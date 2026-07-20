@@ -39,6 +39,7 @@ type
   TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
+  TCollationVariableWeighting = nextpas.core.text.unicode.collate.TCollationVariableWeighting;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
   TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
   IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
@@ -59,6 +60,8 @@ const
   UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
   UNICODE_SURROGATE_FIRST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_FIRST;
   UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_LAST;
+  cvwNonIgnorable = nextpas.core.text.unicode.collate.cvwNonIgnorable;
+  cvwShifted = nextpas.core.text.unicode.collate.cvwShifted;
 
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
@@ -145,6 +148,7 @@ function UnpackTertiary(const AWeight: UInt32): Byte; inline;
 function UnicodeCollator: IUnicodeCollator; inline;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
 function DefaultCollationOptions: TCollationOptions; inline;
+function UCACollationOptions(const AVariable: TCollationVariableWeighting): TCollationOptions; inline;
 
 // 便利函数
 function CompareText(const A, B: string): Integer; inline;
@@ -507,6 +511,11 @@ end;
 function DefaultCollationOptions: TCollationOptions;
 begin
   Result := nextpas.core.text.unicode.collate.DefaultCollationOptions;
+end;
+
+function UCACollationOptions(const AVariable: TCollationVariableWeighting): TCollationOptions;
+begin
+  Result := nextpas.core.text.unicode.collate.UCACollationOptions(AVariable);
 end;
 
 function CompareText(const A, B: string): Integer;

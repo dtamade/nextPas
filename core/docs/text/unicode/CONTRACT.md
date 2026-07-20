@@ -53,9 +53,13 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
 4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
 
-### 排序
+### 排序（UCA / DUCET）
 
-自反 / 对称 / 传递；`Compare` 与 sort key 符号一致；仅 DUCET。
+1. **官方一致性**：UCA 16.0 `CollationTest_NON_IGNORABLE` 全量（~206286 数据行，skip 代理）fail=0
+2. **官方一致性**：UCA 16.0 `CollationTest_SHIFTED` 全量（~227801 行）fail=0
+3. 实现：多 CE expansion、contraction（contiguous + discontiguous non-starter 扩展）、variable weighting（NonIgnorable / Shifted）
+4. API：`IUnicodeCollator` / `UnicodeCollatorWithOptions`；`TCollationOptions.VariableWeighting`；门禁 strength=identical
+5. 仍仅 **DUCET**（无 CLDR locale tailor）
 
 ## 错误处理
 
@@ -68,7 +72,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 ## 已知限制
 
 1. 无 CLDR tailored grapheme / word
-2. Collation 仅 DUCET（无 locale）
+2. Collation 仅 DUCET（无 CLDR locale tailor）；UCA CollationTest 官方全绿
 3. **硬** `NextLine` 不替换为 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`
 4. 无完整 East_Asian_Width 表：LB19a 用 F/W/H 近似区间 + LB 类启发
 
@@ -79,7 +83,7 @@ for t in test_case test_data test_enhance test_grapheme_uax29 \
          test_normalize test_property test_collate \
          test_conformance_normalize test_conformance_grapheme \
          test_conformance_word test_conformance_sentence test_conformance_line \
-         test_conformance_bidi_character test_conformance_bidi; do
+         test_conformance_bidi_character test_conformance_bidi          test_conformance_collate; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```
@@ -94,6 +98,7 @@ python3 core/scripts/gen_unicode_sbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_collate.py --version 16.0.0 --output-dir core/src
 ```
 
 ## 变更记录
