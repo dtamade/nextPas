@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（S3-2 multiplex scale + RoundTripMany stream-0 fix；NEXT=S3-3 or STOP）
+**Updated**: 2026-07-20（**Era S3 Done**：S3-3 H1 对照 + H2 epoll would-block 修；NEXT=STOP）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **S3-3** H1 对照 / epoll residual 或 STOP |
+| **下一执行点** | **STOP until demand**（Era S3 Done） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -767,8 +767,10 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | Wave | Status | Do |
 |------|--------|-----|
 | **S3-1** | **landed (baseline)** | sequential facade residual（~90 req/s） |
-| **S3-2** | **landed** | `RoundTripMany` multiplex + mid 8×16×200 **2872 req/s** threaded stable；修 stream-0 demux bug；epoll hang residual |
-| **S3-3** | queued | 与 H1 harness 对照 + residual；epoll H2 hang 可选收敛 |
+| **S3-2** | **landed** | multiplex mid **2872 req/s** threaded；RoundTripMany stream-0 fix |
+| **S3-3** | **landed** | H1 对照表；H2 epoll would-block I/O 修；epoll mid **~2882 req/s** stable |
+
+**Era S3 Done when**：S3-1..S3-3 landed。 **Met**（H2 scale evidence + epoll；**不**宣称 H1/H2 scale-ready）。
 
 ### Era Q2 — 收口
 
@@ -819,10 +821,9 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 6. **Era Q2 Done** — comparator 刷新 + **Scale-ready (H1 server, Linux epoll)** 诚实宣称
 7. **Era S2 Done**（S2-1..S2-3）
 8. **L1 Met** — multi-conn p50/p99（nextPas）
-9. **S3-1 Met (baseline)** — sequential residual
-10. **S3-2 Met** — multiplex mid **2872 req/s** threaded；epoll hang residual；勿假 H1/H2 scale-ready
-11. **NEXT = S3-3**（H1 对照 / epoll residual）或 STOP
-12. 跨模块仅按本波 Land paths；path-limited landing only
+9. **Era S3 Done** — H2 multiplex ~3k req/s threaded+epoll；H1 对照表；勿假 H1/H2 scale-ready
+10. **NEXT = STOP until demand**
+11. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
