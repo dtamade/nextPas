@@ -147,10 +147,14 @@ end;
 procedure TGCounter.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -165,7 +169,7 @@ end;
 
 procedure TGCounter.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TGCounter.Snapshot(out ANodes: TInt64Array);
@@ -187,7 +191,7 @@ var
   LI: Int32;
   LTotal: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   if (ANodeId < 0) or (ANodeId >= FNodeCount) then
     Exit(crNotFound);
@@ -279,12 +283,12 @@ end;
 
 procedure TGCounter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TGCounter.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 { TPNCounter }
@@ -306,14 +310,14 @@ end;
 
 function TPNCounter.Increment(ANodeId: Int32; AAmount: Int64): TCRDTResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   Result := FPositive.Increment(ANodeId, AAmount);
 end;
 
 function TPNCounter.Decrement(ANodeId: Int32; AAmount: Int64): TCRDTResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   Result := FNegative.Increment(ANodeId, AAmount);
 end;
@@ -333,12 +337,12 @@ end;
 
 procedure TPNCounter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TPNCounter.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 { TLWWRegister }
@@ -355,10 +359,14 @@ end;
 procedure TLWWRegister.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -373,7 +381,7 @@ end;
 
 procedure TLWWRegister.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TLWWRegister.Snapshot(out AValue: AnsiString; out ATimestamp: Int64);
@@ -389,7 +397,7 @@ end;
 
 function TLWWRegister.Assign(const AValue: AnsiString; ATimestamp: Int64): TCRDTResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   Lock;
   try
@@ -439,12 +447,12 @@ end;
 
 procedure TLWWRegister.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TLWWRegister.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 { TORSet }
@@ -462,10 +470,14 @@ end;
 procedure TORSet.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -480,7 +492,7 @@ end;
 
 procedure TORSet.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TORSet.Snapshot(out AEntries: TEntries);
@@ -518,14 +530,14 @@ end;
 
 function TORSet.Add(const AValue: AnsiString): TCRDTResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   Lock;
   try
     if FCount >= FCapacity then
       Grow;
     FAddSet[FCount].Value := AValue;
-    FAddSet[FCount].Tag := AtomicFetchAdd64(Int64(FGlobalTag), 1, moRelaxed) + 1;
+    FAddSet[FCount].Tag := atomic_fetch_add_64(Int64(FGlobalTag), 1, mo_relaxed) + 1;
     FAddSet[FCount].Removed := False;
     Inc(FCount);
     Result := crOk;
@@ -539,7 +551,7 @@ var
   LI: Int32;
   LFound: Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(crClosed);
   Lock;
   try
@@ -629,12 +641,12 @@ end;
 
 procedure TORSet.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TORSet.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

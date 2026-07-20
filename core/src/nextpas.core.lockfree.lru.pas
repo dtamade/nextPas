@@ -133,23 +133,34 @@ begin
 end;
 
 procedure TConcurrentLruCacheImpl.LockMutation;
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(FMutationLock, 0, 1, moAcqRel) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FMutationLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     CpuPause;
+  end;
 end;
 
 procedure TConcurrentLruCacheImpl.UnlockMutation;
 begin
-  AtomicStore32(FMutationLock, 0, moRelease);
+  atomic_store(FMutationLock, 0, mo_release);
 end;
 
 procedure TConcurrentLruCacheImpl.LockBucket(AIdx: PtrUInt);
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLocks[AIdx], LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -164,7 +175,7 @@ end;
 
 procedure TConcurrentLruCacheImpl.UnlockBucket(AIdx: PtrUInt);
 begin
-  AtomicStore32(FLocks[AIdx], 0, moRelease);
+  atomic_store(FLocks[AIdx], 0, mo_release);
 end;
 
 function TConcurrentLruCacheImpl.Get(const AKey: TKey; out AValue: TValue): Boolean;
@@ -180,8 +191,8 @@ begin
       Exit(False);
     AValue := FBuckets[LIdx][LEntryIdx].Value;
     // Update access count
-    AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
-    FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
+    atomic_fetch_add_64(FAccessCounter, 1, mo_relaxed);
+    FBuckets[LIdx][LEntryIdx].AccessCount := atomic_load_64(FAccessCounter, mo_relaxed);
     Result := True;
   finally
     UnlockBucket(LIdx);
@@ -201,7 +212,7 @@ var
 begin
   LockMutation;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(lrClosed);
 
     LIdx := HashKey(AKey) and FMask;
@@ -211,8 +222,8 @@ begin
       if LEntryIdx >= 0 then
       begin
         FBuckets[LIdx][LEntryIdx].Value := AValue;
-        AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
-        FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
+        atomic_fetch_add_64(FAccessCounter, 1, mo_relaxed);
+        FBuckets[LIdx][LEntryIdx].AccessCount := atomic_load_64(FAccessCounter, mo_relaxed);
         Exit(lrUpdated);
       end;
     finally
@@ -277,8 +288,8 @@ begin
 
       FBuckets[LIdx][LEntryIdx].Key := AKey;
       FBuckets[LIdx][LEntryIdx].Value := AValue;
-      AtomicFetchAdd64(FAccessCounter, 1, moRelaxed);
-      FBuckets[LIdx][LEntryIdx].AccessCount := AtomicLoad64(FAccessCounter, moRelaxed);
+      atomic_fetch_add_64(FAccessCounter, 1, mo_relaxed);
+      FBuckets[LIdx][LEntryIdx].AccessCount := atomic_load_64(FAccessCounter, mo_relaxed);
       FBuckets[LIdx][LEntryIdx].Used := True;
       Inc(FCount);
       Result := lrAdded;
@@ -341,7 +352,7 @@ procedure TConcurrentLruCacheImpl.Close;
 begin
   LockMutation;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     UnlockMutation;
   end;
@@ -349,7 +360,7 @@ end;
 
 function TConcurrentLruCacheImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConcurrentLruCacheImpl.IsEmpty: Boolean;

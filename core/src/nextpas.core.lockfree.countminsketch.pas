@@ -52,8 +52,7 @@ type
 implementation
 
 uses
-  nextpas.core.atomic,
-  nextpas.core.errors;
+  nextpas.core.atomic;
 
 function Fnv1aHash(const AData: Pointer; ALength: Int32; ASeed: UInt32): UInt32;
 const
@@ -114,14 +113,14 @@ var
   LNew: Int32;
 begin
   repeat
-    LOld := AtomicLoad32(ACounter, moRelaxed);
+    LOld := atomic_load(ACounter, mo_relaxed);
     if LOld >= High(Int32) - ACount then
       LNew := High(Int32)
     else
       LNew := LOld + ACount;
     if LNew = LOld then
       Exit;
-  until AtomicCompareExchange32(ACounter, LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong(ACounter, LOld, LNew, mo_acq_rel, mo_acquire);
 end;
 
 procedure TCountMinSketch.Add(const AKey: AnsiString; ACount: Int32);
@@ -142,11 +141,11 @@ var
   I, LIdx: Int32;
   LMin, LVal: Int32;
 begin
-  LMin := AtomicLoad32(FCounters[0, Hash(0, AKey) mod UInt32(FWidth)], moAcquire);
+  LMin := atomic_load(FCounters[0, Hash(0, AKey) mod UInt32(FWidth)], mo_acquire);
   for I := 1 to FDepth - 1 do
   begin
     LIdx := Hash(I, AKey) mod UInt32(FWidth);
-    LVal := AtomicLoad32(FCounters[I, LIdx], moAcquire);
+    LVal := atomic_load(FCounters[I, LIdx], mo_acquire);
     if LVal < LMin then
       LMin := LVal;
   end;
@@ -159,7 +158,7 @@ var
 begin
   for I := 0 to FDepth - 1 do
     for J := 0 to FWidth - 1 do
-      AtomicStore32(FCounters[I, J], 0, moRelaxed);
+      atomic_store(FCounters[I, J], 0, mo_relaxed);
 end;
 
 function TCountMinSketch.Depth: Int32; inline;

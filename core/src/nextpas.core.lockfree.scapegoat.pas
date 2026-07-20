@@ -111,10 +111,14 @@ end;
 procedure TConcurrentScapegoatTree.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -127,7 +131,7 @@ end;
 
 procedure TConcurrentScapegoatTree.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentScapegoatTree.CreateNode(AKey, AValue: Int64; AParent: PScapegoatNode): PScapegoatNode;
@@ -261,7 +265,7 @@ var
   LDepth, LHeight: Int32;
   LScapegoat: PScapegoatNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(sgClosed);
   Lock;
   try
@@ -289,7 +293,7 @@ begin
       LParent^.Left := LNew
     else
       LParent^.Right := LNew;
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
     if FCount > FMaxCount then
       FMaxCount := FCount;
     LHeight := Round(Ln(Double(FCount)) / Ln(1.0 / FAlpha));
@@ -309,7 +313,7 @@ function TConcurrentScapegoatTree.Remove(AKey: Int64): TScapegoatResult;
 var
   LNode, LSuccessor, LParent: PScapegoatNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(sgClosed);
   Lock;
   try
@@ -369,7 +373,7 @@ begin
         LSuccessor^.Right^.Parent := LParent;
       FreeNode(LSuccessor);
     end;
-    AtomicFetchSub64(FCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
     if FCount < FMaxCount * FAlpha * FAlpha then
     begin
       if FRoot <> nil then
@@ -386,7 +390,7 @@ function TConcurrentScapegoatTree.Find(AKey: Int64; out AValue: Int64): Boolean;
 var
   LNode: PScapegoatNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
   begin
     AValue := 0;
     Exit(False);
@@ -410,7 +414,7 @@ function TConcurrentScapegoatTree.Contains(AKey: Int64): Boolean;
 var
   LNode: PScapegoatNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   Lock;
   try
@@ -423,7 +427,7 @@ end;
 
 function TConcurrentScapegoatTree.GetCount: Int64;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 procedure TConcurrentScapegoatTree.CollectSubtree(ANode: PScapegoatNode;
@@ -443,7 +447,7 @@ var
   LEntries: TScapegoatEntries;
   LCount, LI: SizeInt;
 begin
-  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
+  if (atomic_load(FClosed, mo_acquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
   try
@@ -482,12 +486,12 @@ end;
 
 procedure TConcurrentScapegoatTree.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentScapegoatTree.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

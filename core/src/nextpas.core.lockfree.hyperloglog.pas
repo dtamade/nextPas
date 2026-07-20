@@ -131,11 +131,11 @@ begin
   LZeros := CountLeadingZeros(LHash shr FP, 32 - FP);
 
   repeat
-    LOld := AtomicLoad32(FRegisters[LIdx], moAcquire);
+    LOld := atomic_load(FRegisters[LIdx], mo_acquire);
     if LZeros <= LOld then
       Break;
     LNew := LZeros;
-  until AtomicCompareExchange32(FRegisters[LIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong(FRegisters[LIdx], LOld, LNew, mo_acq_rel, mo_acquire);
 end;
 
 function THyperLogLog.GetRawEstimate: Double;
@@ -145,7 +145,7 @@ var
 begin
   LSum := 0;
   for I := 0 to FM - 1 do
-    LSum := LSum + 1.0 / (1 shl AtomicLoad32(FRegisters[I], moAcquire));
+    LSum := LSum + 1.0 / (1 shl atomic_load(FRegisters[I], mo_acquire));
   Result := FAlpha * FM * FM / LSum;
 end;
 
@@ -162,7 +162,7 @@ begin
   begin
     LV := 0;
     for I := 0 to FM - 1 do
-      if AtomicLoad32(FRegisters[I], moAcquire) = 0 then
+      if atomic_load(FRegisters[I], mo_acquire) = 0 then
         Inc(LV);
     if LV > 0 then
       LEstimate := FM * Ln(Double(FM) / Double(LV));
@@ -180,7 +180,7 @@ var
   I: Int32;
 begin
   for I := 0 to FM - 1 do
-    AtomicStore32(FRegisters[I], 0, moRelaxed);
+    atomic_store(FRegisters[I], 0, mo_relaxed);
 end;
 
 function THyperLogLog.Merge(AOther: THyperLogLog): Boolean;
@@ -193,12 +193,12 @@ begin
     Exit;
   for I := 0 to FM - 1 do
   begin
-    LOtherVal := AtomicLoad32(AOther.FRegisters[I], moAcquire);
+    LOtherVal := atomic_load(AOther.FRegisters[I], mo_acquire);
     repeat
-      LOld := AtomicLoad32(FRegisters[I], moAcquire);
+      LOld := atomic_load(FRegisters[I], mo_acquire);
       if LOtherVal <= LOld then
         Break;
-    until AtomicCompareExchange32(FRegisters[I], LOld, LOtherVal, moAcqRel) = LOld;
+    until atomic_compare_exchange_strong(FRegisters[I], LOld, LOtherVal, mo_acq_rel, mo_acquire);
   end;
   Result := True;
 end;

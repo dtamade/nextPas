@@ -86,14 +86,21 @@ begin
 end;
 
 procedure TConcurrentTrieImpl.LockNode(ANode: PTrieNode);
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(ANode^.Lock, 0, 1) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(ANode^.Lock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     CpuPause;
+  end;
 end;
 
 procedure TConcurrentTrieImpl.UnlockNode(ANode: PTrieNode);
 begin
-  AtomicStore32(ANode^.Lock, 0, moRelease);
+  atomic_store(ANode^.Lock, 0, mo_release);
 end;
 
 procedure TConcurrentTrieImpl.FreeNode(ANode: PTrieNode);
@@ -126,16 +133,23 @@ begin
 end;
 
 function TConcurrentTrieImpl.AllocValueIndex: Int64;
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(FValuesLock, 0, 1) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FValuesLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     CpuPause;
+  end;
   try
     if FValueCount >= Length(FValues) then
       SetLength(FValues, Length(FValues) * 2 + 16);
     Result := FValueCount;
     Inc(FValueCount);
   finally
-    AtomicStore32(FValuesLock, 0, moRelease);
+    atomic_store(FValuesLock, 0, mo_release);
   end;
 end;
 
@@ -165,7 +179,7 @@ var
   LI, LLen: Integer;
   LIdx: Byte;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(trClosed);
   if Length(AKey) = 0 then
     raise EArgumentError.Create('TConcurrentTrie.Insert: key must not be empty');
@@ -194,7 +208,7 @@ begin
     LNode^.ValueIndex := AllocValueIndex;
     FValues[LNode^.ValueIndex] := AValue;
     LNode^.HasValue := True;
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
     UnlockNode(LNode);
     Result := trInserted;
   end;
@@ -204,7 +218,7 @@ function TConcurrentTrieImpl.Find(const AKey: string; out AValue: TValue): Boole
 var
   LNode: PTrieNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   if Length(AKey) = 0 then
     Exit(False);
@@ -231,7 +245,7 @@ function TConcurrentTrieImpl.Delete(const AKey: string): TLockFreeTrieResult;
 var
   LNode: PTrieNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(trClosed);
   if Length(AKey) = 0 then
     raise EArgumentError.Create('TConcurrentTrie.Delete: key must not be empty');
@@ -244,7 +258,7 @@ begin
   if LNode^.HasValue then
   begin
     LNode^.HasValue := False;
-    AtomicFetchSub64(FCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
     UnlockNode(LNode);
     Result := trDeleted;
   end
@@ -259,7 +273,7 @@ function TConcurrentTrieImpl.Contains(const AKey: string): Boolean;
 var
   LNode: PTrieNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   if Length(AKey) = 0 then
     Exit(False);
@@ -275,24 +289,24 @@ end;
 
 function TConcurrentTrieImpl.GetCount: Int64;
 begin
-  Result := AtomicLoad64(FCount, moAcquire);
+  Result := atomic_load_64(FCount, mo_acquire);
 end;
 
 procedure TConcurrentTrieImpl.Clear;
 begin
   FreeNode(FRoot);
   FRoot := AllocNode;
-  AtomicStore64(FCount, 0, moRelaxed);
+  atomic_store_64(FCount, 0, mo_relaxed);
 end;
 
 procedure TConcurrentTrieImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentTrieImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

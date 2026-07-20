@@ -107,7 +107,7 @@ end;
 
 function TSnapshotIsolationImpl.GetNextTimestamp: Int64;
 begin
-  Result := AtomicFetchAdd64(FTimestamp, 1, moAcqRel) + 1;
+  Result := atomic_fetch_add_64(FTimestamp, 1, mo_acq_rel) + 1;
 end;
 
 function TSnapshotIsolationImpl.HashKey(const AKey: AnsiString): PtrUInt;
@@ -189,7 +189,7 @@ end;
 
 function TSnapshotIsolationImpl.BeginSnapshot: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(-1);
   // 获取唯一时间戳作为快照点
   Result := GetNextTimestamp;
@@ -200,13 +200,17 @@ var
   LEntry: PKeyEntry;
   LVer: PSnapshotVersion;
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(srClosed);
   // 获取锁以确保读取一致性
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -234,7 +238,7 @@ begin
     end;
     Result := srNotFound;
   finally
-    AtomicStore32(FLock, 0, moRelease);
+    atomic_store(FLock, 0, mo_release);
   end;
 end;
 
@@ -243,12 +247,16 @@ var
   LEntry: PKeyEntry;
   LNewVer: PSnapshotVersion;
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(srClosed);
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -277,13 +285,13 @@ begin
     CleanupVersions(LEntry);
     Result := srCommitted;
   finally
-    AtomicStore32(FLock, 0, moRelease);
+    atomic_store(FLock, 0, mo_release);
   end;
 end;
 
 function TSnapshotIsolationImpl.Commit(const ATransactionTs: Int64): TSnapshotResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(srClosed);
   // 简化实现：提交即成功
   // 真实 MVCC 需要维护活跃事务列表，这里简化处理
@@ -292,7 +300,7 @@ end;
 
 function TSnapshotIsolationImpl.Abort(const ATransactionTs: Int64): TSnapshotResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(srClosed);
   // 简化实现：abort 即成功
   // 真实 MVCC 需要回滚该事务的所有写入，这里简化处理
@@ -301,17 +309,17 @@ end;
 
 procedure TSnapshotIsolationImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TSnapshotIsolationImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TSnapshotIsolationImpl.GetCurrentTimestamp: Int64; inline;
 begin
-  Result := AtomicLoad64(FTimestamp, moAcquire);
+  Result := atomic_load_64(FTimestamp, mo_acquire);
 end;
 
 end.

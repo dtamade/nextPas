@@ -3,6 +3,7 @@ program test_lockfree_cowarray;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.lockfree.cowarray;
 
 type
@@ -220,18 +221,23 @@ end;
 procedure TestStrings;
 var
   LArr: specialize TCopyOnWriteArrayImpl<string>;
-  LVal: string;
+  LRaised: Boolean;
 begin
   WriteLn('--- TestStrings ---');
-  LArr := specialize TCopyOnWriteArrayImpl<string>.Create;
+  { COW array rejects managed T (constructor contract). }
+  LRaised := False;
   try
-    LArr.Append('hello');
-    LArr.Append('world');
-    Check((LArr.Get(0, LVal) = cowOk) and (LVal = 'hello'), 'first string');
-    Check((LArr.Get(1, LVal) = cowOk) and (LVal = 'world'), 'second string');
-  finally
-    LArr.Free;
+    LArr := specialize TCopyOnWriteArrayImpl<string>.Create;
+    try
+      LArr.Append('hello');
+    finally
+      LArr.Free;
+    end;
+  except
+    on E: Exception do
+      LRaised := True;
   end;
+  Check(LRaised, 'managed string type rejected at Create');
 end;
 
 begin

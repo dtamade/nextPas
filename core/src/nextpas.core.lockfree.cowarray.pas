@@ -118,14 +118,21 @@ begin
 end;
 
 procedure TCopyOnWriteArrayImpl.LockRetired;
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(FRetiredLock, 0, 1, moAcqRel) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FRetiredLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     ThreadSwitch;
+  end;
 end;
 
 procedure TCopyOnWriteArrayImpl.UnlockRetired;
 begin
-  AtomicStore32(FRetiredLock, 0, moRelease);
+  atomic_store(FRetiredLock, 0, mo_release);
 end;
 
 procedure TCopyOnWriteArrayImpl.RetireData(AData: PData);
@@ -170,7 +177,7 @@ function TCopyOnWriteArrayImpl.Get(AIndex: Int32; out AValue: T): TLockFreeCowAr
 var
   LData: PData;
 begin
-  LData := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
+  LData := PData(atomic_load(PPointer(@FData)^, mo_acquire));
   if (AIndex < 0) or (AIndex >= LData^.FCount) then
     Exit(cowIndexOutOfRange);
   AValue := LData^.FItems[AIndex];
@@ -179,27 +186,29 @@ end;
 
 function TCopyOnWriteArrayImpl.Count: Int32;
 begin
-  Result := PData(AtomicLoadPtr(Pointer(FData), moAcquire))^.FCount;
+  Result := PData(atomic_load(PPointer(@FData)^, mo_acquire))^.FCount;
 end;
 
 function TCopyOnWriteArrayImpl.IsEmpty: Boolean;
 begin
-  Result := PData(AtomicLoadPtr(Pointer(FData), moAcquire))^.FCount = 0;
+  Result := PData(atomic_load(PPointer(@FData)^, mo_acquire))^.FCount = 0;
 end;
 
 function TCopyOnWriteArrayImpl.Append(const AValue: T): TLockFreeCowArrayResult;
 var
   LOld, LNew: PData;
+  LExpected: Pointer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(cowClosed);
   repeat
-    LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
+    LOld := PData(atomic_load(PPointer(@FData)^, mo_acquire));
     LNew := CloneData(LOld);
     LNew^.FCount := LOld^.FCount + 1;
     SetLength(LNew^.FItems, LNew^.FCount);
     LNew^.FItems[LNew^.FCount - 1] := AValue;
-    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+    LExpected := LOld;
+    if atomic_compare_exchange_strong(PPointer(@FData)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
       Break;
     FreeData(LNew);
   until False;
@@ -210,16 +219,18 @@ end;
 function TCopyOnWriteArrayImpl.SetItem(AIndex: Int32; const AValue: T): TLockFreeCowArrayResult;
 var
   LOld, LNew: PData;
+  LExpected: Pointer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(cowClosed);
   repeat
-    LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
+    LOld := PData(atomic_load(PPointer(@FData)^, mo_acquire));
     if (AIndex < 0) or (AIndex >= LOld^.FCount) then
       Exit(cowIndexOutOfRange);
     LNew := CloneData(LOld);
     LNew^.FItems[AIndex] := AValue;
-    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+    LExpected := LOld;
+    if atomic_compare_exchange_strong(PPointer(@FData)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
       Break;
     FreeData(LNew);
   until False;
@@ -230,12 +241,13 @@ end;
 function TCopyOnWriteArrayImpl.Delete(AIndex: Int32): TLockFreeCowArrayResult;
 var
   LOld, LNew: PData;
+  LExpected: Pointer;
   I: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(cowClosed);
   repeat
-    LOld := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
+    LOld := PData(atomic_load(PPointer(@FData)^, mo_acquire));
     if (AIndex < 0) or (AIndex >= LOld^.FCount) then
       Exit(cowIndexOutOfRange);
     New(LNew);
@@ -247,7 +259,8 @@ begin
     // Copy elements after deleted index
     for I := AIndex to LNew^.FCount - 1 do
       LNew^.FItems[I] := LOld^.FItems[I + 1];
-    if AtomicCompareExchangePtr(Pointer(FData), LOld, LNew, moAcqRel) = LOld then
+    LExpected := LOld;
+    if atomic_compare_exchange_strong(PPointer(@FData)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
       Break;
     FreeData(LNew);
   until False;
@@ -259,23 +272,23 @@ procedure TCopyOnWriteArrayImpl.Clear;
 var
   LOld, LNew: PData;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit;
   New(LNew);
   LNew^.FCount := 0;
   SetLength(LNew^.FItems, 0);
-  LOld := PData(AtomicExchangePtr(Pointer(FData), LNew, moAcqRel));
+  LOld := PData(atomic_exchange(PPointer(@FData)^, Pointer(LNew), mo_acq_rel));
   RetireData(LOld);
 end;
 
 procedure TCopyOnWriteArrayImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TCopyOnWriteArrayImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TCopyOnWriteArrayImpl.Snapshot: TItems;
@@ -283,7 +296,7 @@ var
   LData: PData;
   I: Int32;
 begin
-  LData := PData(AtomicLoadPtr(Pointer(FData), moAcquire));
+  LData := PData(atomic_load(PPointer(@FData)^, mo_acquire));
   SetLength(Result, LData^.FCount);
   for I := 0 to LData^.FCount - 1 do
     Result[I] := LData^.FItems[I];
