@@ -53,8 +53,9 @@ type
     function Spawn: IChild;
     {** 同步执行：自动设置 stdout+stderr 为 Piped，捕获输出 *}
     function Output: TProcessOutput;
-    {** 同步执行：返回 TProcessOutput（不捕获 stdout/stderr；含 TimedOut）。
-     *  完整输出请用 Output。成功判定：ProcessSucceeded(Status)。 *}
+    {** 同步执行：返回 TProcessOutput（不捕获 stdout/stderr；StdOut/StdErr 恒空）。
+     *  含 TimedOut/Cancelled。完整输出请用 Output，勿把 Status 当 Capture。
+     *  成功判定：ProcessSucceeded(Status)。 *}
     function Status: TProcessOutput;
     {** 设置超时时间，超时后自动 Kill *}
     function Timeout(const ADuration: TDuration): ICommand;
@@ -65,7 +66,6 @@ type
      *  优先级：stdout 为 stPiped 时 MergeStderr 覆盖 Stderr(stPiped/stInherit)；
      *  与 Stderr(stNull) 冲突时 Spawn 抛 EProcessError。 *}
     function MergeStderr(const AEnable: Boolean = True): ICommand;
-    {** 追加 ExtraFile：子进程侧映射为 fd 3,4,5…（对齐 Go Cmd.ExtraFiles；Unix） *}
     {** 追加 ExtraFile：子进程侧映射为 fd 3,4,5…（Go ExtraFiles；Unix）。Windows：UNSUPPORTED（M2-W3） *}
     function ExtraFd(const AFd: Integer): ICommand;
     {** 在 exec 前 setgid+setuid（SysProcAttr.Credential；Unix）。Windows：UNSUPPORTED（M2-W3） *}

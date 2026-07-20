@@ -25,10 +25,19 @@ type
   IChild = nextpas.core.process.child.IChild;
   ICommand = nextpas.core.process.command.ICommand;
 
+{ U1 Preferred: Command, ProcessSucceeded, LookPath, TryLookPath,
+  RunChecked, MustCapture, RunTimeout, Executable.
+  Compat: remaining Run*/Capture* combinations (kept; use builder for new code). }
+
+{** cProcessDefaultMaxOutput — free-function Capture/Run* buffer cap (64 MiB).
+ *  ICommand.MaxOutput default remains 0 (unlimited). Same value as process.base. *}
+const
+  cProcessDefaultMaxOutput: Int64 = 64 * 1024 * 1024;
+
 {**
  * @desc 判断进程结果是否成功
  *
- * @return 非 TimedOut、非 OutputLimited 且 Status=psExited 且 ExitCode=0 时为 True
+ * @return 非 TimedOut、非 OutputLimited、非 Cancelled 且 Status=psExited 且 ExitCode=0 时为 True
  *
  * @note 对标 Go ProcessState.Success / Rust ExitStatus::success
  *}
@@ -301,6 +310,8 @@ begin
     Exit;
   if AOut.OutputLimited then
     LMsg := 'process output exceeded MaxOutput: ' + APath
+  else if AOut.Cancelled then
+    LMsg := 'process cancelled: ' + APath
   else if AOut.TimedOut then
     LMsg := 'process timed out: ' + APath
   else if AOut.Status = psSignaled then
@@ -314,19 +325,22 @@ begin
     LDetail := Copy(LDetail, 1, 200) + '...';
   if LDetail <> '' then
     LMsg := LMsg + ' — ' + LDetail;
-  LEx := EProcessError.Create(LMsg, AOut.ExitCode, AOut.TimedOut, AOut.OutputLimited);
+  LEx := EProcessError.Create(LMsg, AOut.ExitCode, AOut.TimedOut, AOut.OutputLimited,
+    AOut.Cancelled);
   raise LEx;
 end;
 
 function Run(const APath: string; const AArgs: array of string): TProcessOutput;
 begin
-  Result := TCommand.New(APath).Args(AArgs).Output;
+  Result := TCommand.New(APath).Args(AArgs)
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
 end;
 
 function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
 begin
-  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Output;
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir)
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
 end;
 
 function RunChecked(const APath: string; const AArgs: array of string): TProcessOutput;
@@ -348,6 +362,7 @@ var
 begin
   { stdout only — stderr to null. Avoid dual-pipe WaitWithOutput cost for short Capture. }
   LChild := TCommand.New(APath).Args(AArgs)
+    .MaxOutput(cProcessDefaultMaxOutput)
     .Stdout(stPiped).Stderr(stNull).Spawn;
   Result := LChild.WaitWithOutput.StdOut;
 end;
@@ -358,6 +373,7 @@ var
   LChild: IChild;
 begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir)
+    .MaxOutput(cProcessDefaultMaxOutput)
     .Stdout(stPiped).Stderr(stNull).Spawn;
   Result := LChild.WaitWithOutput.StdOut;
 end;
@@ -368,6 +384,7 @@ var
   LOutput: TProcessOutput;
 begin
   LChild := TCommand.New(APath).Args(AArgs)
+    .MaxOutput(cProcessDefaultMaxOutput)
     .Stdout(stPiped).Stderr(stNull).Spawn;
   LOutput := LChild.WaitWithOutput;
   RaiseIfProcessFailed(APath, LOutput);
@@ -381,6 +398,7 @@ var
   LOutput: TProcessOutput;
 begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir)
+    .MaxOutput(cProcessDefaultMaxOutput)
     .Stdout(stPiped).Stderr(stNull).Spawn;
   LOutput := LChild.WaitWithOutput;
   RaiseIfProcessFailed(APath, LOutput);
@@ -390,7 +408,8 @@ end;
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
 begin
-  Result := TCommand.New(APath).Args(AArgs).MergeStderr.Output.StdOut;
+  Result := TCommand.New(APath).Args(AArgs).MergeStderr
+    .MaxOutput(cProcessDefaultMaxOutput).Output.StdOut;
 end;
 
 function MustCaptureCombined(const APath: string;
@@ -398,7 +417,8 @@ function MustCaptureCombined(const APath: string;
 var
   LOutput: TProcessOutput;
 begin
-  LOutput := TCommand.New(APath).Args(AArgs).MergeStderr.Output;
+  LOutput := TCommand.New(APath).Args(AArgs).MergeStderr
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
   RaiseIfProcessFailed(APath, LOutput);
   Result := LOutput.StdOut;
 end;
@@ -406,13 +426,15 @@ end;
 function CaptureInCombined(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 begin
-  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).MergeStderr.Output.StdOut;
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).MergeStderr
+    .MaxOutput(cProcessDefaultMaxOutput).Output.StdOut;
 end;
 
 function RunTimeout(const APath: string; const AArgs: array of string;
   const ATimeout: TDuration): TProcessOutput;
 begin
-  Result := TCommand.New(APath).Args(AArgs).Timeout(ATimeout).Output;
+  Result := TCommand.New(APath).Args(AArgs).Timeout(ATimeout)
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
 end;
 
 function CaptureTimeout(const APath: string; const AArgs: array of string;
@@ -424,7 +446,8 @@ end;
 function RunInTimeout(const APath: string; const AArgs: array of string;
   const ADir: string; const ATimeout: TDuration): TProcessOutput;
 begin
-  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Timeout(ATimeout).Output;
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Timeout(ATimeout)
+    .MaxOutput(cProcessDefaultMaxOutput).Output;
 end;
 
 function CaptureInTimeout(const APath: string; const AArgs: array of string;
@@ -437,7 +460,7 @@ function CaptureTimeoutCombined(const APath: string;
   const AArgs: array of string; const ATimeout: TDuration): string;
 begin
   Result := TCommand.New(APath).Args(AArgs).Timeout(ATimeout).MergeStderr
-    .Output.StdOut;
+    .MaxOutput(cProcessDefaultMaxOutput).Output.StdOut;
 end;
 
 function CaptureInTimeoutCombined(const APath: string;
@@ -445,7 +468,7 @@ function CaptureInTimeoutCombined(const APath: string;
   const ATimeout: TDuration): string;
 begin
   Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Timeout(ATimeout)
-    .MergeStderr.Output.StdOut;
+    .MergeStderr.MaxOutput(cProcessDefaultMaxOutput).Output.StdOut;
 end;
 
 function RunWithInput(const APath: string; const AArgs: array of string;
@@ -455,7 +478,8 @@ var
   LStdin: IWriter;
 begin
   LChild := TCommand.New(APath).Args(AArgs).Stdin(stPiped)
-    .Stdout(stPiped).Stderr(stPiped).Spawn;
+    .Stdout(stPiped).Stderr(stPiped)
+    .MaxOutput(cProcessDefaultMaxOutput).Spawn;
   LStdin := LChild.TakeStdin;
   if (LStdin <> nil) and (Length(AStdin) > 0) then
     LStdin.Write(AStdin[0], Length(AStdin));
@@ -512,7 +536,8 @@ var
   LStdin: IWriter;
 begin
   LChild := TCommand.New(APath).Args(AArgs).Dir(ADir).Stdin(stPiped)
-    .Stdout(stPiped).Stderr(stPiped).Spawn;
+    .Stdout(stPiped).Stderr(stPiped)
+    .MaxOutput(cProcessDefaultMaxOutput).Spawn;
   LStdin := LChild.TakeStdin;
   if (LStdin <> nil) and (Length(AStdin) > 0) then
     LStdin.Write(AStdin[0], Length(AStdin));

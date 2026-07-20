@@ -16,7 +16,7 @@
 
 | 模块 | Windows 结论 |
 |------|----------------|
-| **process** | Spawn/Wait/Capture/Status/Timeout/MaxOutput/Kill/**KillTree(Job)** 可用；**ExtraFd / Credential** 明文 fail-closed |
+| **process** | Spawn/Wait/Capture/Status/Timeout/MaxOutput/Kill/**KillTree(Job)** 可用；**ExtraFd / Credential** 明文 fail-closed；Signal 有限（可移植优雅停用 WaitGraceful） |
 | **fs** | 读写/目录/OpenLocked 可用；**Chown** UNSUPPORTED；Watch **S2** poll（Wine 事件 soft） |
 | **path** | Join/Clean/IsAbs/Volume/ToSlash/StripPrefix 可用 |
 | **os.env** | Get/Set/Unset/Expand（含 `%VAR%`）可用 |
@@ -113,3 +113,4 @@ CI 接线：`.github/workflows/core-ci.yml` → job `test-windows-runtime` → s
 | 2026-07-20 | M2-W4：一眼表 + wine 最小生产集（24） |
 | 2026-07-20 | M3：host-windows 门禁脚本 + GHA 接线 |
 | 2026-07-20 | M3-ci：L2 步与 platform 矩阵解耦（always + install-fpc success） |
+| 2026-07-20 | U1：便利层默认 MaxOutput 64MiB；EProcessError.Cancelled；文档 Preferred |

@@ -219,3 +219,4 @@ Host + Win：仅 Maintenance（bug/安全）
 | 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24 + 文档对齐；**E2 Done**（wine truth） |
 | 2026-07-20 | **M3**：`l2-windows-ci-matrix.sh` + core-ci Windows job；**E3 Done**（host-windows min-set） |
 | 2026-07-20 | **M3-ci**：L2 host-windows 步 `if: always()`，不因 platform 矩阵失败被 skip |
+| 2026-07-20 | **U1**：可用性收敛 — 便利 MaxOutput 64MiB、EProcessError.Cancelled、Preferred/决策树文档 |

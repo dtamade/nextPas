@@ -6,6 +6,12 @@ L2 文件系统操作模块。提供文件读写、目录操作、路径工具�
 **Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
+**Path 决策**（U1）：只要字符串 → `nextpas.core.path`；已用 fs → `PathJoin2`/`PathJoin([...])`，Go 目录语义用 `FsPathDir`。详见 [path/README](../path/README.md)。
+
+**Boolean 兼容壳（lossy）**：`ForceDirectories` / `DeleteFile` 吞掉异常类型，仅 True/False；错误分类请用 `MkdirAll` / `Remove`。
+
+**兼容入口**：`GetEnv` / `Param*` 请改用 `nextpas.core.os.env` / `args`（新代码）。
+
 ## 快速开始
 
 ```pascal

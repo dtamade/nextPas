@@ -275,9 +275,11 @@ function GetTempDir: string;
 function FileExists(const APath: string): Boolean; inline;
 {** @desc 检查目录是否存在（SysUtils DirectoryExists 兼容） *}
 function DirectoryExists(const APath: string): Boolean; inline;
-{** @desc 递归创建目录（SysUtils ForceDirectories 兼容；失败返回 False 不抛） *}
+{** @desc 递归创建目录（SysUtils ForceDirectories 兼容；失败返回 False 不抛）。
+ *  lossy：吞掉异常类型；错误分类请用 MkdirAll。 *}
 function ForceDirectories(const APath: string): Boolean; inline;
-{** @desc 删除文件（SysUtils DeleteFile 兼容；失败返回 False） *}
+{** @desc 删除文件（SysUtils DeleteFile 兼容；失败返回 False）。
+ *  lossy：吞掉异常类型；错误分类请用 Remove。 *}
 function DeleteFile(const APath: string): Boolean; inline;
 {** @desc 获取当前工作目录（SysUtils GetCurrentDir 兼容） *}
 function GetCurrentDir: string; inline;
