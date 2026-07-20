@@ -8,7 +8,8 @@ uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.io.intf,
   nextpas.core.net.base, nextpas.core.net.intf,
-  nextpas.core.async.base, nextpas.core.async.loop;
+  nextpas.core.async.base, nextpas.core.async.loop,
+  nextpas.core.async.cancellation;
 
 type
   { 异步 TCP 流，集成事件循环 }
@@ -35,6 +36,9 @@ type
     function AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32;
       const ADeadline: TDeadline; ACallback: TIoCompletion;
       AContext: Pointer = nil): Boolean;
+
+    { Bind IAsyncCancellationToken via NetCancelFromAsync (blocking-IO wake). }
+    procedure BindCancelToken(const AToken: IAsyncCancellationToken);
   end;
 
   { 异步 TCP 监听器 }
@@ -72,7 +76,8 @@ uses
   nextpas.core.platform.linux.ffi,
   {$ENDIF}
   nextpas.core.platform.socket,
-  nextpas.core.net.tcp;
+  nextpas.core.net.tcp,
+  nextpas.core.net.async.cancel;
 
 type
   TAsyncTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser,
@@ -102,6 +107,7 @@ type
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
     procedure SetCancelToken(const AToken: INetCancelToken);
+    procedure BindCancelToken(const AToken: IAsyncCancellationToken);
 
     { ITcpSocketRuntime }
     function NativeSocketHandle: PtrUInt;
@@ -228,6 +234,11 @@ end;
 procedure TAsyncTcpStream.SetCancelToken(const AToken: INetCancelToken);
 begin
   FStream.SetCancelToken(AToken);
+end;
+
+procedure TAsyncTcpStream.BindCancelToken(const AToken: IAsyncCancellationToken);
+begin
+  TcpStreamBindAsyncCancel(FStream, AToken);
 end;
 
 function TAsyncTcpStream.NativeSocketHandle: PtrUInt;

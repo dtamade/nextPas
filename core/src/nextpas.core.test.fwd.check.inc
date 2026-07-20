@@ -271,6 +271,16 @@ begin nextpas.core.test.check.Fail(AMessage); end;
 procedure FailUnexpected(const E: Exception);
 begin nextpas.core.test.check.FailUnexpected(E); end;
 
+procedure SoftFail(const AMessage: string);
+begin nextpas.core.test.check.SoftFail(AMessage); end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckTrue(ACondition, AMessage); end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
 

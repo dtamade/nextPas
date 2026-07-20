@@ -153,10 +153,12 @@ type
 type
   { Thread-local execution state — allocated on first use, nil = uninitialized }
   TTestExecState = record
-    SuiteName  : string;
-    TestName   : string;
-    Failed     : Boolean;
-    SkipReason : string;
+    SuiteName     : string;
+    TestName      : string;
+    Failed        : Boolean;
+    SkipReason    : string;
+    SoftFailCount : Integer;  { Go t.Error style: fail but continue }
+    SoftFailFirst : string;   { first soft-fail message for reports }
   end;
   PTestExecState = ^TTestExecState;
 
@@ -231,6 +233,16 @@ procedure ClassifyTestException(E: Exception;
 procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
+{ SoftFail (Go t.Error): record failure without raising; test body continues.
+  Check*/Fail remain Fatal (raise). Runner marks tsFailed if SoftFailCount > 0. }
+procedure SoftFail(const AMessage: string);
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = '');
+{ If status is still tsPassed and soft fails were recorded, set tsFailed + message.
+  Returns True when status was flipped. Does not clear the soft-fail counters
+  until SetTestContext (next test). }
+function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
 function  StrStartsWith(const S, APrefix: string): Boolean;
 function  StrEndsWith(const AStr, ASuffix: string): Boolean;
   { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
@@ -872,6 +884,77 @@ begin
   raise ETestSkipped.Create(AReason);
 end;
 
+procedure SoftFail(const AMessage: string);
+var
+  LMsg: string;
+begin
+  if AMessage = '' then
+    LMsg := 'soft fail'
+  else
+    LMsg := AMessage;
+  if GExecState = nil then
+  begin
+    { Outside a running test there is no result to attach — do not lose signal. }
+    raise EAssertionFailed.Create('SoftFail outside test context: ' + LMsg);
+  end;
+  Inc(GExecState^.SoftFailCount);
+  GExecState^.Failed := True;
+  if GExecState^.SoftFailCount = 1 then
+    GExecState^.SoftFailFirst := LMsg;
+end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin
+  if ACondition then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckTrue failed')
+  else
+    SoftFail(AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckEqual expected ' + IntToStr(AExpected) +
+      ' but got ' + IntToStr(AActual))
+  else
+    SoftFail(AMessage + ': expected ' + IntToStr(AExpected) +
+      ' but got ' + IntToStr(AActual));
+end;
+
+function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
+var
+  LSummary: string;
+begin
+  Result := False;
+  if GExecState = nil then
+    Exit;
+  if GExecState^.SoftFailCount <= 0 then
+    Exit;
+  if AStatus = tsPassed then
+  begin
+    if GExecState^.SoftFailCount = 1 then
+      LSummary := GExecState^.SoftFailFirst
+    else
+      LSummary := GExecState^.SoftFailFirst + ' (+' +
+        IntToStr(GExecState^.SoftFailCount - 1) + ' more soft fails)';
+    AStatus := tsFailed;
+    AMsg := LSummary;
+    Result := True;
+  end
+  else if (AStatus in [tsFailed, tsError]) and (AMsg <> '') and
+    (GExecState^.SoftFailCount > 0) then
+  begin
+    { Hard/soft both present: keep primary message, annotate soft count. }
+    AMsg := AMsg + ' [also ' + IntToStr(GExecState^.SoftFailCount) +
+      ' soft fail(s)]';
+  end;
+end;
+
 procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   if GExecState = nil then
@@ -879,10 +962,12 @@ begin
     New(GExecState);
     GExecState^ := Default(TTestExecState);
   end;
-  GExecState^.SuiteName  := ASuiteName;
-  GExecState^.TestName   := ATestName;
-  GExecState^.Failed     := False;
-  GExecState^.SkipReason := '';
+  GExecState^.SuiteName      := ASuiteName;
+  GExecState^.TestName       := ATestName;
+  GExecState^.Failed         := False;
+  GExecState^.SkipReason     := '';
+  GExecState^.SoftFailCount  := 0;
+  GExecState^.SoftFailFirst  := '';
 end;
 
 { ── SleepMs ───────────────────────────────────────────────────────────────── }

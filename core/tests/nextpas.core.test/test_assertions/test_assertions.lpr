@@ -559,6 +559,102 @@ begin
   end;
 end;
 
+{ ── v8.16 SoftFail (Go t.Error) — Check remains Fatal ─────────────────────── }
+
+var
+  GSoftAfter: Integer = 0;
+
+procedure SoftFailBodyContinues;
+begin
+  SoftFail('first soft');
+  Inc(GSoftAfter);
+  SoftCheckTrue(False, 'second soft');
+  Inc(GSoftAfter);
+  SoftCheckEqual(1, 2, 'third soft');
+  Inc(GSoftAfter);
+end;
+
+procedure SoftFailBodyHardAfterSoft;
+begin
+  SoftFail('soft then hard');
+  CheckTrue(False, 'hard fatal');
+  Inc(GSoftAfter); { must not run }
+end;
+
+procedure SoftFailBodyMultiOnly;
+begin
+  SoftFail('alpha');
+  SoftFail('beta');
+  SoftFail('gamma');
+end;
+
+procedure TestSoftFailContinuesThenFails;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  GSoftAfter := 0;
+  LSuite := TTestSuite.Create('soft-continue');
+  LSuite.Test('body', @SoftFailBodyContinues);
+  CheckFalse(LSuite.RunWithResult(LResult), 'soft fails → suite fail');
+  CheckEqual(GSoftAfter, 3, 'body continues after SoftFail');
+  CheckEqual(LResult.Failed, 1);
+  CheckEqual(LResult.Passed, 0);
+  CheckTrue(Pos('first soft', LResult.Results[0].Message) > 0,
+    'message starts with first soft fail');
+  CheckTrue(Pos('more soft', LResult.Results[0].Message) > 0,
+    'multi soft count annotated');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftCheckHelpers;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-check');
+  LSuite.Test('ok', procedure
+    begin
+      SoftCheckTrue(True);
+      SoftCheckEqual(7, 7);
+      SoftCheckTrue(False, 'bool soft');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(LResult.Failed, 1);
+  CheckContains(LResult.Results[0].Message, 'bool soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestCheckStillFatal;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  GSoftAfter := 0;
+  LSuite := TTestSuite.Create('hard-still');
+  LSuite.Test('body', @SoftFailBodyHardAfterSoft);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(GSoftAfter, 0, 'hard Check aborts body');
+  CheckEqual(LResult.Failed, 1);
+  CheckTrue(Pos('hard fatal', LResult.Results[0].Message) > 0);
+  CheckTrue(Pos('soft', LowerCase(LResult.Results[0].Message)) > 0,
+    'annotates soft fail count with hard fail');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftFailMultiMessage;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-multi');
+  LSuite.Test('body', @SoftFailBodyMultiOnly);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckContains(LResult.Results[0].Message, 'alpha');
+  CheckContains(LResult.Results[0].Message, '2 more soft');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestCheckSnapshotUpdate;
 var
   LSnapDir, LName, LPath, LContents: string;
@@ -2095,6 +2191,12 @@ begin
   LSuite.Test('InstanceOf nil object',    @TestCheckInstanceOfNilObject);
   LSuite.Test('InstanceOf nil class',     @TestCheckInstanceOfNilClass);
   LSuite.Test('InstanceOf+msg',           @TestCheckInstanceOfWithMessage);
+
+  { v8.16 SoftFail (Go t.Error) — Check remains Fatal }
+  LSuite.Test('SoftFail continues then fails', @TestSoftFailContinuesThenFails);
+  LSuite.Test('SoftCheck helpers',             @TestSoftCheckHelpers);
+  LSuite.Test('Check still Fatal',             @TestCheckStillFatal);
+  LSuite.Test('SoftFail multi message',        @TestSoftFailMultiMessage);
 
   if not LSuite.Run then
   begin

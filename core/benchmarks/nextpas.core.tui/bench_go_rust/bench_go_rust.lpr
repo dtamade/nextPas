@@ -1,7 +1,8 @@
 program bench_go_rust;
 {**
- * nextPas side of TUI cross-lang microbench (Wave Q1).
- * Workloads align with scorecard SC1–SC3 constants.
+ * nextPas side of TUI cross-lang microbench (Wave Q1 / Q11).
+ * Workloads align with scorecard SC1–SC3 + layout/overlay simplified kernels.
+ * NOT full ratatui — Layout/Overlay use real nextPas APIs; Go/Rust use stubs.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,13 +15,19 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.event,
-  nextpas.core.tui.input;
+  nextpas.core.tui.input,
+  nextpas.core.tui.layout,
+  nextpas.core.tui.overlay;
 
 const
   W = 200;
   H = 50;
   DIFF_ITERS = 2000;
   PARSE_ITERS = 50000;
+  LAYOUT_ITERS = 100000;
+  OVERLAY_ITERS = 20000;
+  OV_W = 40;
+  OV_H = 12;
 
 procedure FillBase(ABuf: TBuffer);
 var
@@ -56,12 +63,16 @@ end;
 
 var
   Prev, Curr, Same: TBuffer;
+  LBase, LDest: TBuffer;
+  LOv: TOverlayBuffer;
   Patches: TDiffEntries;
+  LRects: TRectArray;
   Ev: TEvent;
-  Consumed, I: Integer;
+  Consumed, I, Sink: Integer;
   LStart, LEnd: UInt64;
   Ascii: array[0..0] of Byte;
   Csi: array[0..2] of Byte;
+  LArea: TRect;
 begin
   WriteLn('=== nextpas.core.tui bench_go_rust (Pascal) ===');
 
@@ -107,4 +118,40 @@ begin
     ParseOne(Csi[0], 3, True, Ev, Consumed);
   LEnd := platform_monotonic_ns;
   Report('ParseCsiUp', LStart, LEnd, PARSE_ITERS);
+
+  { Layout VSplit3 — real VerticalSplit API }
+  LArea := TRect.Make(0, 0, 200, 60);
+  Sink := 0;
+  LStart := platform_monotonic_ns;
+  for I := 1 to LAYOUT_ITERS do
+  begin
+    LRects := VerticalSplit(LArea, [
+      LengthConstraint(3), MinConstraint(0), LengthConstraint(3)]);
+    if Length(LRects) > 0 then
+      Inc(Sink, LRects[0].Height);
+  end;
+  LEnd := platform_monotonic_ns;
+  if Sink = 0 then
+    Halt(2);
+  Report('LayoutVSplit3', LStart, LEnd, LAYOUT_ITERS);
+
+  { Overlay merge — real TOverlayBuffer.MergeInto }
+  LBase := TBuffer.CreateEmpty(TRect.Make(0, 0, OV_W, OV_H));
+  LDest := TBuffer.CreateEmpty(TRect.Make(0, 0, OV_W, OV_H));
+  LOv := TOverlayBuffer.Create(TRect.Make(0, 0, OV_W, OV_H));
+  try
+    LBase.SetString(0, 0, 'base-row-content', StyleDefault);
+    LOv.SetString(2, 0, 'OV', StyleDefault);
+    LStart := platform_monotonic_ns;
+    for I := 1 to OVERLAY_ITERS do
+      LOv.MergeInto(LBase, LDest);
+    LEnd := platform_monotonic_ns;
+    if Pos('OV', LDest.AsLines[0]) = 0 then
+      Halt(2);
+    Report('OverlayMerge 40x12', LStart, LEnd, OVERLAY_ITERS);
+  finally
+    LBase.Free;
+    LDest.Free;
+    LOv.Free;
+  end;
 end.

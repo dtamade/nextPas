@@ -154,18 +154,18 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | json.parser | G4：nodes / arena / indices / slots / overflow 表 |
 | toml.parser | G4：nodes / hash / owned 指针表 |
 | collections.node | **G4.x**：TNodeManager 块/registry/tree node |
-| collections.hashmap | **G4.x+**：buckets/bitmap FreeMemOf（Destroy/Rehash） |
+| collections.hashmap | **G4.x+**：buckets/bitmap FreeMemOf |
+| yaml / xml / ini / csv | **G4 residual**：表/slot 容量 FreeMemOf |
+| toml LBuf | **G4 residual**：free 点旁有 LBufLen |
 | collections swiss\* | 既有 FreeMemOf |
 
-**`FAllocator.FreeMem` 非 mem 粗计（2026-07-20 后 G4.x+）**:
+**`FAllocator.FreeMem` 残余（2026-07-20 residual 后）**:
 
-| 模块 | ~命中 | 备注 |
-|------|-------|------|
-| collections.node | 0 有意 unsized | **G4.x FreeMemOf** |
-| collections.hashmap（非 swiss） | 0 主路径 | **G4.x+ FreeMemOf** |
-| yaml.parser | 3 | |
-| xml / tui / ini / csv | 1–2 | |
-| json / toml | 少量 | 故意：per-string 无 size 旁表 |
+| 模块 | 备注 |
+|------|------|
+| toml `FOwnedBufs[i]` | 无 per-buf size — **故意 unsized** |
+| tui buffer/overlay inject | **WAIVE FreeMemOf**：须 `IAllocator.FreeMem` 以保留 tracking 可观测 |
+| element_manager / treemap 等 | 按触达 |
 
 **结论**: 无新 P0/P1。下一刀仅 **命名模块** + 已知 size；默认 Steady。
 

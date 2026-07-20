@@ -7,17 +7,16 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **20-gate** set on GHA
-  `test-windows-runtime` (promoted including `platform.error` + `platform.fmt` +
-  `platform.info`; GHA pass=20 run 29718874441 @ `534d5e7c4`). Wine runtime smoke
-  secondary (**24** matrix modules, +watch UNSUPPORTED smoke +pty ConPTY smoke).
-  Outside matrix: deeper AcceptEx/ConnectEx; signal is
-  forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
-  Forced Windows compile gates remain the compile-coherence boundary; remaining
-  modules outside the documented set still need real-Windows runtime proof.
-- **macOS**: **focused-runtime** for documented **9-gate** set (ROADMAP D2.c +
-  Batch-5B: +`platform.memory`; GHA run 29696318492 @ `d160cbc46` fail-closed
-  matrix step success).
+- **Windows x86_64**: durable **`ci-matrix`** for documented **20 platform gates**
+  on GHA `test-windows-runtime` (+error +fmt +info; pass=20 run 29718874441).
+  Script may also list `mem.host_runtime` → job `total=21` (not a platform
+  facade gate). Wine secondary **24** modules. Outside matrix: deeper
+  AcceptEx/ConnectEx; signal forced-compile/source-contract only; secure-zero
+  permanent FillChar+barrier.
+- **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
+  `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
+  **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
+  does not demote layer A.
 - **FreeBSD / Android**: source-contract, forced-compile, or best-effort CI only.
 
 Usability maintenance baseline 8.21 is closed (LT0–LT3 + dual-IO/F6 freeze). D0–D3 closed.
@@ -28,8 +27,8 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 20-gate set; wine 24 secondary | expand matrix; keep GHA+wine green |
-| macOS | **focused-runtime** 9-gate set (D2.c + memory) | keep GHA matrix green; no full-host parity |
+| Windows x86_64 | **ci-matrix** 20 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
+| macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
 
@@ -57,11 +56,13 @@ error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
 pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
 Not covered: signal, console, freetype/net.
 
-**Real Windows ci-matrix (20)** via `platform-windows-ci-matrix.sh`: time, memory,
-sync, thread, io, process, files, fs, path, env, mmap, random, socket, error,
-fmt, info, io.reactor.iocp, poller.windows_runtime_smoke, platform.io.windows_real,
-platform.socket.windows_real. Promoted after GHA pass=20 (run 29718874441 @
-`534d5e7c4`, +info). Not full-host parity outside that list.
+**Real Windows ci-matrix (20 platform gates)** via `platform-windows-ci-matrix.sh`:
+time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
+socket, error, fmt, info, io.reactor.iocp, poller.windows_runtime_smoke,
+platform.io.windows_real, platform.socket.windows_real. Promoted GHA pass=20
+(run 29718874441 @ `534d5e7c4`). Scripts also list **which (candidate, Batch-14)**
+and optional **mem.host_runtime** (mem-owned). Do not claim which as ci-matrix
+until GHA green.
 
 ## IOCP / readiness boundary
 

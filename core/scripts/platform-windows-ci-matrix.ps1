@@ -45,6 +45,7 @@ $ModuleEntries = @(
   @{ Name = 'platform.error';   Dir = 'tests/nextpas.core.platform.error/test_platform_error_wine' }
   @{ Name = 'platform.fmt';     Dir = 'tests/nextpas.core.platform.fmt/test_platform_fmt_wine' }
   @{ Name = 'platform.info';    Dir = 'tests/nextpas.core.platform.info/test_platform_info_wine' }
+  @{ Name = 'platform.which';   Dir = 'tests/nextpas.core.platform.which/test_platform_which_wine' }
   @{ Name = 'io.reactor.iocp'; Dir = 'tests/nextpas.core.io.uring/test_reactor_iocp_wine' }
 )
 
@@ -60,7 +61,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 20-gate set; not full-host Windows parity'
+Write-Output 'truth=ci-matrix-candidate; 20 platform gates promoted + which candidate; not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 

@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.12
+**版本**：1.13
 
 ---
 
@@ -167,17 +167,20 @@ end;
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 - Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
-### 6.1 Scorecard 与跨语言对标（Wave Q1–Q10）
+### 6.1 Scorecard 与跨语言对标（Wave Q1–Q11）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC11）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC13）
   - SC1 Diff identical 200×50；SC2 Diff dirty10；SC3 ParseOne batch
   - SC4 Layout 正确性；SC5 Frame Begin/End 空帧（test runtime）
-  - SC6 focus；SC7 CJK；SC8 truecolor；SC9 overlay；SC10 SGR mouse；SC11 paste
+  - SC6 focus；SC7 CJK；SC8 truecolor；SC9 overlay；SC10 SGR mouse；SC11 paste parse
+  - SC12 Kitty flags-reply Verified；SC13 BracketedPaste 会话 `2004h` opt-in
 - **纲领**: `core/docs/tui/PARITY-GO-RUST.md` · 场景表 `SCORECARD.md`
 - **同方法论对照**: `core/benchmarks/nextpas.core.tui/bench_go_rust`（`make compare`）
-  - 简化核，**不是**完整 ratatui/crossterm/tcell；禁止假胜口径
+  - Diff / Parse / **LayoutVSplit3** / **OverlayMerge** 简化核
+  - Pascal Layout/Overlay 用真实 API；Go/Rust 为几何/字节 stub；禁止假胜口径
 - 输入韧性语料：`test_tui_input` 覆盖非法字节恢复、残缺 CSI/UTF-8、Kitty 交错
 - core facade 密度底线：`test_tui_widget_clear` / `test_tui_widget_intf` ≥16
+- tier facade 密度底线：`core_facade` / `ext_facade` / `experimental_facade` ≥12
 
 ---
 
@@ -185,6 +188,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.13 | SC12 Kitty Verified + SC13 paste session；bench layout/overlay；tier facade ≥12 | Claude |
 | 2026-07-20 | 1.12 | SC10 mouse + SC11 paste；DECSET 2004 opt-in；clear/intf/wine 密度收口 | Claude |
 | 2026-07-20 | 1.11 | SC9 overlay merge；tier facade/stress/wine 密度 | Claude |
 | 2026-07-20 | 1.10 | Scorecard SC8 truecolor；facade_surface focus 转发；wine 加厚 | Claude |

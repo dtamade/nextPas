@@ -7,8 +7,8 @@
 | 波次 | 主题 | 退出标准 | 状态 |
 |------|------|----------|------|
 | **R** | 对标文档 + 记分卡 | GO-RUST-PARITY + 本文件 + SCORECARD 更新 | **本轮** |
-| **Q13** | ClassifyNetError + Dial 推荐路径文档 | 单测 0 leak；CONTRACT 表 | **本轮** |
-| Q14 | 统一 IAsyncCancellationToken / INetCancelToken | 适配层 + soak | 后续 |
+| **Q13** | ClassifyNetError + Dial 推荐路径文档 | 单测 0 leak；CONTRACT 表 | **done** |
+| **Q14** | 统一 IAsyncCancellationToken / INetCancelToken | `NetCancelFromAsync` + soak | **done** |
 | Q15 | Async UDP 最小面 | Bind/RecvFrom/SendTo + Token/Timeout | 后续 |
 | Q16 | Pool.AcquireAsync → AsyncTcpDial | Token + idle 校验 | 后续 |
 | Q17 | 平台证据加深 | kqueue accept/connect；Windows native 评估 | 后续 |

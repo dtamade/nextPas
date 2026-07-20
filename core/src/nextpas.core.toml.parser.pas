@@ -733,14 +733,14 @@ begin
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
-      Doc^.FAllocator.FreeMem(LBuf);
+      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen));
       Exit(SetError('invalid escape sequence', 23));
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
     if not Doc^.AddOwnedBuf(LBuf) then
     begin
-      Doc^.FAllocator.FreeMem(LBuf);
+      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen));
       AOwned := False;
       AStr := TStringView.Empty;
       Exit(False);
@@ -866,14 +866,14 @@ begin
       LBufLen := TomlUnescapeToBuffer(LBuf, LBufLen, LBuf, LErr);
       if LErr <> ueNone then
       begin
-        Doc^.FAllocator.FreeMem(LBuf);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
         Exit(SetError('invalid escape in multi-line string', 35));
       end;
       AStr := TStringView.Create(LBuf, LBufLen);
       AOwned := True;
       if not Doc^.AddOwnedBuf(LBuf) then
       begin
-        Doc^.FAllocator.FreeMem(LBuf);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
         AOwned := False;
         AStr := TStringView.Empty;
         Exit(False);
@@ -944,7 +944,7 @@ begin
       AStr := TStringView.Create(LBuf, LDst - LBuf);
       if not Doc^.AddOwnedBuf(LBuf) then
       begin
-        Doc^.FAllocator.FreeMem(LBuf);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
         AStr := TStringView.Empty;
         Exit(False);
       end;

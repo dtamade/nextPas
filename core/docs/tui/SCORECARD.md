@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: Wave Q1–Q10 Active
+**状态**: Wave Q1–Q11 Active
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
@@ -40,6 +40,8 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC9 | Overlay merge | transparent passthrough + overwrite |
 | SC10 | SGR mouse parse | CSI `<` down + scroll-up kinds |
 | SC11 | Bracketed paste | CSI 200~ → evPaste；201~ 吞掉 |
+| SC12 | Kitty flags-reply Verified | CSI `? 5 u` → Verified；`? 0 u` not |
+| SC13 | Bracketed paste session | opt-in emits `2004h`；default off |
 
 规则：
 
@@ -47,30 +49,31 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 - 禁止为 SC1 优化破坏输入正确性或 layout 契约。
 - 跨语言绝对 ns 仅作说明；ops 语义必须一致。
 - nextPas Diff 比较完整 `TCell`（40B）；Go/Rust 对照为 **1-byte ch 简化核**——不可当「快于 ratatui」营销。
+- Layout/Overlay Go/Rust 为几何/字节 stub；Pascal 用真实 nextPas API。
 
 ---
 
-## 本机快照（2026-07-19）
+## 本机快照（2026-07-20）
 
 **Host**: Linux 6.12.74+deb13+1-amd64 x86_64 · FPC 3.3.1 · heaptrc focused scorecard
 
 | ID | Subject | ns/op | ops | ok |
 |----|---------|------:|----:|:--:|
-| SC1 | diff_identical | 25659 | 2000 | Y |
-| SC2 | diff_dirty10 | 38539 | 2000 | Y |
-| SC3a | parse_ascii | 37 | 50000 | Y |
-| SC3b | parse_csi_up | 44 | 50000 | Y |
-| SC4a | vsplit3 | — | 1 | Y |
-| SC4b | grid4x4 | — | 1 | Y |
-| SC5 | frame_empty | 3729 | 500 | Y |
+| SC1 | diff_identical | ~25600 | 2000 | Y |
+| SC2 | diff_dirty10 | ~35600 | 2000 | Y |
+| SC3a | parse_ascii | ~36 | 50000 | Y |
+| SC3b | parse_csi_up | ~45 | 50000 | Y |
+| SC4a–SC13b | correctness gates | — | 1 | Y |
 
 ### `bench_go_rust compare`（同机，简化核）
 
-| Op | nextPas (full TCell / ParseOne) | Go (1B cell / stub) | Rust (1B cell / stub) |
-|----|--------------------------------:|--------------------:|----------------------:|
-| DiffIdentical 200×50 | ~25.9 µs | ~8.2 µs | ~9.5 µs |
-| DiffDirty10 200×50 | ~35.7 µs | ~8.4 µs | ~9.1 µs |
-| ParseAscii | ~36 ns | ~1.2 ns | ~1.2 ns |
-| ParseCsiUp | ~44 ns | ~1.5 ns | ~1.7 ns |
+| Op | nextPas | Go stub | Rust stub |
+|----|--------:|--------:|----------:|
+| DiffIdentical 200×50 | ~25.6 µs | ~8.1 µs | ~9.7 µs |
+| DiffDirty10 200×50 | ~35.6 µs | ~7.3 µs | ~9.2 µs |
+| ParseAscii | ~35 ns | ~1.1 ns | ~1.1 ns |
+| ParseCsiUp | ~45 ns | ~1.1 ns | ~1.7 ns |
+| LayoutVSplit3 | ~291 ns (real API) | ~2.7 ns (geom) | ~0.9 ns (geom) |
+| OverlayMerge 40×12 | ~415 ns (real API) | ~187 ns (byte) | ~485 ns (byte) |
 
-说明：nextPas 路径含完整 cell 相等与真实 `ParseOne`；Go/Rust 为字节级简化核 + anti-DCE。差距符合「完整库 vs 微核」，**不是**“慢于 Go/Rust 生产 TUI”的结论。
+说明：nextPas 路径含完整 cell/真实 ParseOne/真实 layout·overlay；Go/Rust 为简化核 + anti-DCE。差距符合「完整库 vs 微核」，**不是**“慢于 Go/Rust 生产 TUI”的结论。

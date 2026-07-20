@@ -3,7 +3,9 @@ program bench_number;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.bench,
+  nextpas.core.time.base,
   nextpas.core.text.number;
 
 var
@@ -118,18 +120,23 @@ end;
 begin
   WriteLn('=== nextpas.core.text.number benchmark ===');
   WriteLn;
-  LResults := TBenchSuite.Create('IntToBuffer(42)')
-    .AddLoop('IntToBuffer(42)', @BenchIntToBuffer_Small)
-    .AddLoop('IntToBuffer(1234567890)', @BenchIntToBuffer_Medium)
-    .AddLoop('IntToBuffer(MaxInt64)', @BenchIntToBuffer_Large)
-    .AddLoop('IntToBuffer(-1234567890)', @BenchIntToBuffer_Negative)
-    .AddLoop('UIntToBuffer(MaxUInt64)', @BenchUIntToBuffer)
-    .AddLoop('ParseInt64("42")', @BenchParseInt64_Small)
-    .AddLoop('ParseInt64("1234567890")', @BenchParseInt64_Medium)
-    .AddLoop('ParseInt64(MaxInt64)', @BenchParseInt64_Large)
-    .AddLoop('FloatToBuffer(pi)', @BenchFloatToBuffer)
-    .AddLoop('ParseDouble("3.14...")', @BenchParseDouble)
-    .AddLoop('IntToHexBuffer', @BenchIntToHex)
+  LResults := TBenchSuite.Create('number')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .AddLoop('number/IntToBuffer/small', @BenchIntToBuffer_Small)
+    .AddLoop('number/IntToBuffer/medium', @BenchIntToBuffer_Medium)
+    .AddLoop('number/IntToBuffer/max', @BenchIntToBuffer_Large)
+    .AddLoop('number/IntToBuffer/neg', @BenchIntToBuffer_Negative)
+    .AddLoop('number/UIntToBuffer/max', @BenchUIntToBuffer)
+    .AddLoop('number/ParseInt64/small', @BenchParseInt64_Small)
+    .AddLoop('number/ParseInt64/medium', @BenchParseInt64_Medium)
+    .AddLoop('number/ParseInt64/max', @BenchParseInt64_Large)
+    .AddLoop('number/FloatToBuffer', @BenchFloatToBuffer)
+    .AddLoop('number/ParseDouble', @BenchParseDouble)
+    .AddLoop('number/IntToHex', @BenchIntToHex)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-number.json');
 end.
