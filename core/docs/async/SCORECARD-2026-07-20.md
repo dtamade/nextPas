@@ -35,7 +35,8 @@
 - [x] Q13 Wave R 文档 + ClassifyNetError + Dial 推荐路径
 - [x] Q14 NetCancelFromAsync + BindCancelToken + test_net_cancel_bridge
 - [x] Q15 AsyncUdpBind + SendTo/RecvFrom + test_net_async_udp
-- [ ] Q16–Q18 见 ROADMAP-Q13.md
+- [x] Q16 Pool AcquireAsync + AsyncTcpDial + test_net_async_pool
+- [ ] Q17–Q18 见 ROADMAP-Q13.md
 
 ## 性能 scorecard
 

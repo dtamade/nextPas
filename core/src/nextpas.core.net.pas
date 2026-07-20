@@ -21,6 +21,7 @@ uses
   nextpas.core.net.async.resolve,
   nextpas.core.net.async.dial,
   nextpas.core.net.async.cancel,
+  nextpas.core.net.async.pool,
   nextpas.core.net.async.backpressure,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation;
@@ -54,6 +55,9 @@ type
   TBackpressureConfig = nextpas.core.net.async.backpressure.TBackpressureConfig;
   TBackpressureCallback = nextpas.core.net.async.backpressure.TBackpressureCallback;
   IBackpressureController = nextpas.core.net.async.backpressure.IBackpressureController;
+  TConnectionPoolConfig = nextpas.core.net.async.pool.TConnectionPoolConfig;
+  TAcquireAsyncCallback = nextpas.core.net.async.pool.TAcquireAsyncCallback;
+  IConnectionPool = nextpas.core.net.async.pool.IConnectionPool;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
@@ -91,6 +95,14 @@ procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
 
 function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
   APort: UInt16): IAsyncUdpSocket; inline;
+
+function CreateConnectionPool(
+  const AConfig: TConnectionPoolConfig): IConnectionPool; overload; inline;
+function CreateConnectionPool: IConnectionPool; overload; inline;
+function CreateConnectionPool(const ALoop: TAsyncLoop;
+  const AConfig: TConnectionPoolConfig): IConnectionPool; overload; inline;
+function CreateConnectionPool(const ALoop: TAsyncLoop): IConnectionPool;
+  overload; inline;
 
 implementation
 
@@ -187,6 +199,28 @@ function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
   APort: UInt16): IAsyncUdpSocket;
 begin
   Result := nextpas.core.net.async.udp.AsyncUdpBind(ALoop, AAddr, APort);
+end;
+
+function CreateConnectionPool(
+  const AConfig: TConnectionPoolConfig): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(AConfig);
+end;
+
+function CreateConnectionPool: IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool;
+end;
+
+function CreateConnectionPool(const ALoop: TAsyncLoop;
+  const AConfig: TConnectionPoolConfig): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(ALoop, AConfig);
+end;
+
+function CreateConnectionPool(const ALoop: TAsyncLoop): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(ALoop);
 end;
 
 end.
