@@ -224,6 +224,10 @@ append_result_row() {
   local rust_runtime
   local requested_threads
   local effective_threads
+  local p50_ns
+  local p99_ns
+  local mean_ns
+  local latency_samples
 
   if ! printf '%s\n' "${output}" | grep -q "^impl=${expected_impl}$"; then
     echo "unable to find benchmark impl marker for impl=${expected_impl}" >&2
@@ -244,6 +248,10 @@ append_result_row() {
   rust_runtime="$(printf '%s\n' "${output}" | sed -nE 's/^rust_runtime=([^[:space:]]+)$/\1/p' | tail -n 1)"
   requested_threads="$(printf '%s\n' "${output}" | sed -nE 's/^requested_threads=([0-9]+)$/\1/p' | tail -n 1)"
   effective_threads="$(printf '%s\n' "${output}" | sed -nE 's/^effective_threads=([0-9]+)$/\1/p' | tail -n 1)"
+  p50_ns="$(printf '%s\n' "${output}" | sed -nE 's/^p50_ns=([0-9]+)$/\1/p' | tail -n 1)"
+  p99_ns="$(printf '%s\n' "${output}" | sed -nE 's/^p99_ns=([0-9]+)$/\1/p' | tail -n 1)"
+  mean_ns="$(printf '%s\n' "${output}" | sed -nE 's/^mean_ns=([0-9]+)$/\1/p' | tail -n 1)"
+  latency_samples="$(printf '%s\n' "${output}" | sed -nE 's/^latency_samples=([0-9]+)$/\1/p' | tail -n 1)"
   if [[ "${rust_profile}" == "" ]]; then
     rust_profile="n/a"
   fi
@@ -253,10 +261,30 @@ append_result_row() {
   if [[ "${rust_runtime}" == "" ]]; then
     rust_runtime="n/a"
   fi
+  # Latency markers optional for residual impls (rust_std / hyper); required for nextpas + go (Era E1).
+  if [[ "${p50_ns}" == "" ]]; then
+    p50_ns="n/a"
+  fi
+  if [[ "${p99_ns}" == "" ]]; then
+    p99_ns="n/a"
+  fi
+  if [[ "${mean_ns}" == "" ]]; then
+    mean_ns="n/a"
+  fi
+  if [[ "${latency_samples}" == "" ]]; then
+    latency_samples="n/a"
+  fi
   if [[ "${operation}" == "" || "${workload}" == "" || "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" || "${client_read_mode}" == "" || "${response_body_bytes}" == "" || "${requested_threads}" == "" || "${effective_threads}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
     echo "${output}" >&2
     exit 1
+  fi
+  if [[ "${expected_impl}" == "nextpas" || "${expected_impl}" == "go" ]]; then
+    if [[ "${p50_ns}" == "n/a" || "${p99_ns}" == "n/a" || "${mean_ns}" == "n/a" || "${latency_samples}" == "n/a" ]]; then
+      echo "missing latency markers for impl=${expected_impl} (need p50_ns/p99_ns/mean_ns/latency_samples)" >&2
+      echo "${output}" >&2
+      exit 1
+    fi
   fi
 
   if [[ "${operation}" != "http.server.keepalive" || "${workload}" != "${WORKLOAD}" ]]; then
@@ -280,11 +308,12 @@ append_result_row() {
     exit 1
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" \
     "${client_read_mode}" "${response_body_bytes}" "${rust_profile}" \
     "${rust_http_stack}" "${rust_runtime}" "${requested_threads}" \
     "${effective_threads}" "${operation}" "${workload}" \
+    "${p50_ns}" "${p99_ns}" "${mean_ns}" "${latency_samples}" \
     >> "${RESULTS_TMP}"
 }
 
@@ -340,6 +369,10 @@ write_summary() {
       effective_thread_values[impl, count[impl]] = $12;
       operation_values[impl, count[impl]] = $13;
       workload_values[impl, count[impl]] = $14;
+      p50_values[impl, count[impl]] = $15;
+      p99_values[impl, count[impl]] = $16;
+      mean_values[impl, count[impl]] = $17;
+      latency_samples_values[impl, count[impl]] = $18;
     }
 
     END {
@@ -356,6 +389,14 @@ write_summary() {
         delete current_effective_threads;
         delete current_operation;
         delete current_workload;
+        delete current_p50;
+        delete current_p99;
+        delete current_mean;
+        delete current_latency_samples;
+        delete p50_numeric;
+        delete p99_numeric;
+        p50_numeric_count = 0;
+        p99_numeric_count = 0;
         for (i = 1; i <= count[impl]; i++) {
           current_ns[i] = ns_values[impl, i];
           current_req[i] = req_values[impl, i];
@@ -369,14 +410,36 @@ write_summary() {
           current_effective_threads[i] = effective_thread_values[impl, i];
           current_operation[i] = operation_values[impl, i];
           current_workload[i] = workload_values[impl, i];
+          current_p50[i] = p50_values[impl, i];
+          current_p99[i] = p99_values[impl, i];
+          current_mean[i] = mean_values[impl, i];
+          current_latency_samples[i] = latency_samples_values[impl, i];
+          if (p50_values[impl, i] ~ /^[0-9]+$/) {
+            p50_numeric_count++;
+            p50_numeric[p50_numeric_count] = p50_values[impl, i] + 0.0;
+          }
+          if (p99_values[impl, i] ~ /^[0-9]+$/) {
+            p99_numeric_count++;
+            p99_numeric[p99_numeric_count] = p99_values[impl, i] + 0.0;
+          }
         }
-        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_rust_http_stack=%s summary_rust_runtime=%s summary_requested_threads=%s summary_effective_threads=%s summary_operation=%s summary_workload=%s\n",
+        p50_summary = current_p50[1];
+        p99_summary = current_p99[1];
+        if (p50_numeric_count > 0) {
+          p50_summary = sprintf("%.0f", median(p50_numeric, p50_numeric_count));
+        }
+        if (p99_numeric_count > 0) {
+          p99_summary = sprintf("%.0f", median(p99_numeric, p99_numeric_count));
+        }
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f median_p50_ns=%s median_p99_ns=%s summary_client_read_mode=%s summary_response_body_bytes=%s summary_rust_profile=%s summary_rust_http_stack=%s summary_rust_runtime=%s summary_requested_threads=%s summary_effective_threads=%s summary_operation=%s summary_workload=%s summary_latency_samples=%s summary_mean_ns=%s\n",
           impl, count[impl], median(current_completed, count[impl]),
           median(current_ns, count[impl]), median(current_req, count[impl]),
+          p50_summary, p99_summary,
           current_read_mode[1], current_body_bytes[1], current_rust_profile[1],
           current_rust_http_stack[1], current_rust_runtime[1],
           current_requested_threads[1], current_effective_threads[1],
-          current_operation[1], current_workload[1];
+          current_operation[1], current_workload[1],
+          current_latency_samples[1], current_mean[1];
       }
     }
   ' "${RESULTS_TMP}" | sort

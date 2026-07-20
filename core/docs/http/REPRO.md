@@ -4,7 +4,7 @@
 **Authority**：规模门闩定义见 `ROADMAP.md` / `GOAL_TREE.md`；历史表见 `BENCHMARKS.md`。
 
 **Claim (current)**：*Scale-ready (H1 server, Linux epoll)* — same-machine, limited workloads.
-**Not claimed**：H1+H2 package scale-ready；H3；跨机榜；Go 同 harness p99（Era E）。
+**Not claimed**：H1+H2 package scale-ready；H3；跨机榜；p99 multi-run 稳定性（E3）。
 
 从仓库根目录进入 `core/` 后执行。
 
@@ -42,16 +42,20 @@ git status --short   # 应为 clean（或仅 ignore）
 
 ---
 
-## 2. H1 client latency（L1，nextPas 行）
+## 2. H1 client latency（L1 + Go E1）
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_server build
 ./build/projects/nextpas.core.http/bench_server/bench_http_server \
   --requests 20000 --threads 4 --workload no_url --backend epoll
+# same harness + Go p50/p99
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 1 \
+  --nextpas-backend epoll
 ```
 
-**读数**：`p50_ns=` / `p99_ns=` / `mean_ns=` / `req/s=`。
-**注意**：Go 行 p99 仍在 Era **E1**；此处仅 nextPas。
+**读数**：`p50_ns=` / `p99_ns=` / `mean_ns=`；summary 的 `median_p50_ns=` / `median_p99_ns=`。
+**门闩（E2）**：nextPas p99 ≤ **2×** Go p99（同 workload / 同机）。
 
 ---
 
@@ -102,5 +106,5 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
 
 1. 单机单日数字只进 BENCHMARKS 带日期；不写「已全面对标」。
 2. H1 RPS 与 H2 mux **不可**直接做比值 KPI。
-3. p99 门闩（nextPas ≤ 2× Go）在 **E1–E2** 闭合前，对外只报 RPS scale-ready。
+3. p99 门闩（nextPas ≤ 2× Go）单次 E1 **Met**；多 run 刷新见 **E3**。
 4. 结果异常：先 `make hygiene`、确认 ulimit、确认无其他 heavy 进程，再重跑。

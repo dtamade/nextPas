@@ -130,8 +130,8 @@ completion wake for short keep-alive requests. Tests that assert handoff set
    `response_1k` **1.93× Go** (both ≥ 0.80).
 3. threaded remains characterization (~3.6× Go); not the scale KPI backend.
 4. Rust `std_only` is reference only.
-5. **L1 latency** — nextPas multi-conn harness now emits client-observed `p50_ns` /
-   `p99_ns` / `mean_ns` (see § L1). Go/Rust rows still QPS-only unless extended.
+5. **L1 latency** — nextPas + **Go** rows emit client-observed `p50_ns` / `p99_ns` /
+   `mean_ns` (Era **E1**). Rust std residual still QPS-only. See § L1 / § E1.
 6. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
 
 #### Q2-3 Scale-ready verdict (2026-07-19)
@@ -141,15 +141,15 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 | Enter parity zone (epoll H1) | **Met** | ratio ≥ 0.50 (Q2-1 medians ≫ 0.50) |
 | Scale-ready RPS (epoll H1 `no_url`) | **Met** | Q2-1 median **2.20×** Go (≥ 0.80) |
 | Scale-ready RPS (epoll H1 `response_1k`) | **Met** | Q2-1 median **1.93×** Go |
-| Scale-ready p99 ≤ 2× Go | **Partial** | L1: nextPas p50/p99 live; Go comparator row not yet instrumented |
+| Scale-ready p99 ≤ 2× Go | **Met (single-run E1)** | epoll `no_url` p99 ratio **0.29×**; `response_1k` **0.26×** (see § E1); multi-run = E3 |
 | Connection ladder 1k / 10k idle | **Met** | S1-3 `bench_conn_ladder` |
-| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder Met; p99 residual |
+| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder + p99 single-run Met; multi-run p99 / H2 package residual |
 | Scale-ready (H1/**H2** server, Linux) | **No** | H2 multiplex ~3k req/s evidence exists; still ≪ H1 KPI shape |
 | H3 ready | **No** | Blocked; no facade |
 
 **Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
-official harness, with documented residuals (no p99, no H2 scale claim, no Windows
-scale claim, no H3). **Not** a cross-machine leaderboard.
+official harness, with documented residuals (p99 multi-run pending E3, no H2 scale
+claim, no Windows scale claim, no H3). **Not** a cross-machine leaderboard.
 
 #### S2-1 H1 allocation map + outbound buffer reuse
 
@@ -267,8 +267,40 @@ on the client threads, then reports nearest-rank percentiles.
 | ---- | -------- | ------- | ----: | -----: | -----: | ------: | ------: |
 | 2026-07-20 L1 | `no_url` 20k×4 | epoll | 47640 | 58418 | 178376 | 78501 | 20000 |
 
-Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`. **nextPas only** in
-comparison harness for now (Go/Rust residual). Not a cross-machine ranking.
+Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
+
+#### E1 Go comparator p50/p99 (same harness)
+
+**Percentile definition** (nextPas + Go aligned): nearest-rank
+`index = ceil(pct/100 * N) - 1`, clamped. Summary lines:
+`median_p50_ns=` / `median_p99_ns=` (median across `--runs`).
+
+**Client honesty**
+
+| Impl | Client | `client_read_mode` |
+| ---- | ------ | ------------------ |
+| nextPas | raw TCP, parse headers + Content-Length body | `header_plus_content_length` |
+| Go | `net/http` keep-alive + body drain | `http_client_body_drain` |
+| Rust std | residual QPS-only (no latency yet) | — |
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 1 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e1-epoll-no_url.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k --runs 1 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e1-epoll-response_1k.md
+```
+
+| Date | Workload | nextPas p50/p99 (ns) | Go p50/p99 (ns) | p99 nextPas/Go | Gate ≤2× |
+| ---- | -------- | -------------------: | --------------: | -------------: | -------- |
+| 2026-07-20 E1 | `no_url` 20k×4 epoll | 54850 / **192227** | 125703 / 673060 | **0.29×** | **Met** |
+| 2026-07-20 E1 | `response_1k` 20k×4 epoll | 60363 / **171706** | 128469 / 660457 | **0.26×** | **Met** |
+
+**E2 note**: single-run p99 gate **Met** on this host. Multi-run stability = **E3**.
+Not a cross-machine ranking.
 
 #### S3-1 / S3-2 H2 server scale
 
