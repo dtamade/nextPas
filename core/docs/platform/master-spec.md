@@ -36,16 +36,15 @@ Without real runtime evidence, a host is not runtime ready.
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
 Windows compile gates, Wine runtime smoke (24-module matrix, including
 `platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
-GHA **`ci-matrix`** for the **documented 20 platform gates** in
+GHA **`ci-matrix`** for the **documented 21 platform gates** in
 `platform-windows-ci-matrix.sh` / `.ps1`.
 
 ### Count honesty (do not mix)
 
 | Count | Meaning |
 | --- | --- |
-| **20 platform gates** | Promoted `ci-matrix` set: 17 suite dirs (incl. `platform.info`) + poller/io/socket real gates. GHA run **29718874441** @ `534d5e7c4` `pass=20`. |
-| **+which candidate** | Batch-14: `platform.which` in scripts only — **not** ci-matrix until GHA green. |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 21 (or 22 with which) without claiming those as platform facade promote. |
+| **21 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which` + iocp + poller + io/socket real. GHA run **29721371136** @ `0cb2471bc` (job `pass=22` with mem.host; which PASS). |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total=22` = 21 platform + mem.host — do **not** call mem.host a platform facade gate. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -57,8 +56,8 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented **20 platform gates** only (ROADMAP; GHA run 29718874441)
-- do **not** say “21-gate platform ci-matrix” when the 21st is only mem.host
+- `ci-matrix` for the documented **21 platform gates** only (ROADMAP; GHA run 29721371136)
+- do **not** say “22-gate platform ci-matrix” when the 22nd is only mem.host
 
 ## Current macOS truth
 

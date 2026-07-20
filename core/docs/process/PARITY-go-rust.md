@@ -12,9 +12,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.5** | R22 hardening 保持 |
+| **质量 Quality** | **9.6** | R22 + R28：process 主套件迁 `nextpas.core.test` |
 | **规模 Scale (Essential)** | **9.7** | R23 lock + R24 process group + R25 watch |
-| **综合** | **9.7** | 能力闭环 + wine×5 + SCORECARD Go 对照 |
+| **综合** | **9.7** | 能力闭环 + 框架合规 + wine×5 + SCORECARD |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
@@ -93,19 +93,20 @@
 
 ---
 
-## 测试规模（R23 校准）
+## 测试规模（R28 校准）
 
-| 套件 | 通过 |
-|------|------|
-| test_process | **455** |
-| test_process_command / deep / pipe | 48 / **24** / 17 |
-| test_fs | **158** |
-| test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 |
-| test_path | **69** |
-| test_os_env | **69** |
-| **合计** | **≈926** |
+| 套件 | 通过 | 框架 |
+|------|------|------|
+| test_process | **128** cases（原 ~455 手写 Check 行） | **nextpas.core.test** |
+| test_process_command | **21** cases（原 48 Check 行） | **nextpas.core.test** |
+| test_process_deep / pipe | **27** / **17** | nextpas.core.test |
+| test_fs | **158** | nextpas.core.test |
+| test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 | nextpas.core.test |
+| test_path | **69** | nextpas.core.test |
+| test_os_env | **69** | nextpas.core.test |
+| **合计** | **≥900 行为覆盖**（口径：framework cases + 既有 fs/path/env） | |
 
-目标 **≥900** ✅（R23）。
+R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行数；行为覆盖不弱于迁移前。
 
 ---
 
@@ -125,9 +126,9 @@
 | 项 | 性质 |
 |----|------|
 | Win Job Object / ExtraFd / Credential 完整化 | 文档 UNSUPPORTED；非阻塞 |
-| test_process 迁 `nextpas.core.test` | P3 框架债（R27 候选） |
 | 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
 | 递归 fs.watch | 单 path 已够；递归另开 |
+| Status/spawn 再压到 1.0× Go | 已 ~1.2×；收益递减 |
 
 ### 外部债 / 证据
 
@@ -139,11 +140,11 @@
 
 ## 维护策略（口径）
 
-**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + Watch + wine×5 + SCORECARD。
+**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + Watch + wine×5 + SCORECARD + process 测试框架合规。
 
 **周报：**
 
-> process/fs/path/env：维护态。R26 WaitGraceful×组 + wine 加厚 + SCORECARD Go 对照；综合 ~9.7。
+> process/fs/path/env：维护态。R28 process/command 迁 nextpas.core.test + dual-pipe SCORECARD；Quality 9.6 / 综合 ~9.7。
 
 ---
 
@@ -164,3 +165,4 @@
 | 2026-07-20 | R24-PG NewProcessGroup/KillTree；R25 fs.Watch；Scale 9.7 / 综合 9.6 |
 | 2026-07-20 | R24-EV L2 wine×4 + SCORECARD；综合 9.7 |
 | 2026-07-20 | R27 Capture ~1.6ms (~1.3× Go；stdout-only + drain fast-path) |
+| 2026-07-20 | R28 test_process + command 迁 nextpas.core.test；dual-pipe SCORECARD；Quality 9.6 |

@@ -17,6 +17,7 @@ uses
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net.async.tcp,
+  nextpas.core.net.async.udp,
   nextpas.core.net.async.resolve,
   nextpas.core.net.async.dial,
   nextpas.core.net.async.cancel,
@@ -41,6 +42,9 @@ type
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
   IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
   IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  IAsyncUdpSocket = nextpas.core.net.async.udp.IAsyncUdpSocket;
+  TAsyncUdpRecvCallback = nextpas.core.net.async.udp.TAsyncUdpRecvCallback;
+  TAsyncUdpSendCallback = nextpas.core.net.async.udp.TAsyncUdpSendCallback;
   TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
   TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
@@ -84,6 +88,9 @@ function NetCancelFromAsync(
   const AAsync: IAsyncCancellationToken): INetCancelController; inline;
 procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
   const AToken: IAsyncCancellationToken); inline;
+
+function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
+  APort: UInt16): IAsyncUdpSocket; inline;
 
 implementation
 
@@ -174,6 +181,12 @@ procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
   const AToken: IAsyncCancellationToken);
 begin
   nextpas.core.net.async.cancel.TcpStreamBindAsyncCancel(AStream, AToken);
+end;
+
+function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
+  APort: UInt16): IAsyncUdpSocket;
+begin
+  Result := nextpas.core.net.async.udp.AsyncUdpBind(ALoop, AAddr, APort);
 end;
 
 end.

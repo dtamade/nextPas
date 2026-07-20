@@ -17,6 +17,8 @@ type
     opConnect,
     opSend,
     opRecv,
+    opSendTo,
+    opRecvFrom,
     opClose
   );
 
@@ -75,6 +77,12 @@ type
     function AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: UInt32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvFrom(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: Pointer;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncClose(AFd: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
@@ -394,6 +402,28 @@ begin
         LCallback(UInt64(AIdx), LRes32, LContext);
     end;
 
+    opSendTo:
+    begin
+      LRes := sendto(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
+        FOps[AIdx].Flags, FOps[AIdx].Addr, socklen_t(FOps[AIdx].AddrLenVal));
+      LRes32 := EpollResultFromSyscall(LRes);
+      RemoveFd(FOps[AIdx].Fd);
+      FreeOp(AIdx);
+      if Assigned(LCallback) then
+        LCallback(UInt64(AIdx), LRes32, LContext);
+    end;
+
+    opRecvFrom:
+    begin
+      LRes := recvfrom(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
+        FOps[AIdx].Flags, FOps[AIdx].Addr, FOps[AIdx].AddrLen);
+      LRes32 := EpollResultFromSyscall(LRes);
+      RemoveFd(FOps[AIdx].Fd);
+      FreeOp(AIdx);
+      if Assigned(LCallback) then
+        LCallback(UInt64(AIdx), LRes32, LContext);
+    end;
+
     opClose:
     begin
       LRes := nextpas.core.platform.posix.ffi.close(FOps[AIdx].Fd);
@@ -511,6 +541,38 @@ begin
   LIdx := AllocOp(opRecv, AFd, nil, 0, -1, AFlags, ABuf, nil, ALen,
     ACallback, AContext);
   { Store buf in the Buf field for recv }
+  FOps[LIdx].Buf := ABuf;
+  FOps[LIdx].Len := ALen;
+  Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  if not Result then FreeOp(LIdx);
+end;
+
+function TEpollReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
+  AFlags: Int32; AAddr: Pointer; AAddrLen: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LIdx: Int32;
+begin
+  if not IsValid then begin Result := False; Exit; end;
+  if (AAddr = nil) or (AAddrLen = 0) then begin Result := False; Exit; end;
+  if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,
+    ACallback, AContext);
+  Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
+  if not Result then FreeOp(LIdx);
+end;
+
+function TEpollReactor.AsyncRecvFrom(AFd: Int32; ABuf: Pointer; ALen: UInt32;
+  AFlags: Int32; AAddr: Pointer; AAddrLen: Pointer;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LIdx: Int32;
+begin
+  if not IsValid then begin Result := False; Exit; end;
+  if (AAddr = nil) or (AAddrLen = nil) then begin Result := False; Exit; end;
+  if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
+  LIdx := AllocOp(opRecvFrom, AFd, ABuf, ALen, -1, AFlags, AAddr, AAddrLen, 0,
+    ACallback, AContext);
   FOps[LIdx].Buf := ABuf;
   FOps[LIdx].Len := ALen;
   Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));

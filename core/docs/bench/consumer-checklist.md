@@ -4,8 +4,8 @@
 
 抽检日期：2026-07-20 · 抽检人：bench lane  
 C3：Quiet + 50ms/5 samples + SaveToJSON  
-B32–B36：API / C2 / 扩面 / yaml·log / regex·number  
-B37：+2 **io + csv**（文档抽检 + C3 落地）→ checklist **14** 模块
+B32–B37：消费侧扩面与 C3  
+B38：+2 **xml + atomic**（C3 + API 对齐 / 轻量 C2）→ checklist **16** 模块
 
 ## 检查项
 
@@ -24,7 +24,7 @@ B37：+2 **io + csv**（文档抽检 + C3 落地）→ checklist **14** 模块
 | `nextpas.core.hash/bench_hash` | ✅ | ✅ | ✅ | ✅ | ✅ | `SHA256/1MB`；`build/bench-hash.json` |
 | `nextpas.core.collections/bench_vec` | ✅ | ✅ | ✅ | ✅ | ✅ | `Vec/Push/N=…`；`build/bench-vec.json` |
 | `nextpas.core.json/bench_json` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small`；`build/bench-json.json` |
-| `nextpas.core.fs/bench_fs` | ✅ | ✅ | ✅ | ✅ | ✅ | `SeqWrite/64KB`、`Meta/FileExists`；`build/bench-fs.json` |
+| `nextpas.core.fs/bench_fs` | ✅ | ✅ | ✅ | ✅ | ✅ | `SeqWrite/64KB`；`build/bench-fs.json` |
 | `nextpas.core.encoding/bench_encoding` | ✅ | ✅ | ✅ | ✅ | ✅ | `Base64/Encode`；`build/bench-encoding.json` |
 | `nextpas.core.async/bench_async` | ✅ | ✅ | ✅ | ✅ | ✅ | `Timer/Schedule`；`build/bench-async.json` |
 | `nextpas.core.toml/bench_toml_parse` | ✅ | ✅ | ✅ | ✅ | ✅ | `parse/small`；`build/bench-toml-parse.json` |
@@ -33,19 +33,22 @@ B37：+2 **io + csv**（文档抽检 + C3 落地）→ checklist **14** 模块
 | `nextpas.core.log/bench_log` | ✅ | ✅ | ✅ | ✅ | ✅ | `Disabled/null`；`build/bench-log.json` |
 | `nextpas.core.regex/bench_regex` | ✅ | ✅ | ✅ | ✅ | ✅ | `regex/IsMatch/*`；`build/bench-regex.json` |
 | `nextpas.core.text.number/bench_number` | ✅ | ✅ | ✅ | ✅ | ✅ | `number/IntToBuffer/*`；`build/bench-number.json` |
-| `nextpas.core.io/bench_io` | ✅ | ✅ | ✅ | ✅ | ✅ | `Copy/64KB` 等；Quiet+50ms/5；`build/bench-io.json`（B37） |
-| `nextpas.core.csv/bench_csv` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/1K-rows`、`Parse/10K-rows`；`build/bench-csv.json`（B37） |
+| `nextpas.core.io/bench_io` | ✅ | ✅ | ✅ | ✅ | ✅ | `Copy/64KB`；`build/bench-io.json` |
+| `nextpas.core.csv/bench_csv` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/1K-rows`；`build/bench-csv.json` |
+| `nextpas.core.xml/bench_xml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small\|large`；TXmlDocument.Parse+Done；`build/bench-xml.json`（B38） |
+| `nextpas.core.atomic/bench_atomic` | ✅ | ✅ | ✅ | ✅ | ✅ | `atomic/FetchAdd32` 等；TAtomicUInt32.Create；`build/bench-atomic.json`（B38） |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · B37）
+## 汇总（2026-07-20 · B38）
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **14** 模块 |
-| C1–C5 | **14/14 全 ✅** |
+| 抽检面 | **16** 模块 |
+| C1–C5 | **16/16 全 ✅** |
 | C3 | Quiet + 50ms + 5 samples + `build/bench-*.json` |
 | scorecard | 11 track（含 binsearch、lookup） |
+| EBR | 未做（独立设计） |
 
 ## 可复制片段（CI 友好）
 

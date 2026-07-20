@@ -499,3 +499,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `TcpStreamBindAsyncCancel(stream, async)` / `IAsyncTcpStream.BindCancelToken(async)` installs the bridge on a stream.
 - Does **not** delete Net tokens; HTTP adapters remain. Unit: `nextpas.core.net.async.cancel`.
 - Evidence: `test_net_cancel_bridge` (propagate, already-cancelled, waitable, blocking read cancel, 0 leak).
+
+### Async UDP (Q15)
+- `IAsyncUdpSocket` / `AsyncUdpBind` in `net.async.udp` (IPv4, matches sync `NetUdpBind`).
+- `AsyncSendTo` / `AsyncRecvFrom` (+ Timeout) via poller `AsyncSendTo`/`AsyncRecvFrom`.
+- Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP not implemented (returns False).
+- `IUdpSocketRuntime` exposes native fd for async layer.
+- Evidence: `test_net_async_udp` loopback + timeout + 0 leak.
+- Not: IPv6 UDP, multicast, connected UDP API, IOCP datagram.

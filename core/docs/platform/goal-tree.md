@@ -7,10 +7,10 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **20 platform gates**
-  on GHA `test-windows-runtime` (+error +fmt +info; pass=20 run 29718874441).
-  Script may also list `mem.host_runtime` → job `total=21` (not a platform
-  facade gate). Wine secondary **24** modules. Outside matrix: deeper
+- **Windows x86_64**: durable **`ci-matrix`** for documented **21 platform gates**
+  on GHA `test-windows-runtime` (+error +fmt +info +which; run 29721371136
+  pass=22 with mem.host). `mem.host_runtime` is mem-owned, not a platform
+  facade gate. Wine secondary **24** modules. Outside matrix: deeper
   AcceptEx/ConnectEx; signal forced-compile/source-contract only; secure-zero
   permanent FillChar+barrier.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
@@ -27,7 +27,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 20 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
+| Windows x86_64 | **ci-matrix** 21 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
 | macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -56,13 +56,12 @@ error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
 pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
 Not covered: signal, console, freetype/net.
 
-**Real Windows ci-matrix (20 platform gates)** via `platform-windows-ci-matrix.sh`:
+**Real Windows ci-matrix (21 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
-socket, error, fmt, info, io.reactor.iocp, poller.windows_runtime_smoke,
-platform.io.windows_real, platform.socket.windows_real. Promoted GHA pass=20
-(run 29718874441 @ `534d5e7c4`). Scripts also list **which (candidate, Batch-14)**
-and optional **mem.host_runtime** (mem-owned). Do not claim which as ci-matrix
-until GHA green.
+socket, error, fmt, info, which, io.reactor.iocp, poller.windows_runtime_smoke,
+platform.io.windows_real, platform.socket.windows_real. Promoted after GHA
+run 29721371136 @ `0cb2471bc` (pass=22 with mem.host; which PASS). Optional
+**mem.host_runtime** is mem-owned (job total 22).
 
 ## IOCP / readiness boundary
 

@@ -1,6 +1,8 @@
 program bench_atomic;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.atomic, nextpas.core.platform.info;
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.atomic, nextpas.core.platform.info;
 
 const ITERS = 1000000;
 
@@ -65,25 +67,30 @@ var
   LCounter: TAtomicUInt32;
   LI: Int32;
 begin
-  LCounter.Init;
+  LCounter := TAtomicUInt32.Create(0);
   for LI := 1 to ITERS do
     LCounter.Increment;
   GSinkUInt32 := LCounter.Load;
-  LCounter.Free;
 end;
 
 var
-  LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
-  WriteLn('Platform: ', BenchmarkPlatformName);
+  WriteLn('Platform: ', OSName, ' / ', CPUName);
   WriteLn('Compiler flags: -MObjFPC -Sh -O2');
   WriteLn('Input size: ITERS=1000000; scenarios=plain baseline, AtomicLoad/Store32, AtomicFetchAdd32, AtomicCompareExchange32, TAtomicUInt32');
   WriteLn('Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)');
-  LSuite := TBenchSuite.Create('atomic');
-  LSuite.Add('PlainIncrement', @BenchPlainIncrement)
-    .Add('AtomicLoadStore32', @BenchAtomicLoadStore32)
-    .Add('FetchAdd32', @BenchFetchAdd32)
-    .Add('CompareExchange32', @BenchCompareExchange32)
-    .Add('TAtomicUInt32', @BenchAtomicUInt32);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('atomic')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('atomic/PlainIncrement', @BenchPlainIncrement)
+    .Add('atomic/LoadStore32', @BenchAtomicLoadStore32)
+    .Add('atomic/FetchAdd32', @BenchFetchAdd32)
+    .Add('atomic/CompareExchange32', @BenchCompareExchange32)
+    .Add('atomic/TAtomicUInt32', @BenchAtomicUInt32)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-atomic.json');
 end.

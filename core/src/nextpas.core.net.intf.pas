@@ -107,6 +107,13 @@ type
     procedure Close;
   end;
 
+  { Runtime seam for async UDP. Sync consumers may ignore. }
+  IUdpSocketRuntime = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000011}']
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+  end;
+
 implementation
 
 end.
