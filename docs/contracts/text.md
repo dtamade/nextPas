@@ -73,6 +73,8 @@ function BoolToStr(AValue: Boolean): string;
 
 ## 已知限制
 
+- Case：CaseFolding C/F/S + SpecialCasing 无条件 + Final_Sigma 官方门禁；无 tr/az/lt
+
 1. Collation 仅 DUCET（无 CLDR locale）；UCA 16.0 CollationTest NON_IGNORABLE+SHIFTED 官方全绿
 2. UAX#9 Bidi 至 L2 官方 harness 全绿（L3/L4 平台相关，不在门禁）
 3. 硬 `NextLine` 非 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak`

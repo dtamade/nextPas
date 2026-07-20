@@ -107,6 +107,7 @@ function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline
 function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte; inline;
 function UTF8ToUpper(const AValue: string): string; inline;
 function UTF8ToLower(const AValue: string): string; inline;
+function UTF8ToTitle(const AValue: string): string; inline;
 function UTF8CaseFold(const AValue: string): string; inline;
 function UTF8CaseFoldSimple(const AValue: string): string; inline;
 
@@ -349,6 +350,12 @@ function UTF8ToLower(const AValue: string): string;
 begin
   Result := nextpas.core.text.unicode.casefold.UTF8ToLower(AValue);
 end;
+
+function UTF8ToTitle(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToTitle(AValue);
+end;
+
 
 function UTF8CaseFold(const AValue: string): string;
 begin
