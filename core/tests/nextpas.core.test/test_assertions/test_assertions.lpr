@@ -651,9 +651,71 @@ begin
   LSuite := TTestSuite.Create('soft-multi');
   LSuite.Test('body', @SoftFailBodyMultiOnly);
   CheckFalse(LSuite.RunWithResult(LResult));
-  CheckContains(LResult.Results[0].Message, 'alpha');
-  CheckContains(LResult.Results[0].Message, 'beta');
-  CheckContains(LResult.Results[0].Message, 'gamma');
+  { v8.19: exact join contract — FormatSoftFailSummary uses '; ' }
+  CheckEqual('alpha; beta; gamma', LResult.Results[0].Message,
+    'SoftFail multi join exact');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftFailExactDefaultsAndHardAlsoSoft;
+{ Default SoftCheck* messages + hard then soft annotate exact form. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-defaults');
+  LSuite.Test('defaults', procedure
+    begin
+      SoftFail('');
+      SoftCheckTrue(False);
+      SoftCheckFalse(True);
+      SoftCheckEqual(Int64(1), Int64(2));
+      SoftCheckEqual('x', 'y');
+      SoftCheckContains('abc', 'zz');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(
+    'soft fail; SoftCheckTrue failed; SoftCheckFalse failed; ' +
+    'SoftCheckEqual expected 1 but got 2; ' +
+    'SoftCheckEqual expected "x" but got "y"; ' +
+    'SoftCheckContains expected to find "zz" in "abc"',
+    LResult.Results[0].Message,
+    'SoftCheck default messages exact join');
+  LSuite := Default(TTestSuite);
+
+  LSuite := TTestSuite.Create('hard-also-soft');
+  LSuite.Test('body', @SoftFailBodyHardAfterSoft);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual('hard fatal [also soft: soft then hard]',
+    LResult.Results[0].Message,
+    'hard primary + also soft exact');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure SoftFailBodyCap35;
+var
+  J: Integer;
+begin
+  for J := 0 to 34 do  { 35 soft fails → 32 stored + 3 more }
+    SoftFail('m' + IntToStr(J));
+end;
+
+procedure TestSoftFailCapMoreSuffix;
+{ CMaxSoftFailMsgs=32: overflow count appears as (+N more soft fails). }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LExpected: string;
+begin
+  LSuite := TTestSuite.Create('soft-cap');
+  LSuite.Test('body', @SoftFailBodyCap35);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LExpected := 'm0';
+  for I := 1 to 31 do
+    LExpected := LExpected + '; m' + IntToStr(I);
+  LExpected := LExpected + ' (+3 more soft fails)';
+  CheckEqual(LExpected, LResult.Results[0].Message, 'cap +N more exact');
   LSuite := Default(TTestSuite);
 end;
 
@@ -2250,6 +2312,9 @@ begin
   LSuite.Test('SoftFail multi message',        @TestSoftFailMultiMessage);
   LSuite.Test('SoftCheck string+contains',     @TestSoftCheckStringAndContains);
   LSuite.Test('SoftFail does not FailFast',    @TestSoftFailDoesNotFailFast);
+  { v8.19: SoftFail diagnostic exact contracts }
+  LSuite.Test('SoftFail exact defaults+hard',  @TestSoftFailExactDefaultsAndHardAlsoSoft);
+  LSuite.Test('SoftFail cap +N more',          @TestSoftFailCapMoreSuffix);
 
   if not LSuite.Run then
   begin
