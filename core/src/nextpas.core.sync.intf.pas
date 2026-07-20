@@ -67,6 +67,7 @@ type
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560010}']
     procedure Do_(const AProc: TOnceProc);
     procedure DoOnce(const AProc: TOnceProc);
+    procedure DoOnce(const AProc: TSyncProc);
     function Done: Boolean;
   end;
 

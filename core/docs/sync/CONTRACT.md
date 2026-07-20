@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.sync*.pas`
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
-**最后更新**：2026-07-20
-**版本**：1.5
+**最后更新**：2026-07-21
+**版本**：1.6
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -16,7 +16,7 @@
 | 文件 | 职责 |
 |------|------|
 | `nextpas.core.sync.pas` | 门面：工厂 + 类型 re-export |
-| `nextpas.core.sync.base.pas` | `TLockState`、`TOnceProc`、`TBarrierWaitResult` |
+| `nextpas.core.sync.base.pas` | `TLockState`、`TOnceProc`、`TSyncProc`、`TBarrierWaitResult`、Channel 结果枚举 |
 | `nextpas.core.sync.intf.pas` | 全部公开 interface |
 | `nextpas.core.sync.errors.pas` | 内部错误映射（`SyncRaise*`）；**不**进门面 re-export |
 | `nextpas.core.sync.mutex.pas` | `TMutex`、`TFutexMutex` |
@@ -109,8 +109,9 @@ ICondVar = interface
 end;
 
 IOnce = interface
-  procedure Do_(const AProc: TOnceProc);   // 命名冻结：避开关键字 Do
-  procedure DoOnce(const AProc: TOnceProc); // 可读别名；语义 ≡ Do_
+  procedure Do_(const AProc: TOnceProc);      // 命名冻结：避开关键字 Do
+  procedure DoOnce(const AProc: TOnceProc);   // 别名 ≡ Do_
+  procedure DoOnce(const AProc: TSyncProc); // 闭包重载
   function Done: Boolean;
 end;
 
@@ -169,16 +170,33 @@ IChannel = interface
   function Len: SizeInt;
   function Cap: SizeInt;
 end;
+
+{ Channel result enums (nextpas.core.sync.base; uses that unit for csr*/crr* symbols) }
+TChannelSendResult = (csrOk, csrClosed, csrFull, csrTimeout);
+TChannelRecvResult = (crrOk, crrClosed, crrEmpty, crrTimeout);
 ```
 
 **超时约定**
 
 - 纳秒重载：`ATimeoutNs` 为 `Int64`（ns）
 - `TDuration` 重载：转发到 `.AsNanoseconds`（与 `nextpas.core.time.base` 对齐）
-- 返回 `Boolean`：`True` = 成功/未超时，`False` = 超时
+- 多数 `WaitTimeout`：`Boolean` — `True` = 成功/未超时，`False` = 超时
+- **Channel**：超时**不得**折叠为 Full/Empty — 使用 `csrTimeout` / `crrTimeout`
+
+**Channel 结果矩阵**
+
+| 操作 | 成功 | 关闭 | 满/空 | 超时 |
+|------|------|------|-------|------|
+| `TrySend` | `csrOk` | `csrClosed` | `csrFull` | — |
+| `SendTimeout` | `csrOk` | `csrClosed` | (wait) | `csrTimeout` |
+| `TryRecv` | `crrOk` | `crrClosed` | `crrEmpty` | — |
+| `RecvTimeout` | `crrOk` | `crrClosed` | (wait) | `crrTimeout` |
+| `Send`/`Recv` | `True` | `False`（Recv 排空后） | 阻塞 | — |
+
+**枚举符号可见性**：FPC 门面 type alias **不**导入 `csrOk` 等成员。消费者请 `uses nextpas.core.sync, nextpas.core.sync.base`。
 
 **已废弃文档名（不得再写）**：`ILockable`、`IRWLockable`、`DoCall`、`WaitFor` / `WaitForTimeout`（毫秒版签名）、`IMutex.NativeHandle`（已迁至 `INativeMutex`）。
-**冻结**：`IOnce.Do_` 公开名不删除；`DoOnce` 仅为别名。
+**冻结**：`IOnce.Do_` 公开名不删除；`DoOnce` 为别名 + `TSyncProc` 重载。
 
 ### 1.4 原语语义摘要
 
@@ -187,32 +205,39 @@ end;
 | `TMutex` | `PLATFORM_MUTEX_ERRORCHECK`，**非递归**；`INativeMutex`；`FHandle` private | stable |
 | `TRecursiveMutex` | `PLATFORM_MUTEX_RECURSIVE`；`INativeMutex`（可配 CondVar） | stable |
 | `TFutexMutex` | CAS 三态 + address-wait；**仅** `IMutex` | advanced |
-| `TRWLock` | platform rwlock；`FHandle` private | stable |
-| `TCondVar` | 仅配对 `INativeMutex`；`FHandle` private | stable |
+| `TRWLock` | platform rwlock；`FHandle` private；`Release*` 忽略 unlock 返回值 | stable |
+| `TCondVar` | 仅配对 `INativeMutex`；`WaitTimeout`：TIMEDOUT→False，其它非 0→raise | stable |
 | `TSpinLock` | atomic flag + yield | stable |
 | `TWaitGroup` | 可动态 `Add`；`WaitTimeout` | stable |
-| `TOnce` | `DoOnce` ≡ `Do_`；异常回 INIT | stable |
+| `TOnce` | `Do_` / `DoOnce(TOnceProc|TSyncProc)`；异常回 INIT | stable |
 | `TSemaphore` | atomic + address-wait | stable |
 | `TBarrier` | 可复用 generation | stable |
-| `IEvent` | manual / auto | stable |
-| `ILatch` | **一次性** countdown；无 `Add`；`CountDown` 过量 raise | stable |
-| `INotify` | `NotifyOne` 粘性 permit；`NotifyAll` 升 epoch 唤醒当前等待者 | stable |
-| `IChannel` | 有界 MPMC `Pointer`；`capacity >= 1`；`Close` 唤醒阻塞方 | stable |
+| `IEvent` | manual（默认）/ auto；默认 `Event(True)` = manual | stable |
+| `ILatch` | **一次性**；`CountDown` 会使剩余为负 → raise；到 0 后 no-op | stable |
+| `INotify` | `NotifyOne` 粘性 permit；`NotifyAll` = 清 permit + epoch（只醒当前 waiter，非粘性广播） | stable |
+| `IChannel` | 有界 MPMC `Pointer`；`csrTimeout`/`crrTimeout` 独立 | stable |
 | Scoped | `WithLock`/`WithReadLock`/`WithWriteLock` + `Guard*` | stable |
-| `TSyncPool` | TLS freelist + global `IMutex`；门面 re-export | **advanced** |
+| `TSyncPool` | TLS freelist；**强制** `TPoolItem`；门面 advanced | **advanced** |
 
 ### 1.5 CondVar 配对规则
 
 - `ICondVar.Wait` / `WaitTimeout` 参数类型为 **`INativeMutex`**（编译期隔离）
 - `NativeHandle` 必须指向完整 `TPlatformMutex`（仅经接口方法暴露，不公开字段）
 - `TFutexMutex` 不实现 `INativeMutex`，无法传入 Wait
+- `WaitTimeout`：`0` → True；`PLATFORM_ERR_TIMEDOUT` → False；**其它** → `EInvalidOperationError`
 
 ### 1.6 TSyncPool（advanced）
 
 - 单元：`nextpas.core.sync.pool`；门面 re-export `TSyncPool` / `CreateSyncPool` / builder 类型
-- 工厂项须为 `TPoolItem`（或兼容 `PoolNext` 布局）的对象指针
+- 工厂返回值与 `Put` 参数必须是 **`TPoolItem` 实例**（`TObject is TPoolItem`）；否则 `EArgumentError`
 - TLS freelist：按 pool `Owner` 隔离；冷路径 nextpas `IMutex`
 - `DrainTLS`：线程退出前归还 TLS freelist
+
+### 1.6b Notify 语义（对齐 tokio `Notify`）
+
+- `NotifyOne`：存款 sticky permit + wake one；无 waiter 时后续 `Wait` 立即返回
+- `NotifyAll`：清空 permits，bump epoch，wake all **当前** waiter；**不**给迟到 `Wait` 粘性广播
+- 需要粘性全员可见信号 → 使用 `Event(manual)`
 
 ### 1.7 Latch vs WaitGroup vs Barrier
 
@@ -259,7 +284,9 @@ end;
 
 | 场景 | 行为 |
 |------|------|
-| `TMutex` / `TRWLock` / `TCondVar` platform init/lock/unlock/destroy 失败 | `EInvalidOperationError`，消息含 op 名 + 平台码名 |
+| `TMutex` / `TRWLock` / `TCondVar` platform init/lock/destroy 失败 | `EInvalidOperationError`，消息含 op 名 + 平台码名 |
+| `TCondVar.WaitTimeout` | `TIMEDOUT` → False；其它非 0 → raise |
+| `TRWLock.ReleaseRead/Write` | **忽略** unlock 返回值（平台常为 0；与 Acquire 不对称，有意） |
 | `WaitGroup.Add` ≤ 0 | `EArgumentError` |
 | `WaitGroup.Done` 导致计数 < 0 | `EInvalidOperationError` |
 | `Semaphore` 初始 < 0 | `EArgumentError` |
@@ -268,10 +295,9 @@ end;
 | `CondVar` + 非 `INativeMutex` | **编译期**不可传入 |
 | `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` / `DoOnce` |
 | `CondVar.Wait` 非持有者 / 错误 handle | 未定义（调用方契约） |
-| Destroy 时仍持锁 | **调用方必须先释放**。若 `platform_*_destroy` 返回非 0（POSIX 常为 EBUSY），L1 **raise**；若宿主返回 0 则无 L1 检测。不得依赖「Destroy 自动解锁」 |
-| `RecursiveMutex` | 已提供；默认 `Mutex` 仍为非递归 |
-| `TSyncPool` 门面 | advanced re-export；工厂对象须为 `TPoolItem` |
-| `Channel` 无界 / 泛型载荷 | **暂缓** — 仅有界 `Pointer` |
+| Destroy 时仍持锁 | **调用方必须先释放**。若 `platform_*_destroy` 返回非 0，L1 **raise** |
+| `TSyncPool` 非 `TPoolItem` | `EArgumentError` |
+| `Channel` 无界 / 泛型载荷 | **暂缓** |
 | 无缓冲 rendezvous channel | **暂缓** |
 | 公开 API 重命名 `Do_` | **禁止** |
 
@@ -308,7 +334,7 @@ end;
 
 | Gate | 路径 | 说明 |
 |------|------|------|
-| 核心原语 | `core/tests/nextpas.core.sync/test_sync` | 行为 + 超时 + DoOnce + 错误路径；`TWorkerThread` |
+| 核心原语 | `core/tests/nextpas.core.sync/test_sync` | 行为 + Channel timeout 区分 + Notify/Once/Pool 负向；`TWorkerThread` |
 | TSyncPool | `core/tests/nextpas.core.sync/test_sync_pool` | TLS / 并发 / Drain；`TWorkerThread` |
 | 源契约 | `core/tests/nextpas.core.sync/test_sync_source_contracts` | 门面/边界/RTL 隔离/非递归默认 |
 
@@ -349,3 +375,4 @@ make -C core/tests/nextpas.core.sync test
 | 2026-07-20 | 1.3 | per-pool TLS；INativeMutex；Win compile gate；SCORECARD |
 | 2026-07-20 | 1.4 | `WaitTimeout`/`TryAcquireTimeout` `TDuration` 重载；`DoOnce` 别名；`WaitGroup.WaitTimeout`；`sync.errors` 统一错误；`FHandle` private；测试/示例/bench 禁用 SysUtils/Classes/SyncObjs，改 `TWorkerThread` |
 | 2026-07-20 | 1.5 | `RecursiveMutex`；`ILatch`/`INotify`/`IChannel`；Scoped 组合器；`TSyncPool` 门面 advanced re-export；`Do_` 仍冻结 |
+| 2026-07-21 | 1.6 | Channel `csrTimeout`/`crrTimeout`；CondVar WaitTimeout 区分 TIMEDOUT/raise；NotifyAll 清 permit；`DoOnce(TSyncProc)`；Pool 强制 `TPoolItem` |

@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：**Maintenance Ready** — CONTRACT **1.5**（1.4 可用性 + RecursiveMutex / Latch / Notify / Channel / Scoped / Pool 门面）
+**状态**：**Maintenance Ready** — CONTRACT **1.6**（Channel 超时枚举、CondVar 错误面、Notify/Once/Pool 硬化）
 
 ---
 
@@ -68,7 +68,13 @@ function CreateSyncPool(...): TSyncPool;   // advanced
 procedure WithLock / WithReadLock / WithWriteLock;
 ```
 
-超时：ns + `TDuration`。多线程消费者使用 `TWorkerThread`。
+超时：ns + `TDuration`（推荐 Duration）。多线程消费者使用 `TWorkerThread`。
+
+**Channel 结果**：`TrySend` 满 → `csrFull`；`SendTimeout` 到期 → **`csrTimeout`**（二者不同）。
+枚举常量定义在 `nextpas.core.sync.base`：`uses nextpas.core.sync, nextpas.core.sync.base`。
+
+**Event 默认**：`Event` / `Event(True)` = **manual reset**；auto 请 `Event(False)`。
+
 **注意**：`async.channel` 是事件循环模型，与 L1 阻塞 `Channel` 不混用。
 
 ---

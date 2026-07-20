@@ -104,7 +104,11 @@ forbid_token "$INTF" 'IRWLockable'
 
 require_token "$INTF" 'procedure Do_'
 require_token "$INTF" 'procedure DoOnce'
-# Do_ public name stays frozen (DoOnce is alias only)
+require_token "$INTF" 'procedure DoOnce(const AProc: TSyncProc)'
+# Do_ public name stays frozen (DoOnce is alias + TSyncProc overload)
+require_file "$SRC/nextpas.core.sync.base.pas"
+require_token "$SRC/nextpas.core.sync.base.pas" 'csrTimeout'
+require_token "$SRC/nextpas.core.sync.base.pas" 'crrTimeout'
 require_file "$SRC/nextpas.core.sync.latch.pas"
 require_file "$SRC/nextpas.core.sync.notify.pas"
 require_file "$SRC/nextpas.core.sync.channel.pas"
@@ -166,8 +170,10 @@ for f in "$MUTEX" "$RWLOCK" "$CONDVAR"; do
   fi
 done
 
-# --- CondVar pairs only with INativeMutex ---
+# --- CondVar pairs only with INativeMutex; timeout vs platform error ---
 require_token "$CONDVAR" 'INativeMutex'
+require_token "$CONDVAR" 'PLATFORM_ERR_TIMEDOUT'
+require_token "$CONDVAR" 'SyncRaiseOpFailed'
 forbid_token "$CONDVAR" 'CheckNotFutexMutex'
 forbid_token "$CONDVAR" 'TFutexMutex'
 

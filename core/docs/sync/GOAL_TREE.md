@@ -2,7 +2,7 @@
 
 **Lane**: `sync` @ `.worktrees/sync`
 **状态**: **Maintenance Ready**
-**更新**: 2026-07-20（CONTRACT **1.5** P3 扩展）
+**更新**: 2026-07-21（CONTRACT **1.6** usability harden）
 
 ## 愿景
 
@@ -20,6 +20,7 @@
 - [x] 文档 SSOT：README / CONTRACT / SCORECARD / 本 GOAL_TREE
 - [x] **1.4 usability**：`TDuration` 超时、`DoOnce`、`sync.errors`、`TWorkerThread` 消费者
 - [x] **1.5 P3**：`RecursiveMutex`、`Latch`、`Notify`、`Channel`、Scoped、`TSyncPool` 门面
+- [x] **1.6 harden**：Channel timeout 枚举；CondVar 错误/超时分离；NotifyAll 语义；Once 闭包；Pool `TPoolItem` 检查
 - [x] path-limited land 多批
 
 ---
@@ -41,6 +42,7 @@
 - 公开 API 重命名（如删除 `Do_`）— **冻结**
 - FPC `SyncObjs` / 消费者直接 `SysUtils`/`Classes` — **禁止**
 - 无界 channel / rendezvous(0) / 非 Pointer 载荷 — **待消费者驱动**
+- Event 默认改 auto — **不做**（破坏性；文档说明即可）
 
 ---
 

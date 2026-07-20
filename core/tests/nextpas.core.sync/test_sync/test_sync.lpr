@@ -1154,6 +1154,112 @@ begin
   end;
 end;
 
+procedure TestChannelTimeoutDistinct;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(1);
+  Check(C.TrySend(Pointer(1)) = csrOk, 'fill');
+  Check(C.SendTimeout(Pointer(2), TDuration.FromMilliseconds(1)) = csrTimeout,
+    'send timeout != full');
+  Check(C.TrySend(Pointer(3)) = csrFull, 'still full via TrySend');
+  Check(C.Recv(P), 'drain');
+  Check(C.RecvTimeout(P, TDuration.FromMilliseconds(1)) = crrTimeout,
+    'recv timeout != empty');
+  Check(C.TryRecv(P) = crrEmpty, 'still empty via TryRecv');
+end;
+
+procedure TestLatchCountDownTooMany;
+var
+  L: ILatch;
+  LRaised: Boolean;
+begin
+  L := Latch(1);
+  L.CountDown;
+  LRaised := False;
+  try
+    L.CountDown;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  { After zero, CountDown is no-op per INV-11 — not raise. }
+  Check(not LRaised, 'countdown at zero is no-op');
+  Check(L.TryWait, 'still open');
+end;
+
+procedure TestLatchCountDownWouldGoNegative;
+var
+  L: ILatch;
+  LRaised: Boolean;
+begin
+  L := Latch(1);
+  LRaised := False;
+  try
+    L.CountDown(2);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'countdown 2 from 1 raises');
+  CheckEqual(Int64(1), Int64(L.Remaining), 'remaining unchanged');
+end;
+
+procedure TestDoOnceClosure;
+var
+  LOnce: IOnce;
+  LHits: Integer;
+begin
+  LOnce := Once;
+  LHits := 0;
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits);
+  end);
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits, 10);
+  end);
+  CheckEqual(Int64(1), Int64(LHits), 'closure DoOnce runs once');
+  Check(LOnce.Done, 'done');
+end;
+
+procedure TestNotifyAllClearsPermits;
+var
+  N: INotify;
+begin
+  N := Notify;
+  N.NotifyOne;
+  N.NotifyAll;
+  { sticky permit cleared by NotifyAll; no waiter was present }
+  Check(not N.WaitTimeout(TDuration.FromMilliseconds(1)),
+    'no sticky permit after NotifyAll');
+end;
+
+procedure TestPoolRejectsNonPoolItem;
+var
+  LPool: TSyncPool;
+  LObj: TObject;
+  LRaised: Boolean;
+begin
+  LPool := CreateSyncPool(@PoolFacadeFactory);
+  LObj := TObject.Create;
+  try
+    LRaised := False;
+    try
+      LPool.Put(LObj);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Put non-TPoolItem raises');
+  finally
+    LObj.Free;
+    LPool.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -1219,9 +1325,15 @@ begin
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
   T.Test('Channel producer consumer', @TestChannelProducerConsumer);
+  T.Test('Channel timeout distinct', @TestChannelTimeoutDistinct);
+  T.Test('Latch countdown at zero no-op', @TestLatchCountDownTooMany);
+  T.Test('Latch countdown would go negative', @TestLatchCountDownWouldGoNegative);
+  T.Test('DoOnce closure', @TestDoOnceClosure);
+  T.Test('NotifyAll clears permits', @TestNotifyAllClearsPermits);
   T.Test('Scoped WithLock', @TestScopedWithLock);
   T.Test('Scoped RW', @TestScopedRW);
   T.Test('Pool facade', @TestPoolFacade);
+  T.Test('Pool rejects non-TPoolItem', @TestPoolRejectsNonPoolItem);
 
   if not T.Run then Halt(1);
 end.

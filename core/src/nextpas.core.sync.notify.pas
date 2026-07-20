@@ -60,6 +60,9 @@ end;
 
 procedure TNotify.NotifyAll;
 begin
+  { Wake current waiters only (tokio notify_waiters). Clear sticky permits so a
+    prior NotifyOne does not mix with the broadcast generation. }
+  atomic_store(FPermits, 0, mo_release);
   InterlockedIncrement(FEpoch);
   platform_wake_address_all(@FEpoch);
 end;

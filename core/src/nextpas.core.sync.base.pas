@@ -21,17 +21,20 @@ type
     Generation: Int64;
   end;
 
-  { Bounded MPMC channel of Pointer items (L1; no generics). }
+  { Bounded MPMC channel of Pointer items (L1; no generics).
+    Timeout is distinct from Full/Empty (CONTRACT 1.6). }
   TChannelSendResult = (
     csrOk,
     csrClosed,
-    csrFull
+    csrFull,
+    csrTimeout
   );
 
   TChannelRecvResult = (
     crrOk,
     crrClosed,
-    crrEmpty
+    crrEmpty,
+    crrTimeout
   );
 
 implementation

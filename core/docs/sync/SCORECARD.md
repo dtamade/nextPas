@@ -85,14 +85,18 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 
 ---
 
-## 决策（1.5）
+## 决策（1.5–1.6）
 
 | 议题 | 决定 | 证据 |
 |------|------|------|
 | 公开 `RecursiveMutex` | **已上线** | `test_sync` reentry + CondVar 配对 |
-| `TSyncPool` 门面化 | **advanced re-export** | 门面 `CreateSyncPool` + `test_sync` Pool facade |
-| Channel / Latch / Notify / Scoped | **已上线** | `test_sync` 61 cases 含 P3 |
-| 删除 `Do_` | **禁止** | 契约冻结；`DoOnce` 为别名 |
+| `TSyncPool` 门面化 | **advanced** + 强制 `TPoolItem` | Pool facade + 负向测试 |
+| Channel / Latch / Notify / Scoped | **已上线** | `test_sync` 67 cases |
+| Channel 超时 | **`csrTimeout`/`crrTimeout`** | Channel timeout distinct |
+| CondVar WaitTimeout 错误 | TIMEDOUT→False，其它 raise | CONTRACT 1.6 |
+| 删除 `Do_` | **禁止** | `DoOnce(TSyncProc)` 重载 |
+
+**SC9/SC10 噪声**：2T wall-clock 受调度/计时量化影响大，CV 与绝对值仅作趋势，非 CI 硬门。
 
 ---
 

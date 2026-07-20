@@ -26,7 +26,8 @@ type
 implementation
 
 uses
-  nextpas.core.sync.errors;
+  nextpas.core.sync.errors,
+  nextpas.core.platform.error;
 
 constructor TCondVar.Create;
 var
@@ -62,7 +63,11 @@ var
   LRet: Int32;
 begin
   LRet := platform_condvar_timedwait(FHandle, TPlatformMutex(AMutex.NativeHandle^), ATimeoutNs);
-  Result := (LRet = 0);
+  if LRet = 0 then
+    Exit(True);
+  if LRet = PLATFORM_ERR_TIMEDOUT then
+    Exit(False);
+  SyncRaiseOpFailed('TCondVar', 'WaitTimeout', LRet);
 end;
 
 function TCondVar.WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;

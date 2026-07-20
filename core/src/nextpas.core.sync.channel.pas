@@ -182,9 +182,9 @@ begin
       end;
       LRemaining := ATimeoutNs - LDeadline.Elapsed.AsNanoseconds;
       if LRemaining <= 0 then
-        Exit(csrFull);
+        Exit(csrTimeout);
       if not FNotFull.WaitTimeout(FMutex, LRemaining) then
-        Exit(csrFull);
+        Exit(csrTimeout);
     end;
   finally
     FMutex.Release;
@@ -218,9 +218,9 @@ begin
       end;
       LRemaining := ATimeoutNs - LDeadline.Elapsed.AsNanoseconds;
       if LRemaining <= 0 then
-        Exit(crrEmpty);
+        Exit(crrTimeout);
       if not FNotEmpty.WaitTimeout(FMutex, LRemaining) then
-        Exit(crrEmpty);
+        Exit(crrTimeout);
     end;
   finally
     FMutex.Release;
