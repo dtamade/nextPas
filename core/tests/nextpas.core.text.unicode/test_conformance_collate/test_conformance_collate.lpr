@@ -11,7 +11,8 @@ program test_conformance_collate;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.types,
@@ -118,15 +119,16 @@ var
 begin
   P := Pos(';', ALine);
   if P > 0 then
-    Result := Trim(Copy(ALine, 1, P - 1))
+    Result := TextTrim(Copy(ALine, 1, P - 1))
   else
-    Result := Trim(ALine);
+    Result := TextTrim(ALine);
 end;
 
 procedure RunCollationFile(const APath: string; const AVariable: TCollationVariableWeighting;
   const ALabel: string);
 var
-  LFile: TextFile;
+  LLines: TStringArray;
+  LLineIdx: Integer;
   LLine: string;
   LField, LPrevField: string;
   LPrev, LCur: string;
@@ -150,12 +152,10 @@ begin
   LPrevField := '';
   LMaxFailPrint := 40;
 
-  AssignFile(LFile, APath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  LLines := ReadFileLines(APath);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -176,19 +176,16 @@ begin
         begin
           Inc(LFail);
           if LFail <= LMaxFailPrint then
-            WriteLn(Format('FAIL %s L%d cmp=%d prev=[%s] cur=[%s]',
+            WriteLn(TextFormat('FAIL %s L%d cmp=%d prev=[%s] cur=[%s]',
               [ALabel, LLineNo, LCmp, LPrevField, LField]));
         end;
       end;
       LPrev := LCur;
       LPrevField := LField;
       LHasPrev := True;
-    end;
-  finally
-    CloseFile(LFile);
   end;
 
-  WriteLn(Format('%s: data=%d fail=%d skip=%d', [ALabel, LData, LFail, LSkip]));
+  WriteLn(TextFormat('%s: data=%d fail=%d skip=%d', [ALabel, LData, LFail, LSkip]));
   Check(LFail = 0, ALabel + ' fail=0');
   Check(LData > 1000, ALabel + ' has data');
 end;

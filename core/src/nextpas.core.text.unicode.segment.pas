@@ -86,22 +86,23 @@ implementation
 uses
   nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.base,
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.sync;
 
 var
   FUnicodeSegmenter: IUnicodeSegmenter;
-  FSegmenterCS: TRTLCriticalSection;
+  FSegmenterLock: IMutex;
 
 function UnicodeSegmenter: IUnicodeSegmenter;
 begin
   if FUnicodeSegmenter = nil then
   begin
-    EnterCriticalSection(FSegmenterCS);
+    FSegmenterLock.Acquire;
     try
       if FUnicodeSegmenter = nil then
         FUnicodeSegmenter := TUnicodeSegmenter.Create;
     finally
-      LeaveCriticalSection(FSegmenterCS);
+      FSegmenterLock.Release;
     end;
   end;
   Result := FUnicodeSegmenter;
@@ -1803,9 +1804,9 @@ begin
 end;
 
 initialization
-  InitCriticalSection(FSegmenterCS);
+  FSegmenterLock := Mutex;
 
 finalization
-  DoneCriticalSection(FSegmenterCS);
+  
 
 end.

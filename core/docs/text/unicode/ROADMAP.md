@@ -46,6 +46,7 @@
 | **P2-2** SCORECARD v3 | ⬜ | 全量重跑 + Width 测项 + tip 钉死 |
 | **P2-3** Bidi 视觉序 | ⬜ | 由 levels 生成 visual index 置换（TUI RTL，非 L3 镜像） |
 | **P2-4** Script_Extensions | ⬜ | `GetScriptExtensions` 多脚本 |
+| **P0-RTL** 隔离清零 | ✅ | 生产 IMutex；conformance 去 SysUtils |
 | **P2-5** UTS#46 IDNA | ✅ | 大 epic：Punycode + ToASCII/ToUnicode（net 拉票可优先） |
 | **P2-6** CLDR Collation | 🔒 | 仍深水 |
 
@@ -159,6 +160,7 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-20 | P0-RTL：IMutex + conformance 去 SysUtils |
 | 2026-07-20 | P2-5：Punycode + IDNA ToASCII/ToUnicode |
 | 2026-07-20 | Phase2 重规划 + P2-1 BinaryProperty 扩展 |
 | 2026-07-20 | M3e：text 门面 TitleWords + C6 基线 |
