@@ -166,11 +166,10 @@ jobs:
           # L0: pbKqueue Create/Poll on real macOS host. skip is treated as fail.
           ASYNC_HOST_GATES=kqueue-runtime ASYNC_HOST_STRICT=1 bash scripts/async-host-matrix.sh
 
-      - name: Async dial/resolve matrix (best-effort)
-        continue-on-error: true
+      - name: Async dial/resolve matrix (fail-closed on Darwin)
         run: |
-          # L1: dial + resolve + kqueue compile; not full macOS async parity.
-          NEXTPAS_ASYNC_HOST_BEST_EFFORT=1 ASYNC_HOST_GATES=dial-resolve bash scripts/async-host-matrix.sh
+          # L1: dial + resolve + kqueue compile — host smoke fail-closed (not full async parity).
+          ASYNC_HOST_GATES=dial-resolve ASYNC_HOST_STRICT=1 bash scripts/async-host-matrix.sh
 
       - name: Run tests (best-effort inventory; non-promotional)
         continue-on-error: true

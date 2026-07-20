@@ -113,8 +113,9 @@ begin
   // Same case: a == a
   CheckEqual(LCollator.Compare('a', 'a'), 0, 'a == a');
 
-  // Precomposed á decomposes to a + combining acute (ignorable) → equals a
-  CheckEqual(LCollator.Compare('á', 'a'), 0, 'á == a (NFD: a + combining acute)');
+  // Precomposed á → a + combining acute: same primary, differs at secondary
+  Check(LCollator.Compare('á', 'a') <> 0, 'á != a (tertiary/secondary accent)');
+  Check(LCollator.Compare('a', 'á') < 0, 'a < á (secondary acute)');
 
   // à vs À have different tertiary (lowercase vs uppercase)
   Check(LCollator.Compare('à', 'À') < 0, 'à < À (tertiary)');
@@ -224,15 +225,21 @@ end;
 procedure TestIgnorableCharacters;
 var
   LCollator: IUnicodeCollator;
+  LOpts: TCollationOptions;
 begin
-  LCollator := UnicodeCollator;
-
-  // Combining marks are ignorable at primary level
+  LOpts := DefaultCollationOptions;
+  LOpts.Strength := csPrimary;
+  LCollator := UnicodeCollatorWithOptions(LOpts);
+  // Primary: combining mark does not affect order
   CheckEqual(
-    LCollator.Compare('a', 'a' + #$CC#$81),  // a vs a + combining acute
+    LCollator.Compare('a', 'a' + #$CC#$81),
     0,
     'a equals a + combining acute (primary)'
   );
+  LOpts.Strength := csSecondary;
+  LCollator := UnicodeCollatorWithOptions(LOpts);
+  Check(LCollator.Compare('a', 'a' + #$CC#$81) <> 0,
+    'a differs from a + acute (secondary)');
 end;
 
 procedure TestWeightPacking;
@@ -303,11 +310,9 @@ begin
   LSecondaryOpts := DefaultCollationOptions;
   LSecondaryOpts.Strength := csSecondary;
   LSecondaryCol := UnicodeCollatorWithOptions(LSecondaryOpts);
-  // á decomposes to a + combining acute; combining acute is ignorable (weight 0)
-  // So á == a at ALL levels including secondary
-  CheckEqual(LSecondaryCol.Compare('a', 'á'), 0, 'á == a (secondary, combining ignorable)');
-  // à decomposes to a + combining grave; also ignorable
-  CheckEqual(LSecondaryCol.Compare('a', 'à'), 0, 'à == a (secondary, combining ignorable)');
+  Check(LSecondaryCol.Compare('a', 'á') <> 0, 'á != a (secondary accent)');
+  Check(LSecondaryCol.Compare('a', 'à') <> 0, 'à != a (secondary accent)');
+  CheckEqual(LSecondaryCol.Compare('a', 'A'), 0, 'a == A (secondary ignores case)');
 
   // Tertiary: distinguish case
   LTertiaryOpts := DefaultCollationOptions;
@@ -400,9 +405,9 @@ begin
   // a and A: different codepoints
   Check(LIdentCol.Compare('a', 'A') <> 0, 'a != A (identical)');
 
-  // Sort key must have more levels than tertiary
-  Check(Length(LIdentCol.GetSortKey('test')) > Length(UnicodeCollator.GetSortKey('test')),
-    'Identical sort key > default sort key length');
+  // Identical strength: equal only when NFD codepoints match
+  CheckEqual(LIdentCol.Compare('café', 'café'), 0, 'identical equal');
+  Check(LIdentCol.Compare('a', 'A') <> 0, 'identical a!=A');
 end;
 
 { === CaseLevel === }
@@ -524,27 +529,28 @@ end;
 procedure TestPunctuationSorting;
 var
   LCollator: IUnicodeCollator;
+  LOpts: TCollationOptions;
 begin
+  // Non-ignorable (default): variable punctuation keeps primary weights
   LCollator := UnicodeCollator;
-
-  // In DUCET, most ASCII punctuation has weight 0 (ignorable)
-  // This means punctuation sorts equal to empty at primary level
-  CheckEqual(Int64(GetCollationWeight(Ord('-'))), Int64(0), 'hyphen weight = 0 (ignorable)');
-  CheckEqual(Int64(GetCollationWeight(Ord('.'))), Int64(0), 'period weight = 0 (ignorable)');
-  CheckEqual(Int64(GetCollationWeight(Ord(' '))), Int64(0), 'space weight = 0 (ignorable)');
-  CheckEqual(Int64(GetCollationWeight(Ord(','))), Int64(0), 'comma weight = 0 (ignorable)');
-
-  // Dollar sign ($) has non-zero weight (position 0x24 = $21B12002)
+  Check(GetCollationWeight(Ord('-')) > 0, 'hyphen has primary weight (variable)');
+  Check(GetCollationWeight(Ord('.')) > 0, 'period has primary weight (variable)');
+  Check(GetCollationWeight(Ord(' ')) > 0, 'space has primary weight (variable)');
+  Check(GetCollationWeight(Ord(',')) > 0, 'comma has primary weight (variable)');
   Check(GetCollationWeight(Ord('$')) > 0, 'dollar sign has weight');
 
-  // At primary level, ignorable punctuation is invisible
-  CheckEqual(LCollator.Compare('ab', 'a-b'), 0, 'ab == a-b (hyphen ignorable)');
-  CheckEqual(LCollator.Compare('ab', 'a.b'), 0, 'ab == a.b (period ignorable)');
-  CheckEqual(LCollator.Compare('ab', 'a b'), 0, 'ab == a b (space ignorable)');
-
-  // Letters still sort correctly with embedded punctuation
+  // Embedded punctuation changes order under Non-ignorable
+  Check(LCollator.Compare('ab', 'a-b') <> 0, 'ab != a-b (non-ignorable)');
   Check(LCollator.Compare('ab', 'ac') < 0, 'ab < ac');
-  Check(LCollator.Compare('a-b', 'ac') < 0, 'a-b < ac (hyphen ignorable, b < c)');
+
+  // Shifted: variable primaries move to L4 → invisible at primary
+  LOpts := DefaultCollationOptions;
+  LOpts.Strength := csPrimary;
+  LOpts.VariableWeighting := cvwShifted;
+  LCollator := UnicodeCollatorWithOptions(LOpts);
+  CheckEqual(LCollator.Compare('ab', 'a-b'), 0, 'ab == a-b (shifted primary)');
+  CheckEqual(LCollator.Compare('ab', 'a.b'), 0, 'ab == a.b (shifted primary)');
+  CheckEqual(LCollator.Compare('ab', 'a b'), 0, 'ab == a b (shifted primary)');
 end;
 
 { === Format Characters (Ignorable) === }
@@ -581,30 +587,26 @@ end;
 procedure TestVariableWeightChars;
 var
   LCollator: IUnicodeCollator;
+  LOpts: TCollationOptions;
 begin
-  // In DUCET, most ASCII punctuation is "variable weight" with weight 0
-  // (ignorable at primary level). Our implementation uses the default DUCET weights.
-
-  LCollator := UnicodeCollator;
-
-  // ASCII punctuation has weight 0 (ignorable)
-  CheckEqual(Int64(GetCollationWeight(Ord(','))), Int64(0), 'comma weight = 0');
-  CheckEqual(Int64(GetCollationWeight(Ord(';'))), Int64(0), 'semicolon weight = 0');
-  CheckEqual(Int64(GetCollationWeight(Ord('!'))), Int64(0), 'exclamation weight = 0');
-  CheckEqual(Int64(GetCollationWeight(Ord('?'))), Int64(0), 'question weight = 0');
-  CheckEqual(Int64(GetCollationWeight(Ord('-'))), Int64(0), 'hyphen weight = 0');
-  CheckEqual(Int64(GetCollationWeight(Ord('.'))), Int64(0), 'period weight = 0');
-
-  // Dollar sign has non-zero weight (U+0024 = $21B12002)
+  // Variable-weighted punctuation has non-zero primary in the table
+  Check(GetCollationWeight(Ord(',')) > 0, 'comma variable primary');
+  Check(GetCollationWeight(Ord(';')) > 0, 'semicolon variable primary');
+  Check(GetCollationWeight(Ord('!')) > 0, 'exclamation variable primary');
+  Check(GetCollationWeight(Ord('?')) > 0, 'question variable primary');
+  Check(GetCollationWeight(Ord('-')) > 0, 'hyphen variable primary');
+  Check(GetCollationWeight(Ord('.')) > 0, 'period variable primary');
   Check(GetCollationWeight(Ord('$')) > 0, 'dollar has weight');
-  // Hash (#) also has weight 0 in DUCET
-  CheckEqual(Int64(GetCollationWeight(Ord('#'))), Int64(0), 'hash weight = 0');
+  Check(GetCollationWeight(Ord('#')) > 0, 'hash variable primary');
 
-  // At primary level, all zero-weight punctuation is invisible
-  CheckEqual(LCollator.Compare('ab', 'a,b'), 0, 'ab == a,b (comma ignorable)');
-  CheckEqual(LCollator.Compare('ab', 'a;b'), 0, 'ab == a;b (semicolon ignorable)');
-  CheckEqual(LCollator.Compare('ab', 'a!b'), 0, 'ab == a!b (exclamation ignorable)');
-  CheckEqual(LCollator.Compare('ab', 'a?b'), 0, 'ab == a?b (question ignorable)');
+  LOpts := DefaultCollationOptions;
+  LOpts.Strength := csPrimary;
+  LOpts.VariableWeighting := cvwShifted;
+  LCollator := UnicodeCollatorWithOptions(LOpts);
+  CheckEqual(LCollator.Compare('ab', 'a,b'), 0, 'ab == a,b (shifted)');
+  CheckEqual(LCollator.Compare('ab', 'a;b'), 0, 'ab == a;b (shifted)');
+  CheckEqual(LCollator.Compare('ab', 'a!b'), 0, 'ab == a!b (shifted)');
+  CheckEqual(LCollator.Compare('ab', 'a?b'), 0, 'ab == a?b (shifted)');
 end;
 
 begin

@@ -85,8 +85,8 @@ begin
     .SetMinSamples(5)
     .Add('SeqWrite/64KB', @BenchSeqWrite64KB)
     .Add('SeqRead/64KB', @BenchSeqRead64KB)
-    .Add('FileExists', @BenchFileExists)
-    .Add('FileSize', @BenchFileSize)
+    .Add('Meta/FileExists', @BenchFileExists)
+    .Add('Meta/FileSize', @BenchFileSize)
     .Add('ReadAll/64KB', @BenchReadAll64KB)
     .Run;
   WriteLn(LResults.PrintToConsole);
