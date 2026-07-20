@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.17
+**版本**：v8.18
 
 ---
 
@@ -394,6 +394,13 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.18 (2026-07-20) — 规模≥3000 + fail-path 硬门禁 + 消费者示例
+
+- **规模**：`SCALE_MIN` 默认 **3000**；diagnostics/mock/expect 表加厚；discovery 名契约表 +40
+- **fail-path 硬门禁**：`FAIL_PATH_MIN_RATIO` 默认 **0.30**（启发式 ExpectFail / negative 表 / Append*Case '0'）
+- **薄套件**：advanced SoftFail+TAP multi；bench MaxIterations/阈值边界
+- **消费者示例**：`core/examples/nextpas.core.test/smoke_suite`（Check*/Soft*/TestTable/TestSubtest）
 
 ### v8.17 (2026-07-20) — SoftFail 完成度
 

@@ -2191,7 +2191,7 @@ begin
   Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
 
   { B14: meaningful fail-path table — CalledTimes mismatch messages }
-  SetLength(LB14Cases, 300);
+  SetLength(LB14Cases, 500);
   for LB14I := 0 to High(LB14Cases) do
   begin
     LB14Cases[LB14I].Name := 'mock-fail-' + IntToStr(LB14I);

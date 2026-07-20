@@ -13,14 +13,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-2500}"
+MIN_COUNT="${SCALE_MIN:-3000}"
+# Fail-path share of countable processes (heuristic: ExpectFail / negative tables / Append*Case '0')
+MIN_FAIL_RATIO="${FAIL_PATH_MIN_RATIO:-0.30}"
 
-python3 - "$TESTS" "$MIN_COUNT" <<'PY'
+python3 - "$TESTS" "$MIN_COUNT" "$MIN_FAIL_RATIO" <<'PY'
 import re, sys
 from pathlib import Path
 
 tests_root = Path(sys.argv[1])
 min_count = int(sys.argv[2])
+min_fail_ratio = float(sys.argv[3])
 
 EXCLUDE_DIRS = {
     "test_stress",
@@ -88,12 +91,22 @@ for k in sorted(per):
     print(f"  {k:28} {per[k]:5}")
 print(f"TOTAL countable: {total}")
 print(f"MIN required:    {min_count}")
+failed = False
 if total > 0:
-    ratio = 100.0 * fail_path_hint / total
-    print(f"fail-path hint:  {fail_path_hint} (~{ratio:.1f}% of countable; heuristic)")
+    ratio = fail_path_hint / total
+    print(f"fail-path hint:  {fail_path_hint} (~{100.0 * ratio:.1f}% of countable; heuristic)")
+    print(f"MIN fail-path:   {min_fail_ratio:.0%} of countable")
+    if ratio < min_fail_ratio:
+        print(f"FAIL: fail-path ratio {ratio:.3f} < {min_fail_ratio:.3f}")
+        failed = True
+else:
+    print("fail-path hint:  0 (no countable processes)")
+    failed = True
 if total < min_count:
     print(f"FAIL: scale {total} < {min_count}")
+    failed = True
+if failed:
     sys.exit(1)
-print(f"PASS: scale >= {min_count}")
+print(f"PASS: scale >= {min_count} and fail-path >= {min_fail_ratio:.0%}")
 sys.exit(0)
 PY

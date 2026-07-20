@@ -1818,7 +1818,7 @@ begin
   LSuite.Test('ToBeSorted str empty',     @TestToBeSortedStrEmpty);
 
   { B11: meaningful fail-path table for ExpectInt.ToEqualInt }
-  SetLength(LB11Cases, 200);
+  SetLength(LB11Cases, 400);
   for LB11I := 0 to High(LB11Cases) do
   begin
     LB11Cases[LB11I].Name := 'exp-fail-' + IntToStr(LB11I);
