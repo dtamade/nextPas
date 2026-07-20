@@ -288,6 +288,18 @@ procedure SoftCheckEqual(const AExpected, AActual: string;
   const AMessage: string);
 begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
 
+procedure SoftCheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckNear(const AExpected, AActual: Double;
+  AEpsilon: Double; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckNear(AExpected, AActual, AEpsilon, AMessage); end;
+
 procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string);
 begin nextpas.core.test.check.SoftCheckContains(AHaystack, ANeedle, AMessage); end;

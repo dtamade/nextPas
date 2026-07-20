@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
-> 最后更新: 2026-07-20
-> 治理状态: v8.22, 17 源文件 (.pas) + 4 .inc, 19 测试套件, ≥5500 可计数过程 + Cache key 含 stop 语义 + Nested SoftFail
+> 最后更新: 2026-07-21
+> 治理状态: v8.23, 17 源文件 (.pas) + 4 .inc, 19 测试套件, ≥5500 可计数过程 + Soft ColorDiff + Soft 高频扩面
 
 ## Overview
 
@@ -12,6 +12,7 @@
 
 - **Dual API**: Procedural `Check*` assertions + fluent `IExpectation` chain interface
 - **SoftFail**: Go-style `t.Error` — `SoftFail` / `SoftCheck*` continue; `Check*`/`Fail` stay Fatal
+  (`SoftCheckEqual` string uses same ColorDiff as hard path; high-freq Soft: Bool/TBytes/`SoftCheckNear`)
 - **Parallel execution**: Direct thread-based parallel test dispatch (bypasses FPC closure capture limitations)
 - **Subtests**: Go-style nested subtests via `ITestContext.Run` / `RunNested`
 - **Parameterized tests**: `TestTable` for data-driven test cases
@@ -38,7 +39,7 @@
 - **Structured results**: `RunWithResult` / `RunAllWithResult` for programmatic result access
 - **Test caching**: `TTestCache` FNV-1a hash-based result caching (`--cache` CLI flag)
 - **Sequential opt-in**: `TestSeq()` for tests that must run serially (Go `t.Parallel()` inverse)
-- **Minimal dependencies**: Only uses FPC RTL (`SysUtils`) + `nextpas.core.*` modules
+- **Minimal dependencies**: No direct `SysUtils`/`Classes`/`TypInfo` — only `nextpas.core.system` (RTL facade) + other `nextpas.core.*` modules (compiler-transparent isolation)
 
 ## Quick Start
 

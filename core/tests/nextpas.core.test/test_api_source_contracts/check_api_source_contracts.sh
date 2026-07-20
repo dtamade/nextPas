@@ -33,6 +33,8 @@ awk '
   echo SoftCheckFalse
   echo SoftCheckEqual
   echo SoftCheckContains
+  # v8.23 Soft high-frequency surface
+  echo SoftCheckNear
 } >> "$tmp/check_api.txt"
 sort -u "$tmp/check_api.txt" -o "$tmp/check_api.txt"
 
