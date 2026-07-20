@@ -321,14 +321,29 @@ Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
 | ---- | -------- | -------------------: | --------------: | --------: | ---------------------: | ----------------: | --------: |
 | 2026-07-20 E3 | `no_url` 20k×4 epoll runs=3 | **51120** | 23160 | **2.21×** | 56440 / **150141** | 150427 / 729325 | **0.21×** |
 | 2026-07-20 E3 | `response_1k` 20k×4 epoll runs=3 | **49493** | 22343 | **2.22×** | 60369 / **159855** | 154870 / 735282 | **0.22×** |
+| **2026-07-21 E3s** | `no_url` 20k×4 epoll runs=3 | **50549** | 25655 | **1.97×** | 58127 / **155623** | 124993 / 678395 | **0.23×** |
+| **2026-07-21 E3s** | `response_1k` 20k×4 epoll runs=3 | **48549** | 28177 | **1.72×** | 59968 / **162087** | 115513 / 596119 | **0.27×** |
+
+**E3 / E3s gates**（相对 Go 同 harness）
+
+| Gate | Threshold | 2026-07-20 E3 | 2026-07-21 E3s |
+| ---- | --------- | ------------- | -------------- |
+| RPS `no_url` | ≥ 0.80× | **2.21× Met** | **1.97× Met** |
+| RPS `response_1k` | ≥ 0.80× | **2.22× Met** | **1.72× Met** |
+| p99 `no_url` | ≤ 2.0× | **0.21× Met** | **0.23× Met** |
+| p99 `response_1k` | ≤ 2.0× | **0.22× Met** | **0.27× Met** |
+
+Artifacts: `build/projects/nextpas.core.http/server_comparison/e3s-20260721-epoll-*-runs3.md`
 
 **E3 extras**
 
-| Check | Result |
-| ----- | ------ |
-| Ladder 1k idle epoll probe | `stable=1` open_ok=1000 probe_ok=1000 |
-| Ladder 10k idle epoll probe | `stable=1` open_ok=10000 probe_ok=10000 |
-| `test_http_h2_facade` heaptrc | **0 unfreed** (5/5) |
+| Check | 2026-07-20 | 2026-07-21 E3s |
+| ----- | ---------- | -------------- |
+| Ladder 1k idle epoll probe | `stable=1` | **`stable=1`** open_ok=1000 probe_ok=1000 |
+| Ladder 10k idle epoll probe | `stable=1` | **`stable=1`** open_ok=10000 probe_ok=10000 |
+| `test_http_h2_facade` heaptrc | **0 unfreed** (5/5) | (not re-run this wave) |
+
+**E3s verdict (2026-07-21)**：scale-ready RPS + p99 **仍 Met**；绝对值随主机噪声浮动（Go 行略升 → 比值从 ~2.2× 落到 ~1.7–2.0×）。**不**因比值下降收回宣称。
 
 **Era E Done when**：E1–E3 Met。 **Met.** Not a cross-machine ranking.
 
@@ -394,6 +409,8 @@ Not a throughput ranking; sizes are CI-friendly leak soak.
 | 2026-07-20 H2P-2 press | multiplex | epoll | 8×**32**×100 | 25600 | **5746** | 1 |
 | 2026-07-20 H2P-2 press | multiplex | epoll | **16×32**×100 | 51200 | **11463** | 1 |
 | 2026-07-20 H2P-2 press | multiplex | threaded | 8×16×200 | 25600 | **2877** | 1 |
+| **2026-07-21 E3s** | multiplex | epoll | 8×16×100 mid | 12800 | **2879** | 1 |
+| **2026-07-21 E3s** | multiplex | epoll | 16×32×100 press | 51200 | **11469** | 1 |
 
 **H2P-2 bottleneck notes**
 
@@ -403,6 +420,50 @@ Not a throughput ranking; sizes are CI-friendly leak soak.
 - epoll ≈ threaded at 8×16 press → server backend not the differentiator at this size.
 - Likely bound: **per-connection client RoundTripMany sequential batches** + H2 framing/CPU, not accept storm.
 - Still **≪** H1 multi-conn KPI (~40k+); **no package claim**.
+
+#### H2 KPI draft (2026-07-21) — **not a claim**
+
+Purpose: freeze a **future** gate shape for *Scale-ready (H2 mux, Linux epoll)* if product asks.
+**Current CLAIM package remains No.** This section is draft only.
+
+**Shape (frozen with H2P-1 mid)**
+
+| Field | Official mid (KPI candidate) | Press regression |
+| ----- | ---------------------------- | ---------------- |
+| mode | `multiplex` cleartext prior-knowledge | same |
+| backend | **epoll** | epoll |
+| connections × streams × batches | **8 × 16 × 100** | **16 × 32 × 100** |
+| target ops | 12800 | 51200 |
+| peer | **none yet** (no Go h2 harness in-repo) | same |
+
+**Proposed gates (candidate; not enforced as claim)**
+
+| Gate | Proposed threshold | 2026-07-21 sample | Status |
+| ---- | ------------------ | ----------------- | ------ |
+| Mid stable | `stable=1`, failed=0, completed=target | **2879** req/s stable=1 | draft Met |
+| Mid floor | req/s ≥ **0.80 ×** host baseline mid (~2800 → **≥ 2240**) | 2879 ≥ 2240 | draft Met |
+| Press stable | `stable=1`, completed=target | **11469** req/s | draft Met |
+| Press scale | press/mid ≥ **~3.0×** ops/s (conn×stream 4×) | 11469/2879 ≈ **4.0×** | draft Met |
+| Correctness | `test_http_h2_facade` + `test_http_h2_tls_alpn` 0 unfreed | prior waves Met | precondition |
+| Peer ratio | nextPas/Go h2 ≥ **0.80×** same shape | **Blocked** — no Go h2 peer | **not Met** |
+
+**What is still missing for package claim**
+
+1. In-repo **Go (or hyper) H2 peer** on the same mid shape (or absolute multi-run floor with CI host class).
+2. Multi-run median (runs≥3) like H1 E3 — single sample is characterization.
+3. Explicit product **Yes** to upgrade CLAIM package (R1 refused without this).
+4. **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
+
+**Repro**
+
+```sh
+./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
+  --mode multiplex --backend epoll \
+  --connections 8 --streams 16 --batches 100
+./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
+  --mode multiplex --backend epoll \
+  --connections 16 --streams 32 --batches 100
+```
 
 #### S1 sample (2026-07-20, short 2k×4 epoll no_url)
 

@@ -103,6 +103,13 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 **读数**：`stable=1`；`req/s=`；`completed=`（mid ~2.8–3k；press 16×32 ~11k，**不是** H1 KPI）。
 **不宣称** Scale-ready (H1/H2)。
 
+### 4.1 H2 KPI draft 门闩（候选；非宣称）
+
+见 `BENCHMARKS.md` § **H2 KPI draft**。候选：mid `stable=1` 且 req/s ≥ **0.80×** 本机历史 mid（~2800→≥2240）；
+press 16×32 `stable=1` 且 press/mid ops/s ≥ ~3×。**Peer 比值尚未实现**（无 Go h2 harness）。
+
+**E3s 抽检参考（2026-07-21）**：mid **2879** / press **11469**，stable=1。
+
 ---
 
 ## 5. 正确性 smoke + soak（最小）
