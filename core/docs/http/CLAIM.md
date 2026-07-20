@@ -56,7 +56,7 @@
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |
-| Rust std latency | comparison 行仍可无 p50/p99 |
+| Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99（nearest-rank）；仍非 scale KPI |
 
 ---
 

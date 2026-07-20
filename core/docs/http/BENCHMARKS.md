@@ -286,7 +286,7 @@ Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
 | ---- | ------ | ------------------ |
 | nextPas | raw TCP, parse headers + Content-Length body | `header_plus_content_length` |
 | Go | `net/http` keep-alive + body drain | `http_client_body_drain` |
-| Rust std | residual QPS-only (no latency yet) | — |
+| Rust std | raw TCP + Content-Length drain（S2-b p50/p99） | `header_plus_content_length` |
 
 ```sh
 ./benchmarks/nextpas.core.http/run_server_comparison.sh \
@@ -371,6 +371,33 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_soak
 | heaptrc | process exit | **0 unfreed** |
 
 Not a throughput ranking; sizes are CI-friendly leak soak.
+
+#### H2P-1 H2 official workload (frozen 2026-07-20)
+
+| Field | Official mid | Smoke |
+| ----- | ------------ | ----- |
+| mode | multiplex | multiplex |
+| backend | epoll (Linux KPI path) | threaded or epoll |
+| connections | 8 | 4 |
+| streams per batch | 16 | 4 |
+| batches | 100 mid / 200 press | 25 |
+| KPI | **characterization only** | not scale-ready |
+
+**Forbidden**: ratio of H2 `req/s` to H1 multi-conn `req/s` as package claim.
+
+| Date | mode | backend | shape | completed | req/s | stable |
+| ---- | ---- | ------- | ----- | --------: | ----: | -----: |
+| 2026-07-20 H2P-1 mid | multiplex | epoll | 8×16×100 | 12800 | **2827** | 1 |
+
+#### S1 sample (2026-07-20, short 2k×4 epoll no_url)
+
+| Impl | req/s | p50_ns | p99_ns |
+| ---- | ----: | -----: | -----: |
+| nextPas | 42690 | 73494 | 228722 |
+| Go | 32221 | 99755 | 510273 |
+| Rust std | 137534 | 22752 | 46345 |
+
+nextPas/Go RPS ≈ **1.32×**；p99 ratio ≈ **0.45×**（short sample，非 E3 官方 runs=3）。
 
 #### S3-1 / S3-2 H2 server scale
 

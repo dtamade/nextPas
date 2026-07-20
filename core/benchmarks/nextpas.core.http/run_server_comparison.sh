@@ -261,7 +261,7 @@ append_result_row() {
   if [[ "${rust_runtime}" == "" ]]; then
     rust_runtime="n/a"
   fi
-  # Latency markers optional for residual impls (rust_std / hyper); required for nextpas + go (Era E1).
+  # Latency markers optional for residual impls (hyper); required for nextpas + go + rust_std (S2-b).
   if [[ "${p50_ns}" == "" ]]; then
     p50_ns="n/a"
   fi
@@ -279,7 +279,7 @@ append_result_row() {
     echo "${output}" >&2
     exit 1
   fi
-  if [[ "${expected_impl}" == "nextpas" || "${expected_impl}" == "go" ]]; then
+  if [[ "${expected_impl}" == "nextpas" || "${expected_impl}" == "go" || "${expected_impl}" == "rust_std" ]]; then
     if [[ "${p50_ns}" == "n/a" || "${p99_ns}" == "n/a" || "${mean_ns}" == "n/a" || "${latency_samples}" == "n/a" ]]; then
       echo "missing latency markers for impl=${expected_impl} (need p50_ns/p99_ns/mean_ns/latency_samples)" >&2
       echo "${output}" >&2

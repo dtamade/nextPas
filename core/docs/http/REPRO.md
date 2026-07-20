@@ -76,18 +76,28 @@ make -C benchmarks/nextpas.core.http/bench_conn_ladder build
 
 ---
 
-## 4. H2 multiplex scale（S3，evidence only）
+## 4. H2 multiplex scale（H2P-1 / S3，evidence only）
+
+**规格（H2P-1 冻结；与 H1 分表，禁止直接 RPS 比值）**
+
+| 字段 | 官方 mid | smoke |
+|------|----------|-------|
+| mode | `multiplex` | `multiplex` |
+| backend | `epoll`（Linux）/ `threaded` | either |
+| connections | **8** | 4 |
+| streams/batch | **16** | 4 |
+| batches | **100**（mid）/ **200**（press） | 25 |
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h2_server smoke
-# mid（epoll）
+# H2P-1 mid（epoll）
 ./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
   --mode multiplex --backend epoll \
   --connections 8 --streams 16 --batches 100
 ```
 
-**读数**：`stable=1`；`req/s=`（历史 ~2.8–3k，**不是** H1 KPI）。
-**不宣称** Scale-ready (H1/H2)。
+**读数**：`stable=1`；`req/s=`；`completed=`（历史 mid ~2.8–3k，**不是** H1 KPI）。
+**不宣称** Scale-ready (H1/H2)。Go h2 同形对照 → H2P-1 续波 / H2P-2。
 
 ---
 
