@@ -38,6 +38,7 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 - **legacy**：`AtomicCompareExchange32/64/Ptr` 返回 **观测值**（不是 Boolean）；PascalCase wrappers 保留不删，**非首选**，新代码勿扩散。
 - 测试覆盖 legacy **不等于**推荐使用。
 - 完整表与日程：[`CONTRACT.md`](CONTRACT.md) §1.4。消费者扫描：[`../lockfree/consumer-audit.md`](../lockfree/consumer-audit.md)。
+- Q 线质量/对标（含 Q1 legacy 策略）：[`../lockfree/quality-parity.md`](../lockfree/quality-parity.md)。
 
 Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade.
 `atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.
