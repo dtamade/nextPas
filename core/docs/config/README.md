@@ -54,7 +54,9 @@ Available builder steps:
 
 `AddKeyValues` is the shallow CLI integration: parse flags with
 `nextpas.core.args` (or any source), then inject config keys without coupling
-`config` to the args unit:
+`config` to the args unit. See also the startup example markers
+`keyvalues-host` / `keyvalues-port` under
+`examples/nextpas.core.config/config_startup_patterns/`.
 
 ```pascal
 LCfg := ConfigBuilder
