@@ -46,6 +46,7 @@ uses
   nextpas.core.text.unicode.utils;
 
 {$I nextpas.core.text.unicode.normalize.inc}
+{$I nextpas.core.text.unicode.normalize_bmp_index.inc}
 
 const
   HANGUL_SBASE = TUnicodeCodepoint($AC00);
@@ -69,9 +70,13 @@ type
     procedure Append(const ACp: TUnicodeCodepoint);
     procedure ReplaceAt(const AIndex: SizeInt; const ACp: TUnicodeCodepoint);
     procedure DeleteAt(const AIndex: SizeInt);
-    function ItemAt(const AIndex: SizeInt): TUnicodeCodepoint;
+    function ItemAt(const AIndex: SizeInt): TUnicodeCodepoint; inline;
+    procedure SetCount(const ACount: SizeInt); inline;
     property Count: SizeInt read FCount;
   end;
+
+threadvar
+  GNormBuffer: TCodepointBuffer;
 
 function IsHangulSyllable(const ACp: TUnicodeCodepoint): Boolean; inline;
 begin
@@ -123,8 +128,7 @@ var
   LValue: Byte;
 begin
   if ACp <= $FFFF then
-    if FindRange3Value(ACp, DECOMP_BMP_RANGES, LValue) then
-      Exit(LValue);
+    Exit(DECOMP_KIND_BMP[Byte(ACp shr 8), Byte(ACp and $FF)]);
 
   if FindRange3Value(ACp, DECOMP_SMP_RANGES, LValue) then
     Exit(LValue);
@@ -137,41 +141,32 @@ var
   LLo: SizeInt;
   LHi: SizeInt;
   LMid: SizeInt;
+  LIdx: Int32;
 begin
   if ACp <= $FFFF then
   begin
-    LLo := 0;
-    LHi := High(DECOMP_BMP_MAP);
-    while LLo <= LHi do
+    LIdx := DECOMP_BMP_INDEX[Byte(ACp shr 8), Byte(ACp and $FF)];
+    if LIdx >= 0 then
     begin
-      LMid := LLo + ((LHi - LLo) div 2);
-      if ACp < DECOMP_BMP_MAP[LMid].Cp then
-        LHi := LMid - 1
-      else if ACp > DECOMP_BMP_MAP[LMid].Cp then
-        LLo := LMid + 1
-      else
-      begin
-        AEntry := DECOMP_BMP_MAP[LMid];
-        Exit(True);
-      end;
+      AEntry := DECOMP_BMP_MAP[LIdx];
+      Exit(True);
     end;
-  end
-  else
+    Exit(False);
+  end;
+
+  LLo := 0;
+  LHi := High(DECOMP_SMP_MAP);
+  while LLo <= LHi do
   begin
-    LLo := 0;
-    LHi := High(DECOMP_SMP_MAP);
-    while LLo <= LHi do
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp < DECOMP_SMP_MAP[LMid].Cp then
+      LHi := LMid - 1
+    else if ACp > DECOMP_SMP_MAP[LMid].Cp then
+      LLo := LMid + 1
+    else
     begin
-      LMid := LLo + ((LHi - LLo) div 2);
-      if ACp < DECOMP_SMP_MAP[LMid].Cp then
-        LHi := LMid - 1
-      else if ACp > DECOMP_SMP_MAP[LMid].Cp then
-        LLo := LMid + 1
-      else
-      begin
-        AEntry := DECOMP_SMP_MAP[LMid];
-        Exit(True);
-      end;
+      AEntry := DECOMP_SMP_MAP[LMid];
+      Exit(True);
     end;
   end;
 
@@ -296,28 +291,46 @@ var
   LCp: TUnicodeCodepoint;
   LCcc: Byte;
   LPrevCcc: Byte;
+  LCccs: array[0..255] of Byte;
+  LCccsDyn: array of Byte;
+  PCcc: PByte;
+  LJ: SizeInt;
+  LCount: SizeInt;
 begin
-  if ABuffer.Count - AStartIndex < 2 then
+  LCount := ABuffer.Count;
+  if LCount - AStartIndex < 2 then
     Exit;
 
-  for LIdx := AStartIndex + 1 to ABuffer.Count - 1 do
+  if LCount <= 256 then
+    PCcc := @LCccs[0]
+  else
+  begin
+    SetLength(LCccsDyn, LCount);
+    PCcc := @LCccsDyn[0];
+  end;
+
+  for LJ := AStartIndex to LCount - 1 do
+    PCcc[LJ] := GetCanonicalCombiningClass(ABuffer.ItemAt(LJ));
+
+  for LIdx := AStartIndex + 1 to LCount - 1 do
   begin
     LCp := ABuffer.ItemAt(LIdx);
-    LCcc := GetCanonicalCombiningClass(LCp);
+    LCcc := PCcc[LIdx];
     if LCcc = 0 then
       Continue;
 
     LPos := LIdx;
     while LPos > AStartIndex do
     begin
-      LPrevCcc := GetCanonicalCombiningClass(ABuffer.ItemAt(LPos - 1));
+      LPrevCcc := PCcc[LPos - 1];
       if (LPrevCcc = 0) or (LPrevCcc <= LCcc) then
         Break;
       ABuffer.ReplaceAt(LPos, ABuffer.ItemAt(LPos - 1));
-      LCcc := LPrevCcc;  // 移动后继承前一个 CCC，避免下次重复查表
+      PCcc[LPos] := PCcc[LPos - 1];
       Dec(LPos);
     end;
     ABuffer.ReplaceAt(LPos, LCp);
+    PCcc[LPos] := LCcc;
   end;
 end;
 
@@ -350,6 +363,27 @@ begin
     Exit;
   end;
 
+  { Fast path: single-level expansion (common for Latin precomposed) }
+  if LEntry.Len = 2 then
+  begin
+    if (GetDecompositionKind(LEntry.Map[0]) = 0) and
+       ((GetDecompositionKind(LEntry.Map[1]) = 0) or
+        ((GetDecompositionKind(LEntry.Map[1]) = 2) and (not ACompatibility))) then
+    begin
+      ABuffer.Append(LEntry.Map[0]);
+      ABuffer.Append(LEntry.Map[1]);
+      Exit;
+    end;
+  end
+  else if LEntry.Len = 1 then
+  begin
+    if GetDecompositionKind(LEntry.Map[0]) = 0 then
+    begin
+      ABuffer.Append(LEntry.Map[0]);
+      Exit;
+    end;
+  end;
+
   for LIdx := 0 to LEntry.Len - 1 do
     AppendDecomposition(ABuffer, LEntry.Map[LIdx], ACompatibility);
 end;
@@ -362,6 +396,8 @@ var
   LSortStart: SizeInt;
 begin
   ABuffer.Clear;
+  { UTF-8 length upper-bounds codepoint count; decomp expands a few × }
+  ABuffer.Reserve(Length(AValue) + 16);
   LSortStart := 0;
   LIter.Init(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
   while LIter.Next(LCp) do
@@ -381,11 +417,25 @@ function BufferToUtf8(const ABuffer: TCodepointBuffer): string;
 var
   LUsed: SizeInt;
   LIdx: SizeInt;
+  LPtr: PByte;
+  LBuf: array[0..3] of Byte;
+  LLen: Byte;
+  LJ: Integer;
 begin
+  if ABuffer.Count = 0 then
+    Exit('');
   SetLength(Result, ABuffer.Count * 4);
+  LPtr := PByte(@Result[1]);
   LUsed := 0;
   for LIdx := 0 to ABuffer.Count - 1 do
-    AppendUtf8Codepoint(Result, LUsed, ABuffer.ItemAt(LIdx));
+  begin
+    LLen := UTF8Encode(ABuffer.ItemAt(LIdx), @LBuf[0]);
+    if LLen = 0 then
+      Continue;
+    for LJ := 0 to Integer(LLen) - 1 do
+      LPtr[LUsed + LJ] := LBuf[LJ];
+    Inc(LUsed, LLen);
+  end;
   SetLength(Result, LUsed);
 end;
 
@@ -421,6 +471,8 @@ var
   LCcc: Byte;
   LCurrent: TUnicodeCodepoint;
   LComposed: TUnicodeCodepoint;
+  LCanTry: Boolean;
+  LStarter: TUnicodeCodepoint;
 begin
   if ABuffer.Count = 0 then
     Exit;
@@ -428,7 +480,8 @@ begin
   LStarterIndex := 0;
   while LStarterIndex < ABuffer.Count do
   begin
-    if GetCanonicalCombiningClass(ABuffer.ItemAt(LStarterIndex)) <> 0 then
+    LStarter := ABuffer.ItemAt(LStarterIndex);
+    if GetCanonicalCombiningClass(LStarter) <> 0 then
     begin
       Inc(LStarterIndex);
       Continue;
@@ -440,32 +493,26 @@ begin
     begin
       LCurrent := ABuffer.ItemAt(LLookahead);
       LCcc := GetCanonicalCombiningClass(LCurrent);
-      if LCcc = 0 then
-        Break;
 
-      if ComposeHangulPair(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed) or
-         (FindComposition(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed) and
-          ((LLastCcc = 0) or (LLastCcc < LCcc))) then
+      { UAX #15: unblocked if immediately after starter (LLastCcc=0) or
+        LLastCcc < CCC(current). Adjacent starters (CCC=0) must also compose. }
+      LCanTry := (LLastCcc = 0) or ((LCcc <> 0) and (LLastCcc < LCcc));
+      if LCanTry and
+         (ComposeHangulPair(LStarter, LCurrent, LComposed) or
+          FindComposition(LStarter, LCurrent, LComposed)) then
       begin
         ABuffer.ReplaceAt(LStarterIndex, LComposed);
+        LStarter := LComposed;
         ABuffer.DeleteAt(LLookahead);
-        // 组合后重置 LLastCcc：新字符是 starter 的一部分，不是 combining mark
         LLastCcc := 0;
         Continue;
       end;
 
+      if LCcc = 0 then
+        Break;
+
       LLastCcc := LCcc;
       Inc(LLookahead);
-    end;
-
-    if (LLookahead < ABuffer.Count) and (GetCanonicalCombiningClass(ABuffer.ItemAt(LLookahead)) = 0) then
-    begin
-      if ComposeHangulPair(ABuffer.ItemAt(LStarterIndex), ABuffer.ItemAt(LLookahead), LComposed) then
-      begin
-        ABuffer.ReplaceAt(LStarterIndex, LComposed);
-        ABuffer.DeleteAt(LLookahead);
-        Continue;
-      end;
     end;
 
     Inc(LStarterIndex);
@@ -473,30 +520,26 @@ begin
 end;
 
 function NormalizeDecomposed(const AText: string; const ACompatibility: Boolean): string;
-var
-  LBuffer: TCodepointBuffer;
 begin
   if AText = '' then
     Exit('');
   if IsAsciiString(AText) then
     Exit(AText);
 
-  DecomposeToBuffer(AText, ACompatibility, LBuffer);
-  Result := BufferToUtf8(LBuffer);
+  DecomposeToBuffer(AText, ACompatibility, GNormBuffer);
+  Result := BufferToUtf8(GNormBuffer);
 end;
 
 function NormalizeComposed(const AText: string; const ACompatibility: Boolean): string;
-var
-  LBuffer: TCodepointBuffer;
 begin
   if AText = '' then
     Exit('');
   if IsAsciiString(AText) then
     Exit(AText);
 
-  DecomposeToBuffer(AText, ACompatibility, LBuffer);
-  ComposeBufferWithHangul(LBuffer);
-  Result := BufferToUtf8(LBuffer);
+  DecomposeToBuffer(AText, ACompatibility, GNormBuffer);
+  ComposeBufferWithHangul(GNormBuffer);
+  Result := BufferToUtf8(GNormBuffer);
 end;
 
 function NFD(const AText: string): string;
@@ -729,7 +772,8 @@ end;
 
 procedure TCodepointBuffer.Append(const ACp: TUnicodeCodepoint);
 begin
-  Reserve(FCount + 1);
+  if FCount >= Length(FItems) then
+    Reserve(FCount + 1);
   FItems[FCount] := ACp;
   Inc(FCount);
 end;
@@ -740,17 +784,21 @@ begin
 end;
 
 procedure TCodepointBuffer.DeleteAt(const AIndex: SizeInt);
-var
-  LIdx: SizeInt;
 begin
-  for LIdx := AIndex to FCount - 2 do
-    FItems[LIdx] := FItems[LIdx + 1];
+  if AIndex < FCount - 1 then
+    System.Move(FItems[AIndex + 1], FItems[AIndex],
+      SizeUInt(FCount - AIndex - 1) * SizeOf(TUnicodeCodepoint));
   Dec(FCount);
 end;
 
 function TCodepointBuffer.ItemAt(const AIndex: SizeInt): TUnicodeCodepoint;
 begin
   Result := FItems[AIndex];
+end;
+
+procedure TCodepointBuffer.SetCount(const ACount: SizeInt);
+begin
+  FCount := ACount;
 end;
 
 end.

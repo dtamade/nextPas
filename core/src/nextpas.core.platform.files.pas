@@ -207,6 +207,28 @@ function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiC
     @return 0 成功，否则返回错误码 *}
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32;
 
+{** @desc 创建硬链接（对齐 link(2) / CreateHardLink）
+    @param AOldPath 已有文件
+    @param ANewPath 新链接路径
+    @return 0 成功，否则返回错误码 *}
+function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32;
+
+{** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TPlatformFileStat.ModTime 同单位）
+    @param APath 路径
+    @param AAccessTimeNs 访问时间 ns
+    @param AModTimeNs 修改时间 ns
+    @return 0 成功，否则返回错误码 *}
+function platform_file_utimens(const APath: PAnsiChar;
+  const AAccessTimeNs, AModTimeNs: Int64): Int32;
+
+{** @desc 设置所有者（对齐 chown(2) 跟随符号链接；Windows 返回 UNSUPPORTED）
+    @param APath 路径
+    @param AUid 用户 ID
+    @param AGid 组 ID
+    @return 0 成功，否则返回错误码 *}
+function platform_file_chown(const APath: PAnsiChar;
+  const AUid, AGid: UInt32): Int32;
+
 {** @desc 打开目录
     @param APath 目录路径
     @param AHandle 输出目录句柄
@@ -698,6 +720,40 @@ begin
     Exit(PosixCheck(-1));
   ABuf[LResult] := #0;
   Result := 0;
+end;
+
+function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32;
+begin
+  if (AOldPath = nil) or (ANewPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PosixCheck(link(AOldPath, ANewPath));
+end;
+
+function platform_file_utimens(const APath: PAnsiChar;
+  const AAccessTimeNs, AModTimeNs: Int64): Int32;
+const
+  { POSIX AT_FDCWD is -100 on Linux/macOS/FreeBSD/Android. }
+  L_AT_FDCWD = cint(-100);
+var
+  LTimes: array[0..1] of timespec;
+begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if (AAccessTimeNs < 0) or (AModTimeNs < 0) then
+    Exit(PLATFORM_ERR_INVALID);
+  LTimes[0].tv_sec := time_t(AAccessTimeNs div 1000000000);
+  LTimes[0].tv_nsec := clong(AAccessTimeNs mod 1000000000);
+  LTimes[1].tv_sec := time_t(AModTimeNs div 1000000000);
+  LTimes[1].tv_nsec := clong(AModTimeNs mod 1000000000);
+  Result := PosixCheck(utimensat(L_AT_FDCWD, APath, @LTimes[0], 0));
+end;
+
+function platform_file_chown(const APath: PAnsiChar;
+  const AUid, AGid: UInt32): Int32;
+begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PosixCheck(chown(APath, uid_t(AUid), gid_t(AGid)));
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
@@ -1385,6 +1441,74 @@ begin
   Result := 0;
 end;
 
+function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32;
+var
+  LOld, LNew: UnicodeString;
+begin
+  if (AOldPath = nil) or (ANewPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+  if not platform_windows_utf8_to_wide_checked(AOldPath, LOld) then
+    Exit(PLATFORM_ERR_INVALID);
+  if not platform_windows_utf8_to_wide_checked(ANewPath, LNew) then
+    Exit(PLATFORM_ERR_INVALID);
+  { CreateHardLinkW(new, existing, nil) }
+  if not CreateHardLinkW(PWideChar(LNew), PWideChar(LOld), nil) then
+    Result := platform_get_last_error
+  else
+    Result := 0;
+end;
+
+function platform_file_utimens(const APath: PAnsiChar;
+  const AAccessTimeNs, AModTimeNs: Int64): Int32;
+var
+  LPath: UnicodeString;
+  LHandle: HANDLE;
+  LAccess, LWrite: FILETIME;
+  LTicks: UInt64;
+
+  function NsToFileTime(const ANs: Int64; out AFt: FILETIME): Boolean;
+  begin
+    if ANs < 0 then
+      Exit(False);
+    LTicks := UInt64(ANs div 100) + WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS;
+    AFt.dwLowDateTime := DWORD(LTicks and $FFFFFFFF);
+    AFt.dwHighDateTime := DWORD(LTicks shr 32);
+    Result := True;
+  end;
+
+begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if not NsToFileTime(AAccessTimeNs, LAccess) then
+    Exit(PLATFORM_ERR_INVALID);
+  if not NsToFileTime(AModTimeNs, LWrite) then
+    Exit(PLATFORM_ERR_INVALID);
+  if not platform_windows_utf8_to_wide_checked(APath, LPath) then
+    Exit(PLATFORM_ERR_INVALID);
+  LHandle := CreateFileW(PWideChar(LPath), GENERIC_WRITE,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+    nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nil);
+  if LHandle = HANDLE(PtrInt(-1)) then
+    Exit(platform_get_last_error);
+  if not SetFileTime(LHandle, nil, @LAccess, @LWrite) then
+  begin
+    Result := platform_get_last_error;
+    CloseHandle(LHandle);
+    Exit;
+  end;
+  CloseHandle(LHandle);
+  Result := 0;
+end;
+
+function platform_file_chown(const APath: PAnsiChar;
+  const AUid, AGid: UInt32): Int32;
+begin
+  { Windows has no simple POSIX chown equivalent at this layer. }
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
 var
   LPath: UnicodeString;
@@ -1510,6 +1634,9 @@ function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: B
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_utimens(const APath: PAnsiChar; const AAccessTimeNs, AModTimeNs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_chown(const APath: PAnsiChar; const AUid, AGid: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
   { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
     state. Concurrent reads on the same handle are NOT safe. Each thread
     must open its own directory handle. }

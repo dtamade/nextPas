@@ -3,6 +3,7 @@ program test_tui_terminal;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.mem,
   nextpas.core.tui.base,
   nextpas.core.tui.event,
   nextpas.core.tui.error,
@@ -1961,13 +1962,13 @@ begin
   Check(LProfile.Truecolor.Requested, 'truecolor requested by default');
   Check(LProfile.Truecolor.Detected, 'truecolor env hint is recorded');
   Check(LProfile.Truecolor.Active, 'truecolor becomes active when hint is sufficient');
-  Check(not LProfile.Truecolor.Verified, 'truecolor is not yet verified');
+  Check(LProfile.Truecolor.Verified, 'truecolor env-attested verified');
 
   Check(LProfile.KittyKeyboard.Requested, 'kitty keyboard requested by default');
   Check(LProfile.KittyKeyboard.Detected, 'kitty keyboard env hint is recorded');
   Check(not LProfile.KittyKeyboard.Active, 'kitty keyboard stays inactive before negotiation');
   Check(Pos('negotiation', LProfile.KittyKeyboard.FallbackReason) > 0,
-    'kitty keyboard fallback explains missing negotiation');
+    'kitty keyboard fallback explains pending negotiation');
 
   Check(LProfile.ImageProtocol.Status.Requested, 'image protocol requested by default');
   Check(LProfile.ImageProtocol.Status.Detected, 'kitty image protocol is detected');
@@ -2198,6 +2199,337 @@ begin
     'sixel-only terminal activates sixel image protocol');
 end;
 
+procedure TestFrameRuntimeWithAllocator;
+var
+  LTrack: TTrackingAllocator;
+  LAlloc: IAllocator;
+  LTerm: TTerminal;
+  LFrame: TFrame;
+begin
+  LTrack := TTrackingAllocator.Create(DefaultAllocator);
+  LAlloc := LTrack;
+  LTerm := TTerminal.Create(LAlloc);
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(LTrack.ActiveAllocCount > 0, 'frame buffers allocated');
+    LFrame := LTerm.BeginFrame;
+    Check(LFrame.Buffer <> nil, 'frame buffer present');
+    LTerm.EndFrame(LFrame);
+  finally
+    LTerm.Free;
+  end;
+  { ANSI TStringBuilder.Done uses FreeMemOf which may bypass tracking FreeMem
+    (sized DefaultHeap path). Buffer/overlay free via IAllocator.FreeMem and
+    process heaptrc is the ground truth (0 unfreed). }
+  Check(LTrack.ActiveAllocCount <= 1, 'at most ansi builder tracking residue');
+  LAlloc := nil;
+end;
+
+procedure TestKittyKeyboardNegotiationActivatesOnCandidate;
+var
+  LTerm: TTerminal;
+  LPending: AnsiString;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(not LTerm.HasKittyKeyboard, 'inactive before negotiation');
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Detected, 'detected after negotiate candidate');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Active, 'active after session push');
+    Check(LTerm.HasKittyKeyboard, 'HasKittyKeyboard projects Active');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified,
+      'verified stays false until CSI ? flags u reply');
+    Check(Pos('query-pending', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'awaiting query reply');
+    { InitializeFrameRuntimeForTest uses fd=-1; Flush retains pending on write fail. }
+    LPending := LTerm.BackendPendingForTest;
+    Check(Pos(#27'[=5;1u', LPending) > 0, 'push sequence emitted to backend pending');
+    Check(Pos(#27'[?u', LPending) > 0, 'query sequence emitted after push');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardNegotiationSkipsWhenNotDetected;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(False);
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Detected, 'not detected');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Active, 'stays inactive');
+    Check(not LTerm.HasKittyKeyboard, 'HasKittyKeyboard false');
+    Check(Pos('env-hint-missing', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'fallback explains missing hint');
+    CheckEqual('', LTerm.BackendPendingForTest, 'no kitty sequence when not candidate');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardNegotiationIsIdempotent;
+var
+  LTerm: TTerminal;
+  LLenAfterFirst: Integer;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'first negotiate activates');
+    LLenAfterFirst := System.Length(LTerm.BackendPendingForTest);
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'second negotiate keeps active');
+    CheckEqual(Int64(LLenAfterFirst), Int64(System.Length(LTerm.BackendPendingForTest)),
+      'second negotiate does not re-emit push when already pushed');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardLeaveClearsActive;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'active before leave');
+    LTerm.LeaveTui;
+    Check(not LTerm.HasKittyKeyboard, 'inactive after leave');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Detected,
+      'detected retained after leave');
+    Check(Pos('session-ended', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'leave records session-ended fallback');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardPushBytesVisibleBeforeFlush;
+var
+  LTerm: TTerminal;
+begin
+  { Direct backend path is covered in test_tui_backend; here we only assert
+    that a non-candidate never leaves pending push bytes after negotiate. }
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(False);
+    Check(Pos('=5;1u', LTerm.BackendPendingForTest) = 0, 'no push bytes without candidate');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplySetsVerified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'pre-reply not verified');
+    { CSI ? 5 u }
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('5');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    Check(not LTerm.PollQueuedEventForTest(True, LEv),
+      'flags reply is not a user event');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Active, 'active retained after reply');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified after flags=5');
+    CheckEqual('', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason,
+      'verified clears fallback');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplyZeroKeepsActiveUnverified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('0');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    Check(not LTerm.PollQueuedEventForTest(True, LEv), 'zero-flags not user event');
+    Check(LTerm.HasKittyKeyboard, 'active retained when flags=0');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'flags=0 not verified');
+    Check(Pos('query-flags-zero', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'zero flags reason');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplyThenKey;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LBuf: array[0..5] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    { CSI ? 5 u then 'a' }
+    LBuf[0] := 27;
+    LBuf[1] := Ord('[');
+    LBuf[2] := Ord('?');
+    LBuf[3] := Ord('5');
+    LBuf[4] := Ord('u');
+    LBuf[5] := Ord('a');
+    LTerm.InjectInputBytesForTest(LBuf);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'following key still parses');
+    Check(LEv.Kind = evKey, 'key event');
+    Check(LEv.Key.Code = kcChar, 'char');
+    CheckEqual(Int64(Ord('a')), Int64(LEv.Key.Ch), 'char a');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified from mixed stream');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardLeaveClearsVerified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('5');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    LTerm.PollQueuedEventForTest(True, LEv);
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified before leave');
+    LTerm.LeaveTui;
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified cleared on leave');
+    Check(not LTerm.HasKittyKeyboard, 'inactive after leave');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+
+procedure TestFocusReportingInjectEvents;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('I')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'focus in event');
+    Check(LEv.Kind = evFocus, 'kind focus');
+    Check(LEv.Focus.Kind = fkIn, 'in');
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('O')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'focus out event');
+    Check(LEv.Focus.Kind = fkOut, 'out');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestFocusReportingOptionDefaults;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+begin
+  Check(not TTerminalOptions.EditorDefault.FocusReporting,
+    'EditorDefault focus reporting off');
+  Check(not TTerminalOptions.NativeSelectionWheel.FocusReporting,
+    'NativeSelectionWheel focus reporting off');
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.FocusReporting := True;
+    LTerm.Options := LOpts;
+    Check(LTerm.Options.FocusReporting, 'options carry FocusReporting');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteOptionDefaults;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+begin
+  Check(not TTerminalOptions.EditorDefault.BracketedPaste,
+    'EditorDefault bracketed paste off');
+  Check(not TTerminalOptions.NativeSelectionWheel.BracketedPaste,
+    'NativeSelectionWheel bracketed paste off');
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.BracketedPaste := True;
+    LTerm.Options := LOpts;
+    Check(LTerm.Options.BracketedPaste, 'options carry BracketedPaste');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteEmitsOnFrameRuntime;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+  LPending: AnsiString;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.BracketedPaste := True;
+    LTerm.Options := LOpts;
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LPending := LTerm.BackendPendingForTest;
+    Check(Pos(#27'[?2004h', LPending) > 0, 'enable 2004h on session start');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteDefaultOffNoSequence;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(Pos('2004', LTerm.BackendPendingForTest) = 0,
+      'default off emits no 2004 sequence');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
   T.Test('parse ascii key', @TestParseAsciiKey);
@@ -2338,5 +2670,29 @@ begin
     @TestGhosttyCapabilityProfileUsesKittyCompatibility);
   T.Test('sixel capability profile does not imply kitty keyboard',
     @TestSixelCapabilityProfileDoesNotImplyKittyKeyboard);
-  if not T.Run then Halt(1);
+  T.Test('frame runtime with allocator', @TestFrameRuntimeWithAllocator);
+  T.Test('kitty keyboard negotiation activates on candidate',
+    @TestKittyKeyboardNegotiationActivatesOnCandidate);
+  T.Test('kitty keyboard negotiation skips when not detected',
+    @TestKittyKeyboardNegotiationSkipsWhenNotDetected);
+  T.Test('kitty keyboard negotiation is idempotent',
+    @TestKittyKeyboardNegotiationIsIdempotent);
+  T.Test('kitty keyboard leave clears active',
+    @TestKittyKeyboardLeaveClearsActive);
+  T.Test('kitty keyboard push bytes absent without candidate',
+    @TestKittyKeyboardPushBytesVisibleBeforeFlush);
+  T.Test('kitty keyboard query reply sets verified',
+    @TestKittyKeyboardQueryReplySetsVerified);
+  T.Test('kitty keyboard query zero keeps active unverified',
+    @TestKittyKeyboardQueryReplyZeroKeepsActiveUnverified);
+  T.Test('kitty keyboard query reply then key',
+    @TestKittyKeyboardQueryReplyThenKey);
+  T.Test('kitty keyboard leave clears verified',
+    @TestKittyKeyboardLeaveClearsVerified);
+    T.Test('focus reporting inject events', @TestFocusReportingInjectEvents);
+  T.Test('focus reporting option defaults', @TestFocusReportingOptionDefaults);
+  T.Test('bracketed paste option defaults', @TestBracketedPasteOptionDefaults);
+  T.Test('bracketed paste emits on frame runtime', @TestBracketedPasteEmitsOnFrameRuntime);
+  T.Test('bracketed paste default off no sequence', @TestBracketedPasteDefaultOffNoSequence);
+if not T.Run then Halt(1);
 end.

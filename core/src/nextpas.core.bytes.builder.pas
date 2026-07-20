@@ -111,7 +111,8 @@ destructor TBytesBuilderImpl.Destroy;
 begin
   if FPtr <> nil then
   begin
-    FAllocator.FreeMem(FPtr);
+    { Sized free when size known (same pattern as text.builder FreeMemOf). }
+    FreeMemOf(FAllocator, FPtr, FCap);
     FPtr := nil;
   end;
   inherited;
@@ -136,7 +137,7 @@ begin
       Break;
     end;
   end;
-  FPtr := FAllocator.ReallocMem(FPtr, LNewCap);
+  FPtr := ReallocMemOf(FAllocator, FPtr, FCap, LNewCap);
   FCap := LNewCap;
 end;
 

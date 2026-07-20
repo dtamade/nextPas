@@ -1,7 +1,6 @@
 program test_tui_widget_table;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -216,6 +215,61 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestTableRenderEmpty;
+var LT: ITable; LBuf: TBuffer; LS: TTableState;
+begin
+  LT := TTable.New([TTableColumn.Make('X', Fixed(5))]);
+  LS := TTableState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 2), LBuf, LS);
+    Check(True, 'empty table renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTableRenderSmallArea;
+var LT: ITable; LBuf: TBuffer; LS: TTableState;
+begin
+  LT := TTable.New([TTableColumn.Make('X', Fixed(5))])
+    .WithRows([TTableRow.Make(['a'])]);
+  LS := TTableState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 3, 1), LBuf, LS);
+    Check(True, 'table renders in small area');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTableMultipleRows;
+var LT: ITable; LBuf: TBuffer; LS: TTableState; LRow: AnsiString;
+begin
+  LT := TTable.New([TTableColumn.Make('Name', Fixed(10))])
+    .WithRows([
+      TTableRow.Make(['Alice']),
+      TTableRow.Make(['Bob']),
+      TTableRow.Make(['Charlie'])
+    ]);
+  LS := TTableState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 5));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 5), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('Name', LRow) > 0, 'header visible');
+    LRow := LBuf.RowAsString(1);
+    Check(Pos('Alice', LRow) > 0, 'Alice visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTableStateSelectBoundary;
+var S: TTableState;
+begin
+  S := TTableState.Empty;
+  S.Select(0);
+  Check(S.Selected = 0, 'select first');
+  S.ClearSelection;
+  Check(not S.HasSelection, 'clear after select');
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_table');
   try
@@ -243,6 +297,10 @@ begin
     T.Test('Table as IWidget', @TestTableAsIWidget);
     T.Test('Table multiple columns', @TestTableMultipleColumns);
     T.Test('Table selection', @TestTableSelection);
+    T.Test('Table render empty', @TestTableRenderEmpty);
+    T.Test('Table render small area', @TestTableRenderSmallArea);
+    T.Test('Table multiple rows', @TestTableMultipleRows);
+    T.Test('TableState select boundary', @TestTableStateSelectBoundary);
 
     WriteLn;
   if not T.Run then Halt(1);

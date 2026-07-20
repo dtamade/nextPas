@@ -24,6 +24,10 @@ var
   GRefResult: TDnsResult;
   GFailDone: Boolean;
   GFailResult: TDnsResult;
+  GStreamEvents: Integer;
+  GStreamAllDone: Boolean;
+  GStreamAddrs: Integer;
+  GStreamHasV4: Boolean;
 
 procedure DnsCallback(const AResult: TDnsResult; AContext: Pointer);
 begin
@@ -51,7 +55,21 @@ begin
   GLoop.Stop;
 end;
 
-{ 测试异步 DNS 解析 localhost }
+procedure StreamCb(const AEvent: TDnsStreamEvent; AContext: Pointer);
+var
+  LI: Integer;
+begin
+  Inc(GStreamEvents);
+  GStreamAddrs := GStreamAddrs + Length(AEvent.Addresses);
+  for LI := 0 to High(AEvent.Addresses) do
+    if not AEvent.Addresses[LI].IsIPv6 then
+      GStreamHasV4 := True;
+  if AEvent.AllDone then
+  begin
+    GStreamAllDone := True;
+    GLoop.Stop;
+  end;
+end;
 
 procedure TestAsyncResolveLocalhost;
 begin
@@ -59,22 +77,43 @@ begin
   try
     GDnsDone := False;
     GDnsResult := Default(TDnsResult);
-
     AsyncResolve(GLoop, 'localhost', @DnsCallback, nil);
-
     GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
     GLoop.Run;
-
     Check(GDnsDone, 'DNS resolution should complete');
     Check(GDnsResult.Success, 'DNS resolution should succeed');
     Check(GDnsResult.FirstAddress.IP = '127.0.0.1', 'localhost should resolve to 127.0.0.1');
+    Check(Length(GDnsResult.Addresses) >= 1, 'dual-stack list has at least one address');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
-{ 测试异步 DNS 解析 IP 字面量 }
+procedure TestAsyncResolveDualStackList;
+var
+  LI: Integer;
+  LHasV4: Boolean;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    AsyncResolve(GLoop, 'localhost', @DnsCallback, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'DNS resolution should complete');
+    Check(GDnsResult.Success, 'DNS resolution should succeed');
+    LHasV4 := False;
+    for LI := 0 to High(GDnsResult.Addresses) do
+      if not GDnsResult.Addresses[LI].IsIPv6 then
+        LHasV4 := True;
+    Check(LHasV4, 'localhost dual-stack list includes IPv4');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
 
 procedure TestAsyncResolveIPLiteral;
 begin
@@ -82,22 +121,17 @@ begin
   try
     GDnsDone := False;
     GDnsResult := Default(TDnsResult);
-
     AsyncResolve(GLoop, '192.168.1.1', @DnsCallback, nil);
-
     GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
     GLoop.Run;
-
     Check(GDnsDone, 'DNS resolution should complete');
     Check(GDnsResult.Success, 'DNS resolution should succeed');
     Check(GDnsResult.FirstAddress.IP = '192.168.1.1', 'IP literal should be returned as-is');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
-
-{ 测试异步 DNS 解析回调触发 }
 
 procedure TestAsyncResolveCallbackFires;
 begin
@@ -105,21 +139,15 @@ begin
   try
     GFailDone := False;
     GFailResult := Default(TDnsResult);
-
-    { 使用一个可能失败也可能成功的主机名，只验证回调被触发 }
     AsyncResolve(GLoop, 'nonexistent.example.invalid', @DnsFailCallback, nil);
-
     GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCallback, nil);
     GLoop.Run;
-
     Check(GFailDone, 'DNS callback should fire');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
-
-{ 测试异步 DNS 解析 Ref 回调 }
 
 procedure TestAsyncResolveRefCallback;
 begin
@@ -127,26 +155,109 @@ begin
   try
     GRefDone := False;
     GRefResult := Default(TDnsResult);
-
     AsyncResolveRef(GLoop, 'localhost', @DnsRefCallback, nil);
-
     GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
     GLoop.Run;
-
     Check(GRefDone, 'DNS resolution should complete');
     Check(GRefResult.Success, 'DNS resolution should succeed');
     Check(GRefResult.FirstAddress.IP = '127.0.0.1', 'localhost should resolve to 127.0.0.1');
   finally
     GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+procedure TestAsyncResolveExParallelLocalhost;
+var
+  LOpts: TDnsResolveOptions;
+  LI: Integer;
+  LHasV4: Boolean;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    LOpts := DefaultDnsResolveOptions;
+    LOpts.ResolutionDelayMs := 0;
+    Check(AsyncResolveEx(GLoop, 'localhost', LOpts, @DnsCallback, nil),
+      'AsyncResolveEx submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'ResolveEx completes');
+    Check(GDnsResult.Success, 'ResolveEx success');
+    LHasV4 := False;
+    for LI := 0 to High(GDnsResult.Addresses) do
+      if not GDnsResult.Addresses[LI].IsIPv6 then
+        LHasV4 := True;
+    Check(LHasV4, 'ResolveEx includes IPv4 for localhost');
+    CheckEqual(Int64(DNS_DEFAULT_RESOLUTION_DELAY_MS),
+      Int64(DefaultDnsResolveOptions.ResolutionDelayMs),
+      'default resolution delay 50ms');
+  finally
     GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+procedure TestAsyncResolveExIPLiteral;
+var
+  LOpts: TDnsResolveOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    LOpts := DefaultDnsResolveOptions;
+    LOpts.ResolutionDelayMs := 0;
+    Check(AsyncResolveEx(GLoop, '10.0.0.1', LOpts, @DnsCallback, nil),
+      'ResolveEx literal submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'literal complete');
+    Check(GDnsResult.Success, 'literal success');
+    Check(GDnsResult.FirstAddress.IP = '10.0.0.1', 'literal passthrough');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+procedure TestAsyncResolveStreamLocalhost;
+var
+  LOpts: TDnsResolveOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GStreamEvents := 0;
+    GStreamAllDone := False;
+    GStreamAddrs := 0;
+    GStreamHasV4 := False;
+    LOpts := DefaultDnsResolveOptions;
+    LOpts.ResolutionDelayMs := 0;
+    Check(AsyncResolveStream(GLoop, 'localhost', LOpts, @StreamCb, nil),
+      'stream submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCallback, nil);
+    GLoop.Run;
+    Check(GStreamAllDone, 'stream AllDone');
+    Check(GStreamEvents >= 1, 'at least one stream event');
+    Check(GStreamAddrs >= 1, 'stream delivered addresses');
+    Check(GStreamHasV4, 'stream includes IPv4');
+  finally
+    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
 begin
   T := TTestSuite.Create('net_async_resolve');
   T.Test('AsyncResolveLocalhost', @TestAsyncResolveLocalhost);
+  T.Test('AsyncResolveDualStackList', @TestAsyncResolveDualStackList);
   T.Test('AsyncResolveIPLiteral', @TestAsyncResolveIPLiteral);
   T.Test('AsyncResolveCallbackFires', @TestAsyncResolveCallbackFires);
   T.Test('AsyncResolveRefCallback', @TestAsyncResolveRefCallback);
-  T.Run;
+  T.Test('AsyncResolveExParallelLocalhost', @TestAsyncResolveExParallelLocalhost);
+  T.Test('AsyncResolveExIPLiteral', @TestAsyncResolveExIPLiteral);
+  T.Test('AsyncResolveStreamLocalhost', @TestAsyncResolveStreamLocalhost);
+  if not T.Run then
+    Halt(1);
 end.

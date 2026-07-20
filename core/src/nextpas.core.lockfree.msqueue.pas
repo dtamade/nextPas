@@ -1,5 +1,7 @@
 unit nextpas.core.lockfree.msqueue;
 
+{ Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2). }
+
 {$I nextpas.core.settings.inc}
 
 interface
@@ -101,14 +103,16 @@ function TLockFreeMsQueueImpl.TryAllocNodeIdx(out AIdx: Int32): Boolean;
 var
   LOld, LNew: Int64;
   LIdx: Int32;
+  LExpected: Int64;
 begin
   repeat
-    LOld := AtomicLoad64(FFreeHead, moAcquire);
+    LOld := atomic_load_64(FFreeHead, mo_acquire);
     LIdx := UnpackIdx(LOld);
     if LIdx < 0 then
       Exit(False);
     LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
-  until AtomicCompareExchange64(FFreeHead, LOld, LNew, moAcqRel) = LOld;
+  LExpected := LOld;
+  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNew, mo_acq_rel, mo_acquire);
   FNodes[LIdx].FHasValue := False;
   AIdx := LIdx;
   Result := True;
@@ -117,31 +121,33 @@ end;
 procedure TLockFreeMsQueueImpl.FreeNodeIdx(AIdx: Int32);
 var
   LOld, LNew: Int64;
+  LExpected: Int64;
 begin
   FNodes[AIdx].FHasValue := False;
   repeat
-    LOld := AtomicLoad64(FFreeHead, moRelaxed);
+    LOld := atomic_load_64(FFreeHead, mo_relaxed);
     FFreeList[AIdx].FNext := UnpackIdx(LOld);
     LNew := Pack(AIdx, UnpackTag(LOld) + 1);
-  until AtomicCompareExchange64(FFreeHead, LOld, LNew, moAcqRel) = LOld;
+  LExpected := LOld;
+  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNew, mo_acq_rel, mo_acquire);
 end;
 
 procedure TLockFreeMsQueueImpl.EnterOperation;
 begin
   while True do
   begin
-    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+    while atomic_load(FResizing, mo_acquire) <> 0 do
       CpuPause;
-    AtomicFetchAdd32(FActiveOperations, 1, moAcqRel);
-    if AtomicLoad32(FResizing, moAcquire) = 0 then
+    atomic_fetch_add(FActiveOperations, 1, mo_acq_rel);
+    if atomic_load(FResizing, mo_acquire) = 0 then
       Exit;
-    AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+    atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
   end;
 end;
 
 procedure TLockFreeMsQueueImpl.LeaveOperation;
 begin
-  AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+  atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
 end;
 
 procedure TLockFreeMsQueueImpl.Grow;
@@ -153,21 +159,23 @@ var
   LNewFree: Int64;
   LNewNodes: array of TNode;
   LNewFreeList: array of TFreeNode;
+  LResizeExpected: Int32;
 begin
-  if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
+  LResizeExpected := 0;
+  if not atomic_compare_exchange_strong(FResizing, LResizeExpected, 1, mo_acq_rel, mo_acquire) then
   begin
-    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+    while atomic_load(FResizing, mo_acquire) <> 0 do
       CpuPause;
     Exit;
   end;
   try
-    while AtomicLoad32(FActiveOperations, moAcquire) <> 0 do
+    while atomic_load(FActiveOperations, mo_acquire) <> 0 do
       CpuPause;
-    LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+    LOldFree := atomic_load_64(FFreeHead, mo_acquire);
     if UnpackIdx(LOldFree) >= 0 then
       Exit;
 
-    LOldCap := AtomicLoad32(FCapacity, moRelaxed);
+    LOldCap := atomic_load(FCapacity, mo_relaxed);
     if (LOldCap > High(Int32) div 2) or
        (LOldCap > (MaxInt div SizeOf(TNode)) div 2) or
        (LOldCap > (MaxInt div SizeOf(TFreeNode)) div 2) then
@@ -191,10 +199,10 @@ begin
     LNewFree := Pack(LOldCap, UnpackTag(LOldFree) + 1);
     FNodes := LNewNodes;
     FFreeList := LNewFreeList;
-    AtomicStore32(FCapacity, LNewCap, moRelaxed);
-    AtomicStore64(FFreeHead, LNewFree, moRelease);
+    atomic_store(FCapacity, LNewCap, mo_relaxed);
+    atomic_store_64(FFreeHead, LNewFree, mo_release);
   finally
-    AtomicStore32(FResizing, 0, moRelease);
+    atomic_store(FResizing, 0, mo_release);
   end;
 end;
 
@@ -253,12 +261,13 @@ function TLockFreeMsQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LNodeIdx, LTailIdx, LNextIdx: Int32;
   LOldTail, LOldNext, LNewTail, LNewNext: Int64;
+  LExpected: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     EnterOperation;
     if TryAllocNodeIdx(LNodeIdx) then
@@ -272,28 +281,30 @@ begin
     FNodes[LNodeIdx].FNext := Pack(-1, 0);
     while True do
     begin
-      LOldTail := AtomicLoad64(FTail, moAcquire);
+      LOldTail := atomic_load_64(FTail, mo_acquire);
       LTailIdx := UnpackIdx(LOldTail);
-      LOldNext := AtomicLoad64(FNodes[LTailIdx].FNext, moAcquire);
+      LOldNext := atomic_load_64(FNodes[LTailIdx].FNext, mo_acquire);
       LNextIdx := UnpackIdx(LOldNext);
-      if LOldTail = AtomicLoad64(FTail, moAcquire) then
+      if LOldTail = atomic_load_64(FTail, mo_acquire) then
       begin
         if LNextIdx < 0 then
         begin
           LNewNext := Pack(LNodeIdx, UnpackTag(LOldNext) + 1);
-          if AtomicCompareExchange64(FNodes[LTailIdx].FNext,
-            LOldNext, LNewNext, moAcqRel) = LOldNext then
+          LExpected := LOldNext;
+          if atomic_compare_exchange_strong_64(FNodes[LTailIdx].FNext, LExpected, LNewNext, mo_acq_rel, mo_acquire) then
           begin
             LNewTail := Pack(LNodeIdx, UnpackTag(LOldTail) + 1);
-            AtomicCompareExchange64(FTail, LOldTail, LNewTail, moAcqRel);
-            AtomicFetchAdd64(FCount, 1);
+            LExpected := LOldTail;
+            atomic_compare_exchange_strong_64(FTail, LExpected, LNewTail, mo_acq_rel, mo_acquire);
+            atomic_fetch_add_64(FCount, 1);
             Exit(True);
           end;
         end
         else
         begin
           LNewTail := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
-          AtomicCompareExchange64(FTail, LOldTail, LNewTail, moAcqRel);
+          LExpected := LOldTail;
+            atomic_compare_exchange_strong_64(FTail, LExpected, LNewTail, mo_acq_rel, mo_acquire);
         end;
       end;
     end;
@@ -309,26 +320,28 @@ var
   LOldNext: Int64;
   LCandidateValue: T;
   LHasCandidate: Boolean;
+  LExpected: Int64;
 begin
   Result := False;
   EnterOperation;
   try
     while True do
     begin
-      LOldHead := AtomicLoad64(FHead, moAcquire);
+      LOldHead := atomic_load_64(FHead, mo_acquire);
       LHeadIdx := UnpackIdx(LOldHead);
-      LOldTail := AtomicLoad64(FTail, moAcquire);
+      LOldTail := atomic_load_64(FTail, mo_acquire);
       LTailIdx := UnpackIdx(LOldTail);
-      LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
+      LOldNext := atomic_load_64(FNodes[LHeadIdx].FNext, mo_acquire);
       LNextIdx := UnpackIdx(LOldNext);
-      if LOldHead = AtomicLoad64(FHead, moAcquire) then
+      if LOldHead = atomic_load_64(FHead, mo_acquire) then
       begin
         if LHeadIdx = LTailIdx then
         begin
           if LNextIdx < 0 then
             Exit(False);
           LNewHead := Pack(LNextIdx, UnpackTag(LOldTail) + 1);
-          AtomicCompareExchange64(FTail, LOldTail, LNewHead, moAcqRel);
+          LExpected := LOldTail;
+          atomic_compare_exchange_strong_64(FTail, LExpected, LNewHead, mo_acq_rel, mo_acquire);
         end
         else
         begin
@@ -336,7 +349,8 @@ begin
           if LHasCandidate then
             LCandidateValue := FNodes[LNextIdx].FValue;
           LNewHead := Pack(LNextIdx, UnpackTag(LOldHead) + 1);
-          if AtomicCompareExchange64(FHead, LOldHead, LNewHead, moAcqRel) = LOldHead then
+          LExpected := LOldHead;
+          if atomic_compare_exchange_strong_64(FHead, LExpected, LNewHead, mo_acq_rel, mo_acquire) then
           begin
             if LHasCandidate then
             begin
@@ -344,7 +358,7 @@ begin
               Result := True;
             end;
             FreeNodeIdx(LHeadIdx);
-            AtomicFetchAdd64(FCount, -1);
+            atomic_fetch_add_64(FCount, -1);
             Exit;
           end;
         end;
@@ -372,17 +386,17 @@ end;
 
 procedure TLockFreeMsQueueImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TLockFreeMsQueueImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TLockFreeMsQueueImpl.ApproxCount: Int64;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 function TLockFreeMsQueueImpl.IsEmpty: Boolean;
@@ -392,11 +406,11 @@ var
 begin
   EnterOperation;
   try
-    LOldHead := AtomicLoad64(FHead, moAcquire);
+    LOldHead := atomic_load_64(FHead, mo_acquire);
     LHeadIdx := UnpackIdx(LOldHead);
-    LOldTail := AtomicLoad64(FTail, moAcquire);
+    LOldTail := atomic_load_64(FTail, mo_acquire);
     LTailIdx := UnpackIdx(LOldTail);
-    LOldNext := AtomicLoad64(FNodes[LHeadIdx].FNext, moAcquire);
+    LOldNext := atomic_load_64(FNodes[LHeadIdx].FNext, mo_acquire);
     LNextIdx := UnpackIdx(LOldNext);
     Result := (LHeadIdx = LTailIdx) and (LNextIdx < 0);
   finally

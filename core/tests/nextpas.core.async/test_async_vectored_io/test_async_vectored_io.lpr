@@ -108,7 +108,7 @@ begin
     end;
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -159,7 +159,7 @@ begin
     end;
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -205,7 +205,7 @@ begin
     end;
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -251,7 +251,7 @@ begin
     end;
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -326,7 +326,7 @@ begin
     end;
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -357,7 +357,7 @@ begin
     Check(GState.Result < 0, 'completion returned error (got ' + IntToStr(GState.Result) + ')');
   finally
     LLoop.Close;
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 

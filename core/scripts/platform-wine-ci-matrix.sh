@@ -25,6 +25,15 @@ MODULE_ENTRIES=(
   "platform.random core/tests/nextpas.core.platform.random/test_platform_random_wine"
   "platform.socket core/tests/nextpas.core.platform.socket/test_platform_socket_wine"
   "platform.error core/tests/nextpas.core.platform.error/test_platform_error_wine"
+  "platform.fmt core/tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
+  "platform.info core/tests/nextpas.core.platform.info/test_platform_info_wine"
+  "platform.which core/tests/nextpas.core.platform.which/test_platform_which_wine"
+  "platform.dl core/tests/nextpas.core.platform.dl/test_platform_dl_wine"
+  "platform.pipe core/tests/nextpas.core.platform.pipe/test_platform_pipe_wine"
+  "platform.args core/tests/nextpas.core.platform.args/test_platform_args_wine"
+  "platform.resource core/tests/nextpas.core.platform.resource/test_platform_resource_wine"
+  "platform.watch core/tests/nextpas.core.platform.watch/test_platform_watch_wine"
+  "platform.pty core/tests/nextpas.core.platform.pty/test_platform_pty_wine"
   "io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine"
 )
 

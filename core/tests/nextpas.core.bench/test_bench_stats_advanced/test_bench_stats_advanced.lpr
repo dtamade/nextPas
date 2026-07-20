@@ -624,6 +624,68 @@ begin
   Check(ClassifyOutlierSeverity(50, 50, 50) = osNone, 'Zero IQR returns osNone');
 end;
 
+procedure Test_BootstrapCI_BCa;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LCI: TConfidenceInterval;
+  I: Integer;
+begin
+  { 正常数据：1..20 }
+  SetLength(LData, 20);
+  for I := 0 to 19 do
+    LData[I] := I + 1;
+  LStats := TAdvancedStats.Create(LData);
+  LCI := LStats.BootstrapCI_BCa(5000, 0.95, 12345);
+  Check(LCI.Lower < 10.0, 'BCa Lower < 10');
+  Check(LCI.Upper > 10.0, 'BCa Upper > 10');
+  Check(Abs(LCI.Level - 0.95) < 0.01, 'BCa Level ~ 0.95');
+  LStats.Free;
+end;
+
+procedure Test_BootstrapCI_BCa_Empty;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LCI: TConfidenceInterval;
+begin
+  SetLength(LData, 0);
+  LStats := TAdvancedStats.Create(LData);
+  LCI := LStats.BootstrapCI_BCa(1000, 0.95);
+  Check(LCI.Lower = 0.0, 'BCa empty Lower = 0');
+  Check(LCI.Upper = 0.0, 'BCa empty Upper = 0');
+  LStats.Free;
+end;
+
+procedure Test_BootstrapCI_BCa_Single;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LCI: TConfidenceInterval;
+begin
+  SetLength(LData, 1);
+  LData[0] := 42.0;
+  LStats := TAdvancedStats.Create(LData);
+  LCI := LStats.BootstrapCI_BCa(1000, 0.95);
+  Check(LCI.Lower = 42.0, 'BCa single Lower = 42');
+  Check(LCI.Upper = 42.0, 'BCa single Upper = 42');
+  LStats.Free;
+end;
+
+procedure Test_DetectOutliers_ModifiedZScore_NoOutliers;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LResult: TOutlierDetection;
+begin
+  { 紧密数据：无异常值 }
+  LData := CreateTestData([10.0, 10.1, 10.2, 10.3, 10.4, 10.5]);
+  LStats := TAdvancedStats.Create(LData);
+  LResult := LStats.DetectOutliers_ModifiedZScore;
+  Check(Length(LResult.Outliers) = 0, 'No outliers in tight data');
+  LStats.Free;
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -668,6 +730,10 @@ begin
   T.Test('OutlierSeverity_Moderate', @Test_OutlierSeverity_Moderate);
   T.Test('OutlierSeverity_Severe', @Test_OutlierSeverity_Severe);
   T.Test('OutlierSeverity_ZeroIQR', @Test_OutlierSeverity_ZeroIQR);
+  T.Test('BootstrapCI_BCa', @Test_BootstrapCI_BCa);
+  T.Test('BootstrapCI_BCa_Empty', @Test_BootstrapCI_BCa_Empty);
+  T.Test('BootstrapCI_BCa_Single', @Test_BootstrapCI_BCa_Single);
+  T.Test('DetectOutliers_ModifiedZScore_NoOutliers', @Test_DetectOutliers_ModifiedZScore_NoOutliers);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

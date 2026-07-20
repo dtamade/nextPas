@@ -1,6 +1,9 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-17
+> 更新: 2026-07-19（H3-4：证据信封 + CONTRACT 对齐）
+>
+> **权威顺序**：[`CONTRACT.md`](CONTRACT.md) > 本文件 > 选型/README。改 API 必须同步本文件。
+> 绝对性能数字须带 [`bench-envelope.md`](bench-envelope.md)；禁止无信封 Mops 营销。
 
 [English](api-reference.en.md)
 
@@ -308,8 +311,10 @@ type
   end;
 ```
 
+**Progress（诚实）**: **分片自旋锁** 并发 map，**不是 lock-free**。`TConcurrentHashMap` 是**同一实现别名**，不是第二套算法。
+
 **设计特点**:
-- 分片锁（16 shards），每个 shard 使用 AtomicExchange32 自旋锁
+- 分片锁（16 shards），每 shard 自旋锁（preferred `atomic_exchange` 路径）
 - 开放寻址 + 线性探测
 - 负载因子 3/4，自动扩容
 - 仅支持 unmanaged 类型
@@ -333,13 +338,17 @@ type
 | GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
-**性能特征**（vs TConcurrentHashMap）:
+**命名**: `TConcurrentHashMap` ≡ `TShardedHashMap`（同 `TShardedHashMapImpl`）。不要用两者对比“性能差异”。
 
-| 场景 | TShardedHashMap | TConcurrentHashMap |
-|------|-----------------|-------------------|
-| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
-| 内存管理 | 无引用计数 | 有引用计数 |
-| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+**精神对标**（非 API 拷贝）:
+
+| 场景 | Go `sync.Map` | dashmap 精神 | nextpas |
+|------|---------------|--------------|---------|
+| 插入/覆盖 | `Store` | `insert` | `Insert` |
+| 查找 | `Load` | `get` | `Find` / `Contains` |
+| 条件插入 | — | `entry` API | `TryInsert` / `GetOrInsert*` |
+| 删除 | `Delete` | `remove` | `Remove` |
+| Progress | 运行时内部 | 分片锁 | **分片自旋锁（诚实）** |
 
 **键相等性**:
 - 使用 `CompareByte` 逐字节比较，适用于所有 unmanaged 类型（Integer、Int64、record 等）
@@ -575,7 +584,7 @@ type
 **与 TLockFreeChannel 的区别**:
 - 使用原子 load/store 替代 CAS（1P1C 无竞争）
 - 无序列号开销（环形缓冲区直接索引）
-- 性能超越 Go channel (2.99x) 和 Rust std::sync::mpsc (1.26x)
+- 1P1C 热路径通常快于 MPMC Channel / mutex 基线；绝对倍数须带 [`bench-envelope.md`](bench-envelope.md)
 
 **使用场景**:
 - 单生产者单消费者
@@ -621,6 +630,7 @@ type
 | `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
 | `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
 | `select { ... }` | `LResult := LSelector.Select` |
+| `select { ... default: }` | `LResult := LSelector.TrySelect`（`Completed=False` 即 default） |
 
 **使用示例**:
 ```pascal
@@ -650,14 +660,19 @@ end;
 ```
 
 **设计约束**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- 不支持 `default` 分支（需要时直接 TrySend/TryReceive）
-- poll + backoff 策略（纯用户态轮询，不使用内核 wait address）
-- `AddSend` 存储值副本，Select 成功后才实际发送
-
+- 所有 case 必须使用相同类型 T（Go 可在同一 `select` 混不同类型；本实现不支持）
+- **无**语言级 `default` case 对象；用 **`TrySelect`** 表达 default
+- 多 case 同时就绪时按 **Add 注册序** 选最早 case（**非** Go 随机选择）
+- 等待：短 spin 后经 `lockfree.wait` 的 wait-address（`LockFreeWaitData`），不是纯忙轮询
+- `AddSend` 存储值副本，Select/TrySelect 成功时才实际发送
+- 空 closed channel 的 recv case 与 `TryReceive=False` 对齐：`TrySelect`/`SelectTimeout` 不完成
 ---
 
 ## Bag (nextpas.core.lockfree.bag)
+
+> **H3-2 生产子集**（CONTRACT §0.3）：**直接** `uses nextpas.core.lockfree.bag`；**不**在默认 T1 门面。
+> **Progress**：有界 **lock-free ring（MPMC 序列号槽）** + wait-address 阻塞路径；不是“集合语义完全无锁重写”。
+> **Managed**：`IsManagedType(T)` → `EArgumentError`。生命周期：`Close` → drain/join → `Free`；`Destroy` 先 `Close`。
 
 ```pascal
 type
@@ -681,12 +696,10 @@ type
 ```
 
 **特点**:
-- 基于 MPMC 队列实现，允许重复元素
-- FIFO 顺序（先进先出）
-- AddWait/TakeWait 阻塞等待
-- AddTimeout/TakeTimeout 超时等待
-- Close 后不能再添加，但可以取出已有元素
-- 适用于任务队列、工作池等场景
+- 有界 ring bag，允许重复元素；FIFO
+- `TryAdd`/`TryTake` 热路径 CAS/序列号；AddWait/TakeWait 可阻塞
+- Close 后 `TryAdd` → `arClosed`，已入队仍可取出
+- 适用于任务袋、多生产者多消费者工作池等场景
 
 **使用示例**:
 
@@ -717,6 +730,10 @@ end;
 
 ## MultiMap (nextpas.core.lockfree.multimap)
 
+> **H3-2 生产子集**（CONTRACT §0.3）：**直接** `uses nextpas.core.lockfree.multimap`；**不**在默认 T1 门面。
+> **Progress**：**lock-based concurrent**（**单 map 自旋锁**），**不是**分片锁、**不是** lock-free map。
+> **Managed**：键/值均须 unmanaged。生命周期：`Close` → 停写 → 读完/清理 → `Free`；`Destroy` 先 `Close`。
+
 ```pascal
 type
   TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
@@ -738,10 +755,9 @@ type
 ```
 
 **特点**:
-- 基于分片锁 HashMap，每个键对应一个值列表
-- 支持一个键添加多个值
+- 单锁并发 multi-value map（每个键对应值列表）
 - Remove 删除整个键，RemoveValue 删除特定值
-- Close 后不能添加，但可以读取和删除
+- Close 后 `Add` → `mmClosed`；已有键仍可读/删
 - 适用于索引、标签系统等场景
 
 **使用示例**:

@@ -565,7 +565,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 ### 4.2 Multipart bounded stream ingest（Wave Q1-2）
 
-字符串 API `ParseMultipartFormData` / `EncodeMultipartFormData` **保留不变**。  
+字符串 API `ParseMultipartFormData` / `EncodeMultipartFormData` **保留不变**。
 新增 **有界流式摄入**（非磁盘 spool、非第二套 body 家族）：
 
 | API | 行为 |

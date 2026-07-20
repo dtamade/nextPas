@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
-> 最后更新：2026-07-11
-> 版本：Phase 10 Complete
+> 最后更新：2026-07-20
+> 版本：M3+B1–B4 + Q1–Q18（async-bench-parity 同机对照）
 
 ## 模块概览
 
@@ -120,9 +120,9 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 | 平台 | 状态 | 说明 |
 |------|------|------|
 | Linux | ✅ | io_uring + epoll (自动检测) |
-| macOS | ❌ | 无 kqueue 后端 |
-| Windows | ❌ | IOCP 编译桩，无运行时 |
-| FreeBSD | ❌ | 无 kqueue 后端 |
+| macOS | ⚠️ | `pbKqueue` readiness 已接线；FORCE_HOST 编译门；未 host-runtime proven |
+| Windows | ⚠️ | `pbIocp` 真实现 + Wine runtime smoke；非原生 Windows host ready |
+| FreeBSD | ⚠️ | `pbKqueue` 已接线；FORCE_HOST 被 platform.thread 阻塞 |
 
 ## 线程安全
 
@@ -134,16 +134,16 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 1. **单线程模型**: 避免锁竞争，简化状态管理
 2. **回调驱动**: 无 Future/Promise，纯回调模式
-3. **Record 类型**: 值语义，无堆分配
-4. **Close 方法**: 所有 Record 类型使用 Close 释放资源
+3. **TAsyncLoop = class**: 引用语义，消除 `@ALoop` 栈悬空；依赖不拥有 loop
+4. **Close / Free**: Close 幂等释放资源；Free→Destroy 调 Close 且不抛异常
 5. **平台检测**: 运行时自动选择最佳后端
 
 ## 未来方向
 
-1. **macOS/FreeBSD**: 添加 kqueue 后端
-2. **Windows**: 完善 IOCP 运行时支持
-3. **性能优化**: 批量 I/O 操作
-4. **API 扩展**: 添加 WhenAll/WhenAny 组合器
+1. 运行同机对照：`bash core/scripts/async-bench-parity.sh`
+2. 真实 DNS RTT 统计性 HE 基准 / dial bench 扩展
+3. 原生 Windows host runner 升格（见 WINDOWS-NATIVE-ASSESSMENT）
+4. [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md) · [SCORECARD-2026-07-20.md](SCORECARD-2026-07-20.md)
 
 ## 相关文档
 

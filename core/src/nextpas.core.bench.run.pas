@@ -151,7 +151,7 @@ begin
   LResult := LArgs^.Runner.RunOne(LArgs^.Entry);
   LPtr := AllocBenchResult(LResult);
   { 无锁提交: 原子递增获取槽位，写入指针 }
-  LIdx := AtomicFetchAdd32(LArgs^.ResultIdx^, 1, moAcqRel);
+  LIdx := atomic_fetch_add(LArgs^.ResultIdx^, 1, mo_acq_rel);
   PBenchRunResultSlotArray(LArgs^.Results^)^[LIdx] := LPtr;
 end;
 
@@ -188,7 +188,7 @@ var
 begin
   if FResults = nil then
     Exit;
-  for I := 0 to AtomicLoad32(FResultIdx, moRelaxed) - 1 do
+  for I := 0 to atomic_load(FResultIdx, mo_relaxed) - 1 do
     FreeBenchResult(PBenchRunResultSlotArray(FResults)^[I]);
 end;
 
@@ -197,15 +197,19 @@ var
   LIdx, LExpected: Int32;
 begin
   { CAS 循环：只在容量内递增，避免溢出后 FResultIdx 越界 }
-  repeat
-    LExpected := AtomicLoad32(FResultIdx, moRelaxed);
+  LExpected := atomic_load(FResultIdx, mo_relaxed);
+  while True do
+  begin
     if LExpected >= FCapacity then
     begin
       FreeBenchResult(AResult);
       raise EBenchInvalidParam.Create('TBenchRun: result capacity exceeded');
     end;
     LIdx := LExpected;
-  until AtomicCompareExchange32(FResultIdx, LExpected, LExpected + 1) = LExpected;
+    if atomic_compare_exchange_strong(FResultIdx, LExpected, LExpected + 1, mo_acq_rel, mo_relaxed) then
+      Break;
+    { LExpected updated to observed value on failure }
+  end;
   PBenchRunResultSlotArray(FResults)^[LIdx] := AResult;
 end;
 
@@ -213,7 +217,7 @@ function TBenchRun.CollectResults(out AResults: TBenchResultArray): Integer;
 var
   I: Integer;
 begin
-  Result := AtomicLoad32(FResultIdx, moAcquire);
+  Result := atomic_load(FResultIdx, mo_acquire);
   SetLength(AResults, Result);
   for I := 0 to Result - 1 do
     AResults[I] := PBenchRunResultSlotArray(FResults)^[I]^;
@@ -221,7 +225,7 @@ end;
 
 function TBenchRun.Count: Integer;
 begin
-  Result := AtomicLoad32(FResultIdx, moRelaxed);
+  Result := atomic_load(FResultIdx, mo_relaxed);
 end;
 
 function TBenchRun.RunAll(const AEntries: array of TBenchEntry;

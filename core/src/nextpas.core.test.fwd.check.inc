@@ -271,6 +271,27 @@ begin nextpas.core.test.check.Fail(AMessage); end;
 procedure FailUnexpected(const E: Exception);
 begin nextpas.core.test.check.FailUnexpected(E); end;
 
+procedure SoftFail(const AMessage: string);
+begin nextpas.core.test.check.SoftFail(AMessage); end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckTrue(ACondition, AMessage); end;
+
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckFalse(ACondition, AMessage); end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckContains(AHaystack, ANeedle, AMessage); end;
+
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
 
@@ -396,3 +417,21 @@ procedure CheckNotInf(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotInf(AValue, AMessage); end;
 procedure CheckFinite(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckFinite(AValue, AMessage); end;
+
+procedure CheckOneOf(const AValue: string; const AValues: array of string);
+begin nextpas.core.test.check.CheckOneOf(AValue, AValues); end;
+procedure CheckOneOf(const AValue: string; const AValues: array of string; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOf(AValue, AValues, AMessage); end;
+procedure CheckOneOfInt(const AValue: Int64; const AValues: array of Int64);
+begin nextpas.core.test.check.CheckOneOfInt(AValue, AValues); end;
+procedure CheckOneOfInt(const AValue: Int64; const AValues: array of Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOfInt(AValue, AValues, AMessage); end;
+procedure CheckOneOfBool(AValue: Boolean; const AValues: array of Boolean);
+begin nextpas.core.test.check.CheckOneOfBool(AValue, AValues); end;
+procedure CheckOneOfBool(AValue: Boolean; const AValues: array of Boolean; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOfBool(AValue, AValues, AMessage); end;
+
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass);
+begin nextpas.core.test.check.CheckInstanceOf(AObject, AClass); end;
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass; const AMessage: string);
+begin nextpas.core.test.check.CheckInstanceOf(AObject, AClass, AMessage); end;

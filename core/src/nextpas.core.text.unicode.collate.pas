@@ -8,27 +8,29 @@ uses
   nextpas.core.text.unicode.types;
 
 type
-  // 排序规则强度（UCA 级别）
   TCollationStrength = (
-    csPrimary,    // 主要差异（如 a vs b）— 忽略大小写和变音
-    csSecondary,  // 次要差异（如 a vs á）— 区分变音，忽略大小写
-    csTertiary,   // 三级差异（如 a vs A）— 区分大小写
-    csQuaternary, // 四级差异（如平假名 vs 片假名）
-    csIdentical   // 完全相同
+    csPrimary,
+    csSecondary,
+    csTertiary,
+    csQuaternary,
+    csIdentical
   );
 
-  // 排序选项
+  TCollationVariableWeighting = (
+    cvwNonIgnorable,
+    cvwShifted
+  );
+
   TCollationOptions = record
     Strength: TCollationStrength;
-    CaseLevel: Boolean;       // 大小写作为独立级别（法语排序）
-    FrenchAccents: Boolean;   // 法语重音排序（从右到左）
-    NumericOrdering: Boolean; // 数字按数值排序
+    CaseLevel: Boolean;
+    FrenchAccents: Boolean;
+    NumericOrdering: Boolean;
+    VariableWeighting: TCollationVariableWeighting;
   end;
 
-  // 排序键（字节序列）
   TCollationKey = array of Byte;
 
-  // 排序器接口
   IUnicodeCollator = interface
     ['{C3D4E5F6-A7B8-9012-CDEF-123456789012}']
     function Compare(const A, B: string): Integer;
@@ -41,29 +43,26 @@ type
   end;
 
 type
-  // 单遍收集的权重三元组
-  TWeightTriple = record
+  TCollationElement = record
     Primary: UInt16;
-    Secondary: Byte;
-    Tertiary: Byte;
-    Codepoint: TUnicodeCodepoint;  // 原始码点，用于 csIdentical/NumericOrdering
-    IsDigit: Boolean;              // 是否属于数字序列（NumericOrdering 使用）
-    DigitValue: UInt32;            // 数字序列的数值（仅 IsDigit=True 时有效）
+    Secondary: UInt16;
+    Tertiary: UInt16;
+    Quaternary: UInt16;
+    Variable: Boolean;
+    Codepoint: TUnicodeCodepoint;
+    IsDigit: Boolean;
+    DigitValue: UInt32;
   end;
 
-  // 权重数组（预分配，避免每级重复迭代）
-  TWeightArray = array of TWeightTriple;
+  TCollationElementArray = array of TCollationElement;
+  TCodepointArray = array of TUnicodeCodepoint;
 
-  // 排序器实现（基于 DUCET 三级权重）
   TUnicodeCollator = class(TInterfacedObject, IUnicodeCollator)
   private
     FOptions: TCollationOptions;
-    // 单遍收集所有权重
-    function CollectWeights(const ANormalized: string): TWeightArray;
-    // 从权重数组生成排序键
-    function WeightsToSortKey(const AWeights: TWeightArray): TCollationKey;
-    // 从权重数组逐级比较（避免生成完整排序键）
-    function CompareWeights(const AWeightsA, AWeightsB: TWeightArray): Integer;
+    function CollectElements(const ANormalized: string): TCollationElementArray;
+    function ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey;
+    function CompareElements(const A, B: TCollationElementArray): Integer;
   public
     constructor Create(const AOptions: TCollationOptions);
     function Compare(const A, B: string): Integer;
@@ -75,19 +74,11 @@ type
     function Contains(const AText, ASubstring: string): Boolean;
   end;
 
-// 默认排序选项
 function DefaultCollationOptions: TCollationOptions;
-
-// 全局排序器实例
+function UCACollationOptions(const AVariable: TCollationVariableWeighting): TCollationOptions;
 function UnicodeCollator: IUnicodeCollator;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator;
-
-// 底层查询：获取码点的 DUCET 打包权重
-// 返回 0 表示 ignorable（排序时忽略）
-// 打包格式: (primary << 16) | (secondary << 8) | tertiary
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
-
-// 解包权重分量
 function UnpackPrimary(const AWeight: UInt32): UInt16;
 function UnpackSecondary(const AWeight: UInt32): Byte;
 function UnpackTertiary(const AWeight: UInt32): Byte;
@@ -102,7 +93,11 @@ uses
 
 {$I nextpas.core.text.unicode.collate.inc}
 
-{ 内联字节比较：避免依赖 SysUtils.BytesEqual }
+const
+  IMPLICIT_BASE_CORE_HAN = $FB40;
+  IMPLICIT_BASE_OTHER_HAN = $FB80;
+  IMPLICIT_BASE_UNASSIGNED = $FBC0;
+
 function BytesEqual(const A: PByte; const B: PByte; const ALen: SizeInt): Boolean;
 var
   I: SizeInt;
@@ -113,7 +108,6 @@ begin
   Result := True;
 end;
 
-{ CaseLevel 辅助：0=小写/无大小写, 8=大写, 9=混合大小写 }
 function GetCaseLevel(const ACp: TUnicodeCodepoint): Byte;
 var
   LIsUpper, LIsLower: Boolean;
@@ -121,44 +115,486 @@ begin
   LIsUpper := IsUpper(ACp);
   LIsLower := IsLower(ACp);
   if LIsUpper and LIsLower then
-    Result := 9   // mixed case (titlecase)
+    Result := 9
   else if LIsUpper then
-    Result := 8   // uppercase
+    Result := 8
   else
-    Result := 0;  // lowercase or uncased
+    Result := 0;
+end;
+
+function UnpackCE(const APacked: UInt64; out APrimary, ASecondary, ATertiary: UInt16;
+  out AVariable: Boolean): Boolean;
+begin
+  APrimary := UInt16(APacked and $FFFF);
+  ASecondary := UInt16((APacked shr 16) and $FFFF);
+  ATertiary := UInt16((APacked shr 32) and $FFFF);
+  AVariable := ((APacked shr 48) and 1) <> 0;
+  Result := (APrimary <> 0) or (ASecondary <> 0) or (ATertiary <> 0) or AVariable;
+end;
+
+function IsCoreHan(const ACp: TUnicodeCodepoint): Boolean; inline;
+begin
+  Result := ((ACp >= $4E00) and (ACp <= $9FFF)) or
+            ((ACp >= $F900) and (ACp <= $FAFF));
+end;
+
+function IsOtherHan(const ACp: TUnicodeCodepoint): Boolean;
+begin
+  Result :=
+    ((ACp >= $3400) and (ACp <= $4DBF)) or
+    ((ACp >= $20000) and (ACp <= $2A6DF)) or
+    ((ACp >= $2A700) and (ACp <= $2B739)) or
+    ((ACp >= $2B740) and (ACp <= $2B81D)) or
+    ((ACp >= $2B820) and (ACp <= $2CEA1)) or
+    ((ACp >= $2CEB0) and (ACp <= $2EBE0)) or
+    ((ACp >= $2EBF0) and (ACp <= $2EE5D)) or
+    ((ACp >= $30000) and (ACp <= $3134A)) or
+    ((ACp >= $31350) and (ACp <= $323AF));
+end;
+
+function ImplicitBase(const ACp: TUnicodeCodepoint): UInt16;
+var
+  I: Integer;
+begin
+  if IsCoreHan(ACp) then
+    Exit(IMPLICIT_BASE_CORE_HAN);
+  if IsOtherHan(ACp) then
+    Exit(IMPLICIT_BASE_OTHER_HAN);
+  for I := 0 to COLLATE_IMPLICIT_RANGE_COUNT - 1 do
+  begin
+    if (ACp >= COLLATE_IMP_LO[I]) and (ACp <= COLLATE_IMP_HI[I]) then
+      Exit(UInt16(COLLATE_IMP_BASE[I]));
+  end;
+  Result := IMPLICIT_BASE_UNASSIGNED;
+end;
+
+function FindSmpIndex(const ACp: TUnicodeCodepoint): Integer;
+var
+  Lo, Hi, Mid: Integer;
+begin
+  Lo := 0;
+  Hi := COLLATE_SMP_COUNT - 1;
+  while Lo <= Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if COLLATE_SMP_CP[Mid] < ACp then
+      Lo := Mid + 1
+    else if COLLATE_SMP_CP[Mid] > ACp then
+      Hi := Mid - 1
+    else
+      Exit(Mid);
+  end;
+  Result := -1;
+end;
+
+function LookupExplicit(const ACp: TUnicodeCodepoint; out AOffset: UInt32; out ALen: Byte): Boolean;
+var
+  LIdx: UInt32;
+  LSmp: Integer;
+begin
+  if ACp <= $FFFF then
+  begin
+    LIdx := COLLATE_BMP_INDEX[Byte(ACp shr 8), Byte(ACp and $FF)];
+    if LIdx = 0 then
+      Exit(False);
+    AOffset := LIdx shr 8;
+    ALen := Byte(LIdx and $FF);
+    Exit(True);
+  end;
+  LSmp := FindSmpIndex(ACp);
+  if LSmp < 0 then
+    Exit(False);
+  AOffset := COLLATE_SMP_OFF[LSmp];
+  ALen := Byte(COLLATE_SMP_LEN[LSmp] and $FF);
+  Result := ALen > 0;
+end;
+
+function FindContractionFirst(const AFirst: TUnicodeCodepoint): Integer;
+var
+  Lo, Hi, Mid: Integer;
+begin
+  Lo := 0;
+  Hi := COLLATE_CONTRACTION_COUNT - 1;
+  Result := -1;
+  while Lo <= Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if COLLATE_CTR_FIRST[Mid] < AFirst then
+      Lo := Mid + 1
+    else if COLLATE_CTR_FIRST[Mid] > AFirst then
+      Hi := Mid - 1
+    else
+    begin
+      while (Mid > 0) and (COLLATE_CTR_FIRST[Mid - 1] = AFirst) do
+        Dec(Mid);
+      Exit(Mid);
+    end;
+  end;
+end;
+
+function MatchContraction(const ACps: array of TUnicodeCodepoint; const APos, ACount: SizeInt;
+  out AMatchLen: SizeInt; out AOffset: UInt32; out ALen: Byte;
+  out ASkipCps: TCodepointArray; out ASkipCount: SizeInt): Boolean;
+{ UTS#10: longest contiguous match, then extend by discontiguous non-starters. }
+var
+  LStart, LI, LJ, LRestLen: Integer;
+  LFirst: TUnicodeCodepoint;
+  LRestOff: UInt32;
+  LNeed: TUnicodeCodepoint;
+  LSearch, LFound, LK: SizeInt;
+  LNeedCcc, LCcc: Byte;
+  LBlocked: Boolean;
+  LConsumed: array of Boolean;
+  LLast: SizeInt;
+  LCap: SizeInt;
+  LOk: Boolean;
+  LMatchIdx: Integer;
+  LSeq: array of TUnicodeCodepoint;
+  LSeqLen: SizeInt;
+  LExtended: Boolean;
+  LCandIdx: Integer;
+  LTryLen: Integer;
+  LPrefixOk: Boolean;
+begin
+  Result := False;
+  ASkipCount := 0;
+  SetLength(ASkipCps, 0);
+  if APos >= ACount then
+    Exit;
+  LFirst := ACps[APos];
+  LStart := FindContractionFirst(LFirst);
+  if LStart < 0 then
+    Exit;
+
+  // --- Phase 1: longest contiguous multi-cp contraction ---
+  LMatchIdx := -1;
+  LLast := APos;
+  LI := LStart;
+  while (LI < COLLATE_CONTRACTION_COUNT) and (COLLATE_CTR_FIRST[LI] = LFirst) do
+  begin
+    LRestLen := Integer(COLLATE_CTR_REST_LEN[LI]);
+    if (LRestLen > 0) and (APos + 1 + LRestLen <= ACount) then
+    begin
+      LOk := True;
+      LRestOff := COLLATE_CTR_REST_OFF[LI];
+      for LJ := 0 to LRestLen - 1 do
+        if ACps[APos + 1 + LJ] <> COLLATE_CTR_REST[LRestOff + UInt32(LJ)] then
+        begin
+          LOk := False;
+          Break;
+        end;
+      if LOk then
+      begin
+        LMatchIdx := LI;
+        LLast := APos + LRestLen;
+        Break; // longest first
+      end;
+    end;
+    Inc(LI);
+  end;
+
+  // Build current sequence S
+  SetLength(LSeq, 16);
+  LSeq[0] := LFirst;
+  LSeqLen := 1;
+  if LMatchIdx >= 0 then
+  begin
+    LRestLen := Integer(COLLATE_CTR_REST_LEN[LMatchIdx]);
+    LRestOff := COLLATE_CTR_REST_OFF[LMatchIdx];
+    for LJ := 0 to LRestLen - 1 do
+    begin
+      if LSeqLen >= Length(LSeq) then
+        SetLength(LSeq, LSeqLen * 2);
+      LSeq[LSeqLen] := COLLATE_CTR_REST[LRestOff + UInt32(LJ)];
+      Inc(LSeqLen);
+    end;
+  end;
+
+  // Consumed mask for contiguous part
+  SetLength(LConsumed, ACount);
+  for LK := 0 to ACount - 1 do
+    LConsumed[LK] := False;
+  LConsumed[APos] := True;
+  if LMatchIdx >= 0 then
+    for LJ := 1 to LSeqLen - 1 do
+      LConsumed[APos + LJ] := True;
+
+  // --- Phase 2: extend S by discontiguous non-starters ---
+  repeat
+    LExtended := False;
+    LSearch := LLast + 1;
+    // find contraction = S + one non-starter C
+    LI := LStart;
+    while (LI < COLLATE_CONTRACTION_COUNT) and (COLLATE_CTR_FIRST[LI] = LFirst) do
+    begin
+      LRestLen := Integer(COLLATE_CTR_REST_LEN[LI]);
+      LTryLen := LSeqLen - 1; // rest length of current S
+      if LRestLen <> LTryLen + 1 then
+      begin
+        Inc(LI);
+        Continue;
+      end;
+      LRestOff := COLLATE_CTR_REST_OFF[LI];
+      // prefix of rest must equal S[1..]
+      LPrefixOk := True;
+      for LJ := 0 to LTryLen - 1 do
+        if COLLATE_CTR_REST[LRestOff + UInt32(LJ)] <> LSeq[LJ + 1] then
+        begin
+          LPrefixOk := False;
+          Break;
+        end;
+      if not LPrefixOk then
+      begin
+        Inc(LI);
+        Continue;
+      end;
+      LNeed := COLLATE_CTR_REST[LRestOff + UInt32(LTryLen)];
+      LNeedCcc := GetCanonicalCombiningClass(LNeed);
+      if LNeedCcc = 0 then
+      begin
+        Inc(LI);
+        Continue; // only non-starters for discontiguous extend
+      end;
+      // find LNeed at/after LSearch, discontiguous
+      LFound := -1;
+      LK := LSearch;
+      while LK < ACount do
+      begin
+        if LConsumed[LK] then
+        begin
+          Inc(LK);
+          Continue;
+        end;
+        LCcc := GetCanonicalCombiningClass(ACps[LK]);
+        if ACps[LK] = LNeed then
+        begin
+          LBlocked := False;
+          for LCap := LSearch to LK - 1 do
+          begin
+            if LConsumed[LCap] then
+              Continue;
+            LCcc := GetCanonicalCombiningClass(ACps[LCap]);
+            if LCcc = 0 then
+            begin
+              LBlocked := True;
+              Break;
+            end;
+            if LCcc >= LNeedCcc then
+            begin
+              LBlocked := True;
+              Break;
+            end;
+          end;
+          if not LBlocked then
+          begin
+            LFound := LK;
+            Break;
+          end;
+        end
+        else if LCcc = 0 then
+          Break;
+        Inc(LK);
+      end;
+      if LFound >= 0 then
+      begin
+        // extend
+        if LSeqLen >= Length(LSeq) then
+          SetLength(LSeq, LSeqLen * 2);
+        LSeq[LSeqLen] := LNeed;
+        Inc(LSeqLen);
+        LConsumed[LFound] := True;
+        if LFound > LLast then
+          LLast := LFound;
+        LMatchIdx := LI;
+        LExtended := True;
+        Break; // restart extension from new S
+      end;
+      Inc(LI);
+    end;
+  until not LExtended;
+
+  if (LMatchIdx < 0) or (LSeqLen < 2) then
+    Exit(False);
+
+  AMatchLen := LLast - APos + 1;
+  AOffset := COLLATE_CTR_CE_OFF[LMatchIdx];
+  ALen := Byte(COLLATE_CTR_CE_LEN[LMatchIdx] and $FF);
+  ASkipCount := 0;
+  SetLength(ASkipCps, AMatchLen);
+  for LK := APos + 1 to LLast - 1 do
+    if not LConsumed[LK] then
+    begin
+      ASkipCps[ASkipCount] := ACps[LK];
+      Inc(ASkipCount);
+    end;
+  SetLength(ASkipCps, ASkipCount);
+  Result := True;
+end;
+
+procedure AppendImplicit(var ADst: TCollationElementArray; var ACount: SizeInt;
+  const ACp: TUnicodeCodepoint);
+var
+  LBase: UInt16;
+  LAAAA, LBBBB: UInt16;
+  LCap: SizeInt;
+begin
+  LBase := ImplicitBase(ACp);
+  LAAAA := UInt16(LBase + (ACp shr 15));
+  LBBBB := UInt16((ACp and $7FFF) or $8000);
+  LCap := Length(ADst);
+  if ACount + 2 > LCap then
+  begin
+    if LCap = 0 then LCap := 16 else LCap := LCap * 2;
+    while ACount + 2 > LCap do LCap := LCap * 2;
+    SetLength(ADst, LCap);
+  end;
+  ADst[ACount].Primary := LAAAA;
+  ADst[ACount].Secondary := $0020;
+  ADst[ACount].Tertiary := $0002;
+  ADst[ACount].Quaternary := 0;
+  ADst[ACount].Variable := False;
+  ADst[ACount].Codepoint := ACp;
+  ADst[ACount].IsDigit := False;
+  ADst[ACount].DigitValue := 0;
+  Inc(ACount);
+  ADst[ACount].Primary := LBBBB;
+  ADst[ACount].Secondary := 0;
+  ADst[ACount].Tertiary := 0;
+  ADst[ACount].Quaternary := 0;
+  ADst[ACount].Variable := False;
+  ADst[ACount].Codepoint := ACp;
+  ADst[ACount].IsDigit := False;
+  ADst[ACount].DigitValue := 0;
+  Inc(ACount);
+end;
+
+procedure AppendFromPool(var ADst: TCollationElementArray; var ACount: SizeInt;
+  const AOffset: UInt32; const ALen: Byte; const ACp: TUnicodeCodepoint);
+var
+  I: Integer;
+  LPacked: UInt64;
+  LP, LS, LT: UInt16;
+  LV: Boolean;
+  LCap: SizeInt;
+begin
+  for I := 0 to Integer(ALen) - 1 do
+  begin
+    LPacked := COLLATE_CE_POOL[AOffset + UInt32(I)];
+    if not UnpackCE(LPacked, LP, LS, LT, LV) then
+      Continue;
+    LCap := Length(ADst);
+    if ACount >= LCap then
+    begin
+      if LCap = 0 then LCap := 16 else LCap := LCap * 2;
+      SetLength(ADst, LCap);
+    end;
+    ADst[ACount].Primary := LP;
+    ADst[ACount].Secondary := LS;
+    ADst[ACount].Tertiary := LT;
+    ADst[ACount].Quaternary := 0;
+    ADst[ACount].Variable := LV;
+    ADst[ACount].Codepoint := ACp;
+    ADst[ACount].IsDigit := False;
+    ADst[ACount].DigitValue := 0;
+    Inc(ACount);
+  end;
+end;
+
+procedure FillDigitSequences(var AElements: TCollationElementArray; const ACount: SizeInt);
+var
+  LI, LStart: SizeInt;
+  LValue: UInt32;
+  LDigit: UInt32;
+begin
+  LI := 0;
+  while LI < ACount do
+  begin
+    if (AElements[LI].Codepoint >= $30) and (AElements[LI].Codepoint <= $39) then
+    begin
+      LStart := LI;
+      LValue := 0;
+      while (LI < ACount) and (AElements[LI].Codepoint >= $30) and (AElements[LI].Codepoint <= $39) do
+      begin
+        LDigit := AElements[LI].Codepoint - $30;
+        if LValue <= (High(UInt32) - LDigit) div 10 then
+          LValue := LValue * 10 + LDigit
+        else
+          LValue := High(UInt32);
+        Inc(LI);
+      end;
+      while LStart < LI do
+      begin
+        AElements[LStart].IsDigit := True;
+        AElements[LStart].DigitValue := LValue;
+        Inc(LStart);
+      end;
+    end
+    else
+      Inc(LI);
+  end;
+end;
+
+procedure ApplyVariableWeighting(var AElements: TCollationElementArray; const ACount: SizeInt;
+  const AMode: TCollationVariableWeighting);
+var
+  I: SizeInt;
+  LAfterVariable: Boolean;
+begin
+  if AMode = cvwNonIgnorable then
+  begin
+    for I := 0 to ACount - 1 do
+      AElements[I].Quaternary := 0;
+    Exit;
+  end;
+  // Shifted (UTS#10):
+  // - variable CE: primary → quaternary; L1-L3 zero
+  // - primary-ignorable CE following a variable: ignore at L1-L3 (and no quat)
+  // - regular non-variable with primary≠0: quaternary = high (0xFFFF)
+  LAfterVariable := False;
+  for I := 0 to ACount - 1 do
+  begin
+    if AElements[I].Variable and (AElements[I].Primary <> 0) then
+    begin
+      AElements[I].Quaternary := AElements[I].Primary;
+      AElements[I].Primary := 0;
+      AElements[I].Secondary := 0;
+      AElements[I].Tertiary := 0;
+      LAfterVariable := True;
+    end
+    else if (AElements[I].Primary = 0) and LAfterVariable then
+    begin
+      AElements[I].Primary := 0;
+      AElements[I].Secondary := 0;
+      AElements[I].Tertiary := 0;
+      AElements[I].Quaternary := 0;
+      // stay in after-variable run
+    end
+    else if AElements[I].Primary <> 0 then
+    begin
+      LAfterVariable := False;
+      if AElements[I].Variable then
+      begin
+        AElements[I].Quaternary := AElements[I].Primary;
+        AElements[I].Primary := 0;
+        AElements[I].Secondary := 0;
+        AElements[I].Tertiary := 0;
+        LAfterVariable := True;
+      end
+      else
+        AElements[I].Quaternary := $FFFF;
+    end
+    else
+    begin
+      // primary ignorable not after variable: keep secondary/tertiary
+      AElements[I].Quaternary := 0;
+      LAfterVariable := False;
+    end;
+  end;
 end;
 
 var
   FUnicodeCollator: IUnicodeCollator;
   FCollatorCS: TRTLCriticalSection;
-
-function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
-var
-  LValue: UInt32;
-begin
-  if ACp > UNICODE_MAX_CODEPOINT then
-    Exit(0);
-  if ACp <= $FFFF then
-    Exit(COLLATE_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]);
-  if FindRange32Value(ACp, COLLATE_SMP_RANGES, LValue) then
-    Exit(LValue);
-  Result := 0;
-end;
-
-function UnpackPrimary(const AWeight: UInt32): UInt16;
-begin
-  Result := UInt16(AWeight shr 16);
-end;
-
-function UnpackSecondary(const AWeight: UInt32): Byte;
-begin
-  Result := Byte((AWeight shr 8) and $FF);
-end;
-
-function UnpackTertiary(const AWeight: UInt32): Byte;
-begin
-  Result := Byte(AWeight and $FF);
-end;
 
 function DefaultCollationOptions: TCollationOptions;
 begin
@@ -166,6 +602,16 @@ begin
   Result.CaseLevel := False;
   Result.FrenchAccents := False;
   Result.NumericOrdering := False;
+  Result.VariableWeighting := cvwNonIgnorable;
+end;
+
+function UCACollationOptions(const AVariable: TCollationVariableWeighting): TCollationOptions;
+begin
+  Result.Strength := csIdentical;
+  Result.CaseLevel := False;
+  Result.FrenchAccents := False;
+  Result.NumericOrdering := False;
+  Result.VariableWeighting := AVariable;
 end;
 
 function UnicodeCollator: IUnicodeCollator;
@@ -188,7 +634,48 @@ begin
   Result := TUnicodeCollator.Create(AOptions);
 end;
 
-{ TUnicodeCollator }
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
+var
+  LOff: UInt32;
+  LLen: Byte;
+  I: Integer;
+  LP, LS, LT: UInt16;
+  LV: Boolean;
+  LBase: UInt16;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(0);
+  if LookupExplicit(ACp, LOff, LLen) then
+  begin
+    for I := 0 to Integer(LLen) - 1 do
+    begin
+      if UnpackCE(COLLATE_CE_POOL[LOff + UInt32(I)], LP, LS, LT, LV) then
+      begin
+        if LP <> 0 then
+          Exit((UInt32(LP) shl 16) or (UInt32(LS and $FF) shl 8) or UInt32(LT and $FF));
+      end;
+    end;
+    Exit(0);
+  end;
+  LBase := ImplicitBase(ACp);
+  LP := UInt16(LBase + (ACp shr 15));
+  Result := (UInt32(LP) shl 16) or (UInt32($20) shl 8) or $02;
+end;
+
+function UnpackPrimary(const AWeight: UInt32): UInt16;
+begin
+  Result := UInt16(AWeight shr 16);
+end;
+
+function UnpackSecondary(const AWeight: UInt32): Byte;
+begin
+  Result := Byte((AWeight shr 8) and $FF);
+end;
+
+function UnpackTertiary(const AWeight: UInt32): Byte;
+begin
+  Result := Byte(AWeight and $FF);
+end;
 
 constructor TUnicodeCollator.Create(const AOptions: TCollationOptions);
 begin
@@ -196,351 +683,319 @@ begin
   FOptions := AOptions;
 end;
 
-{ NumericOrdering 辅助：检测连续数字序列并填入数值 }
-procedure FillDigitSequences(var AWeights: TWeightArray);
+function TUnicodeCollator.CollectElements(const ANormalized: string): TCollationElementArray;
 var
-  LI, LStart, LLen: SizeInt;
-  LValue: UInt32;
-  LDigit: UInt32;
-begin
-  LLen := Length(AWeights);
-  LI := 0;
-  while LI < LLen do
-  begin
-    // ASCII 数字: U+0030..U+0039
-    if (AWeights[LI].Codepoint >= $30) and (AWeights[LI].Codepoint <= $39) then
-    begin
-      LStart := LI;
-      LValue := 0;
-      // 扫描连续数字
-      while (LI < LLen) and (AWeights[LI].Codepoint >= $30) and (AWeights[LI].Codepoint <= $39) do
-      begin
-        LDigit := AWeights[LI].Codepoint - $30;
-        if LValue <= (High(UInt32) - LDigit) div 10 then
-          LValue := LValue * 10 + LDigit
-        else
-          LValue := High(UInt32);  // 溢出保护
-        Inc(LI);
-      end;
-      // 回填数值
-      while LStart < LI do
-      begin
-        AWeights[LStart].IsDigit := True;
-        AWeights[LStart].DigitValue := LValue;
-        Inc(LStart);
-      end;
-    end
-    else
-      Inc(LI);
-  end;
-end;
-
-function TUnicodeCollator.CollectWeights(const ANormalized: string): TWeightArray;
-var
+  LCps: array of TUnicodeCodepoint;
+  LCpCount: SizeInt;
   LIter: TUTF8Iterator;
   LCp: UInt32;
-  LWeight: UInt32;
+  LPos, LMatchLen: SizeInt;
+  LOff, LOff2: UInt32;
+  LLen, LLen2: Byte;
   LCount: SizeInt;
-  LCapacity: SizeInt;
-  LWeights: TWeightArray;
-  LPrimary: UInt16;
+  LElements: TCollationElementArray;
+  LSkipCps: TCodepointArray;
+  LSkipCount: SizeInt;
+  LSkipI: SizeInt;
 begin
-  LCapacity := Length(ANormalized) div 3 + 16;  // UTF-8 最小 3 字节/码点
-  SetLength(LWeights, LCapacity);
-  LCount := 0;
-
+  LCpCount := 0;
+  SetLength(LCps, Length(ANormalized) + 4);
   LIter.Init(PByte(PAnsiChar(ANormalized)), SizeUInt(Length(ANormalized)));
   while LIter.Next(LCp) do
   begin
-    LWeight := GetCollationWeight(LCp);
-    if LWeight = 0 then
-      Continue;
-
-    LPrimary := UnpackPrimary(LWeight);
-    if LPrimary = 0 then
-      Continue;
-
-    if LCount >= LCapacity then
-    begin
-      LCapacity := LCapacity * 2;
-      SetLength(LWeights, LCapacity);
-    end;
-
-    LWeights[LCount].Primary := LPrimary;
-    LWeights[LCount].Secondary := UnpackSecondary(LWeight);
-    LWeights[LCount].Tertiary := UnpackTertiary(LWeight);
-    LWeights[LCount].Codepoint := LCp;
-    LWeights[LCount].IsDigit := False;
-    LWeights[LCount].DigitValue := 0;
-    Inc(LCount);
+    if LCpCount >= Length(LCps) then
+      SetLength(LCps, Length(LCps) * 2);
+    LCps[LCpCount] := LCp;
+    Inc(LCpCount);
   end;
 
-  SetLength(LWeights, LCount);
+  LCount := 0;
+  SetLength(LElements, LCpCount * 2 + 8);
+  LPos := 0;
+  while LPos < LCpCount do
+  begin
+    if MatchContraction(LCps, LPos, LCpCount, LMatchLen, LOff, LLen, LSkipCps, LSkipCount) then
+    begin
+      AppendFromPool(LElements, LCount, LOff, LLen, LCps[LPos]);
+      for LSkipI := 0 to LSkipCount - 1 do
+      begin
+        if LookupExplicit(LSkipCps[LSkipI], LOff2, LLen2) then
+          AppendFromPool(LElements, LCount, LOff2, LLen2, LSkipCps[LSkipI])
+        else
+          AppendImplicit(LElements, LCount, LSkipCps[LSkipI]);
+      end;
+      Inc(LPos, LMatchLen);
+    end
+    else if LookupExplicit(LCps[LPos], LOff, LLen) then
+    begin
+      AppendFromPool(LElements, LCount, LOff, LLen, LCps[LPos]);
+      Inc(LPos);
+    end
+    else
+    begin
+      AppendImplicit(LElements, LCount, LCps[LPos]);
+      Inc(LPos);
+    end;
+  end;
 
-  // NumericOrdering 后处理：检测连续数字序列，计算数值
+  ApplyVariableWeighting(LElements, LCount, FOptions.VariableWeighting);
+
   if FOptions.NumericOrdering then
-    FillDigitSequences(LWeights);
+    FillDigitSequences(LElements, LCount);
 
-  Result := LWeights;
+  SetLength(LElements, LCount);
+  Result := LElements;
 end;
 
-function TUnicodeCollator.WeightsToSortKey(const AWeights: TWeightArray): TCollationKey;
+procedure AppendU16BE(var AKey: TCollationKey; var APos: SizeInt; const AValue: UInt16);
+begin
+  if APos + 2 > Length(AKey) then
+    SetLength(AKey, Length(AKey) * 2 + 16);
+  AKey[APos] := Byte(AValue shr 8);
+  AKey[APos + 1] := Byte(AValue and $FF);
+  Inc(APos, 2);
+end;
+
+function TUnicodeCollator.ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey;
 var
-  LKeyPos: SizeInt;
   LKey: TCollationKey;
-  LI: SizeInt;
-  LLen: SizeInt;
+  LPos: SizeInt;
+  I, N: SizeInt;
 begin
-  LLen := Length(AWeights);
-  // 预分配：每级 N*2 字节 + 分隔符 + 终止符
-  if FOptions.Strength >= csIdentical then
-    SetLength(LKey, LLen * 12 + 7)
-  else if FOptions.Strength >= csQuaternary then
-    SetLength(LKey, LLen * 10 + 6)
-  else if FOptions.Strength >= csTertiary then
-    if FOptions.CaseLevel then
-      SetLength(LKey, LLen * 8 + 5)
-    else
-      SetLength(LKey, LLen * 6 + 4)
-  else if FOptions.Strength >= csSecondary then
-    if FOptions.CaseLevel then
-      SetLength(LKey, LLen * 4 + 4)
-    else
-      SetLength(LKey, LLen * 4 + 3)
-  else
-    SetLength(LKey, LLen * 2 + 2);
+  N := Length(AElements);
+  SetLength(LKey, N * 12 + 32);
+  LPos := 0;
 
-  LKeyPos := 0;
+  for I := 0 to N - 1 do
+    if AElements[I].Primary <> 0 then
+      AppendU16BE(LKey, LPos, AElements[I].Primary);
+  AppendU16BE(LKey, LPos, 0);
 
-  // ── Level 1: Primary weights ──
-  if FOptions.NumericOrdering then
-  begin
-    // 数值排序：数字序列用数值编码
-    for LI := 0 to LLen - 1 do
-    begin
-      if AWeights[LI].IsDigit then
-      begin
-        // 用数值的高2字节编码（最多65535）
-        LKey[LKeyPos] := Byte(AWeights[LI].DigitValue shr 8);
-        LKey[LKeyPos + 1] := Byte(AWeights[LI].DigitValue and $FF);
-      end
-      else
-      begin
-        LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
-        LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
-      end;
-      Inc(LKeyPos, 2);
-    end;
-  end
-  else
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
-      LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
-      Inc(LKeyPos, 2);
-    end;
-  end;
-  LKey[LKeyPos] := $01;
-  Inc(LKeyPos);
-
-  // ── Level 2: Secondary weights ──
-  if FOptions.Strength >= csSecondary then
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := 0;
-      LKey[LKeyPos + 1] := AWeights[LI].Secondary;
-      Inc(LKeyPos, 2);
-    end;
-    LKey[LKeyPos] := $01;
-    Inc(LKeyPos);
-  end;
-
-  // ── Level 2.5: Case Level ──
-  if FOptions.CaseLevel and (FOptions.Strength >= csSecondary) then
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := 0;
-      LKey[LKeyPos + 1] := GetCaseLevel(AWeights[LI].Codepoint);
-      Inc(LKeyPos, 2);
-    end;
-    LKey[LKeyPos] := $01;
-    Inc(LKeyPos);
-  end;
-
-  // ── Level 3: Tertiary weights ──
-  if FOptions.Strength >= csTertiary then
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := 0;
-      LKey[LKeyPos + 1] := AWeights[LI].Tertiary;
-      Inc(LKeyPos, 2);
-    end;
-    LKey[LKeyPos] := $01;
-    Inc(LKeyPos);
-  end;
-
-  // ── Level 4: Quaternary (codepoint as2-byte value) ──
-  if FOptions.Strength >= csQuaternary then
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := Byte(AWeights[LI].Codepoint shr 8);
-      LKey[LKeyPos + 1] := Byte(AWeights[LI].Codepoint and $FF);
-      Inc(LKeyPos, 2);
-    end;
-    LKey[LKeyPos] := $01;
-    Inc(LKeyPos);
-  end;
-
-  // ── Level 5: Identical (codepoint as 4-byte value) ──
-  if FOptions.Strength >= csIdentical then
-  begin
-    for LI := 0 to LLen - 1 do
-    begin
-      LKey[LKeyPos] := Byte(AWeights[LI].Codepoint shr 24);
-      LKey[LKeyPos + 1] := Byte((AWeights[LI].Codepoint shr 16) and $FF);
-      LKey[LKeyPos + 2] := Byte((AWeights[LI].Codepoint shr 8) and $FF);
-      LKey[LKeyPos + 3] := Byte(AWeights[LI].Codepoint and $FF);
-      Inc(LKeyPos, 4);
-    end;
-    LKey[LKeyPos] := $01;
-    Inc(LKeyPos);
-  end;
-
-  // Terminator
-  LKey[LKeyPos] := $00;
-  Inc(LKeyPos);
-
-  SetLength(LKey, LKeyPos);
-  Result := LKey;
-end;
-
-function TUnicodeCollator.CompareWeights(const AWeightsA, AWeightsB: TWeightArray): Integer;
-var
-  LLenA, LLenB, LMin: SizeInt;
-  LI: SizeInt;
-begin
-  LLenA := Length(AWeightsA);
-  LLenB := Length(AWeightsB);
-  if LLenA < LLenB then
-    LMin := LLenA
-  else
-    LMin := LLenB;
-
-  // ── Level 1: Primary ──
-  if FOptions.NumericOrdering then
-  begin
-    // 数值排序：数字序列按数值比较
-    for LI := 0 to LMin - 1 do
-    begin
-      if AWeightsA[LI].IsDigit and AWeightsB[LI].IsDigit then
-      begin
-        // 两者都是数字：按数值比较（跳过同一序列中的后续数字）
-        if AWeightsA[LI].DigitValue < AWeightsB[LI].DigitValue then
-          Exit(-1);
-        if AWeightsA[LI].DigitValue > AWeightsB[LI].DigitValue then
-          Exit(1);
-        // 数值相同：跳过同一数字序列的剩余部分
-      end
-      else
-      begin
-        // 非数字或混合：按主权重比较
-        if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
-          Exit(-1);
-        if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
-          Exit(1);
-      end;
-    end;
-  end
-  else
-  begin
-    for LI := 0 to LMin - 1 do
-    begin
-      if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
-        Exit(-1);
-      if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
-        Exit(1);
-    end;
-  end;
-  if LLenA < LLenB then Exit(-1);
-  if LLenA > LLenB then Exit(1);
-
-  // ── Level 2: Secondary ──
   if FOptions.Strength >= csSecondary then
   begin
     if FOptions.FrenchAccents then
     begin
-      // 法语重音排序：从右到左比较
-      for LI := LMin - 1 downto 0 do
-      begin
-        if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
-          Exit(-1);
-        if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
-          Exit(1);
-      end;
+      for I := N - 1 downto 0 do
+        if AElements[I].Secondary <> 0 then
+          AppendU16BE(LKey, LPos, AElements[I].Secondary);
     end
     else
-    begin
-      for LI := 0 to LMin - 1 do
-      begin
-        if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
-          Exit(-1);
-        if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
-          Exit(1);
-      end;
-    end;
+      for I := 0 to N - 1 do
+        if AElements[I].Secondary <> 0 then
+          AppendU16BE(LKey, LPos, AElements[I].Secondary);
+    AppendU16BE(LKey, LPos, 0);
   end;
 
-  // ── Level 2.5: Case Level (CaseLevel=True 时插入) ──
   if FOptions.CaseLevel and (FOptions.Strength >= csSecondary) then
   begin
-    for LI := 0 to LMin - 1 do
-    begin
-      // 0 = lowercase/uncased, 8 = uppercase, 9 = mixed
-      if GetCaseLevel(AWeightsA[LI].Codepoint) < GetCaseLevel(AWeightsB[LI].Codepoint) then
-        Exit(-1);
-      if GetCaseLevel(AWeightsA[LI].Codepoint) > GetCaseLevel(AWeightsB[LI].Codepoint) then
-        Exit(1);
-    end;
+    for I := 0 to N - 1 do
+      AppendU16BE(LKey, LPos, GetCaseLevel(AElements[I].Codepoint));
+    AppendU16BE(LKey, LPos, 0);
   end;
 
-  // ── Level 3: Tertiary ──
   if FOptions.Strength >= csTertiary then
   begin
-    for LI := 0 to LMin - 1 do
+    for I := 0 to N - 1 do
+      if AElements[I].Tertiary <> 0 then
+        AppendU16BE(LKey, LPos, AElements[I].Tertiary);
+    AppendU16BE(LKey, LPos, 0);
+  end;
+
+  if FOptions.VariableWeighting = cvwShifted then
+  begin
+    for I := 0 to N - 1 do
+      if AElements[I].Quaternary <> 0 then
+        AppendU16BE(LKey, LPos, AElements[I].Quaternary);
+    AppendU16BE(LKey, LPos, 0);
+  end;
+
+  SetLength(LKey, LPos);
+  Result := LKey;
+end;
+
+function TUnicodeCollator.CompareElements(const A, B: TCollationElementArray): Integer;
+var
+  IA, IB: SizeInt;
+  WA, WB: UInt16;
+  NA, NB: SizeInt;
+  HA, HB: Boolean;
+
+  function NextPri(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  var
+    LDig: UInt32;
+  begin
+    while Idx < Length(E) do
     begin
-      if AWeightsA[LI].Tertiary < AWeightsB[LI].Tertiary then
-        Exit(-1);
-      if AWeightsA[LI].Tertiary > AWeightsB[LI].Tertiary then
-        Exit(1);
+      if FOptions.NumericOrdering and E[Idx].IsDigit then
+      begin
+        LDig := E[Idx].DigitValue;
+        W := UInt16(LDig and $FFFF);
+        while (Idx < Length(E)) and E[Idx].IsDigit and (E[Idx].DigitValue = LDig) do
+          Inc(Idx);
+        Exit(True);
+      end;
+      if E[Idx].Primary <> 0 then
+      begin
+        W := E[Idx].Primary;
+        Inc(Idx);
+        Exit(True);
+      end;
+      Inc(Idx);
+    end;
+    W := 0;
+    Result := False;
+  end;
+
+  function NextSecFwd(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  begin
+    while Idx < Length(E) do
+    begin
+      if E[Idx].Secondary <> 0 then
+      begin
+        W := E[Idx].Secondary;
+        Inc(Idx);
+        Exit(True);
+      end;
+      Inc(Idx);
+    end;
+    W := 0;
+    Result := False;
+  end;
+
+  function NextSecRev(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  begin
+    while Idx >= 0 do
+    begin
+      if E[Idx].Secondary <> 0 then
+      begin
+        W := E[Idx].Secondary;
+        Dec(Idx);
+        Exit(True);
+      end;
+      Dec(Idx);
+    end;
+    W := 0;
+    Result := False;
+  end;
+
+  function NextTer(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  begin
+    while Idx < Length(E) do
+    begin
+      if E[Idx].Tertiary <> 0 then
+      begin
+        W := E[Idx].Tertiary;
+        Inc(Idx);
+        Exit(True);
+      end;
+      Inc(Idx);
+    end;
+    W := 0;
+    Result := False;
+  end;
+
+  function NextQuat(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  begin
+    while Idx < Length(E) do
+    begin
+      if E[Idx].Quaternary <> 0 then
+      begin
+        W := E[Idx].Quaternary;
+        Inc(Idx);
+        Exit(True);
+      end;
+      Inc(Idx);
+    end;
+    W := 0;
+    Result := False;
+  end;
+
+begin
+  NA := Length(A);
+  NB := Length(B);
+
+  IA := 0; IB := 0;
+  while True do
+  begin
+    HA := NextPri(A, IA, WA);
+    HB := NextPri(B, IB, WB);
+    if not HA and not HB then Break;
+    if not HA then Exit(-1);
+    if not HB then Exit(1);
+    if WA < WB then Exit(-1);
+    if WA > WB then Exit(1);
+  end;
+
+  if FOptions.Strength < csSecondary then Exit(0);
+
+  if FOptions.FrenchAccents then
+  begin
+    IA := NA - 1; IB := NB - 1;
+    while True do
+    begin
+      HA := NextSecRev(A, IA, WA);
+      HB := NextSecRev(B, IB, WB);
+      if not HA and not HB then Break;
+      if not HA then Exit(-1);
+      if not HB then Exit(1);
+      if WA < WB then Exit(-1);
+      if WA > WB then Exit(1);
+    end;
+  end
+  else
+  begin
+    IA := 0; IB := 0;
+    while True do
+    begin
+      HA := NextSecFwd(A, IA, WA);
+      HB := NextSecFwd(B, IB, WB);
+      if not HA and not HB then Break;
+      if not HA then Exit(-1);
+      if not HB then Exit(1);
+      if WA < WB then Exit(-1);
+      if WA > WB then Exit(1);
     end;
   end;
 
-  // ── Level 4: Quaternary (codepoint fallback) ──
-  if FOptions.Strength >= csQuaternary then
+  if FOptions.CaseLevel then
   begin
-    for LI := 0 to LMin - 1 do
+    for IA := 0 to NA - 1 do
     begin
-      if AWeightsA[LI].Codepoint < AWeightsB[LI].Codepoint then
-        Exit(-1);
-      if AWeightsA[LI].Codepoint > AWeightsB[LI].Codepoint then
-        Exit(1);
+      if IA >= NB then Exit(1);
+      WA := GetCaseLevel(A[IA].Codepoint);
+      WB := GetCaseLevel(B[IA].Codepoint);
+      if WA < WB then Exit(-1);
+      if WA > WB then Exit(1);
     end;
+    if NA < NB then Exit(-1);
   end;
 
-  // ── Level 5: Identical (raw codepoint comparison) ──
-  if FOptions.Strength >= csIdentical then
+  if FOptions.Strength < csTertiary then Exit(0);
+
+  IA := 0; IB := 0;
+  while True do
   begin
-    for LI := 0 to LMin - 1 do
+    HA := NextTer(A, IA, WA);
+    HB := NextTer(B, IB, WB);
+    if not HA and not HB then Break;
+    if not HA then Exit(-1);
+    if not HB then Exit(1);
+    if WA < WB then Exit(-1);
+    if WA > WB then Exit(1);
+  end;
+
+  if FOptions.VariableWeighting = cvwShifted then
+  begin
+    IA := 0; IB := 0;
+    while True do
     begin
-      if AWeightsA[LI].Codepoint < AWeightsB[LI].Codepoint then
-        Exit(-1);
-      if AWeightsA[LI].Codepoint > AWeightsB[LI].Codepoint then
-        Exit(1);
+      HA := NextQuat(A, IA, WA);
+      HB := NextQuat(B, IB, WB);
+      if not HA and not HB then Break;
+      if not HA then Exit(-1);
+      if not HB then Exit(1);
+      if WA < WB then Exit(-1);
+      if WA > WB then Exit(1);
     end;
   end;
 
@@ -550,46 +1005,50 @@ end;
 function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
 var
   LNormalized: string;
-  LWeights: TWeightArray;
+  LElements: TCollationElementArray;
 begin
   if AText = '' then
   begin
     SetLength(Result, 0);
     Exit;
   end;
-
-  // NFD 规范化
   LNormalized := NFD(AText);
-
-  // 单遍收集所有权重
-  LWeights := CollectWeights(LNormalized);
-
-  // 从权重数组生成排序键
-  Result := WeightsToSortKey(LWeights);
+  LElements := CollectElements(LNormalized);
+  Result := ElementsToSortKey(LElements);
 end;
 
 function TUnicodeCollator.Compare(const A, B: string): Integer;
 var
-  LNormalizedA, LNormalizedB: string;
-  LWeightsA, LWeightsB: TWeightArray;
+  LNA, LNB: string;
+  LEA, LEB: TCollationElementArray;
+  LIterA, LIterB: TUTF8Iterator;
+  LCA, LCB: UInt32;
+  HA, HB: Boolean;
 begin
-  if A = B then
-    Exit(0);
-  if A = '' then
-    Exit(-1);
-  if B = '' then
-    Exit(1);
+  if A = B then Exit(0);
+  if A = '' then Exit(-1);
+  if B = '' then Exit(1);
 
-  // NFD 规范化
-  LNormalizedA := NFD(A);
-  LNormalizedB := NFD(B);
+  LNA := NFD(A);
+  LNB := NFD(B);
+  LEA := CollectElements(LNA);
+  LEB := CollectElements(LNB);
+  Result := CompareElements(LEA, LEB);
+  if Result <> 0 then Exit;
+  if FOptions.Strength < csIdentical then Exit(0);
 
-  // 单遍收集权重
-  LWeightsA := CollectWeights(LNormalizedA);
-  LWeightsB := CollectWeights(LNormalizedB);
-
-  // 逐级比较（不需要生成完整排序键）
-  Result := CompareWeights(LWeightsA, LWeightsB);
+  LIterA.Init(PByte(PAnsiChar(LNA)), SizeUInt(Length(LNA)));
+  LIterB.Init(PByte(PAnsiChar(LNB)), SizeUInt(Length(LNB)));
+  while True do
+  begin
+    HA := LIterA.Next(LCA);
+    HB := LIterB.Next(LCB);
+    if not HA and not HB then Exit(0);
+    if not HA then Exit(-1);
+    if not HB then Exit(1);
+    if LCA < LCB then Exit(-1);
+    if LCA > LCB then Exit(1);
+  end;
 end;
 
 function TUnicodeCollator.TextEquals(const A, B: string): Boolean;
@@ -602,13 +1061,9 @@ var
   LPrefixLen: SizeInt;
 begin
   LPrefixLen := Length(APrefix);
-  if LPrefixLen > Length(AText) then
-    Exit(False);
-  if LPrefixLen = 0 then
-    Exit(True);
-  // 零拷贝：直接比较前缀字节，避免 Copy 堆分配
-  if BytesEqual(@AText[1], @APrefix[1], LPrefixLen) then
-    Exit(True);
+  if LPrefixLen > Length(AText) then Exit(False);
+  if LPrefixLen = 0 then Exit(True);
+  if BytesEqual(@AText[1], @APrefix[1], LPrefixLen) then Exit(True);
   Result := Compare(Copy(AText, 1, LPrefixLen), APrefix) = 0;
 end;
 
@@ -618,13 +1073,9 @@ var
 begin
   LSuffixLen := Length(ASuffix);
   LTextLen := Length(AText);
-  if LSuffixLen > LTextLen then
-    Exit(False);
-  if LSuffixLen = 0 then
-    Exit(True);
-  // 零拷贝：直接比较后缀字节，避免 Copy 堆分配
-  if BytesEqual(@AText[LTextLen - LSuffixLen + 1], @ASuffix[1], LSuffixLen) then
-    Exit(True);
+  if LSuffixLen > LTextLen then Exit(False);
+  if LSuffixLen = 0 then Exit(True);
+  if BytesEqual(@AText[LTextLen - LSuffixLen + 1], @ASuffix[1], LSuffixLen) then Exit(True);
   Result := Compare(Copy(AText, LTextLen - LSuffixLen + 1, LSuffixLen), ASuffix) = 0;
 end;
 
@@ -632,36 +1083,18 @@ function TUnicodeCollator.IndexOf(const AText, ASubstring: string): SizeInt;
 var
   LI, LTextLen, LSubByteLen: SizeInt;
   LDecode: TUTF8DecodeResult;
-  LSubNorm: string;
-  LSubWeights: TWeightArray;
-  LSubNormLen: SizeInt;
 begin
-  if Length(ASubstring) = 0 then
-    Exit(1);
+  if Length(ASubstring) = 0 then Exit(1);
   LTextLen := Length(AText);
   LSubByteLen := Length(ASubstring);
-  if LSubByteLen > LTextLen then
-    Exit(0);
-
-  // 预计算子串的规范化形式和权重（避免每次迭代重复计算）
-  LSubNorm := NFD(ASubstring);
-  LSubWeights := CollectWeights(LSubNorm);
-  LSubNormLen := Length(LSubNorm);
-
+  if LSubByteLen > LTextLen then Exit(0);
   LI := 1;
   while LI <= LTextLen - LSubByteLen + 1 do
   begin
-    // 快速路径：字节级相等
-    if BytesEqual(@AText[LI], @ASubstring[1], LSubByteLen) then
-      Exit(LI);
-    // 慢速路径：collation 比较（仅对子串做 NFD + 权重收集）
-    if CompareWeights(CollectWeights(NFD(Copy(AText, LI, LSubByteLen))), LSubWeights) = 0 then
-      Exit(LI);
+    if BytesEqual(@AText[LI], @ASubstring[1], LSubByteLen) then Exit(LI);
+    if Compare(Copy(AText, LI, LSubByteLen), ASubstring) = 0 then Exit(LI);
     LDecode := UTF8Decode(@AText[LI], LTextLen - LI + 1);
-    if LDecode.ByteLen > 0 then
-      Inc(LI, LDecode.ByteLen)
-    else
-      Inc(LI);
+    if LDecode.ByteLen > 0 then Inc(LI, LDecode.ByteLen) else Inc(LI);
   end;
   Result := 0;
 end;

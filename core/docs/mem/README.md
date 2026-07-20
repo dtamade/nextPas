@@ -2,7 +2,9 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-17）**: 时代 A–C **CLOSED**；时代 D **Steady**（steward 维护）— 见 **[ROADMAP.md](ROADMAP.md)**。
+**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；F **CLOSED**；G **Steady**；**H0 Maintenance** — [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SURFACE](FACADES-SURFACE.md) · [growable KEEP](GROWABLE-KEEP-2026-07-20.md) · [host-runtime CI](MEM-HOST-RUNTIME-CI.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
+
+默认只：`lane-focused LANE=mem` · 回归 · 命名 D3 · GHA `mem.host_runtime` 有红再修。
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash
@@ -15,6 +17,12 @@ make lane-focused LANE=mem
 **Consumer audit（FIX CLOSED）**: [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)。回归：`check_consumer_audit_contracts.sh`（guardrails source-contract）。
 
 **Steward 观测（2026-07-17，只读）**: [Inventory 可删清单](INVENTORY-AUDIT-2026-07-17.md) · [Consumer 热路径/unsized free](CONSUMER-OBSERVATION-2026-07-17.md) — **不删代码、不强制改 consumer**。
+
+**P-a / P-b prune（EXECUTED）**: [P-a](PRUNE-P-a-DESIGN-2026-07-19.md) · [P-b](PRUNE-P-b-DESIGN-2026-07-19.md) — 实验分配器博物馆已收敛（保留 blockpool.growable）。
+
+**Go/Rust 对照**: `make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare`
+
+**证据入口**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1` · `make -C core/tests/nextpas.core.mem/test_soak clean test` · `make -C core/tests/nextpas.core.mem/test_mem_cross_os_compile_gate clean test` · 真机 [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md)（core-ci macOS/Windows matrix）
 
 ---
 
@@ -352,9 +360,9 @@ end;
 
 ## 门面与 Tier
 
-- **门面** `nextpas.core.mem`：Tier-0 + 精选 Tier-1/2（**冻结**：禁止新增 Tier-3）
-- **Experimental (Tier-3)**：直接 `uses` 子单元，无兼容承诺
-- 门面白名单 / Tier-3 黑名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
+- **门面** `nextpas.core.mem`：Tier-0 + 生产诊断（tracking/sentinel/guard）+ mapped/ring/mimalloc（**冻结**；F3 已 demote 冷门包装器）
+- **冷门包装器 / 并发池变体 / Tier-3**：直接 `uses` 子单元，无门面兼容承诺
+- 门面白名单 / demoted 名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
 - 分层规则与符号表：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
 - 架构 / owner：[ARCHITECTURE.md](ARCHITECTURE.md)
 - 运行时契约全文：[CONTRACT.md](CONTRACT.md)
@@ -372,7 +380,7 @@ end;
 | S4 | 诊断零成本默认 | ✅ `NEXTPAS_MEM_DEBUG`（仅插件面） |
 | S5 | 上层注入吃 DefaultHeap | ✅ Growing IAllocator 根；**HTTP + compiler 产品面**；compiler 源改用另 lane |
 | S6 | Arena/Pool 延迟优势 | ✅ SC4 / SC6 / SC7 |
-| S7 | 小门面 | ✅ Tier-3 已出门面 |
+| S7 | 小门面 | ✅ Tier-3 出门面；F3 uses 65→41 |
 
 ---
 

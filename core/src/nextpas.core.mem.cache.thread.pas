@@ -335,18 +335,23 @@ end;
 
 procedure InboxStackPush(var AStack: TInboxStack; APtr: Pointer);
 var
-  LNode, LOldHead: PInboxNode;
+  LNode: PInboxNode;
+  LExpected: Pointer;
 begin
   LNode := PInboxNode(APtr);
-  repeat
-    LOldHead := AStack.FHead;
-    LNode^.FNext := LOldHead;
-  until AtomicCompareExchangePtr(Pointer(AStack.FHead), Pointer(LOldHead), Pointer(LNode)) = Pointer(LOldHead);
+  LExpected := Pointer(AStack.FHead);
+  while True do
+  begin
+    LNode^.FNext := PInboxNode(LExpected);
+    if atomic_compare_exchange_strong(PPointer(@AStack.FHead)^, LExpected, Pointer(LNode),
+      mo_acq_rel, mo_acquire) then
+      Exit;
+  end;
 end;
 
 function InboxStackPopAll(var AStack: TInboxStack): PInboxNode;
 begin
-  Result := PInboxNode(AtomicExchangePtr(Pointer(AStack.FHead), nil));
+  Result := PInboxNode(atomic_exchange(PPointer(@AStack.FHead)^, nil, mo_acq_rel));
 end;
 
 function InboxStackIsEmpty(var AStack: TInboxStack): Boolean;

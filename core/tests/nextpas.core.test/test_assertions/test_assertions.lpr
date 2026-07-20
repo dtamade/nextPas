@@ -26,6 +26,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.math,
   nextpas.core.base,
+  nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.test.check,
   nextpas.core.test.prop;
@@ -405,6 +406,35 @@ begin
   ExpectFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
 end;
 
+procedure TestB12CheckEqualDoubleNaN;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckEqual(1.0, LNaN, 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(LNaN, 1.0, 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(LNaN, LNaN, 1e-9); end, 'NaN');
+end;
+
+procedure TestB12CheckNotEqualDoubleNaN;
+var
+  LNaN: Double;
+begin
+  { NaN != anything including NaN — CheckNotEqual must pass (early exit) }
+  LNaN := 0.0 / 0.0;
+  CheckNotEqual(1.0, LNaN, 1e-9);
+  CheckNotEqual(LNaN, 1.0, 1e-9);
+  CheckNotEqual(LNaN, LNaN, 1e-9);
+end;
+
+procedure TestB12CheckEqualDoubleExactEpsilon;
+begin
+  { Diff exactly equal to epsilon → still "near" (Abs <= eps) }
+  CheckEqual(1.0, 1.0 + 1e-6, 1e-6);
+  { Just outside epsilon → fail }
+  ExpectFail(procedure begin CheckEqual(1.0, 1.0 + 1e-6 + 1e-12, 1e-6); end, 'Expected');
+end;
+
 procedure TestCheckNotNearPass;
 begin
   CheckNotNear(2.0, 1.0);
@@ -478,6 +508,277 @@ const
 begin
   CheckSnapshot('hello world', LSnapDir, 'test2.txt');
   ExpectFail(procedure begin CheckSnapshot('goodbye world', LSnapDir, 'test2.txt'); end, 'mismatch');
+end;
+
+{ B2.1: Snapshot env contracts (insta / NEXTPAS_* parity) }
+
+procedure EnvSet(const AName, AValue: string);
+var
+  LN, LV: AnsiString;
+begin
+  { Keep AnsiString locals alive for the setenv call (no dangling PAnsiChar). }
+  LN := AnsiString(AName);
+  LV := AnsiString(AValue);
+  if platform_env_set(PAnsiChar(LN), PAnsiChar(LV)) <> 0 then
+    Fail('platform_env_set failed for ' + AName);
+  if string(platform_env_get_str(LN)) <> AValue then
+    Fail('platform_env_get_str mismatch after set for ' + AName);
+end;
+
+procedure EnvUnset(const AName: string);
+var
+  LN: AnsiString;
+begin
+  LN := AnsiString(AName);
+  platform_env_unset(PAnsiChar(LN));
+end;
+
+procedure TestCheckSnapshotFailOnCreate;
+const
+  LSnapDir = '/tmp/np_snap_b2_fail_create';
+  LName = 'missing.txt';
+var
+  LPath: string;
+begin
+  LPath := LSnapDir + '/' + LName;
+  { Ensure clean slate }
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  try
+    { Remove prior file if any by writing then we'll rely on fail path when missing:
+      delete via overwrite of dir is hard; use unique name with random suffix via path }
+  except
+  end;
+  EnvSet('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE', '1');
+  try
+    ExpectFail(procedure begin
+      CheckSnapshot('content-never-written', LSnapDir + '_unique_a', 'nofile.txt');
+    end, 'does not exist');
+  finally
+    EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  end;
+end;
+
+{ ── v8.16 SoftFail (Go t.Error) — Check remains Fatal ─────────────────────── }
+
+var
+  GSoftAfter: Integer = 0;
+
+procedure SoftFailBodyContinues;
+begin
+  SoftFail('first soft');
+  Inc(GSoftAfter);
+  SoftCheckTrue(False, 'second soft');
+  Inc(GSoftAfter);
+  SoftCheckEqual(1, 2, 'third soft');
+  Inc(GSoftAfter);
+end;
+
+procedure SoftFailBodyHardAfterSoft;
+begin
+  SoftFail('soft then hard');
+  CheckTrue(False, 'hard fatal');
+  Inc(GSoftAfter); { must not run }
+end;
+
+procedure SoftFailBodyMultiOnly;
+begin
+  SoftFail('alpha');
+  SoftFail('beta');
+  SoftFail('gamma');
+end;
+
+procedure TestSoftFailContinuesThenFails;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  GSoftAfter := 0;
+  LSuite := TTestSuite.Create('soft-continue');
+  LSuite.Test('body', @SoftFailBodyContinues);
+  CheckFalse(LSuite.RunWithResult(LResult), 'soft fails → suite fail');
+  CheckEqual(GSoftAfter, 3, 'body continues after SoftFail');
+  CheckEqual(LResult.Failed, 1);
+  CheckEqual(LResult.Passed, 0);
+  CheckTrue(Pos('first soft', LResult.Results[0].Message) > 0,
+    'message includes first soft fail');
+  CheckTrue(Pos('second soft', LResult.Results[0].Message) > 0,
+    'message includes all soft lines');
+  CheckTrue(Pos('third soft', LResult.Results[0].Message) > 0);
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftCheckHelpers;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-check');
+  LSuite.Test('ok', procedure
+    begin
+      SoftCheckTrue(True);
+      SoftCheckEqual(7, 7);
+      SoftCheckTrue(False, 'bool soft');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(LResult.Failed, 1);
+  CheckContains(LResult.Results[0].Message, 'bool soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestCheckStillFatal;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  GSoftAfter := 0;
+  LSuite := TTestSuite.Create('hard-still');
+  LSuite.Test('body', @SoftFailBodyHardAfterSoft);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(GSoftAfter, 0, 'hard Check aborts body');
+  CheckEqual(LResult.Failed, 1);
+  CheckTrue(Pos('hard fatal', LResult.Results[0].Message) > 0);
+  CheckTrue(Pos('soft', LowerCase(LResult.Results[0].Message)) > 0,
+    'annotates soft fail count with hard fail');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftFailMultiMessage;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-multi');
+  LSuite.Test('body', @SoftFailBodyMultiOnly);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckContains(LResult.Results[0].Message, 'alpha');
+  CheckContains(LResult.Results[0].Message, 'beta');
+  CheckContains(LResult.Results[0].Message, 'gamma');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftCheckStringAndContains;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-str');
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckEqual('a', 'a');
+      SoftCheckContains('hello world', 'world');
+      SoftCheckFalse(False);
+      SoftCheckEqual('x', 'y', 'str soft');
+      SoftCheckContains('abc', 'zz', 'miss soft');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckContains(LResult.Results[0].Message, 'str soft');
+  CheckContains(LResult.Results[0].Message, 'miss soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftFailDoesNotFailFast;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LCfg: TTestConfig;
+  LRanSecond: Integer;
+begin
+  { SoftFail on first test must not stop suite under FailFast. }
+  LRanSecond := 0;
+  LSuite := TTestSuite.Create('soft-ff');
+  LCfg := DefaultConfig;
+  LCfg.FailFast := True;
+  LSuite.Config := LCfg;
+  LSuite.Test('soft1', procedure
+    begin
+      SoftFail('soft only');
+    end);
+  LSuite.Test('second', procedure
+    begin
+      Inc(LRanSecond);
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult), 'suite fails due to soft1');
+  CheckEqual(LRanSecond, 1, 'FailFast must not stop after SoftFail-only');
+  CheckEqual(LResult.Passed, 1);
+  CheckEqual(LResult.Failed, 1);
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestCheckSnapshotUpdate;
+var
+  LSnapDir, LName, LPath, LContents: string;
+  LStatus: TReadFileStatus;
+begin
+  { Unique dir avoids stale /tmp files across suite runs. }
+  LSnapDir := '/tmp/np_snap_b2_update_' + IntToStr(Random(MaxInt));
+  LName := 'upd.txt';
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  try
+    CheckSnapshot('old-content', LSnapDir, LName);
+    LPath := LSnapDir + DirectorySeparator + LName;
+    EnvSet('NEXTPAS_UPDATE_SNAPSHOTS', '1');
+    try
+      CheckTrue(string(platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS')) = '1',
+        'UPDATE env visible before CheckSnapshot');
+      { Should not raise; rewrite snapshot }
+      CheckSnapshot('new-content', LSnapDir, LName);
+    finally
+      EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+    end;
+    CheckTrue(ReadFileContents(LPath, LContents, LStatus), 'read updated snapshot');
+    CheckTrue(LStatus = rfsFound, 'status rfsFound');
+    CheckEqual('new-content', LContents);
+  finally
+    EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+    EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  end;
+end;
+
+procedure TestCheckSnapshotMismatchDiffMessage;
+const
+  LSnapDir = '/tmp/np_snap_b2_diffmsg';
+begin
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  CheckSnapshot('alpha-line', LSnapDir, 'diff.txt');
+  ExpectFail(procedure begin
+    CheckSnapshot('beta-line', LSnapDir, 'diff.txt');
+  end, 'differ at position');
+end;
+
+{ B2.2: string CheckEqual diagnostic contracts (go-cmp style markers) }
+
+procedure TestCheckEqualStringDiffMarkers;
+begin
+  EnvSet('NEXTPAS_COLOR', '0');
+  try
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'differ at position');
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'expected');
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'actual');
+  finally
+    EnvUnset('NEXTPAS_COLOR');
+  end;
+end;
+
+procedure TestCheckEqualMultilineDiff;
+begin
+  EnvSet('NEXTPAS_COLOR', '0');
+  try
+    ExpectFail(procedure begin
+      CheckEqual('line1' + #10 + 'line2', 'line1' + #10 + 'LINE2');
+    end, 'differ at position');
+  finally
+    EnvUnset('NEXTPAS_COLOR');
+  end;
 end;
 
 { E-10: CheckNaN / CheckNotNaN }
@@ -1157,7 +1458,7 @@ procedure TestCheckArrayEqualFailValue;
 begin
   ExpectFail(procedure begin
     CheckArrayEqual([1, 2, 3], [1, 99, 3]);
-  end, 'index 1');
+  end, '[1]');
 end;
 
 procedure TestCheckArrayEqualEmpty;
@@ -1503,6 +1804,113 @@ begin
   end, 'must be finite');
 end;
 
+{ ── v8.8a: CheckOneOf / CheckInstanceOf (Go/Rust zero-untested-API bar) ─── }
+
+procedure TestCheckOneOfStringPass;
+begin
+  CheckOneOf('b', ['a', 'b', 'c']);
+end;
+
+procedure TestCheckOneOfStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOf('z', ['a', 'b', 'c']);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfStringEmpty;
+begin
+  { Empty set: no value can be a member (Go/Rust membership semantics). }
+  ExpectFail(procedure begin
+    CheckOneOf('a', []);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckOneOf('z', ['a'], 'custom-oneof');
+  end, 'custom-oneof');
+end;
+
+procedure TestCheckOneOfIntPass;
+begin
+  CheckOneOfInt(2, [1, 2, 3]);
+end;
+
+procedure TestCheckOneOfIntFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOfInt(9, [1, 2, 3]);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfBoolPass;
+begin
+  CheckOneOfBool(True, [False, True]);
+end;
+
+procedure TestCheckOneOfBoolFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOfBool(True, [False]);
+  end, 'not one of');
+end;
+
+procedure TestCheckInstanceOfPass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    CheckInstanceOf(LObj, TObject);
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfFailType;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      CheckInstanceOf(LObj, EAssertionFailed);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfNilObject;
+begin
+  ExpectFail(procedure begin
+    CheckInstanceOf(nil, TObject);
+  end, 'nil');
+end;
+
+procedure TestCheckInstanceOfNilClass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      CheckInstanceOf(LObj, nil);
+    end, 'AClass is nil');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInstanceOf(nil, TObject, 'custom-instanceof');
+  end, 'custom-instanceof');
+end;
+
 { ── CheckSorted tests ─────────────────────────────────────────────────────── }
 
 procedure TestCheckSortedIntPass;
@@ -1629,6 +2037,9 @@ begin
   LSuite.Test('CheckEqual (double fail)',     @TestCheckEqualDoubleFail);
   LSuite.Test('CheckNotEqual (double pass)',  @TestCheckNotEqualDoublePass);
   LSuite.Test('CheckNotEqual (double fail)',  @TestCheckNotEqualDoubleFail);
+  LSuite.Test('B12 CheckEqual Double NaN',    @TestB12CheckEqualDoubleNaN);
+  LSuite.Test('B12 CheckNotEqual Double NaN', @TestB12CheckNotEqualDoubleNaN);
+  LSuite.Test('B12 CheckEqual exact epsilon', @TestB12CheckEqualDoubleExactEpsilon);
 
   { v3.1: CheckGreaterOrEqual / CheckLessOrEqual }
   LSuite.Test('GreaterOrEqual pass',         @TestCheckGreaterOrEqualPass);
@@ -1713,6 +2124,13 @@ begin
   { F-06: Snapshot testing }
   LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
   LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
+  { B2.1 Snapshot env contracts }
+  LSuite.Test('Snapshot fail-on-create',   @TestCheckSnapshotFailOnCreate);
+  LSuite.Test('Snapshot update env',       @TestCheckSnapshotUpdate);
+  LSuite.Test('Snapshot mismatch diff msg',@TestCheckSnapshotMismatchDiffMessage);
+  { B2.2 string diff contracts }
+  LSuite.Test('Equal string diff markers', @TestCheckEqualStringDiffMarkers);
+  LSuite.Test('Equal multiline diff',      @TestCheckEqualMultilineDiff);
 
   { E-10: CheckNaN / CheckNotNaN coverage }
   LSuite.Test('CheckNaN pass',             @TestCheckNaNPass);
@@ -1809,6 +2227,29 @@ begin
   LSuite.Test('Finite fail (NaN)',       @TestCheckFiniteFailNaN);
   LSuite.Test('Inf+msg',                 @TestCheckInfWithMessage);
   LSuite.Test('Finite+msg',             @TestCheckFiniteWithMessage);
+
+  { v8.8a: Go/Rust quality — zero untested public membership/type APIs }
+  LSuite.Test('OneOf string pass',        @TestCheckOneOfStringPass);
+  LSuite.Test('OneOf string fail',        @TestCheckOneOfStringFail);
+  LSuite.Test('OneOf string empty',       @TestCheckOneOfStringEmpty);
+  LSuite.Test('OneOf string+msg',         @TestCheckOneOfStringWithMessage);
+  LSuite.Test('OneOfInt pass',            @TestCheckOneOfIntPass);
+  LSuite.Test('OneOfInt fail',            @TestCheckOneOfIntFail);
+  LSuite.Test('OneOfBool pass',           @TestCheckOneOfBoolPass);
+  LSuite.Test('OneOfBool fail',           @TestCheckOneOfBoolFail);
+  LSuite.Test('InstanceOf pass',          @TestCheckInstanceOfPass);
+  LSuite.Test('InstanceOf fail type',     @TestCheckInstanceOfFailType);
+  LSuite.Test('InstanceOf nil object',    @TestCheckInstanceOfNilObject);
+  LSuite.Test('InstanceOf nil class',     @TestCheckInstanceOfNilClass);
+  LSuite.Test('InstanceOf+msg',           @TestCheckInstanceOfWithMessage);
+
+  { v8.16 SoftFail (Go t.Error) — Check remains Fatal }
+  LSuite.Test('SoftFail continues then fails', @TestSoftFailContinuesThenFails);
+  LSuite.Test('SoftCheck helpers',             @TestSoftCheckHelpers);
+  LSuite.Test('Check still Fatal',             @TestCheckStillFatal);
+  LSuite.Test('SoftFail multi message',        @TestSoftFailMultiMessage);
+  LSuite.Test('SoftCheck string+contains',     @TestSoftCheckStringAndContains);
+  LSuite.Test('SoftFail does not FailFast',    @TestSoftFailDoesNotFailFast);
 
   if not LSuite.Run then
   begin

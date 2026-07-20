@@ -38,6 +38,21 @@ SetString case records raw buffer write throughput for a full 120x40 surface.
 | --- | ---: | ---: |
 | ParseOne ASCII key | 44.4 | 22,502,757 |
 | ParseOne CSI arrow | 50.3 | 19,890,997 |
+
+## Cross-lang simplified kernels (`bench_go_rust`)
+
+Authoritative gate remains `core/tests/nextpas.core.tui/scorecard`.
+Cross-lang harness (Wave Q1 / Q11):
+
+```bash
+make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
+```
+
+Ops (2026-07-20 / Q12): DiffIdentical / DiffDirty10 @ 200×50；ParseAscii / ParseCsiUp；
+**LayoutVSplit3** / **LayoutHSplit3**（Pascal=真实 split；Go/Rust=几何 stub）；
+**OverlayMerge 40×12**（Pascal=真实 `TOverlayBuffer.MergeInto`；Go/Rust=字节 mark stub）。
+
+禁止把 stub ns 写成「快于 ratatui 全库」。详见 [SCORECARD.md](SCORECARD.md) · [PARITY-GO-RUST.md](PARITY-GO-RUST.md)。
 | ParseOne SGR mouse (incomplete) | 47.8 | 20,900,826 |
 | ParseOne UTF-8 CJK | 45.9 | 21,791,240 |
 
@@ -63,16 +78,26 @@ The workflow does not enforce ns/op thresholds. Hosted runners are noisy, and ha
 real regressions with scheduler, CPU, and thermal variance. Stable performance regression checks
 need fixed hardware, pinned compiler settings, repeated sampling, and a stored median baseline.
 
-## Cross-runtime comparison boundary
+## Cross-runtime comparison (Wave Q1)
 
-The repository already has platform-level FPC RTL, Go, and Rust comparison benchmarks under
-`benchmarks/platform-comparison/`. Those cover shared platform operations such as path handling,
-file checks, mmap, and random bytes.
+**Authoritative gate numbers**: run scorecard (not this historical table alone):
 
-The TUI benchmarks in this document measure nextpas-specific terminal buffer diffing, widget
-rendering, input parsing, and layout solving. Numeric Go or Rust comparisons should only be added
-after equivalent terminal buffer and widget workloads exist in those runtimes. Until then, this file
-records the FreePascal TUI baseline only.
+```bash
+make focused FOCUS=core/tests/nextpas.core.tui/scorecard
+make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
+```
+
+**Same-methodology microbench vs Go/Rust simplified kernels** (not full ratatui/crossterm/tcell):
+
+```bash
+make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
+```
+
+Ops: DiffIdentical / DiffDirty10 @ 200×50; ParseAscii / ParseCsiUp.
+Policy and anti-false-win rules: [PARITY-GO-RUST.md](./PARITY-GO-RUST.md) · [SCORECARD.md](./SCORECARD.md).
+
+Platform-level FPC/Go/Rust comparisons remain under `benchmarks/platform-comparison/`.
+The tables above are historical smoke baselines (2026-06-02); refresh via scorecard for Ready reports.
 
 ## Summary
 

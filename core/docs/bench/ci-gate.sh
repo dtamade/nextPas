@@ -1,91 +1,57 @@
 #!/bin/bash
-# nextpas bench CI integration template
-# Usage: bench-ci-gate.sh [--threshold 1.10] [--baseline-dir .benchbaselines]
+# nextpas.core.bench CI template (module-level)
 #
-# Runs benchmarks, compares against saved baseline, gates on regression.
+# Usage (from repo root):
+#   bash core/docs/bench/ci-gate.sh
+#   bash core/docs/bench/ci-gate.sh --skip-module-bench
+#
+# What this template actually runs (no placeholder binaries):
+#   1) make hygiene
+#   2) make -C core/tests/nextpas.core.bench clean test
+#   3) optional: make -C core/benchmarks/nextpas.core.bench clean test
+#
 # Exit codes:
-#   0 = pass (no regression or no baseline to compare)
-#   1 = regression detected (ratio > threshold)
-#   2 = benchmark execution failed
+#   0 = pass
+#   1 = test or hygiene failure
+#   2 = usage / environment error
 #
-# Environment variables:
-#   BENCH_THRESHOLD  — regression threshold (default: 1.10 = 10%)
-#   BENCH_BASELINE_DIR — directory for baseline files (default: .benchbaselines)
-#   BENCH_FILTER     — benchmark name filter (optional)
-#   BENCH_SAVE       — set to "1" to save current results as new baseline
+# For product-specific regression gates (JSON baseline compare), wire your own
+# TBenchSuite binary and HasRegression/GetRegressionReport — this script is the
+# module quality gate, not a universal CLI for arbitrary apps.
 
 set -euo pipefail
 
-THRESHOLD="${BENCH_THRESHOLD:-1.10}"
-BASELINE_DIR="${BENCH_BASELINE_DIR:-.benchbaselines}"
-FILTER="${BENCH_FILTER:-}"
-SAVE="${BENCH_SAVE:-0}"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+SKIP_MODULE_BENCH=0
 
-# Parse CLI args
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --threshold) THRESHOLD="$2"; shift 2 ;;
-    --baseline-dir) BASELINE_DIR="$2"; shift 2 ;;
-    --filter) FILTER="$2"; shift 2 ;;
-    --save) SAVE=1; shift ;;
-    *) echo "Unknown arg: $1"; exit 2 ;;
+    --skip-module-bench) SKIP_MODULE_BENCH=1; shift ;;
+    -h|--help)
+      sed -n '2,20p' "$0"
+      exit 0
+      ;;
+    *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
-mkdir -p "$BASELINE_DIR"
-
-BASELINE_FILE="$BASELINE_DIR/current.json"
-TIMELINE_FILE="$BASELINE_DIR/timeline.jsonl"
-REPORT_FILE="$BASELINE_DIR/report.html"
-MATRIX_FILE="$BASELINE_DIR/matrix.html"
-
-echo "=== nextpas bench CI ==="
-echo "Threshold: $THRESHOLD"
-echo "Baseline dir: $BASELINE_DIR"
+cd "$ROOT"
+echo "=== nextpas.core.bench CI gate ==="
+echo "ROOT=$ROOT"
 echo ""
 
-# Step 1: Run benchmarks with raw samples + JSON output
-echo "[1/4] Running benchmarks..."
-BENCH_ARGS="--collect-raw-samples --json $BASELINE_DIR/results.json"
-if [[ -n "$FILTER" ]]; then
-  BENCH_ARGS="$BENCH_ARGS --filter $FILTER"
-fi
+echo "[1/3] hygiene"
+make hygiene
 
-if ! your-benchmark-binary $BENCH_ARGS; then
-  echo "ERROR: Benchmark execution failed"
-  exit 2
-fi
+echo "[2/3] module tests (22 suites)"
+make -C core/tests/nextpas.core.bench clean test
 
-# Step 2: Save baseline if requested
-if [[ "$SAVE" == "1" ]]; then
-  echo "[2/4] Saving baseline..."
-  # your-benchmark-binary --save-baseline "$BASELINE_FILE" --git-hash "$(git rev-parse HEAD)"
-  echo "Baseline saved to $BASELINE_FILE"
+if [[ "$SKIP_MODULE_BENCH" == "0" ]]; then
+  echo "[3/3] module micro-benchmarks"
+  make -C core/benchmarks/nextpas.core.bench clean test
 else
-  echo "[2/4] Skipping baseline save (use --save to enable)"
+  echo "[3/3] skip module micro-benchmarks"
 fi
-
-# Step 3: Compare with existing baseline
-echo "[3/4] Comparing with baseline..."
-if [[ -f "$BASELINE_FILE" ]]; then
-  # your-benchmark-binary --compare "$BASELINE_FILE" --threshold "$THRESHOLD"
-  RESULT=$?
-  if [[ $RESULT -ne 0 ]]; then
-    echo ""
-    echo "REGRESSION DETECTED (threshold: $THRESHOLD)"
-    echo "Run with --save to accept new baseline after review."
-    exit 1
-  fi
-  echo "No regression detected."
-else
-  echo "No baseline found at $BASELINE_FILE — skipping comparison."
-  echo "Run with --save to create initial baseline."
-fi
-
-# Step 4: Append to timeline
-echo "[4/4] Updating timeline..."
-# your-benchmark-binary --append-timeline "$TIMELINE_FILE"
-echo "Timeline updated: $TIMELINE_FILE"
 
 echo ""
 echo "=== CI PASS ==="

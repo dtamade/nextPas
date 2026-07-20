@@ -1,6 +1,10 @@
 # Lockfree API Reference
 
-> Updated: 2026-07-17
+> Updated: 2026-07-19 (H3-4: evidence envelope + CONTRACT alignment)
+>
+> **Authority**: [`CONTRACT.md`](CONTRACT.md) > this file. The **Chinese** [`api-reference.md`](api-reference.md)
+> is the fuller surface for Stack/Deque Try\*Ex, H3-2 bag/multimap, and T2 extras.
+> Absolute Mops claims require [`bench-envelope.md`](bench-envelope.md).
 
 [中文版](api-reference.md)
 
@@ -523,7 +527,7 @@ type
 **Differences from TLockFreeChannel**:
 - Uses atomic load/store instead of CAS (1P1C contention-free)
 - No sequence number overhead (direct ring buffer indexing)
-- Performance surpasses Go channel (2.99x) and Rust std::sync::mpsc (1.26x)
+- 1P1C hot path is typically faster than MPMC Channel / mutex baselines; absolute speedups require a full [`bench-envelope.md`](bench-envelope.md)
 
 **Use Cases**:
 - Single producer single consumer
@@ -562,13 +566,14 @@ type
   end;
 ```
 
-**Correspondence with Go select**:
+**Correspondence with Go select** (Q3-a):
 
 | Go | Pascal |
 |----|--------|
 | `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
 | `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
 | `select { ... }` | `LResult := LSelector.Select` |
+| `select { ... default: }` | `LResult := LSelector.TrySelect` (`Completed=False` means default) |
 
 **Usage Example**:
 ```pascal
@@ -598,12 +603,31 @@ end;
 ```
 
 **Design Constraints**:
-- All cases must use the same type T (consistent with Go select type constraints)
-- Does not support `default` branch (use TrySend/TryReceive directly when needed)
-- poll + backoff strategy (pure user-space polling, no kernel wait address)
-- `AddSend` stores value copy, actual send only on Select success
+- All cases must use the same type T (Go may mix types in one `select`; this API does not)
+- No language-level `default` case object; use **`TrySelect`** for default
+- When multiple cases are ready, earliest **Add** index wins (**not** Go random choice)
+- Wait path: short spin then wait-address via `lockfree.wait` (`LockFreeWaitData`), not pure busy-poll
+- `AddSend` stores a value copy; actual send only on successful Select/TrySelect
+- Closed-empty recv aligns with `TryReceive=False`: TrySelect/SelectTimeout do not complete
 
 ---
+
+## Stack / WorkStealingDeque (T1; see ZH for full surface)
+
+- `TLockFreeStack<T>` / `TWorkStealingDeque<T>`: optional `Try*Ex` → `TLockFreeTryError`
+  (`lfteNone` / `lfteFull` / `lfteEmpty` / `lfteClosed`). H2-1 Deque parity.
+- Deque: single-owner push/pop; multi-thief steal; Close blocks new push.
+- Full API text: Chinese [`api-reference.md`](api-reference.md).
+
+## Bag / MultiMap (H3-2 Guarded production subset — **not** default facade)
+
+| Type | Unit | Progress (honest) |
+|------|------|-------------------|
+| `TLockFreeBag<T>` | `nextpas.core.lockfree.bag` | lock-free MPMC sequence ring + wait path |
+| `TLockFreeMultiMap<K,V>` | `nextpas.core.lockfree.multimap` | **single spin lock** concurrent map (**not** lock-free) |
+
+Direct `uses` only. Managed elements rejected. Close/lifecycle: CONTRACT §0.3.
+Full API: Chinese [`api-reference.md`](api-reference.md).
 
 ## Memory Order Reference
 

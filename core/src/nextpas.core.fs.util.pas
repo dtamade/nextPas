@@ -32,11 +32,21 @@ function FsLstat(const APath: string): TFileInfo;
 function FsExists(const APath: string): Boolean;
 function FsIsDir(const APath: string): Boolean;
 function FsIsFile(const APath: string): Boolean;
+{** @desc 是否为符号链接（不跟随链接；不存在返回 False） *}
+function FsIsSymlink(const APath: string): Boolean;
+{** @desc 是否为同一 inode（对齐 Go os.SameFile；lstat Dev+Ino） *}
+function FsSameFile(const A, B: string): Boolean;
 function FsFileSize(const APath: string): Int64;
 procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
 procedure FsSymlink(const ATarget, ALinkPath: string);
 function FsReadlink(const APath: string): string;
+{** @desc 创建硬链接（对齐 Go os.Link / Rust hard_link） *}
+procedure FsHardLink(const AOldPath, ANewPath: string);
+{** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TFileInfo.ModTime 同单位） *}
+procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);
+{** @desc 设置所有者（对齐 Go os.Chown 跟随链接；Windows 不支持） *}
+procedure FsChown(const APath: string; const AUid, AGid: UInt32);
 function FsGetCwd: string;
 procedure FsSetCwd(const APath: string);
 function FsGetEnv(const AName: string): string;
@@ -415,6 +425,29 @@ begin
   Result := platform_fs_is_file(PAnsiChar(APath));
 end;
 
+function FsIsSymlink(const APath: string): Boolean;
+begin
+  if APath = '' then
+    Exit(False);
+  Result := platform_fs_is_symlink(PAnsiChar(APath));
+end;
+
+function FsSameFile(const A, B: string): Boolean;
+var
+  LA, LB: TPlatformFileStat;
+  LErr: Int32;
+begin
+  if (A = '') or (B = '') then
+    raise EArgumentError.Create('SameFile path must not be empty');
+  LErr := platform_file_lstat(PAnsiChar(A), LA);
+  if LErr <> 0 then
+    RaiseFsError(LErr, 'samefile', A);
+  LErr := platform_file_lstat(PAnsiChar(B), LB);
+  if LErr <> 0 then
+    RaiseFsError(LErr, 'samefile', B);
+  Result := (LA.Dev = LB.Dev) and (LA.Ino = LB.Ino);
+end;
+
 function FsFileSize(const APath: string): Int64;
 var
   LResult: Int32;
@@ -449,6 +482,41 @@ begin
   LResult := platform_file_symlink(PAnsiChar(ATarget), PAnsiChar(ALinkPath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'symlink', ALinkPath);
+end;
+
+procedure FsHardLink(const AOldPath, ANewPath: string);
+var
+  LResult: Int32;
+begin
+  if (AOldPath = '') or (ANewPath = '') then
+    raise EArgumentError.Create('HardLink path must not be empty');
+  LResult := platform_file_link(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'hardlink', ANewPath);
+end;
+
+procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);
+var
+  LResult: Int32;
+begin
+  if APath = '' then
+    raise EArgumentError.Create('Chtimes path must not be empty');
+  if (AAccessTimeNs < 0) or (AModTimeNs < 0) then
+    raise EArgumentError.Create('Chtimes times must be non-negative');
+  LResult := platform_file_utimens(PAnsiChar(APath), AAccessTimeNs, AModTimeNs);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'chtimes', APath);
+end;
+
+procedure FsChown(const APath: string; const AUid, AGid: UInt32);
+var
+  LResult: Int32;
+begin
+  if APath = '' then
+    raise EArgumentError.Create('Chown path must not be empty');
+  LResult := platform_file_chown(PAnsiChar(APath), AUid, AGid);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'chown', APath);
 end;
 
 function FsReadlink(const APath: string): string;

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.async*.pas` + `core/src/nextpas.core.net*.pas`
 **层级**：L1-L2（依赖 L0: platform, base, errors）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.1
 
 ---
 
@@ -60,9 +60,10 @@ end;
 { 异步任务状态 }
 TAsyncTaskState = (atsIdle, atsPending, atsCompleted, atsFailed, atsTimedOut, atsCancelled);
 
-{ 事件循环 }
-TAsyncLoop = record
-  class function Create(AQueueDepth: UInt32 = 64): TAsyncLoop; static;
+{ 事件循环 — class，堆拥有；依赖存对象引用且不拥有 }
+TAsyncLoop = class
+  constructor Create(AQueueDepth: UInt32 = 64);
+  destructor Destroy; override;
   procedure Close;
   function IsValid: Boolean;
 
@@ -329,11 +330,12 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### 5.1 异步框架
 
-- **TAsyncLoop**: 值类型，内部管理 FPoller、FTimers、FPendingQueue
+- **TAsyncLoop**: **class**，内部管理 FPoller、FTimers、FPending MPSC；`Free`/`Close` 释放
 - **TTimerHeap**: 值类型，内部管理 FEntries、FHeap
 - **TAsyncTask**: 值类型，调用方管理生命周期
 - **匿名过程引用**: 引用计数，自动释放
 - **方法指针**: 绑定到对象，对象生命周期由调用方管理
+- **依赖 outlive**: mutex/channel/shutdown/net.async 等存 loop 引用但不拥有
 
 ### 5.2 网络层
 
@@ -418,9 +420,109 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 1.1 | TAsyncLoop class 生命周期 | Claude |
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
 
 
 ### OnDiscard / Close
 - Heap wraps posted to the loop must provide OnDiscard when Close may discard them.
 - Timeout I/O uses ScheduleEx + TimeoutCtxDiscardTimer so Close free TTimeoutCtx.
+- TCP async write uses AsyncSend (not positioned AsyncWrite).
+
+### Backpressure (B1)
+- `IBackpressureController.OnStateChange` registers a callback; transitions are notified via `TAsyncLoop.PostEx` (not under the controller lock).
+- Channel queue backpressure and stream watermarks are separate tools — do not merge types.
+
+### Timeout cancel (B2)
+- `Async*Timeout` timer path calls `TPoller.TryCancelByContext(TimeoutCtx)` after user `-ETIMEDOUT`.
+- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll/kqueue: remove pending + internal `-ECANCELED`; IOCP: `CancelIoEx` by context (completion packet still arrives).
+
+### IOCP (B4)
+- `TIocpReactor` is a real completion backend (not a stub); `TPoller` wires `pbIocp` on Windows.
+- Evidence: `truth=wine-runtime-smoke` via `test_reactor_iocp_wine` + `test_poller_windows_runtime_smoke`; still not native Windows host runtime ready.
+
+### Kqueue (B3)
+- `pbKqueue` readiness backend wired into `TPoller` for macOS/FreeBSD (`TKqueueReactor`).
+- Evidence: source-contract + `test_async_kqueue_compile_gate` (FORCE_HOST) + `test_async_kqueue_runtime_smoke`.
+- **CI L0 (Q11)**: macOS job runs `ASYNC_HOST_GATES=kqueue-runtime` **fail-closed** (must print `kqueue-runtime-smoke=pass`; skip fails on Darwin).
+- Linux host: runtime smoke exits skip (not a failure). Still not a claim of full macOS async I/O parity.
+
+### HE-lite dial (Q6)
+- `platform_socket_resolve_stream`: getaddrinfo multi-A (cap 16), AF_UNSPEC.
+- `NetResolveAll` / `AsyncResolve`: v4-first then v6 list.
+- `NetTcpConnect` / `AsyncTcpConnect`: sequential try each address (IPv4+IPv6); **not** concurrent RFC8305 Happy Eyeballs.
+
+### Concurrent Happy Eyeballs (Q7/Q8)
+- `AsyncTcpDial` / `AsyncTcpDialAddrs` in `net.async.dial`: staggered concurrent attempts on `TAsyncLoop` (`AsyncConnect` + timers).
+- Defaults: ConnectionAttemptDelayMs=250, MaxInFlight=2, **InterleaveFamilies=True** (RFC-style alternate v4/v6).
+- Address `Port<>0` honored (else dial port); multi-A first-fail-second-win covered by tests.
+- Optional overall deadline + CancellationToken; single user callback; 0 leak.
+- Does **not** replace HE-lite sync `AsyncTcpConnect`.
+
+### Parallel DNS + RFC timer knobs (Q9)
+- `platform_socket_resolve_stream_family(AHost, AFamily, ...)`: multi-A for AF_INET / AF_INET6 / AF_UNSPEC.
+- `AsyncResolveEx` / `DefaultDnsResolveOptions`: parallel A + AAAA workers + **ResolutionDelayMs** (default 50); `AsyncResolve` remains single AF_UNSPEC path.
+- Dial options: `FirstAddressFamilyCount` (default 1), `ResolutionDelayMs` (default 50).
+- OrderAddresses: optional lead N of preferred family, then interleave or bucket remainder.
+- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS dial/resolve + kqueue L0 fail-closed (Q12).
+
+### DNS-race-while-dialing (Q10)
+- `AsyncResolveStream`: parallel A/AAAA; after Resolution Delay gate, posts per-family batches then one terminal `AllDone`.
+- `AsyncTcpDial` host path uses Stream: starts HE as soon as first family addresses arrive; late family addresses append/interleave into remaining attempts.
+- `MaybeCompleteIfIdle` waits for `FDnsAllDone` before failing empty.
+- State machine: stream family batch → first non-empty `StartDialing`+`OrderAddresses` once → late family `AppendAddresses` into untried suffix → complete only after `AllDone` when idle.
+
+### Strict CAD + timing observability (Q11)
+- **Connection Attempt Delay** is start-to-start: each successful `AsyncConnect` submit is followed by CAD before the next start; **MaxInFlight only caps concurrency** (no burst-fill while loop).
+- `ConnectionAttemptDelayMs=0` allows immediate refill after failure (and 0-delay arm when under MaxInFlight); CAD=0 never arms 0-delay timers while at MaxInFlight (avoids busy-spin).
+- Optional observability: `OnAttemptStart` / `OnAttemptStartContext` (tests; default nil).
+- Evidence: `StrictCadDoesNotBurstStart`, `CadZeroAllowsImmediateRefill`, `FirstFamilyAttemptOrder` in `test_net_async_dial` (0 leak).
+
+### DNS×SYN lab harness (Q12)
+- `IAsyncTcpDialDnsFeed` + `AsyncTcpDialWithDnsFeed`: inject DNS stream events without real getaddrinfo; same `OnDnsStream` state machine as host path.
+- `FeedAddresses` / `SignalDnsDone` post onto the loop; feed detaches safely when dial finishes.
+- Evidence: `DnsRaceStartsBeforeLateFamily`, `DnsRaceLateFamilyInterleaves`, `DnsRaceEmptyUntilDoneFails`, `DnsRaceWaitsAllDoneWhenAddrsExhausted` (0 leak).
+- macOS CI: dial-resolve matrix **fail-closed** (with kqueue L0); still not full macOS async parity.
+
+### Error classification + Dial product default (Q13)
+- `ClassifyNetError(ACode)` in `nextpas.core.net.errors` (re-exported from `nextpas.core.net`): maps dial/IO result codes (signed or absolute) to `TNetErrorClass` with `Kind`, `Timeout`, `Temporary`, `Canceled`, `Code`.
+- Kind table: ok / canceled / timeout / refused / reset / unreachable / dns / temporary / invalid / unknown.
+- Portable codes use `PLATFORM_ERR_*`; cancel uses `NET_ERR_CANCELED` (125, async convention).
+- **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
+- Lab-only: `AsyncTcpDialWithDnsFeed`. LocalAddr bind-before-connect: **not** exposed this wave.
+- Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
+
+### Cancel vocabulary bridge (Q14)
+- **Recommended user token**: `IAsyncCancellationToken` (dial, combinators, TaskGroup).
+- **Blocking TCP plumbing**: `INetCancelToken` + optional `INetCancelWaitable` (socketpair wake) via `NewNetCancelToken`.
+- Bridge: `NetCancelFromAsync(async)` → `INetCancelController` (waitable on Unix); async Cancel propagates to net Cancel.
+- `TcpStreamBindAsyncCancel(stream, async)` / `IAsyncTcpStream.BindCancelToken(async)` installs the bridge on a stream.
+- Does **not** delete Net tokens; HTTP adapters remain. Unit: `nextpas.core.net.async.cancel`.
+- Evidence: `test_net_cancel_bridge` (propagate, already-cancelled, waitable, blocking read cancel, 0 leak).
+
+### Async UDP (Q15)
+- `IAsyncUdpSocket` / `AsyncUdpBind` in `net.async.udp` (IPv4, matches sync `NetUdpBind`).
+- `AsyncSendTo` / `AsyncRecvFrom` (+ Timeout) via poller `AsyncSendTo`/`AsyncRecvFrom`.
+- Reactors: epoll + kqueue ops; **io_uring backend uses epoll sidecar** for datagram; IOCP not implemented (returns False).
+- `IUdpSocketRuntime` exposes native fd for async layer.
+- Evidence: `test_net_async_udp` loopback + timeout + 0 leak.
+- Not: IPv6 UDP, multicast, connected UDP API, IOCP datagram.
+
+### Connection pool async acquire (Q16)
+- `IConnectionPool.AcquireAsync(host, port, cb, ctx, token?)`: prefer idle; else `AsyncTcpDial` (HE).
+- Requires `CreateConnectionPool(Loop[, Config])`; sync-only `CreateConnectionPool` → AcquireAsync returns False after reserving path without loop.
+- Idle keyed by host+port; `Release` returns to idle; `Discard` closes.
+- `ConnectTimeout` → dial `OverallDeadline`; optional `IAsyncCancellationToken`.
+- Evidence: `test_net_async_pool` dial / idle reuse / max connections, 0 leak.
+
+### Platform evidence deepen (Q17)
+- `test_async_accept_connect_smoke`: loopback dial via `AsyncTcpDial` on host poller (Linux epoll/io_uring; Darwin/FreeBSD kqueue; Windows skip).
+- `test_async_kqueue_runtime_smoke`: on Darwin/FreeBSD also runs accept+connect loopback; prints `kqueue-accept-connect-smoke=pass`.
+- `async-host-matrix` includes accept_connect + udp + pool entries.
+- Windows native: see `WINDOWS-NATIVE-ASSESSMENT.md` — **not** native-windows claim; wine-runtime-smoke remains IOCP evidence.
+
+### Same-host bench parity (Q18)
+- Script: `core/scripts/async-bench-parity.sh` runs `test_async_bench` + Go/Rust peer microbenches.
+- Peers: std channel/mutex/timer shapes — **not** TAsyncLoop clones; order-of-magnitude only.
+- truth=`same-host-order-of-magnitude`; **not CI-gating**; do not claim “faster than Go/Rust” from this table alone.
+- SCORECARD table updated from a 2026-07-20 host run.

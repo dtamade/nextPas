@@ -62,6 +62,9 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
+    { Best-effort cancel of one Active entry with matching Context.
+      io_uring: IORING_OP_ASYNC_CANCEL (target CQE still arrives). }
+    function TryCancelByContext(AContext: Pointer): Boolean;
   end;
 
 implementation
@@ -87,12 +90,12 @@ begin
   Result.FEntryCount := 0;
   Result.FPendingCount := 0;
   Result.FFreeHead := -1;
-  AtomicStore32(Result.FRunning, 0, moRelease);
+  atomic_store(Result.FRunning, 0, mo_release);
 end;
 
 procedure TIoReactor.Close;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   try
     ReleasePendingEntries(-ESysECANCELED);
   finally
@@ -227,6 +230,43 @@ begin
   FRing.CqeSeen(ACqe);
   if Assigned(LCallback) then
     LCallback(LId, LResult, LContext);
+end;
+
+function TIoReactor.TryCancelByContext(AContext: Pointer): Boolean;
+var
+  LI: UInt32;
+  LTargetId: UInt64;
+  LCancelId: UInt64;
+  LSqe: PIoUringSqe;
+  LFound: Boolean;
+begin
+  Result := False;
+  if (AContext = nil) or (not IsValid) then
+    Exit;
+  LFound := False;
+  LTargetId := 0;
+  if FEntryCount > 0 then
+  begin
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      if FEntries[LI].Active and (FEntries[LI].Context = AContext) then
+      begin
+        LTargetId := LI;
+        LFound := True;
+        Break;
+      end;
+    end;
+  end;
+  if not LFound then
+    Exit;
+  LSqe := FRing.GetSqe;
+  if LSqe = nil then
+    Exit;
+  { Cancel CQE uses its own entry so DispatchCqe does not free the target early. }
+  LCancelId := AllocEntry(nil, nil);
+  IoUringPrepCancel(LSqe, LTargetId, 0);
+  IoUringSqeSetData(LSqe, LCancelId);
+  Result := True;
 end;
 
 function TIoReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
@@ -414,8 +454,8 @@ const
 begin
   if not IsValid then
     Exit;
-  AtomicStore32(FRunning, 1, moRelease);
-  while AtomicLoad32(FRunning, moAcquire) <> 0 do
+  atomic_store(FRunning, 1, mo_release);
+  while atomic_load(FRunning, mo_acquire) <> 0 do
   begin
     LRet := FRing.SubmitAndWait(1);
     if LRet < 0 then
@@ -423,14 +463,14 @@ begin
       if (LRet = -EINTR) or (LRet = -EAGAIN) then Continue;
       Break;
     end;
-    while (AtomicLoad32(FRunning, moAcquire) <> 0) and FRing.PeekCqe(LCqe) do
+    while (atomic_load(FRunning, mo_acquire) <> 0) and FRing.PeekCqe(LCqe) do
       DispatchCqe(LCqe);
   end;
 end;
 
 procedure TIoReactor.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
 end;
 
 end.

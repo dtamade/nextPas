@@ -9,87 +9,115 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 | 子模块 | 职责 |
 |--------|------|
-| `types.pas` | 基础类型定义（TUnicodeCodepoint 等） |
-| `base.pas` | TUnicodeCodepoint 辅助函数（Utf8Len/ToUtf8/FromUtf8） |
-| `utf8` | UTF-8 编解码（TUTF8Iterator/AppendUtf8Codepoint） |
-| `data.pas` | 属性查询门面（GeneralCategory/BinaryProperty/Script/Block） |
-| `normalize.pas` | NFC/NFD/NFKC/NFKD 规范化 + QuickCheck + CCC |
-| `collate.pas` | DUCET 排序（IUnicodeCollator/Compare/GetSortKey） |
-| `grapheme.pas` | UAX#29 字素簇分割 |
-| `segment.pas` | 词/行/句子分割 |
-| `case.pas` | 大小写映射 + CaseFold |
-| `props.pas` | 属性查询（Script/Block/GeneralCategory） |
-| `utils.pas` | 工具函数（IsAsciiString 等） |
-| `.pas`（门面） | 统一 re-export 所有公共 API |
+| `types.pas` | 基础类型（含 `TIndicConjunctBreak`） |
+| `base.pas` | 区间二分查找原语 |
+| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets / **East_Asian_Width** |
+| `casefold.pas` | 大小写映射 + CaseFold |
+| `normalize.pas` | NFC/NFD/NFKC/NFKD + QuickCheck |
+| `segment.pas` | UAX#29 Grapheme/Word/Sentence + **UAX#14 LineBreak** ByteLen |
+| `bidi.pas` | **UAX#9** 双向算法（至 L2） |
+| `collate.pas` | DUCET 排序 |
+| `script.pas` / `block.pas` | Script / Block |
+| `data.pas` | IUnicodeDataManager |
+| 门面 `unicode.pas` | re-export（含 ResolveBidi / GetBidiClass / 边界 ByteLen） |
+
+`text.grapheme.GraphemeNext` 委托 `GraphemeClusterByteLen` 做边界，本地只计算显示宽度。
 
 ## 不变量
 
 ### 规范化
 
-1. **幂等性**: `NFD(NFD(s)) = NFD(s)`, `NFC(NFC(s)) = NFC(s)`
-2. **往返性**: `NFC(NFD(s))` 产生规范等价的 NFC 字符串
-3. **稳定性**: 已规范化的字符串再次规范化不变
-4. **QuickCheck 一致性**: `QuickCheckNFC(s) = True` ⟹ `IsNormalizedNFC(s) = True`
-5. **空串**: 所有规范化函数对空串返回空串
-6. **ASCII 快速路径**: 纯 ASCII 字符串规范化后不变（O(1) 检测）
-
-### 排序
-
-1. **自反性**: `Compare(a, a) = 0`
-2. **对称性**: `Compare(a, b) = -Compare(b, a)`
-3. **传递性**: `Compare(a, b) < 0 ∧ Compare(b, c) < 0` ⟹ `Compare(a, c) < 0`
-4. **排序键一致性**: `Compare(a, b)` 与 `memcmp(GetSortKey(a), GetSortKey(b))` 符号一致
-5. **确定性**: 相同输入始终产生相同结果
+1. 幂等：`NFD(NFD(s))=NFD(s)`，`NFC(NFC(s))=NFC(s)`
+2. ASCII 快路径：纯 ASCII 规范化后不变
+3. **官方一致性**：Unicode 16.0 `NormalizationTest.txt` 全量通过（~19965 行）
 
 ### 分割
 
-1. **覆盖性**: 分割结果覆盖整个输入字符串（无遗漏、无重叠）
-2. **非空性**: 每个分割片段非空
-3. **边界单调性**: 分割边界位置严格递增
+1. 覆盖性 / 非空 / 边界单调
+2. **官方一致性**：`GraphemeBreakTest.txt` 全量通过（~1093 行）
+3. **官方一致性**：`WordBreakTest.txt` 全量通过（~1826 行）
+4. **官方一致性**：`SentenceBreakTest.txt` 全量通过（~512 行）
+5. **官方一致性**：`LineBreakTest.txt` 全量通过（~16672 行，UAX#14）
+6. **单一真源**：`GraphemeNext` 与 `NextGraphemeCluster` 边界一致
+7. **GB9c**：`InCB=Consonant … Linker … × Consonant` 已实现
+8. **Word**：`NextWord` / `SegmentWords` 按 UAX#29 边界切分（含空白段）
+9. **Sentence**：`NextSentence` / `SegmentSentences` 按 UAX#29 边界（`SentenceBreakByteLen`）
+10. **Line 双语义**：
+    - **硬** `NextLine` / `SegmentLines`：仅硬分隔符（CR/LF/NL 等），**不是** UAX#14
+    - **软** `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`：UAX#14 换行机会（`stLineBreak`）
+
+### 双向（UAX#9）
+
+1. **官方一致性**：`BidiCharacterTest.txt` 全量（~91707 数据行）fail=0
+2. **官方一致性**：`BidiTest.txt` abstract 全量（~770k 方向×行）fail=0
+3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
+4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
+
+### 大小写（CaseFolding / SpecialCasing）
+
+1. **官方一致性**：UCD 16.0 `CaseFolding.txt` 状态 C/F/S 全量 fail=0（T Turkic 跳过）
+2. **官方一致性**：`SpecialCasing.txt` 无条件行 fail=0；**Final_Sigma** 字符串 lower 上下文
+3. API：`UTF8ToUpper/Lower/Title/CaseFold`；`UTF8ToTitle` = 逐码点 title（非 Word_Break 词首）
+4. 默认非 tr/az/lt locale；locale 条件 SpecialCasing 不在门禁
+
+### 排序（UCA / DUCET）
+
+1. **官方一致性**：UCA 16.0 `CollationTest_NON_IGNORABLE` 全量（~206286 数据行，skip 代理）fail=0
+2. **官方一致性**：UCA 16.0 `CollationTest_SHIFTED` 全量（~227801 行）fail=0
+3. 实现：多 CE expansion、contraction（contiguous + discontiguous non-starter 扩展）、variable weighting（NonIgnorable / Shifted）
+4. API：`IUnicodeCollator` / `UnicodeCollatorWithOptions`；`TCollationOptions.VariableWeighting`；门禁 strength=identical
+5. 仍仅 **DUCET**（无 CLDR locale tailor）
 
 ## 错误处理
 
 | 场景 | 行为 |
 |------|------|
-| 空字符串输入 | 返回空串/空数组/0 |
-| 无效 UTF-8 字节 | 替换为 U+FFFD，继续处理 |
-| 代理对 (U+D800-U+DFFF) | 视为无效 UTF-8，替换为 U+FFFD |
-| 超出 Unicode 范围 (>U+10FFFF) | 属性查询返回默认值，规范化保持不变 |
-| 码点无分解 | 返回原始码点 |
-| 码点无组合 | 返回原始码点对 |
-
-## 线程安全
-
-- **UnicodeData**: 临界区保护的单例，首次访问时初始化
-- **UnicodeCollator**: 临界区保护的单例
-- **UnicodeSegmenter**: 临界区保护的单例
-- **无状态函数** (NFD/NFC/NFKD/NFKC/GetCanonicalCombiningClass): 天然线程安全
-- **IUnicodeCollator 实例**: 实例方法非线程安全，需外部同步或每线程创建
-
-## 内存管理
-
-- 所有返回 `string` 的函数：调用方拥有内存，FPC 自动管理
-- `TWeightArray`/`TCollationKey`: 动态数组，引用计数自动管理
-- `IUnicodeCollator`/`IUnicodeSegmenter`/`IUnicodeDataManager`: 接口引用计数
-- 内部 `TCodepointBuffer`: 栈分配，函数返回时自动释放
-
-## 性能特征
-
-| 操作 | 复杂度 | 备注 |
-|------|--------|------|
-| IsAsciiString | O(n/8) | 8 字节并行检查 |
-| NFD/NFC (ASCII) | O(1) | 快速路径检测 |
-| NFD/NFC (BMP) | O(n) | 表查找 O(1) 每码点 |
-| NFD/NFC (SMP) | O(n log m) | m = SMP 范围数 |
-| GetCanonicalCombiningClass | O(1) BMP / O(log m) SMP | |
-| Compare | O(n) | 排序键比较 |
-| GetSortKey | O(n) | 单遍收集权重 |
-| QuickCheckNFD/NFC | O(n) | 无分配，纯检查 |
-| 字素/词/行/句分割 | O(n) | 状态机单遍 |
+| 空输入 | 空结果 |
+| 非法 UTF-8 | 按 U+FFFD、消费 1 字节（可与 Prepend 组簇） |
+| 代理对 | 无效序列 |
 
 ## 已知限制
 
-1. **Indic Conjunct (GB9c)**: Unicode 15.1 新增规则，需要 `InCB` 属性支持，当前未实现
-2. **Tailored Grapheme Break**: UAX#29 默认规则，不支持 CLDR 定制
-3. **Collation Tailoring**: 使用 DUCET 默认权重，不支持区域排序定制
-4. **Sort Key 长度**: 长字符串排序键可能较长（每码点 4-6 字节）
+1. 无 CLDR tailored grapheme / word
+2. Collation 仅 DUCET（无 CLDR locale tailor）；UCA CollationTest 官方全绿
+3. **硬** `NextLine` 不替换为 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`
+4. East_Asian_Width 真表（UCD 16.0）：`GetEastAsianWidth`；LB19a `$EastAsian`=F|W|H；列宽 A→1
+
+## 测试入口
+
+```bash
+for t in test_case test_data test_enhance test_grapheme_uax29 \
+         test_normalize test_property test_collate \
+         test_conformance_normalize test_conformance_grapheme \
+         test_conformance_word test_conformance_sentence test_conformance_line \
+         test_conformance_bidi_character test_conformance_bidi          test_conformance_collate test_conformance_case; do
+  make -C core/tests/nextpas.core.text.unicode/$t clean test
+done
+```
+
+Fixture 生成：
+
+```bash
+python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
+  --fixtures-dir core/tests/nextpas.core.text.unicode/data
+python3 core/scripts/gen_unicode_wbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_sbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_collate.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_eaw.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_special_casing.py --version 16.0.0 --output-dir core/src
+```
+
+## 变更记录
+
+| 日期 | 变更 |
+|------|------|
+| 2026-07-20 | UAX#9 Bidi 官方双 harness 全绿（Character+Abstract）+ ResolveBidi API |
+| 2026-07-20 | NextLineBreak / SegmentLineBreaks 便利 API；stLineBreak |
+| 2026-07-20 | LineBreak 官方 16672/16672 全绿；硬 NextLine / 软 LineBreakByteLen 双语义钉死 |
+| 2026-07-19 | SentenceBreak 官方 harness + SBP + UAX#29 NextSentence |
+| 2026-07-19 | WordBreak 官方 harness + WBP 表 + UAX#29 NextWord |
+| 2026-07-19 | Conformance harness；CCC/compose 修复；GB9c/InCB；Grapheme 真源合并 |
+| 2026-07-11 | enhance 边界测试与文档四件套 |

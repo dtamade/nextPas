@@ -1,11 +1,11 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Steady**（Era D Steward 维护姿态；A–C 已闭合；D0/D1/D4 已交付）
-**Owner**: mem lane（`.worktrees/mem`）
-**更新**: 2026-07-17
+**状态**: **Era G Steady**（Ecosystem Steward 主切片已收；默认只回归 + D3 顺手 + 命名 consumer）
+**Owner**: mem lane（`.worktrees/mem`）全权
+**更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
-**最近 land（main）**: `d2b704ffe`（D0/D1）· `a0a374f19`（D4 Scorecard）· `c87ac8f60`（README Steady）
-**Steward 观测（docs only）**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
+**对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
+**Steward 观测**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
 
 ---
 
@@ -24,6 +24,9 @@
 | **B** | 标准库质量（门面 Tier、契约矩阵、Default 双轨、Scorecard、DEBUG） | **CLOSED** | [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)（90 天 M1–M3 全勾） |
 | **C** | 可用性 + 产品表 dual-track + consumer-audit 全修 | **CLOSED** | [USABILITY-SCORE.md](USABILITY-SCORE.md) · [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) |
 | **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Steady** | 下文 §4 |
+| **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Steady+** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
+| **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **CLOSED** | 下文 §4c |
+| **G** | **Ecosystem Steward**：防回潮、按触达样板、证据习惯 | **Steady** | 下文 §4d |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -92,8 +95,10 @@
 | D2-a | 默认 lane gate 不变：`lane-focused LANE=mem` | — | 已落地 |
 | D4-a | 刷新 SCORECARD 发布数字（`RELEASE=1` SC1–SC9 全 PASS） | 本机安静跑 | **landed** `a0a374f19` |
 | D3-a | 不主动扫仓；其它 lane 触达堆路径时提供 review 清单 | 其它模块 owner | 持续 |
+| D3-b | simd 表/缓冲 sized free（CO-002） | D3 | **done** 2026-07-19（mem lane 受控跨模块） |
 | D9-a | inventory 可删/可归档清单（不删代码） | — | **done** 见 [INVENTORY-AUDIT](INVENTORY-AUDIT-2026-07-17.md) |
 | D9-b | consumer unsized free / 热路径 IAllocator 只读 findings | — | **done** 见 [CONSUMER-OBSERVATION](CONSUMER-OBSERVATION-2026-07-17.md) |
+| D9-c | P-a Tier-3 prune **设计备忘**（不删代码） | D9-a | **done** → 执行见 Era E E2 |
 
 ### 4.3 退出条件（时代 D 何时算「够稳」）
 
@@ -110,7 +115,88 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 
 ---
 
-## 5. 明确不做（时代 D 有效期内）
+## 4b. 时代 E — Go / Rust 对标（Active）
+
+**一句话**: 质量 = 契约 + 诊断 + **可对标数字**；规模 = **stdlib 表面** + **生产路径覆盖**，不是文件数。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| E0 | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) 纲领 + 本表 | **done** 2026-07-19 |
+| E1 | 修复 `bench_arena_go_rust`；`make compare` 三语同方法论 | **done** 2026-07-19 |
+| E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
+| E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
+| E4 | D3 sized free + openssl 双堆纪律 | **done** 2026-07-19（E4-a/b/c + WAIVE 矩阵） |
+| E5 | P-b 剩余 Tier-3 剪枝（15 allocator + tests） | **done** 2026-07-19 |
+| E6 | Era E → Steady+ 关闭条件 | **done** 2026-07-19（P1–P7 + E4/E5） |
+
+**验收**: PARITY 表 P1–P7；`make lane-focused LANE=mem` 常绿。
+**OpenSSL 堆纪律**: [OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md)
+
+---
+
+## 4c. 时代 F — Steady+ 加固（CLOSED 2026-07-20）
+
+**目标**: 证据常绿、文档不撒谎、门面可发现（像 Go/Rust std 入口），**不**回潮博物馆。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| F0 | ROADMAP/PARITY/README/CONSUMER 状态对齐 | **done** 2026-07-20 |
+| F1 | SCORECARD RELEASE 刷新（P-a/P-b 后） | **done** 2026-07-20 |
+| F2 | 门面 slim **设计** | **done** 见 [FACADES-SLIM-DESIGN-2026-07-20.md](FACADES-SLIM-DESIGN-2026-07-20.md) |
+| F3 | 门面收紧执行（批 1 re-export demote） | **done** 2026-07-20 · uses 65→41 · [FACADES-SURFACE.md](FACADES-SURFACE.md) |
+| F4 | FreeMemOf 样板（`bytes.builder`，对照 text.builder） | **done** 2026-07-20 |
+| F5 | process GetMem 微税 | **WAIVE** 2026-07-20：SC1/SC9 热路径已紧；无 ≥3ns 可证明收益；禁止伤 HEAP_DEBUG |
+| F6 | simd.memutils header 存 totalSize（去 unsized free 回落） | **done** 2026-07-20 |
+| F7 | `test_mem_cross_os_compile_gate` | **done** 2026-07-20（FreeBSD FORCE_HOST `pthread_timedjoin_np` PtrUInt cast） |
+| F8 | soak / SC5 入口文档 | **done** 2026-07-20 · `test_soak` 3/3 + SCORECARD 说明 |
+
+F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses` 子单元；源文件保留。
+
+---
+
+## 4d. 时代 G — Ecosystem Steward（Steady 2026-07-20）
+
+**目标**: 防回潮、按触达样板、证据习惯；**不是** 新分配器时代。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| G0 | F 收口卫生：状态文案 + CONSUMER 过时行 | **done** 2026-07-20 |
+| G1 | 门面 demoted 名单 source-contract（防回潮） | **done** 2026-07-20 |
+| G2 | 门面批 2：mimalloc/mmap 移出 re-export | **done** 2026-07-20 |
+| G3 | blockpool.growable **KEEP** 决策 | **done** 见 [GROWABLE-KEEP-2026-07-20.md](GROWABLE-KEEP-2026-07-20.md) |
+| G4 | FreeMemOf 样板 json.parser + toml.parser | **done** 2026-07-20 |
+| G4.x | FreeMemOf `collections.node` TNodeManager | **done** 2026-07-20 |
+| G4.x+ | FreeMemOf `collections.hashmap` buckets/bitmap | **done** 2026-07-20 |
+| G4 residual | yaml/xml/ini/csv + toml LBuf FreeMemOf | **done** 2026-07-20（tui inject WAIVE tracking） |
+| G5 | 多 host 编译门常绿 | **done** 2026-07-20（Linux FORCE_HOST + host-runtime） |
+| G5.x | Darwin/Windows **真机** mem host-runtime 进 CI matrix | **done** 2026-07-20 见 [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md) |
+| G6 | scorecard/soak 证据入口 | **done**（README / SCORECARD） |
+| G7 | CONSUMER 观测快照刷新 | **done** 2026-07-20 §6.2 |
+
+**Steady 之后默认**: 只修回归 · D3 谁改谁顺手 · cross-OS/GHA 有红再开。
+禁止全仓 FreeMem 扫、禁止 Phase 29、禁止误删 growable。
+
+### G 成功标准（均已满足）
+
+| ID | 标准 | 证据 |
+|----|------|------|
+| GS1 | 门面 demote + 防回潮 | G1–G2 · guardrails |
+| GS2 | FreeMemOf 样板覆盖主 inject 表/槽 | G4 · residual · node/hashmap |
+| GS3 | Darwin/Windows 真机 mem host-runtime | G5.x · [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md) |
+| GS4 | growable KEEP 有文 | G3 |
+| GS5 | 证据入口常绿 | G6 · scorecard/soak |
+
+### Era H — Maintenance only（不新开大时代）
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **H0** | Steady 收官：决策树 · SCORECARD 刷新 · CI guardrail · 文档终态 | **done** 2026-07-20 |
+| H1 | element_manager FreeMemOf（仅当 tracking 测允许） | 可选 |
+| H∞ | 回归 / 命名 D3 / GHA mem 红 | 持续 |
+
+---
+
+## 5. 明确不做（时代 D/E/F/G/H 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -118,6 +204,7 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 4. 在 mem worktree 上冲 package DTO / HIR Operands 等 **非 mem owner** 产品表
 5. raw merge 整条 `mem` 分支进 main
 6. 把 Tier-3 实验类型重新塞回门面
+7. 复活 P-a 已删单元（除非命名 consumer + 总控）
 
 跨模块真正需要动别人生产代码时：先 `Needs Review`，path-limited land，验证双方 gate。
 
@@ -162,3 +249,10 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-17 | 初版权威路线图：归档时代 A 多文件 ROADMAP；标注 A–C 闭合；开启时代 D（Steward） |
 | 2026-07-17 | D0/D1 path-limited land → `origin/main` `d2b704ffe`；切片状态与退出条件同步 |
 | 2026-07-17 | D4-a Scorecard RELEASE=1 基线刷新；时代 D → **Steady** |
+| 2026-07-19 | D9-c P-a prune 设计备忘（10 allocator + 16 tests；本会话不删） |
+| 2026-07-19 | D3-b simd sized FreeMem（avx2/sse2/image/imageproc/alloc/memutils） |
+| 2026-07-19 | **Era E** 开启：PARITY-GO-RUST；E1 compare 修复；E2 P-a 执行（10+16） |
+| 2026-07-19 | E3：SC1 对齐 heap 段；CachedTruthyEnv 去 CAS-as-load + process route 单缓存；P2 成立 |
+| 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
+| 2026-07-19 | E5 P-b：删 15 Tier-3 allocator + 21 test 目录；保留 blockpool.growable |
+| 2026-07-20 | Era F 开启：F0 状态对齐 · F1 Scorecard · F2 门面 slim 设计 |

@@ -10,16 +10,26 @@ interface
 
 uses
   nextpas.core.net.base,
+  nextpas.core.net.errors,
   nextpas.core.net.intf,
   nextpas.core.net.cancel,
   nextpas.core.net.tcp,
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net.async.tcp,
-  nextpas.core.net.async.resolve;
+  nextpas.core.net.async.udp,
+  nextpas.core.net.async.resolve,
+  nextpas.core.net.async.dial,
+  nextpas.core.net.async.cancel,
+  nextpas.core.net.async.pool,
+  nextpas.core.net.async.backpressure,
+  nextpas.core.async.loop,
+  nextpas.core.async.cancellation;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
+  TNetErrorKind = nextpas.core.net.errors.TNetErrorKind;
+  TNetErrorClass = nextpas.core.net.errors.TNetErrorClass;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
@@ -33,9 +43,21 @@ type
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
   IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
   IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  IAsyncUdpSocket = nextpas.core.net.async.udp.IAsyncUdpSocket;
+  TAsyncUdpRecvCallback = nextpas.core.net.async.udp.TAsyncUdpRecvCallback;
+  TAsyncUdpSendCallback = nextpas.core.net.async.udp.TAsyncUdpSendCallback;
+  TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
+  TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
   TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
   TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
+  TBackpressureState = nextpas.core.net.async.backpressure.TBackpressureState;
+  TBackpressureConfig = nextpas.core.net.async.backpressure.TBackpressureConfig;
+  TBackpressureCallback = nextpas.core.net.async.backpressure.TBackpressureCallback;
+  IBackpressureController = nextpas.core.net.async.backpressure.IBackpressureController;
+  TConnectionPoolConfig = nextpas.core.net.async.pool.TConnectionPoolConfig;
+  TAcquireAsyncCallback = nextpas.core.net.async.pool.TAcquireAsyncCallback;
+  IConnectionPool = nextpas.core.net.async.pool.IConnectionPool;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
@@ -45,6 +67,42 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
 function NewNetCancelToken: INetCancelController; inline;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop;
+  const AConfig: TBackpressureConfig): IBackpressureController; overload; inline;
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop): IBackpressureController; overload; inline;
+
+function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
+function AsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer = nil): Boolean; inline;
+function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
+  const AAddrs: array of TNetAddress; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer = nil): Boolean; inline;
+
+{ Go-like error classification for dial/IO result codes (negative or positive). }
+function ClassifyNetError(ACode: Int32): TNetErrorClass; inline;
+function NetErrorKindName(AKind: TNetErrorKind): string; inline;
+
+{ Q14: async cancel → waitable net cancel (blocking IO). }
+function NetCancelFromAsync(
+  const AAsync: IAsyncCancellationToken): INetCancelController; inline;
+procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
+  const AToken: IAsyncCancellationToken); inline;
+
+function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
+  APort: UInt16): IAsyncUdpSocket; inline;
+
+function CreateConnectionPool(
+  const AConfig: TConnectionPoolConfig): IConnectionPool; overload; inline;
+function CreateConnectionPool: IConnectionPool; overload; inline;
+function CreateConnectionPool(const ALoop: TAsyncLoop;
+  const AConfig: TConnectionPoolConfig): IConnectionPool; overload; inline;
+function CreateConnectionPool(const ALoop: TAsyncLoop): IConnectionPool;
+  overload; inline;
 
 implementation
 
@@ -77,6 +135,92 @@ end;
 function NewNetCancelToken: INetCancelController;
 begin
   Result := nextpas.core.net.cancel.NewNetCancelToken;
+end;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop;
+  const AConfig: TBackpressureConfig): IBackpressureController;
+begin
+  Result := nextpas.core.net.async.backpressure.CreateBackpressureController(
+    ALoop, AConfig);
+end;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop): IBackpressureController;
+begin
+  Result := nextpas.core.net.async.backpressure.CreateBackpressureController(ALoop);
+end;
+
+function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
+begin
+  Result := nextpas.core.net.async.dial.DefaultAsyncTcpDialOptions;
+end;
+
+function AsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer): Boolean;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDial(ALoop, AHost, APort,
+    AOptions, ACallback, AContext);
+end;
+
+function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
+  const AAddrs: array of TNetAddress; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer): Boolean;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDialAddrs(ALoop, AAddrs, APort,
+    AOptions, ACallback, AContext);
+end;
+
+function ClassifyNetError(ACode: Int32): TNetErrorClass;
+begin
+  Result := nextpas.core.net.errors.ClassifyNetError(ACode);
+end;
+
+function NetErrorKindName(AKind: TNetErrorKind): string;
+begin
+  Result := nextpas.core.net.errors.NetErrorKindName(AKind);
+end;
+
+function NetCancelFromAsync(
+  const AAsync: IAsyncCancellationToken): INetCancelController;
+begin
+  Result := nextpas.core.net.async.cancel.NetCancelFromAsync(AAsync);
+end;
+
+procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
+  const AToken: IAsyncCancellationToken);
+begin
+  nextpas.core.net.async.cancel.TcpStreamBindAsyncCancel(AStream, AToken);
+end;
+
+function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
+  APort: UInt16): IAsyncUdpSocket;
+begin
+  Result := nextpas.core.net.async.udp.AsyncUdpBind(ALoop, AAddr, APort);
+end;
+
+function CreateConnectionPool(
+  const AConfig: TConnectionPoolConfig): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(AConfig);
+end;
+
+function CreateConnectionPool: IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool;
+end;
+
+function CreateConnectionPool(const ALoop: TAsyncLoop;
+  const AConfig: TConnectionPoolConfig): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(ALoop, AConfig);
+end;
+
+function CreateConnectionPool(const ALoop: TAsyncLoop): IConnectionPool;
+begin
+  Result := nextpas.core.net.async.pool.CreateConnectionPool(ALoop);
 end;
 
 end.

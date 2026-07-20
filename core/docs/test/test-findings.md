@@ -4,6 +4,11 @@
 **扫描范围**: 14 源文件 (8,931 行) + 10 测试套件 (~475 tests)
 **扫描维度**: 架构 / 代码 / 测试 / 规范 / 对标
 
+> ⚠️ **Historical snapshot（考古文档）**
+> 本文件保留 2026-06-29 扫描时的 findings 正文。
+> **当前模块状态、版本、测试计数、已实现特性以 `CONTRACT.md` / `README.md`（v8.7+）为准。**
+> 下方「对标差距 B-0x」状态已于 2026-07-19 按现状回填；其余条目的「状态」列若与 CONTRACT 冲突，以 CONTRACT 为准。
+
 ---
 
 ## Summary
@@ -113,7 +118,12 @@
 
 ### 测试覆盖 (Test Coverage)
 
-#### T-01 [P1] 断言模块 NaN/边界测试缺口 (R3 部分修复)
+> **v8.14 sync**: findings 与代码对齐；下列 T-01～T-05 历史缺口已在 v8.10–v8.12 关闭。
+>
+> **v8.12 sync**: T-01 NaN/epsilon 边角已在 v8.12a `test_assertions` 补齐；T-03 parallel subtest skip 已在 v8.10/v8.11 硬测；T-04 TAP/JSON 形式化 + golden 已在 v8.11c/v8.12b 补齐。
+
+
+#### T-01 [P1] 断言模块 NaN/边界测试缺口 — ✅ FIXED (v8.12a)
 - **位置**: `test_assertions.lpr`, `test_expect.lpr`
 - **描述**: R3 已修复 NaN 守卫和添加部分边界测试，但仍有缺口：
   - `CheckEqual(Double)` 的 NaN 行为未测试（委托给 CheckNear，间接受 NaN 守卫保护）
@@ -122,22 +132,22 @@
   - `ToBeSame(nil, nil)` 的空指针场景未测试
 - **建议**: 补充 ~10 个边界测试。
 
-#### T-02 [P2] TMock 无 typed argument/return 测试
+#### T-02 [P2] TMock typed argument/return — ✅ FIXED (v8.6+/mock suite)
 - **位置**: `test_mock/test_mock.lpr`
 - **描述**: TMock 支持 `RecordCallTyped`/`GetReturnTyped`/`ReturnsDouble` 等 typed API，但测试套件主要测试 string-based API。`TMockValueKind` 的 5 种类型（mvString/mvInt64/mvBool/mvDouble/mvUnset）缺少全覆盖测试。
 - **建议**: 添加 `TestMockTypedArgs`、`TestMockReturnsDouble`、`TestMockReturnsBool` 等测试。
 
-#### T-03 [P2] Parallel mode 缺少 subtest graceful-skip 测试
+#### T-03 [P2] Parallel subtest graceful-skip — ✅ FIXED (v8.10/v8.11)
 - **位置**: `test_parallel/test_parallel.lpr`
 - **描述**: parallel.pas:318-323 在并行模式下跳过 subtests 并输出 "subtests not supported in parallel mode"，但没有测试验证此行为（跳过计数、输出消息）。
 - **建议**: 添加 `TestParallelSubtestSkipped` 测试。
 
-#### T-04 [P2] TAP/JSON 输出格式缺少独立验证
+#### T-04 [P2] TAP/JSON 格式验证 — ✅ FIXED (v8.11c/v8.12b/v8.13 golden)
 - **位置**: `test_output/test_output.lpr`
 - **描述**: TAP 和 JSON 输出格式在 `output.tap.pas` / `output.json.pas` 中实现，但测试主要通过 TBufferSink 间接验证。缺少对 TAP v13 格式合规性（`TAP version 13` header、`1..N` plan、YAML block scalar）的直接断言。
 - **建议**: 添加 `TestTAPFormatCompliance`、`TestJSONStructureCompliance` 测试。
 
-#### T-05 [P2] Glob/hierarchical filter 缺少复杂场景测试
+#### T-05 [P2] Glob/hierarchical filter — ✅ FIXED (v8.12a edges + B5 tables)
 - **位置**: `test_output/test_output.lpr`
 - **描述**: `MatchesGlob` 支持 `*`、`?`、嵌套 brace expansion，`MatchesHierarchical` 支持 Go-style `Parent/Sub/Leaf` 匹配。但缺少以下场景测试：
   - 嵌套 brace: `{a,{b,c}}`
@@ -197,7 +207,7 @@
 
 #### E-05 [P3] 注释密度不均匀
 - **位置**: 全局
-- **描述**: 
+- **描述**:
   - `base.pas` / `config.pas` 注释良好（每个类型/函数有 doc comment）
   - `runner.pas` 的 RunWithResult 内部逻辑注释较少
   - `parallel.pas` 的 TimeoutWorker 有详细注释
@@ -209,35 +219,35 @@
 
 ### 对标差距 (Benchmark vs Rust/Go)
 
-#### B-01 [P2] 缺少测试缓存机制
+#### B-01 [P2] 测试缓存机制 — ✅ FIXED (TTestCache + test_runner)
 - **描述**: Go 1.10+ 支持 `go test` 自动缓存未变更的测试结果。nextpas.core.test 无此功能，每次运行都执行全部测试。
 - **影响**: 大型测试套件的 CI 反馈时间。
 - **建议**: 可通过源文件 hash + 结果 hash 实现简单缓存。优先级低。
-- **状态**: ⏭️ **大型特性** — 需要独立设计和实施，建议 v7.0+
+- **状态**: ✅ **已实现**（2026-07 回填）— `TTestCache` + CLI `--cache` / `CacheDir`（见 `test.config` / `test.runner.cli`）
 
-#### B-02 [P2] 缺少 fuzzing 支持
+#### B-02 [P2] fuzzing 支持 — ✅ FIXED (v7.2+/v8.0 prop fuzz)
 - **描述**: Go 1.18+ 内置 fuzzing (`testing.F`)。Rust 有 `cargo-fuzz` / `proptest`。nextpas.core.test 无 property-based testing。
 - **影响**: 无法自动发现边界条件 bug。
 - **建议**: 可在 v7.0 考虑添加 `Fuzz()` API，基于随机输入生成 + shrinking。
-- **状态**: ⏭️ **大型特性** — 需要独立设计，建议 v7.0+
+- **状态**: ✅ **已实现**（2026-07 回填）— `test.prop`：`Prop*` / `Fuzz*` / corpus / shrinking / coverage-guided；见 `property-testing-guide.md`
 
 #### B-03 [P3] 无并行测试 opt-in 机制
 - **描述**: Go 的 `t.Parallel()` 让测试显式 opt-in 并行；nextpas.core.test 的 `RunParallel` 将所有测试并行执行，无 per-test 控制。
 - **影响**: 有共享状态的测试在并行模式下可能 flaky。
 - **建议**: 可添加 `Test('name', proc).Sequential()` 标记，让并行 runner 跳过这些测试。
-- **状态**: ⏭️ **设计扩展** — 当前 RunParallel 是全量并行，per-test 控制需 API 扩展
+- **状态**: 🟡 **部分实现**（2026-07 回填）— `TestSeq()` 为串行 opt-in（Go `t.Parallel` 的**反向**模型：默认并行时标记必须串行）。全量 `RunParallel` 语义仍在
 
 #### B-04 [P3] 无 test binary 编译缓存
 - **描述**: Rust 的 `cargo test` 编译测试二进制后缓存，未变更时不重编。nextpas.core.test 每次 `make test` 都重编译。
 - **影响**: FPC 编译速度快（秒级），影响较小。
 - **建议**: 可在 Makefile 中添加 `.ppu` 时间戳检查。
-- **状态**: ⏭️ **构建系统改进** — FPC 编译秒级，优先级极低
+- **状态**: ⏭️ **构建系统改进** — FPC 编译秒级，优先级极低（仍适用）
 
 #### B-05 [P3] 无 snapshot testing 支持
 - **描述**: Rust 的 `insta` crate、Jest 的 snapshot testing 允许自动更新 golden files。nextpas.core.test 的 diagnostics 套件手动对比 stderr snapshot。
 - **影响**: snapshot 更新需手动操作。
 - **建议**: 可添加 `CheckSnapshot(name, actual)` 断言，自动对比 `tests/snapshots/<name>.txt`，`--update-snapshots` 标志自动更新。
-- **状态**: ⏭️ **大型特性** — 当前 diagnostics 手动对比已足够，snapshot 自动更新需独立设计
+- **状态**: ✅ **已实现**（2026-07 回填）— `CheckSnapshot` / `ToMatchSnapshot`；M3 增加 fail-on-create 严格模式。自动 `--update-snapshots` 仍可选增强
 
 ---
 
@@ -258,11 +268,12 @@
 
 **全部可行动 P2/P3 测试覆盖已修复**：T-02~T-08 全部补全，E-03 locale 回归、E-04 seed=0 修复。
 
-**剩余项为设计决策保留或大型特性规划**：
+**剩余项为设计决策保留或大型特性规划**（2026-07-19 回填）：
 - 设计决策 (6项): A-02 mutable record、A-03 Config 零值、C-03 Mock O(n)、C-04 ANSI 无同步、C-05 ExpectFail 范围、E-01/E-02 API 设计
 - 推迟 (3项): C-06 RunWithResult 复杂度、C-07 TBufferSink、E-05 注释密度
-- 大型特性 (5项): B-01~B-05 (test cache、fuzzing、parallel opt-in、compile cache、snapshot testing)
+- 对标 B-0x：B-01/B-02/B-05 ✅ 已实现；B-03 🟡 部分（`TestSeq`）；B-04 仍低优先级
 - FPC 限制 (1项): A-04 VMT 偏移
+- 新暂缓（见 CONTRACT §10.1）：`IExpectation` 按类型拆分（P3，v9+）
 
 ---
 

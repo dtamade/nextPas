@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.path.pas`（1 个源文件）
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：2.4
+**最后更新**：2026-07-20
+**版本**：2.8
 
 ---
 
@@ -44,8 +44,9 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 - **[INV-2]** UTF-8 字符串安全
 - **[INV-3]** 空路径返回空字符串
 - **[INV-4]** 本单元与 path 测试不 `uses` 裸 FPC RTL；「SysUtils 兼容」仅指 API 形状，实现委托 `fs.path` / `platform.path`。门禁：`test_path` 真 uses 扫描。
-- **[INV-5]** **PathDir 语义**：门面 `PathDir`/`PathSplit` 裸文件名目录为 **空串**（SysUtils）；底层 `FsPathDir` 为 **`.`**（Go）。`PathIsAbs` ≡ `PathIsAbsolute`。
+- **[INV-5]** **PathDir 语义**：门面仅对**无路径分隔符**的裸文件名把 `'.'`→`''`（SysUtils）；`./x` 保留 `'.'`。底层 `FsPathDir` 始终 Go 语义。`PathIsAbs` ≡ `PathIsAbsolute`。
 - **[INV-6]** `ExpandFileName` 委托 `FsPathAbs`，依赖 cwd。
+- **[INV-7]** R16：`PathToSlash`/`PathFromSlash`/`PathSplitList`/`PathVolume`/`PathFileStem`/`PathStripPrefix` 对齐 Go filepath / Rust Path 常用子集。
 
 ---
 
@@ -73,7 +74,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_path | 36 | 路径操作 + SysUtils 兼容 + 真 uses 门禁 |
+| test_path | 69 | R19 + R22 Clean/Rel/Dir 边 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -88,3 +89,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.2 | INV-4 FPC RTL 隔离 / 编译器无关 | Claude |
 | 2026-07-19 | 2.3 | 真 uses 门禁（test_path） | Claude |
 | 2026-07-19 | 2.4 | PathDir 双轨钉死；PathIsAbs；ExpandFileName cwd | Claude |
+| 2026-07-19 | 2.5 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
+| 2026-07-19 | 2.6 | R16 ToSlash/SplitList/Volume/Stem/StripPrefix | Claude |
+| 2026-07-19 | 2.7 | R17 质量表；测试 56 | Claude |
+| 2026-07-20 | 2.8 | R22 Clean/Rel/Dir 边界用例；测试 69 | Claude |

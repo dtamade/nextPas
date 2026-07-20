@@ -534,6 +534,15 @@ function symlink(target: PAnsiChar; linkpath: PAnsiChar): cint; cdecl; external 
     @return 0 成功 *}
 function link(oldpath: PAnsiChar; newpath: PAnsiChar): cint; cdecl; external 'c' name 'link';
 
+{** @desc 设置访问/修改时间（纳秒；dirfd 常用 AT_FDCWD=-100）
+    @param dirfd 目录 fd 或 AT_FDCWD
+    @param pathname 路径
+    @param times 长度为 2 的 timespec 数组：atime, mtime
+    @param flags 0 或 AT_SYMLINK_NOFOLLOW
+    @return 0 成功 *}
+function utimensat(dirfd: cint; pathname: PAnsiChar; times: PTimeSpec;
+  flags: cint): cint; cdecl; external 'c' name 'utimensat';
+
 { Permission }
 
 {** @desc 设置文件权限
@@ -1081,6 +1090,12 @@ function fstatfs(fd: cint; buf: Pointer): cint; cdecl; external 'c' name 'fstatf
 {** @desc 获取进程组 ID
     @return 进程组 ID *}
 function getpgrp: pid_t; cdecl; external 'c' name 'getpgrp';
+
+{** @desc 设置进程组（pid/pgid 为 0 表示当前进程）
+    @param pid 进程 ID
+    @param pgid 进程组 ID
+    @return 0 成功 *}
+function setpgid(pid: pid_t; pgid: pid_t): Int32; cdecl; external 'c' name 'setpgid';
 
 {** @desc 设置进程组 ID
     @return 进程组 ID *}

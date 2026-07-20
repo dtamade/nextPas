@@ -4,6 +4,8 @@ unit nextpas.core.lockfree.mpsc;
 
 interface
 
+{ Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2). }
+
 uses
   nextpas.core.atomic.core,
   nextpas.core.lockfree.base;
@@ -134,23 +136,23 @@ begin
   LNode^.Value := AValue;
   LNode^.Next := nil;
   LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
+  atomic_fetch_add_64(FCount, 1, mo_relaxed);
   AtomicStoreNode(LPrev^.Next, LNode, mo_release);
   { Fast path: only notify if there are waiters }
-  if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+  if atomic_load(FDataWaiters, mo_relaxed) > 0 then
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
 procedure TMpscQueueImpl.Enqueue(const AValue: T);
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     raise EInvalidOperationError.Create('TMpscQueue: Enqueue on closed queue');
   PublishNode(AValue);
 end;
 
 function TMpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   PublishNode(AValue);
   Result := True;
@@ -190,7 +192,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    AtomicFetchSub64(FCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
     Result := True;
     Exit;
   end;
@@ -205,7 +207,7 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    AtomicFetchSub64(FCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
     Result := True;
     Exit;
   end;
@@ -234,10 +236,10 @@ begin
     Exit(True);
   while True do
   begin
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryDequeue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(TryDequeue(AValue));
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
@@ -257,10 +259,10 @@ begin
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryDequeue(AValue));
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryDequeue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(TryDequeue(AValue));
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
@@ -283,13 +285,13 @@ end;
 
 procedure TMpscQueueImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   LockFreeWakeAll(@FDataEpoch);
 end;
 
 function TMpscQueueImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TMpscQueueImpl.IsEmpty: Boolean; inline;
@@ -308,7 +310,7 @@ function TMpscQueueImpl.ApproxCount: PtrUInt;
 var
   LCount: Int64;
 begin
-  LCount := AtomicLoad64(FCount, moRelaxed);
+  LCount := atomic_load_64(FCount, mo_relaxed);
   if LCount > 0 then
     Result := PtrUInt(LCount)
   else

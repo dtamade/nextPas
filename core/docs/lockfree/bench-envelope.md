@@ -1,7 +1,7 @@
-# Lockfree / Atomic Benchmark Evidence Envelope (H2-4)
+# Lockfree / Atomic Benchmark Evidence Envelope (H2-4 / H3-4)
 
 > **Status**: normative for any published or archived lockfree/atomic throughput number
-> **Date**: 2026-07-17
+> **Date**: 2026-07-19（H3-4 hygiene refresh）
 > **Owner**: atomic-lockfree lane
 
 ## Rule
@@ -90,6 +90,44 @@ command:   ...
 
 Files such as `benchmark-comparison-2026-06-16.md` / `benchmark-comparison-2026-07-06.md` are **evidence attachments**.
 If they lack a full envelope, treat numbers as **non-authoritative** until re-run under this document.
+H3-4 marked those files (and archived optimization/phase notes) **historical only / not reproducible without full envelope**.
+Active entry docs (`README.md`, `selection-guide.md`) must not restate bare absolute Mops marketing claims.
+
+---
+
+## Q5 matched suite (same-host Go/Rust)
+
+**Entry**:
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+```
+
+| Scenario | nextpas | Go | Rust |
+|----------|---------|-----|------|
+| **C1** | `TLockFreeChannel` 1P+1C | buffered `chan` 1P+1C | `std::sync::mpsc` 1P+1C (**unbounded**) |
+| **C2** | `TLockFreeChannel` 2P+2C | buffered `chan` 2P+2C | Mutex+Condvar bounded `VecDeque` 2P+2C |
+
+**Honesty**:
+- Not bit-identical algorithms; use for **relative same-host** ordering only.
+- Micro suite (`bench_lockfree all` / `micro`) is **single-thread Try\*** — do **not** compare to multi-thread Go/Rust.
+- Absolute Mops require this envelope printed **before** numbers; `stats: samples=1` is not a marketing claim — re-run N≥3 for any published figure.
+- Soft-skip if `go` / `rustc` missing.
+
+### Formal run (samples ≥ 3)
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+SAMPLES=3 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched-formal
+# or:
+SAMPLES=3 core/docs/lockfree/scripts/run-q5-matched-formal.sh
+```
+
+Writes `core/docs/lockfree/bench-results/YYYY-MM-DD-<host>-q5-formal.md` with mean/median/min/max.
+**Publishable absolute Mops require samples≥3** and this envelope; single-run files are exploratory only.
+
+Optional: keep a dated paste under `bench-results/` as historical attachment (not README marketing).
 
 ---
 

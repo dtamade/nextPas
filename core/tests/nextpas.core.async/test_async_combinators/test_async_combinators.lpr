@@ -12,7 +12,8 @@ uses
   nextpas.core.async.loop,
   nextpas.core.async.taskgroup,
   nextpas.core.async.combinators,
-  nextpas.core.async.retry;
+  nextpas.core.async.retry,
+  nextpas.core.async.cancellation;
 
 var
   GLoop: TAsyncLoop;
@@ -59,7 +60,7 @@ begin
   end;
   WhenAll(LCallbacks, LContexts, 3, @WhenAllCompleteCallback, nil,
     DefaultCombinatorOptions, LLoop);
-  LLoop.Close;
+  LLoop.Free;
   WriteLn('  PASS: WhenAllCloseDiscardsWraps');
 end;
 
@@ -69,7 +70,7 @@ var
 begin
   LLoop := TAsyncLoop.Create;
   RetryWithBackoff(@SimpleCallback, nil, nil, nil, nil, nil, DefaultRetryOptions, LLoop);
-  LLoop.Close;
+  LLoop.Free;
   WriteLn('  PASS: RetryCloseDiscardsState');
 end;
 
@@ -211,6 +212,142 @@ begin
   WriteLn('  PASS: WhenAllWithTimeout');
 end;
 
+procedure NeverRunsCallback(AContext: Pointer);
+begin
+  Inc(PInteger(AContext)^);
+end;
+
+procedure TestWhenAllTokenCancel;
+var
+  LCallbacks: array[0..0] of TAsyncCallback;
+  LContexts: array[0..0] of Pointer;
+  LOptions: TCombinatorOptions;
+  LToken: IAsyncCancellationToken;
+  LCounter: Integer;
+  I: Integer;
+begin
+  LCounter := 0;
+  GWhenAllDone := False;
+  LCallbacks[0] := @NeverRunsCallback;
+  LContexts[0] := @LCounter;
+  LOptions := DefaultCombinatorOptions;
+  LToken := CreateCancellationToken;
+  LOptions.Token := LToken;
+
+  WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, LOptions, GLoop);
+  LToken.Cancel;
+  for I := 0 to 30 do
+    GLoop.Poll;
+  Check(GWhenAllDone, 'WhenAll token cancel should complete once');
+  WriteLn('  PASS: WhenAllTokenCancel');
+end;
+
+procedure TestWhenAllTokenCancelSoak100;
+var
+  LCallbacks: array[0..0] of TAsyncCallback;
+  LContexts: array[0..0] of Pointer;
+  LOptions: TCombinatorOptions;
+  LToken: IAsyncCancellationToken;
+  LCounter: Integer;
+  LI, LJ: Integer;
+begin
+  LCallbacks[0] := @NeverRunsCallback;
+  LContexts[0] := @LCounter;
+  for LI := 1 to 100 do
+  begin
+    LCounter := 0;
+    GWhenAllDone := False;
+    LOptions := DefaultCombinatorOptions;
+    LToken := CreateCancellationToken;
+    LOptions.Token := LToken;
+    WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, LOptions, GLoop);
+    LToken.Cancel;
+    for LJ := 0 to 40 do
+      GLoop.Poll;
+    Check(GWhenAllDone, 'soak WhenAll token complete once #' + IntToStr(LI));
+    LToken := nil;
+  end;
+  WriteLn('  PASS: WhenAllTokenCancelSoak100');
+end;
+
+procedure TestWhenAllTasksWinWithTimeoutArmed;
+var
+  LCallbacks: array[0..2] of TAsyncCallback;
+  LContexts: array[0..2] of Pointer;
+  LOptions: TCombinatorOptions;
+  LCounter: Integer;
+  I: Integer;
+begin
+  { Timeout armed but tasks complete first — CancelTimer ownership path. }
+  LCounter := 0;
+  GWhenAllDone := False;
+  LOptions := DefaultCombinatorOptions;
+  LOptions.TimeoutMs := 5000;
+  for I := 0 to 2 do
+  begin
+    LCallbacks[I] := @SimpleCallback;
+    LContexts[I] := @LCounter;
+  end;
+  WhenAll(LCallbacks, LContexts, 3, @WhenAllCompleteCallback, nil, LOptions, GLoop);
+  for I := 0 to 30 do
+    GLoop.Poll;
+  Check(GWhenAllDone, 'tasks should complete with timeout armed');
+  Check(LCounter = 3, 'all three task callbacks ran');
+  WriteLn('  PASS: WhenAllTasksWinWithTimeoutArmed');
+end;
+
+procedure TestWhenAnyTokenCancel;
+var
+  LCallbacks: array[0..2] of TAsyncCallback;
+  LContexts: array[0..2] of Pointer;
+  LOptions: TCombinatorOptions;
+  LToken: IAsyncCancellationToken;
+  LCounter: Integer;
+  I: Integer;
+begin
+  LCounter := 0;
+  GWhenAnyDone := False;
+  LOptions := DefaultCombinatorOptions;
+  LToken := CreateCancellationToken;
+  LOptions.Token := LToken;
+  for I := 0 to 2 do
+  begin
+    LCallbacks[I] := @NeverRunsCallback;
+    LContexts[I] := @LCounter;
+  end;
+  WhenAny(LCallbacks, LContexts, 3, @WhenAnyCompleteCallback, nil, LOptions, GLoop);
+  LToken.Cancel;
+  for I := 0 to 40 do
+    GLoop.Poll;
+  Check(GWhenAnyDone, 'WhenAny token cancel should complete once');
+  WriteLn('  PASS: WhenAnyTokenCancel');
+end;
+
+procedure TestWhenAllTokenAndTimeoutRace;
+var
+  LCallbacks: array[0..0] of TAsyncCallback;
+  LContexts: array[0..0] of Pointer;
+  LOptions: TCombinatorOptions;
+  LToken: IAsyncCancellationToken;
+  LCounter: Integer;
+  I: Integer;
+begin
+  LCounter := 0;
+  GWhenAllDone := False;
+  LCallbacks[0] := @NeverRunsCallback;
+  LContexts[0] := @LCounter;
+  LOptions := DefaultCombinatorOptions;
+  LOptions.TimeoutMs := 1;
+  LToken := CreateCancellationToken;
+  LOptions.Token := LToken;
+  WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, LOptions, GLoop);
+  LToken.Cancel;
+  for I := 0 to 50 do
+    GLoop.Poll;
+  Check(GWhenAllDone, 'token+timeout race still completes once');
+  WriteLn('  PASS: WhenAllTokenAndTimeoutRace');
+end;
+
 { ==================== 主测试套件 ==================== }
 
 procedure RunAllTests;
@@ -229,16 +366,21 @@ begin
   TestWhenAllSingle;
   TestWhenAllMultiple;
   TestWhenAllWithTimeout;
+  TestWhenAllTokenCancel;
+  TestWhenAllTokenCancelSoak100;
+  TestWhenAllTasksWinWithTimeoutArmed;
+  TestWhenAllTokenAndTimeoutRace;
 
   { WhenAny 测试 }
   WriteLn('--- WhenAny Tests ---');
   TestWhenAnyEmpty;
   TestWhenAnySingle;
   TestWhenAnyMultiple;
+  TestWhenAnyTokenCancel;
 
   for I := 0 to 20 do
     GLoop.Poll;
-  GLoop.Close;
+  GLoop.Free;
 
   WriteLn('=== All tests passed ===');
 end;

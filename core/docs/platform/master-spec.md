@@ -34,12 +34,20 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (14-module matrix), and durable GHA
-**`ci-matrix`** for the **documented 17-gate set** in
-`platform-windows-ci-matrix.sh` / `.ps1` (14 suite dirs + poller/io/socket real
-gates) under job `test-windows-runtime` on `windows-latest`.
+Windows compile gates, Wine runtime smoke (24-module matrix, including
+`platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
+GHA **`ci-matrix`** for the **documented 21 platform gates** in
+`platform-windows-ci-matrix.sh` / `.ps1`.
 
-D1.d promotion is **scoped**: it does **not** claim full-host Windows parity for
+### Count honesty (do not mix)
+
+| Count | Meaning |
+| --- | --- |
+| **21 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which` + iocp + poller + io/socket real. GHA run **29721371136** @ `0cb2471bc` (job `pass=22` with mem.host; which PASS). |
+| **+dl candidate** | Batch-16: `platform.dl` in scripts only — **not** ci-matrix until GHA green. |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 22–23 — do **not** call mem.host (or unpromoted candidates) a platform facade promote. |
+
+Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
 IOCP AcceptEx/ConnectEx depth beyond current smoke gaps.
 
@@ -49,22 +57,39 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented 17-gate set only (ROADMAP D1.d)
+- `ci-matrix` for the documented **21 platform gates** only (ROADMAP; GHA run 29721371136)
+- do **not** say “22-gate platform ci-matrix” when the 22nd is only mem.host
 
 ## Current macOS truth
 
-macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
-**documented 8-gate set** in `platform-macos-ci-matrix.sh` under job
-`test-macos` (fail-closed step; ROADMAP D2.c):
-`platform.{time,sync,thread,files,path,env,error,socket}`.
+### Two evidence layers (do not mix)
 
-D2.c promotion is **scoped**: it does **not** claim full-host macOS parity or
-treat best-effort whole-suite inventory as evidence.
+| Layer | What it is | What it proves |
+| --- | --- | --- |
+| **A. Platform fail-closed matrix** | `platform-macos-ci-matrix.sh` step in job `test-macos` | **`focused-runtime`** for listed platform gates only |
+| **B. Whole `test-macos` job** | May also run async-host / best-effort inventory | Job red/green is **not** platform promotion evidence |
+
+**Documented platform set (layer A):** 9 platform gates
+`platform.{time,sync,thread,files,path,env,error,socket,memory}` (ROADMAP D2.c +
+Batch-5B). Script may also list **`mem.host_runtime`** → summary `total=10`.
+
+- Promoted platform 9-gate: GHA **29696318492** @ `d160cbc46`
+- Re-confirmed layer A green **pass=10 fail=0** (9 platform + mem.host) on
+  run **29719632518** @ `918241bd4`. Overall job red on that run was
+  **non-platform** (`net.async.dial` / `accept4`) — does **not** demote layer A.
+
+Darwin `platform.memory` notes (honest residual, not a demotion):
+- aligned alloc uses SysGetMem fallback (not posix_memalign) on Darwin
+- secure-zero uses FillChar+barrier (not memset_s) on Darwin
+- virtual reserve uses MAP_ANON + mprotect (not MAP_FIXED)
+
+D2.c / Batch-5 promote is **scoped**: it does **not** claim full-host macOS
+parity or treat best-effort whole-suite inventory as evidence.
 
 Allowed wording:
 
-- `focused-runtime` for the documented 8-gate set only (ROADMAP D2.c)
-- best-effort inventory remains non-promotional non-evidence
+- `focused-runtime` for the documented **9 platform gates** only (layer A)
+- layer B / async inventory failures are out of scope for platform promotion
 
 ### IOCP completion operations
 

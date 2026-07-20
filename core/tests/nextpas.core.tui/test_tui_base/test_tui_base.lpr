@@ -132,6 +132,58 @@ begin
   Check(LD = dirVertical, 'vertical');
 end;
 
+{ Rect with non-zero origin }
+procedure TestRectNonZeroOrigin;
+var
+  LR: TRect;
+begin
+  LR := TRect.Make(100, 200, 50, 30);
+  CheckEqual(Int64(100), Int64(LR.X), 'X=100');
+  CheckEqual(Int64(200), Int64(LR.Y), 'Y=200');
+  CheckEqual(Int64(150), Int64(LR.Right), 'right=150');
+  CheckEqual(Int64(230), Int64(LR.Bottom), 'bottom=230');
+  Check(not LR.IsEmpty, 'non-zero origin not empty');
+end;
+
+{ Rect equals }
+procedure TestRectEquals;
+begin
+  Check(RectEquals(TRect.Make(1, 2, 3, 4), TRect.Make(1, 2, 3, 4)), 'equal rects');
+  Check(not RectEquals(TRect.Make(1, 2, 3, 4), TRect.Make(1, 2, 3, 5)), 'different height');
+  Check(not RectEquals(TRect.Make(0, 0, 5, 5), TRect.Make(1, 0, 5, 5)), 'different x');
+end;
+
+{ Position edge cases }
+procedure TestPositionEdge;
+var
+  LP: TPosition;
+begin
+  LP := PositionMake(0, 0);
+  Check(PositionEquals(LP, PositionMake(0, 0)), 'zero position');
+  LP := PositionMake(9999, 9999);
+  CheckEqual(Int64(9999), Int64(LP.X), 'large position');
+end;
+
+{ Size zero }
+procedure TestSizeZero;
+var
+  LS: TSize;
+begin
+  LS := SizeMake(0, 0);
+  CheckEqual(Int64(0), Int64(LS.Width), 'zero width');
+  CheckEqual(Int64(0), Int64(LS.Height), 'zero height');
+end;
+
+{ Margin zero }
+procedure TestMarginZero;
+var
+  LM: TMargin;
+begin
+  LM := MarginMake(0, 0);
+  CheckEqual(Int64(0), Int64(LM.Horizontal), 'zero horizontal');
+  CheckEqual(Int64(0), Int64(LM.Vertical), 'zero vertical');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.base');
   T.Test('rect make and accessors', @TestRectMake);
@@ -143,5 +195,10 @@ begin
   T.Test('rect inner margin', @TestRectInner);
   T.Test('helpers and ctors', @TestHelpers);
   T.Test('direction enum', @TestDirection);
+  T.Test('rect non-zero origin', @TestRectNonZeroOrigin);
+  T.Test('rect equals', @TestRectEquals);
+  T.Test('position edge', @TestPositionEdge);
+  T.Test('size zero', @TestSizeZero);
+  T.Test('margin zero', @TestMarginZero);
   if not T.Run then Halt(1);
 end.

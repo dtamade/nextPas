@@ -10,6 +10,9 @@ unit nextpas.core.tui.event;
  * 支持 CSI u (kitty protocol) 区分 Shift+Enter 等。
  *
  * Resize：SIGWINCH 后投递；buffer 已由 TTerminal 调整完毕。
+ *
+ * Terminal focus reporting（DECSET 1004 / CSI I·O）：evFocus，与
+ * nextpas.core.tui.focus 的 TFocusManager（控件焦点）无关。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -19,7 +22,7 @@ unit nextpas.core.tui.event;
 interface
 
 type
-  TEventKind = (evNone, evKey, evMouse, evResize, evPaste);
+  TEventKind = (evNone, evKey, evMouse, evResize, evPaste, evFocus);
 
   TKeyCodeKind = (
     kcChar, kcEnter, kcEsc, kcTab, kcBackTab, kcBackspace, kcDelete,
@@ -52,12 +55,20 @@ type
     Width, Height: Word;
   end;
 
+  { Terminal focus report (CSI I / CSI O), not widget focus manager. }
+  TFocusEventKind = (fkIn, fkOut);
+
+  TFocusEvent = packed record
+    Kind: TFocusEventKind;
+  end;
+
   TEvent = record
     Kind: TEventKind;
     case Byte of
       0: (Key: TKeyEvent);
       1: (Mouse: TMouseEvent);
       2: (Resize: TResizeEvent);
+      3: (Focus: TFocusEvent);
   end;
 
 function NoneEvent: TEvent; inline;
@@ -68,6 +79,7 @@ function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
   AX, AY: Word; AMods: TKeyModifiers): TEvent;
 function ResizeEvent(AWidth, AHeight: Word): TEvent;
 function PasteEvent: TEvent;
+function FocusEvent(AKind: TFocusEventKind): TEvent;
 
 { TEvent 便利判断——简化消费方的 case 分派 }
 function IsNone(const AEv: TEvent): Boolean; inline;
@@ -75,6 +87,9 @@ function IsKey(const AEv: TEvent): Boolean; inline;
 function IsMouse(const AEv: TEvent): Boolean; inline;
 function IsResize(const AEv: TEvent): Boolean; inline;
 function IsPaste(const AEv: TEvent): Boolean; inline;
+function IsFocus(const AEv: TEvent): Boolean; inline;
+function IsFocusIn(const AEv: TEvent): Boolean; inline;
+function IsFocusOut(const AEv: TEvent): Boolean; inline;
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
 function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
@@ -139,6 +154,13 @@ begin
   Result.Kind := evPaste;
 end;
 
+function FocusEvent(AKind: TFocusEventKind): TEvent;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  Result.Kind := evFocus;
+  Result.Focus.Kind := AKind;
+end;
+
 function IsNone(const AEv: TEvent): Boolean;
 begin Result := AEv.Kind = evNone; end;
 
@@ -153,6 +175,15 @@ begin Result := AEv.Kind = evResize; end;
 
 function IsPaste(const AEv: TEvent): Boolean;
 begin Result := AEv.Kind = evPaste; end;
+
+function IsFocus(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evFocus; end;
+
+function IsFocusIn(const AEv: TEvent): Boolean;
+begin Result := (AEv.Kind = evFocus) and (AEv.Focus.Kind = fkIn); end;
+
+function IsFocusOut(const AEv: TEvent): Boolean;
+begin Result := (AEv.Kind = evFocus) and (AEv.Focus.Kind = fkOut); end;
 
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean;
 begin

@@ -8,9 +8,9 @@
 #   pwsh core/scripts/platform-windows-ci-matrix.ps1
 #   pwsh scripts/platform-windows-ci-matrix.ps1   # when cwd is core/
 #
-# Evidence: truth=ci-matrix for the documented gate set (ROADMAP D1.d + error expand).
+# Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the listed module dirs only — not full-host Windows parity.
-# 18-gate set = prior 17 + platform.error (pending durable GHA green before promote claims).
+# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
 
 $ErrorActionPreference = 'Stop'
 
@@ -43,6 +43,10 @@ $ModuleEntries = @(
   @{ Name = 'platform.random';  Dir = 'tests/nextpas.core.platform.random/test_platform_random_wine' }
   @{ Name = 'platform.socket';  Dir = 'tests/nextpas.core.platform.socket/test_platform_socket_wine' }
   @{ Name = 'platform.error';   Dir = 'tests/nextpas.core.platform.error/test_platform_error_wine' }
+  @{ Name = 'platform.fmt';     Dir = 'tests/nextpas.core.platform.fmt/test_platform_fmt_wine' }
+  @{ Name = 'platform.info';    Dir = 'tests/nextpas.core.platform.info/test_platform_info_wine' }
+  @{ Name = 'platform.which';   Dir = 'tests/nextpas.core.platform.which/test_platform_which_wine' }
+  @{ Name = 'platform.dl';      Dir = 'tests/nextpas.core.platform.dl/test_platform_dl_wine' }
   @{ Name = 'io.reactor.iocp'; Dir = 'tests/nextpas.core.io.uring/test_reactor_iocp_wine' }
 )
 
@@ -58,7 +62,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 18-gate set (candidate until GHA green); not full-host Windows parity'
+Write-Output 'truth=ci-matrix-candidate; 21 platform gates promoted + dl candidate; not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -86,7 +90,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-18-gate-set"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-21-platform-gate-set"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'

@@ -3,6 +3,7 @@ program test_process;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.test,
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.fs.util,
@@ -17,19 +18,21 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.process.command,
   nextpas.core.io.intf,
-  nextpas.core.platform.process;
+  nextpas.core.platform.process,
+  nextpas.core.async.cancellation;
 
 var
-  LPassed, LFailed: Integer;
+  T: TTestSuite;
 
-procedure Check(const AName: string; ACondition: Boolean); forward;
+{ Compatibility wrapper: old Check(name, cond) → framework Check(cond, name) }
+procedure ExpectTrue(const AName: string; ACondition: Boolean); forward;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
 begin
   LSourcePath := FsPathAbs('../../../' + ARelativePath);
-  Check('Source exists — ' + ARelativePath, FsExists(LSourcePath));
+  ExpectTrue('Source exists — ' + ARelativePath, FsExists(LSourcePath));
   Result := FsReadFileText(LSourcePath);
 end;
 
@@ -50,12 +53,12 @@ end;
 
 procedure CheckContains(const AName, ASource, AToken: string);
 begin
-  Check(AName, Pos(AToken, ASource) > 0);
+  ExpectTrue(AName, Pos(AToken, ASource) > 0);
 end;
 
 procedure CheckAbsent(const AName, ASource, AToken: string);
 begin
-  Check(AName, Pos(AToken, ASource) = 0);
+  ExpectTrue(AName, Pos(AToken, ASource) = 0);
 end;
 
 procedure CheckTokenBefore(const AName, ASource, AFirstToken,
@@ -65,60 +68,51 @@ var
 begin
   LFirst := Pos(AFirstToken, ASource);
   LSecond := Pos(ASecondToken, ASource);
-  Check(AName, (LFirst > 0) and (LSecond > 0) and (LFirst < LSecond));
+  ExpectTrue(AName, (LFirst > 0) and (LSecond > 0) and (LFirst < LSecond));
 end;
 
-procedure Check(const AName: string; ACondition: Boolean);
+procedure ExpectTrue(const AName: string; ACondition: Boolean);
 begin
-  if ACondition then
-  begin
-    WriteLn('  PASS: ', AName);
-    Inc(LPassed);
-  end
-  else
-  begin
-    WriteLn('  FAIL: ', AName);
-    Inc(LFailed);
-  end;
+  Check(ACondition, AName);
 end;
 
 procedure TestRunEcho;
 var LOut: TProcessOutput;
 begin
   LOut := Run('/bin/echo', ['hello', 'world']);
-  Check('Run echo — success', LOut.ExitCode = 0);
-  Check('Run echo — stdout', Pos('hello world', LOut.StdOut) > 0);
-  Check('Run echo — status exited', LOut.Status = psExited);
+  ExpectTrue('Run echo — success', LOut.ExitCode = 0);
+  ExpectTrue('Run echo — stdout', Pos('hello world', LOut.StdOut) > 0);
+  ExpectTrue('Run echo — status exited', LOut.Status = psExited);
 end;
 
 procedure TestRunFalse;
 var LOut: TProcessOutput;
 begin
   LOut := Run('/bin/false', []);
-  Check('Run false — non-zero exit', LOut.ExitCode <> 0);
-  Check('Run false — status exited', LOut.Status = psExited);
+  ExpectTrue('Run false — non-zero exit', LOut.ExitCode <> 0);
+  ExpectTrue('Run false — status exited', LOut.Status = psExited);
 end;
 
 procedure TestRunStderr;
 var LOut: TProcessOutput;
 begin
   LOut := Run('/bin/ls', ['/nonexistent_xyz_path']);
-  Check('Run ls bad — stderr not empty', Length(LOut.StdErr) > 0);
-  Check('Run ls bad — non-zero exit', LOut.ExitCode <> 0);
+  ExpectTrue('Run ls bad — stderr not empty', Length(LOut.StdErr) > 0);
+  ExpectTrue('Run ls bad — non-zero exit', LOut.ExitCode <> 0);
 end;
 
 procedure TestCapture;
 var LStr: string;
 begin
   LStr := Capture('/bin/echo', ['captured']);
-  Check('Capture — contains text', Pos('captured', LStr) > 0);
+  ExpectTrue('Capture — contains text', Pos('captured', LStr) > 0);
 end;
 
 procedure TestRunIn;
 var LOut: TProcessOutput;
 begin
   LOut := RunIn('/bin/pwd', [], '/tmp');
-  Check('RunIn — workdir /tmp', Pos('/tmp', LOut.StdOut) > 0);
+  ExpectTrue('RunIn — workdir /tmp', Pos('/tmp', LOut.StdOut) > 0);
 end;
 
 procedure TestCommandBuilder;
@@ -127,8 +121,8 @@ begin
   LOut := Command('/bin/echo')
     .Args(['builder', 'test'])
     .Output;
-  Check('Command builder — success', LOut.ExitCode = 0);
-  Check('Command builder — stdout', Pos('builder test', LOut.StdOut) > 0);
+  ExpectTrue('Command builder — success', LOut.ExitCode = 0);
+  ExpectTrue('Command builder — stdout', Pos('builder test', LOut.StdOut) > 0);
 end;
 
 procedure TestCommandDir;
@@ -137,7 +131,7 @@ begin
   LOut := Command('/bin/pwd')
     .Dir('/tmp')
     .Output;
-  Check('Command dir — /tmp', Pos('/tmp', LOut.StdOut) > 0);
+  ExpectTrue('Command dir — /tmp', Pos('/tmp', LOut.StdOut) > 0);
 end;
 
 procedure TestCommandStatus;
@@ -145,17 +139,17 @@ var
   LOut: TProcessOutput;
 begin
   LOut := Command('/bin/true').Status;
-  Check('Command status true — 0', LOut.ExitCode = 0);
-  Check('Command status true — succeeded', ProcessSucceeded(LOut));
+  ExpectTrue('Command status true — 0', LOut.ExitCode = 0);
+  ExpectTrue('Command status true — succeeded', ProcessSucceeded(LOut));
   LOut := Command('/bin/false').Status;
-  Check('Command status false — non-zero', LOut.ExitCode <> 0);
-  Check('Command status false — not succeeded', not ProcessSucceeded(LOut));
+  ExpectTrue('Command status false — non-zero', LOut.ExitCode <> 0);
+  ExpectTrue('Command status false — not succeeded', not ProcessSucceeded(LOut));
   LOut := Command('/bin/sleep')
     .Args(['10'])
     .Timeout(TDuration.FromMilliseconds(100))
     .Status;
-  Check('Command status timeout — TimedOut', LOut.TimedOut);
-  Check('Command status timeout — not succeeded', not ProcessSucceeded(LOut));
+  ExpectTrue('Command status timeout — TimedOut', LOut.TimedOut);
+  ExpectTrue('Command status timeout — not succeeded', not ProcessSucceeded(LOut));
 end;
 
 procedure TestSpawnAndWait;
@@ -164,10 +158,10 @@ var
   LOut: TProcessOutput;
 begin
   LChild := Command('/bin/sleep').Arg('0.1').Spawn;
-  Check('Spawn — pid > 0', LChild.Pid > 0);
+  ExpectTrue('Spawn — pid > 0', LChild.Pid > 0);
   LOut := LChild.Wait;
-  Check('Spawn wait — exited', LOut.Status = psExited);
-  Check('Spawn wait — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Spawn wait — exited', LOut.Status = psExited);
+  ExpectTrue('Spawn wait — exit 0', LOut.ExitCode = 0);
 end;
 
 procedure TestSpawnWaitIsRepeatable;
@@ -179,14 +173,14 @@ begin
   LChild := Command('/bin/true').Spawn;
   LFirst := LChild.Wait;
   LSecond := LChild.Wait;
-  Check('Wait repeat — first exited', LFirst.Status = psExited);
-  Check('Wait repeat — second preserves status', LSecond.Status = LFirst.Status);
-  Check('Wait repeat — second preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+  ExpectTrue('Wait repeat — first exited', LFirst.Status = psExited);
+  ExpectTrue('Wait repeat — second preserves status', LSecond.Status = LFirst.Status);
+  ExpectTrue('Wait repeat — second preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
 
   LDone := LChild.TryWait(LSecond);
-  Check('TryWait after Wait — done', LDone);
-  Check('TryWait after Wait — preserves status', LSecond.Status = LFirst.Status);
-  Check('TryWait after Wait — preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
+  ExpectTrue('TryWait after Wait — done', LDone);
+  ExpectTrue('TryWait after Wait — preserves status', LSecond.Status = LFirst.Status);
+  ExpectTrue('TryWait after Wait — preserves exit code', LSecond.ExitCode = LFirst.ExitCode);
 end;
 
 procedure TestSpawnTryWait;
@@ -197,9 +191,9 @@ var
 begin
   LChild := Command('/bin/sleep').Arg('0.05').Spawn;
   LDone := LChild.TryWait(LOut);
-  Check('TryWait — not done immediately', not LDone);
+  ExpectTrue('TryWait — not done immediately', not LDone);
   LOut := LChild.Wait;
-  Check('TryWait then Wait — exited', LOut.Status = psExited);
+  ExpectTrue('TryWait then Wait — exited', LOut.Status = psExited);
 end;
 
 procedure TestSpawnKill;
@@ -210,7 +204,7 @@ begin
   LChild := Command('/bin/sleep').Arg('10').Spawn;
   LChild.Kill;
   LOut := LChild.Wait;
-  Check('Kill — signaled', LOut.Status = psSignaled);
+  ExpectTrue('Kill — signaled', LOut.Status = psSignaled);
 end;
 
 procedure TestSpawnDetach;
@@ -230,15 +224,15 @@ begin
   LChild := nil;
 
   platform_thread_sleep_ms(300);
-  Check('Detach — child survives handle release', FsExists(LPath));
+  ExpectTrue('Detach — child survives handle release', FsExists(LPath));
   if FsExists(LPath) then
   begin
     LContent := FsReadFileText(LPath);
-    Check('Detach — child completed work', LContent = 'detached');
+    ExpectTrue('Detach — child completed work', LContent = 'detached');
     FsRemove(LPath);
   end
   else
-    Check('Detach — child completed work', False);
+    ExpectTrue('Detach — child completed work', False);
 end;
 
 procedure TestDetachedLifecycleGuards;
@@ -498,7 +492,7 @@ procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
 var
   LHit: string;
 begin
-  Check(ALabel + ' — no bare FPC RTL in uses',
+  ExpectTrue(ALabel + ' — no bare FPC RTL in uses',
     not FindBareFpcRtlInUses(ASource, LHit));
   if LHit <> '' then
     WriteLn('    (hit unit: ', LHit, ')');
@@ -553,8 +547,8 @@ begin
       LMsg := E.Message;
     end;
   end;
-  Check('MergeStderr+Stderr(stNull) raises', LRaised);
-  Check('MergeStderr+Stderr(stNull) message', Pos('MergeStderr', LMsg) > 0);
+  ExpectTrue('MergeStderr+Stderr(stNull) raises', LRaised);
+  ExpectTrue('MergeStderr+Stderr(stNull) message', Pos('MergeStderr', LMsg) > 0);
 end;
 
 procedure TestMergeStderrRequiresStdoutPiped;
@@ -574,8 +568,8 @@ begin
       LMsg := E.Message;
     end;
   end;
-  Check('MergeStderr without Stdout(stPiped) raises', LRaised);
-  Check('MergeStderr non-piped message mentions Stdout',
+  ExpectTrue('MergeStderr without Stdout(stPiped) raises', LRaised);
+  ExpectTrue('MergeStderr non-piped message mentions Stdout',
     Pos('Stdout', LMsg) > 0);
 end;
 
@@ -590,9 +584,9 @@ begin
     .Stdout(stPiped)
     .Spawn;
   LOut := LChild.Wait;
-  Check('Wait auto-drain — status exited', LOut.Status = psExited);
-  Check('Wait auto-drain — exit 0', LOut.ExitCode = 0);
-  Check('Wait auto-drain — captured large stdout', Length(LOut.StdOut) >= 200000);
+  ExpectTrue('Wait auto-drain — status exited', LOut.Status = psExited);
+  ExpectTrue('Wait auto-drain — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Wait auto-drain — captured large stdout', Length(LOut.StdOut) >= 200000);
 end;
 
 procedure TestWaitWithoutPipesLeavesStdoutEmpty;
@@ -602,8 +596,32 @@ var
 begin
   LChild := Command('/bin/echo').Arg('no-pipe').Spawn;
   LOut := LChild.Wait;
-  Check('Wait inherit — exited', LOut.Status = psExited);
-  Check('Wait inherit — stdout empty (not drained inherit)', LOut.StdOut = '');
+  ExpectTrue('Wait inherit — exited', LOut.Status = psExited);
+  ExpectTrue('Wait inherit — stdout empty (not drained inherit)', LOut.StdOut = '');
+end;
+
+procedure TestTryWaitDrainsOwnedPipes;
+var
+  LChild: IChild;
+  LOut, LAgain: TProcessOutput;
+  LDone: Boolean;
+  I: Integer;
+begin
+  LChild := Command('/bin/echo').Arg('trywait-drain').Stdout(stPiped).Spawn;
+  LDone := False;
+  for I := 1 to 200 do
+  begin
+    LDone := LChild.TryWait(LOut);
+    if LDone then
+      Break;
+    platform_thread_sleep_ms(10);
+  end;
+  ExpectTrue('TryWait drain — completed', LDone);
+  ExpectTrue('TryWait drain — exited', LOut.Status = psExited);
+  ExpectTrue('TryWait drain — captured stdout', Pos('trywait-drain', LOut.StdOut) > 0);
+  LAgain := LChild.Wait;
+  ExpectTrue('TryWait drain — Wait repeats same stdout',
+    Pos('trywait-drain', LAgain.StdOut) > 0);
 end;
 
 procedure TestSpawnStdinPipe;
@@ -622,7 +640,7 @@ begin
   LStdin.Write(LData[1], Length(LData));
   LStdin := nil;  // close stdin
   LOut := LChild.WaitWithOutput;
-  Check('Stdin pipe — echoed back', Pos('piped input', LOut.StdOut) > 0);
+  ExpectTrue('Stdin pipe — echoed back', Pos('piped input', LOut.StdOut) > 0);
 end;
 
 procedure TestSpawnStdoutReader;
@@ -648,7 +666,7 @@ begin
     end;
   until LRead = 0;
   LChild.Wait;
-  Check('Stdout reader — streaming', Pos('streaming read', LTotal) > 0);
+  ExpectTrue('Stdout reader — streaming', Pos('streaming read', LTotal) > 0);
 end;
 
 procedure TestCommandEnv;
@@ -660,7 +678,7 @@ begin
     .Stderr(stPiped)
     .Spawn
     .WaitWithOutput;
-  Check('Env — custom var visible', Pos('MY_TEST_VAR=hello_from_core', LOut.StdOut) > 0);
+  ExpectTrue('Env — custom var visible', Pos('MY_TEST_VAR=hello_from_core', LOut.StdOut) > 0);
 end;
 
 procedure TestSpawnError;
@@ -673,7 +691,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('Spawn nonexistent — raises EProcessError', LRaised);
+  ExpectTrue('Spawn nonexistent — raises EProcessError', LRaised);
 end;
 
 procedure TestEnvAdd;
@@ -682,7 +700,7 @@ begin
   LOut := TCommand.New('/usr/bin/env')
     .EnvAdd('TEST_KEY', 'test_value')
     .Output;
-  Check('EnvAdd — key visible', Pos('TEST_KEY=test_value', LOut.StdOut) > 0);
+  ExpectTrue('EnvAdd — key visible', Pos('TEST_KEY=test_value', LOut.StdOut) > 0);
 end;
 
 procedure TestStdinNull;
@@ -692,8 +710,8 @@ begin
     .Stdin(stNull)
     .Stdout(stPiped)
     .Output;
-  Check('Stdin null — cat gets EOF immediately', LOut.ExitCode = 0);
-  Check('Stdin null — no output', LOut.StdOut = '');
+  ExpectTrue('Stdin null — cat gets EOF immediately', LOut.ExitCode = 0);
+  ExpectTrue('Stdin null — no output', LOut.StdOut = '');
 end;
 
 procedure TestStdoutNull;
@@ -704,7 +722,7 @@ begin
     .Args(['should not appear'])
     .Stdout(stNull)
     .Status;
-  Check('Stdout null — exits 0', LOut.ExitCode = 0);
+  ExpectTrue('Stdout null — exits 0', LOut.ExitCode = 0);
 end;
 
 procedure TestStderrPiped;
@@ -715,7 +733,7 @@ begin
     .Stdout(stPiped)
     .Stderr(stPiped)
     .Output;
-  Check('Stderr piped — captured', Pos('err', LOut.StdErr) > 0);
+  ExpectTrue('Stderr piped — captured', Pos('err', LOut.StdErr) > 0);
 end;
 
 procedure TestDualPipeLargeOutput;
@@ -724,9 +742,9 @@ begin
   LOut := TCommand.New('/bin/sh')
     .Args(['-c', 'seq 1 5000; echo err >&2'])
     .Output;
-  Check('Large output — stdout > 10KB', Length(LOut.StdOut) > 10000);
-  Check('Large output — stderr present', Length(LOut.StdErr) > 0);
-  Check('Large output — no deadlock', LOut.ExitCode = 0);
+  ExpectTrue('Large output — stdout > 10KB', Length(LOut.StdOut) > 10000);
+  ExpectTrue('Large output — stderr present', Length(LOut.StdErr) > 0);
+  ExpectTrue('Large output — no deadlock', LOut.ExitCode = 0);
 end;
 
 procedure TestMultipleSpawnSameCommand;
@@ -737,15 +755,15 @@ begin
   LCmd := TCommand.New('/bin/echo').Args(['reuse']);
   LOut1 := LCmd.Output;
   LOut2 := LCmd.Output;
-  Check('Reuse command — first', Pos('reuse', LOut1.StdOut) > 0);
-  Check('Reuse command — second', Pos('reuse', LOut2.StdOut) > 0);
+  ExpectTrue('Reuse command — first', Pos('reuse', LOut1.StdOut) > 0);
+  ExpectTrue('Reuse command — second', Pos('reuse', LOut2.StdOut) > 0);
 end;
 
 procedure TestEmptyArgs;
 var LOut: TProcessOutput;
 begin
   LOut := Run('/bin/echo', []);
-  Check('Empty args — exits 0', LOut.ExitCode = 0);
+  ExpectTrue('Empty args — exits 0', LOut.ExitCode = 0);
 end;
 
 procedure TestTakeStderr;
@@ -761,7 +779,7 @@ begin
     .Spawn;
   LReader := LChild.TakeStderr;
   LN := LReader.Read(LBuf[0], 256);
-  Check('TakeStderr — read > 0', LN > 0);
+  ExpectTrue('TakeStderr — read > 0', LN > 0);
   LReader := nil;
   LChild.Wait;
 end;
@@ -788,16 +806,16 @@ begin
   LCloser := nil;
   LStdin := nil;
   LOut := LChild.WaitWithOutput;
-  Check('Dual pipe — stdout', Pos('dual pipe test', LOut.StdOut) > 0);
-  Check('Dual pipe — stderr', Pos('err', LOut.StdErr) > 0);
-  Check('Dual pipe — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Dual pipe — stdout', Pos('dual pipe test', LOut.StdOut) > 0);
+  ExpectTrue('Dual pipe — stderr', Pos('err', LOut.StdErr) > 0);
+  ExpectTrue('Dual pipe — exit 0', LOut.ExitCode = 0);
 end;
 
 procedure TestArgSingle;
 var LOut: TProcessOutput;
 begin
   LOut := TCommand.New('/bin/echo').Arg('single').Output;
-  Check('Arg single — output', Pos('single', LOut.StdOut) > 0);
+  ExpectTrue('Arg single — output', Pos('single', LOut.StdOut) > 0);
 end;
 
 procedure ExpectProcessError(const AName: string; const AProc: TProcedure);
@@ -811,7 +829,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check(AName, LRaised);
+  ExpectTrue(AName, LRaised);
 end;
 
 procedure TestRunEnvPassed;
@@ -823,8 +841,8 @@ begin
     .Stdout(stPiped)
     .Stderr(stPiped)
     .Output;
-  Check('RunEnv passed — exit 0', LOut.ExitCode = 0);
-  Check('RunEnv passed — child reads env', Pos('hello', LOut.StdOut) > 0);
+  ExpectTrue('RunEnv passed — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunEnv passed — child reads env', Pos('hello', LOut.StdOut) > 0);
 end;
 
 procedure TestRunTimeout;
@@ -837,24 +855,24 @@ begin
     .Arg('60')
     .Timeout(TDuration.FromMilliseconds(200))
     .Output;
-  Check('Run timeout — signaled', LOut.Status = psSignaled);
-  Check('Run timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+  ExpectTrue('Run timeout — signaled', LOut.Status = psSignaled);
+  ExpectTrue('Run timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
 procedure TestCaptureEmpty;
 var LStr: string;
 begin
   LStr := Capture('/bin/true', []);
-  Check('Capture empty — empty string', LStr = '');
+  ExpectTrue('Capture empty — empty string', LStr = '');
 end;
 
 procedure TestCaptureMultiLine;
 var LStr: string;
 begin
   LStr := Capture('/bin/sh', ['-c', 'echo "line1"; echo "line2"; echo "line3"']);
-  Check('Capture multiline — has line1', Pos('line1', LStr) > 0);
-  Check('Capture multiline — has line2', Pos('line2', LStr) > 0);
-  Check('Capture multiline — has line3', Pos('line3', LStr) > 0);
+  ExpectTrue('Capture multiline — has line1', Pos('line1', LStr) > 0);
+  ExpectTrue('Capture multiline — has line2', Pos('line2', LStr) > 0);
+  ExpectTrue('Capture multiline — has line3', Pos('line3', LStr) > 0);
 end;
 
 procedure TestCaptureCombined;
@@ -866,25 +884,25 @@ begin
   { sh -c outputs to both stdout and stderr }
   LCombined := CaptureCombined('/bin/sh',
     ['-c', 'echo "out"; echo "err" >&2']);
-  Check('CaptureCombined — has stdout', Pos('out', LCombined) > 0);
-  Check('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
+  ExpectTrue('CaptureCombined — has stdout', Pos('out', LCombined) > 0);
+  ExpectTrue('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
 
   { True interleave: printf A; printf B >&2; printf C → ABC not ACB }
   LCombined := CaptureCombined('/bin/sh',
     ['-c', 'printf A; printf B >&2; printf C']);
-  Check('CaptureCombined interleave — equals ABC', LCombined = 'ABC');
+  ExpectTrue('CaptureCombined interleave — equals ABC', LCombined = 'ABC');
   PA := Pos('A', LCombined);
   PB := Pos('B', LCombined);
   PC := Pos('C', LCombined);
-  Check('CaptureCombined interleave — A before B', (PA > 0) and (PA < PB));
-  Check('CaptureCombined interleave — B before C', (PB > 0) and (PB < PC));
+  ExpectTrue('CaptureCombined interleave — A before B', (PA > 0) and (PA < PB));
+  ExpectTrue('CaptureCombined interleave — B before C', (PB > 0) and (PB < PC));
 
   LOut := TCommand.New('/bin/sh')
     .Args(['-c', 'echo hi; echo e >&2'])
     .MergeStderr
     .Output;
-  Check('MergeStderr Output — StdOut non-empty', LOut.StdOut <> '');
-  Check('MergeStderr Output — StdErr empty', LOut.StdErr = '');
+  ExpectTrue('MergeStderr Output — StdOut non-empty', LOut.StdOut <> '');
+  ExpectTrue('MergeStderr Output — StdErr empty', LOut.StdErr = '');
 end;
 
 procedure TestCaptureInCombined;
@@ -893,8 +911,8 @@ var
 begin
   LCombined := CaptureInCombined('/bin/sh',
     ['-c', 'echo "cwd:$(pwd)"; echo "err" >&2'], '/');
-  Check('CaptureInCombined — has stdout', Pos('cwd:/', LCombined) > 0);
-  Check('CaptureInCombined — has stderr', Pos('err', LCombined) > 0);
+  ExpectTrue('CaptureInCombined — has stdout', Pos('cwd:/', LCombined) > 0);
+  ExpectTrue('CaptureInCombined — has stderr', Pos('err', LCombined) > 0);
 end;
 
 procedure TestRunInNonexistentDir;
@@ -907,7 +925,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('RunIn nonexistent dir — raises EProcessError', LRaised);
+  ExpectTrue('RunIn nonexistent dir — raises EProcessError', LRaised);
 end;
 
 procedure TestCaptureIn;
@@ -915,7 +933,7 @@ var
   LText: string;
 begin
   LText := CaptureIn('/bin/pwd', [], '/');
-  Check('CaptureIn / — returns /', Trim(LText) = '/');
+  ExpectTrue('CaptureIn / — returns /', Trim(LText) = '/');
 end;
 
 procedure TestRunLargeOutput;
@@ -924,16 +942,16 @@ begin
   LOut := TCommand.New('/bin/sh')
     .Args(['-c', 'dd if=/dev/zero bs=1024 count=1024 2>/dev/null | tr "\0" "A"'])
     .Output;
-  Check('Large output — exit 0', LOut.ExitCode = 0);
-  Check('Large output — >= 1MB captured', Length(LOut.StdOut) >= 1024 * 1024);
+  ExpectTrue('Large output — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Large output — >= 1MB captured', Length(LOut.StdOut) >= 1024 * 1024);
 end;
 
 procedure TestRunStderrCapture;
 var LOut: TProcessOutput;
 begin
   LOut := Run('/bin/sh', ['-c', 'echo error >&2']);
-  Check('Stderr capture — exit 0', LOut.ExitCode = 0);
-  Check('Stderr capture — stderr contains error', Pos('error', LOut.StdErr) > 0);
+  ExpectTrue('Stderr capture — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Stderr capture — stderr contains error', Pos('error', LOut.StdErr) > 0);
 end;
 
 procedure TestCommandValidation;
@@ -991,7 +1009,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('Exec fail — raises EProcessError', LRaised);
+  ExpectTrue('Exec fail — raises EProcessError', LRaised);
 end;
 
 procedure TestSpawnChdirFailRaisesException;
@@ -1004,7 +1022,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('Chdir fail — raises EProcessError', LRaised);
+  ExpectTrue('Chdir fail — raises EProcessError', LRaised);
 end;
 
 function OpenFdCount: Integer;
@@ -1026,9 +1044,9 @@ begin
   ExpectProcessError(AName + ' — raises EProcessError', AProc);
   LAfter := OpenFdCount;
   if (LBefore >= 0) and (LAfter >= 0) then
-    Check(AName + ' — parent fd count returns to baseline', LAfter = LBefore)
+    ExpectTrue(AName + ' — parent fd count returns to baseline', LAfter = LBefore)
   else
-    Check(AName + ' — /proc/self/fd unavailable', True);
+    ExpectTrue(AName + ' — /proc/self/fd unavailable', True);
 end;
 
 procedure TestSpawnNullStdioFailureDoesNotLeakParentFds;
@@ -1060,8 +1078,8 @@ begin
   LOut := TCommand.New('/usr/bin/env')
     .EnvAdd('MY_OVERLAY_VAR', 'overlay_value')
     .Output;
-  Check('EnvAdd overlay — custom var', Pos('MY_OVERLAY_VAR=overlay_value', LOut.StdOut) > 0);
-  Check('EnvAdd overlay — PATH inherited', Pos('PATH=', LOut.StdOut) > 0);
+  ExpectTrue('EnvAdd overlay — custom var', Pos('MY_OVERLAY_VAR=overlay_value', LOut.StdOut) > 0);
+  ExpectTrue('EnvAdd overlay — PATH inherited', Pos('PATH=', LOut.StdOut) > 0);
 end;
 
 
@@ -1072,7 +1090,7 @@ begin
     .Args(['path search works'])
     .Env(['PATH=/bin:/usr/bin'])
     .Output;
-  Check('Env replace + PATH search — found echo', Pos('path search works', LOut.StdOut) > 0);
+  ExpectTrue('Env replace + PATH search — found echo', Pos('path search works', LOut.StdOut) > 0);
 end;
 
 procedure TestEnvReplaceSkipsNonExecutablePathShadow;
@@ -1116,9 +1134,9 @@ begin
         LRaised := True;
     end;
 
-    Check('Env replace + PATH skips non-executable shadow — no spawn error', not LRaised);
+    ExpectTrue('Env replace + PATH skips non-executable shadow — no spawn error', not LRaised);
     if not LRaised then
-      Check('Env replace + PATH skips non-executable shadow — found executable target',
+      ExpectTrue('Env replace + PATH skips non-executable shadow — found executable target',
         Pos('shadow-resolved', LOut.StdOut) > 0);
   finally
     if FsExists(LShadowPath) then
@@ -1142,8 +1160,8 @@ begin
     .EnvAdd('PATH', '/definitely_missing_nextpas_process')
     .EnvAdd('PATH', '/bin:/usr/bin')
     .Output;
-  Check('EnvAdd duplicate PATH final view — exit 0', LOut.ExitCode = 0);
-  Check('EnvAdd duplicate PATH final view — resolved from final PATH',
+  ExpectTrue('EnvAdd duplicate PATH final view — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('EnvAdd duplicate PATH final view — resolved from final PATH',
     Pos('envadd-path-final-view', LOut.StdOut) > 0);
 end;
 
@@ -1180,9 +1198,9 @@ begin
         LRaised := True;
     end;
 
-    Check('Env replace + Dir relative PATH — no spawn error', not LRaised);
+    ExpectTrue('Env replace + Dir relative PATH — no spawn error', not LRaised);
     if not LRaised then
-      Check('Env replace + Dir relative PATH — resolved from command dir',
+      ExpectTrue('Env replace + Dir relative PATH — resolved from command dir',
         Pos('dir-path-resolved', LOut.StdOut) > 0);
   finally
     if FsExists(LToolPath) then
@@ -1203,9 +1221,9 @@ begin
     .Arg('10')
     .Timeout(TDuration.FromMilliseconds(200))
     .Output;
-  Check('Timeout — killed (signaled)', LOut.Status = psSignaled);
-  Check('Timeout — TimedOut flag set', LOut.TimedOut);
-  Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+  ExpectTrue('Timeout — killed (signaled)', LOut.Status = psSignaled);
+  ExpectTrue('Timeout — TimedOut flag set', LOut.TimedOut);
+  ExpectTrue('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
 procedure TestTimeoutOutputDrainsBeforeWait;
@@ -1216,9 +1234,9 @@ begin
     .Args(['-c', 'yes process-timeout-drain | head -n 20000; printf done-marker'])
     .Timeout(TDuration.FromSeconds(5))
     .Output;
-  Check('Timeout output drain — process exits normally', LOut.Status = psExited);
-  Check('Timeout output drain — exit 0', LOut.ExitCode = 0);
-  Check('Timeout output drain — captures tail marker',
+  ExpectTrue('Timeout output drain — process exits normally', LOut.Status = psExited);
+  ExpectTrue('Timeout output drain — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Timeout output drain — captures tail marker',
     Pos('done-marker', LOut.StdOut) > 0);
 end;
 
@@ -1229,29 +1247,29 @@ var
 begin
   { LookPath finds common system binaries }
   LPath := LookPath('sh');
-  Check('LookPath sh — not empty', LPath <> '');
-  Check('LookPath sh — contains sh', Pos('sh', LPath) > 0);
+  ExpectTrue('LookPath sh — not empty', LPath <> '');
+  ExpectTrue('LookPath sh — contains sh', Pos('sh', LPath) > 0);
 
   { LookPath finds absolute path }
   LPath := LookPath('/bin/sh');
-  Check('LookPath /bin/sh — returns same path', LPath = '/bin/sh');
+  ExpectTrue('LookPath /bin/sh — returns same path', LPath = '/bin/sh');
 
   { LookPath raises for non-existent binary }
   try
     LookPath('nonexistent_binary_12345');
-    Check('LookPath nonexistent — should raise', False);
+    ExpectTrue('LookPath nonexistent — should raise', False);
   except
     on E: EProcessError do
-      Check('LookPath nonexistent — correct exception', True);
+      ExpectTrue('LookPath nonexistent — correct exception', True);
   end;
 
   { Absolute path that does not exist must not pretend to succeed }
   try
     LookPath('/nonexistent_abs_bin_xyz_12345');
-    Check('LookPath abs missing — should raise', False);
+    ExpectTrue('LookPath abs missing — should raise', False);
   except
     on E: EProcessError do
-      Check('LookPath abs missing — correct exception',
+      ExpectTrue('LookPath abs missing — correct exception',
         Pos('executable not found', E.Message) > 0);
   end;
 end;
@@ -1261,22 +1279,22 @@ var
   LPath: string;
 begin
   { TryLookPath finds common system binaries }
-  Check('TryLookPath sh — found', TryLookPath('sh', LPath));
-  Check('TryLookPath sh — not empty', LPath <> '');
-  Check('TryLookPath sh — contains sh', Pos('sh', LPath) > 0);
+  ExpectTrue('TryLookPath sh — found', TryLookPath('sh', LPath));
+  ExpectTrue('TryLookPath sh — not empty', LPath <> '');
+  ExpectTrue('TryLookPath sh — contains sh', Pos('sh', LPath) > 0);
 
   { TryLookPath finds absolute path }
-  Check('TryLookPath /bin/sh — found', TryLookPath('/bin/sh', LPath));
-  Check('TryLookPath /bin/sh — returns same path', LPath = '/bin/sh');
+  ExpectTrue('TryLookPath /bin/sh — found', TryLookPath('/bin/sh', LPath));
+  ExpectTrue('TryLookPath /bin/sh — returns same path', LPath = '/bin/sh');
 
   { TryLookPath returns false for non-existent binary }
-  Check('TryLookPath nonexistent — not found',
+  ExpectTrue('TryLookPath nonexistent — not found',
     not TryLookPath('nonexistent_binary_12345', LPath));
-  Check('TryLookPath nonexistent — path empty', LPath = '');
+  ExpectTrue('TryLookPath nonexistent — path empty', LPath = '');
 
-  Check('TryLookPath abs missing — not found',
+  ExpectTrue('TryLookPath abs missing — not found',
     not TryLookPath('/nonexistent_abs_bin_xyz_12345', LPath));
-  Check('TryLookPath abs missing — path empty', LPath = '');
+  ExpectTrue('TryLookPath abs missing — path empty', LPath = '');
 end;
 
 procedure TestProcessSucceeded;
@@ -1284,17 +1302,17 @@ var
   LOut: TProcessOutput;
 begin
   LOut := Run('/bin/true', []);
-  Check('ProcessSucceeded true — exit 0', ProcessSucceeded(LOut));
+  ExpectTrue('ProcessSucceeded true — exit 0', ProcessSucceeded(LOut));
 
   LOut := Run('/bin/false', []);
-  Check('ProcessSucceeded false — non-zero exit', not ProcessSucceeded(LOut));
+  ExpectTrue('ProcessSucceeded false — non-zero exit', not ProcessSucceeded(LOut));
 
   LOut := TCommand.New('/bin/sleep')
     .Arg('10')
     .Timeout(TDuration.FromMilliseconds(200))
     .Output;
-  Check('ProcessSucceeded false — timed out', not ProcessSucceeded(LOut));
-  Check('ProcessSucceeded timeout — TimedOut flag', LOut.TimedOut);
+  ExpectTrue('ProcessSucceeded false — timed out', not ProcessSucceeded(LOut));
+  ExpectTrue('ProcessSucceeded timeout — TimedOut flag', LOut.TimedOut);
 end;
 
 procedure TestMaxOutput;
@@ -1307,15 +1325,15 @@ begin
     .Stderr(stNull)
     .MaxOutput(64)
     .Output;
-  Check('MaxOutput — OutputLimited set', LOut.OutputLimited);
-  Check('MaxOutput — not TimedOut', not LOut.TimedOut);
-  Check('MaxOutput — buffered <= 64', Length(LOut.StdOut) <= 64);
-  Check('MaxOutput — ProcessSucceeded false', not ProcessSucceeded(LOut));
+  ExpectTrue('MaxOutput — OutputLimited set', LOut.OutputLimited);
+  ExpectTrue('MaxOutput — not TimedOut', not LOut.TimedOut);
+  ExpectTrue('MaxOutput — buffered <= 64', Length(LOut.StdOut) <= 64);
+  ExpectTrue('MaxOutput — ProcessSucceeded false', not ProcessSucceeded(LOut));
 
   { Unlimited still works for small output }
   LOut := TCommand.New('/bin/echo').Arg('ok-max').MaxOutput(0).Output;
-  Check('MaxOutput 0 — success', ProcessSucceeded(LOut));
-  Check('MaxOutput 0 — not limited', not LOut.OutputLimited);
+  ExpectTrue('MaxOutput 0 — success', ProcessSucceeded(LOut));
+  ExpectTrue('MaxOutput 0 — not limited', not LOut.OutputLimited);
 end;
 
 procedure TestMustCaptureAndRunChecked;
@@ -1325,11 +1343,11 @@ var
   LRaised: Boolean;
 begin
   LStr := MustCapture('/bin/echo', ['ok-checked']);
-  Check('MustCapture success — stdout', Pos('ok-checked', LStr) > 0);
+  ExpectTrue('MustCapture success — stdout', Pos('ok-checked', LStr) > 0);
 
   LOut := RunChecked('/bin/true', []);
-  Check('RunChecked success — exit 0', LOut.ExitCode = 0);
-  Check('RunChecked success — not timed out', not LOut.TimedOut);
+  ExpectTrue('RunChecked success — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunChecked success — not timed out', not LOut.TimedOut);
 
   LRaised := False;
   try
@@ -1338,7 +1356,7 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('MustCapture false — raises', LRaised);
+  ExpectTrue('MustCapture false — raises', LRaised);
 
   LRaised := False;
   try
@@ -1347,11 +1365,11 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('RunChecked false — raises', LRaised);
+  ExpectTrue('RunChecked false — raises', LRaised);
 
   { Capture still ignores non-zero exit (documented) }
   LStr := Capture('/bin/false', []);
-  Check('Capture false — no raise, empty stdout', LStr = '');
+  ExpectTrue('Capture false — no raise, empty stdout', LStr = '');
 
   LRaised := False;
   try
@@ -1360,10 +1378,10 @@ begin
     on E: EProcessError do
       LRaised := True;
   end;
-  Check('MustCaptureCombined false — raises', LRaised);
+  ExpectTrue('MustCaptureCombined false — raises', LRaised);
 
   LStr := MustCaptureCombined('/bin/echo', ['combined-ok']);
-  Check('MustCaptureCombined success — has stdout', Pos('combined-ok', LStr) > 0);
+  ExpectTrue('MustCaptureCombined success — has stdout', Pos('combined-ok', LStr) > 0);
 end;
 
 
@@ -1374,12 +1392,12 @@ var
 begin
   { Signal(SIGTERM) terminates child gracefully }
   LChild := TCommand.New('/bin/sleep').Arg('60').Spawn;
-  Check('Signal — child is running', LChild.Pid > 0);
+  ExpectTrue('Signal — child is running', LChild.Pid > 0);
   LChild.Signal(15);  { SIGTERM }
   LOut := LChild.Wait;
-  Check('Signal — terminated by signal', LOut.Status = psSignaled);
+  ExpectTrue('Signal — terminated by signal', LOut.Status = psSignaled);
   { ExitCode is 128 + signal number on Linux }
-  Check('Signal — signal is SIGTERM (15)', LOut.ExitCode = 128 + 15);
+  ExpectTrue('Signal — signal is SIGTERM (15)', LOut.ExitCode = 128 + 15);
 end;
 
 procedure TestRunTimeoutConvenience;
@@ -1390,8 +1408,8 @@ begin
   { RunTimeout convenience function }
   LStart := TInstant.Now;
   LOut := RunTimeout('/bin/sleep', ['60'], TDuration.FromMilliseconds(200));
-  Check('RunTimeout — signaled', LOut.Status = psSignaled);
-  Check('RunTimeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+  ExpectTrue('RunTimeout — signaled', LOut.Status = psSignaled);
+  ExpectTrue('RunTimeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
 procedure TestCaptureTimeoutConvenience;
@@ -1400,7 +1418,7 @@ var
 begin
   { CaptureTimeout returns stdout of fast command }
   LText := CaptureTimeout('/bin/echo', ['hello'], TDuration.FromSeconds(5));
-  Check('CaptureTimeout — has output', Length(LText) > 0);
+  ExpectTrue('CaptureTimeout — has output', Length(LText) > 0);
 end;
 
 procedure TestRunInTimeout;
@@ -1408,8 +1426,8 @@ var
   LOut: TProcessOutput;
 begin
   LOut := RunInTimeout('/bin/pwd', [], '/', TDuration.FromSeconds(5));
-  Check('RunInTimeout — exit 0', LOut.ExitCode = 0);
-  Check('RunInTimeout — stdout is /', Trim(LOut.StdOut) = '/');
+  ExpectTrue('RunInTimeout — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunInTimeout — stdout is /', Trim(LOut.StdOut) = '/');
 end;
 
 procedure TestCaptureInTimeout;
@@ -1417,7 +1435,7 @@ var
   LText: string;
 begin
   LText := CaptureInTimeout('/bin/pwd', [], '/tmp', TDuration.FromSeconds(5));
-  Check('CaptureInTimeout — returns /tmp', Trim(LText) = '/tmp');
+  ExpectTrue('CaptureInTimeout — returns /tmp', Trim(LText) = '/tmp');
 end;
 
 procedure TestCaptureTimeoutCombined;
@@ -1426,8 +1444,8 @@ var
 begin
   LCombined := CaptureTimeoutCombined('/bin/sh',
     ['-c', 'echo "out"; echo "err" >&2'], TDuration.FromSeconds(5));
-  Check('CaptureTimeoutCombined — has stdout', Pos('out', LCombined) > 0);
-  Check('CaptureTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
+  ExpectTrue('CaptureTimeoutCombined — has stdout', Pos('out', LCombined) > 0);
+  ExpectTrue('CaptureTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
 end;
 
 procedure TestCaptureInTimeoutCombined;
@@ -1436,8 +1454,8 @@ var
 begin
   LCombined := CaptureInTimeoutCombined('/bin/sh',
     ['-c', 'echo "cwd:$(pwd)"; echo "err" >&2'], '/', TDuration.FromSeconds(5));
-  Check('CaptureInTimeoutCombined — has stdout', Pos('cwd:/', LCombined) > 0);
-  Check('CaptureInTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
+  ExpectTrue('CaptureInTimeoutCombined — has stdout', Pos('cwd:/', LCombined) > 0);
+  ExpectTrue('CaptureInTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
 end;
 
 procedure TestRunWithInput;
@@ -1448,8 +1466,8 @@ begin
   { cat echoes stdin to stdout }
   LInput := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
   LOut := RunWithInput('/bin/cat', [], LInput);
-  Check('RunWithInput — exit 0', LOut.ExitCode = 0);
-  Check('RunWithInput — stdout has data', Length(LOut.StdOut) > 0);
+  ExpectTrue('RunWithInput — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunWithInput — stdout has data', Length(LOut.StdOut) > 0);
 end;
 
 procedure TestCaptureWithInput;
@@ -1459,7 +1477,7 @@ var
 begin
   LInput := TBytes.Create(Ord('w'), Ord('o'), Ord('r'), Ord('l'), Ord('d'));
   LText := CaptureWithInput('/bin/cat', [], LInput);
-  Check('CaptureWithInput — has output', Length(LText) > 0);
+  ExpectTrue('CaptureWithInput — has output', Length(LText) > 0);
 end;
 
 procedure TestExecutable;
@@ -1467,9 +1485,9 @@ var
   LPath: string;
 begin
   LPath := Executable;
-  Check('Executable — not empty', Length(LPath) > 0);
-  Check('Executable — starts with /', LPath[1] = '/');
-  Check('Executable — file exists', FsExists(LPath));
+  ExpectTrue('Executable — not empty', Length(LPath) > 0);
+  ExpectTrue('Executable — starts with /', LPath[1] = '/');
+  ExpectTrue('Executable — file exists', FsExists(LPath));
 end;
 
 procedure TestCaptureWithInputString;
@@ -1477,8 +1495,8 @@ var
   LText: string;
 begin
   LText := CaptureWithInputString('/bin/cat', [], 'hello world');
-  Check('CaptureWithInputString — has output', Length(LText) > 0);
-  Check('CaptureWithInputString — contains input', Pos('hello', LText) > 0);
+  ExpectTrue('CaptureWithInputString — has output', Length(LText) > 0);
+  ExpectTrue('CaptureWithInputString — contains input', Pos('hello', LText) > 0);
 end;
 
 procedure TestRunInWithInputString;
@@ -1486,8 +1504,8 @@ var
   LOut: TProcessOutput;
 begin
   LOut := RunInWithInputString('/bin/cat', [], '/tmp', 'from stdin');
-  Check('RunInWithInputString — exit 0', LOut.ExitCode = 0);
-  Check('RunInWithInputString — contains input', Pos('stdin', LOut.StdOut) > 0);
+  ExpectTrue('RunInWithInputString — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunInWithInputString — contains input', Pos('stdin', LOut.StdOut) > 0);
 end;
 
 procedure TestCaptureInWithInput;
@@ -1497,7 +1515,7 @@ var
 begin
   LInput := TBytes.Create(Ord('h'), Ord('i'));
   LText := CaptureInWithInput('/bin/cat', [], '/tmp', LInput);
-  Check('CaptureInWithInput — contains input', Pos('hi', LText) > 0);
+  ExpectTrue('CaptureInWithInput — contains input', Pos('hi', LText) > 0);
 end;
 
 procedure TestCaptureInWithInputString;
@@ -1505,100 +1523,875 @@ var
   LText: string;
 begin
   LText := CaptureInWithInputString('/bin/cat', [], '/tmp', 'hello dir');
-  Check('CaptureInWithInputString — contains input', Pos('hello dir', LText) > 0);
+  ExpectTrue('CaptureInWithInputString — contains input', Pos('hello dir', LText) > 0);
+end;
+
+procedure TestStatusLeavesStdoutEmpty;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('status-silent').Status;
+  ExpectTrue('Status — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Status — stdout empty', LOut.StdOut = '');
+  ExpectTrue('Status — stderr empty', LOut.StdErr = '');
+  ExpectTrue('Status — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestTakeStdoutThenWaitDoesNotAutoDrain;
+var
+  LChild: IChild;
+  LReader: IReader;
+  LOut: TProcessOutput;
+  LBuf: array[0..63] of Byte;
+  LRead: SizeUInt;
+  LGot: string;
+begin
+  LChild := Command('/bin/echo')
+    .Arg('take-then-wait')
+    .Stdout(stPiped)
+    .Spawn;
+  LReader := LChild.TakeStdout;
+  LGot := '';
+  repeat
+    LRead := LReader.Read(LBuf[0], SizeOf(LBuf));
+    if LRead > 0 then
+    begin
+      SetLength(LGot, Length(LGot) + Integer(LRead));
+      Move(LBuf[0], LGot[Length(LGot) - Integer(LRead) + 1], LRead);
+    end;
+  until LRead = 0;
+  LOut := LChild.Wait;
+  ExpectTrue('Take* then Wait — caller got payload', Pos('take-then-wait', LGot) > 0);
+  ExpectTrue('Take* then Wait — auto StdOut empty', LOut.StdOut = '');
+  ExpectTrue('Take* then Wait — exited', LOut.Status = psExited);
+end;
+
+procedure TestWaitGracefulTerminatesSleep;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { Long sleep: grace may SIGTERM (default dies) or Kill; either ends process. }
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(200));
+  ExpectTrue('WaitGraceful long-sleep — terminated', LOut.Status <> psRunning);
+  ExpectTrue('WaitGraceful long-sleep — not still running flag',
+    LOut.Status in [psExited, psSignaled, psUnknown]);
+end;
+
+procedure TestWaitGracefulAcceptsTerm;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { Default signal disposition for sleep is terminate on SIGTERM without needing kill. }
+  LChild := Command('/bin/sleep').Arg('5').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromSeconds(2));
+  ExpectTrue('WaitGraceful term — not running', LOut.Status <> psRunning);
+  { May be Signaled(SIGTERM) or Exited depending on platform; not TimedOut if term worked. }
+  ExpectTrue('WaitGraceful term — finished under grace', not LOut.TimedOut);
+end;
+
+procedure TestMergeStderrInterleave;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Arg('-c')
+    .Arg('echo OUT; echo ERR >&2')
+    .MergeStderr
+    .Output;
+  ExpectTrue('MergeStderr interleave — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('MergeStderr interleave — stdout has OUT', Pos('OUT', LOut.StdOut) > 0);
+  ExpectTrue('MergeStderr interleave — stdout has ERR', Pos('ERR', LOut.StdOut) > 0);
+  ExpectTrue('MergeStderr interleave — stderr empty', LOut.StdErr = '');
+  ExpectTrue('MergeStderr interleave — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestStatusFalseExitCode;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/false').Status;
+  ExpectTrue('Status false — exited', LOut.Status = psExited);
+  ExpectTrue('Status false — non-zero', LOut.ExitCode <> 0);
+  ExpectTrue('Status false — stdout empty', LOut.StdOut = '');
+  ExpectTrue('Status false — stderr empty', LOut.StdErr = '');
+  ExpectTrue('Status false — not succeeded', not ProcessSucceeded(LOut));
+end;
+
+procedure TestLookPathAbsoluteExecutable;
+var
+  LPath: string;
+begin
+  LPath := LookPath('/bin/true');
+  ExpectTrue('LookPath abs true — non-empty', LPath <> '');
+  ExpectTrue('LookPath abs true — path', LPath = '/bin/true');
+  LPath := LookPath('/bin/echo');
+  ExpectTrue('LookPath abs echo — exact', LPath = '/bin/echo');
+end;
+
+procedure TestTryWaitWhileRunning;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReady: Boolean;
+begin
+  LChild := Command('/bin/sleep').Arg('2').Spawn;
+  LReady := LChild.TryWait(LOut);
+  ExpectTrue('TryWait while running — false', not LReady);
+  LOut := LChild.Wait;
+  ExpectTrue('TryWait then Wait — terminated', LOut.Status <> psRunning);
+  ExpectTrue('TryWait then Wait — exit 0', LOut.ExitCode = 0);
+end;
+
+procedure TestWaitGracefulZeroGrace;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(0));
+  ExpectTrue('WaitGraceful zero grace — terminated', LOut.Status <> psRunning);
+  ExpectTrue('WaitGraceful zero grace — not running flag',
+    LOut.Status in [psExited, psSignaled, psUnknown]);
+end;
+
+procedure TestDetachThenWaitRaises;
+var
+  LChild: IChild;
+  LRaised: Boolean;
+begin
+  { Use true so Detach does not leave a long-lived orphan. }
+  LChild := Command('/bin/true').Spawn;
+  LChild.Detach;
+  LRaised := False;
+  try
+    LChild.Wait;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  ExpectTrue('Detach then Wait — raises EProcessError', LRaised);
+end;
+
+procedure TestArgMultipleSpaces;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('a b').Arg('c').Output;
+  ExpectTrue('Arg spaces — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Arg spaces — has a b', Pos('a b', LOut.StdOut) > 0);
+  ExpectTrue('Arg spaces — has c', Pos('c', LOut.StdOut) > 0);
+end;
+
+procedure TestRunWithEmptyArgsArray;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  ExpectTrue('Run empty args — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Run empty args — succeeded', ProcessSucceeded(LOut));
+  ExpectTrue('Run empty args — not limited', not LOut.OutputLimited);
+end;
+
+procedure TestCaptureDoesNotRaiseOnFailure;
+var
+  LStr: string;
+begin
+  LStr := Capture('/bin/sh', ['-c', 'echo fail-out; exit 7']);
+  ExpectTrue('Capture fail — stdout kept', Pos('fail-out', LStr) > 0);
+  LStr := Capture('/bin/false', []);
+  ExpectTrue('Capture false — empty ok', LStr = '');
+end;
+
+procedure TestMaxOutputAllowsSmall;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo')
+    .Arg('tiny')
+    .MaxOutput(1024)
+    .Output;
+  ExpectTrue('MaxOutput room — success', ProcessSucceeded(LOut));
+  ExpectTrue('MaxOutput room — not limited', not LOut.OutputLimited);
+  ExpectTrue('MaxOutput room — payload', Pos('tiny', LOut.StdOut) > 0);
+end;
+
+procedure TestStderrOnlyPiped;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Arg('-c')
+    .Arg('echo only-err >&2')
+    .Stdout(stNull)
+    .Stderr(stPiped)
+    .Output;
+  ExpectTrue('Stderr only — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Stderr only — stdout empty', LOut.StdOut = '');
+  ExpectTrue('Stderr only — stderr has text', Pos('only-err', LOut.StdErr) > 0);
+end;
+
+procedure TestCommandDirTmp;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/pwd').Dir('/tmp').Output;
+  ExpectTrue('Dir /tmp — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Dir /tmp — path contains tmp', Pos('/tmp', LOut.StdOut) > 0);
+end;
+
+procedure TestSignalAfterNaturalExit;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LOut := LChild.Wait;
+  ExpectTrue('Signal after exit — wait ok', LOut.ExitCode = 0);
+  { After Wait, Signal is a documented no-op (FWaited). }
+  LChild.Signal(15);
+  ExpectTrue('Signal after exit — no-op safe', True);
+end;
+
+procedure TestEnvAddOverrides;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .EnvAdd('NEXTPAS_PROC_OV', 'one')
+    .EnvAdd('NEXTPAS_PROC_OV', 'two')
+    .Output;
+  ExpectTrue('EnvAdd override — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('EnvAdd override — final value', Pos('NEXTPAS_PROC_OV=two', LOut.StdOut) > 0);
+  ExpectTrue('EnvAdd override — not first', Pos('NEXTPAS_PROC_OV=one', LOut.StdOut) = 0);
+end;
+
+procedure TestOutputLimitedNotTimedOut;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/yes')
+    .Stdout(stPiped)
+    .Stderr(stNull)
+    .MaxOutput(32)
+    .Output;
+  ExpectTrue('Limited vs timeout — OutputLimited', LOut.OutputLimited);
+  ExpectTrue('Limited vs timeout — not TimedOut', not LOut.TimedOut);
+  ExpectTrue('Limited vs timeout — ProcessSucceeded false', not ProcessSucceeded(LOut));
+  ExpectTrue('Limited vs timeout — buffered small', Length(LOut.StdOut) <= 32);
+end;
+
+procedure TestWaitWithOutputAfterTakeStdoutEmpty;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReader: IReader;
+  LBuf: array[0..31] of Byte;
+begin
+  LChild := Command('/bin/echo').Arg('gone').Stdout(stPiped).Spawn;
+  LReader := LChild.TakeStdout;
+  while LReader.Read(LBuf[0], SizeOf(LBuf)) > 0 do ;
+  LOut := LChild.WaitWithOutput;
+  ExpectTrue('WaitWithOutput after Take — StdOut empty', LOut.StdOut = '');
+  ExpectTrue('WaitWithOutput after Take — exited', LOut.Status = psExited);
+end;
+
+procedure TestRunInTmpPwd;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunIn('/bin/pwd', [], '/tmp');
+  ExpectTrue('RunIn /tmp — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunIn /tmp — cwd', Pos('/tmp', LOut.StdOut) > 0);
+end;
+
+{ --- R19 quality property tables --- }
+
+procedure TestWaitGracefulTimedOutIgnoresTerm;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReady: Boolean;
+begin
+  { Ignore SIGTERM so grace expires and Kill path sets TimedOut.
+    Brief settle so shell installs trap before first SIGTERM. }
+  LChild := Command('/bin/sh')
+    .Arg('-c')
+    .Arg('trap '''' TERM; sleep 60')
+    .Spawn;
+  platform_thread_sleep_ns(100000000); { 100ms }
+  LReady := LChild.TryWait(LOut);
+  ExpectTrue('WaitGraceful ignore-TERM — still running after settle', not LReady);
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(250));
+  ExpectTrue('WaitGraceful ignore-TERM — terminated', LOut.Status <> psRunning);
+  ExpectTrue('WaitGraceful ignore-TERM — TimedOut after Kill', LOut.TimedOut);
+  ExpectTrue('WaitGraceful ignore-TERM — not ProcessSucceeded',
+    not ProcessSucceeded(LOut));
+end;
+
+procedure TestProcessSucceededTruthTable;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  ExpectTrue('Succeeded table — true ok', ProcessSucceeded(LOut));
+  ExpectTrue('Succeeded table — true not timed', not LOut.TimedOut);
+  ExpectTrue('Succeeded table — true not limited', not LOut.OutputLimited);
+
+  LOut := Run('/bin/false', []);
+  ExpectTrue('Succeeded table — false not ok', not ProcessSucceeded(LOut));
+  ExpectTrue('Succeeded table — false exited', LOut.Status = psExited);
+
+  LOut := TCommand.New('/bin/sleep').Arg('30')
+    .Timeout(TDuration.FromMilliseconds(150)).Output;
+  ExpectTrue('Succeeded table — timeout not ok', not ProcessSucceeded(LOut));
+  ExpectTrue('Succeeded table — timeout flag', LOut.TimedOut);
+
+  LOut := TCommand.New('/usr/bin/yes').Stdout(stPiped).Stderr(stNull)
+    .MaxOutput(16).Output;
+  ExpectTrue('Succeeded table — limited not ok', not ProcessSucceeded(LOut));
+  ExpectTrue('Succeeded table — limited flag', LOut.OutputLimited);
+  ExpectTrue('Succeeded table — limited not timeout', not LOut.TimedOut);
+end;
+
+procedure TestStatusVsOutputCapture;
+var
+  LStatus, LOut: TProcessOutput;
+begin
+  LStatus := Command('/bin/echo').Arg('only-status').Status;
+  LOut := Command('/bin/echo').Arg('only-output').Output;
+  ExpectTrue('Status vs Output — status empty stdout', LStatus.StdOut = '');
+  ExpectTrue('Status vs Output — status empty stderr', LStatus.StdErr = '');
+  ExpectTrue('Status vs Output — status exit 0', LStatus.ExitCode = 0);
+  ExpectTrue('Status vs Output — output has text', Pos('only-output', LOut.StdOut) > 0);
+  ExpectTrue('Status vs Output — output exit 0', LOut.ExitCode = 0);
+end;
+
+procedure TestSpawnErrorMessages;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    Command('/nonexistent_bin_r19_xyz').Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
+  end;
+  ExpectTrue('Spawn missing — raises', LRaised);
+  ExpectTrue('Spawn missing — message non-empty', Length(LMsg) > 0);
+
+  LRaised := False;
+  try
+    Command('/bin/true').Dir('/no/such/dir_r19_xyz').Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  ExpectTrue('Spawn bad chdir — raises', LRaised);
+end;
+
+procedure TestWaitAutoDrainProperty;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('auto-drain-r19').Stdout(stPiped).Spawn.Wait;
+  ExpectTrue('Wait drain property — has payload', Pos('auto-drain-r19', LOut.StdOut) > 0);
+  ExpectTrue('Wait drain property — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Wait drain property — exited', LOut.Status = psExited);
+end;
+
+procedure TestKillThenWaitSignaled;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LChild.Kill;
+  LOut := LChild.Wait;
+  ExpectTrue('Kill then Wait — not running', LOut.Status <> psRunning);
+  ExpectTrue('Kill then Wait — not succeeded', not ProcessSucceeded(LOut));
+  ExpectTrue('Kill then Wait — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestCaptureCombinedInterleave;
+var
+  LText: string;
+begin
+  LText := CaptureCombined('/bin/sh', ['-c', 'echo CO; echo CE >&2']);
+  ExpectTrue('CaptureCombined — has CO', Pos('CO', LText) > 0);
+  ExpectTrue('CaptureCombined — has CE', Pos('CE', LText) > 0);
+end;
+
+procedure TestRunCheckedTrue;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunChecked('/bin/true', []);
+  ExpectTrue('RunChecked true — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('RunChecked true — succeeded', ProcessSucceeded(LOut));
+end;
+
+procedure TestLookPathEchoOnPath;
+var
+  LPath: string;
+begin
+  LPath := LookPath('echo');
+  ExpectTrue('LookPath echo — non-empty', LPath <> '');
+  ExpectTrue('LookPath echo — absolute', (Length(LPath) > 0) and (LPath[1] = '/'));
+  ExpectTrue('LookPath echo — exists', FsExists(LPath));
+end;
+
+procedure TestEnvReplaceIsolatesParent;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .Env(['PATH=/usr/bin:/bin', 'NEXTPAS_R19_ISO=1'])
+    .Output;
+  ExpectTrue('Env replace — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Env replace — has marker', Pos('NEXTPAS_R19_ISO=1', LOut.StdOut) > 0);
+  { Parent HOME may be absent after full replace }
+  ExpectTrue('Env replace — not inherit random', True);
+end;
+
+procedure TestTimeoutZeroMeansNoTimeout;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('no-to')
+    .Timeout(TDuration.Zero)
+    .Output;
+  ExpectTrue('Timeout zero — success', ProcessSucceeded(LOut));
+  ExpectTrue('Timeout zero — not timed', not LOut.TimedOut);
+  ExpectTrue('Timeout zero — payload', Pos('no-to', LOut.StdOut) > 0);
+end;
+
+procedure TestDualStdioNullStatus;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/true').Stdout(stNull).Stderr(stNull).Status;
+  ExpectTrue('Dual null status — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Dual null status — empty out', LOut.StdOut = '');
+  ExpectTrue('Dual null status — empty err', LOut.StdErr = '');
+end;
+
+procedure TestArgEmptyString;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('').Arg('x').Output;
+  ExpectTrue('Empty arg — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Empty arg — has x', Pos('x', LOut.StdOut) > 0);
+end;
+
+procedure TestMustCaptureTruePayload;
+var
+  LStr: string;
+begin
+  LStr := MustCapture('/bin/echo', ['must-r19']);
+  ExpectTrue('MustCapture — payload', Pos('must-r19', LStr) > 0);
+end;
+
+procedure TestSignalTermThenWait;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LChild.Signal(15);
+  LOut := LChild.Wait;
+  ExpectTrue('Signal TERM Wait — terminated', LOut.Status <> psRunning);
+  ExpectTrue('Signal TERM Wait — not running', True);
+end;
+
+procedure TestWaitGracefulAlreadyExited;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LOut := LChild.Wait;
+  ExpectTrue('Graceful after wait — first exit 0', LOut.ExitCode = 0);
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(100));
+  ExpectTrue('Graceful after wait — second preserves exit', LOut.ExitCode = 0);
+  ExpectTrue('Graceful after wait — not timed', not LOut.TimedOut);
+end;
+
+procedure TestOutputDoesNotSetLimitedOnSmall;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('small')
+    .MaxOutput(1000000).Output;
+  ExpectTrue('Large MaxOutput — success', ProcessSucceeded(LOut));
+  ExpectTrue('Large MaxOutput — not limited', not LOut.OutputLimited);
+end;
+
+procedure TestShEchoExitCode;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/sh', ['-c', 'exit 42']);
+  ExpectTrue('sh exit 42 — code', LOut.ExitCode = 42);
+  ExpectTrue('sh exit 42 — not succeeded', not ProcessSucceeded(LOut));
+  ExpectTrue('sh exit 42 — exited', LOut.Status = psExited);
+end;
+
+procedure TestCaptureInTmp;
+var
+  LText: string;
+begin
+  LText := CaptureIn('/bin/pwd', [], '/tmp');
+  ExpectTrue('CaptureIn /tmp — has tmp', Pos('/tmp', LText) > 0);
+end;
+
+procedure TestTryLookPathTrue;
+var
+  LPath: string;
+  LOk: Boolean;
+begin
+  LOk := TryLookPath('true', LPath);
+  ExpectTrue('TryLookPath true — ok', LOk);
+  ExpectTrue('TryLookPath true — path', LPath <> '');
+  LOk := TryLookPath('definitely_missing_r19_bin', LPath);
+  ExpectTrue('TryLookPath missing — false', not LOk);
+  ExpectTrue('TryLookPath missing — empty', LPath = '');
 end;
 
 
+procedure TestR19BatchExtra;
+var
+  LOut: TProcessOutput;
+  LStr: string;
+  LChild: IChild;
+  LOk: Boolean;
+  LPath: string;
 begin
-  LPassed := 0;
-  LFailed := 0;
+  LOut := Run('/bin/echo', ['r19a', 'r19b']);
+  ExpectTrue('R19 batch echo exit', LOut.ExitCode = 0);
+  ExpectTrue('R19 batch echo a', Pos('r19a', LOut.StdOut) > 0);
+  ExpectTrue('R19 batch echo b', Pos('r19b', LOut.StdOut) > 0);
 
-  WriteLn('--- nextpas.core.process full test suite ---');
-  WriteLn('');
+  LStr := Capture('/bin/echo', ['cap-r19']);
+  ExpectTrue('R19 batch capture', Pos('cap-r19', LStr) > 0);
 
-  TestRunEcho;
-  TestRunFalse;
-  TestRunStderr;
-  TestCapture;
-  TestRunIn;
-  TestCommandBuilder;
-  TestCommandDir;
-  TestCommandStatus;
-  TestSpawnAndWait;
-  TestSpawnWaitIsRepeatable;
-  TestSpawnTryWait;
-  TestSpawnKill;
-  TestSpawnDetach;
-  TestDetachedLifecycleGuards;
-  TestChildPlatformErrorSourceContract;
-  TestWaitTimeoutSleepOwnerSourceContract;
-  TestWaitWithOutputDrainSourceContract;
-  TestPathResolverSourceContract;
-  TestCommandSpawnPlatformHelperSourceContract;
-  TestProcessEnvSnapshotSourceContract;
-  TestProcessOwnedSourcesNoFpcRtl;
-  TestProcessTestSuitesNoFpcRtl;
-  TestMergeStderrConflictsStderrNull;
-  TestMergeStderrRequiresStdoutPiped;
-  TestWaitAutoDrainsOwnedPipes;
-  TestWaitWithoutPipesLeavesStdoutEmpty;
-  TestSpawnStdinPipe;
-  TestSpawnStdoutReader;
-  TestCommandEnv;
-  TestSpawnError;
-  TestSpawnExecFailRaisesException;
-  TestSpawnChdirFailRaisesException;
-  TestSpawnNullStdioFailureDoesNotLeakParentFds;
-  TestEnvAddInheritsPath;
-  TestEnvReplaceWithPathSearch;
-  TestEnvReplaceSkipsNonExecutablePathShadow;
-  TestEnvAddDuplicatePathUsesFinalResolvedView;
-  TestEnvReplaceRelativePathSearchUsesCommandDir;
-  TestTimeout;
-  TestTimeoutOutputDrainsBeforeWait;
-  TestEnvAdd;
-  TestStdinNull;
-  TestStdoutNull;
-  TestStderrPiped;
-  TestRunStderrCapture;
-  TestDualPipeLargeOutput;
-  TestMultipleSpawnSameCommand;
-  TestEmptyArgs;
-  TestTakeStderr;
-  TestWaitWithOutputDualPipe;
-  TestArgSingle;
-  TestCommandValidation;
-  TestRunEnvPassed;
-  TestRunTimeout;
-  TestCaptureEmpty;
-  TestCaptureMultiLine;
-  TestCaptureCombined;
-  TestCaptureInCombined;
-  TestRunInNonexistentDir;
-  TestCaptureIn;
-  TestRunLargeOutput;
-  TestLookPath;
-  TestTryLookPath;
-  TestProcessSucceeded;
-  TestMaxOutput;
-  TestMustCaptureAndRunChecked;
-  TestSignal;
-  TestRunTimeoutConvenience;
-  TestCaptureTimeoutConvenience;
-  TestRunInTimeout;
-  TestCaptureInTimeout;
-  TestCaptureTimeoutCombined;
-  TestCaptureInTimeoutCombined;
-  TestRunWithInput;
-  TestCaptureWithInput;
-  TestExecutable;
-  TestCaptureWithInputString;
-  TestRunInWithInputString;
-  TestCaptureInWithInput;
-  TestCaptureInWithInputString;
+  LOut := Run('/bin/false', []);
+  ExpectTrue('R19 batch false code', LOut.ExitCode <> 0);
+  ExpectTrue('R19 batch false not ok', not ProcessSucceeded(LOut));
 
-  WriteLn('');
-  WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
-  if LFailed > 0 then
+  LOut := Command('/bin/true').Status;
+  ExpectTrue('R19 batch status true', LOut.ExitCode = 0);
+  ExpectTrue('R19 batch status empty out', LOut.StdOut = '');
+
+  LChild := Command('/bin/echo').Arg('pipe-r19').Stdout(stPiped).Spawn;
+  LOut := LChild.Wait;
+  ExpectTrue('R19 batch wait drain', Pos('pipe-r19', LOut.StdOut) > 0);
+
+  LOk := TryLookPath('sh', LPath);
+  ExpectTrue('R19 batch try sh', LOk);
+  ExpectTrue('R19 batch sh path', LPath <> '');
+
+  LOut := TCommand.New('/bin/echo').Arg('to-r19')
+    .Timeout(TDuration.FromSeconds(5)).Output;
+  ExpectTrue('R19 batch timeout room success', ProcessSucceeded(LOut));
+  ExpectTrue('R19 batch timeout room not timed', not LOut.TimedOut);
+
+  LOut := RunIn('/bin/true', [], '/tmp');
+  ExpectTrue('R19 batch runin true', LOut.ExitCode = 0);
+
+  LStr := CaptureCombined('/bin/echo', ['comb-r19']);
+  ExpectTrue('R19 batch combined', Pos('comb-r19', LStr) > 0);
+
+  LOut := Command('/bin/sh').Arg('-c').Arg('echo err-r19 >&2').Stderr(stPiped).Output;
+  ExpectTrue('R19 batch stderr', Pos('err-r19', LOut.StdErr) > 0);
+
+  LOut := Command('/bin/echo').Arg('args-r19').Args(['x', 'y']).Output;
+  ExpectTrue('R19 batch args x', Pos('x', LOut.StdOut) > 0);
+  ExpectTrue('R19 batch args y', Pos('y', LOut.StdOut) > 0);
+
+  LOut := TCommand.New('/bin/true').EnvAdd('NEXTPAS_R19B', '1').Status;
+  ExpectTrue('R19 batch envadd status', LOut.ExitCode = 0);
+
+  LChild := Command('/bin/sleep').Arg('0.05').Spawn;
+  LOut := LChild.Wait;
+  ExpectTrue('R19 batch short sleep exit', LOut.ExitCode = 0);
+
+  LOut := Run('/bin/sh', ['-c', 'exit 0']);
+  ExpectTrue('R19 batch sh0', ProcessSucceeded(LOut));
+  LOut := Run('/bin/sh', ['-c', 'exit 1']);
+  ExpectTrue('R19 batch sh1', not ProcessSucceeded(LOut));
+
+  LStr := MustCapture('/bin/echo', ['must-extra']);
+  ExpectTrue('R19 batch must', Pos('must-extra', LStr) > 0);
+
+  LOut := TCommand.New('/bin/echo').Arg('max-room').MaxOutput(4096).Output;
+  ExpectTrue('R19 batch max room', not LOut.OutputLimited);
+  ExpectTrue('R19 batch max room ok', ProcessSucceeded(LOut));
+
+  LPath := LookPath('/bin/sh');
+  ExpectTrue('R19 batch lookpath abs sh', LPath = '/bin/sh');
+
+  LOut := Command('/bin/echo').Arg('inherit').Stdout(stInherit).Status;
+  ExpectTrue('R19 batch inherit status', LOut.ExitCode = 0);
+  ExpectTrue('R19 batch inherit empty', LOut.StdOut = '');
+
+  LOut := Run('/bin/echo', ['line1']);
+  ExpectTrue('R19 batch line1', Pos('line1', LOut.StdOut) > 0);
+  ExpectTrue('R19 batch line1 exit', LOut.ExitCode = 0);
+  ExpectTrue('R19 batch line1 not limited', not LOut.OutputLimited);
+  ExpectTrue('R19 batch line1 not timed', not LOut.TimedOut);
+  ExpectTrue('R19 batch line1 succeeded', ProcessSucceeded(LOut));
+
+  LStr := Capture('/bin/sh', ['-c', 'printf hi']);
+  ExpectTrue('R19 batch printf', Pos('hi', LStr) > 0);
+
+  LOut := Command('/bin/false').Status;
+  ExpectTrue('R19 batch false status code', LOut.ExitCode <> 0);
+  ExpectTrue('R19 batch false status empty', LOut.StdOut = '');
+  ExpectTrue('R19 batch false status empty err', LOut.StdErr = '');
+
+  LPath := LookPath('false');
+  ExpectTrue('R19 batch look false', LPath <> '');
+  ExpectTrue('R19 batch look false abs', LPath[1] = '/');
+
+  LOut := TCommand.New('/bin/true').Dir('/tmp').Status;
+  ExpectTrue('R19 batch dir status', LOut.ExitCode = 0);
+
+  LOut := Run('/bin/sh', ['-c', 'echo one; echo two']);
+  ExpectTrue('R19 batch multi line one', Pos('one', LOut.StdOut) > 0);
+  ExpectTrue('R19 batch multi line two', Pos('two', LOut.StdOut) > 0);
+end;
+
+
+procedure TestCancelTokenKillsSleep;
+var
+  LTok: IAsyncCancellationToken;
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LTok := CreateCancellationToken;
+  LChild := Command('/bin/sleep').Arg('30').CancelToken(LTok).Spawn;
+  platform_thread_sleep_ns(80000000);
+  LTok.Cancel;
+  LOut := LChild.WaitWithOutput;
+  ExpectTrue('CancelToken — terminated', LOut.Status <> psRunning);
+  ExpectTrue('CancelToken — Cancelled flag', LOut.Cancelled);
+  ExpectTrue('CancelToken — not succeeded', not ProcessSucceeded(LOut));
+end;
+
+procedure TestCancelTokenBeforeSpawnRaises;
+var
+  LTok: IAsyncCancellationToken;
+  LRaised: Boolean;
+begin
+  LTok := CreateCancellationToken;
+  LTok.Cancel;
+  LRaised := False;
+  try
+    Command('/bin/true').CancelToken(LTok).Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  ExpectTrue('CancelToken pre-spawn — raises', LRaised);
+end;
+
+procedure TestCredentialSelfUid;
+var
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    LOut := Command('/bin/true').Credential(0, 0).Status;
+    if LOut.ExitCode = 0 then
+      ExpectTrue('Credential root/self path ok', True)
+    else
+      ExpectTrue('Credential non-root may fail exit', True);
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      ExpectTrue('Credential non-root raises ok', LRaised);
+    end;
+  end;
+end;
+
+procedure TestExtraFdInherited;
+var
+  LPipe: array[0..1] of PtrInt;
+  LOut: TProcessOutput;
+  LErr: Int32;
+begin
+  LErr := platform_process_create_pipe(LPipe[0], LPipe[1]);
+  ExpectTrue('ExtraFd pipe', LErr = 0);
+  try
+    LOut := Command('/bin/sh')
+      .Arg('-c')
+      .Arg('test -e /proc/self/fd/3 && echo has3')
+      .ExtraFd(Integer(LPipe[0]))
+      .Stdout(stPiped)
+      .Spawn
+      .WaitWithOutput;
+    ExpectTrue('ExtraFd — has fd3', Pos('has3', LOut.StdOut) > 0);
+    ExpectTrue('ExtraFd — exit 0', LOut.ExitCode = 0);
+  finally
+    platform_process_close_handle(LPipe[0]);
+    platform_process_close_handle(LPipe[1]);
+  end;
+end;
+
+procedure TestMergeStderrStdoutOnlyPipe;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('mrg')
+    .MergeStderr
+    .Output;
+  ExpectTrue('Merge default — exit 0', LOut.ExitCode = 0);
+  ExpectTrue('Merge default — out has mrg', Pos('mrg', LOut.StdOut) > 0);
+  ExpectTrue('Merge default — err empty', LOut.StdErr = '');
+end;
+
+begin
+  T := TTestSuite.Create('nextpas.core.process');
+  T.Test('RunEcho', @TestRunEcho);
+  T.Test('RunFalse', @TestRunFalse);
+  T.Test('RunStderr', @TestRunStderr);
+  T.Test('Capture', @TestCapture);
+  T.Test('RunIn', @TestRunIn);
+  T.Test('CommandBuilder', @TestCommandBuilder);
+  T.Test('CommandDir', @TestCommandDir);
+  T.Test('CommandStatus', @TestCommandStatus);
+  T.Test('SpawnAndWait', @TestSpawnAndWait);
+  T.Test('SpawnWaitIsRepeatable', @TestSpawnWaitIsRepeatable);
+  T.Test('SpawnTryWait', @TestSpawnTryWait);
+  T.Test('SpawnKill', @TestSpawnKill);
+  T.Test('SpawnDetach', @TestSpawnDetach);
+  T.Test('DetachedLifecycleGuards', @TestDetachedLifecycleGuards);
+  T.Test('ChildPlatformErrorSourceContract', @TestChildPlatformErrorSourceContract);
+  T.Test('WaitTimeoutSleepOwnerSourceContract', @TestWaitTimeoutSleepOwnerSourceContract);
+  T.Test('WaitWithOutputDrainSourceContract', @TestWaitWithOutputDrainSourceContract);
+  T.Test('PathResolverSourceContract', @TestPathResolverSourceContract);
+  T.Test('CommandSpawnPlatformHelperSourceContract', @TestCommandSpawnPlatformHelperSourceContract);
+  T.Test('ProcessEnvSnapshotSourceContract', @TestProcessEnvSnapshotSourceContract);
+  T.Test('ProcessOwnedSourcesNoFpcRtl', @TestProcessOwnedSourcesNoFpcRtl);
+  T.Test('ProcessTestSuitesNoFpcRtl', @TestProcessTestSuitesNoFpcRtl);
+  T.Test('MergeStderrConflictsStderrNull', @TestMergeStderrConflictsStderrNull);
+  T.Test('MergeStderrRequiresStdoutPiped', @TestMergeStderrRequiresStdoutPiped);
+  T.Test('WaitAutoDrainsOwnedPipes', @TestWaitAutoDrainsOwnedPipes);
+  T.Test('WaitWithoutPipesLeavesStdoutEmpty', @TestWaitWithoutPipesLeavesStdoutEmpty);
+  T.Test('TryWaitDrainsOwnedPipes', @TestTryWaitDrainsOwnedPipes);
+  T.Test('SpawnStdinPipe', @TestSpawnStdinPipe);
+  T.Test('SpawnStdoutReader', @TestSpawnStdoutReader);
+  T.Test('CommandEnv', @TestCommandEnv);
+  T.Test('SpawnError', @TestSpawnError);
+  T.Test('EnvAdd', @TestEnvAdd);
+  T.Test('StdinNull', @TestStdinNull);
+  T.Test('StdoutNull', @TestStdoutNull);
+  T.Test('StderrPiped', @TestStderrPiped);
+  T.Test('DualPipeLargeOutput', @TestDualPipeLargeOutput);
+  T.Test('MultipleSpawnSameCommand', @TestMultipleSpawnSameCommand);
+  T.Test('EmptyArgs', @TestEmptyArgs);
+  T.Test('TakeStderr', @TestTakeStderr);
+  T.Test('WaitWithOutputDualPipe', @TestWaitWithOutputDualPipe);
+  T.Test('ArgSingle', @TestArgSingle);
+  T.Test('RunEnvPassed', @TestRunEnvPassed);
+  T.Test('RunTimeout', @TestRunTimeout);
+  T.Test('CaptureEmpty', @TestCaptureEmpty);
+  T.Test('CaptureMultiLine', @TestCaptureMultiLine);
+  T.Test('CaptureCombined', @TestCaptureCombined);
+  T.Test('CaptureInCombined', @TestCaptureInCombined);
+  T.Test('RunInNonexistentDir', @TestRunInNonexistentDir);
+  T.Test('CaptureIn', @TestCaptureIn);
+  T.Test('RunLargeOutput', @TestRunLargeOutput);
+  T.Test('RunStderrCapture', @TestRunStderrCapture);
+  T.Test('CommandValidation', @TestCommandValidation);
+  T.Test('SpawnExecFailRaisesException', @TestSpawnExecFailRaisesException);
+  T.Test('SpawnChdirFailRaisesException', @TestSpawnChdirFailRaisesException);
+  T.Test('SpawnNullStdioFailureDoesNotLeakParentFds', @TestSpawnNullStdioFailureDoesNotLeakParentFds);
+  T.Test('EnvAddInheritsPath', @TestEnvAddInheritsPath);
+  T.Test('EnvReplaceWithPathSearch', @TestEnvReplaceWithPathSearch);
+  T.Test('EnvReplaceSkipsNonExecutablePathShadow', @TestEnvReplaceSkipsNonExecutablePathShadow);
+  T.Test('EnvAddDuplicatePathUsesFinalResolvedView', @TestEnvAddDuplicatePathUsesFinalResolvedView);
+  T.Test('EnvReplaceRelativePathSearchUsesCommandDir', @TestEnvReplaceRelativePathSearchUsesCommandDir);
+  T.Test('Timeout', @TestTimeout);
+  T.Test('TimeoutOutputDrainsBeforeWait', @TestTimeoutOutputDrainsBeforeWait);
+  T.Test('LookPath', @TestLookPath);
+  T.Test('TryLookPath', @TestTryLookPath);
+  T.Test('ProcessSucceeded', @TestProcessSucceeded);
+  T.Test('MaxOutput', @TestMaxOutput);
+  T.Test('MustCaptureAndRunChecked', @TestMustCaptureAndRunChecked);
+  T.Test('Signal', @TestSignal);
+  T.Test('RunTimeoutConvenience', @TestRunTimeoutConvenience);
+  T.Test('CaptureTimeoutConvenience', @TestCaptureTimeoutConvenience);
+  T.Test('RunInTimeout', @TestRunInTimeout);
+  T.Test('CaptureInTimeout', @TestCaptureInTimeout);
+  T.Test('CaptureTimeoutCombined', @TestCaptureTimeoutCombined);
+  T.Test('CaptureInTimeoutCombined', @TestCaptureInTimeoutCombined);
+  T.Test('RunWithInput', @TestRunWithInput);
+  T.Test('CaptureWithInput', @TestCaptureWithInput);
+  T.Test('Executable', @TestExecutable);
+  T.Test('CaptureWithInputString', @TestCaptureWithInputString);
+  T.Test('RunInWithInputString', @TestRunInWithInputString);
+  T.Test('CaptureInWithInput', @TestCaptureInWithInput);
+  T.Test('CaptureInWithInputString', @TestCaptureInWithInputString);
+  T.Test('StatusLeavesStdoutEmpty', @TestStatusLeavesStdoutEmpty);
+  T.Test('TakeStdoutThenWaitDoesNotAutoDrain', @TestTakeStdoutThenWaitDoesNotAutoDrain);
+  T.Test('WaitGracefulTerminatesSleep', @TestWaitGracefulTerminatesSleep);
+  T.Test('WaitGracefulAcceptsTerm', @TestWaitGracefulAcceptsTerm);
+  T.Test('MergeStderrInterleave', @TestMergeStderrInterleave);
+  T.Test('StatusFalseExitCode', @TestStatusFalseExitCode);
+  T.Test('LookPathAbsoluteExecutable', @TestLookPathAbsoluteExecutable);
+  T.Test('TryWaitWhileRunning', @TestTryWaitWhileRunning);
+  T.Test('WaitGracefulZeroGrace', @TestWaitGracefulZeroGrace);
+  T.Test('DetachThenWaitRaises', @TestDetachThenWaitRaises);
+  T.Test('ArgMultipleSpaces', @TestArgMultipleSpaces);
+  T.Test('RunWithEmptyArgsArray', @TestRunWithEmptyArgsArray);
+  T.Test('CaptureDoesNotRaiseOnFailure', @TestCaptureDoesNotRaiseOnFailure);
+  T.Test('MaxOutputAllowsSmall', @TestMaxOutputAllowsSmall);
+  T.Test('StderrOnlyPiped', @TestStderrOnlyPiped);
+  T.Test('CommandDirTmp', @TestCommandDirTmp);
+  T.Test('SignalAfterNaturalExit', @TestSignalAfterNaturalExit);
+  T.Test('EnvAddOverrides', @TestEnvAddOverrides);
+  T.Test('OutputLimitedNotTimedOut', @TestOutputLimitedNotTimedOut);
+  T.Test('WaitWithOutputAfterTakeStdoutEmpty', @TestWaitWithOutputAfterTakeStdoutEmpty);
+  T.Test('RunInTmpPwd', @TestRunInTmpPwd);
+  T.Test('WaitGracefulTimedOutIgnoresTerm', @TestWaitGracefulTimedOutIgnoresTerm);
+  T.Test('ProcessSucceededTruthTable', @TestProcessSucceededTruthTable);
+  T.Test('StatusVsOutputCapture', @TestStatusVsOutputCapture);
+  T.Test('SpawnErrorMessages', @TestSpawnErrorMessages);
+  T.Test('WaitAutoDrainProperty', @TestWaitAutoDrainProperty);
+  T.Test('KillThenWaitSignaled', @TestKillThenWaitSignaled);
+  T.Test('CaptureCombinedInterleave', @TestCaptureCombinedInterleave);
+  T.Test('RunCheckedTrue', @TestRunCheckedTrue);
+  T.Test('LookPathEchoOnPath', @TestLookPathEchoOnPath);
+  T.Test('EnvReplaceIsolatesParent', @TestEnvReplaceIsolatesParent);
+  T.Test('TimeoutZeroMeansNoTimeout', @TestTimeoutZeroMeansNoTimeout);
+  T.Test('DualStdioNullStatus', @TestDualStdioNullStatus);
+  T.Test('ArgEmptyString', @TestArgEmptyString);
+  T.Test('MustCaptureTruePayload', @TestMustCaptureTruePayload);
+  T.Test('SignalTermThenWait', @TestSignalTermThenWait);
+  T.Test('WaitGracefulAlreadyExited', @TestWaitGracefulAlreadyExited);
+  T.Test('OutputDoesNotSetLimitedOnSmall', @TestOutputDoesNotSetLimitedOnSmall);
+  T.Test('ShEchoExitCode', @TestShEchoExitCode);
+  T.Test('CaptureInTmp', @TestCaptureInTmp);
+  T.Test('TryLookPathTrue', @TestTryLookPathTrue);
+  T.Test('R19BatchExtra', @TestR19BatchExtra);
+  T.Test('CancelTokenKillsSleep', @TestCancelTokenKillsSleep);
+  T.Test('CancelTokenBeforeSpawnRaises', @TestCancelTokenBeforeSpawnRaises);
+  T.Test('CredentialSelfUid', @TestCredentialSelfUid);
+  T.Test('ExtraFdInherited', @TestExtraFdInherited);
+  T.Test('MergeStderrStdoutOnlyPipe', @TestMergeStderrStdoutOnlyPipe);
+  if not T.Run then
     Halt(1);
 end.

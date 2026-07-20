@@ -1,0 +1,13 @@
+# Lightweight scorecard tracks (Pascal + Go under bench/<name>/)
+# Lines starting with # are ignored. One track directory name per line.
+boolsum
+fncall
+shortstr
+recops
+inttohex
+bitfield
+packed
+nativeset
+bitscan
+binsearch
+lookup

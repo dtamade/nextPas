@@ -13,8 +13,12 @@ uses
  *
  * @desc
  *   支持 reference to procedure / procedure of object / plain procedure。
- *   每个 worker 有独立队列，空闲时从其他 worker 偷取。
+ *   每个 worker 有独立 T1 work-stealing deque（unmanaged 任务槽间接层）。
+ *   managed TThreadTask 不进入 deque 元素类型。
  *   跨平台（POSIX pthread / Windows threads via platform layer）。
+ *
+ * @progress 池整体为 work-stealing concurrent；deque 热路径为 lock-free
+ *   （owner push/pop + multi-thief steal）。协调用 mutex/condvar（WaitAll/Shutdown）。
  *}
 function CreateWorkStealingPool(const AWorkerCount: Integer = 0): IThreadPool;
 
@@ -22,22 +26,30 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.atomic,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.condvar,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.lockfree.deque;
 
 const
   QUEUE_CAPACITY = 4096;
   MAX_WORKERS = 64;
 
 type
-  TTaskQueue = record
-    Tasks: array[0..QUEUE_CAPACITY - 1] of TThreadTask;
-    Head: Integer;
-    Tail: Integer;
-    Count: Integer;
+  {** Heap node holds managed TThreadTask; deque only stores the pointer. }
+  PTaskNode = ^TTaskNode;
+  TTaskNode = record
+    Task: TThreadTask;
   end;
+
+  {** Unmanaged deque element: pointer to heap task node. }
+  TDequeSlot = record
+    Node: Pointer;
+  end;
+
+  TTaskDeque = specialize TWorkStealingDequeImpl<TDequeSlot>;
 
   TWorkStealingPool = class;
 
@@ -49,7 +61,8 @@ type
 
   TWorkStealingPool = class(TInterfacedObject, IThreadPool)
   private
-    FQueues: array[0..MAX_WORKERS - 1] of TTaskQueue;
+    FDeques: array of TTaskDeque;
+    FOwnerLocks: array of Int32;
     FContexts: array[0..MAX_WORKERS - 1] of TWorkerCtx;
     FWorkerCount: Integer;
     FWorkers: array[0..MAX_WORKERS - 1] of TPlatformThreadHandle;
@@ -59,6 +72,13 @@ type
     FShutdown: Boolean;
     FPendingTasks: Integer;
     FNextQueue: Integer;
+    procedure AcquireOwner(const AWorkerIndex: Integer);
+    procedure ReleaseOwner(const AWorkerIndex: Integer);
+    function TryEnqueueSlot(const AWorkerIndex: Integer; const ASlot: TDequeSlot): Boolean;
+    function TryTakeLocal(const AWorkerIndex: Integer; out ASlot: TDequeSlot): Boolean;
+    function TryStealAny(const AThiefIndex: Integer; out ASlot: TDequeSlot): Boolean;
+    procedure FreeTaskNode(var ANode: PTaskNode);
+    procedure CloseDeques;
   public
     constructor Create(const AWorkerCount: Integer);
     destructor Destroy; override;
@@ -72,10 +92,93 @@ type
     function GetWorkerCount: Integer;
   end;
 
+procedure TWorkStealingPool.AcquireOwner(const AWorkerIndex: Integer);
+var
+  LSpinCount: Int32;
+begin
+  LSpinCount := 0;
+  while AtomicCompareExchange32(FOwnerLocks[AWorkerIndex], 0, 1, moAcquire) <> 0 do
+  begin
+    Inc(LSpinCount);
+    if LSpinCount <= 64 then
+      CpuPause
+    else
+      ThreadSwitch;
+  end;
+end;
+
+procedure TWorkStealingPool.ReleaseOwner(const AWorkerIndex: Integer);
+begin
+  AtomicStore32(FOwnerLocks[AWorkerIndex], 0, moRelease);
+end;
+
+function TWorkStealingPool.TryEnqueueSlot(const AWorkerIndex: Integer;
+  const ASlot: TDequeSlot): Boolean;
+begin
+  AcquireOwner(AWorkerIndex);
+  try
+    Result := FDeques[AWorkerIndex].TryPush(ASlot);
+  finally
+    ReleaseOwner(AWorkerIndex);
+  end;
+end;
+
+function TWorkStealingPool.TryTakeLocal(const AWorkerIndex: Integer;
+  out ASlot: TDequeSlot): Boolean;
+begin
+  AcquireOwner(AWorkerIndex);
+  try
+    Result := FDeques[AWorkerIndex].TryPop(ASlot);
+  finally
+    ReleaseOwner(AWorkerIndex);
+  end;
+end;
+
+function TWorkStealingPool.TryStealAny(const AThiefIndex: Integer;
+  out ASlot: TDequeSlot): Boolean;
+var
+  LI, LVictim: Integer;
+begin
+  Result := False;
+  ASlot.Node := nil;
+  for LI := 1 to FWorkerCount - 1 do
+  begin
+    LVictim := (AThiefIndex + LI) mod FWorkerCount;
+    if FDeques[LVictim].TrySteal(ASlot) then
+      Exit(True);
+  end;
+end;
+
+procedure TWorkStealingPool.FreeTaskNode(var ANode: PTaskNode);
+begin
+  if ANode = nil then
+    Exit;
+  ANode^.Task := nil;
+  Dispose(ANode);
+  ANode := nil;
+end;
+
+procedure TWorkStealingPool.CloseDeques;
+var
+  LI: Integer;
+begin
+  for LI := 0 to FWorkerCount - 1 do
+  begin
+    AcquireOwner(LI);
+    try
+      FDeques[LI].Close;
+    finally
+      ReleaseOwner(LI);
+    end;
+  end;
+end;
+
 function WorkerMain(AArg: Pointer): Pointer; cdecl;
 var
   LPool: TWorkStealingPool;
-  LMyID, LVictim, LI: Integer;
+  LMyID: Integer;
+  LSlot: TDequeSlot;
+  LNode: PTaskNode;
   LTask: TThreadTask;
   LFound: Boolean;
 begin
@@ -85,45 +188,24 @@ begin
 
   while True do
   begin
-    LTask := nil;
-    LFound := False;
-
-    LPool.FMutex.Acquire;
-
-    // Try own queue (pop from front)
-    if LPool.FQueues[LMyID].Count > 0 then
-    begin
-      Pointer(LTask) := Pointer(LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head]);
-      Pointer(LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head]) := nil;
-      LPool.FQueues[LMyID].Head := (LPool.FQueues[LMyID].Head + 1) mod QUEUE_CAPACITY;
-      Dec(LPool.FQueues[LMyID].Count);
-      LFound := True;
-    end;
-
-    // Try stealing from back of victim's queue
+    LFound := LPool.TryTakeLocal(LMyID, LSlot);
     if not LFound then
-      for LI := 1 to LPool.FWorkerCount - 1 do
-      begin
-        LVictim := (LMyID + LI) mod LPool.FWorkerCount;
-        if LPool.FQueues[LVictim].Count > 0 then
-        begin
-          // Pop from back: decrement Tail
-          LPool.FQueues[LVictim].Tail := (LPool.FQueues[LVictim].Tail - 1 + QUEUE_CAPACITY) mod QUEUE_CAPACITY;
-          Dec(LPool.FQueues[LVictim].Count);
-          Pointer(LTask) := Pointer(LPool.FQueues[LVictim].Tasks[LPool.FQueues[LVictim].Tail]);
-          Pointer(LPool.FQueues[LVictim].Tasks[LPool.FQueues[LVictim].Tail]) := nil;
-          LFound := True;
-          Break;
-        end;
-      end;
-
-    LPool.FMutex.Release;
+      LFound := LPool.TryStealAny(LMyID, LSlot);
 
     if LFound then
     begin
-      LTask();
+      LNode := PTaskNode(LSlot.Node);
+      LTask := nil;
+      if LNode <> nil then
+      begin
+        LTask := LNode^.Task;
+        LPool.FreeTaskNode(LNode);
+      end;
+      if Assigned(LTask) then
+        LTask();
+      LTask := nil;
+
       LPool.FMutex.Acquire;
-      LTask := nil;  // Release ref under mutex protection
       Dec(LPool.FPendingTasks);
       if LPool.FPendingTasks = 0 then
         LPool.FDoneCondVar.Broadcast;
@@ -134,8 +216,14 @@ begin
       LPool.FMutex.Acquire;
       if LPool.FShutdown then
       begin
+        if LPool.FPendingTasks = 0 then
+        begin
+          LPool.FMutex.Release;
+          Break;
+        end;
+        { Drain race: tasks may still be in deques; release and retry without sleep. }
         LPool.FMutex.Release;
-        Break;
+        Continue;
       end;
       LPool.FCondVar.Wait(LPool.FMutex);
       LPool.FMutex.Release;
@@ -152,20 +240,26 @@ begin
   FPendingTasks := 0;
   FNextQueue := 0;
 
-  if AWorkerCount > 0 then LCount := AWorkerCount
-  else LCount := platform_cpu_count;
-  if LCount > MAX_WORKERS then LCount := MAX_WORKERS;
+  if AWorkerCount > 0 then
+    LCount := AWorkerCount
+  else
+    LCount := platform_cpu_count;
+  if LCount > MAX_WORKERS then
+    LCount := MAX_WORKERS;
+  if LCount < 1 then
+    LCount := 1;
   FWorkerCount := LCount;
 
   FMutex := nextpas.core.sync.mutex.TMutex.Create;
   FCondVar := nextpas.core.sync.condvar.TCondVar.Create;
   FDoneCondVar := nextpas.core.sync.condvar.TCondVar.Create;
 
+  SetLength(FDeques, LCount);
+  SetLength(FOwnerLocks, LCount);
   for LI := 0 to LCount - 1 do
   begin
-    FQueues[LI].Head := 0;
-    FQueues[LI].Tail := 0;
-    FQueues[LI].Count := 0;
+    FDeques[LI] := TTaskDeque.Create(QUEUE_CAPACITY);
+    FOwnerLocks[LI] := 0;
   end;
 
   for LI := 0 to LCount - 1 do
@@ -177,8 +271,17 @@ begin
 end;
 
 destructor TWorkStealingPool.Destroy;
+var
+  LI: Integer;
 begin
   Shutdown;
+  for LI := 0 to High(FDeques) do
+  begin
+    FDeques[LI].Free;
+    FDeques[LI] := nil;
+  end;
+  SetLength(FDeques, 0);
+  SetLength(FOwnerLocks, 0);
   FDoneCondVar := nil;
   FCondVar := nil;
   FMutex := nil;
@@ -188,31 +291,42 @@ end;
 procedure TWorkStealingPool.Submit(const ATask: TThreadTask);
 var
   LQIdx: Integer;
+  LNode: PTaskNode;
+  LSlot: TDequeSlot;
 begin
+  if not Assigned(ATask) then
+    Exit;
+
+  New(LNode);
+  LNode^.Task := ATask;
+  LSlot.Node := LNode;
+
   FMutex.Acquire;
   if FShutdown then
   begin
     FMutex.Release;
+    FreeTaskNode(LNode);
     Exit;
   end;
 
   LQIdx := FNextQueue;
   FNextQueue := (FNextQueue + 1) mod FWorkerCount;
+  Inc(FPendingTasks);
+  FMutex.Release;
 
-  if FQueues[LQIdx].Count < QUEUE_CAPACITY then
+  if not TryEnqueueSlot(LQIdx, LSlot) then
   begin
-    FQueues[LQIdx].Tasks[FQueues[LQIdx].Tail] := ATask;
-    FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
-    Inc(FQueues[LQIdx].Count);
-    Inc(FPendingTasks);
-  end
-  else
-  begin
+    FMutex.Acquire;
+    Dec(FPendingTasks);
+    if FPendingTasks = 0 then
+      FDoneCondVar.Broadcast;
     FCondVar.Broadcast;
     FMutex.Release;
+    FreeTaskNode(LNode);
     raise EInvalidOperation.Create('TWorkStealingPool.Submit: queue full');
   end;
 
+  FMutex.Acquire;
   FCondVar.Broadcast;
   FMutex.Release;
 end;
@@ -229,36 +343,48 @@ end;
 procedure TWorkStealingPool.SubmitBatch(const ATasks: array of TThreadTask);
 var
   LCount, LI, LQIdx: Integer;
+  LNode: PTaskNode;
+  LSlot: TDequeSlot;
 begin
   LCount := Length(ATasks);
   if LCount = 0 then
     Exit;
 
-  FMutex.Acquire;
-  if FShutdown then
-  begin
-    FMutex.Release;
-    Exit;
-  end;
-
   for LI := 0 to LCount - 1 do
   begin
+    if not Assigned(ATasks[LI]) then
+      Continue;
+
+    New(LNode);
+    LNode^.Task := ATasks[LI];
+    LSlot.Node := LNode;
+
+    FMutex.Acquire;
+    if FShutdown then
+    begin
+      FMutex.Release;
+      FreeTaskNode(LNode);
+      Exit;
+    end;
     LQIdx := FNextQueue;
     FNextQueue := (FNextQueue + 1) mod FWorkerCount;
+    Inc(FPendingTasks);
+    FMutex.Release;
 
-    if FQueues[LQIdx].Count >= QUEUE_CAPACITY then
+    if not TryEnqueueSlot(LQIdx, LSlot) then
     begin
+      FMutex.Acquire;
+      Dec(FPendingTasks);
+      if FPendingTasks = 0 then
+        FDoneCondVar.Broadcast;
       FCondVar.Broadcast;
       FMutex.Release;
+      FreeTaskNode(LNode);
       raise EInvalidOperation.Create('TWorkStealingPool.SubmitBatch: queue full');
     end;
-
-    FQueues[LQIdx].Tasks[FQueues[LQIdx].Tail] := ATasks[LI];
-    FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
-    Inc(FQueues[LQIdx].Count);
-    Inc(FPendingTasks);
   end;
 
+  FMutex.Acquire;
   FCondVar.Broadcast;
   FMutex.Release;
 end;
@@ -285,6 +411,11 @@ begin
     Exit;
   end;
   FShutdown := True;
+  FMutex.Release;
+
+  CloseDeques;
+
+  FMutex.Acquire;
   FCondVar.Broadcast;
   FMutex.Release;
 

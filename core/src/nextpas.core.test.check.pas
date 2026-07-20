@@ -126,8 +126,14 @@ procedure CheckLessThan(const AValue, AThreshold: Int64;
 procedure CheckLength(const AExpected, AActual: NativeInt);
 procedure CheckLength(const AExpected, AActual: NativeInt;
   const AMessage: string); overload;
+{ Check that AProc raises AExceptionClass.
+  AMessage: if non-empty, the raised exception's Message must contain this
+  substring (not a failure prefix — contrast with CheckNoRaise). }
 procedure CheckRaises(AExceptionClass: ExceptClass; AProc: TTestProc;
   const AMessage: string = '');
+{ Check that AProc does NOT raise any exception.
+  AMessage: failure message prefix prepended on failure (not an exception
+  substring — contrast with CheckRaises). }
 procedure CheckNoRaise(AProc: TTestProc; const AMessage: string = '');
 procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64);
 procedure CheckGreaterOrEqual(const AValue, AThreshold: Int64;
@@ -187,6 +193,17 @@ procedure CheckNotMatch(const APattern, AStr: string;
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
+{ SoftFail (Go t.Error): record failure without aborting the test body.
+  Check*/Fail remain Fatal (raise). }
+procedure SoftFail(const AMessage: string);
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
@@ -305,6 +322,35 @@ procedure CheckNotEmpty(const AValue: TBytes); overload;
 procedure CheckNotEmpty(const AValue: TBytes;
   const AMessage: string); overload;
 
+{ ── Set Membership (v8.7) ────────────────────────────────────────────────────── }
+
+{ Check that AValue is one of the given values.
+  Empty array always fails — value cannot be "one of" an empty set. }
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string); overload;
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string; const AMessage: string); overload;
+
+{ Check that AValue is one of the given integer values. }
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64); overload;
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64; const AMessage: string); overload;
+
+{ Check that AValue is one of the given boolean values. }
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean); overload;
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean; const AMessage: string); overload;
+
+{ ── Instance Type Check (v8.7) ──────────────────────────────────────────────── }
+
+{ Check that AObject is an instance of AClass (or a descendant).
+  Fails if AObject is nil. }
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass); overload;
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass;
+  const AMessage: string); overload;
+
 implementation
 
 uses
@@ -312,8 +358,8 @@ uses
   nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
   nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
   nextpas.core.regex,          { RegexIsMatch for CheckMatch }
-  nextpas.core.test.output,    { ColorDiff for colored string comparison }
-  nextpas.core.test.config;    { DefaultConfig for TTestConfig default }
+  nextpas.core.test.config,    { DefaultConfig for ColorDiff }
+  nextpas.core.test.output;    { ColorDiff for colored string comparison }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -353,6 +399,8 @@ function StringDiff(const AExpected, AActual: string): string;
 var
   I, LMin, LStart, LEnd: Integer;
   LActualStart: Integer;
+  LPrefix, LSuffix: string;
+  LActualPrefix, LActualSuffix: string;
 begin
   LMin := Length(AExpected);
   if Length(AActual) < LMin then
@@ -366,14 +414,19 @@ begin
   LStart := Utf8SafeStart(AExpected, I - 10);
   LEnd := I + 20;
   if LEnd > Length(AExpected) then LEnd := Length(AExpected);
+  { Only show ... prefix/suffix when there's actually content omitted }
+  if LStart > 1 then LPrefix := '...' else LPrefix := '';
+  if LEnd < Length(AExpected) then LSuffix := '...' else LSuffix := '';
   Result := 'Strings differ at position ' + IntToStr(I) + ':' + #10 +
-    '  expected: ...' + Copy(AExpected, LStart, LEnd - LStart + 1) + '...' + #10;
+    '  expected: ' + LPrefix + Copy(AExpected, LStart, LEnd - LStart + 1) + LSuffix + #10;
   LActualStart := Utf8SafeStart(AActual, I - 10);
   LEnd := I + 20;
   if LEnd > Length(AActual) then LEnd := Length(AActual);
+  if LActualStart > 1 then LActualPrefix := '...' else LActualPrefix := '';
+  if LEnd < Length(AActual) then LActualSuffix := '...' else LActualSuffix := '';
   Result := Result +
-    '  actual:   ...' + Copy(AActual, LActualStart,
-      LEnd - LActualStart + 1) + '...' + #10 +
+    '  actual:   ' + LActualPrefix + Copy(AActual, LActualStart,
+      LEnd - LActualStart + 1) + LActualSuffix + #10 +
     '  (lengths: ' + IntToStr(Length(AExpected)) + ' vs ' + IntToStr(Length(AActual)) + ')';
 end;
 
@@ -521,7 +574,7 @@ var
   LDiff: Double;
 begin
   if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected ' + FloatToStr(AExpected) +
+    FailPrepend(AMessage, 'Expected ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
   LDiff := Abs(AActual - AExpected);
   if LDiff > AEpsilon then
@@ -537,7 +590,7 @@ var
   LDiff: Double;
 begin
   if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected not near ' + FloatToStr(AExpected) +
+    FailPrepend(AMessage, 'Expected not near ' + FloatToStr(AExpected) +
       ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
   LDiff := Abs(AActual - AExpected);
   if LDiff <= AEpsilon then
@@ -552,7 +605,7 @@ var
   LAbsDiff, LScale: Double;
 begin
   if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected ' + FloatToStr(AExpected) +
+    FailPrepend(AMessage, 'Expected ' + FloatToStr(AExpected) +
       ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
   LAbsDiff := Abs(AActual - AExpected);
   LScale := Abs(AExpected);
@@ -579,7 +632,7 @@ var
   LAbsDiff, LScale: Double;
 begin
   if IsNan(AExpected) or IsNan(AActual) then
-    InternalFail('Expected not near ' + FloatToStr(AExpected) +
+    FailPrepend(AMessage, 'Expected not near ' + FloatToStr(AExpected) +
       ' (rel ' + FloatToStr(ARelEps) + ') but got ' + FloatToStr(AActual) + ' (NaN)');
   LAbsDiff := Abs(AActual - AExpected);
   LScale := Abs(AExpected);
@@ -1163,6 +1216,39 @@ begin
   InternalFail('unexpected ' + E.ClassName + ': ' + E.Message);
 end;
 
+procedure SoftFail(const AMessage: string);
+begin
+  nextpas.core.test.base.SoftFail(AMessage);
+end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckTrue(ACondition, AMessage);
+end;
+
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckFalse(ACondition, AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
+end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckContains(AHaystack, ANeedle, AMessage);
+end;
+
 procedure Skip(const AReason: string);
 begin
   InternalSkip(AReason);
@@ -1219,14 +1305,19 @@ begin
       end;
       if AActual <> LExisting then
       begin
-        { Show first difference for debugging }
+        { Prefer ColorDiff (same contract as CheckEqual string: position +
+          expected/actual). Falls back to plain text when ANSI is off. }
         InternalFail('Snapshot mismatch: ' + LPath +
           ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
-          StringDiff(LExisting, AActual));
+          ColorDiff(LExisting, AActual, DefaultConfig));
       end;
     end;
     rfsNotFound:
     begin
+      { Fail-on-create mode: reject new snapshots (e.g., CI with strict snapshot policy) }
+      if platform_env_get_str('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE') = '1' then
+        InternalFail('CheckSnapshot: snapshot does not exist: ' + LPath +
+          ' (remove NEXTPAS_SNAPSHOT_FAIL_ON_CREATE to auto-create)');
       { First run — create snapshot directory tree and file }
       LDirCreated := ForceDirectories(ASnapshotDir);
       if not LDirCreated then
@@ -1595,6 +1686,94 @@ procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
 begin
   if Length(AValue) = 0 then
     FailWithDefault(AMessage, 'Expected non-empty byte array but got empty');
+end;
+
+{ ── Set Membership (v8.7) ────────────────────────────────────────────────────── }
+
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string);
+begin
+  CheckOneOf(AValue, AValues, '');
+end;
+
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string; const AMessage: string);
+var
+  I: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AValues) do
+    if AValue = AValues[I] then Exit;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AValues[I] + '"';
+  end;
+  FailWithDefault(AMessage,
+    '"' + AValue + '" is not one of [' + LList + ']');
+end;
+
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64);
+begin
+  CheckOneOfInt(AValue, AValues, '');
+end;
+
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64; const AMessage: string);
+var
+  I: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AValues) do
+    if AValue = AValues[I] then Exit;
+  LList := '';
+  for I := 0 to High(AValues) do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AValues[I]);
+  end;
+  FailWithDefault(AMessage,
+    IntToStr(AValue) + ' is not one of [' + LList + ']');
+end;
+
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean);
+begin
+  CheckOneOfBool(AValue, AValues, '');
+end;
+
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean; const AMessage: string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AValues) do
+    if AValue = AValues[I] then Exit;
+  FailWithDefault(AMessage,
+    BoolToStr(AValue) + ' is not one of the expected values');
+end;
+
+{ ── Instance Type Check (v8.7) ──────────────────────────────────────────────── }
+
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass);
+begin
+  CheckInstanceOf(AObject, AClass, '');
+end;
+
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass;
+  const AMessage: string);
+begin
+  if AClass = nil then
+    InternalFail('CheckInstanceOf: AClass is nil');
+  if AObject = nil then
+    FailWithDefault(AMessage,
+      'Expected instance of ' + AClass.ClassName + ' but got nil');
+  if not (AObject is AClass) then
+    FailWithDefault(AMessage,
+      'Expected instance of ' + AClass.ClassName +
+      ' but got ' + AObject.ClassName);
 end;
 
 end.

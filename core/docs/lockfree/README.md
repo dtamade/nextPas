@@ -17,16 +17,18 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-3 done） |
+| [`READY.md`](READY.md) | **状态入口**（Maintenance + **Q 线**；H3-1…H3-5 done） |
+| [`parity-go-rust.md`](parity-go-rust.md) | **对标目标**：Go/Rust atomic+lockfree 质量与规模矩阵 |
+| [`quality-parity.md`](quality-parity.md) | **Q0–Q5** 执行主线（当前） |
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
-| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-3 done；H3-4/H3-5 未授权实现） |
-| [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-5 complete） |
+| [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |
 | [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
-| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
+| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-3 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance + [Q 线](quality-parity.md)**（对标 Go/Rust 质量/规模；**不 invent R9**）。
 
 ## Progress-guarantee matrix
 
@@ -36,7 +38,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TMpscQueue` | lock-free producers + single-owner consumer | no locks; single consumer only | yes |
 | `TWorkStealingDeque` | lock-free with single-owner push/pop | owner thread exclusive for push/pop; thieves steal | yes |
 | `TEbrDomain` / `THazardDomain` | reclamation domains (not containers) | atomics + TLS/HP slots | yes |
-| `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
+| `TLockFreeSelector` | concurrent multiplexer | spin + wait-address over channels | yes |
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
 
@@ -238,7 +240,7 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 **不是 lock-free 结构**。设计目标是高频低竞争场景下的最优性能。
 
 **设计特点**:
-- 16 个分片，每个分片使用 `AtomicExchange32` 自旋锁
+- 16 个分片，每个分片使用自旋锁（`atomic_exchange`）
 - 开放寻址 + 线性探测，负载因子 3/4
 - 自动扩容（2x）
 - 仅支持 unmanaged 类型
@@ -295,13 +297,15 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## Selector
 
-`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现。
+`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现（Q3-a 钉死）。
 
 **设计特点**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- poll + backoff 策略（纯用户态轮询）
-- 支持阻塞和超时两种等待模式
-- AddSend 存储值副本，Select 成功后才实际发送
+- 所有 case 必须使用相同类型 T
+- **`TrySelect` ≡ Go `select { default: }`**（`Completed=False` 走 default）
+- 多就绪时按 **Add 注册序** 选最早 case（非 Go 随机）
+- 等待：短 spin + `lockfree.wait` wait-address（非纯忙轮询）
+- 支持阻塞 / 超时 / 非阻塞三种等待模式
+- AddSend 存储值副本，Select/TrySelect 成功后才实际发送
 
 **使用示例**:
 ```pascal
@@ -468,15 +472,18 @@ External Rust/Go/C++ comparison sources should follow the same logical input ran
 `compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
 `compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.
 `compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
-当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
+**Q5**：`compare-matched` 会同轮跑 nextpas + Go + Rust（缺工具 soft-skip）。结论仍须同机信封；不可无信封宣称碾压 std。
 
-当前推荐的对照入口是 `bench_lockfree` Makefile：
+当前推荐的对照入口是 `bench_lockfree` Makefile（**Q5 matched 优先**）：
 
 ```bash
+# Q5: multi-thread C1/C2 + envelope (nextpas / Go / Rust)
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# optional peers
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare
-make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare   # + micro
 ```
 
 这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：
@@ -488,33 +495,27 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。
 
-## 性能基准 (2026-07-06)
+## 性能基准
 
-**平台**: Linux x86_64, FPC 3.3.1, -O2
-**输入**: OPS=1,000,000; capacity=1024
+**规范**：任何绝对 Mops/ops/s 必须附带 [`bench-envelope.md`](bench-envelope.md) 字段；禁止无信封营销数字（H2-4 / H3-4）。
 
-### 单线程 Try* 操作
+**复现入口**（同机同构建下相对排序才可讨论；绝对值须可复现）：
 
-| 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
-|----------|-------------|---------------|
-| TSpscQueue | 9.9 | 101 |
-| TSpmcQueue | 13.4 | 75 |
-| TMpmcQueue | 14.3 | 70 |
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# 或 micro+matched：
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree envelope
+```
 
-### Channel 性能
+历史一次同机数字（**historical only / not reproducible without full envelope**；详见
+[`benchmark-comparison-2026-07-06.md`](benchmark-comparison-2026-07-06.md)）：
 
-| 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
-|------|------|-------------|---------------|
-| **TLockFreeChannelSpsc** | **1P1C** | **38.2** | **26.2** |
-| TLockFreeChannel | MPMC | 90.9 | 11.0 |
+| 场景（示意） | 相对观察（历史） |
+|-------------|------------------|
+| 单线程 Try\* 环队列 | SPSC 通常快于 SPMC / MPMC |
+| 1P1C Channel | SPSC Channel 热路径通常快于 MPMC Channel 与 mutex+condvar 基线 |
+| 跨语言 1P1C | 历史轮次中 nextpas SPSC Channel 曾相对 Go buffered channel 更快；**不得**在无信封时复述绝对倍数 |
 
-### 跨语言对比 (1P1C Channel)
-
-| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
-|------|-------------|---------------|---------|
-| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
-| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
-| Go channel | 114.3 | 8.7 | 基准 |
-| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
-
-**结论**: nextpas SPSC Channel 比 Go channel 快 2.99x，比 Rust std::sync::mpsc 快 1.26x！
+不要把上表当作当前发布性能保证。新结论必须附完整 envelope + 本机 `bench_lockfree` 输出。

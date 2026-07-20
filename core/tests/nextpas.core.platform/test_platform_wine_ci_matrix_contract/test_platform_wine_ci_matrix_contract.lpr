@@ -40,7 +40,7 @@ end;
 
 procedure TestScriptIncludesAllModuleMappings;
 const
-  EXPECTED_ENTRIES: array[0..14] of string = (
+  EXPECTED_ENTRIES: array[0..23] of string = (
     'platform.time core/tests/nextpas.core.platform.time/test_platform_time_wine',
     'platform.memory core/tests/nextpas.core.platform.memory/test_platform_memory_wine',
     'platform.sync core/tests/nextpas.core.platform.sync/test_platform_sync_wine',
@@ -55,6 +55,15 @@ const
     'platform.random core/tests/nextpas.core.platform.random/test_platform_random_wine',
     'platform.socket core/tests/nextpas.core.platform.socket/test_platform_socket_wine',
     'platform.error core/tests/nextpas.core.platform.error/test_platform_error_wine',
+    'platform.fmt core/tests/nextpas.core.platform.fmt/test_platform_fmt_wine',
+    'platform.info core/tests/nextpas.core.platform.info/test_platform_info_wine',
+    'platform.which core/tests/nextpas.core.platform.which/test_platform_which_wine',
+    'platform.dl core/tests/nextpas.core.platform.dl/test_platform_dl_wine',
+    'platform.pipe core/tests/nextpas.core.platform.pipe/test_platform_pipe_wine',
+    'platform.args core/tests/nextpas.core.platform.args/test_platform_args_wine',
+    'platform.resource core/tests/nextpas.core.platform.resource/test_platform_resource_wine',
+    'platform.watch core/tests/nextpas.core.platform.watch/test_platform_watch_wine',
+    'platform.pty core/tests/nextpas.core.platform.pty/test_platform_pty_wine',
     'io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine'
   );
 var
@@ -115,10 +124,40 @@ begin
     'Wine CI matrix script must print failing log locations');
 end;
 
+procedure TestCrossModuleTestAbiGuards;
+{ Platform wine/macOS GHA depend on these test-harness ABI choices.
+  Keep them under platform contracts so test-module lands cannot silently
+  regress Windows stdcall or Darwin TThreadID without breaking a platform
+  focused gate. }
+const
+  EXPECT_FROM_TEST = '../../../src/nextpas.core.test.expect.pas';
+  EXPECT_FROM_ROOT = 'core/src/nextpas.core.test.expect.pas';
+  RUNNER_FROM_TEST = '../../../src/nextpas.core.test.runner.pas';
+  RUNNER_FROM_ROOT = 'core/src/nextpas.core.test.runner.pas';
+var
+  LExpect: string;
+  LRunner: string;
+begin
+  LExpect := LowerCase(FsReadFileText(ResolvePath(EXPECT_FROM_TEST, EXPECT_FROM_ROOT)));
+  LRunner := LowerCase(FsReadFileText(ResolvePath(RUNNER_FROM_TEST, RUNNER_FROM_ROOT)));
+
+  CheckContains(LExpect, '{$ifdef windows}stdcall{$else}cdecl{$endif}',
+    'TExpectationBase IUnknown must use stdcall on Windows (wine compile)');
+  Check(Pos('{$ifndef windows}cdecl{$endif}', LExpect) = 0,
+    'expect must not use IFNDEF-WINDOWS cdecl-only form (empty convention on Win)');
+
+  CheckContains(LRunner, 'tthreadid(0)',
+    'parallel runner must use TThreadID(0) (Darwin aarch64)');
+  Check(Pos('lthreads[i] := 0;', LRunner) = 0,
+    'runner must not assign bare 0 to LThreads (Darwin ShortInt trap)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.wine_ci_matrix_contract');
   T.Test('script includes all Wine module mappings', @TestScriptIncludesAllModuleMappings);
   T.Test('script enforces skip/log/summary contract',
     @TestScriptEnforcesSkipLogAndSummaryContract);
+  T.Test('cross-module test ABI guards (stdcall + TThreadID)',
+    @TestCrossModuleTestAbiGuards);
   if not T.Run then Halt(1);
 end.

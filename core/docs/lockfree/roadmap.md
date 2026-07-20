@@ -1,14 +1,13 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **Maintenance**（2026-07-18）· R0–R7 + RC Ready + H2 + **H3-1 + H3-2 + H3-3** **已完成** · **Owner**: atomic-lockfree lane
-> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ consumer `async.loop`（H3-1）+ bag/multimap（H3-2）+ consumer gate（H3-3）
-> **当前执行主线**: **Maintenance**。H2 记录见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
-> **H3**: Wave-1 **done**；**H3-2 done**；**H3-3 done**（`verify-h3-consumers`）；**H3-4 / H3-5 未授权实现**。
-> **R8**: 研究 pack 诚实收口（opt-in docs）— [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
+> **状态**: **Maintenance + Q 线**（2026-07-19）· R0–R7 + H2 + **H3-1…H3-5 done** · **Owner**: atomic-lockfree lane（全权）
+> **范围**: atomic + lockfree + H3 消费者面
+> **当前执行主线**: **[Q 线 Quality/Parity](quality-parity.md)**（对标 Go/Rust 质量与规模；**不是 R9**）。
+> **H3**: **H3-1…H3-5 all done**。H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
+> **R8**: 研究 opt-in — [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
 > **Lane**: `.worktrees/atomic-lockfree`；见 [`READY.md`](READY.md)。
-> 冲突时以 **CONTRACT + [`roadmap-h2.md`](roadmap-h2.md) + 本路线图** 为准。
-> **已锁定 (R 线)**: Q1 R4–R7 / Q2 R5 修 cap=1 / Q3 rings+MPSC 优先 / Q4 Makefile 证据 / Q5 phase 归档。
-> **已锁定 (H2)**: D1–D5 见 [`roadmap-h2.md`](roadmap-h2.md)；**不叫 R9**；R8 仍为 opt-in 研究。
+> 冲突时以 **CONTRACT + 本路线图 + quality-parity** 为准。
+> **已锁定 (R/H2)**: 见历史节；**不 invent R9**；R8 仍为 opt-in 研究。
 > **状态入口**: [`READY.md`](READY.md)。
 
 ---
@@ -20,9 +19,10 @@
 | [`CONTRACT.md`](CONTRACT.md) | 运行时/API 契约（Closed、managed、RTL isolation、Try\*Ex） | **契约真相** |
 | [`README.md`](README.md) | 模块入口、T1 矩阵、生命周期、如何用 | **产品真相** |
 | **[`roadmap-h2.md`](roadmap-h2.md)** | Horizon-2（H2-0…H2-6）章程与完成记录 | **H2 完成记录** |
-| **[`roadmap-h3.md`](roadmap-h3.md)** | Horizon-3 章程 + H3-0…H3-5 记录 | **H3-1…H3-3 done**；H3-4/H3-5 未授权实现 |
+| **[`roadmap-h3.md`](roadmap-h3.md)** | Horizon-3 章程 + H3-0…H3-5 记录 | **H3-1…H3-5 done** |
+| **[`quality-parity.md`](quality-parity.md)** | **Q0–Q5** 对标 Go/Rust 质量/规模 | **当前执行主线** |
 | **`roadmap.md`（本文件）** | R0–R7 完成记录、全局非目标、历史索引 | **R 线记录 + 指针** |
-| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance 策略 | **Maintenance**（含 H3-3 consumer gate） |
+| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance + Q | **Maintenance + Q** |
 | [`r8-research-status.md`](r8-research-status.md) | R8（NUMA/RTM/TLA）诚实状态与 research pack 收口 | 研究，opt-in |
 | [`formal/README.md`](formal/README.md) | TLA+ 如何跑 / 无 TLC 时 model-only | 研究 |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 | 证据 / 维护参考 |
@@ -35,7 +35,7 @@
 | `benchmark-comparison-*.md` | 历史对照数据（需平台信封） | 证据附件 |
 | `formal/tla/*` | 形式化模型 | 研究 |
 
-**原则**：R 线、H2、**H3-1…H3-3** 已完成；**默认进入 Maintenance**。不要再开无名编号的「Phase N」或擅自开 R9。R8 仅研究 opt-in（**不**生产化）。H3-4 / H3-5 须单独授权，**不自动执行**。
+**原则**：R 线、H2、**H3-1…H3-5** 已完成。**默认执行 Q 线**（[`quality-parity.md`](quality-parity.md)），保持 Maintenance 清洁纪律。不要再开无名「Phase N」或 **R9**。R8 仅研究 opt-in。
 
 ---
 
@@ -88,7 +88,7 @@
 | — | H3-2 bag+multimap / H3-3 consumer gate | **DONE** |
 | 文档（opt-in） | R8 研究 pack 诚实状态 | **docs** — [`r8-research-status.md`](r8-research-status.md) |
 | 研究（仅 opt-in） | NUMA Phase-3 亲和 residual / TSX / TLA+（有 TLC 时加深） | **R8**（非默认，不自动推进；见 r8-research-status） |
-| 生产向（需授权） | 证据卫生 / thread worksteal 接入 / 扩 T2 子集 | **H3-4 / H3-5**（**未授权不实施**） |
+| 生产向 | 证据卫生 / thread worksteal 接入 / 扩 T2 子集 | **H3-4/H3-5 done**；扩 T2 仍须新章程 |
 
 ### 1.5 标准验证门（所有阶段验收默认集）
 
@@ -144,7 +144,7 @@ Maintenance  ── 当前默认（生产执行主线）
     ├─(opt-in)──► R8 research pack done（docs + verify-r8）
     │                → r8-research-status.md；不生产化
     │
-    └─(opt-in)──► H3-4 / H3-5（roadmap-h3.md）
+    └─ H3-5 worksteal DONE（roadmap-h3.md §6）
                      NOT auto exec；须单独授权
 ```
 
@@ -160,10 +160,10 @@ Maintenance  ── 当前默认（生产执行主线）
 | **H3 Wave-1** | H3-0e + H3-1 async MPSC | **P0** | H2 complete + 授权 | **已完成** — [`roadmap-h3.md`](roadmap-h3.md) |
 | **H3-2** | bag+multimap Guarded 子集 | 生产契约 | Maintenance | **done** |
 | **H3-3** | consumer regression 门 | 工程门 | H3-1/H3-2 | **done** — `verify-h3-consumers` |
-| **Maintenance** | 缺陷 / 契约 / 门 | **P0 当前** | H3-3 | **是** |
+| **H3-4** | 证据 / api-ref 卫生 | 文档 | Maintenance | **done** — 2026-07-19 |
+| **H3-5** | thread worksteal 接入 | 跨模块 | Maintenance | **done** — 2026-07-19 |
+| **Maintenance** | 缺陷 / 契约 / 门 | **P0 当前** | H3-5 | **是** |
 | **R8** | 研究扩展 / pack 收口 | 研究 | 独立 | **否**；docs opt-in；生产化需重大讨论 |
-| **H3-4** | 证据 / api-ref 卫生 | 文档 | Maintenance | **否** — 须单独授权 |
-| **H3-5** | thread worksteal 接入 | 跨模块 | Maintenance | **否** — 章程草案 only |
 
 ---
 
@@ -233,7 +233,9 @@ Maintenance  ── 当前默认（生产执行主线）
 
 - **Wave-1（H3-0e + H3-1）**：**done** — `async.loop` Post → T1 MPSC；main `710ddd7ab`
 - **H3-2**：**done**（bag+multimap）
-- **H3-3…H3-4**：**未授权**；须单独授权后实施
+- **H3-3**：**done**（`verify-h3-consumers`）
+- **H3-4**：**done**（bench envelope + api-ref hygiene）
+- **H3-5**：**done**（thread worksteal → T1 deque）
 
 ---
 
@@ -248,8 +250,8 @@ Maintenance  ── 当前默认（生产执行主线）
 
 ## 5. 工作方式
 
-1. **当前主线**：**Maintenance**；H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 Wave-1 见 [`roadmap-h3.md`](roadmap-h3.md)。新功能波次需显式章程，不要静默续编编号。
-2. **H3 余下阶段**：H3-3…**不**自动开工；必须单独授权（path-limited land）。
+1. **当前主线**：**Maintenance**；H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。新功能波次需显式章程，不要静默续编编号。
+2. **H3-5**：已交付；回归 `test_worksteal` + 两门。
 3. **自主**：阶段内不因琐事打断；**重大变更**（改 Closed 语义、扩门面 T2、R8 进生产、删 legacy）先修订 roadmap 再问。
 4. **文档**：改契约先 CONTRACT，再 README/selection-guide/api-reference，最后更新 READY 进度。
 5. **Landing**：path-limited；push 仅在授权时。
@@ -278,7 +280,7 @@ Maintenance  ── 当前默认（生产执行主线）
 | D4 | 不默认做 R8 | **锁定** |
 | D5 | 小步 commit + focused verify；自主跑完 H2 | **锁定 · DONE** |
 
-**当前执行**: **Maintenance** — H2 complete 详情 [`roadmap-h2.md`](roadmap-h2.md)。R0–R7 + RC Ready + H2 基线保留；**R8 仅研究 opt-in**（pack 收口见 [`r8-research-status.md`](r8-research-status.md)）。**H3-1 + H3-2 done**（[`roadmap-h3.md`](roadmap-h3.md)）；**H3-3…H3-4 未授权**。
+**当前执行**: **Maintenance** — H2 complete 详情 [`roadmap-h2.md`](roadmap-h2.md)。R0–R7 + RC Ready + H2 基线保留；**R8 仅研究 opt-in**（pack 收口见 [`r8-research-status.md`](r8-research-status.md)）。**H3-1…H3-5 done**（[`roadmap-h3.md`](roadmap-h3.md)）。
 
 ### RC Ready close-out — **DONE**（H2 基线）
 

@@ -110,8 +110,9 @@ Each capability tracks:
 - `FallbackReason`
 
 This matters because some capabilities are only candidates until the session proves them. For example,
-kitty/wezterm/ghostty hints can mark kitty keyboard support as detected, but it remains inactive until
-terminal-side negotiation is implemented.
+kitty/wezterm/ghostty hints mark kitty keyboard support as **Detected**, but `Active` stays false until
+`EnterTui` emits progressive-enhancement push (`CSI = 5 ; 1 u`). `LeaveTui` pops with `CSI < u`.
+`Verified` remains false until a future `CSI ? u` query round-trip.
 
 Compatibility properties still exist:
 

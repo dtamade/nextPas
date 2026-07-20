@@ -18,19 +18,22 @@ interface
 
 uses
   nextpas.core.async.base,
-  nextpas.core.async.loop;
+  nextpas.core.async.loop,
+  nextpas.core.async.cancellation;
 
 type
   { 组合器选项 }
   TCombinatorOptions = record
     TimeoutMs: UInt32;       // 0 = 无超时
     CancelOnError: Boolean;  // 任一失败则取消全部
+    Token: IAsyncCancellationToken; { nil = 无；cancel ≈ 超时完成 }
   end;
 
 const
   DefaultCombinatorOptions: TCombinatorOptions = (
     TimeoutMs: 0;
     CancelOnError: False;
+    Token: nil
   );
 
 {
@@ -135,25 +138,32 @@ type
   PWhenAllState = ^TWhenAllState;
   TWhenAllState = record
     Remaining: Integer;
-    RefCount: Integer;       // 引用计数：每个任务 +1，定时器 +1
-    TimedOut: Boolean;       // 超时后设置
+    RefCount: Integer;       // base + timer? + token?
+    Finished: Int32;         // 0 pending; 1 completed
+    TimedOut: Boolean;
+    TokenOwner: Int32;       // 1 while token holds a RefCount
     OnComplete: TAsyncCallback;
     OnCompleteRef: TAsyncCallbackRef;
     OnCompleteCtx: Pointer;
     Loop: TAsyncLoop;
     TimeoutMs: UInt32;
     TimerHandle: TAsyncTimerHandle;
+    Token: IAsyncCancellationToken;
   end;
 
   { WhenAny 状态 }
   PWhenAnyState = ^TWhenAnyState;
   TWhenAnyState = record
     Done: Boolean;
+    Finished: Int32;
+    TokenOwner: Int32;
+    RefCount: Int32;  { base + optional post pin for token abort }
     OnComplete: TAsyncCallback;
     OnCompleteRef: TAsyncCallbackRef;
     OnCompleteCtx: Pointer;
     Loop: TAsyncLoop;
-    Remaining: Integer;  // 跟踪剩余任务数
+    Remaining: Integer;
+    Token: IAsyncCancellationToken;
   end;
 
 procedure DiscardWrappedContext(AContext: Pointer);
@@ -176,7 +186,7 @@ begin
     begin
       { Do not CancelTimer here: Close is already tearing down the loop.
         Timer OnDiscard drops the timer ownership ref safely. }
-      if AtomicFetchSub32(LAll^.RefCount, 1, moAcqRel) = 1 then
+      if atomic_fetch_sub(LAll^.RefCount, 1, mo_acq_rel) = 1 then
         Dispose(LAll);
     end;
   end
@@ -200,11 +210,74 @@ begin
   if LState = nil then
     Exit;
   { Timer was discarded without firing. Drop timer ownership only. }
-  if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
     Dispose(LState);
 end;
 
 { ==================== WhenAll ==================== }
+
+function WhenAllClaimFinish(AState: PWhenAllState): Boolean;
+var
+  LExpected: Int32;
+begin
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(AState^.Finished, LExpected, 1, mo_acq_rel, mo_acquire);
+end;
+
+procedure WhenAllFireComplete(AState: PWhenAllState);
+begin
+  if Assigned(AState^.OnComplete) then
+    AState^.OnComplete(AState^.OnCompleteCtx)
+  else if Assigned(AState^.OnCompleteRef) then
+    AState^.OnCompleteRef(AState^.OnCompleteCtx);
+end;
+
+procedure WhenAllReleaseTokenOwner(var AState: PWhenAllState);
+begin
+  if AState = nil then
+    Exit;
+  if atomic_exchange(AState^.TokenOwner, 0, mo_acq_rel) = 1 then
+  begin
+    AState^.Token := nil;
+    if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
+    begin
+      Dispose(AState);
+      AState := nil;
+    end;
+  end
+  else
+    AState^.Token := nil;
+end;
+
+procedure WhenAllReleaseTimerOwner(var AState: PWhenAllState);
+begin
+  if AState = nil then
+    Exit;
+  if AState^.TimeoutMs = 0 then
+    Exit;
+  if not AState^.TimerHandle.IsValid then
+    Exit;
+  if AState^.Loop.CancelTimer(AState^.TimerHandle) then
+  begin
+    AState^.TimerHandle := TAsyncTimerHandle.None;
+    if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
+    begin
+      Dispose(AState);
+      AState := nil;
+    end;
+  end;
+end;
+
+procedure WhenAllReleaseOne(var AState: PWhenAllState);
+begin
+  if AState = nil then
+    Exit;
+  if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
+  begin
+    Dispose(AState);
+    AState := nil;
+  end;
+end;
 
 { WhenAll 任务完成回调 }
 procedure WhenAllTaskDone(AContext: Pointer);
@@ -215,7 +288,6 @@ begin
   LWrapped := PWrappedContext(AContext);
   LState := PWhenAllState(LWrapped^.State);
 
-  { 超时后不执行用户回调 }
   if not LState^.TimedOut then
   begin
     if Assigned(LWrapped^.UserCallback) then
@@ -225,56 +297,96 @@ begin
   end;
 
   Dispose(LWrapped);
-
-  { 减少剩余计数 }
   Dec(LState^.Remaining);
 
-  { 检查是否全部完成 }
   if LState^.Remaining <= 0 then
   begin
-    if (LState^.TimeoutMs > 0) and not LState^.TimedOut then
+    WhenAllReleaseTimerOwner(LState);
+    if LState = nil then
+      Exit;
+    WhenAllReleaseTokenOwner(LState);
+    if LState = nil then
+      Exit;
+
+    if WhenAllClaimFinish(LState) then
     begin
-      { Cancel abandons timer without OnDiscard; drop timer ownership here. }
-      LState^.Loop.CancelTimer(LState^.TimerHandle);
-      if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
-      begin
-        Dispose(LState);
-        Exit;
-      end;
+      if not LState^.TimedOut then
+        WhenAllFireComplete(LState);
     end;
 
-    if not LState^.TimedOut then
-    begin
-      if Assigned(LState^.OnComplete) then
-        LState^.OnComplete(LState^.OnCompleteCtx)
-      else if Assigned(LState^.OnCompleteRef) then
-        LState^.OnCompleteRef(LState^.OnCompleteCtx);
-    end;
-
-    if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
-      Dispose(LState);
+    WhenAllReleaseOne(LState);
   end;
 end;
 
-{ WhenAll 超时回调 }
-procedure WhenAllTimeoutCallback(AContext: Pointer);
+{ Timer path: releases the timer ownership ref }
+procedure WhenAllTimerAbort(AContext: Pointer);
 var
   LState: PWhenAllState;
 begin
   LState := PWhenAllState(AContext);
+  if LState = nil then
+    Exit;
 
-  { 标记为已超时 }
   LState^.TimedOut := True;
+  LState^.TimerHandle := TAsyncTimerHandle.None;
+  if WhenAllClaimFinish(LState) then
+    WhenAllFireComplete(LState);
 
-  { 触发完成回调 }
-  if Assigned(LState^.OnComplete) then
-    LState^.OnComplete(LState^.OnCompleteCtx)
-  else if Assigned(LState^.OnCompleteRef) then
-    LState^.OnCompleteRef(LState^.OnCompleteCtx);
+  WhenAllReleaseTokenOwner(LState);
+  if LState = nil then
+    Exit;
+  WhenAllReleaseOne(LState);
+end;
 
-  { 释放引用 }
-  if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
-    Dispose(LState);
+{ Token path: releases TokenOwner ref }
+procedure WhenAllTokenAbort(AContext: Pointer);
+var
+  LState: PWhenAllState;
+begin
+  LState := PWhenAllState(AContext);
+  if LState = nil then
+    Exit;
+  try
+    LState^.TimedOut := True;
+    if WhenAllClaimFinish(LState) then
+    begin
+      WhenAllReleaseTimerOwner(LState);
+      if LState <> nil then
+        WhenAllFireComplete(LState);
+    end
+    else
+      WhenAllReleaseTimerOwner(LState);
+    if LState <> nil then
+      WhenAllReleaseTokenOwner(LState);
+  finally
+    if LState <> nil then
+      WhenAllReleaseOne(LState); { drop Post pin from TokenNotify }
+  end;
+end;
+
+procedure WhenAllTokenNotify(AContext: Pointer);
+var
+  LState: PWhenAllState;
+begin
+  LState := PWhenAllState(AContext);
+  if (LState = nil) or (LState^.Loop = nil) then
+    Exit;
+  if atomic_load(LState^.TokenOwner, mo_acquire) = 0 then
+    Exit;
+  if atomic_load(LState^.Finished, mo_acquire) <> 0 then
+    Exit;
+  atomic_fetch_add(LState^.RefCount, 1, mo_acq_rel);
+  LState^.Loop.Post(@WhenAllTokenAbort, LState);
+end;
+
+procedure WhenAllBindToken(AState: PWhenAllState; AToken: IAsyncCancellationToken);
+begin
+  if AToken = nil then
+    Exit;
+  AState^.Token := AToken;
+  atomic_store(AState^.TokenOwner, 1, mo_release);
+  atomic_fetch_add(AState^.RefCount, 1, mo_acq_rel);
+  AToken.OnCancel(@WhenAllTokenNotify, AState);
 end;
 
 procedure WhenAll(
@@ -293,7 +405,6 @@ var
   I: Integer;
 begin
   LLoop := ALoop;
-  // 空数组直接完成
   if ACount <= 0 then
   begin
     if Assigned(AOnComplete) then
@@ -301,30 +412,32 @@ begin
     Exit;
   end;
 
-  // 创建状态
   New(LState);
+  FillChar(LState^, SizeOf(LState^), 0);
   LState^.Remaining := ACount;
-  LState^.RefCount := 1;  // 基础引用
+  LState^.RefCount := 1;
+  LState^.Finished := 0;
   LState^.TimedOut := False;
+  LState^.TokenOwner := 0;
   LState^.OnComplete := AOnComplete;
   LState^.OnCompleteRef := nil;
   LState^.OnCompleteCtx := AOnCompleteCtx;
   LState^.Loop := LLoop;
   LState^.TimeoutMs := AOptions.TimeoutMs;
 
-  // 设置超时定时器
   if AOptions.TimeoutMs > 0 then
   begin
-    Inc(LState^.RefCount);  // 定时器持有引用
+    Inc(LState^.RefCount);
     LState^.TimerHandle := LLoop.ScheduleEx(
       TDuration.FromMilliseconds(AOptions.TimeoutMs),
-      @WhenAllTimeoutCallback,
+      @WhenAllTimerAbort,
       LState,
       @DiscardWhenAllTimeoutState
     );
   end;
 
-  // 添加所有任务（使用包装回调）
+  WhenAllBindToken(LState, AOptions.Token);
+
   for I := 0 to ACount - 1 do
   begin
     New(LWrapped);
@@ -362,9 +475,12 @@ begin
   end;
 
   New(LState);
+  FillChar(LState^, SizeOf(LState^), 0);
   LState^.Remaining := ACount;
   LState^.RefCount := 1;
+  LState^.Finished := 0;
   LState^.TimedOut := False;
+  LState^.TokenOwner := 0;
   LState^.OnComplete := nil;
   LState^.OnCompleteRef := AOnComplete;
   LState^.OnCompleteCtx := nil;
@@ -376,11 +492,13 @@ begin
     Inc(LState^.RefCount);
     LState^.TimerHandle := LLoop.ScheduleEx(
       TDuration.FromMilliseconds(AOptions.TimeoutMs),
-      @WhenAllTimeoutCallback,
+      @WhenAllTimerAbort,
       LState,
       @DiscardWhenAllTimeoutState
     );
   end;
+
+  WhenAllBindToken(LState, AOptions.Token);
 
   for I := 0 to ACount - 1 do
   begin
@@ -397,7 +515,76 @@ end;
 
 { ==================== WhenAny ==================== }
 
-{ WhenAny 任务完成回调 }
+function WhenAnyClaimFinish(AState: PWhenAnyState): Boolean;
+var
+  LExpected: Int32;
+begin
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(AState^.Finished, LExpected, 1, mo_acq_rel, mo_acquire);
+end;
+
+procedure WhenAnyFireComplete(AState: PWhenAnyState);
+begin
+  if Assigned(AState^.OnComplete) then
+    AState^.OnComplete(AState^.OnCompleteCtx)
+  else if Assigned(AState^.OnCompleteRef) then
+    AState^.OnCompleteRef(AState^.OnCompleteCtx);
+end;
+
+procedure WhenAnyReleaseToken(AState: PWhenAnyState);
+begin
+  if AState = nil then
+    Exit;
+  if atomic_exchange(AState^.TokenOwner, 0, mo_acq_rel) = 1 then
+    AState^.Token := nil
+  else
+    AState^.Token := nil;
+end;
+
+procedure WhenAnyTokenAbort(AContext: Pointer);
+var
+  LState: PWhenAnyState;
+begin
+  LState := PWhenAnyState(AContext);
+  if LState = nil then
+    Exit;
+  try
+    if WhenAnyClaimFinish(LState) then
+    begin
+      LState^.Done := True;
+      WhenAnyFireComplete(LState);
+    end;
+    WhenAnyReleaseToken(LState);
+  finally
+    if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
+      Dispose(LState);
+  end;
+end;
+
+procedure WhenAnyTokenNotify(AContext: Pointer);
+var
+  LState: PWhenAnyState;
+begin
+  LState := PWhenAnyState(AContext);
+  if (LState = nil) or (LState^.Loop = nil) then
+    Exit;
+  if atomic_load(LState^.TokenOwner, mo_acquire) = 0 then
+    Exit;
+  if atomic_load(LState^.Finished, mo_acquire) <> 0 then
+    Exit;
+  atomic_fetch_add(LState^.RefCount, 1, mo_acq_rel);
+  LState^.Loop.Post(@WhenAnyTokenAbort, LState);
+end;
+
+procedure WhenAnyBindToken(AState: PWhenAnyState; AToken: IAsyncCancellationToken);
+begin
+  if AToken = nil then
+    Exit;
+  AState^.Token := AToken;
+  atomic_store(AState^.TokenOwner, 1, mo_release);
+  AToken.OnCancel(@WhenAnyTokenNotify, AState);
+end;
+
 procedure WhenAnyTaskDone(AContext: Pointer);
 var
   LWrapped: PWrappedContext;
@@ -406,28 +593,25 @@ begin
   LWrapped := PWrappedContext(AContext);
   LState := PWhenAnyState(LWrapped^.State);
 
-  { 执行用户回调 }
   if Assigned(LWrapped^.UserCallback) then
     LWrapped^.UserCallback(LWrapped^.UserCtx)
   else if Assigned(LWrapped^.UserRef) then
     LWrapped^.UserRef(LWrapped^.UserCtx);
 
-  { 第一个完成的任务触发完成回调 }
-  if not LState^.Done then
+  if WhenAnyClaimFinish(LState) then
   begin
     LState^.Done := True;
-    if Assigned(LState^.OnComplete) then
-      LState^.OnComplete(LState^.OnCompleteCtx)
-    else if Assigned(LState^.OnCompleteRef) then
-      LState^.OnCompleteRef(LState^.OnCompleteCtx);
+    WhenAnyReleaseToken(LState);
+    WhenAnyFireComplete(LState);
   end;
 
-  { 减少剩余计数 }
   Dec(LState^.Remaining);
-
-  { 最后一个任务清理状态 }
   if LState^.Remaining <= 0 then
-    Dispose(LState);
+  begin
+    WhenAnyReleaseToken(LState);
+    if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
+      Dispose(LState);
+  end;
 
   Dispose(LWrapped);
 end;
@@ -448,7 +632,6 @@ var
   I: Integer;
 begin
   LLoop := ALoop;
-  // 空数组直接完成
   if ACount <= 0 then
   begin
     if Assigned(AOnComplete) then
@@ -456,14 +639,18 @@ begin
     Exit;
   end;
 
-  // 创建状态
   New(LState);
+  FillChar(LState^, SizeOf(LState^), 0);
   LState^.Done := False;
+  LState^.Finished := 0;
+  LState^.TokenOwner := 0;
+  LState^.RefCount := 1;
   LState^.OnComplete := AOnComplete;
   LState^.OnCompleteRef := nil;
   LState^.OnCompleteCtx := AOnCompleteCtx;
   LState^.Loop := LLoop;
   LState^.Remaining := ACount;
+  WhenAnyBindToken(LState, AOptions.Token);
 
   for I := 0 to ACount - 1 do
   begin
@@ -473,7 +660,6 @@ begin
     LWrapped^.UserCtx := AContexts[I];
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := False;
-
     LLoop.PostEx(@WhenAnyTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;
@@ -502,12 +688,17 @@ begin
   end;
 
   New(LState);
+  FillChar(LState^, SizeOf(LState^), 0);
   LState^.Done := False;
+  LState^.Finished := 0;
+  LState^.TokenOwner := 0;
+  LState^.RefCount := 1;
   LState^.OnComplete := nil;
   LState^.OnCompleteRef := AOnComplete;
   LState^.OnCompleteCtx := nil;
   LState^.Loop := LLoop;
   LState^.Remaining := ACount;
+  WhenAnyBindToken(LState, AOptions.Token);
 
   for I := 0 to ACount - 1 do
   begin
@@ -517,7 +708,6 @@ begin
     LWrapped^.UserCtx := nil;
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := False;
-
     LLoop.PostEx(@WhenAnyTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;

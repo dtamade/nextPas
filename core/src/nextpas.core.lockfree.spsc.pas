@@ -16,6 +16,8 @@ unit nextpas.core.lockfree.spsc;
  *
  * @see Dmitry Vyukov SPSC queue — lock-free bounded queue
  * @see crossbeam (Rust) — similar SPSC implementation
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -116,18 +118,18 @@ function TSpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LTail: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LTail := FTail;
   if LTail - FHeadCache >= Int64(FCapacity) then
   begin
-    FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);
+    FHeadCache := atomic_load_64(FHeadPublished, mo_acquire);
     if LTail - FHeadCache >= Int64(FCapacity) then
       Exit(False);
   end;
   FSlots[LTail and Int64(FMask)] := AValue;
   FTail := LTail + 1;
-  AtomicStore64(FTailPublished, LTail + 1, moRelease);
+  atomic_store_64(FTailPublished, LTail + 1, mo_release);
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := True;
 end;
@@ -153,13 +155,13 @@ begin
   LHead := FHead;
   if LHead >= FTailCache then
   begin
-    FTailCache := AtomicLoad64(FTailPublished, moAcquire);
+    FTailCache := atomic_load_64(FTailPublished, mo_acquire);
     if LHead >= FTailCache then
       Exit(False);
   end;
   AValue := FSlots[LHead and Int64(FMask)];
   FHead := LHead + 1;
-  AtomicStore64(FHeadPublished, LHead + 1, moRelease);
+  atomic_store_64(FHeadPublished, LHead + 1, mo_release);
   LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
 end;
@@ -188,10 +190,10 @@ begin
   end;
   while True do
   begin
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TryEnqueue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
@@ -207,10 +209,10 @@ begin
   end;
   while True do
   begin
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryDequeue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
   end;
@@ -230,10 +232,10 @@ begin
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryEnqueue(AValue));
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TryEnqueue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
   end;
@@ -255,10 +257,10 @@ begin
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryDequeue(AValue));
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryDequeue(AValue) then
       Exit(True);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
@@ -274,10 +276,10 @@ var
 begin
   if Length(AValues) = 0 then
     Exit(0);
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(0);
   LTail := FTail;
-  FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);
+  FHeadCache := atomic_load_64(FHeadPublished, mo_acquire);
   LAvail := Int64(FCapacity) - (LTail - FHeadCache);
   if LAvail <= 0 then
     Exit(0);
@@ -295,7 +297,7 @@ begin
     Move(AValues[LContiguous], FSlots[0], LWrap * SizeOf(T));
   end;
   FTail := LTail + Int64(LCount);
-  AtomicStore64(FTailPublished, FTail, moRelease);
+  atomic_store_64(FTailPublished, FTail, mo_release);
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := LCount;
 end;
@@ -311,7 +313,7 @@ begin
   if (AMaxCount = 0) or (Length(AValues) = 0) then
     Exit(0);
   LHead := FHead;
-  FTailCache := AtomicLoad64(FTailPublished, moAcquire);
+  FTailCache := atomic_load_64(FTailPublished, mo_acquire);
   LAvail := FTailCache - LHead;
   if LAvail <= 0 then
     Exit(0);
@@ -331,7 +333,7 @@ begin
     Move(FSlots[0], AValues[LContiguous], LWrap * SizeOf(T));
   end;
   FHead := LHead + Int64(LCount);
-  AtomicStore64(FHeadPublished, FHead, moRelease);
+  atomic_store_64(FHeadPublished, FHead, mo_release);
   LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := LCount;
 end;
@@ -353,7 +355,7 @@ end;
 
 procedure TSpscQueueImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
 end;
@@ -366,15 +368,15 @@ end;
 
 function TSpscQueueImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TSpscQueueImpl.ApproxCount: PtrUInt;
 var
   LTail, LHead: Int64;
 begin
-  LTail := AtomicLoad64(FTailPublished, moAcquire);
-  LHead := AtomicLoad64(FHeadPublished, moAcquire);
+  LTail := atomic_load_64(FTailPublished, mo_acquire);
+  LHead := atomic_load_64(FHeadPublished, mo_acquire);
   if LTail > LHead then
     Result := PtrUInt(LTail - LHead)
   else

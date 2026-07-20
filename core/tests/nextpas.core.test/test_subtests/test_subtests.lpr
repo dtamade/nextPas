@@ -469,14 +469,196 @@ begin
   CheckTrue(True, 'WithTempDir completed');
 end;
 
+{ ── B20 meta harnesses (Suite.Test wrappers for scale + contracts) ───────── }
+
+procedure HarnessFailurePropagation;
+var
+  LFailSuite: TTestSuite;
+begin
+  LFailSuite := TTestSuite.Create('Failure Propagation');
+  LFailSuite.TestSubtest('real failure', @TestSubtestWithRealFailure);
+  CheckFalse(LFailSuite.Run, 'suite with failing subtest should report failure');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessClosureSubtestFailure;
+var
+  LFailSuite: TTestSuite;
+begin
+  LFailSuite := TTestSuite.Create('Closure Failure');
+  LFailSuite.TestSubtest('closure failure', @TestClosureSubtestWithFailure);
+  CheckFalse(LFailSuite.Run, 'closure subtest failure should propagate');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessSubtestSkipCounting;
+var
+  LFailSuite: TTestSuite;
+begin
+  LFailSuite := TTestSuite.Create('Skip Count');
+  LFailSuite.TestSubtest('skip precision', @TestSubtestSkipPrecision);
+  LFailSuite.Test('normal', procedure begin CheckTrue(True); end);
+  CheckTrue(LFailSuite.Run, 'suite with skip in subtest should pass');
+  CheckEqual(LFailSuite.LastFail, 0, 'Expected 0 failures');
+  CheckTrue(LFailSuite.LastPass >= 1, 'Expected at least 1 pass');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure Harness3LevelNestedFailure;
+var
+  LFailSuite: TTestSuite;
+begin
+  LFailSuite := TTestSuite.Create('Deep Nested Failure');
+  LFailSuite.TestSubtest('3-level', @TestLevel3Nested);
+  CheckFalse(LFailSuite.Run, '3-level nested failure should propagate');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessAfterEachWarning;
+var
+  LFailSuite: TTestSuite;
+begin
+  LFailSuite := TTestSuite.Create('AfterEach Fail');
+  LFailSuite.OnAfterEach(procedure
+    begin
+      raise EAssertionFailed.Create('afterEach boom');
+    end);
+  LFailSuite.TestSubtest('child ok', @TestAfterEachFail);
+  CheckTrue(LFailSuite.Run, 'subtest AfterEach failure should be non-fatal');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessSubtestSinkPropagation;
+var
+  LFailSuite: TTestSuite;
+  LOutSink, LErrSink: TBufferSink;
+  LOutput: string;
+begin
+  LOutSink := TBufferSink.Create;
+  LErrSink := TBufferSink.Create;
+  LFailSuite := TTestSuite.Create('Subtest Sink');
+  LFailSuite.Config.OutSink := LOutSink;
+  LFailSuite.Config.ErrSink := LErrSink;
+  LFailSuite.Config.AnsiMode := amOff;
+  LFailSuite.TestSubtest('parent', @TestSubtestSinkPropagation);
+  CheckTrue(LFailSuite.Run, 'subtest sink suite should pass');
+  LOutput := LOutSink.GetOutput;
+  CheckTrue(Pos('parent/captured_pass', LOutput) > 0, 'captured_pass in sink');
+  CheckTrue(Pos('parent/captured_skip', LOutput) > 0, 'captured_skip in sink');
+  CheckEqual(LErrSink.GetOutput, '', 'err sink empty');
+  LFailSuite := Default(TTestSuite);
+  LOutSink := nil;
+  LErrSink := nil;
+end;
+
+procedure HarnessCleanupReverseOrder;
+var
+  LFailSuite: TTestSuite;
+begin
+  GCleanupOrder := nil;
+  LFailSuite := TTestSuite.Create('Cleanup Order');
+  LFailSuite.Config.OutSink := TBufferSink.Create;
+  LFailSuite.Config.ErrSink := TBufferSink.Create;
+  LFailSuite.Config.AnsiMode := amOff;
+  LFailSuite.TestSubtest('cleanup basic', @TestCleanupBasic);
+  CheckTrue(LFailSuite.Run, 'cleanup basic should pass');
+  CheckEqual(Length(GCleanupOrder), 2, '2 cleanups');
+  CheckEqual(GCleanupOrder[0], 'cleanup-B', 'reverse B first');
+  CheckEqual(GCleanupOrder[1], 'cleanup-A', 'reverse A second');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessCleanupOnFailure;
+var
+  LFailSuite: TTestSuite;
+begin
+  GCleanupOrder := nil;
+  LFailSuite := TTestSuite.Create('Cleanup On Failure');
+  LFailSuite.Config.OutSink := TBufferSink.Create;
+  LFailSuite.Config.ErrSink := TBufferSink.Create;
+  LFailSuite.Config.AnsiMode := amOff;
+  LFailSuite.TestSubtest('cleanup failure', @TestCleanupOnFailure);
+  CheckFalse(LFailSuite.Run, 'failing subtest suite fails');
+  CheckEqual(Length(GCleanupOrder), 1);
+  CheckEqual(GCleanupOrder[0], 'failure-cleanup');
+  LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessCleanupExceptionSwallowed;
+var
+  LFailSuite: TTestSuite;
+  LOutSink, LErrSink: TBufferSink;
+  LOutput: string;
+begin
+  LFailSuite := TTestSuite.Create('Cleanup Swallow');
+  LOutSink := TBufferSink.Create;
+  LErrSink := TBufferSink.Create;
+  LFailSuite.Config.OutSink := LOutSink;
+  LFailSuite.Config.ErrSink := LErrSink;
+  LFailSuite.Config.AnsiMode := amOff;
+  LFailSuite.TestSubtest('cleanup exception', @TestCleanupExceptionSwallowed);
+  CheckTrue(LFailSuite.Run, 'cleanup exception swallowed');
+  LOutput := LErrSink.GetOutput;
+  CheckTrue(Pos('WARNING cleanup error', LOutput) > 0, 'WARNING cleanup error');
+  LFailSuite := Default(TTestSuite);
+  LOutSink := nil;
+  LErrSink := nil;
+end;
+
+procedure HarnessLogOutputOnFailure;
+var
+  LFailSuite: TTestSuite;
+  LOutSink, LErrSink: TBufferSink;
+  LOutput: string;
+begin
+  LFailSuite := TTestSuite.Create('Log On Failure');
+  LOutSink := TBufferSink.Create;
+  LErrSink := TBufferSink.Create;
+  LFailSuite.Config.OutSink := LOutSink;
+  LFailSuite.Config.ErrSink := LErrSink;
+  LFailSuite.Config.AnsiMode := amOff;
+  LFailSuite.TestSubtest('log test', @TestLogCapture);
+  CheckFalse(LFailSuite.Run, 'failing log suite');
+  LOutput := LOutSink.GetOutput;
+  CheckTrue(Pos('debug info line 1', LOutput) > 0);
+  CheckTrue(Pos('computed 1 + 2 = 3', LOutput) > 0);
+  CheckTrue(Pos('hello from subtest', LOutput) = 0,
+    'passing subtest log should not appear');
+  LFailSuite := Default(TTestSuite);
+  LOutSink := nil;
+  LErrSink := nil;
+end;
+
+procedure HarnessSoftFailInSubtest;
+var
+  LFailSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LFailSuite := TTestSuite.Create('SoftFail Subtest');
+  LFailSuite.TestSubtest('soft sub',
+    procedure(constref Ctx: ITestContext)
+    begin
+      SoftFail('sub soft 1');
+      SoftCheckEqual('a', 'b', 'sub soft str');
+      Ctx.Run('leaf', procedure
+        begin
+          SoftFail('leaf soft');
+        end);
+    end);
+  CheckFalse(LFailSuite.RunWithResult(LResult), 'soft subtest fails suite');
+  CheckTrue(LResult.Failed >= 1);
+  CheckTrue(
+    (Pos('sub soft', LResult.Results[0].Message) > 0) or
+    (Pos('soft', LResult.Results[0].Message) > 0),
+    'soft message in result');
+  LFailSuite := Default(TTestSuite);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
-  LFailSuite: TTestSuite;
-  LOutSink: TBufferSink;
-  LErrSink: TBufferSink;
-  LOutput: string;
+  LMeta: TTestSuite;
 begin
   WriteLn('=== test_subtests ===');
   LSuite := TTestSuite.Create('Subtest Integration');
@@ -508,237 +690,36 @@ begin
 
   WriteLn;
   WriteLn(AnsiBold('Subtests run: '), GSubTestsRun);
-  if GSubTestsRun < 10 then
-  begin
-    FailTest('expected at least 10 subtests run, got ' + IntToStr(GSubTestsRun));
-  end;
-
+  CheckTrue(GSubTestsRun >= 10, 'expected at least 10 subtests run');
   WriteLn(AnsiBold('BeforeEach count: '), GBeforeEachCount);
   WriteLn(AnsiBold('AfterEach count: '), GAfterEachCount);
-  { BeforeEach/AfterEach should have been called exactly once per registered test }
-  if GBeforeEachCount <> 15 then
-  begin
-    FailTest('expected exactly 15 BeforeEach calls, got ' + IntToStr(GBeforeEachCount));
-  end;
-  if GAfterEachCount <> 15 then
-  begin
-    FailTest('expected exactly 15 AfterEach calls, got ' + IntToStr(GAfterEachCount));
-  end;
+  CheckEqual(GBeforeEachCount, 15, 'BeforeEach per registered entry');
+  CheckEqual(GAfterEachCount, 15, 'AfterEach per registered entry');
 
-  { ── Verify subtest failure propagation ────────────────────────────────────── }
-  { A suite containing a subtest with a real failure should report failure }
+  { B20: meta contracts as Suite.Test for scale + t.Run depth }
   WriteLn;
-  SectionHeader('Failure Propagation');
+  SectionHeader('B20 meta contracts (t.Run depth)');
+  LMeta := TTestSuite.Create('subtest-meta');
+  LMeta.Test('Failure propagation', @HarnessFailurePropagation);
+  LMeta.Test('Closure subtest failure', @HarnessClosureSubtestFailure);
+  LMeta.Test('Subtest skip counting', @HarnessSubtestSkipCounting);
+  LMeta.Test('3-level nested failure', @Harness3LevelNestedFailure);
+  LMeta.Test('AfterEach warning', @HarnessAfterEachWarning);
+  LMeta.Test('Sink propagation', @HarnessSubtestSinkPropagation);
+  LMeta.Test('Cleanup reverse order', @HarnessCleanupReverseOrder);
+  LMeta.Test('Cleanup on failure', @HarnessCleanupOnFailure);
+  LMeta.Test('Cleanup exception swallowed', @HarnessCleanupExceptionSwallowed);
+  LMeta.Test('Log output on failure', @HarnessLogOutputOnFailure);
+  LMeta.Test('SoftFail in subtest', @HarnessSoftFailInSubtest);
+  if not LMeta.Run then
   begin
-    LFailSuite := TTestSuite.Create('Failure Propagation');
-    LFailSuite.TestSubtest('real failure', @TestSubtestWithRealFailure);
-    if LFailSuite.Run then
-    begin
-      FailTest('suite with failing subtest should report failure');
-    end;
-    PassTest('Failure propagation verified');
-  end;
-
-  { ── R6-12/13/14: Closure subtest failure propagation ───────────────────── }
-  WriteLn;
-  SectionHeader('Closure Subtest Failure');
-  begin
-    LFailSuite := TTestSuite.Create('Closure Failure');
-    LFailSuite.TestSubtest('closure failure', @TestClosureSubtestWithFailure);
-    if LFailSuite.Run then
-    begin
-      FailTest('closure subtest failure should propagate');
-    end;
-    PassTest('Closure subtest failure propagation verified');
-  end;
-
-  { ── R6-55: Subtest skip counting precision ─────────────────────────────── }
-  WriteLn;
-  SectionHeader('R6-55: Subtest Skip Counting');
-  begin
-    LFailSuite := TTestSuite.Create('Skip Count');
-    LFailSuite.TestSubtest('skip precision', @TestSubtestSkipPrecision);
-    LFailSuite.Test('normal', procedure begin CheckTrue(True); end);
-    if not LFailSuite.Run then
-    begin
-      FailTest('suite with skip in subtest should pass');
-    end;
-    { Subtest-level skips do NOT propagate to suite skip counter (design).
-      But the suite should still pass (no failures). }
-    CheckTrue(LFailSuite.LastFail = 0,
-      'Expected 0 failures, got ' + IntToStr(LFailSuite.LastFail));
-    CheckTrue(LFailSuite.LastPass >= 1,
-      'Expected at least 1 pass, got ' + IntToStr(LFailSuite.LastPass));
-    PassTest('Subtest skip counting verified');
-  end;
-
-  { ── B5.7: 3-level nested failure propagation ────────────────────────────── }
-  WriteLn;
-  SectionHeader('3-Level Nested Failure');
-  begin
-    LFailSuite := TTestSuite.Create('Deep Nested Failure');
-    LFailSuite.TestSubtest('3-level', @TestLevel3Nested);
-    if LFailSuite.Run then
-    begin
-      FailTest('3-level nested failure should propagate');
-    end;
-    PassTest('3-level failure propagation verified');
-  end;
-
-  { ── R3: AfterEach failure is treated as WARNING in subtests ─────────────── }
-  WriteLn;
-  SectionHeader('AfterEach Failure');
-  begin
-    LFailSuite := TTestSuite.Create('AfterEach Fail');
-    LFailSuite.OnAfterEach(procedure begin raise EAssertionFailed.Create('afterEach boom'); end);
-    LFailSuite.TestSubtest('child ok', @TestAfterEachFail);
-    { Current design: subtest AfterEach failure is a WARNING, suite still passes }
-    if not LFailSuite.Run then
-    begin
-      FailTest('subtest AfterEach failure should be non-fatal');
-    end;
-    PassTest('AfterEach failure treated as WARNING (non-fatal)');
-  end;
-
-  { ── R2-F25: Subtest output should inherit suite sink/config ────────────── }
-  WriteLn;
-  SectionHeader('Subtest Sink Propagation');
-  begin
-    LOutSink := TBufferSink.Create;
-    LErrSink := TBufferSink.Create;
-    LFailSuite := TTestSuite.Create('Subtest Sink');
-    LFailSuite.Config.OutSink := LOutSink;
-    LFailSuite.Config.ErrSink := LErrSink;
-    LFailSuite.Config.AnsiMode := amOff;
-    LFailSuite.TestSubtest('parent', @TestSubtestSinkPropagation);
-    if not LFailSuite.Run then
-    begin
-      FailTest('subtest sink suite should pass');
-    end;
-    LOutput := LOutSink.GetOutput;
-    if Pos('parent/captured_pass', LOutput) = 0 then
-    begin
-      FailTest('expected captured_pass in subtest output sink');
-    end;
-    if Pos('parent/captured_skip', LOutput) = 0 then
-    begin
-      FailTest('expected captured_skip in subtest output sink');
-    end;
-    if LErrSink.GetOutput <> '' then
-    begin
-      FailTest('subtest sink err output should stay empty');
-    end;
-    PassTest('Subtest sink propagation verified');
-  end;
-
-  { ── Phase 2: Cleanup order verification ──────────────────────────────── }
-  WriteLn;
-  SectionHeader('Cleanup Callbacks');
-  begin
-    GCleanupOrder := nil;
-    LFailSuite := TTestSuite.Create('Cleanup Order');
-    LFailSuite.Config.OutSink := TBufferSink.Create;
-    LFailSuite.Config.ErrSink := TBufferSink.Create;
-    LFailSuite.Config.AnsiMode := amOff;
-    LFailSuite.TestSubtest('cleanup basic', @TestCleanupBasic);
-    if not LFailSuite.Run then
-    begin
-      FailTest('cleanup basic should pass');
-    end;
-    { Cleanup should be called in reverse order: B first, then A }
-    if Length(GCleanupOrder) <> 2 then
-    begin
-      FailTest('expected 2 cleanup calls, got ' + IntToStr(Length(GCleanupOrder)));
-    end;
-    if GCleanupOrder[0] <> 'cleanup-B' then
-    begin
-      FailTest('first cleanup should be B (reverse), got ' + GCleanupOrder[0]);
-    end;
-    if GCleanupOrder[1] <> 'cleanup-A' then
-    begin
-      FailTest('second cleanup should be A (reverse), got ' + GCleanupOrder[1]);
-    end;
-    PassTest('Cleanup reverse order verified');
-  end;
-
-  { ── Phase 2: Cleanup on failure ──────────────────────────────────────── }
-  begin
-    GCleanupOrder := nil;
-    LFailSuite := TTestSuite.Create('Cleanup On Failure');
-    LFailSuite.Config.OutSink := TBufferSink.Create;
-    LFailSuite.Config.ErrSink := TBufferSink.Create;
-    LFailSuite.Config.AnsiMode := amOff;
-    LFailSuite.TestSubtest('cleanup failure', @TestCleanupOnFailure);
-    if LFailSuite.Run then
-    begin
-      FailTest('suite with failing subtest should report failure');
-    end;
-    if Length(GCleanupOrder) <> 1 then
-    begin
-      FailTest('expected 1 cleanup call, got ' + IntToStr(Length(GCleanupOrder)));
-    end;
-    if GCleanupOrder[0] <> 'failure-cleanup' then
-    begin
-      FailTest('cleanup should run even on failure, got ' + GCleanupOrder[0]);
-    end;
-    PassTest('Cleanup on failure verified');
-  end;
-
-  { ── Phase 2: Cleanup exception swallowed ─────────────────────────────── }
-  begin
-    LFailSuite := TTestSuite.Create('Cleanup Swallow');
-    LOutSink := TBufferSink.Create;
-    LErrSink := TBufferSink.Create;
-    LFailSuite.Config.OutSink := LOutSink;
-    LFailSuite.Config.ErrSink := LErrSink;
-    LFailSuite.Config.AnsiMode := amOff;
-    LFailSuite.TestSubtest('cleanup exception', @TestCleanupExceptionSwallowed);
-    if not LFailSuite.Run then
-    begin
-      FailTest('cleanup exception should be swallowed');
-    end;
-    LOutput := LErrSink.GetOutput;
-    if Pos('WARNING cleanup error', LOutput) = 0 then
-    begin
-      FailTest('expected WARNING cleanup error in stderr');
-    end;
-    PassTest('Cleanup exception swallowed verified');
-  end;
-
-  { ── Phase 2: Log output on failure ───────────────────────────────────── }
-  begin
-    LFailSuite := TTestSuite.Create('Log On Failure');
-    LOutSink := TBufferSink.Create;
-    LErrSink := TBufferSink.Create;
-    LFailSuite.Config.OutSink := LOutSink;
-    LFailSuite.Config.ErrSink := LErrSink;
-    LFailSuite.Config.AnsiMode := amOff;
-    LFailSuite.TestSubtest('log test', @TestLogCapture);
-    if LFailSuite.Run then
-    begin
-      FailTest('suite with failing subtest should report failure');
-    end;
-    LOutput := LOutSink.GetOutput;
-    if Pos('debug info line 1', LOutput) = 0 then
-    begin
-      FailTest('expected "debug info line 1" in output');
-    end;
-    if Pos('computed 1 + 2 = 3', LOutput) = 0 then
-    begin
-      FailTest('expected "computed 1 + 2 = 3" in output');
-    end;
-    if Pos('hello from subtest', LOutput) > 0 then
-    begin
-      FailTest('passing subtest log should not appear in output');
-    end;
-    PassTest('Log output on failure verified');
+    WriteLn;
+    FailTest('META CONTRACTS FAILED');
   end;
 
   WriteLn;
   PassTest('ALL PASSED');
 
-  { Release closures before heaptrc reports }
-  LFailSuite := Default(TTestSuite);
-  LOutSink := nil;
-  LErrSink := nil;
+  LMeta := Default(TTestSuite);
+  LSuite := Default(TTestSuite);
 end.

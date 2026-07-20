@@ -153,12 +153,19 @@ type
 type
   { Thread-local execution state — allocated on first use, nil = uninitialized }
   TTestExecState = record
-    SuiteName  : string;
-    TestName   : string;
-    Failed     : Boolean;
-    SkipReason : string;
+    SuiteName     : string;
+    TestName      : string;
+    Failed        : Boolean;
+    HardFailed    : Boolean;  { True only on InternalFail/raise path }
+    SkipReason    : string;
+    SoftFailCount : Integer;  { Go t.Error style: fail but continue }
+    SoftFailMsgs  : specialize TArray<string>; { up to CMaxSoftFailMsgs }
   end;
   PTestExecState = ^TTestExecState;
+
+const
+  { Soft-fail message cap (Go t.Error accumulates; avoid unbounded growth). }
+  CMaxSoftFailMsgs = 32;
 
 threadvar
   GExecState: PTestExecState;
@@ -231,6 +238,24 @@ procedure ClassifyTestException(E: Exception;
 procedure SetTestContext(const ASuiteName, ATestName: string);
 procedure InternalFail(const AMessage: string);
 procedure InternalSkip(const AReason: string);
+{ SoftFail (Go t.Error): record failure without raising; test body continues.
+  Check*/Fail remain Fatal (raise). Runner marks tsFailed if SoftFailCount > 0. }
+procedure SoftFail(const AMessage: string);
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string = '');
+{ If status is still tsPassed and soft fails were recorded, set tsFailed + message.
+  Returns True when status was flipped. Does not clear the soft-fail counters
+  until SetTestContext (next test). }
+function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
+{ True when current test has soft fails but no hard InternalFail. Used so
+  FailFast does not stop the suite on soft-only failures (Go t.Error). }
+function SoftFailOnly: Boolean;
 function  StrStartsWith(const S, APrefix: string): Boolean;
 function  StrEndsWith(const AStr, ASuffix: string): Boolean;
   { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
@@ -317,16 +342,11 @@ end;
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
 var
-  LOldLen, LNewLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(AResults);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then
-    SetLength(AResults, LCap);
+  SetLength(AResults, LOldLen + 1);
   AResults[LOldLen] := AResult;
-  LNewLen := LOldLen + 1;
-  if LNewLen <> LCap then
-    SetLength(AResults, LNewLen);
 end;
 
 function GetTopSlowest(const AResults: TTestResults;
@@ -536,14 +556,11 @@ end;
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
 var
-  LOldLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(AEntries);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then
-    SetLength(AEntries, LCap);
-  AEntries[LOldLen] := AEntry;
   SetLength(AEntries, LOldLen + 1);
+  AEntries[LOldLen] := AEntry;
 end;
 
 procedure CopyTags(out ATags: specialize TArray<string>;
@@ -567,13 +584,9 @@ begin
 end;
 
 function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(ACleanups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap > LOldLen then SetLength(ACleanups, LCap);
-  Result := LOldLen;
+  Result := Length(ACleanups);
+  SetLength(ACleanups, Result + 1);
 end;
 
 procedure RunShouldFailEntry(const AEntry: TTestEntry;
@@ -691,10 +704,12 @@ var
 
 function IsFrameworkFrame(const AFrameStr: string): Boolean;
 { Returns True if the frame belongs to the test framework and should be hidden
-  from the user-facing output. Matches unit name prefixes:
-    nextpas.core.test  (any sub-unit — followed by . , space, newline, or EOS)
+  from the user-facing output (Go t.Helper intent via unit-prefix filtering).
+  Matches unit name prefixes:
+    nextpas.core.test  (any sub-unit: .check, .helpers, .runner… )
     sysutils            (FPC exception machinery)
-    system              (FPC runtime) }
+    system              (FPC runtime)
+  There is no separate MarkHelper API: put helpers in nextpas.core.test.* units. }
 const
   CPrefix = 'nextpas.core.test';
 var
@@ -871,7 +886,10 @@ end;
 procedure InternalFail(const AMessage: string);
 begin
   if GExecState <> nil then
+  begin
     GExecState^.Failed := True;
+    GExecState^.HardFailed := True;
+  end;
   raise EAssertionFailed.Create(AMessage);
 end;
 
@@ -882,6 +900,136 @@ begin
   raise ETestSkipped.Create(AReason);
 end;
 
+procedure SoftFail(const AMessage: string);
+var
+  LMsg: string;
+  LLen: Integer;
+begin
+  if AMessage = '' then
+    LMsg := 'soft fail'
+  else
+    LMsg := AMessage;
+  if GExecState = nil then
+  begin
+    { Outside a running test there is no result to attach — do not lose signal. }
+    raise EAssertionFailed.Create('SoftFail outside test context: ' + LMsg);
+  end;
+  Inc(GExecState^.SoftFailCount);
+  GExecState^.Failed := True;
+  LLen := Length(GExecState^.SoftFailMsgs);
+  if LLen < CMaxSoftFailMsgs then
+  begin
+    SetLength(GExecState^.SoftFailMsgs, LLen + 1);
+    GExecState^.SoftFailMsgs[LLen] := LMsg;
+  end;
+end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin
+  if ACondition then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckTrue failed')
+  else
+    SoftFail(AMessage);
+end;
+
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin
+  if not ACondition then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckFalse failed')
+  else
+    SoftFail(AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckEqual expected ' + IntToStr(AExpected) +
+      ' but got ' + IntToStr(AActual))
+  else
+    SoftFail(AMessage + ': expected ' + IntToStr(AExpected) +
+      ' but got ' + IntToStr(AActual));
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckEqual expected "' + AExpected +
+      '" but got "' + AActual + '"')
+  else
+    SoftFail(AMessage + ': expected "' + AExpected +
+      '" but got "' + AActual + '"');
+end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if Pos(ANeedle, AHaystack) > 0 then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckContains expected to find "' + ANeedle +
+      '" in "' + AHaystack + '"')
+  else
+    SoftFail(AMessage);
+end;
+
+function FormatSoftFailSummary: string;
+var
+  I, LStored, LExtra: Integer;
+begin
+  Result := '';
+  if (GExecState = nil) or (GExecState^.SoftFailCount <= 0) then
+    Exit;
+  LStored := Length(GExecState^.SoftFailMsgs);
+  if LStored = 0 then
+    Exit('soft fail');
+  Result := GExecState^.SoftFailMsgs[0];
+  for I := 1 to LStored - 1 do
+    Result := Result + '; ' + GExecState^.SoftFailMsgs[I];
+  LExtra := GExecState^.SoftFailCount - LStored;
+  if LExtra > 0 then
+    Result := Result + ' (+' + IntToStr(LExtra) + ' more soft fails)';
+end;
+
+function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
+var
+  LSummary: string;
+begin
+  Result := False;
+  if GExecState = nil then
+    Exit;
+  if GExecState^.SoftFailCount <= 0 then
+    Exit;
+  LSummary := FormatSoftFailSummary;
+  if AStatus = tsPassed then
+  begin
+    AStatus := tsFailed;
+    AMsg := LSummary;
+    Result := True;
+  end
+  else if (AStatus in [tsFailed, tsError]) and (AMsg <> '') then
+  begin
+    { Hard/soft both present: keep primary message, attach all soft lines. }
+    AMsg := AMsg + ' [also soft: ' + LSummary + ']';
+  end;
+end;
+
+function SoftFailOnly: Boolean;
+begin
+  Result := (GExecState <> nil) and
+    (GExecState^.SoftFailCount > 0) and
+    (not GExecState^.HardFailed);
+end;
+
 procedure SetTestContext(const ASuiteName, ATestName: string);
 begin
   if GExecState = nil then
@@ -889,10 +1037,13 @@ begin
     New(GExecState);
     GExecState^ := Default(TTestExecState);
   end;
-  GExecState^.SuiteName  := ASuiteName;
-  GExecState^.TestName   := ATestName;
-  GExecState^.Failed     := False;
-  GExecState^.SkipReason := '';
+  GExecState^.SuiteName      := ASuiteName;
+  GExecState^.TestName       := ATestName;
+  GExecState^.Failed         := False;
+  GExecState^.HardFailed     := False;
+  GExecState^.SkipReason     := '';
+  GExecState^.SoftFailCount  := 0;
+  SetLength(GExecState^.SoftFailMsgs, 0);
 end;
 
 { ── SleepMs ───────────────────────────────────────────────────────────────── }

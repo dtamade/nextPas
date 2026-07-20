@@ -9,15 +9,20 @@ unit nextpas.core.mem;
  *   - 需要 IAllocator 接口的 Arena → CreateArenaAllocator（仅分配不释放）
  *   - 高频固定大小对象 → CreateFixedSlabPool / TFixedSlabPool / TLocalBlockPool
  *   - 高频可变大小对象 → TSlabPool / TSizeClassPool
- *   - 并发场景 → TSlabPoolConcurrent / TSlabPoolSharded / TBlockPoolConcurrent
+ *   - 并发池变体 → uses nextpas.core.mem.pool.slab.concurrent / .sharded
+ *                     / blockpool.concurrent / .sharded（F3 不进门面）
  *   - 测试泄漏检测 → TTrackingAllocator 包装任意 IAllocator
+ *   - 冷门包装器（logging/sampling/hotswap/…）→ 直接 uses 对应子单元
+ *   - 可选后端 mimalloc / mmap 分配器 → uses allocator.mimalloc / .mmap（F3 批 2 / G2）
  *
  * @note 双轨硬规则：
  *   - NEXTPAS_MEM_DEBUG 只叠 DefaultAllocator，不观察过程式 GetMem。
  *   - 错误模型见 core/docs/mem/ERROR-POLICY.md（资源不足=nil；编程错误=raise）。
  *
- * @note 门面只 re-export Tier-0/1/2。Experimental (Tier-3) 请直接 uses 子单元。
- *       分层与迁移见 core/docs/mem/STDLIB-QUALITY-PLAN.md。
+ * @note 门面 re-export Tier-0/1 热路径 + 生产诊断（tracking/sentinel/guard）。
+ *       冷门包装器与并发池变体请直接 uses 子单元（F3 批 1）。
+ *       Experimental (Tier-3) 亦直接 uses 子单元。
+ *       分层与迁移见 core/docs/mem/STDLIB-QUALITY-PLAN.md · FACADES-SLIM-DESIGN。
  *
  * @note 固定大小 vs 通用 API：
  *   - Acquire/Release — 固定大小槽位池（IPool/IBlockPool），不关心具体大小
@@ -51,51 +56,25 @@ uses
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
   nextpas.core.mem.allocator.fallback,
-  nextpas.core.mem.allocator.mmap,
-  nextpas.core.mem.allocator.mimalloc,
   nextpas.core.mem.pool.sizeclass,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.pool.fixed_slab,
   nextpas.core.mem.pool.slab,
-  nextpas.core.mem.pool.slab.concurrent,
-  nextpas.core.mem.pool.slab.sharded,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.blockpool,
-  nextpas.core.mem.blockpool.concurrent,
-  nextpas.core.mem.blockpool.sharded,
-  nextpas.core.mem.stack_pool,
   nextpas.core.mem.ring_buffer,
   nextpas.core.mem.memory_map,
   nextpas.core.mem.mapped_slab_pool,
   nextpas.core.mem.secure,
   nextpas.core.mem.pool,
-  nextpas.core.mem.pool.allocator,
   nextpas.core.mem.stats,
-  nextpas.core.mem.oom,
-  nextpas.core.mem.allocator.callback,
-  nextpas.core.mem.allocator.batch,
   nextpas.core.mem.allocator.sentinel,
   nextpas.core.mem.allocator.guard,
-  nextpas.core.mem.allocator.leak_report,
-  nextpas.core.mem.allocator.logging,
-  nextpas.core.mem.allocator.debug_alloc,
-  nextpas.core.mem.allocator.sampling,
-  nextpas.core.mem.allocator.aligned,
-  nextpas.core.mem.allocator.bounded,
-  nextpas.core.mem.allocator.counting,
   nextpas.core.mem.allocator.crt,
-  nextpas.core.mem.allocator.fail,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.growing,
   nextpas.core.mem.allocator.growing_ia,
-  nextpas.core.mem.allocator.hotswap,
-  nextpas.core.mem.allocator.pool,
-  nextpas.core.mem.allocator.rtl,
-  nextpas.core.mem.allocator.scoped,
-  nextpas.core.mem.allocator.stats,
-  nextpas.core.mem.allocator.thread_safe,
-  nextpas.core.mem.allocator.zeroed,
-  nextpas.core.mem.budget;
+  nextpas.core.mem.allocator.rtl;
 
 type
   { --- Tier-0: 契约与基础 --- }
@@ -133,8 +112,6 @@ type
   TMemStats = nextpas.core.mem.default.TMemStats;
   TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
   TCrtAllocator = nextpas.core.mem.allocator.crt.TCrtAllocator;
-  TMimallocAllocator = nextpas.core.mem.allocator.mimalloc.TMimallocAllocator;
-  TMemoryMapAllocator = nextpas.core.mem.allocator.mmap.TMemoryMapAllocator;
 
   { --- Tier-0: Arena ↔ Allocator 桥 --- }
   TLocalArenaAllocator = nextpas.core.mem.allocator.arena.TLocalArenaAllocator;
@@ -142,7 +119,7 @@ type
   TVirtualArenaAllocator = nextpas.core.mem.allocator.arena.TVirtualArenaAllocator;
   TVirtualArenaAdapter = nextpas.core.mem.allocator.arena.TVirtualArenaAdapter;
 
-  { --- Tier-0: Pool / BlockPool --- }
+  { --- Tier-0: Pool / BlockPool（并发/分片变体请 uses 子单元） --- }
   IMemoryPool = nextpas.core.mem.pool.base.IMemoryPool;
   TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
@@ -150,19 +127,14 @@ type
   IBlockPool = nextpas.core.mem.blockpool.IBlockPool;
   IBlockPoolBatch = nextpas.core.mem.blockpool.IBlockPoolBatch;
   TBlockPool = nextpas.core.mem.blockpool.TBlockPool;
-  TBlockPoolConcurrent = nextpas.core.mem.blockpool.concurrent.TBlockPoolConcurrent;
-  TShardedBlockPool = nextpas.core.mem.blockpool.sharded.TShardedBlockPool;
-  TStackPool = nextpas.core.mem.stack_pool.TStackPool;
   TFixedPool = nextpas.core.mem.pool.fixed.TFixedPool;
   TFixedPoolConcurrent = nextpas.core.mem.pool.fixed.TFixedPoolConcurrent;
   IFixedSlabPool = nextpas.core.mem.pool.fixed_slab.IFixedSlabPool;
   TFixedSlabPool = nextpas.core.mem.pool.fixed_slab.TFixedSlabPool;
   TSlabPool = nextpas.core.mem.pool.slab.TSlabPool;
   TSlabConfig = nextpas.core.mem.pool.slab.TSlabConfig;
-  TSlabPoolConcurrent = nextpas.core.mem.pool.slab.concurrent.TSlabPoolConcurrent;
-  TSlabPoolSharded = nextpas.core.mem.pool.slab.sharded.TSlabPoolSharded;
 
-  { --- Tier-0: 映射 / 容器 / 运行时 --- }
+  { --- Tier-0: 映射 / 容器 / 过程统计 --- }
   TRingBuffer = nextpas.core.mem.ring_buffer.TRingBuffer;
   TMemoryMap = nextpas.core.mem.memory_map.TMemoryMap;
   TSharedMemory = nextpas.core.mem.memory_map.TSharedMemory;
@@ -171,49 +143,16 @@ type
   TAllocHistogram = nextpas.core.mem.stats.TAllocHistogram;
   TAllocStatsCollector = nextpas.core.mem.stats.TAllocStatsCollector;
   TAllocStatsAllocator = nextpas.core.mem.stats.TAllocStatsAllocator;
-  TOomEvent = nextpas.core.mem.oom.TOomEvent;
-  TOomHandler = nextpas.core.mem.oom.TOomHandler;
-  TOomAllocator = nextpas.core.mem.oom.TOomAllocator;
-  TMemoryBudget = nextpas.core.mem.budget.TMemoryBudget;
-  TBudgetAllocator = nextpas.core.mem.budget.TBudgetAllocator;
 
-  { --- Tier-1: 生产组合器 --- }
+  { --- Tier-1: 生产组合器（热路径保留） --- }
   TFallbackAllocator = nextpas.core.mem.allocator.fallback.TFallbackAllocator;
   TFallbackArena = nextpas.core.mem.allocator.fallback.TFallbackArena;
-  TBoundedAllocator = nextpas.core.mem.allocator.bounded.TBoundedAllocator;
-  TBoundedStats = nextpas.core.mem.allocator.bounded.TBoundedStats;
-  TThreadSafeAllocator = nextpas.core.mem.allocator.thread_safe.TThreadSafeAllocator;
-  TScopedAllocator = nextpas.core.mem.allocator.scoped.TScopedAllocator;
-  TAlignedAllocator = nextpas.core.mem.allocator.aligned.TAlignedAllocator;
-  TAlignedStats = nextpas.core.mem.allocator.aligned.TAlignedStats;
-  TZeroedAllocator = nextpas.core.mem.allocator.zeroed.TZeroedAllocator;
-  TStatsAllocator = nextpas.core.mem.allocator.stats.TStatsAllocator;
-  TAllocatorStats = nextpas.core.mem.allocator.stats.TAllocatorStats;
-  THotswapAllocator = nextpas.core.mem.allocator.hotswap.THotswapAllocator;
-  TPoolAllocator = nextpas.core.mem.allocator.pool.TPoolAllocator;
-  TPoolStats = nextpas.core.mem.allocator.pool.TPoolStats;
-  TBatchAllocator = nextpas.core.mem.allocator.batch.TBatchAllocator;
-  TGetMemCallback = nextpas.core.mem.allocator.callback.TGetMemCallback;
-  TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;
-  TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
-  TFreeMemCallback = nextpas.core.mem.allocator.callback.TFreeMemCallback;
 
-  { --- Tier-2: 诊断与故障注入 --- }
+  { --- Tier-1/2: 生产诊断（DEBUG 与测试注入） --- }
   TTrackingAllocator = nextpas.core.mem.allocator.tracking.TTrackingAllocator;
   TLeakCheckResult = nextpas.core.mem.allocator.leak_check.TLeakCheckResult;
   TSentinelAllocator = nextpas.core.mem.allocator.sentinel.TSentinelAllocator;
   TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
-  TLeakReportAllocator = nextpas.core.mem.allocator.leak_report.TLeakReportAllocator;
-  TLeakEntry = nextpas.core.mem.allocator.leak_report.TLeakEntry;
-  TLeakReportResult = nextpas.core.mem.allocator.leak_report.TLeakReportResult;
-  TDebugAllocator = nextpas.core.mem.allocator.debug_alloc.TDebugAllocator;
-  TFailAllocator = nextpas.core.mem.allocator.fail.TFailAllocator;
-  TFailStats = nextpas.core.mem.allocator.fail.TFailStats;
-  TLoggingAllocator = nextpas.core.mem.allocator.logging.TLoggingAllocator;
-  TSamplingAllocator = nextpas.core.mem.allocator.sampling.TSamplingAllocator;
-  TSampleEntry = nextpas.core.mem.allocator.sampling.TSampleEntry;
-  TCountingAllocator = nextpas.core.mem.allocator.counting.TCountingAllocator;
-  TCountingStats = nextpas.core.mem.allocator.counting.TCountingStats;
 
 {** IAllocator plug-in default (Growing IAllocator root, optional NEXTPAS_MEM_DEBUG wraps).
     Same process heap as DefaultHeap; still not the zero-vtable hot path. }
@@ -324,6 +263,9 @@ procedure SecureZeroString(var AStr: AnsiString); inline;
 procedure SecureZeroUnicodeString(var AStr: UnicodeString); inline;
 
 implementation
+
+uses
+  nextpas.core.mem.pool.allocator;
 
 function DefaultAllocator: IAllocator;
 begin

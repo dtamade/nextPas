@@ -83,15 +83,24 @@ end;
 `HasTruecolor`、`HasKittyKeyboard`、`ImageProtocol` 仍然保留，但它们现在只是 active-state projection，
 不再自己承担 hint heuristic。
 
-这点对 kitty keyboard 很关键：终端 hint 可以说明“候选能力存在”，但在真正完成会话协商前，它不应该被
-当成 `Active=True`。
+这点对 kitty keyboard 很重要：终端 hint 只说明“候选能力存在”（`Detected`）。`EnterTui` 在候选
+终端上发出 progressive enhancement push（默认 flags=5：disambiguate + report alternate keys）后才置
+`Active=True`，并异步 query `CSI ? u`；收到 `CSI ? <flags> u` 且与默认 flags 有交集时置
+`Verified=True`。`LeaveTui` 配对 pop。
+
+终端 **focus reporting**（DECSET 1004）默认关闭；`TTerminalOptions.FocusReporting=True`
+时 EnterTui 启用，终端焦点变化以 `evFocus`（`fkIn`/`fkOut`）上报——不同于 ext 层的
+`TFocusManager` 控件焦点。
 
 ## 继续看哪里
 
 - 架构边界看 [ARCHITECTURE.md](./ARCHITECTURE.md)
 - 四层 facade 的冻结 ownership 看 [TIER_REGISTRY.md](./TIER_REGISTRY.md)
 - widget catalog 与 widget facade ownership 看 [WIDGET_CATALOG.md](./WIDGET_CATALOG.md)
-- benchmark smoke 口径看 [BENCHMARK.md](./BENCHMARK.md)
+- 代码契约看 [CONTRACT.md](./CONTRACT.md)
+- **Go/Rust 质量对标纲领**看 [PARITY-GO-RUST.md](./PARITY-GO-RUST.md)
+- **Scorecard 门禁场景**看 [SCORECARD.md](./SCORECARD.md)
+- benchmark smoke / 历史基线看 [BENCHMARK.md](./BENCHMARK.md)
 
 ## Examples
 

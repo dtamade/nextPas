@@ -2,6 +2,8 @@
 
 L2 文件系统操作模块。提供文件读写、目录操作、路径工具和临时文件管理。
 
+**Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
+
 ## 快速开始
 
 ```pascal
@@ -52,7 +54,40 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 |------|------|
 | `Open(APath, AMode)` | 以指定模式打开文件，返回 `IFile` |
 | `Create(APath, APerm)` | 创建新文件（已存在则截断），返回 `IFile` |
+| `OpenLocked(APath[, Mode, Kind])` | 打开并阻塞获取整文件锁（`flkExclusive`/`flkShared`） |
 | `CopyFile(ASrc, ADst)` | 复制文件，返回写入字节数 |
+| `Watch` / `IFsWatcher` | 文件监视；`Add` 单 path；**`AddTree`** 递归目录树（Unix） |
+
+### 文件锁（IFile）
+
+整文件 **advisory** 锁（Unix `flock`；Windows `LockFileEx`）。锁绑定打开句柄，关闭后释放。
+
+```pascal
+var F := OpenLocked('/var/run/myapp.lock', [fmCreate, fmWrite], flkExclusive);
+try
+  // 单实例临界区
+finally
+  F.Close;  // 释放锁
+end;
+
+// 或手动：
+var A := Open(path, [fmRead, fmWrite]);
+if A.TryLock(flkExclusive) then
+begin
+  try
+    ...
+  finally
+    A.Unlock;
+  end;
+end;
+```
+
+| 方法 | 说明 |
+|------|------|
+| `Lock(kind)` | 阻塞获取；失败抛异常 |
+| `TryLock(kind)` | 非阻塞；忙返回 False，其它错误抛异常 |
+| `Unlock` | 释放 |
+| `OpenLocked` | Open + Lock 便利 |
 | `TempFile(ADir, APattern)` | 创建临时文件，返回 `IFile` |
 | `TempDir(ADir, APattern)` | 创建临时目录，返回路径 |
 | `Glob(ADir, APattern)` | 列出匹配 glob 模式的文件（单层） |
@@ -89,11 +124,15 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Exists(APath)` | 检查路径是否存在 |
 | `IsDir(APath)` | 检查是否为目录 |
 | `IsFile(APath)` | 检查是否为普通文件 |
+| `IsSymlink(APath)` | 检查是否为符号链接（不跟随；不存在 False） |
 | `FileSize(APath)` | 返回文件大小（字节） |
 | `Chmod(APath, APerm)` | 设置文件权限 |
 | `Truncate(APath, ASize)` | 截断文件 |
 | `Symlink(ATarget, ALinkPath)` | 创建符号链接 |
 | `Readlink(APath)` | 读取符号链接目标 |
+| `HardLink(AOld, ANew)` | 创建硬链接（对齐 Go `os.Link`） |
+| `Chtimes(APath, AAccessNs, AModNs)` | 访问/修改时间（Unix 纳秒 epoch） |
+| `Chown(APath, AUid, AGid)` | 所有者（Unix；Windows 不支持） |
 
 ### 目录操作
 
@@ -113,7 +152,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | 函数 | 说明 |
 |------|------|
 | `PathJoin(AParts)` | 连接多个路径片段 |
-| `PathDir(APath)` | 提取目录部分（门面：裸文件名 → `''`；底层 `FsPathDir` → `'.'`） |
+| `PathDir(APath)` | 目录部分（裸名→`''`；`./x`→`'.'`；`FsPathDir` 裸名→`'.'`） |
 | `PathBase(APath)` | 提取文件名部分 |
 | `PathSplit(APath, ADir, ABase)` | 分离目录和文件名（门面裸文件名 `ADir=''`） |
 | `PathExt(APath)` | 提取扩展名 |
@@ -139,6 +178,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `GetEnvironmentVariable` / `ParamCount` / `ParamStr` | **兼容入口**；新代码用 `os.env` / `args` |
 | `GetTempDir` | 获取系统临时目录 |
 | `SameFileName(A, B)` | 比较文件名是否相同（平台相关大小写规则） |
+| `SameFile(A, B)` | 是否同一 inode（lstat Dev+Ino；对齐 Go `os.SameFile`） |
 | `ForceDirectories` / `DeleteFile` | Boolean 兼容壳（吞异常）；失败要分类请用 `MkdirAll` / `Remove` |
 | `Remove` | 删除；**ENOENT 静默成功**（Pascal Erase 语义） |
 
@@ -151,9 +191,10 @@ make -C core/tests/nextpas.core.fs/test_fs_glob clean test
 make -C core/tests/nextpas.core.fs/test_fs_idir clean test
 make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
 make -C core/tests/nextpas.core.fs/test_fs_text clean test
+make -C core/tests/nextpas.core.fs/test_fs_watch clean test
 ```
 
-333 个测试，heaptrc 零泄漏。
+含 watch **11** 在内，heaptrc 零泄漏。
 
 ### 特殊行为说明
 

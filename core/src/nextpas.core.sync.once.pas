@@ -39,24 +39,24 @@ end;
 
 procedure TOnce.Do_(const AProc: TOnceProc);
 var
-  LOld, LCur: Int32;
+  LCur, LExpected: Int32;
 begin
   while True do
   begin
-    LCur := AtomicLoad32(FState, moAcquire);
+    LCur := atomic_load(FState, mo_acquire);
     if LCur = STATE_DONE then
       Exit;
     if LCur = STATE_INIT then
     begin
-      LOld := AtomicCompareExchange32(FState, STATE_INIT, STATE_RUNNING, moAcqRel);
-      if LOld = STATE_INIT then
+      LExpected := STATE_INIT;
+      if atomic_compare_exchange_strong(FState, LExpected, STATE_RUNNING, mo_acq_rel, mo_acquire) then
       begin
         try
           AProc();
-          AtomicStore32(FState, STATE_DONE, moRelease);
+          atomic_store(FState, STATE_DONE, mo_release);
           platform_wake_address_all(@FState);
         except
-          AtomicStore32(FState, STATE_INIT, moRelease);
+          atomic_store(FState, STATE_INIT, mo_release);
           platform_wake_address_all(@FState);
           raise;
         end;
@@ -69,7 +69,7 @@ end;
 
 function TOnce.Done: Boolean;
 begin
-  Result := AtomicLoad32(FState, moAcquire) = STATE_DONE;
+  Result := atomic_load(FState, mo_acquire) = STATE_DONE;
 end;
 
 function CreateOnce: IOnce;

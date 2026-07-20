@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.5
+**最后更新**：2026-07-20
+**版本**：1.8
 
 ---
 
@@ -44,6 +44,7 @@
 - **[INV-8]** 本单元与 env 测试不 `uses` 裸 FPC RTL；环境访问仅经 `platform.env`。门禁：`test_os_env` 真 uses 扫描。
 - **[INV-9]** **可移植名**：`SetEnv`/`UnsetEnv`/`Expand*` 占位符名必须为 `[A-Za-z_][A-Za-z0-9_]*`；`GetEnv`/`TryGetEnv`/`HasEnv` 仅 INV-1（可查询既有怪异名）。
 - **[INV-10]** 非线程安全（与 C getenv/setenv 一致）。
+- **[INV-11]** `ClearEnv` 对 EnvKeys 快照逐项 unset（跳过含 `=`/NUL 的异常名）；**不**强制可移植名，以便清空进程环境。
 
 ---
 
@@ -79,7 +80,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 41 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir + 可移植名 + 真 uses 门禁 |
+| test_os_env | 69 | R19 + R22 mixed Expand / HasEnv empty |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -94,3 +95,6 @@
 | 2026-07-19 | 1.3 | INV-8 FPC RTL 隔离 | Claude |
 | 2026-07-19 | 1.4 | 真 uses 门禁（test_os_env） | Claude |
 | 2026-07-19 | 1.5 | INV-9 可移植名 Set/Expand；INV-10 线程 | Claude |
+| 2026-07-19 | 1.6 | ClearEnv（INV-11）；R16 对标 | Claude |
+| 2026-07-19 | 1.7 | R17 质量表；测试 55 | Claude |
+| 2026-07-20 | 1.8 | R22 mixed Expand + HasEnv empty；测试 69 | Claude |

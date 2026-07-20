@@ -3,7 +3,7 @@ program test_tui_examples;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.test;
 
 var

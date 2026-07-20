@@ -259,6 +259,32 @@ function platform_socket_getpeername(const ASocket: TPlatformSocket;
     @return 0 成功，否则返回错误码 *}
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 
+const
+  { Cap for platform_socket_resolve_stream multi-A collection }
+  PLATFORM_RESOLVE_MAX = 16;
+
+type
+  { One resolved stream address (IPv4 or IPv6) from getaddrinfo walk }
+  TPlatformResolvedAddr = record
+    IsIPv6: Boolean;
+    IPv4: UInt32; { network byte order when not IsIPv6 }
+    IPv6: array[0..15] of Byte;
+  end;
+  PPlatformResolvedAddr = ^TPlatformResolvedAddr;
+
+{** @desc 解析主机名为有序地址列表（multi-A / dual-stack，AF_UNSPEC + SOCK_STREAM）
+    @param AHost 主机名
+    @param AOut 输出缓冲区（至少 AMax 个 TPlatformResolvedAddr）
+    @param AMax 最大条数（建议 ≤ PLATFORM_RESOLVE_MAX）
+    @param ACount 实际写入条数
+    @return 0 成功（ACount>0），否则错误码且 ACount=0 *}
+function platform_socket_resolve_stream(const AHost: PAnsiChar;
+  AOut: PPlatformResolvedAddr; AMax: Int32; out ACount: Int32): Int32;
+{** @desc 按地址族解析 multi-A（AFamily = AF_INET / AF_INET6 / AF_UNSPEC） *}
+function platform_socket_resolve_stream_family(const AHost: PAnsiChar;
+  AFamily: Int32; AOut: PPlatformResolvedAddr; AMax: Int32;
+  out ACount: Int32): Int32;
+
 {** @desc 设置套接字为非阻塞模式
     @param ASocket 套接字句柄
     @param ANonBlock True 设为非阻塞，False 设为阻塞
@@ -682,6 +708,78 @@ begin
   AAddr := LSa^.sin_addr.s_addr;
   freeaddrinfo(LRes);
   Result := 0;
+end;
+
+function platform_socket_resolve_stream_family(const AHost: PAnsiChar;
+  AFamily: Int32; AOut: PPlatformResolvedAddr; AMax: Int32;
+  out ACount: Int32): Int32;
+var
+  LHints: addrinfo;
+  LRes, LCur: PAddrInfo;
+  LSa4: ^sockaddr_in;
+  LSa6: ^sockaddr_in6;
+  LMax: Int32;
+  LDst: PPlatformResolvedAddr;
+begin
+  ACount := 0;
+  if (AHost = nil) or (AOut = nil) or (AMax <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
+  LMax := AMax;
+  if LMax > PLATFORM_RESOLVE_MAX then
+    LMax := PLATFORM_RESOLVE_MAX;
+
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := AFamily;
+  LHints.ai_socktype := SOCK_STREAM;
+  LRes := nil;
+  Result := getaddrinfo(AHost, nil, @LHints, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then
+      Result := PLATFORM_ERR_INVALID;
+    Exit;
+  end;
+
+  LCur := LRes;
+  while (LCur <> nil) and (ACount < LMax) do
+  begin
+    if (LCur^.ai_socktype = SOCK_STREAM) or (LCur^.ai_socktype = 0) then
+    begin
+      if (LCur^.ai_family = AF_INET) and (LCur^.ai_addr <> nil) and
+         ((AFamily = AF_UNSPEC) or (AFamily = AF_INET)) then
+      begin
+        LSa4 := Pointer(LCur^.ai_addr);
+        LDst := AOut;
+        Inc(LDst, ACount);
+        LDst^.IsIPv6 := False;
+        LDst^.IPv4 := LSa4^.sin_addr.s_addr;
+        FillChar(LDst^.IPv6, SizeOf(LDst^.IPv6), 0);
+        Inc(ACount);
+      end
+      else if (LCur^.ai_family = AF_INET6) and (LCur^.ai_addr <> nil) and
+              ((AFamily = AF_UNSPEC) or (AFamily = AF_INET6)) then
+      begin
+        LSa6 := Pointer(LCur^.ai_addr);
+        LDst := AOut;
+        Inc(LDst, ACount);
+        LDst^.IsIPv6 := True;
+        LDst^.IPv4 := 0;
+        Move(LSa6^.sin6_addr, LDst^.IPv6, 16);
+        Inc(ACount);
+      end;
+    end;
+    LCur := LCur^.ai_next;
+  end;
+  freeaddrinfo(LRes);
+  if ACount = 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := 0;
+end;
+
+function platform_socket_resolve_stream(const AHost: PAnsiChar;
+  AOut: PPlatformResolvedAddr; AMax: Int32; out ACount: Int32): Int32;
+begin
+  Result := platform_socket_resolve_stream_family(AHost, AF_UNSPEC, AOut, AMax, ACount);
 end;
 
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
@@ -1350,6 +1448,100 @@ begin
   Result := 0;
 end;
 
+function platform_socket_resolve_stream_family(const AHost: PAnsiChar;
+  AFamily: Int32; AOut: PPlatformResolvedAddr; AMax: Int32;
+  out ACount: Int32): Int32;
+type
+  TWinAddrInfo = record
+    ai_flags: Int32;
+    ai_family: Int32;
+    ai_socktype: Int32;
+    ai_protocol: Int32;
+    ai_addrlen: PtrUInt;
+    ai_canonname: PAnsiChar;
+    ai_addr: Pointer;
+    ai_next: Pointer;
+  end;
+  PWinAddrInfo = ^TWinAddrInfo;
+  TWinSockAddrIn = packed record
+    sin_family: Word;
+    sin_port: Word;
+    sin_addr: UInt32;
+    sin_zero: array[0..7] of Byte;
+  end;
+  PWinSockAddrIn = ^TWinSockAddrIn;
+  TWinSockAddrIn6 = packed record
+    sin6_family: Word;
+    sin6_port: Word;
+    sin6_flowinfo: UInt32;
+    sin6_addr: array[0..15] of Byte;
+    sin6_scope_id: UInt32;
+  end;
+  PWinSockAddrIn6 = ^TWinSockAddrIn6;
+var
+  LHints: TWinAddrInfo;
+  LRes, LCur: PWinAddrInfo;
+  LMax: Int32;
+  LDst: PPlatformResolvedAddr;
+begin
+  ACount := 0;
+  if (AHost = nil) or (AOut = nil) or (AMax <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
+  LMax := AMax;
+  if LMax > PLATFORM_RESOLVE_MAX then
+    LMax := PLATFORM_RESOLVE_MAX;
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := AFamily; { 0=AF_UNSPEC, 2=AF_INET, 23=AF_INET6 }
+  LHints.ai_socktype := 1; { SOCK_STREAM }
+  LRes := nil;
+  Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then
+      Result := PLATFORM_ERR_INVALID;
+    Exit;
+  end;
+  LCur := LRes;
+  while (LCur <> nil) and (ACount < LMax) do
+  begin
+    if (LCur^.ai_socktype = 1) or (LCur^.ai_socktype = 0) then
+    begin
+      if (LCur^.ai_family = 2) and (LCur^.ai_addr <> nil) and
+         ((AFamily = 0) or (AFamily = 2)) then
+      begin
+        LDst := AOut;
+        Inc(LDst, ACount);
+        LDst^.IsIPv6 := False;
+        LDst^.IPv4 := PWinSockAddrIn(LCur^.ai_addr)^.sin_addr;
+        FillChar(LDst^.IPv6, SizeOf(LDst^.IPv6), 0);
+        Inc(ACount);
+      end
+      else if (LCur^.ai_family = 23) and (LCur^.ai_addr <> nil) and
+              ((AFamily = 0) or (AFamily = 23)) then
+      begin
+        LDst := AOut;
+        Inc(LDst, ACount);
+        LDst^.IsIPv6 := True;
+        LDst^.IPv4 := 0;
+        Move(PWinSockAddrIn6(LCur^.ai_addr)^.sin6_addr, LDst^.IPv6, 16);
+        Inc(ACount);
+      end;
+    end;
+    LCur := PWinAddrInfo(LCur^.ai_next);
+  end;
+  winsock_freeaddrinfo(LRes);
+  if ACount = 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := 0;
+end;
+
+function platform_socket_resolve_stream(const AHost: PAnsiChar;
+  AOut: PPlatformResolvedAddr; AMax: Int32; out ACount: Int32): Int32;
+begin
+  Result := platform_socket_resolve_stream_family(AHost, 0 { AF_UNSPEC },
+    AOut, AMax, ACount);
+end;
+
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
 var
@@ -1739,6 +1931,8 @@ function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOpt
 function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_resolve_stream_family(const AHost: PAnsiChar; AFamily: Int32; AOut: PPlatformResolvedAddr; AMax: Int32; out ACount: Int32): Int32; begin ACount := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_resolve_stream(const AHost: PAnsiChar; AOut: PPlatformResolvedAddr; AMax: Int32; out ACount: Int32): Int32; begin ACount := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;

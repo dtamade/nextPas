@@ -6,13 +6,14 @@ interface
 
 const
   {** @desc 最大监视文件描述符数量 *}
-  PLATFORM_WATCH_MAX_FDS = 16;
+  PLATFORM_WATCH_MAX_FDS = 256;
 
 type
   {** @desc 文件系统监视事件 *}
   TPlatformWatchEvent = record
     Name: array[0..255] of AnsiChar;
     NameLen: Int32;
+    Wd: Int32;  { watch descriptor / platform id for L2 path map }
     IsDir: Boolean;
     Modified: Boolean;
     Created: Boolean;
@@ -212,6 +213,7 @@ begin
     Exit(0);
 
   LEvt := @LBuf[0];
+  AEvent.Wd := LEvt^.wd;
   AEvent.Modified := (LEvt^.mask and IN_MODIFY) <> 0;
   AEvent.Created := (LEvt^.mask and (IN_CREATE or IN_MOVED_TO)) <> 0;
   AEvent.Deleted := (LEvt^.mask and (IN_DELETE or IN_MOVED_FROM)) <> 0;
@@ -250,6 +252,7 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.posix.errno,
+  nextpas.core.platform.error,
 {$IFDEF NEXTPAS_MACOS}
   nextpas.core.platform.darwin.base,
   nextpas.core.platform.darwin.ffi;
@@ -388,6 +391,7 @@ begin
   if (LEvent.Flags and EV_ERROR) <> 0 then
     Exit(0);
 
+  AEvent.Wd := Int32(LEvent.Ident);
   AEvent.Modified := (LEvent.FFlags and (NOTE_WRITE or NOTE_EXTEND)) <> 0;
   AEvent.Deleted := (LEvent.FFlags and NOTE_DELETE) <> 0;
   AEvent.Created := (LEvent.FFlags and NOTE_WRITE) <> 0;

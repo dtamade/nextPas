@@ -2,6 +2,29 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
+## 消费侧（写模块 bench 的人）
+
+- **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局  
+- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（8 模块）  
+- 示例：`core/examples/bench/`、`core/examples/nextpas.core.bench/`  
+- 模块 bench 样例：`core/benchmarks/nextpas.core.*/`  
+- 跨语言子集：`scorecard-subset-2026-07-19.md`  
+- 历史文档索引：[archive/README.md](archive/README.md)  
+
+### 仓库一键入口
+
+```bash
+# 框架全部 focused suites（约 22 个）
+make bench-module-test
+
+# 轻量 scorecard smoke（inttohex；需 fpc + go）
+make bench-scorecard-smoke
+
+# 子集脚本（可 --tracks a,b 或 --summary）
+bash core/docs/bench/scripts/run-scorecard-subset.sh --list
+bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
+```
+
 ## 模块结构
 
 ```
@@ -112,20 +135,36 @@ LResults := TBenchSuite.Create('MySuite')
 |------|------|
 | `PrintToConsole` | 返回格式化的控制台表格字符串（纯函数，不写 stdout） |
 | `ToBenchstat` | Go benchstat 兼容格式（tab-separated，可直接用 `benchstat` 分析） |
-| `ToJSON` | JSON 格式（含环境信息、统计详情） |
-| `ToTSV` | TSV 格式（含状态/跳过原因） |
-| `ToHTML` | 自包含 HTML（内联 CSS/SVG 图表/箱线图） |
-| `SaveToJSON(Path)` | 保存 JSON 到文件 |
-| `SaveToHTML(Path)` | 保存 HTML 到文件 |
-| `SaveToTSV(Path)` | 保存 TSV 到文件 |
-| `CompareTwoResults(A, B)` | 两个结果 Mann-Whitney U 对比 |
-| `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵（超越 Go/Rust） |
-| `ToMatrixReport(Baselines)` | 多基线矩阵 Console 报告 |
-| `ToMatrixHTML(Baselines)` | 多基线矩阵 HTML（含 B/op + allocs/op） |
-| `ToMatrixJSON(Baselines)` | 多基线矩阵 JSON（CI 可消费） |
+| `ToJSON` / `ToTSV` / `ToHTML` / `ToCSV` / `ToSummary` | 各格式报告字符串 |
+| `SaveToJSON/HTML/TSV/CSV/Markdown(Path)` | 保存到文件 |
+| `CompareTwoResults(A, B)` | 两个结果 Mann-Whitney U 对比（RawSamples） |
+| `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵 |
+| `ToMatrixReport/HTML/JSON/CSV(Baselines)` | 多基线矩阵报告 |
+| `SaveToMatrixJSON/HTML/CSV(Path, Baselines)` | 矩阵报告落盘 |
 | `SaveBaseline(Path, GitHash)` | 保存当前结果为命名基线 |
 | `AppendToTimeline(Path)` | 追加到 JSONL 时间线 |
-| `HasRegression(Threshold)` | 检测回归 |
+| `HasRegression(Threshold)` / `GetRegressionReport(Threshold)` | 回归检测与报告 |
+
+### IBenchResults 结果查询 / 聚合（Round 40–62）
+
+分组规则：名称中**首个 `/` 前**为组名；无 `/` 时整名为组名。
+
+| 方法 | 说明 |
+|------|------|
+| `GetFastest` / `GetSlowest` / `GetTopN` | 极值与 TopN |
+| `GetStableResults` / `GetUnstableResults` | 按 CV 阈值筛选 |
+| `FilterByPrefix/Suffix/Substring/NamePattern` | 名称过滤 |
+| `FilterByNsPerOpRange` / `FilterByStdDevRange` | 数值范围过滤 |
+| `SortByNsPerOp` / `SortByOpsPerSec` / `SortByCustomMetric` | 排序 |
+| `GetSummaryStats` / `GetPercentileStats` / `GetOutlierSummary` | 摘要统计 |
+| `GetTotalOpsPerSec` / `GetTotalIterations` / `GetTotalElapsed` 等 | 跨结果聚合 |
+| `GetGroups` / `GetGroupStats` | 分组枚举与组内聚合 |
+| `ToJSON/Markdown/HTML_Grouped` + `SaveTo*_Grouped` | 分组导出 |
+| `CompareGroups(A, B)` | 两组 NsPerOp 启发式对比（非 MWU） |
+| `GetGroupRegressionReport(Threshold)` | 分组两两回归报告 |
+
+> **API 冻结（2026-07-19）**：默认不再向 `IBenchResults` / `IBenchSuite` 堆叠便捷方法；
+> 后续增量优先落在 report/stats 子单元或文档化的明确缺口修复。
 
 ## TBenchRunner 便利 API
 
@@ -322,28 +361,24 @@ end.
 ## 测试
 
 ```bash
-# 全量测试（15 个 suite）
-make -C core/tests/nextpas.core.bench test
+# 全量测试（22 个 suite，见 goal-tree.md）
+make -C core/tests/nextpas.core.bench clean test
 
-# 运行 bench 模块自身的基准测试
+# 模块自身 micro-bench
 make -C core/tests/nextpas.core.bench bench
+# 或：make -C core/benchmarks/nextpas.core.bench clean test
 
-# 单个 suite
+# 常用 suite
 make -C core/tests/nextpas.core.bench/test_bench_stats clean test
-make -C core/tests/nextpas.core.bench/test_bench_stats_advanced clean test
 make -C core/tests/nextpas.core.bench/test_bench_runner clean test
 make -C core/tests/nextpas.core.bench/test_bench_integration clean test
+make -C core/tests/nextpas.core.bench/test_bench_results_api clean test
 make -C core/tests/nextpas.core.bench/test_bench_report clean test
 make -C core/tests/nextpas.core.bench/test_bench_xlang clean test
 make -C core/tests/nextpas.core.bench/test_bench_baseline clean test
-make -C core/tests/nextpas.core.bench/test_bench_memtrack clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel_memtrack_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
-make -C core/tests/nextpas.core.bench/test_bench_run clean test
 ```
+
+权威状态见 `goal-tree.md`（B0–B27）。历史调研文档（`bench-usability-*`、`FINAL_REPORT.md`）仅作归档，不以之为当前测试计数。
 
 ## 环境变量
 

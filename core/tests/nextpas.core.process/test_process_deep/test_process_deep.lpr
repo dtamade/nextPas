@@ -7,11 +7,16 @@ uses
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.time.base,
+  nextpas.core.async.cancellation,
   nextpas.core.process,
   nextpas.core.process.base,
   nextpas.core.process.child,
   nextpas.core.process.command,
-  nextpas.core.process.pipe;
+  nextpas.core.process.pipe,
+  nextpas.core.fs,
+  nextpas.core.platform.process,
+  nextpas.core.platform.thread,
+  nextpas.core.text.conv;
 
 var
   T: TTestSuite;
@@ -339,6 +344,157 @@ begin
   Check(Pos('done', LOut.StdErr) > 0, 'wwo stderr');
 end;
 
+{ --- R22: CancelToken on plain Wait / Status (no pipes) --- }
+
+procedure TestCancelTokenOnStatus;
+var
+  LTok: IAsyncCancellationToken;
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LTok := CreateCancellationToken;
+  LChild := Command('/bin/sleep')
+    .Arg('30')
+    .CancelToken(LTok)
+    .Spawn;
+  LTok.Cancel;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'cancel Wait — not running');
+  Check(LOut.Cancelled, 'cancel Wait — Cancelled flag');
+  Check(not LOut.TimedOut, 'cancel Wait — not TimedOut');
+  Check(not ProcessSucceeded(LOut), 'cancel Wait — not succeeded');
+end;
+
+procedure TestCancelTokenOnStatusBuilder;
+var
+  LTok: IAsyncCancellationToken;
+  LOut: TProcessOutput;
+begin
+  LTok := CreateCancellationToken;
+  { Status uses Wait (no capture pipes); must still honor CancelToken. }
+  LTok.Cancel;
+  try
+    LOut := Command('/bin/sleep').Arg('30').CancelToken(LTok).Status;
+    Check(False, 'cancel Status pre-spawn should raise');
+  except
+    on E: EProcessError do
+      Check(Pos('cancel', E.Message) > 0, 'cancel Status pre-spawn message');
+  end;
+  LTok := CreateCancellationToken;
+  { Mid-wait cancel is covered by Wait path above; Status after spawn: }
+  LOut := Command('/bin/true').CancelToken(LTok).Status;
+  CheckEqual(Int64(0), Int64(LOut.ExitCode), 'Status true still succeeds without cancel');
+  Check(not LOut.Cancelled, 'Status true — not cancelled');
+end;
+
+procedure TestDoubleWaitReturnsCached;
+var
+  LChild: IChild;
+  L1, L2: TProcessOutput;
+begin
+  LChild := Command('/bin/echo').Arg('once').Stdout(stPiped).Spawn;
+  L1 := LChild.Wait;
+  L2 := LChild.Wait;
+  CheckEqual(Int64(0), Int64(L1.ExitCode), 'first Wait exit 0');
+  CheckEqual(L1.ExitCode, L2.ExitCode, 'second Wait same exit');
+  CheckEqual(L1.StdOut, L2.StdOut, 'second Wait same stdout');
+  Check(not L2.TimedOut, 'second Wait not timed out');
+end;
+
+procedure TestMergeStderrMaxOutput;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/sh')
+    .Args(['-c', 'yes'])
+    .MergeStderr
+    .MaxOutput(64)
+    .Output;
+  Check(LOut.OutputLimited, 'Merge+MaxOutput — OutputLimited');
+  Check(not LOut.TimedOut, 'Merge+MaxOutput — not TimedOut');
+  Check(not ProcessSucceeded(LOut), 'Merge+MaxOutput — not succeeded');
+end;
+
+{ R24: process group + KillTree }
+procedure TestNewProcessGroupKillTree;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LMarker: string;
+  LExists: Boolean;
+  I: Integer;
+begin
+  LMarker := '/tmp/nextpas_r24_pg_' + IntToStr(platform_getpid) + '.alive';
+  if Exists(LMarker) then
+    Remove(LMarker);
+  LChild := Command('/bin/sh')
+    .Args(['-c',
+      'sleep 60 & echo $! > "' + LMarker + '"; wait'])
+    .NewProcessGroup
+    .Spawn;
+  Check(LChild.ProcessGroupId = LChild.Pid, 'pgid equals pid for leader');
+  LExists := False;
+  for I := 1 to 50 do
+  begin
+    if Exists(LMarker) then
+    begin
+      LExists := True;
+      Break;
+    end;
+    platform_thread_sleep_ns(20000000);
+  end;
+  Check(LExists, 'grandchild marker created');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree terminated shell');
+  Check(LChild.ProcessGroupId > 0, 'pgid retained');
+end;
+
+procedure TestKillTreeWithoutGroup;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  CheckEqual(Int64(0), Int64(LChild.ProcessGroupId), 'no group -> pgid 0');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree without group kills process');
+end;
+
+procedure TestWaitGracefulWithProcessGroup;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LMarker: string;
+  I: Integer;
+  LExists: Boolean;
+begin
+  LMarker := '/tmp/nextpas_r26_wg_' + IntToStr(platform_getpid) + '.alive';
+  if Exists(LMarker) then
+    Remove(LMarker);
+  LChild := Command('/bin/sh')
+    .Args(['-c',
+      'trap "" TERM; sleep 60 & echo $! > "' + LMarker + '"; wait'])
+    .NewProcessGroup
+    .Spawn;
+  LExists := False;
+  for I := 1 to 50 do
+  begin
+    if Exists(LMarker) then
+    begin
+      LExists := True;
+      Break;
+    end;
+    platform_thread_sleep_ns(20000000);
+  end;
+  Check(LExists, 'grandchild marker for WaitGraceful+group');
+  { Short grace → KillTree path after TERM ignored by shell trap }
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(100));
+  Check(LOut.Status <> psRunning, 'WaitGraceful+group terminated');
+  Check(LOut.TimedOut, 'WaitGraceful+group TimedOut after KillTree');
+end;
+
 { --- Main --- }
 
 begin
@@ -363,5 +519,12 @@ begin
   T.Test('RunIn', @TestRunIn);
   T.Test('Dual pipe large', @TestDualPipeLarge);
   T.Test('WaitWithOutput stdin', @TestWaitWithOutputStdin);
+  T.Test('R22 CancelToken on Wait', @TestCancelTokenOnStatus);
+  T.Test('R22 CancelToken Status edges', @TestCancelTokenOnStatusBuilder);
+  T.Test('R22 Double Wait cached', @TestDoubleWaitReturnsCached);
+  T.Test('R22 MergeStderr MaxOutput', @TestMergeStderrMaxOutput);
+  T.Test('R24 NewProcessGroup KillTree', @TestNewProcessGroupKillTree);
+  T.Test('R24 KillTree without group', @TestKillTreeWithoutGroup);
+  T.Test('R26 WaitGraceful+ProcessGroup', @TestWaitGracefulWithProcessGroup);
   if not T.Run then Halt(1);
 end.

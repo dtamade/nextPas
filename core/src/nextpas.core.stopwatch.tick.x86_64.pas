@@ -53,7 +53,7 @@ procedure DetectCpuFeatures;
 var
   LEdx: UInt32;
 begin
-  if AtomicLoad32(GHasRDTSCP, moAcquire) >= 0 then
+  if atomic_load(GHasRDTSCP, mo_acquire) >= 0 then
     Exit;
   asm
     movl $0x80000001, %eax
@@ -61,30 +61,30 @@ begin
     movl %edx, LEdx
   end ['eax','ebx','ecx','edx'];
   if (LEdx and (1 shl 27)) <> 0 then
-    AtomicStore32(GHasRDTSCP, 1, moRelease)
+    atomic_store(GHasRDTSCP, 1, mo_release)
   else
-    AtomicStore32(GHasRDTSCP, 0, moRelease);
+    atomic_store(GHasRDTSCP, 0, mo_release);
   asm
     movl $0x80000007, %eax
     cpuid
     movl %edx, LEdx
   end ['eax','ebx','ecx','edx'];
   if (LEdx and (1 shl 8)) <> 0 then
-    AtomicStore32(GHasInvariantTSC, 1, moRelease)
+    atomic_store(GHasInvariantTSC, 1, mo_release)
   else
-    AtomicStore32(GHasInvariantTSC, 0, moRelease);
+    atomic_store(GHasInvariantTSC, 0, mo_release);
 end;
 
 function CpuHasRDTSCP: Boolean;
 begin
   DetectCpuFeatures;
-  Result := AtomicLoad32(GHasRDTSCP, moAcquire) = 1;
+  Result := atomic_load(GHasRDTSCP, mo_acquire) = 1;
 end;
 
 function CpuHasInvariantTSC: Boolean;
 begin
   DetectCpuFeatures;
-  Result := AtomicLoad32(GHasInvariantTSC, moAcquire) = 1;
+  Result := atomic_load(GHasInvariantTSC, mo_acquire) = 1;
 end;
 
 function ReadTSC: UInt64; inline;
@@ -106,7 +106,7 @@ var
   LCounter: Int64;
   LFreq: Int64;
 {$ENDIF}
-  LOld: Int32;
+  LExpected: Int32;
 
   function GetRefNs: UInt64;
   {$IFDEF NEXTPAS_WINDOWS}
@@ -126,10 +126,10 @@ var
   end;
 
 begin
-  LOld := AtomicCompareExchange32(GCalibrated, 0, 1, moAcqRel);
-  if LOld <> 0 then
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(GCalibrated, LExpected, 1, mo_acq_rel, mo_acquire) then
   begin
-    while AtomicLoad32(GCalibrated, moAcquire) = 1 do
+    while atomic_load(GCalibrated, mo_acquire) = 1 do
       CpuPause;
     Exit;
   end;
@@ -145,7 +145,7 @@ begin
     GResolutionHz := ((LEnd - LStart) * 1000000000) div (LRefEnd - LRefStart)
   else
     GResolutionHz := 1000000000;
-  AtomicStore32(GCalibrated, 2, moRelease);
+  atomic_store(GCalibrated, 2, mo_release);
 end;
 
 function IsAvailable: Boolean;

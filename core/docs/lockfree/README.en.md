@@ -9,6 +9,9 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 **Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
+**Status**: Maintenance — H3-1…H3-5 complete. See [`READY.md`](READY.md).
+Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Chinese [`README.md`](README.md) is the fuller product entry.
+
 ## Progress-guarantee matrix
 
 | Class | Progress model | Sync mechanism | Default facade (T1) |
@@ -236,13 +239,15 @@ The current design is safe under these conditions:
 
 ## Selector
 
-`TLockFreeSelector<T>` is a multi-channel multiplexer, Pascal implementation of Go `select` semantics.
+`TLockFreeSelector<T>` is a multi-channel multiplexer (Go `select` style; Q3-a pins).
 
 **Design Features**:
-- All cases must use the same type T (consistent with Go select type constraints)
-- poll + backoff strategy (pure user-space polling)
-- Supports blocking and timeout wait modes
-- AddSend stores value copy, actual send only on Select success
+- All cases must use the same type T
+- **`TrySelect` ≡ Go `select { default: }`** (`Completed=False` means default)
+- Multi-ready: earliest **Add** index wins (not Go random)
+- Wait: short spin + wait-address via `lockfree.wait` (not pure busy-poll)
+- Blocking / timeout / non-blocking modes
+- AddSend stores a value copy; send only on successful Select/TrySelect
 
 **Usage Example**:
 ```pascal

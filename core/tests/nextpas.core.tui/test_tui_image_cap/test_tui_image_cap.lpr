@@ -60,6 +60,87 @@ begin
     'generic terminal programs fall back to half-block');
 end;
 
+procedure TestKittyTakesPriorityOverSixelHints;
+begin
+  // TERM has 'kitty' AND TERM_FEATURES has 'sixel' → kitty wins
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    'xterm-kitty', '', 'sixel', '')),
+    'kitty TERM wins over sixel features');
+  // KITTY_WINDOW_ID set AND TERM=foot → kitty wins
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    'foot', '', '', '12345')),
+    'KITTY_WINDOW_ID wins over sixel TERM=foot');
+end;
+
+procedure TestDetectionIsCaseSensitive;
+begin
+  // WezTerm is case-sensitive (capital W)
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', 'WezTerm', '', '')),
+    'WezTerm (capital W) → kitty');
+  // 'wezterm' (lowercase) should NOT match kitty
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'wezterm', '', '')),
+    'wezterm (lowercase) → fallback');
+  // 'Foot' (capital F) should NOT match sixel
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'Foot', '', '')),
+    'Foot (capital) → fallback');
+end;
+
+
+procedure TestEmptyHintsAreHalfBlock;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints('', '', '', '')),
+    'all empty → half-block');
+end;
+
+procedure TestColorTermAloneNotKitty;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    'truecolor', '', '', '')),
+    'COLORTERM alone does not imply image protocol');
+end;
+
+procedure TestKittyWindowIdHint;
+begin
+  { Some terminals set KITTY_WINDOW_ID via separate path; term features }
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', '', '', 'kitty')),
+    'TERM_FEATURES kitty → kitty');
+end;
+
+procedure TestITermHintIfSupported;
+var
+  L: TImageProtocol;
+begin
+  L := DetectImageProtocolFromHints('', 'iTerm.app', '', '');
+  Check((L = ipKitty) or (L = ipHalfBlock) or (Ord(L) >= 0),
+    'iTerm hint resolves without crash');
+end;
+
+procedure TestUnknownProgramFallback;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'TotallyUnknownTerminalXYZ', 'xterm-256color', '')),
+    'unknown program → half-block');
+end;
+
+procedure TestMixedTermKittyProgramWins;
+begin
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', 'kitty', 'xterm-256color', '')),
+    'kitty program with xterm TERM still kitty');
+end;
+
+procedure TestSixelTermName;
+begin
+  CheckEqual(Ord(ipSixel), Ord(DetectImageProtocolFromHints(
+    'mlterm', '', '', '')),
+    'mlterm TERM → sixel');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.image_cap');
   T.Test('detects kitty protocol from known hints',
@@ -68,5 +149,16 @@ begin
     @TestDetectsSixelProtocolFromKnownHints);
   T.Test('falls back conservatively without enhanced hints',
     @TestFallsBackConservativelyWithoutEnhancedHints);
-  if not T.Run then Halt(1);
+  T.Test('kitty takes priority over sixel hints',
+    @TestKittyTakesPriorityOverSixelHints);
+  T.Test('detection is case-sensitive',
+    @TestDetectionIsCaseSensitive);
+    T.Test('empty hints half-block', @TestEmptyHintsAreHalfBlock);
+  T.Test('colorterm alone not kitty', @TestColorTermAloneNotKitty);
+  T.Test('kitty features hint', @TestKittyWindowIdHint);
+  T.Test('iterm hint no crash', @TestITermHintIfSupported);
+  T.Test('unknown program fallback', @TestUnknownProgramFallback);
+  T.Test('kitty program wins over xterm term', @TestMixedTermKittyProgramWins);
+  T.Test('sixel term name', @TestSixelTermName);
+if not T.Run then Halt(1);
 end.

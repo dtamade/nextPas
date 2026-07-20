@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.6
+**最后更新**：2026-07-20
+**版本**：1.13
 
 ---
 
@@ -34,6 +34,7 @@ fs.pas           ← 门面 re-export
 | Glob | GlobMatch, FsGlob | 通配符匹配 |
 | 临时 | GetTempDir, TempFile | 临时文件 |
 | 符号链接 | Symlink, Readlink | 符号链接操作 |
+| 文件锁 | IFile.Lock/TryLock/Unlock, OpenLocked | 整文件 advisory（R23） |
 | 其他 | Chmod, Truncate, Rename, WriteAtomic | 其他操作 |
 
 ---
@@ -45,10 +46,15 @@ fs.pas           ← 门面 re-export
 - **[INV-3]** GlobMatch 支持 `*`, `?`, `[...]` 模式
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
 - **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 为 **procedure**：失败抛异常，成功无返回值。`ForceDirectories`/`DeleteFile` 保留 Boolean 兼容壳（内部 try/except，**吞掉异常类型**；要错误分类请用 procedure API）
-- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 裸文件名目录为 **空串**（对齐 `nextpas.core.path` / SysUtils）；`FsPathDir`/`FsPathSplit` 保持 Go **`.`**
+- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 仅对**无分隔符**裸名把 `'.'`→`''`；`./x` 保留 `'.'`；`FsPathDir` 始终 Go **`.`**
 - **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses` 裸 FPC RTL 单元；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。门禁：`test_fs` 真 uses 扫描（`fpc_rtl_uses_scan.inc`）。
 - **[INV-8]** `Remove` 对 ENOENT **静默成功**（对齐 Pascal Erase/DeleteFile；≠ Go `os.Remove`）。
 - **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
+- **[INV-10]** `IsSymlink(APath)` / `FsIsSymlink`：不跟随链接；路径不存在返回 False（对齐常见「探测」语义，非抛错）。
+- **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
+- **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
+- **[INV-13]** **文件锁（R23）**：绑定打开中的 `IFile` 句柄；`flkExclusive` 互斥，`flkShared` 可并存且与 exclusive 互斥；`TryLock` 仅「忙」返回 False（`PLATFORM_ERR_AGAIN`/`BUSY` 及 Win 锁占用码）；其它错误 raise；关闭/销毁后 OS 释放锁。Unix 为 **advisory** `flock`；Windows `LockFileEx` 整文件，语义平台相关；**不保证** NFS 可靠。仅经 `platform_file_lock|trylock|unlock`。
+- **[INV-14]** **文件监视（R25+R29）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。`Add`=单 path 非递归；**`AddTree`**=递归挂载目录树（不跟随 symlink 目录；运行时新建子目录 auto-add）。`TFsWatchEvent.Name` 在 L0 提供 Wd 时为 **base+name 路径**（多 path 可消歧）。kqueue 侧 `PLATFORM_WATCH_MAX_FDS=256`；Linux 受 `max_user_watches` 限制。Windows L0 仍可 UNSUPPORTED。不保证跨平台事件字段/洪水下零丢失（单次 Poll 消费一事件）。
 
 ---
 
@@ -58,7 +64,8 @@ fs.pas           ← 门面 re-export
 |------|------|
 | 文件不存在 | ENotFoundError |
 | 权限不足 | EPermissionError |
-| 磁盘满 | EIOError / EResourceExhaustedError |
+| 磁盘满 / 内存不足 | EResourceExhaustedError（ENOSPC/ENOMEM；Win DISK_FULL/NOT_ENOUGH_MEMORY） |
+| 其它 I/O | EIOError |
 | 路径无效 | EArgumentError |
 
 ---
@@ -81,17 +88,18 @@ fs.pas           ← 门面 re-export
 
 test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
-**最后校准：2026-07-19**（suite 通过数以 `make test` 输出为准；与早期 Check 粒度统计不同）。
+**最后校准：2026-07-20 R29**（suite 通过数以 `make test` 输出为准）。
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_fs | 113 | 文件读写/目录/路径/符号链接 + PathDir 门面 + 真 uses 门禁 |
+| test_fs | 158 | R20 HardLink/Chtimes/Chown + R19 错误分类 |
 | test_fs_glob | 31 | GlobMatch / FsGlob |
 | test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
-| test_fs_ifile | 17 | IFile 接口 |
+| test_fs_ifile | **21** | IFile + R23 Lock/TryLock/OpenLocked |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
-| **合计** | **6 个测试目录 / 195** | heaptrc 0 leak 为门禁 |
+| test_fs_watch | **11** | R29 AddTree + multi-path + delete/modify |
+| **合计** | **7 个测试目录 / 255** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
@@ -108,3 +116,10 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.4 | INV-7 FPC RTL 隔离；fs 测试去 SysUtils | Claude |
 | 2026-07-19 | 1.5 | 真 uses 门禁（test_fs + fpc_rtl_uses_scan.inc） | Claude |
 | 2026-07-19 | 1.6 | PathDir 门面对齐 path；Remove ENOENT；Boolean 壳/env 迁移 INV | Claude |
+| 2026-07-19 | 1.7 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
+| 2026-07-19 | 1.8 | IsSymlink；R16 对标 | Claude |
+| 2026-07-19 | 1.9 | SameFile；质量测；117 | Claude |
+| 2026-07-19 | 1.10 | R17 质量表；133 | Claude |
+| 2026-07-20 | 1.11 | R22 ENOSPC/ENOMEM→EResourceExhaustedError | Claude |
+| 2026-07-20 | 1.12 | R23 IFile.Lock/TryLock/Unlock + OpenLocked；INV-13 | Claude |
+| 2026-07-20 | 1.13 | R29 AddTree 递归监视 + Wd 路径消歧；INV-14；watch 11 | Claude |

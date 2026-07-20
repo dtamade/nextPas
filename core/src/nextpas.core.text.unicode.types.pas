@@ -280,6 +280,154 @@ type
     gbpExtendedPictographic   // 14
   );
 
+  // Indic_Conjunct_Break (InCB) — Unicode 15.1+ / UAX #29 GB9c
+  TIndicConjunctBreak = (
+    icbNone = 0,
+    icbLinker = 1,
+    icbConsonant = 2,
+    icbExtend = 3
+  );
+
+  // Word_Break property (Unicode 16.0, UAX #29)
+  TWordBreakProperty = (
+    wbpOther = 0,
+    wbpCR = 1,
+    wbpLF = 2,
+    wbpNewline = 3,
+    wbpExtend = 4,
+    wbpZWJ = 5,
+    wbpRegionalIndicator = 6,
+    wbpFormat = 7,
+    wbpKatakana = 8,
+    wbpHebrewLetter = 9,
+    wbpALetter = 10,
+    wbpSingleQuote = 11,
+    wbpDoubleQuote = 12,
+    wbpMidNumLet = 13,
+    wbpMidLetter = 14,
+    wbpMidNum = 15,
+    wbpNumeric = 16,
+    wbpExtendNumLet = 17,
+    wbpWSegSpace = 18
+  );
+
+  // Sentence_Break property (Unicode 16.0, UAX #29)
+  TSentenceBreakProperty = (
+    sbpOther = 0,
+    sbpCR = 1,
+    sbpLF = 2,
+    sbpExtend = 3,
+    sbpSep = 4,
+    sbpFormat = 5,
+    sbpSp = 6,
+    sbpLower = 7,
+    sbpUpper = 8,
+    sbpOLetter = 9,
+    sbpNumeric = 10,
+    sbpATerm = 11,
+    sbpSContinue = 12,
+    sbpSTerm = 13,
+    sbpClose = 14
+  );
+
+  // Line_Break class (Unicode 16.0, UAX #14)
+  // Ordinals 1..33 match pair-table order OP..CB; 0=XX; 34+ non-table / U16.
+  TLineBreakClass = (
+    lbcXX = 0,
+    lbcOP = 1,
+    lbcCL = 2,
+    lbcCP = 3,
+    lbcQU = 4,
+    lbcGL = 5,
+    lbcNS = 6,
+    lbcEX = 7,
+    lbcSY = 8,
+    lbcIS = 9,
+    lbcPR = 10,
+    lbcPO = 11,
+    lbcNU = 12,
+    lbcAL = 13,
+    lbcHL = 14,
+    lbcID = 15,
+    lbcIN = 16,
+    lbcHY = 17,
+    lbcBA = 18,
+    lbcBB = 19,
+    lbcB2 = 20,
+    lbcZW = 21,
+    lbcCM = 22,
+    lbcWJ = 23,
+    lbcH2 = 24,
+    lbcH3 = 25,
+    lbcJL = 26,
+    lbcJV = 27,
+    lbcJT = 28,
+    lbcRI = 29,
+    lbcEB = 30,
+    lbcEM = 31,
+    lbcZWJ = 32,
+    lbcCB = 33,
+    lbcAI = 34,
+    lbcBK = 35,
+    lbcCJ = 36,
+    lbcCR = 37,
+    lbcLF = 38,
+    lbcNL = 39,
+    lbcSA = 40,
+    lbcSG = 41,
+    lbcSP = 42,
+    lbcAK = 43,
+    lbcAP = 44,
+    lbcAS = 45,
+    lbcVF = 46,
+    lbcVI = 47
+  );
+
+  // Bidi_Class (Unicode 16.0, UAX #9)
+  TBidiClass = (
+    bcL = 0,
+    bcR = 1,
+    bcEN = 2,
+    bcES = 3,
+    bcET = 4,
+    bcAN = 5,
+    bcCS = 6,
+    bcB = 7,
+    bcS = 8,
+    bcWS = 9,
+    bcON = 10,
+    bcBN = 11,
+    bcNSM = 12,
+    bcAL = 13,
+    bcLRE = 14,
+    bcLRO = 15,
+    bcRLE = 16,
+    bcRLO = 17,
+    bcPDF = 18,
+    bcLRI = 19,
+    bcRLI = 20,
+    bcFSI = 21,
+    bcPDI = 22
+  );
+
+  // Bidi_Paired_Bracket_Type
+  TBidiPairedBracketType = (
+    bpbtNone = 0,
+    bpbtOpen = 1,
+    bpbtClose = 2
+  );
+
+  // East_Asian_Width (Unicode 16.0, UAX #11)
+  // Ordinals match gen_unicode_eaw.py / eaw.inc
+  TEastAsianWidth = (
+    eawNeutral = 0,     // N
+    eawAmbiguous = 1,   // A
+    eawHalfwidth = 2,   // H
+    eawFullwidth = 3,   // F
+    eawNarrow = 4,      // Na
+    eawWide = 5         // W
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,

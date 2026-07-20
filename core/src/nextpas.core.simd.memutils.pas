@@ -176,10 +176,14 @@ end;
 
 // On UNIX-like systems we emulate aligned allocation by over-allocating and
 // storing a small header immediately before the aligned pointer. The header
-// layout is:
-//   [ originalPtr : Pointer ][ allocSize : NativeUInt ][ aligned data ... ]
-// This allows AlignedFree and AlignedRealloc to recover both the original
-// pointer returned by GetMem and the originally requested size.
+// layout is (F6):
+//   [ originalPtr : Pointer ][ totalSize : NativeUInt ][ userSize : NativeUInt ]
+//   [ aligned data ... ]
+// totalSize is the GetMem block size (sized free without TryBlockSize).
+// userSize is the requested payload for AlignedRealloc copy.
+
+const
+  ALIGNED_HEADER_SIZE = SizeOf(Pointer) + 2 * SizeOf(NativeUInt);
 
 function AlignedAlloc(size: NativeUInt; alignment: NativeUInt): Pointer;
 var
@@ -195,7 +199,7 @@ begin
     Exit(nil);
   end;
 
-  headerOffset := SizeOf(Pointer) + SizeOf(NativeUInt);
+  headerOffset := ALIGNED_HEADER_SIZE;
   totalSize := AddAlignedAllocationSize(size, alignment, headerOffset);
   originalPtr := GetMem(totalSize);
   if originalPtr = nil then
@@ -209,7 +213,8 @@ begin
   // Store header immediately before the aligned pointer
   headerBase := NativeUInt(alignedPtr) - headerOffset;
   PPointer(headerBase)^ := originalPtr;
-  PNativeUInt(headerBase + SizeOf(Pointer))^ := size;
+  PNativeUInt(headerBase + SizeOf(Pointer))^ := totalSize;
+  PNativeUInt(headerBase + SizeOf(Pointer) + SizeOf(NativeUInt))^ := size;
   {$POP}
 
   Result := alignedPtr;
@@ -219,15 +224,16 @@ procedure AlignedFree(ptr: Pointer);
 var
   originalPtr: Pointer;
   headerBase: NativeUInt;
+  totalSize: NativeUInt;
 begin
   if ptr <> nil then
   begin
-    // Retrieve original pointer from header and free whole block
     {$PUSH}{$WARN 4055 OFF}
-    headerBase := NativeUInt(ptr) - (SizeOf(Pointer) + SizeOf(NativeUInt));
+    headerBase := NativeUInt(ptr) - ALIGNED_HEADER_SIZE;
     originalPtr := PPointer(headerBase)^;
+    totalSize := PNativeUInt(headerBase + SizeOf(Pointer))^;
     {$POP}
-    FreeMem(originalPtr);
+    FreeMem(originalPtr, totalSize);
   end;
 end;
 
@@ -256,10 +262,10 @@ begin
     Exit;
   end;
 
-  // Recover the originally requested size from the header
+  // Recover the originally requested user size from the header
   {$PUSH}{$WARN 4055 OFF}
-  headerBase := NativeUInt(ptr) - (SizeOf(Pointer) + SizeOf(NativeUInt));
-  oldSize := PNativeUInt(headerBase + SizeOf(Pointer))^;
+  headerBase := NativeUInt(ptr) - ALIGNED_HEADER_SIZE;
+  oldSize := PNativeUInt(headerBase + SizeOf(Pointer) + SizeOf(NativeUInt))^;
   {$POP}
 
   // Allocate new aligned memory

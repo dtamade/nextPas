@@ -136,6 +136,22 @@ begin
     'TryBuild missing-file error includes path');
 end;
 
+procedure TestFacadeExposesKeyValuesSurface;
+var
+  LCfg: IConfig;
+begin
+  LCfg := ConfigBuilder
+    .AddDefault('server.host', 'default')
+    .AddJson('{"server":{"host":"json-host","port":1}}')
+    .AddKeyValues(['server.host', 'server.port'], ['cli-host', '8443'])
+    .RequireKeys(['server.host', 'server.port'])
+    .Build;
+  CheckEqual('cli-host', LCfg.GetStringRequired('server.host'),
+    'AddKeyValues is part of the public builder facade');
+  CheckEqual(Int64(8443), LCfg.GetIntRequired('server.port'),
+    'AddKeyValues values are readable as typed getters');
+end;
+
 procedure TestFacadeExposesConfigLoadAndDirectMutableSurface;
 var
   LPath: string;
@@ -180,6 +196,8 @@ begin
     @TestFacadeExposesTryBuildFailureSurface);
   T.Test('facade exposes file-source error surface',
     @TestFacadeExposesFileSourceErrorSurface);
+  T.Test('facade exposes keyvalues surface',
+    @TestFacadeExposesKeyValuesSurface);
   T.Test('facade exposes configload and direct mutable surface',
     @TestFacadeExposesConfigLoadAndDirectMutableSurface);
   if not T.Run then Halt(1);

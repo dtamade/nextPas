@@ -1,8 +1,8 @@
 # Atomic & Lockfree — Horizon-3 章程
 
-> **状态**: **H3-3 COMPLETE**（2026-07-18）— H3-0e + H3-1 + H3-2 + **H3-3 done**；H3-4 **未授权**；H3-5 worksteal **章程草案**
+> **状态**: **H3 COMPLETE**（2026-07-19）— H3-0e + H3-1…**H3-5 done** → **Maintenance**
 > **Owner**: atomic-lockfree lane（`.worktrees/atomic-lockfree`）
-> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ consumer `async.loop` + T2 bag/multimap + consumer regression 门
+> **范围**: atomic + lockfree + async.loop + bag/multimap + consumer gate + 证据卫生 + thread worksteal
 > 冲突时以 **CONTRACT + [`roadmap.md`](roadmap.md) + 本文件** 为准；状态入口见 [`READY.md`](READY.md)。
 
 ---
@@ -20,8 +20,8 @@
 | **H3 Wave-1** | H3-0e + H3-1（async Post → T1 MPSC） | **DONE** — main `710ddd7ab` |
 | **H3-2** | T2 Guarded 生产子集（bag + multimap） | **DONE** — CONTRACT §0.3 |
 | **H3-3** | consumer regression 门 | **DONE** — `verify-h3-consumers` |
-| **H3-4** | 证据与文档卫生 | **未授权** |
-| **H3-5** | thread worksteal 接入（草案） | **章程草案 only** — 见 §6；**未授权实现** |
+| **H3-4** | 证据与文档卫生 | **DONE** — 2026-07-19 |
+| **H3-5** | thread worksteal 接入 | **DONE** — §6 选项 A；2026-07-19 |
 
 **R8 保持研究线**，不因 H3 章程而自动生产化。
 
@@ -36,8 +36,8 @@
 | **H3-1** | 跨模块真实接入 | **async.loop Post → T1 MPSC**；`Close → discard → Free`；loop 外 join producers | **done** (`8d99b07ab` / land `710ddd7ab`) |
 | **H3-2** | T2 Guarded 生产契约子集 | **bag + multimap**：Close / managed / progress；**不进**默认门面 | **done** |
 | **H3-3** | Consumer regression 门 | `verify-h3-consumers`：async + bag + multimap + t1_close_join_free | **done** |
-| **H3-4** | 证据与文档卫生 | bench envelope 同步；api-ref 与契约对齐 | **未授权** |
-| **H3-5** | thread worksteal 接入 | 见 §6 草案；**不**因 H3-3 完成而自动推进 | **未授权** |
+| **H3-4** | 证据与文档卫生 | bench envelope 同步；api-ref 与契约对齐 | **done** |
+| **H3-5** | thread worksteal 接入 | 见 §6 选项 A | **done** |
 
 ```
 H2 complete / Maintenance
@@ -55,11 +55,13 @@ H3-2  T2 Guarded subset  ── DONE（bag + multimap, CONTRACT §0.3）
 H3-3  Consumer regression gate  ── DONE（verify-h3-consumers）
          │
          ▼
-Maintenance  ── 当前默认
+H3-4  证据 / api-ref 卫生  ── DONE（2026-07-19）
          │
-         ├─(opt-in)──► H3-4  证据卫生（未授权）
+         ▼
+H3-5  thread worksteal → T1 deque  ── DONE（2026-07-19）
          │
-         └─(opt-in)──► H3-5  worksteal 接入（章程草案；未授权实现）
+         ▼
+Maintenance  ── 当前默认（H3 生产序列完成）
 ```
 
 ### H3-1 选型（Wave-1 锁定 / 已交付）
@@ -102,17 +104,16 @@ Maintenance  ── 当前默认
 - **发明 R9**
 - 无 bench 信封的绝对 Mops 营销数字
 - 把 T2 升为默认 `uses nextpas.core.lockfree` 门面
-- 未授权前 **自动**推进 H3-4 / H3-5 实现
+- 未授权前 **自动**推进 H3-5 之外的新 horizon 实现
 
 ---
 
 ## 3. 执行策略（硬规则）
 
-1. **H3-1 / H3-2 / H3-3 已交付**。后续 H3-4 / H3-5 **仍须单独授权**。
-2. 启动 H3-4+ 必须有 **单独授权**（总控或用户显式指令），并建议：
-   - path-limited land；`verify-t1` + `verify-h3-consumers` 保绿；跨模块须额外 consumer 验证
-3. 在未授权前，默认继续 **Maintenance**（见 [`READY.md`](READY.md) post-H3-3 checklist）。
-4. 重大变更（Closed、默认门面 T2、R8 生产化、删 legacy）仍属 stop-and-ask，不因 H3 编号自动放行。
+1. **H3-1…H3-5 已交付**。默认 **Maintenance**（见 [`READY.md`](READY.md) post-H3-5 checklist）。
+2. 回归门：`verify-t1` + `verify-h3-consumers`；触碰 worksteal 时加 `test_worksteal`。
+3. 重大变更（Closed、默认门面 T2、R8 生产化、删 legacy）仍属 stop-and-ask。
+4. 新生产波次须新章程；**不 invent R9**。
 
 ---
 
@@ -120,7 +121,7 @@ Maintenance  ── 当前默认
 
 | 文档 | 角色 |
 |------|------|
-| [`READY.md`](READY.md) | 状态入口；**Maintenance**；H3-1…H3-3 done |
+| [`READY.md`](READY.md) | 状态入口；**Maintenance**；H3-1…H3-5 done |
 | [`roadmap.md`](roadmap.md) | R 线记录 + Maintenance；指向 H3 |
 | [`roadmap-h2.md`](roadmap-h2.md) | H2 完成记录；successor 指针 → 本文件 |
 | [`r8-research-status.md`](r8-research-status.md) | R8 诚实研究状态（非 H3 交付） |
@@ -160,13 +161,21 @@ Maintenance  ── 当前默认
 |----|------|
 | **交付** | `verify-h3-consumers` Makefile 目标；串联 async / bag / multimap / t1_close_join_free；READY / roadmap 状态切换；consumer-audit 登记门入口 |
 | **不做** | 替换 `verify-t1`；新跨模块接入；H3-4 全量文档卫生；thread worksteal 改码 |
-| **通过标准** | `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` 绿；日志落 `core/build/verify-lockfree/verify-h3-consumers.log`；文档写 **H3-3 done / Maintenance**；H3-4… **仍未授权** |
+| **通过标准** | `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` 绿；日志落 `core/build/verify-lockfree/verify-h3-consumers.log`；文档写 **H3-3 done / Maintenance** |
+
+### H3-4 / 证据与 api-ref 卫生 — **done**
+
+| 项 | 内容 |
+|----|------|
+| **交付** | 活跃入口（README / selection-guide）去掉无信封绝对 Mops；历史 comparison/optimization/phase 文档加 **historical only** 横幅；api-ref ZH bag/multimap 对齐 CONTRACT §0.3；EN 补 Stack/Deque/H3-2 指针；bench envelope 工具确认可用 |
+| **不做** | 重跑全量跨语言对照并刷新所有历史数字；改生产语义；实施 H3-5 |
+| **通过标准** | 活跃入口无无信封绝对倍数；api-ref 与 CONTRACT 关键面一致；`print-bench-envelope.sh` 可运行；READY 写 **H3-4 done** |
 
 ---
 
-## 6. H3-5 草案 — thread worksteal 接入（**未授权实现**）
+## 6. H3-5 — thread worksteal 接入（**done**）
 
-> 本节是 **只读审计 + 章程草案**。未获单独授权前 **禁止** 改 `thread.pool.worksteal` 生产路径。
+> 选项 A 已实现（2026-07-19）。以下为交付规格与验收记录。
 
 ### 6.1 现状（审计 2026-07-18）
 
@@ -215,4 +224,13 @@ Maintenance  ── 当前默认
 | 回归 | `verify-t1` + `verify-h3-consumers` 绿 |
 | 文档 | consumer-audit 登记 thread 为跨模块消费者；READY 写 H3-5 done |
 
-**当前状态**：**未授权**。需要用户/总控显式指令才可开工实现。
+### 6.6 交付证据（2026-07-19）
+
+| 项 | 路径 / 结果 |
+|----|-------------|
+| 实现 | `core/src/nextpas.core.thread.pool.worksteal.pas` — `TWorkStealingDequeImpl<TDequeSlot>` + 堆 `TTaskNode` |
+| 测试 | `core/tests/nextpas.core.thread/test_worksteal` — 7 passed（含 H3-5 source-contract） |
+| 审计 | [`consumer-audit.md`](consumer-audit.md) §2.6 |
+| 依赖 | `thread` → `lockfree.deque` only |
+
+**当前状态**：**done** → 回到 Maintenance。

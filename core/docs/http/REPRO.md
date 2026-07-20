@@ -1,9 +1,9 @@
 # nextpas.core.http — Release evidence 复现剧本
 
-**Purpose**：在 **Linux amd64** 上 1 小时内复核对标宣称所需的关键数字。  
+**Purpose**：在 **Linux amd64** 上 1 小时内复核对标宣称所需的关键数字。
 **Authority**：规模门闩定义见 `ROADMAP.md` / `GOAL_TREE.md`；历史表见 `BENCHMARKS.md`。
 
-**Claim (current)**：*Scale-ready (H1 server, Linux epoll)* — same-machine, limited workloads.  
+**Claim (current)**：*Scale-ready (H1 server, Linux epoll)* — same-machine, limited workloads.
 **Not claimed**：H1+H2 package scale-ready；H3；跨机榜；Go 同 harness p99（Era E）。
 
 从仓库根目录进入 `core/` 后执行。
@@ -28,7 +28,7 @@ git status --short   # 应为 clean（或仅 ignore）
   --output build/projects/nextpas.core.http/server_comparison/repro-epoll-no_url-runs3.md
 ```
 
-**读数**：summary 中 nextPas / Go `median_req/s`；比值 **≥ 0.80** 才维持 scale-ready RPS。  
+**读数**：summary 中 nextPas / Go `median_req/s`；比值 **≥ 0.80** 才维持 scale-ready RPS。
 **参考历史**：BENCHMARKS Q2-1（2026-07-19）epoll `no_url` **2.20×** Go。
 
 次要 body：
@@ -50,7 +50,7 @@ make -C benchmarks/nextpas.core.http/bench_server build
   --requests 20000 --threads 4 --workload no_url --backend epoll
 ```
 
-**读数**：`p50_ns=` / `p99_ns=` / `mean_ns=` / `req/s=`。  
+**读数**：`p50_ns=` / `p99_ns=` / `mean_ns=` / `req/s=`。
 **注意**：Go 行 p99 仍在 Era **E1**；此处仅 nextPas。
 
 ---
@@ -66,7 +66,7 @@ make -C benchmarks/nextpas.core.http/bench_conn_ladder build
   --connections 10000 --hold-ms 2000 --backend epoll --probe 1
 ```
 
-**读数**：`stable=1`；`open_ok` / `probe_ok`。  
+**读数**：`stable=1`；`open_ok` / `probe_ok`。
 **失败模式**：`--raise-nofile 0 --connections 600` 预期 `stable=0`（soft=1024 附近）。
 
 ---
@@ -81,7 +81,7 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
   --connections 8 --streams 16 --batches 100
 ```
 
-**读数**：`stable=1`；`req/s=`（历史 ~2.8–3k，**不是** H1 KPI）。  
+**读数**：`stable=1`；`req/s=`（历史 ~2.8–3k，**不是** H1 KPI）。
 **不宣称** Scale-ready (H1/H2)。
 
 ---
@@ -100,7 +100,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
 
 ## 解读纪律
 
-1. 单机单日数字只进 BENCHMARKS 带日期；不写「已全面对标」。  
-2. H1 RPS 与 H2 mux **不可**直接做比值 KPI。  
-3. p99 门闩（nextPas ≤ 2× Go）在 **E1–E2** 闭合前，对外只报 RPS scale-ready。  
+1. 单机单日数字只进 BENCHMARKS 带日期；不写「已全面对标」。
+2. H1 RPS 与 H2 mux **不可**直接做比值 KPI。
+3. p99 门闩（nextPas ≤ 2× Go）在 **E1–E2** 闭合前，对外只报 RPS scale-ready。
 4. 结果异常：先 `make hygiene`、确认 ulimit、确认无其他 heavy 进程，再重跑。

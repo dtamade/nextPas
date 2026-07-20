@@ -1,6 +1,11 @@
 # Lockfree 基准对照报告
 
+> **Status**: **historical only / not reproducible without full evidence envelope**（H3-4）
 > 生成: 2026-07-06 | 平台: Linux x86_64, FPC 3.3.1, -O2
+>
+> 下列绝对 Mops/ns/op **不是**当前发布保证。复现须按 [`bench-envelope.md`](bench-envelope.md)
+> 填写完整字段，并使用 `make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run`。
+> 活跃入口文档不得复述无信封绝对倍数。
 
 ## 结果汇总
 

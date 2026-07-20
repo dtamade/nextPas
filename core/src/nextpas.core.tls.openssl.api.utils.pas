@@ -62,8 +62,15 @@ begin
 end;
 
 procedure FreeOpenSSLMem(P: Pointer);
+var
+  LSize: SizeUInt;
 begin
-  if P <> nil then
+  { AllocOpenSSLMem → DefaultHeap GetMem. Prefer sized free via TryBlockSize. }
+  if P = nil then
+    Exit;
+  if TryBlockSize(P, LSize) then
+    FreeMem(P, LSize)
+  else
     FreeMem(P);
 end;
 

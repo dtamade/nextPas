@@ -367,6 +367,79 @@ begin
   LF.Close;
 end;
 
+{ R23: whole-file advisory locks }
+procedure TestIFile_LockExclusiveTryBusy;
+var
+  LPath: string;
+  A, B: IFile;
+begin
+  LPath := GTmpDir + '/lock_ex.txt';
+  WriteRawFile(LPath, [1, 2, 3]);
+  A := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  Check(A.TryLock(flkExclusive), 'first exclusive TryLock');
+  B := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  Check(not B.TryLock(flkExclusive), 'second exclusive TryLock busy');
+  A.Unlock;
+  Check(B.TryLock(flkExclusive), 'after unlock second acquires');
+  B.Unlock;
+  A.Close;
+  B.Close;
+end;
+
+procedure TestIFile_LockShared;
+var
+  LPath: string;
+  A, B, C: IFile;
+begin
+  LPath := GTmpDir + '/lock_sh.txt';
+  WriteRawFile(LPath, [9]);
+  A := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  B := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  Check(A.TryLock(flkShared), 'shared A');
+  Check(B.TryLock(flkShared), 'shared B concurrent');
+  C := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  Check(not C.TryLock(flkExclusive), 'exclusive blocked by shared');
+  A.Unlock;
+  B.Unlock;
+  Check(C.TryLock(flkExclusive), 'exclusive after shared unlock');
+  C.Unlock;
+  A.Close;
+  B.Close;
+  C.Close;
+end;
+
+procedure TestIFile_LockBlocking;
+var
+  LPath: string;
+  A: IFile;
+begin
+  LPath := GTmpDir + '/lock_block.txt';
+  WriteRawFile(LPath, [7]);
+  A := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  A.Lock(flkExclusive);
+  A.Unlock;
+  A.Lock(flkShared);
+  A.Unlock;
+  A.Close;
+end;
+
+procedure TestIFile_OpenLocked;
+var
+  LPath: string;
+  A, B: IFile;
+begin
+  LPath := GTmpDir + '/open_locked.txt';
+  WriteRawFile(LPath, [4]);
+  A := nextpas.core.fs.OpenLocked(LPath, [fmRead, fmWrite], flkExclusive);
+  Check(A <> nil, 'OpenLocked returns file');
+  B := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  Check(not B.TryLock(flkExclusive), 'OpenLocked holds exclusive');
+  A.Close;
+  Check(B.TryLock(flkExclusive), 'after close lock released');
+  B.Unlock;
+  B.Close;
+end;
+
 begin
   SetupTmpDir;
   try
@@ -389,6 +462,10 @@ begin
     T.Test('Stat', @TestIFile_Stat);
     T.Test('Partial read', @TestIFile_PartialRead);
     T.Test('Read at EOF', @TestIFile_ReadAtEOF);
+    T.Test('R23 exclusive TryLock busy', @TestIFile_LockExclusiveTryBusy);
+    T.Test('R23 shared locks', @TestIFile_LockShared);
+    T.Test('R23 blocking Lock', @TestIFile_LockBlocking);
+    T.Test('R23 OpenLocked', @TestIFile_OpenLocked);
 
   if not T.Run then Halt(1);
   finally

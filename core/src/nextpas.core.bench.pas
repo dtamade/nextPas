@@ -40,6 +40,10 @@ type
   TMatrixResult = nextpas.core.bench.base.TMatrixResult;
   TCustomMetric = nextpas.core.bench.base.TCustomMetric;
   TCustomMetricArray = nextpas.core.bench.base.TCustomMetricArray;
+  TBenchSummaryStats = nextpas.core.bench.intf.TBenchSummaryStats;
+  TBenchRegressionReport = nextpas.core.bench.intf.TBenchRegressionReport;
+  TPercentileResult = nextpas.core.bench.intf.TPercentileResult;
+  TOutlierSummary = nextpas.core.bench.intf.TOutlierSummary;
 
   IBenchContext = nextpas.core.bench.intf.IBenchContext;
   IBenchSuite = nextpas.core.bench.intf.IBenchSuite;
@@ -155,6 +159,10 @@ type
     {** B23: Set progress callback }
     function SetOnProgress(ACallback: TBenchProgressCallback): IBenchSuite;
     function SetOutput(const AWriter: ILineWriter): IBenchSuite;
+    {** 获取已注册的基准条目数量 }
+    function GetEntryCount: Integer;
+    {** 检查指定名称的基准条目是否存在 }
+    function HasEntry(const AName: string): Boolean;
     function RunParallel(AThreadCount: Integer = 0): IBenchResults;
     function Run: IBenchResults;
   end;
@@ -176,6 +184,19 @@ type
     {** ST-27: 通用文件保存辅助方法 }
     procedure SaveStringToFile(const APath, AContent, AFormat: string);
 
+    {** 自定义指标辅助函数 }
+    function HasCustomMetric(const AResult: TBenchResult;
+      const AMetricName: string): Boolean;
+    function GetCustomMetricValue(const AResult: TBenchResult;
+      const AMetricName: string): Double;
+
+    {** 从基准名提取分组名（首个 '/' 前；无 '/' 则整名） }
+    class function ExtractGroupName(const AName: string): string; static;
+    {** 收集指定分组内已执行结果（精确 group 匹配，含 bare 名） }
+    function CollectGroupResults(const AGroupName: string): TBenchResultArray;
+    {** 收集指定分组内已执行结果的 NsPerOp 数组 }
+    function CollectGroupNsPerOp(const AGroupName: string): TDoubleArray;
+
   public
     constructor Create(const AResults: array of TBenchResult;
       const AEnvironment: TBenchEnvironment;
@@ -187,15 +208,68 @@ type
     function GetByName(const AName: string): TBenchResult;
     function TryGetByName(const AName: string; out AResult: TBenchResult): Boolean;
     function GetCount: Integer;
+    function GetSkipped: TBenchResultArray;
+    function GetExecuted: TBenchResultArray;
+    function GetAggregateStats: TBenchStats;
+    function FilterByPrefix(const APrefix: string): TBenchResultArray;
+    function FilterBySuffix(const ASuffix: string): TBenchResultArray;
+    function FilterBySubstring(const ASubstring: string): TBenchResultArray;
+    function SortByNsPerOp(AAscending: Boolean = True): TBenchResultArray;
+    function GetFastest: TBenchResult;
+    function GetSlowest: TBenchResult;
+    function GetTopN(ANCount: Integer): TBenchResultArray;
+    function GetStableResults(ACVThreshold: Double = 0.1): TBenchResultArray;
+    function GetUnstableResults(ACVThreshold: Double = 0.1): TBenchResultArray;
+    function FilterByNsPerOpRange(AMinNs: Double = 0; AMaxNs: Double = 0): TBenchResultArray;
+    function FilterByNamePattern(const APattern: string): TBenchResultArray;
+    function GetSummaryStats: TBenchSummaryStats;
+    function GetRegressionReport(AThreshold: Double): TBenchRegressionReport;
+    function FilterByHasCustomMetric(const AMetricName: string): TBenchResultArray;
+    function GetCustomMetricValues(const AMetricName: string): TDoubleArray;
+    function GetPercentileStats: TPercentileResult;
+    function GetCVArray: TDoubleArray;
+    function GetOutlierSummary: TOutlierSummary;
+    function SortByCustomMetric(const AMetricName: string;
+      AAscending: Boolean = True): TBenchResultArray;
+    function FilterByCustomMetricRange(const AMetricName: string;
+      AMin: Double = 0; AMax: Double = 0): TBenchResultArray;
+    function GetCustomMetricStats(const AMetricName: string): TBenchStats;
+    function GetResultsWithOutliers: TBenchResultArray;
+    function GetResultsWithoutOutliers: TBenchResultArray;
+    function SortByOpsPerSec(AAscending: Boolean = False): TBenchResultArray;
+    function FilterByStdDevRange(AMin: Double = 0;
+      AMax: Double = 0): TBenchResultArray;
+    function GetGroups: TStringArray;
+    function GetGroupStats(const AGroupName: string): TBenchStats;
+    function ToJSON_Grouped: string;
+    function ToMarkdown_Grouped: string;
+    procedure SaveToJSON_Grouped(const APath: string);
+    procedure SaveToMarkdown_Grouped(const APath: string);
+    function ToHTML_Grouped: string;
+    procedure SaveToHTML_Grouped(const APath: string);
+    function CompareGroups(const AGroupNameA, AGroupNameB: string): TBenchComparison;
+    function GetGroupRegressionReport(AThreshold: Double): TBenchRegressionReport;
+    function ToCSV: string;
+    function GetTotalOpsPerSec: Double;
+    function GetTotalOutliers: Integer;
+    function GetTotalIterations: Int64;
+    function GetTotalBytesPerOp: Int64;
+    function GetTotalAllocsPerOp: Int64;
+    function GetTotalElapsed: TDuration;
+    function GetAllCustomMetrics: TCustomMetricArray;
+    function GetTotalCustomMetricsCount: Integer;
     function PrintToConsole: string;
     function ToJSON: string;
     function ToTSV: string;
     function ToHTML: string;
     function ToBenchstat: string;
     function ToSummary: string;
+    function ToMarkdown: string;
     procedure SaveToJSON(const APath: string);
     procedure SaveToHTML(const APath: string);
     procedure SaveToTSV(const APath: string);
+    procedure SaveToMarkdown(const APath: string);
+    procedure SaveToCSV(const APath: string);
     function CompareWithBaseline: TBenchComparisonArray;
     function CompareTwoResults(const ANameA, ANameB: string): TBenchComparison;
     procedure SaveBaseline(const APath: string; const AGitHash: string = '');
@@ -208,6 +282,14 @@ type
       const ABaselines: array of TBaselineData): string;
     function ToMatrixJSON(
       const ABaselines: array of TBaselineData): string;
+    function ToMatrixCSV(
+      const ABaselines: array of TBaselineData): string;
+    procedure SaveToMatrixJSON(const APath: string;
+      const ABaselines: array of TBaselineData);
+    procedure SaveToMatrixHTML(const APath: string;
+      const ABaselines: array of TBaselineData);
+    procedure SaveToMatrixCSV(const APath: string;
+      const ABaselines: array of TBaselineData);
     function HasRegression(AThreshold: Double): Boolean;
     function GetEnvironment: TBenchEnvironment;
   end;
@@ -226,7 +308,12 @@ uses
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo,
   nextpas.core.collections.hashmap.swiss.str,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.math.scalar;
+
+const
+  { 哨兵值：表示"无统计检验数据"，区分于有效 p-value }
+  CNoPValue = 0.0 / 0.0; { NaN }
 
 { TBenchWorkerThread - 并行执行辅助线程 }
 
@@ -425,8 +512,7 @@ function TBenchSuite.AddSimple(const AName: string;
 var
   LEntry: TBenchEntry;
 begin
-  if not Assigned(AFunc) then
-    raise EBenchInvalidParam.Create('TBenchSuite.AddSimple: AFunc must not be nil');
+  GuardAssigned(Pointer(AFunc), 'AddSimple');
   Result := BeginAdd;
   LEntry := MakeDefaultEntry(AName);
   LEntry.SimpleFunc := AFunc;
@@ -535,8 +621,7 @@ function TBenchSuite.AddLoopWithContext(const AName: string;
 var
   LEntry: TBenchEntry;
 begin
-  if not Assigned(AFunc) then
-    raise EBenchInvalidParam.Create('TBenchSuite.AddLoopWithContext: function must not be nil');
+  GuardAssigned(Pointer(AFunc), 'AddLoopWithContext');
   Result := BeginAdd;
   LEntry := MakeDefaultEntry(AName);
   LEntry.IsLoop := True;
@@ -555,40 +640,34 @@ end;
 
 function TBenchSuite.RemoveByName(const AName: string): IBenchSuite;
 var
-  I, J: Integer;
+  LIdx: Integer;
 begin
   GuardNotRun;
   Result := Self;
-  for I := 0 to FEntryCount - 1 do
-  begin
-    if FEntries[I].Name = AName then
-    begin
-      // shift remaining entries left
-      for J := I to FEntryCount - 2 do
-        FEntries[J] := FEntries[J + 1];
-      Dec(FEntryCount);
-      Exit;
-    end;
-  end;
-  raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
+  LIdx := FindEntryIndex(AName);
+  if LIdx < 0 then
+    raise EBenchInvalidParam.CreateFmt('TBenchSuite.RemoveByName: entry "%s" not found', [AName]);
+  { shift remaining entries left }
+  for LIdx := LIdx to FEntryCount - 2 do
+    FEntries[LIdx] := FEntries[LIdx + 1];
+  Dec(FEntryCount);
+  { 收缩数组尾部，释放已移除条目的 string 字段 }
+  SetLength(FEntries, FEntryCount);
 end;
 
 function TBenchSuite.TryRemoveByName(const AName: string): Boolean;
 var
-  I, J: Integer;
+  LIdx, J: Integer;
 begin
   GuardNotRun;
-  for I := 0 to FEntryCount - 1 do
-  begin
-    if FEntries[I].Name = AName then
-    begin
-      for J := I to FEntryCount - 2 do
-        FEntries[J] := FEntries[J + 1];
-      Dec(FEntryCount);
-      Exit(True);
-    end;
-  end;
-  Result := False;
+  LIdx := FindEntryIndex(AName);
+  if LIdx < 0 then
+    Exit(False);
+  for J := LIdx to FEntryCount - 2 do
+    FEntries[J] := FEntries[J + 1];
+  Dec(FEntryCount);
+  SetLength(FEntries, FEntryCount);
+  Result := True;
 end;
 
 function TBenchSuite.FindEntryIndex(const AName: string): Integer;
@@ -790,6 +869,16 @@ begin
   GuardNotRun;
   Result := Self;
   FConfig.OnProgress := ACallback;
+end;
+
+function TBenchSuite.GetEntryCount: Integer;
+begin
+  Result := FEntryCount;
+end;
+
+function TBenchSuite.HasEntry(const AName: string): Boolean;
+begin
+  Result := FindEntryIndex(AName) >= 0;
 end;
 
 function TBenchSuite.RunParallel(AThreadCount: Integer): IBenchResults;
@@ -1072,7 +1161,6 @@ type
 var
   LComparisons: array of TBenchComparison;
   LCount: Integer;
-  LIdx: Integer;
   LMap: TBaselineMap;
   LJ: Integer;
   I: Integer;
@@ -1097,24 +1185,23 @@ begin
       if not LMap.TryGetValue(FResults[I].Name, LJ) then
         Continue;
 
-      LIdx := LCount;
-      LComparisons[LIdx].BaselineName := FBaselines[LJ].Name;
-      LComparisons[LIdx].BaselineNsPerOp := FBaselines[LJ].NsPerOp;
-      LComparisons[LIdx].CurrentNsPerOp := FResults[I].NsPerOp;
+      LComparisons[LCount].BaselineName := FBaselines[LJ].Name;
+      LComparisons[LCount].BaselineNsPerOp := FBaselines[LJ].NsPerOp;
+      LComparisons[LCount].CurrentNsPerOp := FResults[I].NsPerOp;
 
       if FBaselines[LJ].NsPerOp > 0 then
-        LComparisons[LIdx].Ratio := FResults[I].NsPerOp / FBaselines[LJ].NsPerOp
+        LComparisons[LCount].Ratio := FResults[I].NsPerOp / FBaselines[LJ].NsPerOp
       else
-        LComparisons[LIdx].Ratio := 1.0;
+        LComparisons[LCount].Ratio := 1.0;
 
       { Baseline 只有均值，没有独立方差或原始样本，不能做统计检验 }
-      LComparisons[LIdx].HasStatisticalTest := False;
-      LComparisons[LIdx].IsSignificant :=
-        Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-      LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
+      LComparisons[LCount].HasStatisticalTest := False;
+      LComparisons[LCount].IsSignificant :=
+        Abs(LComparisons[LCount].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+      LComparisons[LCount].ApproximatePValue := CNoPValue;
 
       Inc(LCount);
-      end;
+    end;
   finally
     LMap.Free;
   end;
@@ -1188,6 +1275,1502 @@ begin
   Result := FResultCount;
 end;
 
+function TBenchResults.GetSkipped: TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Skipped then
+      Inc(LCount);
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Skipped then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.GetExecuted: TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      Inc(LCount);
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.GetAggregateStats: TBenchStats;
+var
+  LExecuted: TBenchResultArray;
+  LNPerOps: TDoubleArray;
+  I: Integer;
+begin
+  Result := Default(TBenchStats);
+  LExecuted := GetExecuted;
+  if Length(LExecuted) = 0 then
+    Exit;
+
+  SetLength(LNPerOps, Length(LExecuted));
+  for I := 0 to High(LExecuted) do
+    LNPerOps[I] := LExecuted[I].NsPerOp;
+
+  Result := FStatsAnalyzer.ComputeStats(LNPerOps);
+end;
+
+function TBenchResults.FilterByPrefix(const APrefix: string): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (Copy(FResults[I].Name, 1, Length(APrefix)) = APrefix) then
+      Inc(LCount);
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (Copy(FResults[I].Name, 1, Length(APrefix)) = APrefix) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.FilterBySuffix(const ASuffix: string): TBenchResultArray;
+var
+  LCount, I, LIdx, LNameLen, LSuffixLen: Integer;
+begin
+  LSuffixLen := Length(ASuffix);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LNameLen := Length(FResults[I].Name);
+      if (LNameLen >= LSuffixLen) and
+         (Copy(FResults[I].Name, LNameLen - LSuffixLen + 1, LSuffixLen) = ASuffix) then
+        Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LNameLen := Length(FResults[I].Name);
+      if (LNameLen >= LSuffixLen) and
+         (Copy(FResults[I].Name, LNameLen - LSuffixLen + 1, LSuffixLen) = ASuffix) then
+      begin
+        Result[LIdx] := FResults[I];
+        Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+        Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.FilterBySubstring(const ASubstring: string): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (Pos(ASubstring, FResults[I].Name) > 0) then
+      Inc(LCount);
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (Pos(ASubstring, FResults[I].Name) > 0) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.SortByNsPerOp(AAscending: Boolean): TBenchResultArray;
+var
+  I, J, LGap: Integer;
+  LTemp: TBenchResult;
+begin
+  Result := GetExecuted;
+  { Shell sort — O(n^1.5) vs selection sort O(n^2)
+    Ciura gap sequence, truncated for small arrays }
+  LGap := Length(Result);
+  while LGap > 1 do
+  begin
+    LGap := LGap div 2;
+    if LGap > 1 then
+    begin
+      { shrink gap using Knuth sequence: gap := gap div 2 is fine for n < 10000 }
+    end;
+    for I := LGap to High(Result) do
+    begin
+      LTemp := Result[I];
+      J := I;
+      if AAscending then
+      begin
+        while (J >= LGap) and (Result[J - LGap].NsPerOp > LTemp.NsPerOp) do
+        begin
+          Result[J] := Result[J - LGap];
+          J := J - LGap;
+        end;
+      end
+      else
+      begin
+        while (J >= LGap) and (Result[J - LGap].NsPerOp < LTemp.NsPerOp) do
+        begin
+          Result[J] := Result[J - LGap];
+          J := J - LGap;
+        end;
+      end;
+      Result[J] := LTemp;
+    end;
+  end;
+end;
+
+function TBenchResults.GetFastest: TBenchResult;
+var
+  I: Integer;
+  LMinNs: Double;
+  LIdx: Integer;
+begin
+  Result := Default(TBenchResult);
+  LMinNs := 1.0e308;
+  LIdx := -1;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp < LMinNs then
+      begin
+        LMinNs := FResults[I].NsPerOp;
+        LIdx := I;
+      end;
+    end;
+  end;
+  if LIdx >= 0 then
+    Result := FResults[LIdx];
+end;
+
+function TBenchResults.GetSlowest: TBenchResult;
+var
+  I: Integer;
+  LMaxNs: Double;
+  LIdx: Integer;
+begin
+  Result := Default(TBenchResult);
+  LMaxNs := -1.0e308;
+  LIdx := -1;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp > LMaxNs then
+      begin
+        LMaxNs := FResults[I].NsPerOp;
+        LIdx := I;
+      end;
+    end;
+  end;
+  if LIdx >= 0 then
+    Result := FResults[LIdx];
+end;
+
+function TBenchResults.GetTopN(ANCount: Integer): TBenchResultArray;
+var
+  LSorted: TBenchResultArray;
+  LActual: Integer;
+begin
+  if ANCount <= 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
+  LSorted := SortByNsPerOp(True);
+  LActual := ANCount;
+  if LActual > Length(LSorted) then
+    LActual := Length(LSorted);
+  SetLength(Result, LActual);
+  if LActual > 0 then
+    Move(LSorted[0], Result[0], LActual * SizeOf(TBenchResult));
+end;
+
+function TBenchResults.GetStableResults(ACVThreshold: Double): TBenchResultArray;
+var
+  I, LCount: Integer;
+  LCV: Double;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp > 0 then
+        LCV := FResults[I].StdDev / FResults[I].NsPerOp
+      else
+        LCV := 0;
+      if LCV < ACVThreshold then
+        Inc(LCount);
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp > 0 then
+        LCV := FResults[I].StdDev / FResults[I].NsPerOp
+      else
+        LCV := 0;
+      if LCV < ACVThreshold then
+      begin
+        Result[LCount] := FResults[I];
+        Inc(LCount);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetUnstableResults(ACVThreshold: Double): TBenchResultArray;
+var
+  I, LCount: Integer;
+  LCV: Double;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp > 0 then
+        LCV := FResults[I].StdDev / FResults[I].NsPerOp
+      else
+        LCV := 0;
+      if LCV >= ACVThreshold then
+        Inc(LCount);
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if FResults[I].NsPerOp > 0 then
+        LCV := FResults[I].StdDev / FResults[I].NsPerOp
+      else
+        LCV := 0;
+      if LCV >= ACVThreshold then
+      begin
+        Result[LCount] := FResults[I];
+        Inc(LCount);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.FilterByNsPerOpRange(AMinNs: Double; AMaxNs: Double): TBenchResultArray;
+var
+  I, LCount: Integer;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if (AMinNs <= 0) or (FResults[I].NsPerOp >= AMinNs) then
+      begin
+        if (AMaxNs <= 0) or (FResults[I].NsPerOp <= AMaxNs) then
+          Inc(LCount);
+      end;
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      if (AMinNs <= 0) or (FResults[I].NsPerOp >= AMinNs) then
+      begin
+        if (AMaxNs <= 0) or (FResults[I].NsPerOp <= AMaxNs) then
+        begin
+          Result[LCount] := FResults[I];
+          Inc(LCount);
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.FilterByNamePattern(const APattern: string): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+  LPatternLower, LNameLower: string;
+begin
+  { 显式限定单元：避免 LowerCase/GlobMatch 解析到错误符号 }
+  LPatternLower := nextpas.core.text.conv.LowerCase(APattern);
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LNameLower := nextpas.core.text.conv.LowerCase(FResults[I].Name);
+      if nextpas.core.bench.base.GlobMatch(LPatternLower, LNameLower) then
+        Inc(LCount);
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LNameLower := nextpas.core.text.conv.LowerCase(FResults[I].Name);
+      if nextpas.core.bench.base.GlobMatch(LPatternLower, LNameLower) then
+      begin
+        Result[LIdx] := FResults[I];
+        Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+        Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetSummaryStats: TBenchSummaryStats;
+var
+  I: Integer;
+  LMinNs, LMaxNs, LTotalNs: Double;
+  LNPerOps: TDoubleArray;
+  LExecutedCount: Integer;
+begin
+  Result := Default(TBenchSummaryStats);
+  LMinNs := 1.0e308;
+  LMaxNs := -1.0e308;
+  LTotalNs := 0;
+  LExecutedCount := 0;
+
+  { 单遍扫描收集基础聚合 }
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed then
+    begin
+      if FResults[I].Skipped then
+        Inc(Result.SkippedCount)
+      else
+      begin
+        Inc(Result.ExecutedCount);
+        Result.TotalOpsPerSec := Result.TotalOpsPerSec + FResults[I].OpsPerSec;
+        Result.TotalIterations := Result.TotalIterations + FResults[I].Iterations;
+        Result.TotalOutliers := Result.TotalOutliers + FResults[I].Outliers;
+        Result.TotalBytesPerOp := Result.TotalBytesPerOp + FResults[I].BytesPerOp;
+        Result.TotalAllocsPerOp := Result.TotalAllocsPerOp + FResults[I].AllocsPerOp;
+        Result.TotalElapsedNs := Result.TotalElapsedNs + FResults[I].NsPerOp * FResults[I].Iterations;
+        Result.CustomMetricsCount := Result.CustomMetricsCount + Length(FResults[I].CustomMetrics);
+
+        if FResults[I].NsPerOp < LMinNs then
+          LMinNs := FResults[I].NsPerOp;
+        if FResults[I].NsPerOp > LMaxNs then
+          LMaxNs := FResults[I].NsPerOp;
+        LTotalNs := LTotalNs + FResults[I].NsPerOp;
+        Inc(LExecutedCount);
+      end;
+    end;
+  end;
+
+  { 设置最快/最慢 }
+  if LExecutedCount > 0 then
+  begin
+    Result.FastestNsPerOp := LMinNs;
+    Result.SlowestNsPerOp := LMaxNs;
+    Result.MeanNsPerOp := LTotalNs / LExecutedCount;
+
+    { 计算中位数需要排序 — 只在有结果时执行 }
+    SetLength(LNPerOps, LExecutedCount);
+    LExecutedCount := 0;
+    for I := 0 to FResultCount - 1 do
+    begin
+      if FResults[I].Executed and (not FResults[I].Skipped) then
+      begin
+        LNPerOps[LExecutedCount] := FResults[I].NsPerOp;
+        Inc(LExecutedCount);
+      end;
+    end;
+    Result.MedianNsPerOp := FStatsAnalyzer.Median(LNPerOps);
+  end;
+end;
+
+function TBenchResults.GetRegressionReport(AThreshold: Double): TBenchRegressionReport;
+var
+  I: Integer;
+begin
+  if AThreshold <= 0 then
+    raise EBenchInvalidParam.Create('TBenchResults.GetRegressionReport: threshold must be > 0');
+
+  Result := Default(TBenchRegressionReport);
+  Result.Threshold := AThreshold;
+  Result.WorstRegressRatio := 1.0;
+
+  Result.Comparisons := GenerateComparisons;
+  Result.TotalComparisons := Length(Result.Comparisons);
+
+  for I := 0 to High(Result.Comparisons) do
+  begin
+    if Result.Comparisons[I].Ratio > AThreshold then
+    begin
+      Inc(Result.RegressedCount);
+      if Result.Comparisons[I].Ratio > Result.WorstRegressRatio then
+      begin
+        Result.WorstRegressRatio := Result.Comparisons[I].Ratio;
+        Result.WorstRegressName := Result.Comparisons[I].BaselineName;
+      end;
+    end
+    else if Result.Comparisons[I].Ratio < (1.0 / AThreshold) then
+      Inc(Result.ImprovedCount)
+    else
+      Inc(Result.UnchangedCount);
+  end;
+
+  Result.HasRegression := Result.RegressedCount > 0;
+end;
+
+function TBenchResults.FilterByHasCustomMetric(const AMetricName: string): TBenchResultArray;
+var
+  I, J, LCount, LIdx: Integer;
+  LHas: Boolean;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LHas := False;
+      for J := 0 to High(FResults[I].CustomMetrics) do
+      begin
+        if FResults[I].CustomMetrics[J].Name = AMetricName then
+        begin
+          LHas := True;
+          Break;
+        end;
+      end;
+      if LHas then
+        Inc(LCount);
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LHas := False;
+      for J := 0 to High(FResults[I].CustomMetrics) do
+      begin
+        if FResults[I].CustomMetrics[J].Name = AMetricName then
+        begin
+          LHas := True;
+          Break;
+        end;
+      end;
+      if LHas then
+      begin
+        Result[LIdx] := FResults[I];
+        Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+        Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetCustomMetricValues(const AMetricName: string): TDoubleArray;
+var
+  I, J, LCount, LIdx: Integer;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      for J := 0 to High(FResults[I].CustomMetrics) do
+      begin
+        if FResults[I].CustomMetrics[J].Name = AMetricName then
+          Inc(LCount);
+      end;
+    end;
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      for J := 0 to High(FResults[I].CustomMetrics) do
+      begin
+        if FResults[I].CustomMetrics[J].Name = AMetricName then
+        begin
+          Result[LIdx] := FResults[I].CustomMetrics[J].Value;
+          Inc(LIdx);
+        end;
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetPercentileStats: TPercentileResult;
+var
+  I, LCount: Integer;
+  LNPerOps: TDoubleArray;
+begin
+  Result := Default(TPercentileResult);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      Inc(LCount);
+  end;
+  if LCount = 0 then
+    Exit;
+
+  SetLength(LNPerOps, LCount);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LNPerOps[LCount] := FResults[I].NsPerOp;
+      Inc(LCount);
+    end;
+  end;
+  Result := FStatsAnalyzer.ComputePercentiles(LNPerOps);
+end;
+
+function TBenchResults.GetCVArray: TDoubleArray;
+var
+  I, LCount, LIdx: Integer;
+begin
+  { 第一遍：计数 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      Inc(LCount);
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      if FResults[I].NsPerOp > 0 then
+        Result[LIdx] := FResults[I].StdDev / FResults[I].NsPerOp
+      else
+        Result[LIdx] := 0;
+      Inc(LIdx);
+    end;
+  end;
+end;
+
+function TBenchResults.GetOutlierSummary: TOutlierSummary;
+var
+  I, LTotalSamples: Integer;
+begin
+  Result := Default(TOutlierSummary);
+  LTotalSamples := 0;
+
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      Result.Total := Result.Total + FResults[I].Outliers;
+      LTotalSamples := LTotalSamples + FResults[I].SampleCount;
+
+      { 按严重度分级：基于 OutlierMethod 和 OutlierThreshold }
+      if FResults[I].OutlierMethod = 'Tukey' then
+      begin
+        { Tukey 分级：1.5x IQR = mild, 3x = moderate, 10x = severe }
+        if FResults[I].OutlierThreshold >= 10.0 then
+          Result.Severe := Result.Severe + FResults[I].Outliers
+        else if FResults[I].OutlierThreshold >= 3.0 then
+          Result.Moderate := Result.Moderate + FResults[I].Outliers
+        else
+          Result.Mild := Result.Mild + FResults[I].Outliers;
+      end
+      else
+      begin
+        { 默认：所有异常值计为 mild }
+        Result.Mild := Result.Mild + FResults[I].Outliers;
+      end;
+    end;
+  end;
+
+  if LTotalSamples > 0 then
+    Result.Ratio := Result.Total / LTotalSamples;
+end;
+
+function TBenchResults.SortByCustomMetric(const AMetricName: string;
+  AAscending: Boolean): TBenchResultArray;
+var
+  I, J, LGap, LCount, LIdx: Integer;
+  LTemp: TBenchResult;
+  LTempVal: Double;
+  LTempHas: Boolean;
+  LHasMetric: array of Boolean;
+  LValues: array of Double;
+  LShouldSwap: Boolean;
+begin
+  { 两遍：先收集指标值，再排序 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      Inc(LCount);
+
+  SetLength(Result, LCount);
+  SetLength(LHasMetric, LCount);
+  SetLength(LValues, LCount);
+
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      LValues[LIdx] := GetCustomMetricValue(FResults[I], AMetricName);
+      LHasMetric[LIdx] := HasCustomMetric(FResults[I], AMetricName);
+      Inc(LIdx);
+    end;
+  end;
+
+  { Shell 排序 — 有指标的排前面，无指标的排后面 }
+  LGap := LCount;
+  while LGap > 1 do
+  begin
+    LGap := LGap div 2;
+    for I := LGap to LCount - 1 do
+    begin
+      LTemp := Result[I];
+      LTempVal := LValues[I];
+      LTempHas := LHasMetric[I];
+      J := I;
+      LShouldSwap := False;
+      while J >= LGap do
+      begin
+        { 有指标 vs 无指标：有指标的排前面 }
+        if LTempHas and (not LHasMetric[J - LGap]) then
+          Break
+        else if (not LTempHas) and LHasMetric[J - LGap] then
+          LShouldSwap := True
+        else if LTempHas and LHasMetric[J - LGap] then
+        begin
+          { 两个都有指标：按值比较 }
+          if AAscending then
+          begin
+            if LTempVal >= LValues[J - LGap] then
+              Break;
+          end
+          else
+          begin
+            if LTempVal <= LValues[J - LGap] then
+              Break;
+          end;
+          LShouldSwap := True;
+        end
+        else
+          { 两个都无指标：保持原序 }
+          Break;
+
+        if LShouldSwap then
+        begin
+          Result[J] := Result[J - LGap];
+          LValues[J] := LValues[J - LGap];
+          LHasMetric[J] := LHasMetric[J - LGap];
+          J := J - LGap;
+          LShouldSwap := False;
+        end
+        else
+          Break;
+      end;
+      Result[J] := LTemp;
+      LValues[J] := LTempVal;
+      LHasMetric[J] := LTempHas;
+    end;
+  end;
+end;
+
+function TBenchResults.FilterByCustomMetricRange(const AMetricName: string;
+  AMin: Double; AMax: Double): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+  LValue: Double;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       HasCustomMetric(FResults[I], AMetricName) then
+    begin
+      LValue := GetCustomMetricValue(FResults[I], AMetricName);
+      if ((AMin <= 0) or (LValue >= AMin)) and
+         ((AMax <= 0) or (LValue <= AMax)) then
+        Inc(LCount);
+    end;
+  end;
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       HasCustomMetric(FResults[I], AMetricName) then
+    begin
+      LValue := GetCustomMetricValue(FResults[I], AMetricName);
+      if ((AMin <= 0) or (LValue >= AMin)) and
+         ((AMax <= 0) or (LValue <= AMax)) then
+      begin
+        Result[LIdx] := FResults[I];
+        Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+        Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetCustomMetricStats(const AMetricName: string): TBenchStats;
+var
+  LValues: TDoubleArray;
+  LCount, I: Integer;
+begin
+  { 收集所有包含该指标的值 }
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       HasCustomMetric(FResults[I], AMetricName) then
+      Inc(LCount);
+
+  if LCount = 0 then
+  begin
+    Result := Default(TBenchStats);
+    Exit;
+  end;
+
+  SetLength(LValues, LCount);
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       HasCustomMetric(FResults[I], AMetricName) then
+    begin
+      LValues[LCount] := GetCustomMetricValue(FResults[I], AMetricName);
+      Inc(LCount);
+    end;
+
+  Result := FStatsAnalyzer.ComputeStats(LValues);
+end;
+
+function TBenchResults.GetResultsWithOutliers: TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (FResults[I].Outliers > 0) then
+      Inc(LCount);
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (FResults[I].Outliers > 0) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.GetResultsWithoutOutliers: TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (FResults[I].Outliers = 0) then
+      Inc(LCount);
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (FResults[I].Outliers = 0) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.SortByOpsPerSec(AAscending: Boolean): TBenchResultArray;
+var
+  I, J, LGap, LCount, LIdx: Integer;
+  LTemp: TBenchResult;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+      Inc(LCount);
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+
+  { Shell 排序 }
+  LGap := LCount;
+  while LGap > 1 do
+  begin
+    LGap := LGap div 2;
+    for I := LGap to LCount - 1 do
+    begin
+      LTemp := Result[I];
+      J := I;
+      if AAscending then
+      begin
+        while (J >= LGap) and (Result[J - LGap].OpsPerSec > LTemp.OpsPerSec) do
+        begin
+          Result[J] := Result[J - LGap];
+          J := J - LGap;
+        end;
+      end
+      else
+      begin
+        while (J >= LGap) and (Result[J - LGap].OpsPerSec < LTemp.OpsPerSec) do
+        begin
+          Result[J] := Result[J - LGap];
+          J := J - LGap;
+        end;
+      end;
+      Result[J] := LTemp;
+    end;
+  end;
+end;
+
+function TBenchResults.FilterByStdDevRange(AMin: Double;
+  AMax: Double): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      if ((AMin <= 0) or (FResults[I].StdDev >= AMin)) and
+         ((AMax <= 0) or (FResults[I].StdDev <= AMax)) then
+        Inc(LCount);
+    end;
+  end;
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      if ((AMin <= 0) or (FResults[I].StdDev >= AMin)) and
+         ((AMax <= 0) or (FResults[I].StdDev <= AMax)) then
+      begin
+        Result[LIdx] := FResults[I];
+        Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+        Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetGroups: TStringArray;
+var
+  I, J, LCount: Integer;
+  LGroupName: string;
+  LFound: Boolean;
+  LGroups: array of string;
+begin
+  { 收集所有唯一的分组名称 }
+  SetLength(LGroups, 0);
+  LCount := 0;
+
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and (not FResults[I].Skipped) then
+    begin
+      LGroupName := ExtractGroupName(FResults[I].Name);
+
+      { 检查是否已存在 }
+      LFound := False;
+      for J := 0 to LCount - 1 do
+        if LGroups[J] = LGroupName then
+        begin
+          LFound := True;
+          Break;
+        end;
+
+      if not LFound then
+      begin
+        if LCount >= Length(LGroups) then
+          SetLength(LGroups, LCount + 16);
+        LGroups[LCount] := LGroupName;
+        Inc(LCount);
+      end;
+    end;
+  end;
+
+  SetLength(Result, LCount);
+  for I := 0 to LCount - 1 do
+    Result[I] := LGroups[I];
+end;
+
+function TBenchResults.GetGroupStats(const AGroupName: string): TBenchStats;
+var
+  LValues: TDoubleArray;
+begin
+  LValues := CollectGroupNsPerOp(AGroupName);
+  if Length(LValues) = 0 then
+  begin
+    Result := Default(TBenchStats);
+    Exit;
+  end;
+
+  Result := FStatsAnalyzer.ComputeStats(LValues);
+end;
+
+function TBenchResults.ToJSON_Grouped: string;
+var
+  LGroups: TStringArray;
+  LGroupResults: TBenchResultArray;
+  LBuilder: TStringBuilder;
+  I, J: Integer;
+begin
+  LGroups := GetGroups;
+  LBuilder.Init(256 + FResultCount * 128);
+  try
+    LBuilder.AppendChar('{');
+    for I := 0 to High(LGroups) do
+    begin
+      if I > 0 then
+        LBuilder.AppendChar(',');
+      LBuilder.AppendChar('"');
+      LBuilder.AppendStr(LGroups[I]);
+      LBuilder.AppendStr('":[');
+
+      LGroupResults := CollectGroupResults(LGroups[I]);
+      for J := 0 to High(LGroupResults) do
+      begin
+        if J > 0 then
+          LBuilder.AppendChar(',');
+        LBuilder.AppendStr('{"name":"');
+        LBuilder.AppendStr(LGroupResults[J].Name);
+        LBuilder.AppendStr('","nsPerOp":');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].NsPerOp));
+        LBuilder.AppendStr(',"opsPerSec":');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].OpsPerSec));
+        LBuilder.AppendStr(',"stdDev":');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].StdDev));
+        LBuilder.AppendChar('}');
+      end;
+
+      LBuilder.AppendChar(']');
+    end;
+    LBuilder.AppendChar('}');
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+function TBenchResults.ToMarkdown_Grouped: string;
+var
+  LGroups: TStringArray;
+  LGroupResults: TBenchResultArray;
+  LBuilder: TStringBuilder;
+  I, J: Integer;
+begin
+  LGroups := GetGroups;
+  LBuilder.Init(256 + FResultCount * 128);
+  try
+    LBuilder.AppendStr('# Benchmark Results');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr(LineEnding);
+
+    for I := 0 to High(LGroups) do
+    begin
+      LBuilder.AppendStr('## ');
+      LBuilder.AppendStr(LGroups[I]);
+      LBuilder.AppendStr(LineEnding);
+      LBuilder.AppendStr(LineEnding);
+
+      LBuilder.AppendStr('| Name | ns/op | ops/s | StdDev |');
+      LBuilder.AppendStr(LineEnding);
+      LBuilder.AppendStr('|------|-------|-------|--------|');
+      LBuilder.AppendStr(LineEnding);
+
+      LGroupResults := CollectGroupResults(LGroups[I]);
+      for J := 0 to High(LGroupResults) do
+      begin
+        LBuilder.AppendChar('|');
+        LBuilder.AppendStr(LGroupResults[J].Name);
+        LBuilder.AppendChar('|');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].NsPerOp));
+        LBuilder.AppendChar('|');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].OpsPerSec));
+        LBuilder.AppendChar('|');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].StdDev));
+        LBuilder.AppendChar('|');
+        LBuilder.AppendStr(LineEnding);
+      end;
+
+      LBuilder.AppendStr(LineEnding);
+    end;
+
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+procedure TBenchResults.SaveToJSON_Grouped(const APath: string);
+begin
+  SaveStringToFile(APath, ToJSON_Grouped, 'GroupedJSON');
+end;
+
+procedure TBenchResults.SaveToMarkdown_Grouped(const APath: string);
+begin
+  SaveStringToFile(APath, ToMarkdown_Grouped, 'GroupedMarkdown');
+end;
+
+function TBenchResults.ToHTML_Grouped: string;
+var
+  LGroups: TStringArray;
+  LGroupResults: TBenchResultArray;
+  LBuilder: TStringBuilder;
+  I, J: Integer;
+begin
+  LGroups := GetGroups;
+  LBuilder.Init(512 + FResultCount * 256);
+  try
+    LBuilder.AppendStr('<!DOCTYPE html>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<html><head><meta charset="utf-8">');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<title>Benchmark Results</title>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<style>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('body{font-family:system-ui,sans-serif;margin:20px}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('h1{color:#333}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('h2{color:#666;margin-top:30px}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('table{border-collapse:collapse;width:100%}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('th,td{border:1px solid #ddd;padding:8px;text-align:left}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('th{background:#f5f5f5}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('tr:nth-child(even){background:#f9f9f9}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('.summary{margin-top:20px;padding:10px;background:#e8f5e9;border-radius:4px}');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('</style></head><body>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<h1>Benchmark Results</h1>');
+    LBuilder.AppendStr(LineEnding);
+
+    for I := 0 to High(LGroups) do
+    begin
+      LBuilder.AppendStr('<h2>');
+      LBuilder.AppendStr(LGroups[I]);
+      LBuilder.AppendStr('</h2>');
+      LBuilder.AppendStr(LineEnding);
+
+      LBuilder.AppendStr('<table>');
+      LBuilder.AppendStr(LineEnding);
+      LBuilder.AppendStr('<tr><th>Name</th><th>ns/op</th><th>ops/s</th><th>StdDev</th></tr>');
+      LBuilder.AppendStr(LineEnding);
+
+      LGroupResults := CollectGroupResults(LGroups[I]);
+      for J := 0 to High(LGroupResults) do
+      begin
+        LBuilder.AppendStr('<tr>');
+        LBuilder.AppendStr('<td>');
+        LBuilder.AppendStr(LGroupResults[J].Name);
+        LBuilder.AppendStr('</td>');
+        LBuilder.AppendStr('<td>');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].NsPerOp));
+        LBuilder.AppendStr('</td>');
+        LBuilder.AppendStr('<td>');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].OpsPerSec));
+        LBuilder.AppendStr('</td>');
+        LBuilder.AppendStr('<td>');
+        LBuilder.AppendStr(FormatFloat('0.##', LGroupResults[J].StdDev));
+        LBuilder.AppendStr('</td>');
+        LBuilder.AppendStr('</tr>');
+        LBuilder.AppendStr(LineEnding);
+      end;
+
+      LBuilder.AppendStr('</table>');
+      LBuilder.AppendStr(LineEnding);
+    end;
+
+    LBuilder.AppendStr('<div class="summary">');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<p><strong>Total Groups:</strong> ');
+    LBuilder.AppendStr(IntToStr(Length(LGroups)));
+    LBuilder.AppendStr('</p>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('<p><strong>Total Benchmarks:</strong> ');
+    LBuilder.AppendStr(IntToStr(FResultCount));
+    LBuilder.AppendStr('</p>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('</div>');
+    LBuilder.AppendStr(LineEnding);
+    LBuilder.AppendStr('</body></html>');
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+procedure TBenchResults.SaveToHTML_Grouped(const APath: string);
+begin
+  SaveStringToFile(APath, ToHTML_Grouped, 'GroupedHTML');
+end;
+
+function TBenchResults.CompareGroups(const AGroupNameA, AGroupNameB: string): TBenchComparison;
+var
+  LValuesA, LValuesB: TDoubleArray;
+  LStatsA, LStatsB: TBenchStats;
+begin
+  Result := Default(TBenchComparison);
+
+  LValuesA := CollectGroupNsPerOp(AGroupNameA);
+  if Length(LValuesA) = 0 then
+    Exit;
+
+  LValuesB := CollectGroupNsPerOp(AGroupNameB);
+  if Length(LValuesB) = 0 then
+    Exit;
+
+  LStatsA := FStatsAnalyzer.ComputeStats(LValuesA);
+  LStatsB := FStatsAnalyzer.ComputeStats(LValuesB);
+
+  Result.BaselineName := AGroupNameA;
+  Result.BaselineNsPerOp := LStatsA.Mean;
+  Result.CurrentNsPerOp := LStatsB.Mean;
+
+  if LStatsA.Mean > 0 then
+    Result.Ratio := LStatsB.Mean / LStatsA.Mean
+  else
+    Result.Ratio := 1.0;
+
+  Result.IsSignificant := FStatsAnalyzer.HasHeuristicDifference(LStatsA, LStatsB);
+  Result.ApproximatePValue := FStatsAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
+  Result.HasStatisticalTest := True;
+end;
+
+function TBenchResults.GetGroupRegressionReport(AThreshold: Double): TBenchRegressionReport;
+var
+  LGroups: TStringArray;
+  I, J, LIdx, LPairCount, LN: Integer;
+  LComparisons: TBenchComparisonArray;
+begin
+  if AThreshold <= 0 then
+    raise EBenchInvalidParam.Create('TBenchResults.GetGroupRegressionReport: threshold must be > 0');
+
+  Result := Default(TBenchRegressionReport);
+  Result.Threshold := AThreshold;
+  Result.WorstRegressRatio := 1.0;
+
+  LGroups := GetGroups;
+  LN := Length(LGroups);
+  if LN < 2 then
+  begin
+    Result.Comparisons := nil;
+    Result.TotalComparisons := 0;
+    Exit;
+  end;
+
+  { 两两比较：C(N,2) = N*(N-1)/2 }
+  LPairCount := LN * (LN - 1) div 2;
+  SetLength(LComparisons, LPairCount);
+  LIdx := 0;
+  for I := 0 to LN - 1 do
+    for J := I + 1 to LN - 1 do
+    begin
+      LComparisons[LIdx] := CompareGroups(LGroups[I], LGroups[J]);
+      Inc(LIdx);
+    end;
+
+  Result.Comparisons := LComparisons;
+  Result.TotalComparisons := LPairCount;
+
+  for I := 0 to High(LComparisons) do
+  begin
+    if LComparisons[I].Ratio > AThreshold then
+    begin
+      Inc(Result.RegressedCount);
+      if LComparisons[I].Ratio > Result.WorstRegressRatio then
+      begin
+        Result.WorstRegressRatio := LComparisons[I].Ratio;
+        Result.WorstRegressName := LComparisons[I].BaselineName;
+      end;
+    end
+    else if LComparisons[I].Ratio < (1.0 / AThreshold) then
+      Inc(Result.ImprovedCount)
+    else
+      Inc(Result.UnchangedCount);
+  end;
+
+  Result.HasRegression := Result.RegressedCount > 0;
+end;
+
+function TBenchResults.ToCSV: string;
+var
+  LBuilder: TStringBuilder;
+  I: Integer;
+
+  procedure WriteCSVEscape(const AValue: string);
+  begin
+    if (Pos(',', AValue) > 0) or (Pos('"', AValue) > 0) or (Pos(#10, AValue) > 0) then
+    begin
+      LBuilder.AppendChar('"');
+      LBuilder.AppendStr(nextpas.core.text.conv.StringReplace(AValue, '"', '""', True));
+      LBuilder.AppendChar('"');
+    end
+    else
+      LBuilder.AppendStr(AValue);
+  end;
+
+begin
+  LBuilder.Init(256 + FResultCount * 128);
+  try
+    { CSV header }
+    LBuilder.AppendStr('Name,Executed,Skipped,NsPerOp,OpsPerSec,StdDev,Median,P95,P99,');
+    LBuilder.AppendStr('Iterations,BytesPerOp,AllocsPerOp,Samples,Outliers');
+    LBuilder.AppendStr(LineEnding);
+
+    { 数据行 }
+    for I := 0 to FResultCount - 1 do
+    begin
+      WriteCSVEscape(FResults[I].Name);
+      LBuilder.AppendChar(',');
+      if FResults[I].Executed then LBuilder.AppendStr('true') else LBuilder.AppendStr('false');
+      LBuilder.AppendChar(',');
+      if FResults[I].Skipped then LBuilder.AppendStr('true') else LBuilder.AppendStr('false');
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].NsPerOp));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].OpsPerSec));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].StdDev));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].Median));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].P95));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', FResults[I].P99));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(IntToStr(FResults[I].Iterations));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(IntToStr(FResults[I].BytesPerOp));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(IntToStr(FResults[I].AllocsPerOp));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(IntToStr(FResults[I].SampleCount));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(IntToStr(FResults[I].Outliers));
+      LBuilder.AppendStr(LineEnding);
+    end;
+
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+function TBenchResults.GetTotalOpsPerSec: Double;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + FResults[I].OpsPerSec;
+  end;
+end;
+
+function TBenchResults.GetTotalOutliers: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + FResults[I].Outliers;
+  end;
+end;
+
+function TBenchResults.GetTotalIterations: Int64;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + FResults[I].Iterations;
+  end;
+end;
+
+function TBenchResults.GetTotalBytesPerOp: Int64;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + FResults[I].BytesPerOp;
+  end;
+end;
+
+function TBenchResults.GetTotalAllocsPerOp: Int64;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + FResults[I].AllocsPerOp;
+  end;
+end;
+
+function TBenchResults.GetTotalElapsed: TDuration;
+var
+  I: Integer;
+  LTotalNs: Double;
+begin
+  LTotalNs := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      LTotalNs := LTotalNs + FResults[I].NsPerOp * FResults[I].Iterations;
+  end;
+  Result := TDuration.FromNanoseconds(Round(LTotalNs));
+end;
+
+function TBenchResults.GetAllCustomMetrics: TCustomMetricArray;
+var
+  I, J, LTotal, LIdx: Integer;
+begin
+  { 第一遍：计数 }
+  LTotal := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      LTotal := LTotal + Length(FResults[I].CustomMetrics);
+  end;
+
+  { 第二遍：收集 }
+  SetLength(Result, LTotal);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      for J := 0 to High(FResults[I].CustomMetrics) do
+      begin
+        Result[LIdx] := FResults[I].CustomMetrics[J];
+        Inc(LIdx);
+      end;
+    end;
+  end;
+end;
+
+function TBenchResults.GetTotalCustomMetricsCount: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Result := Result + Length(FResults[I].CustomMetrics);
+  end;
+end;
+
 function TBenchResults.PrintToConsole: string;
 begin
   Result := FReportGenerator.PrintToConsole;
@@ -1214,41 +2797,13 @@ begin
 end;
 
 function TBenchResults.ToSummary: string;
-var
-  LAll: TBenchResultArray;
-  LLines: array of string;
-  I: Integer;
 begin
-  LAll := GetAll;
-  SetLength(LLines, Length(LAll) + 1);
+  Result := FReportGenerator.ToSummary;
+end;
 
-  LLines[0] := TextFormat('Benchmarks: %d results', [Length(LAll)]);
-
-  for I := 0 to High(LAll) do
-  begin
-    if LAll[I].Executed and not LAll[I].Skipped then
-    begin
-      if LAll[I].StdDev > 0 then
-        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
-          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec,
-           LAll[I].StdDev / LAll[I].NsPerOp * 100])
-      else
-        LLines[I + 1] := TextFormat('  %s: %.1f ns/op, %.0f ops/s',
-          [LAll[I].Name, LAll[I].NsPerOp, LAll[I].OpsPerSec]);
-    end
-    else if LAll[I].Skipped then
-      LLines[I + 1] := TextFormat('  %s: SKIPPED (%s)', [LAll[I].Name, LAll[I].SkipReason])
-    else
-      LLines[I + 1] := TextFormat('  %s: NOT EXECUTED', [LAll[I].Name]);
-  end;
-
-  Result := '';
-  for I := 0 to High(LLines) do
-  begin
-    if I > 0 then
-      Result := Result + LineEnding;
-    Result := Result + LLines[I];
-  end;
+function TBenchResults.ToMarkdown: string;
+begin
+  Result := FReportGenerator.ToMarkdown;
 end;
 
 procedure TBenchResults.SaveStringToFile(const APath, AContent, AFormat: string);
@@ -1259,6 +2814,79 @@ begin
     on E: Exception do
       raise EBenchError.CreateFmt('Failed to save %s to "%s": %s', [AFormat, APath, E.Message]);
   end;
+end;
+
+function TBenchResults.HasCustomMetric(const AResult: TBenchResult;
+  const AMetricName: string): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(AResult.CustomMetrics) do
+    if AResult.CustomMetrics[I].Name = AMetricName then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function TBenchResults.GetCustomMetricValue(const AResult: TBenchResult;
+  const AMetricName: string): Double;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(AResult.CustomMetrics) do
+    if AResult.CustomMetrics[I].Name = AMetricName then
+    begin
+      Result := AResult.CustomMetrics[I].Value;
+      Exit;
+    end;
+end;
+
+class function TBenchResults.ExtractGroupName(const AName: string): string;
+var
+  LSlash: Integer;
+begin
+  LSlash := Pos('/', AName);
+  if LSlash > 1 then
+    Result := Copy(AName, 1, LSlash - 1)
+  else
+    Result := AName;
+end;
+
+function TBenchResults.CollectGroupResults(const AGroupName: string): TBenchResultArray;
+var
+  LCount, I, LIdx: Integer;
+begin
+  LCount := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (ExtractGroupName(FResults[I].Name) = AGroupName) then
+      Inc(LCount);
+
+  SetLength(Result, LCount);
+  LIdx := 0;
+  for I := 0 to FResultCount - 1 do
+    if FResults[I].Executed and (not FResults[I].Skipped) and
+       (ExtractGroupName(FResults[I].Name) = AGroupName) then
+    begin
+      Result[LIdx] := FResults[I];
+      Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
+      Result[LIdx].CustomMetrics := Copy(Result[LIdx].CustomMetrics);
+      Inc(LIdx);
+    end;
+end;
+
+function TBenchResults.CollectGroupNsPerOp(const AGroupName: string): TDoubleArray;
+var
+  LResults: TBenchResultArray;
+  I: Integer;
+begin
+  LResults := CollectGroupResults(AGroupName);
+  SetLength(Result, Length(LResults));
+  for I := 0 to High(LResults) do
+    Result[I] := LResults[I].NsPerOp;
 end;
 
 procedure TBenchResults.SaveToJSON(const APath: string);
@@ -1274,6 +2902,16 @@ end;
 procedure TBenchResults.SaveToTSV(const APath: string);
 begin
   SaveStringToFile(APath, ToTSV, 'TSV');
+end;
+
+procedure TBenchResults.SaveToMarkdown(const APath: string);
+begin
+  SaveStringToFile(APath, ToMarkdown, 'Markdown');
+end;
+
+procedure TBenchResults.SaveToCSV(const APath: string);
+begin
+  SaveStringToFile(APath, ToCSV, 'CSV');
 end;
 
 function TBenchResults.CompareWithBaseline: TBenchComparisonArray;
@@ -1320,7 +2958,7 @@ begin
     { 无原始样本，退回启发式 }
     Result.HasStatisticalTest := False;
     Result.IsSignificant := Abs(Result.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-    Result.ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
+    Result.ApproximatePValue := CNoPValue;
   end;
 end;
 
@@ -1488,7 +3126,6 @@ var
   LMatrix: TMatrixResult;
 begin
   LMatrix := CompareMultipleBaselines(ABaselines);
-  FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.GenerateMatrixReport(LMatrix);
 end;
 
@@ -1498,7 +3135,6 @@ var
   LMatrix: TMatrixResult;
 begin
   LMatrix := CompareMultipleBaselines(ABaselines);
-  FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.GenerateMatrixHTML(LMatrix);
 end;
 
@@ -1508,8 +3144,79 @@ var
   LMatrix: TMatrixResult;
 begin
   LMatrix := CompareMultipleBaselines(ABaselines);
-  FReportGenerator.SetResults(FResults);
   Result := FReportGenerator.GenerateMatrixJSON(LMatrix);
+end;
+
+function TBenchResults.ToMatrixCSV(
+  const ABaselines: array of TBaselineData): string;
+var
+  LMatrix: TMatrixResult;
+  LBuilder: TStringBuilder;
+  I, J: Integer;
+begin
+  LMatrix := CompareMultipleBaselines(ABaselines);
+  LBuilder.Init(256 + Length(LMatrix.Rows) * 128);
+  try
+    { CSV header: Name, CurrentNsPerOp, [Baseline1 Ratio], [Baseline2 Ratio], ... }
+    LBuilder.AppendStr('Name,CurrentNsPerOp,CurrentStdDev');
+    for J := 0 to High(LMatrix.BaselineNames) do
+    begin
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(LMatrix.BaselineNames[J]);
+      LBuilder.AppendStr(' Ratio');
+    end;
+    LBuilder.AppendStr(LineEnding);
+
+    { 数据行 }
+    for I := 0 to High(LMatrix.Rows) do
+    begin
+      LBuilder.AppendStr(LMatrix.Rows[I].Name);
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', LMatrix.Rows[I].CurrentNsPerOp));
+      LBuilder.AppendChar(',');
+      LBuilder.AppendStr(FormatFloat('0.##', LMatrix.Rows[I].CurrentStdDev));
+      for J := 0 to High(LMatrix.Rows[I].Cells) do
+      begin
+        LBuilder.AppendChar(',');
+        LBuilder.AppendStr(FormatFloat('0.####', LMatrix.Rows[I].Cells[J].Ratio));
+      end;
+      LBuilder.AppendStr(LineEnding);
+    end;
+
+    { 几何均值行 }
+    if Length(LMatrix.GeometricMeanRatios) > 0 then
+    begin
+      LBuilder.AppendStr('Geometric Mean,,');
+      for J := 0 to High(LMatrix.GeometricMeanRatios) do
+      begin
+        LBuilder.AppendChar(',');
+        LBuilder.AppendStr(FormatFloat('0.####', LMatrix.GeometricMeanRatios[J]));
+      end;
+      LBuilder.AppendStr(LineEnding);
+    end;
+
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+procedure TBenchResults.SaveToMatrixJSON(const APath: string;
+  const ABaselines: array of TBaselineData);
+begin
+  SaveStringToFile(APath, ToMatrixJSON(ABaselines), 'MatrixJSON');
+end;
+
+procedure TBenchResults.SaveToMatrixHTML(const APath: string;
+  const ABaselines: array of TBaselineData);
+begin
+  SaveStringToFile(APath, ToMatrixHTML(ABaselines), 'MatrixHTML');
+end;
+
+procedure TBenchResults.SaveToMatrixCSV(const APath: string;
+  const ABaselines: array of TBaselineData);
+begin
+  SaveStringToFile(APath, ToMatrixCSV(ABaselines), 'MatrixCSV');
 end;
 
 function TBenchResults.HasRegression(AThreshold: Double): Boolean;

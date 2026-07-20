@@ -248,10 +248,18 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
   Records the GFixtureRegistry index in the suite for cleanup.
   Only call once per fixture (from DiscoverTests). }
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+{ White-box helpers for test_runner: pure single-arg CLI parsers (no ParamStr). }
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+function ExtractArgValue(const AArg, APrefix: string): string;
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
 { White-box helper for test_runner: parse --filter=value form from one argv item. }
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
 function ParseTag(const AArg: string): string;
+{ Apply CLI flags from an injectable argv list (not ParamStr). }
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
@@ -277,11 +285,33 @@ uses
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+begin
+  Result := nextpas.core.test.runner.cli.HasArgFlag(AArg, AFlag1, AFlag2);
+end;
+
+function ExtractArgValue(const AArg, APrefix: string): string;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgValue(AArg, APrefix);
+end;
+
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgIntValue(AArg, APrefix, ADefault);
+end;
+
 function ParseFilter(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseFilter(AArg); end;
 
 function ParseTag(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseTag(AArg); end;
+
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
+begin
+  nextpas.core.test.runner.cli.ApplyCLIArgsFrom(AArgs);
+end;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
   Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)
@@ -849,7 +879,6 @@ begin
   begin
     LProc;
   end;
-  SetLength(EachCleanups, LIdx + 1);
 end;
 
 procedure TTestSuite.Cleanup(AProc: TTestClosure);
@@ -858,7 +887,6 @@ var
 begin
   LIdx := GrowCleanups(EachCleanups);
   EachCleanups[LIdx] := AProc;
-  SetLength(EachCleanups, LIdx + 1);
 end;
 
 procedure TTestSuite.Tag(const ATags: array of string);
@@ -1171,6 +1199,7 @@ begin
 
     { R5-02: set LStart before BeforeEach check so all paths have valid duration }
     LStart := TInstant.Now;
+    LDisplayName := GetDisplayName(LEntry);
 
     if not LBeforeEachPassed then
     begin
@@ -1180,7 +1209,6 @@ begin
     end
     else
     begin
-    LDisplayName := GetDisplayName(LEntry);
     if LEntry.Kind = ekTest then
     begin
       LSubCtx := TTestContext.Create(LEntry.Name, LConfig);
@@ -1336,6 +1364,15 @@ begin
       end;
     end;
 
+    { SoftFail (Go t.Error): if body/hooks soft-failed but status still pass,
+      flip to tsFailed and correct pass/fail counters. }
+    if ApplySoftFails(LStatus, LLastFailMsg) then
+    begin
+      Inc(LFail);
+      if LPass > 0 then
+        Dec(LPass);
+    end;
+
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
       LStart.Elapsed.AsMilliseconds);
@@ -1369,12 +1406,17 @@ begin
     SetCurrentTestContext(nil);
     LSubCtxI := nil;
     LSubCtx := nil;
-    { FailFast: stop on first failure }
+    { FailFast: stop on hard failure/error only — SoftFail-only continues
+      (Go: t.Error does not stop; t.Fatal does). SoftFailOnly = soft msgs
+      and no InternalFail on this entry. }
     if LConfig.FailFast and (LStatus in [tsFailed, tsError]) then
     begin
-      LOutSink.WriteLn(AnsiYellow(
-        '  FAILFAST: stopping on first failure', LConfig));
-      Break;
+      if (LStatus = tsError) or (not SoftFailOnly) then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping on first failure', LConfig));
+        Break;
+      end;
     end;
     { MaxFailures: stop after N total failures in this suite }
     if (LConfig.MaxFailures > 0) and (LFail >= LConfig.MaxFailures) then
@@ -1690,7 +1732,6 @@ begin
       filtered tests are invisible, not counted as pass/fail/skip) }
     if not IsTestEligible(Tests[I], LConfig, LTagFilter, True) then
     begin
-      { TThreadID is a pointer on BSD/Darwin; use TThreadID(0), not bare 0. }
       LThreads[I] := TThreadID(0);
       LProcessed[I] := True;
       Continue;
@@ -1819,7 +1860,13 @@ begin
       begin
         LResults[I] := MakeTestResult(Tests[I].Name, tsError,
           'BeginThread failed', 0);
-        Inc(LFail);
+        LCacheHits[I] := True; { Don't cache system-level errors }
+        LMtx.Acquire;
+        try
+          Inc(LFail);
+        finally
+          LMtx.Release;
+        end;
       end;
       Inc(LSpawned);
       LBatchStart := I + 1;
@@ -1844,8 +1891,8 @@ begin
 
   { Collect results from threads that actually ran.
     Filter-excluded slots have LThreads[I]=TThreadID(0) and no result data.
-    BeginThread-failed slots also have LThreads[I]=TThreadID(0) but have result
-    data written directly (tsError + 'BeginThread failed'). }
+    BeginThread-failed slots also have LThreads[I]=TThreadID(0) but have result data
+    written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
   begin
     if (LThreads[I] <> TThreadID(0)) or (LResults[I].Status <> tsPassed) or

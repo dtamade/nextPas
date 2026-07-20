@@ -200,21 +200,37 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.time.cpu,
-  nextpas.core.bench.intf; { PF-06: for EBenchInvalidParam }
+  nextpas.core.bench.intf, { PF-06: for EBenchInvalidParam }
+  nextpas.core.atomic.types; { P0-2: 线程安全的原子计数器 }
 
 {** F-12: 全局计数器，防止 BootstrapCI 快速连续调用时种子碰撞 }
 var
-  GBootstrapCallCount: UInt64 = 0;
+  GBootstrapCallCount: TAtomicUInt64;
 
-const
-  TINV90_DATA: array[0..29] of Double = (
-    6.314, 2.920, 2.353, 2.132, 2.015,
-    1.943, 1.895, 1.860, 1.833, 1.812,
-    1.796, 1.782, 1.771, 1.761, 1.753,
-    1.746, 1.740, 1.734, 1.729, 1.725,
-    1.721, 1.717, 1.714, 1.711, 1.708,
-    1.706, 1.703, 1.701, 1.699, 1.697
-  );
+{ === 内部辅助函数 === }
+
+procedure WelfordMeanVariance(const AData: TDoubleArray;
+  out AMean, AVariance: Double; out AValidCount: Integer);
+{ Welford 单遍算法：同时计算均值和方差，跳过 NaN/Inf。 }
+var
+  I: Integer;
+  LDelta, LDelta2, LM2: Double;
+begin
+  AMean := 0.0; AVariance := 0.0; AValidCount := 0; LM2 := 0.0;
+  for I := 0 to High(AData) do
+  begin
+    if IsDoubleNaN(AData[I]) or IsInfinite(AData[I]) then Continue;
+    Inc(AValidCount);
+    LDelta := AData[I] - AMean;
+    AMean := AMean + LDelta / AValidCount;
+    LDelta2 := AData[I] - AMean;
+    LM2 := LM2 + LDelta * LDelta2;
+  end;
+  if AValidCount > 1 then
+    AVariance := LM2 / (AValidCount - 1)
+  else
+    AVariance := 0.0;
+end;
 
 { TAdvancedStats }
 
@@ -244,7 +260,7 @@ end;
 
 function TAdvancedStats.Mean: Double;
 var
-  I: Integer;
+  I, LValidCount: Integer;
   LSum: Double;
 begin
   if FMeanCached then
@@ -252,27 +268,51 @@ begin
   if Length(FData) = 0 then
     Exit(0);
 
+  { NaN/Inf guard: 与 Variance 行为一致 }
   LSum := 0;
+  LValidCount := 0;
   for I := 0 to High(FData) do
+  begin
+    if IsDoubleNaN(FData[I]) or IsInfinite(FData[I]) then
+      Continue;
+    Inc(LValidCount);
     LSum := LSum + FData[I];
-  FCachedMean := LSum / Length(FData);
+  end;
+
+  if LValidCount = 0 then
+    FCachedMean := 0
+  else
+    FCachedMean := LSum / LValidCount;
   FMeanCached := True;
   Result := FCachedMean;
 end;
 
 function TAdvancedStats.Median: Double;
 var
-  LCount: Integer;
+  LCount, LValidCount: Integer;
+  I: Integer;
 begin
   LCount := Length(FData);
   if LCount = 0 then Exit(0);
 
   EnsureSorted;
 
-  if LCount mod 2 = 0 then
-    Result := (FSortedData[LCount div 2 - 1] + FSortedData[LCount div 2]) / 2
+  { FSortedData 通过 SortDoubleArray 排序，NaN/Inf 已在末尾；计算有效元素数量 }
+  LValidCount := LCount;
+  for I := LCount - 1 downto 0 do
+  begin
+    if IsDoubleNaN(FSortedData[I]) or IsInfinite(FSortedData[I]) then
+      Dec(LValidCount)
+    else
+      Break;
+  end;
+
+  if LValidCount = 0 then Exit(0);
+
+  if LValidCount mod 2 = 0 then
+    Result := (FSortedData[LValidCount div 2 - 1] + FSortedData[LValidCount div 2]) / 2
   else
-    Result := FSortedData[LCount div 2];
+    Result := FSortedData[LValidCount div 2];
 end;
 
 function TAdvancedStats.StdDev: Double;
@@ -282,118 +322,64 @@ end;
 
 function TAdvancedStats.Variance: Double;
 var
-  I: Integer;
   LMean: Double;
-  LSumSq, LCompensation, LNext, LTemp: Double;
-  LDiff: Double;
-  LLen: Integer;
+  LValidCount: Integer;
 begin
-  LLen := Length(FData);
-  if LLen < 2 then Exit(0);
-
-  LMean := Mean;
-  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
-  if IsNaN(LMean) or IsInfinite(LMean) then
-    Exit(0);
-
-  { Fast path: small arrays use simple summation (avoid Kahan overhead) }
-  if LLen <= 256 then
-  begin
-    LSumSq := 0.0;
-    for I := 0 to High(FData) do
-    begin
-      LDiff := FData[I] - LMean;
-      LSumSq := LSumSq + LDiff * LDiff;
-    end;
-  end
-  else
-  begin
-    { Kahan 补偿求和 for Sqr(x - mean) }
-    LSumSq := 0.0;
-    LCompensation := 0.0;
-    for I := 0 to High(FData) do
-    begin
-      LNext := Sqr(FData[I] - LMean) - LCompensation;
-      LTemp := LSumSq + LNext;
-      LCompensation := (LTemp - LSumSq) - LNext;
-      LSumSq := LTemp;
-    end;
-  end;
-  Result := LSumSq / (LLen - 1);
+  if Length(FData) < 2 then Exit(0);
+  WelfordMeanVariance(FData, LMean, Result, LValidCount);
 end;
 
 function TAdvancedStats.Skewness: Double;
+{ Welford for mean+variance, then single pass for 3rd moment. }
 var
-  I: Integer;
-  LMean: Double;
-  LStdDev: Double;
-  LSum: Double;
-  LCount: Integer;
-  LZ: Double;
+  I, LValidCount: Integer;
+  LMean, LVariance, LStdDev, LSum, LZ: Double;
 begin
-  LCount := Length(FData);
-  if LCount < 3 then Exit(0);
-
-  LMean := Mean;
-  LStdDev := StdDev;
-  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
-  if IsNaN(LMean) or IsInfinite(LMean) or IsNaN(LStdDev) or IsInfinite(LStdDev) then
-    Exit(0);
+  if Length(FData) < 3 then Exit(0);
+  WelfordMeanVariance(FData, LMean, LVariance, LValidCount);
+  if IsDoubleNaN(LMean) or IsInfinite(LMean) then Exit(0);
+  if LValidCount < 3 then Exit(0);
+  LStdDev := Sqrt(LVariance);
   if LStdDev = 0 then Exit(0);
-
   LSum := 0;
   for I := 0 to High(FData) do
   begin
+    if IsDoubleNaN(FData[I]) or IsInfinite(FData[I]) then Continue;
     LZ := (FData[I] - LMean) / LStdDev;
     LSum := LSum + LZ * Sqr(LZ);
   end;
-
-  // Fisher's g1: unbiased estimator
-  if LCount > 2 then
-    Result := (LSum / LCount) * Sqrt(LCount * (LCount - 1)) / (LCount - 2)
+  { Fisher's g1: unbiased estimator }
+  if LValidCount > 2 then
+    Result := (LSum / LValidCount) * Sqrt(LValidCount * (LValidCount - 1)) / (LValidCount - 2)
   else
-    Result := LSum / LCount;
+    Result := LSum / LValidCount;
 end;
 
 function TAdvancedStats.Kurtosis: Double;
+{ Welford for mean, then single pass for 2nd/4th moments. }
 var
-  I: Integer;
-  LMean: Double;
-  LSum2: Double;
-  LSum4: Double;
-  LDiff: Double;
-  LCount: Integer;
-  Lk2: Double;
-  Lk4: Double;
-  LRatio: Double;
+  I, LValidCount: Integer;
+  LMean, LVariance, LSum2, LSum4, LDiff, Lk2, Lk4, LRatio: Double;
 begin
-  LCount := Length(FData);
-  if LCount < 4 then Exit(0);
-
-  LMean := Mean;
-  { NaN/Inf guard: 防止 FPC FPU 异常 (Runtime Error 207) }
-  if IsNaN(LMean) or IsInfinite(LMean) then
-    Exit(0);
-
-  LSum2 := 0;
-  LSum4 := 0;
+  if Length(FData) < 4 then Exit(0);
+  WelfordMeanVariance(FData, LMean, LVariance, LValidCount);
+  if IsDoubleNaN(LMean) or IsInfinite(LMean) then Exit(0);
+  if LValidCount < 4 then Exit(0);
+  LSum2 := 0; LSum4 := 0;
   for I := 0 to High(FData) do
   begin
+    if IsDoubleNaN(FData[I]) or IsInfinite(FData[I]) then Continue;
     LDiff := FData[I] - LMean;
     LSum2 := LSum2 + LDiff * LDiff;
     LSum4 := LSum4 + Sqr(LDiff * LDiff);
   end;
-
   if LSum2 = 0 then Exit(0);
-
-  // Population central moments
-  Lk2 := LSum2 / LCount;
-  Lk4 := LSum4 / LCount;
+  Lk2 := LSum2 / LValidCount;
+  Lk4 := LSum4 / LValidCount;
   LRatio := Lk4 / (Lk2 * Lk2);
-
-  // Unbiased sample excess kurtosis (Fisher's G2)
-  Result := (LCount - 1) * ((LCount + 1) * LRatio - 3 * (LCount - 1))
-            / ((LCount - 2) * (LCount - 3));
+  { Unbiased sample excess kurtosis (Fisher's G2) }
+  Result := (LValidCount - 1) * ((LValidCount + 1) * LRatio - 3 * (LValidCount - 1))
+            / ((LValidCount - 2) * (LValidCount - 3));
 end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
@@ -694,8 +680,8 @@ begin
     LPRNG.Init(ASeed)
   else
   begin
-    Inc(GBootstrapCallCount);
-    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
+    GBootstrapCallCount.Increment;
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount.Load shl 32));
   end;
 
   SetLength(LMeans, LIterations);
@@ -774,8 +760,8 @@ begin
     LPRNG.Init(ASeed)
   else
   begin
-    Inc(GBootstrapCallCount);
-    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
+    GBootstrapCallCount.Increment;
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount.Load shl 32));
   end;
 
   // 计算观测均值
@@ -870,7 +856,7 @@ var
   LMeanA, LMeanB, LObservedDiff: Double;
   LI, LJ, LSwap, LTmp: Integer;
   LCount: Integer;
-  LSumA, LSumB, LTotalSum: Double;
+  LSumA, LTotalSum: Double;
   LValJ, LValSwap: Double;
   LInvNA, LInvNB: Double;
 begin
@@ -912,8 +898,8 @@ begin
     LPRNG.Init(ASeed)
   else
   begin
-    Inc(GBootstrapCallCount);
-    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount shl 32));
+    GBootstrapCallCount.Increment;
+    LPRNG.Init(platform_monotonic_ns xor (GBootstrapCallCount.Load shl 32));
   end;
 
   LIterations := AIterations;
@@ -921,7 +907,7 @@ begin
     LIterations := 1;
 
   // Fisher permutation test
-  // 优化: 在 shuffle 过程中增量更新分组和 LSumA/LSumB，
+  // 优化: 在 shuffle 过程中增量更新 LSumA，LSumB 从 LTotalSum - LSumA 推导
   // 避免 shuffle 后再做 O(N) 求和。
   // 初始状态: 前 LNA 个位置为 A 组，后 LNB 个位置为 B 组。
   // F-12: 预计算总和，消除每迭代 O(LNA+LNB) 重复求和。
@@ -932,46 +918,34 @@ begin
   for LI := 0 to LIterations - 1 do
   begin
     // 初始化: 前 LNA 个 = A 组，后 LNB 个 = B 组
-    // 优化: 只求 LSumA，LSumB 从总和推导
     LSumA := 0.0;
     for LJ := 0 to LNA - 1 do
       LSumA := LSumA + LData[LPerm[LJ]];
-    LSumB := LTotalSum - LSumA;
 
     // Fisher-Yates shuffle: 随机打乱排列
-    // 每次 swap 后增量更新分组和
+    // 每次 swap 后增量更新 LSumA，LSumB 统一从 LTotalSum - LSumA 推导
     for LJ := LN - 1 downto 1 do
     begin
       LSwap := LPRNG.NextInt(LJ + 1);
 
-      // 取当前位置和 swap 目标的值
       LValJ := LData[LPerm[LJ]];
       LValSwap := LData[LPerm[LSwap]];
 
-      // 执行 swap
       LTmp := LPerm[LJ];
       LPerm[LJ] := LPerm[LSwap];
       LPerm[LSwap] := LTmp;
 
-      // 增量更新分组和:
-      // 位置 LJ 从 LValJ → LValSwap
-      // 位置 LSwap 从 LValSwap → LValJ
       if LJ < LNA then
-        LSumA := LSumA - LValJ + LValSwap
-      else
-        LSumB := LSumB - LValJ + LValSwap;
-
+        LSumA := LSumA - LValJ + LValSwap;
       if LSwap < LNA then
-        LSumA := LSumA - LValSwap + LValJ
-      else
-        LSumB := LSumB - LValSwap + LValJ;
+        LSumA := LSumA - LValSwap + LValJ;
     end;
 
-    if Abs(LSumA * LInvNA - LSumB * LInvNB) >= Abs(LObservedDiff) then
+    if Abs(LSumA * LInvNA - (LTotalSum - LSumA) * LInvNB) >= Abs(LObservedDiff) then
       Inc(LCount);
   end;
 
-  // 双尾 p-value (包含 +1 修正，避免 p=0)
+  { 双尾 p-value: +1 修正是 Fisher 置换检验标准做法，保证 p-value > 0 }
   Result.PValue := (LCount + 1.0) / (LIterations + 1.0);
   Result.IsSignificant := Result.PValue < BENCH_SIGNIFICANCE_ALPHA;
   Result.Iterations := LIterations;
@@ -1013,11 +987,9 @@ begin
   if LWSq > 1.001 then
   begin
     LA := Sqrt(2.0 / (LWSq - 1.0));
-    LZSkew := LB * (LGamma1 / Sqrt(LWSq - 1.0) + Sqrt(1.0 / (LWSq - 1.0)));
-    // 使用双曲反正切: Z = (1/alpha) * asinh(Gamma1/(alpha*sqrt(W^2-1)))
-    // 简化为: Z = LB * ln(Gamma1/LA + sqrt((Gamma1/LA)^2 + 1))
+    { asinh(Gamma1/alpha) = ln(Gamma1/alpha + sqrt((Gamma1/alpha)^2 + 1)) }
     if Abs(LGamma1) > 1e-15 then
-      LZSkew := LB * Ln(Abs(LGamma1) / LA + Sqrt(Sqr(LGamma1 / LWSq) + 1.0))
+      LZSkew := LB * Ln(Abs(LGamma1) / LA + Sqrt(Sqr(Abs(LGamma1) / LA) + 1.0))
     else
       LZSkew := 0.0;
   end
@@ -1078,35 +1050,10 @@ end;
 class procedure TAdvancedStats.ComputeMeanVariance(const AData: TDoubleArray;
   out AMean, AVariance: Double);
 var
-  LCount: Integer;
-  LSum, LSumSq, LDiff: Double;
-  I: Integer;
+  LValidCount: Integer;
 begin
-  LCount := Length(AData);
-  if LCount = 0 then
-  begin
-    AMean := 0;
-    AVariance := 0;
-    Exit;
-  end;
-
-  LSum := 0;
-  for I := 0 to High(AData) do
-    LSum := LSum + AData[I];
-  AMean := LSum / LCount;
-
-  if LCount > 1 then
-  begin
-    LSumSq := 0;
-    for I := 0 to High(AData) do
-    begin
-      LDiff := AData[I] - AMean;
-      LSumSq := LSumSq + LDiff * LDiff;
-    end;
-    AVariance := LSumSq / (LCount - 1);
-  end
-  else
-    AVariance := 0;
+  if Length(AData) = 0 then begin AMean := 0; AVariance := 0; Exit; end;
+  WelfordMeanVariance(AData, AMean, AVariance, LValidCount);
 end;
 
 function TAdvancedStats.ApproximateWelchTScore(const AOther: TDoubleArray): Double;

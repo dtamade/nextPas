@@ -12,6 +12,7 @@ uses
 
 function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+function ConfigBorrow(AConfig: TConfig): IConfig;
 
 implementation
 
@@ -28,13 +29,16 @@ type
     cskYaml,
     cskToml,
     cskEnv,
-    cskFile
+    cskFile,
+    cskKeyValues
   );
 
   TConfigSource = record
     Kind: TConfigSourceKind;
     Value: string;
     Format: TConfigFormat;
+    Entries: TConfigEntryArray;
+    EntryCount: Integer;
   end;
 
   TConfigSourceArray = array of TConfigSource;
@@ -61,6 +65,36 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function GetInterpolationMode: TConfigInterpolationMode;
+    function ToIni: string;
+    function ToJson: string;
+    function ToYaml: string;
+    function ToToml: string;
+  end;
+
+  { Non-owning IConfig; does not Free FConfig. }
+  TBorrowedConfig = class(TInterfacedObject, IConfig)
+  private
+    FConfig: TConfig;
+    function GetCount: Integer;
+  public
+    constructor Create(AConfig: TConfig);
+    function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
+    function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    procedure Require(const AKeys: array of string);
+    function Has(const AKey: string): Boolean;
+    function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
+    function GetInterpolationMode: TConfigInterpolationMode;
     function ToIni: string;
     function ToJson: string;
     function ToYaml: string;
@@ -75,6 +109,8 @@ type
     FSourceCount: Integer;
     FRequiredKeys: TStringArray;
     FRequiredCount: Integer;
+    FInterpolationMode: TConfigInterpolationMode;
+    FHasInterpolationMode: Boolean;
     function DefaultIndexOf(const AKey: string): Integer;
     procedure StoreDefault(const AKey, AValue: string);
     procedure StoreSource(const AKind: TConfigSourceKind; const AValue: string;
@@ -85,6 +121,7 @@ type
     procedure ApplyRequiredKeys(ACfg: TConfig);
     function BuildFreshConfig: TConfig;
   public
+    constructor Create;
     function AddDefault(const AKey, AValue: string): IConfigBuilder;
     function AddIni(const AContent: string): IConfigBuilder;
     function AddJson(const AContent: string): IConfigBuilder;
@@ -92,13 +129,13 @@ type
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
     function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
+    function SetInterpolationMode(AMode: TConfigInterpolationMode): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
     function Build: IConfig;
     function BuildConfig: TConfig;
     function TryBuild(out AConfig: IConfig; out AError: string): Boolean;
   end;
-
-
 
 procedure AddConfigSource(var AItems: TConfigSourceArray; var ACount: Integer;
   const AKind: TConfigSourceKind; const AValue: string; AFormat: TConfigFormat);
@@ -108,6 +145,21 @@ begin
   AItems[ACount].Kind := AKind;
   AItems[ACount].Value := AValue;
   AItems[ACount].Format := AFormat;
+  AItems[ACount].Entries := nil;
+  AItems[ACount].EntryCount := 0;
+  Inc(ACount);
+end;
+
+procedure AddKeyValueSource(var AItems: TConfigSourceArray; var ACount: Integer;
+  const AEntries: TConfigEntryArray; AEntryCount: Integer);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount].Kind := cskKeyValues;
+  AItems[ACount].Value := '';
+  AItems[ACount].Format := cfIni;
+  AItems[ACount].Entries := AEntries;
+  AItems[ACount].EntryCount := AEntryCount;
   Inc(ACount);
 end;
 
@@ -224,7 +276,132 @@ begin
   Result := FConfig.ToToml;
 end;
 
+function TOwnedConfig.GetInterpolationMode: TConfigInterpolationMode;
+begin
+  Result := FConfig.GetInterpolationMode;
+end;
+
+{ TBorrowedConfig }
+
+constructor TBorrowedConfig.Create(AConfig: TConfig);
+begin
+  inherited Create;
+  FConfig := AConfig;
+end;
+
+function TBorrowedConfig.GetCount: Integer;
+begin
+  Result := FConfig.Count;
+end;
+
+function TBorrowedConfig.GetString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FConfig.GetString(AKey, ADefault);
+end;
+
+function TBorrowedConfig.GetRawString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FConfig.GetRawString(AKey, ADefault);
+end;
+
+function TBorrowedConfig.GetStringArray(const AKey: string): TStringArray;
+begin
+  Result := FConfig.GetStringArray(AKey);
+end;
+
+function TBorrowedConfig.GetRawStringArray(const AKey: string): TStringArray;
+begin
+  Result := FConfig.GetRawStringArray(AKey);
+end;
+
+function TBorrowedConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetInt(AKey, ADefault);
+end;
+
+function TBorrowedConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
+begin
+  Result := FConfig.GetBool(AKey, ADefault);
+end;
+
+function TBorrowedConfig.GetFloat(const AKey: string; ADefault: Double): Double;
+begin
+  Result := FConfig.GetFloat(AKey, ADefault);
+end;
+
+function TBorrowedConfig.GetStringRequired(const AKey: string): string;
+begin
+  Result := FConfig.GetStringRequired(AKey);
+end;
+
+function TBorrowedConfig.GetIntRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetIntRequired(AKey);
+end;
+
+function TBorrowedConfig.GetBoolRequired(const AKey: string): Boolean;
+begin
+  Result := FConfig.GetBoolRequired(AKey);
+end;
+
+function TBorrowedConfig.GetFloatRequired(const AKey: string): Double;
+begin
+  Result := FConfig.GetFloatRequired(AKey);
+end;
+
+procedure TBorrowedConfig.Require(const AKeys: array of string);
+begin
+  FConfig.Require(AKeys);
+end;
+
+function TBorrowedConfig.Has(const AKey: string): Boolean;
+begin
+  Result := FConfig.Has(AKey);
+end;
+
+function TBorrowedConfig.GetKeys: TStringArray;
+begin
+  Result := FConfig.GetKeys;
+end;
+
+function TBorrowedConfig.GetSection(const APrefix: string): TStringArray;
+begin
+  Result := FConfig.GetSection(APrefix);
+end;
+
+function TBorrowedConfig.GetInterpolationMode: TConfigInterpolationMode;
+begin
+  Result := FConfig.GetInterpolationMode;
+end;
+
+function TBorrowedConfig.ToIni: string;
+begin
+  Result := FConfig.ToIni;
+end;
+
+function TBorrowedConfig.ToJson: string;
+begin
+  Result := FConfig.ToJson;
+end;
+
+function TBorrowedConfig.ToYaml: string;
+begin
+  Result := FConfig.ToYaml;
+end;
+
+function TBorrowedConfig.ToToml: string;
+begin
+  Result := FConfig.ToToml;
+end;
+
 { TConfigBuilderImpl }
+
+constructor TConfigBuilderImpl.Create;
+begin
+  inherited Create;
+  FInterpolationMode := cimDefault;
+  FHasInterpolationMode := False;
+end;
 
 function TConfigBuilderImpl.DefaultIndexOf(const AKey: string): Integer;
 begin
@@ -272,6 +449,7 @@ end;
 procedure TConfigBuilderImpl.ApplySource(ACfg: TConfig; const ASource: TConfigSource);
 var
   LError: string;
+  LI: Integer;
 begin
   case ASource.Kind of
     cskIni:
@@ -288,6 +466,9 @@ begin
     cskFile:
       if not ACfg.TryLoadFromFile(ASource.Value, ASource.Format, LError) then
         raise EConfigError.Create(LError);
+    cskKeyValues:
+      for LI := 0 to ASource.EntryCount - 1 do
+        ACfg.SetString(ASource.Entries[LI].Key, ASource.Entries[LI].Value);
   end;
 end;
 
@@ -305,6 +486,8 @@ var
 begin
   Result := TConfig.Create;
   try
+    if FHasInterpolationMode then
+      Result.SetInterpolationMode(FInterpolationMode);
     ApplyDefaults(Result);
     for LI := 0 to FSourceCount - 1 do
       ApplySource(Result, FSources[LI]);
@@ -360,6 +543,35 @@ begin
   Result := Self;
 end;
 
+function TConfigBuilderImpl.AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
+var
+  LI: Integer;
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+begin
+  if Length(AKeys) <> Length(AValues) then
+    raise EConfigError.Create(
+      'AddKeyValues requires AKeys and AValues of equal length');
+  LCount := Length(AKeys);
+  SetLength(LEntries, LCount);
+  for LI := 0 to LCount - 1 do
+  begin
+    RequireConfigKey(AKeys[LI]);
+    LEntries[LI].Key := AKeys[LI];
+    LEntries[LI].Value := AValues[LI];
+  end;
+  AddKeyValueSource(FSources, FSourceCount, LEntries, LCount);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.SetInterpolationMode(
+  AMode: TConfigInterpolationMode): IConfigBuilder;
+begin
+  FInterpolationMode := AMode;
+  FHasInterpolationMode := True;
+  Result := Self;
+end;
+
 function TConfigBuilderImpl.RequireKeys(const AKeys: array of string): IConfigBuilder;
 var
   LI: Integer;
@@ -404,6 +616,13 @@ end;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
   Result := ConfigBuilder.AddFile(APath, AFormat).Build;
+end;
+
+function ConfigBorrow(AConfig: TConfig): IConfig;
+begin
+  if AConfig = nil then
+    raise EConfigError.Create('ConfigBorrow requires a non-nil TConfig');
+  Result := TBorrowedConfig.Create(AConfig);
 end;
 
 end.

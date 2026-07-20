@@ -95,7 +95,8 @@ function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator;
 implementation
 
 uses
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 type
   PStringSlot = ^string;
@@ -118,8 +119,8 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
-    SizeUInt(LNewCap) * SizeOf(string));
+  LNewPtr := ReallocMemOf(AAllocator, Pointer(ASlots),
+    SizeUInt(LOldCap) * SizeOf(string), SizeUInt(LNewCap) * SizeOf(string));
   if LNewPtr = nil then
     Exit(False);
   ASlots := PStringSlot(LNewPtr);
@@ -129,7 +130,7 @@ begin
 end;
 
 procedure ReleaseStringSlots(const AAllocator: TMemAllocator; var ASlots: PStringSlot;
-  ACount: Integer);
+  ACount, ACap: Integer);
 var
   LI: Integer;
 begin
@@ -137,7 +138,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     ASlots[LI] := '';
-  AAllocator.FreeMem(Pointer(ASlots));
+  FreeMemOf(AAllocator, Pointer(ASlots), SizeUInt(ACap) * SizeOf(string));
   ASlots := nil;
 end;
 
@@ -157,8 +158,8 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
-    SizeUInt(LNewCap) * SizeOf(TStringArray));
+  LNewPtr := ReallocMemOf(AAllocator, Pointer(ASlots),
+    SizeUInt(LOldCap) * SizeOf(TStringArray), SizeUInt(LNewCap) * SizeOf(TStringArray));
   if LNewPtr = nil then
     Exit(False);
   ASlots := PStringArraySlot(LNewPtr);
@@ -168,7 +169,7 @@ begin
 end;
 
 procedure ReleaseRowSlots(const AAllocator: TMemAllocator; var ASlots: PStringArraySlot;
-  ACount: Integer);
+  ACount, ACap: Integer);
 var
   LI: Integer;
 begin
@@ -176,7 +177,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     SetLength(ASlots[LI], 0);
-  AAllocator.FreeMem(Pointer(ASlots));
+  FreeMemOf(AAllocator, Pointer(ASlots), SizeUInt(ACap) * SizeOf(TStringArray));
   ASlots := nil;
 end;
 
@@ -544,7 +545,7 @@ begin
     end;
     Result := True;
   finally
-    ReleaseStringSlots(FAllocator, LFieldsBuf, LCount);
+    ReleaseStringSlots(FAllocator, LFieldsBuf, LCount, LCap);
   end;
 end;
 
@@ -582,7 +583,7 @@ begin
       SetLength(LRows[LI], 0);
     end;
   finally
-    ReleaseRowSlots(FAllocator, LRows, LCount);
+    ReleaseRowSlots(FAllocator, LRows, LCount, LCap);
   end;
 end;
 

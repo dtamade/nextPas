@@ -34,16 +34,18 @@ var
   GInitDone: Int32 = 0;
 
 procedure InitFrequency;
-{$IFDEF CPUAARCH64}
 var
+  LExpected: Int32;
+{$IFDEF CPUAARCH64}
   LFreq: UInt32;
 {$ENDIF}
 begin
-  if AtomicLoad32(GInitDone, moAcquire) <> 0 then
+  if atomic_load(GInitDone, mo_acquire) <> 0 then
     Exit;
-  if AtomicCompareExchange32(GInitDone, 0, 1, moAcqRel) <> 0 then
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(GInitDone, LExpected, 1, mo_acq_rel, mo_acquire) then
   begin
-    while AtomicLoad32(GInitDone, moAcquire) = 1 do
+    while atomic_load(GInitDone, mo_acquire) = 1 do
       CpuPause;
     Exit;
   end;
@@ -56,7 +58,7 @@ begin
 {$ELSE}
   GFrequency := 1000000000;
 {$ENDIF}
-  AtomicStore32(GInitDone, 2, moRelease);
+  atomic_store(GInitDone, 2, mo_release);
 end;
 
 function IsAvailable: Boolean;

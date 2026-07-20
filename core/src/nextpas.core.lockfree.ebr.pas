@@ -15,6 +15,8 @@ unit nextpas.core.lockfree.ebr;
  *
  * @see Epoch-Based Reclamation — Fraser, 2004
  * @see Hazard Pointers — complementary reclamation approach
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -84,7 +86,7 @@ var
   LNode: PEbrRetiredNode;
   LNext: PEbrRetiredNode;
 begin
-  LNode := PEbrRetiredNode(AtomicExchangePtr(Pointer(FRetired), nil, moAcqRel));
+  LNode := PEbrRetiredNode(atomic_exchange(Pointer(FRetired), nil, mo_acq_rel));
   while LNode <> nil do
   begin
     LNext := LNode^.Next;
@@ -99,32 +101,38 @@ end;
 procedure TEbrDomain.Enter;
 var
   LActive: Int32;
+  LExpected: Int32;
 begin
   while True do
   begin
-    while AtomicLoad32(FCollecting, moAcquire) <> 0 do
+    while atomic_load(FCollecting, mo_acquire) <> 0 do
       ThreadSwitch;
-    LActive := AtomicLoad32(FActiveCount, moRelaxed);
+    LActive := atomic_load(FActiveCount, mo_relaxed);
     if LActive = High(Int32) then
       raise EInvalidOperationError.Create('TEbrDomain.Enter: active guard count overflow');
-    if AtomicCompareExchange32(FActiveCount, LActive, LActive + 1, moAcqRel) <> LActive then
+    LExpected := LActive;
+    if not atomic_compare_exchange_strong(FActiveCount, LExpected, LActive + 1,
+      mo_acq_rel, mo_acquire) then
       Continue;
-    if AtomicLoad32(FCollecting, moAcquire) = 0 then
+    if atomic_load(FCollecting, mo_acquire) = 0 then
       Exit;
-    AtomicFetchSub32(FActiveCount, 1, moRelease);
+    atomic_fetch_sub(FActiveCount, 1, mo_release);
   end;
 end;
 
 procedure TEbrDomain.Leave;
 var
   LActive: Int32;
+  LExpected: Int32;
 begin
   repeat
-    LActive := AtomicLoad32(FActiveCount, moAcquire);
+    LActive := atomic_load(FActiveCount, mo_acquire);
     if LActive <= 0 then
       Exit;
-    if AtomicCompareExchange32(FActiveCount, LActive, LActive - 1,
-      moRelease) = LActive then
+    LExpected := LActive;
+    { success release → failure max is relaxed (C11 / atomic contract). }
+    if atomic_compare_exchange_strong(FActiveCount, LExpected, LActive - 1,
+      mo_release, mo_relaxed) then
       Exit;
     cpu_pause;
   until False;
@@ -134,6 +142,7 @@ procedure TEbrDomain.Retire(const AData: Pointer;
   const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
 var
   LNode: PEbrRetiredNode;
+  LExpected: Pointer;
 begin
   if AData = nil then
     Exit;
@@ -141,11 +150,12 @@ begin
   LNode^.Data := AData;
   LNode^.Reclaim := AReclaim;
   LNode^.UserData := AUserData;
-  AtomicFetchAdd64(FRetiredCount, 1, moRelaxed);
+  atomic_fetch_add_64(FRetiredCount, 1, mo_relaxed);
   repeat
-    LNode^.Next := PEbrRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
-  until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode,
-    moRelease) = LNode^.Next;
+    LNode^.Next := PEbrRetiredNode(atomic_load(Pointer(FRetired), mo_relaxed));
+    LExpected := Pointer(LNode^.Next);
+  until atomic_compare_exchange_strong(Pointer(FRetired), LExpected, Pointer(LNode),
+    mo_release, mo_relaxed);
 end;
 
 procedure TEbrDomain.Collect;
@@ -154,16 +164,19 @@ var
   LNode: PEbrRetiredNode;
   LNext: PEbrRetiredNode;
   LReclaimedCount: Int64;
+  LCollectExpected: Int32;
 begin
-  if AtomicCompareExchange32(FCollecting, 0, 1, moAcqRel) <> 0 then
+  LCollectExpected := 0;
+  if not atomic_compare_exchange_strong(FCollecting, LCollectExpected, 1,
+    mo_acq_rel, mo_acquire) then
     Exit;
   LList := nil;
   try
-    if AtomicLoad32(FActiveCount, moAcquire) = 0 then
+    if atomic_load(FActiveCount, mo_acquire) = 0 then
       LList := PEbrRetiredNode(
-        AtomicExchangePtr(Pointer(FRetired), nil, moAcqRel));
+        atomic_exchange(Pointer(FRetired), nil, mo_acq_rel));
   finally
-    AtomicStore32(FCollecting, 0, moRelease);
+    atomic_store(FCollecting, 0, mo_release);
   end;
 
   LReclaimedCount := 0;
@@ -178,17 +191,17 @@ begin
     LNode := LNext;
   end;
   if LReclaimedCount > 0 then
-    AtomicFetchSub64(FRetiredCount, LReclaimedCount, moAcqRel);
+    atomic_fetch_sub_64(FRetiredCount, LReclaimedCount, mo_acq_rel);
 end;
 
 function TEbrDomain.ActiveCount: PtrUInt; inline;
 begin
-  Result := PtrUInt(AtomicLoad32(FActiveCount, moAcquire));
+  Result := PtrUInt(atomic_load(FActiveCount, mo_acquire));
 end;
 
 function TEbrDomain.RetiredCount: PtrUInt; inline;
 begin
-  Result := PtrUInt(AtomicLoad64(FRetiredCount, moAcquire));
+  Result := PtrUInt(atomic_load_64(FRetiredCount, mo_acquire));
 end;
 
 class function TEbrGuard.Acquire(const ADomain: TEbrDomain): TEbrGuard;

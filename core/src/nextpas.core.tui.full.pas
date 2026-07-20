@@ -169,6 +169,8 @@ type
   TMouseButton = nextpas.core.tui.event.TMouseButton;
   TMouseEvent = nextpas.core.tui.event.TMouseEvent;
   TResizeEvent = nextpas.core.tui.event.TResizeEvent;
+  TFocusEventKind = nextpas.core.tui.event.TFocusEventKind;
+  TFocusEvent = nextpas.core.tui.event.TFocusEvent;
 
   { Terminal }
   TTuiTerminal = nextpas.core.tui.terminal.TTerminal;
@@ -360,6 +362,8 @@ type
   TNotificationCenter = nextpas.core.tui.widget.notification_center.TNotificationCenter;
   TCheckbox = nextpas.core.tui.widget.form.TCheckbox;
   TRadioGroup = nextpas.core.tui.widget.form.TRadioGroup;
+  TCheckboxState = nextpas.core.tui.widget.form.TCheckboxState;
+  TRadioGroupState = nextpas.core.tui.widget.form.TRadioGroupState;
   TToastManager = nextpas.core.tui.widget.toast.TToastManager;
 
   TChatTheme = nextpas.core.tui.widget.chat_theme.TTheme;
@@ -471,6 +475,7 @@ const
   evMouse = nextpas.core.tui.event.evMouse;
   evResize = nextpas.core.tui.event.evResize;
   evPaste = nextpas.core.tui.event.evPaste;
+  evFocus = nextpas.core.tui.event.evFocus;
   kcChar = nextpas.core.tui.event.kcChar;
   kcEnter = nextpas.core.tui.event.kcEnter;
   kcEsc = nextpas.core.tui.event.kcEsc;
@@ -491,6 +496,8 @@ const
   kmCtrl = nextpas.core.tui.event.kmCtrl;
   kmAlt = nextpas.core.tui.event.kmAlt;
   kmShift = nextpas.core.tui.event.kmShift;
+  fkIn = nextpas.core.tui.event.fkIn;
+  fkOut = nextpas.core.tui.event.fkOut;
 
   peTop = nextpas.core.tui.widget.panel.peTop;
   peBottom = nextpas.core.tui.widget.panel.peBottom;
@@ -600,11 +607,15 @@ function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
   AX, AY: Word; AMods: TKeyModifiers): TEvent; inline;
 function ResizeEvent(AWidth, AHeight: Word): TEvent; inline;
 function PasteEvent: TEvent; inline;
+function FocusEvent(AKind: TFocusEventKind): TEvent; inline;
 function IsNone(const AEv: TEvent): Boolean; inline;
 function IsKey(const AEv: TEvent): Boolean; inline;
 function IsMouse(const AEv: TEvent): Boolean; inline;
 function IsResize(const AEv: TEvent): Boolean; inline;
 function IsPaste(const AEv: TEvent): Boolean; inline;
+function IsFocus(const AEv: TEvent): Boolean; inline;
+function IsFocusIn(const AEv: TEvent): Boolean; inline;
+function IsFocusOut(const AEv: TEvent): Boolean; inline;
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
 function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
@@ -920,6 +931,11 @@ begin
   Result := nextpas.core.tui.event.PasteEvent;
 end;
 
+function FocusEvent(AKind: TFocusEventKind): TEvent;
+begin
+  Result := nextpas.core.tui.event.FocusEvent(AKind);
+end;
+
 function IsNone(const AEv: TEvent): Boolean;
 begin
   Result := nextpas.core.tui.event.IsNone(AEv);
@@ -943,6 +959,21 @@ end;
 function IsPaste(const AEv: TEvent): Boolean;
 begin
   Result := nextpas.core.tui.event.IsPaste(AEv);
+end;
+
+function IsFocus(const AEv: TEvent): Boolean;
+begin
+  Result := nextpas.core.tui.event.IsFocus(AEv);
+end;
+
+function IsFocusIn(const AEv: TEvent): Boolean;
+begin
+  Result := nextpas.core.tui.event.IsFocusIn(AEv);
+end;
+
+function IsFocusOut(const AEv: TEvent): Boolean;
+begin
+  Result := nextpas.core.tui.event.IsFocusOut(AEv);
 end;
 
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean;

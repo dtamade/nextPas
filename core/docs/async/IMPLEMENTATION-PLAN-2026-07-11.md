@@ -9,12 +9,14 @@
 ## 里程碑总览
 
 ```
-M1: P0 全局状态清除 (3 文件)          ← 无依赖，立即可做
-M2: P0 RemainingMs 修复 (1 文件)      ← 无依赖，立即可做
-M3: TAsyncLoop record→class (10+ 文件) ← 核心变更，M1 完成后做
-M4: 类型安全 + 回调调度修复 (5 文件)    ← M3 完成后做
-M5: 代码去重 (4 文件)                  ← 无依赖，可与 M3 并行
-M6: 功能缺陷收尾 (5 文件)              ← 无依赖，可并行
+M1: P0 全局状态清除 (3 文件)          ← DONE
+M2: P0 RemainingMs 修复 (1 文件)      ← DONE
+M3: TAsyncLoop record→class (10+ 文件) ← DONE 2026-07-19
+M4: 类型安全 + 回调调度修复 (5 文件)    ← DONE（强类型 ALoop）
+M5: 代码去重 (4 文件)                  ← DONE（TIoCompletion/io.base + RefWrapper）
+M6: 功能缺陷收尾                       ← 部分（SendAsync/TCP Recv 等）
+Q1: CancellationToken 贯通             ← 2026-07-19（combinator/taskgroup/Recv|SendTimeoutEx）
+Q2–Q4: 见 SCORECARD-2026-07-19.md
 ```
 
 ---

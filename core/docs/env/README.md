@@ -2,6 +2,8 @@
 
 环境变量操作模块。
 
+**Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
+
 ## 模块定位
 
 - **层级**: L2 facade
@@ -39,6 +41,7 @@
 |------|------|
 | `SetEnv(AName, AValue)` | 设置环境变量 |
 | `UnsetEnv(AName)` | 删除环境变量 |
+| `ClearEnv` | 清除当前进程全部环境变量（对齐 Go `Clearenv`；非线程安全） |
 
 ### 展开
 

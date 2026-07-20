@@ -1,10 +1,18 @@
 # mem Scorecard
 
-**状态**: Steady 基线（SC1–SC9 脚手架绿；RELEASE 数字 2026-07-17）
+**状态**: Steady+ 基线（SC1–SC9 绿；RELEASE 数字 **2026-07-20 · H0** 刷新）
 **权威入口**: `core/tests/nextpas.core.mem/scorecard/`
-**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7 · [ROADMAP.md](ROADMAP.md) D4
+**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7 · [ROADMAP.md](ROADMAP.md) H0
 
 Ready 报告的性能证据以本 Scorecard 为准；历史微基准博物馆数据见 [BENCHMARKS.md](BENCHMARKS.md)。
+
+**Go/Rust 同方法论对照**（非本程序内嵌；人工并排）:
+
+```bash
+make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare
+```
+
+纲领与验收：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)。
 
 ---
 
@@ -54,7 +62,7 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 ## 基线快照
 
 **环境**: Linux x86_64, FPC 3.3.1-19195
-**日期**: 2026-07-17（Era D · D4-a；`RELEASE=1` 本机一次全 PASS）
+**日期**: 2026-07-20（**H0** Steady 收官；G4 residual 后 `RELEASE=1` 本机一次全 PASS）
 **命令**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1`
 **结果**: `SCORECARD: ALL PASS (17 rows)`
 
@@ -62,33 +70,58 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 | ID | subject | ns/op | p99 | Mops/s | 备注 |
 |----|---------|-------|-----|--------|------|
-| SC1 | growing | 8 | — | 125.0 | ~2.8× system |
-| SC1 | default_heap | 17 | — | 58.8 | Growing 单例（DefaultHeap） |
-| SC1 | system | 22 | — | 45.5 | glibc via System.GetMem |
-| SC2 | growing | 24 | 21 | 41.7 | sizes 16..4K |
-| SC2 | system | 38 | 35 | 26.3 | |
-| SC3 | growing | 103 | — | 9.7 | producer alloc / consumer free |
+| SC1 | growing | 8 | — | 125.0 | ≤ system |
+| SC1 | default_heap | 15 | — | 66.7 | Growing 单例 |
+| SC1 | system | 21 | — | 47.6 | glibc via System.GetMem |
+| SC2 | growing | 23 | 22 | 43.5 | sizes 16..4K |
+| SC2 | system | 44 | 76 | 22.7 | |
+| SC3 | growing | 121 | — | 8.3 | producer alloc / consumer free |
 | SC4 | local_arena | 2 | — | 500 | AllocFast reset+reuse 64B |
-| SC5 | growing | 71 | — | 14.1 | peak LiveBytes≈393KB; final≈12KB; delta Released≈489KB / 35 spans |
-| SC6 | virtual_arena | 12 | — | 83.3 | 200 units × 4000 mixed nodes; peakUsed=352KB; finalUsed=0 |
-| SC7 | local_arena | 84 | 59 | 11.9 | per-request scope（hdr+body+temps） |
-| SC7 | system | 272 | 257 | 3.7 | 同负载 GetMem/FreeMem 对照 |
-| SC8 | free_sized | 14 | — | 71.4 | `FreeMem(ptr,size)` 优选热 free |
-| SC8 | free_unsized | 125 | — | 8.0 | `FreeMem(ptr)` span 扫描；~**8.9×** 更慢 |
-| SC8 | try_block_size | — | — | — | 正确性：size-class ≥ 请求 |
-| SC9 | hot_heap | 15 | — | 66.7 | DefaultHeap sized path |
-| SC9 | plugin_ia | 132 | — | 7.6 | DefaultAllocator vtable path；~**8.8×** 更慢 |
-| SC9 | same_heap | — | — | — | 正确性：插件块可 hot sized free |
+| SC5 | growing | 72 | — | 13.9 | peak≈402KB; final≈12KB; ReleasedSpans=35 |
+| SC6 | virtual_arena | 11 | — | 90.9 | peakUsed=352KB; finalUsed=0 |
+| SC7 | local_arena | 75 | 54 | 13.3 | per-request scope |
+| SC7 | system | 265 | 265 | 3.8 | 同负载对照（抖动大） |
+| SC8 | free_sized | 14 | — | 71.4 | `FreeMem(ptr,size)` |
+| SC8 | free_unsized | 120 | — | 8.3 | span 扫描；~**8.6×** 更慢 |
+| SC8 | try_block_size | — | — | — | 正确性 |
+| SC9 | hot_heap | 14 | — | 71.4 | DefaultHeap sized |
+| SC9 | plugin_ia | 139 | — | 7.2 | vtable；~**9.9×** 更慢 |
+| SC9 | same_heap | — | — | — | 同堆互释正确性 |
 
 SC5 说明：40 rounds × 256 × 64B churn + 周期 `Scavenge`；`final LiveBytes` 可保留少量 TLS/active 结构，门禁要求 **delta ReleasedSpans ≥ 1** 且 final ≤ peak。
 
+### SC5 / soak 复跑入口（F8）
+
+```bash
+# Scorecard 行（含 SC5 GetHeapStats 证据）
+make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
+
+# 多线程长跑 smoke（默认 10s × 4 workers；0 leak）
+make -C core/tests/nextpas.core.mem/test_soak clean test
+```
+
+- **不改** scavenge 策略 / 热路径；F8 只要求命令可发现 + 当次绿。
+- 2026-07-20 `test_soak`：3/3 PASS（continuous ~3.0M ops/10s；fragmentation；alloc/free ratio）。
+- SC5 当次示例：peak LiveBytes≈402KB · final≈12KB · ReleasedSpans≥1。
+
+### F5 process GetMem 微税（WAIVE）
+
+- 证据（H0 同机）：SC1 `default_heap` ≈15 ns/op；SC9 `hot_heap` ≈14；`plugin_ia` ≈139。
+- process `GetMem` 在 HEAP_DEBUG 关闭时已 inline 到 DefaultHeap；**不改代码**。
+
+### H0 说明
+
+- 本表刷新于 FreeMemOf 浪潮与 G5.x 真机门之后；权威仍以当次 `RELEASE=1` 输出为准。
+
 SC6 说明：`TVirtualArena` 混合 AST 节点尺寸，每 unit `Reset`；门禁要求 peakUsed > 0 且 finalUsed 远小于 peak。
 
-SC7 说明：p99 是 **单次请求** 延迟（ns），不是单次 alloc；LocalArena 相对 system 约 **3.2×** mean / **4.4×** p99（本机 2026-07-17）。
+SC7 说明：p99 是 **单次请求** 延迟（ns），不是单次 alloc；LocalArena 相对 system 约 **5.2×** mean / **11.7×** p99（本机 2026-07-20；system 路径抖动大）。
 
-SC8 说明：同 64B 负载对比 sized vs unsized free；本机 ~**8.9×** 税（14 vs 125 ns/op）。`try_block_size` 行是契约/正确性，ns/op 可为 0。
+SC8 说明：同 64B 负载对比 sized vs unsized free；本机 ~**6.5×** 税（20 vs 129 ns/op）。`try_block_size` 行是契约/正确性，ns/op 可为 0。
 
-SC9 说明：同 64B 对比热路径 vs 插件面；本机 ~**8.8×** 税（15 vs 132 ns/op）。教学证据“为什么要双轨而不是处处 IAllocator”。`same_heap` 行锁 S5 同堆互释。
+SC9 说明：同 64B 对比热路径 vs 插件面；本机 ~**9.3×** 税（14 vs 130 ns/op）。教学证据“为什么要双轨而不是处处 IAllocator”。`same_heap` 行锁 S5 同堆互释。
+
+**过程式门面**（`bench_arena_go_rust` B 段 / E3）：DefaultHeap direct 与 process `GetMem` 同量级；权威 Ready 仍以本表 RELEASE=1 为准。
 
 数字随机器抖动属正常；**Ready 证据以当次 `RELEASE=1` 输出 + PASS 为准**，本表是可复现参考点。
 

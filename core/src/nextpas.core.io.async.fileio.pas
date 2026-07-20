@@ -168,6 +168,8 @@ begin
     LCtx^.Loop.PostEx(@FileIOPostCallback, LPostCtx, @DiscardFileIOPostCtx);
 
   finally
+    if LCtx^.Data <> nil then
+      FreeMem(LCtx^.Data, LCtx^.Size);
     Dispose(LCtx);
   end;
 end;
@@ -263,7 +265,7 @@ begin
   FillChar(LHandle, SizeOf(LHandle), 0);
   if platform_thread_create(LHandle, @FileIOThread, LCtx) <> 0 then
   begin
-    FreeMem(LDataCopy);
+    FreeMem(LDataCopy, ASize);
     Dispose(LCtx);
     Exit(False);
   end;
@@ -300,7 +302,7 @@ begin
   FillChar(LHandle, SizeOf(LHandle), 0);
   if platform_thread_create(LHandle, @FileIOThread, LCtx) <> 0 then
   begin
-    FreeMem(LDataCopy);
+    FreeMem(LDataCopy, ASize);
     Dispose(LCtx);
     Exit(False);
   end;

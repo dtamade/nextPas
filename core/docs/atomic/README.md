@@ -6,7 +6,8 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 
 **契约**：[`CONTRACT.md`](CONTRACT.md)
 **与 lockfree 联合主线**：[`../lockfree/roadmap-h3.md`](../lockfree/roadmap-h3.md)（H3；H2 见 [`../lockfree/roadmap-h2.md`](../lockfree/roadmap-h2.md)；R 线见 [`../lockfree/roadmap.md`](../lockfree/roadmap.md)）
-**状态**：**Maintenance**（R0–R7 + H2 + H3-1…H3-3 完成）— 见 [`../lockfree/READY.md`](../lockfree/READY.md)
+**状态**：**Maintenance + Q 线**（H3-1…H3-5 完成；对标 Go/Rust）— 见 [`../lockfree/READY.md`](../lockfree/READY.md)
+**对标矩阵**：[`../lockfree/parity-go-rust.md`](../lockfree/parity-go-rust.md)
 
 ## 模块分层
 
@@ -37,6 +38,7 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 - **legacy**：`AtomicCompareExchange32/64/Ptr` 返回 **观测值**（不是 Boolean）；PascalCase wrappers 保留不删，**非首选**，新代码勿扩散。
 - 测试覆盖 legacy **不等于**推荐使用。
 - 完整表与日程：[`CONTRACT.md`](CONTRACT.md) §1.4。消费者扫描：[`../lockfree/consumer-audit.md`](../lockfree/consumer-audit.md)。
+- Q 线质量/对标（含 Q1 legacy 策略）：[`../lockfree/quality-parity.md`](../lockfree/quality-parity.md)。
 
 Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade.
 `atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.

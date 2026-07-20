@@ -49,7 +49,80 @@ Available builder steps:
 - `AddToml`
 - `AddEnv`
 - `AddFile`
+- `AddKeyValues` — inline key/value overrides (CLI maps, ad-hoc pairs)
 - `RequireKeys`
+
+`AddKeyValues` is the shallow CLI integration: parse flags with
+`nextpas.core.args` (or any source), then inject config keys without coupling
+`config` to the args unit. See also the startup example markers
+`keyvalues-host` / `keyvalues-port` under
+`examples/nextpas.core.config/config_startup_patterns/`.
+
+```pascal
+LCfg := ConfigBuilder
+  .AddFile('app.toml', cfToml)
+  .AddEnv('APP_')
+  .AddKeyValues(
+    ['server.host', 'server.port'],
+    [LParser.GetString('host'), LParser.GetString('port')])
+  .Build;
+```
+
+Put `AddKeyValues` last when command-line should win. Keys and values arrays
+must be the same length; empty keys raise `EConfigError` immediately.
+
+## Bind config into a record
+
+Typed bind lives in `nextpas.core.reflect.marshal` (not in this unit — avoids a
+layer cycle). Field names map to config keys; missing keys leave the record
+field unchanged:
+
+```pascal
+uses nextpas.core.reflect, nextpas.core.reflect.marshal, nextpas.core.config;
+
+ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer);           // TConfig or IConfig
+ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer, 'server'); // server.Host, ...
+```
+
+Nested records use `AddRecordField` and flatten keys under the field name
+(`Server.Host` → config key `server.Host` when the outer prefix is empty, or
+`app.server.Host` with prefix `app`). String arrays use `AddDynArrayField` and
+config keys `Tags.0`, `Tags.1`, ... (same as `SetStringArray` / `GetStringArray`).
+
+Runnable: `core/examples/nextpas.core.config/config_bind_patterns/` (`make run`).
+
+## CLI overrides via args bridge
+
+Keep `nextpas.core.config` free of `args`. Use the shallow bridge unit:
+
+```pascal
+uses nextpas.core.config, nextpas.core.config.args, nextpas.core.args;
+
+LCfg := ConfigBuilderAddPresentArgs(
+  ConfigBuilder.AddFile('app.toml', cfToml),
+  LParser,
+  ['host', 'port', 'verbose'],
+  ['server.host', 'server.port', 'log.verbose'],
+  [cavString, cavInt, cavBool]).Build;
+```
+
+Only **present** options become overrides (last in the builder chain wins).
+
+## Interpolation mode
+
+```pascal
+LCfg.SetInterpolationMode(cimDefault);  // optional Get leaves ${x}
+LCfg.SetInterpolationMode(cimStrict);   // GetString fails on unresolved
+LCfg.SetInterpolationMode(cimDisabled); // no ${} expansion
+// or ConfigBuilder.SetInterpolationMode(...).Build
+```
+
+## Borrowed vs owned IConfig
+
+```pascal
+LView := ConfigBorrow(LMutable); // does not Free LMutable
+LOwned := ConfigBuilder.Build;   // owns and frees internal TConfig
+```
 
 Builder priority rules:
 

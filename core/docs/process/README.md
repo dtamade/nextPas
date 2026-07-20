@@ -2,6 +2,9 @@
 
 L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Command` 的子进程管理能力。
 
+**Go/Rust 对标矩阵**：见 [`PARITY-go-rust.md`](./PARITY-go-rust.md)（含 fs/path/env）。  
+**证据 / scorecard**：见 [`SCORECARD.md`](./SCORECARD.md)。
+
 ## 快速开始
 
 ```pascal
@@ -151,7 +154,7 @@ WriteLn(Result.StdOut);  // "hello"
 - 无 POSIX 信号语义：`Signal` 仅 `SIGKILL(9)` → `TerminateProcess`；其它信号返回 unsupported
 - 管道：父端句柄清 inherit + `PeekNamedPipe` 并发 drain（避免双流死锁）
 - PATHEXT / LookPath 已支持
-- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`
+- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`（2026-07-20 R26 本机 **7 passed**；truth=wine-runtime-smoke）
 
 ## 推荐 API 分层（避免便利函数爆炸）
 
@@ -214,7 +217,7 @@ nextpas.core.process.pathresolve.pas ← PATH 搜索逻辑（ResolveExecutablePa
 - **execvp**：默认继承父进程环境 + 搜索 PATH
 - **close(3..1023)**：子进程 exec 前关闭所有继承的 fd，防止管道泄漏
 - **Kill+reap in Destroy**：尽力终止并 reap 子进程（约 5s）；超时 abandon 再 detach，极端负载下不保证零僵尸
-- **Wait 与管道（INV-13）**：IChild 仍持有 stdout/stderr 时 `Wait` 自动排水（等同 `WaitWithOutput`），避免写满死锁；`TakeStdout`/`TakeStderr` 后由调用方负责
+- **Wait 与管道（INV-13）**：仍持管道时 `Wait`→`WaitWithOutput`；`TryWait` 在进程已退出后**仅 drain**（不二次 wait，避免 ECHILD）。`TakeStdout`/`TakeStderr` 后**必须由调用方读完**再 `Wait`/`TryWait`，否则大输出仍可能死锁
 
 ## 测试
 

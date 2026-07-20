@@ -331,7 +331,7 @@ var
 begin
   LLoop := TAsyncLoop.Create(32);
   Check(LLoop.IsValid, 'loop valid');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopTimer;
@@ -346,7 +346,7 @@ begin
   LLoop.Run;
   CheckEqual(Int64(1), Int64(GCallCount), 'timer fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopMultiTimer;
@@ -366,7 +366,7 @@ begin
   CheckEqual(Int64(1), Int64(GCallOrder[0]), 'first=1');
   CheckEqual(Int64(2), Int64(GCallOrder[1]), 'second=2');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopStop;
@@ -384,7 +384,7 @@ begin
   { Only the stop callback should have fired }
   CheckEqual(Int64(1), Int64(GCallCount), 'only stop callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopStopWakesPlatformPollerSourceContract;
@@ -396,11 +396,11 @@ begin
   LStopBody := ExtractSourceRange(LSource, 'procedure tasyncloop.stop;',
     'function tasyncloop.asyncsleep', 'async loop Stop implementation');
 
-  CheckSourceContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceContains(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'Stop clears the running flag');
   CheckSourceContains(LStopBody, 'wake;',
     'Stop wakes the platform poller seam for cross-thread callers');
-  CheckSourceOrder(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceOrder(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'wake;', 'Stop publishes not-running before waking waiters');
 end;
 
@@ -469,7 +469,7 @@ begin
   CheckSourceOrder(LCloseBody, 'lpendingwasready := fpendingready;',
     'fpendingready := false;',
     'Close captures pending ownership before publishing pending teardown state');
-  CheckSourceOrder(LCloseBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceOrder(LCloseBody, 'atomic_store(frunning, 0, mo_release);',
     'fpoller.close;',
     'Close publishes stopped state before poller teardown callbacks');
   CheckSourceOrder(LCloseBody, 'fwakeready := false;',
@@ -591,7 +591,7 @@ begin
   LDiscarded := False;
   LLoop := TAsyncLoop.Create(32);
   LLoop.PostEx(@MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 1, 'PostEx Close runs OnDiscard once');
   Check(GInvokeCount = 0, 'PostEx Close does not invoke pending callback');
   Check(LDiscarded, 'OnDiscard received context');
@@ -610,7 +610,7 @@ begin
   LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
     @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
   Check(LH.IsValid, 'ScheduleEx returns valid handle');
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 1, 'ScheduleEx Close runs OnDiscard once');
   Check(GInvokeCount = 0, 'ScheduleEx Close does not fire abandoned timer callback');
   Check(LDiscarded, 'timer OnDiscard received context');
@@ -629,7 +629,7 @@ begin
   LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
     @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
   Check(LLoop.CancelTimer(LH), 'CancelTimer succeeds for live handle');
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 0, 'Cancel clears OnDiscard; Close must not run it again');
   Check(GInvokeCount = 0, 'cancelled timer callback never fires');
   Check(not LDiscarded, 'OnDiscard must not run after Cancel');
@@ -710,13 +710,13 @@ begin
   LBody := ExtractSourceRange(LSource, 'procedure tasyncloop.run;',
     'procedure tasyncloop.runonce;', 'async loop Run implementation');
   CheckSourceOrder(LBody, 'if not isvalid then',
-    'atomicstore32(frunning, 1', 'Run rejects closed loops before publishing running state');
+    'atomic_store(frunning, 1', 'Run rejects closed loops before publishing running state');
   CheckSourceOrder(LBody, 'if not isvalid then',
     'drainpending', 'Run rejects closed loops before touching pending queue');
   CheckSourceOrder(LBody, 'lfired := ftimers.fireexpired;',
-    'if atomicload32(frunning, moacquire) = 0 then',
+    'if atomic_load(frunning, mo_acquire) = 0 then',
     'Run honors Stop after firing expired timers');
-  CheckSourceOrder(LBody, 'if atomicload32(frunning, moacquire) = 0 then',
+  CheckSourceOrder(LBody, 'if atomic_load(frunning, mo_acquire) = 0 then',
     'fpoller.flush',
     'Run honors Stop before polling I/O');
 
@@ -726,12 +726,12 @@ begin
     'drainpending', 'RunOnce rejects closed loops before touching pending queue');
   CheckSourceOrder(LBody, 'if not isvalid then',
     'fpoller.flush', 'RunOnce rejects closed loops before touching poller');
-  CheckSourceOrder(LBody, 'atomicstore32(frunning, 1',
+  CheckSourceOrder(LBody, 'atomic_store(frunning, 1',
     'drainpending', 'RunOnce publishes running state before posted callbacks');
   CheckSourceOrder(LBody, 'lfired := ftimers.fireexpired;',
-    'if atomicload32(frunning, moacquire) = 0 then',
+    'if atomic_load(frunning, mo_acquire) = 0 then',
     'RunOnce honors Stop after firing already-expired timers');
-  CheckSourceOrder(LBody, 'if atomicload32(frunning, moacquire) = 0 then',
+  CheckSourceOrder(LBody, 'if atomic_load(frunning, mo_acquire) = 0 then',
     'fpoller.flush', 'RunOnce skips I/O after Stop from posted callback');
 end;
 
@@ -812,14 +812,22 @@ begin
 
   CheckSourceContains(LReadme, 'linux runtime truth',
     'async README must separate Linux runtime truth');
-  CheckSourceContains(LReadme, 'windows compile truth',
-    'async README must separate Windows compile truth');
+  CheckSourceContains(LReadme, 'windows wine-runtime truth',
+    'async README must separate Windows wine-runtime truth');
+  CheckSourceContains(LReadme, 'truth=wine-runtime-smoke',
+    'async README must name Wine runtime smoke evidence for IOCP');
   CheckSourceContains(LReadme, 'source-contract + forced compile',
     'async README must name Windows source-contract and forced compile limits');
   CheckSourceContains(LReadme, 'not windows runtime ready',
-    'async README must not claim Windows runtime readiness without runtime proof');
-  CheckSourceContains(LReadme, 'no `pbkqueue` backend',
-    'async README must state current poller has no kqueue backend');
+    'async README must not claim native Windows host runtime readiness');
+  CheckSourceContains(LReadme, 'cancelioex',
+    'async README must document IOCP CancelIoEx cancel path');
+  CheckSourceContains(LReadme, '`pbkqueue`',
+    'async README must document pbKqueue readiness backend');
+  CheckSourceContains(LReadme, 'not full macos async runtime parity',
+    'async README must not claim kqueue host runtime without a runner');
+  CheckSourceContains(LReadme, 'source-contract + forced compile',
+    'async README must name kqueue forced-compile evidence on non-BSD hosts');
   CheckSourceContains(LReadme, '`pbunsupported`',
     'async README must document the unsupported backend truth');
   CheckSourceContains(LReadme, '`test_async_timeout` enforces heaptrc',
@@ -834,6 +842,8 @@ begin
     'async README must document completion-queue backend models');
   CheckSourceContains(LReadme, '`pbepoll` is `pbmreadiness`',
     'async README must document epoll as readiness fallback');
+  CheckSourceContains(LReadme, '`pbkqueue` is `pbmreadiness`',
+    'async README must document kqueue as readiness backend');
   CheckSourceContains(LReadme, 'platform wake is not the iocp owner',
     'async README must keep platform wake separate from IOCP completion ownership');
   CheckSourceNotContains(LReadme, 'eventfd',
@@ -844,10 +854,16 @@ begin
     'async README must not overstate production quality');
   CheckSourceNotContains(LReadme, 'kqueue/iocp backends are stubs',
     'async README must not collapse kqueue and IOCP truth');
+  CheckSourceNotContains(LReadme, 'no `pbkqueue` backend',
+    'async README must not claim absence of pbKqueue after B3');
+  CheckSourceNotContains(LReadme, 'currently a stub that raises',
+    'async README must not call TIocpReactor a stub after B4');
+  CheckSourceNotContains(LReadme, 'iocp is compile-only',
+    'async README must not claim IOCP is compile-only after wine smoke');
 
   CheckSourceContains(LPollerSource,
-    'tpollerbackend = (pbiouring, pbepoll, pbiocp, pbunsupported);',
-    'poller backend enum must expose current backend truth');
+    'tpollerbackend = (pbiouring, pbepoll, pbkqueue, pbiocp, pbunsupported);',
+    'poller backend enum must expose kqueue among backends');
   CheckSourceContains(LPollerSource,
     'tpollerbackendmodel = (pbmcompletionqueue, pbmreadiness, pbmunsupported);',
     'poller backend model enum must classify readiness vs completion truth');
@@ -855,8 +871,10 @@ begin
     'IOCP poller model must remain completion-queue truth');
   CheckSourceContains(LPollerSource, 'pbepoll: result := pbmreadiness;',
     'epoll poller model must remain readiness truth');
-  CheckSourceNotContains(LPollerSource, 'pbkqueue',
-    'poller backend enum must not imply a kqueue backend');
+  CheckSourceContains(LPollerSource, 'pbkqueue: result := pbmreadiness;',
+    'kqueue poller model must be readiness truth');
+  CheckSourceContains(LPollerSource, 'pbkqueue',
+    'poller source must wire pbKqueue backend');
 end;
 
 procedure TestAsyncFacadeExportsTaskStateMachine;
@@ -921,7 +939,7 @@ begin
   { The cancelled timer should not have fired; only stop callback }
   CheckEqual(Int64(1), Int64(GCallCount), 'cancelled timer did not fire');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 var
@@ -981,7 +999,7 @@ begin
   CheckEqual(Int64($EF), Int64(LReadBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -998,7 +1016,7 @@ begin
   LResult := LLoop.Poll;
   Check(LResult >= 1, 'poll returned events');
   CheckEqual(Int64(1), Int64(GCallCount), 'callback fired via poll');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopPollDrainsPostBeforeExpiredTimer;
@@ -1019,7 +1037,7 @@ begin
     'Poll drains posted callbacks before expired timers');
   CheckEqual(Int64(0), Int64(LCtx.TimerCount),
     'posted cancellation prevents expired timer callback');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopRunStopFromPostStillFiresExpiredTimers;
@@ -1041,7 +1059,7 @@ begin
     CheckEqual(Int64(1), Int64(LCtx.TimerCount),
       'Run fires already-expired timers before honoring Stop from posted callback');
   finally
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -1102,7 +1120,7 @@ begin
       CheckEqual(Int64(0), Int64(GRunOnceIoCount),
         'RunOnce skips I/O poll after Stop from posted callback');
     finally
-      LLoop.Close;
+      LLoop.Free;
     end;
   finally
     if LPipeReady then
@@ -1140,7 +1158,7 @@ begin
 
   Check(GScheduleAtFired, 'ScheduleAt callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecv/AsyncSend via TCP loopback === }
@@ -1205,7 +1223,7 @@ begin
   CheckEqual(Int64($DD), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecv via TCP loopback === }
@@ -1268,7 +1286,7 @@ begin
   CheckEqual(Int64($44), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncAccept on TCP listener === }
@@ -1327,7 +1345,7 @@ begin
   end;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecvTimeout success === }
@@ -1392,7 +1410,7 @@ begin
   CheckEqual(Int64($EF), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecvTimeout expired (no data arrives, deadline passes) === }
@@ -1433,7 +1451,7 @@ begin
   Check(GTimeoutIoResult < 0, 'result negative = timeout/cancel');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === TPoller direct API tests === }

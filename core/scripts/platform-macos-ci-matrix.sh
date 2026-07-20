@@ -39,7 +39,9 @@ if [[ -n "${NEXTPAS_FPC_UNITS:-}" ]]; then
   echo "fpc-wrap=$WRAP units=$NEXTPAS_FPC_UNITS"
 fi
 
-# Documented D2.b set (ROADMAP): time, sync, thread, files, path, env, error, socket.
+# Documented set (ROADMAP): D2.b platform gates + mem host-runtime (G5.x).
+# Optional third field: make target (default "test"). Use host-runtime for mem
+# real-OS smoke without FORCE_HOST cross-compile on Darwin.
 MODULE_ENTRIES=(
   "platform.time tests/nextpas.core.platform.time/test_platform_time_helpers"
   "platform.sync tests/nextpas.core.platform.sync/test_platform_sync"
@@ -49,6 +51,8 @@ MODULE_ENTRIES=(
   "platform.env tests/nextpas.core.platform.env/test_platform_env"
   "platform.error tests/nextpas.core.platform.error/test_platform_error"
   "platform.socket tests/nextpas.core.platform.socket/test_platform_socket"
+  "platform.memory tests/nextpas.core.platform.memory/test_platform_memory"
+  "mem.host_runtime tests/nextpas.core.mem/test_mem_cross_os_compile_gate host-runtime"
 )
 
 pass_count=0
@@ -58,7 +62,7 @@ failed=()
 GATE_TIMEOUT_SEC="${NEXTPAS_MACOS_GATE_TIMEOUT_SEC:-180}"
 
 echo "=== Platform macOS CI Matrix (real host) ==="
-echo "truth=macos-focused-runtime; documented 8-gate set; not full-host macOS parity"
+echo "truth=macos-focused-runtime; documented 9 platform gates (+ optional mem.host); layer A fail-closed only; not full-host macOS parity"
 echo "core=$CORE_ROOT"
 echo "gate_timeout_sec=$GATE_TIMEOUT_SEC"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
@@ -90,7 +94,14 @@ echo
 
 for entry in "${MODULE_ENTRIES[@]}"; do
   name="${entry%% *}"
-  dir="${entry#* }"
+  rest="${entry#* }"
+  if [[ "$rest" == *" "* ]]; then
+    dir="${rest% *}"
+    target="${rest##* }"
+  else
+    dir="$rest"
+    target="test"
+  fi
   if [[ ! -d "$dir" ]]; then
     echo "FAIL $name : missing directory $dir"
     fail_count=$((fail_count + 1))
@@ -98,20 +109,20 @@ for entry in "${MODULE_ENTRIES[@]}"; do
     continue
   fi
 
-  echo "=== macos: $name ($dir) ==="
+  echo "=== macos: $name ($dir target=$target) ==="
   set +e
   if command -v timeout >/dev/null 2>&1; then
     timeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   elif command -v gtimeout >/dev/null 2>&1; then
     gtimeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   else
     # macOS often lacks GNU timeout; use perl alarm wrapper.
     perl -e 'alarm shift; exec @ARGV' "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   fi
   set -e
@@ -132,7 +143,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-8-gate-set"
+echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=platform-9+mem-host-runtime"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

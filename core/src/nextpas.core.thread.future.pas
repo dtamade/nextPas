@@ -64,7 +64,7 @@ end;
 
 function TFuturePromise.GetState: TFutureState;
 begin
-  Result := TFutureState(AtomicLoad32(FState, moAcquire));
+  Result := TFutureState(atomic_load(FState, mo_acquire));
 end;
 
 function TFuturePromise.Wait: T;
@@ -105,10 +105,10 @@ procedure TFuturePromise.Complete(const AValue: T);
 begin
   (FMutex as IMutex).Acquire;
   try
-    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
+    if TFutureState(atomic_load(FState, mo_acquire)) <> fsPending then
       raise EInvalidOperationError.Create('future already resolved');
     FValue := AValue;
-    AtomicStore32(FState, Int32(Ord(fsCompleted)), moRelease);
+    atomic_store(FState, Int32(Ord(fsCompleted)), mo_release);
   finally
     (FMutex as IMutex).Release;
   end;
@@ -119,11 +119,11 @@ procedure TFuturePromise.Fail(const AError: Exception);
 begin
   (FMutex as IMutex).Acquire;
   try
-    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
+    if TFutureState(atomic_load(FState, mo_acquire)) <> fsPending then
       raise EInvalidOperationError.Create('future already resolved');
     FErrorClass := ExceptClass(AError.ClassType);
     FErrorMsg := AError.Message;
-    AtomicStore32(FState, Int32(Ord(fsFailed)), moRelease);
+    atomic_store(FState, Int32(Ord(fsFailed)), mo_release);
   finally
     (FMutex as IMutex).Release;
   end;
@@ -135,9 +135,9 @@ procedure TFuturePromise.Cancel;
 begin
   (FMutex as IMutex).Acquire;
   try
-    if TFutureState(AtomicLoad32(FState, moAcquire)) <> fsPending then
+    if TFutureState(atomic_load(FState, mo_acquire)) <> fsPending then
       Exit;
-    AtomicStore32(FState, Int32(Ord(fsCancelled)), moRelease);
+    atomic_store(FState, Int32(Ord(fsCancelled)), mo_release);
   finally
     (FMutex as IMutex).Release;
   end;
@@ -183,12 +183,12 @@ end;
 
 function TFutureVoid.IsDone: Boolean;
 begin
-  Result := AtomicLoad32(FDone, moAcquire) <> 0;
+  Result := atomic_load(FDone, mo_acquire) <> 0;
 end;
 
 procedure TFutureVoid.MarkDone;
 begin
-  AtomicStore32(FDone, 1, moRelease);
+  atomic_store(FDone, 1, mo_release);
   FEvent.SetEvent;
 end;
 
@@ -228,7 +228,7 @@ end;
 
 procedure TWhenAllState.DecrementAndCheck;
 begin
-  if AtomicFetchSub32(FRemaining, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(FRemaining, 1, mo_acq_rel) = 1 then
     FEvent.SetEvent;
 end;
 
@@ -244,7 +244,7 @@ end;
 
 function TWhenAllState.IsDone: Boolean;
 begin
-  Result := AtomicLoad32(FRemaining, moAcquire) = 0;
+  Result := atomic_load(FRemaining, mo_acquire) = 0;
 end;
 
 function WhenAll(const AFutures: array of IFutureVoid): IFutureVoid;

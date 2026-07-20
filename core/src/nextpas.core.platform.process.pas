@@ -34,6 +34,22 @@ function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   out AProc: TPlatformProcess;
   out AFailStage: TPlatformProcessSpawnStage): Int32;
 
+{** @desc spawn_fds 扩展：额外 fd + 可选 setuid/setgid + 可选新进程组
+    @param AExtraFds 父进程 fd 列表（可为 nil）
+    @param AExtraFdCount 额外 fd 数量
+    @param ASetCred True 时在 exec 前 setgid+setuid
+    @param AUid/AGid 凭证（仅 ASetCred 时有效）
+    @param ANewProcessGroup True 时子进程 setpgid(0,0)（Unix；Win UNSUPPORTED）
+    @note Unix；Windows 在 ExtraFd/Cred/NewProcessGroup 时返回 UNSUPPORTED *}
+function platform_process_spawn_fds_ex(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  AExtraFds: PPtrInt; AExtraFdCount: Int32;
+  ASetCred: Boolean; AUid, AGid: UInt32;
+  ANewProcessGroup: Boolean;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
+
 {** @desc 运行进程并捕获 stdout 输出
     @param APath 可执行文件路径
     @param AArgv 参数数组（以 nil 结尾）
@@ -95,6 +111,10 @@ function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32):
     @param AProc 进程句柄
     @return 0 成功，否则返回错误码 *}
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
+
+{** @desc 向进程组发信号（Unix kill(-pgid,sig)；pgid>0）
+    @return 0 成功；Windows 返回 UNSUPPORTED *}
+function platform_process_kill_group(APgid: Int32; ASignal: Int32): Int32;
 
 {** @desc 获取进程 ID
     @param AProc 进程句柄
@@ -323,6 +343,17 @@ begin
       close(LFd);
 end;
 
+procedure CloseChildFdLoopKeep(APreserveFd: Int32; AKeepThrough: Int32);
+var
+  LFd: Int32;
+  LLastFd: Int32;
+begin
+  LLastFd := ChildFdCloseMax;
+  for LFd := PLATFORM_CHILD_FD_FIRST to LLastFd do
+    if (LFd <> APreserveFd) and (LFd > AKeepThrough) then
+      close(LFd);
+end;
+
 {$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
 function TryCloseRangeSegment(AFirst, ALast: cuint): Boolean;
 begin
@@ -349,6 +380,30 @@ begin
     LAfterPreserve := PLATFORM_CHILD_FD_FIRST;
   Result := TryCloseRangeSegment(LAfterPreserve, High(cuint));
 end;
+
+function TryCloseChildFdsWithCloseRangeKeep(APreserveFd: Int32;
+  AKeepThrough: Int32): Boolean;
+var
+  LStart: cuint;
+begin
+  { Keep 0..AKeepThrough and APreserveFd; close the rest. }
+  if AKeepThrough < 2 then
+    AKeepThrough := 2;
+  LStart := cuint(AKeepThrough + 1);
+  if APreserveFd >= Int32(LStart) then
+  begin
+    { close [start, preserve-1] and [preserve+1, high] }
+    if APreserveFd > Int32(LStart) then
+      Result := TryCloseRangeSegment(LStart, cuint(APreserveFd - 1))
+    else
+      Result := True;
+    if not Result then
+      Exit;
+    Result := TryCloseRangeSegment(cuint(APreserveFd) + 1, High(cuint));
+  end
+  else
+    Result := TryCloseRangeSegment(LStart, High(cuint));
+end;
 {$ENDIF}
 
 procedure CloseChildFdsExcept(APreserveFd: Int32);
@@ -358,6 +413,15 @@ begin
     Exit;
 {$ENDIF}
   CloseChildFdLoop(APreserveFd);
+end;
+
+procedure CloseChildFdsExceptKeep(APreserveFd: Int32; AKeepThrough: Int32);
+begin
+{$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
+  if TryCloseChildFdsWithCloseRangeKeep(APreserveFd, AKeepThrough) then
+    Exit;
+{$ENDIF}
+  CloseChildFdLoopKeep(APreserveFd, AKeepThrough);
 end;
 
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
@@ -510,16 +574,35 @@ function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
   out AProc: TPlatformProcess;
   out AFailStage: TPlatformProcessSpawnStage): Int32;
+begin
+  Result := platform_process_spawn_fds_ex(APath, AArgv, AEnvp, ACwd,
+    AChildStdin, AChildStdout, AChildStderr, nil, 0, False, 0, 0, False,
+    AProc, AFailStage);
+end;
+
+function platform_process_spawn_fds_ex(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  AExtraFds: PPtrInt; AExtraFdCount: Int32;
+  ASetCred: Boolean; AUid, AGid: UInt32;
+  ANewProcessGroup: Boolean;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
 var
   LPid: pid_t;
   LErrPipe: array[0..1] of Int32;
   LWire: TPosixSpawnWireError;
   LRead: ssize_t;
+  LI: Int32;
+  LKeepThrough: Int32;
+  LTargetFd: Int32;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
 
   if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if (AExtraFdCount < 0) or ((AExtraFdCount > 0) and (AExtraFds = nil)) then
     Exit(PLATFORM_ERR_INVALID);
 
 {$IFDEF NEXTPAS_LINUX}
@@ -549,6 +632,15 @@ begin
   begin
     close(LErrPipe[0]);
     FillChar(LWire, SizeOf(LWire), 0);
+
+    if ANewProcessGroup then
+      if setpgid(0, 0) <> 0 then
+      begin
+        LWire.Stage := Ord(pssExec);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
 
     if (ACwd <> nil) and (ACwd[0] <> #0) then
       if chdir(ACwd) <> 0 then
@@ -584,7 +676,41 @@ begin
         posix_exit(127);
       end;
 
-    CloseChildFdsExcept(LErrPipe[1]);
+    { ExtraFiles: parent FDs → child 3,4,5,... (Go ExtraFiles) }
+    for LI := 0 to AExtraFdCount - 1 do
+    begin
+      LTargetFd := 3 + LI;
+      if PtrInt(AExtraFds[LI]) < 0 then
+        Continue;
+      if dup2(Int32(AExtraFds[LI]), LTargetFd) < 0 then
+      begin
+        LWire.Stage := Ord(pssDupStderr); { reuse stage bucket for extra }
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
+    end;
+
+    LKeepThrough := 2 + AExtraFdCount; { keep 0..LKeepThrough }
+    CloseChildFdsExceptKeep(LErrPipe[1], LKeepThrough);
+
+    if ASetCred then
+    begin
+      if setgid(gid_t(AGid)) <> 0 then
+      begin
+        LWire.Stage := Ord(pssExec);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
+      if setuid(uid_t(AUid)) <> 0 then
+      begin
+        LWire.Stage := Ord(pssExec);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
+    end;
 
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)
@@ -606,6 +732,9 @@ begin
 
   if LRead = 0 then
   begin
+    { Best-effort: ensure child is group leader (race-safe with child setpgid). }
+    if ANewProcessGroup then
+      setpgid(LPid, LPid);
     AProc.Pid := LPid;
     Result := 0;
   end
@@ -736,6 +865,16 @@ end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin
   Result := platform_process_signal(AProc, PLATFORM_SIGKILL);
+end;
+
+function platform_process_kill_group(APgid: Int32; ASignal: Int32): Int32;
+begin
+  if APgid <= 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  if kill(pid_t(-APgid), ASignal) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
 end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
@@ -1432,6 +1571,11 @@ begin
   Result := platform_process_signal(AProc, PLATFORM_SIGKILL);
 end;
 
+function platform_process_kill_group(APgid: Int32; ASignal: Int32): Int32;
+begin
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := Int32(AProc.Pid); end;
 
@@ -1505,6 +1649,20 @@ function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
   out AProc: TPlatformProcess;
   out AFailStage: TPlatformProcessSpawnStage): Int32;
+begin
+  Result := platform_process_spawn_fds_ex(APath, AArgv, AEnvp, ACwd,
+    AChildStdin, AChildStdout, AChildStderr, nil, 0, False, 0, 0, False,
+    AProc, AFailStage);
+end;
+
+function platform_process_spawn_fds_ex(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  AExtraFds: PPtrInt; AExtraFdCount: Int32;
+  ASetCred: Boolean; AUid, AGid: UInt32;
+  ANewProcessGroup: Boolean;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
 var
   LSI: STARTUPINFOW;
   LPI: PROCESS_INFORMATION;
@@ -1514,6 +1672,11 @@ begin
 
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
+  if (AExtraFdCount > 0) or ASetCred or ANewProcessGroup then
+  begin
+    AFailStage := pssExec;
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  end;
 
   FillChar(LSI, SizeOf(LSI), 0);
   LSI.cb := SizeOf(LSI);
@@ -2208,6 +2371,8 @@ function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32):
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_kill_group(APgid: Int32; ASignal: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_create_pipe(out AReadHandle, AWriteHandle: PtrInt): Int32;
@@ -2222,6 +2387,8 @@ begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
 begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AChildStdin, AChildStdout, AChildStderr: PtrInt; out AProc: TPlatformProcess; out AFailStage: TPlatformProcessSpawnStage): Int32;
+begin FillChar(AProc, SizeOf(AProc), 0); AFailStage := pssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_spawn_fds_ex(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AChildStdin, AChildStdout, AChildStderr: PtrInt; AExtraFds: PPtrInt; AExtraFdCount: Int32; ASetCred: Boolean; AUid, AGid: UInt32; ANewProcessGroup: Boolean; out AProc: TPlatformProcess; out AFailStage: TPlatformProcessSpawnStage): Int32;
 begin FillChar(AProc, SizeOf(AProc), 0); AFailStage := pssNone; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32; AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32; out AExitCode: Int32): Int32;
 begin AStdoutLen := 0; AStderrLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;

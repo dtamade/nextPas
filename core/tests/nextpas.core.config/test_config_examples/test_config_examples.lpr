@@ -183,6 +183,10 @@ begin
   CheckContains(GStartupExampleOutput, 'mutable-port=9090', 'mutable config marker');
   CheckContains(GStartupExampleOutput, 'snapshot-still-port=8080',
     'snapshot immutability marker');
+  CheckContains(GStartupExampleOutput, 'keyvalues-host=cli-host',
+    'AddKeyValues host override');
+  CheckContains(GStartupExampleOutput, 'keyvalues-port=8443',
+    'AddKeyValues port override');
 end;
 
 procedure TestExportPatternsExampleRunPasses;

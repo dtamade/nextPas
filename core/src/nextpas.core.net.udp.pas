@@ -22,7 +22,7 @@ uses
   nextpas.core.platform.socket;
 
 type
-  TUdpSocket = class(TInterfacedObject, IUdpSocket)
+  TUdpSocket = class(TInterfacedObject, IUdpSocket, IUdpSocketRuntime)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -35,6 +35,8 @@ type
     function RecvFrom(var ABuf; const ACount: SizeUInt; out AAddr: TNetAddress): SizeUInt;
     function LocalAddr: TNetAddress;
     procedure Close;
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
   end;
 
 function Htons(AVal: UInt16): UInt16; inline;
@@ -120,6 +122,18 @@ begin
     platform_socket_close(FSocket);
     FSocket := PLATFORM_INVALID_SOCKET;
   end;
+end;
+
+function TUdpSocket.NativeSocketHandle: PtrUInt;
+begin
+  Result := PtrUInt(FSocket.Value);
+end;
+
+procedure TUdpSocket.SetBlocking(const ABlocking: Boolean);
+begin
+  EnsureOpen('set blocking');
+  if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
+    raise ENetworkError.Create('udp set blocking failed');
 end;
 
 function NetUdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;

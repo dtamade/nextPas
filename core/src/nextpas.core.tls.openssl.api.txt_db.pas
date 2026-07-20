@@ -177,12 +177,16 @@ var
   end;
 
   procedure FreeCString(var AValue: PChar);
+  var
+    L: Integer;
   begin
-    if AValue <> nil then
-    begin
-      FreeMem(AValue);
-      AValue := nil;
-    end;
+    if AValue = nil then
+      Exit;
+    L := 0;
+    while AValue[L] <> #0 do
+      Inc(L);
+    FreeMem(AValue, SizeUInt(L + 1));
+    AValue := nil;
   end;
 begin
   Result := False;
@@ -205,7 +209,7 @@ begin
         FreeCString(Row[I]);
     end;
   finally
-    FreeMem(Row);
+    FreeMem(Row, SizeUInt(SizeOf(PChar)) * SizeUInt(Length(Fields)));
   end;
 end;
 
@@ -225,7 +229,7 @@ begin
     SearchVal[LLength] := #0;
     Result := TXT_DB_get_by_index(db, FieldIndex, @SearchVal);
   finally
-    FreeMem(SearchVal);
+    FreeMem(SearchVal, SizeUInt(LLength + 1));
   end;
 end;
 

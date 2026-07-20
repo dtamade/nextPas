@@ -31,6 +31,7 @@ program test_mock;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
@@ -1624,6 +1625,246 @@ begin
   end;
 end;
 
+{ ── B5 fail-path / edge contracts ─────────────────────────────────────────── }
+
+procedure TestB5VerifyNeverAfterCall;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('X', []);
+    ExpectFail(procedure begin
+      LM.Verify('X').CalledNever;
+    end, '0 time');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledOnceFailMsg;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('X', []);
+    LM.RecordCall('X', []);
+    ExpectFail(procedure begin
+      LM.Verify('X').CalledOnce;
+    end, 'exactly 1');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5SetupNeverCalled;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('NeedMe').Returns('v');
+    ExpectFail(procedure begin
+      LM.VerifyAll;
+    end, 'NeedMe');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5ResetCallsKeepsSetup;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    LM.ResetCalls;
+    CheckEqual('bar', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledWithWrongArg;
+var
+  LM: TMock;
+  LArgs: array[0..0] of string;
+begin
+  LM := TMock.Create;
+  try
+    LArgs[0] := 'a';
+    LM.RecordCall('M', LArgs);
+    LArgs[0] := 'b';
+    ExpectFail(procedure begin
+      LM.Verify('M').CalledWith(LArgs);
+    end, 'b');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5DoubleSetupOverwrite;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('one');
+    LM.Setup('Foo').Returns('two');
+    CheckEqual('two', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5VerifyInOrderEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.VerifyInOrder([]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5GetCallHistoryEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    CheckContains(LM.GetCallHistory, 'no calls');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5ReturnsDefaultEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    CheckEqual('', LM.GetReturn('NoSetup'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledTimesZero;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Verify('Never').CalledExactly(0);
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ── B8 v8.10: cross-thread isolation (not thread-safe by contract) ────────── }
+
+type
+  TMockCrossOp = (mcoRecordCall, mcoGetReturn, mcoVerify);
+  PMockThreadCtx = ^TMockThreadCtx;
+  TMockThreadCtx = record
+    Mock: TMock;
+    Op: TMockCrossOp;
+    Caught: Boolean;
+    Msg: string;
+  end;
+
+function MockCrossThreadWorker(P: Pointer): PtrInt;
+var
+  C: PMockThreadCtx;
+  LArgs: array of string;
+begin
+  C := PMockThreadCtx(P);
+  C^.Caught := False;
+  C^.Msg := '';
+  SetLength(LArgs, 0);
+  try
+    case C^.Op of
+      mcoRecordCall:
+        C^.Mock.RecordCall('Cross', LArgs);
+      mcoGetReturn:
+        C^.Mock.GetReturn('bind');
+      mcoVerify:
+        C^.Mock.Verify('bind').CalledExactly(1);
+    end;
+  except
+    on E: EAssertionFailed do
+    begin
+      C^.Caught := True;
+      C^.Msg := E.Message;
+    end;
+  end;
+  Result := 0;
+end;
+
+procedure RunMockCrossThread(AOp: TMockCrossOp; const ALabel: string);
+var
+  LM: TMock;
+  Ctx: TMockThreadCtx;
+  TID: TThreadID;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.Setup('bind').Returns('v');
+    LM.RecordCall('bind', LArgs); { bind owner thread }
+    Ctx.Mock := LM;
+    Ctx.Op := AOp;
+    Ctx.Caught := False;
+    Ctx.Msg := '';
+    TID := BeginThread(@MockCrossThreadWorker, @Ctx);
+    CheckTrue(TID <> TThreadID(0), 'BeginThread ok');
+    WaitForThreadTerminate(TID, 10000);
+    CheckTrue(Ctx.Caught, ALabel + ' must raise on other thread');
+    CheckContains(LowerCase(Ctx.Msg), 'not thread-safe');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMockCrossThreadNotSafe;
+begin
+  RunMockCrossThread(mcoRecordCall, 'RecordCall');
+end;
+
+procedure TestMockCrossThreadGetReturn;
+begin
+  RunMockCrossThread(mcoGetReturn, 'GetReturn');
+end;
+
+procedure TestMockCrossThreadVerify;
+begin
+  RunMockCrossThread(mcoVerify, 'Verify');
+end;
+
+procedure TestMockSameThreadOk;
+var
+  LM: TMock;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.RecordCall('A', LArgs);
+    LM.RecordCall('A', LArgs);
+    LM.Verify('A').CalledExactly(2);
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── TMockCaptor tests ─────────────────────────────────────────────────────── }
 
 procedure TestCaptorCaptureFrom;
@@ -1742,6 +1983,28 @@ begin
   end;
 end;
 
+{ ── B14: mock fail-path table ──────────────────────────────────────────────── }
+
+procedure TestB14MockCalledTimesFailPath(const AC: TTestCase);
+{ Data: expected call count (int). Mock never called → CalledExactly must fail. }
+var
+  LM: TMock;
+  LExpect: Integer;
+  LArgs: specialize TArray<string>;
+begin
+  LExpect := StrToInt(AC.Data);
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    ExpectFail(procedure
+      begin
+        LM.Verify('Never').CalledExactly(LExpect);
+      end, 'time');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1749,6 +2012,8 @@ var
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
+  LB14Cases: specialize TArray<TTestCase>;
+  LB14I: Integer;
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
@@ -1906,6 +2171,35 @@ begin
   Suite.Test('TestCaptorReset', @TestCaptorReset);
   Suite.Test('TestCaptorNoCallsFail', @TestCaptorNoCallsFail);
   Suite.Test('TestCaptorIndexOutOfRange', @TestCaptorIndexOutOfRange);
+
+  { B5: additional fail-path / edge contracts }
+  Suite.Test('B5 VerifyNever after call fails', @TestB5VerifyNeverAfterCall);
+  Suite.Test('B5 CalledOnce fail message', @TestB5CalledOnceFailMsg);
+  Suite.Test('B5 Setup then never called VerifyAll', @TestB5SetupNeverCalled);
+  Suite.Test('B5 ResetCalls keeps setup', @TestB5ResetCallsKeepsSetup);
+  Suite.Test('B5 CalledWith wrong arg fail', @TestB5CalledWithWrongArg);
+  Suite.Test('B5 Double setup overwrite', @TestB5DoubleSetupOverwrite);
+  Suite.Test('B5 VerifyInOrder empty pass', @TestB5VerifyInOrderEmpty);
+  Suite.Test('B5 GetCallHistory empty', @TestB5GetCallHistoryEmpty);
+  Suite.Test('B5 Returns default empty', @TestB5ReturnsDefaultEmpty);
+  Suite.Test('B5 CalledTimes zero', @TestB5CalledTimesZero);
+
+  { B8/B9 mock isolation (not thread-safe by contract) }
+  Suite.Test('B8 cross-thread RecordCall', @TestMockCrossThreadNotSafe);
+  Suite.Test('B9 cross-thread GetReturn', @TestMockCrossThreadGetReturn);
+  Suite.Test('B9 cross-thread Verify', @TestMockCrossThreadVerify);
+  Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
+
+  { B14: meaningful fail-path table — CalledTimes mismatch messages }
+  SetLength(LB14Cases, 300);
+  for LB14I := 0 to High(LB14Cases) do
+  begin
+    LB14Cases[LB14I].Name := 'mock-fail-' + IntToStr(LB14I);
+    { expected count = 1, actual will be 0 → fail path }
+    LB14Cases[LB14I].Data := '1';
+  end;
+  Suite.TestTable('B14 mock CalledTimes fail-path', LB14Cases,
+    @TestB14MockCalledTimesFailPath);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);

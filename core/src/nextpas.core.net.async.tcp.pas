@@ -8,7 +8,8 @@ uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.io.intf,
   nextpas.core.net.base, nextpas.core.net.intf,
-  nextpas.core.async.base, nextpas.core.async.loop;
+  nextpas.core.async.base, nextpas.core.async.loop,
+  nextpas.core.async.cancellation;
 
 type
   { 异步 TCP 流，集成事件循环 }
@@ -35,6 +36,9 @@ type
     function AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32;
       const ADeadline: TDeadline; ACallback: TIoCompletion;
       AContext: Pointer = nil): Boolean;
+
+    { Bind IAsyncCancellationToken via NetCancelFromAsync (blocking-IO wake). }
+    procedure BindCancelToken(const AToken: IAsyncCancellationToken);
   end;
 
   { 异步 TCP 监听器 }
@@ -58,6 +62,9 @@ function AsyncTcpListen(const ALoop: TAsyncLoop;
 { 创建异步 TCP 连接 }
 function AsyncTcpConnect(const ALoop: TAsyncLoop;
   const AAddr: string; const APort: UInt16): IAsyncTcpStream;
+{ Wrap an existing connected ITcpStream for async I/O on ALoop. }
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
 
 implementation
 
@@ -69,7 +76,8 @@ uses
   nextpas.core.platform.linux.ffi,
   {$ENDIF}
   nextpas.core.platform.socket,
-  nextpas.core.net.tcp;
+  nextpas.core.net.tcp,
+  nextpas.core.net.async.cancel;
 
 type
   TAsyncTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser,
@@ -99,6 +107,7 @@ type
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
     procedure SetCancelToken(const AToken: INetCancelToken);
+    procedure BindCancelToken(const AToken: IAsyncCancellationToken);
 
     { ITcpSocketRuntime }
     function NativeSocketHandle: PtrUInt;
@@ -227,6 +236,11 @@ begin
   FStream.SetCancelToken(AToken);
 end;
 
+procedure TAsyncTcpStream.BindCancelToken(const AToken: IAsyncCancellationToken);
+begin
+  TcpStreamBindAsyncCancel(FStream, AToken);
+end;
+
 function TAsyncTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := (FStream as ITcpSocketRuntime).NativeSocketHandle;
@@ -273,7 +287,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, ACallback, AContext);
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, ACallback, AContext);
 end;
 
 function TAsyncTcpStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32;
@@ -282,7 +296,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
     WrapIoCompletionRef(ACallback, AContext));
 end;
 
@@ -303,7 +317,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWriteTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
+  Result := FLoop.AsyncSendTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
 end;
 
 { TAsyncTcpListener }
@@ -444,8 +458,17 @@ function AsyncTcpConnect(const ALoop: TAsyncLoop;
 var
   LStream: ITcpStream;
 begin
+  { NetTcpConnect uses NetResolveAll + sequential multi-A / dual-stack try (HE-lite). }
   LStream := NetTcpConnect(AAddr, APort);
   Result := TAsyncTcpStream.Create(LStream, ALoop) as IAsyncTcpStream;
+end;
+
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
+begin
+  if (ALoop = nil) or (AStream = nil) then
+    raise EInvalidOperationError.Create('AsyncTcpStreamAdopt: nil loop or stream');
+  Result := TAsyncTcpStream.Create(AStream, ALoop) as IAsyncTcpStream;
 end;
 
 end.

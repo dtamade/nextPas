@@ -29,7 +29,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  .inc 数据层（自动生成）                                     │
 │  data.inc, props.inc, casefold.inc, normalize.inc,          │
-│  gcb.inc, collate.inc, script.inc, block.inc                │
+│  gcb.inc, wbp.inc, sbp.inc, collate.inc, script.inc, block.inc       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -47,6 +47,8 @@
 | `TGeneralCategory` | 通用类别枚举（30 值） |
 | `TBinaryProperty` | 二值属性枚举（21 值） |
 | `TGraphemeBreakProperty` | 字素簇分割属性（15 值） |
+| `TWordBreakProperty` | 词边界属性（19 值） |
+| `TIndicConjunctBreak` | InCB（GB9c） |
 | `TUnicodeScript` | 脚本属性枚举（160+ 值） |
 | `TUnicodeBlock` | Unicode 块枚举（300+ 值） |
 | `TCodepointRange2` | 码点范围（Lo, Hi, Delta） |
@@ -77,6 +79,8 @@ Unicode 属性查询的核心实现。BMP 使用 256×256 stage-2 查表（O(1)�
 | `HasBinaryProperty` | 查询 21 种二值属性 |
 | `GetGeneralCategory` | 获取通用类别 |
 | `GetGraphemeBreakProperty` | 获取字素簇分割属性 |
+| `GetWordBreakProperty` | 获取词边界属性 |
+| `GetIndicConjunctBreak` | 获取 InCB |
 | `IsLetter`, `IsDigit`, `IsWhitespace` 等 | 语义分类快捷函数 |
 
 **数据来源**: `nextpas.core.text.unicode.data.inc`, `nextpas.core.text.unicode.props.inc`, `nextpas.core.text.unicode.gcb.inc`
@@ -200,10 +204,18 @@ Unicode 块属性查询（300+ 块）。
 
 ## 数据生成管线
 
-所有 `.inc` 数据文件由 `core/scripts/gen_unicode_data.py` 自动生成：
+生产查表 `.inc` 由 `core/scripts/gen_unicode_data.py` 生成：
 
 ```bash
-python3 core/scripts/gen_unicode_data.py --output-dir core/src
+python3 core/scripts/gen_unicode_data.py --version 16.0.0 --output-dir core/src
+```
+
+官方 conformance fixture 由 `core/scripts/gen_unicode_fixtures.py` 单独生成（见测试节）。
+
+Script/Block：
+
+```bash
+python3 core/scripts/gen_unicode_script_block.py --version 16.0.0 --output-dir core/src
 ```
 
 **数据来源**（Unicode 16.0）:
@@ -282,22 +294,37 @@ end;
 
 ## 测试覆盖
 
-| 测试套件 | 测试数 | 覆盖范围 |
-|----------|--------|----------|
-| `test_property` | 19 | IsUpper/IsLower/IsAlpha/IsDigit/IsNumber/IsWhitespace/IsSeparator/IsControl/IsPunctuation/IsSymbol/IsMark/GeneralCategory/CaseMapping/Boundary/SMP/HasBinaryProperty/GraphemeBreakProperty/PropertyCombinations |
-| `test_case` | 7 | 大小写映射、case fold |
-| `test_normalize` | 18 | NFD/NFC/NFKD/NFKC、QuickCheck(NFD/NFKD/NFC/NFKC)、CCC、SMP 规范化、BMP 长分解、Hangul 边界、废弃分解、组合排除、GetDecompositionMapping API、压力测试 |
-| `test_enhance` | 8 | Script/Block 属性、便利函数、CJK 分词、?! 序列合并、Next* API、单词分割边界 |
-| `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
-| `test_collate` | 23 | DUCET 三级权重、排序键、强度级别(P/T/Q/I)、排序方法、SMP 排序、压力排序、CaseLevel、FrenchAccents、NumericOrdering、Thai/Arabic 排序、标点排序、格式字符、可变权重 |
-| `test_data` | 10 | IUnicodeDataManager 接口全覆盖：GeneralCategory/BinaryProperty/Script/Block/CaseMapping/CaseFoldFull/Decomposition/CCC/CompositionExclusion/Singleton |
-| **总计** | **98** | |
+| 测试套件 | 覆盖范围 |
+|----------|----------|
+| `test_property` | 属性查询 / GCB |
+| `test_case` | 大小写 / case fold |
+| `test_normalize` | NFD/NFC/… 手写边界 |
+| `test_enhance` | Script/Block/分割/排序便利 |
+| `test_grapheme_uax29` | UAX #29 手写 GB 规则 |
+| `test_collate` | DUCET 排序选项 |
+| `test_data` | IUnicodeDataManager |
+| **`test_conformance_normalize`** | **Unicode 16.0 NormalizationTest.txt 全量 (~19965)** |
+| **`test_conformance_grapheme`** | **Unicode 16.0 GraphemeBreakTest.txt 全量 (~1093)** |
+| **`test_conformance_word test_conformance_sentence`** | **Unicode 16.0 WordBreakTest.txt 全量 (~1826)** |
 
 ```bash
-# 运行所有 unicode 测试
-for t in test_case test_data test_enhance test_grapheme_uax29 test_normalize test_property test_collate; do
+# 手写套件
+for t in test_case test_data test_enhance test_grapheme_uax29 \
+         test_normalize test_property test_collate; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
+
+# 官方 conformance（fixture 已 vendoring，离线可跑）
+make -C core/tests/nextpas.core.text.unicode/test_conformance_normalize clean test
+make -C core/tests/nextpas.core.text.unicode/test_conformance_grapheme clean test
+make -C core/tests/nextpas.core.text.unicode/test_conformance_word test_conformance_sentence clean test
+```
+
+重新生成 fixture（开发机，需网络）：
+
+```bash
+python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
+  --fixtures-dir core/tests/nextpas.core.text.unicode/data
 ```
 
 ## 依赖关系

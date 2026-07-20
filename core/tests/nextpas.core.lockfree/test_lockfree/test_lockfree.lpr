@@ -2859,6 +2859,27 @@ begin
   end;
 end;
 
+{ Q3-b: Close is idempotent }
+procedure TestChannelCloseIdempotent;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.TrySend(1), 'seed');
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed once');
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed twice still closed');
+    Check(not LCh.TrySend(2), 'TrySend still rejected');
+    Check(LCh.TryReceive(LV), 'drain still works');
+    CheckEqual(Int64(1), Int64(LV), 'drained value');
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestChannelCloseRaiseOnSend;
 var
   LCh: TIntChannel;
@@ -5551,6 +5572,83 @@ begin
   end;
 end;
 
+{ Q3-a: multi-ready prefers first Add (registration order) }
+procedure TestSelectorCaseOrderPreferFirst;
+var
+  LSel: TIntSelector;
+  LCh1, LCh2: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh1.Send(11);
+    LCh2.Send(22);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'both ready: TrySelect completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'both ready: prefers first Add (index 0)');
+    CheckEqual(Int64(11), Int64(LVal), 'both ready: receives Ch1 value');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+{ Q3-a: TrySelect ≡ Go select default }
+procedure TestSelectorTrySelectAsDefault;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddRecv(LCh, LVal);
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'empty: TrySelect is default path (not completed)');
+    LCh.Send(7);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'after publish: TrySelect completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'after publish: index 0');
+    CheckEqual(Int64(7), Int64(LVal), 'after publish: value 7');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
+{ Q3-a: closed empty recv aligns with TryReceive=False }
+procedure TestSelectorRecvOnClosedEmpty;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh.Close;
+    Check(not LCh.TryReceive(LVal), 'closed empty TryReceive is False');
+    LSel.AddRecv(LCh, LVal);
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'closed empty: TrySelect does not complete');
+    LResult := LSel.SelectTimeout(5 * 1000 * 1000); { 5ms }
+    Check(not LResult.Completed, 'closed empty: SelectTimeout does not complete');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'closed empty: timeout Index=-1');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: EBR with many guards                               }
 { ============================================================ }
@@ -6609,16 +6707,28 @@ begin
     'trie must reject managed values');
   CheckContains(LSelectorImplSource, 'if IsManagedType(T) then',
     'selector must reject managed element types');
+  CheckContains(LSelectorImplSource, 'atomic_load(FNotifyEpoch, mo_acquire)',
+    'selector wait path must use preferred atomic_load on FNotifyEpoch');
+  CheckContains(LSelectorImplSource, 'atomic_fetch_add(FNotifyWaiters, 1, mo_acq_rel)',
+    'selector wait path must use preferred atomic_fetch_add on FNotifyWaiters');
+  CheckContains(LSelectorImplSource, 'atomic_fetch_sub(FNotifyWaiters, 1, mo_acq_rel)',
+    'selector wait path must use preferred atomic_fetch_sub on FNotifyWaiters');
+  CheckContains(LSelectorImplSource, 'LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters',
+    'selector must wait via LockFreeWaitData (wait-address), not pure spin only');
+  CheckNotContains(LSelectorImplSource, 'AtomicLoad32(',
+    'selector must not use legacy AtomicLoad32 on hot path (Q3-a preferred)');
+  CheckNotContains(LSelectorImplSource, 'AtomicFetchAdd32(',
+    'selector must not use legacy AtomicFetchAdd32 (Q3-a preferred)');
   CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
     'SPSC queue must notify space waiters after consume');
   CheckBefore(LSpscTryEnqueueSourceSection,
     'FSlots[LTail and Int64(FMask)] := AValue;',
-    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'atomic_store_64(FTailPublished, LTail + 1, mo_release);',
     'SPSC TryEnqueue must write the slot value before publishing the tail');
   CheckContains(LSpscTryEnqueueSourceSection,
-    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'atomic_store_64(FTailPublished, LTail + 1, mo_release);',
     'SPSC TryEnqueue tail publish must use release ordering');
   CheckContains(LSpscPublishWakeTestSection,
     'SPSC DequeueTimeout consumer should still be pending before publish',
@@ -6679,13 +6789,13 @@ begin
     'SPSC close wait test must bound the blocked consumer wait wake latency');
   CheckContains(LSpscCloseWakeTestSection, 'blocked DequeueWait wake must leave the closed empty queue empty',
     'SPSC close wait test must prove the closed empty queue stays empty after the blocked consumer wait returns');
-  CheckContains(LSpscBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+  CheckContains(LSpscBatchSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'SPSC batch enqueue must reject new items after close');
-  CheckContains(LSpscBatchSourceSection, 'FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);',
+  CheckContains(LSpscBatchSourceSection, 'FHeadCache := atomic_load_64(FHeadPublished, mo_acquire);',
     'SPSC batch enqueue must refresh published head before sizing batch progress');
   CheckContains(LSpscBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
     'SPSC batch enqueue must cap published items to currently available space');
-  CheckContains(LSpscDequeueBatchSourceSection, 'FTailCache := AtomicLoad64(FTailPublished, moAcquire);',
+  CheckContains(LSpscDequeueBatchSourceSection, 'FTailCache := atomic_load_64(FTailPublished, mo_acquire);',
     'SPSC batch dequeue must refresh published tail before sizing batch progress');
   CheckContains(LSpscDequeueBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
     'SPSC batch dequeue must cap returned items to currently available data');
@@ -6713,7 +6823,7 @@ begin
     'MPMC queue must initialize slot sequence tokens with empty-state encoding');
   CheckContains(LMpmcSource, 'LExpected := EmptySequence(LPos);',
     'MPMC enqueue must compare against the empty-state token for the target position');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease)',
+  CheckContains(LMpmcSource, 'atomic_store_64(FSlots[LIdx].Sequence, FullSequence(LPos), mo_release)',
     'MPMC enqueue linearization must publish slot sequence with release ordering');
   CheckContains(LMpmcSource, 'FActiveEnqueues: Int32;',
     'MPMC queue must track admitted producer operations that may still publish after Close');
@@ -6721,17 +6831,17 @@ begin
     'MPMC queue must centralize closed-empty terminal checks behind active producer tracking');
   CheckContains(LMpmcSource, 'procedure LeaveActiveEnqueue; inline;',
     'MPMC queue must centralize active producer decrement and wake handling');
-  CheckContains(LMpmcTryEnqueueSourceSection, 'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
+  CheckContains(LMpmcTryEnqueueSourceSection, 'atomic_fetch_add(FActiveEnqueues, 1, mo_acq_rel);',
     'MPMC TryEnqueue must admit active producers before any slot reservation can happen');
   CheckBefore(LMpmcTryEnqueueSourceSection,
-    'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
-    'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+    'atomic_fetch_add(FActiveEnqueues, 1, mo_acq_rel);',
+    'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'MPMC TryEnqueue must admit active producers before the first Close observation');
   CheckContains(LMpmcTryEnqueueSourceSection, 'LeaveActiveEnqueue;',
     'MPMC TryEnqueue must decrement active producer tracking on every exit path');
-  CheckContains(LMpmcTryEnqueueSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then' + LineEnding + '      Exit(False);',
+  CheckContains(LMpmcTryEnqueueSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then' + LineEnding + '      Exit(False);',
     'MPMC TryEnqueue must re-check Close after admission but before reserving a slot');
-  CheckContains(LMpmcLeaveActiveSourceSection, 'AtomicFetchSub32(FActiveEnqueues, 1, moAcqRel) = 1',
+  CheckContains(LMpmcLeaveActiveSourceSection, 'atomic_fetch_sub(FActiveEnqueues, 1, mo_acq_rel) = 1',
     'MPMC active producer tracking must decrement with acquire-release ordering');
   CheckContains(LMpmcLeaveActiveSourceSection, 'LockFreeWakeAll(@FDataEpoch);',
     'MPMC active producer completion must wake all closed consumers waiting for terminal closed-empty');
@@ -6747,7 +6857,7 @@ begin
     'MPMC DequeueTimeout must prove the queue is still empty after observing no active producers');
   CheckContains(LMpmcSource, 'LExpected := FullSequence(LPos);',
     'MPMC dequeue must compare against the full-state token for the target position');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease)',
+  CheckContains(LMpmcSource, 'atomic_store_64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), mo_release)',
     'MPMC dequeue must recycle slot sequence with release ordering');
   CheckContains(LMpmcSingleSlotTestSection, 'TIntMpmc.Create(1);',
     'MPMC single-slot test must construct a single-slot queue');
@@ -6901,7 +7011,7 @@ begin
   CheckContains(LTestSource,
     'T.Test(''MPMC timeout wakes on space release'', @TestMpmcEnqueueTimeoutWakesOnSpace);',
     'lockfree test runner must register the MPMC space wake runtime test');
-  CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+  CheckContains(LMpmcBatchSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
     'MPMC batch behavior test must cover close rejection');
@@ -6945,40 +7055,45 @@ begin
     'stack ApproxCount must keep traversal best-effort instead of trusting an unbounded chain');
   CheckBefore(LStackTryPushSourceSection,
     'FSlots[LIdx].Value := AValue;',
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop',
     'stack TryPush must write the slot value before publishing it through the top CAS');
   CheckBefore(LStackTryPushSourceSection,
     'FSlots[LIdx].Next := UnpackIdx(LOldTop);',
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop',
     'stack TryPush must link the previous top before publishing through the top CAS');
   CheckContains(LStackTryPushSourceSection,
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
-    'stack TryPush top CAS must use acquire-release ordering');
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop,' + LineEnding +
+    '    mo_acq_rel, mo_acquire)',
+    'stack TryPush top CAS must use acquire-release success with acquire failure');
   CheckContains(LDequeSource, 'LCap := LockFreeNextPow2(ACapacity);',
     'deque constructor must round requested capacity to power-of-two storage');
   CheckContains(LDequeSource, 'if LSize >= Int64(FCapacity) then',
     'deque owner push must reject writes once the bounded ring is full');
   CheckBefore(LDequeTryPushSourceSection,
     'FBuffer[PtrUInt(LBottom) and FMask] := AValue;',
-    'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+    'atomic_store_64(FBottom, LBottom + 1, mo_release);',
     'deque owner TryPush must write the buffer slot before release-publishing bottom');
-  CheckContains(LDequeTryPushSourceSection, 'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+  CheckContains(LDequeTryPushSourceSection, 'atomic_store_64(FBottom, LBottom + 1, mo_release);',
     'deque owner TryPush bottom publish must use release ordering');
-  CheckContains(LDequeSource, 'AtomicStore64(FBottom, LBottom, moSeqCst);',
+  CheckContains(LDequeSource, 'atomic_store_64(FBottom, LBottom, mo_seq_cst);',
     'deque owner pop must publish the speculative bottom decrement as seq_cst before last-item arbitration');
-  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);',
+  CheckContains(LDequeSource, 'LTop := atomic_load_64(FTop, mo_seq_cst);',
     'deque owner pop must observe top with seq_cst before last-item arbitration');
-  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst)',
+  CheckContains(LDequeSource,
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '        mo_seq_cst, mo_seq_cst)',
     'deque owner pop must arbitrate the last item with a seq_cst top CAS');
-  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);' + LineEnding +
-    '  LBottom := AtomicLoad64(FBottom, moSeqCst);',
+  CheckContains(LDequeSource, 'LTop := atomic_load_64(FTop, mo_seq_cst);' + LineEnding +
+    '  LBottom := atomic_load_64(FBottom, mo_seq_cst);',
     'deque thief steal must observe top and bottom with seq_cst before stealing');
   CheckBefore(LDequeTryStealSourceSection,
     'AValue := FBuffer[PtrUInt(LTop) and FMask];',
-    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '    mo_seq_cst, mo_seq_cst)',
     'deque thief TrySteal must read the candidate value before winning it through the top CAS');
   CheckContains(LDequeTryStealSourceSection,
-    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '    mo_seq_cst, mo_seq_cst)',
     'deque thief TrySteal top CAS must use seq_cst ordering');
   CheckContains(LDocsReadme,
     '`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.',
@@ -6995,17 +7110,17 @@ begin
     'goal tree must not report lockfree as broad completion without evidence-level truth');
   CheckContains(LChannelSource, 'TLockFreeChannel.Send: channel closed',
     'channel Send on closed must raise EInvalidOperationError');
-  CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
-    'hashmap ShardLock must use AtomicExchange with moAcquire');
+  CheckContains(LHashMapSource, 'atomic_exchange(AShard.Lock, 1, mo_acquire)',
+    'hashmap ShardLock must use atomic_exchange with mo_acquire');
   CheckContains(LHazardSource, 'AllocMem(SizeOf(THazardThreadRec))',
     'hazard RegisterThread must use AllocMem for zero-init');
   CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
     'hazard UnregisterThread must not blindly nil FThreads');
   CheckContains(LHazardSource,
-    'AtomicStorePtr(LThread^.HP[AHPIndex], APtr, moRelease);',
+    'atomic_store(LThread^.HP[AHPIndex], APtr, mo_release);',
     'hazard Protect must publish its pointer with a release store');
   CheckContains(LHazardSource,
-    'AtomicLoadPtr(LThread^.HP[LI], moAcquire)',
+    'atomic_load(LThread^.HP[LI], mo_acquire)',
     'hazard Collect must scan pointer publications with acquire loads');
   CheckNotContains(LHazardSource, 'procedure THazardDomain.DrainPendingFree;',
     'hazard thread records must not be reclaimed by an unprotected list traversal');
@@ -7013,7 +7128,7 @@ begin
     'hazard domain must expose a publish-and-revalidate source protection loop');
   CheckBefore(LHazardSource,
     'IncrementRetiredCount;',
-    'AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease)',
+    'atomic_compare_exchange_strong(Pointer(FRetired), LExpected, Pointer(LNode), mo_release, mo_relaxed)',
     'hazard retired count must be published before the retired node becomes collectable');
   CheckContains(LCondVarSource, 'PConditionWaiter = ^TConditionWaiter;',
     'condition-variable notifications must be attached to registered waiter lifetimes');
@@ -7206,8 +7321,11 @@ begin
   CheckContains(LMpscEnqueueSourceSection,
     'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
     'MPSC Enqueue previous-node link publish must use release ordering');
-  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop',
-    'work-stealing deque must linearize steals through top CAS');
+  if (Pos('atomic_compare_exchange_strong_64(FTop', LDequeSource) = 0) and
+     (Pos('AtomicCompareExchange64(FTop', LDequeSource) = 0) then
+    raise EAssertionFailed.Create(
+      'work-stealing deque must linearize steals through top CAS ' +
+      '(preferred atomic_compare_exchange_strong_64 or legacy AtomicCompareExchange64)');
   CheckContains(LWaitSource, 'platform_wait_address32',
     'lockfree wait helper must use the atomic/platform wait-address seam');
   CheckContains(LWaitSource,
@@ -7218,9 +7336,12 @@ begin
     'procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;' + LineEnding +
     '  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);',
     'lockfree space wait helper must receive the caller-observed epoch');
-  CheckContains(LWaitSource,
-    'if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then',
-    'lockfree wait helper must skip blocking when the epoch already advanced');
+  { Preferred path atomic_load(…, mo_acquire); legacy AtomicLoad32 still accepted. }
+  if (Pos('if atomic_load(AEpoch^, mo_acquire) <> AExpectedEpoch then', LWaitSource) = 0) and
+     (Pos('if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must skip blocking when the epoch already advanced ' +
+      '(preferred atomic_load+mo_acquire or legacy AtomicLoad32+moAcquire)');
   CheckContains(LWaitSource, 'platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);',
     'lockfree wait helper must wait on the caller-observed epoch');
   CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
@@ -7243,10 +7364,16 @@ begin
     'MPSC blocking dequeue must pass the observed data epoch to wait helper');
   CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
     'MPSC timeout dequeue must pass the observed data epoch to wait helper');
-  CheckContains(LWaitSource, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel)',
-    'lockfree wait helper must register waiters before blocking');
-  CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
-    'lockfree wait helper must unregister waiters after blocking');
+  if (Pos('atomic_fetch_add(AWaiters^, 1, mo_acq_rel)', LWaitSource) = 0) and
+     (Pos('AtomicFetchAdd32(AWaiters^, 1, moAcqRel)', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must register waiters before blocking ' +
+      '(preferred atomic_fetch_add+mo_acq_rel or legacy AtomicFetchAdd32)');
+  if (Pos('atomic_fetch_sub(AWaiters^, 1, mo_acq_rel)', LWaitSource) = 0) and
+     (Pos('AtomicFetchSub32(AWaiters^, 1, moAcqRel)', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must unregister waiters after blocking ' +
+      '(preferred atomic_fetch_sub+mo_acq_rel or legacy AtomicFetchSub32)');
   CheckContains(LBenchMakefile,
     '.PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean',
     'lockfree benchmark Makefile must expose Pascal and external baseline entrypoints');
@@ -7465,6 +7592,7 @@ begin
   T.Test('EBR boundary conditions', @TestEbrBoundaryConditions);
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
+  T.Test('Channel close idempotent', @TestChannelCloseIdempotent);
   T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
   T.Test('Channel Send/Receive', @TestChannelSendReceive);
   T.Test('Channel SendTimeout', @TestChannelSendTimeout);
@@ -7593,6 +7721,9 @@ begin
   T.Test('Selector single channel', @TestSelectorSingleChannel);
   T.Test('Selector TrySelect empty', @TestSelectorTrySelectEmpty);
   T.Test('Selector clear resets', @TestSelectorClearResets);
+  T.Test('Selector case order prefer first', @TestSelectorCaseOrderPreferFirst);
+  T.Test('Selector TrySelect as default', @TestSelectorTrySelectAsDefault);
+  T.Test('Selector recv on closed empty', @TestSelectorRecvOnClosedEmpty);
   T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);

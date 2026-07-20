@@ -8,7 +8,8 @@ program test_parallel;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.runner;
 
 var
   GTestCounter: Integer = 0;
@@ -26,6 +27,9 @@ var
   GVerbResult: TTestRunResult;
   { Phase 10: Cleanup in parallel }
   GCleanupCounter: Integer = 0;
+  { B4 v8.8d: race-intent counters }
+  GAtomicCounter: LongInt = 0;
+  GSeqDone: LongInt = 0;
 
 { Named procedures for closures stored in global TTestSuite variables.
   Anonymous closures in global records leak because FPC finalizes global
@@ -53,6 +57,181 @@ end;
 procedure CleanupIncrement;
 begin
   InterLockedIncrement(GCleanupCounter);
+end;
+
+{ ── B4: race-intent helpers ──────────────────────────────────────────────── }
+
+procedure AtomicIncBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 1000 do
+    InterLockedIncrement(GAtomicCounter);
+  CheckTrue(True, 'atomic body done');
+end;
+
+procedure SeqMarkerBody;
+begin
+  SleepMs(30);
+  { Phase 1 is serial — single writer before parallel workers start. }
+  GSeqDone := 1;
+  CheckTrue(True, 'seq marker');
+end;
+
+procedure ParSeesSeqDone;
+begin
+  { Phase-1 TestSeq finishes before Phase-2 parallel workers start. }
+  CheckTrue(GSeqDone = 1, 'TestSeq must complete before parallel tests');
+end;
+
+procedure ExpectStormBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 500 do
+  begin
+    ExpectInt(I).ToEqualInt(I);
+    CheckEqual(I, I);
+  end;
+end;
+
+{ ── B9: RegisterStub/Fixture main-thread-only contracts ─────────────────── }
+
+type
+  PRegThreadCtx = ^TRegThreadCtx;
+  TRegThreadCtx = record
+    Suite: TTestSuite;
+    OpStub: Boolean;
+    Caught: Boolean;
+    Msg: string;
+  end;
+
+function RegisterCrossThreadWorker(P: Pointer): PtrInt;
+var
+  C: PRegThreadCtx;
+  LPtr: Pointer;
+  LObj: TObject;
+begin
+  C := PRegThreadCtx(P);
+  C^.Caught := False;
+  C^.Msg := '';
+  try
+    if C^.OpStub then
+    begin
+      GetMem(LPtr, 8);
+      try
+        RegisterStub(C^.Suite, LPtr);
+      except
+        FreeMem(LPtr);
+        raise;
+      end;
+    end
+    else
+    begin
+      LObj := TObject.Create;
+      try
+        RegisterFixture(C^.Suite, LObj);
+      except
+        LObj.Free;
+        raise;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      C^.Caught := True;
+      C^.Msg := E.Message;
+    end;
+  end;
+  Result := 0;
+end;
+
+procedure TestRegisterStubMustBeMainThread;
+var
+  LSuite: TTestSuite;
+  Ctx: TRegThreadCtx;
+  TID: TThreadID;
+begin
+  LSuite := TTestSuite.Create('reg-stub');
+  Ctx.Suite := LSuite;
+  Ctx.OpStub := True;
+  Ctx.Caught := False;
+  Ctx.Msg := '';
+  TID := BeginThread(@RegisterCrossThreadWorker, @Ctx);
+  CheckTrue(TID <> TThreadID(0));
+  WaitForThreadTerminate(TID, 10000);
+  CheckTrue(Ctx.Caught, 'RegisterStub from worker must raise');
+  CheckContains(Ctx.Msg, 'main thread');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestRegisterFixtureMustBeMainThread;
+var
+  LSuite: TTestSuite;
+  Ctx: TRegThreadCtx;
+  TID: TThreadID;
+begin
+  LSuite := TTestSuite.Create('reg-fix');
+  Ctx.Suite := LSuite;
+  Ctx.OpStub := False;
+  Ctx.Caught := False;
+  Ctx.Msg := '';
+  TID := BeginThread(@RegisterCrossThreadWorker, @Ctx);
+  CheckTrue(TID <> TThreadID(0));
+  WaitForThreadTerminate(TID, 10000);
+  CheckTrue(Ctx.Caught, 'RegisterFixture from worker must raise');
+  CheckContains(Ctx.Msg, 'main thread');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestRegisterStubMainThreadOk;
+var
+  LSuite: TTestSuite;
+  LPtr: Pointer;
+begin
+  LSuite := TTestSuite.Create('reg-stub-ok');
+  GetMem(LPtr, 8);
+  try
+    RegisterStub(LSuite, LPtr);
+    CheckTrue(True, 'main-thread RegisterStub ok');
+  finally
+    { CleanupTableAllocations will FreeMem stubs registered on suite }
+    LSuite.CleanupTableAllocations;
+    LSuite := Default(TTestSuite);
+  end;
+end;
+
+procedure TestParallelSoftFail;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFound: Boolean;
+begin
+  LSuite := TTestSuite.Create('par-soft');
+  LSuite.Test('soft_a', procedure
+    begin
+      SoftFail('par soft a');
+      SoftFail('par soft b');
+    end);
+  LSuite.Test('ok_b', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult), 'soft fails suite');
+  CheckTrue(LResult.Failed >= 1);
+  CheckTrue(LResult.Passed >= 1, 'other parallel tests still pass');
+  LFound := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Name = 'soft_a') and
+       (LResult.Results[I].Status = tsFailed) then
+    begin
+      LFound := True;
+      CheckTrue(Pos('par soft a', LResult.Results[I].Message) > 0);
+      CheckTrue(Pos('par soft b', LResult.Results[I].Message) > 0);
+    end;
+  CheckTrue(LFound, 'soft_a failed with both messages');
+  LSuite := Default(TTestSuite);
 end;
 
 procedure TestParallelSimple;
@@ -261,6 +440,53 @@ begin
     end;
   CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
   PassTest('✓ Parallel subtest skip');
+  LSuite := Default(TTestSuite);
+end;
+
+{ ── B10: Parallel mixed suite — normal run + subtest skipped count ───────── }
+
+procedure TestParallelMixedSubtestCounts;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LSkippedSub: Integer;
+  LPassedNormal: Integer;
+begin
+  LSuite := TTestSuite.Create('ParMixedSub');
+  LSuite.Test('n1', @TestParallelPassA);
+  LSuite.Test('n2', @TestParallelPassA);
+  LSuite.TestSubtest('s1',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('leaf', procedure begin CheckTrue(False, 'must not run'); end);
+    end);
+  LSuite.TestSubtest('s2',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('leaf2', procedure begin CheckTrue(False, 'must not run'); end);
+    end);
+  LSuite.RunParallelWithResult(nil, LResult);
+  LSkippedSub := 0;
+  LPassedNormal := 0;
+  for I := 0 to High(LResult.Results) do
+  begin
+    if (LResult.Results[I].Status = tsSkipped) and
+       ((LResult.Results[I].Name = 's1') or (LResult.Results[I].Name = 's2')) then
+    begin
+      Inc(LSkippedSub);
+      CheckTrue(Pos('subtests not supported', LResult.Results[I].Message) > 0,
+        'skip message for ' + LResult.Results[I].Name);
+    end;
+    if (LResult.Results[I].Status = tsPassed) and
+       ((LResult.Results[I].Name = 'n1') or (LResult.Results[I].Name = 'n2')) then
+      Inc(LPassedNormal);
+  end;
+  CheckEqual(LPassedNormal, 2, 'two normal tests pass in parallel');
+  CheckEqual(LSkippedSub, 2, 'two subtests skipped in parallel');
+  CheckTrue(LResult.Failed = 0, 'mixed suite no failures');
+  CheckTrue(LResult.Skipped >= 2, 'Skipped counter >= 2');
+  PassTest('✓ B10 parallel mixed subtest counts');
   LSuite := Default(TTestSuite);
 end;
 
@@ -516,6 +742,7 @@ begin
   WriteLn;
   SectionHeader('R6-54/R6-56: Parallel Coverage');
   TestParallelSubtestSkip;
+  TestParallelMixedSubtestCounts;
   TestTableParallelNameUniqueness;
   TestParallelSinkInjection;
 
@@ -680,6 +907,109 @@ begin
         IntToStr(Length(LResults)));
     ResetDefaultConfig;
     PassTest('RunAllParallelWithResult');
+  end;
+
+  { ── B4 v8.8d: race-intent pressure (Go -race substitute) ───────────── }
+  WriteLn;
+  SectionHeader('B4: Atomic counter under RunParallel');
+  begin
+    ResetDefaultConfig;
+    GAtomicCounter := 0;
+    LSuite := TTestSuite.Create('AtomicRace');
+    LSuite.Test('a1', @AtomicIncBody);
+    LSuite.Test('a2', @AtomicIncBody);
+    LSuite.Test('a3', @AtomicIncBody);
+    LSuite.Test('a4', @AtomicIncBody);
+    LSuite.Test('a5', @AtomicIncBody);
+    LSuite.Test('a6', @AtomicIncBody);
+    LSuite.Test('a7', @AtomicIncBody);
+    LSuite.Test('a8', @AtomicIncBody);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 8 then
+      FailTest('atomic race: expected 8 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GAtomicCounter <> 8 * 1000 then
+      FailTest('atomic race: expected counter 8000, got ' + IntToStr(GAtomicCounter));
+    ResetDefaultConfig;
+    PassTest('B4 atomic counter');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: TestSeq runs before parallel batch');
+  begin
+    ResetDefaultConfig;
+    GSeqDone := 0;
+    LSuite := TTestSuite.Create('SeqThenParallel');
+    LSuite.TestSeq('seq-first', @SeqMarkerBody);
+    LSuite.Test('par-a', @ParSeesSeqDone);
+    LSuite.Test('par-b', @ParSeesSeqDone);
+    LSuite.Test('par-c', @ParSeesSeqDone);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 4 then
+      FailTest('TestSeq mix: expected 4 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GSeqDone <> 1 then
+      FailTest('TestSeq mix: GSeqDone not set');
+    ResetDefaultConfig;
+    PassTest('B4 TestSeq before parallel');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: Expect/Check storm in parallel');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('ExpectStorm');
+    LSuite.Test('e1', @ExpectStormBody);
+    LSuite.Test('e2', @ExpectStormBody);
+    LSuite.Test('e3', @ExpectStormBody);
+    LSuite.Test('e4', @ExpectStormBody);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 4 then
+      FailTest('expect storm: expected 4 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GVerbResult.Failed <> 0 then
+      FailTest('expect storm: unexpected failures');
+    ResetDefaultConfig;
+    PassTest('B4 expect storm');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: Parallel result aggregation totals');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('AggTotals');
+    LSuite.Test('ok1', @TestParallelPassA);
+    LSuite.Test('ok2', @TestParallelPassB);
+    LSuite.Test('ok3', @TestParallelPassA);
+    LSuite.Test('bad', @TestParallelFail);
+    LSuite.Test('skp', @TestParallelSkip);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed + GVerbResult.Failed + GVerbResult.Skipped <> 5 then
+      FailTest('aggregation: P+F+S expected 5, got ' +
+        IntToStr(GVerbResult.Passed + GVerbResult.Failed + GVerbResult.Skipped));
+    if GVerbResult.Passed <> 3 then
+      FailTest('aggregation: expected 3 passed');
+    if GVerbResult.Failed <> 1 then
+      FailTest('aggregation: expected 1 failed');
+    if GVerbResult.Skipped <> 1 then
+      FailTest('aggregation: expected 1 skipped');
+    ResetDefaultConfig;
+    PassTest('B4 result aggregation');
+  end;
+
+  WriteLn;
+  SectionHeader('B9: RegisterStub/Fixture main-thread only');
+  begin
+    TestRegisterStubMustBeMainThread;
+    PassTest('B9 RegisterStub worker fails');
+    TestRegisterFixtureMustBeMainThread;
+    PassTest('B9 RegisterFixture worker fails');
+    TestRegisterStubMainThreadOk;
+    PassTest('B9 RegisterStub main ok');
+  end;
+
+  WriteLn;
+  SectionHeader('B23: SoftFail in parallel');
+  begin
+    TestParallelSoftFail;
+    PassTest('B23 parallel SoftFail');
   end;
 
   WriteLn;

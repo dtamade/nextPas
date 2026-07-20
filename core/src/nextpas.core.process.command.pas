@@ -8,7 +8,8 @@ uses
   nextpas.core.text.base,
   nextpas.core.time.base,
   nextpas.core.process.base,
-  nextpas.core.process.child;
+  nextpas.core.process.child,
+  nextpas.core.async.cancellation;
 
 type
   {**
@@ -64,6 +65,14 @@ type
      *  优先级：stdout 为 stPiped 时 MergeStderr 覆盖 Stderr(stPiped/stInherit)；
      *  与 Stderr(stNull) 冲突时 Spawn 抛 EProcessError。 *}
     function MergeStderr(const AEnable: Boolean = True): ICommand;
+    {** 追加 ExtraFile：子进程侧映射为 fd 3,4,5…（对齐 Go Cmd.ExtraFiles；Unix） *}
+    function ExtraFd(const AFd: Integer): ICommand;
+    {** 在 exec 前 setgid+setuid（对齐 SysProcAttr.Credential；Unix；Windows 不支持） *}
+    function Credential(const AUid, AGid: UInt32): ICommand;
+    {** 取消令牌：IsCancelled 时 Wait/Output/Status/WaitGraceful 路径 Kill 并置 Cancelled *}
+    function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
+    {** 子进程 setpgid(0,0) 自建进程组（Unix；Win UNSUPPORTED）。启用后可用 KillTree *}
+    function NewProcessGroup(const AEnable: Boolean = True): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -80,6 +89,12 @@ type
     FTimeout: TDuration;
     FMaxOutput: Int64;
     FMergeStderr: Boolean;
+    FExtraFds: array of PtrInt;
+    FSetCred: Boolean;
+    FUid: UInt32;
+    FGid: UInt32;
+    FCancelToken: IAsyncCancellationToken;
+    FNewProcessGroup: Boolean;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -97,6 +112,10 @@ type
     function Timeout(const ADuration: TDuration): ICommand;
     function MaxOutput(const ABytes: Int64): ICommand;
     function MergeStderr(const AEnable: Boolean = True): ICommand;
+    function ExtraFd(const AFd: Integer): ICommand;
+    function Credential(const AUid, AGid: UInt32): ICommand;
+    function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
+    function NewProcessGroup(const AEnable: Boolean = True): ICommand;
   end;
 
 implementation
@@ -242,6 +261,12 @@ begin
   FTimeout := TDuration.Zero;
   FMaxOutput := 0;
   FMergeStderr := False;
+  FExtraFds := nil;
+  FSetCred := False;
+  FUid := 0;
+  FGid := 0;
+  FCancelToken := nil;
+  FNewProcessGroup := False;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -339,6 +364,8 @@ var
   LResolvedPath: string;
   LCleanFds: array[0..8] of PtrInt;
   LCleanCount, LCleanIdx: Integer;
+  LExtraPtr: PPtrInt;
+  LExtraCount: Int32;
 begin
   { P0-1 fix: Resolve path consistently regardless of env mode }
   { Build env first (needed for PATH search in all modes) }
@@ -485,12 +512,23 @@ begin
     end;
 
     { Spawn }
-    if LEnvp <> nil then
-      LErr := platform_process_spawn_fds(PAnsiChar(LResolvedPath), @LArgv[0], @LEnvp[0],
-        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage)
+    if (FCancelToken <> nil) and FCancelToken.IsCancelled then
+      raise EProcessError.Create('process spawn cancelled before start');
+    LExtraCount := Length(FExtraFds);
+    if LExtraCount > 0 then
+      LExtraPtr := @FExtraFds[0]
     else
-      LErr := platform_process_spawn_fds(PAnsiChar(LResolvedPath), @LArgv[0], nil,
-        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage);
+      LExtraPtr := nil;
+    if LEnvp <> nil then
+      LErr := platform_process_spawn_fds_ex(PAnsiChar(LResolvedPath), @LArgv[0], @LEnvp[0],
+        LCwd, LChildStdin, LChildStdout, LChildStderr,
+        LExtraPtr, LExtraCount, FSetCred, FUid, FGid, FNewProcessGroup,
+        LProc, LFailStage)
+    else
+      LErr := platform_process_spawn_fds_ex(PAnsiChar(LResolvedPath), @LArgv[0], nil,
+        LCwd, LChildStdin, LChildStdout, LChildStderr,
+        LExtraPtr, LExtraCount, FSetCred, FUid, FGid, FNewProcessGroup,
+        LProc, LFailStage);
 
     if LErr <> 0 then
       case LFailStage of
@@ -549,7 +587,8 @@ begin
   if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
-  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput);
+  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput,
+    FCancelToken, FNewProcessGroup);
 end;
 
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
@@ -567,6 +606,35 @@ end;
 function TCommand.MergeStderr(const AEnable: Boolean): ICommand;
 begin
   FMergeStderr := AEnable;
+  Result := Self;
+end;
+
+function TCommand.ExtraFd(const AFd: Integer): ICommand;
+begin
+  if AFd < 0 then
+    raise EProcessError.Create('ExtraFd must be non-negative');
+  SetLength(FExtraFds, Length(FExtraFds) + 1);
+  FExtraFds[High(FExtraFds)] := PtrInt(AFd);
+  Result := Self;
+end;
+
+function TCommand.Credential(const AUid, AGid: UInt32): ICommand;
+begin
+  FSetCred := True;
+  FUid := AUid;
+  FGid := AGid;
+  Result := Self;
+end;
+
+function TCommand.CancelToken(const AToken: IAsyncCancellationToken): ICommand;
+begin
+  FCancelToken := AToken;
+  Result := Self;
+end;
+
+function TCommand.NewProcessGroup(const AEnable: Boolean): ICommand;
+begin
+  FNewProcessGroup := AEnable;
   Result := Self;
 end;
 

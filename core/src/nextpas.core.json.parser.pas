@@ -66,7 +66,8 @@ uses
   nextpas.core.text.number,
   nextpas.core.hash.wyhash,
   nextpas.core.json.scanner,
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 const
   INITIAL_NODE_CAP = 32;
@@ -129,8 +130,9 @@ begin
   begin
     for I := 0 to FIndexCap - 1 do
       if FIndices[I].Slots <> nil then
-        FAllocator.FreeMem(FIndices[I].Slots);
-    FAllocator.FreeMem(FIndices);
+        FreeMemOf(FAllocator, FIndices[I].Slots,
+          SizeUInt(FIndices[I].Mask + 1) * SizeOf(UInt32));
+    FreeMemOf(FAllocator, FIndices, SizeUInt(FIndexCap) * SizeOf(TJsonObjectIndex));
     FIndices := nil;
     FIndexCap := 0;
   end;
@@ -141,13 +143,14 @@ begin
   end;
   if FStrOverflow <> nil then
   begin
-    FAllocator.FreeMem(FStrOverflow);
+    FreeMemOf(FAllocator, FStrOverflow, SizeUInt(FStrOverflowCap) * SizeOf(Pointer));
     FStrOverflow := nil;
   end;
   if FCombinedAlloc then
   begin
     if FNodes <> nil then
-      FAllocator.FreeMem(FNodes);
+      FreeMemOf(FAllocator, FNodes,
+        SizeUInt(FNodeCap) * SizeOf(TJsonNode) + FStrArenaCap);
     FNodes := nil;
     FStrArena := nil;
   end
@@ -155,12 +158,12 @@ begin
   begin
     if FStrArena <> nil then
     begin
-      FAllocator.FreeMem(FStrArena);
+      FreeMemOf(FAllocator, FStrArena, FStrArenaCap);
       FStrArena := nil;
     end;
     if FNodes <> nil then
     begin
-      FAllocator.FreeMem(FNodes);
+      FreeMemOf(FAllocator, FNodes, SizeUInt(FNodeCap) * SizeOf(TJsonNode));
       FNodes := nil;
     end;
   end;
@@ -195,20 +198,22 @@ begin
       LArenaPtr := FAllocator.GetMem(FStrArenaCap);
       if LArenaPtr = nil then
       begin
-        FAllocator.FreeMem(LNodesPtr);
+        FreeMemOf(FAllocator, LNodesPtr, SizeUInt(LNewCap) * SizeOf(TJsonNode));
         SetOutOfMemoryError;
         Exit(JSON_NODE_NONE);
       end;
       if FStrArenaUsed > 0 then
         Move(FStrArena^, LArenaPtr^, FStrArenaUsed);
-      FAllocator.FreeMem(FNodes);
+      FreeMemOf(FAllocator, FNodes,
+        SizeUInt(FNodeCap) * SizeOf(TJsonNode) + FStrArenaCap);
       FNodes := LNodesPtr;
       FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
     begin
-      LNewNodes := FAllocator.ReallocMem(FNodes, LNewCap * SizeOf(TJsonNode));
+      LNewNodes := ReallocMemOf(FAllocator, FNodes,
+        SizeUInt(FNodeCap) * SizeOf(TJsonNode), SizeUInt(LNewCap) * SizeOf(TJsonNode));
       if LNewNodes = nil then
       begin
         SetOutOfMemoryError;
@@ -242,10 +247,11 @@ begin
       LNewCap := 8
     else
       LNewCap := FStrOverflowCap * 2;
-    LNewOverflow := FAllocator.ReallocMem(FStrOverflow, LNewCap * SizeOf(Pointer));
+    LNewOverflow := ReallocMemOf(FAllocator, FStrOverflow,
+      SizeUInt(FStrOverflowCap) * SizeOf(Pointer), SizeUInt(LNewCap) * SizeOf(Pointer));
     if LNewOverflow = nil then
     begin
-      FAllocator.FreeMem(Result);
+      FAllocator.FreeMem(Result); { ASize known but not on IAllocator free path size }
       Result := nil;
       SetOutOfMemoryError;
       Exit;
@@ -843,10 +849,11 @@ begin
     for I := 0 to FIndexCap - 1 do
       if FIndices[I].Slots <> nil then
       begin
-        FAllocator.FreeMem(FIndices[I].Slots);
+        FreeMemOf(FAllocator, FIndices[I].Slots,
+          SizeUInt(FIndices[I].Mask + 1) * SizeOf(UInt32));
         FIndices[I].Slots := nil;
       end;
-    FAllocator.FreeMem(FIndices);
+    FreeMemOf(FAllocator, FIndices, SizeUInt(FIndexCap) * SizeOf(TJsonObjectIndex));
     FIndices := nil;
     FIndexCap := 0;
   end;
@@ -873,18 +880,20 @@ begin
       LArenaPtr := FAllocator.GetMem(FStrArenaCap);
       if LArenaPtr = nil then
       begin
-        FAllocator.FreeMem(LNodesPtr);
+        FreeMemOf(FAllocator, LNodesPtr, SizeUInt(LEstimate) * SizeOf(TJsonNode));
         SetOutOfMemoryError;
         Exit(False);
       end;
-      FAllocator.FreeMem(LBase);
+      FreeMemOf(FAllocator, LBase,
+        SizeUInt(FNodeCap) * SizeOf(TJsonNode) + FStrArenaCap);
       FNodes := LNodesPtr;
       FStrArena := LArenaPtr;
       FCombinedAlloc := False;
     end
     else
     begin
-      LNewNodes := FAllocator.ReallocMem(FNodes, LEstimate * SizeOf(TJsonNode));
+      LNewNodes := ReallocMemOf(FAllocator, FNodes,
+        SizeUInt(FNodeCap) * SizeOf(TJsonNode), SizeUInt(LEstimate) * SizeOf(TJsonNode));
       if LNewNodes = nil then
       begin
         SetOutOfMemoryError;

@@ -345,6 +345,57 @@ begin
   Check(not IsSymbol($D800), 'surrogate not symbol');
 end;
 
+{ === Bidi_Class + Brackets (UAX #9 data) === }
+
+procedure TestBidiClassAndBrackets;
+begin
+  CheckEqual(Int64(Ord(bcL)), Int64(Ord(GetBidiClass(Ord('A')))), 'A is L');
+  { ASCII digits are EN }
+  CheckEqual(Int64(Ord(bcEN)), Int64(Ord(GetBidiClass(Ord('0')))), '0 is EN');
+  CheckEqual(Int64(Ord(bcEN)), Int64(Ord(GetBidiClass(Ord('9')))), '9 is EN');
+  CheckEqual(Int64(Ord(bcWS)), Int64(Ord(GetBidiClass(Ord(' ')))), 'space is WS');
+  CheckEqual(Int64(Ord(bcON)), Int64(Ord(GetBidiClass(Ord('!')))), '! is ON');
+  CheckEqual(Int64(Ord(bcR)), Int64(Ord(GetBidiClass($05D0))), 'Hebrew Alef is R');
+  CheckEqual(Int64(Ord(bcAL)), Int64(Ord(GetBidiClass($0627))), 'Arabic Alef is AL');
+  CheckEqual(Int64(Ord(bcAN)), Int64(Ord(GetBidiClass($0660))), 'Arabic-Indic digit is AN');
+  CheckEqual(Int64(Ord(bcLRE)), Int64(Ord(GetBidiClass($202A))), 'LRE');
+  CheckEqual(Int64(Ord(bcRLE)), Int64(Ord(GetBidiClass($202B))), 'RLE');
+  CheckEqual(Int64(Ord(bcPDF)), Int64(Ord(GetBidiClass($202C))), 'PDF');
+  CheckEqual(Int64(Ord(bcLRI)), Int64(Ord(GetBidiClass($2066))), 'LRI');
+  CheckEqual(Int64(Ord(bcRLI)), Int64(Ord(GetBidiClass($2067))), 'RLI');
+  CheckEqual(Int64(Ord(bcFSI)), Int64(Ord(GetBidiClass($2068))), 'FSI');
+  CheckEqual(Int64(Ord(bcPDI)), Int64(Ord(GetBidiClass($2069))), 'PDI');
+  CheckEqual(Int64(Ord(bcNSM)), Int64(Ord(GetBidiClass($0301))), 'combining acute NSM');
+
+  CheckEqual(Int64(Ord(bpbtOpen)), Int64(Ord(GetBidiPairedBracketType(Ord('(')))), '( open');
+  CheckEqual(Int64(Ord(bpbtClose)), Int64(Ord(GetBidiPairedBracketType(Ord(')')))), ') close');
+  CheckEqual(Int64(Ord(')')), Int64(GetBidiPairedBracket(Ord('('))), '( pairs )');
+  CheckEqual(Int64(Ord('(')), Int64(GetBidiPairedBracket(Ord(')'))), ') pairs (');
+  CheckEqual(Int64(Ord(bpbtNone)), Int64(Ord(GetBidiPairedBracketType(Ord('A')))), 'A no bracket');
+  CheckEqual(Int64(Ord('A')), Int64(GetBidiPairedBracket(Ord('A'))), 'A pair self');
+end;
+
+procedure TestEastAsianWidth;
+begin
+  // Na / N
+  CheckEqual(Int64(Ord(eawNarrow)), Int64(Ord(GetEastAsianWidth(Ord('A')))), 'A Na');
+  CheckEqual(Int64(Ord(eawAmbiguous)), Int64(Ord(GetEastAsianWidth($0301))), 'combining acute A');
+  CheckEqual(Int64(Ord(eawNeutral)), Int64(Ord(GetEastAsianWidth($0378))), 'unassigned N');
+  // W / F
+  CheckEqual(Int64(Ord(eawWide)), Int64(Ord(GetEastAsianWidth($4E2D))), 'CJK W');
+  CheckEqual(Int64(Ord(eawFullwidth)), Int64(Ord(GetEastAsianWidth($FF21))), 'Fullwidth A F');
+  // H halfwidth katakana
+  CheckEqual(Int64(Ord(eawHalfwidth)), Int64(Ord(GetEastAsianWidth($FF66))), 'halfwidth H');
+  // A ambiguous
+  CheckEqual(Int64(Ord(eawAmbiguous)), Int64(Ord(GetEastAsianWidth($00A1))), 'inverted bang A');
+  // FWH helper for LB19a
+  Check(IsEastAsianFWH($4E2D), 'CJK FWH');
+  Check(IsEastAsianFWH($FF21), 'fullwidth FWH');
+  Check(IsEastAsianFWH($FF66), 'halfwidth FWH');
+  Check(not IsEastAsianFWH(Ord('A')), 'A not FWH');
+  Check(not IsEastAsianFWH($00A1), 'Ambiguous not FWH');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode');
   T.Test('IsUpper', @TestIsUpper);
@@ -366,5 +417,7 @@ begin
   T.Test('HasBinaryProperty', @TestHasBinaryProperty);
   T.Test('GraphemeBreakProperty', @TestGraphemeBreakProperty);
   T.Test('PropertyCombinations', @TestPropertyCombinations);
+  T.Test('BidiClassAndBrackets', @TestBidiClassAndBrackets);
+  T.Test('EastAsianWidth', @TestEastAsianWidth);
   if not T.Run then Halt(1);
 end.

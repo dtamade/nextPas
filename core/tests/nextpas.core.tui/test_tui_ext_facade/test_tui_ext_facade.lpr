@@ -123,10 +123,128 @@ begin
   Check(LCaught, 'ext facade lets app code catch backend failures as ETui');
 end;
 
+
+procedure TestExtThemeAccent;
+var
+  LTheme: TChatTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(ColorIsSet(LTheme.AccentUser), 'accent user');
+  Check(ColorIsSet(LTheme.BgPrimary), 'bg primary');
+  Check(ColorIsSet(LTheme.FgPrimary), 'fg primary set');
+  Check(ColorIsSet(LTheme.FgMuted), 'fg muted set');
+end;
+
+procedure TestExtPanelGrid;
+var
+  LPanel: IPanel;
+begin
+  LPanel := TPanel.Grid(2, 2);
+  Check(LPanel <> nil, '2x2 panel');
+end;
+
+procedure TestExtAppScreensEmpty;
+var
+  LApp: TApp;
+begin
+  LApp := TApp.Create;
+  try
+    Check(LApp.Screens.Count = 0, 'screens empty');
+    Check(LApp.Screens.IsEmpty, 'IsEmpty');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestExtLoadingEmptyAllDone;
+var
+  LLoading: TLoadingGroup;
+begin
+  LLoading := TLoadingGroup.Empty;
+  Check(LLoading.AllDone, 'empty all done');
+  Check(not LLoading.AnyLoading, 'not loading');
+end;
+
+procedure TestExtScreenRenderCount;
+var
+  LApp: TApp;
+  LScreen: TExtScreen;
+begin
+  LApp := TApp.Create;
+  LScreen := TExtScreen.Create;
+  try
+    LApp.Screens.Push(LScreen);
+    Check(LApp.Screens.Count = 1, 'one screen');
+    Check(LScreen.RenderCount = 0, 'render not auto-called');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestExtThemeDarkFields;
+var
+  LTheme: TChatTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(ColorIsSet(LTheme.FgPrimary), 'dark fg primary');
+  Check(ColorIsSet(LTheme.BgPrimary), 'dark bg primary');
+  Check(ColorIsSet(LTheme.AccentUser), 'dark accent user');
+end;
+
+procedure TestExtAppRequestAnimationFrame;
+var
+  LApp: TApp;
+begin
+  LApp := TApp.Create;
+  try
+    LApp.RequestAnimationFrame;
+    Check(LApp <> nil, 'request animation frame keeps app');
+    Check(LApp.Screens.IsEmpty, 'screens still empty');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestExtLoadingStartPhase;
+var
+  LLoading: TLoadingGroup;
+  LCompletion: TCompletionSlot;
+  LResult: TTaskResult;
+begin
+  LLoading := TLoadingGroup.Empty;
+  LResult := Default(TTaskResult);
+  LResult.Status := tsCompleted;
+  LCompletion.Id := 7;
+  LCompletion.Result := LResult;
+  LLoading.Start(0, LCompletion.Id, 50);
+  Check(LLoading.AnyLoading, 'started loading');
+  Check(LLoading.GetPhase(0) <> lpSuccess, 'not success before update');
+  LLoading.Update([LCompletion], 1);
+  CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+    'complete to success');
+end;
+
+procedure TestExtPanelGridOneByOne;
+var
+  LPanel: IPanel;
+begin
+  LPanel := TPanel.Grid(1, 1);
+  Check(LPanel <> nil, '1x1 panel');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
   T.Test('ext app task surface', @TestExtAppTaskSurface);
   T.Test('ext facade exposes tui exceptions', @TestExtFacadeExposesTuiExceptions);
+  T.Test('ext theme accent', @TestExtThemeAccent);
+  T.Test('ext panel grid', @TestExtPanelGrid);
+  T.Test('ext app screens empty', @TestExtAppScreensEmpty);
+  T.Test('ext loading empty all done', @TestExtLoadingEmptyAllDone);
+  T.Test('ext screen render count', @TestExtScreenRenderCount);
+  T.Test('ext theme dark fields', @TestExtThemeDarkFields);
+  T.Test('ext app request animation frame', @TestExtAppRequestAnimationFrame);
+  T.Test('ext loading start phase', @TestExtLoadingStartPhase);
+  T.Test('ext panel grid 1x1', @TestExtPanelGridOneByOne);
   if not T.Run then Halt(1);
 end.

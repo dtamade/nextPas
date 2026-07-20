@@ -949,6 +949,89 @@ begin
   ExpectFail(procedure begin ExpectDouble(1.0).Not_.ToBeNotNaN; end, 'NaN');
 end;
 
+{ F2: ToBeInf / ToBeNotInf / ToBeFinite }
+
+procedure TestExpectToBeInfPass;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectDouble(LInf).ToBeInf;
+  ExpectDouble(-1.0 / 0.0).ToBeInf;
+end;
+
+procedure TestExpectToBeInfFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(0.0).ToBeInf; end, 'infinite');
+end;
+
+procedure TestExpectToBeNotInfPass;
+begin
+  ExpectDouble(0.0).ToBeNotInf;
+  ExpectDouble(1.5).ToBeNotInf;
+end;
+
+procedure TestExpectToBeNotInfFail;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).ToBeNotInf; end, 'infinite');
+end;
+
+procedure TestExpectToBeFinitePass;
+begin
+  ExpectDouble(1.5).ToBeFinite;
+  ExpectDouble(0.0).ToBeFinite;
+  ExpectDouble(-42.0).ToBeFinite;
+end;
+
+procedure TestExpectToBeFiniteFailNaN;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeFinite; end, 'finite');
+end;
+
+procedure TestExpectToBeFiniteFailInf;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).ToBeFinite; end, 'finite');
+end;
+
+procedure TestExpectNotToBeInf;
+var
+  LInf: Double;
+begin
+  ExpectDouble(0.0).Not_.ToBeInf;
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).Not_.ToBeInf; end, 'non-infinite');
+end;
+
+procedure TestExpectNotToBeFinite;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectDouble(LInf).Not_.ToBeFinite;
+  ExpectFail(procedure begin ExpectDouble(1.5).Not_.ToBeFinite; end, 'non-finite');
+end;
+
+procedure TestIntOverflowCheck;
+begin
+  CheckFalse(IntOverflowCheck(1, '+', 2), '1+2 no overflow');
+  CheckTrue(IntOverflowCheck(High(Int64), '+', 1), 'High+1 overflows');
+  CheckTrue(IntOverflowCheck(Low(Int64), '-', 1), 'Low-1 overflows');
+  CheckFalse(IntOverflowCheck(10, '*', 2), '10*2 no overflow');
+  CheckTrue(IntOverflowCheck(High(Int64), '*', 2), 'High*2 overflows');
+  CheckTrue(IntOverflowCheck(Low(Int64), '*', -1), 'Low*-1 overflows');
+  CheckFalse(IntOverflowCheck(5, 'add', 0), 'add 0 no overflow');
+  CheckFalse(IntOverflowCheck(5, 'unknown', 99), 'unknown op → no signal');
+end;
+
 { E-10: Chaining returns self }
 
 procedure TestExpectChainingReturnsSelf;
@@ -1428,10 +1511,59 @@ begin
   end;
 end;
 
+{ ── v8.8a: ToMatchSnapshot (fluent mirror of CheckSnapshot) ─────────────── }
+
+procedure TestToMatchSnapshotCreateAndMatch;
+const
+  LSnapDir = '/tmp/np_snap_expect_a';
+begin
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent1.txt');
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent1.txt');
+end;
+
+procedure TestToMatchSnapshotMismatch;
+const
+  LSnapDir = '/tmp/np_snap_expect_b';
+begin
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent2.txt');
+  ExpectFail(procedure begin
+    Expect('goodbye fluent').ToMatchSnapshot(LSnapDir, 'fluent2.txt');
+  end, 'mismatch');
+end;
+
+procedure TestToMatchSnapshotTypeMismatch;
+begin
+  ExpectFail(procedure begin
+    ExpectInt(42).ToMatchSnapshot('/tmp/np_snap_expect_type', 'x.txt');
+  end, 'ToMatchSnapshot');
+end;
+
+{ ── B11: fail-path table for ExpectInt ────────────────────────────────────── }
+
+procedure TestB11ExpectFailPathCase(const AC: TTestCase);
+{ Data: expected|actual — ExpectInt(actual).ToEqualInt(expected) must fail. }
+var
+  LPos: Integer;
+  LExp, LAct: string;
+  LExpN, LActN: Int64;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'B11 data format');
+  LExp := Copy(AC.Data, 1, LPos - 1);
+  LAct := Copy(AC.Data, LPos + 1, MaxInt);
+  LExpN := StrToInt(LExp);
+  LActN := StrToInt(LAct);
+  ExpectFail(procedure begin
+    ExpectInt(LActN).ToEqualInt(LExpN);
+  end, LExp);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LB11Cases: specialize TArray<TTestCase>;
+  LB11I: Integer;
 begin
   WriteLn('=== test_expect ===');
   LSuite := TTestSuite.Create('IExpectation API');
@@ -1599,6 +1731,16 @@ begin
   LSuite.Test('ToBeNotNaN fail',               @TestExpectToBeNotNaNFail);
   LSuite.Test('Not_.ToBeNaN',                  @TestExpectToBeNaNNot);
   LSuite.Test('Not_.ToBeNotNaN',               @TestExpectToBeNotNaNNot);
+  LSuite.Test('ToBeInf pass',                  @TestExpectToBeInfPass);
+  LSuite.Test('ToBeInf fail',                  @TestExpectToBeInfFail);
+  LSuite.Test('ToBeNotInf pass',               @TestExpectToBeNotInfPass);
+  LSuite.Test('ToBeNotInf fail',               @TestExpectToBeNotInfFail);
+  LSuite.Test('ToBeFinite pass',               @TestExpectToBeFinitePass);
+  LSuite.Test('ToBeFinite fail (NaN)',         @TestExpectToBeFiniteFailNaN);
+  LSuite.Test('ToBeFinite fail (Inf)',         @TestExpectToBeFiniteFailInf);
+  LSuite.Test('Not_.ToBeInf',                  @TestExpectNotToBeInf);
+  LSuite.Test('Not_.ToBeFinite',               @TestExpectNotToBeFinite);
+  LSuite.Test('IntOverflowCheck',              @TestIntOverflowCheck);
   LSuite.Test('Chaining returns self',         @TestExpectChainingReturnsSelf);
 
   { WithMessage, ToEqualBytes, ToFailUnexpected }
@@ -1660,6 +1802,11 @@ begin
   LSuite.Test('ToBeInstanceOf nil',        @TestToBeInstanceOfNil);
   LSuite.Test('Not_.ToBeInstanceOf',       @TestToBeInstanceOfNot);
 
+  { v8.8a: ToMatchSnapshot }
+  LSuite.Test('ToMatchSnapshot create+match', @TestToMatchSnapshotCreateAndMatch);
+  LSuite.Test('ToMatchSnapshot mismatch',     @TestToMatchSnapshotMismatch);
+  LSuite.Test('ToMatchSnapshot type mismatch',@TestToMatchSnapshotTypeMismatch);
+
   LSuite.Test('ToBeSorted int pass',      @TestToBeSortedIntPass);
   LSuite.Test('ToBeSorted int fail',      @TestToBeSortedIntFail);
   LSuite.Test('ToBeSorted int empty',     @TestToBeSortedIntEmpty);
@@ -1669,6 +1816,15 @@ begin
   LSuite.Test('ToBeSorted str pass',      @TestToBeSortedStrPass);
   LSuite.Test('ToBeSorted str fail',      @TestToBeSortedStrFail);
   LSuite.Test('ToBeSorted str empty',     @TestToBeSortedStrEmpty);
+
+  { B11: meaningful fail-path table for ExpectInt.ToEqualInt }
+  SetLength(LB11Cases, 200);
+  for LB11I := 0 to High(LB11Cases) do
+  begin
+    LB11Cases[LB11I].Name := 'exp-fail-' + IntToStr(LB11I);
+    LB11Cases[LB11I].Data := IntToStr(LB11I) + '|' + IntToStr(LB11I + 7);
+  end;
+  LSuite.TestTable('B11 expect fail-path', LB11Cases, @TestB11ExpectFailPathCase);
 
   if not LSuite.Run then
   begin

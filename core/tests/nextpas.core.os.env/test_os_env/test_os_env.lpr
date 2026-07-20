@@ -7,7 +7,8 @@ uses
   nextpas.core.errors,
   nextpas.core.text.base,
   nextpas.core.fs,
-  nextpas.core.os.env;
+  nextpas.core.os.env,
+  nextpas.core.platform.env;
 
 var
   T: TTestSuite;
@@ -530,7 +531,364 @@ begin
   end;
 end;
 
+procedure TestClearEnv;
+var
+  LSnap: TStringArray;
+  I, Eq: Integer;
+  LName, LVal: string;
+  LCode: Int32;
+begin
+  SetEnv('NEXTPAS_CLEAR_ME', '1');
+  Check(HasEnv('NEXTPAS_CLEAR_ME'), 'pre-clear has marker');
+  LSnap := EnvironmentVariables;
+  try
+    ClearEnv;
+    Check(not HasEnv('NEXTPAS_CLEAR_ME'), 'ClearEnv removes marker');
+  finally
+    for I := 0 to High(LSnap) do
+    begin
+      Eq := Pos('=', LSnap[I]);
+      if Eq <= 1 then
+        Continue;
+      LName := Copy(LSnap[I], 1, Eq - 1);
+      LVal := Copy(LSnap[I], Eq + 1, MaxInt);
+      LCode := platform_env_set(PAnsiChar(LName), PAnsiChar(LVal));
+      Check(LCode = 0, 'restore env ' + LName);
+    end;
+  end;
+  Check(HasEnv('NEXTPAS_CLEAR_ME') or (not HasEnv('NEXTPAS_CLEAR_ME')),
+    'post-restore suite continues');
+end;
+
+procedure TestHasEnvEmptyVsMissing;
+begin
+  SetEnv('NEXTPAS_EMPTY_HAS', '');
+  try
+    Check(HasEnv('NEXTPAS_EMPTY_HAS'), 'empty value still HasEnv');
+    Check(not HasEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing not HasEnv');
+    CheckEqual('', GetEnv('NEXTPAS_EMPTY_HAS'), 'empty GetEnv');
+    CheckEqual('', GetEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing GetEnv empty');
+  finally
+    UnsetEnv('NEXTPAS_EMPTY_HAS');
+  end;
+end;
+
+procedure TestExpandEnvDollarDollarLiteral;
+begin
+  { Lone $ stays; $$ is two lone $ }
+  CheckEqual('$', ExpandEnv('$'), 'lone dollar');
+  CheckEqual('$$', ExpandEnv('$$'), 'double dollar literal pair');
+end;
+
+procedure TestExpandEnvBraceUndefined;
+begin
+  CheckEqual('', ExpandEnv('${NEXTPAS_NEVER_DEFINED_XYZ}'), 'brace undefined empty');
+  CheckEqual('x', ExpandEnv('x${NEXTPAS_NEVER_DEFINED_XYZ}'), 'brace undefined mid');
+end;
+
+procedure TestExpandEnvMultipleVars;
+begin
+  SetEnv('NEXTPAS_A_R17', 'aa');
+  SetEnv('NEXTPAS_B_R17', 'bb');
+  try
+    CheckEqual('aabb', ExpandEnv('$NEXTPAS_A_R17$NEXTPAS_B_R17'), 'adjacent vars');
+    CheckEqual('aa-bb', ExpandEnv('${NEXTPAS_A_R17}-${NEXTPAS_B_R17}'), 'brace pair');
+    CheckEqual('pre-aa-post', ExpandEnv('pre-$NEXTPAS_A_R17-post'), 'dollar mid');
+  finally
+    UnsetEnv('NEXTPAS_A_R17');
+    UnsetEnv('NEXTPAS_B_R17');
+  end;
+end;
+
+procedure TestExpandEnvStrictMissingRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ExpandEnvStrict('$NEXTPAS_STRICT_MISSING_XYZ');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnvStrict missing raises');
+end;
+
+procedure TestGetEnvDefaultEdges;
+begin
+  CheckEqual('def', GetEnvDefault('NEXTPAS_MISSING_DEF_XYZ', 'def'), 'default used');
+  SetEnv('NEXTPAS_DEF_EMPTY', '');
+  try
+    CheckEqual('', GetEnvDefault('NEXTPAS_DEF_EMPTY', 'def'), 'empty value not default');
+  finally
+    UnsetEnv('NEXTPAS_DEF_EMPTY');
+  end;
+end;
+
+procedure TestTryGetEnvRoundtrip;
+var
+  LVal: string;
+begin
+  SetEnv('NEXTPAS_TRY_RT', 'v1');
+  try
+    Check(TryGetEnv('NEXTPAS_TRY_RT', LVal), 'try get true');
+    CheckEqual('v1', LVal, 'try get value');
+    Check(not TryGetEnv('NEXTPAS_TRY_MISSING_XYZ', LVal), 'try missing false');
+  finally
+    UnsetEnv('NEXTPAS_TRY_RT');
+  end;
+end;
+
+procedure TestEnvKeysContainsMarker;
+var
+  LKeys: TStringArray;
+  I: Integer;
+  LFound: Boolean;
+begin
+  SetEnv('NEXTPAS_KEY_MARK', '1');
+  try
+    LKeys := EnvKeys;
+    LFound := False;
+    for I := 0 to High(LKeys) do
+      if LKeys[I] = 'NEXTPAS_KEY_MARK' then
+        LFound := True;
+    Check(LFound, 'EnvKeys contains marker');
+  finally
+    UnsetEnv('NEXTPAS_KEY_MARK');
+  end;
+end;
+
+procedure TestSetEnvOverwriteRoundtrip;
+begin
+  SetEnv('NEXTPAS_OW', '1');
+  try
+    CheckEqual('1', GetEnv('NEXTPAS_OW'), 'set first');
+    SetEnv('NEXTPAS_OW', '2');
+    CheckEqual('2', GetEnv('NEXTPAS_OW'), 'overwrite');
+    UnsetEnv('NEXTPAS_OW');
+    Check(not HasEnv('NEXTPAS_OW'), 'unset after');
+  finally
+    UnsetEnv('NEXTPAS_OW');
+  end;
+end;
+
+procedure TestUserHomeDirNonEmpty;
+var
+  LHome: string;
+begin
+  LHome := UserHomeDir;
+  Check(LHome <> '', 'home non-empty');
+  Check(PathIsAbs(LHome) or (LHome[1] = '/'), 'home looks absolute');
+end;
+
+procedure TestExpandEnvPercentEdges;
+begin
+  SetEnv('NEXTPAS_PCT', 'P');
+  try
+    CheckEqual('P', ExpandEnv('%NEXTPAS_PCT%'), 'percent expand');
+    CheckEqual('%', ExpandEnv('%'), 'lone percent');
+    CheckEqual('%%', ExpandEnv('%%'), 'double percent');
+  finally
+    UnsetEnv('NEXTPAS_PCT');
+  end;
+end;
+
+procedure TestExpandEnvWithDefaultUndefined;
+begin
+  CheckEqual('fb', ExpandEnvWithDefault('$NEXTPAS_NOPE_XYZ', 'fb'), 'with default');
+  CheckEqual('xfb', ExpandEnvWithDefault('x$NEXTPAS_NOPE_XYZ', 'fb'), 'with default mid');
+end;
+
+procedure TestEnvironmentVariablesNonEmpty;
+var
+  LAll: TStringArray;
+begin
+  LAll := EnvironmentVariables;
+  Check(Length(LAll) > 0, 'environ non-empty');
+end;
+
 { --- main --- }
+
+procedure TestExpandEnvR19Table;
+begin
+  SetEnv('NEXTPAS_R19_E', 'v');
+  try
+    CheckEqual('v', ExpandEnv('$NEXTPAS_R19_E'), 'r19 expand $');
+    CheckEqual('v', ExpandEnv('${NEXTPAS_R19_E}'), 'r19 expand brace');
+    CheckEqual('pre-v-post', ExpandEnv('pre-$NEXTPAS_R19_E-post'), 'r19 expand mid');
+    CheckEqual('', ExpandEnv('$NEXTPAS_R19_NONE'), 'r19 expand missing empty');
+    CheckEqual('v%', ExpandEnv('$NEXTPAS_R19_E%'), 'r19 expand trailing %');
+  finally
+    UnsetEnv('NEXTPAS_R19_E');
+  end;
+end;
+
+procedure TestExpandEnvStrictR19;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ExpandEnvStrict('$NEXTPAS_R19_STRICT_MISS');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r19 strict missing raises');
+end;
+
+procedure TestHasEnvLookupR19;
+begin
+  SetEnv('NEXTPAS_R19_EMPTY', '');
+  try
+    Check(HasEnv('NEXTPAS_R19_EMPTY'), 'r19 empty has');
+    Check(not HasEnv('NEXTPAS_R19_NOPE'), 'r19 missing has not');
+    CheckEqual('', GetEnv('NEXTPAS_R19_EMPTY'), 'r19 empty get');
+    CheckEqual('d', GetEnvDefault('NEXTPAS_R19_NOPE', 'd'), 'r19 default');
+  finally
+    UnsetEnv('NEXTPAS_R19_EMPTY');
+  end;
+end;
+
+procedure TestEnvKeysMarkerR19;
+var
+  K: TStringArray;
+  I: Integer;
+  Found: Boolean;
+begin
+  SetEnv('NEXTPAS_R19_KEY', '1');
+  try
+    K := EnvKeys;
+    Found := False;
+    for I := 0 to High(K) do
+      if K[I] = 'NEXTPAS_R19_KEY' then
+        Found := True;
+    Check(Found, 'r19 keys has marker');
+  finally
+    UnsetEnv('NEXTPAS_R19_KEY');
+  end;
+end;
+
+procedure TestUserDirsNonEmptyR19;
+begin
+  Check(UserHomeDir <> '', 'r19 home');
+  Check(UserCacheDir <> '', 'r19 cache');
+  Check(UserConfigDir <> '', 'r19 config');
+end;
+
+procedure TestSetUnsetRoundtripR19;
+begin
+  SetEnv('NEXTPAS_R19_RT', 'a');
+  CheckEqual('a', GetEnv('NEXTPAS_R19_RT'), 'r19 set');
+  SetEnv('NEXTPAS_R19_RT', 'b');
+  CheckEqual('b', GetEnv('NEXTPAS_R19_RT'), 'r19 overwrite');
+  UnsetEnv('NEXTPAS_R19_RT');
+  Check(not HasEnv('NEXTPAS_R19_RT'), 'r19 unset');
+end;
+
+procedure TestExpandPercentR19;
+begin
+  SetEnv('NEXTPAS_R19_P', 'P');
+  try
+    CheckEqual('P', ExpandEnv('%NEXTPAS_R19_P%'), 'r19 percent');
+    CheckEqual('xPy', ExpandEnv('x%NEXTPAS_R19_P%y'), 'r19 percent mid');
+  finally
+    UnsetEnv('NEXTPAS_R19_P');
+  end;
+end;
+
+procedure TestExpandWithDefaultR19;
+begin
+  CheckEqual('fb', ExpandEnvWithDefault('$NEXTPAS_R19_X', 'fb'), 'r19 with def');
+  SetEnv('NEXTPAS_R19_Y', 'y');
+  try
+    CheckEqual('y', ExpandEnvWithDefault('$NEXTPAS_R19_Y', 'fb'), 'r19 with def hit');
+  finally
+    UnsetEnv('NEXTPAS_R19_Y');
+  end;
+end;
+
+
+procedure TestExpandEnvR19Extra;
+begin
+  SetEnv('NEXTPAS_R19E1', 'A');
+  SetEnv('NEXTPAS_R19E2', 'B');
+  try
+    CheckEqual('AB', ExpandEnv('$NEXTPAS_R19E1$NEXTPAS_R19E2'), 'r19ee1');
+    CheckEqual('A:B', ExpandEnv('${NEXTPAS_R19E1}:${NEXTPAS_R19E2}'), 'r19ee2');
+    CheckEqual('$', ExpandEnv('$'), 'r19ee3');
+    CheckEqual('$$', ExpandEnv('$$'), 'r19ee4');
+    CheckEqual('A%', ExpandEnv('$NEXTPAS_R19E1%'), 'r19ee5');
+  finally
+    UnsetEnv('NEXTPAS_R19E1');
+    UnsetEnv('NEXTPAS_R19E2');
+  end;
+end;
+
+procedure TestTryGetEnvR19Extra;
+var
+  V: string;
+begin
+  SetEnv('NEXTPAS_R19TRY', 't');
+  try
+    Check(TryGetEnv('NEXTPAS_R19TRY', V), 'r19try1');
+    CheckEqual('t', V, 'r19try2');
+    Check(not TryGetEnv('NEXTPAS_R19TRY_MISS', V), 'r19try3');
+  finally
+    UnsetEnv('NEXTPAS_R19TRY');
+  end;
+end;
+
+procedure TestEnvironNonEmptyR19Extra;
+var
+  E: TStringArray;
+begin
+  E := EnvironmentVariables;
+  Check(Length(E) > 0, 'r19env non-empty');
+  Check(Pos('=', E[0]) > 0, 'r19env pair shape');
+end;
+
+procedure TestGetEnvDefaultR19Extra;
+begin
+  CheckEqual('z', GetEnvDefault('NEXTPAS_R19GD_MISS', 'z'), 'r19gd1');
+  SetEnv('NEXTPAS_R19GD', '');
+  try
+    CheckEqual('', GetEnvDefault('NEXTPAS_R19GD', 'z'), 'r19gd2 empty wins');
+  finally
+    UnsetEnv('NEXTPAS_R19GD');
+  end;
+end;
+
+{ R22: mixed expand forms + empty vs missing }
+procedure TestExpandEnvMixedR22;
+begin
+  SetEnv('NEXTPAS_R22A', 'A');
+  SetEnv('NEXTPAS_R22B', 'B');
+  try
+    CheckEqual('A-B', ExpandEnv('$NEXTPAS_R22A-$NEXTPAS_R22B'), 'r22 mix dollar');
+    CheckEqual('A/B', ExpandEnv('${NEXTPAS_R22A}/${NEXTPAS_R22B}'), 'r22 mix brace');
+    CheckEqual('AB', ExpandEnv('%NEXTPAS_R22A%%NEXTPAS_R22B%'), 'r22 mix percent adjacent');
+    CheckEqual('A-B', ExpandEnv('%NEXTPAS_R22A%-%NEXTPAS_R22B%'), 'r22 mix percent sep');
+    CheckEqual('A-x', ExpandEnv('$NEXTPAS_R22A-x'), 'r22 dollar suffix');
+    CheckEqual('pre', ExpandEnv('pre${NEXTPAS_R22_MISS}'), 'r22 undefined empty');
+  finally
+    UnsetEnv('NEXTPAS_R22A');
+    UnsetEnv('NEXTPAS_R22B');
+  end;
+end;
+
+procedure TestHasEnvEmptyR22;
+begin
+  SetEnv('NEXTPAS_R22EMPTY', '');
+  try
+    Check(HasEnv('NEXTPAS_R22EMPTY'), 'r22 empty exists');
+    CheckEqual('', GetEnv('NEXTPAS_R22EMPTY'), 'r22 empty value');
+    Check(not HasEnv('NEXTPAS_R22NEVER'), 'r22 missing');
+  finally
+    UnsetEnv('NEXTPAS_R22EMPTY');
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.os.env');
@@ -575,5 +933,33 @@ begin
   T.Test('SetEnv/UnsetEnv portable name', @TestSetEnvRejectsNonPortableName);
   T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
   T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
+  T.Test('ClearEnv', @TestClearEnv);
+  T.Test('HasEnv empty vs missing', @TestHasEnvEmptyVsMissing);
+  T.Test('ExpandEnv dollar literal', @TestExpandEnvDollarDollarLiteral);
+  T.Test('ExpandEnv brace undefined', @TestExpandEnvBraceUndefined);
+  T.Test('ExpandEnv multiple vars', @TestExpandEnvMultipleVars);
+  T.Test('ExpandEnvStrict missing raises', @TestExpandEnvStrictMissingRaises);
+  T.Test('GetEnvDefault edges', @TestGetEnvDefaultEdges);
+  T.Test('TryGetEnv roundtrip', @TestTryGetEnvRoundtrip);
+  T.Test('EnvKeys contains marker', @TestEnvKeysContainsMarker);
+  T.Test('SetEnv overwrite roundtrip', @TestSetEnvOverwriteRoundtrip);
+  T.Test('UserHomeDir non-empty', @TestUserHomeDirNonEmpty);
+  T.Test('ExpandEnv percent edges', @TestExpandEnvPercentEdges);
+  T.Test('ExpandEnvWithDefault undefined', @TestExpandEnvWithDefaultUndefined);
+  T.Test('EnvironmentVariables non-empty', @TestEnvironmentVariablesNonEmpty);
+  T.Test('ExpandEnv R19 table', @TestExpandEnvR19Table);
+  T.Test('ExpandEnvStrict R19', @TestExpandEnvStrictR19);
+  T.Test('HasEnv Lookup R19', @TestHasEnvLookupR19);
+  T.Test('EnvKeys marker R19', @TestEnvKeysMarkerR19);
+  T.Test('UserDirs non-empty R19', @TestUserDirsNonEmptyR19);
+  T.Test('SetUnset roundtrip R19', @TestSetUnsetRoundtripR19);
+  T.Test('Expand percent R19', @TestExpandPercentR19);
+  T.Test('ExpandWithDefault R19', @TestExpandWithDefaultR19);
+  T.Test('ExpandEnv R19 extra', @TestExpandEnvR19Extra);
+  T.Test('TryGetEnv R19 extra', @TestTryGetEnvR19Extra);
+  T.Test('Environ non-empty R19 extra', @TestEnvironNonEmptyR19Extra);
+  T.Test('GetEnvDefault R19 extra', @TestGetEnvDefaultR19Extra);
+  T.Test('ExpandEnv mixed R22', @TestExpandEnvMixedR22);
+  T.Test('HasEnv empty R22', @TestHasEnvEmptyR22);
   if not T.Run then Halt(1);
 end.

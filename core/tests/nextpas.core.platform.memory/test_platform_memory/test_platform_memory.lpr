@@ -188,6 +188,12 @@ begin
     'forced/native Windows host must report Windows CRT backend source truth');
   Check(platform_aligned_alloc_is_native,
     'forced/native Windows host must report native backend source truth');
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { Darwin uses SysGetMem path (see platform_aligned_alloc_is_native). }
+  Check(platform_aligned_alloc_backend = paabFallback,
+    'Darwin host reports fallback backend (SysGetMem path)');
+  Check(not platform_aligned_alloc_is_native,
+    'Darwin host is not native posix_memalign under current GHA-safe path');
 {$ELSEIF defined(NEXTPAS_UNIX)}
   Check(platform_aligned_alloc_backend = paabPosix,
     'forced/native POSIX host must report POSIX backend source truth');
@@ -488,16 +494,23 @@ end;
 procedure TestAllocVeryLargeAlignment;
 var
   LPtr: Pointer;
+const
+  { Stay within platform_aligned_alloc MAX_ALIGNMENT (16MiB). Multi-GB
+    posix_memalign has aborted Darwin aarch64 GHA at suite exit. }
+  LARGE_ALIGN = 16 * 1024 * 1024;
 begin
-  { Very large alignment (1GB) should still work if power of two }
-  LPtr := platform_aligned_alloc(64, 1024 * 1024 * 1024);
+  LPtr := platform_aligned_alloc(64, LARGE_ALIGN);
   if LPtr <> nil then
   begin
-    Check(IsAligned(LPtr, 1024 * 1024 * 1024), '1GB alignment');
+    Check(IsAligned(LPtr, LARGE_ALIGN), '16MiB alignment');
     platform_aligned_free(LPtr);
   end
   else
-    Check(True, '1GB alignment allocation may fail on some systems');
+    Check(True, '16MiB alignment allocation may fail on some systems');
+
+  { Over-cap alignment must fail closed }
+  Check(platform_aligned_alloc(64, SizeUInt(32) * 1024 * 1024) = nil,
+    'alignment above 16MiB cap fails closed');
 end;
 
 procedure TestReallocGrowAndShrink;

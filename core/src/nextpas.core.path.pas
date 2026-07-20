@@ -4,6 +4,9 @@ unit nextpas.core.path;
 
 interface
 
+uses
+  nextpas.core.base;
+
 {** High-level path manipulation — string-based wrappers over platform.path.
  *  All functions work with UTF-8 strings and handle both / and \ separators.
  *  Equivalent to SysUtils.ExtractFilePath/ExtractFileName/ChangeFileExt etc.
@@ -46,6 +49,21 @@ function PathMatch(const APattern, AName: string): Boolean;
 function PathJoinN(const AParts: array of string): string;
 {** @desc 规范化路径（PathNormalize 的 Go 风格别名） *}
 function PathClean(const APath: string): string; inline;
+{** @desc 将路径中的 '\' 转为 '/'（对齐 Go filepath.ToSlash） *}
+function PathToSlash(const APath: string): string;
+{** @desc 将路径中的 '/' 转为平台分隔符（对齐 Go filepath.FromSlash） *}
+function PathFromSlash(const APath: string): string;
+{** @desc 按 PATH 列表分隔符拆分（Unix ':' / Windows ';'；对齐 filepath.SplitList） *}
+function PathSplitList(const AList: string): TStringArray;
+{** @desc 卷名/盘符（Windows "C:"；Linux 空；对齐 filepath.VolumeName 子集） *}
+function PathVolume(const APath: string): string;
+{** @desc 文件名去掉最后一段扩展名（对齐 Rust Path::file_stem；无扩展名则整段 base） *}
+function PathFileStem(const APath: string): string;
+{**
+ * @desc 若 APath 以 APrefix 为前缀则去掉前缀，否则返回空串
+ * @note 前缀匹配后若下一项是分隔符则一并去掉；APath=APrefix 返回 '.'
+ *}
+function PathStripPrefix(const APath, APrefix: string): string;
 
 { SysUtils-compatible aliases }
 
@@ -53,9 +71,11 @@ const
   {** 平台目录分隔符（Linux: '/', Windows: '\'） *}
   {$IFDEF NEXTPAS_WINDOWS}
   DirectorySeparator = '\';
+  PathListSeparator = ';';
   LineEnding = #13#10;
   {$ELSE}
   DirectorySeparator = '/';
+  PathListSeparator = ':';
   LineEnding = #10;
   {$ENDIF}
 
@@ -101,7 +121,8 @@ begin
   if APath = '' then
     Exit('');
   Result := FsPathDir(APath);
-  if Result = '.' then
+  { Bare filename only: SysUtils empty dir. Keep '.' for './x' etc. }
+  if (Result = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     Result := '';
 end;
 
@@ -119,7 +140,7 @@ begin
     Exit;
   end;
   FsPathSplit(APath, ADir, ABase);
-  if ADir = '.' then
+  if (ADir = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     ADir := '';
 end;
 
@@ -185,6 +206,107 @@ end;
 function PathClean(const APath: string): string;
 begin
   Result := PathNormalize(APath);
+end;
+
+function PathToSlash(const APath: string): string;
+var
+  I: Integer;
+begin
+  Result := APath;
+  for I := 1 to Length(Result) do
+    if Result[I] = '\' then
+      Result[I] := '/';
+end;
+
+function PathFromSlash(const APath: string): string;
+var
+  I: Integer;
+begin
+  Result := APath;
+  {$IFDEF NEXTPAS_WINDOWS}
+  for I := 1 to Length(Result) do
+    if Result[I] = '/' then
+      Result[I] := '\';
+  {$ELSE}
+  { Unix: FromSlash is identity for '/' paths; still normalize nothing extra. }
+  {$ENDIF}
+end;
+
+function PathSplitList(const AList: string): TStringArray;
+var
+  I, LStart, LCount, LLen: Integer;
+  C: Char;
+begin
+  LLen := Length(AList);
+  if LLen = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+  LCount := 1;
+  for I := 1 to LLen do
+    if AList[I] = PathListSeparator then
+      Inc(LCount);
+  SetLength(Result, LCount);
+  LStart := 1;
+  LCount := 0;
+  for I := 1 to LLen do
+  begin
+    C := AList[I];
+    if C = PathListSeparator then
+    begin
+      Result[LCount] := Copy(AList, LStart, I - LStart);
+      Inc(LCount);
+      LStart := I + 1;
+    end;
+  end;
+  Result[LCount] := Copy(AList, LStart, LLen - LStart + 1);
+end;
+
+function PathVolume(const APath: string): string;
+begin
+  Result := ExtractFileDrive(APath);
+end;
+
+function PathFileStem(const APath: string): string;
+var
+  LBase, LExt: string;
+begin
+  LBase := PathBase(APath);
+  if LBase = '' then
+    Exit('');
+  LExt := PathExt(LBase);
+  if LExt = '' then
+    Exit(LBase);
+  Result := Copy(LBase, 1, Length(LBase) - Length(LExt));
+end;
+
+function PathStripPrefix(const APath, APrefix: string): string;
+var
+  LPath, LPref: string;
+  LLen: Integer;
+begin
+  Result := '';
+  if APrefix = '' then
+    Exit(APath);
+  LPath := PathToSlash(APath);
+  LPref := PathToSlash(APrefix);
+  if LPref[Length(LPref)] = '/' then
+    SetLength(LPref, Length(LPref) - 1);
+  LLen := Length(LPref);
+  if LLen = 0 then
+    Exit(APath);
+  if LPath = LPref then
+    Exit('.');
+  if Length(LPath) <= LLen then
+    Exit('');
+  if Copy(LPath, 1, LLen) <> LPref then
+    Exit('');
+  if (LPath[LLen + 1] <> '/') and (LPath[LLen + 1] <> '\') then
+    Exit('');
+  Result := Copy(LPath, LLen + 2, Length(LPath) - LLen - 1);
+  if Result = '' then
+    Result := '.';
 end;
 
 { SysUtils-compatible aliases }

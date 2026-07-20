@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 生产就绪 (Production Ready)
-**最后更新**: 2026-07-05 (Phase 3 + 可用性改进完成)
+**阶段**: 生产就绪 (Production Ready) + 结果 API 收敛冻结
+**最后更新**: 2026-07-19 (Round 62 分组对比 + 审计收敛)
 
 ## 目标树
 
@@ -167,36 +167,75 @@ B23  进度回调 (2026-07-08)                                    ✅
   B23.2  TBenchConfig.OnProgress 字段                         ✅
   B23.3  TBenchSuite.SetOnProgress 配置方法                   ✅
   B23.4  RunAll 调用回调 (platform_monotonic_ns 计时)         ✅
+
+B24  结果聚合 / 过滤 / 排序 API (Round 40–56)                   ✅
+  B24.1  GetFastest/Slowest/TopN + Stable/Unstable            ✅
+  B24.2  GetTotal* 聚合 + GetSummaryStats                     ✅
+  B24.3  FilterBy* / SortBy* / 自定义指标 API                 ✅
+  B24.4  ToCSV + Matrix 文件导出                              ✅
+
+B25  分组分析 (Round 57–62)                                    ✅
+  B25.1  GetGroups / GetGroupStats / FilterByStdDevRange      ✅
+  B25.2  ToJSON/Markdown/HTML_Grouped + SaveTo*_Grouped       ✅
+  B25.3  CompareGroups + GetGroupRegressionReport             ✅
+  B25.4  分组匹配统一 ExtractGroupName / CollectGroupResults  ✅
+
+B26  审计收敛 / API 冻结 (2026-07-19)                           ✅
+  B26.1  停止默认向 IBenchResults 堆叠公共便捷 API            ✅
+  B26.2  文档同步 README / API / ARCHITECTURE / goal-tree     ✅
+
+B27  integration 软拆 (2026-07-19)                               ✅
+  B27.1  test_bench_results_api 承载结果 API 测试 (~58)         ✅
+  B27.2  test_bench_integration 保留生命周期/并行 (~66)         ✅
+
+B28  符号消歧 / 子集扩 track / 文档 CI (2026-07-19)              ✅
+  B28.1  runner/pas/xlang/baseline 限定 GlobMatch/LowerCase/…  ✅
+  B28.2  SCORECARD 子集 + shortstr/recops/inttohex             ✅
+  B28.3  README/CONTRACT/FINAL/ci-gate 口径对齐                  ✅
+
+B29  消费侧文档 + 子集再扩 (2026-07-20)                          ✅
+  B29.1  consumer-guide.md                                     ✅
+  B29.2  scorecard + bitfield/packed/nativeset                 ✅
+
+B30  可复现子集 + 消费抽检 (2026-07-20)                          ✅
+  B30.1  run-scorecard-subset.sh + scorecard-tracks.txt        ✅
+  B30.2  consumer-checklist.md (hash/vec/json)                 ✅
+  B30.3  archive/README 权威 vs 历史索引                       ✅
+
+B31  仓库入口 + 消费扩面 (2026-07-20)                            ✅
+  B31.1  make bench-module-test / bench-scorecard-smoke        ✅
+  B31.2  --summary TSV；checklist ≥8 模块                      ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-07
+> **最后更新**: 2026-07-19
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
-| test_bench_stats | 38 | ✅ 零泄漏 | 基础统计 + GeometricMean + OLS |
-| test_bench_stats_advanced | 39 | ✅ 零泄漏 | 高级统计 + 异常值分级 + NaN/Inf |
+| test_bench_stats | 45 | ✅ 零泄漏 | 基础统计 + GeometricMean + OLS |
+| test_bench_stats_advanced | 43 | ✅ 零泄漏 | 高级统计 + 异常值分级 + NaN/Inf |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
-| test_bench_runner | 14 | ✅ 零泄漏 | 执行器 + StopTimer + 统计完整性 |
-| test_bench_integration | 52 | ✅ 零泄漏 | 集成测试 + 超时 + LoopContext |
-| test_bench_report | 30 | ✅ 零泄漏 | 报告生成 + 空结果 + 边界值 |
+| test_bench_runner | 16 | ✅ 零泄漏 | 执行器 + StopTimer + 统计完整性 |
+| test_bench_integration | 66 | ✅ 零泄漏 | 套件生命周期 / 并行 / 超时 / 基线 |
+| test_bench_results_api | 58 | ✅ 零泄漏 | 结果聚合/过滤/分组/矩阵 API |
+| test_bench_report | 33 | ✅ 零泄漏 | 报告生成 + 空结果 + 边界值 |
 | test_bench_xlang | 40 | ✅ 零泄漏 | 跨语言解析 + Unicode + 溢出保护 |
 | test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 + 字段验证 |
 | test_bench_memtrack | 16 | ✅ 零泄漏 | 内存追踪 + 全局跟踪器 |
 | test_bench_parallel | 11 | ✅ 零泄漏 | 并行基准 |
-| test_bench_parallel_heaptrc | 1 | ✅ 0 leaks | 并行 heaptrc |
-| test_bench_parallel_memtrack_heaptrc | 2 | ✅ 0 leaks | 并行+memtrack |
-| test_bench_invalid_parameters_heaptrc | 12 | ✅ 0 leaks | 参数校验 + 异常类型 |
+| test_bench_parallel_heaptrc | 5 | ✅ 0 leaks | 并行 heaptrc |
+| test_bench_parallel_memtrack_heaptrc | 5 | ✅ 0 leaks | 并行+memtrack |
+| test_bench_invalid_parameters_heaptrc | 18 | ✅ 0 leaks | 参数校验 + 异常类型 |
 | test_bench_matrix | 15 | ✅ 0 leaks | 多基线矩阵 + 图表 + JSON |
-| test_bench_ks | 12 | ✅ 0 leaks | K-S 检验 (Phase A) |
-| test_bench_phase_b | 13 | ✅ 0 leaks | Xoroshiro128+ PRNG + BCa Bootstrap + Bootstrap 假设检验 |
-| test_bench_phase_c | 10 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 + 先验融合 |
+| test_bench_ks | 12 | ✅ 0 leaks | K-S 检验 |
+| test_bench_phase_b | 13 | ✅ 0 leaks | BCa Bootstrap + 假设检验 |
+| test_bench_phase_c | 13 | ✅ 0 leaks | 贝叶斯估计 + 可信区间 |
 | test_bench_run | 13 | ✅ 0 leaks | TBenchRun 线程安全执行器 |
-| test_bench_resultpool | — | ❌ removed | 已删除（dead code cleanup） |
+| test_bench_self_bench | 17 | ✅ 0 leaks | 框架自举路径 |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
 | test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
-| **合计** | **~381** | **23/23 通过** | |
+| **合计** | **~504** | **22/22 通过** | |
 
 ### 跨语言基准对照 (benchmarks/)
 
@@ -220,7 +259,8 @@ B23  进度回调 (2026-07-08)                                    ✅
 
 ## 未来候选
 
-- [ ] Go/Rust/C 跨语言性能对照数据
-- [ ] `BenchRun` 新执行器（基于 `nextpas.core.sync.ebr`）
-- [ ] `TInt64Array` 类型别名（base 模块导出）
-- [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量
+- [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（全量 SCORECARD 仍推迟）
+- [ ] `BenchRun` 新执行器（基于 `nextpas.core.sync.ebr`）— 需独立设计 lane
+- [ ] `TInt64Array` 类型别名（base 模块导出）— 归 base
+- [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量 — 低优先级
+- [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟

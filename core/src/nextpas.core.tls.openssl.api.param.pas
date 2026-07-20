@@ -205,7 +205,9 @@ var
 function LoadOSSLPARAM(const ALibCrypto: TPlatformLibrary): Boolean;
 procedure UnloadOSSLPARAM;
 
-{ Helper functions }
+{ Helper functions — CreateParamArray uses DefaultHeap GetMem.
+  FreeParamArray frees those arrays only (never OSSL_PARAM_free).
+  OpenSSL-owned params (dup/merge): call OSSL_PARAM_free directly. }
 function CreateParamArray(const Params: array of OSSL_PARAM): POSSL_PARAM;
 procedure FreeParamArray(Params: POSSL_PARAM);
 function GetParamValue(const Params: POSSL_PARAM; const Key: string; out Value: string): Boolean;
@@ -325,8 +327,10 @@ end;
 function CreateParamArray(const Params: array of OSSL_PARAM): POSSL_PARAM;
 var
   i: Integer;
+  LBytes: SizeUInt;
 begin
-  Result := GetMem((Length(Params) + 1) * SizeOf(OSSL_PARAM));
+  LBytes := SizeUInt(Length(Params) + 1) * SizeOf(OSSL_PARAM);
+  Result := GetMem(LBytes);
   for i := 0 to High(Params) do
     Result[i] := Params[i];
   
@@ -344,14 +348,25 @@ begin
 end;
 
 procedure FreeParamArray(Params: POSSL_PARAM);
+var
+  N: Integer;
+  P: POSSL_PARAM;
 begin
-  if Params <> nil then
+  { CreateParamArray ownership only — DefaultHeap, not CRYPTO_malloc.
+    Do not call OSSL_PARAM_free here (that free is for OPENSSL-owned arrays). }
+  if Params = nil then
+    Exit;
+  N := 0;
+  P := Params;
+  while True do
   begin
-    if Assigned(OSSL_PARAM_free) then
-      OSSL_PARAM_free(Params)
-    else
-      FreeMem(Params);
+    Inc(N);
+    { terminator: key = nil (manual or construct_end) }
+    if P^.key = nil then
+      Break;
+    Inc(P);
   end;
+  FreeMem(Params, SizeUInt(N) * SizeOf(OSSL_PARAM));
 end;
 
 function GetParamValue(const Params: POSSL_PARAM; const Key: string; out Value: string): Boolean;

@@ -1,6 +1,10 @@
 # Lockfree 基准对照报告
 
+> **Status**: **historical only / not reproducible without full evidence envelope**（H3-4）
 > 生成: 2026-06-16 | 平台: Linux x86_64 (Intel i7-12700H)
+>
+> 下列绝对 Mops **不是**当前发布保证。规范见 [`bench-envelope.md`](bench-envelope.md)。
+> 复现入口：`make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run`。
 
 ## 结果汇总
 

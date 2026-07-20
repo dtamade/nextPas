@@ -85,6 +85,7 @@ procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapCon
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.env,
   nextpas.core.mem.allocator.growing_ia,
   nextpas.core.mem.allocator.fail,
@@ -109,6 +110,8 @@ var
   GTracking: TTrackingAllocator;
   GStats: TStatsAllocator;
   GHeapDebugState: SizeUInt;
+  { Combined HEAP_DEBUG|HEAP_SAFETY for process GetMem hot path (one load). }
+  GProcessRouteState: SizeUInt;
   GHeapSafetyState: SizeUInt;
   GArenaStrictState: SizeUInt;
 
@@ -195,24 +198,31 @@ end;
 
 function CachedTruthyEnv(var AState: SizeUInt; const AEnvName: AnsiString): Boolean;
 var
-  LPrev: SizeUInt;
+  LPrev, LExpected: SizeUInt;
   LEnv: AnsiString;
   LOn: Boolean;
   LNew: SizeUInt;
 begin
-  LPrev := AtomicCmpExchange(AState, ENV_UNREAD, ENV_UNREAD);
+  { Hot path: plain load after first parse.
+    Previous CAS-as-load (AtomicCmpExchange dummy) is a full barrier per call;
+    process GetMem/FreeMem each check HEAP_DEBUG + HEAP_SAFETY → multi-barrier
+    tax (~7× vs DefaultHeap direct on SC1 flat loop). Env flags are write-once
+    after first parse; relaxed read is correct. }
+  LPrev := AState;
   if LPrev = ENV_ON then
     Exit(True);
   if LPrev = ENV_OFF then
     Exit(False);
+  { ENV_UNREAD: parse once, publish with CAS (first writer wins). }
   LEnv := platform_env_get_str(AEnvName);
   LOn := ParseMemHeapDebugEnv(LEnv);
   if LOn then
     LNew := ENV_ON
   else
     LNew := ENV_OFF;
-  AtomicCmpExchange(AState, LNew, ENV_UNREAD);
-  Result := AtomicCmpExchange(AState, 0, 0) = ENV_ON;
+  LExpected := ENV_UNREAD;
+  atomic_compare_exchange_strong(AState, LExpected, LNew, mo_acq_rel, mo_acquire);
+  Result := atomic_load(AState, mo_acquire) = ENV_ON;
 end;
 
 procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapConfig);
@@ -296,16 +306,17 @@ end;
 
 procedure EnsureBuilt;
 var
-  LPrev: SizeUInt;
+  LExpected: SizeUInt;
   LEnv: AnsiString;
   LCfg: TMemDebugWrapConfig;
 begin
-  LPrev := AtomicCmpExchange(GState, STATE_BUILDING, STATE_IDLE);
-  if LPrev = STATE_READY then
-    Exit;
-  if LPrev = STATE_BUILDING then
+  LExpected := STATE_IDLE;
+  if not atomic_compare_exchange_strong(GState, LExpected, STATE_BUILDING, mo_acq_rel, mo_acquire) then
   begin
-    while AtomicCmpExchange(GState, STATE_READY, STATE_READY) <> STATE_READY do
+    if LExpected = STATE_READY then
+      Exit;
+    { Another thread is building — wait until ready. }
+    while atomic_load(GState, mo_acquire) <> STATE_READY do
       ThreadSwitch;
     Exit;
   end;
@@ -330,7 +341,7 @@ begin
   end;
   LCfg.Built := True;
   GConfig := LCfg;
-  AtomicExchange(GState, STATE_READY);
+  atomic_store(GState, STATE_READY, mo_release);
 end;
 
 function ResolveDefaultAllocator: IAllocator;
@@ -368,11 +379,28 @@ begin
 end;
 
 function IsMemHeapDebugEnabled: Boolean;
+var
+  LPrev, LExpected: SizeUInt;
+  LOn: Boolean;
+  LNew: SizeUInt;
 begin
-  { Process path routes through DefaultAllocator when either flag is on. }
-  if CachedTruthyEnv(GHeapDebugState, MEM_HEAP_DEBUG_ENV) then
+  { Process path routes through DefaultAllocator when HEAP_DEBUG or HEAP_SAFETY
+    is on. Single cached flag so GetMem/FreeMem pay one plain load, not two
+    CAS/env probes. }
+  LPrev := GProcessRouteState;
+  if LPrev = ENV_ON then
     Exit(True);
-  Result := IsMemHeapSafetyEnabled;
+  if LPrev = ENV_OFF then
+    Exit(False);
+  LOn := CachedTruthyEnv(GHeapDebugState, MEM_HEAP_DEBUG_ENV) or
+    CachedTruthyEnv(GHeapSafetyState, MEM_HEAP_SAFETY_ENV);
+  if LOn then
+    LNew := ENV_ON
+  else
+    LNew := ENV_OFF;
+  LExpected := ENV_UNREAD;
+  atomic_compare_exchange_strong(GProcessRouteState, LExpected, LNew, mo_acq_rel, mo_acquire);
+  Result := atomic_load(GProcessRouteState, mo_acquire) = ENV_ON;
 end;
 
 procedure ResetDebugWrapForTests;
@@ -382,10 +410,11 @@ begin
   GTracking := nil;
   GStats := nil;
   ClearConfig(GConfig);
-  AtomicExchange(GState, STATE_IDLE);
-  AtomicExchange(GHeapDebugState, ENV_UNREAD);
-  AtomicExchange(GHeapSafetyState, ENV_UNREAD);
-  AtomicExchange(GArenaStrictState, ENV_UNREAD);
+  atomic_store(GState, STATE_IDLE, mo_release);
+  atomic_store(GHeapDebugState, ENV_UNREAD, mo_release);
+  atomic_store(GHeapSafetyState, ENV_UNREAD, mo_release);
+  atomic_store(GArenaStrictState, ENV_UNREAD, mo_release);
+  atomic_store(GProcessRouteState, ENV_UNREAD, mo_release);
 end;
 
 initialization
@@ -396,6 +425,7 @@ initialization
   GHeapDebugState := ENV_UNREAD;
   GHeapSafetyState := ENV_UNREAD;
   GArenaStrictState := ENV_UNREAD;
+  GProcessRouteState := ENV_UNREAD;
   ClearConfig(GConfig);
 
 finalization
@@ -406,5 +436,6 @@ finalization
   GHeapDebugState := ENV_UNREAD;
   GHeapSafetyState := ENV_UNREAD;
   GArenaStrictState := ENV_UNREAD;
+  GProcessRouteState := ENV_UNREAD;
 
 end.

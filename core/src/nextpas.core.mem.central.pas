@@ -130,6 +130,9 @@ function FindSpanIndex(var APool: TCentralPool; APtr: Pointer): Int32;
 
 implementation
 
+uses
+  nextpas.core.atomic;
+
 const
   INITIAL_CAPACITY = 4;
 
@@ -143,10 +146,13 @@ type
 procedure CentralPoolLock(var ALock: SizeUInt);
 var
   LBackoff: SizeUInt;
+  LExpected: SizeUInt;
 begin
   LBackoff := 1;
-  while AtomicCmpExchange(ALock, 1, 0) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(ALock, LExpected, 1, mo_acquire, mo_relaxed) do
   begin
+    LExpected := 0;
     ThreadSwitch;
     if LBackoff < 64 then
       LBackoff := LBackoff shl 1;
@@ -155,7 +161,7 @@ end;
 
 procedure CentralPoolUnlock(var ALock: SizeUInt);
 begin
-  AtomicExchange(ALock, 0);
+  atomic_exchange(ALock, 0, mo_release);
 end;
 
 procedure CentralPoolInit(out APool: TCentralPool; ASlotSize: SizeUInt);
@@ -190,13 +196,16 @@ end;
 
 procedure CentralPoolInboxPush(var APool: TCentralPool; APtr: Pointer);
 var
-  LOldHead: Pointer;
+  LExpected: Pointer;
 begin
   { CAS push: lock-free, safe from any thread. }
-  repeat
-    LOldHead := APool.FInboxHead;
-    PInboxNode(APtr)^.FNext := PInboxNode(LOldHead);
-  until AtomicCmpExchange(APool.FInboxHead, APtr, LOldHead) = LOldHead;
+  LExpected := APool.FInboxHead;
+  while True do
+  begin
+    PInboxNode(APtr)^.FNext := PInboxNode(LExpected);
+    if atomic_compare_exchange_strong(APool.FInboxHead, LExpected, APtr, mo_acq_rel, mo_acquire) then
+      Exit;
+  end;
 end;
 
 {** Add a new span to the pool (caller holds lock). }
@@ -340,7 +349,7 @@ end;
     Safe to call from any thread without locking. }
 function GrabInboxChain(var APool: TCentralPool): PInboxNode;
 begin
-  Result := PInboxNode(AtomicExchange(APool.FInboxHead, nil));
+  Result := PInboxNode(atomic_exchange(APool.FInboxHead, nil, mo_acq_rel));
 end;
 
 {** Process a grabbed inbox chain: return blocks to their spans.

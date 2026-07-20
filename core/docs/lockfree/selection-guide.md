@@ -5,6 +5,7 @@
 [English](selection-guide.en.md)
 
 > 相对性能以 `core/benchmarks/nextpas.core.lockfree` 为准；本指南**不**给无平台信封的绝对 Mops/s。
+> 证据规范：[`bench-envelope.md`](bench-envelope.md)（H2-4 / H3-4）。历史对照见 `benchmark-comparison-*.md`（historical only）。
 
 ## 快速决策树
 
@@ -56,6 +57,9 @@
 ---
 
 ## T2 maturity tiers（H2-2）+ H3-2 生产子集
+
+完整分档清单：[`t2-inventory.md`](t2-inventory.md)（Q4）。
+**Q4 决策**：本波 **不** 扩展 H3-2（仍仅 bag + multimap）。
 
 T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTRACT.md) §0.2）：
 
@@ -243,7 +247,7 @@ T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTR
 │   ├── 单生产者单消费者 (1P1C)
 │   │   └── 使用 TLockFreeChannelSpsc<T>
 │   │       - 专为 1P1C 优化，使用原子 load/store
-│   │       - 性能超越 Go channel (2.99x) 和 Rust (1.26x)
+│   │       - 通常快于 MPMC Channel / mutex 基线（相对排序；无信封不写绝对倍数）
 │   │       - 阻塞/非阻塞/超时
 │   │
 │   └── 多生产者多消费者 (MPMC)
@@ -252,35 +256,32 @@ T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTR
 │           - 阻塞/非阻塞/超时
 │           - Close 后已入队数据仍可读
 │
-└── 多路复用（Go select 语义）
+└── 多路复用（Go select 语义，Q3-a）
     └── 使用 TLockFreeSelector<T>
-        - 等待多个 channel 中第一个就绪
-        - 阻塞/超时两种等待模式
+        - 等待多个 channel 中第一个就绪（Add 注册序优先）
+        - Select / SelectTimeout / **TrySelect（≡ default）**
         - 所有 case 必须使用相同类型 T
+        - 详见 api-reference Selector 节
 ```
 
-## 性能对比
+## 性能对比（相对排序，非绝对 Mops）
 
-| 数据结构 | 场景 | 吞吐 (M ops/s) | 延迟 (ns/op) |
-|----------|------|---------------|-------------|
-| TSpscQueue | 1P+1C | 101 | 9.9 |
-| TSpmcQueue | 1P+2C | 75 | 13.4 |
-| TMpmcQueue | 2P+2C | 68 | 14.6 |
-| TMpscQueue | 4P+1C | ~68 | ~15 |
-| TSegQueue | 2P+2C | 17 | 59.1 |
-| TLockFreeStack | 4P+4C | ~67 | ~15 |
-| TWorkStealingDeque | 1 owner + 2 thieves | ~2.0 | ~500 |
-| **TLockFreeChannelSpsc** | **1P+1C** | **26.2** | **38.2** |
-| TLockFreeChannel | MPMC | 10.6 | 94.3 |
+同机同构建下，常见相对排序（**不是**发布保证；绝对值必须带 [`bench-envelope.md`](bench-envelope.md)）：
 
-### 跨语言对比 (1P1C Channel)
+| 数据结构 | 典型场景 | 相对观察 |
+|----------|----------|----------|
+| TSpscQueue | 1P+1C | 通常最快的有界环（无 CAS 竞争） |
+| TSpmcQueue | 1P+NC | 通常快于满竞争 MPMC；慢于 SPSC |
+| TMpmcQueue | NP+NC | 有界 MPMC 基线 |
+| TMpscQueue | NP+1C | 无界链表；Close 后 plain Enqueue 抛错 |
+| TSegQueue | NP+NC | 无界 segment；吞吐通常低于固定环 |
+| TLockFreeStack | NP+NC | 有界 tagged stack |
+| TWorkStealingDeque | 1 owner + thieves | steal 路径有竞争；非“最热”环队列 |
+| TLockFreeChannelSpsc | 1P+1C | 通常快于 MPMC Channel |
+| TLockFreeChannel | MPMC | 有界序列号通道 |
 
-| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
-|------|-------------|---------------|---------|
-| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
-| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
-| Go channel | 114.3 | 8.7 | 基准 |
-| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
+跨语言 1P1C 对照：以 `bench_lockfree` 的 `compare` 目标为准；历史数字见
+[`benchmark-comparison-2026-07-06.md`](benchmark-comparison-2026-07-06.md)（**historical only**）。
 
 ## 线程安全契约
 

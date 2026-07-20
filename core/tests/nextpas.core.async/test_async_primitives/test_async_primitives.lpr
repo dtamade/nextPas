@@ -60,7 +60,7 @@ begin
   LMutex.Unlock;
   Check(not LMutex.IsLocked, 'mutex is unlocked after unlock');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 2: MutexAsyncLock === }
@@ -91,7 +91,7 @@ begin
   LMutex.Unlock;
   Check(not LMutex.IsLocked, 'mutex is unlocked');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 3: MutexFIFOOrder === }
@@ -134,7 +134,7 @@ begin
   CheckEqual(Int64(3), Int64(GFifoOrder[2]), 'third waiter got lock third');
   GFifoMutex := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 4: SemaphoreBasic === }
@@ -160,7 +160,7 @@ begin
   LSem.Release;
   CheckEqual(Int64(3), Int64(LSem.Available), 'count is 3 after all releases');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 5: SemaphoreAsyncAcquire === }
@@ -188,7 +188,7 @@ begin
   CheckEqual(Int64(1), Int64(GCallCount), 'second acquire callback fired');
   LSem.Release;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 6: ChannelBasic === }
@@ -222,7 +222,7 @@ begin
   FillChar(LBuf, SizeOf(LBuf), 0);
   Check(not LCh.TryReceive(LBuf[0], 4, LReceived), 'empty channel receive fails');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 7: ChannelClose === }
@@ -252,7 +252,7 @@ begin
   LBuf[0] := $FF;
   Check(not LCh.Send(LBuf[0], 1), 'cannot send after close');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 8: ChannelMultipleChunks === }
@@ -283,7 +283,7 @@ begin
     CheckEqual(Int64(LI), Int64(LVal), 'chunk ' + IntToStr(LI) + ' value correct');
   end;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 9: BoundedChannel === }
@@ -311,8 +311,126 @@ begin
   LCh.TryReceive(LOut, SizeOf(LOut), LReceived);
   CheckEqual(Int64(1), Int64(LOut), 'received value 1');
   LVal := 4; Check(LCh.Send(LVal, SizeOf(LVal)), 'send 4 succeeds after receive');
-  LLoop.Close;
-    LLoop.Close;
+  LCh := nil;
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
+{ === Test 9b: BoundedSendAsyncWaits === }
+
+var
+  GSendAsyncDone: Boolean = False;
+
+procedure SendAsyncDoneCallback(AContext: Pointer);
+begin
+  GSendAsyncDone := True;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestBoundedSendAsyncWaits;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal, LOut: UInt32;
+  LReceived: UInt32;
+begin
+  ResetState;
+  GSendAsyncDone := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    { capacity 4 bytes = 1 UInt32 }
+    LCh := CreateBoundedAsyncChannel(LLoop, 4);
+    LVal := 1;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'fill channel');
+    Check(not LCh.TrySend(LVal, SizeOf(LVal)), 'TrySend fails when full');
+    LVal := 2;
+    LCh.SendAsync(LVal, SizeOf(LVal), @SendAsyncDoneCallback, nil);
+    Check(not GSendAsyncDone, 'SendAsync not done while full');
+    LOut := 0;
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'receive frees space');
+    CheckEqual(Int64(1), Int64(LOut), 'got first value');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GSendAsyncDone, 'SendAsync completed after space');
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'receive async value');
+    CheckEqual(Int64(2), Int64(LOut), 'got async value');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
+end;
+
+{ === Test 9c: SendAsyncOnClose === }
+
+procedure TestSendAsyncOnClose;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal: UInt32;
+begin
+  ResetState;
+  GSendAsyncDone := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LCh := CreateBoundedAsyncChannel(LLoop, 4);
+    LVal := 1;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'fill');
+    LVal := 2;
+    LCh.SendAsync(LVal, SizeOf(LVal), @SendAsyncDoneCallback, nil);
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GSendAsyncDone, 'close wakes send waiter');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
+end;
+
+{ === Test 9d: ReceiveThenTryReceive === }
+
+var
+  GRecvNotify: Boolean = False;
+
+procedure RecvNotifyCallback(AContext: Pointer);
+begin
+  GRecvNotify := True;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestReceiveThenTryReceive;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal, LOut: UInt32;
+  LReceived: UInt32;
+begin
+  ResetState;
+  GRecvNotify := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LCh := CreateAsyncChannel(LLoop);
+    LCh.Receive(@RecvNotifyCallback, nil);
+    LVal := 42;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'send after receive wait');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GRecvNotify, 'receive notify fired');
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'try receive data');
+    CheckEqual(Int64(42), Int64(LOut), 'value 42');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
 end;
 
 { === Test 10: CondVarSignal === }
@@ -351,7 +469,7 @@ begin
   GCondVarMutex := nil;
   GCondVar := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 11: CondVarBroadcast === }
@@ -389,7 +507,7 @@ begin
   GCondVarMutex := nil;
   GCondVar := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Main === }
@@ -406,6 +524,9 @@ begin
   T.Test('ChannelClose', @TestChannelClose);
   T.Test('ChannelMultipleChunks', @TestChannelMultipleChunks);
   T.Test('BoundedChannel', @TestBoundedChannel);
+  T.Test('BoundedSendAsyncWaits', @TestBoundedSendAsyncWaits);
+  T.Test('SendAsyncOnClose', @TestSendAsyncOnClose);
+  T.Test('ReceiveThenTryReceive', @TestReceiveThenTryReceive);
   T.Test('CondVarSignal', @TestCondVarSignal);
   T.Test('CondVarBroadcast', @TestCondVarBroadcast);
 

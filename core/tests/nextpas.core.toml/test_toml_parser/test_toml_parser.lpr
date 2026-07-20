@@ -855,9 +855,9 @@ begin
     'init must stage node allocation');
   CheckSourceContains(LSource, 'if lptr = nil then',
     'init must guard node allocation');
-  CheckSourceContains(LSource, 'lnewbufs := ppointer(fallocator.reallocmem(pointer(fownedbufs), lnewcap * sizeof(pointer)));',
+  CheckSourceContains(LSource, 'lnewbufs := ppointer(reallocmemof(fallocator, pointer(fownedbufs),',
     'owned buffer growth must stage reallocate');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lnewcap * sizeof(ttomlnode));',
+  CheckSourceContains(LSource, 'lnewnodes := reallocmemof(fallocator, fnodes,',
     'node growth must stage reallocate');
   CheckSourceContains(LSource, 'lhashbuckets := fallocator.getmem(lcap * sizeof(uint32));',
     'hash index buckets must stage allocation');

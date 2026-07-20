@@ -10,7 +10,8 @@ uses
   nextpas.core.async.loop,
   nextpas.core.async.task,
   nextpas.core.async.taskgroup,
-  nextpas.core.async.shutdown;
+  nextpas.core.async.shutdown,
+  nextpas.core.async.cancellation;
 
 var
   T: TTestSuite;
@@ -41,7 +42,9 @@ begin
   Check(LGroup.TotalCount = 0, 'Initial total 0');
   Check(LGroup.ActiveCount = 0, 'Initial active 0');
   Check(LGroup.CompletedCount = 0, 'Initial completed 0');
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -56,7 +59,9 @@ begin
   Check(LGroup.TotalCount = 1, 'TotalCount 1');
   Check(LGroup.ActiveCount = 1, 'ActiveCount 1');
   Check(LGroup.State = agsRunning, 'State running');
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -72,7 +77,9 @@ begin
   LGroup.RunTask(nil, nil);
   Check(LGroup.TotalCount = 3, 'TotalCount 3');
   Check(LGroup.ActiveCount = 3, 'ActiveCount 3');
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -87,8 +94,27 @@ begin
   LGroup.RunTask(nil, nil);
   LGroup.CancelAll;
   Check(LGroup.State = agsCancelled, 'State cancelled');
-  LLoop.Close;
+  LGroup := nil;
 
+  LLoop.Free;
+
+end;
+
+procedure TestTaskGroupTokenCancel;
+var
+  LLoop: TAsyncLoop;
+  LGroup: IAsyncTaskGroup;
+  LToken: IAsyncCancellationToken;
+begin
+  LLoop := TAsyncLoop.Create;
+  LToken := CreateCancellationToken;
+  LGroup := CreateTaskGroup(LLoop, [], LToken);
+  LGroup.RunTask(nil, nil);
+  LToken.Cancel;
+  Check(LGroup.State = agsCancelled, 'token cancel maps to CancelAll');
+  LGroup := nil;
+  LToken := nil;
+  LLoop.Free;
 end;
 
 procedure TestTaskGroupDrain;
@@ -103,7 +129,9 @@ begin
   Check(LGroup.State = agsDraining, 'State draining');
   LGroup.RunTask(nil, nil); { should be ignored }
   Check(LGroup.TotalCount = 1, 'TotalCount still 1 after drain');
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -117,8 +145,9 @@ begin
   LGroup2 := CreateTaskGroup(LLoop, [agoFailFast, agoCancelOnTimeout]);
   Check(LGroup1.State = agsIdle, 'Default idle');
   Check(LGroup2.State = agsIdle, 'Options idle');
-  LLoop.Close;
-
+  LGroup1 := nil;
+  LGroup2 := nil;
+  LLoop.Free;
 end;
 
 { ==================== Task Group + Loop 测试 ==================== }
@@ -139,7 +168,9 @@ begin
   Check(LGroup.CompletedCount = 1, 'Completed 1');
   Check(LGroup.ActiveCount = 0, 'Active 0');
   GLoopRef := nil;
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -161,7 +192,9 @@ begin
   Check(LGroup.CompletedCount = 3, 'Completed 3');
   Check(LGroup.ActiveCount = 0, 'Active 0');
   GLoopRef := nil;
-  LLoop.Close;
+  LGroup := nil;
+
+  LLoop.Free;
 
 end;
 
@@ -173,11 +206,16 @@ var
   LShutdown: IAsyncShutdown;
 begin
   LLoop := TAsyncLoop.Create;
-  LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
-  Check(LShutdown.Phase = spRunning, 'Initial running');
-  Check(not LShutdown.IsShuttingDown, 'Not shutting down');
-  LLoop.Close;
+  try
+    LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
+    Check(LShutdown.Phase = spRunning, 'Initial running');
+    Check(not LShutdown.IsShuttingDown, 'Not shutting down');
+    LShutdown := nil;
+  finally
+    LShutdown := nil;
 
+    LLoop.Free;
+  end;
 end;
 
 procedure TestShutdownRequest;
@@ -186,12 +224,17 @@ var
   LShutdown: IAsyncShutdown;
 begin
   LLoop := TAsyncLoop.Create;
-  LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
-  LShutdown.RequestShutdown;
-  Check(LShutdown.Phase = spDraining, 'Draining');
-  Check(LShutdown.IsShuttingDown, 'Shutting down');
-  LLoop.Close;
+  try
+    LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
+    LShutdown.RequestShutdown;
+    Check(LShutdown.Phase = spDraining, 'Draining');
+    Check(LShutdown.IsShuttingDown, 'Shutting down');
+    LShutdown := nil;
+  finally
+    LShutdown := nil;
 
+    LLoop.Free;
+  end;
 end;
 
 procedure TestShutdownOptions;
@@ -200,12 +243,18 @@ var
   LShutdown1, LShutdown2: IAsyncShutdown;
 begin
   LLoop := TAsyncLoop.Create;
-  LShutdown1 := CreateShutdownManager(LLoop, [soGraceful], 100);
-  LShutdown2 := CreateShutdownManager(LLoop, [soGraceful, soAbortOnTimeout], 200);
-  Check(LShutdown1.Phase = spRunning, 'Graceful running');
-  Check(LShutdown2.Phase = spRunning, 'Abort running');
-  LLoop.Close;
-
+  try
+    LShutdown1 := CreateShutdownManager(LLoop, [soGraceful], 100);
+    LShutdown2 := CreateShutdownManager(LLoop, [soGraceful, soAbortOnTimeout], 200);
+    Check(LShutdown1.Phase = spRunning, 'Graceful running');
+    Check(LShutdown2.Phase = spRunning, 'Abort running');
+    LShutdown1 := nil;
+    LShutdown2 := nil;
+  finally
+    LShutdown1 := nil;
+    LShutdown2 := nil;
+    LLoop.Free;
+  end;
 end;
 
 procedure TestShutdownCallback;
@@ -214,13 +263,18 @@ var
   LShutdown: IAsyncShutdown;
 begin
   LLoop := TAsyncLoop.Create;
-  LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
-  LShutdown.OnShutdown(@IncrementCallback, nil);
-  LShutdown.RequestShutdown;
-  LShutdown.RequestShutdown; { duplicate ignored }
-  Check(LShutdown.Phase = spDraining, 'Still draining');
-  LLoop.Close;
+  try
+    LShutdown := CreateShutdownManager(LLoop, [soGraceful], 100);
+    LShutdown.OnShutdown(@IncrementCallback, nil);
+    LShutdown.RequestShutdown;
+    LShutdown.RequestShutdown; { duplicate ignored }
+    Check(LShutdown.Phase = spDraining, 'Still draining');
+    LShutdown := nil;
+  finally
+    LShutdown := nil;
 
+    LLoop.Free;
+  end;
 end;
 
 { ==================== Main ==================== }
@@ -231,6 +285,7 @@ begin
   T.Test('TaskGroupRunTask', @TestTaskGroupRunTask);
   T.Test('TaskGroupMultiple', @TestTaskGroupMultiple);
   T.Test('TaskGroupCancelAll', @TestTaskGroupCancelAll);
+  T.Test('TaskGroupTokenCancel', @TestTaskGroupTokenCancel);
   T.Test('TaskGroupDrain', @TestTaskGroupDrain);
   T.Test('TaskGroupOptions', @TestTaskGroupOptions);
   T.Test('TaskGroupWithLoop', @TestTaskGroupWithLoop);

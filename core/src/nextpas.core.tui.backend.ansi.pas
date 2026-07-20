@@ -17,6 +17,7 @@ unit nextpas.core.tui.backend.ansi;
 interface
 
 uses
+  nextpas.core.mem.intf,
   nextpas.core.text.builder,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
@@ -37,7 +38,7 @@ type
     FLastUl: TColor;
     FLastModifier: TModifier;
   public
-    constructor Create(AFd: Int32);
+    constructor Create(AFd: Int32; const AAllocator: IAllocator = nil);
     destructor Destroy; override;
 
     { 重置缓存的 SGR 状态——进入 alt screen / 首帧前调用，确保下次
@@ -52,6 +53,13 @@ type
       AAlternateScrollKeys: Boolean = False);
     procedure LeaveAlternate(AMouseMode: TAnsiMouseMode = amMouseFull;
       AAlternateScrollKeys: Boolean = False);
+    procedure PushKittyKeyboard(AFlags: Integer = KittyKeyboardDefaultFlags);
+    procedure PopKittyKeyboard;
+    procedure QueryKittyKeyboard;
+    procedure EnableFocusReporting;
+    procedure DisableFocusReporting;
+    procedure EnableBracketedPaste;
+    procedure DisableBracketedPaste;
     procedure MoveTo(AX, AY: Word);
 
     { 把 Patches 翻译为 ANSI 字节。Patches 假定按 (Y,X) 排序——buffer Diff
@@ -78,11 +86,11 @@ uses
 
 { TAnsiBackend }
 
-constructor TAnsiBackend.Create(AFd: Int32);
+constructor TAnsiBackend.Create(AFd: Int32; const AAllocator: IAllocator);
 begin
   inherited Create;
   FFd := AFd;
-  FOut.Init(4096);
+  FOut.InitWith(4096, AAllocator);
   ResetStyleCache;
 end;
 
@@ -136,6 +144,41 @@ begin
     AnsiDisableAlternateScroll(FOut);
   AnsiLeaveAltScreen(FOut);
   ResetStyleCache;
+end;
+
+procedure TAnsiBackend.PushKittyKeyboard(AFlags: Integer);
+begin
+  AnsiKittyKeyboardPush(FOut, AFlags);
+end;
+
+procedure TAnsiBackend.PopKittyKeyboard;
+begin
+  AnsiKittyKeyboardPop(FOut);
+end;
+
+procedure TAnsiBackend.QueryKittyKeyboard;
+begin
+  AnsiKittyKeyboardQuery(FOut);
+end;
+
+procedure TAnsiBackend.EnableFocusReporting;
+begin
+  AnsiEnableFocusReporting(FOut);
+end;
+
+procedure TAnsiBackend.DisableFocusReporting;
+begin
+  AnsiDisableFocusReporting(FOut);
+end;
+
+procedure TAnsiBackend.EnableBracketedPaste;
+begin
+  AnsiEnableBracketedPaste(FOut);
+end;
+
+procedure TAnsiBackend.DisableBracketedPaste;
+begin
+  AnsiDisableBracketedPaste(FOut);
 end;
 
 procedure TAnsiBackend.MoveTo(AX, AY: Word);
