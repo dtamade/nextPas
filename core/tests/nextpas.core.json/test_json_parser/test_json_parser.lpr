@@ -996,21 +996,21 @@ begin
     'init must stage initial combined allocation');
   CheckSourceContains(LSource, 'if lbase = nil then',
     'init must guard initial combined allocation');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lnewcap * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnewnodes := reallocmemof(fallocator, fnodes,',
     'node growth must stage reallocate');
   CheckSourceContains(LSource, 'lnodesptr := fallocator.getmem(lnewcap * sizeof(tjsonnode));',
     'combined node growth must stage node allocation');
   CheckSourceContains(LSource, 'larenaptr := fallocator.getmem(fstrarenacap);',
     'combined node growth must stage arena allocation');
-  CheckSourceContains(LSource, 'fallocator.freemem(lnodesptr);',
+  CheckSourceContains(LSource, 'freememof(fallocator, lnodesptr,',
     'combined node growth must release staged nodes when arena allocation fails');
-  CheckSourceContains(LSource, 'lnewoverflow := fallocator.reallocmem(fstroverflow, lnewcap * sizeof(pointer));',
+  CheckSourceContains(LSource, 'lnewoverflow := reallocmemof(fallocator, fstroverflow,',
     'overflow storage must stage reallocate');
   CheckSourceContains(LSource, 'lnodesptr := fallocator.getmem(lestimate * sizeof(tjsonnode));',
     'parse preallocation must stage node allocation');
   CheckSourceContains(LSource, 'larenaptr := fallocator.getmem(fstrarenacap);',
     'parse preallocation must stage arena allocation');
-  CheckSourceContains(LSource, 'lnewnodes := fallocator.reallocmem(fnodes, lestimate * sizeof(tjsonnode));',
+  CheckSourceContains(LSource, 'lnewnodes := reallocmemof(fallocator, fnodes,',
     'parse preallocation must stage reallocate');
   CheckSourceContains(LSource, 'lindices := fallocator.getmem(findexcap * sizeof(tjsonobjectindex));',
     'object index storage must stage allocation');

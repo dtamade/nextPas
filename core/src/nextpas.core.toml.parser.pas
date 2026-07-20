@@ -67,7 +67,8 @@ uses
   nextpas.core.text.number,
   nextpas.core.text.escape,
   nextpas.core.text.utf8,
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 const
   INITIAL_NODE_CAP = 64;
@@ -237,19 +238,19 @@ begin
     Exit;
   if FHashBuckets <> nil then
   begin
-    FAllocator.FreeMem(FHashBuckets);
+    FreeMemOf(FAllocator, FHashBuckets, SizeUInt(FHashCap) * SizeOf(UInt32));
     FHashBuckets := nil;
   end;
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
-      FAllocator.FreeMem((FOwnedBufs + LI)^);
-    FAllocator.FreeMem(Pointer(FOwnedBufs));
+      FAllocator.FreeMem((FOwnedBufs + LI)^); { per-buf size not tracked }
+    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(Pointer));
     FOwnedBufs := nil;
   end;
   if FNodes <> nil then
   begin
-    FAllocator.FreeMem(FNodes);
+    FreeMemOf(FAllocator, FNodes, SizeUInt(FNodeCap) * SizeOf(TTomlNode));
     FNodes := nil;
   end;
   FNodeCount := 0;
@@ -281,7 +282,8 @@ begin
   else if FOwnedCount >= FOwnedCap then
   begin
     LNewCap := FOwnedCap * 2;
-    LNewBufs := PPointer(FAllocator.ReallocMem(Pointer(FOwnedBufs), LNewCap * SizeOf(Pointer)));
+    LNewBufs := PPointer(ReallocMemOf(FAllocator, Pointer(FOwnedBufs),
+      SizeUInt(FOwnedCap) * SizeOf(Pointer), SizeUInt(LNewCap) * SizeOf(Pointer)));
     if LNewBufs = nil then
     begin
       SetOutOfMemoryError;
@@ -303,7 +305,8 @@ begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    LNewNodes := FAllocator.ReallocMem(FNodes, LNewCap * SizeOf(TTomlNode));
+    LNewNodes := ReallocMemOf(FAllocator, FNodes,
+      SizeUInt(FNodeCap) * SizeOf(TTomlNode), SizeUInt(LNewCap) * SizeOf(TTomlNode));
     if LNewNodes = nil then
     begin
       SetOutOfMemoryError;
@@ -332,7 +335,7 @@ begin
   if LCap < 64 then LCap := 64;
   if (FHashBuckets <> nil) and (FHashCap < LCap) then
   begin
-    FAllocator.FreeMem(FHashBuckets);
+    FreeMemOf(FAllocator, FHashBuckets, SizeUInt(FHashCap) * SizeOf(UInt32));
     FHashBuckets := nil;
     FHashCap := 0;
     FHashOwner := TOML_NODE_NONE;
@@ -1870,14 +1873,14 @@ begin
   begin
     for LI := 0 to FOwnedCount - 1 do
       FAllocator.FreeMem((FOwnedBufs + LI)^);
-    FAllocator.FreeMem(Pointer(FOwnedBufs));
+    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(Pointer));
     FOwnedBufs := nil;
     FOwnedCount := 0;
     FOwnedCap := 0;
   end;
   if FHashBuckets <> nil then
   begin
-    FAllocator.FreeMem(FHashBuckets);
+    FreeMemOf(FAllocator, FHashBuckets, SizeUInt(FHashCap) * SizeOf(UInt32));
     FHashBuckets := nil;
     FHashCap := 0;
     FHashOwner := TOML_NODE_NONE;

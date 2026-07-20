@@ -106,10 +106,10 @@ P-a + P-b 名单；`blockpool.growable` 保留源、**不进门面**。
 5. 验证：`test_mem` / `test_debug_wrap` / `lane-focused` / hygiene
 6. **Breaking（re-export only）**：源文件未删
 
-### 批 2（可选，未做）
+### 批 2（G2 · done 2026-07-20）
 
-- mimalloc/mmap 是否降为「仅子单元」
-- 防回潮 source-contract（门面不得 uses demoted 名单）
+- mimalloc/mmap 已移出门面 re-export；调用 `uses allocator.mimalloc` / `.mmap`
+- 防回潮：G1 + G2 名单在 `check_usability_docs.sh`
 
 ### 禁止（仍有效）
 
