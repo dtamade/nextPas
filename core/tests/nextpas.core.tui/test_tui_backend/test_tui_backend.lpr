@@ -488,6 +488,22 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendSynchronizedUpdateBeginEnd;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.BeginSynchronizedUpdate;
+    CheckEqual(#27'[?2026h', PendingString(LBE), 'begin 2026h');
+    LBE.DiscardPending;
+    LBE.EndSynchronizedUpdate;
+    CheckEqual(#27'[?2026l', PendingString(LBE), 'end 2026l');
+  finally
+    LBE.Free;
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.backend');
@@ -526,9 +542,11 @@ begin
     @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
   T.Test('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
-    T.Test('ansi backend focus reporting enable disable',
+  T.Test('ansi backend focus reporting enable disable',
     @TestAnsiBackendFocusReportingEnableDisable);
   T.Test('ansi backend bracketed paste enable disable',
     @TestAnsiBackendBracketedPasteEnableDisable);
-if not T.Run then Halt(1);
+  T.Test('ansi backend synchronized update begin end',
+    @TestAnsiBackendSynchronizedUpdateBeginEnd);
+  if not T.Run then Halt(1);
 end.

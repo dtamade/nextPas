@@ -53,7 +53,7 @@
 | # | 出口标准 | 当前 |
 |---|----------|------|
 | D1 | 四层 facade 与 TIER_REGISTRY 一致，core 无 app/协议泄漏 | **已满足** |
-| D2 | Scorecard SC1–SC27 全绿 + C7/C8 全绿（focused 0 leak） | **已满足**（M1） |
+| D2 | Scorecard SC1–SC28 全绿 + C7/C8/C9 全绿（focused 0 leak） | **已满足**（E2 后 SC28） |
 | D3 | 全部 widget 有专属 suite（基础 ≥16，其余 ≥12） | **已满足**（40/40） |
 | D4 | 7 demos 教学路径契约（app-first） | **已满足** |
 | D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **已满足**（B1 Landed） |
@@ -111,6 +111,7 @@ full         core+ext+experimental + ~30 advanced widgets（迁移伞）
 | Overlay | Done | SC9 |
 | SGR / DrawPatches | Done | SC20/21/23/24 |
 | DECSET mouse/focus/paste/Kitty | Done | SC6/12/13/17 |
+| DECSET 2026 synchronized update | **Done**（E2） | SC28 |
 | Truecolor env-attested | Done | SC8 |
 | Truecolor DA 真查询 | **Out** | 可选未来 |
 | Windows 真 console TUI | **Out** | 挂 platform |
@@ -185,7 +186,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 
 | 步骤 | 内容 | 状态 |
 |------|------|------|
-| E1 | `RELEASE=1` scorecard + `bench_go_rust compare` 刷新 SCORECARD/PARITY；C9 wine 存在性门禁 | **Done**（本批） |
+| E1 | `RELEASE=1` scorecard + `bench_go_rust compare` 刷新 SCORECARD/PARITY；C9 wine 存在性门禁 | **Done** |
+| E2 | DECSET 2026 Synchronized Update（EndFrame 包裹 + SC28 + opt-out） | **Done**（本批） |
 | E-ongoing | 重大变更后刷新快照；**不对 ns 设硬阈值**；禁止假胜营销 | 持续 |
 
 ---
@@ -200,6 +202,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 [DONE] Phase B + Idle 单点：scrollview/modal/dialog/split_pane/select → ext
    ↓
 [DONE] Phase E1 测量刷新 + C2 Wine pure-path
+   ↓
+[DONE] Phase E2 DECSET 2026 Synchronized Update（SC28）
    ↓
 [NOW] Phase F Maintenance Idle
    │

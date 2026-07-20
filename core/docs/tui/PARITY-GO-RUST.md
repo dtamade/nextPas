@@ -96,6 +96,7 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | 当前 | **Maintenance Idle**（见 ROADMAP） | Active |
 | Idle 单点 | dialog + split_pane + **select** → ext | **Done**；B3 候选表清空 |
 | Phase E1 | RELEASE=1 快照 + bench_go_rust 刷新 + C2 wine + C9 | **Done**（2026-07-20） |
+| Phase E2 | DECSET 2026 Synchronized Update + SC28 | **Done**（2026-07-20） |
 | 可选 | Truecolor DA / crate / Windows console | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）
@@ -107,6 +108,7 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Layout | 面积守恒 V/H / % / ratio | SC4, SC14, SC19, SC22；bench Layout* |
 | Protocol | Kitty / focus / paste / truecolor | SC8, SC12–13；CONTRACT §5 |
 | Backend emit | DECSET 会话序列 | SC17；`test_tui_backend` |
+| Sync update | 帧级防撕裂 DECSET 2026 | **SC28**；EndFrame wrap |
 | SGR emit | RGB + indexed FG/BG | SC20, SC23；`test_tui_ansi` |
 | DrawPatches | 复用 + 样式切换 | SC21, SC24 |
 | Widget focus | Tab 循环 | SC25；`test_tui_focus` |

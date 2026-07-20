@@ -52,10 +52,10 @@ SCORECARD="$REPO_ROOT/core/docs/tui/SCORECARD.md"
 PARITY="$REPO_ROOT/core/docs/tui/PARITY-GO-RUST.md"
 SC_LPR="$TEST_DIR/scorecard/scorecard.lpr"
 if [ -f "$SCORECARD" ]; then
-  if grep -q 'SC25' "$SCORECARD" && grep -q 'SC26' "$SCORECARD" && grep -q 'SC27' "$SCORECARD"; then
-    ok "SCORECARD 含 SC25/SC26/SC27"
+  if grep -q 'SC25' "$SCORECARD" && grep -q 'SC26' "$SCORECARD" && grep -q 'SC27' "$SCORECARD" && grep -q 'SC28' "$SCORECARD"; then
+    ok "SCORECARD 含 SC25–SC28"
   else
-    fail_check "SCORECARD 缺少 SC25/SC26/SC27 条目"
+    fail_check "SCORECARD 缺少 SC25–SC28 条目"
   fi
 else
   fail_check "SCORECARD.md 不存在"
@@ -68,7 +68,7 @@ if [ -f "$CONTRACT" ]; then
   fi
 fi
 if [ -f "$SC_LPR" ]; then
-  for p in RunSC25 RunSC26 RunSC27; do
+  for p in RunSC25 RunSC26 RunSC27 RunSC28; do
     if grep -q "procedure $p" "$SC_LPR"; then ok "scorecard.lpr $p"; else fail_check "scorecard.lpr 缺 $p"; fi
   done
 else

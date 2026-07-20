@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: **Maintenance Idle** · Phase E1 测量刷新（2026-07-20）
+**状态**: **Maintenance Idle** · Phase E2 Synchronized Update（2026-07-20）
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [ROADMAP.md](ROADMAP.md)
 
@@ -56,6 +56,7 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC25 | FocusManager Tab | Tab 前进 / Shift+Tab 后退 |
 | SC26 | Keybind BindKey+HandleKey | Enter 绑定触发 action |
 | SC27 | FrameBudget | BeginFrame 后 not over 16ms |
+| SC28 | Synchronized update DECSET 2026 | backend h/l；EndFrame 包裹；opt-out |
 
 规则：
 
