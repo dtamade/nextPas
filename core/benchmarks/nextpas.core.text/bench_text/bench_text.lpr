@@ -1,6 +1,7 @@
 program bench_text;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses SysUtils,
+  nextpas.core.base,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.text.view, nextpas.core.text.number,
   nextpas.core.text.escape, nextpas.core.text.scan, nextpas.core.text.utf8,
@@ -19,10 +20,16 @@ begin LS := UIntToStr(High(UInt64)); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchHexStr(const ACtx: IBenchContext);
 var LS: string;
 begin LS := HexStr($DEADBEEFCAFEBABE, 16); GSink := GSink xor UInt64(Length(LS)); end;
-procedure BenchEscapeHtml(const ACtx: IBenchContext);
+procedure BenchJsonEscape(const ACtx: IBenchContext);
 const DATA = '<script>alert("hello & goodbye")</script>';
-var LS: string;
-begin LS := EscapeHtml(DATA); GSink := GSink xor UInt64(Length(LS)); end;
+var LBuilder: TStringBuilder; LView: TStringView;
+begin
+  LBuilder.Init(Length(DATA) * 2);
+  LView := TStringView.FromStr(DATA);
+  JsonEscapeToBuilder(LView, LBuilder);
+  GSink := GSink xor UInt64(LBuilder.Len);
+  LBuilder.Done;
+end;
 procedure BenchTrimLeft(const ACtx: IBenchContext);
 const DATA = '   hello world   ';
 var LS: string;
@@ -35,7 +42,7 @@ begin
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
     .Add('IndexOf', @BenchIndexOf).Add('IntToStr', @BenchIntToStr).Add('UIntToStr', @BenchUIntToStr)
-    .Add('HexStr', @BenchHexStr).Add('EscapeHtml', @BenchEscapeHtml).Add('TrimLeft', @BenchTrimLeft)
+    .Add('HexStr', @BenchHexStr).Add('JsonEscape', @BenchJsonEscape).Add('TrimLeft', @BenchTrimLeft)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
