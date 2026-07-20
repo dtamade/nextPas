@@ -1,89 +1,144 @@
 # nextpas.core.json 代码契约
 
 **模块路径**：`core/src/nextpas.core.json*.pas`（9 个源文件）
-**层级**：L2（依赖 L0-L1）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**层级**：L2（只依赖 L0–L1）
+**Owner**：config-json-xml-toml-yaml-csv-ini lane
+**最后更新**：2026-07-20
+**版本**：2.0（对齐真实 facade；废止 1.0 中 class-DOM / Pointer / Patch / Schema 描述）
 
 ---
 
-## 1. 接口契约
+## 1. 源文件与职责
 
-### 1.1 子模块
+| 单元 | 职责 |
+|------|------|
+| `json.types` | `TJsonNodeKind`、`TJsonNode`（arena 节点 record）、`TJsonError`、token 常量 |
+| `json.scanner` | 结构扫描（含 SIMD 路径） |
+| `json.reader` | 低层 token 读取 |
+| `json.parser` | `TJsonDocument` record 解析器 |
+| `json.value` | `TJsonValue` 借用视图访问器 |
+| `json.writer` | 低层序列化 |
+| `json.builder` | `IJsonBuilder` 流式构建 |
+| `json.marshal` | 依赖 `reflect` 的 record ↔ JSON |
+| `json.pas` | 门面：`IJsonDocument`、`JsonParse*`、`JsonStringify` |
 
-```
-json.base      ← TJsonKind 枚举, TJsonNode 前向声明
-json.node      ← TJsonNode DOM 树 (Object/Array/String/Number/Boolean/Null)
-json.parser    ← 流式解析器 (UTF-8 输入 → TJsonNode)
-json.writer    ← TJsonNode → JSON 字符串输出
-json.builder   ← 流式构建 API
-json.pointer   ← JSON Pointer (RFC 6901)
-json.patch     ← JSON Patch (RFC 6902)
-json.schema    ← JSON Schema 验证 (子集)
-json.pas       ← 门面
-```
+依赖方向：`types` ← `parser`/`value`/`writer` ← `pas`；`builder`、`marshal` 为可选子面，不经门面强制 re-export 全部符号。
 
-### 1.2 核心 API
+---
+
+## 2. 公开 API
+
+### 2.1 门面（`uses nextpas.core.json`）
 
 ```pascal
-// 解析
-function JsonParse(const AInput: string): TJsonNode;
-function JsonTryParse(const AInput: string; out ANode: TJsonNode): Boolean;
+type
+  TJsonNodeKind = (...);  // jnkNull, jnkBool, jnkInt, jnkReal, jnkString, jnkArray, jnkObject
+  TJsonError = record
+    Message: TStringView;
+    Offset: SizeUInt;
+    Line: UInt32;
+    Column: UInt32;
+  end;
+  TJsonValue = record ... end;  // 借用视图，非堆 DOM class
 
-// 构建
-function JsonNew: TJsonNode;  // null
-function JsonNewObject: TJsonNode;
-function JsonNewArray: TJsonNode;
+  IJsonDocument = interface
+    function Root: TJsonValue;
+    function HasError: Boolean;
+    function Error: TJsonError;
+    function Stringify: string;
+    function StringifyPretty(const AIndent: Int32 = 2): string;
+  end;
 
-// DOM 操作
-TJsonNode = class
-  function Kind: TJsonKind;
-  function AsString: string;
-  function AsInt64: Int64;
-  function AsFloat: Double;
-  function AsBoolean: Boolean;
-  function Count: SizeInt;
-  function Child(const AKey: string): TJsonNode;  // object
-  function Item(AIndex: SizeInt): TJsonNode;       // array
-  procedure SetKeyValue(const AKey: string; AValue: TJsonNode);
-  procedure Add(AValue: TJsonNode);
-  function ToString: string;  // 序列化
-end;
+function JsonParse(const AInput: string): IJsonDocument; overload;
+function JsonParse(const AInput: TStringView): IJsonDocument; overload;
+function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
+function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument; overload;
+function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument; overload;
+function JsonStringify(const AValue: TJsonValue): string;
 ```
 
-### 1.3 JSON Pointer / Patch
+### 2.2 `TJsonValue` 访问（`json.value`）
 
-- `JsonPointer(ANode, '/foo/0/bar')`: RFC 6901 路径查询
-- `JsonPatch(ADoc, APatch)`: RFC 6902 补丁应用 (add/remove/replace/move/copy/test)
+- 类型判断：`IsValid`、`IsNull`、`IsBool`、`IsInt`、`IsReal`、`IsStr`、`IsArray`、`IsObject`、`Kind`
+- 标量：`AsBool`、`AsInt`、`AsFloat`、`AsStr`（`TStringView`）
+- 数组：`ArrayLen`、`ArrayGet`
+- 对象：`ObjectGet`、`ObjectHas`、`ObjectLen`、`ObjectKeyAt`、`ObjectValueAt`
+- **非法访问返回安全默认值**（0 / empty / false / invalid view），不抛异常
 
----
+### 2.3 可选子面
 
-## 2. 不变量
-
-- **[INV-1]** TJsonNode 为树结构，父节点拥有子节点
-- **[INV-2]** JsonParse 失败抛 EParseError
-- **[INV-3]** ToString 输出合法 JSON（可再解析）
-- **[INV-4]** Number 精度：整数用 Int64，浮点用 Double
-
----
-
-## 3. 错误处理
-
-| 场景 | 异常 |
-|------|------|
-| 非法 JSON 语法 | EParseError |
-| 类型不匹配 (AsString on number) | EInvalidOperation |
-| Key 不存在 | ENotFoundError |
-| Index 越界 | EOutOfRange |
+| 单元 | API |
+|------|-----|
+| `json.builder` | `IJsonBuilder` + `JsonBuilder` / `JsonBuilder(AInitialCap)` |
+| `json.marshal` | `JsonMarshal`、`JsonUnmarshal`、`JsonUnmarshalStr`（需 `ITypeRegistry`） |
 
 ---
 
-## 4-6. 概要
+## 3. 错误与失败契约
 
-- **线程安全**: TJsonNode ❌（调用方同步）; 解析/序列化函数 ✅
-- **内存**: TJsonNode 树结构，父节点拥有子节点，Destroy 递归释放
-- **测试**: 11 个测试目录
+| API | 失败行为 |
+|-----|----------|
+| `JsonParse` / `JsonParseWith` | 返回带 `HasError=True` 的 document；不抛解析异常 |
+| `TryJsonParse` | 失败返回 `False`，仍赋值诊断 document |
+| `Stringify` / `StringifyPretty` | 诊断 document 不可序列化（实现内 RequireStringifiable） |
+| `TJsonValue` 错误类型访问 | 安全默认，不抛 |
+| OOM | allocator 路径 fail-closed（`EOutOfMemoryError` 等） |
+
+`TJsonError` 字段：`Message`、`Offset`、`Line`、`Column`（列名是 **Column**，不是 Col）。
+
+---
+
+## 4. Lifetime / 所有权
+
+- `IJsonDocument`：COM 引用计数；出作用域自动释放
+- `TJsonValue`：借用 document 内部节点；**document 必须活过所有 value 使用**
+- zero-copy 字符串视图：未转义字符串可能指向输入缓冲；输入 lifetime 由 document 持有保证
+- `JsonParseWith`：调用方提供的 `TMemAllocator` 生命周期须覆盖 document
+
+---
+
+## 5. 不变量
+
+- **[INV-1]** 节点存储为 arena/`TJsonNode` record 树，不是 `TJsonNode` class
+- **[INV-2]** RFC 8259 对象键为字符串；重复键 hash 查找 last-wins，迭代可保留全部
+- **[INV-3]** 最大嵌套深度 512（实现常量）
+- **[INV-4]** 整数优先 `Int64`；溢出可提升为 `Double`
+- **[INV-5]** `Stringify` 输出可再解析（无 error 的 document）
+
+---
+
+## 6. 依赖边界
+
+- 允许：`text.view`、`text.builder`、`text.scan`（实现）、`mem.intf` / `mem.allocator.base`
+- `marshal` 额外依赖 `reflect`
+- 禁止：直接 `uses SysUtils` 作为长期方案；禁止 L3 反向依赖
+
+**主要消费者**：`config`、`http`、`tls`、`bench`、`reflect` 相关路径。公共 API 变更成本最高。
+
+---
+
+## 7. 测试入口
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.json/test_json_facade_surface
+make focused FOCUS=core/tests/nextpas.core.json/test_json_parser
+# 全模块：core/tests/nextpas.core.json/*
+```
+
+代表性套件：`test_json_facade`、`test_json_facade_surface`、`test_json_parser`、`test_json_reader`、`test_json_writer`、`test_json_builder`、`test_json_marshal`、`test_json_rfc8259`、`test_json_roundtrip`、`test_json_edge_cases`、`test_json_robustness`。
+
+---
+
+## 8. Out of scope / Future
+
+**当前不存在（禁止在文档中写成已实现）**：
+
+- JSON Pointer (RFC 6901)
+- JSON Patch (RFC 6902)
+- JSON Schema
+- 以 `TJsonNode` **class** 为中心的公开 DOM API
+
+**Future（需独立 slice + consumer）**：Pointer/Patch/Schema 等。
 
 ---
 
@@ -91,4 +146,5 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-01 | 1.0 | 初始（与实现不符，已废止） | — |
+| 2026-07-20 | 2.0 | 对齐 IJsonDocument / TJsonValue 真实 API | config-formats lane |

@@ -21,7 +21,7 @@ uses nextpas.core.yaml;
 // Parse
 var Doc: IYamlDocument;
 Doc := YamlParse('server:' + #10 + '  host: localhost' + #10 + '  port: 8080');
-WriteLn(Doc.Root.Get('server').Get('port').AsInt); // 8080
+WriteLn(Doc.Root.MapGet('server').MapGet('port').AsInt); // 8080
 
 // Parse with custom allocator
 Doc := YamlParseWith(MyYaml, MyArenaAllocator);

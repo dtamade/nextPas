@@ -1,74 +1,113 @@
 # nextpas.core.csv 代码契约
 
 **模块路径**：`core/src/nextpas.core.csv.pas`（1 个源文件）
-**层级**：L1（依赖 L0: base, errors, mem）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**层级**：表格格式工具（依赖 L0：`errors`、`mem`）；**不**进入 `TConfigFormat`
+**Owner**：config-json-xml-toml-yaml-csv-ini lane
+**最后更新**：2026-07-20
+**版本**：2.0（对齐真实 record API + free helpers）
 
 ---
 
-## 1. 接口契约
+## 1. 源文件与职责
 
-### 1.1 核心类型
+单文件模块：`TCsvReader`、`TCsvWriter`、`TCsvError`、`CsvParse*`。
+
+---
+
+## 2. 公开 API
 
 ```pascal
-TCsvError = record
-  Message: string;
-  Offset: SizeUInt;
-  Line: UInt32;
-  Column: UInt32;
-end;
+type
+  TStringArray = array of string;
+  TStringMatrix = array of TStringArray;
 
-TCsvReader = record
-  // 流式 RFC 4180 解析器
-  class function Create(const AInput: string): TCsvReader; static;
-  function ReadRow(out ARow: TStringArray): Boolean;
-  function ReadAll: TStringMatrix;
-  function Error: TCsvError;
-end;
+  TCsvError = record
+    Message: string;
+    Offset: SizeUInt;
+    Line: UInt32;
+    Column: UInt32;
+  end;
 
-TCsvWriter = record
-  // 流式 CSV 写入器
-  class function Create(ADelimiter: Char = ','): TCsvWriter; static;
-  procedure WriteRow(const ARow: array of string);
-  function ToString: string;
-end;
+  TCsvReader = record
+    procedure Init(...);
+    procedure Done;
+    class function Create(...): TCsvReader; static;
+    function ReadRow(out AFields: TStringArray): Boolean;
+    function ReadAll: TStringMatrix;
+    function HasError: Boolean;
+    function GetError: string;
+    function Error: TCsvError;
+    function Allocator: TMemAllocator;
+    property Delimiter: AnsiChar;
+  end;
+
+  TCsvWriter = record
+    class function Create(...): TCsvWriter; static;
+    class function CreateWith(const AAllocator: TMemAllocator; ...): TCsvWriter; static;
+    procedure WriteRow(const AFields: array of string);
+    procedure WriteField(const AField: string);
+    procedure EndRow;
+    function ToString: string;
+    function Allocator: TMemAllocator;
+  end;
+
+function CsvParse(const AInput: string; ADelimiter: AnsiChar = ','): TStringMatrix;
+function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator; ...): TStringMatrix;
 ```
 
-### 1.2 RFC 4180 兼容
-
-- 默认分隔符: `,`
-- 引号字符: `"`
-- 引号内换行: 支持
-- 引号内双引号转义: `""` → `"`
-- 行尾: CRLF 或 LF
+选项：`Delimiter`、`FieldsPerRecord`、`TrimSpace`、`Comment`、allocator。
 
 ---
 
-## 2. 不变量
+## 3. 错误与失败契约
 
-- **[INV-1]** TCsvReader 为 record，零堆分配（视图引用输入字符串）
-- **[INV-2]** 引号字段内可包含分隔符和换行
-- **[INV-3]** ReadRow 返回 False 表示 EOF
-
----
-
-## 3. 错误处理
-
-| 场景 | 策略 |
-|------|------|
-| 未闭合引号 | Error.Message 设置，ReadRow 返回 False |
-| 非法格式 | Error 记录位置（Line/Column/Offset） |
-| IAllocator 注入 | 内部 buffer 使用 FAllocator |
+- 解析失败 **in-band**：`HasError` / `GetError` / `Error`，不抛业务解析异常
+- `ReadRow` 返回 `False`：EOF **或** 错误（先查 `HasError`）
+- `ReadAll`：只返回失败记录 **之前** 的完整行；不追加触发错误的残缺/宽度不匹配行
+- `TCsvError`：`Message`、`Line`、`Column`、`Offset`
 
 ---
 
-## 4-6. 概要
+## 4. Lifetime / 所有权
 
-- **线程安全**: TCsvReader/Writer 为 record，✅ 值语义
-- **内存**: Reader 零分配（视图）; Writer 内部 buffer; ReadAll 返回 TStringMatrix
-- **测试**: 4 个测试目录
+- `TCsvReader` 内部持有输入 `string` 引用，防止悬垂
+- `ReadRow`/`ReadAll` 返回的字段字符串为 **拥有副本**
+- record 值语义；`Init`/`Done` 或 `Create` 路径按实现使用
+- Writer 内部 buffer；`ToString` 产出独立 string
+
+---
+
+## 5. 不变量
+
+- **[INV-1]** RFC 4180 取向：默认 `,` 与 `"`；引号内可含分隔符与换行；`""` → `"`
+- **[INV-2]** 行尾 CRLF 或 LF
+- **[INV-3]** 固定字段数校验可选（`FieldsPerRecord`）
+
+---
+
+## 6. 依赖边界
+
+- `nextpas.core.errors`、`mem.intf` / `mem.allocator.base`
+- **与 config 无直接耦合**（config 不加载 CSV）
+
+---
+
+## 7. 测试入口
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.csv/test_csv_facade_surface
+make focused FOCUS=core/tests/nextpas.core.csv/test_csv_roundtrip
+```
+
+套件：`test_csv`、`test_csv_edge_cases`、`test_csv_roundtrip`、`test_csv_facade_surface`。
+
+---
+
+## 8. Out of scope / Future
+
+- 不强制 `ICsvDocument` 式 interface 包装
+- 不作为 config 多源格式
+- 流式 `IStream` 入口：Future，需独立 slice
 
 ---
 
@@ -76,4 +115,5 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-01 | 1.0 | 初始 | — |
+| 2026-07-20 | 2.0 | 补全 Create/Init、CsvParse、错误与 ReadAll 语义 | config-formats lane |
