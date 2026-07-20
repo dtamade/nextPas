@@ -25,6 +25,8 @@ Callers own `TXmlDocument`, `TXmlReader`, and `TXmlWriter` instances and must fr
 
 ## Quick Start
 
+Runnable smoke: `core/examples/nextpas.core.xml/xml_smoke/` (`make run`).
+
 ```pascal
 uses nextpas.core.xml;
 

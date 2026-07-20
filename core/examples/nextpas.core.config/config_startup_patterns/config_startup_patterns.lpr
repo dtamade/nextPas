@@ -93,5 +93,22 @@ begin
     LMutable.Free;
   end;
 
+  { CLI / map overrides: AddKeyValues is an ordinary source; last wins. }
+  LSnapshot := ConfigBuilder
+    .AddDefault('server.host', 'default-host')
+    .AddDefault('server.port', '1')
+    .AddFile('app.toml', cfToml)
+    .AddKeyValues(
+      ['server.host', 'server.port'],
+      ['cli-host', '8443'])
+    .RequireKeys(['server.host', 'server.port'])
+    .Build;
+  if LSnapshot.GetStringRequired('server.host') <> 'cli-host' then
+    Fail('AddKeyValues host override mismatch');
+  if LSnapshot.GetIntRequired('server.port') <> 8443 then
+    Fail('AddKeyValues port override mismatch');
+  WriteLn('keyvalues-host=', LSnapshot.GetStringRequired('server.host'));
+  WriteLn('keyvalues-port=', LSnapshot.GetIntRequired('server.port'));
+
   WriteLn('config-startup-patterns-status=pass');
 end.

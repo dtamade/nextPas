@@ -4,6 +4,8 @@ High-performance JSON parser and serializer with zero-copy value access.
 
 ## API
 
+Runnable smoke: `core/examples/nextpas.core.json/json_smoke/` (`make run`).
+
 ### Parsing
 
 ```pascal

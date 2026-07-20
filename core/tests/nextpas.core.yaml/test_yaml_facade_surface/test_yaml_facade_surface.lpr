@@ -24,6 +24,8 @@ begin
   Check(LValue.IsMap, 'root is map');
   CheckEqual('Alice', LValue.MapGet('name').AsStr.ToString, 'name');
   CheckEqual(Int64(2), LValue.MapGet('count').AsInt, 'count');
+  CheckEqual('Alice', LValue.Get('name').AsStr.ToString, 'Get aliases MapGet');
+  CheckEqual(Int64(2), LValue.Get('count').AsInt, 'Get aliases MapGet for int');
 
   LKind := LValue.Kind;
   Check(Ord(LKind) >= 0, 'node kind visible through facade');
