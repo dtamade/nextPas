@@ -12,20 +12,20 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset.intf,
-  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.mem.allocator.base;
 
 type
   {**
    * THashSet<K>
    *
-   * @desc 哈希集合实现，内部基于 THashMap<K, Byte>
+   * @desc 哈希集合实现，内部基于 TSwissHashMap<K, Byte>
    *
    * @param K 元素类型（必须可哈希、可比较）
    *
    * @note
-   *   - 轻量包装 THashMap，Value 使用 Byte 占位
-   *   - 性能特征与 THashMap 相同
+   *   - 轻量包装 Swiss Table map，Value 使用 Byte 占位
+   *   - 默认后端与 MakeHashMap/MakeMap 一致（Swiss）
    *   - 适用于快速成员资格测试场景
    *
    * @threadsafety 非线程安全
@@ -48,8 +48,8 @@ type
   generic THashSet<K> = class(specialize TGenericCollection<K>, specialize IHashSet<K>)
   private
     type
-      {** 内部映射类型：K -> Byte（Byte 仅作占位） *}
-      TInternalMap = specialize THashMap<K, Byte>;
+      {** 内部映射类型：K -> Byte（Byte 仅作占位）；Swiss 后端 *}
+      TInternalMap = specialize TSwissHashMap<K, Byte>;
       THash = specialize TKeyHashFunc<K>;
       TEquals = specialize TKeyEqualsFunc<K>;
       PK = ^K;

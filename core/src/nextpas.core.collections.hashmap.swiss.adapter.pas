@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
@@ -24,6 +25,7 @@ type
     TValueSupplier = specialize TValueSupplierFunc<V>;
     TValueModifier = specialize TValueModifierProc<V>;
     TRetainPredicate = specialize TPredicateFunc<TEntry>;
+    TKeyArray = array of K;
   private type
     TInner = specialize TSwissTable<K, V>;
   private
@@ -32,6 +34,10 @@ type
     FIterEntry: TEntry;
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
     function DoIterMoveNext(aIter: PPtrIter): Boolean;
+  protected
+    function IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean; override;
+    procedure DoZero(); override;
+    procedure DoReverse; override;
   public
     constructor Create(aCapacity: SizeUInt = 0; aHash: THash = nil;
       aEquals: TEquals = nil; aAllocator: TMemAllocator = nil);
@@ -39,6 +45,10 @@ type
 
     function GetCount: SizeUInt; override;
     function PtrIter: TPtrIter; override;
+    procedure Clear; override;
+    procedure SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt); override;
+    procedure AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt); override;
+    procedure AppendToUnchecked(const aDst: TCollection); override;
 
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
@@ -54,7 +64,8 @@ type
     function GetOrInsertWith(const AKey: K; ASupplier: TValueSupplier): V;
     procedure ModifyOrInsert(const AKey: K; AModifier: TValueModifier; const ADefault: V);
     procedure Retain(aPredicate: TRetainPredicate; aData: Pointer);
-    procedure Clear;
+    { Keys snapshot (order unspecified); mirrors OA THashMap.GetKeys. }
+    function GetKeys: TKeyArray;
   end;
 
 implementation
@@ -118,6 +129,100 @@ end;
 function TSwissHashMap.PtrIter: TPtrIter;
 begin
   Result.Init(Self, @DoIterGetCurrent, @DoIterMoveNext, Pointer(0));
+end;
+
+function TSwissHashMap.IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean;
+begin
+  { Swiss map does not expose contiguous element storage. }
+  Result := False;
+end;
+
+procedure TSwissHashMap.DoZero();
+var
+  i: SizeUInt;
+  LKey: K;
+  LDefault: V;
+begin
+  { Align with OA THashMap: zero values of occupied slots without removing keys. }
+  if FInner.Capacity = 0 then
+    Exit;
+  FillChar(LDefault, SizeOf(V), 0);
+  for i := 0 to FInner.Capacity - 1 do
+    if FInner.GetCtrlByte(i) < $80 then
+    begin
+      LKey := FInner.GetSlotKey(i);
+      FInner.Put(LKey, LDefault);
+    end;
+end;
+
+procedure TSwissHashMap.DoReverse;
+begin
+  { Hash maps have no fixed order; reverse is a no-op. }
+end;
+
+procedure TSwissHashMap.SerializeToArrayBuffer(aDst: Pointer; aCount: SizeUInt);
+var
+  i, LCnt: SizeUInt;
+  PEntry: ^TEntry;
+  LEntry: TEntry;
+begin
+  if (aDst = nil) or (aCount = 0) or (FInner.Count = 0) then
+    Exit;
+  PEntry := aDst;
+  LCnt := 0;
+  for i := 0 to FInner.Capacity - 1 do
+  begin
+    if FInner.GetCtrlByte(i) < $80 then
+    begin
+      if LCnt >= aCount then
+        Break;
+      LEntry.Key := FInner.GetSlotKey(i);
+      FInner.TryGetValue(LEntry.Key, LEntry.Value);
+      PEntry^ := LEntry;
+      Inc(PEntry);
+      Inc(LCnt);
+    end;
+  end;
+end;
+
+procedure TSwissHashMap.AppendUnchecked(const aSrc: Pointer; aElementCount: SizeUInt);
+var
+  i: SizeUInt;
+  PEntry: ^TEntry;
+begin
+  if (aSrc = nil) or (aElementCount = 0) then
+    Exit;
+  PEntry := aSrc;
+  for i := 0 to aElementCount - 1 do
+  begin
+    AddOrAssign(PEntry^.Key, PEntry^.Value);
+    Inc(PEntry);
+  end;
+end;
+
+procedure TSwissHashMap.AppendToUnchecked(const aDst: TCollection);
+var
+  i: SizeUInt;
+  LDst: specialize TSwissHashMap<K, V>;
+  LKey: K;
+  LVal: V;
+begin
+  if aDst = nil then
+    Exit;
+  if aDst is specialize TSwissHashMap<K, V> then
+  begin
+    LDst := specialize TSwissHashMap<K, V>(aDst);
+    for i := 0 to FInner.Capacity - 1 do
+      if FInner.GetCtrlByte(i) < $80 then
+      begin
+        LKey := FInner.GetSlotKey(i);
+        FInner.TryGetValue(LKey, LVal);
+        LDst.AddOrAssign(LKey, LVal);
+      end;
+  end
+  else
+    raise EInvalidOperation.Create(
+      'TSwissHashMap.AppendToUnchecked: cannot append to incompatible container type');
 end;
 
 function TSwissHashMap.TryGetValue(const AKey: K; out AValue: V): Boolean;
@@ -224,6 +329,11 @@ procedure TSwissHashMap.Clear;
 begin
   FIterEntry := Default(TEntry);
   FInner.Clear;
+end;
+
+function TSwissHashMap.GetKeys: TKeyArray;
+begin
+  Result := FInner.GetKeys;
 end;
 
 end.
