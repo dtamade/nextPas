@@ -1,7 +1,7 @@
 # nextpas.core.http — What we claim (R1)
 
 **Authority**: 本文件是**对外/对内宣称**的冻结表述。证据细节见 `BENCHMARKS.md`、`REPRO.md`、`CONTRACT.md`。执行顺序见 `ROADMAP.md`。
-**Reviewed**: 2026-07-21（**R1** — H2P-1..3 后 claim 评审）
+**Reviewed**: 2026-07-21（**R1** + **E3s 抽检** + H2 KPI **draft only**）
 **Host class**: Linux amd64，同机 harness；**不是**跨机排行榜。
 
 ---
@@ -30,7 +30,7 @@
 
 | 宣称 | 状态 | 原因 |
 |------|------|------|
-| Scale-ready (H1/**H2** package) | **No** | H2 mux mid ~3k / press ~11.5k **evidence only**；形状 ≠ H1 multi-conn KPI；**无** H2 官方 KPI 门闩（≥0.8× 某 peer 等） |
+| Scale-ready (H1/**H2** package) | **No** | H2 mux mid ~2.9k / press ~11.5k evidence；**H2 KPI draft** 在 `BENCHMARKS` § H2 KPI（缺 Go h2 peer + multi-run + 产品 Yes） |
 | Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
 | Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
@@ -52,7 +52,8 @@
 
 | Residual | 说明 |
 |----------|------|
-| H2 package scale | H2P-1/2 mux 证据；非 scale-ready 包；禁止 H1/H2 直接 RPS 比值 |
+| H2 package scale | H2P + E3s mid/press；KPI **draft only**（见 BENCHMARKS）；禁止 H1/H2 直接 RPS 比值 |
+| E3s 抽检 (2026-07-21) | RPS 1.97×/1.72× Go；p99 0.23×/0.27×；ladder 1k/10k stable=1 — **维持** H1 scale-ready |
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL per-conn ALPN |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
@@ -99,6 +100,17 @@
 **升 package 的前置（未来；非本波）**：冻结 H2 官方 KPI 定义（同机 peer 或绝对阈值）+ multi-run 表 + REPRO 命令 + 产品明确要求。
 
 **Done when**：本文件 R1 段 + ROADMAP R1 landed + REPRO Claim 行对齐 + 默认 STOP。 **Met (2026-07-21).**
+
+---
+
+## 6.1 E3s 抽检 + H2 KPI draft（2026-07-21）
+
+| 问题 | 决议 |
+|------|------|
+| E3 门闩是否仍 Met？ | **Yes** — E3s runs=3：RPS ≥0.80×、p99 ≤2×（`BENCHMARKS` § E3） |
+| 是否因比值从 ~2.2× 落到 ~1.7–2.0× 收回 scale-ready？ | **No** — 仍远高于 0.80；噪声带内 |
+| H2 KPI 是否冻结为宣称门闩？ | **Draft only** — 中位 floor / press 线性 / stable；**peer 比值 Blocked** |
+| 是否因此升 package claim？ | **No** |
 
 ---
 
