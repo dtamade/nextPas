@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC25 (PARITY-GO-RUST Wave Q1–Q15)
+ * tui Scorecard SC1–SC27 (PARITY-GO-RUST Wave Q1–Q15 + M1)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -28,6 +28,8 @@ program scorecard;
  *   SC23 SGR indexed FG/BG
  *   SC24 DrawPatches style-change reapply
  *   SC25 FocusManager Tab cycle
+ *   SC26 Keybind BindKey + HandleKey
+ *   SC27 FrameBudget not over after BeginFrame
  *}
 
 {$I nextpas.core.settings.inc}
@@ -48,6 +50,8 @@ uses
   nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
   nextpas.core.tui.focus,
+  nextpas.core.tui.keybind,
+  nextpas.core.tui.frame_budget,
   nextpas.core.tui.terminal;
 
 const
@@ -74,6 +78,7 @@ var
   GRows: array of TScoreRow;
   GRowCount: Integer;
   GFailed: Integer;
+  GKeybindActionCalled: Boolean;
 
 procedure AddRow(const AId, ASubject: string; ANsPerOp: Int64; AOps: UInt64;
   AOk: Boolean; const ANote: string);
@@ -962,6 +967,52 @@ begin
   AddRow('SC25a', 'focus_tab', 0, 1, LOk, 'Tab forward + Shift+Tab back');
 end;
 
+procedure ScorecardKeybindAction;
+begin
+  GKeybindActionCalled := True;
+end;
+
+procedure RunSC26;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LOk: Boolean;
+begin
+  WriteLn('SC26 Keybind BindKey + HandleKey ...');
+  LOk := True;
+  GKeybindActionCalled := False;
+  LMgr := TKeybindManager.Create;
+  try
+    LMgr.BindKey(kmNormal, kcEnter, @ScorecardKeybindAction, 'Confirm');
+    if LMgr.BindingCount <> 1 then
+      LOk := False;
+    LKey.Code := kcEnter;
+    LKey.Ch := 0;
+    LKey.Modifiers := [];
+    if not LMgr.HandleKey(LKey) then
+      LOk := False;
+    if not GKeybindActionCalled then
+      LOk := False;
+  finally
+    LMgr.Free;
+  end;
+  AddRow('SC26a', 'keybind_enter', 0, 1, LOk, 'BindKey+HandleKey fires action');
+end;
+
+procedure RunSC27;
+var
+  LBudget: TFrameBudget;
+  LOk: Boolean;
+begin
+  WriteLn('SC27 FrameBudget not over after BeginFrame ...');
+  LOk := True;
+  LBudget := TFrameBudget.Create(16.0);
+  LBudget.BeginFrame;
+  if LBudget.IsOverBudget then
+    LOk := False;
+  AddRow('SC27a', 'frame_budget', 0, 1, LOk, 'BeginFrame not over 16ms');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -991,10 +1042,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 64);
+  SetLength(GRows, 72);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC25 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC27 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -1020,6 +1071,8 @@ begin
   RunSC23;
   RunSC24;
   RunSC25;
+  RunSC26;
+  RunSC27;
   PrintTable;
   if GFailed > 0 then
     Halt(1);
