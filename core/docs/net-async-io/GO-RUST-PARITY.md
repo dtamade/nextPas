@@ -1,7 +1,7 @@
 # Go / Rust 生产级质量对标（net · async · io）
 
-**日期**: 2026-07-20  
-**锚点**: main 起 Q1–Q12（HE CAD、DNS race、lab feed、macOS fail-closed）  
+**日期**: 2026-07-20
+**锚点**: main 起 Q1–Q12（HE CAD、DNS race、lab feed、macOS fail-closed）
 **方法**: 质量属性对标（非 API 个数对齐）；代码 `rg` 交叉核对
 
 ## 1. 质量维度 D1–D8
@@ -20,9 +20,9 @@
 
 ## 2. 刻意不对齐
 
-- Go `context.Value` 键值袋  
-- Tokio work-stealing 多线程 runtime / tower 生态  
-- 在 epoll/kqueue 上假实现 completion 文件 I/O  
+- Go `context.Value` 键值袋
+- Tokio work-stealing 多线程 runtime / tower 生态
+- 在 epoll/kqueue 上假实现 completion 文件 I/O
 
 **契约**: 单线程 `TAsyncLoop` + `Post` 跨线程。
 
@@ -35,7 +35,9 @@
 | Token / OverallDeadline / HE CAD / DNS race / lab feed | 有 |
 | LocalAddr (bind-before-connect) | **Q25** family-matched subset |
 | NoDelay / KeepAlive on win stream | **Q26** |
-| Control / 自定义 Resolver / MPTCP | 无或未接线 |
+| Control (fd hook) | **Q27** subset (not RawConn) |
+| Custom Resolver | **Q28** OnResolve + DnsFeed contract |
+| MPTCP | **deferred** |
 | ClassifyNetError | **Q13** |
 | AsyncTcpDial 为推荐默认（文档） | **Q13** |
 
