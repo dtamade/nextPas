@@ -28,6 +28,7 @@ MULTIMAP_TEST_DIR := test_lockfree_multimap
 T1_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_close_join_free
 T1_SEGQUEUE_WORKERS_DIR := ../../examples/nextpas.core.lockfree/t1_segqueue_workers
 T2_BAG_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_bag_close_join_free
+T2_MULTIMAP_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_multimap_close_join_free
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
@@ -82,6 +83,8 @@ verify-h3-consumers:
 	  $(MAKE) -C $(T1_SEGQUEUE_WORKERS_DIR) clean test; \
 	  echo "=== t2_bag_close_join_free example (H3-2 Bag lifecycle) ==="; \
 	  $(MAKE) -C $(T2_BAG_CLOSE_JOIN_FREE_DIR) clean test; \
+	  echo "=== t2_multimap_close_join_free example (H3-2 MultiMap lifecycle) ==="; \
+	  $(MAKE) -C $(T2_MULTIMAP_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "verify-h3-consumers-status=pass"; \
 	} 2>&1 | tee $(VERIFY_H3_CONSUMERS_LOG)
 	@echo "verify-h3-consumers-status=pass log=$(VERIFY_H3_CONSUMERS_LOG)"

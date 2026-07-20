@@ -30,7 +30,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance preferred close-out**（[`READY.md`](READY.md) 三句话；[`quality-parity.md`](quality-parity.md)；**不 invent R9**）。生产热路径 preferred residual **0**（钉 `test_lockfree_preferred_path`）。
 
-**教学示例**：`t1_close_join_free/`（Channel）；`t1_segqueue_workers/`（SegQueue N 产 + N 消）；`t2_bag_close_join_free/`（H3-2 Bag）。选型见 [`selection-guide.md`](selection-guide.md)「任务投递四选一」。
+**教学示例**：`t1_close_join_free/`（Channel）；`t1_segqueue_workers/`（SegQueue）；`t2_bag_close_join_free/`（Bag）；`t2_multimap_close_join_free/`（MultiMap）。选型见 [`selection-guide.md`](selection-guide.md)「任务投递四选一」。
 
 ## Progress-guarantee matrix
 
