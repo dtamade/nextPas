@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **23 platform-gate `ci-matrix`** (+which +dl +args; GHA 29728715160 pass=24 fail=0); wine 24 secondary |
+| Real Windows GHA | **23 platform-gate `ci-matrix`** (+which +dl +args; GHA 29728715160 pass=24 fail=0); wine 24 secondary; **pipe candidate** Batch-18 |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -319,6 +319,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-16b**: promote **22 platform-gate** set (+dl). GHA 29727006733 pass=23 fail=0 (dl + poller); fix `TPoller.AsyncSendTo/RecvFrom` empty case on Win64. Queue after: args → pipe. |
 | 2026-07-20 | **Batch-17**: Windows scripts candidate **+platform.args** (no promote until GHA green). Queue after: pipe. |
 | 2026-07-20 | **Batch-17b**: promote **23 platform-gate** set (+args) after GHA pass=24 (run 29728715160 @ `00e895e1a`; args PASS; +mem.host in total). Queue after: pipe. |
+| 2026-07-20 | **Batch-18**: Windows scripts candidate **+platform.pipe** (no promote until GHA green). |
 
 ---
 
