@@ -230,7 +230,7 @@ begin
   begin
     Str(LOldCap, LCapStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TFallbackAllocator.MapGrow: capacity overflow (current=' + LCapStr + ')');
+      FormatAllocErrorMsg('TFallbackAllocator', 'MapGrow', 'capacity overflow (current=' + LCapStr + ')'));
   end;
   LOldKeys := FKeys;
   LOldSources := FSources;

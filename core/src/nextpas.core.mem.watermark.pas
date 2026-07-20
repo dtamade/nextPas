@@ -101,7 +101,7 @@ begin
   inherited Create;
   if ACriticalBytes <= AHighBytes then
     raise EAllocError.Create(aeInvalidLayout,
-      'TMemoryWatermark.Create: CriticalBytes must be > HighBytes');
+      FormatAllocErrorMsg('TMemoryWatermark', 'Create', 'CriticalBytes must be > HighBytes'));
   FHighBytes := AHighBytes;
   FCriticalBytes := ACriticalBytes;
   FCurrentLevel := wlNormal;

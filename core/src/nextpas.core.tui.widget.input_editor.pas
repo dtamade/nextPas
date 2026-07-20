@@ -28,7 +28,7 @@ type
 
   IInputEditor = interface(IWidget)
     ['{D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F80}']
-    procedure HandleKey(const K: TKeyEvent);
+    function HandleKey(const K: TKeyEvent): Boolean;
     procedure InsertChar(Cp: LongWord);
     procedure InsertNewline;
     procedure DeleteBackward;
@@ -119,7 +119,7 @@ type
     class function NewWithMaxLines(AMax: Integer): IInputEditor; static;
     destructor Destroy; override;
 
-    procedure HandleKey(const K: TKeyEvent);
+    function HandleKey(const K: TKeyEvent): Boolean;
     procedure InsertChar(Cp: LongWord);
     procedure InsertNewline;
     procedure DeleteBackward;
@@ -785,8 +785,9 @@ begin
 end;
 { HandleKey }
 
-procedure TInputEditor.HandleKey(const K: TKeyEvent);
+function TInputEditor.HandleKey(const K: TKeyEvent): Boolean;
 begin
+  Result := True;
   case K.Code of
     kcChar:
       if kmCtrl in K.Modifiers then
@@ -808,7 +809,9 @@ begin
         InsertChar(K.Ch);
     kcEnter:
       if (kmShift in K.Modifiers) or (kmAlt in K.Modifiers) then
-        InsertNewline;
+        InsertNewline
+      else
+        Result := False;
     kcBackspace:
       DeleteBackward;
     kcDelete:
@@ -832,6 +835,7 @@ begin
     kcEnd:
       MoveEndInternal(kmShift in K.Modifiers);
   else
+    Result := False;
   end;
 end;
 { Render }

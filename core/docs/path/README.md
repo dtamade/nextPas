@@ -20,6 +20,11 @@ uses nextpas.core.fs
 
 **禁止**混用假设：`fs.PathJoin` 不是二元；`PathDir` ≠ `FsPathDir` 对裸文件名。
 
+**测试锚点（U3）**：
+
+- 门面裸名：`test_path` — `PathDir('file.txt') = ''`
+- Go 底层：`test_fs` — `FsPathDir('file.txt') = '.'`
+
 ## 模块定位
 
 - **层级**: L2 facade

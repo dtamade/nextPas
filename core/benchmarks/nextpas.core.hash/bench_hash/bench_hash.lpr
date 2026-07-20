@@ -8,12 +8,12 @@ program bench_hash;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.base,
   nextpas.core.time.base,
-  nextpas.core.hash;
+  nextpas.core.hash,
+  nextpas.core.fs;
 
 const
   DATA_SIZE = 1024 * 1024;

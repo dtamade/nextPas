@@ -351,12 +351,14 @@ begin
 
   // 参数验证
   if aBlockSize = 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: block size must be > 0');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'block size must be > 0'));
   if aCapacity = 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TBlockPool: capacity must be > 0');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'capacity must be > 0'));
   if aCapacity > SizeUInt(High(SizeInt)) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TBlockPool: capacity too large (' + IntToStr(aCapacity) + ')');
+      FormatAllocErrorMsg('TBlockPool', 'Raise', 'capacity too large (' + IntToStr(aCapacity) + ')'));
 
   LAlign := SanitizeConfigAlignment(aAlignment);
 
@@ -368,7 +370,7 @@ begin
     LMask := LAlign - 1;
     if aBlockSize > (High(SizeUInt) - LMask) then
       raise EAllocError.Create(aeInvalidLayout,
-        'TBlockPool: block size overflow (' + IntToStr(aBlockSize) + ')');
+      FormatAllocErrorMsg('TBlockPool', 'Raise', 'block size overflow (' + IntToStr(aBlockSize) + ')'));
     LActualBlockSize := (aBlockSize + LMask) and not LMask;
   end;
 
@@ -397,7 +399,7 @@ begin
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TBlockPool: total size overflow (' + IntToStr(LActualBlockSize) + ' * ' + IntToStr(aCapacity) + ')');
+      FormatAllocErrorMsg('TBlockPool', 'Raise', 'total size overflow (' + IntToStr(LActualBlockSize) + ' * ' + IntToStr(aCapacity) + ')'));
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
@@ -405,14 +407,14 @@ begin
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TBlockPool: allocation size overflow (total=' + IntToStr(Int64(LTotalSize)) + ', align=' + IntToStr(Int64(FAlignment)) + ')');
+      FormatAllocErrorMsg('TBlockPool', 'Raise', 'allocation size overflow (total=' + IntToStr(Int64(LTotalSize)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
   if FAllocator <> nil then
     LRaw := FAllocator.GetMem(LAllocSize)
   else
     LRaw := GetMem(LAllocSize); { process GetMem after uses nextpas.core.mem }
   if LRaw = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TBlockPool: failed to allocate memory (requested ' + IntToStr(Int64(LAllocSize)) + ' bytes)');
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'failed to allocate memory (requested ' + IntToStr(Int64(LAllocSize)) + ' bytes)'));
 
   FRawBuffer := LRaw;
   FRawAllocSize := LAllocSize;
@@ -529,26 +531,26 @@ begin
 
   // 范围检查
   if not Owns(aPtr) then
-    raise EAllocError.Create(aeInvalidPointer, 'TBlockPool.Release: pointer not owned');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TBlockPool', 'Release', 'pointer not owned'));
 
   // 计算索引
   LDiff := PtrUInt(aPtr) - PtrUInt(FBuffer);
   if FBlockMask <> 0 then
   begin
     if (LDiff and PtrUInt(FBlockMask)) <> 0 then
-      raise EAllocError.Create(aeInvalidPointer, 'TBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TBlockPool', 'Release', 'misaligned pointer'));
     LIdx := SizeUInt(LDiff shr FBlockShift);
   end
   else
   begin
     if (LDiff mod FBlockSize) <> 0 then
-      raise EAllocError.Create(aeInvalidPointer, 'TBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TBlockPool', 'Release', 'misaligned pointer'));
     LIdx := SizeUInt(LDiff div FBlockSize);
   end;
 
   // 双重释放检测
   if IsFreeBitSet(LIdx) then
-    raise EAllocError.Create(aeDoubleFree, 'TBlockPool.Release: double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TBlockPool', 'Release', 'double free detected'));
 
   {$IFDEF DEBUG}
   // Poison freed memory to expose use-after-free

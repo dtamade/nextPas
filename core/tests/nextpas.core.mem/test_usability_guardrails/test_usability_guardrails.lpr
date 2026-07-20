@@ -132,6 +132,7 @@ begin
   LLine := FormatMemStats(LMem);
   Check(Pos('debug_coverage_gap=y', LLine) > 0, 'FormatMemStats gap=y');
   Check(Pos('debug_process=n', LLine) > 0, 'FormatMemStats process=n');
+  Check(Pos('WARN=debug_coverage_gap', LLine) > 0, 'FormatMemStats WARN on gap');
 
   { Plugin path — MUST be visible to tracking. }
   LPlugin := LAlloc.GetMem(32);
@@ -561,6 +562,7 @@ begin
   Check(Pos('arena_strict=n', LProf) > 0, 'profile arena_strict');
   Check(Pos('debug=y', LProf) > 0, 'profile debug');
   Check(Pos('debug_coverage_gap=y', LProf) > 0, 'profile gap');
+  Check(Pos('WARN=debug_coverage_gap', LProf) > 0, 'profile WARN on gap');
   Check(FormatMemDebugProfile = LProf, 'profile overload');
   RebuildDebug('');
 end;
@@ -584,6 +586,7 @@ begin
   Check(Pos('heap_debug=n', LLine) > 0, 'plugin track: heap_debug=n');
   Check(Pos('debug=y', LLine) > 0, 'plugin track: debug=y');
   Check(Pos('debug_coverage_gap=y', LLine) > 0, 'plugin track: gap=y');
+  Check(Pos('WARN=debug_coverage_gap', LLine) > 0, 'plugin track: WARN on gap');
   Check(Pos('debug_process=n', LLine) > 0, 'plugin track: process=n');
   Check(Pos('debug_active_allocs=1', LLine) > 0, 'plugin live allocs');
   Check(Pos('debug_allocs=', LLine) > 0, 'plugin lifetime allocs');
@@ -731,6 +734,43 @@ begin
   Check(LRaised, 'raised EAllocError');
   Check(LCode = aeInvalidLayout, 'aeInvalidLayout not OOM');
   Check(Pos('AllocArray.AllocArray:', LMsg) > 0, 'FormatAllocErrorMsg stem in message');
+  Check(Pos('[Invalid layout]', LMsg) > 0, 'BuildAllocMsg code bracket label');
+end;
+
+procedure TestTryAllocErrorCode;
+{ R-CO-01: extract TAllocError from EAllocError and mem EOutOfMemory. }
+var
+  LCode: TAllocError;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    raise EAllocError.Create(aeDoubleFree,
+      FormatAllocErrorMsg('TestTryAllocErrorCode', 'Raise', 'synthetic double free'));
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      Check(TryAllocErrorCode(E, LCode), 'EAllocError yields code');
+      Check(LCode = aeDoubleFree, 'double free code');
+    end;
+  end;
+  Check(LRaised, 'EAllocError raised');
+
+  LRaised := False;
+  try
+    raise EOutOfMemory.Create(aeOutOfMemory,
+      FormatAllocErrorMsg('TestTryAllocErrorCode', 'Raise', 'synthetic OOM'));
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      Check(TryAllocErrorCode(E, LCode), 'EOutOfMemory yields code');
+      Check(LCode = aeOutOfMemory, 'OOM code');
+    end;
+  end;
+  Check(LRaised, 'EOutOfMemory raised');
+  Check(not TryAllocErrorCode(nil, LCode), 'nil exception false');
 end;
 
 procedure TestArenaReallocUsesFormatAllocErrorMsg;
@@ -830,6 +870,7 @@ begin
   T.Test('FormatAllocErrorMsg helpers', @TestFormatAllocErrorMsg);
   T.Test('AllocZeroed/AllocArray nil allocator', @TestAllocZeroedAllocArrayNilAllocator);
   T.Test('AllocArray overflow InvalidLayout', @TestAllocArrayOverflowIsInvalidLayout);
+  T.Test('TryAllocErrorCode EAllocError and OOM', @TestTryAllocErrorCode);
   T.Test('Arena Realloc FormatAllocErrorMsg', @TestArenaReallocUsesFormatAllocErrorMsg);
   T.Test('Arena FreeMem strict dual-mode', @TestArenaStrictFreeMem);
 

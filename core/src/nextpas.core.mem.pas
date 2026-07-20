@@ -38,6 +38,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
@@ -190,6 +191,8 @@ function MemDebugCoverageGap(const AStats: TMemStats): Boolean; inline;
 {** Canonical raise-site message stem Type.Method: reason (see ERROR-POLICY). }
 function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string; inline;
 function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean; inline;
+{** Read TAllocError from EAllocError or mem EOutOfMemory (see ERROR-POLICY catch). }
+function TryAllocErrorCode(E: Exception; out ACode: TAllocError): Boolean; inline;
 
 {** 全局分配函数 — 默认走 DefaultHeap（Growing 原生）。
  *  当 HEAP_DEBUG / HEAP_SAFETY 显式开启时，改走 DefaultAllocator（可被
@@ -355,6 +358,11 @@ end;
 function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
 begin
   Result := nextpas.core.mem.error.IsWellFormedAllocErrorMsg(AMsg);
+end;
+
+function TryAllocErrorCode(E: Exception; out ACode: TAllocError): Boolean;
+begin
+  Result := nextpas.core.mem.error.TryAllocErrorCode(E, ACode);
 end;
 
 function GetMem(ASize: SizeUInt): Pointer;

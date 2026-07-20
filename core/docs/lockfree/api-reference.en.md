@@ -264,99 +264,31 @@ type
   end;
 ```
 
+**Progress (honest)**: **sharded spin locks** — **not** lock-free. `TConcurrentHashMap` is the **same implementation alias**, not a second algorithm.
+
+**Lifecycle**: **no `Close` / `IsClosed`**. Production pattern: stop writers → join all accessors → `Free`. Teaching: `t2_hashmap_join_free`.
+
 **Design Features**:
-- Sharded locks (16 shards), each shard uses AtomicExchange32 spin lock
-- Open addressing + linear probing
-- Load factor 3/4, automatic expansion
-- Only supports unmanaged types
+- 16 shards; preferred `atomic_exchange` spin path per shard
+- Open addressing + linear probing; load factor 3/4; auto grow
+- Unmanaged keys/values only
 
-**API Description**:
+**API (summary)**:
 
-| Method | Complexity | Concurrent Safe | Description |
-|--------|-----------|-----------------|-------------|
-| Insert | O(1) amortized | ✅ | Insert or overwrite |
-| Find | O(1) amortized | ✅ | Find and return value |
-| Remove | O(1) amortized | ✅ | Delete key (mark esDeleted) |
-| Remove (out) | O(1) amortized | ✅ | Delete key and return old value |
-| TryInsert | O(1) amortized | ✅ | CAS semantics: insert only if not exists |
-| Replace | O(1) amortized | ✅ | Atomic replace and return old value |
-| Contains | O(1) amortized | ✅ | Check if key exists |
-| Count | O(shards) | ✅ | Lock-across-shards accumulation (snapshot) |
-| ForEach | O(n) | ✅ | Per-shard traversal, callback while holding lock |
-| ForEachCtx | O(n) | ✅ | Per-shard traversal with context pointer |
-| GetOrInsert | O(1) amortized | ✅ | Atomic get or insert, single lock acquisition |
-| GetOrInsertFn | O(1) amortized | ✅ | Lazy compute: callback only when key doesn't exist |
-| GetOrUpdate | O(1) amortized | ✅ | Atomic get-or-create-then-update |
-| Clear | O(n) | ✅ | Per-shard clear |
-| Reserve | O(shards) | ✅ | Pre-allocate capacity to avoid runtime resize |
+| Method | Notes |
+|--------|-------|
+| Insert / Find / Remove / Contains | Per-shard lock; Remove marks `esDeleted` |
+| TryInsert / Replace / GetOrInsert* / GetOrUpdate | Conditional / atomic update helpers |
+| Count / ForEach / Clear | Count snapshots across shards; ForEach holds shard lock |
 
-**Performance Characteristics** (vs TConcurrentHashMap):
-
-| Scenario | TShardedHashMap | TConcurrentHashMap |
-|----------|-----------------|-------------------|
-| Lock mechanism | AtomicExchange ~1ns | RWLock ~10-50ns |
-| Memory management | No reference counting | Has reference counting |
-| Use case | High-frequency, low-contention, unmanaged | General purpose, supports managed |
-
-**Key Equality**:
-- Uses `CompareByte` byte-by-byte comparison, suitable for all unmanaged types (Integer, Int64, record, etc.)
-- Does not support managed types (AnsiString, UnicodeString, etc.) as keys—compares pointer values, not content
-- Record type keys need attention to padding bytes: recommend using packed record or ensuring padding is zeroed
-
-**Usage Example**:
-
-```pascal
-var
-  LMap: specialize TShardedHashMap<Integer, AnsiString>;
-  LRes: specialize TGetOrInsertResult<AnsiString>;
-  LValue: AnsiString;
-begin
-  LMap := specialize TShardedHashMap<Integer, AnsiString>.Create;
-  try
-    // Basic operations
-    LMap.Insert(1, 'value1');
-    if LMap.Find(1, LValue) then
-      WriteLn('Found: ', LValue);
-
-    // ForEach traversal
-    LMap.ForEach(@MyCallback);
-
-    // ForEachCtx traversal with context
-    LMap.ForEachCtx(@MyCtxCallback, @MyContext);
-
-    // GetOrInsert atomic operation
-    LRes := LMap.GetOrInsert(2, 'default');
-    if LRes.Existed then
-      WriteLn('Existing: ', LRes.Value)
-    else
-      WriteLn('Inserted: ', LRes.Value);
-
-    // GetOrInsertFn lazy compute
-    LRes := LMap.GetOrInsertFn(3, function(const AKey: Integer): AnsiString begin
-      Result := 'computed_' + IntToStr(AKey);  // Only called when key doesn't exist
-    end);
-
-    // GetOrUpdate atomic update
-    LRes := LMap.GetOrUpdate(99, 0, function(const AOld: Integer): Integer begin
-      Result := AOld + 1;  // Read old value, return new value
-    end);
-    WriteLn('Counter: ', LRes.Value);
-
-    // Clear
-    LMap.Clear;
-  finally
-    LMap.Free;
-  end;
-end;
-```
+**Key equality**: `CompareByte` on unmanaged blobs; managed keys unsupported (pointer compare, not content). Prefer packed records or zeroed padding.
 
 **Notes**:
-- ForEach callback holds shard lock during execution, should complete quickly
-- Do not call other HashMap methods inside ForEach callback (deadlock)
-- Count returns approximate value (per-shard locking)
-- Remove uses lazy deletion (esDeleted), does not compact
+- ForEach callback holds the shard lock — keep short; do not re-enter the map (deadlock)
+- Not H3-2; not default-facade-only — HashMap **is** on the T1 facade
 
 ---
+
 
 ## Hazard Pointer (nextpas.core.lockfree.hazard)
 
@@ -726,17 +658,559 @@ type
   end;
 ```
 
-### Other T2 (index only — full text in ZH)
+## Bloom Filter (nextpas.core.lockfree.bloom)
 
-| Area | Units (examples) | Progress note |
-|------|------------------|---------------|
-| Sync helpers | mutex, rwlock, semaphore, stampedlock, phaser, condvar, barrier, countdown | lock / CAS spin — not “LF by namespace” |
-| Caches | lru, lru_cache, lfu, ttl_cache, arccache | sharded / spin locks |
-| Filters / sketches | bloom*, hyperloglog, countminsketch, tdigest, … | atomic bits/counters or mixed locks |
-| Trees / graphs | skiplist*, trie*, btree*, dag, graph, … | per-node or global locks (see unit) |
-| Misc | ringbuffer, timeoutqueue, workstealing pool, snapshot, … | per unit `@concurrency` |
+```pascal
+type
+  generic TConcurrentBloomFilter<T> = class
+    constructor Create(const AExpectedItems: PtrUInt = 10000; const AFalsePositiveRate: Double = 0.01);
+    function Add(const AValue: T): Boolean;
+    function Contains(const AValue: T): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function BitCount: PtrUInt;
+    function HashCount: Integer;
+  end;
+```
 
-Full API prose for those units: Chinese [`api-reference.md`](api-reference.md). Inventory: [`t2-inventory.md`](t2-inventory.md). Naming honesty: [`CONTRACT.md`](CONTRACT.md) §0.
+**Features**: Probabilistic set (false positives possible, no false negatives). After `Close`, `Add` is rejected. **Not** H3-2 production subset — direct `uses` only; treat Close as unit-local API.
+
+---
+
+## LRU Cache (nextpas.core.lockfree.lru)
+
+```pascal
+type
+  TLockFreeLruResult = (lrAdded, lrUpdated, lrFull, lrClosed);
+
+  generic TConcurrentLruCache<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function Get(const AKey: TKey; out AValue: TValue): Boolean;
+    function Put(const AKey: TKey; const AValue: TValue): TLockFreeLruResult;
+    function Remove(const AKey: TKey): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Count: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**Progress**: concurrent cache with internal locks (not lock-free). `Put` → `lrClosed` after Close. Unmanaged keys/values. **Not** H3-2.
+
+---
+
+## Counter (nextpas.core.lockfree.counter)
+
+```pascal
+type
+  TConcurrentCounter = class
+    constructor Create(const AInitialValue: Int64 = 0);
+    function Increment: Int64;
+    function Decrement: Int64;
+    function Add(const AValue: Int64): Int64;
+    function Sub(const AValue: Int64): Int64;
+    function Load: Int64;
+    procedure Store(const AValue: Int64);
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: Atomic shared counter with optional Close gate. Prefer `TAtomic*` / `atomic_*` for simple counters when no Close is needed.
+
+---
+
+## Semaphore (nextpas.core.lockfree.semaphore)
+
+```pascal
+type
+  TLockFreeSemaphoreAcquireResult = (saAcquired, saFull, saClosed, saTimeout);
+
+  TConcurrentSemaphore = class
+    constructor Create(const AMaxPermits: Int64);
+    function TryAcquire: Boolean;
+    function Acquire: Boolean;
+    function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Release;
+    procedure Close;
+    function IsClosed: Boolean;
+    function AvailablePermits: Int64;
+    function MaxPermits: Int64;
+  end;
+```
+
+**Progress**: permit counting with wait/Close — **not** “lock-free by namespace”. Close unblocks waiters with closed results.
+
+---
+
+## Mutex (nextpas.core.lockfree.mutex)
+
+```pascal
+type
+  TLockFreeMutexLockResult = (mlLocked, mlClosed, mlTimeout);
+
+  TConcurrentMutex = class
+    constructor Create;
+    function TryLock: Boolean;
+    function Lock: Boolean;
+    function LockTimeout(const ATimeoutNs: Int64): Boolean;
+    procedure Unlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsLocked: Boolean;
+  end;
+```
+
+**Progress**: exclusive lock (spin/CAS path). Name is historical; treat as concurrent mutex, not LF data structure.
+
+---
+
+## RwLock (nextpas.core.lockfree.rwlock)
+
+```pascal
+type
+  TConcurrentRwLock = class
+    constructor Create;
+    function TryReadLock: Boolean;
+    function ReadLock: Boolean;
+    function TryWriteLock: Boolean;
+    function WriteLock: Boolean;
+    procedure ReadUnlock;
+    procedure WriteUnlock;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+**Features**: multiple readers / single writer; Close rejects new locks.
+
+---
+
+## CountdownLatch (nextpas.core.lockfree.countdown)
+
+```pascal
+type
+  TCountDownLatch = class
+    constructor Create(const AInitialCount: Int64);
+    procedure Done;
+    procedure DoneN(const AN: Int64);
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function GetCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: one-shot barrier count-down; Wait until zero or Close.
+
+---
+
+## CyclicBarrier (nextpas.core.lockfree.barrier)
+
+```pascal
+type
+  TCyclicBarrierWaitResult = (bwArrived, bwClosed, bwTimeout, bwBroken);
+
+  TCyclicBarrier = class
+    constructor Create(const AParties: Int64);
+    function Await: TCyclicBarrierWaitResult;
+    function AwaitTimeout(const ATimeoutNs: Int64): TCyclicBarrierWaitResult;
+    function GetParties: Int64;
+    function GetNumberWaiting: Int64;
+    procedure Reset;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: N parties arrive each generation; Reset starts a new round; Close → `bwClosed`.
+
+---
+
+## Rate Limiter (nextpas.core.lockfree.ratelimit)
+
+```pascal
+type
+  TLockFreeRateLimiterResult = (rlAllowed, rlRejected, rlClosed);
+
+  TTokenBucketLimiter = class
+    constructor Create(const ARatePerSecond: Double; const ABurst: Double);
+    function TryAcquire: TLockFreeRateLimiterResult;
+    function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetRate: Double;
+    function GetBurst: Double;
+  end;
+```
+
+**Features**: token bucket admit/reject; after Close → `rlClosed`.
+
+---
+
+## Condition Variable (nextpas.core.lockfree.condvar)
+
+```pascal
+type
+  TConditionVariableWaitResult = (cvSignaled, cvClosed, cvTimeout);
+
+  TConditionVariable = class
+    constructor Create;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): TConditionVariableWaitResult;
+    procedure Signal;
+    procedure Broadcast;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetWaiterCount: Int32;
+  end;
+```
+
+**Features**: wait/signal coordination with Close unblocking waiters.
+
+---
+
+## Exchanger (nextpas.core.lockfree.exchanger)
+
+```pascal
+type
+  TLockFreeExchangeResult = (exExchanged, exClosed, exTimeout);
+
+  generic TExchangerImpl<T> = class
+    constructor Create;
+    function Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
+    function ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: two-thread rendezvous swap; both block until peer arrives or Close/timeout.
+
+---
+
+## Phaser (nextpas.core.lockfree.phaser)
+
+```pascal
+type
+  TLockFreePhaserArriveResult = (paArrived, paAdvanced, paClosed, paTimeout);
+
+  TPhaser = class
+    constructor Create(const AParties: Int64 = 0);
+    function Register: Int64;
+    function Arrive: Int64;
+    function ArriveAndAwaitAdvance: Int64;
+    function ArriveAndDeregister: Int64;
+    function AwaitAdvance(const APhase: Int64): TLockFreePhaserArriveResult;
+    function AwaitAdvanceTimeout(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
+    function GetPhase: Int64;
+    function GetParties: Int64;
+    function GetArrived: Int64;
+    function GetUnarrived: Int64;
+    procedure Terminate;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsTerminated: Boolean;
+  end;
+```
+
+**Features**: multi-phase barrier with dynamic register/deregister; Terminate/Close end waiting.
+
+---
+
+## StampedLock (nextpas.core.lockfree.stampedlock)
+
+```pascal
+type
+  TStampedLock = class
+    constructor Create;
+    function ReadLock: Int64;
+    function TryReadLock: Int64;
+    function TryReadLockTimeout(const ATimeoutNs: Int64): Int64;
+    function WriteLock: Int64;
+    function TryWriteLock: Int64;
+    function TryWriteLockTimeout(const ATimeoutNs: Int64): Int64;
+    function TryOptimisticRead: Int64;
+    function Validate(const AStamp: Int64): Boolean;
+    procedure UnlockRead(const AStamp: Int64);
+    procedure UnlockWrite(const AStamp: Int64);
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsReadLocked: Boolean;
+    function IsWriteLocked: Boolean;
+  end;
+```
+
+**Features**: optimistic read + pessimistic R/W; stamp validates consistency. Read-heavy alternative to RwLock.
+
+---
+
+## Ring Buffer (nextpas.core.lockfree.ringbuffer)
+
+```pascal
+type
+  TLockFreeRingBufferResult = (rbWritten, rbFull, rbEmpty, rbClosed);
+
+  generic TRingBufferImpl<T> = class
+    constructor Create(const ACapacity: Int64);
+    function TryWrite(const AValue: T): TLockFreeRingBufferResult;
+    function TryRead(out AValue: T): TLockFreeRingBufferResult;
+    function WriteWait(const AValue: T): TLockFreeRingBufferResult;
+    function ReadWait(out AValue: T): TLockFreeRingBufferResult;
+    function WriteTimeout(const AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function ReadTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
+    function Count: Int64;
+    function GetCapacity: Int64;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: fixed-capacity FIFO (power-of-two); MPMC head/tail CAS; Close → `rbClosed`. Prefer T1 Channel/SegQueue for production messaging.
+
+---
+
+## Concurrent Trie (nextpas.core.lockfree.trie)
+
+```pascal
+type
+  TLockFreeTrieResult = (trInserted, trUpdated, trDeleted, trNotFound, trClosed);
+
+  generic TConcurrentTrieImpl<TValue> = class
+    constructor Create;
+    function Insert(const AKey: string; const AValue: TValue): TLockFreeTrieResult;
+    function Find(const AKey: string; out AValue: TValue): Boolean;
+    function Delete(const AKey: string): TLockFreeTrieResult;
+    function Contains(const AKey: string): Boolean;
+    function GetCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Progress**: per-node spin locks (not lock-free). Prefix key/value store with Close gate.
+
+---
+
+## Timer Wheel (nextpas.core.lockfree.timerwheel)
+
+```pascal
+type
+  TTimerCallback = procedure(AData: Pointer);
+  TLockFreeTimerResult = (twScheduled, twCancelled, twClosed, twNotFound);
+
+  TTimerWheel = class
+    constructor Create(const ASlotCount: Int64; const ATickIntervalNs: Int64);
+    function Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
+    function Cancel(const ATimerId: Int64): TLockFreeTimerResult;
+    procedure Tick;
+    procedure TickN(const AN: Int64);
+    function ProcessExpired: Int64;
+    function GetCurrentSlot: Int64;
+    function GetTotalTicks: Int64;
+    function GetTickIntervalNs: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: hierarchical/slot wheel for delayed callbacks; drive with `Tick` / `ProcessExpired`.
+
+---
+
+## Timeout Queue (nextpas.core.lockfree.timeoutqueue)
+
+```pascal
+type
+  TLockFreeTimeoutQueueResult = (tqDequeued, tqTimeout, tqEmpty, tqClosed);
+
+  generic TTimeoutQueueImpl<T> = class
+    constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeTimeoutQueueResult;
+    function GetCount: Int64;
+    function GetCapacity: Int64;
+    function GetTimeoutNs: Int64;
+    function IsEmpty: Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: bounded MPMC queue with timed dequeue; Close ends waiters.
+
+---
+
+## Work Stealing Pool (nextpas.core.lockfree.workstealing)
+
+```pascal
+type
+  TWorkStealingTask = procedure(AData: Pointer);
+  TLockFreeWorkStealingResult = (wsSubmitted, wsStolen, wsEmpty, wsClosed);
+
+  TWorkStealingPool = class
+    constructor Create(const AWorkerCount: Int64);
+    function Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
+    function Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
+    function GetWorkerCount: Int64;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Features**: per-worker deques; local LIFO, steal FIFO. Prefer `thread.pool.worksteal` + T1 `TWorkStealingDeque` for production core paths.
+
+---
+
+## Snapshot Isolation (nextpas.core.lockfree.snapshot)
+
+```pascal
+type
+  TSnapshotResult = (srCommitted, srAborted, srConflict, srNotFound, srClosed);
+
+  generic TSnapshotIsolationImpl<TValue> = class
+    constructor Create;
+    function BeginSnapshot: Int64;
+    function Read(const AKey: string; const ASnapshotTs: Int64; out AValue: TValue): TSnapshotResult;
+    function Write(const AKey: string; const AValue: TValue; const ATransactionTs: Int64): TSnapshotResult;
+    function Commit(const ATransactionTs: Int64): TSnapshotResult;
+    function Abort(const ATransactionTs: Int64): TSnapshotResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function GetCurrentTimestamp: Int64;
+  end;
+```
+
+**Features**: MVCC-style snapshot reads; writers do not block readers. Experimental / Guarded tier — see inventory.
+
+---
+
+## Graph (nextpas.core.lockfree.graph)
+
+```pascal
+type
+  TLockFreeGraphResult = (grAdded, grRemoved, grNotFound, grExists, grClosed);
+
+  TLockFreeGraph = class
+    constructor Create;
+    function AddVertex(AId: Int64): TLockFreeGraphResult;
+    function RemoveVertex(AId: Int64): TLockFreeGraphResult;
+    function AddEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function RemoveEdge(AFromId, AToId: Int64): TLockFreeGraphResult;
+    function HasEdge(AFromId, AToId: Int64): Boolean;
+    function GetVertexCount: Int64;
+    function GetEdgeCount: Int64;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+  end;
+```
+
+**Progress**: adjacency-list graph with per-vertex spin locks (not lock-free).
+
+---
+
+### TLockFreeMsQueue\<T\> (nextpas.core.lockfree.msqueue) — T1 facade
+
+```pascal
+type
+  generic TLockFreeMsQueue<T> = class
+    constructor Create(ACapacity: Int32 = 64);
+    function TryEnqueue(const AValue: T): Boolean;
+    function TryDequeue(out AValue: T): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function ApproxCount: Int64;
+    function IsEmpty: Boolean;
+  end;
+```
+
+**Features**: Michael–Scott lock-free unbounded MPMC; index node pool + auto grow. **Lifecycle** (CONTRACT §1.3): `Close` → join producers/consumers → `Free`. `Destroy` does Close+drain — **does not** replace join. Teaching: `t1_msqueue_close_join_free`.
+
+---
+
+### TLockFreeForkJoinPool (nextpas.core.lockfree.forkjoin)
+
+```pascal
+type
+  TLockFreeForkJoinPool = class
+    constructor Create(AWorkerCount: Int32 = 4);
+    function Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
+    function PopOrSteal(AWorkerId: Int32; out ATask: TForkJoinTask): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function WorkerCount: Int32;
+    function ApproxPendingCount: Int64;
+    function ApproxCompletedCount: Int64;
+  end;
+```
+
+**Features**: Fork/join style pool; local LIFO + steal FIFO. Prefer production `thread.pool.worksteal` when integrating with core thread module.
+
+---
+
+### TCopyOnWriteArray\<T\> (nextpas.core.lockfree.cowarray)
+
+```pascal
+type
+  generic TCopyOnWriteArray<T> = class
+    function Get(AIndex: Int32; out AValue: T): TLockFreeCowArrayResult;
+    function Count: Int32;
+    function IsEmpty: Boolean;
+    function Append(const AValue: T): TLockFreeCowArrayResult;
+    function SetItem(AIndex: Int32; const AValue: T): TLockFreeCowArrayResult;
+    function Delete(AIndex: Int32): TLockFreeCowArrayResult;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Snapshot: TItems;
+  end;
+```
+
+**Features**: lock-free reads, copy-on-write updates; best for rare writers (config / listener lists).
+
+---
+
+### TLockFreeDisjointSet (nextpas.core.lockfree.disjointset)
+
+```pascal
+type
+  TLockFreeDisjointSet = class
+    constructor Create(ACapacity: Int32 = 64);
+    function MakeSet: Int32;
+    function Find(AIdx: Int32): Int32;
+    function Union(AIdx1, AIdx2: Int32): TLockFreeDisjointSetResult;
+    function Connected(AIdx1, AIdx2: Int32): Boolean;
+    function Count: Int32;
+  end;
+```
+
+**Features**: union-find with path compression + rank; auto grow. **No Close** — stop mutators then Free.
+
+---
+
+### SkipList / other trees (index)
+
+| Unit | Type (examples) | Close? | Progress note |
+|------|-----------------|--------|----------------|
+| `skiplist` / `skiplist_map` | `TConcurrentSkipList` | **No** | concurrent ordered map; stop mutators → join → Free (same honesty as HashMap) |
+| `btree` / `rbtree` / `treap` / … | see inventory | unit-local | mixed locks; not H3-2 |
+| caches (`lfu`, `ttl_cache`, `arccache`) | see inventory | often yes | sharded / spin — not LF |
+| sketches (`hyperloglog`, `tdigest`, …) | see inventory | unit-local | atomic counters / mixed |
+
+**H3-2 production Close subset remains Bag + MultiMap only** (CONTRACT §0.3 / Q4 — do not expand without charter). Inventory: [`t2-inventory.md`](t2-inventory.md). Chinese full prose: [`api-reference.md`](api-reference.md).
 
 ## Memory Order Reference
 

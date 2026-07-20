@@ -4,12 +4,13 @@
 
 > **Lane 状态：Maintenance Idle（2026-07-20 · B43；B44 卫生包）**
 >
-> - API 冻结；消费 checklist **19** 模块 C3 全绿；scorecard 子集 **11** track
+> - API 冻结；消费 checklist **22** 模块 C1–C5 全绿；scorecard 子集 **11** track
 > - 默认 gate：**22** suites（`core/tests/nextpas.core.bench/Makefile` PROJECTS）
 > - 日常：只响应回归、明确授权的小修（文档/卫生/契约口径可做）
 > - **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆
 > - **值班 / Landing 纪律**（含 **FF 后必 push**）：[LANE-DUTY.md](LANE-DUTY.md)
-> - **B45**：可用性落地 — Canonical API、`BenchBlackBox*`、示例无 SysUtils
+> - **B45**：Canonical API、`BenchBlackBox*`、官方示例无 SysUtils
+> - **B46**：`core/benchmarks/nextpas.core.*` 去掉直连 FPC RTL（白名单：platform-comparison）
 
 ## Canonical API（唯一推荐路径）
 
@@ -53,7 +54,7 @@ end.
 ## 消费侧（写模块 bench 的人）
 
 - **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局
-- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（**19** 模块；C3 Quiet/短时/JSON 模板）
+- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（**22** 模块；C3 Quiet/短时/JSON 模板）
 - **[LANE-DUTY.md](LANE-DUTY.md)** — lane 值班边界、Landing 硬纪律、回归证据怎么记
 - 示例：`core/examples/bench/`、`core/examples/nextpas.core.bench/`
 - 模块 bench 样例：`core/benchmarks/nextpas.core.*/`

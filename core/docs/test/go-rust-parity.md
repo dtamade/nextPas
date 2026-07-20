@@ -1,8 +1,8 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.22**
-**最后更新**: 2026-07-20
+**当前版本**: **v8.23**
+**最后更新**: 2026-07-21
 
 ---
 
@@ -17,7 +17,7 @@
 | 并行/竞态 | t.Parallel / -race | 串行默认 | RunParallel + 原子压力测 |
 | Prop/Fuzz | testing.F + 第三方 | proptest | 内置 + 可计数套件 |
 | 规模 | 上千级自测 | 同左 | **≥5500 可计数过程 + fail-path≥30%** |
-| 失败语义 | Error 可继续 / Fatal 停 | panic | **Check=Fatal**；**SoftFail** opt-in |
+| 失败语义 | Error 可继续 / Fatal 停 | panic | **Check=Fatal**；**SoftFail** opt-in；Soft string=ColorDiff；高频 Soft Bool/Bytes/Near |
 
 ---
 
@@ -74,6 +74,8 @@
 | B42 v8.22 SoftFail parallel/outside/PushPop | **done** |
 | B43 v8.22 thin + nested demo | **done** |
 | B44 v8.22 SCALE_MIN=5500 | **done** |
+| B45 v8.23 Soft ColorDiff + Soft 高频 (Bool/TBytes/Near) | **done** |
+| B46 v8.23 ComputeKey field source-contract + Soft 矩阵文档 | **done** |
 
 ### 暂缓 / 阻塞
 

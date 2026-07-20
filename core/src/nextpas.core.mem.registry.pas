@@ -229,9 +229,9 @@ var
   LPos: SizeUInt;
 begin
   if AName = '' then
-    raise EAllocError.Create(aeInvalidLayout, 'TAllocatorRegistry.Register: name cannot be empty');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TAllocatorRegistry', 'Register', 'name cannot be empty'));
   if AAllocator = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TAllocatorRegistry.Register: allocator cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TAllocatorRegistry', 'Register', 'allocator cannot be nil'));
 
   FLock.Acquire;
   try
@@ -260,7 +260,7 @@ function TAllocatorRegistry.Get(const AName: string): IAllocator;
 begin
   if not TryGet(AName, Result) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TAllocatorRegistry.Get: allocator "' + AName + '" not found');
+      FormatAllocErrorMsg('TAllocatorRegistry', 'Get', 'allocator "' + AName + '" not found'));
 end;
 
 function TAllocatorRegistry.TryGet(const AName: string; out AAllocator: IAllocator): Boolean;

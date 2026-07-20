@@ -18,13 +18,12 @@ program bench_hotspots;
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init, BaseUnix, Unix,
+  nextpas.core.thread.init,
   {$ENDIF}
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ENDIF}
-  SysUtils, Math,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.math,
+  nextpas.core.platform.time,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.scalar,
@@ -43,22 +42,9 @@ var
   g_VolatileBool: LongBool = False;
 
 function GetNanoTime: Int64;
-{$IFDEF UNIX}
-var
-  tv: TTimeVal;
 begin
-  fpgettimeofday(@tv, nil);
-  Result := Int64(tv.tv_sec) * 1000000000 + Int64(tv.tv_usec) * 1000;
+  Result := Int64(platform_monotonic_ns);
 end;
-{$ELSE}
-var
-  f, c: Int64;
-begin
-  QueryPerformanceFrequency(f);
-  QueryPerformanceCounter(c);
-  Result := c * 1000000000 div f;
-end;
-{$ENDIF}
 
 type
   TBenchProc = procedure;
@@ -106,7 +92,7 @@ begin
   WriteLn('Host OS:       Linux x86_64');
   WriteLn('FPC flags:     -MObjFPC -Sh -O3 -gl (bench Makefile)');
   WriteLn('Active backend:', ' ', GetBackendInfo(GetActiveBackend).Name);
-  WriteLn('VectorAsm:     ', BoolToStr(IsVectorAsmEnabled, True));
+  WriteLn('VectorAsm:     ', BoolToStr(IsVectorAsmEnabled, 'True', 'False'));
   WriteLn('CPU model:     ', GetCPUInfo.Model);
   WriteLn;
   WriteLn('Method:');
@@ -132,7 +118,7 @@ begin
     LVsTrue := 0;
     LVsLib := 0;
   end;
-  WriteLn(Format('  %-22s  true=%7.3f  lib=%7.3f  disp=%7.3f  %s  |  vsTrue=%.2fx  vsLib=%.2fx',
+  WriteLn(TextFormat('  %-22s  true=%7.3f  lib=%7.3f  disp=%7.3f  %s  |  vsTrue=%.2fx  vsLib=%.2fx',
     [aName, aTrue, aLib, aDisp, aUnit, LVsTrue, LVsLib]));
 end;
 

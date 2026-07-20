@@ -68,6 +68,16 @@ need_grep "$MEM_DOCS/ERROR-POLICY.md" 'ENextPasError|统一 catch' \
   'ERROR-POLICY must document unified catch surface'
 need_grep "$MEM_DOCS/README.md" 'debug_coverage_gap' \
   'README must document debug_coverage_gap'
+need_grep "$MEM_DOCS/README.md" 'WARN=debug_coverage_gap|debug_coverage_gap' \
+  'README must keep coverage gap discoverable'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'Acquire|Release' \
+  'API-GUIDE must document pool Acquire/Release verbs'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'TryGetMem' \
+  'API-GUIDE must document TryGetMem for OOM without last-error TLS'
+need_grep "$MEM_DOCS/ERROR-POLICY.md" 'TryAllocErrorCode' \
+  'ERROR-POLICY must document TryAllocErrorCode'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function TryAllocErrorCode' \
+  'mem facade must expose TryAllocErrorCode'
 need_grep "$MEM_DOCS/README.md" 'NEXTPAS_MEM_HEAP_SAFETY|HEAP_SAFETY' \
   'README must document HEAP_SAFETY'
 need_grep "$MEM_DOCS/API-GUIDE.md" 'FreeMemOf' 'API-GUIDE must document FreeMemOf'

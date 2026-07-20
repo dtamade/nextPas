@@ -202,6 +202,13 @@ procedure SoftCheckEqual(const AExpected, AActual: Int64;
   const AMessage: string = ''); overload;
 procedure SoftCheckEqual(const AExpected, AActual: string;
   const AMessage: string = ''); overload;
+{ v8.23: high-frequency SoftCheck surface (Go t.Error style, no raise). }
+procedure SoftCheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string = ''); overload;
+procedure SoftCheckNear(const AExpected, AActual: Double;
+  AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
 procedure Skip(const AReason: string = '');
@@ -1239,8 +1246,92 @@ end;
 
 procedure SoftCheckEqual(const AExpected, AActual: string;
   const AMessage: string);
+{ v8.23: same ColorDiff contract as CheckEqual(string); SoftFail instead of raise. }
+var
+  LDetail: string;
 begin
-  nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
+  if AExpected = AActual then
+    Exit;
+  LDetail := ColorDiff(AExpected, AActual, DefaultConfig);
+  if AMessage <> '' then
+    nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+  else
+    nextpas.core.test.base.SoftFail(LDetail);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Boolean;
+  const AMessage: string);
+var
+  LDetail: string;
+begin
+  if AExpected = AActual then
+    Exit;
+  LDetail := 'expected: ' + BoolToStr(AExpected, 'True', 'False') + #10 +
+    '  actual: ' + BoolToStr(AActual, 'True', 'False');
+  if AMessage <> '' then
+    nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+  else
+    nextpas.core.test.base.SoftFail(LDetail);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
+var
+  I: Integer;
+  LDetail: string;
+begin
+  if Length(AExpected) <> Length(AActual) then
+  begin
+    LDetail := 'Expected TBytes length ' + IntToStr(Length(AExpected)) +
+      ' but got ' + IntToStr(Length(AActual));
+    if AMessage <> '' then
+      nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+    else
+      nextpas.core.test.base.SoftFail(LDetail);
+    Exit;
+  end;
+  for I := 0 to High(AExpected) do
+    if AExpected[I] <> AActual[I] then
+    begin
+      LDetail := 'TBytes differ at index ' + IntToStr(I) +
+        ': expected $' + IntToHex(AExpected[I], 2) +
+        ' but got $' + IntToHex(AActual[I], 2);
+      if AMessage <> '' then
+        nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+      else
+        nextpas.core.test.base.SoftFail(LDetail);
+      Exit;
+    end;
+end;
+
+procedure SoftCheckNear(const AExpected, AActual: Double;
+  AEpsilon: Double; const AMessage: string);
+var
+  LDiff: Double;
+  LDetail: string;
+begin
+  if IsNan(AExpected) or IsNan(AActual) then
+  begin
+    LDetail := 'Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) +
+      ' (NaN)';
+    if AMessage <> '' then
+      nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+    else
+      nextpas.core.test.base.SoftFail(LDetail);
+    Exit;
+  end;
+  LDiff := Abs(AActual - AExpected);
+  if LDiff > AEpsilon then
+  begin
+    LDetail := 'Expected ' + FloatToStr(AExpected) +
+      ' (+/-' + FloatToStr(AEpsilon) + ') but got ' + FloatToStr(AActual) +
+      ' (diff=' + FloatToStr(LDiff) + ')';
+    if AMessage <> '' then
+      nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+    else
+      nextpas.core.test.base.SoftFail(LDetail);
+  end;
 end;
 
 procedure SoftCheckContains(const AHaystack, ANeedle: string;

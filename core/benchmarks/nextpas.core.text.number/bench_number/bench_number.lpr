@@ -3,10 +3,10 @@ program bench_number;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.time.base,
-  nextpas.core.text.number;
+  nextpas.core.text.number,
+  nextpas.core.fs;
 
 var
   LResults: IBenchResults;

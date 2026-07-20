@@ -26,6 +26,7 @@ Unified configuration module supporting multiple data formats with a common flat
 ### Safe scalar access
 
 - JSON / YAML / TOML values expose `TryAsBool`, `TryAsInt`, `TryAsFloat`, `TryAsStr` (typed success flag + out value) alongside the lenient `As*` defaults.
+- Config exposes `TryGetInt` / `TryGetBool` / `TryGetFloat` / `TryGetDurationNs` / `TryGetByteSize` (True only when the key resolves and parses).
 
 ### Bulk `IReader` parse limits
 

@@ -2529,6 +2529,50 @@ begin
   end;
 end;
 
+procedure TestLastEnterResultDefaultOk;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    Check(LTerm.LastEnterResult.Ok, 'default LastEnterResult.Ok');
+    Check(LTerm.LastEnterResult.Failure = tefNone, 'default failure none');
+    CheckEqual('', LTerm.LastEnterResult.Reason, 'default reason empty');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestEnterTuiNotATerminalRecordsReason;
+var
+  LTerm: TTerminal;
+  LRes: TTuiEnterResult;
+  LOk: Boolean;
+begin
+  { CI / non-interactive: STDOUT usually not a TTY → authoritative failure path. }
+  LTerm := TTerminal.Create;
+  try
+    LOk := LTerm.EnterTui;
+    LRes := LTerm.LastEnterResult;
+    if LOk then
+    begin
+      Check(LRes.Ok, 'success path keeps Ok');
+      CheckEqual('', LRes.Reason, 'success reason empty');
+    end
+    else
+    begin
+      Check(not LRes.Ok, 'LastEnterResult.Ok false');
+      Check(LTerm.LastEnterResult.Failure = tefNotATerminal, 'failure is not-a-terminal');
+      CheckEqual('not-a-terminal', LRes.Reason, 'reason token');
+      LRes := LTerm.TryEnterTui;
+      Check(not LRes.Ok, 'TryEnterTui mirrors failure');
+      CheckEqual('not-a-terminal', LRes.Reason, 'TryEnterTui reason');
+    end;
+  finally
+    LTerm.Free;
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
@@ -2694,5 +2738,7 @@ begin
   T.Test('bracketed paste option defaults', @TestBracketedPasteOptionDefaults);
   T.Test('bracketed paste emits on frame runtime', @TestBracketedPasteEmitsOnFrameRuntime);
   T.Test('bracketed paste default off no sequence', @TestBracketedPasteDefaultOffNoSequence);
-if not T.Run then Halt(1);
+  T.Test('last enter result default ok', @TestLastEnterResultDefaultOk);
+  T.Test('enter tui not-a-terminal records reason', @TestEnterTuiNotATerminalRecordsReason);
+  if not T.Run then Halt(1);
 end.

@@ -1,8 +1,8 @@
 program bench_log;
 {$I nextpas.core.settings.inc}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.log.intf, nextpas.core.log;
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.log.intf, nextpas.core.log,
+  nextpas.core.fs;
 type
   TNullHandler = class(TInterfacedObject, ILogHandler)
   private FMinLevel: TLogLevel;

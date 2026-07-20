@@ -98,11 +98,14 @@ type
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 
     {**
-     * @desc 释放由 GetMem/AllocMem/ReallocMem 得到的内存。
+     * @desc 释放由 GetMem/AllocMem/ReallocMem 得到的内存（单参；接口冻结五方法）。
      * @param APtr 待释放指针。APtr=nil 时为空操作。
      * @note 不得对同一指针调用两次（双重释放为未定义行为）。
      * @note 调试分配器（Guard、Sentinel 等）可能对非法指针或双重释放抛 EAllocError
      *       （aeInvalidPointer / aeDoubleFree / aeSentinelCorrupted 等）。
+     * @note Sized free for DefaultHeap-owned blocks: process FreeMem(ptr,size) or
+     *       FreeMemOf(alloc,ptr,size). FreeMemOf may skip this method on same-heap
+     *       hot path — use this FreeMem when inject tracking must observe free.
      *}
     procedure FreeMem(APtr: Pointer);
 

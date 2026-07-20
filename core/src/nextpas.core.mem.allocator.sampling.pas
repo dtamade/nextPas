@@ -124,7 +124,7 @@ constructor TSamplingAllocator.Create(AInner: IAllocator; ASampleRate: UInt32);
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TSamplingAllocator.Create: AInner cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TSamplingAllocator', 'Create', 'AInner cannot be nil'));
   if ASampleRate = 0 then
     ASampleRate := 1;
   FInner := AInner;
@@ -219,7 +219,7 @@ end;
 function TSamplingAllocator.GetSample(AIndex: UInt32): TSampleEntry;
 begin
   if AIndex >= FSampleCount then
-    raise EAllocError.Create(aeInvalidLayout, 'TSamplingAllocator.GetSample: index out of range');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TSamplingAllocator', 'GetSample', 'index out of range'));
   Result := FSamples[AIndex];
 end;
 

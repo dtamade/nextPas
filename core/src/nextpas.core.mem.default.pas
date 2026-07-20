@@ -218,6 +218,8 @@ begin
     ' debug=' + FormatMemStatsYN(AStats.DebugEnabled) +
     ' debug_process=' + FormatMemStatsYN(AStats.DebugObservesProcess) +
     ' debug_coverage_gap=' + FormatMemStatsYN(AStats.DebugCoverageGap);
+  if AStats.DebugCoverageGap then
+    Result := Result + ' WARN=debug_coverage_gap';
   if AStats.DebugEnabled then
     Result := Result +
       ' debug_active_allocs=' + IntToStr(Int64(AStats.DebugActiveAllocs)) +
@@ -244,6 +246,8 @@ begin
     ' debug=' + FormatMemStatsYN(AStats.DebugEnabled) +
     ' debug_process=' + FormatMemStatsYN(AStats.DebugObservesProcess) +
     ' debug_coverage_gap=' + FormatMemStatsYN(AStats.DebugCoverageGap);
+  if AStats.DebugCoverageGap then
+    Result := Result + ' WARN=debug_coverage_gap';
 end;
 
 function FormatMemDebugProfile: string;

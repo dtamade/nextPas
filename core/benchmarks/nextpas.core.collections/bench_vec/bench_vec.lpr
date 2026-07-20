@@ -3,10 +3,10 @@ program bench_vec;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.time.base,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  nextpas.core.fs;
 
 type
   TIntVec = specialize TVec<Integer>;

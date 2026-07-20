@@ -46,7 +46,7 @@ uses
 function IsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
- * IsOverlapUnChecked
+ * IsOverlapUnchecked
  *
  * @desc The unchecked version of `IsOverlap`. Handles overlapping memory.
  *       `IsOverlap` 的无检查版本. 为性能考虑, 此版本不进行安全检查. 能处理重叠内存.
@@ -77,7 +77,7 @@ function IsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: Siz
  *   use this function for maximum performance.
  *   当你确定指针有效,并且aSize有效以及不会造成溢出时, 使用此函数以获得最大性能.
  *}
-function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function IsOverlapUnchecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * IsOverlap
@@ -105,7 +105,7 @@ function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aS
 function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
- * IsOverlapUnChecked
+ * IsOverlapUnchecked
  *
  * @desc Checks if two memory blocks overlap.
  *       检查两个内存块是否重叠.
@@ -123,7 +123,7 @@ function IsOverlap(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {
  * @return `True` if the blocks overlap, `False` otherwise.
  *          如果内存块重叠则返回 `True`, 否则返回 `False`.
  *}
-function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function IsOverlapUnchecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {** @desc 几何增长计算（带溢出保护 + 单调递增保证）。
  *  适用于分段池、可增长块池等需要按比例扩容的场景。
@@ -164,7 +164,7 @@ function CalcGeometricGrowth(aCurrentCapacity: SizeUInt; aGrowthFactor: Double):
 procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
- * CopyUnChecked
+ * CopyUnchecked
  *
  * @desc The unchecked version of `Copy`. Handles overlapping memory.
  *       `Copy` 的无检查版本. 为性能考虑, 此版本不进行安全检查. 能处理重叠内存.
@@ -188,7 +188,7 @@ procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLIN
  *   Use this for maximum performance when you are certain that pointers are valid.
  *   当你确定指针有效时, 使用此函数以获得最大性能.
  *}
-procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+procedure CopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
  * CopyNonOverlap
@@ -219,7 +219,7 @@ procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_C
 procedure CopyNonOverlap(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
- * CopyNonOverlapUnChecked
+ * CopyNonOverlapUnchecked
  *
  * @desc The unchecked version of `CopyNonOverlap`. Assumes memory blocks do not overlap.
  *       `CopyNonOverlap` 的无检查版本. 为性能考虑, 此版本不进行安全检查. 假定内存块不重叠.
@@ -243,7 +243,7 @@ procedure CopyNonOverlap(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_
  *   Use this for maximum performance when you are certain that pointers are valid.
  *   当你确定指针有效时, 使用此函数以获得最大性能.
  *}
-procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+procedure CopyNonOverlapUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -749,11 +749,11 @@ function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boole
   function AlignDown(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
   {**
-   * AlignDownUnChecked
+   * AlignDownUnchecked
    *
    * @desc Unchecked version of AlignDown (no safety checks).
    *}
-  function AlignDownUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+  function AlignDownUnchecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 
 {**
@@ -782,7 +782,7 @@ function IsAligned(aPtr: Pointer; aAlignment: SizeUInt = SizeOf(Pointer)): Boole
 function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 {**
- * AlignUpUnChecked
+ * AlignUpUnchecked
  *
  * @desc Aligns a pointer upwards to the nearest specified boundary. The unchecked version.
  *       将一个指针向上调整到最近的指定对齐边界. 为性能考虑, 此版本不进行安全检查.
@@ -797,7 +797,7 @@ function AlignUp(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFD
  * @return The aligned pointer.
  *         对齐后的指针.
  *}
-function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+function AlignUpUnchecked(aPtr: Pointer; aAlignment: SizeUInt = SIZE_PTR): Pointer; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
 { Sharded pool utilities }
 
@@ -852,10 +852,10 @@ begin
   if IsAddOverflow(LStart2, aSize2) then
     raise EOutOfRange.CreateFmt('aSize2 (%d) is too large for aPtr2 (%p), causing address calculation to overflow.', [aSize2, aPtr2]);
 
-  Result := IsOverlapUnChecked(aPtr1, aSize1, aPtr2, aSize2);
+  Result := IsOverlapUnchecked(aPtr1, aSize1, aPtr2, aSize2);
 end;
 
-function IsOverlapUnChecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean;
+function IsOverlapUnchecked(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean;
 begin
   {$PUSH}{$WARN 4055 OFF}
   Result := (PtrUInt(aPtr1) < PtrUInt(aPtr2) + aSize2) and (PtrUInt(aPtr2) < PtrUInt(aPtr1) + aSize1);
@@ -867,9 +867,9 @@ begin
   Result := IsOverlap(aPtr1, aSize, aPtr2, aSize);
 end;
 
-function IsOverlapUnChecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean;
+function IsOverlapUnchecked(aPtr1, aPtr2: Pointer; aSize: SizeUInt): Boolean;
 begin
-  Result := IsOverlapUnChecked(aPtr1, aSize, aPtr2, aSize);
+  Result := IsOverlapUnchecked(aPtr1, aSize, aPtr2, aSize);
 end;
 
 procedure Copy(aSrc, aDst: Pointer; aSize: SizeUInt);
@@ -889,10 +889,10 @@ begin
     raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.Copy: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
   {$ENDIF}
 
-  CopyUnChecked(aSrc, aDst, aSize);
+  CopyUnchecked(aSrc, aDst, aSize);
 end;
 
-procedure CopyUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt);
+procedure CopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt);
 begin
   {$IFDEF NEXTPAS_CORE_CRT_MEMMOVE}
     memmove(aDst, aSrc, aSize);
@@ -918,10 +918,10 @@ begin
     raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.CopyNonOverlap: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
   {$ENDIF}
 
-  CopyNonOverlapUnChecked(aSrc, aDst, aSize);
+  CopyNonOverlapUnchecked(aSrc, aDst, aSize);
 end;
 
-procedure CopyNonOverlapUnChecked(aSrc, aDst: Pointer; aSize: SizeUInt);
+procedure CopyNonOverlapUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt);
 begin
   {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
     memcpy(aDst, aSrc, aSize);
@@ -1306,10 +1306,10 @@ begin
   if not IsPowerOfTwo(aAlignment) then
     raise EInvalidArgument.Create('nextpas.core.mem.utils.AlignUp: aAlignment must be a power of two');
 
-  Result := AlignUpUnChecked(aPtr, aAlignment);
+  Result := AlignUpUnchecked(aPtr, aAlignment);
 end;
 
-function AlignUpUnChecked(aPtr: Pointer; aAlignment: SizeUInt): Pointer;
+function AlignUpUnchecked(aPtr: Pointer; aAlignment: SizeUInt): Pointer;
 begin
   {$PUSH}{$WARN 4055 OFF}
   Result := Pointer((PtrUInt(aPtr) + (aAlignment - 1)) and not (aAlignment - 1));
@@ -1325,10 +1325,10 @@ begin
     raise EInvalidArgument.Create('nextpas.core.mem.utils.AlignDown: aAlignment is 0');
   if not IsPowerOfTwo(aAlignment) then
     raise EInvalidArgument.Create('nextpas.core.mem.utils.AlignDown: aAlignment must be a power of two');
-  Result := AlignDownUnChecked(aPtr, aAlignment);
+  Result := AlignDownUnchecked(aPtr, aAlignment);
 end;
 
-function AlignDownUnChecked(aPtr: Pointer; aAlignment: SizeUInt): Pointer;
+function AlignDownUnchecked(aPtr: Pointer; aAlignment: SizeUInt): Pointer;
 begin
   {$PUSH}{$WARN 4055 OFF}
   Result := Pointer(PtrUInt(aPtr) and not (aAlignment - 1));

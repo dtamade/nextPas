@@ -38,8 +38,9 @@ end.
 
 - **禁止** `uses SysUtils` / `Classes` 等 FPC RTL（项目隔离约束）；`WriteLn` 用 System 内建即可。
 - 目录：`nextpas.core.fs.ForceDirectories('build')`；JSON 落到 `build/`。
-- 防优化：`BenchBlackBoxInt64` / `BenchBlackBoxPtr` / `BenchBlackBoxBytes`（见 README Canonical）。
+- 防优化：`BenchBlackBoxInt64` / `BenchBlackBoxPtr` / `BenchBlackBoxBytes`（见 README Canonical）；热点路径末尾调用，避免 DCE。
 - 用户控制循环优先 **`AddLoopWithContext`**，不要用无 context 的 `AddLoop` 还指望 `SetBytes`。
+- **`core/benchmarks/nextpas.core.*` 禁止** `uses SysUtils/Classes/...`（`platform-comparison` 对照除外）；门禁见 `scripts/bench-contract-check.sh` C9。
 
 ## 2. 命名约定
 

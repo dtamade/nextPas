@@ -254,7 +254,7 @@ begin
 
   if ABlockSize > (High(SizeUInt) - 7) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TPoolAllocator.Create: block size overflow (' + IntToStr(ABlockSize) + ')');
+      FormatAllocErrorMsg('TPoolAllocator', 'Create', 'block size overflow (' + IntToStr(ABlockSize) + ')'));
 
   // 确保块大小是 8 的倍数（指针对齐）
   LAlignedSize := (ABlockSize + 7) and not SizeUInt(7);
@@ -335,7 +335,8 @@ var
   LAlloc: TPoolAllocatorAlloc;
 begin
   if not MapDelete(aOldPtr, LAlloc) then
-    raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator: pointer is not tracked');
+    raise EAllocError.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TPoolAllocator', 'Raise', 'pointer is not tracked'));
   LAlloc.Ptr := aNewPtr;
   LAlloc.Size := ASize;
   LAlloc.Alignment := AAlignment;
@@ -361,7 +362,7 @@ begin
     LRaw := FFallback.GetMem(ASize + LAlignMask + SizeOf(Pointer));
     if LRaw = nil then
       Exit(nil);
-    Result := AlignUpUnChecked(LRaw + SizeOf(Pointer), AAlignment);
+    Result := AlignUpUnchecked(LRaw + SizeOf(Pointer), AAlignment);
     PPointer(PByte(Result) - SizeOf(Pointer))^ := LRaw;
   end
   else
@@ -405,8 +406,8 @@ procedure TPoolAllocator.RaiseUnknownPointer(APtr: Pointer;
   const aOperation: string);
 begin
   if IsPoolRange(APtr) and not IsPoolBlockStart(APtr) then
-    raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator.' + aOperation + ': pointer is not a pool block start');
-  raise EAllocError.Create(aeInvalidPointer, 'TPoolAllocator.' + aOperation + ': pointer is not tracked');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TPoolAllocator', aOperation, 'pointer is not a pool block start'));
+  raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TPoolAllocator', aOperation, 'pointer is not tracked'));
 end;
 
 function TPoolAllocator.GetAllocatedCount: Integer;
@@ -549,7 +550,7 @@ begin
   if ASize = 0 then
     Exit(nil);
   if (AAlignment = 0) or ((AAlignment and (AAlignment - 1)) <> 0) then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'TPoolAllocator.AllocAligned: alignment must be power of two');
+    raise EAllocError.Create(aeAlignmentNotSupported, FormatAllocErrorMsg('TPoolAllocator', 'AllocAligned', 'alignment must be power of two'));
   if AAlignment < SizeOf(Pointer) then
     AAlignment := SizeOf(Pointer);
 

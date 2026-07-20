@@ -266,7 +266,7 @@ var
 begin
   LEditor := TInputEditor.New;
   LEvent := KeyCharEvent(Ord('a'), []);
-  LEditor.HandleKey(LEvent.Key);
+  Check(LEditor.HandleKey(LEvent.Key), 'HandleKey consumes char');
   Check(LEditor.Content = 'a', 'Content should be a after handle key');
 end;
 

@@ -87,7 +87,7 @@ begin
     begin
       Str(ACapacity, LCapStr);
       raise EOutOfMemory.Create(aeOutOfMemory,
-        'TLocalArena.Create: out of memory (requested ' + LCapStr + ' bytes)');
+      FormatAllocErrorMsg('TLocalArena', 'Create', 'out of memory (requested ' + LCapStr + ' bytes)'));
     end;
   end
   else

@@ -326,7 +326,7 @@ begin
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingBlockPool: segment size overflow (blocks=' + IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')');
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'segment size overflow (blocks=' + IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')'));
 
   if FAlignment <= 1 then
     LAllocSize := LBytes
@@ -334,7 +334,7 @@ begin
     LAllocSize := LBytes + (FAlignment - 1);
   if LAllocSize < LBytes then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingBlockPool: allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')');
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
 
   if FAllocator = nil then
     LRaw := System.GetMem(LAllocSize)
@@ -555,7 +555,8 @@ begin
   inherited Create;
 
   if aConfig.BlockSize = 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TGrowingBlockPool: block size must be > 0');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'block size must be > 0'));
 
   LAlign := SanitizeConfigAlignment(aConfig.Alignment);
 
@@ -566,7 +567,7 @@ begin
     LMask := LAlign - 1;
     if aConfig.BlockSize > (High(SizeUInt) - LMask) then
       raise EAllocError.Create(aeInvalidLayout,
-        'TGrowingBlockPool: block size overflow (' + IntToStr(aConfig.BlockSize) + ')');
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'block size overflow (' + IntToStr(aConfig.BlockSize) + ')'));
     LActualBlockSize := (aConfig.BlockSize + LMask) and not LMask;
   end;
 
@@ -618,8 +619,8 @@ begin
   LInitCap := FInitialCapacity;
   if not AddSegment(LInitCap) then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingBlockPool.Create: failed to allocate initial segment (blocks=' +
-      IntToStr(Int64(LInitCap)) + ')');
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'failed to allocate initial segment (blocks=' +
+      IntToStr(Int64(LInitCap)) + ')'));
 end;
 
 constructor TGrowingBlockPool.Create(ABlockSize, aInitialCapacity: SizeUInt; AAlignment: SizeUInt);
@@ -657,7 +658,7 @@ begin
   end;
 
   if not FindSegment(LPtr, LSegIndex) then
-    raise EAllocError.Create(aeInternalError, 'TGrowingBlockPool.Acquire: free list corruption (unknown segment)');
+    raise EAllocError.Create(aeInternalError, FormatAllocErrorMsg('TGrowingBlockPool', 'Acquire', 'free list corruption (unknown segment)'));
   LSeg := FSegments[LSegIndex];
 
   LDiff := PtrUInt(LPtr) - PtrUInt(LSeg.Base);
@@ -712,32 +713,32 @@ begin
     Exit;
 
   if not FindSegment(aPtr, LSegIndex) then
-    raise EAllocError.Create(aeInvalidPointer, 'TGrowingBlockPool.Release: pointer not owned');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'pointer not owned'));
   LSeg := FSegments[LSegIndex];
 
   LDiff := PtrUInt(aPtr) - PtrUInt(LSeg.Base);
   if (LDiff >= PtrUInt(LSeg.Size)) then
-    raise EAllocError.Create(aeInvalidPointer, 'TGrowingBlockPool.Release: pointer out of range');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'pointer out of range'));
 
   if FBlockMask <> 0 then
   begin
     if (LDiff and PtrUInt(FBlockMask)) <> 0 then
-      raise EAllocError.Create(aeInvalidPointer, 'TGrowingBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'misaligned pointer'));
     LIdx := SizeUInt(LDiff shr FBlockShift);
   end
   else
   begin
     if (LDiff mod FBlockSize) <> 0 then
-      raise EAllocError.Create(aeInvalidPointer, 'TGrowingBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'misaligned pointer'));
     LIdx := SizeUInt(LDiff div FBlockSize);
   end;
 
   if LIdx >= LSeg.Blocks then
     raise EAllocError.Create(aeInvalidPointer,
-      'TGrowingBlockPool.Release: block index out of range (' + IntToStr(LIdx) + '/' + IntToStr(LSeg.Blocks) + ')');
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'block index out of range (' + IntToStr(LIdx) + '/' + IntToStr(LSeg.Blocks) + ')'));
 
   if IsFreeBitSet(LSegIndex, LIdx) then
-    raise EAllocError.Create(aeDoubleFree, 'TGrowingBlockPool.Release: double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TGrowingBlockPool', 'Release', 'double free detected'));
 
   {$IFDEF DEBUG}
   FillMem((PByte(LSeg.Base) + LIdx * FBlockSize), FBlockSize, MEM_POISON_FREED);

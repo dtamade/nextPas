@@ -80,7 +80,7 @@ constructor TFailAllocator.Create(AInner: IAllocator; AFailAt: UInt64);
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TFailAllocator.Create: AInner must not be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TFailAllocator', 'Create', 'AInner must not be nil'));
   FInner := AInner;
   FFailAt := AFailAt;
   FTotalAttempts := 0;

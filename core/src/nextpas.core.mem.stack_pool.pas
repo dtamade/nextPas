@@ -401,7 +401,7 @@ begin
   FBuffer := FBaseAllocator.GetMem(ASize);
   if FBuffer = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TStackPool.Create: failed to allocate stack buffer (' + IntToStr(Int64(ASize)) + ' bytes)');
+      FormatAllocErrorMsg('TStackPool', 'Create', 'failed to allocate stack buffer (' + IntToStr(Int64(ASize)) + ' bytes)'));
 end;
 
 destructor TStackPool.Destroy;

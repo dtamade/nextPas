@@ -14,13 +14,14 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.9** | R34 fs 同方法证据 + wine Capture + IFile ReadAt |
-| **规模 Scale (Essential)** | **9.8** | R29 递归 Watch + R23–R25 |
-| **综合** | **9.9** | Essential + 同方法 SCORECARD + wine Capture |
+| **质量 Quality** | **9.9** | Essential + 同方法 bench + 安全默认（U1/U2 MaxOutput） |
+| **规模 Scale (Essential)** | **9.8** | R29 递归 Watch + R23–R25 + Kind |
+| **可用性 Usability** | **9.4** | U2 后复评：Preferred + 三态 MaxOutput + 文档（复评 2026-07-21） |
+| **综合** | **9.9** | Essential 能力；可用性见 Usability 行 |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
-**证据文档**：[`SCORECARD.md`](./SCORECARD.md)（host-linux 数字 + wine-runtime-smoke 表）。
+**证据文档**：[`SCORECARD.md`](./SCORECARD.md)（host-linux + wine 25 + host-windows 首证 24）。
 
 ---
 
@@ -188,3 +189,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | **M3**：l2-windows-ci-matrix + core-ci host-windows；E3 Done |
 | 2026-07-20 | **U1**：Capture/Run 默认 64MiB MaxOutput；EProcessError.Cancelled；Preferred API 文档 |
 | 2026-07-20 | **U2**：builder 未设 MaxOutput→64MiB；Watch.Kind；test_process 133 |
+| 2026-07-21 | **U3**：README/PARITY 与 U2 对齐；可用性 9.4 记入评分卡 |
