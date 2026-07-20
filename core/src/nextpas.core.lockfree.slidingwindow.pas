@@ -90,10 +90,14 @@ end;
 procedure TSlidingWindowLimiter.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -108,7 +112,7 @@ end;
 
 procedure TSlidingWindowLimiter.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TSlidingWindowLimiter.AdvanceWindow(ANowNs: UInt64);
@@ -163,11 +167,11 @@ var
 begin
   if AN <= 0 then
     raise EArgumentError.Create('TSlidingWindowLimiter.TryAcquireN: N must be > 0');
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(swClosed);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(swClosed);
     if AN > FLimit then
       Exit(swRejected);
@@ -205,7 +209,7 @@ procedure TSlidingWindowLimiter.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -219,7 +223,7 @@ end;
 
 function TSlidingWindowLimiter.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

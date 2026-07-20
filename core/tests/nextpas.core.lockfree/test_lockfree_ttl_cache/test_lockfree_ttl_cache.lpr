@@ -157,7 +157,7 @@ begin
   LSource := TStringList.Create;
   try
     LSource.LoadFromFile('../../../src/nextpas.core.lockfree.ttl_cache.pas');
-    Check(Pos('AtomicLoad64(FDefaultTTL, moAcquire)', LSource.Text) > 0,
+    Check(Pos('atomic_load_64(FDefaultTTL, mo_acquire)', LSource.Text) > 0,
       'default TTL is read atomically');
     Check(Pos('ATTLMs > High(Int64) - ANow', LSource.Text) > 0,
       'expiration deadline addition is saturated');

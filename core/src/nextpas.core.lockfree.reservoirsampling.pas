@@ -96,7 +96,7 @@ begin
   inherited Create;
   FCapacity := ACapacity;
   FCount := 0;
-  LNonce := UInt64(AtomicFetchAdd64(FSeedCounter, 1, moRelaxed)) + 1;
+  LNonce := UInt64(atomic_fetch_add_64(FSeedCounter, 1, mo_relaxed)) + 1;
   FPRNG_S0 := MixSeed(LNonce xor UInt64(PtrUInt(Self)) xor UInt64(ACapacity));
   FPRNG_S1 := MixSeed(LNonce xor QWord($9E3779B97F4A7C15));
   if FPRNG_S0 = 0 then FPRNG_S0 := QWord($DEADBEEFCAFEBABE);
@@ -111,10 +111,14 @@ end;
 procedure TReservoirSamplerImpl.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -129,7 +133,7 @@ end;
 
 procedure TReservoirSamplerImpl.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TReservoirSamplerImpl.NextRandom: UInt64; inline;
@@ -163,11 +167,11 @@ var
   LIdx: Int64;
   LDraw: UInt64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(rsClosed);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(rsClosed);
     if FCount = High(Int64) then
       raise EOverflow.Create('TReservoirSampler: item count overflow');
@@ -250,7 +254,7 @@ procedure TReservoirSamplerImpl.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -264,7 +268,7 @@ end;
 
 function TReservoirSamplerImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

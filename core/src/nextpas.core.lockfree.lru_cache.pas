@@ -128,10 +128,14 @@ end;
 procedure TConcurrentLRUCache.AcquireLock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -146,7 +150,7 @@ end;
 
 procedure TConcurrentLRUCache.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentLRUCache.FindNode(const AKey: AnsiString): PLruNode;
