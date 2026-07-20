@@ -5,10 +5,12 @@ unit nextpas.core.collections.hashmap.swiss.str;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.mem,
+  nextpas.core.mem.error,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -93,13 +95,13 @@ begin
     FAllocator := DefaultAllocator;
   FCtrl := FAllocator.GetMem(LCtrlSize);
   if FCtrl = nil then
-    raise Exception.Create('TSwissTableStr.AllocTable: ctrl allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableStr.AllocTable: ctrl allocation failed');
   FSlots := FAllocator.GetMem(LSlotSize);
   if FSlots = nil then
   begin
     FreeMemOf(FAllocator, FCtrl, LCtrlSize);
     FCtrl := nil;
-    raise Exception.Create('TSwissTableStr.AllocTable: slots allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableStr.AllocTable: slots allocation failed');
   end;
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
   FillChar(FSlots^, LSlotSize, 0);
@@ -330,7 +332,7 @@ end;
 function TSwissTableStr.Get(const AKey: string): V;
 begin
   if not TryGetValue(AKey, Result) then
-    raise Exception.Create('TSwissTableStr.Get: key not found');
+    raise EInvalidOperation.Create('TSwissTableStr.Get: key not found');
 end;
 
 function TSwissTableStr.Remove(const AKey: string): Boolean;

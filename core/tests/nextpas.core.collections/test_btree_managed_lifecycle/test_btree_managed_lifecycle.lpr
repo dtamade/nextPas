@@ -4,8 +4,8 @@ program test_btree_managed_lifecycle;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.btree,
   leak_tracker;
 

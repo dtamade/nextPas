@@ -18,43 +18,11 @@ uses
 const
   DEFAULT_MAX_LOAD_FACTOR = nextpas.core.collections.hashmap.base.DEFAULT_MAX_LOAD_FACTOR;
 
-// Common hash helpers (callers can pass these as aHash)
-
-{**
- * HashMix32
- *
- * @desc Mixes a 32-bit hash value for better distribution
- * @param x Input hash value
- * @return UInt32 Mixed hash value
- *}
-function HashMix32(x: UInt32): UInt32;
-
-{**
- * HashOfPointer
- *
- * @desc Hash function for Pointer type
- * @param p Pointer to hash
- * @return UInt32 Hash value
- *}
-function HashOfPointer(p: Pointer): UInt32;
-
-{**
- * HashOfUInt32
- *
- * @desc Hash function for UInt32 type
- * @param x Value to hash
- * @return UInt32 Hash value
- *}
-function HashOfUInt32(x: UInt32): UInt32;
-
-{**
- * HashOfUInt64
- *
- * @desc Hash function for UInt64 type
- * @param x Value to hash
- * @return UInt32 Hash value
- *}
-function HashOfUInt64(x: QWord): UInt32;
+// Integer hash helpers: owned by hashmap.base; re-export for existing uses of this unit.
+function HashMix32(x: UInt32): UInt32; inline;
+function HashOfPointer(p: Pointer): UInt32; inline;
+function HashOfUInt32(x: UInt32): UInt32; inline;
+function HashOfUInt64(x: QWord): UInt32; inline;
 
 {**
  * HashOfAnsiString
@@ -277,33 +245,26 @@ uses
   nextpas.core.hash.wyhash,
   nextpas.core.mem;
 
-{ Hash helper functions }
+{ Hash helper re-exports (implementations in hashmap.base) }
 
 function HashMix32(x: UInt32): UInt32;
 begin
-  x := (x xor (x shr 16)) * $7feb352d;
-  x := (x xor (x shr 15)) * $846ca68b;
-  x := x xor (x shr 16);
-  Result := x;
+  Result := nextpas.core.collections.hashmap.base.HashMix32(x);
 end;
 
 function HashOfPointer(p: Pointer): UInt32;
 begin
-  Result := HashMix32(UInt32(PtrUInt(p)));
+  Result := nextpas.core.collections.hashmap.base.HashOfPointer(p);
 end;
 
 function HashOfUInt32(x: UInt32): UInt32;
 begin
-  Result := HashMix32(x);
+  Result := nextpas.core.collections.hashmap.base.HashOfUInt32(x);
 end;
 
 function HashOfUInt64(x: QWord): UInt32;
 begin
-  { SplitMix64 — better avalanche for integer keys than split+multiply }
-  Inc(x, QWord($9E3779B97F4A7C15));
-  x := (x xor (x shr 30)) * QWord($BF58476D1CE4E5B9);
-  x := (x xor (x shr 27)) * QWord($94D049BB133111EB);
-  Result := UInt32(x xor (x shr 32));
+  Result := nextpas.core.collections.hashmap.base.HashOfUInt64(x);
 end;
 
 function HashOfAnsiString(const s: AnsiString): UInt32;

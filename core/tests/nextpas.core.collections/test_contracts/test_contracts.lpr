@@ -3,7 +3,6 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.mem.intf,

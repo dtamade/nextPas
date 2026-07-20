@@ -3,9 +3,9 @@ program test_btreemap;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.btree;
 
 type

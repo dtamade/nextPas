@@ -19,6 +19,7 @@ uses
   nextpas.core.collections.arr,
   nextpas.core.collections.slice,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.default;
 
 function MemIsOverlap(aPtr1: Pointer; aSize1: SizeUInt; aPtr2: Pointer; aSize2: SizeUInt): Boolean; inline;
@@ -107,23 +108,23 @@ type
     procedure DoReverse; override;
   public
     constructor Create; reintroduce; overload;
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
-    constructor Create(aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
     constructor Create(aCapacity: SizeUInt); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); virtual; overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); virtual; overload;
 
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
-    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
     destructor  Destroy; override;
 
@@ -799,17 +800,17 @@ begin
 end;
 
 
-constructor TVec.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TVec.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(VEC_DEFAULT_CAPACITY, aAllocator, nil, aData);
 end;
 
-constructor TVec.Create(aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVec.Create(aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(VEC_DEFAULT_CAPACITY, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVec.Create(aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy;
+constructor TVec.Create(aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy;
   aData: Pointer);
 begin
   Create(VEC_DEFAULT_CAPACITY, aAllocator, aGrowStrategy, aData);
@@ -820,17 +821,17 @@ begin
   Create(aCapacity, DefaultAllocator(), nil, nil);
 end;
 
-constructor TVec.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TVec.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator);
 begin
   Create(aCapacity, aAllocator, nil, nil);
 end;
 
-constructor TVec.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVec.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aCapacity, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVec.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVec.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   inherited Create(aAllocator, aData);
   FGrowStrategy := aGrowStrategy;
@@ -839,34 +840,34 @@ begin
   SyncDataPtr;
 end;
 
-constructor TVec.Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVec.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVec.Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVec.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc);
 end;
 
-constructor TVec.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVec.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aCount, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVec.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVec.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc, aCount);
 end;
 
-constructor TVec.Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVec.Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVec.Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVec.Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc);
@@ -2449,14 +2450,14 @@ end;
 function TVec.First: T;
 begin
   if FCount = 0 then
-    raise EEmptyCollection.Create('TVec: collection is empty');
+    raise EEmptyCollection.Create('TVec.Pop/Peek: empty');
   Result := GetUnchecked(0);
 end;
 
 function TVec.Last: T;
 begin
   if FCount = 0 then
-    raise EEmptyCollection.Create('TVec: collection is empty');
+    raise EEmptyCollection.Create('TVec.Pop/Peek: empty');
   Result := GetUnchecked(FCount - 1);
 end;
 

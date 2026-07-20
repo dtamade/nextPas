@@ -247,8 +247,9 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 
 // ==== TreeMap / TreeSet (Ordered containers) ====
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize TCompareFunc<K> = nil; aAllocator: TMemAllocator = nil): specialize ITreeMap<K,V>;
-// 注意：MakeTreeSet 移除了 aCapacity 和 aCompare 参数，因为 TTreeSet 当前不支持这些参数
 generic function MakeTreeSet<T>(aAllocator: TMemAllocator = nil): specialize ITreeSet<T>;
+generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>;
+  aAllocator: TMemAllocator = nil; aCompareData: Pointer = nil): specialize ITreeSet<T>;
 generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
 generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: TMemAllocator = nil): specialize IRBTreeMap<K,V>;
 generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>;
@@ -873,6 +874,12 @@ begin
     Result := specialize TTreeSet<T>.Create(aAllocator)
   else
     Result := specialize TTreeSet<T>.Create;
+end;
+
+generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>;
+  aAllocator: TMemAllocator; aCompareData: Pointer): specialize ITreeSet<T>;
+begin
+  Result := specialize TTreeSet<T>.Create(aAllocator, aCompare, aCompareData);
 end;
 
 generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;

@@ -3,9 +3,10 @@ program test_swisstable_custom_callbacks;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.hashmap.swiss.adapter;
 
@@ -197,7 +198,7 @@ begin
     finally
     end;
   except
-    on E: EArgumentError do
+    on E: EInvalidArgument do
       LRaised := Pos('hash/equality callbacks', E.Message) > 0;
   end;
   Check(LRaised, 'hash callback without equality should fail closed');
@@ -210,7 +211,7 @@ begin
     finally
     end;
   except
-    on E: EArgumentError do
+    on E: EInvalidArgument do
       LRaised := Pos('hash/equality callbacks', E.Message) > 0;
   end;
   Check(LRaised, 'equality callback without hash should fail closed');

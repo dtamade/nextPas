@@ -94,7 +94,7 @@ ICollection                          非泛型根（Count / Clear / IsEmpty / Pt
 | LinkedHashMap | `ILinkedHashMap` | `linkedhashmap` | Swiss map + 链表序 | `MakeLinkedHashMap` |
 | LinkedHashSet | `ILinkedHashSet` | `linkedhashset` | LinkedHashMap 包装（插入序） | `MakeLinkedHashSet` |
 | TreeMap | `ITreeMap` | `treemap` | 红黑树 | `MakeTreeMap` |
-| TreeSet | `ITreeSet` | `tree_set` | 红黑集合 | `MakeTreeSet` |
+| TreeSet | `ITreeSet` | `tree_set` | 红黑集合；可选 `TCompareFunc` | `MakeTreeSet` / `MakeTreeSet(compare)` |
 | RBTreeMap | `IRBTreeMap` | `orderedmap.rb` | RB 有序适配 | `MakeRBTreeMap` |
 | BTreeMap / BTreeSet | `IBTreeMap` / `IBTreeSet` | `btree` | B-Tree | `MakeBTreeMap` / `MakeBTreeSet` |
 | SkipList | `ISkipList` | `skiplist` | 跳表 | `MakeSkipList` |
@@ -144,9 +144,11 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 
 ### 1.6 分配器
 
-- 公共类型：`TMemAllocator`（见 `ICollection.GetAllocator`）。
+- 公共类型：**`TMemAllocator`**（`= IAllocator` 类型别名，见 `mem.allocator.base` / `ICollection.GetAllocator`）。
+- 构造与工厂参数统一写 **`TMemAllocator`**，不在 collections 公共签名混用 `IAllocator` 标识符。
 - 工厂参数 `aAllocator: TMemAllocator = nil` 时走模块默认（与 mem 默认堆路径一致）。
 - 容器拥有内部 buffer / 节点；调用方拥有容器实例生命周期（接口引用计数或类 `Free` 按具体类型）。
+- 整数 `HashMix32` / `HashOfUInt*` 位于 **`hashmap.base`**（`hashmap` 单元 re-export）；LruCache 等只依赖 base，不耦合 OA 实现单元。
 
 ---
 
@@ -165,13 +167,18 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 
 ## 3. 错误处理
 
+文案与类型细节见 [`ERRORS.md`](ERRORS.md)。摘要：
+
 | 场景 | 异常 / 结果 |
 |------|-------------|
-| 下标越界 | `EOutOfRange`（或模块约定的范围异常） |
-| 空容器 checked Pop/Peek | 空集合类异常 |
-| 映射 checked Get 键缺失 | 查找/键异常 |
-| OOM | 分配失败路径 / `EOutOfMemory` |
+| 下标越界 | `EOutOfRange` |
+| 空容器 checked Pop/Peek | `EEmptyCollection`（`Type.Method: empty`） |
+| 映射 checked Get 键缺失 | `EInvalidOperation`（`…Get: key not found`） |
+| nil 必填参数 | `EArgumentNil` |
+| 非法参数 | `EInvalidArgument` |
+| OOM | `EOutOfMemory` |
 | 非并发容器跨线程写 | **未定义**（调用方同步） |
+| Swiss ↔ OA `AppendToUnchecked` | **不互通**；勿依赖静默跨实现 bulk 合并 |
 
 ---
 
@@ -247,3 +254,4 @@ make -C core/tests/nextpas.core.collections/test_vec clean test
 | 2026-07-20 | 1.3 | Wave 3：`THashSet` 内部 map 从 OA `THashMap` 切换为 `TSwissHashMap` |
 | 2026-07-20 | 1.4 | Phase D：MultiMap/MultiSet/LruCache 默认 Swiss；adapter 增加 `GetKeys` |
 | 2026-07-20 | 1.5 | Phase E：LinkedHashMap 双表 Swiss；插入序仍由链表维护 |
+| 2026-07-20 | 1.6 | 可用性 Wave：测试 RTL 隔离 + source-contract；MakeTreeSet(compare)；HashMix→base；TMemAllocator 统一；ERRORS.md；bench Makefile |

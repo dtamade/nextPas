@@ -3,9 +3,9 @@ program test_hashset;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.hashset.intf,
   nextpas.core.collections.hashset;
 

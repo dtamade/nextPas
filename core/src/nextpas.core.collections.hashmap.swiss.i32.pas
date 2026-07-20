@@ -5,10 +5,13 @@ unit nextpas.core.collections.hashmap.swiss.i32;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.mem,
+  nextpas.core.mem.error,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
@@ -34,7 +37,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
-    FAllocator: IAllocator;
+    FAllocator: TMemAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -43,7 +46,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
-    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
     destructor Destroy; override;
 
     function TryGetValue(AKey: Int32; out AValue: V): Boolean;
@@ -89,13 +92,13 @@ begin
     FAllocator := DefaultAllocator;
   FCtrl := FAllocator.GetMem(LCtrlSize);
   if FCtrl = nil then
-    raise Exception.Create('TSwissTableI32.AllocTable: ctrl allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableI32.AllocTable: ctrl allocation failed');
   FSlots := FAllocator.GetMem(LSlotSize);
   if FSlots = nil then
   begin
     FreeMemOf(FAllocator, FCtrl, LCtrlSize);
     FCtrl := nil;
-    raise Exception.Create('TSwissTableI32.AllocTable: slots allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableI32.AllocTable: slots allocation failed');
   end;
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
   FillChar(FSlots^, LSlotSize, 0);
@@ -189,7 +192,7 @@ begin
   end;
 end;
 
-constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
 begin
   inherited Create;
   FCtrl := nil; FSlots := nil;
@@ -324,7 +327,7 @@ end;
 function TSwissTableI32.Get(AKey: Int32): V;
 begin
   if not TryGetValue(AKey, Result) then
-    raise Exception.Create('TSwissTableI32.Get: key not found');
+    raise EInvalidOperation.Create('TSwissTableI32.Get: key not found');
 end;
 
 function TSwissTableI32.Remove(AKey: Int32): Boolean;

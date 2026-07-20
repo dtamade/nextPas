@@ -4,7 +4,6 @@ program test_concurrent_hashmap_managed_returns;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.concurrent.hashmap;
 

@@ -3,7 +3,6 @@ program test_skiplist;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.skiplist,
   leak_tracker;

@@ -191,7 +191,7 @@ end;
 function TPriorityQueue.Pop: T;
 begin
   if not TryPop(Result) then
-    raise EEmptyCollection.Create('TPriorityQueue.Pop: collection is empty');
+    raise EEmptyCollection.Create('TPriorityQueue.Pop: empty');
 end;
 
 function TPriorityQueue.TryPeek(out aItem: T): Boolean;
@@ -204,7 +204,7 @@ end;
 function TPriorityQueue.Peek: T;
 begin
   if not TryPeek(Result) then
-    raise EEmptyCollection.Create('TPriorityQueue.Peek: collection is empty');
+    raise EEmptyCollection.Create('TPriorityQueue.Peek: empty');
 end;
 
 function TPriorityQueue.GetCount: SizeUInt;

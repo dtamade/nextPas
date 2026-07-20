@@ -3,14 +3,42 @@ program test_treeset;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.collections,
   nextpas.core.collections.tree_set,
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.linkedhashset.intf;
+
+function FileReadable(const APath: string): Boolean;
+var
+  F: Text;
+begin
+  {$I-}
+  Assign(F, APath);
+  Reset(F);
+  Result := IOResult = 0;
+  if Result then
+    Close(F);
+  {$I+}
+end;
+
+function LoadTextFile(const APath: string): string;
+var
+  F: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(F, APath);
+  Reset(F);
+  while not Eof(F) do
+  begin
+    ReadLn(F, LLine);
+    Result := Result + LLine + #10;
+  end;
+  Close(F);
+end;
+
 
 type
   IIntTreeSet = specialize ITreeSet<Integer>;
@@ -28,6 +56,16 @@ begin
   SerializeToArrayBuffer(aDst, aCount);
 end;
 
+function ReverseIntCompare(const A, B: Integer; aData: Pointer): SizeInt;
+begin
+  if A > B then
+    Result := -1
+  else if A < B then
+    Result := 1
+  else
+    Result := 0;
+end;
+
 procedure TestTreeSetBasic;
 var
   LSet: IIntTreeSet;
@@ -40,6 +78,21 @@ begin
   CheckEqual(Int64(3), Int64(LSet.GetCount), 'count');
   Check(LSet.Contains(2), 'contains 2');
   Check(not LSet.Contains(5), 'not contains 5');
+end;
+
+procedure TestTreeSetCustomComparer;
+var
+  LSet: IIntTreeSet;
+  LVal: Integer;
+begin
+  LSet := specialize MakeTreeSet<Integer>(@ReverseIntCompare);
+  Check(LSet.Add(1), 'add 1');
+  Check(LSet.Add(3), 'add 3');
+  Check(LSet.Add(2), 'add 2');
+  Check(LSet.Min(LVal), 'min exists under reverse order');
+  CheckEqual(Int64(3), Int64(LVal), 'min is largest under reverse compare');
+  Check(LSet.Max(LVal), 'max exists under reverse order');
+  CheckEqual(Int64(1), Int64(LVal), 'max is smallest under reverse compare');
 end;
 
 procedure TestTreeSetRemove;
@@ -199,16 +252,11 @@ procedure TestRBTreeClearReleasesPoolWhenRootEmpty;
 const
   SourcePath = '../../../src/nextpas.core.collections.tree.rb.pas';
 var
-  Source: TStringList;
+  SourceText: string;
 begin
-  Source := TStringList.Create;
-  try
-    Source.LoadFromFile(SourcePath);
-    Check(Pos('if FRoot = @FSentinel then Exit;', Source.Text) = 0,
-      'RBTree Clear must release pool blocks even when root is empty');
-  finally
-    Source.Free;
-  end;
+  SourceText := LoadTextFile(SourcePath);
+  Check(Pos('if FRoot = @FSentinel then Exit;', SourceText) = 0,
+    'RBTree Clear must release pool blocks even when root is empty');
 end;
 
 procedure TestTreeSetSerializeRespectsCount;
@@ -267,6 +315,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.collections.treeset');
   T.Test('TreeSet basic add/contains', @TestTreeSetBasic);
+  T.Test('TreeSet custom comparer (reverse)', @TestTreeSetCustomComparer);
   T.Test('TreeSet remove', @TestTreeSetRemove);
   T.Test('TreeSet Min/Max', @TestTreeSetMinMax);
   T.Test('TreeSet empty boundary', @TestTreeSetEmptyBoundary);

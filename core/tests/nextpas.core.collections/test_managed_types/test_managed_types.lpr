@@ -3,9 +3,9 @@ program test_managed_types;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections,
   nextpas.core.collections.base,
   nextpas.core.collections.arr.intf,

@@ -168,7 +168,7 @@ end;
 function TArrayDeque.Pop: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.Pop: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.Pop: empty');
   Result := FDeque.PopFront;
 end;
 
@@ -183,7 +183,7 @@ end;
 function TArrayDeque.Peek: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.Peek: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.Peek: empty');
   Result := FDeque.Front;
 end;
 
@@ -207,7 +207,7 @@ end;
 function TArrayDeque.Front: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.Front: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.Front: empty');
   Result := FDeque.Front;
 end;
 
@@ -222,7 +222,7 @@ end;
 function TArrayDeque.Back: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.Back: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.Back: empty');
   Result := FDeque.Back;
 end;
 
@@ -267,7 +267,7 @@ end;
 function TArrayDeque.PopFront: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.PopFront: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.PopFront: empty');
   Result := FDeque.PopFront;
 end;
 
@@ -282,7 +282,7 @@ end;
 function TArrayDeque.PopBack: T;
 begin
   if FDeque.IsEmpty then
-    raise EEmptyCollection.Create('TArrayDeque.PopBack: collection is empty');
+    raise EEmptyCollection.Create('TArrayDeque.PopBack: empty');
   Result := FDeque.PopBack;
 end;
 

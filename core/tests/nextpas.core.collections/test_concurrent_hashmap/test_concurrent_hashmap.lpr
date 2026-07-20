@@ -4,8 +4,9 @@ program test_concurrent_hashmap;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
   nextpas.core.test,
+  nextpas.core.text.conv,
+  nextpas.core.platform.thread,
   nextpas.core.collections.concurrent.hashmap;
 
 type
@@ -114,52 +115,40 @@ begin
   finally M.Free; end;
 end;
 
-{ Multi-threaded stress test }
+{ Multi-threaded stress test (platform.thread — no FPC Classes/TThread) }
 
 var
   GMap: TIntConcMap;
 
 type
-  TWriterThread = class(TThread)
-  private FStart, FEnd: Integer;
-  protected procedure Execute; override;
-  public constructor Create(AStart, AEnd: Integer);
+  PRangeArg = ^TRangeArg;
+  TRangeArg = record
+    StartIdx: Integer;
+    EndIdx: Integer;
   end;
 
-  TReaderThread = class(TThread)
-  private FStart, FEnd, FHits: Integer;
-  protected procedure Execute; override;
-  public
-    constructor Create(AStart, AEnd: Integer);
-    property Hits: Integer read FHits;
-  end;
-
-constructor TWriterThread.Create(AStart, AEnd: Integer);
+function WriterProc(AArg: Pointer): Pointer; cdecl;
+var
+  LArg: PRangeArg;
+  i: Integer;
 begin
-  FStart := AStart; FEnd := AEnd;
-  FreeOnTerminate := False;
-  inherited Create(False);
+  LArg := PRangeArg(AArg);
+  for i := LArg^.StartIdx to LArg^.EndIdx do
+    GMap.Put(i, i * 2);
+  Result := nil;
 end;
 
-procedure TWriterThread.Execute;
-var i: Integer;
+function ReaderProc(AArg: Pointer): Pointer; cdecl;
+var
+  LArg: PRangeArg;
+  i, v, pass: Integer;
 begin
-  for i := FStart to FEnd do GMap.Put(i, i * 2);
-end;
-
-constructor TReaderThread.Create(AStart, AEnd: Integer);
-begin
-  FStart := AStart; FEnd := AEnd; FHits := 0;
-  FreeOnTerminate := False;
-  inherited Create(False);
-end;
-
-procedure TReaderThread.Execute;
-var i, v, pass: Integer;
-begin
+  LArg := PRangeArg(AArg);
   for pass := 1 to 5 do
-    for i := FStart to FEnd do
-      if GMap.TryGetValue(i, v) then Inc(FHits);
+    for i := LArg^.StartIdx to LArg^.EndIdx do
+      if GMap.TryGetValue(i, v) then
+        { hit count unused in assertions } ;
+  Result := nil;
 end;
 
 procedure TestMultiThreadStress;
@@ -169,29 +158,40 @@ const
   NUM_READERS = 4;
   PER_WRITER = NUM_ITEMS div NUM_WRITERS;
 var
-  Writers: array[0..NUM_WRITERS-1] of TWriterThread;
-  Readers: array[0..NUM_READERS-1] of TReaderThread;
+  WriterArgs: array[0..NUM_WRITERS-1] of TRangeArg;
+  ReaderArgs: array[0..NUM_READERS-1] of TRangeArg;
+  Writers: array[0..NUM_WRITERS-1] of TPlatformThreadRecord;
+  Readers: array[0..NUM_READERS-1] of TPlatformThreadRecord;
   i: Integer;
   ok: Boolean;
 begin
   GMap := TIntConcMap.Create(@HashInt, @EqInt);
   try
     for i := 0 to NUM_WRITERS - 1 do
-      Writers[i] := TWriterThread.Create(i * PER_WRITER, (i + 1) * PER_WRITER - 1);
+    begin
+      WriterArgs[i].StartIdx := i * PER_WRITER;
+      WriterArgs[i].EndIdx := (i + 1) * PER_WRITER - 1;
+      CheckEqual(Int64(0), Int64(platform_thread_spawn(Writers[i], @WriterProc, @WriterArgs[i])),
+        'spawn writer');
+    end;
     for i := 0 to NUM_READERS - 1 do
-      Readers[i] := TReaderThread.Create(0, NUM_ITEMS - 1);
+    begin
+      ReaderArgs[i].StartIdx := 0;
+      ReaderArgs[i].EndIdx := NUM_ITEMS - 1;
+      CheckEqual(Int64(0), Int64(platform_thread_spawn(Readers[i], @ReaderProc, @ReaderArgs[i])),
+        'spawn reader');
+    end;
 
-    for i := 0 to NUM_WRITERS - 1 do Writers[i].WaitFor;
-    for i := 0 to NUM_READERS - 1 do Readers[i].WaitFor;
+    for i := 0 to NUM_WRITERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_wait(Writers[i])), 'wait writer');
+    for i := 0 to NUM_READERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_wait(Readers[i])), 'wait reader');
 
     CheckEqual(Int64(NUM_ITEMS), Int64(GMap.Count), 'count');
     ok := True;
     for i := 0 to NUM_ITEMS - 1 do
       if not GMap.ContainsKey(i) then ok := False;
     Check(ok, 'all keys present');
-
-    for i := 0 to NUM_WRITERS - 1 do Writers[i].Free;
-    for i := 0 to NUM_READERS - 1 do Readers[i].Free;
   finally GMap.Free; end;
 end;
 
