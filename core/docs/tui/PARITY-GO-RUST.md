@@ -83,8 +83,9 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q11 | SC12–SC13 + bench layout/overlay + tier facade ≥12 | **Done** (`main@3a55fc4b6`+) |
 | Q12 | SC14–16 hsplit/resilience/diff bound + 质量矩阵 | **Done** (`main@3e783f6c0`+) |
 | Q13 | SC17–19 backend/resize/pct + examples multi-demo | **Done** (`main@31e3e6853`+) |
-| Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **本批** |
-| 后续 | facade **实施**晋升（scrollview/modal） | 待准入 |
+| Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **Done** (`main@3eb99d877`+) |
+| Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **本批** |
+| 后续 | facade **实施**晋升（scrollview/modal） | 待准入 / Maintenance |
 | 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
 | 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
 
@@ -94,11 +95,12 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 |------|----------------|--------------|
 | Buffer diff | 脏区扫描 / 不全量退化 | SC1–SC2, SC16；bench Diff* |
 | Input parse | CSI 正确 + 韧性 | SC3, SC6, SC10–11, SC15；`test_tui_input` |
-| Layout | 面积守恒 V/H / % / ratio | SC4, SC14, SC19, **SC22**；bench Layout* |
+| Layout | 面积守恒 V/H / % / ratio | SC4, SC14, SC19, SC22；bench Layout* |
 | Protocol | Kitty / focus / paste / truecolor | SC8, SC12–13；CONTRACT §5 |
 | Backend emit | DECSET 会话序列 | SC17；`test_tui_backend` |
-| SGR / truecolor emit | 38;2 RGB 序列 | **SC20**；`test_tui_ansi` |
-| DrawPatches | 相邻 cell 样式/光标复用 | **SC21** |
+| SGR emit | RGB + indexed FG/BG | SC20, **SC23**；`test_tui_ansi` |
+| DrawPatches | 复用 + 样式切换 | SC21, **SC24** |
+| Widget focus | Tab 循环 | **SC25**；`test_tui_focus` / integration |
 | Resize | 尺寸事件契约 | SC18 |
 | Wide text | CJK cell width | SC7 |
 | Overlay | transparent merge | SC9；bench OverlayMerge |
