@@ -157,13 +157,15 @@ type
 ```
 
 **Features**:
-- Unbounded MPSC queue
-- Segmented design (32 elements per segment)
-- EBR automatically reclaims old segments
-- Enqueue always succeeds (unbounded)
+- Unbounded **MPMC** segmented queue (production: `thread.pool` task nodes)
+- Segmented design (fixed segment capacity)
+- EBR reclaims old segments
+- Enqueue always succeeds until Close
 - TryEnqueue returns False after Close
-- TryDequeue may return False (empty queue)
-- Close does not affect reading of already-enqueued data
+- TryDequeue may return False (empty)
+- After Close, already-enqueued data remains readable
+- **Lifecycle: Close → join → Free** (teaching: `t1_segqueue_workers`)
+- Optional `TryEnqueueEx` / `TryDequeueEx` → `TLockFreeTryError`
 
 ---
 
@@ -501,6 +503,7 @@ type
 - Capacity automatically rounded up to power-of-two; **capacity=1 supported** with distinguishable full/empty (same empty/full sequence encoding as MPMC; R5)
 - Optional `TrySendEx` / `TryReceiveEx`: full→`lfteFull`, empty→`lfteEmpty`, closed→`lfteClosed`
 - `TryResize` dynamically adjusts capacity (spin-flag mechanism)
+- **Lifecycle: Close → join → Free** (teaching: `t1_close_join_free`)
 
 ---
 
@@ -617,22 +620,112 @@ end;
 
 ---
 
-## Stack / WorkStealingDeque (T1; see ZH for full surface)
+## Stack (nextpas.core.lockfree.stack)
 
-- `TLockFreeStack<T>` / `TWorkStealingDeque<T>`: optional `Try*Ex` → `TLockFreeTryError`
-  (`lfteNone` / `lfteFull` / `lfteEmpty` / `lfteClosed`). H2-1 Deque parity.
-- Deque: single-owner push/pop; multi-thief steal; Close blocks new push.
-- Full API text: Chinese [`api-reference.md`](api-reference.md).
+```pascal
+type
+  generic TLockFreeStack<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+  end;
+```
 
-## Bag / MultiMap (H3-2 Guarded production subset — **not** default facade)
+**Try\*Ex**: success→`lfteNone`; full→`lfteFull`; empty→`lfteEmpty`; closed→`lfteClosed`.
 
-| Type | Unit | Progress (honest) |
-|------|------|-------------------|
-| `TLockFreeBag<T>` | `nextpas.core.lockfree.bag` | lock-free MPMC sequence ring + wait path |
-| `TLockFreeMultiMap<K,V>` | `nextpas.core.lockfree.multimap` | **single spin lock** concurrent map (**not** lock-free) |
+---
 
-Direct `uses` only. Managed elements rejected. Close/lifecycle: CONTRACT §0.3.
-Full API: Chinese [`api-reference.md`](api-reference.md).
+## WorkStealingDeque (nextpas.core.lockfree.deque) — T1
+
+```pascal
+type
+  generic TWorkStealingDeque<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TrySteal(out AValue: T): Boolean;
+    function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**Features**:
+- Owner: `TryPush` / `TryPop` (LIFO end); thieves: `TrySteal` (FIFO end)
+- Bounded power-of-two; Close rejects new publish; already-enqueued may still pop/steal
+- Optional `Try*Ex` (H2-1): full/empty/closed as above
+
+**Not this type**: `lockfree.deque_lf` / `TLockFreeDeque` is **spin-lock** + `TDequeResult` — not lock-free / not wait-free; no `TLockFreeTryError` surface.
+
+---
+
+## Bag (nextpas.core.lockfree.bag)
+
+> **H3-2 production subset** (CONTRACT §0.3): **direct** `uses nextpas.core.lockfree.bag`; **not** on default T1 facade.  
+> **Progress**: bounded **lock-free MPMC sequence ring** + wait-address path.  
+> **Managed**: rejected. **Lifecycle**: Close → drain/join → Free (teaching: `t2_bag_close_join_free`).
+
+```pascal
+type
+  TLockFreeBagAddResult = (arAdded, arFull, arClosed);
+
+  generic TLockFreeBag<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryAdd(const AValue: T): TLockFreeBagAddResult;
+    function TryTake(out AValue: T): Boolean;
+    function AddWait(const AValue: T): Boolean;
+    function TakeWait(out AValue: T): Boolean;
+    function AddTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    function TakeTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function IsFull: Boolean;
+    function Capacity: PtrUInt;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+Duplicates allowed; FIFO. After Close, `TryAdd` → `arClosed`; already-added items remain takeable.
+
+---
+
+## MultiMap (nextpas.core.lockfree.multimap)
+
+> **H3-2 production subset** (CONTRACT §0.3): direct `uses`; **not** default facade.  
+> **Progress**: **single map spin lock** — **not** lock-free, **not** sharded.  
+> **Managed** keys/values rejected. Close → stop writers → read/cleanup → Free.
+
+```pascal
+type
+  TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
+
+  generic TLockFreeMultiMap<TKey, TValue> = class
+    constructor Create(const ACapacity: PtrUInt = 16);
+    function Add(const AKey: TKey; const AValue: TValue): TLockFreeMultiMapAddResult;
+    function Find(const AKey: TKey; out AValues: array of TValue): Integer;
+    function Contains(const AKey: TKey): Boolean;
+    function Remove(const AKey: TKey): Boolean;
+    function RemoveValue(const AKey: TKey; const AValue: TValue): Boolean;
+    procedure Clear;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+  end;
+```
+
+Further T2 surfaces (bloom, caches, sync helpers, graphs, …): Chinese [`api-reference.md`](api-reference.md). Naming honesty: [`CONTRACT.md`](CONTRACT.md) §0.
 
 ## Memory Order Reference
 

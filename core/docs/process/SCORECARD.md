@@ -1,6 +1,6 @@
 # process / fs / path / env — SCORECARD（证据快照）
 
-> **Host Essential Done** + **M2 Windows usable（wine）Done** + **M3 host-windows min-set CI gate Done**  
+> **Host Essential Done** + **M2 wine** + **M3 host-windows min-set** + **U1 可用性**  
 > （见 [ROADMAP.md](./ROADMAP.md) · [WIN.md](./WIN.md)）。
 
 **truth 标签**
@@ -19,9 +19,10 @@
 
 | 项 | 值 |
 |----|-----|
-| 日期 | 2026-07-20（M3） |
+| 日期 | 2026-07-20（U1） |
 | OS | Linux x86_64（host-linux / wine）；GHA windows-latest（host-windows） |
 | 工具 | FPC 3.3.1；Wine 可用；GHA FPC trunk win64 |
+| U1 | 便利层默认 MaxOutput 64MiB；`EProcessError.Cancelled`；test_process **130** |
 
 ---
 

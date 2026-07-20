@@ -220,3 +220,4 @@ Host + Win：仅 Maintenance（bug/安全）
 | 2026-07-20 | **M3**：`l2-windows-ci-matrix.sh` + core-ci Windows job；**E3 Done**（host-windows min-set） |
 | 2026-07-20 | **M3-ci**：L2 host-windows 步 `if: always()`，不因 platform 矩阵失败被 skip |
 | 2026-07-20 | **U1**：可用性收敛 — 便利 MaxOutput 64MiB、EProcessError.Cancelled、Preferred/决策树文档 |
+| 2026-07-20 | **U1-docs**：CONTRACT 核心表去重；SCORECARD 记 U1 |

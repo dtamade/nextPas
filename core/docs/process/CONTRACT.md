@@ -27,37 +27,22 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 |------|------|
 | `Command(APath): ICommand` | 创建命令构建器 |
 | `ProcessSucceeded(AOut): Boolean` | 非 TimedOut/OutputLimited/Cancelled 且 psExited 且 ExitCode=0 |
-| `Run` / `Capture*` 等便利缓冲 API | 默认 **MaxOutput=cProcessDefaultMaxOutput（64MiB）**（U1） |
-| `ICommand.Status: TProcessOutput` | 不捕获输出；**StdOut/StdErr 恒空**；含 TimedOut/Cancelled |
-| `ICommand.MaxOutput(ABytes)` | <=0 不限制；builder 默认 0；超限 OutputLimited |
-| `EProcessError.Cancelled` | 与 TimedOut/OutputLimited 并列的结构化标志（U1） |
-| `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出（不检查 exit） |
-| `RunChecked(APath, AArgs): TProcessOutput` | 同步执行，非成功退出抛 EProcessError |
-| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout（不检查 exit）；**stderr→null**（非 dual-pipe） |
-| `MustCapture(APath, AArgs): string` | 同步执行返回 stdout；非成功退出抛 EProcessError |
-| `LookPath(AName): string` | 在 PATH 中搜索可执行文件；含目录部分时校验可执行性 |
+| `cProcessDefaultMaxOutput` | **64 MiB**；缓冲型 free `Run*`/`Capture*` 默认 cap（U1） |
+| `Run` / `RunChecked` / `Capture*` / `MustCapture*` | 缓冲路径默认套 64MiB；不检查 exit 的见 Capture 系列 |
+| `LookPath` / `TryLookPath` / `Executable` | PATH / 本进程路径 |
 | `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置；EnvAdd 默认继承父环境（overlay） |
 | `ICommand.Spawn: IChild` | 异步启动子进程 |
-| `ICommand.Output: TProcessOutput` | 同步执行并捕获（含 TimedOut / OutputLimited） |
-| `ICommand.Status: TProcessOutput` | 同步执行，**不捕获输出**；含 `TimedOut`/`ExitCode`/`Status`（对齐 Rust `status()`） |
-| `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
-| `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
-| `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
-| `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
-| `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
-| `ICommand.CancelToken` | 取消令牌；Wait/Output/Status/WaitGraceful 路径 Kill 并置 `Cancelled`（无管道的 Wait 也会轮询） |
-| `ICommand.NewProcessGroup` | Unix setpgid(0,0)；**Win Job Object**（M2-W2） |
+| `ICommand.Output: TProcessOutput` | 同步捕获；含 TimedOut / OutputLimited / Cancelled |
+| `ICommand.Status: TProcessOutput` | **不捕获**；StdOut/StdErr **恒空**；含 TimedOut/Cancelled |
+| `ICommand.Timeout` / `MaxOutput` | MaxOutput：builder 默认 **0=无限**；<=0 不限制 |
+| `ICommand.MergeStderr` | stderr 与 stdout 共用写端；合并流在 StdOut |
+| `ICommand.ExtraFd` / `Credential` | Unix；Win fail-closed |
+| `ICommand.CancelToken` / `NewProcessGroup` | 取消；进程组 / Job |
+| `EProcessError` | ExitCode / TimedOut / OutputLimited / **Cancelled** |
+| `IChild.Wait` / `TryWait` / `WaitWithOutput` / `WaitGraceful` | 等待与排水 |
+| `IChild.Kill` / `Signal` / `KillTree` / `SignalTree` | 终止；Win Signal 有限 |
+| `IChild.Detach` / `TakeStdin/Stdout/Stderr` | 生命周期 / 流式管道 |
 | `IChild.ProcessGroupId` | 建组时 = Pid；否则 0 |
-| `IChild.KillTree` / `SignalTree` | Unix kill(-pgid)；**Win TerminateJobObject**；未建组等价 Kill/Signal |
-| `IChild.WaitGraceful` | 建组时先 `SignalTree(SIGTERM)`，超时 `KillTree`；未建组保持单进程 |
-| `IChild.Wait: TProcessOutput` | 阻塞等待 |
-| `IChild.TryWait: Boolean` | 非阻塞检查 |
-| `IChild.Kill` | 终止子进程（SIGKILL） |
-| `IChild.Signal(ASignal)` | 发送指定信号（如 SIGTERM=15） |
-| `IChild.Detach` | 放弃生命周期管理 |
-| `IChild.TakeStdin/Stdout/Stderr` | 取走管道（大输出流式路径） |
-| `IChild.WaitWithOutput: TProcessOutput` | 并发读取 + 等待（全内存缓冲） |
-| `IChild.WaitGraceful(AGrace)` | SIGTERM → grace 内 wait → 超时 Kill；TimedOut 表示走了 Kill |
 
 ---
 
