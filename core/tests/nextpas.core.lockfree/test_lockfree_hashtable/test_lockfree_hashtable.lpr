@@ -323,14 +323,14 @@ procedure ConcurrentInsertBarrier;
 var
   LGeneration: Int32;
 begin
-  LGeneration := AtomicLoad32(GBarrierGeneration, moAcquire);
-  if AtomicFetchAdd32(GBarrierCount, 1, moAcqRel) = CONCURRENT_INSERT_THREADS - 1 then
+  LGeneration := atomic_load(GBarrierGeneration, mo_acquire);
+  if atomic_fetch_add(GBarrierCount, 1, mo_acq_rel) = CONCURRENT_INSERT_THREADS - 1 then
   begin
-    AtomicStore32(GBarrierCount, 0, moRelease);
-    AtomicFetchAdd32(GBarrierGeneration, 1, moAcqRel);
+    atomic_store(GBarrierCount, 0, mo_release);
+    atomic_fetch_add(GBarrierGeneration, 1, mo_acq_rel);
   end
   else
-    while AtomicLoad32(GBarrierGeneration, moAcquire) = LGeneration do
+    while atomic_load(GBarrierGeneration, mo_acquire) = LGeneration do
       CpuPause;
 end;
 
@@ -345,9 +345,9 @@ begin
     ConcurrentInsertBarrier;
     LResult := GConcurrentTable.Insert(LKey, LKey);
     if LResult = htOk then
-      AtomicFetchAdd32(GConcurrentInsertOk, 1, moRelaxed)
+      atomic_fetch_add(GConcurrentInsertOk, 1, mo_relaxed)
     else if LResult <> htExists then
-      AtomicFetchAdd32(GConcurrentInsertErrors, 1, moRelaxed);
+      atomic_fetch_add(GConcurrentInsertErrors, 1, mo_relaxed);
     ConcurrentInsertBarrier;
   end;
 end;
@@ -393,19 +393,19 @@ var
   LValue: Integer;
 begin
   Result := nil;
-  while AtomicLoad32(GReadGrowStop, moAcquire) = 0 do
+  while atomic_load(GReadGrowStop, mo_acquire) = 0 do
   begin
     if not GReadGrowTable.Contains(1) then
-      AtomicFetchAdd32(GReadGrowErrors, 1, moRelaxed);
+      atomic_fetch_add(GReadGrowErrors, 1, mo_relaxed);
     if (GReadGrowTable.Find(1, LValue) <> htOk) or (LValue <> 1) then
-      AtomicFetchAdd32(GReadGrowErrors, 1, moRelaxed);
+      atomic_fetch_add(GReadGrowErrors, 1, mo_relaxed);
 
-    LPublishedKey := AtomicLoad32(GReadGrowPublishedKey, moAcquire);
+    LPublishedKey := atomic_load(GReadGrowPublishedKey, mo_acquire);
     if (LPublishedKey >= 2) and
        ((GReadGrowTable.Find(LPublishedKey, LValue) <> htOk) or
         (LValue <> LPublishedKey)) then
-      AtomicFetchAdd32(GReadGrowErrors, 1, moRelaxed);
-    AtomicFetchAdd32(GReadGrowChecks, 1, moRelaxed);
+      atomic_fetch_add(GReadGrowErrors, 1, mo_relaxed);
+    atomic_fetch_add(GReadGrowChecks, 1, mo_relaxed);
   end;
 end;
 
@@ -442,14 +442,14 @@ begin
     end;
 
     LSpinCount := 0;
-    while (AtomicLoad32(GReadGrowChecks, moAcquire) < LCreatedReaders) and
+    while (atomic_load(GReadGrowChecks, mo_acquire) < LCreatedReaders) and
           (LSpinCount < 1000000) do
     begin
       platform_thread_yield;
       Inc(LSpinCount);
     end;
     Check((LCreatedReaders = 0) or
-      (AtomicLoad32(GReadGrowChecks, moAcquire) >= LCreatedReaders),
+      (atomic_load(GReadGrowChecks, mo_acquire) >= LCreatedReaders),
       'reader-during-grow workers started');
 
     LWriterErrors := 0;
@@ -457,11 +457,11 @@ begin
     begin
       if GReadGrowTable.Insert(LKey, LKey) <> htOk then
         Inc(LWriterErrors);
-      AtomicStore32(GReadGrowPublishedKey, LKey, moRelease);
+      atomic_store(GReadGrowPublishedKey, LKey, mo_release);
       if (LKey and 63) = 0 then
         platform_thread_yield;
     end;
-    AtomicStore32(GReadGrowStop, 1, moRelease);
+    atomic_store(GReadGrowStop, 1, mo_release);
     for LIndex := 0 to LCreatedReaders - 1 do
     begin
       Check(platform_thread_join(LHandles[LIndex], LReturnValue) = 0,
@@ -470,14 +470,14 @@ begin
     end;
 
     Check(LWriterErrors = 0, 'all inserts succeed while readers observe growth');
-    Check(AtomicLoad32(GReadGrowChecks, moRelaxed) > 0,
+    Check(atomic_load(GReadGrowChecks, mo_relaxed) > 0,
       'reader-during-grow workers performed reads');
-    Check(AtomicLoad32(GReadGrowErrors, moRelaxed) = 0,
+    Check(atomic_load(GReadGrowErrors, mo_relaxed) = 0,
       'contains and find remain stable during growth');
     Check(GReadGrowTable.ApproxCount = CONCURRENT_READ_GROW_KEYS,
       'reader-during-grow table retains every key');
   finally
-    AtomicStore32(GReadGrowStop, 1, moRelease);
+    atomic_store(GReadGrowStop, 1, mo_release);
     for LIndex := LJoinedReaders to LCreatedReaders - 1 do
       platform_thread_join(LHandles[LIndex], LReturnValue);
     GReadGrowTable.Free;

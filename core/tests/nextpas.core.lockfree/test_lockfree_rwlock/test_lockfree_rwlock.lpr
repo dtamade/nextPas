@@ -22,10 +22,10 @@ var
   LArgs: PRwLockWriterArgs;
 begin
   LArgs := PRwLockWriterArgs(AData);
-  AtomicStore32(LArgs^.Started^, 1, moRelease);
+  atomic_store(LArgs^.Started^, 1, mo_release);
   if LArgs^.Lock.WriteLock then
   begin
-    AtomicStore32(LArgs^.Acquired^, 1, moRelease);
+    atomic_store(LArgs^.Acquired^, 1, mo_release);
     LArgs^.Lock.WriteUnlock;
   end;
   Result := 0;
@@ -135,7 +135,7 @@ begin
     LThread := BeginThread(@WriterThread, @LArgs);
 
     LSpin := 0;
-    while (AtomicLoad32(LStarted, moAcquire) = 0) and (LSpin < 1000000) do
+    while (atomic_load(LStarted, mo_acquire) = 0) and (LSpin < 1000000) do
     begin
       CpuPause;
       Inc(LSpin);
@@ -145,17 +145,17 @@ begin
       CpuPause;
 
     Check(not LRwLock.TryReadLock, 'New readers must not bypass a waiting writer');
-    CheckEqual(Int32(0), AtomicLoad32(LAcquired, moAcquire), 'Writer must still be pending while reader holds lock');
+    CheckEqual(Int32(0), atomic_load(LAcquired, mo_acquire), 'Writer must still be pending while reader holds lock');
 
     LRwLock.ReadUnlock;
 
     LSpin := 0;
-    while (AtomicLoad32(LAcquired, moAcquire) = 0) and (LSpin < 1000000) do
+    while (atomic_load(LAcquired, mo_acquire) = 0) and (LSpin < 1000000) do
     begin
       CpuPause;
       Inc(LSpin);
     end;
-    CheckEqual(Int32(1), AtomicLoad32(LAcquired, moAcquire), 'Writer should acquire once readers drain');
+    CheckEqual(Int32(1), atomic_load(LAcquired, mo_acquire), 'Writer should acquire once readers drain');
     WaitForThreadTerminate(LThread, 5000);
   finally
     LRwLock.Free;

@@ -24,7 +24,7 @@ var
 
 procedure SumTask(AUserData: Pointer);
 begin
-  AtomicFetchAdd64(GSum, Int64(PtrInt(AUserData)));
+  atomic_fetch_add_64(GSum, Int64(PtrInt(AUserData)));
 end;
 
 procedure TestBasicForkPop;
