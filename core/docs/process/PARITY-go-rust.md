@@ -43,8 +43,8 @@
 | Timeout | context/WaitDelay | — | Timeout | Done |
 | MaxOutput | — | — | MaxOutput | Done |
 | Graceful stop | WaitDelay | — | **WaitGraceful** | Done（R16 续） |
-| ExtraFiles | ExtraFiles | — | **ExtraFd** | Done（R21；Unix fd→3+） |
-| Credential/uid | SysProcAttr | CommandExt | **Credential** | Done（R21；Unix；Win UNSUPPORTED） |
+| ExtraFiles | ExtraFiles | — | **ExtraFd** | Done Unix；**Win UNSUPPORTED fail-closed**（M2-W3） |
+| Credential/uid | SysProcAttr | CommandExt | **Credential** | Done Unix；**Win UNSUPPORTED fail-closed**（M2-W3） |
 | Context cancel | context | — | **CancelToken** | Done（R21+R22；Wait/Output/Status/WaitGraceful） |
 
 ### fs
@@ -128,7 +128,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 | 项 | 性质 |
 |----|------|
-| ExtraFd / Credential Win | **M2-W3**；仍有限/UNSUPPORTED |
+| ExtraFd / Credential Win | **M2-W3 DONE**（明文 fail-closed） |
 | Win platform.watch Poll | **M2-W1 DONE**（S2 RDCW；Wine soft） |
 | 真 Windows host CI | **M3**；基础设施 |
 | Status/spawn 1.0× Go | **非目标**（收益递减） |
@@ -181,3 +181,4 @@ Win 能力用 **W1–W4**，不用 R35+。
 | 2026-07-20 | R32 IFsWatcher.Remove + platform_watch_remove；watch 13 |
 | 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |
 | 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
+| 2026-07-20 | **M2-W3**：ExtraFd/Credential Win 支持矩阵 + fail-closed |
