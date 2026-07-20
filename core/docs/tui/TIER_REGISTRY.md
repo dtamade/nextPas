@@ -134,3 +134,15 @@ The current full-only advanced widget families include:
 - `widget.toast`
 
 `full` is for migration and broad compatibility. It is not the target shape of the default public API.
+
+## Promotion gate (full → ext/core)
+
+Before promoting a full-only widget family:
+
+1. Suite density ≥16, focused run 0 leaks
+2. No hard dependency on experimental protocols
+3. Semantics stable across ≥1 quality wave; CONTRACT documents the surface
+4. Reject fixtures prove the symbol does not leak into the wrong tier
+5. Explicit product confirmation (candidates today: `scrollview`, `modal`)
+
+See `PARITY-GO-RUST.md` §5. Wave Q10 documents the gate; it does **not** perform promotion.
