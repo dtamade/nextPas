@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.net.base,
+  nextpas.core.net.errors,
   nextpas.core.net.intf,
   nextpas.core.net.cancel,
   nextpas.core.net.tcp,
@@ -23,6 +24,8 @@ uses
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
+  TNetErrorKind = nextpas.core.net.errors.TNetErrorKind;
+  TNetErrorClass = nextpas.core.net.errors.TNetErrorClass;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
@@ -69,6 +72,10 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
   const AAddrs: array of TNetAddress; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer = nil): Boolean; inline;
+
+{ Go-like error classification for dial/IO result codes (negative or positive). }
+function ClassifyNetError(ACode: Int32): TNetErrorClass; inline;
+function NetErrorKindName(AKind: TNetErrorKind): string; inline;
 
 implementation
 
@@ -137,6 +144,16 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
 begin
   Result := nextpas.core.net.async.dial.AsyncTcpDialAddrs(ALoop, AAddrs, APort,
     AOptions, ACallback, AContext);
+end;
+
+function ClassifyNetError(ACode: Int32): TNetErrorClass;
+begin
+  Result := nextpas.core.net.errors.ClassifyNetError(ACode);
+end;
+
+function NetErrorKindName(AKind: TNetErrorKind): string;
+begin
+  Result := nextpas.core.net.errors.NetErrorKindName(AKind);
 end;
 
 end.
