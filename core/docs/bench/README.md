@@ -24,6 +24,9 @@ make bench-scorecard-smoke
 # 子集脚本（可 --tracks a,b 或 --summary）
 bash core/docs/bench/scripts/run-scorecard-subset.sh --list
 bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
+
+# checklist 模块样例（产物进 core/build/projects/...，JSON 在工程目录 build/）
+make -C core/benchmarks/nextpas.core.hash/bench_hash run
 ```
 
 ## 模块结构
