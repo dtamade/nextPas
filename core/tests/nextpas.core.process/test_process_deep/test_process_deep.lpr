@@ -462,6 +462,39 @@ begin
   Check(LOut.Status <> psRunning, 'KillTree without group kills process');
 end;
 
+procedure TestWaitGracefulWithProcessGroup;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LMarker: string;
+  I: Integer;
+  LExists: Boolean;
+begin
+  LMarker := '/tmp/nextpas_r26_wg_' + IntToStr(platform_getpid) + '.alive';
+  if Exists(LMarker) then
+    Remove(LMarker);
+  LChild := Command('/bin/sh')
+    .Args(['-c',
+      'trap "" TERM; sleep 60 & echo $! > "' + LMarker + '"; wait'])
+    .NewProcessGroup
+    .Spawn;
+  LExists := False;
+  for I := 1 to 50 do
+  begin
+    if Exists(LMarker) then
+    begin
+      LExists := True;
+      Break;
+    end;
+    platform_thread_sleep_ns(20000000);
+  end;
+  Check(LExists, 'grandchild marker for WaitGraceful+group');
+  { Short grace → KillTree path after TERM ignored by shell trap }
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(100));
+  Check(LOut.Status <> psRunning, 'WaitGraceful+group terminated');
+  Check(LOut.TimedOut, 'WaitGraceful+group TimedOut after KillTree');
+end;
+
 { --- Main --- }
 
 begin
@@ -492,5 +525,6 @@ begin
   T.Test('R22 MergeStderr MaxOutput', @TestMergeStderrMaxOutput);
   T.Test('R24 NewProcessGroup KillTree', @TestNewProcessGroupKillTree);
   T.Test('R24 KillTree without group', @TestKillTreeWithoutGroup);
+  T.Test('R26 WaitGraceful+ProcessGroup', @TestWaitGracefulWithProcessGroup);
   if not T.Run then Halt(1);
 end.

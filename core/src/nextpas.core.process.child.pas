@@ -639,6 +639,7 @@ end;
 function TChild.WaitGraceful(const AGrace: TDuration): TProcessOutput;
 const
   SIGTERM = 15;
+  SIGKILL = 9;
 var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
@@ -653,7 +654,11 @@ begin
 
   LTimedOut := False;
   LCancelled := False;
-  Signal(SIGTERM);
+  { Process group: signal whole tree so grandchildren exit with the leader. }
+  if FNewProcessGroup then
+    SignalTree(SIGTERM)
+  else
+    Signal(SIGTERM);
   if AGrace.IsZero or AGrace.IsNegative then
     LDeadline := TInstant.Now
   else
@@ -664,7 +669,10 @@ begin
     if CancelRequested then
     begin
       LCancelled := True;
-      LErr := platform_process_kill(FProc);
+      if FNewProcessGroup then
+        LErr := platform_process_kill_group(platform_process_pid(FProc), SIGKILL)
+      else
+        LErr := platform_process_kill(FProc);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_kill', LErr);
       LErr := platform_process_wait(FProc, LResult);
@@ -680,7 +688,10 @@ begin
     if TInstant.Now.DurationSince(LDeadline).IsPositive then
     begin
       LTimedOut := True;
-      LErr := platform_process_kill(FProc);
+      if FNewProcessGroup then
+        LErr := platform_process_kill_group(platform_process_pid(FProc), SIGKILL)
+      else
+        LErr := platform_process_kill(FProc);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_kill', LErr);
       LErr := platform_process_wait(FProc, LResult);

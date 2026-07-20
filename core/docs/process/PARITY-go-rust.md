@@ -14,7 +14,7 @@
 |------|-----------|------|
 | **质量 Quality** | **9.5** | R22 hardening 保持 |
 | **规模 Scale (Essential)** | **9.7** | R23 lock + R24 process group + R25 watch |
-| **综合** | **9.7** | 能力闭环 + L2 wine 四套件 + SCORECARD |
+| **综合** | **9.7** | 能力闭环 + wine×5 + SCORECARD Go 对照 |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
@@ -124,26 +124,26 @@
 
 | 项 | 性质 |
 |----|------|
-| FsLock / fs.watch / 进程组 | ~~FsLock~~ **R23 已落地**；watch / 进程组仍 Deferred |
-| Win ExtraFd / Credential | 文档 UNSUPPORTED |
-| test_process 迁 `nextpas.core.test` | P3 框架债 |
+| Win Job Object / ExtraFd / Credential 完整化 | 文档 UNSUPPORTED；非阻塞 |
+| test_process 迁 `nextpas.core.test` | P3 框架债（R27 候选） |
 | 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
+| 递归 fs.watch | 单 path 已够；递归另开 |
 
-### 外部债
+### 外部债 / 证据
 
-- **wine-runtime-smoke**（2026-07-20）：  
-  - process **6** / fs **2** / path **3** / os.env **2** 全绿 under Wine  
-  - 命令见 SCORECARD；≠ 真 Windows host
+- **wine-runtime-smoke**（2026-07-20 R26）：  
+  - process **7** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
+  - 详见 [`SCORECARD.md`](./SCORECARD.md)
 
 ---
 
 ## 维护策略（口径）
 
-**状态：Ready（lane）。** R24-PG + R25 watch 已在 `process-fs-path-env`；wine L2 扩面仍可续。
+**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + Watch + wine×5 + SCORECARD。
 
 **周报：**
 
-> process/fs/path/env：R24 进程组 + KillTree；R25 IFsWatcher；Scale 9.7。待合 main；wine 扩面未完成可下一刀。
+> process/fs/path/env：维护态。R26 WaitGraceful×组 + wine 加厚 + SCORECARD Go 对照；综合 ~9.7。
 
 ---
 

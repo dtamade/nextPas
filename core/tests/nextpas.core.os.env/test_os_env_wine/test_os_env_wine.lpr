@@ -25,6 +25,17 @@ begin
   Check(L <> '', 'SystemRoot or PATH non-empty');
 end;
 
+
+procedure TestExpandBrace;
+begin
+  SetEnv('NEXTPAS_WINE_BR', 'brace');
+  try
+    CheckEqual('x-brace-y', ExpandEnv('x-${NEXTPAS_WINE_BR}-y'), 'brace expand');
+  finally
+    UnsetEnv('NEXTPAS_WINE_BR');
+  end;
+end;
+
 procedure TestSetUnsetExpand;
 var
   LName: string;
@@ -54,6 +65,7 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('getenv path/systemroot', @TestGetEnvPathOrSystemRoot);
   T.Test('set unset expand', @TestSetUnsetExpand);
+  T.Test('expand brace', @TestExpandBrace);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}
