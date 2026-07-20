@@ -1,8 +1,8 @@
 program bench_http_server;
 {**
- * @desc HTTP server multi-client keep-alive QPS benchmark (comparison harness).
+ * @desc HTTP server multi-client keep-alive QPS + client latency benchmark.
  *       CLI-compatible with run_server_comparison.sh / Go / Rust rows.
- *       Restored after erroneous single-conn TBenchSuite migration.
+ *       L1: emits p50_ns / p99_ns / mean_ns (client-observed).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -38,11 +38,19 @@ const
   RESPONSE_1K_LEN = 1024;
   RESPONSE_1K_LEN_TEXT = '1024';
 
+type
+  PClientCtx = ^TClientCtx;
+  TClientCtx = record
+    Requests: Int32;
+    Samples: array of UInt64;
+    SampleCount: Int32;
+    Success: Int32;
+  end;
+
 var
   GServer: THttpServer;
   GPort: UInt16;
   GDone: Int32;
-  GSuccess: Int32;
   GRequests: Int32;
   GRequestedThreads: Int32;
   GThreads: Int32;
@@ -114,13 +122,14 @@ end;
 
 function ClientThread(AParam: Pointer): Pointer; cdecl;
 var
+  LCtx: PClientCtx;
   LI: Int32;
-  LRequests: Int32;
   LConn: ITcpStream;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LTotal: SizeUInt;
   LExpectedBodyLen: SizeUInt;
+  LT0, LT1: UInt64;
 const
   REQ_NO_URL: AnsiString =
     'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
@@ -131,7 +140,10 @@ const
     'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
-  LRequests := Int32(PtrUInt(AParam));
+  LCtx := PClientCtx(AParam);
+  LCtx^.Success := 0;
+  LCtx^.SampleCount := 0;
+  SetLength(LCtx^.Samples, LCtx^.Requests);
   if GWorkload = WORKLOAD_RESPONSE_1K then
     LExpectedBodyLen := RESPONSE_1K_LEN
   else
@@ -140,8 +152,9 @@ begin
     LConn := TcpConnect('127.0.0.1', GPort);
     LConn.SetNoDelay(True);
     LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
-    for LI := 1 to LRequests do
+    for LI := 1 to LCtx^.Requests do
     begin
+      LT0 := platform_monotonic_ns;
       if GWorkload = WORKLOAD_URL_PATH then
         LConn.Write(PAnsiChar(REQ_URL_PATH)^, Length(REQ_URL_PATH))
       else if GWorkload = WORKLOAD_ADAPTER_NO_URL then
@@ -160,7 +173,13 @@ begin
       until ResponseComplete(LBuf, LTotal, LExpectedBodyLen);
       if not ResponseComplete(LBuf, LTotal, LExpectedBodyLen) then
         Break;
-      InterlockedIncrement(GSuccess);
+      LT1 := platform_monotonic_ns;
+      if LT1 >= LT0 then
+      begin
+        LCtx^.Samples[LCtx^.SampleCount] := LT1 - LT0;
+        Inc(LCtx^.SampleCount);
+      end;
+      Inc(LCtx^.Success);
     end;
     LConn.Close;
   except
@@ -238,11 +257,58 @@ begin
   Result := SMALL_RESPONSE_LEN;
 end;
 
+procedure SortUInt64(var A: array of UInt64; ALeft, ARight: Integer);
+var
+  LI, LJ: Integer;
+  LPivot, LTmp: UInt64;
+begin
+  LI := ALeft;
+  LJ := ARight;
+  LPivot := A[(ALeft + ARight) div 2];
+  repeat
+    while A[LI] < LPivot do
+      Inc(LI);
+    while A[LJ] > LPivot do
+      Dec(LJ);
+    if LI <= LJ then
+    begin
+      LTmp := A[LI];
+      A[LI] := A[LJ];
+      A[LJ] := LTmp;
+      Inc(LI);
+      Dec(LJ);
+    end;
+  until LI > LJ;
+  if ALeft < LJ then
+    SortUInt64(A, ALeft, LJ);
+  if LI < ARight then
+    SortUInt64(A, LI, ARight);
+end;
+
+function PercentileNs(var ASamples: array of UInt64; const ACount: Integer;
+  const APct: Integer): UInt64;
+var
+  LIdx: Integer;
+begin
+  if ACount <= 0 then
+    Exit(0);
+  if ACount = 1 then
+    Exit(ASamples[0]);
+  { nearest-rank: index = ceil(pct/100 * N) - 1, clamped }
+  LIdx := (APct * ACount + 99) div 100 - 1;
+  if LIdx < 0 then
+    LIdx := 0;
+  if LIdx >= ACount then
+    LIdx := ACount - 1;
+  Result := ASamples[LIdx];
+end;
+
 var
   LHandle: TPlatformThreadHandle;
   LHandles: array of TPlatformThreadHandle;
+  LCtxs: array of TClientCtx;
   LServerOptions: THttpServerOptions;
-  LI: Int32;
+  LI, LJ: Int32;
   LThreadRequests: Int32;
   LStart, LEnd: UInt64;
   LElapsedNs: UInt64;
@@ -250,6 +316,11 @@ var
   LNsPerOp: Double;
   LRet: Pointer;
   LReadyStart: UInt64;
+  LAllSamples: array of UInt64;
+  LSampleTotal: Integer;
+  LSuccess: Int32;
+  LSum: UInt64;
+  LP50, LP99, LMean: UInt64;
 
 begin
   ParseOptions;
@@ -259,7 +330,6 @@ begin
     FillChar(GResponseBody1K[1], RESPONSE_1K_LEN, Byte('x'));
   end;
   GDone := 0;
-  GSuccess := 0;
 
   LServerOptions := THttpServerOptions.Default;
   LServerOptions.Backend := GBackend;
@@ -308,12 +378,16 @@ begin
   LStart := platform_monotonic_ns;
 
   SetLength(LHandles, GThreads);
+  SetLength(LCtxs, GThreads);
   for LI := 0 to GThreads - 1 do
   begin
     LThreadRequests := GRequests div GThreads;
     if LI < (GRequests mod GThreads) then
       Inc(LThreadRequests);
-    platform_thread_create(LHandles[LI], @ClientThread, Pointer(PtrInt(LThreadRequests)));
+    LCtxs[LI].Requests := LThreadRequests;
+    LCtxs[LI].SampleCount := 0;
+    LCtxs[LI].Success := 0;
+    platform_thread_create(LHandles[LI], @ClientThread, @LCtxs[LI]);
   end;
 
   while InterlockedCompareExchange(GDone, 0, 0) < GThreads do
@@ -325,18 +399,52 @@ begin
   LEnd := platform_monotonic_ns;
   LElapsedNs := LEnd - LStart;
 
+  LSuccess := 0;
+  LSampleTotal := 0;
+  for LI := 0 to GThreads - 1 do
+  begin
+    Inc(LSuccess, LCtxs[LI].Success);
+    Inc(LSampleTotal, LCtxs[LI].SampleCount);
+  end;
+
+  SetLength(LAllSamples, LSampleTotal);
+  LJ := 0;
+  LSum := 0;
+  for LI := 0 to GThreads - 1 do
+  begin
+    for LThreadRequests := 0 to LCtxs[LI].SampleCount - 1 do
+    begin
+      LAllSamples[LJ] := LCtxs[LI].Samples[LThreadRequests];
+      Inc(LSum, LAllSamples[LJ]);
+      Inc(LJ);
+    end;
+  end;
+
+  LP50 := 0;
+  LP99 := 0;
+  LMean := 0;
+  if LSampleTotal > 0 then
+  begin
+    SortUInt64(LAllSamples, 0, LSampleTotal - 1);
+    LP50 := PercentileNs(LAllSamples, LSampleTotal, 50);
+    LP99 := PercentileNs(LAllSamples, LSampleTotal, 99);
+    LMean := LSum div UInt64(LSampleTotal);
+  end;
+
   if LElapsedNs > 0 then
-    LReqPerSec := (GSuccess / (LElapsedNs / 1000000000.0))
+    LReqPerSec := (LSuccess / (LElapsedNs / 1000000000.0))
   else
     LReqPerSec := 0.0;
-  if GSuccess > 0 then
-    LNsPerOp := LElapsedNs / GSuccess
+  if LSuccess > 0 then
+    LNsPerOp := LElapsedNs / LSuccess
   else
     LNsPerOp := 0.0;
 
-  WriteLn('  Completed: ', GSuccess, ' / ', GRequests);
+  WriteLn('  Completed: ', LSuccess, ' / ', GRequests);
   WriteLn('  Elapsed:   ', LElapsedNs div 1000000, ' ms');
   WriteLn('  Req/s:     ', Trunc(LReqPerSec));
+  WriteLn('  p50_ns:    ', LP50);
+  WriteLn('  p99_ns:    ', LP99);
   WriteLn;
   WriteLn('operation=http.server.keepalive');
   WriteLn('workload=', GWorkload);
@@ -349,10 +457,14 @@ begin
   WriteLn('requested_threads=', GRequestedThreads);
   WriteLn('effective_threads=', GThreads);
   WriteLn('threads=', GThreads);
-  WriteLn('completed=', GSuccess);
+  WriteLn('completed=', LSuccess);
   WriteLn('elapsed_ns=', LElapsedNs);
   WriteLn('ns/op=', Trunc(LNsPerOp));
   WriteLn('req/s=', Trunc(LReqPerSec));
+  WriteLn('latency_samples=', LSampleTotal);
+  WriteLn('p50_ns=', LP50);
+  WriteLn('p99_ns=', LP99);
+  WriteLn('mean_ns=', LMean);
   WriteLn;
 
   GServer.Shutdown;

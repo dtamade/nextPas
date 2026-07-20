@@ -130,7 +130,8 @@ completion wake for short keep-alive requests. Tests that assert handoff set
    `response_1k` **1.93× Go** (both ≥ 0.80).
 3. threaded remains characterization (~3.6× Go); not the scale KPI backend.
 4. Rust `std_only` is reference only.
-5. **p99 not instrumented** — harness emits `req/s` / `ns/op` only; do not invent latency.
+5. **L1 latency** — nextPas multi-conn harness now emits client-observed `p50_ns` /
+   `p99_ns` / `mean_ns` (see § L1). Go/Rust rows still QPS-only unless extended.
 6. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
 
 #### Q2-3 Scale-ready verdict (2026-07-19)
@@ -140,7 +141,7 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 | Enter parity zone (epoll H1) | **Met** | ratio ≥ 0.50 (Q2-1 medians ≫ 0.50) |
 | Scale-ready RPS (epoll H1 `no_url`) | **Met** | Q2-1 median **2.20×** Go (≥ 0.80) |
 | Scale-ready RPS (epoll H1 `response_1k`) | **Met** | Q2-1 median **1.93×** Go |
-| Scale-ready p99 ≤ 2× Go | **Not instrumented** | no latency/p99 in harness |
+| Scale-ready p99 ≤ 2× Go | **Partial** | L1: nextPas p50/p99 live; Go comparator row not yet instrumented |
 | Connection ladder 1k / 10k idle | **Met** | S1-3 `bench_conn_ladder` |
 | **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder Met; p99 residual |
 | Scale-ready (H1/**H2** server, Linux) | **No** | S3 H2 server scale open |
@@ -195,6 +196,27 @@ to llhttp for:
 source-contract. No change to official multi-conn QPS KPI shape (`no_url` is
 still zero-body).
 
+#### S2-3 Profiled hotspot evidence (user-space substitute)
+
+**Environment residual**: this worktree host has `perf_event_paranoid=3` — kernel
+`perf record/stat` is unavailable without elevated privileges. S2-3 therefore
+**does not** ship a flamegraph. Evidence is the combination of:
+
+1. **Allocation map** (S2-1 table above) — hotspot hypotheses on the keep-alive path.
+2. **Targeted code changes with before/after characterization**:
+   - S2-1 outbound free-list: ~47.8k → ~49–52k req/s (50k×4 epoll `no_url`, noisy).
+   - S2-2 fixed-body fast path: POST body no longer forced through llhttp when
+     fully buffered (≤64 KiB); correctness gates green.
+3. **Source contracts** locking acquire/release and `FAST_PATH_MAX_BODY` gates.
+
+| Hypothesis | Intervention | Status |
+| ---------- | ------------ | ------ |
+| Per-request `NewH1OutboundBuffer` | S2-1 free-list depth 2 | landed |
+| Body → llhttp always | S2-2 snapshot body ≤64KiB | landed |
+| Request/writer object alloc | residual (future) | open |
+
+**Not claimed**: kernel-level attribution, or a new multi-conn RPS KPI row (still Q2-1).
+
 #### S1-3 Connection ladder (idle keep-alive hold — not RPS)
 
 Harness: `benchmarks/nextpas.core.http/bench_conn_ladder/`
@@ -230,6 +252,45 @@ tops out near ~500 concurrent holds; raise soft (≤ hard) for 1k/10k. Bench set
 `IdleTimeout = hold_ms + 60s` so hold does not false-fail on Default 30s idle.
 
 **Not a Go connection leaderboard** — stability + failure-mode evidence only.
+
+#### L1 Client-observed latency (multi-conn harness)
+
+`bench_http_server` times each keep-alive request (write start → response complete)
+on the client threads, then reports nearest-rank percentiles.
+
+```sh
+./build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 20000 --threads 4 --workload no_url --backend epoll
+```
+
+| Date | Workload | Backend | req/s | p50_ns | p99_ns | mean_ns | samples |
+| ---- | -------- | ------- | ----: | -----: | -----: | ------: | ------: |
+| 2026-07-20 L1 | `no_url` 20k×4 | epoll | 47640 | 58418 | 178376 | 78501 | 20000 |
+
+Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`. **nextPas only** in
+comparison harness for now (Go/Rust residual). Not a cross-machine ranking.
+
+#### S3-1 H2 server scale baseline
+
+Harness: `benchmarks/nextpas.core.http/bench_h2_server/`
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h2_server smoke
+# default: 4 conn × 4 streams/batch × 100 batches = 1600 GETs (H2 cleartext prior-knowledge)
+```
+
+| Date | shape | completed | fail | req/s | stable | Note |
+| ---- | ----- | --------: | ---: | ----: | -----: | ---- |
+| 2026-07-20 S3-1 | 4×4×100 | 1600 | 0 | **90** | **1** | sequential facade GETs; not multiplex concurrent |
+
+**Honest residuals**
+
+- Throughput is **orders below H1** on this path (facade sequential Get, not
+  `RoundTripMany` concurrent streams) — baseline existence, not H2 scale claim.
+- No Go H2 same-harness row yet.
+- A1 production edges (GOAWAY / MaxConcurrent / RoundTripMany) remain the
+  correctness reference; S3-2 should add concurrent multiplex + epoll backend row.
+- **Not** Scale-ready (H1/H2).
 
 #### Interim single-connection characterization (not scale KPI)
 
