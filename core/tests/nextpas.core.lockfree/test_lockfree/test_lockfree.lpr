@@ -6011,6 +6011,31 @@ begin
   end;
 end;
 
+procedure TestMsQueueTryExDiagnostics;
+var
+  LQ: specialize TLockFreeMsQueue<Integer>;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(16);
+  try
+    Check(LQ.TryEnqueueEx(101, LErr), 'MSQueue TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MSQueue success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MSQueue TryDequeueEx success');
+    CheckEqual(101, LV, 'MSQueue TryDequeueEx value');
+    Check(LErr = lfteNone, 'MSQueue dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MSQueue empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MSQueue empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(102, LErr), 'MSQueue closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MSQueue closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MSQueue closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MSQueue closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7680,6 +7705,7 @@ begin
   T.Test('MPSC Try*Ex diagnostics', @TestMpscTryExDiagnostics);
   T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
   T.Test('Deque Try*Ex diagnostics', @TestDequeTryExDiagnostics);
+  T.Test('MSQueue Try*Ex diagnostics', @TestMsQueueTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

@@ -65,8 +65,12 @@ type
 
     {** 入队（无界队列，自动扩容） }
     function TryEnqueue(const AValue: T): Boolean;
+    {** 入队 + 诊断码（H2-1 / A1）。无界：失败 publish 在正常路径上为 lfteClosed。 }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** 出队 }
     function TryDequeue(out AValue: T): Boolean;
+    {** 出队 + 诊断码。空且未 closed → lfteEmpty；closed 且空 → lfteClosed。 }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** 关闭队列 }
     procedure Close;
@@ -313,6 +317,21 @@ begin
   end;
 end;
 
+function TLockFreeMsQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Unbounded: False is closed under ClosedPublishPolicy (CONTRACT §1.3/§1.4). }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TLockFreeMsQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LHeadIdx, LTailIdx, LNextIdx: Int32;
@@ -367,6 +386,20 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeMsQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeMsQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
