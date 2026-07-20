@@ -119,6 +119,7 @@ function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
 ```bash
 make focused FOCUS=core/tests/nextpas.core.toml/test_toml_facade_surface
 make focused FOCUS=core/tests/nextpas.core.toml/test_toml_compliance
+make -C core/examples/nextpas.core.toml/toml_smoke run
 ```
 
 套件含 facade、parser、writer、value、roundtrip、compliance、defensive、fuzz、property、stress、robustness 等。

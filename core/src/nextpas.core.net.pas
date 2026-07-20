@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.net.base,
+  nextpas.core.net.errors,
   nextpas.core.net.intf,
   nextpas.core.net.cancel,
   nextpas.core.net.tcp,
@@ -18,11 +19,15 @@ uses
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.resolve,
   nextpas.core.net.async.dial,
+  nextpas.core.net.async.cancel,
   nextpas.core.net.async.backpressure,
-  nextpas.core.async.loop;
+  nextpas.core.async.loop,
+  nextpas.core.async.cancellation;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
+  TNetErrorKind = nextpas.core.net.errors.TNetErrorKind;
+  TNetErrorClass = nextpas.core.net.errors.TNetErrorClass;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
@@ -69,6 +74,16 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
   const AAddrs: array of TNetAddress; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer = nil): Boolean; inline;
+
+{ Go-like error classification for dial/IO result codes (negative or positive). }
+function ClassifyNetError(ACode: Int32): TNetErrorClass; inline;
+function NetErrorKindName(AKind: TNetErrorKind): string; inline;
+
+{ Q14: async cancel → waitable net cancel (blocking IO). }
+function NetCancelFromAsync(
+  const AAsync: IAsyncCancellationToken): INetCancelController; inline;
+procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
+  const AToken: IAsyncCancellationToken); inline;
 
 implementation
 
@@ -137,6 +152,28 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
 begin
   Result := nextpas.core.net.async.dial.AsyncTcpDialAddrs(ALoop, AAddrs, APort,
     AOptions, ACallback, AContext);
+end;
+
+function ClassifyNetError(ACode: Int32): TNetErrorClass;
+begin
+  Result := nextpas.core.net.errors.ClassifyNetError(ACode);
+end;
+
+function NetErrorKindName(AKind: TNetErrorKind): string;
+begin
+  Result := nextpas.core.net.errors.NetErrorKindName(AKind);
+end;
+
+function NetCancelFromAsync(
+  const AAsync: IAsyncCancellationToken): INetCancelController;
+begin
+  Result := nextpas.core.net.async.cancel.NetCancelFromAsync(AAsync);
+end;
+
+procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
+  const AToken: IAsyncCancellationToken);
+begin
+  nextpas.core.net.async.cancel.TcpStreamBindAsyncCancel(AStream, AToken);
 end;
 
 end.

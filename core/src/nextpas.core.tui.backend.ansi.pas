@@ -58,6 +58,8 @@ type
     procedure QueryKittyKeyboard;
     procedure EnableFocusReporting;
     procedure DisableFocusReporting;
+    procedure EnableBracketedPaste;
+    procedure DisableBracketedPaste;
     procedure MoveTo(AX, AY: Word);
 
     { 把 Patches 翻译为 ANSI 字节。Patches 假定按 (Y,X) 排序——buffer Diff
@@ -167,6 +169,16 @@ end;
 procedure TAnsiBackend.DisableFocusReporting;
 begin
   AnsiDisableFocusReporting(FOut);
+end;
+
+procedure TAnsiBackend.EnableBracketedPaste;
+begin
+  AnsiEnableBracketedPaste(FOut);
+end;
+
+procedure TAnsiBackend.DisableBracketedPaste;
+begin
+  AnsiDisableBracketedPaste(FOut);
 end;
 
 procedure TAnsiBackend.MoveTo(AX, AY: Word);

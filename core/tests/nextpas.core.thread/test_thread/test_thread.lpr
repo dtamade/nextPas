@@ -4,7 +4,7 @@ program test_thread;
 
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Syscall,{$ENDIF}
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.thread,
@@ -73,6 +73,26 @@ begin
   LPool := ThreadPool(3);
   CheckEqual(Int64(3), Int64(LPool.WorkerCount));
   LPool.Shutdown;
+end;
+
+procedure TestPoolH4SegQueueSourceContract;
+var
+  LSource: string;
+begin
+  LSource := '';
+  with TStringList.Create do
+  try
+    LoadFromFile('../../../src/nextpas.core.thread.pool.pas');
+    LSource := Text;
+  finally
+    Free;
+  end;
+  Check(Pos('nextpas.core.lockfree.segqueue', LowerCase(LSource)) > 0,
+    'H4-1 pool must use lockfree.segqueue');
+  Check(Pos('TSegQueueImpl', LSource) > 0,
+    'H4-1 pool must specialize TSegQueueImpl for multi-worker queue');
+  Check(Pos('FQueue.Close', LSource) > 0,
+    'H4-1 Shutdown must Close the task queue');
 end;
 
 procedure TestChannelSingleProducerConsumer;
@@ -348,6 +368,7 @@ begin
   T.Test('Pool submit 10 tasks', @TestPoolSubmitAll);
   T.Test('Pool shutdown rejects new', @TestPoolShutdownRejectsNew);
   T.Test('Pool worker count', @TestPoolWorkerCount);
+  T.Test('Pool H4 SegQueue source-contract', @TestPoolH4SegQueueSourceContract);
   T.Test('Channel single producer/consumer', @TestChannelSingleProducerConsumer);
   T.Test('Channel with thread', @TestChannelWithThread);
   T.Test('Channel close then receive', @TestChannelCloseReceiveFalse);

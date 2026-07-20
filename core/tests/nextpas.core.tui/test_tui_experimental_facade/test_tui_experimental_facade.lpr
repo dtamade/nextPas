@@ -57,6 +57,48 @@ begin
   Check(ipHalfBlock <> ipSixel, 'halfblock != sixel');
 end;
 
+procedure TestAutoNotHalfBlock;
+begin
+  Check(ipAuto <> ipHalfBlock, 'auto != halfblock');
+  Check(ipAuto <> ipSixel, 'auto != sixel');
+end;
+
+procedure TestKittyNotSixel;
+begin
+  Check(ipKitty <> ipSixel, 'kitty != sixel');
+  Check(ipKitty <> ipHalfBlock, 'kitty != halfblock');
+end;
+
+procedure TestClipboardDetectTwiceStableMethod;
+var
+  A, B: TClipboard;
+begin
+  A := TClipboard.Detect;
+  B := TClipboard.Detect;
+  Check(A.Method = B.Method, 'detect method stable across calls');
+end;
+
+procedure TestProtocolOrdinalsNonNegative;
+begin
+  Check(Ord(ipAuto) >= 0, 'auto >= 0');
+  Check(Ord(ipHalfBlock) >= Ord(ipAuto), 'halfblock >= auto');
+end;
+
+procedure TestDetectProtocolIdempotent;
+var
+  A, B: TImageProtocol;
+begin
+  A := DetectImageProtocol;
+  B := DetectImageProtocol;
+  Check(A = B, 'detect protocol idempotent');
+end;
+
+procedure TestClipboardNoneIsDistinct;
+begin
+  Check(cmNone <> cmOSC52, 'none != osc52');
+  Check(cmNone <> cmExternal, 'none != external');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.experimental_facade');
   T.Test('experimental surface', @TestExperimentalSurface);
@@ -65,5 +107,11 @@ begin
   T.Test('clipboard methods distinct', @TestClipboardMethodsDistinct);
   T.Test('clipboard detect method valid', @TestClipboardDetectMethodValid);
   T.Test('halfblock protocol named', @TestHalfBlockProtocolNamed);
+  T.Test('auto not halfblock', @TestAutoNotHalfBlock);
+  T.Test('kitty not sixel', @TestKittyNotSixel);
+  T.Test('clipboard detect twice stable', @TestClipboardDetectTwiceStableMethod);
+  T.Test('protocol ordinals non-negative', @TestProtocolOrdinalsNonNegative);
+  T.Test('detect protocol idempotent', @TestDetectProtocolIdempotent);
+  T.Test('clipboard none distinct', @TestClipboardNoneIsDistinct);
   if not T.Run then Halt(1);
 end.

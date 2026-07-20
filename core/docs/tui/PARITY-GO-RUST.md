@@ -78,7 +78,21 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q6 | Scorecard SC6–SC7 + ext/core 密度 | **Done** |
 | Q7 | Truecolor env-attested Verified + 更多 suite 密度 | **Done** |
 | Q8 | 门面契约 + SC8 + Wine 加厚 | **Done** |
-| Q9 | 分层 facade + stress + SC9 overlay | **本批** |
-| Q10 | facade 晋升策略 | 后续 |
-| Q9 | 完整 ratatui/crossterm crate 对照 | 后续 |
-| Q10 | Truecolor DA 查询（非 env-attested） | 后续 |
+| Q9 | 分层 facade + stress + SC9 overlay | **Done** (`main@027e9255a`+) |
+| Q10 | SC10–SC11 + DECSET 2004 paste + 密度收口 + 晋升策略 | **Done** (`main@5c7fc6dcc`+) |
+| Q11 | SC12–SC13 + bench layout/overlay + tier facade ≥12 | **本批** |
+| 后续 | facade **实施**晋升（scrollview/modal） | 待准入 |
+| 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
+| 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
+
+## 5. Facade 晋升准入标准
+
+将 full-only widget 晋升到 `ext`（或 core）前必须同时满足：
+
+1. 测试密度 ≥16 且 focused 0 leak
+2. 无 experimental 协议硬依赖（image/clipboard 等）
+3. 语义稳定 ≥1 波次，CONTRACT 有对应条目
+4. 有 core reject 夹具证明不泄漏进 default facade（若目标是 ext）
+5. 产品确认（候选：`scrollview` / `modal`；**本波不执行代码晋升**）
+
+见 [TIER_REGISTRY.md](TIER_REGISTRY.md)。

@@ -90,12 +90,12 @@ begin
   Result.FEntryCount := 0;
   Result.FPendingCount := 0;
   Result.FFreeHead := -1;
-  AtomicStore32(Result.FRunning, 0, moRelease);
+  atomic_store(Result.FRunning, 0, mo_release);
 end;
 
 procedure TIoReactor.Close;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   try
     ReleasePendingEntries(-ESysECANCELED);
   finally
@@ -454,8 +454,8 @@ const
 begin
   if not IsValid then
     Exit;
-  AtomicStore32(FRunning, 1, moRelease);
-  while AtomicLoad32(FRunning, moAcquire) <> 0 do
+  atomic_store(FRunning, 1, mo_release);
+  while atomic_load(FRunning, mo_acquire) <> 0 do
   begin
     LRet := FRing.SubmitAndWait(1);
     if LRet < 0 then
@@ -463,14 +463,14 @@ begin
       if (LRet = -EINTR) or (LRet = -EAGAIN) then Continue;
       Break;
     end;
-    while (AtomicLoad32(FRunning, moAcquire) <> 0) and FRing.PeekCqe(LCqe) do
+    while (atomic_load(FRunning, mo_acquire) <> 0) and FRing.PeekCqe(LCqe) do
       DispatchCqe(LCqe);
   end;
 end;
 
 procedure TIoReactor.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
 end;
 
 end.

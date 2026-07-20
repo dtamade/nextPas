@@ -483,3 +483,19 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `FeedAddresses` / `SignalDnsDone` post onto the loop; feed detaches safely when dial finishes.
 - Evidence: `DnsRaceStartsBeforeLateFamily`, `DnsRaceLateFamilyInterleaves`, `DnsRaceEmptyUntilDoneFails`, `DnsRaceWaitsAllDoneWhenAddrsExhausted` (0 leak).
 - macOS CI: dial-resolve matrix **fail-closed** (with kqueue L0); still not full macOS async parity.
+
+### Error classification + Dial product default (Q13)
+- `ClassifyNetError(ACode)` in `nextpas.core.net.errors` (re-exported from `nextpas.core.net`): maps dial/IO result codes (signed or absolute) to `TNetErrorClass` with `Kind`, `Timeout`, `Temporary`, `Canceled`, `Code`.
+- Kind table: ok / canceled / timeout / refused / reset / unreachable / dns / temporary / invalid / unknown.
+- Portable codes use `PLATFORM_ERR_*`; cancel uses `NET_ERR_CANCELED` (125, async convention).
+- **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
+- Lab-only: `AsyncTcpDialWithDnsFeed`. LocalAddr bind-before-connect: **not** exposed this wave.
+- Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
+
+### Cancel vocabulary bridge (Q14)
+- **Recommended user token**: `IAsyncCancellationToken` (dial, combinators, TaskGroup).
+- **Blocking TCP plumbing**: `INetCancelToken` + optional `INetCancelWaitable` (socketpair wake) via `NewNetCancelToken`.
+- Bridge: `NetCancelFromAsync(async)` → `INetCancelController` (waitable on Unix); async Cancel propagates to net Cancel.
+- `TcpStreamBindAsyncCancel(stream, async)` / `IAsyncTcpStream.BindCancelToken(async)` installs the bridge on a stream.
+- Does **not** delete Net tokens; HTTP adapters remain. Unit: `nextpas.core.net.async.cancel`.
+- Evidence: `test_net_cancel_bridge` (propagate, already-cancelled, waitable, blocking read cancel, 0 leak).

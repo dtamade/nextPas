@@ -54,7 +54,9 @@ Available builder steps:
 
 `AddKeyValues` is the shallow CLI integration: parse flags with
 `nextpas.core.args` (or any source), then inject config keys without coupling
-`config` to the args unit:
+`config` to the args unit. See also the startup example markers
+`keyvalues-host` / `keyvalues-port` under
+`examples/nextpas.core.config/config_startup_patterns/`.
 
 ```pascal
 LCfg := ConfigBuilder
@@ -68,6 +70,19 @@ LCfg := ConfigBuilder
 
 Put `AddKeyValues` last when command-line should win. Keys and values arrays
 must be the same length; empty keys raise `EConfigError` immediately.
+
+## Bind config into a record
+
+Typed bind lives in `nextpas.core.reflect.marshal` (not in this unit — avoids a
+layer cycle). Field names map to config keys; missing keys leave the record
+field unchanged:
+
+```pascal
+uses nextpas.core.reflect, nextpas.core.reflect.marshal, nextpas.core.config;
+
+ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer);           // TConfig or IConfig
+ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer, 'server'); // server.Host, ...
+```
 
 Builder priority rules:
 

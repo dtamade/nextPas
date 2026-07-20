@@ -43,13 +43,16 @@ function TSemaphore.TryAcquire: Boolean;
 var
   LCurrent, LNew: Int32;
 begin
-  repeat
-    LCurrent := AtomicLoad32(FCount, moAcquire);
+  LCurrent := atomic_load(FCount, mo_acquire);
+  while True do
+  begin
     if LCurrent <= 0 then
       Exit(False);
     LNew := LCurrent - 1;
-  until AtomicCompareExchange32(FCount, LCurrent, LNew, moAcqRel) = LCurrent;
-  Result := True;
+    if atomic_compare_exchange_strong(FCount, LCurrent, LNew, mo_acq_rel, mo_acquire) then
+      Exit(True);
+    { LCurrent updated to observed on failure }
+  end;
 end;
 
 procedure TSemaphore.Acquire;
@@ -94,7 +97,7 @@ end;
 
 procedure TSemaphore.Release;
 begin
-  AtomicFetchAdd32(FCount, 1, moRelease);
+  atomic_fetch_add(FCount, 1, mo_release);
   platform_wake_address_one(@FCount);
 end;
 
@@ -104,14 +107,14 @@ var
 begin
   if ACount <= 0 then
     raise EArgumentError.Create('Semaphore.Release: count must be > 0');
-  AtomicFetchAdd32(FCount, ACount, moRelease);
+  atomic_fetch_add(FCount, ACount, mo_release);
   for LI := 0 to ACount - 1 do
     platform_wake_address_one(@FCount);
 end;
 
 function TSemaphore.Available: Int32;
 begin
-  Result := AtomicLoad32(FCount, moAcquire);
+  Result := atomic_load(FCount, mo_acquire);
 end;
 
 function CreateSemaphore(const AInitial: Int32): ISemaphore;

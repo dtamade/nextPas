@@ -1,6 +1,8 @@
 program bench_yaml;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.yaml;
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.yaml;
 var GSmall, GMedium, GLarge: string; GSink: UInt64;
 procedure BuildTestData;
 var LI: Integer;
@@ -23,10 +25,16 @@ begin LDoc := YamlParse(GMedium); GSink := GSink xor UInt64(Length(GMedium)); en
 procedure BenchParseLarge(const ACtx: IBenchContext);
 var LDoc: IYamlDocument;
 begin LDoc := YamlParse(GLarge); GSink := GSink xor UInt64(Length(GLarge)); end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
   BuildTestData; GSink := 0;
-  LSuite := TBenchSuite.Create('yaml');
-  LSuite.Add('Parse/small', @BenchParseSmall).Add('Parse/medium', @BenchParseMedium).Add('Parse/large', @BenchParseLarge);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('yaml')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('Parse/small', @BenchParseSmall).Add('Parse/medium', @BenchParseMedium).Add('Parse/large', @BenchParseLarge)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-yaml.json');
 end.

@@ -295,6 +295,48 @@ begin
   end;
 end;
 
+procedure TestFillWidgetIdentityStable;
+var
+  LWidget: IWidget;
+  LSame: IWidget;
+begin
+  LWidget := TFillWidget.Create('z');
+  LSame := LWidget;
+  Check(LWidget = LSame, 'interface identity stable');
+end;
+
+procedure TestAdapterRenderTwiceIdempotent;
+var
+  LWidget: IWidget;
+  LBuf: TBuffer;
+begin
+  LWidget := TFillWidget.Create('#');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LWidget.Render(TRect.Make(0, 0, 3, 1), LBuf);
+    LWidget.Render(TRect.Make(0, 0, 3, 1), LBuf);
+    CheckEqual('###', LBuf.AsLines[0], 'second render same');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestAdapterZeroWidthAreaSafe;
+var
+  LWidget: IWidget;
+  LBuf: TBuffer;
+begin
+  LWidget := TFillWidget.Create('!');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  try
+    LBuf.SetString(0, 0, 'ab', StyleDefault);
+    LWidget.Render(TRect.Make(0, 0, 0, 1), LBuf);
+    CheckEqual('ab', LBuf.AsLines[0], 'zero width no write');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.intf');
   T.Test('implement and render', @TestImplementAndRender);
@@ -310,5 +352,8 @@ begin
   T.Test('interface reassign', @TestInterfaceReassign);
   T.Test('adapter captures outer', @TestAdapterCapturesOuter);
   T.Test('nested adapter over fill', @TestNestedAdapterOverFill);
+  T.Test('fill widget identity stable', @TestFillWidgetIdentityStable);
+  T.Test('adapter render twice idempotent', @TestAdapterRenderTwiceIdempotent);
+  T.Test('adapter zero width area safe', @TestAdapterZeroWidthAreaSafe);
   if not T.Run then Halt(1);
 end.

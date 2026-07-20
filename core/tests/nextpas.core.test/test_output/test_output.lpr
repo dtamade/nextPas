@@ -15,6 +15,7 @@ uses
   nextpas.core.time,
   nextpas.core.path,
   nextpas.core.fs,
+  nextpas.core.platform.env,
   nextpas.core.test;
 
 function ExtractXmlAttributeInt(const AXml, AAttribute: string): Integer;
@@ -1981,6 +1982,93 @@ begin
   CheckContains(LOut, '# skipped: 1');
 end;
 
+{ ── B15/v8.15: committed goldens under CI fail-on-create ──────────────────── }
+
+procedure OutEnvSet(const AName, AValue: string);
+var
+  LN, LV: AnsiString;
+begin
+  LN := AnsiString(AName);
+  LV := AnsiString(AValue);
+  if platform_env_set(PAnsiChar(LN), PAnsiChar(LV)) <> 0 then
+    Fail('platform_env_set failed for ' + AName);
+end;
+
+procedure OutEnvUnset(const AName: string);
+var
+  LN: AnsiString;
+begin
+  LN := AnsiString(AName);
+  platform_env_unset(PAnsiChar(LN));
+end;
+
+procedure TestB15CommittedGoldensStrictCI;
+{ With FAIL_ON_CREATE=1, existing goldens/ files must still match (CI mode). }
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  OutEnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  OutEnvSet('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE', '1');
+  try
+    SetLength(LResults, 1);
+    LResults[0] := TTestRunResult.Create('golden-json');
+    LResults[0].Passed := 1;
+    LResults[0].Failed := 1;
+    LResults[0].Skipped := 1;
+    SetLength(LResults[0].Results, 3);
+    LResults[0].Results[0].Name := 'pass_case';
+    LResults[0].Results[0].Status := tsPassed;
+    LResults[0].Results[0].Duration := 0;
+    LResults[0].Results[1].Name := 'fail_case';
+    LResults[0].Results[1].Status := tsFailed;
+    LResults[0].Results[1].Message := 'expected 1 got 2';
+    LResults[0].Results[1].Duration := 0;
+    LResults[0].Results[2].Name := 'skip_case';
+    LResults[0].Results[2].Status := tsSkipped;
+    LResults[0].Results[2].Message := 'not yet';
+    LResults[0].Results[2].Duration := 0;
+    LOut := JSONReport(LResults, 'golden-json');
+    CheckSnapshot(LOut, 'goldens', 'report.json');
+
+    LResults[0] := TTestRunResult.Create('golden-tap');
+    LResults[0].Passed := 1;
+    LResults[0].Failed := 1;
+    SetLength(LResults[0].Results, 2);
+    LResults[0].Results[0].Name := 'ok_one';
+    LResults[0].Results[0].Status := tsPassed;
+    LResults[0].Results[0].Duration := 0;
+    LResults[0].Results[1].Name := 'not_ok_two';
+    LResults[0].Results[1].Status := tsFailed;
+    LResults[0].Results[1].Message := 'boom';
+    LResults[0].Results[1].Duration := 0;
+    LOut := TAPReport(LResults, 'golden-tap');
+    CheckSnapshot(LOut, 'goldens', 'report.tap');
+
+    LResults[0] := TTestRunResult.Create('golden-junit');
+    LResults[0].Passed := 1;
+    LResults[0].Failed := 1;
+    LResults[0].Skipped := 1;
+    SetLength(LResults[0].Results, 3);
+    LResults[0].Results[0].Name := 'pass_case';
+    LResults[0].Results[0].Status := tsPassed;
+    LResults[0].Results[0].Duration := 0;
+    LResults[0].Results[1].Name := 'fail_case';
+    LResults[0].Results[1].Status := tsFailed;
+    LResults[0].Results[1].Message := 'expected 1 got 2';
+    LResults[0].Results[1].Duration := 0;
+    LResults[0].Results[2].Name := 'skip_case';
+    LResults[0].Results[2].Status := tsSkipped;
+    LResults[0].Results[2].Message := 'not yet';
+    LResults[0].Results[2].Duration := 0;
+    LOut := JUnitXML(LResults, 'golden-junit');
+    CheckSnapshot(LOut, 'goldens', 'report.xml');
+  finally
+    OutEnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+    OutEnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  end;
+end;
+
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
 
 procedure TestFilterTableCase(const AC: TTestCase);
@@ -2138,6 +2226,7 @@ begin
   Suite.Test('B11 TAP golden snapshot',       @TestB11TAPGoldenSnapshot);
   Suite.Test('B13 JUnit golden snapshot',     @TestB13JUnitGoldenSnapshot);
   Suite.Test('B13 TAP formal compliance',     @TestB13TAPFormalCompliance);
+  Suite.Test('B15 committed goldens strict CI', @TestB15CommittedGoldensStrictCI);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);

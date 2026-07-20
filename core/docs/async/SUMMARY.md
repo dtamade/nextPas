@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q12（DNS×SYN lab feed + macOS dial/resolve fail-closed）
+> 版本：M3+B1–B4 + Q1–Q14（NetCancelFromAsync 取消桥）
 
 ## 模块概览
 
@@ -140,9 +140,10 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. 真实 DNS RTT 分布下的统计性 HE 基准（当前为确定性 lab feed 矩阵）
-2. 原生 Windows host runner 升格证据层
-3. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
+1. Q14 统一取消 Token；Q15 Async UDP；Q16 Pool×Dial（见 `../net-async-io/ROADMAP-Q13.md`）
+2. 真实 DNS RTT 分布统计性 HE 基准 / 同机 Go-Rust bench（Q18）
+3. 原生 Windows host runner 升格证据层
+4. [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md) · [SCORECARD-2026-07-20.md](SCORECARD-2026-07-20.md)
 
 ## 相关文档
 

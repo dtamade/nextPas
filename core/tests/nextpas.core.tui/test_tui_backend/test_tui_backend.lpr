@@ -472,6 +472,22 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendBracketedPasteEnableDisable;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.EnableBracketedPaste;
+    CheckEqual(#27'[?2004h', PendingString(LBE), 'enable 2004h');
+    LBE.DiscardPending;
+    LBE.DisableBracketedPaste;
+    CheckEqual(#27'[?2004l', PendingString(LBE), 'disable 2004l');
+  finally
+    LBE.Free;
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.backend');
@@ -512,5 +528,7 @@ begin
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
     T.Test('ansi backend focus reporting enable disable',
     @TestAnsiBackendFocusReportingEnableDisable);
+  T.Test('ansi backend bracketed paste enable disable',
+    @TestAnsiBackendBracketedPasteEnableDisable);
 if not T.Run then Halt(1);
 end.

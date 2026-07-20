@@ -44,10 +44,13 @@ end;
 procedure TSpinLock.Acquire;
 var
   LSpins: Int32;
+  LExpected: Int32;
 begin
   LSpins := 0;
-  while AtomicCompareExchange32(FLocked, 0, 1, moAcquire) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(FLocked, LExpected, 1, mo_acquire, mo_relaxed) do
   begin
+    LExpected := 0;
     Inc(LSpins);
     if LSpins < 64 then
       CpuPause
@@ -60,13 +63,16 @@ begin
 end;
 
 function TSpinLock.TryAcquire: Boolean;
+var
+  LExpected: Int32;
 begin
-  Result := AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0;
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(FLocked, LExpected, 1, mo_acquire, mo_relaxed);
 end;
 
 procedure TSpinLock.Release;
 begin
-  AtomicStore32(FLocked, 0, moRelease);
+  atomic_store(FLocked, 0, mo_release);
 end;
 
 function TSpinLock.Lock: ILockGuard;

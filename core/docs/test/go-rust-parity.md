@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.14**
+**当前版本**: **v8.15**
 **最后更新**: 2026-07-20
 
 ---
@@ -52,6 +52,7 @@
 | B18 v8.14a 门禁诚实化 | **done** |
 | B19 v8.14b report golden 入库 | **done** |
 | B20 v8.14c subtests 深度 | **done** |
+| B21 v8.15 CI golden + contracts 门禁 | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -67,8 +68,10 @@
 
 ```bash
 make -C core/tests/nextpas.core.test/<suite> clean test
+make -C core/tests/nextpas.core.test contracts   # api + runner source-contract + scale
 make hygiene
 make -C core/tests/nextpas.core.test clean test   # 19/19
+# CI goldens: NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1
 ```
 
 

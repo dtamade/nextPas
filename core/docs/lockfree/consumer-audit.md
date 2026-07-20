@@ -57,6 +57,17 @@
 
 **跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）。http/net 仍未直接 uses lockfree 容器。
 
+### 2.7 H4-1 thread.pool → T1 SegQueue
+
+| 项 | 内容 |
+|----|------|
+| 实现 | `nextpas.core.thread.pool` |
+| 原语 | `TSegQueueImpl<Pointer>` 存 `PTaskNode`（多 worker → **SegQueue 非 MPSC**） |
+| 依赖 | `thread` → `lockfree.segqueue` |
+| 生命周期 | Shutdown：Close queue → join workers → drain |
+| 测试 | `test_thread`（含 H4 source-contract） |
+| Charter | [`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md)（文件名保留历史） |
+
 ### 2.5 H3-3 consumer regression 门
 
 | 入口 | 覆盖 |

@@ -417,6 +417,17 @@ type
     bpbtClose = 2
   );
 
+  // East_Asian_Width (Unicode 16.0, UAX #11)
+  // Ordinals match gen_unicode_eaw.py / eaw.inc
+  TEastAsianWidth = (
+    eawNeutral = 0,     // N
+    eawAmbiguous = 1,   // A
+    eawHalfwidth = 2,   // H
+    eawFullwidth = 3,   // F
+    eawNarrow = 4,      // Na
+    eawWide = 5         // W
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,

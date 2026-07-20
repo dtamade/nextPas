@@ -32,6 +32,8 @@ MODULE_ENTRIES=(
   "platform.pipe core/tests/nextpas.core.platform.pipe/test_platform_pipe_wine"
   "platform.args core/tests/nextpas.core.platform.args/test_platform_args_wine"
   "platform.resource core/tests/nextpas.core.platform.resource/test_platform_resource_wine"
+  "platform.watch core/tests/nextpas.core.platform.watch/test_platform_watch_wine"
+  "platform.pty core/tests/nextpas.core.platform.pty/test_platform_pty_wine"
   "io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine"
 )
 

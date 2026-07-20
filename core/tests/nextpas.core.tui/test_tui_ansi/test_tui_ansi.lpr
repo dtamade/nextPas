@@ -188,6 +188,17 @@ begin
   Teardown;
 end;
 
+procedure TestBracketedPaste;
+begin
+  Setup;
+  AnsiEnableBracketedPaste(B);
+  CheckEqual(#27'[?2004h', BufStr, 'enable bracketed paste');
+  B.Clear;
+  AnsiDisableBracketedPaste(B);
+  CheckEqual(#27'[?2004l', BufStr, 'disable bracketed paste');
+  Teardown;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ansi');
   T.Test('hide cursor', @TestHideCursor);
@@ -206,5 +217,6 @@ begin
   T.Test('sgr modifier clear', @TestSgrModifierClear);
   T.Test('sgr modifier clear deduplicates shared codes', @TestSgrModifierClearDeduplicatesSharedCodes);
   T.Test('mouse tracking', @TestMouseTracking);
+  T.Test('bracketed paste', @TestBracketedPaste);
   if not T.Run then Halt(1);
 end.

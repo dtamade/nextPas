@@ -1,4 +1,11 @@
 unit nextpas.core.thread.pool;
+{**
+ * Default thread pool (non-worksteal).
+ *
+ * H4-1: task queue is T1 SegQueue of unmanaged PTaskNode pointers.
+ * Multi-worker consumers require an MPMC-class queue (SegQueue), not MPSC.
+ * Empty wait still uses mutex + condvar (no pure busy-spin).
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -17,6 +24,7 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.condvar,
+  nextpas.core.lockfree.segqueue,
   nextpas.core.platform.thread;
 
 type
@@ -25,25 +33,26 @@ type
     Task: TThreadTask;
     DirectData: Pointer;
     DirectProc: TThreadProc;
-    Next: PTaskNode;
   end;
+
+  TPointerSegQueue = specialize TSegQueueImpl<Pointer>;
 
   TThreadPool = class(TInterfacedObject, IThreadPool)
   private
     FMutex: IMutex;
     FCondVar: ICondVar;
     FDoneCondVar: ICondVar;
-    FHead: PTaskNode;
-    FTail: PTaskNode;
+    FQueue: TPointerSegQueue;
     FWorkerCount: Integer;
     FWorkers: array of TPlatformThreadHandle;
     FShutdown: Boolean;
     FPendingTasks: Integer;
-    { Pre-allocated node pool }
     FNodePool: array[0..127] of TTaskNode;
     FNodePoolFree: Integer;
     function AllocNode: PTaskNode;
     procedure FreeNode(ANode: PTaskNode);
+    procedure RunNode(ANode: PTaskNode);
+    function TryPublishNode(ANode: PTaskNode): Boolean;
   public
     constructor Create(const AWorkerCount: Integer);
     destructor Destroy; override;
@@ -60,76 +69,85 @@ type
 function WorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   LPool: TThreadPool;
+  LNodePtr: Pointer;
   LNode: PTaskNode;
-  LTask: TThreadTask;
-  LDirectProc: TThreadProc;
-  LDirectData: Pointer;
 begin
   Result := nil;
   LPool := TThreadPool(AArg);
 
   while True do
   begin
+    LNodePtr := nil;
+    if LPool.FQueue.TryDequeue(LNodePtr) then
+    begin
+      LPool.RunNode(PTaskNode(LNodePtr));
+      LPool.FMutex.Acquire;
+      Dec(LPool.FPendingTasks);
+      if LPool.FPendingTasks = 0 then
+        LPool.FDoneCondVar.Broadcast;
+      LPool.FMutex.Release;
+      Continue;
+    end;
+
     LPool.FMutex.Acquire;
+    if LPool.FQueue.TryDequeue(LNodePtr) then
+    begin
+      LPool.FMutex.Release;
+      LPool.RunNode(PTaskNode(LNodePtr));
+      LPool.FMutex.Acquire;
+      Dec(LPool.FPendingTasks);
+      if LPool.FPendingTasks = 0 then
+        LPool.FDoneCondVar.Broadcast;
+      LPool.FMutex.Release;
+      Continue;
+    end;
 
-    while (LPool.FHead = nil) and (not LPool.FShutdown) do
-      LPool.FCondVar.Wait(LPool.FMutex);
-
-    if (LPool.FHead = nil) and LPool.FShutdown then
+    if LPool.FShutdown then
     begin
       LPool.FMutex.Release;
       Break;
     end;
 
-    LNode := LPool.FHead;
-    LPool.FHead := LNode^.Next;
-    if LPool.FHead = nil then
-      LPool.FTail := nil;
-
-    LPool.FMutex.Release;
-
-    { Snapshot task info, then clear the node before dispose.
-      The anonymous task must be copied out before any field is nulled. }
-    LDirectProc := LNode^.DirectProc;
-    LDirectData := LNode^.DirectData;
-    LTask := LNode^.Task;
-    LNode^.Task := nil;
-    LNode^.DirectProc := nil;
-    LNode^.DirectData := nil;
-    LNode^.Next := nil;
-    if Assigned(LDirectProc) then
-    begin
-      LPool.FreeNode(LNode);
-      try
-        LDirectProc(LDirectData);
-      except
-        on E: Exception do
-          WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
-      end;
-    end
-    else
-    begin
-      try
-        LTask();
-      except
-        on E: Exception do
-          WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
-      end;
-      LPool.FreeNode(LNode);
-      LTask := nil;
-    end;
-
-    LPool.FMutex.Acquire;
-    Dec(LPool.FPendingTasks);
-    if LPool.FPendingTasks = 0 then
-      LPool.FDoneCondVar.Broadcast
-    else if LPool.FHead <> nil then
-      LPool.FCondVar.Signal;
+    LPool.FCondVar.Wait(LPool.FMutex);
     LPool.FMutex.Release;
   end;
 end;
 
-{ TThreadPool — node pool }
+procedure TThreadPool.RunNode(ANode: PTaskNode);
+var
+  LTask: TThreadTask;
+  LDirectProc: TThreadProc;
+  LDirectData: Pointer;
+begin
+  LDirectProc := ANode^.DirectProc;
+  LDirectData := ANode^.DirectData;
+  LTask := ANode^.Task;
+  ANode^.Task := nil;
+  ANode^.DirectProc := nil;
+  ANode^.DirectData := nil;
+
+  if Assigned(LDirectProc) then
+  begin
+    FreeNode(ANode);
+    try
+      LDirectProc(LDirectData);
+    except
+      on E: Exception do
+        WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
+    end;
+  end
+  else
+  begin
+    try
+      LTask();
+    except
+      on E: Exception do
+        WriteLn(StdErr, '[ThreadPool] task raised: ', E.ClassName, ': ', E.Message);
+    end;
+    FreeNode(ANode);
+    LTask := nil;
+  end;
+end;
 
 function TThreadPool.AllocNode: PTaskNode;
 begin
@@ -144,14 +162,46 @@ end;
 
 procedure TThreadPool.FreeNode(ANode: PTaskNode);
 begin
-  { Pool nodes are never freed — they live for the pool lifetime.
-    Only heap-allocated fallback nodes are disposed. }
   if (PtrUInt(ANode) < PtrUInt(@FNodePool[0])) or
      (PtrUInt(ANode) >= PtrUInt(@FNodePool[128])) then
     Dispose(ANode);
 end;
 
-{ TThreadPool }
+function TThreadPool.TryPublishNode(ANode: PTaskNode): Boolean;
+begin
+  { Pending is incremented under mutex before enqueue so WaitAll cannot race. }
+  FMutex.Acquire;
+  if FShutdown then
+  begin
+    FMutex.Release;
+    ANode^.Task := nil;
+    ANode^.DirectProc := nil;
+    ANode^.DirectData := nil;
+    FreeNode(ANode);
+    Exit(False);
+  end;
+  Inc(FPendingTasks);
+  FMutex.Release;
+
+  if not FQueue.TryEnqueue(Pointer(ANode)) then
+  begin
+    FMutex.Acquire;
+    Dec(FPendingTasks);
+    if FPendingTasks = 0 then
+      FDoneCondVar.Broadcast;
+    FMutex.Release;
+    ANode^.Task := nil;
+    ANode^.DirectProc := nil;
+    ANode^.DirectData := nil;
+    FreeNode(ANode);
+    Exit(False);
+  end;
+
+  FMutex.Acquire;
+  FCondVar.Broadcast;
+  FMutex.Release;
+  Result := True;
+end;
 
 constructor TThreadPool.Create(const AWorkerCount: Integer);
 var
@@ -159,11 +209,10 @@ var
   LCount: Integer;
 begin
   inherited Create;
-  FHead := nil;
-  FTail := nil;
   FShutdown := False;
   FPendingTasks := 0;
   FNodePoolFree := 0;
+  FQueue := TPointerSegQueue.Create;
 
   FMutex := nextpas.core.sync.mutex.TMutex.Create;
   FCondVar := nextpas.core.sync.condvar.TCondVar.Create;
@@ -184,6 +233,11 @@ end;
 destructor TThreadPool.Destroy;
 begin
   Shutdown;
+  if FQueue <> nil then
+  begin
+    FQueue.Free;
+    FQueue := nil;
+  end;
   FDoneCondVar := nil;
   FCondVar := nil;
   FMutex := nil;
@@ -195,28 +249,18 @@ var
   LNode: PTaskNode;
 begin
   FMutex.Acquire;
-
   if FShutdown then
   begin
     FMutex.Release;
     Exit;
   end;
-
   LNode := AllocNode;
+  FMutex.Release;
+
   LNode^.Task := ATask;
   LNode^.DirectProc := nil;
   LNode^.DirectData := nil;
-  LNode^.Next := nil;
-
-  if FTail <> nil then
-    FTail^.Next := LNode
-  else
-    FHead := LNode;
-  FTail := LNode;
-  Inc(FPendingTasks);
-
-  FCondVar.Broadcast;
-  FMutex.Release;
+  TryPublishNode(LNode);
 end;
 
 procedure TThreadPool.SubmitDirect(AData: Pointer; AProc: TThreadProc);
@@ -224,28 +268,18 @@ var
   LNode: PTaskNode;
 begin
   FMutex.Acquire;
-
   if FShutdown then
   begin
     FMutex.Release;
     Exit;
   end;
-
   LNode := AllocNode;
-  LNode^.Task := TThreadTask(nil);  { unused for direct path }
+  FMutex.Release;
+
+  LNode^.Task := TThreadTask(nil);
   LNode^.DirectData := AData;
   LNode^.DirectProc := AProc;
-  LNode^.Next := nil;
-
-  if FTail <> nil then
-    FTail^.Next := LNode
-  else
-    FHead := LNode;
-  FTail := LNode;
-  Inc(FPendingTasks);
-
-  FCondVar.Broadcast;
-  FMutex.Release;
+  TryPublishNode(LNode);
 end;
 
 procedure TThreadPool.SubmitBatch(const ATasks: array of TThreadTask);
@@ -257,33 +291,23 @@ begin
   if LCount = 0 then
     Exit;
 
-  FMutex.Acquire;
-
-  if FShutdown then
-  begin
-    FMutex.Release;
-    Exit;
-  end;
-
   for LI := 0 to LCount - 1 do
   begin
+    FMutex.Acquire;
+    if FShutdown then
+    begin
+      FMutex.Release;
+      Exit;
+    end;
     LNode := AllocNode;
+    FMutex.Release;
+
     LNode^.Task := ATasks[LI];
     LNode^.DirectProc := nil;
     LNode^.DirectData := nil;
-    LNode^.Next := nil;
-
-    if FTail <> nil then
-      FTail^.Next := LNode
-    else
-      FHead := LNode;
-    FTail := LNode;
-    Inc(FPendingTasks);
+    if not TryPublishNode(LNode) then
+      Exit;
   end;
-
-  { Single broadcast for the entire batch — workers claim tasks via the queue }
-  FCondVar.Broadcast;
-  FMutex.Release;
 end;
 
 procedure TThreadPool.SignalWorkers(const ACount: Integer);
@@ -300,6 +324,8 @@ procedure TThreadPool.Shutdown;
 var
   LI: Integer;
   LRetVal: Pointer;
+  LNodePtr: Pointer;
+  LNode: PTaskNode;
 begin
   FMutex.Acquire;
   if FShutdown then
@@ -310,10 +336,29 @@ begin
   FShutdown := True;
   FMutex.Release;
 
+  if FQueue <> nil then
+    FQueue.Close;
+
   FCondVar.Broadcast;
 
   for LI := 0 to FWorkerCount - 1 do
     platform_thread_join(FWorkers[LI], LRetVal);
+
+  if FQueue <> nil then
+    while FQueue.TryDequeue(LNodePtr) do
+    begin
+      LNode := PTaskNode(LNodePtr);
+      LNode^.Task := nil;
+      LNode^.DirectProc := nil;
+      LNode^.DirectData := nil;
+      FreeNode(LNode);
+      FMutex.Acquire;
+      if FPendingTasks > 0 then
+        Dec(FPendingTasks);
+      if FPendingTasks = 0 then
+        FDoneCondVar.Broadcast;
+      FMutex.Release;
+    end;
 end;
 
 procedure TThreadPool.WaitAll;
@@ -332,7 +377,6 @@ begin
   begin
     if not FDoneCondVar.WaitTimeout(FMutex, ATimeoutNs) then
     begin
-      { Timed out — tasks still pending }
       FMutex.Release;
       Exit(False);
     end;

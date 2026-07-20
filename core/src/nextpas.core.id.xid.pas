@@ -72,11 +72,13 @@ end;
 procedure EnsureXidSeeded;
 var
   LCounterSeed: array[0..2] of Byte;
+  LExpected: Int32;
 begin
-  if AtomicLoad32(GXidInitState, moAcquire) = 2 then
+  if atomic_load(GXidInitState, mo_acquire) = 2 then
     Exit;
 
-  if AtomicCompareExchange32(GXidInitState, 0, 1, moAcqRel) = 0 then
+  LExpected := 0;
+  if atomic_compare_exchange_strong(GXidInitState, LExpected, 1, mo_acq_rel, mo_acquire) then
   begin
     try
       IdRngFillBytes(@GMachineId[0], 3);
@@ -84,15 +86,15 @@ begin
       GCounter := (Int32(LCounterSeed[0]) shl 16) or
                   (Int32(LCounterSeed[1]) shl 8) or
                   Int32(LCounterSeed[2]);
-      AtomicStore32(GXidInitState, 2, moRelease);
+      atomic_store(GXidInitState, 2, mo_release);
     except
-      AtomicStore32(GXidInitState, 0, moRelease);
+      atomic_store(GXidInitState, 0, mo_release);
       raise;
     end;
     Exit;
   end;
 
-  while AtomicLoad32(GXidInitState, moAcquire) = 1 do
+  while atomic_load(GXidInitState, mo_acquire) = 1 do
     CpuPause;
   EnsureXidSeeded;
 end;
@@ -113,16 +115,21 @@ var
   LPid: UInt16;
   LRawCnt: UInt32;
   LCnt: UInt32;
+  LLockExpected: Int32;
 begin
   EnsureXidSeeded;
-  while AtomicCompareExchange32(GNewLock, 0, 1) <> 0 do
+  LLockExpected := 0;
+  while not atomic_compare_exchange_strong(GNewLock, LLockExpected, 1, mo_acq_rel, mo_acquire) do
+  begin
+    LLockExpected := 0;
     CpuPause;
+  end;
   try
     LTs := CurrentXidTimestamp;
     if LTs < GLastTs then
       LTs := GLastTs;
     LPid := GetPid16;
-    LRawCnt := UInt32(AtomicFetchAdd32(GCounter, 1));
+    LRawCnt := UInt32(atomic_fetch_add(GCounter, 1, mo_relaxed));
     LCnt := LRawCnt and XID_COUNTER_MASK;
     if GHasLastXid and (LCnt <= GLastCnt) and (LTs <= GLastTs) then
     begin
@@ -149,7 +156,7 @@ begin
     Result.FBytes[10] := Byte(LCnt shr 8);
     Result.FBytes[11] := Byte(LCnt);
   finally
-    AtomicStore32(GNewLock, 0, moRelease);
+    atomic_store(GNewLock, 0, mo_release);
   end;
 end;
 

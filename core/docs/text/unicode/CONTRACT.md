@@ -11,7 +11,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 |--------|------|
 | `types.pas` | 基础类型（含 `TIndicConjunctBreak`） |
 | `base.pas` | 区间二分查找原语 |
-| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets |
+| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets / **East_Asian_Width** |
 | `casefold.pas` | 大小写映射 + CaseFold |
 | `normalize.pas` | NFC/NFD/NFKC/NFKD + QuickCheck |
 | `segment.pas` | UAX#29 Grapheme/Word/Sentence + **UAX#14 LineBreak** ByteLen |
@@ -53,6 +53,13 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
 4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
 
+### 大小写（CaseFolding / SpecialCasing）
+
+1. **官方一致性**：UCD 16.0 `CaseFolding.txt` 状态 C/F/S 全量 fail=0（T Turkic 跳过）
+2. **官方一致性**：`SpecialCasing.txt` 无条件行 fail=0；**Final_Sigma** 字符串 lower 上下文
+3. API：`UTF8ToUpper/Lower/Title/CaseFold`；`UTF8ToTitle` = 逐码点 title（非 Word_Break 词首）
+4. 默认非 tr/az/lt locale；locale 条件 SpecialCasing 不在门禁
+
 ### 排序（UCA / DUCET）
 
 1. **官方一致性**：UCA 16.0 `CollationTest_NON_IGNORABLE` 全量（~206286 数据行，skip 代理）fail=0
@@ -74,7 +81,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 1. 无 CLDR tailored grapheme / word
 2. Collation 仅 DUCET（无 CLDR locale tailor）；UCA CollationTest 官方全绿
 3. **硬** `NextLine` 不替换为 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`
-4. 无完整 East_Asian_Width 表：LB19a 用 F/W/H 近似区间 + LB 类启发
+4. East_Asian_Width 真表（UCD 16.0）：`GetEastAsianWidth`；LB19a `$EastAsian`=F|W|H；列宽 A→1
 
 ## 测试入口
 
@@ -83,7 +90,7 @@ for t in test_case test_data test_enhance test_grapheme_uax29 \
          test_normalize test_property test_collate \
          test_conformance_normalize test_conformance_grapheme \
          test_conformance_word test_conformance_sentence test_conformance_line \
-         test_conformance_bidi_character test_conformance_bidi          test_conformance_collate; do
+         test_conformance_bidi_character test_conformance_bidi          test_conformance_collate test_conformance_case; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```
@@ -99,6 +106,8 @@ python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_collate.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_eaw.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_special_casing.py --version 16.0.0 --output-dir core/src
 ```
 
 ## 变更记录

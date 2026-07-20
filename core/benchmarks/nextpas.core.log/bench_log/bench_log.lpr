@@ -1,6 +1,7 @@
 program bench_log;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.bench, nextpas.core.bench.intf,
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.log.intf, nextpas.core.log;
 type
   TNullHandler = class(TInterfacedObject, ILogHandler)
@@ -22,16 +23,35 @@ function TNullHandler.WithGroup(const AName: string): ILogHandler; begin Result 
 var GSink: UInt64 = 0;
 procedure BenchLogDisabled(const ACtx: IBenchContext);
 var LL: TLogger;
-begin LL := TLogger.Create(TNullHandler.Create(lvInfo)); if LL.Enabled(lvDebug) then LL.Log(lvDebug, 'test'); LL.Free; end;
+begin
+  LL := TLogger.New(TNullHandler.Create(llInfo), llInfo);
+  if LL.Enabled(llDebug) then
+    LL.Debug^.Msg('test');
+  GSink := GSink xor 1;
+end;
 procedure BenchLogNull(const ACtx: IBenchContext);
 var LL: TLogger;
-begin LL := TLogger.Create(TNullHandler.Create(lvDebug)); LL.Log(lvDebug, 'benchmark message'); LL.Free; end;
+begin
+  LL := TLogger.New(TNullHandler.Create(llDebug), llDebug);
+  LL.Debug^.Msg('benchmark message');
+  GSink := GSink xor 2;
+end;
 procedure BenchLogWithAttrs(const ACtx: IBenchContext);
 var LL: TLogger;
-begin LL := TLogger.Create(TNullHandler.Create(lvDebug)); LL.With(['key', 'value']).Log(lvInfo, 'msg'); LL.Free; end;
-var LSuite: IBenchSuite;
 begin
-  LSuite := TBenchSuite.Create('log');
-  LSuite.Add('Disabled/null', @BenchLogDisabled).Add('Simple/null', @BenchLogNull).Add('WithAttrs/null', @BenchLogWithAttrs);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LL := TLogger.New(TNullHandler.Create(llDebug), llDebug);
+  LL.With_('key', 'value').Info^.Msg('msg');
+  GSink := GSink xor 3;
+end;
+var LResults: IBenchResults;
+begin
+  LResults := TBenchSuite.Create('log')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('Disabled/null', @BenchLogDisabled).Add('Simple/null', @BenchLogNull).Add('WithAttrs/null', @BenchLogWithAttrs)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-log.json');
 end.

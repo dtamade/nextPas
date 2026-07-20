@@ -1,6 +1,8 @@
 unit nextpas.core.net.async.dial;
 {**
  * Concurrent Happy Eyeballs (RFC8305 subset) over TAsyncLoop.
+ * Recommended async dial path (Go Dialer-like). Prefer AsyncTcpDial over
+ * AsyncTcpConnect (HE-lite sequential legacy).
  * Staggered multi-A / dual-stack dial: MaxInFlight caps concurrent SYNs;
  * ConnectionAttemptDelayMs is the start-to-start gap (strict CAD; not a burst
  * fill of MaxInFlight). CAD=0 allows immediate refill after failure / next start.
@@ -8,6 +10,7 @@ unit nextpas.core.net.async.dial;
  * then dials as families arrive (DNS-race-while-dialing subset).
  * AsyncTcpDialWithDnsFeed injects stream events for lab timing tests.
  * AsyncTcpConnect remains HE-lite (sequential sync). Use AsyncTcpDial for race.
+ * Dial error codes: ClassifyNetError(AError) (nextpas.core.net.errors).
  *}
 
 {$I nextpas.core.settings.inc}

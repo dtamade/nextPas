@@ -1,13 +1,17 @@
 # nextpas.core.test — Unified test runner
 # =========================================================
 # Usage:
-#   make -C core/tests/nextpas.core.test test    # run all suites
-#   make -C core/tests/nextpas.core.test clean   # clean all build artifacts
-#   make -C core/tests/nextpas.core.test list    # list all suites
+#   make -C core/tests/nextpas.core.test test       # run all suites
+#   make -C core/tests/nextpas.core.test contracts  # source-contract + scale gates
+#   make -C core/tests/nextpas.core.test clean
+#   make -C core/tests/nextpas.core.test list
+#
+# CI tip (strict goldens): export NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1
+#   (committed goldens must exist; no auto-create of new snapshot files)
 
 SUITES := $(sort $(notdir $(wildcard test_*)))
 
-.PHONY: test clean list
+.PHONY: test clean list contracts
 
 test:
 	@echo "=== Running all nextpas.core.test suites ==="
@@ -21,6 +25,13 @@ test:
 	echo ""; \
 	echo "=== Results: $$((total - failed))/$$total suites passed ==="; \
 	[ $$failed -eq 0 ]
+
+contracts:
+	@echo "=== nextpas.core.test contract gates ==="
+	$(MAKE) -C test_api_source_contracts test
+	$(MAKE) -C test_runner_source_contracts test
+	$(MAKE) -C test_scale_report test
+	@echo "=== contract gates: PASS ==="
 
 clean:
 	@for suite in $(SUITES); do \

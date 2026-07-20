@@ -42,20 +42,20 @@ function TBarrier.Wait: TBarrierWaitResult;
 var
   LGen, LRemaining: Int32;
 begin
-  LGen := AtomicLoad32(FGeneration, moAcquire);
-  LRemaining := AtomicFetchSub32(FCount, 1, moAcqRel) - 1;
+  LGen := atomic_load(FGeneration, mo_acquire);
+  LRemaining := atomic_fetch_sub(FCount, 1, mo_acq_rel) - 1;
 
   if LRemaining = 0 then
   begin
-    AtomicStore32(FCount, FTotal, moRelease);
-    AtomicFetchAdd32(FGeneration, 1, moRelease);
+    atomic_store(FCount, FTotal, mo_release);
+    atomic_fetch_add(FGeneration, 1, mo_release);
     platform_wake_address_all(@FGeneration);
     Result.IsLeader := True;
     Result.Generation := LGen;
   end
   else
   begin
-    while AtomicLoad32(FGeneration, moAcquire) = LGen do
+    while atomic_load(FGeneration, mo_acquire) = LGen do
       platform_wait_address32(@FGeneration, LGen, -1);
     Result.IsLeader := False;
     Result.Generation := LGen;

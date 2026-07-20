@@ -4,6 +4,8 @@ program test_tui_widget_clear;
 
 uses
   nextpas.core.tui.base,
+  nextpas.core.tui.color,
+  nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
@@ -324,6 +326,65 @@ begin
   end;
 end;
 
+procedure TestClearWidgetFullAreaAfterPartial;
+var
+  LWidget: IWidget;
+  LBuffer: TBuffer;
+  LCP: PCell;
+begin
+  LWidget := TClearWidget.New;
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 2));
+  try
+    FillWithX(LBuffer, TRect.Make(0, 0, 4, 2));
+    LWidget.Render(TRect.Make(1, 0, 2, 1), LBuffer);
+    LWidget.Render(TRect.Make(0, 0, 4, 2), LBuffer);
+    LCP := LBuffer.CellAt(0, 0);
+    Check(LCP^.Glyph.Bytes[0] = 32, 'full clear row0');
+    LCP := LBuffer.CellAt(3, 1);
+    Check(LCP^.Glyph.Bytes[0] = 32, 'full clear row1');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestClearWidgetStyleDefaultAfterStyled;
+var
+  LWidget: IWidget;
+  LBuffer: TBuffer;
+  LCP: PCell;
+  LStyle: TStyle;
+begin
+  LWidget := TClearWidget.New;
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  try
+    LStyle := StyleDefault;
+    LStyle.Fg := RgbColor(255, 0, 0);
+    LBuffer.SetString(0, 0, 'AB', LStyle);
+    LWidget.Render(TRect.Make(0, 0, 2, 1), LBuffer);
+    LCP := LBuffer.CellAt(0, 0);
+    Check(ColorEquals(LCP^.Fg, CELL_EMPTY.Fg) or (not ColorIsSet(LCP^.Fg)),
+      'fg cleared/default');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestClearWidgetDoesNotGrowBuffer;
+var
+  LWidget: IWidget;
+  LBuffer: TBuffer;
+begin
+  LWidget := TClearWidget.New;
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 2));
+  try
+    LWidget.Render(TRect.Make(0, 0, 3, 2), LBuffer);
+    CheckEqual(3, LBuffer.Area.Width, 'width unchanged');
+    CheckEqual(2, LBuffer.Area.Height, 'height unchanged');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.clear');
   T.Test('TClearWidget.New', @TestClearWidgetNew);
@@ -339,5 +400,8 @@ begin
   T.Test('TClearWidget partial clip edge', @TestClearWidgetPartialClipEdge);
   T.Test('TClearWidget resets to CELL_EMPTY', @TestClearWidgetResetsToCellEmpty);
   T.Test('TClearWidget two instances', @TestClearWidgetTwoInstances);
+  T.Test('TClearWidget full after partial', @TestClearWidgetFullAreaAfterPartial);
+  T.Test('TClearWidget style default after styled', @TestClearWidgetStyleDefaultAfterStyled);
+  T.Test('TClearWidget does not grow buffer', @TestClearWidgetDoesNotGrowBuffer);
   if not T.Run then Halt(1);
 end.

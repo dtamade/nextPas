@@ -252,7 +252,7 @@ var
   LOldState: Int32;
 begin
   { 原子状态转换：ACTIVE -> CANCELLED }
-  LOldState := AtomicExchange32(FState, CANCEL_STATE_CANCELLED, moAcqRel);
+  LOldState := atomic_exchange(FState, CANCEL_STATE_CANCELLED, mo_acq_rel);
   if LOldState = CANCEL_STATE_CANCELLED then
     Exit;  { 已经取消，避免重复触发 }
 
@@ -269,7 +269,7 @@ end;
 
 function TAsyncCancellationTokenImpl.IsCancelled: Boolean;
 begin
-  Result := AtomicLoad32(FState, moAcquire) = CANCEL_STATE_CANCELLED;
+  Result := atomic_load(FState, mo_acquire) = CANCEL_STATE_CANCELLED;
 end;
 
 procedure TAsyncCancellationTokenImpl.OnCancel(ACallback: TCancelCallback;
