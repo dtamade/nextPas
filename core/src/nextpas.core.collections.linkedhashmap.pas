@@ -123,6 +123,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 { TLinkedHashMap<K,V> }
 
 constructor TLinkedHashMap.Create;
@@ -173,7 +176,7 @@ begin
   if aNode <> nil then
   begin
     Finalize(aNode^);  // Finalize managed fields
-    Self.FAllocator.FreeMem(aNode);
+    FreeMemOf(Self.FAllocator, aNode, SizeOf(TNode));
   end;
 end;
 

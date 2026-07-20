@@ -191,7 +191,8 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | 切片 | 内容 | 状态 |
 |------|------|------|
 | **H0** | Steady 收官：决策树 · SCORECARD 刷新 · CI guardrail · 文档终态 | **done** 2026-07-20 |
-| H1 | element_manager FreeMemOf（仅当 tracking 测允许） | 可选 |
+| **H1** | element_manager FreeMemOf | **done** 2026-07-20（test_contracts 绿） |
+| **H1b** | treemap / lrucache / linkedhashmap 节点 FreeMemOf | **done** 2026-07-20 |
 | H∞ | 回归 / 命名 D3 / GHA mem 红 | 持续 |
 
 ---
