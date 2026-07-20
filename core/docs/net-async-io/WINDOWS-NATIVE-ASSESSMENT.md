@@ -1,6 +1,6 @@
 # Windows native async host evidence — assessment (Q17 → Q24B)
 
-**Date**: 2026-07-20  
+**Date**: 2026-07-20
 **Scope**: nextpas.core async I/O on **native Windows** (not Wine)
 
 ## Current evidence tiers
