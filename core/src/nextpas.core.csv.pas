@@ -9,9 +9,11 @@ unit nextpas.core.csv;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.io.intf,
   nextpas.core.mem.intf,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TStringArray = array of string;
@@ -38,10 +40,13 @@ type
     FHasError: Boolean;
     FError: TCsvError;
     FAllocator: TMemAllocator;
+    FReader: IReader;     { nil = pure string mode; non-nil = refill stream }
+    FStreamEOF: Boolean;
     procedure SetError(const AMessage: string);
     procedure SetErrorAt(const AMessage: string; AOffset: SizeUInt);
     procedure SetErrorPosition(var AError: TCsvError; AOffset: SizeUInt);
     procedure SetDelimiter(AValue: AnsiChar);
+    function Refill: Boolean;
     function PeekChar: AnsiChar; inline;
     function AtEnd: Boolean; inline;
     procedure SkipLineEnding;
@@ -52,11 +57,20 @@ type
   public
     procedure Init(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
-      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil);
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil); overload;
+    { Stream from IReader with chunked refill (Go encoding/csv Reader shape). }
+    procedure Init(const AReader: IReader; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil); overload;
     procedure Done;
     class function Create(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
       AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil): TCsvReader; static;
+      overload;
+    class function Create(const AReader: IReader; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil): TCsvReader; static;
+      overload;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
@@ -97,6 +111,9 @@ implementation
 uses
   nextpas.core.mem.default,
   nextpas.core.mem;
+
+const
+  CsvStreamChunkSize = 8192;
 
 type
   PStringSlot = ^string;
@@ -214,6 +231,8 @@ begin
     FAllocator := DefaultAllocator
   else
     FAllocator := AAllocator;
+  FReader := nil;
+  FStreamEOF := True;
   FInput := AInput;
   FData := PAnsiChar(FInput);
   FLen := Length(AInput);
@@ -245,6 +264,8 @@ begin
   FError.Line := 1;
   FError.Column := 1;
   FAllocator := nil;
+  FReader := nil;
+  FStreamEOF := True;
 end;
 
 class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
@@ -255,13 +276,79 @@ begin
     AAllocator);
 end;
 
+procedure TCsvReader.Init(const AReader: IReader; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: TMemAllocator);
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('TCsvReader.Init: reader must not be nil');
+  ValidateCsvDelimiter(ADelimiter, 'TCsvReader.Create');
+  ValidateCsvCommentMarker(AComment, ADelimiter, 'TCsvReader.Create');
+  if AAllocator = nil then
+    FAllocator := DefaultAllocator
+  else
+    FAllocator := AAllocator;
+  FReader := AReader;
+  FStreamEOF := False;
+  FInput := '';
+  FData := nil;
+  FLen := 0;
+  FPos := 0;
+  FDelimiter := ADelimiter;
+  FFieldsPerRecord := AFieldsPerRecord;
+  FTrimSpace := ATrimSpace;
+  FComment := AComment;
+  FHasError := False;
+  FError.Message := '';
+  FError.Offset := 0;
+  FError.Line := 1;
+  FError.Column := 1;
+  Refill;
+end;
+
+class function TCsvReader.Create(const AReader: IReader; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: TMemAllocator): TCsvReader;
+begin
+  Result.Init(AReader, ADelimiter, AFieldsPerRecord, ATrimSpace, AComment,
+    AAllocator);
+end;
+
+function TCsvReader.Refill: Boolean;
+var
+  LBuf: array[0..CsvStreamChunkSize - 1] of AnsiChar;
+  LN: SizeUInt;
+  LOldLen: SizeUInt;
+begin
+  Result := False;
+  if (FReader = nil) or FStreamEOF then
+    Exit;
+  LN := FReader.Read(LBuf[0], SizeUInt(CsvStreamChunkSize));
+  if LN = 0 then
+  begin
+    FStreamEOF := True;
+    Exit(False);
+  end;
+  LOldLen := Length(FInput);
+  SetLength(FInput, LOldLen + LN);
+  Move(LBuf[0], FInput[LOldLen + 1], LN);
+  FData := PAnsiChar(FInput);
+  FLen := SizeUInt(Length(FInput));
+  Result := True;
+end;
+
 function TCsvReader.PeekChar: AnsiChar;
 begin
+  if AtEnd then
+    Exit(#0);
   Result := FData[FPos];
 end;
 
 function TCsvReader.AtEnd: Boolean;
 begin
+  while (FPos >= FLen) and (FReader <> nil) and (not FStreamEOF) do
+    if not Refill then
+      Break;
   Result := FPos >= FLen;
 end;
 
@@ -378,15 +465,22 @@ begin
   while not AtEnd do
   begin
     LStart := FPos;
-    { Scan until quote }
-    while (FPos < FLen) and (FData[FPos] <> '"') do
-      Inc(FPos);
+    { Scan until quote; refill when the buffer ends mid-field. }
+    while True do
+    begin
+      while (FPos < FLen) and (FData[FPos] <> '"') do
+        Inc(FPos);
+      if FPos < FLen then
+        Break;
+      if not Refill then
+        Break;
+    end;
     if FPos > LStart then
     begin
       SetString(LPart, @FData[LStart], FPos - LStart);
       LBuf := LBuf + LPart;
     end;
-    if AtEnd then
+    if AtEnd or (FPos >= FLen) or (FData[FPos] <> '"') then
     begin
       SetErrorAt('Unclosed quoted field', LQuoteOffset);
       Break;

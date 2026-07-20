@@ -15,6 +15,8 @@
 | **Q18** | 同机 Go/Rust bench 脚本 | SCORECARD 表；CI 不强制对照 | **done** |
 | **Q19** | localhost dial 吞吐对照 | dial_ops_per_s + go peer | **done** |
 | **Q20** | 并发 multi-dial 吞吐 | dial_concurrent_ops_per_s + go concurrent peer；Windows assessment 轻量 | **done** |
+| **Q21** | 公网 DNS HE 统计样本 | opt-in `NEXTPAS_PUBLIC_DNS_HE=1`；metrics；非 CI 门 | **done** |
+| **Q22** | Windows native async smoke 挂钩 | `async-windows-native-smoke.sh` + CI continue-on-error | **done** |
 
 ## Q13 细节
 

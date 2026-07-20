@@ -73,6 +73,37 @@ begin
   end;
 end;
 
+procedure TestFacadeExposesStructuredErrorSurface;
+var
+  Ini: TIniFile;
+  LErr: TIniError;
+  LMsg: string;
+begin
+  Ini := TIniFile.Create;
+  try
+    CheckEqual(False,
+      Ini.TryLoadFromString('[unclosed' + #10 + 'key=value' + #10, LErr),
+      'structured TryLoadFromString fails on unclosed section');
+    CheckEqual('missing closing ] in section header', LErr.Message,
+      'structured error message');
+    CheckEqual(UInt32(1), LErr.Line, 'structured error line');
+    CheckEqual(UInt32(1), LErr.Column, 'structured error column');
+    CheckEqual(False,
+      Ini.TryLoadFromString('[unclosed' + #10 + 'key=value' + #10, LMsg),
+      'string TryLoadFromString still fails');
+    Check(Pos('line 1', LMsg) > 0, 'string error keeps line prefix');
+    Check(Pos('missing closing', LMsg) > 0, 'string error keeps message');
+
+    CheckEqual(True,
+      Ini.TryLoadFromString('[ok]' + #10 + 'a=1' + #10, LErr),
+      'structured TryLoadFromString success');
+    CheckEqual('', LErr.Message, 'success clears structured message');
+    CheckEqual(UInt32(0), LErr.Line, 'success clears line');
+  finally
+    Ini.Free;
+  end;
+end;
+
 procedure TestFacadeExposesAllocatorSurface;
 var
   Ini: TIniFile;
@@ -106,6 +137,8 @@ begin
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade exposes write surface', @TestFacadeExposesWriteSurface);
   T.Test('facade exposes delete surface', @TestFacadeExposesDeleteSurface);
+  T.Test('facade exposes structured error surface',
+    @TestFacadeExposesStructuredErrorSurface);
   T.Test('facade exposes allocator surface',
     @TestFacadeExposesAllocatorSurface);
   if not T.Run then Halt(1);

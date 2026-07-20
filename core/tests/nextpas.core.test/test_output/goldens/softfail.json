@@ -1,0 +1,23 @@
+{
+  "name": "softfail-golden",
+  "totalPassed": 0,
+  "totalFailed": 1,
+  "totalSkipped": 0,
+  "suites": [
+    {
+      "name": "softfail-golden",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "allPassed": true,
+      "tests": [
+        {
+          "name": "soft_only",
+          "status": "failed"
+          ,"message": "alpha; beta; gamma"
+          ,"durationMs": 0
+        }
+      ]
+    }
+  ]
+}

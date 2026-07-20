@@ -227,10 +227,42 @@ begin
        (LResult.Results[I].Status = tsFailed) then
     begin
       LFound := True;
-      CheckTrue(Pos('par soft a', LResult.Results[I].Message) > 0);
-      CheckTrue(Pos('par soft b', LResult.Results[I].Message) > 0);
+      { v8.19 exact join under RunParallel }
+      CheckEqual('par soft a; par soft b', LResult.Results[I].Message);
     end;
   CheckTrue(LFound, 'soft_a failed with both messages');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB30ParallelSoftFailPathCase(const AC: TTestCase);
+{ Data: single soft message. RunParallel: that test fails exact, peer passes. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFound: Boolean;
+begin
+  LSuite := TTestSuite.Create('par-fp-' + AC.Name);
+  LSuite.Test('soft', procedure
+    begin
+      SoftFail(AC.Data);
+    end);
+  LSuite.Test('peer', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult));
+  CheckEqual(1, LResult.Failed);
+  CheckEqual(1, LResult.Passed);
+  LFound := False;
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Name = 'soft' then
+    begin
+      LFound := True;
+      CheckEqual(Ord(tsFailed), Ord(LResult.Results[I].Status));
+      CheckEqual(AC.Data, LResult.Results[I].Message);
+    end;
+  CheckTrue(LFound, 'soft result present ' + AC.Name);
   LSuite := Default(TTestSuite);
 end;
 
@@ -613,6 +645,9 @@ var
   LFailSuite, LSkipSuite: TTestSuite;
   LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
+  LB30Suite: TTestSuite;
+  LB30Cases: specialize TArray<TTestCase>;
+  LB30I: Integer;
 begin
   WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
@@ -1010,6 +1045,24 @@ begin
   begin
     TestParallelSoftFail;
     PassTest('B23 parallel SoftFail');
+  end;
+
+  WriteLn;
+  SectionHeader('B30: parallel SoftFail fail-path table');
+  begin
+    SetLength(LB30Cases, 48);
+    for LB30I := 0 to High(LB30Cases) do
+    begin
+      LB30Cases[LB30I].Name := 'p' + IntToStr(LB30I);
+      LB30Cases[LB30I].Data := 'par-soft-msg-' + IntToStr(LB30I);
+    end;
+    LB30Suite := TTestSuite.Create('par-b30');
+    LB30Suite.TestTable('B30 parallel soft fail-path', LB30Cases,
+      @TestB30ParallelSoftFailPathCase);
+    if not LB30Suite.Run then
+      FailTest('B30 parallel soft fail-path table failed');
+    PassTest('B30 parallel soft fail-path table');
+    LB30Suite := Default(TTestSuite);
   end;
 
   WriteLn;

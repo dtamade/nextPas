@@ -46,6 +46,15 @@ begin
   LoadConfigFileByFormat(Self, APath, AFormat);
 end;
 
+procedure TConfig.LoadFromFile(const APath: string);
+var
+  LError: string;
+begin
+  RequireConfigFilePath(APath);
+  if not TryLoadFromFile(APath, LError) then
+    raise EConfigError.Create(LError);
+end;
+
 function TConfig.TryLoadFromIni(const AContent: string; out AError: string): Boolean;
 var
   LIni: TIniFile;
@@ -147,6 +156,8 @@ function TConfig.TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
   out AError: string): Boolean;
 var
   LContent: string;
+  LSniff: TConfigFormat;
+  LFirstError: string;
 begin
   AError := '';
   if APath = '' then
@@ -172,8 +183,17 @@ begin
 
   try
     Result := TryLoadConfigTextByFormat(Self, LContent, AFormat, AError);
-    if not Result then
-      AError := FormatConfigFileLoadError(APath, AError);
+    if Result then
+      Exit;
+    LFirstError := AError;
+    { Wrong extension recovery: sniff content and retry once if format differs. }
+    if TrySniffConfigFormat(LContent, LSniff) and (LSniff <> AFormat) then
+    begin
+      if TryLoadConfigTextByFormat(Self, LContent, LSniff, AError) then
+        Exit(True);
+    end;
+    AError := FormatConfigFileLoadError(APath, LFirstError);
+    Result := False;
   except
     on E: Exception do
     begin
@@ -181,6 +201,56 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function TConfig.TryLoadFromFile(const APath: string; out AError: string): Boolean;
+var
+  LContent: string;
+  LFormat: TConfigFormat;
+  LFirstError: string;
+begin
+  AError := '';
+  if APath = '' then
+  begin
+    AError := ConfigFilePathEmptyError;
+    Exit(False);
+  end;
+
+  try
+    LContent := ReadFileText(APath);
+  except
+    on E: Exception do
+    begin
+      AError := FormatConfigFileLoadError(APath, E.Message);
+      Exit(False);
+    end;
+  end;
+
+  if TryDetectConfigFormat(APath, LFormat) then
+  begin
+    if TryLoadConfigTextByFormat(Self, LContent, LFormat, AError) then
+      Exit(True);
+    LFirstError := AError;
+    if TrySniffConfigFormat(LContent, LFormat) then
+    begin
+      { LFormat may equal extension format; retry only after sniff still useful
+        when extension load failed for non-format reasons — re-sniff assigns. }
+      if TryLoadConfigTextByFormat(Self, LContent, LFormat, AError) then
+        Exit(True);
+    end;
+    AError := FormatConfigFileLoadError(APath, LFirstError);
+    Exit(False);
+  end;
+
+  if not TrySniffConfigFormat(LContent, LFormat) then
+  begin
+    AError := FormatConfigFileLoadError(APath,
+      'cannot sniff config format from content');
+    Exit(False);
+  end;
+  Result := TryLoadConfigTextByFormat(Self, LContent, LFormat, AError);
+  if not Result then
+    AError := FormatConfigFileLoadError(APath, AError);
 end;
 
 function TConfig.TryLoadJson(const AContent: string; out AError: string): Boolean;

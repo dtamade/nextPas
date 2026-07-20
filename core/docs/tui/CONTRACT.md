@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.16
+**版本**：1.17
 
 ---
 
@@ -167,15 +167,14 @@ end;
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 - Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
-### 6.1 Scorecard 与跨语言对标（Wave Q1–Q14）
+### 6.1 Scorecard 与跨语言对标（Wave Q1–Q15）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC22）
-  - SC1–SC19：diff/parse/layout/协议/backend mouse/resize/% 等
-  - **SC20** SGR RGB FG；**SC21** DrawPatches 相邻复用；**SC22** RatioConstraint VSplit
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC25）
+  - SC1–SC22：diff/parse/layout/协议/backend/SGR RGB/DrawPatches 复用/ratio 等
+  - **SC23** indexed SGR；**SC24** DrawPatches 样式切换；**SC25** FocusManager Tab
 - **纲领**: `PARITY-GO-RUST.md` · `SCORECARD.md`
 - **同方法论对照**: `bench_go_rust`（`make compare`）
-- **契约脚本**: `./scripts/tui-contract-check.sh`（含 **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐）
-- 输入韧性：`test_tui_input` + SC15
+- **契约脚本**: `./scripts/tui-contract-check.sh`（**C7** 对齐至 SC23–SC25）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
 
 ---
@@ -184,6 +183,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.17 | SC23 indexed SGR + SC24 style-change patches + SC25 focus Tab；C7 升级 | Claude |
 | 2026-07-20 | 1.16 | SC20 SGR rgb + SC21 DrawPatches + SC22 ratio；contract-check C7 | Claude |
 | 2026-07-20 | 1.15 | SC17 backend mouse modes + SC18 resize + SC19 pct layout；examples multi-demo | Claude |
 | 2026-07-20 | 1.14 | SC14 hsplit + SC15 输入韧性 + SC16 diff 上界；PARITY 质量矩阵；bench HSplit | Claude |

@@ -4,13 +4,13 @@
 **层级**：配置文本格式（依赖 L0：`text.conv`、`errors`、`mem`）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
 **最后更新**：2026-07-20
-**版本**：1.0（首次契约；对齐真实实现）
+**版本**：1.1（+ `TIniError` 结构化诊断）
 
 ---
 
 ## 1. 源文件与职责
 
-单文件：`TIniFile` class、`TIniSection` / `TIniEntry` 内部存储、`IniParse*` / `IniStringify`。
+单文件：`TIniFile` class、`TIniError`、`TIniSection` / `TIniEntry` 内部存储、`IniParse*` / `IniStringify`。
 
 ---
 
@@ -18,14 +18,23 @@
 
 ```pascal
 type
+  TIniError = record
+    Message: string;
+    Line: UInt32;
+    Column: UInt32;
+    Offset: SizeUInt;
+  end;
+
   TIniFile = class
     constructor Create(const AAllocator: TMemAllocator = nil);
     destructor Destroy; override;
 
     procedure LoadFromString(const AContent: string);
     procedure LoadFromFile(const AFileName: string);
-    function TryLoadFromString(const AContent: string; out AError: string): Boolean;
-    function TryLoadFromFile(const APath: string; out AError: string): Boolean;
+    function TryLoadFromString(const AContent: string; out AError: string): Boolean; overload;
+    function TryLoadFromString(const AContent: string; out AError: TIniError): Boolean; overload;
+    function TryLoadFromFile(const APath: string; out AError: string): Boolean; overload;
+    function TryLoadFromFile(const APath: string; out AError: TIniError): Boolean; overload;
     procedure SaveToFile(const AFileName: string);
     function ToString: string; override;
 
@@ -59,11 +68,11 @@ function IniStringify(const AFile: TIniFile): string;
 | API | 行为 |
 |-----|------|
 | `LoadFromString` | 宽松解析；重复 section 合并、重复 key last-wins |
-| `TryLoadFromString` / `TryLoadFromFile` | `False` + **string** error（无 `TIniError` record 类型） |
+| `TryLoadFromString` / `TryLoadFromFile` | `False` + string **或** `TIniError`（重载） |
 | `LoadFromFile` / `SaveToFile` | 文件 I/O 失败抛 `ENextPasError` |
 | OOM | `EResourceExhaustedError` |
 
-行尾：LF、CRLF、lone CR 均识别。Try-load 校验失败消息通常含 `line N` 文本前缀，不是结构化 offset 记录。
+行尾：LF、CRLF、lone CR 均识别。结构化 `TIniError` 提供 `Message`/`Line`/`Column`/`Offset`；string 重载格式为 `line N, column C: message`（与历史兼容）。
 
 ---
 

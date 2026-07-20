@@ -4,7 +4,8 @@
 **Authority**：规模门闩定义见 `ROADMAP.md` / `GOAL_TREE.md`；历史表见 `BENCHMARKS.md`。
 
 **Claim (current)**：*Scale-ready (H1 server, Linux epoll)* — same-machine, limited workloads.
-**Not claimed**：H1+H2 package scale-ready；H3；跨机榜。
+**Authority**：完整允许/禁止表述见 [`CLAIM.md`](CLAIM.md)（R0 冻结）。
+**Not claimed**：H1+H2 package；HTTPS scale-ready；H3；Windows scale；跨机榜。
 
 从仓库根目录进入 `core/` 后执行。
 
