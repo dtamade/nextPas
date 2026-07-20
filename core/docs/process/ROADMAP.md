@@ -26,7 +26,7 @@
 | **E0 Host Essential** | Linux Essential 矩阵无 Missing（有意 ≠ Go 须写清）；框架合规；SCORECARD 可复现 | **DONE（R34）** |
 | **E1 Host Hardening** | INV 稳定；无已知 P0；wine-runtime-smoke 绿；同方法 bench | **DONE** |
 | **E2 Windows usable** | 核心路径 Win 可用或正式 Partial/Out-of-scope；无「代码写 Done、实则 stub」 | **DONE（M2-W1…W4；truth=wine-runtime-smoke）** |
-| **E3 CI host-windows** | 真 Windows runner；truth ≠ 仅 wine | **OPEN（可选/基础设施）** |
+| **E3 CI host-windows** | 真 Windows runner；truth ≠ 仅 wine | **DONE（M3；L2 最小生产集 gate）** |
 
 ### Host Maintenance 定义（冻结）
 
@@ -84,14 +84,14 @@ M1 Freeze + Governance         ← 本图落地即完成
         │
         ├──────────────────┐
         ▼                  ▼
-M2 Windows Usable ✅      M3 CI host-windows（可选）
+M2 Windows Usable ✅      M3 CI host-windows ✅
    W1 Watch S2 ✅
    W2 Job / KillTree ✅
    W3 Spawn 矩阵 ✅
    W4 文档与 wine 收敛 ✅
         │
         ▼
-Host + Win(wine)：仅 Maintenance（bug/安全/M3）
+Host + Win：仅 Maintenance（bug/安全）
 ```
 
 ### M0 — Host Essential Complete — **DONE**
@@ -126,9 +126,17 @@ Host + Win(wine)：仅 Maintenance（bug/安全/M3）
 
 编号：**用 W1–W4**，不用 R35/R36/…
 
-### M3 — CI host-windows（可选）
+### M3 — CI host-windows — **DONE**
 
-有 runner 才做；SCORECARD 增加 `host-windows` 标签。无 runner → 挂起，不阻塞 M1/M2 声明。
+| 交付 | 说明 |
+|------|------|
+| Runner | 既有 `core-ci.yml` → `test-windows-runtime`（`windows-latest` + FPC trunk） |
+| L2 门禁 | `core/scripts/l2-windows-ci-matrix.sh`：5 套件 `make clean test` |
+| CI 步骤 | `L2 process/fs/path/env Windows min-set (host-windows)` |
+| truth | **`host-windows`**（仅最小生产集；≠ 全量 Host 矩阵） |
+| 文档 | [WIN.md](./WIN.md) · [SCORECARD.md](./SCORECARD.md) |
+
+**不做**：把 wine 数字改标 host-windows；全量 L2 Unix 套件搬上 Win CI。
 
 ---
 
@@ -209,3 +217,4 @@ Host + Win(wine)：仅 Maintenance（bug/安全/M3）
 | 2026-07-20 | **M2-W2**：Win Job Object NewProcessGroup + KillTree；wine process 9 |
 | 2026-07-20 | **M2-W3**：Win ExtraFd/Credential fail-closed 矩阵；wine process 11 |
 | 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24 + 文档对齐；**E2 Done**（wine truth） |
+| 2026-07-20 | **M3**：`l2-windows-ci-matrix.sh` + core-ci Windows job；**E3 Done**（host-windows min-set） |

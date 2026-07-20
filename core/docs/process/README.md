@@ -7,7 +7,7 @@ L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Comman
 **Go/Rust 对标矩阵**：见 [`PARITY-go-rust.md`](./PARITY-go-rust.md)（含 fs/path/env）。  
 **证据 / scorecard**：见 [`SCORECARD.md`](./SCORECARD.md)。
 
-> **Host Linux Essential 已完成（Maintenance）**；**M2 Windows usable（wine）Done**。新需求须贴标签，见 ROADMAP §5。
+> **Host Linux Essential 已完成（Maintenance）**；**M2 wine usable + M3 host-windows min-set gate Done**。新需求须贴标签，见 ROADMAP §5。
 ## 快速开始
 
 ```pascal

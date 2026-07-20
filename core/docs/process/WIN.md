@@ -1,7 +1,13 @@
-# process / fs / path / env — Windows 一眼表（M2 出口）
+# process / fs / path / env — Windows 一眼表（M2+M3 出口）
 
-**状态**：M2-W1…W4 **Done**（2026-07-20）  
-**truth**：下列证据为 `wine-runtime-smoke`（Win64 交叉编译 + Wine），**≠** 真 Windows host（那是 M3）。  
+**状态**：M2-W1…W4 **Done** · **M3 host-windows CI gate Done**（2026-07-20）  
+**truth 分层**：
+
+| 标签 | 含义 |
+|------|------|
+| `wine-runtime-smoke` | Win64 交叉 + Wine（本地/Linux CI） |
+| `host-windows` | 真 Windows runner 上 native `make test`（GHA `windows-latest`） |
+
 **总图**：[ROADMAP.md](./ROADMAP.md) · **证据**：[SCORECARD.md](./SCORECARD.md)
 
 ---
@@ -17,27 +23,37 @@
 
 ---
 
-## 2. wine 最小生产集（硬清单）
+## 2. 最小生产集（硬清单）
 
-一键复跑：
+### 2.1 wine（本地 / Linux）
 
 ```bash
-# 仓库根
 bash core/tests/run_l2_wine_min_set.sh
 ```
 
-| 套件 | 路径 | 期望 cases | 覆盖意图 |
-|------|------|------------|----------|
-| process | `core/tests/nextpas.core.process/test_process_wine` | **11** | echo/Capture/LookPath/timeout/MaxOutput/Status/Kill/**KillTree**/ExtraFd×/Cred× |
-| fs | `…/fs/test_fs_wine` | **3** | Write-Read-Remove / MkdirAll / OpenLocked |
-| fs.watch | `…/fs/test_fs_watch_wine` | **3** | create-close / poll timeout / create-event **or soft** |
-| path | `…/path/test_path_wine` | **4** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
-| os.env | `…/os.env/test_os_env_wine` | **3** | GetEnv / Set-Unset-Expand / Expand brace |
-| **合计** | 5 目录 | **24** | 生产路径 smoke；非全量 Host 矩阵 |
+| 套件 | 路径 | 期望 cases |
+|------|------|------------|
+| process | `…/test_process_wine` | **11** |
+| fs | `…/test_fs_wine` | **3** |
+| fs.watch | `…/test_fs_watch_wine` | **3** |
+| path | `…/test_path_wine` | **4** |
+| os.env | `…/test_os_env_wine` | **3** |
+| **合计** | 5 目录 | **24** |
 
-**通过标准（M2 出口）**：五套件均绿、0 leak（heaptrc）。Watch create-event 允许 soft residual（打印说明，不 fail）。
+### 2.2 host-windows（真 Windows CI · M3）
 
-**禁止**：把本表写成 `host-windows` production ready。
+```bash
+# 在 Windows 主机 / GHA windows-latest（cwd 可为 core/）
+bash core/scripts/l2-windows-ci-matrix.sh
+```
+
+同一 5 目录，目标为 native **`make clean test`**（非 `wine-runtime-smoke`）。  
+CI 接线：`.github/workflows/core-ci.yml` → job `test-windows-runtime` → step  
+`L2 process/fs/path/env Windows min-set (host-windows)`。
+
+**通过标准**：五套件均绿。Watch create-event 仍允许 soft residual（与 wine 套件相同逻辑）。
+
+**禁止**：把 wine 结果改写成 `host-windows`；把 min-set 说成「全量 L2 Windows 测试」。
 
 ---
 
@@ -47,7 +63,7 @@ bash core/tests/run_l2_wine_min_set.sh
 
 | 能力 | Linux | Windows | 失败形态 |
 |------|-------|---------|----------|
-| Spawn / Wait / Capture / Status | Done | Done（wine） | raise |
+| Spawn / Wait / Capture / Status | Done | Done | raise |
 | Timeout / MaxOutput / CancelToken | Done | Done | 语义同 Host |
 | NewProcessGroup / KillTree | setpgid + kill(-pg) | **Job Object** | raise |
 | ExtraFd | Done | **UNSUPPORTED** | Spawn 前 `EProcessError` |
@@ -58,20 +74,20 @@ bash core/tests/run_l2_wine_min_set.sh
 
 | 能力 | Linux | Windows | 失败形态 |
 |------|-------|---------|----------|
-| Read/Write/MkdirAll/Remove/… | Done | Done（wine 子集） | raise |
+| Read/Write/MkdirAll/Remove/… | Done | Done（min-set 子集） | raise |
 | OpenLocked / Lock | flock | LockFileEx | busy→False / raise |
-| ReadAt / WriteAt | Done | Done（L0 pread/pwrite） | raise |
+| ReadAt / WriteAt | Done | Done（L0） | raise |
 | Chown | Done | **UNSUPPORTED** | 平台错误映射 |
 | Watch Add/Poll | inotify | **RDCW S2** | soft on Wine |
-| Watch AddTree 多目录 | Done | **Partial**（L0 目录槽有限；见 platform） | NOSPC / 文档 |
+| Watch AddTree 多目录 | Done | Partial | NOSPC / 文档 |
 
 ### path / env
 
 | 能力 | Windows 备注 |
 |------|----------------|
 | path 分隔符 / Volume | `\` 与盘符；ToSlash 可移植 |
-| env 大小写 | **不区分**（`EnvironmentVariableNamesCaseSensitive=false`） |
-| Expand | 支持 `$VAR` / `${VAR}` / `%VAR%` |
+| env 大小写 | **不区分** |
+| Expand | `$VAR` / `${VAR}` / `%VAR%` |
 | User*Dir | `%USERPROFILE%` / `%LOCALAPPDATA%` / `%APPDATA%` |
 
 详细 INV：各模块 `CONTRACT.md`。
@@ -82,11 +98,8 @@ bash core/tests/run_l2_wine_min_set.sh
 
 | 波次 | 交付 | 状态 |
 |------|------|------|
-| M2-W1 | Watch S2 + L2 wine | Done |
-| M2-W2 | Job Object + KillTree | Done |
-| M2-W3 | ExtraFd/Cred 矩阵 fail-closed | Done |
-| **M2-W4** | 本页 + 最小生产集脚本 + 文档对齐 | **Done** |
-| M3 | 真 `host-windows` CI | 可选 / 开放 |
+| M2-W1…W4 | Watch / Job / fail-closed / 文档 | Done |
+| **M3** | `l2-windows-ci-matrix` + core-ci 步骤 | **Done** |
 
 ---
 
@@ -94,4 +107,5 @@ bash core/tests/run_l2_wine_min_set.sh
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-20 | M2-W4：一眼表 + wine 最小生产集（24 cases / 5 suites） |
+| 2026-07-20 | M2-W4：一眼表 + wine 最小生产集（24） |
+| 2026-07-20 | M3：host-windows 门禁脚本 + GHA 接线 |
