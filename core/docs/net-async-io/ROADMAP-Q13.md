@@ -11,7 +11,7 @@
 | **Q14** | 统一 IAsyncCancellationToken / INetCancelToken | `NetCancelFromAsync` + soak | **done** |
 | **Q15** | Async UDP 最小面 | Bind/RecvFrom/SendTo + Timeout | **done** |
 | **Q16** | Pool.AcquireAsync → AsyncTcpDial | Token + idle 校验 | **done** |
-| Q17 | 平台证据加深 | kqueue accept/connect；Windows native 评估 | 后续 |
+| **Q17** | 平台证据加深 | kqueue accept/connect；Windows native 评估 | **done** |
 | Q18 | 同机 Go/Rust bench 脚本 | SCORECARD 表；CI 不强制对照 | 后续 |
 
 ## Q13 细节
