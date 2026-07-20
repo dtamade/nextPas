@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC16 (PARITY-GO-RUST Wave Q1–Q12)
+ * tui Scorecard SC1–SC19 (PARITY-GO-RUST Wave Q1–Q13)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -19,6 +19,9 @@ program scorecard;
  *   SC14 HorizontalSplit correctness
  *   SC15 Input resilience (NeedMore + recovery)
  *   SC16 Diff single-cell upper bound
+ *   SC17 Backend mouse Enter/Leave alternate sequences
+ *   SC18 ResizeEvent helpers
+ *   SC19 PercentageConstraint vertical split
  *}
 
 {$I nextpas.core.settings.inc}
@@ -35,6 +38,7 @@ uses
   nextpas.core.tui.layout,
   nextpas.core.tui.layout.grid,
   nextpas.core.tui.overlay,
+  nextpas.core.tui.backend.ansi,
   nextpas.core.tui.terminal;
 
 const
@@ -702,6 +706,87 @@ begin
   AddRow('SC16a', 'diff_single_cell', 0, 1, LOk, '1 cell dirty patches << full');
 end;
 
+function BackendPendingStr(ABackend: TAnsiBackend): AnsiString;
+var
+  LLen: Integer;
+begin
+  Result := '';
+  LLen := ABackend.PendingLength;
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(ABackend.PendingBytes^, Result[1], LLen);
+end;
+
+procedure RunSC17;
+var
+  LBE: TAnsiBackend;
+  LPending: AnsiString;
+  LOk: Boolean;
+begin
+  WriteLn('SC17 Backend mouse Enter/Leave alternate ...');
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.EnterAlternate(amMouseFull, False);
+    LPending := BackendPendingStr(LBE);
+    if (Pos(#27'[?1003h', LPending) = 0) or (Pos(#27'[?1006h', LPending) = 0) or
+       (Pos(#27'[?1049h', LPending) = 0) then
+      LOk := False;
+    LBE.DiscardPending;
+    LBE.LeaveAlternate(amMouseFull, False);
+    LPending := BackendPendingStr(LBE);
+    if (Pos(#27'[?1003l', LPending) = 0) or (Pos(#27'[?1006l', LPending) = 0) or
+       (Pos(#27'[?1049l', LPending) = 0) then
+      LOk := False
+    else if Pos(#27'[?1003l', LPending) > Pos(#27'[?1049l', LPending) then
+      LOk := False; { disable modes before leave alt }
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC17a', 'mouse_alt_modes', 0, 1, LOk, '1003/1006 enter+leave order');
+end;
+
+procedure RunSC18;
+var
+  LEv: TEvent;
+  LOk: Boolean;
+begin
+  WriteLn('SC18 ResizeEvent helpers ...');
+  LOk := True;
+  LEv := ResizeEvent(80, 24);
+  if (LEv.Kind <> evResize) or (LEv.Resize.Width <> 80) or
+     (LEv.Resize.Height <> 24) or (not IsResize(LEv)) or IsKey(LEv) then
+    LOk := False;
+  AddRow('SC18a', 'resize_event', 0, 1, LOk, 'ResizeEvent 80x24 + IsResize');
+end;
+
+procedure RunSC19;
+var
+  LArea: TRect;
+  LRects: TRectArray;
+  LAreaSum, I: Integer;
+  LOk: Boolean;
+begin
+  WriteLn('SC19 PercentageConstraint VSplit ...');
+  LOk := True;
+  LArea := TRect.Make(0, 0, 200, 60);
+  LRects := VerticalSplit(LArea, [
+    PercentageConstraint(50), PercentageConstraint(50)]);
+  if Length(LRects) <> 2 then
+    LOk := False
+  else
+  begin
+    LAreaSum := 0;
+    for I := 0 to High(LRects) do
+      Inc(LAreaSum, LRects[I].Width * LRects[I].Height);
+    if LAreaSum <> LArea.Width * LArea.Height then
+      LOk := False;
+    if LRects[0].Height + LRects[1].Height <> LArea.Height then
+      LOk := False;
+  end;
+  AddRow('SC19a', 'pct_vsplit50', 0, 1, LOk, '50/50 height sum + area');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -731,10 +816,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 40);
+  SetLength(GRows, 48);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC16 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC19 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -751,6 +836,9 @@ begin
   RunSC14;
   RunSC15;
   RunSC16;
+  RunSC17;
+  RunSC18;
+  RunSC19;
   PrintTable;
   if GFailed > 0 then
     Halt(1);
