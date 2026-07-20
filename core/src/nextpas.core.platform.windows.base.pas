@@ -251,6 +251,8 @@ const
   FILE_SHARE_READ = DWORD(1);
   FILE_SHARE_WRITE = DWORD(2);
   FILE_SHARE_DELETE = DWORD(4);
+  { Directory open access for ReadDirectoryChangesW (flags live in kernel32.inc). }
+  FILE_LIST_DIRECTORY = DWORD($0001);
   CREATE_ALWAYS = DWORD(2);
   OPEN_EXISTING = DWORD(3);
   OPEN_ALWAYS = DWORD(4);

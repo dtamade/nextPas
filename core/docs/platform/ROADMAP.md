@@ -321,6 +321,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-17b**: promote **23 platform-gate** set (+args) after GHA pass=24 (run 29728715160 @ `00e895e1a`; args PASS; +mem.host in total). Queue after: pipe. |
 | 2026-07-20 | **Batch-18**: Windows scripts candidate **+platform.pipe** (no promote until GHA green). |
 | 2026-07-20 | **Batch-18b**: promote **24 platform-gate** set (+pipe) after GHA pass=25 (run 29729281116 @ `c1a092433`; pipe PASS; +mem.host in total). |
+| 2026-07-20 | **Batch-15 S1**: Windows `platform.watch` create/add/close via CreateFileW + DirHandle; poll still UNSUPPORTED. Wine smoke updated. Queue: S2 poll RDCW; optional resource Windows candidate. |
 
 ---
 
