@@ -76,18 +76,28 @@ make -C benchmarks/nextpas.core.http/bench_conn_ladder build
 
 ---
 
-## 4. H2 multiplex scale（S3，evidence only）
+## 4. H2 multiplex scale（H2P-1 / S3，evidence only）
+
+**规格（H2P-1 冻结；与 H1 分表，禁止直接 RPS 比值）**
+
+| 字段 | 官方 mid | smoke |
+|------|----------|-------|
+| mode | `multiplex` | `multiplex` |
+| backend | `epoll`（Linux）/ `threaded` | either |
+| connections | **8** | 4 |
+| streams/batch | **16** | 4 |
+| batches | **100**（mid）/ **200**（press） | 25 |
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h2_server smoke
-# mid（epoll）
+# H2P-1 mid（epoll）
 ./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
   --mode multiplex --backend epoll \
   --connections 8 --streams 16 --batches 100
 ```
 
-**读数**：`stable=1`；`req/s=`（历史 ~2.8–3k，**不是** H1 KPI）。
-**不宣称** Scale-ready (H1/H2)。
+**读数**：`stable=1`；`req/s=`；`completed=`（历史 mid ~2.8–3k，**不是** H1 KPI）。
+**不宣称** Scale-ready (H1/H2)。Go h2 同形对照 → H2P-1 续波 / H2P-2。
 
 ---
 
@@ -103,8 +113,9 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
 ```
 
 期望：server 全绿；facade 含 **epoll** GET；soak **5/5**（Linux）0 unfreed；
-Q3-2 矩阵 **6/6** 0 unfreed；HTTPS smoke **3/3** 0 unfreed（读 `req/s=` / `p50_ns=`；
-`server_accepts` 可能 ≈ `server_reqs` = 无 pool 复用 residual）。
+Q3-2 矩阵 **6/6** 0 unfreed；HTTPS smoke **3/3** 0 unfreed。
+HTTPS smoke 读数：`server_accepts=1`（RH-1 keep-alive）、`req/s` 通常 ≫ 10、`p50_ns=` / `p99_ns=`。
+**仍不宣称** HTTPS scale-ready（见 `CLAIM.md`）。
 
 ---
 
