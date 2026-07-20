@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（S2-2 landed：fast path 固定 body 扩展；NEXT=S2-3 optional / STOP）
+**Updated**: 2026-07-20（S2-3 + L1 + S3-1 baseline landed；NEXT=S3-2 or STOP）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **S2-3** profiled 热点证据（optional）或 STOP |
+| **下一执行点** | **S3-2** H2 concurrent scale 或 STOP |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -746,18 +746,29 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 |------|--------|-----|
 | **S2-1** | **landed** | 分配画像；连接级 H1 outbound buffer free-list 复用（active+queued 深度） |
 | **S2-2** | **landed** | fast path 扩大：完整缓冲的固定 `Content-Length` body（≤64KiB）走 snapshot；Expect/TE/close 仍回退 llhttp |
-| **S2-3** | queued | profiled 单热点前后证据（perf 受限时可 defer） |
+| **S2-3** | **landed** | profiled 证据（user-space 替代：分配表 + S2-1/S2-2 前后表征；`perf_event_paranoid=3` residual） |
 
 **S2-1 Evidence**：outbound free-list；`test_http_server` source-contract。
-**S2-2 Evidence**：`TryUseFastRequestParser` 去掉 `ContentLength=0` 硬门；`TH1FastSnapshotBodyReader`；live POST echo epoll + source-contract；286/0。
+**S2-2 Evidence**：`TryUseFastRequestParser` 去掉 `ContentLength=0` 硬门；`TH1FastSnapshotBodyReader`；live POST echo epoll + source-contract。
+**S2-3 Evidence**：BENCHMARKS § S2-3；非 kernel flamegraph。
+
+**Era S2 Done when**：S2-1..S2-3 landed。 **Met.**
+
+### Era L — Latency instrumentation（升格自 Inbox）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **L1** | **landed** | `bench_http_server` client-observed **p50/p99/mean**；BENCHMARKS 表；smoke 锁 marker |
+
+**L1 Evidence**：epoll `no_url` 20k×4：p50≈58µs p99≈178µs（client）；Go 行仍无 p99。
 
 ### Era S3 — H2 server scale
 
-| Wave | Do |
-|------|-----|
-| **S3-1** | H2 server 多路/流控/GOAWAY 生产边角 |
-| **S3-2** | H2+epoll 规模证据 |
-| **S3-3** | 与 H1 harness 对照 + residual |
+| Wave | Status | Do |
+|------|--------|-----|
+| **S3-1** | **landed (baseline)** | `bench_h2_server` 4×4×100 stable=1；req/s≈90 诚实 residual（sequential facade，非 concurrent multiplex） |
+| **S3-2** | queued | concurrent multiplex + H2+epoll 规模证据 |
+| **S3-3** | queued | 与 H1 harness 对照 + residual |
 
 ### Era Q2 — 收口
 
@@ -793,8 +804,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 想法 | 备注 |
 |------|------|
-| latency/p99 harness（官方 comparison 出 p99） | Q2 residual；未升格则勿实现 |
-| S3 H2 server scale 证据 | 需产品/需求再开 |
+| （latency 已升格 → **L1**；S3 用户指令开波 → **S3-1**） | 新想法只追加 |
 
 ---
 
@@ -807,13 +817,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
 5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯
 6. **Era Q2 Done** — comparator 刷新 + **Scale-ready (H1 server, Linux epoll)** 诚实宣称
-7. **S2-1 Met** — 连接级 outbound buffer 复用
-8. **S2-2 Met** — fast path 固定 body（≤64KiB 完整缓冲）
-9. **NEXT = S2-3**（profiled 证据）或 STOP；S3/latency 需指令/升格
-10. 跨模块仅按本波 Land paths；path-limited landing only
+7. **Era S2 Done**（S2-1..S2-3）
+8. **L1 Met** — multi-conn p50/p99（nextPas）
+9. **S3-1 Met (baseline)** — `bench_h2_server`；H2 吞吐远低于 H1，勿假宣称
+10. **NEXT = S3-2**（H2 concurrent multiplex 规模）或 STOP
+11. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 S3）。**
+**没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
 
 ---
 

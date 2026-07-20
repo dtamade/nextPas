@@ -384,6 +384,11 @@ begin
         'nextPas H1 path marker')
     else
       CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
+    { L1: client-observed latency percentiles (nextPas harness only). }
+    CheckContains(AOutput, 'p50_ns=', 'nextPas p50_ns marker');
+    CheckContains(AOutput, 'p99_ns=', 'nextPas p99_ns marker');
+    CheckContains(AOutput, 'mean_ns=', 'nextPas mean_ns marker');
+    CheckContains(AOutput, 'latency_samples=', 'nextPas latency_samples marker');
   end;
   if AImplementation = 'rust_std' then
     CheckContains(AOutput, 'rust_profile=std_only',
