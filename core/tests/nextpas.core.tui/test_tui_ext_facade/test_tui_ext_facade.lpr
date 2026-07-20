@@ -181,16 +181,70 @@ begin
   end;
 end;
 
+procedure TestExtThemeDarkFields;
+var
+  LTheme: TChatTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(ColorIsSet(LTheme.FgPrimary), 'dark fg primary');
+  Check(ColorIsSet(LTheme.BgPrimary), 'dark bg primary');
+  Check(ColorIsSet(LTheme.AccentUser), 'dark accent user');
+end;
+
+procedure TestExtAppRequestAnimationFrame;
+var
+  LApp: TApp;
+begin
+  LApp := TApp.Create;
+  try
+    LApp.RequestAnimationFrame;
+    Check(LApp <> nil, 'request animation frame keeps app');
+    Check(LApp.Screens.IsEmpty, 'screens still empty');
+  finally
+    LApp.Free;
+  end;
+end;
+
+procedure TestExtLoadingStartPhase;
+var
+  LLoading: TLoadingGroup;
+  LCompletion: TCompletionSlot;
+  LResult: TTaskResult;
+begin
+  LLoading := TLoadingGroup.Empty;
+  LResult := Default(TTaskResult);
+  LResult.Status := tsCompleted;
+  LCompletion.Id := 7;
+  LCompletion.Result := LResult;
+  LLoading.Start(0, LCompletion.Id, 50);
+  Check(LLoading.AnyLoading, 'started loading');
+  Check(LLoading.GetPhase(0) <> lpSuccess, 'not success before update');
+  LLoading.Update([LCompletion], 1);
+  CheckEqual(Int64(Ord(lpSuccess)), Int64(Ord(LLoading.GetPhase(0))),
+    'complete to success');
+end;
+
+procedure TestExtPanelGridOneByOne;
+var
+  LPanel: IPanel;
+begin
+  LPanel := TPanel.Grid(1, 1);
+  Check(LPanel <> nil, '1x1 panel');
+end;
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
   T.Test('ext app task surface', @TestExtAppTaskSurface);
   T.Test('ext facade exposes tui exceptions', @TestExtFacadeExposesTuiExceptions);
-    T.Test('ext theme accent', @TestExtThemeAccent);
+  T.Test('ext theme accent', @TestExtThemeAccent);
   T.Test('ext panel grid', @TestExtPanelGrid);
   T.Test('ext app screens empty', @TestExtAppScreensEmpty);
   T.Test('ext loading empty all done', @TestExtLoadingEmptyAllDone);
   T.Test('ext screen render count', @TestExtScreenRenderCount);
-if not T.Run then Halt(1);
+  T.Test('ext theme dark fields', @TestExtThemeDarkFields);
+  T.Test('ext app request animation frame', @TestExtAppRequestAnimationFrame);
+  T.Test('ext loading start phase', @TestExtLoadingStartPhase);
+  T.Test('ext panel grid 1x1', @TestExtPanelGridOneByOne);
+  if not T.Run then Halt(1);
 end.
