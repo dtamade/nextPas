@@ -2476,6 +2476,59 @@ begin
   end;
 end;
 
+procedure TestBracketedPasteOptionDefaults;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+begin
+  Check(not TTerminalOptions.EditorDefault.BracketedPaste,
+    'EditorDefault bracketed paste off');
+  Check(not TTerminalOptions.NativeSelectionWheel.BracketedPaste,
+    'NativeSelectionWheel bracketed paste off');
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.BracketedPaste := True;
+    LTerm.Options := LOpts;
+    Check(LTerm.Options.BracketedPaste, 'options carry BracketedPaste');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteEmitsOnFrameRuntime;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+  LPending: AnsiString;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.BracketedPaste := True;
+    LTerm.Options := LOpts;
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LPending := LTerm.BackendPendingForTest;
+    Check(Pos(#27'[?2004h', LPending) > 0, 'enable 2004h on session start');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteDefaultOffNoSequence;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(Pos('2004', LTerm.BackendPendingForTest) = 0,
+      'default off emits no 2004 sequence');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
@@ -2638,5 +2691,8 @@ begin
     @TestKittyKeyboardLeaveClearsVerified);
     T.Test('focus reporting inject events', @TestFocusReportingInjectEvents);
   T.Test('focus reporting option defaults', @TestFocusReportingOptionDefaults);
+  T.Test('bracketed paste option defaults', @TestBracketedPasteOptionDefaults);
+  T.Test('bracketed paste emits on frame runtime', @TestBracketedPasteEmitsOnFrameRuntime);
+  T.Test('bracketed paste default off no sequence', @TestBracketedPasteDefaultOffNoSequence);
 if not T.Run then Halt(1);
 end.
