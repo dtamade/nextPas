@@ -47,6 +47,7 @@ $ModuleEntries = @(
   @{ Name = 'platform.info';    Dir = 'tests/nextpas.core.platform.info/test_platform_info_wine' }
   @{ Name = 'platform.which';   Dir = 'tests/nextpas.core.platform.which/test_platform_which_wine' }
   @{ Name = 'platform.dl';      Dir = 'tests/nextpas.core.platform.dl/test_platform_dl_wine' }
+  @{ Name = 'platform.args';    Dir = 'tests/nextpas.core.platform.args/test_platform_args_wine' }
   @{ Name = 'io.reactor.iocp'; Dir = 'tests/nextpas.core.io.uring/test_reactor_iocp_wine' }
 )
 
@@ -62,7 +63,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 22 platform gates (+dl); not full-host Windows parity'
+Write-Output 'truth=ci-matrix-candidate; 22 platform gates promoted + args candidate; not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -90,7 +91,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-22-platform-gate-set"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-22-platform-gate-set-plus-args-candidate"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'
