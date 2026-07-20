@@ -8,12 +8,22 @@ uses
   nextpas.core.time.base;
 
 type
+  {** Primary action for a watch event (U2). Booleans remain for multi-flag cases. *}
+  TFsWatchKind = (
+    fwkNone,
+    fwkCreated,
+    fwkDeleted,
+    fwkModified,
+    fwkOther
+  );
+
   TFsWatchEvent = record
     Name: string;  { path-qualified when Wd known (watch base + name) }
     IsDir: Boolean;
     Modified: Boolean;
     Created: Boolean;
     Deleted: Boolean;
+    Kind: TFsWatchKind;  { primary: Created > Deleted > Modified > Other }
   end;
 
   IFsWatcher = interface
@@ -257,6 +267,7 @@ begin
   AEvent.Modified := False;
   AEvent.Created := False;
   AEvent.Deleted := False;
+  AEvent.Kind := fwkNone;
   if ATimeout.IsZero or ATimeout.IsNegative then
     LMs := 0
   else
@@ -272,6 +283,14 @@ begin
   AEvent.Modified := LEvt.Modified;
   AEvent.Created := LEvt.Created;
   AEvent.Deleted := LEvt.Deleted;
+  if AEvent.Created then
+    AEvent.Kind := fwkCreated
+  else if AEvent.Deleted then
+    AEvent.Kind := fwkDeleted
+  else if AEvent.Modified then
+    AEvent.Kind := fwkModified
+  else
+    AEvent.Kind := fwkOther;
   Result := True;
 
   if AEvent.Created and AEvent.IsDir and FindByWd(LEvt.Wd, LIdx) and

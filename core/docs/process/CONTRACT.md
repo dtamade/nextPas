@@ -57,7 +57,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (not Cancelled) and (Status=psExited) and (ExitCode=0)
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
-- **[INV-10]** **MaxOutput（U1）**：`ICommand` 默认 **0=不限制**。门面缓冲型 `Run*`/`Capture*`/`MustCapture*` 默认套 **`cProcessDefaultMaxOutput`（64 MiB）**。无限缓冲：`Command(...).MaxOutput(0).Output`。
+- **[INV-10]** **MaxOutput（U1+U2）**：未调用 `MaxOutput` 时，缓冲路径（`Output` / 带管道的 `Spawn`→WaitWithOutput）默认 **`cProcessDefaultMaxOutput`（64 MiB）**。`MaxOutput(0)`=显式不限制；`MaxOutput(N>0)`=上限。门面 free `Run*`/`Capture*` 同默认。
 - **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）。**要求** `Stdout(stPiped)`（`.Output` / `Capture*Combined` 会强制）；非 piped 时 `Spawn` 抛 `EProcessError`。stdout piped 时 Merge 覆盖 `Stderr(stPiped/stInherit)`；与 `Stderr(stNull)` 冲突时 `Spawn` 抛 `EProcessError`。
 - **[INV-12]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.process*` 源码与 process 测试套件不得 `uses` 裸 FPC RTL 单元（SysUtils/Classes/BaseUnix/Unix/Windows/…）；OS 能力仅经 `nextpas.core.platform.*` / 其他 core 模块。仅 `nextpas.core.system` 允许直接引用 FPC RTL。门禁：真实 uses 子句扫描（多行/末位单元），见 `core/tests/fpc_rtl_uses_scan.inc`。
 - **[INV-13]** **管道与 Wait/TryWait**：`IChild` 仍持有 stdout/stderr 时：
@@ -102,7 +102,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | **130** | R28 + U1 Cancelled/MaxOutput 常量 |
+| test_process | **133** | U2 builder MaxOutput 三态 + Status 空输出 |
 | test_process_command | **21** | R28 迁 nextpas.core.test（原 48 Check） |
 | test_process_deep | **27** | timeout/large + R22 Cancel + R24 KillTree + R26 group |
 | test_process_pipe_contract | **17** | EINTR/EAGAIN/broken pipe |
@@ -154,3 +154,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.20 | M2-W3 ExtraFd/Cred fail-closed；wine 11 | Claude |
 | 2026-07-20 | 2.21 | M2-W4 WIN.md 交叉引用；wine 最小生产集口径 | Claude |
 | 2026-07-20 | 2.22 | U1：cProcessDefaultMaxOutput 64MiB 便利层；EProcessError.Cancelled；test 130 | Claude |
+| 2026-07-20 | 2.23 | U2：builder 未配置 MaxOutput→64MiB；MaxOutput(0) 无限；test 133 | Claude |

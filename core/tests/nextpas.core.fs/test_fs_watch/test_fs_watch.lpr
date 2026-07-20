@@ -79,6 +79,15 @@ begin
   WriteFileText(GTmp + '/created.txt', 'hi');
   Check(PollAny(W, E), 'received watch event after create');
   Check(E.Created or E.Modified or (E.Name <> ''), 'event has content');
+  if E.Created then
+    Check(E.Kind = fwkCreated, 'Kind Created when Created flag')
+  else if E.Deleted then
+    Check(E.Kind = fwkDeleted, 'Kind Deleted when Deleted flag')
+  else if E.Modified then
+    Check(E.Kind = fwkModified, 'Kind Modified when Modified flag')
+  else
+    Check(E.Kind in [fwkOther, fwkNone, fwkCreated, fwkModified, fwkDeleted],
+      'Kind assigned');
   W.Close;
 end;
 

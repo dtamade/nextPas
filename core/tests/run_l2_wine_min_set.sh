@@ -34,4 +34,4 @@ if [[ "$failed" -ne 0 ]]; then
   exit 1
 fi
 
-echo "L2 wine min set: OK (process 11 + fs 3 + watch 3 + path 4 + env 3 = 24)"
+echo "L2 wine min set: OK (process 11 + fs 4 + watch 3 + path 4 + env 3 = 25)"

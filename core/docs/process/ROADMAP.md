@@ -221,3 +221,4 @@ Host + Win：仅 Maintenance（bug/安全）
 | 2026-07-20 | **M3-ci**：L2 host-windows 步 `if: always()`，不因 platform 矩阵失败被 skip |
 | 2026-07-20 | **U1**：可用性收敛 — 便利 MaxOutput 64MiB、EProcessError.Cancelled、Preferred/决策树文档 |
 | 2026-07-20 | **U1-docs**：CONTRACT 核心表去重；SCORECARD 记 U1 |
+| 2026-07-20 | **U2**：builder 默认 MaxOutput 64MiB（三态）；TFsWatchEvent.Kind；wine fs ReadAt |
