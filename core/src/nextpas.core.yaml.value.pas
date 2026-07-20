@@ -34,6 +34,9 @@ type
     function SeqGet(AIndex: UInt32): TYamlValue;
     function MapGet(const AKey: TStringView): TYamlValue; overload;
     function MapGet(const AKey: string): TYamlValue; overload;
+    { Get is a TOML-style alias for MapGet (same lookup semantics). }
+    function Get(const AKey: TStringView): TYamlValue; overload; inline;
+    function Get(const AKey: string): TYamlValue; overload; inline;
     function MapHas(const AKey: TStringView): Boolean; overload;
     function MapHas(const AKey: string): Boolean; overload;
     function MapLen: UInt32;
@@ -232,6 +235,16 @@ end;
 function TYamlValue.MapGet(const AKey: string): TYamlValue;
 begin
   Result := MapGet(TStringView.FromStr(AKey));
+end;
+
+function TYamlValue.Get(const AKey: TStringView): TYamlValue;
+begin
+  Result := MapGet(AKey);
+end;
+
+function TYamlValue.Get(const AKey: string): TYamlValue;
+begin
+  Result := MapGet(AKey);
 end;
 
 function TYamlValue.MapHas(const AKey: TStringView): Boolean;
