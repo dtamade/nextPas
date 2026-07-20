@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**RH-1**：HTTPS TLS pool reuse fixed；Parity Plus STOP + residual harden）
+**Updated**: 2026-07-20（**S0 收口**：RH-1 landed + 稳定期 **STOP**；见 `CLAIM.md`；H2P parked）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **STOP**（Parity Plus Done；宣称见 [`CLAIM.md`](CLAIM.md)；无需求勿空转 H2P/H3） |
+| **下一执行点** | **STOP**（Parity Plus + RH-1 Done；宣称见 [`CLAIM.md`](CLAIM.md)；稳定期维护 only；H2P 需显式升格） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -824,11 +824,19 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 |------|--------|-----|
 | **Q3-1** | **landed** | `test_http_soak`：H1 KA 1500× threaded+epoll；H2 seq 400×；H2 mux RoundTripMany 50×8 / 20×8；heaptrc **0 unfreed** |
 | **Q3-2** | **landed** | `test_http_q3_matrix` + CONTRACT §Q3-2：timeout→hekTimeout；cancel→hekCanceled/Op=cancel；413/431 wire + no handler；6/6 0 unfreed |
-| **Q3-3** | **landed** | `test_http_https_smoke`：30× H1 HTTPS 吞吐+p50/p99；0 unfreed；**residual**=每请求 TLS dial（accept≈reqs）+ registry H1 server TLS 仅 H2 |
+| **Q3-3** | **landed** | `test_http_https_smoke`：30× H1 HTTPS；0 unfreed；初版 residual=每请求 dial（**RH-1 已修**）+ registry H1 server TLS 仅 H2 |
 
 **Q3 Done when**：Q3-1..Q3-3 landed。 **Met.**
 
-## Era H2P — H2 production（仅 E/Q3 后 + 需求）
+## Residual Harden（R0 后，非 H2P）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **RH-1** | **landed** | `TTlsTcpStream` + `ITcpStreamRuntime` → HTTPS pool keep-alive；smoke `accepts=1` |
+| **RH-2** | **landed** | README/CONTRACT：server `TLSContext` → **H2 only** |
+| **S0** | **landed** | 文档收口：ROADMAP/REPRO 与 RH-1 + 稳定期 STOP 一致 |
+
+## Era H2P — H2 production（仅产品触发）
 
 | Wave | Status | Do |
 |------|--------|-----|
@@ -842,7 +850,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 **R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐。 **Met.**
 
-**推荐路径**：`G0 → G1 → G2 → E1 → E2 → E3 → Q3-1 → Q3-2 → Q3-3 → R0 → STOP`（H2P 仅需求）
+**推荐路径**：`… → R0 → RH-1/RH-2 → S0 → STOP`（H2P 仅需求触发 → 再 R1）
 
 ---
 
@@ -863,10 +871,11 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus Met — CLAIM.md 冻结 scale-ready 与 residual
+1. Parity Plus + RH-1 Met — CLAIM 冻结；HTTPS pool reuse 已证
 2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = STOP**（无用户需求勿开 H2P；需求驱动再升格 Inbox）
-4. 跨模块仅按本波 Land paths；path-limited landing only
+3. **NEXT = STOP**（稳定期：bugfix/文档/CI only）
+4. H2P / H1-HTTPS-server 产品面：须显式升格 Inbox 或新 wave，先改 CLAIM/ROADMAP
+5. path-limited land；push origin 须授权
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2/HTTPS scale-ready）。**
@@ -879,6 +888,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | 文档 | 角色 |
 |------|------|
 | **ROADMAP.md（本文件）** | 向前做什么、顺序、状态、Goal Loop |
+| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R0 冻结） |
+| **[`REPRO.md`](REPRO.md)** | 1h 复现剧本 |
 | **GOAL_TREE.md** | 为什么做、阶段定义、不漂移；**不**维护日更 backlog |
 | **CONTRACT.md** | 对外行为契约 |
 | **API_COVERAGE.md** | 证据矩阵 |
@@ -891,6 +902,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | **S0 收口**：稳定期 STOP 叙事对齐 RH-1；REPRO HTTPS expects accepts=1 |
 | 2026-07-20 | **RH-1**：`TTlsTcpStream` + `ITcpStreamRuntime` → HTTPS keep-alive pool reuse；smoke accepts=1 |
 | 2026-07-20 | **R0 / Parity Plus STOP**：维持 H1 epoll scale-ready；`CLAIM.md` 冻结；H2P parked |
 | 2026-07-20 | **Q3-3 / Era Q3 Done**：HTTPS smoke 吞吐/延迟 + residual |
