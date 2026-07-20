@@ -21,7 +21,7 @@
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **SSE（Q1-1）**：写端 lifecycle 见 CONTRACT §4.1；Op=`sse`；证据 `test_http_middlewares` SSE 套件 + `test_http_server` live stream。
 - **H1 write/backpressure（Q1-4）**：见 **CONTRACT §4.4**（WriteTimeout 从 drain 起算、zero-progress/stall 停 session、不消费 pipeline、S1-1 关系）；证据 `test_http_server` + source-contract。
-- **Server scale（Q2）**：宣称 **Scale-ready (H1 server, Linux epoll)** — 证据仅 [`BENCHMARKS.md`](BENCHMARKS.md) Q2-1 medians + S1-3 连接阶梯；**p99 未仪器化**；**不**宣称 H2/H3 scale。API 面无额外工厂。
+- **Server scale（Q2+S3）**：宣称 **Scale-ready (H1 server, Linux epoll)** — Q2-1 medians + S1-3 连接阶梯 + L1 p50/p99（nextPas）；H2 S3 multiplex ~3k req/s 为证据**非**整包宣称；**不**宣称 H3。详见 [`BENCHMARKS.md`](BENCHMARKS.md)。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
 下列 **Public Surface Matrix** 是本文件的主内容：公开契约 ↔ 测试证据。

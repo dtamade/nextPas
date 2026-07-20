@@ -46,16 +46,15 @@ begin
   Result := THttpServerOptions.Default.WithVersion(hvHttp2).WithIdleTimeout(2000);
 end;
 
-function StartH2FacadeServer(const AHandler: IHttpHandler;
-  out AServer: IHttpServer; out APort: UInt16): TPlatformThreadHandle;
+function StartH2FacadeServerWithOptions(const AHandler: IHttpHandler;
+  const AOpts: THttpServerOptions; out AServer: IHttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
 var
   LCtx: PServerCtx;
   LHandle: TPlatformThreadHandle;
   LWait: Int32;
-  LOpts: THttpServerOptions;
 begin
-  LOpts := NewH2FacadeServerOptions;
-  AServer := NewHttpServer(AHandler, LOpts);
+  AServer := NewHttpServer(AHandler, AOpts);
   New(LCtx);
   LCtx^.Server := AServer;
   LCtx^.Addr := '127.0.0.1';
@@ -71,6 +70,13 @@ begin
   APort := AServer.LocalAddr.Port;
   Check(APort > 0, 'H2 facade server bound free port');
   Result := LHandle;
+end;
+
+function StartH2FacadeServer(const AHandler: IHttpHandler;
+  out AServer: IHttpServer; out APort: UInt16): TPlatformThreadHandle;
+begin
+  Result := StartH2FacadeServerWithOptions(AHandler, NewH2FacadeServerOptions,
+    AServer, APort);
 end;
 
 procedure StopH2FacadeServer(var AServer: IHttpServer;
@@ -241,12 +247,56 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestFacadeH2Get200EpollBackend;
+{ S3-3 regression: H2 poll path must work under epoll (would-block I/O). }
+var
+  LRouter: IHttpRouter;
+  LServer: IHttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LOpts: THttpServerOptions;
+  LBody: string;
+begin
+  LRouter := NewRouter;
+  LRouter.Get('/hello', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    HttpWriteResponseString(AW, HTTP_STATUS_OK, 'text/plain', 'h2-epoll');
+  end);
+  LOpts := NewH2FacadeServerOptions;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartH2FacadeServerWithOptions(LRouter as IHttpHandler, LOpts,
+    LServer, LPort);
+  try
+    LClient := NewH2FacadeClient;
+    try
+      LResp := LClient.Get(LocalUrl(LPort, '/hello'));
+      Check(LResp <> nil, 'H2 epoll GET returns response');
+      CheckEqual(Int64(HTTP_STATUS_OK), Int64(LResp.StatusCode), 'epoll status');
+      LBody := HttpReadResponseBodyString(LResp);
+      CheckEqual('h2-epoll', LBody, 'epoll body');
+    finally
+      LResp := nil;
+      LClient := nil;
+    end;
+  finally
+    StopH2FacadeServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 begin
   T := TTestSuite.Create('nextpas.core.http h2 facade e2e');
   T.Test('Facade H2 GET 200 cleartext prior-knowledge', @TestFacadeH2Get200);
   T.Test('Facade H2 POST body round-trip', @TestFacadeH2PostBodyRoundTrip);
   T.Test('Facade H2 sequential GETs', @TestFacadeH2SequentialGetsReusePath);
   T.Test('Facade H2 router 404', @TestFacadeH2NotFound);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('Facade H2 GET 200 with epoll backend', @TestFacadeH2Get200EpollBackend);
+  {$ENDIF}
   if not T.Run then
     Halt(1);
 end.
