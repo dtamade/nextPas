@@ -64,15 +64,15 @@
 
 **维护 idle。** 队列与观察点见 [`ROADMAP.md`](ROADMAP.md)。
 
-已追加可用性切片（评估 P1 后续）：
+已追加可用性切片（评估后续）：
 
 - 空容器 → `EEmptyCollection` + examples（`3c4784695`）
-- `CORE-API.md` + Ensure 对照 + 有序 map 选型表（本提交）
+- `CORE-API.md` + Ensure 对照 + 有序 map 选型表（`fb1ead4d8`）
+- `capacity_ensure` example + PERF-HASHSET 同机重跑（本提交）
 
 仍仅触发时做：
 
 - 消费者/bug 驱动 hardening
-- 同机重跑 PERF 对外宣称
 - TLS 迁工厂 Swiss → **跨 lane，不排期**
 
 ## 验证入口

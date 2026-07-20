@@ -152,6 +152,7 @@ make -C core/examples/nextpas.core.collections test
 make -C core/examples/nextpas.core.collections/quickstart test
 make -C core/examples/nextpas.core.collections/deque_queue test
 make -C core/examples/nextpas.core.collections/treeset_compare test
+make -C core/examples/nextpas.core.collections/capacity_ensure test
 ```
 
 | 示例 | 演示 |
@@ -159,6 +160,7 @@ make -C core/examples/nextpas.core.collections/treeset_compare test
 | `quickstart` | MakeVec / MakeMap / MakeSet + 门面+intf |
 | `deque_queue` | MakeVecDeque 双端 + MakeQueue FIFO |
 | `treeset_compare` | MakeTreeSet 默认序与自定义 comparer |
+| `capacity_ensure` | **Ensure 改 Count** vs **EnsureCapacity 只改 Capacity** |
 
 ## Benchmarks
 

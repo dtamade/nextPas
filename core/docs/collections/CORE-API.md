@@ -60,6 +60,9 @@ uses
 **反例**：把 `Ensure` 当 `reserve` 用 → Count 被拉长，后续算法看到「假元素」。
 **正例**：预分配只写 `EnsureCapacity` 或 `Reserve`。
 
+可运行对照：`core/examples/nextpas.core.collections/capacity_ensure`
+（`make -C core/examples/nextpas.core.collections/capacity_ensure test`）。
+
 权威对照也在 [CONTRACT.md §1.5](CONTRACT.md)。
 
 ---
