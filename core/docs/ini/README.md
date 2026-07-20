@@ -23,6 +23,8 @@ Callers own `TIniFile` instances and must free them.
 
 ## Quick Start
 
+Runnable smoke: `core/examples/nextpas.core.ini/ini_smoke/` (`make run`).
+
 ```pascal
 uses nextpas.core.ini;
 

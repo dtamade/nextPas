@@ -14,6 +14,8 @@ RFC 4180 compliant CSV parser and writer. Zero SysUtils dependency. Go encoding/
 
 ## Quick Start
 
+Runnable smoke: `core/examples/nextpas.core.csv/csv_smoke/` (`make run`).
+
 ```pascal
 uses nextpas.core.csv;
 
