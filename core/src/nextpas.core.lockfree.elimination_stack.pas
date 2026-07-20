@@ -120,7 +120,7 @@ end;
 
 function TEliminationStackImpl.NextSlotIndex: Int32; inline;
 begin
-  Result := Int32(UInt32(AtomicFetchAdd32(FNextSlot, 1, moRelaxed)) mod
+  Result := Int32(UInt32(atomic_fetch_add(FNextSlot, 1, mo_relaxed)) mod
     UInt32(FElimSize));
 end;
 
@@ -130,7 +130,7 @@ var
 begin
   for LJ := 0 to LOCKFREE_SPIN_COUNT - 1 do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
     CpuPause;
   end;
@@ -173,66 +173,67 @@ function TEliminationStackImpl.TryPush(const AValue: T): TEliminationStackResult
 var
   LOldFree, LNewFree, LOldTop, LNewTop: Int64;
   LIdx, LSlotIdx, LState, LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(esClosed);
   { Step 1: Try stack push (standard Treiber) }
   repeat
-    LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+    LOldFree := atomic_load_64(FFreeHead, mo_acquire);
     LIdx := UnpackIdx(LOldFree);
     if LIdx = -1 then
       Break; { Stack full, try elimination }
     LNewFree := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldFree) + 1);
-  until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
+  until atomic_compare_exchange_strong_64(FFreeHead, LOldFree, LNewFree, mo_acq_rel, mo_acquire);
 
   if LIdx <> -1 then
   begin
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
     FSlots[LIdx].Value := AValue;
     repeat
-      LOldTop := AtomicLoad64(FTop, moAcquire);
+      LOldTop := atomic_load_64(FTop, mo_acquire);
       FSlots[LIdx].Next := UnpackIdx(LOldTop);
       LNewTop := PackTagIdx(LIdx, UnpackTag(LOldTop) + 1);
-    until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
+    until atomic_compare_exchange_strong_64(FTop, LOldTop, LNewTop, mo_acq_rel, mo_acquire);
     Exit(esPushed);
   end;
 
   LSlotIdx := NextSlotIndex;
-  if AtomicCompareExchange32(FElimination[LSlotIdx].State,
-    ELIM_STATE_EMPTY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_EMPTY then
+  LCasExpected := ELIM_STATE_EMPTY;
+  if atomic_compare_exchange_strong(FElimination[LSlotIdx].State, LCasExpected, ELIM_STATE_PUSH, mo_acq_rel, mo_acquire) then
   begin
     FElimination[LSlotIdx].Value := AValue;
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
     begin
       FElimination[LSlotIdx].Value := Default(T);
-      AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+      atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, mo_release);
       Exit(esClosed);
     end;
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
-    AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_READY, moRelease);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
+    atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_READY, mo_release);
     LSpinCount := 0;
     while True do
     begin
-      LState := AtomicLoad32(FElimination[LSlotIdx].State, moAcquire);
+      LState := atomic_load(FElimination[LSlotIdx].State, mo_acquire);
       case LState of
         ELIM_STATE_EMPTY,
         ELIM_STATE_POP:
           Exit(esEliminated);
         ELIM_STATE_CANCELLED:
           begin
-            AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+            atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, mo_release);
             Exit(esClosed);
           end;
       end;
 
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      if atomic_load(FClosed, mo_acquire) <> 0 then
       begin
-        if AtomicCompareExchange32(FElimination[LSlotIdx].State,
-          ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+        LCasExpected := ELIM_STATE_READY;
+        if atomic_compare_exchange_strong(FElimination[LSlotIdx].State, LCasExpected, ELIM_STATE_PUSH, mo_acq_rel, mo_acquire) then
         begin
           FElimination[LSlotIdx].Value := Default(T);
-          AtomicFetchSub64(FCount, 1, moRelaxed);
-          AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+          atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+          atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, mo_release);
           Exit(esClosed);
         end;
       end;
@@ -240,12 +241,12 @@ begin
       Inc(LSpinCount);
       if LSpinCount >= ELIM_SPIN_TIMEOUT then
       begin
-        if AtomicCompareExchange32(FElimination[LSlotIdx].State,
-          ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+        LCasExpected := ELIM_STATE_READY;
+        if atomic_compare_exchange_strong(FElimination[LSlotIdx].State, LCasExpected, ELIM_STATE_PUSH, mo_acq_rel, mo_acquire) then
         begin
           FElimination[LSlotIdx].Value := Default(T);
-          AtomicFetchSub64(FCount, 1, moRelaxed);
-          AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+          atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+          atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, mo_release);
           Exit(esFull);
         end;
       end;
@@ -259,39 +260,40 @@ function TEliminationStackImpl.TryPop(out AValue: T): TEliminationStackResult;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
   LIdx, LSlotIdx: Int32;
+  LCasExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(esClosed);
   { Step 1: Try stack pop (standard Treiber) }
   repeat
-    LOldTop := AtomicLoad64(FTop, moAcquire);
+    LOldTop := atomic_load_64(FTop, mo_acquire);
     LIdx := UnpackIdx(LOldTop);
     if LIdx = -1 then
       Break; { Stack empty, try elimination }
     LNewTop := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldTop) + 1);
-  until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
+  until atomic_compare_exchange_strong_64(FTop, LOldTop, LNewTop, mo_acq_rel, mo_acquire);
 
   if LIdx <> -1 then
   begin
-    AtomicFetchSub64(FCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
     AValue := FSlots[LIdx].Value;
     FSlots[LIdx].Value := Default(T);
     repeat
-      LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+      LOldFree := atomic_load_64(FFreeHead, mo_acquire);
       FSlots[LIdx].Next := UnpackIdx(LOldFree);
       LNewFree := PackTagIdx(LIdx, UnpackTag(LOldFree) + 1);
-    until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
+    until atomic_compare_exchange_strong_64(FFreeHead, LOldFree, LNewFree, mo_acq_rel, mo_acquire);
     Exit(esPopped);
   end;
 
   LSlotIdx := NextSlotIndex;
-  if AtomicCompareExchange32(FElimination[LSlotIdx].State,
-    ELIM_STATE_READY, ELIM_STATE_POP, moAcqRel) = ELIM_STATE_READY then
+  LCasExpected := ELIM_STATE_READY;
+  if atomic_compare_exchange_strong(FElimination[LSlotIdx].State, LCasExpected, ELIM_STATE_POP, mo_acq_rel, mo_acquire) then
   begin
     AValue := FElimination[LSlotIdx].Value;
     FElimination[LSlotIdx].Value := Default(T);
-    AtomicFetchSub64(FCount, 1, moRelaxed);
-    AtomicStore32(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, moRelease);
+    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+    atomic_store(FElimination[LSlotIdx].State, ELIM_STATE_EMPTY, mo_release);
     Exit(esEliminated);
   end;
   Result := esEmpty;
@@ -300,15 +302,16 @@ end;
 procedure TEliminationStackImpl.Close;
 var
   LI: Int32;
+  LCasExpected: Int32;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   for LI := 0 to FElimSize - 1 do
-    if AtomicCompareExchange32(FElimination[LI].State,
-      ELIM_STATE_READY, ELIM_STATE_PUSH, moAcqRel) = ELIM_STATE_READY then
+    LCasExpected := ELIM_STATE_READY;
+    if atomic_compare_exchange_strong(FElimination[LI].State, LCasExpected, ELIM_STATE_PUSH, mo_acq_rel, mo_acquire) then
     begin
       FElimination[LI].Value := Default(T);
-      AtomicFetchSub64(FCount, 1, moRelaxed);
-      AtomicStore32(FElimination[LI].State, ELIM_STATE_CANCELLED, moRelease);
+      atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+      atomic_store(FElimination[LI].State, ELIM_STATE_CANCELLED, mo_release);
     end;
 end;
 
@@ -320,19 +323,19 @@ end;
 
 function TEliminationStackImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TEliminationStackImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed) = 0;
+  Result := atomic_load_64(FCount, mo_relaxed) = 0;
 end;
 
 function TEliminationStackImpl.ApproxCount: PtrUInt;
 var
   LCount: Int64;
 begin
-  LCount := AtomicLoad64(FCount, moRelaxed);
+  LCount := atomic_load_64(FCount, mo_relaxed);
   if LCount > 0 then
     Result := PtrUInt(LCount)
   else

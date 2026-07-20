@@ -84,15 +84,16 @@ uses
 function TFlatCombiningLock.GetPublication: PFCPublication;
 var
   LI: Int32;
+  LCasExpected: Int32;
 begin
-  while AtomicLoad32(FClosed, moAcquire) = 0 do
+  while atomic_load(FClosed, mo_acquire) = 0 do
   begin
     for LI := 0 to FC_PUBLICATION_ARRAY_SIZE - 1 do
     begin
-      if AtomicCompareExchange32(FPublications[LI].OwnerThreadId, 0, 1,
-        moAcqRel) = 0 then
+      LCasExpected := 0;
+      if atomic_compare_exchange_strong(FPublications[LI].OwnerThreadId, LCasExpected, 1, mo_acq_rel, mo_acquire) then
       begin
-        AtomicStore32(FPublications[LI].Completed, 1, moRelaxed);
+        atomic_store(FPublications[LI].Completed, 1, mo_relaxed);
         Exit(@FPublications[LI]);
       end;
     end;
@@ -124,13 +125,16 @@ begin
 end;
 
 function TFlatCombiningLock.TryAcquire: Boolean;
+var
+  LCasExpected: Int32;
 begin
-  Result := AtomicCompareExchange32(FLock, 0, 1, moAcqRel) = 0;
+  LCasExpected := 0;
+  Result := atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire);
 end;
 
 procedure TFlatCombiningLock.Release;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TFlatCombiningLock.Combine;
@@ -139,24 +143,24 @@ var
 begin
   for LI := 0 to FC_PUBLICATION_ARRAY_SIZE - 1 do
   begin
-    if (AtomicLoad32(FPublications[LI].OwnerThreadId, moAcquire) <> 0) and
-       (AtomicLoad32(FPublications[LI].Completed, moAcquire) = 0) then
+    if (atomic_load(FPublications[LI].OwnerThreadId, mo_acquire) <> 0) and
+       (atomic_load(FPublications[LI].Completed, mo_acquire) = 0) then
     begin
       case FPublications[LI].OpType of
         fcopIncr:
-          FPublications[LI].Result := AtomicFetchAdd64(FTargetValue^, 1, moRelaxed) + 1;
+          FPublications[LI].Result := atomic_fetch_add_64(FTargetValue^, 1, mo_relaxed) + 1;
         fcopDecr:
-          FPublications[LI].Result := AtomicFetchSub64(FTargetValue^, 1, moRelaxed) - 1;
+          FPublications[LI].Result := atomic_fetch_sub_64(FTargetValue^, 1, mo_relaxed) - 1;
         fcopAdd:
-          FPublications[LI].Result := AtomicFetchAdd64(FTargetValue^, FPublications[LI].Operand, moRelaxed) + FPublications[LI].Operand;
+          FPublications[LI].Result := atomic_fetch_add_64(FTargetValue^, FPublications[LI].Operand, mo_relaxed) + FPublications[LI].Operand;
         fcopSub:
-          FPublications[LI].Result := AtomicFetchSub64(FTargetValue^, FPublications[LI].Operand, moRelaxed) - FPublications[LI].Operand;
+          FPublications[LI].Result := atomic_fetch_sub_64(FTargetValue^, FPublications[LI].Operand, mo_relaxed) - FPublications[LI].Operand;
         fcopRead:
-          FPublications[LI].Result := AtomicLoad64(FTargetValue^, moRelaxed);
+          FPublications[LI].Result := atomic_load_64(FTargetValue^, mo_relaxed);
       else
         FPublications[LI].Result := 0;
       end;
-      AtomicStore32(FPublications[LI].Completed, 1, moRelease);
+      atomic_store(FPublications[LI].Completed, 1, mo_release);
     end;
   end;
 end;
@@ -166,7 +170,7 @@ var
   LPub: PFCPublication;
   LSpinCount: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(0);
   LPub := GetPublication;
   if LPub = nil then
@@ -174,7 +178,7 @@ begin
   try
     LPub^.OpType := AOp;
     LPub^.Operand := AOperand;
-    AtomicStore32(LPub^.Completed, 0, moRelease);
+    atomic_store(LPub^.Completed, 0, mo_release);
     if TryAcquire then
     begin
       Combine;
@@ -184,7 +188,7 @@ begin
     else
     begin
       LSpinCount := 0;
-      while AtomicLoad32(LPub^.Completed, moAcquire) = 0 do
+      while atomic_load(LPub^.Completed, mo_acquire) = 0 do
       begin
         if TryAcquire then
         begin
@@ -203,18 +207,18 @@ begin
       Result := LPub^.Result;
     end;
   finally
-    AtomicStore32(LPub^.OwnerThreadId, 0, moRelease);
+    atomic_store(LPub^.OwnerThreadId, 0, mo_release);
   end;
 end;
 
 procedure TFlatCombiningLock.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TFlatCombiningLock.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 { TFlatCombiningCounter }
@@ -255,18 +259,18 @@ end;
 
 function TFlatCombiningCounter.GetValue: Int64;
 begin
-  Result := AtomicLoad64(FValue, moRelaxed);
+  Result := atomic_load_64(FValue, mo_relaxed);
 end;
 
 procedure TFlatCombiningCounter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   FLock.Close;
 end;
 
 function TFlatCombiningCounter.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.
