@@ -1,7 +1,7 @@
 # toml × Go / Rust 对标（Wave I）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.toml*`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.toml*`
 **标杆**：Go `BurntSushi/toml` / `pelletier`；Rust `toml` crate
 
 ---

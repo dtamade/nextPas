@@ -1,7 +1,7 @@
 # yaml × Go / Rust 对标（Wave I）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.yaml*`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.yaml*`
 **标杆**：Go `gopkg.in/yaml.v3`；Rust `serde_yaml` / `yaml-rust2`
 
 ---

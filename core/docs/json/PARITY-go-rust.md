@@ -1,7 +1,7 @@
 # json × Go / Rust 对标（Wave I）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.json*`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.json*`
 **标杆**：Go `encoding/json`；Rust `serde_json`
 
 ---

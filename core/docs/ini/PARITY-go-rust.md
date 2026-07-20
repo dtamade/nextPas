@@ -1,7 +1,7 @@
 # ini × Go / Rust 对标（Wave I）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.ini`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.ini`
 **标杆**：Go `gopkg.in/ini.v1` / `ini`；Rust `rust-ini` / `configparser`
 
 ---

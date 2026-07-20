@@ -1,7 +1,7 @@
 # csv × Go / Rust 对标（Wave I–J）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.csv`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.csv`
 **标杆**：Go `encoding/csv`；Rust `csv` crate
 
 ---

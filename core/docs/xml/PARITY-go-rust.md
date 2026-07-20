@@ -1,7 +1,7 @@
 # xml × Go / Rust 对标（Wave I）
 
-**状态日期**：2026-07-20  
-**范围**：`nextpas.core.xml*`  
+**状态日期**：2026-07-20
+**范围**：`nextpas.core.xml*`
 **标杆**：Go `encoding/xml`；Rust `quick-xml` / `roxmltree`
 
 ---
