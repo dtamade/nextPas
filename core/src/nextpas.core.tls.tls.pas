@@ -425,8 +425,16 @@ begin
       'TSSLConnector.ApplyClientOptions'
     );
 
-  if (FALPN <> '') and Supports(AConn, ISSLClientALPNConnection, ALPNConn) then
+  if FALPN <> '' then
+  begin
+    if not Supports(AConn, ISSLClientALPNConnection, ALPNConn) then
+      raise ESSLException.CreateWithContext(
+        'Backend does not expose ISSLClientALPNConnection for ALPN',
+        sslErrUnsupported,
+        'TSSLConnector.ApplyClientOptions'
+      );
     ALPNConn.SetALPNProtocols(FALPN);
+  end;
 end;
 
 function TSSLConnector.TryQueueEarlyData(AConn: ISSLConnection): TSSLOperationResult;

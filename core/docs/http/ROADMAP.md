@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**H2P-2 landed**：加压全绿线性扩展；NEXT=**H2P-3** TLS-ALPN h2）
+**Updated**: 2026-07-20（**H2P-3 landed**：TLS-ALPN `h2` e2e 4/4 0 unfreed；NEXT=**R1** claim review）
 
 ---
 
@@ -117,7 +117,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **H2P-3** TLS-ALPN `h2` e2e + 0 unfreed |
+| Wave H2P-1..3 | **landed** — mid/press scale evidence + TLS-ALPN e2e |
+| **下一执行点** | **R1** claim review（默认 package **仍 No**；无新 KPI 不升 CLAIM） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -844,17 +845,18 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 |------|--------|-----|
 | **H2P-1** | **landed** | 冻结 H2 mid 规格 8×16×100；REPRO/BENCHMARKS 分表；mid epoll **2827** req/s stable=1；**禁止** H1/H2 直接比值；CLAIM package **仍 No** |
 | **H2P-2** | **landed** | 加压阶梯全 **stable=1**；16×32×100 ≈ **11.5k** req/s；瓶颈=连接×流并发下 CPU/批处理，非崩溃点；无强制代码热修 |
-| **H2P-3** | **NEXT** | TLS-ALPN `h2` e2e + 0 unfreed |
+| **H2P-3** | **landed** | `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL `ISSLClientALPNConnection` + `SSL_set_alpn_protos`（修 `WithALPN` 静默空转）；CLAIM package **仍 No** |
 
 ## Era R — 宣称评审
 
 | Wave | Status | Do |
 |------|--------|-----|
 | **R0** | **landed** | **维持** *Scale-ready (H1 server, Linux epoll)*；p99 为必要条件；冻结 [`CLAIM.md`](CLAIM.md)；H2P/H3/HTTPS scale **不宣称** |
+| **R1** | **NEXT** | H2P 证据后 claim 评审：默认 **不**升 H1+H2 package；写明 TLS-ALPN live 与 residual |
 
-**R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐。 **Met.**
+**R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐。 **R0 Met；R1 pending.**
 
-**推荐路径**：`… → S0 → S1/S2-b → H2P-1 → H2P-2 → H2P-3 → R1`（H3 Blocked）
+**推荐路径**：`… → H2P-1 → H2P-2 → H2P-3 → R1`（H3 Blocked）
 
 ---
 
@@ -875,14 +877,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 Met；S1 抽检 + S2-b Rust latency Met
+1. Parity Plus + RH-1 Met；H2P-1..3 Met
 2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = H2P-3**（TLS-ALPN h2 e2e；不升 CLAIM package）
+3. **NEXT = R1**（claim review；默认 package No；不空转 H3）
 4. path-limited land
 ```
 
-**没有用户指令时：可停在 H2P-2 Done 后，勿空转 H3 / 勿假 package scale-ready。**
-**升 CLAIM 须 R1 评审。**
+**没有用户指令时：可停在 H2P-3 Done 后做 R1 评审或 STOP；勿空转 H3 / 勿假 package scale-ready。**
+**升 CLAIM package 须 R1 明确 Yes。**
 
 ---
 
@@ -905,6 +907,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | **H2P-3 landed**：TLS-ALPN h2 e2e 4/4 0 unfreed；OpenSSL per-conn ALPN；NEXT=R1 |
 | 2026-07-20 | **H2P-2 landed**：加压阶梯全绿；16×32×100 ~11.5k req/s；NEXT=H2P-3 ALPN |
 | 2026-07-20 | **H2P-1 开波**（用户授权）：H2 分表规格 + REPRO；S2-b Rust p50/p99；S1 抽检 |
 | 2026-07-20 | **S0 收口**：稳定期 STOP 叙事对齐 RH-1；REPRO HTTPS expects accepts=1 |
