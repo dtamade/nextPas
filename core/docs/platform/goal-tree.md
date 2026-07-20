@@ -8,9 +8,9 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
 - **Windows x86_64**: durable **`ci-matrix`** for documented **24 platform gates**
-  on GHA `test-windows-runtime` (+error +fmt +info +which +dl +args +pipe).
-  `pipe` PASS on run 29729281116 (pass=25 fail=0 with mem.host).
-  `mem.host_runtime` is mem-owned. Wine secondary **24** modules.
+  on GHA `test-windows-runtime` (+error +fmt +info +which +dl +args +pipe;
+  pass=25 fail=0 with mem.host). Scripts list **resource (candidate, Batch-19)**.
+  Watch S1 create/add/close landed (poll still UNSUPPORTED). Wine secondary **24**.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
   **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
@@ -58,8 +58,9 @@ Not covered: signal, console, freetype/net.
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
 socket, error, fmt, info, which, dl, args, pipe, io.reactor.iocp,
 poller.windows_runtime_smoke, platform.io.windows_real, platform.socket.windows_real.
-Promoted with `pipe` after GHA PASS platform.pipe (run 29729281116) + prior args
-promote. Optional **mem.host_runtime** is mem-owned.
+Promoted with `pipe` after GHA PASS platform.pipe. Scripts also list
+**resource (candidate, Batch-19)** and optional **mem.host_runtime** (mem-owned).
+Do not claim resource as ci-matrix until GHA green.
 
 ## IOCP / readiness boundary
 

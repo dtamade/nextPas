@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **24 platform-gate `ci-matrix`** (+which +dl +args +pipe; GHA 29729281116 pass=25 fail=0); wine 24 secondary |
+| Real Windows GHA | **24 platform-gate `ci-matrix`** (+which +dl +args +pipe; pass=25 fail=0); wine 24 secondary; **resource candidate** Batch-19 |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -321,7 +321,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-17b**: promote **23 platform-gate** set (+args) after GHA pass=24 (run 29728715160 @ `00e895e1a`; args PASS; +mem.host in total). Queue after: pipe. |
 | 2026-07-20 | **Batch-18**: Windows scripts candidate **+platform.pipe** (no promote until GHA green). |
 | 2026-07-20 | **Batch-18b**: promote **24 platform-gate** set (+pipe) after GHA pass=25 (run 29729281116 @ `c1a092433`; pipe PASS; +mem.host in total). |
-| 2026-07-20 | **Batch-15 S1**: Windows `platform.watch` create/add/close via CreateFileW + DirHandle; poll still UNSUPPORTED. Wine smoke updated. Queue: S2 poll RDCW; optional resource Windows candidate. |
+| 2026-07-20 | **Batch-15 S1**: Windows `platform.watch` create/add/close via CreateFileW + DirHandle; poll still UNSUPPORTED. Wine smoke updated. Queue: S2 poll RDCW. |
+| 2026-07-20 | **Batch-19**: Windows scripts candidate **+platform.resource** (no promote until GHA green). |
 
 ---
 
