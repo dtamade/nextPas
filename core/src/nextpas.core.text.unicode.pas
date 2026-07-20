@@ -42,6 +42,7 @@ type
   TBidiLevelArray = nextpas.core.text.unicode.bidi.TBidiLevelArray;
   TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
   TIDNAErrorKind = nextpas.core.text.unicode.idna.TIDNAErrorKind;
+  TIDNAMapStatus = nextpas.core.text.unicode.idna.TIDNAMapStatus;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationVariableWeighting = nextpas.core.text.unicode.collate.TCollationVariableWeighting;
@@ -78,6 +79,13 @@ const
   idnaEmptyAceBody = nextpas.core.text.unicode.idna.idnaEmptyAceBody;
   idnaAceLabelTooLong = nextpas.core.text.unicode.idna.idnaAceLabelTooLong;
   idnaDomainTooLong = nextpas.core.text.unicode.idna.idnaDomainTooLong;
+  idnaDisallowed = nextpas.core.text.unicode.idna.idnaDisallowed;
+  idnaInvalidUtf8 = nextpas.core.text.unicode.idna.idnaInvalidUtf8;
+  idmsValid = nextpas.core.text.unicode.idna.idmsValid;
+  idmsMapped = nextpas.core.text.unicode.idna.idmsMapped;
+  idmsIgnored = nextpas.core.text.unicode.idna.idmsIgnored;
+  idmsDeviation = nextpas.core.text.unicode.idna.idmsDeviation;
+  idmsDisallowed = nextpas.core.text.unicode.idna.idmsDisallowed;
 
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
@@ -110,6 +118,9 @@ function IDNAToUnicode(const ADomain: string; out AError: string): string; overl
 function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
 function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string; inline;
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus; inline;
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -787,6 +798,17 @@ end;
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
 begin
   Result := nextpas.core.text.unicode.idna.IDNAErrorKindName(AKind);
+end;
+
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
+begin
+  Result := nextpas.core.text.unicode.idna.GetIdnaMapStatus(ACp, AMap, AMapLen);
+end;
+
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
+begin
+  Result := nextpas.core.text.unicode.idna.ApplyIdnaMap(AText, AKind);
 end;
 
 end.

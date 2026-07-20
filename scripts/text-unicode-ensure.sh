@@ -11,6 +11,7 @@ need=(
   "core/src/nextpas.core.text.unicode.casefold.pas"
   "core/src/nextpas.core.text.unicode.idna.pas"
   "core/src/nextpas.core.text.unicode.script_extensions.inc"
+  "core/src/nextpas.core.text.unicode.idna_mapping.inc"
 )
 for f in "${need[@]}"; do
   if [[ ! -f "$ROOT/$f" ]]; then
@@ -31,6 +32,7 @@ check_grep "core/src/nextpas.core.text.unicode.collate.pas" 'FCollatorLock|IMute
 check_grep "core/src/nextpas.core.text.unicode.bidi.pas" 'ReorderBidiVisually' 'Bidi visual APIs (P2-3)'
 check_grep "core/src/nextpas.core.text.unicode.script.pas" 'GetScriptExtensions' 'Script_Extensions (P2-4)'
 check_grep "core/src/nextpas.core.text.unicode.idna.pas" 'TIDNAErrorKind' 'TIDNAErrorKind (P3-0)'
+check_grep "core/src/nextpas.core.text.unicode.idna.pas" 'ApplyIdnaMap|IDNA_MAP_RANGES' 'IdnaMappingTable (P3-1)'
 check_grep "core/tests/nextpas.core.text.unicode/Makefile" 'function gate|gate:' 'make gate target'
 if [[ $fail -ne 0 ]]; then
   echo "text-unicode-ensure: FAIL — re-cherry-pick text-unicode history"

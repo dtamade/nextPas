@@ -113,6 +113,7 @@ Fixture / UCD 升版生成：见 [README.md#ucd-升版一条龙](README.md#ucd-�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | P3-1：IdnaMappingTable + ApplyIdnaMap |
 | 2026-07-21 | P3-0：TIDNAErrorKind + 门面 re-export SCX/Bidi visual |
 | 2026-07-20 | M2：UTF8ToTitleWords + clLithuanian |
 | 2026-07-20 | P2-3：Bidi 视觉序 API（Reorder/Apply/Invert） |

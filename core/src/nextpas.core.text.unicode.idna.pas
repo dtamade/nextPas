@@ -1,9 +1,10 @@
 unit nextpas.core.text.unicode.idna;
 
 {**
- * UTS #46 IDNA — pragmatic Nontransitional profile for domain labels.
- * Pipeline: split labels · NFC · LDH/Punycode · length checks.
- * Full IdnaMappingTable transitional mapping is out of scope (documented).
+ * UTS #46 IDNA — Nontransitional profile with IdnaMappingTable (P3-1).
+ * Pipeline: Map (UTS#46 table) · NFC · LDH/Punycode · length checks.
+ * UseSTD3ASCIIRules = True (disallowed_STD3_* → disallowed).
+ * Transitional processing is out of scope.
  *
  * Errors: TIDNAErrorKind is the structured code; string overloads map via
  * IDNAErrorKindName for legacy call sites.
@@ -13,11 +14,14 @@ unit nextpas.core.text.unicode.idna;
 
 interface
 
+uses
+  nextpas.core.text.unicode.types;
+
 const
   IDNA_ACE_PREFIX = 'xn--';
 
 type
-  { Stable IDNA failure codes (P3-0). Success = idnaOk. }
+  { Stable IDNA failure codes. Success = idnaOk. }
   TIDNAErrorKind = (
     idnaOk = 0,
     idnaEmptyDomain,
@@ -29,10 +33,30 @@ type
     idnaPunycodeDecodeFailed,
     idnaEmptyAceBody,
     idnaAceLabelTooLong,
-    idnaDomainTooLong
+    idnaDomainTooLong,
+    idnaDisallowed,
+    idnaInvalidUtf8
+  );
+
+  { IdnaMappingTable status (UTS#46). }
+  TIDNAMapStatus = (
+    idmsValid = 0,
+    idmsMapped = 1,
+    idmsIgnored = 2,
+    idmsDeviation = 3,
+    idmsDisallowed = 4,
+    idmsDisallowedSTD3Valid = 5,
+    idmsDisallowedSTD3Mapped = 6
   );
 
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
+
+{ Lookup mapping status for one codepoint. Map codepoints in AMap[0..AMapLen-1]. }
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
+
+{ Apply UTS#46 Map step to a UTF-8 string (Nontransitional + STD3). }
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
 
 { ToASCII / ToUnicode with structured kind. On failure Result='' and AKind<>idnaOk. }
 function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload;
@@ -49,11 +73,12 @@ function IDNAToUnicode(const ADomain: string): string; overload;
 implementation
 
 uses
-  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.punycode,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.utils;
+
+{$I nextpas.core.text.unicode.idna_mapping.inc}
 
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
 begin
@@ -69,8 +94,133 @@ begin
     idnaEmptyAceBody: Result := 'empty ACE body';
     idnaAceLabelTooLong: Result := 'ACE label too long';
     idnaDomainTooLong: Result := 'domain too long';
+    idnaDisallowed: Result := 'disallowed code point';
+    idnaInvalidUtf8: Result := 'invalid UTF-8';
   else
     Result := 'unknown IDNA error';
+  end;
+end;
+
+function FindIdnaMapRange(const ACp: TUnicodeCodepoint): Integer;
+var
+  LLo, LHi, LMid: Integer;
+begin
+  LLo := 0;
+  LHi := IDNA_MAP_RANGES_COUNT - 1;
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) shr 1);
+    if ACp < IDNA_MAP_RANGES[LMid].Lo then
+      LHi := LMid - 1
+    else if ACp > IDNA_MAP_RANGES[LMid].Hi then
+      LLo := LMid + 1
+    else
+      Exit(LMid);
+  end;
+  Result := -1;
+end;
+
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
+var
+  LIdx, I: Integer;
+  LOff: UInt32;
+begin
+  AMapLen := 0;
+  LIdx := FindIdnaMapRange(ACp);
+  if LIdx < 0 then
+    Exit(idmsDisallowed);
+  Result := TIDNAMapStatus(IDNA_MAP_RANGES[LIdx].Status);
+  AMapLen := IDNA_MAP_RANGES[LIdx].MapLen;
+  if AMapLen = 0 then
+    Exit;
+  LOff := IDNA_MAP_RANGES[LIdx].MapOff;
+  if AMapLen > Length(AMap) then
+    AMapLen := Byte(Length(AMap));
+  for I := 0 to Integer(AMapLen) - 1 do
+    AMap[I] := IDNA_MAP_POOL[LOff + UInt32(I)];
+end;
+
+function AppendUtf8Cp(var ADst: string; const ACp: TUnicodeCodepoint): Boolean;
+var
+  LBuf: array[0..3] of Byte;
+  LLen, LOld: Integer;
+  I: Integer;
+begin
+  LLen := Integer(UTF8Encode(ACp, @LBuf[0]));
+  if LLen = 0 then
+    Exit(False);
+  LOld := Length(ADst);
+  SetLength(ADst, LOld + LLen);
+  for I := 0 to LLen - 1 do
+    ADst[LOld + 1 + I] := AnsiChar(LBuf[I]);
+  Result := True;
+end;
+
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
+var
+  LPos, LLen: SizeUInt;
+  LDec: TUTF8DecodeResult;
+  LStatus: TIDNAMapStatus;
+  LMap: array[0..31] of TUnicodeCodepoint;
+  LMapLen: Byte;
+  I: Integer;
+  LCp: TUnicodeCodepoint;
+begin
+  AKind := idnaOk;
+  Result := '';
+  if AText = '' then
+    Exit;
+  LPos := 0;
+  LLen := SizeUInt(Length(AText));
+  while LPos < LLen do
+  begin
+    LDec := UTF8Decode(@PByte(PAnsiChar(AText))[LPos], LLen - LPos);
+    if LDec.ByteLen = 0 then
+    begin
+      AKind := idnaInvalidUtf8;
+      Result := '';
+      Exit;
+    end;
+    LCp := LDec.CodePoint;
+    LStatus := GetIdnaMapStatus(LCp, LMap, LMapLen);
+    case LStatus of
+      idmsValid:
+        if not AppendUtf8Cp(Result, LCp) then
+        begin
+          AKind := idnaInvalidUtf8;
+          Result := '';
+          Exit;
+        end;
+      idmsIgnored:
+        { drop };
+      idmsMapped, idmsDeviation:
+        begin
+          { Nontransitional: use mapping (empty mapping ⇒ drop, e.g. ZWJ). }
+          for I := 0 to Integer(LMapLen) - 1 do
+            if not AppendUtf8Cp(Result, LMap[I]) then
+            begin
+              AKind := idnaInvalidUtf8;
+              Result := '';
+              Exit;
+            end;
+        end;
+      idmsDisallowedSTD3Valid, idmsDisallowedSTD3Mapped:
+        begin
+          { UseSTD3ASCIIRules = True → treat as disallowed. }
+          AKind := idnaDisallowed;
+          Result := '';
+          Exit;
+        end;
+    else
+      { idmsDisallowed or unknown }
+      begin
+        AKind := idnaDisallowed;
+        Result := '';
+        Exit;
+      end;
+    end;
+    Inc(LPos, LDec.ByteLen);
   end;
 end;
 
@@ -114,7 +264,7 @@ end;
 
 function ProcessLabelToASCII(const ALabel: string; out AKind: TIDNAErrorKind): string;
 var
-  LNorm, LPuny: string;
+  LMapped, LNorm, LPuny: string;
 begin
   AKind := idnaOk;
   Result := '';
@@ -123,20 +273,29 @@ begin
     AKind := idnaEmptyLabel;
     Exit;
   end;
-  if IsAsciiLabel(ALabel) then
+  LMapped := ApplyIdnaMap(ALabel, AKind);
+  if AKind <> idnaOk then
+    Exit;
+  if LMapped = '' then
   begin
-    Result := LowerAscii(ALabel);
+    { Entire label ignored (e.g. only soft hyphens) → empty label }
+    AKind := idnaEmptyLabel;
+    Exit;
+  end;
+  LNorm := NFC(LMapped);
+  if LNorm = '' then
+  begin
+    AKind := idnaNfcFailed;
+    Exit;
+  end;
+  if IsAsciiLabel(LNorm) then
+  begin
+    Result := LowerAscii(LNorm);
     if not IsLDHLabel(Result) then
     begin
       AKind := idnaInvalidAsciiLabel;
       Result := '';
     end;
-    Exit;
-  end;
-  LNorm := NFC(ALabel);
-  if LNorm = '' then
-  begin
-    AKind := idnaNfcFailed;
     Exit;
   end;
   LPuny := PunycodeEncode(LNorm);
@@ -155,7 +314,7 @@ end;
 
 function ProcessLabelToUnicode(const ALabel: string; out AKind: TIDNAErrorKind): string;
 var
-  LLower, LBody, LDecoded: string;
+  LMapped, LLower, LBody, LDecoded, LNorm: string;
 begin
   AKind := idnaOk;
   Result := '';
@@ -164,7 +323,15 @@ begin
     AKind := idnaEmptyLabel;
     Exit;
   end;
-  LLower := LowerAscii(ALabel);
+  LMapped := ApplyIdnaMap(ALabel, AKind);
+  if AKind <> idnaOk then
+    Exit;
+  if LMapped = '' then
+  begin
+    AKind := idnaEmptyLabel;
+    Exit;
+  end;
+  LLower := LowerAscii(LMapped);
   if (Length(LLower) >= 4) and (Copy(LLower, 1, 4) = IDNA_ACE_PREFIX) then
   begin
     LBody := Copy(LLower, 5, Length(LLower));
@@ -184,20 +351,23 @@ begin
       AKind := idnaNfcFailed;
     Exit;
   end;
-  if not IsAsciiLabel(LLower) then
+  LNorm := NFC(LMapped);
+  if LNorm = '' then
   begin
-    { Already Unicode label }
-    Result := NFC(LLower);
-    if Result = '' then
-      AKind := idnaNfcFailed;
+    AKind := idnaNfcFailed;
     Exit;
   end;
-  if not IsLDHLabel(LLower) then
+  if IsAsciiLabel(LNorm) then
   begin
-    AKind := idnaInvalidAsciiLabel;
+    if not IsLDHLabel(LowerAscii(LNorm)) then
+    begin
+      AKind := idnaInvalidAsciiLabel;
+      Exit;
+    end;
+    Result := LowerAscii(LNorm);
     Exit;
   end;
-  Result := LLower;
+  Result := LNorm;
 end;
 
 function SplitDomain(const ADomain: string; out ALabels: array of string;
@@ -216,7 +386,6 @@ begin
     begin
       if I = Start then
       begin
-        { empty label: allow trailing dot only as final }
         if I <= Length(ADomain) then
           Exit(False);
         Break;
@@ -274,7 +443,7 @@ begin
     end;
     Inc(LTotal, Length(LOut[I]));
     if I > 0 then
-      Inc(LTotal); { dot }
+      Inc(LTotal);
   end;
   if LTotal > 253 then
   begin
