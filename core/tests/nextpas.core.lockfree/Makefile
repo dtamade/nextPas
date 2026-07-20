@@ -27,6 +27,7 @@ BAG_TEST_DIR := test_lockfree_bag
 MULTIMAP_TEST_DIR := test_lockfree_multimap
 T1_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_close_join_free
 T1_SEGQUEUE_WORKERS_DIR := ../../examples/nextpas.core.lockfree/t1_segqueue_workers
+T2_BAG_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_bag_close_join_free
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
@@ -59,7 +60,7 @@ verify-t1:
 # Does not replace verify-t1. Covers:
 #   - async.loop Post path uses T1 MPSC (H3-1 source-contract in test_async)
 #   - bag / multimap H3-2 production contract pins
-#   - H2-6 Close->join->Free example still builds and runs
+#   - H2-6 Close->join->Free examples (Channel + SegQueue + Bag)
 verify-h3-consumers:
 	@mkdir -p $(VERIFY_LOG_DIR)
 	@echo "verify-h3-consumers: starting (log -> $(VERIFY_H3_CONSUMERS_LOG))"
@@ -75,10 +76,12 @@ verify-h3-consumers:
 	  $(MAKE) -C $(BAG_TEST_DIR) clean test; \
 	  echo "=== lockfree multimap H3-2 ==="; \
 	  $(MAKE) -C $(MULTIMAP_TEST_DIR) clean test; \
-	  echo "=== t1_close_join_free example (H2-6) ==="; \
+	  echo "=== t1_close_join_free example (H2-6 Channel) ==="; \
 	  $(MAKE) -C $(T1_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "=== t1_segqueue_workers example (SegQueue N-worker lifecycle) ==="; \
 	  $(MAKE) -C $(T1_SEGQUEUE_WORKERS_DIR) clean test; \
+	  echo "=== t2_bag_close_join_free example (H3-2 Bag lifecycle) ==="; \
+	  $(MAKE) -C $(T2_BAG_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "verify-h3-consumers-status=pass"; \
 	} 2>&1 | tee $(VERIFY_H3_CONSUMERS_LOG)
 	@echo "verify-h3-consumers-status=pass log=$(VERIFY_H3_CONSUMERS_LOG)"
