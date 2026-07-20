@@ -623,6 +623,83 @@ begin
   end;
 end;
 
+procedure TestDialLocalAddrBind;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LPort: UInt16;
+  LLocal: TNetAddress;
+begin
+  { Bind-before-connect: LocalAddr 127.0.0.1:0 → connected stream local is loopback. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 1;
+    LOpts.LocalAddr := TNetAddress.IPv4('127.0.0.1', 0);
+    Check(AsyncTcpDial(GLoop, '127.0.0.1', LPort, LOpts, @OnDial, nil),
+      'localaddr dial submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'localaddr dial callback');
+    CheckEqual(Int64(0), Int64(GError), 'localaddr error 0');
+    Check(GStream <> nil, 'localaddr stream');
+    LLocal := GStream.LocalAddr;
+    Check(not LLocal.IsIPv6, 'local is IPv4');
+    CheckEqual(LLocal.IP, '127.0.0.1', 'local IP loopback');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+    LListener := nil;
+  finally
+    GLoop.Free;
+  end;
+end;
+
+procedure TestDialNoDelayKeepAliveOptions;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LPort: UInt16;
+begin
+  { NoDelay/KeepAlive apply to winning stream before callback (smoke: dial still ok). }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.NoDelay := True;
+    LOpts.KeepAlive := True;
+    Check(AsyncTcpDial(GLoop, '127.0.0.1', LPort, LOpts, @OnDial, nil),
+      'nodelay/keepalive dial submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'nodelay/keepalive callback');
+    CheckEqual(Int64(0), Int64(GError), 'nodelay/keepalive error 0');
+    Check(GStream <> nil, 'nodelay/keepalive stream');
+    { Re-apply to prove APIs remain live on adopted stream. }
+    GStream.SetNoDelay(True);
+    GStream.SetKeepAlive(True);
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+    LListener := nil;
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_dial');
   GAllowDialDone := True;
@@ -641,6 +718,8 @@ begin
   T.Test('DnsRaceEmptyUntilDoneFails', @TestDnsRaceEmptyUntilDoneFails);
   T.Test('DnsRaceWaitsAllDoneWhenAddrsExhausted',
     @TestDnsRaceWaitsAllDoneWhenAddrsExhausted);
+  T.Test('DialLocalAddrBind', @TestDialLocalAddrBind);
+  T.Test('DialNoDelayKeepAliveOptions', @TestDialNoDelayKeepAliveOptions);
   if not T.Run then
     Halt(1);
 end.

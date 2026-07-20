@@ -39,7 +39,7 @@ type
 
   TThreadPool = class(TInterfacedObject, IThreadPool)
   private
-    FMutex: IMutex;
+    FMutex: INativeMutex;
     FCondVar: ICondVar;
     FDoneCondVar: ICondVar;
     FQueue: TPointerSegQueue;

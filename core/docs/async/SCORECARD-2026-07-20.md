@@ -26,7 +26,7 @@
 | HE / DNS race | **Q6–Q12 done** |
 | 错误分类 | **Q13 ClassifyNetError** |
 | Async UDP / Pool async | **Q15 / Q16** |
-| Windows native | 未宣称 |
+| Windows native | **candidate fail-closed** (Q24B) |
 | 性能 A/B | **Q18** |
 
 ## Q 清单
@@ -43,7 +43,9 @@
 - [x] Q21 public DNS HE stats opt-in (`NEXTPAS_PUBLIC_DNS_HE=1`)
 - [x] Q22 async-windows-native-smoke CI step (continue-on-error)
 - [x] Q23 multi-host public HE matrix (opt-in)
-- [x] Q24A windows smoke streak observer; Q24B fail-closed deferred until promote-ready
+- [x] Q24A windows smoke streak observer; **Q24B fail-closed promoted** (candidate claim)
+- [x] Q25 Dial LocalAddr bind-before-connect + Default() managed-safe options
+- [x] Q26 Dial NoDelay/KeepAlive options on winning stream
 
 ## 性能 scorecard（同机 2026-07-20）
 

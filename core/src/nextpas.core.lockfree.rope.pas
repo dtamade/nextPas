@@ -175,7 +175,7 @@ function TRope.Insert(APosition: Int32; const AText: AnsiString): TRopeResult;
 var
   LLeft, LRight, LNew: PRopeNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(rpClosed);
   if APosition < 0 then
     Exit(rpOutOfBounds);
@@ -200,7 +200,7 @@ function TRope.Delete(APosition, ACount: Int32): TRopeResult;
 var
   LLeft, LMid, LRight, LTemp: PRopeNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(rpClosed);
   if (APosition < 0) or (ACount <= 0) then
     Exit(rpOutOfBounds);
@@ -220,7 +220,7 @@ function TRope.Substring(APosition, ACount: Int32; out AResult: AnsiString): TRo
 var
   LLeft, LMid, LRight, LTemp: PRopeNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(rpClosed);
   if (APosition < 0) or (ACount <= 0) then
     Exit(rpOutOfBounds);
@@ -276,12 +276,12 @@ end;
 
 procedure TRope.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TRope.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

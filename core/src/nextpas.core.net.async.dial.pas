@@ -47,6 +47,12 @@ type
     ResolutionDelayMs: UInt32;        { DNS Resolution Delay; default 50 }
     OnAttemptStart: TAsyncTcpDialAttemptStart; { optional; default nil }
     OnAttemptStartContext: Pointer;
+    { Optional local bind before connect (Go Dialer.LocalAddr subset).
+      Empty IP = unset. Family must match remote attempt or bind is skipped. }
+    LocalAddr: TNetAddress;
+    { Applied to the winning stream before user callback (best-effort). }
+    NoDelay: Boolean;   { TCP_NODELAY; default False }
+    KeepAlive: Boolean; { SO_KEEPALIVE; default False }
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -184,7 +190,8 @@ procedure DnsFeedPostDiscard(AContext: Pointer); forward;
 
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  { Default() for managed fields (Token, LocalAddr.IP); never FillChar. }
+  Result := Default(TAsyncTcpDialOptions);
   Result.ConnectionAttemptDelayMs := HE_DEFAULT_CONNECTION_ATTEMPT_DELAY_MS;
   Result.MaxInFlight := HE_DEFAULT_MAX_IN_FLIGHT;
   Result.OverallDeadline := TDeadline.Infinite;
@@ -195,6 +202,11 @@ begin
   Result.ResolutionDelayMs := HE_DEFAULT_RESOLUTION_DELAY_MS;
   Result.OnAttemptStart := nil;
   Result.OnAttemptStartContext := nil;
+  Result.LocalAddr.IP := '';
+  Result.LocalAddr.Port := 0;
+  Result.LocalAddr.IsIPv6 := False;
+  Result.NoDelay := False;
+  Result.KeepAlive := False;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -529,6 +541,11 @@ begin
     Dec(FInFlight);
   AbortAllAttempts;
 
+  if FOptions.NoDelay then
+    LStream.SetNoDelay(True);
+  if FOptions.KeepAlive then
+    LStream.SetKeepAlive(True);
+
   LAsync := AsyncTcpStreamAdopt(FLoop, LStream);
   LCb := FUserCb;
   LCtx := FUserCtx;
@@ -574,6 +591,7 @@ var
   LAtt: PDialAttempt;
   LDomain: Int32;
   LRemote: TNetAddress;
+  LLocalSa: TPlatformSockAddr;
   LRes: Int32;
 begin
   Result := False;
@@ -616,6 +634,28 @@ begin
     Dispose(LAtt);
     FLastError := -LRes;
     Exit;
+  end;
+
+  { Optional local bind (family must match remote attempt). }
+  if (FOptions.LocalAddr.IP <> '') and
+     (FOptions.LocalAddr.IsIPv6 = LRemote.IsIPv6) then
+  begin
+    if not NetBuildConnectSockAddr(FOptions.LocalAddr, LLocalSa) then
+    begin
+      platform_socket_close(LAtt^.Fd);
+      Dispose(LAtt);
+      FLastError := -ECONNREFUSED_LINUX;
+      Exit;
+    end;
+    LRes := platform_socket_bind(LAtt^.Fd, @LLocalSa.Storage[0],
+      Int32(LLocalSa.Len));
+    if LRes <> 0 then
+    begin
+      platform_socket_close(LAtt^.Fd);
+      Dispose(LAtt);
+      FLastError := -LRes;
+      Exit;
+    end;
   end;
 
   if AIndex >= Length(FAttempts) then

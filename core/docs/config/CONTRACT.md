@@ -72,9 +72,15 @@ function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
 function ConfigLoad(const APath: string): IConfig; overload; // 扩展名 + 内容嗅探
 function ConfigBorrow(AConfig: TConfig): IConfig; // 非拥有 IConfig 视图
+function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig; // viper Sub
+function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig; overload;
 function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
 function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
+function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boolean;
 ```
+
+`ConfigSection`：非拥有前缀视图；`GetString('host')` ≡ parent `prefix.host`；`To*` export 抛 `EConfigError`。
+`GetDurationNs` / `GetDurationNsRequired`：后缀 `ns|us|ms|s|m|h`；裸整数按秒。
 
 `AddKeyValues` 按链顺序应用；不依赖 `args`。长度不等或空 key 在 **Add 时** 立即 `EConfigError`。
 

@@ -116,10 +116,14 @@ end;
 procedure TTimeSeriesRingBuffer.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -134,7 +138,7 @@ end;
 
 procedure TTimeSeriesRingBuffer.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TTimeSeriesRingBuffer.WrapIdx(AIdx: Int32): Int32;
@@ -350,7 +354,7 @@ procedure TTimeSeriesRingBuffer.SetDefaultTTL(ATTLMs: Int64);
 begin
   if ATTLMs < 0 then
     ATTLMs := 0;
-  AtomicExchange64(FDefaultTTL, ATTLMs);
+  atomic_exchange_64(FDefaultTTL, ATTLMs);
 end;
 
 function TTimeSeriesRingBuffer.PurgeExpired: Int32;

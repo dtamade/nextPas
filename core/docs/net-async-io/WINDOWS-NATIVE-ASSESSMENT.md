@@ -1,6 +1,6 @@
-# Windows native async host evidence — assessment (Q17)
+# Windows native async host evidence — assessment (Q17 → Q24B)
 
-**Date**: 2026-07-20  
+**Date**: 2026-07-20
 **Scope**: nextpas.core async I/O on **native Windows** (not Wine)
 
 ## Current evidence tiers
@@ -9,72 +9,57 @@
 |------|-----------|--------|
 | `truth=wine-runtime-smoke` | `test_reactor_iocp_wine`, `test_poller_windows_runtime_smoke` under Wine on Linux CI | IOCP implementation exercised under Wine — **not** bare-metal Windows |
 | `truth=windows-compile-gate` | FORCE_HOST / cross-compile gates | Source compiles for Windows targets |
-| `truth=native-windows` | — | **Not claimed** |
+| `truth=native-windows-candidate` | `async-windows-native-smoke` **fail-closed** on `windows-latest` (Q24B) | Suite-limited host evidence — **not** full host parity |
+| `truth=native-windows` | — | **Not claimed** (full parity) |
 
-## What native Windows would require
+## What native Windows host evidence covers
 
-1. **Runner**: `windows-latest` (or self-hosted) with FPC trunk **x86_64-win64** capable of building `nextpas.core` (function references / ObjFPC).
-2. **Suite (minimum)**:
-   - `test_poller_windows_runtime_smoke` on bare metal
-   - `test_reactor_iocp_wine` equivalent without Wine
-   - `test_async_accept_connect_smoke` (if loop creates `pbIocp`)
-   - dial/resolve host matrix subset (optional phase 2)
-3. **CI job**: fail-closed only after 2+ consecutive green weekly runs (avoid flapping FPC trunk installs).
+1. **Runner**: `windows-latest` with FPC trunk **x86_64-win64** (core-ci snapshot install).
+2. **Suite (async smoke)**:
+   - `test_async_windows_compile_gate` / `test_async_windows_contract`
+   - `test_poller_windows_runtime_smoke`
+   - `test_reactor_iocp_wine` (on native host)
+   - `test_async_accept_connect_smoke`
+3. **CI policy**: fail-closed after streak ≥14 consecutive step successes (Q24B).
 
 ## Current CI reality
 
-- `test-windows-runtime` job exists in `core-ci.yml` and focuses on **platform** matrix + toolchain, not full async host parity.
-- Chocolatey / MSYS2 FPC packaging remains a **blocker risk** for nextpas.core (needs 3.3.1+).
-- Wine smoke remains the **honest** IOCP runtime evidence layer.
+- `test-windows-runtime` runs platform matrix + async Windows native smoke.
+- Async step: **no** `continue-on-error`; `ASYNC_WINDOWS_STRICT=1`.
+- Soft escape (local only): `NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1`.
+- Wine smoke remains a separate honest IOCP tier under Linux CI.
 
-## Decision (Q17 / Q20 light / Q22 wired)
+## Decision (Q24B)
 
 | Option | Choice |
 |--------|--------|
-| Promote to native-windows claim now? | **No** |
+| Promote full `truth=native-windows`? | **No** — suite-limited |
 | Keep wine-runtime-smoke? | **Yes** |
-| Opt-in CI step wired? | **Yes (Q22)** — `async-windows-native-smoke` under `test-windows-runtime` with `continue-on-error: true` |
+| Fail-closed async smoke on Windows CI? | **Yes** |
+| Claim | **native-windows-candidate** |
 
-### Opt-in job / step (wired soft)
+### Step / script
 
 | Field | Value |
 |-------|--------|
-| Job | `test-windows-runtime` (existing FPC trunk win64 setup) |
-| Step | `Async Windows native smoke (opt-in, not fail-closed)` |
+| Job | `test-windows-runtime` |
+| Step | `Async Windows native smoke (fail-closed on Windows host)` |
 | Script | `core/scripts/async-windows-native-smoke.sh` |
-| Suite | windows compile gate + contract; poller windows runtime; IOCP reactor; accept/connect smoke |
-| CI policy | `continue-on-error: true` + script soft (`STRICT!=1`) until streak |
-| Promote fail-closed when | FPC trunk install stable + step green streak (see checklist) |
-| Out of scope | dial concurrent bench, public DNS HE, full host-matrix |
+| STRICT | CI exports `ASYNC_WINDOWS_STRICT=1`; script defaults STRICT=1 on Windows hosts |
 
-### How to judge green / promote (Q24A)
-
-1. Run streak observer (needs `gh` + `jq`):
+### Streak observer
 
 ```bash
 bash core/scripts/async-windows-smoke-streak.sh
-# optional: ASYNC_WINDOWS_STREAK_NEED=14 bash core/scripts/async-windows-smoke-streak.sh --limit 30
+# promote-ready=yes with consecutive_step_success≥14 triggered Q24B
 ```
 
-2. Look for:
+### Rollback
 
-```
-consecutive_step_success=N
-promote-ready=yes|no
-```
-
-3. **Promotion checklist (manual Q24B)** — only if `promote-ready=yes`:
-
-- [ ] Streak ≥ need (default 14 completed main runs with step=success)
-- [ ] No FPC trunk install flakes in the same window
-- [ ] Remove `continue-on-error: true` from the async-windows step in `core-ci.yml`
-- [ ] On Windows host, default `ASYNC_WINDOWS_STRICT=1` unless `NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1`
-- [ ] Keep claim at **native-windows-candidate** until explicitly re-assessed; do not rename Wine evidence
-
-If `promote-ready=no`: keep soft CI; do not flip.
+- Temporarily re-add `continue-on-error` only with assessment note + streak reset if FPC/Windows flakes dominate.
 
 ## Non-goals
 
-- Do not treat Wine green as native Windows host-runtime.
-- Do not block Linux/macOS quality gates on Windows native.
-- Do not claim `truth=native-windows` from wine or compile-only gates.
+- Do not treat Wine green as bare-metal native Windows.
+- Do not block Linux/macOS gates on Windows native.
+- Do not claim full-host Windows async parity from this suite alone.

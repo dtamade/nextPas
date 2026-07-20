@@ -103,10 +103,14 @@ end;
 procedure TWorkStealingPool.AcquireOwner(const AWorkerIndex: Int64);
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FOwnerLocks[AWorkerIndex], 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerIndex], LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -117,7 +121,7 @@ end;
 
 procedure TWorkStealingPool.ReleaseOwner(const AWorkerIndex: Int64);
 begin
-  AtomicStore32(FOwnerLocks[AWorkerIndex], 0, moRelease);
+  atomic_store(FOwnerLocks[AWorkerIndex], 0, mo_release);
 end;
 
 function TWorkStealingPool.Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
@@ -125,15 +129,15 @@ var
   LQueuedTask: TQueuedTask;
   LWorkerIndex: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LQueuedTask.Task := ATask;
   LQueuedTask.Data := AData;
-  LWorkerIndex := Int64(QWord(AtomicFetchAdd64(FNextSubmit, 1, moRelaxed)) mod
+  LWorkerIndex := Int64(QWord(atomic_fetch_add_64(FNextSubmit, 1, mo_relaxed)) mod
     QWord(FWorkerCount));
   AcquireOwner(LWorkerIndex);
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     Result := FDeques[LWorkerIndex].TryPush(LQueuedTask);
   finally
@@ -148,11 +152,11 @@ var
   LQueueIndex: Int64;
   LQueuedTask: TQueuedTask;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(wsClosed);
   ATask := nil;
   AData := nil;
-  LStartIndex := Int64(QWord(AtomicFetchAdd64(FNextSteal, 1, moRelaxed)) mod
+  LStartIndex := Int64(QWord(atomic_fetch_add_64(FNextSteal, 1, mo_relaxed)) mod
     QWord(FWorkerCount));
   for LI := 0 to FWorkerCount - 1 do
   begin
@@ -187,7 +191,7 @@ procedure TWorkStealingPool.Close;
 var
   LI: Int64;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   for LI := 0 to High(FDeques) do
   begin
     AcquireOwner(LI);
@@ -201,7 +205,7 @@ end;
 
 function TWorkStealingPool.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

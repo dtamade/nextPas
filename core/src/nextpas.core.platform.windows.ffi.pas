@@ -730,6 +730,28 @@ function TryEnterCriticalSection(lpCriticalSection: LPCRITICAL_SECTION): WINBOOL
     @return TRUE 成功 *}
 function GetOverlappedResult(hFile: HANDLE; lpOverlapped: LPOVERLAPPED; lpNumberOfBytesTransferred: LPDWORD; bWait: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'GetOverlappedResult';
 
+{** @desc 创建事件对象（UTF-16）
+    @return 事件句柄，失败为 NULL *}
+function CreateEventW(lpEventAttributes: Pointer; bManualReset: WINBOOL;
+  bInitialState: WINBOOL; lpName: LPCWSTR): HANDLE; stdcall;
+  external 'kernel32' name 'CreateEventW';
+
+{** @desc 目录变更通知（异步）
+    @param hDirectory 目录句柄（FILE_LIST_DIRECTORY）
+    @param lpBuffer 输出缓冲
+    @param nBufferLength 缓冲字节数
+    @param bWatchSubtree 是否递归子树
+    @param dwNotifyFilter FILE_NOTIFY_CHANGE_*
+    @param lpBytesReturned 同步完成时写入字节数
+    @param lpOverlapped 异步结构
+    @param lpCompletionRoutine 完成例程（通常 nil）
+    @return TRUE 同步完成；FALSE 时可能 ERROR_IO_PENDING *}
+function ReadDirectoryChangesW(hDirectory: HANDLE; lpBuffer: Pointer;
+  nBufferLength: DWORD; bWatchSubtree: WINBOOL; dwNotifyFilter: DWORD;
+  lpBytesReturned: LPDWORD; lpOverlapped: LPOVERLAPPED;
+  lpCompletionRoutine: Pointer): WINBOOL; stdcall;
+  external 'kernel32' name 'ReadDirectoryChangesW';
+
 {** @desc 取消 I/O 操作
     @param hFile 文件句柄
     @return TRUE 成功 *}

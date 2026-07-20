@@ -1,25 +1,26 @@
 # Windows `platform.watch` design — ReadDirectoryChangesW
 
-**Status:** S1 landed (create/add/close). Poll still stub until S2.
+**Status:** S1+S2 landed (create/add/close + RDCW poll one-event + timeout).
 **Owner:** platform lane. **Public API:** do not change without a new batch.
 
 **S1 decisions locked:** single-directory v1; recursive out of scope;
-overflow deferred to S2/S3; `IsDir` optional (S2+); `Fd` unused on Windows
-(`DirHandle` is validity).
+`Fd` unused on Windows (`DirHandle` is validity).
+**S2:** OVERLAPPED + auto-reset event; poll returns **1** (event) / **0**
+(timeout) matching Linux test convention; residual multi-record drain.
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
 and Darwin/FreeBSD (kqueue EVFILT_VNODE) already provide focused-runtime.
 Windows is currently a permanent-looking stub:
 
 ```pascal
-// {$IFDEF NEXTPAS_WINDOWS} after Batch-15 S1
+// {$IFDEF NEXTPAS_WINDOWS} after Batch-15 S2
 platform_watch_create → 0 (DirHandle invalid until add)
-platform_watch_add    → CreateFileW dir (single path; second → NOSPC)
-platform_watch_poll   → PLATFORM_ERR_UNSUPPORTED (S2)
-platform_watch_close  → CloseHandle; idempotent 0
+platform_watch_add    → CreateFileW dir + OVERLAPPED + arm RDCW
+platform_watch_poll   → 1 event / 0 timeout (RDCW + WaitForSingleObject)
+platform_watch_close  → CancelIoEx + CloseHandle; idempotent 0
 ```
 
-Wine smoke covers S1 create/add/close; poll still asserts UNSUPPORTED.
+Wine smoke covers S1 + poll timeout + create-file event (wine residual OK).
 
 ---
 

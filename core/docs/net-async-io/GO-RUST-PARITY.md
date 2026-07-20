@@ -33,7 +33,9 @@
 | 项 | 状态 |
 |----|------|
 | Token / OverallDeadline / HE CAD / DNS race / lab feed | 有 |
-| LocalAddr / Control / 自定义 Resolver / MPTCP | 无或未接线 |
+| LocalAddr (bind-before-connect) | **Q25** family-matched subset |
+| NoDelay / KeepAlive on win stream | **Q26** |
+| Control / 自定义 Resolver / MPTCP | 无或未接线 |
 | ClassifyNetError | **Q13** |
 | AsyncTcpDial 为推荐默认（文档） | **Q13** |
 
@@ -42,7 +44,7 @@
 | 项 | 状态 |
 |----|------|
 | IAsyncCancellationToken 树 | 有 |
-| INetCancelToken（阻塞 IO wake） | 有，**未统一**（Q14） |
+| INetCancelToken（阻塞 IO wake） | **Q14** NetCancelFromAsync 桥 |
 
 ### I/O 后端
 
@@ -56,9 +58,9 @@
 
 | 项 | 状态 |
 |----|------|
-| Async UDP | 缺（Q15） |
-| Pool × AsyncTcpDial | 同步 pool only（Q16） |
-| kqueue accept/connect smoke | 可加深（Q17） |
+| Async UDP | **Q15** |
+| Pool × AsyncTcpDial | **Q16** AcquireAsync |
+| kqueue accept/connect smoke | **Q17** |
 
 ## 4. 推荐路径（用户心智模型）
 
@@ -76,7 +78,7 @@
 | linux-runtime | 默认质量门 |
 | macos-host-smoke | kqueue + dial/resolve fail-closed |
 | wine-runtime-smoke | IOCP |
-| native-windows | 未宣称 |
+| native-windows | **candidate fail-closed** (Q24B suite-limited; not full parity) |
 
 ## 6. 路线图索引
 

@@ -107,11 +107,11 @@ function TMerkleTree.AddLeaf(const AData: AnsiString): TMerkleResult;
 var
   LLeaf: PMerkleLeaf;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(mkClosed);
   LockTree;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(mkClosed);
     New(LLeaf);
     LLeaf^.Data := AData;
@@ -184,10 +184,14 @@ end;
 procedure TMerkleTree.LockTree;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -202,7 +206,7 @@ end;
 
 procedure TMerkleTree.UnlockTree;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TMerkleTree.GetRootHash: UInt64;
@@ -290,7 +294,7 @@ procedure TMerkleTree.Close;
 begin
   LockTree;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     UnlockTree;
   end;
@@ -298,7 +302,7 @@ end;
 
 function TMerkleTree.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

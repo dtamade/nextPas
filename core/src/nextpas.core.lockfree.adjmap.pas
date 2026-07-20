@@ -99,10 +99,14 @@ implementation
 procedure TAdjMapImpl.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -115,7 +119,7 @@ end;
 
 procedure TAdjMapImpl.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TAdjMapImpl.Create(ACapacity: UInt32);
@@ -171,12 +175,12 @@ end;
 
 function TAdjMapImpl.AddVertex(AId: UInt64): TAdjMapStatus;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(amClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(amClosed);
     if FindVertex(AId) >= 0 then
       Exit(amVertexExists);
@@ -199,14 +203,14 @@ var
   LSrcIdx, LDstIdx: Integer;
   LEdge: PAdjEdge;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(amClosed);
   if AWeight < 0 then
     Exit(amInvalidWeight);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
@@ -245,12 +249,12 @@ var
   LSrcIdx: Integer;
   LEdge, LPrev: PAdjEdge;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(amClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
@@ -321,12 +325,12 @@ begin
   AResult.FPathLen := 0;
   AResult.FDistance := -1;
   SetLength(AResult.FPath, 0);
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(amClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(amClosed);
     LSrcIdx := FindVertex(ASource);
     if LSrcIdx < 0 then
@@ -437,7 +441,7 @@ procedure TAdjMapImpl.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -445,7 +449,7 @@ end;
 
 function TAdjMapImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

@@ -4,6 +4,10 @@ program test_yaml_facade_surface;
 
 uses
   SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.yaml,
   nextpas.core.test;
 
@@ -81,10 +85,40 @@ begin
   Check(LError.Line > 0, 'multi-doc error has line');
 end;
 
+function YamlBytesFromString(const AText: string): TBytes;
+var
+  LI: Integer;
+begin
+  SetLength(Result, Length(AText));
+  for LI := 1 to Length(AText) do
+    Result[LI - 1] := Byte(AText[LI]);
+end;
+
+procedure TestFacadeExposesReaderParse;
+var
+  LStream: IStream;
+  LDoc: IYamlDocument;
+  LRaised: Boolean;
+begin
+  LStream := CreateBytesStreamFrom(YamlBytesFromString('name: bob' + #10));
+  LDoc := YamlParse(LStream as IReader);
+  Check(not LDoc.HasError, 'IReader yaml parse');
+  CheckEqual('bob', LDoc.Root.MapGet('name').AsStr.ToString, 'IReader value');
+  LRaised := False;
+  try
+    YamlParse(IReader(nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'nil IReader raises');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.yaml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade edge depth and large value',
     @TestFacadeEdgeDepthAndLargeValue);
+  T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
   if not T.Run then Halt(1);
 end.

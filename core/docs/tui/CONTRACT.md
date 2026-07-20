@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.17
+**版本**：1.19
 
 ---
 
@@ -12,6 +12,8 @@
 
 L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / experimental / full）。
 默认 `nextpas.core.tui` 只保证终端正确性；app/runtime 走 `.ext`，协议能力走 `.experimental`。
+
+**模块完整开发地图（北极星 / Done / 阶段）**: [ROADMAP.md](ROADMAP.md)
 
 ---
 
@@ -167,15 +169,18 @@ end;
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 - Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
-### 6.1 Scorecard 与跨语言对标（Wave Q1–Q15）
+### 6.1 Scorecard 与跨语言对标（Wave Q1–Q15 + M1 Maintenance）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC25）
-  - SC1–SC22：diff/parse/layout/协议/backend/SGR RGB/DrawPatches 复用/ratio 等
-  - **SC23** indexed SGR；**SC24** DrawPatches 样式切换；**SC25** FocusManager Tab
-- **纲领**: `PARITY-GO-RUST.md` · `SCORECARD.md`
-- **同方法论对照**: `bench_go_rust`（`make compare`）
-- **契约脚本**: `./scripts/tui-contract-check.sh`（**C7** 对齐至 SC23–SC25）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC27）
+  - SC1–SC25：Q 线质量主维度
+  - **SC26** Keybind；**SC27** FrameBudget
+- **纲领**: `PARITY-GO-RUST.md`（**Maintenance** + SC 冻结策略）· `SCORECARD.md`
+- **同方法论对照**: `bench_go_rust`
+- **契约脚本**: `./scripts/tui-contract-check.sh`
+  - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC27
+  - **C8** core facade reject 编译失败（scrollview/modal）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
+- 晋升：scrollview/modal **就绪**（reject 已加），**未**改 ext 导出
 
 ---
 
@@ -183,6 +188,8 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.19 | 权威 ROADMAP 完整开发地图（Done 清单 + Phase A–F） | Claude |
+| 2026-07-20 | 1.18 | M1 Maintenance：SC26 keybind + SC27 frame budget；reject scrollview/modal；C8 | Claude |
 | 2026-07-20 | 1.17 | SC23 indexed SGR + SC24 style-change patches + SC25 focus Tab；C7 升级 | Claude |
 | 2026-07-20 | 1.16 | SC20 SGR rgb + SC21 DrawPatches + SC22 ratio；contract-check C7 | Claude |
 | 2026-07-20 | 1.15 | SC17 backend mouse modes + SC18 resize + SC19 pct layout；examples multi-demo | Claude |

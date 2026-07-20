@@ -73,10 +73,14 @@ end;
 procedure TConditionVariable.AcquireState;
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FStateLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FStateLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -87,7 +91,7 @@ end;
 
 procedure TConditionVariable.ReleaseState;
 begin
-  AtomicStore32(FStateLock, 0, moRelease);
+  atomic_store(FStateLock, 0, mo_release);
 end;
 
 procedure TConditionVariable.RemoveWaiter(AWaiter: PConditionWaiter);
@@ -135,7 +139,7 @@ begin
     LStart := TInstant.Now;
   AcquireState;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(cvClosed);
     if not AMutex.IsOwnedByCurrentThread then
       raise EInvalidOperationError.Create(
@@ -159,7 +163,7 @@ begin
       LDone := False;
       AcquireState;
       try
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        if atomic_load(FClosed, mo_acquire) <> 0 then
         begin
           Result := cvClosed;
           LDone := True;
@@ -224,7 +228,7 @@ var
 begin
   AcquireState;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
     LWaiter := FWaiterHead;
     while LWaiter <> nil do
@@ -247,7 +251,7 @@ var
 begin
   AcquireState;
   try
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) or (FWaiters <= 0) then
+    if (atomic_load(FClosed, mo_acquire) <> 0) or (FWaiters <= 0) then
       Exit;
     LWaiter := FWaiterHead;
     while LWaiter <> nil do
@@ -264,7 +268,7 @@ procedure TConditionVariable.Close;
 begin
   AcquireState;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     ReleaseState;
   end;
@@ -278,7 +282,7 @@ end;
 
 function TConditionVariable.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConditionVariable.GetWaiterCount: Int32;
