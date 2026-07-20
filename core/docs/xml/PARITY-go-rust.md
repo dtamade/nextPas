@@ -24,7 +24,7 @@
 | Writer | Encoder | `TXmlWriter` | Done |
 | DOM | — / roxmltree | `TXmlDocument` / `TXmlNode` | Done |
 | 位置诊断 | SyntaxError | `EXmlError.Pos` | Done |
-| 命名空间 | ✓ | Partial（base 类型有） | Partial |
+| 命名空间 | ✓ | Writer `NamespaceDecl` + 保留前缀护栏 + facade 抽检 | Done |
 | XPath | 外部 | Out of scope | Deferred |
 | XSD | 外部 | Out of scope | Deferred |
 
