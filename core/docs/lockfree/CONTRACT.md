@@ -305,6 +305,7 @@ Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequ
 | MPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
 | SPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
 | MPSC（无界） | `TryEnqueueEx` | `TryDequeueEx` |
+| MSQueue（无界） | `TryEnqueueEx` | `TryDequeueEx` |
 | Stack（有界） | `TryPushEx` | `TryPopEx` |
 | WorkStealingDeque（有界 T1） | `TryPushEx` | `TryPopEx` / `TryStealEx` |
 
@@ -325,7 +326,7 @@ type
 
 实现为现有 `Try*` + `IsClosed` 的薄包装，不替代 Boolean API。
 `plain Enqueue` / `Send` 在 closed 时仍抛 `EInvalidOperationError`。
-无界结构（SegQueue / MPSC）：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
+无界结构（SegQueue / MPSC / MSQueue）：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
 
 ### 1.5 Channel capacity=1（R5）
 
