@@ -125,12 +125,12 @@ begin
   Result.FOpCount := 0;
   Result.FPendingCount := 0;
   Result.FFreeHead := -1;
-  AtomicStore32(Result.FRunning, 0, moRelease);
+  atomic_store(Result.FRunning, 0, mo_release);
 end;
 
 procedure TEpollReactor.Close;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   try
     ReleasePendingOps(-ESysECANCELED);
   finally
@@ -669,8 +669,8 @@ var
 begin
   if not IsValid then
     Exit;
-  AtomicStore32(FRunning, 1, moRelease);
-  while AtomicLoad32(FRunning, moAcquire) <> 0 do
+  atomic_store(FRunning, 1, mo_release);
+  while atomic_load(FRunning, mo_acquire) <> 0 do
   begin
     LN := epoll_wait(FEpfd, @FEvents[0], cint(FMaxEvents), 100);
     if LN < 0 then
@@ -681,7 +681,7 @@ begin
     end;
     for LI := 0 to LN - 1 do
     begin
-      if AtomicLoad32(FRunning, moAcquire) = 0 then Break;
+      if atomic_load(FRunning, mo_acquire) = 0 then Break;
       DispatchEvent(FEvents[LI]);
     end;
   end;
@@ -689,7 +689,7 @@ end;
 
 procedure TEpollReactor.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
 end;
 
 end.
