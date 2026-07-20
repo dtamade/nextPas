@@ -60,6 +60,7 @@ end;
 procedure IdRngFillBytes(ABuf: Pointer; ALen: SizeUInt);
 var
   LTemp: array of Byte;
+  LExpected: Int32;
 begin
   if ALen = 0 then
     Exit;
@@ -68,8 +69,12 @@ begin
   if ALen > MAX_REQUEST_SIZE then
     raise EArgumentError.Create('IdRngFillBytes: length exceeds maximum request size');
 
-  while AtomicCompareExchange32(GLock, 0, 1) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(GLock, LExpected, 1, mo_acquire, mo_relaxed) do
+  begin
+    LExpected := 0;
     CpuPause;
+  end;
   try
     if CacheCanSatisfyCurrentRequest(ALen) then
       FillBytesFromCache(ABuf, ALen)
@@ -80,18 +85,24 @@ begin
       Move(LTemp[0], PByte(ABuf)^, ALen);
     end;
   finally
-    AtomicStore32(GLock, 0, moRelease);
+    atomic_store(GLock, 0, mo_release);
   end;
 end;
 
 procedure IdRngReseed;
+var
+  LExpected: Int32;
 begin
-  while AtomicCompareExchange32(GLock, 0, 1) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(GLock, LExpected, 1, mo_acquire, mo_relaxed) do
+  begin
+    LExpected := 0;
     CpuPause;
+  end;
   try
     GPos := BUF_SIZE;
   finally
-    AtomicStore32(GLock, 0, moRelease);
+    atomic_store(GLock, 0, mo_release);
   end;
 end;
 
