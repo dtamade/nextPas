@@ -71,6 +71,9 @@ type
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
     function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    { Inline key/value overrides (CLI, maps, ad-hoc). Applied in chain order.
+      AKeys and AValues must have the same length; empty keys raise EConfigError. }
+    function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
     function Build: IConfig;
     function BuildConfig: TConfig;
