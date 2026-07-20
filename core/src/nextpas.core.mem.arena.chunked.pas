@@ -107,7 +107,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.mem;
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
@@ -265,7 +266,7 @@ begin
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
       if FAllocator <> nil then
-        FAllocator.FreeMem(LRaw)
+        FreeMemOf(FAllocator, LRaw, LAllocSize)
       else
         System.FreeMem(LRaw);
       Exit(False);
@@ -276,7 +277,7 @@ begin
   if (High(SizeUInt) - FTotalSize) < LSegSize then
   begin
     if FAllocator <> nil then
-      FAllocator.FreeMem(LRaw)
+      FreeMemOf(FAllocator, LRaw, LAllocSize)
     else
       System.FreeMem(LRaw);
     Exit(False);
@@ -309,10 +310,12 @@ end;
 procedure TChunkedArena.FreeSegment(aIndex: SizeInt);
 var
   LRaw: Pointer;
+  LRawSize: SizeUInt;
 begin
   if (aIndex < 0) or (aIndex >= FSegmentCount) then
     Exit;
   LRaw := FSegments[aIndex].Raw;
+  LRawSize := FSegments[aIndex].RawSize;
   FSegments[aIndex].Raw := nil;
   FSegments[aIndex].Base := nil;
   FSegments[aIndex].Size := 0;
@@ -321,7 +324,7 @@ begin
   if LRaw = nil then
     Exit;
   if FAllocator <> nil then
-    FAllocator.FreeMem(LRaw)
+    FreeMemOf(FAllocator, LRaw, LRawSize)
   else
     System.FreeMem(LRaw);
 end;
@@ -407,7 +410,7 @@ begin
     if FFreeSegments[I].Raw <> nil then
     begin
       if FAllocator <> nil then
-        FAllocator.FreeMem(FFreeSegments[I].Raw)
+        FreeMemOf(FAllocator, FFreeSegments[I].Raw, FFreeSegments[I].RawSize)
       else
         System.FreeMem(FFreeSegments[I].Raw);
     end;
@@ -790,11 +793,11 @@ begin
         { Copy B's content right after A }
         Move(LSegB^.Raw^, PByte(LNewRaw)[LSegA^.RawSize], LSegB^.RawSize);
 
-        { Free originals }
+        { Free originals (sized via RawSize) }
         if FAllocator <> nil then
         begin
-          FAllocator.FreeMem(LSegA^.Raw);
-          FAllocator.FreeMem(LSegB^.Raw);
+          FreeMemOf(FAllocator, LSegA^.Raw, LSegA^.RawSize);
+          FreeMemOf(FAllocator, LSegB^.Raw, LSegB^.RawSize);
         end
         else
         begin

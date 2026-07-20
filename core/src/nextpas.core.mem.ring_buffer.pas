@@ -317,7 +317,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.mem;
 
 { TRingBuffer }
 
@@ -354,7 +355,7 @@ end;
 destructor TRingBuffer.Destroy;
 begin
   if FBuffer <> nil then
-    FBaseAllocator.FreeMem(FBuffer);
+    FreeMemOf(FBaseAllocator, FBuffer, FCapacity * FElementSize);
   inherited Destroy;
 end;
 
@@ -584,8 +585,8 @@ begin
     FCount := LToCopy;
   end;
 
-  // 释放旧缓冲区
-  FBaseAllocator.FreeMem(FBuffer);
+  // 释放旧缓冲区（旧 capacity × elem size）
+  FreeMemOf(FBaseAllocator, FBuffer, FCapacity * FElementSize);
 
   // 更新状态
   FBuffer := LNewBuffer;
