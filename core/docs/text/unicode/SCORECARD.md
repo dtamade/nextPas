@@ -1,64 +1,59 @@
-# text.unicode — 性能 SCORECARD
+# text.unicode — 性能 SCORECARD v2
 
-**状态**：v1 固化（M1）· **v2 冻结数字** 在 **M3** 重跑后更新。  
-**bench 路径**：`core/benchmarks/nextpas.core.text.unicode/`  
-**原始流水**：[`RESULTS.md`](../../../benchmarks/nextpas.core.text.unicode/RESULTS.md)（若相对 docs 路径以仓库根为准：`core/benchmarks/.../RESULTS.md`）
+**冻结**：2026-07-20 · **M3**  
+**环境**：Linux x86_64 · Xeon E5-2696 v4 · FPC 3.3.1 -O2 · Go `x/text`  
+**nextPas**：`make -C core/benchmarks/nextpas.core.text.unicode smoke`  
+**Go**：`cd core/benchmarks/nextpas.core.text.unicode/compare_go && go test -bench=. -benchtime=500ms`  
+**比率**：`nextPas_ns / Go_ns`（&lt;1 更快）
+
+---
+
+## 通过准则（冻结）
+
+| ID | 类别 | 准则 |
+|----|------|------|
+| C1 | ASCII CaseFold / ToUpper 整串 | ≤ **1.0×** |
+| C2 | NFC ASCII-200 | ≤ **1.0×** |
+| C3 | NFC BMP-Latin（已 NFC / QC 短路） | ≤ **1.0×** |
+| C4 | NFD BMP-Latin | ≤ **1.0×** |
+| C5 | Collate SortKey | ≤ **2.0×** |
+| C5b | Collate Compare 跨串 | ≤ **2.0×**（未达标 = 🔴 债） |
+| C6 | Segment NextGrapheme | 仅基线 |
+
+**纪律**：只对 🔴 开优化；`make gate` 正确性优先。
+
+---
+
+## v2 冻结数字（2026-07-20 smoke）
+
+| 操作 | nextPas | Go | 比率 | 判定 |
+|------|--------:|---:|-----:|------|
+| UTF8CaseFoldSimple ASCII-200 | 424 | 2514 ToUpper | **0.17×** | ✅ C1 |
+| UTF8CaseFoldSimple BMP-Latin-50 | 1255 | 1924 | **0.65×** | ✅ |
+| NFC ASCII-200 | 60 | 273 | **0.22×** | ✅ C2 |
+| NFC BMP-Latin-50 | 1140 | 2716 | **0.42×** | ✅ C3 |
+| NFD BMP-Latin-50 | 3449 | 20316 | **0.17×** | ✅ C4 |
+| NFC BMP-CJK-50 | 17 | 2229 | **0.01×** | ✅ |
+| QuickCheckNFC ASCII-200 | 51 | 361 | **0.14×** | ✅ |
+| IsAsciiString ASCII-200 | 48 | — | — | ✅ 内部 |
+| NextGrapheme ASCII-200 | 106 | (RuneCount 264) | 不同测项 | ⬜ C6 |
+| GetSortKey ASCII-50 | 6796 | 4690 | **1.45×** | ✅ C5 |
+| GetSortKey BMP-Latin-50 | 14898 | 7943 | **1.88×** | ✅ C5 |
+| Collate Compare ASCII-50 vs 200 | 45625 | 3907 | **11.7×** | 🔴 C5b |
+
+### 汇总
+
+- ✅ C1–C4、SortKey  
+- 🔴 **Collate 跨串 Compare ~12× Go** — 专项优化岛，不阻塞岸线  
+- 维护：优化后必须更新本表 tip + 数字  
 
 ---
 
 ## 测项纪律
 
-1. **整串 API** 与 Go/Rust 对比；禁止「逐码点循环」对「整串 ToUpper」  
-2. 输入必须是 **真实 UTF-8**（禁止 Pascal `#$00C0` 单字节假 Latin-1）  
-3. 已规范化串与 denorm 串 **分开报**（QC 短路 vs 全路径）  
-4. 每次优化 land：更新 tip + 本表数字 + RESULTS  
-
----
-
-## 通过准则（M3 冻结目标）
-
-| 类别 | 准则 | 未达标 |
-|------|------|--------|
-| ASCII 热路径（CaseFold / NFC / IsAscii） | nextPas / Go **≤ 1.0×**（越小越快） | 🔴 |
-| 已 NFC 的 BMP 拉丁 | NFC **≤ 1.0×** Go | 🔴 |
-| denorm NFC 全路径 | 目标 **≤ 1.2×** Go | 🟡 可 land，记债 |
-| Segment / Collate / Width | M3 建基线；暂无硬阈值 | ⬜ M3 |
-
-判定：`比率 = nextPas_ns / Go_ns`。
-
----
-
-## v1 水位快照（2026-07-20，历史，M3 须重跑）
-
-环境：Linux x86_64 · FPC 3.3.1 -O2 · Go `x/text`  
-
-| 操作 | nextPas | Go | 比率 | 注 |
-|------|--------:|---:|-----:|----|
-| UTF8CaseFoldSimple ASCII-200 | ~447 ns | ~2899 ns ToUpper | **0.15×** | 整串 |
-| NFC ASCII-200 | ~83 ns | ~268 ns | **0.31×** | |
-| NFC BMP-Latin 已 NFC（真 UTF-8） | ~1031 ns | ~2819 ns | **0.36×** | QC 短路 |
-| NFD BMP-Latin | 领先（见 RESULTS） | | **≪1** | |
-| denorm NFC 全路径 | 历史 ~1.5× 级 | | 🟡 | M3 重测 |
-
-**v1 结论**：ASCII 与已规范化 BMP 已可对标/领先；denorm 全路径与 Collate/Segment 基线留给 **M3**。
-
----
-
-## 优化只跟表
-
-- 仅 🔴 或明确 🟡 债项开优化  
-- 正确性门禁优先：`make -C core/tests/nextpas.core.text.unicode gate`  
-- 不接受无 SCORECARD 行的「感觉慢」重构  
-
----
-
-## 跑法
-
-```bash
-make -C core/benchmarks/nextpas.core.text.unicode
-# Go 对照
-cd core/benchmarks/nextpas.core.text.unicode/compare_go && go test -bench=. -benchtime=1s
-```
+1. 整串 API；禁止逐码点 vs 整串混比  
+2. 真实 UTF-8  
+3. 已 NFC vs denorm 分开报  
 
 ---
 
@@ -66,4 +61,5 @@ cd core/benchmarks/nextpas.core.text.unicode/compare_go && go test -bench=. -ben
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-20 | M1：准则入仓；数字引用 RESULTS 历史快照 |
+| 2026-07-20 | **M3 v2 冻结** 同机数字 + Collate Compare 债 |
+| 2026-07-20 | M1 准则入仓 |
