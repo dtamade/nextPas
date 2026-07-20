@@ -19,7 +19,8 @@ function TryAESCBCDecryptNoPadding(const AKey, AIV, ACiphertext: TBytes;
 implementation
 
 uses
-  nextpas.core.crypto.aesgcm;
+  nextpas.core.crypto.aesgcm,
+  nextpas.core.crypto.errors;
 
 const
   InvSBox: array[0..255] of Byte = (
@@ -115,11 +116,12 @@ var
   InBlock, OutBlock, Prev: TAESBlock;
 begin
   if (Length(APlaintext) mod 16) <> 0 then
-    raise Exception.Create('AES-CBC plaintext must be a multiple of 16 bytes');
+    RaiseCryptoError(cecInvalidArgument,
+      'AES-CBC plaintext must be a multiple of 16 bytes');
 
   AESKeyExpand(AKey, ExpandedKey, Nr);
   if Nr = 0 then
-    raise Exception.Create('Invalid AES key length');
+    RaiseCryptoError(cecInvalidArgument, 'Invalid AES key length');
 
   Blocks := Length(APlaintext) div 16;
   SetLength(Result, Length(APlaintext));
@@ -144,11 +146,12 @@ var
   InBlock, OutBlock, Prev, NextPrev: TAESBlock;
 begin
   if (Length(ACiphertext) mod 16) <> 0 then
-    raise Exception.Create('AES-CBC ciphertext must be a multiple of 16 bytes');
+    RaiseCryptoError(cecInvalidArgument,
+      'AES-CBC ciphertext must be a multiple of 16 bytes');
 
   AESKeyExpand(AKey, ExpandedKey, Nr);
   if Nr = 0 then
-    raise Exception.Create('Invalid AES key length');
+    RaiseCryptoError(cecInvalidArgument, 'Invalid AES key length');
 
   Blocks := Length(ACiphertext) div 16;
   SetLength(Result, Length(ACiphertext));
