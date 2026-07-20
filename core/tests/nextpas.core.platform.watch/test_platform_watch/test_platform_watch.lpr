@@ -285,10 +285,13 @@ begin
   LWindowsBranch := ExtractBetween(LWatch, '{$ifdef nextpas_windows}',
     '{$if not defined(nextpas_linux) and not defined(nextpas_macos)');
 
-  CheckContains(LWindowsBranch, 'platform_err_unsupported',
-    'Windows watch branch must expose stable PLATFORM_ERR_UNSUPPORTED');
-  CheckContains(LWindowsBranch, 'result := platform_err_unsupported',
-    'Windows watch poll must return PLATFORM_ERR_UNSUPPORTED not a ready event');
+  { S1–S3 + multi-dir: real RDCW path, not permanent UNSUPPORTED stub. }
+  CheckContains(LWindowsBranch, 'readdirectorychangesw',
+    'Windows watch must arm ReadDirectoryChangesW');
+  CheckContains(LWindowsBranch, 'waitformultipleobjects',
+    'Windows multi-dir poll must WaitForMultipleObjects');
+  CheckContains(LWindowsBranch, 'platform_err_again',
+    'Windows overflow maps to PLATFORM_ERR_AGAIN');
   CheckContains(LWindowsBranch, 'aevent',
     'Windows watch poll must keep the event out parameter deterministic');
   CheckAbsent(LWindowsBranch, 'result := -1',
