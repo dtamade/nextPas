@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC22 (PARITY-GO-RUST Wave Q1–Q14)
+ * tui Scorecard SC1–SC27 (PARITY-GO-RUST Wave Q1–Q15 + M1)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -25,6 +25,11 @@ program scorecard;
  *   SC20 SGR truecolor FG emit
  *   SC21 DrawPatches adjacent style reuse
  *   SC22 RatioConstraint vertical split
+ *   SC23 SGR indexed FG/BG
+ *   SC24 DrawPatches style-change reapply
+ *   SC25 FocusManager Tab cycle
+ *   SC26 Keybind BindKey + HandleKey
+ *   SC27 FrameBudget not over after BeginFrame
  *}
 
 {$I nextpas.core.settings.inc}
@@ -44,6 +49,9 @@ uses
   nextpas.core.tui.overlay,
   nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
+  nextpas.core.tui.focus,
+  nextpas.core.tui.keybind,
+  nextpas.core.tui.frame_budget,
   nextpas.core.tui.terminal;
 
 const
@@ -70,6 +78,7 @@ var
   GRows: array of TScoreRow;
   GRowCount: Integer;
   GFailed: Integer;
+  GKeybindActionCalled: Boolean;
 
 procedure AddRow(const AId, ASubject: string; ANsPerOp: Int64; AOps: UInt64;
   AOk: Boolean; const ANote: string);
@@ -870,6 +879,140 @@ begin
   AddRow('SC22a', 'ratio_vsplit', 0, 1, LOk, '1:3 + fill area conserve');
 end;
 
+procedure RunSC23;
+var
+  B: TStringBuilder;
+  LOk: Boolean;
+begin
+  WriteLn('SC23 SGR indexed FG/BG ...');
+  LOk := True;
+  B.Init(64);
+  try
+    AnsiSgrFg(B, IndexedColor(200));
+    if B.ToString <> #27'[38;5;200m' then
+      LOk := False;
+    B.Clear;
+    AnsiSgrBg(B, IndexedColor(2));
+    if B.ToString <> #27'[42m' then
+      LOk := False;
+  finally
+    B.Done;
+  end;
+  AddRow('SC23a', 'sgr_indexed', 0, 1, LOk, '38;5;200 + bg 42');
+end;
+
+procedure RunSC24;
+var
+  LBE: TAnsiBackend;
+  LPatches: TDiffEntries;
+  LPending: AnsiString;
+  LOk: Boolean;
+begin
+  WriteLn('SC24 DrawPatches style-change reapply ...');
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  SetLength(LPatches, 2);
+  try
+    LPatches[0].X := 0;
+    LPatches[0].Y := 0;
+    LPatches[0].Cell := ScorecardStyledCell('A', StyleDefault.WithFg(TUI_RED));
+    LPatches[1].X := 1;
+    LPatches[1].Y := 0;
+    LPatches[1].Cell := ScorecardStyledCell('B', StyleDefault.WithFg(TUI_BLUE));
+    LBE.DrawPatchesN(LPatches, 2);
+    LPending := BackendPendingStr(LBE);
+    if LPending <> #27'[1;1H'#27'[0m'#27'[31mA'#27'[0m'#27'[34mB' then
+      LOk := False;
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC24a', 'draw_style_chg', 0, 1, LOk, 'reapply SGR no extra MoveTo');
+end;
+
+procedure RunSC25;
+var
+  LFocus: TFocusManager;
+  LId1, LId2, LId3: TFocusId;
+  LKey: TKeyEvent;
+  LOk: Boolean;
+begin
+  WriteLn('SC25 FocusManager Tab cycle ...');
+  LOk := True;
+  LFocus := TFocusManager.Create;
+  try
+    LId1 := LFocus.Register(TRect.Make(0, 0, 10, 1));
+    LId2 := LFocus.Register(TRect.Make(0, 2, 10, 1));
+    LId3 := LFocus.Register(TRect.Make(0, 4, 10, 1));
+    if LFocus.FocusedId <> LId1 then
+      LOk := False;
+    LKey.Code := kcTab;
+    LKey.Modifiers := [];
+    LKey.Ch := 0;
+    if not LFocus.HandleKey(LKey) then
+      LOk := False;
+    if LFocus.FocusedId <> LId2 then
+      LOk := False;
+    if not LFocus.HandleKey(LKey) then
+      LOk := False;
+    if LFocus.FocusedId <> LId3 then
+      LOk := False;
+    LKey.Modifiers := [kmShift];
+    if not LFocus.HandleKey(LKey) then
+      LOk := False;
+    if LFocus.FocusedId <> LId2 then
+      LOk := False;
+  finally
+    LFocus.Free;
+  end;
+  AddRow('SC25a', 'focus_tab', 0, 1, LOk, 'Tab forward + Shift+Tab back');
+end;
+
+procedure ScorecardKeybindAction;
+begin
+  GKeybindActionCalled := True;
+end;
+
+procedure RunSC26;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LOk: Boolean;
+begin
+  WriteLn('SC26 Keybind BindKey + HandleKey ...');
+  LOk := True;
+  GKeybindActionCalled := False;
+  LMgr := TKeybindManager.Create;
+  try
+    LMgr.BindKey(kmNormal, kcEnter, @ScorecardKeybindAction, 'Confirm');
+    if LMgr.BindingCount <> 1 then
+      LOk := False;
+    LKey.Code := kcEnter;
+    LKey.Ch := 0;
+    LKey.Modifiers := [];
+    if not LMgr.HandleKey(LKey) then
+      LOk := False;
+    if not GKeybindActionCalled then
+      LOk := False;
+  finally
+    LMgr.Free;
+  end;
+  AddRow('SC26a', 'keybind_enter', 0, 1, LOk, 'BindKey+HandleKey fires action');
+end;
+
+procedure RunSC27;
+var
+  LBudget: TFrameBudget;
+  LOk: Boolean;
+begin
+  WriteLn('SC27 FrameBudget not over after BeginFrame ...');
+  LOk := True;
+  LBudget := TFrameBudget.Create(16.0);
+  LBudget.BeginFrame;
+  if LBudget.IsOverBudget then
+    LOk := False;
+  AddRow('SC27a', 'frame_budget', 0, 1, LOk, 'BeginFrame not over 16ms');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -899,10 +1042,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 56);
+  SetLength(GRows, 72);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC22 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC27 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -925,6 +1068,11 @@ begin
   RunSC20;
   RunSC21;
   RunSC22;
+  RunSC23;
+  RunSC24;
+  RunSC25;
+  RunSC26;
+  RunSC27;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

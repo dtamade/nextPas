@@ -539,6 +539,66 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+{ ── B30: lifecycle fail-path table (AfterEach always runs) ────────────────── }
+
+var
+  GB30After: Integer;
+
+procedure B30LifecycleFailPathCase(const AC: TTestCase);
+{ Data: pass | soft | hard | soft2
+  Assert: AfterEach runs once; suite pass/fail matches mode; soft join exact. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  GB30After := 0;
+  LSuite := TTestSuite.Create('lc-fp-' + AC.Name);
+  LSuite.OnAfterEach(procedure
+    begin
+      Inc(GB30After);
+    end);
+  if AC.Data = 'pass' then
+    LSuite.Test('t', procedure
+      begin
+        CheckTrue(True);
+      end)
+  else if AC.Data = 'soft' then
+    LSuite.Test('t', procedure
+      begin
+        SoftFail('lc soft ' + AC.Name);
+      end)
+  else if AC.Data = 'soft2' then
+    LSuite.Test('t', procedure
+      begin
+        SoftFail('a-' + AC.Name);
+        SoftFail('b-' + AC.Name);
+      end)
+  else { hard }
+    LSuite.Test('t', procedure
+      begin
+        CheckTrue(False, 'lc hard ' + AC.Name);
+      end);
+  LSuite.RunWithResult(LResult);
+  CheckEqual(1, GB30After, 'AfterEach once for ' + AC.Name);
+  if AC.Data = 'pass' then
+  begin
+    CheckTrue(LResult.AllPassed, 'pass case ' + AC.Name);
+    CheckEqual(1, LResult.Passed);
+  end
+  else
+  begin
+    CheckFalse(LResult.AllPassed, 'fail-path ' + AC.Name);
+    CheckEqual(1, LResult.Failed);
+    if AC.Data = 'soft' then
+      CheckEqual('lc soft ' + AC.Name, LResult.Results[0].Message)
+    else if AC.Data = 'soft2' then
+      CheckEqual('a-' + AC.Name + '; b-' + AC.Name, LResult.Results[0].Message)
+    else
+      CheckEqual('lc hard ' + AC.Name, LResult.Results[0].Message);
+  end;
+  LSuite := Default(TTestSuite);
+end;
+
 { ── Facade completeness ───────────────────────────────────────────────────── }
 
 procedure TestFacadeSymbols;
@@ -646,6 +706,8 @@ var
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
+  LB30Cases: specialize TArray<TTestCase>;
+  LB30I: Integer;
 begin
   WriteLn('=== test_lifecycle ===');
   Suite := TTestSuite.Create('lifecycle');
@@ -673,6 +735,22 @@ begin
   { E-04: TTestConfigBuilder }
   Suite.Test('ConfigBuilder', @TestConfigBuilder);
   Suite.Test('ConfigBuilderDefaults', @TestConfigBuilderDefaults);
+
+  { B30: AfterEach + SoftFail/Hard fail-path table (60 cases) }
+  SetLength(LB30Cases, 60);
+  for LB30I := 0 to High(LB30Cases) do
+  begin
+    LB30Cases[LB30I].Name := 'lc' + IntToStr(LB30I);
+    case LB30I mod 4 of
+      0: LB30Cases[LB30I].Data := 'pass';
+      1: LB30Cases[LB30I].Data := 'soft';
+      2: LB30Cases[LB30I].Data := 'hard';
+    else
+      LB30Cases[LB30I].Data := 'soft2';
+    end;
+  end;
+  Suite.TestTable('B30 lifecycle fail-path AfterEach', LB30Cases,
+    @B30LifecycleFailPathCase);
 
   Runner := TSuiteRunner.Create('lifecycle-tests');
   Runner.Add(Suite);

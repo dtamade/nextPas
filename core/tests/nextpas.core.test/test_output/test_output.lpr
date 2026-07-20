@@ -2063,10 +2063,53 @@ begin
     LResults[0].Results[2].Duration := 0;
     LOut := JUnitXML(LResults, 'golden-junit');
     CheckSnapshot(LOut, 'goldens', 'report.xml');
+
+    { v8.19 SoftFail join golden under FAIL_ON_CREATE }
+    LResults[0] := TTestRunResult.Create('softfail-golden');
+    LResults[0].Passed := 0;
+    LResults[0].Failed := 1;
+    SetLength(LResults[0].Results, 1);
+    LResults[0].Results[0].Name := 'soft_only';
+    LResults[0].Results[0].Status := tsFailed;
+    LResults[0].Results[0].Message := 'alpha; beta; gamma';
+    LResults[0].Results[0].Duration := 0;
+    LOut := TAPReport(LResults, 'softfail-golden');
+    CheckSnapshot(LOut, 'goldens', 'softfail.tap');
+    LOut := JSONReport(LResults, 'softfail-golden');
+    CheckSnapshot(LOut, 'goldens', 'softfail.json');
   finally
     OutEnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
     OutEnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
   end;
+end;
+
+{ ── B29/v8.19: SoftFail multi-message join as report golden ──────────────── }
+
+procedure TestB29SoftFailReportGolden;
+{ Stable fixture: soft-only failure message uses FormatSoftFailSummary join. }
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('softfail-golden');
+  LResults[0].Passed := 0;
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'soft_only';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'alpha; beta; gamma';
+  LResults[0].Results[0].Duration := 0;
+
+  LOut := TAPReport(LResults, 'softfail-golden');
+  CheckContains(LOut, 'not ok 1');
+  CheckContains(LOut, 'alpha; beta; gamma');
+  CheckSnapshot(LOut, 'goldens', 'softfail.tap');
+
+  LOut := JSONReport(LResults, 'softfail-golden');
+  CheckContains(LOut, 'soft_only');
+  CheckContains(LOut, 'alpha; beta; gamma');
+  CheckSnapshot(LOut, 'goldens', 'softfail.json');
 end;
 
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
@@ -2227,6 +2270,7 @@ begin
   Suite.Test('B13 JUnit golden snapshot',     @TestB13JUnitGoldenSnapshot);
   Suite.Test('B13 TAP formal compliance',     @TestB13TAPFormalCompliance);
   Suite.Test('B15 committed goldens strict CI', @TestB15CommittedGoldensStrictCI);
+  Suite.Test('B29 SoftFail report golden',    @TestB29SoftFailReportGolden);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);

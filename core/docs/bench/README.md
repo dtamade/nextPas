@@ -2,6 +2,11 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
+> **Lane 状态：Maintenance Idle（2026-07-20 · B43）**  
+> API 冻结；消费 checklist **19** 模块 C3 全绿；scorecard 子集 **11** track。  
+> 日常：只响应回归、明确授权的小修。  
+> **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆。
+
 ## 消费侧（写模块 bench 的人）
 
 - **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局  

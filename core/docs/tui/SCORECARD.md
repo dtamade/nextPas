@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: Wave Q1–Q14 Active
+**状态**: Wave Q1–Q15 + **M1 Maintenance** Active
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
@@ -51,6 +51,11 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC20 | SGR truecolor FG | `CSI 38;2;r;g;b m` |
 | SC21 | DrawPatches adjacent | 一次 MoveTo + 共享 SGR + AB |
 | SC22 | Ratio VSplit | 1:3 + fill 面积守恒 |
+| SC23 | SGR indexed FG/BG | `38;5;200` + named green bg |
+| SC24 | DrawPatches style change | reapply SGR 无多余 MoveTo |
+| SC25 | FocusManager Tab | Tab 前进 / Shift+Tab 后退 |
+| SC26 | Keybind BindKey+HandleKey | Enter 绑定触发 action |
+| SC27 | FrameBudget | BeginFrame 后 not over 16ms |
 
 规则：
 
@@ -62,7 +67,7 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 
 ---
 
-## 本机快照（2026-07-20）
+## 本机快照（2026-07-20，M1）
 
 **Host**: Linux 6.12.74+deb13+1-amd64 x86_64 · FPC 3.3.1 · heaptrc focused scorecard
 
@@ -72,7 +77,10 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC2 | diff_dirty10 | ~35–37k | 2000 | Y |
 | SC3a | parse_ascii | ~36–50 | 50000 | Y |
 | SC3b | parse_csi_up | ~45–50 | 50000 | Y |
-| SC4a–SC22a | correctness gates | — | 1 | Y |
+| SC5 | frame_empty | ~3.5–4.2k | 500 | Y |
+| SC4a–SC27a | correctness gates | — | 1 | Y |
+
+发布数字请用 `make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1`（关闭 heaptrc）。
 
 ### `bench_go_rust compare`（同机，简化核）
 

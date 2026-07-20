@@ -40,6 +40,11 @@
 - [x] Q18 async-bench-parity.sh + peer fixtures + SCORECARD 表
 - [x] Q19 localhost dial_ops_per_s + go-dial peer
 - [x] Q20 dial_concurrent_ops_per_s + go-dial-concurrent peer；Windows native 仅评估挂钩
+- [x] Q21 public DNS HE stats opt-in (`NEXTPAS_PUBLIC_DNS_HE=1`)
+- [x] Q22 async-windows-native-smoke CI step (continue-on-error)
+- [x] Q23 multi-host public HE matrix (opt-in)
+- [x] Q24A windows smoke streak observer; Q24B fail-closed deferred until promote-ready
+- [x] Q25 Dial LocalAddr bind-before-connect + Default() managed-safe options
 
 ## 性能 scorecard（同机 2026-07-20）
 

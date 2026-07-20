@@ -21,7 +21,7 @@
 
 ---
 
-## A. L2 wine-runtime-smoke（R26 加厚）
+## A. L2 wine-runtime-smoke（R33 复跑）
 
 ```bash
 make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke
@@ -33,7 +33,7 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 
 | 套件 | 结果 | 说明 |
 |------|------|------|
-| process | **7 passed** | echo / LookPath / timeout / MaxOutput / Status×2 / Kill |
+| process | **8 passed** | + Capture echo (R34)；timeout / MaxOutput / Status / Kill |
 | fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
@@ -59,18 +59,21 @@ make -C core/benchmarks/nextpas.core.fs/bench_fs run
 | FileSize | ~1.4 µs | — | ~2.5% |
 | ReadAll/64KB | ~131 µs | ~480 MB/s | ~1% |
 
-### Go 对照（`compare_go`，1MB×20）
+### 同方法对照（R34，create/write/close 循环）
 
 ```bash
+make -C core/benchmarks/nextpas.core.fs/bench_fs run   # 末尾 aligned 段
 cd core/benchmarks/nextpas.core.fs/bench_fs/compare_go && go run main.go
 ```
 
-| 项 | 结果（量级） |
-|----|----------------|
-| SeqWrite 1MB×20 | ~2 GB/s |
-| SeqRead 1MB×20 | ~0.4 GB/s |
+| 方法 | nextpas | Go | 备注 |
+|------|---------|-----|------|
+| SeqWrite 64KB×200 | ~1.6 GB/s | ~1.7 GB/s | ~持平 |
+| SeqRead 64KB×200 | ~5.6 GB/s | ~0.56 GB/s | nextpas 更高（page cache 路径） |
+| SeqWrite 1MB×20 | ~1.8 GB/s | ~2.1 GB/s | ~0.85× Go |
+| SeqRead 1MB×20 | ~8.0 GB/s | ~0.39 GB/s | nextpas 更高（同上；非网络） |
 
-块大小/迭代与 Pascal 不同，**不可直接除法对比**。
+**truth**：同机、同 open/write/close 循环；Read 差异受 OS page cache 与 `io.ReadAll` vs 分块 Read 影响，**不**单独宣称全面 I/O 胜 Go。
 
 ---
 
@@ -81,26 +84,25 @@ make -C core/benchmarks/nextpas.core.process/bench_process run
 cd core/benchmarks/nextpas.core.process/bench_process/compare_go && go run main.go
 ```
 
-### nextpas（2026-07-20 R31 复测）
+### nextpas（2026-07-20 R33 复测）
 
 | 项 | n | total | avg |
 |----|---|-------|-----|
-| LookPath(sh) | 200 | 9 ms | ~46 µs |
-| Command(/bin/true).Status | 50 | 55 ms | ~1.1 ms |
-| Capture(echo x) | 50 | 87 ms | **~1.8 ms** |
-| Output(echo x) dual-pipe | 50 | 89 ms | **~1.8 ms** |
+| LookPath(sh) | 200 | 8 ms | ~41 µs |
+| Command(/bin/true).Status | 50 | 49 ms | **~1.0 ms** |
+| Capture(echo x) | 50 | 81 ms | **~1.6 ms** |
+| Output(echo x) dual-pipe | 50 | 84 ms | **~1.7 ms** |
 
 ### Go 对照（同机）
 
 | 项 | n | avg |
 |----|---|-----|
-| exec.LookPath(sh) | 200 | ~46 µs |
-| exec.Command(true).Run | 50 | ~0.96 ms |
-| exec.Command(echo).Output | 50 | ~1.4 ms |
+| exec.LookPath(sh) | 200 | ~44 µs |
+| exec.Command(true).Run | 50 | ~0.88 ms |
+| exec.Command(echo).Output | 50 | ~1.3 ms |
 
-R27–R28：Capture stdout-only + WaitWithOutput 快路径。  
-R31 复测：LookPath **持平** Go；Status ~**1.15×**；Capture/Output dual-pipe ~**1.25–1.3×** Go。  
-Destroy 轮询 sleep 10ms→100µs（与 WaitWithOutput 一致）。
+R33：Wait/WaitGraceful 超时·Cancel 轮询起步 **100µs**（与 WaitWithOutput/Destroy 一致）；wine×5 复跑全绿。  
+LookPath 持平；Status ~**1.15×**；Capture/dual-pipe ~**1.25–1.3×** Go。
 
 ---
 

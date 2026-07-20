@@ -183,6 +183,169 @@ begin
     (Ord(AFormat) <= Ord(High(TConfigFormat)));
 end;
 
+function AsciiLowerExt(const AExt: string): string;
+var
+  LI: Integer;
+begin
+  Result := AExt;
+  for LI := 1 to Length(Result) do
+    if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+      Result[LI] := Chr(Ord(Result[LI]) + 32);
+end;
+
+function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+var
+  LExt: string;
+begin
+  Result := False;
+  AFormat := cfIni;
+  if APath = '' then
+    Exit;
+  LExt := AsciiLowerExt(PathExt(APath));
+  if LExt = '.ini' then
+  begin
+    AFormat := cfIni;
+    Exit(True);
+  end;
+  if LExt = '.json' then
+  begin
+    AFormat := cfJson;
+    Exit(True);
+  end;
+  if (LExt = '.yaml') or (LExt = '.yml') then
+  begin
+    AFormat := cfYaml;
+    Exit(True);
+  end;
+  if LExt = '.toml' then
+  begin
+    AFormat := cfToml;
+    Exit(True);
+  end;
+end;
+
+function ConfigContentIsBlank(const AContent: string): Boolean;
+var
+  LI: Integer;
+begin
+  LI := 1;
+  { UTF-8 BOM }
+  if (Length(AContent) >= 3) and (AContent[1] = #$EF) and (AContent[2] = #$BB) and
+    (AContent[3] = #$BF) then
+    LI := 4;
+  while LI <= Length(AContent) do
+  begin
+    if not (AContent[LI] in [#9, #10, #13, ' ']) then
+      Exit(False);
+    Inc(LI);
+  end;
+  Result := True;
+end;
+
+function IniContentHasAssignment(const AContent: string): Boolean;
+var
+  LI: Integer;
+  LInComment: Boolean;
+begin
+  LInComment := False;
+  for LI := 1 to Length(AContent) do
+  begin
+    case AContent[LI] of
+      #10, #13:
+        LInComment := False;
+      ';', '#':
+        if not LInComment then
+          LInComment := True;
+      '=':
+        if not LInComment then
+          Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
+var
+  LDocJson: IJsonDocument;
+  LDocToml: ITomlDocument;
+  LDocYaml: IYamlDocument;
+  LIni: TIniFile;
+  LErr: string;
+  LSections: TStringArray;
+  LKeys: TStringArray;
+  LI: Integer;
+  LHasKey: Boolean;
+  LRoot: TJsonValue;
+  LYamlRoot: TYamlValue;
+begin
+  Result := False;
+  AFormat := cfIni;
+  if ConfigContentIsBlank(AContent) then
+    Exit;
+
+  { Prefer structured documents. Bare YAML/JSON scalars are not config formats. }
+  LDocJson := JsonParse(AContent);
+  if not LDocJson.HasError then
+  begin
+    LRoot := LDocJson.Root;
+    if LRoot.IsObject or LRoot.IsArray then
+    begin
+      AFormat := cfJson;
+      Exit(True);
+    end;
+  end;
+
+  LDocToml := TomlParse(AContent);
+  if not LDocToml.HasError then
+  begin
+    AFormat := cfToml;
+    Exit(True);
+  end;
+
+  LDocYaml := YamlParse(AContent);
+  if not LDocYaml.HasError then
+  begin
+    LYamlRoot := LDocYaml.Root;
+    if LYamlRoot.IsMap or LYamlRoot.IsSeq then
+    begin
+      AFormat := cfYaml;
+      Exit(True);
+    end;
+  end;
+
+  { INI is lenient — require key=value and at least one loaded key. }
+  if not IniContentHasAssignment(AContent) then
+    Exit;
+  LIni := TIniFile.Create;
+  try
+    if not LIni.TryLoadFromString(AContent, LErr) then
+      Exit;
+    LHasKey := False;
+    LSections := LIni.GetSections;
+    for LI := 0 to High(LSections) do
+    begin
+      LKeys := LIni.GetKeys(LSections[LI]);
+      if Length(LKeys) > 0 then
+      begin
+        LHasKey := True;
+        Break;
+      end;
+    end;
+    if not LHasKey then
+    begin
+      LKeys := LIni.GetKeys('');
+      LHasKey := Length(LKeys) > 0;
+    end;
+    if LHasKey then
+    begin
+      AFormat := cfIni;
+      Exit(True);
+    end;
+  finally
+    LIni.Free;
+  end;
+end;
+
 function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
 var
   LI: Integer;

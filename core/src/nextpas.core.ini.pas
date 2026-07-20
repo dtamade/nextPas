@@ -17,6 +17,14 @@ uses
 type
   TStringArray = array of string;
 
+  { Structured parse diagnostic (aligned with TCsvError / TJsonError shape). }
+  TIniError = record
+    Message: string;
+    Line: UInt32;
+    Column: UInt32;
+    Offset: SizeUInt;
+  end;
+
   TIniEntry = record
     Key: string;
     Value: string;
@@ -54,7 +62,13 @@ type
     procedure LoadFromFile(const AFileName: string);
     procedure LoadFromString(const AContent: string);
     function TryLoadFromString(const AContent: string; out AError: string): Boolean;
+      overload;
+    function TryLoadFromString(const AContent: string; out AError: TIniError): Boolean;
+      overload;
     function TryLoadFromFile(const APath: string; out AError: string): Boolean;
+      overload;
+    function TryLoadFromFile(const APath: string; out AError: TIniError): Boolean;
+      overload;
     procedure SaveToFile(const AFileName: string);
     function ToString: string; override;
 
@@ -326,25 +340,40 @@ begin
   end;
 end;
 
-function TIniFile.TryLoadFromString(const AContent: string; out AError: string): Boolean;
+function FormatIniErrorMessage(const AError: TIniError): string;
+begin
+  if (AError.Line = 0) and (AError.Column = 0) then
+    Exit(AError.Message);
+  Result := 'line ' + IntToStr(AError.Line) +
+    ', column ' + IntToStr(AError.Column) + ': ' + AError.Message;
+end;
+
+function TIniFile.TryLoadFromString(const AContent: string;
+  out AError: TIniError): Boolean;
 var
   LStart, LPos, LLen, LLineNo: Integer;
   LLine, LTrimmed: string;
 
-  function ValidateLine(const ALine: string; ALineNo: Integer): Boolean;
+  function ValidateLine(const ALine: string; ALineNo: Integer;
+    ALineStartOffset: SizeUInt): Boolean;
   begin
     LTrimmed := TrimLeft(ALine);
     if (LTrimmed <> '') and (LTrimmed[1] = '[') and (Pos(']', LTrimmed) = 0) then
     begin
-      AError := 'line ' + IntToStr(ALineNo) +
-        ', column 1: missing closing ] in section header';
+      AError.Message := 'missing closing ] in section header';
+      AError.Line := ALineNo;
+      AError.Column := 1;
+      AError.Offset := ALineStartOffset;
       Exit(False);
     end;
     Result := True;
   end;
 
 begin
-  AError := '';
+  AError.Message := '';
+  AError.Line := 0;
+  AError.Column := 0;
+  AError.Offset := 0;
 
   LLen := Length(AContent);
   LStart := 1;
@@ -357,7 +386,7 @@ begin
       LLine := Copy(AContent, LStart, LPos - LStart);
       if (AContent[LPos] = #13) and (LPos < LLen) and (AContent[LPos + 1] = #10) then
         Inc(LPos);
-      if not ValidateLine(LLine, LLineNo) then
+      if not ValidateLine(LLine, LLineNo, SizeUInt(LStart - 1)) then
         Exit(False);
       Inc(LLineNo);
       LStart := LPos + 1;
@@ -367,24 +396,41 @@ begin
   if LStart <= LLen then
   begin
     LLine := Copy(AContent, LStart, LLen - LStart + 1);
-    if not ValidateLine(LLine, LLineNo) then
+    if not ValidateLine(LLine, LLineNo, SizeUInt(LStart - 1)) then
       Exit(False);
   end;
 
   try
     LoadFromString(AContent);
     Result := True;
-    AError := '';
+    AError.Message := '';
+    AError.Line := 0;
+    AError.Column := 0;
+    AError.Offset := 0;
   except
     on E: Exception do
     begin
-      AError := E.Message;
+      AError.Message := E.Message;
+      AError.Line := 0;
+      AError.Column := 0;
+      AError.Offset := 0;
       Result := False;
     end;
   end;
 end;
 
-function TIniFile.TryLoadFromFile(const APath: string; out AError: string): Boolean;
+function TIniFile.TryLoadFromString(const AContent: string; out AError: string): Boolean;
+var
+  LErr: TIniError;
+begin
+  Result := TryLoadFromString(AContent, LErr);
+  if Result then
+    AError := ''
+  else
+    AError := FormatIniErrorMessage(LErr);
+end;
+
+function TIniFile.TryLoadFromFile(const APath: string; out AError: TIniError): Boolean;
 var
   LFile: TextFile;
   LContent, LLine: string;
@@ -423,8 +469,19 @@ var
     Inc(LLen);
   end;
 
+  procedure SetIoError(const AMessage: string);
+  begin
+    AError.Message := AMessage;
+    AError.Line := 0;
+    AError.Column := 0;
+    AError.Offset := 0;
+  end;
+
 begin
-  AError := '';
+  AError.Message := '';
+  AError.Line := 0;
+  AError.Column := 0;
+  AError.Offset := 0;
   LContent := '';
   LLen := 0;
   LCapacity := 0;
@@ -437,7 +494,7 @@ begin
     LIOResult := IOResult;
     if LIOResult <> 0 then
     begin
-      AError := 'Cannot open file "' + APath + '": IO error ' + IntToStr(LIOResult);
+      SetIoError('Cannot open file "' + APath + '": IO error ' + IntToStr(LIOResult));
       Exit(False);
     end;
 
@@ -454,15 +511,29 @@ begin
   except
     on E: Exception do
     begin
-      AError := 'Cannot read file "' + APath + '": ' + E.Message;
+      SetIoError('Cannot read file "' + APath + '": ' + E.Message);
       Exit(False);
     end;
   end;
 
   SetLength(LContent, LLen);
   Result := TryLoadFromString(LContent, AError);
-  if not Result and (AError <> '') then
-    AError := 'Cannot parse file "' + APath + '": ' + AError;
+  if not Result and (AError.Message <> '') and (AError.Line > 0) then
+    AError.Message := 'Cannot parse file "' + APath + '": ' +
+      FormatIniErrorMessage(AError);
+end;
+
+function TIniFile.TryLoadFromFile(const APath: string; out AError: string): Boolean;
+var
+  LErr: TIniError;
+begin
+  Result := TryLoadFromFile(APath, LErr);
+  if Result then
+    AError := ''
+  else if LErr.Line > 0 then
+    AError := LErr.Message  { already includes path + FormatIniErrorMessage }
+  else
+    AError := LErr.Message;
 end;
 
 procedure TIniFile.LoadFromFile(const AFileName: string);

@@ -1,11 +1,12 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era G Steady**（Ecosystem Steward 主切片已收；默认只回归 + D3 顺手 + 命名 consumer）
+**状态**: **Maintenance Idle（H∞ · 2026-07-20）** — FreeMemOf 战役已关；SCORECARD/soak 已复跑；host-runtime 真机绿
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 **Steward 观测**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
+**日常**: 只响应回归、命名 D3、GHA `mem.host_runtime` 红；**不**默认排期新 allocator / 全仓 FreeMem 扫
 
 ---
 
@@ -27,6 +28,7 @@
 | **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Steady+** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
 | **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **CLOSED** | 下文 §4c |
 | **G** | **Ecosystem Steward**：防回潮、按触达样板、证据习惯 | **Steady** | 下文 §4d |
+| **H** | **Maintenance only**：决策树 + FreeMemOf 收口 + 只回归 | **Idle** | 下文 §4d Era H |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -194,9 +196,18 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **H1** | element_manager FreeMemOf | **done** 2026-07-20（test_contracts 绿） |
 | **H1b** | treemap / lrucache / linkedhashmap 节点 FreeMemOf | **done** 2026-07-20 |
 | **H2** | arr swap 缓冲 FreeMemOf + FreeMemOf 战役关闭声明 | **done** 2026-07-20 |
-| H∞ | 回归 / 命名 D3 / GHA mem 红 | 持续 |
+| **H∞** | SCORECARD/soak 复跑 · host-runtime 续证 · **Idle 声明** | **done** 2026-07-20 → **Idle** |
 
-**H2 后**：inject FreeMemOf 主战役 **结束**。残余仅 WAIVE（tui tracking、owned 串无 size）。无默认下一批功能。
+**H2 后**：inject FreeMemOf 主战役 **结束**。残余仅 WAIVE（tui tracking、owned 串无 size）。
+
+**Maintenance Idle 触发再开工**（任一即可）:
+
+1. GHA **`mem.host_runtime`** 红（Darwin/Windows matrix）
+2. `lane-focused LANE=mem` / SCORECARD / soak **回归**
+3. **命名 consumer** + 明确授权（例：owned-string size 表设计）
+4. 总控要求 path-limited 跨模块 D3
+
+**不默认排期**: Phase 29 allocator、全仓 FreeMem 扫、倒逼 L0 uses mem、owned-string 无设计全扫。
 
 ---
 
@@ -260,3 +271,7 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
 | 2026-07-19 | E5 P-b：删 15 Tier-3 allocator + 21 test 目录；保留 blockpool.growable |
 | 2026-07-20 | Era F 开启：F0 状态对齐 · F1 Scorecard · F2 门面 slim 设计 |
+| 2026-07-20 | Era F **CLOSED**（F0–F8）；Era G Steward Steady（G0–G7 · G5.x Darwin/Windows host-runtime） |
+| 2026-07-20 | Era H Maintenance：H0 决策树/SCORECARD · H1/H1b/H2 FreeMemOf 关闭战役 |
+| 2026-07-20 | H∞：SCORECARD RELEASE=1 + soak 3/3 复跑（post-H2 无回归）；host-runtime CI 证据续记 |
+| 2026-07-20 | **Maintenance Idle** 声明（对齐 bench B43 姿态）：H0–H2 + SCORECARD/soak/CI 齐；仅回归/命名 D3/GHA mem 红再开工 |

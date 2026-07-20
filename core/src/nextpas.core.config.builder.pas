@@ -11,7 +11,8 @@ uses
   nextpas.core.config;
 
 function ConfigBuilder: IConfigBuilder;
-function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
+function ConfigLoad(const APath: string): IConfig; overload;
 function ConfigBorrow(AConfig: TConfig): IConfig;
 
 implementation
@@ -30,6 +31,7 @@ type
     cskToml,
     cskEnv,
     cskFile,
+    cskFileAuto, { resolve via extension + content sniff at Build }
     cskKeyValues
   );
 
@@ -128,7 +130,8 @@ type
     function AddYaml(const AContent: string): IConfigBuilder;
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
-    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder; overload;
+    function AddFile(const APath: string): IConfigBuilder; overload;
     function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
     function SetInterpolationMode(AMode: TConfigInterpolationMode): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
@@ -466,6 +469,9 @@ begin
     cskFile:
       if not ACfg.TryLoadFromFile(ASource.Value, ASource.Format, LError) then
         raise EConfigError.Create(LError);
+    cskFileAuto:
+      if not ACfg.TryLoadFromFile(ASource.Value, LError) then
+        raise EConfigError.Create(LError);
     cskKeyValues:
       for LI := 0 to ASource.EntryCount - 1 do
         ACfg.SetString(ASource.Entries[LI].Key, ASource.Entries[LI].Value);
@@ -543,6 +549,14 @@ begin
   Result := Self;
 end;
 
+function TConfigBuilderImpl.AddFile(const APath: string): IConfigBuilder;
+begin
+  RequireConfigFilePath(APath);
+  { Extension detect + content sniff happen at Build (TryLoadFromFile). }
+  StoreSource(cskFileAuto, APath, cfIni);
+  Result := Self;
+end;
+
 function TConfigBuilderImpl.AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
 var
   LI: Integer;
@@ -616,6 +630,11 @@ end;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
   Result := ConfigBuilder.AddFile(APath, AFormat).Build;
+end;
+
+function ConfigLoad(const APath: string): IConfig;
+begin
+  Result := ConfigBuilder.AddFile(APath).Build;
 end;
 
 function ConfigBorrow(AConfig: TConfig): IConfig;

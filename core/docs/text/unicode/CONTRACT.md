@@ -55,10 +55,12 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 ### 大小写（CaseFolding / SpecialCasing）
 
-1. **官方一致性**：UCD 16.0 `CaseFolding.txt` 状态 C/F/S 全量 fail=0（T Turkic 跳过）
+1. **官方一致性**：UCD 16.0 `CaseFolding.txt` 状态 C/F/S 全量 fail=0（默认 **clRoot**）
 2. **官方一致性**：`SpecialCasing.txt` 无条件行 fail=0；**Final_Sigma** 字符串 lower 上下文
-3. API：`UTF8ToUpper/Lower/Title/CaseFold`；`UTF8ToTitle` = 逐码点 title（非 Word_Break 词首）
-4. 默认非 tr/az/lt locale；locale 条件 SpecialCasing 不在门禁
+3. API：`UTF8ToUpper/Lower/Title/CaseFold`（无参 = root）；`TCaseLocale` / `TCaseOptions` 重载
+4. **Locale（可选）**：`clTurkish` / `clAzeri` 启用 CaseFold **T**（2 行）+ SpecialCasing **tr/az**（含 `After_I` / `Not_Before_Dot`）；`clRoot` 默认与现网一致
+5. **未实现**：`lt`（立陶宛）条件 SpecialCasing；完整 CLDR tailoring
+6. `UTF8ToTitle` = 逐码点 title（非 Word_Break 词首）
 
 ### 排序（UCA / DUCET）
 
@@ -114,6 +116,7 @@ python3 core/scripts/gen_unicode_special_casing.py --version 16.0.0 --output-dir
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | Turkic/locale Case：TCaseLocale + CaseFold T + SpecialCasing tr/az |
 | 2026-07-20 | UAX#9 Bidi 官方双 harness 全绿（Character+Abstract）+ ResolveBidi API |
 | 2026-07-20 | NextLineBreak / SegmentLineBreaks 便利 API；stLineBreak |
 | 2026-07-20 | LineBreak 官方 16672/16672 全绿；硬 NextLine / 软 LineBreakByteLen 双语义钉死 |

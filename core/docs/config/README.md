@@ -29,6 +29,9 @@ var
   LCfg: IConfig;
 begin
   LCfg := ConfigLoad('app.json', cfJson);
+  { extension detect; falls back to content sniff when needed }
+  LCfg := ConfigLoad('app.toml');
+  LCfg := ConfigLoad('/etc/myapp'); { no extension → sniff }
 end;
 ```
 
@@ -48,8 +51,9 @@ Available builder steps:
 - `AddYaml`
 - `AddToml`
 - `AddEnv`
-- `AddFile`
+- `AddFile` — explicit `TConfigFormat` **or** extension auto-detect overload
 - `AddKeyValues` — inline key/value overrides (CLI maps, ad-hoc pairs)
+- `SetInterpolationMode` — `cimDefault` / `cimStrict` / `cimDisabled`
 - `RequireKeys`
 
 `AddKeyValues` is the shallow CLI integration: parse flags with

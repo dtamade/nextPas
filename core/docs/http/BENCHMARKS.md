@@ -153,6 +153,9 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 official harness, with documented residuals (no H2 scale claim, no Windows scale
 claim, no H3). **Not** a cross-machine leaderboard.
 
+**R0 (2026-07-20)**: claim **maintained**; full allow/deny list frozen in
+[`CLAIM.md`](CLAIM.md). p99 ≤ 2× Go remains a hard scale-ready condition.
+
 #### S2-1 H1 allocation map + outbound buffer reuse
 
 **Per keep-alive request (epoll poll-owned path, before S2-1)** — static map:

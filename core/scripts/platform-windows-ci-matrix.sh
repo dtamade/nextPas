@@ -11,10 +11,9 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
-# 23 platform gates promoted (+error +fmt +info +which +dl +args). Evidence:
-# - args: GHA 29728715160 @ 00e895e1a PASS platform.args (pass=24 fail=0
-#   with mem.host).
-# Batch-18 candidate: +platform.pipe (not promoted until GHA green).
+# 25 platform gates promoted (+… +args +pipe +resource). Evidence:
+# - pipe: GHA 29729863072 pass=25 fail=0 with mem.host
+# - resource: GHA 29730911054 @ e0441ae62 PASS (pass=26 fail=0 with mem.host)
 # mem.host_runtime is optional mem-owned (not a platform facade gate).
 
 set -euo pipefail
@@ -52,6 +51,7 @@ MODULE_ENTRIES=(
   "platform.dl tests/nextpas.core.platform.dl/test_platform_dl_wine"
   "platform.args tests/nextpas.core.platform.args/test_platform_args_wine"
   "platform.pipe tests/nextpas.core.platform.pipe/test_platform_pipe_wine"
+  "platform.resource tests/nextpas.core.platform.resource/test_platform_resource_wine"
   "io.reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
@@ -64,7 +64,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix-candidate; 23 platform gates promoted + pipe candidate; mem.host optional; not full-host Windows parity"
+echo "truth=ci-matrix; documented 25 platform gates (+resource); mem.host optional; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
@@ -102,7 +102,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-23-platform-gate-set-plus-pipe-candidate-plus-mem-host"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-25-platform-gate-set-plus-mem-host"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

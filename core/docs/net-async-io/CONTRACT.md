@@ -489,7 +489,8 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Kind table: ok / canceled / timeout / refused / reset / unreachable / dns / temporary / invalid / unknown.
 - Portable codes use `PLATFORM_ERR_*`; cancel uses `NET_ERR_CANCELED` (125, async convention).
 - **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
-- Lab-only: `AsyncTcpDialWithDnsFeed`. LocalAddr bind-before-connect: **not** exposed this wave.
+- Lab-only: `AsyncTcpDialWithDnsFeed`.
+- **LocalAddr (Q25)**: `TAsyncTcpDialOptions.LocalAddr` — bind-before-connect when `IP <> ''` and family matches remote attempt (Go `Dialer.LocalAddr` subset). Empty IP = unset. No Control/MPTCP.
 - Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
 
 ### Cancel vocabulary bridge (Q14)
@@ -537,3 +538,21 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Included in `async-bench-parity.sh` (opt-in, not CI-gating).
 - truth=`localhost-sequential-dial` / `localhost-concurrent-dial` — **not** public DNS / dual-stack HE RTT matrix.
 - Concurrent path is single-loop pipelined dials; listener accept is not required for SYN-complete success on localhost backlog (client closes immediately).
+
+### Public DNS HE stats (Q21 / Q23)
+- Suite: `test_net_async_dial_public_he` — multi-host matrix:
+  - `one.one.one.one:443`, `dns.google:443`, `cloudflare.com:443`
+  - per-host metrics: ok/fail/mean_ms/attempts_mean/attempt_v6_ratio/winner_v6_ratio
+  - aggregate: `metric=public_he_aggregate`
+- **Opt-in only**: `NEXTPAS_PUBLIC_DNS_HE=1` (wrapper: `bash core/scripts/async-public-he-stats.sh`).
+- Env: `NEXTPAS_PUBLIC_DNS_HE_ROUNDS` (default 2, clamp 1..5);
+  `NEXTPAS_PUBLIC_DNS_HE_V6PREF=1` runs a second pass with `PreferIPv6First`.
+- Default: skip (exit 0). All-fail rounds print soft-fail metrics; **never** CI-gating.
+- truth=`public-dns-he-multihost-opt-in; flaky; not-ci-gating; sample-not-sla`.
+
+### Windows native async smoke (Q22 / Q24A)
+- Script: `core/scripts/async-windows-native-smoke.sh` (compile gate + contract + poller/IOCP + accept/connect).
+- CI: `test-windows-runtime` step **continue-on-error: true** — not fail-closed until streak.
+- Streak observer: `bash core/scripts/async-windows-smoke-streak.sh` → `promote-ready=yes|no`.
+- truth on bare-metal Windows host: `native-windows-candidate` until multi-week green streak (see WINDOWS-NATIVE-ASSESSMENT).
+- Do **not** treat Wine green as `truth=native-windows`.

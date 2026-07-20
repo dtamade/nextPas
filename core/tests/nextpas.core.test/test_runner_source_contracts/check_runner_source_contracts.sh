@@ -36,6 +36,10 @@ must_have=(
   ApplyCLIArgsFrom
   Prop
   Fuzz
+  SoftFail
+  SoftCheckTrue
+  SoftCheckEqual
+  SoftFailOnly
 )
 
 echo "=== Runner/public API name presence in self-tests ==="

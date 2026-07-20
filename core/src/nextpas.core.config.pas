@@ -78,7 +78,9 @@ type
     function AddYaml(const AContent: string): IConfigBuilder;
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
-    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder; overload;
+    { Detect format from path extension (.ini/.json/.yaml/.yml/.toml). }
+    function AddFile(const APath: string): IConfigBuilder; overload;
     { Inline key/value overrides (CLI, maps, ad-hoc). Applied in chain order.
       AKeys and AValues must have the same length; empty keys raise EConfigError. }
     function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
@@ -147,13 +149,17 @@ type
     procedure LoadFromJson(const AContent: string);
     procedure LoadFromYaml(const AContent: string);
     procedure LoadFromToml(const AContent: string);
-    procedure LoadFromFile(const APath: string; AFormat: TConfigFormat);
+    procedure LoadFromFile(const APath: string; AFormat: TConfigFormat); overload;
+    { Detect format from path extension (.ini/.json/.yaml/.yml/.toml). }
+    procedure LoadFromFile(const APath: string); overload;
     function TryLoadFromIni(const AContent: string; out AError: string): Boolean;
     function TryLoadFromJson(const AContent: string; out AError: string): Boolean;
     function TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadFromToml(const AContent: string; out AError: string): Boolean;
     function TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
-      out AError: string): Boolean;
+      out AError: string): Boolean; overload;
+    function TryLoadFromFile(const APath: string; out AError: string): Boolean;
+      overload;
     function TryLoadJson(const AContent: string; out AError: string): Boolean;
     function TryLoadYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadToml(const AContent: string; out AError: string): Boolean;
@@ -198,11 +204,17 @@ type
     property Count: Integer read GetCount;
   end;
 function ConfigBuilder: IConfigBuilder;
-function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
+{ Detect format from path extension (.ini/.json/.yaml/.yml/.toml). }
+function ConfigLoad(const APath: string): IConfig; overload;
 { Non-owning IConfig view. Keep AConfig alive while the interface is used. }
 function ConfigBorrow(AConfig: TConfig): IConfig;
 
 function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
+{ Map path extension to TConfigFormat. False if unknown/empty extension. }
+function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+{ Content sniff (no disk I/O). Try-parse order: JSON → TOML → YAML → INI. }
+function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
 procedure AddString(var AItems: TStringArray; var ACount: Integer;
   const AValue: string);
 function FindEntryIndexInSnapshot(const AEntries: TConfigEntryArray;
