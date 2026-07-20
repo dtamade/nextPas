@@ -185,9 +185,10 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | typed bind `ConfigUnmarshal` | **已实现**于 `nextpas.core.reflect.marshal`（`IConfig`/`TConfig` + section prefix） |
 | 嵌套 record 递归 bind | **已实现**（`AddRecordField` + `VisitRecord`，字段名叠进 prefix） |
 | string dynarray bind | **已实现**（`AddDynArrayField` + `GetStringArray`） |
-| `AddArgs(TArgParser)` 深耦合 | Future（可用 `AddKeyValues` 配方） |
-| 插值 mode 扩展 | Future |
-| borrowed `IConfig` adapter | Future |
+| CLI 浅桥 `config.args` | **已实现**（`ConfigBuilderAddPresentArgs` + 显式 kind 映射） |
+| 插值 mode | **已实现**（`cimDefault` / `cimStrict` / `cimDisabled`） |
+| borrowed `IConfig` | **已实现**（`ConfigBorrow`，非拥有视图） |
+| Builder 内硬 `uses args` | Out of scope（浅桥独立单元） |
 | XML/CSV 作为 `TConfigFormat` | Out of scope |
 | `config.cli` 独立单元名 | 不采用；用 `AddKeyValues` |
 

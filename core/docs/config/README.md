@@ -91,6 +91,39 @@ config keys `Tags.0`, `Tags.1`, ... (same as `SetStringArray` / `GetStringArray`
 
 Runnable: `core/examples/nextpas.core.config/config_bind_patterns/` (`make run`).
 
+## CLI overrides via args bridge
+
+Keep `nextpas.core.config` free of `args`. Use the shallow bridge unit:
+
+```pascal
+uses nextpas.core.config, nextpas.core.config.args, nextpas.core.args;
+
+LCfg := ConfigBuilderAddPresentArgs(
+  ConfigBuilder.AddFile('app.toml', cfToml),
+  LParser,
+  ['host', 'port', 'verbose'],
+  ['server.host', 'server.port', 'log.verbose'],
+  [cavString, cavInt, cavBool]).Build;
+```
+
+Only **present** options become overrides (last in the builder chain wins).
+
+## Interpolation mode
+
+```pascal
+LCfg.SetInterpolationMode(cimDefault);  // optional Get leaves ${x}
+LCfg.SetInterpolationMode(cimStrict);   // GetString fails on unresolved
+LCfg.SetInterpolationMode(cimDisabled); // no ${} expansion
+// or ConfigBuilder.SetInterpolationMode(...).Build
+```
+
+## Borrowed vs owned IConfig
+
+```pascal
+LView := ConfigBorrow(LMutable); // does not Free LMutable
+LOwned := ConfigBuilder.Build;   // owns and frees internal TConfig
+```
+
 Builder priority rules:
 
 1. Defaults are always lowest priority, even if `AddDefault` appears later in
