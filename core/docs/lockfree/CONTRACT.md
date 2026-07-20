@@ -21,7 +21,7 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 | 单元 / 名称 | 看起来像 | 实际 progress | 备注 |
 |-------------|---------|---------------|------|
-| `lockfree.deque_lf` / **`TLockFreeDeque`** | lock-free deque | **spin-lock** concurrent deque | 历史名 `lf` + 类型前缀 `TLockFree*`；真 LF deque → `lockfree.deque` / `TWorkStealingDeque` |
+| `lockfree.deque_lf` / **`TLockFreeDeque`** | lock-free deque | **spin-lock** concurrent deque | **Phase D**：实现在 `lockfree.deque_spin` / **`TConcurrentSpinDeque`**；`deque_lf`+`TLockFreeDeque` 为历史 alias；真 LF deque → `lockfree.deque` / `TWorkStealingDeque` |
 | `TShardedHashMap` / `TConcurrentHashMap` | 可能被当成 lock-free map | **per-shard spin lock** | T1 门面诚实别名，同一实现 |
 | `lockfree.hashtable` / **`TLockFreeHashTable*`** | lock-free table | **LF 读路径 + writer spinlock / grow** | 名字偏 LF；写路径有锁 |
 | `lockfree.dag` / `graph` / `adjmap` | 无锁图 | **per-node / per-vertex locks** | 头注释已写 NOT lock-free |
@@ -309,7 +309,7 @@ Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequ
 | Stack（有界） | `TryPushEx` | `TryPopEx` |
 | WorkStealingDeque（有界 T1） | `TryPushEx` | `TryPopEx` / `TryStealEx` |
 
-**非 T1 Try\*Ex 目标**：`lockfree.deque_lf`（`TLockFreeDeque`）为 **spin-lock** + `TDequeResult`（`dqOk`/`dqEmpty`/`dqFull`），**无** `Close` / `TLockFreeTryError` 面；progress **非** lock-free / **非** wait-free（历史名 `lf`）。真 lock-free 双端队列用 `TWorkStealingDeque`。
+**非 T1 Try\*Ex 目标**：`lockfree.deque_spin`（**`TConcurrentSpinDeque`**；历史 `deque_lf`/`TLockFreeDeque`）为 **spin-lock** + `TDequeResult`（`dqOk`/`dqEmpty`/`dqFull`），**无** `Close` / `TLockFreeTryError` 面；progress **非** lock-free / **非** wait-free。真 lock-free 双端队列用 `TWorkStealingDeque`。
 
 ```pascal
 type

@@ -1844,6 +1844,7 @@ const
     'nextpas.core.lockfree.elimination_stack.pas',
     'nextpas.core.lockfree.deque.pas',
     'nextpas.core.lockfree.deque_lf.pas',
+    'nextpas.core.lockfree.deque_spin.pas',
     'nextpas.core.lockfree.channel.pas',
     'nextpas.core.lockfree.channel.spsc.pas',
     'nextpas.core.lockfree.hashmap.pas',

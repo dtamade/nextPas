@@ -598,7 +598,7 @@ type
 - Bounded power-of-two; Close rejects new publish; already-enqueued may still pop/steal
 - Optional `Try*Ex` (H2-1): full/empty/closed as above
 
-**Not this type**: `lockfree.deque_lf` / `TLockFreeDeque` is **spin-lock** + `TDequeResult` — not lock-free / not wait-free; no `TLockFreeTryError` surface.
+**Not this type**: `lockfree.deque_spin` / **`TConcurrentSpinDeque`** (historical alias: `deque_lf` / `TLockFreeDeque`) is **spin-lock** + `TDequeResult` — not lock-free / not wait-free; no `TLockFreeTryError` surface.
 
 ---
 
