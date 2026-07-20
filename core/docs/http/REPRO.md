@@ -4,7 +4,7 @@
 **Authority**：规模门闩定义见 `ROADMAP.md` / `GOAL_TREE.md`；历史表见 `BENCHMARKS.md`。
 
 **Claim (current)**：*Scale-ready (H1 server, Linux epoll)* — same-machine, limited workloads.
-**Not claimed**：H1+H2 package scale-ready；H3；跨机榜；p99 multi-run 稳定性（E3）。
+**Not claimed**：H1+H2 package scale-ready；H3；跨机榜。
 
 从仓库根目录进入 `core/` 后执行。
 
@@ -106,5 +106,5 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
 
 1. 单机单日数字只进 BENCHMARKS 带日期；不写「已全面对标」。
 2. H1 RPS 与 H2 mux **不可**直接做比值 KPI。
-3. p99 门闩（nextPas ≤ 2× Go）单次 E1 **Met**；多 run 刷新见 **E3**。
+3. p99 门闩（nextPas ≤ 2× Go）E3 runs=3 **Met**（历史 0.21×–0.22×）。
 4. 结果异常：先 `make hygiene`、确认 ulimit、确认无其他 heavy 进程，再重跑。

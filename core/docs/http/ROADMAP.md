@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**E1/E2**：Go p50/p99 harness + 单次 p99 门闩 Met；NEXT=**E3**）
+**Updated**: 2026-07-20（**Era E Done**：E3 runs=3 + ladder + 0 unfreed；NEXT=**Q3-1**）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **E3** `--runs 3` 刷新官方表 + ladder 抽查（Parity Plus Era E） |
+| **下一执行点** | **Q3-1** keep-alive / H2 mux soak 泄漏证据（Parity Plus Era Q3） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -814,13 +814,15 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 |------|--------|-----|
 | **E1** | **landed** | Go comparator **p50/p99/mean**（nearest-rank 与 nextPas 对齐）；`run_server_comparison` 透传 `median_p50_ns`/`median_p99_ns` |
 | **E2** | **landed** | 单次 20k×4 epoll：`no_url` p99 **0.29×** Go、`response_1k` **0.26×**（≤2× Met）；见 BENCHMARKS § E1 |
-| **E3** | **NEXT** | `--runs 3` 刷新官方表；ladder 抽查；关键 suite 0 unfreed |
+| **E3** | **landed** | runs=3：RPS **2.21×/2.22×**；p99 **0.21×/0.22×**；ladder 1k/10k `stable=1`；h2_facade 0 unfreed |
+
+**E Done when**：E1–E3 landed；官方表 + p99 multi-run 可复核。 **Met.**
 
 ## Era Q3 — Production quality bar
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **Q3-1** | queued | keep-alive / H2 mux soak 泄漏证据 |
+| **Q3-1** | **NEXT** | keep-alive / H2 mux soak 泄漏证据 |
 | **Q3-2** | queued | 超时/取消/413/431 矩阵对齐 Go 语义 |
 | **Q3-3** | queued | H1 HTTPS smoke 吞吐/延迟 + residual |
 
@@ -857,15 +859,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Era G Met；E1 harness + E2 单次 p99 门闩 Met
+1. Era G + Era E Met — scale-ready 证据（RPS + ladder + multi-run p99）在 main 可复核
 2. H3 Blocked — 跳过；禁止空 facade
-3. H1 scale-ready 宣称保留（RPS + ladder + 单次 p99）
-4. **NEXT = E3** runs=3 刷新 → Q3-1 soak → Q3-2 errors → Q3-3 TLS residual
-5. 跨模块仅按本波 Land paths；path-limited landing only
+3. **NEXT = Q3-1** soak 泄漏 → Q3-2 错误矩阵 → Q3-3 TLS residual
+4. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
-**有「对标 Go/Rust 质量」/「继续」指令时：走 Era E3→Q3。**
+**有「对标 Go/Rust 质量」/「继续」指令时：走 Era Q3。**
 
 ---
 
@@ -886,7 +887,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-20 | **E1/E2 landed**：Go p50/p99 harness + 单次 epoll p99 0.29×/0.26× Go；NEXT=**E3** |
+| 2026-07-20 | **E3 / Era E Done**：runs=3 RPS 2.21×/2.22× + p99 0.21×/0.22×；ladder stable；0 unfreed；NEXT=**Q3-1** |
+| 2026-07-20 | **E1/E2 landed**：Go p50/p99 harness + 单次 epoll p99 0.29×/0.26× Go |
 | 2026-07-20 | **Era G Done**：G0 re-land main `0356cf3b9` + G1 lane absorb + G2 REPRO |
 | 2026-07-20 | **Parity Plus 开波**：Era G/E/Q3 写入 ROADMAP；`REPRO.md` 发布复现剧本 |
 | 2026-07-19 | **Q1-4 landed**：H1 write/backpressure CONTRACT §4.4 + source-contract；**Era Q1 Done**；NEXT=STOP |

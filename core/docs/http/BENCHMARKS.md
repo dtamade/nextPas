@@ -103,6 +103,8 @@ CLI multi-client keep-alive shape (pre-`c1472d3b3` semantics, no SysUtils).
 | **2026-07-19 Q2-1** | `no_url` 20k×4 | **epoll** | **48802** | 22180 | 149536 | **2.20** | **runs=3 median; scale-ready RPS** |
 | **2026-07-19 Q2-1** | `response_1k` 20k×4 | **epoll** | **45997** | 23863 | 130069 | **1.93** | **runs=3 median; scale-ready RPS** |
 | 2026-07-19 Q2-1 | `no_url` 20k×4 | threaded | 90131 | 24696 | 151963 | **3.65** | char only (runs=1) |
+| **2026-07-20 E3** | `no_url` 20k×4 | **epoll** | **51120** | 23160 | 139197 | **2.21** | **runs=3 median; +p50/p99** |
+| **2026-07-20 E3** | `response_1k` 20k×4 | **epoll** | **49493** | 22343 | 129985 | **2.22** | **runs=3 median; +p50/p99** |
 
 **S1-1 change**: poll-owned H1 path defaults to **reactor-inline handlers**
 (`PreferPollWorkerHandoff=False`). Removes per-request worker pool submit +
@@ -141,15 +143,15 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 | Enter parity zone (epoll H1) | **Met** | ratio ≥ 0.50 (Q2-1 medians ≫ 0.50) |
 | Scale-ready RPS (epoll H1 `no_url`) | **Met** | Q2-1 median **2.20×** Go (≥ 0.80) |
 | Scale-ready RPS (epoll H1 `response_1k`) | **Met** | Q2-1 median **1.93×** Go |
-| Scale-ready p99 ≤ 2× Go | **Met (single-run E1)** | epoll `no_url` p99 ratio **0.29×**; `response_1k` **0.26×** (see § E1); multi-run = E3 |
-| Connection ladder 1k / 10k idle | **Met** | S1-3 `bench_conn_ladder` |
-| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder + p99 single-run Met; multi-run p99 / H2 package residual |
+| Scale-ready p99 ≤ 2× Go | **Met (E3 runs=3)** | median p99 `no_url` **0.21×** / `response_1k` **0.22×** Go（§ E3） |
+| Connection ladder 1k / 10k idle | **Met** | S1-3 + E3 抽查 `stable=1` |
+| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder + p99 multi-run Met；H2 package / Windows / H3 residual |
 | Scale-ready (H1/**H2** server, Linux) | **No** | H2 multiplex ~3k req/s evidence exists; still ≪ H1 KPI shape |
 | H3 ready | **No** | Blocked; no facade |
 
 **Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
-official harness, with documented residuals (p99 multi-run pending E3, no H2 scale
-claim, no Windows scale claim, no H3). **Not** a cross-machine leaderboard.
+official harness, with documented residuals (no H2 scale claim, no Windows scale
+claim, no H3). **Not** a cross-machine leaderboard.
 
 #### S2-1 H1 allocation map + outbound buffer reuse
 
@@ -299,8 +301,33 @@ Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
 | 2026-07-20 E1 | `no_url` 20k×4 epoll | 54850 / **192227** | 125703 / 673060 | **0.29×** | **Met** |
 | 2026-07-20 E1 | `response_1k` 20k×4 epoll | 60363 / **171706** | 128469 / 660457 | **0.26×** | **Met** |
 
-**E2 note**: single-run p99 gate **Met** on this host. Multi-run stability = **E3**.
-Not a cross-machine ranking.
+#### E3 Official multi-run refresh (2026-07-20)
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e3-epoll-no_url-runs3.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e3-epoll-response_1k-runs3.md
+```
+
+| Date | Workload | nextPas median req/s | Go median req/s | RPS ratio | nextPas median p50/p99 | Go median p50/p99 | p99 ratio |
+| ---- | -------- | -------------------: | --------------: | --------: | ---------------------: | ----------------: | --------: |
+| 2026-07-20 E3 | `no_url` 20k×4 epoll runs=3 | **51120** | 23160 | **2.21×** | 56440 / **150141** | 150427 / 729325 | **0.21×** |
+| 2026-07-20 E3 | `response_1k` 20k×4 epoll runs=3 | **49493** | 22343 | **2.22×** | 60369 / **159855** | 154870 / 735282 | **0.22×** |
+
+**E3 extras**
+
+| Check | Result |
+| ----- | ------ |
+| Ladder 1k idle epoll probe | `stable=1` open_ok=1000 probe_ok=1000 |
+| Ladder 10k idle epoll probe | `stable=1` open_ok=10000 probe_ok=10000 |
+| `test_http_h2_facade` heaptrc | **0 unfreed** (5/5) |
+
+**Era E Done when**：E1–E3 Met。 **Met.** Not a cross-machine ranking.
 
 #### S3-1 / S3-2 H2 server scale
 
