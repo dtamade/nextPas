@@ -607,6 +607,7 @@ begin
   LOvl := WinWatchSlotOvl(ASlot);
   FillChar(LOvl^, SizeOf(OVERLAPPED), 0);
   LOvl^.hEvent := HANDLE(ASlot.NotifyEvent);
+  ResetEvent(HANDLE(ASlot.NotifyEvent));
   LBytes := 0;
   ASlot.PendLen := 0;
   ASlot.PendPos := 0;
@@ -620,6 +621,7 @@ begin
        LOvl,
        nil) then
   begin
+    { Synchronous completion (unusual for dir watches). }
     ASlot.Pending := False;
     ASlot.PendLen := Int32(LBytes);
     ASlot.PendPos := 0;
@@ -775,7 +777,7 @@ begin
 
   LHandle := CreateFileW(
     PWideChar(LPath),
-    FILE_LIST_DIRECTORY,
+    FILE_LIST_DIRECTORY or SYNCHRONIZE,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil,
     OPEN_EXISTING,
@@ -826,11 +828,9 @@ function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
   I, LCount, LIdx, LArm: Int32;
-  LMs, LWait, LBytes: DWORD;
+  LMs, LWait: DWORD;
   LHandles: array[0..PLATFORM_WATCH_WIN_MAX - 1] of HANDLE;
   LMap: array[0..PLATFORM_WATCH_WIN_MAX - 1] of Int32;
-  LOvl: LPOVERLAPPED;
-  LErr: DWORD;
 
   function FinishCompletedSlot(ASlotIdx: Int32): Int32;
   var
@@ -881,44 +881,6 @@ begin
         Exit(1);
       AWatcher.Slots[I].PendPos := 0;
       AWatcher.Slots[I].PendLen := 0;
-    end;
-
-  { Collect already-completed I/O without waiting (post-timeout harvest). }
-  for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
-    if AWatcher.Slots[I].Active and AWatcher.Slots[I].Pending then
-    begin
-      LOvl := WinWatchSlotOvl(AWatcher.Slots[I]);
-      LBytes := 0;
-      if GetOverlappedResult(HANDLE(AWatcher.Slots[I].DirHandle), LOvl, @LBytes, False) then
-      begin
-        AWatcher.Slots[I].Pending := False;
-        AWatcher.Slots[I].PendLen := Int32(LBytes);
-        AWatcher.Slots[I].PendPos := 0;
-        if WinWatchDecodeSlot(AWatcher.Slots[I], I + 1, AEvent) then
-        begin
-          if AWatcher.Slots[I].PendPos >= AWatcher.Slots[I].PendLen then
-          begin
-            AWatcher.Slots[I].PendLen := 0;
-            AWatcher.Slots[I].PendPos := 0;
-            LArm := WinWatchArmSlot(AWatcher.Slots[I]);
-            if LArm <> 0 then
-              Exit(LArm);
-          end;
-          Exit(1);
-        end;
-        AWatcher.Slots[I].PendLen := 0;
-        AWatcher.Slots[I].PendPos := 0;
-        LArm := WinWatchArmSlot(AWatcher.Slots[I]);
-        if LArm <> 0 then
-          Exit(LArm);
-      end
-      else
-      begin
-        LErr := GetLastError;
-        { ERROR_IO_INCOMPLETE = 996: still pending — keep waiting. }
-        if LErr <> 996 then
-          Exit(WinWatchMapSlotIoError(AWatcher.Slots[I]));
-      end;
     end;
 
   { Re-arm idle active slots. }

@@ -32,6 +32,9 @@ function WaitForMultipleObjects(nCount: DWORD; lpHandles: PHANDLE;
   bWaitAll: WINBOOL; dwMilliseconds: DWORD): DWORD; stdcall;
   external 'kernel32' name 'WaitForMultipleObjects';
 
+function ResetEvent(hEvent: HANDLE): WINBOOL; stdcall;
+  external 'kernel32' name 'ResetEvent';
+
 {** @desc 关闭句柄
     @param hObject 句柄
     @return TRUE 成功 *}
