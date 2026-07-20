@@ -495,6 +495,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 - **OnControl (Q27)**: Go `Dialer.Control` subset — after create/[LocalAddr bind], before connect; `AError<>0` fails that attempt only. Not RawConn.
 - **OnResolve (Q28)**: custom resolver hook — when set, host path skips `AsyncResolveStream`; caller injects via `IAsyncTcpDialDnsFeed` (must `SignalDnsDone`). Lab `AsyncTcpDialWithDnsFeed` is the same feed contract without host string.
 - **AddressFamily (Q30)**: `dafAny` / `dafIPv4` / `dafIPv6` filters resolved or DialAddrs lists before HE ordering.
+- **OnAttemptResult (Q31)**: per-attempt outcome hook (success AError=0 or fail code); Control rejects also report. Loop thread.
 - **MPTCP**: deferred (platform/portability); not exposed.
 - **native-windows claim**: remain `native-windows-candidate` (Q24B fail-closed suite); full parity not claimed.
 - Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.

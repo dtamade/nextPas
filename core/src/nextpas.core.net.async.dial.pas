@@ -44,6 +44,11 @@ type
   TAsyncTcpDialAttemptStart = procedure(AIndex: Integer; const AAddr: TNetAddress;
     AContext: Pointer);
 
+  { Per-attempt outcome (connect finished or sync setup/Control fail).
+    AError=0 success; non-zero fail code (often negative). Loop thread. }
+  TAsyncTcpDialAttemptResult = procedure(AIndex: Integer; const AAddr: TNetAddress;
+    AError: Int32; AContext: Pointer);
+
   { Go Dialer.Control subset: after create/[LocalAddr bind], before connect.
     Set AError <> 0 to fail this attempt (socket will be closed). Loop thread. }
   TAsyncTcpDialControl = procedure(AFd: PtrUInt; const ARemote: TNetAddress;
@@ -72,6 +77,8 @@ type
     ResolutionDelayMs: UInt32;        { DNS Resolution Delay; default 50 }
     OnAttemptStart: TAsyncTcpDialAttemptStart; { optional; default nil }
     OnAttemptStartContext: Pointer;
+    OnAttemptResult: TAsyncTcpDialAttemptResult; { optional; default nil }
+    OnAttemptResultContext: Pointer;
     { Optional local bind before connect (Go Dialer.LocalAddr subset).
       Empty IP = unset. Family must match remote attempt or bind is skipped. }
     LocalAddr: TNetAddress;
@@ -225,6 +232,8 @@ begin
   Result.ResolutionDelayMs := HE_DEFAULT_RESOLUTION_DELAY_MS;
   Result.OnAttemptStart := nil;
   Result.OnAttemptStartContext := nil;
+  Result.OnAttemptResult := nil;
+  Result.OnAttemptResultContext := nil;
   Result.LocalAddr.IP := '';
   Result.LocalAddr.Port := 0;
   Result.LocalAddr.IsIPv6 := False;
@@ -702,6 +711,9 @@ begin
         FLastError := -LCtrlErr
       else
         FLastError := LCtrlErr;
+      if Assigned(FOptions.OnAttemptResult) then
+        FOptions.OnAttemptResult(AIndex, LRemote, FLastError,
+          FOptions.OnAttemptResultContext);
       Exit;
     end;
   end;
@@ -950,6 +962,9 @@ begin
 end;
 
 procedure TAsyncTcpDialer.OnAttemptDone(AAttempt: PDialAttempt; AResult: Int32);
+var
+  LRemote: TNetAddress;
+  LErr: Int32;
 begin
   if AAttempt = nil then
     Exit;
@@ -958,6 +973,17 @@ begin
   AAttempt^.Active := False;
   if FInFlight > 0 then
     Dec(FInFlight);
+
+  LRemote := FAddrs[AAttempt^.Index];
+  if LRemote.Port = 0 then
+    LRemote.Port := FPort;
+  if AResult >= 0 then
+    LErr := 0
+  else
+    LErr := AResult;
+  if Assigned(FOptions.OnAttemptResult) then
+    FOptions.OnAttemptResult(AAttempt^.Index, LRemote, LErr,
+      FOptions.OnAttemptResultContext);
 
   if AResult >= 0 then
   begin

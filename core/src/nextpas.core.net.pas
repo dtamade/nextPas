@@ -48,6 +48,12 @@ type
   TAsyncUdpSendCallback = nextpas.core.net.async.udp.TAsyncUdpSendCallback;
   TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
   TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
+  TAsyncTcpDialAddressFamily = nextpas.core.net.async.dial.TAsyncTcpDialAddressFamily;
+  TAsyncTcpDialControl = nextpas.core.net.async.dial.TAsyncTcpDialControl;
+  TAsyncTcpDialResolve = nextpas.core.net.async.dial.TAsyncTcpDialResolve;
+  TAsyncTcpDialAttemptStart = nextpas.core.net.async.dial.TAsyncTcpDialAttemptStart;
+  TAsyncTcpDialAttemptResult = nextpas.core.net.async.dial.TAsyncTcpDialAttemptResult;
+  IAsyncTcpDialDnsFeed = nextpas.core.net.async.dial.IAsyncTcpDialDnsFeed;
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
   TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
   TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
