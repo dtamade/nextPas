@@ -26,7 +26,7 @@
 |--------|------|------------------|
 | **M0** 官方算法绿 | ✅ | Norm/Grapheme/Word/Sentence/Line软/BidiL2/Collation/Case+tr·az/EAW 全绿 |
 | **M1** 产品化与导航 | ✅ | ROADMAP + SCORECARD + `make gate` + CONTRACT 对齐 + 门面差异表；QC 对非法 UTF-8 不误短路 |
-| **M2** 日常 API | ⬜ | Word-boundary Title；`clLithuanian`；门面/COOKBOOK |
+| **M2** 日常 API | ✅ | Word-boundary Title；`clLithuanian`；COOKBOOK |
 | **M3** SCORECARD v2 | ⬜ | 与 Go 对齐测项 + 通过准则冻结 + 按表优化 |
 | **M4** 按需扩展 | 🔒 | 属性/IDNA/… 仅消费者拉票 |
 | **M5** 深水 | 🔒 | CLDR / Bidi L3+ 默认关闭 |
@@ -87,11 +87,11 @@
 
 ---
 
-## M2 范围（下一整岛）
+## M2 交付（已完成）
 
-1. **P0** `UTF8ToTitleWords`（或等价）：UAX#29 Word_Break 词首；默认 `UTF8ToTitle` 不变  
-2. **P1** `clLithuanian` + SpecialCasing lt 条件 harness  
-3. **P1/P2** 门面决策落文档；COOKBOOK（硬/软 Line、Turkic、双门面）  
+1. ✅ `UTF8ToTitleWords`：UAX#29 Word_Break 词首 title + 词内 lower  
+2. ✅ `clLithuanian`：More_Above / After_Soft_Dotted / 00CC·00CD·0128  
+3. ✅ COOKBOOK + CONTRACT 更新；locale 仍 **仅 unicode 门面**（`text` 不透传）  
 
 ---
 
@@ -138,4 +138,5 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-20 | M2：TitleWords + clLithuanian |
 | 2026-07-20 | M1：地图入仓 + gate + 门面差异表 |

@@ -606,6 +606,51 @@ begin
 end;
 
 
+procedure TestLithuanianAndTitleWords;
+var
+  LOpts, LRoot: TCaseOptions;
+  LIn, LGot, LExp: string;
+begin
+  LRoot.Locale := clRoot;
+  LOpts.Locale := clLithuanian;
+
+  { lt: Ì (00CC) → i + 0307 + 0300 }
+  LIn := Utf8OfCp($00CC);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307) + Utf8OfCp($0300);
+  CheckEqual(UTF8ToLower(LIn, LOpts), LExp, 'lt lower Ì');
+  CheckEqual(UTF8ToLower(LIn, LRoot), Utf8OfCp($00EC), 'root lower Ì → ì');
+
+  { lt: Í (00CD) }
+  LIn := Utf8OfCp($00CD);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307) + Utf8OfCp($0301);
+  CheckEqual(UTF8ToLower(LIn, LOpts), LExp, 'lt lower Í');
+
+  { lt: Ĩ (0128) }
+  LIn := Utf8OfCp($0128);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307) + Utf8OfCp($0303);
+  CheckEqual(UTF8ToLower(LIn, LOpts), LExp, 'lt lower Ĩ');
+
+  { More_Above: I + combining acute → i + 0307 + acute }
+  LIn := Utf8OfCp($0049) + Utf8OfCp($0301);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307) + Utf8OfCp($0301);
+  CheckEqual(UTF8ToLower(LIn, LOpts), LExp, 'lt More_Above I+acute');
+  CheckEqual(UTF8ToLower(LIn, LRoot), Utf8OfCp($0069) + Utf8OfCp($0301), 'root I+acute');
+
+  { After_Soft_Dotted upper: i + 0307 → I (dot removed) }
+  LIn := Utf8OfCp($0069) + Utf8OfCp($0307);
+  CheckEqual(UTF8ToUpper(LIn, LOpts), Utf8OfCp($0049), 'lt upper i+dot removes 0307');
+  { root keeps I + 0307 typically }
+  LGot := UTF8ToUpper(LIn, LRoot);
+  CheckEqual(LGot, Utf8OfCp($0049) + Utf8OfCp($0307), 'root upper i+dot');
+
+  { TitleWords }
+  CheckEqual(UTF8ToTitleWords('hello world'), 'Hello World', 'TitleWords basic');
+  CheckEqual(UTF8ToTitleWords('HELLO'), 'Hello', 'TitleWords lowers rest');
+  { per-cp title still titles every letter }
+  CheckEqual(UTF8ToTitle('hello'), 'HELLO', 'UTF8ToTitle per-codepoint unchanged');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.conformance_case');
   T.Test('CaseFolding', @TestCaseFolding);
@@ -614,6 +659,7 @@ begin
   T.Test('CaseFoldingTurkic', @TestCaseFoldingTurkic);
   T.Test('SpecialCasingTurkic', @TestSpecialCasingTurkic);
   T.Test('TurkicContextAndSamples', @TestTurkicContextAndSamples);
+  T.Test('LithuanianAndTitleWords', @TestLithuanianAndTitleWords);
   if not T.Run then
     Halt(1);
 end.

@@ -276,3 +276,29 @@ Length(NFD('é'))       // → 3 字节 ('e' + U+0301)
 Length(NFD('ℌ'))       // → 1 字节 ('H')  ← 注意: NFD 不展开兼容分解
 Length(NFKD('ℌ'))      // → 1 字节 ('H')  ← NFKD 展开兼容分解
 ```
+
+## 双门面与 locale Case（M1/M2）
+
+```pascal
+uses nextpas.core.text.unicode;
+
+// 日常 root（text 门面也可）
+S := UTF8ToLower('İSTANBUL');
+
+// Turkic
+var O: TCaseOptions;
+O.Locale := clTurkish;
+S := UTF8ToLower('İSTANBUL', O);  // i + ...
+
+// 词首 Title（Word_Break）；默认 UTF8ToTitle 仍是逐码点
+S := UTF8ToTitleWords('hello world'); // Hello World
+```
+
+## 硬行 vs 软换行
+
+```pascal
+// 硬：仅 CR/LF/NL…
+P := UnicodeSegmenter.NextLine(Text, P);
+// 软 UAX#14：
+P := NextLineBreak(Text, P);
+```
