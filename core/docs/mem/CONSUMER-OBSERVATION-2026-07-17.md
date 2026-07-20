@@ -162,15 +162,16 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | toml LBuf | **G4 residual**：free 点旁有 LBufLen |
 | collections swiss\* | 既有 FreeMemOf |
 
-**`FAllocator.FreeMem` 残余（H1 后）**:
+**`FAllocator.FreeMem` 残余（Era I 后）**:
 
 | 模块 | 备注 |
 |------|------|
-| toml `FOwnedBufs[i]` | 无 per-buf size — **故意 unsized** |
+| toml `FOwnedBufs` | **I3 FIXED**：`TTomlOwnedBuf` + `AddOwnedBuf(ptr,size)` → `FreeMemOf` |
+| json `FStrOverflow` | **I2 FIXED**：`TJsonOwnedStr` → `FreeMemOf` |
 | tui buffer/overlay inject | **WAIVE FreeMemOf**：须 `IAllocator.FreeMem` 以保留 tracking 可观测 |
 
-**结论**: 无新 P0/P1。主路径 FreeMemOf 样板已够；残余仅为 WAIVE（tui tracking / owned 串）。
-默认 **Maintenance Idle（H∞）** — 见 [API-GUIDE.md](API-GUIDE.md) FreeMemOf 决策树 · [ROADMAP.md](ROADMAP.md)。
+**结论**: 无新 P0/P1。owned 串 size 表已关；残余 WAIVE **仅** tui tracking。
+默认 **Maintenance Idle（I 后）** — 见 [API-GUIDE.md](API-GUIDE.md) FreeMemOf 决策树 · [ROADMAP.md](ROADMAP.md)。
 
 ---
 
