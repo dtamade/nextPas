@@ -206,6 +206,7 @@ jobs:
           key: fpc-3.3.1-x86_64-win64-linuxbuilt-20260716
 
       - name: Install FPC 3.3.1 x86_64-win64 trunk snapshot
+        id: install-fpc-win64
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"
@@ -306,6 +307,8 @@ jobs:
           bash scripts/platform-windows-ci-matrix.sh
 
       - name: Async Windows native smoke (fail-closed on Windows host)
+        # Run even if platform matrix failed — independent evidence surface (Q34).
+        if: ${{ always() && !cancelled() && steps.install-fpc-win64.outcome == 'success' }}
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"

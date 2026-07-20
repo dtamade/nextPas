@@ -46,6 +46,7 @@
 |-------|--------|
 | Job | `test-windows-runtime` |
 | Step | `Async Windows native smoke (fail-closed on Windows host)` |
+| When | Runs if FPC install succeeded, **even when platform matrix fails** (Q34) |
 | Script | `core/scripts/async-windows-native-smoke.sh` |
 | STRICT | CI exports `ASYNC_WINDOWS_STRICT=1`; script defaults STRICT=1 on Windows hosts |
 
