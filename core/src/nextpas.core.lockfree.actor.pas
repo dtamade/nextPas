@@ -123,10 +123,14 @@ end;
 procedure TActor.AcquireLock;
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -137,7 +141,7 @@ end;
 
 procedure TActor.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 destructor TActor.Destroy;
@@ -319,10 +323,14 @@ end;
 procedure TActorSystem.AcquireLock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -337,7 +345,7 @@ end;
 
 procedure TActorSystem.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 destructor TActorSystem.Destroy;
@@ -354,7 +362,7 @@ function TActorSystem.Spawn(AHandler: TActorHandler; AMaxMailbox: Int32): TActor
 var
   LId: Int64;
 begin
-  LId := AtomicFetchAdd64(FNextId, 1, moRelaxed);
+  LId := atomic_fetch_add_64(FNextId, 1, mo_relaxed);
   AcquireLock;
   try
     if FCount >= FCapacity then

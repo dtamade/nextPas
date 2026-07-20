@@ -257,9 +257,11 @@ var
 begin
   WriteLn('--- Source Contract ---');
   LSource := ReadTextFile('../../../src/nextpas.core.lockfree.deque_lf.pas');
-  Check(Pos('AtomicCompareExchange32(FLock, 0, 1', LSource) > 0,
+  Check(Pos('LCasExpected := 0;', LSource) > 0,
     'lock acquire CAS order uses expected=0 desired=1');
-  Check(Pos('AtomicStore32(FLock, 0, moRelease);', LSource) > 0,
+  Check(Pos('atomic_compare_exchange_strong(FLock, LCasExpected, 1', LSource) > 0,
+    'lock acquire uses preferred Boolean CAS');
+  Check(Pos('atomic_store(FLock, 0, mo_release);', LSource) > 0,
     'lock release uses release store');
 end;
 

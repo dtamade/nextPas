@@ -99,10 +99,14 @@ end;
 procedure TConcurrentLinkedListImpl.LockList;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -117,7 +121,7 @@ end;
 
 procedure TConcurrentLinkedListImpl.UnlockList;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TConcurrentLinkedListImpl.Create;
@@ -158,7 +162,7 @@ begin
       FHead := LNew
     else
       LPrev^.FNext := LNew;
-    AtomicFetchAdd64(FCount, 1);
+    atomic_fetch_add_64(FCount, 1);
     Result := llOk;
   finally
     UnlockList;
@@ -182,7 +186,7 @@ begin
         else
           LPrev^.FNext := LCurrent^.FNext;
         Dispose(LCurrent);
-        AtomicFetchAdd64(FCount, -1);
+        atomic_fetch_add_64(FCount, -1);
         Exit(llOk);
       end;
       LPrev := LCurrent;
@@ -217,12 +221,12 @@ end;
 
 function TConcurrentLinkedListImpl.Count: Int64;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 function TConcurrentLinkedListImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed) = 0;
+  Result := atomic_load_64(FCount, mo_relaxed) = 0;
 end;
 
 function TConcurrentLinkedListImpl.Get(AIndex: Int32; out AValue: T): Boolean;
@@ -258,7 +262,7 @@ begin
   LockList;
   try
     FreeList;
-    AtomicStore64(FCount, 0, moRelease);
+    atomic_store_64(FCount, 0, mo_release);
   finally
     UnlockList;
   end;

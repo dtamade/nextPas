@@ -7283,13 +7283,13 @@ begin
   CheckContains(LTestMakefile, 'CLEAN_BUILD_DIRS := $(DEBUG_BUILD_DIR)',
     'lockfree test clean target must select the DEBUG build dir when the DEBUG gate is requested');
   CheckContains(LMpscSource,
-    'function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;',
+    'function LoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;',
     'MPSC queue must define a pointer-sized atomic node load helper');
   CheckContains(LMpscSource,
-    'procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);',
+    'procedure StoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);',
     'MPSC queue must define a pointer-sized atomic node store helper');
   CheckContains(LMpscSource,
-    'function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;',
+    'function ExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;',
     'MPSC queue must define a pointer-sized atomic node exchange helper');
   CheckContains(LMpscSource, 'atomic_load(PPointer(@ANode)^, AOrder)',
     'MPSC node load helper must use pointer-sized atomic_load');
@@ -7305,21 +7305,21 @@ begin
     'MPSC queue must not exchange pointer links through 64-bit pointer casts');
   CheckBefore(LMpscEnqueueSourceSection,
     'LNode^.Value := AValue;',
-    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);',
     'MPSC Enqueue must initialize the node value before exchanging the head');
   CheckBefore(LMpscEnqueueSourceSection,
     'LNode^.Next := nil;',
-    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);',
     'MPSC Enqueue must initialize the node link before exchanging the head');
   CheckContains(LMpscEnqueueSourceSection,
-    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
+    'LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);',
     'MPSC Enqueue head exchange must use acquire-release ordering');
   CheckBefore(LMpscEnqueueSourceSection,
-    'LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);',
-    'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
+    'LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);',
+    'StoreNode(LPrev^.Next, LNode, mo_release);',
     'MPSC Enqueue must exchange the head before release-linking the previous node');
   CheckContains(LMpscEnqueueSourceSection,
-    'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
+    'StoreNode(LPrev^.Next, LNode, mo_release);',
     'MPSC Enqueue previous-node link publish must use release ordering');
   if (Pos('atomic_compare_exchange_strong_64(FTop', LDequeSource) = 0) and
      (Pos('AtomicCompareExchange64(FTop', LDequeSource) = 0) then

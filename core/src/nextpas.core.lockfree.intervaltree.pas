@@ -300,19 +300,20 @@ end;
 
 procedure TIntervalTree.AcquireLock;
 var
-  LOld: Int32;
+  LCasExpected: Int32;
 begin
-  repeat
-    LOld := AtomicCompareExchange32(FLock, 0, 1, moAcquire);
-    if LOld = 0 then
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
       Exit;
     ThreadSwitch;
-  until False;
+  end;
 end;
 
 procedure TIntervalTree.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TIntervalTree.Insert(const ALo, AHi: Int64; const AId: AnsiString): TIntervalTreeResult;
@@ -394,12 +395,12 @@ end;
 
 function TIntervalTree.Count: Int32; inline;
 begin
-  Result := AtomicLoad32(FCount, moAcquire);
+  Result := atomic_load(FCount, mo_acquire);
 end;
 
 function TIntervalTree.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad32(FCount, moAcquire) = 0;
+  Result := atomic_load(FCount, mo_acquire) = 0;
 end;
 
 end.

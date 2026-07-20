@@ -46,42 +46,42 @@ end;
 
 function TConcurrentCounter.Increment: Int64; inline;
 begin
-  Result := AtomicFetchAdd64(FValue, 1, moRelaxed) + 1;
+  Result := atomic_fetch_add_64(FValue, 1, mo_relaxed) + 1;
 end;
 
 function TConcurrentCounter.Decrement: Int64; inline;
 begin
-  Result := AtomicFetchSub64(FValue, 1, moRelaxed) - 1;
+  Result := atomic_fetch_sub_64(FValue, 1, mo_relaxed) - 1;
 end;
 
 function TConcurrentCounter.Add(const AValue: Int64): Int64; inline;
 begin
-  Result := AtomicFetchAdd64(FValue, AValue, moRelaxed) + AValue;
+  Result := atomic_fetch_add_64(FValue, AValue, mo_relaxed) + AValue;
 end;
 
 function TConcurrentCounter.Sub(const AValue: Int64): Int64; inline;
 begin
-  Result := AtomicFetchSub64(FValue, AValue, moRelaxed) - AValue;
+  Result := atomic_fetch_sub_64(FValue, AValue, mo_relaxed) - AValue;
 end;
 
 function TConcurrentCounter.Load: Int64; inline;
 begin
-  Result := AtomicLoad64(FValue, moRelaxed);
+  Result := atomic_load_64(FValue, mo_relaxed);
 end;
 
 procedure TConcurrentCounter.Store(const AValue: Int64);
 begin
-  AtomicStore64(FValue, AValue, moRelaxed);
+  atomic_store_64(FValue, AValue, mo_relaxed);
 end;
 
 procedure TConcurrentCounter.Reset;
 begin
-  AtomicStore64(FValue, 0, moRelaxed);
+  atomic_store_64(FValue, 0, mo_relaxed);
 end;
 
 procedure TConcurrentCounter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TConcurrentCounter.Destroy;
@@ -92,7 +92,7 @@ end;
 
 function TConcurrentCounter.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

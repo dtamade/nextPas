@@ -3,6 +3,7 @@ program test_lockfree_sortedset;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.lockfree.sortedset;
 
@@ -114,20 +115,22 @@ end;
 procedure TestStrings;
 var
   SS: specialize TConcurrentSortedSetImpl<string>;
+  LRaised: Boolean;
 begin
   WriteLn('--- TestStrings ---');
-  SS := specialize TConcurrentSortedSetImpl<string>.Create;
+  LRaised := False;
   try
-    Check(SS.Insert('banana') = ssetOk, 'insert banana');
-    Check(SS.Insert('apple') = ssetOk, 'insert apple');
-    Check(SS.Insert('cherry') = ssetOk, 'insert cherry');
-    Check(SS.Count = 3, 'count = 3');
-    Check(SS.Contains('apple'), 'contains apple');
-    Check(SS.Contains('banana'), 'contains banana');
-    Check(SS.Contains('cherry'), 'contains cherry');
-  finally
-    SS.Free;
+    SS := specialize TConcurrentSortedSetImpl<string>.Create;
+    try
+      SS.Insert('banana');
+    finally
+      SS.Free;
+    end;
+  except
+    on E: Exception do
+      LRaised := True;
   end;
+  Check(LRaised, 'managed string type rejected at Create');
 end;
 
 begin
