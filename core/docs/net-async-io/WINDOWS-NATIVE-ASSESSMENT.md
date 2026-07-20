@@ -43,9 +43,35 @@
 | Step | `Async Windows native smoke (opt-in, not fail-closed)` |
 | Script | `core/scripts/async-windows-native-smoke.sh` |
 | Suite | windows compile gate + contract; poller windows runtime; IOCP reactor; accept/connect smoke |
-| CI policy | `continue-on-error: true` + script soft (`STRICT!=1`) until 2+ consecutive weekly green |
-| Promote fail-closed when | FPC trunk install stable + step green ≥2 weeks without flaking |
+| CI policy | `continue-on-error: true` + script soft (`STRICT!=1`) until streak |
+| Promote fail-closed when | FPC trunk install stable + step green streak (see checklist) |
 | Out of scope | dial concurrent bench, public DNS HE, full host-matrix |
+
+### How to judge green / promote (Q24A)
+
+1. Run streak observer (needs `gh` + `jq`):
+
+```bash
+bash core/scripts/async-windows-smoke-streak.sh
+# optional: ASYNC_WINDOWS_STREAK_NEED=14 bash core/scripts/async-windows-smoke-streak.sh --limit 30
+```
+
+2. Look for:
+
+```
+consecutive_step_success=N
+promote-ready=yes|no
+```
+
+3. **Promotion checklist (manual Q24B)** — only if `promote-ready=yes`:
+
+- [ ] Streak ≥ need (default 14 completed main runs with step=success)
+- [ ] No FPC trunk install flakes in the same window
+- [ ] Remove `continue-on-error: true` from the async-windows step in `core-ci.yml`
+- [ ] On Windows host, default `ASYNC_WINDOWS_STRICT=1` unless `NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1`
+- [ ] Keep claim at **native-windows-candidate** until explicitly re-assessed; do not rename Wine evidence
+
+If `promote-ready=no`: keep soft CI; do not flip.
 
 ## Non-goals
 
