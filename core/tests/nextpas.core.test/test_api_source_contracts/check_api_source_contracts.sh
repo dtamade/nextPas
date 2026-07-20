@@ -27,6 +27,12 @@ awk '
 {
   echo Fail
   echo Skip
+  # SoftFail surface (Go t.Error) — not matched by Check* awk
+  echo SoftFail
+  echo SoftCheckTrue
+  echo SoftCheckFalse
+  echo SoftCheckEqual
+  echo SoftCheckContains
 } >> "$tmp/check_api.txt"
 sort -u "$tmp/check_api.txt" -o "$tmp/check_api.txt"
 

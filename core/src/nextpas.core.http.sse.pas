@@ -1,14 +1,15 @@
 unit nextpas.core.http.sse;
 {**
- * @desc Server-Sent Events (SSE) support for HTTP/1.1.
- *       Implements the W3C SSE specification:
- *       https://html.spec.whatwg.org/multipage/server-sent-events.html
+ * @desc Server-Sent Events (SSE) write-side helper for HTTP/1.1.
+ *       Spec: https://html.spec.whatwg.org/multipage/server-sent-events.html
+ *
+ *       Production contract (Q1-1): lifecycle, Kind/Op=`sse`, and explicit
+ *       non-goals (not a bus, not EventSource client, not WS substitute).
  *
  *       Usage:
  *         var LWriter: ISSEEventWriter;
  *         LWriter := StartSSE(AW);
- *         LWriter.WriteEvent('message', 'hello', '');
- *         LWriter.WriteEvent('update', '{"x":1}', 'evt-1');
+ *         LWriter.WriteEventSimple('message', 'hello', '');
  *         LWriter.Close;
  *}
 
@@ -23,8 +24,8 @@ uses
 type
   { A single SSE event }
   TSSEvent = record
-    Event: string;   { event type (optional, default "message") }
-    Data: string;    { event payload (required) }
+    Event: string;   { event type (optional; empty omits event: line) }
+    Data: string;    { event payload (required; may be empty) }
     Id: string;      { last event ID (optional) }
     Retry: Int64;    { reconnection time in ms (0 = don't set) }
   end;
@@ -32,22 +33,21 @@ type
   { Writer for Server-Sent Events }
   ISSEEventWriter = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000010}']
-    { Write a single SSE event }
+    { Write a single SSE event (ends with blank line; then Flush). }
     procedure WriteEvent(const AEvent: TSSEvent);
     { Convenience: write event with type, data, and optional id }
     procedure WriteEventSimple(const AType, AData, AId: string);
-    { Write a comment line (keeps connection alive) }
+    { Write a comment line (keeps connection alive); then Flush. }
     procedure WriteComment(const AComment: string);
-    { Set the retry interval (ms) for the client }
+    { Set the retry interval (ms) for the client; then Flush. }
     procedure WriteRetry(const AMs: Int64);
-    { Close the SSE stream }
+    { Close the SSE stream (idempotent). Does not close the HTTP connection. }
     procedure Close;
-    { Check if the stream is still open }
+    { True after StartSSE until Close. }
     function IsOpen: Boolean;
   end;
 
-{ Start an SSE response. Sets appropriate headers and returns an event writer.
-  The caller should use the writer to send events, then call Close. }
+{ Start an SSE response. Sets headers, commits 200, returns event writer. }
 function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
 
 { Create an SSE event record }
@@ -59,12 +59,17 @@ uses
   nextpas.core.errors,
   nextpas.core.text.conv;
 
+const
+  SSE_OP = 'sse';
+
 type
   TSSEEventWriter = class(TInterfacedObject, ISSEEventWriter)
   private
     FWriter: IHttpResponseWriter;
     FOpen: Boolean;
+    procedure EnsureOpen;
     procedure WriteRaw(const ALine: string);
+    procedure FlushWriter;
   public
     constructor Create(const AWriter: IHttpResponseWriter);
     procedure WriteEvent(const AEvent: TSSEvent);
@@ -88,7 +93,8 @@ end;
 function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
 begin
   if AW = nil then
-    raise EHttpError.Create(hekArgument, 'StartSSE: response writer is nil');
+    raise EHttpError.CreateOp(hekArgument, SSE_OP,
+      'StartSSE: response writer is nil');
 
   AW.GetHeaders.SetHeader('content-type', 'text/event-stream');
   AW.GetHeaders.SetHeader('cache-control', 'no-cache');
@@ -107,6 +113,13 @@ begin
   FOpen := True;
 end;
 
+procedure TSSEEventWriter.EnsureOpen;
+begin
+  if not FOpen then
+    raise EHttpError.CreateOp(hekProtocol, SSE_OP,
+      'SSE: stream already closed');
+end;
+
 procedure ValidateSSEFieldValue(const AFieldName, AValue: string;
   const ARejectNull: Boolean);
 var
@@ -115,10 +128,10 @@ begin
   for LI := 1 to Length(AValue) do
   begin
     if AValue[LI] in [#10, #13] then
-      raise EHttpError.Create(hekArgument,
+      raise EHttpError.CreateOp(hekArgument, SSE_OP,
         'SSE ' + AFieldName + ' must not contain line breaks');
     if ARejectNull and (AValue[LI] = #0) then
-      raise EHttpError.Create(hekArgument,
+      raise EHttpError.CreateOp(hekArgument, SSE_OP,
         'SSE ' + AFieldName + ' must not contain null bytes');
   end;
 end;
@@ -151,19 +164,42 @@ var
   LLine: string;
   LTotal, LWritten, LRemaining: SizeUInt;
 begin
-  if not FOpen then
-    raise EHttpError.Create(hekProtocol, 'SSE: stream already closed');
+  EnsureOpen;
   LLine := ALine + #10;
   LTotal := 0;
-  while LTotal < SizeUInt(Length(LLine)) do
-  begin
-    LRemaining := SizeUInt(Length(LLine)) - LTotal;
-    LWritten := FWriter.Write(LLine[LTotal + 1], LRemaining);
-    if LWritten = 0 then
-      raise EIOError.Create('SSE: response writer made zero progress');
-    if LWritten > LRemaining then
-      raise EIOError.Create('SSE: response writer over-reported progress');
-    Inc(LTotal, LWritten);
+  try
+    while LTotal < SizeUInt(Length(LLine)) do
+    begin
+      LRemaining := SizeUInt(Length(LLine)) - LTotal;
+      LWritten := FWriter.Write(LLine[LTotal + 1], LRemaining);
+      if LWritten = 0 then
+        raise EHttpError.CreateOp(hekProtocol, SSE_OP,
+          'SSE: response writer made zero progress');
+      if LWritten > LRemaining then
+        raise EHttpError.CreateOp(hekProtocol, SSE_OP,
+          'SSE: response writer over-reported progress');
+      Inc(LTotal, LWritten);
+    end;
+  except
+    on E: EHttpError do
+      raise;
+    on E: Exception do
+      raise EHttpError.CreateOp(hekProtocol, SSE_OP,
+        'SSE write failed: ' + E.Message);
+  end;
+end;
+
+procedure TSSEEventWriter.FlushWriter;
+begin
+  EnsureOpen;
+  try
+    FWriter.Flush;
+  except
+    on E: EHttpError do
+      raise;
+    on E: Exception do
+      raise EHttpError.CreateOp(hekProtocol, SSE_OP,
+        'SSE flush failed: ' + E.Message);
   end;
 end;
 
@@ -171,26 +207,22 @@ procedure TSSEEventWriter.WriteEvent(const AEvent: TSSEvent);
 var
   LLines: string;
 begin
-  if not FOpen then
-    raise EHttpError.Create(hekProtocol, 'SSE: stream already closed');
+  EnsureOpen;
   if AEvent.Retry < 0 then
-    raise EHttpError.Create(hekArgument, 'SSE retry must not be negative');
+    raise EHttpError.CreateOp(hekArgument, SSE_OP,
+      'SSE retry must not be negative');
   ValidateSSEFieldValue('event name', AEvent.Event, False);
   ValidateSSEFieldValue('event id', AEvent.Id, True);
 
-  { Retry }
   if AEvent.Retry > 0 then
     WriteRaw('retry: ' + IntToStr(AEvent.Retry));
 
-  { Event type }
   if AEvent.Event <> '' then
     WriteRaw('event: ' + AEvent.Event);
 
-  { Last event ID }
   if AEvent.Id <> '' then
     WriteRaw('id: ' + AEvent.Id);
 
-  { Data — split on newlines per SSE spec }
   LLines := NormalizeSSELineEndings(AEvent.Data);
   if LLines = '' then
     WriteRaw('data: ')
@@ -216,8 +248,8 @@ begin
     end;
   end;
 
-  { Empty line terminates the event }
   WriteRaw('');
+  FlushWriter;
 end;
 
 procedure TSSEEventWriter.WriteEventSimple(const AType, AData, AId: string);
@@ -232,6 +264,7 @@ procedure TSSEEventWriter.WriteComment(const AComment: string);
 var
   LLines: string;
 begin
+  EnsureOpen;
   LLines := NormalizeSSELineEndings(AComment);
   while True do
   begin
@@ -246,19 +279,22 @@ begin
       Break;
     end;
   end;
+  FlushWriter;
 end;
 
 procedure TSSEEventWriter.WriteRetry(const AMs: Int64);
 begin
   if AMs < 0 then
-    raise EHttpError.Create(hekArgument, 'SSE retry must not be negative');
+    raise EHttpError.CreateOp(hekArgument, SSE_OP,
+      'SSE retry must not be negative');
   WriteRaw('retry: ' + IntToStr(AMs));
+  FlushWriter;
 end;
 
 procedure TSSEEventWriter.Close;
 begin
-  if FOpen then
-    FOpen := False;
+  { Idempotent: second Close is a no-op. }
+  FOpen := False;
 end;
 
 function TSSEEventWriter.IsOpen: Boolean;

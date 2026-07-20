@@ -4,8 +4,8 @@
 
 抽检日期：2026-07-20 · 抽检人：bench lane  
 C3：Quiet + 50ms/5 samples + SaveToJSON  
-B32–B37：消费侧扩面与 C3  
-B38：+2 **xml + atomic**（C3 + API 对齐 / 轻量 C2）→ checklist **16** 模块
+B32–B39：消费侧扩面  
+B40：**lockfree** matched + micro 双 suite C3/C2 → checklist **19** 模块
 
 ## 检查项
 
@@ -35,20 +35,23 @@ B38：+2 **xml + atomic**（C3 + API 对齐 / 轻量 C2）→ checklist **16** �
 | `nextpas.core.text.number/bench_number` | ✅ | ✅ | ✅ | ✅ | ✅ | `number/IntToBuffer/*`；`build/bench-number.json` |
 | `nextpas.core.io/bench_io` | ✅ | ✅ | ✅ | ✅ | ✅ | `Copy/64KB`；`build/bench-io.json` |
 | `nextpas.core.csv/bench_csv` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/1K-rows`；`build/bench-csv.json` |
-| `nextpas.core.xml/bench_xml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small\|large`；TXmlDocument.Parse+Done；`build/bench-xml.json`（B38） |
-| `nextpas.core.atomic/bench_atomic` | ✅ | ✅ | ✅ | ✅ | ✅ | `atomic/FetchAdd32` 等；TAtomicUInt32.Create；`build/bench-atomic.json`（B38） |
+| `nextpas.core.xml/bench_xml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small\|large`；`build/bench-xml.json` |
+| `nextpas.core.atomic/bench_atomic` | ✅ | ✅ | ✅ | ✅ | ✅ | `atomic/FetchAdd32` 等；`build/bench-atomic.json` |
+| `nextpas.core.bytes/bench_bytes` | ✅ | ✅ | ✅ | ✅ | ✅ | `bytes/SpanEqual/1KB` 等；`build/bench-bytes.json` |
+| `nextpas.core.sync/bench_sync` | ✅ | ✅ | ✅ | ✅ | ✅ | `sync/Mutex/LockUnlock` 等；`build/bench-sync.json` |
+| `nextpas.core.lockfree/bench_lockfree` | ✅ | ✅ | ✅ | ✅ | ✅ | **matched** `lockfree/matched/C1_1P1C`（MaxIters/MinSamples=1）；**micro** `lockfree/micro/*` Quiet+50ms/5；`build/bench-lockfree-{matched,micro}.json`（B40） |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · B38）
+## 汇总（2026-07-20 · B40）
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **16** 模块 |
-| C1–C5 | **16/16 全 ✅** |
-| C3 | Quiet + 50ms + 5 samples + `build/bench-*.json` |
+| 抽检面 | **19** 模块 |
+| C1–C5 | **19/19 全 ✅** |
+| C3 | 常规 Quiet+50ms/5；lockfree **matched** 用 1 sample / MaxIterations=1（避免 1M-op 多线程被反复重跑） |
 | scorecard | 11 track（含 binsearch、lookup） |
-| EBR | 未做（独立设计） |
+| EBR 执行器 | 未做（独立设计；micro 仅测 EBR Retire 路径） |
 
 ## 可复制片段（CI 友好）
 
@@ -70,6 +73,9 @@ LResults.SaveToJSON('build/bench-mymod.json');
 make bench-module-test
 make bench-scorecard-smoke
 bash core/docs/bench/scripts/run-scorecard-subset.sh --list
+# lockfree 模式
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run
+# 或 ./bench_lockfree matched | micro | all
 ```
 
 ## 如何更新本表

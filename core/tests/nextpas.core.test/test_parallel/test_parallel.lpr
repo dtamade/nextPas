@@ -201,6 +201,39 @@ begin
   end;
 end;
 
+procedure TestParallelSoftFail;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFound: Boolean;
+begin
+  LSuite := TTestSuite.Create('par-soft');
+  LSuite.Test('soft_a', procedure
+    begin
+      SoftFail('par soft a');
+      SoftFail('par soft b');
+    end);
+  LSuite.Test('ok_b', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult), 'soft fails suite');
+  CheckTrue(LResult.Failed >= 1);
+  CheckTrue(LResult.Passed >= 1, 'other parallel tests still pass');
+  LFound := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Name = 'soft_a') and
+       (LResult.Results[I].Status = tsFailed) then
+    begin
+      LFound := True;
+      CheckTrue(Pos('par soft a', LResult.Results[I].Message) > 0);
+      CheckTrue(Pos('par soft b', LResult.Results[I].Message) > 0);
+    end;
+  CheckTrue(LFound, 'soft_a failed with both messages');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestParallelSimple;
 begin
   Check(True, 'simple parallel pass');
@@ -970,6 +1003,13 @@ begin
     PassTest('B9 RegisterFixture worker fails');
     TestRegisterStubMainThreadOk;
     PassTest('B9 RegisterStub main ok');
+  end;
+
+  WriteLn;
+  SectionHeader('B23: SoftFail in parallel');
+  begin
+    TestParallelSoftFail;
+    PassTest('B23 parallel SoftFail');
   end;
 
   WriteLn;

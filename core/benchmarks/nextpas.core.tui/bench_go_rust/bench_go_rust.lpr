@@ -135,6 +135,22 @@ begin
     Halt(2);
   Report('LayoutVSplit3', LStart, LEnd, LAYOUT_ITERS);
 
+  { Layout HSplit3 — real HorizontalSplit API }
+  LArea := TRect.Make(0, 0, 200, 60);
+  Sink := 0;
+  LStart := platform_monotonic_ns;
+  for I := 1 to LAYOUT_ITERS do
+  begin
+    LRects := HorizontalSplit(LArea, [
+      LengthConstraint(10), MinConstraint(0), LengthConstraint(10)]);
+    if Length(LRects) > 0 then
+      Inc(Sink, LRects[0].Width);
+  end;
+  LEnd := platform_monotonic_ns;
+  if Sink = 0 then
+    Halt(2);
+  Report('LayoutHSplit3', LStart, LEnd, LAYOUT_ITERS);
+
   { Overlay merge — real TOverlayBuffer.MergeInto }
   LBase := TBuffer.CreateEmpty(TRect.Make(0, 0, OV_W, OV_H));
   LDest := TBuffer.CreateEmpty(TRect.Make(0, 0, OV_W, OV_H));

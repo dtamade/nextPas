@@ -6,13 +6,14 @@ interface
 
 const
   {** @desc 最大监视文件描述符数量 *}
-  PLATFORM_WATCH_MAX_FDS = 16;
+  PLATFORM_WATCH_MAX_FDS = 256;
 
 type
   {** @desc 文件系统监视事件 *}
   TPlatformWatchEvent = record
     Name: array[0..255] of AnsiChar;
     NameLen: Int32;
+    Wd: Int32;  { watch descriptor / platform id for L2 path map }
     IsDir: Boolean;
     Modified: Boolean;
     Created: Boolean;
@@ -43,6 +44,12 @@ type
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     WatchFds: array[0..PLATFORM_WATCH_MAX_FDS - 1] of Int32;
     WatchCount: Int32;
+  {$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}
+    { Residual inotify read buffer — do not drop multi-event batches (R30). }
+    PendBuf: array[0..4095] of Byte;
+    PendLen: Int32;
+    PendPos: Int32;
   {$ENDIF}
     {** @desc 检查监视器是否有效
         @return True 如果监视器有效 *}
@@ -157,11 +164,16 @@ end;
 
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
+  FillChar(AWatcher, SizeOf(AWatcher), 0);
   AWatcher.Fd := inotify_init1(IN_NONBLOCK);
   if AWatcher.Fd < 0 then
     Result := platform_get_errno
   else
+  begin
+    AWatcher.PendLen := 0;
+    AWatcher.PendPos := 0;
     Result := 0;
+  end;
 end;
 
 function platform_watch_add(var AWatcher: TPlatformWatcher;
@@ -189,14 +201,62 @@ type
     len: UInt32;
   end;
 var
-  LBuf: array[0..4095] of Byte;
   LRead: PtrInt;
   LEvt: ^TInotifyEvent;
   LName: PAnsiChar;
   I: Int32;
+  LNeed: Int32;
   LPollFd: record fd: Int32; events: Int16; revents: Int16; end;
+
+  function DecodeAtPos: Boolean;
+  begin
+    Result := False;
+    if AWatcher.PendPos + SizeOf(TInotifyEvent) > AWatcher.PendLen then
+      Exit;
+    LEvt := @AWatcher.PendBuf[AWatcher.PendPos];
+    LNeed := SizeOf(TInotifyEvent) + Int32(LEvt^.len);
+    if (LNeed < SizeOf(TInotifyEvent)) or
+       (AWatcher.PendPos + LNeed > AWatcher.PendLen) then
+      Exit;
+    FillChar(AEvent, SizeOf(AEvent), 0);
+    AEvent.Wd := LEvt^.wd;
+    AEvent.Modified := (LEvt^.mask and IN_MODIFY) <> 0;
+    AEvent.Created := (LEvt^.mask and (IN_CREATE or IN_MOVED_TO)) <> 0;
+    AEvent.Deleted := (LEvt^.mask and (IN_DELETE or IN_MOVED_FROM)) <> 0;
+    AEvent.IsDir := (LEvt^.mask and IN_ISDIR) <> 0;
+    if LEvt^.len > 0 then
+    begin
+      LName := PAnsiChar(@AWatcher.PendBuf[AWatcher.PendPos + SizeOf(TInotifyEvent)]);
+      I := 0;
+      while (I < 255) and (I < Int32(LEvt^.len)) and (LName[I] <> #0) do
+      begin
+        AEvent.Name[I] := LName[I];
+        Inc(I);
+      end;
+      AEvent.Name[I] := #0;
+      AEvent.NameLen := I;
+    end;
+    Inc(AWatcher.PendPos, LNeed);
+    if AWatcher.PendPos >= AWatcher.PendLen then
+    begin
+      AWatcher.PendPos := 0;
+      AWatcher.PendLen := 0;
+    end;
+    Result := True;
+  end;
+
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
+
+  { Drain residual multi-event batch first (R30). }
+  if AWatcher.PendPos < AWatcher.PendLen then
+  begin
+    if DecodeAtPos then
+      Exit(1);
+    { corrupt residual — drop }
+    AWatcher.PendPos := 0;
+    AWatcher.PendLen := 0;
+  end;
 
   if ATimeoutMs <> 0 then
   begin
@@ -207,33 +267,25 @@ begin
       Exit(0); // no events
   end;
 
-  LRead := read(AWatcher.Fd, @LBuf[0], 4096);
+  LRead := read(AWatcher.Fd, @AWatcher.PendBuf[0], SizeOf(AWatcher.PendBuf));
   if LRead <= 0 then
     Exit(0);
-
-  LEvt := @LBuf[0];
-  AEvent.Modified := (LEvt^.mask and IN_MODIFY) <> 0;
-  AEvent.Created := (LEvt^.mask and (IN_CREATE or IN_MOVED_TO)) <> 0;
-  AEvent.Deleted := (LEvt^.mask and (IN_DELETE or IN_MOVED_FROM)) <> 0;
-  AEvent.IsDir := (LEvt^.mask and IN_ISDIR) <> 0;
-
-  if LEvt^.len > 0 then
+  AWatcher.PendLen := Int32(LRead);
+  AWatcher.PendPos := 0;
+  if DecodeAtPos then
+    Result := 1
+  else
   begin
-    LName := PAnsiChar(@LBuf[SizeOf(TInotifyEvent)]);
-    I := 0;
-    while (I < 255) and (I < Int32(LEvt^.len)) and (LName[I] <> #0) do
-    begin
-      AEvent.Name[I] := LName[I];
-      Inc(I);
-    end;
-    AEvent.Name[I] := #0;
-    AEvent.NameLen := I;
+    AWatcher.PendPos := 0;
+    AWatcher.PendLen := 0;
+    Result := 0;
   end;
-  Result := 1;
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 begin
+  AWatcher.PendLen := 0;
+  AWatcher.PendPos := 0;
   if AWatcher.Fd >= 0 then
   begin
     close(AWatcher.Fd);
@@ -389,6 +441,7 @@ begin
   if (LEvent.Flags and EV_ERROR) <> 0 then
     Exit(0);
 
+  AEvent.Wd := Int32(LEvent.Ident);
   AEvent.Modified := (LEvent.FFlags and (NOTE_WRITE or NOTE_EXTEND)) <> 0;
   AEvent.Deleted := (LEvent.FFlags and NOTE_DELETE) <> 0;
   AEvent.Created := (LEvent.FFlags and NOTE_WRITE) <> 0;

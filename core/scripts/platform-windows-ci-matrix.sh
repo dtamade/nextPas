@@ -12,8 +12,9 @@
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
 # 21 platform gates promoted (+error +fmt +info +which) after GHA pass=22
-# including mem.host (run 29721371136 @ 0cb2471bc; which PASS). Platform
-# facade set is 21; mem.host_runtime is optional mem-owned entry (total 22).
+# including mem.host (run 29721371136 @ 0cb2471bc; which PASS). Batch-16
+# candidate: +platform.dl (not promoted until GHA green). mem.host_runtime
+# is optional mem-owned entry (not a platform facade gate).
 
 set -euo pipefail
 
@@ -47,6 +48,7 @@ MODULE_ENTRIES=(
   "platform.fmt tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
   "platform.info tests/nextpas.core.platform.info/test_platform_info_wine"
   "platform.which tests/nextpas.core.platform.which/test_platform_which_wine"
+  "platform.dl tests/nextpas.core.platform.dl/test_platform_dl_wine"
   "io.reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
@@ -59,7 +61,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix; documented 21 platform gates (+which); mem.host optional; not full-host Windows parity"
+echo "truth=ci-matrix-candidate; 21 platform gates promoted + dl candidate; mem.host optional; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true

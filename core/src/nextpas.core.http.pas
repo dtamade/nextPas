@@ -156,6 +156,7 @@ type
   THttpFile = nextpas.core.http.form.THttpFile;
   THttpFileArray = nextpas.core.http.form.THttpFileArray;
   TMultipartFormData = nextpas.core.http.form.TMultipartFormData;
+  TMultipartParseOptions = nextpas.core.http.form.TMultipartParseOptions;
 
 { Status constants - re-export }
 const
@@ -660,6 +661,11 @@ function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function NewMultipartBoundary: string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
+function MultipartParseOptionsDefault: TMultipartParseOptions; inline;
+function ParseMultipartFormData(const ABody, ABoundary: string): TMultipartFormData; inline;
+function ParseMultipartFormDataFromReader(const ABody: IReader;
+  const ABoundary: string;
+  const AOptions: TMultipartParseOptions): TMultipartFormData; inline;
 
 implementation
 
@@ -1708,6 +1714,24 @@ function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string): string;
 begin
   Result := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles, ABoundary);
+end;
+
+function MultipartParseOptionsDefault: TMultipartParseOptions;
+begin
+  Result := nextpas.core.http.form.MultipartParseOptionsDefault;
+end;
+
+function ParseMultipartFormData(const ABody, ABoundary: string): TMultipartFormData;
+begin
+  Result := nextpas.core.http.form.ParseMultipartFormData(ABody, ABoundary);
+end;
+
+function ParseMultipartFormDataFromReader(const ABody: IReader;
+  const ABoundary: string;
+  const AOptions: TMultipartParseOptions): TMultipartFormData;
+begin
+  Result := nextpas.core.http.form.ParseMultipartFormDataFromReader(ABody,
+    ABoundary, AOptions);
 end;
 
 function HttpCreateRequestArena(ACapacity: SizeUInt): IArena;

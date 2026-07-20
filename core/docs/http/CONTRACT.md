@@ -532,7 +532,105 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 - Client：idle pool 经 `CloseIdleConnections`；`Send` 拥有 close-capable request body。
 - Redirect：`301/302/303` → GET 无 body；`307/308` 保方法；跨 authority 剥离敏感头。
 - WebSocket / SSE：`UpgradeWebSocket` / `ConnectWebSocket`；`StartSSE` —
-  公开前置条件均为 `hekArgument`。
+  公开前置条件见下表。
+
+### 4.1 SSE production contract（Wave Q1-1）
+
+`StartSSE` / `ISSEEventWriter` 是 **H1 写端 helper**，不是 EventSource 客户端、
+不是消息总线、不是 WebSocket 替代。
+
+| 阶段 | 行为 |
+|------|------|
+| **StartSSE(AW)** | nil AW → `hekArgument` Op=`sse`。设置 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`，`WriteHeader(200)`，返回 open writer。 |
+| **WriteEvent / WriteEventSimple** | 编码 `retry:` / `event:` / `id:` / 多行 `data:` + 空行结束；然后 **Flush**。 |
+| **WriteComment** | `:` 注释行（可心跳）；Flush。 |
+| **WriteRetry** | 单独 `retry:` 行；Flush。负值 → `hekArgument` Op=`sse`。 |
+| **Close** | **幂等**；仅本地 `IsOpen=false`，不关闭底层 TCP。 |
+| **IsOpen** | Start 后 true，Close 后 false。 |
+
+| 错误 | Kind | Op |
+|------|------|-----|
+| nil writer / 字段注入（event/id 含 CR/LF）/ id 含 NUL / retry&lt;0 | `hekArgument` | `sse` |
+| write-after-close | `hekProtocol` | `sse` |
+| zero-progress write / over-report / underlying write or flush failure | `hekProtocol` | `sse` |
+
+**限制（诚实）**
+
+- 仅写端；无自动重连客户端 / Last-Event-ID 消费 API。
+- 无界背压由底层 `IHttpResponseWriter` 与 server `WriteTimeout` 决定。
+- 长连接 handler 会占用 server 执行路径；在 epoll **reactor-inline**（S1-1 默认）下，阻塞 handler 会拖累同 reactor 其他连接——长推送宜短事件或后续 offload。
+- 非 H2/H3 SSE；非 room/bus。
+
+证据：`test_http_middlewares` SSE 套件 + `test_http_server` `Live SSE event stream`。
+
+### 4.2 Multipart bounded stream ingest（Wave Q1-2）
+
+字符串 API `ParseMultipartFormData` / `EncodeMultipartFormData` **保留不变**。
+新增 **有界流式摄入**（非磁盘 spool、非第二套 body 家族）：
+
+| API | 行为 |
+|-----|------|
+| `MultipartParseOptionsDefault` | `MaxBytes = HTTP_DEFAULT_MULTIPART_MAX_BYTES`（4 MiB，与 server Default.MaxBodySize 对齐量级） |
+| `ParseMultipartFormDataFromReader(Reader, Boundary, Options)` | 从 `IReader` 读至多 `MaxBytes` 字节，再解析 multipart |
+
+| Ownership | 规则 |
+|-----------|------|
+| `IReader` body | **调用方拥有**；parse **不** Close reader |
+| `TMultipartFormData` | 值类型；Fields/Files 内容由调用方持有 |
+| 超限 / 失败 | 抛 `EHttpError`；已分配缓冲随异常释放 |
+
+| 错误 | Kind | Op |
+|------|------|-----|
+| nil reader / empty boundary / MaxBytes≤0 | `hekArgument` | `multipart` |
+| body 超过 MaxBytes | `hekBody` | `multipart` |
+| 读路径其它失败 | `hekProtocol`（包装） | `multipart` |
+
+**诚实限制**：解析结果仍将 part 内容放入 `string` / `THttpFile.Content`（与既有模型一致）；**不是**零拷贝磁盘 spool。`PostMultipart` / `EncodeMultipartFormData` 仍为内存编码。大上传请显式设 `MaxBytes` 并在 handler 侧配合 server `MaxBodySize`。
+
+证据：`test_http_form` FromReader 套件。
+
+### 4.3 Observability 最小 seam（Wave Q1-3）
+
+`MetricsMiddleware` / `MetricsMiddlewareWith` / `MetricsMiddlewareWithFields` +
+`IHttpMetricsCollector` 是 **opt-in** 可观测 seam。
+
+| 规则 | 行为 |
+|------|------|
+| 默认开销 | **零**：不安装 middleware 则无采集、无锁、无回调 |
+| Collector | `NewHttpMetricsCollector` + `Snapshot` / `Reset`；线程安全 |
+| 字段 | `TotalRequests`、2xx–5xx 类计数、`TotalDurationUs`、`RequestBytes`、`ResponseBytes` |
+| 计时 | handler 前后 `try/finally`；**异常仍记录** |
+| 未提交 status | handler 抛异常且 `GetStatus=0` → 记 **status=500**（计入 5xx） |
+| Callback | `With` / `WithFields` 推送外部系统；**callback 内异常被吞掉**，不破坏请求 |
+| 构造失败 | nil collector/callback → `hekArgument` Op=`metrics` |
+
+**非目标**：OpenTelemetry / Prometheus exporter / 全局强制 metrics / 分布式 tracing。
+
+证据：`test_http_middlewares` Metrics 套件（含 exception + callback isolation）。
+
+### 4.4 H1 长连接写失败 / backpressure（Wave Q1-4）
+
+H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）对长连接
+背压与写失败的 **final 契约**。实现与 focused 证据已长期存在；本节约成可读表。
+
+| 主题 | 语义 | 证据（`test_http_server`） |
+|------|------|---------------------------|
+| **WriteTimeout = 0** | 无写 deadline（`THttpServerOptions.Default` 测试兼容） | Server options Default vs Production |
+| **WriteTimeout > 0** | budget 从 **socket 真实 drain 开始**，**不**含 handler 在内存中拼响应的时间 | Real socket write timeout ignores slow buffered handler（threaded + epoll） |
+| **Would-block** | poll 路径订 `peWritable` 继续 drain；**仅有实际写出进度时** re-arm write deadline | poll-driven drains response via writable events；partial timed drain |
+| **Write deadline 到期** | 安全关闭连接；`WakeDeadline → infinite`；**不**追加 500；**不**再消费 follow-up pipeline | times out stalled drain on deadline wake；partial timed drain stops buffered follow-up |
+| **Zero-progress write** | 首次写失败/零进度 → **立即停 session**；不消费后续 pipelined 请求 | Session stops after zero-progress response write failure |
+| **已提交响应后 handler 异常** | **不**再向 wire 追加 synthetic 500 | Committed response exception 相关用例 |
+| **有界 response queue** | untimed poll：active drain + **1** queued；follow-up 错误保序 | queues bounded responses / queues follow-up 400/413/… |
+| **Timed stall + pipeline** | `WriteTimeout>0` 且 drain 已 stall 时，**不**继续处理同连接后续请求 | Real socket write timeout backpressure stops pipeline（threaded + epoll）及「does not emit follow-up 4xx/501」系列 |
+| **Direct error 响应** | parser/size/Expect 等 fail-fast 错误响应同样 arm write timeout | Direct error response arms write timeout on … |
+| **S1-1 关系** | `PreferPollWorkerHandoff=False`（默认）只决定 **handler 在 reactor 还是 worker 执行**；**不改变** drain/backpressure/WriteTimeout 语义 | S1-1 + 本表 drain 测 |
+
+**生产建议**：使用 `THttpServerOptions.Production` 或显式 `WithWriteTimeout`；勿依赖 Default 的 RW=0。
+
+**非目标**：严格 wall-clock SLA 冻结为 CI 阈值；跨机 backpressure 排行榜；改 WriteTimeout 默认值。
+
+证据索引（非穷尽）：`Session stops after zero-progress…`、`H1 poll-driven session times out stalled drain…`、`Real socket write timeout backpressure…`（threaded/epoll）、`Write timeout before any wire bytes…` / `after partial wire bytes…`、source-contract `H1 write/backpressure contract`。
 
 ---
 

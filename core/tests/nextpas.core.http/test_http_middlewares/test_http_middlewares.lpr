@@ -36,7 +36,8 @@ uses
   nextpas.core.compress,
   nextpas.core.text.conv,
   nextpas.core.time.base,
-  nextpas.core.time.sleep;
+  nextpas.core.time.sleep,
+  nextpas.core.fs;
 
 var
   GTestSentinel: TObject;
@@ -53,6 +54,7 @@ type
     FMaxWriteSize: SizeUInt;
     FRaiseOnWrite: Boolean;
     FWriteHeaderCount: Int32;
+    FFlushCount: Int32;
   public
     constructor Create;
     procedure SetMaxWriteSize(const AValue: SizeUInt);
@@ -67,6 +69,7 @@ type
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
     property WriteHeaderCount: Int32 read FWriteHeaderCount;
+    property FlushCount: Int32 read FFlushCount;
   end;
 
   TTrackingResponseWriter = class(TMockResponseWriter)
@@ -117,6 +120,7 @@ begin
   FMaxWriteSize := High(SizeUInt);
   FRaiseOnWrite := False;
   FWriteHeaderCount := 0;
+  FFlushCount := 0;
 end;
 
 destructor TTrackingResponseWriter.Destroy;
@@ -177,6 +181,7 @@ end;
 
 procedure TMockResponseWriter.Flush;
 begin
+  Inc(FFlushCount);
 end;
 
 function TMockResponseWriter.GetBodyBytesWritten: Int64;
@@ -2105,9 +2110,9 @@ begin
     MetricsMiddleware(nil);
   except
     on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
+      LRaised := (E.Kind = hekArgument) and (E.Op = 'metrics');
   end;
-  Check(LRaised, 'raises hekArgument on nil collector');
+  Check(LRaised, 'raises hekArgument Op=metrics on nil collector');
 end;
 
 procedure TestMetricsWithCallbackInvoked;
@@ -2211,9 +2216,9 @@ begin
     MetricsMiddlewareWith(nil);
   except
     on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
+      LRaised := (E.Kind = hekArgument) and (E.Op = 'metrics');
   end;
-  Check(LRaised, 'raises hekArgument on nil callback');
+  Check(LRaised, 'raises hekArgument Op=metrics on nil callback');
 end;
 
 procedure TestMethodGuardAllowsGetMethod;
@@ -2517,6 +2522,81 @@ begin
   LMetrics := LCollector.Snapshot;
   CheckEqual(1, LMetrics.TotalRequests, 'one request');
   CheckEqual(11, LMetrics.ResponseBytes, 'response bytes tracked');
+end;
+
+procedure TestMetricsRecordsOnHandlerException;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+  LRaised: Boolean;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('handler boom');
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LRaised := False;
+  try
+    LHandler.ServeHTTP(LReqIntf, LW);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'handler exception propagates');
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'exception path still counted');
+  CheckEqual(1, LMetrics.Status5xx, 'uncommitted failure counts as 5xx');
+end;
+
+procedure TestMetricsCallbackExceptionDoesNotBreakRequest;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write('ok'[1], 2);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      raise Exception.Create('callback boom');
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LWObj.Status), 'response still OK');
+  Check(Pos('ok', LWObj.Body) > 0, 'body still written');
+end;
+
+procedure TestMetricsNilArgsUseOpMetrics;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.middleware.metrics.pas');
+  Check(Pos('METRICS_OP = ''metrics''', LSrc) > 0, 'metrics Op constant');
+  Check(Pos('CreateOp(hekArgument, METRICS_OP', LSrc) > 0,
+    'nil args use CreateOp Op=metrics');
+  Check(Pos('MetricsStatusAfterHandler', LSrc) > 0,
+    'exception path uses MetricsStatusAfterHandler');
 end;
 
 procedure TestDecompressGzipBody;
@@ -3815,6 +3895,96 @@ begin
   Check(LCaught, 'WriteEvent negative retry raises hekArgument');
 end;
 
+procedure TestSSEWriteAfterCloseIsHekProtocol;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LCaught: Boolean;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.Close;
+  LCaught := False;
+  try
+    LWriter.WriteEventSimple('message', 'late', '');
+    Check(False, 'write after Close must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekProtocol) and (E.Op = 'sse');
+  end;
+  Check(LCaught, 'write after Close is hekProtocol Op=sse');
+end;
+
+procedure TestSSECloseIsIdempotent;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.Close;
+  Check(not LWriter.IsOpen, 'closed after first Close');
+  LWriter.Close;
+  Check(not LWriter.IsOpen, 'still closed after second Close');
+end;
+
+procedure TestSSEFlushesAfterEvent;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LFlushBefore: Int32;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LFlushBefore := LWObj.FlushCount;
+  LWriter.WriteEventSimple('message', 'hello', '');
+  Check(LWObj.FlushCount > LFlushBefore, 'WriteEvent flushes writer');
+  LFlushBefore := LWObj.FlushCount;
+  LWriter.WriteComment('ping');
+  Check(LWObj.FlushCount > LFlushBefore, 'WriteComment flushes writer');
+  LWriter.Close;
+end;
+
+procedure TestSSEWriteFailureIsHekProtocolOpSse;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LCaught: Boolean;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LWObj.SetRaiseOnWrite(True);
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LCaught := False;
+  try
+    LWriter.WriteEventSimple('message', 'x', '');
+    Check(False, 'write failure must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekProtocol) and (E.Op = 'sse');
+  end;
+  Check(LCaught, 'write failure is hekProtocol Op=sse');
+end;
+
+procedure TestSSEErrorsUseOpSse;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.sse.pas');
+  Check(Pos('SSE_OP = ''sse''', LSrc) > 0, 'SSE Op constant is sse');
+  Check(Pos('CreateOp(hekArgument, SSE_OP', LSrc) > 0,
+    'SSE argument failures use CreateOp');
+  Check(Pos('CreateOp(hekProtocol, SSE_OP', LSrc) > 0,
+    'SSE protocol failures use CreateOp');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -3920,6 +4090,10 @@ begin
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
   T.Test('Metrics: tracks request bytes', @TestMetricsTracksRequestBytes);
   T.Test('Metrics: tracks response bytes', @TestMetricsTracksResponseBytes);
+  T.Test('Metrics: records on handler exception', @TestMetricsRecordsOnHandlerException);
+  T.Test('Metrics: callback exception does not break request',
+    @TestMetricsCallbackExceptionDoesNotBreakRequest);
+  T.Test('Metrics: nil args use Op=metrics', @TestMetricsNilArgsUseOpMetrics);
   T.Test('Decompress: gzip body', @TestDecompressGzipBody);
   T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
   T.Test('Decompress: enforces output limit', @TestDecompressEnforcesOutputLimit);
@@ -3979,6 +4153,11 @@ begin
   T.Test('SSE: rejects field injection', @TestSSEEventWriterRejectsFieldInjection);
   T.Test('SSE: StartSSE(nil) is hekArgument', @TestSSEStartNilWriterRaisesHekArgument);
   T.Test('SSE: negative retry is hekArgument', @TestSSEWriteRetryNegativeRaisesHekArgument);
+  T.Test('SSE: write after Close is hekProtocol Op=sse', @TestSSEWriteAfterCloseIsHekProtocol);
+  T.Test('SSE: Close is idempotent', @TestSSECloseIsIdempotent);
+  T.Test('SSE: flushes after event/comment', @TestSSEFlushesAfterEvent);
+  T.Test('SSE: write failure is hekProtocol Op=sse', @TestSSEWriteFailureIsHekProtocolOpSse);
+  T.Test('SSE: errors use CreateOp Op=sse', @TestSSEErrorsUseOpSse);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

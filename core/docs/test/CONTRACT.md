@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.16
+**版本**：v8.17
 
 ---
 
@@ -394,6 +394,14 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.17 (2026-07-20) — SoftFail 完成度
+
+- **全消息**：最多 32 条 soft 消息 join 进 result（超出 `+N more`）
+- **Parallel / Subtest**：SoftFail 硬契约
+- **FailFast**：仅 soft 失败不 stop 套件
+- **SoftCheck**：Equal(string)、Contains、False
+- **HardFailed**：InternalFail 与 Soft 分离
 
 ### v8.16 (2026-07-20) — SoftFail opt-in（Go t.Error）
 

@@ -47,6 +47,9 @@ case "$GATES" in
       "net.async.dial tests/nextpas.core.net/test_net_async_dial"
       "async.kqueue_compile_gate tests/nextpas.core.async/test_async_kqueue_compile_gate"
       "async.kqueue_runtime_smoke tests/nextpas.core.async/test_async_kqueue_runtime_smoke"
+      "async.accept_connect_smoke tests/nextpas.core.async/test_async_accept_connect_smoke"
+      "net.async.udp tests/nextpas.core.net/test_net_async_udp"
+      "net.async.pool tests/nextpas.core.net/test_net_async_pool"
     )
     ;;
   kqueue-runtime)
@@ -59,6 +62,7 @@ case "$GATES" in
       "net.async.resolve tests/nextpas.core.net/test_net_async_resolve"
       "net.async.dial tests/nextpas.core.net/test_net_async_dial"
       "async.kqueue_compile_gate tests/nextpas.core.async/test_async_kqueue_compile_gate"
+      "async.accept_connect_smoke tests/nextpas.core.async/test_async_accept_connect_smoke"
     )
     ;;
   *)

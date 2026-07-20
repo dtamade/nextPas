@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.12
+**版本**：1.13
 
 ---
 
@@ -54,7 +54,7 @@ fs.pas           ← 门面 re-export
 - **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
 - **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
 - **[INV-13]** **文件锁（R23）**：绑定打开中的 `IFile` 句柄；`flkExclusive` 互斥，`flkShared` 可并存且与 exclusive 互斥；`TryLock` 仅「忙」返回 False（`PLATFORM_ERR_AGAIN`/`BUSY` 及 Win 锁占用码）；其它错误 raise；关闭/销毁后 OS 释放锁。Unix 为 **advisory** `flock`；Windows `LockFileEx` 整文件，语义平台相关；**不保证** NFS 可靠。仅经 `platform_file_lock|trylock|unlock`。
-- **[INV-14]** **文件监视（R25）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。单 path 监视；不保证跨平台事件字段完全一致。
+- **[INV-14]** **文件监视（R25+R29+R30）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。`Add`=单 path 非递归；**`AddTree`**=递归挂载目录树（不跟随 symlink 目录；运行时新建子目录 auto-add）。`TFsWatchEvent.Name` 在 L0 提供 Wd 时为 **base+name 路径**（多 path 可消歧）。**R30**：Linux 侧对单次 `read` 批内多事件保留 residual 缓冲，连续 `Poll` 不丢批内事件（对齐 fsnotify 队列意图）。kqueue 侧 `PLATFORM_WATCH_MAX_FDS=256`；Linux 受 `max_user_watches` 限制。Windows L0 仍可 UNSUPPORTED。
 
 ---
 
@@ -88,7 +88,7 @@ fs.pas           ← 门面 re-export
 
 test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
-**最后校准：2026-07-20**（suite 通过数以 `make test` 输出为准）。
+**最后校准：2026-07-20 R29**（suite 通过数以 `make test` 输出为准）。
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
@@ -98,7 +98,8 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | test_fs_idir | 7 | IDir 接口 |
 | test_fs_ifile | **21** | IFile + R23 Lock/TryLock/OpenLocked |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
-| **合计** | **6 个测试目录 / 244** | heaptrc 0 leak 为门禁 |
+| test_fs_watch | **12** | R29 AddTree + R30 burst queue |
+| **合计** | **7 个测试目录 / 255** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
@@ -121,3 +122,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.10 | R17 质量表；133 | Claude |
 | 2026-07-20 | 1.11 | R22 ENOSPC/ENOMEM→EResourceExhaustedError | Claude |
 | 2026-07-20 | 1.12 | R23 IFile.Lock/TryLock/Unlock + OpenLocked；INV-13 | Claude |
+| 2026-07-20 | 1.13 | R29 AddTree 递归监视 + Wd 路径消歧；INV-14；watch 11 | Claude |

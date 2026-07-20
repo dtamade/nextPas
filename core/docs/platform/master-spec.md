@@ -44,7 +44,8 @@ GHA **`ci-matrix`** for the **documented 21 platform gates** in
 | Count | Meaning |
 | --- | --- |
 | **21 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which` + iocp + poller + io/socket real. GHA run **29721371136** @ `0cb2471bc` (job `pass=22` with mem.host; which PASS). |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total=22` = 21 platform + mem.host — do **not** call mem.host a platform facade gate. |
+| **+dl candidate** | Batch-16: `platform.dl` in scripts only — **not** ci-matrix until GHA green. |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 22–23 — do **not** call mem.host (or unpromoted candidates) a platform facade promote. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for

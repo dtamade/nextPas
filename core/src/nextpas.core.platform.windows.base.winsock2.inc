@@ -106,6 +106,7 @@ const
   NI_NAMEREQD    = $08;
   NI_DGRAM       = $10;
 
+  WSAEMFILE          = 10024;
   WSAEWOULDBLOCK     = 10035;
   WSAEINPROGRESS     = 10036;
   WSAEALREADY        = 10037;

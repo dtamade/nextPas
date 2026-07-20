@@ -95,10 +95,13 @@ type
 procedure TWorkStealingPool.AcquireOwner(const AWorkerIndex: Integer);
 var
   LSpinCount: Int32;
+  LExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FOwnerLocks[AWorkerIndex], 0, 1, moAcquire) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(FOwnerLocks[AWorkerIndex], LExpected, 1, mo_acquire, mo_relaxed) do
   begin
+    LExpected := 0;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -109,7 +112,7 @@ end;
 
 procedure TWorkStealingPool.ReleaseOwner(const AWorkerIndex: Integer);
 begin
-  AtomicStore32(FOwnerLocks[AWorkerIndex], 0, moRelease);
+  atomic_store(FOwnerLocks[AWorkerIndex], 0, mo_release);
 end;
 
 function TWorkStealingPool.TryEnqueueSlot(const AWorkerIndex: Integer;

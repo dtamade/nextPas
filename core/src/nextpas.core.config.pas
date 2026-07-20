@@ -35,6 +35,13 @@ type
   TLookupSlotArray = array of Integer;
   TConfigFormat = (cfIni, cfJson, cfYaml, cfToml);
 
+  { Getter-time placeholder policy. Cycles always raise. }
+  TConfigInterpolationMode = (
+    cimDefault,   { optional: leave ${x}; Required: fail unresolved }
+    cimStrict,    { all resolving getters fail on unresolved }
+    cimDisabled   { no expansion; GetString acts like raw for values }
+  );
+
   EConfigError = class(EParseError);
 
   IConfig = interface
@@ -55,6 +62,7 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function GetInterpolationMode: TConfigInterpolationMode;
     function ToIni: string;
     function ToJson: string;
     function ToYaml: string;
@@ -74,6 +82,7 @@ type
     { Inline key/value overrides (CLI, maps, ad-hoc). Applied in chain order.
       AKeys and AValues must have the same length; empty keys raise EConfigError. }
     function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
+    function SetInterpolationMode(AMode: TConfigInterpolationMode): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
     function Build: IConfig;
     function BuildConfig: TConfig;
@@ -100,6 +109,7 @@ type
     FArrayCacheValid: Boolean;
     FInterpolationCacheValues: TStringArray;
     FInterpolationCacheValid: array of Boolean;
+    FInterpolationMode: TConfigInterpolationMode;
     FCount: Integer;
     procedure BuildArrayCacheLocked(const APrefix, ALowerPrefix: string);
     procedure ClearUnlocked;
@@ -183,10 +193,14 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    procedure SetInterpolationMode(AMode: TConfigInterpolationMode);
+    function GetInterpolationMode: TConfigInterpolationMode;
     property Count: Integer read GetCount;
   end;
 function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+{ Non-owning IConfig view. Keep AConfig alive while the interface is used. }
+function ConfigBorrow(AConfig: TConfig): IConfig;
 
 function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
 procedure AddString(var AItems: TStringArray; var ACount: Integer;

@@ -507,3 +507,28 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `IUdpSocketRuntime` exposes native fd for async layer.
 - Evidence: `test_net_async_udp` loopback + timeout + 0 leak.
 - Not: IPv6 UDP, multicast, connected UDP API, IOCP datagram.
+
+### Connection pool async acquire (Q16)
+- `IConnectionPool.AcquireAsync(host, port, cb, ctx, token?)`: prefer idle; else `AsyncTcpDial` (HE).
+- Requires `CreateConnectionPool(Loop[, Config])`; sync-only `CreateConnectionPool` → AcquireAsync returns False after reserving path without loop.
+- Idle keyed by host+port; `Release` returns to idle; `Discard` closes.
+- `ConnectTimeout` → dial `OverallDeadline`; optional `IAsyncCancellationToken`.
+- Evidence: `test_net_async_pool` dial / idle reuse / max connections, 0 leak.
+
+### Platform evidence deepen (Q17)
+- `test_async_accept_connect_smoke`: loopback dial via `AsyncTcpDial` on host poller (Linux epoll/io_uring; Darwin/FreeBSD kqueue; Windows skip).
+- `test_async_kqueue_runtime_smoke`: on Darwin/FreeBSD also runs accept+connect loopback; prints `kqueue-accept-connect-smoke=pass`.
+- `async-host-matrix` includes accept_connect + udp + pool entries.
+- Windows native: see `WINDOWS-NATIVE-ASSESSMENT.md` — **not** native-windows claim; wine-runtime-smoke remains IOCP evidence.
+
+### Same-host bench parity (Q18)
+- Script: `core/scripts/async-bench-parity.sh` runs `test_async_bench` + Go/Rust peer microbenches.
+- Peers: std channel/mutex/timer shapes — **not** TAsyncLoop clones; order-of-magnitude only.
+- truth=`same-host-order-of-magnitude`; **not CI-gating**; do not claim “faster than Go/Rust” from this table alone.
+- SCORECARD table updated from a 2026-07-20 host run.
+
+### Localhost dial bench (Q19)
+- `test_net_async_dial_bench`: sequential `AsyncTcpDial` → `metric=dial_ops_per_s` (localhost listener).
+- Go peer: `core/scripts/async-bench-parity/go-dial` (`net.DialTimeout`).
+- Included in `async-bench-parity.sh`; truth=`localhost-sequential-dial` — **not** public DNS / dual-stack HE RTT matrix.
+- Typical host: nextpas ~O(10¹) dial/s sequential HE path; go dial peer much higher (sync Dial, no event-loop per dial).

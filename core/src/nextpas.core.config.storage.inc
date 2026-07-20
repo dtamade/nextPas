@@ -13,6 +13,7 @@ begin
   FArrayCacheValid := False;
   SetLength(FInterpolationCacheValues, 0);
   SetLength(FInterpolationCacheValid, 0);
+  FInterpolationMode := cimDefault;
 end;
 
 destructor TConfig.Destroy;
@@ -172,6 +173,7 @@ var
   LIdx: Integer;
   LStack: TStringArray;
   LCacheable: Boolean;
+  LFailUnresolved: Boolean;
 begin
   FLock.AcquireRead;
   try
@@ -180,6 +182,12 @@ begin
     if not Result then
     begin
       AValue := '';
+      Exit;
+    end;
+
+    if FInterpolationMode = cimDisabled then
+    begin
+      AValue := FEntries[LIdx].Value;
       Exit;
     end;
 
@@ -199,12 +207,19 @@ begin
       Exit;
     end;
 
+    if FInterpolationMode = cimDisabled then
+    begin
+      AValue := FEntries[LIdx].Value;
+      Exit;
+    end;
+
     if TryGetResolvedEntryFastLocked(LIdx, AValue) then
       Exit;
 
+    LFailUnresolved := FInterpolationMode = cimStrict;
     LStack := nil;
     AValue := ResolveConfigEntryByIndexTracked(FEntries, FLowerKeys,
-      FLookupSlots, FCount, LIdx, LStack, False, '', LCacheable);
+      FLookupSlots, FCount, LIdx, LStack, LFailUnresolved, AKey, LCacheable);
     if LCacheable then
       StoreInterpolationCacheLocked(LIdx, AValue);
   finally
@@ -228,6 +243,12 @@ begin
       Exit;
     end;
 
+    if FInterpolationMode = cimDisabled then
+    begin
+      AValue := FEntries[LIdx].Value;
+      Exit;
+    end;
+
     if TryGetResolvedEntryFastLocked(LIdx, AValue) then
       Exit;
   finally
@@ -241,6 +262,12 @@ begin
     if not Result then
     begin
       AValue := '';
+      Exit;
+    end;
+
+    if FInterpolationMode = cimDisabled then
+    begin
+      AValue := FEntries[LIdx].Value;
       Exit;
     end;
 

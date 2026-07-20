@@ -45,6 +45,11 @@ type
     { Connection-scoped LocalArena: Reset per request, attach for handlers. }
     RequestArena: Boolean;
     RequestArenaCapacity: SizeUInt;
+    { PreferPollWorkerHandoff: when True, poll-owned path submits each completed
+      request to WorkerHandoff (legacy isolation). Default False = reactor-inline
+      handler execution for short-request scale (S1-1). Tests that assert handoff
+      must set True. }
+    PreferPollWorkerHandoff: Boolean;
   end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
@@ -97,17 +102,31 @@ type
     procedure SetCancelToken(const AToken: INetCancelToken);
   end;
 
+  { S2-2: body reader for fast-path snapshot (fixed-length, fully buffered). }
+  TH1FastSnapshotBodyReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPosition: SizeUInt;
+    FSize: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   TH1FastRequestSnapshot = class(TInterfacedObject, IH1Parser)
   private
     FMethod: THttpMethod;
     FUrl: string;
     FVersion: THttpVersion;
     FHeaders: IHttpHeaders;
+    FBody: TBytes;
     FBodySize: Int64;
     FComplete: Boolean;
     FRequestMetadata: TH1RequestMetadata;
   public
-    constructor Create(const AResult: TFastParseResult);
+    { ABuf is the same buffer FastParseRequest scanned; used to copy a complete
+      fixed-length body into the snapshot when ContentLength > 0. }
+    constructor Create(const AResult: TFastParseResult; const ABuf: PAnsiChar);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure Finish;
     function GetMethod: THttpMethod;
@@ -252,6 +271,11 @@ type
     FPollQueuedOutbound: IH1OutboundBuffer;
     FPollQueuedResponsePending: Boolean;
     FPollQueuedCloseAfterDrain: Boolean;
+    { S2-1: connection-scoped outbound buffer free-list (depth matches poll
+      active+queued responses). Avoids NewH1OutboundBuffer per keep-alive
+      request on the hot path. }
+    FSpareOutbound0: IH1OutboundBuffer;
+    FSpareOutbound1: IH1OutboundBuffer;
     FPollReadDeadline: TDeadline;
     FPollReadDeadlineIsIdle: Boolean;
     FPollWriteDeadline: TDeadline;
@@ -274,6 +298,8 @@ type
     procedure PreparePollKeepAliveRequestParse;
     procedure ResetPollResponseState;
     procedure PromoteQueuedPollResponse;
+    function AcquireOutboundBuffer: IH1OutboundBuffer;
+    procedure ReleaseOutboundBuffer(var AOutbound: IH1OutboundBuffer);
     function EnqueuePollResponse(const AOutbound: IH1OutboundBuffer;
       const ACloseAfterDrain: Boolean): Boolean;
     function CanParseBufferedPollRequestWhileDraining: Boolean;
@@ -756,9 +782,35 @@ begin
   FInner.SetCancelToken(AToken);
 end;
 
+{ TH1FastSnapshotBodyReader }
+
+constructor TH1FastSnapshotBodyReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPosition := 0;
+  FSize := SizeUInt(Length(AData));
+end;
+
+function TH1FastSnapshotBodyReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  if (ACount = 0) or (FPosition >= FSize) then
+    Exit(0);
+  LAvailable := FSize - FPosition;
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  Move(FData[FPosition], ABuf, Result);
+  Inc(FPosition, Result);
+end;
+
 { TH1FastRequestSnapshot }
 
-constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult);
+constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult;
+  const ABuf: PAnsiChar);
 begin
   inherited Create;
   FMethod := AResult.Method;
@@ -766,6 +818,12 @@ begin
   FVersion := AResult.Version;
   FHeaders := AResult.Headers;
   FBodySize := AResult.ContentLength;
+  SetLength(FBody, 0);
+  if (AResult.ContentLength > 0) and (ABuf <> nil) then
+  begin
+    SetLength(FBody, AResult.ContentLength);
+    Move(ABuf[AResult.BodyStart], FBody[0], AResult.ContentLength);
+  end;
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
@@ -817,7 +875,9 @@ end;
 
 function TH1FastRequestSnapshot.GetBody: string;
 begin
-  Result := '';
+  if Length(FBody) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@FBody[0]), Length(FBody));
 end;
 
 function TH1FastRequestSnapshot.GetBodySize: Int64;
@@ -827,7 +887,9 @@ end;
 
 function TH1FastRequestSnapshot.NewBodyReader: IReader;
 begin
-  Result := nil;
+  if Length(FBody) = 0 then
+    Exit(nil);
+  Result := TH1FastSnapshotBodyReader.Create(FBody);
 end;
 
 function TH1FastRequestSnapshot.HeadersComplete: Boolean;
@@ -1087,6 +1149,8 @@ begin
   FPollQueuedOutbound := nil;
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
+  FSpareOutbound0 := nil;
+  FSpareOutbound1 := nil;
   FPollReadDeadline := TDeadline.Infinite;
   FPollReadDeadlineIsIdle := False;
   FPollWriteDeadline := TDeadline.Infinite;
@@ -1094,6 +1158,39 @@ begin
   FRequestCount := 0;
   if FStreamRuntime <> nil then
     ArmPollRequestReadDeadline;
+end;
+
+function TH1ServerConnectionState.AcquireOutboundBuffer: IH1OutboundBuffer;
+begin
+  if FSpareOutbound0 <> nil then
+  begin
+    Result := FSpareOutbound0;
+    FSpareOutbound0 := nil;
+    Result.Reset;
+    Exit;
+  end;
+  if FSpareOutbound1 <> nil then
+  begin
+    Result := FSpareOutbound1;
+    FSpareOutbound1 := nil;
+    Result.Reset;
+    Exit;
+  end;
+  Result := NewH1OutboundBuffer;
+end;
+
+procedure TH1ServerConnectionState.ReleaseOutboundBuffer(
+  var AOutbound: IH1OutboundBuffer);
+begin
+  if AOutbound = nil then
+    Exit;
+  AOutbound.Reset;
+  if FSpareOutbound0 = nil then
+    FSpareOutbound0 := AOutbound
+  else if FSpareOutbound1 = nil then
+    FSpareOutbound1 := AOutbound;
+  { If both spares are full, drop — refcount frees the buffer. }
+  AOutbound := nil;
 end;
 
 procedure TH1ServerConnectionState.InvokeHandler(const AReq: IHttpRequest;
@@ -1151,6 +1248,9 @@ end;
 
 function TH1ServerConnectionState.TryUseFastRequestParser(const ABuf: PAnsiChar;
   const ALen: SizeUInt; out AConsumed: SizeUInt): Boolean;
+const
+  { Cap body copy into snapshot; larger/streamed bodies stay on llhttp. }
+  FAST_PATH_MAX_BODY = 65536;
 var
   LFast: TFastParseResult;
 begin
@@ -1166,8 +1266,11 @@ begin
      (LFast.Consumed > ALen) then
     Exit(False);
 
+  { S2-2: fixed-length body allowed when fully buffered and within cap.
+    Still reject Expect / Transfer-Encoding / host policy / connection close. }
   if (LFast.Version <> hvHttp11) or
-     (LFast.ContentLength <> 0) or
+     (LFast.ContentLength < 0) or
+     (LFast.ContentLength > FAST_PATH_MAX_BODY) or
      (not LFast.HasHost) or
      LFast.HostRepeated or
      LFast.HasExpect or
@@ -1180,7 +1283,7 @@ begin
       LFast.ConnectionUnsupported) then
     Exit(False);
 
-  FParser := TH1FastRequestSnapshot.Create(LFast);
+  FParser := TH1FastRequestSnapshot.Create(LFast, ABuf);
   FParserIsSnapshot := True;
   AConsumed := LFast.Consumed;
   Result := True;
@@ -1220,10 +1323,10 @@ end;
 
 procedure TH1ServerConnectionState.ResetPollResponseState;
 begin
-  FPollOutbound := nil;
+  ReleaseOutboundBuffer(FPollOutbound);
   FPollResponsePending := False;
   FPollCloseAfterDrain := False;
-  FPollQueuedOutbound := nil;
+  ReleaseOutboundBuffer(FPollQueuedOutbound);
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
   FPollWriteDeadline := TDeadline.Infinite;
@@ -1287,9 +1390,11 @@ function TH1ServerConnectionState.QueuePollErrorResponse(
 var
   LOutbound: IH1OutboundBuffer;
 begin
-  LOutbound := NewH1OutboundBuffer;
+  LOutbound := AcquireOutboundBuffer;
   WriteErrorResponseToWriter(LOutbound as IWriter, AStatus);
   Result := EnqueuePollResponse(LOutbound, True);
+  if not Result then
+    ReleaseOutboundBuffer(LOutbound);
 end;
 
 procedure TH1ServerConnectionState.ApplyPollRequestResult(
@@ -1299,7 +1404,10 @@ begin
     Exit;
 
   if not EnqueuePollResponse(AWork.Outbound, AWork.CloseAfterDrain) then
+  begin
+    { Work object still holds the buffer; drop via work refcount. Keep-alive off. }
     FKeepAlive := False;
+  end;
 end;
 
 procedure TH1ServerConnectionState.ArmPollWriteDeadline;
@@ -1385,7 +1493,7 @@ begin
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
-    LOutbound := NewH1OutboundBuffer;
+    LOutbound := AcquireOutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
@@ -1401,6 +1509,8 @@ begin
       Result := tscoHandler;
       FKeepAlive := False;
       FConn.SetReadDeadline(TDeadline.Infinite);
+      { Hijack owns the connection; outbound buffer is not reused. }
+      LOutbound := nil;
       Exit;
     end;
 
@@ -1408,6 +1518,7 @@ begin
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
+    ReleaseOutboundBuffer(LOutbound);
 
   except
     on E: Exception do
@@ -1429,6 +1540,7 @@ begin
         except
         end;
       end;
+      ReleaseOutboundBuffer(LOutbound);
       FKeepAlive := False;
     end;
   end;
@@ -1467,7 +1579,7 @@ begin
 
     if HasHttp11HostPolicyError(FParser) then
     begin
-      LOutbound := NewH1OutboundBuffer;
+      LOutbound := AcquireOutboundBuffer;
       WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);
       AOutbound := LOutbound;
       ACloseAfterDrain := True;
@@ -1496,7 +1608,7 @@ begin
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
-    LOutbound := NewH1OutboundBuffer;
+    LOutbound := AcquireOutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
@@ -1511,6 +1623,9 @@ begin
     begin
       Result := tscoHandler;
       FKeepAlive := False;
+      { Hijack owns the connection; do not recycle this outbound buffer. }
+      LOutbound := nil;
+      AOutbound := nil;
       Exit;
     end;
 
@@ -1522,12 +1637,16 @@ begin
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-        Result := tscoHandler
+      begin
+        Result := tscoHandler;
+        LOutbound := nil;
+        AOutbound := nil;
+      end
       else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
       begin
         if LOutbound = nil then
         begin
-          LOutbound := NewH1OutboundBuffer;
+          LOutbound := AcquireOutboundBuffer;
           LResponseWriter := LOutbound as IWriter;
         end;
         try
@@ -1536,6 +1655,7 @@ begin
           AOutbound := LOutbound;
           ACloseAfterDrain := True;
         except
+          ReleaseOutboundBuffer(LOutbound);
           AOutbound := nil;
           ACloseAfterDrain := False;
         end;
@@ -1776,11 +1896,22 @@ var
   LHandoffResult: TTcpServerHandoffResult;
   LOutbound: IH1OutboundBuffer;
   LCloseAfterDrain: Boolean;
+  LInlineOnReactor: Boolean;
 begin
   AOwnership := tscoServer;
   ClearPollReadDeadline;
 
-  if FWorkerHandoff = nil then
+  { S1-1: Prefer reactor-inline handler execution when poll owns response drain
+    and PreferPollWorkerHandoff is False (production default).
+    Multi-conn keep-alive on epoll was ~0.59x Go while threaded was ~3.3x Go —
+    per-request WorkerHandoff (pool submit + completion wake) dominated short
+    request cost. Inline removes that tax.
+
+    Tradeoff: a blocking handler stalls the readiness reactor. PreferPollWorkerHandoff
+    restores legacy isolation for tests / long-handler deployments. }
+  LInlineOnReactor := (FWorkerHandoff = nil) or
+    (UsePollOwnedResponseDrain and (not FOptions.PreferPollWorkerHandoff));
+  if LInlineOnReactor then
   begin
     if FSocketRuntime <> nil then
       FSocketRuntime.SetBlocking(True);
@@ -1924,7 +2055,7 @@ begin
         if FPollOutbound.IsEmpty then
         begin
           LCloseAfterDrain := FPollCloseAfterDrain;
-          FPollOutbound := nil;
+          ReleaseOutboundBuffer(FPollOutbound);
           FPollResponsePending := False;
           FPollCloseAfterDrain := False;
           FPollWriteDeadline := TDeadline.Infinite;
