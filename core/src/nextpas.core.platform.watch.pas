@@ -830,13 +830,49 @@ var
   LHandles: array[0..PLATFORM_WATCH_WIN_MAX - 1] of HANDLE;
   LMap: array[0..PLATFORM_WATCH_WIN_MAX - 1] of Int32;
   LOvl: LPOVERLAPPED;
-  LSlot: ^TPlatformWinWatchSlot;
+  LErr: DWORD;
+
+  function FinishCompletedSlot(ASlotIdx: Int32): Int32;
+  var
+    S: ^TPlatformWinWatchSlot;
+    B: DWORD;
+    O: LPOVERLAPPED;
+    A: Int32;
+  begin
+    S := @AWatcher.Slots[ASlotIdx];
+    O := WinWatchSlotOvl(S^);
+    B := 0;
+    if not GetOverlappedResult(HANDLE(S^.DirHandle), O, @B, False) then
+      Exit(WinWatchMapSlotIoError(S^));
+    S^.Pending := False;
+    S^.PendLen := Int32(B);
+    S^.PendPos := 0;
+    if not WinWatchDecodeSlot(S^, ASlotIdx + 1, AEvent) then
+    begin
+      S^.PendLen := 0;
+      S^.PendPos := 0;
+      A := WinWatchArmSlot(S^);
+      if A <> 0 then
+        Exit(A);
+      Exit(0);
+    end;
+    if S^.PendPos >= S^.PendLen then
+    begin
+      S^.PendLen := 0;
+      S^.PendPos := 0;
+      A := WinWatchArmSlot(S^);
+      if A <> 0 then
+        Exit(A);
+    end;
+    Result := 1;
+  end;
+
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
   if AWatcher.IsInvalid then
     Exit(PLATFORM_ERR_INVALID);
 
-  { Drain residual on any active slot first. }
+  { Drain residual multi-record batch on any slot. }
   for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
     if AWatcher.Slots[I].Active and
        (AWatcher.Slots[I].PendPos < AWatcher.Slots[I].PendLen) then
@@ -847,7 +883,45 @@ begin
       AWatcher.Slots[I].PendLen := 0;
     end;
 
-  { Re-arm slots that are not pending and have no residual. }
+  { Collect already-completed I/O without waiting (post-timeout harvest). }
+  for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
+    if AWatcher.Slots[I].Active and AWatcher.Slots[I].Pending then
+    begin
+      LOvl := WinWatchSlotOvl(AWatcher.Slots[I]);
+      LBytes := 0;
+      if GetOverlappedResult(HANDLE(AWatcher.Slots[I].DirHandle), LOvl, @LBytes, False) then
+      begin
+        AWatcher.Slots[I].Pending := False;
+        AWatcher.Slots[I].PendLen := Int32(LBytes);
+        AWatcher.Slots[I].PendPos := 0;
+        if WinWatchDecodeSlot(AWatcher.Slots[I], I + 1, AEvent) then
+        begin
+          if AWatcher.Slots[I].PendPos >= AWatcher.Slots[I].PendLen then
+          begin
+            AWatcher.Slots[I].PendLen := 0;
+            AWatcher.Slots[I].PendPos := 0;
+            LArm := WinWatchArmSlot(AWatcher.Slots[I]);
+            if LArm <> 0 then
+              Exit(LArm);
+          end;
+          Exit(1);
+        end;
+        AWatcher.Slots[I].PendLen := 0;
+        AWatcher.Slots[I].PendPos := 0;
+        LArm := WinWatchArmSlot(AWatcher.Slots[I]);
+        if LArm <> 0 then
+          Exit(LArm);
+      end
+      else
+      begin
+        LErr := GetLastError;
+        { ERROR_IO_INCOMPLETE = 996: still pending — keep waiting. }
+        if LErr <> 996 then
+          Exit(WinWatchMapSlotIoError(AWatcher.Slots[I]));
+      end;
+    end;
+
+  { Re-arm idle active slots. }
   for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
     if AWatcher.Slots[I].Active and (not AWatcher.Slots[I].Pending) and
        (AWatcher.Slots[I].PendLen = 0) then
@@ -887,35 +961,7 @@ begin
     Exit(platform_get_last_error);
 
   LIdx := Int32(LWait - WAIT_OBJECT_0);
-  I := LMap[LIdx];
-  LSlot := @AWatcher.Slots[I];
-  LOvl := WinWatchSlotOvl(LSlot^);
-  LBytes := 0;
-  if not GetOverlappedResult(HANDLE(LSlot^.DirHandle), LOvl, @LBytes, False) then
-    Exit(WinWatchMapSlotIoError(LSlot^));
-  LSlot^.Pending := False;
-  LSlot^.PendLen := Int32(LBytes);
-  LSlot^.PendPos := 0;
-
-  if not WinWatchDecodeSlot(LSlot^, I + 1, AEvent) then
-  begin
-    LSlot^.PendLen := 0;
-    LSlot^.PendPos := 0;
-    LArm := WinWatchArmSlot(LSlot^);
-    if LArm <> 0 then
-      Exit(LArm);
-    Exit(0);
-  end;
-
-  if LSlot^.PendPos >= LSlot^.PendLen then
-  begin
-    LSlot^.PendLen := 0;
-    LSlot^.PendPos := 0;
-    LArm := WinWatchArmSlot(LSlot^);
-    if LArm <> 0 then
-      Exit(LArm);
-  end;
-  Result := 1;
+  Result := FinishCompletedSlot(LMap[LIdx]);
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
