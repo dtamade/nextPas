@@ -136,6 +136,8 @@ Related earlier landings:
 
 Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-1…H3-5 complete → Maintenance.**
 
+**H4 open (not implemented)**: [`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md) — `thread.pool` Submit → T1 MPSC. Implement only after explicit **H4-1 implement approved**.
+
 ### Still forbidden without major-change discussion
 
 - **Closed** semantics change
