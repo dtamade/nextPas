@@ -11,7 +11,8 @@ uses
   nextpas.core.config;
 
 function ConfigBuilder: IConfigBuilder;
-function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
+function ConfigLoad(const APath: string): IConfig; overload;
 function ConfigBorrow(AConfig: TConfig): IConfig;
 
 implementation
@@ -128,7 +129,8 @@ type
     function AddYaml(const AContent: string): IConfigBuilder;
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
-    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder; overload;
+    function AddFile(const APath: string): IConfigBuilder; overload;
     function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
     function SetInterpolationMode(AMode: TConfigInterpolationMode): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
@@ -543,6 +545,17 @@ begin
   Result := Self;
 end;
 
+function TConfigBuilderImpl.AddFile(const APath: string): IConfigBuilder;
+var
+  LFormat: TConfigFormat;
+begin
+  RequireConfigFilePath(APath);
+  if not TryDetectConfigFormat(APath, LFormat) then
+    raise EConfigError.Create(
+      'AddFile: cannot detect config format from path: ' + APath);
+  Result := AddFile(APath, LFormat);
+end;
+
 function TConfigBuilderImpl.AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
 var
   LI: Integer;
@@ -616,6 +629,11 @@ end;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
   Result := ConfigBuilder.AddFile(APath, AFormat).Build;
+end;
+
+function ConfigLoad(const APath: string): IConfig;
+begin
+  Result := ConfigBuilder.AddFile(APath).Build;
 end;
 
 function ConfigBorrow(AConfig: TConfig): IConfig;

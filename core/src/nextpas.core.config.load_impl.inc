@@ -46,6 +46,17 @@ begin
   LoadConfigFileByFormat(Self, APath, AFormat);
 end;
 
+procedure TConfig.LoadFromFile(const APath: string);
+var
+  LFormat: TConfigFormat;
+begin
+  RequireConfigFilePath(APath);
+  if not TryDetectConfigFormat(APath, LFormat) then
+    raise EConfigError.Create(
+      'cannot detect config format from path: ' + APath);
+  LoadFromFile(APath, LFormat);
+end;
+
 function TConfig.TryLoadFromIni(const AContent: string; out AError: string): Boolean;
 var
   LIni: TIniFile;
@@ -181,6 +192,25 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function TConfig.TryLoadFromFile(const APath: string; out AError: string): Boolean;
+var
+  LFormat: TConfigFormat;
+begin
+  AError := '';
+  if APath = '' then
+  begin
+    AError := ConfigFilePathEmptyError;
+    Exit(False);
+  end;
+  if not TryDetectConfigFormat(APath, LFormat) then
+  begin
+    AError := FormatConfigFileLoadError(APath,
+      'cannot detect config format from path extension');
+    Exit(False);
+  end;
+  Result := TryLoadFromFile(APath, LFormat, AError);
 end;
 
 function TConfig.TryLoadJson(const AContent: string; out AError: string): Boolean;

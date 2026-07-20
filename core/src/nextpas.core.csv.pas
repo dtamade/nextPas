@@ -9,9 +9,11 @@ unit nextpas.core.csv;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.io.intf,
   nextpas.core.mem.intf,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TStringArray = array of string;
@@ -52,11 +54,20 @@ type
   public
     procedure Init(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
-      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil);
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil); overload;
+    { Read all bytes from AReader (Go encoding/csv Reader shape), then parse. }
+    procedure Init(const AReader: IReader; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil); overload;
     procedure Done;
     class function Create(const AInput: string; ADelimiter: AnsiChar = ',';
       AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
       AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil): TCsvReader; static;
+      overload;
+    class function Create(const AReader: IReader; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0; const AAllocator: TMemAllocator = nil): TCsvReader; static;
+      overload;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
@@ -95,8 +106,16 @@ function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator;
 implementation
 
 uses
+  nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
+
+function CsvBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 type
   PStringSlot = ^string;
@@ -252,6 +271,27 @@ class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
   const AAllocator: TMemAllocator): TCsvReader;
 begin
   Result.Init(AInput, ADelimiter, AFieldsPerRecord, ATrimSpace, AComment,
+    AAllocator);
+end;
+
+procedure TCsvReader.Init(const AReader: IReader; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: TMemAllocator);
+var
+  LBytes: TBytes;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('TCsvReader.Init: reader must not be nil');
+  LBytes := IoReadAll(AReader);
+  Init(CsvBytesToString(LBytes), ADelimiter, AFieldsPerRecord, ATrimSpace,
+    AComment, AAllocator);
+end;
+
+class function TCsvReader.Create(const AReader: IReader; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar;
+  const AAllocator: TMemAllocator): TCsvReader;
+begin
+  Result.Init(AReader, ADelimiter, AFieldsPerRecord, ATrimSpace, AComment,
     AAllocator);
 end;
 

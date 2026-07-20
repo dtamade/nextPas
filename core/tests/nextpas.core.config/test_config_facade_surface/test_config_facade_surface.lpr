@@ -189,6 +189,85 @@ begin
   end;
 end;
 
+procedure TestFacadeExposesAutoDetectFormat;
+var
+  LJsonPath, LIniPath, LUnknownPath: string;
+  LSnapshot: IConfig;
+  LMutable: TConfig;
+  LFormat: TConfigFormat;
+  LError: string;
+  LRaised: Boolean;
+begin
+  CheckEqual(True, TryDetectConfigFormat('app.json', LFormat),
+    'detect .json');
+  CheckEqual(Ord(cfJson), Ord(LFormat), 'detect maps json');
+  CheckEqual(True, TryDetectConfigFormat('app.YAML', LFormat),
+    'detect .YAML case-insensitive');
+  CheckEqual(Ord(cfYaml), Ord(LFormat), 'detect maps yaml');
+  CheckEqual(True, TryDetectConfigFormat('cfg.yml', LFormat),
+    'detect .yml');
+  CheckEqual(Ord(cfYaml), Ord(LFormat), 'detect maps yml to yaml');
+  CheckEqual(True, TryDetectConfigFormat('a.toml', LFormat),
+    'detect .toml');
+  CheckEqual(Ord(cfToml), Ord(LFormat), 'detect maps toml');
+  CheckEqual(True, TryDetectConfigFormat('a.ini', LFormat),
+    'detect .ini');
+  CheckEqual(Ord(cfIni), Ord(LFormat), 'detect maps ini');
+  CheckEqual(False, TryDetectConfigFormat('a.txt', LFormat),
+    'unknown extension rejected');
+  CheckEqual(False, TryDetectConfigFormat('noext', LFormat),
+    'missing extension rejected');
+
+  LJsonPath := FacadeTempPath('test_nextpas_config_autodetect', '.json');
+  LIniPath := FacadeTempPath('test_nextpas_config_autodetect', '.ini');
+  LUnknownPath := FacadeTempPath('test_nextpas_config_autodetect', '.txt');
+  RemoveIfExists(LJsonPath);
+  RemoveIfExists(LIniPath);
+  RemoveIfExists(LUnknownPath);
+  WriteFileText(LJsonPath, '{"server":{"host":"auto-json"}}');
+  WriteFileText(LIniPath, '[server]' + #10 + 'host=auto-ini' + #10);
+  WriteFileText(LUnknownPath, 'host=x' + #10);
+  try
+    LSnapshot := ConfigLoad(LJsonPath);
+    CheckEqual('auto-json', LSnapshot.GetString('server.host'),
+      'ConfigLoad auto-detects json extension');
+
+    LSnapshot := ConfigBuilder.AddFile(LIniPath).Build;
+    CheckEqual('auto-ini', LSnapshot.GetString('server.host'),
+      'AddFile auto-detects ini extension');
+
+    LMutable := TConfig.Create;
+    try
+      LMutable.LoadFromFile(LJsonPath);
+      CheckEqual('auto-json', LMutable.GetString('server.host'),
+        'TConfig.LoadFromFile auto-detects extension');
+      CheckEqual(True, LMutable.TryLoadFromFile(LIniPath, LError),
+        'TryLoadFromFile auto-detect succeeds');
+      CheckEqual('auto-ini', LMutable.GetString('server.host'),
+        'TryLoadFromFile auto-detect loads ini');
+      CheckEqual(False, LMutable.TryLoadFromFile(LUnknownPath, LError),
+        'TryLoadFromFile rejects unknown extension');
+      Check(Pos('detect', LError) > 0,
+        'unknown-extension error mentions detect');
+    finally
+      LMutable.Free;
+    end;
+
+    LRaised := False;
+    try
+      ConfigLoad(LUnknownPath);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'ConfigLoad unknown extension raises EConfigError');
+  finally
+    RemoveIfExists(LJsonPath);
+    RemoveIfExists(LIniPath);
+    RemoveIfExists(LUnknownPath);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config (facade surface)');
   T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
@@ -200,5 +279,7 @@ begin
     @TestFacadeExposesKeyValuesSurface);
   T.Test('facade exposes configload and direct mutable surface',
     @TestFacadeExposesConfigLoadAndDirectMutableSurface);
+  T.Test('facade exposes auto-detect format',
+    @TestFacadeExposesAutoDetectFormat);
   if not T.Run then Halt(1);
 end.

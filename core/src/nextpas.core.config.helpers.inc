@@ -183,6 +183,47 @@ begin
     (Ord(AFormat) <= Ord(High(TConfigFormat)));
 end;
 
+function AsciiLowerExt(const AExt: string): string;
+var
+  LI: Integer;
+begin
+  Result := AExt;
+  for LI := 1 to Length(Result) do
+    if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+      Result[LI] := Chr(Ord(Result[LI]) + 32);
+end;
+
+function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+var
+  LExt: string;
+begin
+  Result := False;
+  AFormat := cfIni;
+  if APath = '' then
+    Exit;
+  LExt := AsciiLowerExt(PathExt(APath));
+  if LExt = '.ini' then
+  begin
+    AFormat := cfIni;
+    Exit(True);
+  end;
+  if LExt = '.json' then
+  begin
+    AFormat := cfJson;
+    Exit(True);
+  end;
+  if (LExt = '.yaml') or (LExt = '.yml') then
+  begin
+    AFormat := cfYaml;
+    Exit(True);
+  end;
+  if LExt = '.toml' then
+  begin
+    AFormat := cfToml;
+    Exit(True);
+  end;
+end;
+
 function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
 var
   LI: Integer;
