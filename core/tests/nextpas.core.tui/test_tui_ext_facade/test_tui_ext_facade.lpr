@@ -290,6 +290,27 @@ begin
   end;
 end;
 
+procedure TestExtSplitPaneSurface;
+var
+  LSplit: ISplitPane;
+  LState: TSplitPaneState;
+  LArea, LPane1, LPane2, LDiv: TRect;
+  LBuf: TBuffer;
+begin
+  LSplit := TSplitPane.Horizontal.WithMinSize1(2).WithMinSize2(2);
+  Check(LSplit <> nil, 'ext exposes TSplitPane');
+  LState := TSplitPaneState.Default;
+  LArea := TRect.Make(0, 0, 40, 20);
+  Check(LSplit.Split(LArea, LState, LPane1, LPane2, LDiv), 'split ok');
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LSplit.RenderDivider(LDiv, LBuf);
+    Check(True, 'split_pane divider via ext');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
@@ -307,5 +328,6 @@ begin
   T.Test('ext scrollview surface', @TestExtScrollViewSurface);
   T.Test('ext modal surface', @TestExtModalSurface);
   T.Test('ext dialog surface', @TestExtDialogSurface);
+  T.Test('ext split_pane surface', @TestExtSplitPaneSurface);
   if not T.Run then Halt(1);
 end.
