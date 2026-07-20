@@ -65,7 +65,7 @@
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 | File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
-| File watch | fsnotify / notify | **Watch / AddTree / IFsWatcher** | Done（R25+R29；Unix 递归；Win L0 UNSUPPORTED） |
+| File watch | fsnotify / notify | **Watch / AddTree / Remove / IFsWatcher** | Done（R25–R32；Unix；Win L0 UNSUPPORTED） |
 | Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done（R24-PG；Unix；Win UNSUPPORTED） |
 
 ### path
@@ -101,7 +101,7 @@
 | test_process_command | **21** cases（原 48 Check 行） | **nextpas.core.test** |
 | test_process_deep / pipe | **27** / **17** | nextpas.core.test |
 | test_fs | **158** | nextpas.core.test |
-| test_fs_watch | **12** | nextpas.core.test（R29 AddTree + R30 burst） |
+| test_fs_watch | **13** | nextpas.core.test（R32 Remove） |
 | test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 | nextpas.core.test |
 | test_path | **70** | nextpas.core.test（R31 边界表） |
 | test_os_env | **70** | nextpas.core.test（R31 Expand/Keys） |
@@ -170,3 +170,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | R29 IFsWatcher.AddTree 递归 + Wd 路径消歧；Scale 9.8；watch 11 |
 | 2026-07-20 | R30 Linux inotify residual queue；burst 不丢；Quality 9.7；watch 12 |
 | 2026-07-20 | R31 path/env 边界表 70/70 + SCORECARD 重测 + Destroy 100µs；Quality 9.8 |
+| 2026-07-20 | R32 IFsWatcher.Remove + platform_watch_remove；watch 13 |

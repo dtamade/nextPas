@@ -23,6 +23,9 @@ type
     {** Recursive directory tree (Unix; Win may raise UNSUPPORTED via L0).
      *  Does not follow symlink directories. Auto-adds new subdirs under tree. *}
     procedure AddTree(const ARoot: string);
+    {** Stop watching a path previously Add/AddTree'd (Go fsnotify.Remove).
+     *  Path not watched: no-op. *}
+    procedure Remove(const APath: string);
     { True=event; False=timeout. Other errors raise. }
     function Poll(out AEvent: TFsWatchEvent; const ATimeout: TDuration): Boolean;
     procedure Close;
@@ -59,7 +62,7 @@ type
     procedure EnsureOpen;
     procedure RegisterWatch(const APath: string; const ARecursive: Boolean);
     function FindByWd(const AWd: Int32; out AIndex: Integer): Boolean;
-    function FindByPath(const APath: string): Boolean;
+    function FindByPath(const APath: string; out AIndex: Integer): Boolean;
     procedure QualifyName(const AWd: Int32; const ABaseName: string;
       out AFull: string);
   public
@@ -67,6 +70,7 @@ type
     destructor Destroy; override;
     procedure Add(const APath: string);
     procedure AddTree(const ARoot: string);
+    procedure Remove(const APath: string);
     function Poll(out AEvent: TFsWatchEvent; const ATimeout: TDuration): Boolean;
     procedure Close;
   end;
@@ -116,13 +120,18 @@ begin
   Result := False;
 end;
 
-function TFsWatcher.FindByPath(const APath: string): Boolean;
+function TFsWatcher.FindByPath(const APath: string;
+  out AIndex: Integer): Boolean;
 var
   I: Integer;
 begin
   for I := 0 to High(FEntries) do
     if FEntries[I].Path = APath then
+    begin
+      AIndex := I;
       Exit(True);
+    end;
+  AIndex := -1;
   Result := False;
 end;
 
@@ -131,8 +140,9 @@ procedure TFsWatcher.RegisterWatch(const APath: string;
 var
   LCode: Int32;
   LIdx: Integer;
+  LUnused: Integer;
 begin
-  if FindByPath(APath) then
+  if FindByPath(APath, LUnused) then
     Exit;
   LCode := platform_watch_add(FWatcher, PAnsiChar(APath));
   if LCode < 0 then
@@ -211,6 +221,24 @@ begin
       LStack[LTop] := LChild;
     end;
   end;
+end;
+
+procedure TFsWatcher.Remove(const APath: string);
+var
+  LIdx, I: Integer;
+  LErr: Int32;
+begin
+  EnsureOpen;
+  if APath = '' then
+    raise EArgumentError.Create('watch path must not be empty');
+  if not FindByPath(APath, LIdx) then
+    Exit; { not watched — no-op, align fsnotify soft remove }
+  LErr := platform_watch_remove(FWatcher, FEntries[LIdx].Wd);
+  if LErr <> 0 then
+    RaiseFsError(LErr, 'watch_remove', APath);
+  for I := LIdx to High(FEntries) - 1 do
+    FEntries[I] := FEntries[I + 1];
+  SetLength(FEntries, Length(FEntries) - 1);
 end;
 
 function TFsWatcher.Poll(out AEvent: TFsWatchEvent;
