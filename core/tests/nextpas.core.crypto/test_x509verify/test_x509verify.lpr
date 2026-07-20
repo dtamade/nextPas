@@ -7,7 +7,7 @@ uses
   nextpas.core.tls.x509,
   nextpas.core.time,
   nextpas.core.tls.cert.utils,
-  nextpas.core.crypto.x509verify,
+  nextpas.core.tls.x509verify,
   nextpas.core.test;
 
 var
@@ -154,7 +154,7 @@ begin
     finally LStore.Free; LCert.Free; end;
   end);
 
-  LRunner := TSuiteRunner.Create('nextpas.core.crypto.x509verify');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.x509verify');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

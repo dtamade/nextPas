@@ -26,7 +26,7 @@ function TryRSAES_PKCS1v15_Encrypt(
 implementation
 
 uses
-  nextpas.core.tls.random,
+  nextpas.core.crypto.random,
   nextpas.core.crypto.bigint;
 
 function TryRSAES_PKCS1v15_Encode(
