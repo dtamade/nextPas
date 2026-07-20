@@ -1,5 +1,9 @@
 # fafafa.ssl 目标树（项目总控地图）
 
+> **SUPERSEDED / HISTORICAL (2026-07-20)**
+> 当前权威：`docs/tls/OWNERSHIP.md`、`docs/tls/VERIFY.md`、`core/docs/tls/CONTRACT.md`。
+> 本文件保留为历史里程碑参考，不再作为实施入口。
+
 > **更新**: 2026-05-26 (下一阶段全部完成)
 > **愿景**: FreePascal 领域最优秀的 SSL/TLS 框架
 
