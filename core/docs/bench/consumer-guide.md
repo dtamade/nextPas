@@ -89,7 +89,8 @@ if LResults.HasRegression(1.10) then Halt(1);
 | `core/benchmarks/nextpas.core.<mod>/` | 模块正式 micro-bench（推荐） |
 | `core/examples/bench/` | 框架用法示例（quick_start、ci_integration…） |
 | `core/examples/nextpas.core.bench/` | demo_basic / memtrack / xlang |
-| `bench/<track>/` | 跨语言 scorecard 竞技场（Pascal+Go 等） |
+| `bench/<track>/` | 跨语言 scorecard 竞技场（Pascal+Go 等；**新 track 放这里**） |
+| 仓库根 `arrayops/` 等 | 历史散落 micro；**不推荐**新增大目录到根 |
 
 ## 7. 验证
 

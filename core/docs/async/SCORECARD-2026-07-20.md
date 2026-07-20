@@ -52,6 +52,7 @@
 - [x] Q30 Dial AddressFamily filter (dafIPv4/dafIPv6)
 - [x] Q31 Dial OnAttemptResult observability
 - [x] Q32 facade AsyncTcpDialWithDnsFeed + GO-RUST-PARITY re-score ~8.3
+- [x] Q33 Windows candidate smoke expands dial/resolve/udp/pool/error/cancel
 - [ ] MPTCP deferred; full native-windows deferred
 
 ## 性能 scorecard（同机 2026-07-20）

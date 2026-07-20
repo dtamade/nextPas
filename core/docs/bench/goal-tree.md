@@ -2,8 +2,8 @@
 
 ## 当前状态
 
-**阶段**: 生产就绪 (Production Ready) + 结果 API 收敛冻结
-**最后更新**: 2026-07-19 (Round 62 分组对比 + 审计收敛)
+**阶段**: 生产就绪 (Production Ready) + 结果 API 收敛冻结 + Maintenance Idle
+**最后更新**: 2026-07-20 (B44 接手卫生包：main sync + 口径 + ELF 出库)
 
 ## 目标树
 
@@ -66,9 +66,9 @@ B8  报告扩展 ✅
   B8.3  原始样本收集 (CollectRawSamples)            ✅
 
 B9  质量保证 ✅
-  B9.1  15 测试套件 / 296 框架级测试                 ✅
+  B9.1  默认 gate 22 suites / ~504 测试（历史曾 15/296；以 Makefile 为准） ✅
   B9.2  nextpas.core.test 框架迁移                  ✅
-  B9.3  heaptrc 零泄漏验证 (15/15 套件全部启用 -gh)  ✅
+  B9.3  heaptrc 零泄漏验证 (22/22 套件全部启用 -gh)  ✅
   B9.4  API 覆盖补全 (GetData/Count/GetResults)     ✅
   B9.5  可用性改进 4 里程碑全部完成                   ✅
 
@@ -223,11 +223,18 @@ B42  checklist Makefile 产物卫生 (2026-07-20)                    ✅
 
 B43  Maintenance Idle 落盘 (2026-07-20)                          ✅
   B43.1  README / goal-tree / checklist 标注 idle                ✅
+
+B44  接手卫生包 (2026-07-20)                                       ✅
+  B44.1  merge/fast-forward main；文档/registry/CONTRACT 口径     ✅
+  B44.2  scorecard 根 micro 误追踪 ELF 出库 + .gitignore          ✅
+  B44.3  make hygiene + bench-module-test + smoke 验证            ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-19
+> **最后更新**: 2026-07-20
+>
+> **权威列表**: `core/tests/nextpas.core.bench/Makefile` 的 `PROJECTS`（**22** 项）。
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
@@ -254,6 +261,8 @@ B43  Maintenance Idle 落盘 (2026-07-20)                          ✅
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
 | test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
 | **合计** | **~504** | **22/22 通过** | |
+
+> **非默认 gate**: `test_test_bench_integration/` 目录存在但**未**列入 `PROJECTS`，不进入 `make bench-module-test`。
 
 ### 跨语言基准对照 (benchmarks/)
 

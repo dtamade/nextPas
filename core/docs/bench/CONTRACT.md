@@ -2,8 +2,8 @@
 
 **模块路径**：`core/src/nextpas.core.bench*.pas`
 **层级**：L1（依赖 L0: base / text / platform.time 等）
-**最后更新**：2026-07-19
-**权威状态**：`goal-tree.md`（B0–B27）；API 冻结见 README
+**最后更新**：2026-07-20（B44：索引补全；运行时行为无变更）
+**权威状态**：`goal-tree.md`（B0–B44）；API 冻结见 README；truth = focused-runtime
 
 ---
 
@@ -113,6 +113,20 @@ IBenchResults = interface
   function GetEnvironment: TBenchEnvironment;
   property Count: Integer read GetCount;
   property Environment: TBenchEnvironment read GetEnvironment;
+  { 查询 / 聚合 / 分组 — 完整签名见 bench.intf + README；测试: test_bench_results_api
+    GetFastest / GetSlowest / GetTopN
+    GetStableResults / GetUnstableResults
+    FilterByPrefix / FilterBySuffix / FilterBySubstring / FilterByNamePattern
+    FilterByNsPerOpRange / FilterByStdDevRange
+    SortByNsPerOp / SortByOpsPerSec / SortByCustomMetric
+    GetSummaryStats / GetPercentileStats / GetOutlierSummary
+    GetTotalOpsPerSec / GetTotalIterations / GetTotalElapsed
+    GetGroups / GetGroupStats / CompareGroups / GetGroupRegressionReport
+    ToCSV / SaveToCSV / ToMarkdown / SaveToMarkdown
+    ToJSON_Grouped / ToMarkdown_Grouped / ToHTML_Grouped + SaveTo*_Grouped
+    ToMatrixCSV / SaveToMatrixJSON / SaveToMatrixHTML / SaveToMatrixCSV
+    GetRegressionReport
+  }
 end;
 
 IBenchStatsAnalyzer = interface
@@ -266,4 +280,6 @@ end;
 
 ## 6. 测试覆盖
 
-- `test_bench`: Runner/Stats/Baseline/Parallel/Memtrack/Report
+- 默认 gate：`make bench-module-test` → **22** PROJECTS（见 `goal-tree.md` 测试套件分布）
+- 结果 API 专项：`test_bench_results_api`
+- 契约脚本：`scripts/bench-contract-check.sh`
