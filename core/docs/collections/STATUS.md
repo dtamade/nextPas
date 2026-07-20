@@ -1,8 +1,9 @@
 # nextpas.core.collections — 状态
 
 **更新日期**：2026-07-20
-**阶段**：**可用性 Waves 0–6 完成 → Ready for path-limited landing**
+**阶段**：**Landed / 维护 idle**（可用性 Waves 0–6 已进 main）
 **分支 / worktree**：`collections` / `.worktrees/collections`
+**Landing SHA**：`452bd0678`
 
 ## 已完成（历史目标树）
 
@@ -42,7 +43,7 @@
 | 3 | `TMemAllocator` 统一；`MakeTreeSet(compare)`；HashMix→base；FIterIdx 删除 | 完成 |
 | 4 | `ERRORS.md` + 异常文案/类型对齐 | 完成 |
 | 5 | `benchmarks/.../Makefile` | 完成 |
-| 6 | 全 suite + hygiene + landing | 进行中 |
+| 6 | 全 suite + hygiene + landing | **Landed** `452bd0678` |
 
 ## 明确不做
 
