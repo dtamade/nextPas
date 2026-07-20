@@ -336,6 +336,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-23**: Windows multi-dir watch slots (8) for fs.watch multi-Add; add returns wd; remove(wd) works. |
 | 2026-07-20 | **Owner note**: `async-windows-native-smoke` job step is **net/async** lane (`core/docs/net-async-io/WINDOWS-NATIVE-ASSESSMENT.md`); platform matrix green does not require that step. |
 | 2026-07-20 | **fix(RDCW)**: arm with sync empty batch keeps `Pending=True` so poll waits on notify event (GHA 29752923987 create+delete hard PASS; matrix pass=28 fail=0). |
+| 2026-07-20 | **test**: watch smoke two-dir multi-dir events + multi-event count loop; diagnostics pending_count. |
 
 ---
 

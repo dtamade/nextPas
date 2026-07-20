@@ -452,6 +452,8 @@ var
   K: Integer;
   J: Integer;
   LTotal, LPos: Integer;
+  LSoftSnap: TSoftFailSnapshot;
+  LSoftApplied: Boolean;
 begin
   LOutSink := ResolveOutSink(FConfig);
   for I := 0 to High(FSubtests) do
@@ -459,105 +461,150 @@ begin
     LEntry := FSubtests[I];
     LStatus := tsPassed;
     LMsg    := '';
+    LSoftApplied := False;
     ClearLog;
-    SetTestContext(GExecState^.SuiteName, LEntry.Name);
+    { Go t.Run layering: preserve parent SoftFail across nested SetTestContext. }
+    PushSoftFailState(LSoftSnap);
     try
-      if LEntry.Kind = ekSkipped then
-      begin
-        HandleSubtestSkipped(LEntry.Name, LEntry.SkipReason,
-          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
-      end
-      else if LEntry.Kind = ekSubtest then
-      begin
-        LSubCtx := TTestContext.Create(LEntry.Name, FConfig);
-        LSubCtx.FOnResult := FOnResult; { propagate result callback }
-        LSubCtxI := LSubCtx;
-        LEntry.SubtestProc(LSubCtxI);
-        LSubCtx.ExecuteSubtests;
-        { Aggregate nested subtest counts into parent }
-        Inc(FSubPass, LSubCtx.FSubPass);
-        Inc(FSubFail, LSubCtx.FSubFail);
-        Inc(FSubSkip, LSubCtx.FSubSkip);
-        { Propagate nested failed names to parent }
-        for J := 0 to High(LSubCtx.FFailedNames) do
-          AppendFailedName(FFailedNames, LSubCtx.FFailedNames[J]);
-        LSubCtxI := nil;
-        LSubCtx := nil;
-      end
-      else if LEntry.Kind = ekTableTest then
-      begin
-        { Nil guard: --count=N re-runs the suite after CleanupTableAllocations
-          has disposed TableCase/TableProc. Skip gracefully on re-run. }
-        if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+      SetTestContext(GExecState^.SuiteName, LEntry.Name);
+      try
+        if LEntry.Kind = ekSkipped then
         begin
-          LStatus := tsSkipped;
-          LMsg := 'table data already disposed (--count re-run)';
-          WriteSubtestStatus(tsSkipped, LEntry.Name, '', LMsg, '',
-            LOutSink, FConfig);
-          Inc(FSubSkip);
+          HandleSubtestSkipped(LEntry.Name, LEntry.SkipReason,
+            LOutSink, FConfig, LStatus, LMsg, FSubSkip);
+        end
+        else if LEntry.Kind = ekSubtest then
+        begin
+          LSubCtx := TTestContext.Create(LEntry.Name, FConfig);
+          LSubCtx.FOnResult := FOnResult; { propagate result callback }
+          LSubCtxI := LSubCtx;
+          LEntry.SubtestProc(LSubCtxI);
+          LSubCtx.ExecuteSubtests;
+          { Aggregate nested subtest counts into parent }
+          Inc(FSubPass, LSubCtx.FSubPass);
+          Inc(FSubFail, LSubCtx.FSubFail);
+          Inc(FSubSkip, LSubCtx.FSubSkip);
+          { Propagate nested failed names to parent }
+          for J := 0 to High(LSubCtx.FFailedNames) do
+            AppendFailedName(FFailedNames, LSubCtx.FFailedNames[J]);
+          LSubCtxI := nil;
+          LSubCtx := nil;
+          { SoftFail in nested SubtestProc body (after its own children). }
+          if ApplySoftFails(LStatus, LMsg) then
+          begin
+            LSoftApplied := True;
+            RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+              LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
+          end
+          else if LStatus = tsPassed then
+          begin
+            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+              LOutSink, FConfig);
+            Inc(FSubPass);
+          end;
+        end
+        else if LEntry.Kind = ekTableTest then
+        begin
+          { Nil guard: --count=N re-runs the suite after CleanupTableAllocations
+            has disposed TableCase/TableProc. Skip gracefully on re-run. }
+          if (LEntry.TableCase = nil) or (LEntry.TableProc = nil) then
+          begin
+            LStatus := tsSkipped;
+            LMsg := 'table data already disposed (--count re-run)';
+            WriteSubtestStatus(tsSkipped, LEntry.Name, '', LMsg, '',
+              LOutSink, FConfig);
+            Inc(FSubSkip);
+          end
+          else
+          begin
+            PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
+            if ApplySoftFails(LStatus, LMsg) then
+            begin
+              LSoftApplied := True;
+              RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+                LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
+            end
+            else
+            begin
+              WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+                LOutSink, FConfig);
+              Inc(FSubPass);
+            end;
+          end;
+        end
+        else if LEntry.Kind = ekShouldFail then
+        begin
+          RunShouldFailEntry(LEntry, LStatus, LMsg);
+          if LStatus = tsSkipped then
+            HandleSubtestSkipped(LEntry.Name, LMsg,
+              LOutSink, FConfig, LStatus, LMsg, FSubSkip)
+          else if LStatus = tsFailed then
+            RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
+              LOutSink, FConfig, FSubFail, FFailedNames, FLogLines)
+          else
+          begin
+            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+              LOutSink, FConfig);
+            Inc(FSubPass);
+          end;
         end
         else
         begin
-          PTestCaseProc(LEntry.TableProc)^(PTestCase(LEntry.TableCase)^);
-          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-            LOutSink, FConfig);
-          Inc(FSubPass);
+          if Assigned(LEntry.Closure) then
+            LEntry.Closure()
+          else
+            LEntry.Proc;
+          if ApplySoftFails(LStatus, LMsg) then
+          begin
+            LSoftApplied := True;
+            RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+              LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
+          end
+          else
+          begin
+            WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
+              LOutSink, FConfig);
+            Inc(FSubPass);
+          end;
         end;
-      end
-      else if LEntry.Kind = ekShouldFail then
-      begin
-        RunShouldFailEntry(LEntry, LStatus, LMsg);
-        if LStatus = tsSkipped then
-          HandleSubtestSkipped(LEntry.Name, LMsg,
-            LOutSink, FConfig, LStatus, LMsg, FSubSkip)
-        else if LStatus = tsFailed then
-          RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', False,
-            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines)
-        else
+      except
+        on E: ETestSkipped do
+          HandleSubtestSkipped(LEntry.Name, E.Message,
+            LOutSink, FConfig, LStatus, LMsg, FSubSkip);
+        on E: EAssertionFailed do
         begin
-          WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-            LOutSink, FConfig);
-          Inc(FSubPass);
+          LStatus := tsFailed;
+          LMsg    := AppendTestTrace(E.Message);
+          ApplySoftFails(LStatus, LMsg);
+          RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
         end;
+        on E: Exception do
+        begin
+          LStatus := tsError;
+          LMsg    := AppendTestTrace(FormatExceptionMsg(E));
+          ApplySoftFails(LStatus, LMsg);
+          RecordSubtestFailure(tsError, LEntry.Name, E.Message, E.ClassName, True,
+            LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
+        end;
+      end;
+      ReportLeakIfAny(LStatus, FConfig);
+      { Collect subtest result via callback if caller requested it }
+      if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
+      begin
+        LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
+        { Copy captured log lines on failure/error }
+        if (LStatus in [tsFailed, tsError]) and (Length(FLogLines) > 0) then
+          LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines));
+        FOnResult(LTestResult);
       end
-      else
+      else if (LEntry.Kind = ekSubtest) and LSoftApplied and Assigned(FOnResult) then
       begin
-        if Assigned(LEntry.Closure) then
-          LEntry.Closure()
-        else
-          LEntry.Proc;
-        WriteSubtestStatus(tsPassed, LEntry.Name, '', '', '',
-          LOutSink, FConfig);
-        Inc(FSubPass);
+        LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
+        FOnResult(LTestResult);
       end;
-    except
-      on E: ETestSkipped do
-        HandleSubtestSkipped(LEntry.Name, E.Message,
-          LOutSink, FConfig, LStatus, LMsg, FSubSkip);
-      on E: EAssertionFailed do
-      begin
-        LStatus := tsFailed;
-        LMsg    := AppendTestTrace(E.Message);
-        RecordSubtestFailure(tsFailed, LEntry.Name, LMsg, '', True,
-          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
-      end;
-      on E: Exception do
-      begin
-        LStatus := tsError;
-        LMsg    := AppendTestTrace(FormatExceptionMsg(E));
-        RecordSubtestFailure(tsError, LEntry.Name, E.Message, E.ClassName, True,
-          LOutSink, FConfig, FSubFail, FFailedNames, FLogLines);
-      end;
-    end;
-    ReportLeakIfAny(LStatus, FConfig);
-    { Collect subtest result via callback if caller requested it }
-    if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
-    begin
-      LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
-      { Copy captured log lines on failure/error }
-      if (LStatus in [tsFailed, tsError]) and (Length(FLogLines) > 0) then
-        LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines));
-      FOnResult(LTestResult);
+    finally
+      PopSoftFailState(LSoftSnap);
     end;
   end;
   { Execute cleanup callbacks in reverse order before propagating failures }

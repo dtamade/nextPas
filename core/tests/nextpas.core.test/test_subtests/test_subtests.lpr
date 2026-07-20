@@ -630,13 +630,13 @@ begin
 end;
 
 procedure HarnessSoftFailInSubtest;
-{ Nested SoftFail: leaf SoftFail attaches to parent; leaf entry may stay tsPassed.
-  Observed contract (v8.20): parent Message is SoftFail join from nested body. }
+{ v8.21 Go t.Run layering: parent SoftFail preserved; leaf SoftFail on leaf result. }
 var
   LFailSuite: TTestSuite;
   LResult: TTestRunResult;
   I: Integer;
-  LParentMsg: string;
+  LParentMsg, LLeafMsg: string;
+  LLeafFailed: Boolean;
 begin
   LFailSuite := TTestSuite.Create('SoftFail Subtest');
   LFailSuite.TestSubtest('soft sub',
@@ -652,16 +652,26 @@ begin
   CheckFalse(LFailSuite.RunWithResult(LResult), 'soft subtest fails suite');
   CheckTrue(LResult.Failed >= 1);
   LParentMsg := '';
+  LLeafMsg := '';
+  LLeafFailed := False;
   for I := 0 to High(LResult.Results) do
+  begin
     if LResult.Results[I].Name = 'soft sub' then
     begin
       CheckEqual(Ord(tsFailed), Ord(LResult.Results[I].Status));
       LParentMsg := LResult.Results[I].Message;
+    end
+    else if LResult.Results[I].Name = 'soft sub/leaf' then
+    begin
+      LLeafMsg := LResult.Results[I].Message;
+      LLeafFailed := LResult.Results[I].Status = tsFailed;
     end;
-  CheckTrue(LParentMsg <> '', 'parent soft sub has message');
-  { Nested Ctx.Run resets soft state: parent body SoftFail before leaf is lost;
-    leaf SoftFail lands on parent. Exact contract locks observed behavior. }
-  CheckEqual('leaf soft', LParentMsg, 'nested SoftFail parent message exact');
+  end;
+  CheckTrue(LLeafFailed, 'leaf SoftFail marks leaf tsFailed');
+  CheckEqual('leaf soft', LLeafMsg, 'leaf SoftFail message exact');
+  { Parent keeps its soft join; child fail also surfaces via subtest aggregate. }
+  CheckContains(LParentMsg, 'sub soft 1');
+  CheckContains(LParentMsg, 'sub soft str');
   LFailSuite := Default(TTestSuite);
 end;
 
@@ -687,12 +697,12 @@ begin
 end;
 
 procedure HarnessSoftFailLeafMultiExact;
-{ Multiple SoftFail inside leaf only → parent message is join. }
+{ Multiple SoftFail inside leaf → leaf Message is join; parent fails via aggregate. }
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
   I: Integer;
-  LMsg: string;
+  LLeafMsg, LParentMsg: string;
 begin
   LSuite := TTestSuite.Create('soft-leaf-multi');
   LSuite.TestSubtest('parent',
@@ -705,11 +715,19 @@ begin
         end);
     end);
   CheckFalse(LSuite.RunWithResult(LResult));
-  LMsg := '';
+  LLeafMsg := '';
+  LParentMsg := '';
   for I := 0 to High(LResult.Results) do
-    if LResult.Results[I].Name = 'parent' then
-      LMsg := LResult.Results[I].Message;
-  CheckEqual('L1; L2', LMsg, 'leaf multi SoftFail join on parent');
+  begin
+    if LResult.Results[I].Name = 'parent/leaf' then
+      LLeafMsg := LResult.Results[I].Message
+    else if LResult.Results[I].Name = 'parent' then
+      LParentMsg := LResult.Results[I].Message;
+  end;
+  CheckEqual('L1; L2', LLeafMsg, 'leaf multi SoftFail join on leaf');
+  CheckTrue(
+    (Pos('subtest', LowerCase(LParentMsg)) > 0) or (LParentMsg <> ''),
+    'parent fails because child soft-failed: ' + LParentMsg);
   LSuite := Default(TTestSuite);
 end;
 
@@ -762,9 +780,22 @@ begin
     if LResult.Results[I].Name = 'p' then
       LMsg := LResult.Results[I].Message;
   if AC.Data = 'soft' then
-    CheckEqual('sf-' + AC.Name, LMsg, 'soft exact')
+  begin
+    { soft on leaf: leaf message exact; parent aggregates }
+    LMsg := '';
+    for I := 0 to High(LResult.Results) do
+      if LResult.Results[I].Name = 'p/leaf' then
+        LMsg := LResult.Results[I].Message;
+    CheckEqual('sf-' + AC.Name, LMsg, 'soft exact on leaf')
+  end
   else if AC.Data = 'soft2' then
-    CheckEqual('a-' + AC.Name + '; b-' + AC.Name, LMsg, 'soft2 join')
+  begin
+    LMsg := '';
+    for I := 0 to High(LResult.Results) do
+      if LResult.Results[I].Name = 'p/leaf' then
+        LMsg := LResult.Results[I].Message;
+    CheckEqual('a-' + AC.Name + '; b-' + AC.Name, LMsg, 'soft2 join on leaf')
+  end
   else
     { hard in leaf → parent aggregates; message contains hard tag or subtest summary }
     CheckTrue(

@@ -719,6 +719,19 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure AssertSoftFailOutsideContextExact;
+{ Must run with GExecState=nil (not inside Suite.Test). }
+begin
+  try
+    SoftFail('orphan');
+    raise Exception.Create('expected SoftFail outside context to raise');
+  except
+    on E: EAssertionFailed do
+      if E.Message <> 'SoftFail outside test context: orphan' then
+        raise Exception.Create('outside SoftFail msg: ' + E.Message);
+  end;
+end;
+
 procedure TestSoftCheckStringAndContains;
 var
   LSuite: TTestSuite;
@@ -2315,6 +2328,10 @@ begin
   { v8.19: SoftFail diagnostic exact contracts }
   LSuite.Test('SoftFail exact defaults+hard',  @TestSoftFailExactDefaultsAndHardAlsoSoft);
   LSuite.Test('SoftFail cap +N more',          @TestSoftFailCapMoreSuffix);
+
+  { Outside-context SoftFail only valid when no suite entry is active. }
+  AssertSoftFailOutsideContextExact;
+  WriteLn('  + SoftFail outside context exact');
 
   if not LSuite.Run then
   begin

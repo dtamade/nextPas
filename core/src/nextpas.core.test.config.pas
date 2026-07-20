@@ -953,8 +953,12 @@ begin
   { Hash compiler version }
   for I := 1 to Length(ACompilerVersion) do
     LHash := (LHash xor Ord(ACompilerVersion[I])) * 1099511628211;
-  { Hash config flags that affect test behavior }
-  LHash := (LHash xor Ord(AConfig.ShuffleSeed <> 0)) * 1099511628211;
+  { Hash config flags that affect test behavior / stop semantics.
+    v8.22: MaxFailures/FailFast/ShuffleSeed value must enter the key so
+    cache hits cannot silently change which tests run or stop order. }
+  LHash := (LHash xor Integer(AConfig.ShuffleSeed)) * 1099511628211;
+  LHash := (LHash xor Ord(AConfig.FailFast)) * 1099511628211;
+  LHash := (LHash xor AConfig.MaxFailures) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.ShortMode)) * 1099511628211;
   LHash := (LHash xor Ord(AConfig.VerboseMode)) * 1099511628211;
   { RetryCount/TimeoutMs affect pass/fail outcomes — different values may

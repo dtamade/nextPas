@@ -395,7 +395,7 @@ begin
   LSuite.Test('B12 Discover cleanup idempotent', @TestB12DiscoverCleanupIdempotent);
 
   { B26: meaningful name fail-path table (metadata only, no Discover run) }
-  SetLength(LB26Cases, 40);
+  SetLength(LB26Cases, 90);
   for LB26I := 0 to High(LB26Cases) do
   begin
     LB26Cases[LB26I].Name := 'meta-' + IntToStr(LB26I);

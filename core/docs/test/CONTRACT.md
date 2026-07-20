@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.20
+**版本**：v8.22
 
 ---
 
@@ -394,6 +394,23 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.22 (2026-07-20) — Cache key 诚实化 + SoftFail 回归 + SCALE≥5500
+
+- **产品**：`TTestCache.ComputeKey` 纳入 `MaxFailures` / `FailFast` / **ShuffleSeed 整值**（旧 key 自然 miss）
+- **ComputeKey 字段（进 key）**：ShuffleSeed、FailFast、MaxFailures、ShortMode、VerboseMode、RetryCount、TimeoutMs、FilterPattern、TagFilter、RunPattern、SuiteName、compiler、sources
+- **故意不进 key（当前）**：BenchMem、BenchTimeMs、CacheDir、AnsiMode 等纯展示/输出配置
+- **SoftFail**：outside context exact；parallel multi exact；Push/Pop 锁在 runner.context
+- **消费者**：`nested_softfail_demo`（parent+leaf 分层消息）
+- **规模**：`SCALE_MIN` 默认 **5500**
+
+### v8.21 (2026-07-20) — Nested SoftFail 分层 + Cache 指纹 + SCALE≥5000
+
+- **产品**：nested SoftFail 对齐 Go `t.Run` — `PushSoftFailState`/`PopSoftFailState`；leaf SoftFail 写 leaf result；parent soft 不再被 `SetTestContext` 抹掉
+- **规则 R1–R5**：进入 nested 保存 parent soft → leaf 独立 ApplySoftFails → 恢复 parent soft；不把 leaf soft 文本双记进 parent SoftFail join
+- **Cache**：配置指纹表（filter/tag/shuffle/maxfail/failfast/timeout）+ hit/miss/invalidate exact
+- **薄套件**：discovery 名表 90；advanced SoftFail exact；bench not-executed fail
+- **规模**：`SCALE_MIN` 默认 **5000**
 
 ### v8.20 (2026-07-20) — 契约密度：subtest SoftFail + CLI/MaxFailures + SCALE≥4500
 

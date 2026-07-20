@@ -184,7 +184,7 @@ begin
       LEvent.Created, LEvent.Deleted, LEvent.Modified);
   end;
 
-  WriteLn('Test 6: multi create → two polls');
+  WriteLn('Test 6: multi create → two polls (residual drain)');
   if LWatcher.IsValid and (LDirPath <> '') then
   begin
     while platform_watch_poll(LWatcher, LEvent, 30) > 0 do
@@ -208,14 +208,21 @@ begin
       platform_file_write(LHandle, PAnsiChar(LContent), 1, LWritten);
       platform_file_close(LHandle);
     end;
-    LGotMulti := False;
-    LRet := platform_watch_poll(LWatcher, LEvent, 2000);
-    if LRet > 0 then
+    { Two files → expect ≥2 successful event polls (create and/or modify). }
+    I := 0; { event count }
+    LRet := 0;
+    for LRet := 1 to 50 do
     begin
-      LRet := platform_watch_poll(LWatcher, LEvent, 2000);
-      LGotMulti := LRet > 0;
+      if platform_watch_poll(LWatcher, LEvent, 100) > 0 then
+      begin
+        Inc(I);
+        if I >= 2 then
+          Break;
+      end;
     end;
-    MaybeSoftEvent(LGotMulti, 'multi-event second poll', LUnderWine, LRet,
+    LGotMulti := I >= 2;
+    LRet := I;
+    MaybeSoftEvent(LGotMulti, 'multi-event (≥2 polls)', LUnderWine, LRet,
       LEvent.Created, LEvent.Deleted, LEvent.Modified);
   end;
 
@@ -231,6 +238,58 @@ begin
   Check(platform_watch_close(LWatcher) = 0, 'close');
   Check(LWatcher.IsInvalid, 'invalid after close');
   Check(platform_watch_close(LWatcher) = 0, 'close idempotent');
+
+  WriteLn('Test 8: two distinct dirs multi-dir events');
+  if LDirPath <> '' then
+  begin
+    LRet := platform_watch_create(LWatcher);
+    Check(LRet = 0, 'recreate watcher');
+    FillChar(LDir, SizeOf(LDir), 0);
+    FillChar(LFile2, SizeOf(LFile2), 0);
+    { dir A already LDirPath; create sibling dir B }
+    LFile2Path := LDirPath + '_b';
+    if Length(LDirPath) < SizeOf(LDir) then
+      Move(LDirPath[1], LDir[0], Length(LDirPath));
+    if Length(LFile2Path) < SizeOf(LFile2) then
+      Move(LFile2Path[1], LFile2[0], Length(LFile2Path));
+    platform_file_mkdir(@LDir[0], $1FF);
+    platform_file_mkdir(@LFile2[0], $1FF);
+    Check(platform_watch_add(LWatcher, @LDir[0]) > 0, 'add dir A');
+    Check(platform_watch_add(LWatcher, @LFile2[0]) > 0, 'add dir B');
+    LFilePath := LDirPath + '\da.txt';
+    FillChar(LFile, SizeOf(LFile), 0);
+    if Length(LFilePath) < SizeOf(LFile) then
+      Move(LFilePath[1], LFile[0], Length(LFilePath));
+    LContent := 'z';
+    if platform_file_open(@LFile[0], fomWriteOnly, fcmCreateAlways, LHandle) = 0 then
+    begin
+      platform_file_write(LHandle, PAnsiChar(LContent), 1, LWritten);
+      platform_file_close(LHandle);
+    end;
+    LFilePath := LFile2Path + '\db.txt';
+    FillChar(LFile, SizeOf(LFile), 0);
+    if Length(LFilePath) < SizeOf(LFile) then
+      Move(LFilePath[1], LFile[0], Length(LFilePath));
+    if platform_file_open(@LFile[0], fomWriteOnly, fcmCreateAlways, LHandle) = 0 then
+    begin
+      platform_file_write(LHandle, PAnsiChar(LContent), 1, LWritten);
+      platform_file_close(LHandle);
+    end;
+    I := 0;
+    for LRet := 1 to 50 do
+      if platform_watch_poll(LWatcher, LEvent, 100) > 0 then
+      begin
+        Inc(I);
+        if I >= 2 then
+          Break;
+      end;
+    MaybeSoftEvent(I >= 2, 'two-dir multi-dir events', LUnderWine, I,
+      LEvent.Created, LEvent.Deleted, LEvent.Modified);
+    Check(platform_watch_close(LWatcher) = 0, 'close two-dir watcher');
+    platform_file_unlink(PAnsiChar(AnsiString(LDirPath + '\da.txt')));
+    platform_file_unlink(PAnsiChar(AnsiString(LFile2Path + '\db.txt')));
+    platform_file_rmdir(@LFile2[0]);
+  end;
 
   if LFile[0] <> #0 then
     platform_file_unlink(@LFile[0]);

@@ -42,6 +42,21 @@ must_have=(
   SoftFailOnly
 )
 
+echo "=== Nested SoftFail Push/Pop must appear in runner.context ==="
+CTX="$CORE_ROOT/src/nextpas.core.test.runner.context.pas"
+if ! rg -q --fixed-strings 'PushSoftFailState' "$CTX"; then
+  echo "MISSING in runner.context: PushSoftFailState"
+  fail=1
+else
+  echo "OK: PushSoftFailState in runner.context"
+fi
+if ! rg -q --fixed-strings 'PopSoftFailState' "$CTX"; then
+  echo "MISSING in runner.context: PopSoftFailState"
+  fail=1
+else
+  echo "OK: PopSoftFailState in runner.context"
+fi
+
 echo "=== Runner/public API name presence in self-tests ==="
 for name in "${must_have[@]}"; do
   if ! rg -q --fixed-strings "$name" "$TESTS" --glob '*.lpr' --glob '*.pas' --glob '*.sh'; then
