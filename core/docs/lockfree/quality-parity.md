@@ -140,7 +140,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **V1 done**：`verify-t1` + `verify-h3-consumers` 绿；`test_atomic` source-contract 对齐 bench platform 字段（`OSName/CPUName`）
 - **I1 done**：`t2-inventory` progress 诚实抽检 + 关键误标修正（elim stack / cow / rcu / hashtable…）
 - **C1 done**：core 生产 `Atomic*(`（排除 `atomic*` 自身）再扫 **0**；`test_lockfree_preferred_path` 绿
-- **剩余**：inventory 长尾 placeholder 可按需加深；legacy public API 仍可在 `atomic.compat` 保留
+- **Ready 收口 done**：`READY.md` 三句话交付 + selection-guide「任务投递四选一」
+- **剩余**：inventory 长尾 placeholder 可按需加深；主战场转高层消费者；legacy public API 仍可在 `atomic.compat` 保留
 
 ### Q3-a checklist
 
