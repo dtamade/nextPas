@@ -58,7 +58,7 @@
 
 ## T2 maturity tiers（H2-2）+ H3-2 生产子集
 
-完整分档清单：[`t2-inventory.md`](t2-inventory.md)（Q4）。  
+完整分档清单：[`t2-inventory.md`](t2-inventory.md)（Q4）。
 **Q4 决策**：本波 **不** 扩展 H3-2（仍仅 bag + multimap）。
 
 T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTRACT.md) §0.2）：

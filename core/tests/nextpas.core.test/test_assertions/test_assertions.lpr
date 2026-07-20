@@ -406,6 +406,35 @@ begin
   ExpectFail(procedure begin CheckNotEqual(1.0, 1.0); end, 'differ');
 end;
 
+procedure TestB12CheckEqualDoubleNaN;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin CheckEqual(1.0, LNaN, 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(LNaN, 1.0, 1e-9); end, 'NaN');
+  ExpectFail(procedure begin CheckEqual(LNaN, LNaN, 1e-9); end, 'NaN');
+end;
+
+procedure TestB12CheckNotEqualDoubleNaN;
+var
+  LNaN: Double;
+begin
+  { NaN != anything including NaN — CheckNotEqual must pass (early exit) }
+  LNaN := 0.0 / 0.0;
+  CheckNotEqual(1.0, LNaN, 1e-9);
+  CheckNotEqual(LNaN, 1.0, 1e-9);
+  CheckNotEqual(LNaN, LNaN, 1e-9);
+end;
+
+procedure TestB12CheckEqualDoubleExactEpsilon;
+begin
+  { Diff exactly equal to epsilon → still "near" (Abs <= eps) }
+  CheckEqual(1.0, 1.0 + 1e-6, 1e-6);
+  { Just outside epsilon → fail }
+  ExpectFail(procedure begin CheckEqual(1.0, 1.0 + 1e-6 + 1e-12, 1e-6); end, 'Expected');
+end;
+
 procedure TestCheckNotNearPass;
 begin
   CheckNotNear(2.0, 1.0);
@@ -1861,6 +1890,9 @@ begin
   LSuite.Test('CheckEqual (double fail)',     @TestCheckEqualDoubleFail);
   LSuite.Test('CheckNotEqual (double pass)',  @TestCheckNotEqualDoublePass);
   LSuite.Test('CheckNotEqual (double fail)',  @TestCheckNotEqualDoubleFail);
+  LSuite.Test('B12 CheckEqual Double NaN',    @TestB12CheckEqualDoubleNaN);
+  LSuite.Test('B12 CheckNotEqual Double NaN', @TestB12CheckNotEqualDoubleNaN);
+  LSuite.Test('B12 CheckEqual exact epsilon', @TestB12CheckEqualDoubleExactEpsilon);
 
   { v3.1: CheckGreaterOrEqual / CheckLessOrEqual }
   LSuite.Test('GreaterOrEqual pass',         @TestCheckGreaterOrEqualPass);

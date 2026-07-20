@@ -30,7 +30,8 @@
 | **0** | 热堆、过程式 API、Arena、固定池、过程统计 | **门面** |
 | **1** | 生产诊断注入（tracking、sentinel、guard）+ fallback | **门面** |
 | **2 demoted** | 冷门包装器 / 并发池变体 / budget·oom | **仅子单元**（F3） |
-| **2 optional backend** | mimalloc、mmap、mapped、ring | **门面**（有外部 consumer） |
+| **2 optional backend** | mapped / ring（有外部 consumer） | **门面** |
+| **2 demoted backend** | mimalloc / mmap 分配器类型 | **仅子单元**（G2） |
 | **3 Experimental** | growable 等研究型 | **仅子单元** |
 
 ### Tier-3 黑名单（不得出现在 `nextpas.core.mem` uses）
@@ -38,7 +39,7 @@
 **仍保留且禁止进门面**：
 
 ```text
-nextpas.core.mem.blockpool.growable   # used by blockpool.sharded; not facade
+nextpas.core.mem.blockpool.growable   # KEEP — blockpool.sharded; 见 GROWABLE-KEEP-2026-07-20.md
 ```
 
 **P-a / P-b 已删除** — 不得复活（见历史清单；guardrails forbid 已删名）。
@@ -78,8 +79,6 @@ nextpas.core.mem.allocator.arena
 nextpas.core.mem.allocator.tracking
 nextpas.core.mem.allocator.leak_check
 nextpas.core.mem.allocator.fallback
-nextpas.core.mem.allocator.mmap
-nextpas.core.mem.allocator.mimalloc
 nextpas.core.mem.pool.sizeclass / .fixed / .fixed_slab / .slab / .base / pool
 nextpas.core.mem.blockpool
 nextpas.core.mem.ring_buffer
@@ -101,6 +100,7 @@ nextpas.core.mem.allocator.crt / .foundation / .growing / .growing_ia / .rtl
 allocator.logging / sampling / debug_alloc / hotswap / counting
 allocator.zeroed / fail / scoped / batch / callback
 allocator.aligned / bounded / stats / leak_report / thread_safe / pool
+allocator.mimalloc / allocator.mmap   # G2 批 2：可选后端，0 非 mem 产品引用
 budget / oom
 pool.slab.concurrent / pool.slab.sharded
 blockpool.concurrent / blockpool.sharded

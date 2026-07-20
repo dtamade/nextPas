@@ -34,12 +34,12 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (20-module matrix, including
+Windows compile gates, Wine runtime smoke (21-module matrix, including
 `platform.error`, `platform.fmt`, `platform.info`, `platform.which`,
-`platform.dl`, and `platform.pipe`), and durable GHA **`ci-matrix`** for the
-**documented 19-gate set** in `platform-windows-ci-matrix.sh` / `.ps1` (16 suite
-dirs + poller/io/socket real gates) under job `test-windows-runtime` on
-`windows-latest`.
+`platform.dl`, `platform.pipe`, and `platform.args`), and durable GHA
+**`ci-matrix`** for the **documented 19-gate set** in
+`platform-windows-ci-matrix.sh` / `.ps1` (16 suite dirs + poller/io/socket real
+gates) under job `test-windows-runtime` on `windows-latest`.
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -56,20 +56,25 @@ Allowed wording:
 ## Current macOS truth
 
 macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
-**documented 8-gate set** in `platform-macos-ci-matrix.sh` under job
-`test-macos` (fail-closed step; ROADMAP D2.c):
-`platform.{time,sync,thread,files,path,env,error,socket}`.
+**documented 9-gate set** in `platform-macos-ci-matrix.sh` under job
+`test-macos` (fail-closed step; ROADMAP D2.c + Batch-5B promote):
+`platform.{time,sync,thread,files,path,env,error,socket,memory}`.
 
-Batch-5A adds **`platform.memory`** to the matrix script as a **9-gate candidate**.
-Do **not** claim macOS focused-runtime for memory until GHA `test-macos`
-records `pass=9 fail=0`.
+Promoted after GHA run **29696318492** @ `d160cbc46` — fail-closed matrix
+step conclusion **success** (script exit 0 ⇒ pass=9 fail=0). Windows
+`test-windows-runtime` on the same SHA: pass=19 fail=0.
 
-D2.c promotion is **scoped**: it does **not** claim full-host macOS parity or
-treat best-effort whole-suite inventory as evidence.
+Darwin `platform.memory` notes (honest residual, not a demotion):
+- aligned alloc uses SysGetMem fallback (not posix_memalign) on Darwin
+- secure-zero uses FillChar+barrier (not memset_s) on Darwin
+- virtual reserve uses MAP_ANON + mprotect (not MAP_FIXED)
+
+D2.c / Batch-5 promote is **scoped**: it does **not** claim full-host macOS
+parity or treat best-effort whole-suite inventory as evidence.
 
 Allowed wording:
 
-- `focused-runtime` for the documented 8-gate set only (ROADMAP D2.c)
+- `focused-runtime` for the documented 9-gate set only (ROADMAP D2.c + Batch-5)
 - best-effort inventory remains non-promotional non-evidence
 
 ### IOCP completion operations

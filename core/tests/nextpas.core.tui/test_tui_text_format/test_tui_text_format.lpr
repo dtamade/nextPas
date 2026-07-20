@@ -77,6 +77,26 @@ begin
   CheckEqual('1 MB', FormatBytes(1048576), '1048576 = 1 MB');
 end;
 
+
+procedure TestFormatBytesZero;
+begin
+  Check(Pos('0', FormatBytes(0)) > 0, 'zero formats');
+end;
+
+procedure TestFormatBytesNegativeSafe;
+var
+  S: AnsiString;
+begin
+  S := FormatBytes(-1);
+  Check(Length(S) >= 0, 'negative does not crash');
+end;
+
+procedure TestFormatBytesKBAlias;
+begin
+  CheckEqual(FormatBytes(1024), FormatBytesKB(1), '1KB alias matches 1024 bytes');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.text.format');
   T.Test('bytes', @TestBytes);
@@ -89,5 +109,8 @@ begin
   T.Test('fractional GB', @TestFractionalGB);
   T.Test('boundary KB', @TestBoundaryKB);
   T.Test('boundary MB', @TestBoundaryMB);
-  if not T.Run then Halt(1);
+    T.Test('bytes zero', @TestFormatBytesZero);
+  T.Test('bytes negative safe', @TestFormatBytesNegativeSafe);
+  T.Test('KB alias', @TestFormatBytesKBAlias);
+if not T.Run then Halt(1);
 end.

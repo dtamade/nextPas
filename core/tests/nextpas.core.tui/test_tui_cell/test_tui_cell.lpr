@@ -154,6 +154,18 @@ begin
   Check(not CellEquals(LA, LB), 'diff symbol unequal');
 end;
 
+
+procedure TestEmptyEqualsReset;
+var
+  A, B: TCell;
+begin
+  A := CELL_EMPTY;
+  B := CELL_EMPTY;
+  CellReset(B);
+  Check(CellEquals(A, B), 'empty equals reset empty');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.cell');
   T.Test('size 40 bytes', @TestSize);
@@ -167,5 +179,6 @@ begin
   T.Test('width zero coerced', @TestSetSymbolWidthZeroCoerced);
   T.Test('apply style', @TestApplyStyle);
   T.Test('equals', @TestEquals);
-  if not T.Run then Halt(1);
+    T.Test('empty equals reset', @TestEmptyEqualsReset);
+if not T.Run then Halt(1);
 end.

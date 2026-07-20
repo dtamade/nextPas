@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（17 个 .pas + 4 个 .inc）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
-**最后更新**：2026-07-19
-**版本**：v8.9
+**最后更新**：2026-07-20
+**版本**：v8.13
 
 ---
 
@@ -386,10 +386,64 @@ end;
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| `IExpectation` 按类型拆分（`IStringExpectation` / `INumericExpectation` 等） | **暂缓 (P3)** | 向后兼容风险高；`RequireKind` 运行时检查已覆盖类型误用。触发：v9 major 或显式 breaking 窗口，需迁移指南 + consumer 扫描。 |
-| 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
+| CLI 可注入 argv（`ApplyCLIArgsFrom`） | **done (v8.13)** | 与 ParamStr 解耦，表驱动可测 |
+| perf 跨机硬门禁入库 | **不做** | 仅软策略：`PERF_SKIP` / host baseline；跨 OS 数字不作默认 CI fail |
+| SoftFail / CheckSoft | **暂缓** | Check=Fatal 钉死；opt-in Soft 需显式产品拍板 |
+| `IExpectation` 按类型拆分 | **暂缓 (v9)** | 兼容风险高；`RequireKind` 已覆盖类型误用 |
+| TSAN | **阻塞** | 无 FPC 一体化 ThreadSanitizer 路径；靠契约测与原子压力 |
+| 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.13 (2026-07-20) — CLI 可注入 argv + perf 软跨机策略
+
+- **ApplyCLIArgsFrom**：argv 与 ParamStr 解耦；表驱动可测；`ApplyCLIArgs` 包装进程参数
+- **perf**：`PERF_BASELINE` / `PERF_HOST_TAG` / `PERF_SKIP`；跨 OS 不设默认硬门禁
+- **deferred 维持**：SoftFail（需拍板）、IExpectation 拆分（v9）、TSAN、compiler coverage
+
+### v8.12c (2026-07-20) — shrink 第二波 + 规模 ≥2500
+
+- **Prop**：bytes/filter/choice shrink 边界
+- **规模**：mock CalledExactly 负路径表 +300；合计 ≥2500
+- **perf**：可选 CI、+30% 阈值、跨机不强制入库（见 test_perf_bench 脚本头注释）
+
+### v8.12b (2026-07-20) — 报告可观测 + 门禁 ≥2000
+
+- **JUnit golden**：Duration=0 固定 fixture + CheckSnapshot
+- **TAP formal**：version 13 / plan / YAML / footer totals
+- **scale report**：默认 SCALE_MIN=2000；打印 fail-path 启发式占比
+
+### v8.12a (2026-07-20) — 薄套件 + 边界收口
+
+- **Discovery**：fail run、empty run、hooks on fail、双实例、Cleanup 幂等
+- **Advanced**：Discover+fail、JSON error、TAP error severity、retry message
+- **Assertions**：CheckEqual/NotEqual Double NaN + epsilon 恰界
+- **Filter**：hierarchical A/B/C、Test*/Sub、brace 路径边角
+
+### v8.11c (2026-07-20) — 可观测规模与报告
+
+- **Scale report**：`test_scale_report` 自动汇总可计数过程，门禁 ≥1800
+- **规模**：diagnostics/expect 有意义负路径表扩张（禁 stress 灌水）
+- **Golden**：JSON/TAP Duration=0 固定 fixture + CheckSnapshot
+- **Prop shrink**：min 边界、字符串缩短、向 0 收缩
+
+### v8.11b (2026-07-20) — Runner/Lifecycle 深度
+
+- **CLI**：`HasArgFlag` / `ExtractArgValue` / `ExtractArgIntValue` 经 runner 白盒导出；filter/short/shuffle/timeout 表驱动
+- **Lifecycle**：Setup fail 体不跑 + `[setup]` tsError；Setup `ETestSkipped` 非失败；Teardown 异常不拖垮 suite；BeforeEach fail 仍跑 AfterEach
+- **Parallel subtest**：混合 suite 正常用例 pass + subtest skip 计数与消息
+
+### v8.11a (2026-07-20) — 危险并发契约钉死
+
+- **Mock**：跨线程 `RecordCall` / `GetReturn` / `Verify` 均失败，消息含 `not thread-safe`；`RecordCallTyped` 补 `CheckThread`
+- **RegisterStub / RegisterFixture**：非主线程调用 raise，消息含 `main thread`；主线程 RegisterStub OK
+- 文档：并行用户责任与自测交叉引用（见 go-rust-parity）
+
+### v8.10 (2026-07-20) — Mock 并行隔离 + Perf 宽松阈值 + Output 深契约
+
+- **Mock**：跨线程 `RecordCall` 必须失败，消息含 `not thread-safe`；同线程仍 pass
+- **Perf**：`test_perf_bench` 支持 `--save-baseline` / `--baseline` / `--threshold`（默认 ratio 1.30 = +30%）；`make regression` 可选门禁（非默认 test 硬失败）
+- **Output**：JUnit 空/skip/failure 消息；JSON status 枚举；TAP `1..N`；XmlEscape 特殊字符；ANSI off 无 CSI
 
 ### v8.9 (2026-07-19) — Go/Rust 第二波：规模 + Helper 语义 + runner 门禁
 

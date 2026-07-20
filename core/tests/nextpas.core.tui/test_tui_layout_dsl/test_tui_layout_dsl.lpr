@@ -110,6 +110,44 @@ begin
   CheckEqual(Int64(15), Int64(LRects[1].Y), 'second Y after first');
 end;
 
+
+procedure TestVSplitAreaConserve;
+var
+  A: TRect;
+  R: TRectArray;
+  I, Sum: Integer;
+begin
+  A := TRect.Make(0, 0, 20, 30);
+  R := V(A, [Fixed(5), Flex(), Fixed(5)]);
+  Sum := 0;
+  for I := 0 to High(R) do
+    Inc(Sum, R[I].Width * R[I].Height);
+  CheckEqual(Int64(A.Width * A.Height), Int64(Sum), 'V area conserve');
+end;
+
+procedure TestHSplitAreaConserve;
+var
+  A: TRect;
+  R: TRectArray;
+  I, Sum: Integer;
+begin
+  A := TRect.Make(0, 0, 40, 10);
+  R := H(A, [Fixed(10), Flex()]);
+  Sum := 0;
+  for I := 0 to High(R) do
+    Inc(Sum, R[I].Width * R[I].Height);
+  CheckEqual(Int64(A.Width * A.Height), Int64(Sum), 'H area conserve');
+end;
+
+procedure TestEvenThree;
+var
+  Cs: TConstraints;
+begin
+  Cs := Even(3);
+  CheckEqual(3, Length(Cs), 'Even(3) length');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.layout.dsl');
   T.Test('constraint aliases', @TestConstraintAliases);
@@ -121,5 +159,8 @@ begin
   T.Test('ratio constraint', @TestRatioConstraint);
   T.Test('single constraint', @TestSingleConstraint);
   T.Test('V split position', @TestVSplitPosition);
-  if not T.Run then Halt(1);
+    T.Test('V area conserve', @TestVSplitAreaConserve);
+  T.Test('H area conserve', @TestHSplitAreaConserve);
+  T.Test('Even three', @TestEvenThree);
+if not T.Run then Halt(1);
 end.

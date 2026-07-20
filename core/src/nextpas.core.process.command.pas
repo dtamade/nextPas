@@ -71,6 +71,8 @@ type
     function Credential(const AUid, AGid: UInt32): ICommand;
     {** 取消令牌：IsCancelled 时 Wait/Output/Status/WaitGraceful 路径 Kill 并置 Cancelled *}
     function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
+    {** 子进程 setpgid(0,0) 自建进程组（Unix；Win UNSUPPORTED）。启用后可用 KillTree *}
+    function NewProcessGroup(const AEnable: Boolean = True): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -92,6 +94,7 @@ type
     FUid: UInt32;
     FGid: UInt32;
     FCancelToken: IAsyncCancellationToken;
+    FNewProcessGroup: Boolean;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -112,6 +115,7 @@ type
     function ExtraFd(const AFd: Integer): ICommand;
     function Credential(const AUid, AGid: UInt32): ICommand;
     function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
+    function NewProcessGroup(const AEnable: Boolean = True): ICommand;
   end;
 
 implementation
@@ -262,6 +266,7 @@ begin
   FUid := 0;
   FGid := 0;
   FCancelToken := nil;
+  FNewProcessGroup := False;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -517,12 +522,12 @@ begin
     if LEnvp <> nil then
       LErr := platform_process_spawn_fds_ex(PAnsiChar(LResolvedPath), @LArgv[0], @LEnvp[0],
         LCwd, LChildStdin, LChildStdout, LChildStderr,
-        LExtraPtr, LExtraCount, FSetCred, FUid, FGid,
+        LExtraPtr, LExtraCount, FSetCred, FUid, FGid, FNewProcessGroup,
         LProc, LFailStage)
     else
       LErr := platform_process_spawn_fds_ex(PAnsiChar(LResolvedPath), @LArgv[0], nil,
         LCwd, LChildStdin, LChildStdout, LChildStderr,
-        LExtraPtr, LExtraCount, FSetCred, FUid, FGid,
+        LExtraPtr, LExtraCount, FSetCred, FUid, FGid, FNewProcessGroup,
         LProc, LFailStage);
 
     if LErr <> 0 then
@@ -583,7 +588,7 @@ begin
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput,
-    FCancelToken);
+    FCancelToken, FNewProcessGroup);
 end;
 
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
@@ -624,6 +629,12 @@ end;
 function TCommand.CancelToken(const AToken: IAsyncCancellationToken): ICommand;
 begin
   FCancelToken := AToken;
+  Result := Self;
+end;
+
+function TCommand.NewProcessGroup(const AEnable: Boolean): ICommand;
+begin
+  FNewProcessGroup := AEnable;
   Result := Self;
 end;
 

@@ -118,6 +118,9 @@
 
 ### 测试覆盖 (Test Coverage)
 
+> **v8.12 sync**: T-01 NaN/epsilon 边角已在 v8.12a `test_assertions` 补齐；T-03 parallel subtest skip 已在 v8.10/v8.11 硬测；T-04 TAP/JSON 形式化 + golden 已在 v8.11c/v8.12b 补齐。
+
+
 #### T-01 [P1] 断言模块 NaN/边界测试缺口 (R3 部分修复)
 - **位置**: `test_assertions.lpr`, `test_expect.lpr`
 - **描述**: R3 已修复 NaN 守卫和添加部分边界测试，但仍有缺口：

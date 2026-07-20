@@ -248,10 +248,18 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
   Records the GFixtureRegistry index in the suite for cleanup.
   Only call once per fixture (from DiscoverTests). }
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+{ White-box helpers for test_runner: pure single-arg CLI parsers (no ParamStr). }
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+function ExtractArgValue(const AArg, APrefix: string): string;
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
 { White-box helper for test_runner: parse --filter=value form from one argv item. }
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
 function ParseTag(const AArg: string): string;
+{ Apply CLI flags from an injectable argv list (not ParamStr). }
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
@@ -277,11 +285,33 @@ uses
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+begin
+  Result := nextpas.core.test.runner.cli.HasArgFlag(AArg, AFlag1, AFlag2);
+end;
+
+function ExtractArgValue(const AArg, APrefix: string): string;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgValue(AArg, APrefix);
+end;
+
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgIntValue(AArg, APrefix, ADefault);
+end;
+
 function ParseFilter(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseFilter(AArg); end;
 
 function ParseTag(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseTag(AArg); end;
+
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
+begin
+  nextpas.core.test.runner.cli.ApplyCLIArgsFrom(AArgs);
+end;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
   Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)
@@ -1847,8 +1877,8 @@ begin
 
   { Collect results from threads that actually ran.
     Filter-excluded slots have LThreads[I]=TThreadID(0) and no result data.
-    BeginThread-failed slots also have LThreads[I]=TThreadID(0) but have
-    result data written directly (tsError + 'BeginThread failed'). }
+    BeginThread-failed slots also have LThreads[I]=TThreadID(0) but have result data
+    written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
   begin
     if (LThreads[I] <> TThreadID(0)) or (LResults[I].Status <> tsPassed) or

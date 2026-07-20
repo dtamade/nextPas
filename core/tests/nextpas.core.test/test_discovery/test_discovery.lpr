@@ -260,6 +260,97 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+{ ── B12: discovery lifecycle depth ────────────────────────────────────────── }
+
+procedure TestB12DiscoverFailRun;
+var
+  LFixture: TFailFixture;
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LOk: Boolean;
+begin
+  LFixture := TFailFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  LOk := LSuite.RunWithResult(LResult, True);
+  CheckFalse(LOk, 'fail fixture suite should not AllPass');
+  CheckEqual(1, LResult.Failed, 'one failed test');
+  CheckEqual(0, LResult.Passed, 'no passes');
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB12DiscoverEmptyRunOk;
+var
+  LFixture: TEmptyFixture;
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LOk: Boolean;
+begin
+  LFixture := TEmptyFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(0, Length(LSuite.Tests));
+  LOk := LSuite.RunWithResult(LResult, True);
+  CheckTrue(LOk, 'empty discovered suite runs ok');
+  CheckEqual(0, LResult.Passed);
+  CheckEqual(0, LResult.Failed);
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB12DiscoverHooksOnFailure;
+var
+  LFixture: THooksFixture;
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  { Inject a failing entry after Discover so hooks still fire around it. }
+  LFixture := THooksFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  LSuite.Test('injected-fail', procedure
+    begin
+      Fail('injected');
+    end);
+  LSuite.RunWithResult(LResult, True);
+  CheckTrue(LResult.Failed >= 1, 'injected fail recorded');
+  { BeforeEach/AfterEach for 3 discovered + 1 injected }
+  CheckEqual(4, LFixture.BeforeCount, 'BeforeEach per entry');
+  CheckEqual(4, LFixture.AfterCount, 'AfterEach even after failure');
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB12DiscoverTwoInstancesIndependent;
+var
+  LFa, LFb: TSimpleFixture;
+  LSa, LSb: TTestSuite;
+begin
+  LFa := TSimpleFixture.Create;
+  LFb := TSimpleFixture.Create;
+  LSa := DiscoverTests(LFa, 'inst-a');
+  LSb := DiscoverTests(LFb, 'inst-b');
+  CheckEqual(2, Length(LSa.Tests));
+  CheckEqual(2, Length(LSb.Tests));
+  CheckEqual('inst-a', LSa.Name);
+  CheckEqual('inst-b', LSb.Name);
+  { Independent suites; cleanup each (DeferCleanup not used — default cleanup) }
+  LSa := Default(TTestSuite);
+  LSb := Default(TTestSuite);
+end;
+
+procedure TestB12DiscoverCleanupIdempotent;
+var
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+begin
+  LFixture := TSimpleFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  LSuite.CleanupTableAllocations;
+  LSuite.CleanupTableAllocations; { FCleanupDone guard }
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+  CheckTrue(True, 'triple CleanupTableAllocations safe');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
@@ -282,6 +373,12 @@ begin
   LSuite.Test('Discover fail method name',@TestDiscoverFailMethodName);
   LSuite.Test('Discover entry names',    @TestDiscoverEntryNamesNonEmpty);
   LSuite.Test('Discover hooks count again',@TestDiscoverHooksMethodCountAgain);
+  { B12 lifecycle depth }
+  LSuite.Test('B12 Discover fail run',   @TestB12DiscoverFailRun);
+  LSuite.Test('B12 Discover empty run',  @TestB12DiscoverEmptyRunOk);
+  LSuite.Test('B12 Discover hooks on fail', @TestB12DiscoverHooksOnFailure);
+  LSuite.Test('B12 Discover two instances', @TestB12DiscoverTwoInstancesIndependent);
+  LSuite.Test('B12 Discover cleanup idempotent', @TestB12DiscoverCleanupIdempotent);
 
   if not LSuite.Run then
   begin

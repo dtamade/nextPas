@@ -1962,7 +1962,7 @@ begin
   Check(LProfile.Truecolor.Requested, 'truecolor requested by default');
   Check(LProfile.Truecolor.Detected, 'truecolor env hint is recorded');
   Check(LProfile.Truecolor.Active, 'truecolor becomes active when hint is sufficient');
-  Check(not LProfile.Truecolor.Verified, 'truecolor is not yet verified');
+  Check(LProfile.Truecolor.Verified, 'truecolor env-attested verified');
 
   Check(LProfile.KittyKeyboard.Requested, 'kitty keyboard requested by default');
   Check(LProfile.KittyKeyboard.Detected, 'kitty keyboard env hint is recorded');

@@ -28,13 +28,16 @@ type
     cskYaml,
     cskToml,
     cskEnv,
-    cskFile
+    cskFile,
+    cskKeyValues
   );
 
   TConfigSource = record
     Kind: TConfigSourceKind;
     Value: string;
     Format: TConfigFormat;
+    Entries: TConfigEntryArray;
+    EntryCount: Integer;
   end;
 
   TConfigSourceArray = array of TConfigSource;
@@ -92,13 +95,12 @@ type
     function AddToml(const AContent: string): IConfigBuilder;
     function AddEnv(const APrefix: string): IConfigBuilder;
     function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
     function RequireKeys(const AKeys: array of string): IConfigBuilder;
     function Build: IConfig;
     function BuildConfig: TConfig;
     function TryBuild(out AConfig: IConfig; out AError: string): Boolean;
   end;
-
-
 
 procedure AddConfigSource(var AItems: TConfigSourceArray; var ACount: Integer;
   const AKind: TConfigSourceKind; const AValue: string; AFormat: TConfigFormat);
@@ -108,6 +110,21 @@ begin
   AItems[ACount].Kind := AKind;
   AItems[ACount].Value := AValue;
   AItems[ACount].Format := AFormat;
+  AItems[ACount].Entries := nil;
+  AItems[ACount].EntryCount := 0;
+  Inc(ACount);
+end;
+
+procedure AddKeyValueSource(var AItems: TConfigSourceArray; var ACount: Integer;
+  const AEntries: TConfigEntryArray; AEntryCount: Integer);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount].Kind := cskKeyValues;
+  AItems[ACount].Value := '';
+  AItems[ACount].Format := cfIni;
+  AItems[ACount].Entries := AEntries;
+  AItems[ACount].EntryCount := AEntryCount;
   Inc(ACount);
 end;
 
@@ -272,6 +289,7 @@ end;
 procedure TConfigBuilderImpl.ApplySource(ACfg: TConfig; const ASource: TConfigSource);
 var
   LError: string;
+  LI: Integer;
 begin
   case ASource.Kind of
     cskIni:
@@ -288,6 +306,9 @@ begin
     cskFile:
       if not ACfg.TryLoadFromFile(ASource.Value, ASource.Format, LError) then
         raise EConfigError.Create(LError);
+    cskKeyValues:
+      for LI := 0 to ASource.EntryCount - 1 do
+        ACfg.SetString(ASource.Entries[LI].Key, ASource.Entries[LI].Value);
   end;
 end;
 
@@ -357,6 +378,27 @@ function TConfigBuilderImpl.AddFile(const APath: string;
 begin
   RequireConfigFilePath(APath);
   StoreSource(cskFile, APath, AFormat);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
+var
+  LI: Integer;
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+begin
+  if Length(AKeys) <> Length(AValues) then
+    raise EConfigError.Create(
+      'AddKeyValues requires AKeys and AValues of equal length');
+  LCount := Length(AKeys);
+  SetLength(LEntries, LCount);
+  for LI := 0 to LCount - 1 do
+  begin
+    RequireConfigKey(AKeys[LI]);
+    LEntries[LI].Key := AKeys[LI];
+    LEntries[LI].Value := AValues[LI];
+  end;
+  AddKeyValueSource(FSources, FSourceCount, LEntries, LCount);
   Result := Self;
 end;
 

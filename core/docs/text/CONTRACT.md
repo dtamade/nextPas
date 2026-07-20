@@ -136,7 +136,7 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 
 1. Collation 仅 DUCET（无 CLDR locale）
 2. Line 硬 `NextLine` 非 UAX#14；软 `LineBreakByteLen` 已官方 LineBreakTest 全绿
-3. 无 Bidi（UAX#9）全实现
+3. UAX#9 Bidi 至 L2 官方 harness 全绿（L3/L4 不在门禁）
 4. 无 CLDR tailored grapheme/word
 
 ---

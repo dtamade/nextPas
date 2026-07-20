@@ -18,6 +18,7 @@ uses
   nextpas.core.fs.path,
   nextpas.core.fs.util,
   nextpas.core.fs.glob,
+  nextpas.core.fs.watch,
   nextpas.core.io.scanner,
   nextpas.core.io.mapped;
 
@@ -28,7 +29,10 @@ type
   TFileInfo = nextpas.core.fs.base.TFileInfo;
   TDirEntry = nextpas.core.fs.base.TDirEntry;
   TDirEntryArray = nextpas.core.fs.base.TDirEntryArray;
+  TFileLockKind = nextpas.core.fs.base.TFileLockKind;
+  TFsWatchEvent = nextpas.core.fs.watch.TFsWatchEvent;
   IFile = nextpas.core.fs.intf.IFile;
+  IFsWatcher = nextpas.core.fs.watch.IFsWatcher;
   IScanner = nextpas.core.io.scanner.IScanner;
   IMappedLines = nextpas.core.io.mapped.IMappedLines;
   IDirIterator = nextpas.core.fs.intf.IDirIterator;
@@ -42,6 +46,9 @@ const
   fmTruncate = nextpas.core.fs.base.fmTruncate;
   fmExclusive = nextpas.core.fs.base.fmExclusive;
   fmSync = nextpas.core.fs.base.fmSync;
+
+  flkShared = nextpas.core.fs.base.flkShared;
+  flkExclusive = nextpas.core.fs.base.flkExclusive;
 
   ftRegular = nextpas.core.fs.base.ftRegular;
   ftDirectory = nextpas.core.fs.base.ftDirectory;
@@ -70,6 +77,15 @@ function Open(const APath: string; const AMode: TFileMode): IFile; inline;
 {** @desc 创建新文件（已存在则截断），返回 IFile 接口 *}
 function Create(const APath: string;
   const APerm: TFilePermission = PermDefault): IFile; inline;
+{**
+ * @desc 打开文件并阻塞获取整文件锁（advisory）
+ * @note 锁失败时关闭句柄再抛异常；锁随 IFile 关闭释放
+ *}
+function OpenLocked(const APath: string;
+  const AMode: TFileMode = [fmRead, fmWrite];
+  const AKind: TFileLockKind = flkExclusive): IFile; inline;
+{** @desc 创建文件系统监视器（L0 platform.watch；inotify/kqueue/…） *}
+function Watch: IFsWatcher; inline;
 
 { Convenience }
 {** @desc 读取文件全部内容为字节数组 *}
@@ -295,6 +311,17 @@ end;
 function Create(const APath: string; const APerm: TFilePermission): IFile;
 begin
   Result := FsCreate(APath, APerm);
+end;
+
+function OpenLocked(const APath: string; const AMode: TFileMode;
+  const AKind: TFileLockKind): IFile;
+begin
+  Result := FsOpenLocked(APath, AMode, AKind);
+end;
+
+function Watch: IFsWatcher;
+begin
+  Result := NewFsWatcher;
 end;
 
 function ReadFile(const APath: string): TBytes;

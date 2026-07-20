@@ -879,6 +879,116 @@ begin
     PassTest('ParseFilter helper');
   end;
 
+  { ── B10: CLI pure-parser table (filter/short/shuffle/timeout) ──────────── }
+  WriteLn;
+  SectionHeader('B10: CLI arg table');
+  begin
+    { ExtractArgValue table: prefix=value / no match / embedded equals }
+    if ExtractArgValue('--filter=alpha', '--filter') <> 'alpha' then
+      FailTest('ExtractArgValue filter=alpha');
+    if ExtractArgValue('--filter=', '--filter') <> '' then
+      FailTest('ExtractArgValue empty value should be empty string');
+    if ExtractArgValue('--filter', '--filter') <> '' then
+      FailTest('ExtractArgValue bare flag has no value');
+    if ExtractArgValue('--timeout=30', '--filter') <> '' then
+      FailTest('ExtractArgValue wrong prefix');
+    if ExtractArgValue('--filter=a=b=c', '--filter') <> 'a=b=c' then
+      FailTest('ExtractArgValue embedded equals');
+    if ParseFilter('--filter=glob*') <> 'glob*' then
+      FailTest('ParseFilter glob');
+    if ParseTag('--tag=slow') <> 'slow' then
+      FailTest('ParseTag slow');
+    if ParseTag('--tag=') <> '' then
+      FailTest('ParseTag empty');
+
+    { ExtractArgIntValue: timeout / negative clamp / default / garbage }
+    if ExtractArgIntValue('--timeout=5000', '--timeout', 0) <> 5000 then
+      FailTest('timeout=5000');
+    if ExtractArgIntValue('--timeout=0', '--timeout', 99) <> 0 then
+      FailTest('timeout=0 is valid zero');
+    if ExtractArgIntValue('--timeout=-3', '--timeout', 0) <> 0 then
+      FailTest('negative timeout clamps to 0');
+    if ExtractArgIntValue('--timeout=abc', '--timeout', 7) <> 7 then
+      FailTest('garbage timeout falls back to default');
+    if ExtractArgIntValue('--other=9', '--timeout', 3) <> 3 then
+      FailTest('missing prefix uses default');
+    if ExtractArgIntValue('--shuffle-seed=42', '--shuffle-seed', 0) <> 42 then
+      FailTest('shuffle-seed=42');
+    if ExtractArgIntValue('--count=10', '--count', 0) <> 10 then
+      FailTest('count=10');
+
+    { HasArgFlag: short / shuffle / failfast aliases }
+    if not HasArgFlag('--short', '--short', '-short') then
+      FailTest('--short flag');
+    if not HasArgFlag('-short', '--short', '-short') then
+      FailTest('-short alias');
+    if HasArgFlag('--shuffle', '--short', '-short') then
+      FailTest('shuffle is not short');
+    if not HasArgFlag('--shuffle', '--shuffle', '') then
+      FailTest('--shuffle flag');
+    if not HasArgFlag('--fail-fast', '--failfast', '--fail-fast') then
+      FailTest('--fail-fast alias');
+    if not HasArgFlag('--failfast', '--failfast', '--fail-fast') then
+      FailTest('--failfast flag');
+    if not HasArgFlag('-v', '--verbose', '-v') then
+      FailTest('-v verbose');
+    if HasArgFlag('--filter=x', '--verbose', '-v') then
+      FailTest('value form is not verbose flag');
+
+    PassTest('B10 CLI arg table');
+  end;
+
+  { ── B15: ApplyCLIArgsFrom injectable argv ──────────────────────────────── }
+  WriteLn;
+  SectionHeader('B15: ApplyCLIArgsFrom');
+  begin
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--filter=alpha*', '--short', '--fail-fast',
+      '--timeout=30', '--shuffle-seed=7', '--verbose', '--failures-max=3']);
+    CheckEqual(GetTestFilter, 'alpha*', 'filter from injected argv');
+    CheckTrue(GetShortMode(DefaultConfig), 'short mode');
+    CheckTrue(GetFailFast(DefaultConfig), 'fail-fast');
+    CheckEqual(GetRunTimeoutSec(DefaultConfig), 30, 'timeout sec');
+    CheckEqual(GetShuffleSeed(DefaultConfig), 7, 'shuffle seed');
+    CheckTrue(GetVerboseMode(DefaultConfig), 'verbose');
+    CheckEqual(GetMaxFailures(DefaultConfig), 3, 'max failures');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--filter', 'beta', '--tag', 'slow', '--count', '2',
+      '--json', '--progress', '--list']);
+    CheckEqual(GetTestFilter, 'beta', 'space-separated filter value');
+    CheckEqual(GetTagFilter, 'slow', 'tag');
+    CheckEqual(GetRepeatAllCount(DefaultConfig), 2, 'count');
+    CheckTrue(GetJsonOutput(DefaultConfig), 'json');
+    CheckTrue(GetShowProgress(DefaultConfig), 'progress');
+    CheckTrue(GetListMode(DefaultConfig), 'list');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--bench=MyBench*', '--benchtime=2s', '--benchmem']);
+    CheckTrue(GetBenchEnabled(DefaultConfig), 'bench enabled');
+    CheckEqual(GetTestFilter, 'MyBench*', 'bench pattern → filter');
+    CheckEqual(GetBenchTimeMs(DefaultConfig), 2000, 'benchtime 2s → ms');
+    CheckTrue(GetBenchMem(DefaultConfig), 'benchmem');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--shuffle']);
+    CheckEqual(GetShuffleSeed(DefaultConfig), -1, 'bare --shuffle → -1');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom([]);
+    CheckEqual(GetTestFilter, '', 'empty argv no filter');
+    CheckFalse(GetShortMode(DefaultConfig), 'empty argv no short');
+
+    { Does not clobber pre-set filter }
+    ResetDefaultConfig;
+    SetTestFilter('keep-me');
+    ApplyCLIArgsFrom(['--filter=overwrite']);
+    CheckEqual(GetTestFilter, 'keep-me', 'pre-set filter preserved');
+
+    ResetDefaultConfig;
+    PassTest('B15 ApplyCLIArgsFrom');
+  end;
+
   WriteLn;
   SectionHeader('R6-58b: ParseTag helper');
   begin

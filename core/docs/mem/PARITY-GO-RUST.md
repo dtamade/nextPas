@@ -1,8 +1,8 @@
 # mem × Go / Rust 对标纲领（Era E）
 
-**状态**: Steady+ 主目标已达（2026-07-19）；**Era F** 做门面/证据加固（2026-07-20 起）
+**状态**: Steady+ 主目标已达（2026-07-19）；Era F **CLOSED**；**Era G Steady**（2026-07-20 收口）
 **Owner**: mem lane（全权）
-**活路线图**: [ROADMAP.md](ROADMAP.md) 时代 E
+**活路线图**: [ROADMAP.md](ROADMAP.md) 时代 G
 **原则**: 对标的是 **stdlib 质量与生产规模**，不是「分配器文件数」或「博物馆广度」。
 
 ---

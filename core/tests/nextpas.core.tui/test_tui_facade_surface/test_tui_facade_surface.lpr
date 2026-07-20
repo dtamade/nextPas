@@ -319,6 +319,68 @@ begin
     'TUI facade must forward KeyCharEvent to tui.event');
 end;
 
+
+procedure TestTuiFacadeForwardsFocusEvent;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.focusevent',
+    'TUI facade must forward FocusEvent to tui.event');
+end;
+
+procedure TestTuiFacadeForwardsIsFocus;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocus',
+    'TUI facade must forward IsFocus to tui.event');
+end;
+
+procedure TestTuiFacadeForwardsIsFocusInOut;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocusin',
+    'TUI facade must forward IsFocusIn to tui.event');
+  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocusout',
+    'TUI facade must forward IsFocusOut to tui.event');
+end;
+
+procedure TestTuiFacadeExportsEvFocus;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'evfocus = nextpas.core.tui.event.evfocus',
+    'TUI facade must re-export evFocus');
+end;
+
+procedure TestTuiFacadeExportsFocusEventKind;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'tfocuseventkind = nextpas.core.tui.event.tfocuseventkind',
+    'TUI facade must re-export TFocusEventKind');
+  CheckTokenPresent(LTuiSource, 'tfocusevent = nextpas.core.tui.event.tfocusevent',
+    'TUI facade must re-export TFocusEvent');
+end;
+
+procedure TestTuiFacadeExportsFkInOut;
+var
+  LTuiSource: string;
+begin
+  LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
+  CheckTokenPresent(LTuiSource, 'fkin = nextpas.core.tui.event.fkin',
+    'TUI facade must re-export fkIn');
+  CheckTokenPresent(LTuiSource, 'fkout = nextpas.core.tui.event.fkout',
+    'TUI facade must re-export fkOut');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.facade_surface');
   T.Test('TUI facade is thin', @TestTuiFacadeIsThin);
@@ -327,5 +389,11 @@ begin
   T.Test('tui.widget.intf stays pure', @TestTuiWidgetIntfStaysPure);
   T.Test('tui.widget.block stays pure', @TestTuiWidgetBlockStaysPure);
   T.Test('TUI facade forwards correctly', @TestTuiFacadeForwardsCorrectly);
-  if not T.Run then Halt(1);
+    T.Test('TUI facade forwards FocusEvent', @TestTuiFacadeForwardsFocusEvent);
+  T.Test('TUI facade forwards IsFocus', @TestTuiFacadeForwardsIsFocus);
+  T.Test('TUI facade forwards IsFocusIn/Out', @TestTuiFacadeForwardsIsFocusInOut);
+  T.Test('TUI facade exports evFocus', @TestTuiFacadeExportsEvFocus);
+  T.Test('TUI facade exports FocusEvent types', @TestTuiFacadeExportsFocusEventKind);
+  T.Test('TUI facade exports fkIn/fkOut', @TestTuiFacadeExportsFkInOut);
+if not T.Run then Halt(1);
 end.

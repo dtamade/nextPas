@@ -36,18 +36,19 @@
 
 ---
 
-## 2. 成功标准（Wave Q1）
+## 2. 质量里程碑（Q1–Q6）
 
-| ID | 标准 | 证据 |
-|----|------|------|
-| **Q1** | 本纲领存在且口径清晰 | 本文 |
-| **Q2** | SC1–SC5 可复现门禁 | `core/tests/nextpas.core.tui/scorecard` |
-| **Q3** | 交叉语言同方法论 micro | `bench_go_rust` `make compare` |
-| **Q4** | 输入韧性语料 | `test_tui_input` 加厚 |
-| **Q5** | core facade 密度底线 | `test_tui_widget_clear` / `intf` ≥12 |
-| **Q6** | 文档同步 | SCORECARD / BENCHMARK / CONTRACT 1.5 |
+| Wave | 标准 | 证据 |
+|------|------|------|
+| Q1 | PARITY + SCORECARD + bench_go_rust | docs + scorecard + compare |
+| Q2 | Kitty Verified | CONTRACT 1.6 + terminal tests |
+| Q3 | 稀疏 widget ≥16 | widget suites |
+| Q4 | Wine smoke pure path | `test_tui_*_wine` |
+| Q5 | Focus reporting + core density | CONTRACT 1.7 |
+| Q6 | SC6/SC7 门禁 + ext 运行时密度 ≥12 | scorecard SC6–SC7 + theme/… |
 
----
+原则：可测正确性 + 热路径门禁 + 文档诚实；禁止假胜 ns。
+
 
 ## 3. 命令
 
@@ -73,10 +74,10 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 
 | Wave | 内容 | 状态 |
 |------|------|------|
-| Q1 | PARITY / SCORECARD / bench_go_rust | **Done** |
-| Q2 | Kitty `CSI ? u` → Verified | **Done** |
-| Q3 | 稀疏 widget ≥16 | **Done** |
-| Q4 | Wine smoke input/buffer/color | **Done** |
-| Q5 | DECSET 1004 focus + 核心 suite 密度 | **本批** |
-| Q6 | facade 晋升策略 | 后续 |
-| Q7 | 完整 ratatui/crossterm crate 对照 | 后续 |
+| Q1–Q5 | 测量脚手架 / Kitty / 稀疏 / Wine / Focus | **Done** (`main@a96e3813e`+) |
+| Q6 | Scorecard SC6–SC7 + ext/core 密度 | **Done** |
+| Q7 | Truecolor env-attested Verified + 更多 suite 密度 | **Done** |
+| Q8 | 门面契约 + SC8 + Wine 加厚 | **本批** |
+| Q8 | facade 晋升策略 | 后续 |
+| Q9 | 完整 ratatui/crossterm crate 对照 | 后续 |
+| Q10 | Truecolor DA 查询（非 env-attested） | 后续 |

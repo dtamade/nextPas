@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.9**
+**当前版本**: **v8.13**
 **最后更新**: 2026-07-19
 
 ---
@@ -25,8 +25,8 @@
 
 | 指标 | 值 |
 |------|-----|
-| 套件 | **18**（api + runner source-contract） |
-| 可计数过程 | **≥1500**（排除 stress 10K 空） |
+| 套件 | **19**（+ scale report） |
+| 可计数过程 | **≥2500**（目标；门禁 SCALE_MIN 默认 2000） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -39,13 +39,24 @@
 | B1–B4 v8.8 | **done + main** |
 | B5 v8.9a 有意义规模 | **done** |
 | B6 Helper/Check=Fatal 文档 | **done** |
-| B7 runner 门禁 | **done**（land 随后） |
+| B7 runner 门禁 | **done** |
+| B8 v8.10 mock隔离/perf阈值/output深契约 | **done** |
+| B9 v8.11a 危险并发契约 | **done** |
+| B10 v8.11b Runner/Lifecycle 深度 | **done** |
+| B11 v8.11c 规模报表+golden+≥1800 | **done** |
+| B12 v8.12a 薄套件+边界收口 | **done** |
+| B13 v8.12b 报告+门禁≥2000 | **done** |
+| B14 v8.12c shrink+≥2500 | **done** |
+| B15 v8.13a ApplyCLIArgsFrom | **done** |
+| B16 v8.13b perf 软跨机策略 | **done** |
 
-### 暂缓
+### 暂缓 / 阻塞
 
-- IExpectation 类型拆分
-- SoftFail API（破坏性；文档钉死 Check=Fatal）
-- TSAN / 编译器覆盖率插桩
+- SoftFail API（Check=Fatal 默认；opt-in 需拍板）
+- IExpectation 类型拆分（v9 breaking）
+- TSAN（无 FPC 一体化路径）
+- 编译器 coverage 插桩（等 nextpas 编译器）
+- 跨 OS perf **硬**门禁入库（软策略已做：PERF_SKIP / host baseline）
 
 ---
 
@@ -56,3 +67,30 @@ make -C core/tests/nextpas.core.test/<suite> clean test
 make hygiene
 make -C core/tests/nextpas.core.test clean test   # 17/17
 ```
+
+
+## 并行用户责任（可测）
+
+| 误用 | 期望 |
+|------|------|
+| 跨线程用同一 `TMock` | fail `not thread-safe` |
+| 在 worker 线程 `RegisterStub`/`RegisterFixture` | raise `main thread` |
+| 并行测试内改 `GStubRegistry` 语义 | 禁止；仅 Setup 主线程注册 |
+
+
+## Scale report
+
+```bash
+make -C core/tests/nextpas.core.test/test_scale_report test
+# SCALE_MIN=2500 (default)
+```
+
+
+## perf 策略
+
+| 项 | 策略 |
+|----|------|
+| CI | **可选**（`test_perf_bench` / `perf-regression-check.sh`） |
+| 阈值 | 默认 **+30%**（宽松防 flaky） |
+| 跨机基线 | **不强制入库**；本机生成 `perf-baseline.json` 后对比 |
+| 目标 | 对标 benchstat 意图，非硬性能 SLA |

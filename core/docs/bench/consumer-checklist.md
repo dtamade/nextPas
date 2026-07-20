@@ -2,7 +2,8 @@
 
 对照 [consumer-guide.md](consumer-guide.md)。**默认只记录**；模块 `.lpr` 大改归各模块 lane。
 
-抽检日期：2026-07-20 · 抽检人：bench lane
+抽检日期：2026-07-20 · 抽检人：bench lane  
+C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）
 
 ## 检查项
 
@@ -18,22 +19,58 @@
 
 | 模块 bench | C1 | C2 | C3 | C4 | C5 | 备注 |
 |------------|----|----|----|----|----|------|
-| `nextpas.core.hash/bench_hash` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `TBenchSuite` + `SHA256/1MB` 等；未显式 Quiet/短 MinDuration；仅 PrintToConsole |
-| `nextpas.core.collections/bench_vec` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `Vec.Push` 等 suite 名；多段 suite；控制台输出 |
-| `nextpas.core.json/bench_json` | ✅ | ✅ | ⚠️ | ✅ | ✅ | `Parse/small` 等命名好；链式 Add；默认时长可能偏长 |
+| `nextpas.core.hash/bench_hash` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-hash.json` |
+| `nextpas.core.collections/bench_vec` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-vec.json` |
+| `nextpas.core.json/bench_json` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-json.json` |
+| `nextpas.core.fs/bench_fs` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-fs.json` |
+| `nextpas.core.encoding/bench_encoding` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-encoding.json` |
+| `nextpas.core.async/bench_async` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-async.json` |
+| `nextpas.core.toml/bench_toml_parse` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-toml-parse.json` |
+| `nextpas.core.text/bench_text` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-text.json` |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 建议（给各模块 lane，非本 lane 改代码）
+## 汇总（2026-07-20 · C3 落地后）
 
-1. 统一 `.SetQuiet(True)` + 显式 `SetMinDuration`/`SetMinSamples`（CI 可预测）。  
-2. 可选 `SaveToJSON('build/bench-<mod>.json')` 便于 CI 工件。  
-3. suite 名与 entry 名都用 `Module/Op` 前缀，方便矩阵与分组导出。  
+| 模式 | 观察 |
+|------|------|
+| C1 | 抽检模块均已 `TBenchSuite` |
+| C2 | json/fs 较好；async/text/toml/encoding 等命名仍偏扁平（后续可选） |
+| C3 | **checklist 8 模块已落地** Quiet + 50ms MinDuration + 5 MinSamples |
+| C4–C5 | 控制台 + `build/bench-*.json`；无源码树污染 |
+
+## 建议（其余模块 / C2）
+
+1. 非 checklist 模块可复制下方片段。  
+2. entry 名统一 `Module/Op` 或 `Op/size`（C2，不阻塞 CI）。  
+3. 正式基线可本地去掉短时参数（恢复默认 1s / 30 samples）。
+
+**可复制片段**（CI 友好）：
+
+```pascal
+LResults := TBenchSuite.Create('MyMod')
+  .SetQuiet(True)
+  .SetMinDuration(TDuration.FromMilliseconds(50))
+  .SetMinSamples(5)
+  .Add('MyMod/HotPath', @BenchHot)
+  .Run;
+WriteLn(LResults.PrintToConsole);
+ForceDirectories('build');
+LResults.SaveToJSON('build/bench-mymod.json');
+```
+
+## 仓库一键入口
+
+```bash
+# 框架全量测试
+make bench-module-test
+# 或
+make -C core bench-module-test
+
+# 子集 smoke（需 fpc + go）
+make bench-scorecard-smoke
+```
 
 ## 如何更新本表
 
-抽检新模块后追加行；重跑框架 gate：
-
-```bash
-make -C core/tests/nextpas.core.bench clean test
-```
+抽检新模块后追加行；重跑框架 gate：`make bench-module-test`。

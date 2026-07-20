@@ -9,14 +9,14 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
 - **Windows x86_64**: durable **`ci-matrix`** for documented **18-gate** set on GHA
   `test-windows-runtime` (**19-gate** promoted, including `platform.error` +
-  `platform.fmt`); Wine runtime smoke secondary (**20** matrix modules, +info +which +dl +pipe).
+  `platform.fmt`); Wine runtime smoke secondary (**21** matrix modules, +info +which +dl +pipe +args).
   Outside matrix: deeper AcceptEx/ConnectEx; signal is
   forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
   Forced Windows compile gates remain the compile-coherence boundary; remaining
   modules outside the documented set still need real-Windows runtime proof.
-- **macOS**: **focused-runtime** for documented 8-gate set (ROADMAP D2.c);
-  **9-gate candidate** adds `platform.memory` (Batch-5; promote only after GHA
-  `test-macos` pass=9).
+- **macOS**: **focused-runtime** for documented **9-gate** set (ROADMAP D2.c +
+  Batch-5B: +`platform.memory`; GHA run 29696318492 @ `d160cbc46` fail-closed
+  matrix step success).
 - **FreeBSD / Android**: source-contract, forced-compile, or best-effort CI only.
 
 Usability maintenance baseline 8.21 is closed (LT0–LT3 + dual-IO/F6 freeze). D0–D3 closed.
@@ -27,8 +27,8 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 19-gate set; wine 20-module secondary | expand matrix; keep GHA+wine green |
-| macOS | **focused-runtime** 8-gate set (D2.c); 9-gate (+memory) candidate | GHA green for +memory then promote |
+| Windows x86_64 | **ci-matrix** 19-gate set; wine 21-module secondary | expand matrix; keep GHA+wine green |
+| macOS | **focused-runtime** 9-gate set (D2.c + memory) | keep GHA matrix green; no full-host parity |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
 
@@ -50,10 +50,10 @@ Focused runtime gates use heaptrc for leak-proof validation.
 
 ## Windows matrix evidence
 
-**Wine smoke** (Win64 PE under Wine; secondary; **20** matrix modules): time,
+**Wine smoke** (Win64 PE under Wine; secondary; **21** matrix modules): time,
 memory, sync, thread, io, process, files, fs, path, env, mmap, random, socket,
-error, fmt, info, which, dl, pipe, io.reactor.iocp. Not covered: signal,
-console, args, freetype/net, pty.
+error, fmt, info, which, dl, pipe, args, io.reactor.iocp. Not covered: signal,
+console, freetype/net, pty, resource, watch.
 
 **Real Windows ci-matrix (19)** via `platform-windows-ci-matrix.sh`: time, memory,
 sync, thread, io, process, files, fs, path, env, mmap, random, socket, error,
@@ -80,7 +80,7 @@ that list.
 | P4 Completion lane | IOCP/proactor | ci-matrix poller/iocp + focused-runtime | deepen AcceptEx/ConnectEx |
 | P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile |
 | P6 Benchmarks | performance baseline | 14-operation baseline | cross-platform compare |
-| P7 macOS/Darwin | host truth | focused-runtime 8-gate set | keep matrix green |
+| P7 macOS/Darwin | host truth | focused-runtime 9-gate set | keep matrix green |
 | P8 FreeBSD | host truth | deferred | cross-platform-actions CI |
 | P9 Android | host truth | deferred | NDK + bionic runtime |
 

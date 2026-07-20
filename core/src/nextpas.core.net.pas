@@ -61,6 +61,15 @@ function CreateBackpressureController(
 function CreateBackpressureController(
   const ALoop: TAsyncLoop): IBackpressureController; overload; inline;
 
+function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
+function AsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer = nil): Boolean; inline;
+function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
+  const AAddrs: array of TNetAddress; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer = nil): Boolean; inline;
+
 implementation
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
@@ -106,6 +115,28 @@ function CreateBackpressureController(
   const ALoop: TAsyncLoop): IBackpressureController;
 begin
   Result := nextpas.core.net.async.backpressure.CreateBackpressureController(ALoop);
+end;
+
+function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
+begin
+  Result := nextpas.core.net.async.dial.DefaultAsyncTcpDialOptions;
+end;
+
+function AsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer): Boolean;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDial(ALoop, AHost, APort,
+    AOptions, ACallback, AContext);
+end;
+
+function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
+  const AAddrs: array of TNetAddress; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer): Boolean;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDialAddrs(ALoop, AAddrs, APort,
+    AOptions, ACallback, AContext);
 end;
 
 end.

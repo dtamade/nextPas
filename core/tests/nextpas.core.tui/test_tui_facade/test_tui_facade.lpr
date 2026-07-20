@@ -412,6 +412,42 @@ begin
   Check(LCaught, 'full facade lets app code catch backend failures as ETui');
 end;
 
+
+procedure TestFocusEventHelpers;
+var
+  LIn, LOut: TEvent;
+begin
+  LIn := FocusEvent(fkIn);
+  LOut := FocusEvent(fkOut);
+  Check(IsFocus(LIn), 'IsFocus in');
+  Check(IsFocusIn(LIn), 'IsFocusIn');
+  Check(not IsFocusOut(LIn), 'not out');
+  Check(IsFocusOut(LOut), 'IsFocusOut');
+  Check(LIn.Kind = evFocus, 'evFocus kind');
+end;
+
+procedure TestFocusReportingOptionOnFacade;
+var
+  LOpts: TTerminalOptions;
+begin
+  LOpts := TTerminalOptions.EditorDefault;
+  Check(not LOpts.FocusReporting, 'default off');
+  LOpts.FocusReporting := True;
+  Check(LOpts.FocusReporting, 'can enable');
+end;
+
+procedure TestNoneAndKeyHelpers;
+var
+  LEv: TEvent;
+begin
+  LEv := NoneEvent;
+  Check(IsNone(LEv), 'NoneEvent');
+  LEv := KeyCharEvent(Ord('q'), []);
+  Check(IsKeyChar(LEv, Ord('q')), 'KeyCharEvent q');
+  Check(IsQuit(LEv), 'IsQuit q');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.facade');
   T.Test('core facade types', @TestCoreFacadeTypes);
@@ -423,5 +459,8 @@ begin
   T.Test('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
   T.Test('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
   T.Test('full facade exposes tui exceptions', @TestFullFacadeExposesTuiExceptions);
-  if not T.Run then Halt(1);
+    T.Test('focus event helpers', @TestFocusEventHelpers);
+  T.Test('focus reporting option', @TestFocusReportingOptionOnFacade);
+  T.Test('none and key helpers', @TestNoneAndKeyHelpers);
+if not T.Run then Halt(1);
 end.

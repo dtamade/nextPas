@@ -13,6 +13,7 @@ uses
   nextpas.core.text.unicode.script,
   nextpas.core.text.unicode.block,
   nextpas.core.text.unicode.segment,
+  nextpas.core.text.unicode.bidi,
   nextpas.core.text.unicode.collate,
   nextpas.core.text.unicode.data;
 
@@ -31,6 +32,11 @@ type
   TWordBreakProperty = nextpas.core.text.unicode.types.TWordBreakProperty;
   TSentenceBreakProperty = nextpas.core.text.unicode.types.TSentenceBreakProperty;
   TLineBreakClass = nextpas.core.text.unicode.types.TLineBreakClass;
+  TBidiClass = nextpas.core.text.unicode.types.TBidiClass;
+  TBidiPairedBracketType = nextpas.core.text.unicode.types.TBidiPairedBracketType;
+  TBidiResolveResult = nextpas.core.text.unicode.bidi.TBidiResolveResult;
+  TBidiLevelArray = nextpas.core.text.unicode.bidi.TBidiLevelArray;
+  TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
@@ -62,6 +68,12 @@ function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBrea
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
+function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -117,11 +129,13 @@ function SegmentGraphemeClusters(const AText: string): TSegmentResultArray; inli
 function SegmentWords(const AText: string): TSegmentResultArray; inline;
 function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
+function SegmentLineBreaks(const AText: string): TSegmentResultArray; inline;
 { Shared UAX #29 grapheme-cluster core (byte-oriented). }
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt; inline;
 
 // 排序规则函数
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
@@ -175,6 +189,32 @@ end;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass;
 begin
   Result := nextpas.core.text.unicode.props.GetLineBreakClass(ACp);
+end;
+
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiClass(ACp);
+end;
+
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiPairedBracket(ACp);
+end;
+
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiPairedBracketType(ACp);
+end;
+
+function ResolveBidi(const AText: string; const AParagraphDir: Integer): TBidiResolveResult;
+begin
+  Result := nextpas.core.text.unicode.bidi.ResolveBidi(AText, AParagraphDir);
+end;
+
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer): TBidiResolveResult;
+begin
+  Result := nextpas.core.text.unicode.bidi.ResolveBidiClasses(AClasses, AParagraphDir);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
@@ -404,6 +444,11 @@ begin
   Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
 end;
 
+function SegmentLineBreaks(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.SegmentLineBreaks(AText);
+end;
+
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.GraphemeClusterByteLen(AData, ALen);
@@ -422,6 +467,11 @@ end;
 function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.LineBreakByteLen(AData, ALen);
+end;
+
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
+begin
+  Result := nextpas.core.text.unicode.segment.NextLineBreak(AText, APos);
 end;
 
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;

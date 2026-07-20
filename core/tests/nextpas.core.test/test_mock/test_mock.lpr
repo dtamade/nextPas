@@ -31,6 +31,7 @@ program test_mock;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
@@ -1767,6 +1768,103 @@ begin
   end;
 end;
 
+{ ── B8 v8.10: cross-thread isolation (not thread-safe by contract) ────────── }
+
+type
+  TMockCrossOp = (mcoRecordCall, mcoGetReturn, mcoVerify);
+  PMockThreadCtx = ^TMockThreadCtx;
+  TMockThreadCtx = record
+    Mock: TMock;
+    Op: TMockCrossOp;
+    Caught: Boolean;
+    Msg: string;
+  end;
+
+function MockCrossThreadWorker(P: Pointer): PtrInt;
+var
+  C: PMockThreadCtx;
+  LArgs: array of string;
+begin
+  C := PMockThreadCtx(P);
+  C^.Caught := False;
+  C^.Msg := '';
+  SetLength(LArgs, 0);
+  try
+    case C^.Op of
+      mcoRecordCall:
+        C^.Mock.RecordCall('Cross', LArgs);
+      mcoGetReturn:
+        C^.Mock.GetReturn('bind');
+      mcoVerify:
+        C^.Mock.Verify('bind').CalledExactly(1);
+    end;
+  except
+    on E: EAssertionFailed do
+    begin
+      C^.Caught := True;
+      C^.Msg := E.Message;
+    end;
+  end;
+  Result := 0;
+end;
+
+procedure RunMockCrossThread(AOp: TMockCrossOp; const ALabel: string);
+var
+  LM: TMock;
+  Ctx: TMockThreadCtx;
+  TID: TThreadID;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.Setup('bind').Returns('v');
+    LM.RecordCall('bind', LArgs); { bind owner thread }
+    Ctx.Mock := LM;
+    Ctx.Op := AOp;
+    Ctx.Caught := False;
+    Ctx.Msg := '';
+    TID := BeginThread(@MockCrossThreadWorker, @Ctx);
+    CheckTrue(TID <> TThreadID(0), 'BeginThread ok');
+    WaitForThreadTerminate(TID, 10000);
+    CheckTrue(Ctx.Caught, ALabel + ' must raise on other thread');
+    CheckContains(LowerCase(Ctx.Msg), 'not thread-safe');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMockCrossThreadNotSafe;
+begin
+  RunMockCrossThread(mcoRecordCall, 'RecordCall');
+end;
+
+procedure TestMockCrossThreadGetReturn;
+begin
+  RunMockCrossThread(mcoGetReturn, 'GetReturn');
+end;
+
+procedure TestMockCrossThreadVerify;
+begin
+  RunMockCrossThread(mcoVerify, 'Verify');
+end;
+
+procedure TestMockSameThreadOk;
+var
+  LM: TMock;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.RecordCall('A', LArgs);
+    LM.RecordCall('A', LArgs);
+    LM.Verify('A').CalledExactly(2);
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── TMockCaptor tests ─────────────────────────────────────────────────────── }
 
 procedure TestCaptorCaptureFrom;
@@ -1885,6 +1983,28 @@ begin
   end;
 end;
 
+{ ── B14: mock fail-path table ──────────────────────────────────────────────── }
+
+procedure TestB14MockCalledTimesFailPath(const AC: TTestCase);
+{ Data: expected call count (int). Mock never called → CalledExactly must fail. }
+var
+  LM: TMock;
+  LExpect: Integer;
+  LArgs: specialize TArray<string>;
+begin
+  LExpect := StrToInt(AC.Data);
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    ExpectFail(procedure
+      begin
+        LM.Verify('Never').CalledExactly(LExpect);
+      end, 'time');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1892,6 +2012,8 @@ var
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
+  LB14Cases: specialize TArray<TTestCase>;
+  LB14I: Integer;
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
@@ -2061,6 +2183,23 @@ begin
   Suite.Test('B5 GetCallHistory empty', @TestB5GetCallHistoryEmpty);
   Suite.Test('B5 Returns default empty', @TestB5ReturnsDefaultEmpty);
   Suite.Test('B5 CalledTimes zero', @TestB5CalledTimesZero);
+
+  { B8/B9 mock isolation (not thread-safe by contract) }
+  Suite.Test('B8 cross-thread RecordCall', @TestMockCrossThreadNotSafe);
+  Suite.Test('B9 cross-thread GetReturn', @TestMockCrossThreadGetReturn);
+  Suite.Test('B9 cross-thread Verify', @TestMockCrossThreadVerify);
+  Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
+
+  { B14: meaningful fail-path table — CalledTimes mismatch messages }
+  SetLength(LB14Cases, 300);
+  for LB14I := 0 to High(LB14Cases) do
+  begin
+    LB14Cases[LB14I].Name := 'mock-fail-' + IntToStr(LB14I);
+    { expected count = 1, actual will be 0 → fail path }
+    LB14Cases[LB14I].Data := '1';
+  end;
+  Suite.TestTable('B14 mock CalledTimes fail-path', LB14Cases,
+    @TestB14MockCalledTimesFailPath);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
