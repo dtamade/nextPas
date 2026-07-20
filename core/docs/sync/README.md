@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：Maintenance + 契约硬化（接管基线进行中）
+**状态**：**Maintenance**（稳定；仅在消费者/跨平台语义驱动时开新 slice）
 
 ---
 
@@ -88,6 +88,14 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_source_contracts
 | Android compile | `test_sync_android_compile_gate` | `-dNEXTPAS_FORCE_HOST_ANDROID` -Cn |
 
 Benchmark：`core/benchmarks/nextpas.core.sync/bench_sync/`
+
+### 示例
+
+```bash
+make -C core/examples/nextpas.core.sync/sync_basics run
+```
+
+`sync_basics`：Mutex/CondVar、WaitGroup、Once、Event、SpinLock 门面冒烟（非测试 gate）。
 
 ---
 
