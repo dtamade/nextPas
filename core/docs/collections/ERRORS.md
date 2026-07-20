@@ -17,11 +17,14 @@ Type.Method: reason
 
 | 场景 | 文案 |
 |------|------|
-| 空容器 Pop | `TVec.Pop/Peek: empty` |
+| 空容器 Pop | `TVec.Pop: empty` / `TVecDeque.PopFront: empty` |
+| 空容器 First/Last | `TVecDeque.First: empty` |
 | 键缺失 checked Get | `THashMap.Get: key not found` |
 | 越界 | `Span.Get: index out of range` |
 | nil 参数 | `TNodeManager.Create: aAllocator cannot be nil` |
 | 分配失败 | `TSwissTable.AllocBuffers: ctrl allocation failed` |
+
+**空容器统一类型**：`EEmptyCollection`（不要用 `EOutOfRange` / `EInvalidOperation` 表示「空」）。
 
 避免仅写 `collection is empty` / `key not found` 而无类型/方法上下文。
 
@@ -51,7 +54,7 @@ Type.Method: reason
 | checked `Get(Index)` / `Put(Index)` | `EOutOfRange` |
 | checked map `Get(Key)` | `EInvalidOperation`（key not found） |
 | `TryGetValue` / `TryPop` / `Contains` | `Boolean`，无异常 |
-| 空 `Pop` / `Peek` | `EEmptyCollection` |
+| 空 `Pop` / `Peek` / `Front` / `First` / `Last` | `EEmptyCollection` |
 | nil 缓冲区 / nil allocator（必填） | `EArgumentNil` |
 | 自定义类型无 hash/compare 且未注入 | `ENotSupported*` |
 

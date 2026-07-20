@@ -44,7 +44,7 @@ type
      *   移除后，原来的第二个元素（如果存在）成为新的头部元素
      *
      * @exceptions
-     *   EInvalidOperation 如果链表为空
+     *   EEmptyCollection 如果链表为空
      *}
     function PopFront: T;
 
@@ -76,7 +76,7 @@ type
      *   注意：本方法按值返回，不提供可直接修改的引用
      *
      * @exceptions
-    *   EInvalidOperation 如果链表为空
+    *   EEmptyCollection 如果链表为空
     *}
     function Front: T;
 

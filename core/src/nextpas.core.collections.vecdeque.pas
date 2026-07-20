@@ -935,7 +935,7 @@ begin
   // 简化边界检查：只检查缓冲区是否为空
   // 逻辑索引的有效性由调用者负责检查
   if FBuffer.GetCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.GetPhysicalIndex: buffer is empty');
+    raise EEmptyCollection.Create('TVecDeque.GetPhysicalIndex: empty');
 
   Result := WrapAdd(FHead, aLogicalIndex);
 end;
@@ -3055,7 +3055,7 @@ end;
 function TVecDeque.PopFront: T;
 begin
   if FCount = 0 then
-    raise EOutOfRange.Create('TVecDeque.PopFront: deque is empty');
+    raise EEmptyCollection.Create('TVecDeque.PopFront: empty');
   Result := FData[FHead];
   if System.IsManagedType(T) then
     FData[FHead] := Default(T);
@@ -3082,7 +3082,7 @@ end;
 function TVecDeque.PopBack: T;
 begin
   if FCount = 0 then
-    raise EOutOfRange.Create('TVecDeque.PopBack: deque is empty');
+    raise EEmptyCollection.Create('TVecDeque.PopBack: empty');
   FTail := (FTail - 1) and FCapacityMask;
   Result := FData[FTail];
   if System.IsManagedType(T) then
@@ -3109,7 +3109,7 @@ end;
 function TVecDeque.PeekFront: T;
 begin
   if FCount = 0 then
-    raise EOutOfRange.Create('TVecDeque.PeekFront: deque is empty');
+    raise EEmptyCollection.Create('TVecDeque.PeekFront: empty');
 
   Result := FBuffer.GetUnchecked(FHead);
 end;
@@ -3129,7 +3129,7 @@ end;
 function TVecDeque.PeekBack: T;
 begin
   if FCount = 0 then
-    raise EOutOfRange.Create('TVecDeque.PeekBack: deque is empty');
+    raise EEmptyCollection.Create('TVecDeque.PeekBack: empty');
 
   // 修复：FTail指向下一个插入位置，最后一个元素在WrapSub(FTail, 1)
   Result := FBuffer.GetUnchecked(WrapSub(FTail, 1));
@@ -8104,7 +8104,7 @@ var
   LCurrentValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElement: empty');
 
   LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8122,7 +8122,7 @@ var
   LMinValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElement: empty');
 
   LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8139,7 +8139,7 @@ var
   LMinValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElement: empty');
 
   LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8157,7 +8157,7 @@ var
   LMinValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElement: empty');
 
   LMinValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8176,7 +8176,7 @@ var
   LCurrentValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElement: empty');
 
   LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8194,7 +8194,7 @@ var
   LMaxValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElement: empty');
 
   LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8211,7 +8211,7 @@ var
   LMaxValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElement: empty');
 
   LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8229,7 +8229,7 @@ var
   LMaxValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElement: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElement: empty');
 
   LMaxValue := GetUnchecked(0);
   for i := 1 to FCount - 1 do
@@ -8251,7 +8251,7 @@ var
   LCurrentValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElementIndex: empty');
 
   LMinValue := GetUnchecked(0);
   LMinIndex := 0;
@@ -8274,7 +8274,7 @@ var
   LMinIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElementIndex: empty');
 
   LMinValue := GetUnchecked(0);
   LMinIndex := 0;
@@ -8296,7 +8296,7 @@ var
   LMinIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElementIndex: empty');
 
   LMinValue := GetUnchecked(0);
   LMinIndex := 0;
@@ -8319,7 +8319,7 @@ var
   LMinIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MinElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MinElementIndex: empty');
 
   LMinValue := GetUnchecked(0);
   LMinIndex := 0;
@@ -8343,7 +8343,7 @@ var
   LCurrentValue: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElementIndex: empty');
 
   LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
@@ -8366,7 +8366,7 @@ var
   LMaxIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElementIndex: empty');
 
   LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
@@ -8388,7 +8388,7 @@ var
   LMaxIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElementIndex: empty');
 
   LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
@@ -8411,7 +8411,7 @@ var
   LMaxIndex: SizeUInt;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.MaxElementIndex: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.MaxElementIndex: empty');
 
   LMaxValue := GetUnchecked(0);
   LMaxIndex := 0;
@@ -8868,14 +8868,14 @@ end;
 function TVecDeque.First: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.First: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.First: empty');
   Result := GetUnchecked(0);
 end;
 
 function TVecDeque.Last: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TVecDeque.Last: collection is empty');
+    raise EEmptyCollection.Create('TVecDeque.Last: empty');
   Result := GetUnchecked(FCount - 1);
 end;
 

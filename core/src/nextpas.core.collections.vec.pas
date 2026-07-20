@@ -1464,7 +1464,7 @@ var
   Slot: PElement;
 begin
   if FCount = 0 then
-    raise EEmptyCollection.Create('TVec.Pop: failed to pop (empty)');
+    raise EEmptyCollection.Create('TVec.Pop: empty');
   Dec(FCount);
   Slot := GetPtrUnchecked(FCount);
   Result := Slot^;
@@ -1485,7 +1485,7 @@ end;
 function TVec.Peek: T;
 begin
   if not TryPeekCopy(@Result, 1) then
-    raise EEmptyCollection.Create('TVec.Peek: failed to peek (empty)');
+    raise EEmptyCollection.Create('TVec.Peek: empty');
 end;
 
 function TVec.TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean;
