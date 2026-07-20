@@ -25,7 +25,7 @@
 | Read / ReadAll | ✓ | `ReadRow` / `ReadAll` | Done |
 | Comma / Comment | ✓ | Delimiter / Comment | Done |
 | FieldsPerRecord | ✓ | ✓ | Done |
-| LazyQuotes | ✓ | Partial（实现取舍） | Partial |
+| LazyQuotes | ✓ | **严格**：bare quote → error（`TestBareQuoteError`） | Done（strict） |
 | Writer | ✓ | `TCsvWriter` | Done |
 | 结构化错误 | ParseError | `TCsvError` | Done |
 | 真正流式大文件 | 按块读 | 8KiB refill + 跨块 quoted | Done |

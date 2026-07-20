@@ -1,10 +1,12 @@
 # process / fs / path / env — Go / Rust 对标矩阵（R16–R23）
 
-**状态日期**：2026-07-20
-**范围**：L2 `nextpas.core.{process,fs,path,os.env}`
+**状态日期**：2026-07-20  
+**开发地图（终局 / 里程碑 / 治理）**：[`ROADMAP.md`](./ROADMAP.md) — **Host Essential 已完成；禁止无限 Rxx。**  
+**范围**：L2 `nextpas.core.{process,fs,path,os.env}`  
 **标杆**：Go `os` / `os/exec` / `path/filepath`；Rust `std::{fs,process,path,env}`
 
-> 对标的是**能力 + 边界语义 + 测试强度**，不是符号名逐字复制。
+> 对标的是**能力 + 边界语义 + 测试强度**，不是符号名逐字复制。  
+> **Host 状态：Maintenance**（见 ROADMAP M0/M1）。剩余主线是 **M2 Windows Wave（platform 主责）**，不是再刷 Host 分数。
 
 ---
 
@@ -65,7 +67,7 @@
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 | File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
-| File watch | fsnotify / notify | **Watch / AddTree / Remove / IFsWatcher** | Done（R25–R32；Unix；Win L0 UNSUPPORTED） |
+| File watch | fsnotify / notify | **Watch / AddTree / Remove / IFsWatcher** | Done Unix；**Win S2 poll**（platform RDCW；Wine soft） |
 | Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done（R24-PG；Unix；Win UNSUPPORTED） |
 
 ### path
@@ -122,14 +124,14 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | fs.errors 磁盘满/OOM | **已修**：ENOSPC/ENOMEM、Win DISK_FULL → `EResourceExhaustedError` |
 | 历史 polish（RemoveAll symlink / Append / pread） | **复核已修复** |
 
-### 仍 Deferred（非阻塞）
+### 仍 Deferred（非阻塞；见 ROADMAP M2）
 
 | 项 | 性质 |
 |----|------|
-| Win Job Object / ExtraFd / Credential 完整化 | 文档 UNSUPPORTED；非阻塞 |
-| 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
-| Status/spawn 再压到 1.0× Go | 已 ~1.2×；收益递减 |
-| Win platform.watch 实现 | 仍 UNSUPPORTED；wine 文档化 |
+| Win Job Object / ExtraFd / Credential | **M2-W2/W3**；platform 主责 |
+| Win platform.watch Poll | **M2-W1 DONE**（S2 RDCW；Wine soft） |
+| 真 Windows host CI | **M3**；基础设施 |
+| Status/spawn 1.0× Go | **非目标**（收益递减） |
 
 ### 外部债 / 证据
 
@@ -141,11 +143,14 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 ## 维护策略（口径）
 
-**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + **递归 Watch** + wine×5 + SCORECARD + process 测试框架合规。
+**状态：Host Maintenance（M0/M1）。** Essential Host 完成；R16–R34 序列**封顶**。
 
-**周报：**
+**新工作必须贴标签**（`bug` / `win-l0` / `win-l2` / `ci` / `docs`），见 [`ROADMAP.md`](./ROADMAP.md) §5。  
+Win 能力用 **W1–W4**，不用 R35+。
 
-> process/fs/path/env：维护态。R34 fs 同方法 SCORECARD + wine Capture + IFile ReadAt；Quality 9.9 / Scale 9.8。
+**周报模板：**
+
+> process/fs/path/env：Host Maintenance。Quality 9.9 / Scale 9.8。Win 见 ROADMAP M2。
 
 ---
 
@@ -153,7 +158,9 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-19 | R16 初版矩阵 + 评分卡；Essential 零 L0 API 落地后更新状态 |
+| 2026-07-20 | **ROADMAP**：Host 完成声明；冻结 R 序列；M2 Win Waves |
+| 2026-07-20 | **M2-W1**：Win watch S2 poll 已由 platform 落地；L2 wine 证据 |
+| 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
 | 2026-07-19 | R16 续 WaitGraceful + SameFile |
 | 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |
 | 2026-07-19 | R18 wine-runtime-smoke 实况绿（4/4）；去掉过时 expect 阻塞表述 |

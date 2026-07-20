@@ -1,175 +1,249 @@
 # nextpas.core.collections 代码契约
 
-**模块路径**：`core/src/nextpas.core.collections*.pas`（84 个源文件）
-**层级**：L1（依赖 L0: base, mem, exception）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**模块路径**：`core/src/nextpas.core.collections*.pas`（约 83 个单元）
+**层级**：L1（依赖 L0：`base`、`mem`、`errors`/`exception`）
+**Owner**：collections lane（本 worktree）
+**最后更新**：2026-07-20
+**版本**：1.1
+
+权威状态见同目录 [`STATUS.md`](STATUS.md)。活动进度以本文与 STATUS 为准；根目录 `task_plan.collections.md` / `findings.collections.md` / `progress.collections.md` **不作为**当前契约源。
+
+---
+
+## 0. 官方用法（FPC 3.3.1）
+
+### 0.1 门面 + 接口单元
+
+`uses nextpas.core.collections` **不会**把子单元里的 open generic 接口名（如 `IVec<T>`）自动暴露给调用方。这是 FPC 3.3.1 的限制，不是门面遗漏。
+
+**推荐写法**：
+
+```pascal
+uses
+  nextpas.core.collections,           // MakeXxx 工厂、回调类型、非泛型类型
+  nextpas.core.collections.vec.intf;  // IVec / 具体容器接口
+
+var
+  V: specialize IVec<Integer>;
+begin
+  V := specialize MakeVec<Integer>;
+  // ...
+end;
+```
+
+需要哪个容器接口，就额外 `uses` 对应的 `*.intf`（或实现单元，若必须接触具体类）。
+
+### 0.2 接口优先
+
+- 常规路径：工厂返回接口（`IVec`、`IHashMap`…），调用方持有接口。
+- 具体类（`TVec`、`THashMap`…）保留给实现、benchmark、极致性能路径。
+- **不要**引入 `IMap` / `ISet` 等语义别名接口（identity 风险）。
+- 工厂命名统一 **`MakeXxx`**；短工厂（`Vec` / `Set_`）已否决且不恢复。
 
 ---
 
 ## 1. 接口契约
 
-### 1.1 核心接口层级
+### 1.1 能力层级（示意）
 
 ```
-ICollection                    ← 非泛型根（PtrIter/Count/Clear/IsEmpty）
-  ├── IList<T>                 ← 有序序列（Add/Insert/Remove/Get/Set/IndexOf）
-  ├── ISet<T>                  ← 集合（Add/Remove/Contains/Union/Intersect/Diff）
-  ├── IMap<K,V>                ← 映射（Put/Get/Remove/ContainsKey/Keys/Values）
-  ├── IQueue<T>                ← FIFO（Enqueue/Dequeue/Peek）
-  ├── IStack<T>                ← LIFO（Push/Pop/Peek）
-  └── IDeque<T>                ← 双端队列（PushFront/Back, PopFront/Back）
+ICollection                          非泛型根（Count / Clear / IsEmpty / PtrIter / Allocator）
+  └── IGenericCollection<T>          泛型遍历与通用能力（各容器 intf 继承）
+
+连续数组能力：
+  IArray<T>                          可变、可索引、连续存储 + 算法/块操作
+    └── IVec<T>                      可增长序列（Push/Pop/Insert/Drain/…）
+
+序列 / 队列：
+  IDeque<T>                          双端；VecDeque / 分段 Deque 的公共接口
+  IQueue<T>                          FIFO（Push/Pop/Peek）；实现由 VecDeque 工厂提供
+  IStack<T>                          LIFO（Push/Pop/Peek）；TStack 基于 TVec
+  IList<T> / IForwardList<T>         双向 / 单向链表
+
+映射 / 集合（具体语义名，无 IMap/ISet 别名）：
+  IHashMap<K,V>                      默认 Swiss Table（MakeHashMap/MakeMap）；OA THashMap 仍可专家直用
+  ILinkedHashMap<K,V>                插入序哈希映射
+  ITreeMap<K,V>                      红黑有序映射
+  IRBTreeMap<K,V>                    有序映射适配器（orderedmap.rb）
+  IBTreeMap<K,V>                     B-Tree 映射
+  IHashSet<T> / ITreeSet<T> / ILinkedHashSet<T> / IBTreeSet<T>
+  ISkipList<K,V> / ITrie<V>
+  IMultiMap<K,V> / IMultiSet<T>
+  ILruCache<K,V>                     缓存语义（Get 含命中/近用统计，不是纯 map）
+  IPriorityQueue<T> / ICircularBuffer<T> / IBitSet
+  IConcurrentMap<K,V>                线程安全；不继承 IHashMap
 ```
 
 ### 1.2 容器实现矩阵
 
-| 容器 | 接口 | 实现文件 | 底层结构 | IAllocator |
-|------|------|----------|----------|------------|
-| Vec\<T\> | IList\<T\> | vec.pas | 连续数组 | ✅ |
-| Arr\<T\> | — | arr.pas | 固定大小数组 | ❌ |
-| SmallVec\<T,N\> | — | smallvec.pas | 内联N+溢出 | ✅ |
-| Deque\<T\> | IDeque\<T\> | deque.pas | 分段数组 | ✅ |
-| VecDeque\<T\> | IDeque\<T\> | vecdeque.pas | 环形缓冲 | ✅ |
-| LinkedList\<T\> | IList\<T\> | list.pas | 双向链表 | ✅ |
-| ForwardList\<T\> | IList\<T\> | forward_list.pas | 单向链表 | ✅ |
-| HashMap\<K,V\> | IMap\<K,V\> | hashmap.pas | 开放寻址 | ✅ |
-| SwissMap\<K,V\> | IMap\<K,V\> | hashmap.swiss.pas | Swiss Table | ✅ |
-| HashSet\<T\> | ISet\<T\> | hashset.pas | 哈希表 | ✅ |
-| BTreeMap\<K,V\> | IMap\<K,V\> | btree.pas | B-Tree | ✅ |
-| TreeMap\<K,V\> | IMap\<K,V\> | treemap.pas | 红黑树 | ✅ |
-| TreeSet\<T\> | ISet\<T\> | tree_set.pas | 红黑树 | ✅ |
-| SkipList\<T\> | IList\<T\> | skiplist.pas | 跳表 | ✅ |
-| Trie\<T\> | — | trie.pas | 前缀树 | ✅ |
-| PriorityQueue\<T\> | IQueue\<T\> | priorityqueue.pas | 二叉堆 | ✅ |
-| LruCache\<K,V\> | IMap\<K,V\> | lrucache.pas | HashMap+双向链表 | ✅ |
-| MultiMap\<K,V\> | — | multimap.pas | K→List\<V\> | ✅ |
-| MultiSet\<T\> | — | multiset.pas | T→Count | ✅ |
-| CircularBuffer\<T\> | — | circularbuffer.pas | 环形缓冲 | ✅ |
-| BitSet | — | bitset.pas | 位数组 | ✅ |
-| LinkedHashMap\<K,V\> | IMap\<K,V\> | linkedhashmap.pas | HashMap+链表 | ✅ |
-| LinkedHashSet\<T\> | ISet\<T\> | linkedhashset.pas | HashMap+链表 | ✅ |
-| ConcurrentHashMap\<K,V\> | IConcurrentMap\<K,V\> | concurrent.hashmap.pas | 分片 | ✅ |
+| 容器 | 主要接口 | 实现单元 | 结构 | 门面工厂 |
+|------|----------|----------|------|----------|
+| Vec | `IVec` / `IArray` | `vec` | 连续动态数组 | `MakeVec` |
+| Arr | `IArray` | `arr` | 连续数组能力实现 | `MakeArr` |
+| SmallVec | （record，无 I*） | `smallvec` | 内联 N + 堆溢出 | **无** `Make*`（值类型 + 常量 N） |
+| VecDeque | `IDeque` | `vecdeque` | 环形缓冲 | `MakeVecDeque` |
+| Deque | `IDeque` | `deque` | 分段数组 | `MakeDeque` |
+| Queue | `IQueue` | 由 VecDeque 工厂 | 环形 FIFO | `MakeQueue` |
+| Stack | `IStack` | `stack`（`TVec` 后端） | LIFO | `MakeStack` |
+| List | `IList` | `list` | 双向链表 | `MakeList` |
+| ForwardList | `IForwardList` | `forward_list` | 单向链表 | `MakeForwardList` |
+| HashMap (默认) | `IHashMap` | `hashmap.swiss*` | Swiss Table | `MakeHashMap` / **`MakeMap`** |
+| SwissHashMap | `IHashMap` | `hashmap.swiss*` | Swiss Table（与默认相同） | `MakeSwissHashMap` |
+| HashMap OA 类 | `IHashMap` | `hashmap` | 开放寻址 `THashMap` | 无默认工厂；专家直接 `THashMap` |
+| HashSet | `IHashSet` | `hashset` | Swiss 后端（`TSwissHashMap<K,Byte>` 包装） | `MakeHashSet` / **`MakeSet`** |
+| LinkedHashMap | `ILinkedHashMap` | `linkedhashmap` | Swiss map + 链表序 | `MakeLinkedHashMap` |
+| LinkedHashSet | `ILinkedHashSet` | `linkedhashset` | LinkedHashMap 包装（插入序） | `MakeLinkedHashSet` |
+| TreeMap | `ITreeMap` | `treemap` | 红黑树 | `MakeTreeMap` |
+| TreeSet | `ITreeSet` | `tree_set` | 红黑集合 | `MakeTreeSet` |
+| RBTreeMap | `IRBTreeMap` | `orderedmap.rb` | RB 有序适配 | `MakeRBTreeMap` |
+| BTreeMap / BTreeSet | `IBTreeMap` / `IBTreeSet` | `btree` | B-Tree | `MakeBTreeMap` / `MakeBTreeSet` |
+| SkipList | `ISkipList` | `skiplist` | 跳表 | `MakeSkipList` |
+| Trie | `ITrie` | `trie` | 前缀树（string key） | `MakeTrie` |
+| MultiMap / MultiSet | `IMultiMap` / `IMultiSet` | `multimap` / `multiset` | Swiss map + Vec/计数 | `MakeMultiMap` / `MakeMultiSet` |
+| PriorityQueue | `IPriorityQueue` | `priorityqueue` | 二叉堆 | `MakePriorityQueue` |
+| CircularBuffer | `ICircularBuffer` | `circularbuffer` | 定长环 | `MakeCircularBuffer` |
+| LruCache | `ILruCache` | `lrucache` | Swiss map + 双向链表 | `MakeLruCache` |
+| BitSet | `IBitSet` | `bitset` | 位数组 | `MakeBitSet` |
+| ConcurrentHashMap | `IConcurrentMap` | `concurrent.hashmap` | 分片 | `MakeConcurrentHashMap` |
 
-### 1.3 内存分配器集成
+### 1.3 Map 词表（HashMap / TreeMap / SkipList / Trie / RBTreeMap 等）
 
-所有容器通过 `IAllocator` 接口注入分配器：
-- 构造时 `ResolveAllocator(nil)` / `DefaultAllocator` → **Growing IAllocator 根**（与 `DefaultHeap` 同进程堆；S5）
-- 显式 RTL 仅在传入 `GetRtlAllocator` 时
-- 存储在 `FAllocator: IAllocator` 字段
-- 所有内部堆分配通过 FAllocator
+| 方法 | 语义 |
+|------|------|
+| `TryGetValue(Key, out Value): Boolean` | 非抛查找；缺失返回 False |
+| `Get(Key): Value` | **checked** 查找；缺失抛异常 |
+| `Put(Key, Value)` | 写入；不报告插入/更新 |
+| `Add(Key, Value): Boolean` | 仅当键不存在时插入 |
+| `AddOrAssign(Key, Value): Boolean` | 插入或更新；True=新插入 |
 
-### 1.4 基础设施
+LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或强行 checked。
 
-| 模块 | 文件 | 用途 |
-|------|------|------|
-| base | collections.base.pas | THashFn, TCompareFn 回调类型 |
-| intf | collections.intf.pas | ICollection 根接口 + PtrIterator |
-| element_manager | element_manager.*.pas | 泛型元素生命周期管理 |
-| iterators | iterators.pas | 迭代器基础设施 |
-| slice | slice.pas | 非拥有视图（类似 TByteSpan） |
-| algorithms | algorithms.pas | 排序/查找/过滤算法 |
-| node | node.pas | 链表节点 |
-| builder | builder.pas | 流式构建器 |
+### 1.4 序列词表
 
-### 1.5 门面
+| 方法 | 语义 |
+|------|------|
+| `Get` / `Put`（下标） | checked；越界抛 |
+| `GetUnchecked` / `PutUnchecked` | 调用方保证边界 |
+| `Push` / `Pop` / `Peek` | 队列/栈/向量尾或端点；**不用** Enqueue/Dequeue |
+| `Delete` / `DeleteSwap` | 按下标丢弃（保序 / 不保序） |
+| `RemoveAt` / `TryRemoveAt` | 按下标取出 |
+| `SwapRemoveAt` / `TrySwapRemoveAt` | 不保序取出（Vec 等） |
 
-`nextpas.core.collections.pas` — re-export 所有容器类型和接口。
+`IArray` = 连续存储能力基。**非连续**索引容器（环形 deque）不得继承 `IArray` 只为共享下标。
+
+### 1.5 容量词表（Vec 系）
+
+| 方法 | 语义 |
+|------|------|
+| `Resize` / `Ensure` | 改逻辑 `Count`（`Ensure` 在实现上可走 Resize） |
+| `EnsureCapacity` | 绝对容量，不改 Count |
+| `Reserve` / `ReserveExact` | 为 `Count + Additional` 预留 |
+| `ShrinkToFit` / `FreeBuffer` 等 | 释放多余容量 |
+
+块操作：`Overwrite` 不改 Count；`Write` / `WriteExact` 可扩展 Count（Exact 绕过增长策略）。
+
+### 1.6 分配器
+
+- 公共类型：`TMemAllocator`（见 `ICollection.GetAllocator`）。
+- 工厂参数 `aAllocator: TMemAllocator = nil` 时走模块默认（与 mem 默认堆路径一致）。
+- 容器拥有内部 buffer / 节点；调用方拥有容器实例生命周期（接口引用计数或类 `Free` 按具体类型）。
 
 ---
 
 ## 2. 不变量
 
-- **[INV-1]** `FAllocator` 永远非 nil（构造时 ResolveAllocator 保证）
-- **[INV-2]** Vec 容量始终为 2 的幂（SwissTable 特化要求）
-- **[INV-3]** BTree 节点填充因子：每个节点 `⌈M/2⌉-1 ≤ keys ≤ M-1`
-- **[INV-4]** TreeMap/TreeSet 红黑树性质：红节点的子节点必须为黑
-- **[INV-5]** SkipList 最大层数有上限（通常 32）
-- **[INV-6]** LRU 容量固定，Put 超出时淘汰最久未访问
-- **[INV-7]** CircularBuffer 的 `Head mod Capacity` 和 `Tail mod Capacity` 始终有效
-- **[INV-8]** Concurrent 内部按分片键哈希路由，分片数为 2 的幂
+- **[INV-1]** `GetAllocator` 返回值非 nil（构造时 resolve）。
+- **[INV-2]** HashMap 默认最大负载因子 `DEFAULT_MAX_LOAD_FACTOR = 0.75`。
+- **[INV-3]** BTree 节点填充：`⌈M/2⌉-1 ≤ keys ≤ M-1`。
+- **[INV-4]** TreeMap/TreeSet 红黑树颜色性质成立。
+- **[INV-5]** SkipList 层数有上限（`SKIPLIST_MAX_LEVEL`）。
+- **[INV-6]** LruCache 容量固定；超出淘汰最久未用。
+- **[INV-7]** CircularBuffer head/tail 对 Capacity 取模始终有效。
+- **[INV-8]** ConcurrentHashMap 分片数为 2 的幂；路由按键哈希。
 
 ---
 
 ## 3. 错误处理
 
-| 场景 | 异常 | 来源 |
-|------|------|------|
-| 索引越界 | EOutOfRange | base |
-| 空容器 Pop/Dequeue | EEmptyCollection | base |
-| nil key (HashMap) | EArgumentNil | base |
-| 容量溢出 | EOverflow | base |
-| OOM | 返回 nil / EOutOfMemory | mem |
-| 并发修改 | 未定义行为（非线程安全容器） | — |
+| 场景 | 异常 / 结果 |
+|------|-------------|
+| 下标越界 | `EOutOfRange`（或模块约定的范围异常） |
+| 空容器 checked Pop/Peek | 空集合类异常 |
+| 映射 checked Get 键缺失 | 查找/键异常 |
+| OOM | 分配失败路径 / `EOutOfMemory` |
+| 非并发容器跨线程写 | **未定义**（调用方同步） |
 
 ---
 
 ## 4. 线程安全
 
-| 容器 | 线程安全 | 说明 |
-|------|----------|------|
-| Vec/Arr/SmallVec | ❌ | 调用方同步 |
-| HashMap/SwissMap/HashSet | ❌ | 调用方同步 |
-| BTreeMap/TreeMap/TreeSet | ❌ | 调用方同步 |
-| Deque/VecDeque | ❌ | 调用方同步 |
-| LinkedList/ForwardList | ❌ | 调用方同步 |
-| PriorityQueue | ❌ | 调用方同步 |
-| LRU Cache | ❌ | 调用方同步 |
-| ConcurrentHashMap | ✅ | 分片锁 |
-| CircularBuffer | ❌ | 调用方同步 |
-| BitSet | ❌ | 调用方同步 |
+| 容器 | 线程安全 |
+|------|----------|
+| 普通容器 | ❌ 调用方同步 |
+| `ConcurrentHashMap` | ✅ 分片锁 |
 
 ---
 
-## 5. 内存管理
+## 5. 选型速查
 
-### 5.1 所有权模型
-
-```
-容器拥有：
-  ├── 内部 buffer（通过 FAllocator 分配）
-  ├── 节点/段（链表、树、跳表）
-  └── 元素副本（值语义，非引用）
-
-调用方拥有：
-  ├── 容器实例本身（Create/Destroy）
-  └── 通过 Get/Peek 返回的值拷贝
-```
-
-### 5.2 Allocator 集成
-
-- 所有容器支持 `Create(AAllocator: IAllocator)` 构造
-- `AAllocator=nil` → `GetGrowingIAllocator` / `DefaultAllocator`（与 DefaultHeap 同进程堆）
-- 内部 buffer 的 Realloc/Free 全部通过 FAllocator
-- Destroy 释放所有内部 buffer，heaptrc 0 泄漏
+| 需求 | 优先选择 |
+|------|----------|
+| 动态数组 / 默认序列 | `MakeVec` → `IVec` |
+| 小 N、栈上临时 | `TSmallVec` record（手动 Init/Done） |
+| 双端队列 | `MakeVecDeque`（通用）；`MakeDeque`（分段） |
+| 无序 KV | `MakeMap` 或 `MakeHashMap`（当前均为 Swiss）；`MakeSwissHashMap` 同实现 |
+| 插入序 KV | `MakeLinkedHashMap` |
+| 有序 KV | `MakeTreeMap` / `MakeRBTreeMap` / `MakeBTreeMap`（按场景） |
+| 无序集合 | `MakeSet` 或 `MakeHashSet`（当前 Swiss 包装 `THashSet`） |
+| 有序集合 / 区间 | `MakeTreeSet` |
+| 插入序集合 | `MakeLinkedHashSet` |
+| 线程安全 map | `MakeConcurrentHashMap` → `IConcurrentMap` |
+| 缓存 | `MakeLruCache`（非纯 map 词表） |
 
 ---
 
 ## 6. 测试覆盖
 
-### 6.1 测试矩阵（44 个测试目录）
+### 6.1 Focused suites（`core/tests/nextpas.core.collections/`）
 
-test_base, test_bitset, test_btree_custom_comparer, test_btree_managed_lifecycle, test_btree_managed_returns, test_btreemap, test_btreeset, test_circularbuffer, test_collections_killer, test_concurrent_hashmap, test_concurrent_hashmap_managed_returns, test_contracts, test_deque, test_error_paths, test_facade, test_forwardlist, test_forwardlist_managed_zero, test_hashmap, test_hashset, test_linkedhashmap, test_linkedhashset, test_list, test_lrucache, test_managed_stress, test_managed_types, test_multimap, test_multiset, test_priorityqueue, test_queue, test_rbtreemap_custom_comparer_data, test_rbtreemap_range_managed_state, test_skiplist, test_slice_contract, test_smallvec, test_stack, test_swiss_adapter, test_swisstable, test_swisstable_custom_callbacks, test_swisstable_managed_returns, test_treemap, test_treeset, test_trie, test_vec, test_vecdeque_full
+`test_base`, `test_bitset`, `test_btree_custom_comparer`, `test_btree_managed_lifecycle`, `test_btree_managed_returns`, `test_btreemap`, `test_btreeset`, `test_circularbuffer`, `test_collections_killer`, `test_concurrent_hashmap`, `test_concurrent_hashmap_managed_returns`, `test_contracts`, `test_deque`, `test_error_paths`, `test_facade`, `test_forwardlist`, `test_forwardlist_managed_zero`, `test_hashmap`, `test_hashset`, `test_linkedhashmap`, `test_linkedhashset`, `test_list`, `test_lrucache`, `test_managed_stress`, `test_managed_types`, `test_multimap`, `test_multiset`, `test_priorityqueue`, `test_queue`, `test_rbtreemap_custom_comparer_data`, `test_rbtreemap_range_managed_state`, `test_skiplist`, `test_slice_contract`, `test_smallvec`, `test_stack`, `test_swiss_adapter`, `test_swisstable`, `test_swisstable_custom_callbacks`, `test_swisstable_managed_returns`, `test_treemap`, `test_treeset`, `test_trie`, `test_vec`, `test_vecdeque_full`
 
-### 6.2 必须覆盖的场景
+### 6.2 门禁
 
-| 场景 | 状态 |
+| 场景 | 要求 |
 |------|------|
-| 创建/销毁 0 泄漏 | ✅ (heaptrc) |
-| 增删改查 CRUD | ✅ |
-| 迭代器正确性 | ✅ |
-| 排序/查找算法 | ✅ |
-| 空容器边界 | ✅ |
-| 大量元素压力 | ✅ |
-| Allocator 注入 | ✅ |
-| SwissTable 特化 | ✅ |
-| BTree 分裂/合并 | ✅ |
-| 并发容器基本安全 | ✅ |
+| 创建/销毁 | heaptrc 0 unfreed blocks（leak-sensitive suites） |
+| 公共 API | 有 focused 覆盖；改契约补测试 |
+| Span 溢出 | `test_slice_contract` + `test_contracts` + `test_error_paths` |
+
+### 6.3 常用命令
+
+```sh
+make focused FOCUS=core/tests/nextpas.core.collections/test_facade
+make -C core/tests/nextpas.core.collections/test_slice_contract clean test
+make -C core/tests/nextpas.core.collections/test_vec clean test
+```
+
+---
+
+## 7. 基础设施单元
+
+| 单元 | 用途 |
+|------|------|
+| `collections.base` | 增长策略、回调类型、共享抽象 |
+| `collections.intf` | `ICollection` 等根契约 |
+| `element_manager.*` | 元素生命周期 |
+| `iterators` / `slice` / `algorithms` / `node` / `builder` | 迭代、视图、算法、节点、构建 |
 
 ---
 
 ## 变更记录
 
-| 日期 | 版本 | 变更描述 | 作者 |
-|------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本：84 文件 / 24 容器 / 六项契约 | Claude |
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-07-01 | 1.0 | 初版（已部分过时） |
+| 2026-07-20 | 1.1 | Wave 0：对齐 MakeXxx、Map/序列词表、TMemAllocator、FPC 门面用法、真实测试矩阵；废弃 IMap/ISet/Enqueue 主叙事 |
+| 2026-07-20 | 1.2 | Wave 1：`MakeMap`/`MakeSet` 默认语义工厂；文档纠正 `MakeHashMap` 当前为 Swiss 后端 |
+| 2026-07-20 | 1.3 | Wave 3：`THashSet` 内部 map 从 OA `THashMap` 切换为 `TSwissHashMap` |
+| 2026-07-20 | 1.4 | Phase D：MultiMap/MultiSet/LruCache 默认 Swiss；adapter 增加 `GetKeys` |
+| 2026-07-20 | 1.5 | Phase E：LinkedHashMap 双表 Swiss；插入序仍由链表维护 |

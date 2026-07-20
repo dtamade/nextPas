@@ -25,6 +25,13 @@ uses
   nextpas.core.mem.allocator.base;
 
 type
+  { Owned heap buffer: ptr + alloc size for FreeMemOf (Era I). }
+  TTomlOwnedBuf = record
+    Ptr: Pointer;
+    Size: SizeUInt;
+  end;
+  PTomlOwnedBuf = ^TTomlOwnedBuf;
+
   TTomlDocument = record
   private
     FNodes: PTomlNode;
@@ -34,7 +41,7 @@ type
     FInput: TStringView;
     FError: TTomlError;
     FHasError: Boolean;
-    FOwnedBufs: PPointer;
+    FOwnedBufs: PTomlOwnedBuf;
     FOwnedCount: UInt32;
     FOwnedCap: UInt32;
     FCurrentTable: UInt32;
@@ -44,7 +51,7 @@ type
     FInited: Boolean;
     procedure SetOutOfMemoryError;
     function AddNode: UInt32;
-    function AddOwnedBuf(ABuf: Pointer): Boolean;
+    function AddOwnedBuf(ABuf: Pointer; ASize: SizeUInt): Boolean;
     procedure BuildHashIndex(ATableIdx: UInt32);
     function HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
   public
@@ -244,8 +251,8 @@ begin
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
-      FAllocator.FreeMem((FOwnedBufs + LI)^); { per-buf size not tracked }
-    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(Pointer));
+      FreeMemOf(FAllocator, FOwnedBufs[LI].Ptr, FOwnedBufs[LI].Size);
+    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(TTomlOwnedBuf));
     FOwnedBufs := nil;
   end;
   if FNodes <> nil then
@@ -262,16 +269,16 @@ begin
   FInited := False;
 end;
 
-function TTomlDocument.AddOwnedBuf(ABuf: Pointer): Boolean;
+function TTomlDocument.AddOwnedBuf(ABuf: Pointer; ASize: SizeUInt): Boolean;
 var
   LNewCap: UInt32;
-  LNewBufs: PPointer;
+  LNewBufs: PTomlOwnedBuf;
 begin
   Result := False;
   if FOwnedBufs = nil then
   begin
     FOwnedCap := INITIAL_OWNED_CAP;
-    FOwnedBufs := PPointer(FAllocator.GetMem(FOwnedCap * SizeOf(Pointer)));
+    FOwnedBufs := PTomlOwnedBuf(FAllocator.GetMem(FOwnedCap * SizeOf(TTomlOwnedBuf)));
     if FOwnedBufs = nil then
     begin
       FOwnedCap := 0;
@@ -282,8 +289,8 @@ begin
   else if FOwnedCount >= FOwnedCap then
   begin
     LNewCap := FOwnedCap * 2;
-    LNewBufs := PPointer(ReallocMemOf(FAllocator, Pointer(FOwnedBufs),
-      SizeUInt(FOwnedCap) * SizeOf(Pointer), SizeUInt(LNewCap) * SizeOf(Pointer)));
+    LNewBufs := PTomlOwnedBuf(ReallocMemOf(FAllocator, Pointer(FOwnedBufs),
+      SizeUInt(FOwnedCap) * SizeOf(TTomlOwnedBuf), SizeUInt(LNewCap) * SizeOf(TTomlOwnedBuf)));
     if LNewBufs = nil then
     begin
       SetOutOfMemoryError;
@@ -292,7 +299,8 @@ begin
     FOwnedBufs := LNewBufs;
     FOwnedCap := LNewCap;
   end;
-  (FOwnedBufs + FOwnedCount)^ := ABuf;
+  FOwnedBufs[FOwnedCount].Ptr := ABuf;
+  FOwnedBufs[FOwnedCount].Size := ASize;
   Inc(FOwnedCount);
   Result := True;
 end;
@@ -733,14 +741,15 @@ begin
     LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
-      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen));
+      { free with original alloc size (source span), not unescaped length }
+      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LEnd - LStart));
       Exit(SetError('invalid escape sequence', 23));
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
-    if not Doc^.AddOwnedBuf(LBuf) then
+    if not Doc^.AddOwnedBuf(LBuf, SizeUInt(LEnd - LStart)) then
     begin
-      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen));
+      FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LEnd - LStart));
       AOwned := False;
       AStr := TStringView.Empty;
       Exit(False);
@@ -866,14 +875,14 @@ begin
       LBufLen := TomlUnescapeToBuffer(LBuf, LBufLen, LBuf, LErr);
       if LErr <> ueNone then
       begin
-        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LEnd - LStart) + 1);
         Exit(SetError('invalid escape in multi-line string', 35));
       end;
       AStr := TStringView.Create(LBuf, LBufLen);
       AOwned := True;
-      if not Doc^.AddOwnedBuf(LBuf) then
+      if not Doc^.AddOwnedBuf(LBuf, SizeUInt(LEnd - LStart) + 1) then
       begin
-        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LEnd - LStart) + 1);
         AOwned := False;
         AStr := TStringView.Empty;
         Exit(False);
@@ -942,9 +951,9 @@ begin
         end;
       end;
       AStr := TStringView.Create(LBuf, LDst - LBuf);
-      if not Doc^.AddOwnedBuf(LBuf) then
+      if not Doc^.AddOwnedBuf(LBuf, SizeUInt(LEnd - LStart) + 1) then
       begin
-        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LBufLen) + 1);
+        FreeMemOf(Doc^.FAllocator, LBuf, SizeUInt(LEnd - LStart) + 1);
         AStr := TStringView.Empty;
         Exit(False);
       end;
@@ -1872,8 +1881,8 @@ begin
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
-      FAllocator.FreeMem((FOwnedBufs + LI)^);
-    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(Pointer));
+      FreeMemOf(FAllocator, FOwnedBufs[LI].Ptr, FOwnedBufs[LI].Size);
+    FreeMemOf(FAllocator, Pointer(FOwnedBufs), SizeUInt(FOwnedCap) * SizeOf(TTomlOwnedBuf));
     FOwnedBufs := nil;
     FOwnedCount := 0;
     FOwnedCap := 0;

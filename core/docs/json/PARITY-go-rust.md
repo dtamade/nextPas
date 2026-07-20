@@ -11,8 +11,8 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.0** | RFC8259 + 结构化 `TJsonError` + int64 溢出硬失败 |
-| **规模 Scale** | **8.5** | Parse/Stringify/Builder/Marshal；无 Pointer/Patch/Schema |
-| **综合** | **8.8** | 生产可用；Schema 族显式 Out of scope |
+| **规模 Scale** | **9.0** | Parse/Stringify/Builder/Marshal + **IReader bulk** |
+| **综合** | **9.0** | 生产可用；Schema 族显式 Out of scope |
 
 ---
 
@@ -21,6 +21,7 @@
 | 能力 | Go / Rust | nextpas | 状态 |
 |------|-----------|---------|------|
 | Parse / Stringify | Unmarshal/Marshal | `JsonParse` / `JsonStringify` | Done |
+| 从 Reader 解析 | Decoder | `JsonParse(IReader)` bulk ReadAll | Done |
 | 流式 token | Decoder/Token | `TJsonReader` | Done |
 | 结构化错误 | SyntaxError offset | `TJsonError` Line/Column/Offset | Done |
 | 对象/数组访问 | map/slice | `TJsonValue` 借用视图 | Done |

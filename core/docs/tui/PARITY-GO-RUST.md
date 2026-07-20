@@ -1,17 +1,16 @@
 # tui × Go / Rust 对标纲领（Wave Q）
 
-**状态**: Maintenance（2026-07-20）
+**状态**: **Maintenance Idle**（2026-07-20）— 完整阶段图见 [ROADMAP.md](ROADMAP.md)
 **Owner**: tui lane
-**活入口**: [SCORECARD.md](SCORECARD.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRACT.md](CONTRACT.md)
+**活入口**: [ROADMAP.md](ROADMAP.md) · [SCORECARD.md](SCORECARD.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRACT.md](CONTRACT.md)
 
 原则：对标的是 **stdlib / 生产级 TUI 库的质量与可证测量**，不是 widget 数量或营销 ns。
 
-### SC 冻结策略（Maintenance）
+### SC 冻结策略（Maintenance Idle）
 
-- 默认 **不** 新增 SC 行，除非满足其一：
-  1. 新出现可证失败模式（回归 bug）
-  2. 质量维度矩阵中仍有未覆盖的 go/rust 对标缺口
-- Q1–Q15 + M1 已覆盖主维度；后续优先回归、产品晋升决策、协议 DA 等
+- 默认 **不** 新增 SC 行，除非：可证失败模式，或 ROADMAP 维度缺口
+- Q1–Q15 + M1 + Phase B **完成**；**禁止**开放 Q 波
+- 默认只接：回归 / 泄漏 / 平台绿 / **已批准**单点晋升（见 ROADMAP B3 候选表）
 
 ---
 
@@ -92,10 +91,10 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q13 | SC17–19 backend/resize/pct + examples multi-demo | **Done** (`main@31e3e6853`+) |
 | Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **Done** (`main@3eb99d877`+) |
 | Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **Done** (`main@17b18c4c8`+) |
-| M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **本批** |
-| 后续 | facade **实施**晋升（scrollview/modal） | 就绪中 / 待产品确认 |
-| 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
-| 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
+| M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **Done** (`main@c06f621a8`+) |
+| Phase B | scrollview+modal → ext；B3 停止再晋升 | **Done**（B1 `main@d0009c00f`+） |
+| 当前 | **Maintenance Idle**（见 ROADMAP） | Active |
+| 可选 | Truecolor DA / crate / Windows console；单点晋升 dialog/split/select | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）
 
@@ -129,11 +128,11 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 4. 有 core reject 夹具证明不泄漏进 default facade（若目标是 ext）
 5. 产品确认
 
-### 晋升就绪证据（M1，**未**实施导出）
+### 晋升就绪证据
 
-| 候选 | 密度 | experimental | core reject | CONTRACT 条目 | 产品确认 |
-|------|------|--------------|-------------|---------------|----------|
-| scrollview | 23 | 否 | `rejects_scrollview` | 待晋升时写 | **未** |
-| modal | 16 | 否 | `rejects_modal` | 待晋升时写 | **未** |
+| 候选 | 密度 | experimental | core reject | ext 导出 | 产品确认 |
+|------|------|--------------|-------------|----------|----------|
+| scrollview | 23 | 否 | `rejects_scrollview` | **Phase B1 已导出** | 本波执行 |
+| modal | 16 | 否 | `rejects_modal` | **Phase B1 已导出** | 本波执行 |
 
 见 [TIER_REGISTRY.md](TIER_REGISTRY.md)。

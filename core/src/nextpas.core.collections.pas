@@ -224,7 +224,11 @@ generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemA
 
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator = nil): specialize IArray<T>;
 
-// ==== HashMap / HashSet (OA default) ====
+// ==== HashMap / HashSet ====
+// Default mapping (document in CONTRACT):
+//   MakeMap / MakeHashMap / MakeSwissHashMap → TSwissHashMap (IHashMap)
+//   MakeSet / MakeHashSet → THashSet (IHashSet; Swiss-backed via TSwissHashMap<K,Byte>)
+// OA THashMap remains available as a concrete class for expert use.
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
@@ -232,7 +236,13 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
   generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
     aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  { Default semantic map factory. Currently: TSwissHashMap → IHashMap. }
+  generic function MakeMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+    aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
+  { Default semantic set factory. Currently: THashSet → IHashSet. }
+  generic function MakeSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
 
 // ==== TreeMap / TreeSet (Ordered containers) ====
@@ -831,6 +841,22 @@ end;
 generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
 begin
   Result := specialize THashSet<K>.Create(aCapacity, nil, nil, aAllocator);
+end;
+
+generic function MakeMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize MakeHashMap<K,V>(aCapacity, aAllocator);
+end;
+
+generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>;
+  aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize MakeHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
+end;
+
+generic function MakeSet<K>(aCapacity: SizeUInt = 0; aAllocator: TMemAllocator = nil): specialize IHashSet<K>;
+begin
+  Result := specialize MakeHashSet<K>(aCapacity, aAllocator);
 end;
 {$ENDIF}
 

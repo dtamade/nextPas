@@ -223,6 +223,95 @@ begin
   finally M.Free; end;
 end;
 
+procedure TestSerializeToArrayBuffer;
+var
+  M: TIntMap;
+  Buf: array[0..2] of TIntMap.TEntry;
+  Seen: set of 1..3;
+  i: Integer;
+begin
+  M := TIntMap.Create;
+  try
+    M.Put(1, 10);
+    M.Put(2, 20);
+    M.Put(3, 30);
+    FillChar(Buf, SizeOf(Buf), 0);
+    M.SerializeToArrayBuffer(@Buf[0], 3);
+    Seen := [];
+    for i := 0 to 2 do
+    begin
+      Include(Seen, Buf[i].Key);
+      CheckEqual(Int64(Buf[i].Key * 10), Int64(Buf[i].Value), 'serialize value');
+    end;
+    Check(Seen = [1, 2, 3], 'serialize keys');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TestAppendToUnchecked;
+var
+  Src, Dst: TIntMap;
+  v: Integer;
+begin
+  Src := TIntMap.Create;
+  Dst := TIntMap.Create;
+  try
+    Src.Put(1, 10);
+    Src.Put(2, 20);
+    Dst.Put(2, 99);
+    Src.AppendToUnchecked(Dst);
+    CheckEqual(Int64(2), Int64(Dst.GetCount), 'dst count');
+    Check(Dst.TryGetValue(1, v) and (v = 10), 'appended key 1');
+    Check(Dst.TryGetValue(2, v) and (v = 20), 'key 2 overwritten by append');
+  finally
+    Src.Free;
+    Dst.Free;
+  end;
+end;
+
+procedure TestZeroValuesKeepsKeys;
+var
+  M: TIntMap;
+  v: Integer;
+begin
+  M := TIntMap.Create;
+  try
+    M.Put(1, 10);
+    M.Put(2, 20);
+    M.Zero;
+    CheckEqual(Int64(2), Int64(M.GetCount), 'count after zero');
+    Check(M.ContainsKey(1) and M.ContainsKey(2), 'keys remain');
+    Check(M.TryGetValue(1, v) and (v = 0), 'value 1 zeroed');
+    Check(M.TryGetValue(2, v) and (v = 0), 'value 2 zeroed');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TestGetKeys;
+var
+  M: TIntMap;
+  Keys: TIntMap.TKeyArray;
+  Seen: set of 1..3;
+  i: Integer;
+begin
+  M := TIntMap.Create;
+  try
+    M.Put(1, 10);
+    M.Put(2, 20);
+    M.Put(3, 30);
+    Keys := M.GetKeys;
+    CheckEqual(Int64(3), Int64(Length(Keys)), 'key count');
+    Seen := [];
+    for i := 0 to High(Keys) do
+      Include(Seen, Keys[i]);
+    Check(Seen = [1, 2, 3], 'keys present');
+  finally
+    M.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.collections.swiss_adapter');
   T.Test('Put/Get', @TestPutGet);
@@ -240,5 +329,9 @@ begin
   T.Test('String key', @TestStringKey);
   T.Test('Interface refcount', @TestInterfaceRefCount);
   T.Test('Grow (10000)', @TestGrow);
+  T.Test('SerializeToArrayBuffer', @TestSerializeToArrayBuffer);
+  T.Test('AppendToUnchecked', @TestAppendToUnchecked);
+  T.Test('Zero values keep keys', @TestZeroValuesKeepsKeys);
+  T.Test('GetKeys', @TestGetKeys);
   if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.18
+**版本**：1.21
 
 ---
 
@@ -12,6 +12,16 @@
 
 L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / experimental / full）。
 默认 `nextpas.core.tui` 只保证终端正确性；app/runtime 走 `.ext`，协议能力走 `.experimental`。
+
+**模块完整开发地图（北极星 / Done / 阶段）**: [ROADMAP.md](ROADMAP.md)
+
+### Facade 控件分层（Phase B）
+
+| Facade | 稳定控件 |
+|--------|----------|
+| core | Block/Paragraph/List/Table/Tabs/Scrollbar/Clear/Input |
+| ext | Panel + **ScrollView** + **Modal** + app/runtime |
+| full | 其余 advanced catalog（migration） |
 
 ---
 
@@ -186,6 +196,9 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.21 | Phase B 收尾：B3 停止晋升；Maintenance Idle | Claude |
+| 2026-07-20 | 1.20 | Phase B1：scrollview+modal 晋升 ext；TIER/WIDGET_CATALOG 同步 | Claude |
+| 2026-07-20 | 1.19 | 权威 ROADMAP 完整开发地图（Done 清单 + Phase A–F） | Claude |
 | 2026-07-20 | 1.18 | M1 Maintenance：SC26 keybind + SC27 frame budget；reject scrollview/modal；C8 | Claude |
 | 2026-07-20 | 1.17 | SC23 indexed SGR + SC24 style-change patches + SC25 focus Tab；C7 升级 | Claude |
 | 2026-07-20 | 1.16 | SC20 SGR rgb + SC21 DrawPatches + SC22 ratio；contract-check C7 | Claude |

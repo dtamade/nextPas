@@ -1,5 +1,7 @@
 # process / fs / path / env — SCORECARD（证据快照）
 
+> **Host Essential Done**（见 [ROADMAP.md](./ROADMAP.md)）。本表可复现数字；Win 终局见 ROADMAP M2。
+
 **truth 标签**
 
 | 标签 | 含义 |
@@ -37,7 +39,7 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 | fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
-| fs.watch | **1 passed** | create **or** documents UNSUPPORTED (95) under Wine |
+| fs.watch | **3 passed** | create/close + poll timeout + create-event soft (M2-W1 S2) |
 
 Host `make test` 在非 Windows 上为 skip 分支（1 passed）。
 

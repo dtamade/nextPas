@@ -17,18 +17,18 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.multiset.base,
   nextpas.core.collections.multiset.intf,
-  nextpas.core.collections.hashmap,
- nextpas.core.mem.allocator.base;
+  nextpas.core.collections.hashmap.swiss.adapter,
+  nextpas.core.mem.allocator.base;
 
 type
   {**
    * TMultiSet<T>
    *
-   * @desc 多重集合实现
+   * @desc 多重集合实现（Swiss-backed map of counts）
    *}
   generic TMultiSet<T> = class(TInterfacedObject, specialize IMultiSet<T>)
   public type
-    TInternalMap = specialize THashMap<T, SizeUInt>;
+    TInternalMap = specialize TSwissHashMap<T, SizeUInt>;
     TSelf = specialize TMultiSet<T>;
     TForEachProc = procedure(const AElement: T; ACount: SizeUInt);
   private

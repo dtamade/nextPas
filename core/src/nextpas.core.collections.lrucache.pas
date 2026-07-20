@@ -14,7 +14,8 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
-  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap, { HashMix32 / HashOfUInt* helpers }
+  nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.element_manager;
 
@@ -39,7 +40,8 @@ type
   type
     PNode = ^specialize TLruNode<K, V>;
     TNodeType = specialize TLruNode<K, V>;
-    THashMapNode = specialize THashMap<K, PNode>;
+    { Swiss-backed key → node index; same public cache semantics. }
+    THashMapNode = specialize TSwissHashMap<K, PNode>;
 
   private
     FMap: THashMapNode;

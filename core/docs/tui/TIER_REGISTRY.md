@@ -69,6 +69,8 @@ Default core does not own:
   - `nextpas.core.tui.theme`
   - `nextpas.core.tui.widget.panel`
   - `nextpas.core.tui.widget.chat_theme`
+  - `nextpas.core.tui.widget.scrollview`  (Phase B: stable viewport)
+  - `nextpas.core.tui.widget.modal`      (Phase B: stable overlay shell)
 
 Use `ext` when you need:
 
@@ -78,6 +80,7 @@ Use `ext` when you need:
 - panel/grid orchestration
 - stable theme presets
 - task/frame-budget integration
+- scrollable viewport (`TScrollView`) and modal shell (`TModal`)
 
 ## Keep `nextpas.core.tui.experimental` opt-in
 
@@ -110,11 +113,9 @@ The current full-only advanced widget families include:
 - `widget.dialog`
 - `widget.menu`
 - `widget.split_pane`
-- `widget.modal`
 - `widget.popover`
 - `widget.tooltip`
 - `widget.select`
-- `widget.scrollview`
 - `widget.calendar`
 - `widget.breadcrumb`
 - `widget.statusbar`

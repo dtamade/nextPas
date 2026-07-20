@@ -305,8 +305,7 @@ jobs:
           # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host parity.
           bash scripts/platform-windows-ci-matrix.sh
 
-      - name: Async Windows native smoke (opt-in, not fail-closed)
-        continue-on-error: true
+      - name: Async Windows native smoke (fail-closed on Windows host)
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"
@@ -317,8 +316,10 @@ jobs:
           else
             export FPC="${BIN_DIR}/fpc"
           fi
-          # Soft by default: ASYNC_WINDOWS_STRICT not set. After multi-week green
-          # streak, may promote fail-closed (see WINDOWS-NATIVE-ASSESSMENT).
+          # Q24B: promote-ready after consecutive step green streak (see
+          # WINDOWS-NATIVE-ASSESSMENT + async-windows-smoke-streak.sh).
+          # STRICT defaults on when host is Windows (script); CI always Windows.
+          export ASYNC_WINDOWS_STRICT=1
           bash scripts/async-windows-native-smoke.sh
 
   test-freebsd:

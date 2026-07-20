@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Maintenance Idle（H∞ · 2026-07-20）** — FreeMemOf 战役已关；SCORECARD/soak 已复跑；host-runtime 真机绿
+**状态**: **Era I done → Maintenance Idle（2026-07-20）** — owned-string size 表 + text ReallocMemOf 已关；残余 WAIVE 仅 tui tracking
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -29,6 +29,7 @@
 | **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **CLOSED** | 下文 §4c |
 | **G** | **Ecosystem Steward**：防回潮、按触达样板、证据习惯 | **Steady** | 下文 §4d |
 | **H** | **Maintenance only**：决策树 + FreeMemOf 收口 + 只回归 | **Idle** | 下文 §4d Era H |
+| **I** | **Owned-size 收口**：json/toml size 表 + text ReallocMemOf + 契约钉 | **CLOSED** | 下文 §4e |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -209,9 +210,22 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 
 **不默认排期**: Phase 29 allocator、全仓 FreeMem 扫、倒逼 L0 uses mem、owned-string 无设计全扫。
 
+### Era I — Owned-size 收口（CLOSED 2026-07-20）
+
+命名 consumer 授权：关掉 H2 后仅剩的「有登记点、缺 size」owned 串 WAIVE + builder Realloc 对称。
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **I1** | `text.builder` inject `ReallocMemOf`（对齐 bytes.builder） | **done** |
+| **I2** | `json.parser` `TJsonOwnedStr` overflow 表 + 元素 `FreeMemOf` | **done** |
+| **I3** | `toml.parser` `TTomlOwnedBuf` + `AddOwnedBuf(ptr,size)` | **done** |
+| **I4** | source-contract 钉样板 + tui FreeMemOf WAIVE；文档 | **done** |
+
+**I 后**: 回 **Maintenance Idle**。残余 WAIVE **仅** tui inject tracking。禁止再开全仓 FreeMemOf。
+
 ---
 
-## 5. 明确不做（时代 D/E/F/G/H 有效期内）
+## 5. 明确不做（时代 D/E/F/G/H/I 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -275,3 +289,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | Era H Maintenance：H0 决策树/SCORECARD · H1/H1b/H2 FreeMemOf 关闭战役 |
 | 2026-07-20 | H∞：SCORECARD RELEASE=1 + soak 3/3 复跑（post-H2 无回归）；host-runtime CI 证据续记 |
 | 2026-07-20 | **Maintenance Idle** 声明（对齐 bench B43 姿态）：H0–H2 + SCORECARD/soak/CI 齐；仅回归/命名 D3/GHA mem 红再开工 |
+| 2026-07-20 | **Era I CLOSED**：text ReallocMemOf · json/toml owned-size FreeMemOf · contracts；回 Idle |
