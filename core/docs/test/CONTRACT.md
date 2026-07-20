@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.14
+**版本**：v8.15
 
 ---
 
@@ -394,6 +394,12 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.15 (2026-07-20) — CI 严格 golden + contracts 门禁
+
+- **golden**：`FAIL_ON_CREATE=1` 下仓内 goldens 仍比对通过（CI 模式）
+- **Makefile**：`make -C core/tests/nextpas.core.test contracts`（api + runner + scale）
+- **CI 提示**：`NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1` 禁止新建 snapshot
 
 ### v8.14 (2026-07-20) — 门禁诚实 + golden 入库 + subtests 深度
 
