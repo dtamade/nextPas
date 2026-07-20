@@ -433,7 +433,7 @@ begin
   end;
   LSuite.TestTable('identity table', LCases, @TestIdentityCase);
 
-  SetLength(LCases, 700);
+  SetLength(LCases, 1200);
   for I := 0 to High(LCases) do
   begin
     LCases[I].Name := 'fail-' + IntToStr(I);

@@ -69,6 +69,49 @@ begin
   ResetDefaultConfig;
 end;
 
+procedure TestB38CacheKeyFingerprintCase(const AC: TTestCase);
+{ Data names a config field that ComputeKey hashes (v8.22: includes stop semantics). }
+var
+  LCache: TTestCache;
+  LBase, LMut: TTestConfig;
+  LKeyBase, LKeyMut: string;
+begin
+  LCache := TTestCache.Create('.nextpas/test-cache-b38-fp');
+  LBase := DefaultConfig;
+  LMut := DefaultConfig;
+  if AC.Data = 'filter' then
+    LMut.FilterPattern := 'only-' + AC.Name
+  else if AC.Data = 'tag' then
+    LMut.TagFilter := 'tag-' + AC.Name
+  else if AC.Data = 'shuffle' then
+    LMut.ShuffleSeed := 7 + Length(AC.Name)  { value, not just non-zero }
+  else if AC.Data = 'shuffle_pair' then
+  begin
+    { two non-zero seeds must differ from each other, not only from 0 }
+    LBase.ShuffleSeed := 7;
+    LMut.ShuffleSeed := 8;
+  end
+  else if AC.Data = 'maxfail' then
+    LMut.MaxFailures := 1 + (Length(AC.Name) mod 3)
+  else if AC.Data = 'failfast' then
+    LMut.FailFast := True
+  else if AC.Data = 'short' then
+    LMut.ShortMode := True
+  else if AC.Data = 'verbose' then
+    LMut.VerboseMode := True
+  else if AC.Data = 'retry' then
+    LMut.RetryCount := 2
+  else if AC.Data = 'runpat' then
+    LMut.RunPattern := 'run-' + AC.Name
+  else
+    LMut.TimeoutMs := 1000 + Length(AC.Name);
+  LKeyBase := LCache.ComputeKey([], '3.3.1', LBase);
+  LKeyMut := LCache.ComputeKey([], '3.3.1', LMut);
+  CheckTrue(LKeyBase <> LKeyMut, 'key must change for ' + AC.Data + ' ' + AC.Name);
+  LCache.Invalidate;
+  LCache := Default(TTestCache);
+end;
+
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
 procedure TestSetup;
@@ -2414,6 +2457,57 @@ begin
     LCache.Invalidate;
     LCache := Default(TTestCache);
     PassTest('CacheKey filter difference');
+  end;
+
+  { ── B38: Cache key fingerprint table (config fields change key) ────────── }
+  WriteLn;
+  SectionHeader('B38: Cache key fingerprint fail-path table');
+  begin
+    SetLength(LTableCases, 55);
+    for LB34I := 0 to High(LTableCases) do
+    begin
+      LTableCases[LB34I].Name := 'ck-' + IntToStr(LB34I);
+      case LB34I mod 11 of
+        0: LTableCases[LB34I].Data := 'filter';
+        1: LTableCases[LB34I].Data := 'tag';
+        2: LTableCases[LB34I].Data := 'shuffle';
+        3: LTableCases[LB34I].Data := 'shuffle_pair';
+        4: LTableCases[LB34I].Data := 'maxfail';
+        5: LTableCases[LB34I].Data := 'failfast';
+        6: LTableCases[LB34I].Data := 'short';
+        7: LTableCases[LB34I].Data := 'verbose';
+        8: LTableCases[LB34I].Data := 'retry';
+        9: LTableCases[LB34I].Data := 'runpat';
+      else
+        LTableCases[LB34I].Data := 'timeout';
+      end;
+    end;
+    LResultSuite := TTestSuite.Create('b38-cache');
+    LResultSuite.TestTable('B38 cache key fingerprint fail-path', LTableCases,
+      @TestB38CacheKeyFingerprintCase);
+    if not LResultSuite.Run then
+      FailTest('B38 cache key table failed');
+    { hit / miss / invalidate exact }
+    LCache := TTestCache.Create('.nextpas/test-cache-b38');
+    LCacheConfig1 := DefaultConfig;
+    LCacheKey1 := LCache.ComputeKey([], '3.3.1', LCacheConfig1);
+    LCacheEntry.Status := Ord(tsFailed);
+    LCacheEntry.Message := 'cached-fail';
+    LCacheEntry.Duration := 7;
+    LCacheEntry.Time := 1;
+    LCache.Put(LCacheKey1, 't1', LCacheEntry);
+    if not LCache.Get(LCacheKey1, 't1', LCacheGotEntry) then
+      FailTest('B38 hit expected');
+    if LCacheGotEntry.Message <> 'cached-fail' then
+      FailTest('B38 hit message exact');
+    if LCache.Get(LCacheKey1, 'missing', LCacheGotEntry) then
+      FailTest('B38 miss expected');
+    LCache.Invalidate;
+    if LCache.Get(LCacheKey1, 't1', LCacheGotEntry) then
+      FailTest('B38 after invalidate miss');
+    LCache := Default(TTestCache);
+    PassTest('B38 Cache fingerprint + hit/miss/invalidate');
+    LResultSuite := Default(TTestSuite);
   end;
 
   { ── T-13b: Cache integration in runner ─────────────────────────────────── }
