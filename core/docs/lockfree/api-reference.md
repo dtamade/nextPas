@@ -248,7 +248,7 @@ type
 - 可选 `Try*Ex`（H2-1）：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
 - Boolean 热路径不变
 
-**非此类型**: `lockfree.deque_lf` / `TLockFreeDeque` 为 **spin-lock** + `TDequeResult`，非 lock-free / 非 wait-free，无 `TLockFreeTryError` 面。
+**非此类型**: `lockfree.deque_spin` / **`TConcurrentSpinDeque`**（历史 alias：`deque_lf` / `TLockFreeDeque`）为 **spin-lock** + `TDequeResult`，非 lock-free / 非 wait-free，无 `TLockFreeTryError` 面。
 
 ---
 

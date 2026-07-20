@@ -78,7 +78,7 @@ T1 units (not listed): queues, stack, deque, ebr/hazard, channel(+spsc), selecto
 | `crdt` | Available | CRDT merge + per-type locks | yes |  |
 | `cuckooset` | Available | cuckoo table + locks | yes |  |
 | `dag` | Available | per-node locks (NOT LF) | yes | header honest |
-| `deque_lf` | Available | spin-lock (NOT LF; name misleading) | yes | misleading name: spin-lock |
+| `deque_spin` (+ `deque_lf` alias) | Available | spin-lock (NOT LF) | yes | honest type `TConcurrentSpinDeque`; `TLockFreeDeque` alias |
 | `disjointset` | Available | union-find + locks | yes |  |
 | `elimination_stack` | Available | LF Treiber + elimination array | yes | Hendler et al. |
 | `exchanger` | Guarded | atomic state machine (slot CAS) | yes |  |
