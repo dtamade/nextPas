@@ -1,6 +1,8 @@
 program bench_regex;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.bench, nextpas.core.regex, nextpas.core.text.base;
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.time.base,
+  nextpas.core.regex, nextpas.core.text.base;
 
 const
   INPUT_SIZE = 10000;
@@ -140,20 +142,25 @@ begin
 
   WriteLn('=== Regex Benchmark (input=', INPUT_SIZE, ' bytes) ===');
   WriteLn;
-  LResults := TBenchSuite.Create('Literal IsMatch')
-    .AddLoop('Literal IsMatch', @BenchLiteralIsMatch)
-    .AddLoop('Digit Find (\d+)', @BenchDigitFind)
-    .AddLoop('Alternation (4 alts)', @BenchAlternation)
-    .AddLoop('Compile (date pattern)', @BenchCompile)
-    .AddLoop('IsFullMatch (^[a-z]+$)', @BenchIsFullMatch)
-    .AddLoop('Case-Insensitive (?i)', @BenchCaseInsensitive)
-    .AddLoop('Capture Groups (date)', @BenchCaptureGroups)
-    .AddLoop('FindAll (\\w+)', @BenchFindAll)
-    .AddLoop('ReplaceAll (\\d+ -> NUM)', @BenchReplaceAll)
-    .AddLoop('Split (\\s+)', @BenchSplit)
-    .AddLoop('FindIter (\\w+)', @BenchFindIter)
-    .AddLoop('Large 100KB literal', @BenchLargeInput)
+  LResults := TBenchSuite.Create('regex')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .AddLoop('regex/IsMatch/literal', @BenchLiteralIsMatch)
+    .AddLoop('regex/Find/digit', @BenchDigitFind)
+    .AddLoop('regex/Alternation', @BenchAlternation)
+    .AddLoop('regex/Compile/date', @BenchCompile)
+    .AddLoop('regex/IsFullMatch', @BenchIsFullMatch)
+    .AddLoop('regex/IsMatch/ci', @BenchCaseInsensitive)
+    .AddLoop('regex/Capture/date', @BenchCaptureGroups)
+    .AddLoop('regex/FindAll', @BenchFindAll)
+    .AddLoop('regex/ReplaceAll', @BenchReplaceAll)
+    .AddLoop('regex/Split', @BenchSplit)
+    .AddLoop('regex/FindIter', @BenchFindIter)
+    .AddLoop('regex/IsMatch/large', @BenchLargeInput)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-regex.json');
   if GSink < 0 then Write('');
 end.
