@@ -570,6 +570,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 { TSingleLinkedNode<T> - 极高性能实现 }
 
 procedure TSingleLinkedNode.Init(const aData: T; aNext: Pointer);
@@ -783,23 +786,32 @@ begin
 end;
 
 destructor TNodeManager.Destroy;
+const
+  BLOCK_SIZE = 256;
 var
   i: SizeUInt;
   LP: PPointer;
+  LBlock: Pointer;
 begin
   LP := FSinglePoolBlocks;
   if LP <> nil then
   begin
     for i := 0 to FSinglePoolBlockCount - 1 do
-      FAllocator.FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
-    FAllocator.FreeMem(LP);
+    begin
+      LBlock := PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^;
+      FreeMemOf(FAllocator, LBlock, BLOCK_SIZE * SizeOf(TSingleNode));
+    end;
+    FreeMemOf(FAllocator, LP, FSinglePoolBlockCount * SizeOf(Pointer));
   end;
   LP := FDoublePoolBlocks;
   if LP <> nil then
   begin
     for i := 0 to FDoublePoolBlockCount - 1 do
-      FAllocator.FreeMem(PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^);
-    FAllocator.FreeMem(LP);
+    begin
+      LBlock := PPointer(PtrUInt(LP) + i * SizeOf(Pointer))^;
+      FreeMemOf(FAllocator, LBlock, BLOCK_SIZE * SizeOf(TDoubleNode));
+    end;
+    FreeMemOf(FAllocator, LP, FDoublePoolBlockCount * SizeOf(Pointer));
   end;
   FElementManager.Free;
   inherited Destroy;
@@ -819,7 +831,7 @@ begin
     LBlockSize := BLOCK_SIZE * SizeOf(TSingleNode);
     LBlock := FAllocator.GetMem(LBlockSize);
     if LBlock = nil then
-      raise EOutOfMemory.Create('TNodeManager.AllocateSingleNode: failed to allocate node block');
+      raise EOutOfMemory.CreateMsg('TNodeManager.AllocateSingleNode: failed to allocate node block');
 
     LNew := nil;
     try
@@ -827,7 +839,7 @@ begin
       LNewBlockCount := FSinglePoolBlockCount + 1;
       LNew := PPointer(FAllocator.GetMem(LNewBlockCount * SizeOf(Pointer)));
       if LNew = nil then
-        raise EOutOfMemory.Create('TNodeManager.AllocateSingleNode: failed to allocate block registry');
+        raise EOutOfMemory.CreateMsg('TNodeManager.AllocateSingleNode: failed to allocate block registry');
 
       if FSinglePoolBlocks <> nil then
         Move(FSinglePoolBlocks^, LNew^, FSinglePoolBlockCount * SizeOf(Pointer));
@@ -838,16 +850,17 @@ begin
       FSinglePoolBlockCount := LNewBlockCount;
       LNew := nil;
       if LOldBlocks <> nil then
-        FAllocator.FreeMem(LOldBlocks);
+        FreeMemOf(FAllocator, LOldBlocks,
+          (LNewBlockCount - 1) * SizeOf(Pointer));
 
       FSinglePoolNext := LBlock;
       FSinglePoolEnd := LBlock + LBlockSize;
       LBlock := nil;
     except
       if LNew <> nil then
-        FAllocator.FreeMem(LNew);
+        FreeMemOf(FAllocator, LNew, LNewBlockCount * SizeOf(Pointer));
       if LBlock <> nil then
-        FAllocator.FreeMem(LBlock);
+        FreeMemOf(FAllocator, LBlock, LBlockSize);
       raise;
     end;
   end;
@@ -873,7 +886,7 @@ begin
     LBlockSize := BLOCK_SIZE * SizeOf(TDoubleNode);
     LBlock := FAllocator.GetMem(LBlockSize);
     if LBlock = nil then
-      raise EOutOfMemory.Create('TNodeManager.AllocateDoubleNode: failed to allocate node block');
+      raise EOutOfMemory.CreateMsg('TNodeManager.AllocateDoubleNode: failed to allocate node block');
 
     LNew := nil;
     try
@@ -881,7 +894,7 @@ begin
       LNewBlockCount := FDoublePoolBlockCount + 1;
       LNew := PPointer(FAllocator.GetMem(LNewBlockCount * SizeOf(Pointer)));
       if LNew = nil then
-        raise EOutOfMemory.Create('TNodeManager.AllocateDoubleNode: failed to allocate block registry');
+        raise EOutOfMemory.CreateMsg('TNodeManager.AllocateDoubleNode: failed to allocate block registry');
 
       if FDoublePoolBlocks <> nil then
         Move(FDoublePoolBlocks^, LNew^, FDoublePoolBlockCount * SizeOf(Pointer));
@@ -892,16 +905,17 @@ begin
       FDoublePoolBlockCount := LNewBlockCount;
       LNew := nil;
       if LOldBlocks <> nil then
-        FAllocator.FreeMem(LOldBlocks);
+        FreeMemOf(FAllocator, LOldBlocks,
+          (LNewBlockCount - 1) * SizeOf(Pointer));
 
       FDoublePoolNext := LBlock;
       FDoublePoolEnd := LBlock + LBlockSize;
       LBlock := nil;
     except
       if LNew <> nil then
-        FAllocator.FreeMem(LNew);
+        FreeMemOf(FAllocator, LNew, LNewBlockCount * SizeOf(Pointer));
       if LBlock <> nil then
-        FAllocator.FreeMem(LBlock);
+        FreeMemOf(FAllocator, LBlock, LBlockSize);
       raise;
     end;
   end;
@@ -991,13 +1005,13 @@ function TNodeManager.AllocateTreeNode: PTreeNode;
 begin
   Result := PTreeNode(FAllocator.GetMem(SizeOf(TTreeNodeType)));
   if Result = nil then
-    raise EOutOfMemory.Create('TNodeManager.AllocateTreeNode: 内存分配失败');
+    raise EOutOfMemory.CreateMsg('TNodeManager.AllocateTreeNode: 内存分配失败');
 end;
 
 procedure TNodeManager.DeallocateTreeNode(aNode: PTreeNode);
 begin
   if aNode <> nil then
-    FAllocator.FreeMem(aNode);
+    FreeMemOf(FAllocator, aNode, SizeOf(TTreeNodeType));
 end;
 
 function TNodeManager.CreateTreeNode(const aData: T; aParent: PTreeNode): PTreeNode;

@@ -1,8 +1,8 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.13**
-**最后更新**: 2026-07-19
+**当前版本**: **v8.14**
+**最后更新**: 2026-07-20
 
 ---
 
@@ -16,7 +16,7 @@
 | 诊断 | cmp / testify | pretty_assertions / insta | ColorDiff + Snapshot 契约 |
 | 并行/竞态 | t.Parallel / -race | 串行默认 | RunParallel + 原子压力测 |
 | Prop/Fuzz | testing.F + 第三方 | proptest | 内置 + 可计数套件 |
-| 规模 | 上千级自测 | 同左 | **≥1500 可计数过程** |
+| 规模 | 上千级自测 | 同左 | **≥2500 可计数过程** |
 | 失败语义 | Error 可继续 / Fatal 停 | panic | **Check = Fatal**（raise） |
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥2500**（目标；门禁 SCALE_MIN 默认 2000） |
+| 可计数过程 | **≥2500**（scale report；含 TestSubtest；SCALE_MIN 默认 2500） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -49,6 +49,9 @@
 | B14 v8.12c shrink+≥2500 | **done** |
 | B15 v8.13a ApplyCLIArgsFrom | **done** |
 | B16 v8.13b perf 软跨机策略 | **done** |
+| B18 v8.14a 门禁诚实化 | **done** |
+| B19 v8.14b report golden 入库 | **done** |
+| B20 v8.14c subtests 深度 | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -65,7 +68,7 @@
 ```bash
 make -C core/tests/nextpas.core.test/<suite> clean test
 make hygiene
-make -C core/tests/nextpas.core.test clean test   # 17/17
+make -C core/tests/nextpas.core.test clean test   # 19/19
 ```
 
 
@@ -94,3 +97,25 @@ make -C core/tests/nextpas.core.test/test_scale_report test
 | 阈值 | 默认 **+30%**（宽松防 flaky） |
 | 跨机基线 | **不强制入库**；本机生成 `perf-baseline.json` 后对比 |
 | 目标 | 对标 benchstat 意图，非硬性能 SLA |
+
+
+## Scale 计数规则（v8.14）
+
+可计数过程 =
+1. `.Test('…')` 登记
+2. `.TestSubtest('…')` 登记（Go `t.Run`）
+3. `SetLength(cases, N)` + 邻近 `TestTable` → +N
+4. `Append*Case(` 每次 +1
+
+排除：`test_stress`、shell source-contract、`test_perf_bench`、`test_scale_report` 自身。
+
+
+## Report goldens（仓内）
+
+```
+core/tests/nextpas.core.test/test_output/goldens/
+  report.json  report.tap  report.xml
+```
+
+更新：在 suite 目录执行 `NEXTPAS_UPDATE_SNAPSHOTS=1 make test`。
+Parallel 下 `TestSubtest` 仍 serial-only（skip + 消息契约）。

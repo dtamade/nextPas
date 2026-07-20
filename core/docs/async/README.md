@@ -26,20 +26,21 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - Backend model: `pbKqueue` is `pbmReadiness` (aligned with epoll; not completion-queue file I/O)
 - Timeout cancel: best-effort like epoll (`TryCancelByContext` drops pending op + internal `-ECANCELED`)
 - **source-contract + forced compile** on Linux hosts: `test_async_kqueue_compile_gate` uses `-dNEXTPAS_FORCE_HOST_DARWIN` to prove the kqueue path compiles (FreeBSD FORCE_HOST currently blocked by unrelated `platform.thread` typing)
-- **CI host hooks (Q9–Q11)**: `core/scripts/async-host-matrix.sh`
+- **CI host hooks (Q9–Q12)**: `core/scripts/async-host-matrix.sh`
   - Linux: full matrix strict (`all`)
   - macOS L0 fail-closed: `ASYNC_HOST_GATES=kqueue-runtime` (must `kqueue-runtime-smoke=pass`)
-  - macOS L1 best-effort: `ASYNC_HOST_GATES=dial-resolve` (`continue-on-error`)
-- **not full macOS async runtime parity** unless dial/resolve also run fail-closed and stay green
+  - macOS L1 fail-closed: `ASYNC_HOST_GATES=dial-resolve` (dial + resolve + kqueue compile)
+- **not full macOS async runtime parity** (completion file I/O / full inventory still not claimed)
 
-### DNS / Happy Eyeballs truth (Q6–Q11)
+### DNS / Happy Eyeballs truth (Q6–Q12)
 - `AsyncResolve`: single-worker AF_UNSPEC multi-A
 - `AsyncResolveEx`: parallel A + AAAA + Resolution Delay (default 50ms), single merged callback
 - `AsyncResolveStream`: incremental per-family callbacks for DNS-race-while-dialing
-- `AsyncTcpDial`: concurrent staggered HE; **strict CAD** (start-to-start; MaxInFlight is cap only); host path races dial with late DNS family arrival
+- `AsyncTcpDial`: concurrent staggered HE; **strict CAD**; host path races dial with late DNS family arrival
+- `AsyncTcpDialWithDnsFeed`: lab harness injects stream events (deterministic DNS×SYN matrix tests)
 - Observability: optional `OnAttemptStart` (tests)
 - Evidence: `test_net_async_resolve` / `test_net_async_dial` 0 leak on Linux; host matrix script above
-- Still not a full laboratory DNS-RTT × SYN RFC8305 timing matrix
+- Lab matrix proves start-before-late-family and late-batch interleave; still not a full RFC8305 production timing lab across real DNS RTT distributions
 
 ### Backend Model Classification
 - `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness

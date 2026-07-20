@@ -39,7 +39,9 @@ if [[ -n "${NEXTPAS_FPC_UNITS:-}" ]]; then
   echo "fpc-wrap=$WRAP units=$NEXTPAS_FPC_UNITS"
 fi
 
-# Documented set (ROADMAP): D2.b eight gates + Batch-5 platform.memory (9-gate promoted).
+# Documented set (ROADMAP): D2.b platform gates + mem host-runtime (G5.x).
+# Optional third field: make target (default "test"). Use host-runtime for mem
+# real-OS smoke without FORCE_HOST cross-compile on Darwin.
 MODULE_ENTRIES=(
   "platform.time tests/nextpas.core.platform.time/test_platform_time_helpers"
   "platform.sync tests/nextpas.core.platform.sync/test_platform_sync"
@@ -50,6 +52,7 @@ MODULE_ENTRIES=(
   "platform.error tests/nextpas.core.platform.error/test_platform_error"
   "platform.socket tests/nextpas.core.platform.socket/test_platform_socket"
   "platform.memory tests/nextpas.core.platform.memory/test_platform_memory"
+  "mem.host_runtime tests/nextpas.core.mem/test_mem_cross_os_compile_gate host-runtime"
 )
 
 pass_count=0
@@ -91,7 +94,14 @@ echo
 
 for entry in "${MODULE_ENTRIES[@]}"; do
   name="${entry%% *}"
-  dir="${entry#* }"
+  rest="${entry#* }"
+  if [[ "$rest" == *" "* ]]; then
+    dir="${rest% *}"
+    target="${rest##* }"
+  else
+    dir="$rest"
+    target="test"
+  fi
   if [[ ! -d "$dir" ]]; then
     echo "FAIL $name : missing directory $dir"
     fail_count=$((fail_count + 1))
@@ -99,20 +109,20 @@ for entry in "${MODULE_ENTRIES[@]}"; do
     continue
   fi
 
-  echo "=== macos: $name ($dir) ==="
+  echo "=== macos: $name ($dir target=$target) ==="
   set +e
   if command -v timeout >/dev/null 2>&1; then
     timeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   elif command -v gtimeout >/dev/null 2>&1; then
     gtimeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   else
     # macOS often lacks GNU timeout; use perl alarm wrapper.
     perl -e 'alarm shift; exec @ARGV' "${GATE_TIMEOUT_SEC}" \
-      make -C "$dir" clean test
+      make -C "$dir" clean "$target"
     code=$?
   fi
   set -e
@@ -133,7 +143,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-9-gate-set-promoted"
+echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=platform-9+mem-host-runtime"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

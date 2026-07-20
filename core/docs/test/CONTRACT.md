@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.13
+**版本**：v8.14
 
 ---
 
@@ -394,6 +394,13 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.14 (2026-07-20) — 门禁诚实 + golden 入库 + subtests 深度
+
+- **scale**：TestSubtest 计入；规则/breakdown 打印
+- **golden**：`test_output/goldens/{report.json,report.tap,report.xml}` 仓内比对
+- **subtests**：失败/skip/sink/cleanup 元契约改为 `Suite.Test` 外壳（对标 t.Run）
+- **docs/findings**：数字与 FIXED 状态对齐
 
 ### v8.13 (2026-07-20) — CLI 可注入 argv + perf 软跨机策略
 

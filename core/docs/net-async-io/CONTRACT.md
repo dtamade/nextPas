@@ -464,7 +464,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `AsyncResolveEx` / `DefaultDnsResolveOptions`: parallel A + AAAA workers + **ResolutionDelayMs** (default 50); `AsyncResolve` remains single AF_UNSPEC path.
 - Dial options: `FirstAddressFamilyCount` (default 1), `ResolutionDelayMs` (default 50).
 - OrderAddresses: optional lead N of preferred family, then interleave or bucket remainder.
-- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS dial/resolve best-effort.
+- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS dial/resolve + kqueue L0 fail-closed (Q12).
 
 ### DNS-race-while-dialing (Q10)
 - `AsyncResolveStream`: parallel A/AAAA; after Resolution Delay gate, posts per-family batches then one terminal `AllDone`.
@@ -477,4 +477,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `ConnectionAttemptDelayMs=0` allows immediate refill after failure (and 0-delay arm when under MaxInFlight); CAD=0 never arms 0-delay timers while at MaxInFlight (avoids busy-spin).
 - Optional observability: `OnAttemptStart` / `OnAttemptStartContext` (tests; default nil).
 - Evidence: `StrictCadDoesNotBurstStart`, `CadZeroAllowsImmediateRefill`, `FirstFamilyAttemptOrder` in `test_net_async_dial` (0 leak).
-- Still **not** a laboratory DNS-RTT × SYN full RFC8305 timing matrix.
+
+### DNS×SYN lab harness (Q12)
+- `IAsyncTcpDialDnsFeed` + `AsyncTcpDialWithDnsFeed`: inject DNS stream events without real getaddrinfo; same `OnDnsStream` state machine as host path.
+- `FeedAddresses` / `SignalDnsDone` post onto the loop; feed detaches safely when dial finishes.
+- Evidence: `DnsRaceStartsBeforeLateFamily`, `DnsRaceLateFamilyInterleaves`, `DnsRaceEmptyUntilDoneFails`, `DnsRaceWaitsAllDoneWhenAddrsExhausted` (0 leak).
+- macOS CI: dial-resolve matrix **fail-closed** (with kqueue L0); still not full macOS async parity.

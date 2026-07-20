@@ -27,6 +27,12 @@ var
   GAttemptTicks: array[0..7] of UInt64;
   GAttemptPorts: array[0..7] of UInt16;
   GAttemptIsV6: array[0..7] of Boolean;
+  GFeed: IAsyncTcpDialDnsFeed;
+  GLateFeedPosted: Boolean;
+  GAttemptBeforeLate: Boolean;
+  GAllowDialDone: Boolean;
+  GDialDoneTooEarly: Boolean;
+  GFeedListenerPort: UInt16;
 
 procedure OnDial(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 begin
@@ -34,6 +40,8 @@ begin
   GStream := AStream;
   GError := AError;
   GDone := True;
+  if not GAllowDialDone then
+    GDialDoneTooEarly := True;
   GLoop.Stop;
 end;
 
@@ -50,6 +58,8 @@ begin
   GAttemptPorts[GAttemptCount] := AAddr.Port;
   GAttemptIsV6[GAttemptCount] := AAddr.IsIPv6;
   Inc(GAttemptCount);
+  if not GLateFeedPosted then
+    GAttemptBeforeLate := True;
 end;
 
 procedure ResetAttemptObs;
@@ -347,6 +357,8 @@ begin
     GCallCount := 0;
     GStream := nil;
     GError := -1;
+    GAllowDialDone := True;
+    GDialDoneTooEarly := False;
     ResetAttemptObs;
     LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
     LPort := LListener.LocalAddr.Port;
@@ -378,8 +390,243 @@ begin
   end;
 end;
 
+procedure RaceFeedEarlyWithListener(AContext: Pointer);
+var
+  LAddrs: array[0..1] of TNetAddress;
+begin
+  if GFeed = nil then
+    Exit;
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1);
+  LAddrs[1] := TNetAddress.IPv4('127.0.0.1', GFeedListenerPort);
+  GFeed.FeedAddresses(LAddrs);
+end;
+
+procedure RaceFeedLateFamily(AContext: Pointer);
+var
+  LAddrs: array[0..0] of TNetAddress;
+begin
+  if GFeed = nil then
+    Exit;
+  GLateFeedPosted := True;
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 2);
+  GFeed.FeedAddresses(LAddrs);
+  GFeed.SignalDnsDone(0);
+end;
+
+procedure TestDnsRaceStartsBeforeLateFamily;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+begin
+  { Lab matrix: first DNS batch must start HE before a late batch arrives. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GAllowDialDone := True;
+    GDialDoneTooEarly := False;
+    GLateFeedPosted := False;
+    GAttemptBeforeLate := False;
+    GFeed := nil;
+    ResetAttemptObs;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    GFeedListenerPort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 30;
+    LOpts.MaxInFlight := 2;
+    LOpts.InterleaveFamilies := False;
+    LOpts.OnAttemptStart := @OnAttemptStart;
+    Check(AsyncTcpDialWithDnsFeed(GLoop, 0, LOpts, @OnDial, nil, GFeed),
+      'dns feed submit');
+    Check(GFeed <> nil, 'feed non-nil');
+    GLoop.Schedule(TDuration.FromMilliseconds(0), @RaceFeedEarlyWithListener, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(80), @RaceFeedLateFamily, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(5000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'dns race completes');
+    Check(GStream <> nil, 'listener wins via early batch');
+    Check(GAttemptBeforeLate, 'attempt started before late DNS family');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single callback');
+    GStream := nil;
+    LListener := nil;
+    GFeed := nil;
+  finally
+    GFeed := nil;
+    GLoop.Free;
+  end;
+end;
+
+procedure RaceFeedEarlyRefuseOnly(AContext: Pointer);
+var
+  LAddrs: array[0..0] of TNetAddress;
+begin
+  if GFeed = nil then
+    Exit;
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1);
+  GFeed.FeedAddresses(LAddrs);
+end;
+
+procedure RaceFeedLateListener(AContext: Pointer);
+var
+  LAddrs: array[0..0] of TNetAddress;
+begin
+  if GFeed = nil then
+    Exit;
+  GLateFeedPosted := True;
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', GFeedListenerPort);
+  GFeed.FeedAddresses(LAddrs);
+  GFeed.SignalDnsDone(0);
+end;
+
+procedure TestDnsRaceLateFamilyInterleaves;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LI: Integer;
+  LSawListener: Boolean;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GAllowDialDone := True;
+    GDialDoneTooEarly := False;
+    GLateFeedPosted := False;
+    GAttemptBeforeLate := False;
+    GFeed := nil;
+    ResetAttemptObs;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    GFeedListenerPort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 2;
+    LOpts.InterleaveFamilies := True;
+    LOpts.OnAttemptStart := @OnAttemptStart;
+    Check(AsyncTcpDialWithDnsFeed(GLoop, 0, LOpts, @OnDial, nil, GFeed),
+      'late family feed submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(0), @RaceFeedEarlyRefuseOnly, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(40), @RaceFeedLateListener, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(5000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'late family dial completes');
+    Check(GStream <> nil, 'late listener wins');
+    CheckEqual(Int64(0), Int64(GError), 'success');
+    LSawListener := False;
+    for LI := 0 to GAttemptCount - 1 do
+      if GAttemptPorts[LI] = GFeedListenerPort then
+        LSawListener := True;
+    Check(LSawListener, 'OnAttemptStart saw late listener port');
+    GStream := nil;
+    LListener := nil;
+    GFeed := nil;
+  finally
+    GFeed := nil;
+    GLoop.Free;
+  end;
+end;
+
+procedure RaceSignalDoneOnly(AContext: Pointer);
+begin
+  if GFeed = nil then
+    Exit;
+  GAllowDialDone := True;
+  GFeed.SignalDnsDone(111);
+end;
+
+procedure TestDnsRaceEmptyUntilDoneFails;
+var
+  LOpts: TAsyncTcpDialOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := 0;
+    GAllowDialDone := False;
+    GDialDoneTooEarly := False;
+    GFeed := nil;
+    ResetAttemptObs;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    Check(AsyncTcpDialWithDnsFeed(GLoop, 0, LOpts, @OnDial, nil, GFeed),
+      'empty dns feed submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(0), @RaceSignalDoneOnly, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'empty dns completes');
+    Check(GStream = nil, 'nil stream');
+    Check(GError <> 0, 'error non-zero');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single callback');
+    GFeed := nil;
+  finally
+    GFeed := nil;
+    GLoop.Free;
+  end;
+end;
+
+procedure RaceFeedRefuseHoldDns(AContext: Pointer);
+var
+  LAddrs: array[0..0] of TNetAddress;
+begin
+  if GFeed = nil then
+    Exit;
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1);
+  GFeed.FeedAddresses(LAddrs);
+end;
+
+procedure RaceSignalAllDoneLater(AContext: Pointer);
+begin
+  if GFeed = nil then
+    Exit;
+  GAllowDialDone := True;
+  GFeed.SignalDnsDone(0);
+end;
+
+procedure TestDnsRaceWaitsAllDoneWhenAddrsExhausted;
+var
+  LOpts: TAsyncTcpDialOptions;
+begin
+  { Refuse-only batch must not finish until AllDone (FDnsAllDone). }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := 0;
+    GAllowDialDone := False;
+    GDialDoneTooEarly := False;
+    GFeed := nil;
+    ResetAttemptObs;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 2;
+    LOpts.OnAttemptStart := @OnAttemptStart;
+    Check(AsyncTcpDialWithDnsFeed(GLoop, 0, LOpts, @OnDial, nil, GFeed),
+      'wait all-done submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(0), @RaceFeedRefuseHoldDns, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(60), @RaceSignalAllDoneLater, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(3000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'wait all-done completes');
+    Check(not GDialDoneTooEarly, 'did not complete before AllDone');
+    Check(GStream = nil, 'fail after AllDone');
+    Check(GError <> 0, 'error after exhaust');
+    GFeed := nil;
+  finally
+    GFeed := nil;
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_dial');
+  GAllowDialDone := True;
+  GDialDoneTooEarly := False;
   T.Test('DialLocalhostSuccess', @TestDialLocalhostSuccess);
   T.Test('DialRefused', @TestDialRefused);
   T.Test('DialTokenCancel', @TestDialTokenCancel);
@@ -389,6 +636,11 @@ begin
   T.Test('StrictCadDoesNotBurstStart', @TestStrictCadDoesNotBurstStart);
   T.Test('CadZeroAllowsImmediateRefill', @TestCadZeroAllowsImmediateRefill);
   T.Test('FirstFamilyAttemptOrder', @TestFirstFamilyAttemptOrder);
+  T.Test('DnsRaceStartsBeforeLateFamily', @TestDnsRaceStartsBeforeLateFamily);
+  T.Test('DnsRaceLateFamilyInterleaves', @TestDnsRaceLateFamilyInterleaves);
+  T.Test('DnsRaceEmptyUntilDoneFails', @TestDnsRaceEmptyUntilDoneFails);
+  T.Test('DnsRaceWaitsAllDoneWhenAddrsExhausted',
+    @TestDnsRaceWaitsAllDoneWhenAddrsExhausted);
   if not T.Run then
     Halt(1);
 end.

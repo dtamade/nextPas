@@ -480,6 +480,7 @@ var
   LTimedOut: Boolean;
   LLimited: Boolean;
   LCancelled: Boolean;
+  LPollMs: Int32;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -515,7 +516,11 @@ begin
       LCancelled := True;
       LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
     end;
-    DrainPipePair(FStdoutReader, FStderrReader, 10, Result.StdOut, Result.StdErr,
+    if LHaveProcessResult then
+      LPollMs := 0
+    else
+      LPollMs := 1;
+    DrainPipePair(FStdoutReader, FStderrReader, LPollMs, Result.StdOut, Result.StdErr,
       LStdoutClosed, LStderrClosed, FMaxOutput, LLimited);
     if LLimited then
     begin
@@ -563,9 +568,9 @@ begin
         LStderrClosed := True;
         Break;
       end;
-      { Avoid busy-spin when process still running and pipes idle/closed. }
+      { Short backoff while process still running (was 10ms). }
       if not LHaveProcessResult then
-        platform_thread_sleep_ns(10000000);
+        platform_thread_sleep_ns(100000);
       Continue;
     end;
 
@@ -605,7 +610,7 @@ begin
       Break;
     end;
     if not LHaveProcessResult then
-      platform_thread_sleep_ns(10000000);
+      platform_thread_sleep_ns(100000);
   until False;
 
   if (not FTimeout.IsZero) and (not LHaveProcessResult) then
@@ -639,6 +644,7 @@ end;
 function TChild.WaitGraceful(const AGrace: TDuration): TProcessOutput;
 const
   SIGTERM = 15;
+  SIGKILL = 9;
 var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
@@ -653,7 +659,11 @@ begin
 
   LTimedOut := False;
   LCancelled := False;
-  Signal(SIGTERM);
+  { Process group: signal whole tree so grandchildren exit with the leader. }
+  if FNewProcessGroup then
+    SignalTree(SIGTERM)
+  else
+    Signal(SIGTERM);
   if AGrace.IsZero or AGrace.IsNegative then
     LDeadline := TInstant.Now
   else
@@ -664,7 +674,10 @@ begin
     if CancelRequested then
     begin
       LCancelled := True;
-      LErr := platform_process_kill(FProc);
+      if FNewProcessGroup then
+        LErr := platform_process_kill_group(platform_process_pid(FProc), SIGKILL)
+      else
+        LErr := platform_process_kill(FProc);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_kill', LErr);
       LErr := platform_process_wait(FProc, LResult);
@@ -680,7 +693,10 @@ begin
     if TInstant.Now.DurationSince(LDeadline).IsPositive then
     begin
       LTimedOut := True;
-      LErr := platform_process_kill(FProc);
+      if FNewProcessGroup then
+        LErr := platform_process_kill_group(platform_process_pid(FProc), SIGKILL)
+      else
+        LErr := platform_process_kill(FProc);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_kill', LErr);
       LErr := platform_process_wait(FProc, LResult);

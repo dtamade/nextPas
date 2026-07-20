@@ -42,6 +42,23 @@ begin
   RemoveAll(LDir);
 end;
 
+
+procedure TestOpenLocked;
+var
+  LDir, LFile: string;
+  A: IFile;
+begin
+  LDir := WineTmp;
+  MkdirAll(LDir);
+  LFile := PathJoin(LDir, 'lock.bin');
+  WriteFileText(LFile, 'x');
+  A := OpenLocked(LFile, [fmRead, fmWrite], flkExclusive);
+  Check(A <> nil, 'OpenLocked non-nil');
+  A.Unlock;
+  A.Close;
+  RemoveAll(LDir);
+end;
+
 procedure TestMkdirAllNested;
 var
   LRoot, LNest: string;
@@ -67,6 +84,7 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('write read remove', @TestWriteReadRemove);
   T.Test('mkdirall nested', @TestMkdirAllNested);
+  T.Test('OpenLocked', @TestOpenLocked);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

@@ -11,7 +11,8 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
-# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
+# 20 platform gates promoted (+error +fmt +info) after GHA pass=20
+# (run 29718874441 @ 534d5e7c4). mem.host_runtime may also be listed (mem G4.x).
 
 set -euo pipefail
 
@@ -43,10 +44,12 @@ MODULE_ENTRIES=(
   "platform.socket tests/nextpas.core.platform.socket/test_platform_socket_wine"
   "platform.error tests/nextpas.core.platform.error/test_platform_error_wine"
   "platform.fmt tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
+  "platform.info tests/nextpas.core.platform.info/test_platform_info_wine"
   "io.reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
   "platform.socket.windows_real tests/nextpas.core.platform.socket/test_platform_socket_windows_real"
+  "mem.host_runtime tests/nextpas.core.mem/test_mem_cross_os_compile_gate host-runtime"
 )
 
 pass_count=0
@@ -54,7 +57,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix; documented 19-gate set; not full-host Windows parity"
+echo "truth=ci-matrix; documented 20-platform-gate set (+info); not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
@@ -63,7 +66,14 @@ echo
 
 for entry in "${MODULE_ENTRIES[@]}"; do
   name="${entry%% *}"
-  dir="${entry#* }"
+  rest="${entry#* }"
+  if [[ "$rest" == *" "* ]]; then
+    dir="${rest% *}"
+    target="${rest##* }"
+  else
+    dir="$rest"
+    target="test"
+  fi
   if [[ ! -d "$dir" ]]; then
     echo "FAIL $name : missing directory $dir"
     fail_count=$((fail_count + 1))
@@ -71,8 +81,8 @@ for entry in "${MODULE_ENTRIES[@]}"; do
     continue
   fi
 
-  echo "=== real-windows: $name ($dir) ==="
-  if make -C "$dir" clean test; then
+  echo "=== real-windows: $name ($dir target=$target) ==="
+  if make -C "$dir" clean "$target"; then
     echo "PASS $name"
     pass_count=$((pass_count + 1))
   else
@@ -85,7 +95,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-19-gate-set"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-20-platform-gate-set-plus-mem-host"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

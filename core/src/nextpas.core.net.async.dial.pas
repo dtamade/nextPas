@@ -6,6 +6,7 @@ unit nextpas.core.net.async.dial;
  * fill of MaxInFlight). CAD=0 allows immediate refill after failure / next start.
  * DNS uses AsyncResolveStream (parallel A/AAAA + Resolution Delay gate),
  * then dials as families arrive (DNS-race-while-dialing subset).
+ * AsyncTcpDialWithDnsFeed injects stream events for lab timing tests.
  * AsyncTcpConnect remains HE-lite (sequential sync). Use AsyncTcpDial for race.
  *}
 
@@ -48,6 +49,14 @@ type
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
     AContext: Pointer);
 
+  { Lab / advanced: inject DNS stream events without real getaddrinfo.
+    FeedAddresses / SignalDnsDone are posted onto the loop thread. }
+  IAsyncTcpDialDnsFeed = interface
+    ['{A7C3E91D-4B2F-4E8A-9D1C-6F0B5A8E3D27}']
+    procedure FeedAddresses(const AAddrs: array of TNetAddress);
+    procedure SignalDnsDone(AError: Int32);
+  end;
+
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
 
 { Async resolve + concurrent dial. Callback once on loop thread. }
@@ -60,6 +69,11 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
   const AAddrs: array of TNetAddress; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer = nil): Boolean;
+
+{ Concurrent dial with caller-fed DNS stream events (lab timing matrix). }
+function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean;
 
 implementation
 
@@ -79,6 +93,7 @@ const
 
 type
   TAsyncTcpDialer = class;
+  TAsyncTcpDialDnsFeed = class;
 
   PDialAttempt = ^TDialAttempt;
   TDialAttempt = record
@@ -87,6 +102,25 @@ type
     Fd: TPlatformSocket;
     Sa: TPlatformSockAddr;
     Active: Boolean;
+  end;
+
+  PDnsFeedPost = ^TDnsFeedPost;
+  TDnsFeedPost = record
+    Feed: TAsyncTcpDialDnsFeed;
+    Event: TDnsStreamEvent;
+  end;
+
+  TAsyncTcpDialDnsFeed = class(TInterfacedObject, IAsyncTcpDialDnsFeed)
+  private
+    FLoop: TAsyncLoop;
+    FDialer: TAsyncTcpDialer;
+    procedure DetachDialer;
+    procedure PostEvent(const AEvent: TDnsStreamEvent);
+  public
+    constructor Create(const ALoop: TAsyncLoop; ADialer: TAsyncTcpDialer);
+    destructor Destroy; override;
+    procedure FeedAddresses(const AAddrs: array of TNetAddress);
+    procedure SignalDnsDone(AError: Int32);
   end;
 
   TAsyncTcpDialer = class
@@ -108,6 +142,7 @@ type
     FDnsAllDone: Boolean;
     FDialStarted: Boolean;
     FOverallBound: Boolean;
+    FFeedNotify: TAsyncTcpDialDnsFeed; { non-owning; cleared before Free }
     procedure OrderAddresses;
     procedure EnsureOverallTimer;
     procedure AppendAddresses(const ANew: array of TNetAddress);
@@ -123,6 +158,7 @@ type
     procedure CancelTimers;
     procedure MaybeCompleteIfIdle;
     procedure BindToken;
+    procedure NotifyFeedDetached;
   public
     constructor Create(const ALoop: TAsyncLoop; APort: UInt16;
       const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
@@ -130,6 +166,7 @@ type
     destructor Destroy; override;
     procedure BeginWithHost(const AHost: string);
     procedure BeginWithAddrs(const AAddrs: array of TNetAddress);
+    procedure BeginWithDnsFeed;
   end;
 
 procedure DialConnectCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer); forward;
@@ -139,6 +176,8 @@ procedure DialTokenAbort(AContext: Pointer); forward;
 procedure DialTokenNotify(AContext: Pointer); forward;
 procedure DialStreamCallback(const AEvent: TDnsStreamEvent; AContext: Pointer); forward;
 procedure DialDiscardTimer(AContext: Pointer); forward;
+procedure DnsFeedPostCb(AContext: Pointer); forward;
+procedure DnsFeedPostDiscard(AContext: Pointer); forward;
 
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
 begin
@@ -184,6 +223,89 @@ begin
   FDnsAllDone := True; { Addrs path has no pending DNS }
   FDialStarted := False;
   FOverallBound := False;
+  FFeedNotify := nil;
+end;
+
+constructor TAsyncTcpDialDnsFeed.Create(const ALoop: TAsyncLoop; ADialer: TAsyncTcpDialer);
+begin
+  inherited Create;
+  FLoop := ALoop;
+  FDialer := ADialer;
+end;
+
+destructor TAsyncTcpDialDnsFeed.Destroy;
+begin
+  if FDialer <> nil then
+  begin
+    FDialer.FFeedNotify := nil;
+    FDialer := nil;
+  end;
+  inherited Destroy;
+end;
+
+procedure TAsyncTcpDialDnsFeed.DetachDialer;
+begin
+  FDialer := nil;
+end;
+
+procedure TAsyncTcpDialDnsFeed.PostEvent(const AEvent: TDnsStreamEvent);
+var
+  LPost: PDnsFeedPost;
+begin
+  if (FDialer = nil) or (FLoop = nil) or (not FLoop.IsValid) then
+    Exit;
+  New(LPost);
+  LPost^ := Default(TDnsFeedPost);
+  LPost^.Feed := Self;
+  LPost^.Event := AEvent;
+  Self._AddRef;
+  FLoop.PostEx(@DnsFeedPostCb, LPost, @DnsFeedPostDiscard);
+end;
+
+procedure TAsyncTcpDialDnsFeed.FeedAddresses(const AAddrs: array of TNetAddress);
+var
+  LEvent: TDnsStreamEvent;
+  LI: Integer;
+begin
+  if FDialer = nil then
+    Exit;
+  LEvent := Default(TDnsStreamEvent);
+  LEvent.Error := 0;
+  LEvent.AllDone := False;
+  LEvent.IsIPv6 := False;
+  SetLength(LEvent.Addresses, Length(AAddrs));
+  for LI := 0 to High(AAddrs) do
+  begin
+    LEvent.Addresses[LI] := AAddrs[LI];
+    if AAddrs[LI].IsIPv6 then
+      LEvent.IsIPv6 := True;
+  end;
+  if Length(AAddrs) = 0 then
+    Exit;
+  PostEvent(LEvent);
+end;
+
+procedure TAsyncTcpDialDnsFeed.SignalDnsDone(AError: Int32);
+var
+  LEvent: TDnsStreamEvent;
+begin
+  if FDialer = nil then
+    Exit;
+  LEvent := Default(TDnsStreamEvent);
+  LEvent.Error := AError;
+  LEvent.AllDone := True;
+  LEvent.IsIPv6 := False;
+  SetLength(LEvent.Addresses, 0);
+  PostEvent(LEvent);
+end;
+
+procedure TAsyncTcpDialer.NotifyFeedDetached;
+begin
+  if FFeedNotify <> nil then
+  begin
+    FFeedNotify.DetachDialer;
+    FFeedNotify := nil;
+  end;
 end;
 
 destructor TAsyncTcpDialer.Destroy;
@@ -407,6 +529,7 @@ begin
   LCtx := FUserCtx;
   if Assigned(LCb) then
     LCb(LAsync, 0, LCtx);
+  NotifyFeedDetached;
   Free;
 end;
 
@@ -423,6 +546,7 @@ begin
   LCtx := FUserCtx;
   if Assigned(LCb) then
     LCb(nil, AError, LCtx);
+  NotifyFeedDetached;
   Free;
 end;
 
@@ -770,6 +894,14 @@ begin
   StartDialing;
 end;
 
+procedure TAsyncTcpDialer.BeginWithDnsFeed;
+begin
+  FDnsAllDone := False;
+  FDialStarted := False;
+  BindToken;
+  EnsureOverallTimer;
+end;
+
 procedure DialConnectCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 var
   LAtt: PDialAttempt;
@@ -838,6 +970,41 @@ procedure DialDiscardTimer(AContext: Pointer);
 begin
 end;
 
+procedure DnsFeedPostDiscard(AContext: Pointer);
+var
+  LPost: PDnsFeedPost;
+begin
+  LPost := PDnsFeedPost(AContext);
+  if LPost = nil then
+    Exit;
+  if LPost^.Feed <> nil then
+    LPost^.Feed._Release;
+  LPost^.Event := Default(TDnsStreamEvent);
+  Dispose(LPost);
+end;
+
+procedure DnsFeedPostCb(AContext: Pointer);
+var
+  LPost: PDnsFeedPost;
+  LFeed: TAsyncTcpDialDnsFeed;
+  LEvent: TDnsStreamEvent;
+begin
+  LPost := PDnsFeedPost(AContext);
+  if LPost = nil then
+    Exit;
+  LFeed := LPost^.Feed;
+  LEvent := LPost^.Event;
+  LPost^.Event := Default(TDnsStreamEvent);
+  Dispose(LPost);
+  try
+    if (LFeed <> nil) and (LFeed.FDialer <> nil) then
+      LFeed.FDialer.OnDnsStream(LEvent);
+  finally
+    if LFeed <> nil then
+      LFeed._Release;
+  end;
+end;
+
 function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
   const AAddrs: array of TNetAddress; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
@@ -854,6 +1021,27 @@ begin
   LOpts := AOptions;
   LDialer := TAsyncTcpDialer.Create(ALoop, APort, LOpts, ACallback, AContext);
   LDialer.BeginWithAddrs(AAddrs);
+  Result := True;
+end;
+
+function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean;
+var
+  LDialer: TAsyncTcpDialer;
+  LFeedObj: TAsyncTcpDialDnsFeed;
+  LOpts: TAsyncTcpDialOptions;
+begin
+  Result := False;
+  AFeed := nil;
+  if (ALoop = nil) or (not ALoop.IsValid) or (not Assigned(ACallback)) then
+    Exit;
+  LOpts := AOptions;
+  LDialer := TAsyncTcpDialer.Create(ALoop, APort, LOpts, ACallback, AContext);
+  LFeedObj := TAsyncTcpDialDnsFeed.Create(ALoop, LDialer);
+  LDialer.FFeedNotify := LFeedObj;
+  LDialer.BeginWithDnsFeed;
+  AFeed := LFeedObj;
   Result := True;
 end;
 

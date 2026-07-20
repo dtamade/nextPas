@@ -344,23 +344,32 @@ end;
 
 function Capture(const APath: string; const AArgs: array of string): string;
 var
-  LOutput: TProcessOutput;
+  LChild: IChild;
 begin
-  LOutput := Run(APath, AArgs);
-  Result := LOutput.StdOut;
+  { stdout only — stderr to null. Avoid dual-pipe WaitWithOutput cost for short Capture. }
+  LChild := TCommand.New(APath).Args(AArgs)
+    .Stdout(stPiped).Stderr(stNull).Spawn;
+  Result := LChild.WaitWithOutput.StdOut;
 end;
 
 function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
+var
+  LChild: IChild;
 begin
-  Result := RunIn(APath, AArgs, ADir).StdOut;
+  LChild := TCommand.New(APath).Args(AArgs).Dir(ADir)
+    .Stdout(stPiped).Stderr(stNull).Spawn;
+  Result := LChild.WaitWithOutput.StdOut;
 end;
 
 function MustCapture(const APath: string; const AArgs: array of string): string;
 var
+  LChild: IChild;
   LOutput: TProcessOutput;
 begin
-  LOutput := Run(APath, AArgs);
+  LChild := TCommand.New(APath).Args(AArgs)
+    .Stdout(stPiped).Stderr(stNull).Spawn;
+  LOutput := LChild.WaitWithOutput;
   RaiseIfProcessFailed(APath, LOutput);
   Result := LOutput.StdOut;
 end;
@@ -368,9 +377,12 @@ end;
 function MustCaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 var
+  LChild: IChild;
   LOutput: TProcessOutput;
 begin
-  LOutput := RunIn(APath, AArgs, ADir);
+  LChild := TCommand.New(APath).Args(AArgs).Dir(ADir)
+    .Stdout(stPiped).Stderr(stNull).Spawn;
+  LOutput := LChild.WaitWithOutput;
   RaiseIfProcessFailed(APath, LOutput);
   Result := LOutput.StdOut;
 end;
