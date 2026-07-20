@@ -19,7 +19,9 @@ uses
   nextpas.core.tui.app,
   nextpas.core.tui.app.screen,
   nextpas.core.tui.widget.panel,
-  nextpas.core.tui.widget.chat_theme;
+  nextpas.core.tui.widget.chat_theme,
+  nextpas.core.tui.widget.scrollview,
+  nextpas.core.tui.widget.modal;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -68,6 +70,12 @@ type
   TPanelGrid = nextpas.core.tui.widget.panel.TPanelGrid;
   TSepHit = nextpas.core.tui.widget.panel.TSepHit;
   TPanel = nextpas.core.tui.widget.panel.TPanel;
+  IScrollView = nextpas.core.tui.widget.scrollview.IScrollView;
+  TScrollViewState = nextpas.core.tui.widget.scrollview.TScrollViewState;
+  TScrollView = nextpas.core.tui.widget.scrollview.TScrollView;
+  IModal = nextpas.core.tui.widget.modal.IModal;
+  TModalSize = nextpas.core.tui.widget.modal.TModalSize;
+  TModal = nextpas.core.tui.widget.modal.TModal;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;

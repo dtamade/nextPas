@@ -4,6 +4,10 @@ program test_xml_facade_surface;
 
 uses
   SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.xml,
   nextpas.core.test;
 
@@ -114,10 +118,44 @@ begin
   Check(LRaised, 'xml prefix must bind XML namespace URI');
 end;
 
+function XmlBytesFromString(const AText: string): TBytes;
+var
+  LI: Integer;
+begin
+  SetLength(Result, Length(AText));
+  for LI := 1 to Length(AText) do
+    Result[LI - 1] := Byte(AText[LI]);
+end;
+
+procedure TestFacadeExposesReaderParse;
+var
+  LStream: IStream;
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LStream := CreateBytesStreamFrom(XmlBytesFromString('<root>x</root>'));
+  LDoc := XmlParse(LStream as IReader);
+  try
+    Check(LDoc.Root.IsAssigned, 'XmlParse IReader');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root local');
+  finally
+    LDoc.Free;
+  end;
+  LRaised := False;
+  try
+    XmlParse(IReader(nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'nil IReader raises');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.xml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade exposes namespace surface',
     @TestFacadeExposesNamespaceSurface);
+  T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
   if not T.Run then Halt(1);
 end.

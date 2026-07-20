@@ -14,24 +14,25 @@ uses
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.linkedhashmap.base,
   nextpas.core.collections.linkedhashmap.intf,
-  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.mem.allocator.base;
 
 type
   {**
    * TLinkedHashMap<K,V>
    *
-   * @desc Implementation of ILinkedHashMap using HashMap + doubly-linked list
+   * @desc Implementation of ILinkedHashMap using Swiss HashMap + doubly-linked list
    * @param K Key type
    * @param V Value type
+   * @note Insertion order is owned by the linked list; Swiss tables only do key lookup.
    *}
   generic TLinkedHashMap<K,V> = class(specialize TGenericCollection<specialize TMapEntry<K,V>>, specialize ILinkedHashMap<K,V>)
   private
     type
       TNode = specialize TLinkedNode<K,V>;
       PNode = ^TNode;
-      TInternalMap = specialize THashMap<K,V>;
-      TNodeMap = specialize THashMap<K, PNode>;
+      TInternalMap = specialize TSwissHashMap<K,V>;
+      TNodeMap = specialize TSwissHashMap<K, PNode>;
       TPairType = specialize TPair<K,V>;
       TEntryType = specialize TMapEntry<K,V>;
       TKeysArray = array of K;  // 定义键数组类型
@@ -40,8 +41,8 @@ type
       TValueModifier = specialize TValueModifierProc<V>;
 
     var
-      FMap: TInternalMap;        // Stores key -> value
-      FNodeMap: TNodeMap;        // Stores key -> linked node pointer
+      FMap: TInternalMap;        // Stores key -> value (Swiss)
+      FNodeMap: TNodeMap;        // Stores key -> linked node pointer (Swiss)
       FHead: PNode;              // Head of doubly-linked list
       FTail: PNode;              // Tail of doubly-linked list
 

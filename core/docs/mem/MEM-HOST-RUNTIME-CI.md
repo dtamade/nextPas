@@ -118,3 +118,11 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 |-----|------------------|------|
 | **test-macos** | **PASS** | matrix **10/10**；job 仍红于 kqueue |
 | **test-windows-runtime** | **PASS** | matrix **26/26 全绿** |
+
+### 5.8 Era I land（run **29736759874** · `a304e5b09` · 2026-07-20）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | matrix **10/10**；job 红于 kqueue（非 mem） |
+| **test-windows-runtime** | **PASS** | matrix **27/27** 含 mem；job 红于 **async Windows native smoke**（非 mem） |
+| test-linux | n/a | 红于 platform `master-spec.md` 超 120 行（非 mem） |

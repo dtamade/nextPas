@@ -437,7 +437,7 @@ begin
   InsertNonFull(FRoot, AKey, AValue);
 end;
 
-{ Remove — simplified: mark as not implemented for now }
+{ Remove — B-tree delete with rebalance (covered by test_btreemap) }
 
 function TBTreeMap.Remove(const AKey: K): Boolean;
 var

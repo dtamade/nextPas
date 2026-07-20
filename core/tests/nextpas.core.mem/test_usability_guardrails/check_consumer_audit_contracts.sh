@@ -113,6 +113,42 @@ if [[ -f "$SRC/nextpas.core.yaml.builder.pas" ]]; then
     'yaml.builder must keep FormatAllocErrorMsg on OOM path'
 fi
 
+# --- Era I: ReallocMemOf symmetry + owned-string size tables + tui FreeMemOf WAIVE ---
+need_file "$SRC/nextpas.core.text.builder.pas"
+need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemOf' \
+  'text.builder must use ReallocMemOf on inject grow (I1)'
+
+need_file "$SRC/nextpas.core.collections.element_manager.pas"
+need_grep "$SRC/nextpas.core.collections.element_manager.pas" 'ReallocMemOf' \
+  'element_manager must use ReallocMemOf on SupportsRealloc path (I residual)'
+
+need_file "$SRC/nextpas.core.json.parser.pas"
+need_grep "$SRC/nextpas.core.json.parser.pas" 'TJsonOwnedStr' \
+  'json.parser must keep TJsonOwnedStr overflow size table (I2)'
+need_grep "$SRC/nextpas.core.json.parser.pas" 'FreeMemOf\(FAllocator, FStrOverflow\[' \
+  'json.parser overflow elements must FreeMemOf with recorded size (I2)'
+if grep -nE 'FAllocator\.FreeMem\(' "$SRC/nextpas.core.json.parser.pas" | grep -qE 'FStrOverflow|Overflow'; then
+  die 'json.parser must not FreeMem overflow strings via unsized FAllocator.FreeMem (I2)'
+fi
+
+need_file "$SRC/nextpas.core.toml.parser.pas"
+need_grep "$SRC/nextpas.core.toml.parser.pas" 'AddOwnedBuf\(ABuf: Pointer; ASize: SizeUInt\)' \
+  'toml.parser AddOwnedBuf must take size (I3)'
+need_grep "$SRC/nextpas.core.toml.parser.pas" 'TTomlOwnedBuf' \
+  'toml.parser must keep TTomlOwnedBuf size table (I3)'
+need_grep "$SRC/nextpas.core.toml.parser.pas" 'FreeMemOf\(FAllocator, FOwnedBufs\[' \
+  'toml.parser owned elements must FreeMemOf with recorded size (I3)'
+
+# tui inject: must observe Free via IAllocator (permanent FreeMemOf WAIVE)
+for f in \
+  "$SRC/nextpas.core.tui.buffer.pas" \
+  "$SRC/nextpas.core.tui.overlay.pas"
+do
+  need_file "$f"
+  need_grep "$f" 'FAllocator\.FreeMem' \
+    "tui inject must keep FAllocator.FreeMem (FreeMemOf WAIVE tracking) ($f)"
+done
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2
   exit 1

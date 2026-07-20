@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.0** | `EXmlError` 带位置；Reader/Writer/DOM 分层 |
-| **规模 Scale** | **7.5** | 常用 token + DOM；无 XPath/XSD |
-| **综合** | **7.8** | 配置族旁路工具；不进 `TConfigFormat` |
+| **质量 Quality** | **8.8** | `EXmlError` 位置；namespace 护栏；IReader |
+| **规模 Scale** | **8.5** | token + DOM + `XmlParse(IReader)`；无 XPath/XSD |
+| **综合** | **8.6** | encoding/xml 常用路径；XPath/XSD 有意 Out of scope |
 
 ---
 
@@ -21,6 +21,7 @@
 | 能力 | Go/Rust | nextpas | 状态 |
 |------|---------|---------|------|
 | Token reader | Decoder / Event | `TXmlReader` class | Done |
+| 从 Reader 解析 | Decoder | `XmlParse`/`XmlParseDoc`(IReader) bulk | Done |
 | Writer | Encoder | `TXmlWriter` | Done |
 | DOM | — / roxmltree | `TXmlDocument` / `TXmlNode` | Done |
 | 位置诊断 | SyntaxError | `EXmlError.Pos` | Done |

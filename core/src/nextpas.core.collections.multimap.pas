@@ -8,7 +8,7 @@ uses
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.multimap.intf,
-  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.collections.vec;
 
 type
@@ -17,7 +17,7 @@ type
    *
    * @desc
    *   允许一个键对应多个值的映射容器。
-   *   基于HashMap<K, TVec<V>>实现,提供高效的添加、查询和删除操作。
+   *   基于 Swiss TSwissHashMap<K, TVec<V>> 实现,提供高效的添加、查询和删除操作。
    *
    * @usage
    *   - 标签系统（一个对象多个标签）
@@ -37,7 +37,7 @@ type
   private
     type
       TValueVec = specialize TVec<V>;
-      TInternalMap = specialize THashMap<K, TValueVec>;
+      TInternalMap = specialize TSwissHashMap<K, TValueVec>;
       TKeyArray = array of K;
       TValueArray = array of V;
   public type

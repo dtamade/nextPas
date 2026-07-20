@@ -168,10 +168,10 @@ end;
 | `Semaphore` 初始 < 0 | raise `EArgumentError` |
 | `Semaphore.Release(count)` count ≤ 0 | raise `EArgumentError` |
 | `Barrier` count ≤ 0 | raise `EArgumentError` |
-| `CondVar` + `TFutexMutex` | raise `ENextPasError` |
+| `CondVar` + 非 `INativeMutex` | **编译期**不可传入（`ICondVar.Wait` 签名） |
 | `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` |
 | `CondVar.Wait` 非持有者 / 错误 handle | 未定义（调用方契约） |
-| Destroy 时锁仍被持有 | 平台依赖（未在 L1 统一强制） |
+| Destroy 时锁仍被持有 | **调用方必须先释放**。L1 不强制检测；`platform_mutex_destroy` 行为依宿主（可能 EBUSY / 未定义）。不得依赖「Destroy 自动解锁」 |
 
 ---
 

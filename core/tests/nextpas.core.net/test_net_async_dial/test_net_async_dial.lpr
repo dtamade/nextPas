@@ -33,6 +33,10 @@ var
   GAllowDialDone: Boolean;
   GDialDoneTooEarly: Boolean;
   GFeedListenerPort: UInt16;
+  GControlCalls: Integer;
+  GControlRejectLeft: Integer;
+  GResolvePort: UInt16;
+  GResolveCalls: Integer;
 
 procedure OnDial(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 begin
@@ -700,6 +704,148 @@ begin
   end;
 end;
 
+procedure OnControlOk(AFd: PtrUInt; const ARemote: TNetAddress; AContext: Pointer;
+  var AError: Int32);
+begin
+  Inc(GControlCalls);
+  Check(AFd <> 0, 'control fd non-zero');
+  Check(ARemote.Port <> 0, 'control remote port');
+  AError := 0;
+end;
+
+procedure OnControlRejectFirst(AFd: PtrUInt; const ARemote: TNetAddress;
+  AContext: Pointer; var AError: Int32);
+begin
+  Inc(GControlCalls);
+  if GControlRejectLeft > 0 then
+  begin
+    Dec(GControlRejectLeft);
+    AError := 111; { ECONNREFUSED-ish; fail this attempt }
+  end
+  else
+    AError := 0;
+end;
+
+procedure OnResolveLocal(const AHost: string; APort: UInt16;
+  const AFeed: IAsyncTcpDialDnsFeed; AContext: Pointer);
+var
+  LAddrs: array[0..0] of TNetAddress;
+begin
+  Inc(GResolveCalls);
+  Check(AFeed <> nil, 'resolve feed non-nil');
+  CheckEqual(AHost, 'custom.example', 'resolve host passthrough');
+  LAddrs[0] := TNetAddress.IPv4('127.0.0.1', GResolvePort);
+  AFeed.FeedAddresses(LAddrs);
+  AFeed.SignalDnsDone(0);
+end;
+
+procedure TestDialControlOk;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LPort: UInt16;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GControlCalls := 0;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.OnControl := @OnControlOk;
+    Check(AsyncTcpDial(GLoop, '127.0.0.1', LPort, LOpts, @OnDial, nil),
+      'control dial submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'control dial done');
+    CheckEqual(Int64(0), Int64(GError), 'control dial ok');
+    Check(GControlCalls >= 1, 'control invoked');
+    Check(GStream <> nil, 'control stream');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
+procedure TestDialControlRejectsFirstAttempt;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LAddrs: array[0..1] of TNetAddress;
+  LPort: UInt16;
+begin
+  { First addr Control-fails; second connects. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GControlCalls := 0;
+    GControlRejectLeft := 1;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1); { will be rejected by Control }
+    LAddrs[1] := TNetAddress.IPv4('127.0.0.1', LPort);
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 1;
+    LOpts.OnControl := @OnControlRejectFirst;
+    Check(AsyncTcpDialAddrs(GLoop, LAddrs, 0, LOpts, @OnDial, nil),
+      'control reject submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'control reject dial done');
+    CheckEqual(Int64(0), Int64(GError), 'second attempt wins');
+    Check(GControlCalls >= 2, 'control on both attempts');
+    Check(GStream <> nil, 'stream after reject-first');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
+procedure TestDialOnResolveInjectsAddrs;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GResolveCalls := 0;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    GResolvePort := LListener.LocalAddr.Port;
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.OnResolve := @OnResolveLocal;
+    Check(AsyncTcpDial(GLoop, 'custom.example', GResolvePort, LOpts, @OnDial, nil),
+      'onresolve dial submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'onresolve dial done');
+    CheckEqual(Int64(1), Int64(GResolveCalls), 'onresolve once');
+    CheckEqual(Int64(0), Int64(GError), 'onresolve dial ok');
+    Check(GStream <> nil, 'onresolve stream');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_dial');
   GAllowDialDone := True;
@@ -720,6 +866,9 @@ begin
     @TestDnsRaceWaitsAllDoneWhenAddrsExhausted);
   T.Test('DialLocalAddrBind', @TestDialLocalAddrBind);
   T.Test('DialNoDelayKeepAliveOptions', @TestDialNoDelayKeepAliveOptions);
+  T.Test('DialControlOk', @TestDialControlOk);
+  T.Test('DialControlRejectsFirstAttempt', @TestDialControlRejectsFirstAttempt);
+  T.Test('DialOnResolveInjectsAddrs', @TestDialOnResolveInjectsAddrs);
   if not T.Run then
     Halt(1);
 end.

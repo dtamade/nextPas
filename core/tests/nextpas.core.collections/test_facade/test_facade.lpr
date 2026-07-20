@@ -181,10 +181,39 @@ begin
   end;
 end;
 
+procedure TestFacadeDefaultSemanticFactories;
+var
+  LValue: Integer;
+begin
+  { MakeMap currently maps to MakeHashMap (Swiss-backed IHashMap). }
+  with specialize MakeMap<Integer, Integer> do
+  begin
+    Put(3, 30);
+    CheckEqual(Int64(30), Int64(Get(3)), 'MakeMap default value');
+  end;
+
+  with specialize MakeMap<Integer, Integer>(0, @HashModuloTen, @EqualModuloTen) do
+  begin
+    Put(4, 40);
+    Check(not AddOrAssign(14, 140), 'MakeMap callback equal key updates');
+    Check(TryGetValue(24, LValue), 'MakeMap callback lookup');
+    CheckEqual(Int64(140), Int64(LValue), 'MakeMap callback value');
+  end;
+
+  { MakeSet currently maps to MakeHashSet (OA IHashSet). }
+  with specialize MakeSet<Integer> do
+  begin
+    Check(Add(9), 'MakeSet add');
+    Check(Contains(9), 'MakeSet contains');
+    Check(not Add(9), 'MakeSet duplicate add');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.collections.facade');
   T.Test('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
   T.Test('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
   T.Test('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
+  T.Test('facade default semantic MakeMap MakeSet', @TestFacadeDefaultSemanticFactories);
   if not T.Run then Halt(1);
 end.

@@ -77,10 +77,12 @@ function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig; overlo
 function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
 function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
 function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boolean;
+function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean;
 ```
 
 `ConfigSection`：非拥有前缀视图；`GetString('host')` ≡ parent `prefix.host`；`To*` export 抛 `EConfigError`。
 `GetDurationNs` / `GetDurationNsRequired`：后缀 `ns|us|ms|s|m|h`；裸整数按秒。
+`GetByteSize` / `GetByteSizeRequired`：`b|kb|kib|mb|mib|gb|gib`（1024 进制）；裸整数=字节。
 
 `AddKeyValues` 按链顺序应用；不依赖 `args`。长度不等或空 key 在 **Add 时** 立即 `EConfigError`。
 
@@ -104,7 +106,8 @@ function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boole
 
 ```pascal
 TConfigWatcher = class
-  constructor Create(AConfig: TConfig; const AFilePath: string; AFormat: TConfigFormat);
+  constructor Create(AConfig: TConfig; const AFilePath: string; AFormat: TConfigFormat); overload;
+  constructor Create(AConfig: TConfig; const AFilePath: string); overload; // 扩展+嗅探
   function CheckReload: Boolean;
   property OnReload: TConfigReloadEvent;
 end;

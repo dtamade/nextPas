@@ -9,10 +9,12 @@ unit nextpas.core.ini;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.io.intf,
   nextpas.core.mem.intf,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TStringArray = array of string;
@@ -88,15 +90,24 @@ type
     function Allocator: TMemAllocator;
   end;
 
-function IniParse(const AContent: string): TIniFile;
+function IniParse(const AContent: string): TIniFile; overload;
+function IniParse(const AReader: IReader): TIniFile; overload;
 function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;
 function IniStringify(const AFile: TIniFile): string; inline;
 
 implementation
 
 uses
+  nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
+
+function IniBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 { TIniFile }
 
@@ -847,6 +858,13 @@ end;
 function IniParse(const AContent: string): TIniFile;
 begin
   Result := IniParseWith(AContent, DefaultAllocator);
+end;
+
+function IniParse(const AReader: IReader): TIniFile;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('IniParse: reader must not be nil');
+  Result := IniParse(IniBytesToString(IoReadAll(AReader)));
 end;
 
 function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;

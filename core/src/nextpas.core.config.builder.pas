@@ -63,11 +63,13 @@ type
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
     function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -94,11 +96,13 @@ type
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
     function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -127,11 +131,13 @@ type
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
     function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -264,6 +270,11 @@ begin
   Result := FConfig.GetDurationNs(AKey, ADefault);
 end;
 
+function TOwnedConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetByteSize(AKey, ADefault);
+end;
+
 function TOwnedConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -287,6 +298,11 @@ end;
 function TOwnedConfig.GetDurationNsRequired(const AKey: string): Int64;
 begin
   Result := FConfig.GetDurationNsRequired(AKey);
+end;
+
+function TOwnedConfig.GetByteSizeRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetByteSizeRequired(AKey);
 end;
 
 procedure TOwnedConfig.Require(const AKeys: array of string);
@@ -387,6 +403,11 @@ begin
   Result := FConfig.GetDurationNs(AKey, ADefault);
 end;
 
+function TBorrowedConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetByteSize(AKey, ADefault);
+end;
+
 function TBorrowedConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -410,6 +431,11 @@ end;
 function TBorrowedConfig.GetDurationNsRequired(const AKey: string): Int64;
 begin
   Result := FConfig.GetDurationNsRequired(AKey);
+end;
+
+function TBorrowedConfig.GetByteSizeRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetByteSizeRequired(AKey);
 end;
 
 procedure TBorrowedConfig.Require(const AKeys: array of string);
@@ -532,6 +558,11 @@ begin
   Result := FParent.GetDurationNs(FullKey(AKey), ADefault);
 end;
 
+function TSectionConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FParent.GetByteSize(FullKey(AKey), ADefault);
+end;
+
 function TSectionConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FParent.GetStringRequired(FullKey(AKey));
@@ -555,6 +586,11 @@ end;
 function TSectionConfig.GetDurationNsRequired(const AKey: string): Int64;
 begin
   Result := FParent.GetDurationNsRequired(FullKey(AKey));
+end;
+
+function TSectionConfig.GetByteSizeRequired(const AKey: string): Int64;
+begin
+  Result := FParent.GetByteSizeRequired(FullKey(AKey));
 end;
 
 procedure TSectionConfig.Require(const AKeys: array of string);

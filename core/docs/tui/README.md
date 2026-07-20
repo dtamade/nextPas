@@ -13,11 +13,11 @@ rendering、双缓冲 diff 和数组化 cell 布局，但现在 public surface �
   Core 默认入口。只带终端正确性的最小闭包：`TTerminal`、`TBuffer`、`TEvent`、布局、文本、
   ANSI backend，以及基础 widget。
 - `uses nextpas.core.tui.ext`
-  稳定增强入口。需要 `TApp`、theme、task、panel、focus、interaction、frame budget 时用它。
+  稳定增强入口。需要 `TApp`、theme、task、panel、scrollview、modal、focus、interaction、frame budget 时用它。
 - `uses nextpas.core.tui.experimental`
   实验能力入口。图像协议、clipboard 这类高波动能力显式 opt-in。
 - `uses nextpas.core.tui.full`
-  迁移兼容入口。保留旧的宽门面，方便已有代码先迁进来，再逐步收窄依赖。
+  **迁移兼容入口**（migration-only）。保留宽 widget 目录；**新代码优先 core/ext**，不要默认 `full`。
 
 如果你只需要自己持有终端循环和 buffer，默认 `nextpas.core.tui` 就够了。只要一进入应用框架层，
 就直接从 `nextpas.core.tui.ext` 开始，不要再假设 `TApp` 会从默认 core facade 漏出来。

@@ -21,6 +21,10 @@
 | **Q24** | Windows fail-closed 就绪 | streak 观测 + **fail-closed 升格** | **done (A+B)** |
 | **Q25** | Dial LocalAddr bind-before-connect | Go Dialer.LocalAddr subset；family match；0 leak | **done** |
 | **Q26** | Dial NoDelay/KeepAlive 选项 | 成功 stream 回调前 best-effort 应用 | **done** |
+| **Q27** | Dial OnControl | Go Control 子集；attempt 级 fail | **done** |
+| **Q28** | Dial OnResolve | 自定义 Resolver via DnsFeed 契约 | **done** |
+| **—** | MPTCP | 平台/可移植性不足 | **deferred** |
+| **—** | full native-windows | 更广套件后再评估 | **deferred** |
 
 ## Q13 细节
 

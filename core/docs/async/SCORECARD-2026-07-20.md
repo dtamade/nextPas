@@ -1,7 +1,7 @@
 # async / net / io 质量记分卡（2026-07-20）
 
-**范围**: nextpas.core.async + io reactors/poller + net.async  
-**对照**: Go `net`/`context`；Rust `tokio`（质量属性，非 API 克隆）  
+**范围**: nextpas.core.async + io reactors/poller + net.async
+**对照**: Go `net`/`context`；Rust `tokio`（质量属性，非 API 克隆）
 **基线**: Q1–Q12 Landed；调研 [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md)
 
 ## D1–D8（重估）
@@ -46,6 +46,9 @@
 - [x] Q24A windows smoke streak observer; **Q24B fail-closed promoted** (candidate claim)
 - [x] Q25 Dial LocalAddr bind-before-connect + Default() managed-safe options
 - [x] Q26 Dial NoDelay/KeepAlive options on winning stream
+- [x] Q27 Dial OnControl (Control subset)
+- [x] Q28 Dial OnResolve (custom resolver via feed)
+- [ ] MPTCP deferred; full native-windows deferred
 
 ## 性能 scorecard（同机 2026-07-20）
 

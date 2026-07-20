@@ -17,6 +17,13 @@ type
   end;
   PJsonObjectIndex = ^TJsonObjectIndex;
 
+  { Owned overflow string: ptr + alloc size for FreeMemOf (Era I). }
+  TJsonOwnedStr = record
+    Ptr: Pointer;
+    Size: SizeUInt;
+  end;
+  PJsonOwnedStr = ^TJsonOwnedStr;
+
   TJsonDocument = record
   private
     FNodes: PJsonNode;
@@ -26,7 +33,7 @@ type
     FStrArena: PAnsiChar;
     FStrArenaUsed: UInt32;
     FStrArenaCap: UInt32;
-    FStrOverflow: PPointer;
+    FStrOverflow: PJsonOwnedStr;
     FStrOverflowCount: UInt32;
     FStrOverflowCap: UInt32;
     FInput: TStringView;
@@ -139,11 +146,11 @@ begin
   if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
     for I := 0 to FStrOverflowCount - 1 do
-      FAllocator.FreeMem(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
+      FreeMemOf(FAllocator, FStrOverflow[I].Ptr, FStrOverflow[I].Size);
   end;
   if FStrOverflow <> nil then
   begin
-    FreeMemOf(FAllocator, FStrOverflow, SizeUInt(FStrOverflowCap) * SizeOf(Pointer));
+    FreeMemOf(FAllocator, FStrOverflow, SizeUInt(FStrOverflowCap) * SizeOf(TJsonOwnedStr));
     FStrOverflow := nil;
   end;
   if FCombinedAlloc then
@@ -232,7 +239,7 @@ end;
 function TJsonDocument.AllocStrBuf(ASize: SizeUInt): PAnsiChar;
 var
   LNewCap: UInt32;
-  LNewOverflow: PPointer;
+  LNewOverflow: PJsonOwnedStr;
 begin
   if FStrArenaUsed + UInt32(ASize) <= FStrArenaCap then
   begin
@@ -241,6 +248,11 @@ begin
     Exit;
   end;
   Result := FAllocator.GetMem(ASize);
+  if Result = nil then
+  begin
+    SetOutOfMemoryError;
+    Exit;
+  end;
   if FStrOverflowCount >= FStrOverflowCap then
   begin
     if FStrOverflowCap = 0 then
@@ -248,7 +260,8 @@ begin
     else
       LNewCap := FStrOverflowCap * 2;
     LNewOverflow := ReallocMemOf(FAllocator, FStrOverflow,
-      SizeUInt(FStrOverflowCap) * SizeOf(Pointer), SizeUInt(LNewCap) * SizeOf(Pointer));
+      SizeUInt(FStrOverflowCap) * SizeOf(TJsonOwnedStr),
+      SizeUInt(LNewCap) * SizeOf(TJsonOwnedStr));
     if LNewOverflow = nil then
     begin
       FreeMemOf(FAllocator, Result, ASize);
@@ -259,7 +272,8 @@ begin
     FStrOverflow := LNewOverflow;
     FStrOverflowCap := LNewCap;
   end;
-  PPointer(PByte(FStrOverflow) + FStrOverflowCount * SizeOf(Pointer))^ := Result;
+  FStrOverflow[FStrOverflowCount].Ptr := Result;
+  FStrOverflow[FStrOverflowCount].Size := ASize;
   Inc(FStrOverflowCount);
 end;
 
@@ -857,11 +871,11 @@ begin
     FIndices := nil;
     FIndexCap := 0;
   end;
-  { Free overflow string buffers from previous parse }
+  { Free overflow string buffers from previous parse (sized via TJsonOwnedStr) }
   if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
     for I := 0 to FStrOverflowCount - 1 do
-      FAllocator.FreeMem(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
+      FreeMemOf(FAllocator, FStrOverflow[I].Ptr, FStrOverflow[I].Size);
     FStrOverflowCount := 0;
   end;
   FStrArenaUsed := 0;
