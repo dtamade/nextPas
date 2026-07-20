@@ -29,7 +29,8 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
-  nextpas.core.tls.connection.base;
+  nextpas.core.tls.connection.base,
+  nextpas.core.platform.thread;
 
 const
   H2_CLIENT_SOURCE_PATH_FROM_TEST =
@@ -1766,7 +1767,8 @@ var
   LClientPingCount: Int32;
   LI: SizeInt;
 begin
-  { Empty connection buffer on second borrow → PING health probe (Wave I1). }
+  { After idle grace, empty buffer on borrow → PING health probe (Wave I1).
+    Fresh reuses skip wire PING (see H2_POOL_PROBE_GRACE_MS). }
   ResetDialQueue;
   LStream := TFakeTcpStream.Create(
     ComposeServerHandshake + ComposeResponse(1, '200', '', []));
@@ -1776,6 +1778,8 @@ begin
     LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/one'));
     LResp := nil;
+    { Exceed pool probe grace so the next borrow issues a wire PING. }
+    platform_thread_sleep_ns(UInt64(1100) * 1000000);
     LStream.AppendReadData(ComposeResponse(3, '200', '', []));
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/two'));
     LResp := nil;
