@@ -25,6 +25,13 @@ uses nextpas.core.fs
 - 门面裸名：`test_path` — `PathDir('file.txt') = ''`
 - Go 底层：`test_fs` — `FsPathDir('file.txt') = '.'`
 
+**混用审计（U4）**：[`MIXUSE-AUDIT.md`](./MIXUSE-AUDIT.md)（call-site 清单 + 风险结论）
+
+```bash
+bash scripts/path-mixuse-audit.sh
+bash scripts/path-contract-check.sh   # C6 含锚点 fail-closed
+```
+
 ## 模块定位
 
 - **层级**: L2 facade
