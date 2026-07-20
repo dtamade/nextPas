@@ -17,7 +17,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.system.classes,
-  nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.crypto.x509verify;
+  nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.tls.x509verify;
 
 type
   { 证书链验证选项 }

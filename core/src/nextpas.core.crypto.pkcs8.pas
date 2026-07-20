@@ -35,7 +35,7 @@ implementation
 
 uses
   nextpas.core.math,
-  nextpas.core.tls.asn1,
+  nextpas.core.crypto.asn1,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.aescbc,
   nextpas.core.crypto.hash;

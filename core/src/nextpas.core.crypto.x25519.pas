@@ -7,7 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.tls.errors;
+  nextpas.core.exception;
 
 const
   X25519_KEY_SIZE = 32;
@@ -30,14 +30,16 @@ function TryGenerateX25519KeyPair(out APrivateKey, APublicKey: TBytes;
 implementation
 
 uses
-  nextpas.core.tls.random,
+  nextpas.core.crypto.random,
   nextpas.core.crypto.field25519,
   nextpas.core.mem.secure;
 
 procedure EnsureKeyLength(const AValue: TBytes; const AParamName: string);
 begin
   if Length(AValue) <> X25519_KEY_SIZE then
-    RaiseInvalidParameter(AParamName);
+    raise Exception.CreateFmt(
+      'Invalid parameter "%s": value is nil, empty, or out of valid range',
+      [AParamName]);
 end;
 
 function IsAllZero(const AData: TBytes): Boolean;
@@ -162,7 +164,7 @@ begin
   EnsureKeyLength(APeerPublicKey, 'X25519PeerPublicKey');
   Result := X25519ScalarMult(APrivateKey, APeerPublicKey);
   if IsAllZero(Result) then
-    RaiseKeyDerivationError('X25519 shared secret is all-zero');
+    raise Exception.Create('Key derivation failed: X25519 shared secret is all-zero');
 end;
 
 function TryX25519ScalarMult(const AScalar, AInputU: TBytes;

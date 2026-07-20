@@ -56,7 +56,8 @@ interface_uses_block() {
 }
 
 CERTCHAIN="src/nextpas.core.tls.certchain.pas"
-ASN1="src/nextpas.core.tls.asn1.pas"
+ASN1="src/nextpas.core.crypto.asn1.pas"
+ASN1_SHIM="src/nextpas.core.tls.asn1.pas"
 CRYPTO_UTILS="src/nextpas.core.tls.crypto.utils.pas"
 BACKEND_SELECTOR="src/nextpas.core.tls.backend.selector.pas"
 SYSTEM_CLASSES="src/nextpas.core.system.classes.pas"
@@ -74,7 +75,7 @@ require_token "$CERTCHAIN" "nextpas.core.text.conv.Format("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.Trim("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.SameText("
 
-# asn1: left Classes/Contnrs; uses collections + io.intf + text.conv
+# asn1 implementation lives under crypto; tls.asn1 is a re-export shim
 require_token "$ASN1" "nextpas.core.collections.vec"
 require_token "$ASN1" "nextpas.core.io.intf"
 reject_token "$ASN1" "Classes,"
@@ -86,6 +87,9 @@ fi
 require_token "$ASN1" "nextpas.core.text.conv"
 reject_regex "$ASN1" '(^|[^.[:alnum:]_])Format\('
 require_token "$ASN1" "nextpas.core.text.conv.Format("
+require_token "$ASN1_SHIM" "nextpas.core.crypto.asn1"
+reject_token "$ASN1_SHIM" "Classes,"
+reject_token "$ASN1_SHIM" "Contnrs,"
 
 # crypto.utils: no bare SysUtils/Classes; stream via io/fs, not system.classes
 reject_token "$CRYPTO_UTILS" "SysUtils, Classes"
