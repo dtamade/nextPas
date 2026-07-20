@@ -327,6 +327,74 @@ begin
   end, 'my custom msg');
 end;
 
+{ ── B26: bench config boundary fail-paths ─────────────────────────────────── }
+
+procedure TestB26MaxIterationsZeroMeansDefault;
+var
+  LCfg: TBenchTestConfig;
+  LRes: TBenchTestResult;
+begin
+  LCfg := DefaultBenchTestConfig;
+  LCfg.MaxIterations := 0;
+  LCfg.MinDurationMs := 5;
+  LCfg.MinSamples := 1;
+  LRes := RunBenchTest('noop0', @BenchNoop, LCfg);
+  CheckTrue(LRes.Executed);
+  CheckTrue(LRes.Iterations > 0, 'zero MaxIterations still runs');
+end;
+
+procedure TestB26MaxIterationsOne;
+var
+  LCfg: TBenchTestConfig;
+  LRes: TBenchTestResult;
+begin
+  LCfg := DefaultBenchTestConfig;
+  LCfg.MaxIterations := 1;
+  { MinDurationMs must be >= 1 (FromMilliseconds(0) rejects as < 1 us) }
+  LCfg.MinDurationMs := 1;
+  LCfg.MinSamples := 1;
+  LRes := RunBenchTest('noop1', @BenchNoop, LCfg);
+  CheckTrue(LRes.Executed);
+  CheckTrue(LRes.Iterations >= 1);
+  CheckTrue(LRes.Iterations <= 1, 'MaxIterations=1 caps at 1');
+end;
+
+procedure TestB26NegativeThresholdAlwaysFail;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'n';
+  LRes.Executed := True;
+  LRes.NsPerOp := 100;
+  LRes.OpsPerSec := 1e6;
+  ExpectFail(procedure begin
+    CheckBenchPerformance(LRes, -1.0);
+  end);
+end;
+
+procedure TestB26ThroughputZeroThresholdPass;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'n';
+  LRes.Executed := True;
+  LRes.OpsPerSec := 1.0;
+  CheckBenchThroughput(LRes, 0.0);
+end;
+
+procedure TestB26PerformanceZeroThresholdFail;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'n';
+  LRes.Executed := True;
+  LRes.NsPerOp := 1.0;
+  { threshold 0: any positive NsPerOp exceeds }
+  ExpectFail(procedure begin
+    CheckBenchPerformance(LRes, 0.0);
+  end);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -367,6 +435,13 @@ begin
   { Custom messages }
   S.Test('CheckBenchPerformance/CustomMsg', @TestCheckBenchPerformanceCustomMessage);
   S.Test('CheckBenchThroughput/CustomMsg', @TestCheckBenchThroughputCustomMessage);
+
+  { B26 boundaries }
+  S.Test('B26 MaxIterations zero', @TestB26MaxIterationsZeroMeansDefault);
+  S.Test('B26 MaxIterations one', @TestB26MaxIterationsOne);
+  S.Test('B26 negative threshold fail', @TestB26NegativeThresholdAlwaysFail);
+  S.Test('B26 throughput zero threshold', @TestB26ThroughputZeroThresholdPass);
+  S.Test('B26 performance zero threshold fail', @TestB26PerformanceZeroThresholdFail);
 
   S.Run;
   S.Summary;
