@@ -204,6 +204,11 @@ type
     procedure Require(const AKeys: array of string);
 
     procedure ReplaceFrom(AOther: TConfig);
+    { Deep copy of entries + interpolation mode. Caller Free. }
+    function Clone: TConfig;
+    { Overlay ASource keys onto Self (later wins). Does not free ASource. }
+    procedure MergeFrom(ASource: TConfig); overload;
+    procedure MergeFrom(const ASource: IConfig); overload;
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;

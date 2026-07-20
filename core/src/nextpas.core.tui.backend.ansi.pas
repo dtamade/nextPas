@@ -60,6 +60,8 @@ type
     procedure DisableFocusReporting;
     procedure EnableBracketedPaste;
     procedure DisableBracketedPaste;
+    procedure BeginSynchronizedUpdate;
+    procedure EndSynchronizedUpdate;
     procedure MoveTo(AX, AY: Word);
 
     { 把 Patches 翻译为 ANSI 字节。Patches 假定按 (Y,X) 排序——buffer Diff
@@ -179,6 +181,16 @@ end;
 procedure TAnsiBackend.DisableBracketedPaste;
 begin
   AnsiDisableBracketedPaste(FOut);
+end;
+
+procedure TAnsiBackend.BeginSynchronizedUpdate;
+begin
+  AnsiBeginSynchronizedUpdate(FOut);
+end;
+
+procedure TAnsiBackend.EndSynchronizedUpdate;
+begin
+  AnsiEndSynchronizedUpdate(FOut);
 end;
 
 procedure TAnsiBackend.MoveTo(AX, AY: Word);

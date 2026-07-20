@@ -114,11 +114,52 @@ begin
   Check(LRaised, 'nil IReader raises');
 end;
 
+procedure TestFacadeFeatureMatrix;
+var
+  LDoc: IYamlDocument;
+  LRoot: TYamlValue;
+  LText: string;
+  LMsg: string;
+begin
+  LDoc := YamlParse('n: null' + #10 + 'b: true' + #10 + 'i: 42' + #10 +
+    'f: 1.5' + #10 + 's: hello' + #10 + 'arr:' + #10 + '  - 1' + #10 +
+    '  - 2' + #10 + 'obj:' + #10 + '  k: v' + #10);
+  Check(not LDoc.HasError, 'matrix parse');
+  LRoot := LDoc.Root;
+  Check(LRoot.MapGet('n').IsNull or LRoot.MapGet('n').IsStr,
+    'null-ish node');
+  CheckEqual(True, LRoot.MapGet('b').AsBool, 'bool');
+  CheckEqual(Int64(42), LRoot.MapGet('i').AsInt, 'int');
+  Check(Abs(LRoot.MapGet('f').AsFloat - 1.5) < 1e-9, 'float');
+  CheckEqual('hello', LRoot.MapGet('s').AsStr.ToString, 'str');
+  Check(LRoot.MapGet('arr').IsSeq, 'seq');
+  CheckEqual(Int64(2), Int64(LRoot.MapGet('arr').SeqLen), 'seq len');
+  CheckEqual('v', LRoot.MapGet('obj').MapGet('k').AsStr.ToString, 'nested map');
+
+  LDoc := YamlParse('a: 1' + #10 + '---' + #10 + 'b: 2' + #10);
+  Check(LDoc.HasError, 'multi-doc rejected');
+  LMsg := LDoc.Error.Message.ToString;
+  Check((Pos('multiple', LMsg) > 0) or (Pos('document', LMsg) > 0) or
+    (LDoc.Error.Line > 0), 'multi-doc diagnostic');
+
+  LDoc := YamlParse('a: 1' + #10 + '<<: *anchor' + #10);
+  Check(LDoc.HasError, 'merge-key rejected or anchor error');
+
+  LDoc := YamlParse('name: round' + #10 + 'n: 3' + #10);
+  Check(not LDoc.HasError, 'roundtrip source');
+  LText := LDoc.Stringify;
+  LDoc := YamlParse(LText);
+  Check(not LDoc.HasError, 'stringify reparse');
+  CheckEqual('round', LDoc.Root.MapGet('name').AsStr.ToString, 'roundtrip name');
+  CheckEqual(Int64(3), LDoc.Root.MapGet('n').AsInt, 'roundtrip n');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.yaml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade edge depth and large value',
     @TestFacadeEdgeDepthAndLargeValue);
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
+  T.Test('facade feature matrix', @TestFacadeFeatureMatrix);
   if not T.Run then Halt(1);
 end.

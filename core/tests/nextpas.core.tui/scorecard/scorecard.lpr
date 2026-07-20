@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC27 (PARITY-GO-RUST Wave Q1–Q15 + M1)
+ * tui Scorecard SC1–SC28 (PARITY-GO-RUST + Phase E2 Synchronized Update)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -30,6 +30,7 @@ program scorecard;
  *   SC25 FocusManager Tab cycle
  *   SC26 Keybind BindKey + HandleKey
  *   SC27 FrameBudget not over after BeginFrame
+ *   SC28 Synchronized update DECSET 2026 (backend + EndFrame wrap)
  *}
 
 {$I nextpas.core.settings.inc}
@@ -1013,6 +1014,70 @@ begin
   AddRow('SC27a', 'frame_budget', 0, 1, LOk, 'BeginFrame not over 16ms');
 end;
 
+procedure RunSC28;
+var
+  LBE: TAnsiBackend;
+  LTerm: TTerminal;
+  LFrame: TFrame;
+  LPending: AnsiString;
+  LOk: Boolean;
+  LPosH, LPosL: Integer;
+  LOpts: TTerminalOptions;
+begin
+  WriteLn('SC28 Synchronized update DECSET 2026 ...');
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.BeginSynchronizedUpdate;
+    LPending := BackendPendingStr(LBE);
+    if Pos(#27'[?2026h', LPending) = 0 then
+      LOk := False;
+    LBE.DiscardPending;
+    LBE.EndSynchronizedUpdate;
+    LPending := BackendPendingStr(LBE);
+    if Pos(#27'[?2026l', LPending) = 0 then
+      LOk := False;
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC28a', 'sync_update_be', 0, 1, LOk, 'backend ?2026h/?2026l');
+
+  LOk := True;
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 8, 4));
+    LFrame := LTerm.BeginFrame;
+    LFrame.Buffer.SetString(0, 0, 'x', StyleDefault);
+    LTerm.EndFrame(LFrame);
+    LPending := LTerm.BackendPendingForTest;
+    LPosH := Pos(#27'[?2026h', LPending);
+    LPosL := Pos(#27'[?2026l', LPending);
+    if (LPosH = 0) or (LPosL = 0) or (LPosH > LPosL) then
+      LOk := False;
+  finally
+    LTerm.Free;
+  end;
+  AddRow('SC28b', 'sync_endframe', 0, 1, LOk, 'EndFrame wraps draw 2026');
+
+  LOk := True;
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.Default;
+    LOpts.SynchronizedUpdate := False;
+    LTerm.Options := LOpts;
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 8, 4));
+    LFrame := LTerm.BeginFrame;
+    LFrame.Buffer.SetString(0, 0, 'y', StyleDefault);
+    LTerm.EndFrame(LFrame);
+    LPending := LTerm.BackendPendingForTest;
+    if Pos('2026', LPending) > 0 then
+      LOk := False;
+  finally
+    LTerm.Free;
+  end;
+  AddRow('SC28c', 'sync_opt_out', 0, 1, LOk, 'SynchronizedUpdate=False');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -1045,7 +1110,7 @@ begin
   SetLength(GRows, 72);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC27 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC28 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -1073,6 +1138,7 @@ begin
   RunSC25;
   RunSC26;
   RunSC27;
+  RunSC28;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

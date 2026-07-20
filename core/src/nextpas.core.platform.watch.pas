@@ -607,6 +607,7 @@ begin
   LOvl := WinWatchSlotOvl(ASlot);
   FillChar(LOvl^, SizeOf(OVERLAPPED), 0);
   LOvl^.hEvent := HANDLE(ASlot.NotifyEvent);
+  ResetEvent(HANDLE(ASlot.NotifyEvent));
   LBytes := 0;
   ASlot.PendLen := 0;
   ASlot.PendPos := 0;
@@ -620,6 +621,7 @@ begin
        LOvl,
        nil) then
   begin
+    { Synchronous completion (unusual for dir watches). }
     ASlot.Pending := False;
     ASlot.PendLen := Int32(LBytes);
     ASlot.PendPos := 0;
@@ -775,7 +777,7 @@ begin
 
   LHandle := CreateFileW(
     PWideChar(LPath),
-    FILE_LIST_DIRECTORY,
+    FILE_LIST_DIRECTORY or SYNCHRONIZE,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil,
     OPEN_EXISTING,
@@ -826,17 +828,51 @@ function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
   I, LCount, LIdx, LArm: Int32;
-  LMs, LWait, LBytes: DWORD;
+  LMs, LWait: DWORD;
   LHandles: array[0..PLATFORM_WATCH_WIN_MAX - 1] of HANDLE;
   LMap: array[0..PLATFORM_WATCH_WIN_MAX - 1] of Int32;
-  LOvl: LPOVERLAPPED;
-  LSlot: ^TPlatformWinWatchSlot;
+
+  function FinishCompletedSlot(ASlotIdx: Int32): Int32;
+  var
+    S: ^TPlatformWinWatchSlot;
+    B: DWORD;
+    O: LPOVERLAPPED;
+    A: Int32;
+  begin
+    S := @AWatcher.Slots[ASlotIdx];
+    O := WinWatchSlotOvl(S^);
+    B := 0;
+    if not GetOverlappedResult(HANDLE(S^.DirHandle), O, @B, False) then
+      Exit(WinWatchMapSlotIoError(S^));
+    S^.Pending := False;
+    S^.PendLen := Int32(B);
+    S^.PendPos := 0;
+    if not WinWatchDecodeSlot(S^, ASlotIdx + 1, AEvent) then
+    begin
+      S^.PendLen := 0;
+      S^.PendPos := 0;
+      A := WinWatchArmSlot(S^);
+      if A <> 0 then
+        Exit(A);
+      Exit(0);
+    end;
+    if S^.PendPos >= S^.PendLen then
+    begin
+      S^.PendLen := 0;
+      S^.PendPos := 0;
+      A := WinWatchArmSlot(S^);
+      if A <> 0 then
+        Exit(A);
+    end;
+    Result := 1;
+  end;
+
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
   if AWatcher.IsInvalid then
     Exit(PLATFORM_ERR_INVALID);
 
-  { Drain residual on any active slot first. }
+  { Drain residual multi-record batch on any slot. }
   for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
     if AWatcher.Slots[I].Active and
        (AWatcher.Slots[I].PendPos < AWatcher.Slots[I].PendLen) then
@@ -847,7 +883,7 @@ begin
       AWatcher.Slots[I].PendLen := 0;
     end;
 
-  { Re-arm slots that are not pending and have no residual. }
+  { Re-arm idle active slots. }
   for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
     if AWatcher.Slots[I].Active and (not AWatcher.Slots[I].Pending) and
        (AWatcher.Slots[I].PendLen = 0) then
@@ -887,35 +923,7 @@ begin
     Exit(platform_get_last_error);
 
   LIdx := Int32(LWait - WAIT_OBJECT_0);
-  I := LMap[LIdx];
-  LSlot := @AWatcher.Slots[I];
-  LOvl := WinWatchSlotOvl(LSlot^);
-  LBytes := 0;
-  if not GetOverlappedResult(HANDLE(LSlot^.DirHandle), LOvl, @LBytes, False) then
-    Exit(WinWatchMapSlotIoError(LSlot^));
-  LSlot^.Pending := False;
-  LSlot^.PendLen := Int32(LBytes);
-  LSlot^.PendPos := 0;
-
-  if not WinWatchDecodeSlot(LSlot^, I + 1, AEvent) then
-  begin
-    LSlot^.PendLen := 0;
-    LSlot^.PendPos := 0;
-    LArm := WinWatchArmSlot(LSlot^);
-    if LArm <> 0 then
-      Exit(LArm);
-    Exit(0);
-  end;
-
-  if LSlot^.PendPos >= LSlot^.PendLen then
-  begin
-    LSlot^.PendLen := 0;
-    LSlot^.PendPos := 0;
-    LArm := WinWatchArmSlot(LSlot^);
-    if LArm <> 0 then
-      Exit(LArm);
-  end;
-  Result := 1;
+  Result := FinishCompletedSlot(LMap[LIdx]);
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;

@@ -6,7 +6,7 @@ program test_async_accept_connect_smoke;
   Linux: epoll or io_uring. Darwin/FreeBSD: kqueue. Windows: skip. }
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,

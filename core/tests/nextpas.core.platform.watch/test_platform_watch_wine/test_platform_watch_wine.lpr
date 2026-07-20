@@ -134,7 +134,14 @@ begin
       platform_file_close(LHandle);
     end;
     Check(LRet = 0, 'create probe file');
-    LRet := platform_watch_poll(LWatcher, LEvent, 3000);
+    LRet := 0;
+    FillChar(LEvent, SizeOf(LEvent), 0);
+    for I := 1 to 40 do
+    begin
+      LRet := platform_watch_poll(LWatcher, LEvent, 100);
+      if (LRet > 0) and (LEvent.Created or LEvent.Modified) then
+        Break;
+    end;
     MaybeSoftEvent((LRet > 0) and (LEvent.Created or LEvent.Modified),
       'create event', LUnderWine);
   end;

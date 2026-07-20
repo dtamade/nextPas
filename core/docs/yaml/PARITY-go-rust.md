@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.0** | 单文档严格；错误定位；IReader；深度/大值边测 |
-| **规模 Scale** | **8.5** | 1.1 常用 + builder；多文档有意拒绝 |
-| **综合** | **8.8** | config 路径扎实；非全 YAML 1.2（有意） |
+| **质量 Quality** | **9.1** | 单文档严格；矩阵 facade；merge-key 拒绝；roundtrip |
+| **规模 Scale** | **8.9** | config 消费子集 + IReader + builder |
+| **综合** | **9.0** | 子集有意；证据见 facade feature matrix |
 
 ---
 
@@ -25,7 +25,9 @@
 | 结构化错误 | line/col | `TYamlError` | Done |
 | Builder | — | `TYamlBuilder` record | Done |
 | 多文档流 | Decoder | **拒绝**第二 `---` | Done（有意严格） |
-| YAML 1.2 全量 | 部分库 | 子集 | Partial |
+| merge-key `<<` | 部分库 | **拒绝**（有意） | Done（strict） |
+| config 消费子集 | — | 标量/map/seq + 深度/大值 + IReader | Done |
+| YAML 1.2 全量 | 部分库 | 子集 | Partial（有意） |
 | XPath-like | — | Out of scope | Deferred |
 
 ---

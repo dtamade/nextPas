@@ -206,6 +206,7 @@ jobs:
           key: fpc-3.3.1-x86_64-win64-linuxbuilt-20260716
 
       - name: Install FPC 3.3.1 x86_64-win64 trunk snapshot
+        id: install-fpc-win64
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"
@@ -305,7 +306,26 @@ jobs:
           # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host parity.
           bash scripts/platform-windows-ci-matrix.sh
 
+      - name: L2 process/fs/path/env Windows min-set (host-windows)
+        # Independent of platform matrix (same pattern as async Q34).
+        if: ${{ always() && !cancelled() && steps.install-fpc-win64.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          FPC_ROOT="${HOME}/fpc-trunk"
+          BIN_DIR="${FPC_ROOT}/bin/x86_64-win64"
+          export PATH="${BIN_DIR}:${FPC_ROOT}/bin:${PATH}"
+          if [[ -f "${BIN_DIR}/fpc.exe" ]]; then
+            export FPC="${BIN_DIR}/fpc.exe"
+          else
+            export FPC="${BIN_DIR}/fpc"
+          fi
+          # M3: real Windows host evidence for L2 min production set (not Wine).
+          # truth=host-windows; see core/docs/process/WIN.md
+          bash scripts/l2-windows-ci-matrix.sh
+
       - name: Async Windows native smoke (fail-closed on Windows host)
+        # Run even if platform matrix failed — independent evidence surface (Q34).
+        if: ${{ always() && !cancelled() && steps.install-fpc-win64.outcome == 'success' }}
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"

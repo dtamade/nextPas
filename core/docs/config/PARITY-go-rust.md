@@ -12,9 +12,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.2** | Sub、DurationNs、ByteSize、watcher auto |
-| **规模 Scale** | **9.1** | 四格式 + env + keyvalues + args + bind + Sub |
-| **综合** | **9.1** | 对齐 viper 常用 DX；remote 仍 Future |
+| **质量 Quality** | **9.3** | Sub、Duration、ByteSize、Clone/Merge、watcher |
+| **规模 Scale** | **9.2** | 四格式 + env + keyvalues + args + bind + Sub |
+| **综合** | **9.2** | 对齐 viper 常用 DX；remote 仍 Future |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ 0.85。
 **证据**：[`SCORECARD.md`](./SCORECARD.md)
@@ -43,6 +43,7 @@
 | GetDuration | GetDuration | `GetDurationNs` 最小后缀 | Done |
 | 人可读大小 | — | `GetByteSize` (KiB 进制) | Done |
 | Watch 自动格式 | — | `TConfigWatcher.Create(path)` auto | Done |
+| Clone / Merge | MergeConfigMap | `Clone` / `MergeFrom` | Done |
 | XML/CSV 作 config 格式 | 少见 | Out of scope | Deferred |
 
 ---

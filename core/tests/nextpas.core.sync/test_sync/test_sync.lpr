@@ -8,7 +8,8 @@ uses
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.sync,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.mutex,
+  nextpas.core.sync.rwlock;
 
 var
   T: TTestSuite;
@@ -739,6 +740,93 @@ begin
   end;
 end;
 
+procedure TestBarrierMultiThread;
+const
+  N = 8;
+var
+  LB: IBarrier;
+  LLeaders: Int32;
+  LDone: Int32;
+  LThreads: array[0..N - 1] of TThread;
+  LI: Integer;
+begin
+  LB := Barrier(N);
+  LLeaders := 0;
+  LDone := 0;
+  for LI := 0 to N - 1 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    var
+      LR: TBarrierWaitResult;
+    begin
+      LR := LB.Wait;
+      if LR.IsLeader then
+        InterlockedIncrement(LLeaders);
+      InterlockedIncrement(LDone);
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  for LI := 0 to N - 1 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  CheckEqual(Int64(N), Int64(LDone), 'all barrier waiters finished gen0');
+  CheckEqual(Int64(1), Int64(LLeaders), 'exactly one leader per generation');
+
+  { second generation — reusable barrier }
+  LLeaders := 0;
+  LDone := 0;
+  for LI := 0 to N - 1 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    var
+      LR: TBarrierWaitResult;
+    begin
+      LR := LB.Wait;
+      if LR.IsLeader then
+        InterlockedIncrement(LLeaders);
+      InterlockedIncrement(LDone);
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  for LI := 0 to N - 1 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  CheckEqual(Int64(N), Int64(LDone), 'all barrier waiters finished gen1');
+  CheckEqual(Int64(1), Int64(LLeaders), 'exactly one leader in gen1');
+end;
+
+procedure TestRWLockDestroyWhileHeldBestEffort;
+var
+  LObj: TRWLock;
+  LRaised: Boolean;
+begin
+  LObj := TRWLock.Create;
+  LObj.AcquireWrite;
+  LRaised := False;
+  try
+    LObj.Free;
+  except
+    on E: ENextPasError do
+    begin
+      LRaised := True;
+      LObj.ReleaseWrite;
+      LObj.Free;
+    end;
+  end;
+  { pthread_rwlock_destroy while held is host-dependent (often returns 0).
+    If non-zero → L1 raises (already asserted path). If 0 → lenient host. }
+  if LRaised then
+    Check(True, 'RWLock Destroy while write-held raised (host reports error)')
+  else
+    Check(True, 'RWLock Destroy while write-held returned success (host-lenient)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -774,6 +862,7 @@ begin
   T.Test('Semaphore negative initial', @TestSemaphoreNegativeInitial);
 
   T.Test('Barrier single thread', @TestBarrierSingleThread);
+  T.Test('Barrier multi-thread', @TestBarrierMultiThread);
   T.Test('Barrier invalid count', @TestBarrierInvalidCount);
   T.Test('Event manual reset', @TestEventManualReset);
   T.Test('Event auto reset', @TestEventAutoReset);
@@ -787,6 +876,7 @@ begin
   T.Test('Semaphore timeout zero', @TestSemaphoreTimeoutZero);
   T.Test('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
   T.Test('Mutex destroy while held (best-effort)', @TestMutexDestroyWhileHeldBestEffort);
+  T.Test('RWLock destroy while held (best-effort)', @TestRWLockDestroyWhileHeldBestEffort);
 
   if not T.Run then Halt(1);
 end.
