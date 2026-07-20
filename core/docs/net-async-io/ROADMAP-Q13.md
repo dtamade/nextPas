@@ -33,6 +33,7 @@
 | **Q36** | net.tcp/udp 去 POSIX sockaddr 耦合 | TPlatformSockAddr only — win64 可编 dial/udp | **done** |
 | **Q37** | async.tcp/udp Windows/macOS 可移植 | 去 accept4；async.udp TPlatformSockAddr | **done** |
 | **Q38** | Windows smoke 诚实化 | STRICT 收窄 + suite timeout；dial/udp/pool soft | **done** |
+| **Q39** | IOCP ConnectEx pre-bind | ConnectEx 前 wildcard bind + WSAGetLastError | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
 | **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
@@ -71,7 +72,15 @@ Q37 run `29755003106`：
 | pool | 挂死 >1h（无 suite timeout）→ cancel |
 | cancel_bridge | 未跑到 |
 
-动作：`async-windows-native-smoke.sh` STRICT 只含已绿项；dial/udp/pool/cancel 进 soft + 默认 120s `timeout`；文档 honesty。下一步 runtime 修 IOCP connect/datagram 后再升 STRICT。
+动作：`async-windows-native-smoke.sh` STRICT 只含已绿项；dial/udp/pool/cancel 进 soft + 默认 120s `timeout`；文档 honesty。
+
+### Q39 细节
+
+MSDN：`ConnectEx` 要求 socket **已 bind**。Dial 无 LocalAddr 时 Linux `connect` 可隐式 bind，IOCP 路径却直接 `ConnectEx` → 失败映射为 dial −111 / stream nil。
+
+修复：`TIocpReactor.AsyncConnect` 在 ConnectEx 前按目标族 bind `0.0.0.0:0` / `::`；已 bind（LocalAddr）时忽略 `WSAEINVAL`；错误码改用 `WSAGetLastError`。
+
+UDP soft 仍待 IOCP `AsyncSendTo`/`AsyncRecvFrom`（poller 明确未实现）。
 
 ## Q13 细节
 
