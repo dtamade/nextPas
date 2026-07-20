@@ -209,11 +209,122 @@ begin
   end;
 end;
 
+{ Minimal Create + one basic op for remaining MakeXxx (depth lives in special suites). }
+procedure TestFacadeRemainingFactorySmoke;
+var
+  LVal: Integer;
+  LQueueVal: Integer;
+  LStackVal: Integer;
+  LLruVal: Integer;
+begin
+  with specialize MakeArr<Integer>([1, 2, 3]) do
+  begin
+    CheckEqual(Int64(3), Int64(Count), 'arr count');
+    CheckEqual(Int64(1), Int64(Get(0)), 'arr first');
+  end;
+
+  with specialize MakeVecDeque<Integer> do
+  begin
+    PushBack(1);
+    PushFront(0);
+    CheckEqual(Int64(0), Int64(PopFront), 'vecdeque front');
+    CheckEqual(Int64(1), Int64(PopBack), 'vecdeque back');
+  end;
+
+  with specialize MakeQueue<Integer> do
+  begin
+    Push(10);
+    Check(Pop(LQueueVal), 'queue pop');
+    CheckEqual(Int64(10), Int64(LQueueVal), 'queue value');
+  end;
+
+  with specialize MakeStack<Integer> do
+  begin
+    Push(20);
+    Check(Pop(LStackVal), 'stack pop');
+    CheckEqual(Int64(20), Int64(LStackVal), 'stack value');
+  end;
+
+  with specialize MakeList<Integer> do
+  begin
+    PushBack(1);
+    PushFront(0);
+    CheckEqual(Int64(2), Int64(Count), 'list count');
+  end;
+
+  with specialize MakeForwardList<Integer> do
+  begin
+    PushFront(5);
+    CheckEqual(Int64(1), Int64(Count), 'forward list count');
+  end;
+
+  with specialize MakeTreeMap<Integer, Integer>(0, @CompareIntWithData) do
+  begin
+    Put(1, 100);
+    CheckEqual(Int64(100), Int64(Get(1)), 'tree map get');
+  end;
+
+  with specialize MakeTreeSet<Integer> do
+  begin
+    Check(Add(7), 'tree set add');
+    Check(Contains(7), 'tree set contains');
+  end;
+
+  with specialize MakeLinkedHashMap<Integer, Integer> do
+  begin
+    Put(1, 10);
+    Put(2, 20);
+    CheckEqual(Int64(10), Int64(Get(1)), 'linked hash map get');
+    CheckEqual(Int64(2), Int64(Count), 'linked hash map count');
+  end;
+
+  with specialize MakeLinkedHashSet<Integer> do
+  begin
+    Check(Add(3), 'linked hash set add');
+    Check(Contains(3), 'linked hash set contains');
+  end;
+
+  with specialize MakeLruCache<Integer, Integer>(8) do
+  begin
+    Put(1, 11);
+    Check(Get(1, LLruVal), 'lru get hit');
+    CheckEqual(Int64(11), Int64(LLruVal), 'lru value');
+  end;
+
+  with specialize MakeBTreeMap<Integer, Integer>(@CompareIntWithData) do
+  begin
+    Put(2, 22);
+    Check(TryGetValue(2, LVal), 'btree map try get');
+    CheckEqual(Int64(22), Int64(LVal), 'btree map value');
+  end;
+
+  with specialize MakeBTreeSet<Integer>(@CompareIntWithData) do
+  begin
+    Check(Add(9), 'btree set add');
+    Check(Contains(9), 'btree set contains');
+  end;
+
+  with MakeBitSet(64) do
+  begin
+    SetBit(3);
+    Check(Test(3), 'bitset test');
+    Check(not Test(4), 'bitset clear bit');
+  end;
+
+  with specialize MakeConcurrentHashMap<Integer, Integer> do
+  begin
+    Put(1, 42);
+    Check(TryGetValue(1, LVal), 'concurrent map try get');
+    CheckEqual(Int64(42), Int64(LVal), 'concurrent map value');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.collections.facade');
   T.Test('facade factories return public interfaces', @TestFacadeFactoriesReturnPublicInterfaces);
   T.Test('facade exports growth strategies', @TestFacadeExportsGrowthStrategies);
   T.Test('facade hash map factories forward callbacks', @TestFacadeHashMapFactoriesForwardCallbacks);
   T.Test('facade default semantic MakeMap MakeSet', @TestFacadeDefaultSemanticFactories);
+  T.Test('facade remaining MakeXxx smoke', @TestFacadeRemainingFactorySmoke);
   if not T.Run then Halt(1);
 end.
