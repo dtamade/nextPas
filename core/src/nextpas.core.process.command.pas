@@ -71,7 +71,7 @@ type
     function Credential(const AUid, AGid: UInt32): ICommand;
     {** 取消令牌：IsCancelled 时 Wait/Output/Status/WaitGraceful 路径 Kill 并置 Cancelled *}
     function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
-    {** 子进程 setpgid(0,0) 自建进程组（Unix；Win UNSUPPORTED）。启用后可用 KillTree *}
+    {** 子进程自建进程组：Unix setpgid(0,0)；Win Job Object（M2-W2）。启用后可用 KillTree *}
     function NewProcessGroup(const AEnable: Boolean = True): ICommand;
   end;
 

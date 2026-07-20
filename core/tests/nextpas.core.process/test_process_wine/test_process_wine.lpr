@@ -110,6 +110,22 @@ begin
   Check(not ProcessSucceeded(LOut), 'Status not succeeded');
 end;
 
+{ M2-W2: Job Object path for NewProcessGroup + KillTree. }
+procedure TestNewProcessGroupKillTree;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := TCommand.New('cmd.exe')
+    .Args(['/c', 'ping -n 30 127.0.0.1 >nul'])
+    .NewProcessGroup
+    .Spawn;
+  Check(LChild.ProcessGroupId = LChild.Pid, 'ProcessGroupId equals Pid on Win job');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree terminated job');
+end;
+
 {$ELSE}
 
 procedure TestSkipHost;
@@ -130,6 +146,7 @@ begin
   T.Test('Status exit 0', @TestStatusExit0);
   T.Test('Status exit 1', @TestStatusExit1);
   T.Test('Kill', @TestWaitKill);
+  T.Test('NewProcessGroup KillTree', @TestNewProcessGroupKillTree);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

@@ -117,7 +117,7 @@ Host：仅 Maintenance（bug/安全）
 | Wave | 名称 | L0（platform） | L2 | 出口 |
 |------|------|----------------|-----|------|
 | **W1** | Watch S2 | **DONE** platform S2 RDCW poll (`29ce1f815`) | L2 wine 加厚 poll timeout + create soft | platform 事件路径 + L2 smoke |
-| **W2** | Process tree | Job Object；`kill_group` | KillTree/NewProcessGroup Win | Win 可测杀树 |
+| **W2** | Process tree | **DONE** Job Object spawn+kill | KillTree/NewProcessGroup Win | wine KillTree 绿 |
 | **W3** | Spawn 扩展 | ExtraFd / Credential 能力边界 | 支持矩阵与代码一致 | 无 silent fail |
 | **W4** | 收敛 | — | wine 最小生产集；CONTRACT Win 节 | 文档一眼懂 |
 
@@ -204,3 +204,4 @@ Host：仅 Maintenance（bug/安全）
 |------|------|
 | 2026-07-20 | 初版：M0 完成声明；M1 冻结；M2 W1–W4；禁止无限 Rxx |
 | 2026-07-20 | **M2-W1**：platform S2 已合入；L2 wine watch 证据加厚；勾选 W1 |
+| 2026-07-20 | **M2-W2**：Win Job Object NewProcessGroup + KillTree；wine process 9 |

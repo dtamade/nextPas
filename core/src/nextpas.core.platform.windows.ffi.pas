@@ -617,6 +617,22 @@ procedure GetStartupInfoW(lpStartupInfo: LPSTARTUPINFOW); stdcall; external 'ker
     @return TRUE 成功 *}
 function TerminateProcess(hProcess: HANDLE; uExitCode: UINT): WINBOOL; stdcall; external 'kernel32' name 'TerminateProcess';
 
+{** @desc 恢复挂起线程
+    @return 先前挂起计数；失败 $FFFFFFFF *}
+function ResumeThread(hThread: HANDLE): DWORD; stdcall; external 'kernel32' name 'ResumeThread';
+
+{** @desc 创建 Job Object（进程树容器，M2-W2） *}
+function CreateJobObjectW(lpJobAttributes: LPSECURITY_ATTRIBUTES;
+  lpName: LPCWSTR): HANDLE; stdcall; external 'kernel32' name 'CreateJobObjectW';
+
+{** @desc 将进程加入 Job *}
+function AssignProcessToJobObject(hJob, hProcess: HANDLE): WINBOOL; stdcall;
+  external 'kernel32' name 'AssignProcessToJobObject';
+
+{** @desc 终止 Job 内全部进程 *}
+function TerminateJobObject(hJob: HANDLE; uExitCode: UINT): WINBOOL; stdcall;
+  external 'kernel32' name 'TerminateJobObject';
+
 {** @desc 获取进程退出码
     @param hProcess 进程句柄
     @param lpExitCode 输出退出码
