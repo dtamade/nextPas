@@ -11,7 +11,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 |--------|------|
 | `types.pas` | 基础类型（含 `TIndicConjunctBreak`） |
 | `base.pas` | 区间二分查找原语 |
-| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets |
+| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets / **East_Asian_Width** |
 | `casefold.pas` | 大小写映射 + CaseFold |
 | `normalize.pas` | NFC/NFD/NFKC/NFKD + QuickCheck |
 | `segment.pas` | UAX#29 Grapheme/Word/Sentence + **UAX#14 LineBreak** ByteLen |
@@ -74,7 +74,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 1. 无 CLDR tailored grapheme / word
 2. Collation 仅 DUCET（无 CLDR locale tailor）；UCA CollationTest 官方全绿
 3. **硬** `NextLine` 不替换为 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`
-4. 无完整 East_Asian_Width 表：LB19a 用 F/W/H 近似区间 + LB 类启发
+4. East_Asian_Width 真表（UCD 16.0）：`GetEastAsianWidth`；LB19a `$EastAsian`=F|W|H；列宽 A→1
 
 ## 测试入口
 
@@ -99,6 +99,7 @@ python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_collate.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_eaw.py --version 16.0.0 --output-dir core/src
 ```
 
 ## 变更记录

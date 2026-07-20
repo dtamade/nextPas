@@ -70,6 +70,18 @@ begin
   Check(ColorEquals(IndexedColor(0), IndexedColor(0)), 'index 0 equal');
 end;
 
+procedure TestRgbComponentsDistinct;
+begin
+  Check(not ColorEquals(RgbColor(1, 0, 0), RgbColor(0, 1, 0)), 'r != g');
+  Check(not ColorEquals(RgbColor(0, 0, 1), RgbColor(0, 0, 2)), 'b1 != b2');
+end;
+
+procedure TestIndexedHigh;
+begin
+  Check(ColorEquals(IndexedColor(255), IndexedColor(255)), '255 equal');
+  Check(not ColorEquals(IndexedColor(254), IndexedColor(255)), '254 != 255');
+end;
+
 begin
   T := TTestSuite.Create('tui_color_wine');
   T.Test('rgb equals', @TestRgbEquals);
@@ -82,5 +94,7 @@ begin
   T.Test('white black named', @TestWhiteBlackNamed);
   T.Test('color is set rgb', @TestColorIsSetRgb);
   T.Test('indexed zero', @TestIndexedZero);
+  T.Test('rgb components distinct', @TestRgbComponentsDistinct);
+  T.Test('indexed high', @TestIndexedHigh);
   if not T.Run then Halt(1);
 end.

@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC9 (PARITY-GO-RUST Wave Q1–Q6)
+ * tui Scorecard SC1–SC11 (PARITY-GO-RUST Wave Q1–Q10)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -10,6 +10,10 @@ program scorecard;
  *   SC5 Frame Begin/End empty (test runtime)
  *   SC6 ParseOne focus CSI I/O (DECSET 1004)
  *   SC7 Wide CJK cell width correctness
+ *   SC8 Truecolor env-attested profile
+ *   SC9 Overlay merge
+ *   SC10 SGR mouse parse
+ *   SC11 Bracketed paste 200~/201~
  *}
 
 {$I nextpas.core.settings.inc}
@@ -414,6 +418,93 @@ begin
   AddRow('SC9b', 'overlay_overwrite', 0, 1, LOk, 'marked cells overwrite');
 end;
 
+procedure RunSC10;
+var
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+  LOk: Boolean;
+  LDown: array[0..8] of Byte;
+  LScroll: array[0..9] of Byte;
+begin
+  WriteLn('SC10 ParseOne SGR mouse ...');
+  { CSI < 0;5;3M — left down at (4,2) 0-based }
+  LDown[0] := 27;
+  LDown[1] := Ord('[');
+  LDown[2] := Ord('<');
+  LDown[3] := Ord('0');
+  LDown[4] := Ord(';');
+  LDown[5] := Ord('5');
+  LDown[6] := Ord(';');
+  LDown[7] := Ord('3');
+  LDown[8] := Ord('M');
+
+  LOk := True;
+  LResult := ParseOne(LDown[0], 9, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evMouse) or
+     (LEvent.Mouse.Kind <> mkDown) or (LEvent.Mouse.X <> 4) or
+     (LEvent.Mouse.Y <> 2) or (LConsumed <> 9) then
+    LOk := False;
+  AddRow('SC10a', 'sgr_mouse_down', 0, 1, LOk, 'CSI < 0;5;3M → mkDown');
+
+  { CSI < 64;5;3M — scroll up at (4,2) }
+  LScroll[0] := 27;
+  LScroll[1] := Ord('[');
+  LScroll[2] := Ord('<');
+  LScroll[3] := Ord('6');
+  LScroll[4] := Ord('4');
+  LScroll[5] := Ord(';');
+  LScroll[6] := Ord('5');
+  LScroll[7] := Ord(';');
+  LScroll[8] := Ord('3');
+  LScroll[9] := Ord('M');
+
+  LOk := True;
+  LResult := ParseOne(LScroll[0], 10, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evMouse) or
+     (LEvent.Mouse.Kind <> mkScrollUp) or (LConsumed <> 10) then
+    LOk := False;
+  AddRow('SC10b', 'sgr_scroll_up', 0, 1, LOk, 'CSI < 64;5;3M → mkScrollUp');
+end;
+
+procedure RunSC11;
+var
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+  LOk: Boolean;
+  LStart, LEnd: array[0..5] of Byte;
+begin
+  WriteLn('SC11 ParseOne bracketed paste ...');
+  { CSI 200~ }
+  LStart[0] := 27;
+  LStart[1] := Ord('[');
+  LStart[2] := Ord('2');
+  LStart[3] := Ord('0');
+  LStart[4] := Ord('0');
+  LStart[5] := Ord('~');
+
+  LOk := True;
+  LResult := ParseOne(LStart[0], 6, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evPaste) or (LConsumed <> 6) then
+    LOk := False;
+  AddRow('SC11a', 'paste_start', 0, 1, LOk, 'CSI 200~ → evPaste');
+
+  { CSI 201~ — swallowed as None }
+  LEnd[0] := 27;
+  LEnd[1] := Ord('[');
+  LEnd[2] := Ord('2');
+  LEnd[3] := Ord('0');
+  LEnd[4] := Ord('1');
+  LEnd[5] := Ord('~');
+
+  LOk := True;
+  LResult := ParseOne(LEnd[0], 6, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind = evPaste) or (LConsumed <> 6) then
+    LOk := False;
+  AddRow('SC11b', 'paste_end_swallow', 0, 1, LOk, 'CSI 201~ not evPaste');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -443,10 +534,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 16);
+  SetLength(GRows, 24);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC9 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC11 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -456,6 +547,8 @@ begin
   RunSC7;
   RunSC8;
   RunSC9;
+  RunSC10;
+  RunSC11;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

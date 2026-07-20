@@ -192,6 +192,23 @@ begin
   Check(LTrans.Value = 0, 'Value should be 0');
 end;
 
+procedure TestFocusManagerStressUnregisterAll;
+var
+  LFocus: TFocusManager;
+  I: Integer;
+begin
+  LFocus := TFocusManager.Create;
+  try
+    for I := 0 to 63 do
+      LFocus.Register(TRect.Make(0, I, 4, 1));
+    CheckEqual(64, LFocus.EntryCount, 'registered 64');
+    LFocus.BeginFrame;
+    CheckEqual(0, LFocus.EntryCount, 'BeginFrame clears entries');
+  finally
+    LFocus.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('tui_stress_deep');
   T.Test('FocusManager stress register 1000', @TestFocusManagerStressRegister);
@@ -205,5 +222,6 @@ begin
   T.Test('FrameBudget stress 1000 frames', @TestFrameBudgetStressFrames);
   T.Test('Transition stress advance', @TestTransitionStressAdvance);
   T.Test('Transition stress reset 1000', @TestTransitionStressReset);
+  T.Test('FocusManager stress BeginFrame clears', @TestFocusManagerStressUnregisterAll);
   if not T.Run then Halt(1);
 end.

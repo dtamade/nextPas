@@ -148,6 +148,72 @@ begin
   end;
 end;
 
+procedure TestDiffSingleCell;
+var
+  A, B: TBuffer;
+  LPatches: TDiffEntries;
+  N: Integer;
+begin
+  A := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 2));
+  B := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 2));
+  try
+    A.SetString(0, 0, 'same', StyleDefault);
+    B.SetString(0, 0, 'same', StyleDefault);
+    B.SetString(3, 0, 'X', StyleDefault);
+    N := A.DiffInto(B, LPatches);
+    Check(N > 0, 'single cell dirty');
+    Check(N < 16, 'patches not full buffer');
+  finally
+    A.Free;
+    B.Free;
+  end;
+end;
+
+procedure TestFillRectIdempotent;
+var
+  LBuf: TBuffer;
+  LLines: TBufferLines;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), 'z', StyleDefault);
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), 'z', StyleDefault);
+    LLines := LBuf.AsLines;
+    CheckEqual('zzzz', LLines[0], 'fill idempotent');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringClip;
+var
+  LBuf: TBuffer;
+  LLines: TBufferLines;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 4, 1), '.', StyleDefault);
+    LBuf.SetString(2, 0, 'ABCD', StyleDefault);
+    LLines := LBuf.AsLines;
+    CheckEqual(4, Length(LLines[0]), 'width preserved');
+    Check(Pos('AB', LLines[0]) > 0, 'partial write visible');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestCellAtOutOfRangeNil;
+var
+  LBuf: TBuffer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  try
+    Check(LBuf.CellAt(5, 0) = nil, 'x oob nil');
+    Check(LBuf.CellAt(0, 3) = nil, 'y oob nil');
+  finally
+    LBuf.Free;
+  end;
+end;
 
 begin
   T := TTestSuite.Create('tui_buffer_wine');
@@ -156,8 +222,12 @@ begin
   T.Test('diff dirty', @TestDiffDirty);
   T.Test('fill rect', @TestFillRect);
   T.Test('resize', @TestResize);
-    T.Test('cjk width', @TestCjkWidth);
+  T.Test('cjk width', @TestCjkWidth);
   T.Test('empty area', @TestEmptyArea);
   T.Test('partial fill neighbor', @TestPartialFillNeighbor);
-if not T.Run then Halt(1);
+  T.Test('diff single cell', @TestDiffSingleCell);
+  T.Test('fill rect idempotent', @TestFillRectIdempotent);
+  T.Test('setstring clip', @TestSetStringClip);
+  T.Test('cellat oob nil', @TestCellAtOutOfRangeNil);
+  if not T.Run then Halt(1);
 end.

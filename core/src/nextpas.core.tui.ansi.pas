@@ -40,6 +40,10 @@ procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 procedure AnsiEnableFocusReporting(var B: TStringBuilder);
 procedure AnsiDisableFocusReporting(var B: TStringBuilder);
 
+{ Bracketed paste (DECSET 2004) — paste start CSI 200~ / end CSI 201~. }
+procedure AnsiEnableBracketedPaste(var B: TStringBuilder);
+procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
+
 { Kitty keyboard progressive enhancement.
   flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
 const
@@ -179,6 +183,16 @@ end;
 procedure AnsiDisableFocusReporting(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 1004, False);
+end;
+
+procedure AnsiEnableBracketedPaste(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2004, True);
+end;
+
+procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2004, False);
 end;
 
 procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer);

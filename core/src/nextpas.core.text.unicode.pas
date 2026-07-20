@@ -34,6 +34,7 @@ type
   TLineBreakClass = nextpas.core.text.unicode.types.TLineBreakClass;
   TBidiClass = nextpas.core.text.unicode.types.TBidiClass;
   TBidiPairedBracketType = nextpas.core.text.unicode.types.TBidiPairedBracketType;
+  TEastAsianWidth = nextpas.core.text.unicode.types.TEastAsianWidth;
   TBidiResolveResult = nextpas.core.text.unicode.bidi.TBidiResolveResult;
   TBidiLevelArray = nextpas.core.text.unicode.bidi.TBidiLevelArray;
   TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
@@ -74,6 +75,8 @@ function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inlin
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
+function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
+function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean; inline;
 function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
 function ResolveBidiClasses(const AClasses: array of TBidiClass;
   const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
@@ -209,6 +212,17 @@ function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBrac
 begin
   Result := nextpas.core.text.unicode.props.GetBidiPairedBracketType(ACp);
 end;
+
+function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth;
+begin
+  Result := nextpas.core.text.unicode.props.GetEastAsianWidth(ACp);
+end;
+
+function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean;
+begin
+  Result := nextpas.core.text.unicode.props.IsEastAsianFWH(ACp);
+end;
+
 
 function ResolveBidi(const AText: string; const AParagraphDir: Integer): TBidiResolveResult;
 begin

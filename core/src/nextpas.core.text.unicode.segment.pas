@@ -1173,29 +1173,10 @@ var
     Result := False;
   end;
 
-  { UAX#14 $EastAsian ≈ ea=F|W|H for LB19a (minimal ranges + LB classes). }
+  { UAX#14 $EastAsian = East_Asian_Width in {F, W, H} (UAX#11). }
   function IsEastAsianCp(const ACp: TUnicodeCodepoint): Boolean;
-  var
-    C: TLineBreakClass;
   begin
-    if ((ACp >= $FF00) and (ACp <= $FF60)) or
-       ((ACp >= $FFE0) and (ACp <= $FFE6)) or
-       ((ACp >= $FF61) and (ACp <= $FFBE)) or
-       ((ACp >= $FFE8) and (ACp <= $FFEE)) then
-      Exit(True);
-    C := GetLineBreakClass(ACp);
-    if C in [lbcID, lbcAI, lbcCJ, lbcH2, lbcH3, lbcJL, lbcJV, lbcJT] then
-      Exit(True);
-    if ((ACp >= $2E80) and (ACp <= $9FFF)) or
-       ((ACp >= $A000) and (ACp <= $A4CF)) or
-       ((ACp >= $A960) and (ACp <= $A97F)) or
-       ((ACp >= $AC00) and (ACp <= $D7A3)) or
-       ((ACp >= $F900) and (ACp <= $FAFF)) or
-       ((ACp >= $FE10) and (ACp <= $FE19)) or
-       ((ACp >= $FE30) and (ACp <= $FE6B)) or
-       ((ACp >= $20000) and (ACp <= $3FFFD)) then
-      Exit(True);
-    Result := False;
+    Result := IsEastAsianFWH(ACp);
   end;
 
   function IsPfQU(const ACp: TUnicodeCodepoint): Boolean;

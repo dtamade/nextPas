@@ -100,4 +100,4 @@ bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks bitfield,nativeset
 
 - 仅选无 Rust `target/` 的轻量 track，避免 hygiene 污染。
 - 编译产物应落在 `/tmp` 或 `build/`，勿提交进 git。
-- 子集共 **9** 类 track：boolsum / fncall / shortstr / recops / inttohex / bitfield / packed / nativeset / bitscan。
+- 子集共 **11** 类 track：boolsum / fncall / shortstr / recops / inttohex / bitfield / packed / nativeset / bitscan / **binsearch** / **lookup**（B34 解注释；数字表仍以已跑 9 类为主，新 2 类见脚本 `--tracks` 现跑）。

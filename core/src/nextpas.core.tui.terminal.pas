@@ -37,6 +37,8 @@ type
     SelectionMode: TTerminalSelectionMode;
     { DECSET 1004 terminal focus reporting (CSI I/O). Default False. }
     FocusReporting: Boolean;
+    { DECSET 2004 bracketed paste (CSI 200~/201~). Default False. }
+    BracketedPaste: Boolean;
 
     class function Default: TTerminalOptions; static;
     class function EditorDefault: TTerminalOptions; static;
@@ -100,6 +102,7 @@ type
     FAllocator: IAllocator;
     FKittyKeyboardPushed: Boolean;
     FFocusReportingEnabled: Boolean;
+    FBracketedPasteEnabled: Boolean;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
     function ReadAvailableBytes: Integer;
@@ -233,6 +236,7 @@ begin
   Result.WheelMode := twWheelMouse;
   Result.SelectionMode := tsApplication;
   Result.FocusReporting := False;
+  Result.BracketedPaste := False;
 end;
 
 class function TTerminalOptions.NativeSelectionWheel: TTerminalOptions;
@@ -241,6 +245,7 @@ begin
   Result.WheelMode := twAlternateScrollKeys;
   Result.SelectionMode := tsTerminalNative;
   Result.FocusReporting := False;
+  Result.BracketedPaste := False;
 end;
 
 function TTerminalOptions.EffectiveMouseMode: TTerminalMouseMode;
@@ -355,6 +360,7 @@ begin
   FActiveOptions := FOptions;
   FKittyKeyboardPushed := False;
   FFocusReportingEnabled := False;
+  FBracketedPasteEnabled := False;
   SetLength(FInputQueue, 256);
 end;
 
@@ -424,6 +430,14 @@ begin
     end
     else
       FFocusReportingEnabled := False;
+    if FActiveOptions.BracketedPaste then
+    begin
+      FBackend.EnableBracketedPaste;
+      FBackend.Flush;
+      FBracketedPasteEnabled := True;
+    end
+    else
+      FBracketedPasteEnabled := False;
     FHasMouseTracking := FActiveOptions.RequestsMouseTracking;
     FCellWidth := 0;
     FCellHeight := 0;
@@ -464,6 +478,11 @@ begin
       FBackend.DisableFocusReporting;
       FFocusReportingEnabled := False;
     end;
+    if FBracketedPasteEnabled then
+    begin
+      FBackend.DisableBracketedPaste;
+      FBracketedPasteEnabled := False;
+    end;
     FBackend.LeaveAlternate(ToAnsiMouseMode(FActiveOptions.EffectiveMouseMode),
       FActiveOptions.UsesAlternateScrollKeys);
     FBackend.ShowCursor;
@@ -487,6 +506,7 @@ begin
   FHasMouseTracking := False;
   FKittyKeyboardPushed := False;
   FFocusReportingEnabled := False;
+  FBracketedPasteEnabled := False;
 end;
 
 { Frame lifecycle }
@@ -814,8 +834,21 @@ begin
   FHasMouseTracking := False;
   FKittyKeyboardPushed := False;
   FFocusReportingEnabled := False;
+  FBracketedPasteEnabled := False;
   FCellWidth := 0;
   FCellHeight := 0;
+  if FActiveOptions.FocusReporting then
+  begin
+    FBackend.EnableFocusReporting;
+    FBackend.Flush;
+    FFocusReportingEnabled := True;
+  end;
+  if FActiveOptions.BracketedPaste then
+  begin
+    FBackend.EnableBracketedPaste;
+    FBackend.Flush;
+    FBracketedPasteEnabled := True;
+  end;
 end;
 
 procedure TTerminal.NegotiateKittyKeyboardForTest(ADetected: Boolean);
