@@ -20,7 +20,7 @@ make lane-focused LANE=mem
 
 **Go/Rust 对照**: `make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare`
 
-**证据入口**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1` · `make -C core/tests/nextpas.core.mem/test_soak clean test` · `make -C core/tests/nextpas.core.mem/test_mem_cross_os_compile_gate clean test`
+**证据入口**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1` · `make -C core/tests/nextpas.core.mem/test_soak clean test` · `make -C core/tests/nextpas.core.mem/test_mem_cross_os_compile_gate clean test` · 真机 [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md)（core-ci macOS/Windows matrix）
 
 ---
 
