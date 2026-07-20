@@ -65,3 +65,4 @@
 - [x] Q9 并行 A/AAAA + ResolutionDelay + FirstAddressFamilyCount + host matrix 钩子
 - [x] Q10 DNS-race-while-dialing (`AsyncResolveStream`) + kqueue runtime smoke
 - [x] Q11 严格 CAD + OnAttemptStart 计时测 + macOS kqueue L0 fail-closed
+- [x] Q12 AsyncTcpDialWithDnsFeed + DNS×SYN 矩阵测 + macOS dial/resolve fail-closed

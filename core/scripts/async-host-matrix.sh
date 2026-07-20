@@ -2,8 +2,8 @@
 # async-host-matrix.sh
 #
 # Host-focused async/net smoke gates for CI.
-# truth=linux-runtime on Linux full suite; on macOS dial/resolve may be
-# best-effort while kqueue runtime is fail-closed when gated alone.
+# truth=linux-runtime on Linux full suite; on macOS both kqueue-runtime and
+# dial-resolve can be run fail-closed (STRICT=1). Still not full-host async parity.
 #
 # Usage (cwd = core/ or repo root):
 #   ./scripts/async-host-matrix.sh
