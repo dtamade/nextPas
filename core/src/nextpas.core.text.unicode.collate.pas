@@ -67,7 +67,9 @@ type
     function CollectElements(const ANormalized: string): TCollationElementArray;
     function CollectElementsInto(const ANormalized: string;
       var AElements: TCollationElementArray): SizeInt;
-    function ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey;
+    function ElementsToSortKey(const AElements: TCollationElementArray;
+      const ACount: SizeInt): TCollationKey; overload;
+    function ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey; overload;
     function CompareElements(const A: TCollationElementArray; const ACount: SizeInt;
       const B: TCollationElementArray; const BCount: SizeInt): Integer; overload;
     function CompareElements(const A, B: TCollationElementArray): Integer; overload;
@@ -868,12 +870,19 @@ begin
 end;
 
 function TUnicodeCollator.ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey;
+begin
+  Result := ElementsToSortKey(AElements, Length(AElements));
+end;
+
+function TUnicodeCollator.ElementsToSortKey(const AElements: TCollationElementArray;
+  const ACount: SizeInt): TCollationKey;
 var
   LKey: TCollationKey;
   LPos: SizeInt;
   I, N: SizeInt;
 begin
-  N := Length(AElements);
+  N := ACount;
+  if N < 0 then N := 0;
   SetLength(LKey, N * 12 + 32);
   LPos := 0;
 
@@ -1123,7 +1132,6 @@ function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
 var
   LNormalized: string;
   LCount: SizeInt;
-  LSaved: TCollationElementArray;
 begin
   if AText = '' then
   begin
@@ -1137,11 +1145,7 @@ begin
   else
     LNormalized := NFD(AText);
   LCount := CollectElementsInto(LNormalized, FElsA);
-  { ElementsToSortKey uses Length — temporarily shrink view via copy of count slice }
-  SetLength(LSaved, LCount);
-  if LCount > 0 then
-    Move(FElsA[0], LSaved[0], LCount * SizeOf(TCollationElement));
-  Result := ElementsToSortKey(LSaved);
+  Result := ElementsToSortKey(FElsA, LCount);
 end;
 
 function TUnicodeCollator.Compare(const A, B: string): Integer;

@@ -1,8 +1,8 @@
 # nextpas.core.collections — 状态
 
 **更新日期**：2026-07-20
-**阶段**：**Landed** — 稳定维护
-**分支 / worktree**：`collections` / `.worktrees/collections`（与 `main` 同步后维护）
+**阶段**：**Landed / 维护 idle**
+**分支 / worktree**：`collections` / `.worktrees/collections`
 
 ## 已完成（历史目标树）
 
@@ -16,17 +16,13 @@
 
 公共接口语义按 **软冻结** 管理。
 
-## 本轮交付（已进 main）
+## 已进 main 的交付
 
-| 阶段 | 内容 | 状态 |
-|------|------|------|
-| Wave 0–1 | 契约真相；MakeMap/MakeSet | **Landed** |
-| Wave 2 | 机械 `.inc` 拆文件 | **取消** |
-| Wave 3 / D–E | 默认哈希族 Swiss 收敛 | **Landed** |
-| Phase A–C | Swiss 契约补洞；bench；职责审计 | **Landed** |
-| Landing | `1f7cae0de` path-limited ff → `origin/main` | **Landed** |
-
-**Landing commit**：`1f7cae0de` — `feat(collections): Swiss default map family and contract truth`
+| 项 | SHA / 状态 |
+|----|------------|
+| 功能 Swiss 收敛 + 契约 | `1f7cae0de` **Landed** |
+| P0 文档/契约卫生 + ROADMAP | `0125831c9` **Landed** |
+| P1 facade MakeXxx 烟雾 29/29 | `3ce508865` **Landed** |
 
 ## 默认实现事实
 
@@ -34,6 +30,7 @@
 - HashSet / MultiMap / MultiSet / LruCache / LinkedHash* → Swiss
 - OA `THashMap` 保留专家/TLS 直构
 - 泛型接口：门面 + 对应 `*.intf`（FPC 3.3.1）
+- 全部 public `MakeXxx` 在 `test_facade` 有最小烟雾探针
 
 ## 明确不做
 
@@ -51,14 +48,15 @@
 
 ## 后续
 
-维护队列与优先级见 **[`ROADMAP.md`](ROADMAP.md)**（P0 文档卫生 → P1 facade 探针 → 有触发才 P2/P3）。
+**维护 idle。** 队列与观察点见 [`ROADMAP.md`](ROADMAP.md)（P0/P1 已完成；P2+ 仅有触发时）。
 
-- 消费者/bug 驱动修复（P2）
-- TLS 是否改用工厂 Swiss：**跨 lane，本模块不排期**
+- 消费者/bug 驱动 → P2
+- TLS 迁工厂 Swiss → **跨 lane，不排期**
 
 ## 验证入口
 
 ```sh
+git fetch origin main   # 改代码前 behind 须为 0
 make focused FOCUS=core/tests/nextpas.core.collections/test_facade
 make hygiene
 ```

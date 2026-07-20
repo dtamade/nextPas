@@ -8,7 +8,7 @@ program test_async_kqueue_runtime_smoke;
   FORCE_HOST compile path is covered by test_async_kqueue_compile_gate. }
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.io.poller,
   nextpas.core.io.base,

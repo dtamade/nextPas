@@ -209,6 +209,8 @@ type
     { Overlay ASource keys onto Self (later wins). Does not free ASource. }
     procedure MergeFrom(ASource: TConfig); overload;
     procedure MergeFrom(const ASource: IConfig); overload;
+    { Sorted key=rawValue lines (debug / test diagnostics). }
+    function DebugDump: string;
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
@@ -225,6 +227,8 @@ function ConfigBorrow(AConfig: TConfig): IConfig;
 { Non-owning prefix view (viper Sub). parent lifetime must outlive the view. }
 function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig; overload;
 function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig; overload;
+{ Sorted key=rawValue dump for any IConfig. }
+function ConfigDebugDump(const AConfig: IConfig): string;
 { Parse duration suffixes: ns/us/ms/s/m/h; bare integer = seconds. }
 function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boolean;
 { Parse byte size: b/kb/kib/mb/mib/gb/gib (1024-based); bare integer = bytes. }

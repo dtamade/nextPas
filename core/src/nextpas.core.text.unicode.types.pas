@@ -61,7 +61,20 @@ type
     ubpEmojiComponent,
     ubpDefaultIgnorableCodePoint,
     ubpDeprecated,
-    ubpSoftDotted
+    ubpSoftDotted,
+    ubpHexDigit,
+    ubpAsciiHexDigit,
+    ubpPatternWhiteSpace,
+    ubpPatternSyntax,
+    ubpQuotationMark,
+    ubpDash,
+    ubpDiacritic,
+    ubpExtender,
+    ubpJoinControl,
+    ubpNoncharacterCodePoint,
+    ubpTerminalPunctuation,
+    ubpUnifiedIdeograph,
+    ubpRegionalIndicator
   );
 
   TGeneralCategorySet = set of TGeneralCategory;

@@ -3,7 +3,7 @@ program test_net_cancel_bridge;
 {$I nextpas.core.settings.inc}
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.test,
   nextpas.core.async.cancellation,

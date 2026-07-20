@@ -44,6 +44,11 @@ procedure AnsiDisableFocusReporting(var B: TStringBuilder);
 procedure AnsiEnableBracketedPaste(var B: TStringBuilder);
 procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
 
+{ Synchronized update (DECSET 2026) — batch multipatch draws to reduce tear.
+  Pair Begin/End around one frame's DrawPatches (crossterm/ratatui style). }
+procedure AnsiBeginSynchronizedUpdate(var B: TStringBuilder);
+procedure AnsiEndSynchronizedUpdate(var B: TStringBuilder);
+
 { Kitty keyboard progressive enhancement.
   flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
 const
@@ -193,6 +198,16 @@ end;
 procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 2004, False);
+end;
+
+procedure AnsiBeginSynchronizedUpdate(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2026, True);
+end;
+
+procedure AnsiEndSynchronizedUpdate(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2026, False);
 end;
 
 procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer);

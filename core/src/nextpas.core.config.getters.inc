@@ -441,6 +441,47 @@ begin
     SetString(LKeys[LI], ASource.GetRawString(LKeys[LI]));
 end;
 
+procedure SortConfigKeys(var AKeys: TStringArray);
+var
+  LI, LJ: Integer;
+  LTmp: string;
+begin
+  for LI := 0 to High(AKeys) - 1 do
+    for LJ := LI + 1 to High(AKeys) do
+      if AKeys[LJ] < AKeys[LI] then
+      begin
+        LTmp := AKeys[LI];
+        AKeys[LI] := AKeys[LJ];
+        AKeys[LJ] := LTmp;
+      end;
+end;
+
+function ConfigDebugDump(const AConfig: IConfig): string;
+var
+  LKeys: TStringArray;
+  LI: Integer;
+  LLine: string;
+begin
+  if AConfig = nil then
+    raise EConfigError.Create('ConfigDebugDump requires a non-nil IConfig');
+  LKeys := AConfig.GetKeys;
+  SortConfigKeys(LKeys);
+  Result := '';
+  for LI := 0 to High(LKeys) do
+  begin
+    LLine := LKeys[LI] + '=' + AConfig.GetRawString(LKeys[LI]);
+    if Result = '' then
+      Result := LLine
+    else
+      Result := Result + #10 + LLine;
+  end;
+end;
+
+function TConfig.DebugDump: string;
+begin
+  Result := ConfigDebugDump(ConfigBorrow(Self));
+end;
+
 function TConfig.Has(const AKey: string): Boolean;
 begin
   RequireConfigKey(AKey);

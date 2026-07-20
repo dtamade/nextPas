@@ -3,7 +3,7 @@ program test_net_async_udp;
 {$I nextpas.core.settings.inc}
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,

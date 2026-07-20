@@ -469,6 +469,10 @@ begin
     LBase.MergeFrom(LSnap);
     CheckEqual('from-iface', LBase.GetString('a'), 'merge IConfig');
     CheckEqual('4', LBase.GetString('d'), 'merge IConfig new key');
+    CheckEqual('a=from-iface' + #10 + 'b=merged' + #10 + 'c=3' + #10 + 'd=4',
+      LBase.DebugDump, 'DebugDump sorted');
+    CheckEqual(LBase.DebugDump, ConfigDebugDump(ConfigBorrow(LBase)),
+      'ConfigDebugDump matches');
   finally
     LBase.Free;
   end;

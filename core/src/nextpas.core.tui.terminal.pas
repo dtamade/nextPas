@@ -39,6 +39,9 @@ type
     FocusReporting: Boolean;
     { DECSET 2004 bracketed paste (CSI 200~/201~). Default False. }
     BracketedPaste: Boolean;
+    { DECSET 2026 synchronized update around each EndFrame draw. Default True
+      (crossterm/ratatui parity; unknown modes ignored by unsupported terminals). }
+    SynchronizedUpdate: Boolean;
 
     class function Default: TTerminalOptions; static;
     class function EditorDefault: TTerminalOptions; static;
@@ -237,6 +240,7 @@ begin
   Result.SelectionMode := tsApplication;
   Result.FocusReporting := False;
   Result.BracketedPaste := False;
+  Result.SynchronizedUpdate := True;
 end;
 
 class function TTerminalOptions.NativeSelectionWheel: TTerminalOptions;
@@ -246,6 +250,7 @@ begin
   Result.SelectionMode := tsTerminalNative;
   Result.FocusReporting := False;
   Result.BracketedPaste := False;
+  Result.SynchronizedUpdate := True;
 end;
 
 function TTerminalOptions.EffectiveMouseMode: TTerminalMouseMode;
@@ -548,6 +553,8 @@ begin
     FMerged.Reset;
   FOverlay.MergeInto(FCurr, FMerged);
   LPatchCount := FPrev.DiffInto(FMerged, FPatches);
+  if FActiveOptions.SynchronizedUpdate then
+    FBackend.BeginSynchronizedUpdate;
   FBackend.DrawPatchesN(FPatches, LPatchCount);
 
   if AFrame.HasCursor then
@@ -557,6 +564,8 @@ begin
   end
   else
     FBackend.HideCursor;
+  if FActiveOptions.SynchronizedUpdate then
+    FBackend.EndSynchronizedUpdate;
   FBackend.Flush;
 
   LTmp := FPrev;

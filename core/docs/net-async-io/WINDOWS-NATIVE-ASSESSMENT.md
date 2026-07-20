@@ -61,6 +61,11 @@ bash core/scripts/async-windows-smoke-streak.sh
 
 - Temporarily re-add `continue-on-error` only with assessment note + streak reset if FPC/Windows flakes dominate.
 
+## Notes (Q35)
+
+- Host tests that need threads must use `{$IFDEF UNIX}cthreads,{$ENDIF}` — Windows FPC has no `cthreads` unit; unconditional `uses cthreads` fails compile on win64 smoke.
+- Q33 expansion required this fix for dial/resolve/udp/pool/accept/cancel suites.
+
 ## Full `truth=native-windows` (deferred)
 
 Not claimed. Before promoting beyond **candidate**:

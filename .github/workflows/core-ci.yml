@@ -307,6 +307,8 @@ jobs:
           bash scripts/platform-windows-ci-matrix.sh
 
       - name: L2 process/fs/path/env Windows min-set (host-windows)
+        # Independent of platform matrix (same pattern as async Q34).
+        if: ${{ always() && !cancelled() && steps.install-fpc-win64.outcome == 'success' }}
         run: |
           set -euo pipefail
           FPC_ROOT="${HOME}/fpc-trunk"

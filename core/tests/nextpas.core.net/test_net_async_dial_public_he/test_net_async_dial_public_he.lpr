@@ -10,7 +10,7 @@ program test_net_async_dial_public_he;
   truth=public-dns-he-multihost-opt-in; sample-not-sla. }
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
