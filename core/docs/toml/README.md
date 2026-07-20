@@ -15,6 +15,8 @@ Values are accessed via `TTomlValue` — a 12-byte borrowing view (doc pointer +
 
 ## Quick Start
 
+Runnable smoke: `core/examples/nextpas.core.toml/toml_smoke/` (`make run`).
+
 ```pascal
 uses nextpas.core.toml, nextpas.core.toml.value, nextpas.core.toml.base;
 
