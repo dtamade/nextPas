@@ -277,9 +277,20 @@ begin nextpas.core.test.check.SoftFail(AMessage); end;
 procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
 begin nextpas.core.test.check.SoftCheckTrue(ACondition, AMessage); end;
 
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckFalse(ACondition, AMessage); end;
+
 procedure SoftCheckEqual(const AExpected, AActual: Int64;
   const AMessage: string);
 begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEqual(AExpected, AActual, AMessage); end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckContains(AHaystack, ANeedle, AMessage); end;
 
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;

@@ -57,6 +57,27 @@ const
   GREEK_SMALL_SIGMA = $03C3;
   GREEK_SMALL_FINAL_SIGMA = $03C2;
 
+  { CaseFold simple for U+0000..U+00FF (from CaseFolding C/S) }
+  CASE_FOLD_LATIN1: array[0..255] of UInt16 = (
+    $0000, $0001, $0002, $0003, $0004, $0005, $0006, $0007, $0008, $0009, $000A, $000B, $000C, $000D, $000E, $000F,
+    $0010, $0011, $0012, $0013, $0014, $0015, $0016, $0017, $0018, $0019, $001A, $001B, $001C, $001D, $001E, $001F,
+    $0020, $0021, $0022, $0023, $0024, $0025, $0026, $0027, $0028, $0029, $002A, $002B, $002C, $002D, $002E, $002F,
+    $0030, $0031, $0032, $0033, $0034, $0035, $0036, $0037, $0038, $0039, $003A, $003B, $003C, $003D, $003E, $003F,
+    $0040, $0061, $0062, $0063, $0064, $0065, $0066, $0067, $0068, $0069, $006A, $006B, $006C, $006D, $006E, $006F,
+    $0070, $0071, $0072, $0073, $0074, $0075, $0076, $0077, $0078, $0079, $007A, $005B, $005C, $005D, $005E, $005F,
+    $0060, $0061, $0062, $0063, $0064, $0065, $0066, $0067, $0068, $0069, $006A, $006B, $006C, $006D, $006E, $006F,
+    $0070, $0071, $0072, $0073, $0074, $0075, $0076, $0077, $0078, $0079, $007A, $007B, $007C, $007D, $007E, $007F,
+    $0080, $0081, $0082, $0083, $0084, $0085, $0086, $0087, $0088, $0089, $008A, $008B, $008C, $008D, $008E, $008F,
+    $0090, $0091, $0092, $0093, $0094, $0095, $0096, $0097, $0098, $0099, $009A, $009B, $009C, $009D, $009E, $009F,
+    $00A0, $00A1, $00A2, $00A3, $00A4, $00A5, $00A6, $00A7, $00A8, $00A9, $00AA, $00AB, $00AC, $00AD, $00AE, $00AF,
+    $00B0, $00B1, $00B2, $00B3, $00B4, $03BC, $00B6, $00B7, $00B8, $00B9, $00BA, $00BB, $00BC, $00BD, $00BE, $00BF,
+    $00E0, $00E1, $00E2, $00E3, $00E4, $00E5, $00E6, $00E7, $00E8, $00E9, $00EA, $00EB, $00EC, $00ED, $00EE, $00EF,
+    $00F0, $00F1, $00F2, $00F3, $00F4, $00F5, $00F6, $00D7, $00F8, $00F9, $00FA, $00FB, $00FC, $00FD, $00FE, $00DF,
+    $00E0, $00E1, $00E2, $00E3, $00E4, $00E5, $00E6, $00E7, $00E8, $00E9, $00EA, $00EB, $00EC, $00ED, $00EE, $00EF,
+    $00F0, $00F1, $00F2, $00F3, $00F4, $00F5, $00F6, $00F7, $00F8, $00F9, $00FA, $00FB, $00FC, $00FD, $00FE, $00FF
+  );
+
+
 function IsAsciiUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 begin
   Result := (ACp >= Ord('A')) and (ACp <= Ord('Z'));
@@ -212,22 +233,35 @@ end;
 
 function MapAsciiString(const AValue: string; const AMode: TAsciiMapMode): string;
 var
-  LIdx: SizeInt;
+  LLen, LIdx: SizeInt;
+  LSrc, LDst: PByte;
   LByte: Byte;
 begin
-  SetLength(Result, Length(AValue));
-  for LIdx := 1 to Length(AValue) do
+  LLen := Length(AValue);
+  if LLen = 0 then
+    Exit('');
+  SetLength(Result, LLen);
+  LSrc := PByte(@AValue[1]);
+  LDst := PByte(@Result[1]);
+  if AMode = ammLower then
   begin
-    LByte := Ord(AValue[LIdx]);
-    case AMode of
-      ammUpper:
-        if (LByte >= Ord('a')) and (LByte <= Ord('z')) then
-          LByte := LByte and $DF;
-      ammLower:
-        if (LByte >= Ord('A')) and (LByte <= Ord('Z')) then
-          LByte := LByte or $20;
+    for LIdx := 0 to LLen - 1 do
+    begin
+      LByte := LSrc[LIdx];
+      if (LByte >= Ord('A')) and (LByte <= Ord('Z')) then
+        LByte := LByte or $20;
+      LDst[LIdx] := LByte;
     end;
-    Result[LIdx] := AnsiChar(LByte);
+  end
+  else
+  begin
+    for LIdx := 0 to LLen - 1 do
+    begin
+      LByte := LSrc[LIdx];
+      if (LByte >= Ord('a')) and (LByte <= Ord('z')) then
+        LByte := LByte and $DF;
+      LDst[LIdx] := LByte;
+    end;
   end;
 end;
 
@@ -280,8 +314,8 @@ function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 var
   LIdx: Int32;
 begin
-  if ACp < 128 then
-    Exit(AsciiToLower(ACp));
+  if ACp <= $FF then
+    Exit(CASE_FOLD_LATIN1[ACp]);
 
   if ACp > UNICODE_MAX_CODEPOINT then
     Exit(ACp);

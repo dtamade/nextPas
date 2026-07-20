@@ -629,6 +629,31 @@ begin
   LErrSink := nil;
 end;
 
+procedure HarnessSoftFailInSubtest;
+var
+  LFailSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LFailSuite := TTestSuite.Create('SoftFail Subtest');
+  LFailSuite.TestSubtest('soft sub',
+    procedure(constref Ctx: ITestContext)
+    begin
+      SoftFail('sub soft 1');
+      SoftCheckEqual('a', 'b', 'sub soft str');
+      Ctx.Run('leaf', procedure
+        begin
+          SoftFail('leaf soft');
+        end);
+    end);
+  CheckFalse(LFailSuite.RunWithResult(LResult), 'soft subtest fails suite');
+  CheckTrue(LResult.Failed >= 1);
+  CheckTrue(
+    (Pos('sub soft', LResult.Results[0].Message) > 0) or
+    (Pos('soft', LResult.Results[0].Message) > 0),
+    'soft message in result');
+  LFailSuite := Default(TTestSuite);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -685,6 +710,7 @@ begin
   LMeta.Test('Cleanup on failure', @HarnessCleanupOnFailure);
   LMeta.Test('Cleanup exception swallowed', @HarnessCleanupExceptionSwallowed);
   LMeta.Test('Log output on failure', @HarnessLogOutputOnFailure);
+  LMeta.Test('SoftFail in subtest', @HarnessSoftFailInSubtest);
   if not LMeta.Run then
   begin
     WriteLn;

@@ -507,3 +507,16 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `IUdpSocketRuntime` exposes native fd for async layer.
 - Evidence: `test_net_async_udp` loopback + timeout + 0 leak.
 - Not: IPv6 UDP, multicast, connected UDP API, IOCP datagram.
+
+### Connection pool async acquire (Q16)
+- `IConnectionPool.AcquireAsync(host, port, cb, ctx, token?)`: prefer idle; else `AsyncTcpDial` (HE).
+- Requires `CreateConnectionPool(Loop[, Config])`; sync-only `CreateConnectionPool` → AcquireAsync returns False after reserving path without loop.
+- Idle keyed by host+port; `Release` returns to idle; `Discard` closes.
+- `ConnectTimeout` → dial `OverallDeadline`; optional `IAsyncCancellationToken`.
+- Evidence: `test_net_async_pool` dial / idle reuse / max connections, 0 leak.
+
+### Platform evidence deepen (Q17)
+- `test_async_accept_connect_smoke`: loopback dial via `AsyncTcpDial` on host poller (Linux epoll/io_uring; Darwin/FreeBSD kqueue; Windows skip).
+- `test_async_kqueue_runtime_smoke`: on Darwin/FreeBSD also runs accept+connect loopback; prints `kqueue-accept-connect-smoke=pass`.
+- `async-host-matrix` includes accept_connect + udp + pool entries.
+- Windows native: see `WINDOWS-NATIVE-ASSESSMENT.md` — **not** native-windows claim; wine-runtime-smoke remains IOCP evidence.

@@ -156,11 +156,16 @@ type
     SuiteName     : string;
     TestName      : string;
     Failed        : Boolean;
+    HardFailed    : Boolean;  { True only on InternalFail/raise path }
     SkipReason    : string;
     SoftFailCount : Integer;  { Go t.Error style: fail but continue }
-    SoftFailFirst : string;   { first soft-fail message for reports }
+    SoftFailMsgs  : specialize TArray<string>; { up to CMaxSoftFailMsgs }
   end;
   PTestExecState = ^TTestExecState;
+
+const
+  { Soft-fail message cap (Go t.Error accumulates; avoid unbounded growth). }
+  CMaxSoftFailMsgs = 32;
 
 threadvar
   GExecState: PTestExecState;
@@ -237,12 +242,20 @@ procedure InternalSkip(const AReason: string);
   Check*/Fail remain Fatal (raise). Runner marks tsFailed if SoftFailCount > 0. }
 procedure SoftFail(const AMessage: string);
 procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string = '');
 procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
 { If status is still tsPassed and soft fails were recorded, set tsFailed + message.
   Returns True when status was flipped. Does not clear the soft-fail counters
   until SetTestContext (next test). }
 function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
+{ True when current test has soft fails but no hard InternalFail. Used so
+  FailFast does not stop the suite on soft-only failures (Go t.Error). }
+function SoftFailOnly: Boolean;
 function  StrStartsWith(const S, APrefix: string): Boolean;
 function  StrEndsWith(const AStr, ASuffix: string): Boolean;
   { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
@@ -873,7 +886,10 @@ end;
 procedure InternalFail(const AMessage: string);
 begin
   if GExecState <> nil then
+  begin
     GExecState^.Failed := True;
+    GExecState^.HardFailed := True;
+  end;
   raise EAssertionFailed.Create(AMessage);
 end;
 
@@ -887,6 +903,7 @@ end;
 procedure SoftFail(const AMessage: string);
 var
   LMsg: string;
+  LLen: Integer;
 begin
   if AMessage = '' then
     LMsg := 'soft fail'
@@ -899,8 +916,12 @@ begin
   end;
   Inc(GExecState^.SoftFailCount);
   GExecState^.Failed := True;
-  if GExecState^.SoftFailCount = 1 then
-    GExecState^.SoftFailFirst := LMsg;
+  LLen := Length(GExecState^.SoftFailMsgs);
+  if LLen < CMaxSoftFailMsgs then
+  begin
+    SetLength(GExecState^.SoftFailMsgs, LLen + 1);
+    GExecState^.SoftFailMsgs[LLen] := LMsg;
+  end;
 end;
 
 procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
@@ -909,6 +930,16 @@ begin
     Exit;
   if AMessage = '' then
     SoftFail('SoftCheckTrue failed')
+  else
+    SoftFail(AMessage);
+end;
+
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin
+  if not ACondition then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckFalse failed')
   else
     SoftFail(AMessage);
 end;
@@ -926,6 +957,49 @@ begin
       ' but got ' + IntToStr(AActual));
 end;
 
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckEqual expected "' + AExpected +
+      '" but got "' + AActual + '"')
+  else
+    SoftFail(AMessage + ': expected "' + AExpected +
+      '" but got "' + AActual + '"');
+end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  if Pos(ANeedle, AHaystack) > 0 then
+    Exit;
+  if AMessage = '' then
+    SoftFail('SoftCheckContains expected to find "' + ANeedle +
+      '" in "' + AHaystack + '"')
+  else
+    SoftFail(AMessage);
+end;
+
+function FormatSoftFailSummary: string;
+var
+  I, LStored, LExtra: Integer;
+begin
+  Result := '';
+  if (GExecState = nil) or (GExecState^.SoftFailCount <= 0) then
+    Exit;
+  LStored := Length(GExecState^.SoftFailMsgs);
+  if LStored = 0 then
+    Exit('soft fail');
+  Result := GExecState^.SoftFailMsgs[0];
+  for I := 1 to LStored - 1 do
+    Result := Result + '; ' + GExecState^.SoftFailMsgs[I];
+  LExtra := GExecState^.SoftFailCount - LStored;
+  if LExtra > 0 then
+    Result := Result + ' (+' + IntToStr(LExtra) + ' more soft fails)';
+end;
+
 function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
 var
   LSummary: string;
@@ -935,24 +1009,25 @@ begin
     Exit;
   if GExecState^.SoftFailCount <= 0 then
     Exit;
+  LSummary := FormatSoftFailSummary;
   if AStatus = tsPassed then
   begin
-    if GExecState^.SoftFailCount = 1 then
-      LSummary := GExecState^.SoftFailFirst
-    else
-      LSummary := GExecState^.SoftFailFirst + ' (+' +
-        IntToStr(GExecState^.SoftFailCount - 1) + ' more soft fails)';
     AStatus := tsFailed;
     AMsg := LSummary;
     Result := True;
   end
-  else if (AStatus in [tsFailed, tsError]) and (AMsg <> '') and
-    (GExecState^.SoftFailCount > 0) then
+  else if (AStatus in [tsFailed, tsError]) and (AMsg <> '') then
   begin
-    { Hard/soft both present: keep primary message, annotate soft count. }
-    AMsg := AMsg + ' [also ' + IntToStr(GExecState^.SoftFailCount) +
-      ' soft fail(s)]';
+    { Hard/soft both present: keep primary message, attach all soft lines. }
+    AMsg := AMsg + ' [also soft: ' + LSummary + ']';
   end;
+end;
+
+function SoftFailOnly: Boolean;
+begin
+  Result := (GExecState <> nil) and
+    (GExecState^.SoftFailCount > 0) and
+    (not GExecState^.HardFailed);
 end;
 
 procedure SetTestContext(const ASuiteName, ATestName: string);
@@ -965,9 +1040,10 @@ begin
   GExecState^.SuiteName      := ASuiteName;
   GExecState^.TestName       := ATestName;
   GExecState^.Failed         := False;
+  GExecState^.HardFailed     := False;
   GExecState^.SkipReason     := '';
   GExecState^.SoftFailCount  := 0;
-  GExecState^.SoftFailFirst  := '';
+  SetLength(GExecState^.SoftFailMsgs, 0);
 end;
 
 { ── SleepMs ───────────────────────────────────────────────────────────────── }

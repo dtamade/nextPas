@@ -103,7 +103,7 @@ SMP 包含 CJK Extension B、emoji、音乐符号等。实际文本中 SMP 码�
 | NFC ASCII-50 | 44 | 22.6M | O(n/8) 快速路径 |
 | NFC ASCII-200 | 83 | 12.0M | 同上 |
 | NFD ASCII-50 | 47 | 21.1M | 同上 |
-| NFC BMP-Latin-50 | 4,057 | 246K | 有重音需规范化 |
+| NFC BMP-Latin-50 | **4,216** (SCORECARD 2026-07-20b, was ~5.1µs) | 246K | 有重音需规范化 |
 | NFD BMP-Latin-50 | 3,067 | 326K | 分解比组合快 |
 | NFC BMP-CJK-50 | 47 | 21.5M | CJK 无分解，快速路径 |
 | NFD BMP-CJK-50 | 49 | 20.6M | 同上 |
@@ -133,7 +133,8 @@ SMP 包含 CJK Extension B、emoji、音乐符号等。实际文本中 SMP 码�
 
 | 操作 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| CaseFoldSimple ASCII-200 | 4,043 | 247K | 逐码点查表 |
+| CaseFoldSimple ASCII-200 | ~4µs | — | 逐码点循环 |
+| UTF8CaseFoldSimple ASCII-200 | **447** | — | 整串（2026-07-20 SCORECARD） |
 | CaseFoldSimple BMP-Latin-50 | 1,496 | 669K | 同上 |
 | IsAsciiString ASCII-200 | 49 | 20.5M | 8 字节并行 |
 | IsAsciiString BMP-Latin-50 | 1.5 | 687M | 首字节快速拒绝 |

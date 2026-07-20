@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC13 (PARITY-GO-RUST Wave Q1–Q11)
+ * tui Scorecard SC1–SC16 (PARITY-GO-RUST Wave Q1–Q12)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -16,6 +16,9 @@ program scorecard;
  *   SC11 Bracketed paste 200~/201~
  *   SC12 Kitty flags-reply Verified
  *   SC13 Bracketed paste session enable
+ *   SC14 HorizontalSplit correctness
+ *   SC15 Input resilience (NeedMore + recovery)
+ *   SC16 Diff single-cell upper bound
  *}
 
 {$I nextpas.core.settings.inc}
@@ -597,6 +600,108 @@ begin
   AddRow('SC13b', 'paste_session_off', 0, 1, LOk, 'default no 2004');
 end;
 
+procedure RunSC14;
+var
+  LArea: TRect;
+  LRects: TRectArray;
+  LAreaSum, I: Integer;
+  LOk: Boolean;
+begin
+  WriteLn('SC14 HorizontalSplit correctness ...');
+  LOk := True;
+  LArea := TRect.Make(0, 0, 200, 60);
+  LRects := HorizontalSplit(LArea, [
+    LengthConstraint(10), MinConstraint(0), LengthConstraint(10)]);
+  if Length(LRects) <> 3 then
+    LOk := False
+  else
+  begin
+    LAreaSum := 0;
+    for I := 0 to High(LRects) do
+      Inc(LAreaSum, LRects[I].Width * LRects[I].Height);
+    if LAreaSum <> LArea.Width * LArea.Height then
+      LOk := False;
+    if LRects[0].Width <> 10 then
+      LOk := False;
+    if LRects[2].Width <> 10 then
+      LOk := False;
+  end;
+  AddRow('SC14a', 'hsplit3', 0, 1, LOk, 'area conserve + widths');
+end;
+
+procedure RunSC15;
+var
+  LEvent: TEvent;
+  LConsumed, LPos: Integer;
+  LResult: TParseResult;
+  LOk: Boolean;
+  LCsi: array[0..2] of Byte;
+  LBad: array[0..1] of Byte;
+begin
+  WriteLn('SC15 Input resilience ...');
+  LCsi[0] := 27;
+  LCsi[1] := Ord('[');
+  LCsi[2] := Ord('A');
+
+  LOk := True;
+  LResult := ParseOne(LCsi[0], 2, False, LEvent, LConsumed);
+  if LResult <> prNeedMore then
+    LOk := False;
+  LResult := ParseOne(LCsi[0], 3, False, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evKey) or
+     (LEvent.Key.Code <> kcUp) or (LConsumed <> 3) then
+    LOk := False;
+  AddRow('SC15a', 'csi_need_more', 0, 1, LOk, 'ESC[ NeedMore then CSI A');
+
+  LOk := True;
+  LBad[0] := $FF;
+  LBad[1] := Ord('z');
+  LPos := 0;
+  LResult := ParseOne(LBad[LPos], 2 - LPos, True, LEvent, LConsumed);
+  if LResult <> prInvalid then
+    LOk := False
+  else
+  begin
+    if LConsumed <= 0 then
+      Inc(LPos)
+    else
+      Inc(LPos, LConsumed);
+    LResult := ParseOne(LBad[LPos], 2 - LPos, True, LEvent, LConsumed);
+    if (LResult <> prSuccess) or (LEvent.Kind <> evKey) or
+       (LEvent.Key.Code <> kcChar) or (LEvent.Key.Ch <> Ord('z')) then
+      LOk := False;
+  end;
+  AddRow('SC15b', 'invalid_recover', 0, 1, LOk, '0xFF then z recovers');
+end;
+
+procedure RunSC16;
+var
+  Prev, Curr: TBuffer;
+  LPatches: TDiffEntries;
+  N: Integer;
+  LOk: Boolean;
+begin
+  WriteLn('SC16 Diff single-cell upper bound ...');
+  LOk := True;
+  Prev := TBuffer.CreateEmpty(TRect.Make(0, 0, W, H));
+  Curr := TBuffer.CreateEmpty(TRect.Make(0, 0, W, H));
+  try
+    Prev.SetString(0, 0, 'base', StyleDefault);
+    Curr.SetString(0, 0, 'base', StyleDefault);
+    N := Prev.DiffInto(Curr, LPatches);
+    if N <> 0 then
+      LOk := False;
+    Curr.SetString(3, 0, 'X', StyleDefault);
+    N := Prev.DiffInto(Curr, LPatches);
+    if (N <= 0) or (N >= (W * H) div 4) then
+      LOk := False;
+  finally
+    Prev.Free;
+    Curr.Free;
+  end;
+  AddRow('SC16a', 'diff_single_cell', 0, 1, LOk, '1 cell dirty patches << full');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -626,10 +731,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 32);
+  SetLength(GRows, 40);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC13 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC16 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -643,6 +748,9 @@ begin
   RunSC11;
   RunSC12;
   RunSC13;
+  RunSC14;
+  RunSC15;
+  RunSC16;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

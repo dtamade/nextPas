@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: Wave Q1–Q11 Active
+**状态**: Wave Q1–Q12 Active
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
@@ -42,6 +42,9 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC11 | Bracketed paste | CSI 200~ → evPaste；201~ 吞掉 |
 | SC12 | Kitty flags-reply Verified | CSI `? 5 u` → Verified；`? 0 u` not |
 | SC13 | Bracketed paste session | opt-in emits `2004h`；default off |
+| SC14 | HorizontalSplit 3 | 面积守恒 + 左右固定宽 |
+| SC15 | Input resilience | incomplete CSI NeedMore；非法字节后恢复 |
+| SC16 | Diff single-cell bound | 1 cell dirty → patches>0 且 ≪ 全量 |
 
 规则：
 
@@ -59,21 +62,22 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 
 | ID | Subject | ns/op | ops | ok |
 |----|---------|------:|----:|:--:|
-| SC1 | diff_identical | ~25600 | 2000 | Y |
-| SC2 | diff_dirty10 | ~35600 | 2000 | Y |
-| SC3a | parse_ascii | ~36 | 50000 | Y |
-| SC3b | parse_csi_up | ~45 | 50000 | Y |
-| SC4a–SC13b | correctness gates | — | 1 | Y |
+| SC1 | diff_identical | ~25–26k | 2000 | Y |
+| SC2 | diff_dirty10 | ~35–37k | 2000 | Y |
+| SC3a | parse_ascii | ~36–50 | 50000 | Y |
+| SC3b | parse_csi_up | ~45–50 | 50000 | Y |
+| SC4a–SC16a | correctness gates | — | 1 | Y |
 
 ### `bench_go_rust compare`（同机，简化核）
 
 | Op | nextPas | Go stub | Rust stub |
 |----|--------:|--------:|----------:|
-| DiffIdentical 200×50 | ~25.6 µs | ~8.1 µs | ~9.7 µs |
-| DiffDirty10 200×50 | ~35.6 µs | ~7.3 µs | ~9.2 µs |
-| ParseAscii | ~35 ns | ~1.1 ns | ~1.1 ns |
-| ParseCsiUp | ~45 ns | ~1.1 ns | ~1.7 ns |
-| LayoutVSplit3 | ~291 ns (real API) | ~2.7 ns (geom) | ~0.9 ns (geom) |
-| OverlayMerge 40×12 | ~415 ns (real API) | ~187 ns (byte) | ~485 ns (byte) |
+| DiffIdentical 200×50 | ~25.6 µs | ~8 µs | ~9–10 µs |
+| DiffDirty10 200×50 | ~35–37 µs | ~7–8 µs | ~9 µs |
+| ParseAscii | ~35–40 ns | ~1 ns | ~1 ns |
+| ParseCsiUp | ~45–50 ns | ~1 ns | ~1–2 ns |
+| LayoutVSplit3 | ~291 ns (real) | ~geom stub | ~geom stub |
+| LayoutHSplit3 | real API | ~geom stub | ~geom stub |
+| OverlayMerge 40×12 | ~415 ns (real) | ~byte stub | ~byte stub |
 
 说明：nextPas 路径含完整 cell/真实 ParseOne/真实 layout·overlay；Go/Rust 为简化核 + anti-DCE。差距符合「完整库 vs 微核」，**不是**“慢于 Go/Rust 生产 TUI”的结论。

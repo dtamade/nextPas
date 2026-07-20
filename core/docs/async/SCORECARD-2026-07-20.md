@@ -12,7 +12,7 @@
 | D2 超时竞态 | 8.5 | CAS + dial deadline |
 | D3 双栈 HE | 8.5 | 严格 CAD + DNS race + lab feed |
 | D4 错误可判定 | **7.5→8.0** | **ClassifyNetError (Q13)** |
-| D5 平台证据 | 7.5 | macOS L0/L1 fail-closed；Windows wine |
+| D5 平台证据 | **8.0** | accept/connect smoke + kqueue accept/connect；Windows still wine |
 | D6 性能诚实 | 7.0 | metric 行；无同 harness A/B |
 | D7 API 可用性 | 7.5 | Dial 推荐路径文档化 |
 | D8 生命周期 | 9.0 | class loop + 0 leak 纪律 |
@@ -35,7 +35,9 @@
 - [x] Q13 Wave R 文档 + ClassifyNetError + Dial 推荐路径
 - [x] Q14 NetCancelFromAsync + BindCancelToken + test_net_cancel_bridge
 - [x] Q15 AsyncUdpBind + SendTo/RecvFrom + test_net_async_udp
-- [ ] Q16–Q18 见 ROADMAP-Q13.md
+- [x] Q16 Pool AcquireAsync + AsyncTcpDial + test_net_async_pool
+- [x] Q17 accept/connect smoke + kqueue expand + WINDOWS-NATIVE-ASSESSMENT
+- [ ] Q18 见 ROADMAP-Q13.md
 
 ## 性能 scorecard
 

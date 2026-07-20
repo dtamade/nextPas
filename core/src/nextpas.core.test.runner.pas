@@ -1406,12 +1406,17 @@ begin
     SetCurrentTestContext(nil);
     LSubCtxI := nil;
     LSubCtx := nil;
-    { FailFast: stop on first failure }
+    { FailFast: stop on hard failure/error only — SoftFail-only continues
+      (Go: t.Error does not stop; t.Fatal does). SoftFailOnly = soft msgs
+      and no InternalFail on this entry. }
     if LConfig.FailFast and (LStatus in [tsFailed, tsError]) then
     begin
-      LOutSink.WriteLn(AnsiYellow(
-        '  FAILFAST: stopping on first failure', LConfig));
-      Break;
+      if (LStatus = tsError) or (not SoftFailOnly) then
+      begin
+        LOutSink.WriteLn(AnsiYellow(
+          '  FAILFAST: stopping on first failure', LConfig));
+        Break;
+      end;
     end;
     { MaxFailures: stop after N total failures in this suite }
     if (LConfig.MaxFailures > 0) and (LFail >= LConfig.MaxFailures) then

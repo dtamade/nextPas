@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.16**
+**当前版本**: **v8.17**
 **最后更新**: 2026-07-20
 
 ---
@@ -54,6 +54,7 @@
 | B20 v8.14c subtests 深度 | **done** |
 | B21 v8.15 CI golden + contracts 门禁 | **done** |
 | B22 v8.16 SoftFail opt-in | **done** |
+| B23–B24 v8.17 SoftFail 完成度 | **done** |
 
 ### 暂缓 / 阻塞
 

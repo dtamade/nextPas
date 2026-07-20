@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q15（Async UDP）
+> 版本：M3+B1–B4 + Q1–Q17（平台 accept/connect 证据）
 
 ## 模块概览
 

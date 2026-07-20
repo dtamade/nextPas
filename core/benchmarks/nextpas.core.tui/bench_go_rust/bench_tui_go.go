@@ -68,6 +68,16 @@ func layoutVSplit3(totalH int) (h0, h1, h2 int) {
 	return
 }
 
+// Geometry stub: three horizontal bands with fixed left/right width 10.
+func layoutHSplit3(totalW int) (w0, w1, w2 int) {
+	w0, w2 = 10, 10
+	w1 = totalW - w0 - w2
+	if w1 < 0 {
+		w1 = 0
+	}
+	return
+}
+
 // Marked overlay merge stub over byte grid.
 func overlayMerge(base, dest, marks []byte, markCh byte) int {
 	n := 0
@@ -140,6 +150,13 @@ func main() {
 		sink += a + b + c
 	}
 	report("LayoutVSplit3", time.Since(t0), LayoutIters)
+
+	t0 = time.Now()
+	for i := 0; i < LayoutIters; i++ {
+		a, b, c := layoutHSplit3(200)
+		sink += a + b + c
+	}
+	report("LayoutHSplit3", time.Since(t0), LayoutIters)
 
 	baseOv := make([]byte, OvW*OvH)
 	destOv := make([]byte, OvW*OvH)
