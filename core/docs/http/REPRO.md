@@ -90,15 +90,16 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 
 ---
 
-## 5. 正确性 smoke（最小）
+## 5. 正确性 smoke + soak（最小）
 
 ```sh
 # 从仓库根
 make focused FOCUS=core/tests/nextpas.core.http/test_http_server
 make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
+make focused FOCUS=core/tests/nextpas.core.http/test_http_soak
 ```
 
-期望：server 全绿；facade 含 **epoll** GET。
+期望：server 全绿；facade 含 **epoll** GET；soak **5/5**（Linux）且 heaptrc **0 unfreed**。
 
 ---
 
