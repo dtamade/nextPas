@@ -2,7 +2,7 @@ use std::env;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -206,7 +206,41 @@ fn run_accept_loop(listener: TcpListener, stopping: Arc<AtomicBool>, workload: S
     }
 }
 
-fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Arc<AtomicUsize>) {
+// nearest-rank: index = ceil(pct/100 * N) - 1 (matches nextPas / Go).
+fn percentile_ns(samples: &mut [u128], pct: usize) -> u128 {
+    let n = samples.len();
+    if n == 0 {
+        return 0;
+    }
+    if n == 1 {
+        return samples[0];
+    }
+    samples.sort_unstable();
+    let mut idx = (pct * n + 99) / 100;
+    if idx == 0 {
+        idx = 1;
+    }
+    idx -= 1;
+    if idx >= n {
+        idx = n - 1;
+    }
+    samples[idx]
+}
+
+fn mean_ns(samples: &[u128]) -> u128 {
+    if samples.is_empty() {
+        return 0;
+    }
+    samples.iter().sum::<u128>() / samples.len() as u128
+}
+
+fn run_client(
+    addr: SocketAddr,
+    requests: usize,
+    workload: String,
+    completed: Arc<AtomicUsize>,
+    samples_out: Arc<Mutex<Vec<u128>>>,
+) {
     let mut stream = match TcpStream::connect(addr) {
         Ok(stream) => stream,
         Err(_) => return,
@@ -222,16 +256,24 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
         WORKLOAD_ADAPTER_NO_URL => REQUEST_ADAPTER_NO_URL,
         _ => REQUEST_NO_URL,
     };
+    let mut local: Vec<u128> = Vec::with_capacity(requests);
     for _ in 0..requests {
+        let t0 = Instant::now();
         if stream.write_all(request).is_err() {
             break;
         }
         if !read_one_response(&mut stream, &mut buffer, response_body_len) {
             break;
         }
+        local.push(t0.elapsed().as_nanos());
         completed.fetch_add(1, Ordering::Relaxed);
     }
     let _ = stream.shutdown(Shutdown::Both);
+    if !local.is_empty() {
+        if let Ok(mut guard) = samples_out.lock() {
+            guard.extend(local);
+        }
+    }
 }
 
 fn print_results(
@@ -241,6 +283,7 @@ fn print_results(
     workload: &str,
     completed: usize,
     elapsed: Duration,
+    mut samples: Vec<u128>,
 ) {
     let elapsed_ns = elapsed.as_nanos() as u128;
     let ns_per_op = if completed > 0 {
@@ -253,6 +296,9 @@ fn print_results(
     } else {
         0
     };
+    let p50 = percentile_ns(&mut samples, 50);
+    let p99 = percentile_ns(&mut samples, 99);
+    let mean = mean_ns(&samples);
 
     println!("operation=http.server.keepalive");
     println!("workload={}", workload);
@@ -271,6 +317,10 @@ fn print_results(
     println!("elapsed_ns={}", elapsed_ns);
     println!("ns/op={}", ns_per_op);
     println!("req/s={}", req_per_sec);
+    println!("latency_samples={}", samples.len());
+    println!("p50_ns={}", p50);
+    println!("p99_ns={}", p99);
+    println!("mean_ns={}", mean);
 }
 
 fn main() {
@@ -285,15 +335,23 @@ fn main() {
     let accept_handle =
         thread::spawn(move || run_accept_loop(listener, accept_stopping, accept_workload));
     let completed = Arc::new(AtomicUsize::new(0));
+    let samples = Arc::new(Mutex::new(Vec::with_capacity(requests)));
     let mut clients = Vec::new();
 
     let start = Instant::now();
     for index in 0..effective_threads {
         let client_completed = Arc::clone(&completed);
+        let client_samples = Arc::clone(&samples);
         let client_requests = requests_for_thread(index, requests, effective_threads);
         let client_workload = workload.clone();
         clients.push(thread::spawn(move || {
-            run_client(addr, client_requests, client_workload, client_completed)
+            run_client(
+                addr,
+                client_requests,
+                client_workload,
+                client_completed,
+                client_samples,
+            )
         }));
     }
 
@@ -306,6 +364,7 @@ fn main() {
     let _ = TcpStream::connect(addr);
     let _ = accept_handle.join();
 
+    let samples_vec = samples.lock().map(|g| g.clone()).unwrap_or_default();
     print_results(
         requests,
         requested_threads,
@@ -313,5 +372,6 @@ fn main() {
         &workload,
         completed.load(Ordering::Relaxed),
         elapsed,
+        samples_vec,
     );
 }

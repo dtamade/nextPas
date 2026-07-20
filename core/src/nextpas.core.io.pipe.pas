@@ -45,7 +45,7 @@ type
     FWritePos: SizeUInt;
     FCount: SizeUInt;
     FCap: SizeUInt;
-    FMutex: IMutex;
+    FMutex: INativeMutex;  { CondVar.Wait requires native }
     FNotEmpty: ICondVar;
     FNotFull: ICondVar;
     FWriterClosed: Boolean;

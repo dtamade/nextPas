@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.process*.pas`（6 个源文件）
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：2.15
+**最后更新**：2026-07-20  
+**版本**：2.22
 
 ---
 
@@ -26,34 +26,23 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 函数 | 说明 |
 |------|------|
 | `Command(APath): ICommand` | 创建命令构建器 |
-| `ProcessSucceeded(AOut): Boolean` | 非 TimedOut、非 OutputLimited 且 psExited 且 ExitCode=0 |
-| `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出（不检查 exit） |
-| `RunChecked(APath, AArgs): TProcessOutput` | 同步执行，非成功退出抛 EProcessError |
-| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout（不检查 exit）；**stderr→null**（非 dual-pipe） |
-| `MustCapture(APath, AArgs): string` | 同步执行返回 stdout；非成功退出抛 EProcessError |
-| `LookPath(AName): string` | 在 PATH 中搜索可执行文件；含目录部分时校验可执行性 |
+| `ProcessSucceeded(AOut): Boolean` | 非 TimedOut/OutputLimited/Cancelled 且 psExited 且 ExitCode=0 |
+| `cProcessDefaultMaxOutput` | **64 MiB**；缓冲型 free `Run*`/`Capture*` 默认 cap（U1） |
+| `Run` / `RunChecked` / `Capture*` / `MustCapture*` | 缓冲路径默认套 64MiB；不检查 exit 的见 Capture 系列 |
+| `LookPath` / `TryLookPath` / `Executable` | PATH / 本进程路径 |
 | `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置；EnvAdd 默认继承父环境（overlay） |
 | `ICommand.Spawn: IChild` | 异步启动子进程 |
-| `ICommand.Output: TProcessOutput` | 同步执行并捕获（含 TimedOut / OutputLimited） |
-| `ICommand.Status: TProcessOutput` | 同步执行，**不捕获输出**；含 `TimedOut`/`ExitCode`/`Status`（对齐 Rust `status()`） |
-| `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
-| `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
-| `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
-| `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
-| `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
-| `ICommand.CancelToken` | 取消令牌；Wait/Output/Status/WaitGraceful 路径 Kill 并置 `Cancelled`（无管道的 Wait 也会轮询） |
-| `ICommand.NewProcessGroup` | Unix setpgid(0,0)；**Win Job Object**（M2-W2） |
+| `ICommand.Output: TProcessOutput` | 同步捕获；含 TimedOut / OutputLimited / Cancelled |
+| `ICommand.Status: TProcessOutput` | **不捕获**；StdOut/StdErr **恒空**；含 TimedOut/Cancelled |
+| `ICommand.Timeout` / `MaxOutput` | MaxOutput：builder 默认 **0=无限**；<=0 不限制 |
+| `ICommand.MergeStderr` | stderr 与 stdout 共用写端；合并流在 StdOut |
+| `ICommand.ExtraFd` / `Credential` | Unix；Win fail-closed |
+| `ICommand.CancelToken` / `NewProcessGroup` | 取消；进程组 / Job |
+| `EProcessError` | ExitCode / TimedOut / OutputLimited / **Cancelled** |
+| `IChild.Wait` / `TryWait` / `WaitWithOutput` / `WaitGraceful` | 等待与排水 |
+| `IChild.Kill` / `Signal` / `KillTree` / `SignalTree` | 终止；Win Signal 有限 |
+| `IChild.Detach` / `TakeStdin/Stdout/Stderr` | 生命周期 / 流式管道 |
 | `IChild.ProcessGroupId` | 建组时 = Pid；否则 0 |
-| `IChild.KillTree` / `SignalTree` | Unix kill(-pgid)；**Win TerminateJobObject**；未建组等价 Kill/Signal |
-| `IChild.WaitGraceful` | 建组时先 `SignalTree(SIGTERM)`，超时 `KillTree`；未建组保持单进程 |
-| `IChild.Wait: TProcessOutput` | 阻塞等待 |
-| `IChild.TryWait: Boolean` | 非阻塞检查 |
-| `IChild.Kill` | 终止子进程（SIGKILL） |
-| `IChild.Signal(ASignal)` | 发送指定信号（如 SIGTERM=15） |
-| `IChild.Detach` | 放弃生命周期管理 |
-| `IChild.TakeStdin/Stdout/Stderr` | 取走管道（大输出流式路径） |
-| `IChild.WaitWithOutput: TProcessOutput` | 并发读取 + 等待（全内存缓冲） |
-| `IChild.WaitGraceful(AGrace)` | SIGTERM → grace 内 wait → 超时 Kill；TimedOut 表示走了 Kill |
 
 ---
 
@@ -68,7 +57,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (not Cancelled) and (Status=psExited) and (ExitCode=0)
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
-- **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
+- **[INV-10]** **MaxOutput（U1）**：`ICommand` 默认 **0=不限制**。门面缓冲型 `Run*`/`Capture*`/`MustCapture*` 默认套 **`cProcessDefaultMaxOutput`（64 MiB）**。无限缓冲：`Command(...).MaxOutput(0).Output`。
 - **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）。**要求** `Stdout(stPiped)`（`.Output` / `Capture*Combined` 会强制）；非 piped 时 `Spawn` 抛 `EProcessError`。stdout piped 时 Merge 覆盖 `Stderr(stPiped/stInherit)`；与 `Stderr(stNull)` 冲突时 `Spawn` 抛 `EProcessError`。
 - **[INV-12]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.process*` 源码与 process 测试套件不得 `uses` 裸 FPC RTL 单元（SysUtils/Classes/BaseUnix/Unix/Windows/…）；OS 能力仅经 `nextpas.core.platform.*` / 其他 core 模块。仅 `nextpas.core.system` 允许直接引用 FPC RTL。门禁：真实 uses 子句扫描（多行/末位单元），见 `core/tests/fpc_rtl_uses_scan.inc`。
 - **[INV-13]** **管道与 Wait/TryWait**：`IChild` 仍持有 stdout/stderr 时：
@@ -113,7 +102,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | **128** | R28 迁 nextpas.core.test（原 455 手写 Check） |
+| test_process | **130** | R28 + U1 Cancelled/MaxOutput 常量 |
 | test_process_command | **21** | R28 迁 nextpas.core.test（原 48 Check） |
 | test_process_deep | **27** | timeout/large + R22 Cancel + R24 KillTree + R26 group |
 | test_process_pipe_contract | **17** | EINTR/EAGAIN/broken pipe |
@@ -164,3 +153,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.19 | M2-W2 Win Job Object NewProcessGroup/KillTree | Claude |
 | 2026-07-20 | 2.20 | M2-W3 ExtraFd/Cred fail-closed；wine 11 | Claude |
 | 2026-07-20 | 2.21 | M2-W4 WIN.md 交叉引用；wine 最小生产集口径 | Claude |
+| 2026-07-20 | 2.22 | U1：cProcessDefaultMaxOutput 64MiB 便利层；EProcessError.Cancelled；test 130 | Claude |

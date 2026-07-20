@@ -6,6 +6,20 @@
 **Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
+## 决策树（U1）
+
+```
+只要字符串路径？ ──是──► uses nextpas.core.path
+                         PathJoin 为二元；PathDir 门面语义（裸名→''）
+         │
+         否（已依赖 fs）
+         ▼
+uses nextpas.core.fs
+  PathJoin([...]) / PathJoin2；Go 目录语义用 FsPathDir
+```
+
+**禁止**混用假设：`fs.PathJoin` 不是二元；`PathDir` ≠ `FsPathDir` 对裸文件名。
+
 ## 模块定位
 
 - **层级**: L2 facade

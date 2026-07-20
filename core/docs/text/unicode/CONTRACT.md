@@ -83,6 +83,12 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 | 非法 UTF-8 | 按 U+FFFD、消费 1 字节（可与 Prepend 组簇） |
 | 代理对 | 无效序列 |
 
+### IDNA / Punycode（P2-5）
+
+1. `PunycodeEncode` / `PunycodeDecode`：RFC 3492
+2. `IDNAToASCII` / `IDNAToUnicode`：UTS#46 Nontransitional 实用子集（NFC + xn-- + LDH）
+3. 未含完整 IdnaMappingTable / Transitional / 全量 Bidi Rule
+
 ## 已知限制
 
 1. 无 CLDR tailored grapheme / word

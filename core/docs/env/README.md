@@ -6,6 +6,10 @@
 **Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
+## 线程安全（U1）
+
+**非线程安全**（与 C `getenv`/`setenv` 一致）。多线程读写环境变量须由调用方加锁。
+
 ## 模块定位
 
 - **层级**: L2 facade

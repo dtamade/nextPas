@@ -2,84 +2,92 @@
 
 L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Command` 的子进程管理能力。
 
-**开发地图（Host 完成 / M2 Win 完成 / 禁止无限 Rxx）**：[`ROADMAP.md`](./ROADMAP.md)  
-**Windows 一眼表 + wine 最小生产集**：[`WIN.md`](./WIN.md)  
-**Go/Rust 对标矩阵**：见 [`PARITY-go-rust.md`](./PARITY-go-rust.md)（含 fs/path/env）。  
-**证据 / scorecard**：见 [`SCORECARD.md`](./SCORECARD.md)。
+**开发地图**：[`ROADMAP.md`](./ROADMAP.md) · **Windows**：[WIN.md](./WIN.md) · **对标**：[PARITY-go-rust.md](./PARITY-go-rust.md) · **证据**：[SCORECARD.md](./SCORECARD.md)
 
-> **Host Linux Essential 已完成（Maintenance）**；**M2 wine usable + M3 host-windows min-set gate Done**。新需求须贴标签，见 ROADMAP §5。
-## 快速开始
+> Host Essential + M2/M3 Done（Maintenance）。**U1 可用性收敛**：安全默认 MaxOutput（便利层）+ Preferred API。新需求贴标签（ROADMAP §5）。
+
+## 生产默认（Preferred）
 
 ```pascal
 uses nextpas.core.process;
 
-// 推荐默认路径（新代码）
-var Out := RunChecked('/bin/echo', ['hello']);  // 失败抛 EProcessError
-if ProcessSucceeded(Out) then WriteLn(Out.StdOut);
-
-var Text := MustCapture('/usr/bin/fpc', ['--version']);
-
-var Builder := Command('/usr/bin/fpc')
-  .Args(['--version'])
+// 推荐：builder + 显式上限 + 超时
+var Out := Command('/usr/bin/tool')
+  .Args(['--flag'])
   .Timeout(TDuration.FromSeconds(30))
-  .MaxOutput(1024 * 1024);  // 生产推荐：限制 stdout+stderr 累计字节
-var Timed := Builder.Output;
-if Timed.TimedOut then ...
-if Timed.OutputLimited then ...
+  .MaxOutput(1024 * 1024)  // 生产务必限制；builder 默认 0=无限
+  .Output;
+if not ProcessSucceeded(Out) then
+  // Out.TimedOut / Out.OutputLimited / Out.Cancelled / Out.ExitCode
+  ...
 
-// Status 返回完整 TProcessOutput（不捕获 stdout/stderr，含 TimedOut）
-var St := Command('/bin/true').Status;
-if ProcessSucceeded(St) then ...
-
-// 超时便利函数
-var Timed2 := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
-if Timed2.TimedOut then
-  WriteLn('timed out');
-
-// PATH 查找
-var FpcPath := LookPath('fpc');
-if not TryLookPath('/no/such/bin', FpcPath) then
-  WriteLn('missing absolute path rejected');
+// 便利层：Run/Capture* 已套 cProcessDefaultMaxOutput（64 MiB）；无限用 builder .MaxOutput(0)
+var Text := MustCapture('/bin/echo', ['ok']);
+var St := RunChecked('/bin/true', []);
+var Path := LookPath('fpc');
 ```
 
-### 便利函数示例（兼容保留，新代码优先 builder）
+| Preferred | 用途 |
+|-----------|------|
+| `Command` / `ProcessSucceeded` | 配置与成功判定 |
+| `LookPath` / `TryLookPath` / `Executable` | 解析可执行文件 |
+| `RunChecked` / `MustCapture` / `RunTimeout` | 常用便利（带 64MiB 默认 cap） |
+| `Spawn` + `Wait` / `WaitWithOutput` / `WaitGraceful` / `Detach` | 生命周期 |
 
-```pascal
-// Capture 不检查退出码；需要失败即错用 MustCapture
-// 注意：Run/Capture* 默认无 MaxOutput 上限，海量子进程输出可导致 OOM（INV-10）
-var Text := Capture('/usr/bin/fpc', ['--version']);
-var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
-// Combined：stderr 重定向到 stdout 管道，按写入时间交错（对齐 Go CombinedOutput）
-var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
-var Out3 := RunWithInputString('/bin/cat', [], 'hello');
-var ExePath := Executable;
-```
+其余 `RunIn*` / `Capture*Combined` / `*WithInput*` 为 **Compat**，保留不删；新代码优先上表 + builder。
+
+## MaxOutput 策略（U1）
+
+| 入口 | 默认 |
+|------|------|
+| `ICommand.MaxOutput` | **0 = 不限制**（流式 / 自管缓冲） |
+| free `Run*` / `Capture*`（缓冲输出） | **`cProcessDefaultMaxOutput` = 64 MiB** |
+| 需要无限 | `Command(...).MaxOutput(0).Output` |
+
+## 生命周期
+
+- Spawn 后须 **`Wait` / `WaitWithOutput` / `WaitGraceful` / `Detach` 之一**。
+- `Destroy`：尽力 Kill+reap（约 5s），超时 abandon，**不保证零僵尸**（INV-1）。
+- **非线程安全**：同一 `ICommand`/`IChild` 勿跨线程共享。
 
 ## Status vs Output
 
 | | `Status` | `Output` |
 |--|----------|----------|
-| 管道 | 不强制 piped | 强制 stdout+stderr Piped（或 Merge 单管道） |
-| `TimedOut` | ✓ | ✓ |
-| `OutputLimited` | 恒 False（不读输出） | ✓（若设了 MaxOutput） |
-| `StdOut` / `StdErr` | 空 | 有内容 |
-| 用途 | 只要退出/超时 | 捕获输出 |
-| 成功判定 | `ProcessSucceeded(cmd.Status)` | `ProcessSucceeded(cmd.Output)` |
+| 管道 | 不强制 piped | 强制 stdout+stderr Piped（或 Merge） |
+| `TimedOut` / `Cancelled` | ✓ | ✓ |
+| `OutputLimited` | 恒 False | ✓（设了 MaxOutput） |
+| `StdOut` / `StdErr` | **恒空**（勿当 Capture） | 有内容 |
+| 用途 | 只要退出码/超时 | 捕获输出 |
 
 ```pascal
-// 合并流（builder）
-var Merged := Command('/bin/sh')
-  .Args(['-c', 'printf A; printf B >&2; printf C'])
-  .MergeStderr
-  .Output;
-// Merged.StdOut = 'ABC'; Merged.StdErr = ''
+var St := Command('/bin/true').Status;  // StdOut 空
+if ProcessSucceeded(St) then ...
+```
+
+## 快速开始（扩展）
+
+```pascal
+uses nextpas.core.process;
+
+var Out := RunChecked('/bin/echo', ['hello']);
+var Text := MustCapture('/usr/bin/fpc', ['--version']);
+var Timed2 := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
+if Timed2.TimedOut then WriteLn('timed out');
+```
+
+### Compat 便利示例
+
+```pascal
+// 已带 64MiB 默认 cap（U1）；不检查 exit 用 Capture，失败即错用 MustCapture
+var Text := Capture('/usr/bin/fpc', ['--version']);
+var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
+var Out3 := RunWithInputString('/bin/cat', [], 'hello');
 ```
 
 ## Builder 模式
 
 ```pascal
-uses nextpas.core.process, nextpas.core.process.command;
-
 var Out := Command('/usr/bin/fpc')
   .Args(['--version'])
   .Dir('/tmp')
@@ -87,10 +95,6 @@ var Out := Command('/usr/bin/fpc')
   .Stdout(stPiped)
   .Stderr(stPiped)
   .Output;
-
-WriteLn('exit: ', Out.ExitCode);
-WriteLn('stdout: ', Out.StdOut);
-WriteLn('stderr: ', Out.StdErr);
 ```
 
 ## 异步执行（Spawn + Wait）
@@ -157,7 +161,7 @@ WriteLn(Result.StdOut);  // "hello"
 - 无 POSIX 信号语义：`Signal` 仅 `SIGKILL(9)` → `TerminateProcess`；其它信号返回 unsupported
 - 管道：父端句柄清 inherit + `PeekNamedPipe` 并发 drain（避免双流死锁）
 - PATHEXT / LookPath 已支持
-- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`（2026-07-20 R26 本机 **7 passed**；truth=wine-runtime-smoke）
+- 验证：`bash core/tests/run_l2_wine_min_set.sh` 或 process wine **11**；host-windows 见 WIN.md / GHA
 
 ## 推荐 API 分层（避免便利函数爆炸）
 

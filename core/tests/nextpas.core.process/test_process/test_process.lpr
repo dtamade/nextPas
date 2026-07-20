@@ -2205,6 +2205,28 @@ begin
   ExpectTrue('CancelToken pre-spawn — raises', LRaised);
 end;
 
+procedure TestEProcessErrorCancelledProperty;
+var
+  E: EProcessError;
+begin
+  E := EProcessError.Create('cancelled demo', 9, False, False, True);
+  try
+    ExpectTrue('EProcessError.Cancelled', E.Cancelled);
+    ExpectTrue('EProcessError not TimedOut', not E.TimedOut);
+    ExpectTrue('EProcessError not OutputLimited', not E.OutputLimited);
+    ExpectTrue('EProcessError ExitCode', E.ExitCode = 9);
+  finally
+    E.Free;
+  end;
+end;
+
+procedure TestDefaultMaxOutputConst;
+begin
+  ExpectTrue('cProcessDefaultMaxOutput 64MiB',
+    cProcessDefaultMaxOutput = Int64(64) * 1024 * 1024);
+  ExpectTrue('cProcessDefaultMaxOutput positive', cProcessDefaultMaxOutput > 0);
+end;
+
 procedure TestCredentialSelfUid;
 var
   LOut: TProcessOutput;
@@ -2389,6 +2411,8 @@ begin
   T.Test('R19BatchExtra', @TestR19BatchExtra);
   T.Test('CancelTokenKillsSleep', @TestCancelTokenKillsSleep);
   T.Test('CancelTokenBeforeSpawnRaises', @TestCancelTokenBeforeSpawnRaises);
+  T.Test('EProcessErrorCancelledProperty', @TestEProcessErrorCancelledProperty);
+  T.Test('DefaultMaxOutputConst', @TestDefaultMaxOutputConst);
   T.Test('CredentialSelfUid', @TestCredentialSelfUid);
   T.Test('ExtraFdInherited', @TestExtraFdInherited);
   T.Test('MergeStderrStdoutOnlyPipe', @TestMergeStderrStdoutOnlyPipe);

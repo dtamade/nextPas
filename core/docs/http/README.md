@@ -39,7 +39,8 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → **Basic only**), `WithTLSContext` |
-| Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
+| Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap；pool reuse after RH-1) |
+| HTTPS **server** | `THttpServerOptions.TLSContext` → **registry selects H2 TLS only**（not H1 HTTPS server）；see CONTRACT residual |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
