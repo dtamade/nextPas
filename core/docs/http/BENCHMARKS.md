@@ -424,44 +424,65 @@ Not a throughput ranking; sizes are CI-friendly leak soak.
 #### H2 KPI draft (2026-07-21) — **not a claim**
 
 Purpose: freeze a **future** gate shape for *Scale-ready (H2 mux, Linux epoll)* if product asks.
-**Current CLAIM package remains No.** This section is draft only.
+**Current CLAIM package remains No.** This section is draft + first peer evidence.
 
 **Shape (frozen with H2P-1 mid)**
 
 | Field | Official mid (KPI candidate) | Press regression |
 | ----- | ---------------------------- | ---------------- |
-| mode | `multiplex` cleartext prior-knowledge | same |
-| backend | **epoll** | epoll |
+| mode | `multiplex` cleartext prior-knowledge (h2c) | same |
+| backend nextPas | **epoll** | epoll |
+| backend Go peer | `net/http` + `x/net/http2` h2c | same |
 | connections × streams × batches | **8 × 16 × 100** | **16 × 32 × 100** |
 | target ops | 12800 | 51200 |
-| peer | **none yet** (no Go h2 harness in-repo) | same |
+| peer harness | `benchmarks/.../compare_h2` + `run_h2_comparison.sh` | same |
 
 **Proposed gates (candidate; not enforced as claim)**
 
 | Gate | Proposed threshold | 2026-07-21 sample | Status |
 | ---- | ------------------ | ----------------- | ------ |
-| Mid stable | `stable=1`, failed=0, completed=target | **2879** req/s stable=1 | draft Met |
-| Mid floor | req/s ≥ **0.80 ×** host baseline mid (~2800 → **≥ 2240**) | 2879 ≥ 2240 | draft Met |
-| Press stable | `stable=1`, completed=target | **11469** req/s | draft Met |
-| Press scale | press/mid ≥ **~3.0×** ops/s (conn×stream 4×) | 11469/2879 ≈ **4.0×** | draft Met |
-| Correctness | `test_http_h2_facade` + `test_http_h2_tls_alpn` 0 unfreed | prior waves Met | precondition |
-| Peer ratio | nextPas/Go h2 ≥ **0.80×** same shape | **Blocked** — no Go h2 peer | **not Met** |
+| Mid stable | `stable=1`, failed=0, completed=target | nextPas **2829** / Go **28754** | draft Met (both) |
+| Mid floor (self) | nextPas ≥ **0.80 ×** ~2800 baseline → **≥ 2240** | 2829 | draft Met |
+| Press stable | `stable=1`, completed=target | nextPas **11291** / Go **81750** | draft Met (both) |
+| Press scale (self) | press/mid ≥ **~3.0×** | 11291/2829 ≈ **4.0×** | draft Met |
+| Correctness | h2_facade + h2_tls_alpn 0 unfreed | prior waves Met | precondition |
+| **Peer ratio mid** | nextPas/Go ≥ **0.80×** same shape | **0.10×** | **NotMet** |
+| **Peer ratio press** | nextPas/Go ≥ **0.80×** | **0.14×** | **NotMet** |
+
+**Peer table (same-machine, single run, 2026-07-21)**
+
+| Shape | nextPas req/s | Go h2c req/s | ratio | stable |
+| ----- | ------------: | -----------: | ----: | -----: |
+| 8×16×100 mid | **2829** | **28754** | **0.10×** | 1/1 |
+| 16×32×100 press | **11291** | **81750** | **0.14×** | 1/1 |
+
+Artifacts: `build/projects/nextpas.core.http/h2_comparison/e3s-h2-*-20260721.md`
+
+**Honesty notes**
+
+- Shapes match (connections × concurrent streams × batches, cleartext h2c, GET `/` small body).
+- Client stacks differ: nextPas `RoundTripMany` / Go goroutine batch on `http2.Transport` — both multiplex one conn per client “connection”.
+- Gap is real order-of-magnitude; **not** noise. Do **not** claim H2 package scale-ready.
+- Self-floor / linear press still useful regression canaries; peer gate is the package blocker.
 
 **What is still missing for package claim**
 
-1. In-repo **Go (or hyper) H2 peer** on the same mid shape (or absolute multi-run floor with CI host class).
-2. Multi-run median (runs≥3) like H1 E3 — single sample is characterization.
-3. Explicit product **Yes** to upgrade CLAIM package (R1 refused without this).
+1. Close the **~10× peer gap** (or redefine absolute multi-run floor with product sign-off).
+2. Multi-run median (runs≥3) like H1 E3.
+3. Explicit product **Yes** to upgrade CLAIM package.
 4. **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
 
 **Repro**
 
 ```sh
+# nextPas alone
 ./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
   --mode multiplex --backend epoll \
   --connections 8 --streams 16 --batches 100
-./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
-  --mode multiplex --backend epoll \
+# peer comparison (nextPas + Go h2c)
+./benchmarks/nextpas.core.http/run_h2_comparison.sh \
+  --connections 8 --streams 16 --batches 100
+./benchmarks/nextpas.core.http/run_h2_comparison.sh \
   --connections 16 --streams 32 --batches 100
 ```
 
