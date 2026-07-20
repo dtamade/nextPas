@@ -157,6 +157,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | collections.hashmap | **G4.x+**：buckets/bitmap FreeMemOf |
 | collections.element_manager | **H1**：count×elemSize FreeMemOf |
 | collections treemap/lru/linkedhash | **H1b**：节点 SizeOf FreeMemOf |
+| collections.arr | **H2**：swap 缓冲 FElementSizeCache / LAllocSize |
 | yaml / xml / ini / csv | **G4 residual**：表/slot 容量 FreeMemOf |
 | toml LBuf | **G4 residual**：free 点旁有 LBufLen |
 | collections swiss\* | 既有 FreeMemOf |

@@ -889,6 +889,51 @@ begin
   end;
 end;
 
+{ R31: os.Expand / Environ edge table. }
+procedure TestExpandEnvKeysR31;
+var
+  LKeys: TStringArray;
+  I: Integer;
+  Found: Boolean;
+  Raised: Boolean;
+begin
+  SetEnv('NEXTPAS_R31_A', 'alpha');
+  SetEnv('NEXTPAS_R31_B', 'beta');
+  try
+    CheckEqual('alpha-beta', ExpandEnv('$NEXTPAS_R31_A-${NEXTPAS_R31_B}'),
+      'r31 mixed $ and ${}');
+    CheckEqual('alpha:beta', ExpandEnv('${NEXTPAS_R31_A}:${NEXTPAS_R31_B}'),
+      'r31 brace pair');
+    CheckEqual('alpha', ExpandEnvWithDefault('${NEXTPAS_R31_A}', 'x'),
+      'r31 with default present');
+    CheckEqual('fallback', ExpandEnvWithDefault('${NEXTPAS_R31_MISSING}', 'fallback'),
+      'r31 with default missing');
+    CheckEqual('alpha', ExpandEnvStrict('$NEXTPAS_R31_A'), 'r31 strict ok');
+    Raised := False;
+    try
+      ExpandEnvStrict('$NEXTPAS_R31_NOPE');
+    except
+      on E: Exception do
+        Raised := True;
+    end;
+    Check(Raised, 'r31 strict raises on missing');
+    LKeys := EnvKeys;
+    Found := False;
+    for I := 0 to High(LKeys) do
+      if LKeys[I] = 'NEXTPAS_R31_A' then
+        Found := True;
+    Check(Found, 'r31 EnvKeys has marker');
+    Check(HasEnv('NEXTPAS_R31_A'), 'r31 HasEnv true');
+    UnsetEnv('NEXTPAS_R31_A');
+    Check(not HasEnv('NEXTPAS_R31_A'), 'r31 after unset');
+  finally
+    UnsetEnv('NEXTPAS_R31_A');
+    UnsetEnv('NEXTPAS_R31_B');
+  end;
+end;
+
+
+
 
 begin
   T := TTestSuite.Create('nextpas.core.os.env');
@@ -961,5 +1006,6 @@ begin
   T.Test('GetEnvDefault R19 extra', @TestGetEnvDefaultR19Extra);
   T.Test('ExpandEnv mixed R22', @TestExpandEnvMixedR22);
   T.Test('HasEnv empty R22', @TestHasEnvEmptyR22);
+  T.Test('Expand EnvKeys R31', @TestExpandEnvKeysR31);
   if not T.Run then Halt(1);
 end.

@@ -527,8 +527,13 @@ atsCancelled: TAsyncTaskStatus = 5;
 - truth=`same-host-order-of-magnitude`; **not CI-gating**; do not claim “faster than Go/Rust” from this table alone.
 - SCORECARD table updated from a 2026-07-20 host run.
 
-### Localhost dial bench (Q19)
-- `test_net_async_dial_bench`: sequential `AsyncTcpDial` → `metric=dial_ops_per_s` (localhost listener).
-- Go peer: `core/scripts/async-bench-parity/go-dial` (`net.DialTimeout`).
-- Included in `async-bench-parity.sh`; truth=`localhost-sequential-dial` — **not** public DNS / dual-stack HE RTT matrix.
-- Typical host: nextpas ~O(10¹) dial/s sequential HE path; go dial peer much higher (sync Dial, no event-loop per dial).
+### Localhost dial bench (Q19 + Q20)
+- `test_net_async_dial_bench`:
+  - sequential `AsyncTcpDialAddrs` (one `Run` per dial) → `metric=dial_ops_per_s`
+  - concurrent single-`Run`, W in-flight `AsyncTcpDialAddrs` → `metric=dial_concurrent_ops_per_s`
+- Go peers:
+  - sequential: `core/scripts/async-bench-parity/go-dial` (`net.DialTimeout`)
+  - concurrent: `core/scripts/async-bench-parity/go-dial-concurrent` (W-semaphore goroutines)
+- Included in `async-bench-parity.sh` (opt-in, not CI-gating).
+- truth=`localhost-sequential-dial` / `localhost-concurrent-dial` — **not** public DNS / dual-stack HE RTT matrix.
+- Concurrent path is single-loop pipelined dials; listener accept is not required for SYN-complete success on localhost backlog (client closes immediately).
