@@ -112,12 +112,14 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 make focused FOCUS=core/tests/nextpas.core.http/test_http_server
 make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
 make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_tls_alpn
+make focused FOCUS=core/tests/nextpas.core.http/test_http_tls_real
 make focused FOCUS=core/tests/nextpas.core.http/test_http_soak
 make focused FOCUS=core/tests/nextpas.core.http/test_http_q3_matrix
 make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
 ```
 
 期望：server 全绿；facade 含 **epoll** GET；H2 TLS ALPN **4/4** 0 unfreed（H2P-3）；
+`test_http_tls_real` **5/5** 0 unfreed（低层 TLS + stream wrapper）；
 soak **5/5**（Linux）0 unfreed；Q3-2 矩阵 **6/6** 0 unfreed；HTTPS smoke **3/3** 0 unfreed。
 HTTPS smoke 读数：`server_accepts=1`（RH-1 keep-alive）、`req/s` 通常 ≫ 10、`p50_ns=` / `p99_ns=`。
 **仍不宣称** HTTPS scale-ready 或 H1/H2 package scale-ready（见 `CLAIM.md`）。
