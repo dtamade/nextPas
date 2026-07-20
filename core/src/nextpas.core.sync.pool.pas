@@ -1,11 +1,11 @@
 {******************************************************************************
-  nextpas.core.sync.pool — 对象池 (v7: TLS freelist + 预分配, 碾压 Go)
+  nextpas.core.sync.pool — 对象池 (v7: TLS freelist + 预分配)
 
-  v7 核心架构:
-    1. threadvar TLS freelist — 每线程独立链表, 零锁零syscall
-    2. 预分配块 — 批量 Create, 跳过 FPC 堆分配
-    3. 对象池管理生命周期 — Get 永不调用 Create, Put 永不调用 Free
-    4. 冷路径: TRTLCriticalSection 保护 global stack + 扩容
+  架构:
+    1. threadvar TLS freelist — 每线程独立链表, 零锁热路径
+    2. 预分配 — 批量 Factory, 跳过热路径 Create/Free
+    3. 对象池管理生命周期 — Get 不 Create, Put 不 Free
+    4. 冷路径: nextpas IMutex 保护 global stack
     5. DrainTLS — 线程退出前将 TLS freelist 归还 global pool
 
   线程安全约束:
@@ -13,18 +13,15 @@
     - 一线程只应使用一个 TSyncPool 实例 (单池约束)
     - Factory 回调可能被多线程并发调用, 调用者须保证其线程安全性
     - FTotalCreated 通过 InterLockedIncrement 原子递增
-
-  性能:
-    热路径: 56M ops/sec (超越 Go 50M)
-    含分配: ~56M ops/sec (预分配消除 Create/Free 开销)
-    vs Go:  每线程持平或超越
-    vs Rust: 2.4x 更快
 ******************************************************************************}
 unit nextpas.core.sync.pool;
 
 {$I nextpas.core.settings.inc}
 
 interface
+
+uses
+  nextpas.core.sync.intf;
 
 type
   TPoolFactory = function: Pointer;
@@ -46,7 +43,7 @@ type
   private
     FConfig: TSyncPoolConfig;
     FGlobalHead: TPoolItem;
-    FGlobalLock: TRTLCriticalSection;
+    FGlobalLock: IMutex;
     FTotalCreated: Integer; { 原子递增 via InterLockedIncrement }
     { 预分配块管理 }
     FPreAllocBlocks: array of Pointer; { 每块 = mmap/GetMem 的大内存 }
@@ -85,6 +82,9 @@ function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
 
 implementation
 
+uses
+  nextpas.core.sync.mutex;
+
 threadvar
   TLSHead: TPoolItem;
 
@@ -116,7 +116,7 @@ begin
   inherited Create;
   FConfig := AConfig;
   FGlobalHead := nil;
-  InitCriticalSection(FGlobalLock);
+  FGlobalLock := TMutex.Create;
   FTotalCreated := 0;
   FPreAllocBlocks := nil;
   FPreAllocBlockCount := 0;
@@ -130,12 +130,12 @@ begin
   { 先将当前线程 TLS freelist 移回 global, 再统一释放 }
   DrainTLS;
   InternalDrainGlobal;
-  DoneCriticalSection(FGlobalLock);
+  FGlobalLock := nil;
   inherited Destroy;
 end;
 
-{ Get — 热路径: TLS freelist (零锁零syscall)
-        冷路径: global → 预分配补充 → factory }
+{ Get — 热路径: TLS freelist (零锁)
+        冷路径: global → factory }
 function TSyncPool.Get: Pointer;
 var
   LItem: TPoolItem;
@@ -149,15 +149,17 @@ begin
   end;
 
   { 冷路径: global stack }
-  EnterCriticalSection(FGlobalLock);
-  LItem := FGlobalHead;
-  if LItem <> nil then begin
-    FGlobalHead := LItem.PoolNext;
-    LItem.PoolNext := nil;
-    LeaveCriticalSection(FGlobalLock);
-    Exit(LItem);
+  FGlobalLock.Acquire;
+  try
+    LItem := FGlobalHead;
+    if LItem <> nil then begin
+      FGlobalHead := LItem.PoolNext;
+      LItem.PoolNext := nil;
+      Exit(LItem);
+    end;
+  finally
+    FGlobalLock.Release;
   end;
-  LeaveCriticalSection(FGlobalLock);
 
   { 最冷路径: 工厂创建 (可能被多线程并发调用, Factory 须线程安全) }
   if Assigned(FConfig.Factory) then begin
@@ -192,10 +194,13 @@ begin
   LTail := LItem;
   while LTail.PoolNext <> nil do
     LTail := LTail.PoolNext;
-  EnterCriticalSection(FGlobalLock);
-  LTail.PoolNext := FGlobalHead;
-  FGlobalHead := LItem;
-  LeaveCriticalSection(FGlobalLock);
+  FGlobalLock.Acquire;
+  try
+    LTail.PoolNext := FGlobalHead;
+    FGlobalHead := LItem;
+  finally
+    FGlobalLock.Release;
+  end;
 end;
 
 function TSyncPool.Acquire: Pointer;
@@ -231,9 +236,12 @@ end;
 
 procedure TSyncPool.DrainGlobal;
 begin
-  EnterCriticalSection(FGlobalLock);
-  InternalDrainGlobal;
-  LeaveCriticalSection(FGlobalLock);
+  FGlobalLock.Acquire;
+  try
+    InternalDrainGlobal;
+  finally
+    FGlobalLock.Release;
+  end;
 end;
 
 { ---------------------------------------------------------------------------

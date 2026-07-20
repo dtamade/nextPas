@@ -35,7 +35,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 | 应用级 Mutex / RWLock / WaitGroup / … | **`sync`（本 lane）** | 公开门面 |
 | async 内 Mutex / Channel / CondVar | `async` | 不同事件循环语义，不混用 |
 | thread pool / worksteal | `thread` | 可消费 sync 原语 |
-| `TSyncPool` | `sync.pool` | 实验表面；TLS 单池约束；已知 FPC CriticalSection 债 |
+| `TSyncPool` | `sync.pool` | 实验表面；TLS 单池约束；冷路径 nextpas `IMutex` |
 
 **禁止**
 

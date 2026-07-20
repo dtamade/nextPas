@@ -17,23 +17,24 @@
 - [x] CondVar 拒绝 `TFutexMutex` 配对
 - [x] `TSyncPool` TLS freelist + 并发测试与 bench
 - [x] 基础 `test_sync` / `test_sync_pool` 行为覆盖
-- [x] 文档 SSOT：README + CONTRACT 1.1 + 本 GOAL_TREE
+- [x] 文档 SSOT：README + CONTRACT + 本 GOAL_TREE
 - [x] 删除空壳 `test_sync_posix_fallback`
 - [x] 模块级测试 Makefile + source-contract gate
 - [x] 关键错误路径行为测试补强
+- [x] **E2** `TSyncPool` 冷路径：`TRTLCriticalSection` → nextpas `IMutex`/`TMutex`
 
 ---
 
 ## Now（当前 lane 焦点）
 
 - [x] 基线验证证据落盘（focused gates + hygiene，2026-07-20）
-- [ ] Ready 报告与 path-limited landing 准备（由总控/用户触发 commit）
+- [ ] path-limited landing（`sync` 分支 commits 已就绪）
 
 ---
 
 ## Next
 
-1. **E2 Pool 去 FPC 债**：`TRTLCriticalSection` → nextpas `IMutex`/`TMutex`；评估 per-pool TLS
+1. 评估 per-pool TLS（取消全局 threadvar 单池约束）
 2. CondVar / Futex 类型级隔离（若可无破坏消费者）
 3. L1 Windows / Darwin compile gate（与 platform 对齐）
 4. Stress / 超时边界 / 销毁持锁策略统一
