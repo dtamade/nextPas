@@ -1,6 +1,6 @@
 # Windows `platform.watch` design — ReadDirectoryChangesW
 
-**Status:** design slice only (Batch-15a). **Not implemented.**  
+**Status:** design slice only (Batch-15a). **Not implemented.**
 **Owner:** platform lane. **Public API:** do not change without a new batch.
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
@@ -81,7 +81,7 @@ POSIX-oriented and invalid on Windows.
 
 ### 3.3 Poll and `ReadDirectoryChangesW`
 
-**Filter (v1):**  
+**Filter (v1):**
 `FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
  FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
  FILE_NOTIFY_CHANGE_LAST_WRITE`
