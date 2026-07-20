@@ -52,23 +52,23 @@ SCORECARD="$REPO_ROOT/core/docs/tui/SCORECARD.md"
 PARITY="$REPO_ROOT/core/docs/tui/PARITY-GO-RUST.md"
 SC_LPR="$TEST_DIR/scorecard/scorecard.lpr"
 if [ -f "$SCORECARD" ]; then
-  if grep -q 'SC19' "$SCORECARD" && grep -q 'SC20' "$SCORECARD" && grep -q 'SC22' "$SCORECARD"; then
-    ok "SCORECARD 含 SC19/SC20/SC22"
+  if grep -q 'SC22' "$SCORECARD" && grep -q 'SC23' "$SCORECARD" && grep -q 'SC25' "$SCORECARD"; then
+    ok "SCORECARD 含 SC22/SC23/SC25"
   else
-    fail_check "SCORECARD 缺少 SC19/SC20/SC22 条目"
+    fail_check "SCORECARD 缺少 SC22/SC23/SC25 条目"
   fi
 else
   fail_check "SCORECARD.md 不存在"
 fi
 if [ -f "$CONTRACT" ]; then
-  if grep -qE 'SC1[–-]SC' "$CONTRACT" && grep -qE '\*\*版本\*\*：1\.(1[5-9]|[2-9][0-9])' "$CONTRACT"; then
-    ok "CONTRACT 含 SC 范围与版本 ≥1.15"
+  if grep -qE 'SC1[–-]SC' "$CONTRACT" && grep -qE '\*\*版本\*\*：1\.(1[6-9]|[2-9][0-9])' "$CONTRACT"; then
+    ok "CONTRACT 含 SC 范围与版本 ≥1.16"
   else
     fail_check "CONTRACT 缺少 SC1–SC 范围或版本过旧"
   fi
 fi
 if [ -f "$SC_LPR" ]; then
-  for p in RunSC20 RunSC21 RunSC22; do
+  for p in RunSC23 RunSC24 RunSC25; do
     if grep -q "procedure $p" "$SC_LPR"; then ok "scorecard.lpr $p"; else fail_check "scorecard.lpr 缺 $p"; fi
   done
 else
