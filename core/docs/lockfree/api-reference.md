@@ -1,13 +1,20 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-19（H3-4：证据信封 + CONTRACT 对齐）
+> 更新: 2026-07-20（Maintenance preferred close-out + 示例/生命周期对齐）
 >
 > **权威顺序**：[`CONTRACT.md`](CONTRACT.md) > 本文件 > 选型/README。改 API 必须同步本文件。
 > 绝对性能数字须带 [`bench-envelope.md`](bench-envelope.md)；禁止无信封 Mops 营销。
+> **Preferred 原子原语**：热路径用 `atomic_*` + `mo_*` / `TAtomic*`（见 [`READY.md`](READY.md) residual 0）。
+> **生命周期（T1 容器）**：**Close → join producers/waiters → Free**。Destroy 的 Close+drain **不**替代 join。
+> **选型**：[`selection-guide.md`](selection-guide.md)「任务投递四选一」。
+> **示例**：`t1_close_join_free`（Channel）、`t1_segqueue_workers`（SegQueue）、`t2_bag_close_join_free`（Bag）。
 
 [English](api-reference.en.md)
 
 ## 原子类型 (nextpas.core.atomic)
+
+> 门面优先 `atomic_load` / `atomic_store` / `atomic_compare_exchange_strong*` / `atomic_fetch_*` + `mo_*`。  
+> PascalCase `AtomicLoad32` 等为 **legacy 兼容**（[`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) §1.4），新代码勿扩散。
 
 ### TAtomicInt32 / TAtomicInt64
 
@@ -153,13 +160,13 @@ type
 ```
 
 **特点**:
-- 无界 MPSC 队列
-- 分段设计（每段 32 元素）
+- 无界 **MPMC** 分段队列（segment + EBR；生产侧 `thread.pool` 用此型）
+- 分段设计（每段固定容量）
 - EBR 自动回收旧段
-- Enqueue 总是成功（无界）
+- Enqueue 总是成功（无界，直至 Close）
 - TryEnqueue 在 Close 后返回 False
 - TryDequeue 可能返回 False（空队列）
-- Close 不影响已入队数据的读取
+- Close 后已入队仍可读；**生命周期：Close → join → Free**（教学：`t1_segqueue_workers`）
 
 ---
 
@@ -697,8 +704,9 @@ type
 
 **特点**:
 - 有界 ring bag，允许重复元素；FIFO
-- `TryAdd`/`TryTake` 热路径 CAS/序列号；AddWait/TakeWait 可阻塞
+- `TryAdd`/`TryTake` 热路径 preferred CAS/序列号（`atomic_*`）；AddWait/TakeWait 可阻塞
 - Close 后 `TryAdd` → `arClosed`，已入队仍可取出
+- **生命周期**：Close → drain/join → Free（教学：`t2_bag_close_join_free`）
 - 适用于任务袋、多生产者多消费者工作池等场景
 
 **使用示例**:
