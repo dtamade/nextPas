@@ -1,21 +1,25 @@
 # Windows `platform.watch` design — ReadDirectoryChangesW
 
-**Status:** design slice only (Batch-15a). **Not implemented.**
+**Status:** S1 landed (create/add/close). Poll still stub until S2.
 **Owner:** platform lane. **Public API:** do not change without a new batch.
+
+**S1 decisions locked:** single-directory v1; recursive out of scope;
+overflow deferred to S2/S3; `IsDir` optional (S2+); `Fd` unused on Windows
+(`DirHandle` is validity).
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
 and Darwin/FreeBSD (kqueue EVFILT_VNODE) already provide focused-runtime.
 Windows is currently a permanent-looking stub:
 
 ```pascal
-// {$IFDEF NEXTPAS_WINDOWS}
-platform_watch_create → PLATFORM_ERR_UNSUPPORTED
-platform_watch_add    → PLATFORM_ERR_UNSUPPORTED
-platform_watch_poll   → PLATFORM_ERR_UNSUPPORTED
-platform_watch_close  → PLATFORM_ERR_UNSUPPORTED
+// {$IFDEF NEXTPAS_WINDOWS} after Batch-15 S1
+platform_watch_create → 0 (DirHandle invalid until add)
+platform_watch_add    → CreateFileW dir (single path; second → NOSPC)
+platform_watch_poll   → PLATFORM_ERR_UNSUPPORTED (S2)
+platform_watch_close  → CloseHandle; idempotent 0
 ```
 
-Wine smoke (`test_platform_watch_wine`) intentionally asserts those codes.
+Wine smoke covers S1 create/add/close; poll still asserts UNSUPPORTED.
 
 ---
 

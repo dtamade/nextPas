@@ -538,15 +538,20 @@ atsCancelled: TAsyncTaskStatus = 5;
 - truth=`localhost-sequential-dial` / `localhost-concurrent-dial` — **not** public DNS / dual-stack HE RTT matrix.
 - Concurrent path is single-loop pipelined dials; listener accept is not required for SYN-complete success on localhost backlog (client closes immediately).
 
-### Public DNS HE stats (Q21)
-- Suite: `test_net_async_dial_public_he` — dials `one.one.one.one:443` for N rounds with `OnAttemptStart` + overall deadline.
+### Public DNS HE stats (Q21 / Q23)
+- Suite: `test_net_async_dial_public_he` — multi-host matrix:
+  - `one.one.one.one:443`, `dns.google:443`, `cloudflare.com:443`
+  - per-host metrics: ok/fail/mean_ms/attempts_mean/attempt_v6_ratio/winner_v6_ratio
+  - aggregate: `metric=public_he_aggregate`
 - **Opt-in only**: `NEXTPAS_PUBLIC_DNS_HE=1` (wrapper: `bash core/scripts/async-public-he-stats.sh`).
+- Env: `NEXTPAS_PUBLIC_DNS_HE_ROUNDS` (default 2, clamp 1..5);
+  `NEXTPAS_PUBLIC_DNS_HE_V6PREF=1` runs a second pass with `PreferIPv6First`.
 - Default: skip (exit 0). All-fail rounds print soft-fail metrics; **never** CI-gating.
-- Metrics: `public_he_ok/fail`, `public_he_mean_ms`, `public_he_attempts_mean`, `public_he_winner_v6_ratio`.
-- truth=`public-dns-he-opt-in; flaky; not-ci-gating; sample-not-sla` — not dual-stack lab matrix, not production SLA.
+- truth=`public-dns-he-multihost-opt-in; flaky; not-ci-gating; sample-not-sla`.
 
-### Windows native async smoke (Q22)
+### Windows native async smoke (Q22 / Q24A)
 - Script: `core/scripts/async-windows-native-smoke.sh` (compile gate + contract + poller/IOCP + accept/connect).
-- CI: `test-windows-runtime` step **continue-on-error: true** — not fail-closed.
+- CI: `test-windows-runtime` step **continue-on-error: true** — not fail-closed until streak.
+- Streak observer: `bash core/scripts/async-windows-smoke-streak.sh` → `promote-ready=yes|no`.
 - truth on bare-metal Windows host: `native-windows-candidate` until multi-week green streak (see WINDOWS-NATIVE-ASSESSMENT).
 - Do **not** treat Wine green as `truth=native-windows`.

@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# async-public-he-stats.sh — opt-in public DNS Happy Eyeballs statistical sample.
+# async-public-he-stats.sh — opt-in multi-host public DNS HE statistical sample.
 #
 # Usage:
 #   bash core/scripts/async-public-he-stats.sh
 #
-# Sets NEXTPAS_PUBLIC_DNS_HE=1 and runs test_net_async_dial_public_he.
-# truth=public-dns-he-opt-in; flaky; not CI-gating.
+# Env (optional):
+#   NEXTPAS_PUBLIC_DNS_HE_ROUNDS=N   # default 2, clamp 1..5 (handled in test)
+#   NEXTPAS_PUBLIC_DNS_HE_V6PREF=1   # second matrix with PreferIPv6First
+#
+# Always sets NEXTPAS_PUBLIC_DNS_HE=1.
+# truth=public-dns-he-multihost-opt-in; flaky; not CI-gating.
 
 set -euo pipefail
 
@@ -20,9 +24,11 @@ else
 fi
 
 export NEXTPAS_PUBLIC_DNS_HE=1
-echo "=== async-public-he-stats (opt-in) ==="
-echo "core=$CORE_ROOT host=${PUBLIC_HE_HOST:-one.one.one.one}"
-echo "truth=public-dns-he-opt-in; flaky; not-ci-gating"
+echo "=== async-public-he-stats (opt-in multihost) ==="
+echo "core=$CORE_ROOT"
+echo "rounds=${NEXTPAS_PUBLIC_DNS_HE_ROUNDS:-2} v6pref=${NEXTPAS_PUBLIC_DNS_HE_V6PREF:-0}"
+echo "hosts=one.one.one.one,dns.google,cloudflare.com port=443"
+echo "truth=public-dns-he-multihost-opt-in; flaky; not-ci-gating"
 echo
 
 make -C "$CORE_ROOT/tests/nextpas.core.net/test_net_async_dial_public_he" clean test

@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q22（public HE opt-in + Windows native smoke soft）
+> 版本：M3+B1–B4 + Q1–Q24A（multihost public HE + Windows streak observer）
 
 ## 模块概览
 
@@ -141,9 +141,10 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 ## 未来方向
 
 1. 运行同机对照：`bash core/scripts/async-bench-parity.sh`（含 Q19/Q20 dial 串行/并发）
-2. 公网 DNS HE 样本（flaky）：`bash core/scripts/async-public-he-stats.sh`
+2. 公网 DNS HE 多 host 样本（flaky）：`bash core/scripts/async-public-he-stats.sh`
 3. Windows native async smoke（soft）：`bash core/scripts/async-windows-native-smoke.sh`（CI continue-on-error）
-4. [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md) · [SCORECARD-2026-07-20.md](SCORECARD-2026-07-20.md)
+4. Windows smoke 绿 streak 观测：`bash core/scripts/async-windows-smoke-streak.sh`
+5. [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md) · [SCORECARD-2026-07-20.md](SCORECARD-2026-07-20.md)
 
 ## 相关文档
 
