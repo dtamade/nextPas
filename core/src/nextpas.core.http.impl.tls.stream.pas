@@ -52,13 +52,14 @@ type
   end;
 
   TTlsTcpStream = class(TInterfacedObject, IReader, IWriter, IStream,
-    ITcpStream, ITlsTcpStreamInfo)
+    ITcpStream, ITcpStreamRuntime, ITlsTcpStreamInfo)
   private
     FInner: ITcpStream;
     FIStream: IStream;
     FStream: TSSLStream;
     FClosed: Boolean;
     function TimeoutMsFromDeadline(const ADeadline: TDeadline): Integer;
+    function InnerRuntime: ITcpStreamRuntime;
   public
     constructor Create(const AInner: ITcpStream; const AStream: IStream);
     destructor Destroy; override;
@@ -78,6 +79,16 @@ type
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
     procedure SetCancelToken(const AToken: INetCancelToken);
+    { ITcpStreamRuntime — required so H1 client PoolGet health probe works on
+      HTTPS (RH-1). Without this, PooledConnectionIsReusable always fails and
+      every https request re-dials. Probe delegates to inner TCP; if data is
+      seen the pool discards the connection (ciphertext stolen only on discard). }
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
     function SelectedALPN: string;
   end;
 
@@ -338,6 +349,65 @@ begin
     Result := FStream.GetSelectedALPN
   else
     Result := '';
+end;
+
+function TTlsTcpStream.InnerRuntime: ITcpStreamRuntime;
+begin
+  Result := nil;
+  if FInner <> nil then
+    Supports(FInner, ITcpStreamRuntime, Result);
+end;
+
+function TTlsTcpStream.NativeSocketHandle: PtrUInt;
+var
+  LRuntime: ITcpStreamRuntime;
+begin
+  LRuntime := InnerRuntime;
+  if LRuntime <> nil then
+    Result := LRuntime.NativeSocketHandle
+  else
+    Result := 0;
+end;
+
+procedure TTlsTcpStream.SetBlocking(const ABlocking: Boolean);
+var
+  LRuntime: ITcpStreamRuntime;
+begin
+  LRuntime := InnerRuntime;
+  if LRuntime <> nil then
+    LRuntime.SetBlocking(ABlocking);
+end;
+
+function TTlsTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+var
+  LRuntime: ITcpStreamRuntime;
+begin
+  ARead := 0;
+  if FClosed or (FInner = nil) then
+    Exit(tsiorClosed);
+  LRuntime := InnerRuntime;
+  if LRuntime = nil then
+    { No probe path — report idle so pool can keep the socket; next I/O
+      still fails closed peers via RoundTrip retry. }
+    Exit(tsiorWouldBlock);
+  { Delegate to TCP: pool health only needs "any peer activity?" WouldBlock
+    means idle/live. Ok/Closed → caller discards (does not re-pool). }
+  Result := LRuntime.TryRead(ABuf, ACount, ARead);
+end;
+
+function TTlsTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LRuntime: ITcpStreamRuntime;
+begin
+  AWritten := 0;
+  if FClosed or (FInner = nil) then
+    Exit(tsiorClosed);
+  LRuntime := InnerRuntime;
+  if LRuntime = nil then
+    Exit(tsiorWouldBlock);
+  Result := LRuntime.TryWrite(ABuf, ACount, AWritten);
 end;
 
 end.

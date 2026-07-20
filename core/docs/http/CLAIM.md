@@ -52,7 +52,7 @@
 | Residual | 说明 |
 |----------|------|
 | H2 package scale | 有 S3 mux 证据；非 scale-ready 包 |
-| HTTPS keep-alive pool | Q3-3 smoke 未证明 reuse；正确性单次绿 |
+| HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |

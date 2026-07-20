@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**R0 / Parity Plus STOP**：维持 H1 epoll scale-ready；见 `CLAIM.md`）
+**Updated**: 2026-07-20（**RH-1**：HTTPS TLS pool reuse fixed；Parity Plus STOP + residual harden）
 
 ---
 
@@ -891,6 +891,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | **RH-1**：`TTlsTcpStream` + `ITcpStreamRuntime` → HTTPS keep-alive pool reuse；smoke accepts=1 |
 | 2026-07-20 | **R0 / Parity Plus STOP**：维持 H1 epoll scale-ready；`CLAIM.md` 冻结；H2P parked |
 | 2026-07-20 | **Q3-3 / Era Q3 Done**：HTTPS smoke 吞吐/延迟 + residual |
 | 2026-07-20 | **Q3-2 landed**：timeout/cancel/413/431 Go 语义矩阵（`test_http_q3_matrix` 6/6 0 unfreed） |
