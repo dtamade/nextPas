@@ -264,10 +264,12 @@ Optional readiness inventory (not a promotion):
 ## 5. Default execution queue (after confirmation)
 
 1. **D0** done.
-2. **D1.a–D1.d** done; **18-gate Windows `ci-matrix`** promoted (2026-07-19); keep wine + GHA green.
+2. **D1.a–D1.d** done; Windows **`ci-matrix` expanded through 27 platform gates** (+watch promote Batch-21b; multi-dir Batch-23); keep wine + GHA green.
 3. **D2.a–D2.c** done; **9-gate macOS `focused-runtime`** (+memory, Batch-5B); keep GHA matrix green.
 4. **D3.a–D3.d** done (signal compile, secure-zero permanent fallback, dual-IO owner-only, freetype stay); D3.e remains Won't.
-5. **D4/D5** opportunistic / owner-gated.
+5. **Windows watch expand series closed** (2026-07-21): S1–S3 + multi-dir + L2 multi-path/AddTree; **no `bWatchSubtree`**.
+6. **D4/D5** opportunistic / owner-gated.
+7. **Standing default:** §4 maintenance gates + keep Windows 27-gate / macOS 9-gate green. New platform work only with consumer pain or named owner (FreeBSD/Android/D5).
 
 ---
 
@@ -339,7 +341,10 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **test**: watch smoke two-dir multi-dir events + multi-event count loop; diagnostics pending_count. |
 | 2026-07-20 | **test(fs)**: L2 `test_fs_watch_wine` hard create + two-dir multi-path on real Windows; Wine soft OK (consumes platform multi-dir). |
 | 2026-07-21 | **chore**: platform watch smoke diag gated by `NEXTPAS_WATCH_DEBUG=1` (quiet default CI). |
-| 2026-07-21 | **test(fs)**: L2 AddTree nested create via multi-dir walk (no bWatchSubtree); fits WIN_MAX=8. |
+| 2026-07-21 | **test(fs)**: L2 AddTree nested create via multi-dir walk (no bWatchSubtree); fits WIN_MAX=8. Landed `1790012ef`. |
+| 2026-07-21 | **GHA AddTree evidence**: run [29759582229](https://github.com/dtamade/nextPas/actions/runs/29759582229) @ `1790012ef` — steps **`Run Windows runtime matrix` = success** and **`L2 process/fs/path/env Windows min-set` = success** (suite includes `l2.fs.watch` / AddTree). Local wine-runtime-smoke **6/0**. Async Windows native step hung on this SHA (pre-Q38; **net/async**, not platform evidence). |
+| 2026-07-21 | **Decision (recursive)**: RDCW `bWatchSubtree=True` **out of scope** for v1 product path. Platform always arms with `bWatchSubtree=False`. Tree watch = L2 `AddTree` walk + multi-`Add` only (inotify-parity, WIN_MAX=8). Reopen only via explicit consumer batch + design revise. See [watch-windows-design.md](watch-windows-design.md). |
+| 2026-07-21 | **Watch series closeout**: Batch-15 S1–S3 + Batch-22/23 multi-dir + L2 multi-path/AddTree **done**. **27 platform-gate** matrix + L2 `l2.fs.watch` host-windows green. **No further platform.watch expand batch** unless consumer pain. Next: standing maintenance (§4); D4/D5 opportunistic / owner-gated. |
 
 ---
 
