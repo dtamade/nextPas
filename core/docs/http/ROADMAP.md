@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**Era S3 Done**：S3-3 H1 对照 + H2 epoll would-block 修；NEXT=STOP）
+**Updated**: 2026-07-20（**Parity Plus 开波**：Era G/E/Q3；NEXT=**G0 re-land** + G1/G2）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **STOP until demand**（Era S3 Done） |
+| **下一执行点** | **G0** re-land Parity→main → **G1** lane → **G2** REPRO（Parity Plus） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -720,10 +720,10 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | **Q1-3** | Observability 最小 seam（原 N3/A3） | **landed** |
 | **Q1-4** | H1 长连接写失败 / backpressure 契约 | **landed** |
 
-**Q1-1 Evidence**：CONTRACT §4.1；SSE Op=`sse`。  
-**Q1-2 Evidence**：CONTRACT §4.2；multipart FromReader。  
-**Q1-3 Evidence**：CONTRACT §4.3；metrics obs。  
-**Q1-4 Evidence**：CONTRACT §4.4；既有 real-socket/poll drain 测 + `H1 write/backpressure contract source locks`；与 S1-1 drain 路径一致。  
+**Q1-1 Evidence**：CONTRACT §4.1；SSE Op=`sse`。
+**Q1-2 Evidence**：CONTRACT §4.2；multipart FromReader。
+**Q1-3 Evidence**：CONTRACT §4.3；metrics obs。
+**Q1-4 Evidence**：CONTRACT §4.4；既有 real-socket/poll drain 测 + `H1 write/backpressure contract source locks`；与 S1-1 drain 路径一致。
 
 **Era Q1 Done when**：Q1-1..Q1-4 landed。 **Met.**
 
@@ -788,11 +788,55 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | `response_1k` | epoll | 45997 | 23863 | **1.93** |
 | `no_url` | threaded | 90131 | 24696 | 3.65（char） |
 
-**Q2-3 Verdict**：见 `BENCHMARKS.md` § Q2-3。允许 *Scale-ready (H1 server, Linux epoll)*；residual = p99 not instrumented、H2 S3 open、H3 Blocked、非跨机榜。
+**Q2-3 Verdict**：见 `BENCHMARKS.md` § Q2-3。允许 *Scale-ready (H1 server, Linux epoll)*；residual = p99 未与 Go 同 harness 对标（L1 仅 nextPas）、H2 有证据但非整包宣称、H3 Blocked、非跨机榜。
 
 **Era Q2 Done when**：Q2-1..Q2-3 landed。 **Met.**
 
-**Parity campaign（H1 server scale + Q1 质量）**：RPS + 连接阶梯 + Q1 **Met**；H2 scale / H3 **未宣称**。
+**Parity campaign（H1 server scale + Q1 质量）**：RPS + 连接阶梯 + Q1 **Met**；H2 scale evidence **Met**（S3）；H3 **未宣称**。
+
+---
+
+## Era G — Governance & deliverability（Parity Plus）
+
+目标：对标证据在 **共享 main** 可复核，而非单机 lane 聊天记录。
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **G0** | **in progress** | path-limited **re-land** Parity→main（main 可能被并行推进冲掉前次 land）；**push origin 需授权** |
+| **G1** | queued | `http` lane absorb 最新 main；behind≈0；路径干净 |
+| **G2** | queued | 发布级复现剧本 `REPRO.md`（RPS / p99 / ladder / H2 mux 各一条） |
+
+**G Done when**：Parity 在 main 上；REPRO 可跑；lane 收敛（push 可选）。
+
+## Era E — Evidence parity（延迟与多 workload）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **E1** | queued | Go comparator **p50/p99**（定义对齐 nextPas）；comparison 透传 |
+| **E2** | queued | p99 ≤ 2× Go 验收；不达标则收紧宣称 |
+| **E3** | queued | `--runs 3` 刷新官方表；ladder 抽查；关键 suite 0 unfreed |
+
+## Era Q3 — Production quality bar
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **Q3-1** | queued | keep-alive / H2 mux soak 泄漏证据 |
+| **Q3-2** | queued | 超时/取消/413/431 矩阵对齐 Go 语义 |
+| **Q3-3** | queued | H1 HTTPS smoke 吞吐/延迟 + residual |
+
+## Era H2P — H2 production（仅 E/Q3 后 + 需求）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **H2P-1..3** | parked | Go h2 同形对照 → 加压 → TLS-ALPN h2 |
+
+## Era R — 宣称评审
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **R0** | queued | 是否维持 H1-only scale-ready；p99 条件；对外 What we claim |
+
+**推荐路径**：`G0 → G1 → G2 → E1 → E2 → E3 → Q3-1 → Q3-2 → Q3-3 → (H2P) → R0 → STOP`
 
 ---
 
@@ -806,27 +850,23 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 想法 | 备注 |
 |------|------|
-| （latency 已升格 → **L1**；S3 用户指令开波 → **S3-1**） | 新想法只追加 |
+| （Parity Plus 已升格 → Era G/E/Q3） | 新想法只追加 |
 
 ---
 
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Era 0–8 landed；Era 8 已在 main
+1. Parity Q0–S3 在 http lane 完成；**main 可能缺 land → G0 re-land 优先**
 2. H3 Blocked — 跳过；禁止空 facade
-3. Parity Q0+S1-1+Q2-1 — epoll **2.20× Go**（runs=3 median `no_url`）
-4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
-5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯
-6. **Era Q2 Done** — comparator 刷新 + **Scale-ready (H1 server, Linux epoll)** 诚实宣称
-7. **Era S2 Done**（S2-1..S2-3）
-8. **L1 Met** — multi-conn p50/p99（nextPas）
-9. **Era S3 Done** — H2 multiplex ~3k req/s threaded+epoll；H1 对照表；勿假 H1/H2 scale-ready
-10. **NEXT = STOP until demand**
-11. 跨模块仅按本波 Land paths；path-limited landing only
+3. H1 scale-ready 宣称保留（本机证据）；p99 对标 = Era E
+4. **NEXT = G0**（re-land main）→ **G1** lane 收敛 → **G2** REPRO
+5. 然后 E1 Go p50/p99
+6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
+**有「对标 Go/Rust 质量」指令时：走 Era G→E→Q3。**
 
 ---
 
