@@ -84,6 +84,13 @@ ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer);           // TConfig or
 ConfigUnmarshal(LCfg, Registry, ServerTypeID, @LServer, 'server'); // server.Host, ...
 ```
 
+Nested records use `AddRecordField` and flatten keys under the field name
+(`Server.Host` → config key `server.Host` when the outer prefix is empty, or
+`app.server.Host` with prefix `app`). String arrays use `AddDynArrayField` and
+config keys `Tags.0`, `Tags.1`, ... (same as `SetStringArray` / `GetStringArray`).
+
+Runnable: `core/examples/nextpas.core.config/config_bind_patterns/` (`make run`).
+
 Builder priority rules:
 
 1. Defaults are always lowest priority, even if `AddDefault` appears later in
