@@ -238,7 +238,12 @@ procedure FailUnexpected(const E: Exception);
 { SoftFail (Go t.Error): record failure without aborting. Check*/Fail stay Fatal. }
 procedure SoftFail(const AMessage: string);
 procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string = '');
 procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);

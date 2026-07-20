@@ -601,9 +601,10 @@ begin
   CheckEqual(LResult.Failed, 1);
   CheckEqual(LResult.Passed, 0);
   CheckTrue(Pos('first soft', LResult.Results[0].Message) > 0,
-    'message starts with first soft fail');
-  CheckTrue(Pos('more soft', LResult.Results[0].Message) > 0,
-    'multi soft count annotated');
+    'message includes first soft fail');
+  CheckTrue(Pos('second soft', LResult.Results[0].Message) > 0,
+    'message includes all soft lines');
+  CheckTrue(Pos('third soft', LResult.Results[0].Message) > 0);
   LSuite := Default(TTestSuite);
 end;
 
@@ -651,7 +652,57 @@ begin
   LSuite.Test('body', @SoftFailBodyMultiOnly);
   CheckFalse(LSuite.RunWithResult(LResult));
   CheckContains(LResult.Results[0].Message, 'alpha');
-  CheckContains(LResult.Results[0].Message, '2 more soft');
+  CheckContains(LResult.Results[0].Message, 'beta');
+  CheckContains(LResult.Results[0].Message, 'gamma');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftCheckStringAndContains;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-str');
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckEqual('a', 'a');
+      SoftCheckContains('hello world', 'world');
+      SoftCheckFalse(False);
+      SoftCheckEqual('x', 'y', 'str soft');
+      SoftCheckContains('abc', 'zz', 'miss soft');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckContains(LResult.Results[0].Message, 'str soft');
+  CheckContains(LResult.Results[0].Message, 'miss soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftFailDoesNotFailFast;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LCfg: TTestConfig;
+  LRanSecond: Integer;
+begin
+  { SoftFail on first test must not stop suite under FailFast. }
+  LRanSecond := 0;
+  LSuite := TTestSuite.Create('soft-ff');
+  LCfg := DefaultConfig;
+  LCfg.FailFast := True;
+  LSuite.Config := LCfg;
+  LSuite.Test('soft1', procedure
+    begin
+      SoftFail('soft only');
+    end);
+  LSuite.Test('second', procedure
+    begin
+      Inc(LRanSecond);
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult), 'suite fails due to soft1');
+  CheckEqual(LRanSecond, 1, 'FailFast must not stop after SoftFail-only');
+  CheckEqual(LResult.Passed, 1);
+  CheckEqual(LResult.Failed, 1);
   LSuite := Default(TTestSuite);
 end;
 
@@ -2197,6 +2248,8 @@ begin
   LSuite.Test('SoftCheck helpers',             @TestSoftCheckHelpers);
   LSuite.Test('Check still Fatal',             @TestCheckStillFatal);
   LSuite.Test('SoftFail multi message',        @TestSoftFailMultiMessage);
+  LSuite.Test('SoftCheck string+contains',     @TestSoftCheckStringAndContains);
+  LSuite.Test('SoftFail does not FailFast',    @TestSoftFailDoesNotFailFast);
 
   if not LSuite.Run then
   begin

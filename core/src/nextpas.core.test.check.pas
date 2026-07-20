@@ -197,7 +197,12 @@ procedure FailUnexpected(const E: Exception);
   Check*/Fail remain Fatal (raise). }
 procedure SoftFail(const AMessage: string);
 procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string = '');
 procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = ''); overload;
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string = ''); overload;
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 
@@ -1221,10 +1226,27 @@ begin
   nextpas.core.test.base.SoftCheckTrue(ACondition, AMessage);
 end;
 
+procedure SoftCheckFalse(ACondition: Boolean; const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckFalse(ACondition, AMessage);
+end;
+
 procedure SoftCheckEqual(const AExpected, AActual: Int64;
   const AMessage: string);
 begin
   nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: string;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
+end;
+
+procedure SoftCheckContains(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckContains(AHaystack, ANeedle, AMessage);
 end;
 
 procedure Skip(const AReason: string);
