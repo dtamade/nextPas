@@ -818,7 +818,9 @@ begin
   LPos := 0;
   while LPos < LCpCount do
   begin
-    if MatchContraction(FCpsBuf, LPos, LCpCount, LMatchLen, LOff, LLen, LSkipCps, LSkipCount) then
+    { Fast reject: most codepoints never start a contraction (binary search once). }
+    if (FindContractionFirst(FCpsBuf[LPos]) >= 0) and
+       MatchContraction(FCpsBuf, LPos, LCpCount, LMatchLen, LOff, LLen, LSkipCps, LSkipCount) then
     begin
       AppendFromPool(AElements, LCount, LOff, LLen, FCpsBuf[LPos]);
       for LSkipI := 0 to LSkipCount - 1 do
@@ -1130,6 +1132,8 @@ begin
   end;
   if IsAsciiString(AText) then
     LNormalized := AText
+  else if QuickCheckNFD(AText) then
+    LNormalized := AText
   else
     LNormalized := NFD(AText);
   LCount := CollectElementsInto(LNormalized, FElsA);
@@ -1161,8 +1165,9 @@ begin
   end
   else
   begin
-    LNA := NFD(A);
-    LNB := NFD(B);
+    { Avoid second full normalize when input is already NFD. }
+    if QuickCheckNFD(A) then LNA := A else LNA := NFD(A);
+    if QuickCheckNFD(B) then LNB := B else LNB := NFD(B);
   end;
 
   LCountA := CollectElementsInto(LNA, FElsA);
