@@ -10,7 +10,7 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
 - **Windows x86_64**: durable **`ci-matrix`** for documented **20-gate** set on GHA
   `test-windows-runtime` (promoted including `platform.error` + `platform.fmt` +
   `platform.info`; GHA pass=20 run 29718874441 @ `534d5e7c4`). Wine runtime smoke
-  secondary (**22** matrix modules, +args +resource).
+  secondary (**24** matrix modules, +watch UNSUPPORTED smoke +pty ConPTY smoke).
   Outside matrix: deeper AcceptEx/ConnectEx; signal is
   forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
   Forced Windows compile gates remain the compile-coherence boundary; remaining
@@ -28,7 +28,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 20-gate set; wine 22 secondary | expand matrix; keep GHA+wine green |
+| Windows x86_64 | **ci-matrix** 20-gate set; wine 24 secondary | expand matrix; keep GHA+wine green |
 | macOS | **focused-runtime** 9-gate set (D2.c + memory) | keep GHA matrix green; no full-host parity |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -51,10 +51,11 @@ Focused runtime gates use heaptrc for leak-proof validation.
 
 ## Windows matrix evidence
 
-**Wine smoke** (Win64 PE under Wine; secondary; **22** matrix modules): time,
+**Wine smoke** (Win64 PE under Wine; secondary; **24** matrix modules): time,
 memory, sync, thread, io, process, files, fs, path, env, mmap, random, socket,
-error, fmt, info, which, dl, pipe, args, resource, io.reactor.iocp. Not covered:
-signal, console, freetype/net, pty, watch (watch_create UNSUPPORTED under Wine).
+error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
+pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
+Not covered: signal, console, freetype/net.
 
 **Real Windows ci-matrix (20)** via `platform-windows-ci-matrix.sh`: time, memory,
 sync, thread, io, process, files, fs, path, env, mmap, random, socket, error,

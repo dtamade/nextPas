@@ -34,13 +34,15 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (22-module matrix, including
-`platform.args` and `platform.resource`), and durable GHA **`ci-matrix`** for
-the **documented 20-gate set** in `platform-windows-ci-matrix.sh` / `.ps1`
-(17 suite dirs including `platform.info` + poller/io/socket real gates) under
-job `test-windows-runtime` on `windows-latest`.
+Windows compile gates, Wine runtime smoke (24-module matrix, including
+`platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
+GHA **`ci-matrix`** for the **documented 20-gate set** in
+`platform-windows-ci-matrix.sh` / `.ps1` (17 suite dirs including `platform.info`
++ poller/io/socket real gates) under job `test-windows-runtime` on
+`windows-latest`.
 
-Promoted after GHA run **29718874441** @ `534d5e7c4` — `summary: pass=20 fail=0`.
+Promoted after GHA run **29718874441** @ `534d5e7c4` — `summary: pass=20 fail=0`
+(later runs may show total=21 when `mem.host_runtime` is also listed).
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -61,9 +63,10 @@ macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
 `test-macos` (fail-closed step; ROADMAP D2.c + Batch-5B promote):
 `platform.{time,sync,thread,files,path,env,error,socket,memory}`.
 
-Promoted after GHA run **29696318492** @ `d160cbc46` — fail-closed matrix
-step conclusion **success** (script exit 0 ⇒ pass=9 fail=0). Windows
-`test-windows-runtime` on the same SHA: pass=19 fail=0.
+Promoted after GHA run **29696318492** @ `d160cbc46` (pass=9). Re-confirmed
+platform fail-closed matrix **pass=10 fail=0** on run **29719632518** @
+`918241bd4` (overall `test-macos` job may still fail on non-platform async
+inventory, e.g. `net.async.dial` accept4 — not platform matrix evidence).
 
 Darwin `platform.memory` notes (honest residual, not a demotion):
 - aligned alloc uses SysGetMem fallback (not posix_memalign) on Darwin
