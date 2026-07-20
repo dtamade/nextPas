@@ -163,3 +163,4 @@
 | 2026-07-20 | R23 File lock L2；Scale 9.5 / 综合 9.5；ifile 21；测试 ≈926 |
 | 2026-07-20 | R24-PG NewProcessGroup/KillTree；R25 fs.Watch；Scale 9.7 / 综合 9.6 |
 | 2026-07-20 | R24-EV L2 wine×4 + SCORECARD；综合 9.7 |
+| 2026-07-20 | R27 Capture ~1.6ms (~1.3× Go；stdout-only + drain fast-path) |

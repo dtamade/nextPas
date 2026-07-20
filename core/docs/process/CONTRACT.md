@@ -29,7 +29,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ProcessSucceeded(AOut): Boolean` | 非 TimedOut、非 OutputLimited 且 psExited 且 ExitCode=0 |
 | `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出（不检查 exit） |
 | `RunChecked(APath, AArgs): TProcessOutput` | 同步执行，非成功退出抛 EProcessError |
-| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout（不检查 exit） |
+| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout（不检查 exit）；**stderr→null**（非 dual-pipe） |
 | `MustCapture(APath, AArgs): string` | 同步执行返回 stdout；非成功退出抛 EProcessError |
 | `LookPath(AName): string` | 在 PATH 中搜索可执行文件；含目录部分时校验可执行性 |
 | `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置；EnvAdd 默认继承父环境（overlay） |
@@ -145,3 +145,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.15 | R22 CancelToken 贯通 Wait/Status；WaitWithOutput 忙等修复；deep 24 | Claude |
 | 2026-07-20 | 2.16 | R24 NewProcessGroup/KillTree；deep 26 | Claude |
 | 2026-07-20 | 2.17 | R26 WaitGraceful×ProcessGroup；deep 27 | Claude |
+| 2026-07-20 | 2.18 | R27 Capture stdout-only + WaitWithOutput drain 加速 | Claude |

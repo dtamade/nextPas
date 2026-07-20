@@ -81,23 +81,24 @@ make -C core/benchmarks/nextpas.core.process/bench_process run
 cd core/benchmarks/nextpas.core.process/bench_process/compare_go && go run main.go
 ```
 
-### nextpas（2026-07-20 刷新）
+### nextpas（2026-07-20 R27）
 
 | 项 | n | total | avg |
 |----|---|-------|-----|
-| LookPath(sh) | 200 | 9 ms | ~45 µs |
-| Command(/bin/true).Status | 50 | 50 ms | ~1.0 ms |
-| Capture(echo x) | 50 | 597 ms | ~12 ms |
+| LookPath(sh) | 200 | 8 ms | ~40 µs |
+| Command(/bin/true).Status | 50 | 55 ms | ~1.1 ms |
+| Capture(echo x) | 50 | 78 ms | **~1.6 ms** |
 
 ### Go 对照（同机）
 
 | 项 | n | avg |
 |----|---|-----|
-| exec.LookPath(sh) | 200 | ~46 µs |
-| exec.Command(true).Run | 50 | ~0.93 ms |
-| exec.Command(echo).Output | 50 | ~1.3 ms |
+| exec.LookPath(sh) | 200 | ~41 µs |
+| exec.Command(true).Run | 50 | ~0.76 ms |
+| exec.Command(echo).Output | 50 | ~1.2 ms |
 
-LookPath 与 Status 量级接近 Go。`Capture` 路径更重（管道 drain + 框架），高于 Go `Output` 属预期，非 apple-to-apple。
+R27：`Capture` 改 stdout-only（stderr→null）+ WaitWithOutput poll 1ms / reaped 后 0ms、sleep 100µs。  
+相对 Go Capture ~**1.3×**（优化前 ~10×）。
 
 ---
 
