@@ -1,6 +1,6 @@
 # T2 Inventory — nextpas.core.lockfree
 
-> **Status**: Q4 audit (2026-07-20)
+> **Status**: Q4 audit (2026-07-20) · **I1 honesty pass** (2026-07-20 night)
 > **Authority**: tiers abstract CONTRACT §0.2; H3-2 production subset remains §0.3 only
 > **Rule**: T2 never enters default `uses nextpas.core.lockfree` facade
 
@@ -10,6 +10,20 @@
 2. Otherwise pick tier from table; open unit header for progress truth.
 3. Name contains LockFree/Concurrent ≠ lock-free progress (see `deque_lf`).
 4. Unlisted future units: default **Available** until audited; Experimental if RTM/NUMA/formal-only.
+
+## I1 honesty pass (2026-07-20)
+
+Spot-check of inventory **Progress** vs unit headers / lock signals:
+
+| Finding | Action |
+|---------|--------|
+| `elimination_stack` was labeled lock-based | **Fixed** → Treiber + elimination (LF) |
+| `hashtable` header: LF reads + writer lock | **Fixed** → more precise progress |
+| `cowarray` / `rcu` / `bitset` / `actor` / `forkjoin` | **Fixed** → mechanism-level one-liners |
+| `skiplist` / `dag` / `lfu` | Inventory already honest (locks); OK |
+| Remaining `lock-based concurrent (read unit header)` | Still valid **placeholder** until per-unit deep pass; prefer opening the unit |
+
+Also **C1** (same day): `rg` for production `Atomic*(` outside `nextpas.core.atomic*` → **0** calls; lockfree preferred nail green.
 
 ## Q4 decision — do NOT expand H3-2
 
@@ -44,12 +58,12 @@ T1 units (not listed): queues, stack, deque, ebr/hazard, channel(+spsc), selecto
 
 | Unit | Tier | Progress (honest) | Tests | Notes |
 |------|------|-------------------|-------|-------|
-| `actor` | Available | lock-based concurrent (read unit header) | yes |  |
+| `actor` | Available | MPSC mailbox + actor-system locks | yes | sequential handler |
 | `adjmap` | Available | lock-based concurrent (read unit header) | yes |  |
 | `arccache` | Guarded | lock concurrent | yes |  |
 | `bag` | Guarded | LF ring (MPMC seq) + wait | yes | H3-2 production |
 | `barrier` | Guarded | sync barrier | yes |  |
-| `bitset` | Available | lock-based concurrent (read unit header) | yes |  |
+| `bitset` | Available | atomic bit CAS (+ grow lock) | yes |  |
 | `bloom` | Guarded | atomic bit array (approx) | yes |  |
 | `bplus` | Available | lock concurrent tree | yes |  |
 | `btree` | Available | lock concurrent tree | yes |  |
@@ -59,23 +73,23 @@ T1 units (not listed): queues, stack, deque, ebr/hazard, channel(+spsc), selecto
 | `counter` | Guarded | atomic counter | yes |  |
 | `counting_bloom` | Guarded | atomic counters | yes |  |
 | `countminsketch` | Available | lock-based concurrent (read unit header) | yes |  |
-| `cowarray` | Available | lock-based concurrent (read unit header) | yes |  |
+| `cowarray` | Available | COW CAS publish (read path uncontended) | yes | retired free-list spin |
 | `crdt` | Available | lock-based concurrent (read unit header) | yes |  |
 | `cuckooset` | Available | lock-based concurrent (read unit header) | yes |  |
-| `dag` | Available | lock-based concurrent (read unit header) | yes |  |
+| `dag` | Available | per-node locks (NOT LF) | yes | header honest |
 | `deque_lf` | Available | spin-lock (NOT LF; name misleading) | yes | misleading name: spin-lock |
 | `disjointset` | Available | lock-based concurrent (read unit header) | yes |  |
-| `elimination_stack` | Available | lock-based concurrent (read unit header) | yes |  |
-| `exchanger` | Guarded | lock-based concurrent (read unit header) | yes |  |
+| `elimination_stack` | Available | LF Treiber + elimination array | yes | Hendler et al. |
+| `exchanger` | Guarded | atomic state machine (slot CAS) | yes |  |
 | `fenwick` | Available | lock-based concurrent (read unit header) | yes |  |
 | `fibheap` | Available | lock-based concurrent (read unit header) | yes |  |
-| `flatcombining` | Available | lock-based concurrent (read unit header) | yes |  |
-| `forkjoin` | Available | lock-based concurrent (read unit header) | yes |  |
+| `flatcombining` | Available | combiner lock + publication array | yes |  |
+| `forkjoin` | Available | work-stealing task pool | yes |  |
 | `graph` | Available | lock-based concurrent (read unit header) | yes |  |
 | `hashmap.numa` | Experimental | NUMA research | no | T3/R8 research path; no dedicated focused dir |
 | `hashmap.rtm` | Experimental | RTM research | no | T3/R8 research path; no dedicated focused dir |
 | `hashset` | Available | lock-based concurrent (read unit header) | yes |  |
-| `hashtable` | Available | lock-based concurrent (read unit header) | yes |  |
+| `hashtable` | Available | LF readers + writer spinlock / grow | yes |  |
 | `hyperloglog` | Available | lock-based concurrent (read unit header) | yes |  |
 | `intervaltree` | Available | lock-based concurrent (read unit header) | yes |  |
 | `leakybucket` | Guarded | lock-based concurrent (read unit header) | yes |  |
@@ -95,7 +109,7 @@ T1 units (not listed): queues, stack, deque, ebr/hazard, channel(+spsc), selecto
 | `radix` | Available | lock-based concurrent (read unit header) | yes |  |
 | `ratelimit` | Guarded | lock-based concurrent (read unit header) | yes |  |
 | `rbtree` | Available | lock concurrent tree | yes |  |
-| `rcu` | Available | lock-based concurrent (read unit header) | yes |  |
+| `rcu` | Available | RCU read uncontended + publish/grace | yes |  |
 | `reservoirsampling` | Available | lock-based concurrent (read unit header) | yes |  |
 | `ringbuffer` | Guarded | concurrent ring (see unit) | yes |  |
 | `roaring_bitmap` | Available | lock-based concurrent (read unit header) | yes |  |
@@ -106,8 +120,8 @@ T1 units (not listed): queues, stack, deque, ebr/hazard, channel(+spsc), selecto
 | `scalable_bloom` | Guarded | lock-based concurrent | yes |  |
 | `scapegoat` | Available | lock-based concurrent (read unit header) | yes |  |
 | `semaphore` | Guarded | CAS spin/wait | yes |  |
-| `skiplist` | Available | lock-based concurrent | yes |  |
-| `skiplist_map` | Available | lock-based concurrent | yes |  |
+| `skiplist` | Available | per-level rwlock (NOT LF) | yes | header honest |
+| `skiplist_map` | Available | per-level rwlock (NOT LF) | yes |  |
 | `slidingwindow` | Available | lock-based concurrent (read unit header) | yes |  |
 | `snapshot` | Available | lock-based concurrent (read unit header) | yes |  |
 | `sortedset` | Available | lock-based concurrent (read unit header) | yes |  |

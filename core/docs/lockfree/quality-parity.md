@@ -137,7 +137,10 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **done**：T2 长尾收口 — 全部 `lockfree*.pas` 热路径 preferred；`mpsc` 私有 `LoadNode/StoreNode/ExchangeNode`（去 Atomic 前缀）；residual **0**
 - **M6 done**：生产 residual 回归钉 `test_lockfree_preferred_path`；§5 Q1-a 扫描刷新；Q3-b Close 幂等正文对齐
 - **M7 done**：lockfree 测试/bench harness preferred `atomic_*`（`test_lockfree` / stress / 各 T2 gate 协调标志）；source-contract 对齐 Q5 Go/Rust 对照源
-- **剩余**：无（生产 + 本仓 lockfree 测试调用形）；legacy public API 仍可在 `atomic.compat` 保留
+- **V1 done**：`verify-t1` + `verify-h3-consumers` 绿；`test_atomic` source-contract 对齐 bench platform 字段（`OSName/CPUName`）
+- **I1 done**：`t2-inventory` progress 诚实抽检 + 关键误标修正（elim stack / cow / rcu / hashtable…）
+- **C1 done**：core 生产 `Atomic*(`（排除 `atomic*` 自身）再扫 **0**；`test_lockfree_preferred_path` 绿
+- **剩余**：inventory 长尾 placeholder 可按需加深；legacy public API 仍可在 `atomic.compat` 保留
 
 ### Q3-a checklist
 

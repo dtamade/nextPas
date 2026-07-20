@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q26 + Q24B（Windows native smoke fail-closed candidate）
+> 版本：M3+B1–B4 + Q1–Q33（Windows candidate 套件扩容；对标 ~8.3）
 
 ## 模块概览
 

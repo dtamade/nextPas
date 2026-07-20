@@ -89,5 +89,22 @@ bench/cross-language/bench_pool_go
 bench/cross-language/bench_pool_pascal
 bench/cross-language/bench_pool_rust
 bench/arena/arena
+bench/arena/arena2
+bench/arena/bench_sort_sizes
 bench/*/target/
+
+# Scorecard / root microbench compiled binaries (rebuild from sources; keep *.pas/*.go)
+arrayops/*_bench
+bitrotate/*_bench
+bytewise/*_bench
+charclass/*_bench
+memalloc/*_bench
+random/*_bench
+setmember/*_bench
+bytearray/*_bench
+bench/*/*_bench
+bench/*/*_bench_go
+bench/sortfast/sortint_bench
+bench/sortfast/sortint_bench_go
+
 tests/toolchain/toolchain-*-fixture/

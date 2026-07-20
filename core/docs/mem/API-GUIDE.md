@@ -93,8 +93,8 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 | owned 串 + size 表（`TJsonOwnedStr` / `TTomlOwnedBuf`） | tui inject 须观察 Free（永久 WAIVE FreeMemOf） |
 
 样板：builders · json/yaml/toml/xml/ini/csv · collections.node/hashmap/swiss。  
-**mem-owner**（Era J）：单 slab 后备 `LocalArena` / `TBlockPool` / `TFixedPool` Destroy 用 `FreeMemOf`（已知 alloc size）。  
-**禁止**全仓机械替换；多段 slab/chunked 不默认扫。
+**mem-owner**（Era J/K）：单 slab + 已记录 size 的 growable/chunked/stack/ring 用 `FreeMemOf`。  
+**禁止**全仓机械替换；无 size 字段的复杂 slab 路径不默认扫。
 
 ## 三套 API 体系
 

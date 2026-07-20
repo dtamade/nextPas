@@ -15,12 +15,14 @@
 ## What native Windows host evidence covers
 
 1. **Runner**: `windows-latest` with FPC trunk **x86_64-win64** (core-ci snapshot install).
-2. **Suite (async smoke)**:
+2. **Suite (async smoke, Q33 expanded)**:
    - `test_async_windows_compile_gate` / `test_async_windows_contract`
    - `test_poller_windows_runtime_smoke`
    - `test_reactor_iocp_wine` (on native host)
    - `test_async_accept_connect_smoke`
-3. **CI policy**: fail-closed after streak ≥14 consecutive step successes (Q24B).
+   - **Q33+**: `test_net_async_dial`, `test_net_async_resolve`, `test_net_async_udp`,
+     `test_net_async_pool`, `test_net_error_classify`, `test_net_cancel_bridge`
+3. **CI policy**: fail-closed (Q24B). Still **candidate** until multi-week green after expansion.
 
 ## Current CI reality
 

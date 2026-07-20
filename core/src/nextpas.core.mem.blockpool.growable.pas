@@ -141,6 +141,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
@@ -349,7 +352,7 @@ begin
     if PtrUInt(LMask) > (High(PtrUInt) - LAddr) then
     begin
       if FAllocator <> nil then
-        FAllocator.FreeMem(LRaw)
+        FreeMemOf(FAllocator, LRaw, LAllocSize)
       else
         System.FreeMem(LRaw);
       Exit(False);
@@ -456,12 +459,14 @@ end;
 procedure TGrowingBlockPool.FreeSegment(aIndex: SizeInt);
 var
   LRaw: Pointer;
+  LRawSize: SizeUInt;
   LBlocks: SizeUInt;
 begin
   if (aIndex < 0) or (aIndex > High(FSegments)) then
     Exit;
 
   LRaw := FSegments[aIndex].Raw;
+  LRawSize := FSegments[aIndex].RawSize;
   LBlocks := FSegments[aIndex].Blocks;
 
   FSegments[aIndex].Raw := nil;
@@ -478,7 +483,7 @@ begin
     Exit;
 
   if FAllocator <> nil then
-    FAllocator.FreeMem(LRaw)
+    FreeMemOf(FAllocator, LRaw, LRawSize)
   else
     System.FreeMem(LRaw);
 end;

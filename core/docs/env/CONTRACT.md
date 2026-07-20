@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.8
+**版本**：1.9
 
 ---
 
@@ -80,10 +80,25 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 69 | R19 + R22 mixed Expand / HasEnv empty |
-| **合计** | **1 个测试目录** | heaptrc 0 leak |
+| test_os_env | **70** | R31 Expand/Keys 边界 |
+| test_os_env_wine | **3** | wine 最小生产集 |
+| **合计** | **2 个测试目录** | heaptrc 0 leak |
 
 ---
+
+## Windows / Unix 支持矩阵（M2-W4）
+
+完整一眼表：[`../process/WIN.md`](../process/WIN.md)。
+
+| 能力 | Linux/Unix | Windows | 备注 |
+|------|------------|---------|------|
+| Get/Set/Unset/Has/Try | Done | Done | 名大小写：Win **不区分** |
+| Expand `$VAR` / `${VAR}` | Done | Done | wine：set/unset/expand |
+| Expand `%VAR%` | Done | Done | Win 风格 |
+| UserHome/Cache/Config/Data | XDG | `%USERPROFILE%` / `%LOCALAPPDATA%` / `%APPDATA%` | Cache≡Data 根见 README |
+| ClearEnv | Done | Done | INV-11 |
+
+**原则**：经 `platform.env`；无 silent fail。
 
 ## 变更记录
 
@@ -98,3 +113,4 @@
 | 2026-07-19 | 1.6 | ClearEnv（INV-11）；R16 对标 | Claude |
 | 2026-07-19 | 1.7 | R17 质量表；测试 55 | Claude |
 | 2026-07-20 | 1.8 | R22 mixed Expand + HasEnv empty；测试 69 | Claude |
+| 2026-07-20 | 1.9 | R31 70；M2-W4 Win 矩阵 + wine 3 | Claude |

@@ -6,7 +6,7 @@
 **标杆**：Go `os` / `os/exec` / `path/filepath`；Rust `std::{fs,process,path,env}`
 
 > 对标的是**能力 + 边界语义 + 测试强度**，不是符号名逐字复制。  
-> **Host 状态：Maintenance**（见 ROADMAP M0/M1）。剩余主线是 **M2 Windows Wave（platform 主责）**，不是再刷 Host 分数。
+> **Host 状态：Maintenance**（M0/M1）。**M2 Windows usable：Done**（W1–W4；truth=`wine-runtime-smoke`）。下一可选：**M3 host-windows CI**。一眼表：[WIN.md](./WIN.md)。
 
 ---
 
@@ -124,33 +124,34 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | fs.errors 磁盘满/OOM | **已修**：ENOSPC/ENOMEM、Win DISK_FULL → `EResourceExhaustedError` |
 | 历史 polish（RemoveAll symlink / Append / pread） | **复核已修复** |
 
-### 仍 Deferred（非阻塞；见 ROADMAP M2）
+### 仍 Deferred（非阻塞）
 
 | 项 | 性质 |
 |----|------|
 | ExtraFd / Credential Win | **M2-W3 DONE**（明文 fail-closed） |
 | Win platform.watch Poll | **M2-W1 DONE**（S2 RDCW；Wine soft） |
+| M2 文档/wine 收敛 | **M2-W4 DONE**（[WIN.md](./WIN.md) + min set 24） |
 | 真 Windows host CI | **M3**；基础设施 |
 | Status/spawn 1.0× Go | **非目标**（收益递减） |
 
 ### 外部债 / 证据
 
-- **wine-runtime-smoke**（2026-07-20 R33）：  
-  - process **8** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
-  - 详见 [`SCORECARD.md`](./SCORECARD.md)
+- **wine 最小生产集**（M2-W4，2026-07-20）：  
+  - process **11** / fs **3** / path **4** / os.env **3** / fs.watch **3** = **24**  
+  - `bash core/tests/run_l2_wine_min_set.sh` · [WIN.md](./WIN.md) · [SCORECARD.md](./SCORECARD.md)
 
 ---
 
 ## 维护策略（口径）
 
-**状态：Host Maintenance（M0/M1）。** Essential Host 完成；R16–R34 序列**封顶**。
+**状态：Host Maintenance + M2 Done（wine usable）。** Essential Host 完成；R16–R34 与 W1–W4 **封顶**。
 
 **新工作必须贴标签**（`bug` / `win-l0` / `win-l2` / `ci` / `docs`），见 [`ROADMAP.md`](./ROADMAP.md) §5。  
-Win 能力用 **W1–W4**，不用 R35+。
+默认不接无标签 polish；真 Windows CI 走 **M3**。
 
 **周报模板：**
 
-> process/fs/path/env：Host Maintenance。Quality 9.9 / Scale 9.8。Win 见 ROADMAP M2。
+> process/fs/path/env：Host Maintenance；M2 Win(wine) Done。Quality 9.9 / Scale 9.8。可选 M3 host-windows。
 
 ---
 
@@ -182,3 +183,4 @@ Win 能力用 **W1–W4**，不用 R35+。
 | 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |
 | 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
 | 2026-07-20 | **M2-W3**：ExtraFd/Credential Win 支持矩阵 + fail-closed |
+| 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24；E2 Done（wine truth） |

@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：2.8
+**版本**：2.9
 
 ---
 
@@ -74,10 +74,24 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_path | 69 | R19 + R22 Clean/Rel/Dir 边 |
-| **合计** | **1 个测试目录** | heaptrc 0 leak |
+| test_path | **70** | R31 边界表 |
+| test_path_wine | **4** | wine 最小生产集 |
+| **合计** | **2 个测试目录** | heaptrc 0 leak |
 
 ---
+
+## Windows / Unix 支持矩阵（M2-W4）
+
+完整一眼表：[`../process/WIN.md`](../process/WIN.md)。
+
+| 能力 | Linux/Unix | Windows | 备注 |
+|------|------------|---------|------|
+| Join / Clean / Rel / Match | Done | Done | 分隔符 `/` 与 `\` |
+| IsAbsolute / Volume | Done | Done（盘符） | wine：IsAbs-Volume |
+| ToSlash / FromSlash | Done | Done | 可移植归一 |
+| StripPrefix / FileStem | Done | Done | wine：StripPrefix |
+
+**原则**：纯字符串层无 stub；语义差异写在 INV-5/7。
 
 ## 变更记录
 
@@ -93,3 +107,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.6 | R16 ToSlash/SplitList/Volume/Stem/StripPrefix | Claude |
 | 2026-07-19 | 2.7 | R17 质量表；测试 56 | Claude |
 | 2026-07-20 | 2.8 | R22 Clean/Rel/Dir 边界用例；测试 69 | Claude |
+| 2026-07-20 | 2.9 | R31 边界表 70；M2-W4 Win 矩阵 + wine 4 | Claude |

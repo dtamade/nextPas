@@ -2,6 +2,8 @@
 
 环境变量操作模块。
 
+**开发地图**：[`../process/ROADMAP.md`](../process/ROADMAP.md) — Host Done；**M2 Win(wine) Done**。  
+**Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
 ## 模块定位

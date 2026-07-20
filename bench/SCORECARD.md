@@ -1,10 +1,17 @@
 # nextPas Benchmark Scorecard
 
-> **子集刷新 (2026-07-19)**: 见 `core/docs/bench/scorecard-subset-2026-07-19.md` (boolsum / fncall)。本文件全量数字仍为 2026-07-02 基线。
+> **权威状态（2026-07-20）**
+>
+> - **当前可复现子集**：`core/docs/bench/scorecard-tracks.txt`（**11** track）、
+>   `core/docs/bench/scripts/run-scorecard-subset.sh`、
+>   `core/docs/bench/scorecard-subset-2026-07-19.md`
+> - **本文件全文 W/L 与逐 track 数字** 仍为 **2026-07-02 历史基线**，**不是**当前 CI 真相
+> - 全量 60+ track 刷新在 Maintenance Idle 下**明确推迟**（见 `core/docs/bench/goal-tree.md`）
+> - 请勿将下方 Overall Score 当作 live 排行榜引用
 
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
 **Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE | Go default -O2 (no explicit flag)
-**Date**: 2026-07-02
+**Date**: 2026-07-02（historical baseline only）
 
 ## Overall Score
 

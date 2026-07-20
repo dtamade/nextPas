@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era J done → Maintenance Idle（2026-07-20）** — mem-owner LocalArena/BlockPool/FixedPool FreeMemOf；残余 WAIVE 仅 tui tracking
+**状态**: **Era K done → Maintenance Idle（2026-07-20）** — growable/chunked/stack/ring FreeMemOf；残余 WAIVE 仅 tui tracking
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -31,6 +31,7 @@
 | **H** | **Maintenance only**：决策树 + FreeMemOf 收口 + 只回归 | **Idle** | 下文 §4d Era H |
 | **I** | **Owned-size 收口**：json/toml size 表 + text ReallocMemOf + 契约钉 | **CLOSED** | 下文 §4e |
 | **J** | **mem-owner sized free**：LocalArena/BlockPool/FixedPool backing FreeMemOf | **CLOSED** | 下文 §4f |
+| **K** | **mem-owner FreeMemOf 扩展**：growable/chunked/stack/ring（已有 size 字段） | **CLOSED** | 下文 §4g |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -235,11 +236,25 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **J3** | `TFixedPool` `FRawAllocSize` + Destroy/except FreeMemOf | **done** |
 | **J4** | source-contract + SCORECARD/soak 证据 | **done** |
 
-**J 后**: 回 **Maintenance Idle**。多段 slab/chunked FreeMemOf **不**默认排期。tui WAIVE 不变。
+**J 后**: 回 **Maintenance Idle**。Era K 扩展已有 RawSize/FSize 的 growable/chunked/stack/ring。tui WAIVE 不变。
+
+### Era K — mem-owner FreeMemOf 扩展（CLOSED 2026-07-20）
+
+在 **size 已记录** 的路径改 FreeMemOf（非全仓扫）。
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **K1** | `TGrowingBlockPool` FreeSegment / align fail → FreeMemOf(RawSize) | **done** |
+| **K2** | `TChunkedArena` FreeSegment/ClearCache/merge → FreeMemOf(RawSize) | **done** |
+| **K3** | `TStackPool` Destroy/Grow → FreeMemOf(FSize) | **done** |
+| **K4** | `TRingBuffer` Destroy/Resize → FreeMemOf(cap×elem) | **done** |
+| **K5** | `TGrowingFixedPool` Destroy/Shrink → FreeMemOf(Base, Size) | **done** |
+
+**K 后**: **Maintenance Idle**。残余：fixed_slab fallback 等复杂路径 / tui WAIVE；无默认下一批。
 
 ---
 
-## 5. 明确不做（时代 D/E/F/G/H/I/J 有效期内）
+## 5. 明确不做（时代 D/E/F/G/H/I/J/K 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -306,3 +321,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | **Era I CLOSED**：text ReallocMemOf · json/toml owned-size FreeMemOf · contracts；回 Idle |
 | 2026-07-20 | I residual：element_manager ReallocMemOf + Era I GHA host-runtime 证据 |
 | 2026-07-20 | **Era J CLOSED**：LocalArena/BlockPool/FixedPool backing FreeMemOf；回 Idle |
+| 2026-07-20 | **Era K CLOSED**：growable/chunked/stack/ring FreeMemOf（既有 size 字段） |

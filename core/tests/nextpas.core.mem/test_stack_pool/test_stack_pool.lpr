@@ -244,7 +244,9 @@ var
   LPool: TStackPool;
   LPtr: Pointer;
 begin
-  LPool := TStackPool.Create(128);
+  { Capacity must absorb worst-case padding after a 1-byte prefix for 32-byte
+    alignment (heap base alignment varies with freelist / FreeMemOf order). }
+  LPool := TStackPool.Create(512);
   try
     Check(LPool.Alloc(1) <> nil, 'prefix allocation creates a misaligned offset');
 
