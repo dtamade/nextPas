@@ -270,26 +270,37 @@ on the client threads, then reports nearest-rank percentiles.
 Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`. **nextPas only** in
 comparison harness for now (Go/Rust residual). Not a cross-machine ranking.
 
-#### S3-1 H2 server scale baseline
+#### S3-1 / S3-2 H2 server scale
 
 Harness: `benchmarks/nextpas.core.http/bench_h2_server/`
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h2_server smoke
-# default: 4 conn × 4 streams/batch × 100 batches = 1600 GETs (H2 cleartext prior-knowledge)
+# S3-2 mid (RoundTripMany multiplex, threaded server)
+./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
+  --mode multiplex --backend threaded \
+  --connections 8 --streams 16 --batches 200
 ```
 
-| Date | shape | completed | fail | req/s | stable | Note |
-| ---- | ----- | --------: | ---: | ----: | -----: | ---- |
-| 2026-07-20 S3-1 | 4×4×100 | 1600 | 0 | **90** | **1** | sequential facade GETs; not multiplex concurrent |
+| Date | mode | backend | shape | completed | req/s | stable | Note |
+| ---- | ---- | ------- | ----- | --------: | ----: | -----: | ---- |
+| 2026-07-20 S3-1 | sequential | threaded | 4×4×50 | 800 | **89** | 1 | facade Get residual |
+| 2026-07-20 S3-2 | **multiplex** | **threaded** | 4×4×25 | 400 | **357** | 1 | smoke |
+| 2026-07-20 S3-2 | **multiplex** | **threaded** | **8×16×200** | **25600** | **2872** | **1** | mid scale |
+| 2026-07-20 S3-2 | multiplex | epoll | 4×4×25 | — | — | hang | residual (see below) |
+
+**S3-2 fix**: `RoundTripMany` demux used `TH2StreamFlowControl.Init(0,…)` on
+connection-level frames → `stream flow control requires a valid stream ID`.
+Fixed to dummy stream ID 1 (same as idle PING probe). Regression: live
+multiplex against real H2 server + `test_http_h2_client` 72/0.
 
 **Honest residuals**
 
-- Throughput is **orders below H1** on this path (facade sequential Get, not
-  `RoundTripMany` concurrent streams) — baseline existence, not H2 scale claim.
-- No Go H2 same-harness row yet.
-- A1 production edges (GOAWAY / MaxConcurrent / RoundTripMany) remain the
-  correctness reference; S3-2 should add concurrent multiplex + epoll backend row.
+- Multiplex threaded **~32×** sequential facade (~89 → ~2872) on mid shape — still
+  far below H1 epoll multi-conn RPS (~47k); different workload shape.
+- **H2 + epoll**: readiness hang under this harness (poll-driven H2 residual);
+  scale evidence is **threaded** until fixed.
+- No Go H2 same-harness row.
 - **Not** Scale-ready (H1/H2).
 
 #### Interim single-connection characterization (not scale KPI)

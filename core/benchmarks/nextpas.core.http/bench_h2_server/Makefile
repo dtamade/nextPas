@@ -17,7 +17,8 @@ run: build
 	$(BUILD_DIR)/$(PROGRAM)
 
 smoke: build
-	$(BUILD_DIR)/$(PROGRAM) --connections 4 --streams 4 --requests 100
+	$(BUILD_DIR)/$(PROGRAM) --mode multiplex --backend threaded \
+	  --connections 4 --streams 4 --batches 25
 
 clean:
 	rm -rf $(BUILD_DIR)

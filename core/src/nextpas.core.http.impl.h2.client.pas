@@ -1602,7 +1602,11 @@ begin
 
       if LFrame.Header.StreamID = 0 then
       begin
-        LDummyFlow.Init(0, FRemoteSettings.InitialWindowSize,
+        { Connection-level frames (SETTINGS/PING/GOAWAY/conn WINDOW_UPDATE).
+          Stream flow control rejects StreamID=0; use a dummy ID=1 like the
+          idle PING probe path. HandleWindowUpdate routes stream-0 updates to
+          FConnectionFlow via the frame header, not this dummy. }
+        LDummyFlow.Init(1, FRemoteSettings.InitialWindowSize,
           FLocalSettings.InitialWindowSize);
         TH2ResponseState.Init(LDummyResp);
         DispatchFrame(LFrame, 0, LDummyFlow, LDummyResp);
