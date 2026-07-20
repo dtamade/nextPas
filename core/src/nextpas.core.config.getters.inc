@@ -404,6 +404,43 @@ begin
   end;
 end;
 
+function TConfig.Clone: TConfig;
+begin
+  Result := TConfig.Create;
+  try
+    Result.ReplaceFrom(Self);
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure TConfig.MergeFrom(ASource: TConfig);
+var
+  LKeys: TStringArray;
+  LI: Integer;
+begin
+  if ASource = nil then
+    raise EConfigError.Create('MergeFrom requires a non-nil TConfig');
+  if ASource = Self then
+    Exit;
+  LKeys := ASource.GetKeys;
+  for LI := 0 to High(LKeys) do
+    SetString(LKeys[LI], ASource.GetRawString(LKeys[LI]));
+end;
+
+procedure TConfig.MergeFrom(const ASource: IConfig);
+var
+  LKeys: TStringArray;
+  LI: Integer;
+begin
+  if ASource = nil then
+    raise EConfigError.Create('MergeFrom requires a non-nil IConfig');
+  LKeys := ASource.GetKeys;
+  for LI := 0 to High(LKeys) do
+    SetString(LKeys[LI], ASource.GetRawString(LKeys[LI]));
+end;
+
 function TConfig.Has(const AKey: string): Boolean;
 begin
   RequireConfigKey(AKey);

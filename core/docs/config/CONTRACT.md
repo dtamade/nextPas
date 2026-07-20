@@ -98,8 +98,9 @@ function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean
 
 - 加载：`LoadFromIni/Json/Yaml/Toml/File/Env` + `TryLoad*` / `TryLoadJson|Yaml|Toml` 别名；`LoadFromFile`/`TryLoadFromFile` 支持显式格式或扩展名自动识别
 - 写入：`SetString/Int/Bool/Float/StringArray`、`SetDefault`、`DeleteKey`、`DeleteSection`、`Clear`、`ReplaceFrom`
+- 拷贝/合并：`Clone`（调用方 Free）、`MergeFrom(TConfig|IConfig)`（后写覆盖）
 - 导出：`ToIni/Json/Yaml/Toml`、`SaveTo*`
-- 读取：与 `IConfig` 对称的 Get*/Require/Has/GetKeys/GetSection
+- 读取：与 `IConfig` 对称的 Get*/Require/Has/GetKeys/GetSection + DurationNs/ByteSize
 - 插值：`SetInterpolationMode` / `GetInterpolationMode`
 
 ### 2.5 Watcher
