@@ -520,3 +520,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `test_async_kqueue_runtime_smoke`: on Darwin/FreeBSD also runs accept+connect loopback; prints `kqueue-accept-connect-smoke=pass`.
 - `async-host-matrix` includes accept_connect + udp + pool entries.
 - Windows native: see `WINDOWS-NATIVE-ASSESSMENT.md` — **not** native-windows claim; wine-runtime-smoke remains IOCP evidence.
+
+### Same-host bench parity (Q18)
+- Script: `core/scripts/async-bench-parity.sh` runs `test_async_bench` + Go/Rust peer microbenches.
+- Peers: std channel/mutex/timer shapes — **not** TAsyncLoop clones; order-of-magnitude only.
+- truth=`same-host-order-of-magnitude`; **not CI-gating**; do not claim “faster than Go/Rust” from this table alone.
+- SCORECARD table updated from a 2026-07-20 host run.
