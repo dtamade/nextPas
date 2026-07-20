@@ -133,7 +133,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 ### 外部债 / 证据
 
-- **wine-runtime-smoke**（2026-07-20 R26）：  
+- **wine-runtime-smoke**（2026-07-20 R33）：  
   - process **7** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
   - 详见 [`SCORECARD.md`](./SCORECARD.md)
 
@@ -145,7 +145,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 **周报：**
 
-> process/fs/path/env：维护态。R31 path/env Go 边界表 + SCORECARD 重测 + Destroy 100µs；Quality 9.8 / Scale 9.8。
+> process/fs/path/env：维护态。R33 Wait 100µs 轮询 + wine×5 证据复跑；Quality 9.8 / Scale 9.8。
 
 ---
 
@@ -171,3 +171,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | R30 Linux inotify residual queue；burst 不丢；Quality 9.7；watch 12 |
 | 2026-07-20 | R31 path/env 边界表 70/70 + SCORECARD 重测 + Destroy 100µs；Quality 9.8 |
 | 2026-07-20 | R32 IFsWatcher.Remove + platform_watch_remove；watch 13 |
+| 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |

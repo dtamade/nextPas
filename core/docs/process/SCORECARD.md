@@ -21,7 +21,7 @@
 
 ---
 
-## A. L2 wine-runtime-smoke（R26 加厚）
+## A. L2 wine-runtime-smoke（R33 复跑）
 
 ```bash
 make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke
@@ -81,26 +81,25 @@ make -C core/benchmarks/nextpas.core.process/bench_process run
 cd core/benchmarks/nextpas.core.process/bench_process/compare_go && go run main.go
 ```
 
-### nextpas（2026-07-20 R31 复测）
+### nextpas（2026-07-20 R33 复测）
 
 | 项 | n | total | avg |
 |----|---|-------|-----|
-| LookPath(sh) | 200 | 9 ms | ~46 µs |
-| Command(/bin/true).Status | 50 | 55 ms | ~1.1 ms |
-| Capture(echo x) | 50 | 87 ms | **~1.8 ms** |
-| Output(echo x) dual-pipe | 50 | 89 ms | **~1.8 ms** |
+| LookPath(sh) | 200 | 8 ms | ~41 µs |
+| Command(/bin/true).Status | 50 | 49 ms | **~1.0 ms** |
+| Capture(echo x) | 50 | 81 ms | **~1.6 ms** |
+| Output(echo x) dual-pipe | 50 | 84 ms | **~1.7 ms** |
 
 ### Go 对照（同机）
 
 | 项 | n | avg |
 |----|---|-----|
-| exec.LookPath(sh) | 200 | ~46 µs |
-| exec.Command(true).Run | 50 | ~0.96 ms |
-| exec.Command(echo).Output | 50 | ~1.4 ms |
+| exec.LookPath(sh) | 200 | ~44 µs |
+| exec.Command(true).Run | 50 | ~0.88 ms |
+| exec.Command(echo).Output | 50 | ~1.3 ms |
 
-R27–R28：Capture stdout-only + WaitWithOutput 快路径。  
-R31 复测：LookPath **持平** Go；Status ~**1.15×**；Capture/Output dual-pipe ~**1.25–1.3×** Go。  
-Destroy 轮询 sleep 10ms→100µs（与 WaitWithOutput 一致）。
+R33：Wait/WaitGraceful 超时·Cancel 轮询起步 **100µs**（与 WaitWithOutput/Destroy 一致）；wine×5 复跑全绿。  
+LookPath 持平；Status ~**1.15×**；Capture/dual-pipe ~**1.25–1.3×** Go。
 
 ---
 
