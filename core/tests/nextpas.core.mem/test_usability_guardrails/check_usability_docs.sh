@@ -158,6 +158,7 @@ for demoted in \
   allocator.counting allocator.zeroed allocator.fail allocator.scoped \
   allocator.batch allocator.callback allocator.aligned allocator.bounded \
   allocator.stats allocator.leak_report allocator.thread_safe allocator.pool \
+  allocator.mimalloc allocator.mmap \
   budget oom stack_pool \
   pool.slab.concurrent pool.slab.sharded \
   blockpool.concurrent blockpool.sharded; do

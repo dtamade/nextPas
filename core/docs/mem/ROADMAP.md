@@ -162,9 +162,9 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 |-------|------|------|
 | G0 | F 收口卫生：状态文案 + CONSUMER 过时行 | **done** 2026-07-20 |
 | G1 | 门面 demoted 名单 source-contract（防回潮） | **done** 2026-07-20 |
-| G2 | 门面批 2 设计（mimalloc/mmap 是否出面） | 待批 |
+| G2 | 门面批 2：mimalloc/mmap 移出 re-export | **done** 2026-07-20 |
 | G3 | blockpool.growable 决策备忘 | 按需 |
-| G4 | FreeMemOf 命名 consumer 样板（json/toml…） | 有 owner 才做 |
+| G4 | FreeMemOf 样板 json.parser + toml.parser | **done** 2026-07-20 |
 | G5 | 多 host / 真机红点 | 红点驱动 |
 | G6 | scorecard/soak 证据入口常绿 | 与 G0 合并 docs |
 | G7 | CONSUMER 观测快照刷新 | 可选 docs |

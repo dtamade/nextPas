@@ -13,6 +13,7 @@ unit nextpas.core.mem;
  *                     / blockpool.concurrent / .sharded（F3 不进门面）
  *   - 测试泄漏检测 → TTrackingAllocator 包装任意 IAllocator
  *   - 冷门包装器（logging/sampling/hotswap/…）→ 直接 uses 对应子单元
+ *   - 可选后端 mimalloc / mmap 分配器 → uses allocator.mimalloc / .mmap（F3 批 2 / G2）
  *
  * @note 双轨硬规则：
  *   - NEXTPAS_MEM_DEBUG 只叠 DefaultAllocator，不观察过程式 GetMem。
@@ -55,8 +56,6 @@ uses
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.allocator.leak_check,
   nextpas.core.mem.allocator.fallback,
-  nextpas.core.mem.allocator.mmap,
-  nextpas.core.mem.allocator.mimalloc,
   nextpas.core.mem.pool.sizeclass,
   nextpas.core.mem.pool.fixed,
   nextpas.core.mem.pool.fixed_slab,
@@ -113,8 +112,6 @@ type
   TMemStats = nextpas.core.mem.default.TMemStats;
   TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
   TCrtAllocator = nextpas.core.mem.allocator.crt.TCrtAllocator;
-  TMimallocAllocator = nextpas.core.mem.allocator.mimalloc.TMimallocAllocator;
-  TMemoryMapAllocator = nextpas.core.mem.allocator.mmap.TMemoryMapAllocator;
 
   { --- Tier-0: Arena ↔ Allocator 桥 --- }
   TLocalArenaAllocator = nextpas.core.mem.allocator.arena.TLocalArenaAllocator;
