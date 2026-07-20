@@ -37,6 +37,13 @@ begin
   Result := APathFromTest;
 end;
 
+function DemoSource(const ADemo: string): string;
+begin
+  Result := ReadLowerSourceFile(ResolvePath(
+    '../../../examples/nextpas.core.tui/' + ADemo + '/' + ADemo + '.lpr',
+    'core/examples/nextpas.core.tui/' + ADemo + '/' + ADemo + '.lpr'));
+end;
+
 procedure CheckTokenPresent(const ASource, AToken, ALabel: string);
 begin
   Check(Pos(LowerCase(AToken), ASource) > 0,
@@ -64,35 +71,33 @@ begin
   CheckTokenAbsent(ASource, 'nextpas.core.tui.widget.', ALabel);
 end;
 
+procedure CheckAppFirstNoRawTerminal(const ASource, ALabel: string);
+begin
+  CheckTokenPresent(ASource, 'class(TScreen)', ALabel);
+  CheckTokenPresent(ASource, 'TApp', ALabel);
+  CheckTokenPresent(ASource, 'App.Screens.Push', ALabel);
+  CheckTokenPresent(ASource, 'procedure Render', ALabel);
+  CheckTokenAbsent(ASource, 'nextpas.core.tui.terminal', ALabel);
+  CheckTokenAbsent(ASource, 'TTerminal', ALabel);
+  CheckTokenAbsent(ASource, 'EnterTui', ALabel);
+  CheckTokenAbsent(ASource, 'PollEvent', ALabel);
+end;
+
 procedure TestLayoutDemoTeachesAppFirstExtPath;
 var
   LSource: string;
 begin
-  LSource := ReadLowerSourceFile(ResolvePath(
-    '../../../examples/nextpas.core.tui/demo_layout/demo_layout.lpr',
-    'core/examples/nextpas.core.tui/demo_layout/demo_layout.lpr'));
-
+  LSource := DemoSource('demo_layout');
   CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_layout');
-  CheckTokenPresent(LSource, 'class(TScreen)', 'demo_layout');
-  CheckTokenPresent(LSource, 'TApp', 'demo_layout');
-  CheckTokenPresent(LSource, 'App.Screens.Push', 'demo_layout');
-  CheckTokenPresent(LSource, 'procedure Render', 'demo_layout');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_layout');
   CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_layout');
-
-  CheckTokenAbsent(LSource, 'nextpas.core.tui.terminal', 'demo_layout');
-  CheckTokenAbsent(LSource, 'TTerminal', 'demo_layout');
-  CheckTokenAbsent(LSource, 'EnterTui', 'demo_layout');
-  CheckTokenAbsent(LSource, 'PollEvent', 'demo_layout');
 end;
 
 procedure TestWidgetsDemoTeachesAppFirstFullPath;
 var
   LSource: string;
 begin
-  LSource := ReadLowerSourceFile(ResolvePath(
-    '../../../examples/nextpas.core.tui/demo_widgets/demo_widgets.lpr',
-    'core/examples/nextpas.core.tui/demo_widgets/demo_widgets.lpr'));
-
+  LSource := DemoSource('demo_widgets');
   CheckTokenPresent(LSource, 'nextpas.core.tui.full', 'demo_widgets');
   CheckTokenPresent(LSource, 'class(TScreen)', 'demo_widgets');
   CheckTokenPresent(LSource, 'TApp', 'demo_widgets');
@@ -101,7 +106,6 @@ begin
   CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_widgets');
   CheckTokenPresent(LSource, 'TGauge', 'demo_widgets');
   CheckNoDirectTuiImplementationImports(LSource, 'demo_widgets');
-
   CheckTokenAbsent(LSource, 'TTerminal', 'demo_widgets');
   CheckTokenAbsent(LSource, 'EnterTui', 'demo_widgets');
   CheckTokenAbsent(LSource, 'BeginFrame', 'demo_widgets');
@@ -117,10 +121,61 @@ begin
   LSource := ReadLowerSourceFile(ResolvePath(
     '../../../benchmarks/nextpas.core.tui/bench_render/bench_render.lpr',
     'core/benchmarks/nextpas.core.tui/bench_render/bench_render.lpr'));
-
   CheckTokenPresent(LSource, 'nextpas.core.tui.full', 'bench_render');
   CheckTokenPresent(LSource, 'TGauge', 'bench_render');
   CheckNoDirectTuiImplementationImports(LSource, 'bench_render');
+end;
+
+procedure TestHelloDemoTeachesAppFirstExtPath;
+var
+  LSource: string;
+begin
+  LSource := DemoSource('demo_hello');
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_hello');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_hello');
+  CheckTokenPresent(LSource, 'procedure HandleEvent', 'demo_hello');
+end;
+
+procedure TestMultiScreenDemoTeachesSharedState;
+var
+  LSource: string;
+begin
+  LSource := DemoSource('demo_multi_screen');
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_multi_screen');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_multi_screen');
+  CheckTokenPresent(LSource, 'SharedStateObject', 'demo_multi_screen');
+  CheckTokenPresent(LSource, 'GetShared', 'demo_multi_screen');
+end;
+
+procedure TestPanelLayoutDemoTeachesExtPanel;
+var
+  LSource: string;
+begin
+  LSource := DemoSource('demo_panel_layout');
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_panel_layout');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_panel_layout');
+  CheckTokenPresent(LSource, 'TPanel', 'demo_panel_layout');
+end;
+
+procedure TestTaskCompletionDemoTeachesTasks;
+var
+  LSource: string;
+begin
+  LSource := DemoSource('demo_task_completion');
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_task_completion');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_task_completion');
+  CheckTokenPresent(LSource, 'Tasks', 'demo_task_completion');
+end;
+
+procedure TestThemeFocusKeybindDemoTeachesKeybind;
+var
+  LSource: string;
+begin
+  LSource := DemoSource('demo_theme_focus_keybind');
+  CheckTokenPresent(LSource, 'nextpas.core.tui.ext', 'demo_theme_focus_keybind');
+  CheckAppFirstNoRawTerminal(LSource, 'demo_theme_focus_keybind');
+  CheckTokenPresent(LSource, 'keybind', 'demo_theme_focus_keybind');
+  CheckTokenPresent(LSource, 'TTheme', 'demo_theme_focus_keybind');
 end;
 
 begin
@@ -128,5 +183,10 @@ begin
   T.Test('layout demo teaches app-first ext path', @TestLayoutDemoTeachesAppFirstExtPath);
   T.Test('widgets demo teaches app-first full path', @TestWidgetsDemoTeachesAppFirstFullPath);
   T.Test('full render benchmark uses full facade', @TestFullRenderBenchmarkUsesFullFacade);
+  T.Test('hello demo teaches app-first ext path', @TestHelloDemoTeachesAppFirstExtPath);
+  T.Test('multi_screen demo teaches shared state', @TestMultiScreenDemoTeachesSharedState);
+  T.Test('panel_layout demo teaches ext panel', @TestPanelLayoutDemoTeachesExtPanel);
+  T.Test('task_completion demo teaches tasks', @TestTaskCompletionDemoTeachesTasks);
+  T.Test('theme_focus_keybind demo teaches keybind', @TestThemeFocusKeybindDemoTeachesKeybind);
   if not T.Run then Halt(1);
 end.

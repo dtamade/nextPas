@@ -420,6 +420,10 @@ begin
     pbKqueue: Result := FKqueue.AsyncSendTo(Int32(AFd), ABuf, ALen, AFlags, AAddr, AAddrLen,
                  nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    { IOCP has no AsyncSendTo yet; keep case non-empty for Win64 compile. }
+    pbIocp: Result := False;
+    {$ENDIF}
   else
     Result := False;
   end;
@@ -442,6 +446,10 @@ begin
     {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     pbKqueue: Result := FKqueue.AsyncRecvFrom(Int32(AFd), ABuf, ALen, AFlags, AAddr, AAddrLen,
                  nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    { IOCP has no AsyncRecvFrom yet; keep case non-empty for Win64 compile. }
+    pbIocp: Result := False;
     {$ENDIF}
   else
     Result := False;
