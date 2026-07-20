@@ -251,7 +251,7 @@ begin
       SizeUInt(FStrOverflowCap) * SizeOf(Pointer), SizeUInt(LNewCap) * SizeOf(Pointer));
     if LNewOverflow = nil then
     begin
-      FAllocator.FreeMem(Result); { ASize known but not on IAllocator free path size }
+      FreeMemOf(FAllocator, Result, ASize);
       Result := nil;
       SetOutOfMemoryError;
       Exit;

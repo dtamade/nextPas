@@ -86,3 +86,10 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 |-----|------------------|------|
 | **test-macos** | **PASS** | platform matrix 10/10；job 红于 kqueue smoke |
 | **test-windows-runtime** | **PASS** | matrix 22 pass / 1 fail（非 mem 门） |
+
+### 5.4 近次抽样（run **29727241825** · 2026-07-20）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | platform matrix 10/10；job 红于 kqueue |
+| **test-windows-runtime** | **PASS** | matrix **23/23 全绿** |
