@@ -8,15 +8,17 @@ unit nextpas.core.toml;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.intf,
+  nextpas.core.io.intf,
   nextpas.core.toml.base,
   nextpas.core.toml.parser,
   nextpas.core.toml.value,
   nextpas.core.toml.writer,
   nextpas.core.toml.builder,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TTomlNodeKind = nextpas.core.toml.base.TTomlNodeKind;
@@ -38,7 +40,9 @@ type
 
 function TomlParse(const AInput: string): ITomlDocument; overload;
 function TomlParse(const AInput: TStringView): ITomlDocument; overload;
-function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
+function TomlParse(const AReader: IReader): ITomlDocument; overload;
+function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean; overload;
+function TryTomlParse(const AReader: IReader; out ADoc: ITomlDocument): Boolean; overload;
 function TomlParseWith(const AInput: string; const AAllocator: TMemAllocator): ITomlDocument; overload;
 function TomlParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): ITomlDocument; overload;
 function TomlBuilder: ITomlBuilder; overload; inline;
@@ -55,7 +59,15 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.io.util,
   nextpas.core.mem.default;
+
+function TomlBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 const
   TOML_STRINGIFY_MAX_PATH_SEGMENTS = 128;
@@ -358,6 +370,27 @@ function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
 begin
   ADoc := TomlParse(AInput);
   Result := not ADoc.HasError;
+end;
+
+function TomlParse(const AReader: IReader): ITomlDocument;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('TomlParse: reader must not be nil');
+  Result := TomlParse(TomlBytesToString(IoReadAll(AReader)));
+end;
+
+function TryTomlParse(const AReader: IReader; out ADoc: ITomlDocument): Boolean;
+begin
+  ADoc := nil;
+  if AReader = nil then
+    Exit(False);
+  try
+    ADoc := TomlParse(AReader);
+    Result := not ADoc.HasError;
+  except
+    ADoc := nil;
+    Result := False;
+  end;
 end;
 
 function TomlParseWith(const AInput: string; const AAllocator: TMemAllocator): ITomlDocument;
