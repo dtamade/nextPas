@@ -55,11 +55,13 @@ type
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
     function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -192,11 +194,13 @@ type
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
     function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
 
     procedure ReplaceFrom(AOther: TConfig);
@@ -218,6 +222,8 @@ function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig; 
 function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig; overload;
 { Parse duration suffixes: ns/us/ms/s/m/h; bare integer = seconds. }
 function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boolean;
+{ Parse byte size: b/kb/kib/mb/mib/gb/gib (1024-based); bare integer = bytes. }
+function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean;
 
 function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
 { Map path extension to TConfigFormat. False if unknown/empty extension. }

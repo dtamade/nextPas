@@ -1,65 +1,50 @@
-# config-formats 全族 SCORECARD（Wave K）
+# config-formats 全族 SCORECARD（Wave L）
 
 **truth**：`host-linux` 单机快照（2026-07-20）
 **lane**：`config-json-xml-toml-yaml-csv-ini`
 
-对标矩阵见各模块 `PARITY-go-rust.md`。
-
 ---
 
-## A. 用例规模（`T.Test` 静态计数）
-
-| 模块 | T.Test 合计 |
-|------|-------------|
-| config | ~237（含 facade 8） |
-| json | 175+ |
-| yaml | 206+ |
-| toml | 334+ |
-| csv | 105+ |
-| ini | 71+ |
-| xml | 216+ |
-
----
-
-## B. Wave K focused 代表路径（本波实测）
+## A. Wave L focused 代表路径（本波实测）
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.config/test_config_facade_surface
-make focused FOCUS=core/tests/nextpas.core.json/test_json_facade_surface
-make focused FOCUS=core/tests/nextpas.core.yaml/test_yaml_facade_surface
-make focused FOCUS=core/tests/nextpas.core.toml/test_toml_facade_surface
+make focused FOCUS=core/tests/nextpas.core.ini/test_ini_facade_surface
+make focused FOCUS=core/tests/nextpas.core.xml/test_xml_facade_surface
 make hygiene
 ```
 
 | 套件 | 结果 |
 |------|------|
-| config facade_surface | **8 passed**（Section + DurationNs） |
-| json facade_surface | **2 passed**（IReader parse） |
-| yaml facade_surface | **3 passed**（IReader parse） |
-| toml facade_surface | **3 passed**（IReader parse） |
+| config facade_surface | **9 passed**（ByteSize + watcher auto） |
+| ini facade_surface | **6 passed**（IReader） |
+| xml facade_surface | **3 passed**（IReader） |
 | hygiene | **pass** |
 
 ---
 
-## C. Wave K 关闭项
+## B. Wave L 关闭项
 
 | 项 | 状态 |
 |----|------|
-| ConfigSection（viper Sub） | Done |
-| GetDurationNs 最小后缀 | Done |
-| Json/Yaml/Toml Parse(IReader) bulk | Done |
-| CSV bare-quote 严格语义文档 | Done（既有 TestBareQuoteError） |
+| TConfigWatcher 无格式 Create | Done（reload 走 sniff） |
+| GetByteSize / KiB 进制 | Done |
+| IniParse(IReader) | Done |
+| XmlParse / XmlParseDoc(IReader) | Done |
+| 低分模块 PARITY 升分 | Done |
 
 ---
 
-## D. PARITY 综合指针（Wave K）
+## C. PARITY 综合指针（Wave L）
 
 | 模块 | 综合 |
 |------|------|
-| config | **9.0** |
+| config | **9.1** |
 | json | **9.0** |
 | csv | **9.0** |
-| toml | 8.6 |
-| yaml | 8.0+ |
-| ini | 8.2 |
-| xml | 8.2 |
+| toml | **9.0** |
+| ini | **9.0** |
+| yaml | **8.8** |
+| xml | **8.6** |
+
+**全族 Essential 路径**（config + 四格式 + ini/csv/xml 门面）均 ≥ 8.6；config/json/csv/toml/ini 达 9.0 线。

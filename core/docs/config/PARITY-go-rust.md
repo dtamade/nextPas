@@ -12,9 +12,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.1** | try 路径、插值、嗅探、Sub、DurationNs |
-| **规模 Scale** | **9.0** | 四格式 + env + keyvalues + args + bind + Sub |
-| **综合** | **9.0** | 对齐 viper 常用 DX；remote 仍 Future |
+| **质量 Quality** | **9.2** | Sub、DurationNs、ByteSize、watcher auto |
+| **规模 Scale** | **9.1** | 四格式 + env + keyvalues + args + bind + Sub |
+| **综合** | **9.1** | 对齐 viper 常用 DX；remote 仍 Future |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ 0.85。
 **证据**：[`SCORECARD.md`](./SCORECARD.md)
@@ -41,6 +41,8 @@
 | 嵌套/数组 bind | mapstructure | 嵌套 record + string dynarray | Done |
 | Sub 子树视图 | Sub() | `ConfigSection` | Done |
 | GetDuration | GetDuration | `GetDurationNs` 最小后缀 | Done |
+| 人可读大小 | — | `GetByteSize` (KiB 进制) | Done |
+| Watch 自动格式 | — | `TConfigWatcher.Create(path)` auto | Done |
 | XML/CSV 作 config 格式 | 少见 | Out of scope | Deferred |
 
 ---

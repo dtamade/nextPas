@@ -4,6 +4,10 @@ program test_ini_facade_surface;
 
 uses
   SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.ini,
   nextpas.core.mem.default,
   nextpas.core.test;
@@ -132,6 +136,40 @@ begin
   end;
 end;
 
+function IniBytesFromString(const AText: string): TBytes;
+var
+  LI: Integer;
+begin
+  SetLength(Result, Length(AText));
+  for LI := 1 to Length(AText) do
+    Result[LI - 1] := Byte(AText[LI]);
+end;
+
+procedure TestFacadeExposesReaderParse;
+var
+  LStream: IStream;
+  Ini: TIniFile;
+  LRaised: Boolean;
+begin
+  LStream := CreateBytesStreamFrom(IniBytesFromString(
+    '[app]' + #10 + 'name=from-reader' + #10));
+  Ini := IniParse(LStream as IReader);
+  try
+    CheckEqual('from-reader', Ini.ReadString('app', 'name', ''),
+      'IniParse IReader');
+  finally
+    Ini.Free;
+  end;
+  LRaised := False;
+  try
+    IniParse(IReader(nil));
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'nil IReader raises');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.ini (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
@@ -141,5 +179,6 @@ begin
     @TestFacadeExposesStructuredErrorSurface);
   T.Test('facade exposes allocator surface',
     @TestFacadeExposesAllocatorSurface);
+  T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
   if not T.Run then Halt(1);
 end.

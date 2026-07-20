@@ -9,12 +9,14 @@ unit nextpas.core.xml;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.intf,
+  nextpas.core.io.intf,
   nextpas.core.xml.base,
   nextpas.core.xml.reader,
   nextpas.core.xml.writer,
   nextpas.core.xml.dom,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TXmlTokenKind = nextpas.core.xml.base.TXmlTokenKind;
@@ -68,9 +70,11 @@ const
   xnkPI       = nextpas.core.xml.dom.xnkPI;
   xnkDocument = nextpas.core.xml.dom.xnkDocument;
 
-function XmlParse(const AInput: string): TXmlDocument; inline;
+function XmlParse(const AInput: string): TXmlDocument; inline; overload;
+function XmlParse(const AReader: IReader): TXmlDocument; overload;
 function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
-function XmlParseDoc(const AInput: string): IXmlDocument; inline;
+function XmlParseDoc(const AInput: string): IXmlDocument; inline; overload;
+function XmlParseDoc(const AReader: IReader): IXmlDocument; overload;
 function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;
 function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
 function TryXmlParseWith(const AInput: string; const AAllocator: TMemAllocator;
@@ -88,8 +92,16 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
+
+function XmlBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 type
   { TXmlDocumentImpl — IXmlDocument implementation wrapping TXmlDocument record }
@@ -213,6 +225,13 @@ begin
   Result := XmlParseWith(AInput, DefaultAllocator);
 end;
 
+function XmlParse(const AReader: IReader): TXmlDocument;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('XmlParse: reader must not be nil');
+  Result := XmlParse(XmlBytesToString(IoReadAll(AReader)));
+end;
+
 function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
 begin
   Result := TXmlDocument.ParseWith(AInput, AAllocator);
@@ -244,6 +263,13 @@ end;
 function XmlParseDoc(const AInput: string): IXmlDocument;
 begin
   Result := XmlParseDocWith(AInput, DefaultAllocator);
+end;
+
+function XmlParseDoc(const AReader: IReader): IXmlDocument;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('XmlParseDoc: reader must not be nil');
+  Result := XmlParseDoc(XmlBytesToString(IoReadAll(AReader)));
 end;
 
 function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;

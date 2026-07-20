@@ -556,6 +556,73 @@ begin
   Result := LNs;
 end;
 
+function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean;
+var
+  LText, LNum, LUnit: string;
+  LI: Integer;
+  LVal, LScale: Int64;
+begin
+  Result := False;
+  ABytes := 0;
+  LText := Trim(AText);
+  if LText = '' then
+    Exit;
+  LI := 1;
+  if (LI <= Length(LText)) and (LText[LI] = '-') then
+    Exit;
+  while (LI <= Length(LText)) and (LText[LI] >= '0') and (LText[LI] <= '9') do
+    Inc(LI);
+  if LI = 1 then
+    Exit;
+  LNum := Copy(LText, 1, LI - 1);
+  if not TryStrToInt64(LNum, LVal) then
+    Exit;
+  LUnit := LowerCase(Copy(LText, LI, Length(LText) - LI + 1));
+  while (Length(LUnit) > 0) and (LUnit[1] = ' ') do
+    Delete(LUnit, 1, 1);
+  if LUnit = '' then
+    LUnit := 'b';
+  if (LUnit = 'b') or (LUnit = 'byte') or (LUnit = 'bytes') then
+    LScale := 1
+  else if (LUnit = 'k') or (LUnit = 'kb') or (LUnit = 'kib') then
+    LScale := 1024
+  else if (LUnit = 'm') or (LUnit = 'mb') or (LUnit = 'mib') then
+    LScale := Int64(1024) * 1024
+  else if (LUnit = 'g') or (LUnit = 'gb') or (LUnit = 'gib') then
+    LScale := Int64(1024) * 1024 * 1024
+  else
+    Exit;
+  if (LVal > 0) and (LScale > High(Int64) div LVal) then
+    Exit;
+  ABytes := LVal * LScale;
+  Result := True;
+end;
+
+function TConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
+var
+  LRaw: string;
+  LBytes: Int64;
+begin
+  LRaw := GetString(AKey, '');
+  if LRaw = '' then
+    Exit(ADefault);
+  if TryParseConfigByteSize(LRaw, LBytes) then
+    Result := LBytes
+  else
+    Result := ADefault;
+end;
+
+function TConfig.GetByteSizeRequired(const AKey: string): Int64;
+var
+  LRaw: string;
+  LBytes: Int64;
+begin
+  LRaw := GetStringRequired(AKey);
+  if not TryParseConfigByteSize(LRaw, LBytes) then
+    raise EConfigError.Create('invalid byte size for key "' + AKey + '": ' + LRaw);
+  Result := LBytes;
+end;
+
 { Config facade factories }
 
 function ConfigBuilder: IConfigBuilder;
