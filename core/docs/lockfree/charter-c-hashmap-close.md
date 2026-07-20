@@ -1,8 +1,8 @@
 # Charter C — T1 HashMap Close lifecycle
 
-> **Status**: accepted (A→E line, user ordered execution)  
-> **Date**: 2026-07-21  
-> **Scope**: `nextpas.core.lockfree.hashmap` (`TShardedHashMap` / `TConcurrentHashMap` alias)  
+> **Status**: accepted (A→E line, user ordered execution)
+> **Date**: 2026-07-21
+> **Scope**: `nextpas.core.lockfree.hashmap` (`TShardedHashMap` / `TConcurrentHashMap` alias)
 > **Not**: H3-2 expansion (bag/multimap table unchanged)
 
 ## Decision
@@ -28,11 +28,11 @@
 
 ## Tests
 
-- Unit: Close idempotent; Insert raises; Find works; GetOrInsert existing vs missing  
+- Unit: Close idempotent; Insert raises; Find works; GetOrInsert existing vs missing
 - Stress: concurrent Insert + Close (no hang, no residual preferred regression)
 
 ## Non-goals
 
-- Rename to remove “lockfree” from map  
-- API for H3-2 bag-style result enums on every method  
+- Rename to remove “lockfree” from map
+- API for H3-2 bag-style result enums on every method
 - collections.concurrent.hashmap (separate type)
