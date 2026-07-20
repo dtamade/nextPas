@@ -30,8 +30,27 @@
 | **M3** SCORECARD v2 | ⬜ | 与 Go 对齐测项 + 通过准则冻结 + 按表优化 |
 | **M3b** Collate Compare 热路径 | ✅ | ASCII CE 表 + 实例缓冲；Compare ≈1.12× Go |
 | **M3c** Collate 通用加速 | ✅ | contraction 快拒 + 已 NFD 跳过二次分解；ensure 脚本 |
-| **M4** 按需扩展 | 🔒 | 属性/IDNA/… 仅消费者拉票 |
-| **M5** 深水 | 🔒 | CLDR / Bidi L3+ 默认关闭 |
+| **M3d** GetSortKey 热路径 | ✅ | count 版 ElementsToSortKey；无 CE 切片拷贝；BMP-Latin 1.20× |
+| **M3e** 门面+Segment 基线 | ✅ | text.UTF8ToTitle(Words)；SCORECARD C6 冻结 |
+| **M4 / Phase 2** | 🔄 | **重新开放**：对标 Go/Rust 的下一阶段整岛（非「收工」） |
+| **M5** CLDR / L3+ | 🔒 | 仍默认关闭；书面需求再开 |
+
+## Phase 2 地图（2026-07-20 重规划）
+
+目标：在 **UCD 官方门禁已绿** 之上，把「能写应用 / 对标 Go unicode + x/text」缺口按整岛推进。
+
+| 岛 | 状态 | 完成定义 |
+|----|------|----------|
+| **P2-0** 岸线加固 | ✅ | 重放 M3d/M3e；ensure 含 TitleWords+ACount |
+| **P2-1** BinaryProperty 扩展 | ✅ | PropList 高价值属性 + gen 表 + test_property；对标 Go `unicode.Is*` |
+| **P2-2** SCORECARD v3 | ⬜ | 全量重跑 + Width 测项 + tip 钉死 |
+| **P2-3** Bidi 视觉序 | ⬜ | 由 levels 生成 visual index 置换（TUI RTL，非 L3 镜像） |
+| **P2-4** Script_Extensions | ⬜ | `GetScriptExtensions` 多脚本 |
+| **P2-5** UTS#46 IDNA | ⬜ | 大 epic：Punycode + ToASCII/ToUnicode（net 拉票可优先） |
+| **P2-6** CLDR Collation | 🔒 | 仍深水 |
+
+**纪律不变**：worktree；gate 0-fail；一 land 一岛；禁止无编号碎片。
+
 
 ---
 
@@ -67,7 +86,7 @@
 | Trim/Split/Join/Format… | ✅ 日常 | — |
 | UTF8ToUpper/Lower/CaseFold（root） | ✅ | ✅ |
 | **TCaseLocale / locale 重载** | ❌ 仅 unicode | ✅ tr/az |
-| UTF8ToTitle | ❌ | ✅（逐码点；词首 Title → M2） |
+| UTF8ToTitle / TitleWords | ✅ root 子集（M3e） | ✅ 全量 + locale |
 | NFC/NFD / IsNormalizedNFC | ✅ 子集 | ✅ 全套 + QC |
 | Segment / Bidi / Collate | — | ✅ |
 | GraphemeNext / DisplayWidth | ✅（委托 unicode 边界） | 底层 segment/props |
@@ -140,6 +159,9 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-20 | Phase2 重规划 + P2-1 BinaryProperty 扩展 |
+| 2026-07-20 | M3e：text 门面 TitleWords + C6 基线 |
+| 2026-07-20 | M3d：GetSortKey 去拷贝；Compare≈0.99× / SortKey BMP 1.20× |
 | 2026-07-20 | M3c：contraction 快拒 + QuickCheckNFD 短路；text-unicode-ensure.sh |
 | 2026-07-20 | M3b：Collate Compare ≈1.12× Go |
 | 2026-07-20 | M2：TitleWords + clLithuanian |
