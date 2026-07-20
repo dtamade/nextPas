@@ -248,8 +248,8 @@ begin
   AArena.FReservedBase := VirtualArenaReserve(ARENA_VIRTUAL_RESERVE);
   if AArena.FReservedBase = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TVirtualArena_Init: failed to reserve virtual address space (' +
-      IntToStr(Int64(ARENA_VIRTUAL_RESERVE)) + ' bytes)');
+      FormatAllocErrorMsg('TVirtualArena_Init', 'Create', 'failed to reserve virtual address space (' +
+      IntToStr(Int64(ARENA_VIRTUAL_RESERVE)) + ' bytes)'));
 
   AArena.FReservedSize := ARENA_VIRTUAL_RESERVE;
   AArena.FFrontCommittedSize := 0;

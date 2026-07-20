@@ -243,6 +243,111 @@ begin
     Result := ADefault;
 end;
 
+function TConfig.TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+var
+  LIdx: Integer;
+  LResolved: Boolean;
+  LText: string;
+begin
+  AValue := 0;
+  RequireConfigKey(AKey);
+  LResolved := False;
+  FLock.AcquireRead;
+  try
+    LIdx := FindIndex(AKey);
+    if LIdx < 0 then
+      Exit(False);
+    LResolved := TryGetResolvedEntryFastLocked(LIdx, LText);
+  finally
+    FLock.ReleaseRead;
+  end;
+  if (not LResolved) and (not TryGetValue(AKey, LText)) then
+    Exit(False);
+  Result := TryParseConfigIntText(LText, AValue);
+  if not Result then
+    AValue := 0;
+end;
+
+function TConfig.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+var
+  LIdx: Integer;
+  LResolved: Boolean;
+  LText: string;
+begin
+  AValue := False;
+  RequireConfigKey(AKey);
+  LResolved := False;
+  FLock.AcquireRead;
+  try
+    LIdx := FindIndex(AKey);
+    if LIdx < 0 then
+      Exit(False);
+    LResolved := TryGetResolvedEntryFastLocked(LIdx, LText);
+  finally
+    FLock.ReleaseRead;
+  end;
+  if (not LResolved) and (not TryGetValue(AKey, LText)) then
+    Exit(False);
+  Result := TryParseConfigBoolText(LText, AValue);
+  if not Result then
+    AValue := False;
+end;
+
+function TConfig.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+var
+  LIdx: Integer;
+  LResolved: Boolean;
+  LText: string;
+begin
+  AValue := 0.0;
+  RequireConfigKey(AKey);
+  LResolved := False;
+  FLock.AcquireRead;
+  try
+    LIdx := FindIndex(AKey);
+    if LIdx < 0 then
+      Exit(False);
+    LResolved := TryGetResolvedEntryFastLocked(LIdx, LText);
+  finally
+    FLock.ReleaseRead;
+  end;
+  if (not LResolved) and (not TryGetValue(AKey, LText)) then
+    Exit(False);
+  Result := TryParseConfigFloatText(LText, AValue);
+  if not Result then
+    AValue := 0.0;
+end;
+
+function TConfig.TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+var
+  LRaw: string;
+  LNs: Int64;
+begin
+  AValue := 0;
+  RequireConfigKey(AKey);
+  if not Has(AKey) then
+    Exit(False);
+  LRaw := GetString(AKey, '');
+  Result := TryParseConfigDurationNs(LRaw, LNs);
+  if Result then
+    AValue := LNs;
+end;
+
+function TConfig.TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
+var
+  LRaw: string;
+  LBytes: Int64;
+begin
+  AValue := 0;
+  RequireConfigKey(AKey);
+  if not Has(AKey) then
+    Exit(False);
+  LRaw := GetString(AKey, '');
+  Result := TryParseConfigByteSize(LRaw, LBytes);
+  if Result then
+    AValue := LBytes;
+end;
+
 function TConfig.GetStringRequired(const AKey: string): string;
 var
   LIdx: Integer;

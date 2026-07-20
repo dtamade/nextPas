@@ -658,10 +658,12 @@ begin
 end;
 
 procedure TestSoftFailExactDefaultsAndHardAlsoSoft;
-{ Default SoftCheck* messages + hard then soft annotate exact form. }
+{ Default SoftCheck* messages + hard then soft annotate exact form.
+  v8.23: SoftCheckEqual(string) uses ColorDiff (position), not quoted one-liner. }
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
+  LMsg: string;
 begin
   LSuite := TTestSuite.Create('soft-defaults');
   LSuite.Test('defaults', procedure
@@ -674,13 +676,14 @@ begin
       SoftCheckContains('abc', 'zz');
     end);
   CheckFalse(LSuite.RunWithResult(LResult));
-  CheckEqual(
-    'soft fail; SoftCheckTrue failed; SoftCheckFalse failed; ' +
-    'SoftCheckEqual expected 1 but got 2; ' +
-    'SoftCheckEqual expected "x" but got "y"; ' +
-    'SoftCheckContains expected to find "zz" in "abc"',
-    LResult.Results[0].Message,
-    'SoftCheck default messages exact join');
+  LMsg := LResult.Results[0].Message;
+  CheckContains(LMsg, 'soft fail', 'join has SoftFail default');
+  CheckContains(LMsg, 'SoftCheckTrue failed', 'join has SoftCheckTrue default');
+  CheckContains(LMsg, 'SoftCheckFalse failed', 'join has SoftCheckFalse default');
+  CheckContains(LMsg, 'SoftCheckEqual expected 1 but got 2', 'int soft exact');
+  CheckContains(LMsg, 'Strings differ at position', 'v8.23 string soft ColorDiff');
+  CheckContains(LMsg, 'SoftCheckContains expected to find "zz" in "abc"',
+    'contains soft exact');
   LSuite := Default(TTestSuite);
 
   LSuite := TTestSuite.Create('hard-also-soft');
@@ -748,7 +751,48 @@ begin
     end);
   CheckFalse(LSuite.RunWithResult(LResult));
   CheckContains(LResult.Results[0].Message, 'str soft');
+  CheckContains(LResult.Results[0].Message, 'Strings differ at position',
+    'string soft uses ColorDiff');
   CheckContains(LResult.Results[0].Message, 'miss soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftCheckHighFreqSurface;
+{ v8.23: SoftCheckEqual Bool/TBytes + SoftCheckNear — continue + message contract. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LMsg: string;
+  LExp, LAct: TBytes;
+begin
+  SetLength(LExp, 2);
+  LExp[0] := $01;
+  LExp[1] := $02;
+  SetLength(LAct, 2);
+  LAct[0] := $01;
+  LAct[1] := $FF;
+
+  LSuite := TTestSuite.Create('soft-hf');
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckEqual(True, True);
+      SoftCheckEqual(True, False, 'bool soft');
+      SoftCheckEqual(LExp, LExp);
+      SoftCheckEqual(LExp, LAct, 'bytes soft');
+      SoftCheckNear(1.0, 1.0);
+      SoftCheckNear(1.0, 2.0, 1e-9, 'near soft');
+      SoftCheckNear(0.0 / 0.0, 1.0, 1e-9, 'near nan');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LMsg := LResult.Results[0].Message;
+  CheckContains(LMsg, 'bool soft', 'bool soft prefix');
+  CheckContains(LMsg, 'expected: True', 'bool soft expected');
+  CheckContains(LMsg, 'bytes soft', 'bytes soft prefix');
+  CheckContains(LMsg, 'TBytes differ at index 1', 'bytes soft index');
+  CheckContains(LMsg, 'near soft', 'near soft prefix');
+  CheckContains(LMsg, 'diff=', 'near soft diff');
+  CheckContains(LMsg, 'near nan', 'near nan prefix');
+  CheckContains(LMsg, '(NaN)', 'near nan marker');
   LSuite := Default(TTestSuite);
 end;
 
@@ -2328,6 +2372,7 @@ begin
   { v8.19: SoftFail diagnostic exact contracts }
   LSuite.Test('SoftFail exact defaults+hard',  @TestSoftFailExactDefaultsAndHardAlsoSoft);
   LSuite.Test('SoftFail cap +N more',          @TestSoftFailCapMoreSuffix);
+  LSuite.Test('SoftCheck high-freq surface',   @TestSoftCheckHighFreqSurface);
 
   { Outside-context SoftFail only valid when no suite entry is active. }
   AssertSoftFailOutsideContextExact;

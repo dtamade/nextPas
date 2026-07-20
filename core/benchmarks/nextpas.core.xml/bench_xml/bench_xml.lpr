@@ -1,8 +1,9 @@
 program bench_xml;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.xml;
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.xml,
+  nextpas.core.fs,
+  nextpas.core.text.conv;
 var GConfigXml: string; GDataXml: string; GSink: UInt64;
 function BuildConfigXml(ATargetBytes: Integer): string;
 var LBuffer, LPiece: string; LI: Integer;

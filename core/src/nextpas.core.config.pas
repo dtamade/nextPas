@@ -56,6 +56,12 @@ type
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    { Typed try-get: True only when key resolves and value parses for the type. }
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
@@ -195,6 +201,11 @@ type
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;

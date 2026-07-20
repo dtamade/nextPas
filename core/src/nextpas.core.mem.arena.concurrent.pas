@@ -83,7 +83,8 @@ constructor TArenaConcurrent.Create(aInner: IArena);
 begin
   inherited Create;
   if aInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TArenaConcurrent: inner arena cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TArenaConcurrent', 'Create', 'inner arena cannot be nil'));
   FLock.Init;
   FInner := aInner;
 end;

@@ -315,7 +315,7 @@ constructor TAllocStatsAllocator.Create(AInner: IAllocator;
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TAllocStatsAllocator.Create: AInner must not be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TAllocStatsAllocator', 'Create', 'AInner must not be nil'));
   FInner := AInner;
   FTrackHistogram := ATrackHistogram;
   FCollector := ACollector;

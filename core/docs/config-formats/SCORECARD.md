@@ -1,8 +1,8 @@
-# config-formats 全族 SCORECARD（Wave O Usability）
+# config-formats 全族 SCORECARD（Wave P residual）
 
 **truth**：`host-linux`
 **lane**：`config-json-xml-toml-yaml-csv-ini`
-**日期**：2026-07-20
+**日期**：2026-07-21
 
 ---
 
@@ -16,54 +16,39 @@ make hygiene
 
 ---
 
-## B. Wave O focused 实测
+## B. Wave P focused 实测
 
 | 套件 | 结果 |
 |------|------|
-| config facade_surface | **10 passed** |
+| config facade_surface | **11 passed**（+ TryGet*） |
+| xml facade_surface | **5 passed**（+ Pos.Col） |
 | config format contracts | **findings=0 status=ok** |
-| json facade_surface | **4 passed**（TryAs + bulk guard） |
-| json parser | **40 passed** |
-| yaml facade_surface | **5 passed**（含 TryAs） |
-| yaml facade | **50 passed** |
-| toml facade_surface | **4 passed**（含 TryAs） |
-| toml parser | **42 passed** |
-| csv facade_surface | **3 passed**（Col 别名） |
-| csv edge_cases | **28 passed** |
-| ini facade_surface | **7 passed**（Strict + Col） |
-| ini / ini_edge | **32 / 25 passed** |
-| xml facade_surface | **4 passed** |
-| facade gates script | **config-formats-facade-gates=pass** |
 | hygiene | **pass** |
-| modified tests build matrix | **36/36 OK** |
+
+Wave O 证据保留：json/yaml/toml TryAs、bulk cap、INI Strict、SysUtils purge 仍有效。
 
 ---
 
-## C. Wave O 关闭项
+## C. Wave P 关闭项
 
 | 项 | 状态 |
 |----|------|
-| `config.env` 去掉 SysUtils → `text.conv` | Done |
-| 错误记录 `Col`/`Column` 双向别名 | Done |
-| `nextpas.core.format.limits` + bulk `IReader` 64MiB 上限 | Done |
-| JSON/YAML/TOML `TryAs*` | Done |
-| INI `Strict` 模式 | Done |
-| 测试 RTL 隔离（SysUtils purge；examples 白名单） | Done |
-| source-contract 硬化（include 展开 + no SysUtils + limits） | Done |
-| CONTRACT / SCORECARD / config-formats README | Done |
+| Config `TryGetInt/Bool/Float/DurationNs/ByteSize` | Done |
+| XML `TXmlPosition.Col` 别名 | Done |
+| IConfig 三 wrapper 转发 | Done |
 
 ---
 
 ## D. PARITY 综合指针
 
-| 模块 | 综合（Wave O） |
+| 模块 | 综合（Wave P） |
 |------|----------------|
-| config | **9.4**（RTL 隔离 + contracts） |
-| json | **9.2**（TryAs + bulk cap） |
+| config | **9.5**（TryGet* 类型安全） |
+| json | **9.2** |
 | yaml | **9.2** |
 | toml | **9.2** |
-| csv | **9.1**（Col 别名；真流式仍无 bulk cap） |
-| ini | **9.1**（Strict + 结构化错误） |
-| xml | **9.0**（bulk cap） |
+| csv | **9.1** |
+| ini | **9.1** |
+| xml | **9.1**（Col 别名对齐） |
 
 **Steady 线**：Essential 路径已齐；remote / Schema / XPath / YAML multi-doc 接受仍 Out of scope。

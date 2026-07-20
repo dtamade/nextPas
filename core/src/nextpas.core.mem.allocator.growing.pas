@@ -304,7 +304,8 @@ begin
   for LCheckSize := 16 to 1024 do
     if FastSizeClassIndex(LCheckSize) <> SizeClassIndex(LCheckSize) then
       raise EAllocError.Create(aeInternalError,
-        'FastSizeClassIndex formula mismatch: sizeclass table inconsistency detected');
+      FormatAllocErrorMsg('TGrowingAllocator', 'FastSizeClassIndex',
+        'formula mismatch: sizeclass table inconsistency detected'));
 end;
 
 { Refill/Flush callbacks (standalone functions for TRefillProc/TFlushProc) --- }

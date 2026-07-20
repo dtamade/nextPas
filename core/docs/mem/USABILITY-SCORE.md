@@ -1,11 +1,10 @@
 # nextpas.core.mem 可用性评分（权威）
 
-**评估日期**: 2026-07-17（F1–F7 + R1–R5 + S1–S3 + T1–T4 + U1 修复后）
+**评估日期**: 2026-07-20（可用性债 R-* 全量关闭后）
 **范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入
 **对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）
-**前序**: 独立基线 **7.7** → … → T1–T4 **9.35** → 落地后残留 U1 **9.4**
-**本轮评估**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)
-**调研/计划**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) · [USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md)
+**前序**: … → U1 **9.4** → 独立评估 **8.9** → 修复落地后 **9.5**
+**调研/计划**: [USABILITY-FIX-RESEARCH-2026-07-20.md](USABILITY-FIX-RESEARCH-2026-07-20.md) · [USABILITY-FIX-PLAN-2026-07-20.md](USABILITY-FIX-PLAN-2026-07-20.md)
 
 历史长报告 [USABILITY-AUDIT.md](USABILITY-AUDIT.md) 已 SUPERSEDED，仅作修复履历。
 
@@ -15,12 +14,12 @@
 
 | 项 | 值 |
 |----|-----|
-| **综合分** | **9.4 / 10** |
+| **综合分** | **9.5 / 10** |
 | **等级** | **HIGH** |
-| **趋势** | … → T1–T4 **9.35** → U1 **9.4**（废除 plus-chain 记分） |
-| **风险** | LOW–MEDIUM（热路径双 free 仍默认 UB；需 opt-in SAFETY/DEBUG） |
+| **趋势** | 独立评估 8.9 → R-* 关闭 **9.5**（错误面/门禁/examples/WARN/Unchecked） |
+| **风险** | LOW（热路径双 free 仍默认 UB；SAFETY 有可发现测试入口） |
 
-**结论（一句话）**: 双轨零税；诊断完整；Try/非 Try 对称（含 TryFreeMemOf nil+owned）；AllocArray 溢出为 aeInvalidLayout；AllocZeroed/AllocArray(nil)→ResolveAllocator；Arena Realloc 走 FormatAllocErrorMsg。产品表 dual-track **CLOSED**。可用性主线 **CLOSED**（无新 P0/P1）。
+**结论（一句话）**: 双轨零税保留；raise 全量 `FormatAllocErrorMsg`；`BuildAllocMsg` 为 `stem [code]`；gap 时 `WARN=debug_coverage_gap`；`TryAllocErrorCode` 统一 catch 读码；lane_gate=guardrails+contract；三 examples；`Unchecked` 命名对齐。可用性债 R-* **CLOSED**。
 
 ### 故意默认堆（lifetime 理由；非 phase bulk reclaim 目标）
 
@@ -74,12 +73,12 @@
 | 默认路径正确性 | **9.5** | Growing 热路径；S5 同堆（Growing IAllocator / `GetGrowingIAllocator`）；H1+H2 RequestArena；compiler phase UnitBegin |
 | API 可发现性 | **9.3** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`FreeMemOf`/`ReallocMemOf`/`TryBlockSize`；`FormatMemDebugProfile`；门面冻结 |
 | 调用一致性 | **9.5** | HTTP/compiler bulk-reclaim；插件 free/realloc sized 对称；TryReallocMemOf ≡ ReallocMemOf；TryFreeMemOf nil+owned ≡ process free（U1）；Arena strict |
-| 错误模型 | **9.3** | ERROR-POLICY + FormatAllocErrorMsg；AllocArray 溢出 aeInvalidLayout（T2）；对齐/Arena Realloc 助手（S2/T1） |
-| 诊断可用性 | **9.5** | FormatMemStats（`heap_debug`/`heap_safety`/`arena_strict`/`debug_process`/`debug_coverage_gap`）；HEAP_DEBUG + HEAP_SAFETY；CI recipe |
-| 契约可证明 | **9.5** | guardrails F1–F7 + R1–R5 + S1–S3 + T1–T4 + U1；contract_matrix；SC8 sized free + TryBlockSize；SC9 双轨；source-contract |
-| 性能默认 | **9.4** | 热路径零税；`FreeMem(ptr,size)` 优于 unsized（SC8 ~8×）；丢 size 时 `TryBlockSize` 再 sized free；HEAP_DEBUG/SAFETY 默认关 |
-| 上层可集成 | **9.5** | hello options → native；compiler session 管线真实 MemAlloc；HttpRequestAllocatorOf；Alloc*(nil)→default heap |
-| **加权综合** | **9.4** | — |
+| 错误模型 | **9.5** | ERROR-POLICY + 全量 FormatAllocErrorMsg + BuildAllocMsg `stem [code]` + TryAllocErrorCode |
+| 诊断可用性 | **9.6** | FormatMemStats + gap 时 `WARN=debug_coverage_gap`；HEAP_DEBUG/SAFETY；test_heap_safety_profile |
+| 契约可证明 | **9.6** | lane_gate（guardrails+contract）；check_alloc_error_raises；SC8/SC9 |
+| 性能默认 | **9.4** | 热路径零税；sized free 叙事；SAFETY 默认关 |
+| 上层可集成 | **9.6** | examples heap/arena/inject；HTTP/compiler 既有接线；Try* 无 TLS last-OOM |
+| **加权综合** | **9.5** | — |
 
 ### F1–F7 / R1–R5 修复状态
 
@@ -128,11 +127,30 @@
 **默认 lane focused gate**（`docs/worktrees.md` / `make lane-focused LANE=mem`）：
 
 ```text
-make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
-make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
+make focused FOCUS=core/tests/nextpas.core.mem/lane_gate
+# ≡ test_usability_guardrails + test_contract_matrix
 ```
 
-按改动表面追加：`test_debug_wrap` / `make stage0-heap-debug-recipe` / `test_compiler_mem`。
+按改动表面追加：`test_debug_wrap` / `test_heap_safety_profile` / `make stage0-heap-debug-recipe` / `test_compiler_mem`。
+
+### 2026-07-20 R-* 可用性债关闭
+
+| ID | 状态 | 证据 |
+|----|------|------|
+| R-ER-01 FormatAllocErrorMsg | **closed** | check_alloc_error_raises |
+| R-ER-02 BuildAllocMsg | **closed** | `stem [code label]` + guardrails |
+| R-ER-03 no last-OOM TLS | **closed** | Try* + examples（设计接受） |
+| R-UX-01 gap WARN | **closed** | FormatMemStats WARN= |
+| R-UX-02 examples | **closed** | heap_default / arena_request / inject_tracking |
+| R-UX-03 FreeMemOf vs tracking | **closed** | intf 注释 + inject example |
+| R-CO-01 TryAllocErrorCode | **closed** | mem.error + guardrails |
+| R-CO-02 历史异常 | **closed** | raise 经助手；类型保留 |
+| R-CO-03 IAllocator 单参 free | **closed** | 文档/intf（设计冻结） |
+| R-SA-01 SAFETY 入口 | **closed** | test_heap_safety_profile |
+| R-IF-01/02 认知 | **closed** | API-GUIDE 三套动词 |
+| R-IF-03 Unchecked | **closed** | mem.utils + element_manager |
+| R-TE-01 SysUtils | **closed** | test_stack_guard + 脚本门禁 |
+| R-TE-02 lane 双 gate | **closed** | lane_gate Makefile |
 
 ### 仍可演进（非可用性阻塞）
 

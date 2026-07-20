@@ -662,7 +662,7 @@ begin
   LRaw := FAllocator.GetMem(LNeeded);
   if LRaw = nil then Exit(nil);
 
-  LUser := AlignUpUnChecked(LRaw, LAlign);
+  LUser := AlignUpUnchecked(LRaw, LAlign);
   try
     FbMapInsert(LUser, LRaw, ASize, LAlign);
   except
@@ -1055,7 +1055,7 @@ begin
   {$IFDEF DEBUG}
   if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TSlabPool.GetMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+      FormatAllocErrorMsg('TSlabPool', 'GetMem', 'thread-safety violation — use TSlabPoolConcurrent for multi-threaded access'));
   {$ENDIF}
   if ASize=0 then Exit(nil);
   LPerfEnabled := FConfig.EnablePerfMonitoring;
@@ -1175,7 +1175,7 @@ begin
   {$IFDEF DEBUG}
   if (FOwnerThreadId <> 0) and (platform_thread_id <> FOwnerThreadId) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TSlabPool.FreeMem: thread-safety violation — use TSlabPoolConcurrent for multi-threaded access');
+      FormatAllocErrorMsg('TSlabPool', 'FreeMem', 'thread-safety violation — use TSlabPoolConcurrent for multi-threaded access'));
   {$ENDIF}
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then

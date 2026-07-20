@@ -64,6 +64,11 @@ type
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
@@ -97,6 +102,11 @@ type
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
@@ -132,6 +142,11 @@ type
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
     function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
@@ -275,6 +290,31 @@ begin
   Result := FConfig.GetByteSize(AKey, ADefault);
 end;
 
+function TOwnedConfig.TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetInt(AKey, AValue);
+end;
+
+function TOwnedConfig.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+begin
+  Result := FConfig.TryGetBool(AKey, AValue);
+end;
+
+function TOwnedConfig.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+begin
+  Result := FConfig.TryGetFloat(AKey, AValue);
+end;
+
+function TOwnedConfig.TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetDurationNs(AKey, AValue);
+end;
+
+function TOwnedConfig.TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetByteSize(AKey, AValue);
+end;
+
 function TOwnedConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -406,6 +446,31 @@ end;
 function TBorrowedConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
 begin
   Result := FConfig.GetByteSize(AKey, ADefault);
+end;
+
+function TBorrowedConfig.TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetInt(AKey, AValue);
+end;
+
+function TBorrowedConfig.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+begin
+  Result := FConfig.TryGetBool(AKey, AValue);
+end;
+
+function TBorrowedConfig.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+begin
+  Result := FConfig.TryGetFloat(AKey, AValue);
+end;
+
+function TBorrowedConfig.TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetDurationNs(AKey, AValue);
+end;
+
+function TBorrowedConfig.TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetByteSize(AKey, AValue);
 end;
 
 function TBorrowedConfig.GetStringRequired(const AKey: string): string;
@@ -561,6 +626,31 @@ end;
 function TSectionConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
 begin
   Result := FParent.GetByteSize(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FParent.TryGetInt(FullKey(AKey), AValue);
+end;
+
+function TSectionConfig.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+begin
+  Result := FParent.TryGetBool(FullKey(AKey), AValue);
+end;
+
+function TSectionConfig.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+begin
+  Result := FParent.TryGetFloat(FullKey(AKey), AValue);
+end;
+
+function TSectionConfig.TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FParent.TryGetDurationNs(FullKey(AKey), AValue);
+end;
+
+function TSectionConfig.TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FParent.TryGetByteSize(FullKey(AKey), AValue);
 end;
 
 function TSectionConfig.GetStringRequired(const AKey: string): string;

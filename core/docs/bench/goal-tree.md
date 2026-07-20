@@ -235,6 +235,12 @@ B45  可用性评估落地 (2026-07-20)                                     ✅
   B45.3  Canonical API 文档 + CONTRACT 索引/错误约定/RTL 节       ✅
   B45.4  checklist +http/mem/collections 抽检；contract-check 增强 ✅
   B45.5  门面物理大拆 / EBR / 全量 SCORECARD — 仍推迟             ⏸
+
+B46  benchmarks RTL 隔离 (2026-07-20)                              ✅
+  B46.1  文档 checklist 22 口径一致                              ✅
+  B46.2  nextpas.core.* benches 去掉 SysUtils/Classes/…          ✅
+  B46.3  contract-check C9 + platform-comparison 白名单          ✅
+  B46.4  BlackBox 消费指南推广（文档）                             ✅
 ```
 
 ## 测试套件分布

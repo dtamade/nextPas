@@ -191,9 +191,9 @@ constructor TBudgetAllocator.Create(AInner: IAllocator; ABudget: TMemoryBudget);
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TBudgetAllocator.Create: AInner must not be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TBudgetAllocator', 'Create', 'AInner must not be nil'));
   if ABudget = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TBudgetAllocator.Create: ABudget must not be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TBudgetAllocator', 'Create', 'ABudget must not be nil'));
   FInner := AInner;
   FBudget := ABudget;
 end;

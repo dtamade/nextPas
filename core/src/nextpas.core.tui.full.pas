@@ -96,10 +96,6 @@ type
   ETuiBackend = nextpas.core.tui.error.ETuiBackend;
 
   { 基础类型 }
-  TTuiRect = nextpas.core.tui.base.TRect;
-  TTuiPosition = nextpas.core.tui.base.TPosition;
-  TTuiSize = nextpas.core.tui.base.TSize;
-  TTuiDirection = nextpas.core.tui.base.TDirection;
   TRect = nextpas.core.tui.base.TRect;
   TPosition = nextpas.core.tui.base.TPosition;
   TSize = nextpas.core.tui.base.TSize;
@@ -107,17 +103,11 @@ type
   TDirection = nextpas.core.tui.base.TDirection;
 
   { 样式 }
-  TTuiColor = nextpas.core.tui.color.TColor;
-  TTuiColorKind = nextpas.core.tui.color.TColorKind;
   TColor = nextpas.core.tui.color.TColor;
   TColorKind = nextpas.core.tui.color.TColorKind;
-  TTuiModifier = nextpas.core.tui.modifier.TModifier;
-  TTuiModifierBit = nextpas.core.tui.modifier.TModifierBit;
   TModifier = nextpas.core.tui.modifier.TModifier;
   TModifierBit = nextpas.core.tui.modifier.TModifierBit;
-  TTuiStyle = nextpas.core.tui.style.TStyle;
   TStyle = nextpas.core.tui.style.TStyle;
-  TTuiCell = nextpas.core.tui.cell.TCell;
   TCell = nextpas.core.tui.cell.TCell;
   PCell = nextpas.core.tui.cell.PCell;
 
@@ -127,8 +117,6 @@ type
   TClipboard = nextpas.core.tui.clipboard.TClipboard;
 
   { Buffer }
-  TTuiBuffer = nextpas.core.tui.buffer.TBuffer;
-  TTuiDiffEntries = nextpas.core.tui.buffer.TDiffEntries;
   TBuffer = nextpas.core.tui.buffer.TBuffer;
   TDiffEntry = nextpas.core.tui.buffer.TDiffEntry;
   TDiffEntries = nextpas.core.tui.buffer.TDiffEntries;
@@ -157,8 +145,6 @@ type
   TBorderSet = nextpas.core.tui.borders.TBorderSet;
 
   { 事件 }
-  TTuiEvent = nextpas.core.tui.event.TEvent;
-  TTuiEventKind = nextpas.core.tui.event.TEventKind;
   TEvent = nextpas.core.tui.event.TEvent;
   TEventKind = nextpas.core.tui.event.TEventKind;
   TKeyCodeKind = nextpas.core.tui.event.TKeyCodeKind;
@@ -173,19 +159,13 @@ type
   TFocusEvent = nextpas.core.tui.event.TFocusEvent;
 
   { Terminal }
-  TTuiTerminal = nextpas.core.tui.terminal.TTerminal;
-  TTuiFrame = nextpas.core.tui.terminal.TFrame;
-  TTuiTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
   TTerminal = nextpas.core.tui.terminal.TTerminal;
   TFrame = nextpas.core.tui.terminal.TFrame;
   TTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
 
   { App }
-  TTuiApp = nextpas.core.tui.app.TApp;
   TApp = nextpas.core.tui.app.TApp;
-  TTuiScreen = nextpas.core.tui.app.screen.TScreen;
   TScreen = nextpas.core.tui.app.screen.TScreen;
-  TTuiScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   TScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   EFtuiScreenError = nextpas.core.tui.app.screen.EFtuiScreenError;
   TTaskId = nextpas.core.tui.task.TTaskId;
@@ -209,8 +189,6 @@ type
   TTheme = nextpas.core.tui.theme.TTheme;
 
   { Widget 接口 }
-  ITuiWidget = nextpas.core.tui.widget.intf.IWidget;
-  ITuiBlock = nextpas.core.tui.widget.block.IBlock;
   IWidget = nextpas.core.tui.widget.intf.IWidget;
   TWidgetRenderFn = nextpas.core.tui.widget.intf.TWidgetRenderFn;
   TWidgetAdapter = nextpas.core.tui.widget.intf.TWidgetAdapter;

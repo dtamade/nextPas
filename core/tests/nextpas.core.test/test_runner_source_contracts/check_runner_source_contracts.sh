@@ -39,8 +39,38 @@ must_have=(
   SoftFail
   SoftCheckTrue
   SoftCheckEqual
+  SoftCheckNear
   SoftFailOnly
 )
+
+echo "=== ComputeKey must hash stop-semantic config fields (v8.22+) ==="
+CFG="$CORE_ROOT/src/nextpas.core.test.config.pas"
+# Restrict to ComputeKey body: from function TTestCache.ComputeKey to next function
+ck_body="$(awk '
+  /function TTestCache\.ComputeKey/ { p=1 }
+  p { print }
+  p && /^function TTestCache\./ && !/ComputeKey/ { exit }
+  p && /^procedure TTestCache\./ { exit }
+' "$CFG")"
+for field in ShuffleSeed FailFast MaxFailures ShortMode VerboseMode RetryCount \
+  TimeoutMs FilterPattern TagFilter RunPattern; do
+  if ! printf '%s\n' "$ck_body" | rg -q --fixed-strings "AConfig.$field"; then
+    # SuiteName is a separate parameter, not AConfig
+    if [[ "$field" == "SuiteName" ]]; then
+      continue
+    fi
+    echo "MISSING in ComputeKey: AConfig.$field"
+    fail=1
+  else
+    echo "OK: ComputeKey hashes AConfig.$field"
+  fi
+done
+if ! printf '%s\n' "$ck_body" | rg -q --fixed-strings 'ASuiteName'; then
+  echo "MISSING in ComputeKey: ASuiteName"
+  fail=1
+else
+  echo "OK: ComputeKey hashes ASuiteName"
+fi
 
 echo "=== Nested SoftFail Push/Pop must appear in runner.context ==="
 CTX="$CORE_ROOT/src/nextpas.core.test.runner.context.pas"

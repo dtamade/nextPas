@@ -58,11 +58,20 @@ if not TryFreeMem(P) then
 
 | 调用方策略 | 说明 |
 |------------|------|
-| **推荐** | `except on E: ENextPasError`（或项目根异常）+ 需要时读 `TAllocError` 码 |
-| **窄 catch** | `except on E: EAllocError` — 覆盖标准 raise 路径；**不**保证所有历史类 |
-| **OOM 子类** | `EOutOfMemory` 带 `TAllocError`，但 **不**继承 `EAllocError`；资源不足热路径仍优先 nil |
+| **推荐** | `except on E: ENextPasError`（或项目根异常）+ `TryAllocErrorCode(E, Code)` 读码 |
+| **窄 catch** | `except on E: EAllocError` — 覆盖编程错误 raise；**漏** `mem.EOutOfMemory` |
+| **OOM 子类** | `EOutOfMemory` 带 `TAllocError`，但 **不**继承 `EAllocError`（保留资源层次）；资源不足热路径仍优先 nil |
+
+```pascal
+except
+  on E: ENextPasError do
+    if TryAllocErrorCode(E, LCode) then
+      ... // LCode in TAllocError
+end;
+```
 
 新建/修改的 raise 点必须：`EAllocError.Create(code, FormatAllocErrorMsg(Type, Method, reason))`。
+最终 `E.Message` = stem + ` [code label]`（`BuildAllocMsg`）。
 
 ---
 

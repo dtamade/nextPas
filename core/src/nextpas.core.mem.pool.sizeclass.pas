@@ -154,8 +154,8 @@ begin
     Str(LSlotSize, LSlotSizeStr);
     Str(LCount, LCountStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TSizeClassPool.AllocatePage: out of memory (slot_size=' +
-      LSlotSizeStr + ', count=' + LCountStr + ')');
+      FormatAllocErrorMsg('TSizeClassPool', 'AllocatePage', 'out of memory (slot_size=' +
+      LSlotSizeStr + ', count=' + LCountStr + ')'));
   end;
 
   { 记录页 }
@@ -191,7 +191,7 @@ begin
   begin
     Str(ASize, LASizeStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TSizeClassPool.ClassIndexForSize: size ' + LASizeStr + ' exceeds max size class (512)');
+      FormatAllocErrorMsg('TSizeClassPool', 'ClassIndexForSize', 'size ' + LASizeStr + ' exceeds max size class (512)'));
   end;
   Result := TSizeClassIndex(LIdx);
 end;

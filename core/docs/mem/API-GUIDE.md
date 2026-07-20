@@ -19,13 +19,21 @@
 
 热路径：**只** `DefaultHeap` / 过程式 `GetMem`。`DefaultAllocator` 是注入面，不要进热循环。
 
-资源不足要写分支时用 **Try***（同一后端，False+nil，不抛）：
+资源不足要写分支时用 **Try***（同一后端，False+nil，不抛）。**没有** TLS last-OOM API：
 
 ```pascal
-if not TryGetMem(Size, P) then Exit;   // OOM
+if not TryGetMem(Size, P) then Exit;   // OOM — 用返回值，不要查 last-error
 if not TryFreeMem(P) then ...;         // 丢 size 时的 size-class 恢复 free
 if not TryArenaAlloc(Arena, N, P) then ...;
 ```
+
+### 三套动词（勿混用）
+
+| 动词 | 表面 | 释放 |
+|------|------|------|
+| `Alloc` / `Reset` | Arena 生命周期 | `Reset` / `RestoreToMark`（**不要** `FreeMem`） |
+| `GetMem` / `FreeMem` | 通用堆 / IAllocator | 每块单独 free；热路径 `FreeMem(ptr,size)` |
+| `Acquire` / `Release` | 固定大小池 `IPool` / BlockPool | 槽位归还池 |
 
 ### DEBUG 一键包装（`DefaultAllocator` only）
 

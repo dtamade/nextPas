@@ -52,10 +52,10 @@ SCORECARD="$REPO_ROOT/core/docs/tui/SCORECARD.md"
 PARITY="$REPO_ROOT/core/docs/tui/PARITY-GO-RUST.md"
 SC_LPR="$TEST_DIR/scorecard/scorecard.lpr"
 if [ -f "$SCORECARD" ]; then
-  if grep -q 'SC25' "$SCORECARD" && grep -q 'SC26' "$SCORECARD" && grep -q 'SC27' "$SCORECARD" && grep -q 'SC28' "$SCORECARD" && grep -q 'SC29' "$SCORECARD"; then
-    ok "SCORECARD 含 SC25–SC29"
+  if grep -q 'SC25' "$SCORECARD" && grep -q 'SC26' "$SCORECARD" && grep -q 'SC27' "$SCORECARD" && grep -q 'SC28' "$SCORECARD" && grep -q 'SC29' "$SCORECARD" && grep -q 'SC30' "$SCORECARD"; then
+    ok "SCORECARD 含 SC25–SC30"
   else
-    fail_check "SCORECARD 缺少 SC25–SC29 条目"
+    fail_check "SCORECARD 缺少 SC25–SC30 条目"
   fi
 else
   fail_check "SCORECARD.md 不存在"
@@ -68,7 +68,7 @@ if [ -f "$CONTRACT" ]; then
   fi
 fi
 if [ -f "$SC_LPR" ]; then
-  for p in RunSC25 RunSC26 RunSC27 RunSC28 RunSC29; do
+  for p in RunSC25 RunSC26 RunSC27 RunSC28 RunSC29 RunSC30; do
     if grep -q "procedure $p" "$SC_LPR"; then ok "scorecard.lpr $p"; else fail_check "scorecard.lpr 缺 $p"; fi
   done
 else
@@ -127,6 +127,40 @@ for wine in test_tui_buffer_wine test_tui_color_wine test_tui_input_wine; do
     fail_check "缺 wine suite: $wine"
   fi
 done
+
+printf "\n${BOLD}C10: examples facade 纪律（新代码优先 ext）${NC}\n"
+EX_DIR="$REPO_ROOT/core/examples/nextpas.core.tui"
+if [ -d "$EX_DIR" ]; then
+  for demo in "$EX_DIR"/demo_*/; do
+    [ -d "$demo" ] || continue
+    name=$(basename "$demo")
+    src=$(ls "$demo"/*.lpr 2>/dev/null | head -1)
+    if [ -z "$src" ]; then
+      fail_check "demo $name 无 .lpr"
+      continue
+    fi
+    if [ "$name" = "demo_widgets" ]; then
+      if grep -q 'nextpas\.core\.tui\.full' "$src"; then
+        ok "$name 使用 full（高级 catalog 例外）"
+      else
+        fail_check "$name 应 uses full"
+      fi
+    else
+      if grep -q 'nextpas\.core\.tui\.ext' "$src" && ! grep -q 'nextpas\.core\.tui\.full' "$src"; then
+        ok "$name 使用 ext 且无 full"
+      else
+        fail_check "$name 须 uses ext 且不得 full"
+      fi
+    fi
+  done
+  if grep -qiE 'migration-only|新代码优先|不要默认.*full' "$REPO_ROOT/core/docs/tui/README.md"; then
+    ok "README 含 full 迁移纪律"
+  else
+    fail_check "README 缺少 full migration 纪律表述"
+  fi
+else
+  fail_check "examples 目录缺失"
+fi
 
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"

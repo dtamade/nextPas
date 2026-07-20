@@ -262,13 +262,13 @@ begin
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingFixedPool.AddArena: total size overflow (blocks=' +
-      IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')');
+      FormatAllocErrorMsg('TGrowingFixedPool', 'AddArena', 'total size overflow (blocks=' +
+      IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')'));
 
   LArena.Base := FAllocator.GetMem(LBytes);
   if LArena.Base = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingFixedPool.AddArena: failed to allocate arena (' + IntToStr(Int64(LBytes)) + ' bytes)');
+      FormatAllocErrorMsg('TGrowingFixedPool', 'AddArena', 'failed to allocate arena (' + IntToStr(Int64(LBytes)) + ' bytes)'));
   LArena.Blocks := aBlocks;
   LArena.Size := LBytes;
 
@@ -288,8 +288,8 @@ begin
   // grow free stack space and push all blocks
   if FFreeTop > (High(SizeUInt) - aBlocks) then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TGrowingFixedPool.AddArena: free stack size overflow (top=' +
-      IntToStr(Int64(FFreeTop)) + ', blocks=' + IntToStr(Int64(aBlocks)) + ')');
+      FormatAllocErrorMsg('TGrowingFixedPool', 'AddArena', 'free stack size overflow (top=' +
+      IntToStr(Int64(FFreeTop)) + ', blocks=' + IntToStr(Int64(aBlocks)) + ')'));
   LNewLen := FFreeTop + aBlocks;
   if SizeUInt(Length(FFreeStack)) < LNewLen then
     SetLength(FFreeStack, LNewLen);

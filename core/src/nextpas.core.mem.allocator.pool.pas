@@ -126,9 +126,9 @@ constructor TPoolAllocator.Create(AInner: IAllocator; ABlockSize: SizeUInt;
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TPoolAllocator.Create: AInner cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TPoolAllocator', 'Create', 'AInner cannot be nil'));
   if ABlockSize < MIN_BLOCK_SIZE then
-    raise EAllocError.Create(aeInvalidLayout, 'TPoolAllocator.Create: block size too small');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TPoolAllocator', 'Create', 'block size too small'));
   if AInitialCount = 0 then
     AInitialCount := POOL_DEFAULT_INITIAL_COUNT;
 
@@ -172,12 +172,12 @@ begin
   { 计算总内存大小 }
   LChunkSize := AGrowCount * FActualBlockSize;
   if LChunkSize div FActualBlockSize <> AGrowCount then
-    raise EAllocError.Create(aeOutOfMemory, 'TPoolAllocator.GrowPool: size overflow');
+    raise EAllocError.Create(aeOutOfMemory, FormatAllocErrorMsg('TPoolAllocator', 'GrowPool', 'size overflow'));
 
   { 从内部分配器获取大块内存 }
   LChunk := FInner.GetMem(LChunkSize);
   if LChunk = nil then
-    raise EAllocError.Create(aeOutOfMemory, 'TPoolAllocator.GrowPool: allocation failed');
+    raise EAllocError.Create(aeOutOfMemory, FormatAllocErrorMsg('TPoolAllocator', 'GrowPool', 'allocation failed'));
 
   { 记录池内存块（用于析构时释放） }
   if FPoolChunkCount >= Length(FPoolChunks) then
@@ -254,7 +254,7 @@ function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inl
 begin
   { 固定大小块不支持 Realloc }
   raise EAllocError.Create(aeInvalidLayout,
-    'TPoolAllocator.ReallocMem: not supported for fixed-size pool');
+    FormatAllocErrorMsg('TPoolAllocator', 'ReallocMem', 'not supported for fixed-size pool'));
   Result := nil;
 end;
 

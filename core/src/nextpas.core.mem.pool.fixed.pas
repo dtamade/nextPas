@@ -350,8 +350,8 @@ begin
   LRaw := FAllocator.GetMem(FRawAllocSize);
   if LRaw = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TFixedPool.Create: failed to allocate arena buffer (' +
-      IntToStr(Int64(FRawAllocSize)) + ' bytes)');
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'failed to allocate arena buffer (' +
+      IntToStr(Int64(FRawAllocSize)) + ' bytes)'));
   FRawBuffer := LRaw;
   try
     LAddr := PtrUInt(LRaw);

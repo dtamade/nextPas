@@ -1,8 +1,8 @@
 program bench_atomic;
 {$I nextpas.core.settings.inc}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.atomic, nextpas.core.platform.info;
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.atomic, nextpas.core.platform.info,
+  nextpas.core.fs;
 
 const ITERS = 1000000;
 

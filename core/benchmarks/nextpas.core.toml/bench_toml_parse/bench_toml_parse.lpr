@@ -4,7 +4,6 @@ program bench_toml_parse;
 {$optimization on}
 
 uses
-  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.mem.intf,
@@ -14,7 +13,8 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.fs;
 
 var
   GSmallToml: string;

@@ -42,6 +42,7 @@ IConfig = interface
   function GetCount: Integer;
   function GetString / GetRawString / GetStringArray / GetRawStringArray;
   function GetInt / GetBool / GetFloat;
+  function TryGetInt / TryGetBool / TryGetFloat / TryGetDurationNs / TryGetByteSize;
   function GetStringRequired / GetIntRequired / GetBoolRequired / GetFloatRequired;
   procedure Require(const AKeys: array of string);
   function Has / GetKeys / GetSection;
@@ -101,7 +102,7 @@ function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean
 - 拷贝/合并：`Clone`（调用方 Free）、`MergeFrom(TConfig|IConfig)`（后写覆盖）
 - 诊断：`DebugDump` / `ConfigDebugDump`（排序 `key=rawValue` 行）
 - 导出：`ToIni/Json/Yaml/Toml`、`SaveTo*`
-- 读取：与 `IConfig` 对称的 Get*/Require/Has/GetKeys/GetSection + DurationNs/ByteSize
+- 读取：与 `IConfig` 对称的 Get*/TryGet*/Require/Has/GetKeys/GetSection + DurationNs/ByteSize
 - 插值：`SetInterpolationMode` / `GetInterpolationMode`
 
 ### 2.5 Watcher

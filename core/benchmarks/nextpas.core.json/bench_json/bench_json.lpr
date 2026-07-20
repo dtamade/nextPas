@@ -1,12 +1,12 @@
 program bench_json;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.text.view,
   nextpas.core.text.conv,
-  nextpas.core.json, nextpas.core.json.value;
+  nextpas.core.json, nextpas.core.json.value,
+  nextpas.core.fs;
 const
   SMALL_JSON = '{"name":"test","value":42,"items":[1,2,3,4,5]}';
 var

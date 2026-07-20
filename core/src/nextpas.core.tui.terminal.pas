@@ -60,6 +60,24 @@ type
     FrameId: Cardinal;
   end;
 
+  { EnterTui diagnostic result — Boolean path kept; inspect after False. }
+  TTuiEnterFailure = (
+    tefNone,
+    tefNotATerminal,
+    tefSetRawFailed,
+    tefSessionSetupFailed
+  );
+
+  TTuiEnterResult = record
+    Ok: Boolean;
+    Failure: TTuiEnterFailure;
+    Reason: AnsiString;
+
+    class function OkResult: TTuiEnterResult; static;
+    class function Fail(AFailure: TTuiEnterFailure;
+      const AReason: AnsiString): TTuiEnterResult; static;
+  end;
+
   TTuiImageProtocolCapability = record
     DetectedProtocol: TImageProtocol;
     ActiveProtocol: TImageProtocol;
@@ -106,6 +124,7 @@ type
     FKittyKeyboardPushed: Boolean;
     FFocusReportingEnabled: Boolean;
     FBracketedPasteEnabled: Boolean;
+    FLastEnterResult: TTuiEnterResult;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
     function ReadAvailableBytes: Integer;
@@ -133,6 +152,8 @@ type
 
     function EnterTui: Boolean; overload;
     function EnterTui(const AOptions: TTerminalOptions): Boolean; overload;
+    function TryEnterTui: TTuiEnterResult; overload;
+    function TryEnterTui(const AOptions: TTerminalOptions): TTuiEnterResult; overload;
     procedure LeaveTui;
 
     function BeginFrame: TFrame;
@@ -163,6 +184,7 @@ type
     property CellWidth: Word read FCellWidth;
     property CellHeight: Word read FCellHeight;
     property Options: TTerminalOptions read FOptions write FOptions;
+    property LastEnterResult: TTuiEnterResult read FLastEnterResult;
   end;
 
 implementation
@@ -224,6 +246,23 @@ end;
 function ConsumeTerminate: Boolean;
 begin
   Result := InterlockedExchange(GTermPending, 0) <> 0;
+end;
+
+{ TTuiEnterResult }
+
+class function TTuiEnterResult.OkResult: TTuiEnterResult;
+begin
+  Result.Ok := True;
+  Result.Failure := tefNone;
+  Result.Reason := '';
+end;
+
+class function TTuiEnterResult.Fail(AFailure: TTuiEnterFailure;
+  const AReason: AnsiString): TTuiEnterResult;
+begin
+  Result.Ok := False;
+  Result.Failure := AFailure;
+  Result.Reason := AReason;
 end;
 
 { TTerminalOptions }
@@ -366,6 +405,7 @@ begin
   FKittyKeyboardPushed := False;
   FFocusReportingEnabled := False;
   FBracketedPasteEnabled := False;
+  FLastEnterResult := TTuiEnterResult.OkResult;
   SetLength(FInputQueue, 256);
 end;
 
@@ -389,24 +429,51 @@ begin
   Result := EnterTui(FOptions);
 end;
 
+function TTerminal.TryEnterTui: TTuiEnterResult;
+begin
+  EnterTui;
+  Result := FLastEnterResult;
+end;
+
+function TTerminal.TryEnterTui(const AOptions: TTerminalOptions): TTuiEnterResult;
+begin
+  EnterTui(AOptions);
+  Result := FLastEnterResult;
+end;
+
 function TTerminal.EnterTui(const AOptions: TTerminalOptions): Boolean;
 var
   LSize: TPlatformConsoleSize;
   LMouseMode: TTerminalMouseMode;
 begin
   Result := False;
-  if FInRawMode then Exit(True);
+  if FInRawMode then
+  begin
+    FLastEnterResult := TTuiEnterResult.OkResult;
+    Exit(True);
+  end;
   FOptions := AOptions;
 
-  if not platform_console_is_terminal(STDOUT_FD) then Exit;
+  if not platform_console_is_terminal(STDOUT_FD) then
+  begin
+    FLastEnterResult := TTuiEnterResult.Fail(tefNotATerminal, 'not-a-terminal');
+    Exit;
+  end;
   if platform_console_get_size_fd(STDOUT_FD, LSize) <> 0 then
   begin
     LSize.Cols := 80;
     LSize.Rows := 24;
   end;
-  if platform_console_set_raw(STDIN_FD, FSavedMode) <> 0 then Exit;
+  if platform_console_set_raw(STDIN_FD, FSavedMode) <> 0 then
+  begin
+    FLastEnterResult := TTuiEnterResult.Fail(tefSetRawFailed, 'set-raw-failed');
+    Exit;
+  end;
   FRawModeCaptured := True;
   FInRawMode := True;
+
+  { Best-effort VT enable (Windows); POSIX no-op / ignore errors. }
+  platform_console_enable_ansi;
 
   HookSigwinch;
   HookSigterm;
@@ -447,9 +514,11 @@ begin
     FCellWidth := 0;
     FCellHeight := 0;
     FFrameActive := False;
+    FLastEnterResult := TTuiEnterResult.OkResult;
     Result := True;
   except
     LeaveTui;
+    FLastEnterResult := TTuiEnterResult.Fail(tefSessionSetupFailed, 'session-setup-failed');
     Result := False;
   end;
 end;

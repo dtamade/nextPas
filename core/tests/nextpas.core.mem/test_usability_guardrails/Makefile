@@ -18,6 +18,7 @@ run: build
 test-source-contract:
 	bash check_usability_docs.sh
 	bash check_consumer_audit_contracts.sh
+	bash check_alloc_error_raises.sh
 
 test: test-source-contract run
 

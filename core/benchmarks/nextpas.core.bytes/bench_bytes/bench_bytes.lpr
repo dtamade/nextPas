@@ -1,11 +1,11 @@
 program bench_bytes;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
   nextpas.core.base, nextpas.core.bytes.base, nextpas.core.bytes.ops,
-  nextpas.core.bytes.binary, nextpas.core.bytes.builder;
+  nextpas.core.bytes.binary, nextpas.core.bytes.builder,
+  nextpas.core.fs;
 const SIZE_1MB = 1024 * 1024;
 var GSpanData: TBytes; GSwapVal: UInt64; GReadBuf: array[0..1023] of Byte;
 procedure InitData;

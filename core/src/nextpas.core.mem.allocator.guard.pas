@@ -146,7 +146,7 @@ begin
   LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
     raise EAllocError.Create(aeInvalidPointer,
-      'TGuardAllocator.ReallocMem: invalid guard magic (wild pointer)');
+      FormatAllocErrorMsg('TGuardAllocator', 'ReallocMem', 'invalid guard magic (wild pointer)'));
   LOldSize := LHdr^.UserSize;
 
   { Allocate new, copy, free old }
@@ -171,7 +171,7 @@ begin
   LHdr := PGuardHeader(PtrUInt(APtr) - HeaderSize);
   if LHdr^.Magic <> GUARD_MAGIC then
     raise EAllocError.Create(aeInvalidPointer,
-      'TGuardAllocator.FreeMem: invalid guard magic (possible double free or wild pointer)');
+      FormatAllocErrorMsg('TGuardAllocator', 'FreeMem', 'invalid guard magic (possible double free or wild pointer)'));
   LHdr^.Magic := 0;  { Clear magic to detect double free. }
   platform_virtual_release(LHdr^.Base, LHdr^.TotalSize);
 end;

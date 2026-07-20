@@ -1,11 +1,11 @@
 program bench_async;
 {$I nextpas.core.settings.inc}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
+uses nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.platform.pipe, nextpas.core.platform.posix.ffi,
   nextpas.core.async.base, nextpas.core.async.timer,
-  nextpas.core.async.loop, nextpas.core.io.poller;
+  nextpas.core.async.loop, nextpas.core.io.poller,
+  nextpas.core.fs;
 const TIMER_COUNT = 10000; POST_COUNT = 10000;
 var GSink: UInt64 = 0;
 procedure DummyCallback(AContext: Pointer); begin Inc(GSink); end;

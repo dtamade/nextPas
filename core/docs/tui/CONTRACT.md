@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.27
+**版本**：1.29
 
 ---
 
@@ -89,6 +89,11 @@ end;
 - 有状态 widget 的 state record 类型各异，无法统一到泛型接口（FPC 限制）
 - 事件处理在 state 上而非 interface 上，与 ratatui `StatefulWidget` 模式一致
 - widget 不持有子引用——这是 immediate mode，不是 retained mode 控件树
+
+**Stateful 事件约定（Phase U1）**:
+1. **规范路径（新代码 / core·ext 稳定控件）**: 状态在**外部 record**；`function HandleKey(const K: TKeyEvent): Boolean`（True=已消费）；`RenderStateful(..., var AState)` 在专属接口。
+2. **允许例外（full / 重型编辑器）**: 对象持状态 + 多命令方法（如 `IInputEditor`）；`HandleKey` **应为** `function: Boolean`（U2 起 `IInputEditor` 已对齐）；**不得**再引入新的 procedure-only HandleKey。
+3. **鼠标**: 交互控件可在 widget 或 state 上 `HandleMouse`，返回 Boolean 表示消费（`TSplitPane` 先例）。
 
 ### 1.3 控件列表
 
@@ -180,6 +185,15 @@ end;
 - 失败模式：保留 wrap 时长行/宽格会被终端 reflow，破坏 immediate-mode 格网
 - Emitter：`AnsiDisableAutoWrap` / `AnsiEnableAutoWrap`
 
+### 5.6 EnterTui 失败诊断（Phase U1）
+
+- `EnterTui: Boolean` **保留**（兼容）
+- 每次调用更新 `TTerminal.LastEnterResult: TTuiEnterResult`
+  - `Ok` / `Failure: TTuiEnterFailure` / `Reason` 稳定 token
+  - tokens：`''`（成功）| `not-a-terminal` | `set-raw-failed` | `session-setup-failed`
+- `TryEnterTui` 返回 `LastEnterResult`（等价于 Enter 后读取）
+- `TApp` 失败时：`App.Terminal.LastEnterResult`（不改 `DoEnterTui: Boolean`）
+
 ---
 
 ## 6. 测试
@@ -193,15 +207,16 @@ end;
 
 ### 6.1 Scorecard 与跨语言对标（Wave Q1–Q15 + M1 Maintenance）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC29）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC30）
   - SC1–SC25：Q 线质量主维度
-  - **SC26** Keybind；**SC27** FrameBudget；**SC28** Sync 2026；**SC29** DECAWM wrap
+  - **SC26** Keybind；**SC27** FrameBudget；**SC28** Sync 2026；**SC29** DECAWM；**SC30** Enter 原因
 - **纲领**: `PARITY-GO-RUST.md` · `SCORECARD.md`
 - **同方法论对照**: `bench_go_rust`
 - **契约脚本**: `./scripts/tui-contract-check.sh`
-  - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC29
+  - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC30
   - **C8** core facade reject 编译失败（scrollview/modal/dialog/split_pane/select）
   - **C9** Wine pure-path suite 存在（buffer/color/input）
+  - **C10** examples facade 纪律（除 demo_widgets 外须 ext、禁 full）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
 - 晋升：scrollview/modal/dialog/split_pane/select 已在 **ext**；core reject 保持；B3 候选表清空
 - 测量：SCORECARD 以 **RELEASE=1** 发布口径刷新（Phase E1）；不对 ns 设硬阈值
@@ -212,6 +227,8 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.29 | Phase U2：去双别名 + HandleKey Boolean + Enter enable_ansi | Claude |
+| 2026-07-20 | 1.28 | Phase U1：Enter 诊断 + Stateful 约定 + C10 facade 纪律 | Claude |
 | 2026-07-20 | 1.27 | Phase E3：DECAWM wrap-off on EnterAlternate + SC29 | Claude |
 | 2026-07-20 | 1.26 | Phase E2：DECSET 2026 Synchronized Update + SC28 | Claude |
 | 2026-07-20 | 1.25 | Phase E1：RELEASE=1 快照 + C2 wine + C9；无新 SC | Claude |

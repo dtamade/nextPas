@@ -14,12 +14,12 @@ uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.text.conv,
   nextpas.core.time.base,
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.fs;
 
 var
   GResults: array of TBenchResult;

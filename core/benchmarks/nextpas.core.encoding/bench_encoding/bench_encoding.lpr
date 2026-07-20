@@ -3,12 +3,12 @@ program bench_encoding;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.time.base,
   nextpas.core.encoding.base64,
-  nextpas.core.encoding.hex;
+  nextpas.core.encoding.hex,
+  nextpas.core.fs;
 
 const
   DATA_SIZE = 10000;

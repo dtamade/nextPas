@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: **Maintenance Idle** · Phase E3 DECAWM wrap-off（2026-07-20）
+**状态**: **Maintenance Idle** · Phase U1 可用性闭环（2026-07-20）
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [ROADMAP.md](ROADMAP.md)
 
@@ -58,6 +58,7 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC27 | FrameBudget | BeginFrame 后 not over 16ms |
 | SC28 | Synchronized update DECSET 2026 | backend h/l；EndFrame 包裹；opt-out |
 | SC29 | DECAWM auto-wrap | EnterAlternate `?7l`；Leave `?7h` 在 `1049l` 前 |
+| SC30 | EnterTui 诊断 | `LastEnterResult` 成功空 Reason 或已知失败 token |
 
 规则：
 

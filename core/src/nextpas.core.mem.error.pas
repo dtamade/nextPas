@@ -123,11 +123,15 @@ function AllocErrorToString(aError: TAllocError): string;
 
 {** Canonical raise-site message stem: Type.Method: reason
  *  Pass the result as aMsg to EAllocError.Create / EOutOfMemory.Create.
- *  Create still appends the TAllocError code string via BuildAllocMsg. }
+ *  Create appends code label via BuildAllocMsg as "stem [Code label]". }
 function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string;
 
 {** True when AMsg matches Type.Method: reason (dot before ": "). }
 function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
+
+{** Extract TAllocError from EAllocError or mem EOutOfMemory; False otherwise.
+ *  Use with except on E: ENextPasError — do not require is EAllocError alone. }
+function TryAllocErrorCode(E: Exception; out ACode: TAllocError): Boolean;
 
 {** SanitizeRuntimeAlignment: for runtime allocation calls where 0 is invalid.
  *  Clamp AAlignment to >= SizeOf(Pointer), then validate power-of-two.
@@ -210,9 +214,25 @@ end;
 function BuildAllocMsg(aError: TAllocError; const aMsg: string): string; inline;
 begin
   if aMsg <> '' then
-    Result := aMsg + ': ' + ERROR_MESSAGES[aError]
+    Result := aMsg + ' [' + ERROR_MESSAGES[aError] + ']'
   else
     Result := ERROR_MESSAGES[aError];
+end;
+
+function TryAllocErrorCode(E: Exception; out ACode: TAllocError): Boolean;
+begin
+  if E is EAllocError then
+  begin
+    ACode := EAllocError(E).Error;
+    Exit(True);
+  end;
+  if E is EOutOfMemory then
+  begin
+    ACode := EOutOfMemory(E).Error;
+    Exit(True);
+  end;
+  ACode := aeNone;
+  Result := False;
 end;
 
 { EAllocError }
@@ -220,7 +240,8 @@ end;
 constructor EAllocError.Create(aError: TAllocError; const aMsg: string);
 begin
   if aError = aeNone then
-    raise EAllocError.Create(aeInternalError, 'EAllocError.Create: aeNone is not a valid error code');
+    raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('EAllocError', 'Create', 'aeNone is not a valid error code'));
   FError := aError;
   inherited Create(BuildAllocMsg(aError, aMsg), AllocErrorCategory(aError));
 end;
@@ -230,7 +251,8 @@ end;
 constructor EOutOfMemory.Create(aError: TAllocError; const aMsg: string);
 begin
   if aError = aeNone then
-    raise EAllocError.Create(aeInternalError, 'EOutOfMemory.Create: aeNone is not a valid error code');
+    raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('EOutOfMemory', 'Create', 'aeNone is not a valid error code'));
   FError := aError;
   inherited Create(BuildAllocMsg(aError, aMsg));
 end;

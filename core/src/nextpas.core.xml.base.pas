@@ -40,6 +40,8 @@ type
     ByteOffset: SizeUInt;
     Line: UInt32;
     Column: UInt32;
+    { Alias for cross-format diagnostics (YAML/TOML use Col). }
+    property Col: UInt32 read Column write Column;
   end;
 
   TXmlToken = record

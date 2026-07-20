@@ -90,13 +90,13 @@ constructor TAlignedAllocator.Create(AInner: IAllocator; AAlignment: SizeUInt);
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TAlignedAllocator.Create: AInner cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TAlignedAllocator', 'Create', 'AInner cannot be nil'));
   FInner := AInner;
   { Validate: alignment must be power of 2 and >= SizeOf(Pointer) }
   if AAlignment < SizeOf(Pointer) then
     FAlignment := SizeOf(Pointer)
   else if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TAlignedAllocator.Create: alignment must be power of 2')
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TAlignedAllocator', 'Create', 'alignment must be power of 2'))
   else
     FAlignment := AAlignment;
   FAllocCount := 0;

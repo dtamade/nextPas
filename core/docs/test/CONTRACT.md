@@ -3,8 +3,26 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（17 个 .pas + 4 个 .inc）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
-**最后更新**：2026-07-20
-**版本**：v8.22
+**最后更新**：2026-07-21
+**版本**：v8.23
+
+---
+
+## 0. SoftFail / SoftCheck* 能力矩阵（v8.23）
+
+| API | 状态 | 诊断 | 说明 |
+|-----|------|------|------|
+| `SoftFail(msg)` | **done** | 原文 join | outside context → raise |
+| `SoftCheckTrue` / `SoftCheckFalse` | **done** | 默认文案 | |
+| `SoftCheckEqual(Int64)` | **done** | expected/actual 一行 | |
+| `SoftCheckEqual(string)` | **done** | **ColorDiff**（与 CheckEqual 同契约） | v8.23 |
+| `SoftCheckEqual(Boolean)` | **done** | expected/actual | v8.23 高频 |
+| `SoftCheckEqual(TBytes)` | **done** | length / index + hex | v8.23 高频 |
+| `SoftCheckNear(Double)` | **done** | epsilon + diff / NaN | v8.23 高频 |
+| `SoftCheckContains` | **done** | needle/haystack | |
+| SoftCheck* 全镜像 Check* | **不做** | — | 仅高频子集；其余用 SoftFail |
+| SoftExpect fluent | **暂缓** | — | 见 v9 / M7 |
+| Nested SoftFail Push/Pop | **done** | leaf/parent 分层 | v8.21 |
 
 ---
 
@@ -394,6 +412,14 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.23 (2026-07-21) — Soft 诊断对齐 + Soft 高频扩面（可用性 M0–M3）
+
+- **文档**：README 纠正无 SysUtils 直连；经 `nextpas.core.system` + `nextpas.core.*`；§0 Soft 能力矩阵
+- **Soft 诊断**：`SoftCheckEqual(string)` 复用 `ColorDiff`（position / expected / actual，与 hard 路径一致）
+- **Soft 高频**：`SoftCheckEqual(Boolean)`、`SoftCheckEqual(TBytes)`、`SoftCheckNear`
+- **契约**：api/runner source-contract 纳入 `SoftCheckNear`；ComputeKey 字段名单 source-contract（ShuffleSeed/FailFast/MaxFailures/…）
+- **规模**：`SCALE_MIN` 仍 **5500**（本批不灌水抬门）
 
 ### v8.22 (2026-07-20) — Cache key 诚实化 + SoftFail 回归 + SCALE≥5500
 

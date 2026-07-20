@@ -339,6 +339,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **test**: watch smoke two-dir multi-dir events + multi-event count loop; diagnostics pending_count. |
 | 2026-07-20 | **test(fs)**: L2 `test_fs_watch_wine` hard create + two-dir multi-path on real Windows; Wine soft OK (consumes platform multi-dir). |
 | 2026-07-21 | **chore**: platform watch smoke diag gated by `NEXTPAS_WATCH_DEBUG=1` (quiet default CI). |
+| 2026-07-21 | **test(fs)**: L2 AddTree nested create via multi-dir walk (no bWatchSubtree); fits WIN_MAX=8. |
 
 ---
 

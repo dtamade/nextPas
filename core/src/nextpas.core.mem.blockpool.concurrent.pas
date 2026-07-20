@@ -74,7 +74,8 @@ constructor TBlockPoolConcurrent.Create(aInner: IBlockPool);
 begin
   inherited Create;
   if aInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TBlockPoolConcurrent: inner pool cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TBlockPoolConcurrent', 'Create', 'inner pool cannot be nil'));
   FLock.Init;
   FInner := aInner;
 end;

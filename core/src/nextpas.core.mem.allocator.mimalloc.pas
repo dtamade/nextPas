@@ -141,7 +141,8 @@ begin
   if ASize = 0 then
     Exit(nil);
   if not EnsureMimallocLoaded then
-    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('allocator_mimalloc', 'Raise', 'mimalloc not available: cannot load library'));
   Result := _mi_malloc(ASize);
 end;
 
@@ -150,7 +151,8 @@ begin
   if ASize = 0 then
     Exit(nil);
   if not EnsureMimallocLoaded then
-    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('allocator_mimalloc', 'Raise', 'mimalloc not available: cannot load library'));
   Result := _mi_calloc(1, ASize);
 end;
 
@@ -159,7 +161,8 @@ begin
   if ASize = 0 then
   begin FreeMem(APtr); Exit(nil); end;
   if not EnsureMimallocLoaded then
-    raise EAllocError.Create(aeInternalError, 'mimalloc not available: cannot load library');
+    raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('allocator_mimalloc', 'Raise', 'mimalloc not available: cannot load library'));
   Result := _mi_realloc(APtr, ASize);
 end;
 
@@ -169,7 +172,7 @@ begin
     Exit;
   if not EnsureMimallocLoaded then
     raise EAllocError.Create(aeInternalError,
-      'TMimallocAllocator.FreeMem: mimalloc library unavailable (was previously loaded)');
+      FormatAllocErrorMsg('TMimallocAllocator', 'FreeMem', 'mimalloc library unavailable (was previously loaded)'));
   _mi_free(APtr);
 end;
 

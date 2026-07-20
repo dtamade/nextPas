@@ -110,7 +110,7 @@ constructor TDebugAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
   if AInner = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'TDebugAllocator.Create: AInner cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('TDebugAllocator', 'Create', 'AInner cannot be nil'));
   FInner := AInner;
   FTrackedCount := 0;
   FTotalAllocs := 0;
