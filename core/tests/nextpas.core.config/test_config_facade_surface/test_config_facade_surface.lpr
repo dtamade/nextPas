@@ -324,6 +324,55 @@ begin
   end;
 end;
 
+procedure TestFacadeExposesSectionAndDuration;
+var
+  LCfg: IConfig;
+  LSec, LTls: IConfig;
+  LKeys: TStringArray;
+  LRaised: Boolean;
+  LNs: Int64;
+begin
+  LCfg := ConfigBuilder
+    .AddJson('{"server":{"host":"h1","port":8080,"tls":{"enabled":true}},' +
+      '"timeout":"300ms","idle":"2s"}')
+    .Build;
+
+  LSec := ConfigSection(LCfg, 'server');
+  CheckEqual('h1', LSec.GetString('host'), 'section GetString');
+  CheckEqual(Int64(8080), LSec.GetInt('port'), 'section GetInt');
+  Check(LSec.Has('host'), 'section Has');
+  CheckEqual(False, LSec.Has('missing'), 'section missing');
+  LKeys := LSec.GetKeys;
+  Check(Length(LKeys) >= 2, 'section keys include host/port');
+
+  LTls := ConfigSection(LSec, 'tls');
+  CheckEqual(True, LTls.GetBool('enabled'), 'nested section bool');
+
+  LRaised := False;
+  try
+    LSec.ToJson;
+  except
+    on E: EConfigError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'section export rejected');
+
+  CheckEqual(True, TryParseConfigDurationNs('300ms', LNs), 'parse 300ms');
+  CheckEqual(Int64(300) * 1000000, LNs, '300ms nanos');
+  CheckEqual(True, TryParseConfigDurationNs('2s', LNs), 'parse 2s');
+  CheckEqual(Int64(2) * 1000000000, LNs, '2s nanos');
+  CheckEqual(True, TryParseConfigDurationNs('150', LNs), 'bare int = seconds');
+  CheckEqual(Int64(150) * 1000000000, LNs, '150s nanos');
+  CheckEqual(False, TryParseConfigDurationNs('nope', LNs), 'invalid duration');
+
+  CheckEqual(Int64(300) * 1000000, LCfg.GetDurationNs('timeout'),
+    'GetDurationNs timeout');
+  CheckEqual(Int64(2) * 1000000000, LCfg.GetDurationNsRequired('idle'),
+    'GetDurationNsRequired idle');
+  CheckEqual(Int64(99), LCfg.GetDurationNs('missing', 99),
+    'GetDurationNs default');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config (facade surface)');
   T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
@@ -339,5 +388,7 @@ begin
     @TestFacadeExposesAutoDetectFormat);
   T.Test('facade exposes content sniff',
     @TestFacadeExposesContentSniff);
+  T.Test('facade exposes section and duration',
+    @TestFacadeExposesSectionAndDuration);
   if not T.Run then Halt(1);
 end.

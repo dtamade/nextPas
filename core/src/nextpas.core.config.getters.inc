@@ -484,6 +484,78 @@ begin
   end;
 end;
 
+function TryParseConfigDurationNs(const AText: string; out ANanos: Int64): Boolean;
+var
+  LText: string;
+  LNum: string;
+  LI: Integer;
+  LVal: Int64;
+  LUnit: string;
+  LScale: Int64;
+begin
+  Result := False;
+  ANanos := 0;
+  LText := Trim(AText);
+  if LText = '' then
+    Exit;
+  LI := 1;
+  if (LI <= Length(LText)) and (LText[LI] = '-') then
+    Exit; { negative durations not supported }
+  while (LI <= Length(LText)) and (LText[LI] >= '0') and (LText[LI] <= '9') do
+    Inc(LI);
+  if LI = 1 then
+    Exit;
+  LNum := Copy(LText, 1, LI - 1);
+  if not TryStrToInt64(LNum, LVal) then
+    Exit;
+  LUnit := LowerCase(Copy(LText, LI, Length(LText) - LI + 1));
+  if LUnit = '' then
+    LUnit := 's';
+  if LUnit = 'ns' then
+    LScale := 1
+  else if (LUnit = 'us') or (LUnit = 'µs') then
+    LScale := 1000
+  else if LUnit = 'ms' then
+    LScale := 1000000
+  else if LUnit = 's' then
+    LScale := 1000000000
+  else if LUnit = 'm' then
+    LScale := Int64(60) * 1000000000
+  else if LUnit = 'h' then
+    LScale := Int64(3600) * 1000000000
+  else
+    Exit;
+  if (LVal > 0) and (LScale > High(Int64) div LVal) then
+    Exit;
+  ANanos := LVal * LScale;
+  Result := True;
+end;
+
+function TConfig.GetDurationNs(const AKey: string; ADefault: Int64): Int64;
+var
+  LRaw: string;
+  LNs: Int64;
+begin
+  LRaw := GetString(AKey, '');
+  if LRaw = '' then
+    Exit(ADefault);
+  if TryParseConfigDurationNs(LRaw, LNs) then
+    Result := LNs
+  else
+    Result := ADefault;
+end;
+
+function TConfig.GetDurationNsRequired(const AKey: string): Int64;
+var
+  LRaw: string;
+  LNs: Int64;
+begin
+  LRaw := GetStringRequired(AKey);
+  if not TryParseConfigDurationNs(LRaw, LNs) then
+    raise EConfigError.Create('invalid duration for key "' + AKey + '": ' + LRaw);
+  Result := LNs;
+end;
+
 { Config facade factories }
 
 function ConfigBuilder: IConfigBuilder;
@@ -504,4 +576,14 @@ end;
 function ConfigBorrow(AConfig: TConfig): IConfig;
 begin
   Result := nextpas.core.config.builder.ConfigBorrow(AConfig);
+end;
+
+function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig;
+begin
+  Result := nextpas.core.config.builder.ConfigSection(AConfig, APrefix);
+end;
+
+function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig;
+begin
+  Result := nextpas.core.config.builder.ConfigSection(AConfig, APrefix);
 end;

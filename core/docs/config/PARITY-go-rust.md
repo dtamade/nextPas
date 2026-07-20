@@ -12,9 +12,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.8** | try 路径、插值 mode、export、嗅探 |
-| **规模 Scale** | **8.5** | 四格式 + env + keyvalues + args + bind + sniff |
-| **综合** | **8.7** | 对齐 viper 扩展/嗅探常用路径；缺 remote |
+| **质量 Quality** | **9.1** | try 路径、插值、嗅探、Sub、DurationNs |
+| **规模 Scale** | **9.0** | 四格式 + env + keyvalues + args + bind + Sub |
+| **综合** | **9.0** | 对齐 viper 常用 DX；remote 仍 Future |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ 0.85。
 **证据**：[`SCORECARD.md`](./SCORECARD.md)
@@ -39,6 +39,8 @@
 | 导出 | WriteConfig | ToIni/Json/Yaml/Toml + representability | Done |
 | 结构体 bind | Unmarshal | `ConfigUnmarshal` (reflect.marshal) | Done |
 | 嵌套/数组 bind | mapstructure | 嵌套 record + string dynarray | Done |
+| Sub 子树视图 | Sub() | `ConfigSection` | Done |
+| GetDuration | GetDuration | `GetDurationNs` 最小后缀 | Done |
 | XML/CSV 作 config 格式 | 少见 | Out of scope | Deferred |
 
 ---
@@ -51,6 +53,7 @@
 | CONTRACT §3.3 与 mode 实现漂移 | **已修**（Wave I） |
 | 内容嗅探 / 错扩展恢复 | **Done**（Wave J） |
 | SCORECARD | **Done**（Wave J） |
+| ConfigSection / DurationNs | **Done**（Wave K） |
 | remote source | 仍 Future |
 
 ---

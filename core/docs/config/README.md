@@ -38,6 +38,14 @@ end;
 Use `TConfig` when you need a mutable instance, direct `LoadFromXxx` calls,
 `ReplaceFrom`, or `TConfigWatcher` from `nextpas.core.config.watcher`.
 
+Use `ConfigSection` for a viper-style prefix view (non-owning):
+
+```pascal
+LServer := ConfigSection(LCfg, 'server');
+LHost := LServer.GetString('host'); { ≡ LCfg.GetString('server.host') }
+LTimeoutNs := LCfg.GetDurationNs('timeout'); { e.g. "300ms" }
+```
+
 ## Build config snapshots
 
 `ConfigBuilder` records a source plan, then replays it into a fresh `TConfig`
