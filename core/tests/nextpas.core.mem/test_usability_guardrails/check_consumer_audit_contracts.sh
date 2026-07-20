@@ -149,6 +149,25 @@ do
     "tui inject must keep FAllocator.FreeMem (FreeMemOf WAIVE tracking) ($f)"
 done
 
+# --- Era J: mem-owner single-slab backing FreeMemOf ---
+need_file "$SRC/nextpas.core.mem.arena.local.pas"
+need_grep "$SRC/nextpas.core.mem.arena.local.pas" 'FreeMemOf\(FAllocator, FBacking, FCapacity\)' \
+  'LocalArena Destroy must FreeMemOf backing with FCapacity (J1)'
+forbid_grep "$SRC/nextpas.core.mem.arena.local.pas" 'FAllocator\.FreeMem\(FBacking\)' \
+  'LocalArena must not unsized FreeMem FBacking (J1)'
+
+need_file "$SRC/nextpas.core.mem.blockpool.pas"
+need_grep "$SRC/nextpas.core.mem.blockpool.pas" 'FRawAllocSize' \
+  'TBlockPool must track FRawAllocSize (J2)'
+need_grep "$SRC/nextpas.core.mem.blockpool.pas" 'FreeMemOf\(FAllocator, FRawBuffer, FRawAllocSize\)' \
+  'TBlockPool Destroy must FreeMemOf raw with FRawAllocSize (J2)'
+
+need_file "$SRC/nextpas.core.mem.pool.fixed.pas"
+need_grep "$SRC/nextpas.core.mem.pool.fixed.pas" 'FRawAllocSize' \
+  'TFixedPool must track FRawAllocSize (J3)'
+need_grep "$SRC/nextpas.core.mem.pool.fixed.pas" 'FreeMemOf\(FAllocator, FRawBuffer, FRawAllocSize\)' \
+  'TFixedPool Destroy must FreeMemOf raw with FRawAllocSize (J3)'
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2
   exit 1

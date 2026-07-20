@@ -103,6 +103,7 @@ type
     FAlignment: SizeUInt;        // 对齐
     FBuffer: Pointer;            // 对齐后的缓冲区
     FRawBuffer: Pointer;         // 原始缓冲区（用于释放）
+    FRawAllocSize: SizeUInt;     // GetMem 实际字节数（含对齐 over-alloc）
     FTotalSize: SizeUInt;        // 总大小（字节）= BlockSize * Capacity
     FFreeHead: Pointer;          // 空闲链表头（intrusive free-list）
     FFreeBits: array of QWord;   // 释放位图：1=free, 0=allocated
@@ -250,6 +251,9 @@ type
 
 
 implementation
+
+uses
+  nextpas.core.mem;
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
@@ -405,12 +409,13 @@ begin
   if FAllocator <> nil then
     LRaw := FAllocator.GetMem(LAllocSize)
   else
-    GetMem(LRaw, LAllocSize);
+    LRaw := GetMem(LAllocSize); { process GetMem after uses nextpas.core.mem }
   if LRaw = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
       'TBlockPool: failed to allocate memory (requested ' + IntToStr(Int64(LAllocSize)) + ' bytes)');
 
   FRawBuffer := LRaw;
+  FRawAllocSize := LAllocSize;
 
   // 对齐
   LAddr := PtrUInt(LRaw);
@@ -429,12 +434,13 @@ begin
   if FRawBuffer <> nil then
   begin
     if FAllocator <> nil then
-      FAllocator.FreeMem(FRawBuffer)
+      FreeMemOf(FAllocator, FRawBuffer, FRawAllocSize)
     else
-      FreeMem(FRawBuffer);
+      FreeMem(FRawBuffer, FRawAllocSize);
   end;
   FBuffer := nil;
   FRawBuffer := nil;
+  FRawAllocSize := 0;
   FFreeHead := nil;
   FAllocator := nil;
   SetLength(FFreeBits, 0);
