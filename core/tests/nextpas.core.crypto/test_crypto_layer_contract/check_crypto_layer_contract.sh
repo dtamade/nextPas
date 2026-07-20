@@ -52,4 +52,10 @@ if ! rg -q 'SubjectAltNames:\s*TStringArray' "$SRC/nextpas.core.tls.cert.utils.p
   fail "TCertGenOptions/TCertInfo SubjectAltNames must be TStringArray"
 fi
 
+
+# Batch D: openssl certstore must not reintroduce TStringList indexes
+if rg -n ':\s*TStringList\b|TStringList\.Create' "$SRC/nextpas.core.tls.openssl.certstore.pas"; then
+  fail "openssl.certstore must not use TStringList"
+fi
+
 echo "[crypto-layer-contract] PASS"

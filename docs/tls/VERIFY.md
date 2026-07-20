@@ -40,6 +40,16 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_p384
 
 Known residual: `test_dialer` may fail on `io.pipe` IMutex vs INativeMutex (sync/io lane).
 
+## Batch D — certstore indexes
+
+```bash
+# openssl.certstore must not use TStringList (enforced by layer contract)
+rg -n ':\s*TStringList\b|TStringList\.Create' core/src/nextpas.core.tls.openssl.certstore.pas
+
+make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_https
+make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_loader
+```
+
 Static checks:
 
 - no `nextpas.core.tls` in `core/src/nextpas.core.crypto*.pas`

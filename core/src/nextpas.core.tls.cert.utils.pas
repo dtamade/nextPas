@@ -34,7 +34,6 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -2071,77 +2070,89 @@ class function TCertificateUtils.CompareX509Names(
 ): Boolean;
 var
   LName1, LName2: string;
-  LComponents1, LComponents2: TStringList;
-  i: Integer;
+  LComponents1, LComponents2: TStringArray;
+  I, J: Integer;
+  LFound: Boolean;
 
   function NormalizeDN(const ADN: string): string;
   var
-    s: string;
+    S: string;
   begin
-    s := Trim(ADN);
-    s := StringReplace(s, ' = ', '=', True);
-    s := StringReplace(s, '= ', '=', True);
-    s := StringReplace(s, ' =', '=', True);
-    s := StringReplace(s, ', ', ',', True);
+    S := Trim(ADN);
+    S := StringReplace(S, ' = ', '=', True);
+    S := StringReplace(S, '= ', '=', True);
+    S := StringReplace(S, ' =', '=', True);
+    S := StringReplace(S, ', ', ',', True);
 
     if ACaseInsensitive then
-      Result := LowerCase(s)
+      Result := LowerCase(S)
     else
-      Result := s;
+      Result := S;
   end;
 
-  procedure ParseDN(const ADN: string; AList: TStringList);
+  function ParseDNParts(const ADN: string): TStringArray;
   var
     Components: TStringArray;
-    j: Integer;
+    K, M: Integer;
+    Part: string;
+    Found: Boolean;
   begin
-    AList.Clear;
-    AList.Sorted := True;
-    AList.Duplicates := dupIgnore;
-
+    SetLength(Result, 0);
     Components := nextpas.core.text.strings.StringsSplit(ADN, ',');
-    for j := 0 to Length(Components) - 1 do
-      AList.Add(Trim(Components[j]));
+    for K := 0 to High(Components) do
+    begin
+      Part := Trim(Components[K]);
+      if Part = '' then
+        Continue;
+      Found := False;
+      for M := 0 to High(Result) do
+        if Result[M] = Part then
+        begin
+          Found := True;
+          Break;
+        end;
+      if not Found then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)] := Part;
+      end;
+    end;
   end;
 
 begin
   Result := False;
 
   if AName1 = AName2 then
-  begin
-    Result := True;
-    Exit;
-  end;
+    Exit(True);
 
   LName1 := NormalizeDN(AName1);
   LName2 := NormalizeDN(AName2);
 
   if LName1 = LName2 then
-  begin
-    Result := True;
+    Exit(True);
+
+  LComponents1 := ParseDNParts(LName1);
+  LComponents2 := ParseDNParts(LName2);
+
+  if Length(LComponents1) <> Length(LComponents2) then
     Exit;
-  end;
-  LComponents1 := TStringList.Create;
-  LComponents2 := TStringList.Create;
-  try
-    ParseDN(LName1, LComponents1);
-    ParseDN(LName2, LComponents2);
 
-    if LComponents1.Count <> LComponents2.Count then
-      Exit;
-
-    Result := True;
-    for i := 0 to LComponents1.Count - 1 do
-    begin
-      if LComponents1[i] <> LComponents2[i] then
+  // Multiset equality (order-independent, matches sorted TStringList semantics)
+  Result := True;
+  for I := 0 to High(LComponents1) do
+  begin
+    LFound := False;
+    for J := 0 to High(LComponents2) do
+      if LComponents1[I] = LComponents2[J] then
       begin
-        Result := False;
+        LFound := True;
         Break;
       end;
+    if not LFound then
+    begin
+      Result := False;
+      Exit;
     end;
-  finally
-    LComponents1.Free;
-    LComponents2.Free;
   end;
 end;
 
