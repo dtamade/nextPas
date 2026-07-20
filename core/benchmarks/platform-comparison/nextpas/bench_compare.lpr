@@ -25,23 +25,34 @@ procedure BenchPathBasename(const ACtx: IBenchContext);
 var Buf: array[0..255] of AnsiChar;
 begin platform_path_basename('/home/user/projects/nextpas/core/src/file.pas', @Buf[0], 256); GSink := GSink xor UInt64(Length(Buf)); end;
 procedure BenchFileExists(const ACtx: IBenchContext);
-var LB: Boolean;
-begin LB := platform_file_exists(TEST_FILE); GSink := GSink xor Byte(LB); end;
-procedure BenchMmapView(const ACtx: IBenchContext);
-var LH: TPlatformFileHandle; LView: TPlatformMmapView; LByte: Byte;
+var LStat: TPlatformFileStat; LB: Boolean;
 begin
-  if platform_file_open(MMAP_FILE, fomReadOnly, fcmOpenExisting, LH) <> 0 then begin ACtx.Skip; Exit; end;
-  if platform_mmap_view(LH, 0, 4096, LView) then begin LByte := PByte(LView.Data)^; GSink := GSink xor LByte; platform_mmap_unview(LView); end;
-  platform_file_close(LH);
+  LB := platform_file_stat(TEST_FILE, LStat) = 0;
+  GSink := GSink xor Byte(LB);
 end;
-procedure BenchRandomU32(const ACtx: IBenchContext);
-begin GSink := GSink xor UInt64(platform_random_u32); end;
+procedure BenchMmapView(const ACtx: IBenchContext);
+var LMap: TPlatformMappedFile; LByte: Byte;
+begin
+  if platform_mmap_file(MMAP_FILE, LMap) <> 0 then
+  begin
+    ACtx.Skip('platform_mmap_file failed');
+    Exit;
+  end;
+  if LMap.IsValid and (LMap.Size > 0) then
+  begin
+    LByte := PByte(LMap.Addr)^;
+    GSink := GSink xor LByte;
+  end;
+  platform_mmap_close(LMap);
+end;
+procedure BenchRandomU64(const ACtx: IBenchContext);
+begin GSink := GSink xor platform_random_u64; end;
 var LSuite: IBenchSuite;
 begin
   Setup; GSink := 0;
   LSuite := TBenchSuite.Create('platform-comparison-nextpas');
   LSuite.Add('PathJoin', @BenchPathJoin).Add('PathBasename', @BenchPathBasename)
-    .Add('FileExists', @BenchFileExists).Add('MmapView', @BenchMmapView).Add('RandomU32', @BenchRandomU32);
+    .Add('FileExists', @BenchFileExists).Add('MmapView', @BenchMmapView).Add('RandomU64', @BenchRandomU64);
   WriteLn(LSuite.Run.PrintToConsole);
   Teardown;
 end.

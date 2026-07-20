@@ -6,8 +6,16 @@ function EmptyThread(AArg: Pointer): Pointer; cdecl; begin Result := AArg; end;
 procedure BenchTlsSetGet(const ACtx: IBenchContext);
 var LKey: TPlatformTLSKey; LI: Int32;
 begin
-  if platform_tls_create(LKey) <> 0 then begin ACtx.Skip; Exit; end;
-  for LI := 1 to 100 do begin platform_tls_set(LKey, Pointer(PtrUInt(LI))); GSink := GSink xor PtrUInt(platform_tls_get(LKey)); end;
+  if platform_tls_create(LKey) <> 0 then
+  begin
+    ACtx.Skip('platform_tls_create failed');
+    Exit;
+  end;
+  for LI := 1 to 100 do
+  begin
+    platform_tls_set(LKey, Pointer(PtrUInt(LI)));
+    GSink := GSink xor PtrUInt(platform_tls_get(LKey));
+  end;
   platform_tls_destroy(LKey);
 end;
 procedure BenchYield(const ACtx: IBenchContext);

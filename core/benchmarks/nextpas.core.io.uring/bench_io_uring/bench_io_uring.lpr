@@ -7,7 +7,7 @@ procedure BenchNopLatency(const ACtx: IBenchContext);
 var LRing: TIoUring; LSqe: PIoUringSqe; LCqe: PIoUringCqe;
 begin
   LRing := TIoUring.Create(16);
-  if not LRing.IsValid then begin ACtx.Skip; LRing.Close; Exit; end;
+  if not LRing.IsValid then begin ACtx.Skip('io_uring unavailable'); LRing.Close; Exit; end;
   LSqe := LRing.GetSqe; IoUringPrepNop(LSqe); LRing.SubmitAndWait(1);
   LRing.PeekCqe(LCqe); LRing.CqeSeen(LCqe);
   LRing.Close;
@@ -16,7 +16,7 @@ procedure BenchNopBatch32(const ACtx: IBenchContext);
 var LRing: TIoUring; LSqe: PIoUringSqe; LCqe: PIoUringCqe; LJ, LRet: Int32;
 begin
   LRing := TIoUring.Create(64);
-  if not LRing.IsValid then begin ACtx.Skip; LRing.Close; Exit; end;
+  if not LRing.IsValid then begin ACtx.Skip('io_uring unavailable'); LRing.Close; Exit; end;
   for LJ := 1 to 32 do begin LSqe := LRing.GetSqe; if LSqe = nil then Break; IoUringPrepNop(LSqe); end;
   LRet := LRing.SubmitAndWait(32);
   while LRing.PeekCqe(LCqe) do begin LRing.CqeSeen(LCqe); Inc(GSink); end;

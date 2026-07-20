@@ -4,6 +4,7 @@ program bench_protocols;
 {$Q-}{$R-}
 
 uses
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.bench,
   nextpas.core.cookie,

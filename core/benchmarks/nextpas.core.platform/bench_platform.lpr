@@ -8,7 +8,11 @@ begin GSink := GSink xor platform_monotonic_ns; end;
 procedure BenchMutexThroughput(const ACtx: IBenchContext);
 var LM: TPlatformMutex;
 begin
-  if platform_mutex_init(LM, PLATFORM_MUTEX_NORMAL) <> 0 then begin ACtx.Skip; Exit; end;
+  if platform_mutex_init(LM, PLATFORM_MUTEX_NORMAL) <> 0 then
+  begin
+    ACtx.Skip('platform_mutex_init failed');
+    Exit;
+  end;
   platform_mutex_lock(LM); platform_mutex_unlock(LM);
   platform_mutex_destroy(LM);
 end;
@@ -21,6 +25,8 @@ end;
 var LSuite: IBenchSuite;
 begin
   LSuite := TBenchSuite.Create('platform');
-  LSuite.Add('TimerResolution', @BenchTimerResolution).Add('Mutex/Throughput', @BenchMutexThroughput).Add('File/OpenClose', @BenchFileOpenClose);
+  LSuite.Add('TimerResolution', @BenchTimerResolution)
+    .Add('Mutex/Throughput', @BenchMutexThroughput)
+    .Add('File/OpenClose', @BenchFileOpenClose);
   WriteLn(LSuite.Run.PrintToConsole);
 end.
