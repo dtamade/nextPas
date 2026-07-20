@@ -1,10 +1,10 @@
 # nextpas.core.csv 代码契约
 
 **模块路径**：`core/src/nextpas.core.csv.pas`（1 个源文件）
-**层级**：表格格式工具（依赖 L0：`errors`、`mem`）；**不**进入 `TConfigFormat`
+**层级**：表格格式工具（依赖 L0 `errors`/`mem` + L1 `io.intf`/`io.util`）；**不**进入 `TConfigFormat`
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
 **最后更新**：2026-07-20
-**版本**：2.0（对齐真实 record API + free helpers）
+**版本**：2.1（+ `IReader` 构造；对齐 Go `encoding/csv.NewReader`）
 
 ---
 
@@ -29,9 +29,11 @@ type
   end;
 
   TCsvReader = record
-    procedure Init(...);
+    procedure Init(const AInput: string; ...); overload;
+    procedure Init(const AReader: IReader; ...); overload;  // ReadAll 后解析
     procedure Done;
-    class function Create(...): TCsvReader; static;
+    class function Create(const AInput: string; ...): TCsvReader; static; overload;
+    class function Create(const AReader: IReader; ...): TCsvReader; static; overload;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
@@ -71,6 +73,7 @@ function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator; ...
 ## 4. Lifetime / 所有权
 
 - `TCsvReader` 内部持有输入 `string` 引用，防止悬垂
+- `Init`/`Create(IReader)`：调用 `IoReadAll` 读完全部字节后转为 string 再解析（非真正流式 token 拉取）；`nil` reader → `EArgumentError`
 - `ReadRow`/`ReadAll` 返回的字段字符串为 **拥有副本**
 - record 值语义；`Init`/`Done` 或 `Create` 路径按实现使用
 - Writer 内部 buffer；`ToString` 产出独立 string

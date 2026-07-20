@@ -29,6 +29,8 @@ var
   LCfg: IConfig;
 begin
   LCfg := ConfigLoad('app.json', cfJson);
+  { or auto-detect by extension: .ini / .json / .yaml / .yml / .toml }
+  LCfg := ConfigLoad('app.toml');
 end;
 ```
 
@@ -48,8 +50,9 @@ Available builder steps:
 - `AddYaml`
 - `AddToml`
 - `AddEnv`
-- `AddFile`
+- `AddFile` — explicit `TConfigFormat` **or** extension auto-detect overload
 - `AddKeyValues` — inline key/value overrides (CLI maps, ad-hoc pairs)
+- `SetInterpolationMode` — `cimDefault` / `cimStrict` / `cimDisabled`
 - `RequireKeys`
 
 `AddKeyValues` is the shallow CLI integration: parse flags with
