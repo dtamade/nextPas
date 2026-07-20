@@ -38,6 +38,21 @@ SetString case records raw buffer write throughput for a full 120x40 surface.
 | --- | ---: | ---: |
 | ParseOne ASCII key | 44.4 | 22,502,757 |
 | ParseOne CSI arrow | 50.3 | 19,890,997 |
+
+## Cross-lang simplified kernels (`bench_go_rust`)
+
+Authoritative gate remains `core/tests/nextpas.core.tui/scorecard`.
+Cross-lang harness (Wave Q1 / Q11):
+
+```bash
+make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
+```
+
+Ops (2026-07-20): DiffIdentical / DiffDirty10 @ 200×50；ParseAscii / ParseCsiUp；
+**LayoutVSplit3**（Pascal=真实 `VerticalSplit`；Go/Rust=几何 stub）；
+**OverlayMerge 40×12**（Pascal=真实 `TOverlayBuffer.MergeInto`；Go/Rust=字节 mark stub）。
+
+禁止把 stub ns 写成「快于 ratatui 全库」。详见 [SCORECARD.md](SCORECARD.md) · [PARITY-GO-RUST.md](PARITY-GO-RUST.md)。
 | ParseOne SGR mouse (incomplete) | 47.8 | 20,900,826 |
 | ParseOne UTF-8 CJK | 45.9 | 21,791,240 |
 

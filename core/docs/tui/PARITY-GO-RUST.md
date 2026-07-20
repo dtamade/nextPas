@@ -79,7 +79,8 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q7 | Truecolor env-attested Verified + 更多 suite 密度 | **Done** |
 | Q8 | 门面契约 + SC8 + Wine 加厚 | **Done** |
 | Q9 | 分层 facade + stress + SC9 overlay | **Done** (`main@027e9255a`+) |
-| Q10 | SC10–SC11 + DECSET 2004 paste + 密度收口 + 晋升策略 | **本批** |
+| Q10 | SC10–SC11 + DECSET 2004 paste + 密度收口 + 晋升策略 | **Done** (`main@5c7fc6dcc`+) |
+| Q11 | SC12–SC13 + bench layout/overlay + tier facade ≥12 | **本批** |
 | 后续 | facade **实施**晋升（scrollview/modal） | 待准入 |
 | 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
 | 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
