@@ -1,16 +1,15 @@
 {******************************************************************************
-  nextpas.core.sync.pool — 对象池 (v7: TLS freelist + 预分配)
+  nextpas.core.sync.pool — 对象池 (v8: per-pool TLS freelist + 预分配)
 
   架构:
-    1. threadvar TLS freelist — 每线程独立链表, 零锁热路径
+    1. 每线程 TLS 链表节点按 Owner(pool) 隔离 freelist — 多 pool 同线程安全
     2. 预分配 — 批量 Factory, 跳过热路径 Create/Free
     3. 对象池管理生命周期 — Get 不 Create, Put 不 Free
     4. 冷路径: nextpas IMutex 保护 global stack
-    5. DrainTLS — 线程退出前将 TLS freelist 归还 global pool
+    5. DrainTLS — 将本 pool 在当前线程的 freelist 归还 global
 
   线程安全约束:
-    - TLS freelist 是所有 TSyncPool 实例共享的 threadvar
-    - 一线程只应使用一个 TSyncPool 实例 (单池约束)
+    - 每线程可为多个 TSyncPool 实例各持一个 TLS 节点
     - Factory 回调可能被多线程并发调用, 调用者须保证其线程安全性
     - FTotalCreated 通过 InterLockedIncrement 原子递增
 ******************************************************************************}
@@ -50,6 +49,8 @@ type
     FPreAllocBlockCount: SizeInt;
     procedure InternalPreAlloc(ACount: SizeUInt);
     procedure InternalDrainGlobal;
+    function EnsureTlsNode: Pointer;
+    function FindTlsNode: Pointer;
   public
     constructor Create(const AConfig: TSyncPoolConfig);
     destructor Destroy; override;
@@ -57,7 +58,7 @@ type
     function Get: Pointer;
     procedure Put(AItem: Pointer);
 
-    { Drain current thread's TLS freelist back to global pool.
+    { Drain current thread's freelist for this pool back to global.
       Call before thread exit to prevent heaptrc leak reports. }
     procedure DrainTLS;
 
@@ -85,8 +86,49 @@ implementation
 uses
   nextpas.core.sync.mutex;
 
+type
+  PPoolTlsNode = ^TPoolTlsNode;
+  TPoolTlsNode = record
+    Owner: Pointer;
+    Head: TPoolItem;
+    Next: PPoolTlsNode;
+  end;
+
 threadvar
-  TLSHead: TPoolItem;
+  GPoolTlsList: PPoolTlsNode;
+
+{ ---------------------------------------------------------------------------
+  TLS helpers — per-thread list keyed by pool instance
+  --------------------------------------------------------------------------- }
+
+function TSyncPool.FindTlsNode: Pointer;
+var
+  LNode: PPoolTlsNode;
+begin
+  LNode := GPoolTlsList;
+  while LNode <> nil do
+  begin
+    if LNode^.Owner = Pointer(Self) then
+      Exit(LNode);
+    LNode := LNode^.Next;
+  end;
+  Result := nil;
+end;
+
+function TSyncPool.EnsureTlsNode: Pointer;
+var
+  LNode: PPoolTlsNode;
+begin
+  LNode := FindTlsNode;
+  if LNode <> nil then
+    Exit(LNode);
+  New(LNode);
+  LNode^.Owner := Pointer(Self);
+  LNode^.Head := nil;
+  LNode^.Next := GPoolTlsList;
+  GPoolTlsList := LNode;
+  Result := LNode;
+end;
 
 { ---------------------------------------------------------------------------
   TSyncPool — 预分配
@@ -120,39 +162,42 @@ begin
   FTotalCreated := 0;
   FPreAllocBlocks := nil;
   FPreAllocBlockCount := 0;
-  { 预分配 }
   if FConfig.PreAllocCount > 0 then
     InternalPreAlloc(FConfig.PreAllocCount);
 end;
 
 destructor TSyncPool.Destroy;
 begin
-  { 先将当前线程 TLS freelist 移回 global, 再统一释放 }
   DrainTLS;
   InternalDrainGlobal;
   FGlobalLock := nil;
   inherited Destroy;
 end;
 
-{ Get — 热路径: TLS freelist (零锁)
-        冷路径: global → factory }
 function TSyncPool.Get: Pointer;
 var
+  LNode: PPoolTlsNode;
   LItem: TPoolItem;
 begin
-  { 热路径: TLS freelist }
-  LItem := TLSHead;
-  if LItem <> nil then begin
-    TLSHead := LItem.PoolNext;
-    LItem.PoolNext := nil;
-    Exit(LItem);
+  { 热路径: 本 pool 的 TLS freelist }
+  LNode := FindTlsNode;
+  if LNode <> nil then
+  begin
+    LItem := LNode^.Head;
+    if LItem <> nil then
+    begin
+      LNode^.Head := LItem.PoolNext;
+      LItem.PoolNext := nil;
+      Exit(LItem);
+    end;
   end;
 
   { 冷路径: global stack }
   FGlobalLock.Acquire;
   try
     LItem := FGlobalHead;
-    if LItem <> nil then begin
+    if LItem <> nil then
+    begin
       FGlobalHead := LItem.PoolNext;
       LItem.PoolNext := nil;
       Exit(LItem);
@@ -161,8 +206,9 @@ begin
     FGlobalLock.Release;
   end;
 
-  { 最冷路径: 工厂创建 (可能被多线程并发调用, Factory 须线程安全) }
-  if Assigned(FConfig.Factory) then begin
+  { 最冷路径: 工厂创建 }
+  if Assigned(FConfig.Factory) then
+  begin
     LItem := TPoolItem(FConfig.Factory());
     LItem.PoolNext := nil;
     InterLockedIncrement(FTotalCreated);
@@ -170,36 +216,56 @@ begin
   Result := LItem;
 end;
 
-{ Put — 热路径: TLS freelist push (2 个 field write) }
 procedure TSyncPool.Put(AItem: Pointer);
 var
+  LNode: PPoolTlsNode;
   LItem: TPoolItem;
 begin
-  if AItem = nil then Exit;
+  if AItem = nil then
+    Exit;
   LItem := TPoolItem(AItem);
-  LItem.PoolNext := TLSHead;
-  TLSHead := LItem;
+  LNode := EnsureTlsNode;
+  LItem.PoolNext := LNode^.Head;
+  LNode^.Head := LItem;
 end;
 
-{ DrainTLS — 将当前线程的 TLS freelist 移回 global pool.
-  线程退出前调用, 防止 heaptrc 报泄漏. }
 procedure TSyncPool.DrainTLS;
 var
+  LPrev, LNode: PPoolTlsNode;
   LItem, LTail: TPoolItem;
 begin
-  LItem := TLSHead;
-  TLSHead := nil;
-  if LItem = nil then Exit;
-  { 找到链表尾, 整段挂到 global head }
-  LTail := LItem;
-  while LTail.PoolNext <> nil do
-    LTail := LTail.PoolNext;
-  FGlobalLock.Acquire;
-  try
-    LTail.PoolNext := FGlobalHead;
-    FGlobalHead := LItem;
-  finally
-    FGlobalLock.Release;
+  LPrev := nil;
+  LNode := GPoolTlsList;
+  while LNode <> nil do
+  begin
+    if LNode^.Owner = Pointer(Self) then
+    begin
+      LItem := LNode^.Head;
+      LNode^.Head := nil;
+      { unlink node from thread list }
+      if LPrev = nil then
+        GPoolTlsList := LNode^.Next
+      else
+        LPrev^.Next := LNode^.Next;
+      Dispose(LNode);
+
+      if LItem <> nil then
+      begin
+        LTail := LItem;
+        while LTail.PoolNext <> nil do
+          LTail := LTail.PoolNext;
+        FGlobalLock.Acquire;
+        try
+          LTail.PoolNext := FGlobalHead;
+          FGlobalHead := LItem;
+        finally
+          FGlobalLock.Release;
+        end;
+      end;
+      Exit;
+    end;
+    LPrev := LNode;
+    LNode := LNode^.Next;
   end;
 end;
 
@@ -224,7 +290,8 @@ var
 begin
   L := FGlobalHead;
   FGlobalHead := nil;
-  while L <> nil do begin
+  while L <> nil do
+  begin
     N := L.PoolNext;
     if Assigned(FConfig.OnDestroy) then
       FConfig.OnDestroy(L)
@@ -272,7 +339,8 @@ begin
 end;
 
 function CreateSyncPool(AFactory: TPoolFactory): TSyncPool;
-var LConfig: TSyncPoolConfig;
+var
+  LConfig: TSyncPoolConfig;
 begin
   FillChar(LConfig, SizeOf(LConfig), 0);
   LConfig.Factory := AFactory;
