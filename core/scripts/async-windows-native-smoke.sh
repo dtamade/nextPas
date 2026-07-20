@@ -55,6 +55,13 @@ MODULE_ENTRIES=(
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "async.accept_connect_smoke tests/nextpas.core.async/test_async_accept_connect_smoke"
+  # Q33 expanded candidate surface (still not full native-windows claim)
+  "net.async.dial tests/nextpas.core.net/test_net_async_dial"
+  "net.async.resolve tests/nextpas.core.net/test_net_async_resolve"
+  "net.async.udp tests/nextpas.core.net/test_net_async_udp"
+  "net.async.pool tests/nextpas.core.net/test_net_async_pool"
+  "net.error_classify tests/nextpas.core.net/test_net_error_classify"
+  "net.cancel_bridge tests/nextpas.core.net/test_net_cancel_bridge"
 )
 
 pass_count=0

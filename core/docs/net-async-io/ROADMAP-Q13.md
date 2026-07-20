@@ -27,8 +27,9 @@
 | **Q30** | Dial AddressFamily 过滤 | dafAny/v4/v6 | **done** |
 | **Q31** | Dial OnAttemptResult | attempt 结果可观测 | **done** |
 | **Q32** | 门面 DnsFeed + 对标重估 | AsyncTcpDialWithDnsFeed re-export；D 轴 ~8.3 | **done** |
+| **Q33** | Windows candidate 套件扩容 | dial/resolve/udp/pool/error/cancel 入 smoke | **done** |
 | **—** | MPTCP | 平台/可移植性不足 | **deferred** |
-| **—** | full native-windows | 更广套件后再评估 | **deferred** |
+| **—** | full native-windows | 扩容后 streak 再评估 | **deferred** |
 
 ## Q13 细节
 
