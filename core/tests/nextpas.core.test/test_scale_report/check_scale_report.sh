@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-1800}"
+MIN_COUNT="${SCALE_MIN:-2500}"
 
 python3 - "$TESTS" "$MIN_COUNT" <<'PY'
 import re, sys
@@ -21,6 +21,7 @@ EXCLUDE_DIRS = {"test_stress", "test_scale_report", "test_api_source_contracts",
                 "test_runner_source_contracts", "test_perf_bench"}
 
 total = 0
+fail_path_hint = 0
 per = {}
 
 def add(suite, n, reason=""):
@@ -52,16 +53,25 @@ for lpr in sorted(tests_root.rglob("*.lpr")):
         window = "\n".join(lines[i:i+40])
         if re.search(r'TestTable\s*\(', window):
             add(suite, n)
+            # Heuristic: table names / nearby comments suggesting fail-path bulk
+            if re.search(r'fail[-_ ]?path|ExpectFail|negative', window, re.I):
+                fail_path_hint += n
 
     # 3) AppendFilterCase / Append*Case( helper calls (one case each)
     n_append = len(re.findall(r'''\bAppend\w*Case\s*\(''', text))
     add(suite, n_append)
+    # half of filter bulk tables are typically negative (gen-no / expect 0)
+    n_neg_append = len(re.findall(r'''\bAppend\w*Case\s*\([^)]*'0'\s*\)''', text))
+    fail_path_hint += n_neg_append
 
 print("=== Scale report (countable processes) ===")
 for k in sorted(per):
     print(f"  {k:28} {per[k]:5}")
 print(f"TOTAL countable: {total}")
 print(f"MIN required:    {min_count}")
+if total > 0:
+    ratio = 100.0 * fail_path_hint / total
+    print(f"fail-path hint:  {fail_path_hint} (~{ratio:.1f}% of countable; heuristic)")
 if total < min_count:
     print(f"FAIL: scale {total} < {min_count}")
     sys.exit(1)

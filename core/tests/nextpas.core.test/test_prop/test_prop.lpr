@@ -328,6 +328,70 @@ begin
     'shrunk near zero, got ' + LResult);
 end;
 
+{ ── B14: shrink second wave ───────────────────────────────────────────────── }
+
+procedure TestB14BytesShrinkNotLonger;
+var
+  LGen: IBytesGenerator;
+  LSrc, LCand: TBytes;
+  LCands: specialize TArray<TBytes>;
+  I: Integer;
+  LHasShorter: Boolean;
+begin
+  LGen := GenBytes(0, 64);
+  SetLength(LSrc, 8);
+  FillChar(LSrc[0], 8, $AB);
+  LCands := LGen.Shrink(LSrc);
+  CheckTrue(Length(LCands) > 0, 'bytes shrink yields candidates');
+  LHasShorter := False;
+  for I := 0 to High(LCands) do
+  begin
+    LCand := LCands[I];
+    CheckTrue(Length(LCand) <= Length(LSrc), 'bytes shrink not longer');
+    if Length(LCand) < Length(LSrc) then
+      LHasShorter := True;
+  end;
+  CheckTrue(LHasShorter, 'at least one shorter bytes candidate');
+end;
+
+procedure TestB14FilterIntShrinkStaysInPred;
+var
+  LGen: IIntGenerator;
+  LCands: specialize TArray<Int64>;
+  I: Integer;
+begin
+  { Even numbers only; shrink of 40 must stay even and in range. }
+  LGen := FilterInt(GenInt(0, 100),
+    function(V: Int64): Boolean begin Result := (V mod 2) = 0 end);
+  LCands := LGen.Shrink(40);
+  for I := 0 to High(LCands) do
+  begin
+    CheckTrue((LCands[I] mod 2) = 0, 'filter shrink even');
+    CheckTrue((LCands[I] >= 0) and (LCands[I] <= 100), 'filter shrink in range');
+  end;
+end;
+
+procedure TestB14ChoiceIntShrinkInSet;
+var
+  LGen: IIntGenerator;
+  LCands: specialize TArray<Int64>;
+  I, J: Integer;
+  LOk: Boolean;
+  LSet: array[0..3] of Int64;
+begin
+  LSet[0] := 2; LSet[1] := 4; LSet[2] := 6; LSet[3] := 8;
+  LGen := GenChoiceInt(LSet);
+  LCands := LGen.Shrink(8);
+  for I := 0 to High(LCands) do
+  begin
+    LOk := False;
+    for J := 0 to High(LSet) do
+      if LCands[I] = LSet[J] then
+        LOk := True;
+    CheckTrue(LOk, 'choice shrink stays in set: ' + IntToStr(LCands[I]));
+  end;
+end;
+
 { ── Fuzzing tests (v7.2a) ─────────────────────────────────────────────────── }
 
 procedure TestFuzzBasic;
@@ -839,6 +903,9 @@ begin
   LSuite.Test('B11StringShrinkShorterOrEmpty', @TestB11StringShrinkShorterOrEmpty);
   LSuite.Test('B11IntShrinkMonotonicTowardBoundary',
     @TestB11IntShrinkMonotonicTowardBoundary);
+  LSuite.Test('B14BytesShrinkNotLonger', @TestB14BytesShrinkNotLonger);
+  LSuite.Test('B14FilterIntShrinkStaysInPred', @TestB14FilterIntShrinkStaysInPred);
+  LSuite.Test('B14ChoiceIntShrinkInSet', @TestB14ChoiceIntShrinkInSet);
   LSuite.Test('FuzzBasic', @TestFuzzBasic);
   LSuite.Test('FuzzString', @TestFuzzString);
   LSuite.Test('FuzzGenBytes', @TestFuzzGenBytes);

@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.11c**
+**当前版本**: **v8.12c**
 **最后更新**: 2026-07-19
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥1800**（scale report 门禁，排除 stress） |
+| 可计数过程 | **≥2500**（目标；门禁 SCALE_MIN 默认 2000） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -44,6 +44,9 @@
 | B9 v8.11a 危险并发契约 | **done** |
 | B10 v8.11b Runner/Lifecycle 深度 | **done** |
 | B11 v8.11c 规模报表+golden+≥1800 | **done** |
+| B12 v8.12a 薄套件+边界收口 | **done** |
+| B13 v8.12b 报告+门禁≥2000 | **done** |
+| B14 v8.12c shrink+≥2500 | **done** |
 
 ### 暂缓
 
@@ -75,5 +78,15 @@ make -C core/tests/nextpas.core.test clean test   # 17/17
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=1800 (default)
+# SCALE_MIN=2500 (default)
 ```
+
+
+## perf 策略
+
+| 项 | 策略 |
+|----|------|
+| CI | **可选**（`test_perf_bench` / `perf-regression-check.sh`） |
+| 阈值 | 默认 **+30%**（宽松防 flaky） |
+| 跨机基线 | **不强制入库**；本机生成 `perf-baseline.json` 后对比 |
+| 目标 | 对标 benchstat 意图，非硬性能 SLA |

@@ -14,9 +14,11 @@
 |------|-----------|------|
 | **质量 Quality** | **9.5** | R22 hardening 保持 |
 | **规模 Scale (Essential)** | **9.7** | R23 lock + R24 process group + R25 watch |
-| **综合** | **9.6** | 能力闭环 + 证据仍 wine 级 |
+| **综合** | **9.7** | 能力闭环 + L2 wine 四套件 + SCORECARD |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
+
+**证据文档**：[`SCORECARD.md`](./SCORECARD.md)（host-linux 数字 + wine-runtime-smoke 表）。
 
 ---
 
@@ -129,7 +131,9 @@
 
 ### 外部债
 
-- **wine-runtime-smoke**：2026-07-19 实况 **4 passed**；≠ 真 Windows host
+- **wine-runtime-smoke**（2026-07-20）：  
+  - process **6** / fs **2** / path **3** / os.env **2** 全绿 under Wine  
+  - 命令见 SCORECARD；≠ 真 Windows host
 
 ---
 
@@ -158,3 +162,4 @@
 | 2026-07-20 | R22 quality hardening；Quality 9.5 / 综合 9.4；测试 ≈922 |
 | 2026-07-20 | R23 File lock L2；Scale 9.5 / 综合 9.5；ifile 21；测试 ≈926 |
 | 2026-07-20 | R24-PG NewProcessGroup/KillTree；R25 fs.Watch；Scale 9.7 / 综合 9.6 |
+| 2026-07-20 | R24-EV L2 wine×4 + SCORECARD；综合 9.7 |

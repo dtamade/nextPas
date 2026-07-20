@@ -383,6 +383,40 @@ type
     lbcVI = 47
   );
 
+  // Bidi_Class (Unicode 16.0, UAX #9)
+  TBidiClass = (
+    bcL = 0,
+    bcR = 1,
+    bcEN = 2,
+    bcES = 3,
+    bcET = 4,
+    bcAN = 5,
+    bcCS = 6,
+    bcB = 7,
+    bcS = 8,
+    bcWS = 9,
+    bcON = 10,
+    bcBN = 11,
+    bcNSM = 12,
+    bcAL = 13,
+    bcLRE = 14,
+    bcLRO = 15,
+    bcRLE = 16,
+    bcRLO = 17,
+    bcPDF = 18,
+    bcLRI = 19,
+    bcRLI = 20,
+    bcFSI = 21,
+    bcPDI = 22
+  );
+
+  // Bidi_Paired_Bracket_Type
+  TBidiPairedBracketType = (
+    bpbtNone = 0,
+    bpbtOpen = 1,
+    bpbtClose = 2
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,

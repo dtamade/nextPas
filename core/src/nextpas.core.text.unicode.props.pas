@@ -15,6 +15,9 @@ function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBrea
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -84,6 +87,8 @@ const
 {$I nextpas.core.text.unicode.wbp.inc}
 {$I nextpas.core.text.unicode.sbp.inc}
 {$I nextpas.core.text.unicode.lbp.inc}
+{$I nextpas.core.text.unicode.bcp.inc}
+{$I nextpas.core.text.unicode.brackets.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -281,6 +286,66 @@ begin
     Exit(TLineBreakClass(LValue));
 
   Result := lbcXX;
+end;
+
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass;
+var
+  LValue: Byte;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(bcL);
+
+  if ACp <= $FFFF then
+    Exit(TBidiClass(BCP_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]));
+
+  if FindRange3Value(ACp, BCP_SMP_RANGES, LValue) then
+    Exit(TBidiClass(LValue));
+
+  Result := bcL;
+end;
+
+function FindBidiBracketIndex(const ACp: TUnicodeCodepoint): Integer;
+var
+  Lo, Hi, Mid: Integer;
+begin
+  Lo := 0;
+  Hi := BIDI_BRACKET_COUNT - 1;
+  while Lo <= Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if BIDI_BRACKETS[Mid].Cp < ACp then
+      Lo := Mid + 1
+    else if BIDI_BRACKETS[Mid].Cp > ACp then
+      Hi := Mid - 1
+    else
+      Exit(Mid);
+  end;
+  Result := -1;
+end;
+
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
+var
+  Idx: Integer;
+begin
+  Idx := FindBidiBracketIndex(ACp);
+  if Idx < 0 then
+    Exit(ACp);
+  Result := BIDI_BRACKETS[Idx].Pair;
+end;
+
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType;
+var
+  Idx: Integer;
+begin
+  Idx := FindBidiBracketIndex(ACp);
+  if Idx < 0 then
+    Exit(bpbtNone);
+  case BIDI_BRACKETS[Idx].Kind of
+    1: Result := bpbtOpen;
+    2: Result := bpbtClose;
+  else
+    Result := bpbtNone;
+  end;
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

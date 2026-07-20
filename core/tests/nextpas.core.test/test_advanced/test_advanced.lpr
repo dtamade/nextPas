@@ -338,6 +338,96 @@ begin
   CheckEqual(1, LResults[0].Passed);
 end;
 
+{ ── B12: advanced depth ───────────────────────────────────────────────────── }
+
+type
+  TFailDiscoverFixture = class(TTestFixture)
+  published
+    procedure TestBoom;
+  end;
+
+procedure TFailDiscoverFixture.TestBoom;
+begin
+  Fail('discover-fail-body');
+end;
+
+procedure TestB12DiscoverAndFail;
+var
+  LFixture: TFailDiscoverFixture;
+  LSuite: TTestSuite;
+  LRunner: TSuiteRunner;
+  LResults: specialize TArray<TTestRunResult>;
+begin
+  LFixture := TFailDiscoverFixture.Create;
+  LSuite := DiscoverTests(LFixture, 'FailDiscover');
+  LRunner := TSuiteRunner.Create('FailDiscoverRunner');
+  LRunner.Add(LSuite);
+  LRunner.RunAllWithResult(LResults);
+  CheckFalse(LResults[0].AllPassed);
+  CheckEqual(1, LResults[0].Failed);
+end;
+
+procedure TestB12JSONErrorStatus;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LJSON: string;
+begin
+  LResults := RunSuiteAndGetResults('ErrSuite', 'TestErr', roError, 'boom-err');
+  LJSON := JSONReport(LResults);
+  CheckContains(LJSON, '"status": "error"');
+  CheckContains(LJSON, 'boom-err');
+  CheckContains(LJSON, '"allPassed": false');
+end;
+
+procedure TestB12TAPErrorSeverity;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LTAP: string;
+begin
+  LResults := RunSuiteAndGetResults('ErrTap', 'TestErr', roError, 'eav');
+  LTAP := TAPReport(LResults);
+  CheckContains(LTAP, 'not ok');
+  CheckContains(LTAP, 'severity: error');
+  CheckContains(LTAP, 'eav');
+end;
+
+procedure TestB12DiscoverRunCleanupIdempotent;
+var
+  LFixture: TTeardownFixture;
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LFixture := TTeardownFixture.Create;
+  LSuite := DiscoverTests(LFixture, 'CleanupIdem');
+  LSuite.RunWithResult(LResult, True);
+  CheckTrue(LResult.AllPassed);
+  LSuite.CleanupTableAllocations;
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB12RetryExhaustedMessage;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFound: Boolean;
+begin
+  LSuite := TTestSuite.Create('RetryMsg');
+  LSuite.Test('always_fail', @AlwaysFail, 1);
+  LSuite.RunWithResult(LResult);
+  CheckEqual(1, LResult.Failed);
+  LFound := False;
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Status = tsFailed then
+    begin
+      LFound := True;
+      CheckContains(LResult.Results[I].Message, 'always fails');
+    end;
+  CheckTrue(LFound, 'failed result present');
+  LSuite := Default(TTestSuite);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -370,6 +460,13 @@ begin
 
   { R6-53: Discovery fixture teardown }
   LSuite.Test('DiscoveryFixtureTeardown', @TestDiscoveryFixtureTeardown);
+
+  { B12 }
+  LSuite.Test('B12 DiscoverAndFail', @TestB12DiscoverAndFail);
+  LSuite.Test('B12 JSONErrorStatus', @TestB12JSONErrorStatus);
+  LSuite.Test('B12 TAPErrorSeverity', @TestB12TAPErrorSeverity);
+  LSuite.Test('B12 DiscoverRunCleanupIdempotent', @TestB12DiscoverRunCleanupIdempotent);
+  LSuite.Test('B12 RetryExhaustedMessage', @TestB12RetryExhaustedMessage);
 
   LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);

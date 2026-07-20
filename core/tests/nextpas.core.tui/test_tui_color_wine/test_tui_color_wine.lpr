@@ -44,6 +44,32 @@ begin
   Check(not ColorEquals(TUI_RED, TUI_BLUE), 'named red != blue');
 end;
 
+procedure TestRgbNotIndexed;
+begin
+  Check(not ColorEquals(RgbColor(255, 0, 0), IndexedColor(1)), 'rgb != indexed red');
+end;
+
+procedure TestUnsetNotReset;
+begin
+  Check(not ColorEquals(UnsetColor, ResetColor), 'unset != reset');
+end;
+
+procedure TestWhiteBlackNamed;
+begin
+  Check(not ColorEquals(TUI_WHITE, TUI_BLACK), 'white != black');
+end;
+
+procedure TestColorIsSetRgb;
+begin
+  Check(ColorIsSet(RgbColor(1, 2, 3)), 'rgb is set');
+  Check(not ColorIsSet(UnsetColor), 'unset not set');
+end;
+
+procedure TestIndexedZero;
+begin
+  Check(ColorEquals(IndexedColor(0), IndexedColor(0)), 'index 0 equal');
+end;
+
 begin
   T := TTestSuite.Create('tui_color_wine');
   T.Test('rgb equals', @TestRgbEquals);
@@ -51,5 +77,10 @@ begin
   T.Test('indexed', @TestIndexed);
   T.Test('reset not rgb', @TestResetNotRgb);
   T.Test('named constants', @TestNamedConstants);
+  T.Test('rgb not indexed', @TestRgbNotIndexed);
+  T.Test('unset not reset', @TestUnsetNotReset);
+  T.Test('white black named', @TestWhiteBlackNamed);
+  T.Test('color is set rgb', @TestColorIsSetRgb);
+  T.Test('indexed zero', @TestIndexedZero);
   if not T.Run then Halt(1);
 end.

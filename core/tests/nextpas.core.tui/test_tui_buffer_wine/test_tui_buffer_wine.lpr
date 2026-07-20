@@ -97,6 +97,27 @@ begin
   end;
 end;
 
+
+procedure TestCjkWidth;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    Check(LLead <> nil, 'lead');
+    Check(LLead^.Width = 2, 'cjk width 2');
+    Check(LTail^.Skip, 'tail skip');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+
+
 begin
   T := TTestSuite.Create('tui_buffer_wine');
   T.Test('create and setstring', @TestCreateAndSetString);
@@ -104,5 +125,6 @@ begin
   T.Test('diff dirty', @TestDiffDirty);
   T.Test('fill rect', @TestFillRect);
   T.Test('resize', @TestResize);
-  if not T.Run then Halt(1);
+    T.Test('cjk width', @TestCjkWidth);
+if not T.Run then Halt(1);
 end.

@@ -37,6 +37,7 @@ MODULE_ENTRIES=(
   "net.async.resolve tests/nextpas.core.net/test_net_async_resolve"
   "net.async.dial tests/nextpas.core.net/test_net_async_dial"
   "async.kqueue_compile_gate tests/nextpas.core.async/test_async_kqueue_compile_gate"
+  "async.kqueue_runtime_smoke tests/nextpas.core.async/test_async_kqueue_runtime_smoke"
 )
 
 # On Darwin, prefer a real kqueue path if poller tests exist; compile gate still runs.

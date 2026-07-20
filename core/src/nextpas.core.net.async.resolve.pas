@@ -2,7 +2,8 @@ unit nextpas.core.net.async.resolve;
 {**
  * @desc 异步 DNS 解析：集成事件循环的非阻塞 DNS 解析。
  *       AsyncResolve: 单 worker + AF_UNSPEC multi-A（兼容路径）。
- *       AsyncResolveEx: 并行 A/AAAA（RFC8305 Resolution Delay 子集）。
+ *       AsyncResolveEx: 并行 A/AAAA + Resolution Delay，一次回调。
+ *       AsyncResolveStream: 并行 A/AAAA，按家族增量回调（DNS-race 用）。
  *       注意：使用此模块的程序需要在 uses 中包含 cthreads。
  *}
 
@@ -36,22 +37,34 @@ type
     PreferIPv6First: Boolean;  { merge order: prefer v6 then v4 if True }
   end;
 
+  { 增量 DNS 事件：每家族最多一次 batch；最后一次 AllDone=True }
+  TDnsStreamEvent = record
+    Addresses: array of TNetAddress;
+    IsIPv6: Boolean;
+    Error: Int32;
+    AllDone: Boolean;
+  end;
+  TDnsStreamCallback = procedure(const AEvent: TDnsStreamEvent; AContext: Pointer);
+
 function DefaultDnsResolveOptions: TDnsResolveOptions;
 
-{ 异步 DNS 解析（单次 AF_UNSPEC getaddrinfo，兼容） }
 function AsyncResolve(const ALoop: TAsyncLoop; const AHost: string;
   ACallback: TDnsCallback; AContext: Pointer = nil): Boolean;
 
 function AsyncResolveRef(const ALoop: TAsyncLoop; const AHost: string;
   ACallback: TDnsCallbackRef; AContext: Pointer = nil): Boolean;
 
-{ 并行 A + AAAA + Resolution Delay（RFC8305 §3 简化） }
 function AsyncResolveEx(const ALoop: TAsyncLoop; const AHost: string;
   const AOptions: TDnsResolveOptions; ACallback: TDnsCallback;
   AContext: Pointer = nil): Boolean;
 
 function AsyncResolveExRef(const ALoop: TAsyncLoop; const AHost: string;
   const AOptions: TDnsResolveOptions; ACallback: TDnsCallbackRef;
+  AContext: Pointer = nil): Boolean;
+
+{ 并行 A/AAAA；Resolution Delay 后门控首投递，第二家族再投递。DNS-race 用。 }
+function AsyncResolveStream(const ALoop: TAsyncLoop; const AHost: string;
+  const AOptions: TDnsResolveOptions; ACallback: TDnsStreamCallback;
   AContext: Pointer = nil): Boolean;
 
 implementation
@@ -65,7 +78,6 @@ uses
   nextpas.core.platform.thread;
 
 type
-
   PDnsContext = ^TDnsContext;
   TDnsContext = record
     Host: AnsiString;
@@ -84,11 +96,18 @@ type
     Result: TDnsResult;
   end;
 
-  { Parallel family worker shares parent slot via AFamily tag. }
+  PDnsStreamPostContext = ^TDnsStreamPostContext;
+  TDnsStreamPostContext = record
+    Loop: TAsyncLoop;
+    Callback: TDnsStreamCallback;
+    Context: Pointer;
+    Event: TDnsStreamEvent;
+  end;
+
   PDnsFamilyWorker = ^TDnsFamilyWorker;
   TDnsFamilyWorker = record
-    Parent: Pointer; { PDnsParallelCtx }
-    Family: Int32;   { PLATFORM_AF_INET or PLATFORM_AF_INET6 }
+    Parent: Pointer;
+    Family: Int32;
   end;
 
   PDnsParallelCtx = ^TDnsParallelCtx;
@@ -97,9 +116,11 @@ type
     Loop: TAsyncLoop;
     Callback: TDnsCallback;
     CallbackRef: TDnsCallbackRef;
+    StreamCallback: TDnsStreamCallback;
     Context: Pointer;
     ResolutionDelayMs: UInt32;
     PreferIPv6First: Boolean;
+    Streaming: Boolean;
     V4Raw: array[0..PLATFORM_RESOLVE_MAX - 1] of TPlatformResolvedAddr;
     V6Raw: array[0..PLATFORM_RESOLVE_MAX - 1] of TPlatformResolvedAddr;
     V4Count: Int32;
@@ -136,6 +157,17 @@ begin
     Dispose(PDnsPostContext(AContext));
 end;
 
+procedure DiscardDnsStreamPostCtx(AContext: Pointer);
+var
+  LPostCtx: PDnsStreamPostContext;
+begin
+  if AContext = nil then
+    Exit;
+  LPostCtx := PDnsStreamPostContext(AContext);
+  SetLength(LPostCtx^.Event.Addresses, 0);
+  Dispose(LPostCtx);
+end;
+
 procedure DnsPostCallback(AContext: Pointer);
 var
   LPostCtx: PDnsPostContext;
@@ -147,6 +179,20 @@ begin
     else if Assigned(LPostCtx^.CallbackRef) then
       LPostCtx^.CallbackRef(LPostCtx^.Result, LPostCtx^.Context);
   finally
+    Dispose(LPostCtx);
+  end;
+end;
+
+procedure DnsStreamPostCallback(AContext: Pointer);
+var
+  LPostCtx: PDnsStreamPostContext;
+begin
+  LPostCtx := PDnsStreamPostContext(AContext);
+  try
+    if Assigned(LPostCtx^.Callback) then
+      LPostCtx^.Callback(LPostCtx^.Event, LPostCtx^.Context);
+  finally
+    SetLength(LPostCtx^.Event.Addresses, 0);
     Dispose(LPostCtx);
   end;
 end;
@@ -177,7 +223,6 @@ begin
   SetString(Result, @LBuf[0], LPos);
 end;
 
-{ sin_addr.s_addr is network byte order; on LE print low byte first. }
 function IPv4NetToString(ANet: UInt32): string;
 begin
   Result := IntToStr(ANet and $FF) + '.' +
@@ -202,8 +247,7 @@ end;
 procedure AppendRawAddrs(var AResult: TDnsResult; ARaw: PPlatformResolvedAddr;
   ACount: Int32; AIsIPv6: Boolean);
 var
-  LI, LBase: Integer;
-  LDst: Integer;
+  LI, LBase, LDst: Integer;
 begin
   if ACount <= 0 then
     Exit;
@@ -230,12 +274,9 @@ end;
 procedure MergeSortedV4V6(var AResult: TDnsResult;
   ARaw: PPlatformResolvedAddr; ACount: Int32; APreferV6: Boolean);
 var
-  LI, LJdx, LTotal: Integer;
+  LI, LJdx: Integer;
 begin
-  LTotal := 0;
-  for LI := 0 to ACount - 1 do
-    Inc(LTotal);
-  SetLength(AResult.Addresses, LTotal);
+  SetLength(AResult.Addresses, ACount);
   LJdx := 0;
   if not APreferV6 then
   begin
@@ -292,6 +333,19 @@ begin
   ALoop.PostEx(@DnsPostCallback, LPostCtx, @DiscardDnsPostCtx);
 end;
 
+procedure PostDnsStreamEvent(const ALoop: TAsyncLoop; ACallback: TDnsStreamCallback;
+  AContext: Pointer; const AEvent: TDnsStreamEvent);
+var
+  LPostCtx: PDnsStreamPostContext;
+begin
+  New(LPostCtx);
+  LPostCtx^.Loop := ALoop;
+  LPostCtx^.Callback := ACallback;
+  LPostCtx^.Context := AContext;
+  LPostCtx^.Event := AEvent;
+  ALoop.PostEx(@DnsStreamPostCallback, LPostCtx, @DiscardDnsStreamPostCtx);
+end;
+
 function DnsResolveThread(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PDnsContext;
@@ -303,10 +357,8 @@ begin
   Result := nil;
   LCtx := PDnsContext(AParam);
   try
-    FillChar(LResult, SizeOf(LResult), 0);
+    LResult := Default(TDnsResult);
     SetLength(LResult.Addresses, 0);
-
-    { Fast path: IPv4 literal without DNS }
     if IsIPv4Literal(LCtx^.Host) then
     begin
       LResult.Error := 0;
@@ -314,11 +366,9 @@ begin
       LResult.Addresses[0].IP := string(LCtx^.Host);
       LResult.Addresses[0].Port := 0;
       LResult.Addresses[0].IsIPv6 := False;
-      PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
-        LResult);
+      PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context, LResult);
       Exit;
     end;
-
     LRes := platform_socket_resolve_stream(PAnsiChar(LCtx^.Host), @LRaw[0],
       PLATFORM_RESOLVE_MAX, LCount);
     if (LRes = 0) and (LCount > 0) then
@@ -333,9 +383,7 @@ begin
         LResult.Error := PLATFORM_ERR_INVALID;
       SetLength(LResult.Addresses, 0);
     end;
-
-    PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
-      LResult);
+    PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context, LResult);
   finally
     Dispose(LCtx);
   end;
@@ -373,159 +421,327 @@ begin
   end;
 end;
 
+procedure WaitFamilyGate(LCtx: PDnsParallelCtx);
+var
+  LWaitedMs: UInt32;
+  LFirstDone: Boolean;
+  LBothDone: Boolean;
+begin
+  LWaitedMs := 0;
+  LFirstDone := False;
+  while True do
+  begin
+    LBothDone := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
+      (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0);
+    if LBothDone then
+      Break;
+    if not LFirstDone then
+    begin
+      if (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) or
+         (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) then
+      begin
+        LFirstDone := True;
+        LWaitedMs := 0;
+      end;
+    end
+    else if LWaitedMs >= LCtx^.ResolutionDelayMs then
+      Break;
+    platform_thread_sleep_ms(1);
+    Inc(LWaitedMs);
+    if LWaitedMs > 60000 then
+      Break;
+  end;
+end;
+
+procedure JoinFamilyWorkers(LCtx: PDnsParallelCtx);
+var
+  LWaitedMs: UInt32;
+begin
+  LWaitedMs := 0;
+  while (AtomicLoad32(LCtx^.V4Done, moAcquire) = 0) or
+        (AtomicLoad32(LCtx^.V6Done, moAcquire) = 0) do
+  begin
+    platform_thread_sleep_ms(1);
+    Inc(LWaitedMs);
+    if LWaitedMs > 60000 then
+      Break;
+  end;
+end;
+
+function SpawnFamilyWorkers(LCtx: PDnsParallelCtx): Boolean;
+var
+  LWorker4, LWorker6: PDnsFamilyWorker;
+  LHandle4, LHandle6: TPlatformThreadHandle;
+begin
+  Result := True;
+  LCtx^.V4Count := 0;
+  LCtx^.V6Count := 0;
+  LCtx^.V4Err := PLATFORM_ERR_INVALID;
+  LCtx^.V6Err := PLATFORM_ERR_INVALID;
+  AtomicStore32(LCtx^.V4Done, 0, moRelease);
+  AtomicStore32(LCtx^.V6Done, 0, moRelease);
+  New(LWorker4);
+  LWorker4^.Parent := LCtx;
+  LWorker4^.Family := PLATFORM_AF_INET;
+  New(LWorker6);
+  LWorker6^.Parent := LCtx;
+  LWorker6^.Family := PLATFORM_AF_INET6;
+  FillChar(LHandle4, SizeOf(LHandle4), 0);
+  FillChar(LHandle6, SizeOf(LHandle6), 0);
+  if platform_thread_create(LHandle4, @DnsFamilyWorkerThread, LWorker4) <> 0 then
+  begin
+    Dispose(LWorker4);
+    AtomicStore32(LCtx^.V4Done, 1, moRelease);
+    LCtx^.V4Err := PLATFORM_ERR_INVALID;
+    Result := False;
+  end
+  else
+    platform_thread_detach(LHandle4);
+  if platform_thread_create(LHandle6, @DnsFamilyWorkerThread, LWorker6) <> 0 then
+  begin
+    Dispose(LWorker6);
+    AtomicStore32(LCtx^.V6Done, 1, moRelease);
+    LCtx^.V6Err := PLATFORM_ERR_INVALID;
+    Result := False;
+  end
+  else
+    platform_thread_detach(LHandle6);
+end;
+
+function BuildFamilyEvent(LCtx: PDnsParallelCtx; AIsIPv6: Boolean): TDnsStreamEvent;
+var
+  LOk: Boolean;
+  LCount, LI: Integer;
+begin
+  Result := Default(TDnsStreamEvent);
+  Result.IsIPv6 := AIsIPv6;
+  Result.AllDone := False;
+  SetLength(Result.Addresses, 0);
+  if AIsIPv6 then
+  begin
+    LOk := (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) and
+      (LCtx^.V6Err = 0) and (LCtx^.V6Count > 0);
+    Result.Error := LCtx^.V6Err;
+    if LOk then
+    begin
+      Result.Error := 0;
+      LCount := LCtx^.V6Count;
+      SetLength(Result.Addresses, LCount);
+      for LI := 0 to LCount - 1 do
+      begin
+        Result.Addresses[LI].IP := FormatIPv6Addr(@LCtx^.V6Raw[LI].IPv6[0]);
+        Result.Addresses[LI].Port := 0;
+        Result.Addresses[LI].IsIPv6 := True;
+      end;
+    end
+    else if Result.Error = 0 then
+      Result.Error := PLATFORM_ERR_INVALID;
+  end
+  else
+  begin
+    LOk := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
+      (LCtx^.V4Err = 0) and (LCtx^.V4Count > 0);
+    Result.Error := LCtx^.V4Err;
+    if LOk then
+    begin
+      Result.Error := 0;
+      LCount := LCtx^.V4Count;
+      SetLength(Result.Addresses, LCount);
+      for LI := 0 to LCount - 1 do
+      begin
+        Result.Addresses[LI].IP := IPv4NetToString(LCtx^.V4Raw[LI].IPv4);
+        Result.Addresses[LI].Port := 0;
+        Result.Addresses[LI].IsIPv6 := False;
+      end;
+    end
+    else if Result.Error = 0 then
+      Result.Error := PLATFORM_ERR_INVALID;
+  end;
+end;
+
 function DnsParallelCoordinator(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PDnsParallelCtx;
   LResult: TDnsResult;
-  LWorker4, LWorker6: PDnsFamilyWorker;
-  LHandle4, LHandle6: TPlatformThreadHandle;
+  LOk4, LOk6, LSpawnOk, LBothDone: Boolean;
+  LEvent: TDnsStreamEvent;
+  LPostedV4, LPostedV6: Boolean;
   LWaitedMs: UInt32;
-  LFirstDone: Boolean;
-  LBothDone: Boolean;
-  LOk4, LOk6: Boolean;
-  LSpawnOk: Boolean;
 begin
   Result := nil;
   LCtx := PDnsParallelCtx(AParam);
   try
-    FillChar(LResult, SizeOf(LResult), 0);
+    LResult := Default(TDnsResult);
     SetLength(LResult.Addresses, 0);
 
     if IsIPv4Literal(LCtx^.Host) then
     begin
-      LResult.Error := 0;
-      SetLength(LResult.Addresses, 1);
-      LResult.Addresses[0].IP := string(LCtx^.Host);
-      LResult.Addresses[0].Port := 0;
-      LResult.Addresses[0].IsIPv6 := False;
-      PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
-        LResult);
+      if LCtx^.Streaming then
+      begin
+        LEvent := Default(TDnsStreamEvent);
+        LEvent.Error := 0;
+        LEvent.IsIPv6 := False;
+        LEvent.AllDone := True;
+        SetLength(LEvent.Addresses, 1);
+        LEvent.Addresses[0].IP := string(LCtx^.Host);
+        LEvent.Addresses[0].Port := 0;
+        LEvent.Addresses[0].IsIPv6 := False;
+        PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+      end
+      else
+      begin
+        LResult.Error := 0;
+        SetLength(LResult.Addresses, 1);
+        LResult.Addresses[0].IP := string(LCtx^.Host);
+        LResult.Addresses[0].Port := 0;
+        LResult.Addresses[0].IsIPv6 := False;
+        PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
+          LResult);
+      end;
       Exit;
     end;
 
-    LCtx^.V4Count := 0;
-    LCtx^.V6Count := 0;
-    LCtx^.V4Err := PLATFORM_ERR_INVALID;
-    LCtx^.V6Err := PLATFORM_ERR_INVALID;
-    AtomicStore32(LCtx^.V4Done, 0, moRelease);
-    AtomicStore32(LCtx^.V6Done, 0, moRelease);
+    LSpawnOk := SpawnFamilyWorkers(LCtx);
+    WaitFamilyGate(LCtx);
 
-    New(LWorker4);
-    LWorker4^.Parent := LCtx;
-    LWorker4^.Family := PLATFORM_AF_INET;
-    New(LWorker6);
-    LWorker6^.Parent := LCtx;
-    LWorker6^.Family := PLATFORM_AF_INET6;
-
-    FillChar(LHandle4, SizeOf(LHandle4), 0);
-    FillChar(LHandle6, SizeOf(LHandle6), 0);
-    LSpawnOk := True;
-    if platform_thread_create(LHandle4, @DnsFamilyWorkerThread, LWorker4) <> 0 then
-    begin
-      Dispose(LWorker4);
-      LWorker4 := nil;
-      AtomicStore32(LCtx^.V4Done, 1, moRelease);
-      LCtx^.V4Err := PLATFORM_ERR_INVALID;
-      LSpawnOk := False;
-    end
-    else
-      platform_thread_detach(LHandle4);
-
-    if platform_thread_create(LHandle6, @DnsFamilyWorkerThread, LWorker6) <> 0 then
-    begin
-      Dispose(LWorker6);
-      LWorker6 := nil;
-      AtomicStore32(LCtx^.V6Done, 1, moRelease);
-      LCtx^.V6Err := PLATFORM_ERR_INVALID;
-      LSpawnOk := False;
-    end
-    else
-      platform_thread_detach(LHandle6);
-
-    { Wait: both done, or first family + ResolutionDelay elapsed. }
-    LWaitedMs := 0;
-    LFirstDone := False;
-    while True do
-    begin
-      LBothDone := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
-        (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0);
-      if LBothDone then
-        Break;
-      if not LFirstDone then
-      begin
-        if (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) or
-           (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) then
-        begin
-          LFirstDone := True;
-          LWaitedMs := 0;
-        end;
-      end
-      else if LWaitedMs >= LCtx^.ResolutionDelayMs then
-        Break; { partial OK; still join workers below }
-      platform_thread_sleep_ms(1);
-      if LFirstDone then
-        Inc(LWaitedMs)
-      else
-        Inc(LWaitedMs); { pre-first wait also capped }
-      if LWaitedMs > 60000 then
-        Break;
-    end;
-
-    { Snapshot whatever families finished (RFC: may proceed with first family). }
     LOk4 := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
       (LCtx^.V4Err = 0) and (LCtx^.V4Count > 0);
     LOk6 := (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) and
       (LCtx^.V6Err = 0) and (LCtx^.V6Count > 0);
+    LBothDone := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
+      (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0);
 
-    if LOk4 or LOk6 then
+    if LCtx^.Streaming then
     begin
-      LResult.Error := 0;
+      LPostedV4 := False;
+      LPostedV6 := False;
+
       if LCtx^.PreferIPv6First then
       begin
-        if LOk6 then
-          AppendRawAddrs(LResult, @LCtx^.V6Raw[0], LCtx^.V6Count, True);
-        if LOk4 then
-          AppendRawAddrs(LResult, @LCtx^.V4Raw[0], LCtx^.V4Count, False);
+        if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, True);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV6 := True;
+        end;
+        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, False);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV4 := True;
+        end;
       end
       else
       begin
-        if LOk4 then
-          AppendRawAddrs(LResult, @LCtx^.V4Raw[0], LCtx^.V4Count, False);
-        if LOk6 then
-          AppendRawAddrs(LResult, @LCtx^.V6Raw[0], LCtx^.V6Count, True);
+        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, False);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV4 := True;
+        end;
+        if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, True);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV6 := True;
+        end;
       end;
+
+      if not LBothDone then
+      begin
+        LWaitedMs := 0;
+        while (AtomicLoad32(LCtx^.V4Done, moAcquire) = 0) or
+              (AtomicLoad32(LCtx^.V6Done, moAcquire) = 0) do
+        begin
+          platform_thread_sleep_ms(1);
+          Inc(LWaitedMs);
+          if LWaitedMs > 60000 then
+            Break;
+        end;
+        if (not LPostedV4) and (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, False);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV4 := True;
+        end;
+        if (not LPostedV6) and (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) then
+        begin
+          LEvent := BuildFamilyEvent(LCtx, True);
+          LEvent.AllDone := False;
+          if Length(LEvent.Addresses) > 0 then
+            PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
+          LPostedV6 := True;
+        end;
+      end;
+
+      LEvent := Default(TDnsStreamEvent);
+      LEvent.AllDone := True;
+      SetLength(LEvent.Addresses, 0);
+      if LPostedV4 or LPostedV6 then
+        LEvent.Error := 0
+      else
+      begin
+        if LCtx^.V4Err <> 0 then
+          LEvent.Error := LCtx^.V4Err
+        else if LCtx^.V6Err <> 0 then
+          LEvent.Error := LCtx^.V6Err
+        else
+          LEvent.Error := PLATFORM_ERR_INVALID;
+        if LEvent.Error = 0 then
+          LEvent.Error := PLATFORM_ERR_INVALID;
+      end;
+      PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
     end
     else
     begin
-      { Prefer a finished family's error; else invalid. }
-      if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
-        LResult.Error := LCtx^.V4Err
-      else if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
-        LResult.Error := LCtx^.V6Err
+      if LOk4 or LOk6 then
+      begin
+        LResult.Error := 0;
+        if LCtx^.PreferIPv6First then
+        begin
+          if LOk6 then
+            AppendRawAddrs(LResult, @LCtx^.V6Raw[0], LCtx^.V6Count, True);
+          if LOk4 then
+            AppendRawAddrs(LResult, @LCtx^.V4Raw[0], LCtx^.V4Count, False);
+        end
+        else
+        begin
+          if LOk4 then
+            AppendRawAddrs(LResult, @LCtx^.V4Raw[0], LCtx^.V4Count, False);
+          if LOk6 then
+            AppendRawAddrs(LResult, @LCtx^.V6Raw[0], LCtx^.V6Count, True);
+        end;
+      end
       else
-        LResult.Error := PLATFORM_ERR_INVALID;
-      if LResult.Error = 0 then
-        LResult.Error := PLATFORM_ERR_INVALID;
-      SetLength(LResult.Addresses, 0);
+      begin
+        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+          LResult.Error := LCtx^.V4Err
+        else if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+          LResult.Error := LCtx^.V6Err
+        else
+          LResult.Error := PLATFORM_ERR_INVALID;
+        if LResult.Error = 0 then
+          LResult.Error := PLATFORM_ERR_INVALID;
+        SetLength(LResult.Addresses, 0);
+      end;
+      if not LSpawnOk and not LResult.Success then
+        if LResult.Error = 0 then
+          LResult.Error := PLATFORM_ERR_INVALID;
+      PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
+        LResult);
     end;
 
-    if not LSpawnOk and not LResult.Success then
-      if LResult.Error = 0 then
-        LResult.Error := PLATFORM_ERR_INVALID;
-
-    PostDnsResult(LCtx^.Loop, LCtx^.Callback, LCtx^.CallbackRef, LCtx^.Context,
-      LResult);
-
-    { Join workers before free (workers may still write V* fields). }
-    LWaitedMs := 0;
-    while (AtomicLoad32(LCtx^.V4Done, moAcquire) = 0) or
-          (AtomicLoad32(LCtx^.V6Done, moAcquire) = 0) do
-    begin
-      platform_thread_sleep_ms(1);
-      Inc(LWaitedMs);
-      if LWaitedMs > 60000 then
-        Break;
-    end;
+    JoinFamilyWorkers(LCtx);
   finally
     Dispose(LCtx);
   end;
@@ -541,14 +757,12 @@ begin
   Result := False;
   if not ALoop.IsValid then
     raise EInvalidOperationError.Create('async resolve: loop not valid');
-
   New(LCtx);
   LCtx^.Host := AHost;
   LCtx^.Loop := ALoop;
   LCtx^.Callback := ACallback;
   LCtx^.CallbackRef := ACallbackRef;
   LCtx^.Context := AContext;
-
   FillChar(LHandle, SizeOf(LHandle), 0);
   if platform_thread_create(LHandle, @DnsResolveThread, LCtx) <> 0 then
   begin
@@ -559,9 +773,10 @@ begin
   Result := True;
 end;
 
-function StartResolveExThread(const ALoop: TAsyncLoop; const AHost: string;
+function StartResolveParallel(const ALoop: TAsyncLoop; const AHost: string;
   const AOptions: TDnsResolveOptions; ACallback: TDnsCallback;
-  ACallbackRef: TDnsCallbackRef; AContext: Pointer): Boolean;
+  ACallbackRef: TDnsCallbackRef; AStreamCallback: TDnsStreamCallback;
+  AStreaming: Boolean; AContext: Pointer): Boolean;
 var
   LCtx: PDnsParallelCtx;
   LHandle: TPlatformThreadHandle;
@@ -569,23 +784,22 @@ begin
   Result := False;
   if not ALoop.IsValid then
     raise EInvalidOperationError.Create('async resolve: loop not valid');
-
   New(LCtx);
-  { Do not FillChar — Host is a managed string. }
   LCtx^.Host := AHost;
   LCtx^.Loop := ALoop;
   LCtx^.Callback := ACallback;
   LCtx^.CallbackRef := ACallbackRef;
+  LCtx^.StreamCallback := AStreamCallback;
   LCtx^.Context := AContext;
   LCtx^.ResolutionDelayMs := AOptions.ResolutionDelayMs;
   LCtx^.PreferIPv6First := AOptions.PreferIPv6First;
+  LCtx^.Streaming := AStreaming;
   LCtx^.V4Count := 0;
   LCtx^.V6Count := 0;
   LCtx^.V4Err := 0;
   LCtx^.V6Err := 0;
   LCtx^.V4Done := 0;
   LCtx^.V6Done := 0;
-
   FillChar(LHandle, SizeOf(LHandle), 0);
   if platform_thread_create(LHandle, @DnsParallelCoordinator, LCtx) <> 0 then
   begin
@@ -612,14 +826,23 @@ function AsyncResolveEx(const ALoop: TAsyncLoop; const AHost: string;
   const AOptions: TDnsResolveOptions; ACallback: TDnsCallback;
   AContext: Pointer): Boolean;
 begin
-  Result := StartResolveExThread(ALoop, AHost, AOptions, ACallback, nil, AContext);
+  Result := StartResolveParallel(ALoop, AHost, AOptions, ACallback, nil, nil, False, AContext);
 end;
 
 function AsyncResolveExRef(const ALoop: TAsyncLoop; const AHost: string;
   const AOptions: TDnsResolveOptions; ACallback: TDnsCallbackRef;
   AContext: Pointer): Boolean;
 begin
-  Result := StartResolveExThread(ALoop, AHost, AOptions, nil, ACallback, AContext);
+  Result := StartResolveParallel(ALoop, AHost, AOptions, nil, ACallback, nil, False, AContext);
+end;
+
+function AsyncResolveStream(const ALoop: TAsyncLoop; const AHost: string;
+  const AOptions: TDnsResolveOptions; ACallback: TDnsStreamCallback;
+  AContext: Pointer): Boolean;
+begin
+  if not Assigned(ACallback) then
+    Exit(False);
+  Result := StartResolveParallel(ALoop, AHost, AOptions, nil, nil, ACallback, True, AContext);
 end;
 
 end.

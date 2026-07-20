@@ -63,6 +63,29 @@ begin
     'success only if not limited path');
 end;
 
+procedure TestStatusExit0;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('cmd.exe')
+    .Args(['/c', 'exit 0'])
+    .Status;
+  CheckEqual(Int64(0), Int64(LOut.ExitCode), 'Status exit 0');
+  Check(ProcessSucceeded(LOut) or (LOut.ExitCode = 0), 'Status success path');
+  Check(LOut.StdOut = '', 'Status no stdout capture');
+end;
+
+procedure TestStatusExit1;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('cmd.exe')
+    .Args(['/c', 'exit 1'])
+    .Status;
+  Check(LOut.ExitCode <> 0, 'Status non-zero');
+  Check(not ProcessSucceeded(LOut), 'Status not succeeded');
+end;
+
 {$ELSE}
 
 procedure TestSkipHost;
@@ -79,6 +102,8 @@ begin
   T.Test('LookPath cmd', @TestLookPathCmd);
   T.Test('timeout', @TestTimeout);
   T.Test('MaxOutput', @TestMaxOutput);
+  T.Test('Status exit 0', @TestStatusExit0);
+  T.Test('Status exit 1', @TestStatusExit1);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

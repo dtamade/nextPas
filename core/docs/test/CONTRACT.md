@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.11c
+**版本**：v8.12c
 
 ---
 
@@ -390,6 +390,25 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.12c (2026-07-20) — shrink 第二波 + 规模 ≥2500
+
+- **Prop**：bytes/filter/choice shrink 边界
+- **规模**：mock CalledExactly 负路径表 +300；合计 ≥2500
+- **perf**：可选 CI、+30% 阈值、跨机不强制入库（见 test_perf_bench 脚本头注释）
+
+### v8.12b (2026-07-20) — 报告可观测 + 门禁 ≥2000
+
+- **JUnit golden**：Duration=0 固定 fixture + CheckSnapshot
+- **TAP formal**：version 13 / plan / YAML / footer totals
+- **scale report**：默认 SCALE_MIN=2000；打印 fail-path 启发式占比
+
+### v8.12a (2026-07-20) — 薄套件 + 边界收口
+
+- **Discovery**：fail run、empty run、hooks on fail、双实例、Cleanup 幂等
+- **Advanced**：Discover+fail、JSON error、TAP error severity、retry message
+- **Assertions**：CheckEqual/NotEqual Double NaN + epsilon 恰界
+- **Filter**：hierarchical A/B/C、Test*/Sub、brace 路径边角
 
 ### v8.11c (2026-07-20) — 可观测规模与报告
 
