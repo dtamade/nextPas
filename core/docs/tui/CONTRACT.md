@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.14
+**版本**：1.15
 
 ---
 
@@ -167,21 +167,16 @@ end;
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 - Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
-### 6.1 Scorecard 与跨语言对标（Wave Q1–Q12）
+### 6.1 Scorecard 与跨语言对标（Wave Q1–Q13）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC16）
-  - SC1 Diff identical 200×50；SC2 Diff dirty10；SC3 ParseOne batch
-  - SC4 Layout VSplit/Grid；SC5 Frame 空帧；SC6 focus；SC7 CJK
-  - SC8 truecolor；SC9 overlay；SC10 SGR mouse；SC11 paste parse
-  - SC12 Kitty Verified；SC13 BracketedPaste 会话
-  - **SC14** HorizontalSplit；**SC15** 输入韧性；**SC16** Diff 单 cell 上界
-- **纲领**: `core/docs/tui/PARITY-GO-RUST.md`（含质量维度→证据矩阵）· `SCORECARD.md`
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC19）
+  - SC1–SC16：diff/parse/layout/focus/CJK/truecolor/overlay/mouse/paste/Kitty/hsplit/韧性/单 cell
+  - **SC17** Backend mouse Enter/Leave DECSET 序列；**SC18** ResizeEvent；**SC19** 50/50 % VSplit
+- **纲领**: `core/docs/tui/PARITY-GO-RUST.md`（质量维度→证据）· `SCORECARD.md`
 - **同方法论对照**: `core/benchmarks/nextpas.core.tui/bench_go_rust`（`make compare`）
-  - Diff / Parse / LayoutVSplit3 / **LayoutHSplit3** / OverlayMerge
-  - Pascal Layout/Overlay 用真实 API；Go/Rust 为几何/字节 stub；禁止假胜口径
 - 输入韧性语料：`test_tui_input` + SC15
-- core facade 密度底线：`test_tui_widget_clear` / `test_tui_widget_intf` ≥16
-- tier facade 密度底线：`core_facade` / `ext_facade` / `experimental_facade` ≥12
+- core facade 密度底线：clear/intf ≥16；tier facade ≥12
+- **examples**：`test_tui_examples` ≥7（覆盖全部 demo 教学路径）
 
 ---
 
@@ -189,6 +184,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.15 | SC17 backend mouse modes + SC18 resize + SC19 pct layout；examples multi-demo | Claude |
 | 2026-07-20 | 1.14 | SC14 hsplit + SC15 输入韧性 + SC16 diff 上界；PARITY 质量矩阵；bench HSplit | Claude |
 | 2026-07-20 | 1.13 | SC12 Kitty Verified + SC13 paste session；bench layout/overlay；tier facade ≥12 | Claude |
 | 2026-07-20 | 1.12 | SC10 mouse + SC11 paste；DECSET 2004 opt-in；clear/intf/wine 密度收口 | Claude |
