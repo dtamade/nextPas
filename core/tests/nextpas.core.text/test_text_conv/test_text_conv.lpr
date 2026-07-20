@@ -3,7 +3,6 @@ program test_text_conv;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.test,
