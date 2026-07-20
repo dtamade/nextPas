@@ -7683,19 +7683,19 @@ begin
     'Rust comparison source must print the input-size evidence field');
   CheckContains(LRustCompareSource, 'manual comparison source, not auto-run',
     'Rust comparison source must print honesty/envelope baseline guidance');
-  CheckContains(LRustCompareSource, 'C1 std::sync::mpsc 1P+1C',
+  CheckContains(LRustCompareSource, 'std::sync::mpsc 1P+1C',
     'Rust comparison source must mirror the Q5 C1 mpsc scenario name');
-  CheckContains(LRustCompareSource, 'C2 Mutex+Condvar VecDeque 2P+2C',
+  CheckContains(LRustCompareSource, 'Mutex+Condvar VecDeque 2P+2C',
     'Rust comparison source must mirror the Q5 C2 bounded MPMC scenario name');
-  CheckContains(LRustCompareSource, 'fn bench_c1_mpsc_spsc()',
+  CheckContains(LRustCompareSource, 'fn bench_std_mpsc_spsc()',
     'Rust comparison source must define the C1 mpsc bench function');
-  CheckContains(LRustCompareSource, 'fn bench_c2_bounded_mpmc()',
+  CheckContains(LRustCompareSource, 'fn bench_bounded_mutex_condvar_mpmc()',
     'Rust comparison source must define the C2 bounded mpmc bench function');
-  CheckContains(LRustCompareSource, 'let mut sink = bench_c1_mpsc_spsc();',
+  CheckContains(LRustCompareSource, 'let mut sink = bench_std_mpsc_spsc();',
     'Rust comparison source must initialize the consumed-value sink from C1');
-  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_c2_bounded_mpmc());',
+  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());',
     'Rust comparison source must accumulate the C2 consumed-value sink');
-  CheckNotContains(LRustCompareSource, ' ^ bench_c2_bounded_mpmc()',
+  CheckNotContains(LRustCompareSource, ' ^ bench_bounded_mutex_condvar_mpmc()',
     'Rust comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LRustCompareSource, 'for value in 1..=(N as u64) {',
     'Rust comparison source must use 1..N inclusive for C1 input values');
