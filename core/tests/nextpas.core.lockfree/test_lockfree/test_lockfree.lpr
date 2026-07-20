@@ -6036,6 +6036,71 @@ begin
   end;
 end;
 
+procedure TestMsQueueCloseIdempotent;
+var
+  LQ: specialize TLockFreeMsQueue<Integer>;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(8);
+  try
+    Check(LQ.TryEnqueue(1), 'msq seed');
+    LQ.Close;
+    Check(LQ.IsClosed, 'msq closed once');
+    LQ.Close;
+    Check(LQ.IsClosed, 'msq closed twice still closed');
+    Check(not LQ.TryEnqueue(2), 'msq TryEnqueue rejected after double Close');
+    Check(not LQ.TryEnqueueEx(3, LErr), 'msq TryEnqueueEx rejected');
+    Check(LErr = lfteClosed, 'msq double-close publish is lfteClosed');
+    Check(LQ.TryDequeue(LV), 'msq drain after Close');
+    CheckEqual(1, LV, 'msq drained value');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestStackCloseIdempotent;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(4);
+  try
+    Check(LS.TryPush(9), 'stack seed');
+    LS.Close;
+    Check(LS.IsClosed, 'stack closed once');
+    LS.Close;
+    Check(LS.IsClosed, 'stack closed twice');
+    Check(not LS.TryPush(10), 'stack push rejected after double Close');
+    Check(LS.TryPop(LV), 'stack drain after Close');
+    CheckEqual(9, LV, 'stack drained value');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestSegQueueCloseIdempotent;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(LQ.TryEnqueue(5), 'seg seed');
+    LQ.Close;
+    Check(LQ.IsClosed, 'seg closed once');
+    LQ.Close;
+    Check(LQ.IsClosed, 'seg closed twice');
+    Check(not LQ.TryEnqueueEx(6, LErr), 'seg TryEnqueueEx after double Close');
+    Check(LErr = lfteClosed, 'seg double-close is lfteClosed');
+    Check(LQ.TryDequeue(LV), 'seg drain after Close');
+    CheckEqual(5, LV, 'seg drained value');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7706,6 +7771,9 @@ begin
   T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
   T.Test('Deque Try*Ex diagnostics', @TestDequeTryExDiagnostics);
   T.Test('MSQueue Try*Ex diagnostics', @TestMsQueueTryExDiagnostics);
+  T.Test('MSQueue Close idempotent', @TestMsQueueCloseIdempotent);
+  T.Test('Stack Close idempotent', @TestStackCloseIdempotent);
+  T.Test('SegQueue Close idempotent', @TestSegQueueCloseIdempotent);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

@@ -145,6 +145,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **Polish P2–P5 done**：api-ref/README.en 同步 preferred+示例；`t2_bag_close_join_free`；CONTRACT/README 假 LF 再扫；formal 能/不能声称；verify-h3 绿证
 - **Polish P2b done**：api-reference.en 展开 Stack/Deque/Bag/MultiMap/SegQueue；bag 示例挂入 `verify-h3-consumers`
 - **Polish P2c done**：EN README 命名诚实；api-ref.en T2 索引表；`t2_multimap_close_join_free` + verify-h3
+- **Phase A (T1 deepen) done**：MSQueue Try*Ex；stress Close race（MSQueue/Stack/SegQueue）；Close 幂等边角
 - **Polish P2d done**：api-ref.en T2 短 prose 与中文对齐；`t1_msqueue_close_join_free`；`t2_hashmap_join_free`（无 Close 诚实）；Skiplist 不 invent Close
 - **剩余（本模块内）**：可选更多 T2 教学示例；legacy public API 仍可在 `atomic.compat` 保留
 
