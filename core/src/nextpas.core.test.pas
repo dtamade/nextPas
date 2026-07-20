@@ -431,9 +431,16 @@ type
 type
   TTestFixture = nextpas.core.test.discovery.TTestFixture;
   TTestFixtureClass = nextpas.core.test.discovery.TTestFixtureClass;
+  TDiscoveredMethod = nextpas.core.test.discovery.TDiscoveredMethod;
+  TDiscoveredMethods = nextpas.core.test.discovery.TDiscoveredMethods;
+  ITestDiscoveryBackend = nextpas.core.test.discovery.ITestDiscoveryBackend;
 
 function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string = ''): TTestSuite;
+function CreateFpcVmtDiscoveryBackend: ITestDiscoveryBackend;
+function GetDiscoveryBackend: ITestDiscoveryBackend;
+procedure SetDiscoveryBackend(const ABackend: ITestDiscoveryBackend);
+procedure ResetDiscoveryBackend;
 
 { ── Re-exported from test.output.tap ──────────────────────────────────────── }
 

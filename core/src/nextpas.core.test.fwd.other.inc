@@ -12,6 +12,18 @@ function DiscoverTests(AFixture: TTestFixture;
   const ASuiteName: string): TTestSuite;
 begin Result := nextpas.core.test.discovery.DiscoverTests(AFixture, ASuiteName); end;
 
+function CreateFpcVmtDiscoveryBackend: ITestDiscoveryBackend;
+begin Result := nextpas.core.test.discovery.CreateFpcVmtDiscoveryBackend; end;
+
+function GetDiscoveryBackend: ITestDiscoveryBackend;
+begin Result := nextpas.core.test.discovery.GetDiscoveryBackend; end;
+
+procedure SetDiscoveryBackend(const ABackend: ITestDiscoveryBackend);
+begin nextpas.core.test.discovery.SetDiscoveryBackend(ABackend); end;
+
+procedure ResetDiscoveryBackend;
+begin nextpas.core.test.discovery.ResetDiscoveryBackend; end;
+
 { ── Forward to test.output.tap ─────────────────────────────────────────────── }
 
 function TAPReport(const AResults: specialize TArray<TTestRunResult>;

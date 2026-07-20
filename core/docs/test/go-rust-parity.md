@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.23**
+**当前版本**: **v8.24**
 **最后更新**: 2026-07-21
 
 ---
@@ -76,6 +76,8 @@
 | B44 v8.22 SCALE_MIN=5500 | **done** |
 | B45 v8.23 Soft ColorDiff + Soft 高频 (Bool/TBytes/Near) | **done** |
 | B46 v8.23 ComputeKey field source-contract + Soft 矩阵文档 | **done** |
+| B47 v8.24 sink → platform_console_write (no System.Write*) | **done** |
+| B48 v8.24 ITestDiscoveryBackend + FPC VMT default + inject | **done** |
 
 ### 暂缓 / 阻塞
 

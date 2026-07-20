@@ -224,7 +224,8 @@ implementation
 
 uses
   nextpas.core.fs,
-  nextpas.core.time;
+  nextpas.core.time,
+  nextpas.core.platform.console;
 
 var
   GDefaultConfig: TTestConfig;
@@ -618,34 +619,53 @@ begin
   Result := ResolveConfig(AConfig).CacheDir;
 end;
 
+{ v8.24: route console IO through platform.console (no RTL text IO).
+  fd 1 = stdout, fd 2 = stderr (POSIX + Windows GetStdHandle mapping). }
+const
+  CFdStdout = 1;
+  CFdStderr = 2;
+
+procedure WriteToConsoleFd(AFd: Int32; const AText: string);
+var
+  LLen: Integer;
+begin
+  LLen := Length(AText);
+  if LLen <= 0 then
+    Exit;
+  { Best-effort: same silent-on-error stance as former RTL text IO. }
+  platform_console_write(AFd, PAnsiChar(AText), LLen);
+end;
+
 procedure TStdoutSink.Write(const AText: string);
 begin
-  System.Write(AText);
+  WriteToConsoleFd(CFdStdout, AText);
 end;
 
 procedure TStdoutSink.WriteLn(const AText: string);
 begin
-  System.WriteLn(AText);
+  WriteToConsoleFd(CFdStdout, AText);
+  WriteToConsoleFd(CFdStdout, #10);
 end;
 
 procedure TStdoutSink.Flush;
 begin
-  System.Flush(Output);
+  { platform_console_write is not RTL-buffered; no separate flush. }
 end;
 
 procedure TStderrSink.Write(const AText: string);
 begin
-  System.Write(StdErr, AText);
+  WriteToConsoleFd(CFdStderr, AText);
 end;
 
 procedure TStderrSink.WriteLn(const AText: string);
 begin
-  System.WriteLn(StdErr, AText);
+  WriteToConsoleFd(CFdStderr, AText);
+  WriteToConsoleFd(CFdStderr, #10);
 end;
 
 procedure TStderrSink.Flush;
 begin
-  System.Flush(StdErr);
+  { See TStdoutSink.Flush. }
 end;
 
 function TBufferSink.GetLines: TStringLines;
