@@ -6,7 +6,8 @@ program test_conformance_case;
  *   ../data/case_folding.txt
  *   ../data/special_casing.txt
  *
- * Scope: CaseFold C/F/S (skip T); SpecialCasing unconditional + Final_Sigma samples.
+ * Scope: CaseFold C/F/S (root); CaseFold T + SpecialCasing tr/az (locale);
+ *        SpecialCasing unconditional + Final_Sigma samples.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -346,11 +347,273 @@ begin
   CheckEqual(LSigma, LMedial, 'ΑΣΑ lower medial sigma');
 end;
 
+procedure TestCaseFoldingTurkic;
+var
+  LPath: string;
+  LFile: TextFile;
+  LLine, LCode, LStatus, LMapField: string;
+  LCp: TUnicodeCodepoint;
+  LExp: array[0..7] of TUnicodeCodepoint;
+  LExpCount: Integer;
+  LMap: TCaseFoldMap;
+  LLen: Byte;
+  LData, LFail: Int64;
+  LLineNo: Int64;
+  LMaxPrint: Integer;
+  LOpts: TCaseOptions;
+  LSimple: TUnicodeCodepoint;
+begin
+  LPath := ResolveFixture('case_folding.txt');
+  Check(FileExists(LPath), 'case_folding.txt exists');
+  LData := 0;
+  LFail := 0;
+  LLineNo := 0;
+  LMaxPrint := 25;
+  LOpts.Locale := clTurkish;
+
+  AssignFile(LFile, LPath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Inc(LLineNo);
+      if (LLine = '') or (LLine[1] = '#') then
+        Continue;
+      LCode := NthSemicolonField(LLine, 0);
+      LStatus := NthSemicolonField(LLine, 1);
+      LMapField := NthSemicolonField(LLine, 2);
+      if LStatus <> 'T' then
+        Continue;
+      LCp := ParseHexCp(LCode);
+      if not ParseHexList(LMapField, LExp, LExpCount) then
+        Continue;
+      Inc(LData);
+
+      LSimple := CaseFoldSimple(LCp, LOpts);
+      if (LExpCount <> 1) or (LSimple <> LExp[0]) then
+      begin
+        Inc(LFail);
+        if LFail <= LMaxPrint then
+          WriteLn(Format('FAIL CaseFold T simple L%d U+%s got %x exp %s',
+            [LLineNo, LCode, LSimple, LMapField]));
+      end;
+
+      LLen := CaseFoldFull(LCp, LMap, LOpts);
+      if not CpsEqualMap(LMap, LLen, LExp, LExpCount) then
+      begin
+        Inc(LFail);
+        if LFail <= LMaxPrint then
+          WriteLn(Format('FAIL CaseFold T full L%d U+%s exp %s',
+            [LLineNo, LCode, LMapField]));
+      end;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+
+  WriteLn(Format('CaseFolding T (tr): data=%d fail=%d', [LData, LFail]));
+  Check(LFail = 0, 'CaseFolding T fail=0');
+  Check(LData = 2, 'CaseFolding T has 2 rows');
+
+  LOpts.Locale := clAzeri;
+  CheckEqual(CaseFoldSimple($0049, LOpts), $0131, 'az CaseFold I');
+  CheckEqual(CaseFoldSimple($0130, LOpts), $0069, 'az CaseFold İ');
+end;
+
+function CondHasTag(const ACond, ATag: string): Boolean;
+{ ACond may be "tr", "tr After_I", "az Not_Before_Dot" }
+var
+  LParts: string;
+  I, Start: Integer;
+  Tok: string;
+begin
+  Result := False;
+  LParts := Trim(ACond);
+  if LParts = '' then
+    Exit;
+  Start := 1;
+  for I := 1 to Length(LParts) + 1 do
+  begin
+    if (I > Length(LParts)) or (LParts[I] = ' ') then
+    begin
+      if I > Start then
+      begin
+        Tok := Copy(LParts, Start, I - Start);
+        if Tok = ATag then
+          Exit(True);
+      end;
+      Start := I + 1;
+    end;
+  end;
+end;
+
+function IsTurkicSpecialCond(const ACond: string): Boolean;
+begin
+  Result := CondHasTag(ACond, 'tr') or CondHasTag(ACond, 'az');
+end;
+
+procedure TestSpecialCasingTurkic;
+var
+  LPath: string;
+  LFile: TextFile;
+  LLine: string;
+  LCode, LLower, LTitle, LUpper, LCond: string;
+  LCp: TUnicodeCodepoint;
+  LExpL, LExpT, LExpU: array[0..7] of TUnicodeCodepoint;
+  LCntL, LCntT, LCntU: Integer;
+  LGot, LExpStr, LInput: string;
+  LData, LFail: Int64;
+  LLineNo: Int64;
+  LMaxPrint: Integer;
+  LOpts: TCaseOptions;
+  LIsTr, LIsAz: Boolean;
+begin
+  LPath := ResolveFixture('special_casing.txt');
+  Check(FileExists(LPath), 'special_casing.txt exists');
+  LData := 0;
+  LFail := 0;
+  LLineNo := 0;
+  LMaxPrint := 25;
+
+  AssignFile(LFile, LPath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Inc(LLineNo);
+      if (LLine = '') or (LLine[1] = '#') then
+        Continue;
+      LCode := NthSemicolonField(LLine, 0);
+      LLower := NthSemicolonField(LLine, 1);
+      LTitle := NthSemicolonField(LLine, 2);
+      LUpper := NthSemicolonField(LLine, 3);
+      LCond := NthSemicolonField(LLine, 4);
+      if Pos('#', LCond) > 0 then
+        LCond := Trim(Copy(LCond, 1, Pos('#', LCond) - 1));
+      if LCode = '' then
+        Continue;
+      if not IsTurkicSpecialCond(LCond) then
+        Continue;
+
+      { Context-only rows (After_I / Not_Before_Dot) need multi-cp strings }
+      if CondHasTag(LCond, 'After_I') or CondHasTag(LCond, 'Not_Before_Dot') then
+        Continue;
+
+      LCp := ParseHexCp(LCode);
+      if not ParseHexList(LLower, LExpL, LCntL) then Continue;
+      if not ParseHexList(LTitle, LExpT, LCntT) then Continue;
+      if not ParseHexList(LUpper, LExpU, LCntU) then Continue;
+      Inc(LData);
+
+      LIsTr := CondHasTag(LCond, 'tr');
+      LIsAz := CondHasTag(LCond, 'az');
+      if LIsTr then
+        LOpts.Locale := clTurkish
+      else if LIsAz then
+        LOpts.Locale := clAzeri
+      else
+        Continue;
+
+      LInput := Utf8OfCp(LCp);
+
+      LGot := UTF8ToLower(LInput, LOpts);
+      LExpStr := BuildUtf8(LExpL, LCntL);
+      if LGot <> LExpStr then
+      begin
+        Inc(LFail);
+        if LFail <= LMaxPrint then
+          WriteLn(Format('FAIL Turkic Special lower L%d U+%s cond=%s',
+            [LLineNo, LCode, LCond]));
+      end;
+
+      LGot := UTF8ToTitle(LInput, LOpts);
+      LExpStr := BuildUtf8(LExpT, LCntT);
+      if LGot <> LExpStr then
+      begin
+        Inc(LFail);
+        if LFail <= LMaxPrint then
+          WriteLn(Format('FAIL Turkic Special title L%d U+%s cond=%s',
+            [LLineNo, LCode, LCond]));
+      end;
+
+      LGot := UTF8ToUpper(LInput, LOpts);
+      LExpStr := BuildUtf8(LExpU, LCntU);
+      if LGot <> LExpStr then
+      begin
+        Inc(LFail);
+        if LFail <= LMaxPrint then
+          WriteLn(Format('FAIL Turkic Special upper L%d U+%s cond=%s',
+            [LLineNo, LCode, LCond]));
+      end;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+
+  WriteLn(Format('SpecialCasing tr/az uncond-locale: data=%d fail=%d', [LData, LFail]));
+  Check(LFail = 0, 'SpecialCasing tr/az fail=0');
+  Check(LData >= 4, 'SpecialCasing tr/az has data');
+end;
+
+procedure TestTurkicContextAndSamples;
+var
+  LOpts, LRoot: TCaseOptions;
+  LIn, LGot, LExp: string;
+begin
+  LRoot.Locale := clRoot;
+  LOpts.Locale := clTurkish;
+
+  { root: I → i ; Turkic: I → ı }
+  LIn := Utf8OfCp($0049);
+  CheckEqual(UTF8ToLower(LIn, LRoot), Utf8OfCp($0069), 'root lower I');
+  CheckEqual(UTF8ToLower(LIn, LOpts), Utf8OfCp($0131), 'tr lower I');
+
+  { root: İ → i+0307 ; Turkic: İ → i }
+  LIn := Utf8OfCp($0130);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307);
+  CheckEqual(UTF8ToLower(LIn, LRoot), LExp, 'root lower İ');
+  CheckEqual(UTF8ToLower(LIn, LOpts), Utf8OfCp($0069), 'tr lower İ');
+
+  { Turkic: i → İ upper/title }
+  LIn := Utf8OfCp($0069);
+  CheckEqual(UTF8ToUpper(LIn, LOpts), Utf8OfCp($0130), 'tr upper i');
+  CheckEqual(UTF8ToTitle(LIn, LOpts), Utf8OfCp($0130), 'tr title i');
+  CheckEqual(UTF8ToUpper(LIn, LRoot), Utf8OfCp($0049), 'root upper i');
+
+  { Turkic: ı → I upper }
+  LIn := Utf8OfCp($0131);
+  CheckEqual(UTF8ToUpper(LIn, LOpts), Utf8OfCp($0049), 'tr upper ı');
+
+  { After_I: I + 0307 → i (dot removed) }
+  LIn := Utf8OfCp($0049) + Utf8OfCp($0307);
+  CheckEqual(UTF8ToLower(LIn, LOpts), Utf8OfCp($0069), 'tr After_I I+dot');
+  { root keeps i + combining dot from simple maps }
+  LGot := UTF8ToLower(LIn, LRoot);
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0307);
+  CheckEqual(LGot, LExp, 'root lower I+dot');
+
+  { CaseFold string }
+  LIn := Utf8OfCp($0049) + Utf8OfCp($0130);
+  LExp := Utf8OfCp($0131) + Utf8OfCp($0069);
+  CheckEqual(UTF8CaseFold(LIn, LOpts), LExp, 'tr CaseFold Iİ');
+  LExp := Utf8OfCp($0069) + Utf8OfCp($0069) + Utf8OfCp($0307);
+  CheckEqual(UTF8CaseFold(LIn, LRoot), LExp, 'root CaseFold Iİ');
+
+  LOpts.Locale := clAzeri;
+  CheckEqual(UTF8ToLower(Utf8OfCp($0049), LOpts), Utf8OfCp($0131), 'az lower I');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.conformance_case');
   T.Test('CaseFolding', @TestCaseFolding);
   T.Test('SpecialCasingUnconditional', @TestSpecialCasingUnconditional);
   T.Test('FinalSigma', @TestFinalSigma);
+  T.Test('CaseFoldingTurkic', @TestCaseFoldingTurkic);
+  T.Test('SpecialCasingTurkic', @TestSpecialCasingTurkic);
+  T.Test('TurkicContextAndSamples', @TestTurkicContextAndSamples);
   if not T.Run then
     Halt(1);
 end.
