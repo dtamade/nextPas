@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.25**
+**当前版本**: **v8.26**
 **最后更新**: 2026-07-21
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥5500**（scale report；SCALE_MIN 默认 5500；FAIL_PATH_MIN_RATIO 默认 0.30） |
+| 可计数过程 | **≥6500**（SCALE_MIN 默认 6500；FAIL_PATH≥35%；LOW_SIGNAL≤40%） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -81,6 +81,19 @@
 | B49 v8.25 TimeoutWorkerLeaks + Get/Reset counter | **done** |
 | B50 v8.25 scale low-signal ratio gate (≤55%) | **done** |
 
+### 规划中（v8.26+，全权执行）
+
+> 完整说明见 **`quality-scale-roadmap.md`**（质量与规模北极星 + B51–B80）。
+
+| 批次 | 主题 | 状态 |
+|------|------|------|
+| B51–B55 | **v8.26** 消灭 identity 灌水 + SCALE≥6500 + fail-path≥35% + low-signal≤40% | **done** |
+| B56–B60 | **v8.27** Soft 第二波 + Soft golden | planned |
+| B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | planned |
+| B66–B70 | **v8.29** 并行竞态 + Mock 误用密度 | planned |
+| B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | planned |
+| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | planned |
+
 ### 暂缓 / 阻塞
 
 - IExpectation 类型拆分（v9 breaking）
@@ -114,7 +127,7 @@ make -C core/tests/nextpas.core.test clean test   # 19/19
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=5500 FAIL_PATH_MIN_RATIO=0.30 LOW_SIGNAL_MAX_RATIO=0.55 (defaults)
+# SCALE_MIN=6500 FAIL_PATH_MIN_RATIO=0.35 LOW_SIGNAL_MAX_RATIO=0.40 (defaults)
 ```
 
 消费者示例：
