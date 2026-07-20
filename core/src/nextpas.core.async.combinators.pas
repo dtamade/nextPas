@@ -186,7 +186,7 @@ begin
     begin
       { Do not CancelTimer here: Close is already tearing down the loop.
         Timer OnDiscard drops the timer ownership ref safely. }
-      if AtomicFetchSub32(LAll^.RefCount, 1, moAcqRel) = 1 then
+      if atomic_fetch_sub(LAll^.RefCount, 1, mo_acq_rel) = 1 then
         Dispose(LAll);
     end;
   end
@@ -210,15 +210,18 @@ begin
   if LState = nil then
     Exit;
   { Timer was discarded without firing. Drop timer ownership only. }
-  if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
     Dispose(LState);
 end;
 
 { ==================== WhenAll ==================== }
 
 function WhenAllClaimFinish(AState: PWhenAllState): Boolean;
+var
+  LExpected: Int32;
 begin
-  Result := AtomicCompareExchange32(AState^.Finished, 0, 1, moAcqRel) = 0;
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(AState^.Finished, LExpected, 1, mo_acq_rel, mo_acquire);
 end;
 
 procedure WhenAllFireComplete(AState: PWhenAllState);
@@ -233,10 +236,10 @@ procedure WhenAllReleaseTokenOwner(var AState: PWhenAllState);
 begin
   if AState = nil then
     Exit;
-  if AtomicExchange32(AState^.TokenOwner, 0, moAcqRel) = 1 then
+  if atomic_exchange(AState^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
     AState^.Token := nil;
-    if AtomicFetchSub32(AState^.RefCount, 1, moAcqRel) = 1 then
+    if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
     begin
       Dispose(AState);
       AState := nil;
@@ -257,7 +260,7 @@ begin
   if AState^.Loop.CancelTimer(AState^.TimerHandle) then
   begin
     AState^.TimerHandle := TAsyncTimerHandle.None;
-    if AtomicFetchSub32(AState^.RefCount, 1, moAcqRel) = 1 then
+    if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
     begin
       Dispose(AState);
       AState := nil;
@@ -269,7 +272,7 @@ procedure WhenAllReleaseOne(var AState: PWhenAllState);
 begin
   if AState = nil then
     Exit;
-  if AtomicFetchSub32(AState^.RefCount, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(AState^.RefCount, 1, mo_acq_rel) = 1 then
   begin
     Dispose(AState);
     AState := nil;
@@ -368,11 +371,11 @@ begin
   LState := PWhenAllState(AContext);
   if (LState = nil) or (LState^.Loop = nil) then
     Exit;
-  if AtomicLoad32(LState^.TokenOwner, moAcquire) = 0 then
+  if atomic_load(LState^.TokenOwner, mo_acquire) = 0 then
     Exit;
-  if AtomicLoad32(LState^.Finished, moAcquire) <> 0 then
+  if atomic_load(LState^.Finished, mo_acquire) <> 0 then
     Exit;
-  AtomicFetchAdd32(LState^.RefCount, 1, moAcqRel);
+  atomic_fetch_add(LState^.RefCount, 1, mo_acq_rel);
   LState^.Loop.Post(@WhenAllTokenAbort, LState);
 end;
 
@@ -381,8 +384,8 @@ begin
   if AToken = nil then
     Exit;
   AState^.Token := AToken;
-  AtomicStore32(AState^.TokenOwner, 1, moRelease);
-  AtomicFetchAdd32(AState^.RefCount, 1, moAcqRel);
+  atomic_store(AState^.TokenOwner, 1, mo_release);
+  atomic_fetch_add(AState^.RefCount, 1, mo_acq_rel);
   AToken.OnCancel(@WhenAllTokenNotify, AState);
 end;
 
@@ -512,6 +515,14 @@ end;
 
 { ==================== WhenAny ==================== }
 
+function WhenAnyClaimFinish(AState: PWhenAnyState): Boolean;
+var
+  LExpected: Int32;
+begin
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(AState^.Finished, LExpected, 1, mo_acq_rel, mo_acquire);
+end;
+
 procedure WhenAnyFireComplete(AState: PWhenAnyState);
 begin
   if Assigned(AState^.OnComplete) then
@@ -524,7 +535,7 @@ procedure WhenAnyReleaseToken(AState: PWhenAnyState);
 begin
   if AState = nil then
     Exit;
-  if AtomicExchange32(AState^.TokenOwner, 0, moAcqRel) = 1 then
+  if atomic_exchange(AState^.TokenOwner, 0, mo_acq_rel) = 1 then
     AState^.Token := nil
   else
     AState^.Token := nil;
@@ -538,14 +549,14 @@ begin
   if LState = nil then
     Exit;
   try
-    if AtomicCompareExchange32(LState^.Finished, 0, 1, moAcqRel) = 0 then
+    if WhenAnyClaimFinish(LState) then
     begin
       LState^.Done := True;
       WhenAnyFireComplete(LState);
     end;
     WhenAnyReleaseToken(LState);
   finally
-    if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+    if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
       Dispose(LState);
   end;
 end;
@@ -557,11 +568,11 @@ begin
   LState := PWhenAnyState(AContext);
   if (LState = nil) or (LState^.Loop = nil) then
     Exit;
-  if AtomicLoad32(LState^.TokenOwner, moAcquire) = 0 then
+  if atomic_load(LState^.TokenOwner, mo_acquire) = 0 then
     Exit;
-  if AtomicLoad32(LState^.Finished, moAcquire) <> 0 then
+  if atomic_load(LState^.Finished, mo_acquire) <> 0 then
     Exit;
-  AtomicFetchAdd32(LState^.RefCount, 1, moAcqRel);
+  atomic_fetch_add(LState^.RefCount, 1, mo_acq_rel);
   LState^.Loop.Post(@WhenAnyTokenAbort, LState);
 end;
 
@@ -570,7 +581,7 @@ begin
   if AToken = nil then
     Exit;
   AState^.Token := AToken;
-  AtomicStore32(AState^.TokenOwner, 1, moRelease);
+  atomic_store(AState^.TokenOwner, 1, mo_release);
   AToken.OnCancel(@WhenAnyTokenNotify, AState);
 end;
 
@@ -587,7 +598,7 @@ begin
   else if Assigned(LWrapped^.UserRef) then
     LWrapped^.UserRef(LWrapped^.UserCtx);
 
-  if AtomicCompareExchange32(LState^.Finished, 0, 1, moAcqRel) = 0 then
+  if WhenAnyClaimFinish(LState) then
   begin
     LState^.Done := True;
     WhenAnyReleaseToken(LState);
@@ -598,7 +609,7 @@ begin
   if LState^.Remaining <= 0 then
   begin
     WhenAnyReleaseToken(LState);
-    if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+    if atomic_fetch_sub(LState^.RefCount, 1, mo_acq_rel) = 1 then
       Dispose(LState);
   end;
 
