@@ -21,7 +21,8 @@ UNIT := \
 	test_collate \
 	test_data \
 	test_enhance \
-	test_grapheme_uax29
+	test_grapheme_uax29 \
+	test_idna
 
 help:
 	@echo "Targets:"
