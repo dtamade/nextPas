@@ -332,9 +332,11 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-15 S3**: Windows watch overflow → `PLATFORM_ERR_AGAIN` + re-arm; wine smoke delete/multi soft. Queue: optional watch matrix candidate. |
 | 2026-07-20 | **Batch-21**: Windows scripts candidate **+platform.watch** (S1–S3; no promote until GHA green). |
 | 2026-07-20 | **Batch-21b**: promote **27 platform-gate** set (+watch) after GHA matrix pass=28 (run 29746628175 @ `2020db503`; watch PASS). Job may red on async-native-smoke (not platform evidence). |
-| 2026-07-20 | **Batch-22**: watch smoke hard create/delete on real Windows (`ntdll!wine_get_version`); Wine remains soft residual. |
+| 2026-07-20 | **Batch-22**: watch smoke detects Wine vs real Windows; create/delete still soft residual on both (GHA RDCW delivery not observed; timeout/multi-dir hard). |
 | 2026-07-20 | **Batch-23**: Windows multi-dir watch slots (8) for fs.watch multi-Add; add returns wd; remove(wd) works. |
 | 2026-07-20 | **Owner note**: `async-windows-native-smoke` job step is **net/async** lane (`core/docs/net-async-io/WINDOWS-NATIVE-ASSESSMENT.md`); platform matrix green does not require that step. |
+| 2026-07-20 | **Residual**: real-Windows RDCW create/delete events not yet observed in GHA smoke (hard assert deferred). |
+| 2026-07-20 | **fix(RDCW)**: `ReadDirectoryChangesW` async path must pass `lpBytesReturned=NULL` (MSDN); re-enable hard create/delete on real Windows smoke. |
 
 ---
 

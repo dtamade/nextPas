@@ -27,6 +27,10 @@ procedure AnsiMoveTo(var B: TStringBuilder; AX, AY: Word);
 procedure AnsiClearScreen(var B: TStringBuilder); inline;
 procedure AnsiEnterAltScreen(var B: TStringBuilder); inline;
 procedure AnsiLeaveAltScreen(var B: TStringBuilder); inline;
+{ DECAWM (DECSET 7): disable auto-wrap so cell-grid TUI is not corrupted by
+  terminal reflow (crossterm DisableLineWrap / ratatui EnterAlternateScreen). }
+procedure AnsiDisableAutoWrap(var B: TStringBuilder);
+procedure AnsiEnableAutoWrap(var B: TStringBuilder);
 procedure AnsiEnableMouseClickTracking(var B: TStringBuilder);
 procedure AnsiDisableMouseClickTracking(var B: TStringBuilder);
 procedure AnsiEnableMouseDragTracking(var B: TStringBuilder);
@@ -132,6 +136,18 @@ begin
     B.AppendChar('h')
   else
     B.AppendChar('l');
+end;
+
+procedure AnsiDisableAutoWrap(var B: TStringBuilder);
+begin
+  { CSI ? 7 l — DECAWM off }
+  AnsiDecPrivateMode(B, 7, False);
+end;
+
+procedure AnsiEnableAutoWrap(var B: TStringBuilder);
+begin
+  { CSI ? 7 h — DECAWM on }
+  AnsiDecPrivateMode(B, 7, True);
 end;
 
 procedure AnsiEnableMouseClickTracking(var B: TStringBuilder);

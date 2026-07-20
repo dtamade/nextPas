@@ -189,6 +189,40 @@ need_file "$SRC/nextpas.core.mem.pool.fixed.growable.pas"
 need_grep "$SRC/nextpas.core.mem.pool.fixed.growable.pas" 'FreeMemOf\(FAllocator, FArenas\[LArenaIndex\]\.Base, FArenas\[LArenaIndex\]\.Size\)' \
   'TGrowingFixedPool Destroy must FreeMemOf arena Base/Size (K5)'
 
+# --- Era L: LocalBlockPool + FixedSlab raw + SlabPool fallback ---
+need_file "$SRC/nextpas.core.mem.pool.pas"
+need_grep "$SRC/nextpas.core.mem.pool.pas" 'FBackingSize' \
+  'TLocalBlockPool must track FBackingSize (L1)'
+need_grep "$SRC/nextpas.core.mem.pool.pas" 'FreeMemOf\(FAllocator, FBacking, FBackingSize\)' \
+  'TLocalBlockPool Destroy must FreeMemOf FBacking (L1)'
+
+need_file "$SRC/nextpas.core.mem.pool.fixed_slab.pas"
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FRawAllocSize' \
+  'TFixedSlabPool must track FRawAllocSize (L2)'
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FreeMemOf\(FAllocator, FRaw, FRawAllocSize\)' \
+  'TFixedSlabPool Destroy must FreeMemOf FRaw (L2)'
+
+need_file "$SRC/nextpas.core.mem.pool.slab.pas"
+need_grep "$SRC/nextpas.core.mem.pool.slab.pas" 'FallbackRawAllocSize' \
+  'TSlabPool must use FallbackRawAllocSize for fallback free (L5)'
+need_grep "$SRC/nextpas.core.mem.pool.slab.pas" 'FreeMemOf\(FAllocator, LAlloc\.RawPtr' \
+  'TSlabPool FreeMem fallback must FreeMemOf RawPtr (L5)'
+
+# --- Era M: FixedSlab AlignedFallback size + sharded TLS node sized free ---
+need_file "$SRC/nextpas.core.mem.pool.fixed_slab.pas"
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FAlignedFallbackRawSizes' \
+  'TFixedSlabPool must track AlignedFallback raw sizes (M1)'
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'TrackAlignedFallback\(Result, LRaw, LNeeded\)' \
+  'AllocAligned must TrackAlignedFallback with LNeeded (M1)'
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FreeMemOf\(FAllocator, FAlignedFallbackRawPtrs' \
+  'FreeActiveAlignedFallbacks must FreeMemOf with sizes (M2)'
+
+need_file "$SRC/nextpas.core.mem.blockpool.sharded.pas"
+need_grep "$SRC/nextpas.core.mem.blockpool.sharded.pas" 'AllocSize: SizeUInt' \
+  'TThreadCacheNode must record AllocSize (M3)'
+need_grep "$SRC/nextpas.core.mem.blockpool.sharded.pas" 'System\.FreeMem\(LNode, LNode\^\.AllocSize\)' \
+  'ThreadExitCleanup must sized FreeMem TLS node (M3)'
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2
   exit 1

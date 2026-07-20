@@ -31,6 +31,7 @@ program scorecard;
  *   SC26 Keybind BindKey + HandleKey
  *   SC27 FrameBudget not over after BeginFrame
  *   SC28 Synchronized update DECSET 2026 (backend + EndFrame wrap)
+ *   SC29 DECAWM auto-wrap off on EnterAlternate / on on Leave
  *}
 
 {$I nextpas.core.settings.inc}
@@ -745,20 +746,24 @@ begin
     LBE.EnterAlternate(amMouseFull, False);
     LPending := BackendPendingStr(LBE);
     if (Pos(#27'[?1003h', LPending) = 0) or (Pos(#27'[?1006h', LPending) = 0) or
-       (Pos(#27'[?1049h', LPending) = 0) then
-      LOk := False;
+       (Pos(#27'[?1049h', LPending) = 0) or (Pos(#27'[?7l', LPending) = 0) then
+      LOk := False
+    else if Pos(#27'[?1049h', LPending) > Pos(#27'[?7l', LPending) then
+      LOk := False; { alt before wrap-off }
     LBE.DiscardPending;
     LBE.LeaveAlternate(amMouseFull, False);
     LPending := BackendPendingStr(LBE);
     if (Pos(#27'[?1003l', LPending) = 0) or (Pos(#27'[?1006l', LPending) = 0) or
-       (Pos(#27'[?1049l', LPending) = 0) then
+       (Pos(#27'[?1049l', LPending) = 0) or (Pos(#27'[?7h', LPending) = 0) then
       LOk := False
     else if Pos(#27'[?1003l', LPending) > Pos(#27'[?1049l', LPending) then
-      LOk := False; { disable modes before leave alt }
+      LOk := False { disable modes before leave alt }
+    else if Pos(#27'[?7h', LPending) > Pos(#27'[?1049l', LPending) then
+      LOk := False; { wrap on before leave alt }
   finally
     LBE.Free;
   end;
-  AddRow('SC17a', 'mouse_alt_modes', 0, 1, LOk, '1003/1006 enter+leave order');
+  AddRow('SC17a', 'mouse_alt_modes', 0, 1, LOk, '1003/1006/7 wrap enter+leave order');
 end;
 
 procedure RunSC18;
@@ -1078,6 +1083,43 @@ begin
   AddRow('SC28c', 'sync_opt_out', 0, 1, LOk, 'SynchronizedUpdate=False');
 end;
 
+procedure RunSC29;
+var
+  LBE: TAnsiBackend;
+  LPending: AnsiString;
+  LOk: Boolean;
+  LPosAlt, LPosWrap: Integer;
+begin
+  WriteLn('SC29 DECAWM auto-wrap off on EnterAlternate ...');
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.EnterAlternate(amMouseNone, False);
+    LPending := BackendPendingStr(LBE);
+    LPosAlt := Pos(#27'[?1049h', LPending);
+    LPosWrap := Pos(#27'[?7l', LPending);
+    if (LPosAlt = 0) or (LPosWrap = 0) or (LPosAlt > LPosWrap) then
+      LOk := False;
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC29a', 'wrap_off_enter', 0, 1, LOk, '1049h then 7l');
+
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  try
+    LBE.LeaveAlternate(amMouseNone, False);
+    LPending := BackendPendingStr(LBE);
+    LPosWrap := Pos(#27'[?7h', LPending);
+    LPosAlt := Pos(#27'[?1049l', LPending);
+    if (LPosWrap = 0) or (LPosAlt = 0) or (LPosWrap > LPosAlt) then
+      LOk := False;
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC29b', 'wrap_on_leave', 0, 1, LOk, '7h then 1049l');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -1110,7 +1152,7 @@ begin
   SetLength(GRows, 72);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC28 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC29 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -1139,6 +1181,7 @@ begin
   RunSC26;
   RunSC27;
   RunSC28;
+  RunSC29;
   PrintTable;
   if GFailed > 0 then
     Halt(1);
