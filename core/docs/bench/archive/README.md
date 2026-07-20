@@ -20,6 +20,7 @@
 |------|------|
 | [../README.md](../README.md) | 模块总览与 API |
 | [../goal-tree.md](../goal-tree.md) | 阶段状态 B0–B29+ |
+| [../LANE-DUTY.md](../LANE-DUTY.md) | lane 值班与 Landing 纪律（FF 后必 push） |
 | [../consumer-guide.md](../consumer-guide.md) | 模块作者怎么写 bench |
 | [../consumer-checklist.md](../consumer-checklist.md) | 消费侧抽检表 |
 | [../ARCHITECTURE.md](../ARCHITECTURE.md) | 结构 |

@@ -1,18 +1,31 @@
 # Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 状态
 
-> **Status**: **H3-5 + Q0–Q5 done** → **Maintenance**（preferred residual **0** + M6 nail）
+> **Status**: **H3-5 + Q0–Q5 done** → **Maintenance close-out**（preferred residual **0** · M6–M7 · V1 · I1/C1）
 > **Date**: 2026-07-20
 > **Owner**: atomic-lockfree lane（全权）
-> **Scope**: atomic + lockfree + H3 消费者面；执行主线见 [`quality-parity.md`](quality-parity.md)（**Q0–Q5** + Maintenance）
+> **Scope**: atomic + lockfree + H3 消费者面；执行主线见 [`quality-parity.md`](quality-parity.md)
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 / Horizon-3 (H3-1…H3-5) are complete** — see [`roadmap-h2.md`](roadmap-h2.md) / [`roadmap-h3.md`](roadmap-h3.md).
-**Current execution line**: **Maintenance** after Q0–Q5（[`quality-parity.md`](quality-parity.md)）；T2 inventory [`t2-inventory.md`](t2-inventory.md)；bench [`bench-envelope.md`](bench-envelope.md)；land archive `archive/atomic-lockfree-q3q5-landed-20260720` — **not R9**.
+**Current execution line**: **Maintenance** after preferred-path close-out（[`quality-parity.md`](quality-parity.md)）；T2 inventory [`t2-inventory.md`](t2-inventory.md)；bench [`bench-envelope.md`](bench-envelope.md) — **not R9**.
 **Preferred path**: lockfree 生产 `Atomic*(` residual **0**；回归钉 `make focused FOCUS=core/tests/nextpas.core.lockfree/test_lockfree_preferred_path`。
 **R8** remains **opt-in research** — see [`r8-research-status.md`](r8-research-status.md).
 Do **not** invent an R9.
 
 H3 close-out remains the production baseline; Q 线加深质量与可导航规模，不堆 T2 玩具。
+
+---
+
+## Maintenance preferred close-out（三句话 · 给总控）
+
+1. **底座**：`nextpas.core.atomic` preferred（`atomic_*` / `mo_*` / `TAtomic*`）+ lockfree T1 生产契约就绪；legacy PascalCase 仅 compat；**生产热路径 residual 0**，钉 `test_lockfree_preferred_path`。
+2. **消费者**：H3 `async.loop`→mpsc、`thread.pool.worksteal`→deque、H4-1 `thread.pool`→SegQueue；`verify-t1` / `verify-h3-consumers` 绿（V1）。
+3. **边界**：H3-2 仅 bag/multimap；T2 不进默认门面；不 invent R9；I1 inventory 诚实抽检 + C1 跨模块 legacy 再扫 0。
+
+选型导航：[`selection-guide.md`](selection-guide.md)（含「任务投递」对照）。  
+生命周期示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t2_bag_close_join_free/`（Bag）。
+
+**Maintenance land 锚点（main，代表）**：T2 preferred 长尾 `f773b3a1d` · M6 `adba7a9f6` · M7 `17c6d15f4` · V1 `1c5395b88` · I1/C1 `87ae3ebac`。
 
 H3-1 land HEAD on main: `710ddd7ab` (feat `8d99b07ab` + Wave-1 status docs).
 H3-2 evidence: CONTRACT §0.3; `test_lockfree_bag` / `test_lockfree_multimap` H3-2 pins; multimap `Destroy` closes first.
@@ -33,12 +46,12 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 | **atomic** | **Ready-for-consumer** | Canonical `atomic_*` / `TAtomic*`; legacy CAS documented, not preferred (H2-3) |
 | **T2 concurrent containers** | **Guarded tiers + H3-2 subset** | H2-2 tiers; **bag/multimap** have H3-2 production contract (§0.3); **not** default facade |
 | **T3 / research** | Experimental | RTM / NUMA / formal models — direct import only; R8 status in [`r8-research-status.md`](r8-research-status.md) |
-| **Cross-module T1 consumer** | **H3-1 + H3-5 done** | async → mpsc；thread.pool.worksteal → deque |
+| **Cross-module T1 consumer** | **H3-1 + H3-5 + H4-1 done** | async → mpsc；worksteal → deque；thread.pool → SegQueue |
 | **Consumer regression gate** | **H3-3 done** | `verify-h3-consumers` formalizes async + bag/multimap + H2-6 example |
 
 Authoritative contract: [`CONTRACT.md`](CONTRACT.md). Product entry: [`README.md`](README.md).
 R-line map: [`roadmap.md`](roadmap.md). **H2**: [`roadmap-h2.md`](roadmap-h2.md). **H3**: [`roadmap-h3.md`](roadmap-h3.md).
-**Q 线（当前）**: [`quality-parity.md`](quality-parity.md) — 执行阶段。
+**Q / Maintenance**: [`quality-parity.md`](quality-parity.md) — preferred close-out **done**；后续主战场在高层消费者。
 **对标目标**: [`parity-go-rust.md`](parity-go-rust.md) — Go/Rust atomic+lockfree 质量与规模矩阵。
 
 ---

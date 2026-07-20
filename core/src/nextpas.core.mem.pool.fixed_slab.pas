@@ -54,6 +54,7 @@ type
   private
     FAllocator: IAllocator;
     FRaw: Pointer;
+    FRawAllocSize: SizeUInt;  { GetMem 字节数（含页对齐 over-alloc） }
     FBase: PByte;
     FRegionEnd: PByte;
     FSize: SizeUInt;
@@ -66,6 +67,7 @@ type
     FOwnFill: SizeUInt;
     FAlignedFallbackPtrs: array of Pointer;
     FAlignedFallbackRawPtrs: array of Pointer;
+    FAlignedFallbackRawSizes: array of SizeUInt;  { GetMem LNeeded for FreeMemOf }
     FAlignedFallbackStates: array of Byte;
 
     {$IFDEF NEXTPAS_CORE_SLAB_STATS}
@@ -84,7 +86,7 @@ type
     procedure TrackAllocated(APtr: Pointer; ASize: SizeUInt);
     procedure ValidateTrackedLivePointer(APtr: Pointer; const AOperation: string; out ASize: SizeUInt);
     function AlignedFallbackIndexOf(APtr: Pointer): Integer;
-    procedure TrackAlignedFallback(APtr, ARawPtr: Pointer);
+    procedure TrackAlignedFallback(APtr, ARawPtr: Pointer; ARawSize: SizeUInt);
     function ValidateAlignedFallbackPointer(APtr: Pointer; const AOperation: string): Integer;
     procedure FreeActiveAlignedFallbacks;
 
@@ -125,6 +127,9 @@ type
 
 
 implementation
+
+uses
+  nextpas.core.mem;
 
 const
   FIXED_SLAB_OWNERSHIP_MIN_CAP = 64;
@@ -208,8 +213,13 @@ begin
       'TFixedSlabPool.Create: ownership index overflow (' + IntToStr(desired_pages) + ')');
   ownership_capacity := desired_pages * 16;
 
+  FRawAllocSize := allocation_size;
   FRaw := FAllocator.GetMem(allocation_size);
-  if FRaw = nil then Exit;
+  if FRaw = nil then
+  begin
+    FRawAllocSize := 0;
+    Exit;
+  end;
 
   FBase := ngx_align_ptr(PByte(FRaw), NGX_SLAB_PAGE_SIZE);
   FCore := FBase;
@@ -229,9 +239,12 @@ begin
   FreeActiveAlignedFallbacks;
   SetLength(FAlignedFallbackPtrs, 0);
   SetLength(FAlignedFallbackRawPtrs, 0);
+  SetLength(FAlignedFallbackRawSizes, 0);
   SetLength(FAlignedFallbackStates, 0);
   if FRaw <> nil then
-    FAllocator.FreeMem(FRaw);
+    FreeMemOf(FAllocator, FRaw, FRawAllocSize);
+  FRaw := nil;
+  FRawAllocSize := 0;
   SetLength(FOwnKeys, 0);
   SetLength(FOwnStates, 0);
   SetLength(FOwnSizes, 0);
@@ -551,7 +564,7 @@ begin
   Result := -1;
 end;
 
-procedure TFixedSlabPool.TrackAlignedFallback(APtr, ARawPtr: Pointer);
+procedure TFixedSlabPool.TrackAlignedFallback(APtr, ARawPtr: Pointer; ARawSize: SizeUInt);
 var
   LIndex: Integer;
   LCount: Integer;
@@ -564,15 +577,18 @@ begin
   begin
     FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_ACTIVE;
     FAlignedFallbackRawPtrs[LIndex] := ARawPtr;
+    FAlignedFallbackRawSizes[LIndex] := ARawSize;
     Exit;
   end;
 
   LCount := Length(FAlignedFallbackPtrs);
   SetLength(FAlignedFallbackPtrs, LCount + 1);
   SetLength(FAlignedFallbackRawPtrs, LCount + 1);
+  SetLength(FAlignedFallbackRawSizes, LCount + 1);
   SetLength(FAlignedFallbackStates, LCount + 1);
   FAlignedFallbackPtrs[LCount] := APtr;
   FAlignedFallbackRawPtrs[LCount] := ARawPtr;
+  FAlignedFallbackRawSizes[LCount] := ARawSize;
   FAlignedFallbackStates[LCount] := FIXED_SLAB_ALIGNED_ACTIVE;
 end;
 
@@ -603,7 +619,8 @@ begin
     if (FAlignedFallbackPtrs[LIndex] <> nil) and
        (FAlignedFallbackStates[LIndex] = FIXED_SLAB_ALIGNED_ACTIVE) then
     begin
-      FAllocator.FreeMem(FAlignedFallbackRawPtrs[LIndex]);
+      FreeMemOf(FAllocator, FAlignedFallbackRawPtrs[LIndex],
+        FAlignedFallbackRawSizes[LIndex]);
       FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
     end;
 end;
@@ -613,6 +630,7 @@ begin
   FreeActiveAlignedFallbacks;
   SetLength(FAlignedFallbackPtrs, 0);
   SetLength(FAlignedFallbackRawPtrs, 0);
+  SetLength(FAlignedFallbackRawSizes, 0);
   SetLength(FAlignedFallbackStates, 0);
   if (FBase <> nil) and (FCore <> nil) and (FRegionEnd <> nil) then
   begin
@@ -859,7 +877,7 @@ begin
     Result := AlignUpUnChecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
     LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
     LHeaderPtr^ := LRaw;
-    TrackAlignedFallback(Result, LRaw);
+    TrackAlignedFallback(Result, LRaw, LNeeded);
   end
   else
     Result := nil;
@@ -869,6 +887,7 @@ procedure TFixedSlabPool.FreeAligned(APtr: Pointer);
 var
   LIndex: Integer;
   LSize: SizeUInt;
+  LRawSize: SizeUInt;
   LHeaderPtr: PPointer;
   LRaw: Pointer;
 begin
@@ -881,13 +900,18 @@ begin
       ValidateTrackedLivePointer(APtr, 'FreeAligned', LSize);
     LIndex := ValidateAlignedFallbackPointer(APtr, 'FreeAligned');
     LRaw := FAlignedFallbackRawPtrs[LIndex];
+    LRawSize := FAlignedFallbackRawSizes[LIndex];
     if LRaw <> nil then
-      FAllocator.FreeMem(LRaw)
+      FreeMemOf(FAllocator, LRaw, LRawSize)
     else
     begin
+      { Map missing raw: free via header only (unsized; should be rare). }
       LHeaderPtr := PPointer(PtrUInt(APtr) - SizeOf(Pointer));
       LRaw := LHeaderPtr^;
-      FAllocator.FreeMem(LRaw);
+      if LRawSize > 0 then
+        FreeMemOf(FAllocator, LRaw, LRawSize)
+      else
+        FAllocator.FreeMem(LRaw);
     end;
     FAlignedFallbackStates[LIndex] := FIXED_SLAB_ALIGNED_RELEASED;
   end;

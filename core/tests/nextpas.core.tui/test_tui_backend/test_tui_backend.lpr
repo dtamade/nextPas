@@ -223,8 +223,8 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.EnterAlternate(amMouseClick, False);
-    CheckEqual(#27'[?1049h'#27'[?1000h'#27'[?1006h', PendingString(LBE),
-      'enter alternate enables alt screen before click tracking');
+    CheckEqual(#27'[?1049h'#27'[?7l'#27'[?1000h'#27'[?1006h', PendingString(LBE),
+      'enter alternate: alt + wrap off + click tracking');
   finally
     LBE.Free;
   end;
@@ -237,8 +237,8 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.EnterAlternate(amMouseNone, True);
-    CheckEqual(#27'[?1049h'#27'[?1007h', PendingString(LBE),
-      'enter alternate can enable alternate scroll without mouse tracking');
+    CheckEqual(#27'[?1049h'#27'[?7l'#27'[?1007h', PendingString(LBE),
+      'enter alternate: alt + wrap off + alternate scroll');
   finally
     LBE.Free;
   end;
@@ -251,9 +251,9 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.LeaveAlternate(amMouseDrag, True);
-    CheckEqual(#27'[0m'#27'[?1002l'#27'[?1006l'#27'[?1007l'#27'[?1049l',
+    CheckEqual(#27'[0m'#27'[?1002l'#27'[?1006l'#27'[?1007l'#27'[?7h'#27'[?1049l',
       PendingString(LBE),
-      'leave alternate resets sgr and disables drag/scroll before leaving alt screen');
+      'leave alternate: disable modes + wrap on before leave alt');
   finally
     LBE.Free;
   end;
@@ -488,6 +488,22 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendSynchronizedUpdateBeginEnd;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.BeginSynchronizedUpdate;
+    CheckEqual(#27'[?2026h', PendingString(LBE), 'begin 2026h');
+    LBE.DiscardPending;
+    LBE.EndSynchronizedUpdate;
+    CheckEqual(#27'[?2026l', PendingString(LBE), 'end 2026l');
+  finally
+    LBE.Free;
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.tui.backend');
@@ -526,9 +542,11 @@ begin
     @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
   T.Test('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
-    T.Test('ansi backend focus reporting enable disable',
+  T.Test('ansi backend focus reporting enable disable',
     @TestAnsiBackendFocusReportingEnableDisable);
   T.Test('ansi backend bracketed paste enable disable',
     @TestAnsiBackendBracketedPasteEnableDisable);
-if not T.Run then Halt(1);
+  T.Test('ansi backend synchronized update begin end',
+    @TestAnsiBackendSynchronizedUpdateBeginEnd);
+  if not T.Run then Halt(1);
 end.

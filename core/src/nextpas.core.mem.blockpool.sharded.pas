@@ -100,6 +100,7 @@ type
         Next: PThreadCacheNode;
         RemoteBufs: Pointer; // points to TRemoteFreeBuf[FShardCount] (tail-allocated)
         RemoteBufLen: Integer;
+        AllocSize: SizeUInt; // GetMem size for sized free on thread exit
         Ptrs: array[0..SHARDED_BLOCKPOOL_THREADCACHE_MAX - 1] of Pointer;
       end;
   private
@@ -453,7 +454,11 @@ begin
         GPoolRegistryLock.Release;
       end;
     end;
-    FreeMem(LNode);
+    { Pair System.GetMem on create; prefer sized free when AllocSize recorded. }
+    if LNode^.AllocSize > 0 then
+      System.FreeMem(LNode, LNode^.AllocSize)
+    else
+      System.FreeMem(LNode);
     LNode := LNext;
   end;
   GShardedBlockPoolThreadCacheHead := nil;
@@ -1133,7 +1138,7 @@ begin
     (SizeUInt(FShardCount) > ((High(SizeUInt) - SizeUInt(SizeOf(TThreadCacheNode))) div SizeUInt(SizeOf(TRemoteFreeBuf)))) then
     Exit(nil);
   LAllocSize := SizeUInt(SizeOf(TThreadCacheNode)) + SizeUInt(FShardCount) * SizeUInt(SizeOf(TRemoteFreeBuf));
-  GetMem(LNode, LAllocSize);
+  LNode := PThreadCacheNode(System.GetMem(LAllocSize));
   if LNode = nil then
     Exit(nil);
   ZeroMem(LNode, LAllocSize);
@@ -1142,6 +1147,7 @@ begin
   LNode^.Epoch := FCacheEpoch;
   LNode^.Shard := ChooseShardIndex;
   LNode^.Count := 0;
+  LNode^.AllocSize := LAllocSize;
   LNode^.RemoteBufLen := FShardCount;
   if FShardCount > 0 then
     LNode^.RemoteBufs := Pointer(PByte(LNode) + SizeOf(TThreadCacheNode))

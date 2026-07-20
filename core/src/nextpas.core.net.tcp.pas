@@ -34,7 +34,7 @@ uses
   nextpas.core.errors,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
-  nextpas.core.platform.posix.base,
+  nextpas.core.platform.socket.base,
   nextpas.core.net.resolve;
 
 type
@@ -112,22 +112,24 @@ begin
   Result := platform_htons(AVal);
 end;
 
-procedure FillSockAddr(const AAddr: TNetAddress; out ASa: sockaddr_in; out ALen: Int32);
+procedure FillSockAddr(const AAddr: TNetAddress; out ASa: TPlatformSockAddr);
 begin
-  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port, ASa, ALen) <> 0 then
+  if nextpas.core.platform.socket.platform_sockaddr_ipv4(AAddr.Port,
+    platform_ipv4_parse(AAddr.IP), ASa) <> 0 then
   begin
     FillChar(ASa, SizeOf(ASa), 0);
-    ALen := 0;
+    ASa.Len := 0;
   end;
 end;
 
-function AddrFromSockAddr(const ASa: sockaddr_in): TNetAddress;
+function AddrFromSockAddr(const ASa: TPlatformSockAddr): TNetAddress;
 var
   LIP: UInt32;
   LPort: UInt16;
 begin
-  platform_sockaddr_to_ipv4(ASa, LIP, LPort);
-  Result.IP := platform_ipv4_to_string(LIP);
+  platform_sockaddr_ipv4_extract(ASa, LIP, LPort);
+  { Storage holds network-order s_addr; ipv4_to_string expects host-order word. }
+  Result.IP := platform_ipv4_to_string(platform_ntohl(LIP));
   Result.Port := LPort;
   Result.IsIPv6 := False;
 end;
@@ -578,19 +580,25 @@ end;
 function TTcpListener.Accept: ITcpStream;
 var
   LClient: TPlatformSocket;
-  LAddr, LLocalAddr: sockaddr_in;
-  LAddrLen: socklen_t;
+  LAddr, LLocalAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LResult: Int32;
   LLocal: TNetAddress;
 begin
   EnsureOpen('accept');
-  LAddrLen := SizeOf(LAddr);
-  LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
-  LAddrLen := SizeOf(LLocalAddr);
-  if platform_socket_getsockname(LClient, @LLocalAddr, @LAddrLen) = 0 then
-    LLocal := AddrFromSockAddr(LLocalAddr)
+  LAddr.Len := UInt32(LAddrLen);
+  LLocalAddr.Clear;
+  LAddrLen := SizeOf(LLocalAddr.Storage);
+  if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+  begin
+    LLocalAddr.Len := UInt32(LAddrLen);
+    LLocal := AddrFromSockAddr(LLocalAddr);
+  end
   else
     LLocal := FLocal;
   Result := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
@@ -627,20 +635,26 @@ end;
 function TTcpListener.TryAccept(out AConn: ITcpStream): TTcpAcceptResult;
 var
   LClient: TPlatformSocket;
-  LAddr, LLocalAddr: sockaddr_in;
-  LAddrLen: socklen_t;
+  LAddr, LLocalAddr: TPlatformSockAddr;
+  LAddrLen: Int32;
   LResult: Int32;
   LLocal: TNetAddress;
 begin
   AConn := nil;
   EnsureOpen('try accept');
-  LAddrLen := SizeOf(LAddr);
-  LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
+  LAddr.Clear;
+  LAddrLen := SizeOf(LAddr.Storage);
+  LResult := platform_socket_accept(FSocket, @LAddr.Storage[0], @LAddrLen, LClient);
   if LResult = 0 then
   begin
-    LAddrLen := SizeOf(LLocalAddr);
-    if platform_socket_getsockname(LClient, @LLocalAddr, @LAddrLen) = 0 then
-      LLocal := AddrFromSockAddr(LLocalAddr)
+    LAddr.Len := UInt32(LAddrLen);
+    LLocalAddr.Clear;
+    LAddrLen := SizeOf(LLocalAddr.Storage);
+    if platform_socket_getsockname(LClient, @LLocalAddr.Storage[0], @LAddrLen) = 0 then
+    begin
+      LLocalAddr.Len := UInt32(LAddrLen);
+      LLocal := AddrFromSockAddr(LLocalAddr);
+    end
     else
       LLocal := FLocal;
     AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
@@ -661,7 +675,7 @@ end;
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 var
   LSock: TPlatformSocket;
-  LSa: sockaddr_in;
+  LSa: TPlatformSockAddr;
   LSaLen: Int32;
   LOne: Int32;
   LResult: Int32;
@@ -673,8 +687,8 @@ begin
     raise ENetworkError.Create('tcp listen: socket create failed (' + IntToStr(LResult) + ')');
   LOne := 1;
   platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
-  FillSockAddr(LLocal, LSa, LSaLen);
-  LResult := platform_socket_bind(LSock, @LSa, LSaLen);
+  FillSockAddr(LLocal, LSa);
+  LResult := platform_socket_bind(LSock, @LSa.Storage[0], Int32(LSa.Len));
   if LResult <> 0 then
   begin
     platform_socket_close(LSock);
@@ -687,9 +701,13 @@ begin
     raise ENetworkError.Create('tcp listen: listen failed (' + IntToStr(LResult) + ')');
   end;
   { Get actual bound address (important when port=0) }
-  LSaLen := SizeOf(LSa);
-  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
+  LSa.Clear;
+  LSaLen := SizeOf(LSa.Storage);
+  if platform_socket_getsockname(LSock, @LSa.Storage[0], @LSaLen) = 0 then
+  begin
+    LSa.Len := UInt32(LSaLen);
     LLocal := AddrFromSockAddr(LSa);
+  end;
   Result := TTcpListener.Create(LSock, LLocal);
 end;
 
@@ -756,7 +774,7 @@ begin
   else
   begin
     LIP := platform_ipv4_parse(ARemote.IP);
-    Result := platform_sockaddr_ipv4(ARemote.Port, LIP, ASa) = 0;
+    Result := nextpas.core.platform.socket.platform_sockaddr_ipv4(ARemote.Port, LIP, ASa) = 0;
   end;
 end;
 
@@ -770,17 +788,21 @@ function NetTcpStreamFromConnectedSocket(const ASock: TPlatformSocket;
   const ARemote: TNetAddress): ITcpStream;
 var
   LLocal: TNetAddress;
-  LSa4: sockaddr_in;
-  LSa4Len: Int32;
+  LSa: TPlatformSockAddr;
+  LSaLen: Int32;
 begin
   { Best-effort restore blocking for stream I/O defaults. }
   platform_socket_set_nonblocking(ASock, False);
   LLocal := TNetAddress.Any(0);
   if not ARemote.IsIPv6 then
   begin
-    LSa4Len := SizeOf(LSa4);
-    if platform_socket_getsockname(ASock, @LSa4, @LSa4Len) = 0 then
-      LLocal := AddrFromSockAddr(LSa4);
+    LSa.Clear;
+    LSaLen := SizeOf(LSa.Storage);
+    if platform_socket_getsockname(ASock, @LSa.Storage[0], @LSaLen) = 0 then
+    begin
+      LSa.Len := UInt32(LSaLen);
+      LLocal := AddrFromSockAddr(LSa);
+    end;
   end;
   Result := TTcpStream.Create(ASock, LLocal, ARemote);
 end;
@@ -797,8 +819,8 @@ var
   LTimed: Boolean;
   LDomain: Int32;
   LLocal: TNetAddress;
-  LSa4: sockaddr_in;
-  LSa4Len: Int32;
+  LLocalSa: TPlatformSockAddr;
+  LLocalSaLen: Int32;
 begin
   if not BuildConnectSockAddr(ARemote, LSa) then
     raise ENetworkError.Create('tcp connect: invalid address ' + ARemote.IP);
@@ -873,9 +895,13 @@ begin
   LLocal := TNetAddress.Any(0);
   if not ARemote.IsIPv6 then
   begin
-    LSa4Len := SizeOf(LSa4);
-    if platform_socket_getsockname(LSock, @LSa4, @LSa4Len) = 0 then
-      LLocal := AddrFromSockAddr(LSa4);
+    LLocalSa.Clear;
+    LLocalSaLen := SizeOf(LLocalSa.Storage);
+    if platform_socket_getsockname(LSock, @LLocalSa.Storage[0], @LLocalSaLen) = 0 then
+    begin
+      LLocalSa.Len := UInt32(LLocalSaLen);
+      LLocal := AddrFromSockAddr(LLocalSa);
+    end;
   end;
   Result := TTcpStream.Create(LSock, LLocal, ARemote);
 end;

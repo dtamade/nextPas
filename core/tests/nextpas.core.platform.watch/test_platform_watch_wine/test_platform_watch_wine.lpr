@@ -45,17 +45,23 @@ begin
   Result := LProc <> nil;
 end;
 
-procedure MaybeSoftEvent(AGot: Boolean; const AName: string; AAllowSoft: Boolean);
+procedure MaybeSoftEvent(AGot: Boolean; const AName: string; AAllowSoft: Boolean;
+  ALastPoll: Int32; ACreated, ADeleted, AModified: Boolean);
 begin
   if AGot then
     Check(True, AName)
   else if AAllowSoft then
   begin
-    WriteLn('  ~ ', AName, ' residual under Wine (soft)');
+    WriteLn('  ~ ', AName, ' residual under Wine (soft); last_poll=', ALastPoll);
     Inc(LPassed);
   end
   else
+  begin
+    WriteLn('  diag: ', AName, ' FAILED hard; last_poll=', ALastPoll,
+      ' created=', Ord(ACreated), ' deleted=', Ord(ADeleted),
+      ' modified=', Ord(AModified));
     Check(False, AName + ' (hard on real Windows)');
+  end;
 end;
 
 var
@@ -81,7 +87,7 @@ begin
   end
   else
   begin
-    WriteLn('host=real-windows; create+delete hard asserts');
+    WriteLn('host=real-windows; create+delete hard asserts (RDCW lpBytesReturned=NULL fix)');
   end;
   LPassed := 0;
   LFailed := 0;
@@ -114,11 +120,17 @@ begin
     LRet := platform_watch_add(LWatcher, @LDir[0]);
     Check(LRet > 0, 'watch_add valid dir returns positive wd');
     Check(LWatcher.IsValid, 'watcher valid');
+    WriteLn('  diag: after add pending_count=',
+      platform_watch_debug_pending_count(LWatcher));
   end;
 
   WriteLn('Test 3: poll timeout → 0');
   if LWatcher.IsValid then
+  begin
     Check(platform_watch_poll(LWatcher, LEvent, 20) = 0, 'timeout returns 0');
+    WriteLn('  diag: after timeout pending_count=',
+      platform_watch_debug_pending_count(LWatcher));
+  end;
 
   WriteLn('Test 4: create file → event');
   if LWatcher.IsValid and (LDirPath <> '') then
@@ -134,6 +146,8 @@ begin
       platform_file_close(LHandle);
     end;
     Check(LRet = 0, 'create probe file');
+    WriteLn('  diag: after create pending_count=',
+      platform_watch_debug_pending_count(LWatcher));
     LRet := 0;
     FillChar(LEvent, SizeOf(LEvent), 0);
     for I := 1 to 40 do
@@ -141,9 +155,12 @@ begin
       LRet := platform_watch_poll(LWatcher, LEvent, 100);
       if (LRet > 0) and (LEvent.Created or LEvent.Modified) then
         Break;
+      if (I = 1) or (I = 10) or (I = 40) then
+        WriteLn('  diag: poll#', I, ' ret=', LRet, ' pending=',
+          platform_watch_debug_pending_count(LWatcher));
     end;
     MaybeSoftEvent((LRet > 0) and (LEvent.Created or LEvent.Modified),
-      'create event', LUnderWine);
+      'create event', LUnderWine, LRet, LEvent.Created, LEvent.Deleted, LEvent.Modified);
   end;
 
   WriteLn('Test 5: delete event');
@@ -153,7 +170,8 @@ begin
       ;
     platform_file_unlink(@LFile[0]);
     LGotDelete := False;
-    for I := 1 to 25 do
+    LRet := 0;
+    for I := 1 to 40 do
     begin
       LRet := platform_watch_poll(LWatcher, LEvent, 100);
       if (LRet > 0) and LEvent.Deleted then
@@ -162,7 +180,8 @@ begin
         Break;
       end;
     end;
-    MaybeSoftEvent(LGotDelete, 'delete event', LUnderWine);
+    MaybeSoftEvent(LGotDelete, 'delete event', LUnderWine, LRet,
+      LEvent.Created, LEvent.Deleted, LEvent.Modified);
   end;
 
   WriteLn('Test 6: multi create → two polls');
@@ -196,7 +215,8 @@ begin
       LRet := platform_watch_poll(LWatcher, LEvent, 2000);
       LGotMulti := LRet > 0;
     end;
-    MaybeSoftEvent(LGotMulti, 'multi-event second poll', LUnderWine);
+    MaybeSoftEvent(LGotMulti, 'multi-event second poll', LUnderWine, LRet,
+      LEvent.Created, LEvent.Deleted, LEvent.Modified);
   end;
 
   WriteLn('Test 7: multi-dir second path + remove + close');

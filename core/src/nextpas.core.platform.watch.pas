@@ -121,6 +121,11 @@ function platform_watch_poll(var AWatcher: TPlatformWatcher;
     @return 0 成功，否则返回错误码 *}
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 
+{$IFDEF NEXTPAS_WINDOWS}
+{** Debug: count Active slots with Pending=True (smoke/GHA diagnostics). *}
+function platform_watch_debug_pending_count(const AWatcher: TPlatformWatcher): Int32;
+{$ENDIF}
+
 implementation
 
 {$IFDEF NEXTPAS_LINUX}
@@ -600,17 +605,21 @@ end;
 
 function WinWatchArmSlot(var ASlot: TPlatformWinWatchSlot): Int32;
 var
-  LBytes: DWORD;
   LOvl: LPOVERLAPPED;
-  LErr: DWORD;
+  LErr, LBytes: DWORD;
+  LOk: WINBOOL;
 begin
   LOvl := WinWatchSlotOvl(ASlot);
   FillChar(LOvl^, SizeOf(OVERLAPPED), 0);
   LOvl^.hEvent := HANDLE(ASlot.NotifyEvent);
-  LBytes := 0;
+  ResetEvent(HANDLE(ASlot.NotifyEvent));
   ASlot.PendLen := 0;
   ASlot.PendPos := 0;
-  if ReadDirectoryChangesW(
+  ASlot.Pending := False;
+  LBytes := 0;
+  { Pass @LBytes for Wine/host compatibility. MSDN allows it to be ignored
+    when overlapped is non-NULL; some hosts reject NULL. }
+  LOk := ReadDirectoryChangesW(
        HANDLE(ASlot.DirHandle),
        @ASlot.Buf[0],
        DWORD(SizeOf(ASlot.Buf)),
@@ -618,11 +627,18 @@ begin
        WIN_WATCH_NOTIFY_FILTER,
        @LBytes,
        LOvl,
-       nil) then
+       nil);
+  if LOk then
   begin
+    { Sync completion: buffer may already hold a batch. }
     ASlot.Pending := False;
     ASlot.PendLen := Int32(LBytes);
     ASlot.PendPos := 0;
+    if ASlot.PendLen = 0 then
+    begin
+      { Treat as still pending so poll waits on hEvent rather than busy re-arm. }
+      ASlot.Pending := True;
+    end;
     Result := 0;
   end
   else
@@ -775,7 +791,7 @@ begin
 
   LHandle := CreateFileW(
     PWideChar(LPath),
-    FILE_LIST_DIRECTORY,
+    FILE_LIST_DIRECTORY or SYNCHRONIZE,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil,
     OPEN_EXISTING,
@@ -826,11 +842,9 @@ function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
   I, LCount, LIdx, LArm: Int32;
-  LMs, LWait, LBytes: DWORD;
+  LMs, LWait: DWORD;
   LHandles: array[0..PLATFORM_WATCH_WIN_MAX - 1] of HANDLE;
   LMap: array[0..PLATFORM_WATCH_WIN_MAX - 1] of Int32;
-  LOvl: LPOVERLAPPED;
-  LErr: DWORD;
 
   function FinishCompletedSlot(ASlotIdx: Int32): Int32;
   var
@@ -881,44 +895,6 @@ begin
         Exit(1);
       AWatcher.Slots[I].PendPos := 0;
       AWatcher.Slots[I].PendLen := 0;
-    end;
-
-  { Collect already-completed I/O without waiting (post-timeout harvest). }
-  for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
-    if AWatcher.Slots[I].Active and AWatcher.Slots[I].Pending then
-    begin
-      LOvl := WinWatchSlotOvl(AWatcher.Slots[I]);
-      LBytes := 0;
-      if GetOverlappedResult(HANDLE(AWatcher.Slots[I].DirHandle), LOvl, @LBytes, False) then
-      begin
-        AWatcher.Slots[I].Pending := False;
-        AWatcher.Slots[I].PendLen := Int32(LBytes);
-        AWatcher.Slots[I].PendPos := 0;
-        if WinWatchDecodeSlot(AWatcher.Slots[I], I + 1, AEvent) then
-        begin
-          if AWatcher.Slots[I].PendPos >= AWatcher.Slots[I].PendLen then
-          begin
-            AWatcher.Slots[I].PendLen := 0;
-            AWatcher.Slots[I].PendPos := 0;
-            LArm := WinWatchArmSlot(AWatcher.Slots[I]);
-            if LArm <> 0 then
-              Exit(LArm);
-          end;
-          Exit(1);
-        end;
-        AWatcher.Slots[I].PendLen := 0;
-        AWatcher.Slots[I].PendPos := 0;
-        LArm := WinWatchArmSlot(AWatcher.Slots[I]);
-        if LArm <> 0 then
-          Exit(LArm);
-      end
-      else
-      begin
-        LErr := GetLastError;
-        { ERROR_IO_INCOMPLETE = 996: still pending — keep waiting. }
-        if LErr <> 996 then
-          Exit(WinWatchMapSlotIoError(AWatcher.Slots[I]));
-      end;
     end;
 
   { Re-arm idle active slots. }
@@ -972,6 +948,16 @@ begin
     WinWatchCloseSlot(AWatcher.Slots[I]);
   AWatcher.Fd := -1;
   Result := 0;
+end;
+
+function platform_watch_debug_pending_count(const AWatcher: TPlatformWatcher): Int32;
+var
+  I: Int32;
+begin
+  Result := 0;
+  for I := 0 to PLATFORM_WATCH_WIN_MAX - 1 do
+    if AWatcher.Slots[I].Active and AWatcher.Slots[I].Pending then
+      Inc(Result);
 end;
 {$ENDIF}
 

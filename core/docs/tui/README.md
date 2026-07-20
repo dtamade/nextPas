@@ -95,6 +95,12 @@ end;
 时 EnterTui 启用，终端焦点变化以 `evFocus`（`fkIn`/`fkOut`）上报——不同于 ext 层的
 `TFocusManager` 控件焦点。
 
+**Synchronized update**（DECSET 2026）默认开启：`EndFrame` 在 DrawPatches 外包
+`CSI ? 2026 h`/`l`，减少多 patch 帧撕裂（crossterm/ratatui 同款）；`SynchronizedUpdate=False` 可关。
+
+**Auto-wrap / DECAWM**（DECSET 7）：`EnterAlternate` 发 `CSI ? 7 l`，`LeaveAlternate`
+恢复 `? 7 h`——避免终端自动换行破坏 cell 格网（crossterm `DisableLineWrap`）。
+
 ## 继续看哪里
 
 - **完整开发地图（Done / 阶段）**看 [ROADMAP.md](./ROADMAP.md)

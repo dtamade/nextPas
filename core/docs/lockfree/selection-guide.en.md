@@ -1,10 +1,30 @@
 # Lockfree Data Structure Selection Guide
 
-> Updated: 2026-07-17
+> Updated: 2026-07-20 (Maintenance preferred close-out; task-delivery table)
 
 [中文版](selection-guide.md)
 
 > Relative performance: see `core/benchmarks/nextpas.core.lockfree`. This guide does **not** publish absolute Mops/s without a platform/compiler evidence envelope.
+> Production atomics: prefer `atomic_*` + `mo_*` ([`READY.md`](READY.md) preferred residual 0).
+
+## Task delivery: channel / bag / mpsc / segqueue
+
+Shortest map when handing work to other threads (details still in the decision tree and [`CONTRACT.md`](CONTRACT.md)).
+
+| Need | Choose | Common mistake |
+|------|--------|----------------|
+| **Bounded + backpressure** | `TLockFreeChannel` (MPMC) or `TLockFreeChannelSpsc` (1P1C) | Unbounded queues under overload |
+| **Many producers, one consumer** | `TMpscQueue` | Multiple consumers → use MPMC / SegQueue / Channel |
+| **N-worker shared task pool (unbounded)** | `TSegQueue` (production: `thread.pool`) | Prefer MPSC when there is truly one consumer |
+| **Bag / multiset work items** | `TLockFreeBag` (**H3-2**, direct `uses`, not on default facade) | Need keyed index → multimap, not bag |
+| **One key, many values** | `TLockFreeMultiMap` (**H3-2**, single lock, not LF) | Do not treat as lock-free map |
+| **Owner + steal scheduling** | `TWorkStealingDeque` (`thread.pool.worksteal`) | `deque_lf` is **spin-lock** (name is misleading) |
+
+**Lifecycle (T1 containers):** **Close → join producers/waiters → Free**.  
+`Destroy` Close+drain does **not** replace join.  
+Teaching: `t1_close_join_free/` (Channel), `t1_segqueue_workers/` (SegQueue), `t2_bag_close_join_free/` (H3-2 Bag).
+
+**SegQueue and MPSC:** stop enqueuers after Close → join → Free; segment reclamation uses EBR — do not Free while producers are live.
 
 ## Quick Decision Tree
 

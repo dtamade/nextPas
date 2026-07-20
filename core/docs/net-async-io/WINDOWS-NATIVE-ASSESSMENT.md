@@ -46,6 +46,7 @@
 |-------|--------|
 | Job | `test-windows-runtime` |
 | Step | `Async Windows native smoke (fail-closed on Windows host)` |
+| When | Runs if FPC install succeeded, **even when platform matrix fails** (Q34) |
 | Script | `core/scripts/async-windows-native-smoke.sh` |
 | STRICT | CI exports `ASYNC_WINDOWS_STRICT=1`; script defaults STRICT=1 on Windows hosts |
 
@@ -59,6 +60,11 @@ bash core/scripts/async-windows-smoke-streak.sh
 ### Rollback
 
 - Temporarily re-add `continue-on-error` only with assessment note + streak reset if FPC/Windows flakes dominate.
+
+## Notes (Q35)
+
+- Host tests that need threads must use `{$IFDEF UNIX}cthreads,{$ENDIF}` — Windows FPC has no `cthreads` unit; unconditional `uses cthreads` fails compile on win64 smoke.
+- Q33 expansion required this fix for dial/resolve/udp/pool/accept/cancel suites.
 
 ## Full `truth=native-windows` (deferred)
 

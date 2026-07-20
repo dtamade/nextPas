@@ -302,3 +302,11 @@ P := UnicodeSegmenter.NextLine(Text, P);
 // 软 UAX#14：
 P := NextLineBreak(Text, P);
 ```
+
+## IDNA 域名（P2-5）
+
+```pascal
+uses nextpas.core.text.unicode;
+ACE := IDNAToASCII('münchen.de');
+Uni := IDNAToUnicode(ACE);
+```

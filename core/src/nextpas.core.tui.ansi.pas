@@ -27,6 +27,10 @@ procedure AnsiMoveTo(var B: TStringBuilder; AX, AY: Word);
 procedure AnsiClearScreen(var B: TStringBuilder); inline;
 procedure AnsiEnterAltScreen(var B: TStringBuilder); inline;
 procedure AnsiLeaveAltScreen(var B: TStringBuilder); inline;
+{ DECAWM (DECSET 7): disable auto-wrap so cell-grid TUI is not corrupted by
+  terminal reflow (crossterm DisableLineWrap / ratatui EnterAlternateScreen). }
+procedure AnsiDisableAutoWrap(var B: TStringBuilder);
+procedure AnsiEnableAutoWrap(var B: TStringBuilder);
 procedure AnsiEnableMouseClickTracking(var B: TStringBuilder);
 procedure AnsiDisableMouseClickTracking(var B: TStringBuilder);
 procedure AnsiEnableMouseDragTracking(var B: TStringBuilder);
@@ -43,6 +47,11 @@ procedure AnsiDisableFocusReporting(var B: TStringBuilder);
 { Bracketed paste (DECSET 2004) — paste start CSI 200~ / end CSI 201~. }
 procedure AnsiEnableBracketedPaste(var B: TStringBuilder);
 procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
+
+{ Synchronized update (DECSET 2026) — batch multipatch draws to reduce tear.
+  Pair Begin/End around one frame's DrawPatches (crossterm/ratatui style). }
+procedure AnsiBeginSynchronizedUpdate(var B: TStringBuilder);
+procedure AnsiEndSynchronizedUpdate(var B: TStringBuilder);
 
 { Kitty keyboard progressive enhancement.
   flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
@@ -129,6 +138,18 @@ begin
     B.AppendChar('l');
 end;
 
+procedure AnsiDisableAutoWrap(var B: TStringBuilder);
+begin
+  { CSI ? 7 l — DECAWM off }
+  AnsiDecPrivateMode(B, 7, False);
+end;
+
+procedure AnsiEnableAutoWrap(var B: TStringBuilder);
+begin
+  { CSI ? 7 h — DECAWM on }
+  AnsiDecPrivateMode(B, 7, True);
+end;
+
 procedure AnsiEnableMouseClickTracking(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 1000, True);
@@ -193,6 +214,16 @@ end;
 procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 2004, False);
+end;
+
+procedure AnsiBeginSynchronizedUpdate(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2026, True);
+end;
+
+procedure AnsiEndSynchronizedUpdate(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 2026, False);
 end;
 
 procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer);

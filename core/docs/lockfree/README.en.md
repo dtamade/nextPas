@@ -9,8 +9,17 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 **Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
-**Status**: Maintenance — H3-1…H3-5 complete. See [`READY.md`](READY.md).
+**Status**: **Maintenance preferred close-out** — H3-1…H3-5 complete; production preferred residual **0**. See [`READY.md`](READY.md) (three-sentence delivery).
 Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Chinese [`README.md`](README.md) is the fuller product entry.
+
+**Preferred atomics**: new code uses `atomic_*` + `mo_*` / `TAtomic*`. Nail: `make focused FOCUS=core/tests/nextpas.core.lockfree/test_lockfree_preferred_path`.
+
+**Teaching examples** (Close → join → Free):
+- `core/examples/nextpas.core.lockfree/t1_close_join_free/` — Channel
+- `core/examples/nextpas.core.lockfree/t1_segqueue_workers/` — SegQueue N producers + N workers
+- `core/examples/nextpas.core.lockfree/t2_bag_close_join_free/` — H3-2 Bag
+
+**Selection**: [`selection-guide.md`](selection-guide.md) / [EN](selection-guide.en.md) — includes **task-delivery** table (channel / bag / mpsc / segqueue).
 
 ## Progress-guarantee matrix
 

@@ -1,50 +1,43 @@
-# config-formats 全族 SCORECARD（Wave L）
+# config-formats 全族 SCORECARD（Wave N Steady+）
 
-**truth**：`host-linux` 单机快照（2026-07-20）
+**truth**：`host-linux`
 **lane**：`config-json-xml-toml-yaml-csv-ini`
 
 ---
 
-## A. Wave L focused 代表路径（本波实测）
+## A. 一键门禁
 
 ```bash
-make focused FOCUS=core/tests/nextpas.core.config/test_config_facade_surface
-make focused FOCUS=core/tests/nextpas.core.ini/test_ini_facade_surface
-make focused FOCUS=core/tests/nextpas.core.xml/test_xml_facade_surface
-make hygiene
+bash core/docs/config-formats/scripts/run-facade-gates.sh
 ```
+
+---
+
+## B. Wave N focused 实测
 
 | 套件 | 结果 |
 |------|------|
-| config facade_surface | **9 passed**（ByteSize + watcher auto） |
-| ini facade_surface | **6 passed**（IReader） |
-| xml facade_surface | **3 passed**（IReader） |
+| config facade_surface | **10 passed**（DebugDump 含于 clone/merge） |
+| config examples | startup markers section/duration/bytesize/clone/dump |
 | hygiene | **pass** |
 
 ---
 
-## B. Wave L 关闭项
+## C. Wave N 关闭项
 
 | 项 | 状态 |
 |----|------|
-| TConfigWatcher 无格式 Create | Done（reload 走 sniff） |
-| GetByteSize / KiB 进制 | Done |
-| IniParse(IReader) | Done |
-| XmlParse / XmlParseDoc(IReader) | Done |
-| 低分模块 PARITY 升分 | Done |
+| ConfigDebugDump 排序诊断 | Done |
+| startup example DX 标记 | Done |
+| 全族 9.0 Steady 巩固 | Done |
 
 ---
 
-## C. PARITY 综合指针（Wave L）
+## D. PARITY 综合指针
 
 | 模块 | 综合 |
 |------|------|
-| config | **9.1** |
-| json | **9.0** |
-| csv | **9.0** |
-| toml | **9.0** |
-| ini | **9.0** |
-| yaml | **8.8** |
-| xml | **8.6** |
+| config | **9.3** |
+| json / yaml / toml / csv / ini / xml | **9.0** |
 
-**全族 Essential 路径**（config + 四格式 + ini/csv/xml 门面）均 ≥ 8.6；config/json/csv/toml/ini 达 9.0 线。
+**Steady 线**：Essential 路径已齐；remote / Schema / XPath / YAML multi-doc 接受仍 Out of scope。

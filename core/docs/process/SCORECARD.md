@@ -1,15 +1,17 @@
 # process / fs / path / env — SCORECARD（证据快照）
 
-> **Host Essential Done** + **M2 Windows usable（wine）Done**（见 [ROADMAP.md](./ROADMAP.md) · [WIN.md](./WIN.md)）。
+> **Host Essential Done** + **M2 Windows usable（wine）Done** + **M3 host-windows min-set CI gate Done**  
+> （见 [ROADMAP.md](./ROADMAP.md) · [WIN.md](./WIN.md)）。
 
 **truth 标签**
 
 | 标签 | 含义 |
 |------|------|
 | `host-linux` | 本机 Linux 跑的数字；非 CI 矩阵 |
-| `wine-runtime-smoke` | Win64 交叉编译 + Wine；**≠ 真 Windows host** |
+| `wine-runtime-smoke` | Win64 交叉编译 + Wine；**≠** 真 Windows host |
+| `host-windows` | 真 Windows runner 上 native `make test`（GHA `windows-latest`） |
 
-本表是**单机快照**，用于复现命令与量级对照，不宣称全面胜 Go。
+本表是**单机/CI 快照**，用于复现命令与量级对照，不宣称全面胜 Go。
 
 ---
 
@@ -17,9 +19,9 @@
 
 | 项 | 值 |
 |----|-----|
-| 日期 | 2026-07-20（M2-W4） |
-| OS | Linux x86_64 (Debian) |
-| 工具 | FPC 3.3.1；Wine 可用 |
+| 日期 | 2026-07-20（M3） |
+| OS | Linux x86_64（host-linux / wine）；GHA windows-latest（host-windows） |
+| 工具 | FPC 3.3.1；Wine 可用；GHA FPC trunk win64 |
 
 ---
 
@@ -31,16 +33,6 @@
 bash core/tests/run_l2_wine_min_set.sh
 ```
 
-分套件：
-
-```bash
-make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.fs/test_fs_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.path/test_path_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.os.env/test_os_env_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
-```
-
 | 套件 | 结果 | 说明 |
 |------|------|------|
 | process | **11 passed** | Capture；KillTree(Job)；ExtraFd/Cred fail-closed |
@@ -48,11 +40,36 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
 | fs.watch | **3 passed** | create/close + poll timeout + create-event soft |
-| **合计** | **24 passed** | 最小生产集；见 [WIN.md](./WIN.md) |
+| **合计** | **24 passed** | truth=`wine-runtime-smoke` |
 
 Host `make test` 在非 Windows 上为 skip 分支（1 passed）。
 
-**Windows 备注**：`WaitGraceful` 依赖 SIGTERM，Wine/Win 上 signal 有限；证据用 `Kill`。Watch create-event 在部分 Wine 上 soft residual，套件接受该结果。
+**Windows 备注**：`WaitGraceful` 依赖 SIGTERM，Wine/Win 上 signal 有限；证据用 `Kill`。Watch create-event 在部分 Wine 上 soft residual。
+
+---
+
+## A2. L2 host-windows 最小生产集（M3）
+
+```bash
+# Windows host / GHA (cwd core/ OK)
+bash core/scripts/l2-windows-ci-matrix.sh
+```
+
+| 套件 | 结果 | truth |
+|------|------|-------|
+| l2.process | **11 passed** | host-windows |
+| l2.fs | **3 passed** | host-windows |
+| l2.fs.watch | **3 passed** | host-windows |
+| l2.path | **4 passed** | host-windows |
+| l2.os.env | **3 passed** | host-windows |
+| **合计** | **5/5 gates · 24 cases** | **`host-windows`** |
+
+证据：GHA `test-windows-runtime` run **29751744779** @ `b824a31ce`  
+（platform 矩阵 27/28 时 L2 仍绿：`if: always()` 解耦）。
+
+CI 步骤：`L2 process/fs/path/env Windows min-set (host-windows)`。
+
+**范围**：仅 min-set 5 门；**不是**全量 Host L2。
 
 ---
 
@@ -121,6 +138,7 @@ LookPath 持平；Status ~**1.15×**；Capture/dual-pipe ~**1.25–1.3×** Go。
 
 1. `git checkout` 对应 commit  
 2. `bash core/tests/run_l2_wine_min_set.sh`（需 `fpc -Twin64` + `wine`）  
-3. `bench_fs` / `bench_process` + 各自 `compare_go`  
+3. Windows：`bash core/scripts/l2-windows-ci-matrix.sh` 或等 GHA `test-windows-runtime`  
+4. `bench_fs` / `bench_process` + 各自 `compare_go`  
 
-**不要**把 wine 结果写成「Windows production ready」或 `host-windows`。
+**不要**把 wine 结果写成 `host-windows`；**不要**把 min-set 写成全量 Windows production ready。

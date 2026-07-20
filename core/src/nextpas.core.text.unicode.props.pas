@@ -179,6 +179,32 @@ begin
       Result := ContainsRange2(ACp, PROP_DEPRECATED_RANGES);
     ubpSoftDotted:
       Result := ContainsRange2(ACp, PROP_SOFT_DOTTED_RANGES);
+    ubpHexDigit:
+      Result := ContainsRange2(ACp, PROP_HEX_DIGIT_RANGES);
+    ubpAsciiHexDigit:
+      Result := ContainsRange2(ACp, PROP_ASCII_HEX_DIGIT_RANGES);
+    ubpPatternWhiteSpace:
+      Result := ContainsRange2(ACp, PROP_PATTERN_WHITE_SPACE_RANGES);
+    ubpPatternSyntax:
+      Result := ContainsRange2(ACp, PROP_PATTERN_SYNTAX_RANGES);
+    ubpQuotationMark:
+      Result := ContainsRange2(ACp, PROP_QUOTATION_MARK_RANGES);
+    ubpDash:
+      Result := ContainsRange2(ACp, PROP_DASH_RANGES);
+    ubpDiacritic:
+      Result := ContainsRange2(ACp, PROP_DIACRITIC_RANGES);
+    ubpExtender:
+      Result := ContainsRange2(ACp, PROP_EXTENDER_RANGES);
+    ubpJoinControl:
+      Result := ContainsRange2(ACp, PROP_JOIN_CONTROL_RANGES);
+    ubpNoncharacterCodePoint:
+      Result := ContainsRange2(ACp, PROP_NONCHARACTER_CODE_POINT_RANGES);
+    ubpTerminalPunctuation:
+      Result := ContainsRange2(ACp, PROP_TERMINAL_PUNCTUATION_RANGES);
+    ubpUnifiedIdeograph:
+      Result := ContainsRange2(ACp, PROP_UNIFIED_IDEOGRAPH_RANGES);
+    ubpRegionalIndicator:
+      Result := ContainsRange2(ACp, PROP_REGIONAL_INDICATOR_RANGES);
   end;
 end;
 

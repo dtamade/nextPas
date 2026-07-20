@@ -432,6 +432,52 @@ begin
   end;
 end;
 
+procedure TestFacadeExposesCloneAndMerge;
+var
+  LBase, LClone, LOverlay: TConfig;
+  LSnap: IConfig;
+begin
+  LBase := TConfig.Create;
+  try
+    LBase.SetString('a', '1');
+    LBase.SetString('b', '2');
+    LBase.SetInterpolationMode(cimStrict);
+    LClone := LBase.Clone;
+    try
+      CheckEqual('1', LClone.GetString('a'), 'clone a');
+      CheckEqual(Ord(cimStrict), Ord(LClone.GetInterpolationMode),
+        'clone mode');
+      LClone.SetString('a', 'cloned');
+      CheckEqual('1', LBase.GetString('a'), 'clone independent');
+    finally
+      LClone.Free;
+    end;
+
+    LOverlay := TConfig.Create;
+    try
+      LOverlay.SetString('b', 'merged');
+      LOverlay.SetString('c', '3');
+      LBase.MergeFrom(LOverlay);
+      CheckEqual('1', LBase.GetString('a'), 'merge keeps a');
+      CheckEqual('merged', LBase.GetString('b'), 'merge overwrites b');
+      CheckEqual('3', LBase.GetString('c'), 'merge adds c');
+    finally
+      LOverlay.Free;
+    end;
+
+    LSnap := ConfigBuilder.AddJson('{"a":"from-iface","d":"4"}').Build;
+    LBase.MergeFrom(LSnap);
+    CheckEqual('from-iface', LBase.GetString('a'), 'merge IConfig');
+    CheckEqual('4', LBase.GetString('d'), 'merge IConfig new key');
+    CheckEqual('a=from-iface' + #10 + 'b=merged' + #10 + 'c=3' + #10 + 'd=4',
+      LBase.DebugDump, 'DebugDump sorted');
+    CheckEqual(LBase.DebugDump, ConfigDebugDump(ConfigBorrow(LBase)),
+      'ConfigDebugDump matches');
+  finally
+    LBase.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config (facade surface)');
   T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
@@ -451,5 +497,7 @@ begin
     @TestFacadeExposesSectionAndDuration);
   T.Test('facade exposes byte size and watcher auto',
     @TestFacadeExposesByteSizeAndWatcherAuto);
+  T.Test('facade exposes clone and merge',
+    @TestFacadeExposesCloneAndMerge);
   if not T.Run then Halt(1);
 end.

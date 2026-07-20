@@ -1,14 +1,19 @@
 # Lockfree API Reference
 
-> Updated: 2026-07-19 (H3-4: evidence envelope + CONTRACT alignment)
+> Updated: 2026-07-20 (Maintenance preferred close-out; EN tracks Chinese for lifecycle/examples)
 >
 > **Authority**: [`CONTRACT.md`](CONTRACT.md) > this file. The **Chinese** [`api-reference.md`](api-reference.md)
 > is the fuller surface for Stack/Deque Try\*Ex, H3-2 bag/multimap, and T2 extras.
 > Absolute Mops claims require [`bench-envelope.md`](bench-envelope.md).
+> **Preferred atomics**: `atomic_*` + `mo_*` / `TAtomic*` ([`READY.md`](READY.md) residual 0).
+> **Lifecycle (T1)**: **Close → join → Free**. Examples: `t1_close_join_free`, `t1_segqueue_workers`, `t2_bag_close_join_free`.
+> **Selection**: [`selection-guide.en.md`](selection-guide.en.md) task-delivery table.
 
 [中文版](api-reference.md)
 
 ## Atomic Types (nextpas.core.atomic)
+
+> Prefer facade `atomic_*` + `mo_*`. PascalCase `AtomicLoad32` etc. are **legacy** ([`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) §1.4).
 
 ### TAtomicInt32 / TAtomicInt64
 

@@ -15,7 +15,9 @@ uses
   nextpas.core.text.unicode.segment,
   nextpas.core.text.unicode.bidi,
   nextpas.core.text.unicode.collate,
-  nextpas.core.text.unicode.data;
+  nextpas.core.text.unicode.data,
+  nextpas.core.text.unicode.punycode,
+  nextpas.core.text.unicode.idna;
 
 type
   // 基础类型
@@ -78,6 +80,13 @@ function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBrac
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
 function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean; inline;
 function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+
+function PunycodeEncode(const ALabel: string): string; inline;
+function PunycodeDecode(const AAscii: string): string; inline;
+function IDNAToASCII(const ADomain: string): string; overload; inline;
+function IDNAToUnicode(const ADomain: string): string; overload; inline;
+function IDNAToASCII(const ADomain: string; out AError: string): string; overload; inline;
+function IDNAToUnicode(const ADomain: string; out AError: string): string; overload; inline;
 function ResolveBidiClasses(const AClasses: array of TBidiClass;
   const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -682,5 +691,36 @@ function UnicodeData: IUnicodeDataManager;
 begin
   Result := nextpas.core.text.unicode.data.UnicodeData;
 end;
+
+function PunycodeEncode(const ALabel: string): string;
+begin
+  Result := nextpas.core.text.unicode.punycode.PunycodeEncode(ALabel);
+end;
+
+function PunycodeDecode(const AAscii: string): string;
+begin
+  Result := nextpas.core.text.unicode.punycode.PunycodeDecode(AAscii);
+end;
+
+function IDNAToASCII(const ADomain: string): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToASCII(ADomain);
+end;
+
+function IDNAToUnicode(const ADomain: string): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToUnicode(ADomain);
+end;
+
+function IDNAToASCII(const ADomain: string; out AError: string): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToASCII(ADomain, AError);
+end;
+
+function IDNAToUnicode(const ADomain: string; out AError: string): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToUnicode(ADomain, AError);
+end;
+
 
 end.

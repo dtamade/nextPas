@@ -1,11 +1,31 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-07-17
+> 更新: 2026-07-20（Maintenance preferred close-out；补「任务投递」对照）
 
 [English](selection-guide.en.md)
 
 > 相对性能以 `core/benchmarks/nextpas.core.lockfree` 为准；本指南**不**给无平台信封的绝对 Mops/s。
 > 证据规范：[`bench-envelope.md`](bench-envelope.md)（H2-4 / H3-4）。历史对照见 `benchmark-comparison-*.md`（historical only）。
+> 生产原子原语：优先 `atomic_*` + `mo_*`（[`READY.md`](READY.md) preferred residual 0）。
+
+## 任务投递：channel / bag / mpsc / segqueue 四选一
+
+面向「把工作交给别的线程」时的最短对照（细节仍看决策树与 [`CONTRACT.md`](CONTRACT.md)）。
+
+| 需求 | 选 | 不要选的原因（常见误用） |
+|------|----|--------------------------|
+| **有界 + 背压**（满则阻塞/拒绝） | `TLockFreeChannel`（MPMC）或 `TLockFreeChannelSpsc`（1P1C） | 无界队列在过载时吃内存 |
+| **1 个消费者 drain 多生产者** | `TMpscQueue` | 多消费者会争用错误路径；用 MPMC/SegQueue/Channel |
+| **N worker 共享任务池（无界）** | `TSegQueue`（生产：`thread.pool`） | 单消费者场景用 MPSC 更简单 |
+| **允许重复元素的 bag / 工作池语义** | `TLockFreeBag`（**H3-2**，直接 `uses`，不进门面） | 需要 key 索引时用 multimap，不是 bag |
+| **一键多值索引** | `TLockFreeMultiMap`（**H3-2**，单锁，非 LF） | 不要当 lock-free map |
+| **owner + steal 调度** | `TWorkStealingDeque`（`thread.pool.worksteal`） | `deque_lf` 是 **spin-lock**，名字误导 |
+
+**生命周期（T1 容器统一）**：**Close → join producers/waiters → Free**。  
+`Destroy` 的 Close+drain **不能**替代 join。  
+教学示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t2_bag_close_join_free/`（H3-2 Bag）。
+
+**SegQueue 与 MPSC 一样**：Close 后停止新入队方 → join → Free；段回收依赖 EBR，勿在活跃生产者上 Free。
 
 ## 快速决策树
 
@@ -295,8 +315,8 @@ T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
 | TSpscQueue | 1 线程 | 1 线程 | ✅ |
 | TSpmcQueue | 1 线程 | N 线程 | ✅ |
 | TMpmcQueue | N 线程 | N 线程 | ✅ |
-| TMpscQueue | N 线程 | 1 线程 | ✅（Close 后 Enqueue 抛错；用 TryEnqueue） |
-| TSegQueue | N 线程 | N 线程 | ✅ |
+| TMpscQueue | N 线程 | 1 线程 | ✅（Close 后 Enqueue 抛错；用 TryEnqueue；**Close→join→Free**） |
+| TSegQueue | N 线程 | N 线程 | ✅（Close 后 Enqueue raise / Try=False；**Close→join→Free**；EBR 段） |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
 | TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |

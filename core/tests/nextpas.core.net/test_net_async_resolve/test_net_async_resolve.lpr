@@ -3,7 +3,7 @@ program test_net_async_resolve;
 {$I nextpas.core.settings.inc}
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   Classes,
   SysUtils,
   nextpas.core.test,

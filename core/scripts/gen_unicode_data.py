@@ -120,6 +120,20 @@ BINARY_PROPS = [
     "Default_Ignorable_Code_Point",
     "Deprecated",
     "Soft_Dotted",
+    # Phase 2 / Go unicode.* parity (PropList + DerivedCore)
+    "Hex_Digit",
+    "ASCII_Hex_Digit",
+    "Pattern_White_Space",
+    "Pattern_Syntax",
+    "Quotation_Mark",
+    "Dash",
+    "Diacritic",
+    "Extender",
+    "Join_Control",
+    "Noncharacter_Code_Point",
+    "Terminal_Punctuation",
+    "Unified_Ideograph",
+    "Regional_Indicator",
 ]
 
 

@@ -28,7 +28,9 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance + [Q 线](quality-parity.md)**（对标 Go/Rust 质量/规模；**不 invent R9**）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance preferred close-out**（[`READY.md`](READY.md) 三句话；[`quality-parity.md`](quality-parity.md)；**不 invent R9**）。生产热路径 preferred residual **0**（钉 `test_lockfree_preferred_path`）。
+
+**教学示例**：`t1_close_join_free/`（Channel）；`t1_segqueue_workers/`（SegQueue N 产 + N 消）；`t2_bag_close_join_free/`（H3-2 Bag）。选型见 [`selection-guide.md`](selection-guide.md)「任务投递四选一」。
 
 ## Progress-guarantee matrix
 
@@ -42,12 +44,14 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
 
-**命名诚实脚注（R7）**：
-- `nextpas.core.lockfree.deque_lf`：单元名含 `lf`，实现为 **spin-lock** deque，不是 lock-free；真 lock-free work-stealing 见 `TWorkStealingDeque`（`lockfree.deque`）。
-- `TShardedHashMap` / `TConcurrentHashMap`：T1 门面类型，**分片自旋锁**，不是 lock-free map。
-- 多数 T2 树/缓存/过滤器/同步器：落在 `lockfree.*` 命名空间只表示“并发 + 原子原语”，**不**表示 progress 为 lock-free。
-- `collections` 模块另有自有 `TConcurrentHashMap`，与 lockfree 门面别名 **不是**同一类型。
-- 完整例外表：[`CONTRACT.md`](CONTRACT.md) §0；消费者扫描：[`consumer-audit.md`](consumer-audit.md)。
+**命名诚实脚注（R7 + P4 再扫）**：
+- `deque_lf` / **`TLockFreeDeque`**：名含 `lf` + `LockFree`，实现 **spin-lock**；真 LF 双端队列 → `TWorkStealingDeque`（`lockfree.deque`）。
+- `hashtable` / **`TLockFreeHashTable*`**：**LF 读 + writer 锁**，不是全路径 lock-free map。
+- `TShardedHashMap` / `TConcurrentHashMap`：T1 门面，**分片自旋锁**。
+- `dag` / `graph` / `skiplist*` / 多数树：头注释多已写 NOT lock-free；**per-node / 全局锁**。
+- 多数 T2 缓存/过滤器/同步器（`mutex`/`phaser`/`lfu`…）：`lockfree.*` 只表示并发 + 原子原语。
+- `collections` 自有 `TConcurrentHashMap` ≠ lockfree 门面别名。
+- 完整表：[`CONTRACT.md`](CONTRACT.md) §0；inventory：[`t2-inventory.md`](t2-inventory.md)；审计：[`consumer-audit.md`](consumer-audit.md)。
 
 Single-owner means concurrent multi-owner use is outside the contract (e.g. multiple SPSC producers).
 
