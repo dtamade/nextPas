@@ -29,9 +29,7 @@ uses
 type
   ETui = nextpas.core.tui.error.ETui;
   ETuiBackend = nextpas.core.tui.error.ETuiBackend;
-  TTuiApp = nextpas.core.tui.app.TApp;
   TApp = nextpas.core.tui.app.TApp;
-  TTuiFrame = nextpas.core.tui.TFrame;
   TFrame = nextpas.core.tui.TFrame;
   TTuiEnterFailure = nextpas.core.tui.TTuiEnterFailure;
   TTuiEnterResult = nextpas.core.tui.TTuiEnterResult;
@@ -61,9 +59,7 @@ type
   TAppEventProc = nextpas.core.tui.app.TAppEventProc;
   TAppTickProc = nextpas.core.tui.app.TAppTickProc;
   TAppTaskCompletionProc = nextpas.core.tui.app.TAppTaskCompletionProc;
-  TTuiScreen = nextpas.core.tui.app.screen.TScreen;
   TScreen = nextpas.core.tui.app.screen.TScreen;
-  TTuiScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   TScreenStack = nextpas.core.tui.app.screen.TScreenStack;
   EFtuiScreenError = nextpas.core.tui.app.screen.EFtuiScreenError;
   TTheme = nextpas.core.tui.theme.TTheme;

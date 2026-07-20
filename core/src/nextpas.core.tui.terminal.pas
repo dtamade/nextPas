@@ -472,6 +472,9 @@ begin
   FRawModeCaptured := True;
   FInRawMode := True;
 
+  { Best-effort VT enable (Windows); POSIX no-op / ignore errors. }
+  platform_console_enable_ansi;
+
   HookSigwinch;
   HookSigterm;
 

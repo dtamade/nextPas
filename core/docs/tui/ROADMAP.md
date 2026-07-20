@@ -190,7 +190,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 | E1 | `RELEASE=1` scorecard + `bench_go_rust compare` 刷新 SCORECARD/PARITY；C9 wine 存在性门禁 | **Done** |
 | E2 | DECSET 2026 Synchronized Update（EndFrame 包裹 + SC28 + opt-out） | **Done** |
 | E3 | DECAWM（DECSET 7）EnterAlternate 关 wrap / Leave 恢复 + SC29 | **Done** |
-| U1 | 可用性闭环：Enter 诊断 + Stateful 约定 + C10 + 工厂/别名文档 + SC30 | **Done**（本批） |
+| U1 | 可用性闭环：Enter 诊断 + Stateful 约定 + C10 + 工厂/别名文档 + SC30 | **Done** |
+| U2 | 去双别名 + IInputEditor.HandleKey Boolean + Enter enable_ansi | **Done**（本批） |
 | E-ongoing | 重大变更后刷新快照；**不对 ns 设硬阈值**；禁止假胜营销 | 持续 |
 
 ---
@@ -211,6 +212,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 [DONE] Phase E3 DECAWM wrap-off（SC29）
    ↓
 [DONE] Phase U1 可用性闭环（Enter 诊断 + C10 + SC30）
+   ↓
+[DONE] Phase U2 双别名移除 + HandleKey + Win VT glue
    ↓
 [NOW] Phase F Maintenance Idle
    │

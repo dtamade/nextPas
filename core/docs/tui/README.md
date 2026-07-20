@@ -26,10 +26,11 @@ rendering、双缓冲 diff 和数组化 cell 布局，但现在 public surface �
 - `uses nextpas.core.tui.full`
   **迁移兼容入口**（migration-only）。保留宽 widget 目录；**新代码优先 core/ext**，不要默认 `full`。
 
-**命名**: facade 同时 re-export `TRect` 与历史前缀 `TTuiRect` 等；**新代码只用短名**（`TRect` / `TTerminal` / `TApp`），`TTui*` 仅迁移别名。
+**命名**: facade 使用短名（`TRect` / `TTerminal` / `TApp` / `IWidget`）。**已移除** `TTuiRect`/`TTuiApp`/`ITuiWidget` 等双别名（U2）。保留主名诊断类型：`TTuiEnterResult`、`TTuiCapabilityStatus` 等。
 
 **Enter 失败诊断**: `EnterTui` 仍返回 Boolean；失败后读 `Terminal.LastEnterResult.Reason`
 （`not-a-terminal` / `set-raw-failed` / `session-setup-failed`），或用 `TryEnterTui`。
+Enter 时 best-effort `platform_console_enable_ansi`（Windows 虚拟终端）。
 
 如果你只需要自己持有终端循环和 buffer，默认 `nextpas.core.tui` 就够了。只要一进入应用框架层，
 就直接从 `nextpas.core.tui.ext` 开始，不要再假设 `TApp` 会从默认 core facade 漏出来。

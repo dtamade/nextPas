@@ -201,22 +201,22 @@ begin
   Check(IsPascalKeyword('begin'), 'syntax keyword helper is re-exported');
 end;
 
-procedure TestCompatibilityAliasesRemain;
+procedure TestShortNamesPrimaryOnFacades;
 var
-  LArea: TTuiRect;
-  LWidget: ITuiWidget;
+  LArea: TRect;
+  LWidget: IWidget;
 begin
-  LArea := TTuiRect.Make(0, 0, 1, 1);
+  LArea := TRect.Make(0, 0, 1, 1);
   LWidget := TClearWidget.New;
-  CheckEqual(LongWord(1), LArea.Area, 'TTuiRect compatibility alias remains');
-  Check(LWidget <> nil, 'ITuiWidget compatibility alias remains');
+  CheckEqual(LongWord(1), LArea.Area, 'TRect is primary facade type');
+  Check(LWidget <> nil, 'IWidget is primary facade type');
 end;
 
 procedure TestFullFacadeCoversExtAndExperimentalSurface;
 var
-  LCompatApp: TTuiApp;
-  LCompatScreen: TTuiScreen;
-  LCompatStack: TTuiScreenStack;
+  LCompatApp: TApp;
+  LCompatScreen: TScreen;
+  LCompatStack: TScreenStack;
   LCompatTheme: TTheme;
   LCompatChatTheme: TChatTheme;
   LCompatPanel: IPanel;
@@ -230,8 +230,8 @@ var
   LCompatClipboard: TClipboard;
   LCompatClipboardMethod: TClipboardMethod;
 begin
-  LCompatApp := TTuiApp.Create;
-  LCompatStack := TTuiScreenStack.Create;
+  LCompatApp := TApp.Create;
+  LCompatStack := TScreenStack.Create;
   try
     LCompatScreen := TFullFacadeScreen.Create;
     LCompatStack.Push(LCompatScreen);
@@ -251,8 +251,8 @@ begin
     LCompatClipboardMethod := cmNone;
     LCompatClipboard := TClipboard.Detect;
 
-    Check(LCompatApp <> nil, 'full facade exposes TTuiApp compatibility alias');
-    Check(SizeOf(TTuiFrame) > 0, 'full facade exposes TTuiFrame compatibility alias');
+    Check(LCompatApp <> nil, 'full facade exposes TApp');
+    Check(SizeOf(TFrame) > 0, 'full facade exposes TFrame');
     Check(SizeOf(TScreenStack) > 0, 'full facade exposes TScreenStack alias');
     Check(ColorIsSet(LCompatTheme.Primary.Fg), 'full facade exposes stable TTheme record');
     Check(ColorIsSet(LCompatChatTheme.FgPrimary), 'full facade exposes stable chat theme preset');
@@ -373,10 +373,10 @@ end;
 
 procedure TestReadmeQuickStartCompiles;
 var
-  LApp: TTuiApp;
+  LApp: TApp;
   LHost: TFullFacadeRenderHost;
 begin
-  LApp := TTuiApp.Create;
+  LApp := TApp.Create;
   LHost := TFullFacadeRenderHost.Create;
   try
     LApp.OnRenderCb := @LHost.Render;
@@ -453,7 +453,7 @@ begin
   T.Test('core facade types', @TestCoreFacadeTypes);
   T.Test('widget facade types', @TestWidgetFacadeTypes);
   T.Test('facade constants and helpers', @TestFacadeConstantsAndHelpers);
-  T.Test('compatibility aliases remain', @TestCompatibilityAliasesRemain);
+  T.Test('short names primary on facades', @TestShortNamesPrimaryOnFacades);
   T.Test('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
   T.Test('full facade covers app task runtime surface', @TestFullFacadeCoversAppTaskRuntimeSurface);
   T.Test('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);

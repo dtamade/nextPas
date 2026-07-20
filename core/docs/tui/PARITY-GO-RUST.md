@@ -99,6 +99,7 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Phase E2 | DECSET 2026 Synchronized Update + SC28 | **Done**（2026-07-20） |
 | Phase E3 | DECAWM wrap-off on EnterAlternate + SC29 | **Done**（2026-07-20） |
 | Phase U1 | Enter 诊断 + C10 facade 纪律 + SC30 | **Done**（2026-07-20） |
+| Phase U2 | 去双别名 + HandleKey Boolean + enable_ansi | **Done**（2026-07-20） |
 | 可选 | Truecolor DA / crate / Windows console | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）

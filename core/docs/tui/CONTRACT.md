@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.28
+**版本**：1.29
 
 ---
 
@@ -92,7 +92,7 @@ end;
 
 **Stateful 事件约定（Phase U1）**:
 1. **规范路径（新代码 / core·ext 稳定控件）**: 状态在**外部 record**；`function HandleKey(const K: TKeyEvent): Boolean`（True=已消费）；`RenderStateful(..., var AState)` 在专属接口。
-2. **允许例外（full / 重型编辑器）**: 对象持状态 + 多命令方法（如 `IInputEditor`）；`HandleKey` 可为 `procedure`；**不得**再引入新的「接口无状态又 procedure HandleKey」混搭。
+2. **允许例外（full / 重型编辑器）**: 对象持状态 + 多命令方法（如 `IInputEditor`）；`HandleKey` **应为** `function: Boolean`（U2 起 `IInputEditor` 已对齐）；**不得**再引入新的 procedure-only HandleKey。
 3. **鼠标**: 交互控件可在 widget 或 state 上 `HandleMouse`，返回 Boolean 表示消费（`TSplitPane` 先例）。
 
 ### 1.3 控件列表
@@ -227,6 +227,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.29 | Phase U2：去双别名 + HandleKey Boolean + Enter enable_ansi | Claude |
 | 2026-07-20 | 1.28 | Phase U1：Enter 诊断 + Stateful 约定 + C10 facade 纪律 | Claude |
 | 2026-07-20 | 1.27 | Phase E3：DECAWM wrap-off on EnterAlternate + SC29 | Claude |
 | 2026-07-20 | 1.26 | Phase E2：DECSET 2026 Synchronized Update + SC28 | Claude |
