@@ -4,35 +4,53 @@ unit nextpas.core.tls;
 
 { nextpas.core.tls — TLS 模块统一门面
 
-  对齐 Rust rustls API 设计：
+  对齐 Rust rustls / Go crypto/tls 入口叙事：
 
-  主 API（transport-first，类似 TlsConnector/TlsAcceptor）：
+  主 API（transport-first）：
     var Connector: TSSLConnector;
     Connector := TSSLConnector.FromContext(TSSLQuick.SecureClient);
     Stream := Connector.ConnectSocket(Socket, 'example.com');
 
-  便捷 API（含 DNS + TCP，类似 Go tls.Dial）：
+  便捷 API（DNS + TCP + TLS，类似 Go tls.Dial）：
     if TryTLSDial('example.com', 443, S, Err) then ...;
+
+  返回 IStream（接口拥有权，勿 Free class）。
 }
 
 interface
 
-uses nextpas.core.io.intf, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.tls, nextpas.core.tls.dialer, nextpas.core.tls.quick, nextpas.core.tls.context.builder, nextpas.core.tls.connection.builder; type // Primary API (rustls-aligned) TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
+uses
+  nextpas.core.io.intf,
+  nextpas.core.tls.base,
+  nextpas.core.tls.exceptions,
+  nextpas.core.tls.tls,
+  nextpas.core.tls.dialer,
+  nextpas.core.tls.quick,
+  nextpas.core.tls.context.builder,
+  nextpas.core.tls.connection.builder;
+
+type
+  { Primary API (rustls-aligned) }
+  TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
   TSSLAcceptor = nextpas.core.tls.tls.TSSLAcceptor;
   TSSLStream = nextpas.core.tls.tls.TSSLStream;
 
-  // Convenience
+  { Convenience dialer }
   TSSLDialer = nextpas.core.tls.dialer.TSSLDialer;
   TSSLDialResult = nextpas.core.tls.dialer.TSSLDialResult;
 
-// Convenience functions (DNS + TCP + TLS in one call)
+{ DNS + TCP + TLS in one call }
 function TLSDial(const AHost: string; APort: Word): IStream;
 function TryTLSDial(const AHost: string; APort: Word;
   out AStream: IStream; out AError: string): Boolean;
 
 implementation
 
-uses nextpas.core.tls.freepascal.lib; var GDefaultDialer: TSSLDialer = nil;
+uses
+  nextpas.core.tls.freepascal.lib;
+
+var
+  GDefaultDialer: TSSLDialer = nil;
 
 function GetDefaultDialer: TSSLDialer;
 begin

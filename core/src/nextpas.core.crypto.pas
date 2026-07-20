@@ -22,6 +22,7 @@ uses
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.hkdf,
   nextpas.core.crypto.constant_time,
+  nextpas.core.crypto.random,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.ed25519,

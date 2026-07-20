@@ -34,6 +34,7 @@ function LoadCapabilitiesFromFile(const AFileName: string): TSSLBackendCapabilit
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.exception,
   nextpas.core.path;
 
@@ -1120,7 +1121,7 @@ begin
   else if SameText(AFormat, 'xml') then
     Content := CapabilitiesToXML(ACaps, True)
   else
-    raise Exception.CreateFmt('Unsupported format: %s', [AFormat]);
+    raise ESSLInvalidArgument.CreateFmt('Unsupported format: %s', [AFormat]);
 
   System.Assign(F, AFileName);
   System.Rewrite(F);
@@ -1154,7 +1155,7 @@ begin
     else if Ext = '.xml' then
       Result := XMLToCapabilities(Content)
     else
-      raise Exception.CreateFmt('Unknown file extension: %s', [Ext]);
+      raise ESSLInvalidArgument.CreateFmt('Unknown file extension: %s', [Ext]);
 end;
 
 end.

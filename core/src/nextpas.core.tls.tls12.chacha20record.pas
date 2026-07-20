@@ -31,6 +31,7 @@ function TLS12ChaCha20Poly1305DecryptRecord(
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.crypto.chacha20poly1305;
 
 const
@@ -42,7 +43,7 @@ var
   I: Integer;
 begin
   if Length(AImplicitNonce) <> 12 then
-    raise Exception.Create('ChaCha20 implicit nonce must be 12 bytes');
+    raise ESSLInvalidArgument.Create('ChaCha20 implicit nonce must be 12 bytes');
 
   SetLength(LPaddedSeq, 12);
   FillChar(LPaddedSeq[0], 12, 0);

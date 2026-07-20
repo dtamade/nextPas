@@ -41,6 +41,7 @@ type
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.tls.base,
   nextpas.core.tls.net.hooks,
   nextpas.core.errors;
@@ -68,7 +69,7 @@ begin
   if LRes.Success then
     Result := LRes.Data
   else
-    raise Exception.Create(LRes.ErrorMessage);
+    raise ESSLInvalidArgument.Create(LRes.ErrorMessage);
 end;
 
 end.

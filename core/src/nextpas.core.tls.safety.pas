@@ -268,21 +268,25 @@ type
 
 implementation
 
+uses
+  nextpas.core.tls.exceptions;
+
+
 { TKeySize }
 
 class function TKeySize.Bits(ABits: Integer): TKeySize;
 begin
   if ABits <= 0 then
-    raise Exception.Create('Key size must be positive');
+    raise ESSLInvalidArgument.Create('Key size must be positive');
   if (ABits mod 8) <> 0 then
-    raise Exception.Create('Key size must be multiple of 8 bits');
+    raise ESSLInvalidArgument.Create('Key size must be multiple of 8 bits');
   Result.FBits := ABits;
 end;
 
 class function TKeySize.Bytes(ABytes: Integer): TKeySize;
 begin
   if ABytes <= 0 then
-    raise Exception.Create('Key size must be positive');
+    raise ESSLInvalidArgument.Create('Key size must be positive');
   Result.FBits := ABytes * 8;
 end;
 
@@ -321,21 +325,21 @@ end;
 class function TTimeoutDuration.Milliseconds(AMS: Int64): TTimeoutDuration;
 begin
   if AMS < 0 then
-    raise Exception.Create('Timeout must be non-negative');
+    raise ESSLInvalidArgument.Create('Timeout must be non-negative');
   Result.FMilliseconds := AMS;
 end;
 
 class function TTimeoutDuration.Seconds(ASeconds: Int64): TTimeoutDuration;
 begin
   if ASeconds < 0 then
-    raise Exception.Create('Timeout must be non-negative');
+    raise ESSLInvalidArgument.Create('Timeout must be non-negative');
   Result.FMilliseconds := ASeconds * 1000;
 end;
 
 class function TTimeoutDuration.Minutes(AMinutes: Int64): TTimeoutDuration;
 begin
   if AMinutes < 0 then
-    raise Exception.Create('Timeout must be non-negative');
+    raise ESSLInvalidArgument.Create('Timeout must be non-negative');
   Result.FMilliseconds := AMinutes * 60 * 1000;
 end;
 
@@ -457,7 +461,7 @@ end;
 function TSecureData.Unwrap: T;
 begin
   if not FValid then
-    raise Exception.Create('Cannot unwrap None value: ' + FError);
+    raise ESSLInvalidArgument.Create('Cannot unwrap None value: ' + FError);
   Result := FData;
 end;
 
@@ -501,14 +505,14 @@ end;
 function TResult.Unwrap: T;
 begin
   if not FSuccess then
-    raise Exception.Create('Cannot unwrap Err value');
+    raise ESSLInvalidArgument.Create('Cannot unwrap Err value');
   Result := FValue;
 end;
 
 function TResult.UnwrapErr: E;
 begin
   if FSuccess then
-    raise Exception.Create('Cannot unwrap Ok value');
+    raise ESSLInvalidArgument.Create('Cannot unwrap Ok value');
   Result := FError;
 end;
 
@@ -550,7 +554,7 @@ begin
   else if (LStr = 'TLS1.3') or (LStr = 'TLSV13') or (LStr = 'TLS 1.3') then
     Result := sslv_TLS13
   else
-    raise Exception.CreateFmt('Unknown SSL version: %s', [AStr]);
+    raise ESSLInvalidArgument.CreateFmt('Unknown SSL version: %s', [AStr]);
 end;
 
 {$WARN 6018 OFF}

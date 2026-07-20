@@ -70,6 +70,12 @@ Prefer the **owner unit** in new code. Shims exist for call-site stability.
   `raise Exception` in crypto primitives; public APIs keep Try* shapes.
 - **D13** `crypto.hash.THashAlgorithm` is a type alias of `hash.base.THashAlgorithm`
   (single enum definition).
+- **D14** (2026-07-21 research/P0–P1): non-winssl production must not `uses` Base64 or
+  Sockets; `tls.crypto.utils.THashAlgorithm` aliases `hash.base` with `HASH_* = ha*`
+  consts for OpenSSL helper compatibility; tls production forbids bare
+  `raise Exception` (use `ESSLInvalidArgument` / `ESSL*`); freepascal socket views use
+  `TFdIStream` (IStream) instead of `THandleStream` (TMemoryStream/TConcatStream may
+  remain via system.classes until M6).
 
 ## Related docs
 
