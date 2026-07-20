@@ -1,6 +1,6 @@
 # process / fs / path / env — SCORECARD（证据快照）
 
-> **Host Essential Done**（见 [ROADMAP.md](./ROADMAP.md)）。本表可复现数字；Win 终局见 ROADMAP M2。
+> **Host Essential Done** + **M2 Windows usable（wine）Done**（见 [ROADMAP.md](./ROADMAP.md) · [WIN.md](./WIN.md)）。
 
 **truth 标签**
 
@@ -17,13 +17,21 @@
 
 | 项 | 值 |
 |----|-----|
-| 日期 | 2026-07-20 |
+| 日期 | 2026-07-20（M2-W4） |
 | OS | Linux x86_64 (Debian) |
 | 工具 | FPC 3.3.1；Wine 可用 |
 
 ---
 
-## A. L2 wine-runtime-smoke（R33 复跑）
+## A. L2 wine 最小生产集（M2-W4）
+
+一键：
+
+```bash
+bash core/tests/run_l2_wine_min_set.sh
+```
+
+分套件：
 
 ```bash
 make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke
@@ -35,15 +43,16 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 
 | 套件 | 结果 | 说明 |
 |------|------|------|
-| process | **11 passed** | + ExtraFd/Cred fail-closed（M2-W3）；Job KillTree；Capture |
+| process | **11 passed** | Capture；KillTree(Job)；ExtraFd/Cred fail-closed |
 | fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
-| fs.watch | **3 passed** | create/close + poll timeout + create-event soft (M2-W1 S2) |
+| fs.watch | **3 passed** | create/close + poll timeout + create-event soft |
+| **合计** | **24 passed** | 最小生产集；见 [WIN.md](./WIN.md) |
 
 Host `make test` 在非 Windows 上为 skip 分支（1 passed）。
 
-**Windows 备注**：`WaitGraceful` 依赖 SIGTERM，Wine/Win 上 signal 有限；证据用 `Kill`。`platform.watch` 在部分 Wine 构建为 UNSUPPORTED，套件接受该结果。
+**Windows 备注**：`WaitGraceful` 依赖 SIGTERM，Wine/Win 上 signal 有限；证据用 `Kill`。Watch create-event 在部分 Wine 上 soft residual，套件接受该结果。
 
 ---
 
@@ -111,7 +120,7 @@ LookPath 持平；Status ~**1.15×**；Capture/dual-pipe ~**1.25–1.3×** Go。
 ## 复现清单
 
 1. `git checkout` 对应 commit  
-2. wine 五套件（需 `fpc -Twin64` + `wine`）  
+2. `bash core/tests/run_l2_wine_min_set.sh`（需 `fpc -Twin64` + `wine`）  
 3. `bench_fs` / `bench_process` + 各自 `compare_go`  
 
-**不要**把 wine 结果写成「Windows production ready」。
+**不要**把 wine 结果写成「Windows production ready」或 `host-windows`。

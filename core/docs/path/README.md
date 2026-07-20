@@ -2,7 +2,8 @@
 
 路径操作兼容 facade，委托给 `nextpas.core.fs.path` 实现。
 
-**开发地图**：[`../process/ROADMAP.md`](../process/ROADMAP.md)  
+**开发地图**：[`../process/ROADMAP.md`](../process/ROADMAP.md) — Host Done；**M2 Win(wine) Done**。  
+**Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
 ## 模块定位

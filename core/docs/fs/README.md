@@ -2,7 +2,8 @@
 
 L2 文件系统操作模块。提供文件读写、目录操作、路径工具和临时文件管理。
 
-**开发地图（四模块总图）**：[`../process/ROADMAP.md`](../process/ROADMAP.md) — Host Done；Win 见 M2。  
+**开发地图（四模块总图）**：[`../process/ROADMAP.md`](../process/ROADMAP.md) — Host Done；**M2 Win(wine) Done**。  
+**Windows 一眼表**：[`../process/WIN.md`](../process/WIN.md)  
 **Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
 
 ## 快速开始
