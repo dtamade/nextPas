@@ -38,8 +38,8 @@ var
   LOps: Int64;
 begin
   LIdx := Integer(PtrUInt(AArg));
-  AtomicFetchAdd32(GReady, 1, moRelease);
-  while AtomicLoad32(GReady, moAcquire) < NUM_READERS do
+  atomic_fetch_add(GReady, 1, mo_release);
+  while atomic_load(GReady, mo_acquire) < NUM_READERS do
     CpuPause;
   LOps := 0;
   while LOps < OPS_PER_READER do
@@ -58,8 +58,8 @@ var
   LOps: Int64;
 begin
   LIdx := Integer(PtrUInt(AArg));
-  AtomicFetchAdd32(GReady, 1, moRelease);
-  while AtomicLoad32(GReady, moAcquire) < NUM_READERS do
+  atomic_fetch_add(GReady, 1, mo_release);
+  while atomic_load(GReady, mo_acquire) < NUM_READERS do
     CpuPause;
   LOps := 0;
   while LOps < OPS_PER_READER do
@@ -78,8 +78,8 @@ var
   LOps: Int64;
 begin
   LIdx := Integer(PtrUInt(AArg));
-  AtomicFetchAdd32(GReady, 1, moRelease);
-  while AtomicLoad32(GReady, moAcquire) < NUM_READERS do
+  atomic_fetch_add(GReady, 1, mo_release);
+  while atomic_load(GReady, mo_acquire) < NUM_READERS do
     CpuPause;
   LOps := 0;
   while LOps < OPS_PER_READER do

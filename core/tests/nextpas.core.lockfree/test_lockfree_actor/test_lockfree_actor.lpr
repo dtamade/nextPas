@@ -52,12 +52,12 @@ procedure SerialActorHandler(const AMsg: TActorMessage);
 var
   LActive: Int32;
 begin
-  LActive := AtomicFetchAdd32(GActiveHandlers, 1, moAcqRel) + 1;
+  LActive := atomic_fetch_add(GActiveHandlers, 1, mo_acq_rel) + 1;
   if LActive > 1 then
-    AtomicStore32(GConcurrentHandlerSeen, 1, moRelease);
+    atomic_store(GConcurrentHandlerSeen, 1, mo_release);
   platform_thread_sleep_ns(20000000);
-  AtomicFetchAdd32(GHandledMessages, 1, moRelaxed);
-  AtomicFetchSub32(GActiveHandlers, 1, moRelease);
+  atomic_fetch_add(GHandledMessages, 1, mo_relaxed);
+  atomic_fetch_sub(GActiveHandlers, 1, mo_release);
 end;
 
 function ActorSendThread(AData: Pointer): PtrInt;
@@ -65,7 +65,7 @@ var
   LArgs: PActorSendArgs;
 begin
   LArgs := PActorSendArgs(AData);
-  while AtomicLoad32(LArgs^.Start^, moAcquire) = 0 do
+  while atomic_load(LArgs^.Start^, mo_acquire) = 0 do
     CpuPause;
   LArgs^.Result := LArgs^.Actor.Send(LArgs^.Message);
   Result := 0;
@@ -73,8 +73,8 @@ end;
 
 procedure BlockingActorHandler(const AMsg: TActorMessage);
 begin
-  AtomicStore32(GBlockingHandlerEntered, 1, moRelease);
-  while AtomicLoad32(GReleaseBlockingHandler, moAcquire) = 0 do
+  atomic_store(GBlockingHandlerEntered, 1, mo_release);
+  while atomic_load(GReleaseBlockingHandler, mo_acquire) = 0 do
     CpuPause;
 end;
 
@@ -83,9 +83,9 @@ var
   LArgs: PActorStopArgs;
 begin
   LArgs := PActorStopArgs(AData);
-  AtomicStore32(LArgs^.Started^, 1, moRelease);
+  atomic_store(LArgs^.Started^, 1, mo_release);
   LArgs^.Actor.Stop;
-  AtomicStore32(LArgs^.Returned^, 1, moRelease);
+  atomic_store(LArgs^.Returned^, 1, mo_release);
   Result := 0;
 end;
 
@@ -209,15 +209,15 @@ begin
 
     LThread1 := BeginThread(@ActorSendThread, @LArgs1);
     LThread2 := BeginThread(@ActorSendThread, @LArgs2);
-    AtomicStore32(LStart, 1, moRelease);
+    atomic_store(LStart, 1, mo_release);
     WaitForThreadTerminate(LThread1, 5000);
     WaitForThreadTerminate(LThread2, 5000);
 
     Check(LArgs1.Result = arOk, 'First concurrent send succeeds');
     Check(LArgs2.Result = arOk, 'Second concurrent send succeeds');
-    Check(AtomicLoad32(GHandledMessages, moAcquire) = 2,
+    Check(atomic_load(GHandledMessages, mo_acquire) = 2,
       'Both concurrent messages are handled');
-    Check(AtomicLoad32(GConcurrentHandlerSeen, moAcquire) = 0,
+    Check(atomic_load(GConcurrentHandlerSeen, mo_acquire) = 0,
       'An actor must never execute two handlers concurrently');
   finally
     LActor.Free;
@@ -246,36 +246,36 @@ begin
     LSendArgs.Message.Data := 'block';
     LSendArgs.Result := arStopped;
     LSendThread := BeginThread(@ActorSendThread, @LSendArgs);
-    AtomicStore32(LSendStart, 1, moRelease);
+    atomic_store(LSendStart, 1, mo_release);
 
     LSpin := 0;
-    while (AtomicLoad32(GBlockingHandlerEntered, moAcquire) = 0) and
+    while (atomic_load(GBlockingHandlerEntered, mo_acquire) = 0) and
           (LSpin < 1000000) do
     begin
       CpuPause;
       Inc(LSpin);
     end;
-    Check(AtomicLoad32(GBlockingHandlerEntered, moAcquire) = 1,
+    Check(atomic_load(GBlockingHandlerEntered, mo_acquire) = 1,
       'Handler enters before Stop');
 
     LStopArgs.Actor := LActor;
     LStopArgs.Started := @LStopStarted;
     LStopArgs.Returned := @LStopReturned;
     LStopThread := BeginThread(@ActorStopThread, @LStopArgs);
-    while AtomicLoad32(LStopStarted, moAcquire) = 0 do
+    while atomic_load(LStopStarted, mo_acquire) = 0 do
       CpuPause;
     platform_thread_sleep_ns(5000000);
-    Check(AtomicLoad32(LStopReturned, moAcquire) = 0,
+    Check(atomic_load(LStopReturned, mo_acquire) = 0,
       'Stop must wait for an active handler owned by another thread');
 
-    AtomicStore32(GReleaseBlockingHandler, 1, moRelease);
+    atomic_store(GReleaseBlockingHandler, 1, mo_release);
     WaitForThreadTerminate(LSendThread, 5000);
     WaitForThreadTerminate(LStopThread, 5000);
-    Check(AtomicLoad32(LStopReturned, moAcquire) = 1,
+    Check(atomic_load(LStopReturned, mo_acquire) = 1,
       'Stop returns after the active handler completes');
     Check(LActor.GetState = asStopped, 'Actor reaches stopped state');
   finally
-    AtomicStore32(GReleaseBlockingHandler, 1, moRelease);
+    atomic_store(GReleaseBlockingHandler, 1, mo_release);
     LActor.Free;
   end;
 end;

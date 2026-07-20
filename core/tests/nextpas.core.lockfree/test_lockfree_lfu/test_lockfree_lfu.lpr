@@ -26,14 +26,14 @@ procedure LfuBarrier;
 var
   LGeneration: Int32;
 begin
-  LGeneration := AtomicLoad32(GLfuBarrierGeneration, moAcquire);
-  if AtomicFetchAdd32(GLfuBarrierCount, 1, moAcqRel) = LFU_CONCURRENT_THREADS - 1 then
+  LGeneration := atomic_load(GLfuBarrierGeneration, mo_acquire);
+  if atomic_fetch_add(GLfuBarrierCount, 1, mo_acq_rel) = LFU_CONCURRENT_THREADS - 1 then
   begin
-    AtomicStore32(GLfuBarrierCount, 0, moRelease);
-    AtomicFetchAdd32(GLfuBarrierGeneration, 1, moAcqRel);
+    atomic_store(GLfuBarrierCount, 0, mo_release);
+    atomic_fetch_add(GLfuBarrierGeneration, 1, mo_acq_rel);
   end
   else
-    while AtomicLoad32(GLfuBarrierGeneration, moAcquire) = LGeneration do
+    while atomic_load(GLfuBarrierGeneration, mo_acquire) = LGeneration do
       CpuPause;
 end;
 
@@ -48,7 +48,7 @@ begin
     LfuBarrier;
     LResult := GConcurrentLfu.Put(LRound + 1, LRound + 1);
     if (LResult <> lfAdded) and (LResult <> lfUpdated) then
-      AtomicFetchAdd32(GLfuPutErrors, 1, moRelaxed);
+      atomic_fetch_add(GLfuPutErrors, 1, mo_relaxed);
     LfuBarrier;
   end;
 end;
@@ -254,7 +254,7 @@ begin
       CheckEqual(Int64(0), Int64(platform_thread_join(
         LHandles[LThreadIdx], LReturnValue)));
 
-    CheckEqual(Int64(0), Int64(AtomicLoad32(GLfuPutErrors, moAcquire)));
+    CheckEqual(Int64(0), Int64(atomic_load(GLfuPutErrors, mo_acquire)));
     CheckEqual(PtrUInt(1), GConcurrentLfu.Count);
 
     LLiveKeys := 0;

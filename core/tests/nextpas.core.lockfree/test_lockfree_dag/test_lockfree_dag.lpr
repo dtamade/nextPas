@@ -43,8 +43,8 @@ end;
 
 procedure TDagEdgeThread.Execute;
 begin
-  AtomicFetchAdd32(FReady^, 1, moAcqRel);
-  while AtomicLoad32(FStart^, moAcquire) = 0 do
+  atomic_fetch_add(FReady^, 1, mo_acq_rel);
+  while atomic_load(FStart^, mo_acquire) = 0 do
     CpuPause;
   FResult := FDag.AddEdge(FFromId, FToId);
 end;
@@ -270,9 +270,9 @@ begin
       LReverse := TDagEdgeThread.Create(GDag, 1001, 1, @LReady, @LStart);
       LForward.Start;
       LReverse.Start;
-      while AtomicLoad32(LReady, moAcquire) <> 2 do
+      while atomic_load(LReady, mo_acquire) <> 2 do
         CpuPause;
-      AtomicStore32(LStart, 1, moRelease);
+      atomic_store(LStart, 1, mo_release);
       LForward.WaitFor;
       LReverse.WaitFor;
 

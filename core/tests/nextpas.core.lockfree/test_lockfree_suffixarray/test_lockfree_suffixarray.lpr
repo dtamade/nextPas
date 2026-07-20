@@ -74,7 +74,7 @@ begin
     LMatches := FSuffixArray.Search('a');
     LMatchCount := Length(LMatches);
     if (LMatchCount <> 0) and (LMatchCount <> 32) then
-      AtomicStore32(FInvalidSnapshot^, 1, moRelease);
+      atomic_store(FInvalidSnapshot^, 1, mo_release);
   end;
 end;
 
@@ -211,7 +211,7 @@ begin
     LSearcher.Start;
     LBuilder.WaitFor;
     LSearcher.WaitFor;
-    Check(AtomicLoad32(LInvalidSnapshot, moAcquire) = 0,
+    Check(atomic_load(LInvalidSnapshot, mo_acquire) = 0,
       'Search observes only complete suffix-array publications');
   finally
     LBuilder.Free;
