@@ -1,5 +1,7 @@
 # process / fs / path / env — SCORECARD（证据快照）
 
+> **Host Essential Done**（见 [ROADMAP.md](./ROADMAP.md)）。本表可复现数字；Win 终局见 ROADMAP M2。
+
 **truth 标签**
 
 | 标签 | 含义 |
