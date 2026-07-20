@@ -3,7 +3,8 @@ program bench_sync;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils, Classes,
   nextpas.core.thread.init,
   nextpas.core.bench,
   nextpas.core.time.base,
@@ -12,6 +13,8 @@ uses
 var
   LResults: IBenchResults;
   GSink: Int64;
+  GContendedMutex: IMutex;
+  GContendedIters: Int64;
 
 procedure BenchMutexLockUnlock(aIters: Int64);
 var
@@ -91,6 +94,52 @@ begin
   end;
 end;
 
+{ 2-thread contended lock/unlock: wall-clock total / (2 * iters) as ns/op. }
+function RunContended2T(const ALabel: string; const AMutex: IMutex;
+  const AItersPerThread: Int64): Double;
+var
+  LThreads: array[0..1] of TThread;
+  LStart, LElapsed: TDateTime;
+  LI: Integer;
+  LTotalOps: Int64;
+  LNs: Double;
+begin
+  GContendedMutex := AMutex;
+  GContendedIters := AItersPerThread;
+  LStart := Now;
+  for LI := 0 to 1 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    var
+      LIt: Int64;
+    begin
+      for LIt := 1 to GContendedIters do
+      begin
+        GContendedMutex.Acquire;
+        Inc(GSink);
+        GContendedMutex.Release;
+      end;
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  for LI := 0 to 1 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  LElapsed := Now - LStart;
+  LTotalOps := AItersPerThread * 2;
+  { days -> ns }
+  LNs := LElapsed * 24.0 * 3600.0 * 1.0e9 / LTotalOps;
+  WriteLn(Format('  %-36s  2T x %d  ~%.1f ns/op  (wall, total ops=%d)',
+    [ALabel, AItersPerThread, LNs, LTotalOps]));
+  Result := LNs;
+end;
+
+var
+  GSc7Ns, GSc8Ns: Double;
+
 begin
   WriteLn('=== nextpas.core.sync benchmark (uncontended) ===');
   WriteLn;
@@ -108,4 +157,13 @@ begin
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
   LResults.SaveToJSON('build/bench-sync.json');
+
+  WriteLn;
+  WriteLn('=== contended (2 threads, wall-clock ns/op) ===');
+  WriteLn;
+  GSc7Ns := RunContended2T('sync/Mutex/Contended2T', Mutex, 200000);
+  GSc8Ns := RunContended2T('sync/FutexMutex/Contended2T', FutexMutex, 200000);
+  WriteLn;
+  WriteLn(Format('SCORECARD_HINT SC7_Mutex_2T_ns_op=%.1f SC8_Futex_2T_ns_op=%.1f',
+    [GSc7Ns, GSc8Ns]));
 end.
