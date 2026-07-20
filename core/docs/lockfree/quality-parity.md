@@ -135,7 +135,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **done**：T2 大户 preferred — elimination_stack、stampedlock、hashtable、phaser、exchanger、flatcombining、lfu、leftright、dag、graph
 - **done**：T2 簇 D–G preferred — 树族（trie/treap/skiplist/radix/scapegoat/rbtree/bplus/btree/trie_map/skiplist_map）、cowarray/rcu/snapshot/lru、crdt/ringbuffer/timeoutqueue/bitset/forkjoin、bloom/counting_bloom/scalable_bloom + hyperloglog/tdigest/spacesaving/countminsketch
 - **done**：T2 长尾收口 — 全部 `lockfree*.pas` 热路径 preferred；`mpsc` 私有 `LoadNode/StoreNode/ExchangeNode`（去 Atomic 前缀）；residual **0**
-- **剩余**：无（lockfree 内 PascalCase Atomic* 调用）；legacy public API 仍可在 atomic.compat 保留
+- **M6 done**：生产 residual 回归钉 `test_lockfree_preferred_path`；§5 Q1-a 扫描刷新；Q3-b Close 幂等正文对齐
+- **剩余**：无（lockfree 生产热路径）；legacy public API 仍可在 `atomic.compat` 保留；测试/fixture 中 PascalCase 协调标志另波可选
 
 ### Q3-a checklist
 
@@ -157,7 +158,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 诊断 full/empty/closed | `TrySendEx` / `TryReceiveEx` | Boolean 热路径不变 |
 | 动态容量 | `TryResize` | 有测；closed 拒绝 |
 
-**测试面**（已有）：basic/close/timeout/stress/cap=1/resize 系列/`Try*Ex`/SPSC 变体。Q3-b 补 **Close 幂等**。
+**测试面**（已有）：basic/close/timeout/stress/cap=1/resize 系列/`Try*Ex`/SPSC 变体；**Close 幂等** — `TestChannelCloseIdempotent`（done）。
 
 ### Q3-c — HashMap 导航 + progress 诚实
 
@@ -170,38 +171,47 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 
 ---
 
-## 5. Q1-a — Legacy atomic 消费者扫描（2026-07-19）
+## 5. Q1-a — Legacy atomic 消费者扫描
 
 ### 方法
 
-`rg` 扫描 `core/src/**/*.pas`，排除 `nextpas.core.atomic*` 自身实现。
+`rg` 扫描生产 `.pas` 中 **调用形** `Atomic*(`（名 + 可选 32/64/Ptr + `(`），排除 `nextpas.core.atomic*` 自身实现。
 
-### 结果摘要
+### 结果摘要（2026-07-20 刷新，T2 长尾收口后）
 
 | 模式 | 约略规模 | 含义 |
 |------|----------|------|
-| `AtomicCompareExchange32/64/Ptr` | **~200** 次（core 生产源，不含 atomic 单元） | legacy **返回观测值** CAS；与 `atomic_compare_exchange_*` Boolean 语义不同 |
-| PascalCase `AtomicLoad/Store/Fetch*` | **~1200** 次 | 兼容 wrapper；功能正确，但非首选命名 |
+| lockfree 生产 `Atomic*(` | **0** | T1 + T2 热路径已 preferred（Boolean CAS + `mo_*`） |
+| core 其它生产（排除 atomic/lockfree） | **0 调用**（注释假阳性另计） | 跨模块 consumers 已迁 preferred |
+| `atomic.compat` / legacy API | **保留** | H2-3：不删；新代码勿扩散 |
+| 测试/fixture PascalCase | 仍常见（协调标志等） | **可选**另波；非生产 residual |
 
-### T1 热路径观察
+### 回归钉（M6）
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.lockfree/test_lockfree_preferred_path
+# 或：
+# rg -n '\bAtomic(Load|Store|Exchange|CompareExchange|FetchAdd|FetchSub)\w*\s*\(' \
+#   core/src/nextpas.core.lockfree*.pas
+# 期望：无匹配
+```
+
+### T1 / T2 热路径观察（现状）
 
 | 单元 | 倾向 |
 |------|------|
-| spsc / mpmc / mpsc / stack / deque / ebr | 大量 `AtomicLoad*` / `AtomicStore*` / `AtomicCompareExchange*`（PascalCase） |
-| channel / msqueue / hazard | 同上 + 自旋锁 CAS |
-| 多数 T2 | 自旋锁 `AtomicCompareExchange32(FLock, 0, 1)` |
+| T1 queues / stack / deque / ebr / channel / hazard / msqueue / segqueue | **preferred** `atomic_*` |
+| T2 全量生产单元 | **preferred**（长尾收口后 residual 0） |
+| 测试 harness | 仍可用 legacy 协调标志 |
 
-**对标 Go/Rust**：语义面已够用；差距在 **API 一致性与可读性**，不是缺 CAS。
+**对标 Go/Rust**：生产 API 一致性已收口；剩余差距在测试示范与文档导航，不是缺 CAS。
 
-### 策略（Q1 后续，自主分批）
+### 策略（Maintenance）
 
 1. **不删** legacy / PascalCase API（H2-3 锁定）。
 2. **新代码** 只写 `atomic_*` + `mo_*` 或 `TAtomic*`。
-3. **迁移优先级**（高→低）：
-   - 新改动的 T1 文件顺手改为本文件内一致风格（同一 PR 不混无关文件）
-   - 文档/示例/测试先示范首选路径
-   - 禁止一次「全库 sed」式迁移（风险高、diff 不可审）
-4. **CAS 迁移注意**：`AtomicCompareExchange*` 返回 **old**；`atomic_compare_exchange_strong` 返回 **Boolean** 且写回 `var Expected` — 必须逐点改，不能机械替换。
+3. **生产 lockfree** 由 `test_lockfree_preferred_path` 钉死 residual=0。
+4. **CAS 迁移注意**（若再触碰测试）：`AtomicCompareExchange*` 返回 **old**；`atomic_compare_exchange_strong` 返回 **Boolean** 且写回 `var Expected`。
 
 ### Q1-b/c — **done**（2026-07-20 审计）
 
