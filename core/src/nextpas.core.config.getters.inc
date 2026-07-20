@@ -460,4 +460,3 @@ function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
   Result := nextpas.core.config.builder.ConfigLoad(APath, AFormat);
 end;
-

@@ -53,4 +53,3 @@ procedure TConfig.SaveToToml(const APath: string);
 begin
   ConfigWriteAtomicText(APath, ToToml);
 end;
-
