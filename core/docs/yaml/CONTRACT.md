@@ -58,7 +58,7 @@ function YamlParseWith(...; const AAllocator: TMemAllocator): IYamlDocument;
 - 标量：`AsBool`、`AsInt`、`AsFloat`、`AsStr`
 - 序列：`SeqLen`、`SeqGet`
 - 映射：`MapGet`、`MapHas`、`MapLen`、`MapKeyAt`、`MapValueAt`
-- **没有** `Get` 方法（与 TOML 的 `Get` 不同；请用 `MapGet`）
+- `Get`：**`MapGet` 的 TOML 风格别名**（同查找语义，inline 转发）
 - 非法访问：安全默认
 
 ### 2.3 Builder
@@ -123,7 +123,10 @@ make focused FOCUS=core/tests/nextpas.core.yaml/test_yaml_spec
 - **不存在** `yaml.path` / YAMLPath 查询单元
 - **不存在** 以 `TYamlNode` class 为中心的公开 API
 - 完整 YAML 1.2 全部 tag / schema / 任意复杂 merge key 等：仅当有测试与 consumer 再扩
+- **多文档流**（第二个 `---`）：parser 报错 `multiple YAML documents are not supported`（非静默取第一文档）
 - 与 JSON 强制统一 `ObjectGet` 命名：不做破坏性 rename
+
+Runnable：`core/examples/nextpas.core.yaml/yaml_smoke/`
 
 ---
 
@@ -133,3 +136,4 @@ make focused FOCUS=core/tests/nextpas.core.yaml/test_yaml_spec
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始（与实现不符，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 IYamlDocument / MapGet / TYamlBuilder record | config-formats lane |
+| 2026-07-20 | 2.1 | `Get` 别名 MapGet；标明多文档不支持 | config-formats lane |

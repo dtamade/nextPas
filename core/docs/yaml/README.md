@@ -15,13 +15,16 @@ Values are accessed via `TYamlValue` — a borrowing view with safe defaults for
 
 ## Quick Start
 
+Runnable smoke: `core/examples/nextpas.core.yaml/yaml_smoke/` (`make run`).
+
 ```pascal
 uses nextpas.core.yaml;
 
 // Parse
 var Doc: IYamlDocument;
 Doc := YamlParse('server:' + #10 + '  host: localhost' + #10 + '  port: 8080');
-WriteLn(Doc.Root.MapGet('server').MapGet('port').AsInt); // 8080
+// MapGet or Get (Get is a TOML-style alias for MapGet)
+WriteLn(Doc.Root.Get('server').Get('port').AsInt); // 8080
 
 // Parse with custom allocator
 Doc := YamlParseWith(MyYaml, MyArenaAllocator);
