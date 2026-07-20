@@ -634,10 +634,50 @@ begin
 end;
 
 { =========================================================================== }
+{  TEST 16: same-thread dual pool isolation (per-pool TLS) }
+{ =========================================================================== }
+procedure TestDualPoolSameThreadIsolation;
+var
+  LPoolA, LPoolB: TSyncPool;
+  LObjA, LObjB, LGot: Pointer;
+begin
+  WriteLn('--- TestDualPoolSameThreadIsolation ---');
+  LPoolA := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  LPoolB := TSyncPoolBuilder.Create(@CreateTestObject)
+    .WithDestroy(@DestroyTestObject)
+    .Build;
+  try
+    LObjA := LPoolA.Get;
+    TTestObject(LObjA).FValue := 111;
+    LPoolA.Put(LObjA);
+
+    LObjB := LPoolB.Get;
+    TTestObject(LObjB).FValue := 222;
+    LPoolB.Put(LObjB);
+
+    LGot := LPoolB.Get;
+    CheckEqual(222, TTestObject(LGot).FValue, 'pool B Get must not see pool A TLS item');
+    LPoolB.Put(LGot);
+
+    LGot := LPoolA.Get;
+    CheckEqual(111, TTestObject(LGot).FValue, 'pool A Get returns its own TLS item');
+    LPoolA.Put(LGot);
+
+    LPoolA.DrainTLS;
+    LPoolB.DrainTLS;
+  finally
+    LPoolA.Free;
+    LPoolB.Free;
+  end;
+end;
+
+{ =========================================================================== }
 {  Main }
 { =========================================================================== }
 begin
-  WriteLn('=== test_sync_pool (v7) ===');
+  WriteLn('=== test_sync_pool (v8 per-pool TLS) ===');
   WriteLn;
 
   TestCreateDefault;
@@ -655,6 +695,7 @@ begin
   TestSingleSlotContention;
   TestLeakDetection;
   TestDrainGlobal;
+  TestDualPoolSameThreadIsolation;
 
   WriteLn;
   WriteLn('=== Summary ===');
