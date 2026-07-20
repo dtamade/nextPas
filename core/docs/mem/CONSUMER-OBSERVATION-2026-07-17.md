@@ -155,7 +155,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | toml.parser | G4：nodes / hash / owned 指针表 |
 | collections.node | **G4.x**：TNodeManager 块/registry/tree node |
 | collections.hashmap | **G4.x+**：buckets/bitmap FreeMemOf |
-| collections.element_manager | **H1**：count×elemSize FreeMemOf |
+| collections.element_manager | **H1**：count×elemSize FreeMemOf；**I residual**：ReallocMemOf |
 | collections treemap/lru/linkedhash | **H1b**：节点 SizeOf FreeMemOf |
 | collections.arr | **H2**：swap 缓冲 FElementSizeCache / LAllocSize |
 | yaml / xml / ini / csv | **G4 residual**：表/slot 容量 FreeMemOf |
