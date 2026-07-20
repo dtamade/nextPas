@@ -7,7 +7,7 @@ uses
   nextpas.core.tls.x509,
   nextpas.core.time,
   nextpas.core.tls.cert.utils,
-  nextpas.core.crypto.x509verify,
+  nextpas.core.tls.x509verify,
   nextpas.core.test;
 
 var
@@ -54,12 +54,18 @@ function BuildCurrentValidCertPEM(out ACertPEM: string): Boolean;
 var LOptions: TCertGenOptions; LKeyPEM: string;
 begin
   LOptions := TCertificateUtils.DefaultGenOptions;
-  LOptions.CommonName := 'x509verify-utc-contract.local';
-  LOptions.Organization := 'nextpas core';
-  LOptions.ValidDays := 1;
-  LOptions.NotBefore := Now - (1.0 / 24.0);
-  LOptions.NotAfter := Now + (1.0 / 24.0);
-  Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
+  try
+    LOptions.CommonName := 'x509verify-utc-contract.local';
+    LOptions.Organization := 'nextpas core';
+    LOptions.ValidDays := 1;
+    LOptions.NotBefore := Now - (1.0 / 24.0);
+    LOptions.NotAfter := Now + (1.0 / 24.0);
+    Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
+  finally
+    { DefaultGenOptions allocates SubjectAltNames: TStringList. }
+    LOptions.SubjectAltNames.Free;
+    LOptions.SubjectAltNames := nil;
+  end;
 end;
 
 var
@@ -154,7 +160,7 @@ begin
     finally LStore.Free; LCert.Free; end;
   end);
 
-  LRunner := TSuiteRunner.Create('nextpas.core.crypto.x509verify');
+  LRunner := TSuiteRunner.Create('nextpas.core.tls.x509verify');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;

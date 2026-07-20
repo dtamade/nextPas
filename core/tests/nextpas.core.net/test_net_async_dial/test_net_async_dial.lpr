@@ -37,6 +37,9 @@ var
   GControlRejectLeft: Integer;
   GResolvePort: UInt16;
   GResolveCalls: Integer;
+  GResultCalls: Integer;
+  GResultOk: Integer;
+  GResultFail: Integer;
 
 procedure OnDial(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 begin
@@ -846,6 +849,98 @@ begin
   end;
 end;
 
+procedure TestDialAddressFamilyIPv4Only;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LAddrs: array[0..1] of TNetAddress;
+  LPort: UInt16;
+begin
+  { v6-looking entry filtered out; only IPv4 attempted. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    ResetAttemptObs;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LAddrs[0] := TNetAddress.IPv6('::1', LPort); { filtered }
+    LAddrs[1] := TNetAddress.IPv4('127.0.0.1', LPort);
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.AddressFamily := dafIPv4;
+    LOpts.OnAttemptStart := @OnAttemptStart;
+    Check(AsyncTcpDialAddrs(GLoop, LAddrs, 0, LOpts, @OnDial, nil), 'v4only submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'v4only done');
+    CheckEqual(Int64(0), Int64(GError), 'v4only ok');
+    Check(GStream <> nil, 'v4only stream');
+    CheckEqual(Int64(1), Int64(GAttemptCount), 'only one attempt');
+    Check(not GAttemptIsV6[0], 'attempt was v4');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
+procedure OnAttemptResultObs(AIndex: Integer; const AAddr: TNetAddress;
+  AError: Int32; AContext: Pointer);
+begin
+  Inc(GResultCalls);
+  if AError = 0 then
+    Inc(GResultOk)
+  else
+    Inc(GResultFail);
+  Check(AAddr.Port <> 0, 'result addr port');
+end;
+
+procedure TestDialAttemptResultHook;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LAddrs: array[0..1] of TNetAddress;
+  LPort: UInt16;
+begin
+  { First addr refused port → fail result; second succeeds → ok result. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    GResultCalls := 0;
+    GResultOk := 0;
+    GResultFail := 0;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1);
+    LAddrs[1] := TNetAddress.IPv4('127.0.0.1', LPort);
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 1;
+    LOpts.OnAttemptResult := @OnAttemptResultObs;
+    Check(AsyncTcpDialAddrs(GLoop, LAddrs, 0, LOpts, @OnDial, nil),
+      'attempt result submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'attempt result dial done');
+    CheckEqual(Int64(0), Int64(GError), 'winner ok');
+    Check(GResultFail >= 1, 'saw fail result');
+    Check(GResultOk >= 1, 'saw ok result');
+    Check(GResultCalls >= 2, 'at least two results');
+    GStream.Close;
+    GStream := nil;
+    LListener.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_dial');
   GAllowDialDone := True;
@@ -869,6 +964,8 @@ begin
   T.Test('DialControlOk', @TestDialControlOk);
   T.Test('DialControlRejectsFirstAttempt', @TestDialControlRejectsFirstAttempt);
   T.Test('DialOnResolveInjectsAddrs', @TestDialOnResolveInjectsAddrs);
+  T.Test('DialAddressFamilyIPv4Only', @TestDialAddressFamilyIPv4Only);
+  T.Test('DialAttemptResultHook', @TestDialAttemptResultHook);
   if not T.Run then
     Halt(1);
 end.

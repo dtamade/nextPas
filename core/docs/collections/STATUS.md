@@ -45,13 +45,16 @@
 
 ## 权威文档
 
-- [`CONTRACT.md`](CONTRACT.md) · [`README.md`](README.md) · [`PERF-HASHSET.md`](PERF-HASHSET.md)
-- [`CONSUMERS.md`](CONSUMERS.md) · [`OWNERSHIP-AUDIT.md`](OWNERSHIP-AUDIT.md) · [`READY.md`](READY.md)
+- [`CONTRACT.md`](CONTRACT.md) · [`README.md`](README.md) · [`ROADMAP.md`](ROADMAP.md)
+- [`PERF-HASHSET.md`](PERF-HASHSET.md) · [`CONSUMERS.md`](CONSUMERS.md)
+- [`OWNERSHIP-AUDIT.md`](OWNERSHIP-AUDIT.md) · [`READY.md`](READY.md)
 
-## 后续（按需）
+## 后续
 
-- 消费者/bug 驱动修复
-- TLS 是否改用工厂 Swiss：跨 lane 另议
+维护队列与优先级见 **[`ROADMAP.md`](ROADMAP.md)**（P0 文档卫生 → P1 facade 探针 → 有触发才 P2/P3）。
+
+- 消费者/bug 驱动修复（P2）
+- TLS 是否改用工厂 Swiss：**跨 lane，本模块不排期**
 
 ## 验证入口
 

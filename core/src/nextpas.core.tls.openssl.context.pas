@@ -237,10 +237,12 @@ uses
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.err,
   nextpas.core.mem.secure,
-  Classes, nextpas.core.text.strings;
+  nextpas.core.text.strings;
 
 var
-  GContextRegistry: TList = nil;
+  { Weak registry of live context instances (no ownership). }
+  GContextRegistry: array of TOpenSSLContext = nil;
+  GContextRegistryCount: Integer = 0;
   // Phase 3.3 P1-2: 使用读写锁优化多线程性能
   // 读操作（LookupContext）可以并发执行，只有写操作（Register/Unregister）需要独占
   // 性能提升：10-50 倍（多线程场景）
@@ -750,26 +752,41 @@ begin
 end;
 
 procedure RegisterContextInstance(const AContext: TOpenSSLContext);
+var
+  I: Integer;
 begin
   if (AContext = nil) or (AContext.FSSLContext = nil) then Exit;
   GContextLock.AcquireWrite;
   try
-    if GContextRegistry.IndexOf(AContext) = -1 then
-      GContextRegistry.Add(AContext);
+    for I := 0 to GContextRegistryCount - 1 do
+      if GContextRegistry[I] = AContext then
+        Exit;
+    if GContextRegistryCount >= Length(GContextRegistry) then
+      SetLength(GContextRegistry, GContextRegistryCount * 2 + 4);
+    GContextRegistry[GContextRegistryCount] := AContext;
+    Inc(GContextRegistryCount);
   finally
     GContextLock.ReleaseWrite;
   end;
 end;
 
 procedure UnregisterContextInstance(const AContext: TOpenSSLContext);
+var
+  I, J: Integer;
 begin
   if (GContextLock = nil) or (AContext = nil) then Exit;
   GContextLock.AcquireWrite;
   try
-    if GContextRegistry = nil then Exit;
-    GContextRegistry.Remove(AContext);
-    // Note: Don't destroy registry here to avoid race conditions
-    // It will be cleaned up in finalization
+    for I := 0 to GContextRegistryCount - 1 do
+      if GContextRegistry[I] = AContext then
+      begin
+        for J := I to GContextRegistryCount - 2 do
+          GContextRegistry[J] := GContextRegistry[J + 1];
+        Dec(GContextRegistryCount);
+        if GContextRegistryCount < Length(GContextRegistry) then
+          GContextRegistry[GContextRegistryCount] := nil;
+        Exit;
+      end;
   finally
     GContextLock.ReleaseWrite;
   end;
@@ -777,7 +794,7 @@ end;
 
 function LookupContext(AHandle: PSSL_CTX): TOpenSSLContext;
 var
-  i: Integer;
+  I: Integer;
   Ctx: TOpenSSLContext;
 begin
   Result := nil;
@@ -785,11 +802,10 @@ begin
   // 使用读锁：允许多个线程同时查找上下文
   GContextLock.AcquireRead;
   try
-    if GContextRegistry = nil then Exit;
-    for i := 0 to GContextRegistry.Count - 1 do
+    for I := 0 to GContextRegistryCount - 1 do
     begin
-      Ctx := TOpenSSLContext(GContextRegistry[i]);
-      if Ctx.FSSLContext = AHandle then
+      Ctx := GContextRegistry[I];
+      if (Ctx <> nil) and (Ctx.FSSLContext = AHandle) then
       begin
         Result := Ctx;
         Exit;
@@ -2670,15 +2686,13 @@ end;
 
 initialization
   GContextLock := RWLock;
-  GContextRegistry := TList.Create;
+  GContextRegistry := nil;
+  GContextRegistryCount := 0;
 
 finalization
-  // Clean up context registry and critical section
-  if GContextRegistry <> nil then
-  begin
-    GContextRegistry.Free;
-    GContextRegistry := nil;
-  end;
+  // Weak registry only — contexts own themselves.
+  SetLength(GContextRegistry, 0);
+  GContextRegistryCount := 0;
   GContextLock := nil;
 
 end.

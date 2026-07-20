@@ -48,6 +48,9 @@
 - [x] Q26 Dial NoDelay/KeepAlive options on winning stream
 - [x] Q27 Dial OnControl (Control subset)
 - [x] Q28 Dial OnResolve (custom resolver via feed)
+- [x] Q29 Pool AcquireAsyncEx dial options
+- [x] Q30 Dial AddressFamily filter (dafIPv4/dafIPv6)
+- [x] Q31 Dial OnAttemptResult observability
 - [ ] MPTCP deferred; full native-windows deferred
 
 ## 性能 scorecard（同机 2026-07-20）

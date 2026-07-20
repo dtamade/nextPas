@@ -49,7 +49,7 @@ implementation
 uses
   nextpas.core.crypto.aescbc,
   nextpas.core.crypto.hmac,
-  nextpas.core.tls.random;
+  nextpas.core.crypto.random;
 
 const
   TLS_VERSION_MAJOR = 3;

@@ -24,7 +24,8 @@ const
   CT_LOG_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.ct.log.pas';
   CRL_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.crl.pas';
   OCSP_CACHE_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.ocsp.cache.pas';
-  ASN1_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.asn1.pas';
+  ASN1_PATH = CORE_SRC_PREFIX + 'nextpas.core.crypto.asn1.pas';
+  ASN1_SHIM_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.asn1.pas';
   CERT_PINNING_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.cert.pinning.pas';
   DEBUG_UTILS_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.debug.utils.pas';
   MBEDTLS_CONN_PATH = CORE_SRC_PREFIX + 'nextpas.core.tls.mbedtls.connection.pas';
@@ -176,6 +177,10 @@ begin
   Check(Pos('CreateBytesStream', LText) > 0,
     'asn1 uses CreateBytesStream',
     'CreateBytesStream replacement is missing in ' + ASN1_PATH);
+  LText := LoadText(ASN1_SHIM_PATH);
+  Check(Pos('nextpas.core.crypto.asn1', LText) > 0,
+    'tls.asn1 shims to crypto.asn1',
+    'tls.asn1 must re-export nextpas.core.crypto.asn1');
 
   LText := LoadText(CERT_PINNING_PATH);
   Check(Pos('TStringStream', LText) = 0,

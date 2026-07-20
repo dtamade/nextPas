@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **26 platform-gate `ci-matrix`** (+… +resource +pty; GHA 29734704405 pass=27 fail=0); wine 24 secondary; **watch candidate** Batch-21 |
+| Real Windows GHA | **27 platform-gate `ci-matrix`** (+… +pty +watch; GHA 29746628175 pass=28 fail=0); wine 24 secondary |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -67,7 +67,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 
 | Gap | Severity | Notes |
 |-----|----------|--------|
-| Windows beyond documented 26 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
+| Windows beyond documented 27 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
 | macOS beyond documented 9 platform gates | **P1** | Layer A fail-closed only; whole job (async inventory) is not platform evidence |
 | `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
 | Windows secure-zero native export | **P2** | D3.b closed: permanent FillChar+barrier; no stable DLL export across Wine+real Windows |
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for 26 platform gates** + wine 24 secondary | expand candidates one-at-a-time; keep wine + GHA green |
+| Windows x86_64 | **`ci-matrix` for 27 platform gates** + wine 24 secondary | expand candidates one-at-a-time; keep wine + GHA green |
 | macOS | **`focused-runtime` layer A** (9 platform gates; script total may be 10) | keep fail-closed green; do not treat whole job as platform evidence |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -330,6 +330,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-20b**: promote **26 platform-gate** set (+pty) after GHA matrix pass=27 (run 29734704405 @ `d2eb8f890`; pty PASS). Job may red on async-native-smoke (not platform evidence). |
 | 2026-07-20 | **Batch-15 S3**: Windows watch overflow → `PLATFORM_ERR_AGAIN` + re-arm; wine smoke delete/multi soft. Queue: optional watch matrix candidate. |
 | 2026-07-20 | **Batch-21**: Windows scripts candidate **+platform.watch** (S1–S3; no promote until GHA green). |
+| 2026-07-20 | **Batch-21b**: promote **27 platform-gate** set (+watch) after GHA matrix pass=28 (run 29746628175 @ `2020db503`; watch PASS). Job may red on async-native-smoke (not platform evidence). |
 
 ---
 

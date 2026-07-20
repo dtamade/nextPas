@@ -4,7 +4,7 @@ program test_tls13_chacha20poly1305;
 
 uses
   SysUtils,
-  nextpas.core.tls.tls13.chacha20poly1305;
+  nextpas.core.crypto.chacha20poly1305;
 
 procedure Fail(const AMessage: string);
 begin

@@ -42,9 +42,9 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
 | `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
 | `ICommand.CancelToken` | 取消令牌；Wait/Output/Status/WaitGraceful 路径 Kill 并置 `Cancelled`（无管道的 Wait 也会轮询） |
-| `ICommand.NewProcessGroup` | 子进程 setpgid(0,0)（Unix；Win UNSUPPORTED） |
+| `ICommand.NewProcessGroup` | Unix setpgid(0,0)；**Win Job Object**（M2-W2） |
 | `IChild.ProcessGroupId` | 建组时 = Pid；否则 0 |
-| `IChild.KillTree` / `SignalTree` | kill(-pgid)；未建组等价 Kill/Signal |
+| `IChild.KillTree` / `SignalTree` | Unix kill(-pgid)；**Win TerminateJobObject**；未建组等价 Kill/Signal |
 | `IChild.WaitGraceful` | 建组时先 `SignalTree(SIGTERM)`，超时 `KillTree`；未建组保持单进程 |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
@@ -146,3 +146,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.16 | R24 NewProcessGroup/KillTree；deep 26 | Claude |
 | 2026-07-20 | 2.17 | R26 WaitGraceful×ProcessGroup；deep 27 | Claude |
 | 2026-07-20 | 2.18 | R27 Capture stdout-only + WaitWithOutput drain 加速 | Claude |
+| 2026-07-20 | 2.17 | M2-W2 Win Job Object NewProcessGroup/KillTree | Claude |

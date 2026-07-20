@@ -12,6 +12,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.async.pool,
   nextpas.core.net.async.tcp,
+  nextpas.core.net.async.dial,
   nextpas.core.async.loop;
 
 var
@@ -141,11 +142,54 @@ begin
   end;
 end;
 
+procedure TestAcquireAsyncExDialOptions;
+var
+  LPool: IConnectionPool;
+  LListener: IAsyncTcpListener;
+  LPort: UInt16;
+  LCfg: TConnectionPoolConfig;
+  LOpts: TAsyncTcpDialOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCalls := 0;
+    GStream := nil;
+    GError := -1;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LCfg := TConnectionPoolConfig.Default;
+    LCfg.ConnectTimeout := TDuration.FromSeconds(2);
+    LPool := CreateConnectionPool(GLoop, LCfg);
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 0;
+    LOpts.MaxInFlight := 1;
+    LOpts.NoDelay := True;
+    LOpts.KeepAlive := True;
+    LOpts.LocalAddr := TNetAddress.IPv4('127.0.0.1', 0);
+    Check(LPool.AcquireAsyncEx('127.0.0.1', LPort, LOpts, @OnAcquire, nil),
+      'ex submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(3000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'ex callback');
+    CheckEqual(Int64(0), Int64(GError), 'ex ok');
+    Check(GStream <> nil, 'ex stream');
+    CheckEqual(GStream.LocalAddr.IP, '127.0.0.1', 'ex local bind');
+    LPool.Discard(GStream);
+    GStream := nil;
+    LListener.Close;
+    LPool.Close;
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_pool');
   T.Test('AcquireAsyncDial', @TestAcquireAsyncDial);
   T.Test('AcquireAsyncReuseIdle', @TestAcquireAsyncReuseIdle);
   T.Test('AcquireAsyncMaxConnections', @TestAcquireAsyncMaxConnections);
+  T.Test('AcquireAsyncExDialOptions', @TestAcquireAsyncExDialOptions);
   if not T.Run then
     Halt(1);
 end.
