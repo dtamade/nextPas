@@ -97,9 +97,11 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 make focused FOCUS=core/tests/nextpas.core.http/test_http_server
 make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_facade
 make focused FOCUS=core/tests/nextpas.core.http/test_http_soak
+make focused FOCUS=core/tests/nextpas.core.http/test_http_q3_matrix
 ```
 
-期望：server 全绿；facade 含 **epoll** GET；soak **5/5**（Linux）且 heaptrc **0 unfreed**。
+期望：server 全绿；facade 含 **epoll** GET；soak **5/5**（Linux）0 unfreed；
+Q3-2 矩阵 **6/6** 0 unfreed（timeout/cancel/413/431）。
 
 ---
 
