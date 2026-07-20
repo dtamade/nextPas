@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**Parity Plus 开波**：Era G/E/Q3；NEXT=**G0 re-land** + G1/G2）
+**Updated**: 2026-07-20（**Era G Done**：G0 re-land main `0356cf3b9` + G1 lane absorb + G2 REPRO；NEXT=**E1**）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **G0** re-land Parity→main → **G1** lane → **G2** REPRO（Parity Plus） |
+| **下一执行点** | **E1** Go comparator p50/p99（Parity Plus Era E） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -802,17 +802,17 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **G0** | **in progress** | path-limited **re-land** Parity→main（main 可能被并行推进冲掉前次 land）；**push origin 需授权** |
-| **G1** | queued | `http` lane absorb 最新 main；behind≈0；路径干净 |
-| **G2** | queued | 发布级复现剧本 `REPRO.md`（RPS / p99 / ladder / H2 mux 各一条） |
+| **G0** | **landed** | path-limited re-land Parity→main tip `0356cf3b9`（17 commits + whitespace）；tag `archive/http-parity-plus-g0-20260720`；**未 push origin** |
+| **G1** | **landed** | `http` lane merge main；`merge-base --is-ancestor main HEAD` |
+| **G2** | **landed** | `core/docs/http/REPRO.md` 随 G0 进 main（RPS / p99 / ladder / H2 mux） |
 
-**G Done when**：Parity 在 main 上；REPRO 可跑；lane 收敛（push 可选）。
+**G Done when**：Parity 在 main 上；REPRO 可跑；lane 收敛（push 可选）。 **Met.**
 
 ## Era E — Evidence parity（延迟与多 workload）
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **E1** | queued | Go comparator **p50/p99**（定义对齐 nextPas）；comparison 透传 |
+| **E1** | **NEXT** | Go comparator **p50/p99**（定义对齐 nextPas）；comparison 透传 |
 | **E2** | queued | p99 ≤ 2× Go 验收；不达标则收紧宣称 |
 | **E3** | queued | `--runs 3` 刷新官方表；ladder 抽查；关键 suite 0 unfreed |
 
@@ -857,16 +857,16 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Q0–S3 在 http lane 完成；**main 可能缺 land → G0 re-land 优先**
+1. Era G Met — Parity + REPRO 在 main；lane 已 absorb
 2. H3 Blocked — 跳过；禁止空 facade
 3. H1 scale-ready 宣称保留（本机证据）；p99 对标 = Era E
-4. **NEXT = G0**（re-land main）→ **G1** lane 收敛 → **G2** REPRO
-5. 然后 E1 Go p50/p99
+4. **NEXT = E1** Go comparator p50/p99 → E2 gate → E3 refresh
+5. 然后 Q3-1 soak / Q3-2 errors / Q3-3 TLS residual
 6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
-**有「对标 Go/Rust 质量」指令时：走 Era G→E→Q3。**
+**有「对标 Go/Rust 质量」/「继续」指令时：走 Era E→Q3。**
 
 ---
 
@@ -887,6 +887,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | **Era G Done**：G0 re-land main `0356cf3b9` + G1 lane absorb + G2 REPRO；NEXT=**E1** Go p50/p99 |
+| 2026-07-20 | **Parity Plus 开波**：Era G/E/Q3 写入 ROADMAP；`REPRO.md` 发布复现剧本 |
 | 2026-07-19 | **Q1-4 landed**：H1 write/backpressure CONTRACT §4.4 + source-contract；**Era Q1 Done**；NEXT=STOP |
 | 2026-07-19 | **Q1-3 landed**：metrics observability seam（异常仍记/callback 隔离/Op=metrics） |
 | 2026-07-19 | **Q1-2 landed**：ParseMultipartFormDataFromReader 有界摄入 + ownership |
