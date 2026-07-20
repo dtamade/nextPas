@@ -21,8 +21,11 @@ type
     type
       TRBCore = specialize TRBTreeCore<T>;
       TRBNode = TRBCore.PNode;
+      TUserCompare = specialize TCompareFunc<T>;
   private
     FTree: TRBCore;
+    FUserCompare: TUserCompare;
+    FUserCompareData: Pointer;
 
     function IterGetCurrent(aIter: PPtrIter): Pointer;
     function IterMoveNext(aIter: PPtrIter): Boolean;
@@ -44,6 +47,8 @@ type
     constructor Create; reintroduce; overload;
     constructor Create(aAllocator: TMemAllocator); reintroduce; overload;
     constructor Create(aAllocator: TMemAllocator; aData: Pointer); override;
+    constructor Create(aAllocator: TMemAllocator; aCompare: TUserCompare;
+      aCompareData: Pointer = nil); reintroduce; overload;
     destructor Destroy; override;
 
     function Add(const AValue: T): Boolean;
@@ -111,7 +116,10 @@ end;
 
 function TTreeSet.CompareAdapter(const L, R: T; aData: Pointer): SizeInt;
 begin
-  Result := FInternalComparer(L, R);
+  if Assigned(FUserCompare) then
+    Result := FUserCompare(L, R, FUserCompareData)
+  else
+    Result := FInternalComparer(L, R);
   if Result < 0 then Exit(-1)
   else if Result > 0 then Exit(1)
   else Exit(0);
@@ -221,7 +229,21 @@ end;
 
 constructor TTreeSet.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
+  FUserCompare := nil;
+  FUserCompareData := nil;
   inherited Create(aAllocator, aData);
+  FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);
+end;
+
+constructor TTreeSet.Create(aAllocator: TMemAllocator; aCompare: TUserCompare;
+  aCompareData: Pointer);
+begin
+  FUserCompare := aCompare;
+  FUserCompareData := aCompareData;
+  if aAllocator = nil then
+    inherited Create(DefaultAllocator(), nil)
+  else
+    inherited Create(aAllocator, nil);
   FTree := TRBCore.Create(@CompareAdapter, nil, @FinalizeAdapter);
 end;
 
@@ -273,7 +295,7 @@ var
   LResult: specialize TTreeSet<T>;
   LElement: T;
 begin
-  LResult := specialize TTreeSet<T>.Create;
+  LResult := specialize TTreeSet<T>.Create(Allocator, FUserCompare, FUserCompareData);
   for LElement in Self do
     LResult.Add(LElement);
   for LElement in Other do
@@ -286,7 +308,7 @@ var
   LResult: specialize TTreeSet<T>;
   LElement: T;
 begin
-  LResult := specialize TTreeSet<T>.Create;
+  LResult := specialize TTreeSet<T>.Create(Allocator, FUserCompare, FUserCompareData);
   for LElement in Self do
     if Other.Contains(LElement) then
       LResult.Add(LElement);
@@ -298,7 +320,7 @@ var
   LResult: specialize TTreeSet<T>;
   LElement: T;
 begin
-  LResult := specialize TTreeSet<T>.Create;
+  LResult := specialize TTreeSet<T>.Create(Allocator, FUserCompare, FUserCompareData);
   for LElement in Self do
     if not Other.Contains(LElement) then
       LResult.Add(LElement);

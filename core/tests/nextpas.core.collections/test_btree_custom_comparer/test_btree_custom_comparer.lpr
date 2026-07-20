@@ -3,8 +3,8 @@ program test_btree_custom_comparer;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.btree;
 
 type

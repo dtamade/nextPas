@@ -3,8 +3,8 @@ program test_deque;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.collections.queue.intf,
   nextpas.core.collections.deque.intf,

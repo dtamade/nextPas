@@ -10,6 +10,7 @@ uses
   nextpas.core.math,
   nextpas.core.mem.utils,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
@@ -207,23 +208,23 @@ type
     procedure DoReverse; override;
 
   public
-    constructor Create(aAllocator: IAllocator; aData: Pointer); override; overload;
+    constructor Create(aAllocator: TMemAllocator; aData: Pointer); override; overload;
     // VecDeque 支持自定义增长策略，但最终容量会统一归一为 2 的幂，确保位掩码优化
-    constructor Create(aAllocator: IAllocator); overload;
+    constructor Create(aAllocator: TMemAllocator); overload;
 
     constructor Create(aCapacity: SizeUInt); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); virtual; overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); virtual; overload;
 
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
-    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy); overload;
-    constructor Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy); overload;
+    constructor Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer); overload;
 
     destructor  Destroy; override;
 
@@ -1441,12 +1442,12 @@ end;
 
 
 
-constructor TVecDeque.Create(aAllocator: IAllocator; aData: Pointer);
+constructor TVecDeque.Create(aAllocator: TMemAllocator; aData: Pointer);
 begin
   Create(VECDEQUE_DEFAULT_CAPACITY, aAllocator, GetDefaultGrowStrategy, aData);
 end;
 
-constructor TVecDeque.Create(aAllocator: IAllocator);
+constructor TVecDeque.Create(aAllocator: TMemAllocator);
 begin
   Create(VECDEQUE_DEFAULT_CAPACITY, aAllocator, GetDefaultGrowStrategy, nil);
 end;
@@ -1457,17 +1458,17 @@ begin
   Create(aCapacity, DefaultAllocator(), GetDefaultGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: IAllocator);
+constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator);
 begin
   Create(aCapacity, aAllocator, GetDefaultGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aCapacity, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVecDeque.Create(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 var
   LCapacity: SizeUInt;
 begin
@@ -1484,34 +1485,34 @@ begin
   UpdateCapacityMask;
 end;
 
-constructor TVecDeque.Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVecDeque.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(const aSrc: TCollection; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVecDeque.Create(const aSrc: TCollection; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc);
 end;
 
-constructor TVecDeque.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVecDeque.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aCount, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVecDeque.Create(aSrc: Pointer; aCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc, aCount);
 end;
 
-constructor TVecDeque.Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy);
+constructor TVecDeque.Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy);
 begin
   Create(aSrc, aAllocator, aGrowStrategy, nil);
 end;
 
-constructor TVecDeque.Create(const aSrc: array of T; aAllocator: IAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
+constructor TVecDeque.Create(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: IGrowthStrategy; aData: Pointer);
 begin
   Create(0, aAllocator, aGrowStrategy, aData);
   LoadFrom(aSrc);

@@ -1,7 +1,7 @@
 # nextpas.core.collections — 状态
 
 **更新日期**：2026-07-20
-**阶段**：**Landed / 维护 idle**
+**阶段**：**可用性 Waves 0–6 完成 → Ready for path-limited landing**
 **分支 / worktree**：`collections` / `.worktrees/collections`
 
 ## 已完成（历史目标树）
@@ -32,12 +32,25 @@
 - 泛型接口：门面 + 对应 `*.intf`（FPC 3.3.1）
 - 全部 public `MakeXxx` 在 `test_facade` 有最小烟雾探针
 
+## 可用性 Waves（本 lane 本轮）
+
+| Wave | 内容 | 状态 |
+|------|------|------|
+| 0 | rebase + facade 基线 | 完成 |
+| 1 | 测试去掉 SysUtils/Classes；`test_source_contracts` | 完成 |
+| 2 | README 决策树 / 5 分钟路径；MakeHashMap=Swiss 叙事 | 完成 |
+| 3 | `TMemAllocator` 统一；`MakeTreeSet(compare)`；HashMix→base；FIterIdx 删除 | 完成 |
+| 4 | `ERRORS.md` + 异常文案/类型对齐 | 完成 |
+| 5 | `benchmarks/.../Makefile` | 完成 |
+| 6 | 全 suite + hygiene + landing | 进行中 |
+
 ## 明确不做
 
 - 为「接口更小」批量删能力方法
 - 按行数机械 `.inc` 拆文件
 - open generic 门面 alias / 第二套 interface 身份
 - 无 bench 证据的哈希算法替换
+- TLS 改工厂（跨 lane）
 - 跨模块顺手重构（除非 contract 阻塞）
 
 ## 权威文档

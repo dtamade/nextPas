@@ -3,7 +3,6 @@ program test_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.base;
 
@@ -35,12 +34,37 @@ begin
     'aligned wrapper default alignment');
 end;
 
+function FileReadable(const APath: string): Boolean;
+var
+  LFile: Text;
+begin
+  {$I-}
+  Assign(LFile, APath);
+  Reset(LFile);
+  Result := IOResult = 0;
+  if Result then
+    Close(LFile);
+  {$I+}
+end;
+
+function ExtractBaseName(const APath: string): string;
+var
+  I: Integer;
+begin
+  Result := APath;
+  for I := Length(APath) downto 1 do
+    if (APath[I] = '/') or (APath[I] = '\') then
+      Exit(Copy(APath, I + 1, MaxInt));
+end;
+
 function ReadSourceFile(const APath: string): string;
 var
   LFile: Text;
   LLine: string;
 begin
   Result := '';
+  if not FileReadable(APath) then
+    Exit;
   Assign(LFile, APath);
   Reset(LFile);
   try
@@ -55,13 +79,16 @@ begin
 end;
 
 function ResolveSourcePath(const APathFromTest: string; const APathFromRoot: string): string;
+var
+  LBase: string;
 begin
-  if FileExists(APathFromTest) then
+  if FileReadable(APathFromTest) then
     Exit(APathFromTest);
-  if FileExists(APathFromRoot) then
+  if FileReadable(APathFromRoot) then
     Exit(APathFromRoot);
-  if FileExists('src/' + ExtractFileName(APathFromRoot)) then
-    Exit('src/' + ExtractFileName(APathFromRoot));
+  LBase := ExtractBaseName(APathFromRoot);
+  if FileReadable('src/' + LBase) then
+    Exit('src/' + LBase);
   Result := APathFromTest;
 end;
 

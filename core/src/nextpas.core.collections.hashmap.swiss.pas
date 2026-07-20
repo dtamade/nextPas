@@ -12,6 +12,7 @@ uses
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.mem,
+  nextpas.core.mem.error,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
   {$IFDEF HAS_AVX2}
@@ -301,14 +302,14 @@ begin
     FAllocator := DefaultAllocator;
   ABuffers.Ctrl := PByte(FAllocator.GetMem(LCtrlSize));
   if ABuffers.Ctrl = nil then
-    raise Exception.Create('TSwissTable.AllocBuffers: ctrl allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTable.AllocBuffers: ctrl allocation failed');
   try
     ABuffers.Slots := PSlot(FAllocator.GetMem(LSlotSize));
     if ABuffers.Slots = nil then
     begin
       FreeMemOf(FAllocator, ABuffers.Ctrl, LCtrlSize);
       ABuffers.Ctrl := nil;
-      raise Exception.Create('TSwissTable.AllocBuffers: slots allocation failed');
+      raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTable.AllocBuffers: slots allocation failed');
     end;
   except
     if ABuffers.Ctrl <> nil then
@@ -592,7 +593,7 @@ constructor TSwissTable.Create(aCapacity: SizeUInt; aHash: THash; aEquals: TEqua
 begin
   inherited Create;
   if Assigned(aHash) <> Assigned(aEquals) then
-    raise EArgumentError.Create('TSwissTable: hash/equality callbacks must be provided together');
+    raise EInvalidArgument.Create('TSwissTable.Create: hash/equality callbacks must be provided together');
   FHash := aHash;
   FEquals := aEquals;
   if aAllocator <> nil then

@@ -3,10 +3,10 @@ program test_forwardlist;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.mem.intf,
   failing_allocator,
   leak_tracker,

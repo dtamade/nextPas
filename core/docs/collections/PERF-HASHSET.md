@@ -28,6 +28,16 @@
 
 ## 复现
 
+推荐 Makefile 入口（产物进 `core/build/`）：
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.collections bench-set
+core/build/projects/nextpas.core.collections/bench_set/bench_set
+```
+
+手写编译（与上等价）：
+
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
 BD=core/build/projects/nextpas.core.collections/bench_set

@@ -30,7 +30,6 @@ type
     TInner = specialize TSwissTable<K, V>;
   private
     FInner: TInner;
-    FIterIdx: SizeUInt;
     FIterEntry: TEntry;
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
     function DoIterMoveNext(aIter: PPtrIter): Boolean;

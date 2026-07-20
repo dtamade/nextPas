@@ -3,7 +3,6 @@ program test_hashmap;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.hashmap.intf,
