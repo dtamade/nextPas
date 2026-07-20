@@ -388,6 +388,21 @@ Not a throughput ranking; sizes are CI-friendly leak soak.
 | Date | mode | backend | shape | completed | req/s | stable |
 | ---- | ---- | ------- | ----- | --------: | ----: | -----: |
 | 2026-07-20 H2P-1 mid | multiplex | epoll | 8×16×100 | 12800 | **2827** | 1 |
+| 2026-07-20 H2P-2 mid | multiplex | epoll | 8×16×100 | 12800 | **2861** | 1 |
+| 2026-07-20 H2P-2 press | multiplex | epoll | 8×16×**200** | 25600 | **2860** | 1 |
+| 2026-07-20 H2P-2 press | multiplex | epoll | **16**×16×100 | 25600 | **5669** | 1 |
+| 2026-07-20 H2P-2 press | multiplex | epoll | 8×**32**×100 | 25600 | **5746** | 1 |
+| 2026-07-20 H2P-2 press | multiplex | epoll | **16×32**×100 | 51200 | **11463** | 1 |
+| 2026-07-20 H2P-2 press | multiplex | threaded | 8×16×200 | 25600 | **2877** | 1 |
+
+**H2P-2 bottleneck notes**
+
+- All press shapes **stable=1**, fail=0 on this host.
+- Throughput scales ~linearly with `connections × streams` (8×16 → 16×32 ≈ 4× ops/s).
+- Doubling batches only (8×16×100 → ×200) keeps **same** req/s ≈ 2.86k → not latency-collapse, just more work at same rate.
+- epoll ≈ threaded at 8×16 press → server backend not the differentiator at this size.
+- Likely bound: **per-connection client RoundTripMany sequential batches** + H2 framing/CPU, not accept storm.
+- Still **≪** H1 multi-conn KPI (~40k+); **no package claim**.
 
 #### S1 sample (2026-07-20, short 2k×4 epoll no_url)
 
