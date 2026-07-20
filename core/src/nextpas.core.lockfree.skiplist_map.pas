@@ -158,10 +158,14 @@ end;
 procedure TConcurrentSkipListMap.GlobalLock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -176,7 +180,7 @@ end;
 
 procedure TConcurrentSkipListMap.GlobalUnlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TConcurrentSkipListMap.Create(AMaxLevel: Int32);
@@ -234,7 +238,7 @@ begin
       LNode^.Next[LI] := LUpdate[LI]^.Next[LI];
       LUpdate[LI]^.Next[LI] := LNode;
     end;
-    AtomicFetchAdd32(FSize, 1);
+    atomic_fetch_add(FSize, 1);
     Result := slmOk;
   finally
     GlobalUnlock;
@@ -269,7 +273,7 @@ begin
       LNode^.Next[LI] := LUpdate[LI]^.Next[LI];
       LUpdate[LI]^.Next[LI] := LNode;
     end;
-    AtomicFetchAdd32(FSize, 1);
+    atomic_fetch_add(FSize, 1);
     Result := slmOk;
   finally
     GlobalUnlock;
@@ -335,7 +339,7 @@ begin
         LUpdate[LI]^.Next[LI] := LTarget^.Next[LI];
 
     FreeNode(LTarget);
-    AtomicFetchSub32(FSize, 1);
+    atomic_fetch_sub(FSize, 1);
     Result := slmOk;
   finally
     GlobalUnlock;
@@ -344,12 +348,12 @@ end;
 
 function TConcurrentSkipListMap.Count: Int32; inline;
 begin
-  Result := AtomicLoad32(FSize);
+  Result := atomic_load(FSize);
 end;
 
 function TConcurrentSkipListMap.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad32(FSize) = 0;
+  Result := atomic_load(FSize) = 0;
 end;
 
 procedure TConcurrentSkipListMap.Clear;

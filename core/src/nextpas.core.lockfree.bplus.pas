@@ -129,10 +129,14 @@ end;
 procedure TConcurrentBPlusTree.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -145,7 +149,7 @@ end;
 
 procedure TConcurrentBPlusTree.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentBPlusTree.CreateLeaf: PBplusNode;
@@ -289,11 +293,11 @@ end;
 
 function TConcurrentBPlusTree.Insert(AKey, AValue: Int64): TBplusResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(bpClosed);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(bpClosed);
     Result := InsertUnlocked(AKey, AValue);
   finally
@@ -308,11 +312,11 @@ var
   LNode, LParent, LLeft, LRight, LOldRoot: PBplusNode;
   LDepth, LLevel, LI, LJ, LChildIdx: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(bpClosed);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(bpClosed);
 
     LDepth := 0;
@@ -417,7 +421,7 @@ var
   LLeaf: PBplusNode;
   LI: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
   begin
     AValue := 0;
     Exit(False);
@@ -449,7 +453,7 @@ end;
 
 function TConcurrentBPlusTree.GetCount: Int64;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 procedure TConcurrentBPlusTree.ForEach(ACallback: TBplusForEachCallback);
@@ -459,7 +463,7 @@ var
   LValues: array of Int64;
   LI, LCount: SizeInt;
 begin
-  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
+  if (atomic_load(FClosed, mo_acquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
   try
@@ -496,7 +500,7 @@ var
   LI, LCount: SizeInt;
   LContinue: Boolean;
 begin
-  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
+  if (atomic_load(FClosed, mo_acquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
   try
@@ -566,12 +570,12 @@ end;
 
 procedure TConcurrentBPlusTree.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentBPlusTree.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 {$ifdef NEXTPAS_TESTING}
