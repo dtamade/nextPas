@@ -8,6 +8,8 @@ middleware chaining, and a centralized internal transport registry.
 | Doc | Role |
 |-----|------|
 | **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
+| [`CLAIM.md`](CLAIM.md) | **What we claim** — allow/deny + p99 conditions (R0 freeze) |
+| [`REPRO.md`](REPRO.md) | 1h release-evidence playbook |
 | [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
 | [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
