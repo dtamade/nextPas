@@ -3,7 +3,7 @@ program test_x509_chain_verify;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.x509,
   nextpas.core.tls.x509verify;
 

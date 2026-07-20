@@ -3,7 +3,7 @@ program test_tls12_cbc_e2e;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.tls.crypto.tls12record;
@@ -63,8 +63,7 @@ begin
     WriteLn('  MAC key length: ', Length(LState.ClientWriteMACKey));
 
     // Send HTTP GET using CBC record encryption
-    LRequest := TEncoding.ASCII.GetBytes(
-      'GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
+    LRequest := BytesOf('GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
 
     if Length(LState.ClientWriteMACKey) > 32 then
     begin
@@ -140,7 +139,7 @@ begin
 
     WriteLn('[PASS] CBC application data exchange succeeded');
     WriteLn('  Response: ', Length(LDecrypted), ' bytes');
-    WriteLn('  First line: ', Copy(TEncoding.ASCII.GetString(LDecrypted), 1, 30));
+    WriteLn('  First line: ', Copy(StringOf(LDecrypted), 1, 30));
     Halt(0);
   finally
     LSocket.Free;

@@ -1,5 +1,5 @@
 # nextpas.core.collections examples
-EXAMPLES := quickstart deque_queue treeset_compare
+EXAMPLES := quickstart deque_queue treeset_compare capacity_ensure
 
 .PHONY: all test clean $(EXAMPLES)
 

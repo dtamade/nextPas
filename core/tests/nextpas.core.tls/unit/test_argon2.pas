@@ -4,7 +4,7 @@ program test_argon2;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, nextpas.core.tls.crypto.argon2;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.argon2;
 
 var
   LTotal, LPassed: Integer;
@@ -132,7 +132,7 @@ begin
 end;
 
 begin
-  
+
   LTotal := 0;
   LPassed := 0;
 

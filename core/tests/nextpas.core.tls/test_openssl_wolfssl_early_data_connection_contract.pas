@@ -3,7 +3,7 @@ program test_openssl_wolfssl_early_data_connection_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   fafafa.ssl,
   nextpas.core.tls.openssl.backed,

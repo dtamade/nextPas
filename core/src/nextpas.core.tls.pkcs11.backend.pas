@@ -25,6 +25,7 @@ unit nextpas.core.tls.pkcs11.backend;
 interface
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.exception,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.api,
@@ -176,7 +177,7 @@ begin
   end;
   
   if Result = nil then
-    raise Exception.Create('No suitable PKCS#11 backend available. ' +
+    raise ESSLInvalidArgument.Create('No suitable PKCS#11 backend available. ' +
       'Ensure OpenSSL 3.x (with Provider support) or OpenSSL 1.1.1 (with ENGINE support) is installed.');
 end;
 

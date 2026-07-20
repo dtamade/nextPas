@@ -3,7 +3,7 @@ program test_hash_extended_perf;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api;
 
 const
@@ -49,7 +49,7 @@ var
   TotalMs: Double;
 begin
   Result := 0;
-  
+
   md := EVP_get_digestbyname(AlgoName);
   if md = nil then
   begin
@@ -59,7 +59,7 @@ begin
   end;
 
   StartTime := Now;
-  
+
   for i := 1 to Iterations do
   begin
     ctx := EVP_MD_CTX_new();
@@ -98,7 +98,7 @@ begin
   end;
 
   EndTime := Now;
-  TotalMs := MilliSecondsBetween(EndTime, StartTime);
+  TotalMs := DateTimeMillisecondsBetween(EndTime, StartTime);
   Result := TotalMs / Iterations;
 end;
 
@@ -108,7 +108,7 @@ var
   ThroughputMBps: Double;
 begin
   Write('  Testing ', HashAlgo.Name, '...');
-  
+
   // Warmup
   WarmupTime := TestHashPerformance(HashAlgo.AlgoName, WARMUP_ITERATIONS, True);
   if WarmupTime = 0 then
@@ -126,7 +126,7 @@ begin
   end;
 
   ThroughputMBps := (TEST_DATA_SIZE / 1024.0 / 1024.0) / (AvgTime / 1000.0);
-  
+
   WriteLn(' OK');
   WriteLn('    Average time: ', Format('%.6f', [AvgTime]), ' ms');
   WriteLn('    Throughput:   ', Format('%.2f', [ThroughputMBps]), ' MB/s');
@@ -143,7 +143,7 @@ begin
   WriteLn(Separator);
   WriteLn('Testing OpenSSL Extended Hash Algorithms');
   WriteLn(Separator);
-  
+
   // Load OpenSSL
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
   begin

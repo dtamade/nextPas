@@ -4,7 +4,7 @@ unit openssl_hmac_interface;
 
 {
   HMAC Interface Abstraction
-  
+
   Purpose: Provide interface for HMAC (Hash-based Message Authentication Code) operations
   Allows: Real OpenSSL implementation OR Mock implementation
   Benefits: True unit testing, fast execution, isolated tests
@@ -13,7 +13,7 @@ unit openssl_hmac_interface;
 interface
 
 uses
-  Classes, SysUtils;
+  nextpas.core.system.classes, nextpas.core.system.sysutils;
 
 type
   THMACAlgorithm = (haMD5, haSHA1, haSHA224, haSHA256, haSHA384, haSHA512,
@@ -30,33 +30,33 @@ type
   { IHMAC - Interface for HMAC operations }
   IHMAC = interface
     ['{C1D2E3F4-A5B6-7C8D-9E0F-1A2B3C4D5E6F}']
-    
+
     // Single-shot HMAC
     function Compute(const aAlgorithm: THMACAlgorithm;
                      const aKey: TBytes;
                      const aData: TBytes): THMACResult;
-    
+
     // Incremental HMAC (for large data)
     function Init(const aAlgorithm: THMACAlgorithm;
                   const aKey: TBytes): Boolean;
     function Update(const aData: TBytes): Boolean;
     function Final: THMACResult;
-    
+
     // Key management
     function SetKey(const aAlgorithm: THMACAlgorithm;
                     const aKey: TBytes): Boolean;
     function GetKeySize: Integer;
-    
+
     // Algorithm queries
     function GetMACSize(const aAlgorithm: THMACAlgorithm): Integer;
     function GetAlgorithmName(const aAlgorithm: THMACAlgorithm): string;
-    
+
     // Verification
     function Verify(const aAlgorithm: THMACAlgorithm;
                     const aKey: TBytes;
                     const aData: TBytes;
                     const aExpectedMAC: TBytes): Boolean;
-    
+
     // Statistics
     function GetOperationCount: Integer;
     function GetUpdateCount: Integer;
@@ -73,7 +73,7 @@ type
     FInitialized: Boolean;
   public
     constructor Create;
-    
+
     // IHMAC implementation
     function Compute(const aAlgorithm: THMACAlgorithm;
                      const aKey: TBytes;
@@ -108,7 +108,7 @@ type
     FFailureMessage: string;
     FCustomMAC: TBytes;
     FAccumulatedData: TBytes;
-    
+
     // Last call parameters for verification
     FLastAlgorithm: THMACAlgorithm;
     FLastKeySize: Integer;
@@ -119,7 +119,7 @@ type
     FVerifyCallCount: Integer;
   public
     constructor Create;
-    
+
     // IHMAC implementation
     function Compute(const aAlgorithm: THMACAlgorithm;
                      const aKey: TBytes;
@@ -140,7 +140,7 @@ type
     function GetOperationCount: Integer;
     function GetUpdateCount: Integer;
     procedure ResetStatistics;
-    
+
     // Mock control methods
     procedure SetShouldFail(aValue: Boolean; const aMessage: string = '');
     procedure SetCustomMAC(const aMAC: TBytes);
@@ -268,13 +268,13 @@ begin
     Result := False;
     Exit;
   end;
-  
+
   if Length(LComputed.MAC) <> Length(aExpectedMAC) then
   begin
     Result := False;
     Exit;
   end;
-  
+
   Result := True;
   for i := 0 to High(LComputed.MAC) do
     if LComputed.MAC[i] <> aExpectedMAC[i] then
@@ -316,11 +316,11 @@ var
 begin
   Inc(FComputeCallCount);
   Inc(FOperationCount);
-  
+
   FLastAlgorithm := aAlgorithm;
   FLastKeySize := Length(aKey);
   FLastDataSize := Length(aData);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -331,7 +331,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     if Length(FCustomMAC) > 0 then
       Result.MAC := Copy(FCustomMAC)
     else
@@ -339,12 +339,12 @@ begin
       // Mock: generate predictable HMAC based on key and data
       LMACSize := GetMACSize(aAlgorithm);
       SetLength(Result.MAC, LMACSize);
-      
+
       // Simple mock: combine key and data with pattern
       for i := 0 to LMACSize - 1 do
       begin
         if (Length(aKey) > 0) and (Length(aData) > 0) then
-          Result.MAC[i] := Byte((i * 23 + aKey[i mod Length(aKey)] + 
+          Result.MAC[i] := Byte((i * 23 + aKey[i mod Length(aKey)] +
                                 aData[i mod Length(aData)]) mod 256)
         else if Length(aKey) > 0 then
           Result.MAC[i] := Byte((i * 23 + aKey[i mod Length(aKey)]) mod 256)
@@ -359,7 +359,7 @@ function THMACMock.Init(const aAlgorithm: THMACAlgorithm;
   const aKey: TBytes): Boolean;
 begin
   Inc(FInitCallCount);
-  
+
   if FShouldFail then
   begin
     Result := False;
@@ -381,25 +381,25 @@ var
   i: Integer;
 begin
   Inc(FUpdateCount);
-  
+
   if not FInitialized then
   begin
     Result := False;
     Exit;
   end;
-  
+
   if FShouldFail then
   begin
     Result := False;
     Exit;
   end;
-  
+
   // Accumulate data
   LOldLen := Length(FAccumulatedData);
   SetLength(FAccumulatedData, LOldLen + Length(aData));
   for i := 0 to Length(aData) - 1 do
     FAccumulatedData[LOldLen + i] := aData[i];
-  
+
   Result := True;
 end;
 
@@ -407,7 +407,7 @@ function THMACMock.Final: THMACResult;
 begin
   Inc(FFinalCallCount);
   Inc(FOperationCount);
-  
+
   if not FInitialized then
   begin
     Result.Success := False;
@@ -415,10 +415,10 @@ begin
     SetLength(Result.MAC, 0);
     Exit;
   end;
-  
+
   // Use accumulated data to compute final MAC
   Result := Compute(FCurrentAlgorithm, FCurrentKey, FAccumulatedData);
-  
+
   FInitialized := False;
   SetLength(FAccumulatedData, 0);
 end;
@@ -431,7 +431,7 @@ begin
     Result := False;
     Exit;
   end;
-  
+
   FCurrentAlgorithm := aAlgorithm;
   FCurrentKey := Copy(aKey);
   Result := True;
@@ -485,26 +485,26 @@ var
   i: Integer;
 begin
   Inc(FVerifyCallCount);
-  
+
   if FShouldFail then
   begin
     Result := False;
     Exit;
   end;
-  
+
   LComputed := Compute(aAlgorithm, aKey, aData);
   if not LComputed.Success then
   begin
     Result := False;
     Exit;
   end;
-  
+
   if Length(LComputed.MAC) <> Length(aExpectedMAC) then
   begin
     Result := False;
     Exit;
   end;
-  
+
   // Constant-time comparison (simulated)
   Result := True;
   for i := 0 to High(LComputed.MAC) do

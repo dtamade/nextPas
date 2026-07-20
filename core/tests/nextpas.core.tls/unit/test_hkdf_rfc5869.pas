@@ -3,7 +3,7 @@ program test_hkdf_rfc5869;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.kdf,

@@ -3,7 +3,7 @@ program test_context_builder_http_hooks;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.openssl.backed; // ensure OpenSSL backend registration
@@ -38,7 +38,7 @@ begin
   CalledGet := True;
   LastURL := AURL;
   LastTimeoutMs := ATimeoutMs;
-  LBytes := TEncoding.UTF8.GetBytes('stub-get');
+  LBytes := BytesOf('stub-get');
   Result := TSSLDataResult.Ok(LBytes);
 end;
 
@@ -51,7 +51,7 @@ begin
   LastURL := AURL;
   LastContentType := AContentType;
   LastTimeoutMs := ATimeoutMs;
-  LBytes := TEncoding.UTF8.GetBytes('stub-post');
+  LBytes := BytesOf('stub-post');
   Result := TSSLDataResult.Ok(LBytes);
 end;
 

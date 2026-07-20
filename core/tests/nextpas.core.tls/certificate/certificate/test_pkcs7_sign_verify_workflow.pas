@@ -4,7 +4,7 @@ program test_pkcs7_sign_verify_workflow;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, ctypes,
+  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,

@@ -3,7 +3,7 @@ program test_gcm_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.consts,
@@ -22,7 +22,7 @@ var
   i: Integer;
 begin
   WriteLn('测试 AES-128-GCM 基础功能');
-  
+
   // 初始化测试数据
   for i := 0 to 15 do
   begin
@@ -31,7 +31,7 @@ begin
   end;
   for i := 0 to 11 do
     IV[i] := Byte(i);
-  
+
   // 获取 GCM cipher
   Write('  1. 获取 EVP_aes_128_gcm... ');
   Cipher := EVP_aes_128_gcm();
@@ -42,7 +42,7 @@ begin
     WriteLn('失败');
     Exit;
   end;
-  
+
   // 创建上下文
   Write('  2. 创建 CIPHER_CTX... ');
   Ctx := EVP_CIPHER_CTX_new();
@@ -53,7 +53,7 @@ begin
     WriteLn('失败');
     Exit;
   end;
-  
+
   try
     // 初始化加密
     Write('  3. 初始化加密... ');
@@ -64,7 +64,7 @@ begin
       WriteLn('失败');
       Exit;
     end;
-    
+
     // 设置 IV 长度
     Write('  4. 设置 IV 长度... ');
     if Assigned(EVP_CIPHER_CTX_ctrl) then
@@ -81,7 +81,7 @@ begin
     begin
       WriteLn('跳过 (EVP_CIPHER_CTX_ctrl 未加载)');
     end;
-    
+
     // 设置密钥和 IV
     Write('  5. 设置密钥和 IV... ');
     if EVP_EncryptInit_ex(Ctx, nil, nil, @Key[0], @IV[0]) = 1 then
@@ -91,7 +91,7 @@ begin
       WriteLn('失败');
       Exit;
     end;
-    
+
     WriteLn;
     WriteLn('  加密/解密测试略过，等待 API 修复');
     WriteLn;
@@ -100,12 +100,12 @@ begin
     OutLen := 0;
     TotalLen := 0;
     WriteLn('略过');
-    
+
     // 完成
     Write('  7. 完成加密... ');
     WriteLn('略过');
     }
-    
+
     // 获取标签
     Write('  8. 获取认证标签... ');
     if Assigned(EVP_CIPHER_CTX_ctrl) then
@@ -122,10 +122,10 @@ begin
     begin
       WriteLn('跳过 (EVP_CIPHER_CTX_ctrl 未加载)');
     end;
-    
+
     WriteLn;
     WriteLn('✓ AES-128-GCM 基础测试通过!');
-    
+
   finally
     EVP_CIPHER_CTX_free(Ctx);
   end;
@@ -137,7 +137,7 @@ begin
   WriteLn('AES-GCM 简化测试');
   WriteLn('========================================');
   WriteLn;
-  
+
   // 加载 OpenSSL
   Write('加载 OpenSSL 核心库... ');
   try
@@ -151,10 +151,10 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL 库加载成功');
   WriteLn;
-  
+
   // 加载 EVP 函数
   Write('加载 EVP 函数... ');
   if not LoadEVP(GetCryptoLibHandle) then
@@ -165,14 +165,14 @@ begin
   end;
   WriteLn('成功');
   WriteLn;
-  
+
   // 运行测试
   TestGCMBasic;
-  
+
   WriteLn;
   WriteLn('按回车键退出...');
   ReadLn;
-  
+
   // 清理
   UnloadEVP;
   UnloadOpenSSLCore;

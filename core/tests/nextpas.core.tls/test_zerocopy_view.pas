@@ -3,7 +3,7 @@ program test_zerocopy_view;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding;

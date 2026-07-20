@@ -152,6 +152,14 @@ make focused FOCUS=core/tests/nextpas.core.mem/lane_gate
 | R-TE-01 SysUtils | **closed** | test_stack_guard + 脚本门禁 |
 | R-TE-02 lane 双 gate | **closed** | lane_gate Makefile |
 
+### 2026-07-21 复评残余 P2
+
+| ID | 状态 | 证据 |
+|----|------|------|
+| P2-1 历史子类 raise | **closed** | 40 点 FormatAllocErrorMsg；check 扫全部 `raise E*.Create` |
+| P2-2 坏 stem | **closed** | 禁 `allocator_*` / `Method=Raise` |
+| P2-3 SAFETY 入口 | **closed** | README + MEM-HOST-RUNTIME-CI 钉 profile（不进 matrix） |
+
 ### 仍可演进（非可用性阻塞）
 
 完整待办与优先级见 **[ROADMAP.md](ROADMAP.md) 时代 D**。摘要：

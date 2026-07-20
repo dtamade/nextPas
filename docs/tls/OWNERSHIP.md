@@ -54,6 +54,28 @@ Prefer the **owner unit** in new code. Shims exist for call-site stability.
   X.509 parse paths must free temporary `TASN1Reader`/`TASN1Node`
 - **D8** (Batch B) Prefer dynamic arrays / interface arrays over FPC `TList`
   for TLS registries and cert caches; no bare interface pointers in lists
+- **D9** (Batch C) `TCertGenOptions.SubjectAltNames` and `TCertInfo.SubjectAltNames`
+  are `TStringArray` value types — never `TStringList` (no Free required)
+- **D10** (Batch D) OpenSSL certstore fingerprint/serial/subject/issuer indexes are
+  value-type arrays (no `TStringList`); lookup is linear (stores are small)
+- **D11** FPC RTL isolation (usability wave 2026-07-20):
+  - Production `hash` / `crypto` / `tls` (except winssl) must not `uses` SysUtils,
+    Classes, DateUtils, BaseUnix, Unix, or Windows directly.
+  - Only `nextpas.core.system*` may route to broad FPC RTL.
+  - `tls.winssl.*` may use `Windows` as **platform FFI** for Schannel (not SysUtils debt).
+  - CSPRNG for TLS utils: `crypto.random` / `platform.random` only.
+  - Socket I/O in nonblocking/freepascal.connection: `platform.socket` only.
+  - Tests under hash/crypto/tls use `system.sysutils` / `system.classes` / `time`, not FPC RTL.
+- **D12** Crypto errors: `nextpas.core.crypto.errors.ECryptoError` replaces bare
+  `raise Exception` in crypto primitives; public APIs keep Try* shapes.
+- **D13** `crypto.hash.THashAlgorithm` is a type alias of `hash.base.THashAlgorithm`
+  (single enum definition).
+- **D14** (2026-07-21 research/P0–P1): non-winssl production must not `uses` Base64 or
+  Sockets; `tls.crypto.utils.THashAlgorithm` aliases `hash.base` with `HASH_* = ha*`
+  consts for OpenSSL helper compatibility; tls production forbids bare
+  `raise Exception` (use `ESSLInvalidArgument` / `ESSL*`); freepascal socket views use
+  `TFdIStream` (IStream) instead of `THandleStream` (TMemoryStream/TConcatStream may
+  remain via system.classes until M6).
 
 ## Related docs
 

@@ -3,7 +3,7 @@ program test_openssl_context_der_private_key_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,
@@ -115,7 +115,7 @@ function WriteTempTextFile(const AFileName, AText: string): Boolean;
 var
   LData: TBytes;
 begin
-  LData := TEncoding.ANSI.GetBytes(AText);
+  LData := BytesOf(AText);
   Result := WriteTempBytesFile(AFileName, LData);
 end;
 
@@ -255,7 +255,7 @@ begin
 
   LReader := TPEMReader.Create;
   try
-    LText := TEncoding.ANSI.GetString(APEMBlob);
+    LText := StringOf(APEMBlob);
     LReader.LoadFromString(LText);
     LBlocks := LReader.GetPrivateKeys;
     for I := 0 to High(LBlocks) do

@@ -5,7 +5,7 @@ unit benchmark_utils;
 interface
 
 uses
-  SysUtils, Classes, Math;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Math;
 
 type
   { Benchmark timing and statistics }
@@ -22,14 +22,14 @@ type
     procedure Stop;
     procedure SetIterations(ACount: Int64);
     procedure SetDataSize(ABytes: Int64);
-    
+
     function ElapsedMs: Double;
     function OpsPerSecond: Double;
     function ThroughputMBps: Double;
-    
+
     procedure Report;
     procedure ReportThroughput;
-    
+
     property Name: string read FName;
   end;
 
@@ -108,13 +108,13 @@ end;
 
 procedure TBenchmark.Report;
 begin
-  WriteLn(Format('%-40s: %8.2f ms  (%10.0f ops/sec)', 
+  WriteLn(Format('%-40s: %8.2f ms  (%10.0f ops/sec)',
     [FName, ElapsedMs, OpsPerSecond]));
 end;
 
 procedure TBenchmark.ReportThroughput;
 begin
-  WriteLn(Format('%-40s: %8.2f ms  (%10.2f MB/s)', 
+  WriteLn(Format('%-40s: %8.2f ms  (%10.2f MB/s)',
     [FName, ElapsedMs, ThroughputMBps]));
 end;
 
@@ -139,7 +139,7 @@ begin
   SetLength(Sorted, Length(AValues));
   for I := 0 to High(AValues) do
     Sorted[I] := AValues[I];
-    
+
   // Simple bubble sort (fine for small arrays)
   for I := 0 to High(Sorted) - 1 do
     for Mid := I + 1 to High(Sorted) do
@@ -149,7 +149,7 @@ begin
         Sorted[I] := Sorted[Mid];
         Sorted[Mid] := Result;
       end;
-      
+
   Mid := Length(Sorted) div 2;
   if Length(Sorted) mod 2 = 0 then
     Result := (Sorted[Mid - 1] + Sorted[Mid]) / 2
@@ -166,7 +166,7 @@ begin
   SetLength(Sorted, Length(AValues));
   for I := 0 to High(AValues) do
     Sorted[I] := AValues[I];
-    
+
   // Bubble sort
   for I := 0 to High(Sorted) - 1 do
     for Idx := I + 1 to High(Sorted) do
@@ -176,7 +176,7 @@ begin
         Sorted[I] := Sorted[Idx];
         Sorted[Idx] := Temp;
       end;
-      
+
   Idx := Trunc(P * Length(Sorted));
   if Idx >= Length(Sorted) then
     Idx := High(Sorted);

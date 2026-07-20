@@ -9,7 +9,7 @@ program benchmark_throughput;
 }
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.core,

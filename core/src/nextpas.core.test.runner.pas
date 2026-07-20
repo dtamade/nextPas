@@ -27,6 +27,10 @@ uses
   nextpas.core.time,
   nextpas.core.time.cpu;
 
+{ v8.25: timeout-worker leak counter (implemented in runner.parallel). }
+function GetTimeoutWorkerLeakCount: Integer;
+procedure ResetTimeoutWorkerLeakCount;
+
 { ── Test Suite ────────────────────────────────────────────────────────────── }
 
 type
@@ -282,6 +286,16 @@ uses
   nextpas.core.json.builder,
   nextpas.core.fs,
   nextpas.core.time.base;
+
+function GetTimeoutWorkerLeakCount: Integer;
+begin
+  Result := nextpas.core.test.runner.parallel.GetTimeoutWorkerLeakCount;
+end;
+
+procedure ResetTimeoutWorkerLeakCount;
+begin
+  nextpas.core.test.runner.parallel.ResetTimeoutWorkerLeakCount;
+end;
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
 
@@ -1016,10 +1030,12 @@ var
   LCacheKey: string;
   LCacheEntry: TCacheEntry;
   LCacheHit: Boolean;
+  LLeak0: Integer;
 begin
   ApplyCLIArgs;
   LSuiteStart := TInstant.Now;
   AResult := TTestRunResult.Create(Name);
+  LLeak0 := GetTimeoutWorkerLeakCount;
   LPass := 0;
   LFail := 0;
   LSkip := 0;
@@ -1458,6 +1474,14 @@ begin
     CleanupTableAllocations;
 
   AResult.Duration := LSuiteStart.Elapsed.AsMilliseconds;
+  AResult.TimeoutWorkerLeaks := GetTimeoutWorkerLeakCount - LLeak0;
+  if AResult.TimeoutWorkerLeaks < 0 then
+    AResult.TimeoutWorkerLeaks := 0;
+  if AResult.TimeoutWorkerLeaks > 0 then
+    LErrSink.WriteLn(
+      AnsiYellow('  WARNING: ', LConfig) +
+      IntToStr(AResult.TimeoutWorkerLeaks) +
+      ' timeout worker(s) stuck/detached this suite (TimeoutWorkerLeaks)');
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LastRunPassed;
 end;
@@ -1648,9 +1672,12 @@ var
   LCacheEntry: TCacheEntry;
   LProcessed: array of Boolean;
   LCacheHits: array of Boolean;
+  LLeak0: Integer;
+  LErrSink: IOutputSink;
 begin
   ApplyCLIArgs;
   AResult := TTestRunResult.Create(Name);
+  LLeak0 := GetTimeoutWorkerLeakCount;
   LTotal := Length(Tests);
   LPass := 0;
   LFail := 0;
@@ -1658,6 +1685,7 @@ begin
   LMtx := Mutex();
   LConfig := ResolveConfig(Config);
   LOutSink := ResolveOutSink(LConfig);
+  LErrSink := ResolveErrSink(LConfig);
   LTagFilter := GetTagFilter(LConfig);
   { Cache setup }
   if LConfig.CacheEnabled then
@@ -1912,6 +1940,14 @@ begin
 
   if not ADeferCleanup then
     CleanupTableAllocations;
+  AResult.TimeoutWorkerLeaks := GetTimeoutWorkerLeakCount - LLeak0;
+  if AResult.TimeoutWorkerLeaks < 0 then
+    AResult.TimeoutWorkerLeaks := 0;
+  if AResult.TimeoutWorkerLeaks > 0 then
+    LErrSink.WriteLn(
+      AnsiYellow('  WARNING: ', LConfig) +
+      IntToStr(AResult.TimeoutWorkerLeaks) +
+      ' timeout worker(s) stuck/detached this suite (TimeoutWorkerLeaks)');
   FinalizeResults(LConfig, AResult, LPass, LFail, LSkip);
   Result := LFail = 0;
   LastRunPassed := Result;

@@ -3,7 +3,7 @@ program test_modules_quick_validation;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bn,
@@ -85,7 +85,7 @@ begin
   WriteLn('  (Header Translation Verification)');
   WriteLn('========================================');
   WriteLn;
-  
+
   Write('BN (Big Number)... ');
   if TestBN then
   begin
@@ -97,7 +97,7 @@ begin
     WriteLn('FAIL');
     AddResult('BN', False, 'Functions not available');
   end;
-  
+
   Write('BIO... ');
   if TestBIO then
   begin
@@ -109,7 +109,7 @@ begin
     WriteLn('FAIL');
     AddResult('BIO', False, 'Functions not available');
   end;
-  
+
   Write('RAND... ');
   if TestRAND then
   begin
@@ -121,7 +121,7 @@ begin
     WriteLn('FAIL');
     AddResult('RAND', False, 'Functions not available');
   end;
-  
+
   Write('ERR... ');
   if TestERR then
   begin
@@ -144,24 +144,24 @@ begin
   WriteLn('Summary');
   WriteLn('========================================');
   WriteLn;
-  
+
   Available := 0;
   Total := Length(Results);
-  
+
   for i := 0 to High(Results) do
     if Results[i].Available then
       Inc(Available);
-  
+
   WriteLn('Modules tested: ', Total);
   WriteLn('Available: ', Available, ' (', FormatFloat('0.0', (Available/Total)*100), '%)');
   WriteLn('Not available: ', Total - Available);
   WriteLn;
-  
+
   if Available = Total then
     WriteLn('SUCCESS: All module headers translated correctly!')
   else
     WriteLn('WARNING: Some modules have issues');
-  
+
   WriteLn;
   WriteLn('Detailed Results:');
   WriteLn('----------------------------------------');
@@ -191,7 +191,7 @@ begin
 
     RunAllTests;
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin

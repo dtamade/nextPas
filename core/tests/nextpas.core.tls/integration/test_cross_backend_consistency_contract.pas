@@ -9,7 +9,7 @@ program test_cross_backend_consistency_contract;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
 
   nextpas.core.tls.base,
   {$IFNDEF WINDOWS}

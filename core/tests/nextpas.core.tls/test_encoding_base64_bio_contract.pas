@@ -3,7 +3,7 @@ program test_encoding_base64_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.encoding,
   nextpas.core.tls.openssl.api.bio;

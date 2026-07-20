@@ -3,8 +3,8 @@ program test_winssl_lib_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  
+  nextpas.core.system.sysutils,
+
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 
@@ -28,7 +28,7 @@ end;
 begin
   WriteLn('=== WinSSL Library Simple Tests ===');
   WriteLn;
-  
+
   // Test 1: Create library
   WriteLn('Test 1: Creating WinSSL Library...');
   try
@@ -41,7 +41,7 @@ begin
     on E: Exception do
       TestFail('CreateWinSSLLibrary', E.Message);
   end;
-  
+
   // Test 2: Initialize library
   WriteLn('Test 2: Initializing library...');
   try
@@ -53,14 +53,14 @@ begin
     on E: Exception do
       TestFail('SSLLib.Initialize', E.Message);
   end;
-  
+
   // Test 3: Check if initialized
   WriteLn('Test 3: Checking initialization status...');
   if SSLLib.IsInitialized then
     TestPass('SSLLib.IsInitialized')
   else
     TestFail('SSLLib.IsInitialized', 'Not initialized');
-  
+
   // Test 4: Get library type
   WriteLn('Test 4: Getting library type...');
   try
@@ -72,7 +72,7 @@ begin
     on E: Exception do
       TestFail('GetLibraryType', E.Message);
   end;
-  
+
   // Test 5: Get version string
   WriteLn('Test 5: Getting version string...');
   try
@@ -85,7 +85,7 @@ begin
     on E: Exception do
       TestFail('GetVersionString', E.Message);
   end;
-  
+
   // Test 6: Protocol support - TLS 1.2
   WriteLn('Test 6: Checking TLS 1.2 support...');
   try
@@ -97,7 +97,7 @@ begin
     on E: Exception do
       TestFail('TLS 1.2 support check', E.Message);
   end;
-  
+
   // Test 7: Protocol support - SSL 2.0 (should NOT be supported)
   WriteLn('Test 7: Checking SSL 2.0 support (should be disabled)...');
   try
@@ -109,7 +109,7 @@ begin
     on E: Exception do
       TestFail('SSL 2.0 support check', E.Message);
   end;
-  
+
   // Test 8: Finalize
   WriteLn('Test 8: Finalizing library...');
   try
@@ -119,14 +119,14 @@ begin
     on E: Exception do
       TestFail('SSLLib.Finalize', E.Message);
   end;
-  
+
   // Summary
   WriteLn;
   WriteLn('=== Test Summary ===');
   WriteLn('Passed: ', TestsPassed);
   WriteLn('Failed: ', TestsFailed);
   WriteLn('Total:  ', TestsPassed + TestsFailed);
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;

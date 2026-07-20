@@ -3,7 +3,7 @@ program test_rsa;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.rsa,
   nextpas.core.test;
 

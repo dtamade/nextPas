@@ -3,7 +3,7 @@ program test_openssl_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

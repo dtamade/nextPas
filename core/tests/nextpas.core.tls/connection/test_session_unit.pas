@@ -3,7 +3,7 @@ program test_session_unit;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.session,
@@ -35,13 +35,13 @@ end;
 begin
   TestsPassed := 0;
   TestsFailed := 0;
-  
+
   WriteLn('');
   WriteLn('========================================');
   WriteLn('Session Unit Tests');
   WriteLn('========================================');
   WriteLn('');
-  
+
   // Test 1: 创建 OpenSSL 库
   WriteLn('=== Session Creation Tests ===');
   try
@@ -54,13 +54,13 @@ begin
       TestResult('OpenSSL Library created', False);
     end;
   end;
-  
+
   if SSLLib = nil then
   begin
     WriteLn('Cannot continue without SSLLib');
     Halt(1);
   end;
-  
+
   // Test 2: 初始化
   try
     TestResult('OpenSSL Library initialized', SSLLib.Initialize);
@@ -71,7 +71,7 @@ begin
       TestResult('OpenSSL Library initialized', False);
     end;
   end;
-  
+
   // Test 3: 创建空 Session (应该返回 nil 或抛出异常)
   WriteLn('');
   WriteLn('=== Session Object Tests ===');
@@ -88,16 +88,16 @@ begin
       TestResult('Session API available', False);
     end;
   end;
-  
+
   // Test 4: 测试 Session 的基本方法（使用 nil Session）
   WriteLn('');
   WriteLn('=== Session API Tests (with nil session) ===');
-  
+
   // 这里我们只能测试 API 是否存在，因为我们没有真实的 Session
   // 实际的功能测试需要建立真实的 TLS 连接
   WriteLn('  [INFO] Real session tests require actual TLS connection');
   WriteLn('  [INFO] See examples/session_reuse_example.pas for full test');
-  
+
   TestResult('Session.GetID() method exists', True);
   TestResult('Session.GetCreationTime() method exists', True);
   TestResult('Session.GetProtocolVersion() method exists', True);
@@ -105,7 +105,7 @@ begin
   TestResult('Session.GetPeerCertificate() method exists', True);
   TestResult('Session.Serialize/Deserialize() methods exist', True);
   TestResult('Session.Clone() method exists', True);
-  
+
   // Test 5: 测试常量和类型
   WriteLn('');
   WriteLn('=== Protocol Version Constants ===');
@@ -114,7 +114,7 @@ begin
   WriteLn('  TLS 1.2: ', Ord(sslProtocolTLS12));
   WriteLn('  TLS 1.3: ', Ord(sslProtocolTLS13));
   TestResult('Protocol version constants defined', True);
-  
+
   // Test 6: OpenSSL API 绑定测试
   WriteLn('');
   WriteLn('=== OpenSSL API Binding Tests ===');
@@ -136,7 +136,7 @@ begin
       TestResult('OpenSSL API binding check', False);
     end;
   end;
-  
+
   // 总结
   WriteLn('');
   WriteLn('========================================');
@@ -147,7 +147,7 @@ begin
   WriteLn('Failed: ', TestsFailed, ' ✗');
   WriteLn('Success rate: ', (TestsPassed * 100) div (TestsPassed + TestsFailed), '%');
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn('✅ ALL TESTS PASSED!');

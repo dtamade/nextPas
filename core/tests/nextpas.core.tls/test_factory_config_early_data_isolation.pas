@@ -3,7 +3,7 @@ program test_factory_config_early_data_isolation;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,

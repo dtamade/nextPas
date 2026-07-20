@@ -160,7 +160,8 @@ type
 
 implementation
 
-uses nextpas.core.base.utils, nextpas.core.tls.tls13.wire;
+uses
+  nextpas.core.tls.exceptions, nextpas.core.base.utils, nextpas.core.tls.tls13.wire;
 
 const
   FREEPASCAL_SESSION_MAGIC: array[0..3] of Byte = ($46, $50, $53, $31); // FPS1
@@ -199,7 +200,7 @@ end;
 function ReadUInt32(const AData: TBytes; AOffset: Integer): Cardinal;
 begin
   if (AOffset < 0) or (AOffset + 3 >= Length(AData)) then
-    raise Exception.Create('Invalid uint32 offset');
+    raise ESSLInvalidArgument.Create('Invalid uint32 offset');
 
   Result :=
     (Cardinal(AData[AOffset]) shl 24) or
@@ -213,7 +214,7 @@ var
   I: Integer;
 begin
   if (AOffset < 0) or (AOffset + 7 >= Length(AData)) then
-    raise Exception.Create('Invalid uint64 offset');
+    raise ESSLInvalidArgument.Create('Invalid uint64 offset');
 
   Result := 0;
   for I := 0 to 7 do
@@ -231,12 +232,12 @@ var
   LLen: Integer;
 begin
   if AOffset + 2 > Length(AData) then
-    raise Exception.Create('Missing vector16 length');
+    raise ESSLInvalidArgument.Create('Missing vector16 length');
 
   LLen := ReadUInt16(AData, AOffset);
   Inc(AOffset, 2);
   if AOffset + LLen > Length(AData) then
-    raise Exception.Create('vector16 exceeds payload');
+    raise ESSLInvalidArgument.Create('vector16 exceeds payload');
 
   Result := nil;
   SetLength(Result, LLen);

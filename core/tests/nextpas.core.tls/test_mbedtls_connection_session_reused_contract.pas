@@ -4,7 +4,7 @@ program test_mbedtls_connection_session_reused_contract;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,

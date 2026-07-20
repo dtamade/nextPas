@@ -20,7 +20,7 @@ unit fuzz_framework;
 interface
 
 uses
-  SysUtils, Classes, DateUtils, Math;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, Math;
 
 type
   { Fuzz target procedure type }
@@ -421,7 +421,7 @@ begin
     end;
   end;
 
-  Result.ExecutionTimeMs := MilliSecondsBetween(Now, StartTime);
+  Result.ExecutionTimeMs := DateTimeMillisecondsBetween(Now, StartTime);
 end;
 
 procedure TFuzzer.RunTarget(const ATargetName: string; AIterations: Integer);

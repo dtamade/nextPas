@@ -6,6 +6,14 @@ begin Result := nextpas.core.test.base.GetLastTestTrace; end;
 function FormatTestLocation(APrefix: string): string;
 begin Result := nextpas.core.test.base.FormatTestLocation(APrefix); end;
 
+{ ── Forward to test.runner (timeout leak monitoring) ───────────────────────── }
+
+function GetTimeoutWorkerLeakCount: Integer;
+begin Result := nextpas.core.test.runner.GetTimeoutWorkerLeakCount; end;
+
+procedure ResetTimeoutWorkerLeakCount;
+begin nextpas.core.test.runner.ResetTimeoutWorkerLeakCount; end;
+
 { ── Forward to test.discovery ──────────────────────────────────────────────── }
 
 function DiscoverTests(AFixture: TTestFixture;

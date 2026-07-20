@@ -4,7 +4,7 @@ program test_interop_client;
 
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.lib,
   nextpas.core.tls.freepascal.context;

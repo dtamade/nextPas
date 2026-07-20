@@ -115,7 +115,7 @@ begin
        (LBlock^.TotalSize < HeaderSize) or
        (LBlock^.TotalSize > FReservationSize - LCurrentOffset) then
       raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'block chain corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Internal', 'block chain corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LPayloadOffset = LCurrentOffset + HeaderSize then
     begin
@@ -154,12 +154,12 @@ begin
   begin
     if LCurrentOffset >= FReservationSize then
       raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'free list offset out of range (' + IntToStr(Int64(LCurrentOffset)) + '/' + IntToStr(Int64(FReservationSize)) + ')'));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Internal', 'free list offset out of range (' + IntToStr(Int64(LCurrentOffset)) + '/' + IntToStr(Int64(FReservationSize)) + ')'));
 
     LBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LBlock^.Magic <> MAP_BLOCK_MAGIC) or (LBlock^.State <> MAP_BLOCK_FREE) then
       raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'free list corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Internal', 'free list corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LBlock^.TotalSize >= LNeeded then
     begin
@@ -241,7 +241,7 @@ begin
     LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
       raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Internal', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LCurBlock^.State = MAP_BLOCK_FREE then
     begin
@@ -255,7 +255,7 @@ begin
         LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
         if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
           raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Internal', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
         if LCurBlock^.State <> MAP_BLOCK_FREE then
           Break;
         Inc(LRunSize, LCurBlock^.TotalSize);
@@ -295,11 +295,11 @@ begin
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')'));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Create', 'invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')'));
   {$IF SizeOf(SizeUInt) < SizeOf(UInt64)}
   if aReservationSize > High(SizeUInt) then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')'));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Create', 'reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')'));
   {$ENDIF}
 
   FMap := TMemoryMap.Create;

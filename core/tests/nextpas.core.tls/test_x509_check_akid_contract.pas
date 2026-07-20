@@ -3,7 +3,7 @@ program test_x509_check_akid_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,

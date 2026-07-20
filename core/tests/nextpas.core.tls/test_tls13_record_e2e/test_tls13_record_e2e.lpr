@@ -4,7 +4,7 @@ program test_tls13_record_e2e;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
   nextpas.core.tls.tls13.recordcrypto;
 

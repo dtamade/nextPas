@@ -11,7 +11,8 @@ unit nextpas.core.tls.openssl.certstore;
 interface
 
 uses
-  nextpas.core.system.classes, nextpas.core.fs,
+  nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.tls.base,
   nextpas.core.tls.logging,  // P3-8: 添加日志支持
   nextpas.core.tls.openssl.base,
@@ -23,19 +24,22 @@ uses
   nextpas.core.tls.openssl.certificate;
 
 type
+  TIntegerArray = array of Integer;
+
   TOpenSSLCertificateStore = class(TInterfacedObject, ISSLCertificateStore, ISSLNativeHandleAccess)
   private
     FStore: PX509_STORE;
     FOwnsHandle: Boolean;
     FCertificates: array of PX509;  // 缓存证书列表用于枚举
 
-    // Phase 2.5: 索引查找表 - O(log n) 替代 O(n) 线性搜索
-    // 使用 TStringList (Sorted=True) 实现有序字典
-    FIndexByFingerprint: TStringList;   // SHA256指纹 -> 索引
-    FIndexBySerialNumber: TStringList;  // 序列号 -> 索引
-    // 缓存提取的属性值，避免重复 X509 解析
-    FSubjectCache: TStringList;  // 与 FCertificates 并行，缓存 Subject
-    FIssuerCache: TStringList;   // 与 FCertificates 并行，缓存 Issuer
+    // Parallel value-type indexes (no heap list ownership).
+    // Fingerprint/serial maps use parallel key/index arrays; cert stores are small.
+    FFpKeys: TStringArray;
+    FFpIdx: TIntegerArray;
+    FSerialKeys: TStringArray;
+    FSerialIdx: TIntegerArray;
+    FSubjectCache: TStringArray;  // 与 FCertificates 并行
+    FIssuerCache: TStringArray;
 
     procedure BuildIndexForCertificate(AIndex: Integer; AX509: PX509);
     procedure ClearIndexes;
@@ -180,19 +184,12 @@ begin
   FOwnsHandle := True;
   SetLength(FCertificates, 0);
 
-  // Phase 2.5: 初始化索引查找表
-  FIndexByFingerprint := TStringList.Create;
-  FIndexByFingerprint.Sorted := True;
-  FIndexByFingerprint.Duplicates := dupIgnore;
-  FIndexByFingerprint.CaseSensitive := False;
-  FIndexBySerialNumber := TStringList.Create;
-  FIndexBySerialNumber.Sorted := True;
-  FIndexBySerialNumber.Duplicates := dupIgnore;
-  FIndexBySerialNumber.CaseSensitive := False;
-
-  // 属性缓存（与 FCertificates 并行）
-  FSubjectCache := TStringList.Create;
-  FIssuerCache := TStringList.Create;
+  SetLength(FFpKeys, 0);
+  SetLength(FFpIdx, 0);
+  SetLength(FSerialKeys, 0);
+  SetLength(FSerialIdx, 0);
+  SetLength(FSubjectCache, 0);
+  SetLength(FIssuerCache, 0);
 end;
 
 destructor TOpenSSLCertificateStore.Destroy;
@@ -203,11 +200,7 @@ begin
   // 清空证书列表
   SetLength(FCertificates, 0);
 
-  // Phase 2.5: 释放索引查找表
-  FIndexByFingerprint.Free;
-  FIndexBySerialNumber.Free;
-  FSubjectCache.Free;
-  FIssuerCache.Free;
+  ClearIndexes;
 
   // 释放 X509_STORE（只释放一次！）
   // 注意：如果 OpenSSL 正在卸载，跳过清理以避免崩溃
@@ -230,6 +223,33 @@ end;
 
 { Phase 2.5: 索引构建和清理 }
 
+procedure IndexAppend(var AKeys: TStringArray; var AIdx: TIntegerArray;
+  const AKey: string; ACertIndex: Integer);
+var
+  N: Integer;
+begin
+  if AKey = '' then
+    Exit;
+  N := Length(AKeys);
+  SetLength(AKeys, N + 1);
+  SetLength(AIdx, N + 1);
+  AKeys[N] := AKey;
+  AIdx[N] := ACertIndex;
+end;
+
+function IndexFind(const AKeys: TStringArray; const AIdx: TIntegerArray;
+  const AKey: string): Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  if AKey = '' then
+    Exit;
+  for I := 0 to High(AKeys) do
+    if AKeys[I] = AKey then
+      Exit(AIdx[I]);
+end;
+
 procedure TOpenSSLCertificateStore.BuildIndexForCertificate(AIndex: Integer; AX509: PX509);
 var
   Cert: ISSLCertificate;
@@ -241,32 +261,23 @@ begin
   X509_up_ref(AX509);
   Cert := TOpenSSLCertificate.Create(AX509, True);
   try
-    // 提取并索引指纹 (SHA256优先)
     FP := Cert.GetFingerprintSHA256;
     if FP = '' then
       FP := Cert.GetFingerprintSHA1;
     if FP <> '' then
-    begin
-      FP := NormalizeCertificateStoreHex(FP);
-      FIndexByFingerprint.AddObject(FP, TObject(PtrInt(AIndex)));
-    end;
+      IndexAppend(FFpKeys, FFpIdx, NormalizeCertificateStoreHex(FP), AIndex);
 
-    // 提取并索引序列号
     Serial := Cert.GetSerialNumber;
     if Serial <> '' then
-    begin
-      Serial := NormalizeCertificateStoreHex(Serial);
-      if Serial <> '' then
-        FIndexBySerialNumber.AddObject(Serial, TObject(PtrInt(AIndex)));
-    end;
+      IndexAppend(FSerialKeys, FSerialIdx, NormalizeCertificateStoreHex(Serial), AIndex);
 
-    // 缓存 Subject 和 Issuer 用于部分匹配
     Subject := Cert.GetSubject;
     Issuer := Cert.GetIssuer;
-    FSubjectCache.Add(NormalizeCertificateStoreDN(Subject));
-    FIssuerCache.Add(NormalizeCertificateStoreDN(Issuer));
+    SetLength(FSubjectCache, Length(FSubjectCache) + 1);
+    FSubjectCache[High(FSubjectCache)] := NormalizeCertificateStoreDN(Subject);
+    SetLength(FIssuerCache, Length(FIssuerCache) + 1);
+    FIssuerCache[High(FIssuerCache)] := NormalizeCertificateStoreDN(Issuer);
   except
-    // 索引构建失败不应阻止证书添加
     on E: Exception do
       TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Failed to build index for certificate: %s', [E.Message]));
   end;
@@ -274,10 +285,12 @@ end;
 
 procedure TOpenSSLCertificateStore.ClearIndexes;
 begin
-  FIndexByFingerprint.Clear;
-  FIndexBySerialNumber.Clear;
-  FSubjectCache.Clear;
-  FIssuerCache.Clear;
+  SetLength(FFpKeys, 0);
+  SetLength(FFpIdx, 0);
+  SetLength(FSerialKeys, 0);
+  SetLength(FSerialIdx, 0);
+  SetLength(FSubjectCache, 0);
+  SetLength(FIssuerCache, 0);
 end;
 
 function TOpenSSLCertificateStore.AddCertificate(ACert: ISSLCertificate): Boolean;
@@ -310,7 +323,8 @@ begin
       X509_up_ref(X509);
 
     CertIndex := Length(FCertificates);
-    begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509; end;
+    SetLength(FCertificates, Length(FCertificates) + 1);
+    FCertificates[High(FCertificates)] := X509;
     BuildIndexForCertificate(CertIndex, X509);
     Result := True;
   end
@@ -326,7 +340,8 @@ begin
           X509_up_ref(X509);
 
         CertIndex := Length(FCertificates);
-        begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509; end;
+        SetLength(FCertificates, Length(FCertificates) + 1);
+    FCertificates[High(FCertificates)] := X509;
         BuildIndexForCertificate(CertIndex, X509);
       end;
     end
@@ -478,7 +493,8 @@ begin
           if AddRet = 1 then
           begin
             // 保留一份引用用于枚举缓存（原始引用归 FCertificates 所有）
-            begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509Cert; end;
+            SetLength(FCertificates, Length(FCertificates) + 1);
+            FCertificates[High(FCertificates)] := X509Cert;
             BuildIndexForCertificate(Length(FCertificates) - 1, X509Cert);
             Inc(AddedCount);
           end
@@ -614,14 +630,14 @@ var
   SearchSubject: string;
 begin
   Result := nil;
-  if FSubjectCache.Count = 0 then Exit;
+  if Length(FSubjectCache) = 0 then Exit;
 
   // Phase 2.5: 使用缓存的 Subject 值进行搜索，避免重复 X509 解析
   SearchSubject := NormalizeCertificateStoreDN(ASubject);
   if SearchSubject = '' then
     Exit;
 
-  for I := 0 to FSubjectCache.Count - 1 do
+  for I := 0 to Length(FSubjectCache) - 1 do
   begin
     if FSubjectCache[I] = SearchSubject then
     begin
@@ -630,7 +646,7 @@ begin
     end;
   end;
 
-  for I := 0 to FSubjectCache.Count - 1 do
+  for I := 0 to Length(FSubjectCache) - 1 do
   begin
     // 部分匹配：检查 subject 中是否包含搜索字符串
     if Pos(SearchSubject, FSubjectCache[I]) > 0 then
@@ -647,14 +663,14 @@ var
   SearchIssuer: string;
 begin
   Result := nil;
-  if FIssuerCache.Count = 0 then Exit;
+  if Length(FIssuerCache) = 0 then Exit;
 
   // Phase 2.5: 使用缓存的 Issuer 值进行搜索，避免重复 X509 解析
   SearchIssuer := NormalizeCertificateStoreDN(AIssuer);
   if SearchIssuer = '' then
     Exit;
 
-  for I := 0 to FIssuerCache.Count - 1 do
+  for I := 0 to Length(FIssuerCache) - 1 do
   begin
     if FIssuerCache[I] = SearchIssuer then
     begin
@@ -663,7 +679,7 @@ begin
     end;
   end;
 
-  for I := 0 to FIssuerCache.Count - 1 do
+  for I := 0 to Length(FIssuerCache) - 1 do
   begin
     // 部分匹配：检查 issuer 中是否包含搜索字符串
     if Pos(SearchIssuer, FIssuerCache[I]) > 0 then
@@ -676,48 +692,30 @@ end;
 
 function TOpenSSLCertificateStore.FindBySerialNumber(const ASerialNumber: string): ISSLCertificate;
 var
-  Idx: Integer;
-  CertIndex: PtrInt;
+  CertIndex: Integer;
   LTarget: string;
 begin
   Result := nil;
-  if FIndexBySerialNumber.Count = 0 then Exit;
+  if Length(FSerialKeys) = 0 then Exit;
 
   LTarget := NormalizeCertificateStoreHex(ASerialNumber);
-  if LTarget = '' then
-    Exit;
-
-  // Phase 2.5: O(log n) 索引查找替代 O(n) 线性搜索
-  Idx := FIndexBySerialNumber.IndexOf(LTarget);
-  if Idx >= 0 then
-  begin
-    CertIndex := PtrInt(FIndexBySerialNumber.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
-      Result := GetCertificate(CertIndex);
-  end;
+  CertIndex := IndexFind(FSerialKeys, FSerialIdx, LTarget);
+  if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
+    Result := GetCertificate(CertIndex);
 end;
 
 function TOpenSSLCertificateStore.FindByFingerprint(const AFingerprint: string): ISSLCertificate;
 var
-  Idx: Integer;
-  CertIndex: PtrInt;
+  CertIndex: Integer;
   SearchFP: string;
 begin
   Result := nil;
-  if FIndexByFingerprint.Count = 0 then Exit;
+  if Length(FFpKeys) = 0 then Exit;
 
-  // Phase 2.5: O(log n) 索引查找替代 O(n) 线性搜索
   SearchFP := NormalizeCertificateStoreHex(AFingerprint);
-  if SearchFP = '' then
-    Exit;
-
-  Idx := FIndexByFingerprint.IndexOf(SearchFP);
-  if Idx >= 0 then
-  begin
-    CertIndex := PtrInt(FIndexByFingerprint.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
-      Result := GetCertificate(CertIndex);
-  end;
+  CertIndex := IndexFind(FFpKeys, FFpIdx, SearchFP);
+  if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
+    Result := GetCertificate(CertIndex);
 end;
 
 function TOpenSSLCertificateStore.VerifyCertificate(ACert: ISSLCertificate): Boolean;

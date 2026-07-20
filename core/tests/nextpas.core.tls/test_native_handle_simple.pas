@@ -7,7 +7,7 @@ program test_native_handle_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.native_handle,
   nextpas.core.tls.exceptions;

@@ -54,6 +54,7 @@ uses
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.aesgcm.pool,
+  nextpas.core.hash.base,
   nextpas.core.crypto.hash;
 
 type
@@ -68,15 +69,17 @@ type
   );
 
   {**
-   * 哈希算法枚举
+   * 哈希算法 — 唯一源 nextpas.core.hash.base（禁止再定义独立枚举）
    *}
-  THashAlgorithm = (
-    HASH_SHA256,
-    HASH_SHA512,
-    HASH_SHA1,
-    HASH_MD5,
-    HASH_SHA384
-  );
+  THashAlgorithm = nextpas.core.hash.base.THashAlgorithm;
+
+const
+  { 历史 TCryptoUtils 命名兼容；ordinal 与 ha* 一致 }
+  HASH_MD5 = nextpas.core.hash.base.haMD5;
+  HASH_SHA1 = nextpas.core.hash.base.haSHA1;
+  HASH_SHA256 = nextpas.core.hash.base.haSHA256;
+  HASH_SHA384 = nextpas.core.hash.base.haSHA384;
+  HASH_SHA512 = nextpas.core.hash.base.haSHA512;
 
   {**
    * 加密操作结果
@@ -644,21 +647,8 @@ function StringToHashAlgorithm(const AName: string): THashAlgorithm;
 
 implementation
 
-{$IFDEF WINDOWS}
 uses
-  Windows;
-
-const
-  BCRYPT_USE_SYSTEM_PREFERRED_RNG = $00000002;
-
-// BCryptGenRandom - Windows Vista+ secure random number generator
-function BCryptGenRandom(
-  hAlgorithm: THandle;
-  pbBuffer: PByte;
-  cbBuffer: ULONG;
-  dwFlags: ULONG
-): LONG; stdcall; external 'bcrypt.dll' name 'BCryptGenRandom';
-{$ENDIF}
+  nextpas.core.crypto.random;
 
 const
   // 缓冲区大小常量
@@ -764,39 +754,11 @@ begin
 end;
 
 class procedure TCryptoUtils.SystemRandom(ABuffer: PByte; ASize: Integer);
-{$IFDEF UNIX}
-var
-  LFile: File;
-  LBytesRead: Integer;
-{$ENDIF}
-{$IFDEF WINDOWS}
-var
-  LStatus: LONG;
-{$ENDIF}
 begin
-  {$IFDEF UNIX}
-  LBytesRead := 0;
-  AssignFile(LFile, '/dev/urandom');
-  try
-    Reset(LFile, 1);
-    try
-      BlockRead(LFile, ABuffer^, ASize, LBytesRead);
-      if LBytesRead <> ASize then
-        raise ESSLCryptoError.Create('Insufficient random bytes from /dev/urandom');
-    finally
-      CloseFile(LFile);
-    end;
-  except
-    on E: Exception do
-      raise ESSLCryptoError.Create('System random source failed: ' + E.Message);
-  end;
-  {$ELSE}
-  // Windows: Use BCryptGenRandom (cryptographically secure, Vista+)
-  LStatus := BCryptGenRandom(0, ABuffer, ULONG(ASize), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  if LStatus <> 0 then
-    raise ESSLCryptoError.CreateFmt(
-      'BCryptGenRandom failed with NTSTATUS: 0x%x', [LStatus]);
-  {$ENDIF}
+  if (ABuffer = nil) or (ASize <= 0) then
+    raise ESSLCryptoError.Create('System random: invalid buffer or size');
+  if not SecureRandomBytes(ABuffer, ASize) then
+    raise ESSLCryptoError.Create('System random source failed');
 end;
 
 class function TCryptoUtils.GetEVPCipher(AAlgorithm: TEncryptionAlgorithm): PEVP_CIPHER;

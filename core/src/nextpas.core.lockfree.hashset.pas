@@ -58,6 +58,9 @@ type
 
     {** @desc 清空所有元素 }
     procedure Clear;
+    {** @desc 关闭：转发到底层 HashMap.Close }
+    procedure Close;
+    function IsClosed: Boolean; inline;
   end;
 
   generic TConcurrentHashSet<TKey> = class(specialize TConcurrentHashSetImpl<TKey>)
@@ -107,6 +110,16 @@ end;
 procedure TConcurrentHashSetImpl.Clear;
 begin
   FMap.Clear;
+end;
+
+procedure TConcurrentHashSetImpl.Close;
+begin
+  FMap.Close;
+end;
+
+function TConcurrentHashSetImpl.IsClosed: Boolean; inline;
+begin
+  Result := FMap.IsClosed;
 end;
 
 end.

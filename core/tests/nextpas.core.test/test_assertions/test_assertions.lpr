@@ -2089,10 +2089,39 @@ begin
   CheckSorted(LA);
 end;
 
+procedure TestSoftCheckFailPathCase(const AC: TTestCase);
+{ v8.26 fail-path: SoftCheckEqual int/str must mark suite fail with both values. }
+var
+  LPos: Integer;
+  LExp, LAct: string;
+  LExpN, LActN: Int64;
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'soft fail-path data');
+  LExp := Copy(AC.Data, 1, LPos - 1);
+  LAct := Copy(AC.Data, LPos + 1, MaxInt);
+  LExpN := StrToInt(LExp);
+  LActN := StrToInt(LAct);
+  LSuite := TTestSuite.Create('soft-fp-' + AC.Name);
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckEqual(LExpN, LActN);
+      SoftCheckEqual(LExp, LAct);
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult), 'soft fail-path suite fails');
+  CheckContains(LResult.Results[0].Message, LExp, 'soft msg has expected');
+  CheckContains(LResult.Results[0].Message, LAct, 'soft msg has actual');
+  LSuite := Default(TTestSuite);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LB26SoftCases: specialize TArray<TTestCase>;
+  LB26SoftI: Integer;
 begin
   WriteLn('=== test_assertions ===');
   Randomize;
@@ -2377,6 +2406,17 @@ begin
   { Outside-context SoftFail only valid when no suite entry is active. }
   AssertSoftFailOutsideContextExact;
   WriteLn('  + SoftFail outside context exact');
+
+  { v8.26: SoftCheck fail-path density table }
+  SetLength(LB26SoftCases, 250);
+  for LB26SoftI := 0 to High(LB26SoftCases) do
+  begin
+    LB26SoftCases[LB26SoftI].Name := 'soft-fp-' + IntToStr(LB26SoftI);
+    LB26SoftCases[LB26SoftI].Data := IntToStr(LB26SoftI) + '|' +
+      IntToStr(LB26SoftI + 7);
+  end;
+  LSuite.TestTable('v8.26 SoftCheck fail-path', LB26SoftCases,
+    @TestSoftCheckFailPathCase);
 
   if not LSuite.Run then
   begin

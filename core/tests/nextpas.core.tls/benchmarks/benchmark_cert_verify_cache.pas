@@ -3,7 +3,7 @@ program benchmark_cert_verify_cache;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,

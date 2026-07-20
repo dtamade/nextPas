@@ -3,7 +3,7 @@ program test_md5;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.md5,

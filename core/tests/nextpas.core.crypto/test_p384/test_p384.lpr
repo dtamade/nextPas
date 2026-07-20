@@ -3,7 +3,7 @@ program test_p384;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.p384,
   nextpas.core.test;
 

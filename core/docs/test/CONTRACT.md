@@ -4,7 +4,8 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-21
-**版本**：v8.24
+**版本**：v8.26
+**路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
 
 ---
 
@@ -412,6 +413,20 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.26 (2026-07-21) — 规模质量跃迁（B51–B55）
+
+- **灭 identity**：`test_config` 400 identity → **500 config fingerprint fail-path**；`test_diagnostics` 去掉 identity 表
+- **fail-path 加厚**：diagnostics equal 1800 + notequal 500；assertions Soft 250；lifecycle B30 160
+- **门禁**：`SCALE_MIN=6500`、`FAIL_PATH_MIN_RATIO=0.35`、`LOW_SIGNAL_MAX_RATIO=0.40`
+- **可观测**：scale 报告 per-suite total/fail-path/low-signal breakdown
+
+### v8.25 (2026-07-21) — 并行可观测 + scale 质量（M5–M6）
+
+- **TimeoutWorkerLeaks**：`TTestRunResult.TimeoutWorkerLeaks` = 本 suite 内 stuck timeout worker 增量
+- **API**：`GetTimeoutWorkerLeakCount` / `ResetTimeoutWorkerLeakCount`；并行/串行 suite 结束非零时 WARNING
+- **scale 质量**：`LOW_SIGNAL_MAX_RATIO` 默认 **0.55**；identity/meta 表无 fail-path 关键字计为 low-signal
+- **契约**：runner must_have 锁 TimeoutWorkerLeaks + Get/Reset
 
 ### v8.24 (2026-07-21) — 编译器透明边角（可用性 M4）
 

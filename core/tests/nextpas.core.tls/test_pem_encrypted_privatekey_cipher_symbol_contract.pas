@@ -3,7 +3,7 @@ program test_pem_encrypted_privatekey_cipher_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,

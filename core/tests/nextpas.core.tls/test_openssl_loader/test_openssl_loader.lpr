@@ -4,7 +4,7 @@ program test_openssl_loader;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader;
 
 var

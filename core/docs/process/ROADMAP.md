@@ -224,3 +224,4 @@ Host + Win：仅 Maintenance（bug/安全）
 | 2026-07-20 | **U2**：builder 默认 MaxOutput 64MiB（三态）；TFsWatchEvent.Kind；wine fs ReadAt |
 | 2026-07-21 | **U2-docs**：SCORECARD wine 合计 25；host-windows 证据口径诚实（ReadAt 待 GHA） |
 | 2026-07-21 | **U3**：README 生产示例对齐三态；PARITY 可用性 9.4；Path 测试锚点文档 |
+| 2026-07-21 | **U4**：path-mixuse-audit.sh + MIXUSE-AUDIT.md；path-contract C6 锚点门禁 |

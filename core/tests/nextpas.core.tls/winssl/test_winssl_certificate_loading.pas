@@ -5,10 +5,10 @@ program test_winssl_certificate_loading;
 
 {
   WinSSL Certificate Loading Test
-  
+
   Purpose: Test yesterday's (2025-10-28) certificate loading implementation
   Priority: CRITICAL - This feature is untested on Windows
-  
+
   Tests:
   - LoadCertificate(ISSLCertificate) interface loading
   - Certificate from store → context
@@ -25,8 +25,8 @@ uses
   {$ELSE}
   {$ERROR 'This test requires Windows platform'}
   {$ENDIF}
-  SysUtils, Classes,
-  
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.base,
@@ -64,7 +64,7 @@ procedure Test(const aTestName: string; aCondition: Boolean; const aMessage: str
 begin
   Inc(TotalTests);
   Write('  [', CurrentSection, '] ', aTestName, ': ');
-  
+
   if aCondition then
   begin
     WriteLn('PASS');
@@ -91,7 +91,7 @@ var
   LCtx: ISSLContext;
 begin
   BeginSection('Basic Certificate Loading');
-  
+
   // Initialize library
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -100,7 +100,7 @@ begin
     Exit;
   end;
   Test('Library initialization', True);
-  
+
   // Open system certificate store
   try
     LStore := OpenSystemStore(SSL_STORE_MY);
@@ -113,7 +113,7 @@ begin
       Exit;
     end;
   end;
-  
+
   // Find any certificate (for testing)
   // Note: In real test, we'd create a test certificate first
   LCert := GetFirstCertificate(LStore);
@@ -125,11 +125,11 @@ begin
     Exit;
   end;
   Test('Find certificate in store', True);
-  
+
   // Create client context
   LCtx := LLib.CreateContext(sslCtxClient);
   Test('Create client context', LCtx <> nil);
-  
+
   // ✨ TEST: LoadCertificate(ISSLCertificate) - Yesterday's implementation!
   try
     LCtx.LoadCertificate(LCert);
@@ -138,10 +138,10 @@ begin
     on E: Exception do
       Test('LoadCertificate(ISSLCertificate) succeeds', False, E.Message);
   end;
-  
+
   // Verify context is still valid
   Test('Context remains valid after certificate load', LCtx.IsValid);
-  
+
   // Cleanup
   LCert := nil;
   LStore := nil;
@@ -161,7 +161,7 @@ var
   LServerCtx: ISSLContext;
 begin
   BeginSection('Server Certificate Loading');
-  
+
   // Initialize
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -169,7 +169,7 @@ begin
     Test('Library initialization', False, LLib.GetLastErrorString);
     Exit;
   end;
-  
+
   // Open store and find certificate
   LStore := OpenSystemStore(SSL_STORE_MY);
   if LStore = nil then
@@ -178,7 +178,7 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   LCert := GetFirstCertificate(LStore);
   if LCert = nil then
   begin
@@ -186,11 +186,11 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   // Create SERVER context
   LServerCtx := LLib.CreateContext(sslCtxServer);
   Test('Create server context', LServerCtx <> nil);
-  
+
   if LServerCtx <> nil then
   begin
     // ✨ TEST: LoadCertificate for server mode
@@ -201,12 +201,12 @@ begin
       on E: Exception do
         Test('Load certificate into server context', False, E.Message);
     end;
-    
+
     // Verify server context configuration
     Test('Server context valid after cert load', LServerCtx.IsValid);
     Test('Server context type correct', LServerCtx.GetContextType = sslCtxServer);
   end;
-  
+
   // Cleanup
   LCert := nil;
   LStore := nil;
@@ -226,7 +226,7 @@ var
   LCtx: ISSLContext;
 begin
   BeginSection('Certificate Replacement');
-  
+
   // Initialize
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -234,7 +234,7 @@ begin
     Test('Library initialization', False);
     Exit;
   end;
-  
+
   // Open store
   LStore := OpenSystemStore(SSL_STORE_MY);
   if LStore = nil then
@@ -243,7 +243,7 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   // Get two certificates (if available)
   LCert1 := GetFirstCertificate(LStore);
   if LCert1 = nil then
@@ -252,14 +252,14 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   LCert2 := GetStoreCertificate(LStore, 1);
   if LCert2 = nil then
   begin
     WriteLn('  NOTE: Only one certificate - using same cert for replacement test');
     LCert2 := LCert1; // Use same certificate
   end;
-  
+
   // Create context and load first certificate
   LCtx := LLib.CreateContext(sslCtxClient);
   if LCtx = nil then
@@ -268,7 +268,7 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   try
     LCtx.LoadCertificate(LCert1);
     Test('Load first certificate', True);
@@ -280,7 +280,7 @@ begin
       Exit;
     end;
   end;
-  
+
   // ✨ TEST: Replace with second certificate
   try
     LCtx.LoadCertificate(LCert2);
@@ -289,10 +289,10 @@ begin
     on E: Exception do
       Test('Replace with second certificate', False, E.Message);
   end;
-  
+
   // Verify context still valid
   Test('Context valid after replacement', LCtx.IsValid);
-  
+
   // Cleanup
   LCert1 := nil;
   LCert2 := nil;
@@ -312,7 +312,7 @@ var
   LCtx: ISSLContext;
 begin
   BeginSection('SetCertificateStore');
-  
+
   // Initialize
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -320,21 +320,21 @@ begin
     Test('Library initialization', False);
     Exit;
   end;
-  
+
   // Open store
   LStore := OpenSystemStore(SSL_STORE_MY);
   Test('Open certificate store', LStore <> nil);
-  
+
   if LStore = nil then
   begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   // Create context
   LCtx := LLib.CreateContext(sslCtxClient);
   Test('Create context', LCtx <> nil);
-  
+
   if LCtx <> nil then
   begin
     // ✨ TEST: SetCertificateStore (yesterday's implementation)
@@ -345,14 +345,14 @@ begin
       on E: Exception do
         Test('SetCertificateStore succeeds', False, E.Message);
     end;
-    
+
     // Verify context still valid
     if LStore.GetCount > 0 then
       Test('Context valid after SetCertificateStore', LCtx.IsValid)
     else
       Test('Context valid after SetCertificateStore (store empty, expected)', True);
   end;
-  
+
   // Cleanup
   LStore := nil;
   LCtx := nil;
@@ -369,7 +369,7 @@ var
   LCtx: ISSLContext;
 begin
   BeginSection('Nil Certificate Handling');
-  
+
   // Initialize
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -377,11 +377,11 @@ begin
     Test('Library initialization', False);
     Exit;
   end;
-  
+
   // Create context
   LCtx := LLib.CreateContext(sslCtxClient);
   Test('Create context', LCtx <> nil);
-  
+
   if LCtx <> nil then
   begin
     // ✨ TEST: LoadCertificate with nil should not crash
@@ -394,14 +394,14 @@ begin
         Test('LoadCertificate(nil) raises exception', True, 'Expected: ' + E.Message);
       end;
     end;
-    
+
     // Context may become invalid; ensure no crash and state remains safe
     if LCtx.IsValid then
       Test('Context still valid after nil certificate', True)
     else
       Test('Context handles nil certificate safely (context invalid as expected)', True);
   end;
-  
+
   // Cleanup
   LCtx := nil;
   LLib.Finalize;
@@ -420,7 +420,7 @@ var
   LSubject, LIssuer: string;
 begin
   BeginSection('Self-Signed Certificate');
-  
+
   // Initialize
   LLib := CreateWinSSLLibrary;
   if not LLib.Initialize then
@@ -428,7 +428,7 @@ begin
     Test('Library initialization', False);
     Exit;
   end;
-  
+
   // Open store
   LStore := OpenSystemStore(SSL_STORE_MY);
   if LStore = nil then
@@ -437,7 +437,7 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   // Find certificate
   LCert := GetFirstCertificate(LStore);
   if LCert = nil then
@@ -446,19 +446,19 @@ begin
     LLib.Finalize;
     Exit;
   end;
-  
+
   // Check if self-signed
   LSubject := LCert.GetSubject;
   LIssuer := LCert.GetIssuer;
-  
+
   WriteLn('  Certificate subject: ', LSubject);
   WriteLn('  Certificate issuer:  ', LIssuer);
-  
+
   if LSubject = LIssuer then
   begin
     WriteLn('  → Self-signed certificate detected!');
     Test('Detected self-signed certificate', True);
-    
+
     // ✨ TEST: Self-signed certificate can be loaded
     LCtx := LLib.CreateContext(sslCtxServer);
     if LCtx <> nil then
@@ -470,7 +470,7 @@ begin
         on E: Exception do
           Test('Self-signed cert loads into server context', False, E.Message);
       end;
-      
+
       LCtx := nil;
     end;
   end
@@ -479,7 +479,7 @@ begin
     WriteLn('  → CA-signed certificate (not self-signed)');
     Test('Certificate is CA-signed', True);
   end;
-  
+
   // Cleanup
   LCert := nil;
   LStore := nil;
@@ -496,13 +496,13 @@ begin
   WriteLn('Purpose: Validate certificate loading implementation (2025-10-28)');
   WriteLn('================================================================================');
   WriteLn;
-  
+
   // Check Windows version
   WriteLn('System Information:');
   WriteLn('  OS: Windows');
   WriteLn('  Test Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
   WriteLn;
-  
+
   // Run test suites
   TestBasicCertificateLoading;
   TestServerCertificateLoading;
@@ -510,7 +510,7 @@ begin
   TestSetCertificateStore;
   TestNilCertificateHandling;
   TestSelfSignedCertificate;
-  
+
   // Summary
   WriteLn;
   WriteLn('================================================================================');
@@ -520,7 +520,7 @@ begin
   WriteLn('  Passed:       ', PassedTests, ' (', Format('%.1f', [(PassedTests / TotalTests) * 100]), '%)');
   WriteLn('  Failed:       ', FailedTests);
   WriteLn('================================================================================');
-  
+
   if FailedTests = 0 then
   begin
     WriteLn;

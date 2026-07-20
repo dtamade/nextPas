@@ -4,7 +4,7 @@ program test_engine_handshake;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.engine,
   nextpas.core.tls.freepascal.engine,

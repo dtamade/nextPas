@@ -3,7 +3,7 @@ program test_priority1_modules;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   // Core Infrastructure
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -128,10 +128,10 @@ begin
   try
     md := EVP_get_digestbyname('sha256');
     if md = nil then Exit;
-    
+
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       data := 'test';
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then Exit;
@@ -160,17 +160,17 @@ begin
   try
     cipher := EVP_get_cipherbyname('aes-128-cbc');
     if cipher = nil then Exit;
-    
+
     for i := 0 to 15 do
     begin
       key[i] := Byte(i);
       iv[i] := Byte(i);
     end;
     plaintext := 'test';
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then Exit;
       enc_len := 0;
@@ -191,16 +191,16 @@ begin
   WriteLn('  Priority 1 Modules - Quick Validation');
   WriteLn('========================================');
   WriteLn;
-  
+
   TotalTests := 0;
   PassedTests := 0;
-  
+
   // All modules compiled successfully if we got here
   WriteLn('Phase 1: Compilation Check');
   WriteLn('----------------------------------------');
   WriteLn('[OK] All Priority 1 modules compiled successfully!');
   WriteLn;
-  
+
   // Load OpenSSL
   WriteLn('Phase 2: Runtime Loading');
   WriteLn('----------------------------------------');
@@ -237,11 +237,11 @@ begin
   LoadOpenSSLERR;
   WriteLn('OK');
   WriteLn;
-  
+
   // Test core modules
   WriteLn('Phase 3: Functional Tests');
   WriteLn('----------------------------------------');
-  
+
   Write('Testing BN (Big Number)... ');
   Inc(TotalTests);
   if TestBN then
@@ -255,7 +255,7 @@ begin
     WriteLn('FAIL');
     AddTest('BN', 'Core', True, False, 'Function test failed');
   end;
-  
+
   Write('Testing BIO... ');
   Inc(TotalTests);
   if TestBIO then
@@ -269,7 +269,7 @@ begin
     WriteLn('FAIL');
     AddTest('BIO', 'Core', True, False, 'Function test failed');
   end;
-  
+
   Write('Testing RAND... ');
   Inc(TotalTests);
   if TestRAND then
@@ -283,7 +283,7 @@ begin
     WriteLn('FAIL');
     AddTest('RAND', 'Core', True, False, 'Function test failed');
   end;
-  
+
   Write('Testing ERR... ');
   Inc(TotalTests);
   if TestERR then
@@ -297,7 +297,7 @@ begin
     WriteLn('FAIL');
     AddTest('ERR', 'Core', True, False, 'Function test failed');
   end;
-  
+
   Write('Testing EVP (Hash)... ');
   Inc(TotalTests);
   if TestEVPHash then
@@ -311,7 +311,7 @@ begin
     WriteLn('FAIL');
     AddTest('EVP-Hash', 'Crypto', True, False, 'Hash test failed');
   end;
-  
+
   Write('Testing EVP (Cipher)... ');
   Inc(TotalTests);
   if TestEVPCipher then
@@ -325,7 +325,7 @@ begin
     WriteLn('FAIL');
     AddTest('EVP-Cipher', 'Crypto', True, False, 'Cipher test failed');
   end;
-  
+
   WriteLn;
 end;
 
@@ -345,7 +345,7 @@ begin
   WriteLn('  Failed: ', TotalTests - PassedTests);
   WriteLn('  Rate:   ', FormatFloat('0.0', (PassedTests/TotalTests)*100), '%');
   WriteLn;
-  
+
   if PassedTests < TotalTests then
   begin
     WriteLn('Failed Tests:');
@@ -354,7 +354,7 @@ begin
         WriteLn('  - ', Tests[i].Name, ': ', Tests[i].Note);
     WriteLn;
   end;
-  
+
   WriteLn('========================================');
   WriteLn('Priority 1 Modules Status:');
   WriteLn('----------------------------------------');
@@ -367,7 +367,7 @@ begin
   WriteLn('Advanced:             OK (provider, param, crypto)');
   WriteLn('========================================');
   WriteLn;
-  
+
   if PassedTests = TotalTests then
     WriteLn('SUCCESS: All Priority 1 modules validated!')
   else
@@ -378,10 +378,10 @@ begin
   try
     RunTests;
     PrintSummary;
-    
+
     if PassedTests < TotalTests then
       Halt(1);
-      
+
   except
     on E: Exception do
     begin

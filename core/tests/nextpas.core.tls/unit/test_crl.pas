@@ -3,7 +3,7 @@ program test_crl;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert,
@@ -13,7 +13,7 @@ uses
 
 const
   // Sample empty CRL in PEM format
-  SAMPLE_CRL_PEM = 
+  SAMPLE_CRL_PEM =
     '-----BEGIN X509 CRL-----'#10+
     'MIIBKDCBwQIBATANBgkqhkiG9w0BAQsFADA9MQswCQYDVQQGEwJVUzELMAkGA1UE'#10+
     'CBMCQ0ExFjAUBgNVBAoTDWZhZmFmYS5zc2wgQ0ExCTAHBgNVBAMTABcNMjUwMTAx'#10+
@@ -34,7 +34,7 @@ begin
   WriteLn('  CRL Manager Unit Test');
   WriteLn('====================================');
   WriteLn;
-  
+
   try
     // Step 0: Initialize Library
     WriteLn('[Step 0] Initializing OpenSSL Library...');
@@ -46,7 +46,7 @@ begin
     end;
     WriteLn('✓ Library initialized: ', LLib.GetVersionString);
     WriteLn;
-    
+
     // Step 1: Create CRL Manager
     WriteLn('[Step 1] Creating CRL Manager...');
     LCRL := CreateCRLManager;
@@ -57,7 +57,7 @@ begin
       WriteLn('❌ Failed to create CRL Manager');
       Halt(1);
     end;
-    
+
     // Step 2: Load CRL from PEM (Note: This is a malformed example, will likely fail)
     WriteLn('[Step 2] Loading CRL from PEM...');
     try
@@ -70,11 +70,11 @@ begin
         WriteLn('✓ Test handled gracefully');
       end;
     end;
-    
+
     // Step 3: Test Revocation Check (will fail since no CRL loaded)
     WriteLn('[Step 3] Testing Revocation Check...');
     LCert := TCertificate.CreateSelfSigned('test.com').Certificate;
-    
+
     try
       if LCRL.IsRevoked(LCert) then
         WriteLn('✓ Certificate is revoked')
@@ -84,13 +84,13 @@ begin
       on E: Exception do
         WriteLn('⚠ Expected error (no valid CRL): ', E.Message);
     end;
-    
+
     WriteLn;
     WriteLn('====================================');
     WriteLn('✓ CRL TEST COMPLETE');
     WriteLn('====================================');
     WriteLn('Note: Full CRL testing requires valid CRL data');
-    
+
   except
     on E: Exception do
     begin

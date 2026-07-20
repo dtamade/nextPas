@@ -20,7 +20,7 @@ uses
   {$IFDEF UNIX}
   CThreads,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   fafafa.examples.tcp;

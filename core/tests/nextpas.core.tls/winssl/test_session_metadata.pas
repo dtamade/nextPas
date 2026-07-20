@@ -2,19 +2,19 @@ program test_session_metadata;
 
 {$mode objfpc}{$H+}{$J-}
 
-{ 
+{
   任务 9.2: 会话元数据设置和读取测试
-  
+
   测试内容:
   - 会话 ID 设置和读取
   - 协议版本和密码套件设置
   - 会话有效性检查
-  
+
   验证需求: 4.1
 }
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.connection;
 
@@ -52,13 +52,13 @@ var
   LID: string;
 begin
   BeginSection('测试会话 ID 设置和读取');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 设置会话 ID
     LID := 'test-session-12345';
     LSession.SetSessionMetadata(LID, sslProtocolTLS12, 'TLS_AES_128_GCM_SHA256', False);
-    
+
     // 读取会话 ID
     Check('会话 ID 设置和读取', LSession.GetID = LID);
   finally
@@ -72,13 +72,13 @@ var
   LSession: TWinSSLSession;
 begin
   BeginSection('测试协议版本设置和读取');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 测试 TLS 1.2
     LSession.SetSessionMetadata('session1', sslProtocolTLS12, 'cipher1', False);
     Check('TLS 1.2 协议版本', LSession.GetProtocolVersion = sslProtocolTLS12);
-    
+
     // 测试 TLS 1.3
     LSession.SetSessionMetadata('session2', sslProtocolTLS13, 'cipher2', False);
     Check('TLS 1.3 协议版本', LSession.GetProtocolVersion = sslProtocolTLS13);
@@ -94,13 +94,13 @@ var
   LCipher: string;
 begin
   BeginSection('测试密码套件设置和读取');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 设置密码套件
     LCipher := 'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384';
     LSession.SetSessionMetadata('session1', sslProtocolTLS12, LCipher, False);
-    
+
     // 读取密码套件
     Check('密码套件设置和读取', LSession.GetCipherName = LCipher);
   finally
@@ -114,20 +114,20 @@ var
   LSession: TWinSSLSession;
 begin
   BeginSection('测试会话有效性检查');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 新创建的会话应该无效(没有 ID)
     Check('新会话无效', not LSession.IsValid);
-    
+
     // 设置会话元数据后应该有效
     LSession.SetSessionMetadata('session1', sslProtocolTLS12, 'cipher1', False);
     Check('设置元数据后有效', LSession.IsValid);
-    
+
     // 设置超时为 1 秒
     LSession.SetTimeout(1);
     Check('设置超时后仍有效', LSession.IsValid);
-    
+
     // 等待 2 秒后应该过期
     Sleep(2000);
     Check('超时后无效', not LSession.IsValid);
@@ -142,16 +142,16 @@ var
   LSession: TWinSSLSession;
 begin
   BeginSection('测试会话可复用性');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 无效会话不可复用
     Check('无效会话不可复用', not LSession.IsResumable);
-    
+
     // 有效会话可复用
     LSession.SetSessionMetadata('session1', sslProtocolTLS12, 'cipher1', False);
     Check('有效会话可复用', LSession.IsResumable);
-    
+
     // 过期会话不可复用
     LSession.SetTimeout(1);
     Sleep(2000);
@@ -168,18 +168,18 @@ var
   LCloned: ISSLSession;
 begin
   BeginSection('测试会话克隆');
-  
+
   LSession1 := TWinSSLSession.Create;
   try
     // 设置会话元数据
-    LSession1.SetSessionMetadata('session1', sslProtocolTLS12, 
+    LSession1.SetSessionMetadata('session1', sslProtocolTLS12,
       'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384', False);
     LSession1.SetTimeout(3600);
-    
+
     // 克隆会话
     LCloned := LSession1.Clone;
     Check('克隆成功', LCloned <> nil);
-    
+
     if LCloned <> nil then
     begin
       // 验证克隆的会话具有相同的属性
@@ -200,16 +200,16 @@ var
   LSession: TWinSSLSession;
 begin
   BeginSection('测试会话恢复标记');
-  
+
   LSession := TWinSSLSession.Create;
   try
     // 新会话不是恢复的
     Check('新会话未恢复', not LSession.WasResumed);
-    
+
     // 设置为恢复的会话
     LSession.SetSessionMetadata('session1', sslProtocolTLS12, 'cipher1', True);
     Check('恢复的会话标记正确', LSession.WasResumed);
-    
+
     // 设置为新会话
     LSession.SetSessionMetadata('session2', sslProtocolTLS12, 'cipher2', False);
     Check('新会话标记正确', not LSession.WasResumed);
@@ -225,11 +225,11 @@ var
   LCreationTime: TDateTime;
 begin
   BeginSection('测试会话创建时间');
-  
+
   LSession := TWinSSLSession.Create;
   try
     LCreationTime := LSession.GetCreationTime;
-    
+
     // 创建时间应该接近当前时间(误差小于 1 秒)
     Check('创建时间正确', Abs(Now - LCreationTime) < 1.0 / 86400);
   finally
@@ -306,14 +306,14 @@ begin
   Total := 0;
   Passed := 0;
   Failed := 0;
-  
+
   WriteLn('================================================================');
   WriteLn('WinSSL 会话元数据测试');
   WriteLn('================================================================');
   WriteLn('任务 9.2: 会话元数据设置和读取测试');
   WriteLn('验证需求: 4.1');
   WriteLn;
-  
+
   TestSessionIDSetAndGet;
   TestProtocolVersionSetAndGet;
   TestCipherNameSetAndGet;
@@ -324,9 +324,9 @@ begin
   TestSessionCreationTime;
   TestSessionSerializationRoundTrip;
   TestSessionDeserializeRejectsInvalidPayload;
-  
+
   PrintSummary;
-  
+
   if Failed > 0 then
     Halt(1);
 end.

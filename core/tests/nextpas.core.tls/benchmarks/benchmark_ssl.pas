@@ -19,7 +19,7 @@ program benchmark_ssl;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   benchmark_framework;
 
 const

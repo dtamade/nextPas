@@ -3,7 +3,7 @@ program test_backend_selector_required_feature_truth;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,

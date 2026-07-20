@@ -3,7 +3,7 @@ program test_openssl_verify_ex_store_flag_isolation_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base;
 

@@ -5,7 +5,7 @@ program test_tls13_psk_negative;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,

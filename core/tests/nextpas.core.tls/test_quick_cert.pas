@@ -7,7 +7,7 @@ program test_quick_cert;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.quick,
   nextpas.core.tls.factory,
@@ -21,14 +21,14 @@ begin
   WriteLn('║  TSSLQuick.GetCertificateInfo Test        ║');
   WriteLn('╚═══════════════════════════════════════════╝');
   WriteLn;
-  
+
   Host := '/etc/ssl/certs/ca-certificates.crt';
   WriteLn('正在获取证书信息: ', Host);
   WriteLn;
-  
+
   try
     Info := TSSLHelper.GetCertificateInfo(Host);
-    
+
     WriteLn('证书信息:');
     WriteLn('  主题: ', Info.Subject);
     WriteLn('  颁发者: ', Info.Issuer);

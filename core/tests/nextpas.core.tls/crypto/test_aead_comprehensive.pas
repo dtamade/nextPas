@@ -3,7 +3,7 @@ program test_aead_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api;
 
 type
@@ -51,7 +51,7 @@ begin
   WriteLn('Test Results Summary');
   PrintSeparator;
   WriteLn;
-  
+
   for i := 0 to High(Results) do
   begin
     if Results[i].Success then
@@ -63,7 +63,7 @@ begin
         WriteLn('         Error: ', Results[i].ErrorMsg);
     end;
   end;
-  
+
   WriteLn;
   PrintSeparator;
   WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
@@ -91,14 +91,14 @@ begin
   WriteLn;
   WriteLn('Testing AES-256-GCM AEAD...');
   success := False;
-  
+
   try
     // Initialize test data
     for i := 0 to 31 do key[i] := Byte(i);
     for i := 0 to 11 do iv[i] := Byte(i);
     for i := 0 to 31 do plaintext[i] := Byte($41 + (i mod 26)); // 'A'..'Z'
     for i := 0 to 15 do aad[i] := Byte($30 + (i mod 10)); // '0'..'9'
-    
+
     // Get cipher
     cipher := EVP_aes_256_gcm();
     if cipher = nil then
@@ -107,7 +107,7 @@ begin
       Exit;
     end;
     WriteLn('  [+] Cipher obtained: AES-256-GCM');
-    
+
     // === ENCRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then
@@ -115,7 +115,7 @@ begin
       AddResult('AES-256-GCM: Encryption context', False, 'Context creation failed');
       Exit;
     end;
-    
+
     try
       // Initialize encryption
       if EVP_EncryptInit_ex(ctx, cipher, nil, nil, nil) <> 1 then
@@ -123,21 +123,21 @@ begin
         AddResult('AES-256-GCM: Encrypt init', False, 'Init failed');
         Exit;
       end;
-      
+
       // Set IV length (GCM mode)
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nil) <> 1 then
       begin
         AddResult('AES-256-GCM: Set IV length', False, 'IV length set failed');
         Exit;
       end;
-      
+
       // Initialize key and IV
       if EVP_EncryptInit_ex(ctx, nil, nil, @key[0], @iv[0]) <> 1 then
       begin
         AddResult('AES-256-GCM: Set key/IV', False, 'Key/IV set failed');
         Exit;
       end;
-      
+
       // Add AAD (Additional Authenticated Data)
       if EVP_EncryptUpdate(ctx, nil, @len, @aad[0], 16) <> 1 then
       begin
@@ -145,7 +145,7 @@ begin
         Exit;
       end;
       WriteLn('  [+] AAD added: ', BytesToHex(aad, 16));
-      
+
       // Encrypt plaintext
       if EVP_EncryptUpdate(ctx, @ciphertext[0], @len, @plaintext[0], 32) <> 1 then
       begin
@@ -153,7 +153,7 @@ begin
         Exit;
       end;
       ciphertext_len := len;
-      
+
       // Finalize encryption
       if EVP_EncryptFinal_ex(ctx, @ciphertext[ciphertext_len], @len) <> 1 then
       begin
@@ -161,22 +161,22 @@ begin
         Exit;
       end;
       ciphertext_len := ciphertext_len + len;
-      
+
       // Get authentication tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, @tag[0]) <> 1 then
       begin
         AddResult('AES-256-GCM: Get tag', False, 'Tag retrieval failed');
         Exit;
       end;
-      
+
       WriteLn('  [+] Encrypted ', ciphertext_len, ' bytes');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext, ciphertext_len));
       WriteLn('      Auth Tag:   ', BytesToHex(tag, 16));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // === DECRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then
@@ -184,7 +184,7 @@ begin
       AddResult('AES-256-GCM: Decryption context', False, 'Context creation failed');
       Exit;
     end;
-    
+
     try
       // Initialize decryption
       if EVP_DecryptInit_ex(ctx, cipher, nil, nil, nil) <> 1 then
@@ -192,28 +192,28 @@ begin
         AddResult('AES-256-GCM: Decrypt init', False, 'Init failed');
         Exit;
       end;
-      
+
       // Set IV length
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nil) <> 1 then
       begin
         AddResult('AES-256-GCM: Set IV length (decrypt)', False, 'IV length set failed');
         Exit;
       end;
-      
+
       // Initialize key and IV
       if EVP_DecryptInit_ex(ctx, nil, nil, @key[0], @iv[0]) <> 1 then
       begin
         AddResult('AES-256-GCM: Set key/IV (decrypt)', False, 'Key/IV set failed');
         Exit;
       end;
-      
+
       // Add AAD
       if EVP_DecryptUpdate(ctx, nil, @len, @aad[0], 16) <> 1 then
       begin
         AddResult('AES-256-GCM: Add AAD (decrypt)', False, 'AAD addition failed');
         Exit;
       end;
-      
+
       // Decrypt ciphertext
       if EVP_DecryptUpdate(ctx, @decrypted[0], @len, @ciphertext[0], ciphertext_len) <> 1 then
       begin
@@ -221,14 +221,14 @@ begin
         Exit;
       end;
       decrypted_len := len;
-      
+
       // Set expected tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, @tag[0]) <> 1 then
       begin
         AddResult('AES-256-GCM: Set tag', False, 'Tag set failed');
         Exit;
       end;
-      
+
       // Finalize decryption (this verifies the tag)
       if EVP_DecryptFinal_ex(ctx, @decrypted[decrypted_len], @len) <> 1 then
       begin
@@ -236,11 +236,11 @@ begin
         Exit;
       end;
       decrypted_len := decrypted_len + len;
-      
+
       WriteLn('  [+] Decrypted ', decrypted_len, ' bytes');
       WriteLn('      Plaintext:  ', BytesToHex(decrypted, decrypted_len));
       WriteLn('  [+] Authentication tag verified!');
-      
+
       // Verify data integrity
       success := True;
       for i := 0 to 31 do
@@ -251,7 +251,7 @@ begin
           Break;
         end;
       end;
-      
+
       if success then
       begin
         WriteLn('  [PASS] Data integrity verified!');
@@ -262,11 +262,11 @@ begin
         WriteLn('  [FAIL] Data mismatch!');
         AddResult('AES-256-GCM: Data integrity', False, 'Decrypted data does not match');
       end;
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   except
     on E: Exception do
       AddResult('AES-256-GCM: Exception', False, E.Message);
@@ -292,14 +292,14 @@ begin
   WriteLn;
   WriteLn('Testing ChaCha20-Poly1305 AEAD...');
   success := False;
-  
+
   try
     // Initialize test data
     for i := 0 to 31 do key[i] := Byte($FF - i);
     for i := 0 to 11 do iv[i] := Byte($AA xor i);
     for i := 0 to 47 do plaintext[i] := Byte($61 + (i mod 26)); // 'a'..'z'
     for i := 0 to 23 do aad[i] := Byte(i * 7 mod 256);
-    
+
     // Get cipher
     cipher := EVP_chacha20_poly1305();
     if cipher = nil then
@@ -308,7 +308,7 @@ begin
       Exit;
     end;
     WriteLn('  [+] Cipher obtained: ChaCha20-Poly1305');
-    
+
     // === ENCRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then
@@ -316,7 +316,7 @@ begin
       AddResult('ChaCha20-Poly1305: Encryption context', False, 'Context creation failed');
       Exit;
     end;
-    
+
     try
       // Initialize encryption
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then
@@ -324,7 +324,7 @@ begin
         AddResult('ChaCha20-Poly1305: Encrypt init', False, 'Init failed');
         Exit;
       end;
-      
+
       // Add AAD
       if EVP_EncryptUpdate(ctx, nil, @len, @aad[0], 24) <> 1 then
       begin
@@ -332,7 +332,7 @@ begin
         Exit;
       end;
       WriteLn('  [+] AAD added: ', BytesToHex(aad, 24));
-      
+
       // Encrypt plaintext
       if EVP_EncryptUpdate(ctx, @ciphertext[0], @len, @plaintext[0], 48) <> 1 then
       begin
@@ -340,7 +340,7 @@ begin
         Exit;
       end;
       ciphertext_len := len;
-      
+
       // Finalize encryption
       if EVP_EncryptFinal_ex(ctx, @ciphertext[ciphertext_len], @len) <> 1 then
       begin
@@ -348,22 +348,22 @@ begin
         Exit;
       end;
       ciphertext_len := ciphertext_len + len;
-      
+
       // Get authentication tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, 16, @tag[0]) <> 1 then
       begin
         AddResult('ChaCha20-Poly1305: Get tag', False, 'Tag retrieval failed');
         Exit;
       end;
-      
+
       WriteLn('  [+] Encrypted ', ciphertext_len, ' bytes');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext, ciphertext_len));
       WriteLn('      Auth Tag:   ', BytesToHex(tag, 16));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // === DECRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then
@@ -371,7 +371,7 @@ begin
       AddResult('ChaCha20-Poly1305: Decryption context', False, 'Context creation failed');
       Exit;
     end;
-    
+
     try
       // Initialize decryption
       if EVP_DecryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then
@@ -379,14 +379,14 @@ begin
         AddResult('ChaCha20-Poly1305: Decrypt init', False, 'Init failed');
         Exit;
       end;
-      
+
       // Add AAD
       if EVP_DecryptUpdate(ctx, nil, @len, @aad[0], 24) <> 1 then
       begin
         AddResult('ChaCha20-Poly1305: Add AAD (decrypt)', False, 'AAD addition failed');
         Exit;
       end;
-      
+
       // Decrypt ciphertext
       if EVP_DecryptUpdate(ctx, @decrypted[0], @len, @ciphertext[0], ciphertext_len) <> 1 then
       begin
@@ -394,14 +394,14 @@ begin
         Exit;
       end;
       decrypted_len := len;
-      
+
       // Set expected tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, 16, @tag[0]) <> 1 then
       begin
         AddResult('ChaCha20-Poly1305: Set tag', False, 'Tag set failed');
         Exit;
       end;
-      
+
       // Finalize decryption (verifies tag)
       if EVP_DecryptFinal_ex(ctx, @decrypted[decrypted_len], @len) <> 1 then
       begin
@@ -409,11 +409,11 @@ begin
         Exit;
       end;
       decrypted_len := decrypted_len + len;
-      
+
       WriteLn('  [+] Decrypted ', decrypted_len, ' bytes');
       WriteLn('      Plaintext:  ', BytesToHex(decrypted, decrypted_len));
       WriteLn('  [+] Authentication tag verified!');
-      
+
       // Verify data integrity
       success := True;
       for i := 0 to 47 do
@@ -424,7 +424,7 @@ begin
           Break;
         end;
       end;
-      
+
       if success then
       begin
         WriteLn('  [PASS] Data integrity verified!');
@@ -435,11 +435,11 @@ begin
         WriteLn('  [FAIL] Data mismatch!');
         AddResult('ChaCha20-Poly1305: Data integrity', False, 'Decrypted data does not match');
       end;
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   except
     on E: Exception do
       AddResult('ChaCha20-Poly1305: Exception', False, E.Message);
@@ -462,24 +462,24 @@ var
 begin
   WriteLn;
   WriteLn('Testing tampering detection...');
-  
+
   try
     // Initialize test data
     for i := 0 to 31 do key[i] := Byte(i * 3 mod 256);
     for i := 0 to 11 do iv[i] := Byte(i * 5 mod 256);
     for i := 0 to 15 do plaintext[i] := Byte($30 + i);
-    
+
     cipher := EVP_aes_256_gcm();
     if cipher = nil then
     begin
       AddResult('Tampering: Get cipher', False, 'Cipher unavailable');
       Exit;
     end;
-    
+
     // Encrypt
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       EVP_EncryptInit_ex(ctx, cipher, nil, nil, nil);
       EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nil);
@@ -489,31 +489,31 @@ begin
       EVP_EncryptFinal_ex(ctx, @ciphertext[ciphertext_len], @len);
       ciphertext_len := ciphertext_len + len;
       EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, @tag[0]);
-      
+
       WriteLn('  [+] Original encrypted successfully');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext, ciphertext_len));
       WriteLn('      Tag:        ', BytesToHex(tag, 16));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // Tamper with ciphertext
     ciphertext[0] := ciphertext[0] xor $FF;
     WriteLn('  [+] Tampered with ciphertext (flipped first byte)');
     WriteLn('      Tampered:   ', BytesToHex(ciphertext, ciphertext_len));
-    
+
     // Try to decrypt (should fail authentication)
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       EVP_DecryptInit_ex(ctx, cipher, nil, nil, nil);
       EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, nil);
       EVP_DecryptInit_ex(ctx, nil, nil, @key[0], @iv[0]);
       EVP_DecryptUpdate(ctx, @decrypted[0], @len, @ciphertext[0], ciphertext_len);
       EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, @tag[0]);
-      
+
       // This should fail
       if EVP_DecryptFinal_ex(ctx, @decrypted[len], @i) = 1 then
       begin
@@ -525,11 +525,11 @@ begin
         WriteLn('  [PASS] Tampering detected successfully!');
         AddResult('Tampering: Detection', True);
       end;
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   except
     on E: Exception do
       AddResult('Tampering: Exception', False, E.Message);
@@ -540,12 +540,12 @@ begin
   TotalTests := 0;
   PassedTests := 0;
   SetLength(Results, 0);
-  
+
   PrintSeparator;
   WriteLn('AEAD Comprehensive Test Suite');
   WriteLn('OpenSSL EVP API - Pascal Binding');
   PrintSeparator;
-  
+
   // Load OpenSSL
   try
     if not LoadOpenSSLLibrary then
@@ -565,18 +565,18 @@ begin
       Halt(1);
     end;
   end;
-  
+
   // Run tests
   TestAES256GCM;
   TestChaCha20Poly1305;
   TestTamperingDetection;
-  
+
   // Print summary
   PrintResults;
-  
+
   // Cleanup
   UnloadOpenSSLLibrary;
-  
+
   // Exit with appropriate code
   if PassedTests = TotalTests then
     Halt(0)

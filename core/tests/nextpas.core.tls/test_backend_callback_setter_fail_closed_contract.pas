@@ -3,7 +3,7 @@ program test_backend_callback_setter_fail_closed_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,

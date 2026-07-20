@@ -421,8 +421,8 @@ begin
                  nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
-    { IOCP has no AsyncSendTo yet; keep case non-empty for Win64 compile. }
-    pbIocp: Result := False;
+    pbIocp: Result := FIocp.AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+               nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
     {$ENDIF}
   else
     Result := False;
@@ -448,8 +448,8 @@ begin
                  nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
-    { IOCP has no AsyncRecvFrom yet; keep case non-empty for Win64 compile. }
-    pbIocp: Result := False;
+    pbIocp: Result := FIocp.AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+               nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
     {$ENDIF}
   else
     Result := False;

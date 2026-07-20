@@ -8,7 +8,7 @@ program test_context_builder_try;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,

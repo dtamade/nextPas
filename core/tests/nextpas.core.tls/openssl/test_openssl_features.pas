@@ -3,7 +3,7 @@ program test_openssl_features;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DynLibs,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, DynLibs,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   fafafa.ssl,

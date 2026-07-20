@@ -4,8 +4,8 @@ program test_winssl_integration_multi;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, SysUtils, Classes, WinSock2,
-  
+  Windows, nextpas.core.system.sysutils, nextpas.core.system.classes, WinSock2,
+
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,

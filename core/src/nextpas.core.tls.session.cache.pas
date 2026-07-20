@@ -29,7 +29,6 @@ uses
   nextpas.core.io.intf,
   nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.sync,
   nextpas.core.collections.hashmap,
-  {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.base,

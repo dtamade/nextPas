@@ -67,7 +67,8 @@ bash core/scripts/async-windows-smoke-streak.sh
 - Q33 expansion required this fix for dial/resolve/udp/pool/accept/cancel suites.
 - **Q36**: sync `net.tcp`/`net.udp` use `TPlatformSockAddr` only (no POSIX `sockaddr_in` in product path).
 - **Q37**: `async.tcp` no longer calls `accept4` (uses `platform_socket_accept` for sync try); `async.udp` uses `TPlatformSockAddr` like sync udp — unblocks Windows/macOS **compile** of expanded suites.
-- **Q38**: GHA Q37 showed dial/udp runtime fail + pool hang; STRICT smoke narrowed to proven-green + suite timeout; soft list keeps aspirational signal without red/hang CI.
+- **Q39**: ConnectEx pre-bind + WSAGetLastError for dial path.
+- **Q40**: IOCP `AsyncSendTo`/`AsyncRecvFrom` (WSASendTo/WSARecvFrom) for async UDP.
 
 ## Full `truth=native-windows` (deferred)
 

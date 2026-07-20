@@ -3,7 +3,7 @@ program test_cert_utils_generate_signed_pem_export_bio_new_nil_result_family_con
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

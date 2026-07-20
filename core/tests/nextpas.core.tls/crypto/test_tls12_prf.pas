@@ -3,7 +3,7 @@ program test_tls12_prf;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.crypto.tls12prf;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.tls12prf;
 
 var
   GPassCount: Integer = 0;

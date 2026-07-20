@@ -34,7 +34,7 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,

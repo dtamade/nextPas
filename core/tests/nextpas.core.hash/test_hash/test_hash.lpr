@@ -3,7 +3,7 @@ program test_hash;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.hash.base,

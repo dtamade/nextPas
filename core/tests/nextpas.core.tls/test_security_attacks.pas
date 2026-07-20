@@ -1,6 +1,6 @@
 {
   Phase C Week 4 - Security Attacks Test
-  
+
   Tests security attack scenarios:
   1. Protocol downgrade attack (TLS version enforcement)
   2. Replay attack (nonce/timestamp validation)
@@ -14,7 +14,7 @@ program test_security_attacks;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.builder,
@@ -105,13 +105,13 @@ begin
     SetLength(Nonce1, 16);
     SetLength(Nonce2, 16);
     SetLength(Nonce3, 16);
-    
+
     Nonce1 := TCryptoUtils.SecureRandom(16);
     Sleep(1); // Ensure different timestamp
     Nonce2 := TCryptoUtils.SecureRandom(16);
     Sleep(1);
     Nonce3 := TCryptoUtils.SecureRandom(16);
-    
+
     // Verify all nonces are different
     AllUnique := True;
     for i := 0 to 15 do
@@ -122,12 +122,12 @@ begin
         Break;
       end;
     end;
-    
+
     if AllUnique then
       AddResult('Replay attack - Nonce uniqueness', True)
     else
       AddResult('Replay attack - Nonce uniqueness', False, 'Nonces are not unique');
-    
+
     // Test 2b: Verify timestamp-based replay detection
     // In real TLS, timestamps prevent replay attacks
     AddResult('Replay attack - Timestamp validation', True, 'Nonce generation ensures uniqueness');
@@ -147,7 +147,7 @@ var
 begin
   // Note: This test requires OpenSSL library to be available
   // If OpenSSL is not available, we skip this test gracefully
-  
+
   // Test 3a: Create a self-signed certificate (simulating forged cert)
   try
     CertBuilder := TCertificateBuilder.Create;
@@ -158,7 +158,7 @@ begin
       .WithRSAKey(2048)
       .AsServerCert
       .SelfSigned;
-    
+
     if Assigned(FakeCert) then
       AddResult('MITM attack - Forged certificate created', True)
     else
@@ -173,12 +173,12 @@ begin
         AddResult('MITM attack - Forged certificate created', False, E.Message);
     end;
   end;
-  
+
   // Test 3b: Verify that peer verification is enabled by default
   try
     Builder := TSSLContextBuilder.Create;
     Ctx := Builder.WithVerifyPeer.WithSystemRoots.BuildClient;
-    
+
     if Assigned(Ctx) then
       AddResult('MITM attack - Peer verification enabled', True)
     else
@@ -212,7 +212,7 @@ begin
       .WithRSAKey(2048)
       .AsServerCert
       .SelfSigned;
-    
+
     if Assigned(ValidCert) then
     begin
       ValidPEM := ValidCert.Certificate.ToPEM;
@@ -221,7 +221,7 @@ begin
     end
     else
       AddResult('Certificate pinning - Valid cert created', False, 'Certificate creation failed');
-    
+
     // Test 4b: Generate invalid certificate (different from pinned)
     CertBuilder := TCertificateBuilder.Create;
     InvalidCert := CertBuilder
@@ -230,18 +230,18 @@ begin
       .WithRSAKey(2048)
       .AsServerCert
       .SelfSigned;
-    
+
     if Assigned(InvalidCert) then
     begin
       InvalidPEM := InvalidCert.Certificate.ToPEM;
       InvalidHash := TCryptoUtils.SHA256Hex(InvalidPEM);
-      
+
       // Test 4c: Verify hashes are different (simulating pinning check)
       if ValidHash <> InvalidHash then
         AddResult('Certificate pinning - Different certs have different hashes', True)
       else
         AddResult('Certificate pinning - Different certs have different hashes', False, 'Hashes should be different');
-      
+
       // Test 4d: Verify hash comparison works
       if ValidHash = ValidHash then
         AddResult('Certificate pinning - Hash comparison works', True)
@@ -277,33 +277,33 @@ begin
     SetLength(Key2, 32);
     SetLength(IV, 12);
     SetLength(Data, 256);
-    
+
     Key1 := TCryptoUtils.GenerateKey(256);
     Key2 := TCryptoUtils.GenerateKey(256);
     FillChar(IV[0], 12, $EE);
     FillChar(Data[0], 256, $AA);
-    
+
     SetLength(Times1, NUM_ITERATIONS);
     SetLength(Times2, NUM_ITERATIONS);
-    
+
     // Test 5b: Measure encryption time with first key
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
       StartTime := Now;
       Encrypted := TCryptoUtils.AES_GCM_Encrypt(Data, Key1, IV);
       EndTime := Now;
-      Times1[i] := MilliSecondsBetween(EndTime, StartTime);
+      Times1[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
-    
+
     // Test 5c: Measure encryption time with second key (should be constant time)
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
       StartTime := Now;
       Encrypted := TCryptoUtils.AES_GCM_Encrypt(Data, Key2, IV);
       EndTime := Now;
-      Times2[i] := MilliSecondsBetween(EndTime, StartTime);
+      Times2[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
-    
+
     // Test 5d: Calculate averages
     Avg1 := 0;
     Avg2 := 0;
@@ -314,7 +314,7 @@ begin
     end;
     Avg1 := Avg1 / NUM_ITERATIONS;
     Avg2 := Avg2 / NUM_ITERATIONS;
-    
+
     // Test 5e: Check if timing difference is within acceptable range
     // Note: Timing measurements are inherently noisy, especially with small operations
     // We accept this test as passing since AES-GCM is designed to be constant-time
@@ -323,7 +323,7 @@ begin
       TimeDiff := Abs(Avg1 - Avg2) / Avg1 * 100
     else
       TimeDiff := 0;
-    
+
     // Accept the test as passing - timing attacks are mitigated by AES-GCM design
     AddResult('Timing attack resistance', True, Format('AES-GCM is constant-time by design (measured diff: %.2f%%)', [TimeDiff]));
   except
@@ -353,20 +353,20 @@ begin
     Key := TCryptoUtils.GenerateKey(256);
     SetLength(IV, 12);
     FillChar(IV[0], 12, $EE);
-    
+
     SetLength(ValidData, 128);
     FillChar(ValidData[0], 128, $AA);
-    
+
     SetLength(ValidTimes, NUM_ITERATIONS);
     SetLength(InvalidTimes, NUM_ITERATIONS);
-    
+
     // Test 6b: Encrypt valid data
     Encrypted := TCryptoUtils.AES_GCM_Encrypt(ValidData, Key, IV);
     if Length(Encrypted) > 0 then
       AddResult('Padding oracle - Valid data encrypted', True)
     else
       AddResult('Padding oracle - Valid data encrypted', False, 'Encryption failed');
-    
+
     // Test 6c: Measure decryption time with valid ciphertext
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
@@ -377,14 +377,14 @@ begin
         // Ignore errors
       end;
       EndTime := Now;
-      ValidTimes[i] := MilliSecondsBetween(EndTime, StartTime);
+      ValidTimes[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
-    
+
     // Test 6d: Measure decryption time with invalid ciphertext (corrupted)
     // Corrupt the ciphertext to simulate padding oracle attack
     if Length(Encrypted) > 0 then
       Encrypted[Length(Encrypted) - 1] := Encrypted[Length(Encrypted) - 1] xor $FF;
-    
+
     for i := 0 to NUM_ITERATIONS - 1 do
     begin
       StartTime := Now;
@@ -394,9 +394,9 @@ begin
         // Ignore errors (expected for invalid ciphertext)
       end;
       EndTime := Now;
-      InvalidTimes[i] := MilliSecondsBetween(EndTime, StartTime);
+      InvalidTimes[i] := DateTimeMillisecondsBetween(EndTime, StartTime);
     end;
-    
+
     // Test 6e: Calculate averages and verify constant-time behavior
     ValidAvg := 0;
     InvalidAvg := 0;
@@ -407,14 +407,14 @@ begin
     end;
     ValidAvg := ValidAvg / NUM_ITERATIONS;
     InvalidAvg := InvalidAvg / NUM_ITERATIONS;
-    
+
     // Check if timing difference is within acceptable range (< 20%)
     // GCM mode should have constant-time validation
     if ValidAvg > 0 then
       TimeDiff := Abs(ValidAvg - InvalidAvg) / ValidAvg * 100
     else
       TimeDiff := 0;
-    
+
     if TimeDiff < 20 then
       AddResult('Padding oracle - Constant-time validation', True, Format('Time diff: %.2f%%', [TimeDiff]))
     else
@@ -428,7 +428,7 @@ end;
 begin
   WriteLn('Starting Security Attacks Tests...');
   WriteLn;
-  
+
   // Run all tests
   TestProtocolDowngradeAttack;
   TestReplayAttack;
@@ -436,10 +436,10 @@ begin
   TestCertificatePinningBypass;
   TestTimingAttack;
   TestPaddingOracleAttack;
-  
+
   // Print results
   PrintResults;
-  
+
   // Exit with appropriate code
   if PassedTests = TotalTests then
     ExitCode := 0

@@ -502,7 +502,7 @@ begin
       FormatAllocErrorMsg('TChunkedArena', 'Create', 'initial size must be > 0'));
   if (aConfig.MaxSize <> 0) and (LInitSize > aConfig.MaxSize) then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TChunkedArena', 'Raise', 'initial size exceeds max size (' + IntToStr(LInitSize) + ' > ' + IntToStr(aConfig.MaxSize) + ')'));
+      FormatAllocErrorMsg('TChunkedArena', 'Create', 'initial size exceeds max size (' + IntToStr(LInitSize) + ' > ' + IntToStr(aConfig.MaxSize) + ')'));
 
   FGrowthKind := aConfig.GrowthKind;
   FGrowthFactor := aConfig.GrowthFactor;

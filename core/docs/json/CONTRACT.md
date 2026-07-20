@@ -59,12 +59,12 @@ function JsonStringify(const AValue: TJsonValue): string;
 
 ### 2.2 `TJsonValue` 访问（`json.value`）
 
-- 类型判断：`IsValid`、`IsNull`、`IsBool`、`IsInt`、`IsReal`、`IsStr`、`IsArray`、`IsObject`、`Kind`
+- 类型判断：`IsValid`、`IsNull`、`IsBool`、`IsInt`、`IsReal`（别名 `IsFloat`）、`IsStr`、`IsArray`、`IsObject`、`Kind`
 - 标量：`AsBool`、`AsInt`、`AsFloat`、`AsStr`（`TStringView`）
 - 安全出参：`TryAsBool`、`TryAsInt`、`TryAsFloat`、`TryAsStr`（类型匹配时 `True` + out；否则 `False` + 安全默认）
 - 数组：`ArrayLen`、`ArrayGet`
-- 对象：`ObjectGet`、`ObjectHas`、`ObjectLen`、`ObjectKeyAt`、`ObjectValueAt`
-- **`As*` 非法访问返回安全默认值**（0 / empty / false / invalid view），不抛异常
+- 对象：`ObjectGet`、`Get`（`ObjectGet` 别名）、`ObjectHas`、`ObjectLen`、`ObjectKeyAt`、`ObjectValueAt`
+- **`As*` 非法访问返回安全默认值**（0 / empty / false / invalid view），不抛异常 — 应用代码优先 `TryAs*`
 
 ### 2.3 可选子面
 

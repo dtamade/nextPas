@@ -6,7 +6,7 @@ program test_factory_server_name_compatibility_warning;
   TSSLConfig.ServerName compatibility warnings on factory paths. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

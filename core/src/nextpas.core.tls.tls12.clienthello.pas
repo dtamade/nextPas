@@ -24,6 +24,7 @@ function BuildTLS12ClientHello(const AOptions: TTLS12ClientHelloOptions; const A
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.errors,
   nextpas.core.tls.tls12.wire;
 
@@ -161,7 +162,7 @@ begin
   AppendByte(LBody, TLS12_VERSION_MINOR);
 
   if Length(AClientRandom) <> 32 then
-    raise Exception.Create('ClientRandom must be 32 bytes');
+    raise ESSLInvalidArgument.Create('ClientRandom must be 32 bytes');
   AppendBytes(LBody, AClientRandom);
 
   // Session ID

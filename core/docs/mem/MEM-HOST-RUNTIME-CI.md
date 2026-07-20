@@ -18,14 +18,20 @@
 
 **不**在 matrix 里跑完整 `lane-focused`（过重）。
 
-### 可选：HEAP_SAFETY 习惯入口（默认不进 matrix）
+### 可选：HEAP_SAFETY 习惯入口（默认不进 matrix / 不进 lane_gate）
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.mem/test_heap_safety_profile
 # ≡ NEXTPAS_MEM_HEAP_SAFETY=1 make -C .../test_double_free clean test
 ```
 
-生产默认仍 **关** SAFETY；改堆安全诊断或 DEBUG 链时再跑。
+| 场景 | 是否跑 |
+|------|--------|
+| 默认 `lane-focused LANE=mem` | **否**（防税） |
+| 改 sentinel/tracking/double-free/DEBUG 链 | **是** |
+| core-ci matrix | **否**（可选 best-effort 另议） |
+
+生产默认仍 **关** SAFETY；热路径零税优先。
 
 ---
 

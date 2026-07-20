@@ -23,7 +23,7 @@ program test_p2_cms_boundary;
 }
 
 uses
-  SysUtils, Classes, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.cms,
   nextpas.core.tls.openssl.api.x509,

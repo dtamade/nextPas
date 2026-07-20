@@ -8,7 +8,7 @@ program test_ec_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DynLibs,
+  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,

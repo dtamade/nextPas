@@ -3,7 +3,7 @@ program test_certchain_trusted_store_subject_lookup_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,

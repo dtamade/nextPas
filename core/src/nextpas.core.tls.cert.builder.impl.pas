@@ -228,9 +228,6 @@ end;
 
 destructor TCertificateImpl.Destroy;
 begin
-  if Assigned(FInfo.SubjectAltNames) then
-    FInfo.SubjectAltNames.Free;
-
   // Free OpenSSL handle if we own it
   if FOwnsHandle and Assigned(FX509) then
     X509_free(FX509);
@@ -325,16 +322,8 @@ begin
 end;
 
 function TCertificateImpl.GetSubjectAltNames: nextpas.core.base.TStringArray;
-var
-  I: Integer;
 begin
-  SetLength(Result, 0);
-  if Assigned(FInfo.SubjectAltNames) then
-  begin
-    SetLength(Result, FInfo.SubjectAltNames.Count);
-    for I := 0 to FInfo.SubjectAltNames.Count - 1 do
-      Result[I] := FInfo.SubjectAltNames[I];
-  end;
+  Result := Copy(FInfo.SubjectAltNames);
 end;
 
 function TCertificateImpl.IsCA: Boolean;
@@ -512,8 +501,6 @@ end;
 
 destructor TCertificateBuilderImpl.Destroy;
 begin
-  if Assigned(FOptions.SubjectAltNames) then
-    FOptions.SubjectAltNames.Free;
   inherited;
 end;
 
@@ -603,9 +590,7 @@ end;
 
 function TCertificateBuilderImpl.AddSubjectAltName(const ASAN: string): ICertificateBuilder;
 begin
-  if not Assigned(FOptions.SubjectAltNames) then
-    FOptions.SubjectAltNames := TStringList.Create;
-  FOptions.SubjectAltNames.Add(ASAN);
+  CertOptionsAddSAN(FOptions, ASAN);
   Result := Self;
 end;
 

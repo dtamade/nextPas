@@ -214,7 +214,6 @@ procedure ResetDefaultFreePascalEarlyDataReplayStoreDirectoryForTesting;
 implementation
 
 uses
-  DateUtils,
   nextpas.core.tls.freepascal.earlydatareplay.dirstore;
 
 const
@@ -795,7 +794,7 @@ begin
     LEffectiveTimeout := Integer(LResumptionSession.GetTicketLifetime);
 
   if LEffectiveTimeout > 0 then
-    AExpiresAt := IncSecond(ASession.GetCreationTime, LEffectiveTimeout);
+    AExpiresAt := DateTimeAddSeconds(ASession.GetCreationTime, LEffectiveTimeout);
 
   Result := True;
 end;

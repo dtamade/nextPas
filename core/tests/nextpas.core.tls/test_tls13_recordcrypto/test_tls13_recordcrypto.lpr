@@ -3,7 +3,7 @@ program test_tls13_recordcrypto;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.test;
 

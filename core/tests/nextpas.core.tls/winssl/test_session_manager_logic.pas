@@ -2,21 +2,21 @@ program test_session_manager_logic;
 
 {$mode objfpc}{$H+}{$J-}
 
-{ 
+{
   任务 10.1: 会话管理器测试
-  
+
   测试内容:
   - AddSession 方法(线程安全)
   - GetSession 方法(线程安全)
   - RemoveSession 方法(线程安全)
   - CleanupExpired 方法
   - 最大会话数限制
-  
+
   验证需求: 4.4, 4.5, 4.6, 4.7
 }
 
 uses
-  SysUtils, DateUtils, Classes, SyncObjs;
+  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes, SyncObjs;
 
 type
   TSSLProtocolVersion = (
@@ -61,7 +61,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    
+
     procedure AddSession(const AID: string; ASession: ISSLSession);
     function GetSession(const AID: string): ISSLSession;
     procedure RemoveSession(const AID: string);
@@ -142,13 +142,13 @@ begin
     LIndex := FSessions.IndexOf(AID);
     if LIndex >= 0 then
       FSessions.Delete(LIndex);
-    
+
     // 增加引用计数
     if ASession <> nil then
       ASession._AddRef;
-    
+
     FSessions.AddObject(AID, TObject(Pointer(ASession)));
-    
+
     // 限制最大会话数
     while FSessions.Count > FMaxSessions do
     begin
@@ -280,21 +280,21 @@ var
   LSession1, LSession2: ISSLSession;
 begin
   BeginSection('测试 1: 添加和获取会话');
-  
+
   LManager := TSessionManager.Create;
   try
     // 创建会话
     LSession1 := TMockSession.Create('session1', 3600);
-    
+
     // 添加会话
     LManager.AddSession('session1', LSession1);
     Check('添加会话成功', LManager.GetSessionCount = 1);
-    
+
     // 获取会话
     LSession2 := LManager.GetSession('session1');
     Check('获取会话成功', LSession2 <> nil);
     Check('获取的会话 ID 正确', LSession2.GetID = 'session1');
-    
+
     // 获取不存在的会话
     LSession2 := LManager.GetSession('nonexistent');
     Check('获取不存在的会话返回 nil', LSession2 = nil);
@@ -310,22 +310,22 @@ var
   LSession: ISSLSession;
 begin
   BeginSection('测试 2: 删除会话');
-  
+
   LManager := TSessionManager.Create;
   try
     // 添加会话
     LSession := TMockSession.Create('session1', 3600);
     LManager.AddSession('session1', LSession);
     Check('添加会话', LManager.GetSessionCount = 1);
-    
+
     // 删除会话
     LManager.RemoveSession('session1');
     Check('删除会话后计数为 0', LManager.GetSessionCount = 0);
-    
+
     // 获取已删除的会话
     LSession := LManager.GetSession('session1');
     Check('获取已删除的会话返回 nil', LSession = nil);
-    
+
     // 删除不存在的会话(不应该崩溃)
     LManager.RemoveSession('nonexistent');
     Check('删除不存在的会话不崩溃', True);
@@ -341,39 +341,39 @@ var
   LSession1, LSession2, LSession3: ISSLSession;
 begin
   BeginSection('测试 3: 清理过期会话');
-  
+
   LManager := TSessionManager.Create;
   try
     // 添加有效会话(超时 3600 秒)
     LSession1 := TMockSession.Create('session1', 3600);
     LManager.AddSession('session1', LSession1);
-    
+
     // 添加即将过期的会话(超时 1 秒)
     LSession2 := TMockSession.Create('session2', 1);
     LManager.AddSession('session2', LSession2);
-    
+
     // 添加另一个有效会话
     LSession3 := TMockSession.Create('session3', 3600);
     LManager.AddSession('session3', LSession3);
-    
+
     Check('添加 3 个会话', LManager.GetSessionCount = 3);
-    
+
     // 等待 2 秒让 session2 过期
     WriteLn('    等待 2 秒让会话过期...');
     Sleep(2000);
-    
+
     // 清理过期会话
     LManager.CleanupExpired;
     Check('清理后剩余 2 个会话', LManager.GetSessionCount = 2);
-    
+
     // 验证过期的会话被删除
     LSession2 := LManager.GetSession('session2');
     Check('过期会话被删除', LSession2 = nil);
-    
+
     // 验证有效会话仍然存在
     LSession1 := LManager.GetSession('session1');
     Check('有效会话 1 仍存在', LSession1 <> nil);
-    
+
     LSession3 := LManager.GetSession('session3');
     Check('有效会话 3 仍存在', LSession3 <> nil);
   finally
@@ -389,26 +389,26 @@ var
   i: Integer;
 begin
   BeginSection('测试 4: 最大会话数限制');
-  
+
   LManager := TSessionManager.Create;
   try
     // 设置最大会话数为 5
     LManager.SetMaxSessions(5);
-    
+
     // 添加 10 个会话
     for i := 1 to 10 do
     begin
       LSession := TMockSession.Create('session' + IntToStr(i), 3600);
       LManager.AddSession('session' + IntToStr(i), LSession);
     end;
-    
+
     // 验证只保留最后 5 个会话
     Check('会话数限制为 5', LManager.GetSessionCount = 5);
-    
+
     // 验证最早的会话被删除
     LSession := LManager.GetSession('session1');
     Check('最早的会话被删除', LSession = nil);
-    
+
     // 验证最新的会话仍然存在
     LSession := LManager.GetSession('session10');
     Check('最新的会话仍存在', LSession <> nil);
@@ -425,7 +425,7 @@ var
   i: Integer;
 begin
   BeginSection('测试 5: 多个会话管理');
-  
+
   LManager := TSessionManager.Create;
   try
     // 添加多个会话
@@ -434,9 +434,9 @@ begin
       LSession := TMockSession.Create('session' + IntToStr(i), 3600);
       LManager.AddSession('session' + IntToStr(i), LSession);
     end;
-    
+
     Check('添加 10 个会话', LManager.GetSessionCount = 10);
-    
+
     // 获取所有会话
     for i := 1 to 10 do
     begin
@@ -448,11 +448,11 @@ begin
       end;
     end;
     Check('所有会话都可获取', True);
-    
+
     // 删除部分会话
     for i := 1 to 5 do
       LManager.RemoveSession('session' + IntToStr(i));
-    
+
     Check('删除 5 个会话后剩余 5 个', LManager.GetSessionCount = 5);
   finally
     LManager.Free;
@@ -466,18 +466,18 @@ var
   LSession: ISSLSession;
 begin
   BeginSection('测试 6: 获取过期会话自动清理');
-  
+
   LManager := TSessionManager.Create;
   try
     // 添加即将过期的会话(超时 1 秒)
     LSession := TMockSession.Create('session1', 1);
     LManager.AddSession('session1', LSession);
     Check('添加会话', LManager.GetSessionCount = 1);
-    
+
     // 等待 2 秒让会话过期
     WriteLn('    等待 2 秒让会话过期...');
     Sleep(2000);
-    
+
     // 尝试获取过期会话(应该自动清理)
     LSession := LManager.GetSession('session1');
     Check('获取过期会话返回 nil', LSession = nil);
@@ -505,7 +505,7 @@ begin
   Total := 0;
   Passed := 0;
   Failed := 0;
-  
+
   WriteLn('================================================================');
   WriteLn('WinSSL 会话管理器逻辑测试');
   WriteLn('================================================================');
@@ -514,16 +514,16 @@ begin
   WriteLn;
   WriteLn('注意: 这是逻辑测试,模拟会话管理器的行为');
   WriteLn;
-  
+
   TestAddAndGetSession;
   TestRemoveSession;
   TestCleanupExpired;
   TestMaxSessionsLimit;
   TestMultipleSessions;
   TestGetExpiredSessionAutoCleanup;
-  
+
   PrintSummary;
-  
+
   if Failed > 0 then
     Halt(1);
 end.

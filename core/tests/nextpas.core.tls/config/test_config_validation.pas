@@ -16,7 +16,7 @@ program test_config_validation;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,

@@ -3,7 +3,7 @@ program test_evp_cipher;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
 
@@ -60,7 +60,7 @@ begin
       Exit;
     end;
     WriteLn('  [+] AES-128-CBC cipher obtained');
-    
+
     // === ENCRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -68,7 +68,7 @@ begin
       WriteLn('  [-] Failed to create cipher context');
       Exit;
     end;
-    
+
     try
       // Initialize encryption
       if EVP_EncryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -76,19 +76,19 @@ begin
         WriteLn('  [-] Failed to initialize encryption');
         Exit;
       end;
-      
+
       // Prepare output buffer (plaintext size + block size for padding)
       SetLength(ciphertext, Length(TestPlaintext) + 32);
-      
+
       // Encrypt
       outlen := 0;
-      if EVP_EncryptUpdate(ctx, @ciphertext[0], outlen, 
+      if EVP_EncryptUpdate(ctx, @ciphertext[0], outlen,
          PByte(TestPlaintext), Length(TestPlaintext)) <> 1 then
       begin
         WriteLn('  [-] Failed to encrypt data');
         Exit;
       end;
-      
+
       // Finalize encryption
       tmplen := 0;
       if EVP_EncryptFinal_ex(ctx, @ciphertext[outlen], tmplen) <> 1 then
@@ -96,16 +96,16 @@ begin
         WriteLn('  [-] Failed to finalize encryption');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(ciphertext, outlen);
       WriteLn('  [+] Encryption successful (', outlen, ' bytes)');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // === DECRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -113,7 +113,7 @@ begin
       WriteLn('  [-] Failed to create cipher context for decryption');
       Exit;
     end;
-    
+
     try
       // Initialize decryption
       if EVP_DecryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -121,10 +121,10 @@ begin
         WriteLn('  [-] Failed to initialize decryption');
         Exit;
       end;
-      
+
       // Prepare output buffer
       SetLength(plaintext, Length(ciphertext) + 16);
-      
+
       // Decrypt
       outlen := 0;
       if EVP_DecryptUpdate(ctx, @plaintext[0], outlen,
@@ -133,7 +133,7 @@ begin
         WriteLn('  [-] Failed to decrypt data');
         Exit;
       end;
-      
+
       // Finalize decryption
       tmplen := 0;
       if EVP_DecryptFinal_ex(ctx, @plaintext[outlen], tmplen) <> 1 then
@@ -141,10 +141,10 @@ begin
         WriteLn('  [-] Failed to finalize decryption');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(plaintext, outlen);
-      
+
       // Verify result
       if CompareMem(@plaintext[0], PByte(TestPlaintext), Length(TestPlaintext)) then
       begin
@@ -154,18 +154,18 @@ begin
       end
       else
         WriteLn('  [-] Decryption result mismatch!');
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   finally
     if success then
       WriteLn('  ✅ AES-128-CBC test PASSED')
     else
       WriteLn('  ❌ AES-128-CBC test FAILED');
   end;
-  
+
   WriteLn;
 end;
 
@@ -210,7 +210,7 @@ begin
       Exit;
     end;
     WriteLn('  [+] AES-256-GCM cipher obtained');
-    
+
     // === ENCRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -218,7 +218,7 @@ begin
       WriteLn('  [-] Failed to create cipher context');
       Exit;
     end;
-    
+
     try
       // Initialize encryption
       if EVP_EncryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -226,17 +226,17 @@ begin
         WriteLn('  [-] Failed to initialize encryption');
         Exit;
       end;
-      
+
       // Set AAD
       if EVP_EncryptUpdate(ctx, nil, outlen, PByte(TestAAD), Length(TestAAD)) <> 1 then
       begin
         WriteLn('  [-] Failed to set AAD');
         Exit;
       end;
-      
+
       // Prepare output buffer
       SetLength(ciphertext, Length(TestPlaintext) + 16);
-      
+
       // Encrypt
       if EVP_EncryptUpdate(ctx, @ciphertext[0], outlen,
          PByte(TestPlaintext), Length(TestPlaintext)) <> 1 then
@@ -244,32 +244,32 @@ begin
         WriteLn('  [-] Failed to encrypt data');
         Exit;
       end;
-      
+
       // Finalize encryption
       if EVP_EncryptFinal_ex(ctx, @ciphertext[outlen], tmplen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize encryption');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(ciphertext, outlen);
-      
+
       // Get authentication tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, @tag[0]) <> 1 then
       begin
         WriteLn('  [-] Failed to get authentication tag');
         Exit;
       end;
-      
+
       WriteLn('  [+] Encryption successful (', outlen, ' bytes)');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext));
       WriteLn('      Tag: ', BytesToHex(tag));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // === DECRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -277,7 +277,7 @@ begin
       WriteLn('  [-] Failed to create cipher context for decryption');
       Exit;
     end;
-    
+
     try
       // Initialize decryption
       if EVP_DecryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -285,17 +285,17 @@ begin
         WriteLn('  [-] Failed to initialize decryption');
         Exit;
       end;
-      
+
       // Set AAD
       if EVP_DecryptUpdate(ctx, nil, outlen, PByte(TestAAD), Length(TestAAD)) <> 1 then
       begin
         WriteLn('  [-] Failed to set AAD for decryption');
         Exit;
       end;
-      
+
       // Prepare output buffer
       SetLength(plaintext, Length(ciphertext) + 16);
-      
+
       // Decrypt
       if EVP_DecryptUpdate(ctx, @plaintext[0], outlen,
          @ciphertext[0], Length(ciphertext)) <> 1 then
@@ -303,24 +303,24 @@ begin
         WriteLn('  [-] Failed to decrypt data');
         Exit;
       end;
-      
+
       // Set expected tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, @tag[0]) <> 1 then
       begin
         WriteLn('  [-] Failed to set tag');
         Exit;
       end;
-      
+
       // Finalize decryption (verifies tag)
       if EVP_DecryptFinal_ex(ctx, @plaintext[outlen], tmplen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize decryption (tag verification failed)');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(plaintext, outlen);
-      
+
       // Verify result
       if CompareMem(@plaintext[0], PByte(TestPlaintext), Length(TestPlaintext)) then
       begin
@@ -331,18 +331,18 @@ begin
       end
       else
         WriteLn('  [-] Decryption result mismatch!');
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   finally
     if success then
       WriteLn('  ✅ AES-256-GCM test PASSED')
     else
       WriteLn('  ❌ AES-256-GCM test FAILED');
   end;
-  
+
   WriteLn;
 end;
 
@@ -368,10 +368,10 @@ var
 begin
   WriteLn('Testing ChaCha20-Poly1305 Encryption/Decryption...');
   WriteLn;
-  
+
   success := False;
   try
-    
+
     // Get cipher
     cipher := EVP_chacha20_poly1305();
     if not Assigned(cipher) then
@@ -382,7 +382,7 @@ begin
       Exit;
     end;
     WriteLn('  [+] ChaCha20-Poly1305 cipher obtained');
-    
+
     // === ENCRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -390,7 +390,7 @@ begin
       WriteLn('  [-] Failed to create cipher context');
       Exit;
     end;
-    
+
     try
       // Initialize encryption
       if EVP_EncryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -398,10 +398,10 @@ begin
         WriteLn('  [-] Failed to initialize encryption');
         Exit;
       end;
-      
+
       // Prepare output buffer
       SetLength(ciphertext, Length(TestPlaintext) + 16);
-      
+
       // Encrypt
       if EVP_EncryptUpdate(ctx, @ciphertext[0], outlen,
          PByte(TestPlaintext), Length(TestPlaintext)) <> 1 then
@@ -409,32 +409,32 @@ begin
         WriteLn('  [-] Failed to encrypt data');
         Exit;
       end;
-      
+
       // Finalize encryption
       if EVP_EncryptFinal_ex(ctx, @ciphertext[outlen], tmplen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize encryption');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(ciphertext, outlen);
-      
+
       // Get authentication tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, 16, @tag[0]) <> 1 then
       begin
         WriteLn('  [-] Failed to get authentication tag');
         Exit;
       end;
-      
+
       WriteLn('  [+] Encryption successful (', outlen, ' bytes)');
       WriteLn('      Ciphertext: ', BytesToHex(ciphertext));
       WriteLn('      Tag: ', BytesToHex(tag));
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
     // === DECRYPTION ===
     ctx := EVP_CIPHER_CTX_new();
     if not Assigned(ctx) then
@@ -442,7 +442,7 @@ begin
       WriteLn('  [-] Failed to create cipher context for decryption');
       Exit;
     end;
-    
+
     try
       // Initialize decryption
       if EVP_DecryptInit_ex(ctx, cipher, nil, @TestKey[0], @TestIV[0]) <> 1 then
@@ -450,10 +450,10 @@ begin
         WriteLn('  [-] Failed to initialize decryption');
         Exit;
       end;
-      
+
       // Prepare output buffer
       SetLength(plaintext, Length(ciphertext) + 16);
-      
+
       // Decrypt
       if EVP_DecryptUpdate(ctx, @plaintext[0], outlen,
          @ciphertext[0], Length(ciphertext)) <> 1 then
@@ -461,24 +461,24 @@ begin
         WriteLn('  [-] Failed to decrypt data');
         Exit;
       end;
-      
+
       // Set expected tag
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG, 16, @tag[0]) <> 1 then
       begin
         WriteLn('  [-] Failed to set tag');
         Exit;
       end;
-      
+
       // Finalize decryption (verifies tag)
       if EVP_DecryptFinal_ex(ctx, @plaintext[outlen], tmplen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize decryption (tag verification failed)');
         Exit;
       end;
-      
+
       outlen := outlen + tmplen;
       SetLength(plaintext, outlen);
-      
+
       // Verify result
       if CompareMem(@plaintext[0], PByte(TestPlaintext), Length(TestPlaintext)) then
       begin
@@ -489,11 +489,11 @@ begin
       end
       else
         WriteLn('  [-] Decryption result mismatch!');
-      
+
     finally
       EVP_CIPHER_CTX_free(ctx);
     end;
-    
+
   finally
     if success then
       WriteLn('  ✅ ChaCha20-Poly1305 test PASSED')
@@ -502,7 +502,7 @@ begin
     else
       WriteLn('  ❌ ChaCha20-Poly1305 test FAILED');
   end;
-  
+
   WriteLn;
 end;
 

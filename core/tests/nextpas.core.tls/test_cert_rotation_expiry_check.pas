@@ -6,9 +6,9 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   Math,
-  DateUtils,
+  nextpas.core.time,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.rotation,

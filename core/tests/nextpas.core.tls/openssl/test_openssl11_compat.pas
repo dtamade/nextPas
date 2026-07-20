@@ -4,12 +4,12 @@ program test_openssl11_compat;
 
 {
   Simplified OpenSSL 1.1.x Compatibility Test
-  
+
   Tests basic cryptographic operations with OpenSSL 1.1.x
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
@@ -40,13 +40,13 @@ begin
   Result := False;
   try
     LoadOpenSSLCoreWithVersion(sslVersion_1_1);
-    
+
     if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
       Exit;
-      
+
     VersionStr := GetOpenSSLVersionString;
     Result := (Pos('1.1', VersionStr) > 0) or (Pos('1_1', VersionStr) > 0);
-    
+
     if Result then
       WriteLn('  Loaded: ', VersionStr);
   except
@@ -81,11 +81,11 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_sha256();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) = 1 then
         if EVP_DigestUpdate(ctx, @input[1], Length(input)) = 1 then
           if EVP_DigestFinal_ex(ctx, @digest[0], len) = 1 then
@@ -111,11 +111,11 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_sha512();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) = 1 then
         if EVP_DigestUpdate(ctx, @input[1], Length(input)) = 1 then
           if EVP_DigestFinal_ex(ctx, @digest[0], len) = 1 then
@@ -141,11 +141,11 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_md5();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) = 1 then
         if EVP_DigestUpdate(ctx, @input[1], Length(input)) = 1 then
           if EVP_DigestFinal_ex(ctx, @digest[0], len) = 1 then
@@ -172,14 +172,14 @@ begin
     plaintext := 'Hello OpenSSL 1.1.x!';
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_aes_128_cbc();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) = 1 then
         if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) = 1 then
           if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) = 1 then
@@ -207,14 +207,14 @@ begin
     plaintext := 'AES-256 test';
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_aes_256_cbc();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) = 1 then
         if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) = 1 then
           if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) = 1 then
@@ -242,14 +242,14 @@ begin
     plaintext := 'GCM test';
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_aes_128_gcm();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) = 1 then
         if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) = 1 then
           if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) = 1 then
@@ -278,14 +278,14 @@ begin
     plaintext := 'ChaCha20 test';
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_chacha20();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) = 1 then
         if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) = 1 then
           if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) = 1 then
@@ -304,29 +304,29 @@ begin
   WriteLn('  OpenSSL 1.1.x Compatibility Test');
   WriteLn('=========================================');
   WriteLn;
-  
+
   TotalTests := 0;
   PassedTests := 0;
   FailedTests := 0;
-  
+
   WriteLn('=== Core Library ===');
   LogTest('Load OpenSSL 1.1.x', TestLoadOpenSSL11);
   LogTest('Load EVP Module', TestEVPModule);
   WriteLn;
-  
+
   WriteLn('=== Hash Functions ===');
   LogTest('SHA-256', TestSHA256);
   LogTest('SHA-512', TestSHA512);
   LogTest('MD5', TestMD5);
   WriteLn;
-  
+
   WriteLn('=== Symmetric Encryption ===');
   LogTest('AES-128-CBC', TestAES128CBC);
   LogTest('AES-256-CBC', TestAES256CBC);
   LogTest('AES-128-GCM', TestAES128GCM);
   LogTest('ChaCha20', TestChaCha20);
   WriteLn;
-  
+
   WriteLn('=========================================');
   WriteLn('Test Summary');
   WriteLn('=========================================');
@@ -335,7 +335,7 @@ begin
   WriteLn('Failed: ', FailedTests);
   WriteLn('Rate:   ', Format('%.1f%%', [(PassedTests / TotalTests) * 100]));
   WriteLn;
-  
+
   if FailedTests = 0 then
   begin
     WriteLn('[SUCCESS] OpenSSL 1.1.x is fully compatible!');
@@ -352,7 +352,7 @@ begin
   try
     RunAllTests;
     UnloadOpenSSLCore;
-    
+
     if FailedTests > 0 then
       ExitCode := 1;
   except

@@ -3,7 +3,7 @@ program test_p2_cms;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.cms,
@@ -448,12 +448,12 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
     WriteLn('Some tests FAILED! ✗');
-    
+
   WriteLn;
   WriteLn('Note: CMS (Cryptographic Message Syntax) is the modern');
   WriteLn('      successor to PKCS#7 with enhanced features.');
@@ -465,16 +465,16 @@ begin
   WriteLn('Testing OpenSSL CMS (Cryptographic Message Syntax) API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
     LoadOpenSSLX509;
     LoadOpenSSLBIO;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // Run tests
     TestLoadCMSFunctions;
     TestCMSTypeConstants;
@@ -496,16 +496,16 @@ begin
     TestCMSRecipientInfoEncryptDecrypt;
     TestCMSSignerInfoAlgorithmFunctions;
     TestCMSPrintFunction;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

@@ -3,7 +3,7 @@ program test_ringbuffer_perf;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.ringbuffer;
 
 const
@@ -19,15 +19,15 @@ var
   TotalWritten, TotalRead: Integer;
 begin
   WriteLn('=== Dynamic Array Test ===');
-  
+
   // Initialize
   SetLength(Buffer, 0);
   for i := 0 to CHUNK_SIZE-1 do
     WriteData[i] := Byte(i mod 256);
-  
+
   StartTime := Now;
   TotalWritten := 0;
-  
+
   // Write phase
   while TotalWritten < TEST_SIZE do
   begin
@@ -37,7 +37,7 @@ begin
     Move(WriteData[0], Buffer[i], CHUNK_SIZE);
     Inc(TotalWritten, CHUNK_SIZE);
   end;
-  
+
   // Read phase
   TotalRead := 0;
   while TotalRead < TEST_SIZE do
@@ -45,7 +45,7 @@ begin
     // Simulate reading from dynamic array
     Move(Buffer[TotalRead], ReadData[0], CHUNK_SIZE);
     Inc(TotalRead, CHUNK_SIZE);
-    
+
     // Simulate removing read data (expensive!)
     if TotalRead < Length(Buffer) then
     begin
@@ -54,12 +54,12 @@ begin
       TotalRead := 0;
     end;
   end;
-  
+
   EndTime := Now;
-  
-  WriteLn('Time: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
-  WriteLn('Throughput: ', FormatFloat('0.##', 
-    (TEST_SIZE / 1024.0 / 1024.0) / (MilliSecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
+
+  WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
+  WriteLn('Throughput: ', FormatFloat('0.##',
+    (TEST_SIZE / 1024.0 / 1024.0) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
 end;
 
 procedure TestRingBuffer;
@@ -71,17 +71,17 @@ var
   TotalWritten, TotalRead: Integer;
 begin
   WriteLn('=== Ring Buffer Test ===');
-  
+
   // Initialize - 1MB buffer
   Buffer := TRingBuffer.Create(20); // 2^20 = 1MB
   try
     for i := 0 to CHUNK_SIZE-1 do
       WriteData[i] := Byte(i mod 256);
-    
+
     StartTime := Now;
     TotalWritten := 0;
     TotalRead := 0;
-    
+
     // Interleaved read/write (more realistic)
     while (TotalWritten < TEST_SIZE) or (TotalRead < TEST_SIZE) do
     begin
@@ -91,7 +91,7 @@ begin
         Written := Buffer.Write(WriteData, CHUNK_SIZE);
         Inc(TotalWritten, Written);
       end;
-      
+
       // Read if there's data available
       if Buffer.Available >= CHUNK_SIZE then
       begin
@@ -99,12 +99,12 @@ begin
         Inc(TotalRead, Read);
       end;
     end;
-    
+
     EndTime := Now;
-    
-    WriteLn('Time: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
-    WriteLn('Throughput: ', FormatFloat('0.##', 
-      (TEST_SIZE / 1024.0 / 1024.0) / (MilliSecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
+
+    WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
+    WriteLn('Throughput: ', FormatFloat('0.##',
+      (TEST_SIZE / 1024.0 / 1024.0) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
   finally
     Buffer.Free;
   end;
@@ -121,17 +121,17 @@ var
   ReadSize: Integer;
 begin
   WriteLn('=== Ring Buffer Zero-Copy Test ===');
-  
+
   // Initialize - 1MB buffer
   Buffer := TRingBuffer.Create(20); // 2^20 = 1MB
   try
     for i := 0 to CHUNK_SIZE-1 do
       WriteData[i] := Byte(i mod 256);
-    
+
     StartTime := Now;
     TotalWritten := 0;
     TotalRead := 0;
-    
+
     // Interleaved read/write with zero-copy
     while (TotalWritten < TEST_SIZE) or (TotalRead < TEST_SIZE) do
     begin
@@ -141,7 +141,7 @@ begin
         Buffer.Write(WriteData, CHUNK_SIZE);
         Inc(TotalWritten, CHUNK_SIZE);
       end;
-      
+
       // Zero-copy read
       Buffer.GetReadBuffer(ReadPtr, ReadSize);
       if ReadSize > 0 then
@@ -150,17 +150,17 @@ begin
         // In real use, you'd process ReadPtr directly
         if ReadSize > CHUNK_SIZE then
           ReadSize := CHUNK_SIZE;
-        
+
         Buffer.ConfirmRead(ReadSize);
         Inc(TotalRead, ReadSize);
       end;
     end;
-    
+
     EndTime := Now;
-    
-    WriteLn('Time: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
-    WriteLn('Throughput: ', FormatFloat('0.##', 
-      (TEST_SIZE / 1024.0 / 1024.0) / (MilliSecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
+
+    WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
+    WriteLn('Throughput: ', FormatFloat('0.##',
+      (TEST_SIZE / 1024.0 / 1024.0) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
   finally
     Buffer.Free;
   end;
@@ -173,21 +173,21 @@ var
   i: Integer;
 begin
   WriteLn('=== Baseline: Raw Memory Copy ===');
-  
+
   // Initialize source
   for i := 0 to TEST_SIZE-1 do
     Source[i] := Byte(i mod 256);
-  
+
   StartTime := Now;
-  
+
   // Single large copy
   Move(Source[0], Dest[0], TEST_SIZE);
-  
+
   EndTime := Now;
-  
-  WriteLn('Time: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
-  WriteLn('Throughput: ', FormatFloat('0.##', 
-    (TEST_SIZE / 1024.0 / 1024.0) / (MilliSecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
+
+  WriteLn('Time: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
+  WriteLn('Throughput: ', FormatFloat('0.##',
+    (TEST_SIZE / 1024.0 / 1024.0) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000.0)), ' MB/s');
 end;
 
 begin
@@ -195,28 +195,28 @@ begin
   WriteLn('Test data size: ', TEST_SIZE div 1024 div 1024, ' MB');
   WriteLn('Chunk size: ', CHUNK_SIZE, ' bytes');
   WriteLn;
-  
+
   try
     TestMemoryCopy;
     WriteLn;
-    
+
     TestRingBuffer;
     WriteLn;
-    
+
     TestRingBufferZeroCopy;
     WriteLn;
-    
+
     // Dynamic array test is very slow for large data
     if TEST_SIZE <= 1024 * 1024 then
       TestDynamicArray
     else
       WriteLn('=== Dynamic Array Test skipped (too slow for large data) ===');
-    
+
   except
     on E: Exception do
       WriteLn('Error: ', E.Message);
   end;
-  
+
   WriteLn;
   WriteLn('=== Test Complete ===');
 end.

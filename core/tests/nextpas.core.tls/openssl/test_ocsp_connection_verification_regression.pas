@@ -3,7 +3,7 @@ program test_ocsp_connection_verification_regression;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Dynlibs, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Dynlibs, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,

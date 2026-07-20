@@ -3,7 +3,7 @@ program test_sha256;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha256,

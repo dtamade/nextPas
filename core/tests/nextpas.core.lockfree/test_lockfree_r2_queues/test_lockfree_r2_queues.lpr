@@ -415,7 +415,7 @@ var
 begin
   ExpectArgumentError(@CreateZeroCapacityDeque, 'deque rejects zero capacity');
   LPriority := ReadSource('nextpas.core.lockfree.priority_queue.pas');
-  LDeque := ReadSource('nextpas.core.lockfree.deque_lf.pas');
+  LDeque := ReadSource('nextpas.core.lockfree.deque_spin.pas');
   CheckContains(LPriority, 'AInitialCapacity > MaxInt div SizeOf(T)',
     'priority queue validates allocation multiplication');
   LCount := ExtractSection(LPriority, 'function TConcurrentPriorityQueueImpl.Count',
@@ -423,7 +423,14 @@ begin
   CheckContains(LCount, 'platform_mutex_lock(FMutex)',
     'priority queue count uses the writer mutex');
   CheckContains(LDeque, 'FCapacity > High(Int32) div 2',
-    'deque growth rejects Int32 overflow');
+    'deque_spin growth rejects Int32 overflow');
+  CheckContains(LDeque, 'TConcurrentSpinDeque = class',
+    'honest spin deque type name is TConcurrentSpinDeque');
+  LDeque := ReadSource('nextpas.core.lockfree.deque_lf.pas');
+  CheckContains(LDeque, 'TLockFreeDeque = TConcurrentSpinDeque',
+    'deque_lf keeps TLockFreeDeque as historical type alias');
+  CheckContains(LDeque, 'nextpas.core.lockfree.deque_spin',
+    'deque_lf re-exports deque_spin implementation');
 end;
 
 procedure TestSelectorAndExchangerSourceContracts;

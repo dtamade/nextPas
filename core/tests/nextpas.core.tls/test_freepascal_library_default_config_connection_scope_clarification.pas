@@ -3,7 +3,7 @@ program test_freepascal_library_default_config_connection_scope_clarification;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.freepascal.lib;

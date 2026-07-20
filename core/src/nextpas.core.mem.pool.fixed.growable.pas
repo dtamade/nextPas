@@ -159,10 +159,12 @@ begin
   LWordIndex := aBlockIndex shr 6;
   if (aArenaIndex < 0) or (aArenaIndex > High(FArenas)) or
      (LWordIndex >= SizeUInt(Length(FArenas[aArenaIndex].AllocBits))) then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: allocation bitmap out of range');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Internal', 'allocation bitmap out of range'));
   LMask := QWord(1) shl (aBlockIndex and 63);
   if (FArenas[aArenaIndex].AllocBits[LWordIndex] and LMask) <> 0 then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: free stack corruption (double allocate)');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'free stack corruption (double allocate)'));
   FArenas[aArenaIndex].AllocBits[LWordIndex] := FArenas[aArenaIndex].AllocBits[LWordIndex] or LMask;
 end;
 
@@ -174,7 +176,8 @@ begin
   LWordIndex := aBlockIndex shr 6;
   if (aArenaIndex < 0) or (aArenaIndex > High(FArenas)) or
      (LWordIndex >= SizeUInt(Length(FArenas[aArenaIndex].AllocBits))) then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: allocation bitmap out of range');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Internal', 'allocation bitmap out of range'));
   LMask := QWord(1) shl (aBlockIndex and 63);
   FArenas[aArenaIndex].AllocBits[LWordIndex] := FArenas[aArenaIndex].AllocBits[LWordIndex] and (not LMask);
 end;
@@ -201,12 +204,15 @@ begin
   inherited Create;
 
   if (aConfig.BlockSize = 0) then
-    raise EGrowingFixedPoolError.Create(aeInvalidLayout, 'Block size cannot be zero');
+    raise EGrowingFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Create', 'Block size cannot be zero'));
   // 强制 2 的幂：启用位运算路径，提高释放/校验效率
   if (aConfig.BlockSize and (aConfig.BlockSize - 1)) <> 0 then
-    raise EGrowingFixedPoolError.Create(aeInvalidLayout, 'Block size must be power of two');
+    raise EGrowingFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Create', 'Block size must be power of two'));
   if (SizeOf(Pointer) <> 0) and ((aConfig.BlockSize mod SizeOf(Pointer)) <> 0) then
-    raise EGrowingFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of pointer size');
+    raise EGrowingFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Block size must be a multiple of pointer size'));
 
   FConfig := aConfig;
   FBlockSize := aConfig.BlockSize;
@@ -430,16 +436,19 @@ begin
   end;
 
   if not FindArena(aUnit, LArenaIndex) then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: free stack corruption (unknown arena)');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'free stack corruption (unknown arena)'));
 
   LArena := FArenas[LArenaIndex];
   LDiff := PtrUInt(aUnit) - PtrUInt(LArena.Base);
   if (LDiff >= PtrUInt(LArena.Size)) or ((LDiff and PtrUInt(FBlockMask)) <> 0) then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: free stack corruption (misaligned pointer)');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'free stack corruption (misaligned pointer)'));
 
   LBlockIndex := SizeUInt(LDiff shr FBlockShift);
   if LBlockIndex >= LArena.Blocks then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: free stack corruption (block index out of range)');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'free stack corruption (block index out of range)'));
 
   SetAllocatedBit(LArenaIndex, LBlockIndex);
   Inc(FAllocatedCount);
@@ -458,30 +467,37 @@ begin
     Exit;
 
   if not FindArena(aUnit, LArenaIndex) then
-    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Pointer does not belong to this pool'));
 
   LArena := FArenas[LArenaIndex];
   LPtrU := PtrUInt(aUnit);
   LBaseU := PtrUInt(LArena.Base);
   if LPtrU < LBaseU then
-    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer out of range');
+    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Pointer out of range'));
   LDiff := LPtrU - LBaseU;
   if LDiff >= PtrUInt(LArena.Size) then
-    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer out of range');
+    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Pointer out of range'));
   // 位对齐检查（FBlockSize 为 2 的幂）
   if (LDiff and PtrUInt(FBlockMask)) <> 0 then
-    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer is not aligned to block size');
+    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Pointer is not aligned to block size'));
 
   LBlockIndex := SizeUInt(LDiff shr FBlockShift);
   if LBlockIndex >= LArena.Blocks then
-    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer block index out of range');
+    raise EGrowingFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Pointer block index out of range'));
 
   if not IsAllocatedBitSet(LArenaIndex, LBlockIndex) then
-    raise EGrowingFixedPoolDoubleFree.Create(aeDoubleFree, 'Double free detected');
+    raise EGrowingFixedPoolDoubleFree.Create(aeDoubleFree,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'Double free detected'));
   ClearAllocatedBit(LArenaIndex, LBlockIndex);
 
   if FAllocatedCount = 0 then
-    raise EGrowingFixedPoolError.Create(aeInternalError, 'TGrowingFixedPool: allocated counter underflow');
+    raise EGrowingFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TGrowingFixedPool', 'Release', 'allocated counter underflow'));
 
   PushFree(aUnit);
   Dec(FAllocatedCount);

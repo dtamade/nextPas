@@ -3,7 +3,7 @@ program test_tls12_rfc5246_vectors;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.handshakecrypto,
   nextpas.core.tls.crypto.tls12prf,
   nextpas.core.tls.crypto.hash;

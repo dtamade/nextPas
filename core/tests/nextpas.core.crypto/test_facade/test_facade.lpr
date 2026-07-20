@@ -3,7 +3,7 @@ program test_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.hash, nextpas.core.crypto.hmac, nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519, nextpas.core.crypto.aesgcm, nextpas.core.crypto.aescbc,
   nextpas.core.crypto.constant_time, nextpas.core.tls.tls13.chacha20poly1305,

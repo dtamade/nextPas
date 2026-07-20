@@ -242,6 +242,10 @@ var
   LNotifier: TChannelNotifier;
   LData: Pointer;
 begin
+  { Phase E: skip notifier lock on the common path (no selector registered).
+    Matched channel bench and most runtime send/recv never set a notifier. }
+  if atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_NONE then
+    Exit;
   LNotifier := nil;
   LData := nil;
   LockNotifier;

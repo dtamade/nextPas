@@ -4,7 +4,7 @@ unit test_openssl_core_mock;
 
 {
   True TDD Unit Test with Mocks
-  
+
   This demonstrates proper unit testing:
   - Fast execution (no real OpenSSL loading)
   - Isolated (no external dependencies)
@@ -15,7 +15,7 @@ unit test_openssl_core_mock;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test,
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
   test_base,
   openssl_core_interface;
 
@@ -34,23 +34,23 @@ type
     procedure TestLoad_ShouldReturnFalse_WhenConfiguredToFail;
     procedure TestLoad_ShouldIncrementCallCount;
     procedure TestLoad_ShouldBeIdempotent;
-    
+
     // State tests
     procedure TestIsLoaded_ShouldReturnFalse_BeforeLoad;
     procedure TestIsLoaded_ShouldReturnTrue_AfterLoad;
     procedure TestIsLoaded_ShouldReturnFalse_AfterUnload;
-    
+
     // Version tests
     procedure TestGetVersion_ShouldReturnEmpty_WhenNotLoaded;
     procedure TestGetVersion_ShouldReturnValue_WhenLoaded;
     procedure TestGetVersion_ShouldReturnCustomValue_WhenSet;
-    
+
     // Handle tests
     procedure TestGetCryptoHandle_ShouldReturnZero_WhenNotLoaded;
     procedure TestGetCryptoHandle_ShouldReturnNonZero_WhenLoaded;
     procedure TestGetSSLHandle_ShouldReturnZero_WhenNotLoaded;
     procedure TestGetSSLHandle_ShouldReturnNonZero_WhenLoaded;
-    
+
     // Error path tests
     procedure TestLoad_ShouldHandleMultipleFailures;
     procedure TestUnload_ShouldAllowReload;
@@ -82,10 +82,10 @@ var
 begin
   // Given
   // (Mock configured for success by default)
-  
+
   // When
   Result := FCore.LoadLibrary;
-  
+
   // Then
   CheckTrue(Result, 'LoadLibrary should return True');
   CheckTrue(FCore.IsLoaded, 'IsLoaded should be True after load');
@@ -97,10 +97,10 @@ var
 begin
   // Given
   FMock.SetShouldFailLoad(True);
-  
+
   // When
   Result := FCore.LoadLibrary;
-  
+
   // Then
   CheckFalse(Result, 'LoadLibrary should return False when configured to fail');
   CheckFalse(FCore.IsLoaded, 'IsLoaded should be False after failed load');
@@ -112,10 +112,10 @@ var
 begin
   // Given
   CountBefore := FMock.GetLoadCallCount;
-  
+
   // When
   FCore.LoadLibrary;
-  
+
   // Then
   CountAfter := FMock.GetLoadCallCount;
   CheckEqual(CountBefore + 1, CountAfter, 'Call count should increment by 1');
@@ -128,7 +128,7 @@ begin
   // Given & When
   FirstResult := FCore.LoadLibrary;
   SecondResult := FCore.LoadLibrary;
-  
+
   // Then
   CheckTrue(FirstResult, 'First load should succeed');
   CheckTrue(SecondResult, 'Second load should succeed');
@@ -139,7 +139,7 @@ procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnFalse_BeforeLoad;
 begin
   // Given
   // (Fresh mock, not loaded)
-  
+
   // When & Then
   CheckFalse(FCore.IsLoaded, 'IsLoaded should return False before LoadLibrary');
 end;
@@ -148,7 +148,7 @@ procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnTrue_AfterLoad;
 begin
   // Given
   FCore.LoadLibrary;
-  
+
   // When & Then
   CheckTrue(FCore.IsLoaded, 'IsLoaded should return True after LoadLibrary');
 end;
@@ -157,10 +157,10 @@ procedure TTestOpenSSLCoreMock.TestIsLoaded_ShouldReturnFalse_AfterUnload;
 begin
   // Given
   FCore.LoadLibrary;
-  
+
   // When
   FCore.UnloadLibrary;
-  
+
   // Then
   CheckFalse(FCore.IsLoaded, 'IsLoaded should return False after UnloadLibrary');
 end;
@@ -171,10 +171,10 @@ var
 begin
   // Given
   // (Not loaded)
-  
+
   // When
   Version := FCore.GetVersionString;
-  
+
   // Then
   CheckEqual('', Version, 'Version should be empty when not loaded');
 end;
@@ -185,10 +185,10 @@ var
 begin
   // Given
   FCore.LoadLibrary;
-  
+
   // When
   Version := FCore.GetVersionString;
-  
+
   // Then
   CheckTrue(Version <> '', 'Version should not be empty when loaded');
   CheckTrue(Pos('Mock', Version) > 0, 'Version should contain "Mock"');
@@ -202,10 +202,10 @@ begin
   Expected := 'Custom Version 1.2.3';
   FMock.SetVersionString(Expected);
   FCore.LoadLibrary;
-  
+
   // When
   Actual := FCore.GetVersionString;
-  
+
   // Then
   CheckEqual(Expected, Actual, 'Should return custom version');
 end;
@@ -216,10 +216,10 @@ var
 begin
   // Given
   // (Not loaded)
-  
+
   // When
   Handle := FCore.GetCryptoLibHandle;
-  
+
   // Then
   CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
 end;
@@ -230,10 +230,10 @@ var
 begin
   // Given
   FCore.LoadLibrary;
-  
+
   // When
   Handle := FCore.GetCryptoLibHandle;
-  
+
   // Then
   CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
 end;
@@ -244,10 +244,10 @@ var
 begin
   // Given
   // (Not loaded)
-  
+
   // When
   Handle := FCore.GetSSLLibHandle;
-  
+
   // Then
   CheckEqual(NilHandle, Handle, 'Handle should be NilHandle when not loaded');
 end;
@@ -258,10 +258,10 @@ var
 begin
   // Given
   FCore.LoadLibrary;
-  
+
   // When
   Handle := FCore.GetSSLLibHandle;
-  
+
   // Then
   CheckTrue(Handle <> NilHandle, 'Handle should be non-zero when loaded');
 end;
@@ -272,11 +272,11 @@ var
 begin
   // Given
   FMock.SetShouldFailLoad(True);
-  
+
   // When
   Result1 := FCore.LoadLibrary;
   Result2 := FCore.LoadLibrary;
-  
+
   // Then
   CheckFalse(Result1, 'First load should fail');
   CheckFalse(Result2, 'Second load should also fail');
@@ -290,10 +290,10 @@ begin
   // Given
   LoadResult1 := FCore.LoadLibrary;
   FCore.UnloadLibrary;
-  
+
   // When
   LoadResult2 := FCore.LoadLibrary;
-  
+
   // Then
   CheckTrue(LoadResult1, 'First load should succeed');
   CheckTrue(LoadResult2, 'Reload should succeed');

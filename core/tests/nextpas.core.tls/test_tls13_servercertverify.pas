@@ -3,8 +3,8 @@ program test_tls13_servercertverify;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.crypto.bigint,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
@@ -656,7 +656,7 @@ begin
 
   LReader := TPEMReader.Create;
   try
-    LText := AnsiString(TEncoding.ANSI.GetString(APEMBlob));
+    LText := AnsiString(StringOf(APEMBlob));
     LReader.LoadFromString(LText);
     LBlocks := LReader.GetPrivateKeys;
     for I := 0 to High(LBlocks) do
@@ -1308,7 +1308,7 @@ begin
     LWriter.Free;
   end;
 
-  Result := TEncoding.ASCII.GetBytes(UnicodeString(LText));
+  Result := BytesOf(LText);
 end;
 
 procedure AssertPKCS1SignatureMatchesBaseline(
@@ -1730,7 +1730,7 @@ var
   LJunkBytes: TBytes;
 begin
   Result := nil;
-  LJunkBytes := TEncoding.ASCII.GetBytes(JUNK_PREFIX);
+  LJunkBytes := BytesOf(JUNK_PREFIX);
   SetLength(Result, Length(LJunkBytes) + Length(APEMBlob));
   if Length(LJunkBytes) > 0 then
     Move(LJunkBytes[0], Result[0], Length(LJunkBytes));
@@ -1746,7 +1746,7 @@ var
   LOffset: Integer;
 begin
   Result := nil;
-  LSepBytes := TEncoding.ASCII.GetBytes(SEP);
+  LSepBytes := BytesOf(SEP);
   SetLength(Result, Length(APEMBlobA) + Length(LSepBytes) + Length(APEMBlobB));
   LOffset := 0;
   if Length(APEMBlobA) > 0 then
@@ -3966,11 +3966,9 @@ begin
     'matrix-unsupported-scheme'
   );
 
-  LNoKeyPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN CERTIFICATE-----' + LineEnding +
+  LNoKeyPEM := BytesOf('-----BEGIN CERTIFICATE-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END CERTIFICATE-----' + LineEnding
-  );
+    '-----END CERTIFICATE-----' + LineEnding);
   AssertSignerFailureContains(
     TLS13_SIG_RSA_PKCS1_SHA256,
     LNoKeyPEM,
@@ -3979,11 +3977,9 @@ begin
     'matrix-no-private-key-block'
   );
 
-  LEncryptedPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
+  LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding
-  );
+    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding);
   AssertSignerFailureContainsAny(
     TLS13_SIG_RSA_PKCS1_SHA256,
     LEncryptedPEM,
@@ -4078,11 +4074,9 @@ begin
     'boundary-certificate-pem-not-key'
   );
 
-  LMalformedPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN PRIVATE KEY-----' + LineEnding +
+  LMalformedPEM := BytesOf('-----BEGIN PRIVATE KEY-----' + LineEnding +
     '!!!!' + LineEnding +
-    '-----END PRIVATE KEY-----' + LineEnding
-  );
+    '-----END PRIVATE KEY-----' + LineEnding);
   AssertSignerFailureNonEmptyError(
     TLS13_SIG_RSA_PKCS1_SHA256,
     LMalformedPEM,
@@ -4153,11 +4147,9 @@ begin
     'pss-boundary-cert-pem-not-key'
   );
 
-  LEncryptedPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
+  LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding
-  );
+    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding);
   AssertSignerFailureContainsAny(
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     LEncryptedPEM,
@@ -4484,10 +4476,8 @@ begin
     LTranscriptHash[I] := Byte($B0 + I);
   LInput := BuildTLS13ServerCertificateVerifyInputSHA256(LTranscriptHash);
 
-  LMissingEnd := TEncoding.ASCII.GetBytes(
-    '-----BEGIN PRIVATE KEY-----' + LineEnding +
-    'MIIEvQIBADANBgkq' + LineEnding
-  );
+  LMissingEnd := BytesOf('-----BEGIN PRIVATE KEY-----' + LineEnding +
+    'MIIEvQIBADANBgkq' + LineEnding);
 
   AssertTrue(
     not TryBuildTLS13CertificateVerifySignature(
@@ -4501,11 +4491,9 @@ begin
   );
   AssertContains(LErr, 'No private key block found in PEM blob', 'missing-end PEM error message mismatch');
 
-  LMismatchedMarker := TEncoding.ASCII.GetBytes(
-    '-----BEGIN PRIVATE KEY-----' + LineEnding +
+  LMismatchedMarker := BytesOf('-----BEGIN PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END RSA PRIVATE KEY-----' + LineEnding
-  );
+    '-----END RSA PRIVATE KEY-----' + LineEnding);
   AssertTrue(
     not TryBuildTLS13CertificateVerifySignature(
       TLS13_SIG_RSA_PKCS1_SHA256,
@@ -4518,11 +4506,9 @@ begin
   );
   AssertContains(LErr, 'No private key block found in PEM blob', 'mismatched-marker PEM error message mismatch');
 
-  LBrokenBase64 := TEncoding.ASCII.GetBytes(
-    '-----BEGIN PRIVATE KEY-----' + LineEnding +
+  LBrokenBase64 := BytesOf('-----BEGIN PRIVATE KEY-----' + LineEnding +
     '!!!!' + LineEnding +
-    '-----END PRIVATE KEY-----' + LineEnding
-  );
+    '-----END PRIVATE KEY-----' + LineEnding);
   AssertTrue(
     not TryBuildTLS13CertificateVerifySignature(
       TLS13_SIG_RSA_PKCS1_SHA256,
@@ -4550,11 +4536,9 @@ begin
     LTranscriptHash[I] := Byte($C0 + I);
   LInput := BuildTLS13ServerCertificateVerifyInputSHA256(LTranscriptHash);
 
-  LEncryptedLikePEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
+  LEncryptedLikePEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding
-  );
+    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding);
 
   AssertTrue(
     not TryBuildTLS13CertificateVerifySignature(
@@ -4598,11 +4582,9 @@ begin
 
   LUnknownPEM := BuildPEMBlockWithType('FAFAFA UNKNOWN KEY', [$01, $02, $03]);
   LECPRIVATEPEM := BuildPEMBlockWithType('EC PRIVATE KEY', [$01, $02, $03]);
-  LEncryptedPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
+  LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding
-  );
+    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding);
 
   LCombined := BuildPEMWithMultiplePrivateKeys(LEncryptedPEM, LKeyBlob);
   AssertPKCS1SignatureMatchesBaseline(LCombined, LBaselineSig, LInput, 'pem-waveg-encrypted-then-rsa');
@@ -4708,11 +4690,9 @@ begin
   LCertBlob := LoadFileBytes('tests/certificate/test_certs/signer_cert.pem');
   LInput := BuildDeterministicCertVerifyInput($C6);
   LMalformedDER := [$00, $01, $02];
-  LEncryptedPEM := TEncoding.ASCII.GetBytes(
-    '-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
+  LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +
-    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding
-  );
+    '-----END ENCRYPTED PRIVATE KEY-----' + LineEnding);
 
   AssertSignerFailureContains(TLS13_SIG_RSA_PKCS1_SHA256, LKeyBlob, [], 'CertificateVerify input is empty', 'cross-waveg-empty-input-pkcs1');
   AssertSignerFailureContains(TLS13_SIG_RSA_PSS_RSAE_SHA256, LKeyBlob, [], 'CertificateVerify input is empty', 'cross-waveg-empty-input-pss-rsae');

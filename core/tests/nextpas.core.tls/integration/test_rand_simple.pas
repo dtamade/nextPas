@@ -8,7 +8,7 @@ program test_rand_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, ctypes,
+  nextpas.core.system.sysutils, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,

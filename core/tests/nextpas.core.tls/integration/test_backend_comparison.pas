@@ -11,7 +11,7 @@ program test_backend_comparison;
 uses
   {$IFDEF WINDOWS}Windows, WinSock2,{$ENDIF}
   {$IFNDEF WINDOWS}BaseUnix,{$ENDIF}
-  SysUtils, Classes, StrUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, StrUtils,
 
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,

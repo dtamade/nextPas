@@ -3,7 +3,7 @@ program test_quic_crypto;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
   nextpas.core.errors,
   nextpas.core.tls.quic.crypto;

@@ -22,7 +22,7 @@ program test_p2_ocsp_comprehensive;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ocsp,
   nextpas.core.tls.openssl.api.x509,

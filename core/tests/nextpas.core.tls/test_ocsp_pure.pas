@@ -3,7 +3,7 @@ program test_ocsp_pure;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.time,
   nextpas.core.tls.ocsp.pure;
 

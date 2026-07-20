@@ -3,7 +3,7 @@ program test_wolfssl_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,

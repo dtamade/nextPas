@@ -3,7 +3,7 @@ program test_file;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.fs,

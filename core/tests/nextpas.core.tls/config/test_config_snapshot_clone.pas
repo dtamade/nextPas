@@ -16,7 +16,7 @@ program test_config_snapshot_clone;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fpjson, jsonparser,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,

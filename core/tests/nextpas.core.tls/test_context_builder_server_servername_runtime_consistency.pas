@@ -6,7 +6,7 @@ program test_context_builder_server_servername_runtime_consistency;
   WithSNI / direct context ServerName compatibility behavior. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,

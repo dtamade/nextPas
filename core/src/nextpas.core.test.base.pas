@@ -95,6 +95,9 @@ type
     Duration  : Int64;   { suite execution time in milliseconds }
     Results   : TTestResults;
     SlowTests : TTestResults;  { top N slowest tests, populated by runner }
+    { v8.25: stuck timeout-worker threads detached during this suite run
+      (GTimeoutLeakCount delta). Non-zero means at least one test deadlocked. }
+    TimeoutWorkerLeaks: Integer;
     class function Create(const ASuiteName: string): TTestRunResult; static;
   end;
 
@@ -312,6 +315,7 @@ begin
   Result.Duration  := 0;
   Result.Results   := nil;
   Result.SlowTests := nil;
+  Result.TimeoutWorkerLeaks := 0;
 end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }

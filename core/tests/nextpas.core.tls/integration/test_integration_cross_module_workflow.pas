@@ -9,7 +9,7 @@ program test_integration_cross_module_workflow;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pkcs7,

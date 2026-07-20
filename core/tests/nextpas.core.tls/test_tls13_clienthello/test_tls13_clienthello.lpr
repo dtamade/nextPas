@@ -3,7 +3,7 @@ program test_tls13_clienthello;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.test;
 

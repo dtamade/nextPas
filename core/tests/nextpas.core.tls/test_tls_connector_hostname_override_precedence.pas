@@ -3,7 +3,7 @@ program test_tls_connector_hostname_override_precedence;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.tls;

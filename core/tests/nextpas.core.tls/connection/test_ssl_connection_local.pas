@@ -3,9 +3,9 @@ program test_ssl_connection_local;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.backed,
-  
+
   nextpas.core.tls.base;
 
 var
@@ -65,32 +65,32 @@ begin
       TestResult('Create SSL contexts', False, 'Library not initialized');
       Exit;
     end;
-    
+
     // Create client context
     ClientContext := SSLLib.CreateContext(sslCtxClient);
     if ClientContext <> nil then
       TestResult('Create client context', True)
     else
       TestResult('Create client context', False, 'Context is nil');
-    
-    // Create server context  
+
+    // Create server context
     ServerContext := SSLLib.CreateContext(sslCtxServer);
     if ServerContext <> nil then
       TestResult('Create server context', True)
     else
       TestResult('Create server context', False, 'Context is nil');
-      
+
     // Validate contexts
     if (ClientContext <> nil) and ClientContext.IsValid then
       TestResult('Client context is valid', True)
     else
       TestResult('Client context is valid', False);
-      
+
     if (ServerContext <> nil) and ServerContext.IsValid then
       TestResult('Server context is valid', True)
     else
       TestResult('Server context is valid', False);
-      
+
   except
     on E: Exception do
       TestResult('Create SSL contexts', False, E.Message);
@@ -109,12 +109,12 @@ begin
       TestResult('Create connections', False, 'Contexts not initialized');
       Exit;
     end;
-    
+
     // Create streams
     ClientStream := TMemoryStream.Create;
     ServerStream := TMemoryStream.Create;
     TestResult('Create memory streams', True);
-    
+
     // Create client connection
     ClientConnection := ClientContext.CreateConnection(ClientStream);
     if ClientConnection <> nil then
@@ -133,7 +133,7 @@ begin
     end
     else
       TestResult('Create client connection', False, 'Connection is nil');
-    
+
     // Create server connection
     ServerConnection := ServerContext.CreateConnection(ServerStream);
     if ServerConnection <> nil then
@@ -152,7 +152,7 @@ begin
     end
     else
       TestResult('Create server connection', False, 'Connection is nil');
-      
+
   except
     on E: Exception do
       TestResult('Create connections', False, E.Message);
@@ -172,13 +172,13 @@ begin
       TestResult('Connection properties', False, 'Client connection not initialized');
       Exit;
     end;
-    
+
     // Test IsConnected (should be false before handshake)
     if not ClientConnection.IsConnected then
       TestResult('IsConnected false before handshake', True)
     else
       TestResult('IsConnected false before handshake', False, 'Should be false');
-    
+
     // Test GetState
     try
       WriteLn('Connection state: ', ClientConnection.GetState);
@@ -187,7 +187,7 @@ begin
       on E: Exception do
         TestResult('GetState works', False, E.Message);
     end;
-    
+
     // Test GetProtocolVersion
     try
       WriteLn('Protocol version: ', Ord(ClientConnection.GetProtocolVersion));
@@ -196,7 +196,7 @@ begin
       on E: Exception do
         TestResult('GetProtocolVersion works', False, E.Message);
     end;
-    
+
     // Test GetCipherName
     try
       WriteLn('Cipher: ', ClientConnection.GetCipherName);
@@ -205,7 +205,7 @@ begin
       on E: Exception do
         TestResult('GetCipherName works', False, E.Message);
     end;
-    
+
     // Test GetConnectionInfo
     try
       if Supports(ClientConnection, ISSLConnectionInfo, LConnInfoAccess) then
@@ -221,7 +221,7 @@ begin
       on E: Exception do
         TestResult('GetConnectionInfo works', False, E.Message);
     end;
-    
+
   except
     on E: Exception do
       TestResult('Connection properties', False, E.Message);
@@ -240,7 +240,7 @@ begin
       TestResult('Error handling', False, 'Client connection not initialized');
       Exit;
     end;
-    
+
     // Test GetError
     try
       ErrorCode := ClientConnection.GetError(0);
@@ -252,7 +252,7 @@ begin
       on E: Exception do
         TestResult('GetError', False, E.Message);
     end;
-    
+
     // Test WantRead
     try
       if not ClientConnection.WantRead then
@@ -263,7 +263,7 @@ begin
       on E: Exception do
         TestResult('WantRead', False, E.Message);
     end;
-    
+
     // Test WantWrite
     try
       if not ClientConnection.WantWrite then
@@ -274,7 +274,7 @@ begin
       on E: Exception do
         TestResult('WantWrite', False, E.Message);
     end;
-    
+
   except
     on E: Exception do
       TestResult('Error handling', False, E.Message);
@@ -296,9 +296,9 @@ begin
       TestResult('Data operations', False, 'Client connection not initialized');
       Exit;
     end;
-    
+
     TestData := 'Hello SSL Test';
-    
+
     // Test Write (may fail without handshake, but tests API)
     try
       BytesWritten := ClientConnection.Write(TestData[1], Length(TestData));
@@ -308,7 +308,7 @@ begin
       on E: Exception do
         TestResult('Write API works', False, E.Message);
     end;
-    
+
     // Test Read (may fail without data, but tests API)
     try
       BytesRead := ClientConnection.Read(Buffer[0], SizeOf(Buffer));
@@ -318,11 +318,11 @@ begin
       on E: Exception do
         TestResult('Read API works', False, E.Message);
     end;
-    
+
     // Note: Pending method may not be implemented yet
     WriteLn('Pending method not tested (may not be implemented)');
     TestResult('Data operation tests completed', True);
-    
+
   except
     on E: Exception do
       TestResult('Data operations', False, E.Message);
@@ -344,7 +344,7 @@ begin
         on E: Exception do
           TestResult('Client shutdown', False, E.Message);
       end;
-      
+
       try
         ClientConnection.Close;
         TestResult('Client close', True);
@@ -353,7 +353,7 @@ begin
         TestResult('Client close', False, E.Message);
       end;
     end;
-    
+
     if ServerConnection <> nil then
     begin
       try
@@ -363,7 +363,7 @@ begin
         on E: Exception do
           TestResult('Server shutdown', False, E.Message);
       end;
-      
+
       try
         ServerConnection.Close;
         TestResult('Server close', True);
@@ -372,20 +372,20 @@ begin
           TestResult('Server close', False, E.Message);
       end;
     end;
-    
+
     // Free streams
     if ClientStream <> nil then
     begin
       ClientStream.Free;
       TestResult('Free client stream', True);
     end;
-    
+
     if ServerStream <> nil then
     begin
       ServerStream.Free;
       TestResult('Free server stream', True);
     end;
-    
+
   except
     on E: Exception do
       TestResult('Cleanup', False, E.Message);
@@ -402,19 +402,19 @@ begin
   WriteLn('========================================');
   WriteLn('TEST SUMMARY');
   WriteLn('========================================');
-  
+
   Total := TestsPassed + TestsFailed;
   if Total > 0 then
     PassRate := (TestsPassed / Total) * 100
   else
     PassRate := 0;
-    
+
   WriteLn('Total tests: ', Total);
   WriteLn('Passed: ', TestsPassed);
   WriteLn('Failed: ', TestsFailed);
   WriteLn('Pass rate: ', PassRate:0:1, '%');
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
     WriteLn('Result: ALL TESTS PASSED!')
   else
@@ -427,7 +427,7 @@ begin
   WriteLn('(Tests SSL API without network)');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     // Run all tests in sequence
     Test1_InitializeLibrary;
@@ -437,10 +437,10 @@ begin
     Test5_ErrorHandling;
     Test6_DataOperations;
     Test7_Cleanup;
-    
+
     // Print summary
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin
@@ -449,11 +449,11 @@ begin
       ExitCode := 1;
     end;
   end;
-  
+
   // Cleanup
   if SSLLib <> nil then
     SSLLib.Finalize;
-  
+
   // Exit with error code if tests failed
   if TestsFailed > 0 then
     ExitCode := 1

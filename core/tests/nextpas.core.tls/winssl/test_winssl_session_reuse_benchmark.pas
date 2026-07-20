@@ -4,7 +4,7 @@ program test_winssl_session_reuse_benchmark;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, SysUtils, Classes, WinSock2, Math,
+  Windows, nextpas.core.system.sysutils, nextpas.core.system.classes, WinSock2, Math,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;

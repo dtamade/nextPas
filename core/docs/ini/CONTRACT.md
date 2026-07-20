@@ -72,7 +72,7 @@ function IniStringify(const AFile: TIniFile): string;
 | `LoadFromString` | 宽松解析；重复 section 合并、重复 key last-wins；裸行（非 section / 非 key=value）忽略 |
 | `TryLoadFromString` / `TryLoadFromFile` | `False` + string **或** `TIniError`（重载）；`Strict=True` 时裸行失败 |
 | `IniParse(IReader)` | `IoReadAll` + bulk cap（`FORMAT_BULK_PARSE_MAX_BYTES`） |
-| `LoadFromFile` / `SaveToFile` | 文件 I/O 失败抛 `ENextPasError` |
+| `LoadFromFile` / `SaveToFile` | 经 `nextpas.core.fs`（`ReadFileText` / `WriteAtomic`）；I/O 失败抛 `ENextPasError`；**禁止** `TextFile`/`AssignFile` |
 | OOM | `EResourceExhaustedError` |
 
 行尾：LF、CRLF、lone CR 均识别。结构化 `TIniError` 提供 `Message`/`Line`/`Column`/`Offset`（`Col` 别名）；string 重载格式为 `line N, column C: message`（与历史兼容）。

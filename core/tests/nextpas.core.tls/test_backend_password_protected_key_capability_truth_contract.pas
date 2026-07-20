@@ -3,8 +3,8 @@ program test_backend_password_protected_key_capability_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,

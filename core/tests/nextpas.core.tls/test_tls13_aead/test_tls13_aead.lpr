@@ -3,7 +3,7 @@ program test_tls13_aead;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.aead,
   nextpas.core.tls.tls13.wire,
   nextpas.core.test;

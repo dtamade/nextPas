@@ -4,7 +4,7 @@ program test_tls13_psk_loopback;
 
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -76,7 +76,7 @@ begin
   begin
     FSuccess := True;
     FResumed := FConn.IsSessionReused;
-    LData := TEncoding.ASCII.GetBytes('hello');
+    LData := BytesOf('hello');
     FConn.Write(LData[0], Length(LData));
   end
   else

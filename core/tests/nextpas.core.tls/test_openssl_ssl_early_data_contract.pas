@@ -3,7 +3,7 @@ program test_openssl_ssl_early_data_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.ssl;

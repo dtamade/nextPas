@@ -17,10 +17,12 @@ unit nextpas.core.crypto;
 interface
 
 uses
+  nextpas.core.crypto.errors,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.hkdf,
   nextpas.core.crypto.constant_time,
+  nextpas.core.crypto.random,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.ed25519,
@@ -36,6 +38,8 @@ uses
 
 type
   TECPoint = nextpas.core.crypto.ecdsa.TECPoint;
+  ECryptoError = nextpas.core.crypto.errors.ECryptoError;
+  TCryptoErrorCode = nextpas.core.crypto.errors.TCryptoErrorCode;
 
 implementation
 

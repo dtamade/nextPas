@@ -26,7 +26,7 @@ program test_x509_enterprise;
 *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.x509,

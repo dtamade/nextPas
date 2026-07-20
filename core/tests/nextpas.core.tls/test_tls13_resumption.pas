@@ -3,7 +3,7 @@ program test_tls13_resumption;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,

@@ -27,6 +27,29 @@ rg -n '\bTList\b' core/src/nextpas.core.tls.openssl.context.pas \
 rg -n '/dev/urandom|CryptGenRandom' core/src/nextpas.core.tls.random.pas  # expect empty
 ```
 
+## Batch C — cert options + ASN free
+
+```bash
+# value-type SAN (no TStringList ownership footgun)
+rg -n 'SubjectAltNames\s*:=\s*TStringList\.Create' core/src/nextpas.core.tls*.pas  # empty
+
+make focused FOCUS=core/tests/nextpas.core.tls/test_tls_asn1_free_contract
+make focused FOCUS=core/tests/nextpas.core.crypto/test_ecdsa
+make focused FOCUS=core/tests/nextpas.core.crypto/test_p384
+```
+
+`test_dialer`: `io.pipe` uses `INativeMutex` (fixed 2026-07-20). Expect compile+run green.
+
+## Batch D — certstore indexes
+
+```bash
+# openssl.certstore must not use TStringList (enforced by layer contract)
+rg -n ':\s*TStringList\b|TStringList\.Create' core/src/nextpas.core.tls.openssl.certstore.pas
+
+make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_https
+make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_loader
+```
+
 Static checks:
 
 - no `nextpas.core.tls` in `core/src/nextpas.core.crypto*.pas`
@@ -61,6 +84,36 @@ make focused FOCUS=core/tests/nextpas.core.tls/test_tls13_recordsealer
 make focused FOCUS=core/tests/nextpas.core.tls/test_stream_migration
 make focused FOCUS=core/tests/nextpas.core.tls/test_tls_rtl_dependency_contract
 make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_loader
+make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
+```
+
+## FPC RTL isolation (usability wave + 2026-07-21 P0)
+
+```bash
+# production: non-winssl must not direct-use broad FPC RTL
+rg -n '^\s*(SysUtils|Classes|DateUtils|BaseUnix|Unix|Windows|Base64|Sockets)\b' \
+  core/src --glob 'nextpas.core.{hash,crypto,tls}*' | rg -v 'winssl|\.pem\.pas' || true
+
+# no bare Exception in tls production
+rg -n 'raise Exception\.(Create|CreateFmt)' core/src --glob 'nextpas.core.tls*.pas' || true
+
+# single hash enum source (no HASH_SHA256, form in type enum)
+rg -n 'THashAlgorithm = \(' core/src/nextpas.core.tls.crypto.utils.pas || true
+
+# no THandleStream.Create in freepascal connection
+rg -n 'THandleStream\.Create' core/src/nextpas.core.tls.freepascal.connection.pas || true
+
+# winssl Windows only (platform FFI)
+rg -n '\bWindows\b' core/src/nextpas.core.tls.winssl*.pas | head
+
+# tests: no direct SysUtils/Classes/DateUtils in uses
+rg -n '\buses\b' -A6 core/tests/nextpas.core.hash core/tests/nextpas.core.crypto \
+  core/tests/nextpas.core.tls --glob '*.{pas,lpr}' | rg '\b(SysUtils|Classes|DateUtils)\b' || true
+
+# crypto: no bare Exception raises
+rg -n 'raise Exception\.' core/src/nextpas.core.crypto*.pas || true
+
+# dialer (needs INativeMutex pipe)
 make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
 ```
 

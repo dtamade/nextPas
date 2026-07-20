@@ -68,12 +68,13 @@ function TryParseTLS13KeyUpdate(
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.tls.tls13.wire;
 
 function ReadUInt32BE(const AData: TBytes; AOffset: Integer): Cardinal;
 begin
   if (AOffset < 0) or (AOffset + 3 >= Length(AData)) then
-    raise Exception.Create('Invalid uint32 offset');
+    raise ESSLInvalidArgument.Create('Invalid uint32 offset');
 
   Result :=
     (Cardinal(AData[AOffset]) shl 24) or
@@ -158,9 +159,9 @@ function BuildTLS13NewSessionTicketHandshake(
 ): TBytes;
 begin
   if Length(ATicket) = 0 then
-    raise Exception.Create('NewSessionTicket ticket must not be empty');
+    raise ESSLInvalidArgument.Create('NewSessionTicket ticket must not be empty');
   if Length(ATicketNonce) > 255 then
-    raise Exception.Create('NewSessionTicket ticket_nonce length exceeds 255 bytes');
+    raise ESSLInvalidArgument.Create('NewSessionTicket ticket_nonce length exceeds 255 bytes');
 
   SetLength(Result, 0);
   AppendByte(Result, TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET);

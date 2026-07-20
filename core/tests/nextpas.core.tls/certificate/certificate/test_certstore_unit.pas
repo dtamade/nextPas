@@ -8,7 +8,7 @@ program test_certstore_unit;
 }
 
 uses
-  SysUtils, Classes, Math,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.backed;
@@ -44,15 +44,15 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore Creation Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   AssertNotNil('Library created', Pointer(SSLLib));
-  
+
   AssertTrue('Library initialized', SSLLib.Initialize);
-  
+
   Store := SSLLib.CreateCertificateStore;
   AssertNotNil('CertStore object created', Pointer(Store));
-  
+
   AssertTrue('Store initially empty', Store.GetCount = 0);
 end;
 
@@ -64,12 +64,12 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore System Load Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   SSLLib.Initialize;
-  
+
   Store := SSLLib.CreateCertificateStore;
-  
+
   if Store.LoadSystemStore then
   begin
     Count := Store.GetCount;
@@ -83,7 +83,7 @@ begin
   end
   else
     WriteLn('  Note: System store loading failed (may be normal on some systems)');
-  
+
   AssertTrue('LoadSystemStore does not crash', True);
 end;
 
@@ -94,12 +94,12 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore Path Load Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   SSLLib.Initialize;
-  
+
   Store := SSLLib.CreateCertificateStore;
-  
+
   // Try common certificate paths
   if DirectoryExists('/etc/ssl/certs') then
   begin
@@ -116,7 +116,7 @@ begin
   end
   else
     WriteLn('  /etc/ssl/certs not found, skipping');
-  
+
   AssertTrue('LoadFromPath test completed', True);
 end;
 
@@ -129,17 +129,17 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore Enumeration Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   SSLLib.Initialize;
-  
+
   Store := SSLLib.CreateCertificateStore;
   Store.LoadSystemStore;
-  
+
   Count := Store.GetCount;
   AssertTrue('GetCount works', True);
   WriteLn('  Total certificates: ', Count);
-  
+
   // Try to get first few certificates
   for I := 0 to Min(2, Count - 1) do
   begin
@@ -149,7 +149,7 @@ begin
     else
       WriteLn('  [', I, '] Certificate is nil');
   end;
-  
+
   AssertTrue('GetCertificate enumeration works', True);
 end;
 
@@ -161,28 +161,28 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore Search Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   SSLLib.Initialize;
-  
+
   Store := SSLLib.CreateCertificateStore;
   Store.LoadSystemStore;
-  
+
   // Try to find a common CA
   Cert := Store.FindBySubject('DigiCert');
   if Cert <> nil then
     WriteLn('  Found certificate with subject containing "DigiCert"')
   else
     WriteLn('  No certificate found with subject containing "DigiCert"');
-  
+
   AssertTrue('FindBySubject does not crash', True);
-  
+
   Cert := Store.FindByIssuer('CA');
   AssertTrue('FindByIssuer does not crash', True);
-  
+
   Cert := Store.FindBySerialNumber('12345');
   AssertTrue('FindBySerialNumber does not crash', True);
-  
+
   Cert := Store.FindByFingerprint('AB:CD:EF');
   AssertTrue('FindByFingerprint does not crash', True);
 end;
@@ -261,10 +261,10 @@ var
 begin
   WriteLn;
   WriteLn('=== CertStore Memory Tests ===');
-  
+
   SSLLib := CreateOpenSSLLibrary;
   SSLLib.Initialize;
-  
+
   // Create and destroy multiple stores
   for I := 1 to 10 do
   begin
@@ -274,7 +274,7 @@ begin
     Store1.LoadSystemStore;
     // Reference counting should clean up automatically
   end;
-  
+
   AssertTrue('Multiple store creation/destruction succeeds', True);
 end;
 
@@ -287,12 +287,12 @@ begin
   WriteLn('Total tests: ', TestsPassed + TestsFailed);
   WriteLn('Passed: ', TestsPassed, ' ✓');
   WriteLn('Failed: ', TestsFailed, ' ✗');
-  
+
   if TestsPassed + TestsFailed > 0 then
     WriteLn('Success rate: ', (TestsPassed * 100) div (TestsPassed + TestsFailed), '%');
-  
+
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn('✅ ALL TESTS PASSED!');
@@ -309,7 +309,7 @@ begin
   WriteLn('========================================');
   WriteLn('CertStore Unit Tests');
   WriteLn('========================================');
-  
+
   try
     TestCertStoreCreation;
     TestCertStoreSystemLoad;
@@ -318,7 +318,7 @@ begin
     TestCertStoreSearch;
     TestCertStoreVerificationStoreEffect;
     TestCertStoreMemory;
-    
+
     PrintSummary;
   except
     on E: Exception do

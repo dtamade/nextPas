@@ -4,7 +4,7 @@ program test_tls13_early_data_interop;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -103,7 +103,7 @@ begin
     if Supports(LConn, ISSLEarlyDataConnection, LEarlyData) then
     begin
       LReq := 'GET /early HTTP/1.0'#13#10'Host: localhost'#13#10#13#10;
-      LEarlyData.SetEarlyData(TEncoding.UTF8.GetBytes(LReq));
+      LEarlyData.SetEarlyData(BytesOf(LReq));
     end;
 
     Check(LConn.Connect, 'Resumed TLS 1.3 handshake succeeded');

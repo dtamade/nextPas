@@ -3,7 +3,7 @@ program test_session_cache_persistence_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.session.cache;
 

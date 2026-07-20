@@ -8,7 +8,7 @@ program test_cert_utils_enterprise;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.exceptions;
 
@@ -18,11 +18,11 @@ var
   LCert, LKey: string;
 begin
   WriteLn('[1] 测试RSA证书生成...');
-  
+
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := 'test.example.com';
   LOptions.KeyBits := 2048;
-  
+
   try
     if TCertificateUtils.GenerateSelfSigned(LOptions, LCert, LKey) then
     begin
@@ -48,12 +48,12 @@ var
   LCert, LKey: string;
 begin
   WriteLn('[2] 测试EC证书生成...');
-  
+
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.KeyType := ktECDSA;
   LOptions.ECCurve := 'prime256v1';
   LOptions.CommonName := 'ec.example.com';
-  
+
   try
     TCertificateUtils.GenerateSelfSigned(LOptions, LCert, LKey);
     WriteLn('  ✓ EC证书生成成功');
@@ -75,13 +75,13 @@ var
   LFingerprint: string;
 begin
   WriteLn('[3] 测试证书指纹...');
-  
+
   LOptions := TCertificateUtils.DefaultGenOptions;
   TCertificateUtils.GenerateSelfSigned(LOptions, LCert, LKey);
-  
+
   LFingerprint := TCertificateUtils.GetFingerprint(LCert);
   WriteLn('  指纹: ', LFingerprint);
-  
+
   Assert(Length(LFingerprint) = 64, 'SHA-256 fingerprint should be 64 chars');
   WriteLn('  ✓ 指纹计算成功');
   WriteLn;
@@ -94,7 +94,7 @@ var
   LCert, LKey: string;
 begin
   WriteLn('[4] 测试异常处理...');
-  
+
   // 测试无效参数
   LCaught := False;
   try
@@ -109,7 +109,7 @@ begin
     end;
   end;
   Assert(LCaught, 'Should throw ESSLInvalidArgument for empty CN');
-  
+
   // 测试无效密钥大小
   LCaught := False;
   try
@@ -124,7 +124,7 @@ begin
     end;
   end;
   Assert(LCaught, 'Should throw ESSLInvalidArgument for small key');
-  
+
   WriteLn('  ✓ 异常测试通过');
   WriteLn;
 end;
@@ -134,13 +134,13 @@ begin
   WriteLn('  TCertificateUtils 企业级功能测试');
   WriteLn('==========================================');
   WriteLn;
-  
+
   try
     TestGenerateRSA;
     TestGenerateEC;
     TestFingerprint;
     TestExceptions;
-    
+
     WriteLn('==========================================');
     WriteLn('✅ 所有测试通过！');
     WriteLn('==========================================');

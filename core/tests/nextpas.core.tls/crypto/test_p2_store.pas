@@ -3,7 +3,7 @@ program test_p2_store;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.store,
@@ -48,7 +48,7 @@ begin
   StartTest('Load STORE functions');
   try
     LoadSTOREFunctions;
-    
+
     // Check critical functions
     if not Assigned(OSSL_STORE_INFO_get_type) then
       FailTest('OSSL_STORE_INFO_get_type not loaded')
@@ -124,7 +124,7 @@ begin
       typeName1 := OSSL_STORE_INFO_type_string(OSSL_STORE_INFO_NAME);
       typeName2 := OSSL_STORE_INFO_type_string(OSSL_STORE_INFO_CERT);
       typeName3 := OSSL_STORE_INFO_type_string(OSSL_STORE_INFO_PKEY);
-      
+
       if not Assigned(typeName1) then
         FailTest('NAME type string is nil')
       else if not Assigned(typeName2) then
@@ -201,7 +201,7 @@ begin
   StartTest('Create temporary test certificate file');
   try
     // Simple self-signed certificate PEM (for testing only)
-    certPem := 
+    certPem :=
       '-----BEGIN CERTIFICATE-----' + sLineBreak +
       'MIICljCCAX4CCQCQwixkh+6VRzANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJV' + sLineBreak +
       'UzAeFw0yMDAxMDEwMDAwMDBaFw0zMDAxMDEwMDAwMDBaMA0xCzAJBgNVBAYTAlVT' + sLineBreak +
@@ -219,7 +219,7 @@ begin
       '8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM5L8JqM' + sLineBreak +
       '5L8JqM5L8A==' + sLineBreak +
       '-----END CERTIFICATE-----' + sLineBreak;
-    
+
     // Save to temp file
     fs := TFileStream.Create('test_cert.pem', fmCreate);
     try
@@ -252,7 +252,7 @@ begin
     str2 := StoreObjectTypeToString(OSSL_STORE_INFO_CERT);
     str3 := StoreObjectTypeToString(OSSL_STORE_INFO_PKEY);
     str4 := StoreObjectTypeToString(999);
-    
+
     if str1 = '' then
       FailTest('NAME type string is empty')
     else if str2 = '' then
@@ -279,7 +279,7 @@ begin
     // 2. Wrap it in OSSL_STORE_INFO using OSSL_STORE_INFO_new_CERT
     // 3. Retrieve it using OSSL_STORE_INFO_get0_CERT
     // 4. Verify type using OSSL_STORE_INFO_get_type
-    
+
     if not Assigned(OSSL_STORE_INFO_new_CERT) or
        not Assigned(OSSL_STORE_INFO_get0_CERT) then
       FailTest('Functions not loaded')
@@ -428,7 +428,7 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
@@ -441,19 +441,19 @@ begin
   WriteLn('Testing OpenSSL OSSL_STORE API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
-    
+
     // Load required modules
     LoadOpenSSLX509;
     LoadOpenSSLBIO;
     LoadSTOREFunctions;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // Run tests
     TestLoadStoreFunctions;
     TestStoreInfoTypeConstants;
@@ -472,16 +472,16 @@ begin
     TestStoreExpectAndFindAPIs;
     TestCreateTestCertificateFile;
     CleanupTestFiles;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

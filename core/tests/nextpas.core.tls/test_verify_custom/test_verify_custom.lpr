@@ -1,7 +1,7 @@
 program test_verify_custom;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.verify.custom,
   nextpas.core.crypto.hash;

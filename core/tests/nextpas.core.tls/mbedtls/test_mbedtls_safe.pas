@@ -11,7 +11,7 @@ program test_mbedtls_safe;
 }
 
 uses
-  SysUtils, TypInfo,
+  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,

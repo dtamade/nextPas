@@ -3,7 +3,7 @@ program test_tls12_loopback;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.x509,

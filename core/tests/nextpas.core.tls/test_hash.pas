@@ -3,7 +3,7 @@ program test_hash;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.crypto.hash;
 
 var

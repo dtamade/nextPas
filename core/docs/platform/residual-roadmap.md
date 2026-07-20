@@ -36,9 +36,12 @@ LT4 is no longer a residual-only stage. Track and execute under:
 | Real Windows GHA expand → ci-matrix | D1.b / D1.d |
 | macOS focused-runtime | D2 |
 
-### Snapshot evidence (2026-07-17)
+### Snapshot evidence (2026-07-17) — frozen historical
 
-| Item | State |
+Numbers below are **as of 2026-07-17 only**. Current counts: [ROADMAP.md](ROADMAP.md)
+(wine **24** secondary; Windows **27** platform-gate `ci-matrix`; macOS **9** layer A).
+
+| Item | State (2026-07-17) |
 |------|--------|
 | Wine CI matrix (15 modules) | includes `platform.error`; secondary only |
 | Real Windows GHA gates | `platform-windows-ci-matrix.sh`: 15 suite dirs + poller/io/socket real (18 total) |

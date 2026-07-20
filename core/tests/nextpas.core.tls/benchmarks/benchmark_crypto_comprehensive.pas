@@ -21,7 +21,7 @@ program benchmark_crypto_comprehensive;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   benchmark_framework,
   nextpas.core.tls.crypto.utils;
 

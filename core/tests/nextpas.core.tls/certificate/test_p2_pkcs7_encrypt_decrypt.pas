@@ -23,7 +23,7 @@ program test_p2_pkcs7_encrypt_decrypt;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs7,

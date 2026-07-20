@@ -3,7 +3,7 @@ program test_cert_utils_verify_chain_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.cert.utils;
 

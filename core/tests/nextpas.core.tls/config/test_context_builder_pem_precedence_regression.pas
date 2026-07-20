@@ -3,7 +3,7 @@ program test_context_builder_pem_precedence_regression;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fpjson,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

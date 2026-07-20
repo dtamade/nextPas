@@ -3,7 +3,7 @@ program test_direct_cache;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.lib,

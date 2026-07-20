@@ -4,7 +4,7 @@ program test_mbedtls_connection_info_ciphersuite_contract;
 {$DEFINE ENABLE_MBEDTLS}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.mbedtls.base,

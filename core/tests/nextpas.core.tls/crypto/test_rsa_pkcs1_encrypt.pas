@@ -3,7 +3,7 @@ program test_rsa_pkcs1_encrypt;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.crypto.rsa;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.rsa;
 
 var
   GPassCount: Integer = 0;

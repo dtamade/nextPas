@@ -41,8 +41,12 @@ type
    *   - TKey 和 TValue 必须是 unmanaged 类型
    *   - 所有公共方法（Insert/Find/Remove/Contains/Count）是线程安全的
    *   - Count 返回近似值（需要逐分片加锁）
+   *   - Close 后：Insert/Reserve/GetOrUpdate 抛错；TryInsert/Replace 拒绝写；
+   *     GetOrInsert* 仅允许已有键读取；Find/Remove/ForEach/Clear 仍可用。
+   *   - 生命周期：Close → join accessors → Free（Destroy 会 Close，不替代 join）
    *
    * @see collections.hashmap.pas 中的 THashMap 用于单线程场景
+   * @see charter-c-hashmap-close.md
    *}
   generic TShardedHashMapImpl<TKey, TValue> = class
   public type
@@ -80,6 +84,7 @@ type
   private
     FShards: array of TShard;
     FShardCount: PtrUInt;
+    FClosed: Int32;
     function ShardIndex(const AKey: TKey): PtrUInt;
     procedure ShardLock(var AShard: TShard);
     procedure ShardUnlock(var AShard: TShard);
@@ -90,12 +95,18 @@ type
     procedure ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
     procedure ShardResize(var AShard: TShard);
     function ShardFind(const AShard: TShard; const AKey: TKey; out AIdx: PtrUInt): Boolean;
+    procedure EnsureWritable(const AOp: string);
   public
     {** @desc 计算键的哈希值 }
     function HashKey(const AKey: TKey): PtrUInt;
     {** @desc 创建分片锁 HashMap }
     constructor Create(const AInitialCapacity: PtrUInt = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;
+
+    {** @desc 拒绝新写入；幂等。Destroy 会先 Close。 }
+    procedure Close;
+    {** @desc 是否已 Close }
+    function IsClosed: Boolean; inline;
 
     {** @desc 插入或覆盖键值对 }
     procedure Insert(const AKey: TKey; const AValue: TValue);
@@ -390,6 +401,7 @@ begin
   if SizeOf(TKey) = 0 then
     raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;
+  FClosed := 0;
   LCap := AInitialCapacity;
   if LCap < 4 then
     LCap := 4;
@@ -410,9 +422,27 @@ begin
     inherited;
     Exit;
   end;
+  Close;
   for LI := 0 to FShardCount - 1 do
     SetLength(FShards[LI].Entries, 0);
   inherited;
+end;
+
+procedure TShardedHashMapImpl.Close;
+begin
+  atomic_store(FClosed, 1, mo_release);
+end;
+
+function TShardedHashMapImpl.IsClosed: Boolean; inline;
+begin
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
+end;
+
+procedure TShardedHashMapImpl.EnsureWritable(const AOp: string);
+begin
+  if atomic_load(FClosed, mo_acquire) <> 0 then
+    raise EInvalidOperationError.Create(
+      'TShardedHashMap.' + AOp + ': map is closed');
 end;
 
 procedure TShardedHashMapImpl.Insert(const AKey: TKey; const AValue: TValue);
@@ -422,6 +452,7 @@ var
   LFound: Boolean;
   LFoundIdx: PtrUInt;
 begin
+  EnsureWritable('Insert');
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -524,6 +555,8 @@ var
   LIdx: PtrUInt;
   LFoundIdx: PtrUInt;
 begin
+  if IsClosed then
+    Exit(False);
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -557,6 +590,8 @@ var
   LShardIdx: PtrUInt;
   LIdx: PtrUInt;
 begin
+  if IsClosed then
+    Exit(False);
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -671,6 +706,16 @@ var
   LIdx: PtrUInt;
   LFound: Boolean;
 begin
+  if IsClosed then
+  begin
+    if Find(AKey, Result.Value) then
+    begin
+      Result.Existed := True;
+      Exit;
+    end;
+    raise EInvalidOperationError.Create(
+      'TShardedHashMap.GetOrInsert: map is closed');
+  end;
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -710,6 +755,16 @@ var
   LIdx: PtrUInt;
   LFound: Boolean;
 begin
+  if IsClosed then
+  begin
+    if Find(AKey, Result.Value) then
+    begin
+      Result.Existed := True;
+      Exit;
+    end;
+    raise EInvalidOperationError.Create(
+      'TShardedHashMap.GetOrInsertFn: map is closed');
+  end;
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -749,6 +804,7 @@ var
   LIdx: PtrUInt;
   LFound: Boolean;
 begin
+  EnsureWritable('GetOrUpdate');
   LShardIdx := ShardIndex(AKey);
   ShardWriteLock(FShards[LShardIdx]);
   try
@@ -821,6 +877,7 @@ var
 begin
   if ACount = 0 then
     Exit;
+  EnsureWritable('Reserve');
   { 计算每个分片需要的容量: 按 load factor 反算 }
   LPerShard := (ACount + FShardCount - 1) div FShardCount;
   { 向上对齐到 2 的幂，至少 4 }

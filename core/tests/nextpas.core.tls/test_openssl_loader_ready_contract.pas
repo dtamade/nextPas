@@ -3,7 +3,7 @@ program test_openssl_loader_ready_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.aes,

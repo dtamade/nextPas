@@ -6,7 +6,7 @@ program test_context_builder_server_name_compatibility_warning;
   WithSNI compatibility warnings on builder paths. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

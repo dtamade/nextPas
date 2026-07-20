@@ -1821,7 +1821,7 @@ procedure TestFpcRtlIsolationSourceContract;
 const
   Src = '../../../src/';
   { Full production surface: every nextpas.core.atomic* and nextpas.core.lockfree* unit. }
-  Paths: array[0..106] of string = (
+  Paths: array[0..107] of string = (
     'nextpas.core.atomic.pas',
     'nextpas.core.atomic.core.pas',
     'nextpas.core.atomic.types.pas',
@@ -1844,6 +1844,7 @@ const
     'nextpas.core.lockfree.elimination_stack.pas',
     'nextpas.core.lockfree.deque.pas',
     'nextpas.core.lockfree.deque_lf.pas',
+    'nextpas.core.lockfree.deque_spin.pas',
     'nextpas.core.lockfree.channel.pas',
     'nextpas.core.lockfree.channel.spsc.pas',
     'nextpas.core.lockfree.hashmap.pas',
@@ -2206,6 +2207,109 @@ procedure TestLockFreeWaitHelperStaleEpochGuard;
 begin
   CheckWaitHelperSkipsStaleEpoch(False, 'data wait helper');
   CheckWaitHelperSkipsStaleEpoch(True, 'space wait helper');
+end;
+
+procedure TestLockFreeWaitNilSafe;
+var
+  LEpoch: Int32;
+  LWaiters: Int32;
+begin
+  { Must not crash on nil counters (CONTRACT: defensive early exit). }
+  LockFreeWaitData(nil, nil, 0, 1000000);
+  LockFreeWaitSpace(nil, nil, 0, 1000000);
+  LockFreeNotifyData(nil, nil);
+  LockFreeNotifySpace(nil, nil);
+  LockFreeWakeAll(nil);
+  LEpoch := 0;
+  LWaiters := 0;
+  LockFreeWaitData(@LEpoch, nil, 0, 1000000);
+  LockFreeWaitData(nil, @LWaiters, 0, 1000000);
+  CheckEqual(Int64(0), Int64(LWaiters), 'nil epoch path must not register waiters');
+end;
+
+procedure TestLockFreeWaitTimeoutUnregistersWaiter;
+const
+  WaitTimeoutNs = Int64(5000000); { 5ms }
+var
+  LEpoch: Int32;
+  LWaiters: Int32;
+  LElapsedMs: QWord;
+begin
+  LEpoch := 0;
+  LWaiters := 0;
+  LElapsedMs := TestMonotonicMs;
+  LockFreeWaitData(@LEpoch, @LWaiters, 0, WaitTimeoutNs);
+  LElapsedMs := TestMonotonicMs - LElapsedMs;
+  CheckEqual(Int64(0), Int64(LWaiters),
+    'timeout/return must leave waiter count at 0 (finally unregister)');
+  Check(LElapsedMs < 2000,
+    'bounded wait must not hang for seconds when epoch is stable');
+end;
+
+const
+  LF_WAIT_NOTIFY_WAITERS = 4;
+
+var
+  GLfWaitEpoch: Int32;
+  GLfWaitWaiters: Int32;
+  GLfWaitDone: Int32;
+  GLfWaitStart: Int32;
+
+function LfWaitNotifyWaiter(AArg: Pointer): Pointer; cdecl;
+var
+  LExpected: Int32;
+begin
+  Result := nil;
+  while atomic_load(GLfWaitStart, mo_acquire) = 0 do
+    CpuPause;
+  LExpected := atomic_load(GLfWaitEpoch, mo_acquire);
+  LockFreeWaitData(@GLfWaitEpoch, @GLfWaitWaiters, LExpected, Int64(2000000000));
+  atomic_fetch_add(GLfWaitDone, 1, mo_release);
+end;
+
+procedure TestLockFreeWaitNotifyUnblocksWaiters;
+var
+  LHandles: array[0..LF_WAIT_NOTIFY_WAITERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LCount: Integer;
+  LRet: Pointer;
+  LSpin: Integer;
+begin
+  atomic_store(GLfWaitEpoch, 0, mo_release);
+  atomic_store(GLfWaitWaiters, 0, mo_release);
+  atomic_store(GLfWaitDone, 0, mo_release);
+  atomic_store(GLfWaitStart, 0, mo_release);
+  LCount := 0;
+  try
+    for LI := 0 to LF_WAIT_NOTIFY_WAITERS - 1 do
+    begin
+      StartThread(LHandles[LI], @LfWaitNotifyWaiter, nil, 'lf wait notify waiter');
+      Inc(LCount);
+    end;
+    atomic_store(GLfWaitStart, 1, mo_release);
+    { Give waiters time to enter spin/block path. }
+    for LSpin := 1 to 200 do
+    begin
+      if atomic_load(GLfWaitWaiters, mo_acquire) > 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    LockFreeNotifyData(@GLfWaitEpoch, @GLfWaitWaiters);
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'lf wait notify join');
+    LCount := 0;
+    CheckEqual(Int64(LF_WAIT_NOTIFY_WAITERS),
+      Int64(atomic_load(GLfWaitDone, mo_acquire)),
+      'all waiters must exit after LockFreeNotifyData');
+    CheckEqual(Int64(0), Int64(atomic_load(GLfWaitWaiters, mo_acquire)),
+      'waiter counter must return to 0 after all leave');
+    Check(atomic_load(GLfWaitEpoch, mo_acquire) <> 0,
+      'notify must advance epoch');
+  finally
+    LockFreeWakeAll(@GLfWaitEpoch);
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'lf wait notify cleanup');
+  end;
 end;
 
 var
@@ -3257,6 +3361,58 @@ begin
     LM.Insert(1, 999);
     Check(LM.Contains(1), 'Contains after re-insert');
     CheckEqual(Int64(1), Int64(LM.Count), 'Count after re-insert');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapCloseLifecycle;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+  LRes: TIntIntMap.TGetOrInsertResult;
+  LRaised: Boolean;
+  LOld: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Close;
+    Check(LM.IsClosed, 'IsClosed after Close');
+    LM.Close;
+    Check(LM.IsClosed, 'Close idempotent');
+
+    Check(LM.Find(1, LV), 'Find after Close');
+    CheckEqual(10, LV, 'value after Close');
+    Check(LM.Contains(2), 'Contains after Close');
+    Check(not LM.TryInsert(3, 30), 'TryInsert after Close fails');
+    Check(not LM.Replace(1, 11, LOld), 'Replace after Close fails');
+
+    LRes := LM.GetOrInsert(1, 99);
+    Check(LRes.Existed, 'GetOrInsert existing after Close');
+    CheckEqual(10, LRes.Value, 'GetOrInsert returns existing after Close');
+
+    LRaised := False;
+    try
+      LM.Insert(4, 40);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Insert after Close raises');
+
+    LRaised := False;
+    try
+      LRes := LM.GetOrInsert(99, 1);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'GetOrInsert missing after Close raises');
+
+    Check(LM.Remove(2), 'Remove after Close still works');
+    Check(not LM.Contains(2), 'removed after Close');
   finally
     LM.Free;
   end;
@@ -6011,6 +6167,96 @@ begin
   end;
 end;
 
+procedure TestMsQueueTryExDiagnostics;
+var
+  LQ: specialize TLockFreeMsQueue<Integer>;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(16);
+  try
+    Check(LQ.TryEnqueueEx(101, LErr), 'MSQueue TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MSQueue success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MSQueue TryDequeueEx success');
+    CheckEqual(101, LV, 'MSQueue TryDequeueEx value');
+    Check(LErr = lfteNone, 'MSQueue dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MSQueue empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MSQueue empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(102, LErr), 'MSQueue closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MSQueue closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MSQueue closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MSQueue closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMsQueueCloseIdempotent;
+var
+  LQ: specialize TLockFreeMsQueue<Integer>;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(8);
+  try
+    Check(LQ.TryEnqueue(1), 'msq seed');
+    LQ.Close;
+    Check(LQ.IsClosed, 'msq closed once');
+    LQ.Close;
+    Check(LQ.IsClosed, 'msq closed twice still closed');
+    Check(not LQ.TryEnqueue(2), 'msq TryEnqueue rejected after double Close');
+    Check(not LQ.TryEnqueueEx(3, LErr), 'msq TryEnqueueEx rejected');
+    Check(LErr = lfteClosed, 'msq double-close publish is lfteClosed');
+    Check(LQ.TryDequeue(LV), 'msq drain after Close');
+    CheckEqual(1, LV, 'msq drained value');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestStackCloseIdempotent;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(4);
+  try
+    Check(LS.TryPush(9), 'stack seed');
+    LS.Close;
+    Check(LS.IsClosed, 'stack closed once');
+    LS.Close;
+    Check(LS.IsClosed, 'stack closed twice');
+    Check(not LS.TryPush(10), 'stack push rejected after double Close');
+    Check(LS.TryPop(LV), 'stack drain after Close');
+    CheckEqual(9, LV, 'stack drained value');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestSegQueueCloseIdempotent;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(LQ.TryEnqueue(5), 'seg seed');
+    LQ.Close;
+    Check(LQ.IsClosed, 'seg closed once');
+    LQ.Close;
+    Check(LQ.IsClosed, 'seg closed twice');
+    Check(not LQ.TryEnqueueEx(6, LErr), 'seg TryEnqueueEx after double Close');
+    Check(LErr = lfteClosed, 'seg double-close is lfteClosed');
+    Check(LQ.TryDequeue(LV), 'seg drain after Close');
+    CheckEqual(5, LV, 'seg drained value');
+  finally
+    LQ.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7431,25 +7677,25 @@ begin
     'Rust comparison source platform line must use std::env::consts::OS');
   CheckContains(LRustCompareSource, 'std::env::consts::ARCH',
     'Rust comparison source platform line must use std::env::consts::ARCH');
-  CheckContains(LRustCompareSource, 'Compiler: rustc -C opt-level=3',
+  CheckContains(LRustCompareSource, 'Compiler flags: rustc -C opt-level=3',
     'Rust comparison source must print the compiler-flags evidence field');
-  CheckContains(LRustCompareSource, 'Input: OPS={}',
+  CheckContains(LRustCompareSource, 'Input size: OPS=1000000; capacity=1024',
     'Rust comparison source must print the input-size evidence field');
-  CheckContains(LRustCompareSource, 'Honesty: same-host relative only',
+  CheckContains(LRustCompareSource, 'manual comparison source, not auto-run',
     'Rust comparison source must print honesty/envelope baseline guidance');
-  CheckContains(LRustCompareSource, 'C1 std::sync::mpsc 1P+1C',
+  CheckContains(LRustCompareSource, 'std::sync::mpsc 1P+1C',
     'Rust comparison source must mirror the Q5 C1 mpsc scenario name');
-  CheckContains(LRustCompareSource, 'C2 Mutex+Condvar VecDeque 2P+2C',
+  CheckContains(LRustCompareSource, 'Mutex+Condvar VecDeque 2P+2C',
     'Rust comparison source must mirror the Q5 C2 bounded MPMC scenario name');
-  CheckContains(LRustCompareSource, 'fn bench_c1_mpsc_spsc()',
+  CheckContains(LRustCompareSource, 'fn bench_std_mpsc_spsc()',
     'Rust comparison source must define the C1 mpsc bench function');
-  CheckContains(LRustCompareSource, 'fn bench_c2_bounded_mpmc()',
+  CheckContains(LRustCompareSource, 'fn bench_bounded_mutex_condvar_mpmc()',
     'Rust comparison source must define the C2 bounded mpmc bench function');
-  CheckContains(LRustCompareSource, 'let mut sink = bench_c1_mpsc_spsc();',
+  CheckContains(LRustCompareSource, 'let mut sink = bench_std_mpsc_spsc();',
     'Rust comparison source must initialize the consumed-value sink from C1');
-  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_c2_bounded_mpmc());',
+  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());',
     'Rust comparison source must accumulate the C2 consumed-value sink');
-  CheckNotContains(LRustCompareSource, ' ^ bench_c2_bounded_mpmc()',
+  CheckNotContains(LRustCompareSource, ' ^ bench_bounded_mutex_condvar_mpmc()',
     'Rust comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LRustCompareSource, 'for value in 1..=(N as u64) {',
     'Rust comparison source must use 1..N inclusive for C1 input values');
@@ -7469,25 +7715,25 @@ begin
     'Go comparison source must use the same nominal bounded-capacity context');
   CheckContains(LGoCompareSource, 'fmt.Println("Platform:", runtime.GOOS, runtime.GOARCH)',
     'Go comparison source must print the platform evidence field');
-  CheckContains(LGoCompareSource, 'Compiler: go build (gc)',
+  CheckContains(LGoCompareSource, 'Compiler flags: go build',
     'Go comparison source must print the compiler-flags evidence field');
-  CheckContains(LGoCompareSource, 'Input: OPS=%d CAPACITY=%d',
+  CheckContains(LGoCompareSource, 'Input size: OPS=1000000; capacity=1024',
     'Go comparison source must print the input-size evidence field');
-  CheckContains(LGoCompareSource, 'Honesty: not bit-identical',
+  CheckContains(LGoCompareSource, 'manual comparison source, not auto-run',
     'Go comparison source must print honesty/envelope baseline guidance');
-  CheckContains(LGoCompareSource, 'C1 chan uint64 1P+1C',
+  CheckContains(LGoCompareSource, 'chan uint64 1P+1C',
     'Go comparison source must mirror the Q5 C1 channel scenario name');
-  CheckContains(LGoCompareSource, 'C2 chan uint64 2P+2C',
+  CheckContains(LGoCompareSource, 'chan uint64 2P+2C',
     'Go comparison source must mirror the Q5 C2 channel scenario name');
-  CheckContains(LGoCompareSource, 'func benchC1()',
+  CheckContains(LGoCompareSource, 'func benchChannelSPSC()',
     'Go comparison source must define the C1 bench function');
-  CheckContains(LGoCompareSource, 'func benchC2()',
+  CheckContains(LGoCompareSource, 'func benchChannelMPMC()',
     'Go comparison source must define the C2 bench function');
-  CheckContains(LGoCompareSource, 'sink = benchC1()',
+  CheckContains(LGoCompareSource, 'sink = benchChannelSPSC()',
     'Go comparison source must initialize the consumed-value sink from C1');
-  CheckContains(LGoCompareSource, 'sink += benchC2()',
+  CheckContains(LGoCompareSource, 'sink += benchChannelMPMC()',
     'Go comparison source must accumulate the C2 consumed-value sink');
-  CheckNotContains(LGoCompareSource, 'sink = benchC1() ^',
+  CheckNotContains(LGoCompareSource, 'sink = benchChannelSPSC() ^',
     'Go comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LGoCompareSource, 'for value := uint64(1); value <= Ops; value++ {',
     'Go comparison source must use 1..OPS inclusive for C1 input values');
@@ -7581,6 +7827,9 @@ begin
   T.Test('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
   T.Test('MPMC capacity/empty/full', @TestMpmcCapacity);
   T.Test('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
+  T.Test('LockFree wait nil-safe', @TestLockFreeWaitNilSafe);
+  T.Test('LockFree wait timeout unregisters waiter', @TestLockFreeWaitTimeoutUnregistersWaiter);
+  T.Test('LockFree wait notify unblocks waiters', @TestLockFreeWaitNotifyUnblocksWaiters);
   T.Test('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Test('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
   T.Test('MPSC dequeue timeout', @TestMpscDequeueTimeout);
@@ -7618,6 +7867,7 @@ begin
   T.Test('HashMap Remove with old value', @TestHashMapRemoveWithOldValue);
   T.Test('HashMap Replace', @TestHashMapReplace);
   T.Test('HashMap Clear', @TestHashMapClear);
+  T.Test('HashMap Close lifecycle', @TestHashMapCloseLifecycle);
   T.Test('Selector basic recv', @TestSelectorBasic);
   T.Test('Selector send', @TestSelectorSend);
   T.Test('Selector timeout', @TestSelectorTimeout);
@@ -7680,6 +7930,10 @@ begin
   T.Test('MPSC Try*Ex diagnostics', @TestMpscTryExDiagnostics);
   T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
   T.Test('Deque Try*Ex diagnostics', @TestDequeTryExDiagnostics);
+  T.Test('MSQueue Try*Ex diagnostics', @TestMsQueueTryExDiagnostics);
+  T.Test('MSQueue Close idempotent', @TestMsQueueCloseIdempotent);
+  T.Test('Stack Close idempotent', @TestStackCloseIdempotent);
+  T.Test('SegQueue Close idempotent', @TestSegQueueCloseIdempotent);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

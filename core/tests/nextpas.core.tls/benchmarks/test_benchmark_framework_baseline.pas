@@ -3,7 +3,7 @@ program test_benchmark_framework_baseline;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   benchmark_framework;
 
 var

@@ -3,7 +3,7 @@ program test_p2_pkcs12;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs12,
@@ -278,7 +278,7 @@ begin
       FailTest('Functions not loaded');
       Exit;
     end;
-    
+
     p12 := PKCS12_new();
     if p12 = nil then
       FailTest('PKCS12_new returned nil')
@@ -305,13 +305,13 @@ begin
   StartTest('PKCS8_PRIV_KEY_INFO_new and _free basic test');
   p8 := nil;
   try
-    if not Assigned(PKCS8_PRIV_KEY_INFO_new) or 
+    if not Assigned(PKCS8_PRIV_KEY_INFO_new) or
        not Assigned(PKCS8_PRIV_KEY_INFO_free) then
     begin
       FailTest('Functions not loaded');
       Exit;
     end;
-    
+
     p8 := PKCS8_PRIV_KEY_INFO_new();
     if p8 = nil then
       FailTest('PKCS8_PRIV_KEY_INFO_new returned nil')
@@ -354,12 +354,12 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
     WriteLn('Some tests FAILED! ✗');
-    
+
   WriteLn;
   WriteLn('Note: PKCS12 module is fully functional and production-ready');
   WriteLn('      Use PKCS12 for securely packaging certificates and keys');
@@ -371,15 +371,15 @@ begin
   WriteLn('Testing OpenSSL PKCS#12 API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
     LoadOpenSSLBIO;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // Run tests
     TestLoadPKCS12Module;
     TestPKCS12Constants;
@@ -396,16 +396,16 @@ begin
     TestPKCS12NewFree;
     TestPKCS8PrivKeyInfoNewFree;
     TestHelperFunctionsDeclared;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

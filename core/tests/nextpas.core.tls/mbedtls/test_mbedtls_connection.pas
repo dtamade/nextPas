@@ -12,7 +12,7 @@ program test_mbedtls_connection;
 }
 
 uses
-  SysUtils, Classes, Math,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,

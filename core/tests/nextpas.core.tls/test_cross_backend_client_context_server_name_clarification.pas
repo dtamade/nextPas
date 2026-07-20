@@ -7,7 +7,7 @@ program test_cross_backend_client_context_server_name_clarification;
   backends no longer inherit it. }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

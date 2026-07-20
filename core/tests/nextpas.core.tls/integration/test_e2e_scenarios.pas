@@ -8,7 +8,7 @@ program test_e2e_scenarios;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   {$IFDEF UNIX}
   ctypes,
   {$ENDIF}

@@ -8,7 +8,7 @@ program test_minimal_aes;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp;
 
@@ -24,7 +24,7 @@ var
 begin
   WriteLn('=== Minimal AES-GCM Test ===');
   WriteLn;
-  
+
   try
     // Step 1: Initialize OpenSSL
     WriteLn('[1] Loading OpenSSL...');
@@ -35,12 +35,12 @@ begin
       Halt(1);
     end;
     WriteLn('✓ OpenSSL Core loaded: ', GetOpenSSLVersionString);
-    
+
     WriteLn('[1.5] Loading EVP module...');
     LoadEVP(GetCryptoLibHandle);
     WriteLn('✓ EVP module loaded');
     WriteLn;
-    
+
     // Step 2: Prepare test data
     WriteLn('[2] Preparing test data...');
     FillChar(LKey, SizeOf(LKey), $AA);      // Simple key
@@ -48,7 +48,7 @@ begin
     Move('Hello, World!'[1], LData[0], 13); // Plaintext
     WriteLn('✓ Key, IV, and data prepared');
     WriteLn;
-    
+
     // Step 3: Get cipher
     WriteLn('[3] Getting AES-256-GCM cipher...');
     LCipher := EVP_aes_256_gcm();
@@ -59,7 +59,7 @@ begin
     end;
     WriteLn('✓ Cipher obtained: ', PtrUInt(LCipher));
     WriteLn;
-    
+
     // Step 4: Create context
     WriteLn('[4] Creating cipher context...');
     LCtx := EVP_CIPHER_CTX_new();
@@ -70,7 +70,7 @@ begin
     end;
     WriteLn('✓ Context created: ', PtrUInt(LCtx));
     WriteLn;
-    
+
     try
       // Step 5: Initialize encryption
       WriteLn('[5] Initializing encryption...');
@@ -81,7 +81,7 @@ begin
       end;
       WriteLn('✓ Encryption initialized');
       WriteLn;
-      
+
       // Step 6: Encrypt data
       WriteLn('[6] Encrypting data...');
       LOutLen := 0;
@@ -91,24 +91,24 @@ begin
         Halt(1);
       end;
       WriteLn('✓ Encrypted ', LOutLen, ' bytes');
-      
+
       // Print ciphertext
       Write('  Ciphertext: ');
       for I := 0 to LOutLen - 1 do
         Write(IntToHex(LCiphertext[I], 2));
       WriteLn;
       WriteLn;
-      
+
       WriteLn('========================================');
       WriteLn('✓ SUCCESS! AES-GCM encryption works!');
       WriteLn('========================================');
-      
+
     finally
       EVP_CIPHER_CTX_free(LCtx);
       WriteLn;
       WriteLn('Context freed');
     end;
-    
+
   except
     on E: Exception do
     begin
@@ -119,7 +119,7 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn;
   WriteLn('Press Enter...');
   ReadLn;

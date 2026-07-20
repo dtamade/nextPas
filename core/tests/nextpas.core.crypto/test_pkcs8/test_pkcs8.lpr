@@ -3,7 +3,7 @@ program test_pkcs8;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.pkcs8,
   nextpas.core.test;
 

@@ -3,7 +3,7 @@ program test_security_first_fips_independence_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,

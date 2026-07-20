@@ -3,7 +3,7 @@ program test_cert_verify_cache_regression;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.evp,

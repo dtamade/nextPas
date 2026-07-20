@@ -37,6 +37,9 @@ begin
   Check(LValue.IsObject, 'root is object');
   CheckEqual('Alice', LValue.ObjectGet('name').AsStr.ToString, 'name');
   CheckEqual(Int64(30), LValue.ObjectGet('age').AsInt, 'age');
+  CheckEqual('Alice', LValue.Get('name').AsStr.ToString, 'Get aliases ObjectGet');
+  Check(LValue.ObjectGet('age').IsInt or LValue.ObjectGet('age').IsFloat,
+    'IsInt/IsFloat predicates');
 
   LError := JsonParse('{bad}').Error;
   Check(LError.Line > 0, 'error type visible through facade');

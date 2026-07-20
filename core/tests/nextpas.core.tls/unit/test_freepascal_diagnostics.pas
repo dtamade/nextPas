@@ -4,7 +4,7 @@ program test_freepascal_diagnostics;
 
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix, Sockets,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;

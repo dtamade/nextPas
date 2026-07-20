@@ -16,6 +16,7 @@ uses
   nextpas.core.lockfree.mpsc,
   nextpas.core.lockfree.deque,
   nextpas.core.lockfree.spmc,
+  nextpas.core.lockfree.msqueue,
   nextpas.core.platform.thread;
 
 type
@@ -28,6 +29,7 @@ type
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
+  TIntMsQueue = specialize TLockFreeMsQueue<Integer>;
 
 var
   T: TTestSuite;
@@ -1956,6 +1958,327 @@ begin
 end;
 
 { ============================================================ }
+{ A2: MSQueue multi P/C Close race (Try*Ex diagnostics)        }
+{ ============================================================ }
+
+const
+  MSQ_CLOSE_PRODUCERS = 2;
+  MSQ_CLOSE_CONSUMERS = 2;
+  MSQ_CLOSE_MAX_PER_P = 2000;
+
+var
+  GMsqCloseQ: TIntMsQueue;
+  GMsqClosePublished: Int64;
+  GMsqCloseConsumed: Int64;
+  GMsqCloseClosedEnq: Int64;
+  GMsqCloseClosedEmpty: Int64;
+  GMsqCloseStart: Int32;
+
+function MsqCloseProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LErr: TLockFreeTryError;
+  LBase: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * MSQ_CLOSE_MAX_PER_P;
+  while atomic_load(GMsqCloseStart, mo_acquire) = 0 do
+    CpuPause;
+  for LI := 1 to MSQ_CLOSE_MAX_PER_P do
+  begin
+    if GMsqCloseQ.TryEnqueueEx(LBase + LI, LErr) then
+      atomic_fetch_add_64(GMsqClosePublished, 1, mo_relaxed)
+    else if LErr = lfteClosed then
+    begin
+      atomic_fetch_add_64(GMsqCloseClosedEnq, 1, mo_relaxed);
+      Exit;
+    end
+    else
+      CpuPause;
+  end;
+end;
+
+function MsqCloseConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  Result := nil;
+  while True do
+  begin
+    if GMsqCloseQ.TryDequeueEx(LV, LErr) then
+    begin
+      atomic_fetch_add_64(GMsqCloseConsumed, 1, mo_relaxed);
+      Continue;
+    end;
+    if LErr = lfteClosed then
+    begin
+      atomic_fetch_add_64(GMsqCloseClosedEmpty, 1, mo_relaxed);
+      Exit;
+    end;
+    CpuPause;
+  end;
+end;
+
+procedure TestMsQueueCloseRace;
+var
+  LProducers: array[0..MSQ_CLOSE_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..MSQ_CLOSE_CONSUMERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LPCount, LCCount: Integer;
+  LRet: Pointer;
+  LDrain: Integer;
+  LV: Integer;
+begin
+  GMsqCloseQ := TIntMsQueue.Create(32);
+  GMsqClosePublished := 0;
+  GMsqCloseConsumed := 0;
+  GMsqCloseClosedEnq := 0;
+  GMsqCloseClosedEmpty := 0;
+  atomic_store(GMsqCloseStart, 0, mo_release);
+  LPCount := 0;
+  LCCount := 0;
+  try
+    for LI := 0 to MSQ_CLOSE_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @MsqCloseConsumer, nil, 'msq close consumer');
+      Inc(LCCount);
+    end;
+    for LI := 0 to MSQ_CLOSE_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @MsqCloseProducer, Pointer(PtrInt(LI)), 'msq close producer');
+      Inc(LPCount);
+    end;
+
+    atomic_store(GMsqCloseStart, 1, mo_release);
+    platform_thread_sleep_ms(2);
+    GMsqCloseQ.Close;
+
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'msq close producer join');
+    LPCount := 0;
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'msq close consumer join');
+    LCCount := 0;
+
+    LDrain := 0;
+    while GMsqCloseQ.TryDequeue(LV) do
+      Inc(LDrain);
+
+    Check(GMsqCloseQ.IsClosed, 'MSQueue closed after Close');
+    Check(atomic_load_64(GMsqClosePublished, mo_acquire) >= 0, 'MSQueue published non-negative');
+    CheckEqual(
+      atomic_load_64(GMsqClosePublished, mo_acquire),
+      atomic_load_64(GMsqCloseConsumed, mo_acquire) + Int64(LDrain),
+      'MSQueue published = consumed + leftover drain');
+  finally
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'msq producer cleanup');
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'msq consumer cleanup');
+    GMsqCloseQ.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ A2: Stack Close while concurrent Push/Pop                    }
+{ ============================================================ }
+
+const
+  STACK_CLOSE_THREADS = 4;
+  STACK_CLOSE_CAP = 32;
+  STACK_CLOSE_ROUNDS = 5000;
+
+var
+  GStackClose: TIntStack;
+  GStackClosePushOk: Int64;
+  GStackClosePopOk: Int64;
+  GStackCloseClosedPush: Int64;
+  GStackCloseStart: Int32;
+
+function StackCloseWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  Result := nil;
+  while atomic_load(GStackCloseStart, mo_acquire) = 0 do
+    CpuPause;
+  for LI := 1 to STACK_CLOSE_ROUNDS do
+  begin
+    if GStackClose.TryPushEx(LI, LErr) then
+      atomic_fetch_add_64(GStackClosePushOk, 1, mo_relaxed)
+    else if LErr = lfteClosed then
+    begin
+      atomic_fetch_add_64(GStackCloseClosedPush, 1, mo_relaxed);
+      Exit;
+    end;
+    if GStackClose.TryPopEx(LV, LErr) then
+      atomic_fetch_add_64(GStackClosePopOk, 1, mo_relaxed);
+  end;
+end;
+
+procedure TestStackCloseRace;
+var
+  LHandles: array[0..STACK_CLOSE_THREADS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LCount: Integer;
+  LRet: Pointer;
+  LV: Integer;
+  LDrain: Int64;
+begin
+  GStackClose := TIntStack.Create(STACK_CLOSE_CAP);
+  GStackClosePushOk := 0;
+  GStackClosePopOk := 0;
+  GStackCloseClosedPush := 0;
+  atomic_store(GStackCloseStart, 0, mo_release);
+  LCount := 0;
+  try
+    for LI := 0 to STACK_CLOSE_THREADS - 1 do
+    begin
+      StartThread(LHandles[LI], @StackCloseWorker, Pointer(PtrInt(LI)), 'stack close worker');
+      Inc(LCount);
+    end;
+    atomic_store(GStackCloseStart, 1, mo_release);
+    platform_thread_sleep_ms(1);
+    GStackClose.Close;
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'stack close join');
+    LCount := 0;
+
+    LDrain := 0;
+    while GStackClose.TryPop(LV) do
+      Inc(LDrain);
+
+    Check(GStackClose.IsClosed, 'Stack closed after Close');
+    CheckEqual(
+      atomic_load_64(GStackClosePushOk, mo_acquire),
+      atomic_load_64(GStackClosePopOk, mo_acquire) + LDrain,
+      'stack push = pop + drain after close race');
+  finally
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'stack close cleanup');
+    GStackClose.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ A2: SegQueue Close + Try*Ex error codes under contention     }
+{ ============================================================ }
+
+const
+  SEG_CLOSE_PRODUCERS = 2;
+  SEG_CLOSE_CONSUMERS = 2;
+  SEG_CLOSE_PER_P = 1500;
+
+var
+  GSegCloseQ: TIntSegQueue;
+  GSegClosePub: Int64;
+  GSegCloseCon: Int64;
+  GSegCloseClosedEnq: Int64;
+  GSegCloseStart: Int32;
+
+function SegCloseProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LErr: TLockFreeTryError;
+  LBase: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * SEG_CLOSE_PER_P;
+  while atomic_load(GSegCloseStart, mo_acquire) = 0 do
+    CpuPause;
+  for LI := 1 to SEG_CLOSE_PER_P do
+  begin
+    if GSegCloseQ.TryEnqueueEx(LBase + LI, LErr) then
+      atomic_fetch_add_64(GSegClosePub, 1, mo_relaxed)
+    else if LErr = lfteClosed then
+    begin
+      atomic_fetch_add_64(GSegCloseClosedEnq, 1, mo_relaxed);
+      Exit;
+    end
+    else
+      CpuPause;
+  end;
+end;
+
+function SegCloseConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  Result := nil;
+  while True do
+  begin
+    if GSegCloseQ.TryDequeueEx(LV, LErr) then
+    begin
+      atomic_fetch_add_64(GSegCloseCon, 1, mo_relaxed);
+      Continue;
+    end;
+    if LErr = lfteClosed then
+      Exit;
+    CpuPause;
+  end;
+end;
+
+procedure TestSegQueueCloseTryExRace;
+var
+  LProducers: array[0..SEG_CLOSE_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..SEG_CLOSE_CONSUMERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LPCount, LCCount: Integer;
+  LRet: Pointer;
+  LV: Integer;
+  LDrain: Int64;
+begin
+  GSegCloseQ := TIntSegQueue.Create;
+  GSegClosePub := 0;
+  GSegCloseCon := 0;
+  GSegCloseClosedEnq := 0;
+  atomic_store(GSegCloseStart, 0, mo_release);
+  LPCount := 0;
+  LCCount := 0;
+  try
+    for LI := 0 to SEG_CLOSE_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @SegCloseConsumer, nil, 'seg close consumer');
+      Inc(LCCount);
+    end;
+    for LI := 0 to SEG_CLOSE_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @SegCloseProducer, Pointer(PtrInt(LI)), 'seg close producer');
+      Inc(LPCount);
+    end;
+    atomic_store(GSegCloseStart, 1, mo_release);
+    platform_thread_sleep_ms(2);
+    GSegCloseQ.Close;
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'seg close producer join');
+    LPCount := 0;
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'seg close consumer join');
+    LCCount := 0;
+
+    LDrain := 0;
+    while GSegCloseQ.TryDequeue(LV) do
+      Inc(LDrain);
+
+    Check(GSegCloseQ.IsClosed, 'SegQueue closed');
+    CheckEqual(
+      atomic_load_64(GSegClosePub, mo_acquire),
+      atomic_load_64(GSegCloseCon, mo_acquire) + LDrain,
+      'SegQueue pub = con + drain under close race');
+  finally
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'seg producer cleanup');
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'seg consumer cleanup');
+    GSegCloseQ.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Main                                                         }
 { ============================================================ }
 
@@ -1979,5 +2302,8 @@ begin
 
   T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
   T.Test('Channel Close join Free (2P+2C Try*Ex)', @TestChannelCloseJoinFree);
+  T.Test('MSQueue Close race Try*Ex (2P+2C)', @TestMsQueueCloseRace);
+  T.Test('Stack Close race Push/Pop', @TestStackCloseRace);
+  T.Test('SegQueue Close Try*Ex race (2P+2C)', @TestSegQueueCloseTryExRace);
   if not T.Run then Halt(1);
 end.

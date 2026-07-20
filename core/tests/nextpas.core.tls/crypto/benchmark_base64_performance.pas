@@ -3,7 +3,7 @@ program benchmark_base64_performance;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding;
 
@@ -44,7 +44,7 @@ begin
   for I := 1 to LIterations do
     LEncoded := TEncodingUtils.Base64Encode(LData);
   LEndTime := Now;
-  LEncodeTime := MilliSecondsBetween(LEndTime, LStartTime);
+  LEncodeTime := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LEncodeMBps := (LDataSize * LIterations / 1024 / 1024) / (LEncodeTime / 1000);
 
   WriteLn('  Time: ', LEncodeTime, ' ms');
@@ -58,7 +58,7 @@ begin
   for I := 1 to LIterations do
     LDecoded := TEncodingUtils.Base64Decode(LEncoded);
   LEndTime := Now;
-  LDecodeTime := MilliSecondsBetween(LEndTime, LStartTime);
+  LDecodeTime := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LDecodeMBps := (LDataSize * LIterations / 1024 / 1024) / (LDecodeTime / 1000);
 
   WriteLn('  Time: ', LDecodeTime, ' ms');

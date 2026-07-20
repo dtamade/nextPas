@@ -3,8 +3,8 @@ program test_minimal_interface;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
-  
+  nextpas.core.system.sysutils,
+
   nextpas.core.tls.base;
 
 type

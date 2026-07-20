@@ -4,10 +4,10 @@ program test_openssl_1_1_compatibility;
 
 {
   OpenSSL 1.1.x Comprehensive Compatibility Test
-  
-  Purpose: Verify all critical cryptographic operations work correctly 
+
+  Purpose: Verify all critical cryptographic operations work correctly
            with OpenSSL 1.1.x library
-           
+
   Tests:
   - Core library loading and version detection
   - Hash functions (SHA1, SHA256, SHA512, MD5)
@@ -21,7 +21,7 @@ program test_openssl_1_1_compatibility;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,
@@ -57,16 +57,16 @@ begin
   try
     // Force load OpenSSL 1.1.x
     LoadOpenSSLCoreWithVersion(sslVersion_1_1);
-    
+
     if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
       Exit;
-      
+
     Version := GetOpenSSLVersion;
     VersionStr := GetOpenSSLVersionString;
-    
-    Result := (Ord(Version) = Ord(sslVersion_1_1)) and 
+
+    Result := (Ord(Version) = Ord(sslVersion_1_1)) and
               (Pos('1.1', VersionStr) > 0 or Pos('1_1', VersionStr) > 0);
-              
+
     if Result then
       WriteLn('  Version: ', VersionStr);
   except
@@ -97,15 +97,15 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_sha256();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then Exit;
       if EVP_DigestUpdate(ctx, @input[1], Length(input)) <> 1 then Exit;
       if EVP_DigestFinal_ex(ctx, @digest[0], len) <> 1 then Exit;
-      
+
       Result := (len = 32);
     finally
       EVP_MD_CTX_free(ctx);
@@ -128,15 +128,15 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_sha512();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then Exit;
       if EVP_DigestUpdate(ctx, @input[1], Length(input)) <> 1 then Exit;
       if EVP_DigestFinal_ex(ctx, @digest[0], len) <> 1 then Exit;
-      
+
       Result := (len = 64);
     finally
       EVP_MD_CTX_free(ctx);
@@ -159,15 +159,15 @@ begin
     input := 'test';
     ctx := EVP_MD_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_md5();
       if md = nil then Exit;
-      
+
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then Exit;
       if EVP_DigestUpdate(ctx, @input[1], Length(input)) <> 1 then Exit;
       if EVP_DigestFinal_ex(ctx, @digest[0], len) <> 1 then Exit;
-      
+
       Result := (len = 16);
     finally
       EVP_MD_CTX_free(ctx);
@@ -191,18 +191,18 @@ begin
     plaintext := 'Hello OpenSSL 1.1.x!';
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_aes_128_cbc();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then Exit;
       if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) <> 1 then Exit;
       if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) <> 1 then Exit;
-      
+
       Result := (outlen + finallen > 0);
     finally
       EVP_CIPHER_CTX_free(ctx);
@@ -228,19 +228,19 @@ begin
     FillByte(key, Length(key), $01);
     FillByte(iv, Length(iv), $02);
     taglen := 16;
-    
+
     ctx := EVP_CIPHER_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       cipher := EVP_aes_128_gcm();
       if cipher = nil then Exit;
-      
+
       if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then Exit;
       if EVP_EncryptUpdate(ctx, @outbuf[0], outlen, @plaintext[1], Length(plaintext)) <> 1 then Exit;
       if EVP_EncryptFinal_ex(ctx, @outbuf[outlen], finallen) <> 1 then Exit;
       if EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, taglen, @tag[0]) <> 1 then Exit;
-      
+
       Result := (outlen + finallen > 0);
     finally
       EVP_CIPHER_CTX_free(ctx);
@@ -260,15 +260,15 @@ begin
   try
     ctx := EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nil);
     if ctx = nil then Exit;
-    
+
     try
       if EVP_PKEY_keygen_init(ctx) <> 1 then Exit;
       if EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_RSA, -1, EVP_PKEY_CTRL_RSA_KEYGEN_BITS, 2048, nil) <> 1 then Exit;
-      
+
       pkey_tmp := pkey;
       if EVP_PKEY_keygen(ctx, @pkey_tmp) <> 1 then Exit;
       pkey := pkey_tmp;
-      
+
       Result := (pkey <> nil);
       if Result then
         EVP_PKEY_free(pkey);
@@ -290,16 +290,16 @@ begin
   try
     ctx := EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nil);
     if ctx = nil then Exit;
-    
+
     try
       if EVP_PKEY_keygen_init(ctx) <> 1 then Exit;
-      if EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, EVP_PKEY_OP_PARAMGEN or EVP_PKEY_OP_KEYGEN, 
+      if EVP_PKEY_CTX_ctrl(ctx, EVP_PKEY_EC, EVP_PKEY_OP_PARAMGEN or EVP_PKEY_OP_KEYGEN,
                           EVP_PKEY_CTRL_EC_PARAMGEN_CURVE_NID, NID_X9_62_prime256v1, nil) <> 1 then Exit;
-      
+
       pkey_tmp := pkey;
       if EVP_PKEY_keygen(ctx, @pkey_tmp) <> 1 then Exit;
       pkey := pkey_tmp;
-      
+
       Result := (pkey <> nil);
       if Result then
         EVP_PKEY_free(pkey);
@@ -325,21 +325,21 @@ begin
   try
     // Load HMAC functions
     nextpas.core.tls.openssl.api.hmac.LoadHMAC(GetCryptoLibHandle);
-    
+
     key := 'secret';
     data := 'message';
-    
+
     ctx := HMAC_CTX_new();
     if ctx = nil then Exit;
-    
+
     try
       md := EVP_sha256();
       if md = nil then Exit;
-      
+
       if HMAC_Init_ex(ctx, @key[1], Length(key), md, nil) <> 1 then Exit;
       if HMAC_Update(ctx, @data[1], Length(data)) <> 1 then Exit;
       if HMAC_Final(ctx, @digest[0], @len) <> 1 then Exit;
-      
+
       Result := (len = 32);
     finally
       HMAC_CTX_free(ctx);
@@ -359,11 +359,11 @@ begin
   try
     // Load RAND functions
     nextpas.core.tls.openssl.api.rand.LoadRAND(GetCryptoLibHandle);
-    
+
     FillByte(buffer, Length(buffer), 0);
-    
+
     if RAND_bytes(@buffer[0], Length(buffer)) <> 1 then Exit;
-    
+
     // Check that at least some bytes are non-zero
     allZero := True;
     for i := 0 to High(buffer) do
@@ -372,7 +372,7 @@ begin
         allZero := False;
         Break;
       end;
-      
+
     Result := not allZero;
   except
     Result := False;
@@ -388,12 +388,12 @@ begin
   try
     // Load BN functions
     nextpas.core.tls.openssl.api.bn.LoadBN(GetCryptoLibHandle);
-    
+
     a := BN_new();
     b := BN_new();
     c := BN_new();
     ctx := BN_CTX_new();
-    
+
     if (a = nil) or (b = nil) or (c = nil) or (ctx = nil) then
     begin
       if a <> nil then BN_free(a);
@@ -402,15 +402,15 @@ begin
       if ctx <> nil then BN_CTX_free(ctx);
       Exit;
     end;
-    
+
     try
       // Set a = 100, b = 50
       BN_set_word(a, 100);
       BN_set_word(b, 50);
-      
+
       // c = a + b = 150
       if BN_add(c, a, b) <> 1 then Exit;
-      
+
       Result := (BN_get_word(c) = 150);
     finally
       BN_free(a);
@@ -429,41 +429,41 @@ begin
   WriteLn('OpenSSL 1.1.x Compatibility Test');
   WriteLn('=====================================');
   WriteLn;
-  
+
   TotalTests := 0;
   PassedTests := 0;
   FailedTests := 0;
-  
+
   WriteLn('=== Core & Version Tests ===');
   LogTest('1.1.x Core Loading', TestCoreLoading);
   LogTest('EVP Module Loading', TestEVPLoading);
   WriteLn;
-  
+
   WriteLn('=== Hash Functions ===');
   LogTest('SHA-256 Hash', TestSHA256Hash);
   LogTest('SHA-512 Hash', TestSHA512Hash);
   LogTest('MD5 Hash', TestMD5Hash);
   WriteLn;
-  
+
   WriteLn('=== Symmetric Encryption ===');
   LogTest('AES-128-CBC Encryption', TestAESCBCEncryption);
   LogTest('AES-128-GCM AEAD', TestAESGCMEncryption);
   WriteLn;
-  
+
   WriteLn('=== Asymmetric Cryptography ===');
   LogTest('RSA Key Generation', TestRSAKeyGeneration);
   LogTest('ECDSA Key Generation', TestECDSAKeyGeneration);
   WriteLn;
-  
+
   WriteLn('=== MAC & KDF ===');
   LogTest('HMAC-SHA256', TestHMACSHA256);
   WriteLn;
-  
+
   WriteLn('=== Utilities ===');
   LogTest('Random Bytes Generation', TestRandomBytes);
   LogTest('Big Number Operations', TestBigNumberOperations);
   WriteLn;
-  
+
   WriteLn('=====================================');
   WriteLn('Test Summary');
   WriteLn('=====================================');
@@ -472,7 +472,7 @@ begin
   WriteLn('Failed: ', FailedTests);
   WriteLn('Pass rate: ', Format('%.1f%%', [(PassedTests / TotalTests) * 100]));
   WriteLn;
-  
+
   if FailedTests = 0 then
   begin
     WriteLn('[SUCCESS] All tests passed!');
@@ -488,10 +488,10 @@ end;
 begin
   try
     RunAllTests;
-    
+
     // Cleanup
     UnloadOpenSSLCore;
-    
+
     if FailedTests > 0 then
       ExitCode := 1;
   except

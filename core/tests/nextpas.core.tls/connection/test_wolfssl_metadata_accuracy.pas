@@ -6,9 +6,9 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils,
-  Classes,
-  DateUtils,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,

@@ -383,7 +383,7 @@ begin
   try
     if not MapDelete(PtrUInt(APtr), LSize, LAllocId, LTag) then
       raise EDoubleFree.Create(aeDoubleFree,
-        'TTrackingAllocator.FreeMem: pointer not tracked (double-free or foreign pointer)');
+      FormatAllocErrorMsg('TTrackingAllocator', 'FreeMem', 'pointer not tracked (double-free or foreign pointer)'));
     try
       FInner.FreeMem(APtr);
     except

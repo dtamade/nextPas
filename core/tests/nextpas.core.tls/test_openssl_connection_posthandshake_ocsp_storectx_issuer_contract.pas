@@ -3,7 +3,7 @@ program test_openssl_connection_posthandshake_ocsp_storectx_issuer_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

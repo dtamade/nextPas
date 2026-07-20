@@ -3,7 +3,7 @@ program test_mbedtls_connection_peer_certificate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,

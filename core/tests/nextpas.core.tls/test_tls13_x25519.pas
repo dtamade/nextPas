@@ -3,7 +3,7 @@ program test_tls13_x25519;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.x25519;
 
 procedure Fail(const AMessage: string);

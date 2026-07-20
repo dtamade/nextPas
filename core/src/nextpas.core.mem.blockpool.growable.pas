@@ -326,7 +326,7 @@ begin
   LBytes := aBlocks * FBlockSize;
   if (FBlockSize <> 0) and ((LBytes div FBlockSize) <> aBlocks) then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'segment size overflow (blocks=' + IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')'));
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'segment size overflow (blocks=' + IntToStr(Int64(aBlocks)) + ', block_size=' + IntToStr(Int64(FBlockSize)) + ')'));
 
   if FAlignment <= 1 then
     LAllocSize := LBytes
@@ -334,7 +334,7 @@ begin
     LAllocSize := LBytes + (FAlignment - 1);
   if LAllocSize < LBytes then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
 
   if FAllocator = nil then
     LRaw := System.GetMem(LAllocSize)
@@ -567,7 +567,7 @@ begin
     LMask := LAlign - 1;
     if aConfig.BlockSize > (High(SizeUInt) - LMask) then
       raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TGrowingBlockPool', 'Raise', 'block size overflow (' + IntToStr(aConfig.BlockSize) + ')'));
+      FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'block size overflow (' + IntToStr(aConfig.BlockSize) + ')'));
     LActualBlockSize := (aConfig.BlockSize + LMask) and not LMask;
   end;
 
