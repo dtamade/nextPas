@@ -3075,6 +3075,11 @@ begin
     'client advertises ENABLE_PUSH setting');
   Check(Pos('Result := TRetryClient.Create', LSource) = 0,
     'H2 client unit is transport-only (retry stays http.client decorator)');
+  { S3-2: RoundTripMany must not Init stream flow with StreamID=0. }
+  Check(Pos('LDummyFlow.Init(0,', LSource) = 0,
+    'RoundTripMany must not Init stream flow control with stream ID 0');
+  Check(Pos('LDummyFlow.Init(1,', LSource) > 0,
+    'RoundTripMany uses dummy stream ID 1 for connection-level demux');
 end;
 
 procedure TestHandshakeGoawayCausesFailure;

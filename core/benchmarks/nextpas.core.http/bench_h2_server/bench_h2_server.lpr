@@ -1,25 +1,34 @@
 program bench_h2_server;
 {**
- * @desc H2 server multi-connection / multi-stream scale harness (S3-1).
- *       Cleartext prior-knowledge HTTP/2 via public facade (same as
- *       test_http_h2_facade). Not an H1 comparison KPI; baseline for S3.
+ * @desc H2 server scale harness (S3-1/S3-2).
+ *       S3-2: concurrent multiplex via IHttpTransportMultiplex.RoundTripMany,
+ *       server backend threaded|epoll, higher default scale.
  *}
 
 {$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.base.utils,
+  nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.intf,
+  nextpas.core.http.message,
+  nextpas.core.http.impl.h2.types,
+  nextpas.core.http.impl.h2.client,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
 const
-  DEFAULT_CONNECTIONS = 4;
-  DEFAULT_STREAMS = 4;
-  DEFAULT_REQUESTS = 100;
+  DEFAULT_CONNECTIONS = 8;
+  DEFAULT_STREAMS = 16;
+  DEFAULT_BATCHES = 200;
+  MODE_SEQUENTIAL = 'sequential';
+  MODE_MULTIPLEX = 'multiplex';
+  BACKEND_THREADED = 'threaded';
+  BACKEND_EPOLL = 'epoll';
   SMALL_BODY = 'h2-ok';
 
 type
@@ -32,7 +41,8 @@ type
   TClientCtx = record
     Port: UInt16;
     Streams: Int32;
-    Requests: Int32;
+    Batches: Int32;
+    Mode: string;
     Success: Int32;
     Fail: Int32;
   end;
@@ -40,7 +50,9 @@ type
 var
   GConnections: Int32;
   GStreams: Int32;
-  GRequests: Int32;
+  GBatches: Int32;
+  GMode: string;
+  GBackend: TTcpServerBackend;
   GDone: Int32;
 
 procedure RejectInvalid(const AName, AValue: string);
@@ -58,13 +70,28 @@ begin
   Result := LValue;
 end;
 
+function BackendName: string;
+begin
+  case GBackend of
+    TCP_SERVER_BACKEND_THREADED:
+      Result := BACKEND_THREADED;
+    TCP_SERVER_BACKEND_EPOLL:
+      Result := BACKEND_EPOLL;
+  else
+    Result := 'unknown';
+  end;
+end;
+
 procedure ParseOptions;
 var
   LI: Integer;
 begin
   GConnections := DEFAULT_CONNECTIONS;
   GStreams := DEFAULT_STREAMS;
-  GRequests := DEFAULT_REQUESTS;
+  GBatches := DEFAULT_BATCHES;
+  GMode := MODE_MULTIPLEX;
+  { H2 poll-driven + epoll still residual (can hang); default threaded for scale. }
+  GBackend := TCP_SERVER_BACKEND_THREADED;
   LI := 1;
   while LI <= ParamCount do
   begin
@@ -78,9 +105,34 @@ begin
       GStreams := ParsePositive('--streams', ParamStr(LI + 1));
       Inc(LI, 2);
     end
+    else if (ParamStr(LI) = '--batches') and (LI < ParamCount) then
+    begin
+      GBatches := ParsePositive('--batches', ParamStr(LI + 1));
+      Inc(LI, 2);
+    end
     else if (ParamStr(LI) = '--requests') and (LI < ParamCount) then
     begin
-      GRequests := ParsePositive('--requests', ParamStr(LI + 1));
+      { Alias for --batches (S3-1 CLI compatibility). }
+      GBatches := ParsePositive('--requests', ParamStr(LI + 1));
+      Inc(LI, 2);
+    end
+    else if (ParamStr(LI) = '--mode') and (LI < ParamCount) then
+    begin
+      if (ParamStr(LI + 1) = MODE_SEQUENTIAL) or
+         (ParamStr(LI + 1) = MODE_MULTIPLEX) then
+        GMode := ParamStr(LI + 1)
+      else
+        RejectInvalid('--mode', ParamStr(LI + 1));
+      Inc(LI, 2);
+    end
+    else if (ParamStr(LI) = '--backend') and (LI < ParamCount) then
+    begin
+      if ParamStr(LI + 1) = BACKEND_THREADED then
+        GBackend := TCP_SERVER_BACKEND_THREADED
+      else if ParamStr(LI + 1) = BACKEND_EPOLL then
+        GBackend := TCP_SERVER_BACKEND_EPOLL
+      else
+        RejectInvalid('--backend', ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else
@@ -103,42 +155,85 @@ end;
 function ClientThread(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PClientCtx;
+  LTransport: IHttpTransport;
+  LMux: IHttpTransportMultiplex;
   LClient: IHttpClient;
+  LOpts: TH2ClientTransportOptions;
   LUrl: string;
   LI, LJ: Int32;
   LBatch: Int32;
   LOk: Boolean;
   LResp: IHttpResponse;
+  LReqs: array of IHttpRequest;
+  LResps: THttpResponseArray;
 begin
   Result := nil;
   LCtx := PClientCtx(AParam);
   LCtx^.Success := 0;
   LCtx^.Fail := 0;
   LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LCtx^.Port)) + '/';
+  LBatch := LCtx^.Streams;
+  if LBatch < 1 then
+    LBatch := 1;
+
   try
-    LClient := NewHttpClient(
-      THttpClientOptions.Default.WithVersion(hvHttp2).WithTimeout(10000));
-    { S3-1 baseline: sequential GETs on H2 keep-alive (facade path).
-      True concurrent multiplex via RoundTripMany is S3-2+ (transport seam). }
-    for LI := 1 to LCtx^.Requests do
+    if LCtx^.Mode = MODE_MULTIPLEX then
     begin
-      LBatch := LCtx^.Streams;
-      if LBatch < 1 then
-        LBatch := 1;
-      for LJ := 0 to LBatch - 1 do
+      LOpts := TH2ClientTransportOptions.Default;
+      LOpts.Timeout := 30000;
+      LTransport := NewH2ClientTransport(LOpts);
+      if not Supports(LTransport, IHttpTransportMultiplex, LMux) then
       begin
-        LOk := False;
-        try
-          LResp := LClient.Get(LUrl);
-          LOk := (LResp <> nil) and (LResp.StatusCode = HTTP_STATUS_OK);
-        except
-          LOk := False;
-        end;
-        if LOk then
-          Inc(LCtx^.Success)
-        else
-          Inc(LCtx^.Fail);
+        Inc(LCtx^.Fail);
+        InterlockedIncrement(GDone);
+        Exit;
       end;
+      for LI := 1 to LCtx^.Batches do
+      begin
+        SetLength(LReqs, LBatch);
+        for LJ := 0 to LBatch - 1 do
+          LReqs[LJ] := NewRequest(hmGet, LUrl);
+        try
+          LResps := LMux.RoundTripMany(LReqs);
+          if Length(LResps) <> LBatch then
+            Inc(LCtx^.Fail, LBatch)
+          else
+            for LJ := 0 to LBatch - 1 do
+            begin
+              if (LResps[LJ] <> nil) and
+                 (LResps[LJ].StatusCode = HTTP_STATUS_OK) then
+                Inc(LCtx^.Success)
+              else
+                Inc(LCtx^.Fail);
+            end;
+        except
+          Inc(LCtx^.Fail, LBatch);
+        end;
+        LResps := nil;
+        for LJ := 0 to High(LReqs) do
+          LReqs[LJ] := nil;
+      end;
+    end
+    else
+    begin
+      { sequential: public facade client (S3-1 residual). }
+      LClient := NewHttpClient(
+        THttpClientOptions.Default.WithVersion(hvHttp2).WithTimeout(30000));
+      for LI := 1 to LCtx^.Batches do
+        for LJ := 0 to LBatch - 1 do
+        begin
+          LOk := False;
+          try
+            LResp := LClient.Get(LUrl);
+            LOk := (LResp <> nil) and (LResp.StatusCode = HTTP_STATUS_OK);
+          except
+            LOk := False;
+          end;
+          if LOk then
+            Inc(LCtx^.Success)
+          else
+            Inc(LCtx^.Fail);
+        end;
     end;
   except
     Inc(LCtx^.Fail);
@@ -162,10 +257,13 @@ var
   LSuccess, LFail: Int32;
   LReqPerSec: Double;
   LReadyStart: UInt64;
+  LTarget: Int32;
+  LStable: Int32;
 
 begin
   ParseOptions;
   GDone := 0;
+  LTarget := GConnections * GStreams * GBatches;
 
   LRouter := NewRouter;
   LRouter.Get('/', procedure(const AReq: IHttpRequest;
@@ -174,7 +272,8 @@ begin
     HttpWriteResponseString(AW, HTTP_STATUS_OK, 'text/plain', SMALL_BODY);
   end);
 
-  LOpts := THttpServerOptions.Default.WithVersion(hvHttp2).WithIdleTimeout(30000);
+  LOpts := THttpServerOptions.Default.WithVersion(hvHttp2).WithIdleTimeout(60000);
+  LOpts.Backend := GBackend;
   LServer := NewHttpServer(LRouter as IHttpHandler, LOpts);
   LServerCtx.Server := LServer;
   platform_thread_create(LHandle, @ServerThread, @LServerCtx);
@@ -191,10 +290,13 @@ begin
   end;
   LPort := LServer.LocalAddr.Port;
 
-  WriteLn('=== HTTP/2 Server Scale Harness (S3-1) ===');
+  WriteLn('=== HTTP/2 Server Scale Harness ===');
+  WriteLn('  mode=', GMode);
+  WriteLn('  backend=', BackendName);
   WriteLn('  connections=', GConnections);
   WriteLn('  streams_per_batch=', GStreams);
-  WriteLn('  batches_per_conn=', GRequests);
+  WriteLn('  batches_per_conn=', GBatches);
+  WriteLn('  target_ops=', LTarget);
   WriteLn('  port=', LPort);
   WriteLn;
 
@@ -205,7 +307,8 @@ begin
   begin
     LCtxs[LI].Port := LPort;
     LCtxs[LI].Streams := GStreams;
-    LCtxs[LI].Requests := GRequests;
+    LCtxs[LI].Batches := GBatches;
+    LCtxs[LI].Mode := GMode;
     LCtxs[LI].Success := 0;
     LCtxs[LI].Fail := 0;
     platform_thread_create(LHandles[LI], @ClientThread, @LCtxs[LI]);
@@ -232,30 +335,38 @@ begin
   else
     LReqPerSec := 0.0;
 
+  if (LFail = 0) and (LSuccess = LTarget) then
+    LStable := 1
+  else
+    LStable := 0;
+
   WriteLn('  success=', LSuccess, ' fail=', LFail);
   WriteLn('  elapsed_ms=', LElapsedNs div 1000000);
   WriteLn('  req/s=', Trunc(LReqPerSec));
+  WriteLn('  stable=', LStable);
   WriteLn;
   WriteLn('operation=http.server.h2');
   WriteLn('impl=nextpas');
   WriteLn('protocol=h2');
-  WriteLn('mode=cleartext_prior_knowledge');
+  WriteLn('mode=', GMode);
+  WriteLn('backend=', BackendName);
+  WriteLn('cleartext=prior_knowledge');
   WriteLn('connections=', GConnections);
   WriteLn('streams_per_batch=', GStreams);
-  WriteLn('batches_per_conn=', GRequests);
-  WriteLn('target_ops=', GConnections * GStreams * GRequests);
+  WriteLn('batches_per_conn=', GBatches);
+  WriteLn('target_ops=', LTarget);
   WriteLn('completed=', LSuccess);
   WriteLn('failed=', LFail);
   WriteLn('elapsed_ns=', LElapsedNs);
   WriteLn('req/s=', Trunc(LReqPerSec));
-  WriteLn('stable=', Ord((LFail = 0) and (LSuccess = GConnections * GStreams * GRequests)));
+  WriteLn('stable=', LStable);
   WriteLn;
 
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
   LServer := nil;
 
-  if (LFail = 0) and (LSuccess = GConnections * GStreams * GRequests) then
+  if LStable = 1 then
     Halt(0)
   else
     Halt(1);
