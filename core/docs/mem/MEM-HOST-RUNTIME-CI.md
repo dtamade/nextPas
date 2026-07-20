@@ -104,3 +104,10 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 | test-freebsd | n/a | job **success** |
 
 结论：H2 land 后 Darwin/Windows 真机 host-runtime 仍稳；整 job 红点仍属 async/platform 治理，不阻塞 mem Maintenance。
+
+### 5.6 H∞ scorecard 刷新同日（run **29729525052** · docs evidence land）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | matrix **10/10**；job 仍红于 kqueue |
+| **test-windows-runtime** | **PASS** | matrix **25/25 全绿** |

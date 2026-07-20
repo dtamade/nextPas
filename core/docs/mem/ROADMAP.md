@@ -260,3 +260,6 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
 | 2026-07-19 | E5 P-b：删 15 Tier-3 allocator + 21 test 目录；保留 blockpool.growable |
 | 2026-07-20 | Era F 开启：F0 状态对齐 · F1 Scorecard · F2 门面 slim 设计 |
+| 2026-07-20 | Era F **CLOSED**（F0–F8）；Era G Steward Steady（G0–G7 · G5.x Darwin/Windows host-runtime） |
+| 2026-07-20 | Era H Maintenance：H0 决策树/SCORECARD · H1/H1b/H2 FreeMemOf 关闭战役 |
+| 2026-07-20 | H∞：SCORECARD RELEASE=1 + soak 3/3 复跑（post-H2 无回归）；host-runtime CI 证据续记 |
