@@ -33,8 +33,10 @@ rust:
 compare: run go rust
 	@echo
 	@echo 'compare notes:'
-	@echo '  Same ops: DiffIdentical / DiffDirty10 @ 200x50; ParseAscii / ParseCsiUp'
+	@echo '  Same ops: DiffIdentical / DiffDirty10 @ 200x50; ParseAscii / ParseCsiUp;'
+	@echo '            LayoutVSplit3; OverlayMerge 40x12'
 	@echo '  Simplified kernels only — not full ratatui/crossterm/tcell.'
+	@echo '  Pascal Layout/Overlay use real nextPas APIs; Go/Rust are geometry/byte stubs.'
 	@echo '  Authoritative nextPas gate: core/tests/nextpas.core.tui/scorecard'
 
 clean:

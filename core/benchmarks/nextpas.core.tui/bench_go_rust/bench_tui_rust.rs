@@ -1,4 +1,4 @@
-// Simplified TUI kernels matching nextpas scorecard SC1–SC3 methodology.
+// Simplified TUI kernels matching nextpas scorecard / bench methodology.
 // NOT a full ratatui/crossterm port.
 use std::hint::black_box;
 use std::time::Instant;
@@ -7,6 +7,10 @@ const W: usize = 200;
 const H: usize = 50;
 const DIFF_ITERS: usize = 2000;
 const PARSE_ITERS: usize = 5_000_000;
+const LAYOUT_ITERS: usize = 1_000_000;
+const OVERLAY_ITERS: usize = 200_000;
+const OV_W: usize = 40;
+const OV_H: usize = 12;
 
 #[derive(Clone, Copy)]
 struct Cell {
@@ -39,6 +43,26 @@ fn parse_ascii(buf: &[u8]) -> bool {
 
 fn parse_csi_up(buf: &[u8]) -> bool {
     buf.len() >= 3 && buf[0] == 27 && buf[1] == b'[' && buf[2] == b'A'
+}
+
+fn layout_vsplit3(total_h: i32) -> (i32, i32, i32) {
+    let h0 = 3;
+    let h2 = 3;
+    let h1 = (total_h - h0 - h2).max(0);
+    (h0, h1, h2)
+}
+
+fn overlay_merge(base: &[u8], dest: &mut [u8], marks: &[u8], mark_ch: u8) -> usize {
+    let mut n = 0;
+    for i in 0..base.len() {
+        if marks[i] != 0 {
+            dest[i] = mark_ch;
+            n += 1;
+        } else {
+            dest[i] = base[i];
+        }
+    }
+    n
 }
 
 fn main() {
@@ -92,4 +116,32 @@ fn main() {
     assert!(ok);
     black_box(ok);
     report("ParseCsiUp", t0.elapsed(), PARSE_ITERS);
+
+    let t0 = Instant::now();
+    sink = 0;
+    for _ in 0..LAYOUT_ITERS {
+        let (a, b, c) = layout_vsplit3(black_box(60));
+        sink = sink.wrapping_add((a + b + c) as usize);
+    }
+    black_box(sink);
+    report("LayoutVSplit3", t0.elapsed(), LAYOUT_ITERS);
+
+    let base_ov = vec![b'.'; OV_W * OV_H];
+    let mut dest_ov = vec![0u8; OV_W * OV_H];
+    let mut marks = vec![0u8; OV_W * OV_H];
+    marks[2] = 1;
+    marks[3] = 1;
+
+    let t0 = Instant::now();
+    sink = 0;
+    for _ in 0..OVERLAY_ITERS {
+        sink = sink.wrapping_add(overlay_merge(
+            black_box(&base_ov),
+            black_box(&mut dest_ov),
+            black_box(&marks),
+            b'O',
+        ));
+    }
+    black_box(sink);
+    report("OverlayMerge 40x12", t0.elapsed(), OVERLAY_ITERS);
 }
