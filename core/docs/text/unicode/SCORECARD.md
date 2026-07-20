@@ -37,14 +37,13 @@
 | QuickCheckNFC ASCII-200 | 51 | 361 | **0.14×** | ✅ |
 | IsAsciiString ASCII-200 | 48 | — | — | ✅ 内部 |
 | NextGrapheme ASCII-200 | 106 | (RuneCount 264) | 不同测项 | ⬜ C6 |
-| GetSortKey ASCII-50 | 6796 | 4690 | **1.45×** | ✅ C5 |
+| GetSortKey ASCII-50 | **2275** | 4931 | **0.46×** | ✅ C5 (M3b) |
 | GetSortKey BMP-Latin-50 | 14898 | 7943 | **1.88×** | ✅ C5 |
-| Collate Compare ASCII-50 vs 200 | 45625 | 3907 | **11.7×** | 🔴 C5b |
+| Collate Compare ASCII-50 vs 200 | **4000** | 3579 | **1.12×** | ✅ C5b (M3b) |
 
 ### 汇总
 
-- ✅ C1–C4、SortKey  
-- 🔴 **Collate 跨串 Compare ~12× Go** — 专项优化岛，不阻塞岸线  
+- ✅ C1–C4、SortKey、**C5b Compare ≤2×**（M3b ≈1.12×）  
 - 维护：优化后必须更新本表 tip + 数字  
 
 ---
@@ -61,5 +60,6 @@
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-20 | **M3b** Collate ASCII 表 + 缓冲复用：Compare **1.12×** Go |
 | 2026-07-20 | **M3 v2 冻结** 同机数字 + Collate Compare 债 |
 | 2026-07-20 | M1 准则入仓 |

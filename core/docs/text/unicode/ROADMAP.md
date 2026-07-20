@@ -28,6 +28,7 @@
 | **M1** 产品化与导航 | ✅ | ROADMAP + SCORECARD + `make gate` + CONTRACT 对齐 + 门面差异表；QC 对非法 UTF-8 不误短路 |
 | **M2** 日常 API | ✅ | Word-boundary Title；`clLithuanian`；COOKBOOK |
 | **M3** SCORECARD v2 | ⬜ | 与 Go 对齐测项 + 通过准则冻结 + 按表优化 |
+| **M3b** Collate Compare 热路径 | ✅ | ASCII CE 表 + 实例缓冲；Compare ≈1.12× Go |
 | **M4** 按需扩展 | 🔒 | 属性/IDNA/… 仅消费者拉票 |
 | **M5** 深水 | 🔒 | CLDR / Bidi L3+ 默认关闭 |
 
@@ -138,5 +139,6 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-20 | M3b：Collate Compare ≈1.12× Go |
 | 2026-07-20 | M2：TitleWords + clLithuanian |
 | 2026-07-20 | M1：地图入仓 + gate + 门面差异表 |
