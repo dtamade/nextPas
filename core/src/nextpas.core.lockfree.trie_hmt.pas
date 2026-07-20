@@ -196,9 +196,12 @@ begin
 end;
 
 procedure THashMappedTrie.AcquireLock;
+var
+  LCasExpected: Int32;
 begin
   repeat
-    if AtomicCompareExchange32(FLock, 0, 1, moAcquire) = 0 then
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
       Exit;
     ThreadSwitch;
   until False;
@@ -206,7 +209,7 @@ end;
 
 procedure THashMappedTrie.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function THashMappedTrie.SplitLeafNode(ALeaf: PHmtNode; AHash: UInt32; ADepth: Int32;

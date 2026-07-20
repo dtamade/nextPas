@@ -170,7 +170,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | tui buffer/overlay inject | **WAIVE FreeMemOf**：须 `IAllocator.FreeMem` 以保留 tracking 可观测 |
 
 **结论**: 无新 P0/P1。主路径 FreeMemOf 样板已够；残余仅为 WAIVE（tui tracking / owned 串）。
-默认 **Steady / H0 Maintenance** — 见 [API-GUIDE.md](API-GUIDE.md) FreeMemOf 决策树。
+默认 **Maintenance Idle（H∞）** — 见 [API-GUIDE.md](API-GUIDE.md) FreeMemOf 决策树 · [ROADMAP.md](ROADMAP.md)。
 
 ---
 

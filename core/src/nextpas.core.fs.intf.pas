@@ -21,6 +21,9 @@ type
     { Non-blocking; True=acquired, False=busy; other errors raise. }
     function TryLock(const AKind: TFileLockKind = flkExclusive): Boolean;
     procedure Unlock;
+    { Positioned I/O (pread/pwrite); does not change stream Position. }
+    function ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
+    function WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
   end;
 
   IDirIterator = interface

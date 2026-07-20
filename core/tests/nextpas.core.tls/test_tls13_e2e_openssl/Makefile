@@ -1,9 +1,15 @@
 PROGRAM := test_tls13_e2e_openssl
 include ../../common.mk
 
+# tooling (test_core_focused_makefiles) scans this Makefile text only — it does
+# not expand include. Re-declare clean so suites that override `test:` still
+# expose a clean target (same semantics as common.mk).
+.PHONY: clean test
+clean: clean-src
+	rm -rf $(BUILD_DIR) $(WINE_BUILD_DIR)
+
 # Optional integration gate: spin up openssl s_server when available.
 # Soft-skips (exit 0) when openssl is missing or the server fails to bind.
-.PHONY: test
 test: build
 	@PORT=15555; \
 	if ! command -v openssl >/dev/null 2>&1; then \

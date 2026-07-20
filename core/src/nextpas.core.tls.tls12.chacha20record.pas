@@ -31,7 +31,7 @@ function TLS12ChaCha20Poly1305DecryptRecord(
 implementation
 
 uses
-  nextpas.core.tls.tls13.chacha20poly1305;
+  nextpas.core.crypto.chacha20poly1305;
 
 const
   TAG_LEN = 16;

@@ -11,7 +11,7 @@ Unified configuration module supporting multiple data formats with a common flat
 | `yaml` | `nextpas.core.yaml` | `YamlParse` | `TryYamlParse` | `TYamlError` |
 | `xml` | `nextpas.core.xml` | `XmlParse` | `TryXmlParse` | `EXmlError` |
 | `csv` | `nextpas.core.csv` | `TCsvReader` | In-band via `HasError` | `TCsvError` |
-| `ini` | `nextpas.core.ini` | `LoadFromString` | `TryLoadFromString` | `TIniError` |
+| `ini` | `nextpas.core.ini` | `LoadFromString` | `TryLoadFromString` (string / `TIniError`) | `TIniError` |
 
 ### Diagnostics Fields
 

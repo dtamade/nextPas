@@ -32,7 +32,7 @@ uses
   nextpas.core.crypto.aes.ct64,
   nextpas.core.crypto.pkcs8,
   nextpas.core.crypto.argon2,
-  nextpas.core.tls.tls13.chacha20poly1305;
+  nextpas.core.crypto.chacha20poly1305;
 
 type
   TECPoint = nextpas.core.crypto.ecdsa.TECPoint;

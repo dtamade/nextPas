@@ -3,6 +3,7 @@ program test_toml_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.toml,
   nextpas.core.test;
 
@@ -34,8 +35,45 @@ begin
     'builder and datetime helpers available through facade');
 end;
 
+procedure TestFacadeEdgeDepthLargeAndDuplicate;
+var
+  LText: string;
+  LPath: string;
+  LDoc: ITomlDocument;
+  LValue: TTomlValue;
+  LI: Integer;
+  LBig: string;
+  LError: TTomlError;
+begin
+  LPath := 'l1';
+  for LI := 2 to 16 do
+    LPath := LPath + '.l' + IntToStr(LI);
+  LText := '[' + LPath + ']' + #10 + 'v = 42' + #10;
+  LDoc := TomlParse(LText);
+  Check(not LDoc.HasError, 'deep nested tables parse');
+  LValue := LDoc.Root;
+  for LI := 1 to 16 do
+    LValue := LValue.Get('l' + IntToStr(LI));
+  CheckEqual(Int64(42), LValue.Get('v').AsInt, 'deep table value');
+
+  SetLength(LBig, 4096);
+  for LI := 1 to 4096 do
+    LBig[LI] := Chr(Ord('A') + (LI mod 26));
+  LDoc := TomlParse('blob = "' + LBig + '"' + #10);
+  Check(not LDoc.HasError, 'large string value parses');
+  CheckEqual(Int64(4096), Int64(Length(LDoc.Root.Get('blob').AsStr.ToString)),
+    'large string length');
+
+  LDoc := TomlParse('a = 1' + #10 + 'a = 2' + #10);
+  Check(LDoc.HasError, 'duplicate key rejected');
+  LError := LDoc.Error;
+  Check(LError.Line > 0, 'duplicate key error has line');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.toml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
+  T.Test('facade edge depth large and duplicate',
+    @TestFacadeEdgeDepthLargeAndDuplicate);
   if not T.Run then Halt(1);
 end.

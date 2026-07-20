@@ -13,6 +13,7 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.fs.stream, nextpas.core.fs, nextpas.core.path,
   nextpas.core.platform.files.base,
   nextpas.core.text.conv,

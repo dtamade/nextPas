@@ -630,9 +630,13 @@ begin
 end;
 
 procedure HarnessSoftFailInSubtest;
+{ Nested SoftFail: leaf SoftFail attaches to parent; leaf entry may stay tsPassed.
+  Observed contract (v8.20): parent Message is SoftFail join from nested body. }
 var
   LFailSuite: TTestSuite;
   LResult: TTestRunResult;
+  I: Integer;
+  LParentMsg: string;
 begin
   LFailSuite := TTestSuite.Create('SoftFail Subtest');
   LFailSuite.TestSubtest('soft sub',
@@ -647,11 +651,127 @@ begin
     end);
   CheckFalse(LFailSuite.RunWithResult(LResult), 'soft subtest fails suite');
   CheckTrue(LResult.Failed >= 1);
-  CheckTrue(
-    (Pos('sub soft', LResult.Results[0].Message) > 0) or
-    (Pos('soft', LResult.Results[0].Message) > 0),
-    'soft message in result');
+  LParentMsg := '';
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Name = 'soft sub' then
+    begin
+      CheckEqual(Ord(tsFailed), Ord(LResult.Results[I].Status));
+      LParentMsg := LResult.Results[I].Message;
+    end;
+  CheckTrue(LParentMsg <> '', 'parent soft sub has message');
+  { Nested Ctx.Run resets soft state: parent body SoftFail before leaf is lost;
+    leaf SoftFail lands on parent. Exact contract locks observed behavior. }
+  CheckEqual('leaf soft', LParentMsg, 'nested SoftFail parent message exact');
   LFailSuite := Default(TTestSuite);
+end;
+
+procedure HarnessSoftFailTopLevelExact;
+{ SoftFail only on top-level TestSubtest body (no nested Run) → full join. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('soft-top');
+  LSuite.TestSubtest('only soft',
+    procedure(constref Ctx: ITestContext)
+    begin
+      SoftFail('alpha');
+      SoftFail('beta');
+      SoftCheckTrue(False, 'gamma');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(1, LResult.Failed);
+  CheckEqual('alpha; beta; gamma', LResult.Results[0].Message,
+    'top-level TestSubtest SoftFail join exact');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure HarnessSoftFailLeafMultiExact;
+{ Multiple SoftFail inside leaf only → parent message is join. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LMsg: string;
+begin
+  LSuite := TTestSuite.Create('soft-leaf-multi');
+  LSuite.TestSubtest('parent',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('leaf', procedure
+        begin
+          SoftFail('L1');
+          SoftFail('L2');
+        end);
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LMsg := '';
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Name = 'parent' then
+      LMsg := LResult.Results[I].Message;
+  CheckEqual('L1; L2', LMsg, 'leaf multi SoftFail join on parent');
+  LSuite := Default(TTestSuite);
+end;
+
+{ B33 table cases capture AC via threadvar-free globals (FPC nested ref limits). }
+var
+  GB33Mode: string;
+  GB33Tag: string;
+
+procedure B33LeafSoftOnly;
+begin
+  SoftFail('sf-' + GB33Tag);
+end;
+
+procedure B33LeafSoft2;
+begin
+  SoftFail('a-' + GB33Tag);
+  SoftFail('b-' + GB33Tag);
+end;
+
+procedure B33LeafHard;
+begin
+  CheckTrue(False, 'hard-' + GB33Tag);
+end;
+
+procedure B33ParentSoftFailPath(constref Ctx: ITestContext);
+begin
+  if GB33Mode = 'soft' then
+    Ctx.Run('leaf', @B33LeafSoftOnly)
+  else if GB33Mode = 'soft2' then
+    Ctx.Run('leaf', @B33LeafSoft2)
+  else
+    Ctx.Run('leaf', @B33LeafHard);
+end;
+
+procedure TestB33SoftFailPathCase(const AC: TTestCase);
+{ Data: soft | soft2 | hard — SoftFail/hard inside leaf under TestSubtest. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LMsg: string;
+begin
+  GB33Mode := AC.Data;
+  GB33Tag := AC.Name;
+  LSuite := TTestSuite.Create('b33-' + AC.Name);
+  LSuite.TestSubtest('p', @B33ParentSoftFailPath);
+  CheckFalse(LSuite.RunWithResult(LResult), 'fail-path ' + AC.Name);
+  LMsg := '';
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Name = 'p' then
+      LMsg := LResult.Results[I].Message;
+  if AC.Data = 'soft' then
+    CheckEqual('sf-' + AC.Name, LMsg, 'soft exact')
+  else if AC.Data = 'soft2' then
+    CheckEqual('a-' + AC.Name + '; b-' + AC.Name, LMsg, 'soft2 join')
+  else
+    { hard in leaf → parent aggregates; message contains hard tag or subtest summary }
+    CheckTrue(
+      (Pos('hard-' + AC.Name, LMsg) > 0) or
+      (Pos('subtest', LowerCase(LMsg)) > 0),
+      'hard fail-path msg: ' + LMsg);
+  LSuite := Default(TTestSuite);
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -659,6 +779,8 @@ end;
 var
   LSuite: TTestSuite;
   LMeta: TTestSuite;
+  LB33Cases: specialize TArray<TTestCase>;
+  LB33I: Integer;
 begin
   WriteLn('=== test_subtests ===');
   LSuite := TTestSuite.Create('Subtest Integration');
@@ -711,6 +833,21 @@ begin
   LMeta.Test('Cleanup exception swallowed', @HarnessCleanupExceptionSwallowed);
   LMeta.Test('Log output on failure', @HarnessLogOutputOnFailure);
   LMeta.Test('SoftFail in subtest', @HarnessSoftFailInSubtest);
+  LMeta.Test('SoftFail top-level exact', @HarnessSoftFailTopLevelExact);
+  LMeta.Test('SoftFail leaf multi exact', @HarnessSoftFailLeafMultiExact);
+  { B33 fail-path table }
+  SetLength(LB33Cases, 48);
+  for LB33I := 0 to High(LB33Cases) do
+  begin
+    LB33Cases[LB33I].Name := 's' + IntToStr(LB33I);
+    case LB33I mod 3 of
+      0: LB33Cases[LB33I].Data := 'soft';
+      1: LB33Cases[LB33I].Data := 'soft2';
+    else
+      LB33Cases[LB33I].Data := 'hard';
+    end;
+  end;
+  LMeta.TestTable('B33 SoftFail subtest fail-path', LB33Cases, @TestB33SoftFailPathCase);
   if not LMeta.Run then
   begin
     WriteLn;

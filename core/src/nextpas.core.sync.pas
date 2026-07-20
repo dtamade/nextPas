@@ -25,6 +25,7 @@ type
   ILockGuard = nextpas.core.sync.intf.ILockGuard;
   ILock = nextpas.core.sync.intf.ILock;
   IMutex = nextpas.core.sync.intf.IMutex;
+  INativeMutex = nextpas.core.sync.intf.INativeMutex;
   IRWLock = nextpas.core.sync.intf.IRWLock;
   IWaitGroup = nextpas.core.sync.intf.IWaitGroup;
   ICondVar = nextpas.core.sync.intf.ICondVar;
@@ -36,7 +37,7 @@ type
   TOnceProc = nextpas.core.sync.base.TOnceProc;
   TBarrierWaitResult = nextpas.core.sync.base.TBarrierWaitResult;
 
-function Mutex: IMutex; inline;
+function Mutex: INativeMutex; inline;
 function FutexMutex: IMutex; inline;
 function RWLock: IRWLock; inline;
 function WaitGroup: IWaitGroup; inline;
@@ -49,7 +50,7 @@ function Event(const AManualReset: Boolean = True): IEvent; inline;
 
 implementation
 
-function Mutex: IMutex;
+function Mutex: INativeMutex;
 begin
   Result := nextpas.core.sync.mutex.TMutex.Create;
 end;

@@ -134,7 +134,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **done**：id.rng/v7.monotonic、worksteal owner-lock、taskgroup；**H3-2** bag/multimap；**T2 sync** mutex/rwlock/semaphore/countdown
 - **done**：T2 大户 preferred — elimination_stack、stampedlock、hashtable、phaser、exchanger、flatcombining、lfu、leftright、dag、graph
 - **done**：T2 簇 D–G preferred — 树族（trie/treap/skiplist/radix/scapegoat/rbtree/bplus/btree/trie_map/skiplist_map）、cowarray/rcu/snapshot/lru、crdt/ringbuffer/timeoutqueue/bitset/forkjoin、bloom/counting_bloom/scalable_bloom + hyperloglog/tdigest/spacesaving/countminsketch
-- **剩余 T2**：长尾杂项（statscounter/workstealing/counter/condvar/arccache/adjmap/timerwheel/linkedlist/mpsc 命名…）
+- **done**：T2 长尾收口 — 全部 `lockfree*.pas` 热路径 preferred；`mpsc` 私有 `LoadNode/StoreNode/ExchangeNode`（去 Atomic 前缀）；residual **0**
+- **剩余**：无（lockfree 内 PascalCase Atomic* 调用）；legacy public API 仍可在 atomic.compat 保留
 
 ### Q3-a checklist
 

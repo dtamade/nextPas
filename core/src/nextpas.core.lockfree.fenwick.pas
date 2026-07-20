@@ -62,10 +62,14 @@ end;
 procedure TConcurrentFenwickTree.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -78,7 +82,7 @@ end;
 
 procedure TConcurrentFenwickTree.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentFenwickTree.LowBit(AValue: Int32): Int32;
@@ -88,7 +92,7 @@ end;
 
 function TConcurrentFenwickTree.Update(AIndex: Int32; ADelta: Int64): TFenwickResult;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(fwClosed);
   if (AIndex < 1) or (AIndex > FSize) then
     Exit(fwOutOfBounds);
@@ -109,7 +113,7 @@ function TConcurrentFenwickTree.PrefixSum(AIndex: Int32; out ASum: Int64): TFenw
 var
   LSum: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
   begin
     ASum := 0;
     Exit(fwClosed);
@@ -182,12 +186,12 @@ end;
 
 procedure TConcurrentFenwickTree.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentFenwickTree.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

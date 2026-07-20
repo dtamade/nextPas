@@ -91,10 +91,14 @@ end;
 procedure TTimerWheel.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -109,7 +113,7 @@ end;
 
 procedure TTimerWheel.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TTimerWheel.Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
@@ -119,7 +123,7 @@ var
   LEntry: TTimerEntry;
   LLen: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(-1);
   if ADelayTicks <= 0 then
     raise EArgumentError.Create('TTimerWheel.Schedule: delay must be > 0');
@@ -149,7 +153,7 @@ function TTimerWheel.Cancel(const ATimerId: Int64): TLockFreeTimerResult;
 var
   LSlot, LIndex: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(twClosed);
 
   LSlot := ATimerId div 1000000;
@@ -179,7 +183,7 @@ begin
   Lock;
   try
     FCurrentSlot := (FCurrentSlot + 1) mod FSlotCount;
-    AtomicFetchAdd64(FTotalTicks, 1, moRelaxed);
+    atomic_fetch_add_64(FTotalTicks, 1, mo_relaxed);
   finally
     Unlock;
   end;
@@ -239,7 +243,7 @@ end;
 
 function TTimerWheel.GetTotalTicks: Int64;
 begin
-  Result := AtomicLoad64(FTotalTicks, moAcquire);
+  Result := atomic_load_64(FTotalTicks, mo_acquire);
 end;
 
 function TTimerWheel.GetTickIntervalNs: Int64;
@@ -249,7 +253,7 @@ end;
 
 procedure TTimerWheel.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TTimerWheel.Destroy;
@@ -260,7 +264,7 @@ end;
 
 function TTimerWheel.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

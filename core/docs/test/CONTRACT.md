@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.18
+**版本**：v8.20
 
 ---
 
@@ -394,6 +394,22 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.20 (2026-07-20) — 契约密度：subtest SoftFail + CLI/MaxFailures + SCALE≥4500
+
+- **Subtest SoftFail exact**：top-level join；leaf SoftFail 挂到 parent（nested 前 soft 被 reset 为契约）
+- **B34**：SoftFail 计入 MaxFailures；FailFast+Soft 仍受 MaxFailures；CLI unknown 忽略；`--failures-max` 表
+- **runner contracts**：must_have 锁 SoftFail / SoftCheckTrue / SoftCheckEqual / SoftFailOnly
+- **消费者**：`core/examples/nextpas.core.test/softfail_demo`（exit 1 + join 消息为预期）
+- **规模**：`SCALE_MIN` 默认 **4500**
+
+### v8.19 (2026-07-20) — SoftFail 诊断 + 薄套件 fail-path + 规模≥4000
+
+- **SoftFail exact**：join `msg1; msg2`、默认 SoftCheck 文案、`(+N more soft fails)` cap、hard+soft 注解 exact
+- **golden**：`test_output/goldens/softfail.{tap,json}`；FAIL_ON_CREATE=1 覆盖
+- **薄套件**：lifecycle AfterEach+soft/hard 表 60；parallel SoftFail 表 48；prop gen ExpectFail 表 64
+- **规模**：`SCALE_MIN` 默认 **4000**（fail-path 仍 ≥30%）
+- **tooling（跨模块最小）**：`test_tls13_e2e_openssl` Makefile 暴露 `clean`（tooling 不 expand include）
 
 ### v8.18 (2026-07-20) — 规模≥3000 + fail-path 硬门禁 + 消费者示例
 

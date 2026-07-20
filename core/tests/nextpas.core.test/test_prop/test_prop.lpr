@@ -872,10 +872,46 @@ begin
     GenArray(GenInt(0, 100), 50, 10);
   end, 'AMinLen must be <= AMaxLen');
 end;
+
+{ ── B30: generator fail-path table (ExpectFail contracts) ─────────────────── }
+
+procedure TestB30GenFailPathCase(const AC: TTestCase);
+{ Data encodes which generator must fail; message needle after '|'. }
+var
+  LKind, LNeedle: string;
+  LBar: Integer;
+begin
+  LBar := Pos('|', AC.Data);
+  CheckTrue(LBar > 1, 'case format kind|needle');
+  LKind := Copy(AC.Data, 1, LBar - 1);
+  LNeedle := Copy(AC.Data, LBar + 1, Length(AC.Data));
+  if LKind = 'int_rev' then
+    ExpectFail(procedure begin GenInt(100, 50); end, LNeedle)
+  else if LKind = 'str_rev' then
+    ExpectFail(procedure begin GenString(50, 10); end, LNeedle)
+  else if LKind = 'bytes_rev' then
+    ExpectFail(procedure begin GenBytes(50, 10); end, LNeedle)
+  else if LKind = 'arr_rev' then
+    ExpectFail(procedure begin GenArray(GenInt(0, 10), 50, 10); end, LNeedle)
+  else if LKind = 'choice_int_empty' then
+    ExpectFail(procedure begin GenChoiceInt([]); end, LNeedle)
+  else if LKind = 'choice_str_empty' then
+    ExpectFail(procedure begin GenChoiceString([]); end, LNeedle)
+  else if LKind = 'oneof_int_empty' then
+    ExpectFail(procedure begin GenOneOfInt([]); end, LNeedle)
+  else if LKind = 'oneof_str_empty' then
+    ExpectFail(procedure begin GenOneOfString([]); end, LNeedle)
+  else
+    Fail('unknown kind ' + LKind);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LB30Cases: specialize TArray<TTestCase>;
+  LB30I: Integer;
+  LB30Kinds: array[0..7] of string;
 begin
   WriteLn('=== Property-based Testing Framework ===');
   WriteLn;
@@ -940,6 +976,23 @@ begin
   LSuite.Test('GenStringMinMaxReversed', @TestGenStringMinMaxReversed);
   LSuite.Test('GenBytesMinMaxReversed', @TestGenBytesMinMaxReversed);
   LSuite.Test('GenArrayMinMaxReversed', @TestGenArrayMinMaxReversed);
+
+  { B30: 64-row fail-path table covering all generator validation guards }
+  LB30Kinds[0] := 'int_rev|AMin must be <= AMax';
+  LB30Kinds[1] := 'str_rev|AMinLen must be <= AMaxLen';
+  LB30Kinds[2] := 'bytes_rev|AMinLen must be <= AMaxLen';
+  LB30Kinds[3] := 'arr_rev|AMinLen must be <= AMaxLen';
+  LB30Kinds[4] := 'choice_int_empty|empty values array';
+  LB30Kinds[5] := 'choice_str_empty|empty values array';
+  LB30Kinds[6] := 'oneof_int_empty|empty generator array';
+  LB30Kinds[7] := 'oneof_str_empty|empty generator array';
+  SetLength(LB30Cases, 64);
+  for LB30I := 0 to High(LB30Cases) do
+  begin
+    LB30Cases[LB30I].Name := 'gen-fail-' + IntToStr(LB30I);
+    LB30Cases[LB30I].Data := LB30Kinds[LB30I mod 8];
+  end;
+  LSuite.TestTable('B30 gen fail-path ExpectFail', LB30Cases, @TestB30GenFailPathCase);
 
   if not LSuite.Run then
   begin

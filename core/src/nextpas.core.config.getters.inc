@@ -496,6 +496,11 @@ begin
   Result := nextpas.core.config.builder.ConfigLoad(APath, AFormat);
 end;
 
+function ConfigLoad(const APath: string): IConfig;
+begin
+  Result := nextpas.core.config.builder.ConfigLoad(APath);
+end;
+
 function ConfigBorrow(AConfig: TConfig): IConfig;
 begin
   Result := nextpas.core.config.builder.ConfigBorrow(AConfig);

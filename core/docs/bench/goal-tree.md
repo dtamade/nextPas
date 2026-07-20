@@ -220,6 +220,9 @@ B41  维护收口 + EBR 设计备忘 (2026-07-20)                        ✅
 
 B42  checklist Makefile 产物卫生 (2026-07-20)                    ✅
   B42.1  log 改 BUILD_DIR；regex/csv/xml/vec 补标准 Makefile     ✅
+
+B43  Maintenance Idle 落盘 (2026-07-20)                          ✅
+  B43.1  README / goal-tree / checklist 标注 idle                ✅
 ```
 
 ## 测试套件分布
@@ -276,7 +279,7 @@ B42  checklist Makefile 产物卫生 (2026-07-20)                    ✅
 
 - [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（11 track；全量 SCORECARD 仍推迟）
 - [x] 消费侧 checklist C3 扩面 — **已完成**：19 模块（见 [consumer-checklist.md](consumer-checklist.md)）
-- [ ] `BenchRun` 新执行器（EBR 感知）— **推迟**；备忘见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)；需独立 lane + 总控授权
+- [ ] `BenchRun` 新执行器（EBR 感知）— **推迟**；备忘见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)；需独立 lane + 总控授权（**Idle 期间不默认排期**）
 - [ ] `TInt64Array` 类型别名（base 模块导出）— 归 base
 - [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量 — 低优先级
-- [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟
+- [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟（**Idle 期间不默认排期**）

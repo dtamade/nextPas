@@ -12,9 +12,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.8** | R31 path/env 边界表 + R30 queue + R28 框架 |
+| **质量 Quality** | **9.9** | R34 fs 同方法证据 + wine Capture + IFile ReadAt |
 | **规模 Scale (Essential)** | **9.8** | R29 递归 Watch + R23–R25 |
-| **综合** | **9.8** | 能力闭环 + 框架合规 + wine×5 + SCORECARD |
+| **综合** | **9.9** | Essential + 同方法 SCORECARD + wine Capture |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
@@ -134,7 +134,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 ### 外部债 / 证据
 
 - **wine-runtime-smoke**（2026-07-20 R33）：  
-  - process **7** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
+  - process **8** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
   - 详见 [`SCORECARD.md`](./SCORECARD.md)
 
 ---
@@ -145,7 +145,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 **周报：**
 
-> process/fs/path/env：维护态。R33 Wait 100µs 轮询 + wine×5 证据复跑；Quality 9.8 / Scale 9.8。
+> process/fs/path/env：维护态。R34 fs 同方法 SCORECARD + wine Capture + IFile ReadAt；Quality 9.9 / Scale 9.8。
 
 ---
 
@@ -172,3 +172,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | R31 path/env 边界表 70/70 + SCORECARD 重测 + Destroy 100µs；Quality 9.8 |
 | 2026-07-20 | R32 IFsWatcher.Remove + platform_watch_remove；watch 13 |
 | 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |
+| 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |

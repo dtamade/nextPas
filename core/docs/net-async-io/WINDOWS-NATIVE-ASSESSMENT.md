@@ -27,25 +27,51 @@
 - Chocolatey / MSYS2 FPC packaging remains a **blocker risk** for nextpas.core (needs 3.3.1+).
 - Wine smoke remains the **honest** IOCP runtime evidence layer.
 
-## Decision (Q17 / Q20 light)
+## Decision (Q17 / Q20 light / Q22 wired)
 
 | Option | Choice |
 |--------|--------|
 | Promote to native-windows claim now? | **No** |
 | Keep wine-runtime-smoke? | **Yes** |
-| Next action | When FPC trunk on `windows-latest` is stable for core-ci platform job, add opt-in job `async-windows-native-smoke` (continue-on-error → fail-closed after green streak) |
+| Opt-in CI step wired? | **Yes (Q22)** — `async-windows-native-smoke` under `test-windows-runtime` with `continue-on-error: true` |
 
-### Suggested opt-in job (not wired fail-closed)
+### Opt-in job / step (wired soft)
 
 | Field | Value |
 |-------|--------|
-| Job name | `async-windows-native-smoke` |
-| Runner | `windows-latest` + FPC ≥ 3.3.1 |
-| Suite (min) | poller windows runtime smoke; IOCP smoke; accept/connect if `pbIocp` |
-| CI policy | `continue-on-error: true` until 2+ consecutive weekly green |
-| Out of scope for job-1 | dial concurrent bench, public DNS, full host-matrix |
+| Job | `test-windows-runtime` (existing FPC trunk win64 setup) |
+| Step | `Async Windows native smoke (opt-in, not fail-closed)` |
+| Script | `core/scripts/async-windows-native-smoke.sh` |
+| Suite | windows compile gate + contract; poller windows runtime; IOCP reactor; accept/connect smoke |
+| CI policy | `continue-on-error: true` + script soft (`STRICT!=1`) until streak |
+| Promote fail-closed when | FPC trunk install stable + step green streak (see checklist) |
+| Out of scope | dial concurrent bench, public DNS HE, full host-matrix |
 
-Q20 does **not** land this job — documentation hook only.
+### How to judge green / promote (Q24A)
+
+1. Run streak observer (needs `gh` + `jq`):
+
+```bash
+bash core/scripts/async-windows-smoke-streak.sh
+# optional: ASYNC_WINDOWS_STREAK_NEED=14 bash core/scripts/async-windows-smoke-streak.sh --limit 30
+```
+
+2. Look for:
+
+```
+consecutive_step_success=N
+promote-ready=yes|no
+```
+
+3. **Promotion checklist (manual Q24B)** — only if `promote-ready=yes`:
+
+- [ ] Streak ≥ need (default 14 completed main runs with step=success)
+- [ ] No FPC trunk install flakes in the same window
+- [ ] Remove `continue-on-error: true` from the async-windows step in `core-ci.yml`
+- [ ] On Windows host, default `ASYNC_WINDOWS_STRICT=1` unless `NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1`
+- [ ] Keep claim at **native-windows-candidate** until explicitly re-assessed; do not rename Wine evidence
+
+If `promote-ready=no`: keep soft CI; do not flip.
 
 ## Non-goals
 

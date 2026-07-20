@@ -67,7 +67,6 @@ type
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic;
 
 constructor TPersistentVector.Create;
@@ -108,13 +107,13 @@ end;
 procedure TPersistentVector.RetainChunk(AChunk: PVectorChunk);
 begin
   if AChunk <> nil then
-    AtomicFetchAdd32(AChunk^.RefCount, 1, moAcqRel);
+    atomic_fetch_add(AChunk^.RefCount, 1, mo_acq_rel);
 end;
 
 procedure TPersistentVector.ReleaseChunk(AChunk: PVectorChunk);
 begin
   if (AChunk <> nil) and
-     (AtomicFetchSub32(AChunk^.RefCount, 1, moAcqRel) = 1) then
+     (atomic_fetch_sub(AChunk^.RefCount, 1, mo_acq_rel) = 1) then
     Dispose(AChunk);
 end;
 

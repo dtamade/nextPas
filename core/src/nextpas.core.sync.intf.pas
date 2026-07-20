@@ -20,8 +20,15 @@ type
     function Lock: ILockGuard;
   end;
 
+  { Application mutex — no native handle escape hatch. }
   IMutex = interface(ILock)
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560003}']
+  end;
+
+  { Platform-backed mutex: NativeHandle points at TPlatformMutex.
+    Required partner for ICondVar.Wait / WaitTimeout. }
+  INativeMutex = interface(IMutex)
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560015}']
     function NativeHandle: Pointer;
   end;
 
@@ -46,8 +53,8 @@ type
 
   ICondVar = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560006}']
-    procedure Wait(const AMutex: IMutex);
-    function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
+    procedure Wait(const AMutex: INativeMutex);
+    function WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
     procedure Signal;
     procedure Broadcast;
   end;

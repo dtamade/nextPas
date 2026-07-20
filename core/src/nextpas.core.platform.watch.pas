@@ -51,6 +51,10 @@ type
     PendLen: Int32;
     PendPos: Int32;
   {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
+    { Dir handle owned by watcher; Fd is POSIX-oriented and unused on Windows. }
+    DirHandle: Pointer; { HANDLE }
+  {$ENDIF}
     {** @desc 检查监视器是否有效
         @return True 如果监视器有效 *}
     function IsValid: Boolean; inline;
@@ -506,16 +510,23 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.error,
-  nextpas.core.platform.windows.base;
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
+
+function WinWatchHandleInvalid(AHandle: HANDLE): Boolean; inline;
+begin
+  Result := (AHandle = nil) or (AHandle = HANDLE(PtrInt(-1)));
+end;
 
 function TPlatformWatcher.IsValid: Boolean;
 begin
-  Result := Fd >= 0;
+  Result := not WinWatchHandleInvalid(HANDLE(DirHandle));
 end;
 
 function TPlatformWatcher.IsInvalid: Boolean;
 begin
-  Result := Fd < 0;
+  Result := WinWatchHandleInvalid(HANDLE(DirHandle));
 end;
 
 function TPlatformWatcher.Add(const APath: PAnsiChar): Int32;
@@ -546,34 +557,77 @@ begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 
+{ Batch-15 S1: create / add (single directory) / close.
+  Poll remains UNSUPPORTED until S2 arms ReadDirectoryChangesW. }
+
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
+  FillChar(AWatcher, SizeOf(AWatcher), 0);
   AWatcher.Fd := -1;
-  Result := PLATFORM_ERR_UNSUPPORTED;
+  AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
+  Result := 0;
 end;
 
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
+var
+  LPath: UnicodeString;
+  LHandle: HANDLE;
 begin
-  Result := PLATFORM_ERR_UNSUPPORTED;
-end;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if not WinWatchHandleInvalid(HANDLE(AWatcher.DirHandle)) then
+    Exit(PLATFORM_ERR_NOSPC); { v1: single directory per watcher }
+  if not platform_windows_utf8_to_wide_checked(APath, LPath) then
+    Exit(PLATFORM_ERR_INVALID);
 
+  LHandle := CreateFileW(
+    PWideChar(LPath),
+    FILE_LIST_DIRECTORY,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
+    nil,
+    OPEN_EXISTING,
+    FILE_FLAG_BACKUP_SEMANTICS,
+    nil);
+  if WinWatchHandleInvalid(LHandle) then
+    Exit(platform_get_last_error);
+
+  AWatcher.DirHandle := Pointer(LHandle);
+  AWatcher.Fd := 0; { non-negative sentinel; DirHandle is the real validity bit }
+  Result := 0;
+end;
 
 function platform_watch_remove(var AWatcher: TPlatformWatcher;
   const AWd: Int32): Int32;
 begin
+  { v1 single-dir: no multi-wd remove; close the watcher instead. }
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
+  { S2: ReadDirectoryChangesW + timeout. }
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
+var
+  LHandle: HANDLE;
 begin
+  LHandle := HANDLE(AWatcher.DirHandle);
+  if not WinWatchHandleInvalid(LHandle) then
+  begin
+    if not CloseHandle(LHandle) then
+    begin
+      Result := platform_get_last_error;
+      AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
+      AWatcher.Fd := -1;
+      Exit;
+    end;
+  end;
+  AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
   AWatcher.Fd := -1;
-  Result := PLATFORM_ERR_UNSUPPORTED;
+  Result := 0;
 end;
 {$ENDIF}
 

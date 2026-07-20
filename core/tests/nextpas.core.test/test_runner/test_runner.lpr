@@ -53,6 +53,22 @@ var
   LCleanupResult: TTestRunResult;
   LCleanupCount: Integer;
 
+{ ── B34 CLI table case ───────────────────────────────────────────────────── }
+
+procedure TestB34FailuresMaxCLICase(const AC: TTestCase);
+var
+  LWant: Integer;
+begin
+  LWant := Integer(StrToInt(AC.Data));
+  ResetDefaultConfig;
+  ApplyCLIArgsFrom(['--failures-max=' + AC.Data]);
+  if LWant > 0 then
+    CheckEqual(LWant, GetMaxFailures(DefaultConfig), AC.Name)
+  else
+    CheckEqual(0, GetMaxFailures(DefaultConfig), 'zero not applied ' + AC.Name);
+  ResetDefaultConfig;
+end;
+
 { ── Lifecycle tests ──────────────────────────────────────────────────────── }
 
 procedure TestSetup;
@@ -296,6 +312,7 @@ var
   LIdx: Integer;
   { Phase 8: TableTest failure message }
   LTableCases: specialize TArray<TTestCase>;
+  LB34I: Integer;
   { Phase 9: short mode }
   LShortSuite: TTestSuite;
   LShortResult: TTestRunResult;
@@ -987,6 +1004,72 @@ begin
 
     ResetDefaultConfig;
     PassTest('B15 ApplyCLIArgsFrom');
+  end;
+
+  { ── B34: SoftFail×MaxFailures + CLI fail-path density ──────────────────── }
+  WriteLn;
+  SectionHeader('B34: SoftFail MaxFailures + CLI matrix');
+  begin
+    { SoftFail counts toward MaxFailures and stops the suite. }
+    LMaxFailSuite := TTestSuite.Create('SoftMaxFail');
+    LMaxFailSuite.Test('s1', procedure begin SoftFail('soft1'); end);
+    LMaxFailSuite.Test('s2', procedure begin SoftFail('soft2'); end);
+    LMaxFailSuite.Test('s3', procedure begin SoftFail('soft3'); end);
+    LMaxFailSuite.Test('pass_after', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LMaxFailSuite.Config := LMaxFailConfig;
+    CheckFalse(LMaxFailSuite.RunWithResult(LMaxFailResult));
+    CheckEqual(2, LMaxFailResult.Failed, 'SoftFail MaxFailures stops at 2');
+    CheckEqual(0, LMaxFailResult.Passed, 'later tests not reached');
+    ResetDefaultConfig;
+
+    { SoftFail-only does not FailFast, but MaxFailures still applies. }
+    LFailFastSuite := TTestSuite.Create('SoftFFMax');
+    LFailFastSuite.Test('s1', procedure begin SoftFail('a'); end);
+    LFailFastSuite.Test('s2', procedure begin SoftFail('b'); end);
+    LFailFastSuite.Test('s3', procedure begin SoftFail('c'); end);
+    SetDefaultFailFast(True);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LFailFastSuite.Config := LMaxFailConfig;
+    CheckFalse(LFailFastSuite.RunWithResult(LMaxFailResult));
+    CheckEqual(2, LMaxFailResult.Failed, 'FailFast+Soft still limited by MaxFailures');
+    ResetDefaultConfig;
+
+    { Unknown flags ignored; known flag still applied (lock current behavior). }
+    ApplyCLIArgsFrom(['--not-a-real-flag', '--failures-max=4', '--bogus=x']);
+    CheckEqual(GetMaxFailures(DefaultConfig), 4, 'unknown flags ignored');
+    ResetDefaultConfig;
+
+    { --cache enables CacheEnabled }
+    ApplyCLIArgsFrom(['--cache']);
+    CheckTrue(GetCacheEnabled(DefaultConfig), 'cache flag');
+    ResetDefaultConfig;
+
+    { Table: failures-max parse matrix (meaningful values + zero fail-path) }
+    SetLength(LTableCases, 40);
+    for LB34I := 0 to High(LTableCases) do
+    begin
+      LTableCases[LB34I].Name := 'maxfail-' + IntToStr(LB34I);
+      case LB34I mod 5 of
+        0: LTableCases[LB34I].Data := '5';
+        1: LTableCases[LB34I].Data := '1';
+        2: LTableCases[LB34I].Data := '99';
+        3: LTableCases[LB34I].Data := '0';
+      else
+        LTableCases[LB34I].Data := '2';
+      end;
+    end;
+    LResultSuite := TTestSuite.Create('b34-cli');
+    LResultSuite.TestTable('B34 failures-max CLI fail-path', LTableCases,
+      @TestB34FailuresMaxCLICase);
+    if not LResultSuite.Run then
+      FailTest('B34 CLI table failed');
+    PassTest('B34 SoftFail MaxFailures + CLI matrix');
+    LResultSuite := Default(TTestSuite);
+    LMaxFailSuite := Default(TTestSuite);
+    LFailFastSuite := Default(TTestSuite);
   end;
 
   WriteLn;

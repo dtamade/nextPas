@@ -1,10 +1,17 @@
 # tui × Go / Rust 对标纲领（Wave Q）
 
-**状态**: Active（2026-07-19）
+**状态**: Maintenance（2026-07-20）
 **Owner**: tui lane
 **活入口**: [SCORECARD.md](SCORECARD.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRACT.md](CONTRACT.md)
 
 原则：对标的是 **stdlib / 生产级 TUI 库的质量与可证测量**，不是 widget 数量或营销 ns。
+
+### SC 冻结策略（Maintenance）
+
+- 默认 **不** 新增 SC 行，除非满足其一：
+  1. 新出现可证失败模式（回归 bug）
+  2. 质量维度矩阵中仍有未覆盖的 go/rust 对标缺口
+- Q1–Q15 + M1 已覆盖主维度；后续优先回归、产品晋升决策、协议 DA 等
 
 ---
 
@@ -84,8 +91,9 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q12 | SC14–16 hsplit/resilience/diff bound + 质量矩阵 | **Done** (`main@3e783f6c0`+) |
 | Q13 | SC17–19 backend/resize/pct + examples multi-demo | **Done** (`main@31e3e6853`+) |
 | Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **Done** (`main@3eb99d877`+) |
-| Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **本批** |
-| 后续 | facade **实施**晋升（scrollview/modal） | 待准入 / Maintenance |
+| Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **Done** (`main@17b18c4c8`+) |
+| M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **本批** |
+| 后续 | facade **实施**晋升（scrollview/modal） | 就绪中 / 待产品确认 |
 | 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
 | 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
 
@@ -98,16 +106,18 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Layout | 面积守恒 V/H / % / ratio | SC4, SC14, SC19, SC22；bench Layout* |
 | Protocol | Kitty / focus / paste / truecolor | SC8, SC12–13；CONTRACT §5 |
 | Backend emit | DECSET 会话序列 | SC17；`test_tui_backend` |
-| SGR emit | RGB + indexed FG/BG | SC20, **SC23**；`test_tui_ansi` |
-| DrawPatches | 复用 + 样式切换 | SC21, **SC24** |
-| Widget focus | Tab 循环 | **SC25**；`test_tui_focus` / integration |
+| SGR emit | RGB + indexed FG/BG | SC20, SC23；`test_tui_ansi` |
+| DrawPatches | 复用 + 样式切换 | SC21, SC24 |
+| Widget focus | Tab 循环 | SC25；`test_tui_focus` |
+| Keybind | 绑定 + 派发 | **SC26**；`test_tui_keybind` |
+| Frame budget | 帧时预算 | **SC27**；`test_tui_frame_budget` |
 | Resize | 尺寸事件契约 | SC18 |
 | Wide text | CJK cell width | SC7 |
 | Overlay | transparent merge | SC9；bench OverlayMerge |
-| Facade tiers | 分层 API 契约 | core/ext/experimental facade ≥12 |
-| Examples | app-first 教学路径 | `test_tui_examples` ≥7 demos |
+| Facade tiers | 分层 API 契约 | core/ext/experimental ≥12；**C8 reject** |
+| Examples | app-first 教学路径 | `test_tui_examples` ≥7 |
 | Frame path | 空帧生命周期 | SC5 |
-| 文档/门禁对齐 | 防漂移 | `tui-contract-check` **C7** |
+| 文档/门禁对齐 | 防漂移 | C7 + **C8** |
 
 ## 6. Facade 晋升准入标准
 
@@ -117,6 +127,13 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 2. 无 experimental 协议硬依赖（image/clipboard 等）
 3. 语义稳定 ≥1 波次，CONTRACT 有对应条目
 4. 有 core reject 夹具证明不泄漏进 default facade（若目标是 ext）
-5. 产品确认（候选：`scrollview` / `modal`；**本波不执行代码晋升**）
+5. 产品确认
+
+### 晋升就绪证据（M1，**未**实施导出）
+
+| 候选 | 密度 | experimental | core reject | CONTRACT 条目 | 产品确认 |
+|------|------|--------------|-------------|---------------|----------|
+| scrollview | 23 | 否 | `rejects_scrollview` | 待晋升时写 | **未** |
+| modal | 16 | 否 | `rejects_modal` | 待晋升时写 | **未** |
 
 见 [TIER_REGISTRY.md](TIER_REGISTRY.md)。

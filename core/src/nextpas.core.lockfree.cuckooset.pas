@@ -136,18 +136,19 @@ end;
 
 procedure TCuckooSet.AcquireLock;
 var
-  LOld: Int32;
+  LCasExpected: Int32;
 begin
-  repeat
-    LOld := AtomicCompareExchange32(FLock, 0, 1, moAcquire);
-    if LOld = 0 then
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
       Exit;
-  until False;
+  end;
 end;
 
 procedure TCuckooSet.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TCuckooSet.Resize;
@@ -157,7 +158,7 @@ var
   LKey: AnsiString;
 begin
   { Signal resize start: version becomes odd }
-  AtomicFetchAdd32(FVersion, 1, moRelease);
+  atomic_fetch_add(FVersion, 1, mo_release);
 
   LOldCap := FCapacity;
   LOldTable1 := FTable1;
@@ -188,7 +189,7 @@ begin
   SetLength(LOldTable2, 0);
 
   { Signal resize end: version becomes even again }
-  AtomicFetchAdd32(FVersion, 1, moRelease);
+  atomic_fetch_add(FVersion, 1, mo_release);
 end;
 
 function TCuckooSet.InsertRaw(const AKey: AnsiString): TCuckooSetResult;

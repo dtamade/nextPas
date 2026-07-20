@@ -45,6 +45,7 @@ IConfig = interface
   function GetStringRequired / GetIntRequired / GetBoolRequired / GetFloatRequired;
   procedure Require(const AKeys: array of string);
   function Has / GetKeys / GetSection;
+  function GetInterpolationMode: TConfigInterpolationMode;
   function ToIni / ToJson / ToYaml / ToToml;
   property Count: Integer;
 end;
@@ -57,8 +58,10 @@ IConfigBuilder = interface
   function AddDefault(const AKey, AValue: string): IConfigBuilder;
   function AddIni / AddJson / AddYaml / AddToml(const AContent: string): IConfigBuilder;
   function AddEnv(const APrefix: string): IConfigBuilder;
-  function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+  function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder; overload;
+  function AddFile(const APath: string): IConfigBuilder; overload; // 扩展名自动识别
   function AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;
+  function SetInterpolationMode(AMode: TConfigInterpolationMode): IConfigBuilder;
   function RequireKeys(const AKeys: array of string): IConfigBuilder;
   function Build: IConfig;           // 只读快照，owned
   function BuildConfig: TConfig;     // 可变，调用方 Free
@@ -66,17 +69,30 @@ IConfigBuilder = interface
 end;
 
 function ConfigBuilder: IConfigBuilder;
-function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
+function ConfigLoad(const APath: string): IConfig; overload; // 扩展名 + 内容嗅探
+function ConfigBorrow(AConfig: TConfig): IConfig; // 非拥有 IConfig 视图
+function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
 ```
 
 `AddKeyValues` 按链顺序应用；不依赖 `args`。长度不等或空 key 在 **Add 时** 立即 `EConfigError`。
 
+扩展名映射（大小写不敏感）：`.ini`→`cfIni`，`.json`→`cfJson`，`.yaml`/`.yml`→`cfYaml`，`.toml`→`cfToml`。
+
+**无格式路径**（`AddFile(path)` / `ConfigLoad(path)` / `LoadFromFile` / `TryLoadFromFile`）：
+
+1. 扩展名命中 → 按扩展加载
+2. 扩展加载失败或无/未知扩展 → `TrySniffConfigFormat`（试解析：JSON 对象/数组 → TOML → YAML map/seq → INI 含 `=`）
+3. 仍失败 → 诊断错误（含 path / sniff）
+
 ### 2.4 可变 `TConfig`（摘要）
 
-- 加载：`LoadFromIni/Json/Yaml/Toml/File/Env` + `TryLoad*` / `TryLoadJson|Yaml|Toml` 别名
+- 加载：`LoadFromIni/Json/Yaml/Toml/File/Env` + `TryLoad*` / `TryLoadJson|Yaml|Toml` 别名；`LoadFromFile`/`TryLoadFromFile` 支持显式格式或扩展名自动识别
 - 写入：`SetString/Int/Bool/Float/StringArray`、`SetDefault`、`DeleteKey`、`DeleteSection`、`Clear`、`ReplaceFrom`
 - 导出：`ToIni/Json/Yaml/Toml`、`SaveTo*`
 - 读取：与 `IConfig` 对称的 Get*/Require/Has/GetKeys/GetSection
+- 插值：`SetInterpolationMode` / `GetInterpolationMode`
 
 ### 2.5 Watcher
 
@@ -110,10 +126,13 @@ end;
 
 ### 3.3 插值
 
-- Getter-time **严格** 插值（`${key}`）
-- `GetRawString` 不插值
-- 循环依赖 → `EConfigError`
-- 插值 mode 扩展：**未实现**（Future）
+- Getter-time 插值（`${key}`），由 `TConfigInterpolationMode` 控制：
+  - `cimDefault`：可选 getter 保留未解析 `${x}`；Required 对未解析失败
+  - `cimStrict`：所有解析 getter 对未解析失败
+  - `cimDisabled`：不展开；`GetString` 行为接近 raw
+- `GetRawString` / `GetRawStringArray` 永不插值
+- 循环依赖 → 始终 `EConfigError`（与 mode 无关）
+- Builder：`SetInterpolationMode`；`IConfig.GetInterpolationMode` 可读
 
 ---
 
@@ -188,6 +207,8 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | CLI 浅桥 `config.args` | **已实现**（`ConfigBuilderAddPresentArgs` + 显式 kind 映射） |
 | 插值 mode | **已实现**（`cimDefault` / `cimStrict` / `cimDisabled`） |
 | borrowed `IConfig` | **已实现**（`ConfigBorrow`，非拥有视图） |
+| 扩展名自动识别 | **已实现**（`TryDetectConfigFormat`） |
+| 内容嗅探（无/错扩展） | **已实现**（`TrySniffConfigFormat` + 无格式加载路径） |
 | Builder 内硬 `uses args` | Out of scope（浅桥独立单元） |
 | XML/CSV 作为 `TConfigFormat` | Out of scope |
 | `config.cli` 独立单元名 | 不采用；用 `AddKeyValues` |
@@ -201,3 +222,5 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | 2026-07-01 | 1.0 | 初始（含虚构子模块，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 6 单元真实 API 与 Builder 优先级 | config-formats lane |
 | 2026-07-20 | 2.1 | `AddKeyValues` 浅覆盖源 | config-formats lane |
+| 2026-07-20 | 2.2 | 插值 mode / ConfigBorrow 契约对齐；扩展名自动识别 | config-formats lane |
+| 2026-07-20 | 2.3 | 内容嗅探 `TrySniffConfigFormat`；错扩展恢复 | config-formats lane |

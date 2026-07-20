@@ -143,10 +143,14 @@ end;
 procedure TTTLCache.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -161,7 +165,7 @@ end;
 
 procedure TTTLCache.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TTTLCache.FindNode(const AKey: AnsiString): PTTLNode;
@@ -306,7 +310,7 @@ end;
 
 function TTTLCache.Put(const AKey, AValue: AnsiString): TTTLCacheResult;
 begin
-  Result := PutWithTTL(AKey, AValue, AtomicLoad64(FDefaultTTL, moAcquire));
+  Result := PutWithTTL(AKey, AValue, atomic_load_64(FDefaultTTL, mo_acquire));
 end;
 
 function TTTLCache.PutWithTTL(const AKey, AValue: AnsiString; ATTLMs: Int64): TTTLCacheResult;
@@ -418,12 +422,12 @@ end;
 
 function TTTLCache.Count: Int32; inline;
 begin
-  Result := AtomicLoad32(FCount);
+  Result := atomic_load(FCount);
 end;
 
 function TTTLCache.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad32(FCount) = 0;
+  Result := atomic_load(FCount) = 0;
 end;
 
 procedure TTTLCache.Clear;
@@ -454,7 +458,7 @@ procedure TTTLCache.SetDefaultTTL(ATTLMs: Int64);
 begin
   if ATTLMs < 0 then
     ATTLMs := 0;
-  AtomicExchange64(FDefaultTTL, ATTLMs);
+  atomic_exchange_64(FDefaultTTL, ATTLMs);
 end;
 
 end.
