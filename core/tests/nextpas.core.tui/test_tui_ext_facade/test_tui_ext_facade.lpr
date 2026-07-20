@@ -311,6 +311,26 @@ begin
   end;
 end;
 
+procedure TestExtSelectSurface;
+var
+  LSelect: ISelect;
+  LState: TSelectState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LSelect := TSelect.New(['A', 'B', 'C']).WithPlaceholder('pick');
+  Check(LSelect <> nil, 'ext exposes TSelect');
+  LState := TSelectState.Empty;
+  LArea := TRect.Make(0, 0, 40, 20);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LSelect.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'select render via ext');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
@@ -329,5 +349,6 @@ begin
   T.Test('ext modal surface', @TestExtModalSurface);
   T.Test('ext dialog surface', @TestExtDialogSurface);
   T.Test('ext split_pane surface', @TestExtSplitPaneSurface);
+  T.Test('ext select surface', @TestExtSelectSurface);
   if not T.Run then Halt(1);
 end.

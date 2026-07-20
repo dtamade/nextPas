@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.23
+**版本**：1.24
 
 ---
 
@@ -20,7 +20,7 @@ L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / 
 | Facade | 稳定控件 |
 |--------|----------|
 | core | Block/Paragraph/List/Table/Tabs/Scrollbar/Clear/Input |
-| ext | Panel + ScrollView + Modal + Dialog + **SplitPane** + app/runtime |
+| ext | Panel + ScrollView + Modal + Dialog + SplitPane + **Select** + app/runtime |
 | full | 其余 advanced catalog（migration） |
 
 ---
@@ -186,9 +186,9 @@ end;
 - **同方法论对照**: `bench_go_rust`
 - **契约脚本**: `./scripts/tui-contract-check.sh`
   - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC27
-  - **C8** core facade reject 编译失败（scrollview/modal/dialog/split_pane）
+  - **C8** core facade reject 编译失败（scrollview/modal/dialog/split_pane/select）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
-- 晋升：scrollview/modal/dialog/split_pane 已在 **ext**；core reject 保持
+- 晋升：scrollview/modal/dialog/split_pane/select 已在 **ext**；core reject 保持；B3 候选表清空
 
 ---
 
@@ -196,6 +196,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.24 | Idle 单点：TSelect 晋升 ext；core reject_select；B3 表清空 | Claude |
 | 2026-07-20 | 1.23 | Idle 单点：TSplitPane 晋升 ext；core reject_split_pane | Claude |
 | 2026-07-20 | 1.22 | Idle 单点：TDialog 晋升 ext；core reject_dialog | Claude |
 | 2026-07-20 | 1.21 | Phase B 收尾：B3 停止晋升；Maintenance Idle | Claude |

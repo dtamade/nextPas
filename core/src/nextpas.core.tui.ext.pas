@@ -23,7 +23,8 @@ uses
   nextpas.core.tui.widget.scrollview,
   nextpas.core.tui.widget.modal,
   nextpas.core.tui.widget.dialog,
-  nextpas.core.tui.widget.split_pane;
+  nextpas.core.tui.widget.split_pane,
+  nextpas.core.tui.widget.select;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -85,6 +86,9 @@ type
   TSplitDirection = nextpas.core.tui.widget.split_pane.TSplitDirection;
   TSplitPaneState = nextpas.core.tui.widget.split_pane.TSplitPaneState;
   TSplitPane = nextpas.core.tui.widget.split_pane.TSplitPane;
+  ISelect = nextpas.core.tui.widget.select.ISelect;
+  TSelectState = nextpas.core.tui.widget.select.TSelectState;
+  TSelect = nextpas.core.tui.widget.select.TSelect;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;

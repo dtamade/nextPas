@@ -100,7 +100,8 @@ fi
 if [ -n "$FPC_BIN" ]; then
   mkdir -p "$REJECT_BUILD"
   for rej in test_tui_core_facade_rejects_scrollview test_tui_core_facade_rejects_modal \
-             test_tui_core_facade_rejects_dialog test_tui_core_facade_rejects_split_pane; do
+             test_tui_core_facade_rejects_dialog test_tui_core_facade_rejects_split_pane \
+             test_tui_core_facade_rejects_select; do
     src="$REJECT_DIR/${rej}.lpr"
     if [ ! -f "$src" ]; then
       fail_check "缺 reject 源: $rej.lpr"

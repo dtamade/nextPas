@@ -66,8 +66,9 @@ type
      *  与 Stderr(stNull) 冲突时 Spawn 抛 EProcessError。 *}
     function MergeStderr(const AEnable: Boolean = True): ICommand;
     {** 追加 ExtraFile：子进程侧映射为 fd 3,4,5…（对齐 Go Cmd.ExtraFiles；Unix） *}
+    {** 追加 ExtraFile：子进程侧映射为 fd 3,4,5…（Go ExtraFiles；Unix）。Windows：UNSUPPORTED（M2-W3） *}
     function ExtraFd(const AFd: Integer): ICommand;
-    {** 在 exec 前 setgid+setuid（对齐 SysProcAttr.Credential；Unix；Windows 不支持） *}
+    {** 在 exec 前 setgid+setuid（SysProcAttr.Credential；Unix）。Windows：UNSUPPORTED（M2-W3） *}
     function Credential(const AUid, AGid: UInt32): ICommand;
     {** 取消令牌：IsCancelled 时 Wait/Output/Status/WaitGraceful 路径 Kill 并置 Cancelled *}
     function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
@@ -514,6 +515,15 @@ begin
     { Spawn }
     if (FCancelToken <> nil) and FCancelToken.IsCancelled then
       raise EProcessError.Create('process spawn cancelled before start');
+    {$IFDEF NEXTPAS_WINDOWS}
+    { M2-W3 support matrix: fail closed with explicit messages (no silent stub). }
+    if FSetCred then
+      raise EProcessError.Create(
+        'Credential is unsupported on Windows (see process ROADMAP M2-W3 matrix)');
+    if Length(FExtraFds) > 0 then
+      raise EProcessError.Create(
+        'ExtraFd is unsupported on Windows (see process ROADMAP M2-W3 matrix)');
+    {$ENDIF}
     LExtraCount := Length(FExtraFds);
     if LExtraCount > 0 then
       LExtraPtr := @FExtraFds[0]

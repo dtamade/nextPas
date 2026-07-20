@@ -7,7 +7,8 @@ uses
   SysUtils, Classes,
   nextpas.core.errors,
   nextpas.core.test,
-  nextpas.core.sync;
+  nextpas.core.sync,
+  nextpas.core.sync.mutex;
 
 var
   T: TTestSuite;
@@ -705,6 +706,39 @@ begin
   CheckEqual(Int64(1), Int64(LWoke), 'condvar signal path completed');
 end;
 
+procedure TestMutexDestroyWhileHeldBestEffort;
+var
+  LObj: TMutex;
+  LRaised: Boolean;
+begin
+  { Caller must not Free a held mutex. POSIX often returns EBUSY → L1 raises.
+    Hosts that return 0 are platform-lenient (no L1 detection). }
+  LObj := TMutex.Create;
+  LObj.Acquire;
+  LRaised := False;
+  try
+    LObj.Free;
+  except
+    on E: ENextPasError do
+    begin
+      LRaised := True;
+      { destroy failed: handle still valid — unlock then free cleanly }
+      LObj.Release;
+      LObj.Free;
+    end;
+  end;
+  if LRaised then
+    Check(True, 'Destroy while held raised (host reports destroy error)')
+  else
+  begin
+    {$IFDEF LINUX}
+    Check(False, 'Linux expected TMutex.Destroy to raise when mutex still held');
+    {$ELSE}
+    Check(True, 'host lenient: destroy while held returned success (no L1 detection)');
+    {$ENDIF}
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -752,6 +786,7 @@ begin
   T.Test('Event auto single winner', @TestEventAutoSingleWinner);
   T.Test('Semaphore timeout zero', @TestSemaphoreTimeoutZero);
   T.Test('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
+  T.Test('Mutex destroy while held (best-effort)', @TestMutexDestroyWhileHeldBestEffort);
 
   if not T.Run then Halt(1);
 end.

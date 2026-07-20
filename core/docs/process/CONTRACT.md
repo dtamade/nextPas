@@ -122,6 +122,22 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 ---
 
+
+---
+
+## Windows / Unix 支持矩阵（M2-W3）
+
+| 能力 | Linux/Unix | Windows | 失败形态 |
+|------|------------|---------|----------|
+| Spawn / Wait / Capture / Status | Done | Done（wine smoke） | raise |
+| Timeout / MaxOutput / CancelToken | Done | Done | 语义同 Host |
+| NewProcessGroup / KillTree | setpgid + kill(-pg) | **Job Object**（M2-W2） | raise |
+| ExtraFd（fd≥3） | Done | **UNSUPPORTED** | Spawn 前 **EProcessError** 明文 |
+| Credential（uid/gid） | Done | **UNSUPPORTED** | Spawn 前 **EProcessError** 明文 |
+| Signal（非 Kill） | Partial | Partial（Kill=Terminate） | 文档 |
+
+**原则**：不 silent fail；矩阵与代码一致。
+
 ## 变更记录
 
 | 日期 | 版本 | 变更描述 | 作者 |
