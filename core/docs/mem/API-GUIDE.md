@@ -63,14 +63,36 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 - 对标 Go `runtime.ReadMemStats` 的“一结构体读进程堆”体验
 - 热路径不调用；DEBUG 字段默认全 0
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
-- 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking；`TryFreeMemOf(nil, P)` 仅当 DefaultHeap 自有时 process free，foreign → False）
+- 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（见下节决策树；`TryFreeMemOf(nil, P)` 仅当 DefaultHeap 自有时 process free，foreign → False）
 - 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`；**Try 与非 Try 成功语义一致**，含 nil allocator → process GetMem）
-- **样板（F4/G4/G4.x/residual）**：已知容量表/槽 → builders、json/yaml/toml/xml/ini/csv、collections.node/hashmap 用 `FreeMemOf`/`ReallocMemOf`。
-  **例外**：tui inject 缓冲保持 `IAllocator.FreeMem`（tracking 必须观察 free）；无 size 的 owned 串保持 unsized。
 - 一行 env profile：`FormatMemDebugProfile`（`heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap`）
 - `FormatMemStats` 含 `heap_safety=` / `arena_strict=`（与 HEAP_DEBUG / coverage_gap 并列）
 - 错误消息：`FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg`（见 [ERROR-POLICY.md](ERROR-POLICY.md)）
 - 门面冻结：[FACADES-SURFACE.md](FACADES-SURFACE.md)
+
+### FreeMemOf 决策树（H0）
+
+无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时，`FreeMemOf` 可能对 **DefaultHeap 自有** 块走 sized `DefaultHeap.FreeMem`，**不**调用 `AAllocator.FreeMem`。
+
+```
+已知 size 且指针来自 DefaultHeap / 同堆 inject？
+├─ 需要插件观察 free（TTrackingAllocator.ActiveAllocCount 等）？
+│  └─ 是 → 用 AAllocator.FreeMem(ptr)     // tui inject 反例
+│  └─ 否 → FreeMemOf(alloc, ptr, size)  // 表/槽/builder 主路径
+├─ NEXTPAS_MEM_DEBUG / HEAP_DEBUG 开启？
+│  └─ FreeMemOf 会走 AAllocator.FreeMem，保留 tracking 链
+└─ size 未知？
+   └─ AAllocator.FreeMem 或先 TryBlockSize 再 sized
+```
+
+| 用 FreeMemOf | 用 IAllocator.FreeMem |
+|--------------|----------------------|
+| 容量字段已知的表/registry/槽 | inject 面要测 tracking 计数 |
+| builder 缓冲（text/bytes） | 不确定是否同堆 |
+| 解析器 node 数组（json/yaml/…） | 无 size 的 owned 字符串指针 |
+
+样板：builders · json/yaml/toml/xml/ini/csv · collections.node/hashmap/swiss。
+**禁止**全仓机械替换。
 
 ## 三套 API 体系
 
