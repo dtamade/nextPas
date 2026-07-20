@@ -2,7 +2,8 @@
 
 对照 [consumer-guide.md](consumer-guide.md)。**默认只记录**；模块 `.lpr` 大改归各模块 lane。
 
-抽检日期：2026-07-20 · 抽检人：bench lane
+抽检日期：2026-07-20 · 抽检人：bench lane  
+C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）
 
 ## 检查项
 
@@ -18,31 +19,31 @@
 
 | 模块 bench | C1 | C2 | C3 | C4 | C5 | 备注 |
 |------------|----|----|----|----|----|------|
-| `nextpas.core.hash/bench_hash` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `SHA256/1MB` 等；无 Quiet/短时；仅控制台 |
-| `nextpas.core.collections/bench_vec` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `Vec.Push` suite；多段 suite |
-| `nextpas.core.json/bench_json` | ✅ | ✅ | ⚠️ | ✅ | ✅ | `Parse/small` 命名好；时长可能偏长 |
-| `nextpas.core.fs/bench_fs` | ✅ | ✅ | ⚠️ | ✅ | ✅ | `SeqWrite/64KB` 等；仅控制台 |
-| `nextpas.core.encoding/bench_encoding` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | suite `Base64`；entry 需确认 `/` 层级 |
-| `nextpas.core.async/bench_async` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `TimerSchedule` 等无 `/` |
-| `nextpas.core.toml/bench_toml_parse` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | suite `parse`；控制台输出 |
-| `nextpas.core.text/bench_text` | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | `IndexOf`/`IntToStr` 等扁平名 |
+| `nextpas.core.hash/bench_hash` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-hash.json` |
+| `nextpas.core.collections/bench_vec` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-vec.json` |
+| `nextpas.core.json/bench_json` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-json.json` |
+| `nextpas.core.fs/bench_fs` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-fs.json` |
+| `nextpas.core.encoding/bench_encoding` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-encoding.json` |
+| `nextpas.core.async/bench_async` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-async.json` |
+| `nextpas.core.toml/bench_toml_parse` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-toml-parse.json` |
+| `nextpas.core.text/bench_text` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-text.json` |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20）
+## 汇总（2026-07-20 · C3 落地后）
 
 | 模式 | 观察 |
 |------|------|
 | C1 | 抽检模块均已 `TBenchSuite` |
-| C2 | json/fs 较好；async/text/toml 偏扁平名 |
-| C3 | **普遍未** `SetQuiet` / 显式短 `MinDuration` — CI 可预测性弱 |
-| C4–C5 | 控制台输出为主；无源码树污染；少见 `SaveToJSON` |
+| C2 | json/fs 较好；async/text/toml/encoding 等命名仍偏扁平（后续可选） |
+| C3 | **checklist 8 模块已落地** Quiet + 50ms MinDuration + 5 MinSamples |
+| C4–C5 | 控制台 + `build/bench-*.json`；无源码树污染 |
 
-## 建议（给各模块 lane）
+## 建议（其余模块 / C2）
 
-1. `.SetQuiet(True)` + 显式 `SetMinDuration` / `SetMinSamples`。  
-2. 可选 `SaveToJSON('build/bench-<mod>.json')`。  
-3. entry 名统一 `Module/Op` 或 `Op/size`。  
+1. 非 checklist 模块可复制下方片段。  
+2. entry 名统一 `Module/Op` 或 `Op/size`（C2，不阻塞 CI）。  
+3. 正式基线可本地去掉短时参数（恢复默认 1s / 30 samples）。
 
 **可复制片段**（CI 友好）：
 
@@ -54,6 +55,7 @@ LResults := TBenchSuite.Create('MyMod')
   .Add('MyMod/HotPath', @BenchHot)
   .Run;
 WriteLn(LResults.PrintToConsole);
+ForceDirectories('build');
 LResults.SaveToJSON('build/bench-mymod.json');
 ```
 

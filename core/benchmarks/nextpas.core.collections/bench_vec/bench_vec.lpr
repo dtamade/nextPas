@@ -3,7 +3,9 @@ program bench_vec;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.bench,
+  nextpas.core.time.base,
   nextpas.core.collections.vec;
 
 type
@@ -159,6 +161,9 @@ begin
   WriteLn('=== nextPas TVec<Integer> Benchmark (N=', N, ') ===');
   WriteLn;
   LResults := TBenchSuite.Create('Vec.Push')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
     .AddLoop('Vec.Push/N=100000', @BenchPush)
     .AddLoop('Vec.Push+Reserve/N=100000', @BenchPushPrealloc)
     .AddLoop('Vec.Pop/N=100000', @BenchPop)
@@ -169,6 +174,8 @@ begin
     .AddLoop('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-vec.json');
   GVec.Free;
   if GSink = -1 then WriteLn(GSink);
 end.

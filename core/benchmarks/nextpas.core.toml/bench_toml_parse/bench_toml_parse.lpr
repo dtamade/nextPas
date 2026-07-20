@@ -4,6 +4,7 @@ program bench_toml_parse;
 {$optimization on}
 
 uses
+  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.mem.intf,
@@ -12,7 +13,8 @@ uses
   nextpas.core.toml.parser,
   nextpas.core.toml.value,
   nextpas.core.toml,
-  nextpas.core.bench;
+  nextpas.core.bench,
+  nextpas.core.time.base;
 
 var
   GSmallToml: string;
@@ -211,6 +213,9 @@ begin
   WriteLn;
 
   LResults := TBenchSuite.Create('parse')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
     .AddLoop('parse/small (10 keys)', @BenchSmallParse)
     .AddLoop('parse/medium (~50 keys)', @BenchMediumParse)
     .AddLoop('parse/large (~700 keys)', @BenchLargeParse)
@@ -220,4 +225,6 @@ begin
     .AddLoop('access/medium (3 lookups)', @BenchMediumAccess)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-toml-parse.json');
 end.

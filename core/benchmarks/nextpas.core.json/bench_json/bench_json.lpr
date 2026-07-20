@@ -1,7 +1,9 @@
 program bench_json;
 {$I nextpas.core.settings.inc}
 uses
+  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base,
   nextpas.core.json, nextpas.core.json.parser, nextpas.core.json.serializer;
 const
   SMALL_JSON = '{"name":"test","value":42,"items":[1,2,3,4,5]}';
@@ -56,15 +58,21 @@ begin
     GCounter := GCounter xor UInt64(LVal);
   end;
 end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
   GLargeJson := BuildLargeJson;
   GSmallDoc := TJsonParser.Parse(SMALL_JSON);
   GLargeDoc := TJsonParser.Parse(GLargeJson);
   GCounter := 0;
-  LSuite := TBenchSuite.Create('json');
-  LSuite.Add('Parse/small', @BenchParseSmall).Add('Parse/large', @BenchParseLarge)
+  LResults := TBenchSuite.Create('json')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('Parse/small', @BenchParseSmall).Add('Parse/large', @BenchParseLarge)
     .Add('Stringify/small', @BenchStringifySmall).Add('Stringify/large', @BenchStringifyLarge)
-    .Add('Access/small', @BenchAccessSmall).Add('Access/large', @BenchAccessLarge);
-  WriteLn(LSuite.Run.PrintToConsole);
+    .Add('Access/small', @BenchAccessSmall).Add('Access/large', @BenchAccessLarge)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-json.json');
 end.
