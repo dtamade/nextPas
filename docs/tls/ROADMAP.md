@@ -1,5 +1,8 @@
 # fafafa.ssl 当前路线图
 
+> **SUPERSEDED / HISTORICAL (2026-07-20)**
+> 当前权威：`docs/tls/OWNERSHIP.md`、`docs/tls/VERIFY.md`、`core/docs/{hash,crypto,tls}/CONTRACT.md`。
+
 > **更新**: 2026-05-29
 > **用途**: 当前项目状态、演进方向、验证入口。
 
