@@ -329,6 +329,25 @@ Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
 
 **Era E Done when**：E1–E3 Met。 **Met.** Not a cross-machine ranking.
 
+#### Q3-1 Soak leak evidence (2026-07-20)
+
+Focused gate: `core/tests/nextpas.core.http/test_http_soak`（heaptrc via common.mk `-gh`）。
+
+```sh
+make focused FOCUS=core/tests/nextpas.core.http/test_http_soak
+```
+
+| Case | Shape | Result |
+| ---- | ----- | ------ |
+| H1 keep-alive threaded | 1500 sequential GET | pass |
+| H1 keep-alive epoll | 1500 sequential GET | pass |
+| H2 sequential facade | 400 GET | pass |
+| H2 multiplex threaded | RoundTripMany 50×8 = 400 | pass |
+| H2 multiplex epoll | RoundTripMany 20×8 = 160 | pass |
+| heaptrc | process exit | **0 unfreed** |
+
+Not a throughput ranking; sizes are CI-friendly leak soak.
+
 #### S3-1 / S3-2 H2 server scale
 
 Harness: `benchmarks/nextpas.core.http/bench_h2_server/`
