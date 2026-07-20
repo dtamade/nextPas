@@ -152,7 +152,14 @@ type
     {**
      * EnsureCapacity
      *
-     * @desc 确保容量至少为指定值（仅扩容，不改变 Count）
+     * @desc 确保**物理容量**至少为指定值（仅扩容，**不改变**逻辑 Count）。
+     *
+     * @params
+     *   aCapacity 需要的最小 Capacity（元素个数量级，非字节）。
+     *
+     * @remark
+     *   与 IArray.Ensure 不同：Ensure 在 Count 不足时会 Resize 并**拉长 Count**。
+     *   若只想为后续 Push 预留空间，应使用 EnsureCapacity 或 Reserve/ReserveExact。
      *}
     procedure EnsureCapacity(aCapacity: SizeUInt);
 

@@ -7,6 +7,7 @@ L1 容器库：动态数组、双端队列、哈希/有序映射与集合、链�
 | 文档 | 内容 |
 |------|------|
 | [CONTRACT.md](CONTRACT.md) | **稳定契约**（接口词表、工厂、不变量、测试门禁） |
+| [CORE-API.md](CORE-API.md) | **核心 API 导读**（日常 20 方法 + 容量词表 + 有序选型） |
 | [ERRORS.md](ERRORS.md) | 异常类型与文案规范 |
 | [STATUS.md](STATUS.md) | 当前阶段、已完成目标、进行中 Wave |
 | [PERF-HASHSET.md](PERF-HASHSET.md) | HashSet Swiss 本机 bench 数字 |
@@ -86,6 +87,26 @@ end;
 | `THashMap` 直构 | 开放寻址（OA）专家路径 |
 
 `MakeSwissHashMap` **保留**（显式别名），不删除符号。
+
+### 有序 map 怎么选
+
+| 工厂 | 默认？ | 何时用 |
+|------|--------|--------|
+| **`MakeTreeMap`** | **是** | 通用有序 KV |
+| `MakeRBTreeMap` | 否 | 显式 RB 适配 / `TCompareFunc` 管线 |
+| `MakeBTreeMap` | 否 | 大 N、范围扫描、节点局部性 |
+
+有序 set：默认 **`MakeTreeSet`**（可传 comparer）；B-Tree 用 `MakeBTreeSet`。
+
+### 容量：`Ensure` ≠ `EnsureCapacity`
+
+| API | 改 Count？ | 用途 |
+|-----|-----------|------|
+| `Ensure(n)` | **是**（不足则 Resize） | 逻辑长度至少 n |
+| `EnsureCapacity(n)` | **否** | 物理容量至少 n |
+| `Reserve(k)` | 否 | 再追加 k 个的 headroom |
+
+详见 [CORE-API.md §3](CORE-API.md) 与 [CONTRACT.md §1.5](CONTRACT.md)。
 
 ## 工厂一览
 
