@@ -37,6 +37,8 @@ PROJECTS := \
 	test_http_h2_session \
 	test_http_h2_client \
 	test_http_h2_facade \
+	test_http_soak \
+	test_http_q3_matrix \
 	test_http_websocket \
 	test_http_websocket_client \
 	test_http_fuzz \

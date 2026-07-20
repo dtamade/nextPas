@@ -5,10 +5,11 @@
 ## 消费侧（写模块 bench 的人）
 
 - **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局  
-- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（8 模块）  
+- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（**19** 模块；C3 Quiet/短时/JSON 模板）  
 - 示例：`core/examples/bench/`、`core/examples/nextpas.core.bench/`  
 - 模块 bench 样例：`core/benchmarks/nextpas.core.*/`  
-- 跨语言子集：`scorecard-subset-2026-07-19.md`  
+- 跨语言子集：`scorecard-subset-2026-07-19.md`（**11** track，含 binsearch/lookup）  
+- EBR×BenchRun：**未立项** — [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)  
 - 历史文档索引：[archive/README.md](archive/README.md)  
 
 ### 仓库一键入口

@@ -248,6 +248,23 @@ end;
 | `hekStatus` | ecNetwork | ensure-2xx 非 2xx | `ensure` `download`（Status 保留） |
 | `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
 
+#### Q3-2 Go-aligned matrix（超时 / 取消 / 413 / 431）
+
+权威证据：`test_http_q3_matrix`（+ 既有 server/security/client 深测）。**不是** Go API 克隆；是语义对齐。
+
+| 场景 | Go `net/http` 参照 | nextPas 契约 | Kind / Op / wire |
+|------|-------------------|--------------|------------------|
+| Client 整体 deadline | `Client.Timeout` / `context` deadline | `THttpClientOptions.Timeout` / `WithTimeout` | `hekTimeout`；wrap 路径 `Op=transport`；**禁止**裸 `ETimeoutError` |
+| Client 协作取消 | `context.WithCancel` → `context.Canceled` | `IHttpCancelToken` + request `.CancelToken` | 检查点 `hekCanceled` + **`Op=cancel`**；传输中途可 `Op=transport` |
+| Server body 过大 | `MaxBytesReader` / handler 限流 → 413 | `MaxBodySize` 在 **handler 前** fail-fast | wire `HTTP/1.1 413 Payload Too Large`；**不进** handler |
+| Server header 过大 | `Server.MaxHeaderBytes` → 431 | `MaxHeaderSize` 在 parse 期 fail-fast | wire `HTTP/1.1 431 Request Header Fields Too Large`；**不进** handler |
+
+**诚实 residual**
+
+- Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
+- Windows cancel 仍为 probe-only residual（R3）；Unix waitable 近即时。
+- 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
+
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
 
 | Op | 典型 Kind | 边界 |
@@ -753,3 +770,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
+| 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |

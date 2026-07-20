@@ -69,19 +69,19 @@ var
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
     begin
       Result := 0;
       Exit;
     end;
-    LOld := AtomicLoad64(FState, moRelaxed);
+    LOld := atomic_load_64(FState, mo_relaxed);
     if (LOld and STAMPED_LOCK_WRITE_BIT) <> 0 then
     begin
       CpuPause;
       Continue;
     end;
     LNew := LOld + STAMPED_LOCK_READ_UNIT;
-    if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+    if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     begin
       Result := LNew;
       Exit;
@@ -93,13 +93,13 @@ function TStampedLock.TryReadLock: Int64;
 var
   LOld, LNew: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(0);
-  LOld := AtomicLoad64(FState, moRelaxed);
+  LOld := atomic_load_64(FState, mo_relaxed);
   if (LOld and STAMPED_LOCK_WRITE_BIT) <> 0 then
     Exit(0);
   LNew := LOld + STAMPED_LOCK_READ_UNIT;
-  if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+  if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     Result := LNew
   else
     Result := 0;
@@ -115,18 +115,18 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(0);
     if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
       Exit(0);
-    LOld := AtomicLoad64(FState, moRelaxed);
+    LOld := atomic_load_64(FState, mo_relaxed);
     if (LOld and STAMPED_LOCK_WRITE_BIT) <> 0 then
     begin
       CpuPause;
       Continue;
     end;
     LNew := LOld + STAMPED_LOCK_READ_UNIT;
-    if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+    if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     begin
       Result := LNew;
       Exit;
@@ -140,12 +140,12 @@ var
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
     begin
       Result := 0;
       Exit;
     end;
-    LOld := AtomicLoad64(FState, moRelaxed);
+    LOld := atomic_load_64(FState, mo_relaxed);
     if ((LOld and STAMPED_LOCK_WRITE_BIT) <> 0) or
        ((LOld and STAMPED_LOCK_READERS_MASK) <> 0) then
     begin
@@ -153,7 +153,7 @@ begin
       Continue;
     end;
     LNew := LOld or STAMPED_LOCK_WRITE_BIT;
-    if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+    if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     begin
       Result := LNew;
       Exit;
@@ -165,14 +165,14 @@ function TStampedLock.TryWriteLock: Int64;
 var
   LOld, LNew: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(0);
-  LOld := AtomicLoad64(FState, moRelaxed);
+  LOld := atomic_load_64(FState, mo_relaxed);
   if ((LOld and STAMPED_LOCK_WRITE_BIT) <> 0) or
      ((LOld and STAMPED_LOCK_READERS_MASK) <> 0) then
     Exit(0);
   LNew := LOld or STAMPED_LOCK_WRITE_BIT;
-  if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+  if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     Result := LNew
   else
     Result := 0;
@@ -188,11 +188,11 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(0);
     if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
       Exit(0);
-    LOld := AtomicLoad64(FState, moRelaxed);
+    LOld := atomic_load_64(FState, mo_relaxed);
     if ((LOld and STAMPED_LOCK_WRITE_BIT) <> 0) or
        ((LOld and STAMPED_LOCK_READERS_MASK) <> 0) then
     begin
@@ -200,7 +200,7 @@ begin
       Continue;
     end;
     LNew := LOld or STAMPED_LOCK_WRITE_BIT;
-    if AtomicCompareExchange64(FState, LOld, LNew, moAcqRel) = LOld then
+    if atomic_compare_exchange_strong_64(FState, LOld, LNew, mo_acq_rel, mo_acquire) then
     begin
       Result := LNew;
       Exit;
@@ -210,9 +210,9 @@ end;
 
 function TStampedLock.TryOptimisticRead: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(0);
-  Result := AtomicLoad64(FState, moAcquire) and STAMPED_LOCK_VERSION_MASK;
+  Result := atomic_load_64(FState, mo_acquire) and STAMPED_LOCK_VERSION_MASK;
 end;
 
 function TStampedLock.Validate(const AStamp: Int64): Boolean;
@@ -221,7 +221,7 @@ var
 begin
   if AStamp = 0 then
     Exit(False);
-  LCurrent := AtomicLoad64(FState, moAcquire);
+  LCurrent := atomic_load_64(FState, mo_acquire);
   Result := ((LCurrent and STAMPED_LOCK_WRITE_BIT) = 0) and
             ((LCurrent and STAMPED_LOCK_VERSION_MASK) = (AStamp and STAMPED_LOCK_VERSION_MASK));
 end;
@@ -234,26 +234,28 @@ begin
      ((AStamp and STAMPED_LOCK_READERS_MASK) = 0) then
     Exit;
   repeat
-    LState := AtomicLoad64(FState, moAcquire);
+    LState := atomic_load_64(FState, mo_acquire);
     if ((LState and STAMPED_LOCK_WRITE_BIT) <> 0) or
        ((LState and STAMPED_LOCK_READERS_MASK) = 0) or
        ((LState and STAMPED_LOCK_VERSION_MASK) <>
         (AStamp and STAMPED_LOCK_VERSION_MASK)) then
       Exit;
-  until AtomicCompareExchange64(FState, LState,
-    LState - STAMPED_LOCK_READ_UNIT, moRelease) = LState;
+  until atomic_compare_exchange_strong_64(FState, LState, LState - STAMPED_LOCK_READ_UNIT, mo_release, mo_relaxed);
 end;
 
 procedure TStampedLock.UnlockWrite(const AStamp: Int64);
+var
+  LExpected: Int64;
 begin
   if (AStamp = 0) or ((AStamp and STAMPED_LOCK_WRITE_BIT) = 0) then
     Exit;
-  AtomicCompareExchange64(FState, AStamp, AStamp + 1, moRelease);
+  LExpected := AStamp;
+  atomic_compare_exchange_strong_64(FState, LExpected, AStamp + 1, mo_release, mo_relaxed);
 end;
 
 procedure TStampedLock.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TStampedLock.Destroy;
@@ -264,20 +266,20 @@ end;
 
 function TStampedLock.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TStampedLock.IsReadLocked: Boolean; inline;
 var
   LState: Int64;
 begin
-  LState := AtomicLoad64(FState, moAcquire);
+  LState := atomic_load_64(FState, mo_acquire);
   Result := (LState and STAMPED_LOCK_READERS_MASK) <> 0;
 end;
 
 function TStampedLock.IsWriteLocked: Boolean; inline;
 begin
-  Result := (AtomicLoad64(FState, moAcquire) and STAMPED_LOCK_WRITE_BIT) <> 0;
+  Result := (atomic_load_64(FState, mo_acquire) and STAMPED_LOCK_WRITE_BIT) <> 0;
 end;
 
 end.

@@ -14,6 +14,7 @@
 | **Q17** | 平台证据加深 | kqueue accept/connect；Windows native 评估 | **done** |
 | **Q18** | 同机 Go/Rust bench 脚本 | SCORECARD 表；CI 不强制对照 | **done** |
 | **Q19** | localhost dial 吞吐对照 | dial_ops_per_s + go peer | **done** |
+| **Q20** | 并发 multi-dial 吞吐 | dial_concurrent_ops_per_s + go concurrent peer；Windows assessment 轻量 | **done** |
 
 ## Q13 细节
 

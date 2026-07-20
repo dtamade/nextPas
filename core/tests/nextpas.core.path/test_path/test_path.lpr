@@ -824,6 +824,32 @@ begin
   CheckEqual('.', PathDir('./x'), 'r22 PathDir ./x');
 end;
 
+{ R31: Go filepath-style edge table (host-linux). }
+procedure TestPathCleanJoinMatchR31;
+begin
+  CheckEqual('a/c', PathClean('a/b/../c'), 'r31 clean a/b/../c');
+  CheckEqual('/c', PathClean('/a/b/../../c'), 'r31 clean abs up');
+  CheckEqual('c', PathClean('a/b/../../c'), 'r31 clean rel up');
+  CheckEqual('.', PathClean('a/b/../..'), 'r31 clean to dot');
+  CheckEqual('a/b/c', PathJoin(PathJoin('a', 'b'), 'c'), 'r31 join nested');
+  CheckEqual('/b', PathJoin('a', '/b'), 'r31 join abs child');
+  CheckEqual('a', PathJoin('a', ''), 'r31 join empty child');
+  Check(PathMatch('*.go', 'x.go'), 'r31 match *.go');
+  Check(not PathMatch('*.go', 'x/y.go'), 'r31 * does not cross slash');
+  Check(PathMatch('a?c', 'abc'), 'r31 match a?c');
+  Check(not PathMatch('a?c', 'ac'), 'r31 ? needs one');
+  Check(PathMatch('[a-c]', 'b'), 'r31 class range');
+  Check(not PathMatch('[a-c]', 'd'), 'r31 class miss');
+  Check(PathMatch('*.*', 'a.b'), 'r31 *.*');
+  CheckEqual('../c/d', PathRelative('/a/b', '/a/c/d'), 'r31 rel sibling deep');
+  CheckEqual('../../x', PathRelative('/a/b/c', '/a/x'), 'r31 rel up2');
+  CheckEqual('sub', PathStripPrefix('/tmp/sub', '/tmp/'), 'r31 strip prefix slash');
+  CheckEqual('a/b', PathToSlash('a\b'), 'r31 ToSlash single');
+  CheckEqual('a/b/c', PathFromSlash('a/b/c'), 'r31 FromSlash unix');
+end;
+
+
+
 
 begin
   T := TTestSuite.Create('nextpas.core.path');
@@ -899,5 +925,6 @@ begin
   T.Test('PathMatch R19 extra', @TestPathMatchR19Extra);
   T.Test('PathVolume List R19 extra', @TestPathVolumeListR19Extra);
   T.Test('PathClean Rel R22', @TestPathCleanRelR22);
+  T.Test('PathClean Join Match R31', @TestPathCleanJoinMatchR31);
   if not T.Run then Halt(1);
 end.

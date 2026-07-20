@@ -205,6 +205,18 @@ B30  可复现子集 + 消费抽检 (2026-07-20)                          ✅
 B31  仓库入口 + 消费扩面 (2026-07-20)                            ✅
   B31.1  make bench-module-test / bench-scorecard-smoke        ✅
   B31.2  --summary TSV；checklist ≥8 模块                      ✅
+
+B32–B40  消费侧 C3 落地与扩面 (2026-07-20)                       ✅
+  B32    text/json/async API 对齐                                ✅
+  B33    C2 Domain/Op 命名                                       ✅
+  B34    checklist +yaml/log；scorecard binsearch/lookup         ✅
+  B35–B39  C3 扩面（yaml/log/regex/number/io/csv/xml/atomic/bytes/sync） ✅
+  B40    lockfree matched+micro 双 suite C3                      ✅
+  水位   consumer-checklist **19** 模块 C1–C5 全绿               ✅
+
+B41  维护收口 + EBR 设计备忘 (2026-07-20)                        ✅
+  B41.1  README/goal-tree 水位对齐                               ✅
+  B41.2  ebr-benchrun-design-note.md（不实现）                   ✅
 ```
 
 ## 测试套件分布
@@ -259,8 +271,9 @@ B31  仓库入口 + 消费扩面 (2026-07-20)                            ✅
 
 ## 未来候选
 
-- [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（全量 SCORECARD 仍推迟）
-- [ ] `BenchRun` 新执行器（基于 `nextpas.core.sync.ebr`）— 需独立设计 lane
+- [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（11 track；全量 SCORECARD 仍推迟）
+- [x] 消费侧 checklist C3 扩面 — **已完成**：19 模块（见 [consumer-checklist.md](consumer-checklist.md)）
+- [ ] `BenchRun` 新执行器（EBR 感知）— **推迟**；备忘见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)；需独立 lane + 总控授权
 - [ ] `TInt64Array` 类型别名（base 模块导出）— 归 base
 - [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量 — 低优先级
 - [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟

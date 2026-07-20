@@ -69,10 +69,14 @@ end;
 procedure TPhaser.AcquireState;
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FStateLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FStateLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Exit;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -83,19 +87,19 @@ end;
 
 procedure TPhaser.ReleaseState;
 begin
-  AtomicStore32(FStateLock, 0, moRelease);
+  atomic_store(FStateLock, 0, mo_release);
 end;
 
 function TPhaser.Register: Int64;
 begin
   AcquireState;
   try
-    Result := AtomicLoad64(FPhase, moAcquire);
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Result := atomic_load_64(FPhase, mo_acquire);
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
-    if AtomicLoad64(FParties, moRelaxed) = High(Int64) then
+    if atomic_load_64(FParties, mo_relaxed) = High(Int64) then
       raise EInvalidOperationError.Create('TPhaser.Register: party count overflow');
-    AtomicFetchAdd64(FParties, 1, moRelease);
+    atomic_fetch_add_64(FParties, 1, mo_release);
   finally
     ReleaseState;
   end;
@@ -109,33 +113,33 @@ var
 begin
   AcquireState;
   try
-    AWaitPhase := AtomicLoad64(FPhase, moRelaxed);
+    AWaitPhase := atomic_load_64(FPhase, mo_relaxed);
     Result := AWaitPhase;
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
-    LParties := AtomicLoad64(FParties, moRelaxed);
-    LArrived := AtomicLoad64(FArrived, moRelaxed);
+    LParties := atomic_load_64(FParties, mo_relaxed);
+    LArrived := atomic_load_64(FArrived, mo_relaxed);
 
     if ADeregister then
     begin
       if LParties <= 0 then
         Exit;
       Dec(LParties);
-      AtomicStore64(FParties, LParties, moRelaxed);
+      atomic_store_64(FParties, LParties, mo_relaxed);
     end
     else if LParties > 0 then
     begin
       if LArrived = High(Int64) then
         raise EInvalidOperationError.Create('TPhaser.Arrive: arrived count overflow');
       Inc(LArrived);
-      AtomicStore64(FArrived, LArrived, moRelaxed);
+      atomic_store_64(FArrived, LArrived, mo_relaxed);
     end;
 
     if (LParties = 0) or (LArrived >= LParties) then
     begin
-      AtomicStore64(FArrived, 0, moRelaxed);
+      atomic_store_64(FArrived, 0, mo_relaxed);
       Result := AWaitPhase + 1;
-      AtomicStore64(FPhase, Result, moRelease);
+      atomic_store_64(FPhase, Result, mo_release);
     end;
   finally
     ReleaseState;
@@ -157,16 +161,16 @@ begin
   if Result <> LPhase then
     Exit;
 
-  while AtomicLoad64(FPhase, moAcquire) = LPhase do
+  while atomic_load_64(FPhase, mo_acquire) = LPhase do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
     begin
       Result := LPhase;
       Exit;
     end;
     CpuPause;
   end;
-  Result := AtomicLoad64(FPhase, moAcquire);
+  Result := atomic_load_64(FPhase, mo_acquire);
 end;
 
 function TPhaser.ArriveAndDeregister: Int64;
@@ -185,9 +189,9 @@ begin
   if LUseTimeout then
     LStart := TInstant.Now;
 
-  while AtomicLoad64(FPhase, moAcquire) = APhase do
+  while atomic_load_64(FPhase, mo_acquire) = APhase do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(paClosed);
     if LUseTimeout and (LStart.Elapsed.AsNanoseconds >= ATimeoutNs) then
       Exit(paTimeout);
@@ -210,24 +214,24 @@ end;
 
 function TPhaser.GetPhase: Int64;
 begin
-  Result := AtomicLoad64(FPhase, moAcquire);
+  Result := atomic_load_64(FPhase, mo_acquire);
 end;
 
 function TPhaser.GetParties: Int64;
 begin
-  Result := AtomicLoad64(FParties, moAcquire);
+  Result := atomic_load_64(FParties, mo_acquire);
 end;
 
 function TPhaser.GetArrived: Int64;
 begin
-  Result := AtomicLoad64(FArrived, moAcquire);
+  Result := atomic_load_64(FArrived, mo_acquire);
 end;
 
 function TPhaser.GetUnarrived: Int64;
 begin
   AcquireState;
   try
-    Result := AtomicLoad64(FParties, moRelaxed) - AtomicLoad64(FArrived, moRelaxed);
+    Result := atomic_load_64(FParties, mo_relaxed) - atomic_load_64(FArrived, mo_relaxed);
   finally
     ReleaseState;
   end;
@@ -235,12 +239,12 @@ end;
 
 procedure TPhaser.Terminate;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 procedure TPhaser.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TPhaser.Destroy;
@@ -251,12 +255,12 @@ end;
 
 function TPhaser.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TPhaser.IsTerminated: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

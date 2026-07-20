@@ -27,7 +27,7 @@
 - Chocolatey / MSYS2 FPC packaging remains a **blocker risk** for nextpas.core (needs 3.3.1+).
 - Wine smoke remains the **honest** IOCP runtime evidence layer.
 
-## Decision (Q17)
+## Decision (Q17 / Q20 light)
 
 | Option | Choice |
 |--------|--------|
@@ -35,7 +35,20 @@
 | Keep wine-runtime-smoke? | **Yes** |
 | Next action | When FPC trunk on `windows-latest` is stable for core-ci platform job, add opt-in job `async-windows-native-smoke` (continue-on-error → fail-closed after green streak) |
 
+### Suggested opt-in job (not wired fail-closed)
+
+| Field | Value |
+|-------|--------|
+| Job name | `async-windows-native-smoke` |
+| Runner | `windows-latest` + FPC ≥ 3.3.1 |
+| Suite (min) | poller windows runtime smoke; IOCP smoke; accept/connect if `pbIocp` |
+| CI policy | `continue-on-error: true` until 2+ consecutive weekly green |
+| Out of scope for job-1 | dial concurrent bench, public DNS, full host-matrix |
+
+Q20 does **not** land this job — documentation hook only.
+
 ## Non-goals
 
 - Do not treat Wine green as native Windows host-runtime.
 - Do not block Linux/macOS quality gates on Windows native.
+- Do not claim `truth=native-windows` from wine or compile-only gates.

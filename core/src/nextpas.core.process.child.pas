@@ -209,7 +209,7 @@ begin
               { Timeout: abandon child to avoid blocking destructor }
               Break;
             end;
-            platform_thread_sleep_ns(10000000);
+            platform_thread_sleep_ns(100000); { 100us, align WaitWithOutput (R31) }
           until False;
         end
         else

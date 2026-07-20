@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.15
+**版本**：1.16
 
 ---
 
@@ -167,16 +167,16 @@ end;
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 - Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
-### 6.1 Scorecard 与跨语言对标（Wave Q1–Q13）
+### 6.1 Scorecard 与跨语言对标（Wave Q1–Q14）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC19）
-  - SC1–SC16：diff/parse/layout/focus/CJK/truecolor/overlay/mouse/paste/Kitty/hsplit/韧性/单 cell
-  - **SC17** Backend mouse Enter/Leave DECSET 序列；**SC18** ResizeEvent；**SC19** 50/50 % VSplit
-- **纲领**: `core/docs/tui/PARITY-GO-RUST.md`（质量维度→证据）· `SCORECARD.md`
-- **同方法论对照**: `core/benchmarks/nextpas.core.tui/bench_go_rust`（`make compare`）
-- 输入韧性语料：`test_tui_input` + SC15
-- core facade 密度底线：clear/intf ≥16；tier facade ≥12
-- **examples**：`test_tui_examples` ≥7（覆盖全部 demo 教学路径）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC22）
+  - SC1–SC19：diff/parse/layout/协议/backend mouse/resize/% 等
+  - **SC20** SGR RGB FG；**SC21** DrawPatches 相邻复用；**SC22** RatioConstraint VSplit
+- **纲领**: `PARITY-GO-RUST.md` · `SCORECARD.md`
+- **同方法论对照**: `bench_go_rust`（`make compare`）
+- **契约脚本**: `./scripts/tui-contract-check.sh`（含 **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐）
+- 输入韧性：`test_tui_input` + SC15
+- 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
 
 ---
 
@@ -184,6 +184,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.16 | SC20 SGR rgb + SC21 DrawPatches + SC22 ratio；contract-check C7 | Claude |
 | 2026-07-20 | 1.15 | SC17 backend mouse modes + SC18 resize + SC19 pct layout；examples multi-demo | Claude |
 | 2026-07-20 | 1.14 | SC14 hsplit + SC15 输入韧性 + SC16 diff 上界；PARITY 质量矩阵；bench HSplit | Claude |
 | 2026-07-20 | 1.13 | SC12 Kitty Verified + SC13 paste session；bench layout/overlay；tier facade ≥12 | Claude |

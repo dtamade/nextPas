@@ -287,6 +287,28 @@ begin
   W.Close;
 end;
 
+procedure TestWatchRemoveStopsEvents;
+var
+  W: IFsWatcher;
+  E: TFsWatchEvent;
+  D: string;
+  Got: Boolean;
+begin
+  D := GTmp + '/rmw';
+  MkdirAll(D);
+  W := Watch;
+  W.Add(D);
+  WriteFileText(D + '/before.txt', '1');
+  Check(PollMatch(W, 'before', E), 'event before remove');
+  W.Remove(D);
+  WriteFileText(D + '/after.txt', '2');
+  Got := PollMatch(W, 'after', E, 8);
+  Check(not Got, 'no event after Remove');
+  W.Remove(D); { second remove no-op }
+  W.Close;
+end;
+
+
 begin
   Setup;
   try
@@ -303,6 +325,7 @@ begin
     T.Test('AddTree auto-mount', @TestAddTreeAutoMount);
     T.Test('closed raises', @TestClosedWatcherRaises);
     T.Test('burst events no drop', @TestBurstEventsNoDrop);
+    T.Test('Remove stops events', @TestWatchRemoveStopsEvents);
     if not T.Run then
       Halt(1);
   finally
