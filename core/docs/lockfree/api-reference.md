@@ -7,7 +7,7 @@
 > **Preferred 原子原语**：热路径用 `atomic_*` + `mo_*` / `TAtomic*`（见 [`READY.md`](READY.md) residual 0）。
 > **生命周期（T1 容器）**：**Close → join producers/waiters → Free**。Destroy 的 Close+drain **不**替代 join。
 > **选型**：[`selection-guide.md`](selection-guide.md)「任务投递四选一」。
-> **示例**：`t1_close_join_free`（Channel）、`t1_segqueue_workers`（SegQueue）、`t2_bag_close_join_free`（Bag）。
+> **示例**：`t1_close_join_free`（Channel）、`t1_segqueue_workers`（SegQueue）、`t2_bag_close_join_free`（Bag）、`t2_multimap_close_join_free`（MultiMap）。
 
 [English](api-reference.en.md)
 

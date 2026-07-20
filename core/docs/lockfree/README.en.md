@@ -18,6 +18,7 @@ Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Ch
 - `core/examples/nextpas.core.lockfree/t1_close_join_free/` — Channel
 - `core/examples/nextpas.core.lockfree/t1_segqueue_workers/` — SegQueue N producers + N workers
 - `core/examples/nextpas.core.lockfree/t2_bag_close_join_free/` — H3-2 Bag
+- `core/examples/nextpas.core.lockfree/t2_multimap_close_join_free/` — H3-2 MultiMap (single spin lock)
 
 **Selection**: [`selection-guide.md`](selection-guide.md) / [EN](selection-guide.en.md) — includes **task-delivery** table (channel / bag / mpsc / segqueue).
 
@@ -32,6 +33,13 @@ Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Ch
 | Selector | concurrent multiplexer | poll/backoff | yes |
 | ShardedHashMap / ConcurrentHashMap | **lock-based concurrent** | per-shard spin lock | yes |
 | Trees/caches/CRDT/RTM/NUMA/most lockfree.* extras | lock-based concurrent or specialized | see unit docs | **no** — direct unit import |
+
+**Naming honesty (do not trust the name alone)**:
+- `deque_lf` / **`TLockFreeDeque`**: **spin-lock** deque — not lock-free; real LF work-stealing deque is `TWorkStealingDeque` (`lockfree.deque`).
+- `hashtable` / **`TLockFreeHashTable*`**: LF-ish reads + **writer spinlock / grow**.
+- `dag` / `graph` / `skiplist*` / most trees: **per-node or global locks** (headers often say NOT lock-free).
+- `mutex` / `rwlock` / `phaser` / caches (`lfu`, `lru*`): concurrent helpers / sharded locks — not “LF containers by namespace”.
+- Full table: [`CONTRACT.md`](CONTRACT.md) §0; inventory: [`t2-inventory.md`](t2-inventory.md).
 
 ## Tiered surface
 
