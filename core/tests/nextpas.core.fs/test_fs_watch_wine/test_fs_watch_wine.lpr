@@ -143,6 +143,62 @@ begin
   end;
 end;
 
+procedure TestWatchAddTreeNested;
+var
+  W: IFsWatcher;
+  E: TFsWatchEvent;
+  Root, Nested: string;
+  Got: Boolean;
+  I: Integer;
+begin
+  { AddTree walks the tree and multi-Add each dir (no bWatchSubtree).
+    Small trees fit PLATFORM_WATCH_WIN_MAX=8. }
+  Root := GetTempDir + '/np_fsw_t' + IntToStr(platform_getpid);
+  Nested := Root + '/a/b';
+  MkdirAll(Nested);
+  try
+    W := Watch;
+    W.AddTree(Root);
+    WriteFileText(Nested + '/leaf.txt', 'deep');
+    Got := False;
+    for I := 1 to 40 do
+      if W.Poll(E, TDuration.FromMilliseconds(100)) then
+        if Pos('leaf', E.Name) > 0 then
+        begin
+          Got := True;
+          Break;
+        end;
+    SoftOrHard(Got, 'L2 AddTree nested create event');
+    W.Close;
+  finally
+    RemoveAll(Root);
+  end;
+end;
+
+procedure TestWatchAddTreeNotDir;
+var
+  W: IFsWatcher;
+  F: string;
+  Raised: Boolean;
+begin
+  F := GetTempDir + '/np_fsw_nd' + IntToStr(platform_getpid) + '.txt';
+  WriteFileText(F, 'x');
+  try
+    W := Watch;
+    Raised := False;
+    try
+      W.AddTree(F);
+    except
+      on E: EArgumentError do
+        Raised := True;
+    end;
+    Check(Raised, 'AddTree on file raises');
+    W.Close;
+  finally
+    DeleteFile(F);
+  end;
+end;
+
 {$ELSE}
 
 procedure TestSkipHost;
@@ -156,9 +212,9 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   GUnderWine := RunningUnderWine;
   if GUnderWine then
-    WriteLn('fs.watch L2: host=wine; create/multi may soft')
+    WriteLn('fs.watch L2: host=wine; create/multi/AddTree may soft')
   else
-    WriteLn('fs.watch L2: host=real-windows; create/multi hard');
+    WriteLn('fs.watch L2: host=real-windows; create/multi/AddTree hard');
 {$ENDIF}
   T := TTestSuite.Create('fs.watch L2 wine-runtime-smoke');
 {$IFDEF NEXTPAS_WINDOWS}
@@ -166,6 +222,8 @@ begin
   T.Test('poll timeout', @TestWatchPollTimeout);
   T.Test('create event', @TestWatchCreateEvent);
   T.Test('two-dir multi-path', @TestWatchTwoDirMultiPath);
+  T.Test('AddTree nested create', @TestWatchAddTreeNested);
+  T.Test('AddTree not dir', @TestWatchAddTreeNotDir);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}
