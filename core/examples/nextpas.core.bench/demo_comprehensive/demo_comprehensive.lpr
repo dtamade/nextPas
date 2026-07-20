@@ -4,7 +4,6 @@ program demo_comprehensive;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.xlang,

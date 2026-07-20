@@ -4,7 +4,6 @@ program demo_xlang;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.bench.base,
   nextpas.core.bench.xlang;
 

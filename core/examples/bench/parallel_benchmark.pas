@@ -9,10 +9,10 @@ program bench_parallel_example;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.time.base,
-  nextpas.core.atomic.types;
+  nextpas.core.atomic.types,
+  nextpas.core.text.format;
 
 {*
  * 共享计数器（用于演示原子操作）
@@ -53,13 +53,13 @@ begin
   begin
     SetupAtomicCounter;
 
-    LResults := TBenchSuite.Create(Format('Scalability/T=%d', [LThreadCounts[I]]))
+    LResults := TBenchSuite.Create(TextFormat('Scalability/T=%d', [LThreadCounts[I]]))
       .SetMinDuration(TDuration.FromSeconds(2))
       .SetMinSamples(20)
       .AddParallel('AtomicIncrement', @BenchAtomicIncrement, LThreadCounts[I])
       .Run;
 
-    WriteLn(Format('  Threads=%d: %.2f ns/op',
+    WriteLn(TextFormat('  Threads=%d: %.2f ns/op',
       [LThreadCounts[I], LResults.GetByName('AtomicIncrement').NsPerOp]));
   end;
 
@@ -87,9 +87,9 @@ begin
 
   { 验证最终值 }
   LExpectedValue := LResults.GetByName('AtomicIncrement').Iterations;
-  WriteLn(Format('  Expected iterations: %d', [LExpectedValue]));
-  WriteLn(Format('  Actual counter value: %d', [GAtomicCounter.Load]));
-  WriteLn(Format('  Thread safe: %s',
+  WriteLn(TextFormat('  Expected iterations: %d', [LExpectedValue]));
+  WriteLn(TextFormat('  Actual counter value: %d', [GAtomicCounter.Load]));
+  WriteLn(TextFormat('  Thread safe: %s',
     [BoolToStr(GAtomicCounter.Load = LExpectedValue, 'YES', 'NO')]));
   WriteLn;
 end;

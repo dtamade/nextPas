@@ -4,7 +4,6 @@ program demo_memtrack;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.bench.memtrack;
 
 var

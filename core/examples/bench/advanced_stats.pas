@@ -9,9 +9,10 @@ program bench_advanced_stats;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.text.format,
+  nextpas.core.bench.base;
 
 {*
  * 简单基准函数
@@ -24,8 +25,7 @@ begin
   LSum := 0;
   for I := 1 to 1000 do
     Inc(LSum, I);
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*
@@ -46,16 +46,16 @@ begin
 
   LResult := LResults.GetByName('IntegerSum/1000');
 
-  WriteLn(Format('  Name: %s', [LResult.Name]));
-  WriteLn(Format('  Iterations: %d', [LResult.Iterations]));
-  WriteLn(Format('  NsPerOp: %.2f', [LResult.NsPerOp]));
-  WriteLn(Format('  OpsPerSec: %.2f', [LResult.OpsPerSec]));
-  WriteLn(Format('  StdDev: %.2f', [LResult.StdDev]));
-  WriteLn(Format('  Median: %.2f', [LResult.Median]));
-  WriteLn(Format('  P95: %.2f', [LResult.P95]));
-  WriteLn(Format('  P99: %.2f', [LResult.P99]));
-  WriteLn(Format('  SampleCount: %d', [LResult.SampleCount]));
-  WriteLn(Format('  Outliers: %d', [LResult.Outliers]));
+  WriteLn(TextFormat('  Name: %s', [LResult.Name]));
+  WriteLn(TextFormat('  Iterations: %d', [LResult.Iterations]));
+  WriteLn(TextFormat('  NsPerOp: %.2f', [LResult.NsPerOp]));
+  WriteLn(TextFormat('  OpsPerSec: %.2f', [LResult.OpsPerSec]));
+  WriteLn(TextFormat('  StdDev: %.2f', [LResult.StdDev]));
+  WriteLn(TextFormat('  Median: %.2f', [LResult.Median]));
+  WriteLn(TextFormat('  P95: %.2f', [LResult.P95]));
+  WriteLn(TextFormat('  P99: %.2f', [LResult.P99]));
+  WriteLn(TextFormat('  SampleCount: %d', [LResult.SampleCount]));
+  WriteLn(TextFormat('  Outliers: %d', [LResult.Outliers]));
   WriteLn;
 end;
 
