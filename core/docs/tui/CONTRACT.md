@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.20
+**版本**：1.21
 
 ---
 
@@ -196,6 +196,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.21 | Phase B 收尾：B3 停止晋升；Maintenance Idle | Claude |
 | 2026-07-20 | 1.20 | Phase B1：scrollview+modal 晋升 ext；TIER/WIDGET_CATALOG 同步 | Claude |
 | 2026-07-20 | 1.19 | 权威 ROADMAP 完整开发地图（Done 清单 + Phase A–F） | Claude |
 | 2026-07-20 | 1.18 | M1 Maintenance：SC26 keybind + SC27 frame budget；reject scrollview/modal；C8 | Claude |

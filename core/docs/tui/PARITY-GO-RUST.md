@@ -1,18 +1,16 @@
 # tui × Go / Rust 对标纲领（Wave Q）
 
-**状态**: Maintenance（2026-07-20）— **完整阶段图见 [ROADMAP.md](ROADMAP.md)**
+**状态**: **Maintenance Idle**（2026-07-20）— 完整阶段图见 [ROADMAP.md](ROADMAP.md)
 **Owner**: tui lane
 **活入口**: [ROADMAP.md](ROADMAP.md) · [SCORECARD.md](SCORECARD.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRACT.md](CONTRACT.md)
 
 原则：对标的是 **stdlib / 生产级 TUI 库的质量与可证测量**，不是 widget 数量或营销 ns。
 
-### SC 冻结策略（Maintenance）
+### SC 冻结策略（Maintenance Idle）
 
-- 默认 **不** 新增 SC 行，除非满足其一：
-  1. 新出现可证失败模式（回归 bug）
-  2. [ROADMAP](ROADMAP.md) 质量维度中仍有未覆盖缺口
-- Q1–Q15 + M1 已覆盖主维度；**禁止**无 ROADMAP 阶段号的开放 Q 波
-- 下一开发阶段是 **Phase B**（scrollview/modal → ext），不是 SC28
+- 默认 **不** 新增 SC 行，除非：可证失败模式，或 ROADMAP 维度缺口
+- Q1–Q15 + M1 + Phase B **完成**；**禁止**开放 Q 波
+- 默认只接：回归 / 泄漏 / 平台绿 / **已批准**单点晋升（见 ROADMAP B3 候选表）
 
 ---
 
@@ -94,8 +92,9 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **Done** (`main@3eb99d877`+) |
 | Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **Done** (`main@17b18c4c8`+) |
 | M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **Done** (`main@c06f621a8`+) |
-| 下一阶段 | **Phase B1–B2 进行中**：scrollview+modal → ext | 本波 |
-| 可选 | Truecolor DA / 完整 crate 对照 / Windows 真 console | ROADMAP Phase C/D；不阻塞 Done |
+| Phase B | scrollview+modal → ext；B3 停止再晋升 | **Done**（B1 `main@d0009c00f`+） |
+| 当前 | **Maintenance Idle**（见 ROADMAP） | Active |
+| 可选 | Truecolor DA / crate / Windows console；单点晋升 dialog/split/select | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）
 
