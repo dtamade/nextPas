@@ -18,8 +18,8 @@ implementation
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.socket;
+  nextpas.core.platform.socket,
+  nextpas.core.platform.socket.base;
 
 type
   TUdpSocket = class(TInterfacedObject, IUdpSocket, IUdpSocketRuntime)
@@ -59,29 +59,28 @@ end;
 
 destructor TUdpSocket.Destroy;
 begin
-  if not FClosed then
-    platform_socket_close(FSocket);
+  Close;
   inherited;
 end;
 
 procedure TUdpSocket.EnsureOpen(const AOperation: string);
 begin
   if FClosed then
-    raise ENetworkError.Create('udp socket ' + AOperation + ' after close');
+    raise ENetworkError.Create('udp ' + AOperation + ' after close');
 end;
 
 function TUdpSocket.SendTo(const ABuf; const ACount: SizeUInt; const AAddr: TNetAddress): SizeUInt;
 var
-  LSa: sockaddr_in;
-  LSaLen: Int32;
+  LSa: TPlatformSockAddr;
   LSent: Int32;
   LResult: Int32;
 begin
   EnsureOpen('sendto');
-  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port, LSa, LSaLen) <> 0 then
+  if nextpas.core.platform.socket.platform_sockaddr_ipv4(AAddr.Port,
+    platform_ipv4_parse(AAddr.IP), LSa) <> 0 then
     raise ENetworkError.Create('udp sendto: invalid address');
   LResult := platform_socket_sendto(FSocket, @ABuf, Int32(ACount), 0,
-    @LSa, LSaLen, LSent);
+    @LSa.Storage[0], Int32(LSa.Len), LSent);
   if LResult <> 0 then
     raise ENetworkError.Create('udp sendto failed (' + IntToStr(LResult) + ')');
   Result := SizeUInt(LSent);
@@ -89,21 +88,23 @@ end;
 
 function TUdpSocket.RecvFrom(var ABuf; const ACount: SizeUInt; out AAddr: TNetAddress): SizeUInt;
 var
-  LSa: sockaddr_in;
-  LSaLen: socklen_t;
+  LSa: TPlatformSockAddr;
+  LSaLen: Int32;
   LRecvd: Int32;
   LResult: Int32;
   LIP: UInt32;
   LPort: UInt16;
 begin
   EnsureOpen('recvfrom');
-  LSaLen := SizeOf(LSa);
+  LSa.Clear;
+  LSaLen := SizeOf(LSa.Storage);
   LResult := platform_socket_recvfrom(FSocket, @ABuf, Int32(ACount), 0,
-    @LSa, @LSaLen, LRecvd);
+    @LSa.Storage[0], @LSaLen, LRecvd);
   if LResult <> 0 then
     raise ENetworkError.Create('udp recvfrom failed (' + IntToStr(LResult) + ')');
-  platform_sockaddr_to_ipv4(LSa, LIP, LPort);
-  AAddr.IP := platform_ipv4_to_string(LIP);
+  LSa.Len := UInt32(LSaLen);
+  platform_sockaddr_ipv4_extract(LSa, LIP, LPort);
+  AAddr.IP := platform_ipv4_to_string(platform_ntohl(LIP));
   AAddr.Port := LPort;
   AAddr.IsIPv6 := False;
   Result := SizeUInt(LRecvd);
@@ -139,11 +140,13 @@ end;
 function NetUdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;
 var
   LSock: TPlatformSocket;
-  LSa: sockaddr_in;
+  LSa: TPlatformSockAddr;
   LSaLen: Int32;
   LOne: Int32;
   LResult: Int32;
   LLocal: TNetAddress;
+  LIP: UInt32;
+  LPort: UInt16;
 begin
   LLocal := TNetAddress.Create(AAddr, APort);
   LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM, 0, LSock);
@@ -151,20 +154,26 @@ begin
     raise ENetworkError.Create('udp bind: socket create failed');
   LOne := 1;
   platform_socket_setsockopt(LSock, PLATFORM_SOL_SOCKET, PLATFORM_SO_REUSEADDR, @LOne, SizeOf(LOne));
-  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr), APort, LSa, LSaLen) <> 0 then
+  if nextpas.core.platform.socket.platform_sockaddr_ipv4(APort,
+    platform_ipv4_parse(AAddr), LSa) <> 0 then
   begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('udp bind: invalid address');
   end;
-  LResult := platform_socket_bind(LSock, @LSa, LSaLen);
+  LResult := platform_socket_bind(LSock, @LSa.Storage[0], Int32(LSa.Len));
   if LResult <> 0 then
   begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('udp bind failed');
   end;
-  LSaLen := SizeOf(LSa);
-  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
-    LLocal.Port := platform_htons(LSa.sin_port);
+  LSa.Clear;
+  LSaLen := SizeOf(LSa.Storage);
+  if platform_socket_getsockname(LSock, @LSa.Storage[0], @LSaLen) = 0 then
+  begin
+    LSa.Len := UInt32(LSaLen);
+    platform_sockaddr_ipv4_extract(LSa, LIP, LPort);
+    LLocal.Port := LPort;
+  end;
   Result := TUdpSocket.Create(LSock, LLocal);
 end;
 
