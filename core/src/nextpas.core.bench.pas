@@ -294,6 +294,13 @@ type
     function GetEnvironment: TBenchEnvironment;
   end;
 
+{** 防优化 sink — re-export base（对标 criterion black_box） }
+procedure BenchBlackBoxInt64(AValue: Int64); inline;
+procedure BenchBlackBoxPtr(APtr: Pointer); inline;
+procedure BenchBlackBoxBytes(const AData; ALen: Integer); inline;
+function BenchBlackBoxSink: PtrUInt; inline;
+procedure BenchBlackBoxReset; inline;
+
 implementation
 
 uses
@@ -3240,6 +3247,31 @@ end;
 function TBenchResults.GetEnvironment: TBenchEnvironment;
 begin
   Result := FEnvironment;
+end;
+
+procedure BenchBlackBoxInt64(AValue: Int64);
+begin
+  nextpas.core.bench.base.BenchBlackBoxInt64(AValue);
+end;
+
+procedure BenchBlackBoxPtr(APtr: Pointer);
+begin
+  nextpas.core.bench.base.BenchBlackBoxPtr(APtr);
+end;
+
+procedure BenchBlackBoxBytes(const AData; ALen: Integer);
+begin
+  nextpas.core.bench.base.BenchBlackBoxBytes(AData, ALen);
+end;
+
+function BenchBlackBoxSink: PtrUInt;
+begin
+  Result := nextpas.core.bench.base.BenchBlackBoxSink;
+end;
+
+procedure BenchBlackBoxReset;
+begin
+  nextpas.core.bench.base.BenchBlackBoxReset;
 end;
 
 end.

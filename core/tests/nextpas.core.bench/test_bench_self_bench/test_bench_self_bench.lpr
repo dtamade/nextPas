@@ -74,6 +74,30 @@ begin
   CheckNear(42.0, LData[0], 1e-10, 'Single element preserved');
 end;
 
+procedure TestBenchBlackBox_SinkChanges;
+var
+  LSum: Int64;
+  LI: Integer;
+  LBefore, LAfter: PtrUInt;
+  LBuf: array[0..7] of Byte;
+begin
+  BenchBlackBoxReset;
+  LBefore := BenchBlackBoxSink;
+  LSum := 0;
+  for LI := 1 to 1000 do
+    Inc(LSum, LI);
+  BenchBlackBoxInt64(LSum);
+  LAfter := BenchBlackBoxSink;
+  Check(LAfter <> LBefore, 'BenchBlackBoxInt64 must change sink');
+  BenchBlackBoxPtr(@LSum);
+  Check(BenchBlackBoxSink <> LAfter, 'BenchBlackBoxPtr must change sink');
+  LBuf[0] := 1;
+  LBuf[1] := 2;
+  LAfter := BenchBlackBoxSink;
+  BenchBlackBoxBytes(LBuf[0], Length(LBuf));
+  Check(BenchBlackBoxSink <> LAfter, 'BenchBlackBoxBytes must change sink');
+end;
+
 procedure TestComputeStats_Reasonable;
 var
   LData: TDoubleArray;
@@ -493,6 +517,7 @@ begin
   T.Test('SortDoubleArray_Correctness', @TestSortDoubleArray_Correctness);
   T.Test('SortDoubleArray_Empty', @TestSortDoubleArray_Empty);
   T.Test('SortDoubleArray_Single', @TestSortDoubleArray_Single);
+  T.Test('BenchBlackBox_SinkChanges', @TestBenchBlackBox_SinkChanges);
   T.Test('ComputeStats_Reasonable', @TestComputeStats_Reasonable);
   T.Test('ComputeStats_Constant', @TestComputeStats_Constant);
 
