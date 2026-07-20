@@ -22,7 +22,8 @@
 | **owner + steal 调度** | `TWorkStealingDeque`（`thread.pool.worksteal`） | `deque_lf` 是 **spin-lock**，名字误导 |
 
 **生命周期（T1 容器统一）**：**Close → join producers/waiters → Free**。  
-`Destroy` 的 Close+drain **不能**替代 join。教学示例：`core/examples/nextpas.core.lockfree/t1_close_join_free/`（Channel）。
+`Destroy` 的 Close+drain **不能**替代 join。  
+教学示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t2_bag_close_join_free/`（H3-2 Bag）。
 
 **SegQueue 与 MPSC 一样**：Close 后停止新入队方 → join → Free；段回收依赖 EBR，勿在活跃生产者上 Free。
 

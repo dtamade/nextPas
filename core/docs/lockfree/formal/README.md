@@ -1,8 +1,18 @@
 # Lockfree Formal Models（TLA+）
 
-> **角色**: R8 研究证据入口 · **非** T1 默认验证门
-> **诚实状态**: [`../r8-research-status.md`](../r8-research-status.md)
+> **角色**: R8 研究证据入口 · **非** T1 默认验证门  
+> **诚实状态**: [`../r8-research-status.md`](../r8-research-status.md)  
 > **契约**: formal 加深 **不** 改变 T1 运行时语义（见 [`../CONTRACT.md`](../CONTRACT.md) §6.1）
+
+### 能声称 / 不能声称（P5）
+
+| 能 | 不能 |
+|----|------|
+| 小状态空间上的 **抽象模型** 与 Pascal formal 套件对照 | 「已证明生产实现无 bug」或替换 `verify-t1` |
+| 在 **有 TLC / 有硬件** 时跑 `verify-r8` 作研究证据 | 无环境时把 formal 当默认 CI 绿门槛 |
+| 与 SPSC/MPMC/Channel/Stack **行为意图** 对齐的讨论材料 | 声称覆盖全部 T2 树/缓存/CRDT |
+
+**门禁**：生产合并默认只要求 `verify-t1`（+ 相关 focused）。`verify-r8` **opt-in**，失败不自动阻塞 preferred close-out。
 
 ---
 

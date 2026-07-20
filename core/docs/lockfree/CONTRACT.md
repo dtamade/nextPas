@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.lockfree*.pas`（约 100+ 源文件；默认门面仅 T1）
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-17
-**版本**：2.7
+**最后更新**：2026-07-20
+**版本**：2.8
 
 ---
 
@@ -21,13 +21,18 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 | 单元 / 名称 | 看起来像 | 实际 progress | 备注 |
 |-------------|---------|---------------|------|
-| `lockfree.deque_lf` | lock-free deque | **spin-lock** concurrent deque | 历史名；真 lock-free deque 见 `lockfree.deque`（`TWorkStealingDeque`，单 owner） |
+| `lockfree.deque_lf` / **`TLockFreeDeque`** | lock-free deque | **spin-lock** concurrent deque | 历史名 `lf` + 类型前缀 `TLockFree*`；真 LF deque → `lockfree.deque` / `TWorkStealingDeque` |
 | `TShardedHashMap` / `TConcurrentHashMap` | 可能被当成 lock-free map | **per-shard spin lock** | T1 门面诚实别名，同一实现 |
-| `lockfree.radix` / 多数 tree（`btree`/`rbtree`/`treap`/`skiplist*`/`scapegoat`/`bplus`/`graph`/`dag`…） | 在 `lockfree.*` 命名空间 | **lock-based** 或混合（文档 per unit） | **不进**默认门面；直接 import |
+| `lockfree.hashtable` / **`TLockFreeHashTable*`** | lock-free table | **LF 读路径 + writer spinlock / grow** | 名字偏 LF；写路径有锁 |
+| `lockfree.dag` / `graph` / `adjmap` | 无锁图 | **per-node / per-vertex locks** | 头注释已写 NOT lock-free |
+| `lockfree.skiplist*` / `btree`/`rbtree`/`treap`/`scapegoat`/`bplus`/`radix`/`trie*` | 在 `lockfree.*` 命名空间 | **锁或 RW 锁** | **不进**默认门面；直接 import |
 | `lockfree.lru` / `lru_cache` / `ttl_cache` / `arccache` / `lfu` | 无锁缓存 | **分片锁 / 自旋锁** | `lru_cache` 另属 AnsiString 例外 |
-| `lockfree.mutex` / `rwlock` / `semaphore` / `stampedlock` / `condvar` | 可能被当成“无锁同步原语” | **锁或 CAS 自旋互斥** | 名称是 concurrent helper，不是 container lock-free 声明 |
+| `lockfree.mutex` / `rwlock` / `semaphore` / `stampedlock` / `condvar` / `phaser` | 无锁同步原语 | **锁或 CAS 自旋** | concurrent helper，非 container LF 声明 |
+| `lockfree.cuckooset` / `hashset` / `robinhood` | 无锁 set/map | **锁序列化** | 见 unit 头 |
 | `lockfree.hashmap.rtm` / `hashmap.numa` | 生产默认 | **T3 研究扩展** | 直接 import；不进 T1 门面 |
 | `collections.concurrent.hashmap.TConcurrentHashMap` | 与 lockfree 同名 | **另一套实现** | 勿与 lockfree 门面别名混淆 |
+
+**规则**：单元落在 `lockfree.*` 或类型名含 `LockFree` / `Concurrent` **≠** progress 为 lock-free。以本表 + README Progress matrix + 单元 `@concurrency` / 头注释为准。
 
 - 部分 AnsiString 特化单元允许 managed `AnsiString` 载荷；不要求 `IsManagedType` 泛型守卫（表见 §0.1）。
 - Progress 总表以 [`README.md`](README.md) Progress-guarantee matrix 为准；冲突时以 **CONTRACT + README** 覆盖单元头注释中的“无锁”口语。

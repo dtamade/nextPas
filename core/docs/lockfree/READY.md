@@ -22,7 +22,8 @@ H3 close-out remains the production baseline; Q 线加深质量与可导航规�
 2. **消费者**：H3 `async.loop`→mpsc、`thread.pool.worksteal`→deque、H4-1 `thread.pool`→SegQueue；`verify-t1` / `verify-h3-consumers` 绿（V1）。
 3. **边界**：H3-2 仅 bag/multimap；T2 不进默认门面；不 invent R9；I1 inventory 诚实抽检 + C1 跨模块 legacy 再扫 0。
 
-选型导航：[`selection-guide.md`](selection-guide.md)（含「任务投递」对照）。生命周期示例：`core/examples/nextpas.core.lockfree/t1_close_join_free/`。
+选型导航：[`selection-guide.md`](selection-guide.md)（含「任务投递」对照）。  
+生命周期示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t2_bag_close_join_free/`（Bag）。
 
 **Maintenance land 锚点（main，代表）**：T2 preferred 长尾 `f773b3a1d` · M6 `adba7a9f6` · M7 `17c6d15f4` · V1 `1c5395b88` · I1/C1 `87ae3ebac`。
 

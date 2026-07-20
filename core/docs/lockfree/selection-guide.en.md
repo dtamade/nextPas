@@ -21,7 +21,8 @@ Shortest map when handing work to other threads (details still in the decision t
 | **Owner + steal scheduling** | `TWorkStealingDeque` (`thread.pool.worksteal`) | `deque_lf` is **spin-lock** (name is misleading) |
 
 **Lifecycle (T1 containers):** **Close → join producers/waiters → Free**.  
-`Destroy` Close+drain does **not** replace join. Teaching example: `core/examples/nextpas.core.lockfree/t1_close_join_free/` (Channel). SegQueue workers: `t1_segqueue_workers/`.
+`Destroy` Close+drain does **not** replace join.  
+Teaching: `t1_close_join_free/` (Channel), `t1_segqueue_workers/` (SegQueue), `t2_bag_close_join_free/` (H3-2 Bag).
 
 **SegQueue and MPSC:** stop enqueuers after Close → join → Free; segment reclamation uses EBR — do not Free while producers are live.
 
