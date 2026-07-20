@@ -12,53 +12,6 @@ uses
 var
   T: TTestSuite;
 
-type
-  TSignalOnReleaseMutex = class(TInterfacedObject, ILock, IMutex)
-  private
-    FCondVar: ICondVar;
-    FReleased: Boolean;
-  public
-    constructor Create(const ACondVar: ICondVar);
-    procedure Acquire;
-    function TryAcquire: Boolean;
-    procedure Release;
-    function Lock: ILockGuard;
-    function NativeHandle: Pointer;
-    property Released: Boolean read FReleased;
-  end;
-
-constructor TSignalOnReleaseMutex.Create(const ACondVar: ICondVar);
-begin
-  inherited Create;
-  FCondVar := ACondVar;
-  FReleased := False;
-end;
-
-procedure TSignalOnReleaseMutex.Acquire;
-begin
-end;
-
-function TSignalOnReleaseMutex.TryAcquire: Boolean;
-begin
-  Result := True;
-end;
-
-procedure TSignalOnReleaseMutex.Release;
-begin
-  FReleased := True;
-  FCondVar.Signal;
-end;
-
-function TSignalOnReleaseMutex.Lock: ILockGuard;
-begin
-  Result := nil;
-end;
-
-function TSignalOnReleaseMutex.NativeHandle: Pointer;
-begin
-  Result := nil;
-end;
-
 procedure TestMutexBasic;
 var
   LM: IMutex;
@@ -226,7 +179,7 @@ end;
 procedure TestCondVarDoesNotLoseSignalDuringRelease;
 var
   LCond: ICondVar;
-  LMutex: IMutex;
+  LMutex: INativeMutex;
 begin
   LCond := CondVar;
   LMutex := Mutex;
@@ -472,7 +425,7 @@ end;
 procedure TestCondVarBroadcast;
 var
   LCond: ICondVar;
-  LMutex: IMutex;
+  LMutex: INativeMutex;
 begin
   LCond := CondVar;
   LMutex := Mutex;
@@ -523,24 +476,28 @@ begin
   Check(LRaised, 'Add(negative) must raise');
 end;
 
-procedure TestCondVarRejectsFutexMutex;
+procedure TestCondVarWithNativeMutex;
 var
   LCond: ICondVar;
-  LMutex: IMutex;
-  LRaised: Boolean;
+  LMutex: INativeMutex;
 begin
   LCond := CondVar;
-  LMutex := FutexMutex;
+  LMutex := Mutex;
   LMutex.Acquire;
-  LRaised := False;
-  try
-    LCond.Wait(LMutex);
-  except
-    on E: ENextPasError do
-      LRaised := True;
-  end;
+  Check(not LCond.WaitTimeout(LMutex, 1000000), 'native mutex timeout without signal');
   LMutex.Release;
-  Check(LRaised, 'CondVar must reject FutexMutex pairing');
+end;
+
+procedure TestFutexMutexIsNotNativeMutex;
+var
+  LMutex: IMutex;
+  LNative: INativeMutex;
+begin
+  LMutex := FutexMutex;
+  Check(not Supports(LMutex, INativeMutex, LNative),
+    'FutexMutex must not implement INativeMutex (type-level CondVar isolation)');
+  Check(Supports(Mutex, INativeMutex, LNative),
+    'Mutex factory must implement INativeMutex');
 end;
 
 procedure TestSemaphoreNegativeInitial;
@@ -642,7 +599,8 @@ begin
   T.Test('WaitGroup add non-positive', @TestWaitGroupAddNonPositive);
   T.Test('CondVar broadcast', @TestCondVarBroadcast);
   T.Test('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
-  T.Test('CondVar rejects FutexMutex', @TestCondVarRejectsFutexMutex);
+  T.Test('CondVar with INativeMutex', @TestCondVarWithNativeMutex);
+  T.Test('FutexMutex is not INativeMutex', @TestFutexMutexIsNotNativeMutex);
 
   T.Test('Once basic', @TestOnceBasic);
   T.Test('Once not done before call', @TestOnceDoneBeforeCall);

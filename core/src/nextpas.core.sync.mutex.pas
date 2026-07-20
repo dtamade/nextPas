@@ -13,7 +13,7 @@ type
    * @desc 标准互斥锁，基于 platform pthread_mutex (ERRORCHECK)
    * @note 非递归，同一线程重入会返回错误
    *}
-  TMutex = class(TInterfacedObject, ILock, IMutex)
+  TMutex = class(TInterfacedObject, ILock, IMutex, INativeMutex)
   public
     FHandle: TPlatformMutex;
   public
@@ -29,6 +29,7 @@ type
   {**
    * @desc 高性能互斥锁，基于 futex 三态协议
    * @note 快速路径单次 CAS，慢速路径 futex 阻塞
+   * @note 不实现 INativeMutex — 不可与 ICondVar 配对
    *}
   TFutexMutex = class(TInterfacedObject, ILock, IMutex)
   private
@@ -39,7 +40,6 @@ type
     function TryAcquire: Boolean;
     procedure Release;
     function Lock: ILockGuard;
-    function NativeHandle: Pointer;
   end;
 
 implementation
@@ -190,11 +190,6 @@ function TFutexMutex.Lock: ILockGuard;
 begin
   Acquire;
   Result := TLockGuardImpl.Create(Self);
-end;
-
-function TFutexMutex.NativeHandle: Pointer;
-begin
-  Result := @FState;
 end;
 
 end.
