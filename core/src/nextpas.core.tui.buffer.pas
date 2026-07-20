@@ -188,6 +188,7 @@ procedure TBuffer.FreeOwnedContent;
 begin
   if FAllocator <> nil then
   begin
+    { Keep IAllocator.FreeMem so inject/tracking observes free. }
     if FContentPtr <> nil then
     begin
       FAllocator.FreeMem(FContentPtr);
@@ -641,7 +642,7 @@ begin
     end;
 
   if (FAllocator <> nil) and (LOldPtr <> nil) then
-    FAllocator.FreeMem(LOldPtr);
+    FAllocator.FreeMem(LOldPtr); { inject path: observe Free via IAllocator }
 
   NormalizeWideGlyphBoundaries;
   FDirtyRows := QWord(-1);
