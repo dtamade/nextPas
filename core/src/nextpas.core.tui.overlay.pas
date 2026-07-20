@@ -136,6 +136,8 @@ procedure TOverlayBuffer.FreeOwnedStorage;
 begin
   if FAllocator <> nil then
   begin
+    { Keep IAllocator.FreeMem: inject/tracking must observe free (FreeMemOf may
+      shortcut DefaultHeap sized free and skip plugin Free). }
     if FCellsPtr <> nil then
     begin
       FAllocator.FreeMem(FCellsPtr);

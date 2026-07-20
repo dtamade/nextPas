@@ -81,7 +81,8 @@ function IniStringify(const AFile: TIniFile): string; inline;
 implementation
 
 uses
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 { TIniFile }
 
@@ -115,7 +116,8 @@ begin
     ASection.Entries[I].Value := '';
   end;
   if ASection.Entries <> nil then
-    FAllocator.FreeMem(Pointer(ASection.Entries));
+    FreeMemOf(FAllocator, Pointer(ASection.Entries),
+      SizeUInt(ASection.EntryCap) * SizeOf(TIniEntry));
   ASection.Entries := nil;
   ASection.EntryCount := 0;
   ASection.EntryCap := 0;
@@ -129,7 +131,8 @@ begin
   for I := 0 to FSectionCount - 1 do
     ClearSection(FSections[I]);
   if FSections <> nil then
-    FAllocator.FreeMem(Pointer(FSections));
+    FreeMemOf(FAllocator, Pointer(FSections),
+      SizeUInt(FSectionCap) * SizeOf(TIniSection));
   FSections := nil;
   FSectionCount := 0;
   FSectionCap := 0;
@@ -150,8 +153,8 @@ begin
     LNewCap := FSectionCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.ReallocMem(Pointer(FSections),
-    SizeUInt(LNewCap) * SizeOf(TIniSection));
+  LNewPtr := ReallocMemOf(FAllocator, Pointer(FSections),
+    SizeUInt(LOldCap) * SizeOf(TIniSection), SizeUInt(LNewCap) * SizeOf(TIniSection));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TIniFile: out of memory');
   FSections := PTIniSection(LNewPtr);
@@ -174,8 +177,8 @@ begin
     LNewCap := ASection.EntryCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.ReallocMem(Pointer(ASection.Entries),
-    SizeUInt(LNewCap) * SizeOf(TIniEntry));
+  LNewPtr := ReallocMemOf(FAllocator, Pointer(ASection.Entries),
+    SizeUInt(LOldCap) * SizeOf(TIniEntry), SizeUInt(LNewCap) * SizeOf(TIniEntry));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TIniFile: out of memory');
   ASection.Entries := PTIniEntry(LNewPtr);
