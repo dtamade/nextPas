@@ -2,9 +2,12 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；F **CLOSED**；G **Steady**；**H0 Maintenance** — [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SURFACE](FACADES-SURFACE.md) · [growable KEEP](GROWABLE-KEEP-2026-07-20.md) · [host-runtime CI](MEM-HOST-RUNTIME-CI.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
-
-默认只：`lane-focused LANE=mem` · 回归 · 命名 D3 · GHA `mem.host_runtime` 有红再修。
+> **Lane 状态：Maintenance Idle（2026-07-20 · H∞）**  
+> A–C **CLOSED** · D **Steady** · E **Steady+** · F **CLOSED** · G **Steady** · H **Idle**  
+> FreeMemOf 战役已关；SCORECARD RELEASE=1 + soak 3/3 已复跑；Darwin/Windows `mem.host_runtime` 真机绿。  
+> 日常：只响应回归、命名 D3、GHA `mem.host_runtime` 红。  
+> **不**默认排期：Phase 29 allocator、全仓 FreeMem 扫、无授权 owned-string size 表。  
+> 路线图：[ROADMAP](ROADMAP.md) · 决策树：[API-GUIDE](API-GUIDE.md) · 性能：[SCORECARD](SCORECARD.md) · 真机 CI：[MEM-HOST-RUNTIME-CI](MEM-HOST-RUNTIME-CI.md)
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash

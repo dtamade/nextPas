@@ -111,3 +111,10 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 |-----|------------------|------|
 | **test-macos** | **PASS** | matrix **10/10**；job 仍红于 kqueue |
 | **test-windows-runtime** | **PASS** | matrix **25/25 全绿** |
+
+### 5.7 Maintenance Idle 声明日（run **29731360433** · 2026-07-20）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | matrix **10/10**；job 仍红于 kqueue |
+| **test-windows-runtime** | **PASS** | matrix **26/26 全绿** |
