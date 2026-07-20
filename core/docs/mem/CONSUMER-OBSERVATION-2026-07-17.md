@@ -1,8 +1,8 @@
 # mem Consumer 只读观测（unsized free / 插件面）
 
-**日期**: 2026-07-17
+**日期**: 2026-07-17 · **G7 重扫**: 2026-07-20
 **范围**: `core/src/*.pas`，**排除** `nextpas.core.mem*`
-**动作**: **只读 findings**；不改 consumer 生产代码
+**动作**: **只读 findings**；不改 consumer 生产代码（G4 样板除外，见 §6.2）
 **非目标**: 全仓机械 `FreeMem` 替换（ROADMAP D3 / 明确不做）
 **前序**: [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md)（FIX CLOSED）
 
@@ -125,9 +125,9 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | CO-002 | P2 | simd 表/缓冲 unsized free | simd | **CLOSED 2026-07-19**（mem lane D3）：avx2/sse2 tan scratch、image FlipVertical、imageproc FreeImage、simd.alloc raw free、memutils AlignedFree TryBlockSize |
 | CO-003 | P2 | tls 缓冲 unsized free | tls | **CLOSED E4-c 2026-07-19**（产品 GetMem 路径；见 §6.1 WAIVE） |
 | CO-004 | P2 | iocp / async fileio unsized | io | **CLOSED E4 2026-07-19** |
-| CO-005 | info | FreeMemOf 采用面仍窄 | collections / 文本 | 样板已在 swiss；扩展按触达 |
+| CO-005 | info | FreeMemOf 采用面 | collections / 文本 | **扩展中**：swiss + text/bytes.builder + **G4 json/toml** |
 | CO-006 | P2 | async buffer/channel unsized | async | **CLOSED E4-b 2026-07-19** |
-| CO-007 | info | json/toml/node 插件 free 多 | 各模块 | 设计内；热则 Arena 或 FreeMemOf |
+| CO-007 | info | json/toml/node 插件 free | 各模块 | json/toml **已知 size → FreeMemOf（G4）**；owned 字符串 / node 仍按触达 |
 | CO-008 | — | DefaultAllocator 默认 inject | — | **正确**；勿改热循环为虚调用 |
 
 ### 6.1 残余矩阵（E4 关闭时，2026-07-19 重扫）
@@ -142,6 +142,30 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | IAllocator.FreeMem | **设计内** | 五方法冻结；SC9 |
 
 过程式产品主路径 unsized：**无开放 P0/P1**。
+
+### 6.2 FreeMemOf 样板与残余 inject（G7 · 2026-07-20）
+
+**已落地样板（禁止全仓扫，只作模式参考）**:
+
+| 模块 | 路径 |
+|------|------|
+| text.builder | `FreeMemOf` / sized process free |
+| bytes.builder | F4：`FreeMemOf` / `ReallocMemOf` |
+| json.parser | G4：nodes / arena / indices / slots / overflow 表 |
+| toml.parser | G4：nodes / hash / owned 指针表 |
+| collections swiss\* | 既有 FreeMemOf |
+
+**`FAllocator.FreeMem` 非 mem 粗计（2026-07-20，含仍 unsized 的 owned 串）**:
+
+| 模块 | ~命中 | 备注 |
+|------|-------|------|
+| collections.node | 11 | 可选 G4.x；需 collections owner |
+| collections.hashmap（非 swiss） | 4 | |
+| yaml.parser | 3 | |
+| xml / tui / ini / csv | 1–2 | |
+| json / toml | 少量 | 故意：per-string 无 size 旁表 |
+
+**结论**: 无新 P0/P1。下一刀仅 **命名模块** + 已知 size；默认 Steady。
 
 ---
 

@@ -39,7 +39,7 @@
 **仍保留且禁止进门面**：
 
 ```text
-nextpas.core.mem.blockpool.growable   # used by blockpool.sharded; not facade
+nextpas.core.mem.blockpool.growable   # KEEP — blockpool.sharded; 见 GROWABLE-KEEP-2026-07-20.md
 ```
 
 **P-a / P-b 已删除** — 不得复活（见历史清单；guardrails forbid 已删名）。
