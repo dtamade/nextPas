@@ -87,35 +87,21 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 ## 测试入口
 
-```bash
-for t in test_case test_data test_enhance test_grapheme_uax29 \
-         test_normalize test_property test_collate \
-         test_conformance_normalize test_conformance_grapheme \
-         test_conformance_word test_conformance_sentence test_conformance_line \
-         test_conformance_bidi_character test_conformance_bidi          test_conformance_collate test_conformance_case; do
-  make -C core/tests/nextpas.core.text.unicode/$t clean test
-done
-```
-
-Fixture 生成：
+**一键门禁（M1）**：
 
 ```bash
-python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
-  --fixtures-dir core/tests/nextpas.core.text.unicode/data
-python3 core/scripts/gen_unicode_wbp.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_sbp.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_collate.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_eaw.py --version 16.0.0 --output-dir core/src
-python3 core/scripts/gen_unicode_special_casing.py --version 16.0.0 --output-dir core/src
+make -C core/tests/nextpas.core.text.unicode gate
 ```
+
+导航：[ROADMAP.md](ROADMAP.md) · 性能准则：[SCORECARD.md](SCORECARD.md)
+
+Fixture / UCD 升版生成：见 [README.md#ucd-升版一条龙](README.md#ucd-升版一条龙)。
 
 ## 变更记录
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | M1：ROADMAP + SCORECARD + `make gate`；测试入口收敛 |
 | 2026-07-20 | Turkic/locale Case：TCaseLocale + CaseFold T + SpecialCasing tr/az |
 | 2026-07-20 | UAX#9 Bidi 官方双 harness 全绿（Character+Abstract）+ ResolveBidi API |
 | 2026-07-20 | NextLineBreak / SegmentLineBreaks 便利 API；stLineBreak |
