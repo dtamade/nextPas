@@ -19,6 +19,7 @@ var
 
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
+  BenchConnLadderRelativeDir = 'benchmarks/nextpas.core.http/bench_conn_ladder';
   BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
   BenchHeadersRelativeDir = 'benchmarks/nextpas.core.http/bench_headers';
   BenchH1WriterRelativeDir = 'benchmarks/nextpas.core.http/bench_h1writer';
@@ -219,6 +220,12 @@ begin
     'build/projects/nextpas.core.http/bench_server/bench_http_server');
 end;
 
+function ResolveBenchConnLadderBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_conn_ladder/bench_conn_ladder');
+end;
+
 function ResolveBenchRouterBinaryPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -377,6 +384,11 @@ begin
         'nextPas H1 path marker')
     else
       CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
+    { L1: client-observed latency percentiles (nextPas harness only). }
+    CheckContains(AOutput, 'p50_ns=', 'nextPas p50_ns marker');
+    CheckContains(AOutput, 'p99_ns=', 'nextPas p99_ns marker');
+    CheckContains(AOutput, 'mean_ns=', 'nextPas mean_ns marker');
+    CheckContains(AOutput, 'latency_samples=', 'nextPas latency_samples marker');
   end;
   if AImplementation = 'rust_std' then
     CheckContains(AOutput, 'rust_profile=std_only',
@@ -693,7 +705,7 @@ end;
 
 function LoadTextFile(const APath: string): string;
 begin
-  Result := FsReadFileText(APath);
+  Result := ReadFileText(APath);
 end;
 
 function ExtractSourceBlock(const ASource, AStartMarker, AEndMarker,
@@ -733,6 +745,40 @@ begin
     LBenchDir, LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode), 'bench_server smoke exit code: ' + LOutput);
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '32', '2');
+end;
+
+procedure TestBenchConnLadderSmallSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchConnLadderRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchConnLadderRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_conn_ladder build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchConnLadderBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_conn_ladder binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--connections', '100', '--hold-ms', '200', '--backend', 'epoll',
+     '--probe', '1'],
+    LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_conn_ladder smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'operation=http.server.conn_ladder',
+    'bench_conn_ladder operation marker');
+  CheckContains(LOutput, 'target_connections=100',
+    'bench_conn_ladder target connections');
+  CheckContains(LOutput, 'open_ok=100', 'bench_conn_ladder open_ok');
+  CheckContains(LOutput, 'stable=1', 'bench_conn_ladder stable');
+  CheckContains(LOutput, 'backend=epoll', 'bench_conn_ladder backend');
 end;
 
 procedure TestBenchServerUrlPathSmallSmoke;
@@ -5257,6 +5303,7 @@ end;
 begin
   T := TTestSuite.Create('http benchmarks');
   T.Test('bench_server small smoke', @TestBenchServerSmallSmoke);
+  T.Test('bench_conn_ladder 100-conn smoke', @TestBenchConnLadderSmallSmoke);
   T.Test('bench_server url_path small smoke',
     @TestBenchServerUrlPathSmallSmoke);
   T.Test('bench_server rejects invalid workload',

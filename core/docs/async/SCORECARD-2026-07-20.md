@@ -38,6 +38,7 @@
 - [x] Q16 Pool AcquireAsync + AsyncTcpDial + test_net_async_pool
 - [x] Q17 accept/connect smoke + kqueue expand + WINDOWS-NATIVE-ASSESSMENT
 - [x] Q18 async-bench-parity.sh + peer fixtures + SCORECARD 表
+- [x] Q19 localhost dial_ops_per_s + go-dial peer
 
 ## 性能 scorecard（同机 2026-07-20）
 

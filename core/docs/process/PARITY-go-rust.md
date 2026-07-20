@@ -12,7 +12,7 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.6** | R22 + R28：process 主套件迁 `nextpas.core.test` |
+| **质量 Quality** | **9.7** | R30 watch 批内事件队列 + R22/R28 |
 | **规模 Scale (Essential)** | **9.8** | R29 递归 Watch + R23–R25 |
 | **综合** | **9.8** | 能力闭环 + 框架合规 + wine×5 + SCORECARD |
 
@@ -101,7 +101,7 @@
 | test_process_command | **21** cases（原 48 Check 行） | **nextpas.core.test** |
 | test_process_deep / pipe | **27** / **17** | nextpas.core.test |
 | test_fs | **158** | nextpas.core.test |
-| test_fs_watch | **11** | nextpas.core.test（R29 AddTree） |
+| test_fs_watch | **12** | nextpas.core.test（R29 AddTree + R30 burst） |
 | test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 | nextpas.core.test |
 | test_path | **69** | nextpas.core.test |
 | test_os_env | **69** | nextpas.core.test |
@@ -168,3 +168,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | R27 Capture ~1.6ms (~1.3× Go；stdout-only + drain fast-path) |
 | 2026-07-20 | R28 test_process + command 迁 nextpas.core.test；dual-pipe SCORECARD；Quality 9.6 |
 | 2026-07-20 | R29 IFsWatcher.AddTree 递归 + Wd 路径消歧；Scale 9.8；watch 11 |
+| 2026-07-20 | R30 Linux inotify residual queue；burst 不丢；Quality 9.7；watch 12 |

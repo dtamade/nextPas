@@ -13,6 +13,7 @@
 | **Q16** | Pool.AcquireAsync → AsyncTcpDial | Token + idle 校验 | **done** |
 | **Q17** | 平台证据加深 | kqueue accept/connect；Windows native 评估 | **done** |
 | **Q18** | 同机 Go/Rust bench 脚本 | SCORECARD 表；CI 不强制对照 | **done** |
+| **Q19** | localhost dial 吞吐对照 | dial_ops_per_s + go peer | **done** |
 
 ## Q13 细节
 

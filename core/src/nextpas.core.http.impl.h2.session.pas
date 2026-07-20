@@ -140,9 +140,12 @@ type
     procedure ApplyPendingWindowUpdates(const AStream: TH2Stream);
     procedure ApplyAllPendingWindowUpdates;
     function DrainWriteBuffer: Boolean;
+    { Poll path: partial write + would-block (non-blocking socket). }
+    function DrainWriteBufferPoll(out AWouldBlock: Boolean): Boolean;
     function FillReadBufferBlocking: Boolean;
     function FillReadBufferPoll(const AEvents: TPlatformPollEvents;
-      out ANextEvents: TPlatformPollEvents): Boolean;
+      out ANextEvents: TPlatformPollEvents;
+      out AClosed: Boolean): Boolean;
     function ProcessPreface: Boolean;
     function ProcessFrames: Boolean;
     function DecodeNextFrame(out AFrame: TH2Frame; out AConsumed: SizeUInt): Boolean;
@@ -202,6 +205,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.exception,
@@ -832,6 +836,60 @@ begin
   ClearWriteDeadline;
 end;
 
+function TH2ServerSession.DrainWriteBufferPoll(out AWouldBlock: Boolean): Boolean;
+var
+  LRuntime: ITcpStreamRuntime;
+  LWritten: SizeUInt;
+  LRemaining: SizeInt;
+  LRes: TTcpStreamIOResult;
+begin
+  Result := True;
+  AWouldBlock := False;
+  if FWriteBuffer = '' then
+    Exit(True);
+  if not Supports(FConn, ITcpStreamRuntime, LRuntime) then
+  begin
+    Result := DrainWriteBuffer;
+    Exit;
+  end;
+  while FWriteBuffer <> '' do
+  begin
+    ArmWriteDeadline(FOptions.WriteTimeout);
+    LRes := LRuntime.TryWrite(FWriteBuffer[1], SizeUInt(Length(FWriteBuffer)),
+      LWritten);
+    ClearWriteDeadline;
+    case LRes of
+      tsiorOk:
+        begin
+          if LWritten = 0 then
+          begin
+            AWouldBlock := True;
+            Exit(True);
+          end;
+          if LWritten > SizeUInt(Length(FWriteBuffer)) then
+            raise EIOError.Create('h2 session write over-reported progress');
+          LRemaining := Length(FWriteBuffer) - SizeInt(LWritten);
+          if LRemaining > 0 then
+          begin
+            Move(FWriteBuffer[LWritten + 1], FWriteBuffer[1], LRemaining);
+            SetLength(FWriteBuffer, LRemaining);
+          end
+          else
+            FWriteBuffer := '';
+        end;
+      tsiorWouldBlock:
+        begin
+          AWouldBlock := True;
+          Exit(True);
+        end;
+      tsiorTimeout, tsiorClosed:
+        Exit(False);
+    else
+      Exit(False);
+    end;
+  end;
+end;
+
 function TH2ServerSession.FillReadBufferBlocking: Boolean;
 var
   LBuf: array[0..16383] of AnsiChar;
@@ -860,16 +918,78 @@ begin
 end;
 
 function TH2ServerSession.FillReadBufferPoll(const AEvents: TPlatformPollEvents;
-  out ANextEvents: TPlatformPollEvents): Boolean;
+  out ANextEvents: TPlatformPollEvents; out AClosed: Boolean): Boolean;
+var
+  LRuntime: ITcpStreamRuntime;
+  LBuf: array[0..16383] of AnsiChar;
+  LRead: SizeUInt;
+  LOldLen: SizeInt;
+  LRes: TTcpStreamIOResult;
 begin
+  Result := False;
+  AClosed := False;
+  ANextEvents := [peReadable];
   if not (peReadable in AEvents) then
+    Exit(False);
+
+  if Length(FReadBuffer) >= H2_READ_BUFFER_HARD_LIMIT then
   begin
-    ANextEvents := [peReadable];
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
+    FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
+    FState := h2sesClosed;
+    AClosed := True;
+    ANextEvents := [];
     Exit(False);
   end;
+
+  { S3-3: epoll sockets are non-blocking. Blocking Read() treating EAGAIN as
+    EOF left the session waiting forever (empty ANextEvents hang). }
+  if Supports(FConn, ITcpStreamRuntime, LRuntime) then
+  begin
+    ArmReadDeadline(FOptions.ReadTimeout);
+    LRes := LRuntime.TryRead(LBuf[0], SizeOf(LBuf), LRead);
+    ClearReadDeadline;
+    case LRes of
+      tsiorOk:
+        begin
+          if LRead = 0 then
+          begin
+            AClosed := True;
+            ANextEvents := [];
+            Exit(False);
+          end;
+          LOldLen := Length(FReadBuffer);
+          SetLength(FReadBuffer, LOldLen + SizeInt(LRead));
+          Move(LBuf[0], FReadBuffer[LOldLen + 1], LRead);
+          Exit(True);
+        end;
+      tsiorWouldBlock:
+        begin
+          ANextEvents := [peReadable];
+          Exit(False);
+        end;
+      tsiorTimeout, tsiorClosed:
+        begin
+          AClosed := True;
+          ANextEvents := [];
+          Exit(False);
+        end;
+    else
+      begin
+        AClosed := True;
+        ANextEvents := [];
+        Exit(False);
+      end;
+    end;
+  end;
+
+  { Fallback: blocking Read (threaded path should not use FillReadBufferPoll). }
   Result := FillReadBufferBlocking;
   if not Result then
+  begin
+    AClosed := True;
     ANextEvents := [];
+  end;
 end;
 
 function TH2ServerSession.ProcessPreface: Boolean;
@@ -1690,6 +1810,9 @@ end;
 function TH2ServerSession.Advance(const AEvents: TPlatformPollEvents;
   out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LWouldBlock: Boolean;
+  LClosed: Boolean;
 begin
   AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
   if FState = h2sesClosed then
@@ -1698,6 +1821,7 @@ begin
     Exit(tsprDone);
   end;
 
+  { 1. Drain pending writes (non-blocking). }
   if FWriteBuffer <> '' then
   begin
     if not (peWritable in AEvents) then
@@ -1705,18 +1829,32 @@ begin
       ANextEvents := [peWritable];
       Exit(tsprWait);
     end;
-    if not DrainWriteBuffer then
+    if not DrainWriteBufferPoll(LWouldBlock) then
     begin
       CloseSession;
       ANextEvents := [];
       Exit(tsprDone);
     end;
+    if LWouldBlock and (FWriteBuffer <> '') then
+    begin
+      ANextEvents := [peWritable];
+      Exit(tsprWait);
+    end;
   end;
 
+  { 2. Preface + inbound frames. }
   if not ProcessPreface then
   begin
-    if not FillReadBufferPoll(AEvents, ANextEvents) then
+    if not FillReadBufferPoll(AEvents, ANextEvents, LClosed) then
+    begin
+      if LClosed or (FState = h2sesClosed) then
+      begin
+        CloseSession;
+        ANextEvents := [];
+        Exit(tsprDone);
+      end;
       Exit(tsprWait);
+    end;
     if not ProcessPreface then
     begin
       ANextEvents := [peReadable];
@@ -1724,19 +1862,59 @@ begin
     end;
   end;
 
+  { Read available data when readable so ProcessFrames can make progress. }
+  if peReadable in AEvents then
+  begin
+    if not FillReadBufferPoll(AEvents, ANextEvents, LClosed) then
+    begin
+      if LClosed then
+      begin
+        if FWriteBuffer <> '' then
+        begin
+          ANextEvents := [peWritable];
+          Exit(tsprWait);
+        end;
+        CloseSession;
+        ANextEvents := [];
+        Exit(tsprDone);
+      end;
+      { would-block with empty buffer is fine; may still process buffered. }
+    end;
+  end;
+
   if not ProcessFrames then
   begin
-    if FWriteBuffer <> '' then
-      ANextEvents := [peWritable]
-    else
-      ANextEvents := [];
     if FState = h2sesClosed then
+    begin
+      if FWriteBuffer <> '' then
+      begin
+        ANextEvents := [peWritable];
+        Exit(tsprWait);
+      end;
+      CloseSession;
+      ANextEvents := [];
       Exit(tsprDone);
-    Exit(tsprWait);
+    end;
   end;
 
   ApplyAllPendingWindowUpdates;
   ExecuteReadyStreams;
+
+  { 3. Flush responses produced by handlers. }
+  if FWriteBuffer <> '' then
+  begin
+    if not DrainWriteBufferPoll(LWouldBlock) then
+    begin
+      CloseSession;
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+    if LWouldBlock and (FWriteBuffer <> '') then
+    begin
+      ANextEvents := [peWritable];
+      Exit(tsprWait);
+    end;
+  end;
 
   if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
   begin

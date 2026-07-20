@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q18（async-bench-parity 同机对照）
+> 版本：M3+B1–B4 + Q1–Q19（dial localhost bench）
 
 ## 模块概览
 

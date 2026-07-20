@@ -8,7 +8,13 @@ unit nextpas.core.http.form;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.http.form.base;
+
+const
+  { Default cap for ParseMultipartFormDataFromReader (4 MiB). Aligns with
+    THttpServerOptions.Default.MaxBodySize; override via options. }
+  HTTP_DEFAULT_MULTIPART_MAX_BYTES = Int64(4) * 1024 * 1024;
 
 type
   TFormField = nextpas.core.http.form.base.TFormField;
@@ -16,6 +22,11 @@ type
   THttpFile = nextpas.core.http.form.base.THttpFile;
   THttpFileArray = nextpas.core.http.form.base.THttpFileArray;
   TMultipartFormData = nextpas.core.http.form.base.TMultipartFormData;
+
+  { Bounded stream ingest options (Q1-2). }
+  TMultipartParseOptions = record
+    MaxBytes: Int64; { total body cap; must be > 0 }
+  end;
 
 { Parse application/x-www-form-urlencoded body }
 function ParseUrlEncodedForm(const ABody: string): TFormFieldArray;
@@ -29,6 +40,17 @@ function ParseMultipartFormData(const ABody, ABoundary: string): TMultipartFormD
 function TryParseMultipartFormData(const ABody, ABoundary: string;
   out AData: TMultipartFormData): Boolean;
 
+{ Default MaxBytes = HTTP_DEFAULT_MULTIPART_MAX_BYTES }
+function MultipartParseOptionsDefault: TMultipartParseOptions;
+
+{ Bounded stream ingest: read ABody up to MaxBytes then parse.
+  Caller owns ABody — this function does NOT Close the reader.
+  Empty/invalid boundary or nil reader → hekArgument Op=multipart.
+  Exceed MaxBytes → hekBody Op=multipart. }
+function ParseMultipartFormDataFromReader(const ABody: IReader;
+  const ABoundary: string;
+  const AOptions: TMultipartParseOptions): TMultipartFormData;
+
 { Encode multipart/form-data body. ABoundary is generated if empty. }
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string;
@@ -38,10 +60,16 @@ function NewMultipartBoundary: string;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.exception,
+  nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.http.base,
-  nextpas.core.http.url;
+  nextpas.core.http.url,
+  nextpas.core.http.stream;
+
+const
+  MULTIPART_OP = 'multipart';
 
 { URL-decode a string, converting + to space }
 function UrlDecodeForm(const S: string): string;
@@ -494,6 +522,55 @@ function TryParseMultipartFormData(const ABody, ABoundary: string;
 begin
   AData := ParseMultipartFormData(ABody, ABoundary);
   Result := (AData.FieldCount > 0) or (AData.FileCount > 0);
+end;
+
+function MultipartParseOptionsDefault: TMultipartParseOptions;
+begin
+  Result.MaxBytes := HTTP_DEFAULT_MULTIPART_MAX_BYTES;
+end;
+
+function BytesToRawString(const ABytes: TBytes): string;
+begin
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function ParseMultipartFormDataFromReader(const ABody: IReader;
+  const ABoundary: string;
+  const AOptions: TMultipartParseOptions): TMultipartFormData;
+var
+  LBytes: TBytes;
+  LBody: string;
+begin
+  if ABody = nil then
+    raise EHttpError.CreateOp(hekArgument, MULTIPART_OP,
+      'ParseMultipartFormDataFromReader: body reader is nil');
+  if ABoundary = '' then
+    raise EHttpError.CreateOp(hekArgument, MULTIPART_OP,
+      'ParseMultipartFormDataFromReader: boundary is empty');
+  if AOptions.MaxBytes <= 0 then
+    raise EHttpError.CreateOp(hekArgument, MULTIPART_OP,
+      'ParseMultipartFormDataFromReader: MaxBytes must be positive');
+
+  try
+    { Caller owns ABody — HttpRequestReadBody does not Close the reader. }
+    LBytes := HttpRequestReadBody(ABody, AOptions.MaxBytes);
+  except
+    on E: EHttpError do
+    begin
+      if E.Op = '' then
+        raise EHttpError.CreateOp(E.Kind, MULTIPART_OP, E.Message)
+      else
+        raise;
+    end;
+    on E: Exception do
+      raise EHttpError.CreateOp(hekProtocol, MULTIPART_OP,
+        'multipart body read failed: ' + E.Message);
+  end;
+
+  LBody := BytesToRawString(LBytes);
+  Result := ParseMultipartFormData(LBody, ABoundary);
 end;
 
 end.

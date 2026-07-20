@@ -526,3 +526,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Peers: std channel/mutex/timer shapes — **not** TAsyncLoop clones; order-of-magnitude only.
 - truth=`same-host-order-of-magnitude`; **not CI-gating**; do not claim “faster than Go/Rust” from this table alone.
 - SCORECARD table updated from a 2026-07-20 host run.
+
+### Localhost dial bench (Q19)
+- `test_net_async_dial_bench`: sequential `AsyncTcpDial` → `metric=dial_ops_per_s` (localhost listener).
+- Go peer: `core/scripts/async-bench-parity/go-dial` (`net.DialTimeout`).
+- Included in `async-bench-parity.sh`; truth=`localhost-sequential-dial` — **not** public DNS / dual-stack HE RTT matrix.
+- Typical host: nextpas ~O(10¹) dial/s sequential HE path; go dial peer much higher (sync Dial, no event-loop per dial).

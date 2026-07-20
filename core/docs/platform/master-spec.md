@@ -36,16 +36,15 @@ Without real runtime evidence, a host is not runtime ready.
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
 Windows compile gates, Wine runtime smoke (24-module matrix, including
 `platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
-GHA **`ci-matrix`** for the **documented 21 platform gates** in
+GHA **`ci-matrix`** for the **documented 22 platform gates** in
 `platform-windows-ci-matrix.sh` / `.ps1`.
 
 ### Count honesty (do not mix)
 
 | Count | Meaning |
 | --- | --- |
-| **21 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which` + iocp + poller + io/socket real. GHA run **29721371136** @ `0cb2471bc` (job `pass=22` with mem.host; which PASS). |
-| **+dl candidate** | Batch-16: `platform.dl` in scripts only — **not** ci-matrix until GHA green. |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 22–23 — do **not** call mem.host (or unpromoted candidates) a platform facade promote. |
+| **22 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which`+`dl` + iocp + poller + io/socket real. `dl` PASS on GHA **29725431946** @ `567479723`; full matrix re-green expected after poller Win64 case fix. |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 23 — do **not** call mem.host a platform facade gate. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -57,8 +56,8 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented **21 platform gates** only (ROADMAP; GHA run 29721371136)
-- do **not** say “22-gate platform ci-matrix” when the 22nd is only mem.host
+- `ci-matrix` for the documented **22 platform gates** only (ROADMAP)
+- do **not** say “23-gate platform ci-matrix” when the extra is only mem.host
 
 ## Current macOS truth
 

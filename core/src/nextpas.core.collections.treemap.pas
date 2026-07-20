@@ -275,6 +275,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 { TRedBlackTree }
 
 constructor TRedBlackTree.Create(const aAllocator: TMemAllocator; const aCompare: specialize TCompareFunc<K>);
@@ -328,7 +331,7 @@ begin
   { 在释放内存前 Finalize 键值（特别是字符串等引用类型） }
   Finalize(aNode^.Key);
   Finalize(aNode^.Value);
-  FAllocator.FreeMem(aNode);
+  FreeMemOf(FAllocator, aNode, SizeOf(aNode^));
 end;
 
 procedure TRedBlackTree.RotateLeft(aNode: PNode);

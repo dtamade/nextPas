@@ -11,10 +11,11 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
-# 21 platform gates promoted (+error +fmt +info +which) after GHA pass=22
-# including mem.host (run 29721371136 @ 0cb2471bc; which PASS). Batch-16
-# candidate: +platform.dl (not promoted until GHA green). mem.host_runtime
-# is optional mem-owned entry (not a platform facade gate).
+# 22 platform gates promoted (+error +fmt +info +which +dl). Evidence:
+# - which: GHA 29721371136 @ 0cb2471bc
+# - dl: GHA 29725431946 @ 567479723 PASS platform.dl (matrix was fail=1 on
+#   poller empty-case; fixed AsyncSendTo/RecvFrom Win64 case arms).
+# mem.host_runtime is optional mem-owned (not a platform facade gate).
 
 set -euo pipefail
 
@@ -61,7 +62,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix-candidate; 21 platform gates promoted + dl candidate; mem.host optional; not full-host Windows parity"
+echo "truth=ci-matrix; documented 22 platform gates (+dl); mem.host optional; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
@@ -99,7 +100,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-21-platform-gate-set-plus-mem-host"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-22-platform-gate-set-plus-mem-host"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

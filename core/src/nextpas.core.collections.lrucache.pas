@@ -93,6 +93,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 { TLruCache }
 
 constructor TLruCache.Create(aMaxSize: SizeUInt; const aAllocator: TMemAllocator;
@@ -166,8 +169,7 @@ begin
     aNode^.Value := Default(V);
     aNode^.Key := Default(K);
 
-    // 释放PNode内存
-    FAllocator.FreeMem(aNode);
+    FreeMemOf(FAllocator, aNode, SizeOf(TNodeType));
   end;
 end;
 

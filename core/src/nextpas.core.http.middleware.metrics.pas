@@ -1,8 +1,8 @@
 unit nextpas.core.http.middleware.metrics;
 {**
- * @desc Metrics middleware. Collects basic HTTP request metrics:
- *       total request count, status code class counts, and total duration.
- *       Thread-safe via IMutex.
+ * @desc Metrics middleware — opt-in HTTP observability seam (Q1-3).
+ *       Collects request counts, status class, duration, optional bytes.
+ *       Default zero cost when not installed. Not an APM product.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -53,13 +53,12 @@ function NewHttpMetricsCollector: IHttpMetricsCollector;
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
 
 {** @desc Create metrics middleware that calls ACallback on every request with
-   status code and duration in microseconds. No collector needed; useful for
-   pushing metrics to external systems (StatsD, Prometheus, logs). }
+   status code and duration in microseconds. Callback exceptions are swallowed
+   so they never fail the request. }
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
 
 {** @desc Create metrics middleware with structured fields callback.
-   Calls ACallback with method, path, status, and duration for each request.
-   Useful for structured logging systems (JSON logs, ELK stack). }
+   Callback exceptions are swallowed. }
 function MetricsMiddlewareWithFields(const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
 
 implementation
@@ -71,6 +70,9 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.time.base,
   nextpas.core.sync;
+
+const
+  METRICS_OP = 'metrics';
 
 type
   THttpMetricsCollector = class(TInterfacedObject, IHttpMetricsCollector)
@@ -162,12 +164,23 @@ begin
     Result := 0;
 end;
 
+{ Status for metrics after handler returns or raises.
+  Uncommitted status (0) after failure is treated as 500 for class counters. }
+function MetricsStatusAfterHandler(const AW: IHttpResponseWriter;
+  const AHandlerRaised: Boolean): Int64;
+begin
+  Result := Int64(AW.GetStatus);
+  if AHandlerRaised and (Result = 0) then
+    Result := 500;
+end;
+
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
 var
   LCollector: IHttpMetricsCollector;
 begin
   if ACollector = nil then
-    raise EHttpError.Create(hekArgument, 'MetricsMiddleware collector must not be nil');
+    raise EHttpError.CreateOp(hekArgument, METRICS_OP,
+      'MetricsMiddleware collector must not be nil');
   LCollector := ACollector;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -176,12 +189,24 @@ begin
     var
       LStart: TInstant;
       LDuration: TDuration;
+      LRaised: Boolean;
+      LStatus: Int64;
     begin
       LStart := TInstant.Now;
-      ANext.ServeHTTP(AReq, AW);
-      LDuration := LStart.Elapsed;
-      LCollector.RecordRequestWithBytes(Int64(AW.GetStatus),
-        LDuration.AsMicroseconds, AReq.ContentLength, GetResponseBytes(AW));
+      LRaised := False;
+      try
+        try
+          ANext.ServeHTTP(AReq, AW);
+        except
+          LRaised := True;
+          raise;
+        end;
+      finally
+        LDuration := LStart.Elapsed;
+        LStatus := MetricsStatusAfterHandler(AW, LRaised);
+        LCollector.RecordRequestWithBytes(LStatus, LDuration.AsMicroseconds,
+          AReq.ContentLength, GetResponseBytes(AW));
+      end;
     end);
   end);
 end;
@@ -191,7 +216,8 @@ var
   LCallback: THttpMetricsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWith callback must not be nil');
+    raise EHttpError.CreateOp(hekArgument, METRICS_OP,
+      'MetricsMiddlewareWith callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -200,11 +226,27 @@ begin
     var
       LStart: TInstant;
       LDuration: TDuration;
+      LRaised: Boolean;
+      LStatus: Int64;
     begin
       LStart := TInstant.Now;
-      ANext.ServeHTTP(AReq, AW);
-      LDuration := LStart.Elapsed;
-      LCallback(Int64(AW.GetStatus), LDuration.AsMicroseconds);
+      LRaised := False;
+      try
+        try
+          ANext.ServeHTTP(AReq, AW);
+        except
+          LRaised := True;
+          raise;
+        end;
+      finally
+        LDuration := LStart.Elapsed;
+        LStatus := MetricsStatusAfterHandler(AW, LRaised);
+        try
+          LCallback(LStatus, LDuration.AsMicroseconds);
+        except
+          { Callback failures must not break the request. }
+        end;
+      end;
     end);
   end);
 end;
@@ -214,7 +256,8 @@ var
   LCallback: THttpMetricsFieldsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWithFields callback must not be nil');
+    raise EHttpError.CreateOp(hekArgument, METRICS_OP,
+      'MetricsMiddlewareWithFields callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -225,13 +268,29 @@ begin
       LDuration: TDuration;
       LMethod: string;
       LPath: string;
+      LRaised: Boolean;
+      LStatus: Int64;
     begin
       LMethod := HttpMethodToStr(AReq.GetMethod);
       LPath := AReq.GetPath;
       LStart := TInstant.Now;
-      ANext.ServeHTTP(AReq, AW);
-      LDuration := LStart.Elapsed;
-      LCallback(LMethod, LPath, Int64(AW.GetStatus), LDuration.AsMicroseconds);
+      LRaised := False;
+      try
+        try
+          ANext.ServeHTTP(AReq, AW);
+        except
+          LRaised := True;
+          raise;
+        end;
+      finally
+        LDuration := LStart.Elapsed;
+        LStatus := MetricsStatusAfterHandler(AW, LRaised);
+        try
+          LCallback(LMethod, LPath, LStatus, LDuration.AsMicroseconds);
+        except
+          { Callback failures must not break the request. }
+        end;
+      end;
     end);
   end);
 end;
