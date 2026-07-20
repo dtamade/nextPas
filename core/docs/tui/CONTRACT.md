@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.26
+**版本**：1.27
 
 ---
 
@@ -173,6 +173,13 @@ end;
 - 不支持的终端通常忽略未知 DECSET；可设 `False` 关闭
 - Emitter：`AnsiBeginSynchronizedUpdate` / `AnsiEndSynchronizedUpdate`；backend 转发
 
+### 5.5 Auto-wrap / DECAWM（DECSET 7）
+
+- `EnterAlternate` 在 `1049h` 后发 `CSI ? 7 l`（关闭自动换行）
+- `LeaveAlternate` 在 `1049l` 前发 `CSI ? 7 h`（恢复）
+- 失败模式：保留 wrap 时长行/宽格会被终端 reflow，破坏 immediate-mode 格网
+- Emitter：`AnsiDisableAutoWrap` / `AnsiEnableAutoWrap`
+
 ---
 
 ## 6. 测试
@@ -186,13 +193,13 @@ end;
 
 ### 6.1 Scorecard 与跨语言对标（Wave Q1–Q15 + M1 Maintenance）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC28）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC29）
   - SC1–SC25：Q 线质量主维度
-  - **SC26** Keybind；**SC27** FrameBudget；**SC28** Synchronized Update 2026
+  - **SC26** Keybind；**SC27** FrameBudget；**SC28** Sync 2026；**SC29** DECAWM wrap
 - **纲领**: `PARITY-GO-RUST.md` · `SCORECARD.md`
 - **同方法论对照**: `bench_go_rust`
 - **契约脚本**: `./scripts/tui-contract-check.sh`
-  - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC28
+  - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC29
   - **C8** core facade reject 编译失败（scrollview/modal/dialog/split_pane/select）
   - **C9** Wine pure-path suite 存在（buffer/color/input）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
@@ -205,6 +212,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.27 | Phase E3：DECAWM wrap-off on EnterAlternate + SC29 | Claude |
 | 2026-07-20 | 1.26 | Phase E2：DECSET 2026 Synchronized Update + SC28 | Claude |
 | 2026-07-20 | 1.25 | Phase E1：RELEASE=1 快照 + C2 wine + C9；无新 SC | Claude |
 | 2026-07-20 | 1.24 | Idle 单点：TSelect 晋升 ext；core reject_select；B3 表清空 | Claude |

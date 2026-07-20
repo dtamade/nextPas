@@ -119,6 +119,7 @@ procedure TAnsiBackend.EnterAlternate(AMouseMode: TAnsiMouseMode;
   AAlternateScrollKeys: Boolean);
 begin
   AnsiEnterAltScreen(FOut);
+  AnsiDisableAutoWrap(FOut);
   case AMouseMode of
     amMouseClick: AnsiEnableMouseClickTracking(FOut);
     amMouseDrag:  AnsiEnableMouseDragTracking(FOut);
@@ -144,6 +145,7 @@ begin
   end;
   if AAlternateScrollKeys then
     AnsiDisableAlternateScroll(FOut);
+  AnsiEnableAutoWrap(FOut);
   AnsiLeaveAltScreen(FOut);
   ResetStyleCache;
 end;
