@@ -18,8 +18,10 @@ type
    * @param K 键类型（必须可哈希、可比较）
    * @param V 值类型
    *
-   * @note 实现使用线性探测解决冲突，默认负载因子阈值 0.86
-   * @see THashMap 具体实现
+   * @note 接口语义与具体实现分离：默认工厂 MakeHashMap/MakeMap 使用 Swiss Table；
+   *       专家仍可直构 OA THashMap。负载因子阈值见 DEFAULT_MAX_LOAD_FACTOR（0.75）。
+   * @see TSwissHashMap 默认实现
+   * @see THashMap 开放寻址专家实现
    * @see ITreeMap 有序映射替代方案
    *}
   generic IHashMap<K,V> = interface(specialize IGenericCollection<specialize TMapEntry<K,V>>)
@@ -151,7 +153,7 @@ type
      *
      * @complexity O(1)
      *
-     * @note 当 LoadFactor > 0.86 时自动触发 rehash
+     * @note 当 LoadFactor 超过实现阈值（OA 路径为 DEFAULT_MAX_LOAD_FACTOR=0.75）时触发 rehash
      *}
     function GetLoadFactor: Single;
 
