@@ -7679,9 +7679,9 @@ begin
     'Rust comparison source platform line must use std::env::consts::ARCH');
   CheckContains(LRustCompareSource, 'Compiler flags: rustc -C opt-level=3',
     'Rust comparison source must print the compiler-flags evidence field');
-  CheckContains(LRustCompareSource, 'Input: OPS={}',
+  CheckContains(LRustCompareSource, 'Input size: OPS=1000000; capacity=1024',
     'Rust comparison source must print the input-size evidence field');
-  CheckContains(LRustCompareSource, 'Honesty: same-host relative only',
+  CheckContains(LRustCompareSource, 'manual comparison source, not auto-run',
     'Rust comparison source must print honesty/envelope baseline guidance');
   CheckContains(LRustCompareSource, 'C1 std::sync::mpsc 1P+1C',
     'Rust comparison source must mirror the Q5 C1 mpsc scenario name');
