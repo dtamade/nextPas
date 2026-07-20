@@ -1,8 +1,8 @@
 # nextpas.core.collections — 状态
 
 **更新日期**：2026-07-20
-**阶段**：稳定维护 + 正确性/性能收敛（landing candidate）
-**分支 / worktree**：`collections` / `.worktrees/collections`
+**阶段**：**Landed** — 稳定维护
+**分支 / worktree**：`collections` / `.worktrees/collections`（与 `main` 同步后维护）
 
 ## 已完成（历史目标树）
 
@@ -14,21 +14,26 @@
 | G-PERF | 完成 | introsort、三路分区、VecDeque Rotate、HashMap 负载 0.75 等 |
 | G-BENCH | 完成 | `core/benchmarks/nextpas.core.collections/*` 与跨语言对比 |
 
-公共接口语义按 **软冻结** 管理：不随意改行为；允许补齐 public 工厂与文档；实现层可优化。
+公共接口语义按 **软冻结** 管理。
 
-## 本 lane 交付
+## 本轮交付（已进 main）
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| Wave 0 | 同步 main；CONTRACT/README；STATUS | **完成** |
-| Wave 1 | `MakeMap`/`MakeSet`；HashMap 默认 Swiss 文档 | **完成** |
-| Wave 2 | 大文件 `.inc` 机械拆分 | **取消**（无实质收益；vecdeque 保持单文件） |
-| Wave 3 | HashSet Swiss 后端 | **完成** |
-| Phase A | Swiss abstract 补洞、消费者审计 | **完成** |
-| Phase B | `bench_set` 数字落盘 | **完成**（PERF-HASHSET.md） |
-| Phase C | 真职责审计（非按行数拆文件） | **完成**（OWNERSHIP-AUDIT.md） |
-| Phase D–E | Multi*/Lru/LinkedHash/Builder → Swiss | **完成** |
-| Ready | rebase 最新 main；历史去噪；landing candidate | **完成** |
+| Wave 0–1 | 契约真相；MakeMap/MakeSet | **Landed** |
+| Wave 2 | 机械 `.inc` 拆文件 | **取消** |
+| Wave 3 / D–E | 默认哈希族 Swiss 收敛 | **Landed** |
+| Phase A–C | Swiss 契约补洞；bench；职责审计 | **Landed** |
+| Landing | `1f7cae0de` path-limited ff → `origin/main` | **Landed** |
+
+**Landing commit**：`1f7cae0de` — `feat(collections): Swiss default map family and contract truth`
+
+## 默认实现事实
+
+- `MakeMap` / `MakeHashMap` / Builder → Swiss
+- HashSet / MultiMap / MultiSet / LruCache / LinkedHash* → Swiss
+- OA `THashMap` 保留专家/TLS 直构
+- 泛型接口：门面 + 对应 `*.intf`（FPC 3.3.1）
 
 ## 明确不做
 
@@ -40,17 +45,17 @@
 
 ## 权威文档
 
-- 契约：[`CONTRACT.md`](CONTRACT.md)
-- 导航：[`README.md`](README.md)
-- 性能：[`PERF-HASHSET.md`](PERF-HASHSET.md)
-- 消费者：[`CONSUMERS.md`](CONSUMERS.md)
-- 职责：[`OWNERSHIP-AUDIT.md`](OWNERSHIP-AUDIT.md)
-- 根目录 `task_plan.collections.md` 等：**历史记录**，已 supersede
+- [`CONTRACT.md`](CONTRACT.md) · [`README.md`](README.md) · [`PERF-HASHSET.md`](PERF-HASHSET.md)
+- [`CONSUMERS.md`](CONSUMERS.md) · [`OWNERSHIP-AUDIT.md`](OWNERSHIP-AUDIT.md) · [`READY.md`](READY.md)
+
+## 后续（按需）
+
+- 消费者/bug 驱动修复
+- TLS 是否改用工厂 Swiss：跨 lane 另议
 
 ## 验证入口
 
 ```sh
 make focused FOCUS=core/tests/nextpas.core.collections/test_facade
 make hygiene
-git diff --check
 ```
