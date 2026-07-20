@@ -49,7 +49,7 @@ bash core/scripts/l2-windows-ci-matrix.sh
 
 同一 5 目录，目标为 native **`make clean test`**（非 `wine-runtime-smoke`）。  
 CI 接线：`.github/workflows/core-ci.yml` → job `test-windows-runtime` → step  
-`L2 process/fs/path/env Windows min-set (host-windows)`。
+`L2 process/fs/path/env Windows min-set (host-windows)`（**`if: always()`**，与 platform 矩阵失败解耦，同 Q34 async 模式）。
 
 **通过标准**：五套件均绿。Watch create-event 仍允许 soft residual（与 wine 套件相同逻辑）。
 
@@ -109,3 +109,4 @@ CI 接线：`.github/workflows/core-ci.yml` → job `test-windows-runtime` → s
 |------|------|
 | 2026-07-20 | M2-W4：一眼表 + wine 最小生产集（24） |
 | 2026-07-20 | M3：host-windows 门禁脚本 + GHA 接线 |
+| 2026-07-20 | M3-ci：L2 步与 platform 矩阵解耦（always + install-fpc success） |
