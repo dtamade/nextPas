@@ -8,9 +8,9 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
 - **Windows x86_64**: durable **`ci-matrix`** for documented **26 platform gates**
-  on GHA `test-windows-runtime` (+… +pipe +resource +pty). `pty` PASS on run
-  29734704405 (pass=27 fail=0 with mem.host). Watch S1+S2 RDCW poll landed
-  (not matrix-gated). Wine secondary **24**.
+  on GHA `test-windows-runtime` (+… +pipe +resource +pty; pass=27 fail=0 with
+  mem.host). Scripts list **watch (candidate, Batch-21, S1–S3 RDCW)**. Wine
+  secondary **24**.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
   **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
@@ -58,8 +58,9 @@ Not covered: signal, console, freetype/net.
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
 socket, error, fmt, info, which, dl, args, pipe, resource, pty, io.reactor.iocp,
 poller.windows_runtime_smoke, platform.io.windows_real, platform.socket.windows_real.
-Promoted with `pty` after GHA PASS platform.pty (run 29734704405). Optional
-**mem.host_runtime** is mem-owned.
+Promoted with `pty` after GHA PASS platform.pty (run 29734704405). Scripts also
+list **watch (candidate, Batch-21)** and optional **mem.host_runtime**. Do not
+claim watch as ci-matrix until GHA green.
 
 ## IOCP / readiness boundary
 
