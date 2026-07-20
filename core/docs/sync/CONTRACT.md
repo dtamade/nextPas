@@ -1,130 +1,240 @@
 # nextpas.core.sync 代码契约
 
-**模块路径**：`core/src/nextpas.core.sync*.pas`（13 个源文件）
-**层级**：L1（依赖 L0: base, exception; 可选: platform）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**模块路径**：`core/src/nextpas.core.sync*.pas`
+**层级**：L1
+**Owner**：sync lane（`.worktrees/sync`）
+**最后更新**：2026-07-20
+**版本**：1.1
+**权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
 
 ## 1. 接口契约
 
-### 1.1 同步原语
+### 1.1 源文件
 
-| 原语 | 文件 | 接口/类型 | 说明 |
-|------|------|-----------|------|
-| TMutex | mutex.pas | ILockable | 互斥锁（递归） |
-| TRWLock | rwlock.pas | IRWLockable | 读写锁 |
-| TSemaphore | semaphore.pas | — | 计数信号量 |
-| TEvent | event.pas | — | 手动/自动复位事件 |
-| TCondVar | condvar.pas | — | 条件变量 |
-| TBarrier | barrier.pas | — | 屏障 |
-| TSpinLock | spinlock.pas | — | 自旋锁 |
-| TOnce | once.pas | — | 一次性初始化 |
-| TWaitGroup | waitgroup.pas | — | 等待组 |
-| TSyncPool\<T\> | pool.pas | — | TLS freelist 对象池 |
+| 文件 | 职责 |
+|------|------|
+| `nextpas.core.sync.pas` | 门面：工厂 + 类型 re-export |
+| `nextpas.core.sync.base.pas` | `TLockState`、`TOnceProc`、`TBarrierWaitResult` |
+| `nextpas.core.sync.intf.pas` | 全部公开 interface |
+| `nextpas.core.sync.mutex.pas` | `TMutex`、`TFutexMutex` |
+| `nextpas.core.sync.rwlock.pas` | `TRWLock` |
+| `nextpas.core.sync.condvar.pas` | `TCondVar` |
+| `nextpas.core.sync.spinlock.pas` | `TSpinLock` |
+| `nextpas.core.sync.waitgroup.pas` | `TWaitGroup` |
+| `nextpas.core.sync.once.pas` | `TOnce` |
+| `nextpas.core.sync.semaphore.pas` | `TSemaphore` |
+| `nextpas.core.sync.barrier.pas` | `TBarrier` |
+| `nextpas.core.sync.event.pas` | manual / auto reset Event |
+| `nextpas.core.sync.pool.pas` | `TSyncPool`（**实验**；未进门面） |
 
-### 1.2 核心接口
+### 1.2 门面工厂
 
 ```pascal
-ILockable = interface
+function Mutex: IMutex;
+function FutexMutex: IMutex;
+function RWLock: IRWLock;
+function WaitGroup: IWaitGroup;
+function CondVar: ICondVar;
+function Once: IOnce;
+function SpinLock: ISpinLock;
+function Semaphore(const AInitial: Int32 = 1): ISemaphore;
+function Barrier(const ACount: Int32): IBarrier;
+function Event(const AManualReset: Boolean = True): IEvent;
+```
+
+### 1.3 核心接口（live）
+
+```pascal
+ILock = interface
   procedure Acquire;
-  procedure Release;
   function TryAcquire: Boolean;
+  procedure Release;
+  function Lock: ILockGuard;
 end;
 
-IRWLockable = interface
+IMutex = interface(ILock)
+  function NativeHandle: Pointer;
+end;
+
+IRWLock = interface
   procedure AcquireRead;
-  procedure ReleaseRead;
+  function TryAcquireRead: Boolean;
   procedure AcquireWrite;
+  function TryAcquireWrite: Boolean;
+  procedure ReleaseRead;
   procedure ReleaseWrite;
+  function ReadLock: ILockGuard;
+  function WriteLock: ILockGuard;
+end;
+
+IWaitGroup = interface
+  procedure Add(const ACount: Int32 = 1);
+  procedure Done;
+  procedure Wait;
+end;
+
+ICondVar = interface
+  procedure Wait(const AMutex: IMutex);
+  function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
+  procedure Signal;
+  procedure Broadcast;
+end;
+
+IOnce = interface
+  procedure Do_(const AProc: TOnceProc);  // 命名冻结：避开关键字 Do
+  function Done: Boolean;
+end;
+
+ISpinLock = interface(ILock)
+end;
+
+ISemaphore = interface
+  procedure Acquire;
+  function TryAcquire: Boolean;
+  function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+  procedure Release;
+  procedure Release(const ACount: Int32);
+  function Available: Int32;
+end;
+
+IBarrier = interface
+  function Wait: TBarrierWaitResult;
+end;
+
+IEvent = interface
+  procedure SetEvent;
+  procedure Reset;
+  procedure Wait;
+  function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+  function IsSet: Boolean;
 end;
 ```
 
-### 1.3 TSyncPool 特殊说明
+**已废弃文档名（不得再写）**：`ILockable`、`IRWLockable`、`DoCall`、`WaitFor` / `WaitForTimeout`（毫秒版签名）。
 
-TLS freelist 实现：
-- 每线程独立 freelist（threadvar），无锁热路径
-- Central pool 互斥锁冷路径
-- 性能：63M ops/s (1T), 317M ops/s (32T)
-- 比 Rust crossbeam 快 106x
+### 1.4 原语语义摘要
 
-### 1.4 平台适配
+| 原语 | 实现要点 | 公开级别 |
+|------|----------|----------|
+| `TMutex` | `platform_mutex_init(..., PLATFORM_MUTEX_ERRORCHECK)`，**非递归** | stable |
+| `TFutexMutex` | CAS 三态 + spin + `platform_wait_address32` | advanced（平台相关） |
+| `TRWLock` | platform rwlock；`ReleaseRead`→`rdunlock`，`ReleaseWrite`→`wrunlock` | stable |
+| `TCondVar` | platform condvar；**仅**可与标准 `TMutex` 配对 | stable |
+| `TSpinLock` | atomic flag + `CpuPause` / `platform_thread_yield` | stable |
+| `TWaitGroup` | atomic counter + address-wait | stable |
+| `TOnce` | 三态 INIT/RUNNING/DONE；回调异常回滚到 INIT | stable |
+| `TSemaphore` | atomic count + address-wait | stable |
+| `TBarrier` | generation + address-wait；可复用 | stable |
+| `IEvent` | manual：generation 奇偶；auto：单 permit CAS | stable |
+| `TSyncPool` | TLS freelist + global 锁；**非门面** | experimental |
 
-- **UNIX**：pthread_mutex, pthread_rwlock, pthread_cond, sem_t
-- **Windows**：CriticalSection, SRWLOCK, Event, Semaphore
-- **Fallback**：当平台 API 不可用时，基于 TSpinLock 的纯 Pascal 实现
+### 1.5 CondVar 配对规则
 
-### 1.5 门面
+- `ICondVar.Wait` / `WaitTimeout` 通过 `IMutex.NativeHandle` 取得 `TPlatformMutex`
+- `TFutexMutex.NativeHandle` 指向 4 字节 futex state，**禁止**配对
+- 实现：`CheckNotFutexMutex` 在 Wait 路径 raise `ENextPasError`
 
-`nextpas.core.sync.pas` — re-export 所有同步原语。
+### 1.6 TSyncPool（实验）
+
+- 单元：`nextpas.core.sync.pool`（**不**由门面 re-export）
+- TLS freelist 为进程级 `threadvar`：**一线程同一时间只应使用一个 pool 实例**
+- 冷路径全局栈：当前为 FPC `TRTLCriticalSection`（**known debt**，目标换 nextpas Mutex）
+- `DrainTLS`：线程退出前归还 TLS freelist，避免 heaptrc 假泄漏
 
 ---
 
 ## 2. 不变量
 
-- **[INV-1]** TMutex 是递归锁（同一线程可重复 Acquire）
-- **[INV-2]** TOnce 的回调恰好执行一次（即使多线程竞争）
-- **[INV-3]** TWaitGroup 的 Done 调用次数 ≤ Add 的总数
-- **[INV-4]** TSyncPool 的 TLS freelist 在线程退出时 flush 回 central pool
-- **[INV-5]** TSpinLock 忙等待有 backoff 上限（防止活锁）
-- **[INV-6]** TRWLock：多个读者可并发，写者排他
+- **[INV-1]** 默认 `Mutex` 为 **非递归** ERRORCHECK；同线程重入由平台/实现报错，非合法用法
+- **[INV-2]** `Once.Do_` 在成功路径上回调恰好执行一次；异常路径不置 DONE，允许重试
+- **[INV-3]** `WaitGroup.Done` 次数不得超过 `Add` 总和；超出 raise
+- **[INV-4]** `WaitGroup.Add` 要求 `ACount > 0`
+- **[INV-5]** 多个读者可并发持有 `IRWLock`；写者排他
+- **[INV-6]** `CondVar` 不得与 `TFutexMutex` 配对
+- **[INV-7]** 门面不依赖 `sync.pool`
+- **[INV-8]** 除 `sync.pool` 已知债外，L1 sync 实现不直接依赖 FPC 平台单元
 
 ---
 
 ## 3. 错误处理
 
-| 场景 | 策略 |
+| 场景 | 行为 |
 |------|------|
-| Destroy 时仍被持有 | 平台依赖（pthread 返回 EBUSY） |
-| TWaitGroup.Done 超过 Add | Assert / 未定义行为 |
-| Semaphore wait 被信号中断 | 自动重试 (EINTR) |
-| 无效参数（负数 count） | 抛 EInvalidArgument |
+| `TMutex` platform init/lock/unlock 失败 | raise `ENextPasError` |
+| `WaitGroup.Add` ≤ 0 | raise `ENextPasError` |
+| `WaitGroup.Done` 导致计数 < 0 | raise `ENextPasError` |
+| `Semaphore` 初始 < 0 | raise `EArgumentError` |
+| `Semaphore.Release(count)` count ≤ 0 | raise `EArgumentError` |
+| `Barrier` count ≤ 0 | raise `EArgumentError` |
+| `CondVar` + `TFutexMutex` | raise `ENextPasError` |
+| `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` |
+| `CondVar.Wait` 非持有者 / 错误 handle | 未定义（调用方契约） |
+| Destroy 时锁仍被持有 | 平台依赖（未在 L1 统一强制） |
 
 ---
 
 ## 4. 线程安全
 
-**所有同步原语本身就是线程安全的基础设施。**
+所有公开同步原语本身设计为多线程安全基础设施。
 
 | 原语 | 并发模型 |
 |------|----------|
-| TMutex | 互斥，同一时刻一个持有者 |
-| TRWLock | 多读单写 |
-| TSemaphore | N 并发 |
-| TEvent | 唤醒等待线程 |
-| TCondVar | 与 TMutex 配合 |
-| TBarrier | N 线程同步点 |
-| TSpinLock | 短临界区自旋 |
-| TOnce | 单次初始化 |
-| TWaitGroup | 等待 N 个任务完成 |
-| TSyncPool | TLS 无锁热路径 + central 锁冷路径 |
+| `IMutex` / `ISpinLock` | 互斥 |
+| `IRWLock` | 多读单写 |
+| `ISemaphore` | 最多 N 并发 permit |
+| `IEvent` | 等待 / 唤醒 |
+| `ICondVar` | 与合法 `IMutex` 配合 |
+| `IBarrier` | N 线程汇合 |
+| `IOnce` | 单次初始化 |
+| `IWaitGroup` | 等待 N 个完成 |
+| `TSyncPool` | TLS 无锁热路径 + global 锁冷路径 |
 
 ---
 
 ## 5. 内存管理
 
-- 所有原语的 Create/Destroy 配对
-- TMutex/TRWLock 内部持有平台句柄（pthread_mutex_t 等）
-- TSyncPool 的 TLS freelist 在线程退出时自动回收
-- Destroy 释放所有平台资源
+- 门面原语均为接口（`TInterfacedObject`），引用计数管理生命周期
+- `TMutex` / `TRWLock` / `TCondVar` 在构造/析构中 init/destroy 平台句柄
+- `ILockGuard` 在析构时 `Release`（Mutex / SpinLock / RWLock 读/写 guard）
+- `TSyncPool`：对象生命周期由池拥有；Get 不 Create、Put 不 Free（预分配/工厂模式）
 
 ---
 
 ## 6. 测试覆盖
 
-| 子系统 | 测试文件 | 说明 |
-|--------|----------|------|
-| 核心同步原语 | test_sync | Mutex/RWLock/Event/CondVar/Once/WaitGroup/SpinLock/Barrier/Semaphore |
-| TSyncPool | test_sync_pool | TLS freelist / 并发分配 |
-| POSIX 回退 | test_sync_posix_fallback | 纯 Pascal 回退实现 |
-| **合计** | **3 个测试目录** | |
+| Gate | 路径 | 说明 |
+|------|------|------|
+| 核心原语 | `core/tests/nextpas.core.sync/test_sync` | 行为 + 关键错误路径 |
+| TSyncPool | `core/tests/nextpas.core.sync/test_sync_pool` | TLS / 并发 / Drain |
+| 源契约 | `core/tests/nextpas.core.sync/test_sync_source_contracts` | 门面/边界/非递归默认 |
+
+```bash
+make -C core/tests/nextpas.core.sync test
+```
+
+---
+
+## 7. 依赖关系
+
+**依赖**
+
+- `nextpas.core.platform.sync`（mutex/rwlock/condvar/address-wait）
+- `nextpas.core.platform.thread`（SpinLock yield）
+- `nextpas.core.atomic`（Event / Once / Semaphore / Barrier）
+- `nextpas.core.errors` / `exception`（错误类型）
+- `nextpas.core.time.base`（Semaphore 超时 deadline）
+
+**被依赖（典型）**
+
+- http、tls、thread、test.runner、collections.concurrent、net.server、config、tui 等
 
 ---
 
 ## 变更记录
 
-| 日期 | 版本 | 变更描述 | 作者 |
-|------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本：13 文件 / 10 原语 / 六项契约 | Claude |
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-07-01 | 1.0 | 初始版本（含已过时的递归 Mutex / ILockable 描述） |
+| 2026-07-20 | 1.1 | 以 live source 重写 SSOT；标明 FutexMutex/Pool 级别；删除空 posix_fallback 叙述 |
