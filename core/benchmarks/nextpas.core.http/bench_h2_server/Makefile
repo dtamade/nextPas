@@ -17,7 +17,7 @@ run: build
 	$(BUILD_DIR)/$(PROGRAM)
 
 smoke: build
-	$(BUILD_DIR)/$(PROGRAM) --mode multiplex --backend threaded \
+	$(BUILD_DIR)/$(PROGRAM) --mode multiplex --backend epoll \
 	  --connections 4 --streams 4 --batches 25
 
 clean:

@@ -144,7 +144,7 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 | Scale-ready p99 ≤ 2× Go | **Partial** | L1: nextPas p50/p99 live; Go comparator row not yet instrumented |
 | Connection ladder 1k / 10k idle | **Met** | S1-3 `bench_conn_ladder` |
 | **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder Met; p99 residual |
-| Scale-ready (H1/**H2** server, Linux) | **No** | S3 H2 server scale open |
+| Scale-ready (H1/**H2** server, Linux) | **No** | H2 multiplex ~3k req/s evidence exists; still ≪ H1 KPI shape |
 | H3 ready | **No** | Blocked; no facade |
 
 **Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
@@ -285,23 +285,37 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 | Date | mode | backend | shape | completed | req/s | stable | Note |
 | ---- | ---- | ------- | ----- | --------: | ----: | -----: | ---- |
 | 2026-07-20 S3-1 | sequential | threaded | 4×4×50 | 800 | **89** | 1 | facade Get residual |
-| 2026-07-20 S3-2 | **multiplex** | **threaded** | 4×4×25 | 400 | **357** | 1 | smoke |
-| 2026-07-20 S3-2 | **multiplex** | **threaded** | **8×16×200** | **25600** | **2872** | **1** | mid scale |
-| 2026-07-20 S3-2 | multiplex | epoll | 4×4×25 | — | — | hang | residual (see below) |
+| 2026-07-20 S3-2 | multiplex | threaded | 4×4×25 | 400 | **357** | 1 | smoke |
+| 2026-07-20 S3-2 | multiplex | threaded | **8×16×200** | **25600** | **2872** | **1** | mid |
+| 2026-07-20 S3-3 | multiplex | **epoll** | 4×4×25 | 400 | **353** | **1** | smoke (post I/O fix) |
+| 2026-07-20 S3-3 | multiplex | **epoll** | 8×16×100 | 12800 | **2882** | **1** | mid-ish |
 
-**S3-2 fix**: `RoundTripMany` demux used `TH2StreamFlowControl.Init(0,…)` on
-connection-level frames → `stream flow control requires a valid stream ID`.
-Fixed to dummy stream ID 1 (same as idle PING probe). Regression: live
-multiplex against real H2 server + `test_http_h2_client` 72/0.
+**S3-2 fix**: `RoundTripMany` demux `Init(0)` → dummy stream ID 1.
+
+**S3-3 fix (H2 epoll hang)**: poll path used blocking `Read`/`Write`; non-blocking
+EAGAIN was treated as EOF / zero-write, leaving empty `ANextEvents` forever.
+`FillReadBufferPoll` / `DrainWriteBufferPoll` now use `TryRead`/`TryWrite` +
+would-block → `peReadable`/`peWritable`.
 
 **Honest residuals**
 
-- Multiplex threaded **~32×** sequential facade (~89 → ~2872) on mid shape — still
-  far below H1 epoll multi-conn RPS (~47k); different workload shape.
-- **H2 + epoll**: readiness hang under this harness (poll-driven H2 residual);
-  scale evidence is **threaded** until fixed.
+- Multiplex ~3k req/s still **≪** H1 epoll multi-conn ~48k (different shape).
 - No Go H2 same-harness row.
 - **Not** Scale-ready (H1/H2).
+
+#### S3-3 H1 vs H2 scale (same machine, honest shapes)
+
+| Path | Harness | Shape | req/s | Role |
+| ---- | ------- | ----- | ----: | ---- |
+| H1 epoll multi-conn | `bench_http_server` | 20k×4 `no_url` | **~48k** (Q2-1) | official H1 KPI |
+| H2 mux epoll | `bench_h2_server` | 8×16×100 | **~2.9k** | S3-3 |
+| H2 mux threaded | same | 8×16×200 | **~2.9k** | S3-2 |
+| H2 sequential | same | 4×4×50 | **~90** | residual |
+
+**Caveat**: do **not** form a single “H2/H1 ratio” KPI — H1 is multi-thread
+keep-alive QPS; H2 is multi-stream batch ops. Conclusion: H2 scale **evidence
+exists** (multiplex + epoll), still far below H1 server KPI; claim remains
+**Scale-ready (H1 server, Linux epoll)** only.
 
 #### Interim single-connection characterization (not scale KPI)
 

@@ -90,8 +90,8 @@ begin
   GStreams := DEFAULT_STREAMS;
   GBatches := DEFAULT_BATCHES;
   GMode := MODE_MULTIPLEX;
-  { H2 poll-driven + epoll still residual (can hang); default threaded for scale. }
-  GBackend := TCP_SERVER_BACKEND_THREADED;
+  { S3-3: poll would-block I/O fixed; epoll is viable scale path. }
+  GBackend := TCP_SERVER_BACKEND_EPOLL;
   LI := 1;
   while LI <= ParamCount do
   begin
