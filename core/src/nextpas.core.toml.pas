@@ -59,6 +59,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default;
 
@@ -373,10 +374,14 @@ begin
 end;
 
 function TomlParse(const AReader: IReader): ITomlDocument;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('TomlParse: reader must not be nil');
-  Result := TomlParse(TomlBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'TomlParse');
+  Result := TomlParse(TomlBytesToString(LBytes));
 end;
 
 function TryTomlParse(const AReader: IReader; out ADoc: ITomlDocument): Boolean;

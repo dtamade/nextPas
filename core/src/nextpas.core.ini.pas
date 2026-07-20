@@ -25,6 +25,7 @@ type
     Line: UInt32;
     Column: UInt32;
     Offset: SizeUInt;
+    property Col: UInt32 read Column write Column;
   end;
 
   TIniEntry = record
@@ -47,6 +48,7 @@ type
     FSectionCount: Integer;
     FSectionCap: Integer;
     FAllocator: TMemAllocator;
+    FStrict: Boolean;
     procedure ClearSection(var ASection: TIniSection);
     procedure ClearSections;
     procedure EnsureSectionCapacity(ANeeded: Integer);
@@ -88,6 +90,8 @@ type
     function GetSections: TStringArray;
     function GetKeys(const ASection: string): TStringArray;
     function Allocator: TMemAllocator;
+    { When True, non-comment/non-section lines without '=' fail TryLoad. Default False. }
+    property Strict: Boolean read FStrict write FStrict;
   end;
 
 function IniParse(const AContent: string): TIniFile; overload;
@@ -98,6 +102,7 @@ function IniStringify(const AFile: TIniFile): string; inline;
 implementation
 
 uses
+  nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
@@ -121,6 +126,7 @@ begin
   FSectionCount := 0;
   FSectionCap := 0;
   FSections := nil;
+  FStrict := False;
   FindOrCreateSection('');
 end;
 
@@ -369,9 +375,21 @@ var
     ALineStartOffset: SizeUInt): Boolean;
   begin
     LTrimmed := TrimLeft(ALine);
-    if (LTrimmed <> '') and (LTrimmed[1] = '[') and (Pos(']', LTrimmed) = 0) then
+    if LTrimmed = '' then
+      Exit(True);
+    if (LTrimmed[1] = ';') or (LTrimmed[1] = '#') then
+      Exit(True);
+    if (LTrimmed[1] = '[') and (Pos(']', LTrimmed) = 0) then
     begin
       AError.Message := 'missing closing ] in section header';
+      AError.Line := ALineNo;
+      AError.Column := 1;
+      AError.Offset := ALineStartOffset;
+      Exit(False);
+    end;
+    if FStrict and (LTrimmed[1] <> '[') and (Pos('=', LTrimmed) = 0) then
+    begin
+      AError.Message := 'strict mode: expected key=value or section header';
       AError.Line := ALineNo;
       AError.Column := 1;
       AError.Offset := ALineStartOffset;
@@ -861,10 +879,14 @@ begin
 end;
 
 function IniParse(const AReader: IReader): TIniFile;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('IniParse: reader must not be nil');
-  Result := IniParse(IniBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'IniParse');
+  Result := IniParse(IniBytesToString(LBytes));
 end;
 
 function IniParseWith(const AContent: string; const AAllocator: TMemAllocator): TIniFile;
