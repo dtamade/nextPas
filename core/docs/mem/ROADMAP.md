@@ -166,6 +166,7 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | G3 | blockpool.growable **KEEP** 决策 | **done** 见 [GROWABLE-KEEP-2026-07-20.md](GROWABLE-KEEP-2026-07-20.md) |
 | G4 | FreeMemOf 样板 json.parser + toml.parser | **done** 2026-07-20 |
 | G4.x | FreeMemOf `collections.node` TNodeManager | **done** 2026-07-20 |
+| G4.x+ | FreeMemOf `collections.hashmap` buckets/bitmap | **done** 2026-07-20 |
 | G5 | 多 host 编译门常绿 | **done** 2026-07-20（Linux FORCE_HOST + host-runtime） |
 | G5.x | Darwin/Windows **真机** mem host-runtime 进 CI matrix | **done** 2026-07-20 见 [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md) |
 | G6 | scorecard/soak 证据入口 | **done**（README / SCORECARD） |

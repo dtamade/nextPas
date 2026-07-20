@@ -154,14 +154,15 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | json.parser | G4：nodes / arena / indices / slots / overflow 表 |
 | toml.parser | G4：nodes / hash / owned 指针表 |
 | collections.node | **G4.x**：TNodeManager 块/registry/tree node |
+| collections.hashmap | **G4.x+**：buckets/bitmap FreeMemOf（Destroy/Rehash） |
 | collections swiss\* | 既有 FreeMemOf |
 
-**`FAllocator.FreeMem` 非 mem 粗计（2026-07-20 后 G4.x）**:
+**`FAllocator.FreeMem` 非 mem 粗计（2026-07-20 后 G4.x+）**:
 
 | 模块 | ~命中 | 备注 |
 |------|-------|------|
 | collections.node | 0 有意 unsized | **G4.x FreeMemOf** |
-| collections.hashmap（非 swiss） | 4 | 可选下一刀 |
+| collections.hashmap（非 swiss） | 0 主路径 | **G4.x+ FreeMemOf** |
 | yaml.parser | 3 | |
 | xml / tui / ini / csv | 1–2 | |
 | json / toml | 少量 | 故意：per-string 无 size 旁表 |
