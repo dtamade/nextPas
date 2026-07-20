@@ -516,6 +516,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### Connection pool async acquire (Q16)
 - `IConnectionPool.AcquireAsync(host, port, cb, ctx, token?)`: prefer idle; else `AsyncTcpDial` (HE).
+- `IConnectionPool.AcquireAsyncEx(host, port, dialOpts, cb, ctx?)` **(Q29)**: same idle path; dial path forwards full `TAsyncTcpDialOptions` (LocalAddr/NoDelay/KeepAlive/Control/Resolve/…). Pool `ConnectTimeout` fills infinite overall deadline only.
 - Requires `CreateConnectionPool(Loop[, Config])`; sync-only `CreateConnectionPool` → AcquireAsync returns False after reserving path without loop.
 - Idle keyed by host+port; `Release` returns to idle; `Discard` closes.
 - `ConnectTimeout` → dial `OverallDeadline`; optional `IAsyncCancellationToken`.
