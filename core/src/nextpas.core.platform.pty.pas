@@ -275,7 +275,8 @@ end;
 uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi,
-  nextpas.core.platform.windows.utf16;
+  nextpas.core.platform.windows.utf16,
+  nextpas.core.platform.error;
 
 function platform_pty_open(const ASize: TPlatformPtySize;
   out APty: TPlatformPty): Int32;

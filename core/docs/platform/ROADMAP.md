@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **19-gate `ci-matrix` promoted** (run 29686191527); scripts list **20-gate candidate** (+info); wine 22 secondary |
+| Real Windows GHA | **20-gate `ci-matrix` promoted** (pass=20 run 29718874441 @ `534d5e7c4`, +info); wine 22 secondary |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` 19-gate** + wine 22 secondary; **20-gate candidate** in scripts | GHA pass=20 then promote; keep wine green |
+| Windows x86_64 | **`ci-matrix` for documented 20-gate set** + wine 22 secondary | expand matrix; keep wine + GHA green |
 | macOS | **`focused-runtime` for documented 9-gate set** (D2.c + memory) | keep GHA matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -308,7 +308,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-7**: add `platform.args` to wine matrix (20→21) after Linux 9/0 + wine smoke 6/0. Windows scripts unchanged. |
 | 2026-07-20 | **Batch-8**: fix Windows resource error uses + wine smoke; add `platform.resource` to wine matrix (21→22). Linux 19/0, wine smoke 12/0. |
 | 2026-07-20 | **Batch-9 residual**: `platform.watch` wine smoke fails (watch_create → PLATFORM_ERR_UNSUPPORTED). Not matrix-gated. |
-| 2026-07-20 | **Batch-10**: Windows scripts 19→20 candidate (+`platform.info`). Do **not** promote until GHA pass=20. |
+| 2026-07-20 | **Batch-10**: Windows scripts 19→20 candidate (+`platform.info`). |
+| 2026-07-20 | **Batch-11**: promote Windows 20-gate `ci-matrix` after GHA pass=20 (run 29718874441 @ `534d5e7c4`). Fix Darwin watch `uses platform.error` (macOS matrix compile). |
 
 ---
 
