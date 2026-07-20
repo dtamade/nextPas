@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**H2P-1 开波** + S2-b Rust p50/p99 + S1 抽检；CLAIM package 仍不升）
+**Updated**: 2026-07-20（**H2P-2 landed**：加压全绿线性扩展；NEXT=**H2P-3** TLS-ALPN h2）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **H2P-2** 加压 conn×stream×batch；找真瓶颈 |
+| **下一执行点** | **H2P-3** TLS-ALPN `h2` e2e + 0 unfreed |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -843,8 +843,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | Wave | Status | Do |
 |------|--------|-----|
 | **H2P-1** | **landed** | 冻结 H2 mid 规格 8×16×100；REPRO/BENCHMARKS 分表；mid epoll **2827** req/s stable=1；**禁止** H1/H2 直接比值；CLAIM package **仍 No** |
-| **H2P-2** | **NEXT** | 加压 conn×stream×batch；修真瓶颈 |
-| **H2P-3** | queued | TLS-ALPN `h2` e2e + 0 unfreed |
+| **H2P-2** | **landed** | 加压阶梯全 **stable=1**；16×32×100 ≈ **11.5k** req/s；瓶颈=连接×流并发下 CPU/批处理，非崩溃点；无强制代码热修 |
+| **H2P-3** | **NEXT** | TLS-ALPN `h2` e2e + 0 unfreed |
 
 ## Era R — 宣称评审
 
@@ -877,11 +877,11 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Parity Plus + RH-1 Met；S1 抽检 + S2-b Rust latency Met
 2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = H2P-2**（加压；不升 CLAIM package）
+3. **NEXT = H2P-3**（TLS-ALPN h2 e2e；不升 CLAIM package）
 4. path-limited land
 ```
 
-**没有用户指令时：可停在 H2P-1 Done 后，勿空转 H3 / 勿假 package scale-ready。**
+**没有用户指令时：可停在 H2P-2 Done 后，勿空转 H3 / 勿假 package scale-ready。**
 **升 CLAIM 须 R1 评审。**
 
 ---
@@ -905,6 +905,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | **H2P-2 landed**：加压阶梯全绿；16×32×100 ~11.5k req/s；NEXT=H2P-3 ALPN |
 | 2026-07-20 | **H2P-1 开波**（用户授权）：H2 分表规格 + REPRO；S2-b Rust p50/p99；S1 抽检 |
 | 2026-07-20 | **S0 收口**：稳定期 STOP 叙事对齐 RH-1；REPRO HTTPS expects accepts=1 |
 | 2026-07-20 | **RH-1**：`TTlsTcpStream` + `ITcpStreamRuntime` → HTTPS keep-alive pool reuse；smoke accepts=1 |

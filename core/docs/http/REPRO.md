@@ -94,10 +94,14 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 ./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
   --mode multiplex --backend epoll \
   --connections 8 --streams 16 --batches 100
+# H2P-2 press sample
+./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
+  --mode multiplex --backend epoll \
+  --connections 16 --streams 32 --batches 100
 ```
 
-**读数**：`stable=1`；`req/s=`；`completed=`（历史 mid ~2.8–3k，**不是** H1 KPI）。
-**不宣称** Scale-ready (H1/H2)。Go h2 同形对照 → H2P-1 续波 / H2P-2。
+**读数**：`stable=1`；`req/s=`；`completed=`（mid ~2.8–3k；press 16×32 ~11k，**不是** H1 KPI）。
+**不宣称** Scale-ready (H1/H2)。
 
 ---
 
