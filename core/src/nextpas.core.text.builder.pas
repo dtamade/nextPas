@@ -205,7 +205,7 @@ begin
     LNewCap := LNewCap * 2;
   end;
   if FAllocator <> nil then
-    FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
+    FBuf := ReallocMemOf(FAllocator, FBuf, FCap, LNewCap)
   else
     { nextpas.core.mem.ReallocMem is a function (returns the new pointer),
       not System.ReallocMem(var p). Discarding the result leaves FBuf stale. }
