@@ -1,10 +1,11 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-19 (Era 8 Inbox depth Done I0–I3; NEXT → ROADMAP only — Era 8 STOP; framework-complete non-H3 retained)
-> Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
+> Last updated: 2026-07-20 (Parity Plus Era E Done: multi-run RPS+p99 + ladder; NEXT → ROADMAP only — Q3-1)
+> Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
-> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
-> **Product focus**: H1/H2 client+server and WebSocket excellence. **No H3 product demand** — keep H3 blocked/honest, never fake facade.
+> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
+> **Scale battlefield**: **HTTP server** throughput and connection scale (Linux epoll default).
+> **H3**: blocked/honest, never fake facade.
 
 ## North Star And Scope
 
@@ -28,7 +29,9 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
 | **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
-| **Inbox depth (Era 8)** | **Done** — I0–I3 landed（pool health / WS deflate / H2 multiplex）；H3 仍 Blocked |
+| **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
+| **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
+| **Parity Campaign** | **H1 scale-ready Met** + **Q1 Met** + **S2/S3 Met**（H2 multiplex 证据；非 H1/H2 整包宣称）；H3 Blocked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
@@ -64,18 +67,32 @@ nextpas.core.http
 └── G6: Cross-language benchmark truth and long-run positioning  [stage-closed; further wins optional via Era 6 X5]
 ```
 
-### Excellence stage (post framework-complete non-H3)
+### Parity Campaign (post framework-complete non-H3)
 
-After framework-complete (non-H3), the live product push is **H1/H2 + WebSocket depth**, not H3.
+Live product push is **Go/Rust-class quality + server scale** on H1/H2 — not H3, not API-name parity.
 
-Win dimensions (not ecosystem checklists):
+**Quality bar**
 
-1. Correctness edges proven (timeouts, cancel, pools, WS close, H2 edges already landed).
+1. Correctness edges proven (timeouts, cancel, pools, WS, H2, SSE/stream when landed).
 2. Predictable contracts (Kind/Op, options, ownership).
-3. Evidence-backed performance (ladder + comparators; profiled wins).
-4. Pascal-first small synchronous APIs.
+3. Server production depth (long-lived writes, backpressure, H2 server edges).
+4. Pascal-first **synchronous** public APIs (no async handler rewrite).
 
-Lower-layer fixes (`net` cancel floor, `tls` factory residual) are preferred over HTTP-only workarounds when they unblock these dimensions. Ordered work: **only** [`ROADMAP.md`](ROADMAP.md) Era 6.
+**Scale bar (Linux server; same-machine)**
+
+| Gate | Meaning |
+|------|---------|
+| Enter parity zone | epoll Direct keep-alive **≥ 0.5×** Go `net/http` same workload |
+| Scale-ready RPS | **Met (Q2-1)** — epoll `no_url` median **2.20×** Go（`--runs 3`）；`response_1k` **1.93×** |
+| Scale-ready p99 | **Partial (L1)** — nextPas multi-conn `p50_ns`/`p99_ns`；Go 行未仪器 |
+| Connection ladder | **Met (S1-3)** — 1k / 10k idle keep-alive + soft-nofile failure mode |
+| H2 scale evidence | **Met (S3)** — multiplex ~3k req/s threaded+epoll；≪ H1 KPI shape |
+| Claim | **Scale-ready (H1 server, Linux epoll)** — yes with residuals；**not** H1/H2 整包 |
+
+G6 stage-closed numbers remain **characterization**, not the scale campaign exit.
+Scale campaign evidence lives in [`BENCHMARKS.md`](BENCHMARKS.md) § Parity Campaign and [`ROADMAP.md`](ROADMAP.md) S1–S3.
+
+Lower-layer fixes (`net.server` epoll, `mem` arena, `tls`) preferred over HTTP workarounds.
 
 ### G6 stage performance complete
 

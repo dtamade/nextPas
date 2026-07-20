@@ -25,11 +25,371 @@ checklist that ends “ongoing with no standard.”
 Framework-complete **(non-H3)** does **not** require infinite ranking refresh.
 Optional P2/P4 and future hotspots are demand-driven only.
 
+## Parity Campaign — official scale workload (Q0)
+
+**Authority**: scale exit lines in [`GOAL_TREE.md`](GOAL_TREE.md) / [`ROADMAP.md`](ROADMAP.md).
+This section is the **only** official same-machine Go comparison recipe for the
+server-scale campaign. Older P3 fullchain rows remain characterization, not the
+scale KPI.
+
+### Workload spec (frozen)
+
+| Field | Value | Notes |
+| ----- | ----- | ----- |
+| Harness | `benchmarks/nextpas.core.http/run_server_comparison.sh` | builds nextPas + Go + Rust std |
+| Operation | `http.server.keepalive` | multi-thread client keep-alive |
+| Primary workload | `no_url` | minimal response; Direct-class shape |
+| Secondary | `response_1k` | body-bearing check (same threads/requests) |
+| Requests | `20000` | total client requests |
+| Threads | `4` | client concurrency |
+| Runs | `1` for smoke baseline; `3` before claiming a ratio gate | median if runs>1 |
+| nextPas backend | **`epoll`** for scale KPI | `threaded` = correctness baseline only |
+| Go row | always included | primary ratio denominator |
+| Rust std row | always included | reference; not sole KPI |
+| Hyper | optional `--include-hyper` | Tokio caveat; not sole KPI |
+| Platform | Linux amd64 | Windows not in scale claim |
+
+### Reproduce (one command)
+
+From repo `core/`:
+
+```sh
+# Primary scale KPI shape
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-epoll-no_url.md
+
+# Body-bearing secondary
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k \
+  --nextpas-backend epoll --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-epoll-response_1k.md
+
+# Correctness-baseline backend (not scale KPI)
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend threaded --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-threaded-no_url.md
+```
+
+**Ratio**: `nextpas_req_s / go_req_s` on the **same** run output.
+**Enter parity zone**: epoll + `no_url` ratio **≥ 0.50**.
+**Scale-ready**: ratio **≥ 0.80** and p99 policy per ROADMAP (when harness emits latency).
+
+### Q0 baseline snapshot (2026-07-19)
+
+**Machine**: Linux x86_64, 44 cores, FPC 3.3.1 (this worktree).
+
+#### Multi-conn official harness — **UNBLOCKED** (Q0-2)
+
+**Root cause**: `bench_http_server` had been reduced to a single-connection
+`TBenchSuite` that read until EOF on keep-alive (`ETimeoutError`). Restored
+CLI multi-client keep-alive shape (pre-`c1472d3b3` semantics, no SysUtils).
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 1
+```
+
+| Date | Workload | Backend | nextPas req/s | Go req/s | Rust std req/s | nextPas/Go | Gate |
+| ---- | -------- | ------- | ------------: | -------: | -------------: | ---------: | ---- |
+| 2026-07-19 Q0-2 | `no_url` 20k×4 | **epoll** | 16494 | 28144 | 142930 | **0.59** | enter zone only |
+| 2026-07-19 Q0-2 | `response_1k` 20k×4 | **epoll** | 16286 | 24236 | 132811 | **0.67** | enter zone |
+| 2026-07-19 Q0-2 | `no_url` 20k×4 | threaded | 96313 | 29286 | 156874 | **3.29** | char only |
+| **2026-07-19 S1-1** | `no_url` 20k×4 | **epoll** | **50322** | 31688 | 140364 | **1.59** | **scale-ready (≥0.80)** (single run) |
+| 2026-07-19 S1-1 | `no_url` 20k×4 | threaded | 85284 | 32391 | 143501 | **2.63** | char only |
+| **2026-07-19 Q2-1** | `no_url` 20k×4 | **epoll** | **48802** | 22180 | 149536 | **2.20** | **runs=3 median; scale-ready RPS** |
+| **2026-07-19 Q2-1** | `response_1k` 20k×4 | **epoll** | **45997** | 23863 | 130069 | **1.93** | **runs=3 median; scale-ready RPS** |
+| 2026-07-19 Q2-1 | `no_url` 20k×4 | threaded | 90131 | 24696 | 151963 | **3.65** | char only (runs=1) |
+| **2026-07-20 E3** | `no_url` 20k×4 | **epoll** | **51120** | 23160 | 139197 | **2.21** | **runs=3 median; +p50/p99** |
+| **2026-07-20 E3** | `response_1k` 20k×4 | **epoll** | **49493** | 22343 | 129985 | **2.22** | **runs=3 median; +p50/p99** |
+
+**S1-1 change**: poll-owned H1 path defaults to **reactor-inline handlers**
+(`PreferPollWorkerHandoff=False`). Removes per-request worker pool submit +
+completion wake for short keep-alive requests. Tests that assert handoff set
+`PreferPollWorkerHandoff=True`.
+
+**Q2-1 refresh**: same official harness; epoll rows use **`--runs 3` median**
+`req/s`. Reproduce:
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 3 \
+  --output build/projects/nextpas.core.http/server_comparison/q2-epoll-no_url-runs3.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k \
+  --nextpas-backend epoll --runs 3 \
+  --output build/projects/nextpas.core.http/server_comparison/q2-epoll-response_1k-runs3.md
+```
+
+**Readings**
+
+1. **S1-1 closed the epoll gap**: 0.59× → **1.59× Go** (single-run).
+2. **Q2-1 confirms scale RPS** on median of 3 runs: epoll `no_url` **2.20× Go**,
+   `response_1k` **1.93× Go** (both ≥ 0.80).
+3. threaded remains characterization (~3.6× Go); not the scale KPI backend.
+4. Rust `std_only` is reference only.
+5. **L1 latency** — nextPas + **Go** rows emit client-observed `p50_ns` / `p99_ns` /
+   `mean_ns` (Era **E1**). Rust std residual still QPS-only. See § L1 / § E1.
+6. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
+
+#### Q2-3 Scale-ready verdict (2026-07-19)
+
+| Claim | Verdict | Evidence |
+| ----- | ------- | -------- |
+| Enter parity zone (epoll H1) | **Met** | ratio ≥ 0.50 (Q2-1 medians ≫ 0.50) |
+| Scale-ready RPS (epoll H1 `no_url`) | **Met** | Q2-1 median **2.20×** Go (≥ 0.80) |
+| Scale-ready RPS (epoll H1 `response_1k`) | **Met** | Q2-1 median **1.93×** Go |
+| Scale-ready p99 ≤ 2× Go | **Met (E3 runs=3)** | median p99 `no_url` **0.21×** / `response_1k` **0.22×** Go（§ E3） |
+| Connection ladder 1k / 10k idle | **Met** | S1-3 + E3 抽查 `stable=1` |
+| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder + p99 multi-run Met；H2 package / Windows / H3 residual |
+| Scale-ready (H1/**H2** server, Linux) | **No** | H2 multiplex ~3k req/s evidence exists; still ≪ H1 KPI shape |
+| H3 ready | **No** | Blocked; no facade |
+
+**Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
+official harness, with documented residuals (no H2 scale claim, no Windows scale
+claim, no H3). **Not** a cross-machine leaderboard.
+
+#### S2-1 H1 allocation map + outbound buffer reuse
+
+**Per keep-alive request (epoll poll-owned path, before S2-1)** — static map:
+
+| Site | Alloc? | Notes |
+| ---- | ------ | ----- |
+| `THttpRequest.CreateFromRequestTarget` | yes | method/url/headers materialization |
+| `TH1ResponseWriter.Create` | yes | per-response headers object |
+| `NewH1OutboundBuffer` | **was yes** | new class + growable byte array |
+| Parser body reader | conditional | only when body present |
+| `RequestArena` | optional | opt-in `WithRequestArena`; connection-scoped Reset |
+
+**S2-1 change**: connection free-list (`FSpareOutbound0/1`) recycles
+`IH1OutboundBuffer` after drain / reset. Depth **2** matches poll active +
+queued response bound. Hijack paths do **not** recycle (handler owns conn).
+
+**Characterization** (local, not scale KPI; 50k×4 `no_url` epoll):
+
+| When | req/s samples |
+| ---- | ------------- |
+| Pre (same session) | ~47779 |
+| Post S2-1 | ~49181 / 51135 / 51850 |
+
+Noise band large; treat as **directional** only. Official ratio remains Q2-1
+medians. Residual hot allocs: request + response writer objects (future).
+
+#### S2-2 Fast path fixed-length body
+
+**Before**: `TryUseFastRequestParser` required `ContentLength = 0` — any POST body
+fell through to llhttp even when the full body was already in the socket buffer.
+
+**After**: HTTP/1.1 + Host + complete fixed body with `ContentLength ≤ 65536`
+uses `TH1FastRequestSnapshot` + `TH1FastSnapshotBodyReader`. Still **falls back**
+to llhttp for:
+
+- `Expect` / `Transfer-Encoding`
+- `Connection: close` / unsupported tokens
+- missing/duplicate Host
+- incomplete body
+- body larger than 64 KiB (avoid large per-request copies)
+
+**Gates**: `test_http_h1fast` 32/0；`test_http_server` live POST epoll echo +
+source-contract. No change to official multi-conn QPS KPI shape (`no_url` is
+still zero-body).
+
+#### S2-3 Profiled hotspot evidence (user-space substitute)
+
+**Environment residual**: this worktree host has `perf_event_paranoid=3` — kernel
+`perf record/stat` is unavailable without elevated privileges. S2-3 therefore
+**does not** ship a flamegraph. Evidence is the combination of:
+
+1. **Allocation map** (S2-1 table above) — hotspot hypotheses on the keep-alive path.
+2. **Targeted code changes with before/after characterization**:
+   - S2-1 outbound free-list: ~47.8k → ~49–52k req/s (50k×4 epoll `no_url`, noisy).
+   - S2-2 fixed-body fast path: POST body no longer forced through llhttp when
+     fully buffered (≤64 KiB); correctness gates green.
+3. **Source contracts** locking acquire/release and `FAST_PATH_MAX_BODY` gates.
+
+| Hypothesis | Intervention | Status |
+| ---------- | ------------ | ------ |
+| Per-request `NewH1OutboundBuffer` | S2-1 free-list depth 2 | landed |
+| Body → llhttp always | S2-2 snapshot body ≤64KiB | landed |
+| Request/writer object alloc | residual (future) | open |
+
+**Not claimed**: kernel-level attribution, or a new multi-conn RPS KPI row (still Q2-1).
+
+#### S1-3 Connection ladder (idle keep-alive hold — not RPS)
+
+Harness: `benchmarks/nextpas.core.http/bench_conn_ladder/`
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_conn_ladder build
+# same-process client+server; raise soft RLIMIT_NOFILE when needed
+./build/projects/nextpas.core.http/bench_conn_ladder/bench_conn_ladder \
+  --connections 1000 --hold-ms 2000 --backend epoll --probe 1 --raise-nofile 1
+```
+
+Protocol per connection: GET `/` → read full response → **idle hold** → optional second
+GET probe → close. Machine-readable markers include `operation=http.server.conn_ladder`,
+`open_ok=`, `probe_ok=`, `stable=1|0`, `rlimit_nofile_soft=`, `nofile_raise=`.
+
+| Date | N | hold_ms | backend | open_ok | probe_ok | nofile soft | nofile_raise | stable | Note |
+| ---- | -: | ------: | ------- | ------: | -------: | ----------: | ------------ | -----: | ---- |
+| 2026-07-19 | 100 | 200 | epoll | 100 | 100 | 4296 | ok | **1** | CI smoke (`test_http_benchmarks`) |
+| 2026-07-19 | 1000 | 2000 | epoll | 1000 | 1000 | 6096 | ok | **1** | 1k ladder point |
+| 2026-07-19 | 10000 | 2000 | epoll | 10000 | 10000 | 24096 | ok | **1** | 10k ladder point |
+| 2026-07-19 | 600 | 100 | epoll | 508 | — | **1024** | skipped | **0** | failure mode: soft nofile |
+
+**Failure modes (documented)**
+
+| Mode | Symptom | Reproduction |
+|------|---------|--------------|
+| Soft `RLIMIT_NOFILE` | `open_fail>0`, `stable=0`; process stays up | `--raise-nofile 0 --connections 600` (soft=1024) |
+| Accept EMFILE (pre-fix) | readiness `TryAccept` raised → server tear-down / AV | fixed: `platform_socket_error_resource_limit` → `tarWouldBlock` |
+| Raised nofile 1k/10k | `stable=1` after probe | default `--raise-nofile 1` (uses `platform_resource_set_limit`) |
+
+**fd budget (same process)**: ≈ 2N client+server sockets + listen/epoll/stdio. Soft 1024
+tops out near ~500 concurrent holds; raise soft (≤ hard) for 1k/10k. Bench sets
+`IdleTimeout = hold_ms + 60s` so hold does not false-fail on Default 30s idle.
+
+**Not a Go connection leaderboard** — stability + failure-mode evidence only.
+
+#### L1 Client-observed latency (multi-conn harness)
+
+`bench_http_server` times each keep-alive request (write start → response complete)
+on the client threads, then reports nearest-rank percentiles.
+
+```sh
+./build/projects/nextpas.core.http/bench_server/bench_http_server \
+  --requests 20000 --threads 4 --workload no_url --backend epoll
+```
+
+| Date | Workload | Backend | req/s | p50_ns | p99_ns | mean_ns | samples |
+| ---- | -------- | ------- | ----: | -----: | -----: | ------: | ------: |
+| 2026-07-20 L1 | `no_url` 20k×4 | epoll | 47640 | 58418 | 178376 | 78501 | 20000 |
+
+Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
+
+#### E1 Go comparator p50/p99 (same harness)
+
+**Percentile definition** (nextPas + Go aligned): nearest-rank
+`index = ceil(pct/100 * N) - 1`, clamped. Summary lines:
+`median_p50_ns=` / `median_p99_ns=` (median across `--runs`).
+
+**Client honesty**
+
+| Impl | Client | `client_read_mode` |
+| ---- | ------ | ------------------ |
+| nextPas | raw TCP, parse headers + Content-Length body | `header_plus_content_length` |
+| Go | `net/http` keep-alive + body drain | `http_client_body_drain` |
+| Rust std | residual QPS-only (no latency yet) | — |
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 1 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e1-epoll-no_url.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k --runs 1 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e1-epoll-response_1k.md
+```
+
+| Date | Workload | nextPas p50/p99 (ns) | Go p50/p99 (ns) | p99 nextPas/Go | Gate ≤2× |
+| ---- | -------- | -------------------: | --------------: | -------------: | -------- |
+| 2026-07-20 E1 | `no_url` 20k×4 epoll | 54850 / **192227** | 125703 / 673060 | **0.29×** | **Met** |
+| 2026-07-20 E1 | `response_1k` 20k×4 epoll | 60363 / **171706** | 128469 / 660457 | **0.26×** | **Met** |
+
+#### E3 Official multi-run refresh (2026-07-20)
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e3-epoll-no_url-runs3.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k --runs 3 \
+  --nextpas-backend epoll \
+  --output build/projects/nextpas.core.http/server_comparison/e3-epoll-response_1k-runs3.md
+```
+
+| Date | Workload | nextPas median req/s | Go median req/s | RPS ratio | nextPas median p50/p99 | Go median p50/p99 | p99 ratio |
+| ---- | -------- | -------------------: | --------------: | --------: | ---------------------: | ----------------: | --------: |
+| 2026-07-20 E3 | `no_url` 20k×4 epoll runs=3 | **51120** | 23160 | **2.21×** | 56440 / **150141** | 150427 / 729325 | **0.21×** |
+| 2026-07-20 E3 | `response_1k` 20k×4 epoll runs=3 | **49493** | 22343 | **2.22×** | 60369 / **159855** | 154870 / 735282 | **0.22×** |
+
+**E3 extras**
+
+| Check | Result |
+| ----- | ------ |
+| Ladder 1k idle epoll probe | `stable=1` open_ok=1000 probe_ok=1000 |
+| Ladder 10k idle epoll probe | `stable=1` open_ok=10000 probe_ok=10000 |
+| `test_http_h2_facade` heaptrc | **0 unfreed** (5/5) |
+
+**Era E Done when**：E1–E3 Met。 **Met.** Not a cross-machine ranking.
+
+#### S3-1 / S3-2 H2 server scale
+
+Harness: `benchmarks/nextpas.core.http/bench_h2_server/`
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h2_server smoke
+# S3-2 mid (RoundTripMany multiplex, threaded server)
+./build/projects/nextpas.core.http/bench_h2_server/bench_h2_server \
+  --mode multiplex --backend threaded \
+  --connections 8 --streams 16 --batches 200
+```
+
+| Date | mode | backend | shape | completed | req/s | stable | Note |
+| ---- | ---- | ------- | ----- | --------: | ----: | -----: | ---- |
+| 2026-07-20 S3-1 | sequential | threaded | 4×4×50 | 800 | **89** | 1 | facade Get residual |
+| 2026-07-20 S3-2 | multiplex | threaded | 4×4×25 | 400 | **357** | 1 | smoke |
+| 2026-07-20 S3-2 | multiplex | threaded | **8×16×200** | **25600** | **2872** | **1** | mid |
+| 2026-07-20 S3-3 | multiplex | **epoll** | 4×4×25 | 400 | **353** | **1** | smoke (post I/O fix) |
+| 2026-07-20 S3-3 | multiplex | **epoll** | 8×16×100 | 12800 | **2882** | **1** | mid-ish |
+
+**S3-2 fix**: `RoundTripMany` demux `Init(0)` → dummy stream ID 1.
+
+**S3-3 fix (H2 epoll hang)**: poll path used blocking `Read`/`Write`; non-blocking
+EAGAIN was treated as EOF / zero-write, leaving empty `ANextEvents` forever.
+`FillReadBufferPoll` / `DrainWriteBufferPoll` now use `TryRead`/`TryWrite` +
+would-block → `peReadable`/`peWritable`.
+
+**Honest residuals**
+
+- Multiplex ~3k req/s still **≪** H1 epoll multi-conn ~48k (different shape).
+- No Go H2 same-harness row.
+- **Not** Scale-ready (H1/H2).
+
+#### S3-3 H1 vs H2 scale (same machine, honest shapes)
+
+| Path | Harness | Shape | req/s | Role |
+| ---- | ------- | ----- | ----: | ---- |
+| H1 epoll multi-conn | `bench_http_server` | 20k×4 `no_url` | **~48k** (Q2-1) | official H1 KPI |
+| H2 mux epoll | `bench_h2_server` | 8×16×100 | **~2.9k** | S3-3 |
+| H2 mux threaded | same | 8×16×200 | **~2.9k** | S3-2 |
+| H2 sequential | same | 4×4×50 | **~90** | residual |
+
+**Caveat**: do **not** form a single “H2/H1 ratio” KPI — H1 is multi-thread
+keep-alive QPS; H2 is multi-stream batch ops. Conclusion: H2 scale **evidence
+exists** (multiplex + epoll), still far below H1 server KPI; claim remains
+**Scale-ready (H1 server, Linux epoll)** only.
+
+#### Interim single-connection characterization (not scale KPI)
+
+| Date | Backend | Filter | iters | ns/op | ops/s | Note |
+| ---- | ------- | ------ | ----: | ----: | ----: | ---- |
+| 2026-07-19 | epoll | Direct/Plaintext | 2000 | 125248 | 7984 | L2 fullchain; ≠ multi-conn RPS |
+
+Caveats: single machine, single day; not a leaderboard.
+
 The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
 are the focused projects with their own project `Makefile`s and focused smoke
 coverage:
 
 - `bench_server`
+- `bench_conn_ladder` (S1-3 idle keep-alive connection ladder)
 - `bench_router`
 - `bench_headers`
 - `bench_h1writer`

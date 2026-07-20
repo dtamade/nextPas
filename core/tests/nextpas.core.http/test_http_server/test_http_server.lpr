@@ -9,6 +9,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.net,
@@ -1281,6 +1282,8 @@ begin
   Result.MaxRequestsPerConnection := AHttpOptions.MaxRequestsPerConnection;
   Result.RequestArena := AHttpOptions.RequestArena;
   Result.RequestArenaCapacity := AHttpOptions.RequestArenaCapacity;
+  { Unit tests assert WorkerHandoff submit counts / completion wakes. }
+  Result.PreferPollWorkerHandoff := True;
 end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -1572,6 +1575,64 @@ begin
     LResp := SendRawRequest(LPort, 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200 in response');
     Check(Pos('pong', LResp) > 0, 'body pong in response');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Q1-1: live SSE path — read until event body appears (keep-alive stream). }
+procedure TestLiveSSEEventStream;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LReq: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/events',
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LWriter: ISSEEventWriter;
+    begin
+      LWriter := StartSSE(AW);
+      LWriter.WriteEventSimple('message', 'hello-sse', '1');
+      LWriter.WriteComment('done');
+      LWriter.Close;
+    end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LReq := 'GET /events HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
+    LResp := '';
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (LN = 0) or (Pos('data: hello-sse', LResp) > 0);
+    finally
+      LConn.Close;
+    end;
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'live SSE status 200');
+    Check(Pos('text/event-stream', LResp) > 0, 'live SSE content-type');
+    Check(Pos('data: hello-sse', LResp) > 0, 'live SSE event data');
+    Check(Pos('id: 1', LResp) > 0, 'live SSE event id');
+    { Comment/framing covered by mock suite; chunked keep-alive may interleave
+      length prefixes so full ': done' substring is not required here. }
   finally
     StopServer(LServer, LHandle);
   end;
@@ -12308,11 +12369,112 @@ begin
   end;
 end;
 
+{ Q1-4: lock write/backpressure semantics in H1 source (CONTRACT §4.4). }
+procedure TestH1WriteBackpressureContractSource;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('procedure TH1ServerConnectionState.ArmPollWriteDeadline', LSrc) > 0,
+    'poll write deadline arm exists');
+  Check(Pos('tsiorWouldBlock', LSrc) > 0, 'would-block drain path present');
+  Check(Pos('ANextEvents := [peWritable]', LSrc) > 0,
+    'would-block subscribes peWritable');
+  Check(Pos('FPollWriteDeadline := TDeadline.Infinite', LSrc) > 0,
+    'successful/timeout drain clears write deadline');
+  Check(Pos('PreferPollWorkerHandoff', LSrc) > 0,
+    'S1-1 handoff flag coexists with drain path');
+  Check(Pos('not FOptions.PreferPollWorkerHandoff', LSrc) > 0,
+    'reactor-inline default does not remove drain/backpressure path');
+end;
+
+procedure TestH1OutboundBufferReuseSourceContract;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('function TH1ServerConnectionState.AcquireOutboundBuffer', LSrc) > 0,
+    'S2-1 acquire outbound free-list');
+  Check(Pos('procedure TH1ServerConnectionState.ReleaseOutboundBuffer', LSrc) > 0,
+    'S2-1 release outbound free-list');
+  Check(Pos('FSpareOutbound0', LSrc) > 0, 'S2-1 spare slot 0');
+  Check(Pos('FSpareOutbound1', LSrc) > 0, 'S2-1 spare slot 1 (pipeline depth)');
+  Check(Pos('AcquireOutboundBuffer', LSrc) > 0, 'poll/threaded paths use acquire');
+  Check(Pos('ReleaseOutboundBuffer(FPollOutbound)', LSrc) > 0,
+    'drain completion returns buffer to free-list');
+end;
+
+procedure TestH1FastPathFixedBodySourceContract;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('FAST_PATH_MAX_BODY = 65536', LSrc) > 0,
+    'S2-2 body size cap for snapshot copy');
+  Check(Pos('LFast.ContentLength > FAST_PATH_MAX_BODY', LSrc) > 0,
+    'S2-2 oversize body falls back to llhttp');
+  Check(Pos('TH1FastSnapshotBodyReader', LSrc) > 0,
+    'S2-2 snapshot body reader');
+  Check(Pos('TH1FastRequestSnapshot.Create(LFast, ABuf)', LSrc) > 0,
+    'S2-2 snapshot copies body from parse buffer');
+  { Still reject expect / TE / connection close }
+  Check(Pos('LFast.HasExpect', LSrc) > 0, 'S2-2 still rejects Expect');
+  Check(Pos('LFast.HasTransferEncoding', LSrc) > 0, 'S2-2 still rejects TE');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestLivePostFixedBodyOnEpoll;
+{ S2-2: fixed-length POST body readable on epoll (fast-path snapshot body). }
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: THttpServerOptions;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/echo', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: TBytes;
+    LStr: string;
+  begin
+    LBody := HttpReadRequestBodyBytes(AReq);
+    if Length(LBody) > 0 then
+      SetString(LStr, PAnsiChar(@LBody[0]), Length(LBody))
+    else
+      LStr := '';
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LStr))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(LStr) > 0 then
+      AW.Write(LStr[1], SizeUInt(Length(LStr)));
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'POST /echo HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Content-Length: 5'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      'hello');
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'epoll POST fixed body status 200');
+    Check(Pos('hello', LResp) > 0, 'epoll POST fixed body echoed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 { Main }
 
 begin
   T := TTestSuite.Create('nextpas.core.http.server');
   T.Test('Simple GET 200', @TestSimpleGet200);
+  T.Test('Live SSE event stream', @TestLiveSSEEventStream);
   T.Test('Empty handler commits default response',
     @TestEmptyHandlerCommitsDefaultResponse);
   {$IFDEF NEXTPAS_LINUX}
@@ -12816,5 +12978,15 @@ begin
   T.Test('Server options Default vs Production timeouts',
     @TestServerOptionsDefaultAndProductionTimeouts);
   T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
+  T.Test('H1 write/backpressure contract source locks',
+    @TestH1WriteBackpressureContractSource);
+  T.Test('H1 outbound buffer reuse source contract',
+    @TestH1OutboundBufferReuseSourceContract);
+  T.Test('H1 fast path fixed-body source contract',
+    @TestH1FastPathFixedBodySourceContract);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('Live POST fixed body on epoll (S2-2)',
+    @TestLivePostFixedBodyOnEpoll);
+  {$ENDIF}
   if not T.Run then Halt(1);
 end.

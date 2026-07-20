@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -73,7 +74,38 @@ func requestsForThread(index, totalRequests, threads int) int {
 	return count
 }
 
-func runClient(url string, requests int, workload string, completed *int64, wg *sync.WaitGroup) {
+// percentileNs matches nextPas bench_http_server nearest-rank:
+// index = ceil(pct/100 * N) - 1, clamped to [0, N-1].
+func percentileNs(samples []int64, pct int) int64 {
+	n := len(samples)
+	if n <= 0 {
+		return 0
+	}
+	if n == 1 {
+		return samples[0]
+	}
+	idx := (pct*n+99)/100 - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= n {
+		idx = n - 1
+	}
+	return samples[idx]
+}
+
+func meanNs(samples []int64) int64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	var sum int64
+	for _, v := range samples {
+		sum += v
+	}
+	return sum / int64(len(samples))
+}
+
+func runClient(url string, requests int, workload string, completed *int64, samplesOut *[]int64, samplesMu *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	transport := &http.Transport{
@@ -90,6 +122,7 @@ func runClient(url string, requests int, workload string, completed *int64, wg *
 		Timeout:   10 * time.Second,
 	}
 
+	local := make([]int64, 0, requests)
 	for i := 0; i < requests; i++ {
 		request, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -98,20 +131,31 @@ func runClient(url string, requests int, workload string, completed *int64, wg *
 		if workload == workloadAdapterNoUrl {
 			request.Header.Set("Connection", "keep-alive")
 		}
+		t0 := time.Now()
 		response, err := client.Do(request)
 		if err != nil {
 			return
 		}
 		_, readErr := io.Copy(io.Discard, response.Body)
 		closeErr := response.Body.Close()
+		t1 := time.Now()
 		if readErr != nil || closeErr != nil || response.StatusCode != http.StatusOK {
 			return
 		}
+		if d := t1.Sub(t0).Nanoseconds(); d >= 0 {
+			local = append(local, d)
+		}
 		atomic.AddInt64(completed, 1)
+	}
+
+	if len(local) > 0 {
+		samplesMu.Lock()
+		*samplesOut = append(*samplesOut, local...)
+		samplesMu.Unlock()
 	}
 }
 
-func printResults(requests, requestedThreads, effectiveThreads int, workload string, completed int64, elapsed time.Duration) {
+func printResults(requests, requestedThreads, effectiveThreads int, workload string, completed int64, elapsed time.Duration, samples []int64) {
 	elapsedNs := elapsed.Nanoseconds()
 	nsPerOp := int64(0)
 	reqPerSec := int64(0)
@@ -128,6 +172,11 @@ func printResults(requests, requestedThreads, effectiveThreads int, workload str
 		reqPerSec = completed * int64(time.Second) / elapsedNs
 	}
 
+	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
+	p50 := percentileNs(samples, 50)
+	p99 := percentileNs(samples, 99)
+	mean := meanNs(samples)
+
 	fmt.Println("operation=http.server.keepalive")
 	fmt.Println("workload=" + workload)
 	fmt.Println("impl=go")
@@ -141,6 +190,10 @@ func printResults(requests, requestedThreads, effectiveThreads int, workload str
 	fmt.Printf("elapsed_ns=%d\n", elapsedNs)
 	fmt.Printf("ns/op=%d\n", nsPerOp)
 	fmt.Printf("req/s=%d\n", reqPerSec)
+	fmt.Printf("latency_samples=%d\n", len(samples))
+	fmt.Printf("p50_ns=%d\n", p50)
+	fmt.Printf("p99_ns=%d\n", p99)
+	fmt.Printf("mean_ns=%d\n", mean)
 }
 
 func main() {
@@ -184,12 +237,14 @@ func main() {
 	}
 	url := "http://" + listener.Addr().String() + urlPath
 	var completed int64
+	var samples []int64
+	var samplesMu sync.Mutex
 	var wg sync.WaitGroup
 
 	start := time.Now()
 	for i := 0; i < effectiveThreads; i++ {
 		wg.Add(1)
-		go runClient(url, requestsForThread(i, requests, effectiveThreads), workload, &completed, &wg)
+		go runClient(url, requestsForThread(i, requests, effectiveThreads), workload, &completed, &samples, &samplesMu, &wg)
 	}
 	wg.Wait()
 	elapsed := time.Since(start)
@@ -198,5 +253,5 @@ func main() {
 	_ = server.Shutdown(ctx)
 	cancel()
 
-	printResults(requests, requestedThreads, effectiveThreads, workload, completed, elapsed)
+	printResults(requests, requestedThreads, effectiveThreads, workload, completed, elapsed, samples)
 }
