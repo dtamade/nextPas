@@ -125,10 +125,12 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - [x] bench-envelope.md Q5 节 + 非公平声明
 - [x] formal samples≥3：`compare-matched-formal` / `run-q5-matched-formal.sh`
 
-### Maintenance add-on（本波）
+### Maintenance preferred-path 进度
 
-- preferred-path 热点：`async.cancellation`、`sync.once`、`sync.barrier`、`thread.future`、`id.xid`
-- H4 charter：`charter-h4-thread-pool-mpsc.md`（实现未开）
+- **done**：`async.cancellation`、`sync.once`、`sync.barrier`、`thread.future`、`id.xid`、`async.combinators`、`bench.run`
+- **done**：`sync.event` / `semaphore` / `spinlock`、`stopwatch.tick.*`、`io.reactor`+`epoll`+`kqueue`
+- **H4-1 done**：`thread.pool` → SegQueue
+- **推迟**：`net.async.*`、`io.reactor.iocp`、`async.loop`、mem.*
 
 ### Q3-a checklist
 
