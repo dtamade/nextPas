@@ -57,6 +57,8 @@
 
 **跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）。http/net 仍未直接 uses lockfree 容器。
 
+**H4（charter only）**：拟议 `thread.pool`（非 worksteal）Submit → T1 MPSC — 见 [`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md)。**未接线**。
+
 ### 2.5 H3-3 consumer regression 门
 
 | 入口 | 覆盖 |
