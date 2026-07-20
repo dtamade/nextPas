@@ -28,7 +28,9 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance + [Q 线](quality-parity.md)**（对标 Go/Rust 质量/规模；**不 invent R9**）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance preferred close-out**（[`READY.md`](READY.md) 三句话；[`quality-parity.md`](quality-parity.md)；**不 invent R9**）。生产热路径 preferred residual **0**（钉 `test_lockfree_preferred_path`）。
+
+**教学示例**：`core/examples/nextpas.core.lockfree/t1_close_join_free/`（Channel）；`t1_segqueue_workers/`（SegQueue N 产 + N 消）。选型见 [`selection-guide.md`](selection-guide.md)「任务投递四选一」。
 
 ## Progress-guarantee matrix
 

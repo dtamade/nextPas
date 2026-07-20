@@ -8,7 +8,8 @@ uses
   nextpas.core.text.unicode.types,
   nextpas.core.text.unicode,
   nextpas.core.text.unicode.utils,
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.text.width;
 
 const
   ASCII_50     = 'The quick brown fox jumps over the lazy dog 12345!';
@@ -205,6 +206,15 @@ var I: Int64; LCp: UInt32; LIter: TUTF8Iterator; begin
   end;
 end;
 
+
+{ === W1-W2: Display Width === }
+
+procedure BenchStringDisplayWidth_Ascii200(AIterations: Int64);
+var I: Int64; begin for I := 1 to AIterations do LSinkInt := Integer(StringDisplayWidth(ASCII_200)); end;
+
+procedure BenchStringDisplayWidth_BmpCjk50(AIterations: Int64);
+var I: Int64; begin for I := 1 to AIterations do LSinkInt := Integer(StringDisplayWidth(BMP_CJK_50)); end;
+
 { === F1-F5: Case Folding + Utils === }
 
 procedure BenchCaseFoldSimple_Ascii200(AIterations: Int64);
@@ -306,6 +316,13 @@ begin
     WriteLn;
 
     // F1-F5: Case Folding + Utils
+    LResults := TBenchSuite.Create('Unicode Display Width')
+      .AddLoop('StringDisplayWidth ASCII-200', @BenchStringDisplayWidth_Ascii200)
+      .AddLoop('StringDisplayWidth BMP-CJK-50', @BenchStringDisplayWidth_BmpCjk50)
+      .Run;
+    WriteLn(LResults.PrintToConsole);
+    WriteLn;
+
     LResults := TBenchSuite.Create('Unicode Case & Utils')
       .AddLoop('CaseFoldSimple ASCII-200', @BenchCaseFoldSimple_Ascii200)
       .AddLoop('CaseFoldSimple BMP-Latin-50', @BenchCaseFoldSimple_BmpLatin50)

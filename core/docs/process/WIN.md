@@ -53,6 +53,9 @@ CI 接线：`.github/workflows/core-ci.yml` → job `test-windows-runtime` → s
 
 **通过标准**：五套件均绿。Watch create-event 仍允许 soft residual（与 wine 套件相同逻辑）。
 
+**首证**：GHA run [29751744779](https://github.com/dtamade/nextPas/actions/runs/29751744779) · 5/5 gates · 24 cases · `b824a31ce`。
+
+
 **禁止**：把 wine 结果改写成 `host-windows`；把 min-set 说成「全量 L2 Windows 测试」。
 
 ---

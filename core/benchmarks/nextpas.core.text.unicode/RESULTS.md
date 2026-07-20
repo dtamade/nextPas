@@ -1,3 +1,7 @@
+# Unicode Benchmark Results
+
+> **权威表**：[`core/docs/text/unicode/SCORECARD.md`](../../docs/text/unicode/SCORECARD.md) **v3 / P2-2**
+
 # Unicode Benchmark Results (SCORECARD)
 
 ## 环境

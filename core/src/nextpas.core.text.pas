@@ -93,6 +93,8 @@ function StringDisplayWidth(const AStr: AnsiString): SizeUInt; overload; inline;
 { Common UTF-8 Unicode helpers (full property surface stays in text.unicode) }
 function UTF8ToUpper(const AValue: string): string; inline;
 function UTF8ToLower(const AValue: string): string; inline;
+function UTF8ToTitle(const AValue: string): string; inline;
+function UTF8ToTitleWords(const AValue: string): string; inline;
 function UTF8CaseFold(const AValue: string): string; inline;
 function NFD(const AValue: string): string; inline;
 function NFC(const AValue: string): string; inline;
@@ -283,6 +285,16 @@ end;
 function UTF8CaseFold(const AValue: string): string;
 begin
   Result := nextpas.core.text.unicode.UTF8CaseFold(AValue);
+end;
+
+function UTF8ToTitle(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.UTF8ToTitle(AValue);
+end;
+
+function UTF8ToTitleWords(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.UTF8ToTitleWords(AValue);
 end;
 
 function NFD(const AValue: string): string;

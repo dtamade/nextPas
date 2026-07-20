@@ -53,6 +53,11 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
 4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
 
+### 二值属性（BinaryProperty）
+
+1. UCD **DerivedCoreProperties + PropList + emoji-data** 表驱动（`HasBinaryProperty`）
+2. Phase2 起含 Hex_Digit / Pattern_* / Dash / Quotation_Mark / Diacritic / Join_Control / Noncharacter / Unified_Ideograph / Regional_Indicator 等（对标 Go `unicode`）
+
 ### 大小写（CaseFolding / SpecialCasing）
 
 1. **官方一致性**：UCD 16.0 `CaseFolding.txt` 状态 C/F/S 全量 fail=0（默认 **clRoot**）
@@ -102,6 +107,7 @@ Fixture / UCD 升版生成：见 [README.md#ucd-升版一条龙](README.md#ucd-�
 | 日期 | 变更 |
 |------|------|
 | 2026-07-20 | M2：UTF8ToTitleWords + clLithuanian |
+| 2026-07-20 | P2-1：BinaryProperty PropList 扩展（Go unicode 对标） |
 | 2026-07-20 | M1：ROADMAP + SCORECARD + `make gate`；测试入口收敛 |
 | 2026-07-20 | Turkic/locale Case：TCaseLocale + CaseFold T + SpecialCasing tr/az |
 | 2026-07-20 | UAX#9 Bidi 官方双 harness 全绿（Character+Abstract）+ ResolveBidi API |

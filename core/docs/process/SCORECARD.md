@@ -55,14 +55,21 @@ Host `make test` 在非 Windows 上为 skip 分支（1 passed）。
 bash core/scripts/l2-windows-ci-matrix.sh
 ```
 
-| 套件 | 目标 | truth |
+| 套件 | 结果 | truth |
 |------|------|-------|
-| 同上 5 目录 | native `make clean test` | **`host-windows`** |
+| l2.process | **11 passed** | host-windows |
+| l2.fs | **3 passed** | host-windows |
+| l2.fs.watch | **3 passed** | host-windows |
+| l2.path | **4 passed** | host-windows |
+| l2.os.env | **3 passed** | host-windows |
+| **合计** | **5/5 gates · 24 cases** | **`host-windows`** |
 
-CI：`.github/workflows/core-ci.yml` job `test-windows-runtime` step  
-`L2 process/fs/path/env Windows min-set (host-windows)`。
+证据：GHA `test-windows-runtime` run **29751744779** @ `b824a31ce`  
+（platform 矩阵 27/28 时 L2 仍绿：`if: always()` 解耦）。
 
-**范围**：仅 min-set 5 门；**不是**全量 Host L2。数字以 GHA 绿为准（本地无 Windows 时本表只登记门禁，不伪造 pass 数）。
+CI 步骤：`L2 process/fs/path/env Windows min-set (host-windows)`。
+
+**范围**：仅 min-set 5 门；**不是**全量 Host L2。
 
 ---
 

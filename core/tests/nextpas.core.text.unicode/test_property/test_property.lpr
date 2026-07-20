@@ -298,6 +298,19 @@ begin
   // SMP
   Check(HasBinaryProperty($1D400, ubpUppercase), 'Math Bold A Uppercase');
   Check(HasBinaryProperty($1D41A, ubpLowercase), 'Math Bold a Lowercase');
+
+  { Phase 2 PropList — Go unicode.* parity }
+  Check(HasBinaryProperty(Ord('A'), ubpAsciiHexDigit), 'A ASCII_Hex_Digit');
+  Check(HasBinaryProperty(Ord('f'), ubpHexDigit), 'f Hex_Digit');
+  Check(not HasBinaryProperty(Ord('G'), ubpAsciiHexDigit), 'G not ASCII_Hex_Digit');
+  Check(HasBinaryProperty(Ord(' '), ubpPatternWhiteSpace), 'space Pattern_White_Space');
+  Check(HasBinaryProperty(Ord('-'), ubpDash), 'hyphen Dash');
+  Check(HasBinaryProperty(Ord('"'), ubpQuotationMark), 'quote Quotation_Mark');
+  Check(HasBinaryProperty($0301, ubpDiacritic), 'combining acute Diacritic');
+  Check(HasBinaryProperty($200C, ubpJoinControl), 'ZWNJ Join_Control');
+  Check(HasBinaryProperty($FDD0, ubpNoncharacterCodePoint), 'FDD0 Noncharacter');
+  Check(HasBinaryProperty($4E00, ubpUnifiedIdeograph), 'U+4E00 Unified_Ideograph');
+  Check(HasBinaryProperty($1F1E6, ubpRegionalIndicator), 'RI Regional_Indicator');
 end;
 
 { === GetGraphemeBreakProperty === }

@@ -187,6 +187,14 @@ begin
     'AddKeyValues host override');
   CheckContains(GStartupExampleOutput, 'keyvalues-port=8443',
     'AddKeyValues port override');
+  CheckContains(GStartupExampleOutput, 'section-host=sec-host',
+    'ConfigSection host');
+  CheckContains(GStartupExampleOutput, 'duration-timeout-ns=250000000',
+    'GetDurationNs');
+  CheckContains(GStartupExampleOutput, 'bytesize-max-body=2048',
+    'GetByteSize');
+  CheckContains(GStartupExampleOutput, 'clone-merge=pass', 'Clone/MergeFrom');
+  CheckContains(GStartupExampleOutput, 'debug-dump=a=2', 'DebugDump');
 end;
 
 procedure TestExportPatternsExampleRunPasses;
