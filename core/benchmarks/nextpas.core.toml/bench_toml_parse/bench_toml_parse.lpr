@@ -216,13 +216,13 @@ begin
     .SetQuiet(True)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .AddLoop('parse/small (10 keys)', @BenchSmallParse)
-    .AddLoop('parse/medium (~50 keys)', @BenchMediumParse)
-    .AddLoop('parse/large (~700 keys)', @BenchLargeParse)
-    .AddLoop('parse/string-heavy (100 strings)', @BenchStringHeavy)
-    .AddLoop('parse/long-string (10KB value)', @BenchLongString)
-    .AddLoop('facade/small (parse+interface)', @BenchSmallFacade)
-    .AddLoop('access/medium (3 lookups)', @BenchMediumAccess)
+    .AddLoop('parse/small', @BenchSmallParse)
+    .AddLoop('parse/medium', @BenchMediumParse)
+    .AddLoop('parse/large', @BenchLargeParse)
+    .AddLoop('parse/string-heavy', @BenchStringHeavy)
+    .AddLoop('parse/long-string', @BenchLongString)
+    .AddLoop('facade/small', @BenchSmallFacade)
+    .AddLoop('access/medium', @BenchMediumAccess)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');

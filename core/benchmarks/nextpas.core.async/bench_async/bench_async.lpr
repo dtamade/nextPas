@@ -36,7 +36,7 @@ begin
     .SetQuiet(True)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .Add('TimerSchedule', @BenchTimerSchedule).Add('TimerFire', @BenchTimerFire).Add('TimerCancel', @BenchTimerCancel)
+    .Add('Timer/Schedule', @BenchTimerSchedule).Add('Timer/Fire', @BenchTimerFire).Add('Timer/Cancel', @BenchTimerCancel)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');

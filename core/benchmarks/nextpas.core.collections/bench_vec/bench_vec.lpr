@@ -164,14 +164,14 @@ begin
     .SetQuiet(True)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .AddLoop('Vec.Push/N=100000', @BenchPush)
-    .AddLoop('Vec.Push+Reserve/N=100000', @BenchPushPrealloc)
-    .AddLoop('Vec.Pop/N=100000', @BenchPop)
-    .AddLoop('Vec.Get/N=100000', @BenchGet)
-    .AddLoop('Vec.Get(Memory ptr)/N=100000', @BenchGetPtr)
-    .AddLoop('Vec.Iterate/N=100000', @BenchIterate)
-    .AddLoop('Vec.Insert(mid)/N=1000', @BenchInsertMiddle)
-    .AddLoop('Vec.Delete(mid)/N=1000', @BenchDeleteMiddle)
+    .AddLoop('Vec/Push/N=100000', @BenchPush)
+    .AddLoop('Vec/PushReserve/N=100000', @BenchPushPrealloc)
+    .AddLoop('Vec/Pop/N=100000', @BenchPop)
+    .AddLoop('Vec/Get/N=100000', @BenchGet)
+    .AddLoop('Vec/GetPtr/N=100000', @BenchGetPtr)
+    .AddLoop('Vec/Iterate/N=100000', @BenchIterate)
+    .AddLoop('Vec/InsertMid/N=1000', @BenchInsertMiddle)
+    .AddLoop('Vec/DeleteMid/N=1000', @BenchDeleteMiddle)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');

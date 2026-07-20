@@ -73,10 +73,10 @@ begin
     .SetQuiet(True)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .AddLoop('Base64.Encode', @BenchBase64Encode)
-    .AddLoop('Base64.Decode', @BenchBase64Decode)
-    .AddLoop('Hex.Encode', @BenchHexEncode)
-    .AddLoop('Hex.Decode', @BenchHexDecode)
+    .AddLoop('Base64/Encode', @BenchBase64Encode)
+    .AddLoop('Base64/Decode', @BenchBase64Decode)
+    .AddLoop('Hex/Encode', @BenchHexEncode)
+    .AddLoop('Hex/Decode', @BenchHexDecode)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');

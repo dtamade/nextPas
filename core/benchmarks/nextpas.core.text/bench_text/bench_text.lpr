@@ -41,8 +41,8 @@ begin
     .SetQuiet(True)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .Add('IndexOf', @BenchIndexOf).Add('IntToStr', @BenchIntToStr).Add('UIntToStr', @BenchUIntToStr)
-    .Add('HexStr', @BenchHexStr).Add('JsonEscape', @BenchJsonEscape).Add('TrimLeft', @BenchTrimLeft)
+    .Add('text/IndexOf', @BenchIndexOf).Add('text/IntToStr', @BenchIntToStr).Add('text/UIntToStr', @BenchUIntToStr)
+    .Add('text/HexStr', @BenchHexStr).Add('text/JsonEscape', @BenchJsonEscape).Add('text/TrimLeft', @BenchTrimLeft)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
