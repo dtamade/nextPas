@@ -4,7 +4,7 @@
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
 **最后更新**：2026-07-21
-**版本**：1.6
+**版本**：1.6.1
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -193,6 +193,8 @@ TChannelRecvResult = (crrOk, crrClosed, crrEmpty, crrTimeout);
 | `RecvTimeout` | `crrOk` | `crrClosed` | (wait) | `crrTimeout` |
 | `Send`/`Recv` | `True` | `False`（Recv 排空后） | 阻塞 | — |
 
+**决议（1.6.1 / F-R1）**：阻塞 `Send`/`Recv` **保持 `Boolean`**（成功 vs 关闭/失败），与 Go channel 一致；满/空只体现在阻塞或 `Try*`/`*Timeout` 枚举。**不**将 `Send`/`Recv` 改为枚举返回（破坏面 > 收益）。
+
 **枚举符号可见性**：FPC 门面 type alias **不**导入 `csrOk` 等成员。消费者请 `uses nextpas.core.sync, nextpas.core.sync.base`。
 
 **已废弃文档名（不得再写）**：`ILockable`、`IRWLockable`、`DoCall`、`WaitFor` / `WaitForTimeout`（毫秒版签名）、`IMutex.NativeHandle`（已迁至 `INativeMutex`）。
@@ -247,7 +249,14 @@ TChannelRecvResult = (crrOk, crrClosed, crrEmpty, crrTimeout);
 | 动态增加 | 否 | `Add` | 否 |
 | 典型用途 | 启动门闩 | 任务完成汇合 | 阶段同步 |
 
-### 1.8 Channel vs async.channel
+### 1.8 通道选型（sync / thread / lockfree / async）
+
+| 需求 | 选用 |
+|------|------|
+| L1 有界 `Pointer` 同步 MPMC | **`sync.Channel`** |
+| 类型安全线程间队列 | **`thread.IChannel<T>`** |
+| 无锁/高性能通道 | **`lockfree.channel`** |
+| 事件循环回调式 | **`async.IAsyncChannel`** |
 
 | | `sync.Channel` | `async.IAsyncChannel` |
 |--|----------------|------------------------|
@@ -376,3 +385,4 @@ make -C core/tests/nextpas.core.sync test
 | 2026-07-20 | 1.4 | `WaitTimeout`/`TryAcquireTimeout` `TDuration` 重载；`DoOnce` 别名；`WaitGroup.WaitTimeout`；`sync.errors` 统一错误；`FHandle` private；测试/示例/bench 禁用 SysUtils/Classes/SyncObjs，改 `TWorkerThread` |
 | 2026-07-20 | 1.5 | `RecursiveMutex`；`ILatch`/`INotify`/`IChannel`；Scoped 组合器；`TSyncPool` 门面 advanced re-export；`Do_` 仍冻结 |
 | 2026-07-21 | 1.6 | Channel `csrTimeout`/`crrTimeout`；CondVar WaitTimeout 区分 TIMEDOUT/raise；NotifyAll 清 permit；`DoOnce(TSyncProc)`；Pool 强制 `TPoolItem` |
+| 2026-07-21 | 1.6.1 | 文档决议：Send/Recv 保持 Boolean；通道选型表；N1 竞态/异常回归测试 |

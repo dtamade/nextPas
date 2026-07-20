@@ -2,7 +2,7 @@
 
 **Lane**: `sync` @ `.worktrees/sync`
 **状态**: **Maintenance Ready**
-**更新**: 2026-07-21（CONTRACT **1.6** usability harden）
+**更新**: 2026-07-21（CONTRACT **1.6.1** N1 测试 + N2 文档决议）
 
 ## 愿景
 
@@ -18,9 +18,9 @@
 - [x] SCORECARD SC1–SC10（含 multi-sample contended）
 - [x] 示例 `core/examples/nextpas.core.sync/sync_basics`
 - [x] 文档 SSOT：README / CONTRACT / SCORECARD / 本 GOAL_TREE
-- [x] **1.4 usability**：`TDuration` 超时、`DoOnce`、`sync.errors`、`TWorkerThread` 消费者
-- [x] **1.5 P3**：`RecursiveMutex`、`Latch`、`Notify`、`Channel`、Scoped、`TSyncPool` 门面
-- [x] **1.6 harden**：Channel timeout 枚举；CondVar 错误/超时分离；NotifyAll 语义；Once 闭包；Pool `TPoolItem` 检查
+- [x] **1.4–1.6** 可用性与 P3 词汇表
+- [x] **1.6.1 N1**：Channel close 竞态 / multi-recv / Once 闭包异常 / Boolean 矩阵 / Barrier 2×2 gen
+- [x] **1.6.1 N2**：F-R1 决议（Send/Recv 保持 Boolean）；通道选型表；Notify 注释；Deferred 登记
 - [x] path-limited land 多批
 
 ---
@@ -32,17 +32,20 @@
 | 触发 | 响应 |
 |------|------|
 | 测试/生产缺陷 | 最小修复 + focused gate + path-limited land |
-| 需要无界 / 泛型 channel | 新契约切片 |
-| 跨平台 held-destroy | owner-thread / debug 检测层 |
+| Barrier.WaitTimeout / Mutex timed lock | 有明确消费者再开切片 |
+| Pool DrainTLS 自动 | **cross-module** thread 退出钩子（Needs Review） |
+| 无界 / 泛型 sync.Channel | 与 `thread.IChannel<T>` 去重评审后再定 |
 
 ---
 
 ## Deferred（硬禁止 / 冻结）
 
-- 公开 API 重命名（如删除 `Do_`）— **冻结**
+- 公开 API 重命名（删除 `Do_`）— **冻结**
+- `Send`/`Recv` 改为枚举返回 — **否决**（1.6.1 决议；破坏面 > 收益）
 - FPC `SyncObjs` / 消费者直接 `SysUtils`/`Classes` — **禁止**
+- Event 默认改 auto — **不做**
 - 无界 channel / rendezvous(0) / 非 Pointer 载荷 — **待消费者驱动**
-- Event 默认改 auto — **不做**（破坏性；文档说明即可）
+- DrainTLS 自动回收 — **独立 cross-lane**
 
 ---
 

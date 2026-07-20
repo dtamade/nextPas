@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：**Maintenance Ready** — CONTRACT **1.6**（Channel 超时枚举、CondVar 错误面、Notify/Once/Pool 硬化）
+**状态**：**Maintenance Ready** — CONTRACT **1.6.1**（1.6 硬化 + N1 回归测试 + F-R1/选型文档决议）
 
 ---
 
@@ -70,12 +70,22 @@ procedure WithLock / WithReadLock / WithWriteLock;
 
 超时：ns + `TDuration`（推荐 Duration）。多线程消费者使用 `TWorkerThread`。
 
-**Channel 结果**：`TrySend` 满 → `csrFull`；`SendTimeout` 到期 → **`csrTimeout`**（二者不同）。
-枚举常量定义在 `nextpas.core.sync.base`：`uses nextpas.core.sync, nextpas.core.sync.base`。
+**Channel 结果**：
 
-**Event 默认**：`Event` / `Event(True)` = **manual reset**；auto 请 `Event(False)`。
+- `TrySend` 满 → `csrFull`；`SendTimeout` 到期 → **`csrTimeout`**（二者不同）
+- 阻塞 `Send`/`Recv` 为 **`Boolean`**（成功 / 关闭失败）— **不**改为枚举（1.6.1 决议）
+- 枚举常量：`uses nextpas.core.sync, nextpas.core.sync.base`
 
-**注意**：`async.channel` 是事件循环模型，与 L1 阻塞 `Channel` 不混用。
+**Event 默认**：`Event` / `Event(True)` = **manual reset**；auto 请 **`Event(False)`**（不会改默认）。
+
+**通道选型**：
+
+| 需求 | 模块 |
+|------|------|
+| 有界 Pointer 同步 | `sync.Channel` |
+| 类型安全队列 | `thread.IChannel<T>` |
+| 无锁 | `lockfree.channel` |
+| 事件循环 | `async.channel` |
 
 ---
 

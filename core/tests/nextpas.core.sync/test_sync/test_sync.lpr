@@ -1260,6 +1260,160 @@ begin
   end;
 end;
 
+procedure TestChannelCloseWakesBlockedRecv;
+var
+  C: IChannel;
+  LGot: Int32;
+  LOk: Int32;
+  Th: TProcWorker;
+  P: Pointer;
+begin
+  C := Channel(1);
+  LGot := 0;
+  LOk := 0;
+  Th := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+    LRecvOk: Boolean;
+  begin
+    LRecvOk := C.Recv(LP);
+    if LRecvOk then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  Th.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LGot), 'recv blocked before close');
+  C.Close;
+  Th.WaitFor;
+  Th.Free;
+  CheckEqual(Int64(1), Int64(LGot), 'recv unblocked by close');
+  CheckEqual(Int64(0), Int64(LOk), 'empty closed recv returns False');
+  Check(not C.Recv(P), 'subsequent Recv still False');
+end;
+
+procedure TestChannelMultiRecvClose;
+var
+  C: IChannel;
+  LGot: Int32;
+  LOk: Int32;
+  T1, T2: TProcWorker;
+begin
+  C := Channel(2);
+  LGot := 0;
+  LOk := 0;
+  T1 := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+  begin
+    if C.Recv(LP) then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  T2 := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+  begin
+    if C.Recv(LP) then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LGot), 'both blocked');
+  C.Close;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LGot), 'both woke');
+  CheckEqual(Int64(0), Int64(LOk), 'both got False on empty close');
+end;
+
+procedure TestDoOnceClosureExceptionResets;
+var
+  LOnce: IOnce;
+  LHits: Integer;
+  LRaised: Boolean;
+begin
+  LOnce := Once;
+  LHits := 0;
+  LRaised := False;
+  try
+    LOnce.DoOnce(procedure
+    begin
+      Inc(LHits);
+      raise EInvalidOperationError.Create('once boom');
+    end);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'exception propagated from closure');
+  Check(not LOnce.Done, 'not done after failed closure');
+  CheckEqual(Int64(1), Int64(LHits), 'failed attempt ran once');
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits, 10);
+  end);
+  CheckEqual(Int64(11), Int64(LHits), 'retry ran successfully');
+  Check(LOnce.Done, 'done after retry');
+end;
+
+procedure TestChannelSendRecvBooleanMatrix;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  { F-R1: blocking Send/Recv stay Boolean — success/closed only; never encode full/empty. }
+  C := Channel(1);
+  Check(C.Send(Pointer(9)), 'Send ok while open');
+  Check(C.Recv(P), 'Recv ok with item');
+  CheckEqual(Int64(9), Int64(PtrUInt(P)), 'value');
+  C.Close;
+  Check(not C.Send(Pointer(1)), 'Send False after close');
+  Check(not C.Recv(P), 'Recv False after close empty');
+end;
+
+procedure TestBarrierTwoThreadTwoGens;
+const
+  N = 2;
+var
+  LB: IBarrier;
+  LLeaders: Int32;
+  LDone: Int32;
+  LThreads: array[0..N - 1] of TProcWorker;
+  LI, LRound: Integer;
+begin
+  LB := Barrier(N);
+  for LRound := 1 to 2 do
+  begin
+    LLeaders := 0;
+    LDone := 0;
+    for LI := 0 to N - 1 do
+    begin
+      LThreads[LI] := TProcWorker.Create(procedure
+      var
+        LR: TBarrierWaitResult;
+      begin
+        LR := LB.Wait;
+        if LR.IsLeader then
+          InterlockedIncrement(LLeaders);
+        InterlockedIncrement(LDone);
+      end);
+      LThreads[LI].Start;
+    end;
+    for LI := 0 to N - 1 do
+    begin
+      LThreads[LI].WaitFor;
+      LThreads[LI].Free;
+    end;
+    CheckEqual(Int64(N), Int64(LDone), 'round done');
+    CheckEqual(Int64(1), Int64(LLeaders), 'one leader per round');
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -1334,6 +1488,11 @@ begin
   T.Test('Scoped RW', @TestScopedRW);
   T.Test('Pool facade', @TestPoolFacade);
   T.Test('Pool rejects non-TPoolItem', @TestPoolRejectsNonPoolItem);
+  T.Test('Channel close wakes blocked Recv', @TestChannelCloseWakesBlockedRecv);
+  T.Test('Channel multi Recv close', @TestChannelMultiRecvClose);
+  T.Test('DoOnce closure exception resets', @TestDoOnceClosureExceptionResets);
+  T.Test('Channel Send/Recv Boolean matrix', @TestChannelSendRecvBooleanMatrix);
+  T.Test('Barrier two-thread two gens', @TestBarrierTwoThreadTwoGens);
 
   if not T.Run then Halt(1);
 end.

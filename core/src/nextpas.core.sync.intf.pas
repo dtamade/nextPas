@@ -113,8 +113,9 @@ type
     function Remaining: Int32;
   end;
 
-  { Sticky notify: NotifyOne parks a permit if no waiter;
-    NotifyAll wakes all current waiters (generation). }
+  { NotifyOne: sticky permit if no waiter.
+    NotifyAll: clear permits + bump epoch; wakes only waiters already in Wait
+    (not sticky broadcast — use IEvent manual for that). }
   INotify = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560017}']
     procedure NotifyOne;
