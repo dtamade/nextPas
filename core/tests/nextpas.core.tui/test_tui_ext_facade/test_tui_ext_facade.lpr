@@ -232,6 +232,46 @@ begin
   Check(LPanel <> nil, '1x1 panel');
 end;
 
+procedure TestExtScrollViewSurface;
+var
+  LView: IScrollView;
+  LState: TScrollViewState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LView := TScrollView.New;
+  Check(LView <> nil, 'ext exposes TScrollView');
+  LState := TScrollViewState.Empty;
+  LState.ScrollDown(2);
+  CheckEqual(2, LState.OffsetY, 'scroll state via ext');
+  LArea := TRect.Make(0, 0, 20, 8);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LView.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'scrollview render stateful');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestExtModalSurface;
+var
+  LModal: IModal;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LModal := TModal.New.WithSize(10, 4).WithVisible(True);
+  Check(LModal <> nil, 'ext exposes TModal');
+  LArea := TRect.Make(0, 0, 40, 20);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LModal.Render(LArea, LBuf);
+    Check(True, 'modal render via ext');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
@@ -246,5 +286,7 @@ begin
   T.Test('ext app request animation frame', @TestExtAppRequestAnimationFrame);
   T.Test('ext loading start phase', @TestExtLoadingStartPhase);
   T.Test('ext panel grid 1x1', @TestExtPanelGridOneByOne);
+  T.Test('ext scrollview surface', @TestExtScrollViewSurface);
+  T.Test('ext modal surface', @TestExtModalSurface);
   if not T.Run then Halt(1);
 end.

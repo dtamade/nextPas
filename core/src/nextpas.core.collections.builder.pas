@@ -27,7 +27,7 @@ uses
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.vec,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap.swiss.adapter;
 
 type
 
@@ -103,7 +103,8 @@ type
   generic THashMapBuilder<K, V> = record
   private
     type
-      TMapType = specialize THashMap<K, V>;
+      { Align with MakeHashMap default: Swiss-backed IHashMap. }
+      TMapType = specialize TSwissHashMap<K, V>;
       IMapType = specialize IHashMap<K, V>;
       TSelf = specialize THashMapBuilder<K, V>;
   private

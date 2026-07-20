@@ -56,8 +56,8 @@
 | D2 | Scorecard SC1–SC27 全绿 + C7/C8 全绿（focused 0 leak） | **已满足**（M1） |
 | D3 | 全部 widget 有专属 suite（基础 ≥16，其余 ≥12） | **已满足**（40/40） |
 | D4 | 7 demos 教学路径契约（app-first） | **已满足** |
-| D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **未满足**（仍 full-only） |
-| D6 | 本 ROADMAP 权威存在；PARITY = Maintenance（B 完成后 → Idle） | **本文件起满足地图**；Idle 待 Phase B |
+| D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **已满足**（B1 Landed） |
+| D6 | 本 ROADMAP 权威存在；PARITY = Maintenance Idle | **已满足**（B1–B3 收尾） |
 | D7 | 无 P0 正确性 bug 挂账（或有 issue + 复现测） | **默认满足** |
 
 **D5 是唯一拦路「产品形状」项**；其余质量门禁已齐。
@@ -122,7 +122,7 @@ full         core+ext+experimental + ~30 advanced widgets（迁移伞）
 |------|------|
 | TApp + ScreenStack / Task / Theme / Panel | Done |
 | Focus / Keybind / FrameBudget | Done（SC25–27） |
-| scrollview / modal 在 ext | **Partial** — 实现在 full；core reject 已有；**未晋升** |
+| scrollview / modal 在 ext | **Done**（Phase B1） |
 
 ### 3.3 experimental / full
 
@@ -139,21 +139,38 @@ full         core+ext+experimental + ~30 advanced widgets（迁移伞）
 
 Q1–M1。退出：D1–D4 + SC1–SC27 + C7/C8。
 
-### Phase B — Facade 诚实与稳定应用集 — **下一开发阶段**
+### Phase B — Facade 诚实与稳定应用集 — **DONE**
 
-目标：`ext` 成为真实应用的完整稳定入口。
-
-| 步骤 | 内容 | 退出 |
+| 步骤 | 内容 | 状态 |
 |------|------|------|
-| B1 | scrollview + modal → **ext 导出** | 仅 uses ext 可用；core reject 仍失败；ext smoke |
-| B2 | CONTRACT / WIDGET_CATALOG / TIER_REGISTRY 同步 | 文档=导出 |
-| B3 | 评估下一批稳定候选（**最多 3 个**） | 书面列入/排除 |
-| B4 | full 标 migration-only | README 强调新代码 core/ext |
+| B1 | scrollview + modal → ext | **Done** `main@d0009c00f` |
+| B2 | TIER / WIDGET_CATALOG / CONTRACT 同步 | **Done**（随 B1） |
+| B3 | 下一批稳定候选评估（≤3） | **Done — 结论：停止晋升**（见下） |
+| B4 | full = migration-only | **Done**（README） |
 
-**不做**：一次搬空 full；core 塞 TApp。  
-**B 完成后**：D5 满足 → 可进 Phase F Idle。
+#### B3 评估结论（2026-07-20）
 
-### Phase C — 平台（可选，不阻塞 B）
+**稳定应用最小集已满足 D5**，为避免再次「无边 feature 横搬」，**默认不再把 full 控件批量晋升到 ext**。
+
+若未来**有真实应用依赖**再单开波次，优先考虑（均 ≥16 测、无 experimental 依赖）：
+
+| 优先 | 候选 | 测数 | 理由 |
+|------|------|------|------|
+| 1 | `dialog` | 17 | 确认/取消对话，应用壳常见 |
+| 2 | `split_pane` | 17 | 双栏编辑布局 |
+| 3 | `select` | 19 | 表单单选 |
+
+**明确排除本轮及 Idle 默认路径**：toast/popover/tooltip/menu/… 等其余 full 控件 — 需要时走 `full` 或另立晋升 PR。
+
+### Phase F — Maintenance Idle — **当前状态**
+
+D1–D6 已满足 → **进入 Maintenance Idle**：
+
+1. 默认只接：回归 bug、泄漏、平台绿、**已批准**的单点晋升  
+2. 新 SC 必须附失败场景 + ROADMAP 维度缺口  
+3. **禁止**开放式「对标 go/rust Qxx」波次  
+
+### Phase C / D / E — 可选（不阻塞 Idle）
 
 | 项 | 说明 |
 |----|------|
@@ -170,15 +187,6 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 - bench 简化核禁止假胜营销  
 - 重大变更后 `RELEASE=1` 刷新快照  
 
-### Phase F — Maintenance Idle — **总终点**
-
-D1–D6 满足后：
-
-1. PARITY → **Maintenance Idle**  
-2. 默认只接：回归、泄漏、平台绿、已批准小幅晋升  
-3. 新 SC 必须附失败场景 + 维度缺口  
-4. 不再开开放式「对标 go/rust Qxx」波次  
-
 ---
 
 ## 5. 从现在起的顺序
@@ -186,13 +194,15 @@ D1–D6 满足后：
 ```
 [DONE] Phase A (Q1–M1)
    ↓
-[本批] 本 ROADMAP 落地 + 文档指针
+[DONE] ROADMAP 落地
    ↓
-[下一刀] Phase B1–B2：scrollview+modal → ext
+[DONE] Phase B1–B4：scrollview+modal → ext；B3 停止再晋升
    ↓
-[可选] B3 评估 0–3 个稳定 widget
-   ↓
-[Idle] Phase F；C/D/E 按需
+[NOW] Phase F Maintenance Idle
+   │
+   ├─ C 平台（可选）
+   ├─ D 协议（可选）
+   └─ E 测量纪律（持续轻量）
 ```
 
 Worktree：始终 `.worktrees/tui`，path-limited land。
@@ -211,4 +221,5 @@ make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
 
 ## 7. 一句话
 
-**tui 不是无边大海**：Phase A 质量基线已完成；剩余主线是 **B（ext 稳定集）→ F（Idle）**；可选平台/协议；**不是 SC28**。
+**tui 有终点**：Phase A 质量 + Phase B 稳定应用集已完成 → **Maintenance Idle**。  
+后续默认修回归；可选 C/D/E；**不是 SC28 / 不是再搬 full 全家桶**。
