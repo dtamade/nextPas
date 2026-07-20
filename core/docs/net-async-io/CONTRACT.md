@@ -491,3 +491,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 - **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
 - Lab-only: `AsyncTcpDialWithDnsFeed`. LocalAddr bind-before-connect: **not** exposed this wave.
 - Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
+
+### Cancel vocabulary bridge (Q14)
+- **Recommended user token**: `IAsyncCancellationToken` (dial, combinators, TaskGroup).
+- **Blocking TCP plumbing**: `INetCancelToken` + optional `INetCancelWaitable` (socketpair wake) via `NewNetCancelToken`.
+- Bridge: `NetCancelFromAsync(async)` → `INetCancelController` (waitable on Unix); async Cancel propagates to net Cancel.
+- `TcpStreamBindAsyncCancel(stream, async)` / `IAsyncTcpStream.BindCancelToken(async)` installs the bridge on a stream.
+- Does **not** delete Net tokens; HTTP adapters remain. Unit: `nextpas.core.net.async.cancel`.
+- Evidence: `test_net_cancel_bridge` (propagate, already-cancelled, waitable, blocking read cancel, 0 leak).

@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q13（ClassifyNetError + Go/Rust 对标文档）
+> 版本：M3+B1–B4 + Q1–Q14（NetCancelFromAsync 取消桥）
 
 ## 模块概览
 

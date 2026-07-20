@@ -8,7 +8,7 @@
 
 | ID | 维度 | Go / Tokio 标准 | nextpas 现状 | 分 (0–10) | 目标 |
 |----|------|-----------------|--------------|-----------|------|
-| D1 | 取消正确性 | Dial/IO 可取消、单完成 | Dial Token；TimeoutEx Token；双 Token 体系残留 | 8.0 | 9.0 |
+| D1 | 取消正确性 | Dial/IO 可取消、单完成 | Dial Token；**Q14 NetCancelFromAsync** 贯通阻塞 IO | **8.5** | 9.0 |
 | D2 | 超时竞态 | deadline 无双 fire | CAS TimeoutCtx 成熟；dial OverallDeadline | 8.5 | 9.0 |
 | D3 | 双栈拨号 | Dialer DualStack 默认 HE | AsyncTcpDial 严格 CAD + Stream race；Connect HE-lite | 8.5 | 9.0 |
 | D4 | 错误可判定 | net.Error Timeout/Temporary | **ClassifyNetError**（Q13）；非 OpError 对象 | 7.5 | 8.5 |

@@ -8,7 +8,7 @@
 
 | 维度 | 分 | 说明 |
 |------|-----|------|
-| D1 取消 | 8.0 | 核心路径 Token；双 Token 待 Q14 |
+| D1 取消 | **8.5** | Q14: `NetCancelFromAsync` 统一推荐入口；Net 为阻塞 plumbing |
 | D2 超时竞态 | 8.5 | CAS + dial deadline |
 | D3 双栈 HE | 8.5 | 严格 CAD + DNS race + lab feed |
 | D4 错误可判定 | **7.5→8.0** | **ClassifyNetError (Q13)** |
@@ -33,7 +33,8 @@
 
 - [x] Q1–Q12（取消、HE、DNS race、CAD、lab feed、macOS fail-closed）
 - [x] Q13 Wave R 文档 + ClassifyNetError + Dial 推荐路径
-- [ ] Q14–Q18 见 ROADMAP-Q13.md
+- [x] Q14 NetCancelFromAsync + BindCancelToken + test_net_cancel_bridge
+- [ ] Q15–Q18 见 ROADMAP-Q13.md
 
 ## 性能 scorecard
 
