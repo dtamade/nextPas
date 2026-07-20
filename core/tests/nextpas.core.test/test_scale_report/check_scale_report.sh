@@ -13,7 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-4000}"
+MIN_COUNT="${SCALE_MIN:-4500}"
 # Fail-path share of countable processes (heuristic: ExpectFail / negative tables / Append*Case '0')
 MIN_FAIL_RATIO="${FAIL_PATH_MIN_RATIO:-0.30}"
 
