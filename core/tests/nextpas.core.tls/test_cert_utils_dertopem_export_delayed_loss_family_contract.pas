@@ -3,7 +3,7 @@ program test_cert_utils_dertopem_export_delayed_loss_family_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

@@ -8,7 +8,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;

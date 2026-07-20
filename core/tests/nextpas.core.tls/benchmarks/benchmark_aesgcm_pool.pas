@@ -3,7 +3,7 @@ program benchmark_aesgcm_pool;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   benchmark_framework,
   nextpas.core.tls.init,
   nextpas.core.tls.crypto.utils,
@@ -234,7 +234,7 @@ begin
     InitializeOpenSSL;
     WriteLn('OpenSSL initialized: ', GetOpenSSLVersion);
     WriteLn('');
-    
+
     RunAllBenchmarks;
     ExitCode := 0;
   except

@@ -3,7 +3,7 @@ program test_https_actual;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.utils;
 
@@ -13,28 +13,28 @@ var
   LHash: string;
 begin
   WriteLn('=== Test 1: HashData (实际实现测试) ===');
-  
-  LData := TEncoding.UTF8.GetBytes('Hello, World!');
-  
+
+  LData := BytesOf('Hello, World!');
+
   // 测试 SHA256
   LHash := TSSLHelper.HashData(LData, sslHashSHA256);
   WriteLn('SHA256: ', LHash);
-  
+
   // 验证结果不为空
   if LHash <> '' then
     WriteLn('✅ HashData SHA256 工作正常')
   else
     WriteLn('❌ HashData SHA256 失败');
-  
+
   // 测试 MD5
   LHash := TSSLHelper.HashData(LData, sslHashMD5);
   WriteLn('MD5: ', LHash);
-  
+
   if LHash <> '' then
     WriteLn('✅ HashData MD5 工作正常')
   else
     WriteLn('❌ HashData MD5 失败');
-  
+
   WriteLn;
 end;
 
@@ -46,24 +46,24 @@ var
   LOriginal: string;
 begin
   WriteLn('=== Test 2: Base64 编解码 (实际实现测试) ===');
-  
+
   LOriginal := 'Hello, World!';
-  LData := TEncoding.UTF8.GetBytes(LOriginal);
-  
+  LData := BytesOf(LOriginal);
+
   // 编码
   LBase64 := TSSLUtils.BytesToBase64(LData);
   WriteLn('Base64 Encoded: ', LBase64);
-  
+
   // 解码
   LDecoded := TSSLUtils.Base64ToBytes(LBase64);
-  WriteLn('Decoded: ', TEncoding.UTF8.GetString(LDecoded));
-  
+  WriteLn('Decoded: ', StringOf(LDecoded));
+
   // 验证
-  if TEncoding.UTF8.GetString(LDecoded) = LOriginal then
+  if StringOf(LDecoded) = LOriginal then
     WriteLn('✅ Base64 编解码工作正常')
   else
     WriteLn('❌ Base64 编解码失败');
-  
+
   WriteLn;
 end;
 
@@ -74,23 +74,23 @@ var
   LDecoded: TBytes;
 begin
   WriteLn('=== Test 3: Hex 编解码 (实际实现测试) ===');
-  
-  LData := TEncoding.UTF8.GetBytes('Test');
-  
+
+  LData := BytesOf('Test');
+
   // 编码
   LHex := TSSLUtils.BytesToHex(LData);
   WriteLn('Hex Encoded: ', LHex);
-  
+
   // 解码
   LDecoded := TSSLUtils.HexToBytes(LHex);
-  WriteLn('Decoded: ', TEncoding.UTF8.GetString(LDecoded));
-  
+  WriteLn('Decoded: ', StringOf(LDecoded));
+
   // 验证
-  if TEncoding.UTF8.GetString(LDecoded) = 'Test' then
+  if StringOf(LDecoded) = 'Test' then
     WriteLn('✅ Hex 编解码工作正常')
   else
     WriteLn('❌ Hex 编解码失败');
-  
+
   WriteLn;
 end;
 
@@ -99,7 +99,7 @@ var
   LInfo: string;
 begin
   WriteLn('=== Test 4: SSL 支持检查 ===');
-  
+
   if CheckSSLSupport then
   begin
     WriteLn('✅ SSL Support: Available');
@@ -108,7 +108,7 @@ begin
   end
   else
     WriteLn('❌ SSL Support: Not Available');
-  
+
   WriteLn;
 end;
 
@@ -118,35 +118,35 @@ var
   LVersions: TSSLProtocolVersions;
 begin
   WriteLn('=== Test 5: SSL Context 创建 ===');
-  
+
   try
     // 创建客户端上下文
     LContext := TSSLFactory.CreateContext(sslCtxClient);
-    
+
     if LContext <> nil then
     begin
       WriteLn('✅ SSL Context 创建成功');
-      
+
       // 设置协议版本
       LContext.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
       LVersions := LContext.GetProtocolVersions;
-      
+
       WriteLn('Protocol Versions Set: ', Length(LVersions), ' versions');
-      
+
       // 设置验证模式
       LContext.SetVerifyMode([sslVerifyPeer]);
       WriteLn('Verify Mode: Peer Verification Enabled');
-      
+
       WriteLn('✅ SSL Context 配置成功');
     end
     else
       WriteLn('❌ SSL Context 创建失败');
-      
+
   except
     on E: Exception do
       WriteLn('❌ Error: ', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -156,8 +156,8 @@ var
   LPort: Integer;
 begin
   WriteLn('=== Test 6: URL 解析 ===');
-  
-  if TSSLUtils.ParseURL('https://www.example.com:443/path/to/resource', 
+
+  if TSSLUtils.ParseURL('https://www.example.com:443/path/to/resource',
                         LProtocol, LHost, LPort, LPath) then
   begin
     WriteLn('✅ URL 解析成功:');
@@ -168,7 +168,7 @@ begin
   end
   else
     WriteLn('❌ URL 解析失败');
-  
+
   WriteLn;
 end;
 
@@ -178,17 +178,17 @@ var
   LHex: string;
 begin
   WriteLn('=== Test 7: 随机字节生成 ===');
-  
+
   LBytes := TSSLHelper.GenerateRandomBytes(16);
   LHex := TSSLUtils.BytesToHex(LBytes);
-  
+
   WriteLn('Random Bytes (16): ', LHex);
-  
+
   if Length(LBytes) = 16 then
     WriteLn('✅ 随机字节生成成功')
   else
     WriteLn('❌ 随机字节生成失败');
-  
+
   WriteLn;
 end;
 
@@ -201,10 +201,10 @@ begin
   WriteLn('║     fafafa.ssl 实际实现功能测试                      ║');
   WriteLn('╚══════════════════════════════════════════════════════════╝');
   WriteLn;
-  
+
   LTestCount := 0;
   LPassCount := 0;
-  
+
   try
     Test1_HashData;
     Inc(LTestCount);
@@ -212,7 +212,7 @@ begin
     on E: Exception do
       WriteLn('Test 1 Exception: ', E.Message);
   end;
-  
+
   try
     Test2_Base64;
     Inc(LTestCount);
@@ -220,7 +220,7 @@ begin
     on E: Exception do
       WriteLn('Test 2 Exception: ', E.Message);
   end;
-  
+
   try
     Test3_Hex;
     Inc(LTestCount);
@@ -228,7 +228,7 @@ begin
     on E: Exception do
       WriteLn('Test 3 Exception: ', E.Message);
   end;
-  
+
   try
     Test4_SSLSupport;
     Inc(LTestCount);
@@ -236,7 +236,7 @@ begin
     on E: Exception do
       WriteLn('Test 4 Exception: ', E.Message);
   end;
-  
+
   try
     Test5_SSLContext;
     Inc(LTestCount);
@@ -244,7 +244,7 @@ begin
     on E: Exception do
       WriteLn('Test 5 Exception: ', E.Message);
   end;
-  
+
   try
     Test6_URLParsing;
     Inc(LTestCount);
@@ -252,7 +252,7 @@ begin
     on E: Exception do
       WriteLn('Test 6 Exception: ', E.Message);
   end;
-  
+
   try
     Test7_RandomBytes;
     Inc(LTestCount);
@@ -260,7 +260,7 @@ begin
     on E: Exception do
       WriteLn('Test 7 Exception: ', E.Message);
   end;
-  
+
   WriteLn('╔══════════════════════════════════════════════════════════╗');
   WriteLn('║                   测试完成                             ║');
   WriteLn('╚══════════════════════════════════════════════════════════╝');
@@ -278,7 +278,7 @@ begin
   WriteLn;
   WriteLn('注意: HTTPS网络请求需要实际的网络连接和SSL库支持');
   WriteLn;
-  
+
   {$IFDEF WINDOWS}
   WriteLn('Press Enter to exit...');
   ReadLn;

@@ -3,7 +3,7 @@ program test_backend_selector_minimum_score_filtering;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.openssl.backed,

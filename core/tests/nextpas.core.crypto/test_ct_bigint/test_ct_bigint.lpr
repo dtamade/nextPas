@@ -3,7 +3,7 @@ program test_ct_bigint;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.ct.bigint,
   nextpas.core.test;
 

@@ -3,7 +3,7 @@ program test_algorithms_batch;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
 
@@ -40,17 +40,17 @@ var
   hash_len: Cardinal;
 begin
   Result := False;
-  
+
   // Check availability
   md := EVP_get_digestbyname(PAnsiChar(AlgName));
   if md = nil then
     Exit;
-    
+
   // Quick test
   data := 'test';
   ctx := EVP_MD_CTX_new();
   if ctx = nil then Exit;
-  
+
   try
     if EVP_DigestInit_ex(ctx, md, nil) <> 1 then Exit;
     if EVP_DigestUpdate(ctx, PAnsiChar(data), Length(data)) <> 1 then Exit;
@@ -74,20 +74,20 @@ var
   i: Integer;
 begin
   Result := False;
-  
+
   // Check availability
   cipher := EVP_get_cipherbyname(PAnsiChar(AlgName));
   if cipher = nil then
     Exit;
-    
+
   // Quick test
   for i := 0 to 31 do key[i] := Byte(i);
   for i := 0 to 15 do iv[i] := Byte(i);
   plaintext := 'test data';
-  
+
   ctx := EVP_CIPHER_CTX_new();
   if ctx = nil then Exit;
-  
+
   try
     if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then Exit;
     enc_len := 0;
@@ -104,7 +104,7 @@ procedure TestHashAlgorithms;
 const
   HashAlgorithms: array[0..10] of string = (
     'sha256', 'sha512', 'sha3-256', 'sha3-512',
-    'blake2b512', 'blake2s256', 
+    'blake2b512', 'blake2s256',
     'ripemd160', 'whirlpool', 'md5', 'sha1', 'sm3'
   );
 var
@@ -113,13 +113,13 @@ var
 begin
   WriteLn('Testing Hash Algorithms:');
   WriteLn('----------------------------------------');
-  
+
   for i := Low(HashAlgorithms) to High(HashAlgorithms) do
   begin
     Write('  ', HashAlgorithms[i]:20, ' ... ');
     passed := TestHashAlgorithm(HashAlgorithms[i]);
     available := EVP_get_digestbyname(PAnsiChar(HashAlgorithms[i])) <> nil;
-    
+
     if passed then
     begin
       WriteLn('✓ PASS');
@@ -144,7 +144,7 @@ const
   CipherAlgorithms: array[0..14] of string = (
     'aes-256-cbc', 'aes-128-gcm', 'camellia-256-cbc',
     'chacha20', 'des-ede3-cbc',
-    'bf-cbc', 'cast5-cbc', 'rc2-cbc', 'rc4', 
+    'bf-cbc', 'cast5-cbc', 'rc2-cbc', 'rc4',
     'idea-cbc', 'seed-cbc', 'aria-256-cbc',
     'sm4-cbc', 'aes-256-xts', 'chacha20-poly1305'
   );
@@ -154,13 +154,13 @@ var
 begin
   WriteLn('Testing Cipher Algorithms:');
   WriteLn('----------------------------------------');
-  
+
   for i := Low(CipherAlgorithms) to High(CipherAlgorithms) do
   begin
     Write('  ', CipherAlgorithms[i]:20, ' ... ');
     passed := TestCipherAlgorithm(CipherAlgorithms[i]);
     available := EVP_get_cipherbyname(PAnsiChar(CipherAlgorithms[i])) <> nil;
-    
+
     if passed then
     begin
       WriteLn('✓ PASS');
@@ -190,7 +190,7 @@ begin
   TotalHash := 0; TotalCipher := 0;
   AvailHash := 0; AvailCipher := 0;
   PassedHash := 0; PassedCipher := 0;
-  
+
   for i := 0 to High(Results) do
   begin
     if Results[i].AlgType = 'hash' then
@@ -206,7 +206,7 @@ begin
       if Results[i].Passed then Inc(PassedCipher);
     end;
   end;
-  
+
   WriteLn('========================================');
   WriteLn('SUMMARY');
   WriteLn('========================================');
@@ -243,30 +243,30 @@ begin
   WriteLn('  Algorithm Availability Batch Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     if not LoadOpenSSLLibrary then
     begin
       WriteLn('ERROR: Failed to load OpenSSL library');
       Halt(1);
     end;
-    
+
     if not LoadEVP(GetCryptoLibHandle) then
     begin
       WriteLn('ERROR: Failed to load EVP functions');
       Halt(1);
     end;
-    
+
     WriteLn('OpenSSL loaded successfully');
     WriteLn;
-    
+
     // Run tests
     TestHashAlgorithms;
     TestCipherAlgorithms;
-    
+
     // Print summary
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin

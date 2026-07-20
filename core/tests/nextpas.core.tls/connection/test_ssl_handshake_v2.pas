@@ -3,7 +3,7 @@ program test_ssl_handshake_v2;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
@@ -18,15 +18,15 @@ var
   TotalTests: Integer = 0;
   PassedTests: Integer = 0;
   FailedTests: Integer = 0;
-  
+
   // SSL objects
   ClientCtx, ServerCtx: PSSL_CTX;
   ClientSSL, ServerSSL: PSSL;
-  
+
   // Certificate and key
   ServerCert: PX509;
   ServerKey: PEVP_PKEY;
-  
+
   // BIOs for network simulation
   ClientRead, ClientWrite: PBIO;
   ServerRead, ServerWrite: PBIO;
@@ -81,12 +81,12 @@ begin
   Result := False;
   Cert := nil;
   Key := nil;
-  
+
   try
     // Generate RSA key
     Key := EVP_PKEY_new();
     if Key = nil then Exit;
-    
+
     RSA := RSA_new();
     if RSA = nil then
     begin
@@ -94,7 +94,7 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     BN := BN_new();
     if BN = nil then
     begin
@@ -103,9 +103,9 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     BN_set_word(BN, RSA_F4);
-    
+
     if RSA_generate_key_ex(RSA, 2048, BN, nil) <> 1 then
     begin
       BN_free(BN);
@@ -114,9 +114,9 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     BN_free(BN);
-    
+
     // Use EVP_PKEY_assign with EVP_PKEY_RSA constant
     if EVP_PKEY_assign(Key, EVP_PKEY_RSA, RSA) <> 1 then
     begin
@@ -125,7 +125,7 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     // Create certificate
     Cert := X509_new();
     if Cert = nil then
@@ -134,22 +134,22 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     // Set version to X509v3
     X509_set_version(Cert, 2);
-    
+
     // Set serial number
     Serial := X509_get_serialNumber(Cert);
     if Serial <> nil then
       ASN1_INTEGER_set(Serial, 1);
-    
+
     // Set validity period (1 year)
     X509_gmtime_adj(X509_get_notBefore(Cert), 0);
     X509_gmtime_adj(X509_get_notAfter(Cert), 365 * 24 * 60 * 60);
-    
+
     // Set public key
     X509_set_pubkey(Cert, Key);
-    
+
     // Set subject and issuer name
     Name := X509_get_subject_name(Cert);
     if Name <> nil then
@@ -158,9 +158,9 @@ begin
       X509_NAME_add_entry_by_txt(Name, PAnsiChar('O'), MBSTRING_ASC, PByte(PAnsiChar('Test Company')), -1, -1, 0);
       X509_NAME_add_entry_by_txt(Name, PAnsiChar('CN'), MBSTRING_ASC, PByte(PAnsiChar('localhost')), -1, -1, 0);
     end;
-    
+
     X509_set_issuer_name(Cert, Name);
-    
+
     // Sign certificate
     if X509_sign(Cert, Key, EVP_sha256()) = 0 then
     begin
@@ -170,7 +170,7 @@ begin
       Key := nil;
       Exit;
     end;
-    
+
     Result := True;
   except
     if Cert <> nil then X509_free(Cert);
@@ -187,24 +187,24 @@ begin
   try
     LoadOpenSSLCore();
     TestResult('Load OpenSSL core', True);
-    
+
     LoadOpenSSLBIO();
     TestResult('Load BIO module', True);
-    
+
     LoadOpenSSLX509();
     TestResult('Load X509 module', True);
-    
+
     LoadOpenSSLRSA();
     TestResult('Load RSA module', True);
-    
+
     LoadOpenSSLBN();
     TestResult('Load BN module', True);
-    
+
     // LoadOpenSSLEVP and LoadOpenSSLASN1 require library handle parameter
     // They are automatically loaded by LoadOpenSSLCore if needed
     TestResult('EVP functions available', Assigned(EVP_PKEY_new));
     TestResult('ASN1 functions available', Assigned(ASN1_INTEGER_set));
-    
+
     WriteLn('OpenSSL version: ', GetOpenSSLVersionString);
   except
     on E: Exception do
@@ -255,7 +255,7 @@ begin
       Exit;
     end;
     TestResult('Get client method', True);
-    
+
     ClientCtx := SSL_CTX_new(Method);
     if ClientCtx = nil then
     begin
@@ -263,11 +263,11 @@ begin
       Exit;
     end;
     TestResult('Create client context', True);
-    
+
     // Configure client to accept any certificate (for testing)
     SSL_CTX_set_verify(ClientCtx, SSL_VERIFY_NONE, nil);
     TestResult('Configure client verification', True);
-    
+
     // Create server context
     Method := TLS_server_method();
     if Method = nil then
@@ -276,7 +276,7 @@ begin
       Exit;
     end;
     TestResult('Get server method', True);
-    
+
     ServerCtx := SSL_CTX_new(Method);
     if ServerCtx = nil then
     begin
@@ -284,7 +284,7 @@ begin
       Exit;
     end;
     TestResult('Create server context', True);
-    
+
     // Load certificate and key into server context
     if SSL_CTX_use_certificate(ServerCtx, ServerCert) <> 1 then
     begin
@@ -292,14 +292,14 @@ begin
       Exit;
     end;
     TestResult('Load server certificate', True);
-    
+
     if SSL_CTX_use_PrivateKey(ServerCtx, ServerKey) <> 1 then
     begin
       TestResult('Load server private key', False, 'Failed to load key');
       Exit;
     end;
     TestResult('Load server private key', True);
-    
+
     // Verify that certificate and key match
     if SSL_CTX_check_private_key(ServerCtx) <> 1 then
     begin
@@ -307,7 +307,7 @@ begin
       Exit;
     end;
     TestResult('Verify certificate/key match', True);
-    
+
   except
     on E: Exception do
       TestResult('Create contexts', False, E.Message);
@@ -323,20 +323,20 @@ begin
     ClientWrite := BIO_new(BIO_s_mem());
     ServerRead := BIO_new(BIO_s_mem());
     ServerWrite := BIO_new(BIO_s_mem());
-    
-    if (ClientRead = nil) or (ClientWrite = nil) or 
+
+    if (ClientRead = nil) or (ClientWrite = nil) or
        (ServerRead = nil) or (ServerWrite = nil) then
     begin
       TestResult('Create memory BIOs', False, 'Failed to create BIOs');
       Exit;
     end;
-    
+
     TestResult('Create client BIOs', True);
     TestResult('Create server BIOs', True);
-    
+
     // Memory BIOs are non-blocking by default, no need to set
     TestResult('Configure BIOs as non-blocking', True, 'Memory BIOs are non-blocking by default');
-    
+
   except
     on E: Exception do
       TestResult('Create BIOs', False, E.Message);
@@ -352,7 +352,7 @@ begin
       TestResult('Create SSL objects', False, 'Contexts not created');
       Exit;
     end;
-    
+
     // Create client SSL object
     ClientSSL := SSL_new(ClientCtx);
     if ClientSSL = nil then
@@ -361,7 +361,7 @@ begin
       Exit;
     end;
     TestResult('Create client SSL', True);
-    
+
     // Create server SSL object
     ServerSSL := SSL_new(ServerCtx);
     if ServerSSL = nil then
@@ -370,23 +370,23 @@ begin
       Exit;
     end;
     TestResult('Create server SSL', True);
-    
+
     // Attach BIOs to SSL objects
     // Client reads from ClientRead, writes to ClientWrite
     SSL_set_bio(ClientSSL, ClientRead, ClientWrite);
     TestResult('Attach client BIOs', True);
-    
+
     // Server reads from ServerRead, writes to ServerWrite
     SSL_set_bio(ServerSSL, ServerRead, ServerWrite);
     TestResult('Attach server BIOs', True);
-    
+
     // Set connection states
     SSL_set_connect_state(ClientSSL);
     TestResult('Set client connect state', True);
-    
+
     SSL_set_accept_state(ServerSSL);
     TestResult('Set server accept state', True);
-    
+
   except
     on E: Exception do
       TestResult('Create SSL objects', False, E.Message);
@@ -404,7 +404,7 @@ begin
     if Len > 0 then
       BIO_write(ServerRead, @Buffer[0], Len);
   until Len <= 0;
-  
+
   // Pump data from server write to client read
   repeat
     Len := BIO_read(ServerWrite, @Buffer[0], SizeOf(Buffer));
@@ -427,10 +427,10 @@ begin
       TestResult('Handshake', False, 'SSL objects not created');
       Exit;
     end;
-    
+
     HandshakeComplete := False;
     MaxIterations := 100;
-    
+
     for i := 1 to MaxIterations do
     begin
       // Try client handshake
@@ -438,35 +438,35 @@ begin
       if ClientRet <> 1 then
       begin
         ClientErr := SSL_get_error(ClientSSL, ClientRet);
-        if (ClientErr <> SSL_ERROR_WANT_READ) and 
+        if (ClientErr <> SSL_ERROR_WANT_READ) and
            (ClientErr <> SSL_ERROR_WANT_WRITE) then
         begin
-          TestResult('Client handshake', False, 
+          TestResult('Client handshake', False,
             'Error: ' + IntToStr(ClientErr));
           Exit;
         end;
       end;
-      
+
       // Pump data between BIOs
       PumpData();
-      
+
       // Try server handshake
       ServerRet := SSL_do_handshake(ServerSSL);
       if ServerRet <> 1 then
       begin
         ServerErr := SSL_get_error(ServerSSL, ServerRet);
-        if (ServerErr <> SSL_ERROR_WANT_READ) and 
+        if (ServerErr <> SSL_ERROR_WANT_READ) and
            (ServerErr <> SSL_ERROR_WANT_WRITE) then
         begin
-          TestResult('Server handshake', False, 
+          TestResult('Server handshake', False,
             'Error: ' + IntToStr(ServerErr));
           Exit;
         end;
       end;
-      
+
       // Pump data again
       PumpData();
-      
+
       // Check if both completed
       if (ClientRet = 1) and (ServerRet = 1) then
       begin
@@ -475,12 +475,12 @@ begin
         Break;
       end;
     end;
-    
+
     if HandshakeComplete then
       TestResult('TLS handshake', True, 'Completed successfully')
     else
       TestResult('TLS handshake', False, 'Did not complete in ' + IntToStr(MaxIterations) + ' iterations');
-    
+
   except
     on E: Exception do
       TestResult('Perform handshake', False, E.Message);
@@ -503,32 +503,32 @@ begin
       TestResult('Data transfer', False, 'SSL objects not created');
       Exit;
     end;
-    
+
     // Client sends data to server
     SendBuf := TEST_MESSAGE;
     BytesWritten := SSL_write(ClientSSL, PAnsiChar(SendBuf), Length(SendBuf));
-    
+
     if BytesWritten > 0 then
       TestResult('Client write data', True, IntToStr(BytesWritten) + ' bytes written')
     else
     begin
-      TestResult('Client write data', False, 
+      TestResult('Client write data', False,
         'Error: ' + IntToStr(SSL_get_error(ClientSSL, BytesWritten)));
       Exit;
     end;
-    
+
     // Pump data from client to server
     PumpData();
-    
+
     // Server receives data
     FillChar(RecvBuf, SizeOf(RecvBuf), 0);
     BytesRead := SSL_read(ServerSSL, @RecvBuf[0], SizeOf(RecvBuf));
-    
+
     if BytesRead > 0 then
     begin
       SetString(ReceivedMessage, PAnsiChar(@RecvBuf[0]), BytesRead);
       TestResult('Server read data', True, IntToStr(BytesRead) + ' bytes read');
-      
+
       if ReceivedMessage = TEST_MESSAGE then
         TestResult('Data integrity', True, 'Message matches')
       else
@@ -536,10 +536,10 @@ begin
     end
     else
     begin
-      TestResult('Server read data', False, 
+      TestResult('Server read data', False,
         'Error: ' + IntToStr(SSL_get_error(ServerSSL, BytesRead)));
     end;
-    
+
   except
     on E: Exception do
       TestResult('Data transfer', False, E.Message);
@@ -555,37 +555,37 @@ begin
       SSL_free(ClientSSL);
       TestResult('Free client SSL', True);
     end;
-    
+
     if ServerSSL <> nil then
     begin
       SSL_free(ServerSSL);
       TestResult('Free server SSL', True);
     end;
-    
+
     if ClientCtx <> nil then
     begin
       SSL_CTX_free(ClientCtx);
       TestResult('Free client context', True);
     end;
-    
+
     if ServerCtx <> nil then
     begin
       SSL_CTX_free(ServerCtx);
       TestResult('Free server context', True);
     end;
-    
+
     if ServerCert <> nil then
     begin
       X509_free(ServerCert);
       TestResult('Free certificate', True);
     end;
-    
+
     if ServerKey <> nil then
     begin
       EVP_PKEY_free(ServerKey);
       TestResult('Free private key', True);
     end;
-    
+
   except
     on E: Exception do
       TestResult('Cleanup', False, E.Message);
@@ -597,7 +597,7 @@ begin
   WriteLn('SSL/TLS Handshake and Data Transfer Test');
   WriteLn('Phase 4: Integration Testing (Version 2)');
   WriteLn('========================================');
-  
+
   try
     Test1_LoadLibraries();
     Test2_GenerateCertificate();
@@ -607,9 +607,9 @@ begin
     Test6_PerformHandshake();
     Test7_DataTransfer();
     Test8_Cleanup();
-    
+
     PrintSummary();
-    
+
     if FailedTests > 0 then
     begin
       WriteLn('Result: ', FailedTests, ' test(s) failed');
@@ -617,7 +617,7 @@ begin
     end
     else
       WriteLn('Result: All tests passed!');
-      
+
   except
     on E: Exception do
     begin

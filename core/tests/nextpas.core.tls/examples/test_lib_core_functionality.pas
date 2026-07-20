@@ -4,13 +4,13 @@ program test_lib_core_functionality;
 
 {
   核心功能验证测试
-  
+
   功能：验证库的核心组件是否正常工作（无需网络连接）
   用途：快速发现编译和初始化问题
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,
@@ -53,18 +53,18 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     if not LLib.Initialize then
     begin
       AddResult('Library Initialization', False, 'Initialize returned False');
       WriteLn('✗');
       Exit;
     end;
-    
+
     AddResult('Library Initialization', True);
     WriteLn('✓');
     WriteLn('    Version: ', LLib.GetVersionString);
-    
+
     LLib.Finalize;
   except
     on E: Exception do
@@ -90,7 +90,7 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     // Test client context
     LContext := LLib.CreateContext(sslCtxClient);
     if LContext = nil then
@@ -100,8 +100,8 @@ begin
       LLib.Finalize;
       Exit;
     end;
-    
-    // Test server context  
+
+    // Test server context
     LContext := LLib.CreateContext(sslCtxServer);
     if LContext = nil then
     begin
@@ -110,11 +110,11 @@ begin
       LLib.Finalize;
       Exit;
     end;
-    
+
     AddResult('SSL Context Creation', True);
     WriteLn('✓');
     WriteLn('    Client & Server contexts created successfully');
-    
+
     LLib.Finalize;
   except
     on E: Exception do
@@ -142,7 +142,7 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     LHexHash := TCryptoUtils.SHA256Hex('test');
     if LHexHash <> '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08' then
     begin
@@ -150,7 +150,7 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     // Test Base64
     LEncoded := TEncodingUtils.Base64Encode('Hello World');
     if LEncoded <> 'SGVsbG8gV29ybGQ=' then
@@ -159,7 +159,7 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     LDecoded := TEncodingUtils.Base64DecodeString(LEncoded);
     if LDecoded <> 'Hello World' then
     begin
@@ -167,10 +167,10 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     // Test SHA256Base64
     LBase64Hash := TCryptoUtils.SHA256Base64('test');
-    
+
     AddResult('Crypto Utils', True);
     WriteLn('✓');
     WriteLn('    SHA256, Base64 working correctly');
@@ -202,7 +202,7 @@ begin
       end;
       LLib.Finalize;
     end;
-    
+
     AddResult('Multiple Init/Finalize', True);
     WriteLn('✓');
     WriteLn('    10 cycles completed successfully');
@@ -230,9 +230,9 @@ begin
       WriteLn('✗');
       Exit;
     end;
-    
+
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test various config methods
     try
       // INTENTIONAL_API_SURFACE: context-level SNI setter coverage. This
@@ -240,7 +240,7 @@ begin
       LContext.SetServerName('www.example.com');
       LContext.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
       LContext.SetVerifyMode([sslVerifyPeer]);
-      
+
       AddResult('Context Configuration', True);
       WriteLn('✓');
       WriteLn('    SetServerName, SetProtocolVersions, SetVerifyMode working');
@@ -252,7 +252,7 @@ begin
         WriteLn('    Error: ', E.Message);
       end;
     end;
-    
+
     LLib.Finalize;
   except
     on E: Exception do
@@ -276,7 +276,7 @@ begin
   WriteLn('  Failed: ', GTotalTests - GPassedTests);
   WriteLn('================================================================');
   WriteLn;
-  
+
   if GPassedTests < GTotalTests then
   begin
     WriteLn('Failed Tests:');
@@ -287,7 +287,7 @@ begin
     end;
     WriteLn;
   end;
-  
+
   if GPassedTests = GTotalTests then
   begin
     WriteLn('✅ All core functionality tests passed!');
@@ -318,17 +318,17 @@ begin
   WriteLn;
   WriteLn('Running tests...');
   WriteLn('----------------------------------------------------------------');
-  
+
   TestLibraryInitialization;
   TestContextCreation;
   TestCryptoUtils;
   TestMultipleInitFinalize;
   TestContextConfiguration;
-  
+
   WriteLn('----------------------------------------------------------------');
-  
+
   PrintSummary;
-  
+
   if GPassedTests < GTotalTests then
     Halt(1);
 end.

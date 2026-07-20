@@ -4,7 +4,7 @@ program test_type_safety;
 {$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.safety,
   nextpas.core.test;
 

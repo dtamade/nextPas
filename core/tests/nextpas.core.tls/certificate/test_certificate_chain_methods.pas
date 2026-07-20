@@ -8,7 +8,7 @@ program test_certificate_chain_methods;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
@@ -45,16 +45,16 @@ var
 begin
   WriteLn;
   WriteLn('=== Test Set/Get Issuer Certificate ===');
-  
+
   // 简单的自签名证书
-  LeafPEM := 
+  LeafPEM :=
     '-----BEGIN CERTIFICATE-----' + LineEnding +
     'MIICljCCAX4CCQCKz8PfGfZT9TANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJV' + LineEnding +
     'UzAeFw0yNDAxMDEwMDAwMDBaFw0yNTAxMDEwMDAwMDBaMA0xCzAJBgNVBAYTAlVT' + LineEnding +
     'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw8v7t' + LineEnding +
     'n8=' + LineEnding +
     '-----END CERTIFICATE-----';
-    
+
   IssuerPEM :=
     '-----BEGIN CERTIFICATE-----' + LineEnding +
     'MIICljCCAX4CCQCKz8PfGfZT9TANBgkqhkiG9w0BAQsFADANMQswCQYDVQQGEwJV' + LineEnding +
@@ -62,33 +62,33 @@ begin
     'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw8v7t' + LineEnding +
     'n8=' + LineEnding +
     '-----END CERTIFICATE-----';
-  
+
   // 创建证书
   LeafCert := TSSLFactory.CreateCertificate(sslOpenSSL);
   IssuerCert := TSSLFactory.CreateCertificate(sslOpenSSL);
-  
+
   AssertNotNil('LeafCert created', LeafCert);
   AssertNotNil('IssuerCert created', IssuerCert);
-  
+
   // 测试初始状态
   RetrievedIssuer := LeafCert.GetIssuerCertificate;
   AssertTrue('Initially no issuer', RetrievedIssuer = nil);
-  
+
   // 设置颁发者证书
   LeafCert.SetIssuerCertificate(IssuerCert);
-  
+
   // 获取颁发者证书
   RetrievedIssuer := LeafCert.GetIssuerCertificate;
   AssertNotNil('Issuer retrieved', RetrievedIssuer);
-  
+
   // 验证是同一个对象
   AssertTrue('Same issuer object', RetrievedIssuer = IssuerCert);
-  
+
   // 测试清除颁发者
   LeafCert.SetIssuerCertificate(nil);
   RetrievedIssuer := LeafCert.GetIssuerCertificate;
   AssertTrue('Issuer cleared', RetrievedIssuer = nil);
-  
+
   // 测试重新设置
   LeafCert.SetIssuerCertificate(IssuerCert);
   RetrievedIssuer := LeafCert.GetIssuerCertificate;
@@ -102,30 +102,30 @@ var
 begin
   WriteLn;
   WriteLn('=== Test Certificate Chain Building ===');
-  
+
   // 创建证书链: Root -> Intermediate -> Leaf
   RootCert := TSSLFactory.CreateCertificate(sslOpenSSL);
   IntermediateCert := TSSLFactory.CreateCertificate(sslOpenSSL);
   LeafCert := TSSLFactory.CreateCertificate(sslOpenSSL);
-  
+
   AssertNotNil('RootCert created', RootCert);
   AssertNotNil('IntermediateCert created', IntermediateCert);
   AssertNotNil('LeafCert created', LeafCert);
-  
+
   // 构建链
   LeafCert.SetIssuerCertificate(IntermediateCert);
   IntermediateCert.SetIssuerCertificate(RootCert);
-  
+
   // 验证链: Leaf -> Intermediate
   Retrieved := LeafCert.GetIssuerCertificate;
   AssertTrue('Leaf -> Intermediate', Retrieved = IntermediateCert);
-  
+
   // 验证链: Intermediate -> Root
   if Retrieved <> nil then
   begin
     Retrieved := Retrieved.GetIssuerCertificate;
     AssertTrue('Intermediate -> Root', Retrieved = RootCert);
-    
+
     // 验证根证书没有颁发者
     if Retrieved <> nil then
     begin
@@ -147,7 +147,7 @@ begin
   if TestsPassed + TestsFailed > 0 then
     WriteLn('Success rate: ', (TestsPassed * 100) div (TestsPassed + TestsFailed), '%');
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn('✅ ALL CERTIFICATE CHAIN TESTS PASSED!');
@@ -167,7 +167,7 @@ begin
   WriteLn('========================================');
   WriteLn('Certificate Chain Methods Tests');
   WriteLn('========================================');
-  
+
   try
     // Initialize OpenSSL
     SSLLib := CreateOpenSSLLibrary;
@@ -176,19 +176,19 @@ begin
       WriteLn('Failed to create OpenSSL library');
       Halt(2);
     end;
-    
+
     if not SSLLib.Initialize then
     begin
       WriteLn('Failed to initialize OpenSSL library');
       Halt(2);
     end;
-    
+
     WriteLn('OpenSSL initialized: ', SSLLib.GetVersionString);
-    
+
     // Run test cases
     TestSetGetIssuerCertificate;
     TestCertificateChainBuilding;
-    
+
     PrintSummary;
   except
     on E: Exception do

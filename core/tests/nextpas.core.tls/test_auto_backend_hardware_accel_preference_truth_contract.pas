@@ -3,7 +3,7 @@ program test_auto_backend_hardware_accel_preference_truth_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.backend.selector,

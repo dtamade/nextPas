@@ -7,7 +7,7 @@ program test_tsslconfig_option_bridge_default_truth;
   explicit while new code is steered toward Options. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

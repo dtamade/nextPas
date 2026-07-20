@@ -3,7 +3,7 @@ program test_result_utils;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.result.utils,
   nextpas.core.test;

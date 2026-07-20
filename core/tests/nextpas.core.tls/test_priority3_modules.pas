@@ -3,14 +3,14 @@ program test_priority3_modules;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   // Priority 3 - Symmetric Ciphers (1 module)
   nextpas.core.tls.openssl.api.legacy_ciphers,
-  
+
   // Priority 3 - Advanced Features (2 modules)
   nextpas.core.tls.openssl.api.async,  // Fixed!
   nextpas.core.tls.openssl.api.comp,  // Fixed!
-  
+
   // Priority 3 - Utilities (5 modules)
   nextpas.core.tls.openssl.api.txt_db,
   nextpas.core.tls.openssl.api.ui,  // Fixed in Priority 2!
@@ -42,19 +42,19 @@ end;
 begin
   TotalTests := 0;
   PassedTests := 0;
-  
+
   WriteLn('Testing Priority 3 Modules Compilation');
   PrintSeparator;
-  
+
   WriteLn('Symmetric Ciphers (1 module)');
   Test('Legacy ciphers module loaded', True);
   WriteLn;
-  
+
   WriteLn('Advanced Features (2 modules)');
   Test('Async module loaded', True);
   Test('Compression module loaded', True);
   WriteLn;
-  
+
   WriteLn('Utilities (4 modules)');
   Test('Text database module loaded', True);
   Test('User interface module loaded', True);
@@ -63,12 +63,12 @@ begin
   // Note: Legacy RAND module skipped - replaced by nextpas.core.tls.openssl.api.rand
   WriteLn('Legacy RAND module: SKIPPED (replaced by modern rand API)');
   WriteLn;
-  
+
   PrintSeparator;
-  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)', 
+  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
     [PassedTests, TotalTests, (PassedTests * 100.0) / TotalTests]));
   PrintSeparator;
-  
+
   if PassedTests = TotalTests then
   begin
     WriteLn('SUCCESS: All Priority 3 modules compiled successfully!');

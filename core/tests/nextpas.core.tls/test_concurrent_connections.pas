@@ -1,6 +1,6 @@
 {
   Phase C Week 3 - Concurrent Connections Test
-  
+
   Tests concurrent connection scenarios:
   1. 100+ concurrent TLS connections
   2. Multi-thread access to same context (race conditions)
@@ -15,7 +15,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes, SyncObjs,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.crypto.utils,
@@ -28,7 +28,7 @@ type
     Passed: Boolean;
     ErrorMsg: string;
   end;
-  
+
   TTestThread = class(TThread)
   private
     FTestID: Integer;
@@ -99,18 +99,18 @@ begin
     // Test 1: Create context using builder
     Builder := TSSLContextBuilder.Create;
     Ctx := Builder.WithVerifyNone.BuildClient;
-    
+
     // Test 2: Get random data (tests random pool thread safety)
     SetLength(RandomData, 256);
     RandomData := TCryptoUtils.SecureRandom(256);
-    
+
     // Test 3: Encrypt data (tests AES-GCM pool thread safety)
     SetLength(Key, 32);
     SetLength(IV, 12);
     Key := TCryptoUtils.GenerateKey(256);
     FillChar(IV[0], 12, $EE);
     Encrypted := TCryptoUtils.AES_GCM_Encrypt(RandomData, Key, IV);
-    
+
     FSuccess := True;
   except
     on E: Exception do
@@ -134,21 +134,21 @@ begin
   try
     SetLength(Contexts, NUM_CONNECTIONS);
     StartTime := Now;
-    
+
     // Create 100 concurrent contexts
     for i := 0 to NUM_CONNECTIONS - 1 do
     begin
       Builder := TSSLContextBuilder.Create;
       Contexts[i] := Builder.WithVerifyNone.BuildClient;
     end;
-    
+
     EndTime := Now;
-    
+
     // Cleanup
     for i := 0 to High(Contexts) do
       Contexts[i] := nil;
-    
-    AddResult('100+ concurrent TLS connections', True, 
+
+    AddResult('100+ concurrent TLS connections', True,
       Format('Created %d contexts in %.2f ms', [NUM_CONNECTIONS, (EndTime - StartTime) * 86400000]));
   except
     on E: Exception do
@@ -173,7 +173,7 @@ begin
       Threads[i] := TTestThread.Create(i);
       Threads[i].Start;
     end;
-    
+
     // Wait for all threads
     AllSuccess := True;
     ErrorMsg := '';
@@ -188,7 +188,7 @@ begin
       end;
       Threads[i].Free;
     end;
-    
+
     if AllSuccess then
       AddResult('Multi-thread race conditions (10 threads)', True)
     else
@@ -212,14 +212,14 @@ var
 begin
   try
     SetLength(Threads, NUM_THREADS);
-    
+
     // Create and start threads
     for i := 0 to NUM_THREADS - 1 do
     begin
       Threads[i] := TTestThread.Create(i);
       Threads[i].Start;
     end;
-    
+
     // Wait for all threads
     AllSuccess := True;
     ErrorMsg := '';
@@ -234,7 +234,7 @@ begin
       end;
       Threads[i].Free;
     end;
-    
+
     if AllSuccess then
       AddResult('Random pool concurrent access (20 threads x 100 requests)', True)
     else
@@ -257,14 +257,14 @@ var
 begin
   try
     SetLength(Threads, NUM_THREADS);
-    
+
     // Create and start threads
     for i := 0 to NUM_THREADS - 1 do
     begin
       Threads[i] := TTestThread.Create(i);
       Threads[i].Start;
     end;
-    
+
     // Wait for all threads
     AllSuccess := True;
     ErrorMsg := '';
@@ -279,7 +279,7 @@ begin
       end;
       Threads[i].Free;
     end;
-    
+
     if AllSuccess then
       AddResult('AES-GCM pool concurrent access (10 threads x 50 requests)', True)
     else
@@ -293,16 +293,16 @@ end;
 begin
   WriteLn('Starting Concurrent Connections Tests...');
   WriteLn;
-  
+
   // Run all tests
   TestConcurrentConnections;
   TestRaceConditions;
   TestRandomPoolConcurrent;
   TestAESGCMPoolConcurrent;
-  
+
   // Print results
   PrintResults;
-  
+
   // Exit with appropriate code
   if PassedTests = TotalTests then
     ExitCode := 0

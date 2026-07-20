@@ -3,7 +3,7 @@ program test_tssllibrarydefaults_surface;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl;
 
 type

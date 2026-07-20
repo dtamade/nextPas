@@ -3,7 +3,7 @@ program test_quick;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,  // Ensure all linked backends are registered
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

@@ -24,7 +24,7 @@ program test_p2_pkcs12_comprehensive;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.pkcs12,
   nextpas.core.tls.openssl.api.x509,

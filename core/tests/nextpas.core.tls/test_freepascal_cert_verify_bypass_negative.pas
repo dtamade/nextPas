@@ -14,7 +14,7 @@ program test_freepascal_cert_verify_bypass_negative;
   by DN, but the leaf's signature only verifies against the EVIL key. }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

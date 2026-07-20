@@ -23,7 +23,7 @@ program test_p2_pkcs7_boundary;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
@@ -248,7 +248,7 @@ begin
   if p7 <> nil then
   begin
     Test('PKCS7_set_type 成功', PKCS7_set_type(p7, NID_pkcs7_data) = 1);
-    
+
     // 注意：BIO 操作测试在边界测试中容易导致崩溃
     // 完整的 BIO 操作测试在 test_pkcs7_sign_verify_workflow.pas 中
     Test('BIO 操作测试跳过 (参见工作流测试)', True);

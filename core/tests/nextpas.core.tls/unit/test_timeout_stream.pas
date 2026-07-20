@@ -4,7 +4,7 @@ program test_timeout_stream;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, nextpas.core.tls.timeout;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.tls.timeout;
 
 var
   LTotal, LPassed: Integer;
@@ -163,7 +163,7 @@ begin
 end;
 
 begin
-  
+
   LTotal := 0;
   LPassed := 0;
 

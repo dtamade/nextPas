@@ -9,7 +9,7 @@ program test_result_types;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 

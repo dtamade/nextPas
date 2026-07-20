@@ -3,7 +3,7 @@ program test_quick_all;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.quick,
   nextpas.core.tls.factory,
@@ -42,7 +42,7 @@ begin
   WriteLn('--- Testing GenerateSelfSigned ---');
   KP := TSSLQuick.GenerateSelfSigned('quick.local', 30);
   Check(KP <> nil, 'KeyPair generated');
-  
+
   Cert := KP.GetCertificate;
   Check(Cert <> nil, 'Certificate exists');
   // Check strict match is fragile due to defaults. Check CN presence.
@@ -63,18 +63,18 @@ begin
   WriteLn('--- Testing GenerateServerCert with SANs ---');
   KP := TSSLQuick.GenerateServerCert('server.local', ['api.server.local', 'db.server.local']);
   Check(KP <> nil, 'KeyPair generated');
-  
+
   Cert := KP.GetCertificate;
   Check(Cert <> nil, 'Certificate exists');
   Check(Pos('CN=server.local', Cert.GetSubject) > 0, 'Subject contains CN=server.local');
-  
+
   SANs := Cert.GetSubjectAltNames;
   WriteLn('   Debug: SAN Count = ', Length(SANs));
   if Length(SANs) > 0 then
     WriteLn('   Debug: First SAN = ', SANs[0]);
-    
+
   Check(Length(SANs) >= 2, 'SANs present');
-  
+
   FoundApi := False;
   FoundDb := False;
   for I := Low(SANs) to High(SANs) do
@@ -82,7 +82,7 @@ begin
     if Pos('api.server.local', SANs[I]) > 0 then FoundApi := True;
     if Pos('db.server.local', SANs[I]) > 0 then FoundDb := True;
   end;
-  
+
   Check(FoundApi, 'SAN api.server.local found');
   Check(FoundDb, 'SAN db.server.local found');
 end;
@@ -95,11 +95,11 @@ begin
   WriteLn('--- Testing GenerateCACert ---');
   KP := TSSLQuick.GenerateCACert('My Quick CA', 'Quick Corp');
   Check(KP <> nil, 'KeyPair generated');
-  
+
   Cert := KP.GetCertificate;
   Check(Cert <> nil, 'Certificate exists');
   Check(Pos('O=Quick Corp', Cert.GetSubject) > 0, 'Subject contains Org');
-  
+
   Check(Cert.IsCA, 'Basic Constraints CA=TRUE');
 end;
 
@@ -110,19 +110,19 @@ begin
   WriteLn('--- Testing GenerateCertFiles ---');
   CertPath := 'temp_quick.crt';
   KeyPath := 'temp_quick.key';
-  
+
   if FileExists(CertPath) then DeleteFile(CertPath);
   if FileExists(KeyPath) then DeleteFile(KeyPath);
-  
+
   try
     Check(TSSLQuick.GenerateCertFiles('file.local', CertPath, KeyPath), 'GenerateCertFiles returned True');
     Check(FileExists(CertPath), 'Cert file created');
     Check(FileExists(KeyPath), 'Key file created');
-    
+
     // Verify file content (basic check)
     // CreateCertificate returns ISSLCertificate, which is compatible here for checking LoadFromFile
     Check(TSSLFactory.CreateCertificate.LoadFromFile(CertPath), 'Cert file valid loadable');
-    
+
   finally
     if FileExists(CertPath) then DeleteFile(CertPath);
     if FileExists(KeyPath) then DeleteFile(KeyPath);
@@ -134,7 +134,7 @@ begin
   WriteLn('║  TSSLQuick Comprehensive Tests            ║');
   WriteLn('╚═══════════════════════════════════════════╝');
   WriteLn;
-  
+
   try
     TestSelfSigned;
     WriteLn;
@@ -143,7 +143,7 @@ begin
     TestCACert;
     WriteLn;
     TestFileGeneration;
-    
+
     WriteLn;
     WriteLn('All Quick API Tests Passed Successfully!');
   except

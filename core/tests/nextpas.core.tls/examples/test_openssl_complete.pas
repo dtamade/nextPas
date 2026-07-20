@@ -10,7 +10,7 @@ program test_openssl_complete;
 {$MODE OBJFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   { Core modules }
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.consts,
@@ -102,7 +102,7 @@ begin
   TestResults[idx].TestsPassed := Passed;
   TestResults[idx].TestsFailed := Failed;
   TestResults[idx].ErrorMessage := ErrMsg;
-  
+
   Inc(TotalTests, Passed + Failed);
   Inc(PassedTests, Passed);
   Inc(FailedTests, Failed);
@@ -126,7 +126,7 @@ begin
   WriteLn('Test Results Summary');
   WriteLn('========================================');
   WriteLn;
-  
+
   WriteLn('Module Results:');
   WriteLn('----------------------------------------');
   for i := 0 to High(TestResults) do
@@ -134,7 +134,7 @@ begin
     Write(Format('%-30s: ', [TestResults[i].ModuleName]));
     if TestResults[i].Loaded then
     begin
-      Write(Format('Loaded [P:%d F:%d]', 
+      Write(Format('Loaded [P:%d F:%d]',
         [TestResults[i].TestsPassed, TestResults[i].TestsFailed]));
       if TestResults[i].TestsFailed > 0 then
         Write(' (', TestResults[i].ErrorMessage, ')');
@@ -143,14 +143,14 @@ begin
       Write('Not Loaded');
     WriteLn;
   end;
-  
+
   WriteLn;
   WriteLn('----------------------------------------');
   Duration := (Now - StartTime) * 24 * 60 * 60; // Convert to seconds
   WriteLn(Format('Total Tests:   %d', [TotalTests]));
-  WriteLn(Format('Passed Tests:  %d (%.1f%%)', 
+  WriteLn(Format('Passed Tests:  %d (%.1f%%)',
     [PassedTests, PassedTests * 100.0 / Max(TotalTests, 1)]));
-  WriteLn(Format('Failed Tests:  %d (%.1f%%)', 
+  WriteLn(Format('Failed Tests:  %d (%.1f%%)',
     [FailedTests, FailedTests * 100.0 / Max(TotalTests, 1)]));
   WriteLn(Format('Test Duration: %.2f seconds', [Duration]));
   WriteLn('========================================');
@@ -187,7 +187,7 @@ begin
   Result := False;
   LibCrypto := 0;
   LibSSL := 0;
-  
+
   // Try to load libcrypto
   for i := 0 to High(LIBCRYPTO_NAMES) do
   begin
@@ -198,13 +198,13 @@ begin
       Break;
     end;
   end;
-  
+
   if LibCrypto = 0 then
   begin
     WriteLn('ERROR: Could not load libcrypto library');
     Exit;
   end;
-  
+
   // Try to load libssl
   for i := 0 to High(LIBSSL_NAMES) do
   begin
@@ -215,14 +215,14 @@ begin
       Break;
     end;
   end;
-  
+
   if LibSSL = 0 then
   begin
     WriteLn('ERROR: Could not load libssl library');
     FreeLibrary(LibCrypto);
     Exit;
   end;
-  
+
   Result := True;
 end;
 
@@ -233,11 +233,11 @@ var
 begin
   Passed := 0;
   Failed := 0;
-  
+
   if LoadCore(LibCrypto) then
   begin
     Inc(Passed);
-    
+
     // Test OpenSSL version
     if Assigned(OpenSSL_version_num) then
     begin
@@ -247,7 +247,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     // Test library init
     if Assigned(OPENSSL_init_ssl) then
     begin
@@ -258,7 +258,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     AddTestResult('Core', True, Passed, Failed);
   end
   else
@@ -271,11 +271,11 @@ var
 begin
   Passed := 0;
   Failed := 0;
-  
+
   if LoadErr(LibCrypto) then
   begin
     Inc(Passed);
-    
+
     // Test error string loading
     if Assigned(ERR_load_crypto_strings) then
     begin
@@ -284,7 +284,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     // Test error clearing
     if Assigned(ERR_clear_error) then
     begin
@@ -293,7 +293,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     AddTestResult('Error', True, Passed, Failed);
   end
   else
@@ -307,11 +307,11 @@ var
 begin
   Passed := 0;
   Failed := 0;
-  
+
   if LoadBIO(LibCrypto) then
   begin
     Inc(Passed);
-    
+
     // Test BIO memory creation
     if Assigned(BIO_new) and Assigned(BIO_s_mem) and Assigned(BIO_free) then
     begin
@@ -326,7 +326,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     AddTestResult('BIO', True, Passed, Failed);
   end
   else
@@ -339,11 +339,11 @@ var
 begin
   Passed := 0;
   Failed := 0;
-  
+
   if LoadEVP(LibCrypto) then
   begin
     Inc(Passed);
-    
+
     // Test EVP digest
     if Assigned(EVP_sha256) then
     begin
@@ -354,7 +354,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     AddTestResult('EVP', True, Passed, Failed);
   end
   else
@@ -368,25 +368,25 @@ begin
     AddTestResult('BIGNUM', True, 1, 0)
   else
     AddTestResult('BIGNUM', False, 0, 0);
-    
+
   // Test RSA
   if LoadRSA(LibCrypto) then
     AddTestResult('RSA', True, 1, 0)
   else
     AddTestResult('RSA', False, 0, 0);
-    
+
   // Test DSA
   if LoadDSA(LibCrypto) then
     AddTestResult('DSA', True, 1, 0)
   else
     AddTestResult('DSA', False, 0, 0);
-    
+
   // Test DH
   if LoadDH(LibCrypto) then
     AddTestResult('DH', True, 1, 0)
   else
     AddTestResult('DH', False, 0, 0);
-    
+
   // Test EC
   if LoadEC(LibCrypto) then
     AddTestResult('EC', True, 1, 0)
@@ -401,25 +401,25 @@ begin
     AddTestResult('MD', True, 1, 0)
   else
     AddTestResult('MD', False, 0, 0);
-    
+
   // Test SHA algorithms
   if LoadSHA(LibCrypto) then
     AddTestResult('SHA', True, 1, 0)
   else
     AddTestResult('SHA', False, 0, 0);
-    
+
   // Test SHA3 algorithms
   if LoadSHA3(LibCrypto) then
     AddTestResult('SHA3', True, 1, 0)
   else
     AddTestResult('SHA3', False, 0, 0);
-    
+
   // Test BLAKE2
   if LoadBLAKE2(LibCrypto) then
     AddTestResult('BLAKE2', True, 1, 0)
   else
     AddTestResult('BLAKE2', False, 0, 0);
-    
+
   // Test HMAC
   if LoadHMAC(LibCrypto) then
     AddTestResult('HMAC', True, 1, 0)
@@ -434,19 +434,19 @@ begin
     AddTestResult('AES', True, 1, 0)
   else
     AddTestResult('AES', False, 0, 0);
-    
+
   // Test DES
   if LoadDES(LibCrypto) then
     AddTestResult('DES', True, 1, 0)
   else
     AddTestResult('DES', False, 0, 0);
-    
+
   // Test ChaCha20
   if LoadChaCha(LibCrypto) then
     AddTestResult('ChaCha', True, 1, 0)
   else
     AddTestResult('ChaCha', False, 0, 0);
-    
+
   // Test Modes
   if LoadModes(LibCrypto) then
     AddTestResult('Modes', True, 1, 0)
@@ -461,19 +461,19 @@ begin
     AddTestResult('ASN1', True, 1, 0)
   else
     AddTestResult('ASN1', False, 0, 0);
-    
+
   // Test PEM
   if LoadPEM(LibCrypto) then
     AddTestResult('PEM', True, 1, 0)
   else
     AddTestResult('PEM', False, 0, 0);
-    
+
   // Test X509
   if LoadX509(LibCrypto) then
     AddTestResult('X509', True, 1, 0)
   else
     AddTestResult('X509', False, 0, 0);
-    
+
   // Test X509v3
   if LoadX509V3(LibCrypto) then
     AddTestResult('X509v3', True, 1, 0)
@@ -488,7 +488,7 @@ begin
     AddTestResult('PKCS7', True, 1, 0)
   else
     AddTestResult('PKCS7', False, 0, 0);
-    
+
   // Test PKCS12
   if LoadPKCS12(LibCrypto) then
     AddTestResult('PKCS12', True, 1, 0)
@@ -503,19 +503,19 @@ begin
     AddTestResult('OCSP', True, 1, 0)
   else
     AddTestResult('OCSP', False, 0, 0);
-    
+
   // Test CMS
   if LoadCMS(LibCrypto) then
     AddTestResult('CMS', True, 1, 0)
   else
     AddTestResult('CMS', False, 0, 0);
-    
+
   // Test CT
   if LoadCT(LibCrypto) then
     AddTestResult('CT', True, 1, 0)
   else
     AddTestResult('CT', False, 0, 0);
-    
+
   // Test TS
   if LoadTS(LibCrypto) then
     AddTestResult('TS', True, 1, 0)
@@ -530,19 +530,19 @@ begin
     AddTestResult('RAND', True, 1, 0)
   else
     AddTestResult('RAND', False, 0, 0);
-    
+
   // Test KDF
   if LoadKDF(LibCrypto) then
     AddTestResult('KDF', True, 1, 0)
   else
     AddTestResult('KDF', False, 0, 0);
-    
+
   // Test Engine
   if LoadEngine(LibCrypto) then
     AddTestResult('Engine', True, 1, 0)
   else
     AddTestResult('Engine', False, 0, 0);
-    
+
   // Test Config
   if LoadConf(LibCrypto) then
     AddTestResult('Config', True, 1, 0)
@@ -556,11 +556,11 @@ var
 begin
   Passed := 0;
   Failed := 0;
-  
+
   if LoadSSL(LibSSL) then
   begin
     Inc(Passed);
-    
+
     // Test SSL library init
     if Assigned(SSL_library_init) then
     begin
@@ -569,7 +569,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     // Test SSL method
     if Assigned(TLS_method) then
     begin
@@ -580,7 +580,7 @@ begin
     end
     else
       Inc(Failed);
-      
+
     AddTestResult('SSL', True, Passed, Failed);
   end
   else
@@ -603,7 +603,7 @@ begin
     AddTestResult('OSSL_PARAM', True, 1, 0)
   else
     AddTestResult('OSSL_PARAM', False, 0, 0);
-    
+
   // Test Provider (OpenSSL 3.0+)
   if LoadProvider(LibCrypto) then
     AddTestResult('Provider', True, 1, 0)
@@ -618,61 +618,61 @@ begin
     AddTestResult('Stack', True, 1, 0)
   else
     AddTestResult('Stack', False, 0, 0);
-    
+
   // Test LHash
   if LoadLHash(LibCrypto) then
     AddTestResult('LHash', True, 1, 0)
   else
     AddTestResult('LHash', False, 0, 0);
-    
+
   // Test Buffer
   if LoadBuffer(LibCrypto) then
     AddTestResult('Buffer', True, 1, 0)
   else
     AddTestResult('Buffer', False, 0, 0);
-    
+
   // Test Object
   if LoadObj(LibCrypto) then
     AddTestResult('Object', True, 1, 0)
   else
     AddTestResult('Object', False, 0, 0);
-    
+
   // Test TXT_DB
   if LoadTXTDB(LibCrypto) then
     AddTestResult('TXT_DB', True, 1, 0)
   else
     AddTestResult('TXT_DB', False, 0, 0);
-    
+
   // Test DSO
   if LoadDSO(LibCrypto) then
     AddTestResult('DSO', True, 1, 0)
   else
     AddTestResult('DSO', False, 0, 0);
-    
+
   // Test SRP
   if LoadSRP(LibCrypto) then
     AddTestResult('SRP', True, 1, 0)
   else
     AddTestResult('SRP', False, 0, 0);
-    
+
   // Test Thread
   if LoadThread(LibCrypto) then
     AddTestResult('Thread', True, 1, 0)
   else
     AddTestResult('Thread', False, 0, 0);
-    
+
   // Test UI
   if LoadUI(LibCrypto) then
     AddTestResult('UI', True, 1, 0)
   else
     AddTestResult('UI', False, 0, 0);
-    
+
   // Test Store
   if LoadStore(LibCrypto) then
     AddTestResult('Store', True, 1, 0)
   else
     AddTestResult('Store', False, 0, 0);
-    
+
   // Test Comp
   if LoadComp(LibCrypto) then
     AddTestResult('Comp', True, 1, 0)
@@ -687,37 +687,37 @@ begin
   TestErrorModule;
   TestBIOModule;
   TestEVPModule;
-  
+
   WriteLn('Testing Crypto Modules...');
   TestCryptoModules;
-  
+
   WriteLn('Testing Hash Modules...');
   TestHashModules;
-  
+
   WriteLn('Testing Cipher Modules...');
   TestCipherModules;
-  
+
   WriteLn('Testing Certificate Modules...');
   TestCertificateModules;
-  
+
   WriteLn('Testing PKCS Modules...');
   TestPKCSModules;
-  
+
   WriteLn('Testing Advanced Modules...');
   TestAdvancedModules;
-  
+
   WriteLn('Testing Utility Modules...');
   TestUtilityModules;
-  
+
   WriteLn('Testing SSL/TLS Module...');
   TestSSLModule;
-  
+
   WriteLn('Testing SM Algorithms...');
   TestSMAlgorithms;
-  
+
   WriteLn('Testing OpenSSL 3.0+ Features...');
   TestOpenSSL3Features;
-  
+
   WriteLn('Testing Support Modules...');
   TestSupportModules;
 end;
@@ -775,14 +775,14 @@ begin
   UnloadBIO;
   UnloadErr;
   UnloadCore;
-  
+
   // Free libraries
   if LibSSL <> 0 then
   begin
     FreeLibrary(LibSSL);
     WriteLn('Unloaded libssl');
   end;
-  
+
   if LibCrypto <> 0 then
   begin
     FreeLibrary(LibCrypto);
@@ -797,26 +797,26 @@ begin
   FailedTests := 0;
   SetLength(TestResults, 0);
   StartTime := Now;
-  
+
   // Print header
   PrintHeader;
-  
+
   // Load OpenSSL libraries
   WriteLn('Loading OpenSSL Libraries...');
   WriteLn;
-  
+
   if LoadOpenSSLLibraries then
   begin
     WriteLn;
     WriteLn('Starting Module Tests...');
     WriteLn('----------------------------------------');
-    
+
     // Run all tests
     RunAllTests;
-    
+
     // Print results
     PrintResults;
-    
+
     // Cleanup
     WriteLn;
     WriteLn('Cleaning up...');
@@ -832,7 +832,7 @@ begin
     WriteLn('  Linux:   sudo apt-get install libssl-dev');
     WriteLn('  macOS:   brew install openssl');
   end;
-  
+
   WriteLn;
   WriteLn('Press Enter to exit...');
   ReadLn;

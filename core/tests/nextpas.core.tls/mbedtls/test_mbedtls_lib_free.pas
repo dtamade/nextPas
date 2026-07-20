@@ -3,7 +3,7 @@ program test_mbedtls_lib_free;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.mbedtls.lib;
 
 var

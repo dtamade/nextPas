@@ -4,7 +4,7 @@ program test_winssl_direct;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 
@@ -14,14 +14,14 @@ var
 begin
   WriteLn('=== 测试 WinSSL 库直接创建 ===');
   WriteLn;
-  
+
   // 直接创建 WinSSL 库实例
   WriteLn('创建 TWinSSLLibrary 实例...');
   try
     Lib := TWinSSLLibrary.Create;
     try
       WriteLn('成功创建 TWinSSLLibrary 实例');
-      
+
       // 尝试初始化
       WriteLn('初始化 WinSSL 库...');
       if Lib.Initialize then
@@ -39,7 +39,7 @@ begin
     on E: Exception do
       WriteLn('错误: ', E.ClassName, ': ', E.Message);
   end;
-  
+
   WriteLn;
   WriteLn('=== 测试完成 ===');
 end;
@@ -51,7 +51,7 @@ begin
     on E: Exception do
       WriteLn('发生异常: ', E.ClassName, ': ', E.Message);
   end;
-  
+
   WriteLn;
   WriteLn('按 Enter 键退出...');
   ReadLn;

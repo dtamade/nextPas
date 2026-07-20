@@ -4,7 +4,7 @@ program test_tls13_e2e_openssl;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.net.tcp,
   nextpas.core.net.intf,
   nextpas.core.io.intf,

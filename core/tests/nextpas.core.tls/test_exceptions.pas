@@ -24,7 +24,7 @@ program test_exceptions;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 

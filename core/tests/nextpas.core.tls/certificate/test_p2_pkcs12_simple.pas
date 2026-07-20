@@ -3,7 +3,7 @@ program test_p2_pkcs12_simple;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
@@ -49,7 +49,7 @@ var
 begin
   CryptoHandle := GetCryptoLibHandle;
   if CryptoHandle = 0 then Exit;
-  
+
   PKCS12_new := TPKCS12_new(GetProcAddress(CryptoHandle, 'PKCS12_new'));
   PKCS12_free := TPKCS12_free(GetProcAddress(CryptoHandle, 'PKCS12_free'));
 end;
@@ -81,7 +81,7 @@ begin
       FailTest('Functions not loaded');
       Exit;
     end;
-    
+
     P12 := PKCS12_new();
     if P12 = nil then
       FailTest('PKCS12_new returned nil')
@@ -111,7 +111,7 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED!')
   else
@@ -124,23 +124,23 @@ begin
   WriteLn('Testing basic OpenSSL PKCS#12 functionality');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     LoadOpenSSLCore;
     LoadOpenSSLBIO;
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     TestPKCS12FunctionsAvailable;
     TestPKCS12ObjectLifecycle;
-    
+
     PrintSummary;
-    
+
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

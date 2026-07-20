@@ -3,7 +3,7 @@ program test_p2_err;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.err;
 
@@ -34,15 +34,15 @@ begin
   WriteLn;
   WriteLn('Test: ERR Functions Available');
   WriteLn('----------------------------------------');
-  
-  TestResult('ERR_get_error function loaded', 
+
+  TestResult('ERR_get_error function loaded',
              Assigned(ERR_get_error),
              'Function is available');
-             
+
   TestResult('ERR_error_string function loaded',
              Assigned(ERR_error_string),
              'Function is available');
-             
+
   TestResult('ERR_clear_error function loaded',
              Assigned(ERR_clear_error),
              'Function is available');
@@ -53,12 +53,12 @@ begin
   WriteLn;
   WriteLn('Test: Clear Error Queue');
   WriteLn('----------------------------------------');
-  
+
   try
     // 清除错误队列
     ERR_clear_error();
     TestResult('Clear error queue', True, 'Successfully cleared');
-    
+
     // 验证队列为空
     TestResult('Error queue is empty',
                ERR_get_error() = 0,
@@ -78,17 +78,17 @@ begin
   WriteLn;
   WriteLn('Test: Get Error Code and Message');
   WriteLn('----------------------------------------');
-  
+
   try
     // 清除现有错误
     ERR_clear_error();
-    
+
     // 获取错误代码（应该为0）
     ErrCode := ERR_get_error();
     TestResult('Get error when queue is empty',
                ErrCode = 0,
                'Error code: ' + IntToStr(ErrCode));
-    
+
     // 测试错误字符串转换（使用构造的错误代码）
     // ERR_LIB_SSL = 20, reason = 1
     if Assigned(ERR_error_string_n) then
@@ -102,7 +102,7 @@ begin
     end
     else
       TestResult('Get error string', False, 'Function not available');
-      
+
   except
     on E: Exception do
       TestResult('Get error code', False, E.Message);
@@ -116,17 +116,17 @@ begin
   WriteLn;
   WriteLn('Test: Peek Error (Non-Destructive Read)');
   WriteLn('----------------------------------------');
-  
+
   try
     ERR_clear_error();
-    
+
     if Assigned(ERR_peek_error) then
     begin
       ErrCode := ERR_peek_error();
       TestResult('Peek error when queue is empty',
                  ErrCode = 0,
                  'Error code: ' + IntToStr(ErrCode));
-                 
+
       // 再次 peek 应该返回相同结果
       ErrCode := ERR_peek_error();
       TestResult('Peek error is non-destructive',
@@ -135,7 +135,7 @@ begin
     end
     else
       TestResult('Peek error', False, 'Function not available');
-      
+
   except
     on E: Exception do
       TestResult('Peek error', False, E.Message);
@@ -149,20 +149,20 @@ begin
   WriteLn;
   WriteLn('Test: Error String with Length');
   WriteLn('----------------------------------------');
-  
+
   try
     if Assigned(ERR_error_string_n) then
     begin
       FillChar(ErrMsg, SizeOf(ErrMsg), 0);
       ERR_error_string_n(0, @ErrMsg[0], SizeOf(ErrMsg));
-      
+
       TestResult('Get error string with length',
                  True,
                  'Function executed successfully');
     end
     else
       TestResult('Error string with length', False, 'Function not available');
-      
+
   except
     on E: Exception do
       TestResult('Error string with length', False, E.Message);
@@ -179,7 +179,7 @@ begin
   WriteLn('Passed: ', PassedTests);
   WriteLn('Failed: ', TotalTests - PassedTests);
   if TotalTests > 0 then
-    WriteLn('Pass rate: ', (PassedTests * 100) div TotalTests, '.', 
+    WriteLn('Pass rate: ', (PassedTests * 100) div TotalTests, '.',
             ((PassedTests * 1000) div TotalTests) mod 10, '%');
   WriteLn('========================================');
 end;
@@ -188,19 +188,19 @@ begin
   WriteLn('========================================');
   WriteLn('P2 Module Test: ERR (Error Handling)');
   WriteLn('========================================');
-  
+
   try
     // 加载 OpenSSL
     LoadOpenSSLCore();
-    
+
     if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     begin
       WriteLn('[ERROR] Failed to load OpenSSL');
       Halt(1);
     end;
-    
+
     WriteLn('OpenSSL version: ', GetOpenSSLVersionString);
-    
+
     // 加载 ERR 模块
     if not LoadOpenSSLERR then
     begin
@@ -209,16 +209,16 @@ begin
     end;
     WriteLn('ERR module loaded successfully');
     WriteLn();
-    
+
     // 运行测试
     Test_ERR_Functions_Available;
     Test_ERR_Clear_Error;
     Test_ERR_Get_Error;
     Test_ERR_Peek_Error;
     Test_ERR_Error_String_n;
-    
+
     PrintSummary;
-    
+
     WriteLn;
     if PassedTests = TotalTests then
     begin
@@ -230,7 +230,7 @@ begin
       WriteLn('Result: ', TotalTests - PassedTests, ' test(s) failed');
       Halt(1);
     end;
-      
+
   except
     on E: Exception do
     begin

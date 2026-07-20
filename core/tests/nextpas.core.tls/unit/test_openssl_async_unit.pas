@@ -5,7 +5,7 @@ unit test_openssl_async_unit;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test,
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
   test_base,
   nextpas.core.tls.openssl.api.async;
 

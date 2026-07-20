@@ -8,7 +8,7 @@ program test_cert_utils_try;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils;
 
 var

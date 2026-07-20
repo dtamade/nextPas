@@ -3,7 +3,7 @@ program test_ocsp;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.ocsp, nextpas.core.tls.crypto.hash;
 
 var

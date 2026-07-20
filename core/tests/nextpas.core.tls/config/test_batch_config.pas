@@ -12,7 +12,7 @@ program test_batch_config;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fpjson, jsonparser,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

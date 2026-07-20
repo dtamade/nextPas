@@ -4,7 +4,7 @@ program benchmark_crypto;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
@@ -17,7 +17,7 @@ const
   ITERATIONS_HASH = 10000;      // 哈希测试迭代次数
   ITERATIONS_SYMMETRIC = 1000;  // 对称加密迭代次数
   ITERATIONS_ASYMMETRIC = 100;  // 非对称加密迭代次数
-  
+
   TEST_DATA_SIZE = 1024;  // 1KB测试数据
 
 var
@@ -36,7 +36,7 @@ end;
 
 function GetElapsedMS(StartT, EndT: TDateTime): Int64;
 begin
-  Result := MilliSecondsBetween(EndT, StartT);
+  Result := DateTimeMillisecondsBetween(EndT, StartT);
 end;
 
 procedure PrintResult(const TestName: string; Iterations: Integer; ElapsedMS: Int64);
@@ -54,8 +54,8 @@ begin
     OpsPerSec := 0;
     AvgTimeUS := 0;
   end;
-  
-  WriteLn(Format('%-30s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op', 
+
+  WriteLn(Format('%-30s %8d ops in %6d ms | %10.2f ops/sec | %8.2f µs/op',
     [TestName, Iterations, ElapsedMS, OpsPerSec, AvgTimeUS]));
 end;
 
@@ -68,16 +68,16 @@ var
   MD: PEVP_MD;
 begin
   Write('SHA-256 (' + IntToStr(TEST_DATA_SIZE) + ' bytes)...');
-  
+
   MD := EVP_sha256();
   if not Assigned(MD) then
   begin
     WriteLn(' ✗ SKIPPED (EVP_sha256 not available)');
     Exit;
   end;
-  
+
   StartTime := Now;
-  
+
   for I := 1 to ITERATIONS_HASH do
   begin
     Ctx := EVP_MD_CTX_new();
@@ -89,13 +89,13 @@ begin
       EVP_MD_CTX_free(Ctx);
     end;
   end;
-  
+
   EndTime := Now;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
-  
+
   WriteLn(' ✓');
   PrintResult('  SHA-256', ITERATIONS_HASH, ElapsedMS);
-  
+
   // 计算吞吐量
   ThroughputMBs := (ITERATIONS_HASH * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
   WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
@@ -110,16 +110,16 @@ var
   MD: PEVP_MD;
 begin
   Write('SHA-512 (' + IntToStr(TEST_DATA_SIZE) + ' bytes)...');
-  
+
   MD := EVP_sha512();
   if not Assigned(MD) then
   begin
     WriteLn(' ✗ SKIPPED (EVP_sha512 not available)');
     Exit;
   end;
-  
+
   StartTime := Now;
-  
+
   for I := 1 to ITERATIONS_HASH do
   begin
     Ctx := EVP_MD_CTX_new();
@@ -131,13 +131,13 @@ begin
       EVP_MD_CTX_free(Ctx);
     end;
   end;
-  
+
   EndTime := Now;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
-  
+
   WriteLn(' ✓');
   PrintResult('  SHA-512', ITERATIONS_HASH, ElapsedMS);
-  
+
   ThroughputMBs := (ITERATIONS_HASH * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
   WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
 end;
@@ -153,20 +153,20 @@ var
   OutLen, FinalLen: Integer;
 begin
   Write('AES-256-CBC encrypt (' + IntToStr(TEST_DATA_SIZE) + ' bytes)...');
-  
+
   Cipher := EVP_aes_256_cbc();
   if not Assigned(Cipher) then
   begin
     WriteLn(' ✗ SKIPPED (EVP_aes_256_cbc not available)');
     Exit;
   end;
-  
+
   // 初始化密钥和IV
   FillChar(Key, SizeOf(Key), $AA);
   FillChar(IV, SizeOf(IV), $BB);
-  
+
   StartTime := Now;
-  
+
   for I := 1 to ITERATIONS_SYMMETRIC do
   begin
     Ctx := EVP_CIPHER_CTX_new();
@@ -178,13 +178,13 @@ begin
       EVP_CIPHER_CTX_free(Ctx);
     end;
   end;
-  
+
   EndTime := Now;
   ElapsedMS := GetElapsedMS(StartTime, EndTime);
-  
+
   WriteLn(' ✓');
   PrintResult('  AES-256-CBC Encrypt', ITERATIONS_SYMMETRIC, ElapsedMS);
-  
+
   ThroughputMBs := (ITERATIONS_SYMMETRIC * TEST_DATA_SIZE / 1024.0 / 1024.0) / (ElapsedMS / 1000.0);
   WriteLn(Format('  Throughput: %.2f MB/s', [ThroughputMBs]));
 end;
@@ -222,30 +222,30 @@ begin
     WriteLn('错误: 无法加载OpenSSL库');
     Halt(1);
   end;
-  
+
   InitTestData;
-  
+
   PrintHeader;
-  
+
   WriteLn('=== 哈希算法基准 ===');
   WriteLn;
   BenchmarkSHA256;
   WriteLn;
   BenchmarkSHA512;
   WriteLn;
-  
+
   WriteLn('=== 对称加密基准 ===');
   WriteLn;
   BenchmarkAES256_CBC;
   WriteLn;
-  
+
   WriteLn('=== 非对称加密基准 ===');
   WriteLn;
   BenchmarkRSA2048_Sign;
   WriteLn;
-  
+
   PrintFooter;
-  
+
   // 清理
   UnloadOpenSSLCore;
 end.

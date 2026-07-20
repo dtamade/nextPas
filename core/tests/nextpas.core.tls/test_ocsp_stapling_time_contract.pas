@@ -3,7 +3,7 @@ program test_ocsp_stapling_time_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.time,
   nextpas.core.tls.ocsp,
   nextpas.core.tls.ocsp.cache,

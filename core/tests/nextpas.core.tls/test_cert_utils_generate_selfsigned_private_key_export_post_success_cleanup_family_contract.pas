@@ -3,7 +3,7 @@ program test_cert_utils_generate_selfsigned_private_key_export_post_success_clea
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

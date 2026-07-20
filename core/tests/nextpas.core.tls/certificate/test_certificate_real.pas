@@ -3,7 +3,7 @@ program test_certificate_real;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.certificate;
@@ -74,7 +74,7 @@ var
 begin
   WriteLn;
   WriteLn('=== System Certificate Tests ===');
-  
+
   try
     Store := SSLLib.CreateCertificateStore;
     if Store = nil then
@@ -82,7 +82,7 @@ begin
       WriteLn('  Note: Certificate store creation failed');
       Exit;
     end;
-    
+
     // 尝试加载系统证书
     if not Store.LoadSystemStore then
     begin
@@ -90,11 +90,11 @@ begin
       WriteLn('  [TEST] System cert loading... ⊘ SKIP');
       Exit;
     end;
-    
+
     Count := Store.GetCount;
     WriteLn('  System certificates loaded: ', Count);
     AssertTrue('System cert store has certificates', Count > 0);
-    
+
     if Count > 0 then
     begin
       // 测试第一个证书
@@ -103,22 +103,22 @@ begin
       begin
         WriteLn;
         WriteLn('  Testing first system certificate:');
-        
+
         // 测试新功能
         SerialNum := Cert.GetSerialNumber;
         WriteLn('    Serial: ', Copy(SerialNum, 1, 40), '...');
         AssertNotEmpty('Serial number retrieved', SerialNum);
-        
+
         SigAlg := Cert.GetSignatureAlgorithm;
         WriteLn('    Signature Algorithm: ', SigAlg);
         AssertNotEmpty('Signature algorithm retrieved', SigAlg);
-        
+
         IsCA := Cert.IsCA;
         WriteLn('    IsCA: ', IsCA);
         AssertTrue('IsCA determination successful', True);
       end;
     end;
-    
+
   except
     on E: Exception do
     begin
@@ -133,30 +133,30 @@ begin
   WriteLn('========================================');
   WriteLn('Real Certificate Functionality Tests');
   WriteLn('========================================');
-  
+
   try
     // 初始化OpenSSL库
     SSLLib := CreateOpenSSLLibrary;
     AssertTrue('OpenSSL Library created', Pointer(SSLLib) <> nil);
-    
+
     if SSLLib = nil then
     begin
       WriteLn('Failed to create OpenSSL library');
       Halt(1);
     end;
-    
+
     AssertTrue('OpenSSL Library initialized', SSLLib.Initialize);
-    
+
     // 运行测试
     TestNewFunctions;
     TestWithSystemCertificates;
-    
+
     // 输出总结
     PrintSummary;
-    
+
     if TestsFailed > 0 then
       Halt(1);
-      
+
   except
     on E: Exception do
     begin

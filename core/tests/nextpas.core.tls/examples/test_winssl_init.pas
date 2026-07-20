@@ -4,7 +4,7 @@ program test_winssl_init;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.winssl.lib;
@@ -16,7 +16,7 @@ var
 begin
   WriteLn('=== 测试 WinSSL 库初始化 ===');
   WriteLn;
-  
+
   // 检查可用的库
   WriteLn('检查可用的 SSL 库...');
   try
@@ -28,7 +28,7 @@ begin
       Libs := [];
     end;
   end;
-  
+
   if Libs = [] then
     WriteLn('没有找到可用的 SSL 库')
   else
@@ -43,9 +43,9 @@ begin
     if sslMbedTLS in Libs then
       WriteLn('  - MbedTLS');
   end;
-  
+
   WriteLn;
-  
+
   // 尝试获取 WinSSL 库实例
   WriteLn('尝试创建 WinSSL 库实例...');
   try
@@ -56,7 +56,7 @@ begin
       WriteLn('成功创建 WinSSL 库实例');
       WriteLn('库类型: ', LibraryTypeToString(Lib.GetLibraryType));
       WriteLn('版本: ', Lib.GetVersionString);
-      
+
       // 尝试初始化
       WriteLn;
       WriteLn('初始化 WinSSL 库...');
@@ -74,7 +74,7 @@ begin
     on E: Exception do
       WriteLn('错误: ', E.ClassName, ': ', E.Message);
   end;
-  
+
   WriteLn;
   WriteLn('=== 测试完成 ===');
 end;

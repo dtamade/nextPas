@@ -3,7 +3,7 @@ program test_p2_srp;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.srp,
@@ -250,12 +250,12 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
     WriteLn('Some tests FAILED! ✗');
-    
+
   WriteLn;
   WriteLn('Note: SRP (Secure Remote Password) is deprecated in');
   WriteLn('      OpenSSL 3.x. Many functions may not be available.');
@@ -267,16 +267,16 @@ begin
   WriteLn('Testing OpenSSL SRP (Secure Remote Password) API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
     WriteLn('WARNING: SRP is deprecated in OpenSSL 3.x and may not be available.');
     WriteLn;
-    
+
     // Run tests
     TestLoadSRPFunctions;
     TestSRPVBASELifecycle;
@@ -289,16 +289,16 @@ begin
     TestSRPgNFunctions;
     TestSRPVerifierFunctions;
     TestSRPGetDefaultGN;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

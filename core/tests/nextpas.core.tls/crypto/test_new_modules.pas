@@ -3,7 +3,7 @@ program test_new_modules;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.websocket,
   nextpas.core.tls.quic.crypto,
   nextpas.core.tls.dane.pure,
@@ -38,7 +38,7 @@ begin
       Check(LFrame.FIN, 'FIN should be set');
       Check(LFrame.Opcode = wsOpText, 'Opcode should be text');
       Check(not LFrame.Masked, 'Server frames not masked');
-      Check(TEncoding.UTF8.GetString(LFrame.Payload) = 'Hello WebSocket', 'Payload match');
+      Check(StringOf(LFrame.Payload) = 'Hello WebSocket', 'Payload match');
     finally
       LWS.Free;
     end;
@@ -58,11 +58,11 @@ begin
   try
     LWS := TWebSocketConnection.Create(LStream, True);
     try
-      LWS.SendBinary(TEncoding.ASCII.GetBytes('test'));
+      LWS.SendBinary(BytesOf('test'));
       LStream.Position := 0;
       Check(LWS.ReadFrame(LFrame), 'Should read masked frame');
       Check(LFrame.Opcode = wsOpBinary, 'Opcode should be binary');
-      Check(TEncoding.ASCII.GetString(LFrame.Payload) = 'test', 'Unmasked payload match');
+      Check(StringOf(LFrame.Payload) = 'test', 'Unmasked payload match');
     finally
       LWS.Free;
     end;
@@ -137,7 +137,7 @@ var
   LError: string;
 begin
   WriteLn('Test: DANE TLSA verification');
-  LCertDER := TEncoding.ASCII.GetBytes('fake cert data for testing');
+  LCertDER := BytesOf('fake cert data for testing');
   LHash := SHA256(LCertDER);
 
   LRecords[0] := BuildTLSARecord(3, 0, 1, LHash);
@@ -156,7 +156,7 @@ var
 begin
   WriteLn('Test: DANE with no records');
   SetLength(LRecords, 0);
-  LCertDER := TEncoding.ASCII.GetBytes('cert');
+  LCertDER := BytesOf('cert');
   Check(not VerifyDANE(LRecords, LCertDER, LError), 'No records should fail');
   Check(LError = 'No TLSA records provided', 'Correct error message');
 end;

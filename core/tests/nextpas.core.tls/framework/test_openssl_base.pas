@@ -23,7 +23,7 @@ unit test_openssl_base;
 interface
 
 uses
-  Classes, SysUtils,
+  nextpas.core.system.classes, nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader;
 
 type

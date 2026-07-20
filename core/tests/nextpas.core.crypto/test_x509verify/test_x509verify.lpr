@@ -3,7 +3,7 @@ program test_x509verify;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes, Process,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Process,
   nextpas.core.tls.x509,
   nextpas.core.time,
   nextpas.core.tls.cert.utils,

@@ -3,7 +3,7 @@ program test_openssl_minimal;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed;
 
@@ -12,10 +12,10 @@ var
 begin
   WriteLn('Testing OpenSSL Backend (Minimal)');
   WriteLn('==================================');
-  
+
   Lib := CreateOpenSSLLibrary;
   WriteLn('Library created:  ', (Lib <> nil));
-  
+
   if Lib <> nil then
   begin
     WriteLn('Initializing...');

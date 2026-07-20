@@ -27,7 +27,7 @@ program test_ssl_enterprise;
 *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.err,

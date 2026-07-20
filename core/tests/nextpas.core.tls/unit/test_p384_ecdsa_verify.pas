@@ -4,7 +4,7 @@ program test_p384_ecdsa_verify;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, nextpas.core.tls.crypto.p384;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.p384;
 
 var
   LTotal, LPassed: Integer;

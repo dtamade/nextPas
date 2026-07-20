@@ -8,7 +8,7 @@ program test_ec_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,

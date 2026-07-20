@@ -31,7 +31,7 @@ program test_data_structures;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base;
 
 var

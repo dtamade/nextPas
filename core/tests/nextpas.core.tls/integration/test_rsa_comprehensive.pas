@@ -8,7 +8,7 @@ program test_rsa_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Math,
+  nextpas.core.system.sysutils, Math,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,

@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes, SyncObjs, DateUtils, Math,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs, nextpas.core.time, Math,
   nextpas.core.tls.buffer.pool;
 
 const
@@ -146,7 +146,7 @@ begin
     ReleaseBuffer(Buf);
   end;
   EndTime := Now;
-  PoolTime := MilliSecondsBetween(EndTime, StartTime);
+  PoolTime := DateTimeMillisecondsBetween(EndTime, StartTime);
 
   // 直接分配
   StartTime := Now;
@@ -158,7 +158,7 @@ begin
     FreeMem(DirectBuf);
   end;
   EndTime := Now;
-  DirectTime := MilliSecondsBetween(EndTime, StartTime);
+  DirectTime := DateTimeMillisecondsBetween(EndTime, StartTime);
 
   WriteLn('  Iterations: ', ITERATIONS);
   WriteLn('  Pool allocation: ', PoolTime, ' ms');
@@ -257,7 +257,7 @@ begin
 
   WriteLn('  Threads: ', THREAD_COUNT);
   WriteLn('  Total operations: ', TotalOps);
-  WriteLn('  Duration: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
+  WriteLn('  Duration: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
   WriteLn('  Hit rate: ', Stats.HitRate:0:1, '%');
   WriteLn('  Peak in use: ', Stats.PeakInUse);
 

@@ -1,10 +1,10 @@
 {
   test_error_mapping_logic - 错误映射逻辑测试
-  
+
   版本: 1.0
   作者: fafafa.ssl 开发团队
   创建: 2025-01-17
-  
+
   描述:
     测试错误映射逻辑(不依赖 Windows API)
     验证任务 4.2: 错误处理集成
@@ -15,7 +15,7 @@ program test_error_mapping_logic;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils;
+  nextpas.core.system.classes, nextpas.core.system.sysutils;
 
 type
   TSSLErrorCode = (
@@ -91,47 +91,47 @@ var
   ErrorCode: TSSLErrorCode;
 begin
   WriteLn('=== 测试错误码映射逻辑 ===');
-  
+
   // 测试成功状态
   ErrorCode := MapSchannelError(SEC_E_OK);
   WriteLn('SEC_E_OK -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrNone), ')');
   Assert(ErrorCode = sslErrNone, 'SEC_E_OK should map to sslErrNone');
-  
+
   // 测试握手继续状态
   ErrorCode := MapSchannelError(SEC_I_CONTINUE_NEEDED);
   WriteLn('SEC_I_CONTINUE_NEEDED -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrNone), ')');
   Assert(ErrorCode = sslErrNone, 'SEC_I_CONTINUE_NEEDED should map to sslErrNone');
-  
+
   // 测试不完整消息
   ErrorCode := MapSchannelError(SEC_E_INCOMPLETE_MESSAGE);
   WriteLn('SEC_E_INCOMPLETE_MESSAGE -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrWantRead), ')');
   Assert(ErrorCode = sslErrWantRead, 'SEC_E_INCOMPLETE_MESSAGE should map to sslErrWantRead');
-  
+
   // 测试算法不匹配
   ErrorCode := MapSchannelError(SEC_E_ALGORITHM_MISMATCH);
   WriteLn('SEC_E_ALGORITHM_MISMATCH -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrHandshake), ')');
   Assert(ErrorCode = sslErrHandshake, 'SEC_E_ALGORITHM_MISMATCH should map to sslErrHandshake');
-  
+
   // 测试证书过期
   ErrorCode := MapSchannelError(SEC_E_CERT_EXPIRED);
   WriteLn('SEC_E_CERT_EXPIRED -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrCertificateExpired), ')');
   Assert(ErrorCode = sslErrCertificateExpired, 'SEC_E_CERT_EXPIRED should map to sslErrCertificateExpired');
-  
+
   // 测试不受信任的根
   ErrorCode := MapSchannelError(SEC_E_UNTRUSTED_ROOT);
   WriteLn('SEC_E_UNTRUSTED_ROOT -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrCertificateUntrusted), ')');
   Assert(ErrorCode = sslErrCertificateUntrusted, 'SEC_E_UNTRUSTED_ROOT should map to sslErrCertificateUntrusted');
-  
+
   // 测试无效令牌
   ErrorCode := MapSchannelError(SEC_E_INVALID_TOKEN);
   WriteLn('SEC_E_INVALID_TOKEN -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrProtocol), ')');
   Assert(ErrorCode = sslErrProtocol, 'SEC_E_INVALID_TOKEN should map to sslErrProtocol');
-  
+
   // 测试消息被篡改
   ErrorCode := MapSchannelError(SEC_E_MESSAGE_ALTERED);
   WriteLn('SEC_E_MESSAGE_ALTERED -> ', Ord(ErrorCode), ' (期望: ', Ord(sslErrProtocol), ')');
   Assert(ErrorCode = sslErrProtocol, 'SEC_E_MESSAGE_ALTERED should map to sslErrProtocol');
-  
+
   WriteLn('✓ 所有错误码映射测试通过');
   WriteLn;
 end;
@@ -139,22 +139,22 @@ end;
 procedure TestErrorCategories;
 begin
   WriteLn('=== 测试错误分类 ===');
-  
+
   WriteLn('协议错误:');
   WriteLn('  - SEC_E_INVALID_TOKEN -> sslErrProtocol');
   WriteLn('  - SEC_E_MESSAGE_ALTERED -> sslErrProtocol');
-  
+
   WriteLn('证书错误:');
   WriteLn('  - SEC_E_CERT_EXPIRED -> sslErrCertificateExpired');
   WriteLn('  - SEC_E_UNTRUSTED_ROOT -> sslErrCertificateUntrusted');
   WriteLn('  - CERT_E_REVOKED -> sslErrCertificateRevoked');
-  
+
   WriteLn('握手错误:');
   WriteLn('  - SEC_E_ALGORITHM_MISMATCH -> sslErrHandshake');
-  
+
   WriteLn('配置错误:');
   WriteLn('  - SEC_E_UNSUPPORTED_FUNCTION -> sslErrUnsupported');
-  
+
   WriteLn('✓ 错误分类验证完成');
   WriteLn;
 end;
@@ -169,10 +169,10 @@ begin
   WriteLn('任务 4.2: 在握手流程中集成错误处理');
   WriteLn('========================================');
   WriteLn;
-  
+
   TestsPassed := 0;
   TestsFailed := 0;
-  
+
   try
     TestErrorMapping;
     Inc(TestsPassed);
@@ -183,7 +183,7 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   try
     TestErrorCategories;
     Inc(TestsPassed);
@@ -194,7 +194,7 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   WriteLn;
   WriteLn('========================================');
   WriteLn('测试总结');
@@ -203,7 +203,7 @@ begin
   WriteLn('失败: ', TestsFailed);
   WriteLn('总计: ', TestsPassed + TestsFailed);
   WriteLn;
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn('✓ 所有测试通过!');

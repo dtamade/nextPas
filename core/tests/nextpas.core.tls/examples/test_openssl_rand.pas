@@ -3,7 +3,7 @@ program test_openssl_rand;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.openssl.api.err;
@@ -30,7 +30,7 @@ begin
   WriteLn('OpenSSL Random Number Generation Test');
   WriteLn('======================================');
   WriteLn;
-  
+
   // Load OpenSSL libraries
   Write('Loading OpenSSL libraries... ');
   try
@@ -44,10 +44,10 @@ begin
       Exit;
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Load RAND module
   Write('Loading RAND module... ');
   if not LoadOpenSSLRAND then
@@ -59,11 +59,11 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Generate random bytes
   WriteLn('Generating 32 random bytes (5 times):');
   WriteLn;
-  
+
   for I := 1 to 5 do
   begin
     WriteLn('Generation #', I, ':');
@@ -78,10 +78,10 @@ begin
     end;
     WriteLn;
   end;
-  
+
   // Cleanup
   UnloadOpenSSLRAND;
   UnloadOpenSSLCore;
-  
+
   WriteLn('Test completed successfully.');
 end.

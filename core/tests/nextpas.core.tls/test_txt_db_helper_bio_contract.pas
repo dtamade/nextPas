@@ -3,7 +3,7 @@ program test_txt_db_helper_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.txt_db;
 

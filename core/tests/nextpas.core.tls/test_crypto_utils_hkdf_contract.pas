@@ -3,7 +3,7 @@ program test_crypto_utils_hkdf_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,
   nextpas.core.tls.exceptions;

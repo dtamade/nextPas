@@ -3,7 +3,7 @@ program test_mbedtls_basic;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, TypInfo,
+  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib;
 

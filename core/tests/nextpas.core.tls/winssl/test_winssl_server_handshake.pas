@@ -8,7 +8,7 @@ program test_winssl_server_handshake;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils
+  nextpas.core.system.sysutils
   {$IFDEF WINDOWS}
   , nextpas.core.tls.base,
   nextpas.core.tls.factory

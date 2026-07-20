@@ -3,7 +3,7 @@ program test_tsa_api;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.backed,
@@ -83,16 +83,16 @@ var
   DigestMD: PEVP_MD;
 begin
   WriteLn('=== Test CreateTimestampRequest ===');
-  
+
   // Prepare data
   Data := TBytes.Create(1, 2, 3, 4, 5);
   PolicyOID := '1.2.3.4.5';
-  
+
   // Create request
   Req := CreateTimestampRequest(Data, PolicyOID);
-  
+
   AssertNotNil('Request created', Req);
-  
+
   if Req <> nil then
   begin
     AssertTrue('TS_REQ_get_nonce available', Assigned(TS_REQ_get_nonce));
@@ -195,7 +195,7 @@ begin
   WriteLn('========================================');
   WriteLn('TSA API Tests');
   WriteLn('========================================');
-  
+
   try
     // Initialize OpenSSL
     SSLLib := TSSLFactory.GetLibrary(sslOpenSSL);
@@ -205,22 +205,22 @@ begin
       Halt(1);
     end;
     WriteLn('OpenSSL initialized: ', SSLLib.GetVersionString);
-    
+
     // Run tests
     TestCreateTimestampRequest;
-    
+
     WriteLn('========================================');
     WriteLn('TSA API Test Summary');
     WriteLn('========================================');
     WriteLn(Format('Total tests: %d', [TotalTests]));
     WriteLn(Format('Passed: %d', [PassedTests]));
     WriteLn(Format('Failed: %d', [TotalTests - PassedTests]));
-    
+
     if PassedTests = TotalTests then
       WriteLn('✅ ALL TSA API TESTS PASSED!')
     else
       Halt(1);
-      
+
   except
     on E: Exception do
     begin

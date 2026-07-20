@@ -13,7 +13,7 @@ program test_mbedtls_backend;
 }
 
 uses
-  SysUtils, Classes, TypInfo,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.mbedtls.base,

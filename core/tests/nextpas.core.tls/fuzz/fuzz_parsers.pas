@@ -15,7 +15,7 @@ program fuzz_parsers;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fuzz_framework,
   nextpas.core.tls.cert,
   nextpas.core.tls.cert.builder,

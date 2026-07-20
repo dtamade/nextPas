@@ -3,7 +3,7 @@ program test_cert_utils_ed25519_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,

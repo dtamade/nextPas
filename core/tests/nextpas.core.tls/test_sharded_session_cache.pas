@@ -16,7 +16,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes, SyncObjs, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.session.cache.sharded;
 
@@ -125,12 +125,12 @@ end;
 
 function TMockSession.Serialize: TBytes;
 begin
-  Result := TEncoding.UTF8.GetBytes(FID);
+  Result := BytesOf(FID);
 end;
 
 function TMockSession.Deserialize(const AData: TBytes): Boolean;
 begin
-  FID := TEncoding.UTF8.GetString(AData);
+  FID := StringOf(AData);
   Result := True;
 end;
 
@@ -329,11 +329,11 @@ begin
       Threads[I].Free;
     end;
 
-    OpsPerSec := TotalOps / (MilliSecondsBetween(EndTime, StartTime) / 1000);
+    OpsPerSec := TotalOps / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000);
 
     WriteLn('  Threads: ', THREAD_COUNT);
     WriteLn('  Total operations: ', TotalOps);
-    WriteLn('  Duration: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
+    WriteLn('  Duration: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
     WriteLn('  Throughput: ', OpsPerSec:0:0, ' ops/s');
 
     Check('Concurrent operations completed', TotalOps = TEST_COUNT * 2);

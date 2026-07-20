@@ -20,7 +20,7 @@ program test_winssl_monitoring;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.context,

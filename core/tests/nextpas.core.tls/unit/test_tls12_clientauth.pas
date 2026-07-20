@@ -4,7 +4,7 @@ program test_tls12_clientauth;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, nextpas.core.tls.tls12.clientauth, nextpas.core.tls.x509;
+  nextpas.core.system.sysutils, nextpas.core.tls.tls12.clientauth, nextpas.core.tls.x509;
 
 var
   LTotal, LPassed: Integer;

@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes, SysUtils,
+  nextpas.core.system.classes, nextpas.core.system.sysutils,
   nextpas.core.test,
   test_base,
   test_openssl_core_mock,

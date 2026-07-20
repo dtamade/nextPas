@@ -1,7 +1,7 @@
 program test_dialer;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.tls,
   nextpas.core.tls.base,

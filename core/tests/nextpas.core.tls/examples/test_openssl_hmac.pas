@@ -3,7 +3,7 @@ program test_openssl_hmac;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.hmac,
@@ -50,14 +50,14 @@ var
   Result: PByte;
 begin
   WriteLn('Testing HMAC-SHA1:');
-  
+
   Key := 'key';
   Data := 'The quick brown fox jumps over the lazy dog';
   Expected := 'de7c9b85b8b78aa6bc8a7a36f70a90701c9db4d9';
-  
+
   FillChar(Digest, SizeOf(Digest), 0);
   Result := HMAC_SHA1(@Key[1], Length(Key), @Data[1], Length(Data), @Digest[0]);
-  
+
   if Result <> nil then
   begin
     Got := BytesToHex(Digest, 20);
@@ -65,7 +65,7 @@ begin
   end
   else
     TestResult('HMAC-SHA1 function available', False);
-  
+
   WriteLn;
 end;
 
@@ -79,14 +79,14 @@ var
   Result: PByte;
 begin
   WriteLn('Testing HMAC-SHA256:');
-  
+
   Key := 'key';
   Data := 'The quick brown fox jumps over the lazy dog';
   Expected := 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
-  
+
   FillChar(Digest, SizeOf(Digest), 0);
   Result := HMAC_SHA256(@Key[1], Length(Key), @Data[1], Length(Data), @Digest[0]);
-  
+
   if Result <> nil then
   begin
     Got := BytesToHex(Digest, 32);
@@ -94,7 +94,7 @@ begin
   end
   else
     TestResult('HMAC-SHA256 function available', False);
-  
+
   WriteLn;
 end;
 
@@ -108,14 +108,14 @@ var
   Result: PByte;
 begin
   WriteLn('Testing HMAC-SHA512:');
-  
+
   Key := 'key';
   Data := 'The quick brown fox jumps over the lazy dog';
   Expected := 'b42af09057bac1e2d41708e48a902e09b5ff7f12ab428a4fe86653c73dd248fb82f948a549f7b791a5b41915ee4d1ec3935357e4e2317250d0372afa2ebeeb3a';
-  
+
   FillChar(Digest, SizeOf(Digest), 0);
   Result := HMAC_SHA512(@Key[1], Length(Key), @Data[1], Length(Data), @Digest[0]);
-  
+
   if Result <> nil then
   begin
     Got := BytesToHex(Digest, 64);
@@ -123,7 +123,7 @@ begin
   end
   else
     TestResult('HMAC-SHA512 function available', False);
-  
+
   WriteLn;
 end;
 
@@ -138,37 +138,37 @@ var
   Got: string;
 begin
   WriteLn('Testing HMAC Context (Incremental):');
-  
+
   Key := 'key';
   Data1 := 'The quick brown fox ';
   Data2 := 'jumps over the lazy dog';
   Expected := 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8';
-  
+
   if Assigned(HMAC_CTX_new) and Assigned(HMAC_Init_ex) and Assigned(HMAC_Update) and Assigned(HMAC_Final) and Assigned(EVP_sha256) then
   begin
     Ctx := HMAC_CTX_new();
     TestResult('HMAC_CTX_new', Assigned(Ctx));
-    
+
     if Assigned(Ctx) then
     begin
       // Initialize
       HMAC_Init_ex(Ctx, @Key[1], Length(Key), EVP_sha256(), nil);
       TestResult('HMAC_Init_ex', True);
-      
+
       // Update with first part
       HMAC_Update(Ctx, @Data1[1], Length(Data1));
       TestResult('HMAC_Update (part 1)', True);
-      
+
       // Update with second part
       HMAC_Update(Ctx, @Data2[1], Length(Data2));
       TestResult('HMAC_Update (part 2)', True);
-      
+
       // Finalize
       FillChar(Digest, SizeOf(Digest), 0);
       HMAC_Final(Ctx, @Digest[0], @DigestLen);
       Got := BytesToHex(Digest, DigestLen);
       TestResult('HMAC_Final result', Got = Expected, Expected, Got);
-      
+
       // Cleanup
       HMAC_CTX_free(Ctx);
       TestResult('HMAC_CTX_free', True);
@@ -176,7 +176,7 @@ begin
   end
   else
     TestResult('HMAC context functions available', False);
-  
+
   WriteLn;
 end;
 
@@ -189,10 +189,10 @@ var
   Got: string;
 begin
   WriteLn('Testing HMAC with Empty Key:');
-  
+
   Key := '';
   Data := 'message';
-  
+
   if Assigned(HMAC) and Assigned(EVP_sha256) then
   begin
     FillChar(Digest, SizeOf(Digest), 0);
@@ -204,7 +204,7 @@ begin
   end
   else
     TestResult('HMAC function available', False);
-  
+
   WriteLn;
 end;
 
@@ -212,7 +212,7 @@ begin
   WriteLn('OpenSSL HMAC Module Unit Test');
   WriteLn('=============================');
   WriteLn;
-  
+
   // Load OpenSSL
   Write('Loading OpenSSL libraries... ');
   try
@@ -225,10 +225,10 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Load HMAC module
   Write('Loading HMAC module... ');
   if not LoadOpenSSLHMAC then
@@ -238,7 +238,7 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Run tests
   try
     TestHMAC_SHA1;
@@ -255,14 +255,14 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   // Print summary
   WriteLn('Test Summary:');
   WriteLn('=============');
   WriteLn('Tests Passed: ', TestsPassed);
   WriteLn('Tests Failed: ', TestsFailed);
   WriteLn('Total Tests:  ', TestsPassed + TestsFailed);
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;
@@ -274,7 +274,7 @@ begin
     WriteLn('Some tests FAILED!');
     Halt(1);
   end;
-  
+
   // Cleanup
   UnloadOpenSSLHMAC;
   UnloadOpenSSLCore;

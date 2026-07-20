@@ -4,7 +4,7 @@ program test_freepascal_verify_callback_runtime;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.context,
   nextpas.core.tls.freepascal.context.material;
@@ -58,7 +58,7 @@ begin
     SetLength(LBytes, LStream.Size);
     if Length(LBytes) > 0 then
       LStream.ReadBuffer(LBytes[0], Length(LBytes));
-    Result := TEncoding.UTF8.GetString(LBytes);
+    Result := StringOf(LBytes);
   finally
     LStream.Free;
   end;

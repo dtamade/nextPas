@@ -3,7 +3,7 @@ program test_openssl_loader_required_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   {$IFDEF WINDOWS}
   Windows,
   {$ELSE}

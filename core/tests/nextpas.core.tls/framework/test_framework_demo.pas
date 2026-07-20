@@ -7,7 +7,7 @@ program test_framework_demo;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,

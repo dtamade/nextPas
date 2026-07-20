@@ -8,7 +8,7 @@ program test_x509_basic;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils, ctypes, DynLibs,
+  nextpas.core.system.sysutils, nextpas.core.time, ctypes, DynLibs,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api,

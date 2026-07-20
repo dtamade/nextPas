@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.ringbuffer;
 
 const
@@ -233,10 +233,10 @@ begin
 
     EndTime := Now;
 
-    OpsPerSec := (ITERATIONS * 2) / (MilliSecondsBetween(EndTime, StartTime) / 1000);
+    OpsPerSec := (ITERATIONS * 2) / (DateTimeMillisecondsBetween(EndTime, StartTime) / 1000);
 
     WriteLn('  Iterations: ', ITERATIONS);
-    WriteLn('  Duration: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
+    WriteLn('  Duration: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
     WriteLn('  Operations/sec: ', OpsPerSec:0:0);
     WriteLn('  Throughput: ', (ITERATIONS * 1024 * 2 / 1024 / 1024):0:2, ' MB/s');
     WriteLn('  Total written: ', Ring.TotalWritten);
@@ -372,7 +372,7 @@ begin
     EndTime := Now;
 
     WriteLn('  Messages: ', Count);
-    WriteLn('  Duration: ', MilliSecondsBetween(EndTime, StartTime), ' ms');
+    WriteLn('  Duration: ', DateTimeMillisecondsBetween(EndTime, StartTime), ' ms');
     WriteLn('  Producer written: ', Producer.Written);
     WriteLn('  Consumer read: ', Consumer.TotalRead);
     WriteLn('  Consumer errors: ', Consumer.Errors);

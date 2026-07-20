@@ -3,7 +3,7 @@ program test_ssl_direct_api;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
@@ -63,7 +63,7 @@ begin
     // Load BIO module explicitly
     LoadOpenSSLBIO;
     TestResult('Load BIO module', True);
-    
+
     // Check BIO functions are available
     TestResult('BIO_new available', Assigned(BIO_new));
     TestResult('BIO_new_mem_buf available', Assigned(BIO_new_mem_buf));
@@ -88,7 +88,7 @@ begin
       TestResult('Get TLS method', False, 'Method is nil');
       Exit;
     end;
-    
+
     SSLCtx := SSL_CTX_new(SSLMethod);
     if SSLCtx <> nil then
       TestResult('Create SSL context', True)
@@ -110,7 +110,7 @@ begin
       TestResult('Create SSL objects', False, 'Context not created');
       Exit;
     end;
-    
+
     SSL1 := SSL_new(SSLCtx);
     if SSL1 <> nil then
       TestResult('Create first SSL object', True)
@@ -119,13 +119,13 @@ begin
       TestResult('Create first SSL object', False, 'SSL is nil');
       Exit;
     end;
-    
+
     SSL2 := SSL_new(SSLCtx);
     if SSL2 <> nil then
       TestResult('Create second SSL object', True)
     else
       TestResult('Create second SSL object', False, 'SSL is nil');
-      
+
   except
     on E: Exception do
       TestResult('Create SSL objects', False, E.Message);
@@ -142,7 +142,7 @@ begin
       TestResult('Setup BIOs', False, 'SSL objects not created');
       Exit;
     end;
-    
+
     // Create BIO pair for SSL1
     BioRead := BIO_new(BIO_s_mem());
     if BioRead <> nil then
@@ -152,7 +152,7 @@ begin
       TestResult('Create read BIO', False, 'BIO is nil');
       Exit;
     end;
-    
+
     BioWrite := BIO_new(BIO_s_mem());
     if BioWrite <> nil then
       TestResult('Create write BIO', True)
@@ -161,11 +161,11 @@ begin
       TestResult('Create write BIO', False, 'BIO is nil');
       Exit;
     end;
-    
+
     // Attach BIOs to SSL1
     SSL_set_bio(SSL1, BioRead, BioWrite);
     TestResult('Attach BIOs to SSL', True);
-    
+
   except
     on E: Exception do
       TestResult('Setup BIOs', False, E.Message);
@@ -182,15 +182,15 @@ begin
       TestResult('Set connection states', False, 'SSL objects not created');
       Exit;
     end;
-    
+
     // Set SSL1 as client
     SSL_set_connect_state(SSL1);
     TestResult('Set SSL1 as client (connect state)', True);
-    
+
     // Set SSL2 as server
     SSL_set_accept_state(SSL2);
     TestResult('Set SSL2 as server (accept state)', True);
-    
+
   except
     on E: Exception do
       TestResult('Set connection states', False, E.Message);
@@ -211,15 +211,15 @@ begin
       TestResult('Test SSL properties', False, 'SSL1 not created');
       Exit;
     end;
-    
+
     // Note: Version functions may not be loaded
     WriteLn('SSL version: Not tested (function may not be loaded)');
     TestResult('SSL object created successfully', True);
-    
+
     // Note: Cipher functions may not be loaded yet
     WriteLn('Cipher information: Not tested (functions may not be loaded)');
     TestResult('SSL properties test completed', True);
-    
+
   except
     on E: Exception do
       TestResult('Test SSL properties', False, E.Message);
@@ -238,7 +238,7 @@ begin
       TestResult('Test error handling', False, 'SSL1 not created');
       Exit;
     end;
-    
+
     // Test SSL_get_error with success code
     if Assigned(SSL_get_error) then
     begin
@@ -247,12 +247,12 @@ begin
       if ErrorCode = SSL_ERROR_NONE then
         TestResult('SSL_get_error returns NONE for success', True)
       else
-        TestResult('SSL_get_error returns NONE for success', False, 
+        TestResult('SSL_get_error returns NONE for success', False,
           'Got error code: ' + IntToStr(ErrorCode));
     end
     else
       TestResult('SSL_get_error', False, 'Function not loaded');
-    
+
     // Test want_read/want_write
     if Assigned(SSL_want_read) then
     begin
@@ -263,7 +263,7 @@ begin
     end
     else
       TestResult('SSL_want_read', False, 'Function not loaded');
-    
+
     if Assigned(SSL_want_write) then
     begin
       if SSL_want_write(SSL1) = 0 then
@@ -273,7 +273,7 @@ begin
     end
     else
       TestResult('SSL_want_write', False, 'Function not loaded');
-    
+
   except
     on E: Exception do
       TestResult('Test error handling', False, E.Message);
@@ -292,14 +292,14 @@ begin
       TestResult('Free SSL1', True);
       SSL1 := nil;
     end;
-    
+
     if SSL2 <> nil then
     begin
       SSL_free(SSL2);
       TestResult('Free SSL2', True);
       SSL2 := nil;
     end;
-    
+
     // Free context
     if SSLCtx <> nil then
     begin
@@ -307,7 +307,7 @@ begin
       TestResult('Free SSL context', True);
       SSLCtx := nil;
     end;
-    
+
   except
     on E: Exception do
       TestResult('Cleanup', False, E.Message);
@@ -324,19 +324,19 @@ begin
   WriteLn('========================================');
   WriteLn('TEST SUMMARY');
   WriteLn('========================================');
-  
+
   Total := TestsPassed + TestsFailed;
   if Total > 0 then
     PassRate := (TestsPassed / Total) * 100
   else
     PassRate := 0;
-    
+
   WriteLn('Total tests: ', Total);
   WriteLn('Passed: ', TestsPassed);
   WriteLn('Failed: ', TestsFailed);
   WriteLn('Pass rate: ', PassRate:0:1, '%');
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
     WriteLn('Result: ALL TESTS PASSED!')
   else
@@ -349,7 +349,7 @@ begin
   WriteLn('(Tests SSL without high-level interfaces)');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     Test1_LoadLibrary;
     Test2_LoadBIO;
@@ -360,9 +360,9 @@ begin
     Test7_TestSSLProperties;
     Test8_TestErrorHandling;
     Test9_Cleanup;
-    
+
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin
@@ -371,7 +371,7 @@ begin
       ExitCode := 1;
     end;
   end;
-  
+
   if TestsFailed > 0 then
     ExitCode := 1
   else

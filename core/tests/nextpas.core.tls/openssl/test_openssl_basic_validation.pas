@@ -2,9 +2,9 @@ program test_openssl_basic_validation;
 
 {$mode objfpc}{$H+}
 
-{ 
+{
   OpenSSL基础功能验证测试
-  
+
   目的: 验证刚才修复的代码是否能正常工作
   测试范围:
   1. 库加载和初始化
@@ -15,7 +15,7 @@ program test_openssl_basic_validation;
 }
 
 uses
-  SysUtils, Classes, TypInfo,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.backed,
@@ -68,13 +68,13 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试1: OpenSSL库加载 ===');
-  
+
   try
     LoadOpenSSLCore;
     Success := TOpenSSLLoader.IsModuleLoaded(osmCore);
-    LogTest('LoadOpenSSLCore', Success, 
+    LogTest('LoadOpenSSLCore', Success,
             '库句柄: ' + IntToStr(PtrInt(GetCryptoLibHandle)));
-    
+
     if Success then
     begin
       LogTest('TOpenSSLLoader.IsModuleLoaded(osmCore)', TOpenSSLLoader.IsModuleLoaded(osmCore),
@@ -92,10 +92,10 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试2: 版本信息获取 ===');
-  
+
   try
     Version := GetOpenSSLVersionString;
-    LogTest('GetOpenSSLVersionString', Version <> '', 
+    LogTest('GetOpenSSLVersionString', Version <> '',
             '版本: ' + Version);
   except
     on E: Exception do
@@ -109,7 +109,7 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试3: API模块加载 ===');
-  
+
   // 测试BIO模块
   try
     LoadOpenSSLBIO;
@@ -121,7 +121,7 @@ begin
     on E: Exception do
       LogTest('LoadOpenSSLBIO', False, E.Message);
   end;
-  
+
   // 测试X509模块
   try
     LoadOpenSSLX509;
@@ -138,7 +138,7 @@ begin
     on E: Exception do
       LogTest('LoadOpenSSLX509', False, E.Message);
   end;
-  
+
   // 测试ASN1模块
   try
     LoadOpenSSLASN1(GetCryptoLibHandle);
@@ -153,7 +153,7 @@ begin
     on E: Exception do
       LogTest('LoadOpenSSLASN1', False, E.Message);
   end;
-  
+
   // 测试BN模块
   try
     Success := LoadOpenSSLBN;
@@ -167,7 +167,7 @@ begin
     on E: Exception do
       LogTest('LoadOpenSSLBN', False, E.Message);
   end;
-  
+
   // 测试PEM模块
   try
     Success := LoadOpenSSLPEM(GetCryptoLibHandle);
@@ -178,7 +178,7 @@ begin
     on E: Exception do
       LogTest('LoadOpenSSLPEM', False, E.Message);
   end;
-  
+
   // 测试OBJ模块
   try
     LoadOBJModule(GetCryptoLibHandle);
@@ -190,7 +190,7 @@ begin
     on E: Exception do
       LogTest('LoadOBJModule', False, E.Message);
   end;
-  
+
   // 测试CRYPTO模块
   try
     LoadOpenSSLCrypto;
@@ -215,25 +215,25 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试4: 工厂模式集成 ===');
-  
+
   try
     // 测试库检测
     Available := TSSLFactory.GetAvailableLibraries;
     LogTest('GetAvailableLibraries', Available <> []);
-    
+
     // 测试OpenSSL可用性
-    LogTest('IsLibraryAvailable(sslOpenSSL)', 
+    LogTest('IsLibraryAvailable(sslOpenSSL)',
             TSSLFactory.IsLibraryAvailable(sslOpenSSL));
-    
+
     // 测试最佳库检测
     LibType := TSSLFactory.DetectBestLibrary;
     LogTest('DetectBestLibrary', LibType <> sslAutoDetect,
             '检测到: ' + GetEnumName(TypeInfo(TSSLLibraryType), Ord(LibType)));
-    
+
     // 测试获取库实例
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
     LogTest('GetLibraryInstance', Assigned(Lib));
-    
+
     if Assigned(Lib) then
     begin
       LogTest('Library.IsInitialized', Lib.IsInitialized);
@@ -253,7 +253,7 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试5: Context创建 ===');
-  
+
   try
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
     if not Assigned(Lib) then
@@ -261,28 +261,28 @@ begin
       LogTest('Context Creation', False, '无法获取库实例');
       Exit;
     end;
-    
+
     // 测试客户端Context创建
     Ctx := Lib.CreateContext(sslCtxClient);
     LogTest('CreateContext(Client)', Assigned(Ctx));
-    
+
     if Assigned(Ctx) then
     begin
       LogTest('Context.IsValid', Ctx.IsValid);
       LogTest('Context.GetContextType', Ctx.GetContextType = sslCtxClient);
       LogTest('Context.GetNativeHandle', HasNativeHandle(Ctx));
     end;
-    
+
     // 释放Context
     Ctx := nil;
-    
+
     // 测试服务端Context创建
     Ctx := Lib.CreateContext(sslCtxServer);
     LogTest('CreateContext(Server)', Assigned(Ctx));
-    
+
     if Assigned(Ctx) then
       LogTest('Server Context.IsValid', Ctx.IsValid);
-      
+
   except
     on E: Exception do
       LogTest('Context Creation', False, E.Message);
@@ -296,7 +296,7 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试6: Certificate对象创建 ===');
-  
+
   try
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
     if not Assigned(Lib) then
@@ -304,10 +304,10 @@ begin
       LogTest('Certificate Creation', False, '无法获取库实例');
       Exit;
     end;
-    
+
     Cert := Lib.CreateCertificate;
     LogTest('CreateCertificate', Assigned(Cert));
-    
+
     if Assigned(Cert) then
     begin
       LogTest('Certificate.GetNativeHandle', HasNativeHandle(Cert));
@@ -330,10 +330,10 @@ var
 begin
   WriteLn;
   WriteLn('=== 测试7: 内存管理 ===');
-  
+
   try
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
-    
+
     // 创建和释放多个对象
     for i := 1 to 100 do
     begin
@@ -342,7 +342,7 @@ begin
       Ctx := nil;
       Cert := nil;
     end;
-    
+
     LogTest('创建和释放100个Context/Certificate对象', True, '无内存泄漏');
   except
     on E: Exception do
@@ -365,7 +365,7 @@ begin
   WriteLn('  通过: ', TestsPassed, ' (', Format('%.1f', [Percentage]), '%)');
   WriteLn('  失败: ', TestsFailed);
   WriteLn('=====================================');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;
@@ -387,7 +387,7 @@ begin
   WriteLn('版本: 1.0');
   WriteLn('日期: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
   WriteLn;
-  
+
   try
     TestLibraryLoading;
     TestVersionInfo;
@@ -399,9 +399,9 @@ begin
   finally
     PrintSummary;
   end;
-  
+
   WriteLn;
-  
+
   // 返回退出码
   if TestsFailed > 0 then
     ExitCode := 1

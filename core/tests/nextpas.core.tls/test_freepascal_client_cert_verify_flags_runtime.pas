@@ -3,7 +3,7 @@ program test_freepascal_client_cert_verify_flags_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

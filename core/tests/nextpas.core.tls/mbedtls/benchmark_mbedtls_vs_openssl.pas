@@ -13,7 +13,7 @@ program benchmark_mbedtls_vs_openssl;
 }
 
 uses
-  SysUtils, DateUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.api.core,
@@ -111,7 +111,7 @@ begin
         if LConn.Connect then
         begin
           LEndTime := Now;
-          LTotalTime := LTotalTime + MilliSecondsBetween(LEndTime, LStartTime);
+          LTotalTime := LTotalTime + DateTimeMillisecondsBetween(LEndTime, LStartTime);
 
           // 第一次获取详细信息
           if I = 1 then

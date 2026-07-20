@@ -3,7 +3,7 @@ program test_wolfssl_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, ctypes, DynLibs,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes, DynLibs,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

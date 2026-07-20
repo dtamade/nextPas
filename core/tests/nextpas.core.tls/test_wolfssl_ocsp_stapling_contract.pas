@@ -3,7 +3,7 @@ program test_wolfssl_ocsp_stapling_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   fafafa.ssl,
   nextpas.core.tls.context.builder,

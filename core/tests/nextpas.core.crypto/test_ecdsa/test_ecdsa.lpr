@@ -3,7 +3,7 @@ program test_ecdsa;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.ecdsa,
   nextpas.core.test;
 

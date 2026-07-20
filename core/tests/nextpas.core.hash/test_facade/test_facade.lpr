@@ -3,7 +3,7 @@ program test_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.test;

@@ -3,7 +3,7 @@ program test_tls13_certverify_input;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.servercertverify;
 
 const

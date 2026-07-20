@@ -7,7 +7,7 @@ program test_cert_utils_simple;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
 
@@ -19,7 +19,7 @@ begin
   WriteLn('Simple Certificate Utilities Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     // 初始化OpenSSL
     WriteLn('[1/3] Loading OpenSSL...');
@@ -31,7 +31,7 @@ begin
     end;
     WriteLn('  ✓ OpenSSL loaded: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // 获取默认选项
     WriteLn('[2/3] Getting default options...');
     LOptions := TCertificateUtils.DefaultGenOptions;
@@ -41,7 +41,7 @@ begin
     WriteLn('  ✓ KeyType: ', Ord(LOptions.KeyType));
     WriteLn('  ✓ KeyBits: ', LOptions.KeyBits);
     WriteLn;
-    
+
    // 生成证书
     WriteLn('[3/3] Generating self-signed certificate...');
     try
@@ -56,7 +56,7 @@ begin
         WriteLn('  ✓ Generation succeeded!');
         WriteLn('  ✓ Cert length: ', Length(LCert));
         WriteLn('  ✓ Key length: ', Length(LKey));
-        
+
         if Length(LCert) > 0 then
           WriteLn('  ✓ Cert preview: ', Copy(LCert, 1, 50), '...');
       end
@@ -72,12 +72,12 @@ begin
         Halt(1);
       end;
     end;
-    
+
     WriteLn;
     WriteLn('========================================');
     WriteLn('✓ Test completed successfully!');
     WriteLn('========================================');
-    
+
   except
     on E: Exception do
     begin
@@ -89,7 +89,7 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn;
   WriteLn('Press Enter to exit...');
   ReadLn;

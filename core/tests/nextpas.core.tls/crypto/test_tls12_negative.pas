@@ -3,7 +3,7 @@ program test_tls12_negative;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.parser,
   nextpas.core.tls.tls12.recordcrypto;
 
@@ -97,7 +97,7 @@ begin
   WriteLn('Test: GCM record with corrupted tag');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $AA);
   SetLength(LIV, 4); FillChar(LIV[0], 4, $BB);
-  LPlain := TEncoding.ASCII.GetBytes('test data');
+  LPlain := BytesOf('test data');
 
   TLS12GCMEncryptRecord(LKey, LIV, 0, 23, LPlain, LEnc, LErr);
   // Corrupt last byte of tag
@@ -117,7 +117,7 @@ begin
   WriteLn('Test: GCM record with wrong sequence number');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $CC);
   SetLength(LIV, 4); FillChar(LIV[0], 4, $DD);
-  LPlain := TEncoding.ASCII.GetBytes('hello');
+  LPlain := BytesOf('hello');
 
   TLS12GCMEncryptRecord(LKey, LIV, 5, 23, LPlain, LEnc, LErr);
   LOk := TLS12GCMDecryptRecord(LKey, LIV, 6, 23, LEnc, LDec, LErr); // wrong seq

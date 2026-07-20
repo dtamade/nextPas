@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils;
+  nextpas.core.system.sysutils;
 
 begin
   WriteLn('测试错误映射功能');
@@ -16,7 +16,7 @@ begin
   WriteLn('注意: 此测试需要在 Windows 平台上运行');
   WriteLn('当前平台: ', {$IFDEF WINDOWS}'Windows'{$ELSE}'非 Windows'{$ENDIF});
   WriteLn('');
-  
+
   {$IFDEF WINDOWS}
   WriteLn('错误映射功能已实现:');
   WriteLn('- MapSchannelError: 映射 Schannel 错误码到 TSSLErrorCode');
@@ -25,7 +25,7 @@ begin
   {$ELSE}
   WriteLn('跳过 Windows 专用测试');
   {$ENDIF}
-  
+
   WriteLn('');
   WriteLn('任务 4.1 完成!');
 end.

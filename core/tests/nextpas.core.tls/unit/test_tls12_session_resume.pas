@@ -5,7 +5,7 @@ program test_tls12_session_resume;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.thread.init,
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.freepascal.session;
 
@@ -77,7 +77,7 @@ begin
   LObj.ConfigureTLS12Resumption(
     $C030, 'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384',
     LSessionID, LMasterSecret,
-    IncSecond(Now, -7200), 3600);
+    DateTimeAddSeconds(Now, -7200), 3600);
   LSession := LObj;
 
   Check(not LSession.IsValid, 'Expired session is not valid');

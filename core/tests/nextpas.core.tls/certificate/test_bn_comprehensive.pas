@@ -3,7 +3,7 @@ program test_bn_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bn;
+  nextpas.core.system.sysutils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bn;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -59,7 +59,7 @@ begin
   b := BN_new();
   result := BN_new();
   ctx := BN_CTX_new();
-  
+
   if (a <> nil) and (b <> nil) and (result <> nil) and (ctx <> nil) then
   begin
     BN_set_word(a, 100);
@@ -70,7 +70,7 @@ begin
   end
   else
     RunTest('BN_add (100 + 200 = 300)', False);
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
   if result <> nil then BN_free(result);
@@ -87,7 +87,7 @@ begin
   b := BN_new();
   result := BN_new();
   ctx := BN_CTX_new();
-  
+
   if (a <> nil) and (b <> nil) and (result <> nil) and (ctx <> nil) then
   begin
     BN_set_word(a, 500);
@@ -98,7 +98,7 @@ begin
   end
   else
     RunTest('BN_sub (500 - 200 = 300)', False);
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
   if result <> nil then BN_free(result);
@@ -115,7 +115,7 @@ begin
   b := BN_new();
   result := BN_new();
   ctx := BN_CTX_new();
-  
+
   if (a <> nil) and (b <> nil) and (result <> nil) and (ctx <> nil) then
   begin
     BN_set_word(a, 15);
@@ -126,7 +126,7 @@ begin
   end
   else
     RunTest('BN_mul (15 * 20 = 300)', False);
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
   if result <> nil then BN_free(result);
@@ -144,7 +144,7 @@ begin
   quotient := BN_new();
   remainder := BN_new();
   ctx := BN_CTX_new();
-  
+
   if (a <> nil) and (b <> nil) and (quotient <> nil) and (remainder <> nil) and (ctx <> nil) then
   begin
     BN_set_word(a, 1000);
@@ -155,7 +155,7 @@ begin
   end
   else
     RunTest('BN_div (1000 / 7 = 142)', False);
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
   if quotient <> nil then BN_free(quotient);
@@ -173,7 +173,7 @@ begin
   b := BN_new();
   result := BN_new();
   ctx := BN_CTX_new();
-  
+
   if (a <> nil) and (b <> nil) and (result <> nil) and (ctx <> nil) then
   begin
     BN_set_word(a, 100);
@@ -184,7 +184,7 @@ begin
   end
   else
     RunTest('BN_mod (100 mod 7 = 2)', False);
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
   if result <> nil then BN_free(result);
@@ -198,19 +198,19 @@ var
 begin
   a := BN_new();
   b := BN_new();
-  
+
   if (a <> nil) and (b <> nil) then
   begin
     BN_set_word(a, 100);
     BN_set_word(b, 200);
     cmp_result := BN_cmp(a, b);
     RunTest('BN_cmp (100 < 200)', cmp_result < 0);
-    
+
     BN_set_word(a, 200);
     BN_set_word(b, 200);
     cmp_result := BN_cmp(a, b);
     RunTest('BN_cmp (200 = 200)', cmp_result = 0);
-    
+
     BN_set_word(a, 300);
     BN_set_word(b, 200);
     cmp_result := BN_cmp(a, b);
@@ -222,7 +222,7 @@ begin
     RunTest('BN_cmp (200 = 200)', False);
     RunTest('BN_cmp (300 > 200)', False);
   end;
-    
+
   if a <> nil then BN_free(a);
   if b <> nil then BN_free(b);
 end;
@@ -272,20 +272,20 @@ begin
   WriteLn('  OpenSSL BN (BigNum) Module Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   TestsPassed := 0;
   TestsFailed := 0;
-  
+
   if not LoadOpenSSLLibrary then
   begin
     WriteLn('ERROR: Failed to load OpenSSL library');
     Halt(1);
   end;
-  
+
   try
     WriteLn('Running BN tests...');
     WriteLn;
-    
+
     Test_BN_Creation;
     Test_BN_SetWord;
     Test_BN_Addition;
@@ -296,7 +296,7 @@ begin
     Test_BN_Comparison;
     Test_BN_Hex_Conversion;
     Test_BN_Dec_Conversion;
-    
+
     WriteLn;
     WriteLn('========================================');
     WriteLn('  Test Results');
@@ -306,7 +306,7 @@ begin
     WriteLn('Total Tests:  ', TestsPassed + TestsFailed);
     WriteLn('Success Rate: ', ((TestsPassed * 100) div (TestsPassed + TestsFailed)):3, '%');
     WriteLn;
-    
+
     if TestsFailed = 0 then
     begin
       WriteLn('✓ All BN tests PASSED!');
@@ -317,7 +317,7 @@ begin
       WriteLn('✗ Some BN tests FAILED!');
       Halt(1);
     end;
-    
+
   finally
     UnloadOpenSSLLibrary;
   end;

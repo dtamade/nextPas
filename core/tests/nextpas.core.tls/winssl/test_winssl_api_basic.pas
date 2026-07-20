@@ -4,7 +4,7 @@ program test_winssl_api_basic;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils
+  nextpas.core.system.sysutils
   {$IFDEF WINDOWS}
   , Windows,
   nextpas.core.tls.winssl.base,

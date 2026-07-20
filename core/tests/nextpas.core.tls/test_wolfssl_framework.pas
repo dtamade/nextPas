@@ -22,7 +22,7 @@ program test_wolfssl_framework;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,

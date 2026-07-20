@@ -4,7 +4,7 @@ program test_openssl_load;
 {$CODEPAGE UTF8}
 
 uses
-  SysUtils, Classes, Windows,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Windows,
   // OpenSSL 类型和常量
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -74,7 +74,7 @@ var
   Modules: array of TModuleTest;
   SuccessCount, FailCount: Integer;
 
-procedure AddModule(const AName: string; ALoadProc: procedure(ALib: THandle); 
+procedure AddModule(const AName: string; ALoadProc: procedure(ALib: THandle);
   AUnloadProc: procedure; ATestFunc: Pointer = nil);
 var
   Len: Integer;
@@ -98,7 +98,7 @@ begin
   AddModule('SSL/TLS', @LoadSSLModule, @UnloadSSLModule, @SSL_new);
   AddModule('EVP (加密接口)', @LoadEVPModule, @UnloadEVPModule, @EVP_MD_CTX_new);
   AddModule('X509 (证书)', @LoadX509Module, @UnloadX509Module, @X509_new);
-  
+
   // 公钥算法
   AddModule('RSA', @LoadRSAModule, @UnloadRSAModule, @RSA_new);
   AddModule('DSA', @LoadDSAModule, @UnloadDSAModule, @DSA_new);
@@ -106,26 +106,26 @@ begin
   AddModule('EC (椭圆曲线)', @LoadECModule, @UnloadECModule, @EC_KEY_new);
   AddModule('ECDSA', @LoadECDSAModule, @UnloadECDSAModule, @ECDSA_sign);
   AddModule('ECDH', @LoadECDHModule, @UnloadECDHModule, nil);
-  
+
   // 哈希算法
   AddModule('SHA', @LoadSHAModule, @UnloadSHAModule, @SHA1);
   AddModule('SHA3', @LoadSHA3Module, @UnloadSHA3Module, @SHA3_256);
   AddModule('MD (MD5/MD4)', @LoadMDModule, @UnloadMDModule, @MD5);
   AddModule('BLAKE2', @LoadBLAKE2Module, @UnloadBLAKE2Module, @BLAKE2b256);
   AddModule('HMAC', @LoadHMACModule, @UnloadHMACModule, @HMAC);
-  
+
   // 对称加密
   AddModule('AES', @LoadAESModule, @UnloadAESModule, @AES_encrypt);
   AddModule('DES', @LoadDESModule, @UnloadDESModule, @DES_ecb_encrypt);
   AddModule('ChaCha20-Poly1305', @LoadChaChaModule, @UnloadChaChaModule, @ChaCha20_Encrypt);
-  
+
   // 证书格式
   AddModule('PEM', @LoadPEMModule, @UnloadPEMModule, @PEM_read_bio_X509);
   AddModule('ASN.1', @LoadASN1Module, @UnloadASN1Module, @ASN1_STRING_new);
   AddModule('PKCS7', @LoadPKCS7Module, @UnloadPKCS7Module, @PKCS7_new);
   AddModule('PKCS12', @LoadPKCS12Module, @UnloadPKCS12Module, @PKCS12_new);
   AddModule('X509v3 (扩展)', @LoadX509V3Module, @UnloadX509V3Module, @X509V3_EXT_conf);
-  
+
   // 辅助功能
   AddModule('RAND (随机数)', @LoadRandModule, @UnloadRandModule, @RAND_bytes);
   AddModule('BN (大数)', @LoadBNModule, @UnloadBNModule, @BN_new);
@@ -133,7 +133,7 @@ begin
   AddModule('BUFFER', @LoadBufferModule, @UnloadBufferModule, @BUF_MEM_new);
   AddModule('STACK', @LoadStackModule, @UnloadStackModule, @OPENSSL_sk_new);
   AddModule('LHASH', @LoadLHashModule, @UnloadLHashModule, @OPENSSL_LH_new);
-  
+
   // 高级功能
   AddModule('CMS (加密消息)', @LoadCMSModule, @UnloadCMSModule, @CMS_ContentInfo_new);
   AddModule('TS (时间戳)', @LoadTSModule, @UnloadTSModule, @TS_REQ_new);
@@ -154,11 +154,11 @@ end;
 procedure TestModule(const Module: TModuleTest);
 begin
   Write(Format('  %-30s: ', [Module.Name]));
-  
+
   try
     // 加载模块
     Module.LoadProc(LibCrypto);
-    
+
     // 检查关键函数是否加载成功
     if Assigned(Module.TestFunc) and not Assigned(Module.TestFunc^) then
     begin
@@ -166,7 +166,7 @@ begin
       Inc(FailCount);
       Exit;
     end;
-    
+
     WriteLn('[成功]');
     Inc(SuccessCount);
   except
@@ -188,17 +188,17 @@ begin
   // 尝试加载 OpenSSL 3.0
   LibSSL := LoadLibrary(LIBSSL_NAME_3);
   LibCrypto := LoadLibrary(LIBCRYPTO_NAME_3);
-  
+
   // 如果失败，尝试加载 OpenSSL 1.1
   if (LibSSL = 0) or (LibCrypto = 0) then
   begin
     if LibSSL <> 0 then FreeLibrary(LibSSL);
     if LibCrypto <> 0 then FreeLibrary(LibCrypto);
-    
+
     LibSSL := LoadLibrary(LIBSSL_NAME);
     LibCrypto := LoadLibrary(LIBCRYPTO_NAME);
   end;
-  
+
   if (LibSSL = 0) or (LibCrypto = 0) then
   begin
     WriteLn('错误: 无法加载 OpenSSL 库');
@@ -217,7 +217,7 @@ begin
     SuccessRate := (SuccessCount / Total) * 100
   else
     SuccessRate := 0;
-    
+
   WriteLn;
   WriteLn('========================================');
   WriteLn('           测试结果汇总');
@@ -227,7 +227,7 @@ begin
   WriteLn(Format('  加载失败: %d', [FailCount]));
   WriteLn(Format('  成功率:   %.1f%%', [SuccessRate]));
   WriteLn('========================================');
-  
+
   if FailCount > 0 then
     WriteLn('注意: 某些模块可能需要特定版本的 OpenSSL');
 end;
@@ -242,7 +242,7 @@ begin
     Version := OpenSSL_version_num();
     WriteLn(Format('OpenSSL 版本号: 0x%x', [Version]));
   end;
-  
+
   if Assigned(OpenSSL_version) then
   begin
     VersionStr := OpenSSL_version(OPENSSL_VERSION);
@@ -256,44 +256,44 @@ begin
   WriteLn('     OpenSSL Pascal 绑定模块加载测试');
   WriteLn('========================================');
   WriteLn;
-  
+
   SuccessCount := 0;
   FailCount := 0;
-  
+
   // 加载 OpenSSL 库
   WriteLn('1. 加载 OpenSSL 动态库...');
   LoadOpenSSLLibraries;
   WriteLn('   OpenSSL 库加载成功');
   WriteLn;
-  
+
   // 初始化模块列表
   InitializeModules;
-  
+
   // 加载版本信息模块
   WriteLn('2. 获取 OpenSSL 版本信息...');
   LoadErrModule(LibCrypto);  // ERR 模块包含版本函数
   GetOpenSSLVersion;
   WriteLn;
-  
+
   // 测试所有模块
   WriteLn('3. 测试模块加载...');
   WriteLn('----------------------------------------');
-  
+
   for var Module in Modules do
     TestModule(Module);
-  
+
   // 打印测试结果
   PrintTestResults;
-  
+
   // 清理
   WriteLn;
   WriteLn('4. 清理资源...');
   for var Module in Modules do
     Module.UnloadProc;
-  
+
   if LibSSL <> 0 then FreeLibrary(LibSSL);
   if LibCrypto <> 0 then FreeLibrary(LibCrypto);
-  
+
   WriteLn('   清理完成');
   WriteLn;
   WriteLn('测试结束. 按 Enter 退出...');

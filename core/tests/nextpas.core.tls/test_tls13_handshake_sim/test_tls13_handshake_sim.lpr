@@ -3,7 +3,7 @@ program test_tls13_handshake_sim;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.serverhello,

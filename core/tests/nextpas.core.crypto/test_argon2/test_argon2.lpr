@@ -3,7 +3,7 @@ program test_argon2;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.argon2,
   nextpas.core.test;
 

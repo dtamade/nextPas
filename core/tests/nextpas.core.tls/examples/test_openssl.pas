@@ -4,7 +4,7 @@ program test_openssl;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   fafafa.examples.tcp;
 

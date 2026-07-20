@@ -7,7 +7,7 @@ program test_tsslconfig_option_bridge_precedence_freeze;
   cannot silently drift back into an unspecified surface. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;

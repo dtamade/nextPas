@@ -19,7 +19,7 @@ program test_p2_ct_comprehensive;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ct,
   nextpas.core.tls.openssl.api.bio;

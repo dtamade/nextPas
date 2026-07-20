@@ -20,7 +20,7 @@ program benchmark_tls_handshake_diagnostic;
  *}
 
 uses
-  SysUtils, Classes, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
   benchmark_framework,
   fafafa.ssl,
   nextpas.core.tls.context.builder,

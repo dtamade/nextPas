@@ -5,7 +5,7 @@ unit test_base;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test;
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test;
 
 type
   { TTestBase - 所有单元测试的基类 }
@@ -13,19 +13,19 @@ type
   protected
     // Setup - 在每个测试方法前调用
     procedure BeforeEach; override;
-    
+
     // TearDown - 在每个测试方法后调用
     procedure AfterEach; override;
-    
+
     // 辅助方法：比较字节数组
     procedure AssertBytesEqual(const Expected, Actual: array of Byte; const Msg: string = '');
-    
+
     // 辅助方法：比较字节数组（带长度）
     procedure AssertBytesEqualLen(const Expected, Actual: PByte; Len: Integer; const Msg: string = '');
-    
+
     // 辅助方法：断言异常
     procedure AssertException(AExceptionClass: ExceptClass; AMethod: TRunMethod; const Msg: string = '');
-    
+
     // 辅助方法：将字节数组转为十六进制字符串
     function BytesToHex(const Bytes: array of Byte): string; overload;
     function BytesToHex(Bytes: PByte; Len: Integer): string; overload;
@@ -54,14 +54,14 @@ var
 begin
   if Length(Expected) <> Length(Actual) then
   begin
-    ErrorMsg := Format('Byte array length mismatch: Expected %d, got %d', 
+    ErrorMsg := Format('Byte array length mismatch: Expected %d, got %d',
                       [Length(Expected), Length(Actual)]);
     if Msg <> '' then
       ErrorMsg := Msg + ': ' + ErrorMsg;
     Fail(ErrorMsg);
     Exit;
   end;
-  
+
   for i := 0 to High(Expected) do
   begin
     if Expected[i] <> Actual[i] then
@@ -70,7 +70,7 @@ begin
                         [i, IntToHex(Expected[i], 2), IntToHex(Actual[i], 2)]);
       if Msg <> '' then
         ErrorMsg := Msg + ': ' + ErrorMsg;
-      ErrorMsg := ErrorMsg + LineEnding + 
+      ErrorMsg := ErrorMsg + LineEnding +
                   'Expected: ' + BytesToHex(Expected) + LineEnding +
                   'Actual:   ' + BytesToHex(Actual);
       Fail(ErrorMsg);
@@ -87,7 +87,7 @@ var
 begin
   ExpPtr := Expected;
   ActPtr := Actual;
-  
+
   for i := 0 to Len - 1 do
   begin
     if ExpPtr^ <> ActPtr^ then

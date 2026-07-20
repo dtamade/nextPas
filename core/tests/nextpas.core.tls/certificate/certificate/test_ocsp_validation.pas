@@ -3,7 +3,7 @@ program test_ocsp_validation;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ocsp;
 
@@ -50,7 +50,7 @@ begin
 
   // 测试 OCSP 函数是否可用
   WriteLn('测试 OCSP 函数...');
-  
+
   LResult := Assigned(@OCSP_REQUEST_new) and (OCSP_REQUEST_new <> nil);
   Test('OCSP_REQUEST_new 函数可用', LResult);
 

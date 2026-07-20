@@ -12,7 +12,7 @@ program test_mbedtls_ocsp_capability;
 }
 
 uses
-  SysUtils, TypInfo,
+  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   fafafa.examples.tcp;

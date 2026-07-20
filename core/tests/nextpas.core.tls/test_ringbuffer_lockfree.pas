@@ -9,7 +9,7 @@ program test_ringbuffer_lockfree;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer.lockfree,
   nextpas.core.tls.openssl.loader,

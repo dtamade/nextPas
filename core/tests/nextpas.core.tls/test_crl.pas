@@ -3,7 +3,7 @@ program test_crl;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.crl;
 
 var

@@ -8,7 +8,7 @@ program test_buffer_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DynLibs,
+  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,

@@ -3,7 +3,7 @@ program test_freepascal_backend_basic;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.factory,
   nextpas.core.tls.base;

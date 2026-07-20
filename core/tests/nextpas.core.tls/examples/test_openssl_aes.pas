@@ -3,7 +3,7 @@ program test_openssl_aes;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.aes;
@@ -51,17 +51,17 @@ var
   I: Integer;
 begin
   WriteLn('Testing AES-128 ECB:');
-  
+
   // Test vector from FIPS-197
   // Key: 000102030405060708090a0b0c0d0e0f
   // Plain: 00112233445566778899aabbccddeeff
   // Cipher: 69c4e0d86a7b0430d8cdb78070b4c55a
-  
+
   for I := 0 to 15 do Key[I] := I;
   for I := 0 to 15 do PlainText[I] := $11 * I;
-  
+
   Expected := '69c4e0d86a7b0430d8cdb78070b4c55a';
-  
+
   if Assigned(AES_set_encrypt_key) and Assigned(AES_encrypt) then
   begin
     // Encrypt
@@ -69,7 +69,7 @@ begin
     AES_encrypt(@PlainText[0], @CipherText[0], @AESKey);
     Got := BytesToHex(CipherText, 16);
     TestResult('AES-128 ECB encryption', Got = Expected, Expected, Got);
-    
+
     // Decrypt
     if Assigned(AES_set_decrypt_key) and Assigned(AES_decrypt) then
     begin
@@ -82,7 +82,7 @@ begin
   end
   else
     TestResult('AES encrypt functions available', False);
-  
+
   WriteLn;
 end;
 
@@ -97,17 +97,17 @@ var
   I: Integer;
 begin
   WriteLn('Testing AES-256 ECB:');
-  
+
   // Test vector from FIPS-197
   // Key: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
   // Plain: 00112233445566778899aabbccddeeff
   // Cipher: 8ea2b7ca516745bfeafc49904b496089
-  
+
   for I := 0 to 31 do Key[I] := I;
   for I := 0 to 15 do PlainText[I] := $11 * I;
-  
+
   Expected := '8ea2b7ca516745bfeafc49904b496089';
-  
+
   if Assigned(AES_set_encrypt_key) and Assigned(AES_encrypt) then
   begin
     AES_set_encrypt_key(@Key[0], 256, @AESKey);
@@ -117,7 +117,7 @@ begin
   end
   else
     TestResult('AES encrypt functions available', False);
-  
+
   WriteLn;
 end;
 
@@ -133,12 +133,12 @@ var
   I: Integer;
 begin
   WriteLn('Testing AES-128 CBC:');
-  
+
   // Initialize test data
   for I := 0 to 15 do Key[I] := I;
   FillChar(IV, SizeOf(IV), 0);
   for I := 0 to 31 do PlainText[I] := Byte(I);
-  
+
   if Assigned(AES_set_encrypt_key) and Assigned(AES_cbc_encrypt) then
   begin
     // Encrypt
@@ -146,7 +146,7 @@ begin
     AES_set_encrypt_key(@Key[0], 128, @AESKey);
     AES_cbc_encrypt(@PlainText[0], @CipherText[0], 32, @AESKey, @IVEnc[0], C_AES_ENCRYPT);
     TestResult('AES-128 CBC encryption', True);
-    
+
     // Decrypt
     if Assigned(AES_set_decrypt_key) then
     begin
@@ -160,7 +160,7 @@ begin
   end
   else
     TestResult('AES CBC functions available', False);
-  
+
   WriteLn;
 end;
 
@@ -175,17 +175,17 @@ var
   I: Integer;
 begin
   WriteLn('Testing AES Key Wrap:');
-  
+
   // Initialize test data
   for I := 0 to 15 do KEK[I] := I;
   for I := 0 to 15 do PlainKey[I] := $20 + I;
-  
+
   if Assigned(AES_set_encrypt_key) and Assigned(AES_wrap_key) then
   begin
     AES_set_encrypt_key(@KEK[0], 128, @AESKeyEnc);
     WrapLen := AES_wrap_key(@AESKeyEnc, nil, @WrappedKey[0], @PlainKey[0], 16);
     TestResult('AES key wrap', WrapLen = 24);
-    
+
     if (WrapLen = 24) and Assigned(AES_set_decrypt_key) and Assigned(AES_unwrap_key) then
     begin
       FillChar(UnwrappedKey, SizeOf(UnwrappedKey), 0);
@@ -209,7 +209,7 @@ begin
   end
   else
     TestResult('AES wrap functions available', False);
-  
+
   WriteLn;
 end;
 
@@ -217,7 +217,7 @@ begin
   WriteLn('OpenSSL AES Module Unit Test');
   WriteLn('============================');
   WriteLn;
-  
+
   // Load OpenSSL
   Write('Loading OpenSSL libraries... ');
   try
@@ -230,10 +230,10 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Load AES module
   Write('Loading AES module... ');
   if not LoadAESFunctions(GetCryptoLibHandle) then
@@ -243,7 +243,7 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Run tests
   try
     TestAES128_ECB;
@@ -257,14 +257,14 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   // Print summary
   WriteLn('Test Summary:');
   WriteLn('=============');
   WriteLn('Tests Passed: ', TestsPassed);
   WriteLn('Tests Failed: ', TestsFailed);
   WriteLn('Total Tests:  ', TestsPassed + TestsFailed);
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;
@@ -276,7 +276,7 @@ begin
     WriteLn('Some tests FAILED! ✗');
     Halt(1);
   end;
-  
+
   // Cleanup
   UnloadAESFunctions;
   UnloadOpenSSLCore;

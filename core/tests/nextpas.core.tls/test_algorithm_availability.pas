@@ -3,7 +3,7 @@ program test_algorithm_availability;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
 
@@ -18,7 +18,7 @@ var
 begin
   Inc(TotalAlgs);
   Available := False;
-  
+
   if Category = 'hash' then
   begin
     md := EVP_get_digestbyname(PAnsiChar(AlgName));
@@ -29,7 +29,7 @@ begin
     cipher := EVP_get_cipherbyname(PAnsiChar(AlgName));
     Available := (cipher <> nil);
   end;
-  
+
   if Available then
   begin
     WriteLn('  [OK]   ', AlgName:25, ' (', Category, ')');
@@ -45,21 +45,21 @@ begin
   WriteLn('  (Quick Header Translation Verification)');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     if not LoadOpenSSLLibrary then
     begin
       WriteLn('ERROR: Failed to load OpenSSL');
       Halt(1);
     end;
-    
+
     LoadEVP(GetCryptoLibHandle);
     WriteLn('OpenSSL loaded successfully');
     WriteLn;
-    
+
     TotalAlgs := 0;
     AvailableAlgs := 0;
-    
+
     WriteLn('Hash Algorithms:');
     WriteLn('----------------------------------------');
     CheckAlgorithm('md5', 'hash');
@@ -74,7 +74,7 @@ begin
     CheckAlgorithm('whirlpool', 'hash');
     CheckAlgorithm('sm3', 'hash');
     WriteLn;
-    
+
     WriteLn('Symmetric Ciphers:');
     WriteLn('----------------------------------------');
     CheckAlgorithm('aes-128-cbc', 'cipher');
@@ -90,22 +90,22 @@ begin
     CheckAlgorithm('cast5-cbc', 'cipher');
     CheckAlgorithm('rc4', 'cipher');
     WriteLn;
-    
+
     WriteLn('========================================');
     WriteLn('Summary:');
     WriteLn('----------------------------------------');
     WriteLn('Total tested:    ', TotalAlgs);
-    WriteLn('Available:       ', AvailableAlgs, ' (', 
+    WriteLn('Available:       ', AvailableAlgs, ' (',
             FormatFloat('0.0', (AvailableAlgs/TotalAlgs)*100), '%)');
     WriteLn('Not available:   ', TotalAlgs - AvailableAlgs);
     WriteLn('========================================');
     WriteLn;
-    
+
     if AvailableAlgs >= 15 then  // Expect at least 15 modern algorithms
       WriteLn('SUCCESS: Core algorithms available!')
     else
       WriteLn('WARNING: Some core algorithms missing');
-      
+
   except
     on E: Exception do
     begin

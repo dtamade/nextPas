@@ -3,7 +3,7 @@ program test_rand_direct;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DynLibs,
+  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api;
 
@@ -14,20 +14,20 @@ var
   LLib: TLibHandle;
   LRAND_bytes: TRAND_bytes;
   LBuf: array[0..31] of Byte;
-  
+
 begin
   WriteLn('=== Direct RAND_bytes Test ===');
   WriteLn;
-  
+
   LoadOpenSSLCore();
   WriteLn('Core loaded');
-  
+
   LLib := GetCryptoLibHandle;
   WriteLn('Library handle: ', LLib);
-  
+
   LRAND_bytes := TRAND_bytes(GetProcAddress(LLib, 'RAND_bytes'));
   WriteLn('RAND_bytes assigned: ', Assigned(LRAND_bytes));
-  
+
   if Assigned(LRAND_bytes) then
   begin
     WriteLn('Calling RAND_bytes...');

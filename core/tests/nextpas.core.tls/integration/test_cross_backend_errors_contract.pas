@@ -9,7 +9,7 @@ program test_cross_backend_errors_contract;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
 
   nextpas.core.tls.base,
   {$IFNDEF WINDOWS}

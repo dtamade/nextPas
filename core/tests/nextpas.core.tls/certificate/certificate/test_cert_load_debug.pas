@@ -1,7 +1,7 @@
 program test_cert_load_debug;
 {$mode objfpc}{$H+}
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.bio,
@@ -19,12 +19,12 @@ begin
   WriteLn('  PEM_read_bio_X509: ', Assigned(PEM_read_bio_X509));
   WriteLn('  BIO_free: ', Assigned(BIO_free));
   WriteLn('  X509_free: ', Assigned(X509_free));
-  
+
   if not Assigned(BIO_new_file) then begin
     WriteLn('❌ BIO_new_file not loaded!');
     Exit;
   end;
-  
+
   WriteLn;
   WriteLn('Trying to load: /etc/ssl/certs/ACCVRAIZ1.pem');
   BIO := BIO_new_file('/etc/ssl/certs/ACCVRAIZ1.pem', 'r');
@@ -33,7 +33,7 @@ begin
     Exit;
   end;
   WriteLn('✓ BIO opened');
-  
+
   X509 := PEM_read_bio_X509(BIO, nil, nil, nil);
   if X509 = nil then begin
     WriteLn('❌ PEM_read_bio_X509 returned nil');
@@ -41,7 +41,7 @@ begin
     Exit;
   end;
   WriteLn('✓ Certificate loaded!');
-  
+
   X509_free(X509);
   BIO_free(BIO);
 end;
@@ -59,10 +59,10 @@ begin
     Exit;
   end;
   WriteLn('✓ Initialized');
-  
+
   Store := Lib.CreateCertificateStore;
   WriteLn('Before: Count = ', Store.GetCount);
-  
+
   WriteLn('Calling LoadFromPath("/etc/ssl/certs")...');
   if Store.LoadFromPath('/etc/ssl/certs') then
     WriteLn('✓ SUCCESS: Count = ', Store.GetCount)
@@ -78,7 +78,7 @@ begin
     WriteLn('FATAL: Cannot initialize OpenSSL');
     Halt(1);
   end;
-  
+
   TestDirectLoad;
   TestStoreLoad;
 end.

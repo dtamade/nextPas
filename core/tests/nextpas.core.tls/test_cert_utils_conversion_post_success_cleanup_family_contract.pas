@@ -3,7 +3,7 @@ program test_cert_utils_conversion_post_success_cleanup_family_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

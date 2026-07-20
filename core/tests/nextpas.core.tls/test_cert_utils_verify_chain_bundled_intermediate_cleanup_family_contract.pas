@@ -3,7 +3,7 @@ program test_cert_utils_verify_chain_bundled_intermediate_cleanup_family_contrac
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

@@ -4,9 +4,9 @@ program test_openssl_ca_autoload;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
-  
+
   nextpas.core.tls.base,
   fafafa.ssl;
 

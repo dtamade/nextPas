@@ -4,7 +4,7 @@ program test_nonblocking;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, nextpas.core.tls.nonblocking;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.tls.nonblocking;
 
 var
   LTotal, LPassed: Integer;
@@ -151,7 +151,7 @@ begin
 end;
 
 begin
-  
+
   LTotal := 0;
   LPassed := 0;
 

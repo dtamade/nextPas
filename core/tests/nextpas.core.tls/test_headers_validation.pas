@@ -3,7 +3,7 @@ program test_headers_validation;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
@@ -49,9 +49,9 @@ begin
   WriteLn('OpenSSL Module Header Validation');
   WriteLn('=================================');
   WriteLn;
-  
+
   Pass := 0; Fail := 0; Total := 0;
-  
+
   WriteLn('Type Definitions:');
   Test('PBIO', SizeOf(PBIO) > 0);
   Test('PBIGNUM', SizeOf(PBIGNUM) > 0);
@@ -67,14 +67,14 @@ begin
   Test('PBN_CTX', SizeOf(PBN_CTX) > 0);
   Test('PEVP_MD_CTX', SizeOf(PEVP_MD_CTX) > 0);
   Test('PEVP_CIPHER_CTX', SizeOf(PEVP_CIPHER_CTX) > 0);
-  
+
   WriteLn;
   WriteLn('Constants:');
   Test('EVP_MAX_MD_SIZE', EVP_MAX_MD_SIZE > 0);
   Test('EVP_MAX_KEY_LENGTH', EVP_MAX_KEY_LENGTH > 0);
   Test('EVP_MAX_IV_LENGTH', EVP_MAX_IV_LENGTH > 0);
   Test('EVP_MAX_BLOCK_LENGTH', EVP_MAX_BLOCK_LENGTH > 0);
-  
+
   WriteLn;
   WriteLn('Library Loading:');
   if LoadOpenSSLLibrary then
@@ -82,7 +82,7 @@ begin
     Test('LoadOpenSSLLibrary', True);
     Test('TOpenSSLLoader.IsModuleLoaded(osmCore)', TOpenSSLLoader.IsModuleLoaded(osmCore));
     WriteLn('  Version: ', GetOpenSSLVersion);
-    
+
     WriteLn;
     WriteLn('Function Pointers:');
     if TOpenSSLLoader.IsModuleLoaded(osmCore) then
@@ -124,7 +124,7 @@ begin
     Test('LoadOpenSSLLibrary FAILED', False);
     WriteLn('  WARNING: Cannot load OpenSSL library');
   end;
-  
+
   WriteLn;
   WriteLn('=================================');
   WriteLn('Results:');
@@ -137,7 +137,7 @@ begin
   WriteLn('  Symmetric, MAC, Asymmetric');
   WriteLn('  PKI, AEAD, KDF, EVP');
   WriteLn;
-  
+
   if Fail = 0 then
   begin
     WriteLn('SUCCESS: All core module headers are valid!');

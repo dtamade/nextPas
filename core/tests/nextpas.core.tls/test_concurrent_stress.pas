@@ -13,7 +13,7 @@ program test_concurrent_stress;
 }
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   fafafa.ssl;
@@ -165,7 +165,7 @@ begin
 
       // Success
       Result.Success := True;
-      Result.Duration := MilliSecondsBetween(Now, LStartTime);
+      Result.Duration := DateTimeMillisecondsBetween(Now, LStartTime);
 
     finally
       CloseSocket(LSocket);
@@ -224,14 +224,14 @@ begin
   end;
 
   WriteLn;
-  WriteLn('Completed in ', MilliSecondsBetween(Now, LStartTime), ' ms');
+  WriteLn('Completed in ', DateTimeMillisecondsBetween(Now, LStartTime), ' ms');
   WriteLn;
 
   Result.Level := AConcurrentLevel;
   Result.TotalConnections := AConcurrentLevel;
   Result.SuccessCount := LTotalSuccess;
   Result.FailureCount := LTotalFail;
-  Result.TotalDuration := MilliSecondsBetween(Now, LStartTime);
+  Result.TotalDuration := DateTimeMillisecondsBetween(Now, LStartTime);
 
   if LTotalSuccess > 0 then
     Result.AvgDuration := LTotalDuration div LTotalSuccess

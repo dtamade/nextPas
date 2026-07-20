@@ -3,7 +3,7 @@ program test_hashdata_extended_algorithms;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.encoding;
@@ -76,7 +76,7 @@ begin
   WriteLn('HashData Extended Algorithm Tests');
   WriteLn('========================================');
 
-  Data := TEncoding.UTF8.GetBytes('hashdata-extended-algo-test');
+  Data := BytesOf('hashdata-extended-algo-test');
 
   // Mandatory support added in this iteration
   AssertHashLength('SHA224', sslHashSHA224, Data, 56);

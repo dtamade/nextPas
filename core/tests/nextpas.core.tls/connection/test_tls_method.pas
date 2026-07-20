@@ -1,7 +1,7 @@
 program test_tls_method;
 {$mode objfpc}{$H+}
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.base;
 var
@@ -9,19 +9,19 @@ var
 begin
   // Load OpenSSL core which includes SSL functions
   LoadOpenSSLCore();
-  
+
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
   begin
     WriteLn('ERROR: Failed to load OpenSSL');
     Halt(1);
   end;
-  
+
   WriteLn('OpenSSL loaded: ', GetOpenSSLVersionString);
   WriteLn;
-  
+
   WriteLn('TLS_client_method assigned: ', Assigned(TLS_client_method));
   WriteLn('TLS_server_method assigned: ', Assigned(TLS_server_method));
-  
+
   if Assigned(TLS_client_method) then
   begin
     WriteLn('Calling TLS_client_method...');

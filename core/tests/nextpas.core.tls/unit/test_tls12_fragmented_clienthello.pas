@@ -4,7 +4,7 @@ program test_tls12_fragmented_clienthello;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.clienthello,
   nextpas.core.tls.tls12.io,

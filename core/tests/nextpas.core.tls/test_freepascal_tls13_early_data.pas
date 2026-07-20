@@ -3,7 +3,7 @@ program test_freepascal_tls13_early_data;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils, Process,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, Process,
   {$IFDEF UNIX}BaseUnix, Unix,{$ENDIF}
   fafafa.ssl,
   nextpas.core.tls.base,
@@ -838,7 +838,7 @@ begin
   else
   begin
     FillChar(LPskOffer, SizeOf(LPskOffer), 0);
-    LSessionAgeMs := MilliSecondsBetween(Now, FResumeBaseSession.GetCreationTime);
+    LSessionAgeMs := DateTimeMillisecondsBetween(Now, FResumeBaseSession.GetCreationTime);
     if LSessionAgeMs < 0 then
       LSessionAgeMs := 0;
 
@@ -2759,7 +2759,7 @@ begin
       ADirectoryName,
       AKey,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
-      IncSecond(Now, 600)
+      DateTimeAddSeconds(Now, 600)
     );
     LStream := TFileStream.Create(LFileName, fmOpenReadWrite);
     try
@@ -3499,7 +3499,7 @@ begin
     'ledger-expired',
     8,
     1,
-    IncSecond(Now, -10),
+    DateTimeAddSeconds(Now, -10),
     7200
   );
   AssertTrue(not LReplayLedger.TryAcquireEarlyDataSession(LExpiredSession),
@@ -3781,7 +3781,7 @@ begin
       'provider-expired',
       8,
       1,
-      IncSecond(Now, -10),
+      DateTimeAddSeconds(Now, -10),
       7200
     );
     AssertTrue(not LLedger1.TryAcquireEarlyDataSession(LExpiredSession),
@@ -3958,7 +3958,7 @@ begin
     'store-backed-provider-expired',
     8,
     1,
-    IncSecond(Now, -10),
+    DateTimeAddSeconds(Now, -10),
     7200
   );
   AssertTrue(not LLedger1.TryAcquireEarlyDataSession(LExpiredSession),
@@ -4358,7 +4358,7 @@ begin
       LDirectoryName,
       LReplayKey,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
-      IncSecond(Now, -10)
+      DateTimeAddSeconds(Now, -10)
     );
 
     LStore1 := TFreePascalDirectoryEarlyDataReplayStore.Create(LDirectoryName);
@@ -4530,10 +4530,10 @@ begin
     LStore := TFreePascalDirectoryEarlyDataReplayStore.Create(LDirectoryName);
     SetLength(LEntries, 2);
     LEntries[0].Key := 'fresh';
-    LEntries[0].ExpiresAt := IncSecond(Now, 600);
+    LEntries[0].ExpiresAt := DateTimeAddSeconds(Now, 600);
     LOversizeKey := StringOfChar('x', TEST_INVALID_REPLAY_PROVIDER_KEY_LENGTH);
     LEntries[1].Key := LOversizeKey;
-    LEntries[1].ExpiresAt := IncSecond(Now, 600);
+    LEntries[1].ExpiresAt := DateTimeAddSeconds(Now, 600);
 
     AssertTrue(not LStore.SaveEntries(LEntries),
       'Directory replay-store should fail closed when snapshot writing hits an oversize key');
@@ -7012,7 +7012,7 @@ begin
       'callback-provider-rebuild-expired',
       8,
       1,
-      IncSecond(Now, -10),
+      DateTimeAddSeconds(Now, -10),
       7200
     );
     AssertTrue(not LLedger1.TryAcquireEarlyDataSession(LExpiredSession),
@@ -7109,7 +7109,7 @@ begin
       'file-provider-expired',
       8,
       1,
-      IncSecond(Now, -10),
+      DateTimeAddSeconds(Now, -10),
       7200
     );
     AssertTrue(not LLedger1.TryAcquireEarlyDataSession(LExpiredSession),
@@ -7556,7 +7556,7 @@ begin
       LTempFileName,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
       LReplayKey,
-      IncSecond(Now, 30)
+      DateTimeAddSeconds(Now, 30)
     );
     AssertTrue(not FileExists(LFileName),
       'Canonical replay-store file should stay absent for orphan temp recovery test setup');
@@ -8299,7 +8299,7 @@ begin
       LFileName,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
       LReplayKey,
-      IncSecond(Now, -10)
+      DateTimeAddSeconds(Now, -10)
     );
 
     LProvider1 := TFreePascalFileEarlyDataReplayProvider.Create(LFileName);
@@ -10705,7 +10705,7 @@ begin
       LTempFileName,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
       LReplayKey,
-      IncSecond(Now, 30)
+      DateTimeAddSeconds(Now, 30)
     );
     AssertTrue(not FileExists(LFileName),
       'Runtime orphan temp recovery test should keep canonical main replay store file absent during setup');
@@ -12035,7 +12035,7 @@ begin
       LFileName,
       TEST_FILE_REPLAY_PROVIDER_VERSION,
       LReplayKey,
-      IncSecond(Now, -10)
+      DateTimeAddSeconds(Now, -10)
     );
 
     LCtx1 := BuildBuilderFileBackedReplayStoreServerContext(LFileName);

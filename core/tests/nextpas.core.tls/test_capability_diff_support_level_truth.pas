@@ -3,7 +3,7 @@ program test_capability_diff_support_level_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.capability.diff;
 

@@ -3,7 +3,7 @@ program test_x509_ed25519_algorithm_truth;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,

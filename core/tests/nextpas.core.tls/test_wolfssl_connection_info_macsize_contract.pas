@@ -4,7 +4,7 @@ program test_wolfssl_connection_info_macsize_contract;
 {$DEFINE ENABLE_WOLFSSL}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.wolfssl.base,

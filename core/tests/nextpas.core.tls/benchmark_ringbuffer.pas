@@ -9,7 +9,7 @@ program benchmark_ringbuffer;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.ringbuffer,
   nextpas.core.tls.ringbuffer.lockfree;
@@ -47,7 +47,7 @@ begin
       Buffer.TryRead(ReadBuf, CHUNK_SIZE);
     end;
 
-    Result := MilliSecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(Now, StartTime);
   finally
     Buffer.Free;
   end;
@@ -69,7 +69,7 @@ begin
       Buffer.TryRead(ReadBuf, CHUNK_SIZE);
     end;
 
-    Result := MilliSecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(Now, StartTime);
   finally
     Buffer.Free;
   end;
@@ -104,7 +104,7 @@ begin
       end;
     end;
 
-    Result := MilliSecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(Now, StartTime);
   finally
     Buffer.Free;
   end;
@@ -139,7 +139,7 @@ begin
       end;
     end;
 
-    Result := MilliSecondsBetween(Now, StartTime);
+    Result := DateTimeMillisecondsBetween(Now, StartTime);
   finally
     Buffer.Free;
   end;

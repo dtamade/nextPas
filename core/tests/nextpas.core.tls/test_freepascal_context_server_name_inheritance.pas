@@ -6,7 +6,7 @@ program test_freepascal_context_server_name_inheritance;
   WithSNI / direct context ServerName compatibility on FreePascal. }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
