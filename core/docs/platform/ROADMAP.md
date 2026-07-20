@@ -314,6 +314,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-13**: docs — macOS layer A (fail-closed) vs layer B (whole job); Windows **20 platform gates** vs script total 21 (+mem.host). ABI recheck: wine contract 3/0 (stdcall + TThreadID still locked). |
 | 2026-07-20 | **Batch-14**: Windows scripts candidate **+platform.which** (no promote until GHA green). Queue after: dl → args → pipe. |
 | 2026-07-20 | **Batch-14b**: promote **21 platform-gate** set (+which) after GHA pass=22 (run 29721371136 @ `0cb2471bc`; which PASS; +mem.host in total). |
+| 2026-07-20 | **Batch-16**: Windows scripts candidate **+platform.dl** (no promote until GHA). Queue after: args → pipe. |
+| 2026-07-20 | **Batch-15a design**: Windows watch via ReadDirectoryChangesW — see [watch-windows-design.md](watch-windows-design.md) (docs only; no implement). |
 
 ---
 

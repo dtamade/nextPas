@@ -60,8 +60,9 @@ Not covered: signal, console, freetype/net.
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
 socket, error, fmt, info, which, io.reactor.iocp, poller.windows_runtime_smoke,
 platform.io.windows_real, platform.socket.windows_real. Promoted after GHA
-run 29721371136 @ `0cb2471bc` (pass=22 with mem.host; which PASS). Optional
-**mem.host_runtime** is mem-owned (job total 22).
+run 29721371136 @ `0cb2471bc` (pass=22 with mem.host; which PASS). Scripts also
+list **dl (candidate, Batch-16)** and optional **mem.host_runtime** (mem-owned).
+Do not claim dl as ci-matrix until GHA green.
 
 ## IOCP / readiness boundary
 
