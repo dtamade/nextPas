@@ -24,7 +24,7 @@
 | UTF8CaseFoldSimple ASCII-200 | **447** | ASCII 批处理 MapAscii |
 | UTF8CaseFoldSimple BMP-Latin | 2250 | Latin-1 表 + 串构建 |
 | NFC ASCII-200 | **83** | IsAsciiString 快路径 |
-| NFC BMP-Latin-50 | 5110 | 全量分解+组合 |
+| NFC BMP-Latin-50 | **4216** | O(1) decomp + buffer reuse |
 | NFD BMP-Latin-50 | 3220 | 分解路径 |
 | IsAsciiString ASCII-200 | ~53 | 8 字节并行 |
 
@@ -45,7 +45,7 @@
 | 整串 CaseFold/ToUpper ASCII-200 | **0.15×** | nextPas 大幅领先 |
 | 整串 CaseFold BMP-Latin | **0.92×** | 持平/略快 |
 | NFC ASCII-200 | **0.31×** | nextPas 领先 |
-| NFC BMP-Latin | **1.81×** | 仍慢于 Go，待下一轮 |
+| NFC BMP-Latin | **1.49×** | 改善自 1.81×；目标 1.2× 未完全达到 |
 | NFD BMP-Latin | **0.14×** | nextPas 大幅领先 |
 
 ### 相对历史 RESULTS.md
@@ -53,7 +53,16 @@
 旧表将「CaseFoldSimple ASCII-200 ~4043 ns」与 Go ~200 ns 对比，**测项不对齐**（逐码点 vs 整串）。
 整串 API 对齐后，ASCII CaseFold **不再落后**。
 
-## 本轮优化
+## 本轮优化（NFC BMP-Latin 热路径 2026-07-20b）
+
+1. `TCodepointBuffer` 预留 + Append 容量检查；Compose `DeleteAt` 用 `Move`
+2. `SortCanonicalOrder` 栈上 CCC 缓存（≤256）
+3. `BufferToUtf8` 直接 `UTF8Encode`
+4. `threadvar GNormBuffer` 复用 capacity
+5. BMP 分解 **O(1)**：`DECOMP_KIND_BMP` + `DECOMP_BMP_INDEX`（`normalize_bmp_index.inc`）
+6. 拉丁单层分解 Len=2 快路径
+
+## 先前优化
 
 1. `CaseFoldSimple`：U+0000..U+00FF 走 `CASE_FOLD_LATIN1` 直表
 2. `MapAsciiString`：指针单遍，减少索引开销
