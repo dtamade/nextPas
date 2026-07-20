@@ -253,6 +253,9 @@ var
 begin
   WriteLn('Platform: ', OSName, '/', CPUName);
   WriteLn('Compiler flags: -MObjFPC -Sh -O2');
+  { Source-contract pins (test_lockfree): exact evidence fields. }
+  WriteLn('Input size: OPS=1000000; capacity=1024; scenarios=SPSC 1P+1C, MPMC 2P+2C, mutex channel baseline, Try* 1T');
+  WriteLn('Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)');
   WriteLn('build suite: Q5 matched C1/C2 + optional micro');
   WriteLn;
   GBenchSink := 0;

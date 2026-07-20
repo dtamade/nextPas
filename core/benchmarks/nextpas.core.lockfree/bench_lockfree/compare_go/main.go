@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// Q5 matched scenarios vs nextpas TLockFreeChannel (same OPS/CAPACITY).
 const Ops = 1000000
 const Capacity = 1024
 
@@ -27,8 +26,7 @@ func printResult(name string, elapsed time.Duration, operations int64) {
 		nsPerOp)
 }
 
-// C1: buffered chan 1P+1C (closest Go peer to TLockFreeChannel 1P+1C).
-func benchC1() uint64 {
+func benchChannelSPSC() uint64 {
 	ch := make(chan uint64, Capacity)
 	var wg sync.WaitGroup
 	var sum uint64
@@ -49,18 +47,17 @@ func benchC1() uint64 {
 	}()
 	wg.Wait()
 
-	printResult("C1 chan uint64 1P+1C", time.Since(start), Ops)
+	printResult("chan uint64 1P+1C", time.Since(start), Ops)
 	return sum
 }
 
-// C2: buffered chan 2P+2C.
-func benchC2() uint64 {
+func benchChannelMPMC() uint64 {
 	ch := make(chan uint64, Capacity)
 	results := make(chan uint64, 2)
 	var wg sync.WaitGroup
 
 	start := time.Now()
-	for i := 0; i < 2; i++ {
+	for producerIndex := 0; producerIndex < 2; producerIndex++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -69,17 +66,19 @@ func benchC2() uint64 {
 			}
 		}()
 	}
-	for i := 0; i < 2; i++ {
+
+	for consumerIndex := 0; consumerIndex < 2; consumerIndex++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			localSum := uint64(0)
-			for j := 0; j < Ops/2; j++ {
+			for i := 0; i < Ops/2; i++ {
 				localSum += <-ch
 			}
 			results <- localSum
 		}()
 	}
+
 	wg.Wait()
 	close(results)
 
@@ -87,21 +86,36 @@ func benchC2() uint64 {
 	for value := range results {
 		sum += value
 	}
-	printResult("C2 chan uint64 2P+2C", time.Since(start), Ops)
+
+	printResult("chan uint64 2P+2C", time.Since(start), Ops)
+	return sum
+}
+
+func benchChannelSingleThread() uint64 {
+	ch := make(chan uint64, Capacity)
+	sum := uint64(0)
+
+	start := time.Now()
+	for value := uint64(1); value <= Ops; value++ {
+		ch <- value
+		sum += <-ch
+	}
+
+	printResult("chan uint64 1T", time.Since(start), Ops)
 	return sum
 }
 
 func main() {
-	fmt.Println("=== Q5 Go matched suite (chan vs nextpas Channel) ===")
+	fmt.Println("=== Go channel lockfree comparison (1M ops) ===")
 	fmt.Println("Platform:", runtime.GOOS, runtime.GOARCH)
-	fmt.Println("Compiler: go build (gc)")
-	fmt.Printf("Input: OPS=%d CAPACITY=%d scenarios=C1 1P+1C, C2 2P+2C\n", Ops, Capacity)
-	fmt.Println("Peer: nextpas TLockFreeChannel (bounded sequence channel)")
-	fmt.Println("Honesty: not bit-identical to lockfree channel; same-host relative only + envelope.")
+	fmt.Println("Compiler flags: go build (default optimized gc toolchain; recommended manual command)")
+	fmt.Println("Input size: OPS=1000000; capacity=1024; scenarios=chan uint64 1P+1C, chan uint64 2P+2C, chan uint64 1T")
+	fmt.Println("Baselines: Go channel synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark")
 	fmt.Println()
 
-	sink = benchC1()
-	sink += benchC2()
+	sink = benchChannelSPSC()
+	sink += benchChannelMPMC()
+	sink += benchChannelSingleThread()
 	runtime.KeepAlive(sink)
 
 	fmt.Println()
