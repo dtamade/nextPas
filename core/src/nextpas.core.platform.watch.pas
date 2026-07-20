@@ -54,6 +54,13 @@ type
   {$IFDEF NEXTPAS_WINDOWS}
     { Dir handle owned by watcher; Fd is POSIX-oriented and unused on Windows. }
     DirHandle: Pointer; { HANDLE }
+    NotifyEvent: Pointer; { HANDLE auto-reset event for OVERLAPPED }
+    { OVERLAPPED layout (Win64 32 bytes) — fixed address for async RDCW. }
+    OverlappedRaw: array[0..31] of Byte;
+    Buf: array[0..16383] of Byte;
+    PendLen: Int32;
+    PendPos: Int32;
+    Pending: Boolean;
   {$ENDIF}
     {** @desc 检查监视器是否有效
         @return True 如果监视器有效 *}
@@ -557,14 +564,132 @@ begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 
-{ Batch-15 S1: create / add (single directory) / close.
-  Poll remains UNSUPPORTED until S2 arms ReadDirectoryChangesW. }
+{ Batch-15 S1+S2: create/add/close + ReadDirectoryChangesW poll (one event). }
+
+const
+  WIN_WATCH_NOTIFY_FILTER =
+    FILE_NOTIFY_CHANGE_FILE_NAME or FILE_NOTIFY_CHANGE_DIR_NAME or
+    FILE_NOTIFY_CHANGE_ATTRIBUTES or FILE_NOTIFY_CHANGE_SIZE or
+    FILE_NOTIFY_CHANGE_LAST_WRITE;
+
+function WinWatchOverlapped(var AWatcher: TPlatformWatcher): LPOVERLAPPED; inline;
+begin
+  Result := LPOVERLAPPED(@AWatcher.OverlappedRaw[0]);
+end;
+
+procedure WinWatchResetState(var AWatcher: TPlatformWatcher);
+begin
+  AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
+  AWatcher.NotifyEvent := nil;
+  FillChar(AWatcher.OverlappedRaw, SizeOf(AWatcher.OverlappedRaw), 0);
+  AWatcher.PendLen := 0;
+  AWatcher.PendPos := 0;
+  AWatcher.Pending := False;
+  AWatcher.Fd := -1;
+end;
+
+function WinWatchArm(var AWatcher: TPlatformWatcher): Int32;
+var
+  LBytes: DWORD;
+  LOvl: LPOVERLAPPED;
+  LErr: DWORD;
+begin
+  LOvl := WinWatchOverlapped(AWatcher);
+  FillChar(LOvl^, SizeOf(OVERLAPPED), 0);
+  LOvl^.hEvent := HANDLE(AWatcher.NotifyEvent);
+  LBytes := 0;
+  AWatcher.PendLen := 0;
+  AWatcher.PendPos := 0;
+  if ReadDirectoryChangesW(
+       HANDLE(AWatcher.DirHandle),
+       @AWatcher.Buf[0],
+       DWORD(SizeOf(AWatcher.Buf)),
+       False,
+       WIN_WATCH_NOTIFY_FILTER,
+       @LBytes,
+       LOvl,
+       nil) then
+  begin
+    AWatcher.Pending := False;
+    AWatcher.PendLen := Int32(LBytes);
+    AWatcher.PendPos := 0;
+    Result := 0;
+  end
+  else
+  begin
+    LErr := GetLastError;
+    if LErr = ERROR_IO_PENDING then
+    begin
+      AWatcher.Pending := True;
+      Result := 0;
+    end
+    else
+      Result := platform_get_last_error;
+  end;
+end;
+
+function WinWatchDecodeOne(var AWatcher: TPlatformWatcher;
+  out AEvent: TPlatformWatchEvent): Boolean;
+var
+  LBase: PByte;
+  LNext: DWORD;
+  LAction: DWORD;
+  LNameBytes: DWORD;
+  LNameW: array[0..260] of WideChar;
+  LChars: Int32;
+  LUtf8: AnsiString;
+  I: Int32;
+begin
+  Result := False;
+  FillChar(AEvent, SizeOf(AEvent), 0);
+  if AWatcher.PendPos + 12 > AWatcher.PendLen then
+    Exit;
+  LBase := @AWatcher.Buf[AWatcher.PendPos];
+  LNext := PDWORD(LBase)^;
+  LAction := PDWORD(LBase + 4)^;
+  LNameBytes := PDWORD(LBase + 8)^;
+  if (LNameBytes > 520) or
+     (AWatcher.PendPos + 12 + Int32(LNameBytes) > AWatcher.PendLen) then
+    Exit;
+
+  case LAction of
+    FILE_ACTION_ADDED, FILE_ACTION_RENAMED_NEW_NAME:
+      AEvent.Created := True;
+    FILE_ACTION_REMOVED, FILE_ACTION_RENAMED_OLD_NAME:
+      AEvent.Deleted := True;
+    FILE_ACTION_MODIFIED:
+      AEvent.Modified := True;
+  end;
+
+  if LNameBytes > 0 then
+  begin
+    LChars := Int32(LNameBytes) div SizeOf(WideChar);
+    if LChars > 260 then
+      LChars := 260;
+    Move((LBase + 12)^, LNameW[0], LChars * SizeOf(WideChar));
+    LNameW[LChars] := #0;
+    LUtf8 := platform_windows_wide_to_utf8(@LNameW[0]);
+    I := 0;
+    while (I < 255) and (I < Length(LUtf8)) do
+    begin
+      AEvent.Name[I] := LUtf8[I + 1];
+      Inc(I);
+    end;
+    AEvent.Name[I] := #0;
+    AEvent.NameLen := I;
+  end;
+
+  if LNext = 0 then
+    AWatcher.PendPos := AWatcher.PendLen
+  else
+    Inc(AWatcher.PendPos, Int32(LNext));
+  Result := True;
+end;
 
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
   FillChar(AWatcher, SizeOf(AWatcher), 0);
-  AWatcher.Fd := -1;
-  AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
+  WinWatchResetState(AWatcher);
   Result := 0;
 end;
 
@@ -572,6 +697,8 @@ function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiCh
 var
   LPath: UnicodeString;
   LHandle: HANDLE;
+  LEvent: HANDLE;
+  LArm: Int32;
 begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
@@ -586,13 +713,30 @@ begin
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil,
     OPEN_EXISTING,
-    FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_BACKUP_SEMANTICS or FILE_FLAG_OVERLAPPED,
     nil);
   if WinWatchHandleInvalid(LHandle) then
     Exit(platform_get_last_error);
 
+  LEvent := CreateEventW(nil, False, False, nil);
+  if (LEvent = nil) or (LEvent = HANDLE(PtrInt(-1))) then
+  begin
+    Result := platform_get_last_error;
+    CloseHandle(LHandle);
+    Exit;
+  end;
+
   AWatcher.DirHandle := Pointer(LHandle);
-  AWatcher.Fd := 0; { non-negative sentinel; DirHandle is the real validity bit }
+  AWatcher.NotifyEvent := Pointer(LEvent);
+  AWatcher.Fd := 0;
+  LArm := WinWatchArm(AWatcher);
+  if LArm <> 0 then
+  begin
+    CloseHandle(LEvent);
+    CloseHandle(LHandle);
+    WinWatchResetState(AWatcher);
+    Exit(LArm);
+  end;
   Result := 0;
 end;
 
@@ -603,30 +747,109 @@ begin
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
-function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+function platform_watch_poll(var AWatcher: TPlatformWatcher;
+  out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+var
+  LWait: DWORD;
+  LMs: DWORD;
+  LBytes: DWORD;
+  LOvl: LPOVERLAPPED;
+  LArm: Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
-  { S2: ReadDirectoryChangesW + timeout. }
-  Result := PLATFORM_ERR_UNSUPPORTED;
+  if WinWatchHandleInvalid(HANDLE(AWatcher.DirHandle)) then
+    Exit(PLATFORM_ERR_INVALID);
+
+  { Drain residual multi-record batch (one event per poll). }
+  if AWatcher.PendPos < AWatcher.PendLen then
+  begin
+    if WinWatchDecodeOne(AWatcher, AEvent) then
+      Exit(1);
+    AWatcher.PendPos := 0;
+    AWatcher.PendLen := 0;
+  end;
+
+  if not AWatcher.Pending then
+  begin
+    LArm := WinWatchArm(AWatcher);
+    if LArm <> 0 then
+      Exit(LArm);
+    if (AWatcher.PendLen > 0) and WinWatchDecodeOne(AWatcher, AEvent) then
+      Exit(1);
+  end;
+
+  if ATimeoutMs < 0 then
+    LMs := INFINITE
+  else if ATimeoutMs = 0 then
+    LMs := 0
+  else if ATimeoutMs > High(DWORD) then
+    LMs := INFINITE
+  else
+    LMs := DWORD(ATimeoutMs);
+
+  LWait := WaitForSingleObject(HANDLE(AWatcher.NotifyEvent), LMs);
+  if LWait = WAIT_TIMEOUT then
+    Exit(0); { match Linux: 0 = no event }
+  if LWait <> WAIT_OBJECT_0 then
+    Exit(platform_get_last_error);
+
+  LOvl := WinWatchOverlapped(AWatcher);
+  LBytes := 0;
+  if not GetOverlappedResult(HANDLE(AWatcher.DirHandle), LOvl, @LBytes, False) then
+  begin
+    AWatcher.Pending := False;
+    Exit(platform_get_last_error);
+  end;
+  AWatcher.Pending := False;
+  AWatcher.PendLen := Int32(LBytes);
+  AWatcher.PendPos := 0;
+
+  if not WinWatchDecodeOne(AWatcher, AEvent) then
+  begin
+    AWatcher.PendLen := 0;
+    AWatcher.PendPos := 0;
+    LArm := WinWatchArm(AWatcher);
+    if LArm <> 0 then
+      Exit(LArm);
+    Exit(0);
+  end;
+
+  { Re-arm after consuming a completed buffer when residual is empty. }
+  if AWatcher.PendPos >= AWatcher.PendLen then
+  begin
+    AWatcher.PendLen := 0;
+    AWatcher.PendPos := 0;
+    LArm := WinWatchArm(AWatcher);
+    if LArm <> 0 then
+      Exit(LArm);
+  end;
+  Result := 1;
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 var
-  LHandle: HANDLE;
+  LDir: HANDLE;
+  LEvt: HANDLE;
+  LOvl: LPOVERLAPPED;
 begin
-  LHandle := HANDLE(AWatcher.DirHandle);
-  if not WinWatchHandleInvalid(LHandle) then
+  LDir := HANDLE(AWatcher.DirHandle);
+  LEvt := HANDLE(AWatcher.NotifyEvent);
+  if not WinWatchHandleInvalid(LDir) then
   begin
-    if not CloseHandle(LHandle) then
+    LOvl := WinWatchOverlapped(AWatcher);
+    CancelIoEx(LDir, LOvl);
+    if not CloseHandle(LDir) then
     begin
       Result := platform_get_last_error;
-      AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
-      AWatcher.Fd := -1;
+      if (LEvt <> nil) and (LEvt <> HANDLE(PtrInt(-1))) then
+        CloseHandle(LEvt);
+      WinWatchResetState(AWatcher);
       Exit;
     end;
   end;
-  AWatcher.DirHandle := Pointer(HANDLE(PtrInt(-1)));
-  AWatcher.Fd := -1;
+  if (LEvt <> nil) and (LEvt <> HANDLE(PtrInt(-1))) then
+    CloseHandle(LEvt);
+  WinWatchResetState(AWatcher);
   Result := 0;
 end;
 {$ENDIF}

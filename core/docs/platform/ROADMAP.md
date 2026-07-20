@@ -324,6 +324,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-15 S1**: Windows `platform.watch` create/add/close via CreateFileW + DirHandle; poll still UNSUPPORTED. Wine smoke updated. Queue: S2 poll RDCW. |
 | 2026-07-20 | **Batch-19**: Windows scripts candidate **+platform.resource** (no promote until GHA green). |
 | 2026-07-20 | **Batch-19b**: promote **25 platform-gate** set (+resource) after GHA pass=26 (run 29730911054 @ `e0441ae62`; resource PASS; +mem.host in total). |
+| 2026-07-20 | **Batch-15 S2**: Windows watch `ReadDirectoryChangesW` poll (one event + timeout); wine smoke create/timeout. Queue: S3 rename/delete; optional pty matrix candidate. |
 
 ---
 
