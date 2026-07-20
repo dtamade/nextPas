@@ -117,19 +117,18 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | test_process_command | **21** | R28 迁 nextpas.core.test（原 48 Check） |
 | test_process_deep | **27** | timeout/large + R22 Cancel + R24 KillTree + R26 group |
 | test_process_pipe_contract | **17** | EINTR/EAGAIN/broken pipe |
-| test_process_wine | wine-runtime-smoke **7 passed**（R26） | Windows L2 under Wine；≠ 真 host |
-| **合计** | **5 目录 / 544+ Unix** | 2026-07-20 R22 实测 Unix 全绿 + 0 leak |
+| test_process_wine | wine-runtime-smoke **11 passed**（M2-W3/W4） | 见 [WIN.md](./WIN.md)；≠ 真 host |
+| **合计** | **5 目录 / 193+ Unix cases** | R28 framework cases + deep/pipe；0 leak |
 
 ---
 
+## Windows / Unix 支持矩阵（M2）
 
----
-
-## Windows / Unix 支持矩阵（M2-W3）
+完整一眼表：[WIN.md](./WIN.md)。摘要：
 
 | 能力 | Linux/Unix | Windows | 失败形态 |
 |------|------------|---------|----------|
-| Spawn / Wait / Capture / Status | Done | Done（wine smoke） | raise |
+| Spawn / Wait / Capture / Status | Done | Done（wine 最小生产集） | raise |
 | Timeout / MaxOutput / CancelToken | Done | Done | 语义同 Host |
 | NewProcessGroup / KillTree | setpgid + kill(-pg) | **Job Object**（M2-W2） | raise |
 | ExtraFd（fd≥3） | Done | **UNSUPPORTED** | Spawn 前 **EProcessError** 明文 |
@@ -162,4 +161,6 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-20 | 2.16 | R24 NewProcessGroup/KillTree；deep 26 | Claude |
 | 2026-07-20 | 2.17 | R26 WaitGraceful×ProcessGroup；deep 27 | Claude |
 | 2026-07-20 | 2.18 | R27 Capture stdout-only + WaitWithOutput drain 加速 | Claude |
-| 2026-07-20 | 2.17 | M2-W2 Win Job Object NewProcessGroup/KillTree | Claude |
+| 2026-07-20 | 2.19 | M2-W2 Win Job Object NewProcessGroup/KillTree | Claude |
+| 2026-07-20 | 2.20 | M2-W3 ExtraFd/Cred fail-closed；wine 11 | Claude |
+| 2026-07-20 | 2.21 | M2-W4 WIN.md 交叉引用；wine 最小生产集口径 | Claude |

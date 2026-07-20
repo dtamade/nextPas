@@ -68,6 +68,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Gap | Severity | Notes |
 |-----|----------|--------|
 | Windows beyond documented 27 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
+| `async-windows-native-smoke` job red | **P2 (not platform)** | Owner **net/async**; not a platform facade gate or promote blocker |
 | macOS beyond documented 9 platform gates | **P1** | Layer A fail-closed only; whole job (async inventory) is not platform evidence |
 | `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
 | Windows secure-zero native export | **P2** | D3.b closed: permanent FillChar+barrier; no stable DLL export across Wine+real Windows |
@@ -331,6 +332,9 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-15 S3**: Windows watch overflow → `PLATFORM_ERR_AGAIN` + re-arm; wine smoke delete/multi soft. Queue: optional watch matrix candidate. |
 | 2026-07-20 | **Batch-21**: Windows scripts candidate **+platform.watch** (S1–S3; no promote until GHA green). |
 | 2026-07-20 | **Batch-21b**: promote **27 platform-gate** set (+watch) after GHA matrix pass=28 (run 29746628175 @ `2020db503`; watch PASS). Job may red on async-native-smoke (not platform evidence). |
+| 2026-07-20 | **Batch-22**: watch smoke hard create/delete on real Windows (`ntdll!wine_get_version`); Wine remains soft residual. |
+| 2026-07-20 | **Batch-23**: Windows multi-dir watch slots (8) for fs.watch multi-Add; add returns wd; remove(wd) works. |
+| 2026-07-20 | **Owner note**: `async-windows-native-smoke` job step is **net/async** lane (`core/docs/net-async-io/WINDOWS-NATIVE-ASSESSMENT.md`); platform matrix green does not require that step. |
 
 ---
 

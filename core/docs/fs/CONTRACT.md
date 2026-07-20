@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.14
+**版本**：1.15
 
 ---
 
@@ -100,11 +100,28 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | test_fs_ifile | **22** | IFile + R23 Lock/TryLock/OpenLocked |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
 | test_fs_watch | **13** | R29–R32 AddTree/queue/Remove |
-| **合计** | **7 个测试目录 / 255** | heaptrc 0 leak 为门禁 |
+| test_fs_wine | **3** | wine 最小生产集（读写/MkdirAll/OpenLocked） |
+| test_fs_watch_wine | **3** | wine watch S2 + soft create-event |
+| **合计** | **9 个测试目录** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
 ---
+
+## Windows / Unix 支持矩阵（M2-W4）
+
+完整一眼表：[`../process/WIN.md`](../process/WIN.md)。
+
+| 能力 | Linux/Unix | Windows | 失败形态 |
+|------|------------|---------|----------|
+| Read/Write/MkdirAll/Remove/… | Done | Done（wine 子集） | raise |
+| OpenLocked / IFile.Lock | flock | LockFileEx | busy→False / raise |
+| ReadAt / WriteAt | Done | Done（L0） | raise |
+| Chown | Done | **UNSUPPORTED** | 平台错误映射 |
+| Watch Add/Poll | inotify | **RDCW S2** | Wine 事件 soft |
+| Watch AddTree 多目录 | Done | Partial（槽位/L0 限） | NOSPC / 文档 |
+
+**原则**：不 silent fail；wine 结果 truth=`wine-runtime-smoke`。
 
 ## 变更记录
 
@@ -124,3 +141,5 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-20 | 1.11 | R22 ENOSPC/ENOMEM→EResourceExhaustedError | Claude |
 | 2026-07-20 | 1.12 | R23 IFile.Lock/TryLock/Unlock + OpenLocked；INV-13 | Claude |
 | 2026-07-20 | 1.13 | R29 AddTree 递归监视 + Wd 路径消歧；INV-14；watch 11 | Claude |
+| 2026-07-20 | 1.14 | INV-15 ReadAt/WriteAt；R32 Remove | Claude |
+| 2026-07-20 | 1.15 | M2-W4 Win 支持矩阵 + wine 最小生产集 | Claude |

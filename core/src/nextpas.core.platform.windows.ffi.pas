@@ -26,6 +26,15 @@ function CreateThread(lpThreadAttributes: Pointer; dwStackSize: PtrUInt; lpStart
     @return WAIT_OBJECT_0 成功，WAIT_TIMEOUT 超时 *}
 function WaitForSingleObject(hHandle: HANDLE; dwMilliseconds: DWORD): DWORD; stdcall; external 'kernel32' name 'WaitForSingleObject';
 
+{** @desc 等待多个对象
+    @return WAIT_OBJECT_0+i 或 WAIT_TIMEOUT *}
+function WaitForMultipleObjects(nCount: DWORD; lpHandles: PHANDLE;
+  bWaitAll: WINBOOL; dwMilliseconds: DWORD): DWORD; stdcall;
+  external 'kernel32' name 'WaitForMultipleObjects';
+
+function ResetEvent(hEvent: HANDLE): WINBOOL; stdcall;
+  external 'kernel32' name 'ResetEvent';
+
 {** @desc 关闭句柄
     @param hObject 句柄
     @return TRUE 成功 *}

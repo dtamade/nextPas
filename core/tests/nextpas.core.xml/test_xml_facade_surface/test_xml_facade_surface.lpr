@@ -151,11 +151,57 @@ begin
   Check(LRaised, 'nil IReader raises');
 end;
 
+procedure TestFacadeCdataEntityAndDefaultNs;
+var
+  LDoc: TXmlDocument;
+  LWriter: TXmlWriter;
+  LText: string;
+  LOk: Boolean;
+begin
+  LDoc := XmlParse('<root><![CDATA[raw<>&data]]></root>');
+  try
+    Check(LDoc.Root.IsAssigned, 'cdata root');
+    Check(Pos('raw', LDoc.Root.Text) > 0, 'cdata text retained');
+    Check(Pos('<', LDoc.Root.Text) > 0, 'cdata angle retained');
+  finally
+    LDoc.Free;
+  end;
+
+  CheckEqual('&lt;a&gt;', XmlEncodeText('<a>'), 'XmlEncodeText facade');
+  CheckEqual('<a>', XmlDecodeEntities('&lt;a&gt;'), 'XmlDecodeEntities facade');
+
+  LWriter := TXmlWriter.Create;
+  try
+    LWriter.StartElement('root');
+    LWriter.NamespaceDecl('', 'urn:default');
+    LWriter.StartElement('child');
+    LWriter.Text('x');
+    LWriter.EndElement('child');
+    LWriter.EndElement('root');
+    LText := LWriter.ToString;
+    Check(Pos('xmlns="urn:default"', LText) > 0, 'default ns written');
+  finally
+    LWriter.Free;
+  end;
+  LDoc := XmlParse(LText);
+  try
+    Check(LDoc.Root.IsAssigned, 'default ns reparse');
+    CheckEqual('root', LDoc.Root.Name.Local, 'default ns root local');
+  finally
+    LDoc.Free;
+  end;
+
+  LOk := TryXmlParse('<root><unclosed>', LDoc);
+  CheckEqual(False, LOk, 'malformed TryXmlParse fails');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.xml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade exposes namespace surface',
     @TestFacadeExposesNamespaceSurface);
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
+  T.Test('facade cdata entity default-ns',
+    @TestFacadeCdataEntityAndDefaultNs);
   if not T.Run then Halt(1);
 end.

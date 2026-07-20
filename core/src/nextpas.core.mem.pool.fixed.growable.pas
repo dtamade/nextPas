@@ -116,6 +116,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 function TGrowingFixedPool.GetArenaCount: SizeUInt;
 begin
   Result := SizeUInt(Length(FArenas));
@@ -572,7 +575,7 @@ begin
 
     if LRemoved = LArena.Blocks then
     begin
-      FAllocator.FreeMem(LArena.Base);
+      FreeMemOf(FAllocator, LArena.Base, LArena.Size);
       Dec(FTotalCapacity, LArena.Blocks);
       // 删除尾部 arena（数组按 Base 排序，尾部即最大 Base）
       SetLength(FArenas, LArenaIndex);
@@ -591,7 +594,7 @@ var
 begin
   for LArenaIndex := 0 to High(FArenas) do
     if FArenas[LArenaIndex].Base <> nil then
-      FAllocator.FreeMem(FArenas[LArenaIndex].Base);
+      FreeMemOf(FAllocator, FArenas[LArenaIndex].Base, FArenas[LArenaIndex].Size);
   SetLength(FArenas, 0);
   SetLength(FFreeStack, 0);
   inherited Destroy;

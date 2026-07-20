@@ -6,7 +6,7 @@
 **标杆**：Go `os` / `os/exec` / `path/filepath`；Rust `std::{fs,process,path,env}`
 
 > 对标的是**能力 + 边界语义 + 测试强度**，不是符号名逐字复制。  
-> **Host 状态：Maintenance**（见 ROADMAP M0/M1）。剩余主线是 **M2 Windows Wave（platform 主责）**，不是再刷 Host 分数。
+> **Host 状态：Maintenance**（M0/M1）。**M2 Windows usable：Done**（wine）。**M3 host-windows CI gate：Done**（min-set）。一眼表：[WIN.md](./WIN.md)。
 
 ---
 
@@ -124,33 +124,35 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | fs.errors 磁盘满/OOM | **已修**：ENOSPC/ENOMEM、Win DISK_FULL → `EResourceExhaustedError` |
 | 历史 polish（RemoveAll symlink / Append / pread） | **复核已修复** |
 
-### 仍 Deferred（非阻塞；见 ROADMAP M2）
+### 仍 Deferred（非阻塞）
 
 | 项 | 性质 |
 |----|------|
 | ExtraFd / Credential Win | **M2-W3 DONE**（明文 fail-closed） |
 | Win platform.watch Poll | **M2-W1 DONE**（S2 RDCW；Wine soft） |
-| 真 Windows host CI | **M3**；基础设施 |
+| M2 文档/wine 收敛 | **M2-W4 DONE**（[WIN.md](./WIN.md) + min set 24） |
+| 真 Windows host CI | **M3 DONE**（`l2-windows-ci-matrix` + core-ci；truth=`host-windows` min-set） |
 | Status/spawn 1.0× Go | **非目标**（收益递减） |
 
 ### 外部债 / 证据
 
-- **wine-runtime-smoke**（2026-07-20 R33）：  
-  - process **8** / fs **3** / path **4** / os.env **3** / fs.watch **1**（含 UNSUPPORTED 文档化）  
-  - 详见 [`SCORECARD.md`](./SCORECARD.md)
+- **wine 最小生产集**（M2-W4）：process **11** / fs **3** / path **4** / os.env **3** / fs.watch **3** = **24**  
+  `bash core/tests/run_l2_wine_min_set.sh`
+- **host-windows 最小生产集**（M3）：同上 5 目录 native `make test`  
+  `bash core/scripts/l2-windows-ci-matrix.sh` · GHA `test-windows-runtime`
 
 ---
 
 ## 维护策略（口径）
 
-**状态：Host Maintenance（M0/M1）。** Essential Host 完成；R16–R34 序列**封顶**。
+**状态：Host + Win Maintenance（M0–M3 Done）。** Essential Host / wine usable / host-windows min-set gate **封顶**。
 
 **新工作必须贴标签**（`bug` / `win-l0` / `win-l2` / `ci` / `docs`），见 [`ROADMAP.md`](./ROADMAP.md) §5。  
-Win 能力用 **W1–W4**，不用 R35+。
+默认不接无标签 polish。
 
 **周报模板：**
 
-> process/fs/path/env：Host Maintenance。Quality 9.9 / Scale 9.8。Win 见 ROADMAP M2。
+> process/fs/path/env：Maintenance（M0–M3）。Quality 9.9 / Scale 9.8。wine 24 + host-windows min-set gate。
 
 ---
 
@@ -182,3 +184,5 @@ Win 能力用 **W1–W4**，不用 R35+。
 | 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |
 | 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
 | 2026-07-20 | **M2-W3**：ExtraFd/Credential Win 支持矩阵 + fail-closed |
+| 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24；E2 Done（wine truth） |
+| 2026-07-20 | **M3**：l2-windows-ci-matrix + core-ci host-windows；E3 Done |

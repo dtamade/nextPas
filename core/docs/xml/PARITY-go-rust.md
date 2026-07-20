@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.8** | `EXmlError` 位置；namespace 护栏；IReader |
-| **规模 Scale** | **8.5** | token + DOM + `XmlParse(IReader)`；无 XPath/XSD |
-| **综合** | **8.6** | encoding/xml 常用路径；XPath/XSD 有意 Out of scope |
+| **质量 Quality** | **9.0** | 位置错误；NS 护栏；CDATA/entity facade 锁 |
+| **规模 Scale** | **9.0** | token + DOM + IReader + default-ns |
+| **综合** | **9.0** | encoding/xml 常用路径；XPath/XSD 有意 Out of scope |
 
 ---
 

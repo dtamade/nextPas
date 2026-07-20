@@ -7,8 +7,11 @@ SRC="$CORE_ROOT/src"
 FACADE="$SRC/nextpas.core.sync.pas"
 INTF="$SRC/nextpas.core.sync.intf.pas"
 MUTEX="$SRC/nextpas.core.sync.mutex.pas"
+RWLOCK="$SRC/nextpas.core.sync.rwlock.pas"
 CONDVAR="$SRC/nextpas.core.sync.condvar.pas"
 POOL="$SRC/nextpas.core.sync.pool.pas"
+TESTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODULE_MK="$TESTS_ROOT/Makefile"
 
 fail() {
   echo "[sync-source-contract] FAIL: $*" >&2
@@ -37,8 +40,10 @@ forbid_token() {
 require_file "$FACADE"
 require_file "$INTF"
 require_file "$MUTEX"
+require_file "$RWLOCK"
 require_file "$CONDVAR"
 require_file "$POOL"
+require_file "$MODULE_MK"
 
 # --- Facade factories (stable public surface) ---
 for factory in \
@@ -97,6 +102,23 @@ fi
 require_token "$CONDVAR" 'INativeMutex'
 forbid_token "$CONDVAR" 'CheckNotFutexMutex'
 forbid_token "$CONDVAR" 'TFutexMutex'
+
+# --- Destroy surfaces platform errors ---
+for f in "$MUTEX" "$RWLOCK" "$CONDVAR"; do
+  require_token "$f" 'Destroy failed'
+  require_token "$f" 'LRet <> 0'
+done
+
+# --- Compile-gate matrix present in module Makefile ---
+for gate in \
+  test_sync_windows_compile_gate \
+  test_sync_darwin_compile_gate \
+  test_sync_freebsd_compile_gate \
+  test_sync_android_compile_gate
+do
+  require_token "$MODULE_MK" "$gate"
+  require_file "$TESTS_ROOT/$gate/Makefile"
+done
 
 # --- L1 implementations must not use FPC platform units directly ---
 shopt -s nullglob

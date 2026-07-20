@@ -1,9 +1,8 @@
 program test_platform_watch_wine;
 
-{ Wine / Windows host smoke for platform.watch.
-  S1: create/add/close
-  S2: poll timeout + create-file event
-  S3: delete + multi-event drain (soft residuals OK under Wine) }
+{ Windows host / Wine smoke for platform.watch.
+  - Under Wine: create/delete/multi may soft-residual.
+  - Real Windows (GHA windows-latest): create + delete are hard asserts. }
 
 {$mode objfpc}{$H+}
 
@@ -12,10 +11,13 @@ uses
   nextpas.core.platform.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
-  nextpas.core.platform.fs;
+  nextpas.core.platform.fs,
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi;
 
 var
   LPassed, LFailed: Int32;
+  LUnderWine: Boolean;
 
 procedure Check(ACond: Boolean; const AName: string);
 begin
@@ -31,15 +33,29 @@ begin
   end;
 end;
 
-procedure SoftEvent(AGot: Boolean; const AName: string);
+function RunningUnderWine: Boolean;
+var
+  LNtdll: HMODULE;
+  LProc: FARPROC;
+begin
+  LNtdll := GetModuleHandleW(PWideChar(UnicodeString('ntdll.dll')));
+  if (LNtdll = nil) or (LNtdll = HMODULE(PtrInt(-1))) then
+    Exit(False);
+  LProc := GetProcAddress(LNtdll, 'wine_get_version');
+  Result := LProc <> nil;
+end;
+
+procedure MaybeSoftEvent(AGot: Boolean; const AName: string; AAllowSoft: Boolean);
 begin
   if AGot then
     Check(True, AName)
-  else
+  else if AAllowSoft then
   begin
-    WriteLn('  ~ ', AName, ' residual under Wine (soft); real Windows is hard evidence');
+    WriteLn('  ~ ', AName, ' residual under Wine (soft)');
     Inc(LPassed);
-  end;
+  end
+  else
+    Check(False, AName + ' (hard on real Windows)');
 end;
 
 var
@@ -57,9 +73,16 @@ var
   LContent: AnsiString;
   LGotDelete, LGotMulti: Boolean;
 begin
-  WriteLn('=== platform.watch wine-runtime-smoke ===');
-  WriteLn('truth=wine-runtime-smoke; not real Windows runtime ready');
-  WriteLn('S1–S3: create/add/close + RDCW poll + delete/multi (soft OK).');
+  LUnderWine := RunningUnderWine;
+  WriteLn('=== platform.watch windows smoke ===');
+  if LUnderWine then
+  begin
+    WriteLn('host=wine; truth=wine-runtime-smoke; create/delete may soft');
+  end
+  else
+  begin
+    WriteLn('host=real-windows; create+delete hard asserts');
+  end;
   LPassed := 0;
   LFailed := 0;
   LDirPath := '';
@@ -89,7 +112,7 @@ begin
       Move(LDirPath[1], LDir[0], Length(LDirPath));
     platform_file_mkdir(@LDir[0], $1FF);
     LRet := platform_watch_add(LWatcher, @LDir[0]);
-    Check(LRet = 0, 'watch_add valid dir');
+    Check(LRet > 0, 'watch_add valid dir returns positive wd');
     Check(LWatcher.IsValid, 'watcher valid');
   end;
 
@@ -97,7 +120,7 @@ begin
   if LWatcher.IsValid then
     Check(platform_watch_poll(LWatcher, LEvent, 20) = 0, 'timeout returns 0');
 
-  WriteLn('Test 4: create file → event (soft under Wine)');
+  WriteLn('Test 4: create file → event');
   if LWatcher.IsValid and (LDirPath <> '') then
   begin
     LFilePath := LDirPath + '\probe.txt';
@@ -111,12 +134,19 @@ begin
       platform_file_close(LHandle);
     end;
     Check(LRet = 0, 'create probe file');
-    LRet := platform_watch_poll(LWatcher, LEvent, 3000);
-    SoftEvent((LRet > 0) and (LEvent.Created or LEvent.Modified),
-      'create event');
+    LRet := 0;
+    FillChar(LEvent, SizeOf(LEvent), 0);
+    for I := 1 to 40 do
+    begin
+      LRet := platform_watch_poll(LWatcher, LEvent, 100);
+      if (LRet > 0) and (LEvent.Created or LEvent.Modified) then
+        Break;
+    end;
+    MaybeSoftEvent((LRet > 0) and (LEvent.Created or LEvent.Modified),
+      'create event', LUnderWine);
   end;
 
-  WriteLn('Test 5: delete event (soft under Wine)');
+  WriteLn('Test 5: delete event');
   if LWatcher.IsValid and (LFile[0] <> #0) then
   begin
     while platform_watch_poll(LWatcher, LEvent, 30) > 0 do
@@ -132,10 +162,10 @@ begin
         Break;
       end;
     end;
-    SoftEvent(LGotDelete, 'delete event');
+    MaybeSoftEvent(LGotDelete, 'delete event', LUnderWine);
   end;
 
-  WriteLn('Test 6: multi create → two polls (soft under Wine)');
+  WriteLn('Test 6: multi create → two polls');
   if LWatcher.IsValid and (LDirPath <> '') then
   begin
     while platform_watch_poll(LWatcher, LEvent, 30) > 0 do
@@ -166,12 +196,18 @@ begin
       LRet := platform_watch_poll(LWatcher, LEvent, 2000);
       LGotMulti := LRet > 0;
     end;
-    SoftEvent(LGotMulti, 'multi-event second poll');
+    MaybeSoftEvent(LGotMulti, 'multi-event second poll', LUnderWine);
   end;
 
-  WriteLn('Test 7: NOSPC + close');
-  if LWatcher.IsValid then
-    Check(platform_watch_add(LWatcher, @LDir[0]) = PLATFORM_ERR_NOSPC, 'second add NOSPC');
+  WriteLn('Test 7: multi-dir second path + remove + close');
+  if LWatcher.IsValid and (LDirPath <> '') then
+  begin
+    { Second add of same dir uses another slot (wd > 0). }
+    LRet := platform_watch_add(LWatcher, @LDir[0]);
+    Check(LRet > 0, 'second add returns positive wd');
+    if LRet > 0 then
+      Check(platform_watch_remove(LWatcher, LRet) = 0, 'remove second wd');
+  end;
   Check(platform_watch_close(LWatcher) = 0, 'close');
   Check(LWatcher.IsInvalid, 'invalid after close');
   Check(platform_watch_close(LWatcher) = 0, 'close idempotent');

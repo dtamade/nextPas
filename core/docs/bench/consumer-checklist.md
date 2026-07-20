@@ -45,15 +45,17 @@ B43：**Maintenance Idle** — 默认不扩面；回归 / 明确授权再动
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · B40）
+## 汇总（2026-07-20 · B40；B44 水位注记）
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **19** 模块 |
+| 抽检面 | **19** 模块（**抽检水位**，非全量认证） |
+| 仓库模块 bench 约数 | ~**80** 个 `core/benchmarks/**/bench_*` 目录 |
 | C1–C5 | **19/19 全 ✅** |
 | C3 | 常规 Quiet+50ms/5；lockfree **matched** 用 1 sample / MaxIterations=1（避免 1M-op 多线程被反复重跑） |
 | scorecard | 11 track（含 binsearch、lookup） |
 | EBR 执行器 | 未做（独立设计；micro 仅测 EBR Retire 路径） |
+| Idle | B43+；默认不扩检；回归 / 授权再动 |
 
 ## 可复制片段（CI 友好）
 

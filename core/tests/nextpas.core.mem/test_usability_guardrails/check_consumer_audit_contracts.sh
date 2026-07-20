@@ -168,6 +168,27 @@ need_grep "$SRC/nextpas.core.mem.pool.fixed.pas" 'FRawAllocSize' \
 need_grep "$SRC/nextpas.core.mem.pool.fixed.pas" 'FreeMemOf\(FAllocator, FRawBuffer, FRawAllocSize\)' \
   'TFixedPool Destroy must FreeMemOf raw with FRawAllocSize (J3)'
 
+# --- Era K: multi-segment / growable owner FreeMemOf when size already recorded ---
+need_file "$SRC/nextpas.core.mem.blockpool.growable.pas"
+need_grep "$SRC/nextpas.core.mem.blockpool.growable.pas" 'FreeMemOf\(FAllocator, LRaw, LRawSize\)' \
+  'TGrowingBlockPool FreeSegment must FreeMemOf with RawSize (K1)'
+
+need_file "$SRC/nextpas.core.mem.arena.chunked.pas"
+need_grep "$SRC/nextpas.core.mem.arena.chunked.pas" 'FreeMemOf\(FAllocator, LRaw, LRawSize\)' \
+  'TChunkedArena FreeSegment must FreeMemOf with RawSize (K2)'
+
+need_file "$SRC/nextpas.core.mem.stack_pool.pas"
+need_grep "$SRC/nextpas.core.mem.stack_pool.pas" 'FreeMemOf\(FBaseAllocator, FBuffer, FSize\)' \
+  'TStackPool Destroy must FreeMemOf buffer with FSize (K3)'
+
+need_file "$SRC/nextpas.core.mem.ring_buffer.pas"
+need_grep "$SRC/nextpas.core.mem.ring_buffer.pas" 'FreeMemOf\(FBaseAllocator, FBuffer, FCapacity \* FElementSize\)' \
+  'TRingBuffer Destroy must FreeMemOf capacity*elem (K4)'
+
+need_file "$SRC/nextpas.core.mem.pool.fixed.growable.pas"
+need_grep "$SRC/nextpas.core.mem.pool.fixed.growable.pas" 'FreeMemOf\(FAllocator, FArenas\[LArenaIndex\]\.Base, FArenas\[LArenaIndex\]\.Size\)' \
+  'TGrowingFixedPool Destroy must FreeMemOf arena Base/Size (K5)'
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2
   exit 1

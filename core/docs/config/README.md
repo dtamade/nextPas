@@ -44,6 +44,8 @@ Use `ConfigSection` for a viper-style prefix view (non-owning):
 LServer := ConfigSection(LCfg, 'server');
 LHost := LServer.GetString('host'); { ≡ LCfg.GetString('server.host') }
 LTimeoutNs := LCfg.GetDurationNs('timeout'); { e.g. "300ms" }
+LCopy := LMutable.Clone; { caller Free }
+LMutable.MergeFrom(LOther); { overlay keys }
 ```
 
 ## Build config snapshots

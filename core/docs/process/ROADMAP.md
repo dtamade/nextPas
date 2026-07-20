@@ -3,8 +3,8 @@
 **范围**：L2 `nextpas.core.{process,fs,path,os.env}`  
 **标杆**：Go `os` / `os/exec` / `path/filepath`；Rust `std::{fs,process,path,env}`  
 **对标口径**：能力 + 边界语义 + 测试强度，**不是**符号名复制  
-**状态日期**：2026-07-20（R34 后）  
-**相关**：[`PARITY-go-rust.md`](./PARITY-go-rust.md) · [`SCORECARD.md`](./SCORECARD.md) · 各模块 `CONTRACT.md`
+**状态日期**：2026-07-20（**M2-W4 Done**）  
+**相关**：[`WIN.md`](./WIN.md)（Windows 一眼表） · [`PARITY-go-rust.md`](./PARITY-go-rust.md) · [`SCORECARD.md`](./SCORECARD.md) · 各模块 `CONTRACT.md`
 
 ---
 
@@ -25,8 +25,8 @@
 |----|----------|------|
 | **E0 Host Essential** | Linux Essential 矩阵无 Missing（有意 ≠ Go 须写清）；框架合规；SCORECARD 可复现 | **DONE（R34）** |
 | **E1 Host Hardening** | INV 稳定；无已知 P0；wine-runtime-smoke 绿；同方法 bench | **DONE** |
-| **E2 Windows usable** | 核心路径 Win 可用或正式 Partial/Out-of-scope；无「代码写 Done、实则 stub」 | **OPEN（M2）** |
-| **E3 CI host-windows** | 真 Windows runner；truth ≠ 仅 wine | **OPEN（可选/基础设施）** |
+| **E2 Windows usable** | 核心路径 Win 可用或正式 Partial/Out-of-scope；无「代码写 Done、实则 stub」 | **DONE（M2-W1…W4；truth=wine-runtime-smoke）** |
+| **E3 CI host-windows** | 真 Windows runner；truth ≠ 仅 wine | **DONE（M3；L2 最小生产集 gate）** |
 
 ### Host Maintenance 定义（冻结）
 
@@ -41,10 +41,10 @@
 
 | 模块 | L2 | 文档 | 代表测试规模 |
 |------|----|------|----------------|
-| process | `process*.pas` | CONTRACT / PARITY / SCORECARD / 本 ROADMAP | 128 + 21 + 27 + 17 + wine **8** |
-| fs | `fs*.pas`（含 watch） | CONTRACT / README | 158 + ifile 22 + watch 13 + … |
-| path | `path.pas` + `fs.path` | CONTRACT / README | 70 + wine 4 |
-| env | `os.env.pas` | CONTRACT / README | 70 + wine 3 |
+| process | `process*.pas` | CONTRACT / PARITY / SCORECARD / WIN / 本 ROADMAP | 128 + 21 + 27 + 17 + wine **11** |
+| fs | `fs*.pas`（含 watch） | CONTRACT / README | 158 + ifile 22 + watch 13 + wine **3+3** |
+| path | `path.pas` + `fs.path` | CONTRACT / README | 70 + wine **4** |
+| env | `os.env.pas` | CONTRACT / README | 70 + wine **3** |
 
 依赖：仅 `platform.{process,files,path,env,watch}` + core 时间/IO/错误；**禁止**裸 FPC RTL（INV）。
 
@@ -60,7 +60,7 @@
 
 - Quality **9.9** / Scale **9.8** / 综合 **9.9**
 - Capture ~1.3× Go；Status ~1.15×（spawn 级，**非必达**）
-- wine：process 8 / fs 3 / path 4 / env 3 / watch 1
+- wine **最小生产集**（M2-W4）：process **11** / fs **3** / path **4** / env **3** / watch **3**（合计 **24**）；`bash core/tests/run_l2_wine_min_set.sh`
 - fs 同方法 64KB×200 / 1MB×20 见 SCORECARD
 
 ### 3.4 分层债（分轨）
@@ -84,14 +84,14 @@ M1 Freeze + Governance         ← 本图落地即完成
         │
         ├──────────────────┐
         ▼                  ▼
-M2 Windows Usable        M3 CI host-windows（可选）
-   W1 Watch S2
-   W2 Job / KillTree
-   W3 Spawn 矩阵
-   W4 文档与 wine 收敛
+M2 Windows Usable ✅      M3 CI host-windows ✅
+   W1 Watch S2 ✅
+   W2 Job / KillTree ✅
+   W3 Spawn 矩阵 ✅
+   W4 文档与 wine 收敛 ✅
         │
         ▼
-Host：仅 Maintenance（bug/安全）
+Host + Win：仅 Maintenance（bug/安全）
 ```
 
 ### M0 — Host Essential Complete — **DONE**
@@ -119,15 +119,24 @@ Host：仅 Maintenance（bug/安全）
 | **W1** | Watch S2 | **DONE** platform S2 RDCW poll (`29ce1f815`) | L2 wine 加厚 poll timeout + create soft | platform 事件路径 + L2 smoke |
 | **W2** | Process tree | **DONE** Job Object spawn+kill | KillTree/NewProcessGroup Win | wine KillTree 绿 |
 | **W3** | Spawn 扩展 | **DONE** 矩阵 + fail-closed | ExtraFd/Cred Win 明文 raise | wine 11 绿 |
-| **W4** | 收敛 | — | wine 最小生产集；CONTRACT Win 节 | 文档一眼懂 |
+| **W4** | 收敛 | — | **DONE** [`WIN.md`](./WIN.md) + `run_l2_wine_min_set.sh` + 各 CONTRACT Win 节 | 一眼懂；24 cases 绿 |
 
+**M2 出口（W4）**：核心路径无 stub 冒充 Done；UNSUPPORTED 明文；最小生产集可一键复跑；E2 声明完成（truth 仍 wine）。  
 **M2 不做**：真 Windows CI（M3）；Unix 信号 100% 同构；Host 再开性能刀。
 
 编号：**用 W1–W4**，不用 R35/R36/…
 
-### M3 — CI host-windows（可选）
+### M3 — CI host-windows — **DONE**
 
-有 runner 才做；SCORECARD 增加 `host-windows` 标签。无 runner → 挂起，不阻塞 M1/M2 声明。
+| 交付 | 说明 |
+|------|------|
+| Runner | 既有 `core-ci.yml` → `test-windows-runtime`（`windows-latest` + FPC trunk） |
+| L2 门禁 | `core/scripts/l2-windows-ci-matrix.sh`：5 套件 `make clean test` |
+| CI 步骤 | `L2 process/fs/path/env Windows min-set (host-windows)` |
+| truth | **`host-windows`**（仅最小生产集；≠ 全量 Host 矩阵） |
+| 文档 | [WIN.md](./WIN.md) · [SCORECARD.md](./SCORECARD.md) |
+
+**不做**：把 wine 数字改标 host-windows；全量 L2 Unix 套件搬上 Win CI。
 
 ---
 
@@ -189,12 +198,13 @@ Host：仅 Maintenance（bug/安全）
 | 文档 | 用途 |
 |------|------|
 | **本 ROADMAP** | 终局、里程碑、治理 |
+| [WIN.md](./WIN.md) | **Windows 一眼表 + 最小生产集** |
 | [PARITY-go-rust.md](./PARITY-go-rust.md) | Essential 矩阵 + 评分快照 |
 | [SCORECARD.md](./SCORECARD.md) | 可复现数字；truth 标签 |
 | [CONTRACT.md](./CONTRACT.md) | process 契约 |
 | [../fs/CONTRACT.md](../fs/CONTRACT.md) | fs 契约 |
 | [../path/CONTRACT.md](../path/CONTRACT.md) | path 契约 |
-| os.env CONTRACT | env 契约 |
+| [../env/CONTRACT.md](../env/CONTRACT.md) | env 契约 |
 
 ---
 
@@ -206,3 +216,5 @@ Host：仅 Maintenance（bug/安全）
 | 2026-07-20 | **M2-W1**：platform S2 已合入；L2 wine watch 证据加厚；勾选 W1 |
 | 2026-07-20 | **M2-W2**：Win Job Object NewProcessGroup + KillTree；wine process 9 |
 | 2026-07-20 | **M2-W3**：Win ExtraFd/Credential fail-closed 矩阵；wine process 11 |
+| 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24 + 文档对齐；**E2 Done**（wine truth） |
+| 2026-07-20 | **M3**：`l2-windows-ci-matrix.sh` + core-ci Windows job；**E3 Done**（host-windows min-set） |
