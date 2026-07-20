@@ -77,7 +77,8 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q1–Q5 | 测量脚手架 / Kitty / 稀疏 / Wine / Focus | **Done** (`main@a96e3813e`+) |
 | Q6 | Scorecard SC6–SC7 + ext/core 密度 | **Done** |
 | Q7 | Truecolor env-attested Verified + 更多 suite 密度 | **Done** |
-| Q8 | 门面契约 + SC8 + Wine 加厚 | **本批** |
-| Q8 | facade 晋升策略 | 后续 |
+| Q8 | 门面契约 + SC8 + Wine 加厚 | **Done** |
+| Q9 | 分层 facade + stress + SC9 overlay | **本批** |
+| Q10 | facade 晋升策略 | 后续 |
 | Q9 | 完整 ratatui/crossterm crate 对照 | 后续 |
 | Q10 | Truecolor DA 查询（非 env-attested） | 后续 |

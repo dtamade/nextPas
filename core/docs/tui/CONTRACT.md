@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.10
+**版本**：1.11
 
 ---
 
@@ -162,7 +162,7 @@ end;
 
 ### 6.1 Scorecard 与跨语言对标（Wave Q1）
 
-- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC8）
+- **权威热路径门禁**: `core/tests/nextpas.core.tui/scorecard`（SC1–SC9）
   - SC1 Diff identical 200×50；SC2 Diff dirty10；SC3 ParseOne batch
   - SC4 Layout 正确性；SC5 Frame Begin/End 空帧（test runtime）
 - **纲领**: `core/docs/tui/PARITY-GO-RUST.md` · 场景表 `SCORECARD.md`
@@ -177,6 +177,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.11 | SC9 overlay merge；tier facade/stress/wine 密度 | Claude |
 | 2026-07-20 | 1.10 | Scorecard SC8 truecolor；facade_surface focus 转发；wine 加厚 | Claude |
 | 2026-07-20 | 1.9 | Truecolor Verified=env-attested；error/backend_test/image_mgr/cap/integration 密度 | Claude |
 | 2026-07-20 | 1.8 | Scorecard SC6 focus + SC7 CJK width；ext 密度底线 | Claude |
