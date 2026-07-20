@@ -136,7 +136,7 @@ Related earlier landings:
 
 Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-1…H3-5 complete → Maintenance.**
 
-**H4 open (not implemented)**: [`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md) — `thread.pool` Submit → T1 MPSC. Implement only after explicit **H4-1 implement approved**.
+**H4-1 done**: `thread.pool` → T1 **SegQueue** of task node pointers（多 worker；非 MPSC）。Charter/证据：[`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md)；`test_thread` H4 source-contract。
 
 ### Still forbidden without major-change discussion
 
