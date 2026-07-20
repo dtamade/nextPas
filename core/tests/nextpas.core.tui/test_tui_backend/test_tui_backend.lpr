@@ -223,8 +223,8 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.EnterAlternate(amMouseClick, False);
-    CheckEqual(#27'[?1049h'#27'[?1000h'#27'[?1006h', PendingString(LBE),
-      'enter alternate enables alt screen before click tracking');
+    CheckEqual(#27'[?1049h'#27'[?7l'#27'[?1000h'#27'[?1006h', PendingString(LBE),
+      'enter alternate: alt + wrap off + click tracking');
   finally
     LBE.Free;
   end;
@@ -237,8 +237,8 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.EnterAlternate(amMouseNone, True);
-    CheckEqual(#27'[?1049h'#27'[?1007h', PendingString(LBE),
-      'enter alternate can enable alternate scroll without mouse tracking');
+    CheckEqual(#27'[?1049h'#27'[?7l'#27'[?1007h', PendingString(LBE),
+      'enter alternate: alt + wrap off + alternate scroll');
   finally
     LBE.Free;
   end;
@@ -251,9 +251,9 @@ begin
   LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
   try
     LBE.LeaveAlternate(amMouseDrag, True);
-    CheckEqual(#27'[0m'#27'[?1002l'#27'[?1006l'#27'[?1007l'#27'[?1049l',
+    CheckEqual(#27'[0m'#27'[?1002l'#27'[?1006l'#27'[?1007l'#27'[?7h'#27'[?1049l',
       PendingString(LBE),
-      'leave alternate resets sgr and disables drag/scroll before leaving alt screen');
+      'leave alternate: disable modes + wrap on before leave alt');
   finally
     LBE.Free;
   end;
