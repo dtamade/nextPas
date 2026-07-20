@@ -492,7 +492,7 @@ begin
   try
     if not MapDelete(PtrUInt(APtr), LSize, LAllocId, LTag, LCaller, LTime) then
       raise EDoubleFree.Create(aeDoubleFree,
-        'TLeakReportAllocator.FreeMem: pointer not tracked');
+      FormatAllocErrorMsg('TLeakReportAllocator', 'FreeMem', 'pointer not tracked'));
     try
       FInner.FreeMem(APtr);
     except

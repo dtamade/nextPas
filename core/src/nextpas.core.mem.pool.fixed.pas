@@ -304,11 +304,14 @@ var
 begin
   inherited Create;
   if aBlockSize = 0 then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size cannot be zero');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'Block size cannot be zero'));
   if (SizeOf(Pointer) <> 0) and ((aBlockSize mod SizeOf(Pointer)) <> 0) then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Block size must be a multiple of pointer size');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Block size must be a multiple of pointer size'));
   if aCapacity <= 0 then
-    raise EMemFixedPoolError.Create(aeInvalidLayout, 'Capacity must be positive');
+    raise EMemFixedPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'Capacity must be positive'));
 
   FBlockSize := aBlockSize;
   FCapacity := aCapacity;
@@ -333,15 +336,15 @@ begin
     FAlignment := aAlignment;
   if (FAlignment and (FAlignment-1)) <> 0 then
     raise EMemFixedPoolError.Create(aeAlignmentNotSupported,
-      'Alignment must be power of two (' + IntToStr(FAlignment) + ')');
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'Alignment must be power of two (' + IntToStr(FAlignment) + ')'));
   if (FBlockSize mod FAlignment) <> 0 then
     raise EMemFixedPoolError.Create(aeInvalidLayout,
-      'Block size must be a multiple of alignment (' + IntToStr(FBlockSize) + ' mod ' + IntToStr(FAlignment) + ' <> 0)');
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'Block size must be a multiple of alignment (' + IntToStr(FBlockSize) + ' mod ' + IntToStr(FAlignment) + ' <> 0)'));
 
   // 计算总大小并检查溢出（乘法前溢出检查，避免除法）
   if (FBlockSize <> 0) and (FBlockSize > High(SizeUInt) div SizeUInt(FCapacity)) then
     raise EMemFixedPoolError.Create(aeInvalidLayout,
-      'Total size overflow (' + IntToStr(FBlockSize) + ' * ' + IntToStr(FCapacity) + ')');
+      FormatAllocErrorMsg('TFixedPool', 'Create', 'Total size overflow (' + IntToStr(FBlockSize) + ' * ' + IntToStr(FCapacity) + ')'));
   FTotalSize := FBlockSize * SizeUInt(FCapacity);
 
   // 分配连续 Arena（对齐）
@@ -385,7 +388,8 @@ destructor TFixedPool.Destroy;
 begin
   {$IFDEF DEBUG}
   if FAllocatedCount <> 0 then
-    raise EMemFixedPoolError.Create(aeInternalError, FixedPoolLeakMessage(FAllocatedCount));
+    raise EMemFixedPoolError.Create(aeInternalError,
+      FormatAllocErrorMsg('TFixedPool', 'Destroy', FixedPoolLeakMessage(FAllocatedCount)));
   {$ENDIF}
   // ✅ C-3: 移除死代码分支，FRawBuffer 总是被赋值
   if FRawBuffer <> nil then
@@ -451,24 +455,29 @@ var
 begin
   if aPtr = nil then Exit; // Free(nil) = no-op
   if (FBuffer = nil) or (FTotalSize = 0) then
-    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pool is not initialized');
+    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Pool is not initialized'));
 
   // 边界检查：必须在 [FBuffer, FBuffer + FTotalSize) 范围内
   if (aPtr < FBuffer) or (aPtr >= Pointer(PByte(FBuffer) + FTotalSize)) then
-    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Pointer does not belong to this pool'));
 
   // 计算与校验对齐
   LDiff := SizeUInt(PByte(aPtr) - PByte(FBuffer));
   if (FBlockSize = 0) or ((LDiff mod FBlockSize) <> 0) then
-    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer is not aligned to block size');
+    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Pointer is not aligned to block size'));
 
   LIdxU := LDiff div FBlockSize;
   if LIdxU >= SizeUInt(FCapacity) then
-    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer, 'Pointer index out of range');
+    raise EMemFixedPoolInvalidPointer.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Pointer index out of range'));
 
   LIdx := Integer(LIdxU);
   if FIsFree[LIdx] then
-    raise EMemFixedPoolDoubleFree.Create(aeDoubleFree, 'Double free detected');
+    raise EMemFixedPoolDoubleFree.Create(aeDoubleFree,
+      FormatAllocErrorMsg('TFixedPool', 'Release', 'Double free detected'));
 
   {$IFDEF DEBUG}
   // Poison freed memory to expose use-after-free

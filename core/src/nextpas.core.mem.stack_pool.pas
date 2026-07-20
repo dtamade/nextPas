@@ -391,7 +391,8 @@ begin
   inherited Create;
 
   if ASize = 0 then
-    raise EStackPoolError.Create(aeInvalidLayout, 'Stack size cannot be zero');
+    raise EStackPoolError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TStackPool', 'Create', 'Stack size cannot be zero'));
 
   FSize := ASize;
   FOffset := 0;
@@ -870,7 +871,7 @@ begin
 
   if not CanRelocateBufferForGrow then
     raise EStackPoolError.Create(aeInternalError,
-      'Cannot grow pool while allocations or scopes are active (would invalidate existing pointers)');
+      FormatAllocErrorMsg('TStackPool', 'Release', 'Cannot grow pool while allocations or scopes are active (would invalidate existing pointers)'));
 
   // 计算最小所需大小
   LMinRequired := UsedSize + ARequiredSize;

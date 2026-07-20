@@ -541,7 +541,7 @@ begin
 
     if (LState and ROUTING_READ_MASK) = ROUTING_READ_MASK then
       raise EAllocError.Create(aeInternalError,
-      FormatAllocErrorMsg('TShardedBlockPool', 'Raise', 'routing reader overflow'));
+      FormatAllocErrorMsg('TShardedBlockPool', 'Create', 'routing reader overflow'));
 
     LDesired := LState + 1;
     if InterlockedCompareExchange(FRoutingState, LDesired, LState) = LState then
@@ -1217,7 +1217,7 @@ var
   // Limit capacity to prevent excessive memory use.
   if AConfig.ThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TShardedBlockPool', 'Raise', 'ThreadCacheCapacity max is ' + IntToStr(SHARDED_BLOCKPOOL_THREADCACHE_MAX)));
+      FormatAllocErrorMsg('TShardedBlockPool', 'Create', 'ThreadCacheCapacity max is ' + IntToStr(SHARDED_BLOCKPOOL_THREADCACHE_MAX)));
   FThreadCacheCapacity := AConfig.ThreadCacheCapacity;
   FThreadCacheCheckDoubleFree := AConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := AConfig.TrackInUse;

@@ -207,7 +207,7 @@ Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_get_mem_stats`
 |------------|--------|--------|
 | 注入面 / collections 泄漏 | `NEXTPAS_MEM_DEBUG=leak`（或 `sentinel,leak,stats`） | 过程式 `GetMem`（见 `debug_coverage_gap=y`） |
 | 过程式 `GetMem` 泄漏 | **再加** `NEXTPAS_MEM_HEAP_DEBUG=1`（慢） | 热路径零税 |
-| dev 双 free profile | `NEXTPAS_MEM_HEAP_SAFETY=1`（自动 tracking+sentinel） | 生产默认开 |
+| dev 双 free profile | `NEXTPAS_MEM_HEAP_SAFETY=1`（自动 tracking+sentinel）；验证：`make focused FOCUS=core/tests/nextpas.core.mem/test_heap_safety_profile` | 生产默认开；不进默认 lane |
 | Arena FreeMem 混用 | `NEXTPAS_MEM_ARENA_STRICT=1` | 默认 no-op 兼容 |
 | 进程堆快照 | `GetMemStats` / `FormatMemStats`（无需 DEBUG） | `DebugActive*` 仅 wrap 建成 |
 | doctor 一行进程诊断 | `nextpas doctor` → `mem-process-stats=` | session arena（用 build `mem-session-stats`） |

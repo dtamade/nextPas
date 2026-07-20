@@ -358,7 +358,7 @@ begin
       FormatAllocErrorMsg('TBlockPool', 'Create', 'capacity must be > 0'));
   if aCapacity > SizeUInt(High(SizeInt)) then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TBlockPool', 'Raise', 'capacity too large (' + IntToStr(aCapacity) + ')'));
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'capacity too large (' + IntToStr(aCapacity) + ')'));
 
   LAlign := SanitizeConfigAlignment(aAlignment);
 
@@ -370,7 +370,7 @@ begin
     LMask := LAlign - 1;
     if aBlockSize > (High(SizeUInt) - LMask) then
       raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TBlockPool', 'Raise', 'block size overflow (' + IntToStr(aBlockSize) + ')'));
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'block size overflow (' + IntToStr(aBlockSize) + ')'));
     LActualBlockSize := (aBlockSize + LMask) and not LMask;
   end;
 
@@ -399,7 +399,7 @@ begin
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
     raise EAllocError.Create(aeInvalidLayout,
-      FormatAllocErrorMsg('TBlockPool', 'Raise', 'total size overflow (' + IntToStr(LActualBlockSize) + ' * ' + IntToStr(aCapacity) + ')'));
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'total size overflow (' + IntToStr(LActualBlockSize) + ' * ' + IntToStr(aCapacity) + ')'));
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
@@ -407,7 +407,7 @@ begin
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      FormatAllocErrorMsg('TBlockPool', 'Raise', 'allocation size overflow (total=' + IntToStr(Int64(LTotalSize)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
+      FormatAllocErrorMsg('TBlockPool', 'Create', 'allocation size overflow (total=' + IntToStr(Int64(LTotalSize)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
   if FAllocator <> nil then
     LRaw := FAllocator.GetMem(LAllocSize)
   else

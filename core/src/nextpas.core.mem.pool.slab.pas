@@ -1147,7 +1147,8 @@ begin
   end;
   // Fallback 路径：只有本池创建的 fallback 指针才允许被 Realloc
   if not TryGetFallbackAlloc(APtr, LAlloc) then
-    raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
 
   // 尽可能保持对齐语义（复用原分配时的 Alignment）
   LNew := AllocAligned(ASize, LAlloc.Alignment);
@@ -1195,7 +1196,8 @@ begin
     Inc(FTotalFrees);
   end
   else
-    raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
 end;
 
 procedure TSlabPool.Reset;
