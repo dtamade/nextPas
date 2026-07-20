@@ -59,7 +59,7 @@
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |
 | Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99（nearest-rank）；仍非 scale KPI |
-| `test_http_tls_real` | 旁路：仍 `TThread` 编译阻断（预存）；生产 e2e 以 h2_tls_alpn / https_smoke 为准 |
+| `test_http_tls_real` | **Met (2026-07-21)** — 去 `TThread`，`platform_thread`；5/5 0 unfreed；全量 H2+TLS facade 仍见 h2_tls_alpn |
 
 ---
 

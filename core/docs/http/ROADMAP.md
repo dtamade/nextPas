@@ -907,6 +907,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | residual：`test_http_tls_real` 去 TThread → platform_thread；5/5 0 unfreed；NEXT 仍 STOP |
 | 2026-07-21 | **R1 landed**：维持 H1 epoll scale-ready；package No；H2 ALPN residual Met；NEXT=STOP |
 | 2026-07-20 | **H2P-3 landed**：TLS-ALPN h2 e2e 4/4 0 unfreed；OpenSSL per-conn ALPN；NEXT=R1 |
 | 2026-07-20 | **H2P-2 landed**：加压阶梯全绿；16×32×100 ~11.5k req/s；NEXT=H2P-3 ALPN |
