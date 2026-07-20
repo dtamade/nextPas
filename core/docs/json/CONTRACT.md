@@ -123,6 +123,7 @@ function JsonStringify(const AValue: TJsonValue): string;
 make focused FOCUS=core/tests/nextpas.core.json/test_json_facade_surface
 make focused FOCUS=core/tests/nextpas.core.json/test_json_parser
 # 全模块：core/tests/nextpas.core.json/*
+make -C core/examples/nextpas.core.json/json_smoke run
 ```
 
 代表性套件：`test_json_facade`、`test_json_facade_surface`、`test_json_parser`、`test_json_reader`、`test_json_writer`、`test_json_builder`、`test_json_marshal`、`test_json_rfc8259`、`test_json_roundtrip`、`test_json_edge_cases`、`test_json_robustness`。
