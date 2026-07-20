@@ -30,8 +30,9 @@
 
 | 宣称 | 状态 | 原因 |
 |------|------|------|
-| Scale-ready (H1/**H2** package) | **No** | H2 mux ~3k req/s evidence only；形状 ≠ H1 multi-conn KPI |
-| Scale-ready (HTTPS H1) | **No** | Q3-3 smoke：`accepts≈reqs` 每请求 TLS dial；pool 复用未证 |
+| Scale-ready (H1/**H2** package) | **No** | H2 mux mid ~3k / press ~11.5k evidence only；形状 ≠ H1 multi-conn KPI；无 H2 KPI 门闩 |
+| Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
+| Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
 | Windows scale-ready | **No** | scale KPI 与 epoll 路径以 Linux 为准；cancel residual 见 CONTRACT |
 | Cross-machine leaderboard / “已全面对标 Go/Rust” | **No** | 仅同机比值 + 契约诚实 |
@@ -51,8 +52,9 @@
 
 | Residual | 说明 |
 |----------|------|
-| H2 package scale | 有 S3 mux 证据；非 scale-ready 包 |
-| HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；smoke `accepts=1` for N GETs |
+| H2 package scale | H2P-1/2 mux 证据；非 scale-ready 包 |
+| H2 TLS ALPN | **H2P-3 Met** — facade e2e GET/POST/seq；OpenSSL per-conn ALPN |
+| HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |
@@ -66,9 +68,9 @@
 |------|------|
 | 是否维持 *Scale-ready (H1 server, Linux epoll)*？ | **Yes — maintain** |
 | p99 是否作为 scale-ready 必要条件？ | **Yes**（与 RPS、ladder 并列） |
-| 是否升级为 H1+H2 package claim？ | **No**（需 H2P + 需求） |
+| 是否升级为 H1+H2 package claim？ | **No**（H2P-1..3 Met；仍缺 H2 KPI 门闩与产品需求 → R1 默认 No） |
 | 是否宣称 HTTPS scale-ready？ | **No** |
-| Parity Plus 是否 STOP？ | **Yes** — 无新需求时 STOP；H2P parked |
+| Parity Plus / H2P 是否 STOP？ | **H2P-3 Done** → **R1** 评审或 idle STOP；无需求不升 package |
 
 **Done when**：本文件 + ROADMAP R0 landed；REPRO Claim 行与本文件一致。 **Met (2026-07-20).**
 

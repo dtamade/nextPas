@@ -55,7 +55,7 @@ uses
 
 type
   TOpenSSLConnection = class(TBaseSSLConnection, ISSLClientConnection,
-    ISSLNativeHandleAccess)
+    ISSLClientALPNConnection, ISSLNativeHandleAccess)
   private
     FSocket: THandle;
     FStream: IStream;
@@ -63,6 +63,7 @@ type
     FBioRead: PBIO;
     FBioWrite: PBIO;
     FServerName: string;
+    FALPNProtocols: string;
     FLastSSLError: Integer;
     FConfiguredSession: ISSLSession;
     FEarlyDataPayload: TBytes;
@@ -128,6 +129,11 @@ type
     { ISSLClientConnection }
     procedure SetServerName(const AServerName: string);
     function GetServerName: string;
+
+    { ISSLClientALPNConnection — required by TSSLConnector.WithALPN before handshake.
+      Without this, HTTPS HTTP/2 never offers ALPN "h2" (H2P-3). }
+    procedure SetALPNProtocols(const AProtocols: string);
+    function GetALPNProtocols: string;
 
     { ISSLEarlyDataConnection }
     function SetEarlyData(const AData: TBytes): TSSLOperationResult;
@@ -198,6 +204,7 @@ begin
     );
 
   FServerName := '';
+  FALPNProtocols := '';
 
   if not Assigned(SSL_set_fd) then
     RaiseFunctionNotAvailable('SSL_set_fd');
@@ -247,6 +254,7 @@ begin
   LConstructed := False;
   try
     FServerName := '';
+    FALPNProtocols := '';
 
     // Ensure BIO API is available
     if not TOpenSSLLoader.IsModuleLoaded(osmBIO) then
@@ -308,6 +316,74 @@ end;
 function TOpenSSLConnection.GetServerName: string;
 begin
   Result := FServerName;
+end;
+
+function BuildClientALPNWireData(const AProtocols: string): TBytes;
+{ Wire format: length-prefixed protocol list (RFC 7301). Same encoding as
+  TOpenSSLContext.SetALPNProtocols / SSL_CTX_set_alpn_protos. }
+var
+  LParts: TStringArray;
+  LProto, LTrimmed: string;
+  LTotal, LOffset: Integer;
+  LAnsi: AnsiString;
+begin
+  LTotal := 0;
+  LParts := StringsSplit(AProtocols, ',');
+  for LProto in LParts do
+  begin
+    LTrimmed := Trim(LProto);
+    if LTrimmed = '' then
+      Continue;
+    if Length(LTrimmed) > 255 then
+      RaiseSSLConfigError(
+        'ALPN protocol name longer than 255 bytes',
+        'TOpenSSLConnection.SetALPNProtocols'
+      );
+    Inc(LTotal, 1 + Length(LTrimmed));
+  end;
+  SetLength(Result, LTotal);
+  if LTotal = 0 then
+    Exit;
+  LOffset := 0;
+  for LProto in LParts do
+  begin
+    LTrimmed := Trim(LProto);
+    if LTrimmed = '' then
+      Continue;
+    Result[LOffset] := Byte(Length(LTrimmed));
+    Inc(LOffset);
+    LAnsi := AnsiString(LTrimmed);
+    if Length(LTrimmed) > 0 then
+    begin
+      Move(LAnsi[1], Result[LOffset], Length(LTrimmed));
+      Inc(LOffset, Length(LTrimmed));
+    end;
+  end;
+end;
+
+procedure TOpenSSLConnection.SetALPNProtocols(const AProtocols: string);
+var
+  LWire: TBytes;
+begin
+  FALPNProtocols := Trim(AProtocols);
+  if FSSL = nil then
+    Exit;
+  if FALPNProtocols = '' then
+    Exit;
+  if not Assigned(SSL_set_alpn_protos) then
+    RaiseFunctionNotAvailable('SSL_set_alpn_protos');
+  LWire := BuildClientALPNWireData(FALPNProtocols);
+  if (Length(LWire) = 0) or
+    (SSL_set_alpn_protos(FSSL, @LWire[0], Cardinal(Length(LWire))) <> 0) then
+    RaiseSSLConfigError(
+      'Failed to set per-connection ALPN protocols: ' + FALPNProtocols,
+      'TOpenSSLConnection.SetALPNProtocols'
+    );
+end;
+
+function TOpenSSLConnection.GetALPNProtocols: string;
+begin
+  Result := FALPNProtocols;
 end;
 
 function TOpenSSLConnection.ResolveEarlyDataLimitFromSession(
