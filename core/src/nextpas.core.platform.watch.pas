@@ -83,6 +83,11 @@ function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 function platform_watch_add(var AWatcher: TPlatformWatcher;
   const APath: PAnsiChar): Int32;
 
+{** @desc 移除监视（Linux: inotify wd；kqueue: watch fd）
+    @return 0 成功，否则错误码 *}
+function platform_watch_remove(var AWatcher: TPlatformWatcher;
+  const AWd: Int32): Int32;
+
 {** @desc 等待文件系统事件
     @param AWatcher 监视器句柄
     @param AEvent 输出事件信息
@@ -189,6 +194,19 @@ begin
     Result := platform_get_errno
   else
     Result := LWd;
+end;
+
+function platform_watch_remove(var AWatcher: TPlatformWatcher;
+  const AWd: Int32): Int32;
+begin
+  if AWd < 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  if AWatcher.Fd < 0 then
+    Exit(PLATFORM_ERR_BADF);
+  if inotify_rm_watch(AWatcher.Fd, AWd) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
@@ -414,6 +432,25 @@ begin
   Result := LFd;
 end;
 
+function platform_watch_remove(var AWatcher: TPlatformWatcher;
+  const AWd: Int32): Int32;
+var
+  I, J: Int32;
+begin
+  if AWd < 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  for I := 0 to AWatcher.WatchCount - 1 do
+    if AWatcher.WatchFds[I] = AWd then
+    begin
+      close(AWd);
+      for J := I to AWatcher.WatchCount - 2 do
+        AWatcher.WatchFds[J] := AWatcher.WatchFds[J + 1];
+      Dec(AWatcher.WatchCount);
+      Exit(0);
+    end;
+  Result := PLATFORM_ERR_NOENT;
+end;
+
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 var
@@ -520,6 +557,13 @@ begin
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
+
+function platform_watch_remove(var AWatcher: TPlatformWatcher;
+  const AWd: Int32): Int32;
+begin
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
@@ -546,6 +590,13 @@ function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+
+function platform_watch_remove(var AWatcher: TPlatformWatcher;
+  const AWd: Int32): Int32;
+begin
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin FillChar(AEvent, SizeOf(AEvent), 0); Result := 0; end;
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;

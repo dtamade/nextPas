@@ -599,7 +599,8 @@ implementation
 
 uses
   nextpas.core.system.typinfo,
-  nextpas.core.collections.arr.sort;
+  nextpas.core.collections.arr.sort,
+  nextpas.core.mem;
 
 procedure MemCopyUnchecked(aSrc, aDst: Pointer; aSize: SizeUInt); inline;
 begin
@@ -1236,7 +1237,7 @@ begin
       FSwapBufferCache := GetAllocator.GetMem(FElementSizeCache);
 
       if FSwapBufferCache = nil then
-        raise EOutOfMemory.Create('TArray.Create: Failed to allocate swap buffer cache.');
+        raise EOutOfMemory.CreateMsg('TArray.Create: Failed to allocate swap buffer cache.');
 
       FSwapMethod := @DoSwapMove;
     end;
@@ -1253,7 +1254,7 @@ begin
       { 如果Resize失败，需要清理已分配的FSwapBufferCache }
       if (FSwapBufferCache <> nil) and GetIsManagedType and (FElementSizeCache <> SIZE_PTR) then
       begin
-        GetAllocator.FreeMem(FSwapBufferCache);
+        FreeMemOf(GetAllocator, FSwapBufferCache, FElementSizeCache);
         FSwapBufferCache := nil;
       end;
       raise;  { 重新抛出异常 }
@@ -1266,7 +1267,7 @@ begin
   Clear;
 
   if GetIsManagedType and (FElementSizeCache <> SIZE_PTR) and (FSwapBufferCache <> nil) then
-    GetAllocator.FreeMem(FSwapBufferCache);
+    FreeMemOf(GetAllocator, FSwapBufferCache, FElementSizeCache);
 
   inherited Destroy;
 end;
@@ -1430,7 +1431,7 @@ begin
   LMemory := FElementManager.ReallocElements(FMemory, FCount, aNewSize);
 
   if (aNewSize > 0) and (LMemory = nil) then
-    raise EOutOfMemory.Create('TArray.Resize: out of memory');
+    raise EOutOfMemory.CreateMsg('TArray.Resize: out of memory');
 
   FMemory := LMemory;
   FCount  := aNewSize;
@@ -1515,6 +1516,7 @@ var
   LP1:          PByte;
   LP2:          PByte;
   LBufferSize:  SizeUInt;
+  LAllocSize:   SizeUInt;
   LElementSize: SizeUInt;
   LRemainSize:  SizeUInt;
 begin
@@ -1547,10 +1549,11 @@ begin
     else
       LBufferSize := LRemainSize;
 
-    LBuffer := Allocator.GetMem(LBufferSize);
+    LAllocSize := LBufferSize;
+    LBuffer := Allocator.GetMem(LAllocSize);
 
     if LBuffer = nil then
-      raise EOutOfMemory.Create('TArray.Swap: out of memory');
+      raise EOutOfMemory.CreateMsg('TArray.Swap: out of memory');
 
     try
       { 分块交换元素 }
@@ -1572,7 +1575,7 @@ begin
       end;
 
     finally
-      Allocator.FreeMem(LBuffer);
+      FreeMemOf(Allocator, LBuffer, LAllocSize);
     end;
   end
   else

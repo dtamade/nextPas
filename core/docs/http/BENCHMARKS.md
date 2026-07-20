@@ -329,6 +329,26 @@ Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
 
 **Era E Done when**：E1–E3 Met。 **Met.** Not a cross-machine ranking.
 
+#### Q3-3 H1 HTTPS smoke (2026-07-20)
+
+Focused: `core/tests/nextpas.core.http/test_http_https_smoke`
+
+```sh
+make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
+```
+
+| Date | Shape | reqs | accepts | req/s | p50_ns | p99_ns | unfreed |
+| ---- | ----- | ---: | ------: | ----: | -----: | -----: | ------: |
+| 2026-07-20 Q3-3 | client H1 HTTPS sequential | 30 | 30 | ~3 | ~2.9e8 | ~3.3e8 | **0** |
+
+**Honest residuals**
+
+- `accepts ≈ reqs` → **per-request TLS dial** under this smoke（HTTPS keep-alive pool
+  reuse **not** demonstrated）。
+- Origin is minimal `NewTlsServerTcpStream` H1 TLS；`THttpServer` + `TLSContext`
+  registry path is **H2-only** residual.
+- **Not** Scale-ready (HTTPS). KPI remains plain H1 epoll.
+
 #### Q3-1 Soak leak evidence (2026-07-20)
 
 Focused gate: `core/tests/nextpas.core.http/test_http_soak`（heaptrc via common.mk `-gh`）。

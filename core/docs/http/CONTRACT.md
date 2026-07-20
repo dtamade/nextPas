@@ -248,6 +248,23 @@ end;
 | `hekStatus` | ecNetwork | ensure-2xx 非 2xx | `ensure` `download`（Status 保留） |
 | `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
 
+#### Q3-2 Go-aligned matrix（超时 / 取消 / 413 / 431）
+
+权威证据：`test_http_q3_matrix`（+ 既有 server/security/client 深测）。**不是** Go API 克隆；是语义对齐。
+
+| 场景 | Go `net/http` 参照 | nextPas 契约 | Kind / Op / wire |
+|------|-------------------|--------------|------------------|
+| Client 整体 deadline | `Client.Timeout` / `context` deadline | `THttpClientOptions.Timeout` / `WithTimeout` | `hekTimeout`；wrap 路径 `Op=transport`；**禁止**裸 `ETimeoutError` |
+| Client 协作取消 | `context.WithCancel` → `context.Canceled` | `IHttpCancelToken` + request `.CancelToken` | 检查点 `hekCanceled` + **`Op=cancel`**；传输中途可 `Op=transport` |
+| Server body 过大 | `MaxBytesReader` / handler 限流 → 413 | `MaxBodySize` 在 **handler 前** fail-fast | wire `HTTP/1.1 413 Payload Too Large`；**不进** handler |
+| Server header 过大 | `Server.MaxHeaderBytes` → 431 | `MaxHeaderSize` 在 parse 期 fail-fast | wire `HTTP/1.1 431 Request Header Fields Too Large`；**不进** handler |
+
+**诚实 residual**
+
+- Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
+- Windows cancel 仍为 probe-only residual（R3）；Unix waitable 近即时。
+- 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
+
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
 
 | Op | 典型 Kind | 边界 |
@@ -673,6 +690,16 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
     在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
     修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
     其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
+- **Q3-3 H1 HTTPS smoke residual**：
+  - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
+    见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。
+  - **连接复用 residual**：本机 smoke 观测 `server_accepts ≈ server_reqs`
+    （每请求新 TLS dial；**未**证明 HTTPS keep-alive pool 复用）。正确性
+    单次 round-trip 仍绿；**禁止**据此写 HTTPS scale-ready。
+  - **Server `THttpServerOptions.TLSContext`**：**registry 仅选 H2 TLS transport**
+    （`TLS HTTP server currently requires HTTP/2`）；**不是** H1 HTTPS 服务器
+    产品入口。Q3-3 smoke origin 用 `NewTlsServerTcpStream` 最小 H1 TLS 源。
+  - **不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
 - Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
   `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
   §2.2.0a。
@@ -753,3 +780,5 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
+| 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
+| 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

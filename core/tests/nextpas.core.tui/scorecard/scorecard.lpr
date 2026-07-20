@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC19 (PARITY-GO-RUST Wave Q1–Q13)
+ * tui Scorecard SC1–SC22 (PARITY-GO-RUST Wave Q1–Q14)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -22,12 +22,16 @@ program scorecard;
  *   SC17 Backend mouse Enter/Leave alternate sequences
  *   SC18 ResizeEvent helpers
  *   SC19 PercentageConstraint vertical split
+ *   SC20 SGR truecolor FG emit
+ *   SC21 DrawPatches adjacent style reuse
+ *   SC22 RatioConstraint vertical split
  *}
 
 {$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.platform.time,
+  nextpas.core.text.builder,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -38,6 +42,7 @@ uses
   nextpas.core.tui.layout,
   nextpas.core.tui.layout.grid,
   nextpas.core.tui.overlay,
+  nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
   nextpas.core.tui.terminal;
 
@@ -787,6 +792,84 @@ begin
   AddRow('SC19a', 'pct_vsplit50', 0, 1, LOk, '50/50 height sum + area');
 end;
 
+function ScorecardStyledCell(ACh: AnsiChar; const AStyle: TStyle): TCell;
+begin
+  CellReset(Result);
+  CellSetSymbolAscii(Result, ACh);
+  CellApplyStyle(Result, AStyle);
+end;
+
+procedure RunSC20;
+var
+  B: TStringBuilder;
+  LOk: Boolean;
+begin
+  WriteLn('SC20 SGR truecolor FG emit ...');
+  LOk := True;
+  B.Init(64);
+  try
+    AnsiSgrFg(B, RgbColor(10, 20, 30));
+    if B.ToString <> #27'[38;2;10;20;30m' then
+      LOk := False;
+  finally
+    B.Done;
+  end;
+  AddRow('SC20a', 'sgr_rgb_fg', 0, 1, LOk, 'CSI 38;2;10;20;30m');
+end;
+
+procedure RunSC21;
+var
+  LBE: TAnsiBackend;
+  LPatches: TDiffEntries;
+  LPending: AnsiString;
+  LOk: Boolean;
+begin
+  WriteLn('SC21 DrawPatches adjacent style reuse ...');
+  LOk := True;
+  LBE := TAnsiBackend.Create(-1);
+  SetLength(LPatches, 2);
+  try
+    LPatches[0].X := 0;
+    LPatches[0].Y := 0;
+    LPatches[0].Cell := ScorecardStyledCell('A', StyleDefault.WithFg(TUI_RED));
+    LPatches[1].X := 1;
+    LPatches[1].Y := 0;
+    LPatches[1].Cell := ScorecardStyledCell('B', StyleDefault.WithFg(TUI_RED));
+    LBE.DrawPatchesN(LPatches, 2);
+    LPending := BackendPendingStr(LBE);
+    if LPending <> #27'[1;1H'#27'[0m'#27'[31mAB' then
+      LOk := False;
+  finally
+    LBE.Free;
+  end;
+  AddRow('SC21a', 'draw_adjacent', 0, 1, LOk, 'MoveTo+shared SGR+AB');
+end;
+
+procedure RunSC22;
+var
+  LArea: TRect;
+  LRects: TRectArray;
+  LAreaSum, I: Integer;
+  LOk: Boolean;
+begin
+  WriteLn('SC22 RatioConstraint VSplit ...');
+  LOk := True;
+  LArea := TRect.Make(0, 0, 200, 60);
+  LRects := VerticalSplit(LArea, [
+    RatioConstraint(1, 3), FillConstraint(1)]);
+  if Length(LRects) < 2 then
+    LOk := False
+  else
+  begin
+    LAreaSum := 0;
+    for I := 0 to High(LRects) do
+      Inc(LAreaSum, LRects[I].Width * LRects[I].Height);
+    if LAreaSum <> LArea.Width * LArea.Height then
+      LOk := False;
+  end;
+  AddRow('SC22a', 'ratio_vsplit', 0, 1, LOk, '1:3 + fill area conserve');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -816,10 +899,10 @@ begin
 end;
 
 begin
-  SetLength(GRows, 48);
+  SetLength(GRows, 56);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC19 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC22 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -839,6 +922,9 @@ begin
   RunSC17;
   RunSC18;
   RunSC19;
+  RunSC20;
+  RunSC21;
+  RunSC22;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

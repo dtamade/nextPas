@@ -39,6 +39,7 @@
 - [x] Q17 accept/connect smoke + kqueue expand + WINDOWS-NATIVE-ASSESSMENT
 - [x] Q18 async-bench-parity.sh + peer fixtures + SCORECARD 表
 - [x] Q19 localhost dial_ops_per_s + go-dial peer
+- [x] Q20 dial_concurrent_ops_per_s + go-dial-concurrent peer；Windows native 仅评估挂钩
 
 ## 性能 scorecard（同机 2026-07-20）
 
@@ -52,5 +53,7 @@
 | `timer_schedule_ops_per_s` | ~6.2e6 | ~1.7e6 | ~1.3e8 |
 | `mutex_ops_per_s` | ~1.6e7 | ~7.3e7 | ~7.7e7 |
 | `channel_ops_per_s` | ~4.7e5 | ~1.6e7 | ~3.2e7 |
+| `dial_ops_per_s` | O(10³–10⁴) | O(10⁴) | — |
+| `dial_concurrent_ops_per_s` | O(10³–10⁴) single-loop | O(10⁴–10⁵) goroutine | — |
 
-truth=`same-host-order-of-magnitude`
+truth=`same-host-order-of-magnitude`；dial 行 truth=`localhost-*-dial`

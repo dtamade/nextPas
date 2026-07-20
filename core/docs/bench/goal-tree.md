@@ -217,6 +217,9 @@ B32–B40  消费侧 C3 落地与扩面 (2026-07-20)                       ✅
 B41  维护收口 + EBR 设计备忘 (2026-07-20)                        ✅
   B41.1  README/goal-tree 水位对齐                               ✅
   B41.2  ebr-benchrun-design-note.md（不实现）                   ✅
+
+B42  checklist Makefile 产物卫生 (2026-07-20)                    ✅
+  B42.1  log 改 BUILD_DIR；regex/csv/xml/vec 补标准 Makefile     ✅
 ```
 
 ## 测试套件分布

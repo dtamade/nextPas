@@ -5,7 +5,8 @@
 抽检日期：2026-07-20 · 抽检人：bench lane  
 C3：Quiet + 50ms/5 samples + SaveToJSON  
 B32–B40：消费侧扩面 + lockfree 双 suite  
-B41：维护收口（文档水位）；EBR 仅备忘、不实现 — [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)
+B41：维护收口（文档水位）；EBR 仅备忘 — [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)  
+B42：checklist 模块 Makefile 统一到 `core/build/projects/...`（log/regex/csv/xml/vec）
 
 ## 检查项
 

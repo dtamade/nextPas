@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**Q3-1 landed**：test_http_soak H1 KA + H2 mux，0 unfreed；NEXT=**Q3-2**）
+**Updated**: 2026-07-20（**Q3-3 / Era Q3 Done**：HTTPS smoke + residual；NEXT=**R0** 宣称评审）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **Q3-2** 超时/取消/413/431 矩阵对齐 Go 语义（Parity Plus Era Q3） |
+| **下一执行点** | **R0** 宣称评审：是否维持 H1-only scale-ready；p99 条件；对外 What we claim |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -823,8 +823,10 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | Wave | Status | Do |
 |------|--------|-----|
 | **Q3-1** | **landed** | `test_http_soak`：H1 KA 1500× threaded+epoll；H2 seq 400×；H2 mux RoundTripMany 50×8 / 20×8；heaptrc **0 unfreed** |
-| **Q3-2** | **NEXT** | 超时/取消/413/431 矩阵对齐 Go 语义 |
-| **Q3-3** | queued | H1 HTTPS smoke 吞吐/延迟 + residual |
+| **Q3-2** | **landed** | `test_http_q3_matrix` + CONTRACT §Q3-2：timeout→hekTimeout；cancel→hekCanceled/Op=cancel；413/431 wire + no handler；6/6 0 unfreed |
+| **Q3-3** | **landed** | `test_http_https_smoke`：30× H1 HTTPS 吞吐+p50/p99；0 unfreed；**residual**=每请求 TLS dial（accept≈reqs）+ registry H1 server TLS 仅 H2 |
+
+**Q3 Done when**：Q3-1..Q3-3 landed。 **Met.**
 
 ## Era H2P — H2 production（仅 E/Q3 后 + 需求）
 
@@ -836,7 +838,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **R0** | queued | 是否维持 H1-only scale-ready；p99 条件；对外 What we claim |
+| **R0** | **NEXT** | 是否维持 H1-only scale-ready；p99 条件；对外 What we claim |
 
 **推荐路径**：`G0 → G1 → G2 → E1 → E2 → E3 → Q3-1 → Q3-2 → Q3-3 → (H2P) → R0 → STOP`
 
@@ -859,14 +861,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Era G + Era E Met；Q3-1 soak 0 unfreed Met
+1. Era G/E/Q3 Met — scale-ready H1 plain + soak + error matrix + HTTPS smoke residual
 2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = Q3-2** 错误/超时矩阵 → Q3-3 TLS residual → (H2P) → R0
+3. **NEXT = R0** 宣称评审 → (H2P 仅需求) → STOP
 4. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿假 H2 scale-ready）。**
-**有「对标 Go/Rust 质量」/「继续」指令时：走 Era Q3（Q3-2 起）。**
+**有「对标 Go/Rust 质量」/「继续」指令时：走 R0 宣称评审。**
 
 ---
 
@@ -887,7 +889,9 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-20 | **Q3-1 landed**：`test_http_soak` H1 KA + H2 mux；5/5 + 0 unfreed；NEXT=**Q3-2** |
+| 2026-07-20 | **Q3-3 / Era Q3 Done**：HTTPS smoke 吞吐/延迟 + residual；NEXT=**R0** |
+| 2026-07-20 | **Q3-2 landed**：timeout/cancel/413/431 Go 语义矩阵（`test_http_q3_matrix` 6/6 0 unfreed） |
+| 2026-07-20 | **Q3-1 landed**：`test_http_soak` H1 KA + H2 mux；5/5 + 0 unfreed |
 | 2026-07-20 | **E3 / Era E Done**：runs=3 RPS 2.21×/2.22× + p99 0.21×/0.22×；ladder stable；0 unfreed |
 | 2026-07-20 | **E1/E2 landed**：Go p50/p99 harness + 单次 epoll p99 0.29×/0.26× Go |
 | 2026-07-20 | **Era G Done**：G0 re-land main `0356cf3b9` + G1 lane absorb + G2 REPRO |
