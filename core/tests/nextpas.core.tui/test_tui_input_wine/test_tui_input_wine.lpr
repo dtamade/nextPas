@@ -138,6 +138,28 @@ begin
   Check(LEvent.Key.Code = kcTab, 'kcTab');
 end;
 
+procedure TestIncompleteCsiNeedMore;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #27'[';
+  Check(ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed) = prNeedMore,
+    'incomplete csi needs more');
+end;
+
+procedure TestPasteStart;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #27'[200~';
+  Check(ParseOne(LBuf[1], Length(LBuf), True, LEvent, LConsumed) = prSuccess, 'paste');
+  Check(LEvent.Kind = evPaste, 'evPaste');
+end;
+
 begin
   T := TTestSuite.Create('tui_input_wine');
   T.Test('ascii', @TestAscii);
@@ -150,5 +172,7 @@ begin
   T.Test('focus out', @TestFocusOut);
   T.Test('arrow down', @TestArrowDown);
   T.Test('tab', @TestTab);
+  T.Test('incomplete csi need more', @TestIncompleteCsiNeedMore);
+  T.Test('paste start', @TestPasteStart);
   if not T.Run then Halt(1);
 end.
