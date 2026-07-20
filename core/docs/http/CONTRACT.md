@@ -690,16 +690,16 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
     在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
     修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
     其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
-- **Q3-3 H1 HTTPS smoke residual**：
+- **Q3-3 / RH-1 H1 HTTPS**：
   - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
     见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。
-  - **连接复用 residual**：本机 smoke 观测 `server_accepts ≈ server_reqs`
-    （每请求新 TLS dial；**未**证明 HTTPS keep-alive pool 复用）。正确性
-    单次 round-trip 仍绿；**禁止**据此写 HTTPS scale-ready。
+  - **RH-1 连接复用**：根因 = `TTlsTcpStream` 未实现 `ITcpStreamRuntime` →
+    `PooledConnectionIsReusable` 恒 false → 每请求 re-dial。已补 runtime 委托
+    到 inner TCP；smoke 锁 `server_accepts=1` 且 N keep-alive GET。
   - **Server `THttpServerOptions.TLSContext`**：**registry 仅选 H2 TLS transport**
     （`TLS HTTP server currently requires HTTP/2`）；**不是** H1 HTTPS 服务器
     产品入口。Q3-3 smoke origin 用 `NewTlsServerTcpStream` 最小 H1 TLS 源。
-  - **不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
+  - **仍不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
 - Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
   `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
   §2.2.0a。
@@ -782,3 +782,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
+| 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |

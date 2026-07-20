@@ -251,6 +251,10 @@ begin
     Checkequal(Int64(SMOKE_REQUESTS), Int64(LOk), 'all https requests ok');
     Check(GServerReqs >= SMOKE_REQUESTS, 'server saw requests');
     Check(GServerAccepts >= 1, 'at least one TLS accept');
+    { RH-1: TLS streams must be pool-reusable → one accept for N keep-alive GETs. }
+    Checkequal(Int64(1), Int64(GServerAccepts),
+      'HTTPS keep-alive reuses one TLS connection (accepts=1)');
+    Check(GServerReqs >= SMOKE_REQUESTS, 'all reqs on keep-alive connection');
 
     SortUInt64(LSamples, 0, SMOKE_REQUESTS - 1);
     LP50 := PercentileNs(LSamples, SMOKE_REQUESTS, 50);
@@ -277,8 +281,8 @@ begin
     WriteLn('mean_ns=', LMean);
     WriteLn('latency_samples=', SMOKE_REQUESTS);
 
-    { Sanity: usable smoke, not scale KPI. }
-    Check(LReqPerSec > 2, 'https smoke throughput floor (>2 req/s)');
+    { Keep-alive reuse: expect substantially faster than per-request handshake. }
+    Check(LReqPerSec > 10, 'https keep-alive smoke throughput floor (>10 req/s)');
     Check(LP99 > 0, 'p99 recorded');
     Check(LP50 <= LP99, 'p50 <= p99');
 

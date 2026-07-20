@@ -343,11 +343,12 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
 | Date | Shape | reqs | accepts | req/s | p50_ns | p99_ns | unfreed |
 | ---- | ----- | ---: | ------: | ----: | -----: | -----: | ------: |
 | 2026-07-20 Q3-3 | client H1 HTTPS sequential | 30 | 30 | ~3 | ~2.9e8 | ~3.3e8 | **0** |
+| **2026-07-20 RH-1** | keep-alive after TLS runtime fix | 30 | **1** | **~2466** | ~1.6e5 | ~6.6e6 | **0** |
+
+**RH-1**: `TTlsTcpStream` implements `ITcpStreamRuntime` so pool health probe works.
 
 **Honest residuals**
 
-- `accepts ≈ reqs` → **per-request TLS dial** under this smoke（HTTPS keep-alive pool
-  reuse **not** demonstrated）。
 - Origin is minimal `NewTlsServerTcpStream` H1 TLS；`THttpServer` + `TLSContext`
   registry path is **H2-only** residual.
 - **Not** Scale-ready (HTTPS). KPI remains plain H1 epoll.

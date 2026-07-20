@@ -103,8 +103,9 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
 ```
 
 期望：server 全绿；facade 含 **epoll** GET；soak **5/5**（Linux）0 unfreed；
-Q3-2 矩阵 **6/6** 0 unfreed；HTTPS smoke **3/3** 0 unfreed（读 `req/s=` / `p50_ns=`；
-`server_accepts` 可能 ≈ `server_reqs` = 无 pool 复用 residual）。
+Q3-2 矩阵 **6/6** 0 unfreed；HTTPS smoke **3/3** 0 unfreed。
+HTTPS smoke 读数：`server_accepts=1`（RH-1 keep-alive）、`req/s` 通常 ≫ 10、`p50_ns=` / `p99_ns=`。
+**仍不宣称** HTTPS scale-ready（见 `CLAIM.md`）。
 
 ---
 
