@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # async-windows-native-smoke.sh
 #
-# Native Windows (or Wine on Linux for a subset) async I/O smoke.
-# truth=native-windows only when run on bare-metal Windows host.
-# Under Wine: still wine-runtime-smoke tier — do not rebrand.
+# Native Windows (or non-Windows for compile-ish suites) async I/O smoke.
+# truth=native-windows-candidate when run on bare-metal Windows with STRICT.
+# Under Wine/non-Windows: do not rebrand as native-windows.
 #
 # Usage (cwd = core/ or repo root):
 #   bash core/scripts/async-windows-native-smoke.sh
 #
 # Env:
-#   ASYNC_WINDOWS_STRICT=1  — fail job on any suite fail (default 0 = soft)
-#   NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1 — force soft (same as STRICT=0)
+#   ASYNC_WINDOWS_STRICT=1  — fail on any suite fail
+#   NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1 — force soft even on Windows
+#   On Windows hosts, STRICT defaults to 1 unless BEST_EFFORT=1 (Q24B).
 
 set -euo pipefail
 
@@ -26,11 +27,6 @@ fi
 
 cd "$CORE_ROOT"
 
-STRICT="${ASYNC_WINDOWS_STRICT:-0}"
-if [[ "${NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT:-0}" == "1" ]]; then
-  STRICT=0
-fi
-
 uname_s="$(uname -s 2>/dev/null || echo unknown)"
 # MSYS/Cygwin report MINGW*/MSYS*/CYGWIN*
 is_windows=0
@@ -39,6 +35,18 @@ case "$uname_s" in
 esac
 if [[ "${OS:-}" == "Windows_NT" ]]; then
   is_windows=1
+fi
+
+# Q24B: Windows host defaults STRICT=1; non-Windows stays soft unless forced.
+if [[ -n "${ASYNC_WINDOWS_STRICT+x}" ]]; then
+  STRICT="${ASYNC_WINDOWS_STRICT}"
+elif [[ "$is_windows" -eq 1 ]]; then
+  STRICT=1
+else
+  STRICT=0
+fi
+if [[ "${NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT:-0}" == "1" ]]; then
+  STRICT=0
 fi
 
 MODULE_ENTRIES=(
@@ -57,7 +65,11 @@ failed=()
 echo "=== Async Windows native smoke ==="
 echo "host=$uname_s is_windows=$is_windows core=$CORE_ROOT strict=$STRICT"
 if [[ "$is_windows" -eq 1 ]]; then
-  echo "truth_tier=native-windows-candidate (suites green only; promote fail-closed after streak)"
+  if [[ "$STRICT" == "1" ]]; then
+    echo "truth_tier=native-windows-candidate; fail-closed"
+  else
+    echo "truth_tier=native-windows-candidate; soft (BEST_EFFORT)"
+  fi
 else
   echo "truth_tier=not-native-windows (non-Windows host; suites may skip or wine-only)"
 fi
@@ -90,7 +102,7 @@ done
 
 echo "summary: pass=$pass_count fail=$fail_count skip=$skip_count total=${#MODULE_ENTRIES[@]}"
 if [[ "$is_windows" -eq 1 ]]; then
-  echo "truth=async-windows-native-smoke; host=windows; gates_passed=$pass_count; gates_failed=$fail_count"
+  echo "truth=async-windows-native-smoke; host=windows; strict=$STRICT; gates_passed=$pass_count; gates_failed=$fail_count"
 else
   echo "truth=async-windows-native-smoke; host=non-windows; not-native-claim"
 fi

@@ -551,9 +551,10 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Default: skip (exit 0). All-fail rounds print soft-fail metrics; **never** CI-gating.
 - truth=`public-dns-he-multihost-opt-in; flaky; not-ci-gating; sample-not-sla`.
 
-### Windows native async smoke (Q22 / Q24A)
+### Windows native async smoke (Q22 / Q24A / **Q24B**)
 - Script: `core/scripts/async-windows-native-smoke.sh` (compile gate + contract + poller/IOCP + accept/connect).
-- CI: `test-windows-runtime` step **continue-on-error: true** — not fail-closed until streak.
-- Streak observer: `bash core/scripts/async-windows-smoke-streak.sh` → `promote-ready=yes|no`.
-- truth on bare-metal Windows host: `native-windows-candidate` until multi-week green streak (see WINDOWS-NATIVE-ASSESSMENT).
-- Do **not** treat Wine green as `truth=native-windows`.
+- CI: `test-windows-runtime` step **fail-closed** (`ASYNC_WINDOWS_STRICT=1`; no `continue-on-error`).
+- Streak observer: `bash core/scripts/async-windows-smoke-streak.sh`.
+- truth: **native-windows-candidate** on bare-metal Windows host (suite-limited; not full host parity).
+- Soft escape: `NEXTPAS_ASYNC_WINDOWS_BEST_EFFORT=1` (local only; not default in CI).
+- Do **not** treat Wine green as full `truth=native-windows`.

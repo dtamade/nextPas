@@ -18,7 +18,7 @@
 | **Q21** | 公网 DNS HE 统计样本 | opt-in `NEXTPAS_PUBLIC_DNS_HE=1`；metrics；非 CI 门 | **done** |
 | **Q22** | Windows native async smoke 挂钩 | `async-windows-native-smoke.sh` + CI continue-on-error | **done** |
 | **Q23** | 多 host 公网 HE 矩阵 | 3 host + v4/v6 attempt 分计；可选 PreferIPv6First 遍 | **done** |
-| **Q24** | Windows fail-closed 就绪 | streak 观测脚本；**仅** streak 达标后去 continue-on-error | **A done / B deferred** |
+| **Q24** | Windows fail-closed 就绪 | streak 观测 + **fail-closed 升格** | **done (A+B)** |
 | **Q25** | Dial LocalAddr bind-before-connect | Go Dialer.LocalAddr subset；family match；0 leak | **done** |
 | **Q26** | Dial NoDelay/KeepAlive 选项 | 成功 stream 回调前 best-effort 应用 | **done** |
 

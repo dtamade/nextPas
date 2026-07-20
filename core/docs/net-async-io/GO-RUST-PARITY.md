@@ -78,7 +78,7 @@
 | linux-runtime | 默认质量门 |
 | macos-host-smoke | kqueue + dial/resolve fail-closed |
 | wine-runtime-smoke | IOCP |
-| native-windows | 未宣称 |
+| native-windows | **candidate fail-closed** (Q24B suite-limited; not full parity) |
 
 ## 6. 路线图索引
 
