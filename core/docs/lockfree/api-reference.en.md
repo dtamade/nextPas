@@ -6,7 +6,7 @@
 > is the fuller surface for Stack/Deque Try\*Ex, H3-2 bag/multimap, and T2 extras.
 > Absolute Mops claims require [`bench-envelope.md`](bench-envelope.md).
 > **Preferred atomics**: `atomic_*` + `mo_*` / `TAtomic*` ([`READY.md`](READY.md) residual 0).
-> **Lifecycle (T1)**: **Close → join → Free**. Examples: `t1_close_join_free`, `t1_segqueue_workers`, `t2_bag_close_join_free`.
+> **Lifecycle (T1)**: **Close → join → Free**. Examples: `t1_close_join_free`, `t1_segqueue_workers`, `t2_bag_close_join_free`, `t2_multimap_close_join_free`.
 > **Selection**: [`selection-guide.en.md`](selection-guide.en.md) task-delivery table.
 
 [中文版](api-reference.md)
@@ -672,8 +672,8 @@ type
 
 ## Bag (nextpas.core.lockfree.bag)
 
-> **H3-2 production subset** (CONTRACT §0.3): **direct** `uses nextpas.core.lockfree.bag`; **not** on default T1 facade.  
-> **Progress**: bounded **lock-free MPMC sequence ring** + wait-address path.  
+> **H3-2 production subset** (CONTRACT §0.3): **direct** `uses nextpas.core.lockfree.bag`; **not** on default T1 facade.
+> **Progress**: bounded **lock-free MPMC sequence ring** + wait-address path.
 > **Managed**: rejected. **Lifecycle**: Close → drain/join → Free (teaching: `t2_bag_close_join_free`).
 
 ```pascal
@@ -703,9 +703,10 @@ Duplicates allowed; FIFO. After Close, `TryAdd` → `arClosed`; already-added it
 
 ## MultiMap (nextpas.core.lockfree.multimap)
 
-> **H3-2 production subset** (CONTRACT §0.3): direct `uses`; **not** default facade.  
-> **Progress**: **single map spin lock** — **not** lock-free, **not** sharded.  
-> **Managed** keys/values rejected. Close → stop writers → read/cleanup → Free.
+> **H3-2 production subset** (CONTRACT §0.3): direct `uses`; **not** default facade.
+> **Progress**: **single map spin lock** — **not** lock-free, **not** sharded.
+> **Managed** keys/values rejected. Close → stop writers → read/cleanup → Free
+> (teaching: `t2_multimap_close_join_free`). After Close, `Add` → `mmClosed`; existing keys remain readable/removable.
 
 ```pascal
 type
@@ -725,7 +726,17 @@ type
   end;
 ```
 
-Further T2 surfaces (bloom, caches, sync helpers, graphs, …): Chinese [`api-reference.md`](api-reference.md). Naming honesty: [`CONTRACT.md`](CONTRACT.md) §0.
+### Other T2 (index only — full text in ZH)
+
+| Area | Units (examples) | Progress note |
+|------|------------------|---------------|
+| Sync helpers | mutex, rwlock, semaphore, stampedlock, phaser, condvar, barrier, countdown | lock / CAS spin — not “LF by namespace” |
+| Caches | lru, lru_cache, lfu, ttl_cache, arccache | sharded / spin locks |
+| Filters / sketches | bloom*, hyperloglog, countminsketch, tdigest, … | atomic bits/counters or mixed locks |
+| Trees / graphs | skiplist*, trie*, btree*, dag, graph, … | per-node or global locks (see unit) |
+| Misc | ringbuffer, timeoutqueue, workstealing pool, snapshot, … | per unit `@concurrency` |
+
+Full API prose for those units: Chinese [`api-reference.md`](api-reference.md). Inventory: [`t2-inventory.md`](t2-inventory.md). Naming honesty: [`CONTRACT.md`](CONTRACT.md) §0.
 
 ## Memory Order Reference
 

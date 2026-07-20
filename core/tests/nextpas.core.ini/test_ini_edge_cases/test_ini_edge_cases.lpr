@@ -3,7 +3,7 @@ program test_ini_edge_cases;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.ini,
   nextpas.core.test;
 

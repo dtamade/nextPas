@@ -3,7 +3,6 @@ program test_ini_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.ini,
   nextpas.core.test;
 

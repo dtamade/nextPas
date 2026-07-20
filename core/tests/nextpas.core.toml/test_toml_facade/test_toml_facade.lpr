@@ -3,7 +3,7 @@ program test_toml_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.text.view,
   nextpas.core.mem.default,

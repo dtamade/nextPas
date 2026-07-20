@@ -3,11 +3,12 @@ program test_yaml_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.text.view,
   nextpas.core.yaml,
   nextpas.core.test;
 
@@ -37,6 +38,7 @@ begin
 
   LError := YamlParse('{a: 1, b}').Error;
   Check(LError.Line > 0, 'error type visible through facade');
+  CheckEqual(LError.Col, LError.Column, 'Col/Column aliases match');
 
   LBuilder.Init;
   try
@@ -154,6 +156,28 @@ begin
   CheckEqual(Int64(3), LDoc.Root.MapGet('n').AsInt, 'roundtrip n');
 end;
 
+procedure TestFacadeExposesTryAsAccessors;
+var
+  LDoc: IYamlDocument;
+  LRoot: TYamlValue;
+  LBool: Boolean;
+  LInt: Int64;
+  LFloat: Double;
+  LStr: TStringView;
+begin
+  LDoc := YamlParse('b: true' + #10 + 'i: 9' + #10 + 'f: 2.5' + #10 +
+    's: hello' + #10);
+  Check(not LDoc.HasError, 'tryas parse');
+  LRoot := LDoc.Root;
+  Check(LRoot.MapGet('b').TryAsBool(LBool) and LBool, 'TryAsBool');
+  Check(LRoot.MapGet('i').TryAsInt(LInt) and (LInt = 9), 'TryAsInt');
+  Check(LRoot.MapGet('f').TryAsFloat(LFloat) and (Abs(LFloat - 2.5) < 1e-9),
+    'TryAsFloat');
+  Check(LRoot.MapGet('s').TryAsStr(LStr) and (LStr.ToString = 'hello'),
+    'TryAsStr');
+  Check(not LRoot.MapGet('s').TryAsInt(LInt), 'TryAsInt rejects string');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.yaml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
@@ -161,5 +185,6 @@ begin
     @TestFacadeEdgeDepthAndLargeValue);
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
   T.Test('facade feature matrix', @TestFacadeFeatureMatrix);
+  T.Test('facade exposes TryAs accessors', @TestFacadeExposesTryAsAccessors);
   if not T.Run then Halt(1);
 end.

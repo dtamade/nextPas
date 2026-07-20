@@ -7,7 +7,7 @@ program test_xml_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.mem.intf,

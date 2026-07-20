@@ -24,6 +24,7 @@ type
     Offset: SizeUInt;
     Line: UInt32;
     Column: UInt32;
+    property Col: UInt32 read Column write Column;
   end;
 
   { TCsvReader — streaming CSV parser with RFC 4180 support }

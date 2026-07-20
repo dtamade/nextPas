@@ -36,6 +36,10 @@ type
     function AsInt: Int64;                   { 0 if not int; truncates float }
     function AsFloat: Double;               { 0.0 if not number; promotes int }
     function AsStr: TStringView;            { Empty if not string }
+    function TryAsBool(out AValue: Boolean): Boolean;
+    function TryAsInt(out AValue: Int64): Boolean;
+    function TryAsFloat(out AValue: Double): Boolean;
+    function TryAsStr(out AValue: TStringView): Boolean;
     function ArrayLen: UInt32;              { 0 if not array }
     function ArrayGet(AIndex: UInt32): TJsonValue;  { Invalid if out of bounds }
     function ObjectGet(const AKey: TStringView): TJsonValue; overload; { Invalid if missing }
@@ -140,6 +144,42 @@ begin
   if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkString) then
     Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Str;
+end;
+
+function TJsonValue.TryAsBool(out AValue: Boolean): Boolean;
+begin
+  Result := IsBool;
+  if Result then
+    AValue := AsBool
+  else
+    AValue := False;
+end;
+
+function TJsonValue.TryAsInt(out AValue: Int64): Boolean;
+begin
+  Result := IsInt;
+  if Result then
+    AValue := AsInt
+  else
+    AValue := 0;
+end;
+
+function TJsonValue.TryAsFloat(out AValue: Double): Boolean;
+begin
+  Result := IsReal or IsInt;
+  if Result then
+    AValue := AsFloat
+  else
+    AValue := 0.0;
+end;
+
+function TJsonValue.TryAsStr(out AValue: TStringView): Boolean;
+begin
+  Result := IsStr;
+  if Result then
+    AValue := AsStr
+  else
+    AValue := TStringView.Empty;
 end;
 
 function TJsonValue.ArrayLen: UInt32;

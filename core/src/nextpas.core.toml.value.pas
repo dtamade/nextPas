@@ -38,6 +38,10 @@ type
     function AsInt: Int64;
     function AsFloat: Double;
     function AsBool: Boolean;
+    function TryAsBool(out AValue: Boolean): Boolean;
+    function TryAsInt(out AValue: Int64): Boolean;
+    function TryAsFloat(out AValue: Double): Boolean;
+    function TryAsStr(out AValue: TStringView): Boolean;
     function AsDateTime: TTomlDateTime;
     function Get(const AKey: TStringView): TTomlValue; overload;
     function Get(const AKey: string): TTomlValue; overload;
@@ -157,6 +161,42 @@ begin
   if FDoc^.Node(FIdx)^.Kind <> tnkBool then
     Exit(False);
   Result := FDoc^.Node(FIdx)^.BoolVal;
+end;
+
+function TTomlValue.TryAsBool(out AValue: Boolean): Boolean;
+begin
+  Result := IsBool;
+  if Result then
+    AValue := AsBool
+  else
+    AValue := False;
+end;
+
+function TTomlValue.TryAsInt(out AValue: Int64): Boolean;
+begin
+  Result := IsInt;
+  if Result then
+    AValue := AsInt
+  else
+    AValue := 0;
+end;
+
+function TTomlValue.TryAsFloat(out AValue: Double): Boolean;
+begin
+  Result := IsFloat or IsInt;
+  if Result then
+    AValue := AsFloat
+  else
+    AValue := 0.0;
+end;
+
+function TTomlValue.TryAsStr(out AValue: TStringView): Boolean;
+begin
+  Result := IsStr;
+  if Result then
+    AValue := AsStr
+  else
+    AValue := TStringView.Empty;
 end;
 
 function TTomlValue.AsDateTime: TTomlDateTime;

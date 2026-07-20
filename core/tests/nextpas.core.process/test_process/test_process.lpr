@@ -2227,6 +2227,38 @@ begin
   ExpectTrue('cProcessDefaultMaxOutput positive', cProcessDefaultMaxOutput > 0);
 end;
 
+procedure TestBuilderDefaultMaxOutputUnset;
+var
+  LOut: TProcessOutput;
+begin
+  { U2: no MaxOutput call → 64MiB default; small echo still succeeds }
+  LOut := Command('/bin/echo').Arg('u2-default-cap').Output;
+  ExpectTrue('builder unset MaxOutput — success', ProcessSucceeded(LOut));
+  ExpectTrue('builder unset MaxOutput — not limited', not LOut.OutputLimited);
+  ExpectTrue('builder unset MaxOutput — payload',
+    Pos('u2-default-cap', LOut.StdOut) > 0);
+end;
+
+procedure TestBuilderMaxOutputZeroUnlimited;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('u2-unlimited').MaxOutput(0).Output;
+  ExpectTrue('MaxOutput(0) — success', ProcessSucceeded(LOut));
+  ExpectTrue('MaxOutput(0) — not limited', not LOut.OutputLimited);
+  ExpectTrue('MaxOutput(0) — payload', Pos('u2-unlimited', LOut.StdOut) > 0);
+end;
+
+procedure TestStatusStdoutEmpty;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('hidden').Status;
+  ExpectTrue('Status — success', ProcessSucceeded(LOut));
+  ExpectTrue('Status — StdOut empty', LOut.StdOut = '');
+  ExpectTrue('Status — StdErr empty', LOut.StdErr = '');
+end;
+
 procedure TestCredentialSelfUid;
 var
   LOut: TProcessOutput;
@@ -2413,6 +2445,9 @@ begin
   T.Test('CancelTokenBeforeSpawnRaises', @TestCancelTokenBeforeSpawnRaises);
   T.Test('EProcessErrorCancelledProperty', @TestEProcessErrorCancelledProperty);
   T.Test('DefaultMaxOutputConst', @TestDefaultMaxOutputConst);
+  T.Test('BuilderDefaultMaxOutputUnset', @TestBuilderDefaultMaxOutputUnset);
+  T.Test('BuilderMaxOutputZeroUnlimited', @TestBuilderMaxOutputZeroUnlimited);
+  T.Test('StatusStdoutEmpty', @TestStatusStdoutEmpty);
   T.Test('CredentialSelfUid', @TestCredentialSelfUid);
   T.Test('ExtraFdInherited', @TestExtraFdInherited);
   T.Test('MergeStderrStdoutOnlyPipe', @TestMergeStderrStdoutOnlyPipe);

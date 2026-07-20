@@ -3,7 +3,7 @@ program test_yaml_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.errors,

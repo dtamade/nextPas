@@ -59,7 +59,9 @@ type
     function Status: TProcessOutput;
     {** 设置超时时间，超时后自动 Kill *}
     function Timeout(const ADuration: TDuration): ICommand;
-    {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
+    {** 限制 stdout+stderr 累计捕获字节数。
+     *  未调用时：缓冲路径默认 cProcessDefaultMaxOutput（64 MiB，U2）。
+     *  MaxOutput(0)=显式不限制；MaxOutput(N>0)=上限 N。超限 OutputLimited 并 Kill。 *}
     function MaxOutput(const ABytes: Int64): ICommand;
     {** 将子进程 stderr 写入与 stdout 同一管道（真时间交错，对齐 Go CombinedOutput）。
      *  必须 Stdout(stPiped)（.Output / Capture*Combined 会强制）；非 piped 时 Spawn 抛错。
@@ -89,6 +91,7 @@ type
     FStderrMode: TStdio;
     FTimeout: TDuration;
     FMaxOutput: Int64;
+    FMaxOutputSet: Boolean;
     FMergeStderr: Boolean;
     FExtraFds: array of PtrInt;
     FSetCred: Boolean;
@@ -96,6 +99,7 @@ type
     FGid: UInt32;
     FCancelToken: IAsyncCancellationToken;
     FNewProcessGroup: Boolean;
+    function EffectiveMaxOutput: Int64;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -261,6 +265,7 @@ begin
   FStderrMode := stInherit;
   FTimeout := TDuration.Zero;
   FMaxOutput := 0;
+  FMaxOutputSet := False;
   FMergeStderr := False;
   FExtraFds := nil;
   FSetCred := False;
@@ -597,8 +602,8 @@ begin
   if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
-  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput,
-    FCancelToken, FNewProcessGroup);
+  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout,
+    EffectiveMaxOutput, FCancelToken, FNewProcessGroup);
 end;
 
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
@@ -607,8 +612,18 @@ begin
   Result := Self;
 end;
 
+function TCommand.EffectiveMaxOutput: Int64;
+begin
+  { U2: unset → 64 MiB default; MaxOutput(0) explicit unlimited; N>0 cap. }
+  if FMaxOutputSet then
+    Result := FMaxOutput
+  else
+    Result := cProcessDefaultMaxOutput;
+end;
+
 function TCommand.MaxOutput(const ABytes: Int64): ICommand;
 begin
+  FMaxOutputSet := True;
   FMaxOutput := ABytes;
   Result := Self;
 end;

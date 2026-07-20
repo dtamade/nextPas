@@ -92,6 +92,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
@@ -226,10 +227,14 @@ begin
 end;
 
 function XmlParse(const AReader: IReader): TXmlDocument;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('XmlParse: reader must not be nil');
-  Result := XmlParse(XmlBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'XmlParse');
+  Result := XmlParse(XmlBytesToString(LBytes));
 end;
 
 function XmlParseWith(const AInput: string; const AAllocator: TMemAllocator): TXmlDocument;
@@ -266,10 +271,14 @@ begin
 end;
 
 function XmlParseDoc(const AReader: IReader): IXmlDocument;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('XmlParseDoc: reader must not be nil');
-  Result := XmlParseDoc(XmlBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'XmlParseDoc');
+  Result := XmlParseDoc(XmlBytesToString(LBytes));
 end;
 
 function XmlParseDocWith(const AInput: string; const AAllocator: TMemAllocator): IXmlDocument;

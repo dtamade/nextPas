@@ -42,9 +42,9 @@ B43：**Maintenance Idle** — 默认不扩面；回归 / 明确授权再动
 | `nextpas.core.bytes/bench_bytes` | ✅ | ✅ | ✅ | ✅ | ✅ | `bytes/SpanEqual/1KB` 等；`build/bench-bytes.json` |
 | `nextpas.core.sync/bench_sync` | ✅ | ✅ | ✅ | ✅ | ✅ | `sync/Mutex/LockUnlock` 等；`build/bench-sync.json` |
 | `nextpas.core.lockfree/bench_lockfree` | ✅ | ✅ | ✅ | ✅ | ✅ | **matched** `lockfree/matched/C1_1P1C`（MaxIters/MinSamples=1）；**micro** `lockfree/micro/*` Quiet+50ms/5；`build/bench-lockfree-{matched,micro}.json`（B40） |
-| `nextpas.core.http/bench_headers` | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | `TBenchSuite`+loop；命名含 Headers；**缺** Quiet/短时/JSON→build；归 **http** lane 改进 |
-| `nextpas.core.mem/bench_alloc` | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | `IAllocator/*`/`Raw/*`；**缺** Quiet/JSON build；归 **mem** lane |
-| `nextpas.core.collections/bench_hashmap` | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ | `TBenchSuite`+loop；Put/Get 等；**缺** C3/C4 模板；归 **collections** lane |
+| `nextpas.core.http/bench_headers` | ✅ | ✅ | ✅ | ✅ | ✅ | `Headers/*`；Quiet+50ms/5；`build/bench-headers.json`（B45 收口） |
+| `nextpas.core.mem/bench_alloc` | ✅ | ✅ | ✅ | ✅ | ✅ | `IAllocator/*`/`Raw/*`；Quiet+50ms/5；`build/bench-alloc.json`（B45 收口） |
+| `nextpas.core.collections/bench_hashmap` | ✅ | ✅ | ✅ | ✅ | ✅ | `HashMap/*`/`SwissTable/*`；Quiet+50ms/5；`build/bench-hashmap.json`；标准 Makefile（B45 收口） |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
@@ -52,9 +52,9 @@ B43：**Maintenance Idle** — 默认不扩面；回归 / 明确授权再动
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **22** 模块行（原 19 + http/mem/collections 各 1；**抽检水位**） |
+| 抽检面 | **22** 模块行（19 + http/mem/collections） |
 | 仓库模块 bench 约数 | ~**80** 个 `core/benchmarks/**/bench_*` 目录 |
-| C1–C5 | 原 19 全 ✅；新增 3 行 **C3/C4 偏弱**（跨 lane，不在本包大改） |
+| C1–C5 | **22/22 全 ✅**（B45 收口：headers/alloc/hashmap 补 Quiet/短时/JSON） |
 | C3 | 常规 Quiet+50ms/5；lockfree **matched** 用 1 sample / MaxIterations=1（避免 1M-op 多线程被反复重跑） |
 | scorecard | 11 track（含 binsearch、lookup） |
 | EBR 执行器 | 未做（独立设计；micro 仅测 EBR Retire 路径） |

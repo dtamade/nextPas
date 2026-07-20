@@ -3,7 +3,7 @@ program test_json_builder;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.json.builder,
   nextpas.core.json.writer,

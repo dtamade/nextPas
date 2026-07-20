@@ -3,10 +3,10 @@ program test_yaml_coverage;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.text.view,
+  nextpas.core.fs,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.yaml.types,
@@ -268,16 +268,8 @@ begin
 end;
 
 function ReadSourceFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LowerCase(LText.Text);
-  finally
-    LText.Free;
-  end;
+  Result := LowerCase(ReadFileText(APath));
 end;
 
 function ResolveSourcePath(const APathFromTest: string;

@@ -8,16 +8,19 @@ Supports sections, key=value pairs, comments (`;` and `#`), empty line skipping,
 
 `LoadFromString` stays permissive, while `LoadFromFile` raises `ENextPasError` on file I/O failures.
 
-`TryLoadFromString` and `TryLoadFromFile` return `False` and populate a string
-`AError` (there is no `TIniError` record type). Messages often include a
-`line N` prefix for parse validation failures.
+`TryLoadFromString` and `TryLoadFromFile` return `False` and populate `Error`.
+Both string and structured `TIniError` overloads are available.
 
-`LoadFromString` and the try-load validators recognize LF, CRLF, and lone CR as
-physical line endings.
+`LoadFromString` and the try-load validators recognize LF, CRLF, and lone CR as physical line endings; source diagnostics report byte offsets against the original input.
 
-Duplicate parsed sections merge into the existing section, and duplicate parsed
-keys update the existing key slot with the last parsed value. Try-load accepts
-those duplicates.
+Duplicate parsed sections merge into the existing section, and duplicate parsed keys update the existing key slot with the last parsed value. Try-load accepts those duplicates.
+
+`TIniError` exposes `Message`, `Line`, `Column`, and `Offset`; non-source file I/O failures use `Line = 0` and `Column = 0`.
+`Column` and `Col` are aliases on `TIniError`.
+
+When `TIniFile.Strict = True`, try-load rejects non-comment lines that are neither section headers nor `key=value` pairs. Default is permissive (`Strict = False`), matching historical Go-style ignore-of-bare lines.
+
+`IniParse(IReader)` bulk-loads via `IoReadAll` and is subject to `FORMAT_BULK_PARSE_MAX_BYTES` (see `nextpas.core.format.limits`).
 
 Callers own `TIniFile` instances and must free them.
 
@@ -30,23 +33,20 @@ uses nextpas.core.ini;
 
 var
   Ini: TIniFile;
+  Err: TIniError;
 begin
   Ini := TIniFile.Create;
   try
     Ini.LoadFromString('[server]' + #10 + 'host=localhost' + #10 + 'port=8080');
     WriteLn(Ini.ReadString('server', 'host', ''));
     WriteLn(Ini.ReadInteger('server', 'port', 0));
+
+    Ini.Strict := True;
+    if not Ini.TryLoadFromString('[broken' + #10, Err) then
+      WriteLn('Parse error at ', Err.Line, ':', Err.Column, ' ', Err.Message);
   finally
     Ini.Free;
   end;
-
-// Try-load pattern
-var
-  Error: string;
-begin
-  if not Ini.TryLoadFromString('[broken' + #10, Error) then
-    WriteLn('Parse error: ', Error);
-end;
 
 // Save
 Ini.SaveToFile('config.ini');
@@ -55,7 +55,7 @@ Ini.SaveToFile('config.ini');
 ## File Structure
 
 ```
-src/nextpas.core.ini.pas — TIniFile, TIniSection, TIniEntry
+src/nextpas.core.ini.pas — TIniFile, TIniError, TIniSection, TIniEntry
 ```
 
 ## Feature Coverage
@@ -69,7 +69,9 @@ src/nextpas.core.ini.pas — TIniFile, TIniSection, TIniEntry
 - Read/write string, integer, bool
 - Delete key/section
 - LF, CRLF, CR line ending support
-- Try-load with error reporting
+- Try-load with string and structured `TIniError`
+- Optional `Strict` mode for bare-line rejection
+- `Col` / `Column` diagnostic aliases
 
 ## Performance
 

@@ -3,7 +3,7 @@ program test_yaml_audit;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,

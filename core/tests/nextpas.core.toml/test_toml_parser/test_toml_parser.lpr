@@ -3,9 +3,9 @@ program test_toml_parser;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
+  nextpas.core.fs,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.toml.base,
@@ -191,16 +191,8 @@ begin
 end;
 
 function ReadSourceFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LowerCase(LText.Text);
-  finally
-    LText.Free;
-  end;
+  Result := LowerCase(ReadFileText(APath));
 end;
 
 function ResolveSourcePath(const APathFromTest: string;
@@ -855,7 +847,7 @@ begin
     'init must stage node allocation');
   CheckSourceContains(LSource, 'if lptr = nil then',
     'init must guard node allocation');
-  CheckSourceContains(LSource, 'lnewbufs := ppointer(reallocmemof(fallocator, pointer(fownedbufs),',
+  CheckSourceContains(LSource, 'lnewbufs := ptomlownedbuf(reallocmemof(fallocator, pointer(fownedbufs),',
     'owned buffer growth must stage reallocate');
   CheckSourceContains(LSource, 'lnewnodes := reallocmemof(fallocator, fnodes,',
     'node growth must stage reallocate');

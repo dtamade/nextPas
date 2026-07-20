@@ -55,6 +55,7 @@ implementation
 uses
   nextpas.core.mem.default,
   nextpas.core.errors,
+  nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.text.escape;
 
@@ -335,10 +336,14 @@ begin
 end;
 
 function JsonParse(const AReader: IReader): IJsonDocument;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('JsonParse: reader must not be nil');
-  Result := JsonParse(JsonBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'JsonParse');
+  Result := JsonParse(JsonBytesToString(LBytes));
 end;
 
 function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;

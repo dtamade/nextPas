@@ -36,13 +36,20 @@ var Path := LookPath('fpc');
 
 其余 `RunIn*` / `Capture*Combined` / `*WithInput*` 为 **Compat**，保留不删；新代码优先上表 + builder。
 
-## MaxOutput 策略（U1）
+## MaxOutput 策略（U1+U2）
 
 | 入口 | 默认 |
 |------|------|
-| `ICommand.MaxOutput` | **0 = 不限制**（流式 / 自管缓冲） |
-| free `Run*` / `Capture*`（缓冲输出） | **`cProcessDefaultMaxOutput` = 64 MiB** |
-| 需要无限 | `Command(...).MaxOutput(0).Output` |
+| 未调用 `MaxOutput` 的 **ICommand** 缓冲路径（Output / 带管道 Spawn） | **`cProcessDefaultMaxOutput` = 64 MiB**（U2） |
+| `MaxOutput(0)` | **显式不限制** |
+| `MaxOutput(N>0)` | 上限 N |
+| free `Run*` / `Capture*` | 同样 64 MiB（U1 显式挂载） |
+
+```pascal
+// 无限缓冲必须显式：
+Command('/bin/tool').MaxOutput(0).Output;
+```
+
 
 ## 生命周期
 

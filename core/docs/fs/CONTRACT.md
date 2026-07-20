@@ -46,7 +46,7 @@ fs.pas           ← 门面 re-export
 - **[INV-3]** GlobMatch 支持 `*`, `?`, `[...]` 模式
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
 - **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 为 **procedure**：失败抛异常，成功无返回值。`ForceDirectories`/`DeleteFile` 保留 Boolean 兼容壳（内部 try/except，**吞掉异常类型**；要错误分类请用 procedure API）
-- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 仅对**无分隔符**裸名把 `'.'`→`''`；`./x` 保留 `'.'`；`FsPathDir` 始终 Go **`.`**
+- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 仅对**无分隔符**裸名把 `'.'`→`''`；`./x` 保留 `'.'`；`FsPathDir` 始终 Go **`.`**。**混用风险**：不要假设 `fs.PathJoin` 为二元；裸名目录语义选 path 门面或 `FsPathDir` 须自觉（见 path README 决策树）。
 - **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses` 裸 FPC RTL 单元；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。门禁：`test_fs` 真 uses 扫描（`fpc_rtl_uses_scan.inc`）。
 - **[INV-8]** `Remove` 对 ENOENT **静默成功**（对齐 Pascal Erase/DeleteFile；≠ Go `os.Remove`）。
 - **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
@@ -54,7 +54,7 @@ fs.pas           ← 门面 re-export
 - **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
 - **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
 - **[INV-13]** **文件锁（R23）**：绑定打开中的 `IFile` 句柄；`flkExclusive` 互斥，`flkShared` 可并存且与 exclusive 互斥；`TryLock` 仅「忙」返回 False（`PLATFORM_ERR_AGAIN`/`BUSY` 及 Win 锁占用码）；其它错误 raise；关闭/销毁后 OS 释放锁。Unix 为 **advisory** `flock`；Windows `LockFileEx` 整文件，语义平台相关；**不保证** NFS 可靠。仅经 `platform_file_lock|trylock|unlock`。
-- **[INV-14]** **文件监视（R25+R29+R30+R32）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。`Add`=单 path 非递归；**`AddTree`**=递归挂载目录树（不跟随 symlink 目录；运行时新建子目录 auto-add）。**`Remove(path)`**：停止对该 path 的监视（对齐 Go fsnotify.Remove；未监视则 no-op）。`TFsWatchEvent.Name` 在 L0 提供 Wd 时为 **base+name 路径**；`Created`/`Deleted`/`Modified`/`IsDir` 为独立布尔（可同时 true）。**R30**：Linux residual 缓冲跨 Poll 不丢批内事件。kqueue `PLATFORM_WATCH_MAX_FDS=256`。Windows：**S2 Poll** 经 RDCW（platform）；Wine 上事件可能 soft residual，truth=wine-runtime-smoke。
+- **[INV-14]** **文件监视（R25+R29+R30+R32+U2）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。`Add`=单 path 非递归；**`AddTree`**=递归挂载目录树（不跟随 symlink 目录；运行时新建子目录 auto-add）。**`Remove(path)`**：停止对该 path 的监视（对齐 Go fsnotify.Remove；未监视则 no-op）。`TFsWatchEvent.Name` 在 L0 提供 Wd 时为 **base+name 路径**；`Created`/`Deleted`/`Modified`/`IsDir` 为独立布尔（可同时 true）。**`Kind`**（U2）：主动作 `fwkCreated` > `fwkDeleted` > `fwkModified` > `fwkOther`（布尔仍保留）。**R30**：Linux residual 缓冲跨 Poll 不丢批内事件。kqueue `PLATFORM_WATCH_MAX_FDS=256`。Windows：**S2 Poll** 经 RDCW（platform）；Wine 上事件可能 soft residual，truth=wine-runtime-smoke。
 - **[INV-15]** **位置 IO（R34）**：`IFile.ReadAt`/`WriteAt` 经 `platform_file_pread`/`pwrite`；**不**改变流 `Position`；EOF 外 ReadAt 返回 0。
 
 ---

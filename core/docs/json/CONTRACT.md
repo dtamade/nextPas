@@ -61,9 +61,10 @@ function JsonStringify(const AValue: TJsonValue): string;
 
 - 类型判断：`IsValid`、`IsNull`、`IsBool`、`IsInt`、`IsReal`、`IsStr`、`IsArray`、`IsObject`、`Kind`
 - 标量：`AsBool`、`AsInt`、`AsFloat`、`AsStr`（`TStringView`）
+- 安全出参：`TryAsBool`、`TryAsInt`、`TryAsFloat`、`TryAsStr`（类型匹配时 `True` + out；否则 `False` + 安全默认）
 - 数组：`ArrayLen`、`ArrayGet`
 - 对象：`ObjectGet`、`ObjectHas`、`ObjectLen`、`ObjectKeyAt`、`ObjectValueAt`
-- **非法访问返回安全默认值**（0 / empty / false / invalid view），不抛异常
+- **`As*` 非法访问返回安全默认值**（0 / empty / false / invalid view），不抛异常
 
 ### 2.3 可选子面
 
@@ -84,7 +85,9 @@ function JsonStringify(const AValue: TJsonValue): string;
 | `TJsonValue` 错误类型访问 | 安全默认，不抛 |
 | OOM | allocator 路径 fail-closed（`EOutOfMemoryError` 等） |
 
-`TJsonError` 字段：`Message`、`Offset`、`Line`、`Column`（列名是 **Column**，不是 Col）。
+`TJsonError` 字段：`Message`、`Offset`、`Line`、`Column`；`Col` 为 `Column` 的 property 别名（跨格式统一诊断命名）。
+
+`JsonParse(IReader)` 经 `IoReadAll` 整读后解析，受 `FORMAT_BULK_PARSE_MAX_BYTES`（`nextpas.core.format.limits`，默认 64 MiB）约束；超限抛 `EArgumentError`。
 
 ---
 

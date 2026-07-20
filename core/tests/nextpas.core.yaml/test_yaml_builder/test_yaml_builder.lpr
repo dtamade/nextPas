@@ -3,10 +3,11 @@ program test_yaml_builder;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.text.view,
+  nextpas.core.fs,
   nextpas.core.yaml.types,
   nextpas.core.yaml.builder,
   nextpas.core.yaml;
