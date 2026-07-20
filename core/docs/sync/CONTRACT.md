@@ -4,7 +4,7 @@
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
 **最后更新**：2026-07-20
-**版本**：1.2
+**版本**：1.3
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -118,8 +118,8 @@ end;
 
 | 原语 | 实现要点 | 公开级别 |
 |------|----------|----------|
-| `TMutex` | `platform_mutex_init(..., PLATFORM_MUTEX_ERRORCHECK)`，**非递归** | stable |
-| `TFutexMutex` | CAS 三态 + spin + `platform_wait_address32` | advanced（平台相关） |
+| `TMutex` | `platform_mutex_init(..., PLATFORM_MUTEX_ERRORCHECK)`，**非递归**；实现 `INativeMutex` | stable |
+| `TFutexMutex` | CAS 三态 + spin + address-wait；**仅** `IMutex`（不可配 CondVar） | advanced |
 | `TRWLock` | platform rwlock；`ReleaseRead`→`rdunlock`，`ReleaseWrite`→`wrunlock` | stable |
 | `TCondVar` | platform condvar；**仅**可与标准 `TMutex` 配对 | stable |
 | `TSpinLock` | atomic flag + `CpuPause` / `platform_thread_yield` | stable |
@@ -132,15 +132,15 @@ end;
 
 ### 1.5 CondVar 配对规则
 
-- `ICondVar.Wait` / `WaitTimeout` 通过 `IMutex.NativeHandle` 取得 `TPlatformMutex`
-- `TFutexMutex.NativeHandle` 指向 4 字节 futex state，**禁止**配对
-- 实现：`CheckNotFutexMutex` 在 Wait 路径 raise `ENextPasError`
+- `ICondVar.Wait` / `WaitTimeout` 参数类型为 **`INativeMutex`**（编译期隔离）
+- `NativeHandle` 必须指向完整 `TPlatformMutex`
+- `TFutexMutex` 不实现 `INativeMutex`，无法传入 Wait
 
 ### 1.6 TSyncPool（实验）
 
 - 单元：`nextpas.core.sync.pool`（**不**由门面 re-export）
-- TLS freelist 为进程级 `threadvar`：**一线程同一时间只应使用一个 pool 实例**
-- 冷路径全局栈：nextpas `IMutex`（`TMutex`），不再使用 FPC `TRTLCriticalSection`
+- TLS freelist：每线程链表按 pool `Owner` 隔离（**允许多 pool 同线程**）
+- 冷路径全局栈：nextpas `IMutex`（`TMutex`）
 - `DrainTLS`：线程退出前归还 TLS freelist，避免 heaptrc 假泄漏
 
 ---
@@ -239,3 +239,4 @@ make -C core/tests/nextpas.core.sync test
 | 2026-07-01 | 1.0 | 初始版本（含已过时的递归 Mutex / ILockable 描述） |
 | 2026-07-20 | 1.1 | 以 live source 重写 SSOT；标明 FutexMutex/Pool 级别；删除空 posix_fallback 叙述 |
 | 2026-07-20 | 1.2 | `TSyncPool` 冷路径改 nextpas `IMutex`；移除 FPC CriticalSection 债 |
+| 2026-07-20 | 1.3 | per-pool TLS；INativeMutex；Win compile gate；SCORECARD |
