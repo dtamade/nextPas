@@ -7715,25 +7715,25 @@ begin
     'Go comparison source must use the same nominal bounded-capacity context');
   CheckContains(LGoCompareSource, 'fmt.Println("Platform:", runtime.GOOS, runtime.GOARCH)',
     'Go comparison source must print the platform evidence field');
-  CheckContains(LGoCompareSource, 'Compiler: go build (gc)',
+  CheckContains(LGoCompareSource, 'Compiler flags: go build',
     'Go comparison source must print the compiler-flags evidence field');
-  CheckContains(LGoCompareSource, 'Input: OPS=%d CAPACITY=%d',
+  CheckContains(LGoCompareSource, 'Input size: OPS=1000000; capacity=1024',
     'Go comparison source must print the input-size evidence field');
-  CheckContains(LGoCompareSource, 'Honesty: not bit-identical',
+  CheckContains(LGoCompareSource, 'manual comparison source, not auto-run',
     'Go comparison source must print honesty/envelope baseline guidance');
-  CheckContains(LGoCompareSource, 'C1 chan uint64 1P+1C',
+  CheckContains(LGoCompareSource, 'chan uint64 1P+1C',
     'Go comparison source must mirror the Q5 C1 channel scenario name');
-  CheckContains(LGoCompareSource, 'C2 chan uint64 2P+2C',
+  CheckContains(LGoCompareSource, 'chan uint64 2P+2C',
     'Go comparison source must mirror the Q5 C2 channel scenario name');
-  CheckContains(LGoCompareSource, 'func benchC1()',
+  CheckContains(LGoCompareSource, 'func benchChannelSPSC()',
     'Go comparison source must define the C1 bench function');
-  CheckContains(LGoCompareSource, 'func benchC2()',
+  CheckContains(LGoCompareSource, 'func benchChannelMPMC()',
     'Go comparison source must define the C2 bench function');
-  CheckContains(LGoCompareSource, 'sink = benchC1()',
+  CheckContains(LGoCompareSource, 'sink = benchChannelSPSC()',
     'Go comparison source must initialize the consumed-value sink from C1');
-  CheckContains(LGoCompareSource, 'sink += benchC2()',
+  CheckContains(LGoCompareSource, 'sink += benchChannelMPMC()',
     'Go comparison source must accumulate the C2 consumed-value sink');
-  CheckNotContains(LGoCompareSource, 'sink = benchC1() ^',
+  CheckNotContains(LGoCompareSource, 'sink = benchChannelSPSC() ^',
     'Go comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LGoCompareSource, 'for value := uint64(1); value <= Ops; value++ {',
     'Go comparison source must use 1..OPS inclusive for C1 input values');
