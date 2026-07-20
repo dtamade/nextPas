@@ -4,7 +4,7 @@
 **层级**：表格格式工具（依赖 L0 `errors`/`mem` + L1 `io.intf`/`io.util`）；**不**进入 `TConfigFormat`
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
 **最后更新**：2026-07-20
-**版本**：2.1（+ `IReader` 构造；对齐 Go `encoding/csv.NewReader`）
+**版本**：2.2（`IReader` 分块 refill 真流式）
 
 ---
 
@@ -73,7 +73,8 @@ function CsvParseWith(const AInput: string; const AAllocator: TMemAllocator; ...
 ## 4. Lifetime / 所有权
 
 - `TCsvReader` 内部持有输入 `string` 引用，防止悬垂
-- `Init`/`Create(IReader)`：调用 `IoReadAll` 读完全部字节后转为 string 再解析（非真正流式 token 拉取）；`nil` reader → `EArgumentError`
+- `Init`/`Create(IReader)`：**分块 refill**（默认 8KiB）从 `IReader` 追加缓冲；`ReadRow`/quoted 字段可跨块；`nil` reader → `EArgumentError`
+- string 模式：`FReader=nil`，整段内存解析
 - `ReadRow`/`ReadAll` 返回的字段字符串为 **拥有副本**
 - record 值语义；`Init`/`Done` 或 `Create` 路径按实现使用
 - Writer 内部 buffer；`ToString` 产出独立 string

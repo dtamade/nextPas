@@ -80,9 +80,52 @@ begin
   CheckEqual('Pascal', LRows[1][0], 'CsvParseWith field value visible');
 end;
 
+type
+  { Emits at most FChunk bytes per Read — forces multi-refill streaming. }
+  TChunkedReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPos: SizeUInt;
+    FChunk: SizeUInt;
+  public
+    constructor Create(const AData: TBytes; AChunk: SizeUInt);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+constructor TChunkedReader.Create(const AData: TBytes; AChunk: SizeUInt);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 0;
+  if AChunk = 0 then
+    FChunk := 1
+  else
+    FChunk := AChunk;
+end;
+
+function TChunkedReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvail, LTake: SizeUInt;
+begin
+  if FPos >= SizeUInt(Length(FData)) then
+    Exit(0);
+  LAvail := SizeUInt(Length(FData)) - FPos;
+  LTake := ACount;
+  if LTake > FChunk then
+    LTake := FChunk;
+  if LTake > LAvail then
+    LTake := LAvail;
+  if LTake = 0 then
+    Exit(0);
+  Move(FData[FPos], ABuf, LTake);
+  Inc(FPos, LTake);
+  Result := LTake;
+end;
+
 procedure TestFacadeExposesReaderSurface;
 var
   LStream: IStream;
+  LChunked: IReader;
   LReader: TCsvReader;
   LFields: TStringArray;
   LRows: TStringMatrix;
@@ -103,6 +146,19 @@ begin
   LRows := TCsvReader.Create(LStream as IReader).ReadAll;
   CheckEqual(Int64(2), Int64(Length(LRows)), 'IReader ReadAll rows');
   CheckEqual('1', LRows[1][0], 'IReader ReadAll value');
+
+  { Chunk size 1: every field and quote boundary spans refills. }
+  LChunked := TChunkedReader.Create(BytesFromString(
+    'id,note' + #10 + '1,"hello, ""world"""' + #10 + '2,plain' + #10), 1);
+  LReader := TCsvReader.Create(LChunked);
+  Check(LReader.ReadRow(LFields), 'chunked header');
+  CheckEqual('id', LFields[0], 'chunked header 0');
+  Check(LReader.ReadRow(LFields), 'chunked quoted row');
+  CheckEqual('1', LFields[0], 'chunked id');
+  CheckEqual('hello, "world"', LFields[1], 'chunked quoted field across refills');
+  Check(LReader.ReadRow(LFields), 'chunked plain row');
+  CheckEqual('plain', LFields[1], 'chunked plain field');
+  CheckEqual(False, LReader.HasError, 'chunked stream clean');
 
   LRaised := False;
   try

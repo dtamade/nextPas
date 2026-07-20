@@ -1,4 +1,4 @@
-# csv × Go / Rust 对标（Wave I）
+# csv × Go / Rust 对标（Wave I–J）
 
 **状态日期**：2026-07-20  
 **范围**：`nextpas.core.csv`  
@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.8** | RFC4180；`TCsvError` 行/列/offset；in-band 错误 |
-| **规模 Scale** | **8.5** | Reader/Writer + delimiter/comment/trim + **IReader** |
-| **综合** | **8.6** | 与 Go Reader 形状对齐；非真正按块流式 token |
+| **质量 Quality** | **9.0** | RFC4180；`TCsvError`；chunked IReader 跨块 quoted |
+| **规模 Scale** | **9.0** | Reader/Writer + delimiter/comment/trim + **流式 IReader** |
+| **综合** | **9.0** | 对齐 Go `encoding/csv` Reader 形状 |
 
 ---
 
@@ -21,23 +21,23 @@
 | 能力 | Go `encoding/csv` | nextpas | 状态 |
 |------|-------------------|---------|------|
 | NewReader(string) | NewReader(r io.Reader) | `Create(string)` | Done |
-| NewReader(io.Reader) | ✓ | `Create(IReader)`（ReadAll 后解析） | Done |
+| NewReader(io.Reader) | ✓ | `Create(IReader)` 分块 refill | Done |
 | Read / ReadAll | ✓ | `ReadRow` / `ReadAll` | Done |
 | Comma / Comment | ✓ | Delimiter / Comment | Done |
 | FieldsPerRecord | ✓ | ✓ | Done |
 | LazyQuotes | ✓ | Partial（实现取舍） | Partial |
 | Writer | ✓ | `TCsvWriter` | Done |
 | 结构化错误 | ParseError | `TCsvError` | Done |
-| 真正流式大文件 | 按块读 | 当前整读入 string | Partial |
+| 真正流式大文件 | 按块读 | 8KiB refill + 跨块 quoted | Done |
 
 ---
 
-## 本轮（Wave I）关闭
+## 本轮关闭
 
 | 项 | 结论 |
 |----|------|
-| `IReader` 入口 | **Done** — `Init`/`Create(IReader)`；nil → `EArgumentError` |
-| 超大文件流式 | Future（需真流式字段扫描） |
+| `IReader` 入口 | **Done** — Wave I |
+| 分块 refill / 跨块 quoted | **Done** — Wave J（chunk=1 测试锁） |
 
 ---
 
