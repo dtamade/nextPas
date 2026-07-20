@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **25 platform-gate `ci-matrix`** (+… +pipe +resource; GHA 29730911054 pass=26 fail=0); wine 24 secondary |
+| Real Windows GHA | **25 platform-gate `ci-matrix`** (+… +pipe +resource; GHA 29730911054 pass=26 fail=0); wine 24 secondary; **pty candidate** Batch-20 |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -324,7 +324,9 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-15 S1**: Windows `platform.watch` create/add/close via CreateFileW + DirHandle; poll still UNSUPPORTED. Wine smoke updated. Queue: S2 poll RDCW. |
 | 2026-07-20 | **Batch-19**: Windows scripts candidate **+platform.resource** (no promote until GHA green). |
 | 2026-07-20 | **Batch-19b**: promote **25 platform-gate** set (+resource) after GHA pass=26 (run 29730911054 @ `e0441ae62`; resource PASS; +mem.host in total). |
-| 2026-07-20 | **Batch-15 S2**: Windows watch `ReadDirectoryChangesW` poll (one event + timeout); wine smoke create/timeout. Queue: S3 rename/delete; optional pty matrix candidate. |
+| 2026-07-20 | **Batch-15 S2**: Windows watch `ReadDirectoryChangesW` poll (one event + timeout); wine smoke create/timeout. Queue: S3 rename/delete. |
+| 2026-07-20 | **Batch-20**: Windows scripts candidate **+platform.pty** (no promote until GHA green). |
+| 2026-07-20 | **test**: Linux watch `detect delete` drain residuals before unlink (R30 multi-event shadow fix). |
 
 ---
 

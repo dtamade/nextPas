@@ -44,7 +44,8 @@ GHA **`ci-matrix`** for the **documented 25 platform gates** in
 | Count | Meaning |
 | --- | --- |
 | **25 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which`+`dl`+`args`+`pipe`+`resource` + iocp + poller + io/socket real. `resource` PASS on GHA **29730911054** @ `e0441ae62` (pass=26 fail=0 with mem.host). |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 26 — do **not** call mem.host a platform facade gate. |
+| **+pty candidate** | Batch-20: `platform.pty` in scripts only — **not** ci-matrix until GHA green. |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 26–27 — do **not** call mem.host (or unpromoted candidates) a platform facade promote. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -57,7 +58,7 @@ Allowed wording:
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
 - `ci-matrix` for the documented **25 platform gates** only (ROADMAP)
-- do **not** say “26-gate platform ci-matrix” when the extra is only mem.host
+- do **not** say “26-gate platform ci-matrix” when the 26th is only mem.host or an unpromoted candidate
 
 ## Current macOS truth
 
