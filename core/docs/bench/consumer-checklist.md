@@ -6,7 +6,8 @@
 C3：Quiet + 50ms/5 samples + SaveToJSON  
 B32–B40：消费侧扩面 + lockfree 双 suite  
 B41：维护收口（文档水位）；EBR 仅备忘 — [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)  
-B42：checklist 模块 Makefile 统一到 `core/build/projects/...`（log/regex/csv/xml/vec）
+B42：checklist 模块 Makefile 统一到 `core/build/projects/...`（log/regex/csv/xml/vec）  
+B43：**Maintenance Idle** — 默认不扩面；回归 / 明确授权再动
 
 ## 检查项
 
