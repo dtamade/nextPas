@@ -52,6 +52,13 @@ fn layout_vsplit3(total_h: i32) -> (i32, i32, i32) {
     (h0, h1, h2)
 }
 
+fn layout_hsplit3(total_w: i32) -> (i32, i32, i32) {
+    let w0 = 10;
+    let w2 = 10;
+    let w1 = (total_w - w0 - w2).max(0);
+    (w0, w1, w2)
+}
+
 fn overlay_merge(base: &[u8], dest: &mut [u8], marks: &[u8], mark_ch: u8) -> usize {
     let mut n = 0;
     for i in 0..base.len() {
@@ -125,6 +132,15 @@ fn main() {
     }
     black_box(sink);
     report("LayoutVSplit3", t0.elapsed(), LAYOUT_ITERS);
+
+    let t0 = Instant::now();
+    sink = 0;
+    for _ in 0..LAYOUT_ITERS {
+        let (a, b, c) = layout_hsplit3(black_box(200));
+        sink = sink.wrapping_add((a + b + c) as usize);
+    }
+    black_box(sink);
+    report("LayoutHSplit3", t0.elapsed(), LAYOUT_ITERS);
 
     let base_ov = vec![b'.'; OV_W * OV_H];
     let mut dest_ov = vec![0u8; OV_W * OV_H];
