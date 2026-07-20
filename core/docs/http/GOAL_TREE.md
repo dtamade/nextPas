@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-20 (H2P-3 TLS-ALPN h2 e2e green; CLAIM package still No; NEXT → ROADMAP R1)
+> Last updated: 2026-07-21 (R1 claim review: maintain H1 epoll scale-ready; package No; NEXT → ROADMAP STOP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.

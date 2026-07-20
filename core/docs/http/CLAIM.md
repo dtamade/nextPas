@@ -1,7 +1,7 @@
-# nextpas.core.http — What we claim (R0)
+# nextpas.core.http — What we claim (R1)
 
 **Authority**: 本文件是**对外/对内宣称**的冻结表述。证据细节见 `BENCHMARKS.md`、`REPRO.md`、`CONTRACT.md`。执行顺序见 `ROADMAP.md`。
-**Reviewed**: 2026-07-20（Parity Plus Era G/E/Q3 后 **R0**）
+**Reviewed**: 2026-07-21（**R1** — H2P-1..3 后 claim 评审）
 **Host class**: Linux amd64，同机 harness；**不是**跨机排行榜。
 
 ---
@@ -30,7 +30,7 @@
 
 | 宣称 | 状态 | 原因 |
 |------|------|------|
-| Scale-ready (H1/**H2** package) | **No** | H2 mux mid ~3k / press ~11.5k evidence only；形状 ≠ H1 multi-conn KPI；无 H2 KPI 门闩 |
+| Scale-ready (H1/**H2** package) | **No** | H2 mux mid ~3k / press ~11.5k **evidence only**；形状 ≠ H1 multi-conn KPI；**无** H2 官方 KPI 门闩（≥0.8× 某 peer 等） |
 | Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
 | Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
@@ -52,31 +52,57 @@
 
 | Residual | 说明 |
 |----------|------|
-| H2 package scale | H2P-1/2 mux 证据；非 scale-ready 包 |
-| H2 TLS ALPN | **H2P-3 Met** — facade e2e GET/POST/seq；OpenSSL per-conn ALPN |
+| H2 package scale | H2P-1/2 mux 证据；非 scale-ready 包；禁止 H1/H2 直接 RPS 比值 |
+| H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL per-conn ALPN |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |
 | Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99（nearest-rank）；仍非 scale KPI |
+| `test_http_tls_real` | 旁路：仍 `TThread` 编译阻断（预存）；生产 e2e 以 h2_tls_alpn / https_smoke 为准 |
 
 ---
 
-## 5. R0 决议
+## 5. R0 决议（历史；维持）
 
 | 问题 | 决议 |
 |------|------|
 | 是否维持 *Scale-ready (H1 server, Linux epoll)*？ | **Yes — maintain** |
 | p99 是否作为 scale-ready 必要条件？ | **Yes**（与 RPS、ladder 并列） |
-| 是否升级为 H1+H2 package claim？ | **No**（H2P-1..3 Met；仍缺 H2 KPI 门闩与产品需求 → R1 默认 No） |
+| 是否升级为 H1+H2 package claim？ | **No**（当时 H2P parked） |
 | 是否宣称 HTTPS scale-ready？ | **No** |
-| Parity Plus / H2P 是否 STOP？ | **H2P-3 Done** → **R1** 评审或 idle STOP；无需求不升 package |
 
-**Done when**：本文件 + ROADMAP R0 landed；REPRO Claim 行与本文件一致。 **Met (2026-07-20).**
+**R0 Met (2026-07-20).**
 
 ---
 
-## 6. 与其他文档
+## 6. R1 决议（H2P 后；本波）
+
+**触发**：H2P-1（mid 规格/证据）、H2P-2（press 线性）、H2P-3（TLS-ALPN e2e）均 landed。
+
+**抽检（2026-07-21，非 E3 全量）**：
+
+| Gate | 结果 |
+|------|------|
+| `test_http_h2_tls_alpn` | **4/4** 0 unfreed |
+| `test_http_h2_facade` | **5/5** 0 unfreed |
+| `test_http_https_smoke` | **3/3** 0 unfreed |
+
+| 问题 | 决议 |
+|------|------|
+| 是否维持 *Scale-ready (H1 server, Linux epoll)*？ | **Yes — maintain**（E3 表未失效；本波未重跑 E3） |
+| 是否升级为 H1+H2 package claim？ | **No** — H2 仅有 mux/evidence + 正确性 e2e；**缺**与 H1 同构的 KPI 门闩与产品升格需求 |
+| 是否宣称 HTTPS H1/H2 scale-ready？ | **No** |
+| H2 TLS ALPN 是否可写进 residual 为 Met？ | **Yes**（正确性；非 scale） |
+| 本模块默认执行态？ | **STOP** — 无新需求、不空转 H3、不假 package scale-ready |
+
+**升 package 的前置（未来；非本波）**：冻结 H2 官方 KPI 定义（同机 peer 或绝对阈值）+ multi-run 表 + REPRO 命令 + 产品明确要求。
+
+**Done when**：本文件 R1 段 + ROADMAP R1 landed + REPRO Claim 行对齐 + 默认 STOP。 **Met (2026-07-21).**
+
+---
+
+## 7. 与其他文档
 
 | 文档 | 角色 |
 |------|------|
@@ -84,4 +110,4 @@
 | **REPRO.md** | 如何在 1h 内复核 |
 | **BENCHMARKS.md** | 数字表与日期 |
 | **CONTRACT.md** | 行为契约与 residual 细节 |
-| **ROADMAP.md** | 下一波执行（R0 后默认 STOP） |
+| **ROADMAP.md** | 下一波执行（R1 后默认 **STOP**） |
