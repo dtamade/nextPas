@@ -133,7 +133,8 @@ SMP 包含 CJK Extension B、emoji、音乐符号等。实际文本中 SMP 码�
 
 | 操作 | ns/op | ops/s | 备注 |
 |------|-------|-------|------|
-| CaseFoldSimple ASCII-200 | 4,043 | 247K | 逐码点查表 |
+| CaseFoldSimple ASCII-200 | ~4µs | — | 逐码点循环 |
+| UTF8CaseFoldSimple ASCII-200 | **447** | — | 整串（2026-07-20 SCORECARD） |
 | CaseFoldSimple BMP-Latin-50 | 1,496 | 669K | 同上 |
 | IsAsciiString ASCII-200 | 49 | 20.5M | 8 字节并行 |
 | IsAsciiString BMP-Latin-50 | 1.5 | 687M | 首字节快速拒绝 |
