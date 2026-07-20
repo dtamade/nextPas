@@ -489,7 +489,8 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Kind table: ok / canceled / timeout / refused / reset / unreachable / dns / temporary / invalid / unknown.
 - Portable codes use `PLATFORM_ERR_*`; cancel uses `NET_ERR_CANCELED` (125, async convention).
 - **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
-- Lab-only: `AsyncTcpDialWithDnsFeed`. LocalAddr bind-before-connect: **not** exposed this wave.
+- Lab-only: `AsyncTcpDialWithDnsFeed`.
+- **LocalAddr (Q25)**: `TAsyncTcpDialOptions.LocalAddr` — bind-before-connect when `IP <> ''` and family matches remote attempt (Go `Dialer.LocalAddr` subset). Empty IP = unset. No Control/MPTCP.
 - Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
 
 ### Cancel vocabulary bridge (Q14)

@@ -44,6 +44,7 @@
 - [x] Q22 async-windows-native-smoke CI step (continue-on-error)
 - [x] Q23 multi-host public HE matrix (opt-in)
 - [x] Q24A windows smoke streak observer; Q24B fail-closed deferred until promote-ready
+- [x] Q25 Dial LocalAddr bind-before-connect + Default() managed-safe options
 
 ## 性能 scorecard（同机 2026-07-20）
 

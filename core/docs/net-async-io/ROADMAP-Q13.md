@@ -19,6 +19,7 @@
 | **Q22** | Windows native async smoke 挂钩 | `async-windows-native-smoke.sh` + CI continue-on-error | **done** |
 | **Q23** | 多 host 公网 HE 矩阵 | 3 host + v4/v6 attempt 分计；可选 PreferIPv6First 遍 | **done** |
 | **Q24** | Windows fail-closed 就绪 | streak 观测脚本；**仅** streak 达标后去 continue-on-error | **A done / B deferred** |
+| **Q25** | Dial LocalAddr bind-before-connect | Go Dialer.LocalAddr subset；family match；0 leak | **done** |
 
 ## Q13 细节
 
@@ -32,7 +33,7 @@
 ### Dial 产品默认
 
 - 源码头注释 + CONTRACT：推荐 `AsyncTcpDial`，`AsyncTcpConnect` = HE-lite legacy
-- LocalAddr：本轮 **跳过**（platform bind-before-connect 未作为稳定 API 暴露）
+- LocalAddr：~~本轮跳过~~ → **Q25** bind-before-connect 已接线
 
 ### 不做
 
