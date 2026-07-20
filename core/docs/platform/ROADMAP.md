@@ -336,6 +336,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-23**: Windows multi-dir watch slots (8) for fs.watch multi-Add; add returns wd; remove(wd) works. |
 | 2026-07-20 | **Owner note**: `async-windows-native-smoke` job step is **net/async** lane (`core/docs/net-async-io/WINDOWS-NATIVE-ASSESSMENT.md`); platform matrix green does not require that step. |
 | 2026-07-20 | **Residual**: real-Windows RDCW create/delete events not yet observed in GHA smoke (hard assert deferred). |
+| 2026-07-20 | **fix(RDCW)**: `ReadDirectoryChangesW` async path must pass `lpBytesReturned=NULL` (MSDN); re-enable hard create/delete on real Windows smoke. |
 
 ---
 
