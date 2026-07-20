@@ -61,7 +61,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix-candidate; 20 platform gates promoted + which candidate; not full-host Windows parity'
+Write-Output 'truth=ci-matrix; documented 21 platform gates (+which); not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -89,7 +89,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-20-gate-set"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-21-platform-gate-set"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'
