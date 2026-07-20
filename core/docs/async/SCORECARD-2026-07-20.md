@@ -13,7 +13,7 @@
 | D3 双栈 HE | 8.5 | 严格 CAD + DNS race + lab feed |
 | D4 错误可判定 | **7.5→8.0** | **ClassifyNetError (Q13)** |
 | D5 平台证据 | **8.0** | accept/connect smoke + kqueue accept/connect；Windows still wine |
-| D6 性能诚实 | 7.0 | metric 行；无同 harness A/B |
+| D6 性能诚实 | **7.5** | Q18 same-host peer table; not API-equivalent |
 | D7 API 可用性 | 7.5 | Dial 推荐路径文档化 |
 | D8 生命周期 | 9.0 | class loop + 0 leak 纪律 |
 | **综合** | **~8.1** | 较 07-19 的 ~8.6 更严（按 D 轴诚实重估） |
@@ -37,10 +37,19 @@
 - [x] Q15 AsyncUdpBind + SendTo/RecvFrom + test_net_async_udp
 - [x] Q16 Pool AcquireAsync + AsyncTcpDial + test_net_async_pool
 - [x] Q17 accept/connect smoke + kqueue expand + WINDOWS-NATIVE-ASSESSMENT
-- [ ] Q18 见 ROADMAP-Q13.md
+- [x] Q18 async-bench-parity.sh + peer fixtures + SCORECARD 表
 
-## 性能 scorecard
+## 性能 scorecard（同机 2026-07-20）
 
-诚实声明：非同 harness 对照 Go/Rust。CI 仅要求 metric `> 0`。
+运行：`bash core/scripts/async-bench-parity.sh`
 
-运行：`make -C core/tests/nextpas.core.async/test_async_bench clean test`
+**诚实声明**：peer 为 std 通道/互斥/定时器创建量级参考，**不是** TAsyncLoop API 等价；**禁止**据此宣称「快于 Go/Rust」。CI 不强制本脚本。
+
+| Metric | nextpas | go peer | rust peer |
+|--------|---------|---------|-----------|
+| `post_ops_per_s` | ~3.2e5 | ~1.2e7 | ~1.3e8 |
+| `timer_schedule_ops_per_s` | ~6.2e6 | ~1.7e6 | ~1.3e8 |
+| `mutex_ops_per_s` | ~1.6e7 | ~7.3e7 | ~7.7e7 |
+| `channel_ops_per_s` | ~4.7e5 | ~1.6e7 | ~3.2e7 |
+
+truth=`same-host-order-of-magnitude`

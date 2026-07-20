@@ -56,6 +56,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Create(APath, APerm)` | 创建新文件（已存在则截断），返回 `IFile` |
 | `OpenLocked(APath[, Mode, Kind])` | 打开并阻塞获取整文件锁（`flkExclusive`/`flkShared`） |
 | `CopyFile(ASrc, ADst)` | 复制文件，返回写入字节数 |
+| `Watch` / `IFsWatcher` | 文件监视；`Add` 单 path；**`AddTree`** 递归目录树（Unix） |
 
 ### 文件锁（IFile）
 
@@ -190,9 +191,10 @@ make -C core/tests/nextpas.core.fs/test_fs_glob clean test
 make -C core/tests/nextpas.core.fs/test_fs_idir clean test
 make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
 make -C core/tests/nextpas.core.fs/test_fs_text clean test
+make -C core/tests/nextpas.core.fs/test_fs_watch clean test
 ```
 
-333 个测试，heaptrc 零泄漏。
+含 watch **11** 在内，heaptrc 零泄漏。
 
 ### 特殊行为说明
 

@@ -4,8 +4,9 @@
 
 抽检日期：2026-07-20 · 抽检人：bench lane  
 C3：Quiet + 50ms/5 samples + SaveToJSON  
-B32–B37：消费侧扩面与 C3  
-B38：+2 **xml + atomic**（C3 + API 对齐 / 轻量 C2）→ checklist **16** 模块
+B32–B38：消费侧扩面  
+B39：+2 **bytes + sync**（C3 + C2）→ checklist **18** 模块  
+B40 候选：`lockfree`（matched + micro 双 suite，单独切片）
 
 ## 检查项
 
@@ -35,19 +36,22 @@ B38：+2 **xml + atomic**（C3 + API 对齐 / 轻量 C2）→ checklist **16** �
 | `nextpas.core.text.number/bench_number` | ✅ | ✅ | ✅ | ✅ | ✅ | `number/IntToBuffer/*`；`build/bench-number.json` |
 | `nextpas.core.io/bench_io` | ✅ | ✅ | ✅ | ✅ | ✅ | `Copy/64KB`；`build/bench-io.json` |
 | `nextpas.core.csv/bench_csv` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/1K-rows`；`build/bench-csv.json` |
-| `nextpas.core.xml/bench_xml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small\|large`；TXmlDocument.Parse+Done；`build/bench-xml.json`（B38） |
-| `nextpas.core.atomic/bench_atomic` | ✅ | ✅ | ✅ | ✅ | ✅ | `atomic/FetchAdd32` 等；TAtomicUInt32.Create；`build/bench-atomic.json`（B38） |
+| `nextpas.core.xml/bench_xml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small\|large`；`build/bench-xml.json` |
+| `nextpas.core.atomic/bench_atomic` | ✅ | ✅ | ✅ | ✅ | ✅ | `atomic/FetchAdd32` 等；`build/bench-atomic.json` |
+| `nextpas.core.bytes/bench_bytes` | ✅ | ✅ | ✅ | ✅ | ✅ | `bytes/SpanEqual/1KB` 等；Quiet+50ms/5；`build/bench-bytes.json`（B39） |
+| `nextpas.core.sync/bench_sync` | ✅ | ✅ | ✅ | ✅ | ✅ | `sync/Mutex/LockUnlock` 等；Quiet+50ms/5；`build/bench-sync.json`（B39） |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · B38）
+## 汇总（2026-07-20 · B39）
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **16** 模块 |
-| C1–C5 | **16/16 全 ✅** |
+| 抽检面 | **18** 模块 |
+| C1–C5 | **18/18 全 ✅** |
 | C3 | Quiet + 50ms + 5 samples + `build/bench-*.json` |
 | scorecard | 11 track（含 binsearch、lookup） |
+| 下一切片 | lockfree（matched + micro） |
 | EBR | 未做（独立设计） |
 
 ## 可复制片段（CI 友好）

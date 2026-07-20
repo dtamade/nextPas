@@ -1,7 +1,9 @@
 program bench_bytes;
 {$I nextpas.core.settings.inc}
 uses
+  SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base,
   nextpas.core.base, nextpas.core.bytes.base, nextpas.core.bytes.ops,
   nextpas.core.bytes.binary, nextpas.core.bytes.builder;
 const SIZE_1MB = 1024 * 1024;
@@ -43,13 +45,22 @@ begin LB := CreateBytesBuilder(65536); for LJ := 0 to 65535 do LB.AppendByte(Byt
 procedure BenchTryReadCursor4KB(const ACtx: IBenchContext);
 var LS: TByteSpan; LVal: UInt32;
 begin LS := TByteSpan.FromBytes(GSpanData); while TryReadUInt32LE(LS, LVal) do { }; ACtx.SetBytes(4096); end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
   InitData;
-  LSuite := TBenchSuite.Create('bytes');
-  LSuite.Add('SpanEqual/1KB', @BenchSpanEqual1KB).Add('SpanIndexOf/4KB', @BenchSpanIndexOf4KB)
-    .Add('SwapUInt64', @BenchSwapUInt64).Add('ReadUInt32LE', @BenchReadUInt32LE)
-    .Add('Builder/Append1MB', @BenchBuilderAppend1MB).Add('Builder/AppendByte/64KB', @BenchBuilderAppendByte64KB)
-    .Add('TryReadCursor/4KB', @BenchTryReadCursor4KB);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('bytes')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('bytes/SpanEqual/1KB', @BenchSpanEqual1KB)
+    .Add('bytes/SpanIndexOf/4KB', @BenchSpanIndexOf4KB)
+    .Add('bytes/SwapUInt64', @BenchSwapUInt64)
+    .Add('bytes/ReadUInt32LE', @BenchReadUInt32LE)
+    .Add('bytes/Builder/Append1MB', @BenchBuilderAppend1MB)
+    .Add('bytes/Builder/AppendByte/64KB', @BenchBuilderAppendByte64KB)
+    .Add('bytes/TryReadCursor/4KB', @BenchTryReadCursor4KB)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-bytes.json');
 end.

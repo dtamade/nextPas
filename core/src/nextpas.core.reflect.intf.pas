@@ -49,6 +49,9 @@ type
     function AddDynArrayField(ATypeID: TTypeID; const AName: string;
       AOffset: PtrUInt; AElementKind: TFieldKind; AElementSize: SizeUInt;
       ADynArrayTypeInfo: Pointer; AElementTypeID: TTypeID = 0): Boolean;
+    function AddRecordField(ATypeID: TTypeID; const AName: string;
+      AOffset: PtrUInt; ASubTypeID: TTypeID;
+      AFlags: TFieldFlags = []): Boolean;
     function FindType(const AName: string): PTypeDef;
     function FindTypeByID(AID: TTypeID): PTypeDef;
     function GetTypeID(const AName: string): TTypeID;
