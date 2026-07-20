@@ -9,8 +9,9 @@ program test_mem_cross_os_compile_gate;
 
 {$I nextpas.core.settings.inc}
 
-{$IF not defined(NEXTPAS_WINDOWS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_LINUX)}
-  {$fatal cross-os compile gate expects NEXTPAS_WINDOWS, NEXTPAS_FREEBSD, or NEXTPAS_LINUX}
+{$IF not defined(NEXTPAS_WINDOWS) and not defined(NEXTPAS_FREEBSD)
+    and not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS)}
+  {$fatal cross-os compile gate expects NEXTPAS_WINDOWS, NEXTPAS_FREEBSD, NEXTPAS_LINUX, or NEXTPAS_MACOS}
 {$ENDIF}
 
 uses

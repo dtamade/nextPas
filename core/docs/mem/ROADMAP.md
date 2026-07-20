@@ -165,13 +165,14 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | G2 | 门面批 2：mimalloc/mmap 移出 re-export | **done** 2026-07-20 |
 | G3 | blockpool.growable **KEEP** 决策 | **done** 见 [GROWABLE-KEEP-2026-07-20.md](GROWABLE-KEEP-2026-07-20.md) |
 | G4 | FreeMemOf 样板 json.parser + toml.parser | **done** 2026-07-20 |
-| G5 | 多 host 编译门常绿 | **done** 2026-07-20（`test_mem_cross_os_compile_gate`；真机 runtime 仍红点驱动） |
+| G4.x | FreeMemOf `collections.node` TNodeManager | **done** 2026-07-20 |
+| G5 | 多 host 编译门常绿 | **done** 2026-07-20（Linux FORCE_HOST + host-runtime） |
+| G5.x | Darwin/Windows **真机** mem host-runtime 进 CI matrix | **done** 2026-07-20 见 [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md) |
 | G6 | scorecard/soak 证据入口 | **done**（README / SCORECARD） |
 | G7 | CONSUMER 观测快照刷新 | **done** 2026-07-20 §6.2 |
 
-**Steady 之后默认**: 只修回归 · D3 谁改谁顺手 · cross-OS 有红再开。  
-禁止全仓 FreeMem 扫、禁止 Phase 29、禁止误删 growable。  
-可选远景：G4.x `collections.node` FreeMemOf（需 collections owner）。
+**Steady 之后默认**: 只修回归 · D3 谁改谁顺手 · cross-OS/GHA 有红再开。
+禁止全仓 FreeMem 扫、禁止 Phase 29、禁止误删 growable。
 
 ---
 

@@ -47,6 +47,7 @@ MODULE_ENTRIES=(
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
   "platform.socket.windows_real tests/nextpas.core.platform.socket/test_platform_socket_windows_real"
+  "mem.host_runtime tests/nextpas.core.mem/test_mem_cross_os_compile_gate host-runtime"
 )
 
 pass_count=0
@@ -63,7 +64,14 @@ echo
 
 for entry in "${MODULE_ENTRIES[@]}"; do
   name="${entry%% *}"
-  dir="${entry#* }"
+  rest="${entry#* }"
+  if [[ "$rest" == *" "* ]]; then
+    dir="${rest% *}"
+    target="${rest##* }"
+  else
+    dir="$rest"
+    target="test"
+  fi
   if [[ ! -d "$dir" ]]; then
     echo "FAIL $name : missing directory $dir"
     fail_count=$((fail_count + 1))
@@ -71,8 +79,8 @@ for entry in "${MODULE_ENTRIES[@]}"; do
     continue
   fi
 
-  echo "=== real-windows: $name ($dir) ==="
-  if make -C "$dir" clean test; then
+  echo "=== real-windows: $name ($dir target=$target) ==="
+  if make -C "$dir" clean "$target"; then
     echo "PASS $name"
     pass_count=$((pass_count + 1))
   else
@@ -85,7 +93,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-19-gate-set"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=platform-19+mem-host-runtime"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"
