@@ -5,8 +5,8 @@ program test_winssl_mtls_e2e_local;
 
 uses
   {$IFDEF WINDOWS}Windows, WinSock2,{$ENDIF}
-  SysUtils, Classes,
-  
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 

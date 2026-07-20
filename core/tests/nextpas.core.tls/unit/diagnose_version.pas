@@ -3,7 +3,7 @@ program diagnose_version;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core;
 
 var
@@ -13,14 +13,14 @@ var
 begin
   WriteLn('=== OpenSSL Version Diagnostic ===');
   WriteLn;
-  
+
   LoadOpenSSLCore;
-  
+
   if TOpenSSLLoader.IsModuleLoaded(osmCore) then
   begin
     WriteLn('OpenSSL loaded successfully');
     Version := GetOpenSSLVersionString;
-    
+
     WriteLn('Version string: "', Version, '"');
     WriteLn('Length: ', Length(Version));
     WriteLn('Bytes: ');
@@ -34,6 +34,6 @@ begin
   end
   else
     WriteLn('Failed to load OpenSSL');
-    
+
   ReadLn;
 end.

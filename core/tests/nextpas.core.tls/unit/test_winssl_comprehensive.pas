@@ -5,7 +5,7 @@ program test_winssl_comprehensive;
 
 {$IFDEF WINDOWS}
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
@@ -85,29 +85,29 @@ var
   LLib: ISSLLibrary;
 begin
   WriteLn('Test 1: Library Creation and Availability');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
-    
+
     if LLib <> nil then
     begin
       Pass('WinSSL library created');
-      
+
       if LLib.Initialize then
         Pass('WinSSL is available on this system')
       else
         Fail('WinSSL availability', 'Library reports not available');
-        
+
       Pass('Version: ' + LLib.GetVersionString);
     end
     else
       Fail('Library creation', 'GetLibraryInstance returned nil');
-      
+
   except
     on E: Exception do
       Fail('Library creation', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -120,10 +120,10 @@ var
   LContext: ISSLContext;
 begin
   WriteLn('Test 2: Context Creation');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
-    
+
     // Test 2.1: Client context
     LContext := LLib.CreateContext(sslCtxClient);
     if LContext <> nil then
@@ -136,7 +136,7 @@ begin
     end
     else
       Fail('Client context', 'CreateContext returned nil');
-    
+
     // Test 2.2: Server context
     LContext := LLib.CreateContext(sslCtxServer);
     if LContext <> nil then
@@ -149,12 +149,12 @@ begin
     end
     else
       Fail('Server context', 'CreateContext returned nil');
-      
+
   except
     on E: Exception do
       Fail('Context creation', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -168,11 +168,11 @@ var
   LVersions: TSSLProtocolVersions;
 begin
   WriteLn('Test 3: Protocol Version Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 3.1: Set TLS 1.2 only
     LContext.SetProtocolVersions([sslProtocolTLS12]);
     LVersions := LContext.GetProtocolVersions;
@@ -180,7 +180,7 @@ begin
       Pass('TLS 1.2 version set')
     else
       Fail('Protocol versions', 'TLS 1.2 not in result');
-    
+
     // Test 3.2: Set TLS 1.2 and 1.3
     LContext.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
     LVersions := LContext.GetProtocolVersions;
@@ -188,17 +188,17 @@ begin
       Pass('TLS 1.2 and 1.3 versions set')
     else
       Fail('Protocol versions', 'Expected both TLS 1.2 and 1.3');
-    
+
     // Test 3.3: Set all versions
-    LContext.SetProtocolVersions([sslProtocolSSL3, sslProtocolTLS10, 
+    LContext.SetProtocolVersions([sslProtocolSSL3, sslProtocolTLS10,
                                   sslProtocolTLS11, sslProtocolTLS12, sslProtocolTLS13]);
     Pass('All protocol versions set');
-    
+
   except
     on E: Exception do
       Fail('Protocol versions', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -212,11 +212,11 @@ var
   LMode: TSSLVerifyModes;
 begin
   WriteLn('Test 4: Verify Mode Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 4.1: Verify peer
     LContext.SetVerifyMode([sslVerifyPeer]);
     LMode := LContext.GetVerifyMode;
@@ -224,7 +224,7 @@ begin
       Pass('Verify peer mode set')
     else
       Fail('Verify mode', 'sslVerifyPeer not in result');
-    
+
     // Test 4.2: Verify peer + fail if no cert
     LContext.SetVerifyMode([sslVerifyPeer, sslVerifyFailIfNoPeerCert]);
     LMode := LContext.GetVerifyMode;
@@ -232,16 +232,16 @@ begin
       Pass('Verify peer + fail if no cert set')
     else
       Fail('Verify mode', 'Expected both flags');
-    
+
     // Test 4.3: No verification
     LContext.SetVerifyMode([]);
     Pass('No verification mode set');
-    
+
   except
     on E: Exception do
       Fail('Verify mode', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -255,11 +255,11 @@ var
   LDepth: Integer;
 begin
   WriteLn('Test 5: Verify Depth Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test different depths
     LContext.SetVerifyDepth(5);
     LDepth := LContext.GetVerifyDepth;
@@ -267,19 +267,19 @@ begin
       Pass('Verify depth 5')
     else
       Fail('Verify depth', 'Expected 5, got ' + IntToStr(LDepth));
-    
+
     LContext.SetVerifyDepth(10);
     LDepth := LContext.GetVerifyDepth;
     if LDepth = 10 then
       Pass('Verify depth 10')
     else
       Fail('Verify depth', 'Expected 10, got ' + IntToStr(LDepth));
-    
+
   except
     on E: Exception do
       Fail('Verify depth', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -292,30 +292,30 @@ var
   LContext: ISSLContext;
 begin
   WriteLn('Test 6: Session Cache Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 6.1: Enable cache
     LContext.SetSessionCacheMode(True);
     if LContext.GetSessionCacheMode then
       Pass('Session cache enabled')
     else
       Fail('Session cache', 'Cache not enabled');
-    
+
     // Test 6.2: Disable cache
     LContext.SetSessionCacheMode(False);
     if not LContext.GetSessionCacheMode then
       Pass('Session cache disabled')
     else
       Fail('Session cache', 'Cache not disabled');
-    
+
   except
     on E: Exception do
       Fail('Session cache', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -329,11 +329,11 @@ var
   LTimeout: Integer;
 begin
   WriteLn('Test 7: Session Timeout Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test different timeouts
     LContext.SetSessionTimeout(300);
     LTimeout := LContext.GetSessionTimeout;
@@ -341,19 +341,19 @@ begin
       Pass('Session timeout 300s')
     else
       Fail('Session timeout', 'Expected 300, got ' + IntToStr(LTimeout));
-    
+
     LContext.SetSessionTimeout(600);
     LTimeout := LContext.GetSessionTimeout;
     if LTimeout = 600 then
       Pass('Session timeout 600s')
     else
       Fail('Session timeout', 'Expected 600, got ' + IntToStr(LTimeout));
-    
+
   except
     on E: Exception do
       Fail('Session timeout', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -367,11 +367,11 @@ var
   LSize: Integer;
 begin
   WriteLn('Test 8: Session Cache Size Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test different sizes
     LContext.SetSessionCacheSize(20480);
     LSize := LContext.GetSessionCacheSize;
@@ -379,19 +379,19 @@ begin
       Pass('Session cache size 20480 bytes')
     else
       Fail('Session cache size', 'Expected 20480, got ' + IntToStr(LSize));
-    
+
     LContext.SetSessionCacheSize(40960);
     LSize := LContext.GetSessionCacheSize;
     if LSize = 40960 then
       Pass('Session cache size 40960 bytes')
     else
       Fail('Session cache size', 'Expected 40960, got ' + IntToStr(LSize));
-    
+
   except
     on E: Exception do
       Fail('Session cache size', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -405,11 +405,11 @@ var
   LProtocols: string;
 begin
   WriteLn('Test 9: ALPN Protocol Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 9.1: HTTP/2
     LContext.SetALPNProtocols('h2');
     LProtocols := LContext.GetALPNProtocols;
@@ -417,7 +417,7 @@ begin
       Pass('ALPN: h2')
     else
       Fail('ALPN', 'Expected "h2", got "' + LProtocols + '"');
-    
+
     // Test 9.2: HTTP/2 and HTTP/1.1
     LContext.SetALPNProtocols('h2,http/1.1');
     LProtocols := LContext.GetALPNProtocols;
@@ -425,7 +425,7 @@ begin
       Pass('ALPN: h2,http/1.1')
     else
       Fail('ALPN', 'Expected "h2,http/1.1", got "' + LProtocols + '"');
-    
+
     // Test 9.3: Clear ALPN
     LContext.SetALPNProtocols('');
     LProtocols := LContext.GetALPNProtocols;
@@ -433,12 +433,12 @@ begin
       Pass('ALPN: cleared')
     else
       Fail('ALPN', 'Expected empty, got "' + LProtocols + '"');
-    
+
   except
     on E: Exception do
       Fail('ALPN protocols', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -452,11 +452,11 @@ var
   LRejected: Boolean;
 begin
   WriteLn('Test 10: Cipher Suites Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 10.1: TLS 1.3 custom cipher suites should be rejected on WinSSL
     LRejected := False;
     try
@@ -473,7 +473,7 @@ begin
       Pass('TLS 1.3 custom cipher suites rejected')
     else
       Fail('Cipher suites', 'Expected WinSSL to reject custom non-default TLS 1.3 cipher suites');
-    
+
     // Test 10.2: Single cipher override should also be rejected
     LRejected := False;
     try
@@ -490,12 +490,12 @@ begin
       Pass('Single cipher suite override rejected')
     else
       Fail('Cipher suites', 'Expected WinSSL to reject single custom cipher suite override');
-    
+
   except
     on E: Exception do
       Fail('Cipher suites', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -509,11 +509,11 @@ var
   LOptions: TSSLOptions;
 begin
   WriteLn('Test 11: Options Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // Test 11.1: Enable session cache only
     LContext.SetOptions([ssoEnableSessionCache]);
     LOptions := LContext.GetOptions;
@@ -522,7 +522,7 @@ begin
       Pass('Options: session cache only')
     else
       Fail('Options', 'Expected only session cache flag');
-    
+
     // Test 11.2: Enable cache + tickets
     LContext.SetOptions([ssoEnableSessionCache, ssoEnableSessionTickets]);
     LOptions := LContext.GetOptions;
@@ -531,12 +531,12 @@ begin
       Pass('Options: cache + tickets')
     else
       Fail('Options', 'Expected cache + tickets flags');
-    
+
   except
     on E: Exception do
       Fail('Options', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -550,11 +550,11 @@ var
   LName: string;
 begin
   WriteLn('Test 12: Server Name Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
-    
+
     // INTENTIONAL_API_SURFACE: context-level SNI setter coverage. This
     // unit test locks the WinSSL context setter/getter contract, not
     // recommended connection-flow guidance.
@@ -565,7 +565,7 @@ begin
       Pass('Server name: example.com')
     else
       Fail('Server name', 'Expected "example.com", got "' + LName + '"');
-    
+
     // Test 12.2: Change server name
     LContext.SetServerName('test.example.org');
     LName := LContext.GetServerName;
@@ -573,12 +573,12 @@ begin
       Pass('Server name: test.example.org')
     else
       Fail('Server name', 'Expected "test.example.org", got "' + LName + '"');
-    
+
   except
     on E: Exception do
       Fail('Server name', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -592,24 +592,24 @@ var
   LStore: ISSLCertificateStore;
 begin
   WriteLn('Test 13: Certificate and Certificate Store');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
-    
+
     // Test 13.1: Create certificate
     LCert := LLib.CreateCertificate;
     if LCert <> nil then
       Pass('Certificate object created')
     else
       Fail('Certificate', 'CreateCertificate returned nil');
-    
+
     // Test 13.2: Create certificate store
     LStore := LLib.CreateCertificateStore;
     if LStore <> nil then
       Pass('Certificate store created')
     else
       Fail('Certificate store', 'CreateCertificateStore returned nil');
-    
+
     // Test 13.3: Load system store
     try
       LStore.LoadSystemStore;
@@ -619,12 +619,12 @@ begin
       on E: Exception do
         Pass('System store load attempt (may not be available): ' + E.Message);
     end;
-    
+
   except
     on E: Exception do
       Fail('Certificate store', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -638,17 +638,17 @@ var
   LCallbacks: TTestCallbacks;
 begin
   WriteLn('Test 14: Callback Configuration');
-  
+
   try
     LLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
     LContext := LLib.CreateContext(sslCtxClient);
     LCallbacks := TTestCallbacks.Create;
     try
-    
+
       // Test 14.1: Set verify callback
       LContext.SetVerifyCallback(@LCallbacks.VerifyCallback);
       Pass('Verify callback set');
-      
+
       // Test 14.2: Password callback remains unsupported on current WinSSL runtime
       try
         LContext.SetPasswordCallback(@LCallbacks.PasswordCallback);
@@ -657,19 +657,19 @@ begin
         on E: ESSLException do
           Pass('Password callback unsupported as expected');
       end;
-      
+
       // Test 14.3: Set info callback
       LContext.SetInfoCallback(@LCallbacks.InfoCallback);
       Pass('Info callback set');
     finally
       LCallbacks.Free;
     end;
-    
+
   except
     on E: Exception do
       Fail('Callbacks', E.Message);
   end;
-  
+
   WriteLn;
 end;
 
@@ -681,12 +681,12 @@ begin
   WriteLn('║         WinSSL Comprehensive Test Suite                          ║');
   WriteLn('╚══════════════════════════════════════════════════════════════════════╝');
   WriteLn;
-  
+
   GPassCount := 0;
   GFailCount := 0;
 
   EnsureWinSSLBackendRegistered;
-  
+
   Test_Library_Creation;
   Test_Context_Creation;
   Test_Protocol_Versions;
@@ -701,7 +701,7 @@ begin
   Test_Server_Name;
   Test_Certificate_Store;
   Test_Callbacks;
-  
+
   WriteLn('╔══════════════════════════════════════════════════════════════════════╗');
   WriteLn('║                   Test Results                                    ║');
   WriteLn('╚══════════════════════════════════════════════════════════════════════╝');
@@ -709,7 +709,7 @@ begin
   WriteLn('Passed:      ', GPassCount);
   WriteLn('Failed:      ', GFailCount);
   WriteLn;
-  
+
   WriteLn('Coverage:');
   WriteLn('  ✅ Library creation and availability');
   WriteLn('  ✅ Context creation (client/server)');
@@ -725,7 +725,7 @@ begin
   WriteLn('     - Certificate and store');
   WriteLn('     - Callbacks (3 types)');
   WriteLn;
-  
+
   if GFailCount = 0 then
   begin
     WriteLn('✅ All tests passed! WinSSL 25 methods fully tested!');

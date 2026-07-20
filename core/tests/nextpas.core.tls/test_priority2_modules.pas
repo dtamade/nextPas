@@ -6,14 +6,14 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,  // 必须在最前面，用于线程模块
   {$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   // Priority 2 - Symmetric Ciphers (2 modules)
   nextpas.core.tls.openssl.api.aria,
   nextpas.core.tls.openssl.api.seed,
-  
+
   // Priority 2 - MAC & KDF (1 module)
   nextpas.core.tls.openssl.api.scrypt_whirlpool,  // Fixed!
-  
+
   // Priority 2 - PKI & Certificates (7 modules)
   nextpas.core.tls.openssl.api.pkcs,  // Fixed!
   nextpas.core.tls.openssl.api.pkcs7,  // Testing with fixed stack
@@ -22,14 +22,14 @@ uses
   nextpas.core.tls.openssl.api.ocsp,  // Fixed!
   nextpas.core.tls.openssl.api.ct,  // Fixed!
   nextpas.core.tls.openssl.api.ts,  // Fixed!
-  
+
   // Priority 2 - SSL/TLS (1 module)
   nextpas.core.tls.openssl.api.ssl,  // Fixed!
-  
+
   // Priority 2 - Advanced Features (2 modules)
   nextpas.core.tls.openssl.api.engine,  // Fixed!
   nextpas.core.tls.openssl.api.store,  // Fixed!
-  
+
   // Priority 2 - Utilities (7 modules)
   nextpas.core.tls.openssl.api.buffer,
   nextpas.core.tls.openssl.api.stack,  // Fixed!
@@ -62,19 +62,19 @@ end;
 begin
   TotalTests := 0;
   PassedTests := 0;
-  
+
   WriteLn('Testing Priority 2 Modules Compilation');
   PrintSeparator;
-  
+
   WriteLn('Symmetric Ciphers (2 modules)');
   Test('ARIA module loaded', True);
   Test('SEED module loaded', True);
   WriteLn;
-  
+
   WriteLn('MAC & KDF (1 module)');
   Test('SCrypt/Whirlpool module loaded', True);
   WriteLn;
-  
+
   WriteLn('PKI & Certificates (7 modules)');
   Test('PKCS module loaded', True);
   Test('PKCS#7 module loaded', True);
@@ -84,16 +84,16 @@ begin
   Test('Certificate Transparency module loaded', True);
   Test('Time-Stamp Protocol module loaded', True);
   WriteLn;
-  
+
   WriteLn('SSL/TLS (1 module)');
   Test('SSL module loaded', True);
   WriteLn;
-  
+
   WriteLn('Advanced Features (2 modules)');
   Test('Engine module loaded', True);
   Test('Store module loaded', True);
   WriteLn;
-  
+
   WriteLn('Utilities (7 modules)');
   Test('Buffer module loaded', True);
   Test('Stack module loaded', True);
@@ -102,12 +102,12 @@ begin
   Test('Configuration module loaded', True);
   Test('Thread module loaded', True);
   WriteLn;
-  
+
   PrintSeparator;
-  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)', 
+  WriteLn(Format('Results: %d/%d tests passed (%.1f%%)',
     [PassedTests, TotalTests, (PassedTests * 100.0) / TotalTests]));
   PrintSeparator;
-  
+
   if PassedTests = TotalTests then
   begin
     WriteLn('SUCCESS: All Priority 2 modules compiled successfully!');

@@ -846,7 +846,7 @@ var
   LOldHead: PSingleNode;
 begin
   if FHead = nil then
-    raise EEmptyCollection.Create('TForwardList.PopFront: empty forward_list');
+    raise EEmptyCollection.Create('TForwardList.PopFront: empty');
 
   LOldHead := FHead;
   Result := LOldHead^.Data;
@@ -893,7 +893,7 @@ end;
 function TForwardList.Front: T;
 begin
   if FHead = nil then
-    raise EEmptyCollection.Create('TForwardList.Front: empty forward_list');
+    raise EEmptyCollection.Create('TForwardList.Front: empty');
 
   Result := FHead^.Data;
 end;

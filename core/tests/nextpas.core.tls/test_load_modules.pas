@@ -3,7 +3,7 @@ program test_load_modules;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.rand;
@@ -14,18 +14,18 @@ var
 begin
   WriteLn('=== Module Loading Test ===');
   WriteLn;
-  
+
   WriteLn('[1] Loading Core...');
   LoadOpenSSLCore();
   WriteLn('  Core loaded: ', TOpenSSLLoader.IsModuleLoaded(osmCore));
   WriteLn;
-  
+
   WriteLn('[2] Loading EVP...');
   LoadEVP(GetCryptoLibHandle);
   WriteLn('  EVP loaded: True');
   WriteLn('  EVP_aes_256_gcm assigned: ', Assigned(EVP_aes_256_gcm));
   WriteLn;
-  
+
   WriteLn('[3] Loading RAND...');
   if LoadOpenSSLRAND() then
     WriteLn('  RAND loaded: True')
@@ -33,7 +33,7 @@ begin
     WriteLn('  RAND loaded: False');
   WriteLn('  RAND_bytes assigned: ', Assigned(RAND_bytes));
   WriteLn;
-  
+
   if Assigned(RAND_bytes) then
   begin
     WriteLn('[4] Testing RAND_bytes...');

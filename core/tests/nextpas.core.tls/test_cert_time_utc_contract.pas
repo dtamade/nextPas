@@ -3,7 +3,7 @@ program test_cert_time_utc_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.utils,
@@ -134,7 +134,6 @@ begin
       LVerifier.Free;
     end;
   finally
-    LInfo.SubjectAltNames.Free;
   end;
 end;
 

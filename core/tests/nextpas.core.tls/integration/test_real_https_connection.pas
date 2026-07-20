@@ -11,7 +11,7 @@ uses
   {$IFDEF UNIX}
   ctypes, BaseUnix, Unix,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   sockets,
   nextpas.core.tls.openssl.backed,
@@ -193,7 +193,7 @@ begin
                'Connection: close' + #13#10 +
                #13#10;
 
-    RequestBytes := TEncoding.UTF8.GetBytes(Request);
+    RequestBytes := BytesOf(Request);
     BytesWritten := Conn.Write(RequestBytes[0], Length(RequestBytes));
     if BytesWritten <= 0 then
     begin

@@ -3,7 +3,7 @@ program test_pure_pascal_aescbc;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.crypto.aescbc;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.aescbc;
 
 var
   GPassCount: Integer = 0;

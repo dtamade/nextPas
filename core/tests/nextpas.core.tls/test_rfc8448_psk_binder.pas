@@ -14,7 +14,7 @@ program test_rfc8448_psk_binder;
   and the full ClientHello builder round-trip.
 }
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.crypto.primitives,
   nextpas.core.tls.tls13.clienthello,

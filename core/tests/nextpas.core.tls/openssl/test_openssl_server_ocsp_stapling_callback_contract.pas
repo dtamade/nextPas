@@ -3,7 +3,7 @@ program test_openssl_server_ocsp_stapling_callback_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
   nextpas.core.tls.base,
   fafafa.ssl,
   nextpas.core.tls.context.builder,

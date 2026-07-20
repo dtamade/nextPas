@@ -15,17 +15,22 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.hash.intf;
+  nextpas.core.hash.intf,
+  nextpas.core.hash.base;
 
 type
-  THashAlgorithm = (
-    haMD5,
-    haSHA1,
-    haSHA256,
-    haSHA384,
-    haSHA512
-  );
+  { Single source of truth: nextpas.core.hash.base.THashAlgorithm }
+  THashAlgorithm = nextpas.core.hash.base.THashAlgorithm;
 
+const
+  { Re-export enum values so `uses crypto.hash` still sees ha* without hash.base }
+  haMD5 = nextpas.core.hash.base.haMD5;
+  haSHA1 = nextpas.core.hash.base.haSHA1;
+  haSHA256 = nextpas.core.hash.base.haSHA256;
+  haSHA384 = nextpas.core.hash.base.haSHA384;
+  haSHA512 = nextpas.core.hash.base.haSHA512;
+
+type
   THashContext = class
   private
     FInner: IHasher;

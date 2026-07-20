@@ -3,7 +3,7 @@ program test_tls12_openssl_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.ciphersuite,
   nextpas.core.tls.tls12.recordcrypto,
@@ -55,8 +55,7 @@ begin
     WriteLn('  Cipher suite: 0x', IntToHex(LState.CipherSuite, 4));
     WriteLn('  EMS: ', LState.HasEMS);
 
-    LRequest := TEncoding.ASCII.GetBytes(
-      'GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
+    LRequest := BytesOf('GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10);
 
     TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo);
     LOk := False;
@@ -126,7 +125,7 @@ begin
 
     WriteLn('[PASS] Application data exchange succeeded');
     WriteLn('  Response length: ', Length(LDecrypted), ' bytes');
-    WriteLn('  First line: ', Copy(TEncoding.ASCII.GetString(LDecrypted), 1, 40));
+    WriteLn('  First line: ', Copy(StringOf(LDecrypted), 1, 40));
     Halt(0);
   finally
     LSocket.Free;

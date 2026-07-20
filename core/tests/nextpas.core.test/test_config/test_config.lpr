@@ -358,14 +358,68 @@ begin
   { Don't free LSink — it's managed by interface reference counting }
 end;
 
-{ ── B3 scale: table-driven identity bulk ─────────────────────────────────── }
+{ ── v8.26: config fingerprint fail-path (replaces B3 identity bulk) ───────── }
+{ Data: kind|n  where kind is maxfail|shuffle|retry|workers|timeout
+  Asserts builder writes field, and a wrong CheckEqual fails (fail-path). }
 
-procedure TestConfigIdentityCase(const AC: TTestCase);
+procedure TestConfigFingerprintCase(const AC: TTestCase);
 var
-  N: Int64;
+  LPos: Integer;
+  LKind: string;
+  N: Integer;
+  LCfg: TTestConfig;
 begin
-  N := StrToInt(AC.Data);
-  CheckEqual(N, N);
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'fingerprint data kind|n');
+  LKind := Copy(AC.Data, 1, LPos - 1);
+  N := StrToInt(Copy(AC.Data, LPos + 1, MaxInt));
+  if LKind = 'maxfail' then
+  begin
+    LCfg := TTestConfigBuilder.Create.WithMaxFailures(N).Build;
+    CheckEqual(N, LCfg.MaxFailures, 'MaxFailures round-trip');
+    ExpectFail(procedure
+      begin
+        CheckEqual(N + 1, LCfg.MaxFailures);
+      end, IntToStr(N));
+  end
+  else if LKind = 'shuffle' then
+  begin
+    LCfg := TTestConfigBuilder.Create.WithShuffle(N).Build;
+    CheckEqual(N, LCfg.ShuffleSeed, 'ShuffleSeed round-trip');
+    ExpectFail(procedure
+      begin
+        CheckEqual(N + 1, LCfg.ShuffleSeed);
+      end, IntToStr(N));
+  end
+  else if LKind = 'retry' then
+  begin
+    LCfg := TTestConfigBuilder.Create.WithRetry(N).Build;
+    CheckEqual(N, LCfg.RetryCount, 'RetryCount round-trip');
+    ExpectFail(procedure
+      begin
+        CheckEqual(N + 1, LCfg.RetryCount);
+      end, IntToStr(N));
+  end
+  else if LKind = 'workers' then
+  begin
+    LCfg := TTestConfigBuilder.Create.WithWorkers(N).Build;
+    CheckEqual(N, LCfg.MaxParallelWorkers, 'MaxParallelWorkers round-trip');
+    ExpectFail(procedure
+      begin
+        CheckEqual(N + 1, LCfg.MaxParallelWorkers);
+      end, IntToStr(N));
+  end
+  else if LKind = 'timeout' then
+  begin
+    LCfg := TTestConfigBuilder.Create.WithTimeout(UInt64(N)).Build;
+    CheckEqual(Int64(N), Int64(LCfg.TimeoutMs), 'TimeoutMs round-trip');
+    ExpectFail(procedure
+      begin
+        CheckEqual(Int64(N + 1), Int64(LCfg.TimeoutMs));
+      end, IntToStr(N));
+  end
+  else
+    Fail('unknown fingerprint kind: ' + LKind);
 end;
 
 { ── Main ───────────────────────────────────────────────────────────────────── }
@@ -424,14 +478,21 @@ begin
   { MakeBufferConfig }
   LSuite.Test('MakeBufferConfig',          @TestMakeBufferConfig);
 
-  { B3: 400 table-driven identity processes }
-  SetLength(LCases, 400);
+  { v8.26: 500 config fingerprint fail-path (replaces identity bulk) }
+  SetLength(LCases, 500);
   for I := 0 to High(LCases) do
   begin
-    LCases[I].Name := 'cfg-id-' + IntToStr(I);
-    LCases[I].Data := IntToStr(I);
+    LCases[I].Name := 'cfg-fp-' + IntToStr(I);
+    case I mod 5 of
+      0: LCases[I].Data := 'maxfail|' + IntToStr(1 + (I mod 40));
+      1: LCases[I].Data := 'shuffle|' + IntToStr(1 + (I mod 97));
+      2: LCases[I].Data := 'retry|' + IntToStr(I mod 8);
+      3: LCases[I].Data := 'workers|' + IntToStr(I mod 16);
+    else
+      LCases[I].Data := 'timeout|' + IntToStr(10 + (I mod 200));
+    end;
   end;
-  LSuite.TestTable('config identity', LCases, @TestConfigIdentityCase);
+  LSuite.TestTable('config fingerprint fail-path', LCases, @TestConfigFingerprintCase);
 
   if not LSuite.Run then
   begin

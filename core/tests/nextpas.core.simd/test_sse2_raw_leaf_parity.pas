@@ -2,8 +2,11 @@ program test_sse2_raw_leaf_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  nextpas.core.thread.init, nextpas.core.text.conv, Math,
-  nextpas.core.simd.intrinsics.base, nextpas.core.simd.memutils,
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.intrinsics.base,
+  nextpas.core.simd.memutils,
   nextpas.core.simd.intrinsics.x86.sse2;
 
 type

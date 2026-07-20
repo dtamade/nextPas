@@ -4,7 +4,7 @@ program test_winssl_cert_verify_ex;
 
 uses
   Windows,
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,

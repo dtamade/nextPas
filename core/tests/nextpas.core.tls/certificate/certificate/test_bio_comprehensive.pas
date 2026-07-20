@@ -3,7 +3,7 @@ program test_bio_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bio;
+  nextpas.core.system.sysutils, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.api.bio;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -64,13 +64,13 @@ begin
   begin
     write_data := 'OpenSSL BIO Read/Write Test';
     written := BIO_write(bio, PAnsiChar(write_data), Length(write_data));
-    
+
     FillChar(buffer, SizeOf(buffer), 0);
     read_count := BIO_read(bio, @buffer[0], SizeOf(buffer));
-    
+
     SetString(read_data, buffer, read_count);
     RunTest('BIO读写数据一致性', read_data = write_data);
-    
+
     BIO_free(bio);
   end
   else
@@ -89,13 +89,13 @@ begin
   begin
     test_str := 'BIO_puts test string';
     BIO_puts(bio, PAnsiChar(test_str));
-    
+
     FillChar(buffer, SizeOf(buffer), 0);
     BIO_gets(bio, @buffer[0], SizeOf(buffer));
-    
+
     read_str := string(buffer);
     RunTest('BIO_puts/gets字符串操作', Pos(test_str, read_str) > 0);
-    
+
     BIO_free(bio);
   end
   else
@@ -113,10 +113,10 @@ begin
   begin
     data := 'Test pending data';
     BIO_write(bio, PAnsiChar(data), Length(data));
-    
+
     pending := BIO_ctrl_pending(bio);
     RunTest('BIO_ctrl_pending检测待读取数据', pending = Length(data));
-    
+
     BIO_free(bio);
   end
   else
@@ -135,12 +135,12 @@ begin
     data := 'Data to reset';
     BIO_write(bio, PAnsiChar(data), Length(data));
     pending_before := BIO_ctrl_pending(bio);
-    
+
     BIO_reset(bio);
     pending_after := BIO_ctrl_pending(bio);
-    
+
     RunTest('BIO_reset重置BIO', (pending_before > 0) and (pending_after = 0));
-    
+
     BIO_free(bio);
   end
   else
@@ -152,27 +152,27 @@ begin
   WriteLn('  OpenSSL BIO Module Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   TestsPassed := 0;
   TestsFailed := 0;
-  
+
   if not LoadOpenSSLLibrary then
   begin
     WriteLn('ERROR: 无法加载 OpenSSL 库');
     Halt(1);
   end;
-  
+
   try
     WriteLn('运行 BIO 测试...');
     WriteLn;
-    
+
     Test_BIO_new_mem_buf;
     Test_BIO_s_mem;
     Test_BIO_read_write;
     Test_BIO_gets_puts;
     Test_BIO_ctrl_pending;
     Test_BIO_reset;
-    
+
     WriteLn;
     WriteLn('========================================');
     WriteLn('  测试结果');
@@ -183,7 +183,7 @@ begin
     if (TestsPassed + TestsFailed) > 0 then
       WriteLn('成功率: ', ((TestsPassed * 100) div (TestsPassed + TestsFailed)):3, '%');
     WriteLn;
-    
+
     if TestsFailed = 0 then
     begin
       WriteLn('✓ 所有测试通过!');
@@ -194,7 +194,7 @@ begin
       WriteLn('✗ 部分测试失败!');
       Halt(1);
     end;
-    
+
   finally
     UnloadOpenSSLLibrary;
   end;

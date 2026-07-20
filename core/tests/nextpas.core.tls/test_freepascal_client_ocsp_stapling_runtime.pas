@@ -3,7 +3,7 @@ program test_freepascal_client_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
@@ -168,10 +168,10 @@ begin
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
-  LOptions.SubjectAltNames := TStringList.Create;
+  SetLength(LOptions.SubjectAltNames, 0);
   try
     for I := Low(ASANs) to High(ASANs) do
-      LOptions.SubjectAltNames.Add(ASANs[I]);
+      CertOptionsAddSAN(LOptions, ASANs[I]);
 
     if not TCertificateUtils.GenerateSigned(
       LOptions,
@@ -182,8 +182,6 @@ begin
     ) then
       raise Exception.Create('GenerateSigned returned False for scripted CA-signed server material');
   finally
-    LOptions.SubjectAltNames.Free;
-    LOptions.SubjectAltNames := nil;
   end;
 
   LCombinedPEM := AnsiString(LLeafCertPEM + LineEnding + LCACertPEM);

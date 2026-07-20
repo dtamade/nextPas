@@ -3,7 +3,7 @@ program test_constant_time_comparebuffer_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.constant_time;
 
 var

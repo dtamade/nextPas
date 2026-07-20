@@ -3,7 +3,7 @@ program test_freepascal_server_session_resumption;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -223,7 +223,7 @@ begin
   if FMode in [ocmResumed, ocmResumedBadBinder] then
   begin
     FillChar(LPskOffer, SizeOf(LPskOffer), 0);
-    LSessionAgeMs := MilliSecondsBetween(Now, FResumeBaseSession.GetCreationTime);
+    LSessionAgeMs := DateTimeMillisecondsBetween(Now, FResumeBaseSession.GetCreationTime);
     if LSessionAgeMs < 0 then
       LSessionAgeMs := 0;
 

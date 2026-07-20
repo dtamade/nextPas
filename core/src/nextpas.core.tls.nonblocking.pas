@@ -54,11 +54,10 @@ type
 implementation
 
 uses
-  {$IFDEF UNIX}BaseUnix, Unix, Sockets,{$ENDIF}
-  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
   nextpas.core.errors,
   nextpas.core.io.stream_adapter,
-  nextpas.core.net.intf;
+  nextpas.core.net.intf,
+  nextpas.core.platform.socket;
 
 constructor TNonBlockingStream.Create(AInner: IStream);
 var
@@ -203,94 +202,67 @@ begin
   FHandle := AHandle;
 end;
 
-function TSocketNonBlockingAdapter.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-{$IFDEF UNIX}
-var
-  LErrno: Integer;
-  LResult: Int32;
-{$ENDIF}
+function HandleToPlatformSocket(AHandle: THandle): TPlatformSocket; inline;
 begin
-  Result := 0;
-  if ACount = 0 then
-    Exit;
-
-  {$IFDEF UNIX}
-  LResult := fpRecv(FHandle, @ABuf, ACount, MSG_DONTWAIT);
-  if LResult < 0 then
-  begin
-    LErrno := fpGetErrno;
-    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
-      FLastIOResult := ioWantRead
-    else
-      FLastIOResult := ioError;
-    Exit;
-  end;
-  Result := SizeUInt(LResult);
-  if Result = 0 then
-    FLastIOResult := ioClosed
-  else
-    FLastIOResult := ioSuccess;
+  {$IFDEF WINDOWS}
+  Result.Value := PtrUInt(AHandle);
   {$ELSE}
-  Result := recv(FHandle, ABuf, Integer(ACount), 0);
-  if Integer(Result) = SOCKET_ERROR then
-  begin
-    if WSAGetLastError = WSAEWOULDBLOCK then
-      FLastIOResult := ioWantRead
-    else
-      FLastIOResult := ioError;
-    Result := 0;
-    Exit;
-  end;
-  if Result = 0 then
-    FLastIOResult := ioClosed
-  else
-    FLastIOResult := ioSuccess;
+  Result.Value := Int32(AHandle);
   {$ENDIF}
 end;
 
-function TSocketNonBlockingAdapter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-{$IFDEF UNIX}
+function TSocketNonBlockingAdapter.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  LErrno: Integer;
-  LResult: Int32;
-{$ENDIF}
+  LSock: TPlatformSocket;
+  LRecvd: Int32;
+  LErr: Int32;
 begin
   Result := 0;
   if ACount = 0 then
     Exit;
 
-  {$IFDEF UNIX}
-  LResult := fpSend(FHandle, @ABuf, ACount, MSG_DONTWAIT or MSG_NOSIGNAL);
-  if LResult < 0 then
+  LSock := HandleToPlatformSocket(FHandle);
+  LErr := platform_socket_recv(LSock, @ABuf, Int32(ACount), 0, LRecvd);
+  if LErr <> 0 then
   begin
-    LErrno := fpGetErrno;
-    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
+    if platform_socket_error_would_block(LErr) then
+      FLastIOResult := ioWantRead
+    else
+      FLastIOResult := ioError;
+    Exit;
+  end;
+  Result := SizeUInt(LRecvd);
+  if Result = 0 then
+    FLastIOResult := ioClosed
+  else
+    FLastIOResult := ioSuccess;
+end;
+
+function TSocketNonBlockingAdapter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LSock: TPlatformSocket;
+  LSent: Int32;
+  LErr: Int32;
+begin
+  Result := 0;
+  if ACount = 0 then
+    Exit;
+
+  LSock := HandleToPlatformSocket(FHandle);
+  LErr := platform_socket_send(LSock, @ABuf, Int32(ACount), PLATFORM_MSG_NOSIGNAL, LSent);
+  if LErr <> 0 then
+  begin
+    if platform_socket_error_would_block(LErr) then
       FLastIOResult := ioWantWrite
     else
       FLastIOResult := ioError;
     Exit;
   end;
-  Result := SizeUInt(LResult);
+  Result := SizeUInt(LSent);
   if Result = 0 then
     FLastIOResult := ioClosed
   else
     FLastIOResult := ioSuccess;
-  {$ELSE}
-  Result := send(FHandle, ABuf, Integer(ACount), 0);
-  if Integer(Result) = SOCKET_ERROR then
-  begin
-    if WSAGetLastError = WSAEWOULDBLOCK then
-      FLastIOResult := ioWantWrite
-    else
-      FLastIOResult := ioError;
-    Result := 0;
-    Exit;
-  end;
-  if Result = 0 then
-    FLastIOResult := ioClosed
-  else
-    FLastIOResult := ioSuccess;
-  {$ENDIF}
 end;
 
 end.

@@ -3,7 +3,7 @@ program test_chacha20;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
 
@@ -50,85 +50,85 @@ var
   i: Integer;
 begin
   Result := False;
-  
+
   // Initialize key and IV/nonce
   for i := 0 to 31 do
     key[i] := Byte(i);
   for i := 0 to 15 do
     iv[i] := Byte(i);
-    
-  plaindata := TEncoding.UTF8.GetBytes(PlainText);
-  
+
+  plaindata := BytesOf(PlainText);
+
   // Get cipher
   cipher := EVP_get_cipherbyname(PAnsiChar(CipherName));
-    
+
   if cipher = nil then
   begin
     WriteLn('  Cipher not available: ', CipherName);
     Exit;
   end;
-  
+
   WriteLn('  Cipher: ', CipherName);
-  
+
   // Encrypt
   ctx := EVP_CIPHER_CTX_new();
   if ctx = nil then Exit;
-  
+
   try
     if EVP_EncryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then
     begin
       WriteLn('  EncryptInit failed');
       Exit;
     end;
-    
+
     enc_len := 0;
     if EVP_EncryptUpdate(ctx, @encrypted[0], enc_len, @plaindata[0], Length(plaindata)) <> 1 then
     begin
       WriteLn('  EncryptUpdate failed');
       Exit;
     end;
-    
+
     final_len := 0;
     if EVP_EncryptFinal_ex(ctx, @encrypted[enc_len], final_len) <> 1 then
     begin
       WriteLn('  EncryptFinal failed');
       Exit;
     end;
-    
+
     enc_len := enc_len + final_len;
     WriteLn('  Encrypted length: ', enc_len, ' bytes');
     WriteLn('  Encrypted: ', Copy(BytesToHex(encrypted, enc_len), 1, 32), '...');
   finally
     EVP_CIPHER_CTX_free(ctx);
   end;
-  
+
   // Decrypt
   ctx := EVP_CIPHER_CTX_new();
   if ctx = nil then Exit;
-  
+
   try
     if EVP_DecryptInit_ex(ctx, cipher, nil, @key[0], @iv[0]) <> 1 then
     begin
       WriteLn('  DecryptInit failed');
       Exit;
     end;
-    
+
     dec_len := 0;
     if EVP_DecryptUpdate(ctx, @decrypted[0], dec_len, @encrypted[0], enc_len) <> 1 then
     begin
       WriteLn('  DecryptUpdate failed');
       Exit;
     end;
-    
+
     final_len := 0;
     if EVP_DecryptFinal_ex(ctx, @decrypted[dec_len], final_len) <> 1 then
     begin
       WriteLn('  DecryptFinal failed');
       Exit;
     end;
-    
+
     dec_len := dec_len + final_len;
-    
+
     // Verify
     if dec_len = Length(plaindata) then
     begin
@@ -140,7 +140,7 @@ begin
     end
     else
       WriteLn('  ✗ Length mismatch: expected ', Length(plaindata), ' got ', dec_len);
-      
+
   finally
     EVP_CIPHER_CTX_free(ctx);
   end;
@@ -179,12 +179,12 @@ begin
     PassRate := (PassCount / TotalTests) * 100
   else
     PassRate := 0;
-    
-  WriteLn('Results: ', PassCount, '/', TotalTests, ' tests passed (', 
+
+  WriteLn('Results: ', PassCount, '/', TotalTests, ' tests passed (',
           FormatFloat('0.0', PassRate), '%)');
   WriteLn('========================================');
   WriteLn;
-  
+
   for I := 0 to High(Results) do
   begin
     if Results[I].Passed then
@@ -192,7 +192,7 @@ begin
     else
       WriteLn('[FAIL] ', Results[I].TestName, ': ', Results[I].ErrorMsg);
   end;
-  
+
   WriteLn;
   if PassCount = TotalTests then
     WriteLn('✅ ALL TESTS PASSED')
@@ -207,31 +207,31 @@ begin
   WriteLn('  ChaCha20 Module Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     if not LoadOpenSSLLibrary then
     begin
       WriteLn('ERROR: Failed to load OpenSSL library');
       Halt(1);
     end;
-    
+
     if not LoadEVP(GetCryptoLibHandle) then
     begin
       WriteLn('ERROR: Failed to load EVP functions');
       Halt(1);
     end;
-    
+
     WriteLn('OpenSSL loaded successfully');
     WriteLn;
-    
+
     // Run tests
     TestChaCha20;
     WriteLn;
     TestChaCha20Poly1305;
-    
+
     // Print results
     PrintResults;
-    
+
   except
     on E: Exception do
     begin
@@ -239,7 +239,7 @@ begin
       Halt(1);
     end;
   end;
-  
+
   if PassCount <> Length(Results) then
     Halt(1);
 end.

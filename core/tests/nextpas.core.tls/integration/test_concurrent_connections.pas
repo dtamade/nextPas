@@ -14,7 +14,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes, SyncObjs,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.crypto.utils,

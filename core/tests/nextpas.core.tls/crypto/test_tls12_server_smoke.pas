@@ -3,7 +3,7 @@ program test_tls12_server_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.tls.x509,

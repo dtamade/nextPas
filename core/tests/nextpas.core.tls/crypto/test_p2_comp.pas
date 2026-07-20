@@ -3,7 +3,7 @@ program test_p2_comp;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.comp,
@@ -137,7 +137,7 @@ begin
   try
     // Note: These functions may not be available in OpenSSL 3.x
     // as SSL/TLS compression is deprecated
-    
+
     // Check basic function pointers (may be nil)
     if Assigned(COMP_CTX_new) then
       WriteLn('  [INFO] COMP_CTX_new loaded');
@@ -147,7 +147,7 @@ begin
       WriteLn('  [INFO] COMP_get_name loaded');
     if Assigned(COMP_get_type) then
       WriteLn('  [INFO] COMP_get_type loaded');
-      
+
     // These are expected to not be available in modern OpenSSL
     PassTest;  // API loading doesn't fail, just may return nil
   except
@@ -162,7 +162,7 @@ begin
   try
     // Note: COMP functions are deprecated in OpenSSL 3.x
     // Testing availability, not functionality
-    
+
     if Assigned(COMP_zlib) then
       WriteLn('  [INFO] COMP_zlib loaded');
     if Assigned(COMP_zlib_oneshot) then
@@ -173,7 +173,7 @@ begin
       WriteLn('  [INFO] COMP_zstd loaded');
     if Assigned(COMP_rle) then
       WriteLn('  [INFO] COMP_rle loaded');
-      
+
     PassTest;  // API check passes regardless of actual availability
   except
     on E: Exception do
@@ -186,7 +186,7 @@ begin
   StartTest('SSL_COMP functions availability');
   try
     // SSL compression functions (deprecated in OpenSSL 3.x)
-    
+
     if Assigned(SSL_COMP_add_compression_method) then
       WriteLn('  [INFO] SSL_COMP_add_compression_method loaded');
     if Assigned(SSL_COMP_get_compression_methods) then
@@ -197,7 +197,7 @@ begin
       WriteLn('  [INFO] SSL_COMP_get_id loaded');
     if Assigned(SSL_COMP_free_compression_methods) then
       WriteLn('  [INFO] SSL_COMP_free_compression_methods loaded');
-      
+
     PassTest;
   except
     on E: Exception do
@@ -210,14 +210,14 @@ begin
   StartTest('BIO compression functions availability');
   try
     // BIO compression filters
-    
+
     if Assigned(BIO_f_zlib) then
       WriteLn('  [INFO] BIO_f_zlib loaded');
     if Assigned(BIO_f_brotli) then
       WriteLn('  [INFO] BIO_f_brotli loaded');
     if Assigned(BIO_f_zstd) then
       WriteLn('  [INFO] BIO_f_zstd loaded');
-      
+
     PassTest;
   except
     on E: Exception do
@@ -237,7 +237,7 @@ begin
       WriteLn('  [INFO] COMP_compress_block loaded');
     if Assigned(COMP_expand_block) then
       WriteLn('  [INFO] COMP_expand_block loaded');
-      
+
     PassTest;
   except
     on E: Exception do
@@ -257,7 +257,7 @@ begin
       WriteLn('  [INFO] COMP_zlib_set_mem_level loaded');
     if Assigned(COMP_zlib_set_strategy) then
       WriteLn('  [INFO] COMP_zlib_set_strategy loaded');
-      
+
     PassTest;
   except
     on E: Exception do
@@ -272,7 +272,7 @@ begin
   StartTest('Helper function GetCompressionMethodName (nil check)');
   try
     name := GetCompressionMethodName(nil);
-    
+
     // Should return 'Unknown' for nil method
     if name = 'Unknown' then
       PassTest
@@ -291,7 +291,7 @@ begin
   StartTest('Helper function IsCompressionSupported (nil check)');
   try
     supported := IsCompressionSupported(nil);
-    
+
     // Should return False for nil method
     if not supported then
       PassTest
@@ -329,12 +329,12 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
     WriteLn('Some tests FAILED! ✗');
-    
+
   WriteLn;
   WriteLn('Note: COMP API is deprecated in OpenSSL 3.x');
   WriteLn('      Function availability checks passing is expected');
@@ -347,15 +347,15 @@ begin
   WriteLn('Testing OpenSSL Compression API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
     LoadOpenSSLBIO;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // Run tests
     TestLoadCompFunctions;
     TestCompConstants;
@@ -371,16 +371,16 @@ begin
     TestHelperFunctionGetCompressionMethodName;
     TestHelperFunctionIsCompressionSupported;
     TestDeprecationWarning;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

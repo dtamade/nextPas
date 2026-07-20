@@ -3,7 +3,6 @@ program test_scalar;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.math.base,
@@ -304,6 +303,28 @@ begin
     0.000000000000001, 'DEG_TO_RAD');
   CheckNear(57.2957795130823208768, BASE_RAD_TO_DEG_COMPILE_TIME,
     0.000000000000001, 'RAD_TO_DEG');
+end;
+
+procedure TestIEEESpecialNamedValues;
+var
+  LNaN, LInf, LNegInf: Double;
+  LBits: UInt64;
+begin
+  LNaN := nextpas.core.math.scalar.NaN;
+  LInf := nextpas.core.math.scalar.Infinity;
+  LNegInf := nextpas.core.math.scalar.NegInfinity;
+
+  Check(IsNaN(LNaN), 'named NaN is NaN');
+  Check(IsInfinite(LInf) and (LInf > 0.0), 'named Infinity is +Inf');
+  Check(IsInfinite(LNegInf) and (LNegInf < 0.0), 'named NegInfinity is -Inf');
+
+  Move(LNaN, LBits, SizeOf(LBits));
+  Check((LBits and UInt64($7FF8000000000000)) = UInt64($7FF8000000000000),
+    'named NaN quiet payload bit');
+  Move(LInf, LBits, SizeOf(LBits));
+  Check(LBits = UInt64($7FF0000000000000), 'named Infinity bit pattern');
+  Move(LNegInf, LBits, SizeOf(LBits));
+  Check(LBits = UInt64($FFF0000000000000), 'named NegInfinity bit pattern');
 end;
 
 procedure RaiseClampSingleReversedBounds; forward;
@@ -1761,6 +1782,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.math.scalar');
   T.Test('constants', @TestConstants);
+  T.Test('IEEE special named values', @TestIEEESpecialNamedValues);
   T.Test('min max clamp', @TestMinMaxClamp);
   T.Test('interpolation', @TestInterpolation);
   T.Test('rounding and sign', @TestRoundingAndSign);

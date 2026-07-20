@@ -736,8 +736,8 @@ begin
   Suite.Test('ConfigBuilder', @TestConfigBuilder);
   Suite.Test('ConfigBuilderDefaults', @TestConfigBuilderDefaults);
 
-  { B30: AfterEach + SoftFail/Hard fail-path table (60 cases) }
-  SetLength(LB30Cases, 60);
+  { B30/v8.26: AfterEach + SoftFail/Hard fail-path table (160 cases) }
+  SetLength(LB30Cases, 160);
   for LB30I := 0 to High(LB30Cases) do
   begin
     LB30Cases[LB30I].Name := 'lc' + IntToStr(LB30I);

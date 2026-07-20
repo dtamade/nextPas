@@ -3,9 +3,9 @@ program test_vec;
 {$I nextpas.core.settings.inc}
 
 uses
-  Math,
   nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.math,
   nextpas.core.math.scalar,
   nextpas.core.math.vec;
 

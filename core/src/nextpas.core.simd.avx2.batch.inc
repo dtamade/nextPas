@@ -3611,7 +3611,7 @@ begin
   if aCount = 0 then Exit;
   pS := aSrc; pD := aDst;
   for i := 0 to aCount - 1 do
-    pD[i] := Math.Ceil(pS[i]);
+    pD[i] := SimdCeilF64(pS[i]);
   {$POP}
 end;
 
@@ -3624,7 +3624,7 @@ begin
   if aCount = 0 then Exit;
   pS := aSrc; pD := aDst;
   for i := 0 to aCount - 1 do
-    pD[i] := Math.Floor(pS[i]);
+    pD[i] := SimdFloorF64(pS[i]);
   {$POP}
 end;
 

@@ -3,7 +3,7 @@ program test_tls12_fuzzing;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.tls12.io,
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls12.parser,
@@ -232,7 +232,7 @@ begin
   WriteLn('Test: GCM replay protection (same ciphertext, different seq)');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $11);
   SetLength(LIV, 4); FillChar(LIV[0], 4, $22);
-  LPlain := TEncoding.ASCII.GetBytes('replay test');
+  LPlain := BytesOf('replay test');
 
   TLS12GCMEncryptRecord(LKey, LIV, 7, 23, LPlain, LEnc, LErr);
 
@@ -258,7 +258,7 @@ begin
   WriteLn('Test: ChaCha20 replay protection');
   SetLength(LKey, 32); FillChar(LKey[0], 32, $33);
   SetLength(LIV, 12); FillChar(LIV[0], 12, $44);
-  LPlain := TEncoding.ASCII.GetBytes('chacha replay');
+  LPlain := BytesOf('chacha replay');
 
   TLS12ChaCha20Poly1305EncryptRecord(LKey, LIV, 3, 23, LPlain, LEnc, LErr);
 
@@ -279,7 +279,7 @@ begin
   WriteLn('Test: CBC padding oracle resistance (uniform error)');
   SetLength(LKey, 16); FillChar(LKey[0], 16, $55);
   SetLength(LMACKey, 32); FillChar(LMACKey[0], 32, $66);
-  LPlain := TEncoding.ASCII.GetBytes('padding oracle test data here!!');
+  LPlain := BytesOf('padding oracle test data here!!');
 
   TLS12CBCEncrypt_SHA256(LKey, LMACKey, 0, 23, LPlain, LEnc, LErr);
 

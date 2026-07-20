@@ -10,7 +10,7 @@ program test_native_handle_unified;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

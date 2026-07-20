@@ -4,13 +4,13 @@ program performance_regression_suite;
 
 {
   性能回归测试套件
-  
+
   功能：自动化性能基准测试，检测性能退化
   用途：CI/CD 集成，定期性能验证
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   fafafa.ssl;
@@ -46,7 +46,7 @@ begin
   Inc(FTotalTests);
   if AResult.Success then
     Inc(FPassedTests);
-  
+
   SetLength(FResults, Length(FResults) + 1);
   FResults[High(FResults)] := AResult;
 end;
@@ -62,7 +62,7 @@ begin
     WriteLn(F, '# Performance Benchmark Results');
     WriteLn(F, '# Generated: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
     WriteLn(F, 'Name,Duration(ms),Throughput(ops/s),Success');
-    
+
     for I := 0 to High(FResults) do
       with FResults[I] do
         WriteLn(F, Format('%s,%d,%.2f,%s', [Name, Duration, Throughput, BoolToStr(Success, True)]));
@@ -81,14 +81,14 @@ var
   Parts: TStringArray;
 begin
   Result := True;
-  
+
   if not FileExists(ABaselineFile) then
   begin
     WriteLn('⚠️  No baseline file found, creating new baseline...');
     SaveResults(ABaselineFile);
     Exit;
   end;
-  
+
   AssignFile(F, ABaselineFile);
   Reset(F);
   try
@@ -96,16 +96,16 @@ begin
     ReadLn(F);
     ReadLn(F);
     ReadLn(F);
-    
+
     while not EOF(F) do
     begin
       ReadLn(F, Line);
       Parts := Line.Split(',');
       if Length(Parts) < 2 then Continue;
-      
+
       BName := Parts[0];
       BDuration := StrToInt64Def(Parts[1], 0);
-      
+
       // Find corresponding current result
       Idx := -1;
       for I := 0 to High(FResults) do
@@ -114,7 +114,7 @@ begin
           Idx := I;
           Break;
         end;
-      
+
       if Idx >= 0 then
       begin
         CurrentDuration := FResults[Idx].Duration;
@@ -123,7 +123,7 @@ begin
           Degradation := (CurrentDuration - BDuration) / BDuration;
           if Degradation > AThreshold then
           begin
-            WriteLn(Format('❌ REGRESSION: %s: %.1f%% slower (was %dms, now %dms)', 
+            WriteLn(Format('❌ REGRESSION: %s: %.1f%% slower (was %dms, now %dms)',
               [BName, Degradation * 100, BDuration, CurrentDuration]));
             Result := False;
           end
@@ -146,24 +146,24 @@ begin
   WriteLn('Performance Benchmark Summary');
   WriteLn('================================================================');
   WriteLn;
-  
+
   TotalDuration := 0;
   for I := 0 to High(FResults) do
   begin
     with FResults[I] do
     begin
       if Success then
-        WriteLn(Format('[%2d] %-40s %6dms  %8.1f ops/s', 
+        WriteLn(Format('[%2d] %-40s %6dms  %8.1f ops/s',
           [I+1, Name, Duration, Throughput]))
       else
         WriteLn(Format('[%2d] %-40s FAILED: %s', [I+1, Name, ErrorMessage]));
       Inc(TotalDuration, Duration);
     end;
   end;
-  
+
   WriteLn;
   WriteLn('================================================================');
-  WriteLn(Format('Total: %d tests, %d passed, %d failed', 
+  WriteLn(Format('Total: %d tests, %d passed, %d failed',
     [FTotalTests, FPassedTests, FTotalTests - FPassedTests]));
   WriteLn(Format('Total execution time: %dms', [TotalDuration]));
   WriteLn('================================================================');
@@ -231,11 +231,11 @@ var
 begin
   Result.Name := Format('AES_Encrypt_%dKBx%d', [ASizeKB, AIterations]);
   Result.Success := False;
-  
+
   SetLength(Data, ASizeKB * 1024);
   for I := 0 to High(Data) do
     Data[I] := Byte(Random(256));
-  
+
   StartTime := GetTickCount64;
   try
     // This would need actual encryption calls
@@ -245,7 +245,7 @@ begin
       // Simulate encryption overhead
       Move(Data[0], Data[0], Length(Data));
     end;
-    
+
     EndTime := GetTickCount64;
     Result.Duration := EndTime - StartTime;
     if Result.Duration = 0 then Result.Duration := 1;  // Avoid division by zero
@@ -261,17 +261,17 @@ procedure TBenchmarkSuite.RunAll;
 begin
   WriteLn('Running Performance Regression Suite...');
   WriteLn;
-  
+
   // Context creation benchmarks
   // Use larger iteration counts to reduce timer jitter with millisecond resolution.
   AddResult(BenchmarkContextCreation(1000));
   AddResult(BenchmarkContextCreation(5000));
-  
+
   // Encryption benchmarks
   AddResult(BenchmarkEncryption(1, 1000));
   AddResult(BenchmarkEncryption(10, 100));
   AddResult(BenchmarkEncryption(100, 10));
-  
+
   WriteLn;
 end;
 
@@ -282,18 +282,18 @@ begin
     WriteLn('fafafa.ssl Performance Regression Test Suite');
     WriteLn('================================================================');
     WriteLn;
-    
+
     GLib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
     if not GLib.Initialize then
       Halt(1);
-    
+
     GSuite.RunAll;
     GSuite.PrintSummary;
-    
+
     WriteLn;
     WriteLn('Saving results...');
     GSuite.SaveResults('benchmark_results.csv');
-    
+
     WriteLn('Checking for regressions...');
     if not GSuite.CheckRegression('benchmark_baseline.csv', 0.15) then
     begin
@@ -301,10 +301,10 @@ begin
       WriteLn('⚠️  Performance regression detected!');
       Halt(1);
     end;
-    
+
     WriteLn;
     WriteLn('✅ All benchmarks passed!');
-    
+
     GLib.Finalize;
   finally
     GSuite.Free;

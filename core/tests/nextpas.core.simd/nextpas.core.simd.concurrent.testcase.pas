@@ -20,9 +20,21 @@ interface
 
 uses
   {$IFDEF UNIX}
-  nextpas.core.thread.init, {$ENDIF}
-  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time.cpu, Math, nextpas.core.test, nextpas.core.simd, nextpas.core.simd.testcase,
-  nextpas.core.simd.base, nextpas.core.simd.backend.adapter, nextpas.core.simd.runtime, nextpas.core.simd.dispatch;
+  nextpas.core.thread.init,
+  {$ENDIF}
+  Classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.time.cpu,
+  nextpas.core.math,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.backend.adapter,
+  nextpas.core.simd.runtime,
+  nextpas.core.simd.dispatch;
 
 type
   TSimdStatefulTestCase = class(TSimdVectorAsmStatefulTestCase)

@@ -18,7 +18,9 @@ interface
 
 uses
   nextpas.core.base,
-  Base64, nextpas.core.fs, SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.encoding.base64,
   nextpas.core.io.intf,
   nextpas.core.io.util,
   nextpas.core.io.stream_adapter,
@@ -1026,13 +1028,8 @@ procedure TMbedTLSContext.AddCertificatePinBase64(const ABase64Hash: string;
   APinType: Integer; const ADescription: string; AIsBackup: Boolean);
 var
   LHash: TBytes;
-  LDecoded: AnsiString;
 begin
-  // 解码 Base64
-  LDecoded := DecodeStringBase64(ABase64Hash);
-  SetLength(LHash, Length(LDecoded));
-  if Length(LDecoded) > 0 then
-    Move(LDecoded[1], LHash[0], Length(LDecoded));
+  LHash := Base64Decode(ABase64Hash);
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(

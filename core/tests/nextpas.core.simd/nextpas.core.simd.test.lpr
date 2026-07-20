@@ -7,7 +7,6 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes, SysUtils,
   nextpas.core.test,
   nextpas.core.simd.testcase,
   nextpas.core.simd.memutils.aliases.testcase,
@@ -307,4 +306,9 @@ begin
     WriteLn('Press Enter to exit...');
     ReadLn;
   end;
+
+  { Release suite closures/results before unit finalization so heaptrc
+    does not report DiscoverTests/AppendResult blocks as unfreed.
+    (Unit finalization can run before program-level managed fields are cleared.) }
+  LRunner := Default(TSuiteRunner);
 end.

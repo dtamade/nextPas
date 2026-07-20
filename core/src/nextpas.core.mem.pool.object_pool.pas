@@ -440,7 +440,8 @@ begin
   // Double-release detection: scan pool for existing reference
   for LIdx := 0 to FFreeTop - 1 do
     if FPool[LIdx] = aObject then
-      raise EDoubleFree.Create(aeDoubleFree, 'TObjectPool.ReleaseObject: object already in pool');
+      raise EDoubleFree.Create(aeDoubleFree,
+      FormatAllocErrorMsg('TObjectPool', 'ReleaseObject', 'object already in pool'));
 
   // Finalize object
   if FHasFinalize then

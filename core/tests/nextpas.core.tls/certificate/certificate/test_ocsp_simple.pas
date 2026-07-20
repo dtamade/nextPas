@@ -3,7 +3,7 @@ program test_ocsp_simple;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ocsp;
 
@@ -34,7 +34,7 @@ begin
   // 统计可用函数数量
   WriteLn('2. 检查 OCSP 函数可用性...');
   LCount := 0;
-  
+
   if Assigned(OCSP_REQUEST_new) then Inc(LCount, 1);
   if Assigned(OCSP_RESPONSE_new) then Inc(LCount, 1);
   if Assigned(OCSP_BASICRESP_new) then Inc(LCount, 1);
@@ -43,9 +43,9 @@ begin
   if Assigned(OCSP_RESPONSE_status) then Inc(LCount, 1);
   if Assigned(OCSP_parse_url) then Inc(LCount, 1);
   if Assigned(OCSP_check_validity) then Inc(LCount, 1);
-  
+
   WriteLn(Format('   可用函数数量: %d/8', [LCount]));
-  
+
   if LCount >= 5 then
     WriteLn('   ✅ 大部分 OCSP 函数可用')
   else
@@ -75,7 +75,7 @@ begin
   end;
   WriteLn('========================================');
   WriteLn;
-  
+
   WriteLn('按 Enter 键退出...');
   ReadLn;
 end.

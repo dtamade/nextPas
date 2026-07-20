@@ -2,20 +2,20 @@ program test_session_save_logic;
 
 {$mode objfpc}{$H+}{$J-}
 
-{ 
+{
   任务 11.2: 会话保存逻辑测试
-  
+
   测试内容:
   - 握手完成后保存会话信息
   - 提取会话 ID、协议版本、密码套件
   - 创建 TWinSSLSession 对象
   - 设置会话元数据
-  
+
   验证需求: 4.4
 }
 
 uses
-  SysUtils, DateUtils;
+  nextpas.core.system.sysutils, nextpas.core.time;
 
 type
   TSSLProtocolVersion = (
@@ -63,11 +63,11 @@ type
     FIsResumed: Boolean;
   public
     constructor Create;
-    
-    procedure SetSessionMetadata(const AID: string; 
+
+    procedure SetSessionMetadata(const AID: string;
       AProtocol: TSSLProtocolVersion; const ACipher: string; AResumed: Boolean);
     procedure SetPeerCertificate(ACert: ISSLCertificate);
-    
+
     function GetID: string;
     function IsValid: Boolean;
     function GetProtocolVersion: TSSLProtocolVersion;
@@ -82,17 +82,17 @@ type
     FProtocolVersion: TSSLProtocolVersion;
     FCipherName: string;
     FPeerCertificate: ISSLCertificate;
-    
+
     function GetProtocolVersion: TSSLProtocolVersion;
     function GetCipherName: string;
     function GetPeerCertificate: ISSLCertificate;
   public
     constructor Create;
-    
-    procedure SetConnectionInfo(AProtocol: TSSLProtocolVersion; 
+
+    procedure SetConnectionInfo(AProtocol: TSSLProtocolVersion;
       const ACipher: string; ACert: ISSLCertificate);
     procedure SaveSessionAfterHandshake;
-    
+
     function GetSavedSession: ISSLSession;
   end;
 
@@ -126,7 +126,7 @@ begin
   FIsResumed := False;
 end;
 
-procedure TMockSession.SetSessionMetadata(const AID: string; 
+procedure TMockSession.SetSessionMetadata(const AID: string;
   AProtocol: TSSLProtocolVersion; const ACipher: string; AResumed: Boolean);
 begin
   FID := AID;
@@ -176,7 +176,7 @@ begin
   FPeerCertificate := nil;
 end;
 
-procedure TMockConnection.SetConnectionInfo(AProtocol: TSSLProtocolVersion; 
+procedure TMockConnection.SetConnectionInfo(AProtocol: TSSLProtocolVersion;
   const ACipher: string; ACert: ISSLCertificate);
 begin
   FProtocolVersion := AProtocol;
@@ -212,17 +212,17 @@ begin
   LProtocol := GetProtocolVersion;
   LCipher := GetCipherName;
   LPeerCert := GetPeerCertificate;
-  
+
   // 任务 11.2: 创建 TWinSSLSession 对象
   LSession := TMockSession.Create;
   try
     // 设置会话元数据
     LSession.SetSessionMetadata(LSessionID, LProtocol, LCipher, False);
-    
+
     // 设置对端证书
     if LPeerCert <> nil then
       LSession.SetPeerCertificate(LPeerCert);
-    
+
     // 保存当前会话引用
     FCurrentSession := LSession;
   except
@@ -270,19 +270,19 @@ var
   LSession: ISSLSession;
 begin
   BeginSection('测试 1: 保存会话基本信息');
-  
+
   LConn := TMockConnection.Create;
   try
     // 设置连接信息
     LConn.SetConnectionInfo(sslProtocolTLS12, 'TLS_AES_128_GCM_SHA256', nil);
-    
+
     // 保存会话
     LConn.SaveSessionAfterHandshake;
-    
+
     // 获取会话
     LSession := LConn.GetSavedSession;
     Check('会话已创建', LSession <> nil);
-    
+
     if LSession <> nil then
     begin
       Check('会话 ID 不为空', LSession.GetID <> '');
@@ -303,27 +303,27 @@ var
   LCert: ISSLCertificate;
 begin
   BeginSection('测试 2: 保存会话包含对端证书');
-  
+
   LConn := TMockConnection.Create;
   try
     // 创建对端证书
     LCert := TMockCertificate.Create('CN=client.example.com');
-    
+
     // 设置连接信息
     LConn.SetConnectionInfo(sslProtocolTLS13, 'TLS_AES_256_GCM_SHA384', LCert);
-    
+
     // 保存会话
     LConn.SaveSessionAfterHandshake;
-    
+
     // 获取会话
     LSession := LConn.GetSavedSession;
     Check('会话已创建', LSession <> nil);
-    
+
     if LSession <> nil then
     begin
       Check('会话包含对端证书', LSession.GetPeerCertificate <> nil);
       if LSession.GetPeerCertificate <> nil then
-        Check('对端证书主题正确', 
+        Check('对端证书主题正确',
           LSession.GetPeerCertificate.GetSubject = 'CN=client.example.com');
     end;
   finally
@@ -338,23 +338,23 @@ var
   LSession1, LSession2: ISSLSession;
 begin
   BeginSection('测试 3: 多次保存会话');
-  
+
   LConn := TMockConnection.Create;
   try
     // 第一次保存
     LConn.SetConnectionInfo(sslProtocolTLS12, 'TLS_AES_128_GCM_SHA256', nil);
     LConn.SaveSessionAfterHandshake;
     LSession1 := LConn.GetSavedSession;
-    
+
     // 第二次保存(模拟重新连接)
     LConn.SetConnectionInfo(sslProtocolTLS13, 'TLS_AES_256_GCM_SHA384', nil);
     LConn.SaveSessionAfterHandshake;
     LSession2 := LConn.GetSavedSession;
-    
+
     Check('第一个会话已创建', LSession1 <> nil);
     Check('第二个会话已创建', LSession2 <> nil);
     Check('两个会话不同', LSession1 <> LSession2);
-    
+
     if LSession2 <> nil then
       Check('第二个会话协议版本正确', LSession2.GetProtocolVersion = sslProtocolTLS13);
   finally
@@ -380,7 +380,7 @@ begin
   Total := 0;
   Passed := 0;
   Failed := 0;
-  
+
   WriteLn('================================================================');
   WriteLn('WinSSL 会话保存逻辑测试');
   WriteLn('================================================================');
@@ -389,13 +389,13 @@ begin
   WriteLn;
   WriteLn('注意: 这是逻辑测试,模拟会话保存的行为');
   WriteLn;
-  
+
   TestSaveSessionBasicInfo;
   TestSaveSessionWithPeerCert;
   TestMultipleSaveSession;
-  
+
   PrintSummary;
-  
+
   if Failed > 0 then
     Halt(1);
 end.

@@ -3,7 +3,7 @@ program test_factory_logging_scope_clarification;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,

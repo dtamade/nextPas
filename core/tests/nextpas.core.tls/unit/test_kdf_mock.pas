@@ -4,7 +4,7 @@ unit test_kdf_mock;
 
 {
   KDF Mock Unit Tests
-  
+
   Tests the mock implementation of Key Derivation Functions including:
   - PBKDF2 (Password-Based Key Derivation Function 2)
   - HKDF (HMAC-based Key Derivation Function)
@@ -14,7 +14,7 @@ unit test_kdf_mock;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test,
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
   openssl_kdf_interface;
 
 type
@@ -23,7 +23,7 @@ type
   private
     FKDF: IKDF;
     FMock: TKDFMock;
-    
+
     function GetTestPassword(aSize: Integer): TBytes;
     function GetTestSalt(aSize: Integer): TBytes;
     function GetTestInfo(aSize: Integer): TBytes;
@@ -40,7 +40,7 @@ type
     procedure TestPBKDF2_ShouldFail_WithZeroIterations;
     procedure TestPBKDF2_ShouldFail_WithNegativeKeyLength;
     procedure TestPBKDF2_ShouldBeDeterministic;
-    
+
     // HKDF tests
     procedure TestHKDF_ShouldSucceed_WithSHA256;
     procedure TestHKDF_ShouldSucceed_WithSHA512;
@@ -48,28 +48,28 @@ type
     procedure TestHKDF_ShouldFail_WithEmptyInputKey;
     procedure TestHKDFExtract_ShouldReturnHashSize;
     procedure TestHKDFExpand_ShouldExpandPRK;
-    
+
     // Scrypt tests
     procedure TestScrypt_ShouldSucceed_WithDefaultParams;
     procedure TestScrypt_ShouldSucceed_WithCustomParams;
     procedure TestScrypt_ShouldFail_WithZeroN;
     procedure TestScrypt_ShouldFail_WithZeroR;
     procedure TestScrypt_ShouldFail_WithZeroP;
-    
+
     // Algorithm info tests
     procedure TestGetAlgorithmName_ShouldReturnCorrectName;
     procedure TestGetOutputSize_ShouldReturnCorrectSize;
     procedure TestIsAlgorithmSupported_ShouldReturnTrue;
-    
+
     // Error handling tests
     procedure TestPBKDF2_ShouldFail_WhenConfigured;
     procedure TestHKDF_ShouldFail_WhenConfigured;
     procedure TestScrypt_ShouldFail_WhenConfigured;
-    
+
     // Custom key tests
     procedure TestPBKDF2_ShouldUseCustomKey_WhenSet;
     procedure TestHKDF_ShouldUseCustomKey_WhenSet;
-    
+
     // Statistics tests
     procedure TestStatistics_ShouldTrackCalls;
     procedure TestResetStatistics_ShouldClearCounters;
@@ -132,10 +132,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes');
@@ -150,10 +150,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(20);
   LSalt := GetTestSalt(20);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA512, LPassword, LSalt, 2000, 64);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
@@ -167,10 +167,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(10);
   LSalt := GetTestSalt(8);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA1, LPassword, LSalt, 1000, 20);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(20, Length(LResult.DerivedKey), 'Should return 20 bytes');
@@ -184,10 +184,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act - 请求48字节
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 48);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(48, Length(LResult.DerivedKey), 'Should return exactly 48 bytes');
@@ -200,10 +200,10 @@ var
 begin
   // Arrange
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, nil, LSalt, 1000, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Password cannot be empty', LResult.ErrorMessage, 'Should have error message');
@@ -217,10 +217,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 0, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Iterations must be positive', LResult.ErrorMessage, 'Should have error message');
@@ -234,10 +234,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, -1);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Key length must be positive', LResult.ErrorMessage, 'Should have error message');
@@ -252,16 +252,16 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult1 := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   LResult2 := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
-  
+
   // Assert
   CheckTrue(LResult1.Success, 'First call should succeed');
   CheckTrue(LResult2.Success, 'Second call should succeed');
   CheckEqual(Length(LResult1.DerivedKey), Length(LResult2.DerivedKey), 'Lengths should match');
-  
+
   for i := 0 to High(LResult1.DerivedKey) do
     CheckEqual(LResult1.DerivedKey[i], LResult2.DerivedKey[i], 'Byte ' + IntToStr(i) + ' should match');
 end;
@@ -277,10 +277,10 @@ begin
   LInputKey := GetTestPassword(32);
   LSalt := GetTestSalt(16);
   LInfo := GetTestInfo(20);
-  
+
   // Act
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(48, Length(LResult.DerivedKey), 'Should return 48 bytes');
@@ -295,10 +295,10 @@ begin
   LInputKey := GetTestPassword(64);
   LSalt := GetTestSalt(32);
   LInfo := GetTestInfo(30);
-  
+
   // Act
   LResult := FKDF.HKDF(kdHKDF_SHA512, LInputKey, LSalt, LInfo, 64);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
@@ -313,10 +313,10 @@ begin
   LInputKey := GetTestPassword(32);
   LSalt := GetTestSalt(16);
   LInfo := GetTestInfo(10);
-  
+
   // Act - 请求128字节
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 128);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(128, Length(LResult.DerivedKey), 'Should return exactly 128 bytes');
@@ -330,10 +330,10 @@ begin
   // Arrange
   LSalt := GetTestSalt(16);
   LInfo := GetTestInfo(20);
-  
+
   // Act
   LResult := FKDF.HKDF(kdHKDF_SHA256, nil, LSalt, LInfo, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Input key cannot be empty', LResult.ErrorMessage, 'Should have error message');
@@ -347,10 +347,10 @@ begin
   // Arrange
   LInputKey := GetTestPassword(32);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.HKDFExtract(kdHKDF_SHA256, LInputKey, LSalt);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes (SHA256 hash size)');
@@ -365,13 +365,13 @@ begin
   LInputKey := GetTestPassword(32);
   LSalt := GetTestSalt(16);
   LInfo := GetTestInfo(20);
-  
+
   // Act - Extract phase
   LExtractResult := FKDF.HKDFExtract(kdHKDF_SHA256, LInputKey, LSalt);
-  
+
   // Act - Expand phase
   LExpandResult := FKDF.HKDFExpand(kdHKDF_SHA256, LExtractResult.DerivedKey, LInfo, 64);
-  
+
   // Assert
   CheckTrue(LExtractResult.Success, 'Extract should succeed');
   CheckTrue(LExpandResult.Success, 'Expand should succeed');
@@ -388,10 +388,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.Scrypt(LPassword, LSalt, 16384, 8, 1, 32);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(32, Length(LResult.DerivedKey), 'Should return 32 bytes');
@@ -405,10 +405,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(20);
   LSalt := GetTestSalt(20);
-  
+
   // Act - 使用较小的N值用于测试
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 4, 2, 64);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(64, Length(LResult.DerivedKey), 'Should return 64 bytes');
@@ -422,10 +422,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.Scrypt(LPassword, LSalt, 0, 8, 1, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('N parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
@@ -439,10 +439,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 0, 1, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('R parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
@@ -456,10 +456,10 @@ begin
   // Arrange
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
-  
+
   // Act
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 8, 0, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('P parameter must be non-zero', LResult.ErrorMessage, 'Should have error message');
@@ -502,10 +502,10 @@ begin
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
   FMock.SetShouldFail(True, 'Simulated PBKDF2 failure');
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Simulated PBKDF2 failure', LResult.ErrorMessage, 'Error message');
@@ -522,10 +522,10 @@ begin
   LSalt := GetTestSalt(16);
   LInfo := GetTestInfo(20);
   FMock.SetShouldFail(True, 'Simulated HKDF failure');
-  
+
   // Act
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Simulated HKDF failure', LResult.ErrorMessage, 'Error message');
@@ -540,10 +540,10 @@ begin
   LPassword := GetTestPassword(16);
   LSalt := GetTestSalt(16);
   FMock.SetShouldFail(True, 'Simulated Scrypt failure');
-  
+
   // Act
   LResult := FKDF.Scrypt(LPassword, LSalt, 1024, 8, 1, 32);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Simulated Scrypt failure', LResult.ErrorMessage, 'Error message');
@@ -564,10 +564,10 @@ begin
   for i := 0 to 31 do
     LCustomKey[i] := $AA;
   FMock.SetCustomKey(LCustomKey);
-  
+
   // Act
   LResult := FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   for i := 0 to 31 do
@@ -588,10 +588,10 @@ begin
   for i := 0 to 47 do
     LCustomKey[i] := $BB;
   FMock.SetCustomKey(LCustomKey);
-  
+
   // Act
   LResult := FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   for i := 0 to 47 do
@@ -610,13 +610,13 @@ begin
   LSalt := GetTestSalt(16);
   LInputKey := GetTestPassword(32);
   LInfo := GetTestInfo(20);
-  
+
   // Act
   FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   FKDF.PBKDF2(kdPBKDF2_SHA512, LPassword, LSalt, 2000, 64);
   FKDF.HKDF(kdHKDF_SHA256, LInputKey, LSalt, LInfo, 48);
   FKDF.Scrypt(LPassword, LSalt, 1024, 8, 1, 32);
-  
+
   // Assert
   CheckEqual(4, FKDF.GetOperationCount, 'Operation count');
   CheckEqual(2, FKDF.GetPBKDF2CallCount, 'PBKDF2 call count');
@@ -633,10 +633,10 @@ begin
   LSalt := GetTestSalt(16);
   FKDF.PBKDF2(kdPBKDF2_SHA256, LPassword, LSalt, 1000, 32);
   FKDF.Scrypt(LPassword, LSalt, 1024, 8, 1, 32);
-  
+
   // Act
   FKDF.ResetStatistics;
-  
+
   // Assert
   CheckEqual(0, FKDF.GetOperationCount, 'Operation count after reset');
   CheckEqual(0, FKDF.GetPBKDF2CallCount, 'PBKDF2 call count after reset');

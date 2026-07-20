@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-21（**R1 landed**：维持 H1 epoll scale-ready；package **No**；默认 **STOP**）
+**Updated**: 2026-07-21（**Go h2 peer** landed；peer mid **0.10× NotMet**；package **仍 No**；默认 **STOP**）
 
 ---
 
@@ -907,6 +907,9 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | **Go h2 peer**：`compare_h2` + `run_h2_comparison`；mid 0.10× / press 0.14× → peer **NotMet**；package No；STOP |
+| 2026-07-21 | **E3s 抽检** RPS 1.97×/1.72× p99 0.23×/0.27× ladder stable；**H2 KPI draft**；NEXT 仍 STOP |
+| 2026-07-21 | residual：`test_http_tls_real` 去 TThread → platform_thread；5/5 0 unfreed；NEXT 仍 STOP |
 | 2026-07-21 | **R1 landed**：维持 H1 epoll scale-ready；package No；H2 ALPN residual Met；NEXT=STOP |
 | 2026-07-20 | **H2P-3 landed**：TLS-ALPN h2 e2e 4/4 0 unfreed；OpenSSL per-conn ALPN；NEXT=R1 |
 | 2026-07-20 | **H2P-2 landed**：加压阶梯全绿；16×32×100 ~11.5k req/s；NEXT=H2P-3 ALPN |

@@ -4,7 +4,7 @@ unit test_evp_cipher_mock;
 
 {
   EVP Cipher Mock Unit Tests
-  
+
   Tests the mock implementation of EVP cipher operations including:
   - Basic encryption/decryption
   - Multiple cipher algorithms (AES, ChaCha20, Camellia, SM4)
@@ -17,7 +17,7 @@ unit test_evp_cipher_mock;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test,
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
   openssl_evp_cipher_interface;
 
 type
@@ -26,7 +26,7 @@ type
   private
     FCipher: IEVPCipher;
     FMock: TEVPCipherMock;
-    
+
     function GetTestKey(aSize: Integer): TBytes;
     function GetTestIV(aSize: Integer): TBytes;
     function GetTestData(aSize: Integer): TBytes;
@@ -40,22 +40,22 @@ type
     procedure TestEncrypt_ShouldSucceed_WithChaCha20;
     procedure TestEncrypt_ShouldSucceed_WithCamellia256CBC;
     procedure TestEncrypt_ShouldSucceed_WithSM4CBC;
-    
+
     // Basic decryption tests
     procedure TestDecrypt_ShouldSucceed_WithAES256CBC;
     procedure TestDecrypt_ShouldReverseEncryption;
-    
+
     // AEAD tests
     procedure TestEncryptAEAD_ShouldSucceed_WithAES256GCM;
     procedure TestEncryptAEAD_ShouldGenerateTag;
     procedure TestDecryptAEAD_ShouldSucceed_WithValidTag;
     procedure TestEncryptAEAD_ShouldSucceed_WithChaCha20Poly1305;
-    
+
     // Error handling tests
     procedure TestEncrypt_ShouldFail_WhenConfigured;
     procedure TestDecrypt_ShouldFail_WhenConfigured;
     procedure TestEncryptAEAD_ShouldFail_WhenConfigured;
-    
+
     // Parameter validation tests
     procedure TestGetKeySize_ShouldReturnCorrectSize_ForAES128;
     procedure TestGetKeySize_ShouldReturnCorrectSize_ForAES256;
@@ -64,17 +64,17 @@ type
     procedure TestGetIVSize_ShouldReturn12_ForGCMMode;
     procedure TestGetBlockSize_ShouldReturn16_ForAES;
     procedure TestGetBlockSize_ShouldReturn1_ForChaCha20;
-    
+
     // Call counting tests
     procedure TestEncrypt_ShouldIncrementCounter;
     procedure TestDecrypt_ShouldIncrementCounter;
     procedure TestAEAD_ShouldIncrementCounter;
     procedure TestResetStatistics_ShouldClearCounters;
-    
+
     // Custom output tests
     procedure TestEncrypt_ShouldUseCustomOutput_WhenSet;
     procedure TestEncryptAEAD_ShouldUseCustomTag_WhenSet;
-    
+
     // Padding tests
     procedure TestSetPadding_ShouldStoreValue;
     procedure TestGetPadding_ShouldReturnDefault;
@@ -138,10 +138,10 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(16);
-  
+
   // Act
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Output), 'Should have output');
@@ -157,10 +157,10 @@ begin
   LKey := GetTestKey(16);
   SetLength(LIV, 0);  // ECB doesn't use IV
   LPlaintext := GetTestData(16);
-  
+
   // Act
   LResult := FCipher.Encrypt(caAES128, cmECB, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckTrue(FMock.GetLastAlgorithm = caAES128, 'Algorithm should be AES128');
@@ -176,10 +176,10 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(64);
-  
+
   // Act
   LResult := FCipher.Encrypt(caChaCha20, cmCTR, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(64, Length(LResult.Output), 'Should have output');
@@ -194,10 +194,10 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(32);
-  
+
   // Act
   LResult := FCipher.Encrypt(caCamellia256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckTrue(FMock.GetLastAlgorithm = caCamellia256, 'Algorithm should be Camellia256');
@@ -212,10 +212,10 @@ begin
   LKey := GetTestKey(16);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(16);
-  
+
   // Act
   LResult := FCipher.Encrypt(caSM4, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckTrue(FMock.GetLastAlgorithm = caSM4, 'Algorithm should be SM4');
@@ -232,10 +232,10 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LCiphertext := GetTestData(16);
-  
+
   // Act
   LResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Output), 'Should have output');
@@ -252,16 +252,16 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(16);
-  
+
   // Act
   LEncResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   LDecResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LEncResult.Output);
-  
+
   // Assert
   CheckTrue(LEncResult.Success, 'Encrypt should succeed');
   CheckTrue(LDecResult.Success, 'Decrypt should succeed');
   CheckEqual(Length(LPlaintext), Length(LDecResult.Output), 'Should restore plaintext length');
-  
+
   // Verify roundtrip (mock uses XOR, so encrypt then decrypt should restore)
   for i := 0 to High(LPlaintext) do
     CheckEqual(LPlaintext[i], LDecResult.Output[i], 'Byte ' + IntToStr(i) + ' should match');
@@ -279,10 +279,10 @@ begin
   LIV := GetTestIV(12);
   LPlaintext := GetTestData(16);
   LAAD := GetTestData(8);
-  
+
   // Act
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Output), 'Should have output');
@@ -299,10 +299,10 @@ begin
   LIV := GetTestIV(12);
   LPlaintext := GetTestData(16);
   LAAD := GetTestData(8);
-  
+
   // Act
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckTrue(Length(LResult.Tag) > 0, 'Should generate tag');
@@ -322,10 +322,10 @@ begin
   SetLength(LTag, 16);
   for i := 0 to 15 do LTag[i] := $CC + i;
   LAAD := GetTestData(8);
-  
+
   // Act
   LResult := FCipher.DecryptAEAD(caAES256, cmGCM, LKey, LIV, LCiphertext, LTag, LAAD);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Output), 'Should have output');
@@ -341,10 +341,10 @@ begin
   LIV := GetTestIV(12);
   LPlaintext := GetTestData(64);
   LAAD := GetTestData(16);
-  
+
   // Act
   LResult := FCipher.EncryptAEAD(caChaCha20Poly1305, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckTrue(FMock.GetLastAlgorithm = caChaCha20Poly1305, 'Algorithm should be ChaCha20Poly1305');
@@ -363,10 +363,10 @@ begin
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(16);
   FMock.SetShouldFail(True, 'Simulated encryption failure');
-  
+
   // Act
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual('Simulated encryption failure', LResult.ErrorMessage, 'Error message');
@@ -383,10 +383,10 @@ begin
   LIV := GetTestIV(16);
   LCiphertext := GetTestData(16);
   FMock.SetShouldFail(True, 'Simulated decryption failure');
-  
+
   // Act
   LResult := FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckTrue(LResult.ErrorMessage <> '', 'Should have error message');
@@ -403,10 +403,10 @@ begin
   LPlaintext := GetTestData(16);
   LAAD := GetTestData(8);
   FMock.SetShouldFail(True, 'AEAD failure');
-  
+
   // Act
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckFalse(LResult.Success, 'Should fail');
   CheckEqual(0, Length(LResult.Tag), 'Tag should be empty on failure');
@@ -460,11 +460,11 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LPlaintext := GetTestData(16);
-  
+
   // Act
   FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckEqual(2, FMock.GetEncryptCallCount, 'Encrypt call count');
   CheckEqual(2, FCipher.GetOperationCount, 'Operation count');
@@ -479,10 +479,10 @@ begin
   LKey := GetTestKey(32);
   LIV := GetTestIV(16);
   LCiphertext := GetTestData(16);
-  
+
   // Act
   FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LCiphertext);
-  
+
   // Assert
   CheckEqual(1, FMock.GetDecryptCallCount, 'Decrypt call count');
 end;
@@ -497,10 +497,10 @@ begin
   LIV := GetTestIV(12);
   LPlaintext := GetTestData(16);
   LAAD := GetTestData(8);
-  
+
   // Act
   FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckEqual(1, FMock.GetAEADCallCount, 'AEAD call count');
 end;
@@ -516,10 +516,10 @@ begin
   LPlaintext := GetTestData(16);
   FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
   FCipher.Decrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Act
   FCipher.ResetStatistics;
-  
+
   // Assert
   CheckEqual(0, FCipher.GetOperationCount, 'Operation count after reset');
   CheckEqual(0, FMock.GetEncryptCallCount, 'Encrypt count after reset');
@@ -541,10 +541,10 @@ begin
   SetLength(LCustom, 16);
   for i := 0 to 15 do LCustom[i] := $FF;
   FMock.SetCustomOutput(LCustom);
-  
+
   // Act
   LResult := FCipher.Encrypt(caAES256, cmCBC, LKey, LIV, LPlaintext);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Output), 'Custom output length');
@@ -566,10 +566,10 @@ begin
   SetLength(LCustomTag, 16);
   for i := 0 to 15 do LCustomTag[i] := $DD;
   FMock.SetCustomTag(LCustomTag);
-  
+
   // Act
   LResult := FCipher.EncryptAEAD(caAES256, cmGCM, LKey, LIV, LPlaintext, LAAD);
-  
+
   // Assert
   CheckTrue(LResult.Success, 'Should succeed');
   CheckEqual(16, Length(LResult.Tag), 'Custom tag length');
@@ -583,7 +583,7 @@ procedure TTestEVPCipherMock.TestSetPadding_ShouldStoreValue;
 begin
   // Act
   FCipher.SetPadding(False);
-  
+
   // Assert
   CheckFalse(FCipher.GetPadding, 'Padding should be disabled');
 end;

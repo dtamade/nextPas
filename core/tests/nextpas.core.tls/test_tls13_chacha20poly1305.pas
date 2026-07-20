@@ -3,7 +3,7 @@ program test_tls13_chacha20poly1305;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.chacha20poly1305;
 
 procedure Fail(const AMessage: string);

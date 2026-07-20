@@ -3,7 +3,7 @@ program test_winssl_enterprise;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.winssl.enterprise;
 
 type
@@ -41,7 +41,7 @@ begin
   WriteLn('WinSSL Enterprise Features Test Results');
   WriteLn('=' + StringOfChar('=', 78));
   WriteLn;
-  
+
   for i := 0 to High(GResults) do
   begin
     if GResults[i].Passed then
@@ -52,7 +52,7 @@ begin
     if GResults[i].Message <> '' then
       WriteLn('       ', GResults[i].Message);
   end;
-  
+
   WriteLn;
   WriteLn('=' + StringOfChar('=', 78));
   WriteLn(Format('Total: %d, Passed: %d, Failed: %d (%.1f%%)',
@@ -68,7 +68,7 @@ var
 begin
   try
     LFIPSEnabled := IsFIPSModeEnabled;
-    
+
     AddTestResult('Test 1: FIPS Mode Detection', True,
       Format('FIPS Mode: %s', [BoolToStr(LFIPSEnabled, 'Enabled', 'Disabled')]));
   except
@@ -106,7 +106,7 @@ begin
     LConfig := TSSLEnterpriseConfig.Create;
     try
       LSuccess := LConfig.LoadFromSystem;
-      
+
       AddTestResult('Test 3: Load From System', LSuccess,
         Format('Configuration loaded: %s', [BoolToStr(LSuccess, True)]));
     finally
@@ -129,9 +129,9 @@ begin
     try
       LConfig.LoadFromSystem;
       LFIPSEnabled := LConfig.IsFIPSEnabled;
-      
+
       AddTestResult('Test 4: FIPS Detection via Config', True,
-        Format('FIPS Mode via Config: %s', 
+        Format('FIPS Mode via Config: %s',
           [BoolToStr(LFIPSEnabled, 'Enabled', 'Disabled')]));
     finally
       LConfig.Free;
@@ -153,7 +153,7 @@ begin
     try
       LConfig.LoadFromSystem;
       LRoots := LConfig.GetTrustedRoots;
-      
+
       AddTestResult('Test 5: Get Trusted Roots', True,
         Format('Found %d trusted root certificates', [Length(LRoots)]));
     finally
@@ -176,9 +176,9 @@ begin
     try
       LConfig.LoadFromSystem;
       LTrusted := LConfig.IsEnterpriseCATrusted;
-      
+
       AddTestResult('Test 6: Enterprise CA Trust', True,
-        Format('Enterprise CA Trusted: %s', 
+        Format('Enterprise CA Trusted: %s',
           [BoolToStr(LTrusted, 'Yes', 'No')]));
     finally
       LConfig.Free;
@@ -225,7 +225,7 @@ begin
     try
       LConfig.LoadFromSystem;
       LConfig.Reload;
-      
+
       AddTestResult('Test 8: Config Reload', True,
         'Configuration reloaded successfully');
     finally
@@ -244,12 +244,12 @@ var
 begin
   try
     LRoots := GetEnterpriseTrustedRoots;
-    
+
     AddTestResult('Test 9: GetEnterpriseTrustedRoots Function', True,
       Format('Found %d roots via global function', [Length(LRoots)]));
   except
     on E: Exception do
-      AddTestResult('Test 9: GetEnterpriseTrustedRoots Function', False, 
+      AddTestResult('Test 9: GetEnterpriseTrustedRoots Function', False,
         'Exception: ' + E.Message);
   end;
 end;
@@ -258,7 +258,7 @@ begin
   WriteLn('WinSSL Enterprise Features Test Suite');
   WriteLn('Testing Windows enterprise integration...');
   WriteLn;
-  
+
   TestFIPSDetection;
   TestEnterpriseConfigCreation;
   TestLoadFromSystem;
@@ -268,9 +268,9 @@ begin
   TestGroupPolicyRead;
   TestConfigReload;
   TestGetEnterpriseTrustedRootsFunction;
-  
+
   PrintResults;
-  
+
   if GPassCount < GTestCount then
     Halt(1);
 end.

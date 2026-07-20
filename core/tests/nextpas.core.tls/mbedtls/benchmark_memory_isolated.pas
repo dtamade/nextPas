@@ -9,7 +9,7 @@ program benchmark_memory_isolated;
 }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   {$IFDEF TEST_OPENSSL}
   nextpas.core.tls.openssl.backed,

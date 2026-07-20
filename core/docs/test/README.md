@@ -2,7 +2,9 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: v8.23, 17 源文件 (.pas) + 4 .inc, 19 测试套件, ≥5500 可计数过程 + Soft ColorDiff + Soft 高频扩面
+> 治理状态: **v8.26** SCALE≥6500 + fail-path≥35% + low-signal≤40%（identity 已替换）
+>
+> Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
 ## Overview
 
@@ -33,7 +35,7 @@
 - **Verbose mode**: `SetDefaultVerboseMode` / `VerboseMode` per-test [PASS]/[FAIL]/[SKIP] output (there is **no** `OutputLevel` field)
 - **Progress**: `SetDefaultShowProgress` [N/Total] progress counter
 - **Mock framework**: `TMock` with setup/verify/typed values/call ordering
-- **RTTI discovery**: `DiscoverTests` auto-discovers published methods
+- **RTTI discovery**: `DiscoverTests` via pluggable `ITestDiscoveryBackend` (default FPC VMT; inject for nextpas)
 - **Benchmarking**: `Bench` + adaptive N scaling (Go testing.B equivalent)
 - **Property testing**: QuickCheck-style `Prop()` with generators, coverage-guided fuzzing, automatic shrinking
 - **Structured results**: `RunWithResult` / `RunAllWithResult` for programmatic result access

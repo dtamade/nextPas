@@ -3,7 +3,7 @@ program test_openssl_md;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.md;
@@ -48,13 +48,13 @@ var
   expected, got: string;
 begin
   WriteLn('Testing MD5:');
-  
+
   if not Assigned(MD5_Init) or not Assigned(MD5_Update) or not Assigned(MD5_Final) then
   begin
     WriteLn('  MD5 functions not loaded');
     Exit;
   end;
-  
+
   // Test 1: Empty string
   // MD5("") = d41d8cd98f00b204e9800998ecf8427e
   FillChar(ctx, SizeOf(ctx), 0);
@@ -63,7 +63,7 @@ begin
   expected := 'd41d8cd98f00b204e9800998ecf8427e';
   got := BytesToHex(digest, MD5_DIGEST_LENGTH);
   TestResult('MD5 empty string', got = expected, expected, got);
-  
+
   // Test 2: "abc"
   // MD5("abc") = 900150983cd24fb0d6963f7d28e17f72
   testData := 'abc';
@@ -74,7 +74,7 @@ begin
   expected := '900150983cd24fb0d6963f7d28e17f72';
   got := BytesToHex(digest, MD5_DIGEST_LENGTH);
   TestResult('MD5 "abc"', got = expected, expected, got);
-  
+
   // Test 3: "message digest"
   // MD5("message digest") = f96b697d7cb7938d525a2f31aaf161d0
   testData := 'message digest';
@@ -85,7 +85,7 @@ begin
   expected := 'f96b697d7cb7938d525a2f31aaf161d0';
   got := BytesToHex(digest, MD5_DIGEST_LENGTH);
   TestResult('MD5 "message digest"', got = expected, expected, got);
-  
+
   // Test 4: One-shot MD5 function
   if Assigned(MD5) then
   begin
@@ -95,7 +95,7 @@ begin
     got := BytesToHex(digest, MD5_DIGEST_LENGTH);
     TestResult('MD5 one-shot "hello"', got = expected, expected, got);
   end;
-  
+
   WriteLn;
 end;
 
@@ -108,13 +108,13 @@ var
   expected, got: string;
 begin
   WriteLn('Testing MD4:');
-  
+
   if not Assigned(MD4_Init) or not Assigned(MD4_Update) or not Assigned(MD4_Final) then
   begin
     WriteLn('  MD4 functions not loaded');
     Exit;
   end;
-  
+
   // Test 1: Empty string
   // MD4("") = 31d6cfe0d16ae931b73c59d7e0c089c0
   FillChar(ctx, SizeOf(ctx), 0);
@@ -123,7 +123,7 @@ begin
   expected := '31d6cfe0d16ae931b73c59d7e0c089c0';
   got := BytesToHex(digest, MD4_DIGEST_LENGTH);
   TestResult('MD4 empty string', got = expected, expected, got);
-  
+
   // Test 2: "abc"
   // MD4("abc") = a448017aaf21d8525fc10ae87aa6729d
   testData := 'abc';
@@ -134,7 +134,7 @@ begin
   expected := 'a448017aaf21d8525fc10ae87aa6729d';
   got := BytesToHex(digest, MD4_DIGEST_LENGTH);
   TestResult('MD4 "abc"', got = expected, expected, got);
-  
+
   // Test 3: "message digest"
   // MD4("message digest") = d9130a8164549fe818874806e1c7014b
   testData := 'message digest';
@@ -145,7 +145,7 @@ begin
   expected := 'd9130a8164549fe818874806e1c7014b';
   got := BytesToHex(digest, MD4_DIGEST_LENGTH);
   TestResult('MD4 "message digest"', got = expected, expected, got);
-  
+
   WriteLn;
 end;
 
@@ -158,13 +158,13 @@ var
   expected, got: string;
 begin
   WriteLn('Testing RIPEMD160:');
-  
+
   if not Assigned(RIPEMD160_Init) or not Assigned(RIPEMD160_Update) or not Assigned(RIPEMD160_Final) then
   begin
     WriteLn('  RIPEMD160 functions not loaded');
     Exit;
   end;
-  
+
   // Test 1: Empty string
   // RIPEMD160("") = 9c1185a5c5e9fc54612808977ee8f548b2258d31
   FillChar(ctx, SizeOf(ctx), 0);
@@ -173,7 +173,7 @@ begin
   expected := '9c1185a5c5e9fc54612808977ee8f548b2258d31';
   got := BytesToHex(digest, RIPEMD160_DIGEST_LENGTH);
   TestResult('RIPEMD160 empty string', got = expected, expected, got);
-  
+
   // Test 2: "abc"
   // RIPEMD160("abc") = 8eb208f7e05d987a9b044a8e98c6b087f15a0bfc
   testData := 'abc';
@@ -184,7 +184,7 @@ begin
   expected := '8eb208f7e05d987a9b044a8e98c6b087f15a0bfc';
   got := BytesToHex(digest, RIPEMD160_DIGEST_LENGTH);
   TestResult('RIPEMD160 "abc"', got = expected, expected, got);
-  
+
   // Test 3: "message digest"
   // RIPEMD160("message digest") = 5d0689ef49d2fae572b881b123a85ffa21595f36
   testData := 'message digest';
@@ -195,7 +195,7 @@ begin
   expected := '5d0689ef49d2fae572b881b123a85ffa21595f36';
   got := BytesToHex(digest, RIPEMD160_DIGEST_LENGTH);
   TestResult('RIPEMD160 "message digest"', got = expected, expected, got);
-  
+
   WriteLn;
 end;
 
@@ -208,30 +208,30 @@ var
   expected, got: string;
 begin
   WriteLn('Testing Incremental Hashing:');
-  
+
   if not Assigned(MD5_Init) or not Assigned(MD5_Update) or not Assigned(MD5_Final) then
   begin
     WriteLn('  MD5 functions not loaded');
     Exit;
   end;
-  
+
   // Test: Hash "abcdefghij" in three parts
   // MD5("abcdefghij") = a925576942e94b2ef57a066101b48876
   part1 := 'abc';
   part2 := 'defg';
   part3 := 'hij';
-  
+
   FillChar(ctx, SizeOf(ctx), 0);
   MD5_Init(@ctx);
   MD5_Update(@ctx, @part1[1], Length(part1));
   MD5_Update(@ctx, @part2[1], Length(part2));
   MD5_Update(@ctx, @part3[1], Length(part3));
   MD5_Final(@digest[0], @ctx);
-  
+
   expected := 'a925576942e94b2ef57a066101b48876';
   got := BytesToHex(digest, MD5_DIGEST_LENGTH);
   TestResult('MD5 incremental "abcdefghij"', got = expected, expected, got);
-  
+
   WriteLn;
 end;
 
@@ -248,9 +248,9 @@ var
   ripemd_ctx: PRIPEMD160_CTX;
 begin
   WriteLn('Testing Multiple Algorithms on Same Data:');
-  
+
   testData := 'The quick brown fox jumps over the lazy dog';
-  
+
   // MD4
   if Assigned(MD4_Init) and Assigned(MD4_Update) and Assigned(MD4_Final) then
   begin
@@ -265,7 +265,7 @@ begin
       FreeMem(md4_ctx);
     end;
   end;
-  
+
   // MD5
   if Assigned(MD5_Init) and Assigned(MD5_Update) and Assigned(MD5_Final) then
   begin
@@ -276,13 +276,13 @@ begin
       MD5_Update(md5_ctx, @testData[1], Length(testData));
       MD5_Final(@md5_digest[0], md5_ctx);
       // MD5("The quick brown fox jumps over the lazy dog") = 9e107d9d372bb6826bd81d3542a419d6
-      TestResult('MD5 quick brown fox', 
+      TestResult('MD5 quick brown fox',
         BytesToHex(md5_digest, MD5_DIGEST_LENGTH) = '9e107d9d372bb6826bd81d3542a419d6');
     finally
       FreeMem(md5_ctx);
     end;
   end;
-  
+
   // RIPEMD160
   if Assigned(RIPEMD160_Init) and Assigned(RIPEMD160_Update) and Assigned(RIPEMD160_Final) then
   begin
@@ -299,7 +299,7 @@ begin
       FreeMem(ripemd_ctx);
     end;
   end;
-  
+
   WriteLn;
 end;
 
@@ -307,7 +307,7 @@ begin
   WriteLn('OpenSSL MD (Message Digest) Module Unit Test');
   WriteLn('=============================================');
   WriteLn;
-  
+
   // Load OpenSSL
   Write('Loading OpenSSL libraries... ');
   try
@@ -320,10 +320,10 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Load MD module
   Write('Loading MD module... ');
   if not LoadMDFunctions(GetCryptoLibHandle) then
@@ -333,7 +333,7 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Run tests
   try
     TestMD5;
@@ -348,14 +348,14 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   // Print summary
   WriteLn('Test Summary:');
   WriteLn('=============');
   WriteLn('Tests Passed: ', TestsPassed);
   WriteLn('Tests Failed: ', TestsFailed);
   WriteLn('Total Tests:  ', TestsPassed + TestsFailed);
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;
@@ -367,7 +367,7 @@ begin
     WriteLn('Some tests FAILED! ✗');
     Halt(1);
   end;
-  
+
   // Cleanup
   UnloadMDFunctions();
   UnloadOpenSSLCore();

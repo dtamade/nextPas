@@ -120,7 +120,7 @@ function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 implementation
 
 uses
-  Math,
+  nextpas.core.math.trig,
   nextpas.core.simd,
   nextpas.core.simd.linalg.gemm,
   {$IFDEF SIMD_X86_AVAILABLE}
@@ -1019,9 +1019,9 @@ begin
         LConverged := False;
 
         if Abs(LApp - LAqq) < 1e-10 then
-          LTheta := PI / 4
+          LTheta := PI_VALUE / 4
         else
-          LTheta := 0.5 * Math.ArcTan2(2 * LApq, LApp - LAqq);
+          LTheta := 0.5 * ArcTan2(2 * LApq, LApp - LAqq);
 
         LCos := Cos(LTheta);
         LSin := Sin(LTheta);

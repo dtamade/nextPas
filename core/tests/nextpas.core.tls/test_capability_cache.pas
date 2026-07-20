@@ -3,7 +3,7 @@ program test_capability_cache;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
@@ -45,7 +45,7 @@ begin
     StartTime := Now;
     Caps := Lib.GetCapabilities;
     EndTime := Now;
-    FirstCallTime := MilliSecondsBetween(EndTime, StartTime);
+    FirstCallTime := DateTimeMillisecondsBetween(EndTime, StartTime);
     WriteLn('  Backend: ', SSL_LIBRARY_NAMES[Caps.BackendType]);
     WriteLn('  Version: ', Caps.BackendVersion);
     WriteLn('  Time: ', FirstCallTime, ' ms');
@@ -56,7 +56,7 @@ begin
     for I := 1 to ITERATIONS do
       Caps := Lib.GetCapabilities;
     EndTime := Now;
-    CachedCallTime := MilliSecondsBetween(EndTime, StartTime);
+    CachedCallTime := DateTimeMillisecondsBetween(EndTime, StartTime);
 
     WriteLn('  Total Time: ', CachedCallTime, ' ms');
     WriteLn('  Average per call: ', (CachedCallTime / ITERATIONS):0:6, ' ms');

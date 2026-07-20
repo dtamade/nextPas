@@ -13,7 +13,7 @@ program test_mbedtls_cert_verify_flags;
 }
 
 uses
-  SysUtils, Classes, TypInfo,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   fafafa.examples.tcp;

@@ -7,7 +7,7 @@ uses
   {$IFDEF WINDOWS}
   Windows, WinSock2,
   {$ENDIF}
-  SysUtils, Classes, Process,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Process,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,

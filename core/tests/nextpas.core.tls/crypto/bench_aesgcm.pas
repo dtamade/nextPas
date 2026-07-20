@@ -4,7 +4,7 @@ program bench_aesgcm;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, DateUtils, nextpas.core.tls.crypto.aesgcm, nextpas.core.tls.crypto.aesni;
+  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.tls.crypto.aesgcm, nextpas.core.tls.crypto.aesni;
 
 const
   ITERATIONS = 10000;
@@ -40,7 +40,7 @@ begin
   LStart := Now;
   for I := 1 to ITERATIONS do
     PurePascalAESGCMEncrypt(LKey128, LIV, LPlaintext, LAAD, LCiphertext, LTag);
-  LElapsed := MilliSecondsBetween(Now, LStart);
+  LElapsed := DateTimeMillisecondsBetween(Now, LStart);
   WriteLn('AES-128-GCM Encrypt (AES-NI): ', LElapsed, ' ms / ', ITERATIONS, ' ops');
   if LElapsed > 0 then
     WriteLn('  Throughput: ', (Int64(ITERATIONS) * DATA_SIZE * 1000) div (LElapsed * 1024 * 1024), ' MB/s');
@@ -51,7 +51,7 @@ begin
   LStart := Now;
   for I := 1 to ITERATIONS do
     PurePascalAESGCMEncrypt(LKey256, LIV, LPlaintext, LAAD, LCiphertext, LTag);
-  LElapsed := MilliSecondsBetween(Now, LStart);
+  LElapsed := DateTimeMillisecondsBetween(Now, LStart);
   WriteLn('AES-256-GCM Encrypt (Pascal):  ', LElapsed, ' ms / ', ITERATIONS, ' ops');
   if LElapsed > 0 then
     WriteLn('  Throughput: ', (Int64(ITERATIONS) * DATA_SIZE * 1000) div (LElapsed * 1024 * 1024), ' MB/s');
@@ -61,7 +61,7 @@ begin
   LStart := Now;
   for I := 1 to ITERATIONS do
     PurePascalAESGCMDecrypt(LKey128, LIV, LCiphertext, LTag, LAAD, LDecrypted);
-  LElapsed := MilliSecondsBetween(Now, LStart);
+  LElapsed := DateTimeMillisecondsBetween(Now, LStart);
   WriteLn('AES-128-GCM Decrypt (AES-NI): ', LElapsed, ' ms / ', ITERATIONS, ' ops');
   if LElapsed > 0 then
     WriteLn('  Throughput: ', (Int64(ITERATIONS) * DATA_SIZE * 1000) div (LElapsed * 1024 * 1024), ' MB/s');

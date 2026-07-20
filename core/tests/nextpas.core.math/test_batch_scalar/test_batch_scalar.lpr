@@ -4,6 +4,7 @@ program test_batch_scalar;
 
 uses
   nextpas.core.test,
+  nextpas.core.errors,
   nextpas.core.math;
 
 var
@@ -211,14 +212,19 @@ procedure TestBatchMismatchedLength;
 var
   LInput: array[0..2] of Single;
   LOutput: array[0..1] of Single;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LInput[0] := 0.0;
   LInput[1] := 1.0;
   LInput[2] := 2.0;
-
-  LCount := BatchSinF32(LInput, LOutput);
-  Check(LCount = 2, 'BatchSinF32 handles mismatched lengths');
+  LRaised := False;
+  try
+    BatchSinF32(LInput, LOutput);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'BatchSinF32 mismatched lengths raise EArgumentError');
 end;
 
 procedure TestBatchSinF64;
@@ -413,14 +419,19 @@ procedure TestBatchMismatchedLengthF64;
 var
   LInput: array[0..2] of Double;
   LOutput: array[0..1] of Double;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LInput[0] := 0.0;
   LInput[1] := 1.0;
   LInput[2] := 2.0;
-
-  LCount := BatchSinF64(LInput, LOutput);
-  Check(LCount = 2, 'BatchSinF64 handles mismatched lengths');
+  LRaised := False;
+  try
+    BatchSinF64(LInput, LOutput);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'BatchSinF64 mismatched lengths raise EArgumentError');
 end;
 
 begin

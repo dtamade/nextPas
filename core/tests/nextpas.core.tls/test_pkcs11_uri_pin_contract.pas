@@ -3,8 +3,8 @@ program test_pkcs11_uri_pin_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.uri,
   nextpas.core.tls.pkcs11.pin,

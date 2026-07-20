@@ -8,7 +8,7 @@ program test_asn1_module;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.time, ctypes,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.api.core,

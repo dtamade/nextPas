@@ -7,7 +7,7 @@ program test_connection_builder_hostname_precedence;
   fallback unless callers set an explicit hostname. }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
   nextpas.core.tls.connection.builder;

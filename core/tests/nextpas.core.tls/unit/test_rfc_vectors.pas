@@ -3,7 +3,7 @@ program test_rfc_vectors;
 {$mode ObjFPC}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.crypto.ed25519,
   nextpas.core.tls.crypto.primitives,
   nextpas.core.tls.crypto.x25519;

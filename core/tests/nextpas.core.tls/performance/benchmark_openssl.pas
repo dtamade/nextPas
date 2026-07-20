@@ -3,7 +3,7 @@ program benchmark_openssl;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core;
 
@@ -22,7 +22,7 @@ begin
   WriteLn('fafafa.ssl 性能基准测试');
   WriteLn('========================================');
   WriteLn;
-  
+
   // 加载OpenSSL
   Write('加载OpenSSL...');
   try
@@ -36,13 +36,13 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL版本: ', GetOpenSSLVersionString);
   WriteLn;
-  
+
   WriteLn('=== 基础性能测试 ===');
   WriteLn;
-  
+
   // 测试1: 库加载性能
   Write('测试库加载/卸载...');
   StartTime := Now;
@@ -52,11 +52,11 @@ begin
     LoadOpenSSLCore;
   end;
   EndTime := Now;
-  ElapsedMS := MilliSecondsBetween(EndTime, StartTime);
+  ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
   PrintResult('  100次加载/卸载', ElapsedMS);
   WriteLn;
-  
+
   WriteLn('========================================');
   WriteLn('测试完成');
   WriteLn('========================================');

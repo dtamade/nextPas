@@ -4,7 +4,7 @@ program test_ct_pure;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base64,
   nextpas.core.tls.ct.logs,
   nextpas.core.tls.ct.pure,

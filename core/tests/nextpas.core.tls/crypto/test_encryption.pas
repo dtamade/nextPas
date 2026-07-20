@@ -3,7 +3,7 @@ program test_encryption;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.secure;
 
@@ -17,14 +17,14 @@ var
 begin
   WriteLn('=== Testing TSecureKeyStore AES-256-GCM Encryption ===');
   WriteLn;
-  
+
   // Create key store
   WriteLn('1. Creating TSecureKeyStore...');
   LKeyStore := TSecureKeyStoreImpl.Create('test_password');
   try
     WriteLn('   ✓ Key store created');
     WriteLn;
-    
+
     // Create test data
     WriteLn('2. Creating test data...');
     SetLength(LTestData, 35);
@@ -35,7 +35,7 @@ begin
     Write(PChar(LOriginal.Data));
     WriteLn;
     WriteLn;
-    
+
     // Encrypt
     WriteLn('3. Encrypting with AES-256-GCM...');
     LPassword := 'MySecurePassword123!';
@@ -43,21 +43,21 @@ begin
     WriteLn('   ✓ Encryption successful');
     WriteLn('   Encrypted size: ', Length(LEncrypted), ' bytes (includes salt+IV+tag)');
     WriteLn;
-    
+
     // Decrypt
     WriteLn('4. Decrypting...');
     LDecrypted := LKeyStore.DecryptKey(LEncrypted, LPassword);
    WriteLn('   ✓ Decryption successful');
     WriteLn;
-    
+
     // Verify
     WriteLn('5. Verifying integrity...');
-    if (LOriginal.Size = LDecrypted.Size) and 
+    if (LOriginal.Size = LDecrypted.Size) and
        (CompareMem(LOriginal.Data, LDecrypted.Data, LOriginal.Size)) then
     begin
       WriteLn('   ✓ SUCCESS: Data matches!');
       WriteLn;
-      
+
       // Test wrong password
       WriteLn('6. Testing authentication (wrong password)...');
       try
@@ -71,7 +71,7 @@ begin
         end;
       end;
       WriteLn;
-      
+
       WriteLn('=== ALL TESTS PASSED ===');
     end
     else
@@ -79,7 +79,7 @@ begin
       WriteLn('   ✗ FAILED: Data mismatch');
       ExitCode := 1;
     end;
-    
+
   finally
     LKeyStore.Free;
   end;

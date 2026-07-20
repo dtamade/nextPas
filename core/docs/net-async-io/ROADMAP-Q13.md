@@ -32,8 +32,11 @@
 | **Q35** | Windows 测试 cthreads 条件化 | `{$IFDEF UNIX}cthreads{$ENDIF}` 修编译 | **done** |
 | **Q36** | net.tcp/udp 去 POSIX sockaddr 耦合 | TPlatformSockAddr only — win64 可编 dial/udp | **done** |
 | **Q37** | async.tcp/udp Windows/macOS 可移植 | 去 accept4；async.udp TPlatformSockAddr | **done** |
+| **Q38** | Windows smoke 诚实化 | STRICT 收窄 + suite timeout；dial/udp/pool soft | **done** |
+| **Q39** | IOCP ConnectEx pre-bind | ConnectEx 前 wildcard bind + WSAGetLastError | **done** |
+| **Q40** | IOCP datagram | AsyncSendTo/AsyncRecvFrom via WSASendTo/WSARecvFrom | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
-| **—** | full native-windows claim | 等 Q33+Q37 扩容 smoke 多周绿 | **deferred** |
+| **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
 ### 为何 MPTCP 不做
 
@@ -56,7 +59,44 @@
 
 - `async.tcp`：同步试 accept 改为 `platform_socket_accept`（全平台），去掉 Linux-only `accept4`。
 - `async.udp`：op 缓冲用 `TPlatformSockAddr` + `platform_sockaddr_ipv4` / `_extract`，去 `posix.base`。
-- 验证：Linux dial/udp/pool/cancel/accept_connect 0 leak；GHA Windows async smoke 需再绿。
+- 验证：Linux dial/udp/pool/cancel/accept_connect 0 leak；Windows **编译** 通过。
+
+### Q38 细节（GHA 证据驱动）
+
+Q37 run `29755003106`：
+
+| 套件 | 结果 |
+|------|------|
+| compile_gate / contract / poller / iocp / accept_connect / resolve / error_classify | PASS |
+| dial | 3/19；成功路径 error≈−111 / stream nil |
+| udp | Bind ok；Recv arm / timeout arm fail |
+| pool | 挂死 >1h（无 suite timeout）→ cancel |
+| cancel_bridge | 未跑到 |
+
+动作：`async-windows-native-smoke.sh` STRICT 只含已绿项；dial/udp/pool/cancel 进 soft + 默认 120s `timeout`；文档 honesty。
+
+### Q39 细节
+
+MSDN：`ConnectEx` 要求 socket **已 bind**。Dial 无 LocalAddr 时 Linux `connect` 可隐式 bind，IOCP 路径却直接 `ConnectEx` → 失败映射为 dial −111 / stream nil。
+
+修复：`TIocpReactor.AsyncConnect` 在 ConnectEx 前按目标族 bind `0.0.0.0:0` / `::`；已 bind（LocalAddr）时忽略 `WSAEINVAL`；错误码改用 `WSAGetLastError`。
+
+UDP soft 仍待 IOCP `AsyncSendTo`/`AsyncRecvFrom`（poller 明确未实现）。
+
+### Q40 细节
+
+- `WSASendTo` / `WSARecvFrom` FFI
+- `TIocpReactor.AsyncSendTo` / `AsyncRecvFrom` + poller `pbIocp` 接线
+- 与 epoll 路径同样的回调契约（`AAddrLen` 指针 out for recvfrom）
+- soft 套件仍报告；GHA 绿后再升 STRICT
+
+### 待升 STRICT 条件
+
+| soft 套件 | 阻塞 | 修复 |
+|-----------|------|------|
+| dial / pool | ConnectEx unbound | **Q39** |
+| udp | 无 IOCP datagram | **Q40** |
+| cancel_bridge | 依赖 stream bind + dial | Q39 后应连带改善 |
 
 ## Q13 细节
 

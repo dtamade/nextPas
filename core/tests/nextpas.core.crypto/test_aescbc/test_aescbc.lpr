@@ -3,7 +3,7 @@ program test_aescbc;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.aescbc,
   nextpas.core.test;
 

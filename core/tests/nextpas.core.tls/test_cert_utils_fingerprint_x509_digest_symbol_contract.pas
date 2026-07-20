@@ -3,7 +3,7 @@ program test_cert_utils_fingerprint_x509_digest_symbol_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

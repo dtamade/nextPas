@@ -3,7 +3,7 @@ program test_stream_migration;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.crl,
@@ -132,7 +132,7 @@ begin
     'FsCreate replacement is missing in ' + CERT_ADVANCED_PATH);
   Check(Pos('Classes', LText) = 0,
     'cert.advanced removed Classes uses',
-    'Classes is still present in ' + CERT_ADVANCED_PATH);
+    'nextpas.core.system.classes is still present in ' + CERT_ADVANCED_PATH);
 
   LText := LoadText(CT_LOG_PATH);
   Check(Pos('TFileStream', LText) = 0,
@@ -140,7 +140,7 @@ begin
     'TFileStream is still present in ' + CT_LOG_PATH);
   Check(Pos('Classes', LText) = 0,
     'ct.log removed Classes uses',
-    'Classes is still present in ' + CT_LOG_PATH);
+    'nextpas.core.system.classes is still present in ' + CT_LOG_PATH);
   Check(Pos('FsOpen(', LText) > 0,
     'ct.log uses FsOpen',
     'FsOpen replacement is missing in ' + CT_LOG_PATH);
@@ -168,7 +168,7 @@ begin
     'FsCreate replacement is missing in ' + OCSP_CACHE_PATH);
   Check(Pos('Classes', LText) = 0,
     'ocsp.cache removed Classes uses',
-    'Classes is still present in ' + OCSP_CACHE_PATH);
+    'nextpas.core.system.classes is still present in ' + OCSP_CACHE_PATH);
 
   LText := LoadText(ASN1_PATH);
   Check(Pos('TMemoryStream', LText) = 0,
@@ -194,7 +194,7 @@ begin
     'Base64Encode replacement is missing in ' + CERT_PINNING_PATH);
   Check(Pos('Classes', LText) = 0,
     'cert.pinning removed Classes uses',
-    'Classes is still present in ' + CERT_PINNING_PATH);
+    'nextpas.core.system.classes is still present in ' + CERT_PINNING_PATH);
 
   LText := LoadText(DEBUG_UTILS_PATH);
   Check(Pos('class(TMemoryStream)', LText) = 0,

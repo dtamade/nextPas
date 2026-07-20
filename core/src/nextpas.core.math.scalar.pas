@@ -148,6 +148,13 @@ function IsNaN(const AValue: Single): Boolean; overload; inline;
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
 function IsInfinite(const AValue: Single): Boolean; overload; inline;
 
+{** * IEEE special values with FPC Math-compatible names (Double payloads).
+ * Built from bit patterns — no exception-raising division.
+ *}
+function NaN: Double; inline;
+function Infinity: Double; inline;
+function NegInfinity: Double; inline;
+
 {** * Tests approximate equality of two floating-point values.
  * @param AA First value
  * @param AB Second value
@@ -290,8 +297,7 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.math.impl.scalar,
-  Math;
+  nextpas.core.math.impl.scalar;
 
 { RoundTo - rounds AValue to ADecimals decimal places }
 function RoundTo(const AValue: Double; const ADecimals: Integer): Double;
@@ -1443,6 +1449,21 @@ begin
   Result := DoubleIsInfinite(AValue);
 end;
 
+function NaN: Double;
+begin
+  Result := DoubleQuietNaN;
+end;
+
+function Infinity: Double;
+begin
+  Result := DoubleSignedInfinity(False);
+end;
+
+function NegInfinity: Double;
+begin
+  Result := DoubleSignedInfinity(True);
+end;
+
 function IsFinite(const AValue: Single): Boolean;
 begin
   Result := (not SingleIsNaN(AValue)) and (not SingleIsInfinite(AValue));
@@ -1619,22 +1640,13 @@ begin
     else
       Exit(0.0);
   end;
-  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
-  begin
-    Result := Single(Math.FMod(Double(AX), Double(AY)));
-    if Result = 0.0 then
-      Result := SingleSignedZero(SingleHasSignBit(AX));
-  end
+  LDoubleResult := FmodPositiveFinite(LAbsX, LAbsY);
+  if LDoubleResult = 0.0 then
+    Result := SingleSignedZero(SingleHasSignBit(AX))
+  else if SingleHasSignBit(AX) then
+    Result := Single(-LDoubleResult)
   else
-  begin
-    LDoubleResult := FmodPositiveFinite(LAbsX, LAbsY);
-    if LDoubleResult = 0.0 then
-      Result := SingleSignedZero(SingleHasSignBit(AX))
-    else if SingleHasSignBit(AX) then
-      Result := Single(-LDoubleResult)
-    else
-      Result := Single(LDoubleResult);
-  end;
+    Result := Single(LDoubleResult);
 end;
 
 function Fmod(const AX, AY: Double): Double;
@@ -1669,20 +1681,11 @@ begin
     else
       Exit(0.0);
   end;
-  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
-  begin
-    Result := Math.FMod(AX, AY);
-    if Result = 0.0 then
-      Result := DoubleSignedZero(DoubleHasSignBit(AX));
-  end
-  else
-  begin
-    Result := FmodPositiveFinite(LAbsX, LAbsY);
-    if Result = 0.0 then
-      Result := DoubleSignedZero(DoubleHasSignBit(AX))
-    else if DoubleHasSignBit(AX) then
-      Result := -Result;
-  end;
+  Result := FmodPositiveFinite(LAbsX, LAbsY);
+  if Result = 0.0 then
+    Result := DoubleSignedZero(DoubleHasSignBit(AX))
+  else if DoubleHasSignBit(AX) then
+    Result := -Result;
 end;
 
 {$IF SizeOf(Extended) > SizeOf(Double)}
@@ -1718,20 +1721,11 @@ begin
     else
       Exit(0.0);
   end;
-  if (LAbsY > 1.0e-100) and (LAbsX < 1.0e100) and (LAbsX / LAbsY < 1.0e15) then
-  begin
-    Result := Math.FMod(AX, AY);
-    if Result = 0.0 then
-      Result := ExtendedSignedZero(ExtendedHasSignBit(AX));
-  end
-  else
-  begin
-    Result := FmodPositiveFinite(LAbsX, LAbsY);
-    if Result = 0.0 then
-      Result := ExtendedSignedZero(ExtendedHasSignBit(AX))
-    else if ExtendedHasSignBit(AX) then
-      Result := -Result;
-  end;
+  Result := FmodPositiveFinite(LAbsX, LAbsY);
+  if Result = 0.0 then
+    Result := ExtendedSignedZero(ExtendedHasSignBit(AX))
+  else if ExtendedHasSignBit(AX) then
+    Result := -Result;
 end;
 {$ENDIF}
 

@@ -3,7 +3,7 @@ program TestCertificatePinning;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.pinning,
   nextpas.core.tls.openssl.api.x509,
@@ -28,20 +28,20 @@ var
   Hash: TBytes;
 begin
   WriteLn('=== Test: Pin Creation ===');
-  
+
   Validator := TPinValidator.Create;
   try
     // Create a test hash
     SetLength(Hash, 32);
     FillChar(Hash[0], 32, $AA);
-    
+
     // Add pin
     Validator.AddPin(Hash, ptPublicKey, 'Test Pin', False);
-    
+
     WriteLn('✓ Pin created successfully');
     WriteLn('  Pin count: ', Length(Validator.Pins));
     WriteLn('  Valid pins: ', Validator.GetValidPinCount);
-    
+
     // Test Base64 pin
     Validator.AddPinBase64(
       'YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=',
@@ -49,14 +49,14 @@ begin
       'Base64 Test Pin',
       True
     );
-    
+
     WriteLn('✓ Base64 pin created successfully');
     WriteLn('  Total pins: ', Length(Validator.Pins));
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -66,39 +66,39 @@ var
   Hash: TBytes;
 begin
   WriteLn('=== Test: Secure Configuration ===');
-  
+
   Validator := TPinValidator.Create;
   try
     SetLength(Hash, 32);
-    
+
     // Test with 0 pins (insecure)
     if not Validator.IsSecureConfiguration then
       WriteLn('✓ Correctly identified insecure config (0 pins)')
     else
       WriteLn('✗ Failed: Should reject 0 pins');
-    
+
     // Add 1 pin (still insecure)
     FillChar(Hash[0], 32, $AA);
     Validator.AddPin(Hash, ptPublicKey, 'Pin 1', False);
-    
+
     if not Validator.IsSecureConfiguration then
       WriteLn('✓ Correctly identified insecure config (1 pin)')
     else
       WriteLn('✗ Failed: Should reject 1 pin');
-    
+
     // Add 2nd pin (now secure)
     FillChar(Hash[0], 32, $BB);
     Validator.AddPin(Hash, ptPublicKey, 'Pin 2', True);
-    
+
     if Validator.IsSecureConfiguration then
       WriteLn('✓ Correctly identified secure config (2 pins)')
     else
       WriteLn('✗ Failed: Should accept 2 pins');
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -109,28 +109,28 @@ var
   Info: string;
 begin
   WriteLn('=== Test: Pin Information ===');
-  
+
   Validator := TPinValidator.Create;
   try
     SetLength(Hash, 32);
-    
+
     // Add test pins
     FillChar(Hash[0], 32, $AA);
     Validator.AddPin(Hash, ptPublicKey, 'Primary Pin', False);
-    
+
     FillChar(Hash[0], 32, $BB);
     Validator.AddPin(Hash, ptCertificate, 'Backup Pin', True);
-    
+
     // Get info
     Info := Validator.GetPinInfo;
     WriteLn(Info);
-    
+
     WriteLn('✓ Pin information retrieved successfully');
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -140,32 +140,32 @@ var
   Hash: TBytes;
 begin
   WriteLn('=== Test: Clear Pins ===');
-  
+
   Validator := TPinValidator.Create;
   try
     SetLength(Hash, 32);
     FillChar(Hash[0], 32, $AA);
-    
+
     // Add pins
     Validator.AddPin(Hash, ptPublicKey, 'Pin 1', False);
     Validator.AddPin(Hash, ptPublicKey, 'Pin 2', True);
-    
+
     WriteLn('Pins before clear: ', Length(Validator.Pins));
-    
+
     // Clear
     Validator.ClearPins;
-    
+
     WriteLn('Pins after clear: ', Length(Validator.Pins));
-    
+
     if Length(Validator.Pins) = 0 then
       WriteLn('✓ Pins cleared successfully')
     else
       WriteLn('✗ Failed: Pins not cleared');
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -203,22 +203,22 @@ begin
     WriteLn('Certificate Pinning Test Suite');
     WriteLn('==============================');
     WriteLn;
-    
+
     // Initialize OpenSSL
     LoadOpenSSLCore;
-    
+
     // Run tests
     TestPinCreation;
     TestSecureConfiguration;
     TestPinInfo;
     TestClearPins;
-    
+
     // Show best practices
     ShowBestPractices;
-    
+
     WriteLn('All tests completed!');
     WriteLn;
-    
+
   except
     on E: Exception do
     begin

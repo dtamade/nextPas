@@ -34,7 +34,6 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.system.classes,
   nextpas.core.fs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
@@ -93,7 +92,7 @@ type
     PublicKeyType: string;     // 公钥类型
     PublicKeyBits: Integer;    // 公钥位数
     SignatureAlgorithm: string;// 签名算法
-    SubjectAltNames: TStringList; // SAN (备用名称)
+    SubjectAltNames: TStringArray; // SAN (备用名称，值类型，无需 Free)
     KeyUsage: string;          // 密钥用途
     IsCA: Boolean;             // 是否CA证书
     Version: Integer;          // 证书版本
@@ -113,11 +112,12 @@ type
     KeyType: TKeyType;         // 密钥类型
     KeyBits: Integer;          // RSA密钥位数 (2048/4096)
     ECCurve: string;           // EC曲线名称 (prime256v1/secp384r1)
-    SubjectAltNames: TStringList; // 备用名称
+    SubjectAltNames: TStringArray; // 备用名称（值类型，无需 Free）
     IsCA: Boolean;             // 是否CA证书
     SerialNumber: Int64;       // 序列号 (0=自动生成)
     OCSPResponderURL: string;  // 可选：写入 AIA 的 OCSP Responder URL（http/https）
   end;
+
 
   {**
    * 企业级证书工具类
@@ -286,6 +286,12 @@ type
     ): Boolean;
   end;
 
+{ Append a SAN entry to certificate generation options (value-type array). }
+procedure CertOptionsAddSAN(var AOptions: TCertGenOptions; const ASAN: string);
+{ Join SAN entries for OpenSSL extension text (comma-separated). }
+function JoinSubjectAltNames(const ANames: TStringArray): string;
+
+
 implementation
 
 uses
@@ -298,6 +304,27 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.certchain;
+
+
+procedure CertOptionsAddSAN(var AOptions: TCertGenOptions; const ASAN: string);
+begin
+  SetLength(AOptions.SubjectAltNames, Length(AOptions.SubjectAltNames) + 1);
+  AOptions.SubjectAltNames[High(AOptions.SubjectAltNames)] := ASAN;
+end;
+
+function JoinSubjectAltNames(const ANames: TStringArray): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(ANames) do
+  begin
+    if I > 0 then
+      Result := Result + ',';
+    Result := Result + ANames[I];
+  end;
+end;
+
 
 { TCertificateUtils }
 
@@ -417,7 +444,7 @@ begin
   Result.KeyType := ktRSA;
   Result.KeyBits := DEFAULT_RSA_KEY_BITS;
   Result.ECCurve := DEFAULT_EC_CURVE;
-  Result.SubjectAltNames := TStringList.Create;
+  SetLength(Result.SubjectAltNames, 0);
   Result.IsCA := False;
   Result.SerialNumber := 0;
   Result.OCSPResponderURL := '';
@@ -973,14 +1000,11 @@ begin
       AddExtension(LCert, LCert, NID_authority_key_identifier, 'keyid:always');
 
       // Subject Alternative Names
-      if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+      if Length(AOptions.SubjectAltNames) > 0 then
       begin
-        // Force comma delimiter without quotes
-        AOptions.SubjectAltNames.Delimiter := ',';
-        AOptions.SubjectAltNames.QuoteChar := #0;
-        if not AddExtension(LCert, LCert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText) then
+        if not AddExtension(LCert, LCert, NID_subject_alt_name,
+          JoinSubjectAltNames(AOptions.SubjectAltNames)) then
           ; // Check for failure silently or convert to exception if critical
-
       end;
 
       // Authority Information Access (OCSP)
@@ -1271,8 +1295,9 @@ begin
           AddExtension(LCert, LCACert, NID_authority_key_identifier, 'keyid:always,issuer');
 
           // Subject Alternative Names
-          if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
-            AddExtension(LCert, LCACert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText);
+          if Length(AOptions.SubjectAltNames) > 0 then
+            AddExtension(LCert, LCACert, NID_subject_alt_name,
+              JoinSubjectAltNames(AOptions.SubjectAltNames));
 
           // Authority Information Access (OCSP)
           if (AOptions.OCSPResponderURL <> '') and Assigned(OBJ_txt2nid) then
@@ -1438,7 +1463,7 @@ var
   LKeyUsageFlags: Cardinal;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.SubjectAltNames := TStringList.Create;
+  SetLength(Result.SubjectAltNames, 0);
 
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     LoadOpenSSLCore();
@@ -1626,7 +1651,9 @@ begin
               if (LType = 2) and (LVal <> nil) then // 2 = GEN_DNS
               begin
                 // LVal is ASN1_STRING (implicitly).
-                Result.SubjectAltNames.Add('DNS:' + ASN1StringToString(ASN1_STRING(LVal)));
+                SetLength(Result.SubjectAltNames, Length(Result.SubjectAltNames) + 1);
+                Result.SubjectAltNames[High(Result.SubjectAltNames)] :=
+                  'DNS:' + ASN1StringToString(ASN1_STRING(LVal));
               end;
             end;
           end;
@@ -1971,13 +1998,9 @@ var
   LCurrentTime: TDateTime;
 begin
   LInfo := GetInfo(ACertPEM);
-  try
-    LCurrentTime := DateTimeUtcNow;
-    Result := (LCurrentTime >= LInfo.NotBefore) and
-      (LCurrentTime <= LInfo.NotAfter);
-  finally
-    LInfo.SubjectAltNames.Free;
-  end;
+  LCurrentTime := DateTimeUtcNow;
+  Result := (LCurrentTime >= LInfo.NotBefore) and
+    (LCurrentTime <= LInfo.NotAfter);
 end;
 
 {**
@@ -2047,77 +2070,89 @@ class function TCertificateUtils.CompareX509Names(
 ): Boolean;
 var
   LName1, LName2: string;
-  LComponents1, LComponents2: TStringList;
-  i: Integer;
+  LComponents1, LComponents2: TStringArray;
+  I, J: Integer;
+  LFound: Boolean;
 
   function NormalizeDN(const ADN: string): string;
   var
-    s: string;
+    S: string;
   begin
-    s := Trim(ADN);
-    s := StringReplace(s, ' = ', '=', True);
-    s := StringReplace(s, '= ', '=', True);
-    s := StringReplace(s, ' =', '=', True);
-    s := StringReplace(s, ', ', ',', True);
+    S := Trim(ADN);
+    S := StringReplace(S, ' = ', '=', True);
+    S := StringReplace(S, '= ', '=', True);
+    S := StringReplace(S, ' =', '=', True);
+    S := StringReplace(S, ', ', ',', True);
 
     if ACaseInsensitive then
-      Result := LowerCase(s)
+      Result := LowerCase(S)
     else
-      Result := s;
+      Result := S;
   end;
 
-  procedure ParseDN(const ADN: string; AList: TStringList);
+  function ParseDNParts(const ADN: string): TStringArray;
   var
     Components: TStringArray;
-    j: Integer;
+    K, M: Integer;
+    Part: string;
+    Found: Boolean;
   begin
-    AList.Clear;
-    AList.Sorted := True;
-    AList.Duplicates := dupIgnore;
-
+    SetLength(Result, 0);
     Components := nextpas.core.text.strings.StringsSplit(ADN, ',');
-    for j := 0 to Length(Components) - 1 do
-      AList.Add(Trim(Components[j]));
+    for K := 0 to High(Components) do
+    begin
+      Part := Trim(Components[K]);
+      if Part = '' then
+        Continue;
+      Found := False;
+      for M := 0 to High(Result) do
+        if Result[M] = Part then
+        begin
+          Found := True;
+          Break;
+        end;
+      if not Found then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)] := Part;
+      end;
+    end;
   end;
 
 begin
   Result := False;
 
   if AName1 = AName2 then
-  begin
-    Result := True;
-    Exit;
-  end;
+    Exit(True);
 
   LName1 := NormalizeDN(AName1);
   LName2 := NormalizeDN(AName2);
 
   if LName1 = LName2 then
-  begin
-    Result := True;
+    Exit(True);
+
+  LComponents1 := ParseDNParts(LName1);
+  LComponents2 := ParseDNParts(LName2);
+
+  if Length(LComponents1) <> Length(LComponents2) then
     Exit;
-  end;
-  LComponents1 := TStringList.Create;
-  LComponents2 := TStringList.Create;
-  try
-    ParseDN(LName1, LComponents1);
-    ParseDN(LName2, LComponents2);
 
-    if LComponents1.Count <> LComponents2.Count then
-      Exit;
-
-    Result := True;
-    for i := 0 to LComponents1.Count - 1 do
-    begin
-      if LComponents1[i] <> LComponents2[i] then
+  // Multiset equality (order-independent, matches sorted TStringList semantics)
+  Result := True;
+  for I := 0 to High(LComponents1) do
+  begin
+    LFound := False;
+    for J := 0 to High(LComponents2) do
+      if LComponents1[I] = LComponents2[J] then
       begin
-        Result := False;
+        LFound := True;
         Break;
       end;
+    if not LFound then
+    begin
+      Result := False;
+      Exit;
     end;
-  finally
-    LComponents1.Free;
-    LComponents2.Free;
   end;
 end;
 
@@ -2177,7 +2212,7 @@ begin
     Result := True;
   except
     FillChar(AInfo, SizeOf(AInfo), 0);
-    AInfo.SubjectAltNames := TStringList.Create;
+    SetLength(AInfo.SubjectAltNames, 0);
     Result := False;
   end;
 end;

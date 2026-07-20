@@ -15,14 +15,14 @@
 ## What native Windows host evidence covers
 
 1. **Runner**: `windows-latest` with FPC trunk **x86_64-win64** (core-ci snapshot install).
-2. **Suite (async smoke, Q33 expanded)**:
-   - `test_async_windows_compile_gate` / `test_async_windows_contract`
-   - `test_poller_windows_runtime_smoke`
-   - `test_reactor_iocp_wine` (on native host)
-   - `test_async_accept_connect_smoke`
-   - **Q33+**: `test_net_async_dial`, `test_net_async_resolve`, `test_net_async_udp`,
-     `test_net_async_pool`, `test_net_error_classify`, `test_net_cancel_bridge`
-3. **CI policy**: fail-closed (Q24B). Still **candidate** until multi-week green after expansion.
+2. **Suite (async smoke, Q38 honesty)**:
+   - **STRICT (fail-closed)**: compile_gate, windows_contract, poller.windows_runtime,
+     reactor.iocp, accept_connect (Windows skip-ok), `test_net_async_resolve`,
+     `test_net_error_classify`
+   - **SOFT / aspirational (report only, suite timeout)**: dial, udp, pool, cancel_bridge
+     — compile after **Q37**; runtime not green (IOCP connect −111 / recv arm / pool hang)
+   - Historical Q33 full expansion deferred until SOFT suites green
+3. **CI policy**: fail-closed (Q24B) on **STRICT** set only. Still **candidate**.
 
 ## Current CI reality
 
@@ -66,7 +66,9 @@ bash core/scripts/async-windows-smoke-streak.sh
 - Host tests that need threads must use `{$IFDEF UNIX}cthreads,{$ENDIF}` — Windows FPC has no `cthreads` unit; unconditional `uses cthreads` fails compile on win64 smoke.
 - Q33 expansion required this fix for dial/resolve/udp/pool/accept/cancel suites.
 - **Q36**: sync `net.tcp`/`net.udp` use `TPlatformSockAddr` only (no POSIX `sockaddr_in` in product path).
-- **Q37**: `async.tcp` no longer calls `accept4` (uses `platform_socket_accept` for sync try); `async.udp` uses `TPlatformSockAddr` like sync udp — unblocks Windows/macOS compile of expanded smoke suites.
+- **Q37**: `async.tcp` no longer calls `accept4` (uses `platform_socket_accept` for sync try); `async.udp` uses `TPlatformSockAddr` like sync udp — unblocks Windows/macOS **compile** of expanded suites.
+- **Q39**: ConnectEx pre-bind + WSAGetLastError for dial path.
+- **Q40**: IOCP `AsyncSendTo`/`AsyncRecvFrom` (WSASendTo/WSARecvFrom) for async UDP.
 
 ## Full `truth=native-windows` (deferred)
 

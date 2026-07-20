@@ -4,7 +4,7 @@ program test_p384;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, nextpas.core.tls.crypto.p384;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.p384;
 
 var
   LTotal, LPassed: Integer;
@@ -186,7 +186,7 @@ begin
 end;
 
 begin
-  
+
   LTotal := 0;
   LPassed := 0;
 

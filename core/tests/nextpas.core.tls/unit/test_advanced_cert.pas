@@ -3,7 +3,7 @@ program test_advanced_cert;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.cert.advanced,
   nextpas.core.tls.cert.builder;
 
@@ -13,11 +13,11 @@ var
   LResponse: TOCSPResponse;
 begin
   WriteLn('[Test 1] OCSP Client Interface');
-  
+
   LOCSPClient := CreateOCSPClient;
   LOCSPClient.SetResponderURL('http://ocsp.example.com');
   LOCSPClient.SetTimeout(30);
-  
+
   WriteLn('✓ OCSP client created');
   WriteLn('  Responder URL set');
   WriteLn('  Timeout: 30s');
@@ -30,7 +30,7 @@ var
   LCRLMgr: ICRLManager;
 begin
   WriteLn('[Test 2] CRL Manager Interface');
-  
+
   LCRLMgr := CreateCRLManager;
   WriteLn('✓ CRL manager created');
   WriteLn('  Note: Full CRL implementation in progress');
@@ -42,12 +42,12 @@ var
   LOptions: TPKCS12Options;
 begin
   WriteLn('[Test 3] PKCS#12 Manager');
-  
+
   LOptions := DefaultPKCS12Options;
   LOptions.FriendlyName := 'My Certificate';
   LOptions.Password := 'secret123';
   LOptions.Iterations := 4096;
-  
+
   WriteLn('✓ PKCS#12 options configured');
   WriteLn('  Friendly name: ', LOptions.FriendlyName);
   WriteLn('  Iterations: ', LOptions.Iterations);
@@ -60,12 +60,12 @@ begin
   WriteLn('  Advanced Certificate Features');
   WriteLn('====================================');
   WriteLn;
-  
+
   try
     TestOCSPClient;
     TestCRLManager;
     TestPKCS12;
-    
+
     WriteLn('====================================');
     WriteLn('✓ INTERFACES READY');
     WriteLn('====================================');
@@ -76,7 +76,7 @@ begin
     WriteLn('  • TPKCS12Manager - Certificate packaging');
     WriteLn;
     WriteLn('Next: Implement OpenSSL integration');
-    
+
   except
     on E: Exception do
     begin

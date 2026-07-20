@@ -4,7 +4,7 @@ program test_p256_point;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.p256.field,
   nextpas.core.crypto.p256.point,
   nextpas.core.test;

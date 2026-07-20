@@ -3,7 +3,7 @@ program test_openssl_rsa;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.crypto,
@@ -14,7 +14,7 @@ var
   TestsPassed: Integer = 0;
   TestsFailed: Integer = 0;
 
-procedure TestResult(const TestName: string; Passed: Boolean; 
+procedure TestResult(const TestName: string; Passed: Boolean;
   const Expected: string = ''; const Got: string = '');
 begin
   Write('  [', TestName, '] ... ');
@@ -57,11 +57,11 @@ var
   key_size: Integer;
 begin
   WriteLn('Testing RSA Key Generation:');
-  
+
   // Create RSA structure
   rsa := RSA_new();
   TestResult('RSA_new', rsa <> nil);
-  
+
   if rsa <> nil then
   begin
     // Create public exponent
@@ -70,27 +70,27 @@ begin
     begin
       // Set e = 65537 (RSA_F4)
       BN_set_word(e, RSA_F4);
-      
+
       // Generate 2048-bit RSA key
       WriteLn('  Generating 2048-bit RSA key (this may take a moment)...');
-      TestResult('RSA_generate_key_ex (2048 bits)', 
+      TestResult('RSA_generate_key_ex (2048 bits)',
         RSA_generate_key_ex(rsa, 2048, e, nil) = 1);
-      
+
       // Check key size
       key_size := RSA_size(rsa);
-      TestResult('RSA_size (should be 256 for 2048-bit)', 
+      TestResult('RSA_size (should be 256 for 2048-bit)',
         key_size = 256, '256', IntToStr(key_size));
-      
+
       // Check bits
-      TestResult('RSA_bits (should be 2048)', 
+      TestResult('RSA_bits (should be 2048)',
         RSA_bits(rsa) = 2048, '2048', IntToStr(RSA_bits(rsa)));
-      
+
       BN_free(e);
     end;
-    
+
     RSA_free(rsa);
   end;
-  
+
   WriteLn;
 end;
 
@@ -106,7 +106,7 @@ var
   decrypted_str: AnsiString;
 begin
   WriteLn('Testing RSA Encryption/Decryption:');
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
@@ -114,10 +114,10 @@ begin
     WriteLn;
     Exit;
   end;
-  
+
   e := BN_new();
   BN_set_word(e, RSA_F4);
-  
+
   WriteLn('  Generating 2048-bit RSA key...');
   if RSA_generate_key_ex(rsa, 2048, e, nil) <> 1 then
   begin
@@ -128,12 +128,12 @@ begin
     Exit;
   end;
   BN_free(e);
-  
+
   // Test encryption/decryption
   plaintext := 'Hello, RSA!';
   FillChar(ciphertext, SizeOf(ciphertext), 0);
   FillChar(decrypted, SizeOf(decrypted), 0);
-  
+
   // Public key encryption
   encrypted_len := RSA_public_encrypt(
     Length(plaintext),
@@ -142,9 +142,9 @@ begin
     rsa,
     RSA_PKCS1_PADDING
   );
-  
+
   TestResult('RSA_public_encrypt', encrypted_len > 0);
-  
+
   if encrypted_len > 0 then
   begin
     // Private key decryption
@@ -155,18 +155,18 @@ begin
       rsa,
       RSA_PKCS1_PADDING
     );
-    
+
     TestResult('RSA_private_decrypt', decrypted_len > 0);
-    
+
     if decrypted_len > 0 then
     begin
       SetLength(decrypted_str, decrypted_len);
       Move(decrypted[0], decrypted_str[1], decrypted_len);
-      TestResult('Decrypted matches plaintext', 
+      TestResult('Decrypted matches plaintext',
         decrypted_str = plaintext, plaintext, decrypted_str);
     end;
   end;
-  
+
   RSA_free(rsa);
   WriteLn;
 end;
@@ -184,7 +184,7 @@ var
   nid_sha256: Integer;
 begin
   WriteLn('Testing RSA Sign/Verify:');
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
@@ -192,10 +192,10 @@ begin
     WriteLn;
     Exit;
   end;
-  
+
   e := BN_new();
   BN_set_word(e, RSA_F4);
-  
+
   WriteLn('  Generating 2048-bit RSA key...');
   if RSA_generate_key_ex(rsa, 2048, e, nil) <> 1 then
   begin
@@ -206,20 +206,20 @@ begin
     Exit;
   end;
   BN_free(e);
-  
+
   // Test signing
   message := 'Test message for signing';
   FillChar(signature, SizeOf(signature), 0);
   FillChar(verified, SizeOf(verified), 0);
   sig_len := 0;
-  
+
   // NID for SHA256 (usually 672)
   nid_sha256 := 672;
-  
+
   // Scope note: this block intentionally validates raw RSA private/public primitive round-trip.
   // It is not a substitute for full RSA_sign/RSA_verify digest+padding compliance testing.
   WriteLn('  Signing with RSA...');
-  
+
   // Use private key to sign (encrypt)
   sig_len := RSA_private_encrypt(
     Length(message),
@@ -228,9 +228,9 @@ begin
     rsa,
     RSA_PKCS1_PADDING
   );
-  
+
   TestResult('RSA_private_encrypt (sign)', sig_len > 0);
-  
+
   if sig_len > 0 then
   begin
     // Verify signature with public key
@@ -241,10 +241,10 @@ begin
       rsa,
       RSA_PKCS1_PADDING
     );
-    
+
     TestResult('RSA_public_decrypt (verify)', verify_result > 0);
   end;
-  
+
   RSA_free(rsa);
   WriteLn;
 end;
@@ -258,7 +258,7 @@ var
   p, q: PBIGNUM;
 begin
   WriteLn('Testing RSA Key Components:');
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
@@ -266,10 +266,10 @@ begin
     WriteLn;
     Exit;
   end;
-  
+
   e := BN_new();
   BN_set_word(e, RSA_F4);
-  
+
   WriteLn('  Generating 1024-bit RSA key (faster for testing)...');
   if RSA_generate_key_ex(rsa, 1024, e, nil) <> 1 then
   begin
@@ -280,25 +280,25 @@ begin
     Exit;
   end;
   BN_free(e);
-  
+
   // Get key components
   n := nil;
   e_get := nil;
   d := nil;
   RSA_get0_key(rsa, @n, @e_get, @d);
-  
+
   TestResult('RSA_get0_key (n)', n <> nil);
   TestResult('RSA_get0_key (e)', e_get <> nil);
   TestResult('RSA_get0_key (d)', d <> nil);
-  
+
   // Get factors
   p := nil;
   q := nil;
   RSA_get0_factors(rsa, @p, @q);
-  
+
   TestResult('RSA_get0_factors (p)', p <> nil);
   TestResult('RSA_get0_factors (q)', q <> nil);
-  
+
   RSA_free(rsa);
   WriteLn;
 end;
@@ -310,7 +310,7 @@ var
   e: PBIGNUM;
 begin
   WriteLn('Testing RSA Check Key:');
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
@@ -318,10 +318,10 @@ begin
     WriteLn;
     Exit;
   end;
-  
+
   e := BN_new();
   BN_set_word(e, RSA_F4);
-  
+
   WriteLn('  Generating 1024-bit RSA key...');
   if RSA_generate_key_ex(rsa, 1024, e, nil) <> 1 then
   begin
@@ -332,13 +332,13 @@ begin
     Exit;
   end;
   BN_free(e);
-  
+
   // Check key validity
   if Assigned(RSA_check_key) then
     TestResult('RSA_check_key (valid key)', RSA_check_key(rsa) = 1)
   else
     WriteLn('  RSA_check_key not available in this OpenSSL version');
-  
+
   RSA_free(rsa);
   WriteLn;
 end;
@@ -348,7 +348,7 @@ begin
   WriteLn('============================');
   WriteLn;
   PrintScopeNote;
-  
+
   // Load OpenSSL
   Write('Loading OpenSSL libraries... ');
   try
@@ -361,14 +361,14 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Load required modules
   LoadOpenSSLCrypto;
   LoadOpenSSLBN;
-  
+
   // Load RSA module
   Write('Loading RSA module... ');
   if not LoadOpenSSLRSA then
@@ -378,7 +378,7 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Run tests
   try
     TestRSAKeyGeneration;
@@ -393,7 +393,7 @@ begin
       Inc(TestsFailed);
     end;
   end;
-  
+
   // Print summary
   WriteLn('Test Summary:');
   WriteLn('=============');
@@ -401,7 +401,7 @@ begin
   WriteLn('Tests Failed: ', TestsFailed);
   WriteLn('Total Tests:  ', TestsPassed + TestsFailed);
   WriteLn;
-  
+
   if TestsFailed = 0 then
     WriteLn('All tests PASSED!')
   else
@@ -409,7 +409,7 @@ begin
     WriteLn('Some tests FAILED!');
     Halt(1);
   end;
-  
+
   // Cleanup
   UnloadOpenSSLRSA;
   UnloadOpenSSLBN;

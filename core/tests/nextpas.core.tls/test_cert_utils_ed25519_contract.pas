@@ -3,7 +3,7 @@ program test_cert_utils_ed25519_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.evp,
@@ -107,7 +107,6 @@ begin
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));
     finally
       if Assigned(LInfo.SubjectAltNames) then
-        LInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do
@@ -157,7 +156,6 @@ begin
         'CA KeyUsage=' + LCAInfo.KeyUsage);
     finally
       if Assigned(LCAInfo.SubjectAltNames) then
-        LCAInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do
@@ -221,7 +219,6 @@ begin
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));
     finally
       if Assigned(LInfo.SubjectAltNames) then
-        LInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do

@@ -1,7 +1,7 @@
 program test_tls12_serverhello_parse;
 {$mode objfpc}{$H+}{$J-}
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.wire;
 

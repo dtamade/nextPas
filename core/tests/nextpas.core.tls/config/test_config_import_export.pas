@@ -21,7 +21,7 @@ program test_config_import_export;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.backend.selector,
   nextpas.core.tls.context.builder,

@@ -4,7 +4,7 @@ program test_base_connection_time_metrics;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base;

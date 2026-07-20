@@ -1,9 +1,10 @@
 # Windows `platform.watch` design — ReadDirectoryChangesW
 
-**Status:** S1–S3 landed (create/add/close + RDCW poll + overflow AGAIN).
+**Status:** S1–S3 + multi-dir + L2 consumer **closed** (2026-07-21).
 **Owner:** platform lane. **Public API:** do not change without a new batch.
 
-**S1 decisions locked:** single-directory v1; recursive out of scope;
+**S1 decisions locked:** single-directory v1 → **superseded by Batch-23**
+multi-dir (see below); recursive OS flag still out of scope;
 `Fd` unused on Windows (`DirHandle` is validity).
 **S2:** OVERLAPPED + auto-reset event; poll returns **1** (event) / **0**
 (timeout) matching Linux test convention; residual multi-record drain.
@@ -15,6 +16,13 @@
 positive wd; `remove(wd)` closes slot; poll via WaitForMultipleObjects.
 **RDCW arm:** if ReadDirectoryChangesW returns success with 0 bytes, keep
 `Pending` so poll does not busy re-arm with empty wait set.
+**L2 AddTree (2026-07-21):** `nextpas.core.fs.watch.AddTree` walks the tree
+and multi-`Add`s each directory. **Does not** set RDCW `bWatchSubtree=True`.
+GHA 29759582229 @ `1790012ef`: platform matrix + L2 min-set steps success
+(includes `l2.fs.watch`). Local wine-runtime-smoke 6/0.
+**Recursive (closed):** platform keeps `bWatchSubtree=False` always. Product
+tree watch = L2 walk + multi-Add only. Reopen only with an explicit consumer
+batch + design revise (not a silent flag flip).
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
 and Darwin/FreeBSD (kqueue EVFILT_VNODE) already provide focused-runtime.
@@ -46,7 +54,9 @@ Wine smoke covers S1 + poll timeout + create-file event (wine residual OK).
 - IOCP completion-port driven watch (belongs with io.reactor later if needed).
 - Full FSEvents / kqueue feature parity (xattrs, rename chains, coalescing).
 - Network share / SMB edge cases as promotion criteria.
-- Recursive-by-default tree watches without an explicit flag (TBD in S3+).
+- **OS recursive watch via `bWatchSubtree=True`** (closed 2026-07-21): L2
+  `AddTree` multi-dir walk is the intentional product path; portable parity
+  with inotify per-directory watches; respects `PLATFORM_WATCH_WIN_MAX=8`.
 - Changing the portable event record layout (256-byte name cap stays).
 
 ## 3. Proposed Windows model
@@ -186,20 +196,23 @@ Confirm / add in `nextpas.core.platform.windows.ffi` (or base):
 Reuse existing: `CreateFileW`, `CloseHandle`, `GetLastError` mapping,
 UTF-16 helpers.
 
-## 9. Open decisions (need owner sign-off before S1)
+## 9. Decisions (S1+ closed)
 
-1. Single-directory v1 vs multi-path array like BSD `WatchFds`?
-2. Recursive watch: out of scope vs `bWatchSubtree` flag on add?
-3. Overflow: error vs synthetic event?
-4. `IsDir` best-effort required for v1 tests or optional?
+1. **Multi-path:** Batch-23 — Windows slots (`PLATFORM_WATCH_WIN_MAX=8`);
+   `add` returns wd; second+ paths no longer `NOSPC` within budget.
+2. **Recursive / `bWatchSubtree`:** **out of scope** for platform. L2
+   `AddTree` = DFS walk + multi-`Add` only. No RDCW subtree flag.
+3. **Overflow:** `PLATFORM_ERR_AGAIN` + re-arm (S3 locked).
+4. **`IsDir`:** best-effort; not required for hard smoke asserts.
 
 ## 10. References in-tree
 
 - `core/src/nextpas.core.platform.watch.pas` — portable API + stubs
 - `core/tests/nextpas.core.platform.watch/test_platform_watch/` — Linux behaviour
-- `core/tests/nextpas.core.platform.watch/test_platform_watch_wine/` — Win UNSUPPORTED smoke
-- Higher layer: `nextpas.core.fs.watch` (if present) should keep consuming portable API only
+- `core/tests/nextpas.core.platform.watch/test_platform_watch_wine/` — RDCW wine smoke (hard timeout; soft events under Wine)
+- Higher layer: `nextpas.core.fs.watch` consumes portable API; AddTree = multi-dir walk
 
 ---
 
-*Batch-15a design landed as documentation only. Implementation is a later batch.*
+*Batch-15a design → S1–S3 implement → Batch-22/23 multi-dir + L2 AddTree.
+Watch expand series closed 2026-07-21; standing maintenance only unless consumer pain.*

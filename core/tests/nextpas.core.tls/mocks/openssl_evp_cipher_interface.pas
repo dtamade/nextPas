@@ -4,7 +4,7 @@ unit openssl_evp_cipher_interface;
 
 {
   EVP Cipher Interface Abstraction
-  
+
   Purpose: Provide interface for EVP cipher operations
   Allows: Real OpenSSL implementation OR Mock implementation
   Benefits: True unit testing, fast execution, isolated tests
@@ -13,11 +13,11 @@ unit openssl_evp_cipher_interface;
 interface
 
 uses
-  Classes, SysUtils;
+  nextpas.core.system.classes, nextpas.core.system.sysutils;
 
 type
   TCipherMode = (cmECB, cmCBC, cmCFB, cmOFB, cmCTR, cmGCM, cmCCM, cmXTS, cmOCB);
-  TCipherAlgorithm = (caAES128, caAES192, caAES256, caChaCha20, caChaCha20Poly1305, 
+  TCipherAlgorithm = (caAES128, caAES192, caAES256, caChaCha20, caChaCha20Poly1305,
                       caCamellia128, caCamellia192, caCamellia256, caSM4);
   TCipherOperation = (coEncrypt, coDecrypt);
 
@@ -32,20 +32,20 @@ type
   { IEVPCipher - Interface for EVP cipher operations }
   IEVPCipher = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    
+
     // Basic encryption/decryption
-    function Encrypt(const aAlgorithm: TCipherAlgorithm; 
+    function Encrypt(const aAlgorithm: TCipherAlgorithm;
                      const aMode: TCipherMode;
-                     const aKey: TBytes; 
+                     const aKey: TBytes;
                      const aIV: TBytes;
                      const aPlaintext: TBytes): TCipherResult;
-                     
+
     function Decrypt(const aAlgorithm: TCipherAlgorithm;
-                     const aMode: TCipherMode; 
+                     const aMode: TCipherMode;
                      const aKey: TBytes;
-                     const aIV: TBytes; 
+                     const aIV: TBytes;
                      const aCiphertext: TBytes): TCipherResult;
-    
+
     // AEAD mode operations with authenticated encryption
     function EncryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
@@ -53,7 +53,7 @@ type
                          const aIV: TBytes;
                          const aPlaintext: TBytes;
                          const aAAD: TBytes): TCipherResult;
-                         
+
     function DecryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
                          const aKey: TBytes;
@@ -61,16 +61,16 @@ type
                          const aCiphertext: TBytes;
                          const aTag: TBytes;
                          const aAAD: TBytes): TCipherResult;
-    
+
     // Padding control
     procedure SetPadding(aPadding: Boolean);
     function GetPadding: Boolean;
-    
+
     // Key and IV size queries
     function GetKeySize(const aAlgorithm: TCipherAlgorithm): Integer;
     function GetIVSize(const aAlgorithm: TCipherAlgorithm; const aMode: TCipherMode): Integer;
     function GetBlockSize(const aAlgorithm: TCipherAlgorithm): Integer;
-    
+
     // Statistics
     function GetOperationCount: Integer;
     procedure ResetStatistics;
@@ -84,27 +84,27 @@ type
     function GetEVPCipher(const aAlgorithm: TCipherAlgorithm; const aMode: TCipherMode): Pointer;
   public
     constructor Create;
-    
+
     // IEVPCipher implementation
-    function Encrypt(const aAlgorithm: TCipherAlgorithm; 
+    function Encrypt(const aAlgorithm: TCipherAlgorithm;
                      const aMode: TCipherMode;
-                     const aKey: TBytes; 
+                     const aKey: TBytes;
                      const aIV: TBytes;
                      const aPlaintext: TBytes): TCipherResult;
-                     
+
     function Decrypt(const aAlgorithm: TCipherAlgorithm;
-                     const aMode: TCipherMode; 
+                     const aMode: TCipherMode;
                      const aKey: TBytes;
-                     const aIV: TBytes; 
+                     const aIV: TBytes;
                      const aCiphertext: TBytes): TCipherResult;
-                     
+
     function EncryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
                          const aKey: TBytes;
                          const aIV: TBytes;
                          const aPlaintext: TBytes;
                          const aAAD: TBytes): TCipherResult;
-                         
+
     function DecryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
                          const aKey: TBytes;
@@ -112,7 +112,7 @@ type
                          const aCiphertext: TBytes;
                          const aTag: TBytes;
                          const aAAD: TBytes): TCipherResult;
-                         
+
     procedure SetPadding(aPadding: Boolean);
     function GetPadding: Boolean;
     function GetKeySize(const aAlgorithm: TCipherAlgorithm): Integer;
@@ -134,7 +134,7 @@ type
     FEncryptCallCount: Integer;
     FDecryptCallCount: Integer;
     FAEADCallCount: Integer;
-    
+
     // Store last call parameters for verification
     FLastAlgorithm: TCipherAlgorithm;
     FLastMode: TCipherMode;
@@ -144,27 +144,27 @@ type
     FLastInputSize: Integer;
   public
     constructor Create;
-    
+
     // IEVPCipher implementation
-    function Encrypt(const aAlgorithm: TCipherAlgorithm; 
+    function Encrypt(const aAlgorithm: TCipherAlgorithm;
                      const aMode: TCipherMode;
-                     const aKey: TBytes; 
+                     const aKey: TBytes;
                      const aIV: TBytes;
                      const aPlaintext: TBytes): TCipherResult;
-                     
+
     function Decrypt(const aAlgorithm: TCipherAlgorithm;
-                     const aMode: TCipherMode; 
+                     const aMode: TCipherMode;
                      const aKey: TBytes;
-                     const aIV: TBytes; 
+                     const aIV: TBytes;
                      const aCiphertext: TBytes): TCipherResult;
-                     
+
     function EncryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
                          const aKey: TBytes;
                          const aIV: TBytes;
                          const aPlaintext: TBytes;
                          const aAAD: TBytes): TCipherResult;
-                         
+
     function DecryptAEAD(const aAlgorithm: TCipherAlgorithm;
                          const aMode: TCipherMode;
                          const aKey: TBytes;
@@ -172,7 +172,7 @@ type
                          const aCiphertext: TBytes;
                          const aTag: TBytes;
                          const aAAD: TBytes): TCipherResult;
-                         
+
     procedure SetPadding(aPadding: Boolean);
     function GetPadding: Boolean;
     function GetKeySize(const aAlgorithm: TCipherAlgorithm): Integer;
@@ -180,7 +180,7 @@ type
     function GetBlockSize(const aAlgorithm: TCipherAlgorithm): Integer;
     function GetOperationCount: Integer;
     procedure ResetStatistics;
-    
+
     // Mock control methods
     procedure SetShouldFail(aValue: Boolean; const aMessage: string = '');
     procedure SetCustomOutput(const aOutput: TBytes);
@@ -328,7 +328,7 @@ var
 begin
   Inc(FEncryptCallCount);
   Inc(FOperationCount);
-  
+
   // Store call parameters
   FLastAlgorithm := aAlgorithm;
   FLastMode := aMode;
@@ -336,7 +336,7 @@ begin
   FLastKeySize := Length(aKey);
   FLastIVSize := Length(aIV);
   FLastInputSize := Length(aPlaintext);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -348,7 +348,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     // Return custom output if set, otherwise simulate encryption
     if Length(FCustomOutput) > 0 then
       Result.Output := Copy(FCustomOutput)
@@ -361,7 +361,7 @@ begin
       for i := 0 to High(Result.Output) do
         Result.Output[i] := Result.Output[i] xor $AA;
     end;
-    
+
     SetLength(Result.Tag, 0);
   end;
 end;
@@ -374,14 +374,14 @@ var
 begin
   Inc(FDecryptCallCount);
   Inc(FOperationCount);
-  
+
   FLastAlgorithm := aAlgorithm;
   FLastMode := aMode;
   FLastOperation := coDecrypt;
   FLastKeySize := Length(aKey);
   FLastIVSize := Length(aIV);
   FLastInputSize := Length(aCiphertext);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -393,7 +393,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     if Length(FCustomOutput) > 0 then
       Result.Output := Copy(FCustomOutput)
     else
@@ -404,7 +404,7 @@ begin
       for i := 0 to High(Result.Output) do
         Result.Output[i] := Result.Output[i] xor $AA;
     end;
-    
+
     SetLength(Result.Tag, 0);
   end;
 end;
@@ -417,14 +417,14 @@ var
 begin
   Inc(FAEADCallCount);
   Inc(FOperationCount);
-  
+
   FLastAlgorithm := aAlgorithm;
   FLastMode := aMode;
   FLastOperation := coEncrypt;
   FLastKeySize := Length(aKey);
   FLastIVSize := Length(aIV);
   FLastInputSize := Length(aPlaintext);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -436,7 +436,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     if Length(FCustomOutput) > 0 then
       Result.Output := Copy(FCustomOutput)
     else
@@ -446,7 +446,7 @@ begin
       for i := 0 to High(Result.Output) do
         Result.Output[i] := Result.Output[i] xor $BB;
     end;
-    
+
     // Generate mock tag
     if Length(FCustomTag) > 0 then
       Result.Tag := Copy(FCustomTag)
@@ -467,14 +467,14 @@ var
 begin
   Inc(FAEADCallCount);
   Inc(FOperationCount);
-  
+
   FLastAlgorithm := aAlgorithm;
   FLastMode := aMode;
   FLastOperation := coDecrypt;
   FLastKeySize := Length(aKey);
   FLastIVSize := Length(aIV);
   FLastInputSize := Length(aCiphertext);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -486,7 +486,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     if Length(FCustomOutput) > 0 then
       Result.Output := Copy(FCustomOutput)
     else
@@ -496,7 +496,7 @@ begin
       for i := 0 to High(Result.Output) do
         Result.Output[i] := Result.Output[i] xor $BB;
     end;
-    
+
     SetLength(Result.Tag, 0);
   end;
 end;

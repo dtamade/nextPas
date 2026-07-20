@@ -336,7 +336,7 @@ var
 begin
   if not MapDelete(aOldPtr, LAlloc) then
     raise EAllocError.Create(aeInvalidPointer,
-      FormatAllocErrorMsg('TPoolAllocator', 'Raise', 'pointer is not tracked'));
+      FormatAllocErrorMsg('TPoolAllocator', 'Create', 'pointer is not tracked'));
   LAlloc.Ptr := aNewPtr;
   LAlloc.Size := ASize;
   LAlloc.Alignment := AAlignment;

@@ -7,7 +7,7 @@ program test_alpn_syntax;
   It does NOT perform functional testing. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.consts;
 
 var
@@ -67,11 +67,11 @@ begin
   WriteLn('ALPN Implementation Syntax Verification Test');
   WriteLn('=============================================================');
   WriteLn;
-  
+
   TestALPNCallbackExists;
   TestALPNConstantsExist;
   TestSSLFunctionsExist;
-  
+
   WriteLn;
   WriteLn('=============================================================');
   WriteLn('Test Summary:');
@@ -79,7 +79,7 @@ begin
   WriteLn('  Passed: ', LTestsPassed);
   WriteLn('  Failed: ', LTestsFailed);
   WriteLn('=============================================================');
-  
+
   if LTestsFailed > 0 then
   begin
     WriteLn('RESULT: FAILED');

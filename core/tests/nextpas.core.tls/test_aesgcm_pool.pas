@@ -4,7 +4,7 @@ program test_aesgcm_pool;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.aesgcm.pool,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.openssl.api.evp,

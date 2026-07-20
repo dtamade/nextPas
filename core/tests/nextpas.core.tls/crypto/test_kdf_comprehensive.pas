@@ -3,7 +3,7 @@ program test_kdf_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api;
 
 type
@@ -17,7 +17,7 @@ type
   PPKCS5_PBKDF2_HMAC = function(const pass: PAnsiChar; passlen: Integer;
     const salt: PByte; saltlen: Integer; iter: Integer; const digest: PEVP_MD;
     keylen: Integer; out_: PByte): Integer; cdecl;
-    
+
   PEVP_PKEY_CTX = Pointer;
   TEVP_PKEY_derive_init = function(ctx: PEVP_PKEY_CTX): Integer; cdecl;
   TEVP_PKEY_derive_set_peer = function(ctx: PEVP_PKEY_CTX; peer: PEVP_PKEY): Integer; cdecl;
@@ -30,7 +30,7 @@ type
 var
   Results: array of TTestResult;
   TotalTests, PassedTests: Integer;
-  
+
   // KDF functions
   PKCS5_PBKDF2_HMAC: PPKCS5_PBKDF2_HMAC;
   EVP_PKEY_derive_init: TEVP_PKEY_derive_init;
@@ -61,7 +61,7 @@ begin
   LibHandle := LoadLibrary(CRYPTO_LIB);
   if LibHandle = 0 then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
-  
+
   Pointer(PKCS5_PBKDF2_HMAC) := GetProcAddress(LibHandle, 'PKCS5_PBKDF2_HMAC');
   Pointer(EVP_PKEY_derive_init) := GetProcAddress(LibHandle, 'EVP_PKEY_derive_init');
   Pointer(EVP_PKEY_derive) := GetProcAddress(LibHandle, 'EVP_PKEY_derive');
@@ -104,7 +104,7 @@ begin
   WriteLn('Test Results Summary');
   PrintSeparator;
   WriteLn;
-  
+
   for i := 0 to High(Results) do
   begin
     if Results[i].Success then
@@ -116,7 +116,7 @@ begin
         WriteLn('         Error: ', Results[i].ErrorMsg);
     end;
   end;
-  
+
   WriteLn;
   PrintSeparator;
   WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
@@ -135,17 +135,17 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2-HMAC-SHA256...');
-  
+
   password := 'password';
   salt := 'salt';
   iterations := 1000;
-  
+
   if not Assigned(PKCS5_PBKDF2_HMAC) then
   begin
     AddResult('PBKDF2: Function available', False, 'Function not loaded');
     Exit;
   end;
-  
+
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), iterations, EVP_sha256(),
     Length(key), @key[0]) <> 1 then
@@ -153,13 +153,13 @@ begin
     AddResult('PBKDF2: Derivation', False, 'Key derivation failed');
     Exit;
   end;
-  
+
   result_hex := BytesToHex(key, Length(key));
   WriteLn('  Password:   "', password, '"');
   WriteLn('  Salt:       "', salt, '"');
   WriteLn('  Iterations: ', iterations);
   WriteLn('  Result:     ', result_hex);
-  
+
   // RFC 7914 test vector
   // Note: Actual value depends on exact test vector, checking execution for now
   if Length(result_hex) = 64 then
@@ -184,11 +184,11 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2-HMAC-SHA512...');
-  
+
   password := 'secretpassword123';
   salt := 'randomsalt456';
   iterations := 2048;
-  
+
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), iterations, EVP_sha512(),
     Length(key), @key[0]) <> 1 then
@@ -196,14 +196,14 @@ begin
     AddResult('PBKDF2-SHA512: Derivation', False, 'Key derivation failed');
     Exit;
   end;
-  
+
   result_hex := BytesToHex(key, Length(key));
   WriteLn('  Password:   "', password, '"');
   WriteLn('  Salt:       "', salt, '"');
   WriteLn('  Iterations: ', iterations);
   WriteLn('  Key length: ', Length(key), ' bytes');
   WriteLn('  Result:     ', Copy(result_hex, 1, 64), '...');
-  
+
   if Length(result_hex) = 128 then
   begin
     WriteLn('  [PASS] PBKDF2-SHA512 derivation successful!');
@@ -227,18 +227,18 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2 performance (high iteration count)...');
-  
+
   password := 'testpassword';
   salt := 'testsalt';
   iterations := 100000;  // Common modern iteration count
-  
+
   WriteLn('  Password:   "', password, '"');
   WriteLn('  Salt:       "', salt, '"');
   WriteLn('  Iterations: ', iterations);
   WriteLn('  Computing...');
-  
+
   start_time := Now;
-  
+
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), iterations, EVP_sha256(),
     Length(key), @key[0]) <> 1 then
@@ -246,13 +246,13 @@ begin
     AddResult('PBKDF2: Performance test', False, 'Key derivation failed');
     Exit;
   end;
-  
+
   end_time := Now;
   duration_ms := (end_time - start_time) * 24 * 60 * 60 * 1000;
-  
+
   WriteLn('  Duration:   ', duration_ms:0:2, ' ms');
   WriteLn('  Result:     ', Copy(BytesToHex(key, Length(key)), 1, 32), '...');
-  
+
   if duration_ms > 0 then
   begin
     WriteLn('  [PASS] PBKDF2 performance test completed!');
@@ -274,10 +274,10 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2 with empty password...');
-  
+
   password := '';
   salt := 'salt';
-  
+
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), 1000, EVP_sha256(),
     Length(key), @key[0]) <> 1 then
@@ -285,12 +285,12 @@ begin
     AddResult('PBKDF2: Empty password', False, 'Key derivation failed');
     Exit;
   end;
-  
+
   result_hex := BytesToHex(key, Length(key));
   WriteLn('  Password:   (empty)');
   WriteLn('  Salt:       "', salt, '"');
   WriteLn('  Result:     ', result_hex);
-  
+
   if Length(result_hex) = 32 then
   begin
     WriteLn('  [PASS] Empty password handled correctly!');
@@ -314,11 +314,11 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2 with variable key lengths...');
-  
+
   password := 'password';
   salt := 'salt';
   success := True;
-  
+
   // 16 bytes (128 bits)
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), 1000, EVP_sha256(),
@@ -326,7 +326,7 @@ begin
     success := False
   else
     WriteLn('  [+] 16-byte key: ', BytesToHex(key16, 16));
-  
+
   // 32 bytes (256 bits)
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), 1000, EVP_sha256(),
@@ -334,7 +334,7 @@ begin
     success := False
   else
     WriteLn('  [+] 32-byte key: ', BytesToHex(key32, 32));
-  
+
   // 64 bytes (512 bits)
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), 1000, EVP_sha256(),
@@ -342,7 +342,7 @@ begin
     success := False
   else
     WriteLn('  [+] 64-byte key: ', Copy(BytesToHex(key64, 64), 1, 64), '...');
-  
+
   if success then
   begin
     WriteLn('  [PASS] Variable length keys generated!');
@@ -365,11 +365,11 @@ var
 begin
   WriteLn;
   WriteLn('Testing PBKDF2 with RFC 6070 test vector...');
-  
+
   // RFC 6070 Test Vector 1
   password := 'password';
   salt := 'salt';
-  
+
   if PKCS5_PBKDF2_HMAC(PAnsiChar(password), Length(password),
     PByte(PAnsiChar(salt)), Length(salt), 1, EVP_sha1(),
     20, @key[0]) <> 1 then
@@ -377,16 +377,16 @@ begin
     AddResult('PBKDF2: RFC test vector', False, 'Key derivation failed');
     Exit;
   end;
-  
+
   result_hex := BytesToHex(key, 20);
   expected := '0C60C80F961F0E71F3A9B524AF6012062FE037A6';
-  
+
   WriteLn('  Password:   "', password, '"');
   WriteLn('  Salt:       "', salt, '"');
   WriteLn('  Iterations: 1');
   WriteLn('  Result:     ', result_hex);
   WriteLn('  Expected:   ', expected);
-  
+
   if UpperCase(result_hex) = UpperCase(expected) then
   begin
     WriteLn('  [PASS] RFC test vector matches!');
@@ -403,12 +403,12 @@ begin
   TotalTests := 0;
   PassedTests := 0;
   SetLength(Results, 0);
-  
+
   PrintSeparator;
   WriteLn('KDF Comprehensive Test Suite');
   WriteLn('PBKDF2 - Password-Based Key Derivation');
   PrintSeparator;
-  
+
   // Load OpenSSL
   try
     if not LoadOpenSSLLibrary then
@@ -421,7 +421,7 @@ begin
       WriteLn('Version: ', OPENSSL_version(0))
     else
       WriteLn('Version: Unknown');
-      
+
     // Load KDF functions
     LoadKDFFunctions;
     WriteLn('KDF functions loaded successfully');
@@ -433,7 +433,7 @@ begin
       Halt(1);
     end;
   end;
-  
+
   // Run PBKDF2 tests
   TestPBKDF2;
   TestPBKDF2_SHA512;
@@ -441,13 +441,13 @@ begin
   TestPBKDF2_EmptyPassword;
   TestPBKDF2_VariableLength;
   TestPBKDF2_RFC_TestVector;
-  
+
   // Print summary
   PrintResults;
-  
+
   // Cleanup
   UnloadOpenSSLLibrary;
-  
+
   // Exit with appropriate code
   if PassedTests = TotalTests then
     Halt(0)

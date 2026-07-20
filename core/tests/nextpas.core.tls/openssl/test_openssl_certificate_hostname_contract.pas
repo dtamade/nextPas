@@ -3,7 +3,7 @@ program test_openssl_certificate_hostname_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base;
 

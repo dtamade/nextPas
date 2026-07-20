@@ -3,7 +3,7 @@ program test_p2_pkcs7;
 {$mode delphi}
 
 uses
-  SysUtils, ctypes,  // For clong type
+  nextpas.core.system.sysutils, ctypes,  // For clong type
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api,  // For MBSTRING_ASC constant
@@ -123,7 +123,7 @@ begin
                 Assigned(PKCS7_verify) and
                 Assigned(PKCS7_encrypt) and
                 Assigned(PKCS7_decrypt);
-  
+
   if allPresent then
     Pass(TEST_NAME)
   else
@@ -138,13 +138,13 @@ var
   p7: PPKCS7;
 begin
   p7 := PKCS7_new();
-  
+
   if p7 = nil then
   begin
     Fail(TEST_NAME, 'Failed to create PKCS7 object');
     Exit;
   end;
-  
+
   try
     Pass(TEST_NAME);
   finally
@@ -175,13 +175,13 @@ var
   si: PPKCS7_SIGNER_INFO;
 begin
   si := PKCS7_SIGNER_INFO_new();
-  
+
   if si = nil then
   begin
     Fail(TEST_NAME, 'Failed to create SIGNER_INFO');
     Exit;
   end;
-  
+
   try
     Pass(TEST_NAME);
   finally
@@ -197,13 +197,13 @@ var
   ri: PPKCS7_RECIP_INFO;
 begin
   ri := PKCS7_RECIP_INFO_new();
-  
+
   if ri = nil then
   begin
     Fail(TEST_NAME, 'Failed to create RECIP_INFO');
     Exit;
   end;
-  
+
   try
     Pass(TEST_NAME);
   finally
@@ -224,7 +224,7 @@ begin
     Fail(TEST_NAME, 'Failed to create PKCS7 object');
     Exit;
   end;
-  
+
   try
     if PKCS7_set_type(p7, NID_pkcs7_data) = 1 then
       Pass(TEST_NAME)
@@ -248,7 +248,7 @@ begin
                 Assigned(d2i_PKCS7_bio) and
                 Assigned(PEM_read_bio_PKCS7) and
                 Assigned(PEM_write_bio_PKCS7);
-  
+
   if allPresent then
     Pass(TEST_NAME)
   else
@@ -265,7 +265,7 @@ begin
   allPresent := Assigned(SMIME_write_PKCS7) and
                 Assigned(SMIME_read_PKCS7) and
                 Assigned(SMIME_text);
-  
+
   if allPresent then
     Pass(TEST_NAME)
   else
@@ -303,18 +303,18 @@ begin
   Result := False;
   TestCert := nil;
   TestPrivKey := nil;
-  
+
   // Generate RSA key
   pkey := EVP_PKEY_new();
   if pkey = nil then Exit;
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   bn := BN_new();
   if bn = nil then
   begin
@@ -322,9 +322,9 @@ begin
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   BN_set_word(bn, RSA_F4);
-  
+
   if RSA_generate_key_ex(rsa, 2048, bn, nil) <> 1 then
   begin
     BN_free(bn);
@@ -332,16 +332,16 @@ begin
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   BN_free(bn);
-  
+
   if EVP_PKEY_assign(pkey, EVP_PKEY_RSA, rsa) <> 1 then
   begin
     RSA_free(rsa);
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   // Create certificate
   x509 := X509_new();
   if x509 = nil then
@@ -349,30 +349,30 @@ begin
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   // Set version
   X509_set_version(x509, 2);
-  
+
   // Set serial number
   serial := X509_get_serialNumber(x509);
   ASN1_INTEGER_set(serial, 1);
-  
+
   // Set validity
   X509_gmtime_adj(X509_get_notBefore(x509), 0);
   X509_gmtime_adj(X509_get_notAfter(x509), 60 * 60 * 24 * 365); // 1 year
-  
+
   // Set public key
   X509_set_pubkey(x509, pkey);
-  
+
   // Set subject name
   name := X509_get_subject_name(x509);
   X509_NAME_add_entry_by_txt(name, 'C', MBSTRING_ASC, PByte(PAnsiChar('US')), -1, -1, 0);
   X509_NAME_add_entry_by_txt(name, 'O', MBSTRING_ASC, PByte(PAnsiChar('Test')), -1, -1, 0);
   X509_NAME_add_entry_by_txt(name, 'CN', MBSTRING_ASC, PByte(PAnsiChar('Test Cert')), -1, -1, 0);
-  
+
   // Set issuer name (self-signed)
   X509_set_issuer_name(x509, name);
-  
+
   // Sign certificate
   if X509_sign(x509, pkey, EVP_sha256()) = 0 then
   begin
@@ -380,7 +380,7 @@ begin
     EVP_PKEY_free(pkey);
     Exit;
   end;
-  
+
   TestCert := x509;
   TestPrivKey := pkey;
   Result := True;
@@ -393,7 +393,7 @@ begin
     X509_free(TestCert);
     TestCert := nil;
   end;
-  
+
   if TestPrivKey <> nil then
   begin
     EVP_PKEY_free(TestPrivKey);
@@ -414,17 +414,17 @@ begin
     Fail(TEST_NAME, 'Test cert/key not available');
     Exit;
   end;
-  
+
   bio_in := BIO_new_mem_buf(PAnsiChar(TEST_DATA), Length(TEST_DATA));
   if bio_in = nil then
   begin
     Fail(TEST_NAME, 'Failed to create input BIO');
     Exit;
   end;
-  
+
   try
     p7 := PKCS7_sign(TestCert, TestPrivKey, nil, bio_in, PKCS7_DETACHED or PKCS7_BINARY);
-    
+
     if p7 <> nil then
     begin
       PKCS7_free(p7);
@@ -460,7 +460,7 @@ begin
   WriteLn('Target: nextpas.core.tls.openssl.api.pkcs7');
   WriteLn('Purpose: Validate PKCS7 Cryptographic Message Syntax API');
   WriteLn;
-  
+
   // Initialize OpenSSL
   try
     LoadOpenSSLCore;
@@ -471,10 +471,10 @@ begin
       Halt(1);
     end;
   end;
-  
+
   // Load required modules
   LoadOpenSSLBIO;
-  
+
   if not LoadEVP(GetCryptoLibHandle) then
   begin
     WriteLn('ERROR: Failed to load EVP functions');
@@ -482,66 +482,66 @@ begin
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   LoadOpenSSLX509;
-  
+
   if not LoadOpenSSLRSA then
   begin
     WriteLn('ERROR: Failed to load RSA functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadOpenSSLBN then
   begin
     WriteLn('ERROR: Failed to load BN functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadOpenSSLASN1(GetCryptoLibHandle) then
   begin
     WriteLn('ERROR: Failed to load ASN1 functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadOpenSSLPEM(GetCryptoLibHandle) then
   begin
     WriteLn('ERROR: Failed to load PEM functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadOpenSSLERR then
   begin
     WriteLn('ERROR: Failed to load ERR functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadStackFunctions then
   begin
     WriteLn('ERROR: Failed to load Stack functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   if not LoadPKCS7Functions then
   begin
     WriteLn('ERROR: Failed to load PKCS7 functions');
     UnloadOpenSSLCore;
     Halt(1);
   end;
-  
+
   WriteLn('[OK] All required OpenSSL modules loaded successfully');
   WriteLn;
-  
+
   // Section 1: Module Loading & Basic Functions
   TestSection('Section 1: Module Loading & Basic Functions');
   Test_01_PKCS7_Functions_Loaded;
   Test_02_Critical_Functions_Present;
-  
+
   // Section 2: Object Lifecycle
   TestSection('Section 2: Object Lifecycle Management');
   Test_03_PKCS7_Object_Lifecycle;
@@ -549,13 +549,13 @@ begin
   Test_05_SIGNER_INFO_Lifecycle;
   Test_06_RECIP_INFO_Lifecycle;
   Test_07_PKCS7_Set_Type;
-  
+
   // Section 3: I/O Operations
   TestSection('Section 3: I/O and Serialization');
   Test_08_IO_Functions_Present;
   Test_09_SMIME_Functions_Present;
   Test_10_PKCS7_BIO_Operations;
-  
+
   // Section 4: Cryptographic Operations
   TestSection('Section 4: Cryptographic Operations');
   WriteLn('[INFO] Generating test certificate and key pair...');
@@ -574,7 +574,7 @@ begin
     WriteLn('[WARN] Failed to generate test cert/key - skipping crypto tests');
     Fail('Test cert/key generation', 'Failed to generate test materials');
   end;
-  
+
   // Results
   WriteLn;
   WriteLn('================================================================================');
@@ -593,7 +593,7 @@ begin
 
   if SkipStackPartialCount = 0 then
     Fail('Stack partial skip accounting', 'Expected stack partial skip count to be tracked');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;
@@ -609,7 +609,7 @@ begin
     WriteLn('================================================================================');
     Halt(1);
   end;
-  
+
   // Cleanup
   UnloadPKCS7Functions;
   UnloadStackFunctions;

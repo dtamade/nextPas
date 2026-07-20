@@ -3,7 +3,7 @@ program test_tls12_clienthello;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.tls12.wire, nextpas.core.tls.tls12.clienthello;
+  nextpas.core.system.sysutils, nextpas.core.tls.tls12.wire, nextpas.core.tls.tls12.clienthello;
 
 var
   GPassCount: Integer = 0;

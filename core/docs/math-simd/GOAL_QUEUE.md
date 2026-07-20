@@ -1,18 +1,20 @@
 # math-simd Goal Queue
 
-> Last updated: 2026-07-17
+> Last updated: 2026-07-19
 > Lane: `math-simd` worktree
 > Purpose: **single CURRENT pointer** so agents run end-to-end cards without human “继续”.
 
 ## How to execute (agent contract)
 
-1. Read **only** `CURRENT` card + linked roadmap/GOAL_TREE sections it cites.
-2. Implement within **IN_SCOPE_PATHS**; anything outside → **STOP** (Blocked).
-3. Run **GATES** exactly; on failure fix or Blocked (do not skip).
-4. Update docs required by **DoD**; one logical **commit** (message = card intent).
-5. Set `CURRENT` to card **NEXT** (same commit or tiny follow-up commit).
-6. **Do not** wait for the user to say 继续. One session = one card closed or Blocked.
-7. On **STOP / BLOCKED_UNTIL**: report Blocked and exit; do not open the next card.
+1. Work is planned in **BATCH**es; `CURRENT` is always **one Card** inside an active Batch.
+2. Read **only** the active Batch + `CURRENT` card (+ linked roadmap sections).
+3. Implement within **IN_SCOPE_PATHS**; anything outside → **STOP** (Blocked).
+4. **UNIT_TESTS required**: new behavior = RED unit tests first; bugfix = regression test; leaf = parity + source-contract + runtime slot assert.
+5. Run **GATES** exactly; on failure fix or Blocked (**never skip / never lower strict**).
+6. Fill **EVIDENCE** (commands + exit codes + pass counts + named tests). No evidence → not done.
+7. One logical **commit** per Card (message = card intent); advance `CURRENT` to **NEXT**.
+8. When all cards in a Batch are done: run **BATCH_GATES**, fill batch EVIDENCE, mark Batch closed.
+9. Do not auto-start Wave 4 walls. Do not wait for chat「继续」inside an approved Batch.
 
 ### Card template (copy for new goals)
 
@@ -23,9 +25,11 @@ NEXT:
 WHY:
 IN_SCOPE_PATHS:
 OUT_OF_SCOPE:
+UNIT_TESTS:
 DELIVERABLES:
 GATES:
 DoD:
+EVIDENCE:
 STOP:
 BLOCKED_UNTIL: (optional)
 ```
@@ -37,6 +41,381 @@ BLOCKED_UNTIL: (optional)
 ```text
 CURRENT=IDLE
 ```
+
+### Usability P0/P1 package  【done 2026-07-20】
+
+Strict batch equal-length (default); `BatchLog*` alias; `TryBatchLn*`; docs CONTRACT 1.5 / API app-vs-kernel / numeric contract pointer.
+
+
+---
+
+## Wave C — post-representative expansion 【active】
+
+> 代表集 23 叶 **不撤销**。Wave C 为显式扩展波；每批仍 UNIT_TESTS + evidence。
+> 默认顺序：C0 → C1 → C2 → C3 → C4a → C4b → …；C5/C6 需点名。
+
+### C0–C3  【done 2026-07-20】
+
+### C4a — NEON BatchF64 core 8 leaves  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C4b |
+| **WHY** | F32/F64 symmetry for math F64 batch consumers |
+| **LEAVES** | Add/Sub/Mul/Div/Min/Max/Abs/Neg F64 |
+| **UNIT_TESTS** | FacadeFastSlots F64 core; Platform F64 remainder still scalar; `Test_BatchF64_ArrayCore8_Parity` |
+| **EVIDENCE** | focused **1754**/0; neon **1754**/0; math exit 0; API 71/0 |
+
+### C4b — NEON BatchF64 Sqrt / broadcast / Reduce  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C4c |
+| **WHY** | math F64 hot path (stats/scale/sqrt) after C4a core 8 |
+| **LEAVES** | Sqrt, MulScalar, AddScalar, ReduceSum/Dot/Min/Max F64 |
+| **UNIT_TESTS** | FacadeFastSlots C4b; Platform Exp/Linear/Clamp still scalar; `Test_BatchF64_SqrtBroadcastReduce_Parity` |
+| **EVIDENCE** | focused **1755**/0; neon-optin **1755**/0; math exit 0; API 71/0 |
+
+### C4c — NEON BatchF64 Linear / Clamp / Lerp / Fma / Axpy  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C4d |
+| **WHY** | F32 B3+B4+C1 mix symmetry for math F64 normalize/lerp/fma |
+| **LEAVES** | Linear, Clamp, Lerp, Fma, Axpy F64 |
+| **UNIT_TESTS** | FacadeFastSlots C4c; Exp/Rcp/Ceil/ReLU still scalar; `Test_BatchF64_LinearClampLerpFmaAxpy_Parity` |
+| **EVIDENCE** | focused **1756**/0; neon-optin **1756**/0; math exit 0; API 71/0 |
+
+### C4d — NEON BatchF64 Ceil/Floor/Trunc + ReLU/AbsDiff  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C4e |
+| **WHY** | F32 Wave C2+C3 rounding/utility symmetry on F64 |
+| **LEAVES** | Ceil, Floor, Trunc, ReLU, AbsDiff F64 |
+| **UNIT_TESTS** | FacadeFastSlots C4d; Exp/Rcp/Round still scalar; `Test_BatchF64_CeilFloorTruncReLUAbsDiff_Parity` |
+| **EVIDENCE** | focused **1757**/0; neon-optin **1757**/0; math exit 0; API 71/0 |
+
+### C4e — NEON BatchF64 Rcp / Rsqrt / Refine  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **WHY** | F32 B7–B9 reciprocal family symmetry; close F64 NEON representative path |
+| **LEAVES** | Rcp, Rsqrt, RcpRefine, RsqrtRefine F64 (exact fdiv / fsqrt+fdiv) |
+| **UNIT_TESTS** | FacadeFastSlots C4e; Exp/Round/Sin still scalar; `Test_BatchF64_RcpRsqrtRefine_Parity` |
+| **EVIDENCE** | focused **1758**/0; neon-optin **1758**/0; math exit 0; API 71/0 |
+
+### C5 — transcendental sample  【done 2026-07-20 · design + sample】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C5b |
+| **WHY** | ARM math BatchSin/Exp still scalar; prove NEON transcendental path |
+| **DESIGN** | `core/docs/simd/design-c5-transcendentals.md` (D1–D5) |
+| **LEAVES** | `ArraySinF32`, `ArrayExpF32` (Cody-Waite poly; near-parity) |
+| **UNIT_TESTS** | FacadeFastSlots; Cos/Log/F64 Sin still scalar; `Test_BatchF32_ArraySinExp_NearParity` |
+| **EVIDENCE** | focused **1759**/0; neon-optin **1759**/0; math exit 0 |
+
+### C5b — Cos / SinCos  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C5c |
+| **LEAVES** | `ArrayCosF32`, `ArraySinCosF32` |
+| **UNIT_TESTS** | FacadeFastSlots; Log/Tan/F64 Sin still scalar; `Test_BatchF32_ArrayCosSinCos_NearParity` |
+| **EVIDENCE** | focused **1760**/0; neon-optin **1760**/0; math exit 0 |
+
+### C5c — Log / Log2 / Log10  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C5d |
+| **LEAVES** | `ArrayLogF32`, `ArrayLog2F32`, `ArrayLog10F32` |
+| **UNIT_TESTS** | FacadeFastSlots; Tan/F64 Log still scalar; `Test_BatchF32_ArrayLogFamily_NearParity` |
+| **EVIDENCE** | focused **1761**/0; neon-optin **1761**/0; math exit 0 |
+
+### C5d — F64 Sin / Exp  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C5e |
+| **LEAVES** | `ArraySinF64`, `ArrayExpF64` |
+| **UNIT_TESTS** | FacadeFastSlots; F64 Cos/Log still scalar; `Test_BatchF64_ArraySinExp_NearParity` |
+| **EVIDENCE** | focused **1762**/0; neon-optin **1762**/0; math exit 0 |
+
+### C5e — F32 Sin/Exp true 4-wide NEON asm  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | C5e-ext |
+| **LEAVES** | `NEONArraySinF32`, `NEONArrayExpF32` rewritten as `assembler; nostackframe` 4×f32 |
+| **UNIT_TESTS** | FacadeFastSlots assembler contracts; existing Sin/Exp near-parity still green |
+| **EVIDENCE** | focused **1762**/0; neon-optin **1762**/0; math exit 0 |
+
+### C5e-ext — Cos/Log F32 + Sin/Exp F64 vector asm  【done 2026-07-20 · Sprint】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **LEAVES** | CosF32 4-wide; LogF32 4-wide; SinF64/ExpF64 2-wide; Log2/10 scale on Log |
+| **UNIT_TESTS** | assembler contracts; Cos/Log/F64 near-parity suites still green |
+| **EVIDENCE** | focused **1762**/0; neon-optin **1762**/0; math exit 0 |
+| **FOLLOW-ON** | C6 landing |
+
+### C6 — landing prep  【planned, controller】
+
+---
+
+## NEON BatchF32 代表集 【closed 2026-07-20】
+
+**STATUS:** closed — do **not** auto-expand transcendental / full table without a new explicit Batch.
+
+### Owned (23 leaves, ASM opt-in register)
+
+| Group | Slots |
+|-------|--------|
+| Arith/cmp/unary | Add, Sub, Mul, Div, Min, Max, Abs, Neg |
+| Scalar broadcast | MulScalar, AddScalar |
+| Mix | Clamp, Lerp, Fma, Axpy |
+| Root/recip | Sqrt, Rcp, Rsqrt, RcpRefine, RsqrtRefine |
+| Reduce | ReduceSum, ReduceDot, ReduceMin, ReduceMax |
+
+### Intentionally scalar (boundary)
+
+- Transcendentals: Sin/Cos/Exp/Log/Pow/Tan/…
+- Rounding: Ceil/Floor/Round/Trunc/Fract
+- Utility: Mod/Sign/Step/Smoothstep/ReLU/…
+- All **BatchF64** / **BatchInteger**
+
+### Verification (B9 closeout)
+
+- focused **1750**/0；neon-optin **1750**/0；math exit 0；API surface 71/0
+
+---
+
+## BATCH B9 — NEON ArrayRsqrtRefine + 代表集收口  【closed 2026-07-20】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | Finish reciprocal family; close NEON BatchF32 representative set (23 leaves) |
+| **CARDS** | B9.1–B9.3 (same session) |
+| **OUT_OF_SCOPE** | Transcendentals; BatchF64; Wave 4 |
+| **EVIDENCE** | 2026-07-20: focused **1750**/0; neon-optin **1750**/0; math exit 0; 代表集 docs + Exp/Ceil still-scalar contracts |
+
+### B9.1 contracts + Test_BatchF32_ArrayRsqrtRefine_Parity 【done】
+### B9.2 NEONArrayRsqrtRefineF32 【done】
+### B9.3 math + docs + 代表集 closed → IDLE 【done】
+
+---
+
+## BATCH B8 — NEON BatchF32 ArrayRsqrt / ArrayRcpRefine  【closed 2026-07-20】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | Exact rsqrt + refine rcp companions |
+| **CARDS** | B8.1–B8.3 (same session) |
+| **OUT_OF_SCOPE** | RsqrtRefine; F64; Wave 4 |
+| **EVIDENCE** | 2026-07-20: focused **1749**/0; neon-optin **1749**/0; math exit 0 + API surface 71/0 |
+
+### B8.1 contracts + Test_BatchF32_ArrayRsqrtRcpRefine_Parity 【done】
+### B8.2 NEONArrayRsqrtF32 / NEONArrayRcpRefineF32 【done】 (no frsqrte approx)
+### B8.3 math + docs → IDLE 【done】
+
+---
+
+## BATCH B7 — NEON BatchF32 ArrayRcp / ReduceDot  【closed 2026-07-20】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | User-selected next leaves: exact Rcp + ReduceDot |
+| **CARDS** | B7.1–B7.3 (same session) |
+| **OUT_OF_SCOPE** | Rsqrt/Refine; F64; Wave 4 |
+| **EVIDENCE** | 2026-07-20: focused **1748**/0; neon-optin **1748**/0; math exit 0 + API surface 71/0 |
+
+### B7.1 contracts + Test_BatchF32_ArrayRcpReduceDot_Parity 【done】
+### B7.2 NEONArrayRcpF32 / NEONReduceDotF32 【done】 (Rcp=fdiv 1/x; Dot near-parity)
+### B7.3 math + docs → IDLE 【done】
+
+---
+
+## BATCH B6 — NEON BatchF32 ReduceMin / ReduceMax  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | Complete reduce trio after ReduceSum; high-frequency extrema |
+| **CARDS** | B6.1–B6.3 (same session) |
+| **OUT_OF_SCOPE** | ReduceDot; Rcp; F64; Wave 4 |
+| **EVIDENCE** | 2026-07-19: focused **1747**/0; neon-optin **1747**/0; math exit 0 + API surface 71/0 |
+
+### B6.1 contracts + Test_BatchF32_ReduceMinMax_Parity 【done】
+### B6.2 NEONReduceMinF32 / NEONReduceMaxF32 【done】
+### B6.3 math + docs → IDLE 【done】
+
+---
+
+## BATCH B5 — NEON BatchF32 ArraySqrt / ReduceSum  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | Next high-frequency leaves after B4 fused ops |
+| **CARDS** | B5.1 → B5.2 → B5.3 (same session) |
+| **OUT_OF_SCOPE** | ReduceDot/Min/Max; Rcp; F64; Wave 4 |
+| **EVIDENCE** | 2026-07-19: focused **1746**/0; neon-optin **1746**/0; math exit 0 + API surface 71/0 |
+
+### B5.1 — contracts + `Test_BatchF32_ArraySqrtReduceSum_Parity` 【done】
+### B5.2 — Implement NEONArraySqrtF32 / NEONReduceSumF32 【done】 (ReduceSum near-parity for assoc)
+### B5.3 — math + docs → IDLE 【done】
+
+---
+
+## BATCH B4 — NEON BatchF32 ArrayFma / ArrayAxpy  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | S23c-style fused leaves; high-frequency Fma/Axpy |
+| **CARDS** | B4.1 → B4.2 → B4.3 (same session) |
+| **OUT_OF_SCOPE** | Reduce/Sqrt; F64; Wave 4 |
+| **EVIDENCE** | 2026-07-19: focused **1745**/0; neon-optin **1745**/0; math exit 0 + API surface 71/0 |
+
+### B4.1 — contracts + `Test_BatchF32_ArrayFmaAxpy_Parity` 【done】
+### B4.2 — Implement NEONArrayFmaF32 / NEONArrayAxpyF32 【done】 (mul+add, not hardware fmla)
+### B4.3 — math smoke + docs → IDLE 【done】
+
+---
+
+## BATCH B3 — NEON BatchF32 ArrayLerp / ArrayClamp  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | math public `BatchLerpF32` / `BatchClampF32` hot paths |
+| **CARDS** | B3.1 → B3.2 → B3.3 (same session) |
+| **OUT_OF_SCOPE** | Fma/Axpy; F64; Wave 4 |
+| **BATCH_GATES** | focused; neon-optin; math clean test; hygiene |
+| **EVIDENCE** | 2026-07-19: focused **1744**/0; neon-optin **1744**/0; math exit 0 + API surface 71/0 |
+
+### B3.1 — contracts + `Test_BatchF32_ArrayLerpClamp_Parity`
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B3.2 |
+| **UNIT_TESTS** | FacadeFastSlots Lerp/Clamp; PlatformFacadeSlots honesty; `Test_BatchF32_ArrayLerpClamp_Parity` |
+| **EVIDENCE** | length matrix + t=0/1/0.5 + count=0 |
+
+### B3.2 — Implement NEONArrayLerpF32 / NEONArrayClampF32
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B3.3 |
+| **EVIDENCE** | asm fmin/fmax clamp; lerp = start+t*(end-start); ASM-only register |
+
+### B3.3 — math smoke + docs
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **EVIDENCE** | math clean test exit 0; docs BatchF32 NEON 12 leaves |
+
+---
+
+## BATCH B2 — NEON BatchF32 AddScalar / MulScalar  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | Power math `BatchScaleOffset*` and scalar-broadcast hot paths; next high-frequency band after Div |
+| **CARDS** | B2.1 → B2.2 → B2.3 (same session) |
+| **OUT_OF_SCOPE** | Lerp/Clamp (later batch); Fma/Axpy; F64/Integer; Wave 4 |
+| **BATCH_GATES** | focused; neon-optin-focused; math clean test; hygiene; diff-check |
+| **BATCH_DoD** | Both leaves owned under ASM; unit tests green; docs 8→10 leaves |
+| **EVIDENCE** | 2026-07-19: focused **1743**/0; neon-optin **1743**/0; math exit 0 + API surface 71/0; hygiene pass |
+
+### B2.1 — RED contracts + Mul/AddScalar parity unit tests
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B2.2 |
+| **UNIT_TESTS** | FacadeFastSlots MulScalar/AddScalar asm+scalar+register+runtime; PlatformFacadeSlots honesty (Lerp/Clamp still scalar); `Test_BatchF32_ArrayMulAddScalar_Parity` |
+| **EVIDENCE** | Unit test + contracts land with impl; parity counts 0/1/4/7/16/65 + NaN + count=0 |
+
+### B2.2 — Implement NEONArrayMulScalarF32 / NEONArrayAddScalarF32
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B2.3 |
+| **IN_SCOPE_PATHS** | neon.pas; neon.facade.asm/scalar.inc; neon.register.inc |
+| **EVIDENCE** | asm fmul/fadd + scalar broadcast; register under ASM only |
+
+### B2.3 — math smoke + docs closeout
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **EVIDENCE** | math clean test exit 0; docs BatchF32 NEON 10 leaves |
+
+---
+
+## BATCH B1 — NEON BatchF32 ArrayDiv  【closed 2026-07-19】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | closed |
+| **WHY** | S23b deferred Div; division semantics need strict unit tests before leaf ownership |
+| **CARDS** | B1.1 → B1.2 → B1.3 (same session: tests+impl+smoke) |
+| **OUT_OF_SCOPE** | BatchF64/Integer; Fma/Axpy; full BatchF32 table; math public ABI renames; Wave 4 |
+| **BATCH_GATES** | `make focused FOCUS=core/tests/nextpas.core.simd`; `make -C core/tests/nextpas.core.simd neon-optin-focused`; `make -C core/tests/nextpas.core.math clean test`; `make hygiene`; `git diff --check` |
+| **BATCH_DoD** | All three cards done with EVIDENCE; Div in NEON BatchF32 ownership set (ASM opt-in); docs honest |
+| **EVIDENCE** | 2026-07-19: focused **1742**/0 (+1 special Div unit test); neon-optin **1742**/0; math clean test exit 0 + API surface 71/0; hygiene pass |
+
+### B1.1 — RED unit tests + contracts for NEON ArrayDivF32
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B1.2 |
+| **UNIT_TESTS** | `Test_NEON_FacadeFastSlots_*` (Div asm/scalar/register/runtime); PlatformFacadeSlots no longer forbids Div; `Test_BatchF32_ArrayDiv_SpecialParity_Matches_Scalar`; `TestArrayDivF32_SpecialParity` in array_f32_correctness |
+| **EVIDENCE** | Intermediate RED: focused failed with missing `NEONArrayDivF32` contract snippets before B1.2; special test first failed `EInvalidOp` then fixed with FPU mask |
+
+### B1.2 — Implement NEONArrayDivF32 leaf
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | B1.3 |
+| **DELIVERABLES** | `NEONArrayDivF32` in `neon.facade.asm.inc` (fdiv) + scalar companion + register under ASM |
+| **EVIDENCE** | focused **1742** passed after impl; neon-optin green |
+
+### B1.3 — math consumer smoke + docs closeout
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **EVIDENCE** | `make -C core/tests/nextpas.core.math clean test` exit 0; `MATH_API_SURFACE OK: scanned=71 findings=0`; docs leaf count → 8 (incl Div) |
 
 ---
 
@@ -306,6 +685,12 @@ math ──//──► nextpas.core.simd.{dispatch,backend*,cpuinfo,dataplane,*}
 
 When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates or stops.
 Wave 4 walls (S26/S27/S24b/M9) stay blocked — never auto-start.
+
+**V0 re-verify (2026-07-19, ownership takeover):**
+
+- `make -C core/tests/nextpas.core.math clean test` → exit 0；`MATH_API_SURFACE OK: scanned=71 findings=0`；Pascal heaptrc 0 unfreed
+- `make focused FOCUS=core/tests/nextpas.core.simd` → **1741** passed / 0 failed
+- `make hygiene` → pass；`git diff --check` clean on tracked tree
 
 ---
 

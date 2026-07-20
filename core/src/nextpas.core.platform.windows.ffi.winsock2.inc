@@ -27,6 +27,8 @@ procedure winsock_freeaddrinfo(ai: Pointer); stdcall; external 'ws2_32' name 'fr
 function winsock_getnameinfo(sa: Pointer; salen: LongInt; host: PAnsiChar; hostlen: DWORD; serv: PAnsiChar; servlen: DWORD; flags: LongInt): LongInt; stdcall; external 'ws2_32' name 'getnameinfo';
 function WSARecv(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesRecvd: LPDWORD; lpFlags: LPDWORD; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSARecv';
 function WSASend(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesSent: LPDWORD; dwFlags: DWORD; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSASend';
+function WSARecvFrom(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesRecvd: LPDWORD; lpFlags: LPDWORD; lpFrom: Pointer; lpFromlen: Pointer; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSARecvFrom';
+function WSASendTo(s: TSocket; lpBuffers: LPWSABUF; dwBufferCount: DWORD; lpNumberOfBytesSent: LPDWORD; dwFlags: DWORD; lpTo: Pointer; iTolen: LongInt; lpOverlapped: LPWSAOVERLAPPED; lpCompletionRoutine: LPWSAOVERLAPPED_COMPLETION_ROUTINE): LongInt; stdcall; external 'ws2_32' name 'WSASendTo';
 function WSASocketW(af: LongInt; socket_type: LongInt; protocol: LongInt; lpProtocolInfo: Pointer; g: DWORD; dwFlags: DWORD): TSocket; stdcall; external 'ws2_32' name 'WSASocketW';
 function htons(hostshort: WORD): WORD; stdcall; external 'ws2_32' name 'htons';
 function ntohs(netshort: WORD): WORD; stdcall; external 'ws2_32' name 'ntohs';

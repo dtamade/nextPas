@@ -3,7 +3,7 @@ program test_random_pool;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.time,
   nextpas.core.tls.random.pool,
   nextpas.core.tls.random;
 
@@ -74,7 +74,7 @@ begin
     end;
     LEndTime := Now;
 
-    LElapsedMs := MilliSecondsBetween(LEndTime, LStartTime);
+    LElapsedMs := DateTimeMillisecondsBetween(LEndTime, LStartTime);
     LThroughput := (ITERATIONS * 1000.0) / LElapsedMs;
 
     WriteLn(Format('[RESULT] Time: %d ms', [LElapsedMs]));
@@ -103,7 +103,7 @@ begin
   end;
   LEndTime := Now;
 
-  LElapsedMs := MilliSecondsBetween(LEndTime, LStartTime);
+  LElapsedMs := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LThroughput := (ITERATIONS * 1000.0) / LElapsedMs;
 
   WriteLn(Format('[RESULT] Time: %d ms', [LElapsedMs]));

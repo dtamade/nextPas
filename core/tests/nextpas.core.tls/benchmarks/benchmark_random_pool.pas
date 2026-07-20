@@ -18,7 +18,7 @@ program benchmark_random_pool;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   benchmark_utils,
   nextpas.core.tls.random,
   nextpas.core.tls.random.pool;

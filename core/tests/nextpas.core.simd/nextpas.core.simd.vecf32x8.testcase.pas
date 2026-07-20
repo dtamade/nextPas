@@ -9,10 +9,15 @@ unit nextpas.core.simd.vecf32x8.testcase;
 interface
 
 uses
-  Math, Classes, nextpas.core.text.conv, nextpas.core.math, nextpas.core.test,
-  nextpas.core.simd, nextpas.core.simd.testcase,
-  nextpas.core.simd.base, nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar, nextpas.core.simd.ops;
+  nextpas.core.math,
+  nextpas.core.text.conv,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar,
+  nextpas.core.simd.ops;
 
 type
   // ✅ TVecF32x8 (256-bit 单精度浮点向量) 完整测试套件 (2026-02-05)

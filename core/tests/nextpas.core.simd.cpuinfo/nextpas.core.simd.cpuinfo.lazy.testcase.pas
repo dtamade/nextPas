@@ -6,7 +6,9 @@ unit nextpas.core.simd.cpuinfo.lazy.testcase;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.cpuinfo,

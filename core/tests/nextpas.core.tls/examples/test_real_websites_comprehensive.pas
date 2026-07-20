@@ -15,7 +15,7 @@ program test_real_websites_comprehensive;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fafafa.ssl,
   nextpas.core.tls.context.builder,
   fafafa.examples.tcp;

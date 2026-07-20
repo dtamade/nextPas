@@ -41,6 +41,9 @@ must_have=(
   SoftCheckEqual
   SoftCheckNear
   SoftFailOnly
+  GetTimeoutWorkerLeakCount
+  ResetTimeoutWorkerLeakCount
+  TimeoutWorkerLeaks
 )
 
 echo "=== ComputeKey must hash stop-semantic config fields (v8.22+) ==="
@@ -70,6 +73,48 @@ if ! printf '%s\n' "$ck_body" | rg -q --fixed-strings 'ASuiteName'; then
   fail=1
 else
   echo "OK: ComputeKey hashes ASuiteName"
+fi
+
+echo "=== v8.24 RTL isolation: sinks via platform.console (no System text IO) ==="
+CFG_SRC="$CORE_ROOT/src/nextpas.core.test.config.pas"
+# Match real code only: System.Write/WriteLn/Flush as statements (not comments).
+if rg -n '^[[:space:]]*System\.(Write|WriteLn|Flush)\b' "$CFG_SRC" >/dev/null; then
+  echo "FAIL: config still calls System.Write/WriteLn/Flush"
+  fail=1
+else
+  echo "OK: no System text-IO calls in config sinks"
+fi
+if ! rg -q --fixed-strings 'platform_console_write' "$CFG_SRC"; then
+  echo "MISSING: platform_console_write in config sinks"
+  fail=1
+else
+  echo "OK: config sinks use platform_console_write"
+fi
+
+echo "=== v8.24 Discovery backend pluggable API ==="
+DISC="$CORE_ROOT/src/nextpas.core.test.discovery.pas"
+for name in ITestDiscoveryBackend CreateFpcVmtDiscoveryBackend \
+  GetDiscoveryBackend SetDiscoveryBackend ResetDiscoveryBackend \
+  EnumeratePublishedMethods; do
+  if ! rg -q --fixed-strings "$name" "$DISC"; then
+    echo "MISSING in discovery: $name"
+    fail=1
+  else
+    echo "OK: discovery has $name"
+  fi
+done
+# self-tests must exercise inject/reset
+if ! rg -q --fixed-strings 'SetDiscoveryBackend' "$TESTS" --glob '*.lpr'; then
+  echo "MISSING in self-tests: SetDiscoveryBackend"
+  fail=1
+else
+  echo "OK: SetDiscoveryBackend used in self-tests"
+fi
+if ! rg -q --fixed-strings 'ResetDiscoveryBackend' "$TESTS" --glob '*.lpr'; then
+  echo "MISSING in self-tests: ResetDiscoveryBackend"
+  fail=1
+else
+  echo "OK: ResetDiscoveryBackend used in self-tests"
 fi
 
 echo "=== Nested SoftFail Push/Pop must appear in runner.context ==="

@@ -3,8 +3,8 @@ program test_cert_verify;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
-  
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
+
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed;
 
@@ -16,7 +16,7 @@ var
 begin
   WriteLn('Test: Certificate Verification');
   WriteLn('================================');
-  
+
   try
     // Create OpenSSL library
     LLib := TOpenSSLLibrary.Create;
@@ -26,7 +26,7 @@ begin
       Exit;
     end;
     WriteLn('OK: OpenSSL library initialized');
-    
+
     // Create certificate
     LCert := LLib.CreateCertificate;
     if LCert = nil then
@@ -35,7 +35,7 @@ begin
       Exit;
     end;
     WriteLn('OK: Certificate object created');
-    
+
     // Create certificate store
     LStore := LLib.CreateCertificateStore;
     if LStore = nil then
@@ -44,7 +44,7 @@ begin
       Exit;
     end;
     WriteLn('OK: Certificate store created');
-    
+
     WriteLn('');
     WriteLn('All basic tests passed!');
   except
@@ -61,7 +61,7 @@ begin
   WriteLn('');
   WriteLn('Test: Hostname Verification');
   WriteLn('============================');
-  
+
   try
     // Create OpenSSL library
     LLib := TOpenSSLLibrary.Create;
@@ -71,7 +71,7 @@ begin
       Exit;
     end;
     WriteLn('OK: OpenSSL library initialized');
-    
+
     // Create certificate
     LCert := LLib.CreateCertificate;
     if LCert = nil then
@@ -80,14 +80,14 @@ begin
       Exit;
     end;
     WriteLn('OK: Certificate object created');
-    
+
     // Test hostname verification with empty certificate
     // Should return False because certificate is not loaded
     if not LCert.VerifyHostname('example.com') then
       WriteLn('OK: VerifyHostname returns False for unloaded certificate')
     else
       WriteLn('FAIL: VerifyHostname should return False for unloaded certificate');
-    
+
     WriteLn('');
     WriteLn('All hostname verification tests passed!');
   except
@@ -105,7 +105,7 @@ begin
   WriteLn('');
   WriteLn('Test: Certificate Failure Scenarios');
   WriteLn('====================================');
-  
+
   try
     // Create OpenSSL library
     LLib := TOpenSSLLibrary.Create;
@@ -115,7 +115,7 @@ begin
       Exit;
     end;
     WriteLn('OK: OpenSSL library initialized');
-    
+
     // Test 1: Load non-existent certificate file
     WriteLn('');
     WriteLn('Test 1: Load non-existent certificate');
@@ -128,7 +128,7 @@ begin
       on E: Exception do
         WriteLn('OK: Correctly raised exception: ', E.ClassName);
     end;
-    
+
     // Test 2: Load invalid certificate data
     WriteLn('');
     WriteLn('Test 2: Load invalid certificate data');
@@ -141,7 +141,7 @@ begin
       on E: Exception do
         WriteLn('OK: Correctly raised exception: ', E.ClassName);
     end;
-    
+
     // Test 3: Verify hostname with invalid certificate
     WriteLn('');
     WriteLn('Test 3: Verify hostname with invalid certificate');
@@ -151,7 +151,7 @@ begin
       WriteLn('OK: VerifyHostname returns False for empty hostname')
     else
       WriteLn('FAIL: VerifyHostname should return False for empty hostname');
-    
+
     // Test 4: Certificate store with no certificates
     WriteLn('');
     WriteLn('Test 4: Certificate store operations');
@@ -161,7 +161,7 @@ begin
       WriteLn('OK: Empty certificate store has count 0')
     else
       WriteLn('FAIL: Empty certificate store should have count 0');
-    
+
     // Test 5: Access certificate at invalid index
     WriteLn('');
     WriteLn('Test 5: Access invalid certificate index');
@@ -176,7 +176,7 @@ begin
       on E: Exception do
         WriteLn('OK: Correctly raised exception for invalid index: ', E.ClassName);
     end;
-    
+
     // Test 6: Verify certificate chain with empty store
     WriteLn('');
     WriteLn('Test 6: Verify certificate chain with empty store');
@@ -186,7 +186,7 @@ begin
       WriteLn('OK: Verify returns False for unloaded certificate')
     else
       WriteLn('FAIL: Verify should return False for unloaded certificate');
-    
+
     WriteLn('');
     WriteLn('All failure scenario tests completed!');
   except

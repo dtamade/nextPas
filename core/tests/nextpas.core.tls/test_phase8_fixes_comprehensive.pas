@@ -3,7 +3,7 @@ program test_phase8_fixes_comprehensive;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils, DynLibs,
+  nextpas.core.system.sysutils, nextpas.core.time, DynLibs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.crypto.utils,
@@ -116,7 +116,7 @@ begin
   LEncoded := 'SGVsbG8gV29ybGQ=';
   LDecoded := TEncodingUtils.Base64Decode(LEncoded);
   RunTest('Decode "Hello World"',
-    (Length(LDecoded) = 11) and (TEncoding.UTF8.GetString(LDecoded) = 'Hello World'));
+    (Length(LDecoded) = 11) and (StringOf(LDecoded) = 'Hello World'));
 
   SetLength(LData, 256);
   for I := 0 to 255 do
@@ -141,7 +141,7 @@ begin
     LDecoded := TEncodingUtils.Base64Decode(LEncoded);
   LEndTime := Now;
 
-  LDecodeTime := MilliSecondsBetween(LEndTime, LStartTime);
+  LDecodeTime := DateTimeMillisecondsBetween(LEndTime, LStartTime);
   LDecodeMBps := (LDataSize * 5 / 1024 / 1024) / (LDecodeTime / 1000);
 
   WriteLn('  Decode Speed: ', LDecodeMBps:0:2, ' MB/s');

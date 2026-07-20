@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   sockets,
   {$ENDIF}
-  SysUtils;
+  nextpas.core.system.sysutils;
 
 begin
   {$IFDEF UNIX}

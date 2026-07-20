@@ -3,9 +3,9 @@ program test_connection_basic;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.factory,
-  
+
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.api.core,
   fafafa.ssl;
@@ -63,7 +63,7 @@ begin
     LConfig.LibraryType := sslOpenSSL;
     LConfig.ProtocolVersions := [sslProtocolTLS12, sslProtocolTLS13];
     LConfig.VerifyMode := [sslVerifyNone]; // No verification for basic test
-    
+
     LContext := TSSLFactory.CreateContext(LConfig);
     if LContext <> nil then
     begin
@@ -103,7 +103,7 @@ begin
       TestFailed('Connection creation', 'Context not initialized');
       Exit;
     end;
-    
+
     // Create a memory stream for the connection
     LStream := TMemoryStream.Create;
     try
@@ -134,13 +134,13 @@ begin
       TestFailed('Connection properties', 'Connection not initialized');
       Exit;
     end;
-    
+
     // Test IsConnected before any connection attempt
     if not LConnection.IsConnected then
       TestPassed('IsConnected returns False before connection')
     else
       TestFailed('IsConnected', 'Should be False before connection');
-      
+
     // Test GetNativeHandle
     if Supports(LConnection, ISSLNativeHandleAccess, LNativeHandleAccess) then
     begin
@@ -151,7 +151,7 @@ begin
     end
     else
       TestFailed('GetNativeHandle', 'Connection does not expose ISSLNativeHandleAccess');
-      
+
   except
     on E: Exception do
       TestFailed('Connection properties', E.Message);
@@ -170,7 +170,7 @@ begin
       TestFailed('Connection state', 'Connection not initialized');
       Exit;
     end;
-    
+
     // Get state string
     try
       WriteLn('  State: ', LConnection.GetState);
@@ -179,7 +179,7 @@ begin
       on E: Exception do
         TestFailed('GetState', E.Message);
     end;
-    
+
     // Get state string long
     try
       if Supports(LConnection, ISSLConnectionInfo, LConnInfo) then
@@ -193,7 +193,7 @@ begin
       on E: Exception do
         TestFailed('GetStateString', E.Message);
     end;
-      
+
   except
     on E: Exception do
       TestFailed('Connection state', E.Message);
@@ -210,7 +210,7 @@ begin
       TestFailed('Protocol version', 'Connection not initialized');
       Exit;
     end;
-    
+
     // Get protocol version (should return default even if not connected)
     try
       WriteLn('  Protocol: ', Ord(LConnection.GetProtocolVersion));
@@ -219,7 +219,7 @@ begin
       on E: Exception do
         TestFailed('GetProtocolVersion', E.Message);
     end;
-      
+
   except
     on E: Exception do
       TestFailed('Protocol version', E.Message);
@@ -236,7 +236,7 @@ begin
       TestFailed('Error handling', 'Connection not initialized');
       Exit;
     end;
-    
+
     // Test GetError with zero (no error)
     try
       if LConnection.GetError(0) = sslErrNone then
@@ -247,7 +247,7 @@ begin
       on E: Exception do
         TestFailed('GetError', E.Message);
     end;
-    
+
     // Test WantRead/WantWrite (should be false when not connected)
     try
       if not LConnection.WantRead then
@@ -258,7 +258,7 @@ begin
       on E: Exception do
         TestFailed('WantRead', E.Message);
     end;
-    
+
     try
       if not LConnection.WantWrite then
         TestPassed('WantWrite returns False when not connected')
@@ -268,7 +268,7 @@ begin
       on E: Exception do
         TestFailed('WantWrite', E.Message);
     end;
-      
+
   except
     on E: Exception do
       TestFailed('Error handling', E.Message);
@@ -285,19 +285,19 @@ begin
   WriteLn('========================================');
   WriteLn('TEST SUMMARY');
   WriteLn('========================================');
-  
+
   LTotal := LTestsPassed + LTestsFailed;
   if LTotal > 0 then
     LPassRate := (LTestsPassed / LTotal) * 100
   else
     LPassRate := 0;
-    
+
   WriteLn('Total tests: ', LTotal);
   WriteLn('Passed: ', LTestsPassed);
   WriteLn('Failed: ', LTestsFailed);
   WriteLn('Pass rate: ', LPassRate:0:1, '%');
   WriteLn('========================================');
-  
+
   if LTestsFailed = 0 then
     WriteLn('Result: ALL TESTS PASSED!')
   else
@@ -309,7 +309,7 @@ begin
   WriteLn('OpenSSL Connection Basic Tests');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     // Load OpenSSL
     WriteLn('Loading OpenSSL...');
@@ -324,7 +324,7 @@ begin
         Halt(1);
       end;
     end;
-    
+
     // Run tests
     Test1_FactoryCreation;
     Test2_ContextCreation;
@@ -333,10 +333,10 @@ begin
     Test5_ConnectionState;
     Test6_ProtocolVersion;
     Test7_ErrorHandling;
-    
+
     // Print summary
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin
@@ -345,7 +345,7 @@ begin
       Halt(1);
     end;
   end;
-  
+
   // Exit with error code if tests failed
   if LTestsFailed > 0 then
     Halt(1);

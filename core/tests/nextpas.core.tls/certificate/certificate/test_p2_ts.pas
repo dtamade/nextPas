@@ -3,7 +3,7 @@ program test_p2_ts;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.ts,
@@ -418,12 +418,12 @@ begin
   WriteLn('Passed:       ', PassedTests, ' (', Format('%.1f', [PassedTests * 100.0 / TotalTests]), '%)');
   WriteLn('Failed:       ', FailedTests, ' (', Format('%.1f', [FailedTests * 100.0 / TotalTests]), '%)');
   WriteLn('============================================');
-  
+
   if FailedTests = 0 then
     WriteLn('All tests PASSED! ✓')
   else
     WriteLn('Some tests FAILED! ✗');
-    
+
   WriteLn;
   WriteLn('Note: TS (Timestamp Protocol) provides RFC 3161');
   WriteLn('      timestamping for document integrity.');
@@ -435,16 +435,16 @@ begin
   WriteLn('Testing OpenSSL TS (Timestamp Protocol) API');
   WriteLn('============================================');
   WriteLn;
-  
+
   try
     // Initialize OpenSSL
     LoadOpenSSLCore;
     LoadOpenSSLX509;
     LoadOpenSSLBIO;
-    
+
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
     WriteLn;
-    
+
     // Run tests
     TestLoadTSFunctions;
     TestTSStatusConstants;
@@ -463,16 +463,16 @@ begin
     TestTSVerificationFunctions;
     TestTSIOFunctions;
     TestTSPrintFunctions;
-    
+
     // Print results
     PrintSummary;
-    
+
     // Exit with appropriate code
     if FailedTests > 0 then
       Halt(1)
     else
       Halt(0);
-      
+
   except
     on E: Exception do
     begin

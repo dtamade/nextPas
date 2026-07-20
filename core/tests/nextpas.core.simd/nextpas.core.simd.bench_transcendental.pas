@@ -3,11 +3,10 @@ program nextpas.core.simd.bench_transcendental;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
+  nextpas.core.time.base,
   {$IFDEF UNIX}
-  nextpas.core.thread.init, Unix,
-  {$ENDIF}
-  nextpas.core.text.conv, Math, SysUtils,
-  nextpas.core.simd,
+  nextpas.core.thread.init, {$ENDIF}
+  nextpas.core.text.conv, nextpas.core.math, nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
 
@@ -19,10 +18,8 @@ var
   Src, Dst: array[0..N-1] of Single;
 
 function GetTimeUs: Int64;
-var tv: timeval;
 begin
-  fpgettimeofday(@tv, nil);
-  Result := Int64(tv.tv_sec) * 1000000 + tv.tv_usec;
+  Result := TInstant.Now.DurationSince(Default(TInstant)).AsMicroseconds;
 end;
 
 type

@@ -3,7 +3,7 @@ program test_early_data_public_api_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.freepascal.lib;
 

@@ -4,8 +4,10 @@ program test_api_coverage_wide_vectors;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.text.conv, Math,
-  nextpas.core.simd.base, nextpas.core.simd,
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.base,
+  nextpas.core.simd,
   nextpas.core.simd.api_coverage.support;
 
 procedure TestF32x8ExtMath;

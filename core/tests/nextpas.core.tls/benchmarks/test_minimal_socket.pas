@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   BaseUnix, Unix,
   {$ENDIF}
-  SysUtils;
+  nextpas.core.system.sysutils;
 
 {$IFDEF UNIX}
 procedure TestSocket;

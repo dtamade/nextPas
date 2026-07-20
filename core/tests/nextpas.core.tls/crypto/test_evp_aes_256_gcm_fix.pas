@@ -3,7 +3,7 @@ program test_evp_aes_256_gcm_fix;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DynLibs,
+  nextpas.core.system.sysutils, DynLibs,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.evp;
 

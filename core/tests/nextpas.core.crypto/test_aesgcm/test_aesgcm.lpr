@@ -3,7 +3,7 @@ program test_aesgcm;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.aesgcm,
   nextpas.core.test;
 

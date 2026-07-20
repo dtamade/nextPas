@@ -15,7 +15,7 @@ unit test_memutils;
 interface
 
 uses
-  Classes, SysUtils, nextpas.core.test,
+  nextpas.core.system.classes, nextpas.core.system.sysutils, nextpas.core.test,
   test_base, nextpas.core.tls.memutils;
 
 type

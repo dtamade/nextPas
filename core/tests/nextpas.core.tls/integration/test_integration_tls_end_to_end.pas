@@ -9,7 +9,7 @@ program test_integration_tls_end_to_end;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes, DateUtils, Math,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, Math,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   fafafa.ssl,

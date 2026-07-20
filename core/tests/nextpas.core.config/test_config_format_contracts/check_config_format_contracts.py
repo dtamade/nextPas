@@ -79,6 +79,37 @@ FORMAT_BULK_PARSE_UNITS = (
     "src/nextpas.core.ini.pas",
 )
 
+# Language-level FPC file I/O must not appear in format/config production sources.
+TEXTFILE_BANNED_GLOBS = (
+    "src/nextpas.core.json*.pas",
+    "src/nextpas.core.toml*.pas",
+    "src/nextpas.core.yaml*.pas",
+    "src/nextpas.core.xml*.pas",
+    "src/nextpas.core.csv*.pas",
+    "src/nextpas.core.ini*.pas",
+    "src/nextpas.core.config*.pas",
+    "src/nextpas.core.config*.inc",
+    "src/nextpas.core.format.limits.pas",
+)
+
+TEXTFILE_BANNED_RE = re.compile(
+    r"\b(TextFile|AssignFile|CloseFile|Reset\s*\(|Rewrite\s*\()\b",
+    re.IGNORECASE,
+)
+
+# Format/config tests must not uses SysUtils/Classes (use fs/process/text.*).
+TEST_SYSUTILS_BANNED_GLOBS = (
+    "tests/nextpas.core.config/**/*.lpr",
+    "tests/nextpas.core.json/**/*.lpr",
+    "tests/nextpas.core.toml/**/*.lpr",
+    "tests/nextpas.core.yaml/**/*.lpr",
+    "tests/nextpas.core.xml/**/*.lpr",
+    "tests/nextpas.core.csv/**/*.lpr",
+    "tests/nextpas.core.ini/**/*.lpr",
+)
+
+TEST_SYSUTILS_WHITELIST: set[str] = set()  # empty: no exceptions
+
 USES_RE = re.compile(r"\buses\b(?P<body>.*?);", re.IGNORECASE | re.DOTALL)
 CONFIG_UNIT_RE = re.compile(r"\bnextpas\.core\.config\b", re.IGNORECASE)
 PASCAL_PROC_RE_TEMPLATE = (
@@ -150,6 +181,22 @@ REQUIRED_DOC_SNIPPETS = {
         (
             "config-formats-tryas",
             "TryAsBool",
+        ),
+        (
+            "config-formats-recommended-calls-header",
+            "## Recommended calls",
+        ),
+        (
+            "config-formats-error-model-when",
+            "when to raise",
+        ),
+        (
+            "config-formats-silent-default-warning",
+            "silent defaults",
+        ),
+        (
+            "config-formats-fs-not-textfile",
+            "ReadFileText",
         ),
     ),
     "docs/config/README.md": (
@@ -678,6 +725,51 @@ def check_no_sysutils_in_format_modules(
                 )
 
 
+def check_no_textfile_io_in_format_modules(root: Path, findings: list[Finding]) -> None:
+    paths: set[Path] = set()
+    for pattern in TEXTFILE_BANNED_GLOBS:
+        paths.update(root.glob(pattern))
+    for path in sorted(paths):
+        rel_path = path.relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8")
+        scan_text = strip_pascal_comments_and_strings(text)
+        for match in TEXTFILE_BANNED_RE.finditer(scan_text):
+            findings.append(
+                Finding(
+                    "format-no-textfile-io",
+                    rel_path,
+                    line_number(scan_text, match.start()),
+                    "format/config production must use nextpas.core.fs, not TextFile/AssignFile",
+                )
+            )
+
+
+def check_no_sysutils_in_format_tests(root: Path, findings: list[Finding]) -> None:
+    paths: set[Path] = set()
+    for pattern in TEST_SYSUTILS_BANNED_GLOBS:
+        paths.update(root.glob(pattern))
+    for path in sorted(paths):
+        rel_path = path.relative_to(root).as_posix()
+        if rel_path in TEST_SYSUTILS_WHITELIST:
+            continue
+        text = path.read_text(encoding="utf-8")
+        scan_text = strip_pascal_comments_and_strings(text)
+        for uses_match in USES_RE.finditer(scan_text):
+            body = uses_match.group("body")
+            for banned in ("SysUtils", "Classes"):
+                m = re.search(rf"\b{banned}\b", body, re.IGNORECASE)
+                if m:
+                    offset = uses_match.start("body") + m.start()
+                    findings.append(
+                        Finding(
+                            "format-test-no-sysutils",
+                            rel_path,
+                            line_number(scan_text, offset),
+                            f"format/config tests must not use {banned}; use fs/process/text.*",
+                        )
+                    )
+
+
 def check_format_limits_and_bulk_cap(root: Path, findings: list[Finding]) -> None:
     limits = root / "src/nextpas.core.format.limits.pas"
     if not limits.is_file():
@@ -739,6 +831,8 @@ def build_report(root: Path) -> Report:
     check_no_sysutils_in_format_modules(
         root, collect_sysutils_banned_sources(root), findings
     )
+    check_no_textfile_io_in_format_modules(root, findings)
+    check_no_sysutils_in_format_tests(root, findings)
     check_format_limits_and_bulk_cap(root, findings)
     return Report(
         root=str(root),

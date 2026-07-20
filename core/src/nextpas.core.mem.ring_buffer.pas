@@ -327,9 +327,11 @@ begin
   inherited Create;
 
   if aCapacity = 0 then
-    raise ERingBufferError.Create(aeInvalidLayout, 'Capacity cannot be zero');
+    raise ERingBufferError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TRingBuffer', 'Create', 'Capacity cannot be zero'));
   if aElementSize = 0 then
-    raise ERingBufferError.Create(aeInvalidLayout, 'Element size cannot be zero');
+    raise ERingBufferError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TRingBuffer', 'Create', 'Element size cannot be zero'));
 
   FCapacity := aCapacity;
   FElementSize := aElementSize;
@@ -343,7 +345,7 @@ begin
   // 防止乘法溢出并分配内存
   if (FElementSize <> 0) and (FCapacity > MAX_SIZE_UINT div FElementSize) then
     raise ERingBufferError.Create(aeInvalidLayout,
-      'TRingBuffer: size exceeds addressable range (' + IntToStr(FCapacity) + ' * ' + IntToStr(FElementSize) + ')');
+      FormatAllocErrorMsg('TRingBuffer', 'Create', 'size exceeds addressable range (' + IntToStr(FCapacity) + ' * ' + IntToStr(FElementSize) + ')'));
 
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then

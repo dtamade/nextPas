@@ -16,7 +16,7 @@ program test_transformation_methods;
  *}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fpjson, jsonparser,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

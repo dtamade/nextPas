@@ -16,7 +16,7 @@ program test_mbedtls_server_context;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib;
 

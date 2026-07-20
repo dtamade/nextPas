@@ -24,11 +24,6 @@ unit nextpas.core.tls.freepascal.connection;
 interface
 
 uses
-  {$IFDEF WINDOWS}
-  Windows, Winsock2,
-  {$ELSE}
-  Sockets,
-  {$ENDIF}
   nextpas.core.system.classes,
   nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.strings, nextpas.core.base.utils,
   nextpas.core.io.intf,
@@ -246,7 +241,7 @@ type
 implementation
 
 uses
-  {$IFDEF UNIX}BaseUnix, Unix,{$ENDIF}
+  nextpas.core.platform.socket,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.parser,
@@ -980,7 +975,20 @@ begin
   inherited Destroy;
 end;
 
+function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
+begin
+  {$IFDEF WINDOWS}
+  Result.Value := PtrUInt(AHandle);
+  {$ELSE}
+  Result.Value := Int32(AHandle);
+  {$ENDIF}
+end;
+
 function TFreePascalConnection.SendData(const ABuffer; ASize: Integer): Integer;
+var
+  LSock: TPlatformSocket;
+  LSent: Int32;
+  LErr: Int32;
 begin
   if FStream <> nil then
     Exit(Integer(FStream.Write(ABuffer, ASize)));
@@ -988,22 +996,19 @@ begin
   if FSocket < 0 then
     Exit(-1);
 
-  {$IFDEF WINDOWS}
-  Result := Winsock2.send(FSocket, ABuffer, ASize, 0);
-  if Result = SOCKET_ERROR then
-    Result := -1;
-  {$ELSE}
-  Result := fpSend(FSocket, @ABuffer, ASize, 0);
-  {$ENDIF}
+  LSock := FreePascalHandleToSocket(FSocket);
+  LErr := platform_socket_send(LSock, @ABuffer, ASize, PLATFORM_MSG_NOSIGNAL, LSent);
+  if LErr <> 0 then
+    Exit(-1);
+  Result := LSent;
 end;
 
 function TFreePascalConnection.RecvData(var ABuffer; ASize: Integer): Integer;
-{$IFDEF UNIX}
 var
-  LSet: TFDSet;
-  LTimeout: TTimeVal;
-  LRet: Integer;
-{$ENDIF}
+  LSock: TPlatformSocket;
+  LRecvd: Int32;
+  LErr: Int32;
+  LRevents: Int32;
 begin
   if FStream <> nil then
     Exit(Integer(FStream.Read(ABuffer, ASize)));
@@ -1011,44 +1016,42 @@ begin
   if FSocket < 0 then
     Exit(-1);
 
-  {$IFDEF UNIX}
+  LSock := FreePascalHandleToSocket(FSocket);
   if FReadTimeoutMs > 0 then
   begin
-    fpFD_ZERO(LSet);
-    fpFD_SET(FSocket, LSet);
-    LTimeout.tv_sec := FReadTimeoutMs div 1000;
-    LTimeout.tv_usec := (FReadTimeoutMs mod 1000) * 1000;
-    LRet := fpSelect(FSocket + 1, @LSet, nil, nil, @LTimeout);
-    if LRet <= 0 then
+    LErr := platform_socket_poll(LSock, PLATFORM_POLL_IN, FReadTimeoutMs, LRevents);
+    if LErr <> 0 then
       Exit(-1);
   end;
-  {$ENDIF}
 
-  {$IFDEF WINDOWS}
-  Result := Winsock2.recv(FSocket, ABuffer, ASize, 0);
-  if Result = SOCKET_ERROR then
-    Result := -1;
-  {$ELSE}
-  Result := fpRecv(FSocket, @ABuffer, ASize, 0);
-  {$ENDIF}
+  LErr := platform_socket_recv(LSock, @ABuffer, ASize, 0, LRecvd);
+  if LErr <> 0 then
+    Exit(-1);
+  Result := LRecvd;
 end;
 
 procedure TFreePascalConnection.SetReadTimeout(AMs: Integer);
+var
+  LSock: TPlatformSocket;
 begin
   FReadTimeoutMs := AMs;
-  {$IFDEF WINDOWS}
   if FSocket >= 0 then
-    setsockopt(FSocket, SOL_SOCKET, SO_RCVTIMEO, @AMs, SizeOf(AMs));
-  {$ENDIF}
+  begin
+    LSock := FreePascalHandleToSocket(FSocket);
+    platform_socket_set_timeout(LSock, PLATFORM_SO_RCVTIMEO, AMs);
+  end;
 end;
 
 procedure TFreePascalConnection.SetWriteTimeout(AMs: Integer);
+var
+  LSock: TPlatformSocket;
 begin
   FWriteTimeoutMs := AMs;
-  {$IFDEF WINDOWS}
   if FSocket >= 0 then
-    setsockopt(FSocket, SOL_SOCKET, SO_SNDTIMEO, @AMs, SizeOf(AMs));
-  {$ENDIF}
+  begin
+    LSock := FreePascalHandleToSocket(FSocket);
+    platform_socket_set_timeout(LSock, PLATFORM_SO_SNDTIMEO, AMs);
+  end;
 end;
 
 function TFreePascalConnection.SendAll(const AData: TBytes): Boolean;

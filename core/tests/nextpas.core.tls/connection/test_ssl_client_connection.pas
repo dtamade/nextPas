@@ -3,7 +3,7 @@ program test_ssl_client_connection;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
@@ -119,7 +119,7 @@ begin
       TestResult('Create SSL context', False, 'Library not initialized');
       Exit;
     end;
-    
+
     Context := SSLLib.CreateContext(sslCtxClient);
     if Context <> nil then
     begin
@@ -167,18 +167,18 @@ begin
       TestResult('Create SSL connection', False, 'Context not initialized');
       Exit;
     end;
-    
+
     if Stream = nil then
     begin
       TestResult('Create SSL connection', False, 'Stream not initialized');
       Exit;
     end;
-    
+
     Connection := Context.CreateConnection(Stream);
     if Connection <> nil then
     begin
       TestResult('Create SSL connection object', True);
-      
+
       if GetNativeHandle(Connection) <> nil then
         TestResult('SSL native handle is valid', True)
       else
@@ -205,13 +205,13 @@ begin
       TestResult('SSL handshake', False, 'Connection not initialized');
       Exit;
     end;
-    
+
     WriteLn('Attempting SSL handshake...');
     Attempts := 0;
     repeat
       HandshakeState := Connection.DoHandshake;
       Inc(Attempts);
-      
+
       case HandshakeState of
         sslHsCompleted:
         begin
@@ -235,7 +235,7 @@ begin
         end;
       end;
     until (HandshakeState <> sslHsInProgress) or (Attempts > 100);
-    
+
   except
     on E: Exception do
       TestResult('SSL handshake', False, E.Message);
@@ -256,13 +256,13 @@ begin
       TestResult('Connection verification', False, 'Connection not initialized');
       Exit;
     end;
-    
+
     // Check if connected
     if Connection.IsConnected then
       TestResult('Connection is established', True)
     else
       TestResult('Connection is established', False);
-    
+
     // Get protocol version
     try
       WriteLn('Protocol version: ', Ord(Connection.GetProtocolVersion));
@@ -271,7 +271,7 @@ begin
       on E: Exception do
         TestResult('Get protocol version', False, E.Message);
     end;
-    
+
     // Get cipher name
     try
       WriteLn('Cipher: ', Connection.GetCipherName);
@@ -280,7 +280,7 @@ begin
       on E: Exception do
         TestResult('Get cipher name', False, E.Message);
     end;
-    
+
     // Get peer certificate
     try
       PeerCert := Connection.GetPeerCertificate;
@@ -295,7 +295,7 @@ begin
       on E: Exception do
         TestResult('Get peer certificate', False, E.Message);
     end;
-    
+
     // Get verify result
     try
       GetCertificateVerificationInfo(Connection, VerifyResult, VerifyResultString);
@@ -304,14 +304,14 @@ begin
         TestResult('Certificate verification', True)
       else
       begin
-        TestResult('Certificate verification', False, 
+        TestResult('Certificate verification', False,
           'Verify failed: ' + VerifyResultString);
       end;
     except
       on E: Exception do
         TestResult('Certificate verification', False, E.Message);
     end;
-    
+
   except
     on E: Exception do
       TestResult('Connection verification', False, E.Message);
@@ -330,16 +330,16 @@ begin
       TestResult('Send data', False, 'Connection not initialized');
       Exit;
     end;
-    
+
     if not Connection.IsConnected then
     begin
       TestResult('Send data', False, 'Not connected');
       Exit;
     end;
-    
+
     WriteLn('Sending: ', TEST_REQUEST);
     BytesWritten := Connection.Write(TEST_REQUEST[1], Length(TEST_REQUEST));
-    
+
     if BytesWritten > 0 then
     begin
       TestResult('Send HTTP request', True);
@@ -347,7 +347,7 @@ begin
     end
     else
       TestResult('Send HTTP request', False, 'No bytes written');
-      
+
   except
     on E: Exception do
       TestResult('Send data', False, E.Message);
@@ -368,28 +368,28 @@ begin
       TestResult('Receive data', False, 'Connection not initialized');
       Exit;
     end;
-    
+
     if not Connection.IsConnected then
     begin
       TestResult('Receive data', False, 'Not connected');
       Exit;
     end;
-    
+
     // Read response
     BytesRead := Connection.Read(Buffer[0], SizeOf(Buffer));
-    
+
     if BytesRead > 0 then
     begin
       TestResult('Receive HTTP response', True);
       WriteLn('Received ', BytesRead, ' bytes');
-      
+
       SetString(Response, PAnsiChar(@Buffer[0]), BytesRead);
       WriteLn('Response preview (first 200 chars):');
       if Length(Response) > 200 then
         WriteLn(Copy(Response, 1, 200), '...')
       else
         WriteLn(Response);
-        
+
       // Check if it looks like HTTP response
       if Pos('HTTP/', Response) > 0 then
         TestResult('Valid HTTP response', True)
@@ -398,7 +398,7 @@ begin
     end
     else
       TestResult('Receive HTTP response', False, 'No data received');
-      
+
   except
     on E: Exception do
       TestResult('Receive data', False, E.Message);
@@ -416,10 +416,10 @@ begin
         TestResult('SSL shutdown', True)
       else
         TestResult('SSL shutdown', False, 'Shutdown returned false');
-        
+
       Connection.Close;
       TestResult('Close connection', True);
-      
+
       if not Connection.IsConnected then
         TestResult('Connection closed', True)
       else
@@ -427,7 +427,7 @@ begin
     end
     else
       TestResult('Close connection', False, 'Connection not initialized');
-      
+
   except
     on E: Exception do
       TestResult('Close connection', False, E.Message);
@@ -444,19 +444,19 @@ begin
   WriteLn('========================================');
   WriteLn('TEST SUMMARY');
   WriteLn('========================================');
-  
+
   Total := TestsPassed + TestsFailed;
   if Total > 0 then
     PassRate := (TestsPassed / Total) * 100
   else
     PassRate := 0;
-    
+
   WriteLn('Total tests: ', Total);
   WriteLn('Passed: ', TestsPassed);
   WriteLn('Failed: ', TestsFailed);
   WriteLn('Pass rate: ', PassRate:0:1, '%');
   WriteLn('========================================');
-  
+
   if TestsFailed = 0 then
     WriteLn('Result: ALL TESTS PASSED!')
   else
@@ -469,7 +469,7 @@ begin
   WriteLn('========================================');
   WriteLn('Target: ', TEST_HOST, ':', TEST_PORT);
   WriteLn;
-  
+
   try
     // Run all tests in sequence
     Test1_InitializeLibrary;
@@ -481,10 +481,10 @@ begin
     Test7_SendData;
     Test8_ReceiveData;
     Test9_CloseConnection;
-    
+
     // Print summary
     PrintSummary;
-    
+
   except
     on E: Exception do
     begin
@@ -493,17 +493,17 @@ begin
       ExitCode := 1;
     end;
   end;
-  
+
   // Cleanup
   if SSLLib <> nil then
     SSLLib.Finalize;
-    
+
   if Stream <> nil then
     Stream.Free;
-    
+
   if Socket <> nil then
     Socket.Free;
-  
+
   // Exit with error code if tests failed
   if TestsFailed > 0 then
     ExitCode := 1

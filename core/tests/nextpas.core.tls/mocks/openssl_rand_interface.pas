@@ -4,19 +4,19 @@ unit openssl_rand_interface;
 
 {
   Random Number Generator Mock Interface
-  
+
   Provides mock implementations for random number generation including:
   - RAND_bytes: Cryptographic random bytes
   - Deterministic mode: For reproducible testing
   - Seeding control: Custom seed management
-  
+
   This mock allows testing random-number-dependent code without requiring OpenSSL.
 }
 
 interface
 
 uses
-  Classes, SysUtils;
+  nextpas.core.system.classes, nextpas.core.system.sysutils;
 
 type
   // 随机数生成模式
@@ -35,33 +35,33 @@ type
   { IRandom - Random Number Generator接口 }
   IRandom = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    
+
     // 生成随机字节
     function GenerateBytes(aLength: Integer): TRandomResult;
-    
+
     // 生成随机整数（范围：0 到 aMax-1）
     function GenerateInteger(aMax: Cardinal): Cardinal;
-    
+
     // 生成随机浮点数（范围：0.0 到 1.0）
     function GenerateFloat: Double;
-    
+
     // 种子管理
     procedure SetSeed(aSeed: Cardinal);
     function GetSeed: Cardinal;
     procedure Reseed;
-    
+
     // 模式控制
     procedure SetMode(aMode: TRandomMode);
     function GetMode: TRandomMode;
-    
+
     // 确定性序列（用于测试）
     procedure SetDeterministicSequence(const aSequence: TBytes);
     procedure ClearDeterministicSequence;
-    
+
     // 状态查询
     function IsSeeded: Boolean;
     function GetStatus: string;
-    
+
     // 统计信息
     function GetBytesGeneratedCount: Int64;
     function GetGenerateCallCount: Integer;
@@ -81,34 +81,34 @@ type
     FBytesGeneratedCount: Int64;
     FGenerateCallCount: Integer;
     FLCGState: Cardinal;  // Linear Congruential Generator状态
-    
+
     function GeneratePseudoRandomByte: Byte;
     function GetDeterministicByte: Byte;
   public
     constructor Create;
-    
+
     // IRandom接口实现
     function GenerateBytes(aLength: Integer): TRandomResult;
     function GenerateInteger(aMax: Cardinal): Cardinal;
     function GenerateFloat: Double;
-    
+
     procedure SetSeed(aSeed: Cardinal);
     function GetSeed: Cardinal;
     procedure Reseed;
-    
+
     procedure SetMode(aMode: TRandomMode);
     function GetMode: TRandomMode;
-    
+
     procedure SetDeterministicSequence(const aSequence: TBytes);
     procedure ClearDeterministicSequence;
-    
+
     function IsSeeded: Boolean;
     function GetStatus: string;
-    
+
     function GetBytesGeneratedCount: Int64;
     function GetGenerateCallCount: Integer;
     procedure ResetStatistics;
-    
+
     // 测试辅助方法
     procedure SetShouldFail(aValue: Boolean; const aErrorMessage: string = '');
   end;
@@ -130,7 +130,7 @@ begin
   FBytesGeneratedCount := 0;
   FGenerateCallCount := 0;
   FLCGState := 0;
-  
+
   // 使用时间戳作为初始种子
   Reseed;
 end;
@@ -167,45 +167,45 @@ var
   i: Integer;
 begin
   Inc(FGenerateCallCount);
-  
+
   Result.Success := False;
   SetLength(Result.Data, 0);
   Result.ErrorMessage := '';
-  
+
   if FShouldFail then
   begin
     Result.ErrorMessage := FErrorMessage;
     Exit;
   end;
-  
+
   if aLength < 0 then
   begin
     Result.ErrorMessage := 'Length cannot be negative';
     Exit;
   end;
-  
+
   if aLength = 0 then
   begin
     Result.Success := True;
     Exit;
   end;
-  
+
   SetLength(Result.Data, aLength);
-  
+
   case FMode of
     rmDeterministic:
       begin
         for i := 0 to aLength - 1 do
           Result.Data[i] := GetDeterministicByte;
       end;
-      
+
     rmPseudoRandom:
       begin
         for i := 0 to aLength - 1 do
           Result.Data[i] := GeneratePseudoRandomByte;
       end;
   end;
-  
+
   Inc(FBytesGeneratedCount, aLength);
   Result.Success := True;
 end;
@@ -216,15 +216,15 @@ var
   LValue: Cardinal;
 begin
   Result := 0;
-  
+
   if aMax = 0 then
     Exit;
-  
+
   // 生成4个字节并转换为Cardinal
   LBytes := GenerateBytes(4);
   if not LBytes.Success then
     Exit;
-  
+
   Move(LBytes.Data[0], LValue, 4);
   Result := LValue mod aMax;
 end;
@@ -241,7 +241,7 @@ begin
     Result := 0.0;
     Exit;
   end;
-  
+
   Move(LBytes.Data[0], LValue, 4);
   // 转换为0.0到1.0之间的值
   Result := LValue / High(Cardinal);
@@ -305,7 +305,7 @@ begin
   else
     Result := 'Unknown mode';
   end;
-  
+
   if FIsSeeded then
     Result := Result + ' (seeded: ' + IntToStr(FSeed) + ')'
   else

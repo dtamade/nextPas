@@ -3,7 +3,7 @@ program test_tls12_record_cbc;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.tls.crypto.tls12record;
+  nextpas.core.system.sysutils, nextpas.core.tls.crypto.tls12record;
 
 var
   GPassCount: Integer = 0;

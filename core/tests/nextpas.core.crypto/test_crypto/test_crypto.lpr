@@ -4,7 +4,7 @@ program test_crypto;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.test,
   nextpas.core.crypto.ct.bigint,
   nextpas.core.crypto.p256.field,

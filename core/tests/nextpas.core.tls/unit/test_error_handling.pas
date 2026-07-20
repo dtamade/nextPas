@@ -3,7 +3,7 @@ program test_error_handling;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.errors;
 
 type
@@ -15,7 +15,7 @@ var
 begin
   LA := StrToIntDef(A, 0);
   LB := StrToIntDef(B, 0);
-  
+
   if LB = 0 then
     Result := TStringResult.ErrCode(errInvalidConfiguration, 'Division by zero')
   else
@@ -29,7 +29,7 @@ begin
   WriteLn('  Error Handling Demo');
   WriteLn('====================================');
   WriteLn;
-  
+
   // Test 1: Success case
   WriteLn('[Test 1] Success case');
   LResult := DivideStrings('10', '2');
@@ -38,7 +38,7 @@ begin
   else
     WriteLn('✗ Error: ', LResult.Error.Message);
   WriteLn;
-  
+
   // Test 2: Error case
   WriteLn('[Test 2] Error case');
   LResult := DivideStrings('10', '0');
@@ -52,13 +52,13 @@ begin
     WriteLn('  Recoverable: ', LResult.Error.Recoverable);
   end;
   WriteLn;
-  
+
   // Test 3: UnwrapOr
   WriteLn('[Test 3] UnwrapOr with default');
   LResult := DivideStrings('10', '0');
   WriteLn('  Result: ', LResult.UnwrapOr('default_value'));
   WriteLn;
-  
+
   // Test 4: Unwrap (should raise)
   WriteLn('[Test 4] Unwrap on error (should raise)');
   try
@@ -69,7 +69,7 @@ begin
       WriteLn('✓ Exception caught: ', E.ToString);
   end;
   WriteLn;
-  
+
   WriteLn('====================================');
   WriteLn('✓ Error handling system working!');
   WriteLn('====================================');

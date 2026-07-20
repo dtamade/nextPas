@@ -15,7 +15,7 @@ program test_integration_winssl_openssl_comparison;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils, Classes, DateUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
@@ -47,7 +47,7 @@ begin
   try
     OpenSSLLib := TOpenSSLLibrary.Create;
     OpenSSLInit := OpenSSLLib.Initialize;
-    Duration := MilliSecondsBetween(Now, StartTime);
+    Duration := DateTimeMillisecondsBetween(Now, StartTime);
 
     if OpenSSLInit then
     begin
@@ -68,7 +68,7 @@ begin
     WinSSLLib := TWinSSLLibrary.Create;
     if WinSSLLib.Initialize then
     begin
-      Duration := MilliSecondsBetween(Now, StartTime);
+      Duration := DateTimeMillisecondsBetween(Now, StartTime);
       Runner.Check('WinSSL initialization', True, Format('Version: %s, Time: %.2f ms',
         [WinSSLLib.GetVersionString, Duration]));
     end

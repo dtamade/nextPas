@@ -4,7 +4,7 @@ unit openssl_core_interface;
 
 {
   OpenSSL Core Interface Abstraction
-  
+
   Purpose: Provide interface for dependency injection
   Allows: Real implementation OR Mock implementation
   Benefits: True unit testing, fast execution, isolated tests
@@ -13,23 +13,23 @@ unit openssl_core_interface;
 interface
 
 uses
-  Classes, SysUtils, DynLibs;
+  nextpas.core.system.classes, nextpas.core.system.sysutils, DynLibs;
 
 type
   { IOpenSSLCore - Interface for OpenSSL Core functionality }
   IOpenSSLCore = interface
     ['{E8F9A1B2-C3D4-4E5F-6A7B-8C9D0E1F2A3B}']
-    
+
     // Library loading
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
     function GetCryptoLibHandle: TLibHandle;
     function GetSSLLibHandle: TLibHandle;
-    
+
     // Version information
     function GetVersionString: string;
     function GetVersionNumber: Cardinal;
-    
+
     // Library management
     procedure UnloadLibrary;  // For testing purposes
   end;
@@ -44,7 +44,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    
+
     // IOpenSSLCore implementation
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
@@ -65,7 +65,7 @@ type
     FLoadCallCount: Integer;
   public
     constructor Create;
-    
+
     // IOpenSSLCore implementation
     function LoadLibrary: Boolean;
     function IsLoaded: Boolean;
@@ -74,7 +74,7 @@ type
     function GetVersionString: string;
     function GetVersionNumber: Cardinal;
     procedure UnloadLibrary;
-    
+
     // Mock control methods
     procedure SetShouldFailLoad(AValue: Boolean);
     procedure SetVersionString(const AValue: string);

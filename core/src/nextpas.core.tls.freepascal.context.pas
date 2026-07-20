@@ -14,7 +14,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  Base64, nextpas.core.fs.stream,
+  nextpas.core.encoding.base64,
+  nextpas.core.fs.stream,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
@@ -1127,16 +1128,9 @@ end;
 procedure TFreePascalContext.AddCertificatePinBase64(const ABase64Hash: string; APinType: Integer;
   const ADescription: string; AIsBackup: Boolean);
 var
-  LDecoded: string;
-  LAnsi: AnsiString;
   LHash: TBytes;
 begin
-  LDecoded := DecodeStringBase64(ABase64Hash);
-  LAnsi := AnsiString(LDecoded);
-  SetLength(LHash, Length(LAnsi));
-  if Length(LAnsi) > 0 then
-    Move(LAnsi[1], LHash[0], Length(LAnsi));
-
+  LHash := Base64Decode(ABase64Hash);
   AddCertificatePin(LHash, APinType, ADescription, AIsBackup);
 end;
 

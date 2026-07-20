@@ -3,7 +3,7 @@ program test_hmac;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.crypto.hmac,
@@ -33,7 +33,7 @@ begin
   var LKey, LData: TBytes; LD: TSHA256Digest;
   begin
     LKey := HexToBytes('0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b');
-    LData := TEncoding.UTF8.GetBytes(UnicodeString('Hi There'));
+    LData := BytesOf('Hi There');
     LD := HmacSHA256(LKey, LData);
     CheckEqual('b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7',
       ToHex(LD, 32));
@@ -42,8 +42,8 @@ begin
   LSuite.Test('RFC 4231 TC2', procedure
   var LKey, LData: TBytes; LD: TSHA256Digest;
   begin
-    LKey := TEncoding.UTF8.GetBytes(UnicodeString('Jefe'));
-    LData := TEncoding.UTF8.GetBytes(UnicodeString('what do ya want for nothing?'));
+    LKey := BytesOf('Jefe');
+    LData := BytesOf('what do ya want for nothing?');
     LD := HmacSHA256(LKey, LData);
     CheckEqual('5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843',
       ToHex(LD, 32));
@@ -73,7 +73,7 @@ begin
   var LKey, LData: TBytes; LD: TSHA256Digest;
   begin
     SetLength(LKey, 131); FillChar(LKey[0], 131, $AA);
-    LData := TEncoding.UTF8.GetBytes(UnicodeString('Test Using Larger Than Block-Size Key - Hash Key First'));
+    LData := BytesOf('Test Using Larger Than Block-Size Key - Hash Key First');
     LD := HmacSHA256(LKey, LData);
     CheckEqual('60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54',
       ToHex(LD, 32));
@@ -83,9 +83,7 @@ begin
   var LKey, LData: TBytes; LD: TSHA256Digest;
   begin
     SetLength(LKey, 131); FillChar(LKey[0], 131, $AA);
-    LData := TEncoding.UTF8.GetBytes(UnicodeString(
-      'This is a test using a larger than block-size key and a larger than block-size data. ' +
-      'The key needs to be hashed before being used by the HMAC algorithm.'));
+    LData := BytesOf('This is a test using a larger than block-size key and a larger than block-size data. ' + 'The key needs to be hashed before being used by the HMAC algorithm.');
     LD := HmacSHA256(LKey, LData);
     CheckEqual('9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2',
       ToHex(LD, 32));
@@ -94,8 +92,8 @@ begin
   LSuite.Test('convenience functions', procedure
   var LKey, LData, LResult: TBytes; LD: TSHA256Digest;
   begin
-    LKey := TEncoding.UTF8.GetBytes(UnicodeString('secret'));
-    LData := TEncoding.UTF8.GetBytes(UnicodeString('message'));
+    LKey := BytesOf('secret');
+    LData := BytesOf('message');
     LResult := HMAC_SHA256(LKey, LData);
     LD := HmacSHA256(LKey, LData);
     CheckTrue(CompareMem(@LResult[0], @LD[0], 32));
@@ -112,8 +110,8 @@ begin
   LSuite.Test('streaming behavior', procedure
   var LH: IHasher; LKey, LData: TBytes; LD1, LD2: TSHA256Digest;
   begin
-    LKey := TEncoding.UTF8.GetBytes(UnicodeString('Jefe'));
-    LData := TEncoding.UTF8.GetBytes(UnicodeString('what do ya want for nothing?'));
+    LKey := BytesOf('Jefe');
+    LData := BytesOf('what do ya want for nothing?');
     LH := NewHMAC(haSHA256, LKey[0], Length(LKey));
     LH.Write(LData[0], Length(LData));
     LH.Sum(LD1, 32);

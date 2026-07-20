@@ -8,7 +8,7 @@ program test_rsa_integration;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.init,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.rsa,

@@ -17,7 +17,7 @@ program fuzz_openssl;
  *}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   fuzz_framework,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,

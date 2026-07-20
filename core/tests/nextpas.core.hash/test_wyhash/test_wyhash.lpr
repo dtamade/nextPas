@@ -3,7 +3,7 @@ program test_wyhash;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.errors,
   nextpas.core.hash.wyhash,
   nextpas.core.test;

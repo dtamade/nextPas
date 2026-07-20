@@ -121,7 +121,7 @@ begin
     Exit;
   if not TStackGuard.Enter then
     raise EStackOverflow.Create(aeStackOverflow,
-      'TLocalArena.Alloc: recursion depth exceeded');
+      FormatAllocErrorMsg('TLocalArena', 'Alloc', 'recursion depth exceeded'));
   try
     if FOffset > FCapacity then
       Exit;

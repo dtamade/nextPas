@@ -4,7 +4,7 @@ program test_openssl_https;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils, Classes, BaseUnix, Sockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, BaseUnix, Sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed;
 

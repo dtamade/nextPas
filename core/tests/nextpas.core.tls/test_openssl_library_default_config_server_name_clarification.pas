@@ -6,7 +6,7 @@ program test_openssl_library_default_config_server_name_clarification;
   TSSLConfig.ServerName compatibility on the OpenSSL direct-library path. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.backed;

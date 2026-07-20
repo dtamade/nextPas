@@ -23,7 +23,7 @@ program test_p2_srp_comprehensive;
 }
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.srp,
   nextpas.core.tls.openssl.loader;

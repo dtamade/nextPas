@@ -8,7 +8,7 @@ program test_session_resumption;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, DateUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.backed,

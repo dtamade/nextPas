@@ -3,7 +3,7 @@ program test_early_data_context_scope_clarification;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,

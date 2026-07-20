@@ -22,7 +22,7 @@ unit benchmark_framework;
 interface
 
 uses
-  SysUtils, Classes, DateUtils, StrUtils;
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, StrUtils;
 
 type
   { Benchmark test procedure type }

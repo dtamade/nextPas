@@ -24,7 +24,7 @@ program test_base_interface_contract;
 }
 
 uses
-  SysUtils, TypInfo,
+  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base;
 
 var

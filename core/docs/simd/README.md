@@ -1,6 +1,6 @@
 # nextpas.core.simd 模块
 
-> 最后更新: 2026-07-17
+> 最后更新: 2026-07-19
 > **开发主线**: [roadmap.md](roadmap.md)（Phase 20+）。当前活动清单: [plan.md](plan.md)。
 
 ## 概述
@@ -18,22 +18,23 @@
 ### 当前状态
 
 - **Backend Adapters**: ✅ x86 SSE2…AVX-512 与 NEON 真 SIMD 汇编；RVV 实验；scalar 全覆盖回退
-- **批量 / 超越函数**: ✅ x86 上 F32/F64 `Array*` 批量与超越函数深覆盖（Phase 13–18）；NEON BatchF32 代表 7 叶；RVV Batch* **故意 scalar**（S24a）
+- **批量 / 超越函数**: ✅ x86 深覆盖；**NEON** F32 代表集 23 + Wave C 代数/超越（含 4-wide asm）；F64 C4 代数 + C5d Sin/Exp；RVV Batch* **故意 scalar**（S24a）
 - **Intrinsics 层**: ✅ 主路径真实 ISA；实验性 ISA 可能 stub
 - **分派器层**: ✅ 嵌套表 `CoreVectors` / `Batch*` / `Memory` / `Mask`（Phase 19）；Public ABI 字段名保持 flat
 - **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
 - **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
-- **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
+- **NEON Batch\***: ✅ F32 代表集 23 + Wave C1–C3 + **C5–C5e** transc（Sin/Exp F32 **4-wide asm**）；**C4a–C4e + C5d F64 Sin/Exp**；其余（Tan/F64 Cos/Log…）/Integer 仍 scalar
+  - 设计：[design-c5-transcendentals.md](design-c5-transcendentals.md)
 - **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
 - **cpuinfo**: ✅ 主路径稳定
 - **活动阶段**: Phase 20–23b + Phase 25 + math residual + Q1/Q2 已收口；**Goal CURRENT=IDLE**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
-- **math 消费者边界**: public batch 在 math；`Array*`/`VecF32x*` 叶在 simd；edit-where 表见 GOAL_QUEUE §「math↔simd linkage (Q2)」
-- **验证基线 (2026-07-17)** — 与 roadmap §1.4 同源:
-  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1741 passed**（S25b focused）
-  - `neon-optin-focused` → 同量级（与 focused 同源 suite）
-  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-V1 后仍绿；API surface 70/0）
+- **math 消费者边界**: **应用默认 math**（`Batch*`）；`Array*`/`Vec*` 为 **内核/专家** API；edit-where 见 GOAL_QUEUE Q2；长度策略见 math `API.md`
+- **验证基线 (2026-07-20 C5e-ext)** — 与 roadmap §1.4 同源:
+  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1762 passed**（0 failed；C5e-ext Cos/Log/F64 vector asm）
+  - `neon-optin-focused` → **1762 passed**（0 failed）
+  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（API surface **71/0**；Pascal suites heaptrc 0 unfreed）
   - `make hygiene` → pass
-  - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
+  - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin；历史 Phase 21 收口）
   - **S25b SLA（vsTrue 主指标，S25a 主机）** — 四热点全绿:
     - ArrayAddF32 @1024 → **4.51x**（正式 SLA **4x+**；stretch 6x+）
     - ArrayAddF64 @1024 → **6.36x**（SLA 6x+）

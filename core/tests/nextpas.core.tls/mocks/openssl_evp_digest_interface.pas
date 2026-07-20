@@ -4,7 +4,7 @@ unit openssl_evp_digest_interface;
 
 {
   EVP Digest (Hash) Interface Abstraction
-  
+
   Purpose: Provide interface for EVP digest operations
   Allows: Real OpenSSL implementation OR Mock implementation
   Benefits: True unit testing, fast execution, isolated tests
@@ -13,11 +13,11 @@ unit openssl_evp_digest_interface;
 interface
 
 uses
-  Classes, SysUtils;
+  nextpas.core.system.classes, nextpas.core.system.sysutils;
 
 type
   TDigestAlgorithm = (daNull, daMD5, daSHA1, daSHA224, daSHA256, daSHA384, daSHA512,
-                      daSHA512_224, daSHA512_256, daSHA3_224, daSHA3_256, daSHA3_384, 
+                      daSHA512_224, daSHA512_256, daSHA3_224, daSHA3_256, daSHA3_384,
                       daSHA3_512, daBLAKE2b512, daBLAKE2s256, daSM3, daRIPEMD160);
 
   { Digest result record }
@@ -30,21 +30,21 @@ type
   { IEVPDigest - Interface for EVP digest operations }
   IEVPDigest = interface
     ['{B1C2D3E4-F5A6-7B8C-9D0E-1F2A3B4C5D6E}']
-    
+
     // Single-shot digest
-    function Digest(const aAlgorithm: TDigestAlgorithm; 
+    function Digest(const aAlgorithm: TDigestAlgorithm;
                     const aData: TBytes): TDigestResult;
-    
+
     // Incremental digest (for large data)
     function DigestInit(const aAlgorithm: TDigestAlgorithm): Boolean;
     function DigestUpdate(const aData: TBytes): Boolean;
     function DigestFinal: TDigestResult;
-    
+
     // Algorithm queries
     function GetDigestSize(const aAlgorithm: TDigestAlgorithm): Integer;
     function GetBlockSize(const aAlgorithm: TDigestAlgorithm): Integer;
     function GetAlgorithmName(const aAlgorithm: TDigestAlgorithm): string;
-    
+
     // Statistics
     function GetOperationCount: Integer;
     function GetUpdateCount: Integer;
@@ -60,9 +60,9 @@ type
     FInitialized: Boolean;
   public
     constructor Create;
-    
+
     // IEVPDigest implementation
-    function Digest(const aAlgorithm: TDigestAlgorithm; 
+    function Digest(const aAlgorithm: TDigestAlgorithm;
                     const aData: TBytes): TDigestResult;
     function DigestInit(const aAlgorithm: TDigestAlgorithm): Boolean;
     function DigestUpdate(const aData: TBytes): Boolean;
@@ -86,7 +86,7 @@ type
     FFailureMessage: string;
     FCustomHash: TBytes;
     FAccumulatedData: TBytes;
-    
+
     // Last call parameters for verification
     FLastAlgorithm: TDigestAlgorithm;
     FLastDataSize: Integer;
@@ -95,9 +95,9 @@ type
     FFinalCallCount: Integer;
   public
     constructor Create;
-    
+
     // IEVPDigest implementation
-    function Digest(const aAlgorithm: TDigestAlgorithm; 
+    function Digest(const aAlgorithm: TDigestAlgorithm;
                     const aData: TBytes): TDigestResult;
     function DigestInit(const aAlgorithm: TDigestAlgorithm): Boolean;
     function DigestUpdate(const aData: TBytes): Boolean;
@@ -108,7 +108,7 @@ type
     function GetOperationCount: Integer;
     function GetUpdateCount: Integer;
     procedure ResetStatistics;
-    
+
     // Mock control methods
     procedure SetShouldFail(aValue: Boolean; const aMessage: string = '');
     procedure SetCustomHash(const aHash: TBytes);
@@ -261,10 +261,10 @@ var
 begin
   Inc(FDigestCallCount);
   Inc(FOperationCount);
-  
+
   FLastAlgorithm := aAlgorithm;
   FLastDataSize := Length(aData);
-  
+
   if FShouldFail then
   begin
     Result.Success := False;
@@ -275,7 +275,7 @@ begin
   begin
     Result.Success := True;
     Result.ErrorMessage := '';
-    
+
     if Length(FCustomHash) > 0 then
       Result.Hash := Copy(FCustomHash)
     else
@@ -283,7 +283,7 @@ begin
       // Mock: generate predictable hash based on data
       LHashSize := GetDigestSize(aAlgorithm);
       SetLength(Result.Hash, LHashSize);
-      
+
       // Simple mock: XOR all input bytes, spread across hash
       for i := 0 to LHashSize - 1 do
       begin
@@ -299,7 +299,7 @@ end;
 function TEVPDigestMock.DigestInit(const aAlgorithm: TDigestAlgorithm): Boolean;
 begin
   Inc(FInitCallCount);
-  
+
   if FShouldFail then
   begin
     Result := False;
@@ -320,25 +320,25 @@ var
   i: Integer;
 begin
   Inc(FUpdateCount);
-  
+
   if not FInitialized then
   begin
     Result := False;
     Exit;
   end;
-  
+
   if FShouldFail then
   begin
     Result := False;
     Exit;
   end;
-  
+
   // Accumulate data
   LOldLen := Length(FAccumulatedData);
   SetLength(FAccumulatedData, LOldLen + Length(aData));
   for i := 0 to Length(aData) - 1 do
     FAccumulatedData[LOldLen + i] := aData[i];
-  
+
   Result := True;
 end;
 
@@ -346,7 +346,7 @@ function TEVPDigestMock.DigestFinal: TDigestResult;
 begin
   Inc(FFinalCallCount);
   Inc(FOperationCount);
-  
+
   if not FInitialized then
   begin
     Result.Success := False;
@@ -354,10 +354,10 @@ begin
     SetLength(Result.Hash, 0);
     Exit;
   end;
-  
+
   // Use accumulated data to compute final hash
   Result := Digest(FCurrentAlgorithm, FAccumulatedData);
-  
+
   FInitialized := False;
   SetLength(FAccumulatedData, 0);
 end;

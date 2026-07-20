@@ -12,7 +12,7 @@ program test_resource_limits;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, StrUtils,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, StrUtils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils,

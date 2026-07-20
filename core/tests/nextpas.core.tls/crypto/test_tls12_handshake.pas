@@ -3,7 +3,7 @@ program test_tls12_handshake;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls12.parser,
   nextpas.core.tls.tls12.recordcrypto,
@@ -91,7 +91,7 @@ begin
   FillChar(LKey[0], 16, $11);
   SetLength(LIV, 4);
   FillChar(LIV[0], 4, $22);
-  LPlaintext := TEncoding.ASCII.GetBytes('Hello TLS 1.2 GCM!');
+  LPlaintext := BytesOf('Hello TLS 1.2 GCM!');
 
   LOk := TLS12GCMEncryptRecord(LKey, LIV, 0, 23, LPlaintext, LEncrypted, LError);
   Check(LOk, 'GCM encrypt should succeed: ' + LError);
@@ -99,7 +99,7 @@ begin
 
   LOk := TLS12GCMDecryptRecord(LKey, LIV, 0, 23, LEncrypted, LDecrypted, LError);
   Check(LOk, 'GCM decrypt should succeed: ' + LError);
-  Check(TEncoding.ASCII.GetString(LDecrypted) = 'Hello TLS 1.2 GCM!', 'Decrypted should match');
+  Check(StringOf(LDecrypted) = 'Hello TLS 1.2 GCM!', 'Decrypted should match');
 end;
 
 procedure TestGCMRecordBadTag;
@@ -113,7 +113,7 @@ begin
   FillChar(LKey[0], 16, $33);
   SetLength(LIV, 4);
   FillChar(LIV[0], 4, $44);
-  LPlaintext := TEncoding.ASCII.GetBytes('test');
+  LPlaintext := BytesOf('test');
 
   TLS12GCMEncryptRecord(LKey, LIV, 5, 23, LPlaintext, LEncrypted, LError);
   LEncrypted[Length(LEncrypted) - 1] := LEncrypted[Length(LEncrypted) - 1] xor $FF;

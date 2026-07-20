@@ -7,7 +7,7 @@ interface
 
 uses
   nextpas.core.text.conv,
-  Math,
+  nextpas.core.math,
   nextpas.core.simd.base;
 
 procedure StartApiCoverageSuite(const aTitle: string);

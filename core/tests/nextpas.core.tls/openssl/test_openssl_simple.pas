@@ -3,7 +3,7 @@ program test_openssl_simple;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core;
 
@@ -35,7 +35,7 @@ begin
   WriteLn('OpenSSL API Basic Tests');
   WriteLn('========================================');
   WriteLn;
-  
+
   try
     // Test 1: Load OpenSSL
     WriteLn('Test 1: Loading OpenSSL...');
@@ -53,7 +53,7 @@ begin
       end;
     end;
     WriteLn;
-    
+
     // Test 2: Check critical function pointers
     WriteLn('Test 2: Checking API function pointers...');
     TestResult('TLS_method', Assigned(TLS_method));
@@ -67,7 +67,7 @@ begin
     TestResult('SSL_free', Assigned(SSL_free));
     TestResult('SSL_CTX_free', Assigned(SSL_CTX_free));
     WriteLn;
-    
+
     // Test 3: Check newly added functions
     WriteLn('Test 3: Checking newly added API functions...');
     TestResult('SSL_set_connect_state', Assigned(SSL_set_connect_state));
@@ -78,17 +78,17 @@ begin
     TestResult('SSL_get_verify_result', Assigned(SSL_get_verify_result));
     TestResult('SSL_session_reused', Assigned(SSL_session_reused));
     WriteLn;
-    
+
     // Test 4: Creating SSL context...
     WriteLn('Test 4: Creating SSL context...');
     SSLMethod := TLS_method();
       TestResult('TLS_method() returned non-nil', SSLMethod <> nil);
-      
+
       if SSLMethod <> nil then
       begin
         SSLCtx := SSL_CTX_new(SSLMethod);
         TestResult('SSL_CTX_new() returned non-nil', SSLCtx <> nil);
-        
+
         if SSLCtx <> nil then
         begin
           SSL_CTX_free(SSLCtx);
@@ -96,7 +96,7 @@ begin
         end;
       end;
     WriteLn;
-    
+
     // Test 5: Create SSL object
     WriteLn('Test 5: Creating SSL object...');
     SSLMethod2 := TLS_method();
@@ -107,22 +107,22 @@ begin
         begin
           SSL := SSL_new(SSLCtx2);
           TestResult('SSL_new() returned non-nil', SSL <> nil);
-          
+
           if SSL <> nil then
           begin
             // Test state functions
             SSL_set_connect_state(SSL);
             TestResult('SSL_set_connect_state() succeeded', True);
-            
+
             SSL_free(SSL);
             TestResult('SSL_free() succeeded', True);
           end;
-          
+
           SSL_CTX_free(SSLCtx2);
         end;
       end;
     WriteLn;
-    
+
     // Print summary
     WriteLn('========================================');
     WriteLn('TEST SUMMARY');
@@ -130,7 +130,7 @@ begin
     WriteLn('Total tests: ', TestsPassed + TestsFailed);
     WriteLn('Passed: ', TestsPassed);
     WriteLn('Failed: ', TestsFailed);
-    
+
     if TestsFailed = 0 then
     begin
       WriteLn;
@@ -143,7 +143,7 @@ begin
       WriteLn('Result: SOME TESTS FAILED');
       ExitCode := 1;
     end;
-    
+
   except
     on E: Exception do
     begin

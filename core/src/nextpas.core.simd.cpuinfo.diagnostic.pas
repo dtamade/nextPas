@@ -52,11 +52,6 @@ function GetArchName(arch: TCPUArch): string;
 
 implementation
 
-{$IFDEF WINDOWS}
-uses
-  Windows;
-{$ENDIF}
-
 {$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 // Local helpers for OS enablement on x86
@@ -91,27 +86,17 @@ end;
 
 function StartCounter: TCPUPerformanceCounter; inline;
 begin
-  {$IFDEF WINDOWS}
-  QueryPerformanceFrequency(Result.Frequency);
-  QueryPerformanceCounter(Result.StartTime);
-  {$ELSE}
-  // Simple fallback using GetTickCount64 equivalent
-  Result.Frequency := 1000000;  // nanoseconds → milliseconds
+  // platform_monotonic_ns is the owner timer; report elapsed as milliseconds.
+  Result.Frequency := 1000000;
   Result.StartTime := platform_monotonic_ns;
-  {$ENDIF}
 end;
 
 function StopCounter(const Counter: TCPUPerformanceCounter): Double; inline;
 var
   EndTime: Int64;
 begin
-  {$IFDEF WINDOWS}
-  QueryPerformanceCounter(EndTime);
-  Result := ((EndTime - Counter.StartTime) * 1000.0) / Counter.Frequency;
-  {$ELSE}
   EndTime := platform_monotonic_ns;
   Result := (EndTime - Counter.StartTime) / Counter.Frequency;
-  {$ENDIF}
 end;
 
 function MeasureCPUInfoDetectionTime: Double;
@@ -129,16 +114,16 @@ end;
 function ValidateCPUInfo(const Info: TCPUInfo): Boolean;
 begin
   Result := True;
-  
+
   // Basic validation checks
   if Info.Vendor = '' then Result := False;
   if Info.Model = '' then Result := False;
   if Info.Arch = caUnknown then Result := False;
-  
+
   // Core count should be reasonable
   if (Info.PhysicalCores < 1) or (Info.PhysicalCores > 256) then Result := False;
   if (Info.LogicalCores < Info.PhysicalCores) or (Info.LogicalCores > 512) then Result := False;
-  
+
   // Cache sizes should be reasonable (if detected)
   if Info.Cache.L1DataKB > 256 then Result := False;  // L1 usually <= 256KB
   if Info.Cache.L2KB > 64*1024 then Result := False;  // L2 usually <= 64MB
@@ -156,17 +141,17 @@ begin
   // Warm up
   for i := 0 to 999 do
     buffer[i and 1023] := i and $FF;
-    
+
   Counter := StartCounter;
-  
+
   sum := 0;
   for i := 1 to ITERATIONS do
   begin
     sum := sum + buffer[i and 1023];
   end;
-  
+
   Result := StopCounter(Counter) * 1000000 / ITERATIONS;  // nanoseconds per access
-  
+
   // Prevent optimization
   if sum = MaxInt then
     WriteLn('Impossible');
@@ -183,27 +168,27 @@ var
   sum: Int64;
 begin
   SetLength(buffer, BUFFER_SIZE);
-  
+
   // Initialize buffer
   for i := 0 to BUFFER_SIZE - 1 do
     buffer[i] := i and $FF;
-    
+
   Counter := StartCounter;
-  
+
   sum := 0;
   for i := 1 to ITERATIONS do
   begin
     for j := 0 to BUFFER_SIZE - 1 do
       sum := sum + buffer[j];
   end;
-  
+
   Result := StopCounter(Counter);
   if Result > 0 then
     Result := (BUFFER_SIZE * ITERATIONS / 1024.0 / 1024.0) / (Result / 1000.0)  // MB/s
   else
     Result := 0;
-    
-  // Prevent optimization  
+
+  // Prevent optimization
   if sum = MaxInt then
     WriteLn('Impossible');
 end;
@@ -216,11 +201,11 @@ begin
   Result.MemoryBandwidth := EstimateMemoryBandwidth;
   Result.ValidationPassed := ValidateCPUInfo(Result.CPUInfo);
   Result.AdditionalNotes := '';
-  
+
   // Add diagnostic notes
   if not Result.ValidationPassed then
     Result.AdditionalNotes := Result.AdditionalNotes + 'Validation failed; ';
-    
+
   if Result.DetectionTime > 10.0 then
     Result.AdditionalNotes := Result.AdditionalNotes + 'Detection unusually slow; ';
 end;
@@ -242,13 +227,13 @@ begin
   WriteLn('  L3: ', Info.Cache.L3KB, ' KB');
   WriteLn('  Cache Line Size: ', Info.Cache.LineSize, ' bytes');
   WriteLn;
-  
+
   // OS enablement details
   WriteLn('OS-Enablement:');
   WriteLn('  OSXSAVE: ', BoolToStr(Info.OSXSAVE));
   WriteLn('  XCR0: $', IntToHex(Info.XCR0, 16));
   WriteLn;
-  
+
   // Generic features (Raw / Usable)
   WriteLn('Generic Features (Raw / Usable):');
   WriteLn('  SIMD-128: ', BoolToStr(gfSimd128 in Info.GenericRaw), ' / ', BoolToStr(gfSimd128 in Info.GenericUsable));
@@ -285,7 +270,7 @@ begin
       WriteLn('Summary: SIMD-512 raw=true usable=false (OSXSAVE=', BoolToStr(Info.OSXSAVE), ', XCR0=$', IntToHex(Info.XCR0,16), ')');
   end;
   {$ENDIF}
-  
+
   {$IFDEF SIMD_X86_AVAILABLE}
   WriteLn('x86 Features:');
   with Info.X86 do
@@ -318,7 +303,7 @@ begin
     WriteLn(F, '====================');
     WriteLn(F, 'Generated: monotonic_ns=', IntToStr(platform_monotonic_ns));
     WriteLn(F);
-    
+
     WriteLn(F, 'Detection Time: ', Format('%.3f ms', [Report.DetectionTime]));
     WriteLn(F, 'Cache Latency: ', Format('%.2f ns', [Report.CacheLatency]));
     WriteLn(F, 'Memory Bandwidth: ', Format('%.1f MB/s', [Report.MemoryBandwidth]));
@@ -326,7 +311,7 @@ begin
     if Report.AdditionalNotes <> '' then
       WriteLn(F, 'Notes: ', Report.AdditionalNotes);
     WriteLn(F);
-    
+
     // Redirect PrintCPUInfo to file (simplified version)
     WriteLn(F, 'CPU Information:');
     WriteLn(F, 'Vendor: ', Report.CPUInfo.Vendor);
@@ -337,7 +322,7 @@ begin
     WriteLn(F, 'L1 Data Cache: ', Report.CPUInfo.Cache.L1DataKB, ' KB');
     WriteLn(F, 'L2 Cache: ', Report.CPUInfo.Cache.L2KB, ' KB');
     WriteLn(F, 'L3 Cache: ', Report.CPUInfo.Cache.L3KB, ' KB');
-    
+
     // OS enablement
     WriteLn(F, 'OSXSAVE: ', BoolToStr(Report.CPUInfo.OSXSAVE));
     WriteLn(F, 'XCR0: $', IntToHex(Report.CPUInfo.XCR0, 16));
@@ -373,7 +358,7 @@ begin
       end;
     end;
     {$ENDIF}
-    
+
   finally
     CloseFile(F);
   end;

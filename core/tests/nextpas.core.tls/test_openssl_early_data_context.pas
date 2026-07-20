@@ -1,7 +1,7 @@
 {
   test_openssl_early_data_context - OpenSSL Early Data Context 接口测试
-  
-  测试 TOpenSSLContext 的 ISSLEarlyDataContext 和 
+
+  测试 TOpenSSLContext 的 ISSLEarlyDataContext 和
   ISSLServerOCSPStaplingContext 接口实现
 }
 
@@ -10,7 +10,7 @@ program test_openssl_early_data_context;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -187,9 +187,9 @@ begin
       TestResponse[7] := $06;
       TestResponse[8] := $07;
       TestResponse[9] := $08;
-      
+
       OCSPStaplingCtx.SetServerStapledOCSPResponse(TestResponse);
-      
+
       if OCSPStaplingCtx.HasServerStapledOCSPResponse then
       begin
         Retrieved := OCSPStaplingCtx.GetServerStapledOCSPResponse;
@@ -287,14 +287,14 @@ begin
     // 运行测试
     TestEarlyDataInterfaceSupport;
     TestOCSPStaplingInterfaceSupport;
-    
+
     if EarlyDataCtx <> nil then
     begin
       TestClientEarlyDataEnabled;
       TestServerEarlyDataPolicy;
       TestServerMaxEarlyDataSize;
     end;
-    
+
     if OCSPStaplingCtx <> nil then
     begin
       TestOCSPStaplingResponse;

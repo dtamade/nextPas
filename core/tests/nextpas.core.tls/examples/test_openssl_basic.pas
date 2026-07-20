@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   // Core units
   nextpas.core.tls.openssl.api.types,
   nextpas.core.tls.openssl.api.consts,
@@ -19,7 +19,7 @@ procedure TestOpenSSLInitialization;
 begin
   WriteLn('=== Testing OpenSSL Initialization ===');
   WriteLn;
-  
+
   // Load OpenSSL library
   WriteLn('Loading OpenSSL libraries...');
   if LoadOpenSSL then
@@ -44,7 +44,7 @@ var
 begin
   WriteLn('=== Testing Basic Crypto Functions ===');
   WriteLn;
-  
+
   // Test random generation
   Write('Testing random generation... ');
   if RAND_bytes(@Buffer[0], Length(Buffer)) = 1 then
@@ -57,7 +57,7 @@ begin
   end
   else
     WriteLn('FAILED');
-    
+
   WriteLn;
 end;
 
@@ -72,16 +72,16 @@ var
 begin
   WriteLn('=== Testing EVP Functions ===');
   WriteLn;
-  
+
   // Test EVP hash
   Data := 'Hello, OpenSSL!';
   MD := EVP_sha256;
-  
+
   if Assigned(MD) then
   begin
     WriteLn('SHA256 digest available');
     Ctx := EVP_MD_CTX_new;
-    
+
     if Assigned(Ctx) then
     begin
       if EVP_DigestInit_ex(Ctx, MD, nil) = 1 then
@@ -104,7 +104,7 @@ begin
       end
       else
         WriteLn('DigestInit failed');
-        
+
       EVP_MD_CTX_free(Ctx);
     end
     else
@@ -112,7 +112,7 @@ begin
   end
   else
     WriteLn('SHA256 not available');
-    
+
   WriteLn;
 end;
 
@@ -123,13 +123,13 @@ var
 begin
   WriteLn('=== Testing Error Handling ===');
   WriteLn;
-  
+
   // Clear error stack
   ERR_clear_error;
-  
+
   // Generate an error (intentionally)
   EVP_DigestInit_ex(nil, nil, nil);
-  
+
   // Get last error
   ErrorCode := ERR_get_error;
   if ErrorCode <> 0 then
@@ -140,7 +140,7 @@ begin
   end
   else
     WriteLn('No error in queue');
-    
+
   WriteLn;
 end;
 
@@ -149,16 +149,16 @@ begin
     WriteLn('OpenSSL Basic Test Program');
     WriteLn('==========================');
     WriteLn;
-    
+
     TestOpenSSLInitialization;
     TestCryptoFunctions;
     TestEVPFunctions;
     TestErrorHandling;
-    
+
     // Clean up
     UnloadOpenSSL;
     WriteLn('OpenSSL unloaded.');
-    
+
     WriteLn;
     WriteLn('All tests completed!');
   except
@@ -168,7 +168,7 @@ begin
       Exit;
     end;
   end;
-  
+
   WriteLn;
   WriteLn('Press Enter to exit...');
   ReadLn;

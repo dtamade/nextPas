@@ -10,27 +10,33 @@ Pure Pascal TLS 1.3/1.2 implementation with optional OpenSSL/WolfSSL/mbedTLS bac
 ## Quick Start
 
 ```pascal
-uses nextpas.core.tls;
+uses
+  nextpas.core.io.intf,
+  nextpas.core.tls;
 
 var
-  S: TSSLStream;
+  S: IStream;
   Err: string;
   Buf: array[0..4095] of Byte;
-  N: Integer;
+  N: SizeUInt;
+  Req: AnsiString;
 begin
   // One line TLS connection (DNS + TCP + TLS handshake)
   if TryTLSDial('example.com', 443, S, Err) then
-  try
-    S.WriteBuffer('GET / HTTP/1.1'#13#10'Host: example.com'#13#10#13#10, 40);
+  begin
+    Req := 'GET / HTTP/1.1'#13#10'Host: example.com'#13#10#13#10;
+    S.Write(Req[1], Length(Req));
     N := S.Read(Buf, SizeOf(Buf));
     // process response...
-  finally
-    S.Free;
-  end;
+    // S is interface-owned — do not Free
+  end
+  else
+    WriteLn('TLS dial failed: ', Err);
 end.
 ```
 
 No setup required. `uses nextpas.core.tls` auto-registers the pure Pascal backend.
+`TLSDial` / `TryTLSDial` return `IStream` (not a class requiring Free).
 
 ## API Layers
 

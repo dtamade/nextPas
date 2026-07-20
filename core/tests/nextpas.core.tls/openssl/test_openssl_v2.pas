@@ -3,7 +3,7 @@ program test_openssl_v2;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.backed,
@@ -48,7 +48,7 @@ begin
   try
     LoadOpenSSLCore;
     Test('LoadOpenSSLCore', TOpenSSLLoader.IsModuleLoaded(osmCore));
-    Test('GetCryptoLibHandle', GetCryptoLibHandle <> 0, 
+    Test('GetCryptoLibHandle', GetCryptoLibHandle <> 0,
          'Handle=' + IntToStr(PtrInt(GetCryptoLibHandle)));
     Test('GetSSLLibHandle', GetSSLLibHandle <> 0,
          'Handle=' + IntToStr(PtrInt(GetSSLLibHandle)));
@@ -70,13 +70,13 @@ begin
   try
     Available := TSSLFactory.GetAvailableLibraries;
     Test('GetAvailableLibraries', Available <> []);
-    
-    Test('IsLibraryAvailable(sslOpenSSL)', 
+
+    Test('IsLibraryAvailable(sslOpenSSL)',
          TSSLFactory.IsLibraryAvailable(sslOpenSSL));
-    
+
     Lib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
     Test('GetLibraryInstance', Assigned(Lib));
-    
+
     if Assigned(Lib) then
     begin
       Test('Library.IsInitialized', Lib.IsInitialized);
@@ -103,16 +103,16 @@ begin
       Test('Context', False, 'Library not available');
       Exit;
     end;
-    
+
     Ctx := Lib.CreateContext(sslCtxClient);
     Test('CreateContext(Client)', Assigned(Ctx));
-    
+
     if Assigned(Ctx) then
     begin
       Test('Context.IsValid', Ctx.IsValid);
       Test('Context.GetNativeHandle', HasNativeHandle(Ctx));
     end;
-    
+
     Ctx := nil;
     Ctx := Lib.CreateContext(sslCtxServer);
     Test('CreateContext(Server)', Assigned(Ctx));
@@ -136,10 +136,10 @@ begin
       Test('Certificate', False, 'Library not available');
       Exit;
     end;
-    
+
     Cert := Lib.CreateCertificate;
     Test('CreateCertificate', Assigned(Cert));
-    
+
     if Assigned(Cert) then
     begin
       Test('Certificate.GetNativeHandle', HasNativeHandle(Cert));
@@ -153,16 +153,16 @@ end;
 begin
   TestsPassed := 0;
   TestsFailed := 0;
-  
+
   WriteLn('OpenSSL Basic Validation Test v2');
   WriteLn('=================================');
   WriteLn('Date: ', FormatDateTime('yyyy-mm-dd hh:nn:ss', Now));
-  
+
   TestCoreLoading;
   TestFactory;
   TestContext;
   TestCertificate;
-  
+
   WriteLn;
   WriteLn('=================================');
   WriteLn('Results:');
@@ -170,7 +170,7 @@ begin
   WriteLn('  Failed: ', TestsFailed);
   WriteLn('  Total:  ', TestsPassed + TestsFailed);
   WriteLn('=================================');
-  
+
   if TestsFailed = 0 then
   begin
     WriteLn;

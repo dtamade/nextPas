@@ -3,7 +3,7 @@ program test_openssl_connection_stream_cleanup_ssl_free_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

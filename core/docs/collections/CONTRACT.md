@@ -131,16 +131,23 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 
 `IArray` = 连续存储能力基。**非连续**索引容器（环形 deque）不得继承 `IArray` 只为共享下标。
 
-### 1.5 容量词表（Vec 系）
+### 1.5 容量词表（Vec / IArray 系）
 
-| 方法 | 语义 |
-|------|------|
-| `Resize` / `Ensure` | 改逻辑 `Count`（`Ensure` 在实现上可走 Resize） |
-| `EnsureCapacity` | 绝对容量，不改 Count |
-| `Reserve` / `ReserveExact` | 为 `Count + Additional` 预留 |
-| `ShrinkToFit` / `FreeBuffer` 等 | 释放多余容量 |
+| 方法 | 改 `Count`？ | 参数含义 | 典型用途 |
+|------|-------------|----------|----------|
+| **`Ensure(n)`** | **是**（`Count < n` 时等价 `Resize(n)`，新元素初始化） | 最小**逻辑长度** | 需要可下标访问的 n 个槽 |
+| **`EnsureCapacity(n)`** | **否** | 最小**物理容量** | 即将多次 `Push`，减少 realloc |
+| `Resize(n)` | 是 | 精确逻辑长度 | 已知最终长度 |
+| `Reserve(k)` | 否 | 为再追加 **k** 个预留（`Count+k`） | 已知还要写 k 个 |
+| `ReserveExact(k)` | 否 | 同上，尽量精确分配 | 内存敏感 |
+| `ShrinkToFit` / `FreeBuffer` 等 | 否 | 释放多余容量 | 峰值过后 |
+
+**禁止**：把 `Ensure` 当成 Rust `reserve` / Go `make` 容量预留——那会**拉长 Count**。
+**只预留容量**：`EnsureCapacity` 或 `Reserve` / `ReserveExact`。
 
 块操作：`Overwrite` 不改 Count；`Write` / `WriteExact` 可扩展 Count（Exact 绕过增长策略）。
+
+更短的「核心 20」见 [`CORE-API.md`](CORE-API.md)。
 
 ### 1.6 分配器
 
@@ -200,12 +207,24 @@ LruCache 的 `Get` 是缓存命中/近用语义，**不要**按上表改名或�
 | 双端队列 | `MakeVecDeque`（通用）；`MakeDeque`（分段） |
 | 无序 KV | `MakeMap` 或 `MakeHashMap`（当前均为 Swiss）；`MakeSwissHashMap` 同实现 |
 | 插入序 KV | `MakeLinkedHashMap` |
-| 有序 KV | `MakeTreeMap` / `MakeRBTreeMap` / `MakeBTreeMap`（按场景） |
+| 有序 KV（默认） | **`MakeTreeMap`** |
+| 有序 KV（RB 适配器入口） | `MakeRBTreeMap`（显式 `TCompareFunc` 管线） |
+| 有序 KV（大块/局部性） | `MakeBTreeMap` |
 | 无序集合 | `MakeSet` 或 `MakeHashSet`（当前 Swiss 包装 `THashSet`） |
-| 有序集合 / 区间 | `MakeTreeSet` |
+| 有序集合 / 区间 | **`MakeTreeSet`**（可选 comparer）；大 N 可 `MakeBTreeSet` |
 | 插入序集合 | `MakeLinkedHashSet` |
 | 线程安全 map | `MakeConcurrentHashMap` → `IConcurrentMap` |
 | 缓存 | `MakeLruCache`（非纯 map 词表） |
+
+### 5.1 有序 map 选型（何时换）
+
+| 工厂 | 结构 | 默认推荐？ | 换用动机 |
+|------|------|------------|----------|
+| `MakeTreeMap` | 红黑树 | **是** | 通用有序 KV / 上下界 |
+| `MakeRBTreeMap` | RB 适配器 | 否 | 已绑定 `orderedmap.rb` / 统一 `TCompareFunc` 注入 |
+| `MakeBTreeMap` | B-Tree | 否 | 更大 N、范围扫描、节点填充局部性 |
+
+不必三种一起学：默认 Tree；BTree 有测量或数据形态动机再上。
 
 ---
 
@@ -255,3 +274,4 @@ make -C core/tests/nextpas.core.collections/test_vec clean test
 | 2026-07-20 | 1.4 | Phase D：MultiMap/MultiSet/LruCache 默认 Swiss；adapter 增加 `GetKeys` |
 | 2026-07-20 | 1.5 | Phase E：LinkedHashMap 双表 Swiss；插入序仍由链表维护 |
 | 2026-07-20 | 1.6 | 可用性 Wave：测试 RTL 隔离 + source-contract；MakeTreeSet(compare)；HashMix→base；TMemAllocator 统一；ERRORS.md；bench Makefile |
+| 2026-07-21 | 1.7 | Ensure vs EnsureCapacity 对照表；有序 map 选型 §5.1；CORE-API 导读；空容器 EEmptyCollection；可编译 examples |

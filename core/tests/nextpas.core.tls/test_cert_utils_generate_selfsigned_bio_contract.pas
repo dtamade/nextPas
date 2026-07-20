@@ -3,7 +3,7 @@ program test_cert_utils_generate_selfsigned_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   fafafa.ssl,

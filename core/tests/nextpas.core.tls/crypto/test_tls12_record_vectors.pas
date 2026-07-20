@@ -3,7 +3,7 @@ program test_tls12_record_vectors;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.tls.tls12.chacha20record,
   nextpas.core.tls.crypto.tls12record,

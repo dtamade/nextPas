@@ -13,7 +13,7 @@ program test_cert_pinning;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.cert.pinning,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.api.x509,
@@ -90,7 +90,7 @@ begin
     X509_free(Result);
     raise Exception.Create('Failed to create EVP_PKEY_CTX');
   end;
-  
+
   try
     if EVP_PKEY_keygen_init(Ctx) <= 0 then
       raise Exception.Create('Failed to init keygen');
@@ -115,7 +115,7 @@ begin
 
   // 设置主题名称
   X509Name := X509_get_subject_name(Result);
-  X509_NAME_add_entry_by_txt(X509Name, 'CN', MBSTRING_ASC, 
+  X509_NAME_add_entry_by_txt(X509Name, 'CN', MBSTRING_ASC,
     PAnsiChar(AnsiString(CommonName)), -1, -1, 0);
 
   // 设置颁发者名称（自签名）
@@ -134,19 +134,19 @@ var
   Base64Hash: string;
 begin
   WriteLn('=== Test_CertificatePin_Basic ===');
-  
+
   // 测试从 Base64 创建 Pin
   Base64Hash := 'X3pGTSOuJeEVw989IJ/cEtXUEmy52zs1TZQrU06KUKg=';
   Pin := TCertificatePin.FromBase64(Base64Hash, ptPublicKey, 'Test Pin', False);
-  
+
   Assert(Pin.PinType = ptPublicKey, 'Pin type should be ptPublicKey');
   Assert(Pin.Description = 'Test Pin', 'Pin description should match');
   Assert(not Pin.IsBackup, 'Pin should not be backup');
   Assert(Pin.IsValid, 'Pin should be valid');
-  
+
   // 测试 ToBase64
   Assert(Pin.ToBase64 = Base64Hash, 'ToBase64 should return original hash');
-  
+
   WriteLn;
 end;
 
@@ -157,33 +157,33 @@ var
   Hash: TBytes;
 begin
   WriteLn('=== Test_PinValidator_AddClear ===');
-  
+
   Validator := TPinValidator.Create;
   try
     // 测试初始状态
     Assert(Validator.GetValidPinCount = 0, 'Initial pin count should be 0');
     Assert(not Validator.IsSecureConfiguration, 'Should not be secure with 0 pins');
-    
+
     // 添加第一个 Pin
     SetLength(Hash, 32);
     FillChar(Hash[0], 32, $AA);
     Validator.AddPin(Hash, ptPublicKey, 'Pin 1', False);
     Assert(Validator.GetValidPinCount = 1, 'Pin count should be 1');
-    
+
     // 添加第二个 Pin
     FillChar(Hash[0], 32, $BB);
     Validator.AddPin(Hash, ptPublicKey, 'Pin 2', True);
     Assert(Validator.GetValidPinCount = 2, 'Pin count should be 2');
     Assert(Validator.IsSecureConfiguration, 'Should be secure with 2 pins');
-    
+
     // 清除所有 Pin
     Validator.ClearPins;
     Assert(Validator.GetValidPinCount = 0, 'Pin count should be 0 after clear');
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -193,22 +193,22 @@ var
   Validator: TPinValidator;
 begin
   WriteLn('=== Test_PinValidator_AddBase64 ===');
-  
+
   Validator := TPinValidator.Create;
   try
     // 添加 Base64 编码的 Pin
-    Validator.AddPinBase64('X3pGTSOuJeEVw989IJ/cEtXUEmy52zs1TZQrU06KUKg=', 
+    Validator.AddPinBase64('X3pGTSOuJeEVw989IJ/cEtXUEmy52zs1TZQrU06KUKg=',
       ptPublicKey, 'Base64 Pin 1', False);
-    Validator.AddPinBase64('YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=', 
+    Validator.AddPinBase64('YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=',
       ptPublicKey, 'Base64 Pin 2', True);
-    
+
     Assert(Validator.GetValidPinCount = 2, 'Should have 2 pins');
     Assert(Validator.IsSecureConfiguration, 'Should be secure configuration');
-    
+
   finally
     Validator.Free;
   end;
-  
+
   WriteLn;
 end;
 
@@ -223,7 +223,7 @@ var
   DigestLen: Cardinal;
 begin
   WriteLn('=== Test_CertificateHash_Extraction ===');
-  
+
   // 创建测试证书
   Cert := CreateTestCertificate('test.example.com');
   try
@@ -231,29 +231,29 @@ begin
     try
       // 提取证书哈希（使用私有方法的反射或直接测试）
       // 这里我们通过验证流程间接测试
-      
+
       // 计算证书的 SHA-256 哈希
       if X509_digest(Cert, EVP_sha256(), @Digest[0], @DigestLen) = 1 then
       begin
         SetLength(CertHash, DigestLen);
         Move(Digest[0], CertHash[0], DigestLen);
-        
+
         // 添加证书 Pin
         Validator.AddPin(CertHash, ptCertificate, 'Test Cert Pin', False);
-        
+
         // 验证证书
         Assert(Validator.ValidateCertificate(Cert), 'Certificate should match pin');
       end
       else
         Assert(False, 'Failed to compute certificate digest');
-      
+
     finally
       Validator.Free;
     end;
   finally
     X509_free(Cert);
   end;
-  
+
   WriteLn;
 end;
 
@@ -269,7 +269,7 @@ var
   PubKeyHash: TBytes;
 begin
   WriteLn('=== Test_PublicKeyHash_Extraction ===');
-  
+
   // 创建测试证书
   Cert := CreateTestCertificate('test.example.com');
   try
@@ -289,13 +289,13 @@ begin
                 SPKILen := BIO_ctrl_pending(Bio);
                 SetLength(SPKIData, SPKILen);
                 BIO_read(Bio, @SPKIData[0], SPKILen);
-                
+
                 // 计算 SHA-256
                 PubKeyHash := TCryptoUtils.SHA256(SPKIData);
-                
+
                 // 添加公钥 Pin
                 Validator.AddPin(PubKeyHash, ptPublicKey, 'Test PubKey Pin', False);
-                
+
                 // 验证证书
                 Assert(Validator.ValidateCertificate(Cert), 'Public key should match pin');
               end
@@ -313,14 +313,14 @@ begin
       end
       else
         Assert(False, 'Failed to extract public key');
-      
+
     finally
       Validator.Free;
     end;
   finally
     X509_free(Cert);
   end;
-  
+
   WriteLn;
 end;
 
@@ -332,7 +332,7 @@ var
   WrongHash: TBytes;
 begin
   WriteLn('=== Test_PinValidation_Failure ===');
-  
+
   // 创建测试证书
   Cert := CreateTestCertificate('test.example.com');
   try
@@ -342,17 +342,17 @@ begin
       SetLength(WrongHash, 32);
       FillChar(WrongHash[0], 32, $FF);
       Validator.AddPin(WrongHash, ptPublicKey, 'Wrong Pin', False);
-      
+
       // 验证应该失败
       Assert(not Validator.ValidateCertificate(Cert), 'Validation should fail with wrong pin');
-      
+
     finally
       Validator.Free;
     end;
   finally
     X509_free(Cert);
   end;
-  
+
   WriteLn;
 end;
 
@@ -369,7 +369,7 @@ var
   PubKeyHash: TBytes;
 begin
   WriteLn('=== Test_CertificateChain_Validation ===');
-  
+
   // 创建两个测试证书
   Cert1 := CreateTestCertificate('leaf.example.com');
   Cert2 := CreateTestCertificate('intermediate.example.com');
@@ -391,16 +391,16 @@ begin
                 SetLength(SPKIData, SPKILen);
                 BIO_read(Bio, @SPKIData[0], SPKILen);
                 PubKeyHash := TCryptoUtils.SHA256(SPKIData);
-                
+
                 // 添加第二个证书的 Pin
                 Validator.AddPin(PubKeyHash, ptPublicKey, 'Intermediate Pin', False);
-                
+
                 // 构建证书链
                 Chain[0] := Cert1;
                 Chain[1] := Cert2;
-                
+
                 // 验证证书链（应该匹配第二个证书）
-                Assert(Validator.ValidateCertificateChain(Chain), 
+                Assert(Validator.ValidateCertificateChain(Chain),
                   'Chain validation should succeed');
               end;
             finally
@@ -411,7 +411,7 @@ begin
           EVP_PKEY_free(PubKey);
         end;
       end;
-      
+
     finally
       Validator.Free;
     end;
@@ -419,7 +419,7 @@ begin
     X509_free(Cert1);
     X509_free(Cert2);
   end;
-  
+
   WriteLn;
 end;
 
@@ -431,7 +431,7 @@ var
   WrongHash: TBytes;
 begin
   WriteLn('=== Test_RequireValidPin_Property ===');
-  
+
   Cert := CreateTestCertificate('test.example.com');
   try
     Validator := TPinValidator.Create;
@@ -440,24 +440,24 @@ begin
       SetLength(WrongHash, 32);
       FillChar(WrongHash[0], 32, $FF);
       Validator.AddPin(WrongHash, ptPublicKey, 'Wrong Pin', False);
-      
+
       // 默认应该要求验证
       Assert(Validator.RequireValidPin, 'RequireValidPin should be True by default');
-      Assert(not Validator.ValidateCertificate(Cert), 
+      Assert(not Validator.ValidateCertificate(Cert),
         'Validation should fail when RequireValidPin is True');
-      
+
       // 禁用强制验证
       Validator.RequireValidPin := False;
-      Assert(Validator.ValidateCertificate(Cert), 
+      Assert(Validator.ValidateCertificate(Cert),
         'Validation should succeed when RequireValidPin is False');
-      
+
     finally
       Validator.Free;
     end;
   finally
     X509_free(Cert);
   end;
-  
+
   WriteLn;
 end;
 
@@ -474,7 +474,7 @@ var
   PubKeyHash: TBytes;
 begin
   WriteLn('=== Test_PinValidatorEx_DetailedResult ===');
-  
+
   Cert := CreateTestCertificate('test.example.com');
   try
     Validator := TPinValidatorEx.Create;
@@ -494,18 +494,18 @@ begin
                 SetLength(SPKIData, SPKILen);
                 BIO_read(Bio, @SPKIData[0], SPKILen);
                 PubKeyHash := TCryptoUtils.SHA256(SPKIData);
-                
+
                 // 添加 Pin
                 Validator.AddPin(PubKeyHash, ptPublicKey, 'Test Pin', False);
-                
+
                 // 验证并获取详细结果
                 if Validator.ValidateCertificateEx(Cert, Result) then
                 begin
                   Assert(Result.Success, 'Result.Success should be True');
                   Assert(Result.MatchedPinIndex = 0, 'Should match first pin');
-                  Assert(Result.MatchedPinDescription = 'Test Pin', 
+                  Assert(Result.MatchedPinDescription = 'Test Pin',
                     'Should match pin description');
-                  Assert(Result.PublicKeyFingerprint <> '', 
+                  Assert(Result.PublicKeyFingerprint <> '',
                     'Should have public key fingerprint');
                 end
                 else
@@ -519,14 +519,14 @@ begin
           EVP_PKEY_free(PubKey);
         end;
       end;
-      
+
     finally
       Validator.Free;
     end;
   finally
     X509_free(Cert);
   end;
-  
+
   WriteLn;
 end;
 

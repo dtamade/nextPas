@@ -6,7 +6,7 @@ unit nextpas.core.simd.narrow512.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.base;
 
 {$M+}

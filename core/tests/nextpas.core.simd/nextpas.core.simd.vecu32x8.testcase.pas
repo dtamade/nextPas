@@ -9,7 +9,7 @@ unit nextpas.core.simd.vecu32x8.testcase;
 interface
 
 uses
-  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.testcase, nextpas.core.simd.base;
 
 type

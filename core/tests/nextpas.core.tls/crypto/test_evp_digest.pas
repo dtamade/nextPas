@@ -4,7 +4,7 @@ program test_evp_digest;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   DynLibs,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
@@ -33,7 +33,7 @@ var
 begin
   Result := False;
   WriteLn('Testing MD5...');
-  
+
   try
     // Check function availability
     if not Assigned(EVP_md5) then
@@ -41,21 +41,21 @@ begin
       WriteLn('  [-] EVP_md5 not loaded');
       Exit;
     end;
-    
+
     md := EVP_md5();
     if not Assigned(md) then
     begin
       WriteLn('  [-] Failed to get MD5 algorithm');
       Exit;
     end;
-    
+
     ctx := EVP_MD_CTX_new();
     if not Assigned(ctx) then
     begin
       WriteLn('  [-] Failed to create context');
       Exit;
     end;
-    
+
     try
       // Initialize
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then
@@ -63,14 +63,14 @@ begin
         WriteLn('  [-] Failed to init digest');
         Exit;
       end;
-      
+
       // Update
       if EVP_DigestUpdate(ctx, PAnsiChar(TestData), Length(TestData)) <> 1 then
       begin
         WriteLn('  [-] Failed to update digest');
         Exit;
       end;
-      
+
       // Finalize
       digestLen := 0;
       if EVP_DigestFinal_ex(ctx, @digest[0], digestLen) <> 1 then
@@ -78,12 +78,12 @@ begin
         WriteLn('  [-] Failed to finalize digest');
         Exit;
       end;
-      
+
       // Verify
       hexResult := BytesToHex(@digest[0], digestLen);
       WriteLn('  [+] Hash length: ', digestLen, ' bytes');
       WriteLn('  [+] Hash: ', hexResult);
-      
+
       if hexResult = ExpectedMD5 then
       begin
         WriteLn('  ✅ MD5 Test PASSED');
@@ -95,7 +95,7 @@ begin
         WriteLn('      Expected: ', ExpectedMD5);
         WriteLn('      Got:      ', hexResult);
       end;
-      
+
     finally
       EVP_MD_CTX_free(ctx);
     end;
@@ -120,52 +120,52 @@ var
 begin
   Result := False;
   WriteLn('Testing SHA-256...');
-  
+
   try
     if not Assigned(EVP_sha256) then
     begin
       WriteLn('  [-] EVP_sha256 not loaded');
       Exit;
     end;
-    
+
     md := EVP_sha256();
     if not Assigned(md) then
     begin
       WriteLn('  [-] Failed to get SHA-256 algorithm');
       Exit;
     end;
-    
+
     ctx := EVP_MD_CTX_new();
     if not Assigned(ctx) then
     begin
       WriteLn('  [-] Failed to create context');
       Exit;
     end;
-    
+
     try
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then
       begin
         WriteLn('  [-] Failed to init digest');
         Exit;
       end;
-      
+
       if EVP_DigestUpdate(ctx, PAnsiChar(TestData), Length(TestData)) <> 1 then
       begin
         WriteLn('  [-] Failed to update digest');
         Exit;
       end;
-      
+
       digestLen := 0;
       if EVP_DigestFinal_ex(ctx, @digest[0], digestLen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize digest');
         Exit;
       end;
-      
+
       hexResult := BytesToHex(@digest[0], digestLen);
       WriteLn('  [+] Hash length: ', digestLen, ' bytes');
       WriteLn('  [+] Hash: ', hexResult);
-      
+
       if hexResult = ExpectedSHA256 then
       begin
         WriteLn('  ✅ SHA-256 Test PASSED');
@@ -177,7 +177,7 @@ begin
         WriteLn('      Expected: ', ExpectedSHA256);
         WriteLn('      Got:      ', hexResult);
       end;
-      
+
     finally
       EVP_MD_CTX_free(ctx);
     end;
@@ -203,52 +203,52 @@ var
 begin
   Result := False;
   WriteLn('Testing SHA-512...');
-  
+
   try
     if not Assigned(EVP_sha512) then
     begin
       WriteLn('  [-] EVP_sha512 not loaded');
       Exit;
     end;
-    
+
     md := EVP_sha512();
     if not Assigned(md) then
     begin
       WriteLn('  [-] Failed to get SHA-512 algorithm');
       Exit;
     end;
-    
+
     ctx := EVP_MD_CTX_new();
     if not Assigned(ctx) then
     begin
       WriteLn('  [-] Failed to create context');
       Exit;
     end;
-    
+
     try
       if EVP_DigestInit_ex(ctx, md, nil) <> 1 then
       begin
         WriteLn('  [-] Failed to init digest');
         Exit;
       end;
-      
+
       if EVP_DigestUpdate(ctx, PAnsiChar(TestData), Length(TestData)) <> 1 then
       begin
         WriteLn('  [-] Failed to update digest');
         Exit;
       end;
-      
+
       digestLen := 0;
       if EVP_DigestFinal_ex(ctx, @digest[0], digestLen) <> 1 then
       begin
         WriteLn('  [-] Failed to finalize digest');
         Exit;
       end;
-      
+
       hexResult := BytesToHex(@digest[0], digestLen);
       WriteLn('  [+] Hash length: ', digestLen, ' bytes');
       WriteLn('  [+] Hash: ', hexResult);
-      
+
       if hexResult = ExpectedSHA512 then
       begin
         WriteLn('  ✅ SHA-512 Test PASSED');
@@ -260,7 +260,7 @@ begin
         WriteLn('      Expected: ', ExpectedSHA512);
         WriteLn('      Got:      ', hexResult);
       end;
-      
+
     finally
       EVP_MD_CTX_free(ctx);
     end;
@@ -274,13 +274,13 @@ end;
 var
   LCryptoLib: TLibHandle;
   LPassCount, LTotalCount: Integer;
-  
+
 begin
   WriteLn('========================================');
   WriteLn('EVP Digest Algorithm Test');
   WriteLn('========================================');
   WriteLn;
-  
+
   // Initialize OpenSSL
   try
     if not LoadOpenSSLLibrary then
@@ -293,9 +293,9 @@ begin
       Halt(1);
     end;
   end;
-  
+
   WriteLn('OpenSSL loaded successfully!');
-  
+
   // Load libcrypto for EVP functions
   {$IFDEF MSWINDOWS}
   LCryptoLib := LoadLibrary('libcrypto-3-x64.dll');
@@ -308,15 +308,15 @@ begin
   if LCryptoLib = NilHandle then
     LCryptoLib := LoadLibrary('libcrypto.so');
   {$ENDIF}
-  
+
   if LCryptoLib = NilHandle then
   begin
     WriteLn('ERROR: Failed to load libcrypto!');
     Halt(1);
   end;
-  
+
   WriteLn('libcrypto loaded');
-  
+
   // Load EVP module
   if not LoadEVP(LCryptoLib) then
   begin
@@ -324,20 +324,20 @@ begin
     FreeLibrary(LCryptoLib);
     Halt(1);
   end;
-  
+
   WriteLn('EVP module loaded successfully!');
   WriteLn;
   WriteLn('========================================');
   WriteLn;
-  
+
   // Run tests
   LPassCount := 0;
   LTotalCount := 3;
-  
+
   if TestMD5 then Inc(LPassCount);
   if TestSHA256 then Inc(LPassCount);
   if TestSHA512 then Inc(LPassCount);
-  
+
   // Summary
   WriteLn('========================================');
   WriteLn('Test Summary');
@@ -347,7 +347,7 @@ begin
   WriteLn('Failed:       ', LTotalCount - LPassCount);
   WriteLn('Success rate: ', (LPassCount * 100) div LTotalCount, '%');
   WriteLn('========================================');
-  
+
   if LPassCount = LTotalCount then
   begin
     WriteLn('🎉 All tests PASSED!');

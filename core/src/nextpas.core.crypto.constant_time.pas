@@ -104,6 +104,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.crypto.errors;
+
 class function TConstantTime.CompareBytes(const A, B: TBytes): Integer;
 var
   I: Integer;
@@ -191,7 +194,7 @@ begin
   
   // Select the appropriate length (assumes same length for security)
   if Length(IfTrue) <> Length(IfFalse) then
-    raise Exception.Create('Select requires equal-length arrays');
+    RaiseCryptoError(cecInvalidArgument, 'Select requires equal-length arrays');
   
   Result := nil;
   SetLength(Result, Length(IfTrue));

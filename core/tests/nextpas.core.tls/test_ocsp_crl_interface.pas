@@ -12,7 +12,7 @@ program test_ocsp_crl_interface;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.factory;
 

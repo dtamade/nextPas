@@ -108,3 +108,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.7 | R17 质量表；测试 56 | Claude |
 | 2026-07-20 | 2.8 | R22 Clean/Rel/Dir 边界用例；测试 69 | Claude |
 | 2026-07-20 | 2.9 | R31 边界表 70；M2-W4 Win 矩阵 + wine 4 | Claude |
+| 2026-07-21 | 2.10 | U4 mix-use audit script + MIXUSE-AUDIT；C6 锚点门禁 | Claude |

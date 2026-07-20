@@ -557,7 +557,10 @@ begin
   else
     FailTest('SOME FAILED');
 
-  { Release closures before heaptrc reports }
+  { Release stubs/fixtures before unit finalization (avoids double-free AV). }
+  LSuite.CleanupTableAllocations;
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
   LRunner := Default(TSuiteRunner);
   LSuite := Default(TTestSuite);
   LResults := nil;

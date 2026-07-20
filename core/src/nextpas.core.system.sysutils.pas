@@ -15,6 +15,7 @@ unit nextpas.core.system.sysutils;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv;
 
@@ -23,6 +24,7 @@ type
   ExceptClass = nextpas.core.exception.ExceptClass;
   EConvertError = nextpas.core.exception.EConvertError;
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
+  TBytes = nextpas.core.base.TBytes;
 
 { Text formatting }
 function Format(const AFmt: string; const AArgs: array of const): string;
@@ -31,11 +33,17 @@ function SameText(const A, B: string): Boolean;
 { Numeric conversion }
 function IntToStr(const AValue: Int64): string;
 function Int64ToStr(const AValue: Int64): string;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 function StrToInt(const AStr: string): Integer;
 function StrToInt64(const AStr: string): Int64;
 function StrToFloat(const AStr: string): Double;
 function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
+
+{ Bytes helpers (SysUtils-compat for tests / facades) }
+function BytesOf(const AStr: string): TBytes;
+function StringOf(const ABytes: TBytes): string;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 
 { String manipulation }
 function Trim(const AStr: string): string;
@@ -67,6 +75,9 @@ function RenameFile(const AOldName, ANewName: string): Boolean;
 function CopyFile(const ASrcName, ADestName: string): Boolean;
 
 { Path manipulation }
+const
+  PathDelim = {$IFDEF WINDOWS}'\'{$ELSE}'/'{$ENDIF};
+
 function ExtractFilePath(const AFileName: string): string;
 function ExtractFileName(const AFileName: string): string;
 function ExtractFileExt(const AFileName: string): string;
@@ -75,6 +86,9 @@ function ExtractFileDrive(const AFileName: string): string;
 function ChangeFileExt(const AFileName, ANewExt: string): string;
 function IncludeTrailingPathDelimiter(const APath: string): string;
 function ExcludeTrailingPathDelimiter(const APath: string): string;
+function ExpandFileName(const AFileName: string): string;
+function GetTempDir: string; overload;
+function GetTempDir(Global: Boolean): string; overload;
 
 { Working directory }
 function GetCurrentDir: string;
@@ -87,6 +101,10 @@ function ParamStr(AIndex: Integer): string;
 { Environment }
 function GetEnvironmentVariable(const AName: string): string;
 
+{ Process }
+function GetProcessID: SizeUInt;
+function ExecuteProcess(const APath, AParams: string): Integer;
+
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
 
@@ -98,8 +116,11 @@ implementation
 
 uses
   SysUtils,
+  {$IFDEF UNIX}BaseUnix,{$ENDIF}
+  {$IFDEF WINDOWS}Windows,{$ENDIF}
   nextpas.core.path,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.base.utils;
 
 { Text formatting }
 
@@ -125,6 +146,11 @@ begin
   Result := nextpas.core.text.conv.IntToStr(AValue);
 end;
 
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+begin
+  Result := nextpas.core.text.conv.IntToHex(AValue, ADigits);
+end;
+
 function StrToInt(const AStr: string): Integer;
 begin
   Result := Integer(nextpas.core.text.conv.StrToInt(AStr));
@@ -148,6 +174,25 @@ end;
 function CurrToStr(const AValue: Currency): string;
 begin
   Result := nextpas.core.text.conv.FloatToStr(AValue);
+end;
+
+function BytesOf(const AStr: string): TBytes;
+begin
+  SetLength(Result, Length(AStr));
+  if Length(AStr) > 0 then
+    Move(AStr[1], Result[0], Length(AStr));
+end;
+
+function StringOf(const ABytes: TBytes): string;
+begin
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+begin
+  Result := nextpas.core.base.utils.CompareMem(A, B, ASize);
 end;
 
 { String manipulation }
@@ -303,6 +348,42 @@ end;
 function ExcludeTrailingPathDelimiter(const APath: string): string;
 begin
   Result := nextpas.core.path.ExcludeTrailingPathDelimiter(APath);
+end;
+
+function ExpandFileName(const AFileName: string): string;
+begin
+  Result := nextpas.core.path.ExpandFileName(AFileName);
+end;
+
+function GetTempDir: string;
+begin
+  Result := nextpas.core.fs.GetTempDir;
+end;
+
+function GetTempDir(Global: Boolean): string;
+begin
+  { Global flag ignored — single temp root on nextPas fs facade }
+  Result := nextpas.core.fs.GetTempDir;
+end;
+
+function GetProcessID: SizeUInt;
+{$IFDEF UNIX}
+var
+  LPid: LongInt;
+{$ENDIF}
+begin
+  {$IFDEF UNIX}
+  { system facade may use FPC RTL directly }
+  LPid := fpgetpid;
+  Result := SizeUInt(LPid);
+  {$ELSE}
+  Result := SizeUInt(GetCurrentProcessId);
+  {$ENDIF}
+end;
+
+function ExecuteProcess(const APath, AParams: string): Integer;
+begin
+  Result := SysUtils.ExecuteProcess(APath, AParams);
 end;
 
 { Working directory — delegates to platform }

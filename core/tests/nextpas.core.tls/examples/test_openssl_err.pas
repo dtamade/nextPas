@@ -3,7 +3,7 @@ program test_openssl_err;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.err;
 
@@ -16,7 +16,7 @@ begin
   WriteLn('Testing OpenSSL Error Handling');
   WriteLn('------------------------------');
   WriteLn;
-  
+
   // Load ERR module
   Write('Loading ERR module... ');
   if not LoadOpenSSLERR then
@@ -26,7 +26,7 @@ begin
   end;
   WriteLn('OK');
   WriteLn;
-  
+
   // Clear any existing errors
   WriteLn('Clearing error queue...');
   if Assigned(ERR_clear_error) then
@@ -37,7 +37,7 @@ begin
   else
     WriteLn('ERR_clear_error not available');
   WriteLn;
-  
+
   // Check if there are any errors in the queue
   if Assigned(ERR_peek_error) then
   begin
@@ -50,7 +50,7 @@ begin
   else
     WriteLn('ERR_peek_error not available');
   WriteLn;
-  
+
   // Print some error code information
   WriteLn('OpenSSL Error Library Codes:');
   WriteLn('  ERR_LIB_NONE    = ', ERR_LIB_NONE);
@@ -60,7 +60,7 @@ begin
   WriteLn('  ERR_LIB_EVP     = ', ERR_LIB_EVP);
   WriteLn('  ERR_LIB_SSL     = ', ERR_LIB_SSL);
   WriteLn;
-  
+
   // Test error packing/unpacking
   WriteLn('Testing error packing/unpacking:');
   ErrorCode := ERR_PACK_INLINE(ERR_LIB_SSL, 0, 100);
@@ -69,7 +69,7 @@ begin
   WriteLn('  Function: ', ERR_GET_FUNC_INLINE(ErrorCode));
   WriteLn('  Reason:   ', ERR_GET_REASON_INLINE(ErrorCode));
   WriteLn;
-  
+
   // Cleanup
   UnloadOpenSSLERR;
   WriteLn('Test completed successfully.');
@@ -79,7 +79,7 @@ begin
   WriteLn('OpenSSL Error Module Test');
   WriteLn('=========================');
   WriteLn;
-  
+
   // Load OpenSSL core
   Write('Loading OpenSSL libraries... ');
   try
@@ -93,13 +93,13 @@ begin
       Exit;
     end;
   end;
-  
+
   WriteLn('OpenSSL version: ', OpenSSL_version(0));
   WriteLn;
-  
+
   // Run tests
   TestErrorHandling;
-  
+
   // Cleanup
   UnloadOpenSSLCore;
 end.

@@ -3,8 +3,8 @@ program test_winssl_library_basic;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  
+  nextpas.core.system.sysutils,
+
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 
@@ -41,7 +41,7 @@ var
   Lib: ISSLLibrary;
 begin
   TestSection('Library Initialization Tests');
-  
+
   // Test 1: Create library
   try
     Lib := CreateWinSSLLibrary;
@@ -54,7 +54,7 @@ begin
     on E: Exception do
       TestFail('CreateWinSSLLibrary', E.Message);
   end;
-  
+
   // Test 2: Initialize library
   try
     if Lib.Initialize then
@@ -65,7 +65,7 @@ begin
     on E: Exception do
       TestFail('Library.Initialize', E.Message);
   end;
-  
+
   // Test 3: Check if initialized
   if Lib.IsInitialized then
     TestPass('Library.IsInitialized')
@@ -83,7 +83,7 @@ var
   LibType: TSSLLibraryType;
 begin
   TestSection('Version Information Tests');
-  
+
   // Test 1: Get library type
   try
     LibType := SSLLib.GetLibraryType;
@@ -95,7 +95,7 @@ begin
     on E: Exception do
       TestFail('GetLibraryType', E.Message);
   end;
-  
+
   // Test 2: Get version string
   try
     VersionStr := SSLLib.GetVersionString;
@@ -107,7 +107,7 @@ begin
     on E: Exception do
       TestFail('GetVersionString', E.Message);
   end;
-  
+
   // Test 3: Get version number
   try
     if SSLLib.GetVersionNumber > 0 then
@@ -118,7 +118,7 @@ begin
     on E: Exception do
       TestFail('GetVersionNumber', E.Message);
   end;
-  
+
   // Test 4: Get compile flags
   try
     VersionStr := SSLLib.GetCompileFlags;
@@ -139,19 +139,19 @@ end;
 procedure TestProtocolSupport;
 begin
   TestSection('Protocol Support Tests');
-  
+
   // Test 1: TLS 1.2 support
   if SSLLib.IsProtocolSupported(sslProtocolTLS12) then
     TestPass('TLS 1.2 supported')
   else
     TestFail('TLS 1.2 supported', 'Should be supported');
-    
+
   // Test 2: SSL 2.0 not supported
   if not SSLLib.IsProtocolSupported(sslProtocolSSL2) then
     TestPass('SSL 2.0 not supported (correct)')
   else
     TestFail('SSL 2.0 not supported', 'Should not be supported');
-    
+
   // Test 3: SSL 3.0 not supported
   if not SSLLib.IsProtocolSupported(sslProtocolSSL3) then
     TestPass('SSL 3.0 not supported (correct)')
@@ -187,7 +187,7 @@ end;
 procedure TestContextCreation;
 begin
   TestSection('Context Creation Tests');
-  
+
   // Test 1: Create client context
   try
     Context := SSLLib.CreateContext(sslCtxClient);
@@ -199,7 +199,7 @@ begin
     on E: Exception do
       TestFail('CreateContext (client)', E.Message);
   end;
-  
+
   if Context <> nil then
   begin
     // Test 2: Get context type
@@ -207,7 +207,7 @@ begin
       TestPass('Context.GetContextType')
     else
       TestFail('Context.GetContextType', 'Wrong type');
-      
+
     // Test 3: Set protocol versions
     try
       Context.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
@@ -216,7 +216,7 @@ begin
       on E: Exception do
         TestFail('Context.SetProtocolVersions', E.Message);
     end;
-    
+
     // Test 4: Get protocol versions
     try
       if sslProtocolTLS12 in Context.GetProtocolVersions then
@@ -227,7 +227,7 @@ begin
       on E: Exception do
         TestFail('Context.GetProtocolVersions', E.Message);
     end;
-    
+
     // Test 5: Set server name
     try
       // INTENTIONAL_API_SURFACE: context-level SNI setter coverage. This
@@ -251,7 +251,7 @@ end;
 procedure TestErrorHandling;
 begin
   TestSection('Error Handling Tests');
-  
+
   // Test 1: Clear error
   try
     SSLLib.ClearError;
@@ -274,7 +274,7 @@ var
   Stats: TSSLStatistics;
 begin
   TestSection('Statistics Tests');
-  
+
   // Test 1: Get statistics
   try
     Stats := SSLLib.GetStatistics;
@@ -287,7 +287,7 @@ begin
     on E: Exception do
       TestFail('GetStatistics', E.Message);
   end;
-  
+
   // Test 2: Reset statistics
   try
     SSLLib.ResetStatistics;
@@ -309,7 +309,7 @@ end;
 procedure TestLibraryFinalization;
 begin
   TestSection('Library Finalization Tests');
-  
+
   // Test 1: Finalize library
   try
     SSLLib.Finalize;
@@ -331,7 +331,7 @@ begin
   WriteLn('WinSSL Library Basic Tests');
   WriteLn('===========================');
   WriteLn;
-  
+
   try
     TestLibraryInitialization;
     TestVersionInfo;
@@ -341,14 +341,14 @@ begin
     TestErrorHandling;
     TestStatistics;
     TestLibraryFinalization;
-    
+
     WriteLn;
     WriteLn('===========================');
     WriteLn('Test Results:');
     WriteLn('  Passed: ', TestsPassed);
     WriteLn('  Failed: ', TestsFailed);
     WriteLn('  Total:  ', TestsPassed + TestsFailed);
-    
+
     if TestsFailed = 0 then
     begin
       WriteLn;
@@ -361,7 +361,7 @@ begin
       WriteLn('�?Some tests failed!');
       ExitCode := 1;
     end;
-    
+
   except
     on E: Exception do
     begin

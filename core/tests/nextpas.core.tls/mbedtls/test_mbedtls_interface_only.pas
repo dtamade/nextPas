@@ -9,7 +9,7 @@ program test_mbedtls_interface_only;
 }
 
 uses
-  SysUtils, TypInfo,
+  nextpas.core.system.sysutils, TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.context,

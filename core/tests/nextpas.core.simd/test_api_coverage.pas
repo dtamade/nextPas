@@ -3,7 +3,9 @@ program test_api_coverage;
 {$Q-}{$R-}
 
 uses
-  nextpas.core.text.conv, Math, nextpas.core.simd.base,
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.base,
   nextpas.core.simd;
 
 var

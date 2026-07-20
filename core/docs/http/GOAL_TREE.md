@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-21 (R1 claim review: maintain H1 epoll scale-ready; package No; NEXT → ROADMAP STOP)
+> Last updated: 2026-07-21 (Go h2 peer 0.10× mid NotMet; H1 E3s Met; package No; NEXT → ROADMAP STOP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
@@ -279,7 +279,7 @@ Design exclusions (by design, not gaps):
 
 Remaining H2 hardening:
 - Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
-- Real TLS runtime proof: ✅ OpenSSL path covered by client HTTPS + H2 ALPN focused；`test_http_tls_real` currently compile-blocked on `TThread` (pre-existing). Wave X4: PinValidator free; client HTTPS residual 1×41B process-lifetime
+- Real TLS runtime proof: ✅ client HTTPS + H2 ALPN focused；`test_http_tls_real` **5/5** (platform_thread, 2026-07-21). Wave X4: PinValidator free; client HTTPS residual cleared on smoke path
 - Documentation alignment (this document and ARCHITECTURE.md)
 
 H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.

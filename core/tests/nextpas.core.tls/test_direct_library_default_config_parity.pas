@@ -7,7 +7,7 @@ program test_direct_library_default_config_parity;
   compatibility default surface stays explicit. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;

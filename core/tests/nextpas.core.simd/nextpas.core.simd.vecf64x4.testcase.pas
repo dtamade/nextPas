@@ -9,7 +9,7 @@ unit nextpas.core.simd.vecf64x4.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.math, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.text.conv, nextpas.core.math, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.testcase, nextpas.core.simd.base,
   nextpas.core.simd.utils, nextpas.core.simd.scalar,
   nextpas.core.simd.ops;

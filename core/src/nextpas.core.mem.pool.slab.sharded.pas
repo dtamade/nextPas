@@ -789,12 +789,14 @@ begin
   end;
 
   if not TryRouteShardIndex(APtr, LShard, LIsFallback) then
-    raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
 
   FShards[LShard].Lock.Acquire;
   try
     if (not LIsFallback) and (not FShards[LShard].Pool.Owns(APtr)) then
-      raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+      raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
     Result := FShards[LShard].Pool.ReallocMem(APtr, ASize);
     if Result <> nil then
     begin
@@ -826,12 +828,14 @@ begin
   if APtr = nil then Exit;
 
   if not TryRouteShardIndex(APtr, LShard, LIsFallback) then
-    raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+    raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
 
   FShards[LShard].Lock.Acquire;
   try
     if (not LIsFallback) and (not FShards[LShard].Pool.Owns(APtr)) then
-      raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
+      raise ESlabPoolCorruption.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TSlabPool', 'Release', 'Pointer does not belong to this pool'));
 
     FShards[LShard].Pool.FreeMem(APtr);
     if LIsFallback then

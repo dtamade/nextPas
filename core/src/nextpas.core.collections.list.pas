@@ -430,7 +430,7 @@ var
   LOldHead: PDoubleNode;
 begin
   if FHead = nil then
-    raise EInvalidOperation.Create('TList.PopFront: 链表为空');
+    raise EEmptyCollection.Create('TList.PopFront: empty');
 
   LOldHead := FHead;
   Result := LOldHead^.Data;
@@ -450,7 +450,7 @@ var
   LOldTail: PDoubleNode;
 begin
   if FTail = nil then
-    raise EInvalidOperation.Create('TList.PopBack: 链表为空');
+    raise EEmptyCollection.Create('TList.PopBack: empty');
 
   LOldTail := FTail;
   Result := LOldTail^.Data;
@@ -468,14 +468,14 @@ end;
 function TList.Front: T;
 begin
   if FHead = nil then
-    raise EInvalidOperation.Create('TList.Front: 链表为空');
+    raise EEmptyCollection.Create('TList.Front: empty');
   Result := FHead^.Data;
 end;
 
 function TList.Back: T;
 begin
   if FTail = nil then
-    raise EInvalidOperation.Create('TList.Back: 链表为空');
+    raise EEmptyCollection.Create('TList.Back: empty');
   Result := FTail^.Data;
 end;
 

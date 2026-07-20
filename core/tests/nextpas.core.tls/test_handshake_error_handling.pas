@@ -7,7 +7,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  SysUtils;
+  nextpas.core.system.sysutils;
 
 begin
   WriteLn('测试握手错误处理集成');
@@ -16,7 +16,7 @@ begin
   WriteLn('注意: 此测试需要在 Windows 平台上运行');
   WriteLn('当前平台: ', {$IFDEF WINDOWS}'Windows'{$ELSE}'非 Windows'{$ENDIF});
   WriteLn('');
-  
+
   {$IFDEF WINDOWS}
   WriteLn('错误处理已集成到握手流程:');
   WriteLn('');
@@ -42,7 +42,7 @@ begin
   {$ELSE}
   WriteLn('跳过 Windows 专用测试');
   {$ENDIF}
-  
+
   WriteLn('');
   WriteLn('任务 4.2 完成!');
   WriteLn('');

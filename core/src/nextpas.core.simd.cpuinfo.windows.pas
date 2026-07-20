@@ -13,12 +13,13 @@ implementation
 {$IFDEF WINDOWS}
 
 uses
-  Windows;
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.windows.ffi;
 
 type
   PSYSTEM_LOGICAL_PROCESSOR_INFORMATION = ^SYSTEM_LOGICAL_PROCESSOR_INFORMATION;
   SYSTEM_LOGICAL_PROCESSOR_INFORMATION = record
-    ProcessorMask: ULONG_PTR;
+    ProcessorMask: PtrUInt;
     Relationship: DWORD;
     case Integer of
       0: (ProcessorCore: record
@@ -34,15 +35,17 @@ type
             Size: DWORD;
             Type_: DWORD;
           end);
-      3: (Reserved: array[0..1] of ULONGLONG);
+      3: (Reserved: array[0..1] of UInt64);
   end;
 
-function GetLogicalProcessorInformation(Buffer: Pointer; var ReturnLength: DWORD): BOOL; stdcall; external 'kernel32.dll';
-function GetActiveProcessorCount(GroupNumber: WORD): DWORD; stdcall; external 'kernel32.dll';
+function GetLogicalProcessorInformation(Buffer: Pointer; var ReturnLength: DWORD): BOOL; stdcall;
+  external 'kernel32.dll' name 'GetLogicalProcessorInformation';
+function GetActiveProcessorCount(GroupNumber: WORD): DWORD; stdcall;
+  external 'kernel32.dll' name 'GetActiveProcessorCount';
 
 const
   RelationProcessorCore = 0;
-  ALL_PROCESSOR_GROUPS = $FFFF;
+  ALL_PROCESSOR_GROUPS = WORD($FFFF);
 
 function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 var
@@ -51,26 +54,18 @@ var
   P: PSYSTEM_LOGICAL_PROCESSOR_INFORMATION;
   BytesRead: DWORD;
   SI: SYSTEM_INFO;
+  GroupCount: DWORD;
 begin
   Physical := 0;
   Logical := 0;
 
   // Logical processors from SYSTEM_INFO (fallback)
   GetSystemInfo(SI);
-  Logical := SI.dwNumberOfProcessors;
-  // Try Windows groups-aware API (Win7+)
-  try
-    if Logical <= 0 then
-      Logical := GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)
-    else
-    begin
-      // Prefer groups-aware count if available
-      if GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) > Logical then
-        Logical := GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
-    end;
-  except
-    // Ignore if API not available
-  end;
+  Logical := LongInt(SI.dwNumberOfProcessors);
+  // Prefer groups-aware count when available (Win7+)
+  GroupCount := GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+  if GroupCount > DWORD(Logical) then
+    Logical := LongInt(GroupCount);
 
   // Try to count physical cores via GLPI
   BufferSize := 0;

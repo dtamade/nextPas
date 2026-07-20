@@ -3,7 +3,7 @@ program test_tls12_session_resume;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
   nextpas.core.tls.tls12.client;
 
 var

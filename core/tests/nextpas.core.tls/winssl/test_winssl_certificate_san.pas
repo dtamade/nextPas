@@ -22,7 +22,7 @@ uses
   {$ELSE}
   {$ERROR 'This test requires Windows platform'}
   {$ENDIF}
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib,
   nextpas.core.tls.winssl.certificate;

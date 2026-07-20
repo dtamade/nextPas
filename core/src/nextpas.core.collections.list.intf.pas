@@ -67,7 +67,7 @@ type
      * @return 被移除的头部元素
      *
      * @exceptions
-     *   EInvalidOperation  链表为空
+     *   EEmptyCollection  空链表
      *
      * @postcondition Count 减少 1
      *
@@ -83,7 +83,7 @@ type
      * @return 被移除的尾部元素
      *
      * @exceptions
-     *   EInvalidOperation  链表为空
+     *   EEmptyCollection  空链表
      *
      * @postcondition Count 减少 1
      *
@@ -99,7 +99,7 @@ type
      * @return 头部元素
      *
      * @exceptions
-     *   EInvalidOperation  链表为空
+     *   EEmptyCollection  空链表
      *
      * @complexity O(1)
      *}
@@ -113,7 +113,7 @@ type
      * @return 尾部元素
      *
      * @exceptions
-     *   EInvalidOperation  链表为空
+     *   EEmptyCollection  空链表
      *
      * @complexity O(1)
      *}

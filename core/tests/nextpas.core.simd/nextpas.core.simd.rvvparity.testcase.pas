@@ -16,8 +16,12 @@ unit nextpas.core.simd.rvvparity.testcase;
 interface
 
 uses
-  Math, SysUtils, nextpas.core.test, nextpas.core.simd,
-  nextpas.core.simd.base, nextpas.core.simd.scalar;
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.base,
+  nextpas.core.simd.scalar;
 
 {$M+}
 type
@@ -805,7 +809,7 @@ procedure TTestCase_RVVParity.Test_DivF32x4_Boundary;
 var a, b, rvv, scalar: TVecF32x4;
 begin
   a := MakeF32x4(1.0, 1e-38, 1.0, -1.0);
-  b := MakeF32x4(1e38, 1e38, Single.PositiveInfinity, -2.0);
+  b := MakeF32x4(1e38, 1e38, Single(Infinity), -2.0);
   rvv := ScalarDivF32x4(a, b);
   scalar := ScalarDivF32x4(a, b);
   CheckF32x4('DivF32x4_Boundary', scalar, rvv);

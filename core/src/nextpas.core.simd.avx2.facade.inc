@@ -16,13 +16,10 @@ asm
   cmp rdi, rsi
   je @equal              // Same pointer = equal
 
-  // Index must be zero for both short and long paths. Previously only the
-  // len>=128 path zeroed rcx; short inputs left rcx garbage so remainder
-  // often skipped and returned equal=true (breaks BytesEqual/StartsWith).
-  xor rcx, rcx           // i = 0
   // 大数组路径: 4x YMM 展开 (128 bytes/iter)
   cmp rdx, 128
   jb @loop32
+  xor rcx, rcx           // i = 0
 
 @loop128:
   lea r8, [rcx + 128]

@@ -3,7 +3,7 @@ program test_streaming_operations;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.crypto.utils;
 

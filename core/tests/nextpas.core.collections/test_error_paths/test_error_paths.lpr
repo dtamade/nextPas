@@ -52,23 +52,32 @@ begin
   Check(LRaised, 'Vec.Get(0) on empty raises');
 end;
 
-{ VecDeque }
+{ VecDeque — empty state uses EEmptyCollection (ERRORS.md) }
 procedure TestDequePopFrontEmpty;
 var LD: TIntDeque; LRaised: Boolean;
 begin
   LD := TIntDeque.Create; LRaised := False;
-  try try LD.PopFront; except on E: EOutOfRange do LRaised := True; end;
+  try try LD.PopFront; except on E: EEmptyCollection do LRaised := True; end;
   finally LD.Free; end;
-  Check(LRaised, 'VecDeque.PopFront empty raises');
+  Check(LRaised, 'VecDeque.PopFront empty raises EEmptyCollection');
 end;
 
 procedure TestDequePopBackEmpty;
 var LD: TIntDeque; LRaised: Boolean;
 begin
   LD := TIntDeque.Create; LRaised := False;
-  try try LD.PopBack; except on E: EOutOfRange do LRaised := True; end;
+  try try LD.PopBack; except on E: EEmptyCollection do LRaised := True; end;
   finally LD.Free; end;
-  Check(LRaised, 'VecDeque.PopBack empty raises');
+  Check(LRaised, 'VecDeque.PopBack empty raises EEmptyCollection');
+end;
+
+procedure TestDequeFirstEmpty;
+var LD: TIntDeque; LRaised: Boolean;
+begin
+  LD := TIntDeque.Create; LRaised := False;
+  try try LD.First; except on E: EEmptyCollection do LRaised := True; end;
+  finally LD.Free; end;
+  Check(LRaised, 'VecDeque.First empty raises EEmptyCollection');
 end;
 
 { Stack }
@@ -95,18 +104,18 @@ procedure TestListPopFrontEmpty;
 var LL: TIntList; LRaised: Boolean;
 begin
   LL := TIntList.Create; LRaised := False;
-  try try LL.PopFront; except LRaised := True; end;
+  try try LL.PopFront; except on E: EEmptyCollection do LRaised := True; end;
   finally LL.Free; end;
-  Check(LRaised, 'List.PopFront empty raises');
+  Check(LRaised, 'List.PopFront empty raises EEmptyCollection');
 end;
 
 procedure TestListPopBackEmpty;
 var LL: TIntList; LRaised: Boolean;
 begin
   LL := TIntList.Create; LRaised := False;
-  try try LL.PopBack; except LRaised := True; end;
+  try try LL.PopBack; except on E: EEmptyCollection do LRaised := True; end;
   finally LL.Free; end;
-  Check(LRaised, 'List.PopBack empty raises');
+  Check(LRaised, 'List.PopBack empty raises EEmptyCollection');
 end;
 
 { ForwardList }
@@ -114,9 +123,9 @@ procedure TestFwdListPopFrontEmpty;
 var LL: TIntFwdList; LRaised: Boolean;
 begin
   LL := TIntFwdList.Create; LRaised := False;
-  try try LL.PopFront; except LRaised := True; end;
+  try try LL.PopFront; except on E: EEmptyCollection do LRaised := True; end;
   finally LL.Free; end;
-  Check(LRaised, 'ForwardList.PopFront empty raises');
+  Check(LRaised, 'ForwardList.PopFront empty raises EEmptyCollection');
 end;
 
 { PriorityQueue }
@@ -145,9 +154,9 @@ procedure TestCBPopEmpty;
 var LCB: TIntCB; LRaised: Boolean;
 begin
   LCB := TIntCB.Create(4); LRaised := False;
-  try try LCB.Pop; except LRaised := True; end;
+  try try LCB.Pop; except on E: EEmptyCollection do LRaised := True; end;
   finally LCB.Free; end;
-  Check(LRaised, 'CircularBuffer.Pop empty raises');
+  Check(LRaised, 'CircularBuffer.Pop empty raises EEmptyCollection');
 end;
 
 { TreeSet }
@@ -175,6 +184,7 @@ begin
   T.Test('Vec.Get out of range', @TestVecGetOutOfRange);
   T.Test('VecDeque.PopFront empty', @TestDequePopFrontEmpty);
   T.Test('VecDeque.PopBack empty', @TestDequePopBackEmpty);
+  T.Test('VecDeque.First empty', @TestDequeFirstEmpty);
   T.Test('Stack.Pop empty', @TestStackPopEmpty);
   T.Test('Stack.Peek empty', @TestStackPeekEmpty);
   T.Test('List.PopFront empty', @TestListPopFrontEmpty);

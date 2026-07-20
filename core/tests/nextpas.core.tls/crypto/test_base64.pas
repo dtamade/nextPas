@@ -3,7 +3,7 @@ program test_base64;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.crypto.utils,
   nextpas.core.tls.encoding,  // Phase 2.3.6: Base64/Hex functions
   nextpas.core.tls.openssl.api.bio,

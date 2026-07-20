@@ -3,7 +3,7 @@ program test_ed25519;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.crypto.ed25519,
   nextpas.core.test;
 

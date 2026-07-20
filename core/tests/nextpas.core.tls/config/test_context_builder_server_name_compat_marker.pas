@@ -6,7 +6,7 @@ program test_context_builder_server_name_compat_marker;
   marker coverage for the compatibility-only builder surface. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fpjson, jsonparser,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder;

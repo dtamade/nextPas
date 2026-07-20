@@ -352,17 +352,7 @@ begin
   end;
 end;
 
-{ ── B3 scale: table-driven identity checks (countable process bulk) ─────── }
-
-procedure TestIdentityCase(const AC: TTestCase);
-var
-  N: Int64;
-begin
-  N := StrToInt(AC.Data);
-  CheckEqual(N, N);
-  CheckTrue(N = N);
-  CheckNotEqual(N, N + 1);
-end;
+{ ── v8.26: fail-path equal (identity bulk removed; messages must cite both) ─ }
 
 procedure TestFailPathCase(const AC: TTestCase);
 { Data: expected|actual — must fail with both values in message (B5 meaningful) }
@@ -383,6 +373,17 @@ begin
   ExpectFail(procedure begin
     CheckEqual(LExpN, LActN);
   end, LAct);
+end;
+
+procedure TestFailPathNotEqualCase(const AC: TTestCase);
+{ Data: value — CheckNotEqual(v,v) must fail (same value). }
+var
+  N: Int64;
+begin
+  N := StrToInt(AC.Data);
+  ExpectFail(procedure begin
+    CheckNotEqual(N, N);
+  end, IntToStr(N));
 end;
 
 { ── Main ─────────────────────────────────────────────────────────────────── }
@@ -424,22 +425,22 @@ begin
   LSuite.Test('msg contract int equal',         @TestMsgContractIntEqual);
   LSuite.Test('msg contract snapshot mismatch', @TestMsgContractSnapshotMismatch);
 
-  { B3/B5/B11: identity + fail-path tables (meaningful negative ≥30% of bulk) }
-  SetLength(LCases, 500);
-  for I := 0 to High(LCases) do
-  begin
-    LCases[I].Name := 'id-' + IntToStr(I);
-    LCases[I].Data := IntToStr(I * 17 + 3);
-  end;
-  LSuite.TestTable('identity table', LCases, @TestIdentityCase);
-
-  SetLength(LCases, 1200);
+  { v8.26: drop identity bulk; expand fail-path equal + NotEqual }
+  SetLength(LCases, 1800);
   for I := 0 to High(LCases) do
   begin
     LCases[I].Name := 'fail-' + IntToStr(I);
     LCases[I].Data := IntToStr(I) + '|' + IntToStr(I + 1000);
   end;
   LSuite.TestTable('fail-path equal', LCases, @TestFailPathCase);
+
+  SetLength(LCases, 500);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 'neq-fail-' + IntToStr(I);
+    LCases[I].Data := IntToStr(I * 3 + 1);
+  end;
+  LSuite.TestTable('fail-path notequal', LCases, @TestFailPathNotEqualCase);
 
   if not LSuite.Run then
   begin

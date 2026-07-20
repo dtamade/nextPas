@@ -3,7 +3,7 @@ program test_tsslcontextconfig_surface;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl;
 
 procedure AssertTrue(const AName: string; AValue: Boolean);

@@ -406,6 +406,25 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestTimeoutWorkerLeakObservability;
+{ v8.25: TimeoutWorkerLeaks field + Get/ResetTimeoutWorkerLeakCount. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  ResetTimeoutWorkerLeakCount;
+  CheckEqual(0, GetTimeoutWorkerLeakCount, 'Reset clears global leak counter');
+  LSuite := TTestSuite.Create('LeakObs');
+  LSuite.Test('fast', @TestParallelPassA);
+  CheckTrue(LSuite.RunParallelWithResult(nil, LResult), 'fast parallel passes');
+  CheckEqual(0, LResult.TimeoutWorkerLeaks,
+    'no stuck timeout workers on fast suite');
+  CheckEqual(0, GetTimeoutWorkerLeakCount,
+    'global counter still zero after clean parallel run');
+  LSuite := Default(TTestSuite);
+  PassTest('✓ TimeoutWorkerLeaks observability');
+end;
+
 procedure TestRetryInParallel;
 var
   LSuite: TTestSuite;
@@ -808,6 +827,7 @@ begin
   WriteLn;
   SectionHeader('R2-F22: Timeout/Retry/Skip Tests');
   TestParallelTimeout;
+  TestTimeoutWorkerLeakObservability;
   TestRetryInParallel;
   TestSubtestSkipInParallel;
   TestClosureRetry;

@@ -199,18 +199,18 @@ begin
   { Check pre-sentinel }
   if LHdr^.PreSentinel <> SENTINEL_PRE then
     raise EAllocError.Create(aeSentinelCorrupted,
-      FormatAllocErrorMsg('allocator_sentinel', 'Raise', 'Pre-sentinel corrupted — possible buffer underflow or wild pointer'));
+      FormatAllocErrorMsg('TSentinelAllocator', 'FreeMem', 'Pre-sentinel corrupted — possible buffer underflow or wild pointer'));
   { Check post-sentinel }
   LPost := PostSentinelPtr(APtr, LHdr^.UserSize);
   if LPost^ <> SENTINEL_POST then
     raise EAllocError.Create(aeSentinelCorrupted,
-      FormatAllocErrorMsg('allocator_sentinel', 'Raise', 'Post-sentinel corrupted — possible buffer overflow'));
+      FormatAllocErrorMsg('TSentinelAllocator', 'FreeMem', 'Post-sentinel corrupted — possible buffer overflow'));
   { Check checksum }
   LExpected := CalcChecksum(Pointer(PtrUInt(APtr) + HEADER_SIZE),
     LHdr^.UserSize, LHdr^.AllocId);
   if LHdr^.Checksum <> LExpected then
     raise EAllocError.Create(aeChecksumFailure,
-      FormatAllocErrorMsg('allocator_sentinel', 'Raise', 'Checksum mismatch — metadata corrupted'));
+      FormatAllocErrorMsg('TSentinelAllocator', 'FreeMem', 'Checksum mismatch — metadata corrupted'));
 end;
 
 function TSentinelAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

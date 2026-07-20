@@ -3,7 +3,7 @@ program test_cert_builder_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils, Classes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,

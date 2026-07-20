@@ -6,7 +6,7 @@ program test_factory_server_name_scope_clarification;
   TSSLConfig.ServerName compatibility-only semantics on factory paths. }
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,

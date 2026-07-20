@@ -3,7 +3,7 @@ program test_signature_comprehensive;
 {$mode objfpc}{$H+}{$J-}
 
 uses
-  SysUtils,
+  nextpas.core.system.sysutils,
   nextpas.core.tls.openssl.api;
 
 type
@@ -17,20 +17,20 @@ type
   PRSA = Pointer;
   PEC_KEY = Pointer;
   PEVP_PKEY_CTX = Pointer;
-  
+
   TRSA_new = function: PRSA; cdecl;
   TRSA_free = procedure(rsa: PRSA); cdecl;
   TRSA_generate_key_ex = function(rsa: PRSA; bits: Integer; e: PBIGNUM; cb: Pointer): Integer; cdecl;
   TRSA_size = function(const rsa: PRSA): Integer; cdecl;
-  TRSA_sign = function(type_: Integer; const m: PByte; m_len: Cardinal; 
+  TRSA_sign = function(type_: Integer; const m: PByte; m_len: Cardinal;
     sigret: PByte; siglen: PCardinal; rsa: PRSA): Integer; cdecl;
   TRSA_verify = function(type_: Integer; const m: PByte; m_len: Cardinal;
     const sigbuf: PByte; siglen: Cardinal; rsa: PRSA): Integer; cdecl;
-    
+
   TBN_new = function: PBIGNUM; cdecl;
   TBN_free = procedure(a: PBIGNUM); cdecl;
   TBN_set_word = function(a: PBIGNUM; w: LongWord): Integer; cdecl;
-  
+
   TEVP_PKEY_new = function: PEVP_PKEY; cdecl;
   TEVP_PKEY_free = procedure(pkey: PEVP_PKEY); cdecl;
   TEVP_PKEY_assign = function(pkey: PEVP_PKEY; type_: Integer; key: Pointer): Integer; cdecl;
@@ -44,7 +44,7 @@ type
     const tbs: PByte; tbslen: NativeUInt): Integer; cdecl;
   TEVP_PKEY_CTX_set_rsa_padding = function(ctx: PEVP_PKEY_CTX; pad: Integer): Integer; cdecl;
   TEVP_PKEY_CTX_set_signature_md = function(ctx: PEVP_PKEY_CTX; md: PEVP_MD): Integer; cdecl;
-  
+
   // EVP digest functions
   TEVP_Digest = function(const data: Pointer; count: NativeUInt; md: PByte; var size: Cardinal; const type_: PEVP_MD; impl: PENGINE): Integer; cdecl;
   TEVP_sha256 = function: PEVP_MD; cdecl;
@@ -59,7 +59,7 @@ const
 var
   Results: array of TTestResult;
   TotalTests, PassedTests: Integer;
-  
+
   // Function pointers
   RSA_new: TRSA_new;
   RSA_free: TRSA_free;
@@ -91,7 +91,7 @@ begin
   LibHandle := LoadLibrary(CRYPTO_LIB);
   if LibHandle = 0 then
     raise Exception.Create('Failed to load ' + CRYPTO_LIB);
-  
+
   Pointer(RSA_new) := GetProcAddress(LibHandle, 'RSA_new');
   Pointer(RSA_free) := GetProcAddress(LibHandle, 'RSA_free');
   Pointer(RSA_generate_key_ex) := GetProcAddress(LibHandle, 'RSA_generate_key_ex');
@@ -150,7 +150,7 @@ begin
   WriteLn('Test Results Summary');
   PrintSeparator;
   WriteLn;
-  
+
   for i := 0 to High(Results) do
   begin
     if Results[i].Success then
@@ -162,7 +162,7 @@ begin
         WriteLn('         Error: ', Results[i].ErrorMsg);
     end;
   end;
-  
+
   WriteLn;
   PrintSeparator;
   WriteLn(Format('Total: %d tests, %d passed, %d failed (%.1f%%)',
@@ -180,14 +180,14 @@ var
 begin
   WriteLn;
   WriteLn('Testing RSA key generation...');
-  
+
   rsa := RSA_new();
   if rsa = nil then
   begin
     AddResult('RSA: Key generation', False, 'RSA_new failed');
     Exit;
   end;
-  
+
   try
     e := BN_new();
     if e = nil then
@@ -195,7 +195,7 @@ begin
       AddResult('RSA: Key generation', False, 'BN_new failed');
       Exit;
     end;
-    
+
     try
       // Set public exponent to 65537 (common choice)
       if BN_set_word(e, 65537) <> 1 then
@@ -203,18 +203,18 @@ begin
         AddResult('RSA: Key generation', False, 'BN_set_word failed');
         Exit;
       end;
-      
+
       WriteLn('  Generating 2048-bit RSA key...');
       if RSA_generate_key_ex(rsa, 2048, e, nil) <> 1 then
       begin
         AddResult('RSA: Key generation', False, 'RSA_generate_key_ex failed');
         Exit;
       end;
-      
+
       key_size := RSA_size(rsa);
       WriteLn('  [+] Key generated successfully');
       WriteLn('  [+] Key size: ', key_size, ' bytes (', key_size * 8, ' bits)');
-      
+
       if key_size = 256 then  // 2048 bits / 8 = 256 bytes
       begin
         WriteLn('  [PASS] RSA key generation successful!');
@@ -225,7 +225,7 @@ begin
         WriteLn('  [FAIL] Unexpected key size!');
         AddResult('RSA Key Generation', False, 'Wrong key size');
       end;
-      
+
     finally
       BN_free(e);
     end;
@@ -248,9 +248,9 @@ var
 begin
   WriteLn;
   WriteLn('Testing RSA sign and verify...');
-  
+
   message := 'Hello, World! This is a test message for RSA signature.';
-  
+
   // Generate key
   rsa := RSA_new();
   if rsa = nil then
@@ -258,11 +258,11 @@ begin
     AddResult('RSA: Sign/Verify', False, 'RSA_new failed');
     Exit;
   end;
-  
+
   try
     e := BN_new();
     BN_set_word(e, 65537);
-    
+
     WriteLn('  Generating RSA key...');
     if RSA_generate_key_ex(rsa, 2048, e, nil) <> 1 then
     begin
@@ -271,19 +271,19 @@ begin
       Exit;
     end;
     BN_free(e);
-    
+
     // Compute SHA-256 hash of message
     WriteLn('  Computing message hash...');
-    if EVP_Digest(PAnsiChar(message), Length(message), @hash[0], hash_len, 
+    if EVP_Digest(PAnsiChar(message), Length(message), @hash[0], hash_len,
        EVP_sha256(), nil) <> 1 then
     begin
       AddResult('RSA: Sign/Verify', False, 'Hash computation failed');
       Exit;
     end;
-    
+
     WriteLn('  Message: "', Copy(message, 1, 30), '..."');
     WriteLn('  Hash:    ', Copy(BytesToHex(hash, hash_len), 1, 32), '...');
-    
+
     // Sign the hash
     WriteLn('  Signing hash...');
     sig_len := SizeOf(signature);
@@ -292,10 +292,10 @@ begin
       AddResult('RSA: Sign/Verify', False, 'Signing failed');
       Exit;
     end;
-    
+
     WriteLn('  [+] Signature created (', sig_len, ' bytes)');
     WriteLn('  Signature: ', Copy(BytesToHex(signature, sig_len), 1, 64), '...');
-    
+
     // Verify the signature
     WriteLn('  Verifying signature...');
     if RSA_verify(NID_sha256, @hash[0], hash_len, @signature[0], sig_len, rsa) <> 1 then
@@ -304,13 +304,13 @@ begin
       AddResult('RSA Sign/Verify', False, 'Verification failed');
       Exit;
     end;
-    
+
     WriteLn('  [+] Signature verified successfully!');
-    
+
     // Test with tampered signature (should fail)
     WriteLn('  Testing tampered signature...');
     signature[0] := signature[0] xor $FF;  // Corrupt first byte
-    
+
     if RSA_verify(NID_sha256, @hash[0], hash_len, @signature[0], sig_len, rsa) = 1 then
     begin
       WriteLn('  [FAIL] Tampered signature was accepted!');
@@ -322,7 +322,7 @@ begin
       WriteLn('  [PASS] RSA sign/verify test successful!');
       AddResult('RSA Sign/Verify', True);
     end;
-    
+
   finally
     RSA_free(rsa);
   end;
@@ -343,14 +343,14 @@ var
 begin
   WriteLn;
   WriteLn('Testing EVP high-level signature API...');
-  
+
   message := 'Test message for EVP signature';
-  
+
   // Generate RSA key
   rsa := RSA_new();
   e := BN_new();
   BN_set_word(e, 65537);
-  
+
   WriteLn('  Generating RSA key...');
   if RSA_generate_key_ex(rsa, 2048, e, nil) <> 1 then
   begin
@@ -360,7 +360,7 @@ begin
     Exit;
   end;
   BN_free(e);
-  
+
   // Create EVP_PKEY
   pkey := EVP_PKEY_new();
   if pkey = nil then
@@ -369,7 +369,7 @@ begin
     AddResult('EVP: Signature', False, 'EVP_PKEY_new failed');
     Exit;
   end;
-  
+
   if EVP_PKEY_assign(pkey, EVP_PKEY_RSA, rsa) <> 1 then
   begin
     RSA_free(rsa);
@@ -377,7 +377,7 @@ begin
     AddResult('EVP: Signature', False, 'EVP_PKEY_assign failed');
     Exit;
   end;
-  
+
   try
     // Create signing context
     ctx := EVP_PKEY_CTX_new(pkey, nil);
@@ -386,7 +386,7 @@ begin
       AddResult('EVP: Signature', False, 'EVP_PKEY_CTX_new failed');
       Exit;
     end;
-    
+
     try
       // Hash the message first
       WriteLn('  Hashing message...');
@@ -396,7 +396,7 @@ begin
         AddResult('EVP: Signature', False, 'Hash computation failed');
         Exit;
       end;
-      
+
       // Initialize signing
       WriteLn('  Initializing signature context...');
       if EVP_PKEY_sign_init(ctx) <> 1 then
@@ -404,31 +404,31 @@ begin
         AddResult('EVP: Signature', False, 'EVP_PKEY_sign_init failed');
         Exit;
       end;
-      
+
       // Set padding and hash algorithm
       if Assigned(EVP_PKEY_CTX_set_rsa_padding) then
         EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-        
+
       if Assigned(EVP_PKEY_CTX_set_signature_md) then
         EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256());
-      
+
       // Sign the hash
       WriteLn('  Signing hash...');
       sig_len := SizeOf(signature);
-      if EVP_PKEY_sign(ctx, @signature[0], sig_len, 
+      if EVP_PKEY_sign(ctx, @signature[0], sig_len,
          @hash[0], hash_len) <> 1 then
       begin
         AddResult('EVP: Signature', False, 'EVP_PKEY_sign failed');
         Exit;
       end;
-      
+
       WriteLn('  [+] Signature created (', sig_len, ' bytes)');
       WriteLn('  Signature: ', Copy(BytesToHex(signature, sig_len), 1, 64), '...');
-      
+
     finally
       EVP_PKEY_CTX_free(ctx);
     end;
-    
+
     // Verify signature
     ctx := EVP_PKEY_CTX_new(pkey, nil);
     try
@@ -438,13 +438,13 @@ begin
         AddResult('EVP: Signature', False, 'EVP_PKEY_verify_init failed');
         Exit;
       end;
-      
+
       if Assigned(EVP_PKEY_CTX_set_rsa_padding) then
         EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING);
-        
+
       if Assigned(EVP_PKEY_CTX_set_signature_md) then
         EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256());
-      
+
       if EVP_PKEY_verify(ctx, @signature[0], sig_len,
          @hash[0], hash_len) <> 1 then
       begin
@@ -452,15 +452,15 @@ begin
         AddResult('EVP Signature', False, 'Verification failed');
         Exit;
       end;
-      
+
       WriteLn('  [+] Signature verified successfully!');
       WriteLn('  [PASS] EVP signature API test successful!');
       AddResult('EVP Signature API', True);
-      
+
     finally
       EVP_PKEY_CTX_free(ctx);
     end;
-    
+
   finally
     EVP_PKEY_free(pkey);  // This will also free the RSA key
   end;
@@ -479,20 +479,20 @@ var
 begin
   WriteLn;
   WriteLn('Testing different RSA key sizes...');
-  
+
   all_passed := True;
   e := BN_new();
   BN_set_word(e, 65537);
-  
+
   try
     for i := 0 to High(key_sizes) do
     begin
       WriteLn;
       WriteLn('  Testing ', key_sizes[i], '-bit key...');
-      
+
       rsa := RSA_new();
       start_time := Now;
-      
+
       if RSA_generate_key_ex(rsa, key_sizes[i], e, nil) <> 1 then
       begin
         WriteLn('  [FAIL] Generation failed');
@@ -500,27 +500,27 @@ begin
         RSA_free(rsa);
         Continue;
       end;
-      
+
       end_time := Now;
       duration_ms := (end_time - start_time) * 24 * 60 * 60 * 1000;
-      
+
       actual_size := RSA_size(rsa) * 8;
       WriteLn('  [+] Generated in ', duration_ms:0:2, ' ms');
       WriteLn('  [+] Key size: ', actual_size, ' bits');
-      
+
       if actual_size <> key_sizes[i] then
       begin
         WriteLn('  [FAIL] Size mismatch!');
         all_passed := False;
       end;
-      
+
       RSA_free(rsa);
     end;
-    
+
   finally
     BN_free(e);
   end;
-  
+
   if all_passed then
   begin
     WriteLn;
@@ -539,12 +539,12 @@ begin
   TotalTests := 0;
   PassedTests := 0;
   SetLength(Results, 0);
-  
+
   PrintSeparator;
   WriteLn('Digital Signature Comprehensive Test Suite');
   WriteLn('RSA Signature - Sign and Verify');
   PrintSeparator;
-  
+
   // Load OpenSSL
   try
     if not LoadOpenSSLLibrary then
@@ -557,7 +557,7 @@ begin
       WriteLn('Version: ', OPENSSL_version(0))
     else
       WriteLn('Version: Unknown');
-      
+
     // Load signature functions
     LoadSignatureFunctions;
     WriteLn('Signature functions loaded successfully');
@@ -569,19 +569,19 @@ begin
       Halt(1);
     end;
   end;
-  
+
   // Run tests
   TestRSAKeyGeneration;
   TestRSASignVerify;
   TestEVPSignature;
   TestRSAKeySizes;
-  
+
   // Print summary
   PrintResults;
-  
+
   // Cleanup
   UnloadOpenSSLLibrary;
-  
+
   // Exit with appropriate code
   if PassedTests = TotalTests then
     Halt(0)

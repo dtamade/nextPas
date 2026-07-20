@@ -4,7 +4,7 @@ program test_winssl_peer_certificate_surface;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  Windows, SysUtils, WinSock2,
+  Windows, nextpas.core.system.sysutils, WinSock2,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.lib;
 
