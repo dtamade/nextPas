@@ -9,9 +9,10 @@ program bench_ci_integration;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.fs,
+  nextpas.core.bench.base;
 
 {*
  * 模拟待测函数
@@ -40,8 +41,7 @@ begin
   for I := 0 to High(LMap) do
     Inc(LSum, LMap[I]);
 
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*

@@ -391,6 +391,17 @@ function NormalQuantile(AP: Double): Double;
  *  用于 Mann-Whitney U、Welch t-test 等场景。 }
 function ZToPValue(AZ: Double): Double;
 
+{** 防优化 sink（对标 criterion black_box / Go KeepAlive）
+ *  将值混入全局 sink，阻止编译器消除“无副作用”计算。
+ *  基准热路径末尾调用，勿用于业务逻辑。 }
+procedure BenchBlackBoxInt64(AValue: Int64);
+procedure BenchBlackBoxPtr(APtr: Pointer);
+procedure BenchBlackBoxBytes(const AData; ALen: Integer);
+{** 读取当前 sink（测试 / 调试）；热路径不需要 }
+function BenchBlackBoxSink: PtrUInt;
+{** 重置 sink（仅测试） }
+procedure BenchBlackBoxReset;
+
 implementation
 
 uses
@@ -1041,6 +1052,51 @@ begin
     Inc(LP);
 
   Result := LP^ = #0;
+end;
+
+{ ===== BenchBlackBox (anti-DCE) ===== }
+
+var
+  GBenchBlackBoxSink: PtrUInt = 0;
+
+procedure BenchBlackBoxInt64(AValue: Int64);
+begin
+  { 混入高低半字，避免纯常量折叠抹掉写入 }
+  GBenchBlackBoxSink := GBenchBlackBoxSink xor PtrUInt(AValue)
+    xor PtrUInt(AValue shr 32) xor 1;
+end;
+
+procedure BenchBlackBoxPtr(APtr: Pointer);
+begin
+  GBenchBlackBoxSink := GBenchBlackBoxSink xor PtrUInt(APtr) xor 1;
+end;
+
+procedure BenchBlackBoxBytes(const AData; ALen: Integer);
+var
+  LBytes: PByte;
+  LI: Integer;
+  LAcc: PtrUInt;
+begin
+  if (ALen <= 0) then
+  begin
+    GBenchBlackBoxSink := GBenchBlackBoxSink xor 1;
+    Exit;
+  end;
+  LBytes := @AData;
+  LAcc := 0;
+  for LI := 0 to ALen - 1 do
+    LAcc := LAcc + LBytes[LI] + PtrUInt(LI);
+  GBenchBlackBoxSink := GBenchBlackBoxSink xor LAcc xor PtrUInt(ALen) xor 1;
+end;
+
+function BenchBlackBoxSink: PtrUInt;
+begin
+  Result := GBenchBlackBoxSink;
+end;
+
+procedure BenchBlackBoxReset;
+begin
+  GBenchBlackBoxSink := 0;
 end;
 
 end.

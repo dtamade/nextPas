@@ -2,8 +2,24 @@
 
 **模块路径**：`core/src/nextpas.core.bench*.pas`
 **层级**：L1（依赖 L0: base / text / platform.time 等）
-**最后更新**：2026-07-20（B44：索引补全；运行时行为无变更）
-**权威状态**：`goal-tree.md`（B0–B44）；API 冻结见 README；truth = focused-runtime
+**最后更新**：2026-07-20（B45：可用性 — BlackBox、方法索引、错误约定、示例隔离）
+**权威状态**：`goal-tree.md`（B0–B45）；API 冻结见 README；truth = focused-runtime
+
+### 0.1 测量辅助（base / 门面 re-export）
+
+| 符号 | 说明 |
+|------|------|
+| `BenchBlackBoxInt64` | 防 DCE；热路径末尾混入全局 sink |
+| `BenchBlackBoxPtr` | 指针 sink |
+| `BenchBlackBoxBytes` | 字节块 sink |
+| `BenchBlackBoxSink` / `BenchBlackBoxReset` | 测试读/清 sink |
+
+### 0.2 错误消息约定
+
+- 参数非法：`EBenchInvalidParam`，消息形如 `TBenchSuite.SetMinSamples: sample count must be > 0`
+- 基线缺失：`EBenchBaselineNotFound`
+- 其它：`EBenchError`（含路径 IO 包装）
+- **不**新增公开 ErrorCode 枚举（Idle / API 冻结）
 
 ---
 
@@ -281,5 +297,12 @@ end;
 ## 6. 测试覆盖
 
 - 默认 gate：`make bench-module-test` → **22** PROJECTS（见 `goal-tree.md` 测试套件分布）
+- **非 gate**：`test_test_bench_integration/`（历史集成草稿，不进 Makefile PROJECTS）
 - 结果 API 专项：`test_bench_results_api`
-- 契约脚本：`scripts/bench-contract-check.sh`
+- 契约脚本：`scripts/bench-contract-check.sh`（含 examples RTL 禁扫、PROJECTS=22、LANE-DUTY）
+
+## 7. FPC RTL 隔离
+
+- 生产 `nextpas.core.bench*`：**不得** `uses SysUtils/Classes/...`；线程经 `system.classes`，mem 经 `system.memmanager`
+- 官方示例 `core/examples/bench`、`core/examples/nextpas.core.bench`：同样禁止直连 RTL；`WriteLn` 属 System 允许
+- 契约门禁 C5 扫描 examples
