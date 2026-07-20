@@ -14,42 +14,38 @@
 - [x] 门面 + 十种原语实现（Mutex / FutexMutex / RWLock / CondVar / SpinLock / WaitGroup / Once / Semaphore / Barrier / Event）
 - [x] 平台句柄路径走 `platform.sync`（含 rwlock 分模式 unlock）
 - [x] 用户态原语基于 atomic + address-wait
-- [x] CondVar 拒绝 `TFutexMutex` 配对
-- [x] `TSyncPool` TLS freelist + 并发测试与 bench
-- [x] 基础 `test_sync` / `test_sync_pool` 行为覆盖
-- [x] 文档 SSOT：README + CONTRACT + 本 GOAL_TREE
-- [x] 删除空壳 `test_sync_posix_fallback`
-- [x] 模块级测试 Makefile + source-contract gate
-- [x] 关键错误路径行为测试补强
-- [x] **E2** `TSyncPool` 冷路径：`TRTLCriticalSection` → nextpas `IMutex`/`TMutex`
-- [x] per-pool TLS freelist（多 pool 同线程隔离）
-- [x] `INativeMutex` 类型级 CondVar 配对
-- [x] Windows forced compile gate
-- [x] SCORECARD 初版（SC1–SC6）
+- [x] CondVar / `INativeMutex` 类型级配对；`TFutexMutex` 不可配 CondVar
+- [x] `TSyncPool` TLS freelist + 并发测试与 bench；per-pool TLS；冷路径 `IMutex`
+- [x] 文档 SSOT：README + CONTRACT + SCORECARD + 本 GOAL_TREE
+- [x] source-contract + 行为测试 + Windows compile gate
+- [x] path-limited land 到 `origin/main`（2026-07-20）
+- [x] Stress / 超时边界补强（WaitGroup 高并发、Event multi-waiter、Semaphore timeout 0、CondVar signal）
+- [x] Darwin forced compile gate（`-dNEXTPAS_FORCE_HOST_DARWIN`）
+- [x] Destroy 持锁策略写入 CONTRACT
 
 ---
 
-## Now（当前 lane 焦点）
+## Now
 
-- [x] 基线验证证据落盘（focused gates + hygiene，2026-07-20）
-- [ ] path-limited landing（landing candidate + landing-check）
+- [ ] path-limited landing（本批 B1–B3 提交）
+- [ ] SCORECARD contended 数字刷新（可选）
 
 ---
 
 ## Next
 
-1. Darwin/FreeBSD compile gate（若 FORCE_HOST 路径稳定）
-2. Stress / 超时边界 / 销毁持锁策略统一
-3. SCORECARD contended 场景
-4. 是否公开 `RecursiveMutex`；是否门面化 Pool
+1. FreeBSD compile gate（若 FORCE_HOST 稳定）
+2. SCORECARD SC7/SC8 contended 本机基线固化
+3. 是否公开 `RecursiveMutex`；是否门面化 Pool（默认暂缓）
+4. 销毁持锁可检测路径（仅在有跨平台语义后）
 
 ---
 
 ## Deferred
 
 - Channel / Latch / Notify（可能属 async 或独立模块）
-- 公开 API 重命名（`Do_` 等）— **冻结**，需大版本策略
-- 把 sync 做成 FPC `SyncObjs` 兼容层 — **禁止**（见双编译器原则）
+- 公开 API 重命名（`Do_` 等）— **冻结**
+- FPC `SyncObjs` 兼容层 — **禁止**
 
 ---
 

@@ -124,7 +124,7 @@ begin
   LArgs := TWaiterArgs(AData^);
   LArgs.Mutex.Lock;
   LArgs.CondVar.Wait(LArgs.Mutex);
-  AtomicStore32(LArgs.Done^, 1, moRelease);
+  atomic_store(LArgs.Done^, 1, mo_release);
   LArgs.Signaled^ := True;
   LArgs.Mutex.Unlock;
   Result := 0;
@@ -172,8 +172,8 @@ begin
 
     { Wait for one thread to complete }
     LSpin := 0;
-    while (AtomicLoad32(LDone1, moAcquire) = 0) and
-          (AtomicLoad32(LDone2, moAcquire) = 0) and
+    while (atomic_load(LDone1, mo_acquire) = 0) and
+          (atomic_load(LDone2, mo_acquire) = 0) and
           (LSpin < 1000000) do
     begin
       CpuPause;
@@ -182,15 +182,15 @@ begin
 
     { One should be signaled, one should still be waiting }
     Check(LSignaled1 or LSignaled2, 'At least one should be signaled');
-    Check((AtomicLoad32(LDone1, moAcquire) + AtomicLoad32(LDone2, moAcquire)) = 1,
+    Check((atomic_load(LDone1, mo_acquire) + atomic_load(LDone2, mo_acquire)) = 1,
       'Exactly one waiter should complete after a single Signal');
     CheckEqual(Int32(1), LCondVar.GetWaiterCount, 'One waiter should remain after a single Signal');
 
     { Signal the second one }
     LCondVar.Signal;
     LSpin := 0;
-    while ((AtomicLoad32(LDone1, moAcquire) = 0) or
-           (AtomicLoad32(LDone2, moAcquire) = 0)) and
+    while ((atomic_load(LDone1, mo_acquire) = 0) or
+           (atomic_load(LDone2, mo_acquire) = 0)) and
           (LSpin < 1000000) do
     begin
       CpuPause;
@@ -253,8 +253,8 @@ begin
 
     { Wait for both to complete }
     LSpin := 0;
-    while ((AtomicLoad32(LDone1, moAcquire) = 0) or
-           (AtomicLoad32(LDone2, moAcquire) = 0)) and
+    while ((atomic_load(LDone1, mo_acquire) = 0) or
+           (atomic_load(LDone2, mo_acquire) = 0)) and
           (LSpin < 1000000) do
     begin
       CpuPause;

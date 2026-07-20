@@ -28,15 +28,15 @@ var
   LI: Integer;
 begin
   LArgs := PSubmitArgs(AData);
-  while AtomicLoad32(LArgs^.Start^, moAcquire) = 0 do
+  while atomic_load(LArgs^.Start^, mo_acquire) = 0 do
     CpuPause;
   for LI := 1 to CONCURRENT_OPS_PER_PRODUCER do
   begin
     while not LArgs^.Pool.Submit(nil, Pointer(PtrUInt(LI))) do
       CpuPause;
-    AtomicFetchAdd64(LArgs^.Submitted^, 1, moRelaxed);
+    atomic_fetch_add_64(LArgs^.Submitted^, 1, mo_relaxed);
   end;
-  AtomicFetchAdd32(LArgs^.Done^, 1, moRelease);
+  atomic_fetch_add(LArgs^.Done^, 1, mo_release);
   Result := 0;
 end;
 
@@ -160,9 +160,9 @@ begin
       LArgs[LI].Submitted := @LSubmitted;
       LThreads[LI] := BeginThread(@SubmitThread, @LArgs[LI]);
     end;
-    AtomicStore32(LStart, 1, moRelease);
+    atomic_store(LStart, 1, mo_release);
 
-    while AtomicLoad32(LDone, moAcquire) < CONCURRENT_PRODUCER_COUNT do
+    while atomic_load(LDone, mo_acquire) < CONCURRENT_PRODUCER_COUNT do
     begin
       LResult := LPool.Steal(LTask, LData);
       if LResult = wsStolen then
@@ -180,8 +180,8 @@ begin
       WaitForThreadTerminate(LThreads[LI], 5000);
 
     CheckEqual(Int64(CONCURRENT_PRODUCER_COUNT * CONCURRENT_OPS_PER_PRODUCER),
-      AtomicLoad64(LSubmitted, moAcquire), 'All producer submissions must complete');
-    CheckEqual(AtomicLoad64(LSubmitted, moAcquire), LConsumed,
+      atomic_load_64(LSubmitted, mo_acquire), 'All producer submissions must complete');
+    CheckEqual(atomic_load_64(LSubmitted, mo_acquire), LConsumed,
       'Concurrent submissions must not overwrite tasks in the single-owner deque');
   finally
     LPool.Free;

@@ -351,7 +351,7 @@ begin
   { Logical enqueue reserves inside Publish (Enqueue is a thin closed-check wrapper). }
   LEnqueue := ExtractSection(LSource, 'procedure TSegQueueImpl.Publish',
     'procedure TSegQueueImpl.Enqueue');
-  CheckNotContains(LEnqueue, 'AtomicFetchAdd64(FEnqueuePos',
+  CheckNotContains(LEnqueue, 'atomic_fetch_add_64(FEnqueuePos',
     'segment queue does not reserve before fallible allocation');
   CheckBefore(LEnqueue, 'FindOrCreateSegment(LPos)',
     'atomic_compare_exchange_strong_64(FEnqueuePos',

@@ -51,6 +51,7 @@ const
   ERROR_NO_MORE_ITEMS       = DWORD(259);
   ERROR_DIRECTORY           = DWORD(267);
   ERROR_IO_PENDING          = DWORD(997);
+  ERROR_NOTIFY_ENUM_DIR     = DWORD(1022); { ReadDirectoryChanges buffer overflow }
   ERROR_NOT_FOUND           = DWORD(1168);
   ERROR_OPERATION_ABORTED   = DWORD(995);
 

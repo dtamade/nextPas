@@ -328,6 +328,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **Batch-20**: Windows scripts candidate **+platform.pty** (no promote until GHA green). |
 | 2026-07-20 | **test**: Linux watch `detect delete` drain residuals before unlink (R30 multi-event shadow fix). |
 | 2026-07-20 | **Batch-20b**: promote **26 platform-gate** set (+pty) after GHA matrix pass=27 (run 29734704405 @ `d2eb8f890`; pty PASS). Job may red on async-native-smoke (not platform evidence). |
+| 2026-07-20 | **Batch-15 S3**: Windows watch overflow → `PLATFORM_ERR_AGAIN` + re-arm; wine smoke delete/multi soft. Queue: optional watch matrix candidate. |
 
 ---
 

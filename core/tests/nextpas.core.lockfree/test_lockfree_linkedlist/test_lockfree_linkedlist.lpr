@@ -77,7 +77,7 @@ begin
     FList.Contains(LI mod 64);
     LValue := -1;
     if (not FList.Get(0, LValue)) and (LValue <> 0) then
-      AtomicStore32(FInvalidOutput^, 1, moRelease);
+      atomic_store(FInvalidOutput^, 1, mo_release);
   end;
 end;
 
@@ -247,7 +247,7 @@ begin
     LReader.Start;
     LWriter.WaitFor;
     LReader.WaitFor;
-    Check(AtomicLoad32(LInvalidOutput, moAcquire) = 0,
+    Check(atomic_load(LInvalidOutput, mo_acquire) = 0,
       'Concurrent failed reads keep deterministic output');
   finally
     LWriter.Free;

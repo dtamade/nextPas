@@ -32,9 +32,27 @@ const
   HE_DEFAULT_FIRST_ADDRESS_FAMILY_COUNT = 1;
 
 type
+  { Lab / advanced: inject DNS stream events without real getaddrinfo.
+    FeedAddresses / SignalDnsDone are posted onto the loop thread. }
+  IAsyncTcpDialDnsFeed = interface
+    ['{A7C3E91D-4B2F-4E8A-9D1C-6F0B5A8E3D27}']
+    procedure FeedAddresses(const AAddrs: array of TNetAddress);
+    procedure SignalDnsDone(AError: Int32);
+  end;
+
   { Observability hook (tests): fired on loop thread after AsyncConnect submit. }
   TAsyncTcpDialAttemptStart = procedure(AIndex: Integer; const AAddr: TNetAddress;
     AContext: Pointer);
+
+  { Go Dialer.Control subset: after create/[LocalAddr bind], before connect.
+    Set AError <> 0 to fail this attempt (socket will be closed). Loop thread. }
+  TAsyncTcpDialControl = procedure(AFd: PtrUInt; const ARemote: TNetAddress;
+    AContext: Pointer; var AError: Int32);
+
+  { Custom resolve: replace AsyncResolveStream. Caller must FeedAddresses and
+    eventually SignalDnsDone on AFeed (same contract as lab DnsFeed). }
+  TAsyncTcpDialResolve = procedure(const AHost: string; APort: UInt16;
+    const AFeed: IAsyncTcpDialDnsFeed; AContext: Pointer);
 
   TAsyncTcpDialOptions = record
     ConnectionAttemptDelayMs: UInt32; { default 250; 0 = no delay between starts }
@@ -53,18 +71,14 @@ type
     { Applied to the winning stream before user callback (best-effort). }
     NoDelay: Boolean;   { TCP_NODELAY; default False }
     KeepAlive: Boolean; { SO_KEEPALIVE; default False }
+    OnControl: TAsyncTcpDialControl;
+    OnControlContext: Pointer;
+    OnResolve: TAsyncTcpDialResolve;
+    OnResolveContext: Pointer;
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
     AContext: Pointer);
-
-  { Lab / advanced: inject DNS stream events without real getaddrinfo.
-    FeedAddresses / SignalDnsDone are posted onto the loop thread. }
-  IAsyncTcpDialDnsFeed = interface
-    ['{A7C3E91D-4B2F-4E8A-9D1C-6F0B5A8E3D27}']
-    procedure FeedAddresses(const AAddrs: array of TNetAddress);
-    procedure SignalDnsDone(AError: Int32);
-  end;
 
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
 
@@ -152,6 +166,7 @@ type
     FDialStarted: Boolean;
     FOverallBound: Boolean;
     FFeedNotify: TAsyncTcpDialDnsFeed; { non-owning; cleared before Free }
+    FFeedHold: IAsyncTcpDialDnsFeed; { keeps OnResolve/DnsFeed object alive }
     procedure OrderAddresses;
     procedure EnsureOverallTimer;
     procedure AppendAddresses(const ANew: array of TNetAddress);
@@ -207,6 +222,10 @@ begin
   Result.LocalAddr.IsIPv6 := False;
   Result.NoDelay := False;
   Result.KeepAlive := False;
+  Result.OnControl := nil;
+  Result.OnControlContext := nil;
+  Result.OnResolve := nil;
+  Result.OnResolveContext := nil;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -321,6 +340,7 @@ begin
     FFeedNotify.DetachDialer;
     FFeedNotify := nil;
   end;
+  FFeedHold := nil;
 end;
 
 destructor TAsyncTcpDialer.Destroy;
@@ -593,6 +613,7 @@ var
   LRemote: TNetAddress;
   LLocalSa: TPlatformSockAddr;
   LRes: Int32;
+  LCtrlErr: Int32;
 begin
   Result := False;
   if (AIndex < 0) or (AIndex >= Length(FAddrs)) then
@@ -654,6 +675,24 @@ begin
       platform_socket_close(LAtt^.Fd);
       Dispose(LAtt);
       FLastError := -LRes;
+      Exit;
+    end;
+  end;
+
+  { Control hook before connect (Go Dialer.Control subset). }
+  if Assigned(FOptions.OnControl) then
+  begin
+    LCtrlErr := 0;
+    FOptions.OnControl(PtrUInt(LAtt^.Fd.Value), LRemote, FOptions.OnControlContext,
+      LCtrlErr);
+    if LCtrlErr <> 0 then
+    begin
+      platform_socket_close(LAtt^.Fd);
+      Dispose(LAtt);
+      if LCtrlErr > 0 then
+        FLastError := -LCtrlErr
+      else
+        FLastError := LCtrlErr;
       Exit;
     end;
   end;
@@ -916,6 +955,7 @@ end;
 procedure TAsyncTcpDialer.BeginWithHost(const AHost: string);
 var
   LDnsOpts: TDnsResolveOptions;
+  LFeedObj: TAsyncTcpDialDnsFeed;
 begin
   FDnsAllDone := False;
   FDialStarted := False;
@@ -923,6 +963,14 @@ begin
   EnsureOverallTimer;
   if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
+  if Assigned(FOptions.OnResolve) then
+  begin
+    LFeedObj := TAsyncTcpDialDnsFeed.Create(FLoop, Self);
+    FFeedNotify := LFeedObj;
+    FFeedHold := LFeedObj;
+    FOptions.OnResolve(AHost, FPort, FFeedHold, FOptions.OnResolveContext);
+    Exit;
+  end;
   LDnsOpts := DefaultDnsResolveOptions;
   LDnsOpts.ResolutionDelayMs := FOptions.ResolutionDelayMs;
   LDnsOpts.PreferIPv6First := FOptions.PreferIPv6First;
@@ -1087,6 +1135,7 @@ begin
   LDialer := TAsyncTcpDialer.Create(ALoop, APort, LOpts, ACallback, AContext);
   LFeedObj := TAsyncTcpDialDnsFeed.Create(ALoop, LDialer);
   LDialer.FFeedNotify := LFeedObj;
+  LDialer.FFeedHold := LFeedObj;
   LDialer.BeginWithDnsFeed;
   AFeed := LFeedObj;
   Result := True;
@@ -1102,7 +1151,8 @@ begin
   Result := False;
   if (ALoop = nil) or (not ALoop.IsValid) or (not Assigned(ACallback)) then
     Exit;
-  if AHost = '' then
+  { Empty host only allowed with OnResolve (custom resolver injects addresses). }
+  if (AHost = '') and (not Assigned(AOptions.OnResolve)) then
     Exit;
   LOpts := AOptions;
   LDialer := TAsyncTcpDialer.Create(ALoop, APort, LOpts, ACallback, AContext);

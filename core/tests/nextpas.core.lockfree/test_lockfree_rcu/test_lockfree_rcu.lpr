@@ -24,9 +24,9 @@ var
   LArgs: PRcuSynchronizeArgs;
 begin
   LArgs := PRcuSynchronizeArgs(AArg);
-  AtomicStore32(LArgs^.Started^, 1, moRelease);
+  atomic_store(LArgs^.Started^, 1, mo_release);
   LArgs^.Domain.Synchronize;
-  AtomicStore32(LArgs^.Done^, 1, moRelease);
+  atomic_store(LArgs^.Done^, 1, mo_release);
   Result := nil;
 end;
 
@@ -105,12 +105,12 @@ begin
 
     for LSpin := 1 to 1000 do
     begin
-      if AtomicLoad32(LStarted, moAcquire) <> 0 then
+      if atomic_load(LStarted, mo_acquire) <> 0 then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
     platform_thread_sleep_ns(10000000);
-    LReturnedEarly := AtomicLoad32(LDone, moAcquire) <> 0;
+    LReturnedEarly := atomic_load(LDone, mo_acquire) <> 0;
 
     LDomain.ExitRead(LGuard2);
     CheckEqual(Int64(0), Int64(platform_thread_join(LThread, LRetVal)),
@@ -118,7 +118,7 @@ begin
 
     Check(not LReturnedEarly,
       'Synchronize must not finish while a nested guard remains in the shared reader slot');
-    CheckEqual(Int32(1), AtomicLoad32(LDone, moAcquire),
+    CheckEqual(Int32(1), atomic_load(LDone, mo_acquire),
       'Synchronize must finish after the final nested guard exits');
   finally
     LDomain.Free;

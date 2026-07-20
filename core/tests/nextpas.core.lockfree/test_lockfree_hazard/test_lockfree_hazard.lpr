@@ -21,7 +21,7 @@ var
   GStressDomain: THazardDomain;
 procedure HazardReclaimProc(const AData: Pointer; const AUserData: Pointer);
 begin
-  AtomicFetchAdd32(GReclaimCount, 1, moSeqCst);
+  atomic_fetch_add(GReclaimCount, 1, mo_seq_cst);
 end;
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc;
   AArg: Pointer; const AMessage: string): Int32;
@@ -220,9 +220,9 @@ begin
   Result := nil;
   LId := GMultiDomain.RegisterThread;
   GMultiReaderId := LId;
-  AtomicStore32(GMultiReaderReady, 1, moRelease);
+  atomic_store(GMultiReaderReady, 1, mo_release);
   LReads := 0;
-  while AtomicLoad32(GMultiRetireDone, moAcquire) = 0 do
+  while atomic_load(GMultiRetireDone, mo_acquire) = 0 do
   begin
     GMultiDomain.Protect(LId, 0, Pointer(1));
     CpuPause;
@@ -232,7 +232,7 @@ begin
       CpuPause;
   end;
   GMultiDomain.UnregisterThread(LId);
-  AtomicStore32(GMultiReaderDone, 1, moRelease);
+  atomic_store(GMultiReaderDone, 1, mo_release);
 end;
 procedure TestMultiThreadProtectRetire;
 var
@@ -251,22 +251,22 @@ begin
     StartThread(LReader, @MultiThreadReader, nil, 'hazard reader thread');
     for LSpin := 1 to 1000 do
     begin
-      if AtomicLoad32(GMultiReaderReady, moAcquire) <> 0 then
+      if atomic_load(GMultiReaderReady, mo_acquire) <> 0 then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    CheckEqual(Int64(1), Int64(AtomicLoad32(GMultiReaderReady, moAcquire)),
+    CheckEqual(Int64(1), Int64(atomic_load(GMultiReaderReady, mo_acquire)),
       'reader thread must register before retire');
     for LI := 1 to 1000 do
       GMultiDomain.Retire(Pointer(PtrUInt(LI)), @HazardReclaimProc);
-    AtomicStore32(GMultiRetireDone, 1, moRelease);
+    atomic_store(GMultiRetireDone, 1, mo_release);
     for LSpin := 1 to 1000 do
     begin
-      if AtomicLoad32(GMultiReaderDone, moAcquire) <> 0 then
+      if atomic_load(GMultiReaderDone, mo_acquire) <> 0 then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    CheckEqual(Int64(1), Int64(AtomicLoad32(GMultiReaderDone, moAcquire)),
+    CheckEqual(Int64(1), Int64(atomic_load(GMultiReaderDone, mo_acquire)),
       'reader thread must finish');
     JoinThread(LReader, LRetVal, 'hazard reader thread');
     LId := GMultiDomain.RegisterThread;
