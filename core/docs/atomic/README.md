@@ -6,7 +6,7 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 
 **契约**：[`CONTRACT.md`](CONTRACT.md)
 **与 lockfree 联合主线**：[`../lockfree/roadmap-h3.md`](../lockfree/roadmap-h3.md)（H3；H2 见 [`../lockfree/roadmap-h2.md`](../lockfree/roadmap-h2.md)；R 线见 [`../lockfree/roadmap.md`](../lockfree/roadmap.md)）
-**状态**：**Maintenance + Q 线**（H3-1…H3-5 完成；对标 Go/Rust）— 见 [`../lockfree/READY.md`](../lockfree/READY.md)
+**状态**：**Maintenance preferred close-out**（H3-1…H3-5 完成；lockfree 生产 residual 0；对标 Go/Rust）— 见 [`../lockfree/READY.md`](../lockfree/READY.md)
 **对标矩阵**：[`../lockfree/parity-go-rust.md`](../lockfree/parity-go-rust.md)
 
 ## 模块分层

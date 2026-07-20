@@ -13,6 +13,7 @@ program t1_close_join_free;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
@@ -44,12 +45,12 @@ begin
     begin
       if GChannel.TrySendEx(LI, LErr) then
       begin
-        AtomicFetchAdd64(GProduced, 1, moRelaxed);
+        atomic_fetch_add_64(GProduced, 1, mo_relaxed);
         Break;
       end;
       if LErr = lfteClosed then
       begin
-        AtomicFetchAdd64(GClosedPublishHits, 1, moRelaxed);
+        atomic_fetch_add_64(GClosedPublishHits, 1, mo_relaxed);
         Exit;
       end;
       { full: yield briefly }
@@ -68,7 +69,7 @@ begin
   begin
     if GChannel.TryReceiveEx(LV, LErr) then
     begin
-      AtomicFetchAdd64(GConsumed, 1, moRelaxed);
+      atomic_fetch_add_64(GConsumed, 1, mo_relaxed);
       Continue;
     end;
     if LErr = lfteClosed then
@@ -97,7 +98,7 @@ begin
       raise EInvalidOperationError.Create('producer thread create failed');
 
     { Wait until most items are in flight, then close. }
-    while AtomicLoad64(GProduced, moAcquire) < (ITEM_COUNT div 2) do
+    while atomic_load_64(GProduced, mo_acquire) < (ITEM_COUNT div 2) do
       platform_thread_yield;
 
     WriteLn('  Close channel (mid-stream)');
