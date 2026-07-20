@@ -320,7 +320,7 @@ type
 
 **Progress（诚实）**: **分片自旋锁** 并发 map，**不是 lock-free**。`TConcurrentHashMap` 是**同一实现别名**，不是第二套算法。
 
-**生命周期**: **无 `Close` / `IsClosed`**。生产推荐：停止写入 → join 所有访问方 → `Free`。教学示例：`t2_hashmap_join_free`。（SkipList 同理：无 Close，勿 invent H3-2 契约。）
+**生命周期**（Charter C）：`Close` / `IsClosed`。Close 后 Insert/Reserve/GetOrUpdate 抛错；TryInsert/Replace 拒绝写；GetOrInsert* 仅允许已有键；Find/Remove/ForEach/Clear 仍可用。Destroy 先 Close。生产：`Close` → join → `Free`。教学示例：`t2_hashmap_join_free`。（SkipList Close 仍推迟；**非** H3-2 子集。）
 
 **设计特点**:
 - 分片锁（16 shards），每 shard 自旋锁（preferred `atomic_exchange` 路径）

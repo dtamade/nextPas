@@ -3365,6 +3365,58 @@ begin
   end;
 end;
 
+procedure TestHashMapCloseLifecycle;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+  LRes: TIntIntMap.TGetOrInsertResult;
+  LRaised: Boolean;
+  LOld: Integer;
+begin
+  LM := TIntIntMap.Create;
+  try
+    LM.Insert(1, 10);
+    LM.Insert(2, 20);
+    LM.Close;
+    Check(LM.IsClosed, 'IsClosed after Close');
+    LM.Close;
+    Check(LM.IsClosed, 'Close idempotent');
+
+    Check(LM.Find(1, LV), 'Find after Close');
+    CheckEqual(10, LV, 'value after Close');
+    Check(LM.Contains(2), 'Contains after Close');
+    Check(not LM.TryInsert(3, 30), 'TryInsert after Close fails');
+    Check(not LM.Replace(1, 11, LOld), 'Replace after Close fails');
+
+    LRes := LM.GetOrInsert(1, 99);
+    Check(LRes.Existed, 'GetOrInsert existing after Close');
+    CheckEqual(10, LRes.Value, 'GetOrInsert returns existing after Close');
+
+    LRaised := False;
+    try
+      LM.Insert(4, 40);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Insert after Close raises');
+
+    LRaised := False;
+    try
+      LRes := LM.GetOrInsert(99, 1);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'GetOrInsert missing after Close raises');
+
+    Check(LM.Remove(2), 'Remove after Close still works');
+    Check(not LM.Contains(2), 'removed after Close');
+  finally
+    LM.Free;
+  end;
+end;
+
 function ComputeDouble(const AKey: Integer): Integer;
 begin
   Inc(GComputeCallCount);
@@ -7814,6 +7866,7 @@ begin
   T.Test('HashMap Remove with old value', @TestHashMapRemoveWithOldValue);
   T.Test('HashMap Replace', @TestHashMapReplace);
   T.Test('HashMap Clear', @TestHashMapClear);
+  T.Test('HashMap Close lifecycle', @TestHashMapCloseLifecycle);
   T.Test('Selector basic recv', @TestSelectorBasic);
   T.Test('Selector send', @TestSelectorSend);
   T.Test('Selector timeout', @TestSelectorTimeout);
