@@ -80,12 +80,26 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q8 | 门面契约 + SC8 + Wine 加厚 | **Done** |
 | Q9 | 分层 facade + stress + SC9 overlay | **Done** (`main@027e9255a`+) |
 | Q10 | SC10–SC11 + DECSET 2004 paste + 密度收口 + 晋升策略 | **Done** (`main@5c7fc6dcc`+) |
-| Q11 | SC12–SC13 + bench layout/overlay + tier facade ≥12 | **本批** |
+| Q11 | SC12–SC13 + bench layout/overlay + tier facade ≥12 | **Done** (`main@3a55fc4b6`+) |
+| Q12 | SC14–16 hsplit/resilience/diff bound + 质量矩阵 | **本批** |
 | 后续 | facade **实施**晋升（scrollview/modal） | 待准入 |
 | 后续 | Truecolor DA 查询（非 env-attested） | 待协议波 |
 | 后续 | 完整 ratatui/crossterm crate 对照 | 待重依赖 harness |
 
-## 5. Facade 晋升准入标准
+## 5. 质量维度 → 证据（对标 go/rust）
+
+| 维度 | go/rust 关注点 | nextPas 证据 |
+|------|----------------|--------------|
+| Buffer diff | 脏区扫描 / 不全量退化 | SC1–SC2, **SC16**；bench Diff* |
+| Input parse | CSI 正确 + 韧性 | SC3, SC6, SC10–11, **SC15**；`test_tui_input` |
+| Layout | 面积守恒 V/H | SC4, **SC14**；bench LayoutVSplit3 / LayoutHSplit3 |
+| Protocol | Kitty / focus / paste / truecolor | SC8, SC12–13；CONTRACT §5 |
+| Wide text | CJK cell width | SC7 |
+| Overlay | transparent merge | SC9；bench OverlayMerge |
+| Facade tiers | 分层 API 契约 | core/ext/experimental facade ≥12 |
+| Frame path | 空帧生命周期 | SC5 |
+
+## 6. Facade 晋升准入标准
 
 将 full-only widget 晋升到 `ext`（或 core）前必须同时满足：
 
