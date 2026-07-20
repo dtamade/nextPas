@@ -32,7 +32,11 @@ function ExtractArgIntValue(const AArg, APrefix: string;
 function ParseFilter(const AArg: string): string;
 function ParseTag(const AArg: string): string;
 
-{ Auto-detect CLI arguments and apply to global default config. }
+{ Apply CLI arguments from an injectable argv list (tests / embedding).
+  Does not read ParamStr. Indexing is 0-based over AArgs. }
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
+
+{ Auto-detect process CLI arguments (ParamStr) and apply to global default config. }
 procedure ApplyCLIArgs;
 
 implementation
@@ -185,9 +189,15 @@ begin
   Result := ExtractArgValue(AArg, '--run');
 end;
 
-{ ── FromArgs helpers (iterate ParamCount, delegate to single-arg parsers) ── }
+function IsCacheArg(const AArg: string): Boolean;
+begin
+  Result := HasArgFlag(AArg, '--cache', '-cache');
+end;
 
-function FindArgValue(
+{ ── Injectable argv helpers (0-based open array) ─────────────────────────── }
+
+function FindArgValueIn(
+  const AArgs: array of string;
   AParseFunc: TArgStringParser;
   const ALongFlag: string
 ): string;
@@ -195,18 +205,19 @@ var
   K: Integer;
   LVal: string;
 begin
-  for K := 1 to ParamCount do
+  for K := 0 to High(AArgs) do
   begin
-    LVal := AParseFunc(ParamStr(K));
+    LVal := AParseFunc(AArgs[K]);
     if LVal <> '' then
       Exit(LVal);
-    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
-      Exit(ParamStr(K + 1));
+    if (AArgs[K] = ALongFlag) and (K < High(AArgs)) then
+      Exit(AArgs[K + 1]);
   end;
   Result := '';
 end;
 
-function FindArgInt(
+function FindArgIntIn(
+  const AArgs: array of string;
   AParseFunc: TArgIntParser;
   const ALongFlag: string;
   ADefault: Integer
@@ -215,14 +226,14 @@ var
   K: Integer;
   LVal: Integer;
 begin
-  for K := 1 to ParamCount do
+  for K := 0 to High(AArgs) do
   begin
-    LVal := AParseFunc(ParamStr(K));
+    LVal := AParseFunc(AArgs[K]);
     if LVal <> 0 then
       Exit(LVal);
-    if (ParamStr(K) = ALongFlag) and (K < ParamCount) then
+    if (AArgs[K] = ALongFlag) and (K < High(AArgs)) then
     begin
-      Result := StrToIntDef(ParamStr(K + 1), ADefault);
+      Result := StrToIntDef(AArgs[K + 1], ADefault);
       if Result < 0 then Result := 0;
       Exit;
     end;
@@ -230,179 +241,190 @@ begin
   Result := ADefault;
 end;
 
-function FindFlagInArgs(
+function FindFlagInArgsList(
+  const AArgs: array of string;
   AIsFlagFunc: TArgFlagChecker
 ): Boolean;
 var
   K: Integer;
 begin
-  for K := 1 to ParamCount do
-    if AIsFlagFunc(ParamStr(K)) then
+  for K := 0 to High(AArgs) do
+    if AIsFlagFunc(AArgs[K]) then
       Exit(True);
   Result := False;
 end;
 
-function ParseFilterFromArgs: string;
+{ ── ParamStr-backed FromArgs (process CLI) ───────────────────────────────── }
+
+function CollectParamArgs: specialize TArray<string>;
+var
+  K: Integer;
 begin
-  Result := FindArgValue(@ParseFilter, '--filter');
+  SetLength(Result, ParamCount);
+  for K := 1 to ParamCount do
+    Result[K - 1] := ParamStr(K);
 end;
 
-function ParseTagFromArgs: string;
+function ParseFilterFromArgsList(const AArgs: array of string): string;
 begin
-  Result := FindArgValue(@ParseTag, '--tag');
+  Result := FindArgValueIn(AArgs, @ParseFilter, '--filter');
 end;
 
-function ParseCountFromArgs: Integer;
+function ParseTagFromArgsList(const AArgs: array of string): string;
 begin
-  Result := FindArgInt(@ParseCount, '--count', 0);
+  Result := FindArgValueIn(AArgs, @ParseTag, '--tag');
 end;
 
-function ParseShuffleFromArgs: Integer;
+function ParseCountFromArgsList(const AArgs: array of string): Integer;
 begin
-  if FindFlagInArgs(@IsShuffleFlag) then
+  Result := FindArgIntIn(AArgs, @ParseCount, '--count', 0);
+end;
+
+function ParseShuffleFromArgsList(const AArgs: array of string): Integer;
+begin
+  if FindFlagInArgsList(AArgs, @IsShuffleFlag) then
     Exit(-1);
-  Result := FindArgInt(@ParseShuffleSeed, '--shuffle-seed', 0);
+  Result := FindArgIntIn(AArgs, @ParseShuffleSeed, '--shuffle-seed', 0);
 end;
 
-function ParseFailFastFromArgs: Boolean;
+function ParseFailFastFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsFailFastArg);
+  Result := FindFlagInArgsList(AArgs, @IsFailFastArg);
 end;
 
-function ParseListFromArgs: Boolean;
+function ParseListFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsListArg);
+  Result := FindFlagInArgsList(AArgs, @IsListArg);
 end;
 
-function ParseShortFromArgs: Boolean;
+function ParseShortFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsShortArg);
+  Result := FindFlagInArgsList(AArgs, @IsShortArg);
 end;
 
-function ParseProgressFromArgs: Boolean;
+function ParseProgressFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsProgressArg);
+  Result := FindFlagInArgsList(AArgs, @IsProgressArg);
 end;
 
-function ParseMaxFailuresFromArgs: Integer;
+function ParseMaxFailuresFromArgsList(const AArgs: array of string): Integer;
 begin
-  Result := FindArgInt(@ParseMaxFailures, '--failures-max', 0);
+  Result := FindArgIntIn(AArgs, @ParseMaxFailures, '--failures-max', 0);
 end;
 
-function ParseJsonFromArgs: Boolean;
+function ParseJsonFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsJsonArg);
+  Result := FindFlagInArgsList(AArgs, @IsJsonArg);
 end;
 
-function ParseVerboseFromArgs: Boolean;
+function ParseVerboseFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsVerboseArg);
+  Result := FindFlagInArgsList(AArgs, @IsVerboseArg);
 end;
 
-function ParseRunTimeoutFromArgs: Integer;
+function ParseRunTimeoutFromArgsList(const AArgs: array of string): Integer;
 begin
-  Result := FindArgInt(@ParseRunTimeout, '--timeout', 0);
+  Result := FindArgIntIn(AArgs, @ParseRunTimeout, '--timeout', 0);
 end;
 
-function ParseBenchFromArgs: string;
+function ParseBenchFromArgsList(const AArgs: array of string): string;
 begin
-  Result := FindArgValue(@ParseBenchPattern, '--bench');
+  Result := FindArgValueIn(AArgs, @ParseBenchPattern, '--bench');
 end;
 
-function ParseBenchTimeFromArgs: Integer;
+function ParseBenchTimeFromArgsList(const AArgs: array of string): Integer;
 begin
-  Result := FindArgInt(@ParseBenchTime, '--benchtime', 0);
+  Result := FindArgIntIn(AArgs, @ParseBenchTime, '--benchtime', 0);
 end;
 
-function ParseBenchMemFromArgs: Boolean;
+function ParseBenchMemFromArgsList(const AArgs: array of string): Boolean;
 begin
-  Result := FindFlagInArgs(@IsBenchMemArg);
+  Result := FindFlagInArgsList(AArgs, @IsBenchMemArg);
 end;
 
-function ParseBenchSaveFromArgs: string;
+function ParseBenchSaveFromArgsList(const AArgs: array of string): string;
 begin
-  Result := FindArgValue(@ParseBenchSavePattern, '--benchsave');
+  Result := FindArgValueIn(AArgs, @ParseBenchSavePattern, '--benchsave');
 end;
 
-function ParseBenchCompareFromArgs: string;
+function ParseBenchCompareFromArgsList(const AArgs: array of string): string;
 begin
-  Result := FindArgValue(@ParseBenchComparePattern, '--benchcompare');
+  Result := FindArgValueIn(AArgs, @ParseBenchComparePattern, '--benchcompare');
 end;
 
-function IsCacheArg(const AArg: string): Boolean;
+function ParseRunFromArgsList(const AArgs: array of string): string;
 begin
-  Result := HasArgFlag(AArg, '--cache', '-cache');
+  Result := FindArgValueIn(AArgs, @ParseRunPattern, '--run');
 end;
 
-function ParseRunFromArgs: string;
-begin
-  Result := FindArgValue(@ParseRunPattern, '--run');
-end;
+{ ── ApplyCLIArgsFrom / ApplyCLIArgs ──────────────────────────────────────── }
 
-{ ── ApplyCLIArgs ─────────────────────────────────────────────────────────── }
-
-procedure ApplyCLIArgs;
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
 var
   LCount, LShuffleSeed, LMaxFail, LRunTimeout, LBenchTime: Integer;
   LBenchPattern, LRunPattern, LBenchSave, LBenchCompare: string;
 begin
   if GetTestFilter = '' then
-    SetTestFilter(ParseFilterFromArgs);
+    SetTestFilter(ParseFilterFromArgsList(AArgs));
   if GetTagFilter = '' then
-    SetTagFilter(ParseTagFromArgs);
+    SetTagFilter(ParseTagFromArgsList(AArgs));
   if GetRunPattern(DefaultConfig) = '' then
   begin
-    LRunPattern := ParseRunFromArgs;
+    LRunPattern := ParseRunFromArgsList(AArgs);
     if LRunPattern <> '' then
       SetDefaultRunPattern(LRunPattern);
   end;
   if GetRepeatAllCount(DefaultConfig) = 0 then
   begin
-    LCount := ParseCountFromArgs;
+    LCount := ParseCountFromArgsList(AArgs);
     if LCount > 0 then
       SetDefaultRepeatAllCount(LCount);
   end;
-  LShuffleSeed := ParseShuffleFromArgs;
+  LShuffleSeed := ParseShuffleFromArgsList(AArgs);
   if LShuffleSeed <> 0 then
     SetDefaultShuffleSeed(LShuffleSeed);
-  if ParseFailFastFromArgs then
+  if ParseFailFastFromArgsList(AArgs) then
     SetDefaultFailFast(True);
-  if ParseListFromArgs then
+  if ParseListFromArgsList(AArgs) then
     SetDefaultListMode(True);
-  if ParseShortFromArgs then
+  if ParseShortFromArgsList(AArgs) then
     SetDefaultShortMode(True);
-  if ParseProgressFromArgs then
+  if ParseProgressFromArgsList(AArgs) then
     SetDefaultShowProgress(True);
-  LMaxFail := ParseMaxFailuresFromArgs;
+  LMaxFail := ParseMaxFailuresFromArgsList(AArgs);
   if LMaxFail > 0 then
     SetDefaultMaxFailures(LMaxFail);
-  if ParseJsonFromArgs then
+  if ParseJsonFromArgsList(AArgs) then
     SetDefaultJsonOutput(True);
-  if ParseVerboseFromArgs then
+  if ParseVerboseFromArgsList(AArgs) then
     SetDefaultVerboseMode(True);
-  LRunTimeout := ParseRunTimeoutFromArgs;
+  LRunTimeout := ParseRunTimeoutFromArgsList(AArgs);
   if LRunTimeout > 0 then
     SetDefaultRunTimeoutSec(LRunTimeout);
-  LBenchPattern := ParseBenchFromArgs;
+  LBenchPattern := ParseBenchFromArgsList(AArgs);
   if LBenchPattern <> '' then
   begin
     SetDefaultBenchEnabled(True);
     SetDefaultFilterPattern(LBenchPattern);
   end;
-  LBenchTime := ParseBenchTimeFromArgs;
+  LBenchTime := ParseBenchTimeFromArgsList(AArgs);
   if LBenchTime > 0 then
     SetDefaultBenchTimeMs(LBenchTime);
-  if ParseBenchMemFromArgs then
+  if ParseBenchMemFromArgsList(AArgs) then
     SetDefaultBenchMem(True);
-  LBenchSave := ParseBenchSaveFromArgs;
+  LBenchSave := ParseBenchSaveFromArgsList(AArgs);
   if LBenchSave <> '' then
     SetDefaultBenchSaveFile(LBenchSave);
-  LBenchCompare := ParseBenchCompareFromArgs;
+  LBenchCompare := ParseBenchCompareFromArgsList(AArgs);
   if LBenchCompare <> '' then
     SetDefaultBenchCompareFile(LBenchCompare);
-  if FindFlagInArgs(@IsCacheArg) then
+  if FindFlagInArgsList(AArgs, @IsCacheArg) then
     SetDefaultCacheEnabled(True);
 end;
 
-end.
+procedure ApplyCLIArgs;
+begin
+  ApplyCLIArgsFrom(CollectParamArgs);
+end;
 
+end.

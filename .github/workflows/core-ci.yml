@@ -161,11 +161,16 @@ jobs:
           # Documented 8-gate set (ROADMAP D2.b). truth=macos-focused-runtime for that set only.
           bash scripts/platform-macos-ci-matrix.sh
 
-      - name: Async host smoke (dial/resolve/kqueue compile; best-effort)
+      - name: Kqueue runtime smoke (fail-closed on Darwin)
+        run: |
+          # L0: pbKqueue Create/Poll on real macOS host. skip is treated as fail.
+          ASYNC_HOST_GATES=kqueue-runtime ASYNC_HOST_STRICT=1 bash scripts/async-host-matrix.sh
+
+      - name: Async dial/resolve matrix (best-effort)
         continue-on-error: true
         run: |
-          # truth=async-host-matrix (not full macOS async parity). Dial + ResolveEx + kqueue compile gate.
-          NEXTPAS_ASYNC_HOST_BEST_EFFORT=1 bash scripts/async-host-matrix.sh
+          # L1: dial + resolve + kqueue compile; not full macOS async parity.
+          NEXTPAS_ASYNC_HOST_BEST_EFFORT=1 ASYNC_HOST_GATES=dial-resolve bash scripts/async-host-matrix.sh
 
       - name: Run tests (best-effort inventory; non-promotional)
         continue-on-error: true

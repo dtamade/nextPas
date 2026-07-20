@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-20
-> 版本：M3+B1–B4 + Q1–Q9（并行 DNS + RFC HE 计时 + host matrix）
+> 版本：M3+B1–B4 + Q1–Q11（严格 CAD HE + DNS-race + kqueue L0 fail-closed）
 
 ## 模块概览
 
@@ -140,9 +140,10 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. DNS A/AAAA 并行查询竞速（仍一次 resolve_stream 可二期）
-2. **原生 Windows / macOS host runner** 升格证据层
-3. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
+1. 更完整的 RFC8305 DNS-RTT × SYN 实验室计时矩阵（当前为严格 CAD + race 子集）
+2. macOS dial/resolve host matrix 从 best-effort 升 fail-closed（待 CI 稳定）
+3. 原生 Windows host runner 升格证据层
+4. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
 
 ## 相关文档
 

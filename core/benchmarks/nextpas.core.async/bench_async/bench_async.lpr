@@ -1,6 +1,7 @@
 program bench_async;
 {$I nextpas.core.settings.inc}
-uses nextpas.core.bench, nextpas.core.bench.intf,
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.platform.pipe, nextpas.core.platform.posix.ffi,
   nextpas.core.async.base, nextpas.core.async.timer,
@@ -29,9 +30,15 @@ begin
   for LI := 1 to TIMER_COUNT do begin LH := LHeap.ScheduleAfter(TDuration.FromSeconds(60), nil, nil); LHeap.Cancel(LH); end;
   LHeap.Free;
 end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
-  LSuite := TBenchSuite.Create('async');
-  LSuite.Add('TimerSchedule', @BenchTimerSchedule).Add('TimerFire', @BenchTimerFire).Add('TimerCancel', @BenchTimerCancel);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('async')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('TimerSchedule', @BenchTimerSchedule).Add('TimerFire', @BenchTimerFire).Add('TimerCancel', @BenchTimerCancel)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-async.json');
 end.

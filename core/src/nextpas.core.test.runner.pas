@@ -258,6 +258,8 @@ function ExtractArgIntValue(const AArg, APrefix: string;
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
 function ParseTag(const AArg: string): string;
+{ Apply CLI flags from an injectable argv list (not ParamStr). }
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
 { Check if a test entry matches a tag filter. Empty filter = match all. }
 function MatchesTagFilter(const AEntryTags: specialize TArray<string>;
   const ATagFilter: string): Boolean;
@@ -305,6 +307,11 @@ begin Result := nextpas.core.test.runner.cli.ParseFilter(AArg); end;
 
 function ParseTag(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseTag(AArg); end;
+
+procedure ApplyCLIArgsFrom(const AArgs: array of string);
+begin
+  nextpas.core.test.runner.cli.ApplyCLIArgsFrom(AArgs);
+end;
 
 { Global registry of all heap-allocated method stubs from DiscoverTests.
   Stubs are disposed by CleanupTableAllocations (with FCleanupDone guard)

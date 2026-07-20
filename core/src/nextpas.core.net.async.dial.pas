@@ -1,8 +1,9 @@
 unit nextpas.core.net.async.dial;
 {**
  * Concurrent Happy Eyeballs (RFC8305 subset) over TAsyncLoop.
- * Staggered multi-A / dual-stack dial: MaxInFlight attempts in parallel,
- * ConnectionAttemptDelay between starts; first success wins.
+ * Staggered multi-A / dual-stack dial: MaxInFlight caps concurrent SYNs;
+ * ConnectionAttemptDelayMs is the start-to-start gap (strict CAD; not a burst
+ * fill of MaxInFlight). CAD=0 allows immediate refill after failure / next start.
  * DNS uses AsyncResolveStream (parallel A/AAAA + Resolution Delay gate),
  * then dials as families arrive (DNS-race-while-dialing subset).
  * AsyncTcpConnect remains HE-lite (sequential sync). Use AsyncTcpDial for race.
@@ -27,15 +28,21 @@ const
   HE_DEFAULT_FIRST_ADDRESS_FAMILY_COUNT = 1;
 
 type
+  { Observability hook (tests): fired on loop thread after AsyncConnect submit. }
+  TAsyncTcpDialAttemptStart = procedure(AIndex: Integer; const AAddr: TNetAddress;
+    AContext: Pointer);
+
   TAsyncTcpDialOptions = record
-    ConnectionAttemptDelayMs: UInt32; { default 250 }
-    MaxInFlight: UInt32;              { default 2 }
+    ConnectionAttemptDelayMs: UInt32; { default 250; 0 = no delay between starts }
+    MaxInFlight: UInt32;              { default 2; 0 => default }
     OverallDeadline: TDeadline;       { Infinite = no overall timer }
     Token: IAsyncCancellationToken;   { optional }
     PreferIPv6First: Boolean;         { first family in interleaved order }
     InterleaveFamilies: Boolean;      { default True: vX[0],vY[0],vX[1]... }
     FirstAddressFamilyCount: UInt32;  { default 1: lead N of preferred family }
     ResolutionDelayMs: UInt32;        { DNS Resolution Delay; default 50 }
+    OnAttemptStart: TAsyncTcpDialAttemptStart; { optional; default nil }
+    OnAttemptStartContext: Pointer;
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -144,6 +151,8 @@ begin
   Result.InterleaveFamilies := True;
   Result.FirstAddressFamilyCount := HE_DEFAULT_FIRST_ADDRESS_FAMILY_COUNT;
   Result.ResolutionDelayMs := HE_DEFAULT_RESOLUTION_DELAY_MS;
+  Result.OnAttemptStart := nil;
+  Result.OnAttemptStartContext := nil;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -159,11 +168,10 @@ begin
   FLoop := ALoop;
   FPort := APort;
   FOptions := AOptions;
-  if FOptions.ConnectionAttemptDelayMs = 0 then
-    FOptions.ConnectionAttemptDelayMs := HE_DEFAULT_CONNECTION_ATTEMPT_DELAY_MS;
+  { CAD=0 is intentional (immediate refill / no start gap). Only MaxInFlight
+    treats 0 as "use default". FirstAddressFamilyCount 0 = no lead prefix. }
   if FOptions.MaxInFlight = 0 then
     FOptions.MaxInFlight := HE_DEFAULT_MAX_IN_FLIGHT;
-  { FirstAddressFamilyCount: 0 means "no lead prefix" (pure interleave). }
   FUserCb := ACallback;
   FUserCtx := AContext;
   FNextIndex := 0;
@@ -494,6 +502,8 @@ begin
     FLastError := -ECONNREFUSED_LINUX;
     Exit;
   end;
+  if Assigned(FOptions.OnAttemptStart) then
+    FOptions.OnAttemptStart(AIndex, LRemote, FOptions.OnAttemptStartContext);
   Result := True;
 end;
 
@@ -501,14 +511,22 @@ procedure TAsyncTcpDialer.StartNextAttempts;
 var
   LGuard: Integer;
 begin
+  { RFC8305 CAD: at most one successful AsyncConnect submit per call.
+    Synchronous setup failures may advance to the next address without waiting
+    CAD (no SYN was sent). }
   LGuard := 0;
   while (AtomicLoad32(FFinished, moAcquire) = 0) and
         (FInFlight < Int32(FOptions.MaxInFlight)) and
         (FNextIndex < Length(FAddrs)) and
         (LGuard < Length(FAddrs) + 2) do
   begin
-    StartAttempt(FNextIndex);
     Inc(LGuard);
+    if StartAttempt(FNextIndex) then
+    begin
+      KickStagger;
+      MaybeCompleteIfIdle;
+      Exit;
+    end;
   end;
   KickStagger;
   MaybeCompleteIfIdle;
@@ -520,9 +538,12 @@ begin
     Exit;
   if FNextIndex >= Length(FAddrs) then
     Exit;
-  if FInFlight >= Int32(FOptions.MaxInFlight) then
-    Exit;
   if FStaggerTimer.IsValid then
+    Exit;
+  { CAD=0 + at MaxInFlight: do not arm 0-delay timers (busy-spin). Refill from
+    OnAttemptDone (CAD=0 path) when a slot frees. CAD>0 may recheck after delay. }
+  if (FInFlight >= Int32(FOptions.MaxInFlight)) and
+     (FOptions.ConnectionAttemptDelayMs = 0) then
     Exit;
   FStaggerTimer := FLoop.ScheduleEx(
     TDuration.FromMilliseconds(FOptions.ConnectionAttemptDelayMs),
@@ -674,8 +695,11 @@ begin
   if AtomicLoad32(FFinished, moAcquire) <> 0 then
     Exit;
 
-  StartAttempt(0);
-  KickStagger;
+  { First attempt immediate; further starts only via CAD stagger (or CAD=0 path). }
+  if StartAttempt(0) then
+    KickStagger
+  else
+    StartNextAttempts;
   MaybeCompleteIfIdle;
 end;
 
@@ -705,7 +729,17 @@ begin
   if AtomicLoad32(FFinished, moAcquire) <> 0 then
     Exit;
 
-  StartNextAttempts;
+  MaybeCompleteIfIdle;
+  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+    Exit;
+  if FNextIndex >= Length(FAddrs) then
+    Exit;
+  { Keep CAD between starts: only CAD=0 refills immediately on failure.
+    Otherwise the stagger timer armed at the previous start opens the next SYN. }
+  if FOptions.ConnectionAttemptDelayMs = 0 then
+    StartNextAttempts
+  else
+    KickStagger;
 end;
 
 procedure TAsyncTcpDialer.BeginWithHost(const AHost: string);

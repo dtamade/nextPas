@@ -443,7 +443,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### Kqueue (B3)
 - `pbKqueue` readiness backend wired into `TPoller` for macOS/FreeBSD (`TKqueueReactor`).
-- Evidence: source-contract + `test_async_kqueue_compile_gate` (FORCE_HOST); not host-runtime proven here.
+- Evidence: source-contract + `test_async_kqueue_compile_gate` (FORCE_HOST) + `test_async_kqueue_runtime_smoke`.
+- **CI L0 (Q11)**: macOS job runs `ASYNC_HOST_GATES=kqueue-runtime` **fail-closed** (must print `kqueue-runtime-smoke=pass`; skip fails on Darwin).
+- Linux host: runtime smoke exits skip (not a failure). Still not a claim of full macOS async I/O parity.
 
 ### HE-lite dial (Q6)
 - `platform_socket_resolve_stream`: getaddrinfo multi-A (cap 16), AF_UNSPEC.
@@ -460,13 +462,19 @@ atsCancelled: TAsyncTaskStatus = 5;
 ### Parallel DNS + RFC timer knobs (Q9)
 - `platform_socket_resolve_stream_family(AHost, AFamily, ...)`: multi-A for AF_INET / AF_INET6 / AF_UNSPEC.
 - `AsyncResolveEx` / `DefaultDnsResolveOptions`: parallel A + AAAA workers + **ResolutionDelayMs** (default 50); `AsyncResolve` remains single AF_UNSPEC path.
-- Dial options: `FirstAddressFamilyCount` (default 1), `ResolutionDelayMs` (default 50); dial host path uses `AsyncResolveEx`.
+- Dial options: `FirstAddressFamilyCount` (default 1), `ResolutionDelayMs` (default 50).
 - OrderAddresses: optional lead N of preferred family, then interleave or bucket remainder.
-- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS best-effort; not full-host parity.
-- Still **not** DNS-race-while-dialing (Happy Eyeballs DNS race phase 2).
+- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS dial/resolve best-effort.
 
 ### DNS-race-while-dialing (Q10)
 - `AsyncResolveStream`: parallel A/AAAA; after Resolution Delay gate, posts per-family batches then one terminal `AllDone`.
 - `AsyncTcpDial` host path uses Stream: starts HE as soon as first family addresses arrive; late family addresses append/interleave into remaining attempts.
 - `MaybeCompleteIfIdle` waits for `FDnsAllDone` before failing empty.
-- Still not a full RFC8305 resolver-controlled interleave of DNS RTT with TCP SYN timing matrix.
+- State machine: stream family batch → first non-empty `StartDialing`+`OrderAddresses` once → late family `AppendAddresses` into untried suffix → complete only after `AllDone` when idle.
+
+### Strict CAD + timing observability (Q11)
+- **Connection Attempt Delay** is start-to-start: each successful `AsyncConnect` submit is followed by CAD before the next start; **MaxInFlight only caps concurrency** (no burst-fill while loop).
+- `ConnectionAttemptDelayMs=0` allows immediate refill after failure (and 0-delay arm when under MaxInFlight); CAD=0 never arms 0-delay timers while at MaxInFlight (avoids busy-spin).
+- Optional observability: `OnAttemptStart` / `OnAttemptStartContext` (tests; default nil).
+- Evidence: `StrictCadDoesNotBurstStart`, `CadZeroAllowsImmediateRefill`, `FirstFamilyAttemptOrder` in `test_net_async_dial` (0 leak).
+- Still **not** a laboratory DNS-RTT × SYN full RFC8305 timing matrix.

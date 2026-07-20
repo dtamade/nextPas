@@ -1,6 +1,7 @@
 program bench_text;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf,
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.text.view, nextpas.core.text.number,
   nextpas.core.text.escape, nextpas.core.text.scan, nextpas.core.text.utf8,
   nextpas.core.text.builder, nextpas.core.text.conv;
@@ -26,11 +27,17 @@ procedure BenchTrimLeft(const ACtx: IBenchContext);
 const DATA = '   hello world   ';
 var LS: string;
 begin LS := TrimLeft(DATA); GSink := GSink xor UInt64(Length(LS)); end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
   GSink := 0;
-  LSuite := TBenchSuite.Create('text');
-  LSuite.Add('IndexOf', @BenchIndexOf).Add('IntToStr', @BenchIntToStr).Add('UIntToStr', @BenchUIntToStr)
-    .Add('HexStr', @BenchHexStr).Add('EscapeHtml', @BenchEscapeHtml).Add('TrimLeft', @BenchTrimLeft);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('text')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('IndexOf', @BenchIndexOf).Add('IntToStr', @BenchIntToStr).Add('UIntToStr', @BenchUIntToStr)
+    .Add('HexStr', @BenchHexStr).Add('EscapeHtml', @BenchEscapeHtml).Add('TrimLeft', @BenchTrimLeft)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-text.json');
 end.

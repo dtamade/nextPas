@@ -3,8 +3,10 @@ program bench_encoding;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.bench,
+  nextpas.core.time.base,
   nextpas.core.encoding.base64,
   nextpas.core.encoding.hex;
 
@@ -68,11 +70,16 @@ begin
   WriteLn('=== Encoding Benchmark (data=', DATA_SIZE, ' bytes) ===');
   WriteLn;
   LResults := TBenchSuite.Create('Base64')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
     .AddLoop('Base64.Encode', @BenchBase64Encode)
     .AddLoop('Base64.Decode', @BenchBase64Decode)
     .AddLoop('Hex.Encode', @BenchHexEncode)
     .AddLoop('Hex.Decode', @BenchHexDecode)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-encoding.json');
   if GSink < 0 then Write('');
 end.

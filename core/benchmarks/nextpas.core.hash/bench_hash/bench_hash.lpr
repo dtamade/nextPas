@@ -8,9 +8,11 @@ program bench_hash;
 {$Q-}{$R-}
 
 uses
+  SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.intf,
   nextpas.core.base,
+  nextpas.core.time.base,
   nextpas.core.hash;
 
 const
@@ -62,13 +64,18 @@ begin
 end;
 
 var
-  LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
   InitData;
-  LSuite := TBenchSuite.Create('hash');
-  LSuite
+  LResults := TBenchSuite.Create('hash')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
     .Add('SHA256/1MB', @BenchSHA256)
     .Add('MD5/1MB', @BenchMD5)
-    .Add('SHA1/1MB', @BenchSHA1);
-  WriteLn(LSuite.Run.PrintToConsole);
+    .Add('SHA1/1MB', @BenchSHA1)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-hash.json');
 end.

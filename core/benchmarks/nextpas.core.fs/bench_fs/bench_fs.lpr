@@ -1,6 +1,7 @@
 program bench_fs;
 {$I nextpas.core.settings.inc}
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.io.intf,
@@ -74,15 +75,21 @@ begin
 end;
 
 var
-  LSuite: IBenchSuite;
+  LResults: IBenchResults;
 begin
   GTmpDir := FsGetTempDir;
   GSink := 0;
-  LSuite := TBenchSuite.Create('fs');
-  LSuite.Add('SeqWrite/64KB', @BenchSeqWrite64KB)
+  LResults := TBenchSuite.Create('fs')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('SeqWrite/64KB', @BenchSeqWrite64KB)
     .Add('SeqRead/64KB', @BenchSeqRead64KB)
     .Add('FileExists', @BenchFileExists)
     .Add('FileSize', @BenchFileSize)
-    .Add('ReadAll/64KB', @BenchReadAll64KB);
-  WriteLn(LSuite.Run.PrintToConsole);
+    .Add('ReadAll/64KB', @BenchReadAll64KB)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-fs.json');
 end.

@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.12c
+**版本**：v8.13
 
 ---
 
@@ -386,10 +386,20 @@ end;
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| `IExpectation` 按类型拆分（`IStringExpectation` / `INumericExpectation` 等） | **暂缓 (P3)** | 向后兼容风险高；`RequireKind` 运行时检查已覆盖类型误用。触发：v9 major 或显式 breaking 窗口，需迁移指南 + consumer 扫描。 |
-| 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
+| CLI 可注入 argv（`ApplyCLIArgsFrom`） | **done (v8.13)** | 与 ParamStr 解耦，表驱动可测 |
+| perf 跨机硬门禁入库 | **不做** | 仅软策略：`PERF_SKIP` / host baseline；跨 OS 数字不作默认 CI fail |
+| SoftFail / CheckSoft | **暂缓** | Check=Fatal 钉死；opt-in Soft 需显式产品拍板 |
+| `IExpectation` 按类型拆分 | **暂缓 (v9)** | 兼容风险高；`RequireKind` 已覆盖类型误用 |
+| TSAN | **阻塞** | 无 FPC 一体化 ThreadSanitizer 路径；靠契约测与原子压力 |
+| 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.13 (2026-07-20) — CLI 可注入 argv + perf 软跨机策略
+
+- **ApplyCLIArgsFrom**：argv 与 ParamStr 解耦；表驱动可测；`ApplyCLIArgs` 包装进程参数
+- **perf**：`PERF_BASELINE` / `PERF_HOST_TAG` / `PERF_SKIP`；跨 OS 不设默认硬门禁
+- **deferred 维持**：SoftFail（需拍板）、IExpectation 拆分（v9）、TSAN、compiler coverage
 
 ### v8.12c (2026-07-20) — shrink 第二波 + 规模 ≥2500
 
