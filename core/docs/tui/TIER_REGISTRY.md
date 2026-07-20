@@ -73,6 +73,7 @@ Default core does not own:
   - `nextpas.core.tui.widget.modal`      (Phase B: stable overlay shell)
   - `nextpas.core.tui.widget.dialog`     (Idle 单点：确认/取消壳)
   - `nextpas.core.tui.widget.split_pane` (Idle 单点：双栏布局)
+  - `nextpas.core.tui.widget.select`     (Idle 单点：表单单选)
 
 Use `ext` when you need:
 
@@ -82,7 +83,7 @@ Use `ext` when you need:
 - panel/grid orchestration
 - stable theme presets
 - task/frame-budget integration
-- scrollable viewport (`TScrollView`), modal shell (`TModal`), dialog (`TDialog`), and split (`TSplitPane`)
+- scrollable viewport (`TScrollView`), modal shell (`TModal`), dialog (`TDialog`), split (`TSplitPane`), and select (`TSelect`)
 
 ## Keep `nextpas.core.tui.experimental` opt-in
 
@@ -115,7 +116,6 @@ The current full-only advanced widget families include:
 - `widget.menu`
 - `widget.popover`
 - `widget.tooltip`
-- `widget.select`
 - `widget.calendar`
 - `widget.breadcrumb`
 - `widget.statusbar`
@@ -146,7 +146,7 @@ Before promoting a full-only widget family:
 4. Reject fixtures prove the symbol does not leak into the wrong tier
 5. Explicit product confirmation（B3 后默认停止批量晋升；Idle 仅单点）
 
-已晋升 ext：`scrollview`、`modal`（Phase B1）、`dialog`、`split_pane`（Idle 单点）。
-候选剩余：`select`（按需，非默认）。
+已晋升 ext：`scrollview`、`modal`（Phase B1）、`dialog`、`split_pane`、`select`（Idle 单点；B3 候选表清空）。
+候选剩余：无（B3 表已尽；后续晋升须单独产品确认）。
 
 See `PARITY-GO-RUST.md` §5 与 `ROADMAP.md` B3。
