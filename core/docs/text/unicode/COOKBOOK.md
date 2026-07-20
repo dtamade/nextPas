@@ -303,10 +303,21 @@ P := UnicodeSegmenter.NextLine(Text, P);
 P := NextLineBreak(Text, P);
 ```
 
-## IDNA 域名（P2-5）
+## Bidi 视觉序（TUI RTL，P2-3）
 
 ```pascal
 uses nextpas.core.text.unicode;
-ACE := IDNAToASCII('münchen.de');
-Uni := IDNAToUnicode(ACE);
+
+// 完整解析：段落等级 + levels + VisualToLogical
+R := ResolveBidi(MixedHebrewEnglish, 2); // auto
+// R.VisualToLogical[vis] = logical codepoint index
+
+// 仅有 levels 时重排
+Map := ReorderBidiVisually(R.Levels);
+
+// 逻辑 → 视觉
+L2V := InvertBidiIndexMap(R.VisualToLogical, Length(R.Levels));
+
+// 显示串：按视觉序拼 UTF-8（不含 L3 镜像）
+Display := ApplyBidiVisualOrder(MixedHebrewEnglish, 2);
 ```

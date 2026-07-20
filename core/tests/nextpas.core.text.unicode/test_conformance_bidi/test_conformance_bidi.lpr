@@ -7,10 +7,22 @@ program test_conformance_bidi;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.bidi;
+
+
+function StrToIntDefLocal(const S: string): Integer;
+var
+  V: Int64;
+begin
+  if TryStrToInt(S, V) then
+    Result := Integer(V)
+  else
+    Result := 0;
+end;
 
 var
   T: TTestSuite;
@@ -75,8 +87,9 @@ end;
 
 procedure TestBidiAbstract;
 var
+  LLines: TStringArray;
+  LLineIdx: Integer;
   LPath: string;
-  LFile: Text;
   LLine, LLevelsLine, LReorderLine: string;
   LLineNo, LChecked, LFail, I, N, NT, Bitset, Dir: Integer;
   LToks: array[0..255] of string;
@@ -92,28 +105,26 @@ begin
   LPath := ResolveFixture('bidi_test.txt');
   Check(FileExists(LPath), 'fixture exists: ' + LPath);
 
-  Assign(LFile, LPath);
-  Reset(LFile);
+  LLines := ReadFileLines(LPath);
   LLineNo := 0;
   LChecked := 0;
   LFail := 0;
   LLevelsLine := '';
   LReorderLine := '';
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
       if (Length(LLine) >= 8) and (Copy(LLine, 1, 8) = '@Levels:') then
       begin
-        LLevelsLine := Trim(Copy(LLine, 9, MaxInt));
+        LLevelsLine := TextTrim(Copy(LLine, 9, High(Integer)));
         Continue;
       end;
       if (Length(LLine) >= 9) and (Copy(LLine, 1, 9) = '@Reorder:') then
       begin
-        LReorderLine := Trim(Copy(LLine, 10, MaxInt));
+        LReorderLine := TextTrim(Copy(LLine, 10, High(Integer)));
         Continue;
       end;
       if LLine[1] = '@' then
@@ -122,9 +133,9 @@ begin
       LSemi := Pos(';', LLine);
       if LSemi = 0 then
         Continue;
-      LInput := Trim(Copy(LLine, 1, LSemi - 1));
-      LBits := Trim(Copy(LLine, LSemi + 1, MaxInt));
-      Bitset := StrToIntDef(LBits, 0);
+      LInput := TextTrim(Copy(LLine, 1, LSemi - 1));
+      LBits := TextTrim(Copy(LLine, LSemi + 1, High(Integer)));
+      Bitset := StrToIntDefLocal(LBits);
 
       ParseTokens(LInput, LToks, N);
       SetLength(LCls, N);
@@ -135,7 +146,7 @@ begin
       end;
 
       ParseTokens(LLevelsLine, LToks, NT);
-      CheckEqual(Int64(N), Int64(NT), Format('levels count line %d', [LLineNo]));
+      CheckEqual(Int64(N), Int64(NT), TextFormat('levels count line %d', [LLineNo]));
       SetLength(LExpLevels, N);
       for I := 0 to N - 1 do
         if LToks[I] = 'x' then
@@ -184,18 +195,15 @@ begin
         begin
           Inc(LFail);
           if LFail <= 15 then
-            WriteLn(Format('FAIL line %d dir=%d input=%s', [LLineNo, Dir, LInput]));
+            WriteLn(TextFormat('FAIL line %d dir=%d input=%s', [LLineNo, Dir, LInput]));
         end;
         Inc(LChecked);
       end;
-    end;
-  finally
-    Close(LFile);
   end;
 
-  WriteLn(Format('checked=%d fail=%d pass=%d', [LChecked, LFail, LChecked - LFail]));
-  CheckEqual(Int64(0), Int64(LFail), Format('bidi abstract failures: %d', [LFail]));
-  Check(LChecked > 1000, Format('expected many rows, got %d', [LChecked]));
+  WriteLn(TextFormat('checked=%d fail=%d pass=%d', [LChecked, LFail, LChecked - LFail]));
+  CheckEqual(Int64(0), Int64(LFail), TextFormat('bidi abstract failures: %d', [LFail]));
+  Check(LChecked > 1000, TextFormat('expected many rows, got %d', [LChecked]));
 end;
 
 begin

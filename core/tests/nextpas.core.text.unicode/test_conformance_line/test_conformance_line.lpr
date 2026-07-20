@@ -11,7 +11,8 @@ program test_conformance_line;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
@@ -204,12 +205,12 @@ begin
         Continue;
 
       LPipe := Pos('|', LLine);
-      Check(LPipe > 0, Format('missing | line %d', [LLineNo]));
+      Check(LPipe > 0, TextFormat('missing | line %d', [LLineNo]));
 
       ParseCpList(Copy(LLine, 1, LPipe - 1), LCps, LCpCount);
       ParseBreakFlags(Copy(LLine, LPipe + 1, MaxInt), LExp, LFlagCount);
       CheckEqual(Int64(LCpCount + 1), Int64(LFlagCount),
-        Format('flag count line %d', [LLineNo]));
+        TextFormat('flag count line %d', [LLineNo]));
 
       LText := BuildUtf8(LCps, LCpCount);
       ObservedLineBreaks(LText, LCpCount, LObs);
@@ -236,7 +237,7 @@ begin
       if LExpStr <> LObsStr then
       begin
         Inc(LFailCount);
-        WriteLn(Format('FAIL line %d exp=%s obs=%s cps=%s',
+        WriteLn(TextFormat('FAIL line %d exp=%s obs=%s cps=%s',
           [LLineNo, LExpStr, LObsStr, Copy(LLine, 1, LPipe - 1)]));
       end;
 
@@ -246,9 +247,9 @@ begin
     Close(LFile);
   end;
 
-  WriteLn(Format('checked=%d fail=%d pass=%d', [LChecked, LFailCount, LChecked-LFailCount]));
-  CheckEqual(Int64(0), Int64(LFailCount), Format('line break failures: %d', [LFailCount]));
-  Check(LChecked >= 10000, Format('expected many line rows, got %d', [LChecked]));
+  WriteLn(TextFormat('checked=%d fail=%d pass=%d', [LChecked, LFailCount, LChecked-LFailCount]));
+  CheckEqual(Int64(0), Int64(LFailCount), TextFormat('line break failures: %d', [LFailCount]));
+  Check(LChecked >= 10000, TextFormat('expected many line rows, got %d', [LChecked]));
 end;
 
 begin

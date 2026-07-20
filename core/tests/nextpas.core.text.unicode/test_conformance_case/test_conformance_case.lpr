@@ -13,7 +13,8 @@ program test_conformance_case;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.types,
@@ -39,7 +40,7 @@ begin
     begin
       if Field = AIndex then
       begin
-        Result := Trim(Copy(ALine, Start, I - Start));
+        Result := TextTrim(Copy(ALine, Start, I - Start));
         Exit;
       end;
       Inc(Field);
@@ -113,7 +114,7 @@ var
 begin
   ACount := 0;
   Result := True;
-  if Trim(AField) = '' then
+  if TextTrim(AField) = '' then
     Exit;
   LStart := 1;
   for I := 1 to Length(AField) + 1 do
@@ -149,7 +150,6 @@ end;
 procedure TestCaseFolding;
 var
   LPath: string;
-  LFile: TextFile;
   LLine, LCode, LStatus, LMapField: string;
   LCp: TUnicodeCodepoint;
   LExp: array[0..7] of TUnicodeCodepoint;
@@ -160,6 +160,8 @@ var
   LLineNo: Int64;
   LSimple: TUnicodeCodepoint;
   LMaxPrint: Integer;
+  LLines: TStringArray;
+  LLineIdx: Integer;
 begin
   LPath := ResolveFixture('case_folding.txt');
   Check(FileExists(LPath), 'case_folding.txt exists');
@@ -169,12 +171,10 @@ begin
   LLineNo := 0;
   LMaxPrint := 25;
 
-  AssignFile(LFile, LPath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  LLines := ReadFileLines(LPath);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -204,7 +204,7 @@ begin
         begin
           Inc(LFail);
           if LFail <= LMaxPrint then
-            WriteLn(Format('FAIL CaseFold S/C L%d U+%s simple got %x exp %s',
+            WriteLn(TextFormat('FAIL CaseFold S/C L%d U+%s simple got %x exp %s',
               [LLineNo, LCode, LSimple, LMapField]));
         end;
       end;
@@ -216,16 +216,13 @@ begin
         begin
           Inc(LFail);
           if LFail <= LMaxPrint then
-            WriteLn(Format('FAIL CaseFold F/C L%d U+%s full mismatch exp %s',
+            WriteLn(TextFormat('FAIL CaseFold F/C L%d U+%s full mismatch exp %s',
               [LLineNo, LCode, LMapField]));
         end;
       end;
-    end;
-  finally
-    CloseFile(LFile);
   end;
 
-  WriteLn(Format('CaseFolding: data=%d fail=%d skipT=%d', [LData, LFail, LSkipT]));
+  WriteLn(TextFormat('CaseFolding: data=%d fail=%d skipT=%d', [LData, LFail, LSkipT]));
   Check(LFail = 0, 'CaseFolding fail=0');
   Check(LData > 1000, 'CaseFolding has data');
 end;
@@ -241,7 +238,6 @@ end;
 procedure TestSpecialCasingUnconditional;
 var
   LPath: string;
-  LFile: TextFile;
   LLine: string;
   LCode, LLower, LTitle, LUpper, LCond: string;
   LCp: TUnicodeCodepoint;
@@ -252,6 +248,8 @@ var
   LData, LFail, LSkipCond: Int64;
   LLineNo: Int64;
   LMaxPrint: Integer;
+  LLines: TStringArray;
+  LLineIdx: Integer;
 begin
   LPath := ResolveFixture('special_casing.txt');
   Check(FileExists(LPath), 'special_casing.txt exists');
@@ -261,12 +259,10 @@ begin
   LLineNo := 0;
   LMaxPrint := 25;
 
-  AssignFile(LFile, LPath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  LLines := ReadFileLines(LPath);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -276,7 +272,7 @@ begin
       LUpper := NthSemicolonField(LLine, 3);
       LCond := NthSemicolonField(LLine, 4);
       if Pos('#', LCond) > 0 then
-        LCond := Trim(Copy(LCond, 1, Pos('#', LCond) - 1));
+        LCond := TextTrim(Copy(LCond, 1, Pos('#', LCond) - 1));
       if LCode = '' then
         Continue;
       if LCond <> '' then
@@ -297,7 +293,7 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Special lower L%d U+%s', [LLineNo, LCode]));
+          WriteLn(TextFormat('FAIL Special lower L%d U+%s', [LLineNo, LCode]));
       end;
 
       LGot := UTF8ToTitle(Utf8OfCp(LCp));
@@ -306,7 +302,7 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Special title L%d U+%s', [LLineNo, LCode]));
+          WriteLn(TextFormat('FAIL Special title L%d U+%s', [LLineNo, LCode]));
       end;
 
       LGot := UTF8ToUpper(Utf8OfCp(LCp));
@@ -315,14 +311,11 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Special upper L%d U+%s', [LLineNo, LCode]));
+          WriteLn(TextFormat('FAIL Special upper L%d U+%s', [LLineNo, LCode]));
       end;
-    end;
-  finally
-    CloseFile(LFile);
   end;
 
-  WriteLn(Format('SpecialCasing uncond: data=%d fail=%d skipCond=%d', [LData, LFail, LSkipCond]));
+  WriteLn(TextFormat('SpecialCasing uncond: data=%d fail=%d skipCond=%d', [LData, LFail, LSkipCond]));
   Check(LFail = 0, 'SpecialCasing unconditional fail=0');
   Check(LData > 50, 'SpecialCasing has unconditional data');
 end;
@@ -350,7 +343,6 @@ end;
 procedure TestCaseFoldingTurkic;
 var
   LPath: string;
-  LFile: TextFile;
   LLine, LCode, LStatus, LMapField: string;
   LCp: TUnicodeCodepoint;
   LExp: array[0..7] of TUnicodeCodepoint;
@@ -362,6 +354,8 @@ var
   LMaxPrint: Integer;
   LOpts: TCaseOptions;
   LSimple: TUnicodeCodepoint;
+  LLines: TStringArray;
+  LLineIdx: Integer;
 begin
   LPath := ResolveFixture('case_folding.txt');
   Check(FileExists(LPath), 'case_folding.txt exists');
@@ -371,12 +365,10 @@ begin
   LMaxPrint := 25;
   LOpts.Locale := clTurkish;
 
-  AssignFile(LFile, LPath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  LLines := ReadFileLines(LPath);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -395,7 +387,7 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL CaseFold T simple L%d U+%s got %x exp %s',
+          WriteLn(TextFormat('FAIL CaseFold T simple L%d U+%s got %x exp %s',
             [LLineNo, LCode, LSimple, LMapField]));
       end;
 
@@ -404,15 +396,12 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL CaseFold T full L%d U+%s exp %s',
+          WriteLn(TextFormat('FAIL CaseFold T full L%d U+%s exp %s',
             [LLineNo, LCode, LMapField]));
       end;
-    end;
-  finally
-    CloseFile(LFile);
   end;
 
-  WriteLn(Format('CaseFolding T (tr): data=%d fail=%d', [LData, LFail]));
+  WriteLn(TextFormat('CaseFolding T (tr): data=%d fail=%d', [LData, LFail]));
   Check(LFail = 0, 'CaseFolding T fail=0');
   Check(LData = 2, 'CaseFolding T has 2 rows');
 
@@ -429,7 +418,7 @@ var
   Tok: string;
 begin
   Result := False;
-  LParts := Trim(ACond);
+  LParts := TextTrim(ACond);
   if LParts = '' then
     Exit;
   Start := 1;
@@ -456,7 +445,6 @@ end;
 procedure TestSpecialCasingTurkic;
 var
   LPath: string;
-  LFile: TextFile;
   LLine: string;
   LCode, LLower, LTitle, LUpper, LCond: string;
   LCp: TUnicodeCodepoint;
@@ -468,6 +456,8 @@ var
   LMaxPrint: Integer;
   LOpts: TCaseOptions;
   LIsTr, LIsAz: Boolean;
+  LLines: TStringArray;
+  LLineIdx: Integer;
 begin
   LPath := ResolveFixture('special_casing.txt');
   Check(FileExists(LPath), 'special_casing.txt exists');
@@ -476,12 +466,10 @@ begin
   LLineNo := 0;
   LMaxPrint := 25;
 
-  AssignFile(LFile, LPath);
-  Reset(LFile);
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  LLines := ReadFileLines(LPath);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -491,7 +479,7 @@ begin
       LUpper := NthSemicolonField(LLine, 3);
       LCond := NthSemicolonField(LLine, 4);
       if Pos('#', LCond) > 0 then
-        LCond := Trim(Copy(LCond, 1, Pos('#', LCond) - 1));
+        LCond := TextTrim(Copy(LCond, 1, Pos('#', LCond) - 1));
       if LCode = '' then
         Continue;
       if not IsTurkicSpecialCond(LCond) then
@@ -524,7 +512,7 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Turkic Special lower L%d U+%s cond=%s',
+          WriteLn(TextFormat('FAIL Turkic Special lower L%d U+%s cond=%s',
             [LLineNo, LCode, LCond]));
       end;
 
@@ -534,7 +522,7 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Turkic Special title L%d U+%s cond=%s',
+          WriteLn(TextFormat('FAIL Turkic Special title L%d U+%s cond=%s',
             [LLineNo, LCode, LCond]));
       end;
 
@@ -544,15 +532,12 @@ begin
       begin
         Inc(LFail);
         if LFail <= LMaxPrint then
-          WriteLn(Format('FAIL Turkic Special upper L%d U+%s cond=%s',
+          WriteLn(TextFormat('FAIL Turkic Special upper L%d U+%s cond=%s',
             [LLineNo, LCode, LCond]));
       end;
-    end;
-  finally
-    CloseFile(LFile);
   end;
 
-  WriteLn(Format('SpecialCasing tr/az uncond-locale: data=%d fail=%d', [LData, LFail]));
+  WriteLn(TextFormat('SpecialCasing tr/az uncond-locale: data=%d fail=%d', [LData, LFail]));
   Check(LFail = 0, 'SpecialCasing tr/az fail=0');
   Check(LData >= 4, 'SpecialCasing tr/az has data');
 end;

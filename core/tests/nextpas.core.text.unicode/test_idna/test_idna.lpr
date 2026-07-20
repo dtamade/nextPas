@@ -54,11 +54,32 @@ begin
   Check(R = '', 'leading hyphen fails');
 end;
 
+procedure TestErrorKinds;
+var
+  R: string;
+  K: TIDNAErrorKind;
+begin
+  R := IDNAToASCII('', K);
+  Check(R = '', 'empty domain empty result');
+  CheckEqual(Integer(K), Integer(idnaEmptyDomain), 'kind empty domain');
+  CheckEqual(IDNAErrorKindName(K), 'empty domain', 'name empty domain');
+
+  R := IDNAToASCII('-bad.com', K);
+  Check(R = '', 'leading hyphen empty result');
+  CheckEqual(Integer(K), Integer(idnaInvalidAsciiLabel), 'kind invalid ASCII label');
+
+  R := IDNAToASCII('example.com', K);
+  CheckEqual(R, 'example.com', 'ok domain');
+  CheckEqual(Integer(K), Integer(idnaOk), 'kind ok');
+  CheckEqual(IDNAErrorKindName(K), '', 'name ok empty');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.idna');
   T.Test('PunycodeBasics', @TestPunycodeBasics);
   T.Test('PunycodeRFC3493', @TestPunycodeRFC3493);
   T.Test('Invalid', @TestInvalid);
+  T.Test('ErrorKinds', @TestErrorKinds);
   if not T.Run then
     Halt(1);
 end.

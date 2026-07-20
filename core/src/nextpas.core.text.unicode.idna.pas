@@ -4,6 +4,9 @@ unit nextpas.core.text.unicode.idna;
  * UTS #46 IDNA — pragmatic Nontransitional profile for domain labels.
  * Pipeline: split labels · NFC · LDH/Punycode · length checks.
  * Full IdnaMappingTable transitional mapping is out of scope (documented).
+ *
+ * Errors: TIDNAErrorKind is the structured code; string overloads map via
+ * IDNAErrorKindName for legacy call sites.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -13,9 +16,31 @@ interface
 const
   IDNA_ACE_PREFIX = 'xn--';
 
-{ ToASCII / ToUnicode. On failure Result='' and AError is set. }
-function IDNAToASCII(const ADomain: string; out AError: string): string;
-function IDNAToUnicode(const ADomain: string; out AError: string): string;
+type
+  { Stable IDNA failure codes (P3-0). Success = idnaOk. }
+  TIDNAErrorKind = (
+    idnaOk = 0,
+    idnaEmptyDomain,
+    idnaEmptyLabel,
+    idnaInvalidDomain,
+    idnaInvalidAsciiLabel,
+    idnaNfcFailed,
+    idnaPunycodeEncodeFailed,
+    idnaPunycodeDecodeFailed,
+    idnaEmptyAceBody,
+    idnaAceLabelTooLong,
+    idnaDomainTooLong
+  );
+
+function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
+
+{ ToASCII / ToUnicode with structured kind. On failure Result='' and AKind<>idnaOk. }
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload;
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string; overload;
+
+{ String error form (legacy). AError = IDNAErrorKindName(kind). }
+function IDNAToASCII(const ADomain: string; out AError: string): string; overload;
+function IDNAToUnicode(const ADomain: string; out AError: string): string; overload;
 
 { Convenience: empty error ignored. }
 function IDNAToASCII(const ADomain: string): string; overload;
@@ -29,6 +54,25 @@ uses
   nextpas.core.text.unicode.punycode,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.utils;
+
+function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
+begin
+  case AKind of
+    idnaOk: Result := '';
+    idnaEmptyDomain: Result := 'empty domain';
+    idnaEmptyLabel: Result := 'empty label';
+    idnaInvalidDomain: Result := 'invalid domain';
+    idnaInvalidAsciiLabel: Result := 'invalid ASCII label';
+    idnaNfcFailed: Result := 'NFC failed';
+    idnaPunycodeEncodeFailed: Result := 'punycode encode failed';
+    idnaPunycodeDecodeFailed: Result := 'punycode decode failed';
+    idnaEmptyAceBody: Result := 'empty ACE body';
+    idnaAceLabelTooLong: Result := 'ACE label too long';
+    idnaDomainTooLong: Result := 'domain too long';
+  else
+    Result := 'unknown IDNA error';
+  end;
+end;
 
 function IsAsciiLabel(const ALabel: string): Boolean;
 var
@@ -68,15 +112,15 @@ begin
       Result[I] := Chr(Ord(Result[I]) + 32);
 end;
 
-function ProcessLabelToASCII(const ALabel: string; out AError: string): string;
+function ProcessLabelToASCII(const ALabel: string; out AKind: TIDNAErrorKind): string;
 var
   LNorm, LPuny: string;
 begin
-  AError := '';
+  AKind := idnaOk;
   Result := '';
   if ALabel = '' then
   begin
-    AError := 'empty label';
+    AKind := idnaEmptyLabel;
     Exit;
   end;
   if IsAsciiLabel(ALabel) then
@@ -84,7 +128,7 @@ begin
     Result := LowerAscii(ALabel);
     if not IsLDHLabel(Result) then
     begin
-      AError := 'invalid ASCII label';
+      AKind := idnaInvalidAsciiLabel;
       Result := '';
     end;
     Exit;
@@ -92,32 +136,32 @@ begin
   LNorm := NFC(ALabel);
   if LNorm = '' then
   begin
-    AError := 'NFC failed';
+    AKind := idnaNfcFailed;
     Exit;
   end;
   LPuny := PunycodeEncode(LNorm);
   if LPuny = '' then
   begin
-    AError := 'punycode encode failed';
+    AKind := idnaPunycodeEncodeFailed;
     Exit;
   end;
   Result := IDNA_ACE_PREFIX + LowerAscii(LPuny);
   if Length(Result) > 63 then
   begin
-    AError := 'ACE label too long';
+    AKind := idnaAceLabelTooLong;
     Result := '';
   end;
 end;
 
-function ProcessLabelToUnicode(const ALabel: string; out AError: string): string;
+function ProcessLabelToUnicode(const ALabel: string; out AKind: TIDNAErrorKind): string;
 var
   LLower, LBody, LDecoded: string;
 begin
-  AError := '';
+  AKind := idnaOk;
   Result := '';
   if ALabel = '' then
   begin
-    AError := 'empty label';
+    AKind := idnaEmptyLabel;
     Exit;
   end;
   LLower := LowerAscii(ALabel);
@@ -126,29 +170,31 @@ begin
     LBody := Copy(LLower, 5, Length(LLower));
     if LBody = '' then
     begin
-      AError := 'empty ACE body';
+      AKind := idnaEmptyAceBody;
       Exit;
     end;
     LDecoded := PunycodeDecode(LBody);
     if LDecoded = '' then
     begin
-      AError := 'punycode decode failed';
+      AKind := idnaPunycodeDecodeFailed;
       Exit;
     end;
     Result := NFC(LDecoded);
     if Result = '' then
-      AError := 'NFC failed after decode';
+      AKind := idnaNfcFailed;
     Exit;
   end;
   if not IsAsciiLabel(LLower) then
   begin
     { Already Unicode label }
     Result := NFC(LLower);
+    if Result = '' then
+      AKind := idnaNfcFailed;
     Exit;
   end;
   if not IsLDHLabel(LLower) then
   begin
-    AError := 'invalid ASCII label';
+    AKind := idnaInvalidAsciiLabel;
     Exit;
   end;
   Result := LLower;
@@ -198,25 +244,30 @@ begin
   end;
 end;
 
-function IDNAToASCII(const ADomain: string; out AError: string): string;
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string;
 var
   LLabels: array[0..127] of string;
   LOut: array[0..127] of string;
   LCount, I: Integer;
   LTotal: Integer;
 begin
-  AError := '';
+  AKind := idnaOk;
   Result := '';
+  if ADomain = '' then
+  begin
+    AKind := idnaEmptyDomain;
+    Exit;
+  end;
   if not SplitDomain(ADomain, LLabels, LCount) then
   begin
-    AError := 'invalid domain';
+    AKind := idnaInvalidDomain;
     Exit;
   end;
   LTotal := 0;
   for I := 0 to LCount - 1 do
   begin
-    LOut[I] := ProcessLabelToASCII(LLabels[I], AError);
-    if AError <> '' then
+    LOut[I] := ProcessLabelToASCII(LLabels[I], AKind);
+    if AKind <> idnaOk then
     begin
       Result := '';
       Exit;
@@ -227,29 +278,34 @@ begin
   end;
   if LTotal > 253 then
   begin
-    AError := 'domain too long';
+    AKind := idnaDomainTooLong;
     Exit;
   end;
   Result := JoinLabels(LOut, LCount);
 end;
 
-function IDNAToUnicode(const ADomain: string; out AError: string): string;
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string;
 var
   LLabels: array[0..127] of string;
   LOut: array[0..127] of string;
   LCount, I: Integer;
 begin
-  AError := '';
+  AKind := idnaOk;
   Result := '';
+  if ADomain = '' then
+  begin
+    AKind := idnaEmptyDomain;
+    Exit;
+  end;
   if not SplitDomain(ADomain, LLabels, LCount) then
   begin
-    AError := 'invalid domain';
+    AKind := idnaInvalidDomain;
     Exit;
   end;
   for I := 0 to LCount - 1 do
   begin
-    LOut[I] := ProcessLabelToUnicode(LLabels[I], AError);
-    if AError <> '' then
+    LOut[I] := ProcessLabelToUnicode(LLabels[I], AKind);
+    if AKind <> idnaOk then
     begin
       Result := '';
       Exit;
@@ -258,18 +314,34 @@ begin
   Result := JoinLabels(LOut, LCount);
 end;
 
+function IDNAToASCII(const ADomain: string; out AError: string): string;
+var
+  LKind: TIDNAErrorKind;
+begin
+  Result := IDNAToASCII(ADomain, LKind);
+  AError := IDNAErrorKindName(LKind);
+end;
+
+function IDNAToUnicode(const ADomain: string; out AError: string): string;
+var
+  LKind: TIDNAErrorKind;
+begin
+  Result := IDNAToUnicode(ADomain, LKind);
+  AError := IDNAErrorKindName(LKind);
+end;
+
 function IDNAToASCII(const ADomain: string): string;
 var
-  E: string;
+  LKind: TIDNAErrorKind;
 begin
-  Result := IDNAToASCII(ADomain, E);
+  Result := IDNAToASCII(ADomain, LKind);
 end;
 
 function IDNAToUnicode(const ADomain: string): string;
 var
-  E: string;
+  LKind: TIDNAErrorKind;
 begin
-  Result := IDNAToUnicode(ADomain, E);
+  Result := IDNAToUnicode(ADomain, LKind);
 end;
 
 end.

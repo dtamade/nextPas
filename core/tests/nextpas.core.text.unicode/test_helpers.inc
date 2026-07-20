@@ -25,3 +25,15 @@ begin
   for I := 0 to High(ACps) do
     AppendUtf8(Result, ACps[I]);
 end;
+
+
+function ResolveUnicodeFixture(const AName: string): string;
+begin
+  if FileExists('../data/' + AName) then
+    Exit('../data/' + AName);
+  if FileExists('core/tests/nextpas.core.text.unicode/data/' + AName) then
+    Exit('core/tests/nextpas.core.text.unicode/data/' + AName);
+  if FileExists('../../nextpas.core.text.unicode/data/' + AName) then
+    Exit('../../nextpas.core.text.unicode/data/' + AName);
+  Result := '../data/' + AName;
+end;

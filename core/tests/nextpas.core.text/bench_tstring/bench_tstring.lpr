@@ -7,14 +7,16 @@ program bench_tstring;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.text.tstring;
+  nextpas.core.text.tstring,
+  nextpas.core.time,
+  nextpas.core.text.conv;
 
 const
   N = 1000000;
 
 var
   i: Integer;
-  t0, t1: TDateTime;
+  sw: TStopwatch;
 
 { === FPC AnsiString 基线 === }
 
@@ -22,39 +24,39 @@ procedure FPC_SmallCreate;
 var
   s: string;
 begin
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
     s := 'hello';
-  t1 := Now;
+  sw.Stop;
   s := '';
   WriteLn('[FPC]    small (5B)  create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_MediumCreate;
 var
   s: string;
 begin
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
     s := 'hello world!!!';
-  t1 := Now;
+  sw.Stop;
   s := '';
   WriteLn('[FPC]    medium(14B) create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_HeapCreate;
 var
   s: string;
 begin
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
     s := '0123456789abcdef';
-  t1 := Now;
+  sw.Stop;
   s := '';
   WriteLn('[FPC]    heap  (16B) create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_Assign;
@@ -62,16 +64,16 @@ var
   s, s2: string;
 begin
   s := 'shared string value longer than 15';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     s2 := s;
     s2 := '';
   end;
-  t1 := Now;
+  sw.Stop;
   s := '';
   WriteLn('[FPC]    heap assign   x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 { === TString 测试 === }
@@ -82,15 +84,15 @@ var
   ts: TString;
 begin
   src := 'hello';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     ts := TString.Create(@src[1], Length(src));
     StringFini(ts);
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[TStr]   small (5B)  create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms', ' (SSO)');
+    IntToStr(sw.ElapsedMilliseconds), ' ms', ' (SSO)');
 end;
 
 procedure TS_MediumCreate;
@@ -99,15 +101,15 @@ var
   ts: TString;
 begin
   src := 'hello world!!!';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     ts := TString.Create(@src[1], Length(src));
     StringFini(ts);
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[TStr]   medium(14B) create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms', ' (SSO)');
+    IntToStr(sw.ElapsedMilliseconds), ' ms', ' (SSO)');
 end;
 
 procedure TS_HeapCreate;
@@ -116,15 +118,15 @@ var
   ts: TString;
 begin
   src := '0123456789abcdef';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     ts := TString.Create(@src[1], Length(src));
     StringFini(ts);
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[TStr]   heap  (16B) create x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms', ' (heap)');
+    IntToStr(sw.ElapsedMilliseconds), ' ms', ' (heap)');
 end;
 
 function S(const AStr: AnsiString): TString;
@@ -137,16 +139,16 @@ var
   ts, ts2: TString;
 begin
   ts := S('shared string value longer than 15');
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     StringAssign(ts2, ts);
     StringFini(ts2);
   end;
-  t1 := Now;
+  sw.Stop;
   StringFini(ts);
   WriteLn('[TStr]   heap assign   x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure TS_Assign_SSO;
@@ -154,16 +156,16 @@ var
   ts, ts2: TString;
 begin
   ts := S('hello');
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     StringAssign(ts2, ts);
     StringFini(ts2);
   end;
-  t1 := Now;
+  sw.Stop;
   StringFini(ts);
   WriteLn('[TStr]   SSO assign    x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 { === SizeOf & 内存分析 === }

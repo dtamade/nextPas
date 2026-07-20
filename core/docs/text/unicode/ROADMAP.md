@@ -27,7 +27,7 @@
 | **M0** 官方算法绿 | ✅ | Norm/Grapheme/Word/Sentence/Line软/BidiL2/Collation/Case+tr·az/EAW 全绿 |
 | **M1** 产品化与导航 | ✅ | ROADMAP + SCORECARD + `make gate` + CONTRACT 对齐 + 门面差异表；QC 对非法 UTF-8 不误短路 |
 | **M2** 日常 API | ✅ | Word-boundary Title；`clLithuanian`；COOKBOOK |
-| **M3** SCORECARD v2 | ⬜ | 与 Go 对齐测项 + 通过准则冻结 + 按表优化 |
+| **M3** SCORECARD v2→v3 | ✅ | v2 冻结 + M3b–e 优化 + **P2-2 v3** 全量 |
 | **M3b** Collate Compare 热路径 | ✅ | ASCII CE 表 + 实例缓冲；Compare ≈1.12× Go |
 | **M3c** Collate 通用加速 | ✅ | contraction 快拒 + 已 NFD 跳过二次分解；ensure 脚本 |
 | **M3d** GetSortKey 热路径 | ✅ | count 版 ElementsToSortKey；无 CE 切片拷贝；BMP-Latin 1.20× |
@@ -43,11 +43,22 @@
 |----|------|----------|
 | **P2-0** 岸线加固 | ✅ | 重放 M3d/M3e；ensure 含 TitleWords+ACount |
 | **P2-1** BinaryProperty 扩展 | ✅ | PropList 高价值属性 + gen 表 + test_property；对标 Go `unicode.Is*` |
-| **P2-2** SCORECARD v3 | ⬜ | 全量重跑 + Width 测项 + tip 钉死 |
-| **P2-3** Bidi 视觉序 | ⬜ | 由 levels 生成 visual index 置换（TUI RTL，非 L3 镜像） |
-| **P2-4** Script_Extensions | ⬜ | `GetScriptExtensions` 多脚本 |
+| **P2-2** SCORECARD v3 | ✅ | 全量重跑 + Width 测项 + C6/C7 库存 |
+| **P2-3** Bidi 视觉序 | ✅ | ReorderBidiVisually / ApplyBidiVisualOrder / InvertBidiIndexMap |
+| **P2-4** Script_Extensions | ✅ | GetScriptExtensions / HasScript + gen |
 | **P2-5** UTS#46 IDNA | ✅ | 大 epic：Punycode + ToASCII/ToUnicode（net 拉票可优先） |
 | **P2-6** CLDR Collation | 🔒 | 仍深水 |
+
+
+## Phase 3 地图（可用性 / 对标加深）
+
+| 岛 | 状态 | 完成定义 |
+|----|------|----------|
+| **P3-0** 岸线 + 错误模型 + 门面矩阵 | ✅ | re-land P2-3/4 + P0；`TIDNAErrorKind`；门面矩阵 v2；ROADMAP 与 tip 对齐 |
+| **P3-1** IDNA MappingTable | ⬜ | UTS#46 IdnaMappingTable 全表（非仅 NFC+Punycode） |
+| **P3-2** 统一 text 错误策略 | ⬜ | 非法 UTF-8 / convert 与 IDNA 错误文档化一致 |
+| **P2-6** CLDR Collation | 🔒 | 仍深水 |
+
 
 **纪律不变**：worktree；gate 0-fail；一 land 一岛；禁止无编号碎片。
 
@@ -79,20 +90,24 @@
 
 ---
 
-## 双门面差异（M1 审计）
+## 双门面差异（v2 · P3-0）
 
 | 能力 | `text.pas` | `text.unicode.pas` |
 |------|------------|---------------------|
-| Trim/Split/Join/Format… | ✅ 日常 | — |
+| Trim/Split/Join/Format/conv | ✅ 日常 | — |
 | UTF8ToUpper/Lower/CaseFold（root） | ✅ | ✅ |
-| **TCaseLocale / locale 重载** | ❌ 仅 unicode | ✅ tr/az |
-| UTF8ToTitle / TitleWords | ✅ root 子集（M3e） | ✅ 全量 + locale |
-| NFC/NFD / IsNormalizedNFC | ✅ 子集 | ✅ 全套 + QC |
-| Segment / Bidi / Collate | — | ✅ |
-| GraphemeNext / DisplayWidth | ✅（委托 unicode 边界） | 底层 segment/props |
+| **TCaseLocale / locale 重载** | ❌ 仅 unicode | ✅ tr/az/lt |
+| UTF8ToTitle / TitleWords | ✅ root | ✅ + locale |
+| NFC/NFD / IsNormalized* / QC | ✅ 子集 | ✅ 全套 |
+| Segment G/W/S + 硬/软 Line | — | ✅ |
+| Bidi resolve L2 + **visual 序** | — | ✅ |
+| Collate DUCET | — | ✅ |
+| BinaryProperty / Script / **SCX** / Block / EAW | — | ✅ |
+| IDNA / Punycode + **TIDNAErrorKind** | — | ✅ |
+| GraphemeNext / DisplayWidth | ✅（委托 unicode） | 底层 |
 
-**约定**：locale Case、完整 segment/bidi/collate → 用 **`nextpas.core.text.unicode`**。  
-`text` 保持轻量日常；M2 可选择是否透传 locale（默认倾向文档钉死「仅 unicode」）。
+**约定**：locale Case、segment/bidi/collate/IDNA/属性全集 → **`nextpas.core.text.unicode`**。  
+`text` 保持轻量日常 UTF-8；不透传 locale / IDNA。
 
 ---
 
@@ -159,6 +174,7 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-21 | **P3-0**：re-land P2-3/4+P0；TIDNAErrorKind；门面矩阵 v2 |
 | 2026-07-20 | P2-5：Punycode + IDNA ToASCII/ToUnicode |
 | 2026-07-20 | Phase2 重规划 + P2-1 BinaryProperty 扩展 |
 | 2026-07-20 | M3e：text 门面 TitleWords + C6 基线 |
