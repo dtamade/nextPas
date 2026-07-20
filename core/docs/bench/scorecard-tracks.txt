@@ -9,6 +9,5 @@ bitfield
 packed
 nativeset
 bitscan
-# optional next batch
-# binsearch
-# lookup
+binsearch
+lookup
