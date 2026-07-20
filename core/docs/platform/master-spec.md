@@ -36,16 +36,15 @@ Without real runtime evidence, a host is not runtime ready.
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
 Windows compile gates, Wine runtime smoke (24-module matrix, including
 `platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
-GHA **`ci-matrix`** for the **documented 26 platform gates** in
+GHA **`ci-matrix`** for the **documented 27 platform gates** in
 `platform-windows-ci-matrix.sh` / `.ps1`.
 
 ### Count honesty (do not mix)
 
 | Count | Meaning |
 | --- | --- |
-| **26 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which`+`dl`+`args`+`pipe`+`resource`+`pty` + iocp + poller + io/socket real. `pty` PASS on GHA **29734704405** @ `d2eb8f890` (pass=27 fail=0 with mem.host). |
-| **+watch candidate** | Batch-21: `platform.watch` (S1–S3 RDCW) in scripts only — **not** ci-matrix until GHA green. |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 27–28 — do **not** call mem.host (or unpromoted candidates) a platform facade promote. |
+| **27 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which`+`dl`+`args`+`pipe`+`resource`+`pty`+`watch` + iocp + poller + io/socket real. `watch` PASS on GHA **29746628175** @ `2020db503` (pass=28 fail=0 with mem.host). |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 28 — do **not** call mem.host a platform facade gate. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
@@ -57,8 +56,8 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented **26 platform gates** only (ROADMAP)
-- do **not** say “27-gate platform ci-matrix” when the 27th is only mem.host or an unpromoted candidate
+- `ci-matrix` for the documented **27 platform gates** only (ROADMAP)
+- do **not** say “28-gate platform ci-matrix” when the extra is only mem.host
 
 ## Current macOS truth
 
