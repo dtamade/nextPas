@@ -3,7 +3,6 @@ program test_json_marshal;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.mem.default,

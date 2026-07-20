@@ -3,10 +3,10 @@ program test_json_parser;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.text.builder,
+  nextpas.core.fs,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.json.types,
@@ -194,16 +194,8 @@ begin
 end;
 
 function ReadSourceFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LowerCase(LText.Text);
-  finally
-    LText.Free;
-  end;
+  Result := LowerCase(ReadFileText(APath));
 end;
 
 function ResolveSourcePath(const APathFromTest: string;
@@ -951,9 +943,9 @@ begin
   LAllocator := LAllocatorObj;
   Doc.Init(LAllocator);
   try
-    Check(Doc.Parse(SV(StringOfChar('a', 200).QuotedString('"'))),
+    Check(Doc.Parse(SV('"' + StringOfChar('a', 200) + '"')),
       'first large parse succeeds');
-    Check(not Doc.Parse(SV(StringOfChar('b', 260).QuotedString('"'))),
+    Check(not Doc.Parse(SV('"' + StringOfChar('b', 260) + '"')),
       'second large parse rejects preallocation OOM');
     Check(Doc.HasError, 'preallocation OOM sets error');
     CheckEqual('out of memory', Doc.Error.Message.ToString,

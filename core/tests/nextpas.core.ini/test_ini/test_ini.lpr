@@ -3,9 +3,9 @@ program test_ini;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.ini,

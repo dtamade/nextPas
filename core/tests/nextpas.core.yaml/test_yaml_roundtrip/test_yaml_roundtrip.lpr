@@ -3,7 +3,7 @@ program test_yaml_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.yaml.types,
   nextpas.core.yaml,
   nextpas.core.test;

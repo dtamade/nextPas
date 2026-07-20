@@ -3,7 +3,7 @@ program test_json_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.mem.default,
   nextpas.core.json,

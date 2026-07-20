@@ -3,7 +3,9 @@ program test_config_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.time,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.config,
   nextpas.core.config.watcher,
@@ -15,7 +17,7 @@ var
 function FacadeTempPath(const AName, AExt: string): string;
 begin
   Result := PathJoin([GetTempDir,
-    AName + '_' + IntToStr(GetProcessID) + AExt]);
+    AName + '_' + IntToStr(PtrUInt(Pointer(@T))) + AExt]);
 end;
 
 procedure RemoveIfExists(const APath: string);
@@ -414,7 +416,7 @@ begin
       LReloaded := False;
       for LAttempt := 0 to 20 do
       begin
-        Sleep(20);
+        TSleep.ForDuration(TDuration.FromMilliseconds(20));
         WriteFileText(LPath, '{"server":{"host":"reloaded"},"x":1}');
         LReloaded := LWatcher.CheckReload;
         if LReloaded then

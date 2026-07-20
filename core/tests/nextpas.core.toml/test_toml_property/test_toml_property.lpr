@@ -14,7 +14,7 @@ program test_toml_property;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.default,

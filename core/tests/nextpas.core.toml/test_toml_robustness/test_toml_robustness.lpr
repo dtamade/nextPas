@@ -3,7 +3,7 @@ program test_toml_robustness;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.toml.base,
   nextpas.core.toml.value,

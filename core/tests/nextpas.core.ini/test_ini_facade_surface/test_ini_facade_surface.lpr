@@ -3,7 +3,6 @@ program test_ini_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
@@ -170,6 +169,31 @@ begin
   Check(LRaised, 'nil IReader raises');
 end;
 
+procedure TestFacadeExposesStrictAndColAlias;
+var
+  Ini: TIniFile;
+  LErr: TIniError;
+begin
+  Ini := TIniFile.Create;
+  try
+    CheckEqual(False, Ini.Strict, 'Strict default false');
+    CheckEqual(True,
+      Ini.TryLoadFromString('[s]' + #10 + 'bareline' + #10 + 'k=v' + #10, LErr),
+      'permissive accepts bare line');
+    CheckEqual('v', Ini.ReadString('s', 'k', ''), 'permissive still loads keys');
+
+    Ini.Strict := True;
+    CheckEqual(False,
+      Ini.TryLoadFromString('[s]' + #10 + 'bareline' + #10 + 'k=v' + #10, LErr),
+      'strict rejects bare line');
+    Check(Pos('strict', LErr.Message) > 0, 'strict error message');
+    CheckEqual(UInt32(2), LErr.Line, 'strict error line');
+    CheckEqual(LErr.Column, LErr.Col, 'Column/Col aliases match');
+  finally
+    Ini.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.ini (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
@@ -180,5 +204,7 @@ begin
   T.Test('facade exposes allocator surface',
     @TestFacadeExposesAllocatorSurface);
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
+  T.Test('facade exposes strict and Col alias',
+    @TestFacadeExposesStrictAndColAlias);
   if not T.Run then Halt(1);
 end.

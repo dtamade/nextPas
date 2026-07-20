@@ -55,6 +55,28 @@ FORMAT_SOURCE_GLOBS = (
     "src/nextpas.core.xml*.pas",
     "src/nextpas.core.csv*.pas",
     "src/nextpas.core.ini*.pas",
+    "src/nextpas.core.format.limits.pas",
+)
+
+# Production format/config modules must not pull FPC SysUtils (RTL isolation).
+# Host harness / process examples may still use SysUtils outside these globs.
+SYSUTILS_BANNED_GLOBS = (
+    "src/nextpas.core.json*.pas",
+    "src/nextpas.core.toml*.pas",
+    "src/nextpas.core.yaml*.pas",
+    "src/nextpas.core.xml*.pas",
+    "src/nextpas.core.csv*.pas",
+    "src/nextpas.core.ini*.pas",
+    "src/nextpas.core.config*.pas",
+    "src/nextpas.core.format.limits.pas",
+)
+
+FORMAT_BULK_PARSE_UNITS = (
+    "src/nextpas.core.json.pas",
+    "src/nextpas.core.toml.pas",
+    "src/nextpas.core.yaml.pas",
+    "src/nextpas.core.xml.pas",
+    "src/nextpas.core.ini.pas",
 )
 
 USES_RE = re.compile(r"\buses\b(?P<body>.*?);", re.IGNORECASE | re.DOTALL)
@@ -116,6 +138,18 @@ REQUIRED_DOC_SNIPPETS = {
         (
             "config-formats-empty-top-level-key-boundary",
             "JSON, YAML, and TOML empty keys stay a config-adapter concern",
+        ),
+        (
+            "config-formats-bulk-limit",
+            "FORMAT_BULK_PARSE_MAX_BYTES",
+        ),
+        (
+            "config-formats-col-column-aliases",
+            "Col` / `Column",
+        ),
+        (
+            "config-formats-tryas",
+            "TryAsBool",
         ),
     ),
     "docs/config/README.md": (
@@ -484,12 +518,49 @@ def pascal_method_body(scan_text: str, method_name: str) -> tuple[str, int] | No
     return match.group("body"), match.start("body")
 
 
+def expand_pascal_includes(root: Path, source: Path, text: str, depth: int = 0) -> str:
+    """Inline {$I ...} / {$INCLUDE ...} shards for contract scanning (depth-capped)."""
+    if depth > 8:
+        return text
+    include_re = re.compile(
+        r"\{\$I(?:NCLUDE)?\s+([^}]+)\}",
+        re.IGNORECASE,
+    )
+    out: list[str] = []
+    last = 0
+    for m in include_re.finditer(text):
+        out.append(text[last:m.start()])
+        inc_name = m.group(1).strip().strip("'").strip('"')
+        # Prefer same-directory relative include (config shards live next to facade).
+        candidates = [
+            source.parent / inc_name,
+            root / "src" / inc_name,
+            root / inc_name,
+        ]
+        body = None
+        for cand in candidates:
+            if cand.is_file():
+                body = expand_pascal_includes(
+                    root, cand, cand.read_text(encoding="utf-8"), depth + 1
+                )
+                break
+        if body is None:
+            out.append(m.group(0))  # leave unresolved marker
+        else:
+            out.append("\n" + body + "\n")
+        last = m.end()
+    out.append(text[last:])
+    return "".join(out)
+
+
 def check_config_save_uses_atomic_publish(root: Path, findings: list[Finding]) -> None:
     config_source = root / "src/nextpas.core.config.pas"
     if not config_source.is_file():
         return
 
-    text = config_source.read_text(encoding="utf-8")
+    text = expand_pascal_includes(
+        root, config_source, config_source.read_text(encoding="utf-8")
+    )
     scan_text = strip_pascal_comments_and_strings(text)
     if not re.search(r"\bConfigWriteAtomicText\s*\(", scan_text, re.IGNORECASE):
         findings.append(
@@ -576,6 +647,87 @@ def check_format_modules_do_not_depend_on_config(
                 )
 
 
+def collect_sysutils_banned_sources(root: Path) -> list[Path]:
+    paths: set[Path] = set()
+    for pattern in SYSUTILS_BANNED_GLOBS:
+        paths.update(root.glob(pattern))
+    return sorted(paths)
+
+
+def check_no_sysutils_in_format_modules(
+    root: Path,
+    paths: list[Path],
+    findings: list[Finding],
+) -> None:
+    for path in paths:
+        rel_path = path.relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8")
+        scan_text = strip_pascal_comments_and_strings(text)
+        for uses_match in USES_RE.finditer(scan_text):
+            body = uses_match.group("body")
+            sys_match = re.search(r"\bSysUtils\b", body, re.IGNORECASE)
+            if sys_match:
+                offset = uses_match.start("body") + sys_match.start()
+                findings.append(
+                    Finding(
+                        "format-no-sysutils",
+                        rel_path,
+                        line_number(scan_text, offset),
+                        "format/config production modules must not use SysUtils",
+                    )
+                )
+
+
+def check_format_limits_and_bulk_cap(root: Path, findings: list[Finding]) -> None:
+    limits = root / "src/nextpas.core.format.limits.pas"
+    if not limits.is_file():
+        findings.append(
+            Finding(
+                "format-limits-unit",
+                "src/nextpas.core.format.limits.pas",
+                0,
+                "missing shared bulk parse limits unit",
+            )
+        )
+        return
+    limits_text = limits.read_text(encoding="utf-8")
+    if "FORMAT_BULK_PARSE_MAX_BYTES" not in limits_text:
+        findings.append(
+            Finding(
+                "format-limits-const",
+                "src/nextpas.core.format.limits.pas",
+                0,
+                "must define FORMAT_BULK_PARSE_MAX_BYTES",
+            )
+        )
+    if "RequireFormatBulkByteCount" not in limits_text:
+        findings.append(
+            Finding(
+                "format-limits-guard",
+                "src/nextpas.core.format.limits.pas",
+                0,
+                "must define RequireFormatBulkByteCount",
+            )
+        )
+    for rel in FORMAT_BULK_PARSE_UNITS:
+        path = root / rel
+        if not path.is_file():
+            findings.append(
+                Finding("format-bulk-cap-unit", rel, 0, "missing bulk parse facade unit")
+            )
+            continue
+        body = path.read_text(encoding="utf-8")
+        if "RequireFormatBulkByteCount" not in body:
+            findings.append(
+                Finding(
+                    "format-bulk-cap-call",
+                    rel,
+                    0,
+                    "IReader bulk parse path must call RequireFormatBulkByteCount",
+                )
+            )
+
+
 def build_report(root: Path) -> Report:
     findings: list[Finding] = []
     check_required_paths(root, findings)
@@ -584,6 +736,10 @@ def build_report(root: Path) -> Report:
     check_required_doc_snippets(root, findings)
     format_sources = collect_format_sources(root)
     check_format_modules_do_not_depend_on_config(root, format_sources, findings)
+    check_no_sysutils_in_format_modules(
+        root, collect_sysutils_banned_sources(root), findings
+    )
+    check_format_limits_and_bulk_cap(root, findings)
     return Report(
         root=str(root),
         scanned_files=len(format_sources),

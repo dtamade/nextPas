@@ -3,7 +3,6 @@ program test_yaml_advanced;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.text.view,
   nextpas.core.yaml.types,
