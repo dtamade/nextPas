@@ -18,6 +18,8 @@ function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inlin
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
+function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
+function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -89,6 +91,7 @@ const
 {$I nextpas.core.text.unicode.lbp.inc}
 {$I nextpas.core.text.unicode.bcp.inc}
 {$I nextpas.core.text.unicode.brackets.inc}
+{$I nextpas.core.text.unicode.eaw.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -302,6 +305,30 @@ begin
     Exit(TBidiClass(LValue));
 
   Result := bcL;
+end;
+
+function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth;
+var
+  LValue: Byte;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(eawNeutral);
+
+  if ACp <= $FFFF then
+    Exit(TEastAsianWidth(EAW_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]));
+
+  if FindRange3Value(ACp, EAW_SMP_RANGES, LValue) then
+    Exit(TEastAsianWidth(LValue));
+
+  Result := eawNeutral;
+end;
+
+function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean;
+var
+  W: TEastAsianWidth;
+begin
+  W := GetEastAsianWidth(ACp);
+  Result := W in [eawFullwidth, eawWide, eawHalfwidth];
 end;
 
 function FindBidiBracketIndex(const ACp: TUnicodeCodepoint): Integer;
