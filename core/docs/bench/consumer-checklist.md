@@ -4,8 +4,8 @@
 
 抽检日期：2026-07-20 · 抽检人：bench lane  
 C3：Quiet + 50ms/5 samples + SaveToJSON  
-B32–B35：API / C2 / 扩面 / yaml·log  
-B36：regex + text.number C3 + 轻量 C2 → checklist **12/12 全绿**
+B32–B36：API / C2 / 扩面 / yaml·log / regex·number  
+B37：+2 **io + csv**（文档抽检 + C3 落地）→ checklist **14** 模块
 
 ## 检查项
 
@@ -31,18 +31,20 @@ B36：regex + text.number C3 + 轻量 C2 → checklist **12/12 全绿**
 | `nextpas.core.text/bench_text` | ✅ | ✅ | ✅ | ✅ | ✅ | `text/IndexOf`；`build/bench-text.json` |
 | `nextpas.core.yaml/bench_yaml` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/small`；`build/bench-yaml.json` |
 | `nextpas.core.log/bench_log` | ✅ | ✅ | ✅ | ✅ | ✅ | `Disabled/null`；`build/bench-log.json` |
-| `nextpas.core.regex/bench_regex` | ✅ | ✅ | ✅ | ✅ | ✅ | `regex/IsMatch/*` 等；Quiet+50ms/5；`build/bench-regex.json`（B36） |
-| `nextpas.core.text.number/bench_number` | ✅ | ✅ | ✅ | ✅ | ✅ | `number/IntToBuffer/*` 等；Quiet+50ms/5；`build/bench-number.json`（B36） |
+| `nextpas.core.regex/bench_regex` | ✅ | ✅ | ✅ | ✅ | ✅ | `regex/IsMatch/*`；`build/bench-regex.json` |
+| `nextpas.core.text.number/bench_number` | ✅ | ✅ | ✅ | ✅ | ✅ | `number/IntToBuffer/*`；`build/bench-number.json` |
+| `nextpas.core.io/bench_io` | ✅ | ✅ | ✅ | ✅ | ✅ | `Copy/64KB` 等；Quiet+50ms/5；`build/bench-io.json`（B37） |
+| `nextpas.core.csv/bench_csv` | ✅ | ✅ | ✅ | ✅ | ✅ | `Parse/1K-rows`、`Parse/10K-rows`；`build/bench-csv.json`（B37） |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · B36）
+## 汇总（2026-07-20 · B37）
 
 | 模式 | 观察 |
 |------|------|
-| 抽检面 | **12** 模块 |
-| C1–C5 | **12/12 全 ✅** |
-| C3 | Quiet + 50ms MinDuration + 5 MinSamples + `build/bench-*.json` |
+| 抽检面 | **14** 模块 |
+| C1–C5 | **14/14 全 ✅** |
+| C3 | Quiet + 50ms + 5 samples + `build/bench-*.json` |
 | scorecard | 11 track（含 binsearch、lookup） |
 
 ## 可复制片段（CI 友好）
