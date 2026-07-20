@@ -58,6 +58,18 @@ Prefer the **owner unit** in new code. Shims exist for call-site stability.
   are `TStringArray` value types — never `TStringList` (no Free required)
 - **D10** (Batch D) OpenSSL certstore fingerprint/serial/subject/issuer indexes are
   value-type arrays (no `TStringList`); lookup is linear (stores are small)
+- **D11** FPC RTL isolation (usability wave 2026-07-20):
+  - Production `hash` / `crypto` / `tls` (except winssl) must not `uses` SysUtils,
+    Classes, DateUtils, BaseUnix, Unix, or Windows directly.
+  - Only `nextpas.core.system*` may route to broad FPC RTL.
+  - `tls.winssl.*` may use `Windows` as **platform FFI** for Schannel (not SysUtils debt).
+  - CSPRNG for TLS utils: `crypto.random` / `platform.random` only.
+  - Socket I/O in nonblocking/freepascal.connection: `platform.socket` only.
+  - Tests under hash/crypto/tls use `system.sysutils` / `system.classes` / `time`, not FPC RTL.
+- **D12** Crypto errors: `nextpas.core.crypto.errors.ECryptoError` replaces bare
+  `raise Exception` in crypto primitives; public APIs keep Try* shapes.
+- **D13** `crypto.hash.THashAlgorithm` is a type alias of `hash.base.THashAlgorithm`
+  (single enum definition).
 
 ## Related docs
 

@@ -38,7 +38,7 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_ecdsa
 make focused FOCUS=core/tests/nextpas.core.crypto/test_p384
 ```
 
-Known residual: `test_dialer` may fail on `io.pipe` IMutex vs INativeMutex (sync/io lane).
+`test_dialer`: `io.pipe` uses `INativeMutex` (fixed 2026-07-20). Expect compile+run green.
 
 ## Batch D — certstore indexes
 
@@ -84,6 +84,27 @@ make focused FOCUS=core/tests/nextpas.core.tls/test_tls13_recordsealer
 make focused FOCUS=core/tests/nextpas.core.tls/test_stream_migration
 make focused FOCUS=core/tests/nextpas.core.tls/test_tls_rtl_dependency_contract
 make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_loader
+make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
+```
+
+## FPC RTL isolation (usability wave)
+
+```bash
+# production: non-winssl must not direct-use broad FPC RTL
+rg -n '^\s*(SysUtils|Classes|DateUtils|BaseUnix|Unix|Windows|Base64|Sockets)\b' \
+  core/src --glob 'nextpas.core.{hash,crypto,tls}*' | rg -v 'winssl|\.pem\.pas' || true
+
+# winssl Windows only (platform FFI)
+rg -n '\bWindows\b' core/src/nextpas.core.tls.winssl*.pas | head
+
+# tests: no direct SysUtils/Classes/DateUtils in uses
+rg -n '\buses\b' -A6 core/tests/nextpas.core.hash core/tests/nextpas.core.crypto \
+  core/tests/nextpas.core.tls --glob '*.{pas,lpr}' | rg '\b(SysUtils|Classes|DateUtils)\b' || true
+
+# crypto: no bare Exception raises
+rg -n 'raise Exception\.' core/src/nextpas.core.crypto*.pas || true
+
+# dialer (needs INativeMutex pipe)
 make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
 ```
 
