@@ -30,6 +30,10 @@ type
     function AsInt: Int64;
     function AsFloat: Double;
     function AsStr: TStringView;
+    function TryAsBool(out AValue: Boolean): Boolean;
+    function TryAsInt(out AValue: Int64): Boolean;
+    function TryAsFloat(out AValue: Double): Boolean;
+    function TryAsStr(out AValue: TStringView): Boolean;
     function SeqLen: UInt32;
     function SeqGet(AIndex: UInt32): TYamlValue;
     function MapGet(const AKey: TStringView): TYamlValue; overload;
@@ -135,6 +139,42 @@ begin
   else
     Result := 0;
   end;
+end;
+
+function TYamlValue.TryAsBool(out AValue: Boolean): Boolean;
+begin
+  Result := IsBool;
+  if Result then
+    AValue := AsBool
+  else
+    AValue := False;
+end;
+
+function TYamlValue.TryAsInt(out AValue: Int64): Boolean;
+begin
+  Result := IsInt;
+  if Result then
+    AValue := AsInt
+  else
+    AValue := 0;
+end;
+
+function TYamlValue.TryAsFloat(out AValue: Double): Boolean;
+begin
+  Result := IsFloat or IsInt;
+  if Result then
+    AValue := AsFloat
+  else
+    AValue := 0.0;
+end;
+
+function TYamlValue.TryAsStr(out AValue: TStringView): Boolean;
+begin
+  Result := IsStr;
+  if Result then
+    AValue := AsStr
+  else
+    AValue := TStringView.Empty;
 end;
 
 function TYamlValue.AsFloat: Double;

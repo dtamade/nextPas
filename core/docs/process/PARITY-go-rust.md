@@ -99,7 +99,7 @@
 
 | 套件 | 通过 | 框架 |
 |------|------|------|
-| test_process | **130** cases | **nextpas.core.test**（+U1） |
+| test_process | **133** cases | **nextpas.core.test**（+U2） |
 | test_process_command | **21** cases（原 48 Check 行） | **nextpas.core.test** |
 | test_process_deep / pipe | **27** / **17** | nextpas.core.test |
 | test_fs | **158** | nextpas.core.test |
@@ -187,3 +187,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | **M2-W4**：WIN.md + wine 最小生产集 24；E2 Done（wine truth） |
 | 2026-07-20 | **M3**：l2-windows-ci-matrix + core-ci host-windows；E3 Done |
 | 2026-07-20 | **U1**：Capture/Run 默认 64MiB MaxOutput；EProcessError.Cancelled；Preferred API 文档 |
+| 2026-07-20 | **U2**：builder 未设 MaxOutput→64MiB；Watch.Kind；test_process 133 |

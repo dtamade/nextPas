@@ -7,7 +7,7 @@ program test_xml_edge_cases;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.mem.default,
   nextpas.core.test,
   nextpas.core.xml,

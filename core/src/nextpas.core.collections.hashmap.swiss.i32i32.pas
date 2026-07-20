@@ -5,10 +5,12 @@ unit nextpas.core.collections.hashmap.swiss.i32i32;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.mem,
+  nextpas.core.mem.error,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -83,7 +85,7 @@ begin
     FAllocator := DefaultAllocator;
   FCtrl := FAllocator.GetMem(LTotal);
   if FCtrl = nil then
-    raise Exception.Create('TSwissTableI32I32.AllocTable: allocation failed');
+    raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableI32I32.AllocTable: allocation failed');
   FSlots := PSwissSlotI32I32(FCtrl + LCtrlSize);
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
   FillChar(FSlots^, LSlotSize, 0);
@@ -313,7 +315,7 @@ end;
 function TSwissTableI32I32.Get(AKey: Int32): Int32;
 begin
   if not TryGetValue(AKey, Result) then
-    raise Exception.Create('key not found');
+    raise EInvalidOperation.Create('TSwissTableI32I32.Get: key not found');
 end;
 
 function TSwissTableI32I32.Remove(AKey: Int32): Boolean;

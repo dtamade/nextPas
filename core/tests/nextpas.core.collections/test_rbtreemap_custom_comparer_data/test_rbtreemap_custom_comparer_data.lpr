@@ -3,7 +3,6 @@ program test_rbtreemap_custom_comparer_data;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.base,
   nextpas.core.collections.orderedmap.rb,

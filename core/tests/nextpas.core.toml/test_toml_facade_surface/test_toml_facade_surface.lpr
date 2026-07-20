@@ -3,11 +3,12 @@ program test_toml_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.text.view,
   nextpas.core.toml,
   nextpas.core.test;
 
@@ -31,6 +32,7 @@ begin
 
   LError := TomlParse('= invalid').Error;
   Check(LError.Line > 0, 'error type visible through facade');
+  CheckEqual(LError.Col, LError.Column, 'Col/Column aliases match');
 
   LBuilder := TomlBuilder;
   LBuilder.Key('when');
@@ -103,11 +105,33 @@ begin
   Check(LRaised, 'nil IReader raises');
 end;
 
+procedure TestFacadeExposesTryAsAccessors;
+var
+  LDoc: ITomlDocument;
+  LRoot: TTomlValue;
+  LBool: Boolean;
+  LInt: Int64;
+  LFloat: Double;
+  LStr: TStringView;
+begin
+  LDoc := TomlParse('b = true' + #10 + 'i = 11' + #10 + 'f = 3.5' + #10 +
+    's = "ok"' + #10);
+  Check(not LDoc.HasError, 'tryas parse');
+  LRoot := LDoc.Root;
+  Check(LRoot.Get('b').TryAsBool(LBool) and LBool, 'TryAsBool');
+  Check(LRoot.Get('i').TryAsInt(LInt) and (LInt = 11), 'TryAsInt');
+  Check(LRoot.Get('f').TryAsFloat(LFloat) and (Abs(LFloat - 3.5) < 1e-9),
+    'TryAsFloat');
+  Check(LRoot.Get('s').TryAsStr(LStr) and (LStr.ToString = 'ok'), 'TryAsStr');
+  Check(not LRoot.Get('s').TryAsInt(LInt), 'TryAsInt rejects string');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.toml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
   T.Test('facade edge depth large and duplicate',
     @TestFacadeEdgeDepthLargeAndDuplicate);
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
+  T.Test('facade exposes TryAs accessors', @TestFacadeExposesTryAsAccessors);
   if not T.Run then Halt(1);
 end.

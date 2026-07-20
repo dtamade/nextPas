@@ -3,7 +3,7 @@ program test_csv_edge_cases;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.csv,
   nextpas.core.test;
 

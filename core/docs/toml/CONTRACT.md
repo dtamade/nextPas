@@ -33,8 +33,9 @@ type
   TTomlError = record
     Message: TStringView;
     Line: UInt32;
-    Col: UInt32;      // 注意：字段名是 Col，不是 Column
+    Col: UInt32;      // 主字段名 Col；Column 为 property 别名
     Offset: SizeUInt;
+    property Column: UInt32 read Col write Col;
   end;
   TTomlValue = record ... end;
   ITomlBuilder = interface ... end;
@@ -64,10 +65,11 @@ function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
 
 - 判断：`IsValid`、`IsStr`、`IsInt`、`IsFloat`、`IsBool`、`IsDateTime`、`IsArray`、`IsTable`、`Kind`
 - 标量：`AsStr`、`AsInt`、`AsFloat`、`AsBool`、`AsDateTime`、`AsString`
+- 安全出参：`TryAsBool`、`TryAsInt`、`TryAsFloat`、`TryAsStr`
 - 表：`Get`、`Has`、`TableLen`、`TableKeyAt`、`TableValueAt`、`FindByPath`
 - 数组：`ArrayLen`、`ArrayGet`
 - 迭代：`TomlEnumerate` / `Key`（遍历时）
-- 非法访问：安全默认，不抛
+- 非法访问：`As*` 安全默认；`TryAs*` 返回 False
 
 ### 2.3 双层生命周期
 
@@ -83,6 +85,7 @@ function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
 | API | 失败行为 |
 |-----|----------|
 | `TomlParse` / `TomlParseWith` | document + `HasError` |
+| `TomlParse(IReader)` | `IoReadAll` + `FORMAT_BULK_PARSE_MAX_BYTES` bulk cap |
 | `TryTomlParse` | `False` + 诊断 document |
 | 诊断 document | 不可 `Stringify` |
 | 严格校验 | 重复键、前导零、下划线、datetime 范围等 → error |

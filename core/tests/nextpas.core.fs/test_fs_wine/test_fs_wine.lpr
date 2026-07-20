@@ -59,6 +59,27 @@ begin
   RemoveAll(LDir);
 end;
 
+procedure TestReadAt;
+var
+  LDir, LFile: string;
+  A: IFile;
+  LBuf: array[0..15] of AnsiChar;
+  N: SizeUInt;
+begin
+  LDir := WineTmp;
+  MkdirAll(LDir);
+  LFile := PathJoin(LDir, 'pread.bin');
+  WriteFileText(LFile, 'ABCDEFGH');
+  A := Open(LFile, [fmRead]);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  N := A.ReadAt(LBuf[0], 4, 2);
+  Check(N = 4, 'ReadAt len 4');
+  Check((LBuf[0] = 'C') and (LBuf[1] = 'D') and (LBuf[2] = 'E') and (LBuf[3] = 'F'),
+    'ReadAt offset 2 payload CDEF');
+  A.Close;
+  RemoveAll(LDir);
+end;
+
 procedure TestMkdirAllNested;
 var
   LRoot, LNest: string;
@@ -85,6 +106,7 @@ begin
   T.Test('write read remove', @TestWriteReadRemove);
   T.Test('mkdirall nested', @TestMkdirAllNested);
   T.Test('OpenLocked', @TestOpenLocked);
+  T.Test('ReadAt', @TestReadAt);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

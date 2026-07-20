@@ -49,6 +49,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.format.limits,
   nextpas.core.io.util,
   nextpas.core.mem.default;
 
@@ -157,10 +158,14 @@ begin
 end;
 
 function YamlParse(const AReader: IReader): IYamlDocument;
+var
+  LBytes: TBytes;
 begin
   if AReader = nil then
     raise EArgumentError.Create('YamlParse: reader must not be nil');
-  Result := YamlParse(YamlBytesToString(IoReadAll(AReader)));
+  LBytes := IoReadAll(AReader);
+  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'YamlParse');
+  Result := YamlParse(YamlBytesToString(LBytes));
 end;
 
 function TryYamlParse(const AReader: IReader; out ADoc: IYamlDocument): Boolean;

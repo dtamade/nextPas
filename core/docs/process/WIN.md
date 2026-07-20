@@ -34,11 +34,11 @@ bash core/tests/run_l2_wine_min_set.sh
 | 套件 | 路径 | 期望 cases |
 |------|------|------------|
 | process | `…/test_process_wine` | **11** |
-| fs | `…/test_fs_wine` | **3** |
+| fs | `…/test_fs_wine` | **4** |
 | fs.watch | `…/test_fs_watch_wine` | **3** |
 | path | `…/test_path_wine` | **4** |
 | os.env | `…/test_os_env_wine` | **3** |
-| **合计** | 5 目录 | **24** |
+| **合计** | 5 目录 | **25** |
 
 ### 2.2 host-windows（真 Windows CI · M3）
 

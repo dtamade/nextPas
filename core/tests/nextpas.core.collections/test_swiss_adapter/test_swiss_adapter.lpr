@@ -3,8 +3,8 @@ program test_swiss_adapter;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashmap.swiss.adapter;
 

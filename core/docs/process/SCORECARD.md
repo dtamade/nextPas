@@ -19,10 +19,10 @@
 
 | 项 | 值 |
 |----|-----|
-| 日期 | 2026-07-20（U1） |
+| 日期 | 2026-07-20（U2） |
 | OS | Linux x86_64（host-linux / wine）；GHA windows-latest（host-windows） |
 | 工具 | FPC 3.3.1；Wine 可用；GHA FPC trunk win64 |
-| U1 | 便利层默认 MaxOutput 64MiB；`EProcessError.Cancelled`；test_process **130** |
+| U1+U2 | 便利+builder 默认 MaxOutput 64MiB；Cancelled；Watch.Kind；test_process **133** |
 
 ---
 
@@ -37,7 +37,7 @@ bash core/tests/run_l2_wine_min_set.sh
 | 套件 | 结果 | 说明 |
 |------|------|------|
 | process | **11 passed** | Capture；KillTree(Job)；ExtraFd/Cred fail-closed |
-| fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
+| fs | **4 passed** | + ReadAt（U2）；Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
 | fs.watch | **3 passed** | create/close + poll timeout + create-event soft |
@@ -59,7 +59,7 @@ bash core/scripts/l2-windows-ci-matrix.sh
 | 套件 | 结果 | truth |
 |------|------|-------|
 | l2.process | **11 passed** | host-windows |
-| l2.fs | **3 passed** | host-windows |
+| l2.fs | **4 passed** | host-windows（+ReadAt U2） |
 | l2.fs.watch | **3 passed** | host-windows |
 | l2.path | **4 passed** | host-windows |
 | l2.os.env | **3 passed** | host-windows |

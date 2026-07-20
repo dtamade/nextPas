@@ -676,7 +676,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 | MaxConcurrentStreams | server 超限 → `REFUSED_STREAM` RST | session enforcement tests |
 | 池 / 多路表征 | 默认 `IHttpTransport.RoundTrip`：单连接**串行**一流；池按 authority/`MaxPoolSize` 复用。**Era 8 I3**：可选 `IHttpTransportMultiplex.RoundTripMany` 同连接并发多流（H2 only） | pool tests；`RoundTripMany` focused |
 | Server push | `ENABLE_PUSH=0`；`PUSH_PROMISE` → GOAWAY `PROTOCOL_ERROR` | client SETTINGS + PUSH tests |
-| TLS H2 | ALPN `h2`；`http://` prior knowledge；无 h2c Upgrade | facade / tls_real |
+| TLS H2 | ALPN `h2`；`http://` prior knowledge；无 h2c Upgrade | facade + **`test_http_h2_tls_alpn` (H2P-3)** |
 
 **诚实 residual（非缺口伪装）**：
 

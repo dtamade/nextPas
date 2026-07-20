@@ -6,7 +6,7 @@ program test_toml_stress;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.text.view,
   nextpas.core.mem.default,
   nextpas.core.mem.intf,

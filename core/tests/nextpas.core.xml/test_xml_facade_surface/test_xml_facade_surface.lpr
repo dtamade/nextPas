@@ -3,7 +3,6 @@ program test_xml_facade_surface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,

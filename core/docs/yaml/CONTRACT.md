@@ -32,8 +32,9 @@ type
   TYamlError = record
     Message: TStringView;
     Line: UInt32;
-    Col: UInt32;       // 字段名 Col（与 TOML 一致，与 JSON Column 不同）
+    Col: UInt32;       // 主字段名 Col；Column 为 property 别名
     Offset: SizeUInt;
+    property Column: UInt32 read Col write Col;
   end;
   TYamlValue = record ... end;
   TYamlBuilder = record ... end;  // Init/Done 手动生命周期
@@ -56,10 +57,11 @@ function YamlParseWith(...; const AAllocator: TMemAllocator): IYamlDocument;
 
 - 判断：`IsValid`、`IsNull`、`IsBool`、`IsInt`、`IsFloat`、`IsStr`、`IsSeq`、`IsMap`、`Kind`
 - 标量：`AsBool`、`AsInt`、`AsFloat`、`AsStr`
+- 安全出参：`TryAsBool`、`TryAsInt`、`TryAsFloat`、`TryAsStr`
 - 序列：`SeqLen`、`SeqGet`
 - 映射：`MapGet`、`MapHas`、`MapLen`、`MapKeyAt`、`MapValueAt`
 - `Get`：**`MapGet` 的 TOML 风格别名**（同查找语义，inline 转发）
-- 非法访问：安全默认
+- 非法访问：`As*` 安全默认；`TryAs*` 返回 False
 
 ### 2.3 Builder
 
@@ -72,6 +74,7 @@ function YamlParseWith(...; const AAllocator: TMemAllocator): IYamlDocument;
 | API | 失败行为 |
 |-----|----------|
 | `YamlParse` / `YamlParseWith` | document + `HasError` |
+| `YamlParse(IReader)` | `IoReadAll` + `FORMAT_BULK_PARSE_MAX_BYTES`  bulk cap |
 | `TryYamlParse` | `False` + 诊断 document |
 | 诊断 document | 不可 `Stringify` / `StringifyPretty` |
 

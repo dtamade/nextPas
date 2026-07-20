@@ -4,6 +4,9 @@ program bench_hashmap;
 
 uses
   nextpas.core.bench,
+  nextpas.core.bench.intf,
+  nextpas.core.time.base,
+  nextpas.core.fs,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.swiss.i32i32;
 
@@ -183,20 +186,25 @@ begin
 
   WriteLn('=== nextPas THashMap<Integer,Integer> Benchmark (N=', N, ') ===');
   WriteLn;
-  LResults := TBenchSuite.Create('HashMap.Put')
-    .AddLoop('HashMap.Put/N=100000', @BenchPut)
-    .AddLoop('HashMap.Put+prealloc/N=100000', @BenchPutPrealloc)
-    .AddLoop('HashMap.Get(hit)/N=100000', @BenchGetHit)
-    .AddLoop('HashMap.Get(miss)/N=100000', @BenchGetMiss)
-    .AddLoop('HashMap.ContainsKey/N=100000', @BenchContainsKey)
-    .AddLoop('HashMap.Remove/N=100000', @BenchRemove)
-    .AddLoop('SwissTable.Put/N=100000', @BenchSwissPut)
-    .AddLoop('SwissTable.Put+prealloc/N=100000', @BenchSwissPutPrealloc)
-    .AddLoop('SwissTable.Get(hit)/N=100000', @BenchSwissGetHit)
-    .AddLoop('SwissTable.Get(miss)/N=100000', @BenchSwissGetMiss)
-    .AddLoop('SwissTable.Remove/N=100000', @BenchSwissRemove)
+  LResults := TBenchSuite.Create('hashmap')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .AddLoop('HashMap/Put/N=100000', @BenchPut)
+    .AddLoop('HashMap/PutPrealloc/N=100000', @BenchPutPrealloc)
+    .AddLoop('HashMap/Get/hit/N=100000', @BenchGetHit)
+    .AddLoop('HashMap/Get/miss/N=100000', @BenchGetMiss)
+    .AddLoop('HashMap/ContainsKey/N=100000', @BenchContainsKey)
+    .AddLoop('HashMap/Remove/N=100000', @BenchRemove)
+    .AddLoop('SwissTable/Put/N=100000', @BenchSwissPut)
+    .AddLoop('SwissTable/PutPrealloc/N=100000', @BenchSwissPutPrealloc)
+    .AddLoop('SwissTable/Get/hit/N=100000', @BenchSwissGetHit)
+    .AddLoop('SwissTable/Get/miss/N=100000', @BenchSwissGetMiss)
+    .AddLoop('SwissTable/Remove/N=100000', @BenchSwissRemove)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-hashmap.json');
   GSwiss.Free;
   GMap.Free;
   if GSink = -1 then WriteLn(GSink);

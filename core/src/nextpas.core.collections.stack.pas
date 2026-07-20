@@ -94,7 +94,7 @@ end;
 function TStack.Pop: T;
 begin
   if FVec.IsEmpty then
-    raise EEmptyCollection.Create('TStack.Pop: collection is empty');
+    raise EEmptyCollection.Create('TStack.Pop: empty');
   Result := FVec.Pop;
 end;
 
@@ -106,7 +106,7 @@ end;
 function TStack.Peek: T;
 begin
   if FVec.IsEmpty then
-    raise EEmptyCollection.Create('TStack.Peek: collection is empty');
+    raise EEmptyCollection.Create('TStack.Peek: empty');
   Result := FVec.Peek;
 end;
 

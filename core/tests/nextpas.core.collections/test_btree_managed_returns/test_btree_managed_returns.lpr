@@ -3,7 +3,6 @@ program test_btree_managed_returns;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.collections.btree;
 

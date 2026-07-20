@@ -12,7 +12,7 @@ function NextConfigWindowsEnvBlockEntry(var ACursor: PAnsiChar;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function TryConfigEnvNameToKey(const AName, APrefix: string;
   out AKey: string): Boolean;

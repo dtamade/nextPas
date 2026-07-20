@@ -4,8 +4,8 @@ program test_swisstable;
 {$modeswitch advancedrecords}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.hashmap.swiss,
   nextpas.core.collections.hashmap.swiss.str;
 

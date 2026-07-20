@@ -50,6 +50,7 @@ begin
   Check(LReader.HasError, 'reader error state visible');
   LError := LReader.Error;
   Check(LError.Line > 0, 'structured csv error visible through facade');
+  CheckEqual(LError.Column, LError.Col, 'Column/Col aliases match');
   Check(LReader.GetError <> '', 'string error visible through facade');
 
   LWriter := TCsvWriter.Create(';');

@@ -3,7 +3,7 @@ program test_csv_roundtrip;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.csv,
   nextpas.core.mem.default,
   nextpas.core.test;

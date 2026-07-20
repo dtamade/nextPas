@@ -3,8 +3,8 @@ program test_collections_killer;
 {$R+}{$Q+}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.vec,
   nextpas.core.collections.btree;

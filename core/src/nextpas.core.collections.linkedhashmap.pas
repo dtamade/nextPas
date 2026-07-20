@@ -388,7 +388,7 @@ end;
 function TLinkedHashMap.First: TPairType;
 begin
   if FHead = nil then
-    raise EEmptyCollection.Create('TLinkedHashMap.First: collection is empty');
+    raise EEmptyCollection.Create('TLinkedHashMap.First: empty');
 
   Result := FHead^.Pair;
 end;
@@ -396,7 +396,7 @@ end;
 function TLinkedHashMap.Last: TPairType;
 begin
   if FTail = nil then
-    raise EEmptyCollection.Create('TLinkedHashMap.Last: collection is empty');
+    raise EEmptyCollection.Create('TLinkedHashMap.Last: empty');
 
   Result := FTail^.Pair;
 end;

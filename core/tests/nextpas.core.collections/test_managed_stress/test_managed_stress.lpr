@@ -3,8 +3,8 @@ program test_managed_stress;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   leak_tracker,
   nextpas.core.collections.base,
   nextpas.core.collections.vec,
@@ -26,6 +26,36 @@ uses
   nextpas.core.collections.iterators,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base;
+
+function FileReadable(const APath: string): Boolean;
+var
+  F: Text;
+begin
+  {$I-}
+  Assign(F, APath);
+  Reset(F);
+  Result := IOResult = 0;
+  if Result then
+    Close(F);
+  {$I+}
+end;
+
+function LoadTextFile(const APath: string): string;
+var
+  F: Text;
+  LLine: string;
+begin
+  Result := '';
+  Assign(F, APath);
+  Reset(F);
+  while not Eof(F) do
+  begin
+    ReadLn(F, LLine);
+    Result := Result + LLine + #10;
+  end;
+  Close(F);
+end;
+
 
 var
   GPass: Integer;
@@ -99,24 +129,16 @@ end;
 function LoadCollectionsSource(const AFileName: string): string;
 var
   LPath: string;
-  LText: TStringList;
 begin
   LPath := '../../../src/' + AFileName;
-  if not FileExists(LPath) then
+  if not FileReadable(LPath) then
     LPath := 'core/src/' + AFileName;
-  if not FileExists(LPath) then
+  if not FileReadable(LPath) then
   begin
     WriteLn('FAIL: source contract file not found: ', AFileName);
     Halt(1);
   end;
-
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(LPath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := LoadTextFile(LPath);
 end;
 
 procedure TestVecPushClear;
@@ -1205,7 +1227,7 @@ var
   Source: string;
 begin
   Source := LoadCollectionsSource('nextpas.core.collections.hashmap.swiss.str.pas');
-  Source := StringReplace(Source, #13#10, #10, [rfReplaceAll]);
+  Source := StringReplace(Source, #13#10, #10, True);
   if Pos('if FSlots[Li].Key = AKey then' + #10 +
     '      begin' + #10 +
     '        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);' + #10 +
@@ -1279,7 +1301,7 @@ var
   Source: string;
 begin
   Source := LoadCollectionsSource('nextpas.core.collections.hashmap.swiss.i32.pas');
-  Source := StringReplace(Source, #13#10, #10, [rfReplaceAll]);
+  Source := StringReplace(Source, #13#10, #10, True);
   if Pos('if FSlots[Li].Key = AKey then' + #10 +
     '      begin' + #10 +
     '        if System.IsManagedType(V) then Finalize(FSlots[Li].Value);' + #10 +
@@ -1536,18 +1558,13 @@ procedure TestCircularBufferManagedSlotsStayInitialized;
 const
   SourcePath = '../../../src/nextpas.core.collections.circularbuffer.pas';
 var
-  Source: TStringList;
+  SourceText: string;
 begin
-  Source := TStringList.Create;
-  try
-    Source.LoadFromFile(SourcePath);
-    if Pos('FinalizeManagedElementsUnchecked(@FBuffer', Source.Text) <> 0 then
-    begin
-      WriteLn('FAIL: CircularBuffer managed slots must be released with typed defaults, not raw finalization');
-      Halt(1);
-    end;
-  finally
-    Source.Free;
+  SourceText := LoadTextFile(SourcePath);
+  if Pos('FinalizeManagedElementsUnchecked(@FBuffer', SourceText) <> 0 then
+  begin
+    WriteLn('FAIL: CircularBuffer managed slots must be released with typed defaults, not raw finalization');
+    Halt(1);
   end;
   Pass('CircularBuffer managed slots stay initialized');
 end;
@@ -1649,23 +1666,18 @@ procedure TestPriorityQueueManagedSlotsStayInitialized;
 const
   SourcePath = '../../../src/nextpas.core.collections.priorityqueue.pas';
 var
-  Source: TStringList;
+  SourceText: string;
 begin
-  Source := TStringList.Create;
-  try
-    Source.LoadFromFile(SourcePath);
-    if Pos('Finalize(FItems[', Source.Text) <> 0 then
-    begin
-      WriteLn('FAIL: PriorityQueue managed slots must use typed defaults, not raw finalization');
-      Halt(1);
-    end;
-    if Pos('FItems[i] := Default(T)', Source.Text) = 0 then
-    begin
-      WriteLn('FAIL: PriorityQueue managed slots must be released with typed defaults');
-      Halt(1);
-    end;
-  finally
-    Source.Free;
+  SourceText := LoadTextFile(SourcePath);
+  if Pos('Finalize(FItems[', SourceText) <> 0 then
+  begin
+    WriteLn('FAIL: PriorityQueue managed slots must use typed defaults, not raw finalization');
+    Halt(1);
+  end;
+  if Pos('FItems[i] := Default(T)', SourceText) = 0 then
+  begin
+    WriteLn('FAIL: PriorityQueue managed slots must be released with typed defaults');
+    Halt(1);
   end;
   Pass('PriorityQueue managed slots stay initialized');
 end;
@@ -1851,6 +1863,6 @@ begin
   TestTreeSetManagedRemoveAllReleasesPoolOnFree;
   TestMapIterManagedReinitReleasesCurrent;
   TestChainIterManagedReinitReleasesCurrent;
-  WriteLn(Format('--- %d passed ---', [GPass]));
+  WriteLn('--- ' + IntToStr(GPass) + ' passed ---');
   WriteLn('ALL PASS');
 end.

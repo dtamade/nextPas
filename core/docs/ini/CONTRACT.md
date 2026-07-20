@@ -23,6 +23,7 @@ type
     Line: UInt32;
     Column: UInt32;
     Offset: SizeUInt;
+    property Col: UInt32 read Column write Column;  // alias
   end;
 
   TIniFile = class
@@ -52,6 +53,7 @@ type
     function GetSections: TStringArray;
     function GetKeys(const ASection: string): TStringArray;
     function Allocator: TMemAllocator;
+    property Strict: Boolean;  // default False; try-load rejects bare lines when True
   end;
 
 function IniParse(const AContent: string): TIniFile;
@@ -67,12 +69,13 @@ function IniStringify(const AFile: TIniFile): string;
 
 | API | 行为 |
 |-----|------|
-| `LoadFromString` | 宽松解析；重复 section 合并、重复 key last-wins |
-| `TryLoadFromString` / `TryLoadFromFile` | `False` + string **或** `TIniError`（重载） |
+| `LoadFromString` | 宽松解析；重复 section 合并、重复 key last-wins；裸行（非 section / 非 key=value）忽略 |
+| `TryLoadFromString` / `TryLoadFromFile` | `False` + string **或** `TIniError`（重载）；`Strict=True` 时裸行失败 |
+| `IniParse(IReader)` | `IoReadAll` + bulk cap（`FORMAT_BULK_PARSE_MAX_BYTES`） |
 | `LoadFromFile` / `SaveToFile` | 文件 I/O 失败抛 `ENextPasError` |
 | OOM | `EResourceExhaustedError` |
 
-行尾：LF、CRLF、lone CR 均识别。结构化 `TIniError` 提供 `Message`/`Line`/`Column`/`Offset`；string 重载格式为 `line N, column C: message`（与历史兼容）。
+行尾：LF、CRLF、lone CR 均识别。结构化 `TIniError` 提供 `Message`/`Line`/`Column`/`Offset`（`Col` 别名）；string 重载格式为 `line N, column C: message`（与历史兼容）。
 
 ---
 

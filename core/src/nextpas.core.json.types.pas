@@ -57,6 +57,8 @@ type
     Offset: SizeUInt;
     Line: UInt32;
     Column: UInt32;
+    { Alias for YAML/TOML Col naming. }
+    property Col: UInt32 read Column write Column;
   end;
 
 const

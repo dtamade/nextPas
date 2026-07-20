@@ -3,7 +3,6 @@ program test_linkedhashmap;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   leak_tracker,
   nextpas.core.base,
   nextpas.core.test,

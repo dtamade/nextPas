@@ -84,6 +84,8 @@ type
     Line: UInt32;
     Col: UInt32;
     Offset: SizeUInt;
+    { Alias for cross-format diagnostics (JSON/CSV use Column). }
+    property Column: UInt32 read Col write Col;
   end;
 
 const

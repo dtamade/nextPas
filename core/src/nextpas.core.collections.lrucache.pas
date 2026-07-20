@@ -14,7 +14,7 @@ uses
   nextpas.core.collections.base,
   nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
-  nextpas.core.collections.hashmap, { HashMix32 / HashOfUInt* helpers }
+  nextpas.core.collections.hashmap.base, { HashMix32 / HashOfUInt* helpers }
   nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.collections.vecdeque,
   nextpas.core.collections.element_manager;

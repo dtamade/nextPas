@@ -31,6 +31,7 @@ type
   TDirEntryArray = nextpas.core.fs.base.TDirEntryArray;
   TFileLockKind = nextpas.core.fs.base.TFileLockKind;
   TFsWatchEvent = nextpas.core.fs.watch.TFsWatchEvent;
+  TFsWatchKind = nextpas.core.fs.watch.TFsWatchKind;
   IFile = nextpas.core.fs.intf.IFile;
   IFsWatcher = nextpas.core.fs.watch.IFsWatcher;
   IScanner = nextpas.core.io.scanner.IScanner;

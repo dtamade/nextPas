@@ -4,6 +4,9 @@ program bench_headers;
 
 uses
   nextpas.core.bench,
+  nextpas.core.bench.intf,
+  nextpas.core.time.base,
+  nextpas.core.fs,
   nextpas.core.http.intf,
   nextpas.core.http.headers;
 
@@ -164,16 +167,21 @@ begin
   WriteLn('=== nextpas.core.http.headers benchmark ===');
   WriteLn('operation=http.headers');
   WriteLn;
-  LResults := TBenchSuite.Create('Set+Get 5 headers')
-    .AddLoop('Set+Get 5 headers', @BenchSetGet_5Headers)
-    .AddLoop('Set+Get 15 headers', @BenchSetGet_15Headers)
-    .AddLoop('Add 15 headers', @BenchAdd_15Headers)
-    .AddLoop('Get miss (3 headers)', @BenchGet_Miss)
-    .AddLoop('GetAll miss (5 headers)', @BenchGetAll_Miss)
-    .AddLoop('Get hit (5 headers, last)', @BenchGet_Hit)
-    .AddLoop('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase)
-    .AddLoop('Has (3 headers)', @BenchHas)
-    .AddLoop('Clone 10 headers', @BenchClone_10Headers)
+  LResults := TBenchSuite.Create('headers')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .AddLoop('Headers/SetGet/5', @BenchSetGet_5Headers)
+    .AddLoop('Headers/SetGet/15', @BenchSetGet_15Headers)
+    .AddLoop('Headers/Add/15', @BenchAdd_15Headers)
+    .AddLoop('Headers/Get/miss', @BenchGet_Miss)
+    .AddLoop('Headers/GetAll/miss', @BenchGetAll_Miss)
+    .AddLoop('Headers/Get/hit', @BenchGet_Hit)
+    .AddLoop('Headers/Get/hitUpper', @BenchGet_HitUppercase)
+    .AddLoop('Headers/Has', @BenchHas)
+    .AddLoop('Headers/Clone/10', @BenchClone_10Headers)
     .Run;
   WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-headers.json');
 end.
