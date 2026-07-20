@@ -90,7 +90,9 @@ procedure MFCCF32(aSignal: PSingle; aSignalCount: SizeUInt;
 implementation
 
 uses
-  Math, nextpas.core.simd.mathutil, nextpas.core.simd;
+  nextpas.core.math.trig,
+  nextpas.core.simd.mathutil,
+  nextpas.core.simd;
 
 {$IFDEF SIMD_X86_AVAILABLE}
 // Process 4 complex butterflies with SSE2
@@ -337,6 +339,42 @@ asm
 end;
 {$ENDIF}
 
+procedure FftNaiveF32(aData: PSimdComplexF32; aCount: SizeUInt; aDirection: TSimdFftDirection);
+{ In-place direct DFT for non-power-of-two lengths. }
+var
+  k, n: SizeUInt;
+  LSign, LAngle, LRe, LIm, LC, LS, LXr, LXi: Single;
+  LTmp: PSimdComplexF32;
+begin
+  if aCount <= 1 then Exit;
+  if aDirection = sfdForward then LSign := -1.0 else LSign := 1.0;
+  LTmp := PSimdComplexF32(SimdAlloc(aCount * SizeOf(TSimdComplexF32)));
+  try
+    for k := 0 to aCount - 1 do
+    begin
+      LRe := 0;
+      LIm := 0;
+      for n := 0 to aCount - 1 do
+      begin
+        LAngle := LSign * 2.0 * SIMD_PI * Single(k) * Single(n) / Single(aCount);
+        LC := SimdCosF32(LAngle);
+        LS := SimdSinF32(LAngle);
+        LXr := aData[n].Re;
+        LXi := aData[n].Im;
+        LRe := LRe + LXr * LC - LXi * LS;
+        LIm := LIm + LXr * LS + LXi * LC;
+      end;
+      LTmp[k].Re := LRe;
+      LTmp[k].Im := LIm;
+    end;
+    Move(LTmp^, aData^, aCount * SizeOf(TSimdComplexF32));
+    if aDirection = sfdInverse then
+      ArrayMulScalarF32(PSingle(aData), PSingle(aData), aCount * 2, 1.0 / aCount);
+  finally
+    SimdFree(LTmp);
+  end;
+end;
+
 procedure FftRadix2F32(aData: PSimdComplexF32; aCount: SizeUInt; aDirection: TSimdFftDirection);
 var
   i, j, k, m, mh, LStage, LNumStages: SizeUInt;
@@ -350,6 +388,13 @@ var
   LTwOfs: SizeUInt;
 begin
   if aCount <= 1 then Exit;
+
+  { Non-power-of-two lengths must not enter radix-2 butterflies (OOB writes). }
+  if (aCount and (aCount - 1)) <> 0 then
+  begin
+    FftNaiveF32(aData, aCount, aDirection);
+    Exit;
+  end;
 
   if aDirection = sfdForward then LSign := -1.0 else LSign := 1.0;
 
@@ -1074,6 +1119,29 @@ end;
 // Real FFT using half-size complex FFT trick:
 // Pack N real samples as N/2 complex: z[k] = x[2k] + j*x[2k+1]
 // Do N/2 complex FFT, then unpack using symmetry
+procedure RealFftNaiveF32(aInput: PSingle; aOutput: PSimdComplexF32; aCount: SizeUInt);
+{ Direct DFT for non-power-of-two real input. Writes aCount complex bins. }
+var
+  k, n: SizeUInt;
+  LAngle, LRe, LIm, LC, LS: Single;
+begin
+  for k := 0 to aCount - 1 do
+  begin
+    LRe := 0;
+    LIm := 0;
+    for n := 0 to aCount - 1 do
+    begin
+      LAngle := -2.0 * SIMD_PI * Single(k) * Single(n) / Single(aCount);
+      LC := SimdCosF32(LAngle);
+      LS := SimdSinF32(LAngle);
+      LRe := LRe + aInput[n] * LC;
+      LIm := LIm + aInput[n] * LS;
+    end;
+    aOutput[k].Re := LRe;
+    aOutput[k].Im := LIm;
+  end;
+end;
+
 procedure RealFftF32(aInput: PSingle; aOutput: PSimdComplexF32; aCount: SizeUInt);
 var
   LHalf, k: SizeUInt;
@@ -1084,15 +1152,12 @@ begin
   if aCount = 0 then Exit;
   if aCount = 1 then begin aOutput[0].Re := aInput[0]; aOutput[0].Im := 0; Exit; end;
 
-  // Odd count: fall back to naive
-  if (aCount and 1) <> 0 then
+  { Radix-2 path requires power-of-two length. Non-power-of-two (including
+    even values like 10 whose N/2=5 is also non-power-of-two) must not enter
+    FftRadix2F32 — that overruns the packed buffer and corrupts the heap. }
+  if (aCount and (aCount - 1)) <> 0 then
   begin
-    for k := 0 to aCount - 1 do
-    begin
-      aOutput[k].Re := aInput[k];
-      aOutput[k].Im := 0;
-    end;
-    FftRadix2F32(aOutput, aCount, sfdForward);
+    RealFftNaiveF32(aInput, aOutput, aCount);
     Exit;
   end;
 
@@ -1397,8 +1462,8 @@ begin
   if (aFilterCount = 0) or (aFftSize = 0) or (aSampleRate <= 0) then Exit;
 
   // Convert Hz to Mel
-  LLowMel := 2595 * Math.Log10(1 + aLowFreq / 700);
-  LHighMel := 2595 * Math.Log10(1 + aHighFreq / 700);
+  LLowMel := 2595 * Log10(1 + aLowFreq / 700);
+  LHighMel := 2595 * Log10(1 + aHighFreq / 700);
 
   // Create mel points
   SetLength(LMelPoints, aFilterCount + 2);
@@ -1408,7 +1473,7 @@ begin
   for i := 0 to aFilterCount + 1 do
   begin
     LMelPoints[i] := LLowMel + i * LStep;
-    LFreqPoints[i] := 700 * (Math.Power(10, LMelPoints[i] / 2595) - 1);
+    LFreqPoints[i] := 700 * (Power(10, LMelPoints[i] / 2595) - 1);
   end;
 
   // Initialize output to zero

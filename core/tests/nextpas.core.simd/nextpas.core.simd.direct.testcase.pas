@@ -6,11 +6,16 @@ unit nextpas.core.simd.direct.testcase;
 interface
 
 uses
-  Math, nextpas.core.exception,
-  nextpas.core.text.conv, nextpas.core.test,
-  nextpas.core.simd, nextpas.core.simd.fixturehelpers,
-  nextpas.core.simd.testcase, nextpas.core.simd.base,
-  nextpas.core.simd.dispatch, nextpas.core.simd.direct,
+  nextpas.core.math,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.fixturehelpers,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.direct,
   nextpas.core.simd.scalar;
 
 type
@@ -64,7 +69,8 @@ type
 implementation
 
 uses
-  Math, Classes;
+  nextpas.core.math,
+  Classes;
 
 function DirectBackendName(const aBackend: TSimdBackend): string;
 begin

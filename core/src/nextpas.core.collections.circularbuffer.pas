@@ -266,7 +266,7 @@ end;
 function TCircularBuffer.Pop: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TCircularBuffer.Pop: Buffer is empty');
+    raise EEmptyCollection.Create('TCircularBuffer.Pop: empty');
 
   Result := FBuffer[FHead];
 
@@ -296,7 +296,7 @@ end;
 function TCircularBuffer.Peek: T;
 begin
   if FCount = 0 then
-    raise EInvalidOperation.Create('TCircularBuffer.Peek: Buffer is empty');
+    raise EEmptyCollection.Create('TCircularBuffer.Peek: empty');
 
   Result := FBuffer[FHead];
 end;

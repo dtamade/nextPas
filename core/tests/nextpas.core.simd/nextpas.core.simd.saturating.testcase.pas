@@ -9,7 +9,7 @@ unit nextpas.core.simd.saturating.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.testcase, nextpas.core.simd.base;
 
 type

@@ -4,14 +4,14 @@ program test_micro_ops;
 {$I nextpas.core.simd.settings.inc}
 
 uses
-  nextpas.core.text.conv, Unix, BaseUnix, nextpas.core.simd.base,
+  nextpas.core.time.base,
+  nextpas.core.text.conv, nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
 function GetTimeNs: Int64;
-var LTs: TTimeVal;
 begin
-  fpgettimeofday(@LTs, nil);
-  Result := Int64(LTs.tv_sec) * 1000000000 + Int64(LTs.tv_usec) * 1000;
+  { Monotonic ns via framework clock (no OS unit). }
+  Result := TInstant.Now.DurationSince(Default(TInstant)).AsNanoseconds;
 end;
 
 var

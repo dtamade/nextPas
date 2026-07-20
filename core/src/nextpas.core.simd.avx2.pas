@@ -73,13 +73,11 @@ procedure MemSet_AVX2(dst: Pointer; len: SizeUInt; value: Byte);
 implementation
 
 uses
-  nextpas.core.mem,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar, // For fallback functions
   nextpas.core.simd.mathutil, // For SimdMax in stable normalization
-  nextpas.core.math.trig, // For ArcTan2
-  Math; // For Ceil, Floor
+  nextpas.core.math.trig; // For ArcTan2
 
 // Thread-local scratch buffers for Tan computation (AVX2 specific)
 // 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
@@ -89,20 +87,18 @@ threadvar
   GAVX2TanBufCapacity: SizeUInt;
 
 procedure EnsureAVX2TanScratch(aCount: SizeUInt);
-var
-  LOldBytes: SizeUInt;
 begin
   if (GAVX2TanBufCapacity < aCount) or (aCount < GAVX2TanBufCapacity div 4) then
   begin
-    // sized free: capacity is the GetMem element count for both scratch buffers
-    LOldBytes := GAVX2TanBufCapacity * SizeOf(Single);
+    // 释放旧缓冲区
     if GAVX2TanSinBuf <> nil then
-      FreeMem(GAVX2TanSinBuf, LOldBytes);
+      FreeMem(GAVX2TanSinBuf);
     if GAVX2TanCosBuf <> nil then
-      FreeMem(GAVX2TanCosBuf, LOldBytes);
+      FreeMem(GAVX2TanCosBuf);
+    // 分配新缓冲区
     GAVX2TanBufCapacity := aCount;
-    GAVX2TanSinBuf := GetMem(aCount * SizeOf(Single));
-    GAVX2TanCosBuf := GetMem(aCount * SizeOf(Single));
+    GetMem(GAVX2TanSinBuf, aCount * SizeOf(Single));
+    GetMem(GAVX2TanCosBuf, aCount * SizeOf(Single));
   end;
 end;
 
@@ -3260,14 +3256,13 @@ end;
 finalization
   if GAVX2TanSinBuf <> nil then
   begin
-    FreeMem(GAVX2TanSinBuf, GAVX2TanBufCapacity * SizeOf(Single));
+    FreeMem(GAVX2TanSinBuf);
     GAVX2TanSinBuf := nil;
   end;
   if GAVX2TanCosBuf <> nil then
   begin
-    FreeMem(GAVX2TanCosBuf, GAVX2TanBufCapacity * SizeOf(Single));
+    FreeMem(GAVX2TanCosBuf);
     GAVX2TanCosBuf := nil;
   end;
-  GAVX2TanBufCapacity := 0;
 
 end.

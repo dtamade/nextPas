@@ -3,8 +3,67 @@
 **模块路径**：`core/src/nextpas.core.math*.pas`（约 20 个源文件）
 **层级**：L0（注册表权威；与 `base`/`simd`/`atomic` 同属 L0 治理集。batch/impl 可消费公开 `nextpas.core.simd` 门面）
 **Owner**：math-simd lane
-**最后更新**：2026-07-17
-**版本**：1.2
+**最后更新**：2026-07-20
+**版本**：1.5
+
+---
+
+## 0. FPC RTL 隔离（编译器无关）
+
+**规则**：仅 `nextpas.core.system`（及其 system 子门面）允许直接 `uses` FPC RTL 单元。
+`nextpas.core.math*` 生产源 **禁止** `uses Math|SysUtils|Classes|Windows|Unix|BaseUnix|Dos|TypInfo|Types`。
+
+| 能力 | Owner | 禁止 |
+|------|-------|------|
+| 标量/超越函数 | `math.scalar` / `math.trig` | FPC `Math` |
+| 错误类型 | `nextpas.core.errors` | FPC `SysUtils` 异常树直连 |
+| FPU mask | `nextpas.core.math` 门面 `Get/SetExceptionMask` | FPC `Math` FPU API |
+| OS/平台 | 不属 math；由 `platform` | OS 单元 |
+
+**门禁**：`make -C core/tests/nextpas.core.math/test_rtl_isolation test`
+（生产 **fail**；测试/示例/基准仍可 **WARN**，`--fail-tests` 可收紧）
+
+**FPU mask 契约**：`Get/SetExceptionMask` 在 x86_64 上同时写 MXCSR 与 x87 CW，并清 sticky 状态；
+FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIMD batch 的 `fsin`/`fcos`/`fyl2x` scalar tail。
+
+**测试树 residual（WARN，不阻塞 landing；S4 收敛后）**：
+- `core/tests/nextpas.core.math/**`：已无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
+- `core/tests/nextpas.core.simd/**`：已无 FPC `Math`（迁到 `nextpas.core.math`，含
+  `NaN`/`Infinity`/`NegInfinity` 命名特殊值）；bench 计时已迁
+  `nextpas.core.time.base.TInstant`（不再 `uses Unix|Windows|BaseUnix`）。
+- **仍保留的 live residual（6 files）**，均为真实符号依赖，不是死 uses：
+  - `Classes` + `TThread`：`simd.concurrent(.testcase)`、`direct.testcase`、
+    `dispatchapi.testcase`、`cpuinfo.lazy.testcase`
+  - `SysUtils` + `FindFirst`/`DirectoryExists`：`cpuinfo.testcase`
+- 后续可选：`TThread` 迁 `nextpas.core.thread`；目录探测迁 platform/fs owner。
+
+`System.Sin/Sqrt/...` 等语言级 intrinsic 应集中在 `math.trig`/`math.scalar` 出口；consumer 与 simd 应调用 math owner，避免业务路径散落 `System.*`。
+
+**System.* 允许清单（实现细节）**：
+
+| 位置 | 允许 | 禁止 |
+|------|------|------|
+| `math.trig` / `math.scalar` | `System.Sin/Exp/Ln/Sqrt/...` 作为 RTL intrinsic 出口 | 业务单元直连 |
+| `simd` 标量 convert / 叶 specials | 实现内部可暂用 `System.*` | 应用代码 `uses` simd 后假设 bit=libm |
+| `simd.signal` / `nn` 等 | 应逐步收敛到 math owner 或本地 poly | 本包不批量改（依赖面大） |
+
+### 0.1 应用入口 vs 内核入口
+
+| 角色 | 入口 | 禁止 |
+|------|------|------|
+| 应用 / 游戏 / 业务 | `nextpas.core.math`（`Batch*`、`TVec*`） | 默认 `uses nextpas.core.simd` |
+| 内核 / 热循环专家 | `nextpas.core.simd` 的 `Array*`/`Vec*` | 无 open-array 边界；调用方拥有长度 |
+
+### 0.2 Batch open-array 长度策略（默认严格）
+
+见 `API.md`「Batch open-array length policy」。实现集中在
+`math.batch.simd` 的 `MinArrayCount*` / `ResolveEqualOrMin*`。
+`{$DEFINE NEXTPAS_MATH_BATCH_TRUNCATE_MIN}` 恢复旧 min 截断。
+
+### 0.3 超越 near-parity（NEON sample）
+
+NEON 超越叶（Sin/Exp/Cos/Log 等）对 `System.*` / scalar **near-parity**，非 bit 相等。
+细节：`docs/simd/design-c5-transcendentals.md`。测试容差为契约证据，非 libm 认证 ULP。
 
 ---
 

@@ -6,7 +6,7 @@ unit nextpas.core.simd.linalg.testcase;
 interface
 
 uses
-  Classes, Math, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.base,
+  nextpas.core.math, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.base,
   nextpas.core.simd.arrays.typed, nextpas.core.simd.linalg, nextpas.core.simd,
   {$IFDEF SIMD_X86_AVAILABLE}
   nextpas.core.simd.linalg.gemm.sse2
@@ -277,10 +277,9 @@ begin
   A.Put(1, 0, 4); A.Put(1, 1, 3);
 
   try
-    L := TSimdF32Matrix.Create(2, 2);
-    U := TSimdF32Matrix.Create(2, 2);
+    { LUDecomposeF32 allocates L/U itself — do not pre-create or those buffers leak. }
+    CheckTrue(LUDecomposeF32(A, L, U), 'LU success');
     try
-      CheckTrue(LUDecomposeF32(A, L, U), 'LU success');
       // L should be lower triangular, U upper triangular
       CheckNear(1, L.Get(0, 0), EPS, 'L[0,0]');
       CheckNear(2, L.Get(1, 0), EPS, 'L[1,0]');
@@ -547,7 +546,7 @@ end;
 
 procedure TTestCase_SimdLinalg.Test_Cholesky_Decompose;
 var
-  A, L, LLt: TSimdF32Matrix;
+  A, L, LLt, LLtT: TSimdF32Matrix;
   i, j: Integer;
 begin
   // Symmetric positive definite matrix
@@ -564,14 +563,19 @@ begin
         for j := i + 1 to 2 do
           CheckNear(0.0, L.Get(i, j), EPS, 'L upper[' + IntToStr(i) + ',' + IntToStr(j) + ']');
 
-      // Verify L * L^T = A
-      LLt := MatMulF32(L, L.Transpose);
+      // Verify L * L^T = A (own Transpose temp — MatMul does not free operands)
+      LLtT := L.Transpose;
       try
-        for i := 0 to 2 do
-          for j := 0 to 2 do
-            CheckNear(A.Get(i, j), LLt.Get(i, j), EPS, 'LLt[' + IntToStr(i) + ',' + IntToStr(j) + ']');
+        LLt := MatMulF32(L, LLtT);
+        try
+          for i := 0 to 2 do
+            for j := 0 to 2 do
+              CheckNear(A.Get(i, j), LLt.Get(i, j), EPS, 'LLt[' + IntToStr(i) + ',' + IntToStr(j) + ']');
+        finally
+          LLt.Free;
+        end;
       finally
-        LLt.Free;
+        LLtT.Free;
       end;
     finally
       L.Free;
@@ -879,7 +883,7 @@ end;
 
 procedure TTestCase_SimdLinalg.Test_QR_Orthogonality;
 var
-  A, Q, R, QtQ: TSimdF32Matrix;
+  A, Q, R, QtQ, Qt: TSimdF32Matrix;
   i, j: Integer;
 begin
   // Simple 3x2 matrix
@@ -891,17 +895,22 @@ begin
   try
     CheckTrue(QRDecomposeF32(A, Q, R), 'QR success');
     try
-      // Check Q^T * Q ≈ I (first 2x2 block)
-      QtQ := MatMulF32(Q.Transpose, Q);
+      // Check Q^T * Q ≈ I (first 2x2 block); own Transpose temp
+      Qt := Q.Transpose;
       try
-        for i := 0 to 1 do
-          for j := 0 to 1 do
-            if i = j then
-              CheckNear(1.0, QtQ.Get(i, j), 1e-4, 'QtQ[' + IntToStr(i) + ',' + IntToStr(j) + ']')
-            else
-              CheckNear(0.0, QtQ.Get(i, j), 1e-4, 'QtQ[' + IntToStr(i) + ',' + IntToStr(j) + ']');
+        QtQ := MatMulF32(Qt, Q);
+        try
+          for i := 0 to 1 do
+            for j := 0 to 1 do
+              if i = j then
+                CheckNear(1.0, QtQ.Get(i, j), 1e-4, 'QtQ[' + IntToStr(i) + ',' + IntToStr(j) + ']')
+              else
+                CheckNear(0.0, QtQ.Get(i, j), 1e-4, 'QtQ[' + IntToStr(i) + ',' + IntToStr(j) + ']');
+        finally
+          QtQ.Free;
+        end;
       finally
-        QtQ.Free;
+        Qt.Free;
       end;
     finally
       Q.Free; R.Free;

@@ -161,22 +161,93 @@ begin
   table.Memory.ToLowerAscii := @ToLowerAscii_NEON;
   table.Memory.ToUpperAscii := @ToUpperAscii_NEON;
   table.Memory.BitsetPopCount := @BitsetPopCount_NEON;
-  // Phase 23a/23b: BatchF32 high-frequency leaves (register only under ASM).
+  // Phase 23 + Batch B1–B5: BatchF32 high-frequency leaves (register only under ASM).
   table.BatchF32.ArrayAdd := @NEONArrayAddF32;
   table.BatchF32.ArraySub := @NEONArraySubF32;
   table.BatchF32.ArrayMul := @NEONArrayMulF32;
+  table.BatchF32.ArrayDiv := @NEONArrayDivF32;
   table.BatchF32.ArrayMin := @NEONArrayMinF32;
   table.BatchF32.ArrayMax := @NEONArrayMaxF32;
   table.BatchF32.ArrayAbs := @NEONArrayAbsF32;
   table.BatchF32.ArrayNeg := @NEONArrayNegF32;
+  table.BatchF32.ArrayMulScalar := @NEONArrayMulScalarF32;
+  table.BatchF32.ArrayAddScalar := @NEONArrayAddScalarF32;
+  table.BatchF32.ArrayClamp := @NEONArrayClampF32;
+  table.BatchF32.ArrayLerp := @NEONArrayLerpF32;
+  table.BatchF32.ArrayFma := @NEONArrayFmaF32;
+  table.BatchF32.ArrayAxpy := @NEONArrayAxpyF32;
+  table.BatchF32.ArraySqrt := @NEONArraySqrtF32;
+  table.BatchF32.ReduceSum := @NEONReduceSumF32;
+  table.BatchF32.ReduceMin := @NEONReduceMinF32;
+  table.BatchF32.ReduceMax := @NEONReduceMaxF32;
+  table.BatchF32.ArrayRcp := @NEONArrayRcpF32;
+  table.BatchF32.ReduceDot := @NEONReduceDotF32;
+  table.BatchF32.ArrayRsqrt := @NEONArrayRsqrtF32;
+  table.BatchF32.ArrayRcpRefine := @NEONArrayRcpRefineF32;
+  table.BatchF32.ArrayRsqrtRefine := @NEONArrayRsqrtRefineF32;
+  // Wave C1: Linear (math BatchScaleOffset consumer; extends representative set)
+  table.BatchF32.ArrayLinear := @NEONArrayLinearF32;
+  // Wave C2: rounding family
+  table.BatchF32.ArrayCeil := @NEONArrayCeilF32;
+  table.BatchF32.ArrayFloor := @NEONArrayFloorF32;
+  table.BatchF32.ArrayTrunc := @NEONArrayTruncF32;
+  // Wave C3: utility
+  table.BatchF32.ArrayReLU := @NEONArrayReLUF32;
+  table.BatchF32.ArrayAbsDiff := @NEONArrayAbsDiffF32;
+  // Wave C4a: BatchF64 core 8
+  table.BatchF64.ArrayAdd := @NEONArrayAddF64;
+  table.BatchF64.ArraySub := @NEONArraySubF64;
+  table.BatchF64.ArrayMul := @NEONArrayMulF64;
+  table.BatchF64.ArrayDiv := @NEONArrayDivF64;
+  table.BatchF64.ArrayMin := @NEONArrayMinF64;
+  table.BatchF64.ArrayMax := @NEONArrayMaxF64;
+  table.BatchF64.ArrayAbs := @NEONArrayAbsF64;
+  table.BatchF64.ArrayNeg := @NEONArrayNegF64;
+  // Wave C4b: BatchF64 Sqrt / broadcast / Reduce
+  table.BatchF64.ArraySqrt := @NEONArraySqrtF64;
+  table.BatchF64.ArrayMulScalar := @NEONArrayMulScalarF64;
+  table.BatchF64.ArrayAddScalar := @NEONArrayAddScalarF64;
+  table.BatchF64.ReduceSum := @NEONReduceSumF64;
+  table.BatchF64.ReduceDot := @NEONReduceDotF64;
+  table.BatchF64.ReduceMin := @NEONReduceMinF64;
+  table.BatchF64.ReduceMax := @NEONReduceMaxF64;
+  // Wave C4c: BatchF64 Linear / Clamp / Lerp / Fma / Axpy
+  table.BatchF64.ArrayLinear := @NEONArrayLinearF64;
+  table.BatchF64.ArrayClamp := @NEONArrayClampF64;
+  table.BatchF64.ArrayLerp := @NEONArrayLerpF64;
+  table.BatchF64.ArrayFma := @NEONArrayFmaF64;
+  table.BatchF64.ArrayAxpy := @NEONArrayAxpyF64;
+  // Wave C4d: BatchF64 Ceil/Floor/Trunc + ReLU/AbsDiff
+  table.BatchF64.ArrayCeil := @NEONArrayCeilF64;
+  table.BatchF64.ArrayFloor := @NEONArrayFloorF64;
+  table.BatchF64.ArrayTrunc := @NEONArrayTruncF64;
+  table.BatchF64.ArrayReLU := @NEONArrayReLUF64;
+  table.BatchF64.ArrayAbsDiff := @NEONArrayAbsDiffF64;
+  // Wave C4e: BatchF64 Rcp / Rsqrt / Refine
+  table.BatchF64.ArrayRcp := @NEONArrayRcpF64;
+  table.BatchF64.ArrayRsqrt := @NEONArrayRsqrtF64;
+  table.BatchF64.ArrayRcpRefine := @NEONArrayRcpRefineF64;
+  table.BatchF64.ArrayRsqrtRefine := @NEONArrayRsqrtRefineF64;
+  // Wave C5 sample: BatchF32 Sin / Exp
+  table.BatchF32.ArraySin := @NEONArraySinF32;
+  table.BatchF32.ArrayExp := @NEONArrayExpF32;
+  // Wave C5b: BatchF32 Cos / SinCos
+  table.BatchF32.ArrayCos := @NEONArrayCosF32;
+  table.BatchF32.ArraySinCos := @NEONArraySinCosF32;
+  // Wave C5c: BatchF32 Log / Log2 / Log10
+  table.BatchF32.ArrayLog := @NEONArrayLogF32;
+  table.BatchF32.ArrayLog2 := @NEONArrayLog2F32;
+  table.BatchF32.ArrayLog10 := @NEONArrayLog10F32;
+  // Wave C5d: BatchF64 Sin / Exp
+  table.BatchF64.ArraySin := @NEONArraySinF64;
+  table.BatchF64.ArrayExp := @NEONArrayExpF64;
   {$ENDIF}
 
   // Keep permanently-scalar platform facade helpers on the base scalar slots.
   // Backend-local wrappers add no runtime value and make slot ownership harder to audit.
   // Wide dot fallback-only helpers follow the same rule until NEON owns a real implementation.
-  // Phase 22b closed Memory (15/15 under ASM). Phase 23a/23b own BatchF32
-  // Add/Sub/Mul/Min/Max/Abs/Neg; remaining BatchF32 / BatchF64 / BatchInteger
-  // slots still inherit FillBase scalar.
+  // Phase 22b closed Memory (15/15 under ASM). Phase 23 + B1–B9 representative set
+  // + Wave C1 ArrayLinear; transcendentals remain FillBase scalar.
 
   // Saturating arithmetic is backend-owned only when NEON asm is compiled.
   {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}

@@ -9,8 +9,13 @@ unit nextpas.core.simd.signal.testcase;
 interface
 
 uses
-  Math, nextpas.core.test, nextpas.core.simd.signal,
-  nextpas.core.simd.base, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.simd.alloc;
+  nextpas.core.math,
+  nextpas.core.test,
+  nextpas.core.simd.signal,
+  nextpas.core.simd.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.simd.alloc;
 
 {$M+}
 type

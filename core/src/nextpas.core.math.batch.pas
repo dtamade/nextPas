@@ -65,6 +65,15 @@ function BatchExpF32(const AInput: array of Single;
 function BatchLnF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
 
+{** Alias for BatchLnF32 (natural log). Matches simd ArrayLogF32 naming. *}
+function BatchLogF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+
+{** Try natural log: False if any non-positive or non-finite element (no write). *}
+function TryBatchLnF32(const AInput: array of Single;
+                       var AOutput: array of Single;
+                       out ACount: SizeInt): Boolean;
+
 {** Batch base-10 logarithm for Single arrays.
  * Computes log10(x) for each element in the input array.
  * @param AInput Input array (must be positive)
@@ -265,6 +274,12 @@ function BatchExpF64(const AInput: array of Double;
                      var AOutput: array of Double): SizeInt;
 function BatchLnF64(const AInput: array of Double;
                     var AOutput: array of Double): SizeInt;
+{** Alias for BatchLnF64 (natural log). *}
+function BatchLogF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function TryBatchLnF64(const AInput: array of Double;
+                       var AOutput: array of Double;
+                       out ACount: SizeInt): Boolean;
 function BatchLog10F64(const AInput: array of Double;
                        var AOutput: array of Double): SizeInt;
 function BatchLog2F64(const AInput: array of Double;
@@ -311,7 +326,8 @@ function BatchSmoothstepF64(const AEdge0, AEdge1, AInput: array of Double;
 implementation
 
 uses
-  nextpas.core.math.batch.simd;
+  nextpas.core.math.batch.simd,
+  nextpas.core.math.scalar;
 
 { BatchSinF32 }
 function BatchSinF32(const AInput: array of Single;
@@ -353,6 +369,34 @@ function BatchLnF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
 begin
   Result := BatchLnSimdF32(AInput, AOutput);
+end;
+
+{ BatchLogF32 — alias of BatchLnF32 }
+function BatchLogF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := BatchLnF32(AInput, AOutput);
+end;
+
+{ TryBatchLnF32 }
+function TryBatchLnF32(const AInput: array of Single;
+                       var AOutput: array of Single;
+                       out ACount: SizeInt): Boolean;
+var
+  i: SizeInt;
+  L: SizeInt;
+begin
+  ACount := 0;
+  L := Length(AInput);
+  if L <> Length(AOutput) then
+    Exit(False);
+  if L = 0 then
+    Exit(True);
+  for i := 0 to L - 1 do
+    if (AInput[i] <= 0.0) or IsNaN(AInput[i]) or IsInfinite(AInput[i]) then
+      Exit(False);
+  ACount := BatchLnF32(AInput, AOutput);
+  Result := True;
 end;
 
 { BatchLog10F32 }
@@ -530,6 +574,32 @@ function BatchLnF64(const AInput: array of Double;
                     var AOutput: array of Double): SizeInt;
 begin
   Result := BatchLnSimdF64(AInput, AOutput);
+end;
+
+function BatchLogF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchLnF64(AInput, AOutput);
+end;
+
+function TryBatchLnF64(const AInput: array of Double;
+                       var AOutput: array of Double;
+                       out ACount: SizeInt): Boolean;
+var
+  i: SizeInt;
+  L: SizeInt;
+begin
+  ACount := 0;
+  L := Length(AInput);
+  if L <> Length(AOutput) then
+    Exit(False);
+  if L = 0 then
+    Exit(True);
+  for i := 0 to L - 1 do
+    if (AInput[i] <= 0.0) or IsNaN(AInput[i]) or IsInfinite(AInput[i]) then
+      Exit(False);
+  ACount := BatchLnF64(AInput, AOutput);
+  Result := True;
 end;
 
 function BatchLog10F64(const AInput: array of Double;

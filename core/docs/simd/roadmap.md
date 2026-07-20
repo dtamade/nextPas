@@ -1,6 +1,6 @@
 # nextpas.core.simd 开发路线图
 
-> 最后更新: 2026-07-17
+> 最后更新: 2026-07-19
 > 权威性: **本文件是 forward-looking 主线**。历史 Phase 1–19 / Wave B 的细节见下方「已完成归档」；活动设计见 `design/`；过期实施草稿见 `plans/` 与旧 plan 文件（仅存档）。
 
 ## 0. 文档权威图
@@ -47,13 +47,13 @@ Facade (flat public API)
 | Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
 | SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
 | AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
-| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **BatchF32 7 叶**（23a/23b）；其余 Batch 继承 scalar | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **BatchF32 代表集 23 叶**（B1–B9 closed）；超越/舍入/F64/Integer scalar | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
 | **RVV** | 大量（~412） | **0/15 故意 scalar**（S24a） | **20/20 本地** | **0 故意 scalar**（S24a） | MaskedOps 跟 vector-asm；实验性；真叶等 S24b |
 | LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
 
 **NEON Memory**：Phase 22 已关闭全部 15 槽（asm 叶 + register，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管；非 asm 编译保留 scalar fallback 符号）。
 
-**NEON Batch 进度**：Phase 23a/23b 已接管 `BatchF32` Add/Sub/Mul/Min/Max/Abs/Neg（ASM opt-in；Div 未接）；其余 `BatchF32` 槽 + 全部 `BatchF64` / `BatchInteger` 仍继承 scalar。
+**NEON Batch 进度**：**代表集 closed（B1–B9，23 叶）**。已拥有：Add/Sub/Mul/Div/Min/Max/Abs/Neg、MulScalar/AddScalar、Clamp/Lerp/Fma/Axpy、Sqrt/Rcp/Rsqrt/RcpRefine/RsqrtRefine、ReduceSum/Dot/Min/Max。**故意 scalar**：Sin/Cos/Exp/…、Ceil/Floor/…、BatchF64、BatchInteger。
 
 **RVV Memory/Batch 诚实矩阵（S24a）**：
 
@@ -68,7 +68,7 @@ Facade (flat public API)
 
 | Gate | 状态 | 说明 |
 |------|------|------|
-| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1741** passed（2026-07-17，S25b focused） |
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1750** passed（2026-07-20 Batch B9 + 代表集收口） |
 | `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 与 focused 同量级 suite |
 | `make hygiene` | ✅ | pass |
 | `api-coverage-contract` | ✅ | missing=0 / thin=0（Phase 21 收口，strict-thin 未降） |
@@ -132,17 +132,27 @@ Facade (flat public API)
 | **验收** | focused + neon-optin + hygiene 绿；Memory 15/15 源契约 asm/register；x86 runtime 仍 scalar（无 asm）；PlatformFacadeSlots 锁定 Batch* 继承 |
 | **非目标** | 不为覆盖率写永久 `NEONMemX := ScalarMemX` 死包装注册 |
 
-### Phase 23 — NEON Batch* 最小可用面  【P1 · 进行中】
+### Phase 23 — NEON Batch* 最小可用面  【P1 · 已完成（代表集）】
 
 | 项 | 内容 |
 |----|------|
 | **目标** | 在 ARM 上提供与 x86 对齐的 **高频** Batch 路径（非整表抄写） |
 | **23a（✅）** | `BatchF32` `ArrayAdd` / `ArraySub` / `ArrayMul`：AArch64 asm 叶 + register（仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED`）+ 非 asm scalar companion；契约 FacadeFastSlots 运行时绑定期望 |
-| **23b（✅）** | `Min` / `Max` / `Abs` / `Neg`（`Div` 推迟） |
-| **交付物** | `BatchF32` 代表集 + register + parity smoke；能力位策略写清 |
+| **23b（✅）** | `Min` / `Max` / `Abs` / `Neg` |
+| **B1 Div（✅）** | `ArrayDivF32`：asm + scalar companion + register（ASM opt-in）+ special parity unit test |
+| **B2 Mul/AddScalar（✅）** | `ArrayMulScalarF32` / `ArrayAddScalarF32`：asm + companion + register + parity unit test |
+| **B3 Clamp/Lerp（✅）** | `ArrayClampF32` / `ArrayLerpF32`：asm + companion + register + parity unit test |
+| **B4 Fma/Axpy（✅）** | `ArrayFmaF32` / `ArrayAxpyF32`：mul+add（非硬件 FMA）+ companion + register + parity unit test |
+| **B5 Sqrt/ReduceSum（✅）** | `ArraySqrtF32` / `ReduceSumF32`：fsqrt；Reduce 允许浮点结合差（near 测） |
+| **B6 ReduceMin/Max（✅）** | `ReduceMinF32` / `ReduceMaxF32`：fmin/fmax 归约；count=0→0 |
+| **B7 Rcp/ReduceDot（✅）** | `ArrayRcpF32`（exact fdiv 1/x）/ `ReduceDotF32`（near 容差） |
+| **B8 Rsqrt/RcpRefine（✅）** | `ArrayRsqrtF32`（fsqrt+fdiv）/ `ArrayRcpRefineF32`（exact 1/x） |
+| **B9 RsqrtRefine + 代表集收口（✅）** | `ArrayRsqrtRefineF32`；**23 叶代表集 closed**（超越/舍入/F64/Integer 故意 scalar） |
+| **交付物** | `BatchF32` 代表 **23** 叶 + 边界表 + 契约锁定 Exp/Ceil 等仍 scalar |
 | **依赖** | Phase 22 Memory 叶已稳定 |
-| **验收** | neon-optin 契约 + 语义 smoke；未实现槽继续 scalar 继承并有注释/契约 |
-| **非目标** | 一次填满全部 BatchF64/BatchInteger |
+| **验收** | neon-optin 契约 + 语义 smoke；代表集边界有 source-contract |
+| **非目标** | 自动填满 transcendence/全表；Wave 4 |
+| **状态** | ✅ **NEON BatchF32 代表集 closed**（GOAL_QUEUE） |
 
 ### Phase 24 — RVV 覆盖诚实化  【P2 · 24a 已完成】
 
@@ -314,3 +324,13 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: M-V2 math residual docs + lane-complete 分类；CURRENT→Q1。
 - 2026-07-17: Q1 指针新鲜度（验证数 1741、去掉假 Double 缺口）；CURRENT→Q2。
 - 2026-07-17: Q2 math↔simd linkage 表；CURRENT→IDLE。
+- 2026-07-19: V0/D0 接管复验（simd 1741 / math API surface 71/0）；Phase 23 标题改为已完成代表集。
+- 2026-07-19: Batch B1 NEON `ArrayDivF32` 真叶 + special parity unit test；focused **1742**；CURRENT→IDLE。
+- 2026-07-19: Batch B2 NEON `ArrayMulScalarF32`/`ArrayAddScalarF32`；focused **1743**；CURRENT→IDLE。
+- 2026-07-19: Batch B3 NEON `ArrayClampF32`/`ArrayLerpF32`；focused **1744**；CURRENT→IDLE。
+- 2026-07-19: Batch B4 NEON `ArrayFmaF32`/`ArrayAxpyF32`；focused **1745**；CURRENT→IDLE。
+- 2026-07-19: Batch B5 NEON `ArraySqrtF32`/`ReduceSumF32`；focused **1746**；CURRENT→IDLE。
+- 2026-07-19: Batch B6 NEON `ReduceMinF32`/`ReduceMaxF32`；focused **1747**；CURRENT→IDLE。
+- 2026-07-20: Batch B7 NEON `ArrayRcpF32`/`ReduceDotF32`；focused **1748**；CURRENT→IDLE。
+- 2026-07-20: Batch B8 NEON `ArrayRsqrtF32`/`ArrayRcpRefineF32`；focused **1749**；CURRENT→IDLE。
+- 2026-07-20: Batch B9 `ArrayRsqrtRefineF32` + **NEON BatchF32 代表集 23 叶 closed**；focused **1750**；CURRENT→IDLE。

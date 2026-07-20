@@ -32,8 +32,9 @@
 | **Q35** | Windows 测试 cthreads 条件化 | `{$IFDEF UNIX}cthreads{$ENDIF}` 修编译 | **done** |
 | **Q36** | net.tcp/udp 去 POSIX sockaddr 耦合 | TPlatformSockAddr only — win64 可编 dial/udp | **done** |
 | **Q37** | async.tcp/udp Windows/macOS 可移植 | 去 accept4；async.udp TPlatformSockAddr | **done** |
+| **Q38** | Windows smoke 诚实化 | STRICT 收窄 + suite timeout；dial/udp/pool soft | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
-| **—** | full native-windows claim | 等 Q33+Q37 扩容 smoke 多周绿 | **deferred** |
+| **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
 ### 为何 MPTCP 不做
 
@@ -56,7 +57,21 @@
 
 - `async.tcp`：同步试 accept 改为 `platform_socket_accept`（全平台），去掉 Linux-only `accept4`。
 - `async.udp`：op 缓冲用 `TPlatformSockAddr` + `platform_sockaddr_ipv4` / `_extract`，去 `posix.base`。
-- 验证：Linux dial/udp/pool/cancel/accept_connect 0 leak；GHA Windows async smoke 需再绿。
+- 验证：Linux dial/udp/pool/cancel/accept_connect 0 leak；Windows **编译** 通过。
+
+### Q38 细节（GHA 证据驱动）
+
+Q37 run `29755003106`：
+
+| 套件 | 结果 |
+|------|------|
+| compile_gate / contract / poller / iocp / accept_connect / resolve / error_classify | PASS |
+| dial | 3/19；成功路径 error≈−111 / stream nil |
+| udp | Bind ok；Recv arm / timeout arm fail |
+| pool | 挂死 >1h（无 suite timeout）→ cancel |
+| cancel_bridge | 未跑到 |
+
+动作：`async-windows-native-smoke.sh` STRICT 只含已绿项；dial/udp/pool/cancel 进 soft + 默认 120s `timeout`；文档 honesty。下一步 runtime 修 IOCP connect/datagram 后再升 STRICT。
 
 ## Q13 细节
 

@@ -5,8 +5,13 @@ unit nextpas.core.simd.backend.consistency.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, Math, nextpas.core.simd.base,
-  nextpas.core.simd.fixturehelpers, nextpas.core.simd.dispatch,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.math,
+  nextpas.core.simd.base,
+  nextpas.core.simd.fixturehelpers,
+  nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar;
 
 // =============================================================================

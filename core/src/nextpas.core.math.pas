@@ -137,6 +137,11 @@ function BatchExpF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 function BatchLnF32(const AInput: array of Single;
                     var AOutput: array of Single): SizeInt;
+function BatchLogF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+function TryBatchLnF32(const AInput: array of Single;
+                       var AOutput: array of Single;
+                       out ACount: SizeInt): Boolean;
 function BatchLog10F32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
 function BatchLog2F32(const AInput: array of Single;
@@ -177,6 +182,11 @@ function BatchExpF64(const AInput: array of Double;
                      var AOutput: array of Double): SizeInt;
 function BatchLnF64(const AInput: array of Double;
                     var AOutput: array of Double): SizeInt;
+function BatchLogF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function TryBatchLnF64(const AInput: array of Double;
+                       var AOutput: array of Double;
+                       out ACount: SizeInt): Boolean;
 function BatchLog10F64(const AInput: array of Double;
                        var AOutput: array of Double): SizeInt;
 function BatchLog2F64(const AInput: array of Double;
@@ -253,6 +263,9 @@ function IsNaN(const AValue: Double): Boolean; overload; inline;
 function IsNaN(const AValue: Single): Boolean; overload; inline;
 function IsInfinite(const AValue: Double): Boolean; overload; inline;
 function IsInfinite(const AValue: Single): Boolean; overload; inline;
+function NaN: Double; inline;
+function Infinity: Double; inline;
+function NegInfinity: Double; inline;
 function FloatEquals(const AA, AB: Double; const AEpsilon: Double): Boolean; overload; inline;
 function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean; overload; inline;
 function FloatIsZero(const AValue: Double; const AEpsilon: Double): Boolean; overload; inline;
@@ -368,8 +381,9 @@ function EaseInBounce(const AT: Double): Double; inline;
 function EaseOutBounce(const AT: Double): Double; inline;
 function EaseInOutBounce(const AT: Double): Double; inline;
 
-{ ── FPU Exception Control (x86_64 MXCSR) ──────────────────────────────────── }
-{ Replaces Math.GetExceptionMask/SetExceptionMask — no FPC RTL dependency. }
+{ ── FPU Exception Control (x86_64 MXCSR + x87 CW) ────────────────────────── }
+{ Replaces Math.GetExceptionMask/SetExceptionMask — no FPC Math dependency. }
+{ Must cover both SSE (MXCSR) and x87 control word: SIMD batch tails use fsin/fyl2x. }
 
 type
   TFPUException = (
@@ -577,6 +591,19 @@ begin
   Result := nextpas.core.math.batch.BatchLnF32(AInput, AOutput);
 end;
 
+function BatchLogF32(const AInput: array of Single;
+                     var AOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLogF32(AInput, AOutput);
+end;
+
+function TryBatchLnF32(const AInput: array of Single;
+                       var AOutput: array of Single;
+                       out ACount: SizeInt): Boolean;
+begin
+  Result := nextpas.core.math.batch.TryBatchLnF32(AInput, AOutput, ACount);
+end;
+
 function BatchLog10F32(const AInput: array of Single;
                       var AOutput: array of Single): SizeInt;
 begin
@@ -686,6 +713,19 @@ function BatchLnF64(const AInput: array of Double;
                     var AOutput: array of Double): SizeInt;
 begin
   Result := nextpas.core.math.batch.BatchLnF64(AInput, AOutput);
+end;
+
+function BatchLogF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLogF64(AInput, AOutput);
+end;
+
+function TryBatchLnF64(const AInput: array of Double;
+                       var AOutput: array of Double;
+                       out ACount: SizeInt): Boolean;
+begin
+  Result := nextpas.core.math.batch.TryBatchLnF64(AInput, AOutput, ACount);
 end;
 
 function BatchLog10F64(const AInput: array of Double;
@@ -986,6 +1026,21 @@ end;
 function IsInfinite(const AValue: Double): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsInfinite(AValue);
+end;
+
+function NaN: Double;
+begin
+  Result := nextpas.core.math.scalar.NaN;
+end;
+
+function Infinity: Double;
+begin
+  Result := nextpas.core.math.scalar.Infinity;
+end;
+
+function NegInfinity: Double;
+begin
+  Result := nextpas.core.math.scalar.NegInfinity;
 end;
 
 function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean;
@@ -1506,43 +1561,64 @@ begin
 end;
 
 { ── FPU Exception Control ─────────────────────────────────────────────────── }
+{ x86_64: keep MXCSR (SSE) and x87 CW mask bits in lockstep. Bit layout of
+  TFPUException (0..5) matches both MXCSR[12:7] and x87 CW[5:0].
+  SetExceptionMask also clears sticky status flags (MXCSR[5:0] + fnclex) so
+  restore-after-boundary tests do not re-raise deferred exceptions. }
 
 function GetExceptionMask: TFPUExceptionMask;
 var
   LMxcsr: UInt32;
+  LCw: Word;
   LMask: Byte;
 begin
+  Result := [];
   {$IFDEF CPUX86_64}
   {$asmmode intel}
   asm
     stmxcsr [LMxcsr]
+    fnstcw [LCw]
   end;
   {$asmmode att}
-  LMask := Byte((LMxcsr shr 7) and $3F);
-  Move(LMask, Result, SizeOf(Result));
-  {$ELSE}
-  Result := [];
+  { Report the intersection so a flag appears masked only if both units mask it. }
+  LMask := Byte(((LMxcsr shr 7) and $3F) and (LCw and $3F));
+  Move(LMask, Result, 1);
   {$ENDIF}
 end;
 
 procedure SetExceptionMask(const AMask: TFPUExceptionMask);
 var
   LMxcsr: UInt32;
+  LCw: Word;
   LMask: Byte;
+  {$IFDEF FPC}
+  LSoft: Byte;
+  {$ENDIF}
 begin
   {$IFDEF CPUX86_64}
+  LMask := 0;
+  Move(AMask, LMask, 1);
   {$asmmode intel}
   asm
     stmxcsr [LMxcsr]
+    fnstcw [LCw]
   end;
   {$asmmode att}
-  Move(AMask, LMask, SizeOf(LMask));
-  LMxcsr := (LMxcsr and not ($3F shl 7)) or (UInt32(LMask) shl 7);
+  { Clear sticky status (bits 0..5) while updating exception masks (bits 7..12). }
+  LMxcsr := (LMxcsr and not UInt32($3F or ($3F shl 7))) or (UInt32(LMask) shl 7);
+  LCw := (LCw and not Word($003F)) or Word(LMask);
   {$asmmode intel}
   asm
     ldmxcsr [LMxcsr]
+    fnclex
+    fldcw [LCw]
   end;
   {$asmmode att}
+  {$IFDEF FPC}
+  { Keep FPC softfloat in sync for System.Sin/Ln paths that consult it. }
+  LSoft := LMask;
+  Move(LSoft, softfloat_exception_mask, 1);
+  {$ENDIF}
   {$ENDIF}
 end;
 

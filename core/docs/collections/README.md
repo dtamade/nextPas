@@ -120,6 +120,25 @@ make -C core/tests/nextpas.core.collections/test_vecdeque_full clean test
 
 Leak-sensitive 运行应报告 heaptrc `0 unfreed memory blocks`。
 
+## Examples（可编译）
+
+双 uses 模板 + 默认可运行路径（产物在 `core/build/`）：
+
+```sh
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/examples/nextpas.core.collections test
+# 或单个：
+make -C core/examples/nextpas.core.collections/quickstart test
+make -C core/examples/nextpas.core.collections/deque_queue test
+make -C core/examples/nextpas.core.collections/treeset_compare test
+```
+
+| 示例 | 演示 |
+|------|------|
+| `quickstart` | MakeVec / MakeMap / MakeSet + 门面+intf |
+| `deque_queue` | MakeVecDeque 双端 + MakeQueue FIFO |
+| `treeset_compare` | MakeTreeSet 默认序与自定义 comparer |
+
 ## Benchmarks
 
 ```sh

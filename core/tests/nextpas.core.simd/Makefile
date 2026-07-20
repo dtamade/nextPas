@@ -154,6 +154,7 @@ audit:
 	$(PYTHON) check_windows_publicabi_contract.py
 	$(PYTHON) check_cpuinfo_runner_contract.py --summary-line
 	$(PYTHON) check_cpuinfo_boundary_contract.py
+	$(PYTHON) -B ../nextpas.core.math/test_rtl_isolation/check_rtl_isolation.py --root $(CORE_ROOT) --summary-line
 	$(PYTHON) check_riscvv_facade_optin_contract.py --summary-line
 
 audit-hygiene-contract:

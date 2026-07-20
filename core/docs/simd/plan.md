@@ -1,6 +1,6 @@
 # SIMD 当前活动计划
 
-> 最后更新: 2026-07-17
+> 最后更新: 2026-07-19
 > **权威主线**: [roadmap.md](roadmap.md)
 > **Goal 队列（执行入口）**: [../math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)
 
@@ -23,11 +23,37 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 - [x] Phase 20–23b / Phase 25 / G0 / S24–S25 / M-C1 / M-V1 / M-V2
 - [x] **Q1** 指针新鲜度（验证数 1741；清除 math README 假 Double 缺口）
 - [x] **Q2** math↔simd linkage table（GOAL_QUEUE 权威表 + README 指针）
+- [x] **V0/D0**（2026-07-19）接管复验 + Phase 23 标题/API surface 指针对齐
+- [x] **Batch B1** NEON `ArrayDivF32`（单测 + 叶 + math smoke；1742 passed）
+- [x] **Batch B2** NEON MulScalar/AddScalar（1743 passed）
+- [x] **Batch B3** NEON Clamp/Lerp（1744 passed）
+- [x] **Batch B4** NEON Fma/Axpy（1745 passed）
+- [x] **Batch B5** NEON Sqrt/ReduceSum（1746 passed）
+- [x] **Batch B6** NEON ReduceMin/Max（1747 passed）
+- [x] **Batch B7** NEON Rcp/ReduceDot（1748 passed）
+- [x] **Batch B8** NEON Rsqrt/RcpRefine（1749 passed）
+- [x] **Batch B9** RsqrtRefine + **代表集 23 叶 closed**（1750 passed）
+- [x] **Wave C0/C1** ArrayLinear（1751 passed）
+- [x] **Wave C2** Ceil/Floor/Trunc（1752 passed）
+- [x] **Wave C3** ReLU/AbsDiff（1753 passed）
+- [x] **Wave C4a** BatchF64 core 8（1754 passed）
+- [x] **Wave C4b** BatchF64 Sqrt/broadcast/Reduce（1755 passed）
+- [x] **Wave C4c** BatchF64 Linear/Clamp/Lerp/Fma/Axpy（1756 passed）
+- [x] **Wave C4d** BatchF64 Ceil/Floor/Trunc/ReLU/AbsDiff（1757 passed）
+- [x] **Wave C4e** BatchF64 Rcp/Rsqrt/Refine（1758 passed）
+- [x] **Wave C5** 超越 design + Sin/Exp F32 sample（1759 passed）
+- [x] **Wave C5b** Cos/SinCos F32（1760 passed）
+- [x] **Wave C5c** Log/Log2/Log10 F32（1761 passed）
+- [x] **Wave C5d** F64 Sin/Exp（1762 passed）
+- [x] **Wave C5e** F32 Sin/Exp 4-wide NEON asm（1762 passed）
+- [x] **Wave C5e-ext** Cos/Log F32 + Sin/Exp F64 vector asm（1762 passed）
 
 ### 队列摘要
 
-- [x] Q1 / Q2 quality wave
-- [x] **IDLE**（CURRENT）
+- [x] B1–B9 代表集 closed
+- [x] Wave C0–C4e + C5–C5e-ext done
+- [ ] C6 Landing
+- [x] **IDLE**（CURRENT；见 GOAL_QUEUE）
 
 入口:
 

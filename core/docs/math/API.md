@@ -10,6 +10,29 @@ uses
 Use a narrower submodule only when a file intentionally depends on one math family, such as
 `nextpas.core.math.vec` or `nextpas.core.math.random`.
 
+**Application vs kernel:** batch/vector math for apps goes through **math** (`Batch*`,
+`TVec*`). Pointer-level `Array*` / `VecF32x*` in `nextpas.core.simd` are **kernel/expert**
+APIs (no open-array bounds; caller owns length). Do not use simd as the default app import.
+
+### Batch open-array length policy (usability)
+
+- All related open-array arguments must have the **same Length** when any is non-empty.
+- Mismatched non-empty lengths → `EArgumentError` (`Batch: array lengths must match …`).
+- Any empty side → return `0`, no raise.
+- Return value is the processed count (equal length, or 0).
+- Escape hatch for legacy truncate-min: compile with `{$DEFINE NEXTPAS_MATH_BATCH_TRUNCATE_MIN}`.
+
+### Natural log naming
+
+| math (public) | simd leaf | meaning |
+|---------------|-----------|---------|
+| `BatchLnF32` / `BatchLnF64` | `ArrayLogF32` / `ArrayLogF64` | natural log |
+| `BatchLogF32` / `BatchLogF64` | (alias of Ln) | same as Ln |
+| `BatchLog2*` / `BatchLog10*` | `ArrayLog2*` / `ArrayLog10*` | base 2 / 10 |
+
+`TryBatchLnF32` / `TryBatchLnF64`: return `False` without writing if lengths differ or any
+element is non-positive / non-finite; otherwise run Ln and set `ACount`.
+
 ## Public Modules
 
 - `nextpas.core.math` is the facade. It re-exports the public scalar, trig, vector, matrix,
@@ -152,9 +175,13 @@ Scalar helpers:
 
 Statistical helpers: `Sum`, `SumToDouble`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
 
-Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchSinCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (F32 scalar batches); `BatchSinF64`, `BatchCosF64`, `BatchSinCosF64`, `BatchTanF64`, `BatchExpF64`, `BatchLnF64`, `BatchLog10F64`, `BatchLog2F64`, `BatchSqrtF64`, `BatchAbsF64`, `BatchNegF64`, `BatchCeilF64`, `BatchFloorF64`, `BatchRoundF64`, `BatchTruncF64`, `BatchLerpF64`, `BatchClampF64`, `BatchScaleOffsetF64` (F64 scalar batches, same core set).
+Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchSinCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLogF32`, `TryBatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (F32 scalar batches); `BatchSinF64`, `BatchCosF64`, `BatchSinCosF64`, `BatchTanF64`, `BatchExpF64`, `BatchLnF64`, `BatchLogF64`, `TryBatchLnF64`, `BatchLog10F64`, `BatchLog2F64`, `BatchSqrtF64`, `BatchAbsF64`, `BatchNegF64`, `BatchCeilF64`, `BatchFloorF64`, `BatchRoundF64`, `BatchTruncF64`, `BatchLerpF64`, `BatchClampF64`, `BatchScaleOffsetF64` (F64 scalar batches, same core set).
 
-Public `Batch*F64` is a thin open-array facade: length is `min(input, output)` (and multi-array mins for multi-input ops), empty inputs return `0`, and work dispatches to simd `Array*F64`. Extra batch helpers such as `BatchAtan2F64` / `BatchHypotF64` live on `nextpas.core.math.batch` but are not re-exported from the root facade (same policy as the F32 extended set).
+Public `Batch*F64` is a thin open-array facade: **equal lengths required** (see length policy
+above); empty → `0`; work dispatches to simd `Array*F64`. Extra batch helpers such as
+`BatchAtan2F64` / `BatchHypotF64` live on `nextpas.core.math.batch` but are not re-exported
+from the root facade (same policy as the F32 extended set). Also: `BatchLogF32/F64` (alias of
+`BatchLn*`) and `TryBatchLnF32/F64`.
 
 ### SIMD Batch Operations
 
@@ -287,7 +314,8 @@ Hot `TVec3f`/`TVec4f` paths may use `vec.batch.simd` (public simd only).
 Double implementations use value-type element loops (`TVec*d` methods / `TMat4d.MultPoint`);
 they do **not** import private simd backends.
 
-All batch functions return the number of processed elements. They accept mismatched array lengths by processing `Min(Length(...))` across inputs and outputs; empty → `0`.
+All batch functions return the number of processed elements. **Equal lengths required** across
+inputs/outputs when non-empty (raise `EArgumentError` on mismatch); empty → `0`.
 
 ## Matrices
 
@@ -489,8 +517,11 @@ stable lattice-equivalent semantics rather than raising an owner-level error.
 
 ## FPU Exception Control
 
-`nextpas.core.math` provides FPU exception mask control for x86_64 MXCSR register.
-This replaces `Math.GetExceptionMask`/`SetExceptionMask` from FPC RTL without any FPC dependency.
+`nextpas.core.math` provides FPU exception mask control for x86_64 **MXCSR (SSE) and
+x87 control word** (kept in lockstep; SIMD batch scalar tails use `fsin`/`fyl2x`).
+On FPC host builds, `softfloat_exception_mask` is updated as well so `System.Sin`/`Ln`
+paths stay consistent. This replaces `Math.GetExceptionMask`/`SetExceptionMask`
+without any FPC `Math` unit dependency.
 
 ```pascal
 uses
@@ -510,6 +541,15 @@ begin
 end;
 ```
 
+### IEEE special values
+
+FPC `Math`-compatible names on the math facade / `math.scalar` (Double payloads,
+bit-pattern construction, no exception-raising division):
+
+- `NaN` — quiet NaN
+- `Infinity` — positive infinity
+- `NegInfinity` — negative infinity
+
 ### Types
 
 - `TFPUException` — Enum of FPU exception flags: `exInvalidOp`, `exDenormalized`,
@@ -518,10 +558,10 @@ end;
 
 ### Functions
 
-- `GetExceptionMask: TFPUExceptionMask` — Returns current MXCSR exception mask.
+- `GetExceptionMask: TFPUExceptionMask` — Intersection of MXCSR and x87 CW masks.
   Returns empty set `[]` on non-x86_64 targets.
-- `SetExceptionMask(AMask: TFPUExceptionMask)` — Sets MXCSR exception mask.
-  No-op on non-x86_64 targets.
+- `SetExceptionMask(AMask: TFPUExceptionMask)` — Sets MXCSR, x87 CW, and (FPC)
+  softfloat mask together. No-op on non-x86_64 targets.
 
 ## Verification
 

@@ -388,14 +388,12 @@ function FindFirstNotOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
 implementation
 
 uses
-  nextpas.core.mem,
   nextpas.core.simd.mathutil,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
   nextpas.core.simd.intrinsics.base,
   nextpas.core.simd.intrinsics.sse2,
-  nextpas.core.math.trig,
-  Math;
+  nextpas.core.math.trig;
 
 // Thread-local scratch buffers for Tan computation
 // 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
@@ -405,20 +403,18 @@ threadvar
   GTanBufCapacity: SizeUInt;
 
 procedure EnsureTanScratch(aCount: SizeUInt);
-var
-  LOldBytes: SizeUInt;
 begin
   if (GTanBufCapacity < aCount) or (aCount < GTanBufCapacity div 4) then
   begin
-    // sized free: capacity is the GetMem element count for both scratch buffers
-    LOldBytes := GTanBufCapacity * SizeOf(Single);
+    // 释放旧缓冲区
     if GTanSinBuf <> nil then
-      FreeMem(GTanSinBuf, LOldBytes);
+      FreeMem(GTanSinBuf);
     if GTanCosBuf <> nil then
-      FreeMem(GTanCosBuf, LOldBytes);
+      FreeMem(GTanCosBuf);
+    // 分配新缓冲区
     GTanBufCapacity := aCount;
-    GTanSinBuf := GetMem(aCount * SizeOf(Single));
-    GTanCosBuf := GetMem(aCount * SizeOf(Single));
+    GetMem(GTanSinBuf, aCount * SizeOf(Single));
+    GetMem(GTanCosBuf, aCount * SizeOf(Single));
   end;
 end;
 
@@ -5993,14 +5989,13 @@ end;
 finalization
   if GTanSinBuf <> nil then
   begin
-    FreeMem(GTanSinBuf, GTanBufCapacity * SizeOf(Single));
+    FreeMem(GTanSinBuf);
     GTanSinBuf := nil;
   end;
   if GTanCosBuf <> nil then
   begin
-    FreeMem(GTanCosBuf, GTanBufCapacity * SizeOf(Single));
+    FreeMem(GTanCosBuf);
     GTanCosBuf := nil;
   end;
-  GTanBufCapacity := 0;
 
 end.

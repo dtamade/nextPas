@@ -9,10 +9,15 @@ unit nextpas.core.simd.edgecases.testcase;
 interface
 
 uses
-  Math, Classes, nextpas.core.exception, nextpas.core.math, nextpas.core.test,
-  nextpas.core.simd, nextpas.core.simd.testcase,
-  nextpas.core.simd.base, nextpas.core.simd.utils,
-  nextpas.core.simd.ops, nextpas.core.simd.scalar,
+  nextpas.core.math,
+  nextpas.core.exception,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.utils,
+  nextpas.core.simd.ops,
+  nextpas.core.simd.scalar,
   nextpas.core.simd.memutils;
 
 type

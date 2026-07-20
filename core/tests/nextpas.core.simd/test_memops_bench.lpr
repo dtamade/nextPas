@@ -7,7 +7,6 @@
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.scalar,

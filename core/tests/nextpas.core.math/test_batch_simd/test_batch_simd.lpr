@@ -4,9 +4,11 @@ program test_batch_simd;
 
 uses
   nextpas.core.test,
+  nextpas.core.errors,
+  nextpas.core.math,
   nextpas.core.math.base,
-  nextpas.core.math.batch.simd,
-  Math;
+  nextpas.core.math.batch,
+  nextpas.core.math.batch.simd;
 
 var
   T: TTestSuite;
@@ -383,14 +385,44 @@ procedure TestBatchSinMismatchedLength;
 var
   LInput: array[0..2] of Single;
   LOutput: array[0..0] of Single;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LInput[0] := 0.0;
   LInput[1] := 1.0;
   LInput[2] := 2.0;
+  LRaised := False;
+  try
+    BatchSinSimdF32(LInput, LOutput);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Mismatched lengths must raise EArgumentError (strict batch policy)');
+end;
 
-  LCount := BatchSinSimdF32(LInput, LOutput);
-  Check(LCount = 1, 'Should return min length');
+procedure TestBatchLogAliasAndTryLn;
+var
+  LIn, LOutLn, LOutLog: array[0..2] of Single;
+  LCount, LTryCount: SizeInt;
+  LOk: Boolean;
+begin
+  LIn[0] := 1.0;
+  LIn[1] := 2.718281828;
+  LIn[2] := 10.0;
+  LCount := BatchLnF32(LIn, LOutLn);
+  Check(LCount = 3, 'BatchLnF32 count');
+  LCount := BatchLogF32(LIn, LOutLog);
+  Check(LCount = 3, 'BatchLogF32 alias count');
+  CheckNear(LOutLn[0], LOutLog[0], 1e-6, 'BatchLog alias [0]');
+  CheckNear(LOutLn[1], LOutLog[1], 1e-5, 'BatchLog alias [1]');
+  CheckNear(LOutLn[2], LOutLog[2], 1e-5, 'BatchLog alias [2]');
+
+  LOk := TryBatchLnF32(LIn, LOutLn, LTryCount);
+  Check(LOk and (LTryCount = 3), 'TryBatchLnF32 positive domain');
+
+  LIn[1] := -1.0;
+  LOk := TryBatchLnF32(LIn, LOutLn, LTryCount);
+  Check((not LOk) and (LTryCount = 0), 'TryBatchLnF32 rejects non-positive');
 end;
 
 { ============================================================================
@@ -970,14 +1002,19 @@ procedure TestBatchSinMismatchedLengthF64;
 var
   LInput: array[0..2] of Double;
   LOutput: array[0..0] of Double;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LInput[0] := 0.0;
   LInput[1] := 1.0;
   LInput[2] := 2.0;
-
-  LCount := BatchSinSimdF64(LInput, LOutput);
-  Check(LCount = 1, 'F64 should return min length');
+  LRaised := False;
+  try
+    BatchSinSimdF64(LInput, LOutput);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'F64 mismatched lengths must raise EArgumentError');
 end;
 
 begin
@@ -1004,6 +1041,7 @@ begin
   T.Test('BatchScaleOffsetSimdF32', @TestBatchScaleOffsetSimd);
   T.Test('BatchSinSimdF32 Empty', @TestBatchSinEmpty);
   T.Test('BatchSinSimdF32 MismatchedLength', @TestBatchSinMismatchedLength);
+  T.Test('BatchLog alias + TryBatchLn', @TestBatchLogAliasAndTryLn);
 
   // Boundary value tests: NaN, Inf, -Inf, 0
   T.Test('BatchSinSimdF32 Boundary', @TestBatchSinSimd_Boundary);

@@ -91,11 +91,113 @@ procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 
+// === Batch B1: BatchF32 Array Div ===
+procedure NEONArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+
 // === Phase 23b: BatchF32 Array Min / Max / Abs / Neg ===
 procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Batch B2: BatchF32 Array MulScalar / AddScalar ===
+procedure NEONArrayMulScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
+procedure NEONArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
+
+// === Batch B3: BatchF32 Array Clamp / Lerp ===
+procedure NEONArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
+procedure NEONArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
+
+// === Batch B4: BatchF32 Array Fma / Axpy ===
+procedure NEONArrayFmaF32(aA, aB, aC, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
+
+// === Batch B5: BatchF32 Array Sqrt / ReduceSum ===
+procedure NEONArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+function NEONReduceSumF32(aSrc: PSingle; aCount: SizeUInt): Single;
+
+// === Batch B6: BatchF32 ReduceMin / ReduceMax ===
+function NEONReduceMinF32(aSrc: PSingle; aCount: SizeUInt): Single;
+function NEONReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
+
+// === Batch B7: BatchF32 ArrayRcp / ReduceDot ===
+procedure NEONArrayRcpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+function NEONReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
+
+// === Batch B8: BatchF32 ArrayRsqrt / ArrayRcpRefine ===
+procedure NEONArrayRsqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayRcpRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Batch B9: BatchF32 ArrayRsqrtRefine ===
+procedure NEONArrayRsqrtRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Wave C1: BatchF32 ArrayLinear ===
+procedure NEONArrayLinearF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
+
+// === Wave C2: BatchF32 Ceil / Floor / Trunc ===
+procedure NEONArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Wave C3: BatchF32 ReLU / AbsDiff ===
+procedure NEONArrayReLUF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayAbsDiffF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+
+// === Wave C4a: BatchF64 core 8 ===
+procedure NEONArrayAddF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArraySubF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayMulF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayDivF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayAbsF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayNegF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+
+// === Wave C4b: BatchF64 Sqrt / broadcast / Reduce ===
+procedure NEONArraySqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayMulScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
+procedure NEONArrayAddScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
+function NEONReduceSumF64(aSrc: PDouble; aCount: SizeUInt): Double;
+function NEONReduceDotF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
+function NEONReduceMinF64(aSrc: PDouble; aCount: SizeUInt): Double;
+function NEONReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
+
+// === Wave C4c: BatchF64 Linear / Clamp / Lerp / Fma / Axpy ===
+procedure NEONArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+procedure NEONArrayClampF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
+procedure NEONArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+procedure NEONArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+
+// === Wave C4d: BatchF64 Ceil/Floor/Trunc + ReLU/AbsDiff ===
+procedure NEONArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+
+// === Wave C4e: BatchF64 Rcp / Rsqrt / Refine ===
+procedure NEONArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayRcpRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayRsqrtRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+
+// === Wave C5 sample: BatchF32 Sin / Exp (Cody-Waite poly; near-parity) ===
+procedure NEONArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Wave C5b: BatchF32 Cos / SinCos ===
+procedure NEONArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
+
+// === Wave C5c: BatchF32 Log / Log2 / Log10 ===
+procedure NEONArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
+// === Wave C5d: BatchF64 Sin / Exp ===
+procedure NEONArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure NEONArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
 
 implementation
 

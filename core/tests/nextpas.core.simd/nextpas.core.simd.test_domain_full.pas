@@ -4,7 +4,7 @@ program nextpas.core.simd.test_domain_full;
 
 uses
   nextpas.core.thread.init,
-  Math,
+  nextpas.core.math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

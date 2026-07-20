@@ -9,7 +9,7 @@ unit nextpas.core.simd.memutils.aliases.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.errors,
+  nextpas.core.text.conv, nextpas.core.test, nextpas.core.errors,
   nextpas.core.simd, nextpas.core.simd.alloc,
   nextpas.core.simd.memutils;
 

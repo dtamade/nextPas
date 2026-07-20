@@ -294,7 +294,7 @@ begin
   if (aSrc1.Width <> aSrc2.Width) or
      (aSrc1.Height <> aSrc2.Height) or
      (aSrc1.Format <> aSrc2.Format) then
-    raise Exception.Create('图像尺寸或格式不匹配');
+    raise EArgumentError.Create('Image dimensions or format do not match');
 
   RequireImageData(aSrc1, 'src1');
   RequireImageData(aSrc2, 'src2');
@@ -460,7 +460,7 @@ begin
   LDataSize64 := Int64(aWidth) * Int64(aHeight) * Int64(LBytesPerPixel);
 
   if LDataSize64 > High(Integer) then
-    raise EOutOfMemoryError.CreateFmt('Image too large: %dx%d (%d bytes)', [aWidth, aHeight, LDataSize64]);
+    raise EOutOfMemory.CreateFmt('Image too large: %dx%d (%d bytes)', [aWidth, aHeight, LDataSize64]);
 
   Result.Width := aWidth;
   Result.Height := aHeight;
@@ -828,7 +828,7 @@ var
   LR, LG, LB: Byte;
 begin
   if (aSrc.Format <> ifRGB24) and (aSrc.Format <> ifRGBA32) then
-    raise Exception.Create('源图像必须是 RGB24 或 RGBA32 格式');
+    raise EArgumentError.Create('Source image must be RGB24 or RGBA32');
 
   RequireImageData(aSrc, 'src');
   EnsureImage(aDest, aSrc.Width, aSrc.Height, ifGrayscale);
@@ -862,7 +862,7 @@ var
   LSrcData, LDestData: PByte;
 begin
   if aSrc.Format <> ifGrayscale then
-    raise Exception.Create('源图像必须是 Grayscale 格式');
+    raise EArgumentError.Create('Source image must be Grayscale');
 
   RequireImageData(aSrc, 'src');
   EnsureImage(aDest, aSrc.Width, aSrc.Height, ifRGB24);

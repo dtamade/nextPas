@@ -14,9 +14,13 @@ program test_simd_boundary;
  *}
 
 uses
-  nextpas.core.text.conv, Math, nextpas.core.math, nextpas.core.simd.base,
-  nextpas.core.simd.dispatch, nextpas.core.simd.scalar,
-  nextpas.core.simd.arrays.typed, nextpas.core.simd.linalg;
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar,
+  nextpas.core.simd.arrays.typed,
+  nextpas.core.simd.linalg;
 
 // 禁用 FPU 异常以正确测试 IEEE 754 行为
 procedure DisableFPUExceptions;
