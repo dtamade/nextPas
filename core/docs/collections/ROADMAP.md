@@ -53,40 +53,13 @@
 
 按 **收益 / 风险 / 可验证** 排序。默认 **小步提交 + focused 验证**。
 
-### P0 — 文档与契约卫生（低风险，先做）
+### P0 — 文档与契约卫生 — **完成**（`0125831c9` on main）
 
-**目标**：读文档不会学到错误后端或负载因子。
+已完成：CONSUMERS 后端表、MakeSet 注释、负载因子 0.75 对齐、IHashMap Swiss/OA 叙述、STATUS→ROADMAP 指针。
 
-1. 刷新 `CONSUMERS.md` 模块内后端表（Multi/Lru/LinkedHash = Swiss）
-2. 修正 `test_facade` 中 MakeSet「OA」注释
-3. 对齐 `hashmap.intf` 负载因子与 `DEFAULT_MAX_LOAD_FACTOR = 0.75`
-4. `IHashMap` 文档区分：接口语义 vs 默认实现（Swiss）vs 专家 OA 类
-5. `STATUS` 增加「维护队列」指针到本 ROADMAP
+### P1 — Facade 工厂烟雾补全 — **完成**（本批）
 
-**完成标准**：抽样 CONTRACT/intf/测试注释与 `MakeHashMap`/`THashSet` 实现一致。
-**验证**：`git diff --check`；相关 docs 无代码则可不跑全测；改 intf 则 `test_hashmap` + `test_facade`。
-
-### P1 — Facade 工厂烟雾补全（中风险，测试 only）
-
-**目标**：每个 `MakeXxx` 在 `test_facade` 有一次最小创建/基本操作（或明确「由专项 suite 覆盖」清单）。
-
-| 缺 facade 探针（当前） | 专项 suite 是否已有 |
-|------------------------|---------------------|
-| MakeArr | 弱 / 经 vec 间接 |
-| MakeVecDeque / MakeQueue / MakeStack | deque/queue/stack 有 |
-| MakeList / MakeForwardList | list/forwardlist 有 |
-| MakeTreeMap / MakeTreeSet | treemap/treeset 有 |
-| MakeLinkedHashMap / MakeLinkedHashSet | 有 |
-| MakeLruCache | 有 |
-| MakeBTree* / MakeBitSet / MakeConcurrentHashMap | 有 |
-
-**策略**：
-
-- **A**：facade 只补「无专项 suite 或工厂映射易错」的探针（如 MakeMap/Set 已做）
-- **B**：对已有专项的工厂，在 facade 加 1 行 Create 探针即可，避免重复深度测
-
-**完成标准**：无「有工厂、无任何入口测试」的遗漏；文档写清「深度测在 test_*」。
-**验证**：`test_facade` + 触及容器的专项 suite。
+`test_facade` 新增 `TestFacadeRemainingFactorySmoke`：Arr、VecDeque、Queue、Stack、List、ForwardList、TreeMap/Set、LinkedHash*、LruCache、BTree*、BitSet、ConcurrentHashMap。深度行为仍在各专项 suite。
 
 ### P2 — 正确性 hardening（有触发才做）
 
@@ -130,19 +103,12 @@
 ## 3. 建议执行顺序（下一维护周期）
 
 ```
-Sync    git fetch && rebase origin/main（behind 必须先清零）
+P0  完成 → main
+P1  完成 → 本批 commit / landing
   │
   ▼
-P0      文档/注释/intf 负载因子对齐（1 个 docs+小修 commit）
-  │
-  ▼
-P1      facade 工厂烟雾策略落地（1 个 test commit）
-  │
-  ▼
-停      无新触发则停；有 bug 进 P2；有 bench 需求进 P3
+停  无新触发则停；有 bug 进 P2；有 bench 需求进 P3
 ```
-
-**不要**在无 P0/P1 完成前开 P3 性能或 P4 重构。
 
 ---
 
