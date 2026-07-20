@@ -67,6 +67,11 @@ type
     FOptions: TH2ClientTransportOptions;
     FState: TH2ClientConnectionState;
     FReadBuffer: AnsiString;
+    { 0-based index into FReadBuffer (1-based AnsiString). Avoids O(n) Copy
+      on every DiscardConsumed (H2 peer gap: demux many frames per batch). }
+    FReadPos: SizeInt;
+    { Coalesce HEADERS/DATA/control frames into one Write before ReadFrame. }
+    FWriteBuffer: AnsiString;
     FRemoteSettings: TH2Settings;
     FLocalSettings: TH2Settings;
     FConnectionFlow: TH2ConnectionFlowControl;
@@ -90,6 +95,8 @@ type
     function DecodeNextFrame(out AFrame: TH2Frame; out AConsumed: SizeUInt): Boolean;
     function ReadFrame(out AFrame: TH2Frame): Boolean;
     procedure DiscardConsumed(const AConsumed: SizeUInt);
+    procedure CompactReadBuffer;
+    procedure FlushWriteBuffer;
     procedure SendBytes(const ABytes: AnsiString);
     procedure SendFrame(const AFrameType: Byte; const AFlags: Byte;
       const AStreamID: UInt32; const APayload: AnsiString);
@@ -420,6 +427,9 @@ begin
     Result := TcpConnect(AHost, APort, ADialTimeoutMs)
   else
     Result := TcpConnect(AHost, APort);
+  { HTTP/2 multiplex is latency-sensitive; Nagle delays kill small-frame RTT. }
+  if Result <> nil then
+    Result.SetNoDelay(True);
 end;
 
 procedure SetH2ClientDialFuncForTests(const ADial: TH2ClientDialFunc);
@@ -481,6 +491,8 @@ begin
   FOptions := AOptions;
   FState := h2ccsConnecting;
   FReadBuffer := '';
+  FReadPos := 0;
+  FWriteBuffer := '';
   FRemoteSettings := TH2Settings.Default;
   FLocalSettings := FOptions.ToSettings;
   FConnectionFlow.Init(FRemoteSettings.InitialWindowSize,
@@ -527,13 +539,36 @@ begin
   FState := h2ccsClosed;
 end;
 
+procedure TH2ClientConnection.CompactReadBuffer;
+var
+  LRemain: SizeInt;
+  LNew: AnsiString;
+begin
+  if FReadPos <= 0 then
+    Exit;
+  LRemain := Length(FReadBuffer) - FReadPos;
+  if LRemain <= 0 then
+  begin
+    FReadBuffer := '';
+    FReadPos := 0;
+    Exit;
+  end;
+  SetLength(LNew, LRemain);
+  Move(FReadBuffer[FReadPos + 1], LNew[1], LRemain);
+  FReadBuffer := LNew;
+  FReadPos := 0;
+end;
+
 function TH2ClientConnection.FillReadBuffer: Boolean;
 var
-  LBuf: array[0..4095] of Byte;
+  LBuf: array[0..65535] of Byte;
   LRead: SizeUInt;
   LOldLen: SizeInt;
 begin
   Result := False;
+  { Drop consumed prefix before appending so the string does not grow forever. }
+  if FReadPos > 0 then
+    CompactReadBuffer;
   LRead := FConn.Read(LBuf[0], SizeOf(LBuf));
   if LRead = 0 then
     Exit;
@@ -545,15 +580,17 @@ end;
 
 function TH2ClientConnection.DecodeNextFrame(out AFrame: TH2Frame;
   out AConsumed: SizeUInt): Boolean;
+var
+  LAvail: SizeInt;
 begin
-  if FReadBuffer = '' then
+  LAvail := Length(FReadBuffer) - FReadPos;
+  if LAvail <= 0 then
   begin
     AFrame := Default(TH2Frame);
     AConsumed := 0;
     Exit(False);
   end;
-  Result := H2DecodeFrame(@FReadBuffer[1], Length(FReadBuffer), AFrame,
-    AConsumed);
+  Result := H2DecodeFrame(@FReadBuffer[FReadPos + 1], LAvail, AFrame, AConsumed);
 end;
 
 function TH2ClientConnection.ReadFrame(out AFrame: TH2Frame): Boolean;
@@ -561,6 +598,8 @@ var
   LConsumed: SizeUInt;
   LErrorCode: UInt32;
 begin
+  { Deliver any coalesced writes before blocking on the peer. }
+  FlushWriteBuffer;
   while not DecodeNextFrame(AFrame, LConsumed) do
   begin
     if not FillReadBuffer then
@@ -579,39 +618,59 @@ end;
 
 procedure TH2ClientConnection.DiscardConsumed(const AConsumed: SizeUInt);
 var
-  LRemain: SizeInt;
+  LAvail: SizeInt;
 begin
   if AConsumed = 0 then
     Exit;
-  if AConsumed >= SizeUInt(Length(FReadBuffer)) then
+  LAvail := Length(FReadBuffer) - FReadPos;
+  if AConsumed >= SizeUInt(LAvail) then
   begin
     FReadBuffer := '';
+    FReadPos := 0;
     Exit;
   end;
-  LRemain := Length(FReadBuffer) - SizeInt(AConsumed);
-  FReadBuffer := Copy(FReadBuffer, SizeInt(AConsumed) + 1, LRemain);
+  Inc(FReadPos, SizeInt(AConsumed));
+  { Compact when wasted prefix dominates (keep demux loop O(frame) not O(buffer)). }
+  if (FReadPos >= 8192) and (FReadPos * 2 >= Length(FReadBuffer)) then
+    CompactReadBuffer;
 end;
 
-procedure TH2ClientConnection.SendBytes(const ABytes: AnsiString);
+procedure TH2ClientConnection.FlushWriteBuffer;
 var
   LOffset: SizeInt;
   LWritten: SizeUInt;
   LLen: SizeUInt;
 begin
-  if ABytes = '' then
+  if FWriteBuffer = '' then
     Exit;
   LOffset := 1;
-  LLen := Length(ABytes);
+  LLen := Length(FWriteBuffer);
   while SizeUInt(LOffset) <= LLen do
   begin
-    LWritten := FConn.Write(ABytes[LOffset], LLen - SizeUInt(LOffset) + 1);
+    LWritten := FConn.Write(FWriteBuffer[LOffset], LLen - SizeUInt(LOffset) + 1);
     if LWritten = 0 then
     begin
+      FWriteBuffer := '';
       TransitionClosed;
-      raise EHttpError.Create(hekProtocol, 'HTTP/2 client write failed: connection closed');
+      raise EHttpError.Create(hekProtocol,
+        'HTTP/2 client write failed: connection closed');
     end;
     Inc(LOffset, SizeInt(LWritten));
   end;
+  FWriteBuffer := '';
+end;
+
+procedure TH2ClientConnection.SendBytes(const ABytes: AnsiString);
+var
+  LOldLen: SizeInt;
+  LAdd: SizeInt;
+begin
+  if ABytes = '' then
+    Exit;
+  LAdd := Length(ABytes);
+  LOldLen := Length(FWriteBuffer);
+  SetLength(FWriteBuffer, LOldLen + LAdd);
+  Move(ABytes[1], FWriteBuffer[LOldLen + 1], LAdd);
 end;
 
 procedure TH2ClientConnection.SendFrame(const AFrameType: Byte; const AFlags: Byte;
@@ -677,7 +736,13 @@ procedure TH2ClientConnection.FailConnection(const AErrorCode: UInt32;
 begin
   try
     if FConn <> nil then
+    begin
       SendGoaway(FLastPeerStreamID, AErrorCode, ADebugData);
+      try
+        FlushWriteBuffer;
+      except
+      end;
+    end;
   finally
     if FConn <> nil then
     begin
@@ -687,6 +752,7 @@ begin
       end;
       FConn := nil;
     end;
+    FWriteBuffer := '';
     TransitionClosed;
   end;
   raise EHttpError.Create(hekProtocol, AMessage);
@@ -1422,6 +1488,9 @@ begin
       raise EHttpError.Create(hekProtocol, 'HTTP/2 handshake expected SETTINGS first');
     end;
   end;
+  { SETTINGS ACK (and any control frames) from HandleSettings must hit the wire
+    before Handshake returns — tests and peers observe WrittenData / peer state. }
+  FlushWriteBuffer;
   FState := h2ccsActive;
   Result := True;
 end;
@@ -1500,6 +1569,7 @@ begin
     end;
     DrainBufferedFrames(LStreamID, FActiveStreams[LStreamIndex].Flow,
       LResponse);
+    FlushWriteBuffer;
     Result := BuildResponse(LResponse);
   finally
     RemoveActiveStream(LStreamID);
@@ -1662,6 +1732,7 @@ begin
       FlushPendingConnectionWindowUpdate;
     end;
 
+    FlushWriteBuffer;
     for LI := 0 to LCount - 1 do
       Result[LI] := BuildResponse(LResponses[LI]);
   finally
@@ -1695,7 +1766,7 @@ begin
   { Residual buffered frames mean the peer has already written on this
     connection (live). Serial RoundTrip fixtures may also pre-queue the next
     response; do not fail the probe on that data. }
-  if FReadBuffer <> '' then
+  if Length(FReadBuffer) > FReadPos then
     Exit(True);
 
   try
@@ -1762,6 +1833,7 @@ begin
   begin
     try
       SendGoaway(FLastPeerStreamID, H2_ERR_NO_ERROR);
+      FlushWriteBuffer;
     except
     end;
   end;
@@ -1770,6 +1842,9 @@ begin
   except
   end;
   FConn := nil;
+  FWriteBuffer := '';
+  FReadBuffer := '';
+  FReadPos := 0;
   TransitionClosed;
 end;
 
@@ -1820,11 +1895,19 @@ end;
 
 function TH2ClientTransport.PoolGet(const AHost: string;
   const APort: UInt16; const ASecure: Boolean): TH2ClientConnection;
+const
+  { Skip wire PING when the conn was just returned — RoundTripMany / tight
+    keep-alive loops were paying a full RTT per batch (H2 peer ~10× gap). }
+  H2_POOL_PROBE_GRACE_MS = 1000;
 var
   LI: Int32;
   LCandidate: TH2ClientConnection;
   LToClose: array of TH2ClientConnection;
   LCloseCount: Int32;
+  LIdleAtMs: UInt64;
+  LIdleMs: UInt64;
+  LNow: UInt64;
+  LNeedProbe: Boolean;
 begin
   { Never Close/Free while holding FPoolLock — same hang class as H1 pool. }
   Result := nil;
@@ -1833,6 +1916,7 @@ begin
   while True do
   begin
     LCandidate := nil;
+    LIdleAtMs := 0;
     FPoolLock.Acquire;
     try
       LI := 0;
@@ -1854,6 +1938,7 @@ begin
             Continue;
           end;
           LCandidate := FPool[LI].Conn;
+          LIdleAtMs := FPool[LI].IdleAtMs;
           PoolRemoveAt(LI);
           Break;
         end;
@@ -1866,8 +1951,21 @@ begin
     if LCandidate = nil then
       Break;
 
-    { Probe outside the pool lock: PING/Read can block (same hang class as Close). }
-    if LCandidate.IsReusable and LCandidate.ProbeHealth then
+    { Probe outside the pool lock: PING/Read can block (same hang class as Close).
+      Fresh idle: only IsReusable (no wire PING). }
+    LNeedProbe := True;
+    if LIdleAtMs > 0 then
+    begin
+      LNow := GetTickCount64;
+      if LNow >= LIdleAtMs then
+        LIdleMs := LNow - LIdleAtMs
+      else
+        LIdleMs := 0;
+      if LIdleMs < H2_POOL_PROBE_GRACE_MS then
+        LNeedProbe := False;
+    end;
+    if LCandidate.IsReusable and
+       ((not LNeedProbe) or LCandidate.ProbeHealth) then
     begin
       Result := LCandidate;
       Break;

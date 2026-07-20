@@ -181,6 +181,9 @@ begin
     begin
       LOpts := TH2ClientTransportOptions.Default;
       LOpts.Timeout := 30000;
+      { Fair peer comparison: Go does not PING on every batch reuse. Production
+        pool still probes after idle grace (see PoolGet). }
+      LOpts.PingTimeout := 0;
       LTransport := NewH2ClientTransport(LOpts);
       if not Supports(LTransport, IHttpTransportMultiplex, LMux) then
       begin

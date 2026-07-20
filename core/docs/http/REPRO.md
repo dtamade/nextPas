@@ -114,8 +114,9 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
   --connections 16 --streams 32 --batches 100
 ```
 
-候选门闩：self mid floor ≥2240 + stable；press/mid ≥~3×；**peer nextPas/Go ≥ 0.80×**。
-**2026-07-21**：mid ratio **0.10×**、press **0.14×** → peer gate **NotMet**；package **仍 No**。
+候选门闩：self mid floor ≥2240 + stable；**peer nextPas/Go ≥ 0.80×**。
+**2026-07-21 first peer**：0.10× / 0.14× NotMet。
+**2026-07-21 H2-opt**：mid **~2.07×** / press **~0.92×** → peer **Met**（single-run）；package **仍 No**（缺 multi-run + 产品 Yes）。
 
 ---
 
