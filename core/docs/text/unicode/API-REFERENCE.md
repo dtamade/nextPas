@@ -1,12 +1,16 @@
 # nextpas.core.text.unicode — API 参考
 
+**导航**：[ROADMAP](ROADMAP.md) · [CONTRACT](CONTRACT.md) · [错误策略](../ERROR_MODEL.md) · [COOKBOOK](COOKBOOK.md) · [SCORECARD](SCORECARD.md)
+
+> 以门面 `nextpas.core.text.unicode` **live 签名**为准。算法细节与门禁见 CONTRACT；用法见 COOKBOOK。
+
 ## 门面单元
 
 ```pascal
 uses nextpas.core.text.unicode;
 ```
 
-统一 re-export 所有子模块的公共 API。以下按功能域组织。
+统一 re-export 公共 API。以下按功能域组织（P3-3 与 tip 对齐）。
 
 ---
 
@@ -290,7 +294,7 @@ type
   IUnicodeDataManager = interface
     function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory;
     function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProp: TBinaryProperty): Boolean;
-    function GetScript(const ACp: TUnicodeCodepoint): TScript;
+    function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript;
     function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
     function GetUpperCaseMapping(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
     function GetLowerCaseMapping(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
@@ -309,44 +313,95 @@ type
 function UnicodeData: IUnicodeDataManager;
 ```
 
-获取属性管理器单例（临界区保护）。
+获取属性管理器单例（`IMutex` 保护，非 RTL CriticalSection）。
 
 ```pascal
 var D := UnicodeData;
 D.GetGeneralCategory(Ord('A'));           // → gcuUppercaseLetter
 D.HasBinaryProperty($0020, ubpWhiteSpace); // → True
-D.GetScript($4E00);                       // → scHan
+D.GetScript($4E00);                       // → usHan
 D.GetBlock($4E00);                        // → ubCJKUnifiedIdeographs
 D.GetLowerCaseMapping(Ord('A'));           // → Ord('a')
 ```
 
+### 门面属性快捷函数
+
+```pascal
+function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean;
+function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory;
+function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript;
+function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean;
+function GetScriptExtensions(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeScript; out ACount: Byte): Boolean;
+function HasScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean;
+function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
+function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean;
+function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth;
+function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean;
+```
+
+- **Script_Extensions（P2-4）**：`GetScriptExtensions` / `HasScript`；无表项时默认 `{GetScript}`。稀有 script 可能为 `usUnknown`（债）。
+- **BinaryProperty**：含 PropList 扩展（P2-1），对标 Go `unicode.Is*` 高价值集。
+
 ---
 
-## 大小写 (case.pas)
-
-### IsUpper / IsLower
+## 双向 Bidi (bidi.pas · UAX#9 ≤L2)
 
 ```pascal
-function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
-function IsLower(const ACp: TUnicodeCodepoint): Boolean;
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass;
+function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult;
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer = 2): TBidiResolveResult;
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray;
+function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
+  const ALogicalCount: SizeInt): TBidiIndexArray;
+function ApplyBidiVisualOrder(const AText: string;
+  const AParagraphDir: Integer = 2): string;
 ```
 
-检查码点是否为大写/小写字母。
+| API | 说明 |
+|-----|------|
+| `ResolveBidi` | 段落等级 + levels + `VisualToLogical`（L2） |
+| `ReorderBidiVisually` | 由 levels 生成 visual→logical 置换 |
+| `InvertBidiIndexMap` | 逻辑→视觉 |
+| `ApplyBidiVisualOrder` | 按视觉序拼显示串（**非** L3 镜像） |
 
-### CaseFoldSimple / CaseFoldFull
+`AParagraphDir`：0=LTR，1=RTL，2=auto。用法见 COOKBOOK「Bidi 视觉序」。
+
+---
+
+## 大小写 (casefold.pas)
+
+### 码点级
 
 ```pascal
+function IsUpper / IsLower / IsAlpha / … (码点分类快捷)
+function CodepointToLower / ToUpper / ToTitle
 function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
-function CaseFoldFull(const ACp: TUnicodeCodepoint; out AOut: array of TUnicodeCodepoint): Byte;
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte;
+// + TCaseOptions 重载
 ```
 
-- **CaseFoldSimple**: 简单大小写折叠（1:1 映射），适合快速比较
-- **CaseFoldFull**: 完整大小写折叠（可能 1:N），返回输出长度
+### 整串 UTF-8
 
 ```pascal
-CaseFoldSimple(Ord('A'))  // → Ord('a')
-CaseFoldSimple($00DF)     // → $00DF (ß 不变，需 CaseFoldFull 展开为 'ss')
+function UTF8ToUpper / UTF8ToLower / UTF8ToTitle / UTF8CaseFold / UTF8CaseFoldSimple
+  (const AValue: string): string;
+// locale：
+function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string;
+// … 同类重载
+
+function UTF8ToTitleWords(const AValue: string): string; overload;
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string; overload;
 ```
+
+| API | 说明 |
+|-----|------|
+| `UTF8ToTitle` | 逐码点 title |
+| `UTF8ToTitleWords` | UAX#29 词边界：词首 title + 词内 lower |
+| `TCaseLocale` | `clRoot` / `clTurkish` / `clAzeri` / `clLithuanian` |
+
+**日常门面**：`nextpas.core.text` 提供 root 的 `UTF8To*` / `TextToUpper`（与 `UTF8ToUpper` 等价 root 路径）；**locale 仅 unicode 门面**。
 
 ---
 
@@ -370,7 +425,59 @@ IsAsciiString('')          // → True
 
 ---
 
-## 基础类型 (base.pas)
+## IDNA / Punycode (idna.pas · punycode.pas · P2-5/P3-1)
+
+```pascal
+const IDNA_ACE_PREFIX = 'xn--';
+
+type
+  TIDNAErrorKind = (idnaOk, idnaEmptyDomain, …, idnaDisallowed, idnaInvalidUtf8);
+  TIDNAMapStatus = (idmsValid, idmsMapped, idmsIgnored, idmsDeviation, idmsDisallowed, …);
+
+function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
+
+{ 推荐：结构化 kind }
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string;
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string;
+
+{ 兼容：string 错误 = KindName }
+function IDNAToASCII(const ADomain: string; out AError: string): string;
+function IDNAToUnicode(const ADomain: string; out AError: string): string;
+
+{ ⚠ 便利：失败仅 Result=''，丢失 kind — 生产勿用 }
+function IDNAToASCII(const ADomain: string): string;
+function IDNAToUnicode(const ADomain: string): string;
+
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
+
+function PunycodeEncode(const ALabel: string): string;
+function PunycodeDecode(const AAscii: string): string;
+```
+
+- 管线：**Map（IdnaMappingTable）→ NFC → LDH/Punycode**；Nontransitional + UseSTD3ASCIIRules。
+- 失败：`Result=''` 且 `AKind <> idnaOk`（L2，见 [ERROR_MODEL](../ERROR_MODEL.md)）。
+- **未实现**：Transitional、完整 Validity Criteria / Bidi Rule。
+
+```pascal
+var K: TIDNAErrorKind;
+ACE := IDNAToASCII('münchen.de', K);
+if K <> idnaOk then
+  Halt(1); // IDNAErrorKindName(K)
+```
+
+---
+
+## 错误策略
+
+三层模型（L0 FFFD / L1 异常·Try / L2 IDNA kind）真源：
+
+**[../ERROR_MODEL.md](../ERROR_MODEL.md)**
+
+---
+
+## 基础类型 (types.pas / base.pas)
 
 ### TUnicodeCodepoint
 
@@ -379,18 +486,11 @@ type
   TUnicodeCodepoint = UInt32;
 ```
 
-Unicode 码点类型，范围 0x0000-0x10FFFF。
+Unicode 码点类型，范围 0x0000-0x10FFFF。枚举：`TUnicodeScript`（`usHan` 等）、`TUnicodeBlock`、`TBinaryProperty`、`TBidiClass`、`TEastAsianWidth` … 见 `types.pas`。
 
-### 辅助函数
+### 辅助（utf8 / utils，经门面或子模块）
 
-```pascal
-function Utf8Len(const ACp: TUnicodeCodepoint): Byte;
-function ToUtf8(const ACp: TUnicodeCodepoint): string;
-function FromUtf8(const AStr: string; out ACp: TUnicodeCodepoint): Boolean;
-function IsValidCodepoint(const ACp: TUnicodeCodepoint): Boolean;
-function IsHighSurrogate(const ACp: TUnicodeCodepoint): Boolean;
-function IsLowSurrogate(const ACp: TUnicodeCodepoint): Boolean;
-```
+常见：`UTF8IsValid`、`UTF8Decode`、`UTF8Encode`、区间查找原语。具体签名以源码为准。
 
 ---
 
@@ -399,5 +499,15 @@ function IsLowSurrogate(const ACp: TUnicodeCodepoint): Boolean;
 ```pascal
 const
   UNICODE_MAX_CODEPOINT = $10FFFF;
-  UNICODE_REPLACEMENT_CHAR = $FFFD;
+  UNICODE_SURROGATE_FIRST = $D800;
+  UNICODE_SURROGATE_LAST = $DFFF;
+  // 门面亦 re-export idnaOk / idmsValid / clRoot / clTurkish …
 ```
+
+---
+
+## 变更（文档）
+
+| 日期 | 说明 |
+|------|------|
+| 2026-07-21 | **P3-3**：对齐 tip — Bidi visual / SCX / Case locale / IDNA kind / ERROR_MODEL；修正 `TUnicodeScript`/`usHan` |

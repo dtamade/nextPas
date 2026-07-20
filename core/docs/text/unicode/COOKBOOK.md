@@ -331,9 +331,41 @@ Display := ApplyBidiVisualOrder(MixedHebrewEnglish, 2);
 - **L1** StrTo* / Format / View：异常或 Try*
 - **L2** IDNA：`TIDNAErrorKind`，不抛
 
+## IDNA 域名（P2-5 / P3-1 · 生产样板）
+
+**只推荐 kind 重载**；失败必须检查 `K`。
+
 ```pascal
-var K: TIDNAErrorKind;
-ACE := IDNAToASCII(Domain, K);
-if K <> idnaOk then
-  // 使用 IDNAErrorKindName(K)
+uses nextpas.core.text.unicode;
+
+var
+  K: TIDNAErrorKind;
+  ACE, Uni: string;
+begin
+  ACE := IDNAToASCII('münchen.de', K);
+  if K <> idnaOk then
+  begin
+    // IDNAErrorKindName(K) — 稳定协议用 kind，勿解析英文串
+    Exit;
+  end;
+  Uni := IDNAToUnicode(ACE, K);
+  // Nontransitional：ß → ss → 纯 ASCII 标签
+  // IDNAToASCII('stra' + #$C3#$9F + 'e.de', K) = 'strasse.de'
+end;
 ```
+
+⚠ **勿用** `IDNAToASCII(s)` / `IDNAToUnicode(s)` 无 out 重载：失败仅返回 `''`，**丢失 kind**，生产易静默吞错。  
+兼容：`out AError: string` = `IDNAErrorKindName(kind)`。
+
+Map 步可单独调用：`ApplyIdnaMap` / `GetIdnaMapStatus`。
+
+## 日常门面别名（text vs unicode）
+
+| 日常 `nextpas.core.text` | `text.unicode` |
+|--------------------------|----------------|
+| `TextToUpper` / `UTF8ToUpper` | `UTF8ToUpper`（+ locale 重载） |
+| `TextToLower` / `UTF8ToLower` | 同上 |
+| `UTF8ToTitle` / `UTF8ToTitleWords` | 全量 + locale |
+| — | IDNA / segment / bidi / collate |
+
+locale Case **仅** `text.unicode`。

@@ -35,6 +35,8 @@ check_grep "core/src/nextpas.core.text.unicode.script.pas" 'GetScriptExtensions'
 check_grep "core/src/nextpas.core.text.unicode.idna.pas" 'TIDNAErrorKind' 'TIDNAErrorKind (P3-0)'
 check_grep "core/src/nextpas.core.text.unicode.idna.pas" 'ApplyIdnaMap|IDNA_MAP_RANGES' 'IdnaMappingTable (P3-1)'
 check_grep "core/docs/text/ERROR_MODEL.md" 'L0|L1|L2|TIDNAErrorKind' 'ERROR_MODEL P3-2'
+check_grep "core/docs/text/unicode/API-REFERENCE.md" 'IDNAToASCII|GetScriptExtensions' 'API-REFERENCE tip surface (P3-3)'
+check_grep "core/docs/text/ERROR_MODEL.md" 'SysUtils|System.Move' 'ERROR_MODEL RTL boundary (P3-3)'
 check_grep "core/tests/nextpas.core.text.unicode/Makefile" 'function gate|gate:' 'make gate target'
 if [[ $fail -ne 0 ]]; then
   echo "text-unicode-ensure: FAIL — re-cherry-pick text-unicode history"

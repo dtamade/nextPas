@@ -133,8 +133,23 @@ make -C core/tests/nextpas.core.text.unicode/test_idna test
 
 ---
 
+## 9. RTL / 编译器无关（P3-3）
+
+**原则**：仅 `nextpas.core.system` 可直接 `uses` FPC RTL 单元；其余模块（含 text/unicode **生产与测试**）走 `nextpas.core.*`。
+
+| 允许 | 禁止 |
+|------|------|
+| `System.Move` / `System.Copy` / `System.Length` / `SetLength` / `ReallocMem` 等 **语言内建** | `uses SysUtils, Classes, Windows, BaseUnix, Unix, …` |
+| `nextpas.core.sync`（`IMutex`）、`nextpas.core.fs`、`nextpas.core.exception` 等 | 业务代码包装 FPC `TStream`/`TStringList` 作长期 API |
+| 门面 re-export 的框架类型 | 测试里「图省事」拉 SysUtils |
+
+审计：`rg '\b(SysUtils|Classes)\b'` 于 `core/src/nextpas.core.text*` 与对应 tests 应为 **零 unit 引用**（变量名 `Classes` 等假阳性除外）。
+
+---
+
 ## 变更
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-21 | **P3-3**：§9 RTL 边界（uses 禁止 / System 内建允许） |
 | 2026-07-21 | **P3-2** 初版：L0/L1/L2 统一策略真源 |
