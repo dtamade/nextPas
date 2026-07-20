@@ -100,6 +100,47 @@ type
     function IsSet: Boolean;
   end;
 
+  { One-shot countdown: Wait until CountDown drives remaining to 0.
+    Unlike WaitGroup, no Add after create; not reusable. }
+  ILatch = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560016}']
+    procedure CountDown(const ACount: Int32 = 1);
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
+    function TryWait: Boolean;
+    function Remaining: Int32;
+  end;
+
+  { Sticky notify: NotifyOne parks a permit if no waiter;
+    NotifyAll wakes all current waiters (generation). }
+  INotify = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560017}']
+    procedure NotifyOne;
+    procedure NotifyAll;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
+  end;
+
+  { Bounded multi-producer multi-consumer channel of Pointer.
+    Close unblocks waiters; Recv after drain+close returns False. }
+  IChannel = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560018}']
+    function TrySend(AItem: Pointer): TChannelSendResult;
+    function Send(AItem: Pointer): Boolean;
+    function TryRecv(out AItem: Pointer): TChannelRecvResult;
+    function Recv(out AItem: Pointer): Boolean;
+    function SendTimeout(AItem: Pointer; const ATimeoutNs: Int64): TChannelSendResult;
+    function SendTimeout(AItem: Pointer; const ATimeout: TDuration): TChannelSendResult;
+    function RecvTimeout(out AItem: Pointer; const ATimeoutNs: Int64): TChannelRecvResult;
+    function RecvTimeout(out AItem: Pointer; const ATimeout: TDuration): TChannelRecvResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Len: SizeInt;
+    function Cap: SizeInt;
+  end;
+
 implementation
 
 end.

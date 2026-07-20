@@ -67,6 +67,7 @@ require_file "$BENCH_LPR"
 # --- Facade factories (stable public surface) ---
 for factory in \
   'function Mutex: INativeMutex' \
+  'function RecursiveMutex: INativeMutex' \
   'function FutexMutex: IMutex' \
   'function RWLock: IRWLock' \
   'function WaitGroup: IWaitGroup' \
@@ -75,20 +76,27 @@ for factory in \
   'function SpinLock: ISpinLock' \
   'function Semaphore' \
   'function Barrier' \
-  'function Event'
+  'function Event' \
+  'function Latch' \
+  'function Notify' \
+  'function Channel' \
+  'function CreateSyncPool' \
+  'procedure WithLock' \
+  'procedure WithReadLock' \
+  'procedure WithWriteLock'
 do
   require_token "$FACADE" "$factory"
 done
 
-# Facade must not pull experimental pool or internal errors into the public surface.
-forbid_token "$FACADE" 'nextpas.core.sync.pool'
-forbid_token "$FACADE" 'TSyncPool'
-forbid_token "$FACADE" 'CreateSyncPool'
+# Pool is advanced facade re-export (CONTRACT 1.5+); errors stay internal.
+require_token "$FACADE" 'nextpas.core.sync.pool'
+require_token "$FACADE" 'TSyncPool'
+require_token "$FACADE" 'CreateSyncPool'
 forbid_token "$FACADE" 'nextpas.core.sync.errors'
 forbid_token "$FACADE" 'SyncRaise'
 
 # --- Interfaces (live names; reject retired doc aliases) ---
-for iface in ILock IMutex INativeMutex IRWLock IWaitGroup ICondVar IOnce ISpinLock ISemaphore IBarrier IEvent ILockGuard; do
+for iface in ILock IMutex INativeMutex IRWLock IWaitGroup ICondVar IOnce ISpinLock ISemaphore IBarrier IEvent ILatch INotify IChannel ILockGuard; do
   require_token "$INTF" "$iface"
 done
 forbid_token "$INTF" 'ILockable'
@@ -96,6 +104,11 @@ forbid_token "$INTF" 'IRWLockable'
 
 require_token "$INTF" 'procedure Do_'
 require_token "$INTF" 'procedure DoOnce'
+# Do_ public name stays frozen (DoOnce is alias only)
+require_file "$SRC/nextpas.core.sync.latch.pas"
+require_file "$SRC/nextpas.core.sync.notify.pas"
+require_file "$SRC/nextpas.core.sync.channel.pas"
+require_file "$SRC/nextpas.core.sync.scoped.pas"
 require_token "$INTF" 'function WaitTimeout'
 require_token "$INTF" 'INativeMutex'
 require_token "$INTF" 'procedure Wait(const AMutex: INativeMutex)'
@@ -117,11 +130,17 @@ fi
 
 # --- Mutex default is ERRORCHECK (non-recursive); Futex is not native ---
 require_token "$MUTEX" 'PLATFORM_MUTEX_ERRORCHECK'
+require_token "$MUTEX" 'PLATFORM_MUTEX_RECURSIVE'
 require_token "$MUTEX" 'TFutexMutex'
+require_token "$MUTEX" 'TRecursiveMutex'
 require_token "$MUTEX" 'INativeMutex'
 # TFutexMutex class line must not list INativeMutex
 if rg -n 'TFutexMutex = class' "$MUTEX" | rg -F 'INativeMutex' >/dev/null; then
   fail "TFutexMutex must not implement INativeMutex"
+fi
+# TRecursiveMutex must implement INativeMutex
+if ! rg -n 'TRecursiveMutex = class' "$MUTEX" | rg -F 'INativeMutex' >/dev/null; then
+  fail "TRecursiveMutex must implement INativeMutex"
 fi
 
 # FHandle must be under private (not public) for platform-backed primitives

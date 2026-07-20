@@ -42,6 +42,24 @@ type
     function Lock: ILockGuard;
   end;
 
+  {**
+   * @desc 递归互斥锁，基于 platform pthread_mutex (RECURSIVE)
+   * @note 同一线程可重入；必须配对相同次数的 Release
+   * @note 实现 INativeMutex，可与 ICondVar 配对
+   *}
+  TRecursiveMutex = class(TInterfacedObject, ILock, IMutex, INativeMutex)
+  private
+    FHandle: TPlatformMutex;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Acquire;
+    function TryAcquire: Boolean;
+    procedure Release;
+    function Lock: ILockGuard;
+    function NativeHandle: Pointer;
+  end;
+
 implementation
 
 uses
@@ -191,6 +209,62 @@ function TFutexMutex.Lock: ILockGuard;
 begin
   Acquire;
   Result := TLockGuardImpl.Create(Self);
+end;
+
+{ TRecursiveMutex }
+
+constructor TRecursiveMutex.Create;
+var
+  LRet: Int32;
+begin
+  inherited Create;
+  LRet := platform_mutex_init(FHandle, PLATFORM_MUTEX_RECURSIVE);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Create', LRet);
+end;
+
+destructor TRecursiveMutex.Destroy;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_destroy(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Destroy', LRet);
+  inherited;
+end;
+
+procedure TRecursiveMutex.Acquire;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_lock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Acquire', LRet);
+end;
+
+function TRecursiveMutex.TryAcquire: Boolean;
+begin
+  Result := platform_mutex_trylock(FHandle) = 0;
+end;
+
+procedure TRecursiveMutex.Release;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_unlock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Release', LRet);
+end;
+
+function TRecursiveMutex.Lock: ILockGuard;
+begin
+  Acquire;
+  Result := TLockGuardImpl.Create(Self);
+end;
+
+function TRecursiveMutex.NativeHandle: Pointer;
+begin
+  Result := @FHandle;
 end;
 
 end.

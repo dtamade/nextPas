@@ -10,6 +10,7 @@ uses
   nextpas.core.system,
   nextpas.core.test,
   nextpas.core.time.base,
+  nextpas.core.sync.base,
   nextpas.core.sync,
   nextpas.core.sync.mutex,
   nextpas.core.sync.rwlock;
@@ -891,6 +892,268 @@ begin
     Check(True, 'RWLock Destroy while write-held returned success (host-lenient)');
 end;
 
+procedure TestRecursiveMutexReentry;
+var
+  LM: INativeMutex;
+begin
+  LM := RecursiveMutex;
+  LM.Acquire;
+  LM.Acquire;
+  Check(True, 'recursive reentry ok');
+  LM.Release;
+  LM.Release;
+  Check(LM.TryAcquire, 'free after balanced unlock');
+  LM.Release;
+end;
+
+procedure TestRecursiveMutexWithCondVar;
+var
+  LM: INativeMutex;
+  LCv: ICondVar;
+begin
+  LM := RecursiveMutex;
+  LCv := CondVar;
+  LM.Acquire;
+  Check(not LCv.WaitTimeout(LM, 1000000), 'recursive mutex pairs with condvar');
+  LM.Release;
+end;
+
+procedure TestLatchBasic;
+var
+  L: ILatch;
+begin
+  L := Latch(2);
+  CheckEqual(Int64(2), Int64(L.Remaining), 'remaining start');
+  Check(not L.TryWait, 'not ready');
+  L.CountDown;
+  CheckEqual(Int64(1), Int64(L.Remaining), 'remaining mid');
+  L.CountDown;
+  Check(L.TryWait, 'ready');
+  Check(L.WaitTimeout(TDuration.FromMilliseconds(1)), 'wait after zero');
+end;
+
+procedure TestLatchZero;
+var
+  L: ILatch;
+begin
+  L := Latch(0);
+  Check(L.TryWait, 'zero latch already open');
+  L.Wait;
+end;
+
+procedure TestLatchMultiWaiter;
+var
+  L: ILatch;
+  LDone: Int32;
+  T1, T2: TProcWorker;
+begin
+  L := Latch(1);
+  LDone := 0;
+  T1 := TProcWorker.Create(procedure
+  begin
+    L.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T2 := TProcWorker.Create(procedure
+  begin
+    L.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LDone), 'blocked before countdown');
+  L.CountDown;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LDone), 'both waiters released');
+end;
+
+procedure TestNotifySticky;
+var
+  N: INotify;
+begin
+  N := Notify;
+  N.NotifyOne;
+  N.Wait;
+  Check(True, 'sticky notify consumed');
+  Check(not N.WaitTimeout(TDuration.FromMilliseconds(1)), 'no second permit');
+end;
+
+procedure TestNotifyWakesWaiter;
+var
+  N: INotify;
+  LDone: Int32;
+  Th: TProcWorker;
+begin
+  N := Notify;
+  LDone := 0;
+  Th := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  Th.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LDone), 'blocked');
+  N.NotifyOne;
+  Th.WaitFor;
+  Th.Free;
+  CheckEqual(Int64(1), Int64(LDone), 'woken');
+end;
+
+procedure TestNotifyAll;
+var
+  N: INotify;
+  LDone: Int32;
+  T1, T2: TProcWorker;
+begin
+  N := Notify;
+  LDone := 0;
+  T1 := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T2 := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  N.NotifyAll;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LDone), 'notify all woke both');
+end;
+
+procedure TestChannelBasic;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(2);
+  CheckEqual(Int64(2), Int64(C.Cap), 'cap');
+  Check(C.TrySend(Pointer(1)) = csrOk, 'send1');
+  Check(C.TrySend(Pointer(2)) = csrOk, 'send2');
+  Check(C.TrySend(Pointer(3)) = csrFull, 'full');
+  Check(C.TryRecv(P) = crrOk, 'recv1');
+  CheckEqual(Int64(1), Int64(PtrUInt(P)), 'val1');
+  Check(C.Recv(P), 'recv2');
+  CheckEqual(Int64(2), Int64(PtrUInt(P)), 'val2');
+  Check(C.TryRecv(P) = crrEmpty, 'empty');
+end;
+
+procedure TestChannelClose;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(1);
+  Check(C.Send(Pointer(7)), 'send');
+  C.Close;
+  Check(C.IsClosed, 'closed');
+  Check(C.TrySend(Pointer(8)) = csrClosed, 'send after close');
+  Check(C.Recv(P), 'drain after close');
+  CheckEqual(Int64(7), Int64(PtrUInt(P)), 'drained value');
+  Check(not C.Recv(P), 'recv closed empty');
+end;
+
+procedure TestChannelProducerConsumer;
+var
+  C: IChannel;
+  LSum: Int32;
+  Prod, Cons: TProcWorker;
+  I: Integer;
+begin
+  C := Channel(4);
+  LSum := 0;
+  Prod := TProcWorker.Create(procedure
+  var
+    K: Integer;
+  begin
+    for K := 1 to 20 do
+      Check(C.Send(Pointer(K)), 'prod send');
+    C.Close;
+  end);
+  Cons := TProcWorker.Create(procedure
+  var
+    P: Pointer;
+  begin
+    while C.Recv(P) do
+      InterlockedExchangeAdd(LSum, Integer(PtrUInt(P)));
+  end);
+  Prod.Start;
+  Cons.Start;
+  Prod.WaitFor;
+  Cons.WaitFor;
+  Prod.Free;
+  Cons.Free;
+  CheckEqual(Int64(210), Int64(LSum), 'sum 1..20');
+end;
+
+procedure TestScopedWithLock;
+var
+  LM: IMutex;
+  LVal: Integer;
+begin
+  LM := Mutex;
+  LVal := 0;
+  WithLock(LM, procedure
+  begin
+    Inc(LVal);
+    Check(not LM.TryAcquire, 'held inside WithLock');
+  end);
+  CheckEqual(Int64(1), Int64(LVal), 'proc ran');
+  Check(LM.TryAcquire, 'released after WithLock');
+  LM.Release;
+end;
+
+procedure TestScopedRW;
+var
+  LRW: IRWLock;
+  LVal: Integer;
+begin
+  LRW := RWLock;
+  LVal := 0;
+  WithReadLock(LRW, procedure
+  begin
+    Inc(LVal);
+  end);
+  WithWriteLock(LRW, procedure
+  begin
+    Inc(LVal, 10);
+  end);
+  CheckEqual(Int64(11), Int64(LVal), 'read+write scoped');
+end;
+
+function PoolFacadeFactory: Pointer;
+begin
+  Result := TPoolItem.Create;
+end;
+
+procedure TestPoolFacade;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+begin
+  LPool := CreateSyncPool(@PoolFacadeFactory);
+  try
+    LObj := LPool.Get;
+    Check(LObj <> nil, 'pool get');
+    LPool.Put(LObj);
+    Check(LPool.TotalCreated > 0, 'pool created items');
+  finally
+    LPool.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -944,6 +1207,21 @@ begin
   T.Test('WaitGroup wait timeout', @TestWaitGroupWaitTimeout);
   T.Test('DoOnce alias', @TestDoOnceAlias);
   T.Test('Duration timeout overloads', @TestDurationTimeoutOverloads);
+
+  T.Test('RecursiveMutex reentry', @TestRecursiveMutexReentry);
+  T.Test('RecursiveMutex with CondVar', @TestRecursiveMutexWithCondVar);
+  T.Test('Latch basic', @TestLatchBasic);
+  T.Test('Latch zero', @TestLatchZero);
+  T.Test('Latch multi waiter', @TestLatchMultiWaiter);
+  T.Test('Notify sticky', @TestNotifySticky);
+  T.Test('Notify wakes waiter', @TestNotifyWakesWaiter);
+  T.Test('Notify all', @TestNotifyAll);
+  T.Test('Channel basic', @TestChannelBasic);
+  T.Test('Channel close', @TestChannelClose);
+  T.Test('Channel producer consumer', @TestChannelProducerConsumer);
+  T.Test('Scoped WithLock', @TestScopedWithLock);
+  T.Test('Scoped RW', @TestScopedRW);
+  T.Test('Pool facade', @TestPoolFacade);
 
   if not T.Run then Halt(1);
 end.

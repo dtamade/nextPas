@@ -135,6 +135,39 @@ begin
   LS.Release;
 end;
 
+procedure DemoP3;
+var
+  LLatch: ILatch;
+  LNotify: INotify;
+  LCh: IChannel;
+  LP: Pointer;
+  LRec: INativeMutex;
+begin
+  LLatch := Latch(1);
+  LLatch.CountDown;
+  Require(LLatch.TryWait, 'latch open');
+
+  LNotify := Notify;
+  LNotify.NotifyOne;
+  LNotify.Wait;
+
+  LCh := Channel(1);
+  Require(LCh.Send(Pointer(1)), 'channel send');
+  Require(LCh.Recv(LP), 'channel recv');
+  Require(PtrUInt(LP) = 1, 'channel value');
+
+  LRec := RecursiveMutex;
+  LRec.Acquire;
+  LRec.Acquire;
+  LRec.Release;
+  LRec.Release;
+
+  WithLock(Mutex, procedure
+  begin
+    { scoped ok }
+  end);
+end;
+
 begin
   WriteLn('sync-basics=ready');
   DemoMutexAndCondVar;
@@ -145,5 +178,7 @@ begin
   WriteLn('  once+event=ok');
   DemoSpinLock;
   WriteLn('  spinlock=ok');
+  DemoP3;
+  WriteLn('  p3 latch/notify/channel/recursive/scoped=ok');
   WriteLn('sync-basics-status=pass');
 end.

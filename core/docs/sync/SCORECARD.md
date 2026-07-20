@@ -85,12 +85,14 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 
 ---
 
-## 决策（暂缓）
+## 决策（1.5）
 
 | 议题 | 决定 | 证据 |
 |------|------|------|
-| 公开 `RecursiveMutex` | **暂缓** | 默认 ERRORCHECK；`PLATFORM_MUTEX_RECURSIVE` 存在但无生产调用 |
-| `TSyncPool` 门面化 | **暂缓** | 仅 `test_sync_pool` + 文档；无 core 生产 `CreateSyncPool` |
+| 公开 `RecursiveMutex` | **已上线** | `test_sync` reentry + CondVar 配对 |
+| `TSyncPool` 门面化 | **advanced re-export** | 门面 `CreateSyncPool` + `test_sync` Pool facade |
+| Channel / Latch / Notify / Scoped | **已上线** | `test_sync` 61 cases 含 P3 |
+| 删除 `Do_` | **禁止** | 契约冻结；`DoOnce` 为别名 |
 
 ---
 
