@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.24
+**版本**：1.25
 
 ---
 
@@ -187,8 +187,10 @@ end;
 - **契约脚本**: `./scripts/tui-contract-check.sh`
   - **C7** SCORECARD/CONTRACT/scorecard.lpr 对齐至 SC27
   - **C8** core facade reject 编译失败（scrollview/modal/dialog/split_pane/select）
+  - **C9** Wine pure-path suite 存在（buffer/color/input）
 - 密度：clear/intf ≥16；tier facade ≥12；examples ≥7
 - 晋升：scrollview/modal/dialog/split_pane/select 已在 **ext**；core reject 保持；B3 候选表清空
+- 测量：SCORECARD 以 **RELEASE=1** 发布口径刷新（Phase E1）；不对 ns 设硬阈值
 
 ---
 
@@ -196,6 +198,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.25 | Phase E1：RELEASE=1 快照 + C2 wine + C9；无新 SC | Claude |
 | 2026-07-20 | 1.24 | Idle 单点：TSelect 晋升 ext；core reject_select；B3 表清空 | Claude |
 | 2026-07-20 | 1.23 | Idle 单点：TSplitPane 晋升 ext；core reject_split_pane | Claude |
 | 2026-07-20 | 1.22 | Idle 单点：TDialog 晋升 ext；core reject_dialog | Claude |

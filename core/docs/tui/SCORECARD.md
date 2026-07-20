@@ -1,8 +1,8 @@
 # tui Scorecard
 
-**状态**: Wave Q1–Q15 + **M1 Maintenance** Active
+**状态**: **Maintenance Idle** · Phase E1 测量刷新（2026-07-20）
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
-**对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
+**对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [ROADMAP.md](ROADMAP.md)
 
 Ready 报告的热路径证据以本 Scorecard 为准；历史 smoke 数字见 [BENCHMARK.md](BENCHMARK.md)。
 Go/Rust 同方法论对照：
@@ -64,34 +64,43 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 - 跨语言绝对 ns 仅作说明；ops 语义必须一致。
 - nextPas Diff 比较完整 `TCell`（40B）；Go/Rust 对照为 **1-byte ch 简化核**——不可当「快于 ratatui」营销。
 - Layout/Overlay Go/Rust 为几何/字节 stub；Pascal 用真实 nextPas API。
+- **禁止**无失败模式新增 SC28+（见 ROADMAP Phase F / PARITY 冻结策略）。
 
 ---
 
-## 本机快照（2026-07-20，M1）
+## 本机快照（2026-07-20，Phase E1 · `RELEASE=1`）
 
-**Host**: Linux 6.12.74+deb13+1-amd64 x86_64 · FPC 3.3.1 · heaptrc focused scorecard
+**Host**: Linux 6.12.74+deb13+1-amd64 x86_64 · FPC 3.3.1 · **无 heaptrc**（发布口径）
 
 | ID | Subject | ns/op | ops | ok |
 |----|---------|------:|----:|:--:|
-| SC1 | diff_identical | ~25–26k | 2000 | Y |
-| SC2 | diff_dirty10 | ~35–37k | 2000 | Y |
-| SC3a | parse_ascii | ~36–50 | 50000 | Y |
-| SC3b | parse_csi_up | ~45–50 | 50000 | Y |
-| SC5 | frame_empty | ~3.5–4.2k | 500 | Y |
+| SC1 | diff_identical | 29576 | 2000 | Y |
+| SC2 | diff_dirty10 | 35934 | 2000 | Y |
+| SC3a | parse_ascii | 36 | 50000 | Y |
+| SC3b | parse_csi_up | 44 | 50000 | Y |
+| SC5 | frame_empty | 3647 | 500 | Y |
 | SC4a–SC27a | correctness gates | — | 1 | Y |
 
-发布数字请用 `make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1`（关闭 heaptrc）。
+相对 16 ms 帧预算：SC1/SC2 约 30–36 µs（约 **0.2%** 帧时）。
 
-### `bench_go_rust compare`（同机，简化核）
+### `bench_go_rust compare`（同机，简化核 · E1）
 
 | Op | nextPas | Go stub | Rust stub |
 |----|--------:|--------:|----------:|
-| DiffIdentical 200×50 | ~25.6 µs | ~8 µs | ~9–10 µs |
-| DiffDirty10 200×50 | ~35–37 µs | ~7–8 µs | ~9 µs |
-| ParseAscii | ~35–40 ns | ~1 ns | ~1 ns |
-| ParseCsiUp | ~45–50 ns | ~1 ns | ~1–2 ns |
-| LayoutVSplit3 | ~291 ns (real) | ~geom stub | ~geom stub |
-| LayoutHSplit3 | real API | ~geom stub | ~geom stub |
-| OverlayMerge 40×12 | ~415 ns (real) | ~byte stub | ~byte stub |
+| DiffIdentical 200×50 | 26.4 µs | 7.9 µs | 10.2 µs |
+| DiffDirty10 200×50 | 36.2 µs | 7.3 µs | 9.2 µs |
+| ParseAscii | 36 ns | ~0.9 ns | ~1.2 ns |
+| ParseCsiUp | 44 ns | ~1.1 ns | ~1.9 ns |
+| LayoutVSplit3 | 293 ns (real) | ~2.6 ns (geom stub) | ~1.0 ns (geom stub) |
+| LayoutHSplit3 | 419 ns (real) | ~2.2 ns (geom stub) | ~1.6 ns (geom stub) |
+| OverlayMerge 40×12 | 516 ns (real) | 214 ns (byte stub) | 504 ns (byte stub) |
 
-说明：nextPas 路径含完整 cell/真实 ParseOne/真实 layout·overlay；Go/Rust 为简化核 + anti-DCE。差距符合「完整库 vs 微核」，**不是**“慢于 Go/Rust 生产 TUI”的结论。
+说明：nextPas 路径含完整 cell / 真实 ParseOne / 真实 layout·overlay；Go/Rust 为简化核 + anti-DCE。差距符合「完整库 vs 微核」，**不是**「慢于 Go/Rust 生产 TUI」的结论。
+
+### Phase C2 Wine pure-path（E1 同批证据）
+
+| Suite | 结果 |
+|-------|------|
+| `test_tui_buffer_wine` | 12/12，0 leak |
+| `test_tui_color_wine` | 12/12，0 leak |
+| `test_tui_input_wine` | 12/12，0 leak |

@@ -119,6 +119,15 @@ if [ -n "$FPC_BIN" ]; then
   done
 fi
 
+printf "\n${BOLD}C9: Wine pure-path suite 存在${NC}\n"
+for wine in test_tui_buffer_wine test_tui_color_wine test_tui_input_wine; do
+  if [ -d "$TEST_DIR/$wine" ] && ls "$TEST_DIR/$wine"/*.lpr >/dev/null 2>&1; then
+    ok "$wine suite 存在"
+  else
+    fail_check "缺 wine suite: $wine"
+  fi
+done
+
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

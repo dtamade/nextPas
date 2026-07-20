@@ -172,20 +172,21 @@ D1–D6 已满足 → **进入 Maintenance Idle**：
 
 ### Phase C / D / E — 可选（不阻塞 Idle）
 
-| 项 | 说明 |
-|----|------|
-| C2 Wine pure-path | 保持现有 wine suites |
-| C3/C4 Windows/macOS 真机 | 挂 platform CI，非 tui 独有阻塞 |
+| 项 | 说明 | 状态 |
+|----|------|------|
+| C2 Wine pure-path | buffer/color/input wine suites 全绿 0 leak | **Done**（E1 同批 2026-07-20） |
+| C3/C4 Windows/macOS 真机 | 挂 platform CI，非 tui 独有阻塞 | 可选 / Out 默认 |
 
 ### Phase D — 协议（可选）
 
 Truecolor DA / 图像协议：仅 experimental 内演进。
 
-### Phase E — 测量纪律（持续轻量）
+### Phase E — 测量纪律
 
-- scorecard 权威正确性，**不对 ns 设硬阈值**  
-- bench 简化核禁止假胜营销  
-- 重大变更后 `RELEASE=1` 刷新快照  
+| 步骤 | 内容 | 状态 |
+|------|------|------|
+| E1 | `RELEASE=1` scorecard + `bench_go_rust compare` 刷新 SCORECARD/PARITY；C9 wine 存在性门禁 | **Done**（本批） |
+| E-ongoing | 重大变更后刷新快照；**不对 ns 设硬阈值**；禁止假胜营销 | 持续 |
 
 ---
 
@@ -196,13 +197,15 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
    ↓
 [DONE] ROADMAP 落地
    ↓
-[DONE] Phase B1–B4：scrollview+modal → ext；B3 停止再晋升
+[DONE] Phase B + Idle 单点：scrollview/modal/dialog/split_pane/select → ext
+   ↓
+[DONE] Phase E1 测量刷新 + C2 Wine pure-path
    ↓
 [NOW] Phase F Maintenance Idle
    │
-   ├─ C 平台（可选）
-   ├─ D 协议（可选）
-   └─ E 测量纪律（持续轻量）
+   ├─ C3/C4 真机（可选，挂 platform）
+   ├─ D 协议（可选，experimental）
+   └─ E-ongoing 重大变更后刷新快照
 ```
 
 Worktree：始终 `.worktrees/tui`，path-limited land。
@@ -213,7 +216,11 @@ Worktree：始终 `.worktrees/tui`，path-limited land。
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.tui/scorecard
+make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
+make -C core/tests/nextpas.core.tui/test_tui_buffer_wine clean test
+make -C core/tests/nextpas.core.tui/test_tui_color_wine clean test
+make -C core/tests/nextpas.core.tui/test_tui_input_wine clean test
 ./scripts/tui-contract-check.sh
 ```
 
