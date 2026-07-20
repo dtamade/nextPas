@@ -64,7 +64,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem.stack_guard;
+  nextpas.core.mem.stack_guard,
+  nextpas.core.mem;
 
 { TLocalArena }
 
@@ -101,7 +102,8 @@ destructor TLocalArena.Destroy;
 begin
   if FBacking <> nil then
   begin
-    FAllocator.FreeMem(FBacking);
+    { Sized free of single backing slab (FCapacity == Create GetMem size). }
+    FreeMemOf(FAllocator, FBacking, FCapacity);
     FBacking := nil;
   end;
   FAllocator := nil;
