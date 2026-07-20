@@ -92,6 +92,66 @@ begin
   Fail('intentional failure');
 end;
 
+{ v8.24: injectable empty backend (nextpas / test double path) }
+type
+  TEmptyDiscoveryBackend = class(TInterfacedObject, ITestDiscoveryBackend)
+  public
+    function EnumeratePublishedMethods(AClass: TClass;
+      out AMethods: TDiscoveredMethods): Boolean;
+  end;
+
+function TEmptyDiscoveryBackend.EnumeratePublishedMethods(AClass: TClass;
+  out AMethods: TDiscoveredMethods): Boolean;
+begin
+  SetLength(AMethods, 0);
+  Result := True; { succeeded with zero methods }
+end;
+
+procedure TestDiscoveryBackendEmptyInject;
+var
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+begin
+  SetDiscoveryBackend(TEmptyDiscoveryBackend.Create as ITestDiscoveryBackend);
+  try
+    LFixture := TSimpleFixture.Create;
+    LSuite := DiscoverTests(LFixture, 'empty-backend');
+    CheckEqual(0, Length(LSuite.Tests), 'empty backend → zero tests');
+    CheckEqual('empty-backend', LSuite.Name, 'suite name preserved');
+    LSuite.CleanupTableAllocations;
+    LSuite := Default(TTestSuite);
+  finally
+    ResetDiscoveryBackend;
+  end;
+end;
+
+procedure TestDiscoveryBackendResetRestoresFpc;
+var
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+begin
+  SetDiscoveryBackend(TEmptyDiscoveryBackend.Create as ITestDiscoveryBackend);
+  ResetDiscoveryBackend;
+  LFixture := TSimpleFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(2, Length(LSuite.Tests), 'FPC backend restored after Reset');
+  LSuite.CleanupTableAllocations;
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestFpcBackendEnumerateDirect;
+var
+  LBackend: ITestDiscoveryBackend;
+  LMethods: TDiscoveredMethods;
+  LOk: Boolean;
+begin
+  LBackend := CreateFpcVmtDiscoveryBackend;
+  LOk := LBackend.EnumeratePublishedMethods(TSimpleFixture, LMethods);
+  CheckTrue(LOk, 'FPC enumerate succeeds');
+  CheckEqual(2, Length(LMethods), 'TSimpleFixture has 2 published methods');
+  CheckTrue(GetDiscoveryBackend <> nil, 'default backend non-nil');
+end;
+
 { ── DiscoverTests tests ───────────────────────────────────────────────────── }
 
 procedure TestDiscoverSimple;
@@ -393,6 +453,10 @@ begin
   LSuite.Test('B12 Discover hooks on fail', @TestB12DiscoverHooksOnFailure);
   LSuite.Test('B12 Discover two instances', @TestB12DiscoverTwoInstancesIndependent);
   LSuite.Test('B12 Discover cleanup idempotent', @TestB12DiscoverCleanupIdempotent);
+  { v8.24 discovery backend injectability }
+  LSuite.Test('v8.24 empty backend inject', @TestDiscoveryBackendEmptyInject);
+  LSuite.Test('v8.24 reset restores FPC', @TestDiscoveryBackendResetRestoresFpc);
+  LSuite.Test('v8.24 FPC enumerate direct', @TestFpcBackendEnumerateDirect);
 
   { B26: meaningful name fail-path table (metadata only, no Discover run) }
   SetLength(LB26Cases, 90);

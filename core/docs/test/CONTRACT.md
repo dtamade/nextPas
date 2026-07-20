@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-21
-**版本**：v8.23
+**版本**：v8.24
 
 ---
 
@@ -412,6 +412,13 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.24 (2026-07-21) — 编译器透明边角（可用性 M4）
+
+- **Sink IO**：`TStdoutSink` / `TStderrSink` 经 `platform_console_write`（fd 1/2），**禁止** `System.Write*`
+- **Discovery**：`ITestDiscoveryBackend` + `CreateFpcVmtDiscoveryBackend`；`SetDiscoveryBackend` / `ResetDiscoveryBackend` 可注入 nextpas/测试双
+- **契约**：runner source-contract 锁无 System.Write*、platform_console_write、backend API + 自测 inject/reset
+- **FPC VMT**：仍为默认 backend 实现（布局绑定隔离在 `TFpcVmtDiscoveryBackend`）
 
 ### v8.23 (2026-07-21) — Soft 诊断对齐 + Soft 高频扩面（可用性 M0–M3）
 

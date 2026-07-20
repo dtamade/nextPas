@@ -692,12 +692,19 @@ end;
 
 function TIocpReactor.AsyncConnect(AFd: PtrInt; AAddr: Pointer;
   AAddrLen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+const
+  { winsock2.h WSAEINVAL — bind when already bound, or other invalid state }
+  WSAEINVAL_LOCAL = 10022;
 var
   LHandle: HANDLE;
   LOp: PIocpPendingOp;
   LError: DWORD;
   LUserData: UInt64;
   LOk: BOOL;
+  LFamily: WORD;
+  LLocal4: sockaddr_in;
+  LLocal6: sockaddr_in6;
+  LBindRc: LongInt;
 begin
   IocpLoadWinsockExt;
   if not _ConnectExAvailable then
@@ -715,14 +722,42 @@ begin
   if not IocpEnsureAssociatedHandle(Self, LHandle, LError) then
     Exit(IocpFail(ACallback, AContext, 0, LError));
 
+  { ConnectEx requires a prior bind (MSDN). Dial may omit LocalAddr;
+    bind wildcard of the same family. Already-bound sockets (LocalAddr) get
+    WSAEINVAL — treat as success. }
+  LFamily := PWORD(AAddr)^;
+  LError := 0;
+  if LFamily = AF_INET then
+  begin
+    FillChar(LLocal4, SizeOf(LLocal4), 0);
+    LLocal4.sin_family := AF_INET;
+    LBindRc := winsock_bind(TSocket(AFd), @LLocal4, SizeOf(LLocal4));
+  end
+  else if LFamily = AF_INET6 then
+  begin
+    FillChar(LLocal6, SizeOf(LLocal6), 0);
+    LLocal6.sin6_family := AF_INET6;
+    LBindRc := winsock_bind(TSocket(AFd), @LLocal6, SizeOf(LLocal6));
+  end
+  else
+    Exit(IocpFail(ACallback, AContext, 0, ERROR_INVALID_PARAMETER));
+
+  if LBindRc <> 0 then
+  begin
+    LError := WSAGetLastError;
+    if LError <> WSAEINVAL_LOCAL then
+      Exit(IocpFail(ACallback, AContext, 0, LError));
+  end;
+
   LOp := IocpAllocOp(Self, opConnect, LHandle, ACallback, AContext);
   LOk := _ConnectEx(TSocket(AFd), AAddr, AAddrLen, nil, 0, nil, @LOp^.Overlapped);
 
   if LOk then
     Exit(True);
 
-  LError := GetLastError;
-  if LError = ERROR_IO_PENDING then
+  { ConnectEx is a Winsock extension — use WSAGetLastError, not GetLastError. }
+  LError := WSAGetLastError;
+  if (LError = ERROR_IO_PENDING) or (LError = WSA_IO_PENDING) then
     Exit(True);
 
   LUserData := LOp^.UserData;
