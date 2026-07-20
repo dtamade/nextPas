@@ -31,8 +31,9 @@
 | **Q34** | smoke 与 platform matrix 解耦 | FPC 安装成功即跑 async smoke | **done** |
 | **Q35** | Windows 测试 cthreads 条件化 | `{$IFDEF UNIX}cthreads{$ENDIF}` 修编译 | **done** |
 | **Q36** | net.tcp/udp 去 POSIX sockaddr 耦合 | TPlatformSockAddr only — win64 可编 dial/udp | **done** |
+| **Q37** | async.tcp/udp Windows/macOS 可移植 | 去 accept4；async.udp TPlatformSockAddr | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
-| **—** | full native-windows claim | 等 Q33+Q36 扩容 smoke 多周绿 | **deferred** |
+| **—** | full native-windows claim | 等 Q33+Q37 扩容 smoke 多周绿 | **deferred** |
 
 ### 为何 MPTCP 不做
 
@@ -46,11 +47,16 @@
 ### 为何 full native-windows 尚未宣称
 
 1. claim 名 **native-windows** = 满血 host 对等；当前只能诚实标 **candidate**。
-2. Q33 扩容后曾 **编不过**（cthreads + sockaddr POSIX 耦合）→ Q35/Q36 修编译。
+2. Q33 扩容后曾 **编不过**（cthreads + sockaddr POSIX 耦合）→ Q35/Q36 修编译；
+   Q36 后 GHA 仍红：`accept4`（async.tcp）+ posix `sockaddr_in`（async.udp）→ **Q37** 修。
 3. 升满血条件（assessment）：扩容 smoke **多周** step=success streak + 无 flaky + 文档矩阵对齐。
 4. platform.watch 等 **非 async 套件** 仍可能让 job overall 红；Q34 已解耦 smoke 证据。
 
-Q36 落地后：Windows 上 dial/udp/pool 应能 **编译**；下一刀是盯 GHA async smoke 全绿，再谈 claim 升级。
+### Q37 细节
+
+- `async.tcp`：同步试 accept 改为 `platform_socket_accept`（全平台），去掉 Linux-only `accept4`。
+- `async.udp`：op 缓冲用 `TPlatformSockAddr` + `platform_sockaddr_ipv4` / `_extract`，去 `posix.base`。
+- 验证：Linux dial/udp/pool/cancel/accept_connect 0 leak；GHA Windows async smoke 需再绿。
 
 ## Q13 细节
 
