@@ -11,7 +11,7 @@
 | 正确性 / 生命周期 | 8.5 | WhenAll RefCount+OnDiscard；Timeout CAS；class loop |
 | 取消传播 | **8.5** | Q1：combinator/taskgroup/Recv|SendTimeoutEx 贯通 |
 | 类型安全 | 8.5 | TAsyncLoop 强类型；TIoCompletion 统一 io.base |
-| 后端完整度 | 8.0 | io_uring/epoll 运行时；kqueue compile；IOCP wine-smoke |
+| 后端完整度 | 8.2 | io_uring/epoll 运行时；kqueue compile + Darwin CI L0 runtime smoke；IOCP wine-smoke |
 | 测试 / 契约 | 8.0 | 多套件 0 leak；Truth Matrix source-contract |
 | **综合** | **~8.6** | Q1 取消贯通后 |
 
@@ -38,7 +38,7 @@
 |------|---------|--------------|------|
 | 取消贯通 API | context 几乎全栈 | Token 贯通核心路径 | **Q1 done** |
 | 超时+取消竞态 | 标准 | CAS 三方 | **Q1 done** |
-| dual-stack | 默认 | multi-A + HE-lite 串行 + **AsyncTcpDial 并发 HE** + **并行 A/AAAA ResolveEx** | **Q6–Q9** |
+| dual-stack | 默认 | multi-A + HE-lite + **AsyncTcpDial 严格 CAD HE** + 并行 DNS Stream race | **Q6–Q11** |
 | 组合器竞态 soak | 成熟 | soak100 + token/timeout race | **Q2 done** |
 | 性能 scorecard | 社区基准 | 本机 metric 行 | **Q4 done** |
 
@@ -63,3 +63,5 @@
 - [x] dual-stack resolve list
 - [x] bench metric 行 + 本文档
 - [x] Q9 并行 A/AAAA + ResolutionDelay + FirstAddressFamilyCount + host matrix 钩子
+- [x] Q10 DNS-race-while-dialing (`AsyncResolveStream`) + kqueue runtime smoke
+- [x] Q11 严格 CAD + OnAttemptStart 计时测 + macOS kqueue L0 fail-closed

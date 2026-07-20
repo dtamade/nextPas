@@ -25,17 +25,21 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - `TPoller` wires kqueue on `NEXTPAS_MACOS` / `NEXTPAS_FREEBSD` (`PollerDetectBackend` → `pbKqueue`)
 - Backend model: `pbKqueue` is `pbmReadiness` (aligned with epoll; not completion-queue file I/O)
 - Timeout cancel: best-effort like epoll (`TryCancelByContext` drops pending op + internal `-ECANCELED`)
-- **source-contract + forced compile only** on Linux hosts: `test_async_kqueue_compile_gate` uses `-dNEXTPAS_FORCE_HOST_DARWIN` to prove the kqueue path compiles (FreeBSD FORCE_HOST currently blocked by unrelated `platform.thread` typing)
-- **CI host hooks (Q9)**: `core/scripts/async-host-matrix.sh` runs dial/resolve + kqueue compile gate; Linux job strict; macOS job **best-effort** (`continue-on-error`) — still not a claim of full macOS async runtime parity unless that job is green without best-effort
-- **not macOS/FreeBSD host-runtime proven** as a blanket claim in this worktree without green strict host jobs
-- Pure idle loops without a valid backend wait on platform wake without I/O polling; with kqueue, I/O polling is available once Create succeeds
+- **source-contract + forced compile** on Linux hosts: `test_async_kqueue_compile_gate` uses `-dNEXTPAS_FORCE_HOST_DARWIN` to prove the kqueue path compiles (FreeBSD FORCE_HOST currently blocked by unrelated `platform.thread` typing)
+- **CI host hooks (Q9–Q11)**: `core/scripts/async-host-matrix.sh`
+  - Linux: full matrix strict (`all`)
+  - macOS L0 fail-closed: `ASYNC_HOST_GATES=kqueue-runtime` (must `kqueue-runtime-smoke=pass`)
+  - macOS L1 best-effort: `ASYNC_HOST_GATES=dial-resolve` (`continue-on-error`)
+- **not full macOS async runtime parity** unless dial/resolve also run fail-closed and stay green
 
-### DNS / Happy Eyeballs truth (Q6–Q9)
+### DNS / Happy Eyeballs truth (Q6–Q11)
 - `AsyncResolve`: single-worker AF_UNSPEC multi-A
 - `AsyncResolveEx`: parallel A + AAAA + Resolution Delay (default 50ms), single merged callback
 - `AsyncResolveStream`: incremental per-family callbacks for DNS-race-while-dialing
-- `AsyncTcpDial`: concurrent staggered HE; host path races dial with late DNS family arrival
+- `AsyncTcpDial`: concurrent staggered HE; **strict CAD** (start-to-start; MaxInFlight is cap only); host path races dial with late DNS family arrival
+- Observability: optional `OnAttemptStart` (tests)
 - Evidence: `test_net_async_resolve` / `test_net_async_dial` 0 leak on Linux; host matrix script above
+- Still not a full laboratory DNS-RTT × SYN RFC8305 timing matrix
 
 ### Backend Model Classification
 - `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness
