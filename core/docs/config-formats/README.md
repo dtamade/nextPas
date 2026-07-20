@@ -21,12 +21,24 @@ Unified configuration module supporting multiple data formats with a common flat
 - XML: `EXmlError.Pos` carries `ByteOffset`, `Line`, `Column`
 - CSV: `TCsvError` exposes `Message`, `Line`, `Column`, and `Offset`
 - INI: `TIniError` exposes `Message`, `Line`, `Column`, and `Offset`
+- Cross-format aliases: `Col` / `Column` are property aliases on structured error records so callers can use either name.
+
+### Safe scalar access
+
+- JSON / YAML / TOML values expose `TryAsBool`, `TryAsInt`, `TryAsFloat`, `TryAsStr` (typed success flag + out value) alongside the lenient `As*` defaults.
+
+### Bulk `IReader` parse limits
+
+- JSON / YAML / TOML / INI / XML `Parse(IReader)` paths bulk-read via `IoReadAll` then parse.
+- Shared cap: `FORMAT_BULK_PARSE_MAX_BYTES` (64 MiB) in `nextpas.core.format.limits`; overflow raises `EArgumentError`.
+- CSV true streaming (`TCsvReader` + chunked `IReader`) is **not** subject to this bulk cap.
 
 ### TryParse Semantics
 
 - JSON/TOML/YAML: Returns `False` and still assigns a diagnostic document
 - XML: `TryXmlParse` returns `False` and keeps `ADoc = nil`
 - INI: `TryLoadFromString` returns `False` and populates `Error`
+- INI optional `Strict` mode rejects bare non-key lines on try-load
 
 ### Lifetime Model
 
@@ -39,6 +51,10 @@ Unified configuration module supporting multiple data formats with a common flat
 ### Diagnostic Stringification
 
 JSON, TOML, and YAML diagnostic documents are error carriers and cannot be stringified.
+
+### RTL isolation
+
+Format and config production sources do not `uses SysUtils`; host process harness examples may still whitelist SysUtils.
 
 ## Format Surface Gates
 
@@ -75,11 +91,12 @@ JSON, YAML, and TOML empty keys stay a config-adapter concern.
 
 ```
 src/
-  nextpas.core.config/     — Flat config facade (IConfig, TConfig)
-  nextpas.core.json/       — JSON parser
-  nextpas.core.toml/       — TOML parser
-  nextpas.core.yaml/       — YAML parser
-  nextpas.core.xml/       — XML tokenizer/reader/writer
-  nextpas.core.csv/        — CSV parser
-  nextpas.core.ini/        — INI parser
+  nextpas.core.config*       — Flat config facade (IConfig, TConfig)
+  nextpas.core.format.limits — Shared bulk parse limits
+  nextpas.core.json*         — JSON parser
+  nextpas.core.toml*         — TOML parser
+  nextpas.core.yaml*         — YAML parser
+  nextpas.core.xml*          — XML tokenizer/reader/writer
+  nextpas.core.csv*          — CSV parser
+  nextpas.core.ini*          — INI parser
 ```

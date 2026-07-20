@@ -79,6 +79,11 @@ Requires type registry from `nextpas.core.reflect`.
 `TryJsonParse` returns `False` on parse failure and still assigns a diagnostic document.
 
 `TJsonError` exposes `Message`, `Line`, `Column`, and `Offset`.
+`Col` is a property alias for `Column`.
+
+`TJsonValue` provides `TryAsBool` / `TryAsInt` / `TryAsFloat` / `TryAsStr` for typed success checks alongside lenient `As*` defaults.
+
+`JsonParse(IReader)` is bulk (`IoReadAll`) and capped by `FORMAT_BULK_PARSE_MAX_BYTES`.
 
 Malformed string diagnostics point at the offending byte.
 

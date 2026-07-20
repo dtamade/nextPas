@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.0** | RFC8259 + 结构化 `TJsonError` + int64 溢出硬失败 |
-| **规模 Scale** | **9.0** | Parse/Stringify/Builder/Marshal + **IReader bulk** |
-| **综合** | **9.0** | 生产可用；Schema 族显式 Out of scope |
+| **质量 Quality** | **9.2** | RFC8259 + 结构化 `TJsonError` + `TryAs*` + Col 别名 |
+| **规模 Scale** | **9.2** | Parse/Stringify/Builder/Marshal + **IReader bulk** + 64MiB cap |
+| **综合** | **9.2** | 生产可用；Schema 族显式 Out of scope |
 
 ---
 
@@ -25,6 +25,8 @@
 | 流式 token | Decoder/Token | `TJsonReader` | Done |
 | 结构化错误 | SyntaxError offset | `TJsonError` Line/Column/Offset | Done |
 | 对象/数组访问 | map/slice | `TJsonValue` 借用视图 | Done |
+| 安全类型转换 | type assert / Option | `TryAsBool`/`TryAsInt`/`TryAsFloat`/`TryAsStr` | Done |
+| bulk 上限 | Decoder 流式 | `FORMAT_BULK_PARSE_MAX_BYTES` on bulk IReader | Done |
 | int64 精确 | json.Number / i64 | `jnkInt` + overflow reject | Done |
 | float | float64 | `jnkReal` + overflow reject | Done |
 | Builder | Encoder | `IJsonBuilder` | Done |
