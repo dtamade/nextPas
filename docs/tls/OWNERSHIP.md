@@ -48,7 +48,12 @@ Prefer the **owner unit** in new code. Shims exist for call-site stability.
 - **D3** ChaCha20-Poly1305 owner: `crypto.chacha20poly1305`
 - **D4** ASN.1/DER owner: `crypto.asn1`
 - **D5** X.509 chain verify owner: `tls.x509verify` (protocol-level)
-- **D6** Crypto CSPRNG owner: `crypto.random` (via `platform.random`)
+- **D6** Crypto CSPRNG owner: `crypto.random` (via `platform.random`);
+  `tls.random` is a thin compatibility shim
+- **D7** (Batch B) ASN.1 trees own children (`TASN1Node` frees `FChildren`);
+  X.509 parse paths must free temporary `TASN1Reader`/`TASN1Node`
+- **D8** (Batch B) Prefer dynamic arrays / interface arrays over FPC `TList`
+  for TLS registries and cert caches; no bare interface pointers in lists
 
 ## Related docs
 

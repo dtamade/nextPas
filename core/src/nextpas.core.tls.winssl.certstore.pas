@@ -31,7 +31,7 @@ type
     FStoreHandle: HCERTSTORE;
     FStoreName: string;
     FOwnsHandle: Boolean;
-    FCertificates: TList;  // 缓存的证书列表
+    FCertificates: array of ISSLCertificate;  // 缓存的证书列表
 
     procedure ClearCache;
     procedure LoadCertificates;
@@ -136,7 +136,7 @@ begin
   FStoreHandle := nil;
   FStoreName := AStoreName;
   FOwnsHandle := True;
-  FCertificates := TList.Create;
+  SetLength(FCertificates, 0);
 
   if AStoreName <> '' then
     OpenSystemStore(AStoreName);
@@ -148,7 +148,7 @@ begin
   FStoreHandle := AStoreHandle;
   FStoreName := '';
   FOwnsHandle := AOwnsHandle;
-  FCertificates := TList.Create;
+  SetLength(FCertificates, 0);
 
   if AStoreHandle <> nil then
     LoadCertificates;
@@ -172,9 +172,7 @@ procedure TWinSSLCertificateStore.ClearCache;
 var
   i: Integer;
 begin
-  for i := 0 to FCertificates.Count - 1 do
-    ISSLCertificate(FCertificates[i])._Release;
-  FCertificates.Clear;
+  SetLength(FCertificates, 0);
 end;
 
 procedure TWinSSLCertificateStore.LoadCertificates;
@@ -198,8 +196,9 @@ begin
         CertDuplicateCertificateContext(CertContext),
         True
       );
-      Cert._AddRef;
-      FCertificates.Add(Pointer(Cert));
+      { array of ISSLCertificate holds a proper interface ref. }
+      SetLength(FCertificates, Length(FCertificates) + 1);
+      FCertificates[High(FCertificates)] := Cert;
     end;
   until CertContext = nil;
 end;
@@ -580,13 +579,13 @@ end;
 
 function TWinSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TWinSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
 begin
-  if (AIndex >= 0) and (AIndex < FCertificates.Count) then
-    Result := ISSLCertificate(FCertificates[AIndex])
+  if (AIndex >= 0) and (AIndex < Length(FCertificates)) then
+    Result := FCertificates[AIndex]
   else
     Result := nil;
 end;
@@ -595,9 +594,9 @@ function TWinSSLCertificateStore.GetAllCertificates: TSSLCertificateArray;
 var
   i: Integer;
 begin
-  SetLength(Result, FCertificates.Count);
-  for i := 0 to FCertificates.Count - 1 do
-    Result[i] := ISSLCertificate(FCertificates[i]);
+  SetLength(Result, Length(FCertificates));
+  for i := 0 to Length(FCertificates) - 1 do
+    Result[i] := FCertificates[i];
 end;
 
 // ============================================================================
@@ -622,17 +621,17 @@ begin
 
   // 基于缓存证书对象做归一化匹配，避免 WinSSL lane
   // 继续停留在 backend-native 的未归一化字符串搜索语义上。
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
     if LCandidate = LTarget then
       Exit(Cert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, False));
     if CertificateStoreDNMatches(LCandidate, LTarget) then
       Exit(Cert);
@@ -655,17 +654,17 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
     if LCandidate = LTarget then
       Exit(Cert);
   end;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     LCandidate := NormalizeCertificateStoreDN(GetCertificateStoreDNText(Cert, True));
     if CertificateStoreDNMatches(LCandidate, LTarget) then
       Exit(Cert);
@@ -683,9 +682,9 @@ begin
   if LTarget = '' then
     Exit;
 
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     if NormalizeCertificateStoreHex(Cert.GetSerialNumber) = LTarget then
     begin
       Result := Cert;
@@ -706,9 +705,9 @@ begin
   if SearchFP = '' then
     Exit;
   
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
-    Cert := ISSLCertificate(FCertificates[I]);
+    Cert := FCertificates[I];
     
     // Try SHA256 fingerprint (constant-time comparison)
     FP_SHA256 := NormalizeCertificateStoreHex(Cert.GetFingerprintSHA256);
@@ -780,8 +779,7 @@ begin
     Exit;
 
   try
-    // 直接写入结果数组，保持 interface 引用计数，
-    // 避免把接口对象作为裸指针塞进 TList 造成悬空引用。
+    // 直接写入结果数组，保持 interface 引用计数。
     for i := 0 to ChainContext^.cChain - 1 do
     begin
       SimpleChain := ChainContext^.rgpChain[i];
