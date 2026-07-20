@@ -69,6 +69,11 @@ if command -v go >/dev/null 2>&1; then
   echo "--- go dial peer ---"
   (cd "$PARITY_DIR/go-dial" && GO111MODULE=on go run . >"$OUT_DIR/go-dial.metrics" 2>"$OUT_DIR/go-dial.log")
   cat "$OUT_DIR/go-dial.metrics"
+
+  echo
+  echo "--- go dial concurrent peer ---"
+  (cd "$PARITY_DIR/go-dial-concurrent" && GO111MODULE=on go run . >"$OUT_DIR/go-dial-concurrent.metrics" 2>"$OUT_DIR/go-dial-concurrent.log")
+  cat "$OUT_DIR/go-dial-concurrent.metrics"
 fi
 
 echo
@@ -95,6 +100,8 @@ np.update(npd)
 go = load("go.metrics")
 god = load("go-dial.metrics")
 go.update(god)
+goc = load("go-dial-concurrent.metrics")
+go.update(goc)
 rs = load("rust.metrics")
 keys = sorted(set(np) | set(go) | set(rs))
 print("| Metric | nextpas | go peer | rust peer |")
@@ -105,6 +112,7 @@ for k in keys:
     print(f"| `{k}` | {fmt(np.get(k))} | {fmt(go.get(k))} | {fmt(rs.get(k))} |")
 print()
 print("Notes: peers are std channel/mutex/timer-create shapes, not TAsyncLoop clones.")
+print("dial_concurrent_ops_per_s: nextpas single-loop W-inflight; go = goroutine DialTimeout.")
 print("truth=same-host-order-of-magnitude")
 PY
 
