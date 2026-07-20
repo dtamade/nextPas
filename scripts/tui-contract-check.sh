@@ -47,6 +47,39 @@ printf "\n${BOLD}C6: 测试完备性${NC}\n"
 TEST_COUNT=$(find "$TEST_DIR" -mindepth 1 -maxdepth 1 -type d -name 'test_*' -exec basename {} \; 2>/dev/null | wc -l)
 if [ "$TEST_COUNT" -gt 0 ]; then ok "测试目录: $TEST_COUNT 个"; else warn_check "无 test_* 目录"; fi
 
+printf "\n${BOLD}C7: Scorecard / CONTRACT 对齐${NC}\n"
+SCORECARD="$REPO_ROOT/core/docs/tui/SCORECARD.md"
+PARITY="$REPO_ROOT/core/docs/tui/PARITY-GO-RUST.md"
+SC_LPR="$TEST_DIR/scorecard/scorecard.lpr"
+if [ -f "$SCORECARD" ]; then
+  if grep -q 'SC19' "$SCORECARD" && grep -q 'SC20' "$SCORECARD" && grep -q 'SC22' "$SCORECARD"; then
+    ok "SCORECARD 含 SC19/SC20/SC22"
+  else
+    fail_check "SCORECARD 缺少 SC19/SC20/SC22 条目"
+  fi
+else
+  fail_check "SCORECARD.md 不存在"
+fi
+if [ -f "$CONTRACT" ]; then
+  if grep -qE 'SC1[–-]SC' "$CONTRACT" && grep -qE '\*\*版本\*\*：1\.(1[5-9]|[2-9][0-9])' "$CONTRACT"; then
+    ok "CONTRACT 含 SC 范围与版本 ≥1.15"
+  else
+    fail_check "CONTRACT 缺少 SC1–SC 范围或版本过旧"
+  fi
+fi
+if [ -f "$SC_LPR" ]; then
+  for p in RunSC20 RunSC21 RunSC22; do
+    if grep -q "procedure $p" "$SC_LPR"; then ok "scorecard.lpr $p"; else fail_check "scorecard.lpr 缺 $p"; fi
+  done
+else
+  fail_check "scorecard.lpr 不存在"
+fi
+if [ -f "$PARITY" ] && grep -q '质量维度' "$PARITY"; then
+  ok "PARITY 含质量维度矩阵"
+else
+  fail_check "PARITY 缺少质量维度"
+fi
+
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1
