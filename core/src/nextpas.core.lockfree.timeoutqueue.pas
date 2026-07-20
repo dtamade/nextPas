@@ -86,26 +86,26 @@ var
   LIdx: Int64;
   LSeq: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   while True do
   begin
-    LHead := AtomicLoad64(FHead, moRelaxed);
-    LTail := AtomicLoad64(FTail, moAcquire);
+    LHead := atomic_load_64(FHead, mo_relaxed);
+    LTail := atomic_load_64(FTail, mo_acquire);
     if (LHead - LTail) >= FCapacity then
       Exit(False);
     LIdx := LHead and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    LSeq := atomic_load_64(FSlots[LIdx].Sequence, mo_acquire);
     if LSeq <> LHead then
     begin
       CpuPause;
       Continue;
     end;
-    if AtomicCompareExchange64(FHead, LHead, LHead + 1, moAcqRel) = LHead then
+    if atomic_compare_exchange_strong_64(FHead, LHead, LHead + 1, mo_acq_rel, mo_acquire) then
     begin
       FSlots[LIdx].Value := AValue;
       FSlots[LIdx].EnqueuedAt := TTimeoutQueueInstant.Now;
-      AtomicStore64(FSlots[LIdx].Sequence, LHead + 1, moRelease);
+      atomic_store_64(FSlots[LIdx].Sequence, LHead + 1, mo_release);
       Exit(True);
     end;
   end;
@@ -122,24 +122,24 @@ var
 begin
   while True do
   begin
-    LTail := AtomicLoad64(FTail, moRelaxed);
-    LHead := AtomicLoad64(FHead, moAcquire);
+    LTail := atomic_load_64(FTail, mo_relaxed);
+    LHead := atomic_load_64(FHead, mo_acquire);
     if LTail = LHead then
     begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      if atomic_load(FClosed, mo_acquire) <> 0 then
         Exit(tqClosed);
       Exit(tqEmpty);
     end;
 
     LIdx := LTail and FMask;
-    LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+    LSeq := atomic_load_64(FSlots[LIdx].Sequence, mo_acquire);
     if LSeq <> (LTail + 1) then
     begin
       CpuPause;
       Continue;
     end;
 
-    if AtomicCompareExchange64(FTail, LTail, LTail + 1, moAcqRel) <> LTail then
+    if not atomic_compare_exchange_strong_64(FTail, LTail, LTail + 1, mo_acq_rel, mo_acquire) then
       Continue;
 
     LNow := TTimeoutQueueInstant.Now;
@@ -148,12 +148,12 @@ begin
     begin
       AValue := FSlots[LIdx].Value;
       FSlots[LIdx].Value := Default(T);
-      AtomicStore64(FSlots[LIdx].Sequence, LTail + FCapacity, moRelease);
+      atomic_store_64(FSlots[LIdx].Sequence, LTail + FCapacity, mo_release);
       Exit(tqDequeued);
     end;
 
     FSlots[LIdx].Value := Default(T);
-    AtomicStore64(FSlots[LIdx].Sequence, LTail + FCapacity, moRelease);
+    atomic_store_64(FSlots[LIdx].Sequence, LTail + FCapacity, mo_release);
   end;
 end;
 
@@ -190,8 +190,8 @@ function TTimeoutQueueImpl.GetCount: Int64; inline;
 var
   LHead, LTail: Int64;
 begin
-  LHead := AtomicLoad64(FHead, moAcquire);
-  LTail := AtomicLoad64(FTail, moAcquire);
+  LHead := atomic_load_64(FHead, mo_acquire);
+  LTail := atomic_load_64(FTail, mo_acquire);
   if LHead > LTail then
     Result := LHead - LTail
   else
@@ -210,12 +210,12 @@ end;
 
 function TTimeoutQueueImpl.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad64(FHead, moAcquire) = AtomicLoad64(FTail, moAcquire);
+  Result := atomic_load_64(FHead, mo_acquire) = atomic_load_64(FTail, mo_acquire);
 end;
 
 procedure TTimeoutQueueImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TTimeoutQueueImpl.Destroy;
@@ -226,7 +226,7 @@ end;
 
 function TTimeoutQueueImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

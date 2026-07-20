@@ -133,11 +133,11 @@ var
   LIdx: Int32;
 begin
   if GMyReaderId = 0 then
-    GMyReaderId := AtomicFetchAdd32(GReaderCounter, 1, moRelaxed) + 1;
+    GMyReaderId := atomic_fetch_add(GReaderCounter, 1, mo_relaxed) + 1;
   LIdx := (GMyReaderId - 1) mod RCU_MAX_READERS;
   AGuard.Domain := Self;
   AGuard.ReaderIndex := LIdx;
-  AtomicFetchAdd64(FReaderCounts[LIdx], 1, moAcquire);
+  atomic_fetch_add_64(FReaderCounts[LIdx], 1, mo_acquire);
 end;
 
 procedure TRcuDomain.ExitRead(var AGuard: TRcuGuard);
@@ -148,11 +148,10 @@ begin
      (AGuard.ReaderIndex >= RCU_MAX_READERS) then
     Exit;
   repeat
-    LCount := AtomicLoad64(FReaderCounts[AGuard.ReaderIndex], moAcquire);
+    LCount := atomic_load_64(FReaderCounts[AGuard.ReaderIndex], mo_acquire);
     if LCount <= 0 then
       Break;
-  until AtomicCompareExchange64(FReaderCounts[AGuard.ReaderIndex], LCount,
-    LCount - 1, moRelease) = LCount;
+  until atomic_compare_exchange_strong_64(FReaderCounts[AGuard.ReaderIndex], LCount, LCount - 1, mo_release, mo_relaxed);
   AGuard.Domain := nil;
   AGuard.ReaderIndex := -1;
 end;
@@ -169,7 +168,7 @@ begin
     LDone := True;
     for LI := 0 to RCU_MAX_READERS - 1 do
     begin
-      if AtomicLoad64(FReaderCounts[LI], moAcquire) > 0 then
+      if atomic_load_64(FReaderCounts[LI], mo_acquire) > 0 then
       begin
         LDone := False;
         Break;
@@ -187,12 +186,12 @@ end;
 
 procedure TRcuDomain.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TRcuDomain.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 { TRcuPublisherImpl }
@@ -203,7 +202,7 @@ var
 begin
   LNew := RcuAllocNode(SizeOf(T));
   RcuCopyToNode(LNew, AValue, SizeOf(T));
-  LOld := PRcuValueNode(AtomicExchangePtr(Pointer(FCurrentNode), Pointer(LNew), moAcqRel));
+  LOld := PRcuValueNode(atomic_exchange(Pointer(FCurrentNode), Pointer(LNew), mo_acq_rel));
   FDomain.Synchronize;
   RcuFreeNode(LOld);
 end;
@@ -223,7 +222,7 @@ destructor TRcuPublisherImpl.Destroy;
 var
   LNode: PRcuValueNode;
 begin
-  LNode := PRcuValueNode(AtomicExchangePtr(Pointer(FCurrentNode), nil, moAcqRel));
+  LNode := PRcuValueNode(atomic_exchange(Pointer(FCurrentNode), nil, mo_acq_rel));
   RcuFreeNode(LNode);
   FDomain.Free;
   inherited Destroy;
@@ -234,13 +233,13 @@ var
   LGuard: TRcuGuard;
   LNode: PRcuValueNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
   begin
     AValue := Default(T);
     Exit(False);
   end;
   FDomain.EnterRead(LGuard);
-  LNode := PRcuValueNode(AtomicLoadPtr(Pointer(FCurrentNode), moAcquire));
+  LNode := PRcuValueNode(atomic_load(Pointer(FCurrentNode), mo_acquire));
   if LNode <> nil then
     RcuCopyFromNode(LNode, AValue, SizeOf(T))
   else
@@ -251,20 +250,20 @@ end;
 
 procedure TRcuPublisherImpl.Update(const AValue: T);
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit;
   AllocAndPublish(AValue);
 end;
 
 procedure TRcuPublisherImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   FDomain.Close;
 end;
 
 function TRcuPublisherImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

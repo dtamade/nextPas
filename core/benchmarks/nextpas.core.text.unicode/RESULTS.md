@@ -94,3 +94,11 @@
 - UCD `NFC_QC` N/M 表（`nfc_qc.inc`，SMP 已排序）+ **安全** `NFC` 短路
 - `FindComposition` starter-run 索引（391 runs）
 - `BufferToUtf8` BMP 内联 1/2/3 字节编码
+
+
+## Norm QC 全家桶 (2026-07-20d)
+
+- UCD `NFC/NFD/NFKD/NFKC_QC` not-Yes 表：`normalize_qc.inc`（SMP 已排序）
+- `NFD`/`NFKD`/`NFKC`/`NFC` 均在 QC=Yes 时短路返回原串
+- NormalizationTest 全绿
+- 生成器：`core/scripts/gen_unicode_norm_qc.py`

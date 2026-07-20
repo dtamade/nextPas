@@ -79,13 +79,17 @@ end;
 procedure TConcurrentBitSet.EnsureCapacity(AIndex: Int32);
 var
   LNeeded, LOldCount, I, LSpin: Int32;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
   LNeeded := (AIndex div 64) + 1;
   if LNeeded <= FWordCount then
     Exit;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -98,7 +102,7 @@ begin
   end;
   if LNeeded <= FWordCount then
   begin
-    AtomicStore32(FLock, 0, moRelease);
+    atomic_store(FLock, 0, mo_release);
     Exit;
   end;
   LOldCount := FWordCount;
@@ -106,7 +110,7 @@ begin
   SetLength(FBits, FWordCount);
   for I := LOldCount to FWordCount - 1 do
     FBits[I] := 0;
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentBitSet.SetBit(AIndex: Int32): TLockFreeBitSetResult;
@@ -120,9 +124,9 @@ begin
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
   repeat
-    LOld := AtomicLoad64(FBits[LWordIdx], moAcquire);
+    LOld := atomic_load_64(FBits[LWordIdx], mo_acquire);
     LNew := LOld or (Int64(1) shl LBitIdx);
-  until AtomicCompareExchange64(FBits[LWordIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIdx], LOld, LNew, mo_acq_rel, mo_acquire);
   Result := bsOk;
 end;
 
@@ -138,9 +142,9 @@ begin
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
   repeat
-    LOld := AtomicLoad64(FBits[LWordIdx], moAcquire);
+    LOld := atomic_load_64(FBits[LWordIdx], mo_acquire);
     LNew := LOld and (not (Int64(1) shl LBitIdx));
-  until AtomicCompareExchange64(FBits[LWordIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIdx], LOld, LNew, mo_acq_rel, mo_acquire);
   Result := bsOk;
 end;
 
@@ -155,9 +159,9 @@ begin
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
   repeat
-    LOld := AtomicLoad64(FBits[LWordIdx], moAcquire);
+    LOld := atomic_load_64(FBits[LWordIdx], mo_acquire);
     LNew := LOld xor (Int64(1) shl LBitIdx);
-  until AtomicCompareExchange64(FBits[LWordIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIdx], LOld, LNew, mo_acq_rel, mo_acquire);
   Result := bsOk;
 end;
 
@@ -171,7 +175,7 @@ begin
     Exit(False);
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
-  Result := (AtomicLoad64(FBits[LWordIdx], moAcquire) and (Int64(1) shl LBitIdx)) <> 0;
+  Result := (atomic_load_64(FBits[LWordIdx], mo_acquire) and (Int64(1) shl LBitIdx)) <> 0;
 end;
 
 function TConcurrentBitSet.TestAndSet(AIndex: Int32): Boolean;
@@ -185,9 +189,9 @@ begin
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
   repeat
-    LOld := AtomicLoad64(FBits[LWordIdx], moAcquire);
+    LOld := atomic_load_64(FBits[LWordIdx], mo_acquire);
     LNew := LOld or (Int64(1) shl LBitIdx);
-  until AtomicCompareExchange64(FBits[LWordIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIdx], LOld, LNew, mo_acq_rel, mo_acquire);
   Result := (LOld and (Int64(1) shl LBitIdx)) <> 0;
 end;
 
@@ -203,9 +207,9 @@ begin
   LWordIdx := AIndex div 64;
   LBitIdx := AIndex mod 64;
   repeat
-    LOld := AtomicLoad64(FBits[LWordIdx], moAcquire);
+    LOld := atomic_load_64(FBits[LWordIdx], mo_acquire);
     LNew := LOld and (not (Int64(1) shl LBitIdx));
-  until AtomicCompareExchange64(FBits[LWordIdx], LOld, LNew, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIdx], LOld, LNew, mo_acq_rel, mo_acquire);
   Result := (LOld and (Int64(1) shl LBitIdx)) <> 0;
 end;
 
@@ -222,7 +226,7 @@ begin
   Result := 0;
   for I := 0 to FWordCount - 1 do
   begin
-    LVal := AtomicLoad64(FBits[I], moRelaxed);
+    LVal := atomic_load_64(FBits[I], mo_relaxed);
     while LVal <> 0 do
     begin
       LVal := LVal and (LVal - 1);
@@ -236,7 +240,7 @@ var
   I: Int32;
 begin
   for I := 0 to FWordCount - 1 do
-    AtomicStore64(FBits[I], 0, moRelease);
+    atomic_store_64(FBits[I], 0, mo_release);
 end;
 
 end.

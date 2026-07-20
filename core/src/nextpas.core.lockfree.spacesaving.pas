@@ -93,10 +93,14 @@ uses
 procedure TSpaceSavingImpl.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -109,7 +113,7 @@ end;
 
 procedure TSpaceSavingImpl.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TSpaceSavingImpl.Create(AK: UInt32);
@@ -224,12 +228,12 @@ function TSpaceSavingImpl.Add(AItem: UInt64): TSpaceSavingStatus;
 var
   LIdx, LMinIdx: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(ssClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(ssClosed);
     if FTotalItems < High(UInt64) then
       Inc(FTotalItems);
@@ -276,12 +280,12 @@ var
   LI, LJ, LTemp: Integer;
   LSorted: array of Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(ssClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(ssClosed);
     if FHeapSize = 0 then
     begin
@@ -339,7 +343,7 @@ procedure TSpaceSavingImpl.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -347,7 +351,7 @@ end;
 
 function TSpaceSavingImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

@@ -131,10 +131,14 @@ end;
 procedure TLockFreeForkJoinPool.AcquireOwner(const AWorkerId: Int32);
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FOwnerLocks[AWorkerId], 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerId], LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -145,26 +149,26 @@ end;
 
 procedure TLockFreeForkJoinPool.ReleaseOwner(const AWorkerId: Int32);
 begin
-  AtomicStore32(FOwnerLocks[AWorkerId], 0, moRelease);
+  atomic_store(FOwnerLocks[AWorkerId], 0, mo_release);
 end;
 
 function TLockFreeForkJoinPool.Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
 var
   LWorkerId: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(fjClosed);
   // Round-robin to next worker
-  LWorkerId := Int32(QWord(AtomicFetchAdd64(FNextWorker, 1)) mod
+  LWorkerId := Int32(QWord(atomic_fetch_add_64(FNextWorker, 1)) mod
     QWord(FWorkerCount));
   AcquireOwner(LWorkerId);
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(fjClosed);
-    AtomicFetchAdd64(FTaskCount, 1, moRelaxed);
+    atomic_fetch_add_64(FTaskCount, 1, mo_relaxed);
     if FDeques[LWorkerId].TryPush(ATask) then
       Exit(fjOk);
-    AtomicFetchSub64(FTaskCount, 1, moRelaxed);
+    atomic_fetch_sub_64(FTaskCount, 1, mo_relaxed);
   finally
     ReleaseOwner(LWorkerId);
   end;
@@ -182,8 +186,8 @@ begin
   try
     if FDeques[AWorkerId].TryPop(ATask) then
     begin
-      AtomicFetchAdd64(FCompletedCount, 1);
-      AtomicFetchSub64(FTaskCount, 1);
+      atomic_fetch_add_64(FCompletedCount, 1);
+      atomic_fetch_sub_64(FTaskCount, 1);
       Exit(True);
     end;
   finally
@@ -195,8 +199,8 @@ begin
     LVictim := (AWorkerId + I) mod FWorkerCount;
     if FDeques[LVictim].TrySteal(ATask) then
     begin
-      AtomicFetchAdd64(FCompletedCount, 1);
-      AtomicFetchSub64(FTaskCount, 1);
+      atomic_fetch_add_64(FCompletedCount, 1);
+      atomic_fetch_sub_64(FTaskCount, 1);
       Exit(True);
     end;
   end;
@@ -205,12 +209,12 @@ end;
 
 procedure TLockFreeForkJoinPool.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TLockFreeForkJoinPool.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TLockFreeForkJoinPool.WorkerCount: Int32; inline;
@@ -220,12 +224,12 @@ end;
 
 function TLockFreeForkJoinPool.ApproxPendingCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FTaskCount, moRelaxed);
+  Result := atomic_load_64(FTaskCount, mo_relaxed);
 end;
 
 function TLockFreeForkJoinPool.ApproxCompletedCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FCompletedCount, moRelaxed);
+  Result := atomic_load_64(FCompletedCount, mo_relaxed);
 end;
 
 end.
