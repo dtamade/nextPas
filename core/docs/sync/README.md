@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：**Maintenance**（稳定；仅在消费者/跨平台语义驱动时开新 slice）
+**状态**：**Maintenance Ready (idle)** — 稳定；仅消费者缺陷 / 平台契约 / 架构触发时开 slice
 
 ---
 

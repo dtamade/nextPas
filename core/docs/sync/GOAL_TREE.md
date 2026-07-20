@@ -1,7 +1,7 @@
 # nextpas.core.sync Goal Tree
 
 **Lane**: `sync` @ `.worktrees/sync`
-**状态**: **Maintenance (idle)**
+**状态**: **Maintenance Ready (idle)**
 **更新**: 2026-07-20
 
 ## 愿景
@@ -10,36 +10,52 @@
 
 ---
 
-## Done
+## Done（能力面）
 
-- [x] 门面 + 原语 + platform.sync / INativeMutex / per-pool TLS
+- [x] 门面 + 原语 + `platform.sync` / `INativeMutex` / per-pool TLS
 - [x] Compile gates: Windows + Darwin + FreeBSD + Android
 - [x] Stress / Barrier 多线程 / Destroy 错误面 / source-contract
-- [x] SCORECARD SC1–SC10 multi-sample contended
+- [x] SCORECARD SC1–SC10（含 multi-sample contended）
 - [x] 示例 `core/examples/nextpas.core.sync/sync_basics`
+- [x] 文档 SSOT：README / CONTRACT / SCORECARD / 本 GOAL_TREE
 - [x] RecursiveMutex / Pool 门面 — **暂缓**（无生产消费者）
-- [x] path-limited land 多批
+- [x] path-limited land 多批；landing worktree 已清理
 
 ---
 
 ## Now
 
-- [ ] （无主动功能批）响应消费者缺陷 / 平台契约变化
+**无主动功能批。**
 
----
+Lane 保持与 `origin/main` 对齐；仅在下列触发时再开 slice：
 
-## Next（仅触发再开）
-
-| 触发 | 工作 |
+| 触发 | 响应 |
 |------|------|
+| 测试/生产缺陷 | 最小修复 + focused gate + path-limited land |
 | 生产需要递归锁 | 评估 `RecursiveMutex: INativeMutex` |
 | 生产广泛使用 Pool | 评估门面 re-export + 契约升级 |
-| 跨平台要求统一 held-destroy | owner-thread 或 debug 检测层 |
+| 跨平台要求统一 held-destroy | owner-thread / debug 检测层 |
 | 架构确认归属 | Channel / Latch / Notify |
 
 ---
 
-## Deferred
+## Deferred（硬禁止 / 冻结）
 
-- API 重命名 `Do_` — **冻结**
+- 公开 API 重命名（如 `Do_`）— **冻结**
 - FPC `SyncObjs` 兼容层 — **禁止**
+
+---
+
+## 验证入口（交接）
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.sync
+make -C core/examples/nextpas.core.sync/sync_basics run
+make -C core/benchmarks/nextpas.core.sync/bench_sync run   # 可选 SCORECARD
+```
+
+## 非目标
+
+- 拥有 platform ABI 细节
+- 替代 `async` 事件循环内同步原语
+- 无消费者驱动的 API 扩张
