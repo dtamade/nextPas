@@ -62,13 +62,20 @@ bash -n core/scripts/platform-windows-ci-matrix.sh
 
 ## 5. 证据快照（GHA · 2026-07-20）
 
-Core CI run **29719186114**（commit 含 G4.x/G5.x）：
+### 5.1 首次挂载（run **29719186114**）
 
 | Job | mem.host_runtime | 备注 |
 |-----|------------------|------|
-| **test-windows-runtime** | **PASS** | 整 job 绿（~3m） |
-| **test-macos** | **PASS** | 整 job 红于 **platform.watch** `PLATFORM_ERR_*`（非 mem） |
-| test-linux | n/a 全量 suite | 与 mem host-runtime 无关的既有/他模块失败 |
+| **test-windows-runtime** | **PASS** | 整 job 绿 |
+| **test-macos** | **PASS** | 整 job 曾红于 platform.watch（非 mem） |
 
-结论：**G5.x 真机证据已达成**（Darwin + Windows 均跑通 host-runtime）。  
-macOS matrix 其它 gate 红点属 platform owner，不阻塞 mem Steady。
+### 5.2 平台 watch 修复后（run **29719632518**）
+
+| Job | mem.host_runtime | platform matrix | 备注 |
+|-----|------------------|-----------------|------|
+| **test-windows-runtime** | **PASS** | **21/21** | 含 mem；整 job 绿 |
+| **test-macos** | **PASS** | **10/10** | 含 mem；整 job 红于 **async dial/resolve**（非 mem） |
+| test-linux | n/a | 全量 suite | 他模块失败，与 host-runtime 无关 |
+
+结论：**G5.x 真机证据稳固**（Darwin + Windows 连续 PASS）。  
+macOS job 残余红点在 async，不阻塞 mem Steady。

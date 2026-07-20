@@ -274,7 +274,8 @@ implementation
 
 uses
   nextpas.core.math,
-  nextpas.core.hash.wyhash;
+  nextpas.core.hash.wyhash,
+  nextpas.core.mem;
 
 { Hash helper functions }
 
@@ -479,9 +480,9 @@ begin
       Inc(FCount); Inc(FUsed);
     end;
   end;
-  FAllocator.FreeMem(oldBuckets);
+  FreeMemOf(FAllocator, oldBuckets, oldCap * SizeOf(TBucket));
   if oldBitmap <> nil then
-    FAllocator.FreeMem(oldBitmap);
+    FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
 end;
 
 function THashMap.KeyHash(const AKey: K): UInt32;
@@ -720,12 +721,12 @@ begin
   Clear;
   if FBuckets <> nil then
   begin
-    FAllocator.FreeMem(FBuckets);
+    FreeMemOf(FAllocator, FBuckets, FCapacity * SizeOf(TBucket));
     FBuckets := nil;
   end;
   if FBitmap <> nil then
   begin
-    FAllocator.FreeMem(FBitmap);
+    FreeMemOf(FAllocator, FBitmap, (FCapacity + 7) div 8);
     FBitmap := nil;
   end;
   inherited;
