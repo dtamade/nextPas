@@ -266,7 +266,7 @@ type
 
 **Progress (honest)**: **sharded spin locks** — **not** lock-free. `TConcurrentHashMap` is the **same implementation alias**, not a second algorithm.
 
-**Lifecycle**: **no `Close` / `IsClosed`**. Production pattern: stop writers → join all accessors → `Free`. Teaching: `t2_hashmap_join_free`.
+**Lifecycle** (Charter C): `Close` / `IsClosed`. After Close: Insert/Reserve/GetOrUpdate raise; TryInsert/Replace reject writes; GetOrInsert* only for existing keys; Find/Remove/ForEach/Clear still allowed. Destroy closes first. Teaching: `t2_hashmap_join_free`. Skiplist Close deferred; **not** H3-2 subset.
 
 **Design Features**:
 - 16 shards; preferred `atomic_exchange` spin path per shard

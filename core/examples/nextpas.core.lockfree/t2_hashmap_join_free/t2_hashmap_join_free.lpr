@@ -1,8 +1,7 @@
 {**
- * HashMap teaching consumer: multi-writer + stop → join → Free
+ * HashMap teaching consumer: multi-writer + Close → join → Free
  *
- * ShardedHashMap has NO Close/IsClosed (not H3-2 bag/multimap).
- * Lifecycle honesty: stop all mutators/accessors, join threads, then Free.
+ * Charter C: T1 ShardedHashMap Close (not H3-2 bag/multimap subset).
  * Progress is sharded spin locks — not lock-free.
  *}
 program t2_hashmap_join_free;
@@ -52,7 +51,7 @@ var
   LValue: Integer;
   LExpected: Int64;
 begin
-  WriteLn('=== HashMap multi-writer stop → join → Free (no Close API) ===');
+  WriteLn('=== HashMap multi-writer Close → join → Free ===');
   GMap := TIntMap.Create(64);
   GInserted := 0;
   try
@@ -67,7 +66,11 @@ begin
       if platform_thread_join(LProducers[LI], LRet) <> 0 then
         raise EInvalidOperationError.Create('producer join failed');
 
-    { All writers stopped — safe to observe and Free. No Close to call. }
+    WriteLn('  Close map (after writers done)');
+    GMap.Close;
+    if not GMap.IsClosed then
+      raise EInvalidOperationError.Create('expected closed');
+
     LExpected := Int64(PRODUCER_COUNT) * WRITES_PER_PRODUCER;
     if atomic_load_64(GInserted, mo_acquire) <> LExpected then
       raise EInvalidOperationError.Create('insert count mismatch');
@@ -77,15 +80,17 @@ begin
       raise EInvalidOperationError.Create('expected key 1');
     if not GMap.Find(LExpected, LValue) or (LValue <> Integer(LExpected)) then
       raise EInvalidOperationError.Create('expected last key');
+    if GMap.TryInsert(Integer(LExpected) + 1, 0) then
+      raise EInvalidOperationError.Create('TryInsert after Close must fail');
 
     WriteLn('  inserted=', atomic_load_64(GInserted, mo_acquire),
-      ' Count=', GMap.Count);
-    WriteLn('  join complete; Free next (no Close on HashMap)');
+      ' Count=', GMap.Count, ' IsClosed=', GMap.IsClosed);
+    WriteLn('  join complete; Free next');
   finally
     GMap.Free;
     GMap := nil;
   end;
-  WriteLn('  Free complete — stop → join → Free OK');
+  WriteLn('  Free complete — Close → join → Free OK');
   WriteLn;
   WriteLn('t2_hashmap_join_free: pass');
 end;
