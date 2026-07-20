@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **26 platform-gate `ci-matrix`** (+… +resource +pty; GHA 29734704405 pass=27 fail=0); wine 24 secondary |
+| Real Windows GHA | **26 platform-gate `ci-matrix`** (+… +resource +pty; GHA 29734704405 pass=27 fail=0); wine 24 secondary; **watch candidate** Batch-21 |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -329,6 +329,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **test**: Linux watch `detect delete` drain residuals before unlink (R30 multi-event shadow fix). |
 | 2026-07-20 | **Batch-20b**: promote **26 platform-gate** set (+pty) after GHA matrix pass=27 (run 29734704405 @ `d2eb8f890`; pty PASS). Job may red on async-native-smoke (not platform evidence). |
 | 2026-07-20 | **Batch-15 S3**: Windows watch overflow → `PLATFORM_ERR_AGAIN` + re-arm; wine smoke delete/multi soft. Queue: optional watch matrix candidate. |
+| 2026-07-20 | **Batch-21**: Windows scripts candidate **+platform.watch** (S1–S3; no promote until GHA green). |
 
 ---
 
