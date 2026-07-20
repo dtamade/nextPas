@@ -99,17 +99,36 @@ function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): 
 function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock; inline;
 function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean; inline;
 
+// 大小写映射类型（locale Case）
+type
+  TCaseLocale = nextpas.core.text.unicode.casefold.TCaseLocale;
+  TCaseOptions = nextpas.core.text.unicode.casefold.TCaseOptions;
+
+const
+  clRoot = nextpas.core.text.unicode.casefold.clRoot;
+  clTurkish = nextpas.core.text.unicode.casefold.clTurkish;
+  clAzeri = nextpas.core.text.unicode.casefold.clAzeri;
+
 // 大小写映射函数
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
-function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
-function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte; inline;
-function UTF8ToUpper(const AValue: string): string; inline;
-function UTF8ToLower(const AValue: string): string; inline;
-function UTF8ToTitle(const AValue: string): string; inline;
-function UTF8CaseFold(const AValue: string): string; inline;
-function UTF8CaseFoldSimple(const AValue: string): string; inline;
+function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; overload; inline;
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte; overload; inline;
+function CaseFoldSimple(const ACp: TUnicodeCodepoint; const AOptions: TCaseOptions): TUnicodeCodepoint; overload; inline;
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap;
+  const AOptions: TCaseOptions): Byte; overload; inline;
+function UTF8ToUpper(const AValue: string): string; overload; inline;
+function UTF8ToLower(const AValue: string): string; overload; inline;
+function UTF8ToTitle(const AValue: string): string; overload; inline;
+function UTF8CaseFold(const AValue: string): string; overload; inline;
+function UTF8CaseFoldSimple(const AValue: string): string; overload; inline;
+function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8ToLower(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function DefaultCaseOptions: TCaseOptions; inline;
 
 // 规范化函数
 function NFD(const AText: string): string; inline;
@@ -331,6 +350,11 @@ begin
   Result := nextpas.core.text.unicode.casefold.CodepointToTitle(ACp);
 end;
 
+function DefaultCaseOptions: TCaseOptions;
+begin
+  Result := nextpas.core.text.unicode.casefold.DefaultCaseOptions;
+end;
+
 function CaseFoldSimple(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
 begin
   Result := nextpas.core.text.unicode.casefold.CaseFoldSimple(ACp);
@@ -339,6 +363,17 @@ end;
 function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byte;
 begin
   Result := nextpas.core.text.unicode.casefold.CaseFoldFull(ACp, ADst);
+end;
+
+function CaseFoldSimple(const ACp: TUnicodeCodepoint; const AOptions: TCaseOptions): TUnicodeCodepoint;
+begin
+  Result := nextpas.core.text.unicode.casefold.CaseFoldSimple(ACp, AOptions);
+end;
+
+function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap;
+  const AOptions: TCaseOptions): Byte;
+begin
+  Result := nextpas.core.text.unicode.casefold.CaseFoldFull(ACp, ADst, AOptions);
 end;
 
 function UTF8ToUpper(const AValue: string): string;
@@ -356,7 +391,6 @@ begin
   Result := nextpas.core.text.unicode.casefold.UTF8ToTitle(AValue);
 end;
 
-
 function UTF8CaseFold(const AValue: string): string;
 begin
   Result := nextpas.core.text.unicode.casefold.UTF8CaseFold(AValue);
@@ -365,6 +399,31 @@ end;
 function UTF8CaseFoldSimple(const AValue: string): string;
 begin
   Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue);
+end;
+
+function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToUpper(AValue, AOptions);
+end;
+
+function UTF8ToLower(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToLower(AValue, AOptions);
+end;
+
+function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToTitle(AValue, AOptions);
+end;
+
+function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8CaseFold(AValue, AOptions);
+end;
+
+function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue, AOptions);
 end;
 
 function NFD(const AText: string): string;

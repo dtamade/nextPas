@@ -8,57 +8,58 @@ import (
 	"time"
 )
 
+func thruput(size, n int, elapsed time.Duration) float64 {
+	return float64(size*n) / elapsed.Seconds() / 1024 / 1024
+}
+
 func main() {
-	fmt.Println("=== Go FS Benchmark ===\n")
+	fmt.Println("=== Go FS scorecard (aligned methods) ===")
 	tmpDir, _ := os.MkdirTemp("", "bench_fs_go")
 	defer os.RemoveAll(tmpDir)
 
-	const size = 1024 * 1024 // 1MB
-	data := make([]byte, size)
-	for i := range data { data[i] = byte(i % 256) }
-	fpath := filepath.Join(tmpDir, "test.bin")
-
-	// Sequential Write
+	// --- same method as Pascal historical 64KB path (create/write/close loop) ---
+	const size64 = 64 * 1024
+	const n64 = 200
+	data64 := make([]byte, size64)
+	for i := range data64 {
+		data64[i] = 0xAA
+	}
+	fpath64 := filepath.Join(tmpDir, "t64.bin")
 	start := time.Now()
-	for iter := 0; iter < 20; iter++ {
-		f, _ := os.Create(fpath)
-		f.Write(data)
+	for i := 0; i < n64; i++ {
+		f, _ := os.Create(fpath64)
+		f.Write(data64)
 		f.Close()
 	}
-	elapsed := time.Since(start)
-	mbps := float64(size*20) / elapsed.Seconds() / 1024 / 1024
-	fmt.Printf("  SeqWrite 1MB x20:  %7.1f MB/s\n", mbps)
-
-	// Sequential Read
+	fmt.Printf("SeqWrite 64KB x%d: %7.1f MB/s\n", n64, thruput(size64, n64, time.Since(start)))
 	start = time.Now()
-	for iter := 0; iter < 20; iter++ {
-		f, _ := os.Open(fpath)
+	for i := 0; i < n64; i++ {
+		f, _ := os.Open(fpath64)
 		io.ReadAll(f)
 		f.Close()
 	}
-	elapsed = time.Since(start)
-	mbps = float64(size*20) / elapsed.Seconds() / 1024 / 1024
-	fmt.Printf("  SeqRead 1MB x20:   %7.1f MB/s\n", mbps)
+	fmt.Printf("SeqRead  64KB x%d: %7.1f MB/s\n", n64, thruput(size64, n64, time.Since(start)))
 
-	// Walk directory
-	walkDir := filepath.Join(tmpDir, "walk")
-	os.MkdirAll(walkDir, 0755)
-	for i := 0; i < 3; i++ {
-		sub := filepath.Join(walkDir, fmt.Sprintf("d%d", i))
-		os.MkdirAll(sub, 0755)
-		for j := 0; j < 5; j++ {
-			os.WriteFile(filepath.Join(sub, fmt.Sprintf("f%d.txt", j)), []byte("x"), 0644)
-		}
+	// --- same method as SCORECARD legacy Go 1MB×20 ---
+	const size1m = 1024 * 1024
+	const n1m = 20
+	data1 := make([]byte, size1m)
+	for i := range data1 {
+		data1[i] = byte(i % 256)
 	}
+	fpath1 := filepath.Join(tmpDir, "t1m.bin")
 	start = time.Now()
-	count := 0
-	for iter := 0; iter < 1000; iter++ {
-		filepath.Walk(walkDir, func(path string, info os.FileInfo, err error) error {
-			count++
-			return nil
-		})
+	for i := 0; i < n1m; i++ {
+		f, _ := os.Create(fpath1)
+		f.Write(data1)
+		f.Close()
 	}
-	elapsed = time.Since(start)
-	fmt.Printf("  Walk (1000x):      %7.3f ms/iter  (%d entries/iter)\n",
-		float64(elapsed.Milliseconds())/1000.0, count/1000)
+	fmt.Printf("SeqWrite 1MB x%d:  %7.1f MB/s\n", n1m, thruput(size1m, n1m, time.Since(start)))
+	start = time.Now()
+	for i := 0; i < n1m; i++ {
+		f, _ := os.Open(fpath1)
+		io.ReadAll(f)
+		f.Close()
+	}
+	fmt.Printf("SeqRead  1MB x%d:  %7.1f MB/s\n", n1m, thruput(size1m, n1m, time.Since(start)))
 }

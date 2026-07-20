@@ -64,6 +64,14 @@ begin
     'success only if not limited path');
 end;
 
+procedure TestCaptureEcho;
+var
+  S: string;
+begin
+  S := Capture('cmd.exe', ['/c', 'echo capture_wine_r34']);
+  Check(Pos('capture_wine_r34', S) > 0, 'Capture stdout');
+end;
+
 procedure TestStatusExit0;
 var
   LOut: TProcessOutput;
@@ -115,6 +123,7 @@ begin
   T := TTestSuite.Create('process L2 wine-runtime-smoke');
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('cmd echo', @TestCmdEcho);
+  T.Test('Capture echo', @TestCaptureEcho);
   T.Test('LookPath cmd', @TestLookPathCmd);
   T.Test('timeout', @TestTimeout);
   T.Test('MaxOutput', @TestMaxOutput);
