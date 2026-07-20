@@ -118,6 +118,37 @@ end;
 
 
 
+
+procedure TestEmptyArea;
+var
+  LBuf: TBuffer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 0, 0));
+  try
+    CheckEqual(0, LBuf.Area.Width, 'empty w');
+    CheckEqual(0, LBuf.Area.Height, 'empty h');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestPartialFillNeighbor;
+var
+  LBuf: TBuffer;
+  LLines: TBufferLines;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.FillRect(TRect.Make(0, 0, 6, 1), '.', StyleDefault);
+    LBuf.FillRect(TRect.Make(2, 0, 2, 1), 'X', StyleDefault);
+    LLines := LBuf.AsLines;
+    CheckEqual('..XX..', LLines[0], 'partial fill neighbors');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('tui_buffer_wine');
   T.Test('create and setstring', @TestCreateAndSetString);
@@ -126,5 +157,7 @@ begin
   T.Test('fill rect', @TestFillRect);
   T.Test('resize', @TestResize);
     T.Test('cjk width', @TestCjkWidth);
+  T.Test('empty area', @TestEmptyArea);
+  T.Test('partial fill neighbor', @TestPartialFillNeighbor);
 if not T.Run then Halt(1);
 end.

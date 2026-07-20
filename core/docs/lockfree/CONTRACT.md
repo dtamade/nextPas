@@ -63,6 +63,9 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 ### 0.2 T2 maturity tiers（H2-2）
 
+**权威可扫清单**（单元 → 档位 → progress → 测试）：[`t2-inventory.md`](t2-inventory.md)（Q4）。
+下表为摘要；与 inventory 冲突时以 inventory + 本文件 §0.3 为准。
+
 默认门面 **不** 升 T2。T2 直接 import 时用下列成熟度档位（文档分档，**不**重写算法）：
 
 | 档位 | 含义 | 消费者期望 |
@@ -132,6 +135,8 @@ R8 轴 **不** 因文档收口而升入 T1 / 默认门面；生产化属重大�
 | 门面不含 bag/multimap | `nextpas.core.lockfree.pas` 无 re-export（source-contract 钉住） |
 
 **H3-2 非目标**：全量 T2 契约化；T2 进默认门面；算法重写；R8 生产化；删 legacy CAS。
+
+**Q4（2026-07-20）**：明确 **不** 扩展 H3-2 生产子集。若未来扩展，须单独 charter（Close/managed/progress + focused tests + 门面隔离 + 批准）。见 [`t2-inventory.md`](t2-inventory.md)。
 
 ---
 
@@ -247,8 +252,23 @@ generic TShardedHashMap<TKey, TValue> = class
 end;
 generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>);
 
-// Channel / Selector / reclamation — 见 api-reference 与 README
+// Channel / reclamation — 见 api-reference 与 README
 ```
+
+### 1.2a Selector（Q3-a）
+
+`TLockFreeSelector<T>`（门面）/ `TLockFreeSelectorImpl<T>`：
+
+| 约束 | 语义 |
+|------|------|
+| 同类型 T | 所有 case 的 channel 元素类型必须相同 |
+| `TrySelect` | **Go `select { default: }` 等价**；无就绪 → `Completed=False` |
+| 多就绪次序 | 按 **Add 注册序** 选最早 case（**非** Go 随机） |
+| 等待 | 短 spin 后 `LockFreeWaitData`（`lockfree.wait`） |
+| closed-empty recv | 与 channel `TryReceive=False` 对齐；不伪完成 |
+| 并发 | **同一 selector 实例** 上不支持并发 `Select*` |
+
+权威 API 文本：[`api-reference.md`](api-reference.md) Selector 节。
 
 ### 1.3 ClosedPublishPolicy
 

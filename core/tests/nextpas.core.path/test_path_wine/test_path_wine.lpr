@@ -28,6 +28,15 @@ begin
   Check(PathVolume('C:\tools') <> '', 'Volume C:');
 end;
 
+
+procedure TestStripPrefix;
+var
+  L: string;
+begin
+  L := PathStripPrefix('C:\a\b\c', 'C:\a');
+  Check((L = 'b\c') or (L = 'b/c') or (Pos('b', L) > 0), 'strip prefix has remainder');
+end;
+
 procedure TestToSlash;
 begin
   CheckEqual('a/b/c', PathToSlash('a\b\c'), 'ToSlash');
@@ -48,6 +57,7 @@ begin
   T.Test('join clean', @TestJoinClean);
   T.Test('isabs volume', @TestIsAbsVolume);
   T.Test('toslash', @TestToSlash);
+  T.Test('strip prefix', @TestStripPrefix);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

@@ -30,20 +30,22 @@ function platform_resource_set_limit(
 
 implementation
 
-{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 uses
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi
+  nextpas.core.platform.error
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.posix.base
+  , nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_LINUX}
-  , nextpas.core.platform.linux.base,
-  nextpas.core.platform.linux.ffi
+  , nextpas.core.platform.linux.base
+  , nextpas.core.platform.linux.ffi
   {$ENDIF}
   {$IFDEF NEXTPAS_ANDROID}
   , nextpas.core.platform.android.base
   {$ENDIF}
-  , nextpas.core.platform.error
+{$ENDIF}
   ;
 
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   TPlatformHostRLimit =
   {$IFDEF NEXTPAS_LINUX}

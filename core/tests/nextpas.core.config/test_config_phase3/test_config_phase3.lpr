@@ -1072,6 +1072,73 @@ begin
   Check(Pos('empty', LError) > 0, 'AddToml empty key TryBuild error names empty key');
 end;
 
+procedure TestKeyValuesOverrideOrder;
+var
+  LCfg: IConfig;
+begin
+  { Key/value overrides are ordinary sources: later wins; defaults stay lowest. }
+  LCfg := ConfigBuilder
+    .AddDefault('server.host', 'default-host')
+    .AddDefault('server.port', '1')
+    .AddJson('{"server":{"host":"json-host","port":8080}}')
+    .AddKeyValues(['server.host', 'server.port'], ['kv-host', '9090'])
+    .Build;
+
+  CheckEqual('kv-host', LCfg.GetString('server.host'),
+    'key values override earlier JSON source');
+  CheckEqual(Int64(9090), LCfg.GetInt('server.port'),
+    'key values override port as string parsed by GetInt');
+
+  LCfg := ConfigBuilder
+    .AddKeyValues(['server.host'], ['early-kv'])
+    .AddJson('{"server":{"host":"later-json"}}')
+    .Build;
+  CheckEqual('later-json', LCfg.GetString('server.host'),
+    'later JSON still overrides earlier key values');
+end;
+
+procedure TestKeyValuesRejectsLengthMismatch;
+var
+  LRaised: Boolean;
+begin
+  { Length check is eager (at AddKeyValues), same as empty env prefix validation. }
+  LRaised := False;
+  try
+    ConfigBuilder.AddKeyValues(['only-key'], ['a', 'b']);
+  except
+    on E: EConfigError do
+    begin
+      LRaised := True;
+      Check(Pos('equal length', E.Message) > 0,
+        'length mismatch names equal length');
+    end;
+  end;
+  CheckEqual(True, LRaised, 'AddKeyValues raises on length mismatch');
+end;
+
+procedure TestKeyValuesRejectsEmptyKey;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ConfigBuilder.AddKeyValues([''], ['value']);
+  except
+    on E: EConfigError do
+      LRaised := True;
+  end;
+  CheckEqual(True, LRaised, 'AddKeyValues rejects empty key');
+
+  LRaised := False;
+  try
+    ConfigBuilder.AddKeyValues(['good', ''], ['1', '2']);
+  except
+    on E: EConfigError do
+      LRaised := True;
+  end;
+  CheckEqual(True, LRaised, 'AddKeyValues rejects empty key in pair list');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config.phase3');
   T.Test('Build.ReadSurface', @TestBuildReturnsReadableIConfig);
@@ -1105,5 +1172,9 @@ begin
   T.Test('TomlContentSource.Errors', @TestTomlContentSourceErrors);
   T.Test('IniContentSource.Errors', @TestIniContentSourceErrors);
   T.Test('ContentSource.EmptyKeyErrors', @TestEmptyKeyContentSourceErrors);
+  T.Test('Builder.KeyValuesOverrideOrder', @TestKeyValuesOverrideOrder);
+  T.Test('Builder.KeyValuesRejectsLengthMismatch',
+    @TestKeyValuesRejectsLengthMismatch);
+  T.Test('Builder.KeyValuesRejectsEmptyKey', @TestKeyValuesRejectsEmptyKey);
   if not T.Run then Halt(1);
 end.

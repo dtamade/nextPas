@@ -311,8 +311,10 @@ type
   end;
 ```
 
+**Progress（诚实）**: **分片自旋锁** 并发 map，**不是 lock-free**。`TConcurrentHashMap` 是**同一实现别名**，不是第二套算法。
+
 **设计特点**:
-- 分片锁（16 shards），每个 shard 使用 AtomicExchange32 自旋锁
+- 分片锁（16 shards），每 shard 自旋锁（preferred `atomic_exchange` 路径）
 - 开放寻址 + 线性探测
 - 负载因子 3/4，自动扩容
 - 仅支持 unmanaged 类型
@@ -336,13 +338,17 @@ type
 | GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
-**性能特征**（vs TConcurrentHashMap）:
+**命名**: `TConcurrentHashMap` ≡ `TShardedHashMap`（同 `TShardedHashMapImpl`）。不要用两者对比“性能差异”。
 
-| 场景 | TShardedHashMap | TConcurrentHashMap |
-|------|-----------------|-------------------|
-| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
-| 内存管理 | 无引用计数 | 有引用计数 |
-| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+**精神对标**（非 API 拷贝）:
+
+| 场景 | Go `sync.Map` | dashmap 精神 | nextpas |
+|------|---------------|--------------|---------|
+| 插入/覆盖 | `Store` | `insert` | `Insert` |
+| 查找 | `Load` | `get` | `Find` / `Contains` |
+| 条件插入 | — | `entry` API | `TryInsert` / `GetOrInsert*` |
+| 删除 | `Delete` | `remove` | `Remove` |
+| Progress | 运行时内部 | 分片锁 | **分片自旋锁（诚实）** |
 
 **键相等性**:
 - 使用 `CompareByte` 逐字节比较，适用于所有 unmanaged 类型（Integer、Int64、record 等）
@@ -624,6 +630,7 @@ type
 | `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
 | `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
 | `select { ... }` | `LResult := LSelector.Select` |
+| `select { ... default: }` | `LResult := LSelector.TrySelect`（`Completed=False` 即 default） |
 
 **使用示例**:
 ```pascal
@@ -653,11 +660,12 @@ end;
 ```
 
 **设计约束**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- 不支持 `default` 分支（需要时直接 TrySend/TryReceive）
-- poll + backoff 策略（纯用户态轮询，不使用内核 wait address）
-- `AddSend` 存储值副本，Select 成功后才实际发送
-
+- 所有 case 必须使用相同类型 T（Go 可在同一 `select` 混不同类型；本实现不支持）
+- **无**语言级 `default` case 对象；用 **`TrySelect`** 表达 default
+- 多 case 同时就绪时按 **Add 注册序** 选最早 case（**非** Go 随机选择）
+- 等待：短 spin 后经 `lockfree.wait` 的 wait-address（`LockFreeWaitData`），不是纯忙轮询
+- `AddSend` 存储值副本，Select/TrySelect 成功时才实际发送
+- 空 closed channel 的 recv case 与 `TryReceive=False` 对齐：`TrySelect`/`SelectTimeout` 不完成
 ---
 
 ## Bag (nextpas.core.lockfree.bag)

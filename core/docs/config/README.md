@@ -49,7 +49,25 @@ Available builder steps:
 - `AddToml`
 - `AddEnv`
 - `AddFile`
+- `AddKeyValues` — inline key/value overrides (CLI maps, ad-hoc pairs)
 - `RequireKeys`
+
+`AddKeyValues` is the shallow CLI integration: parse flags with
+`nextpas.core.args` (or any source), then inject config keys without coupling
+`config` to the args unit:
+
+```pascal
+LCfg := ConfigBuilder
+  .AddFile('app.toml', cfToml)
+  .AddEnv('APP_')
+  .AddKeyValues(
+    ['server.host', 'server.port'],
+    [LParser.GetString('host'), LParser.GetString('port')])
+  .Build;
+```
+
+Put `AddKeyValues` last when command-line should win. Keys and values arrays
+must be the same length; empty keys raise `EConfigError` immediately.
 
 Builder priority rules:
 

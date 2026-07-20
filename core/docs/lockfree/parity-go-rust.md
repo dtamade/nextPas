@@ -67,8 +67,8 @@
 | SPMC / SegQueue / MSQueue | 无 std | 库 | ✅ | **增强** |
 | Stack | 无 std | 库 | `TLockFreeStack` | **增强** |
 | Work-stealing deque | runtime 内部 | crossbeam deque | `TWorkStealingDeque` | **对标** |
-| Channel + close | `chan` + close | flume/async_channel | `TLockFreeChannel` (+ SPSC 变体) | **对标**（语义差见文档） |
-| select | `select` | 库/手写 | `TLockFreeSelector` | **部分对标**（同类型 T；无 default 分支） |
+| Channel + close | `chan` + close | flume/async_channel | `TLockFreeChannel` (+ SPSC 变体) | **对标**（细节见 quality-parity Q3-b） |
+| select | `select` | 库/手写 | `TLockFreeSelector` | **部分对标**（同类型 T；`TrySelect`≡default；多就绪按 Add 序非随机） |
 | 并发 map | `sync.Map` | dashmap | `TShardedHashMap`（**分片锁**） | **对标精神**（诚实非 LF） |
 | 内存回收 | GC | crossbeam epoch 等 | EBR + Hazard | **对标 Rust 无 GC 路径** |
 | 生命周期 | GC + channel close | Drop/ownership | **Close → join → Free** | **硬契约**（必须教） |
@@ -102,7 +102,7 @@
 ### 2.5 Lockfree 规模结论
 
 **T1 工具箱在「队列/通道/窃取/回收/分片 map」上已达写 runtime 的 Go/Rust 常用规模，部分超过 Go std。**
-缺口主要在：**select 完整度、T2 可导航性、API 命名一致性、可复现跨语言证据** — 由 Q2–Q5 推进。
+缺口主要在：**T2 可导航性、可复现跨语言证据（Q5）**；select/map/channel 体验已由 **Q3** 钉死诚实边界。
 
 ---
 

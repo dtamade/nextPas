@@ -566,13 +566,14 @@ type
   end;
 ```
 
-**Correspondence with Go select**:
+**Correspondence with Go select** (Q3-a):
 
 | Go | Pascal |
 |----|--------|
 | `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
 | `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
 | `select { ... }` | `LResult := LSelector.Select` |
+| `select { ... default: }` | `LResult := LSelector.TrySelect` (`Completed=False` means default) |
 
 **Usage Example**:
 ```pascal
@@ -602,10 +603,12 @@ end;
 ```
 
 **Design Constraints**:
-- All cases must use the same type T (consistent with Go select type constraints)
-- Does not support `default` branch (use TrySend/TryReceive directly when needed)
-- poll + backoff strategy (pure user-space polling, no kernel wait address)
-- `AddSend` stores value copy, actual send only on Select success
+- All cases must use the same type T (Go may mix types in one `select`; this API does not)
+- No language-level `default` case object; use **`TrySelect`** for default
+- When multiple cases are ready, earliest **Add** index wins (**not** Go random choice)
+- Wait path: short spin then wait-address via `lockfree.wait` (`LockFreeWaitData`), not pure busy-poll
+- `AddSend` stores a value copy; actual send only on successful Select/TrySelect
+- Closed-empty recv aligns with `TryReceive=False`: TrySelect/SelectTimeout do not complete
 
 ---
 

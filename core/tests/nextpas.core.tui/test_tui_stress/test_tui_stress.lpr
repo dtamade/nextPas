@@ -120,6 +120,97 @@ begin
   finally LBuf.Free; end;
 end;
 
+
+procedure TestSingleCellDiffUpperBound;
+var
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LCount: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 100, 40));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 100, 40));
+  try
+    LCurr.SetString(0, 0, 'X', TStyle.Default);
+    LCount := LPrev.DiffInto(LCurr, LPatches);
+    Check(LCount > 0, 'found change');
+    Check(LCount < 50, 'single cell change small patch set');
+  finally
+    LPrev.Free; LCurr.Free;
+  end;
+end;
+
+procedure TestDiffIdempotentSameInputs;
+var
+  LPrev, LCurr: TBuffer;
+  LPatches1, LPatches2: TDiffEntries;
+  C1, C2: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 80, 20));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 80, 20));
+  try
+    LCurr.SetString(0, 5, 'row', TStyle.Default);
+    C1 := LPrev.DiffInto(LCurr, LPatches1);
+    C2 := LPrev.DiffInto(LCurr, LPatches2);
+    CheckEqual(Int64(C1), Int64(C2), 'diff count stable');
+  finally
+    LPrev.Free; LCurr.Free;
+  end;
+end;
+
+procedure TestBufferResizeRoundTrip;
+var
+  LBuf: TBuffer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 50, 20));
+  try
+    LBuf.Resize(TRect.Make(0, 0, 30, 10));
+    CheckEqual(30, LBuf.Area.Width, 'shrunk w');
+    LBuf.Resize(TRect.Make(0, 0, 60, 25));
+    CheckEqual(60, LBuf.Area.Width, 'grown w');
+    CheckEqual(25, LBuf.Area.Height, 'grown h');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestEmptyListRender;
+var
+  LList: IListWidget;
+  LState: TListState;
+  LBuf: TBuffer;
+begin
+  LList := TListWidget.FromStrings([]);
+  LState := TListState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 10));
+  try
+    LList.RenderStateful(TRect.Make(0, 0, 40, 10), LBuf, LState);
+    CheckEqual(40, LBuf.Area.Width, 'empty list keeps area');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFillThenIdenticalDiff;
+var
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  Y: Integer;
+begin
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 100, 30));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 100, 30));
+  try
+    for Y := 0 to 29 do
+    begin
+      LPrev.SetString(0, Y, 'same row content', TStyle.Default);
+      LCurr.SetString(0, Y, 'same row content', TStyle.Default);
+    end;
+    CheckEqual(0, LPrev.DiffInto(LCurr, LPatches), 'filled identical zero');
+  finally
+    LPrev.Free; LCurr.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.stress');
   T.Test('4K buffer create', @TestLargeBuffer);
@@ -129,5 +220,10 @@ begin
   T.Test('20-col 100-row table render', @TestLargeTableRender);
   T.Test('10KB string render', @TestLongStringRender);
   T.Test('10KB paragraph wrap', @TestParagraphWrapLong);
-  if not T.Run then Halt(1);
+    T.Test('single cell diff upper bound', @TestSingleCellDiffUpperBound);
+  T.Test('diff idempotent same inputs', @TestDiffIdempotentSameInputs);
+  T.Test('buffer resize round trip', @TestBufferResizeRoundTrip);
+  T.Test('empty list render', @TestEmptyListRender);
+  T.Test('fill then identical diff', @TestFillThenIdenticalDiff);
+if not T.Run then Halt(1);
 end.

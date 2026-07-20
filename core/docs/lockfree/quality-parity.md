@@ -1,7 +1,7 @@
 # Atomic / Lockfree — Q 线（Quality / Parity）
 
-> **状态**: **Q0 done** · **Q1-a done** · wait 首选路径示范 · **Q1-b/Q2 继续**
-> **日期**: 2026-07-19
+> **状态**: **Q0–Q5 done** · **Q1-b/c done** · Maintenance
+> **日期**: 2026-07-20
 > **Owner**: atomic-lockfree lane（全权）
 > **目标**: 对标 Go/Rust 的 **质量与可用规模**，并保持清洁
 > **编号**: **Q0–Q5**（**不是** R9；R8 仍为研究 opt-in）
@@ -31,11 +31,11 @@
 | 阶段 | 名称 | 状态 |
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
-| **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
-| **Q2** | T1 深度（首选路径 + stress） | **Q2-a + Q2-b done** — T1 preferred path 全量；verify-t1 绿 |
-| **Q3** | Map/Channel 体验对标 | pending |
-| **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
-| **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
+| **Q1** | Atomic 首选路径与质量加固 | **done**（a 扫描；b 边界测已覆盖；c 交叉链接） |
+| **Q2** | T1 深度（首选路径 + stress） | **done** — T1 preferred path 全量；verify-t1 绿；已 land main |
+| **Q3** | Map/Channel 体验对标 | **Q3-a/b/c done**（Selector 钉死 + Channel 对标表 + HashMap progress 诚实） |
+| **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | **done** — inventory + **不扩** H3-2 |
+| **Q5** | 有信封 Go/Rust 同机对照常青 | **done** — compare-matched C1/C2 + envelope |
 
 ```
 H3 complete → Q0 → Q1 → Q2 → Q3 → Q4 → Q5 → Maintenance 循环
@@ -103,6 +103,57 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-19 | **Q2-a**：`lockfree.hazard` + `segqueue` 迁 preferred path（回收域 / 无界 segment） |
 | 2026-07-20 | **Q2-a**：`lockfree.msqueue` + `hashmap` 迁 preferred path（MS 无界队列 / 分片锁 map） |
 | 2026-07-20 | **Q2-b**：`verify-t1` 全门绿（atomic + main + stress 17） |
+| 2026-07-20 | **Land** H3-4/H3-5 + Q0–Q2 → main `1e535bfb4`；archive tag |
+| 2026-07-20 | **Q3-a**：Selector preferred atomics；TrySelect≡default；Add 序；wait 文档修正；钉测试 |
+| 2026-07-20 | **Q3-b/c**：Channel 对标表 + Close 幂等测；HashMap api-ref 诚实 progress / 去假对比 |
+| 2026-07-20 | **Q4**：[`t2-inventory.md`](t2-inventory.md)；**否决**本波扩 H3-2；CONTRACT/selection-guide 指针 |
+| 2026-07-20 | **Q5**：matched C1/C2 multi-thread channel；`compare-matched`；envelope 脚本增强 |
+| 2026-07-20 | **Land Q3–Q5** → main `4447ae001`；tag `archive/atomic-lockfree-q3q5-landed-20260720` |
+| 2026-07-20 | **Q1-b/c**：审计关闭（alignment/GetMut/wait 已覆盖；交叉链接） |
+
+### Q4 checklist
+
+- [x] T2 inventory（档位 + progress + tests）
+- [x] 书面否决 H3-2 扩子集
+- [x] CONTRACT §0.2 / selection-guide 指向 inventory
+- [x] 无 T2 进门面、无算法大改
+
+### Q5 checklist
+
+- [x] matched C1/C2 多线程 Pascal + Go + Rust
+- [x] envelope 可填 command/measured/stats；`compare-matched` 入口
+- [x] bench-envelope.md Q5 节 + 非公平声明
+
+### Q3-a checklist
+
+- [x] `selector.impl` → `atomic_*`+`mo_*`
+- [x] 头注释 / CONTRACT §1.2a / api-ref / README / selection-guide 语义一致
+- [x] 测试：case 序、TrySelect-as-default、closed-empty recv
+- [x] source-contract：preferred atomics + LockFreeWaitData；禁 legacy AtomicLoad32/FetchAdd32
+
+### Q3-b — Channel 体验对标
+
+| Go / Rust 精神 | nextpas | 备注 |
+|----------------|---------|------|
+| buffered `chan` | `TLockFreeChannel<T>(capacity)` | capacity 上取整 2^n |
+| unbuffered 精神 | capacity=1（R5） | 非运行时 rendezvous 全语义 |
+| close + drain | `Close`；已入队仍可 `TryReceive` | CONTRACT §1.3 |
+| send on closed | `Send` 抛错；`TrySend`=False | 与 Go panic / ok 差不同 |
+| select default | `TLockFreeSelector.TrySelect` | Q3-a |
+| 1P1C 快路径 | `TLockFreeChannelSpsc` | 无 MPMC 竞争 |
+| 诊断 full/empty/closed | `TrySendEx` / `TryReceiveEx` | Boolean 热路径不变 |
+| 动态容量 | `TryResize` | 有测；closed 拒绝 |
+
+**测试面**（已有）：basic/close/timeout/stress/cap=1/resize 系列/`Try*Ex`/SPSC 变体。Q3-b 补 **Close 幂等**。
+
+### Q3-c — HashMap 导航 + progress 诚实
+
+| 项 | 状态 |
+|----|------|
+| Progress：分片锁非 LF | README / selection-guide **已有**；api-ref 去掉误导「vs ConcurrentHashMap 性能」假对比 |
+| 别名诚实 | `TConcurrentHashMap` ≡ `TShardedHashMap` |
+| 对标表 | api-ref 增 sync.Map / dashmap 精神表 |
+| 不扩算法 | 本切片无 HashMap 实现改动 |
 
 ---
 
@@ -139,7 +190,16 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
    - 禁止一次「全库 sed」式迁移（风险高、diff 不可审）
 4. **CAS 迁移注意**：`AtomicCompareExchange*` 返回 **old**；`atomic_compare_exchange_strong` 返回 **Boolean** 且写回 `var Expected` — 必须逐点改，不能机械替换。
 
-### Q1-b/c（下一步）
+### Q1-b/c — **done**（2026-07-20 审计）
 
-- Q1-b：atomic 测试边界抽检（alignment / GetMut / wait）— 缺则补
-- Q1-c：atomic README ↔ consumer-audit 交叉链接 + 本表指针
+**Q1-b**（抽检，不硬造用例）：
+
+| 主题 | 证据 |
+|------|------|
+| natural alignment | `TestAtomicTypedNaturalAlignmentContract` + direct_types_ptr 运行时钉 |
+| GetMut / IntoInner | runtime + source-contract + forced-compile fixture |
+| wait/notify | atomic README + source-contract 钉 `atomic_wait` / platform wait seams；fallback 谓词循环文档化 |
+
+结论：边界面 **已具备**；本波不追加重复测试。
+
+**Q1-c**：`core/docs/atomic/README.md` 已链 `consumer-audit` + CONTRACT §1.4；本文件 §5 为 legacy 扫描表；README 补链本 Q 线入口（见同 commit）。

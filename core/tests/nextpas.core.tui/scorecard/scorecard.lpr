@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC8 (PARITY-GO-RUST Wave Q1–Q6)
+ * tui Scorecard SC1–SC9 (PARITY-GO-RUST Wave Q1–Q6)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -25,6 +25,7 @@ uses
   nextpas.core.tui.input,
   nextpas.core.tui.layout,
   nextpas.core.tui.layout.grid,
+  nextpas.core.tui.overlay,
   nextpas.core.tui.terminal;
 
 const
@@ -370,6 +371,49 @@ begin
   AddRow('SC8c', 'truecolor_absent', 0, 1, LOk, 'no COLORTERM → not verified');
 end;
 
+
+procedure RunSC9;
+var
+  LBase, LDest: TBuffer;
+  LOv: TOverlayBuffer;
+  LLines: TBufferLines;
+  LOk: Boolean;
+begin
+  WriteLn('SC9 Overlay merge ...');
+  LOk := True;
+  LBase := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LDest := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LOv := TOverlayBuffer.Create(TRect.Make(0, 0, 4, 1));
+  try
+    LBase.SetString(0, 0, 'base', StyleDefault);
+    LDest.SetString(0, 0, 'base', StyleDefault);
+    LOv.MergeInto(LBase, LDest);
+    LLines := LDest.AsLines;
+    if LLines[0] <> 'base' then
+      LOk := False;
+  finally
+    LBase.Free; LDest.Free; LOv.Free;
+  end;
+  AddRow('SC9a', 'overlay_transparent', 0, 1, LOk, 'empty overlay passthrough');
+
+  LOk := True;
+  LBase := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LDest := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LOv := TOverlayBuffer.Create(TRect.Make(0, 0, 4, 1));
+  try
+    LBase.SetString(0, 0, 'aaaa', StyleDefault);
+    LDest.SetString(0, 0, 'aaaa', StyleDefault);
+    LOv.SetString(1, 0, 'XY', StyleDefault);
+    LOv.MergeInto(LBase, LDest);
+    LLines := LDest.AsLines;
+    if LLines[0] <> 'aXYa' then
+      LOk := False;
+  finally
+    LBase.Free; LDest.Free; LOv.Free;
+  end;
+  AddRow('SC9b', 'overlay_overwrite', 0, 1, LOk, 'marked cells overwrite');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -402,7 +446,7 @@ begin
   SetLength(GRows, 16);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC8 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC9 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -411,6 +455,7 @@ begin
   RunSC6;
   RunSC7;
   RunSC8;
+  RunSC9;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

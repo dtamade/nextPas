@@ -38,7 +38,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TMpscQueue` | lock-free producers + single-owner consumer | no locks; single consumer only | yes |
 | `TWorkStealingDeque` | lock-free with single-owner push/pop | owner thread exclusive for push/pop; thieves steal | yes |
 | `TEbrDomain` / `THazardDomain` | reclamation domains (not containers) | atomics + TLS/HP slots | yes |
-| `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
+| `TLockFreeSelector` | concurrent multiplexer | spin + wait-address over channels | yes |
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
 
@@ -240,7 +240,7 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 **不是 lock-free 结构**。设计目标是高频低竞争场景下的最优性能。
 
 **设计特点**:
-- 16 个分片，每个分片使用 `AtomicExchange32` 自旋锁
+- 16 个分片，每个分片使用自旋锁（`atomic_exchange`）
 - 开放寻址 + 线性探测，负载因子 3/4
 - 自动扩容（2x）
 - 仅支持 unmanaged 类型
@@ -297,13 +297,15 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## Selector
 
-`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现。
+`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现（Q3-a 钉死）。
 
 **设计特点**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- poll + backoff 策略（纯用户态轮询）
-- 支持阻塞和超时两种等待模式
-- AddSend 存储值副本，Select 成功后才实际发送
+- 所有 case 必须使用相同类型 T
+- **`TrySelect` ≡ Go `select { default: }`**（`Completed=False` 走 default）
+- 多就绪时按 **Add 注册序** 选最早 case（非 Go 随机）
+- 等待：短 spin + `lockfree.wait` wait-address（非纯忙轮询）
+- 支持阻塞 / 超时 / 非阻塞三种等待模式
+- AddSend 存储值副本，Select/TrySelect 成功后才实际发送
 
 **使用示例**:
 ```pascal
@@ -470,15 +472,18 @@ External Rust/Go/C++ comparison sources should follow the same logical input ran
 `compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
 `compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.
 `compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
-当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
+**Q5**：`compare-matched` 会同轮跑 nextpas + Go + Rust（缺工具 soft-skip）。结论仍须同机信封；不可无信封宣称碾压 std。
 
-当前推荐的对照入口是 `bench_lockfree` Makefile：
+当前推荐的对照入口是 `bench_lockfree` Makefile（**Q5 matched 优先**）：
 
 ```bash
+# Q5: multi-thread C1/C2 + envelope (nextpas / Go / Rust)
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# optional peers
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare
-make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare   # + micro
 ```
 
 这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：
@@ -498,10 +503,10 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# 或 micro+matched：
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run
-# 或先打印信封：
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree envelope
-core/docs/lockfree/scripts/print-bench-envelope.sh
 ```
 
 历史一次同机数字（**historical only / not reproducible without full envelope**；详见

@@ -45,6 +45,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.NewProcessGroup` | 子进程 setpgid(0,0)（Unix；Win UNSUPPORTED） |
 | `IChild.ProcessGroupId` | 建组时 = Pid；否则 0 |
 | `IChild.KillTree` / `SignalTree` | kill(-pgid)；未建组等价 Kill/Signal |
+| `IChild.WaitGraceful` | 建组时先 `SignalTree(SIGTERM)`，超时 `KillTree`；未建组保持单进程 |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -114,7 +115,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 |----------|-----------|------|
 | test_process | 455 | R21 Cancel/ExtraFd/Credential + R19 表 |
 | test_process_command | 48 | ICommand builder |
-| test_process_deep | 26 | timeout/large + R22 Cancel + R24 KillTree |
+| test_process_deep | 27 | timeout/large + R22 Cancel + R24 KillTree |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
 | test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
 | **合计** | **5 目录 / 544+ Unix** | 2026-07-20 R22 实测 Unix 全绿 + 0 leak |
@@ -143,3 +144,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.14 | R19 质量表；测试 447 | Claude |
 | 2026-07-20 | 2.15 | R22 CancelToken 贯通 Wait/Status；WaitWithOutput 忙等修复；deep 24 | Claude |
 | 2026-07-20 | 2.16 | R24 NewProcessGroup/KillTree；deep 26 | Claude |
+| 2026-07-20 | 2.17 | R26 WaitGraceful×ProcessGroup；deep 27 | Claude |
