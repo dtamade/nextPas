@@ -147,14 +147,20 @@ var
   GThreadRegistryLock: SizeUInt;
 
 procedure RegistryLock;
+var
+  LExpected: SizeUInt;
 begin
-  while AtomicCmpExchange(GThreadRegistryLock, 1, 0) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(GThreadRegistryLock, LExpected, 1, mo_acquire, mo_relaxed) do
+  begin
+    LExpected := 0;
     ThreadSwitch;
+  end;
 end;
 
 procedure RegistryUnlock;
 begin
-  AtomicExchange(GThreadRegistryLock, 0);
+  atomic_exchange(GThreadRegistryLock, 0, mo_release);
 end;
 
 { Register current thread's TLS cache in global registry. }
@@ -197,7 +203,7 @@ begin
         is guaranteed to see the old FCache (still valid at that point).
         Any reader that sees FActive=False returns nil. }
       GThreadRegistry[LSlot].FActive := False;
-      AtomicStorePtr(GThreadRegistry[LSlot].FCache, nil, moRelease);
+      atomic_store(GThreadRegistry[LSlot].FCache, nil, mo_release);
     end;
   finally
     RegistryUnlock;
@@ -220,7 +226,7 @@ begin
     Exit(nil);
   { Read cache pointer first, then verify active flag.
     If thread exits between these reads, FActive will be False. }
-  Result := AtomicLoadPtr(GThreadRegistry[LSlot].FCache);
+  Result := atomic_load(GThreadRegistry[LSlot].FCache, mo_acquire);
   if (Result <> nil) and (not GThreadRegistry[LSlot].FActive) then
     Result := nil;
 end;
@@ -318,7 +324,7 @@ procedure FlushToCentral(AIndex: Int32; ACount: Word;
   ABlocks: PPointer);
 var
   I: Word;
-  LOldHead: Pointer;
+  LOldHead, LExpected: Pointer;
 begin
   if (AIndex < 0) or (AIndex >= MEM_SIZECLASS_COUNT) then
     Exit;
@@ -334,8 +340,9 @@ begin
   repeat
     LOldHead := GGrowingAllocator.FCentrals[AIndex].FInboxHead;
     PFreeNode(ABlocks[ACount - 1])^.FNext := PFreeNode(LOldHead);
-  until AtomicCmpExchange(GGrowingAllocator.FCentrals[AIndex].FInboxHead,
-    ABlocks[0], LOldHead) = LOldHead;
+    LExpected := LOldHead;
+  until atomic_compare_exchange_strong(GGrowingAllocator.FCentrals[AIndex].FInboxHead,
+    LExpected, ABlocks[0], mo_acq_rel, mo_acquire);
 end;
 
 { --- TGrowingAllocator --- }
@@ -386,7 +393,7 @@ begin
   { Periodic scavenge: uses thread-local counter in GThreadCache. }
   if (GThreadCache.FOpCount and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
   begin
-    AtomicExchange(FOpCounter, GThreadCache.FOpCount);
+    atomic_exchange_64(FOpCounter, GThreadCache.FOpCount, mo_relaxed);
     for LIndex := 0 to MEM_SIZECLASS_COUNT - 1 do
       ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
         SCAVENGER_IDLE_THRESHOLD);
@@ -789,7 +796,7 @@ begin
   LOp := GThreadCache.FOpCount;
   if LOp = 0 then
     LOp := FOpCounter;
-  AtomicExchange(FOpCounter, LOp);
+  atomic_exchange_64(FOpCounter, LOp, mo_relaxed);
   for I := 0 to MEM_SIZECLASS_COUNT - 1 do
     Inc(Result, ScavengeCentralPools(FCentrals[I], LOp, 0));
 end;

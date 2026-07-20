@@ -222,16 +222,19 @@ begin
 end;
 
 function TimeoutCtxClaimCompletion(ACtx: PTimeoutCtx; AState: Int32): Boolean;
+var
+  LExpected: Int32;
 begin
-  Result := AtomicCompareExchange32(ACtx^.CompletionState,
-    TIMEOUT_COMPLETION_PENDING, AState, moAcqRel) = TIMEOUT_COMPLETION_PENDING;
+  LExpected := TIMEOUT_COMPLETION_PENDING;
+  Result := atomic_compare_exchange_strong(ACtx^.CompletionState, LExpected, AState,
+    mo_acq_rel, mo_acquire);
 end;
 
 procedure TimeoutCtxRelease(ACtx: PTimeoutCtx);
 begin
   if ACtx = nil then
     Exit;
-  if AtomicFetchSub32(ACtx^.RefCount, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(ACtx^.RefCount, 1, mo_acq_rel) = 1 then
   begin
     ACtx^.Loop := nil;
     ACtx^.UserCallback := nil;
@@ -245,7 +248,7 @@ procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
 begin
   if ACtx = nil then
     Exit;
-  if AtomicExchange32(ACtx^.TokenOwner, 0, moAcqRel) = 1 then
+  if atomic_exchange(ACtx^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
     ACtx^.Token := nil;
     TimeoutCtxRelease(ACtx);
@@ -370,13 +373,13 @@ begin
   LCtx := PTimeoutCtx(AContext);
   if LCtx = nil then
     Exit;
-  if AtomicLoad32(LCtx^.TokenOwner, moAcquire) = 0 then
+  if atomic_load(LCtx^.TokenOwner, mo_acquire) = 0 then
     Exit;
-  if AtomicLoad32(LCtx^.CompletionState, moAcquire) <> TIMEOUT_COMPLETION_PENDING then
+  if atomic_load(LCtx^.CompletionState, mo_acquire) <> TIMEOUT_COMPLETION_PENDING then
     Exit;
   if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
     Exit;
-  AtomicFetchAdd32(LCtx^.RefCount, 1, moAcqRel);
+  atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
   LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
 end;
 
@@ -397,8 +400,8 @@ begin
     @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
   if AToken <> nil then
   begin
-    AtomicStore32(Result^.TokenOwner, 1, moRelease);
-    AtomicFetchAdd32(Result^.RefCount, 1, moAcqRel);
+    atomic_store(Result^.TokenOwner, 1, mo_release);
+    atomic_fetch_add(Result^.RefCount, 1, mo_acq_rel);
     AToken.OnCancel(@TimeoutTokenNotify, Result);
   end;
 end;
@@ -455,7 +458,7 @@ begin
   FClosed := True;
   LWakeWasReady := FWakeReady;
   LPendingWasReady := FPendingReady;
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   FWakeReady := False;
   { Publish closed before Close/drain so concurrent Post fails IsValid or Enqueue. }
   FPendingReady := False;
@@ -754,9 +757,9 @@ var
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: run after close');
-  AtomicStore32(FRunning, 1, moRelease);
+  atomic_store(FRunning, 1, mo_release);
   try
-    while AtomicLoad32(FRunning, moAcquire) <> 0 do
+    while atomic_load(FRunning, mo_acquire) <> 0 do
     begin
       { Drain wake signal and process pending callbacks }
       DrainWake;
@@ -764,7 +767,7 @@ begin
       { Fire expired timers }
       LFired := FTimers.FireExpired;
       { Check if stopped from callback }
-      if AtomicLoad32(FRunning, moAcquire) = 0 then
+      if atomic_load(FRunning, mo_acquire) = 0 then
         Break;
       { Poll I/O non-blocking }
       FPoller.Flush;
@@ -777,7 +780,7 @@ begin
       WaitForWake(AsyncIdleWakeTimeoutMs(FPoller, LNext));
     end;
   finally
-    AtomicStore32(FRunning, 0, moRelease);
+    atomic_store(FRunning, 0, mo_release);
   end;
 end;
 
@@ -789,14 +792,14 @@ var
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: run once after close');
-  AtomicStore32(FRunning, 1, moRelease);
+  atomic_store(FRunning, 1, mo_release);
   try
     { Drain pending first }
     DrainWake;
     DrainPending;
     { Timers first (consistent with Run) }
     LFired := FTimers.FireExpired;
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
+    if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
     { Then I/O }
     FPoller.Flush;
@@ -810,18 +813,18 @@ begin
     DrainWake;
     DrainPending;
     FTimers.FireExpired;
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
+    if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
     FPoller.Flush;
     FPoller.Poll;
   finally
-    AtomicStore32(FRunning, 0, moRelease);
+    atomic_store(FRunning, 0, mo_release);
   end;
 end;
 
 procedure TAsyncLoop.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   Wake;
 end;
 

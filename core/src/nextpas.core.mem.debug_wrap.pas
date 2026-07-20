@@ -85,6 +85,7 @@ procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapCon
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.env,
   nextpas.core.mem.allocator.growing_ia,
   nextpas.core.mem.allocator.fail,
@@ -197,7 +198,7 @@ end;
 
 function CachedTruthyEnv(var AState: SizeUInt; const AEnvName: AnsiString): Boolean;
 var
-  LPrev: SizeUInt;
+  LPrev, LExpected: SizeUInt;
   LEnv: AnsiString;
   LOn: Boolean;
   LNew: SizeUInt;
@@ -219,8 +220,9 @@ begin
     LNew := ENV_ON
   else
     LNew := ENV_OFF;
-  AtomicCmpExchange(AState, LNew, ENV_UNREAD);
-  Result := AState = ENV_ON;
+  LExpected := ENV_UNREAD;
+  atomic_compare_exchange_strong(AState, LExpected, LNew, mo_acq_rel, mo_acquire);
+  Result := atomic_load(AState, mo_acquire) = ENV_ON;
 end;
 
 procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapConfig);
@@ -304,16 +306,17 @@ end;
 
 procedure EnsureBuilt;
 var
-  LPrev: SizeUInt;
+  LExpected: SizeUInt;
   LEnv: AnsiString;
   LCfg: TMemDebugWrapConfig;
 begin
-  LPrev := AtomicCmpExchange(GState, STATE_BUILDING, STATE_IDLE);
-  if LPrev = STATE_READY then
-    Exit;
-  if LPrev = STATE_BUILDING then
+  LExpected := STATE_IDLE;
+  if not atomic_compare_exchange_strong(GState, LExpected, STATE_BUILDING, mo_acq_rel, mo_acquire) then
   begin
-    while AtomicCmpExchange(GState, STATE_READY, STATE_READY) <> STATE_READY do
+    if LExpected = STATE_READY then
+      Exit;
+    { Another thread is building — wait until ready. }
+    while atomic_load(GState, mo_acquire) <> STATE_READY do
       ThreadSwitch;
     Exit;
   end;
@@ -338,7 +341,7 @@ begin
   end;
   LCfg.Built := True;
   GConfig := LCfg;
-  AtomicExchange(GState, STATE_READY);
+  atomic_store(GState, STATE_READY, mo_release);
 end;
 
 function ResolveDefaultAllocator: IAllocator;
@@ -377,7 +380,7 @@ end;
 
 function IsMemHeapDebugEnabled: Boolean;
 var
-  LPrev: SizeUInt;
+  LPrev, LExpected: SizeUInt;
   LOn: Boolean;
   LNew: SizeUInt;
 begin
@@ -395,8 +398,9 @@ begin
     LNew := ENV_ON
   else
     LNew := ENV_OFF;
-  AtomicCmpExchange(GProcessRouteState, LNew, ENV_UNREAD);
-  Result := GProcessRouteState = ENV_ON;
+  LExpected := ENV_UNREAD;
+  atomic_compare_exchange_strong(GProcessRouteState, LExpected, LNew, mo_acq_rel, mo_acquire);
+  Result := atomic_load(GProcessRouteState, mo_acquire) = ENV_ON;
 end;
 
 procedure ResetDebugWrapForTests;
@@ -406,11 +410,11 @@ begin
   GTracking := nil;
   GStats := nil;
   ClearConfig(GConfig);
-  AtomicExchange(GState, STATE_IDLE);
-  AtomicExchange(GHeapDebugState, ENV_UNREAD);
-  AtomicExchange(GHeapSafetyState, ENV_UNREAD);
-  AtomicExchange(GArenaStrictState, ENV_UNREAD);
-  AtomicExchange(GProcessRouteState, ENV_UNREAD);
+  atomic_store(GState, STATE_IDLE, mo_release);
+  atomic_store(GHeapDebugState, ENV_UNREAD, mo_release);
+  atomic_store(GHeapSafetyState, ENV_UNREAD, mo_release);
+  atomic_store(GArenaStrictState, ENV_UNREAD, mo_release);
+  atomic_store(GProcessRouteState, ENV_UNREAD, mo_release);
 end;
 
 initialization

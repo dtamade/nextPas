@@ -396,11 +396,11 @@ begin
   LStopBody := ExtractSourceRange(LSource, 'procedure tasyncloop.stop;',
     'function tasyncloop.asyncsleep', 'async loop Stop implementation');
 
-  CheckSourceContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceContains(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'Stop clears the running flag');
   CheckSourceContains(LStopBody, 'wake;',
     'Stop wakes the platform poller seam for cross-thread callers');
-  CheckSourceOrder(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceOrder(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'wake;', 'Stop publishes not-running before waking waiters');
 end;
 
@@ -469,7 +469,7 @@ begin
   CheckSourceOrder(LCloseBody, 'lpendingwasready := fpendingready;',
     'fpendingready := false;',
     'Close captures pending ownership before publishing pending teardown state');
-  CheckSourceOrder(LCloseBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckSourceOrder(LCloseBody, 'atomic_store(frunning, 0, mo_release);',
     'fpoller.close;',
     'Close publishes stopped state before poller teardown callbacks');
   CheckSourceOrder(LCloseBody, 'fwakeready := false;',
@@ -710,13 +710,13 @@ begin
   LBody := ExtractSourceRange(LSource, 'procedure tasyncloop.run;',
     'procedure tasyncloop.runonce;', 'async loop Run implementation');
   CheckSourceOrder(LBody, 'if not isvalid then',
-    'atomicstore32(frunning, 1', 'Run rejects closed loops before publishing running state');
+    'atomic_store(frunning, 1', 'Run rejects closed loops before publishing running state');
   CheckSourceOrder(LBody, 'if not isvalid then',
     'drainpending', 'Run rejects closed loops before touching pending queue');
   CheckSourceOrder(LBody, 'lfired := ftimers.fireexpired;',
-    'if atomicload32(frunning, moacquire) = 0 then',
+    'if atomic_load(frunning, mo_acquire) = 0 then',
     'Run honors Stop after firing expired timers');
-  CheckSourceOrder(LBody, 'if atomicload32(frunning, moacquire) = 0 then',
+  CheckSourceOrder(LBody, 'if atomic_load(frunning, mo_acquire) = 0 then',
     'fpoller.flush',
     'Run honors Stop before polling I/O');
 
@@ -726,12 +726,12 @@ begin
     'drainpending', 'RunOnce rejects closed loops before touching pending queue');
   CheckSourceOrder(LBody, 'if not isvalid then',
     'fpoller.flush', 'RunOnce rejects closed loops before touching poller');
-  CheckSourceOrder(LBody, 'atomicstore32(frunning, 1',
+  CheckSourceOrder(LBody, 'atomic_store(frunning, 1',
     'drainpending', 'RunOnce publishes running state before posted callbacks');
   CheckSourceOrder(LBody, 'lfired := ftimers.fireexpired;',
-    'if atomicload32(frunning, moacquire) = 0 then',
+    'if atomic_load(frunning, mo_acquire) = 0 then',
     'RunOnce honors Stop after firing already-expired timers');
-  CheckSourceOrder(LBody, 'if atomicload32(frunning, moacquire) = 0 then',
+  CheckSourceOrder(LBody, 'if atomic_load(frunning, mo_acquire) = 0 then',
     'fpoller.flush', 'RunOnce skips I/O after Stop from posted callback');
 end;
 
@@ -824,9 +824,9 @@ begin
     'async README must document IOCP CancelIoEx cancel path');
   CheckSourceContains(LReadme, '`pbkqueue`',
     'async README must document pbKqueue readiness backend');
-  CheckSourceContains(LReadme, 'not macos/freebsd host-runtime proven',
+  CheckSourceContains(LReadme, 'not full macos async runtime parity',
     'async README must not claim kqueue host runtime without a runner');
-  CheckSourceContains(LReadme, 'source-contract + forced compile only',
+  CheckSourceContains(LReadme, 'source-contract + forced compile',
     'async README must name kqueue forced-compile evidence on non-BSD hosts');
   CheckSourceContains(LReadme, '`pbunsupported`',
     'async README must document the unsupported backend truth');
