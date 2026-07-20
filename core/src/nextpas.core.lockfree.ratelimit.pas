@@ -70,10 +70,14 @@ end;
 procedure TTokenBucketLimiter.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -88,7 +92,7 @@ end;
 
 procedure TTokenBucketLimiter.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TTokenBucketLimiter.Refill;
@@ -122,11 +126,11 @@ function TTokenBucketLimiter.TryAcquireN(const AN: Double): TLockFreeRateLimiter
 begin
   if IsNaN(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter.TryAcquireN: N must be > 0');
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(rlClosed);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(rlClosed);
     Refill;
     if FTokens >= AN then
@@ -145,7 +149,7 @@ procedure TTokenBucketLimiter.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -159,7 +163,7 @@ end;
 
 function TTokenBucketLimiter.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TTokenBucketLimiter.GetRate: Double; inline;

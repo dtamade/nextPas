@@ -108,7 +108,6 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.atomic,
-  nextpas.core.errors,
   nextpas.core.lockfree.base;
 
 constructor TLockFreeDeque.Create(ACapacity: Int32);
@@ -134,10 +133,14 @@ end;
 procedure TLockFreeDeque.AcquireLock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -152,7 +155,7 @@ end;
 
 procedure TLockFreeDeque.ReleaseLock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TLockFreeDeque.IncIdx(AIdx, ADelta: Int32): Int32;

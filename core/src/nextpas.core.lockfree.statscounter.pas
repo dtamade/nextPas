@@ -62,44 +62,44 @@ procedure TConcurrentStatsCounter.RecordValue(AValue: Int64);
 var
   LOldMin, LNewMin, LOldMax, LNewMax: Int64;
 begin
-  AtomicFetchAdd64(FCount, 1);
-  AtomicFetchAdd64(FSum, AValue);
+  atomic_fetch_add_64(FCount, 1);
+  atomic_fetch_add_64(FSum, AValue);
   // Update min with CAS loop
   repeat
-    LOldMin := AtomicLoad64(FMin, moRelaxed);
+    LOldMin := atomic_load_64(FMin, mo_relaxed);
     if AValue >= LOldMin then
       Break;
     LNewMin := AValue;
-  until AtomicCompareExchange64(FMin, LOldMin, LNewMin, moAcqRel) = LOldMin;
+  until atomic_compare_exchange_strong_64(FMin, LOldMin, LNewMin, mo_acq_rel, mo_acquire);
   // Update max with CAS loop
   repeat
-    LOldMax := AtomicLoad64(FMax, moRelaxed);
+    LOldMax := atomic_load_64(FMax, mo_relaxed);
     if AValue <= LOldMax then
       Break;
     LNewMax := AValue;
-  until AtomicCompareExchange64(FMax, LOldMax, LNewMax, moAcqRel) = LOldMax;
+  until atomic_compare_exchange_strong_64(FMax, LOldMax, LNewMax, mo_acq_rel, mo_acquire);
 end;
 
 function TConcurrentStatsCounter.Count: Int64; inline;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 function TConcurrentStatsCounter.Sum: Int64; inline;
 begin
-  Result := AtomicLoad64(FSum, moRelaxed);
+  Result := atomic_load_64(FSum, mo_relaxed);
 end;
 
 function TConcurrentStatsCounter.Min: Int64; inline;
 begin
-  Result := AtomicLoad64(FMin, moRelaxed);
+  Result := atomic_load_64(FMin, mo_relaxed);
   if Result = High(Int64) then
     Result := 0;
 end;
 
 function TConcurrentStatsCounter.Max: Int64; inline;
 begin
-  Result := AtomicLoad64(FMax, moRelaxed);
+  Result := atomic_load_64(FMax, mo_relaxed);
   if Result = Low(Int64) then
     Result := 0;
 end;
@@ -108,18 +108,18 @@ function TConcurrentStatsCounter.Mean: Int64;
 var
   LCount: Int64;
 begin
-  LCount := AtomicLoad64(FCount, moRelaxed);
+  LCount := atomic_load_64(FCount, mo_relaxed);
   if LCount = 0 then
     Exit(0);
-  Result := AtomicLoad64(FSum, moRelaxed) div LCount;
+  Result := atomic_load_64(FSum, mo_relaxed) div LCount;
 end;
 
 procedure TConcurrentStatsCounter.Reset;
 begin
-  AtomicStore64(FCount, 0, moRelease);
-  AtomicStore64(FSum, 0, moRelease);
-  AtomicStore64(FMin, High(Int64), moRelease);
-  AtomicStore64(FMax, Low(Int64), moRelease);
+  atomic_store_64(FCount, 0, mo_release);
+  atomic_store_64(FSum, 0, mo_release);
+  atomic_store_64(FMin, High(Int64), mo_release);
+  atomic_store_64(FMax, Low(Int64), mo_release);
 end;
 
 end.

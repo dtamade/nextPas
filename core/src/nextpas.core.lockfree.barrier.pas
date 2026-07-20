@@ -98,10 +98,14 @@ end;
 procedure TCyclicBarrier.AcquireState;
 var
   LSpinCount: Int32;
+  LCasExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FStateLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FStateLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -112,7 +116,7 @@ end;
 
 procedure TCyclicBarrier.ReleaseState;
 begin
-  AtomicStore32(FStateLock, 0, moRelease);
+  atomic_store(FStateLock, 0, mo_release);
 end;
 
 function TCyclicBarrier.CreateGeneration(const AIndex: Int64): PBarrierGeneration;
@@ -165,7 +169,7 @@ begin
 
   AcquireState;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(bwClosed);
     LGeneration := FGeneration;
     Inc(LGeneration^.Waiters);
@@ -269,9 +273,9 @@ procedure TCyclicBarrier.Close;
 begin
   AcquireState;
   try
-    if AtomicLoad32(FClosed, moRelaxed) <> 0 then
+    if atomic_load(FClosed, mo_relaxed) <> 0 then
       Exit;
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
     if FGeneration^.Outcome = bgoWaiting then
       FGeneration^.Outcome := bgoClosed;
   finally
@@ -281,7 +285,7 @@ end;
 
 function TCyclicBarrier.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

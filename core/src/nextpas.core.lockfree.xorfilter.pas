@@ -239,10 +239,14 @@ end;
 procedure TXorFilter.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -257,7 +261,7 @@ end;
 
 procedure TXorFilter.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TXorFilter.Contains(AKey: UInt64): Boolean;
@@ -265,7 +269,7 @@ var
   LF: UInt32;
   LH0, LH1, LH2: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LF := FingerPrint(AKey);
   LH0 := Int32(Hash(AKey, FSeed + 0) mod UInt32(FCapacity));
@@ -286,7 +290,7 @@ end;
 
 procedure TXorFilter.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TXorFilter.Destroy;
@@ -297,7 +301,7 @@ end;
 
 function TXorFilter.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

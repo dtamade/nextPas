@@ -42,9 +42,9 @@ type
     FCount: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
-    function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
-    procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
-    function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
+    function LoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
+    procedure StoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
+    function ExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
     procedure PublishNode(const AValue: T);
   public
     constructor Create;
@@ -82,17 +82,17 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
-function TMpscQueueImpl.AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;
+function TMpscQueueImpl.LoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;
 begin
   Result := PNode(atomic_load(PPointer(@ANode)^, AOrder));
 end;
 
-procedure TMpscQueueImpl.AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);
+procedure TMpscQueueImpl.StoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);
 begin
   atomic_store(PPointer(@ANode)^, Pointer(AValue), AOrder);
 end;
 
-function TMpscQueueImpl.AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;
+function TMpscQueueImpl.ExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;
 begin
   Result := PNode(atomic_exchange(PPointer(@ANode)^, Pointer(AValue), AOrder));
 end;
@@ -135,9 +135,9 @@ begin
   New(LNode);
   LNode^.Value := AValue;
   LNode^.Next := nil;
-  LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
+  LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);
   atomic_fetch_add_64(FCount, 1, mo_relaxed);
-  AtomicStoreNode(LPrev^.Next, LNode, mo_release);
+  StoreNode(LPrev^.Next, LNode, mo_release);
   { Fast path: only notify if there are waiters }
   if atomic_load(FDataWaiters, mo_relaxed) > 0 then
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
@@ -178,14 +178,14 @@ var
   LTail, LNext, LPrev: PNode;
 begin
   LTail := FTail;
-  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
+  LNext := LoadNode(LTail^.Next, mo_acquire);
   if LTail = @FStub then
   begin
     if LNext = nil then
       Exit(False);
     FTail := LNext;
     LTail := LNext;
-    LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
+    LNext := LoadNode(LTail^.Next, mo_acquire);
   end;
   if LNext <> nil then
   begin
@@ -196,12 +196,12 @@ begin
     Result := True;
     Exit;
   end;
-  if LTail <> AtomicLoadNode(FHead, mo_acquire) then
+  if LTail <> LoadNode(FHead, mo_acquire) then
     Exit(False);
   FStub.Next := nil;
-  LPrev := AtomicExchangeNode(FHead, @FStub, mo_acq_rel);
-  AtomicStoreNode(LPrev^.Next, @FStub, mo_release);
-  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
+  LPrev := ExchangeNode(FHead, @FStub, mo_acq_rel);
+  StoreNode(LPrev^.Next, @FStub, mo_release);
+  LNext := LoadNode(LTail^.Next, mo_acquire);
   if LNext <> nil then
   begin
     FTail := LNext;
@@ -299,7 +299,7 @@ var
   LTail, LNext: PNode;
 begin
   LTail := FTail;
-  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
+  LNext := LoadNode(LTail^.Next, mo_acquire);
   if LTail = @FStub then
     Result := LNext = nil
   else

@@ -308,11 +308,11 @@ begin
     'channel has double-checked operation admission');
   CheckContains(LSource, 'procedure TLockFreeChannelImpl.LeaveOperation',
     'channel releases operation admission');
-  CheckContains(LResize, 'AtomicLoad32(FActiveOperations, moAcquire)',
+  CheckContains(LResize, 'atomic_load(FActiveOperations, mo_acquire)',
     'resize waits for admitted operations');
-  CheckContains(LResize, 'AtomicStore64(FRecvPos, 0, moRelaxed)',
+  CheckContains(LResize, 'atomic_store_64(FRecvPos, 0, mo_release)',
     'resize rebases receive position');
-  CheckContains(LResize, 'AtomicStore64(FSendPos, Int64(LCount), moRelaxed)',
+  CheckContains(LResize, 'atomic_store_64(FSendPos, Int64(LCount), mo_release)',
     'resize rebases send position');
   CheckContains(LSource, 'FNotifierCallbacks: Int32',
     'channel tracks callbacks during notifier unregister');
@@ -338,7 +338,7 @@ begin
   CheckContains(LGrow, 'LNewNodes', 'MS queue grows into local node storage');
   CheckContains(LGrow, 'LNewFreeList', 'MS queue grows into local free-list storage');
   CheckBefore(LDequeue, 'LCandidateValue := FNodes[LNextIdx].FValue',
-    'AtomicCompareExchange64(FHead', 'MS queue copies value before head CAS');
+    'atomic_compare_exchange_strong_64(FHead', 'MS queue copies value before head CAS');
   CheckContains(LSource, 'if IsManagedType(T) then', 'MS queue rejects managed T');
 end;
 
@@ -348,12 +348,13 @@ var
   LEnqueue: string;
 begin
   LSource := ReadSource('nextpas.core.lockfree.segqueue.pas');
-  LEnqueue := ExtractSection(LSource, 'procedure TSegQueueImpl.Enqueue',
-    'function TSegQueueImpl.TryEnqueue');
+  { Logical enqueue reserves inside Publish (Enqueue is a thin closed-check wrapper). }
+  LEnqueue := ExtractSection(LSource, 'procedure TSegQueueImpl.Publish',
+    'procedure TSegQueueImpl.Enqueue');
   CheckNotContains(LEnqueue, 'AtomicFetchAdd64(FEnqueuePos',
     'segment queue does not reserve before fallible allocation');
   CheckBefore(LEnqueue, 'FindOrCreateSegment(LPos)',
-    'AtomicCompareExchange64(FEnqueuePos',
+    'atomic_compare_exchange_strong_64(FEnqueuePos',
     'segment allocation completes before logical position reservation');
 end;
 
@@ -363,10 +364,10 @@ var
 begin
   LSource := ReadSource('nextpas.core.lockfree.segqueue.pas');
   CheckContains(LSource,
-    'Pointer(LOldHead), Pointer(LOldHead^.Next), moAcqRel',
+    'Pointer(LOldHead^.Next), mo_acq_rel',
     'segment free-pool pop uses expected then desired CAS order');
   CheckContains(LSource,
-    'Pointer(LOldHead), Pointer(LSeg), moAcqRel',
+    'Pointer(LSeg), mo_acq_rel',
     'segment free-pool push uses expected then desired CAS order');
 end;
 
@@ -378,14 +379,15 @@ var
 begin
   LStack := ReadSource('nextpas.core.lockfree.stack.pas');
   LMpsc := ReadSource('nextpas.core.lockfree.mpsc.pas');
-  LMpscEnqueue := ExtractSection(LMpsc, 'procedure TMpscQueueImpl.Enqueue',
-    'function TMpscQueueImpl.TryEnqueue');
+  { Count + link publish live in PublishNode (Enqueue is a thin closed-check wrapper). }
+  LMpscEnqueue := ExtractSection(LMpsc, 'procedure TMpscQueueImpl.PublishNode',
+    'procedure TMpscQueueImpl.Enqueue');
   CheckContains(LStack, 'FCount: Int64', 'stack count is an independent atomic');
   CheckContains(LStack, 'if LCount > FCapacity then Break;',
     'stack ApproxCount must keep traversal best-effort with capacity cap');
   CheckContains(LMpsc, 'FCount: Int64', 'MPSC count has unbounded-queue width');
-  CheckBefore(LMpscEnqueue, 'AtomicFetchAdd64(FCount, 1',
-    'AtomicStoreNode(LPrev^.Next', 'MPSC count publishes before the consumer-visible link');
+  CheckBefore(LMpscEnqueue, 'atomic_fetch_add_64(FCount, 1',
+    'StoreNode(LPrev^.Next', 'MPSC count publishes before the consumer-visible link');
 end;
 
 procedure TestEliminationStackSourceContracts;
@@ -397,7 +399,7 @@ begin
   LPop := ExtractSection(LSource, 'function TEliminationStackImpl.TryPop',
     'procedure TEliminationStackImpl.Close');
   CheckContains(LSource, 'FCount: Int64', 'elimination stack uses an atomic count');
-  CheckContains(LSource, 'AtomicFetchAdd32(FNextSlot, 1',
+  CheckContains(LSource, 'atomic_fetch_add(FNextSlot, 1',
     'elimination slot selection is atomic');
   CheckNotContains(LPop, 'ELIM_STATE_EMPTY, ELIM_STATE_POP',
     'pop does not publish an offer state that push never matches');
