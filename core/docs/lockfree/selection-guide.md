@@ -21,11 +21,11 @@
 | **一键多值索引** | `TLockFreeMultiMap`（**H3-2**，单锁，非 LF） | 不要当 lock-free map |
 | **owner + steal 调度** | `TWorkStealingDeque`（`thread.pool.worksteal`） | `deque_lf` 是 **spin-lock**，名字误导 |
 
-**生命周期（T1 容器统一）**：**Close → join producers/waiters → Free**。  
-`Destroy` 的 Close+drain **不能**替代 join。  
+**生命周期（T1 容器统一）**：**Close → join producers/waiters → Free**。
+`Destroy` 的 Close+drain **不能**替代 join。
 教学示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t2_bag_close_join_free/`（H3-2 Bag）。
 
-**SegQueue 与 MPSC 一样**：Close 后停止新入队方 → join → Free；段回收依赖 EBR，勿在活跃生产者上 Free。  
+**SegQueue 与 MPSC 一样**：Close 后停止新入队方 → join → Free；段回收依赖 EBR，勿在活跃生产者上 Free。
 **managed 元素**：interface/string 不能直接进 T1 — 用 **Pointer 节点**（H4-1 / H5-1 模式）。
 
 ## 快速决策树
