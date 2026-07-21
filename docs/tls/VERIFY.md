@@ -87,12 +87,21 @@ make focused FOCUS=core/tests/nextpas.core.tls/test_openssl_loader
 make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
 ```
 
-## FPC RTL isolation (usability wave)
+## FPC RTL isolation (usability wave + 2026-07-21 P0)
 
 ```bash
 # production: non-winssl must not direct-use broad FPC RTL
 rg -n '^\s*(SysUtils|Classes|DateUtils|BaseUnix|Unix|Windows|Base64|Sockets)\b' \
   core/src --glob 'nextpas.core.{hash,crypto,tls}*' | rg -v 'winssl|\.pem\.pas' || true
+
+# no bare Exception in tls production
+rg -n 'raise Exception\.(Create|CreateFmt)' core/src --glob 'nextpas.core.tls*.pas' || true
+
+# single hash enum source (no HASH_SHA256, form in type enum)
+rg -n 'THashAlgorithm = \(' core/src/nextpas.core.tls.crypto.utils.pas || true
+
+# no THandleStream.Create in freepascal connection
+rg -n 'THandleStream\.Create' core/src/nextpas.core.tls.freepascal.connection.pas || true
 
 # winssl Windows only (platform FFI)
 rg -n '\bWindows\b' core/src/nextpas.core.tls.winssl*.pas | head

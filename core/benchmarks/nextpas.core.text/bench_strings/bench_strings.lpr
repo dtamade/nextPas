@@ -1,38 +1,43 @@
 program bench_strings;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.platform.time, nextpas.core.text, nextpas.core.text.compare;
+  nextpas.core.text, nextpas.core.text.base, nextpas.core.text.compare;
 var GSink: UInt64;
 procedure BenchTrim(const ACtx: IBenchContext);
 var LS: string;
-begin LS := Trim('   hello world   '); GSink := GSink xor UInt64(Length(LS)); end;
+begin LS := TextTrim('   hello world   '); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchSplit(const ACtx: IBenchContext);
 var LParts: TStringArray;
-begin LParts := Split('a,b,c,d,e,f,g,h,i,j', ','); GSink := GSink xor UInt64(Length(LParts)); end;
+begin LParts := TextSplit('a,b,c,d,e,f,g,h,i,j', ','); GSink := GSink xor UInt64(Length(LParts)); end;
 procedure BenchJoin(const ACtx: IBenchContext);
-var LParts: array[0..9] of string; LS: string; LI: Integer;
-begin for LI := 0 to 9 do LParts[LI] := 'item' + IntToStr(LI); LS := Join(',', LParts); GSink := GSink xor UInt64(Length(LS)); end;
+var LParts: TStringArray; LS: string; LI: Integer;
+begin
+  SetLength(LParts, 10);
+  for LI := 0 to 9 do LParts[LI] := 'item' + IntToStr(LI);
+  LS := TextJoin(LParts, ',');
+  GSink := GSink xor UInt64(Length(LS));
+end;
 procedure BenchReplace(const ACtx: IBenchContext);
 var LS: string;
-begin LS := Replace('hello world hello foo hello bar', 'hello', 'bye'); GSink := GSink xor UInt64(Length(LS)); end;
+begin LS := TextReplace('hello world hello foo hello bar', 'hello', 'bye'); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchContains(const ACtx: IBenchContext);
 var LB: Boolean;
-begin LB := Contains('The quick brown fox jumps over the lazy dog', 'fox'); GSink := GSink xor Byte(LB); end;
+begin LB := TextContains('The quick brown fox jumps over the lazy dog', 'fox'); GSink := GSink xor Byte(LB); end;
 procedure BenchHasPrefix(const ACtx: IBenchContext);
 var LB: Boolean;
-begin LB := HasPrefix('Hello World', 'Hello'); GSink := GSink xor Byte(LB); end;
+begin LB := TextStartsWith('Hello World', 'Hello'); GSink := GSink xor Byte(LB); end;
 procedure BenchHasSuffix(const ACtx: IBenchContext);
 var LB: Boolean;
-begin LB := HasSuffix('Hello World', 'World'); GSink := GSink xor Byte(LB); end;
+begin LB := TextEndsWith('Hello World', 'World'); GSink := GSink xor Byte(LB); end;
 procedure BenchEqualFold(const ACtx: IBenchContext);
 var LB: Boolean;
-begin LB := EqualFold('Hello World', 'hello world'); GSink := GSink xor Byte(LB); end;
+begin LB := TextEqualCaseFold('Hello World', 'hello world'); GSink := GSink xor Byte(LB); end;
 procedure BenchToUpper(const ACtx: IBenchContext);
 var LS: string;
-begin LS := UpperCase('hello world'); GSink := GSink xor UInt64(Length(LS)); end;
+begin LS := TextToUpper('hello world'); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchToLower(const ACtx: IBenchContext);
 var LS: string;
-begin LS := LowerCase('HELLO WORLD'); GSink := GSink xor UInt64(Length(LS)); end;
+begin LS := TextToLower('HELLO WORLD'); GSink := GSink xor UInt64(Length(LS)); end;
 var LSuite: IBenchSuite;
 begin
   GSink := 0;

@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 生产就绪 (Production Ready) + 结果 API 收敛冻结 + Maintenance Idle
-**最后更新**: 2026-07-20 (B44 接手卫生包：main sync + 口径 + ELF 出库)
+**最后更新**: 2026-07-20 (B47 消费侧 bench API drift 修复)
 
 ## 目标树
 
@@ -241,6 +241,12 @@ B46  benchmarks RTL 隔离 (2026-07-20)                              ✅
   B46.2  nextpas.core.* benches 去掉 SysUtils/Classes/…          ✅
   B46.3  contract-check C9 + platform-comparison 白名单          ✅
   B46.4  BlackBox 消费指南推广（文档）                             ✅
+
+B47  消费侧 bench API drift 修复 (2026-07-20)                      ✅
+  B47.1  merge origin/main 后编译红点清零（bytes/http.protocols/io.uring/math/mem/platform/stopwatch/text/json） ✅
+  B47.2  Skip(reason) / Text* / text.conv / Mat4fIdentity / TSizeClassPool 等对齐当前 core API ✅
+  B47.3  SpinLock 已移除 → CondVar/Signal；GetTickCount64 → platform_monotonic_ns ✅
+  B47.4  全量 nextpas.core.* Makefile 编译抽检（~70 绿；内部 exception 为 FPC 串行缓存抖动，clean 后绿） ✅
 ```
 
 ## 测试套件分布

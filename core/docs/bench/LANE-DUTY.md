@@ -82,5 +82,6 @@ bench core/docs/bench core/docs/core-module-registry.md
 |------|------|------|------|
 | 2026-07-20 | lane `ed47d339f`（registry `focused-runtime`；B44 在 origin 祖先链）；当时 behind origin=3 | `make bench-module-test` | **exit 0**；**22/22** suites；**505** tests passed / 0 failed；heaptrc 末 suite 0 leaks；hygiene pass |
 | 2026-07-20 | B45 可用性落地 | `make bench-module-test` + `bench-contract-check` + example compile | **22/22** suites **506** tests；contract pass（orphan warn）；quick_start/demo_basic/bb_smoke 编译通过 |
+| 2026-07-20 | B47 消费侧 API drift | 原红 12 + json_raw + Skip 修复；`make -C <bench> clean build` 全绿；`bench-contract-check` | 见 commit；门面大拆/EBR/SCORECARD 仍 Idle |
 
 > 新一次回归后更新本表一行即可。

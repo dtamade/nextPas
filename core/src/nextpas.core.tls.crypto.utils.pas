@@ -54,6 +54,7 @@ uses
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.aesgcm.pool,
+  nextpas.core.hash.base,
   nextpas.core.crypto.hash;
 
 type
@@ -68,15 +69,17 @@ type
   );
 
   {**
-   * 哈希算法枚举
+   * 哈希算法 — 唯一源 nextpas.core.hash.base（禁止再定义独立枚举）
    *}
-  THashAlgorithm = (
-    HASH_SHA256,
-    HASH_SHA512,
-    HASH_SHA1,
-    HASH_MD5,
-    HASH_SHA384
-  );
+  THashAlgorithm = nextpas.core.hash.base.THashAlgorithm;
+
+const
+  { 历史 TCryptoUtils 命名兼容；ordinal 与 ha* 一致 }
+  HASH_MD5 = nextpas.core.hash.base.haMD5;
+  HASH_SHA1 = nextpas.core.hash.base.haSHA1;
+  HASH_SHA256 = nextpas.core.hash.base.haSHA256;
+  HASH_SHA384 = nextpas.core.hash.base.haSHA384;
+  HASH_SHA512 = nextpas.core.hash.base.haSHA512;
 
   {**
    * 加密操作结果

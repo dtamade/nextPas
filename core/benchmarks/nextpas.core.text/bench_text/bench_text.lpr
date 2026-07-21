@@ -19,7 +19,7 @@ var LS: string;
 begin LS := UIntToStr(High(UInt64)); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchHexStr(const ACtx: IBenchContext);
 var LS: string;
-begin LS := HexStr($DEADBEEFCAFEBABE, 16); GSink := GSink xor UInt64(Length(LS)); end;
+begin LS := HexStr(UInt64($DEADBEEFCAFEBABE), 16); GSink := GSink xor UInt64(Length(LS)); end;
 procedure BenchJsonEscape(const ACtx: IBenchContext);
 const DATA = '<script>alert("hello & goodbye")</script>';
 var LBuilder: TStringBuilder; LView: TStringView;

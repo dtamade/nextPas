@@ -439,38 +439,41 @@ Purpose: freeze a **future** gate shape for *Scale-ready (H2 mux, Linux epoll)* 
 
 **Proposed gates (candidate; not enforced as claim)**
 
-| Gate | Proposed threshold | 2026-07-21 sample | Status |
-| ---- | ------------------ | ----------------- | ------ |
-| Mid stable | `stable=1`, failed=0, completed=target | nextPas **2829** / Go **28754** | draft Met (both) |
-| Mid floor (self) | nextPas ≥ **0.80 ×** ~2800 baseline → **≥ 2240** | 2829 | draft Met |
-| Press stable | `stable=1`, completed=target | nextPas **11291** / Go **81750** | draft Met (both) |
-| Press scale (self) | press/mid ≥ **~3.0×** | 11291/2829 ≈ **4.0×** | draft Met |
-| Correctness | h2_facade + h2_tls_alpn 0 unfreed | prior waves Met | precondition |
-| **Peer ratio mid** | nextPas/Go ≥ **0.80×** same shape | **0.10×** | **NotMet** |
-| **Peer ratio press** | nextPas/Go ≥ **0.80×** | **0.14×** | **NotMet** |
+| Gate | Proposed threshold | First peer (pre-fix) | **Post-fix 2026-07-21** |
+| ---- | ------------------ | --------------------- | ------------------------ |
+| Mid stable | both stable=1 | 2829 / 28754 | **79064 / 38206** |
+| Mid floor (self) | ≥ 2240 | Met | Met |
+| Press stable | both stable=1 | 11291 / 81750 | **83191 / 90118** |
+| Press scale (self) | press/mid ≥ ~3× | ~4× | ~1.05× (both now CPU-bound high) |
+| Correctness | h2_client/facade/tls_alpn | Met | **Met** |
+| **Peer ratio mid** | ≥ **0.80×** | **0.10× NotMet** | **2.07× Met** |
+| **Peer ratio press** | ≥ **0.80×** | **0.14× NotMet** | **0.92× Met** |
 
-**Peer table (same-machine, single run, 2026-07-21)**
+**Peer table (same-machine, single run)**
 
-| Shape | nextPas req/s | Go h2c req/s | ratio | stable |
-| ----- | ------------: | -----------: | ----: | -----: |
-| 8×16×100 mid | **2829** | **28754** | **0.10×** | 1/1 |
-| 16×32×100 press | **11291** | **81750** | **0.14×** | 1/1 |
+| Date | Shape | nextPas req/s | Go h2c req/s | ratio | note |
+| ---- | ----- | ------------: | -----------: | ----: | ---- |
+| 2026-07-21 first peer | 8×16×100 | 2829 | 28754 | 0.10× | pre-fix |
+| 2026-07-21 first peer | 16×32×100 | 11291 | 81750 | 0.14× | pre-fix |
+| **2026-07-21 H2-opt** | 8×16×100 | **79064** | 38206 | **2.07×** | TCP_NODELAY + write coalesce + pool probe grace |
+| **2026-07-21 H2-opt** | 16×32×100 | **83191** | 90118 | **0.92×** | same |
 
-Artifacts: `build/projects/nextpas.core.http/h2_comparison/e3s-h2-*-20260721.md`
+**Root cause (pre-fix ~10× gap)**
+
+1. **Primary**: H2 client dial never set `TCP_NODELAY` → Nagle + delayed ACK destroyed multiplex RTT.
+2. **Secondary**: per-frame `Write` + `Copy` discard on read buffer; every pool borrow PING (tight RoundTripMany).
 
 **Honesty notes**
 
-- Shapes match (connections × concurrent streams × batches, cleartext h2c, GET `/` small body).
-- Client stacks differ: nextPas `RoundTripMany` / Go goroutine batch on `http2.Transport` — both multiplex one conn per client “connection”.
-- Gap is real order-of-magnitude; **not** noise. Do **not** claim H2 package scale-ready.
-- Self-floor / linear press still useful regression canaries; peer gate is the package blocker.
+- Peer gate **Met** on single-run mid/press; still **not** multi-run E3-class.
+- Client stacks still differ (RoundTripMany vs Go goroutine batch); shapes match.
+- **CLAIM package remains No** until multi-run + product Yes (R1 policy).
 
 **What is still missing for package claim**
 
-1. Close the **~10× peer gap** (or redefine absolute multi-run floor with product sign-off).
-2. Multi-run median (runs≥3) like H1 E3.
-3. Explicit product **Yes** to upgrade CLAIM package.
-4. **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
+1. Multi-run median (runs≥3) like H1 E3 for H2 peer ratios.
+2. Explicit product **Yes** to upgrade CLAIM package.
+3. **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
 
 **Repro**
 

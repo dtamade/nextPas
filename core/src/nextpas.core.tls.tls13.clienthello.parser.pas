@@ -66,6 +66,10 @@ function TLS13ClientHelloOffersALPNProtocol(const AInfo: TTLS13ClientHelloInfo; 
 
 implementation
 
+uses
+  nextpas.core.tls.exceptions;
+
+
 procedure InitClientHelloInfo(out AInfo: TTLS13ClientHelloInfo);
 begin
   FillChar(AInfo, SizeOf(AInfo), 0);
@@ -84,7 +88,7 @@ end;
 function ReadUInt32BE(const AData: TBytes; AOffset: Integer): Cardinal;
 begin
   if (AOffset < 0) or (AOffset + 3 >= Length(AData)) then
-    raise Exception.Create('Invalid uint32 offset');
+    raise ESSLInvalidArgument.Create('Invalid uint32 offset');
 
   Result :=
     (Cardinal(AData[AOffset]) shl 24) or

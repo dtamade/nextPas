@@ -32,7 +32,7 @@ var LCollator: IUnicodeCollator;
 begin LCollator := UnicodeCollator; GSink := GSink xor UInt64(LCollator.Compare('Hello', 'World')); end;
 procedure BenchCollatorEquals(const ACtx: IBenchContext);
 var LCollator: IUnicodeCollator;
-begin LCollator := UnicodeCollator; GSink := GSink xor Byte(LCollator.Equals('Hello', 'Hello')); end;
+begin LCollator := UnicodeCollator; GSink := GSink xor Byte(LCollator.TextEquals('Hello', 'Hello')); end;
 procedure BenchCollatorStartsWith(const ACtx: IBenchContext);
 var LCollator: IUnicodeCollator;
 begin LCollator := UnicodeCollator; GSink := GSink xor Byte(LCollator.StartsWith('Hello World', 'Hello')); end;

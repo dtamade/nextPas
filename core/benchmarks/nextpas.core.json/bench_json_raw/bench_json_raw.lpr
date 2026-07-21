@@ -2,6 +2,7 @@ program bench_json_raw;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
 uses nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.platform.time, nextpas.core.text.view, nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.mem.intf, nextpas.core.mem.default,
   nextpas.core.json.types, nextpas.core.json.parser, nextpas.core.json.writer;
 const

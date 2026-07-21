@@ -19,7 +19,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.io.intf, nextpas.core.fs.stream, Base64,
+  nextpas.core.io.intf, nextpas.core.fs.stream,
+  nextpas.core.encoding.base64,
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.io.stream_adapter,
@@ -1021,13 +1022,8 @@ procedure TWolfSSLContext.AddCertificatePinBase64(const ABase64Hash: string;
   APinType: Integer; const ADescription: string; AIsBackup: Boolean);
 var
   LHash: TBytes;
-  LDecoded: AnsiString;
 begin
-  // 解码 Base64
-  LDecoded := DecodeStringBase64(ABase64Hash);
-  SetLength(LHash, Length(LDecoded));
-  if Length(LDecoded) > 0 then
-    Move(LDecoded[1], LHash[0], Length(LDecoded));
+  LHash := Base64Decode(ABase64Hash);
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(

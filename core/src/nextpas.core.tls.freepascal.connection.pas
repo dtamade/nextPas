@@ -242,6 +242,7 @@ implementation
 
 uses
   nextpas.core.platform.socket,
+  nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.clienthello.parser,
   nextpas.core.tls.tls13.parser,
@@ -3092,7 +3093,7 @@ var
   LContextMaterial: IFreePascalContextMaterial;
   LContextCipherSuites: IFreePascalContextCipherSuites;
   LResumptionCache: IFreePascalResumptionCache;
-  LSocketStream: THandleStream;
+  LSocketStream: TStream;
   LPrefixStream: TMemoryStream;
   LCombined: TStream;
   LSuiteInfo: TTLS12CipherSuiteInfo;
@@ -3130,7 +3131,7 @@ begin
   except
   end;
 
-  LSocketStream := THandleStream.Create(FSocket);
+  LSocketStream := WrapIStream(SocketHandleAsIStream(FSocket));
   try
     // Prepend already-read ClientHello record, then read rest from socket
     LPrefixStream := TMemoryStream.Create;
@@ -3165,7 +3166,7 @@ begin
         else
           FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
         if FStream = nil then
-          FStream := WrapTStream(THandleStream.Create(FSocket), True);
+          FStream := SocketHandleAsIStream(FSocket);
 
         if (Length(LState.SessionID) > 0) and (not LState.Resumed) then
         begin
@@ -3201,7 +3202,7 @@ var
   LState: TTLS12ClientState;
   LError: string;
   LClientRandom: TBytes;
-  LSocketStream: THandleStream;
+  LSocketStream: TStream;
   LSuiteInfo: TTLS12CipherSuiteInfo;
   LPrefixStream: TMemoryStream;
   LCombined: TStream;
@@ -3229,7 +3230,7 @@ begin
   // Extract ClientRandom from the TLS 1.3 ClientHello handshake (offset 6, 32 bytes)
   LClientRandom := Copy(AClientHelloHandshake, 6, 32);
 
-  LSocketStream := THandleStream.Create(FSocket);
+  LSocketStream := WrapIStream(SocketHandleAsIStream(FSocket));
   try
     LPrefixStream := TMemoryStream.Create;
     try
@@ -3268,7 +3269,7 @@ begin
           FCipherName := LSuiteInfo.Name
         else
           FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
-        FStream := WrapTStream(THandleStream.Create(FSocket), True);
+        FStream := SocketHandleAsIStream(FSocket);
 
         if LState.Resumed then
           FSessionReused := True;
@@ -3331,7 +3332,7 @@ begin
         MarkUnsupported('TLS 1.2 requires transport (socket or stream)');
         Exit;
       end;
-      FStream := WrapTStream(THandleStream.Create(FSocket), True);
+      FStream := SocketHandleAsIStream(FSocket);
     end;
 
     if Trim(FALPNProtocols) <> '' then

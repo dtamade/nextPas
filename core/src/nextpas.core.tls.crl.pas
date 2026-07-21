@@ -129,6 +129,7 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.fs.base,
   nextpas.core.fs.stream,
   nextpas.core.io.intf,
@@ -193,7 +194,7 @@ begin
   try
     Root := Reader.Parse;
     if Root = nil then
-      raise Exception.Create('Invalid CRL: failed to parse DER data');
+      raise ESSLInvalidArgument.Create('Invalid CRL: failed to parse DER data');
     ParseCRL(Root);
   finally
     Root.Free;
@@ -210,12 +211,12 @@ begin
   // 查找 BEGIN 和 END 标记
   StartPos := Pos('-----BEGIN X509 CRL-----', APEMText);
   if StartPos = 0 then
-    raise Exception.Create('Invalid PEM: missing BEGIN marker');
+    raise ESSLInvalidArgument.Create('Invalid PEM: missing BEGIN marker');
 
   StartPos := StartPos + Length('-----BEGIN X509 CRL-----');
   EndPos := Pos('-----END X509 CRL-----', APEMText);
   if EndPos = 0 then
-    raise Exception.Create('Invalid PEM: missing END marker');
+    raise ESSLInvalidArgument.Create('Invalid PEM: missing END marker');
 
   // 提取 Base64 数据
   Base64Data := Copy(APEMText, StartPos, EndPos - StartPos);
@@ -253,10 +254,10 @@ begin
   //   signatureValue     BIT STRING }
 
   if not ARoot.IsSequence then
-    raise Exception.Create('Invalid CRL: root is not SEQUENCE');
+    raise ESSLInvalidArgument.Create('Invalid CRL: root is not SEQUENCE');
 
   if ARoot.ChildCount < 3 then
-    raise Exception.Create('Invalid CRL: insufficient elements');
+    raise ESSLInvalidArgument.Create('Invalid CRL: insufficient elements');
 
   // tbsCertList
   TBSNode := ARoot.GetChild(0);
@@ -283,7 +284,7 @@ begin
   //   crlExtensions        [0] EXPLICIT Extensions OPTIONAL }
 
   if not ANode.IsSequence then
-    raise Exception.Create('Invalid CRL: TBSCertList is not SEQUENCE');
+    raise ESSLInvalidArgument.Create('Invalid CRL: TBSCertList is not SEQUENCE');
 
   Index := 0;
 

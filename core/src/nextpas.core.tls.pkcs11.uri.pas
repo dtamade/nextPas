@@ -60,6 +60,7 @@ type
 implementation
 
 uses
+  nextpas.core.tls.exceptions,
   nextpas.core.text.strings;
 
 
@@ -217,7 +218,7 @@ begin
   // Trim and validate
   URI := Trim(AURIString);
   if not IsPKCS11URI(URI) then
-    raise Exception.Create('Invalid PKCS#11 URI: must start with "pkcs11:"');
+    raise ESSLInvalidArgument.Create('Invalid PKCS#11 URI: must start with "pkcs11:"');
   
   // Remove "pkcs11:" prefix
   Delete(URI, 1, 7);

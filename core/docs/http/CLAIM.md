@@ -30,7 +30,7 @@
 
 | 宣称 | 状态 | 原因 |
 |------|------|------|
-| Scale-ready (H1/**H2** package) | **No** | Peer mid **0.10×** / press **0.14×** Go h2c（≪ 0.80）；见 `BENCHMARKS` § H2 KPI |
+| Scale-ready (H1/**H2** package) | **No** | Peer mid/press **single-run Met**（~2.07× / 0.92×）后仍缺 multi-run + 产品 Yes；见 `BENCHMARKS` § H2 KPI |
 | Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
 | Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
@@ -52,9 +52,10 @@
 
 | Residual | 说明 |
 |----------|------|
-| H2 package scale | Peer gate **NotMet**（0.10×/0.14× Go h2c）；self mid/press canary ok；禁止 H1/H2 直接 RPS 比值 |
+| H2 package scale | Peer **single-run Met** after H2-opt；package **仍 No**（缺 multi-run + 产品 Yes） |
 | E3s 抽检 (2026-07-21) | RPS 1.97×/1.72× Go；p99 0.23×/0.27×；ladder 1k/10k stable=1 — **维持** H1 scale-ready |
-| H2 Go peer harness | **landed** — `compare_h2` + `run_h2_comparison.sh`；不升 package |
+| H2 Go peer harness | **landed** — `compare_h2` + `run_h2_comparison.sh` |
+| H2-opt (2026-07-21) | TCP_NODELAY on dial；write coalesce；pool PING grace 1s；bench PingTimeout=0 |
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL per-conn ALPN |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
@@ -110,8 +111,8 @@
 |------|------|
 | E3 门闩是否仍 Met？ | **Yes** — E3s runs=3：RPS ≥0.80×、p99 ≤2×（`BENCHMARKS` § E3） |
 | 是否因比值从 ~2.2× 落到 ~1.7–2.0× 收回 scale-ready？ | **No** — 仍远高于 0.80；噪声带内 |
-| H2 KPI 是否冻结为宣称门闩？ | **Draft + peer evidence** — self canary ok；**peer 0.10× NotMet** |
-| 是否因此升 package claim？ | **No**（peer ≪ 0.80；无产品 Yes） |
+| H2 KPI 是否冻结为宣称门闩？ | **Draft + peer single-run Met**（H2-opt 后 mid 2.07× / press 0.92×） |
+| 是否因此升 package claim？ | **No**（仍缺 multi-run + 产品 Yes） |
 
 ---
 
