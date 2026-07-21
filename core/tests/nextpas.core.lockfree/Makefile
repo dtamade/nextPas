@@ -33,6 +33,7 @@ T1_MSQUEUE_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_msqueu
 T2_HASHMAP_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_hashmap_join_free
 THREAD_TEST_DIR := ../nextpas.core.thread/test_thread
 WORKSTEAL_TEST_DIR := ../nextpas.core.thread/test_worksteal
+NET_SERVER_TEST_DIR := ../nextpas.core.net.server/test_net_server
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
@@ -69,6 +70,7 @@ verify-t1:
 #   - HashMap Close → join → Free (Charter C; T1 facade)
 #   - H4-1 thread.pool → T1 SegQueue (test_thread source-contract)
 #   - H3-5 thread.pool.worksteal → T1 deque (test_worksteal)
+#   - H5-1 net poll completion → T1 MPSC (test_net_server source-contract)
 verify-h3-consumers:
 	@mkdir -p $(VERIFY_LOG_DIR)
 	@echo "verify-h3-consumers: starting (log -> $(VERIFY_H3_CONSUMERS_LOG))"
@@ -100,6 +102,8 @@ verify-h3-consumers:
 	  $(MAKE) -C $(THREAD_TEST_DIR) clean test; \
 	  echo "=== H3-5 worksteal deque consumer (test_worksteal) ==="; \
 	  $(MAKE) -C $(WORKSTEAL_TEST_DIR) clean test; \
+	  echo "=== H5-1 net completion MPSC consumer (test_net_server) ==="; \
+	  $(MAKE) -C $(NET_SERVER_TEST_DIR) clean test; \
 	  echo "verify-h3-consumers-status=pass"; \
 	} 2>&1 | tee $(VERIFY_H3_CONSUMERS_LOG)
 	@echo "verify-h3-consumers-status=pass log=$(VERIFY_H3_CONSUMERS_LOG)"

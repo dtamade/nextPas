@@ -2863,6 +2863,30 @@ begin
     'poller target dispatch should only use registered targets');
 end;
 
+procedure TestH5CompletionQueueMpscSourceContract;
+var
+  LSource: string;
+  LClass: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.runtime.pas');
+  CheckSourceContains(LSource, 'nextpas.core.lockfree.mpsc',
+    'H5-1 completion queue must use lockfree.mpsc');
+  CheckSourceContains(LSource, 'tmpscqueueimpl',
+    'H5-1 must specialize TMpscQueueImpl for single-consumer drain');
+  CheckSourceContains(LSource, 'pcompletionnode',
+    'H5-1 must use heap completion nodes (Pointer elements only)');
+  CheckSourceContains(LSource, 'fqueue.close',
+    'H5-1 Destroy must Close the MPSC queue before drain');
+  LClass := ExtractSourceRange(LSource,
+    'ttcpserverpollcompletionqueue = class',
+    'ttcpserverpolltargetregistry = class',
+    'completion queue class');
+  CheckSourceNotContains(LClass, 'flock',
+    'H5-1 completion queue class must not keep IMutex hot path');
+  CheckSourceNotContains(LClass, 'fitems',
+    'H5-1 completion queue class must not keep dynamic array FItems');
+end;
+
 procedure TestCustomBackendFactoryOverridesSelection;
 var
   LOldFactory: TTcpServerFactory;
@@ -4022,6 +4046,8 @@ begin
     @TestReadinessSessionFactoryFailureSourceContract);
   T.Test('Readiness completion skips unregistered targets source contract',
     @TestReadinessCompletionSkipsUnregisteredTargetsSourceContract);
+  T.Test('H5-1 completion queue MPSC source-contract',
+    @TestH5CompletionQueueMpscSourceContract);
   T.Test('Custom backend factory overrides selection',
     @TestCustomBackendFactoryOverridesSelection);
   T.Test('Missing backend factory raises not supported',

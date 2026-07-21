@@ -12,7 +12,7 @@
 
 | 面 | 结论 |
 |----|------|
-| **lockfree 跨模块生产消费者** | **H3-1** async→mpsc；**H3-5** worksteal→deque；**H4-1** pool→SegQueue；**H5 候选** net completion→MPSC |
+| **lockfree 跨模块生产消费者** | **H3-1** async→mpsc；**H3-5** worksteal→deque；**H4-1** pool→SegQueue；**H5-1** net completion→MPSC |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
 | **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用；消费者侧须遵守各 charter 生命周期 |
 | **legacy CAS** | **生产**：lockfree 热路径 `Atomic*(` **= 0**；core 其它模块（排除 `atomic*` 自身）调用形 **= 0**（C1 再扫 2026-07-20）。首选 `atomic_*` / `TAtomic*`，**不删** `atomic.compat`；策略见 [`quality-parity.md`](quality-parity.md) §5；回归钉 `test_lockfree_preferred_path` |
@@ -36,9 +36,9 @@
 | `nextpas.core.collections.hashmap.pas` | **注释 only** | 文档指向 `TShardedHashMap`；无 uses |
 | `nextpas.core.collections.concurrent.hashmap.pas` | **同名异实现** | 自有 `TConcurrentHashMap`，**不是** lockfree 门面别名 |
 | `nextpas.core.tls.ringbuffer.lockfree` | **旁路 byte SPSC** | 自建 SSL 字节流 ring（GetWriteBuffer/Commit）；**非** `TSpscQueue<T>` 元素队列；**本波不替换** |
-| `nextpas.core.net.server.runtime` `TTcpServerPollCompletionQueue` | **H5 候选** | 现 `IMutex`+动态数组；N worker Enqueue / 单 reactor Drain → 计划迁 T1 **MPSC** + Pointer 节点（见 charter-h5） |
+| **`nextpas.core.net.server.runtime` `TTcpServerPollCompletionQueue`** | **H5-1 生产消费者** | T1 `TMpscQueueImpl<Pointer>` + `PCompletionNode`；N worker Enqueue / 单 reactor Drain；charter-h5 |
 
-**判定**：跨模块 T1 消费者 = **async.loop**（MPSC）+ **thread.pool.worksteal**（Deque）+ **thread.pool**（SegQueue）。HTTP 仍未直接 uses lockfree；**net completion 为下一刀（H5）**。
+**判定**：跨模块 T1 消费者 = **async.loop**（MPSC）+ **thread.pool.worksteal**（Deque）+ **thread.pool**（SegQueue）+ **net completion**（MPSC）。HTTP 仍未直接 uses lockfree。
 
 ### 2.2 测试 / 基准 / 示例
 
@@ -58,7 +58,18 @@
 | `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
 | `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
 
-**跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）+ thread.pool（H4-1）。HTTP 仍未直接 uses lockfree 容器；net completion 为 **H5 候选**。
+**跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）+ thread.pool（H4-1）+ **net completion（H5-1）**。HTTP 仍未直接 uses lockfree 容器。
+
+### 2.8 H5-1 net completion → T1 MPSC
+
+| 项 | 内容 |
+|----|------|
+| 实现 | `nextpas.core.net.server.runtime` `TTcpServerPollCompletionQueue` |
+| 原语 | `TMpscQueueImpl<Pointer>` 存 `PCompletionNode`（节点内持 interface） |
+| 依赖 | `net` → `lockfree.mpsc`；**禁止** lockfree → net |
+| 生命周期 | Destroy：Close → drain residual nodes → Free；ReleaseRuntimeContext 先 Complete 再 Clear |
+| 测试 | `test_net_server`（行为 + H5 source-contract） |
+| Charter | [`charter-h5-net-completion-mpsc.md`](charter-h5-net-completion-mpsc.md) |
 
 ### 2.7 H4-1 thread.pool → T1 SegQueue
 
