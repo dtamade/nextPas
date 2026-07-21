@@ -1,10 +1,10 @@
-# Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3)
+# Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3 + H4 + H5 prep)
 
-> **日期**: 2026-07-20（legacy 计数刷新；uses 审计骨架仍为 2026-07-19）
+> **日期**: 2026-07-21（verify-h3 widen H4/H3-5；登记 DIY 旁路 + H5 候选）
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate；**H3-5 thread worksteal → T1 deque**；Maintenance preferred residual 0
-> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3** + **H3-5 thread consumer** + **preferred-path M6 nail**
+> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate（**含 H4-1 + H3-5**）；**H3-5 thread worksteal → T1 deque**；**H4-1 thread.pool → SegQueue**；Maintenance preferred residual 0；**H5 候选：net completion → MPSC**
+> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3/H3-5** + **H4-1** + **preferred-path M6 nail** + **gate widen 2026-07-21**
 
 ---
 
@@ -12,9 +12,9 @@
 
 | 面 | 结论 |
 |----|------|
-| **lockfree 跨模块生产消费者** | **H3-1**：`async.loop` → `lockfree.mpsc`；**H3-5**：`thread.pool.worksteal` → `lockfree.deque`（unmanaged 槽间接层） |
+| **lockfree 跨模块生产消费者** | **H3-1** async→mpsc；**H3-5** worksteal→deque；**H4-1** pool→SegQueue；**H5 候选** net completion→MPSC |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
-| **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用（因为没有跨模块 lockfree 容器消费者） |
+| **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用；消费者侧须遵守各 charter 生命周期 |
 | **legacy CAS** | **生产**：lockfree 热路径 `Atomic*(` **= 0**；core 其它模块（排除 `atomic*` 自身）调用形 **= 0**（C1 再扫 2026-07-20）。首选 `atomic_*` / `TAtomic*`，**不删** `atomic.compat`；策略见 [`quality-parity.md`](quality-parity.md) §5；回归钉 `test_lockfree_preferred_path` |
 | **T2 命名诚实** | `deque_lf` 等已注明；本轮扩充命名脚注表（CONTRACT / README） |
 
@@ -31,11 +31,14 @@
 | `nextpas.core.lockfree*`（门面 + T1–T3 子单元） | **owner / 自用** | 内部 uses `lockfree.base` / `wait` / `ebr` / `deque` 等 |
 | **`nextpas.core.async.loop`** | **H3-1 生产消费者** | `uses nextpas.core.lockfree.mpsc`；`FPending: TMpscQueueImpl<TAsyncPendingItem>`；Close→discard→Free |
 | **`nextpas.core.thread.pool.worksteal`** | **H3-5 生产消费者** | `uses nextpas.core.lockfree.deque`；每 worker 一个 `TWorkStealingDequeImpl<TDequeSlot>`；槽内 `Pointer` → 堆上 `TThreadTask` 节点；**禁止** managed 元素直接入 deque |
+| **`nextpas.core.thread.pool`** | **H4-1 生产消费者** | `uses nextpas.core.lockfree.segqueue`；`TSegQueueImpl<Pointer>` 存 `PTaskNode`（多 worker → **SegQueue 非 MPSC**） |
 | `nextpas.core.bench.run.pas` | **注释 only** | `@see nextpas.core.lockfree.ebr`；无 uses |
 | `nextpas.core.collections.hashmap.pas` | **注释 only** | 文档指向 `TShardedHashMap`；无 uses |
 | `nextpas.core.collections.concurrent.hashmap.pas` | **同名异实现** | 自有 `TConcurrentHashMap`，**不是** lockfree 门面别名 |
+| `nextpas.core.tls.ringbuffer.lockfree` | **旁路 byte SPSC** | 自建 SSL 字节流 ring（GetWriteBuffer/Commit）；**非** `TSpscQueue<T>` 元素队列；**本波不替换** |
+| `nextpas.core.net.server.runtime` `TTcpServerPollCompletionQueue` | **H5 候选** | 现 `IMutex`+动态数组；N worker Enqueue / 单 reactor Drain → 计划迁 T1 **MPSC** + Pointer 节点（见 charter-h5） |
 
-**判定**：跨模块 T1 消费者 = **async.loop**（MPSC）+ **thread.pool.worksteal**（Deque）。HTTP/net 仍未直接 uses lockfree。
+**判定**：跨模块 T1 消费者 = **async.loop**（MPSC）+ **thread.pool.worksteal**（Deque）+ **thread.pool**（SegQueue）。HTTP 仍未直接 uses lockfree；**net completion 为下一刀（H5）**。
 
 ### 2.2 测试 / 基准 / 示例
 
@@ -55,7 +58,7 @@
 | `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
 | `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
 
-**跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）。http/net 仍未直接 uses lockfree 容器。
+**跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）+ thread.pool（H4-1）。HTTP 仍未直接 uses lockfree 容器；net completion 为 **H5 候选**。
 
 ### 2.7 H4-1 thread.pool → T1 SegQueue
 
@@ -68,11 +71,11 @@
 | 测试 | `test_thread`（含 H4 source-contract） |
 | Charter | [`charter-h4-thread-pool-mpsc.md`](charter-h4-thread-pool-mpsc.md)（文件名保留历史） |
 
-### 2.5 H3-3 consumer regression 门
+### 2.5 H3-3 consumer regression 门（widen 2026-07-21）
 
 | 入口 | 覆盖 |
 |------|------|
-| `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` | `test_async`（含 `AsyncLoopPendingQueueMpscSourceContract`）+ `test_lockfree_bag` + `test_lockfree_multimap` + `t1_close_join_free` |
+| `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` | `test_async`（H3-1）+ bag/multimap（H3-2）+ lifecycle 示例 + **`test_thread`（H4-1）** + **`test_worksteal`（H3-5）** |
 | 日志 | `core/build/verify-lockfree/verify-h3-consumers.log` |
 | 与 `verify-t1` | **不替代**；Maintenance / land 推荐两者都跑 |
 

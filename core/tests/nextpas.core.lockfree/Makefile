@@ -31,6 +31,8 @@ T2_BAG_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_bag_close_
 T2_MULTIMAP_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_multimap_close_join_free
 T1_MSQUEUE_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_msqueue_close_join_free
 T2_HASHMAP_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_hashmap_join_free
+THREAD_TEST_DIR := ../nextpas.core.thread/test_thread
+WORKSTEAL_TEST_DIR := ../nextpas.core.thread/test_worksteal
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
@@ -59,12 +61,14 @@ verify-t1:
 	} 2>&1 | tee $(VERIFY_T1_LOG)
 	@echo "verify-t1-status=pass log=$(VERIFY_T1_LOG)"
 
-# H3-3: cross-module + H3-2 Guarded subset consumer regression.
+# H3-3 (+ H4/H3-5 widen): cross-module + H3-2 Guarded subset consumer regression.
 # Does not replace verify-t1. Covers:
 #   - async.loop Post path uses T1 MPSC (H3-1 source-contract in test_async)
 #   - bag / multimap H3-2 production contract pins
 #   - H2-6 Close->join->Free examples (Channel + SegQueue + Bag + MSQueue)
-#   - HashMap stop->join->Free (no Close API honesty)
+#   - HashMap Close → join → Free (Charter C; T1 facade)
+#   - H4-1 thread.pool → T1 SegQueue (test_thread source-contract)
+#   - H3-5 thread.pool.worksteal → T1 deque (test_worksteal)
 verify-h3-consumers:
 	@mkdir -p $(VERIFY_LOG_DIR)
 	@echo "verify-h3-consumers: starting (log -> $(VERIFY_H3_CONSUMERS_LOG))"
@@ -90,8 +94,12 @@ verify-h3-consumers:
 	  $(MAKE) -C $(T2_BAG_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "=== t2_multimap_close_join_free example (H3-2 MultiMap lifecycle) ==="; \
 	  $(MAKE) -C $(T2_MULTIMAP_CLOSE_JOIN_FREE_DIR) clean test; \
-	  echo "=== t2_hashmap_join_free example (HashMap stop-join-Free, no Close) ==="; \
+	  echo "=== t2_hashmap_join_free example (HashMap Close→join→Free, Charter C) ==="; \
 	  $(MAKE) -C $(T2_HASHMAP_JOIN_FREE_DIR) clean test; \
+	  echo "=== H4-1 thread.pool SegQueue consumer (test_thread) ==="; \
+	  $(MAKE) -C $(THREAD_TEST_DIR) clean test; \
+	  echo "=== H3-5 worksteal deque consumer (test_worksteal) ==="; \
+	  $(MAKE) -C $(WORKSTEAL_TEST_DIR) clean test; \
 	  echo "verify-h3-consumers-status=pass"; \
 	} 2>&1 | tee $(VERIFY_H3_CONSUMERS_LOG)
 	@echo "verify-h3-consumers-status=pass log=$(VERIFY_H3_CONSUMERS_LOG)"

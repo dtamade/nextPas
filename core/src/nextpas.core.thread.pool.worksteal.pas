@@ -66,7 +66,7 @@ type
     FContexts: array[0..MAX_WORKERS - 1] of TWorkerCtx;
     FWorkerCount: Integer;
     FWorkers: array[0..MAX_WORKERS - 1] of TPlatformThreadHandle;
-    FMutex: IMutex;
+    FMutex: INativeMutex;
     FCondVar: ICondVar;
     FDoneCondVar: ICondVar;
     FShutdown: Boolean;
