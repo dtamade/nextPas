@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: **Maintenance Idle** · Phase U1 可用性闭环（2026-07-20）
+**状态**: **Maintenance Idle** · 主线封板 U1+U2 sealed（2026-07-21）
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [ROADMAP.md](ROADMAP.md)
 
