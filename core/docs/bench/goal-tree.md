@@ -3,7 +3,7 @@
 ## 当前状态
 
 **阶段**: 生产就绪 (Production Ready) + 结果 API 收敛冻结 + Maintenance Idle
-**最后更新**: 2026-07-20 (B47 消费侧 bench API drift 修复)
+**最后更新**: 2026-07-21 (T1 文档卫生：archive 物理迁入、口径 22、契约/架构对齐)
 
 ## 目标树
 
@@ -136,11 +136,10 @@ B18  线程安全执行器 (2026-07-06)                             ✅
   B18.3  并发 RunAll (platform_thread_create/join)            ✅
   B18.4  test_bench_run 13 tests (heaptrc 0 leaks)           ✅
 
-B19  缓冲区池 (2026-07-07)                                   ✅
-  B19.1  TBenchResultPool 预分配缓冲区                        ✅
-  B19.2  原子索引无锁借用 (AtomicFetchAdd32)                  ✅
-  B19.3  池满回退到直接分配                                    ✅
-  B19.4  test_bench_resultpool 7 tests (0 leaks)              ❌ removed (dead code cleanup)
+B19  缓冲区池 (2026-07-07)                                   ⚠ 历史已撤回
+  B19.1–B19.3  TBenchResultPool 曾实现后 dead-code 删除         ❌ 源码已无
+  B19.4  test_bench_resultpool                                  ❌ removed
+  备注  示例 `object_pool.pas` → recipe reuse + BlackBox（T2/B49）
 
 B20  跨语言性能对照 (2026-07-08)                              ✅
   B20.1  Go 基准测试 (Fibonacci/Sort/String/Memory/Map)       ✅
@@ -212,7 +211,7 @@ B32–B40  消费侧 C3 落地与扩面 (2026-07-20)                       ✅
   B34    checklist +yaml/log；scorecard binsearch/lookup         ✅
   B35–B39  C3 扩面（yaml/log/regex/number/io/csv/xml/atomic/bytes/sync） ✅
   B40    lockfree matched+micro 双 suite C3                      ✅
-  水位   consumer-checklist **19** 模块 C1–C5 全绿               ✅
+  水位   当时 consumer-checklist **19** 模块；B45 扩至 **22**     ✅
 
 B41  维护收口 + EBR 设计备忘 (2026-07-20)                        ✅
   B41.1  README/goal-tree 水位对齐                               ✅
@@ -233,7 +232,7 @@ B45  可用性评估落地 (2026-07-20)                                     ✅
   B45.1  BenchBlackBox* 防优化 sink + self_bench 测试             ✅
   B45.2  官方示例去掉 SysUtils；fs + BlackBox                     ✅
   B45.3  Canonical API 文档 + CONTRACT 索引/错误约定/RTL 节       ✅
-  B45.4  checklist +http/mem/collections 抽检；contract-check 增强 ✅
+  B45.4  checklist +http/mem/collections 抽检（**22** 模块）      ✅
   B45.5  门面物理大拆 / EBR / 全量 SCORECARD — 仍推迟             ⏸
 
 B46  benchmarks RTL 隔离 (2026-07-20)                              ✅
@@ -243,17 +242,30 @@ B46  benchmarks RTL 隔离 (2026-07-20)                              ✅
   B46.4  BlackBox 消费指南推广（文档）                             ✅
 
 B47  消费侧 bench API drift 修复 (2026-07-20)                      ✅
-  B47.1  merge origin/main 后编译红点清零（bytes/http.protocols/io.uring/math/mem/platform/stopwatch/text/json） ✅
-  B47.2  Skip(reason) / Text* / text.conv / Mat4fIdentity / TSizeClassPool 等对齐当前 core API ✅
-  B47.3  SpinLock 已移除 → CondVar/Signal；GetTickCount64 → platform_monotonic_ns ✅
-  B47.4  全量 nextpas.core.* Makefile 编译抽检（~70 绿；内部 exception 为 FPC 串行缓存抖动，clean 后绿） ✅
+  B47.1  merge origin/main 后编译红点清零                          ✅
+  B47.2  Skip/Text*/Mat4f/TSizeClassPool 等对齐当前 core API     ✅
+  B47.3  SpinLock→CondVar；GetTickCount64→platform_monotonic_ns  ✅
+  B47.4  全量 nextpas.core.* Makefile 编译抽检                     ✅
+
+B48  T1 文档卫生 (2026-07-21)                                      ✅
+  B48.1  历史 docs 物理迁入 archive/；删除 tests 下双 findings   ✅
+  B48.2  CONTRACT SetTimeout→TDuration；层级 tooling 实况        ✅
+  B48.3  ARCHITECTURE 真实依赖图；API.md 签名对齐                 ✅
+  B48.4  消费模块数口径统一 **22**（guide/ebr/goal-tree）          ✅
+
+B49  T2 半成品收口 (2026-07-21)                                    ✅
+  B49.1  删除 TBenchEntry.TimeoutMs 死路径；suite SetTimeout 保留 ✅
+  B49.2  object_pool 示例改为 recipe reuse + BlackBox            ✅
+  B49.3  删除孤儿 test_test_bench_integration（test lane 已覆盖） ✅
 ```
 
 ## 测试套件分布
 
-> **最后更新**: 2026-07-20
+> **最后更新**: 2026-07-21（B49）
 >
 > **权威列表**: `core/tests/nextpas.core.bench/Makefile` 的 `PROJECTS`（**22** 项）。
+> **heaptrc**: `bench_test_common.mk` 统一 `FPCFLAGS` 含 `-gh`。
+> **test.bench 桥**：见 `core/tests/nextpas.core.test/test_bench`（test 模块 gate）。
 
 | 套件 | 测试数 | heaptrc | 说明 |
 |------|--------|---------|------|
@@ -281,8 +293,6 @@ B47  消费侧 bench API drift 修复 (2026-07-20)                      ✅
 | test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
 | **合计** | **~504** | **22/22 通过** | |
 
-> **非默认 gate**: `test_test_bench_integration/` 目录存在但**未**列入 `PROJECTS`，不进入 `make bench-module-test`。
-
 ### 跨语言基准对照 (benchmarks/)
 
 | 语言 | 基准测试 | 说明 |
@@ -300,14 +310,16 @@ B47  消费侧 bench API drift 修复 (2026-07-20)                      ✅
 - [x] TAdvancedStats.Variance/Skewness/Kurtosis NaN/Inf guard
 - [x] GetData 返回 Copy 语义（原来返回引用，泄漏）
 - [x] 17 处 TAdvancedStats 内联 Create 泄漏
-- [x] 全部 12 套件迁移到 nextpas.core.test 框架
-- [x] 8 个 Makefile 添加 `-gh` heaptrc 标志
+- [x] 全部套件经 `bench_test_common.mk` 启用 `-gh` heaptrc
+- [x] 消费侧 checklist — **22** 模块 C1–C5（B45 水位）
 
 ## 未来候选
 
 - [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（11 track；全量 SCORECARD 仍推迟）
-- [x] 消费侧 checklist C3 扩面 — **已完成**：19 模块（见 [consumer-checklist.md](consumer-checklist.md)）
-- [ ] `BenchRun` 新执行器（EBR 感知）— **推迟**；备忘见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)；需独立 lane + 总控授权（**Idle 期间不默认排期**）
+- [x] 消费侧 checklist C3 扩面 — **已完成**：**22** 模块（见 [consumer-checklist.md](consumer-checklist.md)）
+- [x] 每条目 `TimeoutMs` 半成品字段删除（仅 suite `SetTimeout`）— B49
+- [x] `object_pool` 示例改为 recipe reuse + BlackBox — B49
+- [x] 删除孤儿 `test_test_bench_integration` — B49（覆盖：test lane `test_bench`）
+- [ ] `BenchRun` 新执行器（EBR 感知）— **推迟**；备忘见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)；需独立 lane + 总控授权
 - [ ] `TInt64Array` 类型别名（base 模块导出）— 归 base
-- [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量 — 低优先级
 - [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟（**Idle 期间不默认排期**）

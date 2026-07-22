@@ -2,15 +2,15 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
-> **Lane 状态：Maintenance Idle（2026-07-20 · B43；B44 卫生包）**
+> **Lane 状态：Maintenance Idle（2026-07-21 · B47 后；T1 文档卫生）**
 >
 > - API 冻结；消费 checklist **22** 模块 C1–C5 全绿；scorecard 子集 **11** track
 > - 默认 gate：**22** suites（`core/tests/nextpas.core.bench/Makefile` PROJECTS）
 > - 日常：只响应回归、明确授权的小修（文档/卫生/契约口径可做）
 > - **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆
 > - **值班 / Landing 纪律**（含 **FF 后必 push**）：[LANE-DUTY.md](LANE-DUTY.md)
-> - **B45**：Canonical API、`BenchBlackBox*`、官方示例无 SysUtils
-> - **B46**：`core/benchmarks/nextpas.core.*` 去掉直连 FPC RTL（白名单：platform-comparison）
+> - **B45–B47**：Canonical API、BlackBox、benchmarks RTL 隔离、消费侧 API drift
+> - **B48–B49**：文档卫生；删 per-entry Timeout 半成品；orphan test 清理；recipe 示例
 
 ## Canonical API（唯一推荐路径）
 
@@ -82,20 +82,22 @@ make -C core/benchmarks/nextpas.core.hash/bench_hash run
 ## 模块结构
 
 ```
-L1 依赖层：仅依赖 L0（base, exception, platform.time）
+tooling harness（registry）— 非「纯 L1→L0」；真实依赖见 ARCHITECTURE.md
+  除 L0 外：fs/json（基线与报告）、atomic/platform.thread（TBenchRun）、
+  system.classes（并行 TThread）、collections.hashmap（对比加速）等
 
-nextpas.core.bench.base        ← 基本类型、排序（IntroSort）
-nextpas.core.bench.intf        ← 接口定义（IBenchSuite/IBenchResults）、异常
-nextpas.core.bench.stats       ← 基础统计（Mean/Median/StdDev/t-distribution）
-nextpas.core.bench.stats.advanced ← 高级统计（异常值检测/CI/bootstrap/正态性）
-nextpas.core.bench             ← 门面：TBenchSuite/TBenchResults
-nextpas.core.bench.baseline    ← 基线管理（JSON 序列化/回归检测）
-nextpas.core.bench.memtrack    ← 内存追踪（MemoryManager hook + 原子计数）
-nextpas.core.bench.parallel    ← 并行基准（TThread + 聚合结果）
-nextpas.core.bench.run         ← 线程安全执行器（原子结果收集，EBR 就绪）
-nextpas.core.bench.runner      ← 执行器（校准/采样/统计流水线）
-nextpas.core.bench.report      ← 报告生成（Console/JSON/TSV/HTML/SVG）
-nextpas.core.bench.xlang       ← 跨语言解析（Go/Rust/FPC 输出）
+nextpas.core.bench.base        ← 基本类型、GlobMatch、BlackBox
+nextpas.core.bench.intf        ← 接口（IBenchSuite / IBenchResults≈77 方法）
+nextpas.core.bench.stats       ← 基础统计（Welford / MWU / K-S …）
+nextpas.core.bench.stats.advanced ← Bootstrap/BCa/异常值
+nextpas.core.bench             ← 门面：TBenchSuite/TBenchResults（API 冻结）
+nextpas.core.bench.baseline    ← 基线 JSON / 时间线
+nextpas.core.bench.memtrack    ← MemoryManager hook
+nextpas.core.bench.parallel    ← 并行基准（TThread）
+nextpas.core.bench.run         ← 线程安全原子收集
+nextpas.core.bench.runner      ← 校准/预热/采样
+nextpas.core.bench.report      ← Console/JSON/TSV/HTML/SVG
+nextpas.core.bench.xlang       ← Go/Rust/FPC 输出解析
 ```
 
 ## 快速开始
@@ -433,7 +435,7 @@ make -C core/tests/nextpas.core.bench/test_bench_xlang clean test
 make -C core/tests/nextpas.core.bench/test_bench_baseline clean test
 ```
 
-权威状态见 `goal-tree.md`（B0–B27）。历史调研文档（`bench-usability-*`、`FINAL_REPORT.md`）仅作归档，不以之为当前测试计数。
+权威状态见 `goal-tree.md`（B0–B47）。历史调研/findings 已迁入 [archive/](archive/README.md)，不以之为当前测试计数。
 
 ## 环境变量
 

@@ -1233,26 +1233,13 @@ begin
   Result.Executed := True;
   LSetupData := nil;
 
-  { F-10: per-benchmark timeout 检查 }
-  LTimeoutMs := LEntry.TimeoutMs;
-  if LTimeoutMs > 0 then
-    LStartNs := platform_monotonic_ns
-  else
-    LStartNs := 0;
+  { suite 级超时由 TBenchSuite.Run 在条目间/条目后检查；单 entry 采样不设 per-entry 截止 }
+  LTimeoutMs := 0;
+  LStartNs := 0;
   if Assigned(LEntry.Setup) then
     LSetupData := LEntry.Setup();
   try
     LIters := CalibrateEntryIterations(LEntry);
-
-    { F-10: 校准后检查 timeout，避免白跑采样 }
-    if (LTimeoutMs > 0) and
-       (platform_monotonic_ns - LStartNs >= UInt64(LTimeoutMs) * 1000000) then
-    begin
-      Result.Skipped := True;
-      Result.SkipReason := 'Per-benchmark timeout exceeded';
-      AddResult(Result);
-      Exit;
-    end;
 
     LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement,
       LTimeoutMs, LStartNs);

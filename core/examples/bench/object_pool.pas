@@ -1,10 +1,11 @@
 {*
- * nextpas.core.bench - Object Pool Example
+ * nextpas.core.bench - Recipe Reuse Example
  *
- * 展示对象池功能：零分配基准测试路径。
+ * 原名 object_pool：B19 TBenchResultPool 已删除。
+ * 本示例改为「同一配方连跑两次 + BlackBox」，演示可复现的最小微基准。
  *}
 
-program bench_object_pool;
+program bench_recipe_reuse;
 
 {$mode ObjFPC}{$H+}
 
@@ -12,12 +13,8 @@ uses
   nextpas.core.bench,
   nextpas.core.time.base,
   nextpas.core.text.format,
-  nextpas.core.bench.base,
   nextpas.core.platform.time;
 
-{*
- * 简单基准函数
- *}
 procedure BenchIntegerSum(const ACtx: IBenchContext);
 var
   LSum: Int64;
@@ -29,55 +26,47 @@ begin
   BenchBlackBoxInt64(LSum);
 end;
 
-{*
- * 演示对象池功能
- *}
-procedure DemoObjectPool;
+procedure DemoRecipeReuse;
 var
   LResults: IBenchResults;
   LStart, LEnd: UInt64;
+  LNs1, LNs2: Double;
 begin
-  WriteLn('=== Object Pool Demo ===');
+  WriteLn('=== Recipe Reuse Demo (ex object_pool) ===');
 
-  { 不使用对象池 }
-  WriteLn('  Without Object Pool:');
+  WriteLn('  Run 1:');
   LStart := platform_monotonic_ns;
-
-  LResults := TBenchSuite.Create('NoPool')
-    .SetMinDuration(TDuration.FromMilliseconds(500))
-    .SetMinSamples(20)
-    .Add('Benchmark', @BenchIntegerSum)
+  LResults := TBenchSuite.Create('Recipe1')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(100))
+    .SetMinSamples(5)
+    .Add('Sum/1k', @BenchIntegerSum)
     .Run;
-
   LEnd := platform_monotonic_ns;
-  WriteLn(TextFormat('    Wall: %d ms', [(LEnd - LStart) div 1000000]));
-  WriteLn(TextFormat('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
+  LNs1 := LResults.GetByName('Sum/1k').NsPerOp;
+  WriteLn(TextFormat('    Wall: %d ms  ns/op: %.2f',
+    [(LEnd - LStart) div 1000000, LNs1]));
 
-  { 再次运行（演示可复用 suite 配方；对象池 API 若未暴露则同路径） }
-  WriteLn('  Second run (same recipe):');
+  WriteLn('  Run 2 (same recipe):');
   LStart := platform_monotonic_ns;
-
-  LResults := TBenchSuite.Create('WithPool')
-    .SetMinDuration(TDuration.FromMilliseconds(500))
-    .SetMinSamples(20)
-    .Add('Benchmark', @BenchIntegerSum)
+  LResults := TBenchSuite.Create('Recipe2')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(100))
+    .SetMinSamples(5)
+    .Add('Sum/1k', @BenchIntegerSum)
     .Run;
-
   LEnd := platform_monotonic_ns;
-  WriteLn(TextFormat('    Wall: %d ms', [(LEnd - LStart) div 1000000]));
-  WriteLn(TextFormat('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
+  LNs2 := LResults.GetByName('Sum/1k').NsPerOp;
+  WriteLn(TextFormat('    Wall: %d ms  ns/op: %.2f',
+    [(LEnd - LStart) div 1000000, LNs2]));
 
+  WriteLn(TextFormat('  Ratio run2/run1: %.3f', [LNs2 / LNs1]));
   WriteLn;
 end;
 
-{*
- * 主程序
- *}
 begin
-  WriteLn('=== nextpas.core.bench Object Pool ===');
+  WriteLn('=== nextpas.core.bench recipe reuse ===');
   WriteLn;
-
-  DemoObjectPool;
-
-  WriteLn('=== Object Pool Demo Complete ===');
+  DemoRecipeReuse;
+  WriteLn('=== Done ===');
 end.

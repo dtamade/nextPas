@@ -1028,7 +1028,6 @@ var
   LRunResult: TBenchResult;
   LStartNs: UInt64;
   LTimeoutNs: UInt64;
-  LEntryStartNs: UInt64; { F-017 }
   I: Integer;
 begin
   FRunner.SetConfig(FConfig);
@@ -1046,7 +1045,7 @@ begin
   if (FEntryCount = 0) and (not FConfig.Quiet) then
     FConfig.Output.WriteLine('WARNING: TBenchSuite.Run called with no registered entries');
 
-  // ST-04: 超时检查初始化
+  { ST-04: suite 级超时（无 per-entry TimeoutMs；公开 API 仅 SetTimeout） }
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
   if LTimeoutNs > 0 then
     LStartNs := platform_monotonic_ns
@@ -1080,19 +1079,7 @@ begin
       Continue;
     end;
 
-    { F-017: per-benchmark timeout check }
-    if FEntries[I].TimeoutMs > 0 then
-    begin
-      LEntryStartNs := platform_monotonic_ns;
-      LRunResult := FRunner.RunOne(FEntries[I]);
-      if platform_monotonic_ns - LEntryStartNs >= UInt64(FEntries[I].TimeoutMs) * 1000000 then
-      begin
-        LRunResult.Skipped := True;
-        LRunResult.SkipReason := 'Per-benchmark timeout exceeded';
-      end;
-    end
-    else
-      LRunResult := FRunner.RunOne(FEntries[I]);
+    LRunResult := FRunner.RunOne(FEntries[I]);
     { P1-15: RunOne 可能耗时很长，完成后也检查 suite 超时 }
     if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
     begin

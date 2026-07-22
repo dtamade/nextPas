@@ -1,8 +1,8 @@
 # bench lane 值班备忘
 
 **对象**：`.worktrees/bench` / 分支 `bench`
-**状态默认**：Maintenance Idle（B43+；B44 卫生包已 land）
-**最后更新**：2026-07-20
+**状态默认**：Maintenance Idle（B43+；B48 T1 文档卫生已落 lane）
+**最后更新**：2026-07-21
 
 ## 1. 职责边界
 
@@ -83,5 +83,7 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-20 | lane `ed47d339f`（registry `focused-runtime`；B44 在 origin 祖先链）；当时 behind origin=3 | `make bench-module-test` | **exit 0**；**22/22** suites；**505** tests passed / 0 failed；heaptrc 末 suite 0 leaks；hygiene pass |
 | 2026-07-20 | B45 可用性落地 | `make bench-module-test` + `bench-contract-check` + example compile | **22/22** suites **506** tests；contract pass（orphan warn）；quick_start/demo_basic/bb_smoke 编译通过 |
 | 2026-07-20 | B47 消费侧 API drift | 原红 12 + json_raw + Skip 修复；`make -C <bench> clean build` 全绿；`bench-contract-check` | 见 commit；门面大拆/EBR/SCORECARD 仍 Idle |
+| 2026-07-21 | B48 T1 文档卫生 | `bench-contract-check` + `make hygiene` + `git diff --check` | 历史 docs→archive；CONTRACT/ARCH/API/22 口径；无源码变更 |
+| 2026-07-21 | B49 T2 半成品收口 | integration/timeout 路径 + contract-check | 删 entry TimeoutMs；object_pool→recipe；删 orphan test |
 
 > 新一次回归后更新本表一行即可。

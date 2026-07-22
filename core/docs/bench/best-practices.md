@@ -37,7 +37,7 @@ begin
   SetLength(LData, 100000);  { 这部分被计时 }
   for var I := 0 to High(LData) do
     LData[I] := Random;
-  
+
   SortArray(LData);  { 只想测这个 }
 end;
 
@@ -67,9 +67,9 @@ procedure BenchWithMixedWork(const ACtx: IBenchContext);
 begin
   { 不想测量的部分 }
   LoadDataFromDisk;
-  
+
   ACtx.ResetTimer;  { 重置计时器 }
-  
+
   { 想测量的部分 }
   ProcessData;
 end;
@@ -82,14 +82,14 @@ procedure BenchWithPauses(const ACtx: IBenchContext);
 begin
   { 想测量的部分 A }
   ProcessPartA;
-  
+
   ACtx.StopTimer;  { 暂停计时 }
-  
+
   { 不想测量的部分 }
   WaitForIO;
-  
+
   ACtx.StartTimer;  { 恢复计时 }
-  
+
   { 想测量的部分 B }
   ProcessPartB;
 end;
@@ -136,16 +136,16 @@ var
   LEntry: TBenchEntryResult;
 begin
   LEntry := LResults.GetByName('Benchmark');
-  
+
   { 错误：只看均值 }
   WriteLn(Format('Mean: %.2f ns', [LEntry.MeanNs]));
-  
+
   { 正确：检查置信区间 }
   WriteLn(Format('Mean: %.2f ± %.2f ns (95%% CI)', [
     LEntry.MeanNs,
     LEntry.ConfidenceInterval
   ]));
-  
+
   { 如果置信区间太大，说明结果不稳定 }
   if LEntry.ConfidenceInterval > LEntry.MeanNs * 0.1 then
     WriteLn('WARNING: High variance, increase sample size');
@@ -166,7 +166,7 @@ begin
     .SetWarmupIters(0)  { 不预热 }
     .Add('Benchmark', @BenchFunc)
     .Run;
-  
+
   WriteLn(Format('Cold: %s', [LResults.GetByName('Benchmark').MeanStr]));
 end;
 
@@ -179,7 +179,7 @@ begin
     .SetWarmupIters(100)  { 预热 100 次 }
     .Add('Benchmark', @BenchFunc)
     .Run;
-  
+
   WriteLn(Format('Warm: %s', [LResults.GetByName('Benchmark').MeanStr]));
 end;
 ```
@@ -253,7 +253,7 @@ var
   LResult: TMannWhitneyResult;
 begin
   LResult := MannWhitneyU(LBaseline.RawSamples, LCurrent.RawSamples);
-  
+
   if LResult.IsSignificant then
   begin
     if LResult.EffectSize > 0.2 then  { 中等效应 }
@@ -275,7 +275,7 @@ var
 begin
   for var I := 0 to LResults.Count - 1 do
     LRatios[I] := LResults[I].RatioToBaseline;
-  
+
   WriteLn(Format('Overall: %.2fx', [GeometricMean(LRatios)]));
 end;
 ```
@@ -295,11 +295,11 @@ end;
 
 begin
   GCounter.Store(0);
-  
+
   LResults := TBenchSuite.Create('ThreadSafety')
     .AddParallel('AtomicIncrement', @BenchAtomicIncrement, 8)
     .Run;
-  
+
   { 验证最终值等于迭代次数 }
   Assert(GCounter.Load = LResults.GetByName('AtomicIncrement').Iterations);
 end;
@@ -316,7 +316,7 @@ begin
     LResults := TBenchSuite.Create(Format('Scalability/T=%d', [LThreads]))
       .AddParallel('Benchmark', @BenchFunc, LThreads)
       .Run;
-    
+
     WriteLn(Format('Threads=%d: %s (%.2fx vs single)', [
       LThreads,
       LResults.GetByName('Benchmark').MeanStr,
@@ -337,7 +337,7 @@ begin
   LResults := TBenchSuite.Create('Baseline')
     .Add('Benchmark', @BenchFunc)
     .Run;
-  
+
   LResults.SaveToJSON('bench-baseline.json');
 end;
 
@@ -348,7 +348,7 @@ begin
     .LoadBaseline('bench-baseline.json')
     .Add('Benchmark', @BenchFunc)
     .Run;
-  
+
   if LResults.HasRegression(5.0) then  { 5% 阈值 }
     ExitCode := 1;
 end;
@@ -402,7 +402,7 @@ var
   LTimeline: TBenchTimeline;
 begin
   LTimeline := TBenchTimeline.LoadFromJSONL('bench-timeline.jsonl');
-  
+
   WriteLn(Format('Trend: %.2f%% per commit', [LTimeline.TrendPercent]));
 end;
 ```

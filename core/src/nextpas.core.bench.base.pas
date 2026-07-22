@@ -160,8 +160,7 @@ type
     {** PrintToConsole 统计详情最大显示数量（默认 5），0=不显示详情 }
     MaxDetailCount: Integer;
     SuiteName: string;
-    {** ST-04: 整体超时（毫秒），0=不超时。超时后跳过剩余 benchmark。
-     *  F-05/F-07: 统一为 Int64（与 TBenchEntry.TimeoutMs 一致）。 }
+    {** ST-04: suite 级整体超时（毫秒），0=不超时。超时后跳过剩余条目。 }
     TimeoutMs: Int64;
     {** 启用并行执行（需配合 TParallelBenchmark） }
     EnableParallel: Boolean;
