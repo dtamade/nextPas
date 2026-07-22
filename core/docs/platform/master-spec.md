@@ -34,10 +34,12 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (24-module matrix, including
-`platform.watch` RDCW create/timeout with soft event residual under Wine and
-`platform.pty` ConPTY smoke), and durable GHA **`ci-matrix`** for the
+Windows compile gates, Wine runtime smoke (**25**-module matrix, including
+`platform.watch` RDCW create/timeout with soft event residual under Wine,
+`platform.pty` ConPTY smoke, and `platform.console` is_terminal/size/ansi/write),
+and durable GHA **`ci-matrix`** for the
 **documented 27 platform gates** in `platform-windows-ci-matrix.sh` / `.ps1`.
+Console is wine-secondary only until a real-Windows gate promote.
 
 ### Count honesty (do not mix)
 

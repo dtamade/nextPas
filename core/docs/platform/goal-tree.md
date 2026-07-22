@@ -11,7 +11,7 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
   on GHA `test-windows-runtime` (+… +pty +watch S1–S3 multi-dir). `watch` PASS on run
   29746628175 (pass=28 fail=0 with mem.host). L2 `l2.fs.watch` (multi-path +
   AddTree walk, no `bWatchSubtree`) step-green on GHA 29759582229 @ `1790012ef`.
-  Wine secondary **24**. Watch expand series **closed** 2026-07-21.
+  Wine secondary **25** (+console). Watch expand series **closed** 2026-07-21.
   **Not full-host real-Windows runtime** parity: modules outside the 27-gate list,
   AcceptEx/ConnectEx depth, and whole-job reds (async native) are not platform claims.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
@@ -51,11 +51,12 @@ Focused runtime gates use heaptrc for leak-proof validation.
 
 ## Windows matrix evidence
 
-**Wine smoke** (Win64 PE under Wine; secondary; **24** matrix modules): time,
+**Wine smoke** (Win64 PE under Wine; secondary; **25** matrix modules): time,
 memory, sync, thread, io, process, files, fs, path, env, mmap, random, socket,
 error, fmt, info, which, dl, pipe, args, resource, watch (RDCW create/timeout;
 event soft under Wine), pty (ConPTY open/close; resize may E_NOTIMPL under Wine),
-io.reactor.iocp. Not covered: signal, console, freetype/net.
+console (is_terminal/get_size/enable_ansi/write smoke), io.reactor.iocp.
+Not covered: signal, freetype/net.
 
 **Real Windows ci-matrix (27 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,

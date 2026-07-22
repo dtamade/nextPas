@@ -19,9 +19,15 @@ Contracts:
 - Worker completion wakes the reactor; it does not advance the session directly.
 - Cleanup order for unregister/remove/close is part of the contract.
 
-Current truth is Linux focused-runtime plus source-contract tests. Windows
-readiness consumer proof remains source/compile truth until real Windows runtime
-gates exist.
+### Current readiness truth (2026-07-21)
+
+| Host | Tier | Scope |
+|------|------|--------|
+| Linux | focused-runtime | platform/io + consumer gates |
+| Windows | **ci-matrix** (documented **27** platform gates) + wine **25** secondary | Includes poller/iocp real gates in `platform-windows-ci-matrix.sh`; **not** full-host parity |
+| macOS | focused-runtime layer A (**9** platform gates) | Fail-closed `platform-macos-ci-matrix.sh` only; whole job is not platform evidence |
+
+Wine is forever `wine-runtime-smoke` and never substitutes for real Windows `ci-matrix`.
 
 ## Completion lane
 
@@ -42,14 +48,21 @@ Contracts:
 - `pbIocp`, `pbUnsupported`, `IsValid`, `Poll`, `Stop`, and async operation
   returns are consumer-visible contract.
 
+Completion depth beyond documented smokes (e.g. AcceptEx/ConnectEx residual)
+is owned with **io/net-async**, not as a blanket platform facade claim.
+
+## Console / TUI consumer note
+
+- `nextpas.core.tui` depends on `platform.console` (+ signal for SIGWINCH/SIGTERM on POSIX).
+- `platform.console` is on the **wine secondary matrix (25)** as of 2026-07-21;
+  **not** yet a promoted Windows `ci-matrix` platform gate.
+- Windows true-console TUI remains tui-lane product work; platform supplies
+  evidence ladder only.
+
 ## Current route
 
-1. Closed timeout owner boundary.
-2. Submit failure owner boundary.
-3. Close/run wake handoff and drain ownership.
-4. File read/write lifecycle proof.
-5. Real Windows runtime only after source/compile contracts are stable.
+1. Keep readiness/completion split honest.
+2. Expand Windows/macOS matrices only with consumer pain + one-gate ladder.
+3. Do not promote full-host Windows or macOS parity from wine or partial matrices.
 
-Deferred: Windows runtime-ready claims, socket completion publication,
-Darwin/Android runtime completion proof, benchmarks, and unrelated facade
-rewrites.
+Deferred: FreeBSD/Android device runtime, D5 benches as truth language, dual-IO sunset.
