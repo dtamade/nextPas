@@ -270,10 +270,33 @@ end;
 function TSemanticAnalyzer.EmitOwnedStringLengthTemp(const ANode: TGreenNode;
   out ABlob: string): Boolean;
 var
-  Ctx: TSemaOwnershipContext;
+  SourceName, TempName, Operand: string;
+  CallNode: TGreenNode;
 begin
-  FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitOwnedStringLengthTemp(Ctx, ANode, ABlob);
+  { Encode nested call formals (recvar / str / ints). The free ownership
+    helper only emitted a no-arg sret call (ptr len owner alloc_size stub),
+    which broke Length(GetS(R)) — missing const record formal. }
+  ABlob := '';
+  Result := False;
+  if not IsSupportedOwnedStringReturnLengthArgument(ANode, SourceName) then
+    Exit;
+  if (ANode.ChildCount < 2) or (ANode.ChildAt(1) = nil) then
+    Exit;
+  CallNode := ANode.ChildAt(1);
+  Inc(FBlockLabelCounter);
+  TempName := '$str_len_tmp_' + IntToStr(FBlockLabelCounter);
+  RegisterRuntimeVar(TempName);
+  RegisterRuntimeStrVar(TempName);
+  Operand := EncodeStrCallArgs(CallNode, TempName);
+  FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
+  FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
+    TempName + #9 + 'callee ' + SourceName + #9 + Operand);
+  FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
+    'strvar ' + TempName + #10);
+  FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
+    TempName);
+  ABlob := 'var ' + TempName + '$len' + #10;
+  Result := True;
 end;
 
 
@@ -773,6 +796,9 @@ begin
     end;
     if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
       Blob := 'strvar ' + ArgNode.Text + #10
+    else if (ArgNode.NodeKind = gnkIdentifier) and IsRecordVar(ArgNode.Text) then
+      { const/var record formal (Batch 25 Length(GetS(R))). }
+      Blob := 'recvar ' + ArgNode.Text + #10
     else if IsSupportedOwnedStringReturnArgument(ACallNode, ArgNode,
       ArgIndex - 1) and StringReturnFunctionNameFromNode(ArgNode, SourceName) then
     begin

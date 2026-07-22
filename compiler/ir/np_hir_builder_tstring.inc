@@ -13,15 +13,17 @@ begin
     Dec(FPendingParamCount);
     Inc(FPendingParamLlvmIdx);
   end
-  else if FInStartFunc then
+  else if FInStartFunc and (Length(ANode.Operand) > 0) and
+    (ANode.Operand[1] <> '$') then
   begin
-    { Global variable: register as global }
+    { True program-level string global. Compiler temps ($str_len_tmp_*,
+      $str_arg_*) must stay function-local 24B allocas so sret + Length work. }
     RegisterGlobal(ANode.Operand + '$ts', GetPtrType);
     FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType);
   end
   else
   begin
-    { Local variable: single 24B alloca + tstring_init }
+    { Local / temp: single 24B alloca + tstring_init }
     EmitTStringInit(ANode.Operand);
   end;
 end;
@@ -206,6 +208,7 @@ var
   FuncName, ArgBlob, DstName, PartBlob, ObjName, SlotText: string;
   DstPtr, V, DataPtr, LenVal, ObjSlot, SelfPtr, TablePtr, FnPtr,
     SlotVal: THIRValueId;
+  ArgTypeId: THIRTypeId;
   TabPos, I, ArgPartCount, ArgCount, SlotIdx: LongInt;
   ArgParts: array of string;
   ArgValues: array of THIRValueId;
@@ -365,7 +368,7 @@ begin
       end
       else
       begin
-        V := ParseIntExprArg(ArgParts[I]);
+        V := ParseIntExprArgTyped(ArgParts[I], ArgTypeId);
         if V <> 0 then
         begin
           if ArgCount >= Length(ArgValues) then
@@ -374,7 +377,19 @@ begin
             SetLength(ArgTypes, ArgCount + 8);
           end;
           ArgValues[ArgCount] := V;
-          ArgTypes[ArgCount] := GetIntType;
+          { recvar / varref / pointer formals must stay ptr — defaulting to
+            GetIntType made constref record args into i64 and broke sret calls
+            like GetS(R) / Length(GetS(R)). }
+          if (Copy(ArgParts[I], 1, 7) = 'recvar ') or
+            (Copy(ArgParts[I], 1, 7) = 'varref ') or
+            (ArgTypeId = GetPtrType) then
+            ArgTypes[ArgCount] := GetPtrType
+          else if (ArgTypeId <> 0) and HirTypeIsInt(ArgTypeId) then
+            ArgTypes[ArgCount] := GetIntType
+          else if ArgTypeId <> 0 then
+            ArgTypes[ArgCount] := ArgTypeId
+          else
+            ArgTypes[ArgCount] := GetIntType;
           Inc(ArgCount);
         end;
       end;

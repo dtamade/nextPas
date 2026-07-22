@@ -155,32 +155,12 @@ end;
 
 procedure THIRBuilder.ProcessStringTempOwnedRuntime(
   const ANode: TTypedHirNode);
-var
-  Instr: THIRInstr;
-  FuncName, TempName: string;
-  TabPos: LongInt;
-  TsSlot: THIRValueId;
 begin
-  TempName := ANode.Operand;
-  TabPos := Pos(#9, TempName);
-  if TabPos > 0 then
-    TempName := Copy(TempName, 1, TabPos - 1);
-  FuncName := ANode.DisplayName;
-
-  TsSlot := FindAlloca(TempName + '$ts');
-  if TsSlot <> 0 then
-  begin
-    { TString path: call function, result stored via tstring_assign or sret }
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikCall;
-    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.CallTarget := FuncName;
-    SetLength(Instr.Operands, 1);
-    Instr.Operands[0].ValueId := TsSlot;
-    Instr.Operands[0].TypeId := GetPtrType;
-    EmitInstr(Instr);
-  end;
+  { Same operand shape as assign-tstring-call-runtime:
+      TempName #9 'callee ' FuncName #9 arg0 #9 arg1 ...
+    Earlier path only passed the sret slot (no formals), so
+    Length(GetS(R)) dropped the const record arg and broke sret ABI. }
+  ProcessAssignTStringCall(ANode);
 end;
 
 procedure THIRBuilder.ProcessStringTempBorrowArgRuntime(
@@ -207,9 +187,11 @@ begin
   TsSlot := FindAlloca(TempName + '$ts');
   if TsSlot <> 0 then
   begin
+    { np_tstring_len is i64; keep $len as i64 so store/load match without
+      requiring tip-only store.cast ValueLlvmType machinery. }
     LenSlot := EmitTStringLen(TsSlot);
-    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(32, True));
-    EmitStore(GetIntTypeByWidth(32, True), LenSlot, FindAlloca(TempName + '$len'));
+    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(64, True));
+    EmitStore(GetIntTypeByWidth(64, True), LenSlot, FindAlloca(TempName + '$len'));
   end;
 end;
 
