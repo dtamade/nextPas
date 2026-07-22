@@ -345,6 +345,55 @@ begin
   S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
+procedure THIRBuilder.EmitExprFieldStrLen(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs, LenVal: THIRValueId;
+  Target, Rest: string;
+  FieldIdx, SpacePos: LongInt;
+begin
+  { Length(Self.FName) / Length(R.S): GEP to inline TString field, then
+    np_tstring_len(field_ptr). Arg format: "<base> <fieldIdx>".
+    Class/var-param slots hold a pointer; local record allocas/globals are the
+    buffer itself (same rule as ProcessAssignTStringFieldLoad). }
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+  begin
+    Target := Copy(AArg, 1, SpacePos - 1);
+    Rest := Copy(AArg, SpacePos + 1, Length(AArg));
+    FieldIdx := StrToIntDef(Rest, 0);
+  end
+  else
+  begin
+    Target := AArg;
+    FieldIdx := 0;
+  end;
+  V := FindAlloca(Target);
+  if V = 0 then
+    Exit;
+  if FindAllocaType(Target) = GetPtrType then
+    V := EmitLoad(GetPtrType, V);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
+  EmitInstr(Instr);
+  Rhs := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  LenVal := EmitTStringLen(Instr.ResultId);
+  if LenVal <> 0 then
+    S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
+end;
+
 procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
   const AIntrinsic: string);
 var

@@ -328,7 +328,13 @@ begin
       end
       else if AInstr.IntrinsicName = 'str_const' then
       begin
-        Op := Copy(AInstr.CallTarget, 2, Length(AInstr.CallTarget) - 2);
+        { CallTarget may be decoded content (assign-tstring-literal) or a
+          quoted token from older paths. Only strip one surrounding quote pair. }
+        Op := AInstr.CallTarget;
+        if (Length(Op) >= 2) and
+          (((Op[1] = '''') and (Op[Length(Op)] = '''')) or
+           ((Op[1] = '"') and (Op[Length(Op)] = '"'))) then
+          Op := Copy(Op, 2, Length(Op) - 2);
         Emit('  ' + ValueRef(AInstr.ResultId) +
           ' = getelementptr i8, ptr @.str.' + IntToStr(
             AddStrConstant(Op)) + ', i64 0');

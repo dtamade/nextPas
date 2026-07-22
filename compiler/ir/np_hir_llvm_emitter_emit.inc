@@ -142,13 +142,15 @@ begin
     FCurrentDISubprogram := -1;
 
   Emit('');
+  { alignstack=16: freestanding frames can otherwise leave rsp 8-mod-16;
+    llc then emits movaps for bulk zero stores and SIGSEGV on cleanup. }
   if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
     (Pos('np_object_string_cleanup_', AFunc.Name) = 1) then
     Emit('define internal ' + RetStr + ' @' + AFunc.Name +
-      '(' + ParamStr + ') {')
+      '(' + ParamStr + ') #0 {')
   else
     Emit('define ' + RetStr + ' @' + AFunc.Name +
-      '(' + ParamStr + ') {');
+      '(' + ParamStr + ') #0 {');
 
   if AFunc.Blocks <> nil then
     for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do

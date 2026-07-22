@@ -119,6 +119,7 @@ begin
       else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
       else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)
       else if Token = 'rload' then EmitExprRLoad(S, Arg)
+      else if Token = 'fieldstrlen' then EmitExprFieldStrLen(S, Arg)
       else if Token = 'add' then EmitExprBinOp(S, hikAdd)
       else if Token = 'sub' then EmitExprBinOp(S, hikSub)
       else if Token = 'mul' then EmitExprBinOp(S, hikMul)

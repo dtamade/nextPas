@@ -338,6 +338,10 @@ begin
   { Emit debug info metadata section at the end of the module }
   if FDebugInfoEnabled then
     EmitDebugMetadataSection;
+
+  { Shared by all define bodies (#0). Keep freestanding stack 16-byte aligned. }
+  Emit('');
+  Emit('attributes #0 = { alignstack=16 nounwind }');
 end;
 
 {$I np_hir_llvm_emitter_helpers.inc}

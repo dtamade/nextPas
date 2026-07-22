@@ -266,7 +266,7 @@ begin
       if FieldPtr <> 0 then
         EmitTStringFini(FieldPtr);
 
-      ZeroVal := EmitConstIntSmart(0);
+      ZeroVal := EmitConstIntOfType(0, GetIntType);
       if ZeroVal <> 0 then
       begin
         for Offset := 0 to 2 do

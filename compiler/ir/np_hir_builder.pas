@@ -163,6 +163,7 @@ type
     procedure EmitExprArrElemRef(var S: TExprStack; const AArg: string);
     procedure EmitExprFieldRef(var S: TExprStack; const AArg: string);
     procedure EmitExprRLoad(var S: TExprStack; const AArg: string);
+    procedure EmitExprFieldStrLen(var S: TExprStack; const AArg: string);
     procedure EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
       const AIntrinsic: string);
     procedure EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);

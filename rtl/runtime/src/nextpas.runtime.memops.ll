@@ -18,6 +18,23 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 target triple = "x86_64-unknown-linux-gnu"
 
 ; ============================================================
+; libc ABI shims — llc lowers llvm.memcpy/memset to memcpy/memset;
+; freestanding link of libnprt must not require host -lc for those.
+; ============================================================
+define ptr @memcpy(ptr %dst, ptr %src, i64 %n) {
+entry:
+  call void @np_memcpy(ptr %dst, ptr %src, i64 %n)
+  ret ptr %dst
+}
+
+define ptr @memset(ptr %dst, i32 %c, i64 %n) {
+entry:
+  %b = trunc i32 %c to i8
+  call void @np_memset(ptr %dst, i8 %b, i64 %n)
+  ret ptr %dst
+}
+
+; ============================================================
 ; np_memcpy — 不重叠拷贝 (dst != src 区域)
 ; ============================================================
 define void @np_memcpy(ptr %dst, ptr %src, i64 %n) {

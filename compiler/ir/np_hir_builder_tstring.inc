@@ -88,7 +88,8 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntTypeByWidth(32, True);
+  { Runtime ABI: np_tstring_len returns i64 (SizeInt-compatible). }
+  Instr.TypeId := GetIntTypeByWidth(64, True);
   Instr.IntrinsicName := 'tstring_len';
   SetLength(Instr.Operands, 1);
   Instr.Operands[0].ValueId := AValue;
@@ -134,11 +135,11 @@ begin
   Instr.CallTarget := LitValue;
   EmitInstr(Instr);
   LitPtr := Instr.ResultId;
-  { Step 2: emit literal length as i32 constant }
+  { Step 2: emit literal length as i64 constant (matches np_tstring_from_literal). }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntTypeByWidth(32, True);
+  Instr.TypeId := GetIntTypeByWidth(64, True);
   Instr.IntrinsicName := 'const:' + IntToStr(Length(LitValue));
   EmitInstr(Instr);
   LenConst := Instr.ResultId;
@@ -152,7 +153,7 @@ begin
   Instr.Operands[1].ValueId := LitPtr;
   Instr.Operands[1].TypeId := GetPtrType;
   Instr.Operands[2].ValueId := LenConst;
-  Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
+  Instr.Operands[2].TypeId := GetIntTypeByWidth(64, True);
   EmitInstr(Instr);
 end;
 
@@ -345,7 +346,8 @@ begin
         Instr.CallTarget := PartBlob;
         EmitInstr(Instr);
         DataPtr := Instr.ResultId;
-        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntTypeByWidth(32, True));
+        { Open-ABI / runtime len is i64 (np_tstring_from_literal / create). }
+        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntTypeByWidth(64, True));
         if (DataPtr <> 0) and (LenVal <> 0) then
         begin
           if (ArgCount + 1) >= Length(ArgValues) then
@@ -357,7 +359,7 @@ begin
           ArgTypes[ArgCount] := GetPtrType;
           Inc(ArgCount);
           ArgValues[ArgCount] := LenVal;
-          ArgTypes[ArgCount] := GetIntTypeByWidth(32, True);
+          ArgTypes[ArgCount] := GetIntTypeByWidth(64, True);
           Inc(ArgCount);
         end;
       end
@@ -472,7 +474,10 @@ begin
   if DstPtr = 0 then Exit;
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
-  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { Class / var-param record slots hold a pointer; local record allocas are
+    the buffer itself. Only load when the slot is ptr-typed. }
+  if FindAllocaType(VarName) = GetPtrType then
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
   { GEP to field offset }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -521,7 +526,10 @@ begin
 
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
-  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { Class / var-param record slots hold a pointer; local record allocas are
+    the buffer itself (record:N). Only load when the slot is ptr-typed. }
+  if FindAllocaType(VarName) = GetPtrType then
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -570,11 +578,11 @@ begin
     Instr.Operands[0].ValueId := TsTmp;
     Instr.Operands[0].TypeId := GetPtrType;
     EmitInstr(Instr);
-    { literal length constant }
+    { literal length constant — i64 to match np_tstring_from_literal ABI }
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikLoad;
-    Instr.TypeId := GetIntTypeByWidth(32, True);
+    Instr.TypeId := GetIntTypeByWidth(64, True);
     Instr.IntrinsicName := 'const:' + IntToStr(Length(SrcName));
     EmitInstr(Instr);
     LenConst := Instr.ResultId;
@@ -587,7 +595,7 @@ begin
     Instr.Operands[1].ValueId := SrcPtr;
     Instr.Operands[1].TypeId := GetPtrType;
     Instr.Operands[2].ValueId := LenConst;
-    Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
+    Instr.Operands[2].TypeId := GetIntTypeByWidth(64, True);
     EmitInstr(Instr);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.Kind := hikIntrinsic;
