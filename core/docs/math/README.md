@@ -12,8 +12,10 @@ uses
 ```
 
 Use submodules only for narrower imports, such as `nextpas.core.math.vec` or
-`nextpas.core.math.random`. Prefer **math** for apps; **simd** `Array*` is kernel-level
-(no open-array bounds). Batch arrays require **equal lengths** (see `API.md`).
+`nextpas.core.math.random`. **`nextpas.core.math` is the only recommended application
+entry.** Prefer **math** for apps; **simd** `Array*` is kernel-level (no open-array
+bounds). All Batch open-arrays (scalar **and** vector) require **equal lengths**
+(see `API.md`).
 
 Detailed behavior contracts live in `API.md`; this README stays compact.
 

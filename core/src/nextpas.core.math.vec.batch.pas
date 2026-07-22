@@ -76,7 +76,7 @@ function BatchClamp(const AVectors: array of TVec3f;
 
 { Double (TVec*d) — minimal public parity with F32 core set.
   M-V1: value-type element loops via TVec*d methods (no private simd backend).
-  Same length policy: min(inputs[, outputs]); empty → 0. }
+  Same length policy as scalar Batch: equal lengths required; empty → 0. }
 
 function BatchDot(const ALeft, ARight: array of TVec2d;
                   var AResults: array of Double): SizeInt; overload;
@@ -109,8 +109,35 @@ function BatchClamp(const AVectors: array of TVec3d;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.math.scalar,
-  nextpas.core.math.vec.batch.simd;
+  nextpas.core.math.vec.batch.simd,
+  nextpas.core.text.conv;
+
+{ Length policy (usability Wave-2): same as math.batch.simd ResolveEqualOrMin. }
+
+function ResolveEqualOrMin(const A, B: SizeInt): SizeInt; inline;
+begin
+  if (A = 0) or (B = 0) then
+    Exit(0);
+  if A = B then
+    Exit(A);
+{$IFDEF NEXTPAS_MATH_BATCH_TRUNCATE_MIN}
+  if A < B then
+    Result := A
+  else
+    Result := B;
+{$ELSE}
+  raise EArgumentError.Create(
+    'Batch: array lengths must match (got ' + IntToStr(Int64(A)) +
+    ' vs ' + IntToStr(Int64(B)) + ')');
+{$ENDIF}
+end;
+
+function ResolveEqualOrMin3(const A, B, C: SizeInt): SizeInt; inline;
+begin
+  Result := ResolveEqualOrMin(ResolveEqualOrMin(A, B), C);
+end;
 
 { BatchDot - TVec2f }
 function BatchDot(const ALeft, ARight: array of TVec2f;
@@ -118,11 +145,7 @@ function BatchDot(const ALeft, ARight: array of TVec2f;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
   for i := 0 to LCount - 1 do
     AResults[i] := ALeft[i].Dot(ARight[i]);
   Result := LCount;
@@ -179,9 +202,7 @@ function BatchTransform(const AMatrix: TMat3f;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := (AMatrix * TVec3f.Create(ASource[i].X, ASource[i].Y, 1.0)).XY;
   Result := LCount;
@@ -218,11 +239,7 @@ function BatchDot(const ALeft, ARight: array of TVec2d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
   for i := 0 to LCount - 1 do
     AResults[i] := ALeft[i].Dot(ARight[i]);
   Result := LCount;
@@ -233,11 +250,7 @@ function BatchDot(const ALeft, ARight: array of TVec3d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
   for i := 0 to LCount - 1 do
     AResults[i] := ALeft[i].Dot(ARight[i]);
   Result := LCount;
@@ -248,11 +261,7 @@ function BatchDot(const ALeft, ARight: array of TVec4d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
   for i := 0 to LCount - 1 do
     AResults[i] := ALeft[i].Dot(ARight[i]);
   Result := LCount;
@@ -293,9 +302,7 @@ function BatchNormalize(const ASource: array of TVec3d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := ASource[i].Normalize;
   Result := LCount;
@@ -307,9 +314,7 @@ function BatchTransform(const AMatrix: TMat3d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := (AMatrix * TVec3d.Create(ASource[i].X, ASource[i].Y, 1.0)).XY;
   Result := LCount;
@@ -321,9 +326,7 @@ function BatchTransform(const AMatrix: TMat4d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := AMatrix.MultPoint(ASource[i]);
   Result := LCount;
@@ -335,11 +338,7 @@ function BatchLerp(const AStart, AEnd: array of TVec3d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin3(Length(AStart), Length(AEnd), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := AStart[i].Lerp(AEnd[i], AT);
   Result := LCount;
@@ -351,9 +350,7 @@ function BatchClamp(const AVectors: array of TVec3d;
 var
   i, LCount: SizeInt;
 begin
-  LCount := Length(AVectors);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(AVectors), Length(ADest));
   for i := 0 to LCount - 1 do
     ADest[i] := AVectors[i].Clamp(AMin, AMax);
   Result := LCount;

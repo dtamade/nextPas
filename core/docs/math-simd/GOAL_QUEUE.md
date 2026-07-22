@@ -46,6 +46,13 @@ CURRENT=IDLE
 
 Strict batch equal-length (default); `BatchLog*` alias; `TryBatchLn*`; docs CONTRACT 1.5 / API app-vs-kernel / numeric contract pointer.
 
+### Usability Wave-2  【done 2026-07-21】
+
+- P0-1: `vec.batch` / `vec.batch.simd` strict equal-length (same policy as scalar Batch)
+- P0-2: simd README app-entry warning + math-first quickstart
+- P0-3: RTL residual **6→4**（`fs.ReadDir` + dispatchapi `TSourceLines`）；`TThread` 四文件
+  待 thread owner 加固 `TWorkerThread` 后再清零
+
 
 ---
 

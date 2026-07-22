@@ -26,16 +26,15 @@
 **FPU mask 契约**：`Get/SetExceptionMask` 在 x86_64 上同时写 MXCSR 与 x87 CW，并清 sticky 状态；
 FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIMD batch 的 `fsin`/`fcos`/`fyl2x` scalar tail。
 
-**测试树 residual（WARN，不阻塞 landing；S4 收敛后）**：
-- `core/tests/nextpas.core.math/**`：已无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
-- `core/tests/nextpas.core.simd/**`：已无 FPC `Math`（迁到 `nextpas.core.math`，含
-  `NaN`/`Infinity`/`NegInfinity` 命名特殊值）；bench 计时已迁
-  `nextpas.core.time.base.TInstant`（不再 `uses Unix|Windows|BaseUnix`）。
-- **仍保留的 live residual（6 files）**，均为真实符号依赖，不是死 uses：
-  - `Classes` + `TThread`：`simd.concurrent(.testcase)`、`direct.testcase`、
-    `dispatchapi.testcase`、`cpuinfo.lazy.testcase`
-  - `SysUtils` + `FindFirst`/`DirectoryExists`：`cpuinfo.testcase`
-- 后续可选：`TThread` 迁 `nextpas.core.thread`；目录探测迁 platform/fs owner。
+**测试树 residual（Wave-2 部分收口）**：
+- `core/tests/nextpas.core.math/**`：无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
+- `core/tests/nextpas.core.simd/**`：无 FPC `Math`；cpuinfo sysfs 用 `nextpas.core.fs.ReadDir`；
+  dispatchapi 源审计用本地 `TSourceLines`（不再 `Classes.TStringList`）。
+- **仍保留 live residual（4 files，`Classes`+`TThread`）**：
+  `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`。
+  原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
+  （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
+- Gate：`production=0`；`test=4` WARN（不阻塞 landing）。
 
 `System.Sin/Sqrt/...` 等语言级 intrinsic 应集中在 `math.trig`/`math.scalar` 出口；consumer 与 simd 应调用 math owner，避免业务路径散落 `System.*`。
 
@@ -56,9 +55,12 @@ FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIM
 
 ### 0.2 Batch open-array 长度策略（默认严格）
 
-见 `API.md`「Batch open-array length policy」。实现集中在
-`math.batch.simd` 的 `MinArrayCount*` / `ResolveEqualOrMin*`。
-`{$DEFINE NEXTPAS_MATH_BATCH_TRUNCATE_MIN}` 恢复旧 min 截断。
+见 `API.md`「Batch open-array length policy」。实现：
+
+- 标量 Batch：`math.batch.simd` 的 `ResolveEqualOrMin*`
+- 向量 Batch：`math.vec.batch` / `math.vec.batch.simd` 同构 helper
+
+`{$DEFINE NEXTPAS_MATH_BATCH_TRUNCATE_MIN}` 恢复旧 min 截断（两路共用同一 define）。
 
 ### 0.3 超越 near-parity（NEON sample）
 

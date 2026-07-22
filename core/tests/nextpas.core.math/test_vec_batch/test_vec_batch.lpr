@@ -4,6 +4,7 @@ program test_vec_batch;
 
 uses
   nextpas.core.test,
+  nextpas.core.errors,
   nextpas.core.math;
 
 var
@@ -194,15 +195,20 @@ var
   LLeft: array[0..2] of TVec3f;
   LRight: array[0..0] of TVec3f;
   LResults: array[0..2] of Single;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LLeft[0] := TVec3f.Create(1.0, 0.0, 0.0);
   LLeft[1] := TVec3f.Create(0.0, 1.0, 0.0);
   LLeft[2] := TVec3f.Create(0.0, 0.0, 1.0);
   LRight[0] := TVec3f.Create(1.0, 0.0, 0.0);
-  LCount := BatchDot(LLeft, LRight, LResults);
-  Check(LCount = 1, 'BatchDot mismatched length returns min');
-  CheckNear(1.0, LResults[0], 0.0, 'BatchDot mismatched [0]');
+  LRaised := False;
+  try
+    BatchDot(LLeft, LRight, LResults);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'BatchDot mismatched lengths raise EArgumentError');
 end;
 
 procedure TestBatchNormalizeZero;
@@ -409,15 +415,20 @@ var
   LLeft: array[0..2] of TVec3d;
   LRight: array[0..0] of TVec3d;
   LResults: array[0..2] of Double;
-  LCount: SizeInt;
+  LRaised: Boolean;
 begin
   LLeft[0] := TVec3d.Create(1.0, 0.0, 0.0);
   LLeft[1] := TVec3d.Create(0.0, 1.0, 0.0);
   LLeft[2] := TVec3d.Create(0.0, 0.0, 1.0);
   LRight[0] := TVec3d.Create(1.0, 0.0, 0.0);
-  LCount := BatchDot(LLeft, LRight, LResults);
-  Check(LCount = 1, 'BatchDot TVec3d mismatched returns min');
-  CheckNear(1.0, LResults[0], 0.0, 'BatchDot TVec3d mismatched value');
+  LRaised := False;
+  try
+    BatchDot(LLeft, LRight, LResults);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'BatchDot TVec3d mismatched lengths raise EArgumentError');
 end;
 
 begin

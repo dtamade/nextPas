@@ -1,7 +1,12 @@
 # nextpas.core.simd 模块
 
-> 最后更新: 2026-07-19
+> 最后更新: 2026-07-21
 > **开发主线**: [roadmap.md](roadmap.md)（Phase 20+）。当前活动清单: [plan.md](plan.md)。
+
+> **⚠ 应用入口不是本模块。** 游戏 / 业务 / 一般数值请用
+> [`nextpas.core.math`](../math/API.md)（`Batch*`、`TVec*`，有 open-array 长度策略）。
+> 本模块的 `Array*` / `VecF32x*` 是 **内核 / 专家** API：指针级、**无** 长度边界校验，
+> 调用方拥有长度与对齐。误用可导致静默内存破坏。
 
 ## 概述
 
@@ -44,8 +49,23 @@
 
 ## 快速入门
 
+### 应用（推荐）
+
 ```pascal
-uses nextpas.core.simd;
+uses nextpas.core.math;  // not simd
+
+var
+  InA, OutA: array[0..3] of Single;
+begin
+  // open-array Batch: equal lengths required (see math/API.md)
+  BatchSinF32(InA, OutA);
+end;
+```
+
+### 专家 / 内核（本模块）
+
+```pascal
+uses nextpas.core.simd;  // expert only: no open-array bounds
 
 var
   A, B, C: TVecF32x4;

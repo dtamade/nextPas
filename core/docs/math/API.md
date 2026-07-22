@@ -16,6 +16,9 @@ APIs (no open-array bounds; caller owns length). Do not use simd as the default 
 
 ### Batch open-array length policy (usability)
 
+Applies to **all** open-array Batch APIs: scalar (`Batch*F32/F64`) **and** vector
+(`BatchDot` / `BatchNormalize` / `BatchTransform` / `BatchLerp` / `BatchClamp` on `TVec*`).
+
 - All related open-array arguments must have the **same Length** when any is non-empty.
 - Mismatched non-empty lengths → `EArgumentError` (`Batch: array lengths must match …`).
 - Any empty side → return `0`, no raise.
