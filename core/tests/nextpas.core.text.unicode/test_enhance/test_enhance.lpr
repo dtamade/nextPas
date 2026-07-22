@@ -26,6 +26,10 @@ begin
   CheckEqual(Int64(Ord(usGreek)), Int64(Ord(GetScript($0391))), 'Alpha is Greek');  // Α
   CheckEqual(Int64(Ord(usCyrillic)), Int64(Ord(GetScript($0410))), 'A is Cyrillic');  // А
   CheckEqual(Int64(Ord(usHan)), Int64(Ord(GetScript($4E2D))), '中 is Han');  // 中
+  Check(HasScript(Ord('A'), usLatin), 'A HasScript Latin');
+  Check(not HasScript(Ord('A'), usHan), 'A not HasScript Han');
+  Check(HasScript($3001, usHan) or HasScript($3001, usCommon) or HasScript($3001, usInherited),
+    'U+3001 script ext');
 end;
 
 procedure TestBlockProperties;
@@ -267,6 +271,44 @@ begin
   Check(Length(LResults) >= 3, 'Fullwidth comma splits CJK into segments');
 end;
 
+procedure TestBidiVisualOrder;
+var
+  LRes: TBidiResolveResult;
+  LMap, LInv: TBidiIndexArray;
+  LLevels: TBidiLevelArray;
+  LText, LVis: string;
+  I: SizeInt;
+begin
+  { Pure LTR: identity visual map }
+  LRes := ResolveBidi('abc', 0);
+  CheckEqual(Int64(Length(LRes.VisualToLogical)), Int64(3), 'LTR visual len');
+  CheckEqual(Int64(LRes.VisualToLogical[0]), Int64(0), 'LTR vis0');
+  CheckEqual(Int64(LRes.VisualToLogical[2]), Int64(2), 'LTR vis2');
+  LInv := InvertBidiIndexMap(LRes.VisualToLogical, 3);
+  CheckEqual(Int64(LInv[0]), Int64(0), 'LTR inv0');
+  CheckEqual(Int64(LInv[2]), Int64(2), 'LTR inv2');
+  CheckEqual(ApplyBidiVisualOrder('abc', 0), 'abc', 'LTR Apply identity');
+
+  { Hebrew אב (U+05D0 U+05D1) auto RTL paragraph → visual reverse }
+  LText := #$D7#$90#$D7#$91; { UTF-8 of 05D0 05D1 }
+  LRes := ResolveBidi(LText, 2);
+  Check(Length(LRes.VisualToLogical) = 2, 'Hebrew visual len 2');
+  CheckEqual(Int64(LRes.VisualToLogical[0]), Int64(1), 'Hebrew vis0=1');
+  CheckEqual(Int64(LRes.VisualToLogical[1]), Int64(0), 'Hebrew vis1=0');
+  LVis := ApplyBidiVisualOrder(LText, 2);
+  CheckEqual(LVis, #$D7#$91#$D7#$90, 'Hebrew Apply reverses');
+
+  { ReorderBidiVisually matches Resolve map for same levels }
+  SetLength(LLevels, Length(LRes.Levels));
+  for I := 0 to High(LRes.Levels) do
+    LLevels[I] := LRes.Levels[I];
+  LMap := ReorderBidiVisually(LLevels);
+  CheckEqual(Int64(Length(LMap)), Int64(Length(LRes.VisualToLogical)), 'Reorder len');
+  for I := 0 to High(LMap) do
+    CheckEqual(Int64(LMap[I]), Int64(LRes.VisualToLogical[I]), 'Reorder matches Resolve');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.enhance');
   T.Test('Script properties', @TestScriptProperties);
@@ -277,5 +319,6 @@ begin
   T.Test('convenience functions', @TestConvenienceFunctions);
   T.Test('Next* standalone APIs', @TestNextAPIs);
   T.Test('word segmentation boundaries', @TestWordBoundaries);
+  T.Test('Bidi visual order (P2-3)', @TestBidiVisualOrder);
   if not T.Run then Halt(1);
 end.

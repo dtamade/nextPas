@@ -12,7 +12,8 @@ program test_conformance_grapheme;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
@@ -195,12 +196,12 @@ begin
         Continue;
 
       LPipe := Pos('|', LLine);
-      Check(LPipe > 0, Format('missing | line %d', [LLineNo]));
+      Check(LPipe > 0, TextFormat('missing | line %d', [LLineNo]));
 
       ParseCpList(Copy(LLine, 1, LPipe - 1), LCps, LCpCount);
       ParseBreakFlags(Copy(LLine, LPipe + 1, MaxInt), LExp, LFlagCount);
       CheckEqual(Int64(LCpCount + 1), Int64(LFlagCount),
-        Format('flag count line %d', [LLineNo]));
+        TextFormat('flag count line %d', [LLineNo]));
 
       LText := BuildUtf8(LCps, LCpCount);
       ObservedBreaksBefore(LText, LCpCount, LObs);
@@ -226,7 +227,7 @@ begin
 
       if LExpStr <> LObsStr then
         CheckEqual(LExpStr, LObsStr,
-          Format('line %d cps=%s', [LLineNo, Copy(LLine, 1, LPipe - 1)]));
+          TextFormat('line %d cps=%s', [LLineNo, Copy(LLine, 1, LPipe - 1)]));
 
       Inc(LChecked);
     end;
@@ -234,7 +235,7 @@ begin
     Close(LFile);
   end;
 
-  Check(LChecked >= 1000, Format('expected ~1093 rows, got %d', [LChecked]));
+  Check(LChecked >= 1000, TextFormat('expected ~1093 rows, got %d', [LChecked]));
 end;
 
 begin

@@ -6,7 +6,6 @@
 {$mode objfpc}{$H+}
 program test_tstring;
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.text.tstring;
 

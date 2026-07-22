@@ -40,6 +40,18 @@ function ResolveBidiClassesWithBrackets(const AClasses: array of TBidiClass;
 function ResolveBidi(const AText: string;
   const AParagraphDir: Integer = 2): TBidiResolveResult;
 
+{ UAX#9 L2 visual reorder from resolved levels only (codepoint indices).
+  Skips BIDI_LEVEL_REMOVED. VisualToLogical[i] = logical index of visual position i. }
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray;
+
+{ Inverse of VisualToLogical. LogicalToVisual[log] = visual index, or -1 if removed. }
+function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
+  const ALogicalCount: SizeInt): TBidiIndexArray;
+
+{ Resolve + reorder UTF-8 by codepoint visual order (TUI display string). }
+function ApplyBidiVisualOrder(const AText: string;
+  const AParagraphDir: Integer = 2): string;
+
 implementation
 
 uses
@@ -914,5 +926,122 @@ begin
   SetLength(Cps, Count);
   Result := ResolveBidiClassesWithBrackets(Classes, Cps, AParagraphDir);
 end;
+
+
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray;
+var
+  N, I, J, K, Start, VisCount, MaxLevel, Lev: SizeInt;
+  Tmp: SizeInt;
+begin
+  N := Length(ALevels);
+  if N = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+  MaxLevel := 0;
+  for I := 0 to N - 1 do
+    if (ALevels[I] <> BIDI_LEVEL_REMOVED) and (ALevels[I] > MaxLevel) then
+      MaxLevel := ALevels[I];
+  SetLength(Result, N);
+  VisCount := 0;
+  for I := 0 to N - 1 do
+    if ALevels[I] <> BIDI_LEVEL_REMOVED then
+    begin
+      Result[VisCount] := I;
+      Inc(VisCount);
+    end;
+  SetLength(Result, VisCount);
+  Lev := MaxLevel;
+  while Lev > 0 do
+  begin
+    I := 0;
+    while I < VisCount do
+    begin
+      if ALevels[Result[I]] < Lev then
+      begin
+        Inc(I);
+        Continue;
+      end;
+      Start := I;
+      while (I < VisCount) and (ALevels[Result[I]] >= Lev) do
+        Inc(I);
+      J := Start;
+      K := I - 1;
+      while J < K do
+      begin
+        Tmp := Result[J];
+        Result[J] := Result[K];
+        Result[K] := Tmp;
+        Inc(J);
+        Dec(K);
+      end;
+    end;
+    Dec(Lev);
+  end;
+end;
+
+function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
+  const ALogicalCount: SizeInt): TBidiIndexArray;
+var
+  I, L: SizeInt;
+begin
+  SetLength(Result, ALogicalCount);
+  for I := 0 to ALogicalCount - 1 do
+    Result[I] := -1;
+  for I := 0 to High(AVisualToLogical) do
+  begin
+    L := AVisualToLogical[I];
+    if (L >= 0) and (L < ALogicalCount) then
+      Result[L] := I;
+  end;
+end;
+
+function ApplyBidiVisualOrder(const AText: string;
+  const AParagraphDir: Integer): string;
+var
+  LRes: TBidiResolveResult;
+  LCps: array of TUnicodeCodepoint;
+  LCount, I, LUsed, LVis: SizeInt;
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LBuf: array[0..3] of Byte;
+  LLen: Byte;
+  J: Integer;
+begin
+  if AText = '' then
+    Exit('');
+  LRes := ResolveBidi(AText, AParagraphDir);
+  LCount := 0;
+  SetLength(LCps, Length(AText) + 4);
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
+  while LIter.Next(LCp) do
+  begin
+    if LCount >= Length(LCps) then
+      SetLength(LCps, Length(LCps) * 2);
+    LCps[LCount] := LCp;
+    Inc(LCount);
+  end;
+  if LCount = 0 then
+    Exit('');
+  SetLength(Result, LCount * 4 + 8);
+  LUsed := 0;
+  for I := 0 to High(LRes.VisualToLogical) do
+  begin
+    LVis := LRes.VisualToLogical[I];
+    if (LVis < 0) or (LVis >= LCount) then
+      Continue;
+    LLen := UTF8Encode(LCps[LVis], @LBuf[0]);
+    if LLen = 0 then
+      Continue;
+    if LUsed + LLen > Length(Result) then
+      SetLength(Result, (LUsed + LLen) * 2 + 8);
+    for J := 0 to Integer(LLen) - 1 do
+      Result[LUsed + J + 1] := Chr(LBuf[J]);
+    Inc(LUsed, LLen);
+  end;
+  SetLength(Result, LUsed);
+end;
+
 
 end.

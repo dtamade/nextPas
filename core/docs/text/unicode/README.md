@@ -6,7 +6,7 @@
 
 模块族采用 **门面 + 子模块** 架构：`nextpas.core.text.unicode` 是消费者入口，只做类型别名和 inline forward；真实算法和数据在各子模块中。
 
-**导航**：[ROADMAP](ROADMAP.md) · [CONTRACT](CONTRACT.md) · [SCORECARD](SCORECARD.md) · [API-REFERENCE](API-REFERENCE.md) · [COOKBOOK](COOKBOOK.md) · [PERFORMANCE](PERFORMANCE.md)
+**导航**：[ROADMAP](ROADMAP.md) · [CONTRACT](CONTRACT.md) · [错误策略](../ERROR_MODEL.md) · [SCORECARD](SCORECARD.md) · [API-REFERENCE](API-REFERENCE.md) · [COOKBOOK](COOKBOOK.md) · [PERFORMANCE](PERFORMANCE.md)
 
 ## 模块架构
 
@@ -312,7 +312,7 @@ end;
 make -C core/tests/nextpas.core.text.unicode gate
 ```
 
-导航：[ROADMAP](ROADMAP.md) · [SCORECARD](SCORECARD.md) · [CONTRACT](CONTRACT.md)
+导航：[ROADMAP](ROADMAP.md) · [SCORECARD](SCORECARD.md) · [CONTRACT](CONTRACT.md) · [ERROR_MODEL](ERROR_MODEL.md)
 
 ### UCD 升版一条龙
 

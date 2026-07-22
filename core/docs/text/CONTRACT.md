@@ -82,13 +82,18 @@ text.pas           ← UTF-8 日常门面（re-export 常用符号）
 
 ## 3. 错误处理
 
-| 场景 | 策略 |
-|------|------|
-| StrToInt 无效输入 | 抛 EConvertError |
-| TryStrToInt 无效输入 | 返回 False |
-| TStringView nil+非零长度 | 抛 EArgumentNil |
-| 非法 UTF-8 | U+FFFD |
-| 无效转义序列 | 抛 EConvertError 或 TUnescapeError |
+**真源**：[ERROR_MODEL.md](ERROR_MODEL.md)（P3-2 三层模型 L0/L1/L2）。
+
+| 场景 | 策略 | 层 |
+|------|------|-----|
+| StrToInt 无效输入 | 抛 `EConvertError` | L1 |
+| TryStrToInt 无效输入 | 返回 False | L1 |
+| TStringView 非空但 Data=nil | 抛 `EInvalidArgument` | L1 |
+| 非法 UTF-8（normalize/case/segment…） | U+FFFD，消费 1 字节，不抛 | L0 |
+| JSON unescape 缓冲 API | `out TUnescapeError` | L1 枚举 |
+| IDNA（仅 unicode 门面） | `TIDNAErrorKind`，不抛 | L2 |
+
+详见 [ERROR_MODEL.md](ERROR_MODEL.md)。
 
 ---
 
@@ -139,7 +144,7 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 4. 无 CLDR tailored grapheme/word
 5. East_Asian_Width 真表（UCD 16.0）；LB19a F|W|H；列宽 A→1
 6. **locale Case**（tr/az）与完整 segment/bidi/collate 在 **`text.unicode`**；`text` 门面仅 root case 子集（见 ROADMAP 门面表）
-7. `UTF8ToTitle` = 逐码点 title；词首 Title → ROADMAP **M2**
+7. `UTF8ToTitle` = 逐码点 title；**`UTF8ToTitleWords`** = 词首 title（M2）
 
 ---
 
@@ -147,6 +152,7 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 
 | 日期 | 版本 | 变更描述 |
 |------|------|----------|
+| 2026-07-21 | 1.4 | P3-2：错误策略真源 ERROR_MODEL.md；修正 View 异常类型 |
 | 2026-07-20 | 1.3 | M1：gate 入口 + ROADMAP/SCORECARD；门面/限制与 unicode live 对齐 |
 | 2026-07-20 | 1.2 | LineBreak UAX#14 官方全绿；硬/软 Line 双语义 |
 | 2026-07-19 | 1.1 | Conformance + grapheme 真源 + GB9c；测试表与子模块清单对齐 live |

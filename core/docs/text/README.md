@@ -241,3 +241,5 @@ end;
 
 - 这是真正的高频 facade surface，还是 owner 子模块里的专用能力？
 - 它有没有先保住 ASCII/标量真值，再去做 SIMD 或 Unicode 扩展？
+
+相关：[ERROR_MODEL.md](ERROR_MODEL.md)（P3-2 错误策略真源）

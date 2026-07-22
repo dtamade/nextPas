@@ -303,10 +303,69 @@ P := UnicodeSegmenter.NextLine(Text, P);
 P := NextLineBreak(Text, P);
 ```
 
-## IDNA 域名（P2-5）
+## Bidi 视觉序（TUI RTL，P2-3）
 
 ```pascal
 uses nextpas.core.text.unicode;
-ACE := IDNAToASCII('münchen.de');
-Uni := IDNAToUnicode(ACE);
+
+// 完整解析：段落等级 + levels + VisualToLogical
+R := ResolveBidi(MixedHebrewEnglish, 2); // auto
+// R.VisualToLogical[vis] = logical codepoint index
+
+// 仅有 levels 时重排
+Map := ReorderBidiVisually(R.Levels);
+
+// 逻辑 → 视觉
+L2V := InvertBidiIndexMap(R.VisualToLogical, Length(R.Levels));
+
+// 显示串：按视觉序拼 UTF-8（不含 L3 镜像）
+Display := ApplyBidiVisualOrder(MixedHebrewEnglish, 2);
 ```
+
+
+## 错误策略（P3-2）
+
+三层模型见 [ERROR_MODEL.md](../ERROR_MODEL.md)：
+
+- **L0** Unicode 处理：非法 UTF-8 → U+FFFD，不抛
+- **L1** StrTo* / Format / View：异常或 Try*
+- **L2** IDNA：`TIDNAErrorKind`，不抛
+
+## IDNA 域名（P2-5 / P3-1 · 生产样板）
+
+**只推荐 kind 重载**；失败必须检查 `K`。
+
+```pascal
+uses nextpas.core.text.unicode;
+
+var
+  K: TIDNAErrorKind;
+  ACE, Uni: string;
+begin
+  ACE := IDNAToASCII('münchen.de', K);
+  if K <> idnaOk then
+  begin
+    // IDNAErrorKindName(K) — 稳定协议用 kind，勿解析英文串
+    Exit;
+  end;
+  Uni := IDNAToUnicode(ACE, K);
+  // Nontransitional：ß → ss → 纯 ASCII 标签
+  // IDNAToASCII('stra' + #$C3#$9F + 'e.de', K) = 'strasse.de'
+end;
+```
+
+⚠ **勿用** `IDNAToASCII(s)` / `IDNAToUnicode(s)` 无 out 重载：失败仅返回 `''`，**丢失 kind**，生产易静默吞错。
+兼容：`out AError: string` = `IDNAErrorKindName(kind)`。
+
+Map 步可单独调用：`ApplyIdnaMap` / `GetIdnaMapStatus`。
+
+## 日常门面别名（text vs unicode）
+
+| 日常 `nextpas.core.text` | `text.unicode` |
+|--------------------------|----------------|
+| `TextToUpper` / `UTF8ToUpper` | `UTF8ToUpper`（+ locale 重载） |
+| `TextToLower` / `UTF8ToLower` | 同上 |
+| `UTF8ToTitle` / `UTF8ToTitleWords` | 全量 + locale |
+| — | IDNA / segment / bidi / collate |
+
+locale Case **仅** `text.unicode`。
