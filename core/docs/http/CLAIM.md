@@ -1,7 +1,7 @@
 # nextpas.core.http — What we claim (R1)
 
 **Authority**: 本文件是**对外/对内宣称**的冻结表述。证据细节见 `BENCHMARKS.md`、`REPRO.md`、`CONTRACT.md`。执行顺序见 `ROADMAP.md`。
-**Reviewed**: 2026-07-21（**R1** + **E3s 抽检** + H2 KPI **draft only**）
+**Reviewed**: 2026-07-21（**R1** + **E3s** + **HS-0/HS-1** H2 peer multi-run Met；package **仍 No**）
 **Host class**: Linux amd64，同机 harness；**不是**跨机排行榜。
 
 ---
@@ -30,7 +30,7 @@
 
 | 宣称 | 状态 | 原因 |
 |------|------|------|
-| Scale-ready (H1/**H2** package) | **No** | Peer mid/press **single-run Met**（~2.07× / 0.92×）后仍缺 multi-run + 产品 Yes；见 `BENCHMARKS` § H2 KPI |
+| Scale-ready (H1/**H2** package) | **No** | Peer KPI **HS-0 冻结** + multi-run mid **1.86×** / press **0.93× Met (HS-1)**；仍缺 **产品 Yes**（HS-2a）；见 `BENCHMARKS` § H2 KPI |
 | Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
 | Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
@@ -52,10 +52,11 @@
 
 | Residual | 说明 |
 |----------|------|
-| H2 package scale | Peer **single-run Met** after H2-opt；package **仍 No**（缺 multi-run + 产品 Yes） |
+| H2 package scale | KPI **HS-0 frozen**；multi-run mid **1.86×** / press **0.93× Met (HS-1)**；**产品 Yes** 仍缺 → package **No** |
 | E3s 抽检 (2026-07-21) | RPS 1.97×/1.72× Go；p99 0.23×/0.27×；ladder 1k/10k stable=1 — **维持** H1 scale-ready |
-| H2 Go peer harness | **landed** — `compare_h2` + `run_h2_comparison.sh` |
+| H2 Go peer harness | **landed** — `compare_h2` + `run_h2_comparison.sh`（HS-1 加 `--runs`） |
 | H2-opt (2026-07-21) | TCP_NODELAY on dial；write coalesce；pool PING grace 1s；bench PingTimeout=0 |
+| H2 peer self press/mid≥3× | **Dropped (HS-0)** — H2-opt 后双方高吞吐 CPU-bound，自比 ~1.05× 不再作门 |
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL per-conn ALPN |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
 | H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
@@ -111,8 +112,23 @@
 |------|------|
 | E3 门闩是否仍 Met？ | **Yes** — E3s runs=3：RPS ≥0.80×、p99 ≤2×（`BENCHMARKS` § E3） |
 | 是否因比值从 ~2.2× 落到 ~1.7–2.0× 收回 scale-ready？ | **No** — 仍远高于 0.80；噪声带内 |
-| H2 KPI 是否冻结为宣称门闩？ | **Draft + peer single-run Met**（H2-opt 后 mid 2.07× / press 0.92×） |
+| H2 KPI 是否冻结为宣称门闩？ | **Draft only**（当时）；**HS-0 已冻结为 evidence bar**（仍非 package claim） |
 | 是否因此升 package claim？ | **No**（仍缺 multi-run + 产品 Yes） |
+
+---
+
+## 6.2 HS-0 / HS-1 — H2 Seal（2026-07-21）
+
+| 问题 | 决议 |
+|------|------|
+| H2 peer KPI 形状是否冻结？ | **Yes (HS-0)** — mid 8×16×100 / press 16×32×100；peer **ratio of medians ≥0.80×**（runs≥3）；stable=1 |
+| self press/mid ≥3× 是否仍作门？ | **No — Dropped**（H2-opt 后双方 CPU-bound） |
+| multi-run 证据？ | **HS-1 Met** — mid median 1.86× / press 0.93×（runs=3，all stable） |
+| 是否升 package claim？ | **No** — multi-run Met 后仍须 **产品明确 Yes**（HS-2a） |
+| 默认执行态？ | HS-0 → HS-1 → **STOP**（无产品 Yes 不空转 package） |
+
+**Done when (HS-0)**：CLAIM residual + BENCHMARKS/REPRO 门闩一致；package 仍 No。 **Met (2026-07-21).**
+**Done when (HS-1)**：`--runs` harness + mid/press multi-run 表；package 仍 No。 **Met (2026-07-21).**
 
 ---
 
@@ -124,4 +140,4 @@
 | **REPRO.md** | 如何在 1h 内复核 |
 | **BENCHMARKS.md** | 数字表与日期 |
 | **CONTRACT.md** | 行为契约与 residual 细节 |
-| **ROADMAP.md** | 下一波执行（R1 后默认 **STOP**） |
+| **ROADMAP.md** | 下一波执行（Era HS Done → 默认 **STOP**；升 package 须产品 Yes） |

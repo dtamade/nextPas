@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-21（**H2-opt**：TCP_NODELAY 等；peer mid **~2.07× Met**；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-21（**Era HS Done**：multi-run mid **1.86×** / press **0.93× Met**；package **仍 No**；默认 **STOP**）
 
 ---
 
@@ -119,7 +119,9 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
 | Wave H2P-1..3 | **landed** — mid/press scale evidence + TLS-ALPN e2e |
 | Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
-| **下一执行点** | **STOP**（无新需求；H3 Blocked；勿假 package scale-ready） |
+| Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped；package **仍 No** |
+| Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness；package **仍 No** |
+| **下一执行点** | **STOP**（H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -857,7 +859,21 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 **R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐；默认 STOP。 **R0+R1 Met (2026-07-21).**
 
-**推荐路径**：`… → H2P-3 → R1 → STOP`（H3 Blocked；升 package 须新 KPI + 产品需求）
+**推荐路径（历史）**：`… → H2P-3 → R1 → STOP` → 现接 **Era HS**。
+
+## Era HS — H2 Seal（KPI freeze + multi-run；不开 package）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **HS-0** | **landed** | 冻结 H2 peer KPI：mid 8×16×100 / press 16×32×100；peer **ratio of medians ≥0.80×**（runs≥3）；stable=1；废弃 self press/mid≥3×；CLAIM package **仍 No** |
+| **HS-1** | **landed** | `run_h2_comparison.sh --runs`；mid median **1.86×** / press **0.93× Met**；h2_client/facade/tls_alpn；package **仍 No** → **STOP** |
+| **HS-1b** | parked | 仅 press/mid multi-run NotMet 时：有界热修再跑；**本轮不需要** |
+| **HS-2a** | parked | 仅产品明确 Yes 后升 CLAIM package |
+
+**HS Done when（默认）**：HS-0+HS-1 landed；multi-run 表可 1h 复核；package **仍 No**；NEXT=STOP。 **Met (2026-07-21).**
+**升 package**：须 multi-run Met **且** 产品 Yes（HS-2a）。
+
+**推荐路径**：`… → R1 → HS-0 → HS-1 → STOP`（H3 Blocked；勿假 package）
 
 ---
 
@@ -878,13 +894,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 + H2P-1..3 + R1 Met
-2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = STOP**（idle；有产品/KPI 需求再开波）
-4. 无指令时不要空转 H3 / 不要假 package scale-ready
+1. Parity Plus + RH-1 + H2P-1..3 + R1 + **HS-0/HS-1 Met**
+2. H2 peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
+3. H3 Blocked — 跳过；禁止空 facade
+4. **NEXT = STOP**（idle；升 package 须产品 Yes → HS-2a）
+5. 无指令时不要空转 H3 / 不要假 package scale-ready
 ```
 
-**默认 STOP。** 升 CLAIM package 须：冻结 H2 KPI 门闩 + multi-run 证据 + 产品明确 Yes（见 `CLAIM.md` §6）。
+**默认 STOP。** 升 CLAIM package 须：冻结 KPI（HS-0 Met）+ multi-run Met（HS-1 Met）+ **产品明确 Yes**（HS-2a；见 `CLAIM.md`）。
 
 ---
 
@@ -907,6 +924,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |
+| 2026-07-21 | **HS-0 landed**：H2 peer KPI 冻结（mid/press ≥0.80× multi-run；self 3× Dropped）；package No；NEXT=HS-1 |
 | 2026-07-21 | **H2-opt**：TCP_NODELAY + write coalesce + pool probe grace；peer mid ~2.07× / press ~0.92× **Met**；package No；STOP |
 | 2026-07-21 | **Go h2 peer**：`compare_h2` + `run_h2_comparison`；pre-fix mid 0.10×；package No |
 | 2026-07-21 | **E3s 抽检** RPS 1.97×/1.72× p99 0.23×/0.27× ladder stable；**H2 KPI draft**；NEXT 仍 STOP |

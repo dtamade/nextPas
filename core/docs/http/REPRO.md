@@ -103,20 +103,28 @@ make -C benchmarks/nextpas.core.http/bench_h2_server smoke
 **读数**：`stable=1`；`req/s=`；`completed=`（mid ~2.8–3k；press 16×32 ~11k，**不是** H1 KPI）。
 **不宣称** Scale-ready (H1/H2)。
 
-### 4.1 H2 KPI draft + Go peer（候选；非宣称）
+### 4.1 H2 peer KPI + Go peer（HS-0 frozen；非 package claim）
 
-见 `BENCHMARKS.md` § **H2 KPI draft**。
+见 `BENCHMARKS.md` § **H2 KPI frozen**。
+
+**冻结门闩（evidence bar）**：mid 8×16×100 / press 16×32×100；**ratio of medians ≥ 0.80×**（runs≥3）；每 run stable=1。
+self press/mid≥3× **已 Dropped**。**不宣称** H1+H2 package。
 
 ```sh
+# multi-run (HS-1；--runs 默认 1 兼容 single-run)
 ./benchmarks/nextpas.core.http/run_h2_comparison.sh \
-  --connections 8 --streams 16 --batches 100
+  --connections 8 --streams 16 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_comparison/hs1-mid-8x16x100-runs3.md
 ./benchmarks/nextpas.core.http/run_h2_comparison.sh \
-  --connections 16 --streams 32 --batches 100
+  --connections 16 --streams 32 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_comparison/hs1-press-16x32x100-runs3.md
 ```
 
-候选门闩：self mid floor ≥2240 + stable；**peer nextPas/Go ≥ 0.80×**。
+**读数**：`summary_ratio_nextpas_over_go`（中位 ratio）与 `summary_gate_peer_0_80`。
 **2026-07-21 first peer**：0.10× / 0.14× NotMet。
-**2026-07-21 H2-opt**：mid **~2.07×** / press **~0.92×** → peer **Met**（single-run）；package **仍 No**（缺 multi-run + 产品 Yes）。
+**2026-07-21 H2-opt single-run**：mid **~2.07×** / press **~0.92×** Met。
+**2026-07-21 HS-1 multi-run (runs=3)**：mid median **1.86× Met**；press median **0.93× Met**。
+**package 仍 No**（multi-run Met；**缺产品 Yes**）。
 
 ---
 

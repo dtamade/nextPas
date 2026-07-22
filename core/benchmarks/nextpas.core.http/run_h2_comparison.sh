@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compare nextPas bench_h2_server vs Go h2c peer (same multiplex shape).
-# Does not claim package scale-ready; emits ratio for H2 KPI draft peer gate.
+# Does not claim package scale-ready; emits ratio for H2 peer evidence bar (HS-0/HS-1).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,14 +9,18 @@ BUILD_DIR="${CORE_ROOT}/build/projects/nextpas.core.http/h2_comparison"
 CONNECTIONS=8
 STREAMS=16
 BATCHES=100
+RUNS=1
 OUTPUT_PATH=""
 
 usage() {
   cat <<'EOF'
-usage: run_h2_comparison.sh [--connections N] [--streams N] [--batches N] [--output PATH]
+usage: run_h2_comparison.sh [--connections N] [--streams N] [--batches N]
+                            [--runs N] [--output PATH]
 
 Runs nextPas bench_h2_server (epoll multiplex) and Go compare_h2 peer with the
-same shape. Prints summary lines and nextPas/Go req/s ratio.
+same shape. With --runs N (default 1), repeats each side N times and reports
+median req/s and ratio of medians (H1 E3 style). Prints summary lines and
+nextPas/Go peer gate (≥ 0.80 on median ratio).
 EOF
 }
 
@@ -25,11 +29,21 @@ while [[ $# -gt 0 ]]; do
     --connections) CONNECTIONS="${2:?}"; shift 2 ;;
     --streams) STREAMS="${2:?}"; shift 2 ;;
     --batches) BATCHES="${2:?}"; shift 2 ;;
+    --runs) RUNS="${2:?}"; shift 2 ;;
     --output) OUTPUT_PATH="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if ! [[ "${RUNS}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--runs must be a positive integer" >&2
+  exit 2
+fi
+if ! [[ "${CONNECTIONS}" =~ ^[1-9][0-9]*$ && "${STREAMS}" =~ ^[1-9][0-9]*$ && "${BATCHES}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--connections, --streams, and --batches must be positive integers" >&2
+  exit 2
+fi
 
 mkdir -p "${BUILD_DIR}"
 
@@ -47,52 +61,151 @@ NEXTPAS_BIN="${CORE_ROOT}/build/projects/nextpas.core.http/bench_h2_server/bench
 GO_BIN="${BUILD_DIR}/bench_h2_server_go"
 SHAPE=(--connections "${CONNECTIONS}" --streams "${STREAMS}" --batches "${BATCHES}")
 
-run_capture() {
-  local label="$1"
-  local bin="$2"
-  shift 2
-  local log="${BUILD_DIR}/${label}.log"
-  echo "=== run ${label} ===" >&2
-  "${bin}" "$@" | tee "${log}"
-  # emit last-line markers for parsers
-  grep -E '^(req/s|completed|failed|stable|connections|streams_per_batch|batches_per_conn|impl|operation)=' "${log}" || true
+RESULTS_TMP="$(mktemp "${BUILD_DIR}/h2-comparison-results.XXXXXX")"
+trap 'rm -f "${RESULTS_TMP}"' EXIT
+: > "${RESULTS_TMP}"
+
+parse_field() {
+  local log="$1"
+  local key="$2"
+  awk -F= -v k="${key}" '$1==k {v=$2} END{print v}' "${log}"
 }
 
-NEXTPAS_LOG="${BUILD_DIR}/nextpas.log"
-GO_LOG="${BUILD_DIR}/go.log"
+# TSV: run_index \t impl \t req_s \t completed \t failed \t stable
+append_row() {
+  local run_index="$1"
+  local impl="$2"
+  local log="$3"
+  local req_s completed failed stable
+  req_s="$(parse_field "${log}" "req/s")"
+  completed="$(parse_field "${log}" "completed")"
+  failed="$(parse_field "${log}" "failed")"
+  stable="$(parse_field "${log}" "stable")"
+  if [[ -z "${req_s}" || -z "${stable}" ]]; then
+    echo "unable to parse ${impl} run=${run_index} log=${log}" >&2
+    cat "${log}" >&2 || true
+    exit 1
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "${run_index}" "${impl}" "${req_s}" "${completed:-}" "${failed:-}" "${stable}" \
+    >> "${RESULTS_TMP}"
+}
 
 {
+  echo "comparison=http.server.h2.comparison"
   echo "shape=connections=${CONNECTIONS} streams=${STREAMS} batches=${BATCHES}"
+  echo "summary_shape=${CONNECTIONS}x${STREAMS}x${BATCHES}"
+  echo "runs=${RUNS}"
   echo "date=$(date -Iseconds 2>/dev/null || date)"
   echo
-  echo "=== nextpas ==="
-  "${NEXTPAS_BIN}" --mode multiplex --backend epoll "${SHAPE[@]}" | tee "${NEXTPAS_LOG}"
-  echo
-  echo "=== go ==="
-  "${GO_BIN}" "${SHAPE[@]}" | tee "${GO_LOG}"
-  echo
 
-  np_rps="$(awk -F= '/^req\/s=/{v=$2} END{print v}' "${NEXTPAS_LOG}")"
-  go_rps="$(awk -F= '/^req\/s=/{v=$2} END{print v}' "${GO_LOG}")"
-  np_stable="$(awk -F= '/^stable=/{v=$2} END{print v}' "${NEXTPAS_LOG}")"
-  go_stable="$(awk -F= '/^stable=/{v=$2} END{print v}' "${GO_LOG}")"
+  for run_index in $(seq 1 "${RUNS}"); do
+    echo "run=${run_index}"
+    np_log="${BUILD_DIR}/nextpas.run${run_index}.log"
+    go_log="${BUILD_DIR}/go.run${run_index}.log"
 
-  ratio="n/a"
-  if [[ -n "${np_rps}" && -n "${go_rps}" && "${go_rps}" -gt 0 ]]; then
-    ratio="$(awk -v a="${np_rps}" -v b="${go_rps}" 'BEGIN{printf "%.2f", a/b}')"
-  fi
+    echo "section=nextpas"
+    "${NEXTPAS_BIN}" --mode multiplex --backend epoll "${SHAPE[@]}" | tee "${np_log}"
+    append_row "${run_index}" "nextpas" "${np_log}"
+    echo
 
-  echo "summary=http.server.h2.comparison"
-  echo "summary_shape=${CONNECTIONS}x${STREAMS}x${BATCHES}"
-  echo "summary_nextpas_req/s=${np_rps}"
-  echo "summary_go_req/s=${go_rps}"
-  echo "summary_ratio_nextpas_over_go=${ratio}"
-  echo "summary_nextpas_stable=${np_stable}"
-  echo "summary_go_stable=${go_stable}"
-  echo "summary_gate_peer_0_80=$([ -n "${ratio}" ] && awk -v r="${ratio}" 'BEGIN{if(r+0>=0.80)print "Met";else if(r=="n/a")print "n/a";else print "NotMet"}')"
+    echo "section=go"
+    "${GO_BIN}" "${SHAPE[@]}" | tee "${go_log}"
+    append_row "${run_index}" "go" "${go_log}"
+    echo
+  done
+
+  # Also keep last-run aliases for single-run tooling compatibility
+  cp -f "${BUILD_DIR}/nextpas.run${RUNS}.log" "${BUILD_DIR}/nextpas.log"
+  cp -f "${BUILD_DIR}/go.run${RUNS}.log" "${BUILD_DIR}/go.log"
+
+  awk -F $'\t' '
+    function sort_values(values, count,    i, j, tmp) {
+      for (i = 1; i < count; i++) {
+        for (j = i + 1; j <= count; j++) {
+          if (values[j] < values[i]) {
+            tmp = values[i];
+            values[i] = values[j];
+            values[j] = tmp;
+          }
+        }
+      }
+    }
+
+    function median(values, count,    copy, i) {
+      delete copy;
+      for (i = 1; i <= count; i++) {
+        copy[i] = values[i];
+      }
+      sort_values(copy, count);
+      if ((count % 2) == 1) {
+        return copy[int((count + 1) / 2)];
+      }
+      return (copy[int(count / 2)] + copy[int(count / 2) + 1]) / 2.0;
+    }
+
+    {
+      impl = $2;
+      count[impl]++;
+      req_values[impl, count[impl]] = $3 + 0.0;
+      completed_values[impl, count[impl]] = $4 + 0.0;
+      failed_values[impl, count[impl]] = $5 + 0.0;
+      stable_values[impl, count[impl]] = $6 + 0;
+    }
+
+    END {
+      for (impl in count) {
+        delete current_req;
+        all_stable = 1;
+        for (i = 1; i <= count[impl]; i++) {
+          current_req[i] = req_values[impl, i];
+          if (stable_values[impl, i] != 1) {
+            all_stable = 0;
+          }
+        }
+        med_req = median(current_req, count[impl]);
+        printf "summary_impl=%s runs=%d median_req/s=%.0f all_stable=%d\n",
+          impl, count[impl], med_req, all_stable;
+        if (impl == "nextpas") {
+          np_med = med_req;
+          np_stable = all_stable;
+          np_runs = count[impl];
+        } else if (impl == "go") {
+          go_med = med_req;
+          go_stable = all_stable;
+          go_runs = count[impl];
+        }
+      }
+
+      ratio = "n/a";
+      gate = "n/a";
+      if (np_runs > 0 && go_runs > 0 && go_med > 0) {
+        ratio_val = np_med / go_med;
+        ratio = sprintf("%.2f", ratio_val);
+        if (np_stable == 1 && go_stable == 1 && ratio_val >= 0.80) {
+          gate = "Met";
+        } else {
+          gate = "NotMet";
+        }
+      } else if (np_runs > 0 && go_runs > 0) {
+        gate = "NotMet";
+      }
+
+      printf "summary=http.server.h2.comparison\n";
+      printf "summary_median_nextpas_req/s=%.0f\n", np_med + 0;
+      printf "summary_median_go_req/s=%.0f\n", go_med + 0;
+      printf "summary_nextpas_req/s=%.0f\n", np_med + 0;
+      printf "summary_go_req/s=%.0f\n", go_med + 0;
+      printf "summary_ratio_nextpas_over_go=%s\n", ratio;
+      printf "summary_nextpas_stable=%d\n", np_stable + 0;
+      printf "summary_go_stable=%d\n", go_stable + 0;
+      printf "summary_gate_peer_0_80=%s\n", gate;
+    }
+  ' "${RESULTS_TMP}"
 } | tee "${BUILD_DIR}/latest.md"
 
 if [[ -n "${OUTPUT_PATH}" ]]; then
+  mkdir -p "$(dirname "${OUTPUT_PATH}")"
   cp "${BUILD_DIR}/latest.md" "${OUTPUT_PATH}"
   echo "wrote ${OUTPUT_PATH}"
 fi
