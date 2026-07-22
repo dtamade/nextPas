@@ -71,12 +71,125 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       FModel.SetSymbolScope(SymbolId, ScopeId);
   end;
 
+  function FindDeclBody(const ADecl: TGreenNode): TGreenNode;
+  var
+    BodyIdx: LongInt;
+    BodyChild: TGreenNode;
+  begin
+    Result := nil;
+    if ADecl = nil then
+      Exit;
+    for BodyIdx := 0 to ADecl.ChildCount - 1 do
+    begin
+      BodyChild := ADecl.ChildAt(BodyIdx);
+      if (BodyChild <> nil) and
+        ((BodyChild.NodeKind = gnkBeginBlock) or
+         (BodyChild.NodeKind = gnkAsmBlock)) then
+        Exit(BodyChild);
+    end;
+  end;
+
+  { Host-free multi-unit: attach implementation bodies + unit init/fini without
+    exporting private symbols. RegisterProcedureBody updates the interface
+    entry (same name/owner/sig) so SeedFunctionBodies can lower MuTotal/etc.
+    System stays stub-only (full attach floods IR). Recovery counterpart:
+    AttachImplementationBodiesInNode @ recovery/compiler-system-wip-20260722. }
+  procedure AttachImplementationBodiesInNode(
+    const ANode: TGreenNode;
+    const AOwnerUnitId: string
+  );
+  var
+    ChildIdx: LongInt;
+    Child, BodyChild: TGreenNode;
+    SavedScopeId: LongInt;
+    UnitScopeId: LongInt;
+    HirId: LongInt;
+  begin
+    if ANode = nil then
+      Exit;
+    for ChildIdx := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(ChildIdx);
+      if Child = nil then
+        Continue;
+      if Child.NodeKind = gnkConstSection then
+      begin
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          ProcessConstSection(Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
+      else if Child.NodeKind = gnkTypeSection then
+      begin
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          ProcessTypeSection(Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
+      else if Child.NodeKind = gnkVarSection then
+      begin
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          ProcessVarSection(Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
+      else if (Child.NodeKind = gnkProcedureDecl) or
+        (Child.NodeKind = gnkFunctionDecl) then
+      begin
+        BodyChild := FindDeclBody(Child);
+        if BodyChild = nil then
+          Continue;
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          { Body only — do not SeedImportedCallableSymbol for impl-private names. }
+          RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
+      else if Child.NodeKind = gnkInitializationSection then
+      begin
+        FModel.AddRuntimeContract(NPSYSTEM_UNIT_INIT);
+        HirId := FModel.AddTypedHirNode(
+          'unit-init-runtime', AOwnerUnitId, 0, 0, AOwnerUnitId);
+        FModel.SetTypedHirNodeGreenRef(HirId, Child);
+      end
+      else if Child.NodeKind = gnkFinalizationSection then
+      begin
+        FModel.AddRuntimeContract(NPSYSTEM_UNIT_FINI);
+        HirId := FModel.AddTypedHirNode(
+          'unit-fini-runtime', AOwnerUnitId, 0, 0, AOwnerUnitId);
+        FModel.SetTypedHirNodeGreenRef(HirId, Child);
+      end
+      else if Child.NodeKind <> gnkUsesClause then
+        AttachImplementationBodiesInNode(Child, AOwnerUnitId);
+    end;
+  end;
+
   procedure RegisterBodiesInNode(
     const ANode: TGreenNode;
     const AOwnerUnitId: string
   );
   var
-    ChildIdx, BodyIdx: LongInt;
+    ChildIdx: LongInt;
     Child, BodyChild: TGreenNode;
     SavedScopeId: LongInt;
     UnitScopeId: LongInt;
@@ -112,6 +225,18 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := SavedScopeId;
         end;
       end
+      else if Child.NodeKind = gnkVarSection then
+      begin
+        UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+        SavedScopeId := FCurrentScopeId;
+        if UnitScopeId > 0 then
+          FCurrentScopeId := UnitScopeId;
+        try
+          ProcessVarSection(Child, AOwnerUnitId);
+        finally
+          FCurrentScopeId := SavedScopeId;
+        end;
+      end
       else if (Child.NodeKind = gnkProcedureDecl) or
         (Child.NodeKind = gnkFunctionDecl) then
       begin
@@ -121,39 +246,93 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := UnitScopeId;
         try
           SeedImportedCallableSymbol(Child, AOwnerUnitId, UnitScopeId);
-          BodyChild := nil;
-          for BodyIdx := 0 to Child.ChildCount - 1 do
-            if (Child.ChildAt(BodyIdx) <> nil) and
-              ((Child.ChildAt(BodyIdx).NodeKind = gnkBeginBlock) or
-               (Child.ChildAt(BodyIdx).NodeKind = gnkAsmBlock)) then
-            begin
-              BodyChild := Child.ChildAt(BodyIdx);
-              Break;
-            end;
+          BodyChild := FindDeclBody(Child);
           RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
         finally
           FCurrentScopeId := SavedScopeId;
         end;
       end
       else if Child.NodeKind = gnkInterfaceSection then
-        RegisterBodiesInNode(Child, AOwnerUnitId);
-      { gnkImplementationSection 跳过: 实现段声明对外部单元不可见 }
+        RegisterBodiesInNode(Child, AOwnerUnitId)
+      else if Child.NodeKind = gnkImplementationSection then
+      begin
+        { Multi-unit host-free body attach. Skip full System (IR flood). }
+        if not SameText(NormalizeUnitIdentity(AOwnerUnitId), 'system') then
+          AttachImplementationBodiesInNode(Child, AOwnerUnitId);
+      end;
     end;
+  end;
+
+  { Re-parse unit source and attach interface symbols + implementation bodies.
+    Symbol caches only store interface symbols — without this, host-free multi-unit
+    IR has call @MuTotal / empty np_unit_init_* stubs. }
+  procedure ParseAndRegisterUnitBodies(
+    const ASourcePath, ACanonicalName, AOwnerUnitId: string;
+    const ADiag: TDiagnosticsSink
+  );
+  var
+    LSourceText, LLine: string;
+    LUnitLexer: TLexerResult;
+    LUnitTree: TGreenTree;
+    LF: Text;
+    LPP: TPreprocessor;
+    LPPDefines: TDefineTable;
+    LIncResolver: TFileIncludeResolver;
+  begin
+    Assign(LF, ASourcePath);
+    {$I-}
+    Reset(LF);
+    {$I+}
+    if IOResult <> 0 then
+      Exit;
+    LSourceText := '';
+    while not Eof(LF) do
+    begin
+      ReadLn(LF, LLine);
+      if LSourceText <> '' then
+        LSourceText := LSourceText + #10;
+      LSourceText := LSourceText + LLine;
+    end;
+    Close(LF);
+    LUnitLexer := TLexerResult.Create(LSourceText);
+    LPPDefines := TDefineTable.Create(FAllocator);
+    LPPDefines.SeedFPCDefines;
+    if SameText(ACanonicalName, 'System') then
+      LPPDefines.Undef('FPC');
+    LIncResolver := TFileIncludeResolver.Create(ExtractFileDir(ASourcePath), FAllocator);
+    LIncResolver.AddSearchPath(ExtractFileDir(ASourcePath));
+    LIncResolver.AddSearchPath(
+      ExtractFileDir(ExtractFileDir(ASourcePath)) + DirectorySeparator + 'objpas');
+    LIncResolver.AddSearchPath(
+      ExtractFileDir(ExtractFileDir(ASourcePath)) + DirectorySeparator + 'objpas' +
+      DirectorySeparator + 'sysutils');
+    LIncResolver.AddSearchPath(
+      ExtractFileDir(ExtractFileDir(ASourcePath)) + DirectorySeparator + 'inc');
+    LPP := TPreprocessor.Create(LPPDefines, True, LIncResolver, FAllocator);
+    try
+      LPP.Process(LUnitLexer);
+      LUnitLexer.Free;
+      LUnitLexer := LPP.ToLexerResult;
+    finally
+      LPP.Free;
+    end;
+    LUnitTree := ParseGreenTree(LUnitLexer, ADiag, 0, FAllocator);
+    if (LUnitTree <> nil) and (LUnitTree.RootNode <> nil) then
+    begin
+      RegisterImportedUnitTree(LUnitTree, AOwnerUnitId);
+      RegisterBodiesInNode(LUnitTree.RootNode, AOwnerUnitId);
+    end
+    else if LUnitTree <> nil then
+      LUnitTree.Free;
+    LUnitLexer.Free;
   end;
 
 var
   OwnerUnitId: string;
   Index: LongInt;
   ResolvedUnit: TResolvedUnit;
-  SourceText, Line: string;
-  UnitLexer: TLexerResult;
-  UnitTree: TGreenTree;
-  F: Text;
   SourcePath: string;
   TmpDiag: TDiagnosticsSink;
-  PP: TPreprocessor;
-  PPDefines: TDefineTable;
-  IncResolver: TFileIncludeResolver;
   CacheIdx: LongInt;
   DiskUnit: TDiskCachedUnit;
   Fingerprint: UInt32;
@@ -210,6 +389,9 @@ begin
             FModel.SetSymbolParamSignature(FModel.SymbolCount, ParamSignature);
             FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
           end;
+        { Symbol cache has no bodies — re-parse for multi-unit host-free. }
+        ParseAndRegisterUnitBodies(SourcePath, ResolvedUnit.CanonicalName,
+          OwnerUnitId, TmpDiag);
         Continue;
       end;
 
@@ -268,101 +450,15 @@ begin
             CacheEntry^.Symbols.Push(CachedSym);
           end;
         end;
+        { Disk symbol cache has no bodies — re-parse for multi-unit host-free. }
+        ParseAndRegisterUnitBodies(SourcePath, ResolvedUnit.CanonicalName,
+          OwnerUnitId, TmpDiag);
         Continue;
       end;
 
-      Assign(F, SourcePath);
-      {$I-}
-      Reset(F);
-      {$I+}
-      if IOResult <> 0 then
-        Continue;
-      SourceText := '';
-      while not Eof(F) do
-      begin
-        ReadLn(F, Line);
-        if SourceText <> '' then
-          SourceText := SourceText + #10;
-        SourceText := SourceText + Line;
-      end;
-      Close(F);
-      UnitLexer := TLexerResult.Create(SourceText);
-      PPDefines := TDefineTable.Create(FAllocator);
-      PPDefines.SeedFPCDefines;
-      { The non-FPC branch is the compiler-visible System kernel surface. }
-      if SameText(ResolvedUnit.CanonicalName, 'System') then
-        PPDefines.Undef('FPC');
-      IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath), FAllocator);
-      IncResolver.AddSearchPath(ExtractFileDir(SourcePath));
-      IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'objpas');
-      IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'objpas' +
-        DirectorySeparator + 'sysutils');
-      IncResolver.AddSearchPath(
-        ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'inc');
-      PP := TPreprocessor.Create(PPDefines, True, IncResolver, FAllocator);
-      try
-        PP.Process(UnitLexer);
-        UnitLexer.Free;
-        UnitLexer := PP.ToLexerResult;
-      finally
-        PP.Free;
-      end;
-
-      SymBefore := FModel.SymbolCount;
-      UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0, FAllocator);
-      if (UnitTree <> nil) and (UnitTree.RootNode <> nil) then
-      begin
-        RegisterImportedUnitTree(UnitTree, OwnerUnitId);
-        RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
-      end
-      else if UnitTree <> nil then
-        UnitTree.Free;
-      UnitLexer.Free;
-      SymAfter := FModel.SymbolCount;
-
-      if SymbolCacheEligible and (SymAfter > SymBefore) and
-        SameText(ResolvedUnit.OriginClass, 'installed-source') then
-      begin
-        CacheEntry := AppendImportedUnitCacheEntry(
-          SourcePath, Age, SymAfter - SymBefore);
-        { Also build disk cache entry }
-        DiskUnit.UnitId := OwnerUnitId;
-        DiskUnit.SourcePath := SourcePath;
-        DiskUnit.Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
-        DiskUnit.SymbolCount := SymAfter - SymBefore;
-        SetLength(DiskUnit.Symbols, SymAfter - SymBefore);
-        for J := SymBefore to SymAfter - 1 do
-        begin
-          Sym := FModel.SymbolAt(J);
-          CachedSym.Name := Sym.Name;
-          CachedSym.Kind := Sym.Kind;
-          CachedSym.OwnerUnitId := Sym.OwnerUnitId;
-          CachedSym.ParamCount := Sym.ParamCount;
-          CachedSym.MinParamCount := Sym.MinParamCount;
-          CachedSym.ParamSignature := Sym.ParamSignature;
-          CachedSym.TypeId := Sym.TypeId;
-          if Sym.TypeId > 0 then
-            CachedSym.TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
-          else
-            CachedSym.TypeRefName := '';
-          CachedSym.ByteOffset := Sym.ByteOffset;
-          CacheEntry^.Symbols.Push(CachedSym);
-          DiskUnit.Symbols[J - SymBefore].Name := Sym.Name;
-          DiskUnit.Symbols[J - SymBefore].Kind := Sym.Kind;
-          DiskUnit.Symbols[J - SymBefore].OwnerUnitId := OwnerUnitId;
-          DiskUnit.Symbols[J - SymBefore].ParamCount := Sym.ParamCount;
-          DiskUnit.Symbols[J - SymBefore].MinParamCount := Sym.MinParamCount;
-          DiskUnit.Symbols[J - SymBefore].ParamSignature := Sym.ParamSignature;
-          if Sym.TypeId > 0 then
-            DiskUnit.Symbols[J - SymBefore].TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
-          else
-            DiskUnit.Symbols[J - SymBefore].TypeRefName := '';
-          DiskUnit.Symbols[J - SymBefore].ByteOffset := Sym.ByteOffset;
-        end;
-        GDiskCache.Save(DiskUnit);
-      end;
+      { Cold path: full parse + interface symbols + implementation bodies. }
+      ParseAndRegisterUnitBodies(SourcePath, ResolvedUnit.CanonicalName,
+        OwnerUnitId, TmpDiag);
     end;
   finally
     TmpDiag.Free;

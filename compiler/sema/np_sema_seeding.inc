@@ -320,6 +320,9 @@ end;
 procedure TSemanticAnalyzer.SeedRuntimeVarDecls;
 var
   RootNode: TGreenNode;
+  I: LongInt;
+  Tree: TGreenTree;
+  OwnerId: string;
 begin
   if not FNoFold then
     Exit;
@@ -333,6 +336,23 @@ begin
   if RootNode = nil then
     Exit;
   WalkRuntimeVarDecls(RootNode);
+  { Multi-unit host-free: unit-level vars (GMuAcc, ...) live in imported unit
+    ASTs registered by SeedImportedUnitBodies. Skip System to avoid flooding
+    IR with full kernel globals. }
+  if (FImportedUnitTrees <> nil) and (FImportedUnitOwners <> nil) then
+    for I := 0 to LongInt(FImportedUnitTrees.Count) - 1 do
+    begin
+      Tree := FImportedUnitTrees[I];
+      if (Tree = nil) or (Tree.RootNode = nil) then
+        Continue;
+      if I < LongInt(FImportedUnitOwners.Count) then
+        OwnerId := FImportedUnitOwners[I]
+      else
+        OwnerId := '';
+      if SameText(NormalizeUnitIdentity(OwnerId), 'system') then
+        Continue;
+      WalkRuntimeVarDecls(Tree.RootNode);
+    end;
 end;
 
 procedure TSemanticAnalyzer.SeedHaltCalls;
@@ -433,8 +453,10 @@ begin
     FCurrentBlockTerminated := False;
     FCurrentMethodClass := '';
 
-    // Normalize unit name: replace dots with underscores for LLVM function names
-    LNormalizedUnitName := StringReplace(Node.Operand, '.', '_', True);
+    { UnitId identity is lowercase (NormalizeUnitIdentity). TopologicalInitOrder
+      may carry CanonicalName case — without LowerCase, define/call symbols diverge
+      (e.g. @np_unit_init_MuInitLeaf vs @np_unit_init_muinitleaf). }
+    LNormalizedUnitName := LowerCase(StringReplace(Node.Operand, '.', '_', True));
 
     if Node.NodeKind = hnkUnitInitRuntime then
     begin

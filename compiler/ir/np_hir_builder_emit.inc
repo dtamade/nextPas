@@ -70,12 +70,17 @@ begin
     if IsVarParamAlloca(AArg) then
     begin
       V := EmitLoad(GetPtrType, V);
-      S.Push(EmitLoad(FindAllocaType(AArg), V));
+      if FindAllocaType(AArg) <> 0 then
+        S.PushTyped(EmitLoad(FindAllocaType(AArg), V), FindAllocaType(AArg))
+      else
+        S.PushTyped(EmitLoad(GetIntType, V), GetIntType);
     end
     else if FindAllocaType(AArg) = GetPtrType then
       S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+    else if FindAllocaType(AArg) <> 0 then
+      S.PushTyped(EmitLoad(FindAllocaType(AArg), V), FindAllocaType(AArg))
     else
-      S.Push(EmitLoad(FindAllocaType(AArg), V));
+      S.PushTyped(EmitLoad(GetIntType, V), GetIntType);
   end
   else if FSemaModel.LookupConstValue(AArg, ConstVal) then
   begin

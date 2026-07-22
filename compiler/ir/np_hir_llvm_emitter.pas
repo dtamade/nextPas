@@ -122,6 +122,8 @@ type
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
     procedure EmitImtGlobals;
+    function HasEmittedFunction(const AName: string): Boolean;
+    function NormalizeUnitLifecycleName(const AUnitName: string): string;
     procedure EmitUnitDeclares;
     procedure EmitUnitInitCalls;
     procedure EmitUnitFiniCalls;
@@ -221,14 +223,29 @@ begin
       if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal thread_local global ptr null')
       else
-        Emit('@g_' + G.Name + ' = internal thread_local global i64 0');
+      begin
+        { Match RegisterGlobal DeclType (e.g. Integer → i32). }
+        if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
+          Emit('@g_' + G.Name + ' = internal thread_local global i64 0')
+        else
+          Emit('@g_' + G.Name + ' = internal thread_local global ' +
+            TypeToLlvm(G.TypeId) + ' 0');
+      end;
     end
     else
     begin
       if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal global ptr null')
       else
-        Emit('@g_' + G.Name + ' = internal global i64 0');
+      begin
+        { Match RegisterGlobal DeclType (e.g. Integer → i32). Hardcoding i64
+          made load/store of unit vars like GMuAcc type-inconsistent. }
+        if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
+          Emit('@g_' + G.Name + ' = internal global i64 0')
+        else
+          Emit('@g_' + G.Name + ' = internal global ' +
+            TypeToLlvm(G.TypeId) + ' 0');
+      end;
     end;
   end;
 
