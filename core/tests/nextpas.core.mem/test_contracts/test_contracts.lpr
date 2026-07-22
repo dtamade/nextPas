@@ -368,8 +368,9 @@ begin
     'chunked arena should expose explicit aligned allocation');
   CheckContains(LArenaSource, 'lraw := fallocator.getmem(lallocsize);',
     'chunked arena should allocate segments via iallocator.getmem');
-  CheckContains(LArenaSource, 'fallocator.freemem(lraw)',
-    'chunked arena should release segments via iallocator.freemem');
+  { Era K: sized free via FreeMemOf (same IAllocator owner, known RawSize). }
+  CheckContains(LArenaSource, 'freememof(fallocator, lraw',
+    'chunked arena should release segments via freememof(iallocator, raw, size)');
 
   LBlockPoolSource := ReadSourceText(ResolveSourcePath(
     MEM_BLOCKPOOL_GROWABLE_SOURCE_PATH_FROM_TEST,
@@ -386,8 +387,8 @@ begin
     'growable block pool field should store iallocator');
   CheckContains(LBlockPoolSource, 'lraw := fallocator.getmem(lallocsize);',
     'growable block pool should allocate segments via iallocator.getmem');
-  CheckContains(LBlockPoolSource, 'fallocator.freemem(lraw)',
-    'growable block pool should release segments via iallocator.freemem');
+  CheckContains(LBlockPoolSource, 'freememof(fallocator, lraw',
+    'growable block pool should release segments via freememof(iallocator, raw, size)');
 end;
 
 procedure TestArenaUnitsUseExplicitArenaApi;
