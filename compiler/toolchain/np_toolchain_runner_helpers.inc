@@ -25,10 +25,14 @@ begin
   if FsIsDir(AResolvedPath) then
     Exit;
 
-  if not FsMkdirAll(AResolvedPath) then
+  { FsMkdirAll is procedure (INV-5): failure raises; re-wrap as toolchain error. }
+  try
+    FsMkdirAll(AResolvedPath);
+  except
     raise EToolchainRunnerError.Create(
       AFailureKind + ': ' + AResolvedPath
     );
+  end;
 end;
 
 procedure EnsureParentDirectory(
