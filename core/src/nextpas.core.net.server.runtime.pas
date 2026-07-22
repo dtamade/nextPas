@@ -4,7 +4,7 @@ unit nextpas.core.net.server.runtime;
 
 interface
 
-uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline;
+uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline, nextpas.core.lockfree.mpsc;
 
 type
   TTcpServerPollSessionTarget = class;
@@ -94,13 +94,17 @@ type
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
+  { H5-1: T1 MPSC of Pointer → heap PCompletionNode (managed interfaces on node).
+    N worker Enqueue / single reactor Drain. See charter-h5-net-completion-mpsc. }
   TTcpServerPollCompletionQueue = class
   private
-    FLock: IMutex;
-    FItems: TTcpServerPollPendingCompletionArray;
-    FCount: SizeUInt;
+    type
+      TPointerMpsc = specialize TMpscQueueImpl<Pointer>;
+    var
+      FQueue: TPointerMpsc;
   public
     constructor Create;
+    destructor Destroy; override;
     procedure Enqueue(const ATicket: ITcpServerPollTargetTicket;
       const ACompletion: ITcpServerWorkCompletion;
       const AOutcome: TTcpServerWorkOutcome;
@@ -144,6 +148,12 @@ implementation
 uses nextpas.core.base.utils, nextpas.core.errors, nextpas.core.sync.mutex, nextpas.core.thread, nextpas.core.time.base;
 
 type
+  { Heap node so interfaces never enter T1 MPSC element type (unmanaged Pointer only). }
+  PCompletionNode = ^TCompletionNode;
+  TCompletionNode = record
+    Item: TTcpServerPollPendingCompletion;
+  end;
+
   TTcpServerWorkTask = class(TInterfacedObject)
   private
     FWork: ITcpServerWork;
@@ -416,8 +426,28 @@ end;
 constructor TTcpServerPollCompletionQueue.Create;
 begin
   inherited Create;
-  FLock := nextpas.core.sync.mutex.TMutex.Create;
-  FCount := 0;
+  FQueue := TPointerMpsc.Create;
+end;
+
+destructor TTcpServerPollCompletionQueue.Destroy;
+var
+  LPtr: Pointer;
+  LNode: PCompletionNode;
+begin
+  if FQueue <> nil then
+  begin
+    FQueue.Close;
+    while FQueue.TryDequeue(LPtr) do
+    begin
+      LNode := PCompletionNode(LPtr);
+      LNode^.Item.TargetTicket := nil;
+      LNode^.Item.Completion := nil;
+      Dispose(LNode);
+    end;
+    FQueue.Free;
+    FQueue := nil;
+  end;
+  inherited;
 end;
 
 procedure TTcpServerPollCompletionQueue.Enqueue(
@@ -426,52 +456,57 @@ procedure TTcpServerPollCompletionQueue.Enqueue(
   const AOutcome: TTcpServerWorkOutcome;
   const AOwnership: TTcpServerConnOwnership);
 var
-  LCapacity: SizeUInt;
+  LNode: PCompletionNode;
 begin
   if ACompletion = nil then
     Exit;
+  if FQueue = nil then
+    Exit;
 
-  FLock.Acquire;
-  try
-    LCapacity := SizeUInt(Length(FItems));
-    if FCount >= LCapacity then
-    begin
-      if LCapacity = 0 then
-        LCapacity := 4
-      else
-        LCapacity := LCapacity * 2;
-      SetLength(FItems, LCapacity);
-    end;
-    FItems[FCount].TargetTicket := ATicket;
-    FItems[FCount].Completion := ACompletion;
-    FItems[FCount].Outcome := AOutcome;
-    FItems[FCount].Ownership := AOwnership;
-    Inc(FCount);
-  finally
-    FLock.Release;
+  New(LNode);
+  LNode^.Item.TargetTicket := ATicket;
+  LNode^.Item.Completion := ACompletion;
+  LNode^.Item.Outcome := AOutcome;
+  LNode^.Item.Ownership := AOwnership;
+  if not FQueue.TryEnqueue(Pointer(LNode)) then
+  begin
+    LNode^.Item.TargetTicket := nil;
+    LNode^.Item.Completion := nil;
+    Dispose(LNode);
   end;
 end;
 
 function TTcpServerPollCompletionQueue.Drain: TTcpServerPollPendingCompletionArray;
 var
-  LI: SizeUInt;
+  LPtr: Pointer;
+  LNode: PCompletionNode;
+  LCount: SizeUInt;
+  LCap: SizeUInt;
 begin
   Result := nil;
-  FLock.Acquire;
-  try
-    if FCount = 0 then
-      Exit;
-    SetLength(Result, FCount);
-    for LI := 0 to FCount - 1 do
+  if FQueue = nil then
+    Exit;
+  LCount := 0;
+  LCap := 0;
+  while FQueue.TryDequeue(LPtr) do
+  begin
+    LNode := PCompletionNode(LPtr);
+    if LCount >= LCap then
     begin
-      Result[LI] := FItems[LI];
-      FItems[LI].TargetTicket := nil;
-      FItems[LI].Completion := nil;
+      if LCap = 0 then
+        LCap := 4
+      else
+        LCap := LCap * 2;
+      SetLength(Result, LCap);
     end;
-    FCount := 0;
-  finally
-    FLock.Release;
+    Result[LCount] := LNode^.Item;
+    LNode^.Item.TargetTicket := nil;
+    LNode^.Item.Completion := nil;
+    Dispose(LNode);
+    Inc(LCount);
   end;
+  if LCount <> LCap then
+    SetLength(Result, LCount);
 end;
 
 procedure TTcpServerPollCompletionQueue.Clear;
