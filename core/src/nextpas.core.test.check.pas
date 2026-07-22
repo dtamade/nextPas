@@ -211,6 +211,12 @@ procedure SoftCheckNear(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
+{ v8.27: Soft high-frequency second wave (Go t.Error; no raise). }
+procedure SoftCheckNil(AValue: Pointer; const AMessage: string = '');
+procedure SoftCheckNotNil(AValue: Pointer; const AMessage: string = '');
+procedure SoftCheckEmpty(const AValue: string; const AMessage: string = '');
+procedure SoftCheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
@@ -1338,6 +1344,66 @@ procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string);
 begin
   nextpas.core.test.base.SoftCheckContains(AHaystack, ANeedle, AMessage);
+end;
+
+procedure SoftCheckNil(AValue: Pointer; const AMessage: string);
+{ v8.27: Soft mirror of CheckNil — continues after fail. }
+var
+  LDetail: string;
+begin
+  if AValue = nil then
+    Exit;
+  LDetail := 'Expected nil but got $' + IntToHex(NativeUInt(AValue), 16);
+  if AMessage <> '' then
+    nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+  else
+    nextpas.core.test.base.SoftFail(LDetail);
+end;
+
+procedure SoftCheckNotNil(AValue: Pointer; const AMessage: string);
+var
+  LDetail: string;
+begin
+  if AValue <> nil then
+    Exit;
+  LDetail := 'Expected non-nil but got nil';
+  if AMessage <> '' then
+    nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+  else
+    nextpas.core.test.base.SoftFail(LDetail);
+end;
+
+procedure SoftCheckEmpty(const AValue: string; const AMessage: string);
+var
+  LDetail: string;
+begin
+  if Length(AValue) = 0 then
+    Exit;
+  LDetail := 'Expected empty string but got ' + IntToStr(Length(AValue)) +
+    ' char(s)';
+  if AMessage <> '' then
+    nextpas.core.test.base.SoftFail(AMessage + ': ' + LDetail)
+  else
+    nextpas.core.test.base.SoftFail(LDetail);
+end;
+
+procedure SoftCheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string);
+{ Case-insensitive SoftCheckContains; empty needle matches (same as CheckContainsCI). }
+var
+  LDetail: string;
+begin
+  if Length(ANeedle) = 0 then
+    Exit;
+  if PosCI(ANeedle, AHaystack) > 0 then
+    Exit;
+  if AMessage = '' then
+    LDetail := 'SoftCheckContainsCI expected to find "' + ANeedle +
+      '" in "' + AHaystack + '"'
+  else
+    LDetail := AMessage + ': "' + AHaystack + '" does not contain (ci) "' +
+      ANeedle + '"';
+  nextpas.core.test.base.SoftFail(LDetail);
 end;
 
 procedure Skip(const AReason: string);

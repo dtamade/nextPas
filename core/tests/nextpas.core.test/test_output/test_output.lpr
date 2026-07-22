@@ -2112,6 +2112,68 @@ begin
   CheckSnapshot(LOut, 'goldens', 'softfail.json');
 end;
 
+procedure TestB57SoftWave2ReportGolden;
+{ v8.27 B57: Soft second-wave default messages as TAP/JSON golden under FAIL_ON_CREATE. }
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+  LMsg: string;
+begin
+  { Fixture mirrors FormatSoftFailSummary join of SoftCheckNil/Empty/ContainsCI defaults. }
+  LMsg := 'Expected nil but got $0000000000000001; ' +
+    'Expected empty string but got 1 char(s); ' +
+    'SoftCheckContainsCI expected to find "zz" in "abc"';
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('softfail-wave2');
+  LResults[0].Passed := 0;
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'wave2_soft';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := LMsg;
+  LResults[0].Results[0].Duration := 0;
+
+  LOut := TAPReport(LResults, 'softfail-wave2');
+  CheckContains(LOut, 'not ok 1');
+  CheckContains(LOut, 'Expected nil but got');
+  CheckContains(LOut, 'SoftCheckContainsCI expected to find');
+  CheckSnapshot(LOut, 'goldens', 'softfail_wave2.tap');
+
+  LOut := JSONReport(LResults, 'softfail-wave2');
+  CheckContains(LOut, 'wave2_soft');
+  CheckContains(LOut, 'Expected empty string but got 1 char(s)');
+  CheckSnapshot(LOut, 'goldens', 'softfail_wave2.json');
+end;
+
+procedure TestB62HierarchicalFilterCase(const AC: TTestCase);
+{ v8.28 B62: hierarchical + brace/glob negative/positive path density.
+  Data: pattern|name|0|1  (0=must not match, 1=must match) }
+var
+  LPattern, LName, LExpect: string;
+  LPos, LPos2: Integer;
+  LRest: string;
+  LConfig: TTestConfig;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'B62 data pattern|name|expect');
+  LPattern := Copy(AC.Data, 1, LPos - 1);
+  LRest := Copy(AC.Data, LPos + 1, MaxInt);
+  LPos2 := Pos('|', LRest);
+  CheckTrue(LPos2 > 0, 'B62 data name|expect');
+  LName := Copy(LRest, 1, LPos2 - 1);
+  LExpect := Copy(LRest, LPos2 + 1, MaxInt);
+  LConfig := DefaultConfig;
+  SetTestFilter(LPattern);
+  try
+    if LExpect = '1' then
+      CheckTrue(MatchesFilter(LName, LConfig), AC.Name + ' should match')
+    else
+      CheckFalse(MatchesFilter(LName, LConfig), AC.Name + ' should not match');
+  finally
+    SetTestFilter('');
+  end;
+end;
+
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
 
 procedure TestFilterTableCase(const AC: TTestCase);
@@ -2271,6 +2333,7 @@ begin
   Suite.Test('B13 TAP formal compliance',     @TestB13TAPFormalCompliance);
   Suite.Test('B15 committed goldens strict CI', @TestB15CommittedGoldensStrictCI);
   Suite.Test('B29 SoftFail report golden',    @TestB29SoftFailReportGolden);
+  Suite.Test('B57 Soft wave2 report golden',  @TestB57SoftWave2ReportGolden);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);
@@ -2304,6 +2367,42 @@ begin
         'case_' + IntToStr(LI) + '*', 'other_' + IntToStr(LI), '0');
   end;
   Suite.TestTable('filter contracts', LFilterCases, @TestFilterTableCase);
+
+  { v8.28 B62: hierarchical Parent/Sub/* + brace negative density }
+  SetLength(LFilterCases, 0);
+  AppendFilterCase(LFilterCases, 'h-exact-yes', 'P/S', 'P/S', '1');
+  AppendFilterCase(LFilterCases, 'h-desc-yes', 'P/S', 'P/S/L', '1');
+  AppendFilterCase(LFilterCases, 'h-deep-yes', 'P/S', 'P/S/L/X', '1');
+  AppendFilterCase(LFilterCases, 'h-parent-prefix-yes', 'P/S', 'P', '1');
+  AppendFilterCase(LFilterCases, 'h-sib-no', 'P/S', 'P/T', '0');
+  AppendFilterCase(LFilterCases, 'h-other-no', 'P/S', 'Q/S', '0');
+  AppendFilterCase(LFilterCases, 'h-star-yes', 'P/*', 'P/A', '1');
+  AppendFilterCase(LFilterCases, 'h-star-no', 'P/*', 'Q/A', '0');
+  AppendFilterCase(LFilterCases, 'h-substar-yes', 'P/Sub*', 'P/SubA', '1');
+  AppendFilterCase(LFilterCases, 'h-substar-no', 'P/Sub*', 'P/Leaf', '0');
+  AppendFilterCase(LFilterCases, 'h-brace-yes-a', 'P/{A,B}', 'P/A', '1');
+  AppendFilterCase(LFilterCases, 'h-brace-yes-b', 'P/{A,B}', 'P/B', '1');
+  AppendFilterCase(LFilterCases, 'h-brace-no-c', 'P/{A,B}', 'P/C', '0');
+  AppendFilterCase(LFilterCases, 'h-brace-leaf-yes', 'P/{A,B}/L', 'P/A/L', '1');
+  AppendFilterCase(LFilterCases, 'h-brace-leaf-no', 'P/{A,B}/L', 'P/C/L', '0');
+  AppendFilterCase(LFilterCases, 'h-3seg-yes', 'P/S/*', 'P/S/X', '1');
+  AppendFilterCase(LFilterCases, 'h-3seg-parent-yes', 'P/S/*', 'P/S', '1');
+  AppendFilterCase(LFilterCases, 'h-3seg-sib-no', 'P/S/*', 'P/T/X', '0');
+  AppendFilterCase(LFilterCases, 'h-q-yes', 'P/S?', 'P/SA', '1');
+  AppendFilterCase(LFilterCases, 'h-q-no', 'P/S?', 'P/SAB', '0');
+  for LI := 0 to 39 do
+  begin
+    if (LI mod 2) = 0 then
+      AppendFilterCase(LFilterCases, 'h-gen-yes-' + IntToStr(LI),
+        'Root/G' + IntToStr(LI) + '/*',
+        'Root/G' + IntToStr(LI) + '/leaf', '1')
+    else
+      AppendFilterCase(LFilterCases, 'h-gen-no-' + IntToStr(LI),
+        'Root/G' + IntToStr(LI) + '/*',
+        'Root/Other' + IntToStr(LI) + '/leaf', '0');
+  end;
+  Suite.TestTable('B62 hierarchical filter fail-path', LFilterCases,
+    @TestB62HierarchicalFilterCase);
 
   Runner := TSuiteRunner.Create('output-tests');
   Runner.Add(Suite);

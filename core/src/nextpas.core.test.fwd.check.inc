@@ -304,6 +304,19 @@ procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string);
 begin nextpas.core.test.check.SoftCheckContains(AHaystack, ANeedle, AMessage); end;
 
+procedure SoftCheckNil(AValue: Pointer; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckNil(AValue, AMessage); end;
+
+procedure SoftCheckNotNil(AValue: Pointer; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckNotNil(AValue, AMessage); end;
+
+procedure SoftCheckEmpty(const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.SoftCheckEmpty(AValue, AMessage); end;
+
+procedure SoftCheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string);
+begin nextpas.core.test.check.SoftCheckContainsCI(AHaystack, ANeedle, AMessage); end;
+
 procedure Skip(const AReason: string);
 begin nextpas.core.test.check.Skip(AReason); end;
 

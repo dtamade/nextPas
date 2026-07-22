@@ -255,6 +255,11 @@ procedure SoftCheckNear(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10; const AMessage: string = '');
 procedure SoftCheckContains(const AHaystack, ANeedle: string;
   const AMessage: string = '');
+procedure SoftCheckNil(AValue: Pointer; const AMessage: string = '');
+procedure SoftCheckNotNil(AValue: Pointer; const AMessage: string = '');
+procedure SoftCheckEmpty(const AValue: string; const AMessage: string = '');
+procedure SoftCheckContainsCI(const AHaystack, ANeedle: string;
+  const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 procedure SleepMs(AMilliseconds: Integer);
 

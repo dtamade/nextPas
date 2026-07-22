@@ -186,6 +186,9 @@ function GetLastTestTrace: string;
 function FormatTestLocation(const APrefix: string = ''): string;
   { Returns the first non-empty frame from GLastTestTrace, prefixed with APrefix.
     Returns '' if no useful frame was captured. }
+function IsFrameworkFrame(const AFrameStr: string): Boolean;
+  { Go t.Helper intent: True if frame is framework/sysutils/system and should
+    be hidden from user-facing failure location. }
 
 { ── Record Helpers (reduce boilerplate at creation sites) ───────────────────── }
 
@@ -1032,10 +1035,15 @@ begin
     AMsg := LSummary;
     Result := True;
   end
-  else if (AStatus in [tsFailed, tsError]) and (AMsg <> '') then
+  else if AStatus in [tsFailed, tsError] then
   begin
-    { Hard/soft both present: keep primary message, attach all soft lines. }
-    AMsg := AMsg + ' [also soft: ' + LSummary + ']';
+    { Soft contributed alongside hard/aggregate failure — still "applied".
+      v8.28: return True so nested RunNested Soft layers enter result collect. }
+    if AMsg <> '' then
+      AMsg := AMsg + ' [also soft: ' + LSummary + ']'
+    else
+      AMsg := LSummary;
+    Result := True;
   end;
 end;
 

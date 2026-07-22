@@ -1,7 +1,7 @@
 { softfail_demo — intentional SoftFail multi-message join (exit 1 expected)
   =========================================================
   Demonstrates Go t.Error-style SoftFail: body continues, suite fails with
-  joined messages "a; b; c".
+  joined messages. v8.27 also shows SoftCheckEqual(Bool) + SoftCheckNear.
   Build/run (expect non-zero exit):
     make -C core/examples/nextpas.core.test/softfail_demo run
 }
@@ -29,6 +29,9 @@ begin
       SoftFail('gamma');
       { body continues after SoftFail }
       SoftCheckTrue(True);
+      { v8.27: SoftCheck Bool/Near surface in consumer demo }
+      SoftCheckEqual(True, False, 'bool soft');
+      SoftCheckNear(1.0, 2.0, 1e-9, 'near soft');
     end);
   if LSuite.RunWithResult(LResult) then
   begin

@@ -4,16 +4,16 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-21
-**版本**：v8.26
+**版本**：v8.28
 **路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
 
 ---
 
-## 0. SoftFail / SoftCheck* 能力矩阵（v8.23）
+## 0. SoftFail / SoftCheck* 能力矩阵（v8.27）
 
 | API | 状态 | 诊断 | 说明 |
 |-----|------|------|------|
-| `SoftFail(msg)` | **done** | 原文 join | outside context → raise |
+| `SoftFail(msg)` | **done** | 原文 join（`; `） | outside context → raise |
 | `SoftCheckTrue` / `SoftCheckFalse` | **done** | 默认文案 | |
 | `SoftCheckEqual(Int64)` | **done** | expected/actual 一行 | |
 | `SoftCheckEqual(string)` | **done** | **ColorDiff**（与 CheckEqual 同契约） | v8.23 |
@@ -21,6 +21,11 @@
 | `SoftCheckEqual(TBytes)` | **done** | length / index + hex | v8.23 高频 |
 | `SoftCheckNear(Double)` | **done** | epsilon + diff / NaN | v8.23 高频 |
 | `SoftCheckContains` | **done** | needle/haystack | |
+| `SoftCheckNil` / `SoftCheckNotNil` | **done** | 与 CheckNil/NotNil 同 detail | v8.27 |
+| `SoftCheckEmpty(string)` | **done** | length char(s) | v8.27 |
+| `SoftCheckContainsCI` | **done** | ci needle/haystack | v8.27 |
+| Soft 消息 join + ColorDiff 换行 | **done** | 段间仍 `; `；ColorDiff 内可含 `#10` | v8.27 B59 |
+| Soft × MaxFailures / FailFast | **done** | Soft-only 不 FailFast 停；计 MaxFailures | v8.27 B58 |
 | SoftCheck* 全镜像 Check* | **不做** | — | 仅高频子集；其余用 SoftFail |
 | SoftExpect fluent | **暂缓** | — | 见 v9 / M7 |
 | Nested SoftFail Push/Pop | **done** | leaf/parent 分层 | v8.21 |
@@ -413,6 +418,22 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.28 (2026-07-21) — Runner / Subtest / CLI ≈ Go testing（B61–B65）
+
+- **B61**：≥3 层 `RunNested` SoftFail 分层 exact（leaf 独立；parent 不吞 leaf 文案）
+- **B61 fix**：`ApplySoftFails` 在 also-soft 路径也返回 True；failed nested `RunNested` 一律进 `RunWithResult.Results`
+- **B62**：hierarchical filter 负路径表（`Parent/Sub/*`、brace、glob 段）
+- **B63**：CLI `--short`/`--failfast`/`--failures-max`/`--count` 交叉表
+- **B64**：`IsFrameworkFrame` 导出 + 单元前缀契约表（Go t.Helper 意图）
+- **B65**：parallel `TestTable` Skip 计数 exact；ShortSkip+Table 计数 exact
+
+### v8.27 (2026-07-21) — Soft 第二波 + 诊断 golden（B56–B60）
+
+- **Soft API**：`SoftCheckNil` / `SoftCheckNotNil` / `SoftCheckEmpty(string)` / `SoftCheckContainsCI`
+- **golden**：`softfail_wave2.tap` / `.json`（wave2 默认消息 join）
+- **契约**：Soft × MaxFailures/FailFast 串行再钉；并行 SoftCheck 全员仍跑；ColorDiff 换行下 join 仍用 `; `
+- **demo**：`softfail_demo` 扩 SoftCheck Bool/Near
 
 ### v8.26 (2026-07-21) — 规模质量跃迁（B51–B55）
 

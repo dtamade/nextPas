@@ -1,9 +1,9 @@
 # nextpas.core.test — Go/Rust 质量与规模路线图
 
-**Owner**: test lane（`.worktrees/test`）— **全权**  
-**北极星**: 对标 **Go `testing` + 工程门禁** / **Rust 测试工程纪律** 的**质量与规模**，不是 API 化妆。  
-**当前基线**: **v8.26**（SCALE≥6500 质量跃迁）  
-**最后更新**: 2026-07-21  
+**Owner**: test lane（`.worktrees/test`）— **全权**
+**北极星**: 对标 **Go `testing` + 工程门禁** / **Rust 测试工程纪律** 的**质量与规模**，不是 API 化妆。
+**当前基线**: **v8.28**（Runner/Subtest/CLI ≈ Go testing）
+**最后更新**: 2026-07-21
 
 ---
 
@@ -46,6 +46,8 @@
 | v8.24 | platform sink + Discovery backend | 编译器透明边角 |
 | **v8.25** | TimeoutWorkerLeaks + low-signal 门 | 并行可观测 + 反灌水 |
 | **v8.26** | 灭 identity + SCALE≥6500 + 三门收紧 | 质量跃迁 **done** |
+| **v8.27** | Soft 第二波 + Soft golden + join 契约 | Soft 可用面 **done** |
+| **v8.28** | Runner/Subtest/CLI ≈ Go testing | 行为密度 **done** |
 
 ---
 
@@ -55,9 +57,9 @@
 
 ```
 v8.26  规模质量跃迁（替换 identity + SCALE≥6500）  ✅
-v8.27  Soft 第二波 + Soft 诊断 golden              ← next
-v8.28  Runner/Subtest/CLI 深度（Go testing 行为）
-v8.29  并行竞态与 Mock 误用密度
+v8.27  Soft 第二波 + Soft 诊断 golden              ✅
+v8.28  Runner/Subtest/CLI 深度（Go testing 行为）  ✅
+v8.29  并行竞态与 Mock 误用密度                    ← next
 v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500
 v8.31+ 收紧 low-signal≤25%；消费者示例；CI 默认 contracts
 v9     （另拍板）IExpectation 拆分 / SoftExpect
@@ -77,31 +79,31 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ---
 
-### v8.27 — Soft 第二波 + 诊断 golden（P0 下一刀）
+### v8.27 — Soft 第二波 + 诊断 golden（**done**）
 
 **目标**: Soft 更接近 Go「任意多 Error 后汇总」。
 
-| ID | 任务 | 验收 |
+| ID | 任务 | 状态 |
 |----|------|------|
-| B56 | Soft 高频再扩：`SoftCheckNil`/`SoftCheckNotNil`、`SoftCheckEmpty`（string）、`SoftCheckContainsCI`（可选） | api source-contract 含新名 |
-| B57 | Soft 失败消息 **golden**（TAP/JSON 或 diagnostics exact 表） | FAIL_ON_CREATE 可过 |
-| B58 | Soft + MaxFailures / FailFast 交叉表再钉（并行+串行） | runner/parallel 契约 |
-| B59 | Soft 消息 join 在含 ColorDiff 换行时的 **稳定契约**（文档 + 测） | 不 flaky |
-| B60 | `softfail_demo` 扩一则 Bool/Near 示例（或新 demo） | examples 可 run |
+| B56 | Soft 高频再扩：`SoftCheckNil`/`SoftCheckNotNil`、`SoftCheckEmpty`（string）、`SoftCheckContainsCI` | **done** |
+| B57 | Soft 失败消息 **golden**（`softfail_wave2.tap`/`.json`） | **done** |
+| B58 | Soft + MaxFailures / FailFast 交叉表再钉（并行+串行） | **done** |
+| B59 | Soft 消息 join 在含 ColorDiff 换行时的 **稳定契约** | **done** |
+| B60 | `softfail_demo` 扩 Bool/Near 示例 | **done** |
 
 ---
 
-### v8.28 — Runner / Subtest / CLI ≈ Go testing（P1）
+### v8.28 — Runner / Subtest / CLI ≈ Go testing（**done**）
 
 **目标**: 行为密度对齐 `go test` 用户预期。
 
-| ID | 任务 | 验收 |
+| ID | 任务 | 状态 |
 |----|------|------|
-| B61 | 深嵌套 `TestSubtest`（≥3 层）失败聚合 + Soft 分层 exact | subtests 表 |
-| B62 | hierarchical filter 负路径表扩（`Parent/Sub/*`、brace） | output/runner |
-| B63 | CLI：`--count` / `--short` / `--failfast` / `--failures-max` 交叉表 | ApplyCLIArgsFrom 表 |
-| B64 | `t.Helper` 意图：IsFrameworkFrame 过滤契约（栈顶不含 test.* 内部） | base/diagnostics |
-| B65 | Skip / ShortSkip 在 table+parallel 下计数 exact | parallel/lifecycle |
+| B61 | 深嵌套 `TestSubtest`（≥3 层）失败聚合 + Soft 分层 exact | **done** |
+| B62 | hierarchical filter 负路径表扩（`Parent/Sub/*`、brace） | **done** |
+| B63 | CLI：`--count` / `--short` / `--failfast` / `--failures-max` 交叉表 | **done** |
+| B64 | `t.Helper` 意图：IsFrameworkFrame 过滤契约（栈顶不含 test.* 内部） | **done** |
+| B65 | Skip / ShortSkip 在 table+parallel 下计数 exact | **done** |
 
 ---
 
@@ -145,11 +147,11 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 4. 每版执行纪律（不变）
 
-1. 仅 `.worktrees/test` 开发  
-2. 每版结束：`make hygiene` + `make -C core/tests/nextpas.core.test contracts` + 相关 suite + demos  
-3. path-limited landing worktree → 祖先检查 → `git push origin HEAD:main`（无 force）  
-4. Ready 报告：SHA、文件清单、scale 三数字、禁止带入清单  
-5. 跨模块仅最小必要（如 Makefile clean），单独列出  
+1. 仅 `.worktrees/test` 开发
+2. 每版结束：`make hygiene` + `make -C core/tests/nextpas.core.test contracts` + 相关 suite + demos
+3. path-limited landing worktree → 祖先检查 → `git push origin HEAD:main`（无 force）
+4. Ready 报告：SHA、文件清单、scale 三数字、禁止带入清单
+5. 跨模块仅最小必要（如 Makefile clean），单独列出
 
 ---
 
@@ -167,15 +169,15 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.27** Soft 第二波 + golden（B56–B60）。
+**v8.29** 并行竞态与 Mock 误用密度（B66–B70）。
 
 ---
 
 ## 7. 状态汇报模板
 
-- **Ready**: 版本、HEAD、scale 三门数字、改动路径、验证命令、land SHA  
-- **Blocked**: 条件、已尝试、需谁决策（仅 v9/TSAN/coverage 类）  
-- **Landed**: origin tip、祖先检查、marker  
+- **Ready**: 版本、HEAD、scale 三门数字、改动路径、验证命令、land SHA
+- **Blocked**: 条件、已尝试、需谁决策（仅 v9/TSAN/coverage 类）
+- **Landed**: origin tip、祖先检查、marker
 
 ---
 

@@ -286,6 +286,33 @@ begin
     WriteLn('  (no trace captured — stack trace may not be available)');
 end;
 
+procedure TestB64IsFrameworkFrameTable;
+{ v8.28 B64: IsFrameworkFrame exact contract (Go t.Helper unit-prefix intent). }
+begin
+  CheckTrue(IsFrameworkFrame('  $0000  nextpas.core.test.check.pas:10'),
+    'test.check frame is framework');
+  CheckTrue(IsFrameworkFrame('nextpas.core.test.helpers unit'),
+    'test.helpers frame is framework');
+  CheckTrue(IsFrameworkFrame('nextpas.core.test,'),
+    'test facade with comma delimiter');
+  CheckTrue(IsFrameworkFrame('nextpas.core.test'),
+    'exact unit prefix at end');
+  CheckTrue(IsFrameworkFrame('sysutils.pas:1 Exception.Create'),
+    'sysutils is framework');
+  CheckTrue(IsFrameworkFrame('system, line 99'),
+    'system comma form is framework');
+  CheckTrue(IsFrameworkFrame('  system something'),
+    'system space form is framework');
+  CheckFalse(IsFrameworkFrame('myapp.tests.foo.pas:42 DoWork'),
+    'user unit not framework');
+  CheckFalse(IsFrameworkFrame('nextpas.core.mem.pas:10'),
+    'other nextpas.core modules are not test framework');
+  CheckFalse(IsFrameworkFrame('nextpas.core.testing.extra'),
+    'nextpas.core.testing is not nextpas.core.test prefix boundary');
+  CheckFalse(IsFrameworkFrame(''),
+    'empty frame is not framework');
+end;
+
 { ── 5. B2.3 Failure message contracts (stable substrings) ────────────────── }
 
 procedure DiagEnvSet(const AName, AValue: string);
@@ -419,6 +446,7 @@ begin
 
   { Framework frame filtering }
   LSuite.Test('framework frame filtering',      @TestFrameworkFrameFiltering);
+  LSuite.Test('B64 IsFrameworkFrame table',     @TestB64IsFrameworkFrameTable);
 
   { B2.3 message contracts }
   LSuite.Test('msg contract string equal',      @TestMsgContractStringEqual);

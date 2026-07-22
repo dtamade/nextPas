@@ -19,9 +19,11 @@ run: build
 	EC=$$?; \
 	printf '%s\n' "$$OUT"; \
 	echo "$$OUT" | grep -q 'alpha; beta; gamma' || { echo 'softfail_demo: missing join message'; exit 1; }; \
+	echo "$$OUT" | grep -q 'bool soft' || { echo 'softfail_demo: missing bool soft'; exit 1; }; \
+	echo "$$OUT" | grep -q 'near soft' || { echo 'softfail_demo: missing near soft'; exit 1; }; \
 	echo "$$OUT" | grep -q 'softfail_demo-status=fail-as-expected' || { echo 'softfail_demo: missing status'; exit 1; }; \
 	[ $$EC -eq 1 ] || { echo "softfail_demo: expected exit 1, got $$EC"; exit 1; }; \
-	echo 'softfail_demo: OK (exit 1 + join message)'
+	echo 'softfail_demo: OK (exit 1 + join message + SoftCheck Bool/Near)'
 
 clean:
 	rm -rf $(BUILD_DIR)

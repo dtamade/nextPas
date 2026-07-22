@@ -1004,6 +1004,7 @@ var
   LSubCtxI: ITestContext;
   LPass, LFail, LSkip: Integer;
   LLastFailMsg: string;
+  LWasPassed: Boolean;
   LTestResult: TTestResult;
   LAppender: TTestResultAppender;
   LConfig: TTestConfig;
@@ -1381,12 +1382,18 @@ begin
     end;
 
     { SoftFail (Go t.Error): if body/hooks soft-failed but status still pass,
-      flip to tsFailed and correct pass/fail counters. }
+      flip to tsFailed and correct pass/fail counters.
+      v8.28: ApplySoftFails also returns True for already-failed + also-soft;
+      only adjust counters when we actually flipped pass→fail. }
+    LWasPassed := (LStatus = tsPassed);
     if ApplySoftFails(LStatus, LLastFailMsg) then
     begin
-      Inc(LFail);
-      if LPass > 0 then
-        Dec(LPass);
+      if LWasPassed then
+      begin
+        Inc(LFail);
+        if LPass > 0 then
+          Dec(LPass);
+      end;
     end;
 
     { Record test result }

@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.26**
+**当前版本**: **v8.28**
 **最后更新**: 2026-07-21
 
 ---
@@ -88,8 +88,8 @@
 | 批次 | 主题 | 状态 |
 |------|------|------|
 | B51–B55 | **v8.26** 消灭 identity 灌水 + SCALE≥6500 + fail-path≥35% + low-signal≤40% | **done** |
-| B56–B60 | **v8.27** Soft 第二波 + Soft golden | planned |
-| B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | planned |
+| B56–B60 | **v8.27** Soft 第二波 + Soft golden | **done** |
+| B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | **done** |
 | B66–B70 | **v8.29** 并行竞态 + Mock 误用密度 | planned |
 | B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | planned |
 | B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | planned |

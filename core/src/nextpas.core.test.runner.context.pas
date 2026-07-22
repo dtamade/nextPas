@@ -589,18 +589,18 @@ begin
         end;
       end;
       ReportLeakIfAny(LStatus, FConfig);
-      { Collect subtest result via callback if caller requested it }
-      if (LEntry.Kind <> ekSubtest) and Assigned(FOnResult) then
+      { Collect subtest result via callback if caller requested it.
+        v8.28: always collect failed/error nested RunNested layers (not only
+        Soft-only flips) so deep Soft+child-fail appears in RunWithResult. }
+      if Assigned(FOnResult) and
+         ((LEntry.Kind <> ekSubtest) or
+          LSoftApplied or
+          (LStatus in [tsFailed, tsError])) then
       begin
         LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
         { Copy captured log lines on failure/error }
         if (LStatus in [tsFailed, tsError]) and (Length(FLogLines) > 0) then
           LTestResult.CapturedLog := Copy(FLogLines, 0, Length(FLogLines));
-        FOnResult(LTestResult);
-      end
-      else if (LEntry.Kind = ekSubtest) and LSoftApplied and Assigned(FOnResult) then
-      begin
-        LTestResult := MakeTestResult(LEntry.Name, LStatus, LMsg, 0);
         FOnResult(LTestResult);
       end;
     finally

@@ -273,6 +273,34 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestB58ParallelSoftCheckFailFastMax;
+{ v8.27 B58 parallel: SoftCheck-only workers all run under FailFast+MaxFailures=1
+  (parallel dispatches all; serial would stop at MaxFailures). }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LCfg: TTestConfig;
+  I: Integer;
+  LSoft: Integer;
+begin
+  LSuite := TTestSuite.Create('par-soft-ff');
+  LCfg := DefaultConfig;
+  LCfg.FailFast := True;
+  LCfg.MaxFailures := 1;
+  LSuite.Config := LCfg;
+  LSuite.Test('s0', procedure begin SoftCheckNil(Pointer(1)); end);
+  LSuite.Test('s1', procedure begin SoftCheckEmpty('x'); end);
+  LSuite.Test('s2', procedure begin SoftCheckNotNil(nil); end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult));
+  CheckEqual(3, LResult.Failed, 'parallel SoftCheck: all three fail');
+  LSoft := 0;
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Status = tsFailed then
+      Inc(LSoft);
+  CheckEqual(3, LSoft, 'three SoftCheck results recorded');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestB30ParallelSoftFailPathCase(const AC: TTestCase);
 { Data: single soft message. RunParallel: that test fails exact, peer passes. }
 var
@@ -302,6 +330,70 @@ begin
       CheckEqual(AC.Data, LResult.Results[I].Message);
     end;
   CheckTrue(LFound, 'soft result present ' + AC.Name);
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB65TableSkipCase(const AC: TTestCase);
+{ v8.28 B65: TestTable body Skip vs pass under serial harness (used by parallel suite). }
+begin
+  if AC.Data = 'skip' then
+    Skip('table-skip-' + AC.Name)
+  else
+    CheckTrue(True, 'table pass ' + AC.Name);
+end;
+
+procedure TestB65ParallelTableSkipExact;
+{ Parallel TestTable: half Skip → exact Passed/Skipped counts. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LCases: specialize TArray<TTestCase>;
+  I: Integer;
+begin
+  SetLength(LCases, 8);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 'c' + IntToStr(I);
+    if (I mod 2) = 0 then
+      LCases[I].Data := 'skip'
+    else
+      LCases[I].Data := 'pass';
+  end;
+  LSuite := TTestSuite.Create('par-table-skip');
+  LSuite.TestTable('rows', LCases, @TestB65TableSkipCase);
+  CheckTrue(LSuite.RunParallelWithResult(nil, LResult), 'skip is not fail');
+  CheckEqual(4, LResult.Passed, 'B65 parallel table pass count');
+  CheckEqual(4, LResult.Skipped, 'B65 parallel table skip count');
+  CheckEqual(0, LResult.Failed, 'B65 parallel table no fail');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB65ParallelShortSkipWithTableExact;
+{ ShortMode: ShortSkip entry skipped; TestTable peers still run (exact counts). }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LCases: specialize TArray<TTestCase>;
+  LCfg: TTestConfig;
+  I: Integer;
+begin
+  SetLength(LCases, 4);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 't' + IntToStr(I);
+    LCases[I].Data := 'pass';
+  end;
+  LSuite := TTestSuite.Create('par-short-table');
+  LCfg := DefaultConfig;
+  LCfg.ShortMode := True;
+  LSuite.Config := LCfg;
+  LSuite.ShortSkip('slow', procedure begin CheckTrue(True); end);
+  LSuite.TestTable('fast_rows', LCases, @TestB65TableSkipCase);
+  LSuite.Test('peer', procedure begin CheckTrue(True); end);
+  CheckTrue(LSuite.RunParallelWithResult(nil, LResult));
+  CheckEqual(1, LResult.Skipped, 'B65 ShortSkip exact skip=1');
+  CheckEqual(5, LResult.Passed, 'B65 table(4)+peer under short');
+  CheckEqual(0, LResult.Failed);
   LSuite := Default(TTestSuite);
 end;
 
@@ -1106,6 +1198,17 @@ begin
     PassTest('B23 parallel SoftFail');
     TestB42ParallelSoftFailMultiWorkerExact;
     PassTest('B42 parallel SoftFail multi exact');
+    TestB58ParallelSoftCheckFailFastMax;
+    PassTest('B58 parallel SoftCheck FailFast+MaxFailures');
+  end;
+
+  WriteLn;
+  SectionHeader('B65: table Skip + ShortSkip exact (parallel)');
+  begin
+    TestB65ParallelTableSkipExact;
+    PassTest('B65 parallel TestTable Skip exact');
+    TestB65ParallelShortSkipWithTableExact;
+    PassTest('B65 parallel ShortSkip+Table exact');
   end;
 
   WriteLn;

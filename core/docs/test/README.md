@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: **v8.26** SCALE≥6500 + fail-path≥35% + low-signal≤40%（identity 已替换）
+> 治理状态: **v8.28** Runner/Subtest/CLI Go-testing 行为密度（B61–B65）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
@@ -14,7 +14,8 @@
 
 - **Dual API**: Procedural `Check*` assertions + fluent `IExpectation` chain interface
 - **SoftFail**: Go-style `t.Error` — `SoftFail` / `SoftCheck*` continue; `Check*`/`Fail` stay Fatal
-  (`SoftCheckEqual` string uses same ColorDiff as hard path; high-freq Soft: Bool/TBytes/`SoftCheckNear`)
+  (`SoftCheckEqual` string uses same ColorDiff as hard path; high-freq Soft: Bool/TBytes/`SoftCheckNear`/
+  Nil/NotNil/Empty/ContainsCI)
 - **Parallel execution**: Direct thread-based parallel test dispatch (bypasses FPC closure capture limitations)
 - **Subtests**: Go-style nested subtests via `ITestContext.Run` / `RunNested`
 - **Parameterized tests**: `TestTable` for data-driven test cases
