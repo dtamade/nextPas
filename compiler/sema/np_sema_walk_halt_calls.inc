@@ -408,6 +408,18 @@ begin
         LowerRuntimeIfStatement(Child, Operand);
         Continue;
       end;
+      { Do NOT WalkHaltCalls(if-node): that emits then+else unconditionally when
+        the condition cannot be folded. Fall back to integer condition encoding
+        (field loads, comparisons) before giving up. }
+      if FNoFold and (Child.ChildCount >= 2) and
+        EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+      begin
+        Operand := Operand + 'int 0' + #10 + 'cmp ne' + #10;
+        LowerRuntimeIfStatement(Child, Operand);
+        Continue;
+      end;
+      if FNoFold then
+        Continue;
       WalkHaltCalls(Child);
       Continue;
     end;
@@ -483,6 +495,28 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
+      { Exit(expr) must assign into Result before cleanup/return. Bare Exit
+        keeps the current Result value (or void for procedures). }
+      if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+        (FCurrentRetVarName <> '') then
+      begin
+        if IsRuntimeStrVar(FCurrentRetVarName) then
+        begin
+          if Child.ChildAt(0).NodeKind = gnkStringLiteral then
+            FModel.AddTypedHirNode('assign-tstring-literal-runtime',
+              FCurrentRetVarName, 0, 0,
+              DecodePascalStringLiteral(Child.ChildAt(0).Text))
+          else if (Child.ChildAt(0).NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Child.ChildAt(0).Text) then
+            FModel.AddTypedHirNode('assign-tstring-runtime',
+              FCurrentRetVarName, 0, 0,
+              FCurrentRetVarName + #9 + 'strvar ' +
+              Child.ChildAt(0).Text + #10);
+        end
+        else if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+          FModel.AddTypedHirNode('assign-runtime', FCurrentRetVarName, 0, 0,
+            FCurrentRetVarName + #9 + Operand);
+      end;
       EmitClassVarFreeCleanupNodes;
       EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
