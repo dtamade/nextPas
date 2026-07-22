@@ -121,8 +121,9 @@ begin
   LFixture := TDiscoveryFixture.Create;
   LSuite := DiscoverTests(LFixture);  { default name = ClassName }
   CheckEqual('TDiscoveryFixture', LSuite.Name);
-  { White-box ownership note: published-method fixtures are registered for
-    discovery cleanup, so this test must not free manually. }
+  { DiscoverTests always RegisterFixture (+ stubs for published methods).
+    Suite owns them via registry; never Free the fixture manually. }
+  LSuite.CleanupTableAllocations;
 end;
 
 procedure TestDiscoverNoPublished;
@@ -133,9 +134,10 @@ begin
   LFixture := TEmptyFixture.Create;
   LSuite := DiscoverTests(LFixture);
   CheckEqual(0, Length(LSuite.Tests));
-  { White-box ownership note: the zero-published-method early-exit happens
-    before RegisterFixture, so caller ownership remains here. }
-  LFixture.Free;
+  { DiscoverTests still RegisterFixture even when zero published methods.
+    Manual Free would leave a dangling GFixtureRegistry entry and cause
+    finalization double-free AV + heaptrc leaks for later safety-net frees. }
+  LSuite.CleanupTableAllocations;
 end;
 
 { ── Retry Tests ───────────────────────────────────────────────────────────── }
