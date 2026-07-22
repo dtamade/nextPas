@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：**Maintenance Ready (idle)** — 稳定；仅消费者缺陷 / 平台契约 / 架构触发时开 slice
+**状态**：**Maintenance Ready** — CONTRACT **1.6.1**（1.6 硬化 + N1 回归测试 + F-R1/选型文档决议）
 
 ---
 
@@ -17,10 +17,11 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 | 表面 | 单元 | 说明 |
 |------|------|------|
 | 门面 | `nextpas.core.sync` | 工厂函数 + 接口 re-export |
-| 接口 | `nextpas.core.sync.intf` | `ILock` / `IMutex` / `IRWLock` / … |
+| 接口 | `nextpas.core.sync.intf` | `ILock` / `IMutex` / `INativeMutex` / `IRWLock` / … |
 | 基本类型 | `nextpas.core.sync.base` | `TOnceProc`、`TBarrierWaitResult` 等 |
-| 实现 | `mutex` / `rwlock` / `condvar` / `spinlock` / `waitgroup` / `once` / `semaphore` / `barrier` / `event` | 各原语实现 |
-| 实验旁路 | `nextpas.core.sync.pool` | `TSyncPool`（**未**进门面） |
+| 错误 | `nextpas.core.sync.errors` | 内部 `SyncRaise*`（不进门面） |
+| 实现 | `mutex` / `rwlock` / `condvar` / `spinlock` / `waitgroup` / `once` / `semaphore` / `barrier` / `event` / `latch` / `notify` / `channel` / `scoped` | 各原语实现 |
+| Advanced | `nextpas.core.sync.pool` | `TSyncPool`（门面 re-export） |
 
 宿主 ABI（pthread / SRWLOCK / futex / address-wait）由 **L0 `platform.sync`** 拥有；本模块只消费其统一函数层。
 
@@ -49,19 +50,42 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 ## 公开工厂（门面）
 
 ```pascal
-function Mutex: INativeMutex;           // platform ERRORCHECK，非递归；可配 CondVar
-function FutexMutex: IMutex;            // 高级：CAS + address-wait；不可配 CondVar
+function Mutex: INativeMutex;              // ERRORCHECK 非递归
+function RecursiveMutex: INativeMutex;     // RECURSIVE；可配 CondVar
+function FutexMutex: IMutex;               // advanced；不可配 CondVar
 function RWLock: IRWLock;
 function WaitGroup: IWaitGroup;
-function CondVar: ICondVar;             // Wait 需要 INativeMutex
-function Once: IOnce;
+function CondVar: ICondVar;
+function Once: IOnce;                      // Do_ + DoOnce 别名
 function SpinLock: ISpinLock;
 function Semaphore(AInitial: Int32 = 1): ISemaphore;
 function Barrier(ACount: Int32): IBarrier;
 function Event(AManualReset: Boolean = True): IEvent;
+function Latch(ACount: Int32): ILatch;     // 一次性 countdown
+function Notify: INotify;                  // NotifyOne sticky / NotifyAll
+function Channel(ACapacity: SizeInt): IChannel; // 有界 MPMC Pointer
+function CreateSyncPool(...): TSyncPool;   // advanced
+procedure WithLock / WithReadLock / WithWriteLock;
 ```
 
-超时参数在 live API 中为 **纳秒**（`WaitTimeout` / `TryAcquireTimeout`）。
+超时：ns + `TDuration`（推荐 Duration）。多线程消费者使用 `TWorkerThread`。
+
+**Channel 结果**：
+
+- `TrySend` 满 → `csrFull`；`SendTimeout` 到期 → **`csrTimeout`**（二者不同）
+- 阻塞 `Send`/`Recv` 为 **`Boolean`**（成功 / 关闭失败）— **不**改为枚举（1.6.1 决议）
+- 枚举常量：`uses nextpas.core.sync, nextpas.core.sync.base`
+
+**Event 默认**：`Event` / `Event(True)` = **manual reset**；auto 请 **`Event(False)`**（不会改默认）。
+
+**通道选型**：
+
+| 需求 | 模块 |
+|------|------|
+| 有界 Pointer 同步 | `sync.Channel` |
+| 类型安全队列 | `thread.IChannel<T>` |
+| 无锁 | `lockfree.channel` |
+| 事件循环 | `async.channel` |
 
 ---
 

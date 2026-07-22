@@ -5,7 +5,8 @@ unit nextpas.core.sync.event;
 interface
 
 uses
-  nextpas.core.sync.intf;
+  nextpas.core.sync.intf,
+  nextpas.core.time.base;
 
 function CreateEvent(const AManualReset: Boolean = True): IEvent;
 
@@ -25,6 +26,7 @@ type
     procedure Reset;
     procedure Wait;
     function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
     function IsSet: Boolean;
   end;
 
@@ -37,6 +39,7 @@ type
     procedure Reset;
     procedure Wait;
     function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
     function IsSet: Boolean;
   end;
 
@@ -110,6 +113,11 @@ begin
   Result := (LSnap and 1) = 1;
 end;
 
+function TManualResetEvent.WaitTimeout(const ATimeout: TDuration): Boolean;
+begin
+  Result := WaitTimeout(ATimeout.AsNanoseconds);
+end;
+
 function TManualResetEvent.IsSet: Boolean;
 begin
   Result := (atomic_load(FGen, mo_acquire) and 1) = 1;
@@ -163,6 +171,11 @@ begin
   platform_wait_address32(@FState, 0, ATimeoutNs);
   LExpected := 1;
   Result := atomic_compare_exchange_strong(FState, LExpected, 0, mo_acquire, mo_relaxed);
+end;
+
+function TAutoResetEvent.WaitTimeout(const ATimeout: TDuration): Boolean;
+begin
+  Result := WaitTimeout(ATimeout.AsNanoseconds);
 end;
 
 function TAutoResetEvent.IsSet: Boolean;

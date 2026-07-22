@@ -5,7 +5,8 @@ unit nextpas.core.sync.intf;
 interface
 
 uses
-  nextpas.core.sync.base;
+  nextpas.core.sync.base,
+  nextpas.core.time.base;
 
 type
   ILockGuard = interface
@@ -49,12 +50,15 @@ type
     procedure Add(const ACount: Int32 = 1);
     procedure Done;
     procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
   end;
 
   ICondVar = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560006}']
     procedure Wait(const AMutex: INativeMutex);
     function WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;
     procedure Signal;
     procedure Broadcast;
   end;
@@ -62,6 +66,8 @@ type
   IOnce = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560010}']
     procedure Do_(const AProc: TOnceProc);
+    procedure DoOnce(const AProc: TOnceProc);
+    procedure DoOnce(const AProc: TSyncProc);
     function Done: Boolean;
   end;
 
@@ -74,6 +80,7 @@ type
     procedure Acquire;
     function TryAcquire: Boolean;
     function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    function TryAcquireTimeout(const ATimeout: TDuration): Boolean;
     procedure Release;
     procedure Release(const ACount: Int32);
     function Available: Int32;
@@ -90,7 +97,50 @@ type
     procedure Reset;
     procedure Wait;
     function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
     function IsSet: Boolean;
+  end;
+
+  { One-shot countdown: Wait until CountDown drives remaining to 0.
+    Unlike WaitGroup, no Add after create; not reusable. }
+  ILatch = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560016}']
+    procedure CountDown(const ACount: Int32 = 1);
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
+    function TryWait: Boolean;
+    function Remaining: Int32;
+  end;
+
+  { NotifyOne: sticky permit if no waiter.
+    NotifyAll: clear permits + bump epoch; wakes only waiters already in Wait
+    (not sticky broadcast — use IEvent manual for that). }
+  INotify = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560017}']
+    procedure NotifyOne;
+    procedure NotifyAll;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
+  end;
+
+  { Bounded multi-producer multi-consumer channel of Pointer.
+    Close unblocks waiters; Recv after drain+close returns False. }
+  IChannel = interface
+    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560018}']
+    function TrySend(AItem: Pointer): TChannelSendResult;
+    function Send(AItem: Pointer): Boolean;
+    function TryRecv(out AItem: Pointer): TChannelRecvResult;
+    function Recv(out AItem: Pointer): Boolean;
+    function SendTimeout(AItem: Pointer; const ATimeoutNs: Int64): TChannelSendResult;
+    function SendTimeout(AItem: Pointer; const ATimeout: TDuration): TChannelSendResult;
+    function RecvTimeout(out AItem: Pointer; const ATimeoutNs: Int64): TChannelRecvResult;
+    function RecvTimeout(out AItem: Pointer; const ATimeout: TDuration): TChannelRecvResult;
+    procedure Close;
+    function IsClosed: Boolean;
+    function Len: SizeInt;
+    function Cap: SizeInt;
   end;
 
 implementation

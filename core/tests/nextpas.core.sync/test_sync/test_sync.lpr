@@ -4,15 +4,47 @@ program test_sync;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.thread.base,
+  nextpas.core.platform.thread,
   nextpas.core.errors,
+  nextpas.core.system,
   nextpas.core.test,
+  nextpas.core.time.base,
+  nextpas.core.sync.base,
   nextpas.core.sync,
   nextpas.core.sync.mutex,
   nextpas.core.sync.rwlock;
 
 var
   T: TTestSuite;
+
+
+type
+  TProcWorker = class(TWorkerThread)
+  private
+    FProc: TThreadTask;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AProc: TThreadTask);
+  end;
+
+constructor TProcWorker.Create(const AProc: TThreadTask);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TProcWorker.Execute;
+begin
+  if Assigned(FProc) then
+    FProc();
+end;
+
+procedure SleepMs(const AMs: Integer);
+begin
+  platform_thread_sleep_ms(UInt64(AMs));
+end;
 
 procedure TestMutexBasic;
 var
@@ -68,23 +100,22 @@ procedure TestFutexMutexContention;
 var
   LM: IMutex;
   LCounter: Int32;
-  LThread: TThread;
+  LThread: TProcWorker;
 begin
   LM := FutexMutex;
   LCounter := 0;
 
   LM.Acquire;
 
-  LThread := TThread.CreateAnonymousThread(procedure
+  LThread := TProcWorker.Create(procedure
   begin
     LM.Acquire;
     InterlockedIncrement(LCounter);
     LM.Release;
   end);
-  LThread.FreeOnTerminate := False;
   LThread.Start;
 
-  Sleep(10);
+  SleepMs(10);
   CheckEqual(Int64(0), Int64(LCounter), 'thread should be blocked');
   LM.Release;
 
@@ -124,19 +155,18 @@ procedure TestWaitGroupBasic;
 var
   LWg: IWaitGroup;
   LDone: Int32;
-  LThread: TThread;
+  LThread: TProcWorker;
 begin
   LWg := WaitGroup;
   LDone := 0;
 
   LWg.Add(1);
-  LThread := TThread.CreateAnonymousThread(procedure
+  LThread := TProcWorker.Create(procedure
   begin
-    Sleep(5);
+    SleepMs(5);
     InterlockedIncrement(LDone);
     LWg.Done;
   end);
-  LThread.FreeOnTerminate := False;
   LThread.Start;
 
   LWg.Wait;
@@ -150,7 +180,7 @@ var
   LWg: IWaitGroup;
   LCounter: Int32;
   LI: Integer;
-  LThreads: array[0..3] of TThread;
+  LThreads: array[0..3] of TProcWorker;
 begin
   LWg := WaitGroup;
   LCounter := 0;
@@ -158,13 +188,12 @@ begin
   LWg.Add(4);
   for LI := 0 to 3 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
-      Sleep(2);
+      SleepMs(2);
       InterlockedIncrement(LCounter);
       LWg.Done;
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
 
@@ -447,7 +476,7 @@ begin
   try
     LWg.Done;
   except
-    on E: ENextPasError do
+    on E: EInvalidOperationError do
       LRaised := True;
   end;
   Check(LRaised, 'Done without Add must raise');
@@ -463,7 +492,7 @@ begin
   try
     LWg.Add(0);
   except
-    on E: ENextPasError do
+    on E: EArgumentError do
       LRaised := True;
   end;
   Check(LRaised, 'Add(0) must raise');
@@ -472,7 +501,7 @@ begin
   try
     LWg.Add(-1);
   except
-    on E: ENextPasError do
+    on E: EArgumentError do
       LRaised := True;
   end;
   Check(LRaised, 'Add(negative) must raise');
@@ -542,7 +571,7 @@ end;
 procedure TestOnceConcurrent;
 var
   LOnce: IOnce;
-  LThreads: array[0..7] of TThread;
+  LThreads: array[0..7] of TProcWorker;
   LI: Integer;
 begin
   LOnce := Once;
@@ -550,11 +579,10 @@ begin
 
   for LI := 0 to 7 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
       LOnce.Do_(@OnceIncrement);
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
 
@@ -585,7 +613,7 @@ procedure TestWaitGroupHighConcurrency;
 var
   LWg: IWaitGroup;
   LCounter: Int32;
-  LThreads: array[0..15] of TThread;
+  LThreads: array[0..15] of TProcWorker;
   LI: Integer;
 begin
   LWg := WaitGroup;
@@ -593,12 +621,11 @@ begin
   LWg.Add(16);
   for LI := 0 to 15 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
       InterlockedIncrement(LCounter);
       LWg.Done;
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   LWg.Wait;
@@ -614,22 +641,21 @@ procedure TestEventManualMultiWaiter;
 var
   LEv: IEvent;
   LPassed: Int32;
-  LThreads: array[0..3] of TThread;
+  LThreads: array[0..3] of TProcWorker;
   LI: Integer;
 begin
   LEv := Event(True); { manual reset }
   LPassed := 0;
   for LI := 0 to 3 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
       LEv.Wait;
       InterlockedIncrement(LPassed);
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
-  Sleep(20);
+  SleepMs(20);
   CheckEqual(Int64(0), Int64(LPassed), 'waiters blocked before Set');
   LEv.SetEvent;
   for LI := 0 to 3 do
@@ -644,22 +670,21 @@ procedure TestEventAutoSingleWinner;
 var
   LEv: IEvent;
   LPassed: Int32;
-  LThreads: array[0..3] of TThread;
+  LThreads: array[0..3] of TProcWorker;
   LI: Integer;
 begin
   LEv := Event(False); { auto reset }
   LPassed := 0;
   for LI := 0 to 3 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
       if LEv.WaitTimeout(200000000) then { 200ms }
         InterlockedIncrement(LPassed);
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
-  Sleep(20);
+  SleepMs(20);
   LEv.SetEvent;
   for LI := 0 to 3 do
   begin
@@ -684,20 +709,19 @@ var
   LCond: ICondVar;
   LMutex: INativeMutex;
   LWoke: Int32;
-  LThread: TThread;
+  LThread: TProcWorker;
 begin
   LCond := CondVar;
   LMutex := Mutex;
   LWoke := 0;
   LMutex.Acquire;
-  LThread := TThread.CreateAnonymousThread(procedure
+  LThread := TProcWorker.Create(procedure
   begin
-    Sleep(30);
+    SleepMs(30);
     LMutex.Acquire;
     LCond.Signal;
     LMutex.Release;
   end);
-  LThread.FreeOnTerminate := False;
   LThread.Start;
   Check(LCond.WaitTimeout(LMutex, 500000000), 'waiter sees signal within 500ms');
   InterlockedIncrement(LWoke);
@@ -720,7 +744,7 @@ begin
   try
     LObj.Free;
   except
-    on E: ENextPasError do
+    on E: EInvalidOperationError do
     begin
       LRaised := True;
       { destroy failed: handle still valid — unlock then free cleanly }
@@ -747,7 +771,7 @@ var
   LB: IBarrier;
   LLeaders: Int32;
   LDone: Int32;
-  LThreads: array[0..N - 1] of TThread;
+  LThreads: array[0..N - 1] of TProcWorker;
   LI: Integer;
 begin
   LB := Barrier(N);
@@ -755,7 +779,7 @@ begin
   LDone := 0;
   for LI := 0 to N - 1 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     var
       LR: TBarrierWaitResult;
     begin
@@ -764,7 +788,6 @@ begin
         InterlockedIncrement(LLeaders);
       InterlockedIncrement(LDone);
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   for LI := 0 to N - 1 do
@@ -780,7 +803,7 @@ begin
   LDone := 0;
   for LI := 0 to N - 1 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     var
       LR: TBarrierWaitResult;
     begin
@@ -789,7 +812,6 @@ begin
         InterlockedIncrement(LLeaders);
       InterlockedIncrement(LDone);
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   for LI := 0 to N - 1 do
@@ -799,6 +821,49 @@ begin
   end;
   CheckEqual(Int64(N), Int64(LDone), 'all barrier waiters finished gen1');
   CheckEqual(Int64(1), Int64(LLeaders), 'exactly one leader in gen1');
+end;
+
+
+procedure TestWaitGroupWaitTimeout;
+var
+  LWg: IWaitGroup;
+begin
+  LWg := WaitGroup;
+  LWg.Add(1);
+  Check(not LWg.WaitTimeout(1000000), 'timeout when counter non-zero');
+  LWg.Done;
+  Check(LWg.WaitTimeout(1000000), 'immediate when counter zero');
+  Check(LWg.WaitTimeout(TDuration.FromMilliseconds(1)), 'duration overload when zero');
+end;
+
+procedure TestDoOnceAlias;
+var
+  LOnce: IOnce;
+begin
+  LOnce := Once;
+  GOnceCounter := 0;
+  LOnce.DoOnce(@OnceIncrement);
+  LOnce.DoOnce(@OnceIncrement);
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'DoOnce runs once');
+  Check(LOnce.Done, 'done after DoOnce');
+end;
+
+procedure TestDurationTimeoutOverloads;
+var
+  LSem: ISemaphore;
+  LEv: IEvent;
+  LCv: ICondVar;
+  LM: INativeMutex;
+begin
+  LSem := Semaphore(0);
+  Check(not LSem.TryAcquireTimeout(TDuration.FromMilliseconds(1)), 'sem duration timeout');
+  LEv := Event(False);
+  Check(not LEv.WaitTimeout(TDuration.FromMilliseconds(1)), 'event duration timeout');
+  LCv := CondVar;
+  LM := Mutex;
+  LM.Acquire;
+  Check(not LCv.WaitTimeout(LM, TDuration.FromMilliseconds(1)), 'condvar duration timeout');
+  LM.Release;
 end;
 
 procedure TestRWLockDestroyWhileHeldBestEffort;
@@ -812,7 +877,7 @@ begin
   try
     LObj.Free;
   except
-    on E: ENextPasError do
+    on E: EInvalidOperationError do
     begin
       LRaised := True;
       LObj.ReleaseWrite;
@@ -825,6 +890,528 @@ begin
     Check(True, 'RWLock Destroy while write-held raised (host reports error)')
   else
     Check(True, 'RWLock Destroy while write-held returned success (host-lenient)');
+end;
+
+procedure TestRecursiveMutexReentry;
+var
+  LM: INativeMutex;
+begin
+  LM := RecursiveMutex;
+  LM.Acquire;
+  LM.Acquire;
+  Check(True, 'recursive reentry ok');
+  LM.Release;
+  LM.Release;
+  Check(LM.TryAcquire, 'free after balanced unlock');
+  LM.Release;
+end;
+
+procedure TestRecursiveMutexWithCondVar;
+var
+  LM: INativeMutex;
+  LCv: ICondVar;
+begin
+  LM := RecursiveMutex;
+  LCv := CondVar;
+  LM.Acquire;
+  Check(not LCv.WaitTimeout(LM, 1000000), 'recursive mutex pairs with condvar');
+  LM.Release;
+end;
+
+procedure TestLatchBasic;
+var
+  L: ILatch;
+begin
+  L := Latch(2);
+  CheckEqual(Int64(2), Int64(L.Remaining), 'remaining start');
+  Check(not L.TryWait, 'not ready');
+  L.CountDown;
+  CheckEqual(Int64(1), Int64(L.Remaining), 'remaining mid');
+  L.CountDown;
+  Check(L.TryWait, 'ready');
+  Check(L.WaitTimeout(TDuration.FromMilliseconds(1)), 'wait after zero');
+end;
+
+procedure TestLatchZero;
+var
+  L: ILatch;
+begin
+  L := Latch(0);
+  Check(L.TryWait, 'zero latch already open');
+  L.Wait;
+end;
+
+procedure TestLatchMultiWaiter;
+var
+  L: ILatch;
+  LDone: Int32;
+  T1, T2: TProcWorker;
+begin
+  L := Latch(1);
+  LDone := 0;
+  T1 := TProcWorker.Create(procedure
+  begin
+    L.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T2 := TProcWorker.Create(procedure
+  begin
+    L.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LDone), 'blocked before countdown');
+  L.CountDown;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LDone), 'both waiters released');
+end;
+
+procedure TestNotifySticky;
+var
+  N: INotify;
+begin
+  N := Notify;
+  N.NotifyOne;
+  N.Wait;
+  Check(True, 'sticky notify consumed');
+  Check(not N.WaitTimeout(TDuration.FromMilliseconds(1)), 'no second permit');
+end;
+
+procedure TestNotifyWakesWaiter;
+var
+  N: INotify;
+  LDone: Int32;
+  Th: TProcWorker;
+begin
+  N := Notify;
+  LDone := 0;
+  Th := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  Th.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LDone), 'blocked');
+  N.NotifyOne;
+  Th.WaitFor;
+  Th.Free;
+  CheckEqual(Int64(1), Int64(LDone), 'woken');
+end;
+
+procedure TestNotifyAll;
+var
+  N: INotify;
+  LDone: Int32;
+  T1, T2: TProcWorker;
+begin
+  N := Notify;
+  LDone := 0;
+  T1 := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T2 := TProcWorker.Create(procedure
+  begin
+    N.Wait;
+    InterlockedIncrement(LDone);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  N.NotifyAll;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LDone), 'notify all woke both');
+end;
+
+procedure TestChannelBasic;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(2);
+  CheckEqual(Int64(2), Int64(C.Cap), 'cap');
+  Check(C.TrySend(Pointer(1)) = csrOk, 'send1');
+  Check(C.TrySend(Pointer(2)) = csrOk, 'send2');
+  Check(C.TrySend(Pointer(3)) = csrFull, 'full');
+  Check(C.TryRecv(P) = crrOk, 'recv1');
+  CheckEqual(Int64(1), Int64(PtrUInt(P)), 'val1');
+  Check(C.Recv(P), 'recv2');
+  CheckEqual(Int64(2), Int64(PtrUInt(P)), 'val2');
+  Check(C.TryRecv(P) = crrEmpty, 'empty');
+end;
+
+procedure TestChannelClose;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(1);
+  Check(C.Send(Pointer(7)), 'send');
+  C.Close;
+  Check(C.IsClosed, 'closed');
+  Check(C.TrySend(Pointer(8)) = csrClosed, 'send after close');
+  Check(C.Recv(P), 'drain after close');
+  CheckEqual(Int64(7), Int64(PtrUInt(P)), 'drained value');
+  Check(not C.Recv(P), 'recv closed empty');
+end;
+
+procedure TestChannelProducerConsumer;
+var
+  C: IChannel;
+  LSum: Int32;
+  Prod, Cons: TProcWorker;
+  I: Integer;
+begin
+  C := Channel(4);
+  LSum := 0;
+  Prod := TProcWorker.Create(procedure
+  var
+    K: Integer;
+  begin
+    for K := 1 to 20 do
+      Check(C.Send(Pointer(K)), 'prod send');
+    C.Close;
+  end);
+  Cons := TProcWorker.Create(procedure
+  var
+    P: Pointer;
+  begin
+    while C.Recv(P) do
+      InterlockedExchangeAdd(LSum, Integer(PtrUInt(P)));
+  end);
+  Prod.Start;
+  Cons.Start;
+  Prod.WaitFor;
+  Cons.WaitFor;
+  Prod.Free;
+  Cons.Free;
+  CheckEqual(Int64(210), Int64(LSum), 'sum 1..20');
+end;
+
+procedure TestScopedWithLock;
+var
+  LM: IMutex;
+  LVal: Integer;
+begin
+  LM := Mutex;
+  LVal := 0;
+  WithLock(LM, procedure
+  begin
+    Inc(LVal);
+    Check(not LM.TryAcquire, 'held inside WithLock');
+  end);
+  CheckEqual(Int64(1), Int64(LVal), 'proc ran');
+  Check(LM.TryAcquire, 'released after WithLock');
+  LM.Release;
+end;
+
+procedure TestScopedRW;
+var
+  LRW: IRWLock;
+  LVal: Integer;
+begin
+  LRW := RWLock;
+  LVal := 0;
+  WithReadLock(LRW, procedure
+  begin
+    Inc(LVal);
+  end);
+  WithWriteLock(LRW, procedure
+  begin
+    Inc(LVal, 10);
+  end);
+  CheckEqual(Int64(11), Int64(LVal), 'read+write scoped');
+end;
+
+function PoolFacadeFactory: Pointer;
+begin
+  Result := TPoolItem.Create;
+end;
+
+procedure TestPoolFacade;
+var
+  LPool: TSyncPool;
+  LObj: Pointer;
+begin
+  LPool := CreateSyncPool(@PoolFacadeFactory);
+  try
+    LObj := LPool.Get;
+    Check(LObj <> nil, 'pool get');
+    LPool.Put(LObj);
+    Check(LPool.TotalCreated > 0, 'pool created items');
+  finally
+    LPool.Free;
+  end;
+end;
+
+procedure TestChannelTimeoutDistinct;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  C := Channel(1);
+  Check(C.TrySend(Pointer(1)) = csrOk, 'fill');
+  Check(C.SendTimeout(Pointer(2), TDuration.FromMilliseconds(1)) = csrTimeout,
+    'send timeout != full');
+  Check(C.TrySend(Pointer(3)) = csrFull, 'still full via TrySend');
+  Check(C.Recv(P), 'drain');
+  Check(C.RecvTimeout(P, TDuration.FromMilliseconds(1)) = crrTimeout,
+    'recv timeout != empty');
+  Check(C.TryRecv(P) = crrEmpty, 'still empty via TryRecv');
+end;
+
+procedure TestLatchCountDownTooMany;
+var
+  L: ILatch;
+  LRaised: Boolean;
+begin
+  L := Latch(1);
+  L.CountDown;
+  LRaised := False;
+  try
+    L.CountDown;
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  { After zero, CountDown is no-op per INV-11 — not raise. }
+  Check(not LRaised, 'countdown at zero is no-op');
+  Check(L.TryWait, 'still open');
+end;
+
+procedure TestLatchCountDownWouldGoNegative;
+var
+  L: ILatch;
+  LRaised: Boolean;
+begin
+  L := Latch(1);
+  LRaised := False;
+  try
+    L.CountDown(2);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'countdown 2 from 1 raises');
+  CheckEqual(Int64(1), Int64(L.Remaining), 'remaining unchanged');
+end;
+
+procedure TestDoOnceClosure;
+var
+  LOnce: IOnce;
+  LHits: Integer;
+begin
+  LOnce := Once;
+  LHits := 0;
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits);
+  end);
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits, 10);
+  end);
+  CheckEqual(Int64(1), Int64(LHits), 'closure DoOnce runs once');
+  Check(LOnce.Done, 'done');
+end;
+
+procedure TestNotifyAllClearsPermits;
+var
+  N: INotify;
+begin
+  N := Notify;
+  N.NotifyOne;
+  N.NotifyAll;
+  { sticky permit cleared by NotifyAll; no waiter was present }
+  Check(not N.WaitTimeout(TDuration.FromMilliseconds(1)),
+    'no sticky permit after NotifyAll');
+end;
+
+procedure TestPoolRejectsNonPoolItem;
+var
+  LPool: TSyncPool;
+  LObj: TObject;
+  LRaised: Boolean;
+begin
+  LPool := CreateSyncPool(@PoolFacadeFactory);
+  LObj := TObject.Create;
+  try
+    LRaised := False;
+    try
+      LPool.Put(LObj);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Put non-TPoolItem raises');
+  finally
+    LObj.Free;
+    LPool.Free;
+  end;
+end;
+
+procedure TestChannelCloseWakesBlockedRecv;
+var
+  C: IChannel;
+  LGot: Int32;
+  LOk: Int32;
+  Th: TProcWorker;
+  P: Pointer;
+begin
+  C := Channel(1);
+  LGot := 0;
+  LOk := 0;
+  Th := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+    LRecvOk: Boolean;
+  begin
+    LRecvOk := C.Recv(LP);
+    if LRecvOk then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  Th.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LGot), 'recv blocked before close');
+  C.Close;
+  Th.WaitFor;
+  Th.Free;
+  CheckEqual(Int64(1), Int64(LGot), 'recv unblocked by close');
+  CheckEqual(Int64(0), Int64(LOk), 'empty closed recv returns False');
+  Check(not C.Recv(P), 'subsequent Recv still False');
+end;
+
+procedure TestChannelMultiRecvClose;
+var
+  C: IChannel;
+  LGot: Int32;
+  LOk: Int32;
+  T1, T2: TProcWorker;
+begin
+  C := Channel(2);
+  LGot := 0;
+  LOk := 0;
+  T1 := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+  begin
+    if C.Recv(LP) then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  T2 := TProcWorker.Create(procedure
+  var
+    LP: Pointer;
+  begin
+    if C.Recv(LP) then
+      InterlockedIncrement(LOk);
+    InterlockedIncrement(LGot);
+  end);
+  T1.Start;
+  T2.Start;
+  SleepMs(20);
+  CheckEqual(Int64(0), Int64(LGot), 'both blocked');
+  C.Close;
+  T1.WaitFor;
+  T2.WaitFor;
+  T1.Free;
+  T2.Free;
+  CheckEqual(Int64(2), Int64(LGot), 'both woke');
+  CheckEqual(Int64(0), Int64(LOk), 'both got False on empty close');
+end;
+
+procedure TestDoOnceClosureExceptionResets;
+var
+  LOnce: IOnce;
+  LHits: Integer;
+  LRaised: Boolean;
+begin
+  LOnce := Once;
+  LHits := 0;
+  LRaised := False;
+  try
+    LOnce.DoOnce(procedure
+    begin
+      Inc(LHits);
+      raise EInvalidOperationError.Create('once boom');
+    end);
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'exception propagated from closure');
+  Check(not LOnce.Done, 'not done after failed closure');
+  CheckEqual(Int64(1), Int64(LHits), 'failed attempt ran once');
+  LOnce.DoOnce(procedure
+  begin
+    Inc(LHits, 10);
+  end);
+  CheckEqual(Int64(11), Int64(LHits), 'retry ran successfully');
+  Check(LOnce.Done, 'done after retry');
+end;
+
+procedure TestChannelSendRecvBooleanMatrix;
+var
+  C: IChannel;
+  P: Pointer;
+begin
+  { F-R1: blocking Send/Recv stay Boolean — success/closed only; never encode full/empty. }
+  C := Channel(1);
+  Check(C.Send(Pointer(9)), 'Send ok while open');
+  Check(C.Recv(P), 'Recv ok with item');
+  CheckEqual(Int64(9), Int64(PtrUInt(P)), 'value');
+  C.Close;
+  Check(not C.Send(Pointer(1)), 'Send False after close');
+  Check(not C.Recv(P), 'Recv False after close empty');
+end;
+
+procedure TestBarrierTwoThreadTwoGens;
+const
+  N = 2;
+var
+  LB: IBarrier;
+  LLeaders: Int32;
+  LDone: Int32;
+  LThreads: array[0..N - 1] of TProcWorker;
+  LI, LRound: Integer;
+begin
+  LB := Barrier(N);
+  for LRound := 1 to 2 do
+  begin
+    LLeaders := 0;
+    LDone := 0;
+    for LI := 0 to N - 1 do
+    begin
+      LThreads[LI] := TProcWorker.Create(procedure
+      var
+        LR: TBarrierWaitResult;
+      begin
+        LR := LB.Wait;
+        if LR.IsLeader then
+          InterlockedIncrement(LLeaders);
+        InterlockedIncrement(LDone);
+      end);
+      LThreads[LI].Start;
+    end;
+    for LI := 0 to N - 1 do
+    begin
+      LThreads[LI].WaitFor;
+      LThreads[LI].Free;
+    end;
+    CheckEqual(Int64(N), Int64(LDone), 'round done');
+    CheckEqual(Int64(1), Int64(LLeaders), 'one leader per round');
+  end;
 end;
 
 begin
@@ -877,6 +1464,35 @@ begin
   T.Test('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
   T.Test('Mutex destroy while held (best-effort)', @TestMutexDestroyWhileHeldBestEffort);
   T.Test('RWLock destroy while held (best-effort)', @TestRWLockDestroyWhileHeldBestEffort);
+  T.Test('WaitGroup wait timeout', @TestWaitGroupWaitTimeout);
+  T.Test('DoOnce alias', @TestDoOnceAlias);
+  T.Test('Duration timeout overloads', @TestDurationTimeoutOverloads);
+
+  T.Test('RecursiveMutex reentry', @TestRecursiveMutexReentry);
+  T.Test('RecursiveMutex with CondVar', @TestRecursiveMutexWithCondVar);
+  T.Test('Latch basic', @TestLatchBasic);
+  T.Test('Latch zero', @TestLatchZero);
+  T.Test('Latch multi waiter', @TestLatchMultiWaiter);
+  T.Test('Notify sticky', @TestNotifySticky);
+  T.Test('Notify wakes waiter', @TestNotifyWakesWaiter);
+  T.Test('Notify all', @TestNotifyAll);
+  T.Test('Channel basic', @TestChannelBasic);
+  T.Test('Channel close', @TestChannelClose);
+  T.Test('Channel producer consumer', @TestChannelProducerConsumer);
+  T.Test('Channel timeout distinct', @TestChannelTimeoutDistinct);
+  T.Test('Latch countdown at zero no-op', @TestLatchCountDownTooMany);
+  T.Test('Latch countdown would go negative', @TestLatchCountDownWouldGoNegative);
+  T.Test('DoOnce closure', @TestDoOnceClosure);
+  T.Test('NotifyAll clears permits', @TestNotifyAllClearsPermits);
+  T.Test('Scoped WithLock', @TestScopedWithLock);
+  T.Test('Scoped RW', @TestScopedRW);
+  T.Test('Pool facade', @TestPoolFacade);
+  T.Test('Pool rejects non-TPoolItem', @TestPoolRejectsNonPoolItem);
+  T.Test('Channel close wakes blocked Recv', @TestChannelCloseWakesBlockedRecv);
+  T.Test('Channel multi Recv close', @TestChannelMultiRecvClose);
+  T.Test('DoOnce closure exception resets', @TestDoOnceClosureExceptionResets);
+  T.Test('Channel Send/Recv Boolean matrix', @TestChannelSendRecvBooleanMatrix);
+  T.Test('Barrier two-thread two gens', @TestBarrierTwoThreadTwoGens);
 
   if not T.Run then Halt(1);
 end.

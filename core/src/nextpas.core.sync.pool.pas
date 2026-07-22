@@ -84,7 +84,17 @@ function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
 implementation
 
 uses
+  nextpas.core.sync.errors,
   nextpas.core.sync.mutex;
+
+function RequirePoolItem(AItem: Pointer; const AOp: string): TPoolItem;
+begin
+  if AItem = nil then
+    Exit(nil);
+  if not (TObject(AItem) is TPoolItem) then
+    SyncRaiseArg('TSyncPool.' + AOp + ': item must be TPoolItem');
+  Result := TPoolItem(AItem);
+end;
 
 type
   PPoolTlsNode = ^TPoolTlsNode;
@@ -142,7 +152,9 @@ begin
   { 批量调用工厂创建对象, 放入 global stack.
     安全前提: 仅在构造函数中调用, 对象尚未对外暴露, 单线程访问. }
   for I := 1 to ACount do begin
-    LItem := TPoolItem(FConfig.Factory());
+    LItem := RequirePoolItem(FConfig.Factory(), 'Factory');
+    if LItem = nil then
+      SyncRaiseArg('TSyncPool.Factory: must not return nil');
     LItem.PoolNext := FGlobalHead;
     FGlobalHead := LItem;
     InterLockedIncrement(FTotalCreated);
@@ -209,7 +221,9 @@ begin
   { 最冷路径: 工厂创建 }
   if Assigned(FConfig.Factory) then
   begin
-    LItem := TPoolItem(FConfig.Factory());
+    LItem := RequirePoolItem(FConfig.Factory(), 'Factory');
+    if LItem = nil then
+      SyncRaiseArg('TSyncPool.Factory: must not return nil');
     LItem.PoolNext := nil;
     InterLockedIncrement(FTotalCreated);
   end;
@@ -223,7 +237,7 @@ var
 begin
   if AItem = nil then
     Exit;
-  LItem := TPoolItem(AItem);
+  LItem := RequirePoolItem(AItem, 'Put');
   LNode := EnsureTlsNode;
   LItem.PoolNext := LNode^.Head;
   LNode^.Head := LItem;

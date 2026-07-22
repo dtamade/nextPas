@@ -5,13 +5,10 @@ unit nextpas.core.sync.waitgroup;
 interface
 
 uses
-  nextpas.core.sync.intf;
+  nextpas.core.sync.intf,
+  nextpas.core.time.base;
 
 type
-  {**
-   * @desc 无锁 WaitGroup，基于原子操作 + address-wait
-   * @note 线程安全
-   *}
   TWaitGroup = class(TInterfacedObject, IWaitGroup)
   private
     FCounter: Int32;
@@ -21,15 +18,15 @@ type
     procedure Add(const ACount: Int32 = 1);
     procedure Done;
     procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
   end;
 
 implementation
 
 uses
-  nextpas.core.errors,
+  nextpas.core.sync.errors,
   nextpas.core.platform.sync;
-
-{ TWaitGroup }
 
 constructor TWaitGroup.Create;
 begin
@@ -41,7 +38,7 @@ end;
 procedure TWaitGroup.Add(const ACount: Int32);
 begin
   if ACount <= 0 then
-    raise ENextPasError.Create('TWaitGroup.Add: count must be positive');
+    SyncRaiseArg('TWaitGroup.Add: count must be positive');
   InterlockedExchangeAdd(FCounter, ACount);
 end;
 
@@ -51,7 +48,7 @@ var
 begin
   LNew := InterlockedExchangeAdd(FCounter, -1) - 1;
   if LNew < 0 then
-    raise ENextPasError.Create('TWaitGroup.Done: negative counter (more Done than Add)');
+    SyncRaiseInvalidOp('TWaitGroup.Done: negative counter (more Done than Add)');
   if LNew = 0 then
   begin
     if InterlockedCompareExchange(FWaiters, 0, 0) > 0 then
@@ -79,6 +76,39 @@ begin
   finally
     InterlockedDecrement(FWaiters);
   end;
+end;
+
+function TWaitGroup.WaitTimeout(const ATimeoutNs: Int64): Boolean;
+var
+  LCurrent: Int32;
+  LDeadline: TInstant;
+  LRemaining: Int64;
+begin
+  LCurrent := InterlockedCompareExchange(FCounter, 0, 0);
+  if LCurrent <= 0 then
+    Exit(True);
+
+  InterlockedIncrement(FWaiters);
+  try
+    LDeadline := TInstant.Now;
+    while True do
+    begin
+      LCurrent := InterlockedCompareExchange(FCounter, 0, 0);
+      if LCurrent <= 0 then
+        Exit(True);
+      LRemaining := ATimeoutNs - LDeadline.Elapsed.AsNanoseconds;
+      if LRemaining <= 0 then
+        Exit(False);
+      platform_wait_address32(@FCounter, LCurrent, LRemaining);
+    end;
+  finally
+    InterlockedDecrement(FWaiters);
+  end;
+end;
+
+function TWaitGroup.WaitTimeout(const ATimeout: TDuration): Boolean;
+begin
+  Result := WaitTimeout(ATimeout.AsNanoseconds);
 end;
 
 end.

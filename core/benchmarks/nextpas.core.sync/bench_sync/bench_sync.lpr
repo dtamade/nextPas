@@ -5,12 +5,11 @@ program bench_sync;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.thread.init,
+  nextpas.core.thread.base,
   nextpas.core.bench,
-  nextpas.core.bench.intf,
   nextpas.core.time.base,
+  nextpas.core.text,
   nextpas.core.fs,
-  nextpas.core.text.format,
-  nextpas.core.system.classes,
   nextpas.core.sync;
 
 const
@@ -18,11 +17,33 @@ const
   CONTENDED_SAMPLES = 7;
   CONTENDED_WARMUP = 1;
 
+type
+  TProcWorker = class(TWorkerThread)
+  private
+    FProc: TThreadTask;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AProc: TThreadTask);
+  end;
+
 var
   LResults: IBenchResults;
   GSink: Int64;
   GContendedMutex: IMutex;
   GContendedIters: Int64;
+
+constructor TProcWorker.Create(const AProc: TThreadTask);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TProcWorker.Execute;
+begin
+  if Assigned(FProc) then
+    FProc();
+end;
 
 procedure BenchMutexLockUnlock(aIters: Int64);
 var
@@ -104,7 +125,7 @@ end;
 
 function SampleContended2T(const AMutex: IMutex; const AItersPerThread: Int64): Double;
 var
-  LThreads: array[0..1] of TThread;
+  LThreads: array[0..1] of TProcWorker;
   LStart: TInstant;
   LI: Integer;
   LTotalOps: Int64;
@@ -115,7 +136,7 @@ begin
   LStart := TInstant.Now;
   for LI := 0 to 1 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     var
       LIt: Int64;
     begin
@@ -126,7 +147,6 @@ begin
         GContendedMutex.Release;
       end;
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   for LI := 0 to 1 do
@@ -173,7 +193,6 @@ var
   LSum, LVar, LStd: Double;
   LIdxP95: Integer;
 begin
-  { warmup discarded }
   for LI := 1 to CONTENDED_WARMUP do
     SampleContended2T(AMutex, CONTENDED_ITERS);
 
