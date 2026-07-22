@@ -166,24 +166,53 @@ begin
   Emit('}');
 end;
 
+function THIRLlvmEmitter.HasEmittedFunction(const AName: string): Boolean;
+var
+  I: LongInt;
+begin
+  for I := 0 to FModule.FunctionCount - 1 do
+    if SameText(FModule.FunctionAt(I).Name, AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function THIRLlvmEmitter.NormalizeUnitLifecycleName(const AUnitName: string): string;
+begin
+  { Match SeedUnitLifecycleBodies (UnitId lowercase + dots → underscores). }
+  Result := LowerCase(StringReplace(AUnitName, '.', '_', True));
+end;
+
 procedure THIRLlvmEmitter.EmitUnitDeclares;
 var
   I: LongInt;
   LName: string;
   LNormalizedUnitName: string;
+  LInitName: string;
+  LFiniName: string;
 begin
+  { Only emit empty stubs when SeedUnitLifecycleBodies did not produce a real
+    body. Re-define after a real body would hide it. Bodies use i64 return ABI
+    (function-body-begin default); stubs/calls must match. }
   for I := 0 to FModule.UnitInitOrderCount - 1 do
   begin
     LName := FModule.UnitInitOrderAt(I);
-    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
-    Emit('define void @np_unit_init_' + LNormalizedUnitName + '() {');
-    Emit('entry:');
-    Emit('  ret void');
-    Emit('}');
-    Emit('define void @np_unit_fini_' + LNormalizedUnitName + '() {');
-    Emit('entry:');
-    Emit('  ret void');
-    Emit('}');
+    LNormalizedUnitName := NormalizeUnitLifecycleName(LName);
+    LInitName := 'np_unit_init_' + LNormalizedUnitName;
+    LFiniName := 'np_unit_fini_' + LNormalizedUnitName;
+    if not HasEmittedFunction(LInitName) then
+    begin
+      Emit('define internal i64 @' + LInitName + '() {');
+      Emit('entry:');
+      Emit('  ret i64 0');
+      Emit('}');
+    end;
+    if not HasEmittedFunction(LFiniName) then
+    begin
+      Emit('define internal i64 @' + LFiniName + '() {');
+      Emit('entry:');
+      Emit('  ret i64 0');
+      Emit('}');
+    end;
   end;
 end;
 
@@ -196,8 +225,8 @@ begin
   for I := 0 to FModule.UnitInitOrderCount - 1 do
   begin
     LName := FModule.UnitInitOrderAt(I);
-    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
-    Emit('  call void @np_unit_init_' + LNormalizedUnitName + '()');
+    LNormalizedUnitName := NormalizeUnitLifecycleName(LName);
+    Emit('  call i64 @np_unit_init_' + LNormalizedUnitName + '()');
   end;
 end;
 
@@ -211,8 +240,8 @@ begin
   for I := FModule.UnitInitOrderCount - 1 downto 0 do
   begin
     LName := FModule.UnitInitOrderAt(I);
-    LNormalizedUnitName := StringReplace(LName, '.', '_', True);
-    Emit('  call void @np_unit_fini_' + LNormalizedUnitName + '()');
+    LNormalizedUnitName := NormalizeUnitLifecycleName(LName);
+    Emit('  call i64 @np_unit_fini_' + LNormalizedUnitName + '()');
   end;
 end;
 

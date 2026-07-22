@@ -465,7 +465,7 @@ var
   Instr: THIRInstr;
   ConstVal: Int64;
   FloatConstVal: Double;
-  HirType: THIRTypeId;
+  HirType, StorageType: THIRTypeId;
 begin
   InitExprResult(AResult);
   if AExpr.SymbolId <= 0 then
@@ -488,13 +488,27 @@ begin
   end;
   if V <> 0 then
   begin
+    StorageType := FindAllocaType(Symbol.Name);
     if IsVarParamAlloca(Symbol.Name) then
     begin
       V := EmitLoad(GetPtrType, V);
       SetExprValue(AResult, EmitLoad(HirType, V), HirType, shvcScalar);
     end
-    else if FindAllocaType(Symbol.Name) = GetPtrType then
+    else if StorageType = GetPtrType then
       SetExprValue(AResult, EmitLoad(GetPtrType, V), GetPtrType, shvcScalar)
+    else if StorageType <> 0 then
+    begin
+      { Prefer storage type (local alloca or unit global) so load width matches
+        declared @g_* / alloca; then cast to expression HirType if needed. }
+      V := EmitLoad(StorageType, V);
+      if StorageType <> HirType then
+      begin
+        V := NormalizeScalarValueToType(V, StorageType, HirType);
+        if V = 0 then
+          Exit(False);
+      end;
+      SetExprValue(AResult, V, HirType, shvcScalar);
+    end
     else
       SetExprValue(AResult, EmitLoad(HirType, V), HirType, shvcScalar);
     Exit(AResult.ValueId <> 0);

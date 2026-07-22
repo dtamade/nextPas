@@ -308,6 +308,17 @@ begin
     for I := 0 to FAllocas.Count - 1 do
       if SameText(FAllocas[I].Name, AName) then
         Exit(FAllocas[I].TypeId);
+  { Unit-level vars (e.g. GMuAcc) are globals: RegisterGlobal stores type in
+    FGlobalTypes. Without this lookup, load/store fall through with TypeId 0
+    (emitter residual i64) while structured expr loads use Integer width. }
+  if FGlobalNames.Count > 0 then
+    for I := 0 to FGlobalNames.Count - 1 do
+      if SameText(FGlobalNames[I], AName) then
+      begin
+        if I < FGlobalTypes.Count then
+          Exit(FGlobalTypes[I]);
+        Exit(0);
+      end;
   Result := 0;
 end;
 

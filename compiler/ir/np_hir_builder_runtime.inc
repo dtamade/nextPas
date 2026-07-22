@@ -5,6 +5,8 @@ var
   Func: THIRFunction;
   Instr: THIRInstr;
   I: LongInt;
+  SourceType, RetType: THIRTypeId;
+  Normalized: THIRValueId;
 begin
   if FIntfVarNames.Count > 0 then
     for I := 0 to LongInt(FIntfVarNames.Count) - 1 do
@@ -24,6 +26,13 @@ begin
       end;
     end;
   Func := FModule.FunctionAt(FModule.FunctionCount - 1);
+  if (FCurrentFuncId <> 0) then
+    for I := 0 to FModule.FunctionCount - 1 do
+      if FModule.FunctionAt(I).Id = FCurrentFuncId then
+      begin
+        Func := FModule.FunctionAt(I);
+        Break;
+      end;
   if (Func.Params <> nil) and (Func.Params.Count > 0) and
     (Func.Params[0].Name = 'sret_ptr') then
   begin
@@ -39,7 +48,22 @@ begin
   end
   else
   begin
-    V := LowerNodeExprOrBlob(ANode, ANode.Operand);
+    { unit-init seeds ret-runtime with "int 0" (narrowest const width i8);
+      function-body-begin defaults ReturnTypeId to i64. Cast so ret matches. }
+    SourceType := 0;
+    V := LowerNodeExprOrBlobTyped(ANode, ANode.Operand, SourceType);
+    RetType := Func.ReturnTypeId;
+    if (V <> 0) and (RetType <> 0) then
+    begin
+      if SourceType = 0 then
+        SourceType := RetType;
+      if SourceType <> RetType then
+      begin
+        Normalized := NormalizeScalarValueToType(V, SourceType, RetType);
+        if Normalized <> 0 then
+          V := Normalized;
+      end;
+    end;
     FlushPendingCleanupNodes;
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
