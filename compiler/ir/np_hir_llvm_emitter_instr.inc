@@ -46,6 +46,9 @@ begin
     end;
     hikLoad:
     begin
+      { TypeId 0 maps to void; cannot load void. Prefer i64 for scalar residual. }
+      if (LlvmType = '') or (LlvmType = 'void') then
+        LlvmType := 'i64';
       if AInstr.IntrinsicName <> '' then
       begin
         if Copy(AInstr.IntrinsicName, 1, 6) = 'const:' then
@@ -58,13 +61,15 @@ begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
             ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
         else
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+            ', ptr null');
       end
       else if Length(AInstr.Operands) > 0 then
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
           ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
       else
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+          ', ptr null');
     end;
     hikStore:
       if Length(AInstr.Operands) >= 2 then

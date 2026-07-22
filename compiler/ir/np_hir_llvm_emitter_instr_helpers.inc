@@ -276,12 +276,64 @@ end;
 procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
 var
   I: LongInt;
-  LlvmType, Op: string;
+  LlvmType, Op, SretRef, FirstTy, ArgTy: string;
   IsTStringSret: Boolean;
+  NeedSretInject: Boolean;
 begin
   LlvmType := TypeToLlvm(AInstr.TypeId);
+  if (LlvmType = '') or (LlvmType = 'void') then
+    if AInstr.ResultId <> 0 then
+      LlvmType := 'i64';
   IsTStringSret := IsTStringSretFunction(AInstr.CallTarget);
-  if IsSretFunction(AInstr.CallTarget) or IsTStringSret then
+  SretRef := '';
+  NeedSretInject := False;
+  { Batch 25: TString-return ABI is void(ptr sret(%TString), formals...).
+    Scalar-encoded call sites pass only formals and store ResultId; inject a
+    temp slot and bind ResultId so Length(GetS(...)) / field consumers work. }
+  if IsTStringSret then
+  begin
+    FNeedsTStringRuntime := True;
+    if Length(AInstr.Operands) = 0 then
+      NeedSretInject := True
+    else
+    begin
+      if AInstr.Operands[0].TypeId <> 0 then
+        FirstTy := TypeToLlvm(AInstr.Operands[0].TypeId)
+      else
+        FirstTy := 'i64';
+      if (FirstTy <> 'ptr') and (Pos('ptr', FirstTy) <> 1) then
+        NeedSretInject := True
+      else
+        SretRef := ValueRef(AInstr.Operands[0].ValueId);
+    end;
+    if NeedSretInject then
+    begin
+      SretRef := '%sret.tmp.' + IntToStr(AInstr.ResultId);
+      Emit('  ' + SretRef + ' = alloca [24 x i8], align 8');
+      Emit('  call void @np_tstring_init(ptr ' + SretRef + ')');
+    end;
+    Op := '  call void @' + AInstr.CallTarget + '(ptr sret(%TString) ' + SretRef;
+    for I := 0 to High(AInstr.Operands) do
+    begin
+      if (not NeedSretInject) and (I = 0) then
+        Continue;
+      Op := Op + ', ';
+      if AInstr.Operands[I].TypeId <> 0 then
+        ArgTy := TypeToLlvm(AInstr.Operands[I].TypeId)
+      else
+        ArgTy := 'i64';
+      if ArgTy = '' then
+        ArgTy := 'i64';
+      Op := Op + ArgTy + ' ' + ValueRef(AInstr.Operands[I].ValueId);
+    end;
+    Op := Op + ')';
+    Emit(Op);
+    if AInstr.ResultId <> 0 then
+      Emit('  ' + ValueRef(AInstr.ResultId) + ' = bitcast ptr ' +
+        SretRef + ' to ptr');
+    Exit;
+  end;
+  if IsSretFunction(AInstr.CallTarget) then
     Op := '  call void @' + AInstr.CallTarget + '('
   else if LlvmType = 'void' then
     Op := '  call void @' + AInstr.CallTarget + '('
@@ -291,10 +343,7 @@ begin
   for I := 0 to High(AInstr.Operands) do
   begin
     if I > 0 then Op := Op + ', ';
-    { First operand of TString sret call gets sret(%TString) annotation }
-    if IsTStringSret and (I = 0) then
-      Op := Op + 'ptr sret(%TString) '
-    else if AInstr.Operands[I].TypeId <> 0 then
+    if AInstr.Operands[I].TypeId <> 0 then
       Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' '
     else
       Op := Op + 'i64 ';
