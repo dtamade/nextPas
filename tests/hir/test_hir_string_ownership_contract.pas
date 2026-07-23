@@ -9,9 +9,12 @@ uses
   np_green_tree,
   np_hir_builder,
   np_hir_llvm_emitter,
+  np_hir_model,
+  np_hir_types,
   np_lexer,
   np_semantic_analyzer,
   np_semantic_model,
+  np_system_contracts,
   np_unit_graph;
 
 const
@@ -76,6 +79,17 @@ const
     'procedure Kill(Box: TStringBox);' + LineEnding +
     'begin' + LineEnding +
     '  Box.Free;' + LineEnding +
+    'end;' + LineEnding +
+    'begin' + LineEnding +
+    'end.';
+
+  LocalTriadSource =
+    'program test;' + LineEnding +
+    'procedure Touch;' + LineEnding +
+    'var A, B: string;' + LineEnding +
+    'begin' + LineEnding +
+    '  A := ''abcdef'';' + LineEnding +
+    '  B := A;' + LineEnding +
     'end;' + LineEnding +
     'begin' + LineEnding +
     'end.';
@@ -315,11 +329,122 @@ begin
   end;
 end;
 
+procedure AssertTypedStringContracts;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Func: THIRFunction;
+  Instr: THIRInstr;
+  FuncIndex, BlockIndex, InstrIndex: LongInt;
+  InitCount, FiniCount, AssignCount: LongInt;
+  ContractDefinition: TSystemContractDefinition;
+  OperandType: THIRTypeRec;
+  OperandIndex: LongInt;
+begin
+  { Local string slots exercise init/assign/fini triad (program globals skip init). }
+  Model := BuildModel(LocalTriadSource);
+  Builder := nil;
+  try
+    if Model = nil then
+      Fail('typed-string-model-nil');
+    Builder := THIRBuilder.Create(Model);
+    Builder.Build;
+    InitCount := 0;
+    FiniCount := 0;
+    AssignCount := 0;
+    for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
+    begin
+      Func := Builder.Module.FunctionAt(FuncIndex);
+      if Func.Blocks = nil then
+        Continue;
+      for BlockIndex := 0 to LongInt(Func.Blocks.Count) - 1 do
+        if Func.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+          for InstrIndex := 0 to
+            LongInt(Func.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+          begin
+            Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[
+              SizeUInt(InstrIndex)];
+            if (Instr.Kind = hikIntrinsic) and
+              IsSystemContract(Instr, sckStringInit) then
+            begin
+              Inc(InitCount);
+              ContractDefinition := SystemContractAt(sckStringInit);
+              if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+                Fail('string-init-name-mismatch:' + Instr.IntrinsicName);
+              if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+                Fail('string-init-runtime-mismatch:' + Instr.CallTarget);
+              if Length(Instr.Operands) <> 1 then
+                Fail('string-init-operand-count:' +
+                  IntToStr(Length(Instr.Operands)));
+              OperandType := Builder.Module.Types.GetType(
+                Instr.Operands[0].TypeId);
+              if OperandType.Kind <> htkPointer then
+                Fail('string-init-operand-not-pointer');
+            end;
+            if (Instr.Kind = hikIntrinsic) and
+              IsSystemContract(Instr, sckStringFini) then
+            begin
+              Inc(FiniCount);
+              ContractDefinition := SystemContractAt(sckStringFini);
+              if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+                Fail('string-fini-name-mismatch:' + Instr.IntrinsicName);
+              if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+                Fail('string-fini-runtime-mismatch:' + Instr.CallTarget);
+              if Length(Instr.Operands) <> 1 then
+                Fail('string-fini-operand-count:' +
+                  IntToStr(Length(Instr.Operands)));
+              OperandType := Builder.Module.Types.GetType(
+                Instr.Operands[0].TypeId);
+              if OperandType.Kind <> htkPointer then
+                Fail('string-fini-operand-not-pointer');
+            end;
+            if (Instr.Kind = hikIntrinsic) and
+              IsSystemContract(Instr, sckStringAssign) then
+            begin
+              Inc(AssignCount);
+              ContractDefinition := SystemContractAt(sckStringAssign);
+              if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+                Fail('string-assign-name-mismatch:' + Instr.IntrinsicName);
+              if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+                Fail('string-assign-runtime-mismatch:' + Instr.CallTarget);
+              if Length(Instr.Operands) <> 2 then
+                Fail('string-assign-operand-count:' +
+                  IntToStr(Length(Instr.Operands)));
+              for OperandIndex := 0 to High(Instr.Operands) do
+              begin
+                OperandType := Builder.Module.Types.GetType(
+                  Instr.Operands[OperandIndex].TypeId);
+                if OperandType.Kind <> htkPointer then
+                  Fail('string-assign-operand-not-pointer:' +
+                    IntToStr(OperandIndex));
+              end;
+            end;
+            { Legacy string names must not remain as untyped authority. }
+            if (Instr.Kind = hikIntrinsic) and (not Instr.HasSystemContract) and
+              ((Instr.IntrinsicName = 'tstring_init') or
+              (Instr.IntrinsicName = 'tstring_fini') or
+              (Instr.IntrinsicName = 'tstring_assign')) then
+              Fail('legacy-untyped-tstring-intrinsic:' + Instr.IntrinsicName);
+          end;
+    end;
+    if InitCount = 0 then
+      Fail('missing-typed-string-init');
+    if FiniCount = 0 then
+      Fail('missing-typed-string-fini');
+    if AssignCount = 0 then
+      Fail('missing-typed-string-assign');
+  finally
+    Builder.Free;
+    Model.Free;
+  end;
+end;
+
 begin
   AssertOwnedBorrowedContract;
   AssertAliasNoOwnerContract;
   AssertIntToStrOwnershipContract;
   AssertReturnOwnershipCoveredByC6H4;
   AssertFieldAndObjectFreeBoundaries;
+  AssertTypedStringContracts;
   WriteLn('hir-string-ownership-contract-status=pass');
 end.

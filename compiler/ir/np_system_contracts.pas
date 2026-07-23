@@ -143,10 +143,10 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'owned destination';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'deferred';
-      RuntimeMapping: 'deferred';
-      FocusedEvidence: 'runtime-contracts.md';
-      EvidenceLevel: scelVocabulary
+      HirEvidence: 'tstring_init / np.system.string_init';
+      RuntimeMapping: 'np_tstring_init';
+      FocusedEvidence: 'test_hir_string_ownership_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckStringFini;
@@ -156,8 +156,8 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'owned value release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'string cleanup nodes';
-      RuntimeMapping: 'string release helpers';
+      HirEvidence: 'tstring_fini / np.system.string_fini';
+      RuntimeMapping: 'np_tstring_fini';
       FocusedEvidence: 'test_hir_string_ownership_contract';
       EvidenceLevel: scelHir
     ),
@@ -169,8 +169,8 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'copy or move assignment';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'string assignment nodes';
-      RuntimeMapping: 'string assignment helpers';
+      HirEvidence: 'tstring_assign / np.system.string_assign';
+      RuntimeMapping: 'np_tstring_assign';
       FocusedEvidence: 'test_hir_string_ownership_contract';
       EvidenceLevel: scelHir
     ),

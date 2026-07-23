@@ -60,9 +60,9 @@ for compiler-emitted operations. Advanced Unicode, parsing, formatting and text 
 
 | Contract | Meaning | Owner boundary |
 | --- | --- | --- |
-| `np.system.string_init` | initialize a managed string slot to a safe empty state | system contract, runtime implementation deferred |
-| `np.system.string_fini` | finalize a managed string slot and release owned storage if needed | system contract over mem owner |
-| `np.system.string_assign` | assign one managed string value to another with correct lifetime behavior | system contract over text/mem owners |
+| `np.system.string_init` | initialize a managed string slot to a safe empty state | system contract; HIR typed (`sckStringInit` → `np_tstring_init`); full runtime lifecycle proof deferred |
+| `np.system.string_fini` | finalize a managed string slot and release owned storage if needed | system contract over mem owner; HIR typed (`sckStringFini` → `np_tstring_fini`) |
+| `np.system.string_assign` | assign one managed string value to another with correct lifetime behavior | system contract over text/mem owners; HIR typed (`sckStringAssign` → `np_tstring_assign`) |
 
 Non-goals for this stage:
 

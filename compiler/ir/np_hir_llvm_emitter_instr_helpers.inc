@@ -524,6 +524,50 @@ begin
         FProcessFiniEmitted := True;
       end;
     end;
+    sckStringInit:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringInit).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckStringFini:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringFini).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckStringAssign:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 2 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringAssign).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end;
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

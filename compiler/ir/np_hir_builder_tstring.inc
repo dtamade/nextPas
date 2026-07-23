@@ -59,6 +59,8 @@ end;
 procedure THIRBuilder.EmitTStringInit(const AName: string);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
+  SlotId: THIRValueId;
 begin
   if FindAlloca(AName + '$ts') <> 0 then Exit;
   { alloca [24 x i8] — uses tstring IntrinsicName for emitter dispatch }
@@ -73,12 +75,17 @@ begin
   else
     EmitInstr(Instr);
   RegisterAllocaEntry(AName + '$ts', Instr.ResultId, GetPtrType, False);
-  { call tstring_init to zero-fill 24B }
+  { Typed string_init: SystemContractKind authority; CallTarget = runtime map. }
+  SlotId := FindAlloca(AName + '$ts');
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := 0;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_init';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringInit);
+  ContractDefinition := SystemContractAt(sckStringInit);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0].ValueId := FindAlloca(AName + '$ts');
+  Instr.Operands[0].ValueId := SlotId;
   Instr.Operands[0].TypeId := GetPtrType;
   EmitInstr(Instr);
 end;
@@ -86,10 +93,15 @@ end;
 procedure THIRBuilder.EmitTStringFini(AValue: THIRValueId);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := 0;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_fini';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringFini);
+  ContractDefinition := SystemContractAt(sckStringFini);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0].ValueId := AValue;
   Instr.Operands[0].TypeId := GetPtrType;
@@ -99,10 +111,15 @@ end;
 procedure THIRBuilder.EmitTStringAssign(ADst, ASrc: THIRValueId);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := 0;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_assign';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringAssign);
+  ContractDefinition := SystemContractAt(sckStringAssign);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 2);
   Instr.Operands[0].ValueId := ADst;
   Instr.Operands[0].TypeId := GetPtrType;
@@ -616,8 +633,11 @@ begin
     EmitInstr(Instr);
     TsTmp := Instr.ResultId;
     FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := 0;
     Instr.Kind := hikIntrinsic;
-    Instr.IntrinsicName := 'tstring_init';
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    AssignSystemContract(Instr, sckStringInit);
+    Instr.CallTarget := SystemContractAt(sckStringInit).RuntimeMapping;
     SetLength(Instr.Operands, 1);
     Instr.Operands[0].ValueId := TsTmp;
     Instr.Operands[0].TypeId := GetPtrType;

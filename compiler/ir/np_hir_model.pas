@@ -309,6 +309,7 @@ function ValidateSystemContractInstr(const AInstr: THIRInstr;
 var
   ContractDefinition: TSystemContractDefinition;
   ContractOrdinal: LongInt;
+  OperandIndex: LongInt;
   OperandType: THIRTypeRec;
 begin
   AError := '';
@@ -326,6 +327,9 @@ begin
   case AInstr.SystemContractKind of
     sckProcessInit,
     sckProcessFini,
+    sckStringInit,
+    sckStringFini,
+    sckStringAssign,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -353,6 +357,46 @@ begin
       AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
         ':' + IntToStr(Length(AInstr.Operands));
       Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Managed string TString triad: init/fini = 1 ptr; assign = 2 ptr. }
+  if (AInstr.SystemContractKind = sckStringInit) or
+    (AInstr.SystemContractKind = sckStringFini) or
+    (AInstr.SystemContractKind = sckStringAssign) then
+  begin
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    if AInstr.SystemContractKind = sckStringAssign then
+    begin
+      if Length(AInstr.Operands) <> 2 then
+      begin
+        AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+          ':' + IntToStr(Length(AInstr.Operands));
+        Exit(False);
+      end;
+    end
+    else if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    for OperandIndex := 0 to High(AInstr.Operands) do
+    begin
+      OperandType := ATypes.GetType(AInstr.Operands[OperandIndex].TypeId);
+      if OperandType.Kind <> htkPointer then
+      begin
+        AError := 'system-contract-operand-not-pointer:' +
+          IntToStr(ContractOrdinal) + ':' +
+          IntToStr(AInstr.Operands[OperandIndex].TypeId);
+        Exit(False);
+      end;
     end;
     Exit(True);
   end;

@@ -16,9 +16,9 @@ into readiness claims or public ABI.
 | `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_init_chain`) | Focused host-free multi-unit init side-effect (Halt 33); ledger stays semantic |
 | `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_fini_body`) | Focused host-free fini body/order evidence; ledger stays semantic |
 | `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
-| `np.system.string_init` | vocabulary | `System.AnsiString` | deferred | `runtime-contracts.md` | No implementation claim |
-| `np.system.string_fini` | HIR | string cleanup nodes | string release helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
-| `np.system.string_assign` | HIR | string assignment nodes | string assignment helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
+| `np.system.string_init` | HIR | `System.AnsiString`; typed `sckStringInit` | `np_tstring_init` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
+| `np.system.string_fini` | HIR | string cleanup nodes; typed `sckStringFini` | `np_tstring_fini` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
+| `np.system.string_assign` | HIR | string assignment nodes; typed `sckStringAssign` | `np_tstring_assign` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
 | `np.system.dynarray_init` | vocabulary | System dynamic array | deferred | `runtime-contracts.md` | No implementation claim |
 | `np.system.dynarray_fini` | executable | dynarray cleanup contract | `np_dynarray_release` | `test_hir_dynarray_release_runtime_smoke` | Managed-element coverage remains partial |
 | `np.system.dynarray_set_length` | executable | set-length array contract | `np_dynarray_resize` | `test_hir_dynarray_release_runtime_smoke` | Failure cleanup remains partial |
@@ -45,6 +45,12 @@ into readiness claims or public ABI.
 > kinds before legacy call-target string matching. Evidence remains **call-shape only**
 > (typed identity + void IR); **not** full process business init; ledger stays **scelHir**.
 > Residual honesty footnotes are closed; further work is whole-family typed migration.
+>
+> **Footnote (M1 typed string ownership triad, 2026-07-23)**: `sckStringInit` /
+> `sckStringFini` / `sckStringAssign` are production typed HIR (authority =
+> `SystemContractKind`); runtime maps to `np_tstring_*`. Evidence is HIR identity +
+> LLVM call-shape via `test_hir_string_ownership_contract`; **not** full COW/refcount
+> executable lifecycle. Ledger **scelHir** for the triad (init promoted from vocabulary).
 >
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves

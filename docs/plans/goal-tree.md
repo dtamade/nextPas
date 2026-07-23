@@ -68,8 +68,10 @@
 - NPC V2 framing 与 path-safe entry identity 已落地；framing 14/14 和五阶段 fail-closed
   incremental gate 通过。compiler-pass harness 尚未隔离或清空 workspace `.nextpas` artifact
   roots，因此两次 53/53 都不能写成 cold/warm-cache 证明。
-- M1 已落地第一个 production typed family：object-free 的 root、destroy、cleanup、release
-  由 `TSystemContractKind` 控制 HIR validation 和 LLVM dispatch；其余 contract families 仍待迁移。
+- M1 production typed families 已落地：object-free（root/destroy/cleanup/release）、
+  process_init/fini、string ownership triad（init/fini/assign）；均由
+  `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。下一 family：dynarray /
+  interface；其余 contract families 仍待迁移。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
@@ -178,7 +180,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 7. [ ] 继续 System typed contract migration；M1 未完成。
    - [x] object-free production family（root/destroy/cleanup/release）
    - [x] process_init/fini typed HIR family（`SystemContractKind` 权威；ledger 仍 scelHir）
-   - [ ] 下一 family：string / dynarray / interface（整族推进）
+   - [x] string ownership triad typed HIR（init/fini/assign → `np_tstring_*`；ledger scelHir）
+   - [ ] 下一 family：dynarray / interface（整族推进）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---
@@ -198,6 +201,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-12 | Compiler excellence roadmap | 采用 Rust 式内部严谨性 + Go 式构建反馈，重新按 production evidence 计分 |
 | 2026-07-13 | M0 truth revalidation | NPC gates、53/53 immediate repeat、16/16 fail、rebuild 与 tooling fresh 通过；cache-root isolation 保持 open |
 | 2026-07-13 | M1 typed contract slice | object-free root/destroy/cleanup/release 成为首个 typed HIR-to-LLVM production family |
+| 2026-07-23 | M1 process + string families | process_init/fini 与 string init/fini/assign 进入 typed HIR（scelHir call-shape） |
 
 ---
 
