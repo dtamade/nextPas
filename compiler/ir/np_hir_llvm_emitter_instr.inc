@@ -284,9 +284,15 @@ begin
       end
       else if AInstr.IntrinsicName = 'write_int' then
       begin
+        { Batch 29: Operands[0]=value, optional [1]=fd (default 1). }
         FNeedsWriteInt := True;
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @write_i64_decimal(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @write_i64_decimal(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')')
+        else if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @write_i64_decimal(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 1)');
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin

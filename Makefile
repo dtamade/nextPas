@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -66,6 +66,11 @@ test-compiler-astatestr-fail: hygiene
 # Batch 27: ErrOutput/StdErr → fd 2 host-free write routing (not M2-A).
 test-compiler-erroutput-fd: hygiene
 	bash tests/regression/verify_compiler_erroutput_fd_focused.sh
+	$(MAKE) hygiene
+
+# Batch 29: write_i64_decimal(value, fd) integer write to stderr (not M2-A).
+test-compiler-write-i64-fd: hygiene
+	bash tests/regression/verify_compiler_write_i64_fd_focused.sh
 	$(MAKE) hygiene
 
 focused: hygiene

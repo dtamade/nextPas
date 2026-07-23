@@ -3,6 +3,7 @@ var
   V: THIRValueId;
   ValueType: THIRTypeId;
   Instr: THIRInstr;
+  Fd: Int64;
 begin
   V := LowerNodeExprOrBlobTyped(ANode, ANode.Operand, ValueType);
   if (V <> 0) and (ValueType <> 0) then
@@ -13,13 +14,19 @@ begin
   end;
   if V <> 0 then
   begin
+    { Batch 29: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+    if SameText(ANode.DisplayName, 'WriteErr') then
+      Fd := 2
+    else
+      Fd := 1;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
     Instr.IntrinsicName := 'write_int';
-    SetLength(Instr.Operands, 1);
+    SetLength(Instr.Operands, 2);
     Instr.Operands[0] := MakeTypedOperand(V, GetIntType);
+    Instr.Operands[1] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
     EmitInstr(Instr);
   end;
 end;

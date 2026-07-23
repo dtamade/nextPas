@@ -295,12 +295,13 @@ var
   end;
 
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
-    const AOperand: string);
+    const AOperand: string; const ADisplayName: string);
   var
     LocalExprId, LocalNodeId: LongInt;
   begin
+    { Batch 29: ADisplayName Write|WriteErr → write_i64_decimal fd. }
     LocalNodeId := FModel.AddTypedHirNode(
-      'write-int-runtime', 'Write', 0, 0, AOperand
+      'write-int-runtime', ADisplayName, 0, 0, AOperand
     );
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
@@ -1777,7 +1778,7 @@ begin
               (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
               SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
-              AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
+              AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand, ArgName)
             else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', ArgName, 0, 0, Operand
@@ -1871,7 +1872,7 @@ begin
                   (not FModel.LookupConstValue(
                     FuncName + '$ret_str_' + RhsNode.ChildAt(1).Text, CondValue)) and
                   EncodeRuntimeIntExprFold(RhsNode, Operand) then
-                  AddWriteIntRuntimeNode(RhsNode, Operand)
+                  AddWriteIntRuntimeNode(RhsNode, Operand, ArgName)
                 else if Value >= 0 then
                 begin
                   Inc(FBlockLabelCounter);
@@ -1891,7 +1892,7 @@ begin
               end;
             end
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
-              AddWriteIntRuntimeNode(RhsNode, Operand);
+              AddWriteIntRuntimeNode(RhsNode, Operand, ArgName);
             Inc(ArgIndex);
           end;
           if SameText(Child.Text, 'WriteLn') then
