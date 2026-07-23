@@ -761,6 +761,9 @@ begin
         ValueRef(AInstr.Operands[0].ValueId) + ')');
     sckObjectFreeRelease:
       EmitObjectFreeRelease(AInstr);
+    sckManagedRecordFini:
+      { Marker only: nested sckStringFini / sckDynArrayFini do the work. }
+      Emit('  ; --- managed-record-fini (compiler-planned field cleanup) ---');
   else
     raise Exception.Create('Unsupported typed System contract kind: ' +
       IntToStr(Ord(AInstr.SystemContractKind)));

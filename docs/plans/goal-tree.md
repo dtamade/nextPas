@@ -188,7 +188,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] heap_alloc/free typed HIR（GetMem/FreeMem + field arr byte-size → `sckHeapAlloc`/`sckHeapFree` → `@np_alloc`/`@np_free`；ledger scelHir）
    - [x] exception boundary typed HIR（try_push/pop/raise/finally_end/except_end → `@np_try_*` 等；ledger scelHir；begin markers 仍 bare）
    - [x] object_alloc typed HIR（class-new → `sckObjectAlloc` → `@np_object_alloc`；ledger scelHir；arr_alloc 归并进 heap_alloc）
-   - [ ] 下一 family / 其余 residual（managed-record 等）
+   - [x] managed_record_fini typed HIR（cleanup → `sckManagedRecordFini` 权威 marker + 嵌套 string/dynarray；init 仍 vocabulary；ledger scelHir）
+   - [ ] 下一 family / 其余 residual（runtime_fault / unit 等；runtime-closure 待 M1 稳定后）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---

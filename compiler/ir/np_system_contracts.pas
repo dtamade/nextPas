@@ -261,9 +261,9 @@ const
       TargetIdentity: 'managed-record';
       OwnershipIntent: 'owned fields release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'managed-record-cleanup-runtime';
-      RuntimeMapping: 'deferred';
-      FocusedEvidence: 'test_hir_node_kind';
+      HirEvidence: 'typed sckManagedRecordFini / managed-record-cleanup-runtime';
+      RuntimeMapping: 'compiler-planned field cleanup';
+      FocusedEvidence: 'test_hir_managed_record_contract';
       EvidenceLevel: scelHir
     ),
     (

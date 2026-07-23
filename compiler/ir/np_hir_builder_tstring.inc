@@ -96,7 +96,7 @@ var
   ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := 0;
+  Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   AssignSystemContract(Instr, sckStringFini);

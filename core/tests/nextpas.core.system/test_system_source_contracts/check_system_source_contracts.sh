@@ -948,10 +948,21 @@ require_repo_token "tests/hir/test_hir_object_alloc_contract.pas" "sckObjectAllo
 require_repo_token "tests/hir/test_hir_object_alloc_contract.pas" "hir-object-alloc-contract=pass"
 require_token "tests/nextpas.core.system/Makefile" "test_hir_object_alloc_contract.pas"
 require_token "tests/nextpas.core.system/Makefile" "test-object-alloc-contract"
+# managed_record_fini typed HIR (managed-record-cleanup → sckManagedRecordFini)
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckManagedRecordFini)"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckManagedRecordFini:"
+require_repo_owner_family_token "compiler/ir" "np_hir_model" "sckManagedRecordFini"
+require_repo_file "tests/hir/test_hir_managed_record_contract.pas"
+require_repo_token "tests/hir/test_hir_managed_record_contract.pas" "IsSystemContract(Instr, sckManagedRecordFini)"
+require_repo_token "tests/hir/test_hir_managed_record_contract.pas" "sckManagedRecordFini"
+require_repo_token "tests/hir/test_hir_managed_record_contract.pas" "hir-managed-record-contract=pass"
+require_token "tests/nextpas.core.system/Makefile" "test_hir_managed_record_contract.pas"
+require_token "tests/nextpas.core.system/Makefile" "test-managed-record-contract"
 # Halt, heap, object_alloc mapping documented in runtime-contracts
 require_token "docs/system/runtime-contracts.md" "typed \`sckHalt\`"
 require_token "docs/system/runtime-contracts.md" "typed HIR \`sckHeapAlloc\`"
 require_token "docs/system/runtime-contracts.md" "sckObjectAlloc"
+require_token "docs/system/runtime-contracts.md" "sckManagedRecordFini"
 require_token "docs/system/runtime-contracts.md" "arr_alloc"
 require_token "docs/system/runtime-contracts.md" "class_alloc"
 for helper in \

@@ -25,7 +25,7 @@ into readiness claims or public ABI.
 | `np.system.interface_addref` | HIR | typed `sckInterfaceAddRef` + intf-addref-runtime | `np_intf_addref` | `test_hir_interface_contract` | Typed HIR/LLVM call-shape only; not full refcount executable proof |
 | `np.system.interface_release` | HIR | typed `sckInterfaceRelease` + intf-release-runtime | `np_intf_release` | `test_hir_interface_contract` | Typed HIR/LLVM call-shape only; not full refcount executable proof |
 | `np.system.managed_record_init` | vocabulary | System managed record | deferred | `runtime-contracts.md` | No implementation claim |
-| `np.system.managed_record_fini` | HIR | managed-record cleanup contract | deferred | `test_hir_node_kind` | No executable lifecycle proof |
+| `np.system.managed_record_fini` | HIR | typed `sckManagedRecordFini` + `managed-record-cleanup-runtime` | compiler-planned field cleanup | `test_hir_managed_record_contract` | Marker + nested string/dynarray; init stays vocabulary; not full lifecycle e2e |
 | `np.system.heap_alloc` | HIR | typed `sckHeapAlloc` + `getmem-runtime` / field arr path | `np_alloc` | `test_hir_heap_contract` | GetMem + field setlength byte-size path typed; legacy `arr_alloc*` emit remains for dead bare sites |
 | `np.system.heap_free` | HIR | typed `sckHeapFree` + `freemem-runtime` | `np_free` | `test_hir_heap_contract` | FreeMem path typed; large-alloc smoke remains secondary executable evidence |
 | `np.system.object_alloc` | HIR | typed `sckObjectAlloc` + `class-new-runtime` | `np_object_alloc` | `test_hir_object_alloc_contract` | Typed HIR + call-shape; not full ctor/vmt e2e |
@@ -86,6 +86,15 @@ into readiness claims or public ABI.
 > authority = `SystemContractKind`); runtime maps to `@np_object_alloc`.
 > Focused typed identity: `test_hir_object_alloc_contract`. Evidence is HIR
 > identity + LLVM call-shape; **not** full constructor/vmt e2e. Ledger **scelHir**.
+>
+> **Footnote (M1 typed managed_record_fini, 2026-07-23)**: `sckManagedRecordFini`
+> is production typed HIR authority for managed-record scope cleanup
+> (`managed-record-cleanup-runtime`; authority = `SystemContractKind`).
+> Runtime mapping is compiler-planned field cleanup: nested typed contracts
+> (`sckStringFini` / `sckDynArrayFini`) perform release; LLVM emits a marker
+> comment only. `managed_record_init` stays vocabulary. Focused typed identity:
+> `test_hir_managed_record_contract`. Evidence is HIR identity + nested call
+> shape; **not** full nested/managed-record executable lifecycle. Ledger **scelHir**.
 >
 > **Footnote (M1 typed exception boundary, 2026-07-23)**: `sckExceptionTryPush` /
 > `sckExceptionTryPop` / `sckExceptionRaise` / `sckExceptionFinallyEnd` /

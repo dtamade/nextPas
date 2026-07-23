@@ -342,6 +342,7 @@ begin
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
     sckObjectFreeRelease,
+    sckManagedRecordFini,
     sckExceptionTryPush,
     sckExceptionTryPop,
     sckExceptionRaise,

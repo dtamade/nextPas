@@ -31,7 +31,7 @@ ownership status so future slices can expand the module without turning it into 
 | Managed strings | `future compiler/runtime only` | Runtime lifetime contract belongs here eventually; advanced Unicode/text APIs stay in `nextpas.core.text`. |
 | Dynamic arrays | `future compiler/runtime only` | Managed lifetime and compiler lowering contract; no public ABI in S0/S1. |
 | Interfaces | `future compiler/runtime only` | Managed lifetime and reference-count contract; no public ABI in S0/S1. |
-| Managed records | `future compiler/runtime only` | Compiler/runtime lifetime contract; no public ABI in S0/S1. |
+| Managed records | `compiler/HIR contract live; no public facade` | `np.system.managed_record_fini` is production typed HIR (`sckManagedRecordFini` / managed-record-cleanup); compiler-planned field cleanup expands nested string/dynarray contracts. `managed_record_init` remains vocabulary. |
 | Exception raise/unwind root | `compiler/HIR contract live; no public facade` | Five `np.system.exception_*` kinds are production typed HIR (`sckException*`); LLVM maps to `@np_try_*` / `@np_raise` / `@np_finally_end` / `@np_except_end`. Taxonomy owner remains `nextpas.core.exception`. |
 | RTTI / `TypeInfo` primitive contract | `system facade delegating to owner` | Minimal `nextpas.core.system.typinfo` names the seven-symbol contract; compiler/System still own `TypeInfo` and `GetTypeKind` compile-truth. |
 | File I/O helpers | `owned by another module, no system facade yet` | `nextpas.core.fs` / `nextpas.core.io`. |

@@ -196,6 +196,14 @@ Rules:
 - Partial initialization must have a defined cleanup path.
 - Finalization must be idempotent only where compiler semantics require it; do not silently mask double-finalize bugs.
 - Record field ownership stays explicit; system does not own text, array, interface or heap internals.
+- Scope cleanup lowers to production typed HIR `sckManagedRecordFini`
+  (`np.system.managed_record_fini` via `AssignSystemContract` on
+  `managed-record-cleanup-runtime`). The marker carries the record base pointer;
+  nested managed contracts (`sckStringFini` → `@np_tstring_fini`,
+  `sckDynArrayFini` → `@np_dynarray_release`) perform field release. LLVM emits
+  a compiler-planned marker comment only (no standalone `@np_managed_record_fini`
+  helper in this slice). Focused evidence: `test_hir_managed_record_contract`.
+  `managed_record_init` remains vocabulary-only.
 
 ## Heap Manager
 

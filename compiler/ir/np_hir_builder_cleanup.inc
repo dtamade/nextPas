@@ -240,7 +240,18 @@ begin
   if FindAllocaType(VarName) = GetPtrType then
     RecPtr := EmitLoad(GetPtrType, RecAlloca);
 
-  { 遍历每个需要清理的字段 }
+  { Typed authority: managed_record_fini marker (record base ptr).
+    Nested field contracts (string/dynarray) perform actual release. }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckManagedRecordFini);
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(RecPtr, GetPtrType);
+  EmitInstr(Instr);
+
+  { Expand each managed field into its typed nested contract. }
   while Blob <> '' do
   begin
     TabPos := Pos(#9, Blob);
