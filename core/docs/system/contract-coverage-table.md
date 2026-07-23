@@ -166,6 +166,9 @@ and no ledger elevation past `scelSemantic`.
 **What remains**:
 - No host-free end-to-end executable proof that runtime helpers run as full business init.
 - No host-free multi-unit program that proves real init/fini side-effects at executable level.
+  Note (2026-07-23 probe): stage0 `unit_lifecycle_pass` can build+run with init side-effect
+  (count=42) only via **host FPC emit asm** (`fpc-stage0-host`); that is not host-free evidence
+  and must not elevate the unit ledger past `scelSemantic`.
 - No runtime fault classification (`np.system.runtime_fault`) beyond partial allocator/dynarray evidence.
 - Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — LLVM call-order
   evidence ≠ host-free executable; do not treat as self-host complete.

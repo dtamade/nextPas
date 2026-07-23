@@ -319,10 +319,11 @@ is already partially covered by the `test_hir_exception` test suite.
 - LLVM multi-unit call-order（focused：`test_unit_lifecycle_llvm_ordering`）
 
 **当前 residual（相对 M0 权威，按优先级）**:
-1. 无 host-free 端到端「nextPas 编 + 跑」multi-unit unit 生命周期门禁
-2. ledger 保持 `scelSemantic`，**禁止**在无 host-free executable 证明时抬到 executable
-3. 不在本轮做 typed 热路径大迁移 / A→B→C
-4. process residual 见 Gate 3（scelHir call-shape ≠ 业务 init）
+1. 无 host-free 端到端「nextPas 自有 codegen 编 + 跑」multi-unit unit 生命周期门禁
+2. **probe（2026-07-23）**：`unit_lifecycle_pass` 经 stage0 build 可跑且 init 副作用正确（count=42），但 primary tool 为 **host FPC emit asm**（`fpc-stage0-host`；llvm disabled）→ **不算** host-free 关闭；ledger 仍 `scelSemantic`
+3. ledger 保持 `scelSemantic`，**禁止**把 host-FPC 可执行绿读成 host-free / executable 权威
+4. 不在本轮做 typed 热路径大迁移 / A→B→C
+5. process residual 见 Gate 3（scelHir call-shape ≠ 业务 init）
 
 ## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 入口审计)
 
