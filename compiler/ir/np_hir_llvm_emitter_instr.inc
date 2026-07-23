@@ -834,6 +834,7 @@ begin
     end;
     hikTryBegin:
     begin
+      { Legacy bare path; production uses typed sckExceptionTryPush. }
       FNeedsExceptionRuntime := True;
       Inc(FTryCounter);
       Emit('  ; --- try begin ---');

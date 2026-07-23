@@ -692,6 +692,56 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
       end;
     end;
+    sckExceptionTryPush:
+    begin
+      { Typed try frame: alloca jmpbuf + push + setjmp branch.
+        Handler label is CallTarget (bbN); empty → synthetic try.exc.N. }
+      FNeedsExceptionRuntime := True;
+      Inc(FTryCounter);
+      Emit('  ; --- try begin ---');
+      Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [9 x ptr]');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionTryPush).RuntimeMapping +
+        '(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %setjmp.' + IntToStr(FTryCounter) +
+        ' = call i32 @setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %is_exc.' + IntToStr(FTryCounter) + ' = icmp ne i32 %setjmp.' +
+        IntToStr(FTryCounter) + ', 0');
+      if AInstr.CallTarget <> '' then
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) + ', label %' +
+          Trim(AInstr.CallTarget) + ', label %try.body.' +
+          IntToStr(FTryCounter))
+      else
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) +
+          ', label %try.exc.' + IntToStr(FTryCounter) +
+          ', label %try.body.' + IntToStr(FTryCounter));
+      Emit('try.body.' + IntToStr(FTryCounter) + ':');
+    end;
+    sckExceptionTryPop:
+    begin
+      Emit('  ; --- try end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionTryPop).RuntimeMapping + '()');
+    end;
+    sckExceptionFinallyEnd:
+    begin
+      Emit('  ; --- finally end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionFinallyEnd).RuntimeMapping + '()');
+    end;
+    sckExceptionExceptEnd:
+    begin
+      Emit('  ; --- except end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionExceptEnd).RuntimeMapping + '()');
+    end;
+    sckExceptionRaise:
+    begin
+      FNeedsExceptionRuntime := True;
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionRaise).RuntimeMapping + '()');
+      Emit('  unreachable');
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

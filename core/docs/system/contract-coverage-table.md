@@ -33,11 +33,11 @@ into readiness claims or public ABI.
 | `np.system.object_free.cleanup` | HIR | object-free cleanup marker | compiler-planned cleanup | `test_hir_object_free_contract` | End-to-end cleanup effects unproven |
 | `np.system.object_free.release` | backend | object-free release marker | `np_object_free_release` | `test_hir_object_free_contract` | End-to-end release effects unproven |
 | `np.system.runtime_fault` | backend | fault-specific nodes | allocator and dynarray fault helpers | `runtime-contracts.md` | No focused lifecycle-fault proof |
-| `np.system.exception_try_push` | backend | try-begin runtime contract | `np_try_push` | `test_hir_exception` | No executable unwind proof |
-| `np.system.exception_try_pop` | backend | try-end runtime contract | `np_try_pop` | `test_hir_exception` | No executable unwind proof |
-| `np.system.exception_raise` | backend | raise runtime contract | `np_raise` | `test_hir_exception` | No executable unwind proof |
-| `np.system.exception_finally_end` | backend | finally-end runtime contract | `np_finally_end` | `test_hir_exception` | No executable unwind proof |
-| `np.system.exception_except_end` | backend | except-end runtime contract | `np_except_end` | `test_hir_exception` | No executable unwind proof |
+| `np.system.exception_try_push` | HIR | typed `sckExceptionTryPush` + `try-begin-runtime` | `np_try_push` | `test_hir_exception_contract` | Typed HIR + setjmp frame shape; not executable unwind proof |
+| `np.system.exception_try_pop` | HIR | typed `sckExceptionTryPop` + `try-end-runtime` | `np_try_pop` | `test_hir_exception_contract` | Typed HIR + call-shape; not executable unwind proof |
+| `np.system.exception_raise` | HIR | typed `sckExceptionRaise` + `raise-runtime` | `np_raise` | `test_hir_exception_contract` | Typed HIR + unreachable; not exception object model |
+| `np.system.exception_finally_end` | HIR | typed `sckExceptionFinallyEnd` + `finally-end-runtime` | `np_finally_end` | `test_hir_exception_contract` | Typed HIR + call-shape; not executable unwind proof |
+| `np.system.exception_except_end` | HIR | typed `sckExceptionExceptEnd` + `except-end-runtime` | `np_except_end` | `test_hir_exception_contract` | Typed HIR + call-shape; not executable unwind proof |
 <!-- ledger-table:end -->
 
 > **Footnote (D3 closed → M1 typed process family, 2026-07-23)**: HIR builder assigns
@@ -78,6 +78,16 @@ into readiness claims or public ABI.
 > remain bare implementation intrinsics (not this contract surface). Allocator
 > owner remains `nextpas.core.mem`. Evidence is HIR identity + LLVM call-shape;
 > **not** full leak/OOM executable proof. Ledger **scelHir**.
+>
+> **Footnote (M1 typed exception boundary, 2026-07-23)**: `sckExceptionTryPush` /
+> `sckExceptionTryPop` / `sckExceptionRaise` / `sckExceptionFinallyEnd` /
+> `sckExceptionExceptEnd` are production typed HIR (authority =
+> `SystemContractKind`); LLVM maps to `@np_try_push` / `@np_try_pop` /
+> `@np_raise` / `@np_finally_end` / `@np_except_end` (setjmp frame shape).
+> Marker-only `hikFinallyBegin` / `hikExceptBegin` remain non-contract.
+> Focused typed identity: `test_hir_exception_contract` (+ legacy shape
+> `test_hir_exception`). Evidence is HIR identity + call-shape; **not** full
+> unwind object model or table-based exception ABI. Ledger **scelHir**.
 >
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves
@@ -129,9 +139,9 @@ They must not be used as facade contract symbols or treated as part of the `np.s
 | `@np_str_pos` | String position search | `nextpas.core.text` owns, not system contract |
 | `@np_memcpy` | Memory copy | Backend-private helper for `np.system.heap_alloc` managed operations; not alias for public `CopyMem` |
 | `@np_memzero` | Memory zero | Backend-private helper for allocation zeroing; not alias for public `ZeroMem` |
-| `@np_try_push` / `@np_try_pop` | Exception try block | Maps to exception boundary (future) |
-| `@np_finally_end` / `@np_except_end` | Exception finally/except end | Maps to exception boundary (future) |
-| `@np_raise` | Exception raise | Maps to exception boundary (future) |
+| `@np_try_push` / `@np_try_pop` | Exception try block | Maps to typed `np.system.exception_try_push` / `exception_try_pop` |
+| `@np_finally_end` / `@np_except_end` | Exception finally/except end | Maps to typed `np.system.exception_finally_end` / `exception_except_end` |
+| `@np_raise` | Exception raise | Maps to typed `np.system.exception_raise` |
 
 ## TypInfo Compile-Truth Privilege
 

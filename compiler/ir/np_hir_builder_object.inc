@@ -701,15 +701,72 @@ var
   Instr: THIRInstr;
   LabelName: string;
   BlockId: THIRBlockId;
+  VoidType: THIRTypeId;
 begin
-  FillChar(Instr, SizeOf(Instr), 0);
+  VoidType := FModule.Types.AddType(htkVoid, 'void');
   case ANode.NodeKind of
-    hnkTryBeginRuntime:     Instr.Kind := hikTryBegin;
-    hnkTryEndRuntime:       Instr.Kind := hikTryEnd;
-    hnkFinallyBeginRuntime: Instr.Kind := hikFinallyBegin;
-    hnkFinallyEndRuntime:   Instr.Kind := hikFinallyEnd;
-    hnkExceptBeginRuntime:  Instr.Kind := hikExceptBegin;
-    hnkExceptEndRuntime:    Instr.Kind := hikExceptEnd;
+    hnkTryBeginRuntime:
+    begin
+      { Typed try_push: handler label in CallTarget (was bare hikTryBegin). }
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := VoidType;
+      AssignSystemContract(Instr, sckExceptionTryPush);
+      if ANode.Operand <> '' then
+      begin
+        LabelName := ANode.Operand;
+        if (Length(LabelName) > 0) and (LabelName[Length(LabelName)] = #10) then
+          LabelName := Copy(LabelName, 1, Length(LabelName) - 1);
+        BlockId := EnsureBlock(LabelName);
+        Instr.CallTarget := 'bb' + IntToStr(BlockId);
+      end;
+      EmitInstr(Instr);
+    end;
+    hnkTryEndRuntime:
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := VoidType;
+      AssignSystemContract(Instr, sckExceptionTryPop);
+      EmitInstr(Instr);
+    end;
+    hnkFinallyBeginRuntime:
+    begin
+      { Marker only — no system contract kind. }
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikFinallyBegin;
+      Instr.TypeId := VoidType;
+      EmitInstr(Instr);
+    end;
+    hnkFinallyEndRuntime:
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := VoidType;
+      AssignSystemContract(Instr, sckExceptionFinallyEnd);
+      EmitInstr(Instr);
+    end;
+    hnkExceptBeginRuntime:
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikExceptBegin;
+      Instr.TypeId := VoidType;
+      EmitInstr(Instr);
+    end;
+    hnkExceptEndRuntime:
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := VoidType;
+      AssignSystemContract(Instr, sckExceptionExceptEnd);
+      EmitInstr(Instr);
+    end;
     hnkRaiseRuntime:
     begin
       if ANode.Operand <> '' then
@@ -724,24 +781,15 @@ begin
         EmitInstr(Instr);
       end;
       FillChar(Instr, SizeOf(Instr), 0);
-      Instr.Kind := hikRaise;
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := VoidType;
+      AssignSystemContract(Instr, sckExceptionRaise);
       EmitInstr(Instr);
-      Exit;
     end;
   else
-    Exit;
+    ;
   end;
-  if (ANode.NodeKind = hnkTryBeginRuntime) and (ANode.Operand <> '') then
-  begin
-    LabelName := ANode.Operand;
-    if (Length(LabelName) > 0) and (LabelName[Length(LabelName)] = #10) then
-      LabelName := Copy(LabelName, 1, Length(LabelName) - 1);
-    BlockId := EnsureBlock(LabelName);
-    Instr.IntrinsicName := 'bb' + IntToStr(BlockId);
-  end
-  else
-    Instr.IntrinsicName := ANode.Operand;
-  EmitInstr(Instr);
 end;
 
 procedure THIRBuilder.ProcessFieldStore(const ANode: TTypedHirNode);

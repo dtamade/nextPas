@@ -364,10 +364,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'try-begin-runtime';
+      HirEvidence: 'typed sckExceptionTryPush / try-begin-runtime';
       RuntimeMapping: 'np_try_push';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionTryPop;
@@ -377,10 +377,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'try-end-runtime';
+      HirEvidence: 'typed sckExceptionTryPop / try-end-runtime';
       RuntimeMapping: 'np_try_pop';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionRaise;
@@ -390,10 +390,10 @@ const
       TargetIdentity: 'exception-object';
       OwnershipIntent: 'transferred exception object';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'raise-runtime';
+      HirEvidence: 'typed sckExceptionRaise / raise-runtime';
       RuntimeMapping: 'np_raise';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionFinallyEnd;
@@ -403,10 +403,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'finally-end-runtime';
+      HirEvidence: 'typed sckExceptionFinallyEnd / finally-end-runtime';
       RuntimeMapping: 'np_finally_end';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionExceptEnd;
@@ -416,10 +416,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'except-end-runtime';
+      HirEvidence: 'typed sckExceptionExceptEnd / except-end-runtime';
       RuntimeMapping: 'np_except_end';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     )
   );
 

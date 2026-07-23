@@ -340,7 +340,12 @@ begin
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
-    sckObjectFreeRelease:
+    sckObjectFreeRelease,
+    sckExceptionTryPush,
+    sckExceptionTryPop,
+    sckExceptionRaise,
+    sckExceptionFinallyEnd,
+    sckExceptionExceptEnd:
       ;
   else
     AError := 'system-contract-kind-unsupported:' +
@@ -355,9 +360,15 @@ begin
     Exit(False);
   end;
 
-  { Zero-arg void lifecycle contracts (process init/fini). }
+  { Zero-arg void lifecycle contracts (process init/fini + exception boundary).
+    try_push may carry handler label in CallTarget. }
   if (AInstr.SystemContractKind = sckProcessInit) or
-    (AInstr.SystemContractKind = sckProcessFini) then
+    (AInstr.SystemContractKind = sckProcessFini) or
+    (AInstr.SystemContractKind = sckExceptionTryPush) or
+    (AInstr.SystemContractKind = sckExceptionTryPop) or
+    (AInstr.SystemContractKind = sckExceptionRaise) or
+    (AInstr.SystemContractKind = sckExceptionFinallyEnd) or
+    (AInstr.SystemContractKind = sckExceptionExceptEnd) then
   begin
     if Length(AInstr.Operands) <> 0 then
     begin
