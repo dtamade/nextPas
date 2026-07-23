@@ -185,7 +185,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] dynarray set_length/fini typed HIR（→ `np_dynarray_*`；init 仍 vocabulary；ledger scelExecutable）
    - [x] interface addref/release typed HIR（→ `np_intf_*`；ledger scelHir call-shape）
    - [x] halt typed HIR（`sckHalt` → backend syscall lowering；ledger scelHir）
-   - [ ] 下一 family / 其余 residual（整族推进；候选 heap_alloc/free）
+   - [x] heap_alloc/free typed HIR（GetMem/FreeMem → `sckHeapAlloc`/`sckHeapFree` → `@np_alloc`/`@np_free`；ledger scelHir；arr/class_alloc 仍 bare）
+   - [ ] 下一 family / 其余 residual（exception/try、managed-record、object_new 等）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---
@@ -207,6 +208,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-13 | M1 typed contract slice | object-free root/destroy/cleanup/release 成为首个 typed HIR-to-LLVM production family |
 | 2026-07-23 | M1 process + string families | process_init/fini 与 string init/fini/assign 进入 typed HIR（scelHir call-shape） |
 | 2026-07-23 | M1 dynarray + interface families | dynarray set_length/fini（scelExecutable）与 interface addref/release（scelHir）进入 typed HIR |
+| 2026-07-23 | M1 halt + heap families | halt（scelHir syscall）与 GetMem/FreeMem heap_alloc/free（scelHir → np_alloc/np_free）进入 typed HIR |
 | 2026-07-23 | M1 halt family | halt 进入 typed HIR（scelHir；syscall lowering；权威 = SystemContractKind） |
 
 ---

@@ -213,13 +213,17 @@ Rules:
 - The heap manager contract must preserve size/alignment truth needed by mem.
 - Out-of-memory behavior must map to canonical exception/error taxonomy.
 - Any implementation must prove leak-sensitive behavior before it can be treated as Ready.
-- HIR uses `arr_alloc` and `arr_alloc_sized` as internal intrinsic names for dynamic
-  array allocation; `class_alloc` for object instance allocation. These are
-  implementation vocabulary, not the `np.system.heap_alloc` contract name.
-- LLVM emitter translates `arr_alloc` → `@np_alloc` (array allocation) and
-  `class_alloc` → `@np_object_alloc` (object allocation). HIR does not currently
-  use `np.system.heap_alloc` or `np.system.heap_free` intrinsic names.
-- Compiler/HIR may currently project heap ownership through backend-private allocator helpers
+- GetMem/FreeMem lower to production typed HIR `sckHeapAlloc` / `sckHeapFree`
+  (`np.system.heap_alloc` / `np.system.heap_free` semantic names via
+  `AssignSystemContract`); LLVM emits backend-private `@np_alloc` / `@np_free`.
+  Focused evidence: `test_hir_heap_contract` (HIR identity + call-shape only).
+- HIR still uses `arr_alloc` and `arr_alloc_sized` as internal intrinsic names for
+  dynamic array allocation; `class_alloc` for object instance allocation. These
+  remain implementation vocabulary, not the typed GetMem/FreeMem contract surface.
+- LLVM emitter still translates `arr_alloc` → `@np_alloc` (array allocation) and
+  `class_alloc` → `@np_object_alloc` (object allocation) as bare implementation
+  paths; they are not yet re-homed onto `sckHeapAlloc`.
+- Compiler/HIR may project heap ownership through backend-private allocator helpers
   such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
   These helper names are LLVM/backend evidence only,
   not public ABI, not Pascal facade symbols, and not allocator owner transfer

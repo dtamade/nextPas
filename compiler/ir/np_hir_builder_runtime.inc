@@ -426,7 +426,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'getmem';
+  AssignSystemContract(Instr, sckHeapAlloc);
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(SizeV, GetIntType);
   EmitInstr(Instr);
@@ -448,7 +448,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'freemem';
+  AssignSystemContract(Instr, sckHeapFree);
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
   EmitInstr(Instr);

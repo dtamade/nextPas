@@ -1,4 +1,4 @@
-.PHONY: test test-source-contracts test-facade test-kernel test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query clean
+.PHONY: test test-source-contracts test-facade test-kernel test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-heap-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query clean
 
 ROOT_DIR := $(abspath ../../..)
 TARGET_ID := linux-x86_64
@@ -19,6 +19,10 @@ HALT_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-halt-contract
 HALT_CONTRACT_BINARY := $(HALT_CONTRACT_BUILD_DIR)/test_hir_halt_contract
 HALT_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_halt_contract.pas
 HALT_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
+HEAP_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-heap-contract
+HEAP_CONTRACT_BINARY := $(HEAP_CONTRACT_BUILD_DIR)/test_hir_heap_contract
+HEAP_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_heap_contract.pas
+HEAP_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 FIELD_DYNARRAY_CONTRACT_BUILD_DIR := $(ROOT_DIR)/build/.tmp/core-system-field-dynarray-contract
 FIELD_DYNARRAY_CONTRACT_BINARY := $(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)/test_hir_field_dynarray_contract
 FIELD_DYNARRAY_CONTRACT_SOURCE := $(ROOT_DIR)/tests/hir/test_hir_field_dynarray_contract.pas
@@ -41,7 +45,7 @@ STAGE0_SYSTEM_OBJECT_FREE_QUERY_PASS_MARKER := stage0-query-system-object-free-c
 STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_PASS_MARKER := stage0-query-system-object-free-implicit-check=pass
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/targets -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/compiler/backend -Fu$(ROOT_DIR)/compiler/toolchain -Fu$(ROOT_DIR)/tools/stage0 -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 
-test: test-source-contracts test-facade test-kernel test-contracts test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query
+test: test-source-contracts test-facade test-kernel test-contracts test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-heap-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query
 
 test-source-contracts:
 	$(MAKE) -C test_system_source_contracts test
@@ -87,6 +91,12 @@ test-halt-contract:
 	mkdir -p "$(HALT_CONTRACT_BUILD_DIR)"
 	fpc $(HALT_CONTRACT_FPC_FLAGS) -FE"$(HALT_CONTRACT_BUILD_DIR)" -FU"$(HALT_CONTRACT_BUILD_DIR)" "$(HALT_CONTRACT_SOURCE)"
 	"$(HALT_CONTRACT_BINARY)"
+
+test-heap-contract:
+	rm -rf "$(HEAP_CONTRACT_BUILD_DIR)"
+	mkdir -p "$(HEAP_CONTRACT_BUILD_DIR)"
+	fpc $(HEAP_CONTRACT_FPC_FLAGS) -FE"$(HEAP_CONTRACT_BUILD_DIR)" -FU"$(HEAP_CONTRACT_BUILD_DIR)" "$(HEAP_CONTRACT_SOURCE)"
+	"$(HEAP_CONTRACT_BINARY)"
 
 test-field-dynarray-contract:
 	rm -rf "$(FIELD_DYNARRAY_CONTRACT_BUILD_DIR)"

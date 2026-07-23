@@ -661,24 +661,6 @@ begin
           FNeedsMemmove := True;
         end;
       end
-      else if AInstr.IntrinsicName = 'getmem' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @np_alloc(i64 ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-          FNeedsAlloc := True;
-        end;
-      end
-      else if AInstr.IntrinsicName = 'freemem' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  call void @np_free(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
-          FNeedsFree := True;
-        end;
-      end
       else if AInstr.IntrinsicName = 'interlocked-cas' then
       begin
         if Length(AInstr.Operands) >= 3 then

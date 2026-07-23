@@ -335,6 +335,8 @@ begin
     sckDynArraySetLength,
     sckInterfaceAddRef,
     sckInterfaceRelease,
+    sckHeapAlloc,
+    sckHeapFree,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -488,6 +490,34 @@ begin
     end;
     Exit(True);
   end;
+
+  { Heap alloc: one size:int operand; result is caller-owned pointer. }
+  if AInstr.SystemContractKind = sckHeapAlloc then
+  begin
+    if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkInt then
+    begin
+      AError := 'system-contract-operand-not-int:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Heap free falls through: one pointer operand (default path). }
 
   if Length(AInstr.Operands) <> 1 then
   begin

@@ -26,8 +26,8 @@ into readiness claims or public ABI.
 | `np.system.interface_release` | HIR | typed `sckInterfaceRelease` + intf-release-runtime | `np_intf_release` | `test_hir_interface_contract` | Typed HIR/LLVM call-shape only; not full refcount executable proof |
 | `np.system.managed_record_init` | vocabulary | System managed record | deferred | `runtime-contracts.md` | No implementation claim |
 | `np.system.managed_record_fini` | HIR | managed-record cleanup contract | deferred | `test_hir_node_kind` | No executable lifecycle proof |
-| `np.system.heap_alloc` | backend | `arr_alloc` and `class_alloc` | `np_alloc`, `np_object_alloc` | `test_hir_class_alloc_contract` | Allocator owner remains outside System |
-| `np.system.heap_free` | executable | object and array release nodes | `np_free` | `test_hir_large_alloc_runtime_smoke` | Allocation paths are partial evidence |
+| `np.system.heap_alloc` | HIR | typed `sckHeapAlloc` + `getmem-runtime` | `np_alloc` | `test_hir_heap_contract` | GetMem path typed; `arr_alloc`/`class_alloc` remain implementation intrinsics |
+| `np.system.heap_free` | HIR | typed `sckHeapFree` + `freemem-runtime` | `np_free` | `test_hir_heap_contract` | FreeMem path typed; large-alloc smoke remains secondary executable evidence |
 | `np.system.object_free` | backend | object-free runtime contract | `np_object_free_release` | `test_hir_object_free_contract` | No full ownership proof |
 | `np.system.object_free.destroy` | HIR | object-free destroy marker | virtual `Destroy` dispatch | `test_hir_object_free_contract` | Direct dispatch not end-to-end proven |
 | `np.system.object_free.cleanup` | HIR | object-free cleanup marker | compiler-planned cleanup | `test_hir_object_free_contract` | End-to-end cleanup effects unproven |
@@ -71,6 +71,14 @@ into readiness claims or public ABI.
 > `test_hir_halt_contract`. Evidence is HIR identity + syscall lowering shape;
 > **not** full process business e2e. Ledger **scelHir** (promoted from backend).
 >
+> **Footnote (M1 typed heap_alloc/free, 2026-07-23)**: `sckHeapAlloc` /
+> `sckHeapFree` are production typed HIR for **GetMem/FreeMem** only
+> (authority = `SystemContractKind`); runtime maps to `@np_alloc` / `@np_free`.
+> Focused typed identity: `test_hir_heap_contract`. `arr_alloc` / `class_alloc`
+> remain bare implementation intrinsics (not this contract surface). Allocator
+> owner remains `nextpas.core.mem`. Evidence is HIR identity + LLVM call-shape;
+> **not** full leak/OOM executable proof. Ledger **scelHir**.
+>
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves
 > `_start` call/declare **void** shape only when typed lifecycle nodes are present (and no calls
@@ -103,8 +111,8 @@ They must not be used as facade contract symbols or treated as part of the `np.s
 
 | Helper | Purpose | Contract alignment |
 |--------|---------|-------------------|
-| `@np_alloc` | Heap allocation | Maps to `np.system.heap_alloc` (future) |
-| `@np_free` | Heap release | Maps to `np.system.heap_free` (future) |
+| `@np_alloc` | Heap allocation | Maps to typed `np.system.heap_alloc` (`sckHeapAlloc` / GetMem) |
+| `@np_free` | Heap release | Maps to typed `np.system.heap_free` (`sckHeapFree` / FreeMem) |
 | `@np_object_alloc` | Object instance allocation | Part of `np.system.object_free` lifecycle group |
 | `@np_object_free_release` | Object nil-guard + release | Maps to `np.system.object_free.release` |
 | `@np_object_release_valid` | Release valid object allocation | Backend-private sub-step of object release |

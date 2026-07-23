@@ -663,6 +663,35 @@ begin
           ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' +
           ValueRef(AInstr.Operands[0].ValueId) + ')');
     end;
+    sckHeapAlloc:
+    begin
+      FNeedsAlloc := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+            AInstr.CallTarget + '(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+            SystemContractAt(sckHeapAlloc).RuntimeMapping + '(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckHeapFree:
+    begin
+      FNeedsFree := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckHeapFree).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
+      end;
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

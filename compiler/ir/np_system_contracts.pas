@@ -269,27 +269,27 @@ const
       Kind: sckHeapAlloc;
       SemanticName: NPSYSTEM_HEAP_ALLOC;
       DeclarationOwner: SYSTEM_CONTRACT_OWNER;
-      SourceSymbol: 'System memory manager hook';
+      SourceSymbol: 'System.GetMem';
       TargetIdentity: 'allocation-size';
       OwnershipIntent: 'caller-owned allocation';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'arr_alloc and class_alloc';
-      RuntimeMapping: 'np_alloc and np_object_alloc';
-      FocusedEvidence: 'test_hir_class_alloc_contract';
-      EvidenceLevel: scelBackend
+      HirEvidence: 'typed sckHeapAlloc / getmem-runtime';
+      RuntimeMapping: 'np_alloc';
+      FocusedEvidence: 'test_hir_heap_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckHeapFree;
       SemanticName: NPSYSTEM_HEAP_FREE;
       DeclarationOwner: SYSTEM_CONTRACT_OWNER;
-      SourceSymbol: 'System memory manager hook';
+      SourceSymbol: 'System.FreeMem';
       TargetIdentity: 'allocation';
       OwnershipIntent: 'owned allocation release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'object and array release nodes';
+      HirEvidence: 'typed sckHeapFree / freemem-runtime';
       RuntimeMapping: 'np_free';
-      FocusedEvidence: 'test_hir_large_alloc_runtime_smoke';
-      EvidenceLevel: scelExecutable
+      FocusedEvidence: 'test_hir_heap_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckObjectFree;
