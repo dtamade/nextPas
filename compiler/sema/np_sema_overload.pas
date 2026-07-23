@@ -30,6 +30,10 @@ type
     Decl: TGreenNode;
     OwnerUnitId: string;
     ScopeId: LongInt;
+    { Reachable body seed: only Needed bodies enter SeedFunctionBodies encode
+      queue. Encoded avoids re-walking after fixed-point expansion. }
+    Needed: Boolean;
+    Encoded: Boolean;
   end;
   { Analyzer owns; overload/ownership/HIR contexts borrow the same TVec. }
   TProcedureBodyVec = specialize TVec<TProcedureBodyEntry>;
@@ -73,6 +77,11 @@ function MangledName(const AName: string; AParamCount: LongInt): string;
 function MangledNameSig(const AName, ASig: string): string;
 function HasOverload(const AName: string;
   const AProcedureBodies: TProcedureBodyVec): Boolean;
+{ Linear name walk (TVec). Recovery used a hash index; O(n) is fine for Slice C. }
+function FirstBodyIndexForName(const ABodies: TProcedureBodyVec;
+  const AName: string): LongInt;
+function NextBodyIndexForName(const ABodies: TProcedureBodyVec;
+  const AName: string; const APrevIndex: LongInt): LongInt;
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;

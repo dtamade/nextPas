@@ -37,6 +37,8 @@ type
     FDiagnostics: TDiagnosticsSink;
     FRootFileId: TSourceFileId;
     FNoFold: Boolean;
+    { True while SeedFunctionBodies fixed-point is running (mid-seed register). }
+    FSeedingBodiesActive: Boolean;
     { Optional scratch IAllocator for working TVecs / imported unit trees. }
     FAllocator: IAllocator;
     FModel: TSemanticModel;
@@ -561,6 +563,10 @@ type
     procedure WalkRuntimeVarDecls(const ANode: TGreenNode);
     procedure SeedHaltCalls;
     procedure PreRegisterFunctionReturnTypes;
+    procedure MarkClassMethodCohort(const AClassName: string);
+    procedure MarkProcedureBodyNeededByName(const AName: string);
+    procedure MarkBodiesFromTypedHirCalls;
+    procedure CollectReachableBodyRoots;
     procedure SeedFunctionBodies;
     procedure SeedUnitLifecycleBodies;
     procedure SeedImportedUnitBodies;

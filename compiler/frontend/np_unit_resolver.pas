@@ -224,7 +224,8 @@ begin
   end;
 
   DependencyFileId := FSourceDatabase.RegisterSource(Candidates[0]);
-  DependencyDiag := TDiagnosticsSink.Create;
+  { CreateDefault initializes FDiagnostics; bare Create leaves garbage and AV on Free. }
+  DependencyDiag := TDiagnosticsSink.CreateDefault;
   DependencyLexer := TLexerResult.Create(
     FSourceDatabase.SourceTextForFileId(DependencyFileId),
     DependencyDiag,

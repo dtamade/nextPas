@@ -341,6 +341,7 @@ begin
   FDiagnostics := ADiagnostics;
   FRootFileId := ARootFileId;
   FNoFold := ANoFold;
+  FSeedingBodiesActive := False;
   FAllocator := AAllocator;
   FModel := TSemanticModel.Create;
   FBlockLabelCounter := 0;

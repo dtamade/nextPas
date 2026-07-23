@@ -349,7 +349,7 @@ begin
     Exit;
   if GDiskCache = nil then
     GDiskCache := TDiskSymbolCache.Create('.nextpas/cache');
-  TmpDiag := TDiagnosticsSink.Create;
+  TmpDiag := TDiagnosticsSink.CreateDefault;
   try
     for Index := FUnitGraph.ResolvedUnitCount - 1 downto 0 do
     begin
