@@ -337,6 +337,7 @@ begin
     sckInterfaceRelease,
     sckHeapAlloc,
     sckHeapFree,
+    sckObjectAlloc,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -502,8 +503,9 @@ begin
     Exit(True);
   end;
 
-  { Heap alloc: one size:int operand; result is caller-owned pointer. }
-  if AInstr.SystemContractKind = sckHeapAlloc then
+  { Heap / object alloc: one size:int operand; result is caller-owned pointer. }
+  if (AInstr.SystemContractKind = sckHeapAlloc) or
+    (AInstr.SystemContractKind = sckObjectAlloc) then
   begin
     if Length(AInstr.Operands) <> 1 then
     begin

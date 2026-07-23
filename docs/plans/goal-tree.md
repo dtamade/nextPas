@@ -185,9 +185,10 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] dynarray set_length/fini typed HIR（→ `np_dynarray_*`；init 仍 vocabulary；ledger scelExecutable）
    - [x] interface addref/release typed HIR（→ `np_intf_*`；ledger scelHir call-shape）
    - [x] halt typed HIR（`sckHalt` → backend syscall lowering；ledger scelHir）
-   - [x] heap_alloc/free typed HIR（GetMem/FreeMem → `sckHeapAlloc`/`sckHeapFree` → `@np_alloc`/`@np_free`；ledger scelHir；arr/class_alloc 仍 bare）
+   - [x] heap_alloc/free typed HIR（GetMem/FreeMem + field arr byte-size → `sckHeapAlloc`/`sckHeapFree` → `@np_alloc`/`@np_free`；ledger scelHir）
    - [x] exception boundary typed HIR（try_push/pop/raise/finally_end/except_end → `@np_try_*` 等；ledger scelHir；begin markers 仍 bare）
-   - [ ] 下一 family / 其余 residual（managed-record、object_new、arr/class_alloc 归并等）
+   - [x] object_alloc typed HIR（class-new → `sckObjectAlloc` → `@np_object_alloc`；ledger scelHir；arr_alloc 归并进 heap_alloc）
+   - [ ] 下一 family / 其余 residual（managed-record 等）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---
@@ -211,6 +212,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-23 | M1 dynarray + interface families | dynarray set_length/fini（scelExecutable）与 interface addref/release（scelHir）进入 typed HIR |
 | 2026-07-23 | M1 halt + heap families | halt（scelHir syscall）与 GetMem/FreeMem heap_alloc/free（scelHir → np_alloc/np_free）进入 typed HIR |
 | 2026-07-23 | M1 exception boundary family | try_push/pop/raise/finally_end/except_end 进入 typed HIR（scelHir；setjmp call-shape） |
+| 2026-07-23 | M1 object_alloc + arr 归并 | class-new → sckObjectAlloc→np_object_alloc；field arr_alloc → sckHeapAlloc（scelHir） |
 | 2026-07-23 | M1 halt family | halt 进入 typed HIR（scelHir；syscall lowering；权威 = SystemContractKind） |
 
 ---

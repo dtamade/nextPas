@@ -493,6 +493,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
+        { Legacy bare path; production field setlength uses typed sckHeapAlloc. }
         FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 1 then
         begin
@@ -505,6 +506,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc_sized' then
       begin
+        { Legacy bare path; no production builder site. }
         FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 2 then
         begin
@@ -518,6 +520,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
+        { Legacy bare path; production uses typed sckObjectAlloc. }
         FNeedsAlloc := True;
         FNeedsObjectAlloc := True;
         if Length(AInstr.Operands) >= 1 then

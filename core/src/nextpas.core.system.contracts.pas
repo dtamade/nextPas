@@ -28,6 +28,7 @@ const
   NPSYSTEM_HEAP_ALLOC = 'np.system.heap_alloc';
   NPSYSTEM_HEAP_FREE = 'np.system.heap_free';
 
+  NPSYSTEM_OBJECT_ALLOC = 'np.system.object_alloc';
   NPSYSTEM_OBJECT_FREE = 'np.system.object_free';
   NPSYSTEM_OBJECT_FREE_DESTROY = 'np.system.object_free.destroy';
   NPSYSTEM_OBJECT_FREE_CLEANUP = 'np.system.object_free.cleanup';

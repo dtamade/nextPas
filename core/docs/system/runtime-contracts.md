@@ -216,13 +216,14 @@ Rules:
 - GetMem/FreeMem lower to production typed HIR `sckHeapAlloc` / `sckHeapFree`
   (`np.system.heap_alloc` / `np.system.heap_free` semantic names via
   `AssignSystemContract`); LLVM emits backend-private `@np_alloc` / `@np_free`.
-  Focused evidence: `test_hir_heap_contract` (HIR identity + call-shape only).
-- HIR still uses `arr_alloc` and `arr_alloc_sized` as internal intrinsic names for
-  dynamic array allocation; `class_alloc` for object instance allocation. These
-  remain implementation vocabulary, not the typed GetMem/FreeMem contract surface.
-- LLVM emitter still translates `arr_alloc` → `@np_alloc` (array allocation) and
-  `class_alloc` → `@np_object_alloc` (object allocation) as bare implementation
-  paths; they are not yet re-homed onto `sckHeapAlloc`.
+  Field setlength element-count paths re-home onto `sckHeapAlloc` after
+  count×8 byte-size lowering. Focused evidence: `test_hir_heap_contract`.
+- Class instance allocation lowers to production typed HIR `sckObjectAlloc`
+  (`np.system.object_alloc` via `AssignSystemContract`); LLVM emits
+  `@np_object_alloc`. Focused evidence: `test_hir_object_alloc_contract`.
+- Legacy bare HIR names `arr_alloc` / `arr_alloc_sized` / `class_alloc` may still
+  appear only as residual emitter fallbacks; production builder sites no longer
+  assign those IntrinsicName values.
 - Compiler/HIR may project heap ownership through backend-private allocator helpers
   such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
   These helper names are LLVM/backend evidence only,

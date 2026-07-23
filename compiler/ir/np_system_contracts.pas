@@ -26,6 +26,7 @@ type
     sckManagedRecordFini,
     sckHeapAlloc,
     sckHeapFree,
+    sckObjectAlloc,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -289,6 +290,19 @@ const
       HirEvidence: 'typed sckHeapFree / freemem-runtime';
       RuntimeMapping: 'np_free';
       FocusedEvidence: 'test_hir_heap_contract';
+      EvidenceLevel: scelHir
+    ),
+    (
+      Kind: sckObjectAlloc;
+      SemanticName: NPSYSTEM_OBJECT_ALLOC;
+      DeclarationOwner: SYSTEM_CONTRACT_OWNER;
+      SourceSymbol: 'System.TObject.Create / class-new';
+      TargetIdentity: 'class-instance';
+      OwnershipIntent: 'caller-owned object allocation';
+      FailureBehavior: 'runtime-fault';
+      HirEvidence: 'typed sckObjectAlloc / class-new-runtime';
+      RuntimeMapping: 'np_object_alloc';
+      FocusedEvidence: 'test_hir_object_alloc_contract';
       EvidenceLevel: scelHir
     ),
     (

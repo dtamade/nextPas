@@ -890,7 +890,8 @@ for helper in \
   "np.system.managed_record_init" \
   "np.system.managed_record_fini" \
   "np.system.heap_alloc" \
-  "np.system.heap_free"; do
+  "np.system.heap_free" \
+  "np.system.object_alloc"; do
   require_token "docs/system/runtime-contracts.md" "$helper"
 done
 for helper in \
@@ -917,7 +918,7 @@ require_repo_token "tests/hir/test_hir_halt_contract.pas" "IsSystemContract(Inst
 require_repo_token "tests/hir/test_hir_halt_contract.pas" "hir-halt-contract=pass"
 require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:space:]]*'halt'"
 require_repo_reject_regex "compiler/ir" "IntrinsicName[[:space:]]*=[[:space:]]*'halt'"
-# GetMem/FreeMem are production typed HIR (sckHeapAlloc/sckHeapFree); arr/class_alloc stay bare
+# GetMem/FreeMem + field arr path are production typed HIR (sckHeapAlloc/sckHeapFree)
 require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckHeapAlloc)"
 require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckHeapFree)"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckHeapAlloc:"
@@ -932,14 +933,25 @@ require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:s
 require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:space:]]*'freemem'"
 require_repo_reject_regex "compiler/ir" "IntrinsicName[[:space:]]*=[[:space:]]*'getmem'"
 require_repo_reject_regex "compiler/ir" "IntrinsicName[[:space:]]*=[[:space:]]*'freemem'"
-# Heap allocation intrinsics use implementation names 'arr_alloc' and 'class_alloc'
-require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'arr_alloc';"
-require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'class_alloc';"
+# Production builder must not assign bare arr_alloc / class_alloc IntrinsicName
+require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:space:]]*'arr_alloc'"
+require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:space:]]*'class_alloc'"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_alloc"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_object_alloc"
-# Halt, heap, and allocation intrinsic mapping documented in runtime-contracts
+# object_alloc typed HIR (class-new → sckObjectAlloc)
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckObjectAlloc)"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckObjectAlloc:"
+require_repo_owner_family_token "compiler/ir" "np_hir_model" "sckObjectAlloc"
+require_repo_file "tests/hir/test_hir_object_alloc_contract.pas"
+require_repo_token "tests/hir/test_hir_object_alloc_contract.pas" "IsSystemContract(Instr, sckObjectAlloc)"
+require_repo_token "tests/hir/test_hir_object_alloc_contract.pas" "sckObjectAlloc"
+require_repo_token "tests/hir/test_hir_object_alloc_contract.pas" "hir-object-alloc-contract=pass"
+require_token "tests/nextpas.core.system/Makefile" "test_hir_object_alloc_contract.pas"
+require_token "tests/nextpas.core.system/Makefile" "test-object-alloc-contract"
+# Halt, heap, object_alloc mapping documented in runtime-contracts
 require_token "docs/system/runtime-contracts.md" "typed \`sckHalt\`"
 require_token "docs/system/runtime-contracts.md" "typed HIR \`sckHeapAlloc\`"
+require_token "docs/system/runtime-contracts.md" "sckObjectAlloc"
 require_token "docs/system/runtime-contracts.md" "arr_alloc"
 require_token "docs/system/runtime-contracts.md" "class_alloc"
 for helper in \
@@ -1319,7 +1331,7 @@ require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`rtl/
 require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`TObject.Free`'
 require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
 require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "class-new-runtime"
-require_repo_owner_family_token "compiler/ir" "np_hir_builder" "class_alloc"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "sckObjectAlloc"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_object_free_release"
 
 for path in \

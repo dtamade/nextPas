@@ -2,7 +2,7 @@ procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
 var
   TabPos, TabPos2, TabPos3: LongInt;
   ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr, PlainVarName: string;
-  IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx: THIRValueId;
+  IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx, SizeVal: THIRValueId;
   StoreType, ValueType: THIRTypeId;
   TargetResult: THIRExprResult;
   Token: string;
@@ -90,15 +90,18 @@ begin
 
     if ANode.DisplayName = '__field_setlength__' then
     begin
+      { Element count → byte size (×8) then typed sckHeapAlloc → @np_alloc. }
       IdxVal := ParseIntExprArg(Rest);
       if IdxVal = 0 then Exit;
+      SizeVal := EmitBinOp(hikMul, GetIntTypeByWidth(64, True),
+        IdxVal, EmitConstIntOfType(8, GetIntTypeByWidth(64, True)));
       FillChar(Instr, SizeOf(Instr), 0);
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
       Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'arr_alloc';
+      AssignSystemContract(Instr, sckHeapAlloc);
       SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeOperand(IdxVal);
+      Instr.Operands[0] := MakeTypedOperand(SizeVal, GetIntTypeByWidth(64, True));
       EmitInstr(Instr);
       EmitStore(GetPtrType, Instr.ResultId, ElemPtr);
     end
@@ -333,9 +336,9 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'class_alloc';
+  AssignSystemContract(Instr, sckObjectAlloc);
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(SizeVal);
+  Instr.Operands[0] := MakeTypedOperand(SizeVal, GetIntTypeByWidth(64, True));
   EmitInstr(Instr);
   PtrVal := Instr.ResultId;
 

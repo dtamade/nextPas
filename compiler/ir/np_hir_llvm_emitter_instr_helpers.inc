@@ -678,6 +678,16 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ')');
       end;
     end;
+    sckObjectAlloc:
+    begin
+      { Typed class instance alloc: byte size → @np_object_alloc. }
+      FNeedsAlloc := True;
+      FNeedsObjectAlloc := True;
+      if Length(AInstr.Operands) >= 1 then
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+          SystemContractAt(sckObjectAlloc).RuntimeMapping + '(i64 ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ')');
+    end;
     sckHeapFree:
     begin
       FNeedsFree := True;
