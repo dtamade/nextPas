@@ -1,4 +1,4 @@
-# compiler-system focused fixtures (Batch 22–27)
+# compiler-system focused fixtures (Batch 22–28)
 
 Small host-free programs for lane evidence. **Not** G0 inventory inflation;
 **not** M2-A.
@@ -7,8 +7,8 @@ Small host-free programs for lane evidence. **Not** G0 inventory inflation;
 | --- | --- | --- |
 | `rec_str_field.pas` | `make test-compiler-rec-str-abi` | exit 42 |
 | `rec_const_str_sret.pas` | same | exit 42 |
-| `fail_mini_state.pas` | same | exit 1 + greppable status/command/selector |
-| `astatestr_fail_mini.pas` | `make test-compiler-astatestr-fail` | exit 1 + multi-arg WriteLn + post-sret field |
+| `fail_mini_state.pas` | same | exit 1 + Fail lines **on stderr only** |
+| `astatestr_fail_mini.pas` | `make test-compiler-astatestr-fail` | exit 1 + multi-arg WriteLn + post-sret field **on stderr only** |
 | `erroutput_fd_mini.pas` | `make test-compiler-erroutput-fd` | stdout vs stderr split (fd 1 vs fd 2) |
 
 ## Run
@@ -29,7 +29,7 @@ make test-compiler-erroutput-fd
 | Gate | claim-level |
 | --- | --- |
 | `verify_compiler_rec_str_abi_focused` | `rec-str-const-sret-fail-mini-not-m2a` |
-| `verify_compiler_astatestr_fail_focused` | `astatestr-selector-truth` |
+| `verify_compiler_astatestr_fail_focused` | `astatestr-selector-truth-fd2` |
 | `verify_compiler_erroutput_fd_focused` | `erroutput-fd2-routing` |
 
 ## Honest gaps
@@ -41,6 +41,8 @@ make test-compiler-erroutput-fd
   gate requires `selector=build` and `human-summary=invalid-arguments`.
 - Batch 27 maps host-free `Write`/`WriteLn` string payloads for
   `ErrOutput`/`StdErr` to fd 2 and `Output`/`StdOut` to fd 1. Integer
-  `write_i64_decimal` still always targets stdout (runtime helper).
-  `astatestr-fail` gate still accepts combined stdout|stderr for Fail
-  lines (does not yet *require* fd 2).
+  `write_i64_decimal` still always targets stdout (runtime helper); **not**
+  on the Fail-string path exercised by B28.
+- Batch 28: `astatestr-fail` and `fail_mini_state` gates **require** Fail
+  diagnostic lines on stderr (fd 2) and reject stdout leakage (no combined
+  stdout|stderr lucky-green).

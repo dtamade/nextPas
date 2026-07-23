@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Batch 25: record string field + const record string sret + mini Fail.
+# Batch 28: fail_mini_state diagnostics must be on stderr (fd 2).
 # Not M2-A. claim-level set at end.
 # Adapted for main stage0 CLI: --out-dir (not tip --artifact-root).
 set -euo pipefail
@@ -106,24 +107,36 @@ build_and_check_stderr() {
     cat "$art/stderr.txt" "$art/stdout.txt" >&2 || true
     exit 1
   fi
-  # Host-free WriteLn currently uses write(1); accept stdout or stderr markers.
-  cat "$art/stdout.txt" "$art/stderr.txt" >"$art/combined.txt" 2>/dev/null || true
-  if ! grep -Fq 'status=failure' "$art/combined.txt"; then
-    echo "FAIL: $name output missing status=failure" >&2
-    cat "$art/combined.txt" >&2 || true
+  # Batch 28: Fail markers must be on stderr (fd 2), not merged lucky-green.
+  require_stderr_only() {
+    local needle="$1"
+    if ! grep -Fq "$needle" "$art/stderr.txt"; then
+      echo "FAIL: $name stderr missing $needle" >&2
+      echo "--- stdout ---" >&2
+      cat "$art/stdout.txt" >&2 || true
+      echo "--- stderr ---" >&2
+      cat "$art/stderr.txt" >&2 || true
+      exit 1
+    fi
+    if grep -Fq "$needle" "$art/stdout.txt"; then
+      echo "FAIL: $name stdout leaked $needle (expected fd 2 only)" >&2
+      cat "$art/stdout.txt" >&2 || true
+      exit 1
+    fi
+  }
+  require_stderr_only 'status=failure'
+  require_stderr_only 'command=build'
+  if ! grep -Eq 'selector=(build|cli)' "$art/stderr.txt"; then
+    echo "FAIL: $name stderr missing selector=build|cli" >&2
+    cat "$art/stdout.txt" "$art/stderr.txt" >&2 || true
     exit 1
   fi
-  if ! grep -Fq 'command=build' "$art/combined.txt"; then
-    echo "FAIL: $name output missing command=build" >&2
-    cat "$art/combined.txt" >&2 || true
+  if grep -Eq 'selector=(build|cli)' "$art/stdout.txt"; then
+    echo "FAIL: $name stdout leaked selector= (expected fd 2 only)" >&2
+    cat "$art/stdout.txt" >&2 || true
     exit 1
   fi
-  if ! grep -Eq 'selector=(build|cli)' "$art/combined.txt"; then
-    echo "FAIL: $name output missing selector=build|cli" >&2
-    cat "$art/combined.txt" >&2 || true
-    exit 1
-  fi
-  echo "[rec-str-abi] $name exit=$rc output-ok"
+  echo "[rec-str-abi] $name exit=$rc stderr-fd2-ok"
 }
 
 build_and_run rec_str_field \

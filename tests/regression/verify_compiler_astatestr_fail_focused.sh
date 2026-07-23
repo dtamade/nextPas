@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Batch 26: multi-arg WriteLn + inline string sret (AState-like Fail shape).
+# Batch 28: Fail diagnostic lines must land on stderr (fd 2), not combined lucky-green.
 # Not M2-A. claim-level set at end.
 set -euo pipefail
 
@@ -69,39 +70,30 @@ if [ "$rc" -ne 1 ]; then
   cat "$art/stderr.txt" "$art/stdout.txt" >&2 || true
   exit 1
 fi
-# Host-free WriteLn currently uses write(1); accept stdout or stderr.
-cat "$art/stdout.txt" "$art/stderr.txt" >"$art/combined.txt" 2>/dev/null || true
-if ! grep -Fq 'status=failure' "$art/combined.txt"; then
-  echo "FAIL: $name output missing status=failure" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
-if ! grep -Fq 'command=build' "$art/combined.txt"; then
-  echo "FAIL: $name output missing command=build" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
-if ! grep -Fq 'selector=build' "$art/combined.txt"; then
-  echo "FAIL: $name output missing selector=build" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
+# Batch 28: require Fail lines on stderr (fd 2); stdout must not carry them.
+require_stderr_line() {
+  local needle="$1" note="${2:-}"
+  if ! grep -Fq "$needle" "$art/stderr.txt"; then
+    echo "FAIL: $name stderr missing $needle${note:+ ($note)}" >&2
+    echo "--- stdout ---" >&2
+    cat "$art/stdout.txt" >&2 || true
+    echo "--- stderr ---" >&2
+    cat "$art/stderr.txt" >&2 || true
+    exit 1
+  fi
+  if grep -Fq "$needle" "$art/stdout.txt"; then
+    echo "FAIL: $name stdout leaked $needle (expected fd 2 only)" >&2
+    cat "$art/stdout.txt" >&2 || true
+    exit 1
+  fi
+}
+require_stderr_line 'status=failure'
+require_stderr_line 'command=build'
+require_stderr_line 'selector=build'
 # Post-sret field multi-arg proves AState ptr slot was not clobbered.
-if ! grep -Fq 'command2=build' "$art/combined.txt"; then
-  echo "FAIL: $name output missing command2=build (sret clobber?)" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
-if ! grep -Fq 'human-summary=invalid-arguments' "$art/combined.txt"; then
-  echo "FAIL: $name output missing human-summary=invalid-arguments" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
-if ! grep -Fq 'failure-kind=invalid-arguments' "$art/combined.txt"; then
-  echo "FAIL: $name output missing failure-kind=invalid-arguments" >&2
-  cat "$art/combined.txt" >&2 || true
-  exit 1
-fi
-echo "[astatestr-fail] $name exit=$rc output-ok"
+require_stderr_line 'command2=build' 'sret clobber?'
+require_stderr_line 'human-summary=invalid-arguments'
+require_stderr_line 'failure-kind=invalid-arguments'
+echo "[astatestr-fail] $name exit=$rc stderr-fd2-ok"
 echo "verify_compiler_astatestr_fail_focused=pass"
-echo "claim-level=astatestr-selector-truth"
+echo "claim-level=astatestr-selector-truth-fd2"
