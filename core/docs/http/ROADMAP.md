@@ -133,8 +133,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave PD-1B Default RW finite | **landed** — Default Read/Write=30000 |
 | Wave PD-3-1 Idle 对照 | **landed** — IdleTimeout vs IdleTTL 表 + spot-check |
 | Wave PD-3-2 large body residual | **landed** — 审计：Q1-4/413 已 Met；无新代码 |
-| Wave PD-3-3 Windows cancel wake | **parked** — 跨 platform/net；本波只升格 residual 诚实 |
-| **下一执行点** | **STOP**（PD-1B+PD-3-1/2 Met；PD-3-3 需跨模块再开） |
+| Wave PD-3-3 Windows cancel wake | **landed** — Windows TCP loopback pair + waitable cancel |
+| **下一执行点** | **STOP**（Era PD 扩展含 PD-3-3 Met） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -917,9 +917,9 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 2. Era PD 默认路径 Met：PD-0 + PD-1A + PD-2
 3. **PD-1B Met**：Default RW=30000
 4. **PD-3-1/2 Met**：Idle 对照 + large-body residual 审计
-5. PD-3-3 Windows cancel wake — **parked**（跨 platform/net）
+5. **PD-3-3 Met**：Windows cancel waitable（TCP loopback pair）
 6. H3 Blocked — 跳过；禁止空 facade
-7. **NEXT = STOP**（idle）；跨模块 wake / 新战役需再升格
+7. **NEXT = STOP**（idle）；新战役需再升格
 ```
 
 **默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)。
@@ -930,7 +930,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 **目标**：生产默认诚实 + latency 可读 + 深度对照（Idle/body/Windows residual）。
 
-**推荐路径（产品 2026-07-23 再授权）**：`PD-1B → PD-3-1 → PD-3-2`（PD-3-3 parked）
+**推荐路径（产品 2026-07-23 再授权 + 2026-07-24 跨模块授权）**：`PD-1B → PD-3-1 → PD-3-2 → PD-3-3`
 
 ### Wave PD-0 — Production honesty（契约 / 清单 / source-contract）
 
@@ -988,16 +988,17 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | **Status** | **landed** — 证据：`test_http_server`/`security`/`q3_matrix` 413 + Q1-4 source-contract；无新增真缺口 |
 | **Next** | PD-3-3 或 STOP |
 
-### Wave PD-3-3 — Windows cancel wake（**parked** until cross-module）
+### Wave PD-3-3 — Windows cancel wake
 
 | 字段 | 内容 |
 |------|------|
-| **Do（未来）** | `platform_socket_pair` Windows 实现或等价 wake → net cancel 近即时 |
-| **Don't（本波）** | 在 http 层假 wake；宣称 Windows scale-ready |
-| **Status** | **parked** — residual 仍 R3 probe-only；需 platform/net lane |
+| **Do** | `platform_socket_pair` Windows TCP loopback 模拟 → net cancel waitable |
+| **Don't** | 在 http 层假 wake；宣称 Windows scale-ready |
+| **Status** | **landed** — loopback pair + CONTRACT/source-contract；probe-only 仅 pair 失败兜底 |
+| **Evidence** | `platform.socket` Windows pair；`net.cancel` 注释；`test_http_client` waitable pair source-contract；`test_net` / `test_platform_socket` Linux 回归 |
 | **Next** | STOP |
 
-**Era PD 扩展 Done when**：PD-1B + PD-3-1 + PD-3-2 landed；PD-3-3 parked。 **Met (2026-07-23) for 1B/3-1/3-2.**
+**Era PD 扩展 Done when**：PD-1B + PD-3-1 + PD-3-2 + PD-3-3 landed。 **Met (2026-07-24).**
 
 ---
 
@@ -1074,6 +1075,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-24 | **PD-3-3 landed**：Windows `platform_socket_pair` TCP loopback → waitable cancel；Era PD 扩展完整 Met；NEXT=STOP |
 | 2026-07-23 | **PD-1B + PD-3-1/2 landed**：Default RW=30000；IdleTimeout/IdleTTL 对照；large-body residual Met；PD-3-3 Windows wake parked；NEXT=STOP |
 | 2026-07-23 | **Era PD landed**：PD-0 honesty + PD-1A Default Keep + PD-2 latency readbook；NEXT=STOP |
 | 2026-07-23 | **Era PD open**（产品授权）：PD-0 honesty → PD-1A guidance → PD-2 latency readbook；Default RW **Keep**；NEXT=PD-0 |

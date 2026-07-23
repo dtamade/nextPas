@@ -17,7 +17,7 @@
 - **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
-- **Residual-honest（Era 6–7 + PD）**：cancel waitable Unix（X2）；**Windows probe-only only**（R3；PD-3-3 wake parked）；pool IdleTTL（X3）+ suite hang 修（R1）；OpenSSL PinValidator free（X4）；HTTPS **R4 已 0 unfreed**；headers equal-fold Get/Has（X5）；server `Default` RW=**30000**（PD-1B）。
+- **Residual-honest（Era 6–7 + PD）**：cancel waitable Unix（X2）+ **Windows TCP loopback pair（PD-3-3）**；pool IdleTTL（X3）+ suite hang 修（R1）；OpenSSL PinValidator free（X4）；HTTPS **R4 已 0 unfreed**；headers equal-fold Get/Has（X5）；server `Default` RW=**30000**（PD-1B）。
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **SSE（Q1-1）**：写端 lifecycle 见 CONTRACT §4.1；Op=`sse`；证据 `test_http_middlewares` SSE 套件 + `test_http_server` live stream。
 - **H1 write/backpressure（Q1-4）**：见 **CONTRACT §4.4**（WriteTimeout 从 drain 起算、zero-progress/stall 停 session、不消费 pipeline、S1-1 关系）；证据 `test_http_server` + source-contract。

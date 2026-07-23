@@ -3133,35 +3133,34 @@ begin
   end;
 end;
 
-procedure TestWindowsCancelProbeOnlyResidualSourceContract;
+procedure TestWindowsCancelWaitablePairSourceContract;
 var
   LCancelSrc: string;
   LPlatformSrc: string;
   LPairPos: SizeInt;
   LPairBlock: string;
 begin
-  { Wave R3: Unix waitable cancel uses socketpair wake; Windows platform
-    socket_pair is explicitly UNSUPPORTED so tokens stay probe-only (~10ms). }
+  { Wave PD-3-3: Windows platform_socket_pair emulates socketpair via TCP
+    loopback so NewNetCancelToken gets a waitable wake (same as Unix path). }
   LCancelSrc := ReadFileText('../../../src/nextpas.core.net.cancel.pas');
-  Check(Pos('Windows falls back to probe-only', LCancelSrc) > 0,
-    'net.cancel documents Windows probe-only residual');
   Check(Pos('platform_socket_pair', LCancelSrc) > 0,
     'net.cancel attempts platform_socket_pair for waitable wake');
+  Check(Pos('Falls back to probe-only only if platform_socket_pair fails', LCancelSrc) > 0,
+    'net.cancel documents probe-only as pair-failure fallback only');
+  Check(Pos('Windows falls back to probe-only', LCancelSrc) = 0,
+    'net.cancel no longer claims Windows is always probe-only');
   LPlatformSrc := ReadFileText('../../../src/nextpas.core.platform.socket.pas');
-  LPairPos := Pos(
-    'function platform_socket_pair(ADomain, AType, AProtocol: Int32;',
-    LPlatformSrc);
-  { Prefer the Windows residual implementation when present in this unit. }
-  if Pos('Windows doesn''t have socketpair', LPlatformSrc) > 0 then
-  begin
-    LPairPos := Pos('Windows doesn''t have socketpair', LPlatformSrc);
-    LPairBlock := Copy(LPlatformSrc, LPairPos, 400);
-    Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
-      'Windows platform_socket_pair returns PLATFORM_ERR_UNSUPPORTED');
-  end
-  else
-    Check(LPairPos > 0,
-      'platform_socket_pair is present for waitable cancel wiring');
+  LPairPos := Pos('No native socketpair on Windows', LPlatformSrc);
+  Check(LPairPos > 0, 'Windows platform_socket_pair documents loopback emulation');
+  LPairBlock := Copy(LPlatformSrc, LPairPos, 2500);
+  Check(Pos('platform_sockaddr_loopback4', LPairBlock) > 0,
+    'Windows pair uses loopback bind');
+  Check(Pos('platform_socket_connect', LPairBlock) > 0,
+    'Windows pair connects write end');
+  Check(Pos('platform_socket_accept', LPairBlock) > 0,
+    'Windows pair accepts read end');
+  Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
+    'Windows pair still returns UNSUPPORTED for non-STREAM');
 end;
 
 procedure TestClientPostStringBodyOverload;
@@ -11197,8 +11196,8 @@ begin
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Test('OpenSSL context frees PinValidator source contract',
     @TestOpenSSLContextFreesPinValidatorSourceContract);
-  T.Test('Windows cancel probe-only residual source contract',
-    @TestWindowsCancelProbeOnlyResidualSourceContract);
+  T.Test('Windows cancel waitable pair source contract',
+    @TestWindowsCancelWaitablePairSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);

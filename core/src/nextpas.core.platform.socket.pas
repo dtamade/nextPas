@@ -395,12 +395,12 @@ function platform_socket_resolve_ipv6(const AHost: PAnsiChar;
   AAddr: PByte): Int32;
 
 {** @desc 创建已连接的套接字对
-    @param ADomain 地址族
-    @param AType 套接字类型
+    @param ADomain 地址族（Unix: AF_UNIX；Windows: AF_UNIX/AF_INET/0 均可，内部用 TCP loopback）
+    @param AType 套接字类型（STREAM）
     @param AProtocol 协议号
-    @param ASocket1 输出第一个套接字
-    @param ASocket2 输出第二个套接字
-    @return 0 成功，否则返回错误码；Windows 当前返回 PLATFORM_ERR_UNSUPPORTED *}
+    @param ASocket1 输出读端（cancel wake 等用）
+    @param ASocket2 输出写端
+    @return 0 成功，否则返回错误码。Windows 无原生 socketpair，用 127.0.0.1 自连接模拟。 *}
 function platform_socket_pair(ADomain, AType, AProtocol: Int32;
   out ASocket1, ASocket2: TPlatformSocket): Int32;
 
@@ -1768,11 +1768,98 @@ end;
 
 function platform_socket_pair(ADomain, AType, AProtocol: Int32;
   out ASocket1, ASocket2: TPlatformSocket): Int32;
+var
+  LListener: TPlatformSocket;
+  LRead: TPlatformSocket;
+  LWrite: TPlatformSocket;
+  LAddr: TPlatformSockAddr;
+  LNameLen: Int32;
 begin
-  { Windows doesn't have socketpair, use loopback connect }
-  ASocket1.Value := -1;
-  ASocket2.Value := -1;
-  Result := PLATFORM_ERR_UNSUPPORTED;
+  { No native socketpair on Windows. Emulate full-duplex STREAM pair via
+    TCP loopback (same pattern as WindowsCreateWakePair in platform.io).
+    net.cancel passes domain=1 (AF_UNIX on Unix); accept that, AF_INET, or 0. }
+  ASocket1.Value := PtrUInt(-1);
+  ASocket2.Value := PtrUInt(-1);
+  LListener.Value := PtrUInt(-1);
+  LRead.Value := PtrUInt(-1);
+  LWrite.Value := PtrUInt(-1);
+
+  if AType <> PLATFORM_SOCK_STREAM then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  if (ADomain <> 0) and (ADomain <> 1) and (ADomain <> PLATFORM_AF_INET) then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  if (AProtocol <> 0) and (AProtocol <> PLATFORM_IPPROTO_TCP) then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LListener);
+  if Result <> 0 then
+    Exit;
+
+  Result := platform_socket_set_reuseaddr(LListener, True);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  Result := platform_sockaddr_loopback4(0, LAddr);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  Result := platform_socket_bind(LListener, @LAddr.Storage, Int32(LAddr.Len));
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  Result := platform_socket_listen(LListener, 1);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  LNameLen := Int32(SizeOf(LAddr.Storage));
+  Result := platform_socket_getsockname(LListener, @LAddr.Storage, @LNameLen);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+  LAddr.Len := LNameLen;
+
+  Result := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LWrite);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  Result := platform_socket_connect(LWrite, @LAddr.Storage, Int32(LAddr.Len));
+  if Result <> 0 then
+  begin
+    platform_socket_close(LWrite);
+    platform_socket_close(LListener);
+    Exit;
+  end;
+
+  Result := platform_socket_accept(LListener, nil, nil, LRead);
+  platform_socket_close(LListener);
+  if Result <> 0 then
+  begin
+    platform_socket_close(LWrite);
+    Exit;
+  end;
+
+  ASocket1 := LRead;
+  ASocket2 := LWrite;
+  Result := 0;
 end;
 
 function platform_socket_getsockopt(const ASocket: TPlatformSocket;

@@ -155,14 +155,13 @@ end;
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
   接到 `ITcpStream.SetCancelToken`：`NewHttpCancelToken` 为 waitable
-  （socketpair wake + `platform_socket_poll_or_wake`，Unix）；probe-only
-  token 退回 ~10ms `SO_*TIMEO` 切片。中途取消抛 `hekCanceled`（经
-  `ECancelledError` 包装）。
-  **Windows residual（Wave R3）**：`platform_socket_pair` 在 Windows 路径
-  固定返回 `PLATFORM_ERR_UNSUPPORTED`（无原生 socketpair；loopback 方案未
-  落地）。`TNetCancelToken` 因此 `FHasWake=False`，`WakeHandle=0`，全程
-  **probe-only**（~10ms `NET_IO_CANCEL_SLICE_MS`），**不**声称近即时唤醒。
-  Linux/macOS/FreeBSD waitable 证据不变（X2）。
+  （socketpair / TCP-loopback wake + `platform_socket_poll_or_wake`）；
+  仅当 `platform_socket_pair` 失败时退回 probe-only ~10ms `SO_*TIMEO` 切片。
+  中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  **Windows（Wave PD-3-3）**：`platform_socket_pair` 用 127.0.0.1 TCP
+  loopback 模拟 socketpair；`TNetCancelToken` 拿到 `FHasWake=True`，与 Unix
+  同 waitable 路径。probe-only 仅作 pair 失败兜底。
+  Linux/macOS/FreeBSD 仍用原生 socketpair（X2）。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -237,7 +236,7 @@ end;
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); **Windows = probe-only only**（R3；`platform_socket_pair` → UNSUPPORTED） |
+| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only only if pair fails | net + H1/H2/WS client wire | **Landed** (X2); **Windows waitable via TCP loopback pair（PD-3-3）** |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
@@ -282,7 +281,7 @@ end;
 **诚实 residual**
 
 - Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
-- Windows cancel 仍为 probe-only residual（R3）；Unix waitable 近即时。
+- Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
@@ -725,9 +724,9 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
   - Q3-3 smoke origin 仍可用最小 `NewTlsServerTcpStream` 字节源做 client
     latency 测；产品 server 入口是 `NewHttpServer` + `TLSContext`。
   - **仍不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
-- Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
-  `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
-  §2.2.0a。
+- Cancel 平台路径（**Wave PD-3-3**）：Unix 原生 socketpair+poll；Windows
+  TCP loopback pair + 同一 waitable 路径。probe-only 仅 pair 失败兜底。
+  见 §2.2.0 / §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
 #### Client connection pool（Wave A2）
@@ -804,6 +803,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.16 | Wave R1：H1/H2 pool Close 锁外，IdleTTL suite 稳定 |
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
+| 2026-07-24 | 3.23 | Wave PD-3-3：Windows `platform_socket_pair` TCP loopback → waitable cancel |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

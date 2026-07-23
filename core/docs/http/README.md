@@ -198,8 +198,9 @@ make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
   [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
   redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
-  `ITcpStream.SetCancelToken`. **Unix**: waitable wake (socketpair+poll, near-instant);
-  **Windows**: probe-only residual (~10ms slice). Prefer pairing with
+  `ITcpStream.SetCancelToken`. **Unix**: waitable wake (socketpair+poll);
+  **Windows**: waitable wake via TCP-loopback `platform_socket_pair` (PD-3-3).
+  Prefer pairing with
   `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`. Details: CONTRACT §2.2.0.
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
   the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
