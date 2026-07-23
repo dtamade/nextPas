@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-21（**Era HS Done**：multi-run mid **1.86×** / press **0.93× Met**；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-23（**Era D0** doc-truth hygiene；HS Done 维持；package **仍 No**；默认 **STOP**）
 
 ---
 
@@ -48,7 +48,7 @@ LOOP:
        core/src/nextpas.core.http*
        core/tests/nextpas.core.http/**
        core/docs/http/**
-       examples/nextpas.core.http/**（若本波触及）
+       examples/nextpas.core.http/** 或 core/examples/nextpas.core.http/**（若本波触及）
        benchmarks/nextpas.core.http/**（若本波触及）
      跨模块：必须在本波「Land paths」声明，且最小必要
   5. 回写：本 Wave → landed；下一可执行行 → NEXT；changelog 一行
@@ -121,7 +121,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
 | Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped；package **仍 No** |
 | Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness；package **仍 No** |
-| **下一执行点** | **STOP**（H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
+| **下一执行点** | **STOP**（D0 doc-truth landed；H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -149,22 +149,24 @@ CHECKPOINT（不阻塞续波）:
 
 ---
 
-## 推荐默认执行路径（goal 默认跟这条）
+## 推荐默认执行路径（历史；已完成 → 默认 STOP）
 
 ```text
 Era 0–8:  landed（framework-complete non-H3 + Excellence + Residual + Inbox depth）
 Era 5/H3: Blocked — 跳过
-Era 9:    N0 landed；N1–N3 并入 Q1（不再单独 STOP）
-──── Parity Campaign（对标 Go/Rust 质量+规模）────
-Q0:  Q0-0 → Q0-1 → Q0-2     开壳 + workload + 基线比值  ← 当前
-Q1:  Q1-1 SSE → Q1-2 stream → Q1-3 obs → Q1-4 backpressure
-S1:  Server scale foundation（epoll 连接/吞吐）
-S2:  H1 hot path（分配/fast path）
-S3:  H2 server scale
-Q2:  证据收口 / Scale-ready 评审
+Era 9:    N0 landed；N1–N3 并入 Q1
+──── Parity Campaign（对标 Go/Rust 质量+规模）—— 全部 landed ────
+Q0:  Q0-0 → Q0-1 → Q0-2     开壳 + workload + 基线比值  ← done
+Q1:  Q1-1 SSE → Q1-2 stream → Q1-3 obs → Q1-4 backpressure  ← done
+S1:  Server scale foundation（epoll 连接/吞吐）  ← done
+S2:  H1 hot path（分配/fast path）  ← done
+S3:  H2 server scale  ← done
+Q2 / E / Q3 / H2P / R / HS:  收口 + 证据 + Seal  ← done
+──── 当前 ────
+NEXT = STOP（idle；升 package 须产品 Yes → HS-2a；H3 Blocked）
 ```
 
-**插队规则**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
+**插队规则（历史）**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
 
 ---
 
@@ -579,7 +581,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 |----|------|
 | server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
 | cancel ~50 ms 切片 | **X2 landed**：Unix waitable 近即时；probe-only ~10ms；**Windows = probe-only only**（**R3**） |
-| OpenSSL factory unfreed | **X4 landed**：PinValidator 已修；HTTPS **1×41B** process-lifetime 无可靠栈（**R2** 诚实 Park） |
+| OpenSSL factory unfreed | **X4 + R4 landed**：PinValidator free；HTTPS **0 unfreed**（R2 的 1×41B dig 仅为历史） |
 | pool idle TTL | **X3 landed**；suite hang residual → **R1 landed**（close-outside-lock） |
 | client suite hang after IdleTTL | **R1 landed** |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
@@ -896,12 +898,25 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Parity Plus + RH-1 + H2P-1..3 + R1 + **HS-0/HS-1 Met**
 2. H2 peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
-3. H3 Blocked — 跳过；禁止空 facade
-4. **NEXT = STOP**（idle；升 package 须产品 Yes → HS-2a）
-5. 无指令时不要空转 H3 / 不要假 package scale-ready
+3. **D0 doc-truth** landed（2026-07-23）：stale residual/路径/双状态已清
+4. H3 Blocked — 跳过；禁止空 facade
+5. **NEXT = STOP**（idle；升 package 须产品 Yes → HS-2a）
+6. 无指令时不要空转 H3 / 不要假 package scale-ready
 ```
 
 **默认 STOP。** 升 CLAIM package 须：冻结 KPI（HS-0 Met）+ multi-run Met（HS-1 Met）+ **产品明确 Yes**（HS-2a；见 `CLAIM.md`）。
+
+新大块工作：须先经产品决策写入本文件有序 Era/Wave，再开波；禁止 Inbox 直做。
+
+---
+
+## Era D0 — Doc truth hygiene（零碎收口）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **D0** | **landed** | 对齐 live residual 与证据：API_COVERAGE R4 0 unfreed；GOAL_TREE p99 Met；README 路径/H2/cancel；ARCHITECTURE 库存；ROADMAP 推荐路径去「Q0 当前」；Era X residual 表 R4；Makefile side 列表；REPRO tls_real side 标注 |
+
+**D0 Done when**：docs 无 live 假 residual（1×41B / p99 Partial / ~50ms cancel / examples 错路径 / Q0 当前）；NEXT 仍 STOP。 **Met (2026-07-23).**
 
 ---
 
@@ -924,6 +939,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-23 | **D0 landed**：doc-truth hygiene（R4/p99/路径/H2/cancel/ARCHITECTURE/推荐路径/Makefile/REPRO）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-0 landed**：H2 peer KPI 冻结（mid/press ≥0.80× multi-run；self 3× Dropped）；package No；NEXT=HS-1 |
 | 2026-07-21 | **H2-opt**：TCP_NODELAY + write coalesce + pool probe grace；peer mid ~2.07× / press ~0.92× **Met**；package No；STOP |

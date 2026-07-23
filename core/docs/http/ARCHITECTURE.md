@@ -11,7 +11,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 消费方只需 `uses nextpas.core.http` 即可获得当前 H1/H2 能力；默认版本解析对应用层透明。
 `hvHttp2` 已注册到内建 registry：`http://` 使用 cleartext prior knowledge，`https://` 强制 ALPN `h2`。
 
-## 当前落地状态（2026-07-16）
+## 当前落地状态（2026-07-23）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -23,7 +23,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实源码库存约 58 个 HTTP 单元，测试工程 39 个，主 Makefile 门禁 34 个。
+- 当前真实源码库存约 **60** 个 `nextpas.core.http*` 单元；测试目录约 **45** 个；主 Makefile **PROJECTS = 39** 正确性门禁（side：benchmarks/examples/smoke/integration/tls_real/mem 等）。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）

@@ -1,10 +1,12 @@
 # Main focused gate: correctness + public surface contracts.
-# Side suites (not in PROJECTS):
+# Side suites (not in PROJECTS — run via make focused FOCUS=... when needed):
 #   test_http_benchmarks  — timing/comparator harness, not a correctness gate
 #   test_http_examples    — example smoke, slower / env-dependent
 #   test_http_smoke       — broad smoke; prefer focused suites
 #   test_http_integration — long multi-surface integration
-#   test_http_tls_real    — needs OpenSSL host env; residual backend leaks owned by tls
+#   test_http_tls_real    — needs OpenSSL host env; side suite (not main gate)
+#   test_http_mem         — RequestArena / mem path; side suite (optional product gate)
+#   bench_http_h2         — H2 bench harness, not a correctness gate
 PROJECTS := \
 	test_http_base \
 	test_http_url \

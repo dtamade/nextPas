@@ -8,7 +8,7 @@ middleware chaining, and a centralized internal transport registry.
 | Doc | Role |
 |-----|------|
 | **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
-| [`CLAIM.md`](CLAIM.md) | **What we claim** — allow/deny + p99 conditions (R0 freeze) |
+| [`CLAIM.md`](CLAIM.md) | **What we claim** — allow/deny + p99 conditions (R1 + HS freeze) |
 | [`REPRO.md`](REPRO.md) | 1h release-evidence playbook |
 | [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
 | [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
@@ -23,7 +23,7 @@ middleware chaining, and a centralized internal transport registry.
 Facade (nextpas.core.http) — single uses entry point
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
-  Protocol layer: impl.h1 (landed), impl.h2 foundation (started), impl.h2 transport / impl.h3 (planned)
+  Protocol layer: impl.h1 (landed), impl.h2 transport (landed), impl.h3 (blocked on QUIC)
 ```
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
@@ -54,10 +54,11 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 Run the examples instead of copy-pasting a partial snippet:
 
 ```sh
-make -C examples/nextpas.core.http/http_hello_server run
-make -C examples/nextpas.core.http/http_get_client run
-make -C examples/nextpas.core.http/http_server_options_demo run
-make -C examples/nextpas.core.http/http_websocket_echo_demo run
+# from repo root (or any cwd that can reach core/)
+make -C core/examples/nextpas.core.http/http_hello_server run
+make -C core/examples/nextpas.core.http/http_get_client run
+make -C core/examples/nextpas.core.http/http_server_options_demo run
+make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
 ```
 
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
@@ -181,8 +182,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
   redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
-  `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with
-  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`.
+  `ITcpStream.SetCancelToken`. **Unix**: waitable wake (socketpair+poll, near-instant);
+  **Windows**: probe-only residual (~10ms slice). Prefer pairing with
+  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`. Details: CONTRACT §2.2.0.
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
   the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
   budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if
