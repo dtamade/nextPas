@@ -89,6 +89,7 @@ begin
     Exit;
   end;
   ClearGlobalRefs;
+  SetLength(FValueLlvmTypes, 0);
 
   ParamStr := '';
   if AFunc.Params <> nil then

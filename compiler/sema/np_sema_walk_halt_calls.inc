@@ -511,7 +511,29 @@ begin
             FModel.AddTypedHirNode('assign-tstring-runtime',
               FCurrentRetVarName, 0, 0,
               FCurrentRetVarName + #9 + 'strvar ' +
-              Child.ChildAt(0).Text + #10);
+              Child.ChildAt(0).Text + #10)
+          else if (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+            (Child.ChildAt(0).ChildCount >= 2) and
+            (Child.ChildAt(0).ChildAt(0) <> nil) and
+            (Child.ChildAt(0).ChildAt(1) <> nil) and
+            (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+            (Child.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
+          begin
+            { Exit(AState.SelectorName) / Exit(AState.CommandName) }
+            FuncName := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
+            if FuncName = '' then
+              FuncName := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
+            if (FuncName <> '') and
+              TypeMetaFieldIsStr(FuncName, Child.ChildAt(0).ChildAt(1).Text) then
+            begin
+              Value := TypeMetaFieldIndex(FuncName,
+                Child.ChildAt(0).ChildAt(1).Text);
+              if Value >= 0 then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-field-load-runtime', FCurrentRetVarName, 0, 0,
+                  Child.ChildAt(0).ChildAt(0).Text + #9 + IntToStr(Value));
+            end;
+          end;
         end
         else if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
           FModel.AddTypedHirNode('assign-runtime', FCurrentRetVarName, 0, 0,
@@ -1771,6 +1793,36 @@ begin
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', 'Write', 0, 0, Operand
               );
+            end
+            else if (RhsNode.NodeKind = gnkFunctionCall) and
+              LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
+              (IsOwnedStringReturnFunc(RhsNode.Text) or
+               IsRuntimeStrVar(RhsNode.Text)) then
+            begin
+              { Batch 26: WriteLn(..., EnvelopeSelectorName(AState)) — string
+                sret call as Write arg must use a private temp, not clobber the
+                AState ptr slot (historical Fail SEGV) or fall through to
+                write_i64_decimal. }
+              Inc(FBlockLabelCounter);
+              Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(Operand);
+              RegisterRuntimeStrVar(Operand);
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+              StringValue := EncodeStrCallArgs(RhsNode, Operand);
+              if StringValue <> '' then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
+                  Operand + #9 + 'callee ' + RhsNode.Text + #9 + StringValue
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
+                  Operand + #9 + 'callee ' + RhsNode.Text
+                );
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', 'Write', 0, 0, Operand
+              );
+              EmitPendingStringTempReleases;
             end
             else if (RhsNode.NodeKind = gnkDotAccess) and
               (RhsNode.ChildCount >= 2) and

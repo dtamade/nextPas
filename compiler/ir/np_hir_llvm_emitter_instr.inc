@@ -52,24 +52,42 @@ begin
       if AInstr.IntrinsicName <> '' then
       begin
         if Copy(AInstr.IntrinsicName, 1, 6) = 'const:' then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
-            ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0')
+            ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0');
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end
         else if AInstr.IntrinsicName = 'null' then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = inttoptr i64 0 to ptr')
+            ' = inttoptr i64 0 to ptr');
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end
         else if Length(AInstr.Operands) > 0 then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
+            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end
         else
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
             ', ptr null');
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end;
       end
       else if Length(AInstr.Operands) > 0 then
+      begin
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
+          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end
       else
+      begin
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
           ', ptr null');
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     end;
     hikStore:
       if Length(AInstr.Operands) >= 2 then
@@ -77,64 +95,142 @@ begin
           ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
     hikAdd:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikSub:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikMul:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = mul ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikDiv:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
           DivOpcodeToLlvm(AInstr) + ' ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikMod:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
           ModOpcodeToLlvm(AInstr) + ' ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikNeg:
       if Length(AInstr.Operands) >= 1 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'neg.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' 0, ' + ValueRef(AInstr.Operands[0].ValueId));
+          ' 0, ' + Op);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikCmpEq, hikCmpNe, hikCmpLt, hikCmpLe, hikCmpGt, hikCmpGe:
     begin
-      Op := CompareOpcodeToLlvm(AInstr);
       if Length(AInstr.Operands) >= 2 then
       begin
         LlvmType := OperandTypeToLlvm(AInstr.Operands[0], 'i64');
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' ' +
-          LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+        if ValueLlvmType(AInstr.Operands[0].ValueId, '') <> '' then
+          LlvmType := ValueLlvmType(AInstr.Operands[0].ValueId, LlvmType);
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'cmp0.' + IntToStr(AInstr.ResultId));
+        Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'cmp1.' + IntToStr(AInstr.ResultId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' +
+          CompareOpcodeToLlvm(AInstr) + ' ' + LlvmType + ' ' + LTruncVal +
+          ', ' + Op);
+        NoteValueLlvmType(AInstr.ResultId, 'i1');
       end;
     end;
     hikTrunc:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        { Prefer noted SSA type: HIR TypeId may still say i32 after i64 load/call. }
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikZext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i1') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i1'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikSext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sext ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = sext ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikCall:
     begin
       if AInstr.CallTarget = 'np_process_init' then
@@ -348,16 +444,28 @@ begin
       begin
         if Length(AInstr.Operands) >= 4 then
         begin
+          { Lengths may still be typed i32 in HIR while SSA is i64 (tstring_len). }
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'strcmp.a.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[3].ValueId, 'i64',
+            'strcmp.b.' + IntToStr(AInstr.ResultId));
           if AInstr.CallTarget = 'ne' then
           begin
             Emit('  %strcmp.' + IntToStr(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
+              ' = call i64 @np_str_cmp(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + Op +
+              ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) +
+              ', i64 ' + LTruncVal + ')');
             Emit('  ' + ValueRef(AInstr.ResultId) +
               ' = xor i64 %strcmp.' + IntToStr(AInstr.ResultId) + ', 1');
           end
           else
             Emit('  ' + ValueRef(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
+              ' = call i64 @np_str_cmp(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + Op +
+              ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) +
+              ', i64 ' + LTruncVal + ')');
+          NoteValueLlvmType(AInstr.ResultId, 'i64');
           FNeedsStrCmp := True;
         end;
       end
@@ -742,9 +850,12 @@ begin
       begin
         FNeedsTStringRuntime := True;
         if Length(AInstr.Operands) >= 1 then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call i64 @np_tstring_len(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
+          NoteValueLlvmType(AInstr.ResultId, 'i64');
+        end;
       end
       else if AInstr.IntrinsicName = 'tstring_from_int' then
       begin

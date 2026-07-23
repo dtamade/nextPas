@@ -61,6 +61,9 @@ type
     FUnitInitCallsEmitted: Boolean;
     FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
+    { ResultId -> actual LLVM type for the current function (1-based ValueId).
+      Load/call/const may disagree with HIR TypeId (e.g. Integer i32 vs call i64). }
+    FValueLlvmTypes: array of string;
     { Debug info metadata }
     FDebugInfoEnabled: Boolean;
     FDebugMetadata: TLlvmNameVec;
@@ -84,6 +87,12 @@ type
     function BlockEndsWithIntrinsicReturn(const ABlock: THIRBlock): Boolean;
     function OperandTypeToLlvm(const AOperand: THIROperand;
       const AFallback: string): string;
+    function ValueLlvmType(AValueId: THIRValueId;
+      const AFallback: string): string;
+    procedure NoteValueLlvmType(AValueId: THIRValueId; const ALlvmType: string);
+    { Cast SSA value to AWantedTy when noted type differs; returns ref (maybe temp). }
+    function EmitCastValueToLlvmType(AValueId: THIRValueId;
+      const AWantedTy, ATag: string): string;
     function IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
     function IsUnsignedOrderedCompareType(const ATypeId: THIRTypeId): Boolean;
     function DivOpcodeToLlvm(const AInstr: THIRInstr): string;

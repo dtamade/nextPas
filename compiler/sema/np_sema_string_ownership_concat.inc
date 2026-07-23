@@ -136,7 +136,7 @@ end;
 function CanEmitStrCompareOperand(const Ctx: TSemaOwnershipContext; const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean): Boolean;
 var
-  SourceName: string;
+  SourceName, TypeName: string;
 begin
   Result := False;
   if ANode = nil then
@@ -149,6 +149,19 @@ begin
     Exit(True);
   if ANode.NodeKind = gnkStringLiteral then
     Exit(True);
+  { Batch 26: AState.SelectorName <> '' — record/class string field compare. }
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    TypeName := Ctx.LookupClassVar(Ctx.CallbackCtx, ANode.ChildAt(0).Text);
+    if TypeName = '' then
+      TypeName := Ctx.RuntimeVars.LookupRecordVar(ANode.ChildAt(0).Text);
+    if (TypeName <> '') and
+      Ctx.TypeMetaFieldIsStr(Ctx.CallbackCtx, TypeName, ANode.ChildAt(1).Text) then
+      Exit(True);
+  end;
   if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
     (ANode.Text = '+') and ConcatTreeHasSupportedOwnedStringReturn(Ctx, ANode) and
     CanEmitStrConcatOperand(Ctx, ANode) then
@@ -175,7 +188,8 @@ end;
 function EmitStrCompareOperand(var Ctx: TSemaOwnershipContext; const ANode: TGreenNode;
   const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
 var
-  LeftName, RightName, SourceName, TempName: string;
+  LeftName, RightName, SourceName, TempName, TypeName: string;
+  FieldIdx: Int64;
 begin
   ABlob := '';
   Result := False;
@@ -190,6 +204,36 @@ begin
   begin
     ABlob := 'strlit ' + ANode.Text + #10;
     Exit(True);
+  end;
+  { Batch 26: load record/class string field into a temp for strcmp. }
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    TypeName := Ctx.LookupClassVar(Ctx.CallbackCtx, ANode.ChildAt(0).Text);
+    if TypeName = '' then
+      TypeName := Ctx.RuntimeVars.LookupRecordVar(ANode.ChildAt(0).Text);
+    if (TypeName <> '') and
+      Ctx.TypeMetaFieldIsStr(Ctx.CallbackCtx, TypeName, ANode.ChildAt(1).Text) then
+    begin
+      FieldIdx := Ctx.TypeMetaFieldIndex(Ctx.CallbackCtx, TypeName,
+        ANode.ChildAt(1).Text);
+      if FieldIdx >= 0 then
+      begin
+        Inc(Ctx.BlockLabelCounter);
+        TempName := '$str_cmp_fld_' + IntToStr(Ctx.BlockLabelCounter);
+        Ctx.RegisterRuntimeVar(Ctx.CallbackCtx, TempName);
+        Ctx.RegisterRuntimeStrVar(Ctx.CallbackCtx, TempName);
+        Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
+          TempName);
+        Ctx.Model.AddTypedHirNode(
+          'assign-tstring-field-load-runtime', TempName, 0, 0,
+          ANode.ChildAt(0).Text + #9 + IntToStr(FieldIdx));
+        ABlob := 'strvar ' + TempName + #10;
+        Exit(True);
+      end;
+    end;
   end;
   if AAllowOwnedStringReturn and (ANode.NodeKind = gnkBinaryExpression) and
     (ANode.Text = '+') and (ANode.ChildCount >= 2) and

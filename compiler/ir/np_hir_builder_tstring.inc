@@ -1,17 +1,45 @@
 procedure THIRBuilder.ProcessVarDeclTString(const ANode: TTypedHirNode);
 var
   ParamIdx: LongInt;
-  ParamValueId: THIRValueId;
+  ParamValueId, LenValueId, TsSlot, LenI64: THIRValueId;
+  Func: THIRFunction;
+  Instr: THIRInstr;
 begin
   if FPendingParamCount > 0 then
   begin
-    { Function parameter: store incoming sret/value into alloca }
+    { Const/open string params are ABI (ptr, i32 len). Materialize a real
+      24B TString so write-str-var / strcmp / assign all see a TString slot.
+      Historical bug: only stored the data ptr into $ts then called
+      np_tstring_data/len on that ptr-slot → garbage human-summary. }
+    Func := FModule.FunctionAt(FModule.FunctionCount - 1);
     ParamIdx := FPendingParamLlvmIdx;
-    ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
-    EnsureAlloca(ANode.Operand + '$ts', GetPtrType);
-    EmitStore(GetPtrType, ParamValueId, FindAlloca(ANode.Operand + '$ts'));
+    if (ParamIdx < 0) or (ParamIdx + 1 >= LongInt(Func.Params.Count)) then
+      Exit;
+    ParamValueId := Func.Params[ParamIdx].ValueId;
+    LenValueId := Func.Params[ParamIdx + 1].ValueId;
+    EmitTStringInit(ANode.Operand);
+    TsSlot := FindAlloca(ANode.Operand + '$ts');
+    if TsSlot = 0 then
+      Exit;
+    { np_tstring_from_literal expects i64 len; formal is i32. }
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikZext;
+    Instr.TypeId := GetIntTypeByWidth(64, True);
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeTypedOperand(LenValueId, GetIntTypeByWidth(32, True));
+    EmitInstr(Instr);
+    LenI64 := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.Kind := hikIntrinsic;
+    Instr.IntrinsicName := 'tstring_from_literal';
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(TsSlot, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(ParamValueId, GetPtrType);
+    Instr.Operands[2] := MakeTypedOperand(LenI64, GetIntTypeByWidth(64, True));
+    EmitInstr(Instr);
     Dec(FPendingParamCount);
-    Inc(FPendingParamLlvmIdx);
+    Inc(FPendingParamLlvmIdx, 2);
   end
   else if FInStartFunc and (Length(ANode.Operand) > 0) and
     (ANode.Operand[1] <> '$') then
@@ -565,8 +593,9 @@ begin
   EmitInstr(Instr);
   FieldPtr := Instr.ResultId;
 
-  { Resolve source: 'lit ...' → from_literal, 'var ...' → tstring_assign, raw name → tstring_assign }
-  if (Length(SrcSpec) > 4) and (Copy(SrcSpec, 1, 4) = 'lit ') then
+  { Resolve source: 'lit ...' → from_literal, 'var ...' → tstring_assign, raw name → tstring_assign.
+    Use >= 4 so empty lit (SrcSpec = 'lit ') is accepted — SelectorName := '' was dropped. }
+  if (Length(SrcSpec) >= 4) and (Copy(SrcSpec, 1, 4) = 'lit ') then
   begin
     { Literal source: tstring_from_literal(field_ptr, lit_data, lit_len) }
     SrcName := Copy(SrcSpec, 5, Length(SrcSpec));

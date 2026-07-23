@@ -183,7 +183,84 @@ begin
   if AOperand.TypeId <> 0 then
     Result := TypeToLlvm(AOperand.TypeId)
   else
-    Result := AFallback;
+    Result := ValueLlvmType(AOperand.ValueId, AFallback);
+end;
+
+procedure THIRLlvmEmitter.NoteValueLlvmType(AValueId: THIRValueId;
+  const ALlvmType: string);
+begin
+  if (AValueId = 0) or (ALlvmType = '') then
+    Exit;
+  if AValueId > Length(FValueLlvmTypes) then
+    SetLength(FValueLlvmTypes, AValueId + 64);
+  FValueLlvmTypes[AValueId - 1] := ALlvmType;
+end;
+
+function THIRLlvmEmitter.ValueLlvmType(AValueId: THIRValueId;
+  const AFallback: string): string;
+begin
+  if (AValueId > 0) and (AValueId <= Length(FValueLlvmTypes)) and
+    (FValueLlvmTypes[AValueId - 1] <> '') then
+    Exit(FValueLlvmTypes[AValueId - 1]);
+  Result := AFallback;
+end;
+
+function THIRLlvmEmitter.EmitCastValueToLlvmType(AValueId: THIRValueId;
+  const AWantedTy, ATag: string): string;
+var
+  HaveTy: string;
+  CastName: string;
+  WantW, HaveW: LongInt;
+begin
+  if AValueId = 0 then
+  begin
+    if (AWantedTy = 'ptr') or (AWantedTy = '') then
+      Exit('null');
+    if (AWantedTy = 'float') or (AWantedTy = 'double') or
+      (AWantedTy = 'x86_fp80') then
+      Exit('0.0');
+    Exit('0');
+  end;
+  Result := ValueRef(AValueId);
+  if AWantedTy = '' then
+    Exit;
+  HaveTy := ValueLlvmType(AValueId, AWantedTy);
+  if (HaveTy = '') or (HaveTy = AWantedTy) then
+    Exit;
+  CastName := '%cast.' + ATag + '.' + IntToStr(AValueId);
+  if (HaveTy = 'ptr') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = ptrtoint ptr ' + Result + ' to ' + AWantedTy);
+    Result := CastName;
+  end
+  else if (AWantedTy = 'ptr') and (Copy(HaveTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = inttoptr ' + HaveTy + ' ' + Result + ' to ptr');
+    Result := CastName;
+  end
+  else if (Copy(HaveTy, 1, 1) = 'i') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    WantW := StrToIntDef(Copy(AWantedTy, 2, 8), 0);
+    HaveW := StrToIntDef(Copy(HaveTy, 2, 8), 0);
+    if WantW > HaveW then
+    begin
+      Emit('  ' + CastName + ' = sext ' + HaveTy + ' ' + Result +
+        ' to ' + AWantedTy);
+      Result := CastName;
+    end
+    else if WantW < HaveW then
+    begin
+      Emit('  ' + CastName + ' = trunc ' + HaveTy + ' ' + Result +
+        ' to ' + AWantedTy);
+      Result := CastName;
+    end;
+  end
+  else if (HaveTy = 'i1') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = zext i1 ' + Result + ' to ' + AWantedTy);
+    Result := CastName;
+  end;
+  { Other mismatched pairs left uncast — prefer crash at opt over wrong IR. }
 end;
 
 function THIRLlvmEmitter.IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
@@ -329,8 +406,11 @@ begin
     Op := Op + ')';
     Emit(Op);
     if AInstr.ResultId <> 0 then
+    begin
       Emit('  ' + ValueRef(AInstr.ResultId) + ' = bitcast ptr ' +
         SretRef + ' to ptr');
+      NoteValueLlvmType(AInstr.ResultId, 'ptr');
+    end;
     Exit;
   end;
   if IsSretFunction(AInstr.CallTarget) then
@@ -351,6 +431,9 @@ begin
   end;
   Op := Op + ')';
   Emit(Op);
+  if (AInstr.ResultId <> 0) and (not IsSretFunction(AInstr.CallTarget)) and
+    (LlvmType <> 'void') then
+    NoteValueLlvmType(AInstr.ResultId, LlvmType);
 end;
 
 procedure THIRLlvmEmitter.ClosePendingObjectFreeGuard;
