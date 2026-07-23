@@ -12,6 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 STAGE0="${NEXTPAS_UNIT_LIFECYCLE_STAGE0:-$REPO_ROOT/build/stage0-bootstrap/nextpas}"
 TARGET="${NEXTPAS_UNIT_LIFECYCLE_TARGET:-linux-x86_64}"
+# Host-free unit lifecycle gates: require --toolchain-binding …-llvm
+# (default nextpas build = fpc-stage0-host is NOT host-free).
 BINDING="${NEXTPAS_UNIT_LIFECYCLE_BINDING:-linux-x86_64-to-linux-x86_64-llvm}"
 RUNTIME_LIB="${NEXTPAS_UNIT_LIFECYCLE_RUNTIME_LIB:-$REPO_ROOT/build/runtime/$TARGET/libnprt.a}"
 FIXTURE="$REPO_ROOT/tests/compiler/pass/unit_lifecycle_pass.pas"

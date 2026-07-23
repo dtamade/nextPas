@@ -84,11 +84,19 @@ Current S3 stance:
 - `np.system.process_init` and `np.system.process_fini` are live compiler
   semantic contracts.
 - Runtime execution of process startup/shutdown remains deferred.
+- Focused evidence is **HIR/LLVM call-shape only** (`test_process_lifecycle`,
+  `test_process_lifecycle_llvm`); typed ledger remains **scelHir**.
+- Phase 0 helper is state flag + fsync only — not unit table / heap / ExitProc
+  (business process init still deferred).
+- Host-free claims for any lifecycle slice require explicit
+  `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm`; default stage0 build
+  is `fpc-stage0-host` and is not host-free evidence. Default binding is not
+  changed by this policy.
 - No callable `nextpas.core.system` facade function is exposed for either
   contract.
-- Unit initialization and finalization are not upgraded by this contract; they
-  still require compiler-owned unit graph execution evidence before becoming
-  live.
+- Unit initialization and finalization are not upgraded by process contracts; they
+  need their own unit-graph evidence (semantic + focused host-free slices under
+  llvm binding; ledger stays scelSemantic).
 
 ## Unit Lifecycle
 

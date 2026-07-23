@@ -40,27 +40,29 @@ into readiness claims or public ABI.
 | `np.system.exception_except_end` | backend | except-end runtime contract | `np_except_end` | `test_hir_exception` | No executable unwind proof |
 <!-- ledger-table:end -->
 
-> **Footnote (D3, 2026-07-23)**: `process_init` / `process_fini` focused HIR/LLVM call evidence
-> (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves `_start` call/declare void shape only.
-> It does **not** prove full runtime business init, host-free executable lifecycle, or justify
-> elevating the typed ledger past `scelHir`. Coverage boundary remains **Runtime execution deferred**.
+> **Footnote (D3, 2026-07-23; residual honesty same day)**: `process_init` / `process_fini`
+> focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves
+> `_start` call/declare **void** shape only when typed lifecycle nodes are present (and no calls
+> without them). It does **not** prove full runtime business init, host-free process business e2e,
+> or justify elevating the typed ledger past `scelHir`. Coverage boundary remains
+> **Runtime execution deferred**. Process residual is **closed as this evidence boundary**, not as
+> production readiness.
 >
 > **Footnote (D3 unit ordering, 2026-07-23)**: `test_unit_lifecycle_llvm_ordering` proves LLVM IR
 > multi-unit call order only (`process_init` → topo `np_unit_init_*` → reverse `np_unit_fini_*` →
 > `process_fini`) when `UnitInitOrder` is set. It does **not** alone justify elevating unit contracts
 > past `scelSemantic`.
 >
-> **Footnote (D3 host-free multi-unit, 2026-07-23 re-probe)**: focused host-free executable evidence
-> exists via `make test-compiler-unit-init-chain` / `verify_compiler_unit_init_chain.sh`
-> (`examples/smoke/llvm_unit_init_chain.pas` + `MuInitMid`/`MuInitLeaf`; binding
-> `linux-x86_64-to-linux-x86_64-llvm`; primary `llvm-stable`; Halt 33 = leaf 3 + mid 30).
-> Fini companion: `make test-compiler-unit-fini-body`. Gate scripts refuse silent host FPC masquerade
-> (`fpc-stage0-host`). This is **slice-level** executable proof of unit init/fini side-effects —
-> **not** full business process init. `unit_lifecycle_pass` under LLVM is now **green** via
-> `make test-compiler-unit-lifecycle-llvm` (store path inserts i64→i32 trunc after
-> `call i64 @GetInitCount`; stdout `count=42`) — still **does not** raise typed ledger past
-> `scelSemantic`. Default stage0 build without `--toolchain-binding …-llvm` still uses
-> host FPC (`backend-family=native`, `primary-tool-profile-id=fpc-stage0-host`).
+> **Footnote (D3 host-free multi-unit + binding policy, 2026-07-23)**: host-free executable evidence
+> **requires** explicit `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` (or gate env
+> equivalent). Transcript must show `backend-family=llvm`, `primary-tool-profile-id=llvm-stable`,
+> and must **not** be `fpc-stage0-host`. Default stage0 `nextpas build` without that binding remains
+> host FPC and **must not** be cited as host-free. Focused gates:
+> `make test-compiler-unit-init-chain` (Halt 33), `make test-compiler-unit-fini-body`,
+> `make test-compiler-unit-lifecycle-llvm` (count=42; store i64→i32 trunc). Gate scripts refuse silent
+> host FPC masquerade. Slice-level unit init/fini proof only — **not** full business process init;
+> **does not** raise unit ledger past `scelSemantic`. **Global default binding is intentionally
+> unchanged.**
 
 
 ## Backend-Private Helper Names (NOT Public ABI)
@@ -181,10 +183,13 @@ Ledger remains `scelSemantic` — slice ≠ full self-host readiness.
   (anti-masquerade; IR `trunc i64 … to i32` before `store i32 … @g_Count`; exit 0 / count=42).
 
 **What remains**:
-- No host-free end-to-end executable proof that process runtime helpers run as full business init.
+- Process residual is **closed as scelHir call-shape** only; full process business init and
+  host-free process business e2e remain **deferred** (not a silent red production knife).
 - Default stage0 `unit_lifecycle_pass` (no llvm binding) still lands on **host FPC** (`fpc-stage0-host`);
-  that green is **not** host-free evidence (default binding unchanged this knife).
-- Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — focused host-free slice
+  that green is **not** host-free evidence. Host-free claims **must** use
+  `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` (+ anti-masquerade). **Default binding
+  intentionally unchanged.**
+- Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — focused host-free unit slice
   ≠ ledger raise / self-host complete.
 
 **Severity**: Low for current scope (deferred to future compiler/runtime integration) — but high

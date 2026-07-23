@@ -328,30 +328,32 @@ is already partially covered by the `test_hir_exception` test suite.
 **当前 residual（相对 M0 权威，按优先级）**:
 1. **已关闭（切片）**：host-free multi-unit init 副作用门禁（Halt 33）+ anti-masquerade 断言
 2. **已关闭（切片）**：`unit_lifecycle_pass` + llvm binding 可执行（`make test-compiler-unit-lifecycle-llvm`；store 路径 i64→i32 trunc）
-3. **仍 open**：默认 stage0 build 无 llvm binding → `fpc-stage0-host`；compiler-pass 默认绿不算 host-free
+3. **策略固定（非 bug）**：默认 stage0 build 无 llvm binding → `fpc-stage0-host`；compiler-pass 默认绿 **不算** host-free（**不改**全局默认 binding）
 4. ledger 保持 `scelSemantic`，**禁止**因切片绿抬 executable / 声称 self-host
-5. process residual 见 Gate 3（scelHir call-shape ≠ 业务 init）
+5. process residual 见 Gate 3（call-shape 已收口；业务 init 仍 deferred）
 6. 不在本轮做 typed 热路径大迁移 / A→B→C / M2-A
 
-## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 入口审计)
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 residual 诚实收口)
 
 **历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
 当前权威：README/coverage 写 `process_init`/`process_fini` = **compiler semantic live; runtime execution deferred**；
 typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 完成证明。
 
-| 验收标准 | 历史记录（非 readiness） |
+| 验收标准 | 当前诚实记录 |
 |----------|------|
-| process_init 在 main 前 seed/call | 报告：编译器 seed 顺序 + LLVM call 存在 |
-| process_fini 在 main 后 seed/call | 报告：HIR 顺序修复后 seed 在 halt 相关点之后 |
-| 退出码通过关闭序列保留 | 历史主张；需 focused 再验，不作当前权威 |
-| void call LLVM IR 正确性 | 报告：void call 不带结果名 |
-| 链接器符号解析 | 报告：runtime 导出 `np_process_init`/`fini` |
+| process_init 在 main 前 seed/call | **scelHir 已证**：typed 节点 → `_start` HIR call `np_process_init` |
+| process_fini 在 main 后 seed/call | **scelHir 已证**：typed 节点 → `_start` HIR call `np_process_fini`（单次） |
+| void call LLVM IR 正确性 | **已证**：`declare void` + `call void`（非 `call i64`；fini 不双发） |
+| 全量 runtime 业务 init | **未证 / deferred**（Phase 0 helper ≠ unit 表/堆/ExitProc） |
+| host-free process 业务 e2e | **未证**（现有 process 门禁是 host-fpc 单元测试，不是 llvm binding 可执行门禁） |
+| 退出码经关闭序列保留 | 历史主张；**不作**当前 readiness 权威 |
+| 链接器符号 / runtime 导出 | inventory 存在；≠ 业务 init 证明 |
 
 **已有基础**（inventory）:
 - HIR/emitter：`process-init-runtime` / `process-fini-runtime`；`@np_process_init` / `@np_process_fini`
 - Phase 0 运行时：`rtl/runtime/src/nextpas.runtime.lifecycle.ll`（状态标志 + fsync；**不做** unit 表/堆/ExitProc）
 - System.pas：`cdecl; external` 声明
-- Focused：`test_process_lifecycle` / `test_process_lifecycle_llvm`（HIR/LLVM 级）
+- Focused：**call-shape only** — `test_process_lifecycle`（HIR）/ `test_process_lifecycle_llvm`（LLVM IR）
 
 **Phase 0 运行时职责** (nextpas.runtime.lifecycle.ll):
 - `np_process_init`: 防重入检查 + 全局状态标记
@@ -359,11 +361,18 @@ typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 
 - 使用 Linux x86_64 syscall (不依赖 libc)
 - 全局 `__np_lifecycle_state` 跟踪生命周期阶段 (0→1→2→3)
 
-**当前 residual（相对 M0 权威）**:
-1. ledger 仍为 `scelHir`；coverage 边界仍是 **Runtime execution deferred**（有 Phase 0 helper ≠ 全量 process 业务 init 证明）
-2. **D3 再验（2026-07-23）**：`test_process_lifecycle` + `test_process_lifecycle_llvm` 绿；IR 为 `call void @np_process_init/fini`（曾回归为 `call i64` + 双 fini，已最小修复）。**仍不是** host-free 端到端业务 init 证明
-3. 无 A→B→C / self-host 证明；**禁止**把历史 PHASE 0 勾选读成生产就绪
-4. 下一刀可选：默认 binding 仍 host FPC；process business init / ledger 策略见上，**禁止**抬 ledger / M2-A
+**Host-free 绑定（与 Gate 2 相同；本 Gate 当前无 host-free process 业务门禁）**:
+```bash
+# host-free 证明必须显式 llvm binding；默认 nextpas build = fpc-stage0-host ≠ host-free
+--toolchain-binding linux-x86_64-to-linux-x86_64-llvm
+# 期望: backend-family=llvm, primary-tool-profile-id=llvm-stable（非 fpc-stage0-host）
+```
+
+**当前 residual（相对 M0 权威）— 诚实收口**:
+1. **已收口**：call-shape 证据边界（HIR + LLVM void form）= ledger **scelHir** + coverage **Runtime execution deferred**
+2. **仍 deferred（非本刀生产）**：全量 process 业务 init；host-free process 业务 e2e；ledger 升 `scelExecutable`
+3. **禁止**：把 HIR/LLVM 绿 / Phase 0 helper / 历史 PHASE 0 勾选读成生产就绪或 self-host
+4. **禁止**：改默认 toolchain binding；M2-A / A→B→C
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 

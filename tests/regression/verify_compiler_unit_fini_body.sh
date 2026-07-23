@@ -2,6 +2,7 @@
 # verify_compiler_unit_fini_body.sh — L2-IR evidence: unit finalization lowers
 # to a non-empty np_unit_fini_* body (store), called before process_fini.
 #
+# REQUIRES --toolchain-binding …-llvm; default stage0 build is host FPC (not host-free).
 # claim-level=unit-fini-body-ir-not-kernel-scale
 # Requires true LLVM binding — host FPC green is not acceptable.
 

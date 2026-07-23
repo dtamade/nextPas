@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Focused host-free multi-unit initialization evidence (Slice A).
+# REQUIRES --toolchain-binding …-llvm; default stage0 build is host FPC (not host-free).
 # Expect Halt(33): leaf init sets GMuAcc=3, mid adds 30.
 # Requires true LLVM binding — host FPC green is not acceptable.
 # claim-level=unit-init-chain-host-free-executable-not-ledger-raise

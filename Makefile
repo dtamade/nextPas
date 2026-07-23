@@ -73,6 +73,12 @@ test-compiler-write-i64-fd: hygiene
 	bash tests/regression/verify_compiler_write_i64_fd_focused.sh
 	$(MAKE) hygiene
 
+# --- host-free unit lifecycle gates (D3) ---
+# REQUIRE: scripts force --toolchain-binding linux-x86_64-to-linux-x86_64-llvm and
+# anti-masquerade (backend-family=llvm, primary=llvm-stable; refuse fpc-stage0-host).
+# Default `nextpas build` without that binding is host FPC — NOT host-free evidence.
+# Do NOT change the global default toolchain binding from these targets.
+
 # D3 host-free multi-unit unit_init side-effect (LLVM binding; not host FPC; not ledger raise).
 test-compiler-unit-init-chain: hygiene
 	bash tests/regression/verify_compiler_unit_init_chain.sh
