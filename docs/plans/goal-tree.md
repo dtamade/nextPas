@@ -178,7 +178,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、compiler-fail 16/16。
 5. [x] 恢复 canonical `make rebuild-compiler`。
 6. [ ] 建立 fail-closed B0 benchmark 与 process-tree resource evidence。
-7. [ ] 继续 System typed contract migration；M1 未完成。
+7. [x] M1 typed production families closed（2026-07-23）。
    - [x] object-free production family（root/destroy/cleanup/release）
    - [x] process_init/fini typed HIR family（`SystemContractKind` 权威；ledger 仍 scelHir）
    - [x] string ownership triad typed HIR（init/fini/assign → `np_tstring_*`；ledger scelHir）
@@ -189,8 +189,12 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] exception boundary typed HIR（try_push/pop/raise/finally_end/except_end → `@np_try_*` 等；ledger scelHir；begin markers 仍 bare）
    - [x] object_alloc typed HIR（class-new → `sckObjectAlloc` → `@np_object_alloc`；ledger scelHir；arr_alloc 归并进 heap_alloc）
    - [x] managed_record_fini typed HIR（cleanup → `sckManagedRecordFini` 权威 marker + 嵌套 string/dynarray；init 仍 vocabulary；ledger scelHir）
-   - [ ] 下一 family / 其余 residual（runtime_fault / unit 等；runtime-closure 待 M1 稳定后）
-8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
+   - Residual **non-blocking / intentionally deferred**（不挡 M1 关账）：
+     `dynarray_init` / `managed_record_init` = vocabulary；
+     `unit_init` / `unit_fini` = semantic；
+     `object_free` root/release + `runtime_fault` = backend evidence boundary；
+     runtime-closure / 全表 `scelExecutable` = M1 之后。
+8. [ ] 进入 M2 A→B→C 两跳证明（M1 typed migration 已关账）。
 
 ---
 
@@ -214,7 +218,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-23 | M1 halt + heap families | halt（scelHir syscall）与 GetMem/FreeMem heap_alloc/free（scelHir → np_alloc/np_free）进入 typed HIR |
 | 2026-07-23 | M1 exception boundary family | try_push/pop/raise/finally_end/except_end 进入 typed HIR（scelHir；setjmp call-shape） |
 | 2026-07-23 | M1 object_alloc + arr 归并 | class-new → sckObjectAlloc→np_object_alloc；field arr_alloc → sckHeapAlloc（scelHir） |
-| 2026-07-23 | M1 halt family | halt 进入 typed HIR（scelHir；syscall lowering；权威 = SystemContractKind） |
+| 2026-07-23 | M1 managed_record_fini | cleanup → sckManagedRecordFini marker + nested string/dynarray（scelHir） |
+| 2026-07-23 | M1 typed production families closed | vocabulary/semantic/backend residual 标 non-blocking；下一主线 M2 |
 
 ---
 

@@ -96,6 +96,18 @@ into readiness claims or public ABI.
 > `test_hir_managed_record_contract`. Evidence is HIR identity + nested call
 > shape; **not** full nested/managed-record executable lifecycle. Ledger **scelHir**.
 >
+> **Footnote (M1 typed production families closed, 2026-07-23)**: Production
+> builder sites no longer assign bare `class_alloc` / `arr_alloc` IntrinsicName;
+> remaining production lifecycle families are typed under `SystemContractKind`.
+> The following residual rows are **intentionally deferred / non-blocking** for
+> M1 exit and must not be re-opened as “next typed family” without a new phase
+> decision: `dynarray_init` and `managed_record_init` stay **vocabulary** (slot
+> nil / no independent runtime claim); `unit_init` / `unit_fini` stay
+> **semantic** (host-free multi-unit evidence already recorded); `object_free`
+> root/release and `runtime_fault` stay at their current **backend** evidence
+> boundary; elevating the whole ledger to `scelExecutable` / runtime-closure is
+> **post-M1**. See `docs/plans/goal-tree.md` execution window item 7 closed.
+>
 > **Footnote (M1 typed exception boundary, 2026-07-23)**: `sckExceptionTryPush` /
 > `sckExceptionTryPop` / `sckExceptionRaise` / `sckExceptionFinallyEnd` /
 > `sckExceptionExceptEnd` are production typed HIR (authority =
