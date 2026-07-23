@@ -292,59 +292,55 @@ These gates should be reviewed quarterly. Update `goal-tree.md` and this documen
 each gate progresses toward completion. The first gate to close (Gate 5, exception unwind)
 is already partially covered by the `test_hir_exception` test suite.
 
-## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 2 实现)
+## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 入口审计)
 
-**状态: PHASE 0 COMPLETE** (编译器管线 + 拓扑排序 + _start 驱动全部就绪)
+**历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
+当前权威：`contract-coverage-table.md` / README 将 `np.system.unit_init`/`unit_fini` 标为
+**future compiler/runtime only**；typed ledger 为 `scelSemantic`，**无 executable ordering proof**。
 
-| 验收标准 | 状态 |
+| 验收标准 | 历史记录（非 readiness） |
 |----------|------|
-| UnitGraph → HIR nodes for each resolved unit | ✅ `SeedUnitLifecycleBodies` 已为每个 unit 生成 init/fini HIR |
-| np.system.unit_init/unit_fini seeded for multi-unit programs | ✅ 生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
-| LLVM emitter generates init/fini call sequences | ✅ `_start` 中直接调用 (拓扑序 init, 逆序 fini) |
-| Multi-unit program runs with correct init ordering via nextPas | ✅ Kahn BFS 拓扑排序，System 强制首位 |
+| UnitGraph → HIR nodes for each resolved unit | 报告：`SeedUnitLifecycleBodies` 生成 init/fini 相关产物 |
+| np.system.unit_init/unit_fini seeded for multi-unit programs | 报告：生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
+| LLVM emitter generates init/fini call sequences | 报告：`_start` 侧直接 call（拓扑序 init，逆序 fini） |
+| Multi-unit program runs with correct init ordering via nextPas | **未**升为 executable 权威证据；coverage 仍写 No executable ordering proof |
 
-**关键变更 (2026-06-19)**:
+**历史关键变更 (2026-06-19)**（inventory，非当前 gate 关闭证明）:
 - `TUnitGraph.TopologicalInitOrder`: Kahn BFS 拓扑排序 (np_unit_graph.pas)
-- 删除 `@llvm.global_ctors`/`@llvm.global_dtors`，替换为 `_start` 中直接调用
+- 删除 `@llvm.global_ctors`/`@llvm.global_dtors`，替换为 `_start` 中直接调用（**ctors 路径已废弃**，勿再写 65535 优先级缺口）
 - 数据流: UnitGraph → SemanticModel → HIRModule → Emitter
-- `_start` 序列: `process_init → unit_init (拓扑序) → 用户代码 → unit_fini (逆序) → process_fini → halt`
+- 目标序列: `process_init → unit_init (拓扑序) → 用户代码 → unit_fini (逆序) → process_fini → halt`
 
-**已有基础**:
-- Lexer 解析 initialization/finalization 关键字 ✅
-- Green tree 解析器解析 init/fini sections ✅
-- 契约常量 NPSYSTEM_UNIT_INIT/FINI 已定义 ✅
-- 文档契约已完整登记 ✅
-- `SeedUnitLifecycleBodies` 为每个 unit 生成 LLVM 函数 ✅
-- `@llvm.global_ctors`/`@llvm.global_dtors` 注册 ✅
+**已有基础**（编译器/契约侧）:
+- Lexer / green tree 解析 initialization/finalization
+- 契约常量 `NPSYSTEM_UNIT_INIT`/`FINI`；coverage 表与 ledger 名称 1:1
+- 语义/发射侧 unit_init/fini 产物（focused：`test_semantic_runtime_contract_seed`）
 
-**缺口 (按实现顺序)**:
-1. ~~SeedRuntimeContracts 扩展~~ ✅ 已完成
-2. ~~HIR 层: unit-init-runtime/unit-fini-runtime 节点类型~~ ✅ 已完成
-3. ~~LLVM emitter: @np_unit_init/@np_unit_fini helper~~ ✅ 已完成
-4. **优先级排序**: 当前全为 65535，需实现 `_start` 驱动拓扑排序
-5. Runtime: `_start` 驱动器（process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt）
-6. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
+**当前 residual（相对 M0 权威，按优先级）**:
+1. 无 executable 级 multi-unit ordering 证明（coverage 边界）
+2. 无 host-free 端到端「nextPas 编 + 跑」unit 生命周期门禁
+3. ledger 保持 `scelSemantic`，**禁止**在无新 focused 证明时抬到 executable
+4. 不在本轮做 typed 热路径大迁移 / A→B→C
 
-## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 3 实现)
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 入口审计)
 
-**状态: PHASE 0 COMPLETE** (编译器侧 + 运行时 Phase 0 已完成)
+**历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
+当前权威：README/coverage 写 `process_init`/`process_fini` = **compiler semantic live; runtime execution deferred**；
+typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 完成证明。
 
-| 验收标准 | 状态 |
+| 验收标准 | 历史记录（非 readiness） |
 |----------|------|
-| process_init 在 main 前执行 | ✅ 编译器 seed 顺序正确 + 运行时实现存在 |
-| process_fini 在 main 后执行 | ✅ seed 移到 SeedHaltCalls 之后，HIR 顺序正确 |
-| 退出码通过关闭序列保留 | ✅ halt syscall 在 process_fini 之前，退出码直接保留 |
-| void call LLVM IR 正确性 | ✅ emitter 不再给 void call 结果名 |
-| 链接器符号解析 | ✅ libnprt.a 中导出 np_process_init/fini |
+| process_init 在 main 前 seed/call | 报告：编译器 seed 顺序 + LLVM call 存在 |
+| process_fini 在 main 后 seed/call | 报告：HIR 顺序修复后 seed 在 halt 相关点之后 |
+| 退出码通过关闭序列保留 | 历史主张；需 focused 再验，不作当前权威 |
+| void call LLVM IR 正确性 | 报告：void call 不带结果名 |
+| 链接器符号解析 | 报告：runtime 导出 `np_process_init`/`fini` |
 
-**已有基础** (2026-06-19 更新):
-- `'process-init-runtime'` 正确映射到 `hnkProcessInitRuntime` (hir_types:259) ✅
-- `EmitProcessInit`/`EmitProcessFini` 存在 (hir_builder:7430-7452) ✅
-- LLVM emitter 声明 `@np_process_init`/`@np_process_fini` (emitter:1310-1311) ✅
-- **运行时实现**: `rtl/runtime/src/nextpas.runtime.lifecycle.ll` (Phase 0) ✅
-- **void call 修复**: emitter void call 不再带结果名 (emitter:314-315) ✅
-- **HIR 顺序修复**: process_fini seed 移到 SeedHaltCalls 之后 (sema:6201-6211) ✅
-- **System.pas**: `cdecl; external` 声明指向 libnprt.a 实现 ✅
+**已有基础**（inventory）:
+- HIR/emitter：`process-init-runtime` / `process-fini-runtime`；`@np_process_init` / `@np_process_fini`
+- Phase 0 运行时：`rtl/runtime/src/nextpas.runtime.lifecycle.ll`（状态标志 + fsync；**不做** unit 表/堆/ExitProc）
+- System.pas：`cdecl; external` 声明
+- Focused：`test_process_lifecycle` / `test_process_lifecycle_llvm`（HIR/LLVM 级）
 
 **Phase 0 运行时职责** (nextpas.runtime.lifecycle.ll):
 - `np_process_init`: 防重入检查 + 全局状态标记
@@ -352,13 +348,11 @@ is already partially covered by the `test_hir_exception` test suite.
 - 使用 Linux x86_64 syscall (不依赖 libc)
 - 全局 `__np_lifecycle_state` 跟踪生命周期阶段 (0→1→2→3)
 
-**缺口 (按实现顺序)**:
-1. ~~THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime~~ ✅ 已完成
-2. ~~THIRBuilder 处理~~ ✅ 已完成
-3. ~~LLVM emitter 新增 @np_process_init/@np_process_fini~~ ✅ 已完成
-4. ~~运行时: np_process_init/np_process_fini 实际实现~~ ✅ Phase 0 完成
-5. **_start 驱动拓扑排序**: `process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt` (Gate 2 职责)
-6. **端到端集成**: halt 改为调用 process_fini + haltproc (当前 halt 直接 syscall 绕过 process_fini)
+**当前 residual（相对 M0 权威）**:
+1. ledger 仍为 `scelHir`；coverage 边界仍是 **Runtime execution deferred**（有 Phase 0 helper ≠ 全量 process 业务 init 证明）
+2. halt / 关闭路径与 process_fini 的端到端关系需 focused 再验（历史笔记称部分路径可能 syscall 直出）
+3. 无 A→B→C / self-host 证明；**禁止**把历史 PHASE 0 勾选读成生产就绪
+4. 下一刀优先：补/跑 focused 证据脚注，而不是抬 ledger 或开 M2-A
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 
