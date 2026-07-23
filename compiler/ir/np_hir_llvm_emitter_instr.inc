@@ -91,8 +91,17 @@ begin
     end;
     hikStore:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  store ' + LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+      begin
+        { Value SSA may be wider/narrower than store TypeId (e.g. call i64 →
+          store i32 for Integer unit vars). Reuse B25 cast helper. }
+        if (LlvmType = '') or (LlvmType = 'void') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'st.' + IntToStr(AInstr.Operands[0].ValueId) + '.' +
+          IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  store ' + LlvmType + ' ' + Op +
           ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
+      end;
     hikAdd:
       if Length(AInstr.Operands) >= 2 then
       begin

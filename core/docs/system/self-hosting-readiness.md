@@ -327,8 +327,8 @@ is already partially covered by the `test_hir_exception` test suite.
 
 **当前 residual（相对 M0 权威，按优先级）**:
 1. **已关闭（切片）**：host-free multi-unit init 副作用门禁（Halt 33）+ anti-masquerade 断言
-2. **仍 open**：默认 stage0 build 无 llvm binding → `fpc-stage0-host`；`unit_lifecycle_pass` 默认绿不算 host-free
-3. **仍 open**：`unit_lifecycle_pass` + llvm binding → `opt` 失败：`store i32` 收 i64 函数返回（缺 trunc）；下一刀生产最小修
+2. **已关闭（切片）**：`unit_lifecycle_pass` + llvm binding 可执行（`make test-compiler-unit-lifecycle-llvm`；store 路径 i64→i32 trunc）
+3. **仍 open**：默认 stage0 build 无 llvm binding → `fpc-stage0-host`；compiler-pass 默认绿不算 host-free
 4. ledger 保持 `scelSemantic`，**禁止**因切片绿抬 executable / 声称 self-host
 5. process residual 见 Gate 3（scelHir call-shape ≠ 业务 init）
 6. 不在本轮做 typed 热路径大迁移 / A→B→C / M2-A
@@ -363,7 +363,7 @@ typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 
 1. ledger 仍为 `scelHir`；coverage 边界仍是 **Runtime execution deferred**（有 Phase 0 helper ≠ 全量 process 业务 init 证明）
 2. **D3 再验（2026-07-23）**：`test_process_lifecycle` + `test_process_lifecycle_llvm` 绿；IR 为 `call void @np_process_init/fini`（曾回归为 `call i64` + 双 fini，已最小修复）。**仍不是** host-free 端到端业务 init 证明
 3. 无 A→B→C / self-host 证明；**禁止**把历史 PHASE 0 勾选读成生产就绪
-4. 下一刀可选：`unit_lifecycle_pass` LLVM i64→i32 trunc 生产最小修，**禁止**抬 ledger / M2-A
+4. 下一刀可选：默认 binding 仍 host FPC；process business init / ledger 策略见上，**禁止**抬 ledger / M2-A
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 

@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -81,6 +81,11 @@ test-compiler-unit-init-chain: hygiene
 # D3 host-free multi-unit unit_fini body IR + executable oracle (LLVM binding).
 test-compiler-unit-fini-body: hygiene
 	bash tests/regression/verify_compiler_unit_fini_body.sh
+	$(MAKE) hygiene
+
+# D3 host-free unit_lifecycle_pass under LLVM (store i64→i32 trunc; not ledger raise).
+test-compiler-unit-lifecycle-llvm: hygiene
+	bash tests/regression/verify_compiler_unit_lifecycle_llvm.sh
 	$(MAKE) hygiene
 
 focused: hygiene

@@ -56,9 +56,10 @@ into readiness claims or public ABI.
 > `linux-x86_64-to-linux-x86_64-llvm`; primary `llvm-stable`; Halt 33 = leaf 3 + mid 30).
 > Fini companion: `make test-compiler-unit-fini-body`. Gate scripts refuse silent host FPC masquerade
 > (`fpc-stage0-host`). This is **slice-level** executable proof of unit init/fini side-effects —
-> **not** full business process init, **not** `unit_lifecycle_pass` under LLVM (that fixture fails
-> opt with i64→i32 store trunc on `Count := GetInitCount`), and **does not** raise typed ledger
-> past `scelSemantic`. Default stage0 build without `--toolchain-binding …-llvm` still uses
+> **not** full business process init. `unit_lifecycle_pass` under LLVM is now **green** via
+> `make test-compiler-unit-lifecycle-llvm` (store path inserts i64→i32 trunc after
+> `call i64 @GetInitCount`; stdout `count=42`) — still **does not** raise typed ledger past
+> `scelSemantic`. Default stage0 build without `--toolchain-binding …-llvm` still uses
 > host FPC (`backend-family=native`, `primary-tool-profile-id=fpc-stage0-host`).
 
 
@@ -176,14 +177,13 @@ Ledger remains `scelSemantic` — slice ≠ full self-host readiness.
 - Host-free multi-unit init side-effect: `make test-compiler-unit-init-chain`
   (`llvm_unit_init_chain` Halt 33; asserts `backend-family=llvm` + `primary-tool-profile-id=llvm-stable`).
 - Host-free multi-unit fini body: `make test-compiler-unit-fini-body`.
+- Host-free `unit_lifecycle_pass` (init side-effect + store trunc): `make test-compiler-unit-lifecycle-llvm`
+  (anti-masquerade; IR `trunc i64 … to i32` before `store i32 … @g_Count`; exit 0 / count=42).
 
 **What remains**:
 - No host-free end-to-end executable proof that process runtime helpers run as full business init.
-- Default stage0 `unit_lifecycle_pass` still lands on **host FPC** (`fpc-stage0-host`); that green
-  is **not** host-free evidence.
-- `unit_lifecycle_pass` under `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` still fails
-  at `opt` with **i64→i32 store trunc** (`Count := GetInitCount` → `store i32 %v3` where `%v3` is i64).
-  Emit trunc fix is the next production knife; not a missing unit_init emitter.
+- Default stage0 `unit_lifecycle_pass` (no llvm binding) still lands on **host FPC** (`fpc-stage0-host`);
+  that green is **not** host-free evidence (default binding unchanged this knife).
 - Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — focused host-free slice
   ≠ ledger raise / self-host complete.
 
