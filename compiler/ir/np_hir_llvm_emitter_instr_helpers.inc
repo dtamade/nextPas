@@ -492,6 +492,38 @@ begin
     ;
   end;
   case AInstr.SystemContractKind of
+    sckProcessInit:
+    begin
+      FNeedsProcessLifecycle := True;
+      if AInstr.CallTarget <> '' then
+        Emit('  call void @' + AInstr.CallTarget + '()')
+      else
+        Emit('  call void @' +
+          SystemContractAt(sckProcessInit).RuntimeMapping + '()');
+      if not FUnitInitCallsEmitted then
+      begin
+        EmitUnitInitCalls;
+        FUnitInitCallsEmitted := True;
+      end;
+    end;
+    sckProcessFini:
+    begin
+      FNeedsProcessLifecycle := True;
+      if not FProcessFiniEmitted then
+      begin
+        if not FUnitFiniCallsEmitted then
+        begin
+          EmitUnitFiniCalls;
+          FUnitFiniCallsEmitted := True;
+        end;
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '()')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckProcessFini).RuntimeMapping + '()');
+        FProcessFiniEmitted := True;
+      end;
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

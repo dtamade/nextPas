@@ -40,7 +40,13 @@ into readiness claims or public ABI.
 | `np.system.exception_except_end` | backend | except-end runtime contract | `np_except_end` | `test_hir_exception` | No executable unwind proof |
 <!-- ledger-table:end -->
 
-> **Footnote (D3, 2026-07-23; residual honesty same day)**: `process_init` / `process_fini`
+> **Footnote (D3 closed → M1 typed process family, 2026-07-23)**: HIR builder assigns
+> `sckProcessInit` / `sckProcessFini` via `AssignSystemContract`; LLVM dispatches those
+> kinds before legacy call-target string matching. Evidence remains **call-shape only**
+> (typed identity + void IR); **not** full process business init; ledger stays **scelHir**.
+> Residual honesty footnotes are closed; further work is whole-family typed migration.
+>
+> **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves
 > `_start` call/declare **void** shape only when typed lifecycle nodes are present (and no calls
 > without them). It does **not** prove full runtime business init, host-free process business e2e,

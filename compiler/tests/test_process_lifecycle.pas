@@ -4,23 +4,37 @@ program test_process_lifecycle;
 
 uses
   nextpas.core.exception, np_semantic_model, np_hir_builder, np_hir_model,
-  np_hir_types;
+  np_hir_types, np_system_contracts;
 
-function HasCallTarget(const AFunc: THIRFunction;
-  const ATarget: string): Boolean;
+function HasProcessContract(const AFunc: THIRFunction;
+  AKind: TSystemContractKind): Boolean;
 var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
+  ContractDefinition := SystemContractAt(AKind);
   if AFunc.Blocks <> nil then
     for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
-    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
-      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
-    begin
-      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
-      if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) then
-        Exit(True);
-  end;
+      if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+        for InstrIndex := 0 to
+          LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+        begin
+          Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[
+            SizeUInt(InstrIndex)];
+          if IsSystemContract(Instr, AKind) then
+          begin
+            if Instr.Kind <> hikIntrinsic then
+              Exit(False);
+            if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+              Exit(False);
+            if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+              Exit(False);
+            if Length(Instr.Operands) <> 0 then
+              Exit(False);
+            Exit(True);
+          end;
+        end;
   Result := False;
 end;
 
@@ -42,7 +56,7 @@ var
   Builder: THIRBuilder;
   StartFunc: THIRFunction;
 begin
-  { Test 1: process-init-runtime and process-fini-runtime generate calls }
+  { Test 1: process lifecycle nodes → typed System contracts on _start }
   Model := TSemanticModel.Create;
   try
     Model.AddTypedHirNode('process-init-runtime',
@@ -57,9 +71,9 @@ begin
       if Builder.Module.FunctionCount = 0 then
         Halt(1);
       StartFunc := GetStartFunc(Builder.Module);
-      if not HasCallTarget(StartFunc, 'np_process_init') then
+      if not HasProcessContract(StartFunc, sckProcessInit) then
         Halt(2);
-      if not HasCallTarget(StartFunc, 'np_process_fini') then
+      if not HasProcessContract(StartFunc, sckProcessFini) then
         Halt(3);
     finally
       Builder.Free;
@@ -68,7 +82,7 @@ begin
     Model.Free;
   end;
 
-  { Test 2: without process lifecycle nodes, no calls generated }
+  { Test 2: without process lifecycle nodes, no typed process contracts }
   Model := TSemanticModel.Create;
   try
     Model.AddTypedHirNode('var-decl-runtime', 'x', 0, 0, 'x');
@@ -79,9 +93,9 @@ begin
       if Builder.Module.FunctionCount = 0 then
         Halt(4);
       StartFunc := GetStartFunc(Builder.Module);
-      if HasCallTarget(StartFunc, 'np_process_init') then
+      if HasProcessContract(StartFunc, sckProcessInit) then
         Halt(5);
-      if HasCallTarget(StartFunc, 'np_process_fini') then
+      if HasProcessContract(StartFunc, sckProcessFini) then
         Halt(6);
     finally
       Builder.Free;

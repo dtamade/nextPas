@@ -175,7 +175,10 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、compiler-fail 16/16。
 5. [x] 恢复 canonical `make rebuild-compiler`。
 6. [ ] 建立 fail-closed B0 benchmark 与 process-tree resource evidence。
-7. [ ] 继续 System typed contract migration；object-free 是第一个 production family，M1 未完成。
+7. [ ] 继续 System typed contract migration；M1 未完成。
+   - [x] object-free production family（root/destroy/cleanup/release）
+   - [x] process_init/fini typed HIR family（`SystemContractKind` 权威；ledger 仍 scelHir）
+   - [ ] 下一 family：string / dynarray / interface（整族推进）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---

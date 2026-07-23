@@ -324,6 +324,8 @@ begin
   end;
 
   case AInstr.SystemContractKind of
+    sckProcessInit,
+    sckProcessFini,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -340,6 +342,19 @@ begin
   begin
     AError := 'system-contract-name-mismatch:' + IntToStr(ContractOrdinal);
     Exit(False);
+  end;
+
+  { Zero-arg void lifecycle contracts (process init/fini). }
+  if (AInstr.SystemContractKind = sckProcessInit) or
+    (AInstr.SystemContractKind = sckProcessFini) then
+  begin
+    if Length(AInstr.Operands) <> 0 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    Exit(True);
   end;
 
   if Length(AInstr.Operands) <> 1 then
