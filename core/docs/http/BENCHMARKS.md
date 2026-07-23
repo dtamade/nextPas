@@ -503,6 +503,30 @@ Per-run press nextPas: 83059 / 87827 / 75742；Go: 92858 / 89599 / 87747（all s
   --connections 16 --streams 32 --batches 100 --runs 3
 ```
 
+#### HTTPS ALPN h2 peer multi-run (C-D, 2026-07-23) — evidence only
+
+Same frozen shapes as HS-0, transport **TLS ALPN `h2`** (self-signed both sides).
+Harness: `bench_h2_server --tls` + `compare_h2 --tls` + `run_h2_comparison.sh --tls`.
+Gate: ratio of medians ≥ **0.80×**, runs≥3, each run `stable=1`.
+**Does not** upgrade CLAIM package or *Scale-ready (HTTPS H2)*.
+
+| Date | Shape | median nextPas req/s | median Go req/s | ratio | gate | artifact |
+| ---- | ----- | -------------------: | --------------: | ----: | ---- | --------- |
+| **2026-07-23 C-D** | 8×16×100 mid | **93586** | **36420** | **2.57×** | **Met** | `h2_tls_comparison/cd-mid-8x16x100-runs3.md` |
+| **2026-07-23 C-D** | 16×32×100 press | **253405** | **83588** | **3.03×** | **Met** | `h2_tls_comparison/cd-press-16x32x100-runs3.md` |
+
+Per-run mid nextPas: 72653 / 93586 / 99600；Go: 35026 / 36420 / 36874（all stable=1）。
+Per-run press nextPas: 239380 / 271337 / 253405；Go: 87135 / 83588 / 83443（all stable=1）。
+
+```sh
+./benchmarks/nextpas.core.http/run_h2_comparison.sh --tls \
+  --connections 8 --streams 16 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_tls_comparison/cd-mid-8x16x100-runs3.md
+./benchmarks/nextpas.core.http/run_h2_comparison.sh --tls \
+  --connections 16 --streams 32 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_tls_comparison/cd-press-16x32x100-runs3.md
+```
+
 #### S1 sample (2026-07-20, short 2k×4 epoll no_url)
 
 | Impl | req/s | p50_ns | p99_ns |

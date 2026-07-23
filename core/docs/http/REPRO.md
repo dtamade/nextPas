@@ -126,6 +126,23 @@ self press/mid≥3× **已 Dropped**。**不宣称** H1+H2 package。
 **2026-07-21 HS-1 multi-run (runs=3)**：mid median **1.86× Met**；press median **0.93× Met**。
 **package 仍 No**（multi-run Met；**缺产品 Yes**）。
 
+### 4.2 HTTPS ALPN h2 peer（C-D；非 package / HTTPS scale claim）
+
+同 HS-0 形状；transport = TLS ALPN `h2`（双方 self-signed）。门闩同 §4.1：ratio of medians ≥0.80×（runs≥3）。
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h2_server smoke-tls
+./benchmarks/nextpas.core.http/run_h2_comparison.sh --tls \
+  --connections 8 --streams 16 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_tls_comparison/cd-mid-8x16x100-runs3.md
+./benchmarks/nextpas.core.http/run_h2_comparison.sh --tls \
+  --connections 16 --streams 32 --batches 100 --runs 3 \
+  --output build/projects/nextpas.core.http/h2_tls_comparison/cd-press-16x32x100-runs3.md
+```
+
+**2026-07-23 C-D multi-run (runs=3)**：mid median **2.57× Met**；press median **3.03× Met**。
+**不宣称** *Scale-ready (HTTPS H2)* 或 H1+H2 package。
+
 ---
 
 ## 5. 正确性 smoke + soak（最小）

@@ -1,8 +1,9 @@
 program bench_h2_server;
 {**
- * @desc H2 server scale harness (S3-1/S3-2).
+ * @desc H2 server scale harness (S3-1/S3-2 + C-D TLS).
  *       S3-2: concurrent multiplex via IHttpTransportMultiplex.RoundTripMany,
- *       server backend threaded|epoll, higher default scale.
+ *       server backend threaded|epoll.
+ *       C-D: --tls enables HTTPS+ALPN h2 (self-signed); default remains h2c.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -18,6 +19,10 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.impl.h2.types,
   nextpas.core.http.impl.h2.client,
+  nextpas.core.tls.base,
+  nextpas.core.tls.context.builder,
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.openssl.backed,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
@@ -43,6 +48,7 @@ type
     Streams: Int32;
     Batches: Int32;
     Mode: string;
+    UseTls: Boolean;
     Success: Int32;
     Fail: Int32;
   end;
@@ -53,6 +59,8 @@ var
   GBatches: Int32;
   GMode: string;
   GBackend: TTcpServerBackend;
+  GTls: Boolean;
+  GClientTls: ISSLContext;
   GDone: Int32;
 
 procedure RejectInvalid(const AName, AValue: string);
@@ -82,6 +90,40 @@ begin
   end;
 end;
 
+function TransportName: string;
+begin
+  if GTls then
+    Result := 'tls-alpn-h2'
+  else
+    Result := 'h2c-prior-knowledge';
+end;
+
+function NewServerTlsContext: ISSLContext;
+var
+  LKeyPair: IKeyPairWithCertificate;
+  LCertPEM, LKeyPEM: string;
+begin
+  LKeyPair := TCertificateBuilder.Create
+    .WithCommonName('127.0.0.1')
+    .WithOrganization('nextpas-h2-bench')
+    .SelfSigned;
+  LKeyPair.SaveToPEM(LCertPEM, LKeyPEM);
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithCertificatePEM(LCertPEM)
+    .WithPrivateKeyPEM(LKeyPEM)
+    .WithVerifyNone
+    .BuildServer;
+end;
+
+function NewClientTlsContext: ISSLContext;
+begin
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithVerifyNone
+    .BuildClient;
+end;
+
 procedure ParseOptions;
 var
   LI: Integer;
@@ -92,6 +134,7 @@ begin
   GMode := MODE_MULTIPLEX;
   { S3-3: poll would-block I/O fixed; epoll is viable scale path. }
   GBackend := TCP_SERVER_BACKEND_EPOLL;
+  GTls := False;
   LI := 1;
   while LI <= ParamCount do
   begin
@@ -135,6 +178,11 @@ begin
         RejectInvalid('--backend', ParamStr(LI + 1));
       Inc(LI, 2);
     end
+    else if ParamStr(LI) = '--tls' then
+    begin
+      GTls := True;
+      Inc(LI);
+    end
     else
       Inc(LI);
   end;
@@ -159,7 +207,9 @@ var
   LMux: IHttpTransportMultiplex;
   LClient: IHttpClient;
   LOpts: TH2ClientTransportOptions;
+  LClientOpts: THttpClientOptions;
   LUrl: string;
+  LScheme: string;
   LI, LJ: Int32;
   LBatch: Int32;
   LOk: Boolean;
@@ -171,7 +221,11 @@ begin
   LCtx := PClientCtx(AParam);
   LCtx^.Success := 0;
   LCtx^.Fail := 0;
-  LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LCtx^.Port)) + '/';
+  if LCtx^.UseTls then
+    LScheme := 'https://'
+  else
+    LScheme := 'http://';
+  LUrl := LScheme + '127.0.0.1:' + IntToStr(Int64(LCtx^.Port)) + '/';
   LBatch := LCtx^.Streams;
   if LBatch < 1 then
     LBatch := 1;
@@ -184,6 +238,8 @@ begin
       { Fair peer comparison: Go does not PING on every batch reuse. Production
         pool still probes after idle grace (see PoolGet). }
       LOpts.PingTimeout := 0;
+      if LCtx^.UseTls then
+        LOpts.TLSContext := GClientTls;
       LTransport := NewH2ClientTransport(LOpts);
       if not Supports(LTransport, IHttpTransportMultiplex, LMux) then
       begin
@@ -220,8 +276,12 @@ begin
     else
     begin
       { sequential: public facade client (S3-1 residual). }
-      LClient := NewHttpClient(
-        THttpClientOptions.Default.WithVersion(hvHttp2).WithTimeout(30000));
+      LClientOpts := THttpClientOptions.Default
+        .WithVersion(hvHttp2)
+        .WithTimeout(30000);
+      if LCtx^.UseTls then
+        LClientOpts := LClientOpts.WithTLSContext(GClientTls);
+      LClient := NewHttpClient(LClientOpts);
       for LI := 1 to LCtx^.Batches do
         for LJ := 0 to LBatch - 1 do
         begin
@@ -266,6 +326,7 @@ var
 begin
   ParseOptions;
   GDone := 0;
+  GClientTls := nil;
   LTarget := GConnections * GStreams * GBatches;
 
   LRouter := NewRouter;
@@ -277,6 +338,11 @@ begin
 
   LOpts := THttpServerOptions.Default.WithVersion(hvHttp2).WithIdleTimeout(60000);
   LOpts.Backend := GBackend;
+  if GTls then
+  begin
+    LOpts.TLSContext := NewServerTlsContext;
+    GClientTls := NewClientTlsContext;
+  end;
   LServer := NewHttpServer(LRouter as IHttpHandler, LOpts);
   LServerCtx.Server := LServer;
   platform_thread_create(LHandle, @ServerThread, @LServerCtx);
@@ -296,6 +362,7 @@ begin
   WriteLn('=== HTTP/2 Server Scale Harness ===');
   WriteLn('  mode=', GMode);
   WriteLn('  backend=', BackendName);
+  WriteLn('  transport=', TransportName);
   WriteLn('  connections=', GConnections);
   WriteLn('  streams_per_batch=', GStreams);
   WriteLn('  batches_per_conn=', GBatches);
@@ -312,6 +379,7 @@ begin
     LCtxs[LI].Streams := GStreams;
     LCtxs[LI].Batches := GBatches;
     LCtxs[LI].Mode := GMode;
+    LCtxs[LI].UseTls := GTls;
     LCtxs[LI].Success := 0;
     LCtxs[LI].Fail := 0;
     platform_thread_create(LHandles[LI], @ClientThread, @LCtxs[LI]);
@@ -353,7 +421,11 @@ begin
   WriteLn('protocol=h2');
   WriteLn('mode=', GMode);
   WriteLn('backend=', BackendName);
-  WriteLn('cleartext=prior_knowledge');
+  WriteLn('transport=', TransportName);
+  if GTls then
+    WriteLn('cleartext=false')
+  else
+    WriteLn('cleartext=prior_knowledge');
   WriteLn('connections=', GConnections);
   WriteLn('streams_per_batch=', GStreams);
   WriteLn('batches_per_conn=', GBatches);
@@ -368,6 +440,7 @@ begin
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
   LServer := nil;
+  GClientTls := nil;
 
   if LStable = 1 then
     Halt(0)

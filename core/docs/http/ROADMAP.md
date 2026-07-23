@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-23（**Era C-A** H1 HTTPS server product path；HS Done 维持；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-23（**Era C-D** HTTPS H2 peer multi-run Met；C-A/HS Done 维持；package **仍 No**；默认 **STOP**）
 
 ---
 
@@ -123,7 +123,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness；package **仍 No** |
 | Wave D0 doc-truth | **landed** — residual/路径/双状态 hygiene |
 | Wave C-A H1 HTTPS server | **landed** — `NewH1TlsServerTransport` + registry；`test_http_h1_tls_server` |
-| **下一执行点** | **STOP**（C-A landed；H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
+| Wave C-D HTTPS H2 scale KPI | **landed** — `run_h2_comparison.sh --tls`；mid **2.57×** / press **3.03× Met**（runs=3）；package **仍 No** |
+| **下一执行点** | **STOP**（C-D evidence Met；升 package / HTTPS scale-ready 须产品 Yes；H3 Blocked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -900,14 +901,16 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 ```text
 1. Parity Plus + RH-1 + H2P-1..3 + R1 + **HS-0/HS-1 Met**
-2. H2 peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
+2. H2c peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
 3. **D0 doc-truth** + **C-A H1 HTTPS server** landed（2026-07-23）
-4. H3 Blocked — 跳过；禁止空 facade
-5. **NEXT = STOP**（idle；升 package 须产品 Yes → HS-2a）
-6. 无指令时不要空转 H3 / 不要假 package scale-ready
+4. **C-D HTTPS ALPN h2 peer multi-run** Met（mid **2.57×** / press **3.03×**；runs=3）
+5. H3 Blocked — 跳过；禁止空 facade
+6. **NEXT = STOP**（idle；升 package / HTTPS scale-ready 须产品 Yes → HS-2a）
+7. 无指令时不要空转 H3 / 不要假 package scale-ready
 ```
 
 **默认 STOP。** 升 CLAIM package 须：冻结 KPI（HS-0 Met）+ multi-run Met（HS-1 Met）+ **产品明确 Yes**（HS-2a；见 `CLAIM.md`）。
+HTTPS H2 规模宣称仍须单独产品 Yes；C-D 仅 evidence bar。
 
 新大块工作：须先经产品决策写入本文件有序 Era/Wave，再开波；禁止 Inbox 直做。
 
@@ -933,6 +936,19 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 ---
 
+## Era C-D — HTTPS H2 peer scale evidence
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-D** | **landed** | `bench_h2_server --tls` + Go `compare_h2 --tls` + `run_h2_comparison.sh --tls`；shape 与 HS-0 同（mid 8×16×100 / press 16×32×100）；runs≥3 median peer ≥0.80×；docs residual；**不**升 package / HTTPS scale-ready |
+
+**C-D Done when**：HTTPS ALPN h2 multi-run 表 + REPRO 命令；gate Met；CLAIM package **仍 No**；NEXT=STOP。 **Met (2026-07-23).**
+
+**Evidence（runs=3，stable=1）**：mid median **93586 / 36420 = 2.57× Met**；press median **253405 / 83588 = 3.03× Met**。
+产物：`build/projects/nextpas.core.http/h2_tls_comparison/cd-mid-*.md` / `cd-press-*.md`。
+
+---
+
 ## 与其他文档的关系
 
 | 文档 | 角色 |
@@ -952,6 +968,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-23 | **C-D landed**：HTTPS ALPN h2 peer multi-run mid **2.57×** / press **3.03× Met**；`--tls` harness；package No；NEXT=STOP |
 | 2026-07-23 | **C-A landed**：H1 HTTPS server product path（`NewH1TlsServerTransport` + registry + focused gate）；package No；NEXT=STOP |
 | 2026-07-23 | **D0 landed**：doc-truth hygiene（R4/p99/路径/H2/cancel/ARCHITECTURE/推荐路径/Makefile/REPRO）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |

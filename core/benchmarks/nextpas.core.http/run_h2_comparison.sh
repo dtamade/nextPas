@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Compare nextPas bench_h2_server vs Go h2c peer (same multiplex shape).
-# Does not claim package scale-ready; emits ratio for H2 peer evidence bar (HS-0/HS-1).
+# Compare nextPas bench_h2_server vs Go peer (same multiplex shape).
+# Default: h2c (HS-0/HS-1). --tls: HTTPS ALPN h2 (C-D evidence bar; not package claim).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,17 +10,20 @@ CONNECTIONS=8
 STREAMS=16
 BATCHES=100
 RUNS=1
+USE_TLS=0
 OUTPUT_PATH=""
 
 usage() {
   cat <<'EOF'
 usage: run_h2_comparison.sh [--connections N] [--streams N] [--batches N]
-                            [--runs N] [--output PATH]
+                            [--runs N] [--tls] [--output PATH]
 
 Runs nextPas bench_h2_server (epoll multiplex) and Go compare_h2 peer with the
-same shape. With --runs N (default 1), repeats each side N times and reports
-median req/s and ratio of medians (H1 E3 style). Prints summary lines and
-nextPas/Go peer gate (≥ 0.80 on median ratio).
+same shape. Default transport is h2c prior-knowledge. Pass --tls for HTTPS
+ALPN h2 (self-signed both sides; C-D). With --runs N (default 1), repeats each
+side N times and reports median req/s and ratio of medians (H1 E3 style).
+Prints summary lines and nextPas/Go peer gate (≥ 0.80 on median ratio).
+Does not claim package scale-ready.
 EOF
 }
 
@@ -30,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     --streams) STREAMS="${2:?}"; shift 2 ;;
     --batches) BATCHES="${2:?}"; shift 2 ;;
     --runs) RUNS="${2:?}"; shift 2 ;;
+    --tls) USE_TLS=1; shift ;;
     --output) OUTPUT_PATH="${2:?}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -43,6 +47,16 @@ fi
 if ! [[ "${CONNECTIONS}" =~ ^[1-9][0-9]*$ && "${STREAMS}" =~ ^[1-9][0-9]*$ && "${BATCHES}" =~ ^[1-9][0-9]*$ ]]; then
   echo "--connections, --streams, and --batches must be positive integers" >&2
   exit 2
+fi
+
+TLS_ARGS=()
+TRANSPORT="h2c-prior-knowledge"
+COMPARISON_NAME="http.server.h2.comparison"
+if [[ "${USE_TLS}" -eq 1 ]]; then
+  TLS_ARGS=(--tls)
+  TRANSPORT="tls-alpn-h2"
+  COMPARISON_NAME="http.server.h2.tls.comparison"
+  BUILD_DIR="${CORE_ROOT}/build/projects/nextpas.core.http/h2_tls_comparison"
 fi
 
 mkdir -p "${BUILD_DIR}"
@@ -92,9 +106,10 @@ append_row() {
 }
 
 {
-  echo "comparison=http.server.h2.comparison"
+  echo "comparison=${COMPARISON_NAME}"
   echo "shape=connections=${CONNECTIONS} streams=${STREAMS} batches=${BATCHES}"
   echo "summary_shape=${CONNECTIONS}x${STREAMS}x${BATCHES}"
+  echo "transport=${TRANSPORT}"
   echo "runs=${RUNS}"
   echo "date=$(date -Iseconds 2>/dev/null || date)"
   echo
@@ -105,12 +120,12 @@ append_row() {
     go_log="${BUILD_DIR}/go.run${run_index}.log"
 
     echo "section=nextpas"
-    "${NEXTPAS_BIN}" --mode multiplex --backend epoll "${SHAPE[@]}" | tee "${np_log}"
+    "${NEXTPAS_BIN}" --mode multiplex --backend epoll "${SHAPE[@]}" "${TLS_ARGS[@]}" | tee "${np_log}"
     append_row "${run_index}" "nextpas" "${np_log}"
     echo
 
     echo "section=go"
-    "${GO_BIN}" "${SHAPE[@]}" | tee "${go_log}"
+    "${GO_BIN}" "${SHAPE[@]}" "${TLS_ARGS[@]}" | tee "${go_log}"
     append_row "${run_index}" "go" "${go_log}"
     echo
   done
@@ -119,7 +134,7 @@ append_row() {
   cp -f "${BUILD_DIR}/nextpas.run${RUNS}.log" "${BUILD_DIR}/nextpas.log"
   cp -f "${BUILD_DIR}/go.run${RUNS}.log" "${BUILD_DIR}/go.log"
 
-  awk -F $'\t' '
+  awk -F $'\t' -v comparison="${COMPARISON_NAME}" -v transport="${TRANSPORT}" '
     function sort_values(values, count,    i, j, tmp) {
       for (i = 1; i < count; i++) {
         for (j = i + 1; j <= count; j++) {
@@ -191,7 +206,8 @@ append_row() {
         gate = "NotMet";
       }
 
-      printf "summary=http.server.h2.comparison\n";
+      printf "summary=%s\n", comparison;
+      printf "summary_transport=%s\n", transport;
       printf "summary_median_nextpas_req/s=%.0f\n", np_med + 0;
       printf "summary_median_go_req/s=%.0f\n", go_med + 0;
       printf "summary_nextpas_req/s=%.0f\n", np_med + 0;
