@@ -98,7 +98,7 @@
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`） |
 | H1 `THttpServer`+`TLSContext` | **C-A Met** — `NewH1TlsServerTransport` |
-| Windows cancel | waitable via TCP-loopback pair（**PD-3-3**）；probe-only only if pair fails |
+| Windows cancel | waitable via TCP-loopback pair（**PD-3-3**）；probe-only only if pair fails；Wine smoke `test_platform_socket_wine` 含 socket_pair 字节唤醒（**非** real-Windows / **非** scale-ready） |
 | Server `Default` RW | **PD-1B** — Read/Write=**30000**（与 Production 同量级）；长轮询显式 0 |
 | Server IdleTimeout vs client IdleTTL | **PD-3-1** — Idle=30s / IdleTTL=90s 对照表见 CONTRACT |
 | 长连接 / 大 body | **PD-3-2** residual Met — Q1-4 + 413/backpressure 矩阵已有测；无新增缺口 |

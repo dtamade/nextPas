@@ -281,7 +281,7 @@ end;
 **诚实 residual**
 
 - Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
-- Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。
+- Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。Wine smoke：`make -C core/tests/nextpas.core.platform.socket/test_platform_socket_wine wine-runtime-smoke`（含 socket_pair 字节唤醒；**非** real-Windows / **非** Windows scale-ready）。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
