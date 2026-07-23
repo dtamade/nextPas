@@ -13,8 +13,8 @@ into readiness claims or public ABI.
 | --- | --- | --- | --- | --- | --- |
 | `np.system.process_init` | HIR | `System.np_process_init`; process-start contract | `np_process_init` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
 | `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
-| `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
-| `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
+| `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`) | LLVM multi-unit call-order only; no host-free executable; ledger stays semantic |
+| `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`) | LLVM multi-unit call-order only; no host-free executable; ledger stays semantic |
 | `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
 | `np.system.string_init` | vocabulary | `System.AnsiString` | deferred | `runtime-contracts.md` | No implementation claim |
 | `np.system.string_fini` | HIR | string cleanup nodes | string release helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
@@ -44,6 +44,12 @@ into readiness claims or public ABI.
 > (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves `_start` call/declare void shape only.
 > It does **not** prove full runtime business init, host-free executable lifecycle, or justify
 > elevating the typed ledger past `scelHir`. Coverage boundary remains **Runtime execution deferred**.
+>
+> **Footnote (D3 unit ordering, 2026-07-23)**: `test_unit_lifecycle_llvm_ordering` proves LLVM IR
+> multi-unit call order only (`process_init` → topo `np_unit_init_*` → reverse `np_unit_fini_*` →
+> `process_fini`) when `UnitInitOrder` is set. It does **not** prove host-free multi-unit program
+> execution, real initialization side-effects, or justify elevating unit contracts past
+> `scelSemantic`.
 
 
 ## Backend-Private Helper Names (NOT Public ABI)
@@ -140,9 +146,9 @@ any diagnostic.
 **Description**: Process lifecycle has HIR/LLVM call-shape evidence
 (`test_process_lifecycle`, `test_process_lifecycle_llvm`) but no full runtime business-init
 proof and no `scelExecutable` ledger elevation. Unit lifecycle (`np.system.unit_init`,
-`np.system.unit_fini`) has semantic contract evidence but no executable ordering proof.
-The compiler can name and lower lifecycle contracts without proving host-free process
-business initialization or multi-unit ordering.
+`np.system.unit_fini`) has semantic contract evidence plus LLVM multi-unit **call-order**
+proof (`test_unit_lifecycle_llvm_ordering`) but still no host-free executable multi-unit run
+and no ledger elevation past `scelSemantic`.
 
 **Current mitigations**:
 - `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for
@@ -154,14 +160,15 @@ business initialization or multi-unit ordering.
   single fini; re-verified 2026-07-23 after builder ResultId=0 + emitter fini-dedupe fix).
 - Phase 0 runtime helper exists (`rtl/runtime/src/nextpas.runtime.lifecycle.ll`: state flag +
   fsync only). This is **not** full process business init (no unit table / heap / ExitProc).
-- Unit lifecycle remains deferred for executable ordering proof.
+- Unit multi-unit LLVM call-order: `compiler/tests/test_unit_lifecycle_llvm_ordering.pas`
+  (topo init / reverse fini around process lifecycle calls when `UnitInitOrder` is set).
 
 **What remains**:
 - No host-free end-to-end executable proof that runtime helpers run as full business init.
-- No unit initialization/finalization ordering at executable level.
+- No host-free multi-unit program that proves real init/fini side-effects at executable level.
 - No runtime fault classification (`np.system.runtime_fault`) beyond partial allocator/dynarray evidence.
-- Ledger stays `scelHir` / coverage boundary **Runtime execution deferred** — HIR/LLVM call
-  evidence ≠ full runtime business init; do not treat as self-host complete.
+- Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — LLVM call-order
+  evidence ≠ host-free executable; do not treat as self-host complete.
 
 **Severity**: Low for current scope (deferred to future compiler/runtime integration) — but high
 for self-hosting target.

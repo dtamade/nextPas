@@ -296,14 +296,15 @@ is already partially covered by the `test_hir_exception` test suite.
 
 **历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
 当前权威：`contract-coverage-table.md` / README 将 `np.system.unit_init`/`unit_fini` 标为
-**future compiler/runtime only**；typed ledger 为 `scelSemantic`，**无 executable ordering proof**。
+**future compiler/runtime only**；typed ledger 为 `scelSemantic`。已有 LLVM multi-unit
+**call-order** 证明（`test_unit_lifecycle_llvm_ordering`），**仍无** host-free executable 端到端。
 
 | 验收标准 | 历史记录（非 readiness） |
 |----------|------|
 | UnitGraph → HIR nodes for each resolved unit | 报告：`SeedUnitLifecycleBodies` 生成 init/fini 相关产物 |
 | np.system.unit_init/unit_fini seeded for multi-unit programs | 报告：生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
-| LLVM emitter generates init/fini call sequences | 报告：`_start` 侧直接 call（拓扑序 init，逆序 fini） |
-| Multi-unit program runs with correct init ordering via nextPas | **未**升为 executable 权威证据；coverage 仍写 No executable ordering proof |
+| LLVM emitter generates init/fini call sequences | **D3 2026-07-23**：`test_unit_lifecycle_llvm_ordering` 证明 topo init / reverse fini 相对 `process_*` 的 call 序（IR 级） |
+| Multi-unit program runs with correct init ordering via nextPas | **未**升为 host-free executable 权威证据；ledger 仍 `scelSemantic` |
 
 **历史关键变更 (2026-06-19)**（inventory，非当前 gate 关闭证明）:
 - `TUnitGraph.TopologicalInitOrder`: Kahn BFS 拓扑排序 (np_unit_graph.pas)
@@ -315,12 +316,13 @@ is already partially covered by the `test_hir_exception` test suite.
 - Lexer / green tree 解析 initialization/finalization
 - 契约常量 `NPSYSTEM_UNIT_INIT`/`FINI`；coverage 表与 ledger 名称 1:1
 - 语义/发射侧 unit_init/fini 产物（focused：`test_semantic_runtime_contract_seed`）
+- LLVM multi-unit call-order（focused：`test_unit_lifecycle_llvm_ordering`）
 
 **当前 residual（相对 M0 权威，按优先级）**:
-1. 无 executable 级 multi-unit ordering 证明（coverage 边界）
-2. 无 host-free 端到端「nextPas 编 + 跑」unit 生命周期门禁
-3. ledger 保持 `scelSemantic`，**禁止**在无新 focused 证明时抬到 executable
-4. 不在本轮做 typed 热路径大迁移 / A→B→C
+1. 无 host-free 端到端「nextPas 编 + 跑」multi-unit unit 生命周期门禁
+2. ledger 保持 `scelSemantic`，**禁止**在无 host-free executable 证明时抬到 executable
+3. 不在本轮做 typed 热路径大迁移 / A→B→C
+4. process residual 见 Gate 3（scelHir call-shape ≠ 业务 init）
 
 ## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 入口审计)
 
@@ -352,7 +354,7 @@ typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 
 1. ledger 仍为 `scelHir`；coverage 边界仍是 **Runtime execution deferred**（有 Phase 0 helper ≠ 全量 process 业务 init 证明）
 2. **D3 再验（2026-07-23）**：`test_process_lifecycle` + `test_process_lifecycle_llvm` 绿；IR 为 `call void @np_process_init/fini`（曾回归为 `call i64` + 双 fini，已最小修复）。**仍不是** host-free 端到端业务 init 证明
 3. 无 A→B→C / self-host 证明；**禁止**把历史 PHASE 0 勾选读成生产就绪
-4. 下一刀可选：unit_init/fini ordering 脚注/负向证据，**禁止**抬 ledger / M2-A
+4. 下一刀可选：unit lifecycle host-free multi-unit 端到端，**禁止**抬 ledger / M2-A
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 
