@@ -13,8 +13,8 @@ into readiness claims or public ABI.
 | --- | --- | --- | --- | --- | --- |
 | `np.system.process_init` | HIR | `System.np_process_init`; process-start contract | `np_process_init` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
 | `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
-| `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`) | LLVM multi-unit call-order only; no host-free executable; ledger stays semantic |
-| `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`) | LLVM multi-unit call-order only; no host-free executable; ledger stays semantic |
+| `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_init_chain`) | Focused host-free multi-unit init side-effect (Halt 33); ledger stays semantic |
+| `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_fini_body`) | Focused host-free fini body/order evidence; ledger stays semantic |
 | `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
 | `np.system.string_init` | vocabulary | `System.AnsiString` | deferred | `runtime-contracts.md` | No implementation claim |
 | `np.system.string_fini` | HIR | string cleanup nodes | string release helpers | `test_hir_string_ownership_contract` | No executable lifecycle proof |
@@ -47,9 +47,19 @@ into readiness claims or public ABI.
 >
 > **Footnote (D3 unit ordering, 2026-07-23)**: `test_unit_lifecycle_llvm_ordering` proves LLVM IR
 > multi-unit call order only (`process_init` → topo `np_unit_init_*` → reverse `np_unit_fini_*` →
-> `process_fini`) when `UnitInitOrder` is set. It does **not** prove host-free multi-unit program
-> execution, real initialization side-effects, or justify elevating unit contracts past
-> `scelSemantic`.
+> `process_fini`) when `UnitInitOrder` is set. It does **not** alone justify elevating unit contracts
+> past `scelSemantic`.
+>
+> **Footnote (D3 host-free multi-unit, 2026-07-23 re-probe)**: focused host-free executable evidence
+> exists via `make test-compiler-unit-init-chain` / `verify_compiler_unit_init_chain.sh`
+> (`examples/smoke/llvm_unit_init_chain.pas` + `MuInitMid`/`MuInitLeaf`; binding
+> `linux-x86_64-to-linux-x86_64-llvm`; primary `llvm-stable`; Halt 33 = leaf 3 + mid 30).
+> Fini companion: `make test-compiler-unit-fini-body`. Gate scripts refuse silent host FPC masquerade
+> (`fpc-stage0-host`). This is **slice-level** executable proof of unit init/fini side-effects —
+> **not** full business process init, **not** `unit_lifecycle_pass` under LLVM (that fixture fails
+> opt with i64→i32 store trunc on `Count := GetInitCount`), and **does not** raise typed ledger
+> past `scelSemantic`. Default stage0 build without `--toolchain-binding …-llvm` still uses
+> host FPC (`backend-family=native`, `primary-tool-profile-id=fpc-stage0-host`).
 
 
 ## Backend-Private Helper Names (NOT Public ABI)
@@ -146,9 +156,10 @@ any diagnostic.
 **Description**: Process lifecycle has HIR/LLVM call-shape evidence
 (`test_process_lifecycle`, `test_process_lifecycle_llvm`) but no full runtime business-init
 proof and no `scelExecutable` ledger elevation. Unit lifecycle (`np.system.unit_init`,
-`np.system.unit_fini`) has semantic contract evidence plus LLVM multi-unit **call-order**
-proof (`test_unit_lifecycle_llvm_ordering`) but still no host-free executable multi-unit run
-and no ledger elevation past `scelSemantic`.
+`np.system.unit_fini`) has semantic contract evidence, LLVM multi-unit **call-order**
+proof (`test_unit_lifecycle_llvm_ordering`), plus a **focused host-free multi-unit
+executable slice** (`verify_compiler_unit_init_chain` / `verify_compiler_unit_fini_body`).
+Ledger remains `scelSemantic` — slice ≠ full self-host readiness.
 
 **Current mitigations**:
 - `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for
@@ -162,16 +173,19 @@ and no ledger elevation past `scelSemantic`.
   fsync only). This is **not** full process business init (no unit table / heap / ExitProc).
 - Unit multi-unit LLVM call-order: `compiler/tests/test_unit_lifecycle_llvm_ordering.pas`
   (topo init / reverse fini around process lifecycle calls when `UnitInitOrder` is set).
+- Host-free multi-unit init side-effect: `make test-compiler-unit-init-chain`
+  (`llvm_unit_init_chain` Halt 33; asserts `backend-family=llvm` + `primary-tool-profile-id=llvm-stable`).
+- Host-free multi-unit fini body: `make test-compiler-unit-fini-body`.
 
 **What remains**:
-- No host-free end-to-end executable proof that runtime helpers run as full business init.
-- No host-free multi-unit program that proves real init/fini side-effects at executable level.
-  Note (2026-07-23 probe): stage0 `unit_lifecycle_pass` can build+run with init side-effect
-  (count=42) only via **host FPC emit asm** (`fpc-stage0-host`); that is not host-free evidence
-  and must not elevate the unit ledger past `scelSemantic`.
-- No runtime fault classification (`np.system.runtime_fault`) beyond partial allocator/dynarray evidence.
-- Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — LLVM call-order
-  evidence ≠ host-free executable; do not treat as self-host complete.
+- No host-free end-to-end executable proof that process runtime helpers run as full business init.
+- Default stage0 `unit_lifecycle_pass` still lands on **host FPC** (`fpc-stage0-host`); that green
+  is **not** host-free evidence.
+- `unit_lifecycle_pass` under `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` still fails
+  at `opt` with **i64→i32 store trunc** (`Count := GetInitCount` → `store i32 %v3` where `%v3` is i64).
+  Emit trunc fix is the next production knife; not a missing unit_init emitter.
+- Process ledger stays `scelHir` / unit ledger stays `scelSemantic` — focused host-free slice
+  ≠ ledger raise / self-host complete.
 
 **Severity**: Low for current scope (deferred to future compiler/runtime integration) — but high
 for self-hosting target.

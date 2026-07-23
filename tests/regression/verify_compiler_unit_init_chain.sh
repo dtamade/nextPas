@@ -2,6 +2,7 @@
 # Focused host-free multi-unit initialization evidence (Slice A).
 # Expect Halt(33): leaf init sets GMuAcc=3, mid adds 30.
 # Requires true LLVM binding — host FPC green is not acceptable.
+# claim-level=unit-init-chain-host-free-executable-not-ledger-raise
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,6 +27,14 @@ if [[ ! -f "$SMOKE" ]]; then
   echo "unit-init-chain-failure=missing-fixture path=$SMOKE" >&2
   exit 1
 fi
+case "$BINDING" in
+  *llvm*) ;;
+  *)
+    echo "unit-init-chain-failure=binding-not-llvm binding=$BINDING" >&2
+    echo "  host FPC path is not host-free evidence; refuse silent fpc-stage0-host" >&2
+    exit 1
+    ;;
+esac
 
 set +e
 "$STAGE0" build "$SMOKE" \
@@ -47,6 +56,24 @@ if [[ $RC -ne 0 ]]; then
   exit 1
 fi
 
+# Anti-masquerade: build transcript must show nextPas LLVM primary tool, not host FPC.
+if ! rg -q 'backend-family=llvm' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-init-chain-failure=backend-family-not-llvm" >&2
+  exit 1
+fi
+if ! rg -q 'primary-tool-profile-id=llvm-stable' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-init-chain-failure=primary-tool-not-llvm-stable" >&2
+  exit 1
+fi
+if rg -q 'primary-tool-profile-id=fpc-stage0-host' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-init-chain-failure=silent-host-fpc-masquerade" >&2
+  exit 1
+fi
+if ! rg -q 'llvm-toolchain-status=ready' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-init-chain-failure=llvm-toolchain-not-ready" >&2
+  exit 1
+fi
+
 OUT="$WORK/llvm_unit_init_chain"
 if [[ ! -f "$OUT" ]]; then
   echo "unit-init-chain-failure=missing-binary path=$OUT" >&2
@@ -63,4 +90,4 @@ if [[ $EX -ne 33 ]]; then
   exit 1
 fi
 
-echo "unit-init-chain-ok=33 binding=$BINDING"
+echo "unit-init-chain-ok=33 binding=$BINDING primary=llvm-stable claim-level=host-free-executable-not-ledger-raise"

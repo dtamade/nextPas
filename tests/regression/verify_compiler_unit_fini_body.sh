@@ -58,6 +58,27 @@ if [[ $RC -ne 0 ]]; then
   exit 1
 fi
 
+# Anti-masquerade: host FPC green is not host-free evidence.
+case "$BINDING" in
+  *llvm*) ;;
+  *)
+    echo "unit-fini-body-failure=binding-not-llvm binding=$BINDING" >&2
+    exit 1
+    ;;
+esac
+if ! rg -q 'backend-family=llvm' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-fini-body-failure=backend-family-not-llvm" >&2
+  exit 1
+fi
+if ! rg -q 'primary-tool-profile-id=llvm-stable' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-fini-body-failure=primary-tool-not-llvm-stable" >&2
+  exit 1
+fi
+if rg -q 'primary-tool-profile-id=fpc-stage0-host' "$WORK/build.stdout" "$WORK/build.stderr" 2>/dev/null; then
+  echo "unit-fini-body-failure=silent-host-fpc-masquerade" >&2
+  exit 1
+fi
+
 LL=""
 for cand in \
   "$REPO_ROOT/.nextpas/cache/backend/$TARGET/llvm_unit_fini_body.ll" \
