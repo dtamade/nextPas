@@ -37,14 +37,17 @@ does not freeze a backend syscall ABI.
 
 Rules:
 
-- The semantic source node is `halt-call-runtime`; sema owns selecting the exit
+- The semantic source nodes are `halt-call` (const exit code) and
+  `halt-call-runtime` (expression exit code); sema owns selecting the exit
   expression and sequencing required cleanup before termination.
-- HIR uses `halt` as the internal intrinsic name for program termination.
-  This is implementation vocabulary, not the `np.system.halt` contract name.
-- LLVM emitter translates `halt` intrinsic to inline syscall
-  (`movq $60, %rax; syscall`). No named LLVM helper for halt.
-- HIR may project the contract as HIR intrinsic `halt`; this is a compiler/HIR
-  lowering detail, not a public Pascal symbol.
+- HIR authority is typed `sckHalt` via `AssignSystemContract`; `IntrinsicName`
+  is the semantic contract name `np.system.halt` (not bare `halt`).
+- LLVM emitter dispatches `sckHalt` before legacy intrinsic-name matching and
+  lowers to inline syscall (`movq $60, %rax; syscall`). No named LLVM helper
+  for halt.
+- Const form stores the exit code in `CallTarget`; expression form uses one
+  int operand. When process lifecycle is active, halt injects `process_fini`
+  (and reverse unit fini) once before the syscall.
 - Current LLVM output may use syscall inline assembly as backend-private
   termination lowering evidence. This backend-private termination lowering is
   not public ABI and must not become a facade contract.

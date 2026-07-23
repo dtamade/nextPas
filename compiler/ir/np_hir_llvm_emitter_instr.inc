@@ -272,27 +272,7 @@ begin
     end;
     hikIntrinsic:
     begin
-      if AInstr.IntrinsicName = 'halt' then
-      begin
-        if FNeedsProcessLifecycle and not FProcessFiniEmitted then
-        begin
-          // Emit unit fini calls in reverse order before process_fini
-          if not FUnitFiniCallsEmitted then
-          begin
-            EmitUnitFiniCalls;
-            FUnitFiniCallsEmitted := True;
-          end;
-          Emit('  call void @np_process_fini()');
-          FProcessFiniEmitted := True;
-        end;
-        if AInstr.CallTarget <> '' then
-          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
-            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
-        else if Length(AInstr.Operands) >= 1 then
-          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
-            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'write_int' then
+      if AInstr.IntrinsicName = 'write_int' then
       begin
         { Batch 29: Operands[0]=value, optional [1]=fd (default 1). }
         FNeedsWriteInt := True;

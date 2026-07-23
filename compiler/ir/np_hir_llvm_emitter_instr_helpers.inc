@@ -642,6 +642,27 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ')');
       end;
     end;
+    sckHalt:
+    begin
+      { Typed halt: inject process_fini once, then backend-private syscall. }
+      if FNeedsProcessLifecycle and not FProcessFiniEmitted then
+      begin
+        if not FUnitFiniCallsEmitted then
+        begin
+          EmitUnitFiniCalls;
+          FUnitFiniCallsEmitted := True;
+        end;
+        Emit('  call void @np_process_fini()');
+        FProcessFiniEmitted := True;
+      end;
+      if AInstr.CallTarget <> '' then
+        Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+          ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
+      else if Length(AInstr.Operands) >= 1 then
+        Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+          ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ')');
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

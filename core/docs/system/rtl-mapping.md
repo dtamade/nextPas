@@ -19,7 +19,7 @@ ownership status so future slices can expand the module without turning it into 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | Program startup and shutdown | `compiler semantic contract live; runtime execution deferred` | Semantic analysis seeds exact `np.system.process_init` then `np.system.process_fini` contracts for program, library and package roots; runtime execution remains deferred. |
-| `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` maps sema `halt-call-runtime` to HIR intrinsic `halt`; backend termination lowering remains private. |
+| `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` is production typed HIR (`sckHalt`); sema `halt-call` / `halt-call-runtime` lower via `AssignSystemContract`; backend termination lowering remains private. |
 | Unit initialization/finalization order | `future compiler/runtime only` | Compiler owns `UnitGraph`; runtime executes `np.system.unit_init` / `np.system.unit_fini`. |
 | Compiler intrinsic names | `future compiler/runtime only` | Intrinsic contract names stay explicit; backend must not invent private helper strings. |
 | Pointer/integer/ABI truth | `system-owned` | Minimal constants are surfaced from `nextpas.core.base`; `SizeInt`, `SizeUInt`, `PtrInt`, `PtrUInt`, `NativeInt` and `NativeUInt` alias compiler `System` truth. Host/target ABI remains platform-owned. |

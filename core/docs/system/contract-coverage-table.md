@@ -15,7 +15,7 @@ into readiness claims or public ABI.
 | `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
 | `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_init_chain`) | Focused host-free multi-unit init side-effect (Halt 33); ledger stays semantic |
 | `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` (+ `test_unit_lifecycle_llvm_ordering`, `verify_compiler_unit_fini_body`) | Focused host-free fini body/order evidence; ledger stays semantic |
-| `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
+| `np.system.halt` | HIR | typed `sckHalt` + `halt-call` / `halt-call-runtime` | backend halt lowering (syscall) | `test_hir_halt_contract` | Typed HIR identity + syscall lowering; not full process e2e |
 | `np.system.string_init` | HIR | `System.AnsiString`; typed `sckStringInit` | `np_tstring_init` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
 | `np.system.string_fini` | HIR | string cleanup nodes; typed `sckStringFini` | `np_tstring_fini` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
 | `np.system.string_assign` | HIR | string assignment nodes; typed `sckStringAssign` | `np_tstring_assign` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
@@ -64,6 +64,12 @@ into readiness claims or public ABI.
 > runtime maps to `np_intf_addref` / `np_intf_release`. Focused typed identity:
 > `test_hir_interface_contract`. Evidence is HIR identity + LLVM call-shape only;
 > **not** full COM/elision/destruction policy. Ledger **scelHir**.
+>
+> **Footnote (M1 typed halt, 2026-07-23)**: `sckHalt` is production typed HIR
+> (authority = `SystemContractKind`); LLVM lowers to backend-private syscall
+> inline asm (no named `@np_halt` helper). Focused typed identity:
+> `test_hir_halt_contract`. Evidence is HIR identity + syscall lowering shape;
+> **not** full process business e2e. Ledger **scelHir** (promoted from backend).
 >
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves

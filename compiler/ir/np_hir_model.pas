@@ -327,6 +327,7 @@ begin
   case AInstr.SystemContractKind of
     sckProcessInit,
     sckProcessFini,
+    sckHalt,
     sckStringInit,
     sckStringFini,
     sckStringAssign,
@@ -360,6 +361,42 @@ begin
     begin
       AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
         ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Halt: const exit-code in CallTarget, or one int operand for dynamic code. }
+  if AInstr.SystemContractKind = sckHalt then
+  begin
+    if Length(AInstr.Operands) = 0 then
+    begin
+      if AInstr.CallTarget = '' then
+      begin
+        AError := 'system-contract-target-missing:' +
+          IntToStr(ContractOrdinal);
+        Exit(False);
+      end;
+      Exit(True);
+    end;
+    if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkInt then
+    begin
+      AError := 'system-contract-operand-not-int:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
       Exit(False);
     end;
     Exit(True);

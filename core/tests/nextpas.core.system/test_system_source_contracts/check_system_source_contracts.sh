@@ -908,16 +908,22 @@ require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckInterfac
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckInterfaceRelease:"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_intf_addref"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_intf_release"
-# Halt intrinsic uses implementation name 'halt', not 'np.system.halt'
-require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'halt';"
-require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "if AInstr.IntrinsicName = 'halt' then"
+# Halt is production typed HIR (sckHalt); IntrinsicName is semantic np.system.halt
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckHalt)"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "sckHalt:"
+require_repo_owner_family_token "compiler/ir" "np_hir_model" "sckHalt"
+require_repo_file "tests/hir/test_hir_halt_contract.pas"
+require_repo_token "tests/hir/test_hir_halt_contract.pas" "IsSystemContract(Instr, sckHalt)"
+require_repo_token "tests/hir/test_hir_halt_contract.pas" "hir-halt-contract=pass"
+require_repo_reject_regex "compiler/ir" "Instr[.]IntrinsicName[[:space:]]*:=[[:space:]]*'halt'"
+require_repo_reject_regex "compiler/ir" "IntrinsicName[[:space:]]*=[[:space:]]*'halt'"
 # Heap allocation intrinsics use implementation names 'arr_alloc' and 'class_alloc'
 require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'arr_alloc';"
 require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'class_alloc';"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_alloc"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_object_alloc"
 # Halt and allocation intrinsic mapping documented in runtime-contracts
-require_token "docs/system/runtime-contracts.md" "HIR uses \`halt\` as the internal intrinsic name"
+require_token "docs/system/runtime-contracts.md" "typed \`sckHalt\`"
 require_token "docs/system/runtime-contracts.md" "arr_alloc"
 require_token "docs/system/runtime-contracts.md" "class_alloc"
 for helper in \
@@ -960,17 +966,19 @@ for token in \
   "np.system.halt" \
   "halt-call-runtime" \
   "explicit program termination" \
-  'HIR intrinsic `halt`' \
+  "typed \`sckHalt\`" \
   "backend-private termination lowering" \
   "syscall inline assembly"; do
   require_token "docs/system/runtime-contracts.md" "$token"
 done
 require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "halt-call-runtime"
-require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'halt';"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "AssignSystemContract(Instr, sckHalt)"
 require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" 'movq $$60, %rax; syscall'
 require_repo_token "compiler/ir/np_hir_types.pas" "hnkHaltCallRuntime"
 require_repo_token "compiler/tests/test_semantic_hir_expr_producer.pas" "TestHaltRuntimeExprProducer"
 require_repo_token "tests/hir/test_hir_node_kind.pas" "halt-call-runtime"
+require_token "tests/nextpas.core.system/Makefile" "test_hir_halt_contract.pas"
+require_token "tests/nextpas.core.system/Makefile" "test-halt-contract"
 require_token "docs/system/runtime-contracts.md" "compiler-planned cleanup"
 require_token "docs/system/runtime-contracts.md" "field-agnostic"
 require_token "docs/system/runtime-contracts.md" "Compiler HIR may project"

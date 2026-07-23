@@ -696,7 +696,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'halt';
+    AssignSystemContract(Instr, sckHalt);
     Instr.CallTarget := '0';
     EmitInstr(Instr);
   end;

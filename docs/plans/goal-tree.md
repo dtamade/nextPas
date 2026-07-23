@@ -70,9 +70,9 @@
   roots，因此两次 53/53 都不能写成 cold/warm-cache 证明。
 - M1 production typed families 已落地：object-free（root/destroy/cleanup/release）、
   process_init/fini、string ownership triad（init/fini/assign）、dynarray
-  set_length/fini（`sckDynArray*`）、interface addref/release（`sckInterface*`）；
-  均由 `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。
-  `dynarray_init` 仍 vocabulary。下一 family 与其余 contract families 仍待迁移。
+  set_length/fini（`sckDynArray*`）、interface addref/release（`sckInterface*`）、
+  halt（`sckHalt`）；均由 `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。
+  `dynarray_init` 仍 vocabulary。下一 family 与其余 residual 仍待迁移。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
@@ -184,7 +184,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] string ownership triad typed HIR（init/fini/assign → `np_tstring_*`；ledger scelHir）
    - [x] dynarray set_length/fini typed HIR（→ `np_dynarray_*`；init 仍 vocabulary；ledger scelExecutable）
    - [x] interface addref/release typed HIR（→ `np_intf_*`；ledger scelHir call-shape）
-   - [ ] 下一 family / 其余 residual（整族推进）
+   - [x] halt typed HIR（`sckHalt` → backend syscall lowering；ledger scelHir）
+   - [ ] 下一 family / 其余 residual（整族推进；候选 heap_alloc/free）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---
@@ -206,6 +207,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-13 | M1 typed contract slice | object-free root/destroy/cleanup/release 成为首个 typed HIR-to-LLVM production family |
 | 2026-07-23 | M1 process + string families | process_init/fini 与 string init/fini/assign 进入 typed HIR（scelHir call-shape） |
 | 2026-07-23 | M1 dynarray + interface families | dynarray set_length/fini（scelExecutable）与 interface addref/release（scelHir）进入 typed HIR |
+| 2026-07-23 | M1 halt family | halt 进入 typed HIR（scelHir；syscall lowering；权威 = SystemContractKind） |
 
 ---
 

@@ -20,7 +20,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'halt';
+    AssignSystemContract(Instr, sckHalt);
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeTypedOperand(V, GetIntType);
     EmitInstr(Instr);
@@ -37,7 +37,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'halt';
+  AssignSystemContract(Instr, sckHalt);
   Instr.CallTarget := ANode.Operand;
   EmitInstr(Instr);
   FBlockTerminated := True;

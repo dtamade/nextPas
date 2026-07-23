@@ -130,10 +130,10 @@ const
       TargetIdentity: 'exit-code';
       OwnershipIntent: 'none';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'halt-call-runtime';
+      HirEvidence: 'typed sckHalt / halt-call-runtime';
       RuntimeMapping: 'backend halt lowering';
-      FocusedEvidence: 'test_hir_node_kind';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_halt_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckStringInit;
