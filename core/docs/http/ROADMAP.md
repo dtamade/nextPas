@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-23（**Era C-D** HTTPS H2 peer multi-run Met；C-A/HS Done 维持；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-23（**HS-2a** package Yes + **C-D-claim** HTTPS H2 scale Yes + **C-H1** HTTPS H1 scale Met；默认 **STOP**）
 
 ---
 
@@ -118,18 +118,21 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
 | Wave H2P-1..3 | **landed** — mid/press scale evidence + TLS-ALPN e2e |
-| Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
-| Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped；package **仍 No** |
-| Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness；package **仍 No** |
+| Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；当时 package **No**（后 HS-2a 升） |
+| Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped |
+| Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness |
+| Wave HS-2a package claim | **landed** — 产品 Yes → *Scale-ready (H1+H2 package)* |
 | Wave D0 doc-truth | **landed** — residual/路径/双状态 hygiene |
 | Wave C-A H1 HTTPS server | **landed** — `NewH1TlsServerTransport` + registry；`test_http_h1_tls_server` |
-| Wave C-D HTTPS H2 scale KPI | **landed** — `run_h2_comparison.sh --tls`；mid **2.57×** / press **3.03× Met**（runs=3）；package **仍 No** |
-| **下一执行点** | **STOP**（C-D evidence Met；升 package / HTTPS scale-ready 须产品 Yes；H3 Blocked） |
+| Wave C-D HTTPS H2 scale KPI | **landed** — evidence mid **2.57×** / press **3.03× Met** |
+| Wave C-D-claim HTTPS H2 scale | **landed** — 产品 Yes → *Scale-ready (HTTPS H2)* |
+| Wave C-H1 HTTPS H1 scale KPI | **landed** — `run_h1_tls_comparison.sh`；`no_url` **2.10×** / `response_1k` **2.13× Met** |
+| **下一执行点** | **STOP**（package + HTTPS H1/H2 scale Yes；H3 Blocked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~95%   规模 ~82%   优雅 ~88%   诚实 ~95%  (Q1 生产深度 Done)
+质量 ~95%   规模 ~94%   优雅 ~88%   诚实 ~95%  (H1/H2 package + HTTPS H1/H2 scale)
 ```
 
 ---
@@ -166,8 +169,11 @@ S2:  H1 hot path（分配/fast path）  ← done
 S3:  H2 server scale  ← done
 Q2 / E / Q3 / H2P / R / HS:  收口 + 证据 + Seal  ← done
 D0 / C-A:  doc-truth + H1 HTTPS server product path  ← done
+C-D / C-D-claim: HTTPS H2 peer evidence + scale claim  ← done
+HS-2a: package claim Yes  ← done
+C-H1: HTTPS H1 peer multi-run + scale claim  ← done
 ──── 当前 ────
-NEXT = STOP（idle；升 package 须产品 Yes → HS-2a；H3 Blocked）
+NEXT = STOP（idle；H3 Blocked）
 ```
 
 **插队规则（历史）**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
@@ -871,15 +877,15 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **HS-0** | **landed** | 冻结 H2 peer KPI：mid 8×16×100 / press 16×32×100；peer **ratio of medians ≥0.80×**（runs≥3）；stable=1；废弃 self press/mid≥3×；CLAIM package **仍 No** |
-| **HS-1** | **landed** | `run_h2_comparison.sh --runs`；mid median **1.86×** / press **0.93× Met**；h2_client/facade/tls_alpn；package **仍 No** → **STOP** |
+| **HS-0** | **landed** | 冻结 H2 peer KPI：mid 8×16×100 / press 16×32×100；peer **ratio of medians ≥0.80×**（runs≥3）；stable=1；废弃 self press/mid≥3× |
+| **HS-1** | **landed** | `run_h2_comparison.sh --runs`；mid median **1.86×** / press **0.93× Met**；h2_client/facade/tls_alpn |
 | **HS-1b** | parked | 仅 press/mid multi-run NotMet 时：有界热修再跑；**本轮不需要** |
-| **HS-2a** | parked | 仅产品明确 Yes 后升 CLAIM package |
+| **HS-2a** | **landed** | 产品 Yes → CLAIM *Scale-ready (H1+H2 package, Linux epoll)*；禁止 H1/H2 直接 RPS 比值 |
 
-**HS Done when（默认）**：HS-0+HS-1 landed；multi-run 表可 1h 复核；package **仍 No**；NEXT=STOP。 **Met (2026-07-21).**
-**升 package**：须 multi-run Met **且** 产品 Yes（HS-2a）。
+**HS Done when（默认）**：HS-0+HS-1 landed；multi-run 表可 1h 复核。 **Met (2026-07-21).**
+**升 package**：HS-2a **Met (2026-07-23)**（multi-run Met + 产品 Yes）。
 
-**推荐路径**：`… → R1 → HS-0 → HS-1 → STOP`（H3 Blocked；勿假 package）
+**推荐路径（历史）**：`… → R1 → HS-0 → HS-1 → STOP` → 现接 C-D / HS-2a / C-H1。
 
 ---
 
@@ -900,17 +906,16 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 + H2P-1..3 + R1 + **HS-0/HS-1 Met**
-2. H2c peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
-3. **D0 doc-truth** + **C-A H1 HTTPS server** landed（2026-07-23）
-4. **C-D HTTPS ALPN h2 peer multi-run** Met（mid **2.57×** / press **3.03×**；runs=3）
+1. Parity Plus + RH-1 + H2P + R1 + HS-0/HS-1 + D0 + C-A + C-D 全 Met
+2. **HS-2a** package claim Yes（产品 Yes + HS-1 multi-run）
+3. **C-D-claim** *Scale-ready (HTTPS H2)* Yes（产品 Yes + C-D 2.57×/3.03×）
+4. **C-H1** *Scale-ready (HTTPS H1)* Yes（20k×4 multi-run 2.10×/2.13×）
 5. H3 Blocked — 跳过；禁止空 facade
-6. **NEXT = STOP**（idle；升 package / HTTPS scale-ready 须产品 Yes → HS-2a）
-7. 无指令时不要空转 H3 / 不要假 package scale-ready
+6. **NEXT = STOP**（idle）
+7. 无指令时不要空转 H3 / 不要发明跨机榜
 ```
 
-**默认 STOP。** 升 CLAIM package 须：冻结 KPI（HS-0 Met）+ multi-run Met（HS-1 Met）+ **产品明确 Yes**（HS-2a；见 `CLAIM.md`）。
-HTTPS H2 规模宣称仍须单独产品 Yes；C-D 仅 evidence bar。
+**默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)（H1、H1+H2 package、HTTPS H1、HTTPS H2）。
 
 新大块工作：须先经产品决策写入本文件有序 Era/Wave，再开波；禁止 Inbox 直做。
 
@@ -940,12 +945,33 @@ HTTPS H2 规模宣称仍须单独产品 Yes；C-D 仅 evidence bar。
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **C-D** | **landed** | `bench_h2_server --tls` + Go `compare_h2 --tls` + `run_h2_comparison.sh --tls`；shape 与 HS-0 同（mid 8×16×100 / press 16×32×100）；runs≥3 median peer ≥0.80×；docs residual；**不**升 package / HTTPS scale-ready |
+| **C-D** | **landed** | `bench_h2_server --tls` + Go `compare_h2 --tls` + `run_h2_comparison.sh --tls`；shape 与 HS-0 同（mid 8×16×100 / press 16×32×100）；runs≥3 median peer ≥0.80×；docs residual；当时 **不**升宣称 |
+| **C-D-claim** | **landed** | 产品 Yes → CLAIM *Scale-ready (HTTPS H2, Linux epoll)*；对齐 REPRO/BENCHMARKS residual |
 
-**C-D Done when**：HTTPS ALPN h2 multi-run 表 + REPRO 命令；gate Met；CLAIM package **仍 No**；NEXT=STOP。 **Met (2026-07-23).**
+**C-D Done when**：HTTPS ALPN h2 multi-run 表 + REPRO 命令；gate Met。 **Met (2026-07-23).**
+**C-D-claim Done when**：CLAIM 升格 + residual 对齐。 **Met (2026-07-23).**
 
 **Evidence（runs=3，stable=1）**：mid median **93586 / 36420 = 2.57× Met**；press median **253405 / 83588 = 3.03× Met**。
 产物：`build/projects/nextpas.core.http/h2_tls_comparison/cd-mid-*.md` / `cd-press-*.md`。
+
+---
+
+## Era C-H1 — HTTPS H1 peer scale KPI
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-H1** | **landed** | 冻结 HTTPS H1 KPI：20k×4 `no_url` / `response_1k`；epoll；TLS ALPN `http/1.1`；peer Go `net/http`；runs≥3；RPS median ≥0.80×；p99 median ≤2×；`bench_http_server --tls` + `compare_go --tls` + `run_h1_tls_comparison.sh`；CLAIM *Scale-ready (HTTPS H1)* |
+
+**C-H1 Done when**：harness + multi-run 表 + REPRO/CLAIM/BENCHMARKS；gate Met。 **Met (2026-07-23).**
+
+**Evidence（runs=3）**：
+
+| Workload | median nextPas req/s | median Go req/s | RPS ratio | p99 ratio | gate |
+|----------|---------------------:|----------------:|----------:|----------:|------|
+| `no_url` | **40851** | **19446** | **2.10×** | **0.15×** | **Met** |
+| `response_1k` | **40787** | **19149** | **2.13×** | **0.17×** | **Met** |
+
+产物：`build/projects/nextpas.core.http/h1_tls_comparison/ch1-*-20k4-runs3.md`。
 
 ---
 
@@ -954,7 +980,7 @@ HTTPS H2 规模宣称仍须单独产品 Yes；C-D 仅 evidence bar。
 | 文档 | 角色 |
 |------|------|
 | **ROADMAP.md（本文件）** | 向前做什么、顺序、状态、Goal Loop |
-| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R1 冻结） |
+| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R1 + HS-2a / C-D-claim / C-H1） |
 | **[`REPRO.md`](REPRO.md)** | 1h 复现剧本 |
 | **GOAL_TREE.md** | 为什么做、阶段定义、不漂移；**不**维护日更 backlog |
 | **CONTRACT.md** | 对外行为契约 |
@@ -968,7 +994,8 @@ HTTPS H2 规模宣称仍须单独产品 Yes；C-D 仅 evidence bar。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-23 | **C-D landed**：HTTPS ALPN h2 peer multi-run mid **2.57×** / press **3.03× Met**；`--tls` harness；package No；NEXT=STOP |
+| 2026-07-23 | **HS-2a + C-D-claim + C-H1 landed**：package Yes；HTTPS H2 scale Yes；HTTPS H1 multi-run **2.10× / 2.13× Met**；NEXT=STOP |
+| 2026-07-23 | **C-D landed**：HTTPS ALPN h2 peer multi-run mid **2.57×** / press **3.03× Met**；`--tls` harness；当时 package No |
 | 2026-07-23 | **C-A landed**：H1 HTTPS server product path（`NewH1TlsServerTransport` + registry + focused gate）；package No；NEXT=STOP |
 | 2026-07-23 | **D0 landed**：doc-truth hygiene（R4/p99/路径/H2/cancel/ARCHITECTURE/推荐路径/Makefile/REPRO）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |

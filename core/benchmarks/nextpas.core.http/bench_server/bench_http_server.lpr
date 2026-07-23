@@ -14,10 +14,16 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.server,
   nextpas.core.http.middleware,
+  nextpas.core.http.impl.tls.stream,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.tls.base,
+  nextpas.core.tls.context.builder,
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.http2.alpn,
+  nextpas.core.tls.openssl.backed,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 
@@ -57,6 +63,8 @@ var
   GWorkload: string;
   GBackend: TTcpServerBackend;
   GResponseBody1K: AnsiString;
+  GTls: Boolean;
+  GClientTls: ISSLContext;
 
 procedure RejectInvalidWorkload(const AValue: string);
 begin
@@ -120,6 +128,40 @@ begin
   GServer.ListenAndServe('127.0.0.1', 0);
 end;
 
+function NewServerTlsContext: ISSLContext;
+var
+  LKeyPair: IKeyPairWithCertificate;
+  LCertPEM, LKeyPEM: string;
+begin
+  LKeyPair := TCertificateBuilder.Create
+    .WithCommonName('127.0.0.1')
+    .WithOrganization('nextpas-h1-bench')
+    .SelfSigned;
+  LKeyPair.SaveToPEM(LCertPEM, LKeyPEM);
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithCertificatePEM(LCertPEM)
+    .WithPrivateKeyPEM(LKeyPEM)
+    .WithVerifyNone
+    .BuildServer;
+end;
+
+function NewClientTlsContext: ISSLContext;
+begin
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithVerifyNone
+    .BuildClient;
+end;
+
+function TransportName: string;
+begin
+  if GTls then
+    Result := 'tls-alpn-http1.1'
+  else
+    Result := 'cleartext-h1';
+end;
+
 function ClientThread(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PClientCtx;
@@ -151,6 +193,9 @@ begin
   try
     LConn := TcpConnect('127.0.0.1', GPort);
     LConn.SetNoDelay(True);
+    if GTls then
+      LConn := NewTlsClientTcpStream(LConn, GClientTls, '127.0.0.1',
+        HTTP11_ALPN_PROTOCOL);
     LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
     for LI := 1 to LCtx^.Requests do
     begin
@@ -196,6 +241,7 @@ begin
   GThreads := DEFAULT_NUM_THREADS;
   GWorkload := WORKLOAD_NO_URL;
   GBackend := TCP_SERVER_BACKEND_THREADED;
+  GTls := False;
   LI := 1;
   while LI <= ParamCount do
   begin
@@ -225,6 +271,11 @@ begin
     begin
       GBackend := ParseBackendOption(ParamStr(LI + 1));
       Inc(LI, 2);
+    end
+    else if ParamStr(LI) = '--tls' then
+    begin
+      GTls := True;
+      Inc(LI);
     end
     else
       Inc(LI);
@@ -333,6 +384,11 @@ begin
 
   LServerOptions := THttpServerOptions.Default;
   LServerOptions.Backend := GBackend;
+  if GTls then
+  begin
+    LServerOptions.TLSContext := NewServerTlsContext;
+    GClientTls := NewClientTlsContext;
+  end;
   GServer := THttpServer.Create(HandlerFunc(
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
@@ -368,11 +424,12 @@ begin
   GPort := GServer.LocalAddr.Port;
 
   WriteLn('=== HTTP Server Benchmark ===');
-  WriteLn('  Requests: ', GRequests);
-  WriteLn('  Threads:  ', GThreads);
-  WriteLn('  Workload: ', GWorkload);
-  WriteLn('  Backend:  ', BackendName);
-  WriteLn('  Port:     ', GPort);
+  WriteLn('  Requests:  ', GRequests);
+  WriteLn('  Threads:   ', GThreads);
+  WriteLn('  Workload:  ', GWorkload);
+  WriteLn('  Backend:   ', BackendName);
+  WriteLn('  Transport: ', TransportName);
+  WriteLn('  Port:      ', GPort);
   WriteLn;
 
   LStart := platform_monotonic_ns;
@@ -450,6 +507,11 @@ begin
   WriteLn('workload=', GWorkload);
   WriteLn('impl=nextpas');
   WriteLn('backend=', BackendName);
+  WriteLn('transport=', TransportName);
+  if GTls then
+    WriteLn('cleartext=false')
+  else
+    WriteLn('cleartext=true');
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload);
   WriteLn('client_read_mode=header_plus_content_length');
   WriteLn('response_body_bytes=', ResponseBodyBytesForWorkload);

@@ -146,7 +146,7 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 | Scale-ready p99 ≤ 2× Go | **Met (E3 runs=3)** | median p99 `no_url` **0.21×** / `response_1k` **0.22×** Go（§ E3） |
 | Connection ladder 1k / 10k idle | **Met** | S1-3 + E3 抽查 `stable=1` |
 | **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder + p99 multi-run Met；H2 package / Windows / H3 residual |
-| Scale-ready (H1/**H2** server, Linux) | **No** | H2 multiplex ~3k req/s evidence exists; still ≪ H1 KPI shape |
+| Scale-ready (H1/**H2** server, Linux) | **Yes (HS-2a)** | H1 scale-ready + H2 peer multi-run mid 1.86× / press 0.93×；禁止 H1/H2 直接 RPS 比值 |
 | H3 ready | **No** | Blocked; no facade |
 
 **Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
@@ -422,10 +422,11 @@ Not a throughput ranking; sizes are CI-friendly leak soak.
 - Likely bound: **per-connection client RoundTripMany sequential batches** + H2 framing/CPU, not accept storm.
 - Still **≪** H1 multi-conn KPI (~40k+); **no package claim**.
 
-#### H2 KPI frozen (2026-07-21, HS-0) — **evidence bar, not a claim**
+#### H2 KPI frozen (2026-07-21, HS-0) — package gate (HS-2a Yes)
 
-Purpose: freeze the **official H2 peer gate shape** for a future *Scale-ready (H2 mux, Linux epoll)* **if product asks**.
-**Current CLAIM package remains No.** This section is the evidence bar + peer tables (single-run history + multi-run when HS-1 lands).
+Purpose: freeze the **official H2 peer gate shape** for *Scale-ready (H1+H2 package, Linux epoll)*.
+**CLAIM package Yes (HS-2a, 2026-07-23)** after HS-1 multi-run Met + product Yes.
+This section remains the evidence bar + peer tables.
 
 **Shape (frozen with H2P-1 mid; HS-0)**
 
@@ -439,7 +440,7 @@ Purpose: freeze the **official H2 peer gate shape** for a future *Scale-ready (H
 | peer harness | `benchmarks/.../compare_h2` + `run_h2_comparison.sh` | same |
 | multi-run | **runs≥3 median** (HS-1) | same |
 
-**Frozen gates (evidence bar; not CLAIM package)**
+**Frozen gates (package claim bar; HS-2a Yes)**
 
 | Gate | Threshold | First peer (pre-fix) | **Post-fix single-run 2026-07-21** |
 | ---- | ------------------ | --------------------- | ------------------------ |
@@ -480,13 +481,14 @@ Per-run press nextPas: 83059 / 87827 / 75742；Go: 92858 / 89599 / 87747（all s
 
 - Peer multi-run mid/press **Met** (≥0.80× ratio of medians).
 - Client stacks still differ (RoundTripMany vs Go goroutine batch); shapes match.
-- **CLAIM package remains No** until product Yes (HS-2a).
+- **CLAIM package Yes (HS-2a, 2026-07-23)** — multi-run Met + product Yes.
 - Self press/mid ≥3× **dropped** as a gate after H2-opt (both sides high CPU-bound).
+- **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
 
-**What is still missing for package claim**
+**Package claim prerequisites (closed)**
 
 1. ~~Multi-run median (runs≥3)~~ — **HS-1 Met (2026-07-21)**.
-2. Explicit product **Yes** to upgrade CLAIM package — **HS-2a**.
+2. ~~Explicit product Yes~~ — **HS-2a Met (2026-07-23)**.
 3. **Forbidden forever**: H2 mid req/s ÷ H1 multi-conn req/s as a package KPI.
 
 **Repro**
@@ -503,12 +505,12 @@ Per-run press nextPas: 83059 / 87827 / 75742；Go: 92858 / 89599 / 87747（all s
   --connections 16 --streams 32 --batches 100 --runs 3
 ```
 
-#### HTTPS ALPN h2 peer multi-run (C-D, 2026-07-23) — evidence only
+#### HTTPS ALPN h2 peer multi-run (C-D, 2026-07-23) — Scale-ready (HTTPS H2) Yes
 
 Same frozen shapes as HS-0, transport **TLS ALPN `h2`** (self-signed both sides).
 Harness: `bench_h2_server --tls` + `compare_h2 --tls` + `run_h2_comparison.sh --tls`.
 Gate: ratio of medians ≥ **0.80×**, runs≥3, each run `stable=1`.
-**Does not** upgrade CLAIM package or *Scale-ready (HTTPS H2)*.
+**C-D-claim (2026-07-23)**：product Yes → CLAIM *Scale-ready (HTTPS H2, Linux epoll)*.
 
 | Date | Shape | median nextPas req/s | median Go req/s | ratio | gate | artifact |
 | ---- | ----- | -------------------: | --------------: | ----: | ---- | --------- |
@@ -526,6 +528,33 @@ Per-run press nextPas: 239380 / 271337 / 253405；Go: 87135 / 83588 / 83443（al
   --connections 16 --streams 32 --batches 100 --runs 3 \
   --output build/projects/nextpas.core.http/h2_tls_comparison/cd-press-16x32x100-runs3.md
 ```
+
+#### HTTPS ALPN http/1.1 peer multi-run (C-H1, 2026-07-23) — Scale-ready (HTTPS H1) Yes
+
+Same official **H1 multi-conn shape** as cleartext KPI (20k×4), transport **TLS ALPN `http/1.1`**.
+Harness: `bench_http_server --tls` + `compare_go --tls` + `run_h1_tls_comparison.sh`.
+Gates: RPS median ≥ **0.80×**；p99 median ≤ **2×**；runs≥3；backend **epoll**.
+
+| Date | Workload | median nextPas req/s | median Go req/s | RPS ratio | median nextPas p99_ns | median Go p99_ns | p99 ratio | gate | artifact |
+| ---- | -------- | -------------------: | --------------: | --------: | --------------------: | ---------------: | --------: | ---- | --------- |
+| **2026-07-23 C-H1** | `no_url` 20k×4 | **40851** | **19446** | **2.10×** | **137246** | **889137** | **0.15×** | **Met** | `h1_tls_comparison/ch1-no_url-20k4-runs3.md` |
+| **2026-07-23 C-H1** | `response_1k` 20k×4 | **40787** | **19149** | **2.13×** | **146766** | **876735** | **0.17×** | **Met** | `h1_tls_comparison/ch1-response_1k-20k4-runs3.md` |
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_server smoke-tls
+./benchmarks/nextpas.core.http/run_h1_tls_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --output build/projects/nextpas.core.http/h1_tls_comparison/ch1-no_url-20k4-runs3.md
+./benchmarks/nextpas.core.http/run_h1_tls_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k --runs 3 \
+  --output build/projects/nextpas.core.http/h1_tls_comparison/ch1-response_1k-20k4-runs3.md
+```
+
+**Readings**
+
+1. HTTPS H1 peer RPS **~2.1× Go** on both official workloads (runs=3 median).
+2. p99 **~0.15–0.17× Go** (client-observed; honest mode differ as E1).
+3. Cleartext H1 E3 (~2.2×) remains the plain-H1 scale anchor; this table is TLS-only.
 
 #### S1 sample (2026-07-20, short 2k×4 epoll no_url)
 

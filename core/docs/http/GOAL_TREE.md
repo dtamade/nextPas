@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-23 (D0 doc-truth; H2 Seal Met; package No; NEXT → ROADMAP STOP)
+> Last updated: 2026-07-23 (HS-2a package Yes; C-D-claim HTTPS H2 Yes; C-H1 HTTPS H1 Yes; NEXT → ROADMAP STOP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
@@ -31,7 +31,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
 | **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
 | **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
-| **Parity Campaign** | **H1 scale-ready Met** + **Q1 Met** + **S2/S3 Met**（H2 multiplex 证据；非 H1/H2 整包宣称）；H3 Blocked |
+| **Parity Campaign** | **H1 scale-ready Met** + **H1+H2 package Yes** + **HTTPS H1/H2 scale Yes** + **Q1 Met** + **S2/S3 Met**；H3 Blocked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | **39** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
