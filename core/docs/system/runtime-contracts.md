@@ -122,17 +122,17 @@ Rules:
 - Nil interface references must be safe.
 - Release ordering must be deterministic and testable.
 - Any interaction with object destruction must align with `np.system.object_free`.
-- HIR uses `intf_addref` and `intf_release` as internal intrinsic names (not the full `np.system.*` contract names).
-- LLVM emitter translates `intf_addref` → `@np_intf_addref` and `intf_release` → `@np_intf_release`.
-- Compiler/HIR may currently project interface reference ownership through
-  backend-private interface helpers such as `@np_intf_addref` and
-  `@np_intf_release`. These names are LLVM/backend evidence only,
+- Compiler HIR assigns typed `sckInterfaceAddRef` / `sckInterfaceRelease` via
+  `AssignSystemContract` (semantic names `np.system.interface_addref` /
+  `np.system.interface_release`); LLVM dispatches those kinds before any legacy
+  intrinsic string. Runtime mapping still goes through backend-private interface helpers
+  `@np_intf_addref` and `@np_intf_release` as LLVM/backend evidence only,
   not public ABI, not Pascal facade symbols, not object-free completion, and
   not finalized reference-counting strategy.
 - Current helper bodies are allowed to show nil-safety and refcount-slot
   mechanics in LLVM-focused tests. They must not be read as a final COM,
   elision, destruction, or interface-table policy for the future runtime.
-- Source-contract check `check_system_source_contracts.sh:675-680` verifies HIR intrinsic name and LLVM helper existence.
+- Source-contract check verifies typed builder assignment and LLVM helper existence.
 
 ## Object Free
 

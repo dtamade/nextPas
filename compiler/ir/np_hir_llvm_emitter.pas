@@ -46,6 +46,7 @@ type
     FNeedsObjectAlloc: Boolean;
     FNeedsObjectFreeRelease: Boolean;
     FNeedsDynArrayHelpers: Boolean;
+    FNeedsIntfRefCountHelpers: Boolean;
     FStrConstants: TLlvmNameVec;
     FCurrentReturnTypeId: THIRTypeId;
     FCurrentFuncIsTStringSret: Boolean;
@@ -173,6 +174,7 @@ begin
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FNeedsDynArrayHelpers := False;
+  FNeedsIntfRefCountHelpers := False;
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
   FProcessFiniEmitted := False;
@@ -342,7 +344,7 @@ begin
   if FNeedsAlloc then
     EmitAllocatorFaultHelper;
 
-  if FNeedsObjectAlloc then
+  if FNeedsObjectAlloc or FNeedsIntfRefCountHelpers then
     EmitIntfRefCountHelpers;
 
   if FNeedsExceptionRuntime then

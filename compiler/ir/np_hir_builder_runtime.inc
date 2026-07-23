@@ -15,11 +15,13 @@ begin
       if ObjPtr <> 0 then
       begin
         ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+        { Typed interface_release at return: SystemContractKind authority. }
         FillChar(Instr, SizeOf(Instr), 0);
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikIntrinsic;
-        Instr.TypeId := 0;
-        Instr.IntrinsicName := 'intf_release';
+        Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+        AssignSystemContract(Instr, sckInterfaceRelease);
+        Instr.CallTarget := SystemContractAt(sckInterfaceRelease).RuntimeMapping;
         SetLength(Instr.Operands, 1);
         Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
         EmitInstr(Instr);

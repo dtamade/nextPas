@@ -22,8 +22,8 @@ into readiness claims or public ABI.
 | `np.system.dynarray_init` | vocabulary | System dynamic array | deferred | `runtime-contracts.md` | No implementation claim; slot nil via stores only |
 | `np.system.dynarray_fini` | executable | typed `sckDynArrayFini` + cleanup nodes | `np_dynarray_release` | `test_hir_dynarray_typed_contract` (+ release_runtime_smoke) | Typed HIR authority; managed-element coverage remains partial |
 | `np.system.dynarray_set_length` | executable | typed `sckDynArraySetLength` + setlength nodes | `np_dynarray_resize` | `test_hir_dynarray_typed_contract` (+ release_runtime_smoke) | Typed HIR authority; failure cleanup remains partial |
-| `np.system.interface_addref` | backend | `intf_addref` implementation intrinsic | `np_intf_addref` | `test_hir_interface_contract` | Backend helper, not facade ABI |
-| `np.system.interface_release` | backend | `intf_release` implementation intrinsic | `np_intf_release` | `test_hir_interface_contract` | Backend helper, not facade ABI |
+| `np.system.interface_addref` | HIR | typed `sckInterfaceAddRef` + intf-addref-runtime | `np_intf_addref` | `test_hir_interface_contract` | Typed HIR/LLVM call-shape only; not full refcount executable proof |
+| `np.system.interface_release` | HIR | typed `sckInterfaceRelease` + intf-release-runtime | `np_intf_release` | `test_hir_interface_contract` | Typed HIR/LLVM call-shape only; not full refcount executable proof |
 | `np.system.managed_record_init` | vocabulary | System managed record | deferred | `runtime-contracts.md` | No implementation claim |
 | `np.system.managed_record_fini` | HIR | managed-record cleanup contract | deferred | `test_hir_node_kind` | No executable lifecycle proof |
 | `np.system.heap_alloc` | backend | `arr_alloc` and `class_alloc` | `np_alloc`, `np_object_alloc` | `test_hir_class_alloc_contract` | Allocator owner remains outside System |
@@ -58,6 +58,12 @@ into readiness claims or public ABI.
 > `test_hir_dynarray_typed_contract`. Existing release/field runtime smokes remain
 > executable evidence. `dynarray_init` stays vocabulary (slot nil via stores).
 > Managed-element finalization coverage remains partial.
+>
+> **Footnote (M1 typed interface addref/release, 2026-07-23)**: `sckInterfaceAddRef`
+> / `sckInterfaceRelease` are production typed HIR (authority = `SystemContractKind`);
+> runtime maps to `np_intf_addref` / `np_intf_release`. Focused typed identity:
+> `test_hir_interface_contract`. Evidence is HIR identity + LLVM call-shape only;
+> **not** full COM/elision/destruction policy. Ledger **scelHir**.
 >
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves
@@ -97,8 +103,8 @@ They must not be used as facade contract symbols or treated as part of the `np.s
 | `@np_object_free_release` | Object nil-guard + release | Maps to `np.system.object_free.release` |
 | `@np_object_release_valid` | Release valid object allocation | Backend-private sub-step of object release |
 | `@np_object_release_invalid` | Diagnose invalid object release | Backend-private sub-step of object release |
-| `@np_intf_addref` | Interface addref | Maps to `np.system.interface_addref` (future) |
-| `@np_intf_release` | Interface release | Maps to `np.system.interface_release` (future) |
+| `@np_intf_addref` | Interface addref | Maps to `np.system.interface_addref` |
+| `@np_intf_release` | Interface release | Maps to `np.system.interface_release` |
 | `@np_dynarray_resize` | Dynamic array resize | Maps to `np.system.dynarray_set_length` (future) |
 | `@np_dynarray_release` | Dynamic array release | Maps to `np.system.dynarray_fini` (future) |
 | `@np_dynarray_fault` | Dynamic array fault | Maps to `np.system.runtime_fault` sub-category |

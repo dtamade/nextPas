@@ -60,6 +60,7 @@ begin
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FNeedsDynArrayHelpers := False;
+  FNeedsIntfRefCountHelpers := False;
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -611,6 +612,34 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
             ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
             ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end;
+    end;
+    sckInterfaceAddRef:
+    begin
+      FNeedsIntfRefCountHelpers := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckInterfaceAddRef).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckInterfaceRelease:
+    begin
+      FNeedsIntfRefCountHelpers := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckInterfaceRelease).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
       end;
     end;
     sckObjectFree:

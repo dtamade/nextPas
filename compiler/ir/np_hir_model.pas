@@ -332,6 +332,8 @@ begin
     sckStringAssign,
     sckDynArrayFini,
     sckDynArraySetLength,
+    sckInterfaceAddRef,
+    sckInterfaceRelease,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,

@@ -147,21 +147,25 @@ begin
   if OldObjPtr <> 0 then
   begin
     OldObjPtr := EmitLoad(GetPtrType, OldObjPtr);
+    { Typed interface_release: SystemContractKind authority. }
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
-    Instr.TypeId := 0;
-    Instr.IntrinsicName := 'intf_release';
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    AssignSystemContract(Instr, sckInterfaceRelease);
+    Instr.CallTarget := SystemContractAt(sckInterfaceRelease).RuntimeMapping;
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeTypedOperand(OldObjPtr, GetPtrType);
     EmitInstr(Instr);
   end;
 
+  { Typed interface_addref: SystemContractKind authority. }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := 0;
-  Instr.IntrinsicName := 'intf_addref';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckInterfaceAddRef);
+  Instr.CallTarget := SystemContractAt(sckInterfaceAddRef).RuntimeMapping;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
   EmitInstr(Instr);
@@ -187,11 +191,13 @@ begin
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
   ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { Typed interface_release: SystemContractKind authority. }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := 0;
-  Instr.IntrinsicName := 'intf_release';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckInterfaceRelease);
+  Instr.CallTarget := SystemContractAt(sckInterfaceRelease).RuntimeMapping;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
   EmitInstr(Instr);

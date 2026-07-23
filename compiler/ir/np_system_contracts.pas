@@ -221,10 +221,10 @@ const
       TargetIdentity: 'interface-reference';
       OwnershipIntent: 'shared reference acquire';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'intf_addref';
+      HirEvidence: 'typed sckInterfaceAddRef / intf-addref-runtime';
       RuntimeMapping: 'np_intf_addref';
       FocusedEvidence: 'test_hir_interface_contract';
-      EvidenceLevel: scelBackend
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckInterfaceRelease;
@@ -234,10 +234,10 @@ const
       TargetIdentity: 'interface-reference';
       OwnershipIntent: 'shared reference release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'intf_release';
+      HirEvidence: 'typed sckInterfaceRelease / intf-release-runtime';
       RuntimeMapping: 'np_intf_release';
       FocusedEvidence: 'test_hir_interface_contract';
-      EvidenceLevel: scelBackend
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckManagedRecordInit;

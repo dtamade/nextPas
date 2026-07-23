@@ -4,7 +4,7 @@ program test_hir_interface_contract;
 
 uses
   SysUtils, np_semantic_model, np_hir_types, np_hir_model,
-  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
+  np_hir_builder, np_hir_llvm_emitter, np_hir_verifier, np_system_contracts;
 
 var
   SemaModel: TSemanticModel;
@@ -14,6 +14,8 @@ var
   LlvmText: string;
   Func: THIRFunction;
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
+  OperandType: THIRTypeRec;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
   AddrefCount, ReleaseCount: LongInt;
   AddrefHelperPos, ReleaseHelperPos: LongInt;
@@ -30,10 +32,10 @@ begin
   Verifier := nil;
   Emitter := nil;
   try
-    // Model interface variable lifecycle:
-    // - var-decl-ptr-runtime: allocate interface variable slot
-    // - intf-addref-runtime: addref when assigning new value
-    // - intf-release-runtime: release when variable goes out of scope
+    { Model interface variable lifecycle:
+      - var-decl-ptr-runtime: allocate interface variable slot
+      - intf-addref-runtime: addref when assigning new value
+      - intf-release-runtime: release when variable goes out of scope }
     SemaModel.AddTypedHirNode('var-decl-ptr-runtime', 'A', 0, 0, 'A');
     SemaModel.AddTypedHirNode('intf-addref-runtime', 'A' + #9 + '0', 0, 0, 'A');
     SemaModel.AddTypedHirNode('intf-release-runtime', 'A', 0, 0, 'A');
@@ -53,22 +55,53 @@ begin
       for BlockIndex := 0 to LongInt(Func.Blocks.Count) - 1 do
         if Func.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
           for InstrIndex := 0 to LongInt(Func.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
-        begin
-          Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
-          if (Instr.Kind = hikIntrinsic) and SameText(Instr.IntrinsicName, 'intf_addref') then
-            Inc(AddrefCount);
-          if (Instr.Kind = hikIntrinsic) and SameText(Instr.IntrinsicName, 'intf_release') then
-            Inc(ReleaseCount);
-        end;
+          begin
+            Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
+            if (Instr.Kind = hikIntrinsic) and
+              IsSystemContract(Instr, sckInterfaceAddRef) then
+            begin
+              Inc(AddrefCount);
+              ContractDefinition := SystemContractAt(sckInterfaceAddRef);
+              if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+                Fail('addref-name-mismatch:' + Instr.IntrinsicName);
+              if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+                Fail('addref-runtime-mismatch:' + Instr.CallTarget);
+              if Length(Instr.Operands) <> 1 then
+                Fail('addref-operand-count:' + IntToStr(Length(Instr.Operands)));
+              OperandType := Builder.Module.Types.GetType(Instr.Operands[0].TypeId);
+              if OperandType.Kind <> htkPointer then
+                Fail('addref-operand0-not-pointer');
+            end;
+            if (Instr.Kind = hikIntrinsic) and
+              IsSystemContract(Instr, sckInterfaceRelease) then
+            begin
+              Inc(ReleaseCount);
+              ContractDefinition := SystemContractAt(sckInterfaceRelease);
+              if Instr.IntrinsicName <> ContractDefinition.SemanticName then
+                Fail('release-name-mismatch:' + Instr.IntrinsicName);
+              if Instr.CallTarget <> ContractDefinition.RuntimeMapping then
+                Fail('release-runtime-mismatch:' + Instr.CallTarget);
+              if Length(Instr.Operands) <> 1 then
+                Fail('release-operand-count:' + IntToStr(Length(Instr.Operands)));
+              OperandType := Builder.Module.Types.GetType(Instr.Operands[0].TypeId);
+              if OperandType.Kind <> htkPointer then
+                Fail('release-operand0-not-pointer');
+            end;
+            { Legacy bare names must not remain as untyped authority. }
+            if (Instr.Kind = hikIntrinsic) and (not Instr.HasSystemContract) and
+              ((Instr.IntrinsicName = 'intf_addref') or
+              (Instr.IntrinsicName = 'intf_release')) then
+              Fail('legacy-untyped-interface-intrinsic:' + Instr.IntrinsicName);
+          end;
     end;
 
     WriteLn('hir-interface-contract-addref-count=', AddrefCount);
     WriteLn('hir-interface-contract-release-count=', ReleaseCount);
 
     if AddrefCount < 1 then
-      Fail('missing-intf-addref-hir-intrinsic');
+      Fail('missing-typed-intf-addref');
     if ReleaseCount < 1 then
-      Fail('missing-intf-release-hir-intrinsic');
+      Fail('missing-typed-intf-release');
 
     Emitter := THIRLlvmEmitter.Create(Builder.Module);
     Emitter.EmitModule;
@@ -81,6 +114,10 @@ begin
       Fail('missing-intf-addref-llvm-helper');
     if ReleaseHelperPos = 0 then
       Fail('missing-intf-release-llvm-helper');
+    if Pos('declare void @np_intf_addref', LlvmText) = 0 then
+      Fail('missing-intf-addref-declare');
+    if Pos('declare void @np_intf_release', LlvmText) = 0 then
+      Fail('missing-intf-release-declare');
 
     WriteLn('hir-interface-contract-llvm-addref=found');
     WriteLn('hir-interface-contract-llvm-release=found');
