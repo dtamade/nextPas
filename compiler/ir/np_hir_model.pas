@@ -330,6 +330,8 @@ begin
     sckStringInit,
     sckStringFini,
     sckStringAssign,
+    sckDynArrayFini,
+    sckDynArraySetLength,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -393,6 +395,53 @@ begin
       if OperandType.Kind <> htkPointer then
       begin
         AError := 'system-contract-operand-not-pointer:' +
+          IntToStr(ContractOrdinal) + ':' +
+          IntToStr(AInstr.Operands[OperandIndex].TypeId);
+        Exit(False);
+      end;
+    end;
+    Exit(True);
+  end;
+
+  { Dynarray fini: (ptr, len:int, elem_size:int). SetLength: + new_len:int. }
+  if (AInstr.SystemContractKind = sckDynArrayFini) or
+    (AInstr.SystemContractKind = sckDynArraySetLength) then
+  begin
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    if AInstr.SystemContractKind = sckDynArraySetLength then
+    begin
+      if Length(AInstr.Operands) <> 4 then
+      begin
+        AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+          ':' + IntToStr(Length(AInstr.Operands));
+        Exit(False);
+      end;
+    end
+    else if Length(AInstr.Operands) <> 3 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkPointer then
+    begin
+      AError := 'system-contract-operand-not-pointer:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
+      Exit(False);
+    end;
+    for OperandIndex := 1 to High(AInstr.Operands) do
+    begin
+      OperandType := ATypes.GetType(AInstr.Operands[OperandIndex].TypeId);
+      if OperandType.Kind <> htkInt then
+      begin
+        AError := 'system-contract-operand-not-int:' +
           IntToStr(ContractOrdinal) + ':' +
           IntToStr(AInstr.Operands[OperandIndex].TypeId);
         Exit(False);

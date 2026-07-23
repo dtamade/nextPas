@@ -86,12 +86,16 @@ Rules:
 - Resizing must define failure behavior before implementation appears.
 - Element finalization must be explicit for managed element types.
 - Allocation must route through the heap manager owned by `nextpas.core.mem`.
-- Compiler HIR may project `np.system.dynarray_set_length`,
-  `np.system.dynarray_fini` and element contracts such as
+- Compiler HIR assigns typed `sckDynArraySetLength` / `sckDynArrayFini` via
+  `AssignSystemContract` (semantic names `np.system.dynarray_set_length` /
+  `np.system.dynarray_fini`); LLVM dispatches those kinds before any legacy
+  intrinsic string. Element contracts such as
   `np.system.string_fini` for `array of string` and
-  `np.system.interface_release` for `array of interface`. Backend-private
+  `np.system.interface_release` for `array of interface` may nest. Backend-private
   helpers such as `@np_dynarray_resize`, `@np_dynarray_release` and
   `@np_dynarray_fault` remain implementation details, not public ABI.
+- `dynarray_init` remains vocabulary: empty slot is established by compiler stores
+  to `{ptr,len}`, not a typed runtime call in this slice.
 - The dynamic-array fault helper is current backend evidence for rejecting
   impossible helper states in generated LLVM. It is not a public runtime-fault
   taxonomy, not a Pascal exception facade, and not proof that all dynamic-array

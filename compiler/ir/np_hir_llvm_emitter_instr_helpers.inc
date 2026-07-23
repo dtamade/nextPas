@@ -568,6 +568,51 @@ begin
             ValueRef(AInstr.Operands[1].ValueId) + ')');
       end;
     end;
+    sckDynArraySetLength:
+    begin
+      FNeedsAlloc := True;
+      FNeedsFree := True;
+      FNeedsMemcpy := True;
+      FNeedsDynArrayHelpers := True;
+      if Length(AInstr.Operands) >= 4 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @' +
+            SystemContractAt(sckDynArraySetLength).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end;
+    end;
+    sckDynArrayFini:
+    begin
+      FNeedsAlloc := True;
+      FNeedsFree := True;
+      FNeedsDynArrayHelpers := True;
+      if Length(AInstr.Operands) >= 3 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckDynArrayFini).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end;
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:

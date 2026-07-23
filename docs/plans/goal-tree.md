@@ -69,9 +69,10 @@
   incremental gate 通过。compiler-pass harness 尚未隔离或清空 workspace `.nextpas` artifact
   roots，因此两次 53/53 都不能写成 cold/warm-cache 证明。
 - M1 production typed families 已落地：object-free（root/destroy/cleanup/release）、
-  process_init/fini、string ownership triad（init/fini/assign）；均由
-  `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。下一 family：dynarray /
-  interface；其余 contract families 仍待迁移。
+  process_init/fini、string ownership triad（init/fini/assign）、dynarray
+  set_length/fini（`sckDynArray*`）；均由 `TSystemContractKind` 控制 HIR validation
+  与 LLVM dispatch。`dynarray_init` 仍 vocabulary。下一 family：interface；其余
+  contract families 仍待迁移。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
@@ -181,7 +182,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
    - [x] object-free production family（root/destroy/cleanup/release）
    - [x] process_init/fini typed HIR family（`SystemContractKind` 权威；ledger 仍 scelHir）
    - [x] string ownership triad typed HIR（init/fini/assign → `np_tstring_*`；ledger scelHir）
-   - [ ] 下一 family：dynarray / interface（整族推进）
+   - [x] dynarray set_length/fini typed HIR（→ `np_dynarray_*`；init 仍 vocabulary；ledger scelExecutable）
+   - [ ] 下一 family：interface（整族推进）
 8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---

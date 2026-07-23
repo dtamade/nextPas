@@ -195,9 +195,9 @@ const
       TargetIdentity: 'managed-dynarray';
       OwnershipIntent: 'owned value release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'dynarray-cleanup-runtime';
+      HirEvidence: 'typed sckDynArrayFini / dynarray-cleanup-runtime';
       RuntimeMapping: 'np_dynarray_release';
-      FocusedEvidence: 'test_hir_dynarray_release_runtime_smoke';
+      FocusedEvidence: 'test_hir_dynarray_typed_contract';
       EvidenceLevel: scelExecutable
     ),
     (
@@ -208,9 +208,9 @@ const
       TargetIdentity: 'managed-dynarray';
       OwnershipIntent: 'owned buffer resize';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'setlength-arr-runtime';
+      HirEvidence: 'typed sckDynArraySetLength / setlength-arr-runtime';
       RuntimeMapping: 'np_dynarray_resize';
-      FocusedEvidence: 'test_hir_dynarray_release_runtime_smoke';
+      FocusedEvidence: 'test_hir_dynarray_typed_contract';
       EvidenceLevel: scelExecutable
     ),
     (

@@ -19,9 +19,9 @@ into readiness claims or public ABI.
 | `np.system.string_init` | HIR | `System.AnsiString`; typed `sckStringInit` | `np_tstring_init` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
 | `np.system.string_fini` | HIR | string cleanup nodes; typed `sckStringFini` | `np_tstring_fini` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
 | `np.system.string_assign` | HIR | string assignment nodes; typed `sckStringAssign` | `np_tstring_assign` | `test_hir_string_ownership_contract` | Typed HIR/LLVM call-shape only; not full string lifecycle executable proof |
-| `np.system.dynarray_init` | vocabulary | System dynamic array | deferred | `runtime-contracts.md` | No implementation claim |
-| `np.system.dynarray_fini` | executable | dynarray cleanup contract | `np_dynarray_release` | `test_hir_dynarray_release_runtime_smoke` | Managed-element coverage remains partial |
-| `np.system.dynarray_set_length` | executable | set-length array contract | `np_dynarray_resize` | `test_hir_dynarray_release_runtime_smoke` | Failure cleanup remains partial |
+| `np.system.dynarray_init` | vocabulary | System dynamic array | deferred | `runtime-contracts.md` | No implementation claim; slot nil via stores only |
+| `np.system.dynarray_fini` | executable | typed `sckDynArrayFini` + cleanup nodes | `np_dynarray_release` | `test_hir_dynarray_typed_contract` (+ release_runtime_smoke) | Typed HIR authority; managed-element coverage remains partial |
+| `np.system.dynarray_set_length` | executable | typed `sckDynArraySetLength` + setlength nodes | `np_dynarray_resize` | `test_hir_dynarray_typed_contract` (+ release_runtime_smoke) | Typed HIR authority; failure cleanup remains partial |
 | `np.system.interface_addref` | backend | `intf_addref` implementation intrinsic | `np_intf_addref` | `test_hir_interface_contract` | Backend helper, not facade ABI |
 | `np.system.interface_release` | backend | `intf_release` implementation intrinsic | `np_intf_release` | `test_hir_interface_contract` | Backend helper, not facade ABI |
 | `np.system.managed_record_init` | vocabulary | System managed record | deferred | `runtime-contracts.md` | No implementation claim |
@@ -51,6 +51,13 @@ into readiness claims or public ABI.
 > `SystemContractKind`); runtime maps to `np_tstring_*`. Evidence is HIR identity +
 > LLVM call-shape via `test_hir_string_ownership_contract`; **not** full COW/refcount
 > executable lifecycle. Ledger **scelHir** for the triad (init promoted from vocabulary).
+>
+> **Footnote (M1 typed dynarray set_length/fini, 2026-07-23)**: `sckDynArraySetLength`
+> / `sckDynArrayFini` are production typed HIR (authority = `SystemContractKind`);
+> runtime maps to `np_dynarray_resize` / `np_dynarray_release`. Focused typed identity:
+> `test_hir_dynarray_typed_contract`. Existing release/field runtime smokes remain
+> executable evidence. `dynarray_init` stays vocabulary (slot nil via stores).
+> Managed-element finalization coverage remains partial.
 >
 > **Footnote (D3, 2026-07-23; residual honesty same day — historical)**: `process_init` / `process_fini`
 > focused HIR/LLVM call evidence (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves

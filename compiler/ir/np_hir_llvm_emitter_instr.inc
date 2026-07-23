@@ -536,31 +536,6 @@ begin
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
       end
-      else if AInstr.IntrinsicName = 'dynarray_resize' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsMemcpy := True;
-        FNeedsDynArrayHelpers := True;
-        if Length(AInstr.Operands) >= 4 then
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call ptr @np_dynarray_resize(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[3].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'dynarray_release' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsDynArrayHelpers := True;
-        if Length(AInstr.Operands) >= 3 then
-          Emit('  call void @np_dynarray_release(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ')');
-      end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
         FNeedsAlloc := True;
