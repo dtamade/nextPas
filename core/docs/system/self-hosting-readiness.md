@@ -17,9 +17,14 @@ support that a self-hosted compiler will require.
 | Stage0 A via pinned FPC | yes | `make rebuild-compiler` → `build/stage0-bootstrap/nextpas` |
 | M2-0 harness + LLVM smoke | yes | `make m2-two-hop` → `scripts/m2-two-hop.sh` a-ready + llvm-smoke |
 | Immutable source manifest (declared) | yes | `docs/plans/m2/source-manifest.txt` + `ladder.txt` |
-| A→B linked nextpas (L3) | **no** | ladder may stop before L3 |
+| M2-1 LLVM ladder L0–L2 | yes | `make m2-ladder` → L0 hello + L1 `np_target_facts` + L2 `nextpas_projection_types` on LLVM |
+| A→B linked nextpas (L3) | **no** | full `tools/stage0/nextpas.pas` still hangs/timeouts under A LLVM |
 | B→C + equivalence | **no** | M2-3 |
 | Host self-compile module probes | **not** M2 evidence | `build/probe_self_compile_module.sh` forces host FPC assemble |
+
+Known hang under stage0 unit build (host or LLVM, empty envelope): e.g.
+`compiler/diagnostics/np_diagnostics_sink.pas`, `compiler/frontend/np_source_database.pas`.
+Ladder deliberately uses units that complete.
 
 Current focused fixtures are partial evidence for individual compiler/runtime contracts. A -> B -> C has not executed:
 the repository has not built a runnable stage B from A’s LLVM path over the declared closure, then used

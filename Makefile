@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm m2-two-hop m2-a-ready m2-llvm-smoke m2-ladder focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm m2-two-hop m2-a-ready m2-llvm-smoke m2-ladder m2-ladder-all focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -110,6 +110,10 @@ m2-llvm-smoke:
 	bash scripts/m2-two-hop.sh --phase a-ready --phase llvm-smoke
 
 m2-ladder:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase ladder-l2
+
+# Full ladder including L3 probe (L3 expected fail/timeout until M2-2; reports partial)
+m2-ladder-all:
 	bash scripts/m2-two-hop.sh --phase a-ready --phase ladder
 
 focused: hygiene

@@ -196,7 +196,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
      runtime-closure / 全表 `scelExecutable` = M1 之后。
 8. [ ] M2 A→B→C 两跳证明（进行中）
    - [x] M2-0 harness：`docs/plans/m2/*` + `scripts/m2-two-hop.sh` + `make m2-two-hop`（a-ready + LLVM hello 基线；禁 host FPC 伪装）
-   - [ ] M2-1 LLVM 闭包阶梯 L1→L2
+   - [x] M2-1 LLVM 闭包阶梯 L0–L2：`make m2-ladder`（L1=`np_target_facts` L2=`nextpas_projection_types`；L3 未过）
    - [ ] M2-2 A→B 可执行（ladder L3 / source-manifest entry）
    - [ ] M2-3 B→C + acceptance 子集 + 等价报告
 
@@ -225,6 +225,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-23 | M1 managed_record_fini | cleanup → sckManagedRecordFini marker + nested string/dynarray（scelHir） |
 | 2026-07-23 | M1 typed production families closed | vocabulary/semantic/backend residual 标 non-blocking；下一主线 M2 |
 | 2026-07-23 | M2-0 harness | source-manifest + ladder + `m2-two-hop.sh` + `make m2-two-hop`；A→B 未关闭 |
+| 2026-07-23 | M2-1 ladder L0–L2 | LLVM unit object path 过 `np_target_facts` + `nextpas_projection_types`；L3/driver 仍挂 |
 
 ---
 

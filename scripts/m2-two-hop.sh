@@ -32,9 +32,10 @@ Usage: m2-two-hop.sh [--phase NAME]...
   Phases (default: a-ready llvm-smoke):
     a-ready      Require stage0 binary A; record hash under build/m2/gen-a
     llvm-smoke   L0: A builds hello.pas on LLVM; run executable; anti-masquerade
-    ladder       Run L0..highest level that still passes; report first failure
+    ladder       Run L0..first failure; reports partial (L3 expected fail until M2-2)
     ladder-l0    Only L0
     ladder-l1    L0 then L1
+    ladder-l2    L0..L2 must pass (M2-1 green)
     build-b      A builds source-manifest entry → gen-b (M2-2; fail if not ready)
     smoke-b      Run B on hello (requires build-b)
     build-c      B builds same entry → gen-c (M2-3)
@@ -44,7 +45,8 @@ Usage: m2-two-hop.sh [--phase NAME]...
 EOF
 }
 
-log() { printf 'm2=%s\n' "$*"; }
+# Log to stderr (line-oriented even when stdout is redirected to a file).
+log() { printf 'm2=%s\n' "$*" >&2; }
 fail() { printf 'm2-failure=%s\n' "$*" >&2; exit 1; }
 
 require_llvm_binding() {
@@ -109,18 +111,19 @@ sha256_file() {
 
 # Build with A (or given compiler) under isolated gen workspace.
 # Args: compiler out_dir log_path source_path [extra...]
-# Optional env NEXTPAS_M2_BUILD_TIMEOUT_SEC (default 120) wraps build in timeout(1).
+# Optional env NEXTPAS_M2_BUILD_TIMEOUT_SEC (default 90) wraps build in timeout(1).
 m2_build() {
   local compiler="$1"
   local out_dir="$2"
   local log_path="$3"
   local source="$4"
+  local timeout_sec rc
   shift 4
   mkdir -p "$out_dir" "$(dirname "$log_path")"
-  local timeout_sec="${NEXTPAS_M2_BUILD_TIMEOUT_SEC:-120}"
+  timeout_sec="${NEXTPAS_M2_BUILD_TIMEOUT_SEC:-90}"
   local -a cmd
   if command -v timeout >/dev/null 2>&1 && [[ "$timeout_sec" -gt 0 ]]; then
-    cmd=(timeout --signal=TERM --kill-after=10 "$timeout_sec" "$compiler")
+    cmd=(timeout --foreground --signal=TERM --kill-after=5 "$timeout_sec" "$compiler")
   else
     cmd=("$compiler")
   fi
@@ -133,7 +136,7 @@ m2_build() {
     --fold \
     "$@" \
     >"$log_path" 2>&1
-  local rc=$?
+  rc=$?
   set -e
   if [[ $rc -eq 124 ]]; then
     printf 'm2-build-timeout=%ss source=%s\n' "$timeout_sec" "$source" >>"$log_path"
@@ -242,9 +245,11 @@ phase_llvm_smoke() {
 }
 
 # Parse ladder file → run levels up to max_level (empty = all until fail)
-# max_level: 0,1,2,3 or empty for full ladder report
+# max_level: 0,1,2,3 or empty for full ladder report.
+# When max_level is set (ladder-lN), every level ≤ N must pass or the phase fails hard.
 phase_ladder() {
   local max_level="${1:-}"
+  local require_pass=""
   log "phase=ladder max_level=${max_level:-all}"
   ensure_dirs
   require_llvm_binding
@@ -253,6 +258,9 @@ phase_ladder() {
   fi
   if [[ ! -x "$STAGE0" ]]; then
     fail "missing-stage0 path=$STAGE0"
+  fi
+  if [[ -n "$max_level" ]]; then
+    require_pass="L${max_level}"
   fi
 
   local level path base outd logf rc highest_pass="none"
@@ -284,15 +292,17 @@ phase_ladder() {
     cp "$logf" "$EVIDENCE/ladder-$level-$base.log" 2>/dev/null || true
     if [[ $rc -ne 0 ]]; then
       log "ladder-result=$level=fail build-exit=$rc"
-      printf 'm2-ladder-highest-pass=%s\n' "$highest_pass"
-      printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path"
-      # L0 must never fail in default smoke; ladder phase may continue reporting
+      printf 'm2-ladder-highest-pass=%s\n' "$highest_pass" >&2
+      printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path" >&2
+      if [[ -n "$require_pass" ]]; then
+        tail -40 "$logf" >&2 || true
+        fail "ladder-required-level-failed level=$level required=$require_pass exit=$rc"
+      fi
       if [[ "$level" == "L0" ]]; then
         tail -40 "$logf" >&2 || true
         fail "ladder-l0-failed"
       fi
-      # For ladder phase: stop at first fail but exit 0 with report? Plan says
-      # report first failure. M2-0 only requires L0; full ladder may fail L1+.
+      # Full ladder: stop at first fail with partial report (L3 expected until M2-2).
       log "ladder=partial highest_pass=$highest_pass first_fail=$level"
       return 0
     fi
@@ -318,15 +328,21 @@ phase_ladder() {
     else
       if ! grep -Eq '^status=success$' "$logf"; then
         log "ladder-result=$level=fail missing-status"
-        printf 'm2-ladder-highest-pass=%s\n' "$highest_pass"
-        printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path"
+        printf 'm2-ladder-highest-pass=%s\n' "$highest_pass" >&2
+        printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path" >&2
+        if [[ -n "$require_pass" ]]; then
+          fail "ladder-required-level-failed level=$level reason=missing-status"
+        fi
         log "ladder=partial highest_pass=$highest_pass first_fail=$level"
         return 0
       fi
       if ! grep -Eq 'backend-family=llvm' "$logf"; then
         log "ladder-result=$level=fail backend-not-llvm"
-        printf 'm2-ladder-highest-pass=%s\n' "$highest_pass"
-        printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path"
+        printf 'm2-ladder-highest-pass=%s\n' "$highest_pass" >&2
+        printf 'm2-ladder-first-fail=%s path=%s\n' "$level" "$path" >&2
+        if [[ -n "$require_pass" ]]; then
+          fail "ladder-required-level-failed level=$level reason=backend-not-llvm"
+        fi
         log "ladder=partial highest_pass=$highest_pass first_fail=$level"
         return 0
       fi
@@ -339,7 +355,10 @@ phase_ladder() {
     log "ladder-result=$level=pass"
   done <"$LADDER_FILE"
 
-  printf 'm2-ladder-highest-pass=%s\n' "$highest_pass"
+  printf 'm2-ladder-highest-pass=%s\n' "$highest_pass" >&2
+  if [[ -n "$require_pass" && "$highest_pass" != "$require_pass" ]]; then
+    fail "ladder-required-level-not-reached required=$require_pass highest=$highest_pass"
+  fi
   if [[ "$highest_pass" == "L3" ]]; then
     log "ladder=complete a-to-b-entry-ready=yes"
   else
@@ -453,6 +472,7 @@ for p in "${PHASES[@]}"; do
     ladder) phase_ladder "" ;;
     ladder-l0) phase_ladder 0 ;;
     ladder-l1) phase_ladder 1 ;;
+    ladder-l2) phase_ladder 2 ;;
     build-b) phase_build_b ;;
     smoke-b) phase_smoke_b ;;
     build-c) phase_build_c ;;
