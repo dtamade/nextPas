@@ -4,12 +4,25 @@ This document defines the acceptance criteria for nextPas to reach self-hosting 
 can compile itself). It focuses on the `np.system.*` contract vocabulary and runtime
 support that a self-hosted compiler will require.
 
-## Status: M0 truth convergence; not self-host ready
+## Status: M1 typed production closed; M2 two-hop harness started; not self-host ready
 
 ## Current readiness boundary
 
+**M2 authority** is `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` §M2
+(executable A→B→C). Do not confuse with historical bootstrap-spine “M2 typed contracts”
+(that work closed under M1).
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Stage0 A via pinned FPC | yes | `make rebuild-compiler` → `build/stage0-bootstrap/nextpas` |
+| M2-0 harness + LLVM smoke | yes | `make m2-two-hop` → `scripts/m2-two-hop.sh` a-ready + llvm-smoke |
+| Immutable source manifest (declared) | yes | `docs/plans/m2/source-manifest.txt` + `ladder.txt` |
+| A→B linked nextpas (L3) | **no** | ladder may stop before L3 |
+| B→C + equivalence | **no** | M2-3 |
+| Host self-compile module probes | **not** M2 evidence | `build/probe_self_compile_module.sh` forces host FPC assemble |
+
 Current focused fixtures are partial evidence for individual compiler/runtime contracts. A -> B -> C has not executed:
-the repository has not built a runnable stage A compiler-system bundle, used it to build stage B, then used
+the repository has not built a runnable stage B from A’s LLVM path over the declared closure, then used
 stage B to build and compare stage C.
 
 The `PHASE 0 COMPLETE` labels in the historical assessments below are archived assessments, not present

@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm m2-two-hop m2-a-ready m2-llvm-smoke m2-ladder focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -93,6 +93,24 @@ test-compiler-unit-fini-body: hygiene
 test-compiler-unit-lifecycle-llvm: hygiene
 	bash tests/regression/verify_compiler_unit_lifecycle_llvm.sh
 	$(MAKE) hygiene
+
+# --- M2 executable two-hop (excellence plan M2; not host self-compile probes) ---
+# REQUIRE: scripts force --toolchain-binding linux-x86_64-to-linux-x86_64-llvm.
+# Host self-compile / stage2-bootstrap module lists are NOT M2 evidence.
+# M2-0 green: m2-two-hop (a-ready + llvm-smoke). A→B only when ladder L3 closes.
+
+m2-two-hop: hygiene
+	bash scripts/m2-two-hop.sh --phase a-ready --phase llvm-smoke
+	$(MAKE) hygiene
+
+m2-a-ready:
+	bash scripts/m2-two-hop.sh --phase a-ready
+
+m2-llvm-smoke:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase llvm-smoke
+
+m2-ladder:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase ladder
 
 focused: hygiene
 	@test -n "$(FOCUS)" || { echo "FOCUS is required, e.g. make focused FOCUS=core/tests/nextpas.core.http/test_http_client" >&2; exit 1; }

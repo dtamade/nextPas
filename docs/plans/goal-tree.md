@@ -53,7 +53,7 @@
 |-----------|------|------|
 | M0 | compiler/System gate、rebuild 与状态真相恢复 | 🏗️ |
 | M1 | compiler/System bootstrap contract 收敛 | 🏗️ |
-| M2 | 最小可执行 A→B→C 两跳自举证明 | 🔲 |
+| M2 | 最小可执行 A→B→C 两跳自举证明 | 🏗️ |
 | M3 | session owner、stable IDs、immutable snapshots | 🔲 |
 | M4 | typed query + dependency-aware incremental | 🔲 |
 | M5 | deterministic parallel + data-oriented performance | 🔲 |
@@ -194,7 +194,11 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
      `unit_init` / `unit_fini` = semantic；
      `object_free` root/release + `runtime_fault` = backend evidence boundary；
      runtime-closure / 全表 `scelExecutable` = M1 之后。
-8. [ ] 进入 M2 A→B→C 两跳证明（M1 typed migration 已关账）。
+8. [ ] M2 A→B→C 两跳证明（进行中）
+   - [x] M2-0 harness：`docs/plans/m2/*` + `scripts/m2-two-hop.sh` + `make m2-two-hop`（a-ready + LLVM hello 基线；禁 host FPC 伪装）
+   - [ ] M2-1 LLVM 闭包阶梯 L1→L2
+   - [ ] M2-2 A→B 可执行（ladder L3 / source-manifest entry）
+   - [ ] M2-3 B→C + acceptance 子集 + 等价报告
 
 ---
 
@@ -220,6 +224,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-23 | M1 object_alloc + arr 归并 | class-new → sckObjectAlloc→np_object_alloc；field arr_alloc → sckHeapAlloc（scelHir） |
 | 2026-07-23 | M1 managed_record_fini | cleanup → sckManagedRecordFini marker + nested string/dynarray（scelHir） |
 | 2026-07-23 | M1 typed production families closed | vocabulary/semantic/backend residual 标 non-blocking；下一主线 M2 |
+| 2026-07-23 | M2-0 harness | source-manifest + ladder + `m2-two-hop.sh` + `make m2-two-hop`；A→B 未关闭 |
 
 ---
 
