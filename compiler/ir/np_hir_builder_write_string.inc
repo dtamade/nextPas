@@ -27,13 +27,21 @@ end;
 procedure THIRBuilder.ProcessWriteStr(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
+  Fd: Int64;
 begin
+  { Batch 27: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+  if SameText(ANode.DisplayName, 'WriteErr') then
+    Fd := 2
+  else
+    Fd := 1;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.IntrinsicName := 'write_str';
   Instr.CallTarget := ANode.Operand;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
   EmitInstr(Instr);
 end;
 
@@ -51,6 +59,7 @@ procedure THIRBuilder.ProcessWriteStrVar(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
   TsSlot, DataPtr, LenVal: THIRValueId;
+  Fd: Int64;
 begin
   TsSlot := FindAlloca(ANode.Operand + '$ts');
   if TsSlot = 0 then
@@ -61,14 +70,21 @@ begin
   if (DataPtr = 0) or (LenVal = 0) then
     Exit;
 
+  { Batch 27: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+  if SameText(ANode.DisplayName, 'WriteErr') then
+    Fd := 2
+  else
+    Fd := 1;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.IntrinsicName := 'write_str_var';
-  SetLength(Instr.Operands, 2);
+  SetLength(Instr.Operands, 3);
   Instr.Operands[0] := MakeTypedOperand(DataPtr, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[2] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
   EmitInstr(Instr);
 end;
 

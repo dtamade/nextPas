@@ -290,17 +290,34 @@ begin
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin
+        { Batch 27: optional Operands[0] = fd (default 1). }
         I := AddStrConstant(AInstr.CallTarget);
-        Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
-          ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
-          IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr @.str.' +
+            IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')')
+        else
+          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
+            IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
       end
       else if AInstr.IntrinsicName = 'write_str_var' then
       begin
+        { Batch 27: Operands[0]=data, [1]=len, optional [2]=fd (default 1). }
         if Length(AInstr.Operands) >= 2 then
         begin
-          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
-            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ')');
+          if Length(AInstr.Operands) >= 3 then
+            Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+              ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 ' +
+              ValueRef(AInstr.Operands[2].ValueId) + ', ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')')
+          else
+            Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+              ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
         end;
       end
       else if AInstr.IntrinsicName = 'string_owned_extract_ptr' then

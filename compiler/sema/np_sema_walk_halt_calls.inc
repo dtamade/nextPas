@@ -1726,6 +1726,9 @@ begin
           Arg := Child;
         if FNoFold then
         begin
+          { Batch 27: WriteLn(ErrOutput/StdErr, ...) maps host-free write to
+            fd 2; Output/StdOut stay fd 1. ArgName = Write | WriteErr. }
+          ArgName := 'Write';
           if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) then
             ArgIndex := 1
           else
@@ -1738,8 +1741,7 @@ begin
               Inc(ArgIndex);
               Continue;
             end;
-            { Batch 25: WriteLn(ErrOutput/Output, ...) — textfile handle is not
-              an integer payload; skip so we do not print leading "0". }
+            { Batch 25/27: textfile handle is not an integer payload. }
             if (RhsNode.NodeKind = gnkIdentifier) and
               (SameText(RhsNode.Text, 'ErrOutput') or
                SameText(RhsNode.Text, 'Output') or
@@ -1747,23 +1749,29 @@ begin
                SameText(RhsNode.Text, 'StdErr') or
                SameText(RhsNode.Text, 'Input')) then
             begin
+              if SameText(RhsNode.Text, 'ErrOutput') or
+                SameText(RhsNode.Text, 'StdErr') then
+                ArgName := 'WriteErr'
+              else if SameText(RhsNode.Text, 'Output') or
+                SameText(RhsNode.Text, 'StdOut') then
+                ArgName := 'Write';
               Inc(ArgIndex);
               Continue;
             end
             else if RhsNode.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
-                'write-string-runtime', 'Write', 0, 0,
+                'write-string-runtime', ArgName, 0, 0,
                 DecodePascalStringLiteral(RhsNode.Text)
               )
             else if EvaluateStringConstant(RhsNode, StringValue) then
               FModel.AddTypedHirNode(
-                'write-string-runtime', 'Write', 0, 0, StringValue
+                'write-string-runtime', ArgName, 0, 0, StringValue
               )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(RhsNode.Text) and
               not LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, RhsNode.Text
+                'write-str-var-runtime', ArgName, 0, 0, RhsNode.Text
               )
             else if (RhsNode.NodeKind = gnkFunctionCall) and
               (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
@@ -1772,11 +1780,11 @@ begin
               AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
             else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               )
             else if EmitOwnedStringConcatWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
@@ -1791,7 +1799,7 @@ begin
                 'assign-tstring-call-runtime', RhsNode.Text, 0, 0, Operand
               );
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               );
             end
             else if (RhsNode.NodeKind = gnkFunctionCall) and
@@ -1820,7 +1828,7 @@ begin
                   Operand + #9 + 'callee ' + RhsNode.Text
                 );
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               );
               EmitPendingStringTempReleases;
             end
@@ -1852,7 +1860,7 @@ begin
                     RhsNode.ChildAt(0).Text + #9 + IntToStr(Value)
                   );
                   FModel.AddTypedHirNode(
-                    'write-str-var-runtime', 'Write', 0, 0, Operand
+                    'write-str-var-runtime', ArgName, 0, 0, Operand
                   );
                 end;
               end
@@ -1877,7 +1885,7 @@ begin
                     IntToStr(Value)
                   );
                   FModel.AddTypedHirNode(
-                    'write-str-var-runtime', 'Write', 0, 0, Operand
+                    'write-str-var-runtime', ArgName, 0, 0, Operand
                   );
                 end;
               end;
@@ -1888,7 +1896,7 @@ begin
           end;
           if SameText(Child.Text, 'WriteLn') then
             FModel.AddTypedHirNode(
-              'write-string-runtime', 'Write', 0, 0, #10
+              'write-string-runtime', ArgName, 0, 0, #10
             );
           EmitPendingStringTempReleases;
           Continue;
