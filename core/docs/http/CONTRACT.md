@@ -690,15 +690,20 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
     在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
     修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
     其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
-- **Q3-3 / RH-1 H1 HTTPS**：
+- **Q3-3 / RH-1 / C-A H1 HTTPS**：
   - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
     见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。
   - **RH-1 连接复用**：根因 = `TTlsTcpStream` 未实现 `ITcpStreamRuntime` →
     `PooledConnectionIsReusable` 恒 false → 每请求 re-dial。已补 runtime 委托
     到 inner TCP；smoke 锁 `server_accepts=1` 且 N keep-alive GET。
-  - **Server `THttpServerOptions.TLSContext`**：**registry 仅选 H2 TLS transport**
-    （`TLS HTTP server currently requires HTTP/2`）；**不是** H1 HTTPS 服务器
-    产品入口。Q3-3 smoke origin 用 `NewTlsServerTcpStream` 最小 H1 TLS 源。
+  - **Server `THttpServerOptions.TLSContext`**：**产品路径**按版本 wrap：
+    - **H1**（默认 / `hvHttp10`/`hvHttp11`）：`NewH1TlsServerTransport` →
+      TLS accept + ALPN `http/1.1`（空 ALPN 兼容）→ 内层 H1 serve
+      （`test_http_h1_tls_server`）。
+    - **H2**：`NewH2TlsServerTransport` → ALPN `h2` 强制
+      （`test_http_h2_tls_alpn`）。
+  - Q3-3 smoke origin 仍可用最小 `NewTlsServerTcpStream` 字节源做 client
+    latency 测；产品 server 入口是 `NewHttpServer` + `TLSContext`。
   - **仍不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
 - Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
   `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /

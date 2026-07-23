@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-23（**Era D0** doc-truth hygiene；HS Done 维持；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-23（**Era C-A** H1 HTTPS server product path；HS Done 维持；package **仍 No**；默认 **STOP**）
 
 ---
 
@@ -121,7 +121,9 @@ CHECKPOINT（不阻塞续波）:
 | Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
 | Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped；package **仍 No** |
 | Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness；package **仍 No** |
-| **下一执行点** | **STOP**（D0 doc-truth landed；H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
+| Wave D0 doc-truth | **landed** — residual/路径/双状态 hygiene |
+| Wave C-A H1 HTTPS server | **landed** — `NewH1TlsServerTransport` + registry；`test_http_h1_tls_server` |
+| **下一执行点** | **STOP**（C-A landed；H2 Seal Met；升 package 须产品 Yes / HS-2a；H3 Blocked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -162,6 +164,7 @@ S1:  Server scale foundation（epoll 连接/吞吐）  ← done
 S2:  H1 hot path（分配/fast path）  ← done
 S3:  H2 server scale  ← done
 Q2 / E / Q3 / H2P / R / HS:  收口 + 证据 + Seal  ← done
+D0 / C-A:  doc-truth + H1 HTTPS server product path  ← done
 ──── 当前 ────
 NEXT = STOP（idle；升 package 须产品 Yes → HS-2a；H3 Blocked）
 ```
@@ -898,7 +901,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Parity Plus + RH-1 + H2P-1..3 + R1 + **HS-0/HS-1 Met**
 2. H2 peer multi-run：mid **1.86×** / press **0.93×**（runs=3）
-3. **D0 doc-truth** landed（2026-07-23）：stale residual/路径/双状态已清
+3. **D0 doc-truth** + **C-A H1 HTTPS server** landed（2026-07-23）
 4. H3 Blocked — 跳过；禁止空 facade
 5. **NEXT = STOP**（idle；升 package 须产品 Yes → HS-2a）
 6. 无指令时不要空转 H3 / 不要假 package scale-ready
@@ -917,6 +920,16 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | **D0** | **landed** | 对齐 live residual 与证据：API_COVERAGE R4 0 unfreed；GOAL_TREE p99 Met；README 路径/H2/cancel；ARCHITECTURE 库存；ROADMAP 推荐路径去「Q0 当前」；Era X residual 表 R4；Makefile side 列表；REPRO tls_real side 标注 |
 
 **D0 Done when**：docs 无 live 假 residual（1×41B / p99 Partial / ~50ms cancel / examples 错路径 / Q0 当前）；NEXT 仍 STOP。 **Met (2026-07-23).**
+
+---
+
+## Era C-A — H1 HTTPS server product path
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-A** | **landed** | `impl.h1.tls`：TLS accept → ALPN `http/1.1` → 内层 H1；registry `CreateH1ServerTransport` 对称 H2 wrap；`test_http_h1_tls_server`；docs 去 H2-only residual |
+
+**C-A Done when**：`NewHttpServer` + `TLSContext` 默认 H1 可 HTTPS e2e；source-contract 无 H2-only raise；HTTPS scale **仍 No**。 **Met (2026-07-23).**
 
 ---
 
@@ -939,6 +952,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-23 | **C-A landed**：H1 HTTPS server product path（`NewH1TlsServerTransport` + registry + focused gate）；package No；NEXT=STOP |
 | 2026-07-23 | **D0 landed**：doc-truth hygiene（R4/p99/路径/H2/cancel/ARCHITECTURE/推荐路径/Makefile/REPRO）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |
 | 2026-07-21 | **HS-0 landed**：H2 peer KPI 冻结（mid/press ≥0.80× multi-run；self 3× Dropped）；package No；NEXT=HS-1 |

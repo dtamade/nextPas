@@ -40,6 +40,7 @@ PROJECTS := \
 	test_http_h2_client \
 	test_http_h2_facade \
 	test_http_h2_tls_alpn \
+	test_http_h1_tls_server \
 	test_http_soak \
 	test_http_q3_matrix \
 	test_http_https_smoke \

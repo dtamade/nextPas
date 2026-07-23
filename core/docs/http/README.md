@@ -40,7 +40,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → **Basic only**), `WithTLSContext` |
 | Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap；pool reuse after RH-1) |
-| HTTPS **server** | `THttpServerOptions.TLSContext` → **registry selects H2 TLS only**（not H1 HTTPS server）；see CONTRACT residual |
+| HTTPS **server** | `THttpServerOptions.TLSContext` → H1: `NewH1TlsServerTransport`（ALPN `http/1.1`）；H2: `NewH2TlsServerTransport`（ALPN `h2`） |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |

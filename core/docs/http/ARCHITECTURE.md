@@ -23,13 +23,14 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实源码库存约 **60** 个 `nextpas.core.http*` 单元；测试目录约 **45** 个；主 Makefile **PROJECTS = 39** 正确性门禁（side：benchmarks/examples/smoke/integration/tls_real/mem 等）。
+- 当前真实源码库存约 **61** 个 `nextpas.core.http*` 单元；测试目录约 **46** 个；主 Makefile **PROJECTS = 40** 正确性门禁（side：benchmarks/examples/smoke/integration/tls_real/mem 等）。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
   - client transport (`h2.client.pas`, 1569 行)：client preface/SETTINGS handshake、同步 RoundTrip、
     连接池（MaxPoolSize governed）、stale pooled connection retry、GOAWAY/PING 处理
-  - TLS wrapper (`h2.tls.pas`)：ALPN `h2` 协商、session factory 传递
+  - TLS wrapper (`h1.tls.pas` / `h2.tls.pas`)：按版本 ALPN + session factory 传递
+    （H1=`http/1.1`，H2=`h2`）
   - TLS stream (`impl.tls.stream.pas`)：`TTlsTcpStream`（`ITcpStream` + `ISSLStream`）
   - RFC 9113 合规：HPACK table-size rules、MaxHeaderListSize enforcement、trailer handling、GOAWAY last-stream tracking、MaxConcurrentStreams enforcement
   - 性能：HPACK MRU cache、4-bit nibble Huffman decode、DecodeView zero-refcount path、TH2StreamMap RemoveByIndex
@@ -204,10 +205,11 @@ src/
   nextpas.core.http.impl.h2.client.pas        ← H2 client transport（RoundTrip、连接池、GOAWAY、stale retry）
   nextpas.core.http.impl.h2.server.pas        ← H2 server transport factory（IHttpServerSessionFactory）
   nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
+  nextpas.core.http.impl.h1.tls.pas           ← H1 TLS wrapper（ALPN http/1.1 + session factory）
 
   { TLS 集成 }
   nextpas.core.http.impl.tls.stream.pas       ← TLS TCP stream（ITcpStream + ISSLStream + ALPN）
-  nextpas.core.tls.http2.alpn.pas             ← H2 ALPN 协议常量 + SSLConnectionPool
+  nextpas.core.tls.http2.alpn.pas             ← H2/H1 ALPN 协议常量 + SSLConnectionPool
 ```
 
 H3 仍未进入实现（仅有 QUIC crypto primitives）。H2 已完整落地并注册到 registry。
@@ -371,7 +373,7 @@ http.middleware ← http.intf
 http.server     ← http.base, http.intf, net.base, net.intf, net.server, impl.registry
 http.client     ← http.base, http.intf, io, text, impl.registry
 
-impl.registry   ← http.base, http.intf, impl.h1, impl.h2.server, impl.h2.client, impl.h2.tls
+impl.registry   ← http.base, http.intf, impl.h1, impl.h1.tls, impl.h2.server, impl.h2.client, impl.h2.tls
 impl.h1.*       ← http.base, http.intf, net, io, text
 impl.h2.*       ← http.base, http.intf, net, tls, io, text
 impl.h3.*       ← planned: http.intf, quic, io, collections
@@ -424,7 +426,8 @@ Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真
 + impl.h2.session — server session（preface、SETTINGS、frame dispatch、poll-driven）
 + impl.h2.client — client transport（RoundTrip、连接池、GOAWAY、stale retry）
 + impl.h2.server — server transport factory
-+ impl.h2.tls — TLS ALPN wrapper
++ impl.h2.tls — H2 TLS ALPN wrapper
++ impl.h1.tls — H1 TLS ALPN wrapper
 + impl.tls.stream — TLS TCP stream wrapper
 + tls.http2.alpn — ALPN 协议常量
 + registry 扩展到 H2 默认解析 / ALPN 接线

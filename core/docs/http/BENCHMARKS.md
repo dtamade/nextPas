@@ -364,8 +364,9 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_https_smoke
 
 **Honest residuals**
 
-- Origin is minimal `NewTlsServerTcpStream` H1 TLS；`THttpServer` + `TLSContext`
-  registry path is **H2-only** residual.
+- Origin is minimal `NewTlsServerTcpStream` H1 TLS for Q3-3 latency harness.
+  Product path: `THttpServer` + `TLSContext` → `NewH1TlsServerTransport` (C-A;
+  `test_http_h1_tls_server`).
 - **Not** Scale-ready (HTTPS). KPI remains plain H1 epoll.
 
 #### Q3-1 Soak leak evidence (2026-07-20)

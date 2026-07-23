@@ -31,7 +31,7 @@
 | 宣称 | 状态 | 原因 |
 |------|------|------|
 | Scale-ready (H1/**H2** package) | **No** | Peer KPI **HS-0 冻结** + multi-run mid **1.86×** / press **0.93× Met (HS-1)**；仍缺 **产品 Yes**（HS-2a）；见 `BENCHMARKS` § H2 KPI |
-| Scale-ready (HTTPS H1) | **No** | H1 HTTPS 非产品 server 入口（registry TLS→H2）；client smoke ≠ scale |
+| Scale-ready (HTTPS H1) | **No** | 产品 H1 HTTPS server 已通（C-A）；**无** HTTPS RPS/p99 KPI；client smoke ≠ scale |
 | Scale-ready (HTTPS H2) | **No** | H2P-3 正确性 e2e（ALPN `h2`）已绿；**无** HTTPS H2 RPS/p99 KPI |
 | H3 ready | **No** | Blocked on QUIC；禁止空 facade |
 | Windows scale-ready | **No** | scale KPI 与 epoll 路径以 Linux 为准；cancel residual 见 CONTRACT |
@@ -59,7 +59,7 @@
 | H2 peer self press/mid≥3× | **Dropped (HS-0)** — H2-opt 后双方高吞吐 CPU-bound，自比 ~1.05× 不再作门 |
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed；OpenSSL per-conn ALPN |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`）；H1 client smoke `accepts=1` for N GETs |
-| H1 `THttpServer`+`TLSContext` | registry **仅 H2 TLS**；H1 HTTPS server 非产品入口 |
+| H1 `THttpServer`+`TLSContext` | **C-A Met** — `NewH1TlsServerTransport`；`test_http_h1_tls_server` |
 | Windows cancel | probe-only residual（R3） |
 | H3 | Blocked |
 | Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99（nearest-rank）；仍非 scale KPI |
