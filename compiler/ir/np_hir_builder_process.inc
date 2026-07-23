@@ -609,7 +609,9 @@ var
   Instr: THIRInstr;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
+  { void runtime helpers: ResultId must stay 0 so LLVM emits call void, not
+    call i64 (EmitCallInstr upgrades void→i64 when ResultId is assigned). }
+  Instr.ResultId := 0;
   Instr.Kind := hikCall;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.CallTarget := 'np_process_init';
@@ -621,7 +623,7 @@ var
   Instr: THIRInstr;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
+  Instr.ResultId := 0;
   Instr.Kind := hikCall;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.CallTarget := 'np_process_fini';

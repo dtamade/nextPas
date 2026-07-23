@@ -11,8 +11,8 @@ into readiness claims or public ABI.
 <!-- ledger-table:start -->
 | Contract | Evidence level | Source / semantic evidence | Runtime mapping | Focused evidence | Current boundary |
 | --- | --- | --- | --- | --- | --- |
-| `np.system.process_init` | HIR | `System.np_process_init`; process-start contract | `np_process_init` | `test_process_lifecycle` | Runtime execution deferred |
-| `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` | Runtime execution deferred |
+| `np.system.process_init` | HIR | `System.np_process_init`; process-start contract | `np_process_init` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
+| `np.system.process_fini` | HIR | `System.np_process_fini`; process-fini contract | `np_process_fini` | `test_process_lifecycle` (+ `test_process_lifecycle_llvm`) | Runtime execution deferred; HIR/LLVM call evidence only (see footnote) |
 | `np.system.unit_init` | semantic | System unit initialization | unit-specific init entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
 | `np.system.unit_fini` | semantic | System unit finalization | unit-specific fini entry | `test_semantic_runtime_contract_seed` | No executable ordering proof |
 | `np.system.halt` | backend | `halt-call-runtime` | backend halt lowering | `test_hir_node_kind` | Backend-specific lowering |
@@ -39,6 +39,12 @@ into readiness claims or public ABI.
 | `np.system.exception_finally_end` | backend | finally-end runtime contract | `np_finally_end` | `test_hir_exception` | No executable unwind proof |
 | `np.system.exception_except_end` | backend | except-end runtime contract | `np_except_end` | `test_hir_exception` | No executable unwind proof |
 <!-- ledger-table:end -->
+
+> **Footnote (D3, 2026-07-23)**: `process_init` / `process_fini` focused HIR/LLVM call evidence
+> (`test_process_lifecycle`, `test_process_lifecycle_llvm`) proves `_start` call/declare void shape only.
+> It does **not** prove full runtime business init, host-free executable lifecycle, or justify
+> elevating the typed ledger past `scelHir`. Coverage boundary remains **Runtime execution deferred**.
+
 
 ## Backend-Private Helper Names (NOT Public ABI)
 
@@ -131,22 +137,31 @@ any diagnostic.
 
 ### Risk 3: Process/Unit Lifecycle Execution Gap
 
-**Description**: Process lifecycle has semantic seed proof (`test-process-runtime-contract-seed`)
-but no runtime execution proof. Unit lifecycle (`np.system.unit_init`, `np.system.unit_fini`)
-has semantic contract evidence but no executable ordering proof. This means the compiler can
-name lifecycle contracts but cannot yet prove runtime initialization/finalization ordering.
+**Description**: Process lifecycle has HIR/LLVM call-shape evidence
+(`test_process_lifecycle`, `test_process_lifecycle_llvm`) but no full runtime business-init
+proof and no `scelExecutable` ledger elevation. Unit lifecycle (`np.system.unit_init`,
+`np.system.unit_fini`) has semantic contract evidence but no executable ordering proof.
+The compiler can name and lower lifecycle contracts without proving host-free process
+business initialization or multi-unit ordering.
 
 **Current mitigations**:
-- `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for program/library/package roots.
-- Integration smoke via `build/verify_local.sh` is partial compiler-to-executable evidence; it does not
-  prove the A -> B -> C bootstrap chain or lifecycle ordering.
-- Unit lifecycle is explicitly deferred until the compiler has a UnitGraph consumption path.
+- `np.system.process_init` / `np.system.process_fini` are seeded as HIR nodes for
+  program/library/package roots and lower to `_start` calls.
+- Focused HIR proof: `compiler/tests/test_process_lifecycle.pas` — `_start` contains
+  `np_process_init` / `np_process_fini` call targets when lifecycle typed nodes are present.
+- Focused LLVM proof: `compiler/tests/test_process_lifecycle_llvm.pas` — IR contains
+  `declare void @np_process_init/fini` and `call void @np_process_init/fini` (void form,
+  single fini; re-verified 2026-07-23 after builder ResultId=0 + emitter fini-dedupe fix).
+- Phase 0 runtime helper exists (`rtl/runtime/src/nextpas.runtime.lifecycle.ll`: state flag +
+  fsync only). This is **not** full process business init (no unit table / heap / ExitProc).
+- Unit lifecycle remains deferred for executable ordering proof.
 
 **What remains**:
-- No runtime execution of `np.system.process_init` / `np.system.process_fini` beyond the inline
-  syscall path (halt-based programs).
-- No unit initialization/finalization ordering at all.
+- No host-free end-to-end executable proof that runtime helpers run as full business init.
+- No unit initialization/finalization ordering at executable level.
 - No runtime fault classification (`np.system.runtime_fault`) beyond partial allocator/dynarray evidence.
+- Ledger stays `scelHir` / coverage boundary **Runtime execution deferred** — HIR/LLVM call
+  evidence ≠ full runtime business init; do not treat as self-host complete.
 
 **Severity**: Low for current scope (deferred to future compiler/runtime integration) — but high
 for self-hosting target.

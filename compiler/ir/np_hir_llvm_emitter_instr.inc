@@ -248,7 +248,7 @@ begin
       begin
         FNeedsProcessLifecycle := True;
         if FProcessFiniEmitted then
-          Exit; // already emitted before halt syscall
+          Exit; // already emitted (HIR node or halt-path inject)
         // Before process_fini, emit unit fini calls in reverse order
         if not FUnitFiniCallsEmitted then
         begin
@@ -256,6 +256,7 @@ begin
           FUnitFiniCallsEmitted := True;
         end;
         EmitCallInstr(AInstr);
+        FProcessFiniEmitted := True;
       end
       else
         EmitCallInstr(AInstr);

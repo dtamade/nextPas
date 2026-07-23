@@ -350,9 +350,9 @@ typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 
 
 **当前 residual（相对 M0 权威）**:
 1. ledger 仍为 `scelHir`；coverage 边界仍是 **Runtime execution deferred**（有 Phase 0 helper ≠ 全量 process 业务 init 证明）
-2. halt / 关闭路径与 process_fini 的端到端关系需 focused 再验（历史笔记称部分路径可能 syscall 直出）
+2. **D3 再验（2026-07-23）**：`test_process_lifecycle` + `test_process_lifecycle_llvm` 绿；IR 为 `call void @np_process_init/fini`（曾回归为 `call i64` + 双 fini，已最小修复）。**仍不是** host-free 端到端业务 init 证明
 3. 无 A→B→C / self-host 证明；**禁止**把历史 PHASE 0 勾选读成生产就绪
-4. 下一刀优先：补/跑 focused 证据脚注，而不是抬 ledger 或开 M2-A
+4. 下一刀可选：unit_init/fini ordering 脚注/负向证据，**禁止**抬 ledger / M2-A
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 
