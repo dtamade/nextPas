@@ -6,6 +6,7 @@ uses
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.http.base;
 
 var
@@ -549,6 +550,37 @@ begin
     'Production keeps Default MaxBodySize');
 end;
 
+procedure TestServerDefaultVsProductionSourceContract;
+{ PD-0/PD-1A: Default RW=0 is test-compat; Production finite RW;
+  arena convenience factory must not inherit unbounded RW. }
+var
+  LBase, LFacade, LServer, LContract, LReadme: string;
+begin
+  LBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
+  LFacade := ReadFileText('../../../src/nextpas.core.http.pas');
+  LServer := ReadFileText('../../../src/nextpas.core.http.server.pas');
+  LContract := ReadFileText('../../../docs/http/CONTRACT.md');
+  LReadme := ReadFileText('../../../docs/http/README.md');
+  Check(Pos('Result.ReadTimeout := 0;', LBase) > 0,
+    'Default ReadTimeout stays 0 in base');
+  Check(Pos('Result.WriteTimeout := 0;', LBase) > 0,
+    'Default WriteTimeout stays 0 in base');
+  Check(Pos('Result.ReadTimeout := 30000;', LBase) > 0,
+    'Production ReadTimeout 30000 in base');
+  Check(Pos('Result.WriteTimeout := 30000;', LBase) > 0,
+    'Production WriteTimeout 30000 in base');
+  Check(Pos('THttpServerOptions.Default', LServer) > 0,
+    'NewHttpServer(handler) still uses Default (compat)');
+  Check(Pos('THttpServerOptions.Production.WithRequestArena', LFacade) > 0,
+    'arena convenience factory bases on Production');
+  Check(Pos('Production', LContract) > 0, 'CONTRACT documents Production');
+  Check(Pos('ReadTimeout', LContract) > 0, 'CONTRACT mentions ReadTimeout');
+  Check(Pos('Production checklist', LReadme) > 0,
+    'README has Production checklist section');
+  Check(Pos('THttpServerOptions.Production', LReadme) > 0,
+    'README points Production for servers');
+end;
+
 procedure TestHttpOptionsWithVersion;
 var
   LClientOptions: THttpClientOptions;
@@ -648,6 +680,8 @@ begin
     @TestHttpClientOptionsWithTLSContextFluent);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Test('THttpServerOptions.Production', @TestHttpServerOptionsProduction);
+  T.Test('Server Default vs Production source-contract (PD-0/1A)',
+    @TestServerDefaultVsProductionSourceContract);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);
   T.Test('HTTP options WithMaxRedirects', @TestHttpOptionsWithMaxRedirects);

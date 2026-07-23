@@ -228,6 +228,8 @@ end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
+  { Compat/test default: THttpServerOptions.Default (RW=0). For production,
+    pass THttpServerOptions.Production or explicit timeouts. }
   Result := THttpServer.Create(AHandler, THttpServerOptions.Default);
 end;
 

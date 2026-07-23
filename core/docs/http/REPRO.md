@@ -62,6 +62,19 @@ make -C benchmarks/nextpas.core.http/bench_server build
 **读数**：`p50_ns=` / `p99_ns=` / `mean_ns=`；summary 的 `median_p50_ns=` / `median_p99_ns=`。
 **门闩（E2）**：nextPas p99 ≤ **2×** Go p99（同 workload / 同机）。
 
+### 2.1 如何读 latency（PD-2）
+
+| 字段 | 含义 |
+|------|------|
+| `p50_ns` / `p99_ns` / `mean_ns` | **client-observed** nearest-rank percentile（与 Go harness 对齐） |
+| `latency_samples=` | 参与分位的样本数（通常 = completed） |
+| multi-run `median_*` | 对多次 run 的 p50/p99 **再取中位**（抗单次噪声） |
+| p99 ratio | nextPas_p99 / Go_p99；scale-ready 要求 **≤ 2.0** |
+| 诚实差 | nextPas `header_plus_content_length` vs Go `http_client_body_drain`（见 BENCHMARKS § E1） |
+
+**不要**：把单次 short sample 当 scale-ready 证据；用 H2 mid RPS ÷ H1 multi-conn RPS；跨机对比。
+**要**：官方 shape + runs≥3 时看 summary gate 行；1h 复核走本节 + §1。
+
 ---
 
 ## 3. 连接阶梯 1k / 10k idle（S1-3）

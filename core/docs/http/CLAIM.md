@@ -99,6 +99,7 @@
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`） |
 | H1 `THttpServer`+`TLSContext` | **C-A Met** — `NewH1TlsServerTransport` |
 | Windows cancel | probe-only residual（R3） |
+| Server `Default` RW=0 | **Keep**（PD-0/1A）— 测试兼容；生产用 `THttpServerOptions.Production` |
 | H3 | Blocked |
 | Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99；仍非 scale KPI |
 | `test_http_tls_real` | **Met (2026-07-21)** — 5/5 0 unfreed |

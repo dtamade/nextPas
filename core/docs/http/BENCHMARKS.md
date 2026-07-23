@@ -273,6 +273,7 @@ on the client threads, then reports nearest-rank percentiles.
 | 2026-07-20 L1 | `no_url` 20k×4 | epoll | 47640 | 58418 | 178376 | 78501 | 20000 |
 
 Markers: `p50_ns=`, `p99_ns=`, `mean_ns=`, `latency_samples=`.
+**How to read**：[`REPRO.md`](REPRO.md) §2.1（PD-2）— client-observed vs multi-run median；p99 ≤2× Go.
 
 #### E1 Go comparator p50/p99 (same harness)
 

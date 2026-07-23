@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-23（**HS-2a** package Yes + **C-D-claim** HTTPS H2 scale Yes + **C-H1** HTTPS H1 scale Met；默认 **STOP**）
+**Updated**: 2026-07-23（**Era PD** PD-0/1A/2 Met；默认 **STOP**）
 
 ---
 
@@ -127,7 +127,10 @@ CHECKPOINT（不阻塞续波）:
 | Wave C-D HTTPS H2 scale KPI | **landed** — evidence mid **2.57×** / press **3.03× Met** |
 | Wave C-D-claim HTTPS H2 scale | **landed** — 产品 Yes → *Scale-ready (HTTPS H2)* |
 | Wave C-H1 HTTPS H1 scale KPI | **landed** — `run_h1_tls_comparison.sh`；`no_url` **2.10×** / `response_1k` **2.13× Met** |
-| **下一执行点** | **STOP**（package + HTTPS H1/H2 scale Yes；H3 Blocked） |
+| Wave PD-0 Production honesty | **landed** — checklist + residual + source-contract |
+| Wave PD-1A Production guidance | **landed** — Default RW Keep；Production/arena 锁 |
+| Wave PD-2 Latency readbook | **landed** — REPRO §2.1 + BENCHMARKS 指针 |
+| **下一执行点** | **STOP**（Era PD 默认路径 Met；PD-3 parked） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -906,18 +909,68 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 + H2P + R1 + HS-0/HS-1 + D0 + C-A + C-D 全 Met
-2. **HS-2a** package claim Yes（产品 Yes + HS-1 multi-run）
-3. **C-D-claim** *Scale-ready (HTTPS H2)* Yes（产品 Yes + C-D 2.57×/3.03×）
-4. **C-H1** *Scale-ready (HTTPS H1)* Yes（20k×4 multi-run 2.10×/2.13×）
-5. H3 Blocked — 跳过；禁止空 facade
-6. **NEXT = STOP**（idle）
-7. 无指令时不要空转 H3 / 不要发明跨机榜
+1. Scale 战役已 Met：HS-2a package + C-D-claim HTTPS H2 + C-H1 HTTPS H1
+2. **Era PD 默认路径 Met**：PD-0 + PD-1A + PD-2
+3. H3 Blocked — 跳过；禁止空 facade
+4. **NEXT = STOP**（idle）；PD-3 / PX / Windows scale 需再升格
+5. 无指令时不要空转 H3 / 不要发明跨机榜
 ```
 
 **默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)（H1、H1+H2 package、HTTPS H1、HTTPS H2）。
 
-新大块工作：须先经产品决策写入本文件有序 Era/Wave，再开波；禁止 Inbox 直做。
+新大块（PD-3 / PX / H3 / Windows scale）：须先产品升格有序 Wave；禁止 Inbox 直做。
+
+---
+
+## Era PD — Production Defaults & Depth
+
+**目标**：在 scale 宣称已 Met 后，收敛**生产默认诚实**与 **latency 可读**——不改 H3、不扩企业代理、不改 Default RW 数值（策略 A）。
+
+**推荐路径**：`PD-0 → PD-1A → PD-2`（PD-3 可选，需再升格）
+
+### Wave PD-0 — Production honesty（契约 / 清单 / source-contract）
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | README 生产 checklist；CLAIM residual 钉 Default RW Keep；CONTRACT/README 对齐；source-contract 锁 Production vs Default + arena 工厂走 Production；示例勿裸 Default 当生产模板 |
+| **Don't** | 改 `Default` Read/Write 数值；改 scale KPI；开 H3 / 企业代理 |
+| **Done when** | docs 一致；`test_http_base` source-contract 绿；示例 production 路径用 Production 或显式有限 RW |
+| **Gates** | `make focused FOCUS=core/tests/nextpas.core.http/test_http_base`；`git diff --check`；hygiene |
+| **Land paths** | `core/docs/http/**`；`core/tests/nextpas.core.http/test_http_base/**`；`core/examples/nextpas.core.http/**`；必要 `core/src/nextpas.core.http*.pas` 注释 |
+| **Status** | **landed** |
+| **Next** | PD-1A |
+
+### Wave PD-1A — Production guidance（不改 Default 数值）
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | 保持 `THttpServerOptions.Default` RW=0；`NewHttpServer(Handler)` 仍 Default（测试兼容）+ 源码注释；`NewHttpServerWithRequestArena` 继续 Production；focused 锁 Production 非零 RW |
+| **Don't** | PD-1B（把 Default 改成 Production 同量级）— 本波不选 |
+| **Done when** | 工厂语义可辩护；Production 测 + source-contract 绿 |
+| **Gates** | `test_http_base`；hygiene |
+| **Status** | **landed** |
+| **Next** | PD-2 |
+
+### Wave PD-2 — Latency readbook
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | REPRO 专节「如何读 p50/p99」；与 BENCHMARKS L1/E1/E3 口径指针对齐；不改门闩阈值 |
+| **Don't** | 跨机榜；Rust 当 scale KPI；改 0.80× / 2× 门闩 |
+| **Done when** | 1h 内可按 REPRO 复核 latency 数字；无新 forbidden 宣称 |
+| **Gates** | docs + hygiene（可选 smoke-tls） |
+| **Status** | **landed** |
+| **Next** | STOP 或 PD-3（需升格） |
+
+### Wave PD-3 — 生产深度 backlog（**parked** until promote）
+
+| 候选 | 备注 |
+|------|------|
+| Server IdleTimeout vs client IdleTTL 对照表 + 抽查 | 契约化 |
+| 长连接/大 body 真缺口（在 Q1-4 之上） | 有测才动 |
+| Windows cancel wake（platform/net） | 跨模块 |
+
+**Era PD Done when**：PD-0 + PD-1A + PD-2 landed；H3 仍 Blocked。 **Met (2026-07-23).**
 
 ---
 
@@ -994,6 +1047,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-23 | **Era PD landed**：PD-0 honesty + PD-1A Default Keep + PD-2 latency readbook；NEXT=STOP |
+| 2026-07-23 | **Era PD open**（产品授权）：PD-0 honesty → PD-1A guidance → PD-2 latency readbook；Default RW **Keep**；NEXT=PD-0 |
 | 2026-07-23 | **HS-2a + C-D-claim + C-H1 landed**：package Yes；HTTPS H2 scale Yes；HTTPS H1 multi-run **2.10× / 2.13× Met**；NEXT=STOP |
 | 2026-07-23 | **C-D landed**：HTTPS ALPN h2 peer multi-run mid **2.57×** / press **3.03× Met**；`--tls` harness；当时 package No |
 | 2026-07-23 | **C-A landed**：H1 HTTPS server product path（`NewH1TlsServerTransport` + registry + focused gate）；package No；NEXT=STOP |

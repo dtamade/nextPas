@@ -1056,6 +1056,8 @@ end;
 
 class function THttpServerOptions.Default: THttpServerOptions;
 begin
+  { Test/compat defaults: unbounded Read/Write (0). Production servers must
+    use Production or explicit WithReadTimeout/WithWriteTimeout — not bare Default. }
   Result.Backend := tsbThreaded;
   Result.ReadTimeout := 0;
   Result.WriteTimeout := 0;
@@ -1073,6 +1075,7 @@ end;
 
 class function THttpServerOptions.Production: THttpServerOptions;
 begin
+  { Finite Read/Write for production templates (PD-1A: keep Default RW=0). }
   Result := Default;
   Result.ReadTimeout := 30000;
   Result.WriteTimeout := 30000;

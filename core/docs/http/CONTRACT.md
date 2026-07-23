@@ -204,13 +204,15 @@ end;
 | `Timeout` | socket 就绪后 request 读/写 | 无界（仅测试/工具） | options / `WithTimeout` / builder / request options |
 | `ConnectTimeout` | OS `connect` + 新连接首写 | 回退到 `Timeout`（`Timeout` 亦 0 则无界） | options / `WithConnectTimeout`（rebuild） |
 
-**Default vs Production**：
+**Default vs Production**（PD-0 诚实锁）：
 
 | 载体 | Default | Production / 生产建议 |
 |------|---------|----------------------|
 | `THttpClientOptions` | `Timeout=30000`，`ConnectTimeout=0` | 保持 Default 或显式有限 `WithTimeout`；勿依赖 cancel-only |
-| `THttpServerOptions` | Read/Write=**0**（测兼容） | **`Production`** Read/Write=30000；Idle  alone 不足 |
+| `THttpServerOptions` | Read/Write=**0**（**测试兼容 Keep**；非生产安全默认） | **`Production`** Read/Write=30000；或 `WithReadTimeout`/`WithWriteTimeout`；Idle alone 不足 |
 | `TWebSocketOptions` | ConnectTimeout=Timeout=30000 | 同 Default；`=0` 仅显式无界 |
+
+**工厂**：`NewHttpServer(Handler)` → `Default`（兼容）；`NewHttpServerWithRequestArena`（无 options）→ **Production** + RequestArena。生产 checklist 见 `README.md` § Production checklist。
 
 ### 2.2.0a Net-dependent capabilities
 

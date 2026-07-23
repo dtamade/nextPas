@@ -17,6 +17,21 @@ middleware chaining, and a centralized internal transport registry.
 | [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
 | [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
+## Production checklist（PD-0）
+
+复制粘贴生产服务时按此表，**不要**把测试默认当生产模板：
+
+| 项 | 做 | 别做 |
+|----|----|------|
+| Server options | `THttpServerOptions.Production` 或显式 `WithReadTimeout` / `WithWriteTimeout` | 裸 `THttpServerOptions.Default`（RW=0 无界，仅测试兼容） |
+| Server 工厂 | `NewHttpServer(handler, Production…)`；arena 便利工厂已走 Production | 以为 `NewHttpServer(handler)` 已是生产安全 |
+| Client options | `Default.Timeout=30000` 或 `WithTimeout` | 只挂 cancel、不设 Timeout 当唯一模板 |
+| Keep-alive | 默认开（INV-1）；长连接写失败见 CONTRACT §4.4 | 用 IdleTimeout **alone** 当完整生产模板 |
+| TLS | `TLSContext` + H1/H2 产品路径（C-A / H2P-3） | 空 facade / 假 H3 |
+| 宣称 | 只说 [`CLAIM.md`](CLAIM.md) 允许句 | Windows scale / 跨机榜 / H1÷H2 RPS package KPI |
+
+细节权威：[`CONTRACT.md`](CONTRACT.md) §2.2 Default vs Production。
+
 ## Architecture
 
 ```
