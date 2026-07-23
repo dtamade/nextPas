@@ -17,20 +17,21 @@ middleware chaining, and a centralized internal transport registry.
 | [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
 | [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
-## Production checklist（PD-0）
+## Production checklist（PD-0 / PD-1B）
 
-复制粘贴生产服务时按此表，**不要**把测试默认当生产模板：
+复制粘贴生产服务时按此表：
 
 | 项 | 做 | 别做 |
 |----|----|------|
-| Server options | `THttpServerOptions.Production` 或显式 `WithReadTimeout` / `WithWriteTimeout` | 裸 `THttpServerOptions.Default`（RW=0 无界，仅测试兼容） |
-| Server 工厂 | `NewHttpServer(handler, Production…)`；arena 便利工厂已走 Production | 以为 `NewHttpServer(handler)` 已是生产安全 |
-| Client options | `Default.Timeout=30000` 或 `WithTimeout` | 只挂 cancel、不设 Timeout 当唯一模板 |
-| Keep-alive | 默认开（INV-1）；长连接写失败见 CONTRACT §4.4 | 用 IdleTimeout **alone** 当完整生产模板 |
+| Server options | `THttpServerOptions.Production`（或 Default，PD-1B 后 RW 同为 30s） | 长轮询/SSE 忘了 `WithReadTimeout(0)` 导致 30s 断流 |
+| Server 工厂 | `NewHttpServer(handler, Production…)`；arena 便利工厂已走 Production | 用 IdleTimeout **alone** 当完整模板 |
+| Client options | `Default.Timeout=30000` 或 `WithTimeout`；池淘汰见 IdleTTL | 只挂 cancel、不设 Timeout 当唯一模板 |
+| Idle 对照 | server IdleTimeout（默认 30s）≠ client IdleTTL（默认 90s） | 把两个旋钮当成同一个 |
+| Keep-alive | 默认开（INV-1）；长连接写失败见 CONTRACT §4.4 | 大 body / 背压缺口已有 Q1-4 + 413 矩阵，勿空写 KPI |
 | TLS | `TLSContext` + H1/H2 产品路径（C-A / H2P-3） | 空 facade / 假 H3 |
 | 宣称 | 只说 [`CLAIM.md`](CLAIM.md) 允许句 | Windows scale / 跨机榜 / H1÷H2 RPS package KPI |
 
-细节权威：[`CONTRACT.md`](CONTRACT.md) §2.2 Default vs Production。
+细节权威：[`CONTRACT.md`](CONTRACT.md) §2.2 Default vs Production + IdleTimeout vs IdleTTL。
 
 ## Architecture
 
@@ -185,14 +186,14 @@ make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
   **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
   (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
   such as `http_get_client` use a finite timeout for this reason.
-- **Production server defaults**: `THttpServerOptions.Default` keeps
-  `ReadTimeout`/`WriteTimeout` = **0** (unbounded) for tests/compat.
-  Production servers must use **`THttpServerOptions.Production`** (finite
-  Read/Write = 30000 ms) or explicit `WithReadTimeout` / `WithWriteTimeout`.
+- **Production server defaults**: `THttpServerOptions.Default` Read/Write =
+  **30000** ms (**PD-1B**). `Production` is the same RW named template — prefer
+  it in product code for intent. Long-poll/SSE must set
+  `WithReadTimeout(0)` / `WithWriteTimeout(0)` explicitly.
   IdleTimeout alone is not a full production template. Examples
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
   Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
-  on **Production** + RequestArena so arena demos do not inherit unbounded RW.
+  on **Production** + RequestArena so arena demos inherit finite RW defaults.
 - **With* chain / Timeout vs ConnectTimeout / Default vs Production**：权威表见
   [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /

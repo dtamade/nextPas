@@ -98,8 +98,10 @@
 | H2 TLS ALPN | **H2P-3 Met** — `test_http_h2_tls_alpn` 4/4 0 unfreed |
 | HTTPS keep-alive pool | **RH-1 fixed**（`TTlsTcpStream` + `ITcpStreamRuntime`） |
 | H1 `THttpServer`+`TLSContext` | **C-A Met** — `NewH1TlsServerTransport` |
-| Windows cancel | probe-only residual（R3） |
-| Server `Default` RW=0 | **Keep**（PD-0/1A）— 测试兼容；生产用 `THttpServerOptions.Production` |
+| Windows cancel | probe-only residual（R3）；**PD-3-3** wake 实现仍跨 platform/net parked |
+| Server `Default` RW | **PD-1B** — Read/Write=**30000**（与 Production 同量级）；长轮询显式 0 |
+| Server IdleTimeout vs client IdleTTL | **PD-3-1** — Idle=30s / IdleTTL=90s 对照表见 CONTRACT |
+| 长连接 / 大 body | **PD-3-2** residual Met — Q1-4 + 413/backpressure 矩阵已有测；无新增缺口 |
 | H3 | Blocked |
 | Rust std latency | **S2-b**：`compare_rust` 已发 p50/p99；仍非 scale KPI |
 | `test_http_tls_real` | **Met (2026-07-21)** — 5/5 0 unfreed |

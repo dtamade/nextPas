@@ -228,8 +228,8 @@ end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
-  { Compat/test default: THttpServerOptions.Default (RW=0). For production,
-    pass THttpServerOptions.Production or explicit timeouts. }
+  { PD-1B: Default has finite RW=30000. Prefer Production for product intent;
+    long-poll/SSE: WithReadTimeout(0)/WithWriteTimeout(0). }
   Result := THttpServer.Create(AHandler, THttpServerOptions.Default);
 end;
 

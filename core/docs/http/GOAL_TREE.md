@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-23 (Era PD Done; scale claims Met; NEXT → ROADMAP STOP)
+> Last updated: 2026-07-23 (PD-1B Default RW=30000; PD-3-1/2 Met; PD-3-3 parked; NEXT → ROADMAP STOP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Era PD + Parity history, Goal Loop, Inbox.
@@ -32,7 +32,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
 | **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
 | **Parity Campaign** | **H1 scale-ready Met** + **H1+H2 package Yes** + **HTTPS H1/H2 scale Yes** + **Q1 Met** + **S2/S3 Met**；H3 Blocked |
-| **Era PD** | **Done** — PD-0/1A/2 Met（Default RW Keep；Production checklist；latency readbook） |
+| **Era PD** | **Done (ext)** — PD-0/1A/2 + **PD-1B** RW=30s + **PD-3-1/2**；PD-3-3 Windows wake parked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | **39** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |

@@ -177,11 +177,12 @@ end;
     默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
   - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（waitable 近即时；
     probe-only 仍有 ~10ms 切片上界）。
-  - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
-    （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
-    （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
-    IdleTimeout alone 不是完整生产模板。示例 `http_hello_server` /
-    `http_websocket_echo_demo` 使用 Production。
+  - 生产 server：**PD-1B** 起 `THttpServerOptions.Default` 的 Read/Write =
+    **30000** ms（与 `Production` 同量级）。长轮询/SSE/需要无界 IO 时显式
+    `WithReadTimeout(0)` / `WithWriteTimeout(0)`。产品代码仍推荐命名模板
+    **`THttpServerOptions.Production`** 表达意图。IdleTimeout alone 不是完整
+    生产模板。示例 `http_hello_server` / `http_websocket_echo_demo` 使用
+    Production。
   - 示例 `http_get_client` 使用有限 client timeout。
 
 #### With* 链语义（Wave E2）
@@ -204,15 +205,32 @@ end;
 | `Timeout` | socket 就绪后 request 读/写 | 无界（仅测试/工具） | options / `WithTimeout` / builder / request options |
 | `ConnectTimeout` | OS `connect` + 新连接首写 | 回退到 `Timeout`（`Timeout` 亦 0 则无界） | options / `WithConnectTimeout`（rebuild） |
 
-**Default vs Production**（PD-0 诚实锁）：
+**Default vs Production**（PD-1B）：
 
 | 载体 | Default | Production / 生产建议 |
 |------|---------|----------------------|
 | `THttpClientOptions` | `Timeout=30000`，`ConnectTimeout=0` | 保持 Default 或显式有限 `WithTimeout`；勿依赖 cancel-only |
-| `THttpServerOptions` | Read/Write=**0**（**测试兼容 Keep**；非生产安全默认） | **`Production`** Read/Write=30000；或 `WithReadTimeout`/`WithWriteTimeout`；Idle alone 不足 |
+| `THttpServerOptions` | Read/Write=**30000**（PD-1B）；Idle=30000 | **`Production`** 同 RW 命名模板；长轮询用 `WithReadTimeout(0)`；Idle alone 不足 |
 | `TWebSocketOptions` | ConnectTimeout=Timeout=30000 | 同 Default；`=0` 仅显式无界 |
 
-**工厂**：`NewHttpServer(Handler)` → `Default`（兼容）；`NewHttpServerWithRequestArena`（无 options）→ **Production** + RequestArena。生产 checklist 见 `README.md` § Production checklist。
+**工厂**：`NewHttpServer(Handler)` → `Default`（现已有限 RW）；`NewHttpServerWithRequestArena`（无 options）→ **Production** + RequestArena。生产 checklist 见 `README.md` § Production checklist。
+
+#### Server IdleTimeout vs client IdleTTL（PD-3-1）
+
+| 旋钮 | 所有者 | 默认 | 作用 | 0 含义 | 不是 |
+|------|--------|------|------|--------|------|
+| **Server `IdleTimeout`** | `THttpServerOptions` | **30000** ms | keep-alive **请求间隙**等待下一请求；`ReadTimeout=0` 时作读 deadline 回退 | 不因 idle 主动关连接（仍受 RW 等约束） | **不是** mid-request body stall 时钟（有限 `ReadTimeout` 时用 `ReadTimeout`）；**不是** client 池淘汰 |
+| **Client `IdleTTL`** | `THttpClientOptions` | **90000** ms | 连接池**空闲连接**墙钟淘汰（借出/归还路径检查 `IdleAtMs`） | 关闭墙钟淘汰（仍可 MaxPoolSize / CloseIdle） | **不是** server keep-alive；**不是** per-request Timeout |
+| Server `ReadTimeout` / `WriteTimeout` | `THttpServerOptions` | **30000**（PD-1B） | 单次读/写 IO 有界；**mid-request** stall / partial body 用 Read；`WriteTimeout>0` 时 poll 路径优先 drain、不做 parse-while-draining | 无界 IO（长轮询/SSE 才显式 0） | 替代不了 IdleTimeout 间隙语义 |
+| Client `Timeout` | `THttpClientOptions` | **30000** | request 读/写 budget | 无界（测试/工具） | 替代不了 IdleTTL |
+
+**对照要点**：
+
+1. IdleTimeout（server）关的是 **已接受连接上的请求间隙**；IdleTTL（client）关的是 **池里空闲连接**。
+2. 数值刻意不同（30s vs 90s）：client 池可多持一会儿，server 更短清理 idle socket。
+3. PD-1B 后 Default `ReadTimeout>0`：**只改 IdleTimeout 不会**缩短 mid-request body stall 时钟（需同步 `WithReadTimeout`）。
+4. 生产 checklist：server 用有限 RW（Default/Production）+ 合适 IdleTimeout；client 按需 `WithIdleTTL` / `CloseIdleConnections`。
+5. 抽查：`test_http_base` IdleTimeout vs IdleTTL spot-check；IdleTTL 行为见 `test_http_client`。
 
 ### 2.2.0a Net-dependent capabilities
 
@@ -645,7 +663,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 | **Direct error 响应** | parser/size/Expect 等 fail-fast 错误响应同样 arm write timeout | Direct error response arms write timeout on … |
 | **S1-1 关系** | `PreferPollWorkerHandoff=False`（默认）只决定 **handler 在 reactor 还是 worker 执行**；**不改变** drain/backpressure/WriteTimeout 语义 | S1-1 + 本表 drain 测 |
 
-**生产建议**：使用 `THttpServerOptions.Production` 或显式 `WithWriteTimeout`；勿依赖 Default 的 RW=0。
+**生产建议**：使用 `THttpServerOptions.Production` 或 Default（PD-1B 后 RW 同为 30s）；长写流式仍设有限 `WithWriteTimeout`；勿把 IdleTimeout alone 当完整模板。
 
 **非目标**：严格 wall-clock SLA 冻结为 CI 阈值；跨机 backpressure 排行榜；改 WriteTimeout 默认值。
 

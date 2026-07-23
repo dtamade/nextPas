@@ -238,7 +238,7 @@ begin
 
   LOpts := THttpServerOptions.Default.WithRequestArena;
   Check(LOpts.RequestArena, 'options RequestArena');
-  CheckEqual(0, LOpts.ReadTimeout, 'explicit Default.WithRequestArena keeps RW=0');
+  CheckEqual(30000, LOpts.ReadTimeout, 'Default.WithRequestArena keeps RW=30000 (PD-1B)');
   LServer := NewHttpServer(LInner, LOpts);
   Check(LServer <> nil, 'NewHttpServer WithRequestArena options');
 

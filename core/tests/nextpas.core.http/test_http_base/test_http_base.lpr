@@ -516,8 +516,8 @@ var
 begin
   LOptions := THttpServerOptions.Default;
   Check(LOptions.Backend = TCP_SERVER_BACKEND_THREADED, 'default backend');
-  CheckEqual(Int64(0), LOptions.ReadTimeout, 'default read timeout');
-  CheckEqual(Int64(0), LOptions.WriteTimeout, 'default write timeout');
+  CheckEqual(Int64(30000), LOptions.ReadTimeout, 'default read timeout PD-1B');
+  CheckEqual(Int64(30000), LOptions.WriteTimeout, 'default write timeout PD-1B');
   CheckEqual(Int64(30000), LOptions.IdleTimeout, 'default idle timeout');
   CheckEqual(Int64(8192), Int64(LOptions.MaxHeaderSize), 'default max header size');
   CheckEqual(Int64(4194304), LOptions.MaxBodySize, 'default max body size');
@@ -538,8 +538,8 @@ var
 begin
   LDefault := THttpServerOptions.Default;
   LProd := THttpServerOptions.Production;
-  CheckEqual(Int64(0), LDefault.ReadTimeout, 'Default ReadTimeout stays 0');
-  CheckEqual(Int64(0), LDefault.WriteTimeout, 'Default WriteTimeout stays 0');
+  CheckEqual(Int64(30000), LDefault.ReadTimeout, 'Default ReadTimeout is 30000');
+  CheckEqual(Int64(30000), LDefault.WriteTimeout, 'Default WriteTimeout is 30000');
   CheckEqual(Int64(30000), LProd.ReadTimeout, 'Production ReadTimeout is 30000');
   CheckEqual(Int64(30000), LProd.WriteTimeout, 'Production WriteTimeout is 30000');
   CheckEqual(LDefault.IdleTimeout, LProd.IdleTimeout,
@@ -551,7 +551,7 @@ begin
 end;
 
 procedure TestServerDefaultVsProductionSourceContract;
-{ PD-0/PD-1A: Default RW=0 is test-compat; Production finite RW;
+{ PD-1B: Default RW=30000; Production named template same RW;
   arena convenience factory must not inherit unbounded RW. }
 var
   LBase, LFacade, LServer, LContract, LReadme: string;
@@ -561,24 +561,43 @@ begin
   LServer := ReadFileText('../../../src/nextpas.core.http.server.pas');
   LContract := ReadFileText('../../../docs/http/CONTRACT.md');
   LReadme := ReadFileText('../../../docs/http/README.md');
-  Check(Pos('Result.ReadTimeout := 0;', LBase) > 0,
-    'Default ReadTimeout stays 0 in base');
-  Check(Pos('Result.WriteTimeout := 0;', LBase) > 0,
-    'Default WriteTimeout stays 0 in base');
   Check(Pos('Result.ReadTimeout := 30000;', LBase) > 0,
-    'Production ReadTimeout 30000 in base');
+    'Default/Production ReadTimeout 30000 in base');
   Check(Pos('Result.WriteTimeout := 30000;', LBase) > 0,
-    'Production WriteTimeout 30000 in base');
+    'Default/Production WriteTimeout 30000 in base');
+  Check(Pos('PD-1B', LBase) > 0, 'base documents PD-1B');
   Check(Pos('THttpServerOptions.Default', LServer) > 0,
-    'NewHttpServer(handler) still uses Default (compat)');
+    'NewHttpServer(handler) still uses Default');
   Check(Pos('THttpServerOptions.Production.WithRequestArena', LFacade) > 0,
     'arena convenience factory bases on Production');
   Check(Pos('Production', LContract) > 0, 'CONTRACT documents Production');
   Check(Pos('ReadTimeout', LContract) > 0, 'CONTRACT mentions ReadTimeout');
+  Check(Pos('IdleTimeout', LContract) > 0, 'CONTRACT documents IdleTimeout');
+  Check(Pos('IdleTTL', LContract) > 0, 'CONTRACT documents IdleTTL');
   Check(Pos('Production checklist', LReadme) > 0,
     'README has Production checklist section');
   Check(Pos('THttpServerOptions.Production', LReadme) > 0,
     'README points Production for servers');
+end;
+
+procedure TestIdleTimeoutVsIdleTTLSpotCheck;
+{ PD-3-1: server IdleTimeout vs client IdleTTL are different knobs. }
+var
+  LServer: THttpServerOptions;
+  LClient: THttpClientOptions;
+begin
+  LServer := THttpServerOptions.Default;
+  LClient := THttpClientOptions.Default;
+  CheckEqual(Int64(30000), LServer.IdleTimeout,
+    'server IdleTimeout default 30s (keep-alive wait on connection)');
+  CheckEqual(Int64(90000), LClient.IdleTTL,
+    'client IdleTTL default 90s (pool wall-clock idle eviction)');
+  Check(LServer.IdleTimeout <> LClient.IdleTTL,
+    'IdleTimeout and IdleTTL are not the same default — do not confuse');
+  LClient := LClient.WithIdleTTL(0);
+  CheckEqual(Int64(0), LClient.IdleTTL, 'IdleTTL=0 disables wall-clock eviction');
+  LServer := LServer.WithIdleTimeout(0);
+  CheckEqual(Int64(0), LServer.IdleTimeout, 'IdleTimeout=0 means no idle close budget');
 end;
 
 procedure TestHttpOptionsWithVersion;
@@ -680,8 +699,10 @@ begin
     @TestHttpClientOptionsWithTLSContextFluent);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Test('THttpServerOptions.Production', @TestHttpServerOptionsProduction);
-  T.Test('Server Default vs Production source-contract (PD-0/1A)',
+  T.Test('Server Default vs Production source-contract (PD-1B)',
     @TestServerDefaultVsProductionSourceContract);
+  T.Test('IdleTimeout vs IdleTTL spot-check (PD-3-1)',
+    @TestIdleTimeoutVsIdleTTLSpotCheck);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);
   T.Test('HTTP options WithMaxRedirects', @TestHttpOptionsWithMaxRedirects);

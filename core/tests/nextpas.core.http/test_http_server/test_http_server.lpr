@@ -69,10 +69,10 @@ var
   LDefault, LProd: THttpServerOptions;
 begin
   LDefault := THttpServerOptions.Default;
-  CheckEqual(0, LDefault.ReadTimeout,
-    'Default ReadTimeout stays 0 (unbounded) for tests/compat');
-  CheckEqual(0, LDefault.WriteTimeout,
-    'Default WriteTimeout stays 0 (unbounded) for tests/compat');
+  CheckEqual(30000, LDefault.ReadTimeout,
+    'Default ReadTimeout is 30s (PD-1B)');
+  CheckEqual(30000, LDefault.WriteTimeout,
+    'Default WriteTimeout is 30s (PD-1B)');
   CheckEqual(30000, LDefault.IdleTimeout, 'Default IdleTimeout');
 
   LProd := THttpServerOptions.Production;
@@ -83,8 +83,8 @@ begin
   CheckEqual(4194304, LProd.MaxBodySize, 'Production keeps MaxBodySize');
   { Production must not mutate Default semantics for subsequent Default calls }
   LDefault := THttpServerOptions.Default;
-  CheckEqual(0, LDefault.ReadTimeout, 'Default still 0 after Production');
-  CheckEqual(0, LDefault.WriteTimeout, 'Default Write still 0 after Production');
+  CheckEqual(30000, LDefault.ReadTimeout, 'Default still 30000 after Production');
+  CheckEqual(30000, LDefault.WriteTimeout, 'Default Write still 30000 after Production');
 end;
 
 var
@@ -2367,6 +2367,9 @@ var
   LHandlerCalls: Int32;
 begin
   LHttpOpts := THttpServerOptions.Default;
+  { PD-1B: Default ReadTimeout is 30s; first-request arm uses FReadMs, not FIdleMs.
+    Short both so the 50ms sleep can expire the wake deadline. }
+  LHttpOpts.ReadTimeout := 20;
   LHttpOpts.IdleTimeout := 20;
   LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
 
@@ -2444,6 +2447,9 @@ var
   LHandlerCalls: Int32;
 begin
   LHttpOpts := THttpServerOptions.Default;
+  { PD-1B: mid-request partial body arms FReadMs (ReadTimeout). IdleTimeout alone
+    no longer covers request-side stalls when Default RW is finite. }
+  LHttpOpts.ReadTimeout := 20;
   LHttpOpts.IdleTimeout := 20;
   LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
 
@@ -2710,6 +2716,9 @@ const
   BODY = 'ok';
 begin
   LHttpOpts := THttpServerOptions.Default;
+  { PD-1B: CanParseBufferedPollRequestWhileDraining requires WriteTimeout<=0.
+    Keep WriteTimeout=0 so pipeline-while-draining queue growth is exercised. }
+  LHttpOpts.WriteTimeout := 0;
   LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
 
   LTransport := NewH1ServerTransport(LH1Opts);
@@ -6187,6 +6196,9 @@ begin
   end);
 
   LOpts := THttpServerOptions.Default;
+  { PD-1B: post-100 body stall is gated by ReadTimeout (FReadMs), not IdleTimeout.
+    Align both so client 5s observation window still sees close. }
+  LOpts.ReadTimeout := 200;
   LOpts.IdleTimeout := 200;
   if AUseEpoll then
     LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
