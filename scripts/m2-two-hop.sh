@@ -127,13 +127,16 @@ m2_build() {
   else
     cmd=("$compiler")
   fi
+  # Default CLI is NoFold=True (omit --fold/--no-fold). --fold constant-folds
+  # program bodies into write/halt stubs and drops reachable function emission —
+  # L0 hello may still “pass”, but L3/nextpas becomes a string-dump binary and
+  # smoke-b cannot use B as a compiler. Keep default no-fold for real A→B.
   set +e
   "${cmd[@]}" build "$source" \
     --target "$TARGET" \
     --toolchain-binding "$BINDING" \
     --workspace "$REPO_ROOT" \
     --out-dir "$out_dir" \
-    --fold \
     "$@" \
     >"$log_path" 2>&1
   rc=$?
