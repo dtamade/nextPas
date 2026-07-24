@@ -23,11 +23,14 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实源码库存约 **64** 个 `nextpas.core.http*` 单元；测试目录约 **48** 个；主 Makefile **PROJECTS = 43** 正确性门禁（含 `test_http_mem` / `test_http_stream` / `test_http_sse`；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **66** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
+- Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
+- H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
 - **H2 transport 已完整落地**：
-  - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
+  - server session (`h2.session.pas`)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
-  - client transport (`h2.client.pas`, 1569 行)：client preface/SETTINGS handshake、同步 RoundTrip、
+  - client transport (`h2.client.pas`)：client preface/SETTINGS handshake、同步 RoundTrip、
     连接池（MaxPoolSize governed）、stale pooled connection retry、GOAWAY/PING 处理
   - TLS wrapper (`h1.tls.pas` / `h2.tls.pas`)：按版本 ALPN + session factory 传递
     （H1=`http/1.1`，H2=`h2`）

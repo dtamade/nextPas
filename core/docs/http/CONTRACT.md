@@ -1,10 +1,10 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 **62** 个源文件；主 gate PROJECTS=**43**，含 `test_http_mem` / `test_http_stream` / `test_http_sse`）
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 **66** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-18（Wave I1 pool active health probe）
-**版本**：3.15
+**最后更新**：2026-03-14（Era R2-5+ multi-OS host CI + Wine path）
+**版本**：3.36
 
 ---
 
@@ -26,7 +26,7 @@ http.impl.registry       ← 版本 → transport factory
 http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast
 http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client/TLS
 http.impl.tls.stream     ← TLS over TCP stream wrapper
-http.fuzz                ← 模糊测试辅助（测试/安全验证用）
+{ tests only } support/nextpas.core.http.fuzz ← 模糊测试辅助（非生产 inventory）
 ```
 
 公开消费方默认只 `uses nextpas.core.http`。
@@ -90,9 +90,13 @@ end;
 | `HTTP_DEFAULT_BODY_READ_MAX` | **4 MiB**（与 server `Default.MaxBodySize` 对齐） |
 | `HttpReadRequestBodyBytes` / `String` / `Json` | 默认有界；超限 → `EHttpError(hekBody)` Op=`body` |
 | `HttpReadRequestBodyBytesMax(AReq, AMax)` | 显式上限；`AMax <= 0` = 无界（**仅**测试/工具） |
+| `HttpReadRequestBodyBytesUnlimited` | 命名逃生口 = Max(0)（**仅**测试/工具） |
 | `BodyCacheMiddleware` | 默认 max=常量；超限 → **413**，不进入 next |
 | `BodyCacheMiddlewareWith(AMax)` | 显式 max；`<=0` 无界（仅测试/工具） |
+| `BodyCacheMiddlewareUnlimited` | 命名逃生口 = With(0)（仅测试/工具） |
 | `DecompressMiddleware` | 默认解压输出上限=常量；`DecompressMiddleware(0)` 无界（仅测试/工具） |
+| `DecompressMiddlewareUnlimited` | 命名逃生口 = (0)（仅测试/工具） |
+| Server `MaxBodySize` | **Default=4 MiB**；**`0`=unlimited**（兼容；生产 checklist 禁止无界） |
 | `IHttpRequestWithArena` / `HttpRequestArenaOf` | Arena 附着在 request 上（Supports O(1)）；**无**进程全局 map |
 | Migration | 需要更大 body/解压时用 Max/With/显式 AMaxSize 放宽；生产禁止依赖无界默认 |
 
@@ -102,11 +106,12 @@ end;
 |----|------|
 | 语义 | **非抢占**；仅在 handler **返回后**判定；响应 body **全缓冲** |
 | 超时 | 返回后 elapsed ≥ `ATimeoutMs` → **504** `gateway_timeout`（handler 死循环则永不 504） |
-| 缓冲上限 | 默认 `HTTP_DEFAULT_BODY_READ_MAX`；`DeadlineMiddlewareWith(ms, max)`；`max<=0` 无界（仅测试） |
+| 缓冲上限 | 默认 `HTTP_DEFAULT_BODY_READ_MAX`；`DeadlineMiddlewareWith(ms, max)`；`max<=0` 无界（仅测试）；`DeadlineMiddlewareUnlimitedBuffer` 命名逃生口 |
 | 超缓冲 | **413** `payload_too_large`，丢弃缓冲；不 Finalize 成功路径 |
 | Headers | `GetHeaders` 透传真实 writer（与 body 缓冲不完全对称） |
 | 生产建议 | **默认不装**；硬限时用 server `ReadTimeout`/`WriteTimeout` + cancel；仅短 handler + 小 body 可考虑后验 504 |
-| Recovery | 已提交响应时 500 写入失败 → 空 except 有意吞掉，不二次写、不 abort 连接 |
+| Recovery | 若 `Supports(IHttpResponseWriterCommitState)` 且 `HeadersCommitted` → **不**再写 500；无 CommitState 时 500 失败 → 空 except 有意吞掉 |
+| RateLimit | 默认 100 req / 60s；`MaxKeys` 默认 **10000**（满则新 IP **429**，不 LRU）；`MaxKeys=0` 无界键（仅测试） |
 
 **Stream / ResponseTime（Wave TRUTH-2）**：
 
@@ -316,6 +321,9 @@ end;
 
 - Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
 - Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。Wine smoke：`make -C core/tests/nextpas.core.platform.socket/test_platform_socket_wine wine-runtime-smoke`（含 socket_pair 字节唤醒；**非** real-Windows / **非** Windows scale-ready）。
+- Multi-OS HTTP threaded host（R2-5+）：`bash core/scripts/http-host-ci-matrix.sh` → `test_http_threaded_host` — 钉 `THttpServerOptions.Default.Backend=tsbThreaded` + HTTP/1.1 wire GET（net.server.threaded）。**CI hosts**：Linux / macOS / Windows / FreeBSD（`core-ci.yml`）。truth=`host-runtime`；**非** scale-ready / **非** IOCP / **非** full facade TLS。
+- Windows HTTP threaded wine（R2-5）：`make -C core/tests/nextpas.core.http/test_http_threaded_wine wine-runtime-smoke` — 同上 wire 在 Win64+Wine；**非** real-Windows / **非** scale-ready。full `uses nextpas.core.http` Win64 交叉仍 residual（TLS 链触 `system.sysutils` FPC internal）。
+- Windows IOCP（WIN-3）：**Parked** — `TCP_SERVER_BACKEND_IOCP` 枚举在，factory 未注册；跨模块 net.server 另立。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
@@ -845,6 +853,12 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-03-14 | 3.28 | Wave TRUTH-2：`HttpWriteStream` 注释对齐实现；`middleware.timeout`→`responsetime`；inventory 对齐 |
 | 2026-03-14 | 3.29 | Wave STRUCT-1/3：`impl.h1.pool` 抽出；`test_http_stream`/`test_http_sse` 入主 PROJECTS=43 |
 | 2026-03-14 | 3.30 | Wave STRUCT-2：`client.redirect` + `client.decorator` 机械抽出；redirect/retry 语义冻结 |
+| 2026-03-14 | 3.31 | Era0：inventory **64** 单元；HTTP 生产/测试禁止 `uses` FPC RTL（`test_http_contract` source-contract）；6 suite 去掉 `SysUtils` |
+| 2026-03-14 | 3.32 | Era R2-2 STRUCT-opt：`impl.h2.client.pool` + `client.helpers` + `impl.h1.wire`；inventory **67**；decorator 无 `uses client` |
+| 2026-03-14 | 3.33 | Era R2-3 test split：`test_http_client_redirect` / `body_helpers` / `server_expect` / `server_chunk` 入主 PROJECTS=**47**；client/server lpr 各 <10k |
+| 2026-03-14 | 3.34 | Era R2-4：`http.fuzz` → tests support；BodyCache GetBody 共享 TBytes 只读视图；inventory **66** |
+| 2026-03-14 | 3.35 | Era R2-5：Wine WIN-0..2；`test_http_threaded_wine`；WIN-3 IOCP Parked；H3 Blocked；Windows scale=No |
+| 2026-03-14 | 3.36 | Era R2-5+：`test_http_threaded_host` + `http-host-ci-matrix.sh` 挂 Linux/macOS/Windows/FreeBSD CI；Wine 仍 smoke-only；scale=No |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
