@@ -10,6 +10,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.fs,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -370,6 +371,17 @@ begin
   Check(HttpRequestArenaOf(LReq) = nil, 'nil arena attach is no-op');
 end;
 
+procedure TestRequestArenaNoGlobalMap;
+{ SAFE-3: arena attachment is request-local Supports, not GArenaMap. }
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.middleware.requestarena.pas');
+  Check(Pos('GArenaMap', LSrc) = 0, 'no GArenaMap');
+  Check(Pos('TRTLCriticalSection', LSrc) = 0, 'no RTL critical section map lock');
+  Check(Pos('IHttpRequestWithArena', LSrc) > 0, 'uses IHttpRequestWithArena');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.mem');
   T.Test('request arena helpers', @TestHttpRequestArenaHelpers);
@@ -380,6 +392,7 @@ begin
   T.Test('HttpUseRequestArena helper', @TestHttpUseRequestArenaHelper);
   T.Test('HttpWithRequestArena + server factory', @TestHttpWithRequestArenaAndServerFactory);
   T.Test('HttpAttach/Detach kernel path', @TestHttpAttachDetachRequestArena);
+  T.Test('RequestArena no global map', @TestRequestArenaNoGlobalMap);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

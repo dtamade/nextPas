@@ -15,7 +15,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.mem.arena.intf;
 
 type
   TStringArray = nextpas.core.base.TStringArray;
@@ -99,6 +100,15 @@ type
     function GetContext: IHttpContext;
     procedure SetContext(const ACtx: IHttpContext);
     property Context: IHttpContext read GetContext;
+  end;
+
+  {** Optional request-scoped Arena (RequestArenaMiddleware / H1-H2 attach).
+     Attached on the request object — not a process-global map. }
+  IHttpRequestWithArena = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010013}']
+    function GetArena: IArena;
+    procedure SetArena(const AArena: IArena);
+    property Arena: IArena read GetArena;
   end;
 
   IHttpResponse = interface

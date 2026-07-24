@@ -1,14 +1,17 @@
 unit nextpas.core.http.middleware.deadline;
 {**
- * @desc Request deadline middleware. Enforces a maximum handler execution time.
- *       If the handler does not complete within the specified timeout, the
- *       middleware writes a 504 Gateway Timeout response.
+ * @desc Post-hoc request deadline middleware (non-preemptive).
  *
- *       Note: this middleware cannot interrupt a blocking handler. It works by
- *       wrapping the response writer — if the handler exceeds the deadline,
- *       any subsequent writes are discarded and a 504 is emitted instead.
- *       Handlers that do cooperative checking (e.g. checking a cancellation
- *       token) get the best results.
+ *       Semantics (honest contract):
+ *       - Does NOT interrupt a blocking / spinning handler.
+ *       - Buffers the entire response until the handler returns, then either
+ *         flushes the buffer or writes 504 if elapsed >= timeout.
+ *       - Response body buffer is bounded (default HTTP_DEFAULT_BODY_READ_MAX).
+ *         Exceeding the buffer yields 413 and discards buffered output.
+ *
+ *       Production hard limits belong on server ReadTimeout/WriteTimeout and
+ *       cancel tokens. Use Deadline only for short handlers with small bodies
+ *       where a post-hoc 504 is acceptable.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -16,13 +19,18 @@ unit nextpas.core.http.middleware.deadline;
 interface
 
 uses
+  nextpas.core.http.base,
   nextpas.core.http.intf;
 
-{** @desc Create deadline middleware with timeout in milliseconds.
-   If the handler takes longer than ATimeoutMs, a 504 Gateway Timeout
-   response is written instead of the handler's output.
-   ATimeoutMs must be > 0. }
+{** @desc Post-hoc deadline middleware (default buffer = HTTP_DEFAULT_BODY_READ_MAX).
+   After the handler returns: if elapsed >= ATimeoutMs → 504; else flush buffer.
+   Non-preemptive. ATimeoutMs must be > 0. }
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
+
+{** @desc Post-hoc deadline with explicit response buffer max (bytes).
+   AMaxBufferBytes <= 0 means unlimited buffer (tests/tools only). }
+function DeadlineMiddlewareWith(ATimeoutMs: Int64;
+  const AMaxBufferBytes: Int64): IHttpMiddleware;
 
 implementation
 
@@ -30,49 +38,63 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.time.base,
-  nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.message;
 
 type
-  { Response writer wrapper that enforces a deadline.
-    Buffers all writes until the handler returns. If the deadline is exceeded,
-    discards the buffered output and writes a 504 instead. }
+  { Response writer wrapper: buffers body until Finalize.
+    Timed-out → 504; oversize buffer → 413; else flush status+body. }
   TDeadlineResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
   private
     FReal: IHttpResponseWriter;
     FStart: TInstant;
     FTimeoutMs: Int64;
+    FMaxBufferBytes: Int64;
     FStatus: THttpStatus;
     FBody: TBytes;
     FBodyLen: SizeUInt;
     FTimedOut: Boolean;
+    FOversize: Boolean;
     procedure EnsureCapacity(AExtra: SizeUInt);
+    function WouldExceedMax(AExtra: SizeUInt): Boolean;
   public
-    constructor Create(const AReal: IHttpResponseWriter; ATimeoutMs: Int64);
+    constructor Create(const AReal: IHttpResponseWriter; ATimeoutMs: Int64;
+      const AMaxBufferBytes: Int64);
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
-    { Call after handler returns. Writes buffered output or 504 if timed out. }
+    { Call after handler returns. Writes buffered output, 504, or 413. }
     procedure Finalize;
     property TimedOut: Boolean read FTimedOut;
+    property Oversize: Boolean read FOversize;
   end;
 
 { TDeadlineResponseWriter }
 
 constructor TDeadlineResponseWriter.Create(const AReal: IHttpResponseWriter;
-  ATimeoutMs: Int64);
+  ATimeoutMs: Int64; const AMaxBufferBytes: Int64);
 begin
   inherited Create;
   FReal := AReal;
   FTimeoutMs := ATimeoutMs;
+  FMaxBufferBytes := AMaxBufferBytes;
   FStart := TInstant.Now;
   FStatus := HTTP_STATUS_OK;
   FBody := nil;
   FBodyLen := 0;
   FTimedOut := False;
+  FOversize := False;
+end;
+
+function TDeadlineResponseWriter.WouldExceedMax(AExtra: SizeUInt): Boolean;
+begin
+  if FMaxBufferBytes <= 0 then
+    Exit(False);
+  if AExtra > SizeUInt(High(Int64)) then
+    Exit(True);
+  Result := Int64(FBodyLen) + Int64(AExtra) > FMaxBufferBytes;
 end;
 
 procedure TDeadlineResponseWriter.EnsureCapacity(AExtra: SizeUInt);
@@ -92,6 +114,8 @@ end;
 
 procedure TDeadlineResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
+  if FOversize then
+    Exit;
   FStatus := AStatus;
 end;
 
@@ -102,6 +126,9 @@ end;
 
 function TDeadlineResponseWriter.GetHeaders: IHttpHeaders;
 begin
+  { Headers are not buffered separately — they go to the real writer.
+    Body is buffered until Finalize. Callers must treat this as post-hoc
+    deadline buffering, not a fully isolated response snapshot. }
   Result := FReal.GetHeaders;
 end;
 
@@ -109,6 +136,15 @@ function TDeadlineResponseWriter.Write(const ABuf; const ACount: SizeUInt): Size
 begin
   if ACount = 0 then
     Exit(0);
+  if FOversize then
+    Exit(ACount);
+  if WouldExceedMax(ACount) then
+  begin
+    FOversize := True;
+    FBodyLen := 0;
+    SetLength(FBody, 0);
+    Exit(ACount);
+  end;
   EnsureCapacity(ACount);
   Move(ABuf, FBody[FBodyLen], ACount);
   Inc(FBodyLen, ACount);
@@ -122,15 +158,19 @@ end;
 
 procedure TDeadlineResponseWriter.Finalize;
 begin
+  if FOversize then
+  begin
+    HttpWriteErrorPayloadTooLarge(FReal,
+      'Deadline response buffer exceeded');
+    Exit;
+  end;
   if FStart.Elapsed.AsMilliseconds >= FTimeoutMs then
   begin
-    { Deadline exceeded — write 504 }
     FTimedOut := True;
     HttpWriteErrorGatewayTimeout(FReal, 'Request timeout');
   end
   else
   begin
-    { Within deadline — write buffered output }
     FReal.WriteHeader(FStatus);
     if FBodyLen > 0 then
       FReal.Write(FBody[0], FBodyLen);
@@ -141,8 +181,15 @@ end;
 
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
 begin
+  Result := DeadlineMiddlewareWith(ATimeoutMs, HTTP_DEFAULT_BODY_READ_MAX);
+end;
+
+function DeadlineMiddlewareWith(ATimeoutMs: Int64;
+  const AMaxBufferBytes: Int64): IHttpMiddleware;
+begin
   if ATimeoutMs <= 0 then
-    raise EHttpError.Create(hekArgument, 'deadline middleware timeout must be > 0');
+    raise EHttpError.Create(hekArgument,
+      'deadline middleware timeout must be > 0');
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -150,7 +197,7 @@ begin
       LBuf: TDeadlineResponseWriter;
       LBufWriter: IHttpResponseWriter;
     begin
-      LBuf := TDeadlineResponseWriter.Create(AW, ATimeoutMs);
+      LBuf := TDeadlineResponseWriter.Create(AW, ATimeoutMs, AMaxBufferBytes);
       LBufWriter := LBuf;
       try
         ANext.ServeHTTP(AReq, LBufWriter);

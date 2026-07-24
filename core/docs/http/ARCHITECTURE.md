@@ -23,7 +23,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实源码库存约 **61** 个 `nextpas.core.http*` 单元；测试目录约 **46** 个；主 Makefile **PROJECTS = 40** 正确性门禁（side：benchmarks/examples/smoke/integration/tls_real/mem 等）。
+- 当前真实源码库存约 **62** 个 `nextpas.core.http*` 单元；测试目录约 **48** 个；主 Makefile **PROJECTS = 43** 正确性门禁（含 `test_http_mem` / `test_http_stream` / `test_http_sse`；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
@@ -40,7 +40,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
   无 QPACK/HTTP3 frame/stream 源码。H3 阻塞于 QUIC 独立模块。
 
 HTTP server runtime 的权威方向已经固定在
-[docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
+[`docs/net/ARCHITECTURE.md`](../net/ARCHITECTURE.md)：
 HTTP 保持同步 public surface，listener/runtime/backend ownership 由
 `nextpas.core.net.server` 统一负责。
 
@@ -175,7 +175,9 @@ src/
   nextpas.core.http.middleware.cors.pas
   nextpas.core.http.middleware.logger.pas
   nextpas.core.http.middleware.recovery.pas
-  nextpas.core.http.middleware.timeout.pas
+  nextpas.core.http.middleware.responsetime.pas  ← X-Response-Time（非限时）
+  nextpas.core.http.middleware.deadline.pas     ← 后验 504；默认缓冲有界
+  nextpas.core.http.stream.pas           ← body copy helpers（不设 TE）
   nextpas.core.http.server.pas           ← Server facade（委托 nextpas.core.net.server）
   nextpas.core.http.client.pas           ← Client 骨架（redirect + helper request build）
   nextpas.core.http.static.pas           ← 静态文件/目录服务
@@ -186,6 +188,7 @@ src/
 
   { HTTP/1.1 实现 }
   nextpas.core.http.impl.h1.pas          ← H1 transport owner（client round-trip + server per-conn serve）
+  nextpas.core.http.impl.h1.pool.pas     ← client idle connection pool（STRUCT-1）
   nextpas.core.http.impl.h1.llhttp.pas   ← llhttp 翻译产物
   nextpas.core.http.impl.h1.parser.pas   ← H1 协议解析（基于 llhttp 翻译）
   nextpas.core.http.impl.h1.scan.pas     ← H1 扫描辅助

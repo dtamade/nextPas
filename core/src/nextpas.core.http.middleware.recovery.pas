@@ -1,4 +1,15 @@
 unit nextpas.core.http.middleware.recovery;
+{**
+ * @desc Panic recovery middleware. Catches handler exceptions and tries to
+ *       write a 500 Internal Server Error JSON response.
+ *
+ *       Honest limits:
+ *       - If headers/body were already committed on the real writer, the
+ *         500 write may fail; the inner empty except is intentional — we do
+ *         not invent a second response or force-close the connection here.
+ *       - Callback errors from AOnError are also swallowed so logging never
+ *         breaks the recovery path.
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -11,7 +22,7 @@ uses
 type
   {** Callback invoked when RecoveryMiddleware catches an exception.
      Use this to log panics, send alerts, etc. The middleware always
-     returns 500 to the client regardless of the callback. }
+     attempts 500 to the client regardless of the callback. }
   TRecoveryCallback = reference to procedure(E: Exception);
 
 {** Catch panics and return 500 (silent — no error logging). }
@@ -56,7 +67,8 @@ begin
           try
             HttpWriteErrorInternal(AW, 'Internal Server Error');
           except
-            { Headers may already be sent — nothing we can do }
+            { Headers/body may already be committed — cannot rewrite as 500;
+              intentionally no second response and no connection abort here. }
           end;
         end;
       end;

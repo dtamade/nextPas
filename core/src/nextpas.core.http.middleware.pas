@@ -10,7 +10,8 @@ uses
   nextpas.core.http.intf,
   nextpas.core.sync.intf,
   nextpas.core.sync.spinlock,
-  nextpas.core.thread.intf;
+  nextpas.core.thread.intf,
+  nextpas.core.mem.arena.intf;
 
 type
   { Function type for creating middleware from a closure }
@@ -20,11 +21,11 @@ type
   TRequestPredicate = reference to function(const AReq: IHttpRequest): Boolean;
 
   {** Request decorator base. Forwards IHttpRequest and optional extension
-     interfaces (context/options) to FInner so middleware wrappers do not drop
-     Supports(IHttpRequestWithContext/Options). Override GetBody/GetHeaders/
-     GetContentLength as needed. }
+     interfaces (context/options/arena) to FInner so middleware wrappers do not
+     drop Supports(IHttpRequestWithContext/Options/Arena). Override GetBody/
+     GetHeaders/GetContentLength as needed. }
   THttpRequestWrapper = class(TInterfacedObject, IHttpRequest,
-    IHttpRequestWithOptions, IHttpRequestWithContext)
+    IHttpRequestWithOptions, IHttpRequestWithContext, IHttpRequestWithArena)
   protected
     FInner: IHttpRequest;
     function GetMethod: THttpMethod; virtual;
@@ -43,6 +44,8 @@ type
     procedure SetRequestOptions(const AOptions: THttpRequestOptions); virtual;
     function GetContext: IHttpContext; virtual;
     procedure SetContext(const ACtx: IHttpContext); virtual;
+    function GetArena: IArena; virtual;
+    procedure SetArena(const AArena: IArena); virtual;
   public
     constructor Create(const AInner: IHttpRequest);
   end;
@@ -217,6 +220,23 @@ var
 begin
   if Supports(FInner, IHttpRequestWithContext, LCtx) then
     LCtx.SetContext(ACtx);
+end;
+
+function THttpRequestWrapper.GetArena: IArena;
+var
+  LArena: IHttpRequestWithArena;
+begin
+  if Supports(FInner, IHttpRequestWithArena, LArena) then
+    Exit(LArena.GetArena);
+  Result := nil;
+end;
+
+procedure THttpRequestWrapper.SetArena(const AArena: IArena);
+var
+  LWith: IHttpRequestWithArena;
+begin
+  if Supports(FInner, IHttpRequestWithArena, LWith) then
+    LWith.SetArena(AArena);
 end;
 
 { TFuncHandler }

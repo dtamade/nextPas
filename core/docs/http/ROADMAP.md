@@ -134,12 +134,36 @@ CHECKPOINT（不阻塞续波）:
 | Wave PD-3-1 Idle 对照 | **landed** — IdleTimeout vs IdleTTL 表 + spot-check |
 | Wave PD-3-2 large body residual | **landed** — 审计：Q1-4/413 已 Met；无新代码 |
 | Wave PD-3-3 Windows cancel wake | **landed** — Windows TCP loopback pair + waitable cancel |
-| **下一执行点** | **STOP**（Era PD 扩展含 PD-3-3 Met） |
+| **下一执行点** | **STOP** / path-limited landing（SAFE+TRUTH+STRUCT 已 done；STRUCT-2/opt 在 Inbox） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
 质量 ~95%   规模 ~94%   优雅 ~88%   诚实 ~95%  (H1/H2 package + HTTPS H1/H2 scale)
+```
+
+---
+
+## Era SAFE — 默认安全（findings F-01..F-04）
+
+**目标**：生产 copy-paste 默认有界；request-scoped 状态不进全局 map.
+**权威方案**：worktree 审计 + SAFE/TRUTH/STRUCT 计划（`findings.md` 不进 main）。
+**非目标**：H3、Windows scale/IOCP、async handler。
+
+| Wave | Status | Do | Gate |
+|------|--------|-----|------|
+| **SAFE-1** Body 有界 | **done** | `HTTP_DEFAULT_BODY_READ_MAX=4MiB`；`HttpReadRequestBodyBytes` 默认有界；`HttpReadRequestBodyBytesMax`；`BodyCacheMiddlewareWith`；超限 helper=`hekBody` Op=`body`，BodyCache→413 | `test_http_message` + `test_http_middlewares` |
+| **SAFE-2** Decompress 默认有界 | **done** | 默认 `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`；0 仅显式；超限 400 | decompress suite + CONTRACT/README |
+| **SAFE-3** RequestArena 附着 | **done** | `IHttpRequestWithArena`；删 `GArenaMap`；`test_http_mem` 入主 PROJECTS | `test_http_mem` 9/0 + message/middlewares |
+| **TRUTH-1** Deadline 诚实 | **done** | 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占文档 | middlewares 123/0 |
+| **TRUTH-2** 命名/文档 | **done** | stream 注释对齐；`timeout`→`responsetime` unit；PROJECTS inventory | middlewares + docs |
+| **STRUCT-1** h1.pool | **done** | `impl.h1.pool` 抽出；client IdleTTL/pool 行为冻结 | `test_http_client` |
+| **STRUCT-3** SSE/stream suite | **done** | `test_http_stream` + `test_http_sse` 入主 PROJECTS；middlewares 去挂靠 | stream/sse/middlewares |
+| **STRUCT-2/opt** | Inbox | client redirect/retry 或 poll 再拆；server 巨石；opt 项 | 行为冻结 |
+
+```text
+──── 当前 ────
+NEXT = STOP（path-limited landing 就绪；STRUCT-2/opt 仍在 Inbox）
 ```
 
 ---
@@ -180,7 +204,7 @@ C-D / C-D-claim: HTTPS H2 peer evidence + scale claim  ← done
 HS-2a: package claim Yes  ← done
 C-H1: HTTPS H1 peer multi-run + scale claim  ← done
 ──── 当前 ────
-NEXT = STOP（idle；H3 Blocked）
+NEXT = SAFE-1（Era SAFE：默认安全；Body 有界）
 ```
 
 **插队规则（历史）**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。

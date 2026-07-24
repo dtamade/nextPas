@@ -1529,6 +1529,53 @@ begin
   Check(LBody = nil, 'ReadRequestBodyBytes empty body returns nil');
 end;
 
+procedure TestReadRequestBodyBytesMaxUnlimited;
+var
+  LReq: IHttpRequest;
+  LData: TBytes;
+  LBody: TBytes;
+  LI: SizeInt;
+begin
+  SetLength(LData, 64);
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte(LI and $FF);
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api')
+    .ContentType('application/octet-stream').Body(LData).Build;
+  LBody := HttpReadRequestBodyBytesMax(LReq, 0);
+  CheckEqual(Int64(Length(LData)), Int64(Length(LBody)), 'Max(0) unlimited length');
+end;
+
+procedure TestReadRequestBodyBytesExceedsDefaultMaxRaises;
+var
+  LReq: IHttpRequest;
+  LData: TBytes;
+  LRaised: Boolean;
+  LKind: THttpErrorKind;
+  LOp: string;
+begin
+  { Build a body larger than a tiny Max via Max overload; default path covered by Max. }
+  SetLength(LData, 32);
+  FillChar(LData[0], Length(LData), Ord('x'));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api')
+    .ContentType('application/octet-stream').Body(LData).Build;
+  LRaised := False;
+  LKind := hekUnknown;
+  LOp := '';
+  try
+    HttpReadRequestBodyBytesMax(LReq, 16);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LRaised, 'oversize body raises');
+  Check(LKind = hekBody, 'Kind=hekBody');
+  CheckEqual('body', LOp, 'Op=body');
+end;
+
 { HttpRedirect tests }
 
 procedure TestRedirectSetsLocationAndStatus;
@@ -2206,6 +2253,10 @@ begin
     @TestReadRequestBodyJsonInvalidJsonRaises);
   T.Test('ReadRequestBodyBytes empty body returns nil',
     @TestReadRequestBodyBytesEmptyBodyReturnsNil);
+  T.Test('ReadRequestBodyBytesMax(0) unlimited',
+    @TestReadRequestBodyBytesMaxUnlimited);
+  T.Test('ReadRequestBodyBytesMax oversize raises hekBody',
+    @TestReadRequestBodyBytesExceedsDefaultMaxRaises);
   T.Test('Redirect sets location and status',
     @TestRedirectSetsLocationAndStatus);
   T.Test('Redirect 301 permanent',

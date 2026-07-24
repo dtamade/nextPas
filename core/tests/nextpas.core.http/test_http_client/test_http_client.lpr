@@ -3046,7 +3046,8 @@ begin
   if LDestroyPos > 0 then
   begin
     LDestroyBlock := Copy(LSource, LDestroyPos, 256);
-    Check(Pos('PoolClear;', LDestroyBlock) > 0,
+    Check((Pos('FPool.Free', LDestroyBlock) > 0) or
+          (Pos('FPool.Clear', LDestroyBlock) > 0),
       'h1 client transport destructor closes pooled idle connections');
   end;
 end;
@@ -3057,8 +3058,9 @@ var
   LPutPos: SizeInt;
   LPutBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
-  LPutPos := Pos('procedure TH1ClientTransport.PoolPut(', LSource);
+  { STRUCT-1: pool body lives in impl.h1.pool. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pool.pas');
+  LPutPos := Pos('procedure TH1IdleConnectionPool.Put(', LSource);
   Check(LPutPos > 0, 'h1 PoolPut is present');
   if LPutPos > 0 then
   begin
@@ -3067,13 +3069,13 @@ begin
     LPutBlock := Copy(LSource, LPutPos, 2400);
     Check(Pos('LAuthorityIdle', LPutBlock) > 0,
       'h1 PoolPut counts idle connections per authority');
-    Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
+    Check(Pos('FCount >= FMaxPoolSize', LPutBlock) = 0,
       'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
-    Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
+    Check(Pos('LAuthorityIdle >= FMaxPoolSize', LPutBlock) > 0,
       'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
     Check(Pos('IdleAtMs', LPutBlock) > 0,
       'h1 PoolPut stamps IdleAtMs for IdleTTL');
-    Check(Pos('PoolEntryExpired', LPutBlock) > 0,
+    Check(Pos('EntryExpired', LPutBlock) > 0,
       'h1 PoolPut evicts expired idle peers before MaxPoolSize count');
     Check(Pos('LToClose', LPutBlock) > 0,
       'h1 PoolPut defers Close outside FPoolLock');
@@ -6967,12 +6969,13 @@ var
 begin
   { Wave I1: borrow-time TryRead probe is the H1 active health check.
     Live peer-close races are covered by stale-retry suites; this contract
-    locks the probe into PoolGet outside the pool lock. }
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+    locks the probe into PoolGet outside the pool lock.
+    STRUCT-1: pool body lives in impl.h1.pool. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pool.pas');
   LReusablePos := Pos(
-    'function TH1ClientTransport.PooledConnectionIsReusable', LSource);
+    'function TH1IdleConnectionPool.ConnectionIsReusable', LSource);
   Check(LReusablePos > 0, 'PooledConnectionIsReusable exists');
-  LGetPos := Pos('function TH1ClientTransport.PoolGet', LSource);
+  LGetPos := Pos('function TH1IdleConnectionPool.Get(', LSource);
   Check(LGetPos > LReusablePos, 'PoolGet follows reusable helper');
   LReusableBlock := Copy(LSource, LReusablePos, LGetPos - LReusablePos);
   Check(Pos('Active health probe on borrow', LReusableBlock) > 0,
@@ -6981,12 +6984,12 @@ begin
     'H1 probe uses non-blocking TryRead');
   Check(Pos('tsiorWouldBlock', LReusableBlock) > 0,
     'H1 probe treats WouldBlock as live idle');
-  LEndPos := Pos('procedure TH1ClientTransport.PoolPut', LSource);
+  LEndPos := Pos('procedure TH1IdleConnectionPool.Put(', LSource);
   Check(LEndPos > LGetPos, 'PoolPut follows PoolGet');
   LGetBlock := Copy(LSource, LGetPos, LEndPos - LGetPos);
-  Check(Pos('PooledConnectionIsReusable(LCandidate)', LGetBlock) > 0,
+  Check(Pos('ConnectionIsReusable(LCandidate)', LGetBlock) > 0,
     'PoolGet invokes health probe on candidate');
-  Check(Pos('Never Close or probe sockets while holding FPoolLock', LGetBlock) > 0,
+  Check(Pos('Never Close or probe sockets while holding FLock', LGetBlock) > 0,
     'PoolGet probes outside pool lock');
 end;
 

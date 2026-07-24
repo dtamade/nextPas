@@ -1,6 +1,6 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 **62** 个源文件；主 gate PROJECTS=**43**，含 `test_http_mem` / `test_http_stream` / `test_http_sse`）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
 **最后更新**：2026-07-18（Wave I1 pool active health probe）
@@ -76,12 +76,46 @@ end;
 | 侧 | API | 行为 |
 |----|-----|------|
 | server 响应压缩 | `CompressionMiddleware` / `CompressionMiddlewareWith` | 按 `Accept-Encoding` 选 gzip/deflate；默认最小 body 1024 |
-| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；失败 → 400 |
+| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；**默认** `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`（4 MiB）；`0`=无界（仅测试/工具）；超限/损坏 → **400** `invalid_body`，不进 next |
 | client raw body | `HttpReadResponseBodyBytes` / `String` / `StringAuto` | **不**自动解 Content-Encoding（wire 字节） |
 | client 显式解码 | `HttpDecodeContentEncoding` / `HttpReadResponseBodyBytesDecoded` / `HttpReadResponseBodyStringDecoded` | 单 coding：`gzip`/`x-gzip`/`deflate`/`identity`/缺省；`AMaxSize>0` 限制解压输出 |
 | 不支持编码 | 同上 | `hekProtocol` Op=`content_encoding`（含 multi-coding） |
 | 损坏 payload | 同上 | `hekBody` Op=`content_encoding` |
 | 非目标 | br / zstd / 浏览器完整 content 栈 / 默认自动 Accept-Encoding 协商 | 不在 C1；未支持编码诚实失败 |
+
+**In-memory request body helpers（Wave SAFE-1）**：
+
+| API | 行为 |
+|-----|------|
+| `HTTP_DEFAULT_BODY_READ_MAX` | **4 MiB**（与 server `Default.MaxBodySize` 对齐） |
+| `HttpReadRequestBodyBytes` / `String` / `Json` | 默认有界；超限 → `EHttpError(hekBody)` Op=`body` |
+| `HttpReadRequestBodyBytesMax(AReq, AMax)` | 显式上限；`AMax <= 0` = 无界（**仅**测试/工具） |
+| `BodyCacheMiddleware` | 默认 max=常量；超限 → **413**，不进入 next |
+| `BodyCacheMiddlewareWith(AMax)` | 显式 max；`<=0` 无界（仅测试/工具） |
+| `DecompressMiddleware` | 默认解压输出上限=常量；`DecompressMiddleware(0)` 无界（仅测试/工具） |
+| `IHttpRequestWithArena` / `HttpRequestArenaOf` | Arena 附着在 request 上（Supports O(1)）；**无**进程全局 map |
+| Migration | 需要更大 body/解压时用 Max/With/显式 AMaxSize 放宽；生产禁止依赖无界默认 |
+
+**DeadlineMiddleware（Wave TRUTH-1）**：
+
+| 项 | 行为 |
+|----|------|
+| 语义 | **非抢占**；仅在 handler **返回后**判定；响应 body **全缓冲** |
+| 超时 | 返回后 elapsed ≥ `ATimeoutMs` → **504** `gateway_timeout`（handler 死循环则永不 504） |
+| 缓冲上限 | 默认 `HTTP_DEFAULT_BODY_READ_MAX`；`DeadlineMiddlewareWith(ms, max)`；`max<=0` 无界（仅测试） |
+| 超缓冲 | **413** `payload_too_large`，丢弃缓冲；不 Finalize 成功路径 |
+| Headers | `GetHeaders` 透传真实 writer（与 body 缓冲不完全对称） |
+| 生产建议 | **默认不装**；硬限时用 server `ReadTimeout`/`WriteTimeout` + cancel；仅短 handler + 小 body 可考虑后验 504 |
+| Recovery | 已提交响应时 500 写入失败 → 空 except 有意吞掉，不二次写、不 abort 连接 |
+
+**Stream / ResponseTime（Wave TRUTH-2）**：
+
+| API | 行为 |
+|-----|------|
+| `HttpWriteStream` | 仅从 `IReader` copy 到 writer；**不**设 TE、**不** `WriteHeader`；framing 归 writer |
+| `HttpWriteStreamWithLength` | 设 `Content-Length` 后 copy |
+| `ResponseTimeMiddleware` | 写 `X-Response-Time`；单元名 `middleware.responsetime`（原 `middleware.timeout` 已改名） |
+| 限时对照 | ResponseTime ≠ Deadline（后验）≠ server `ReadTimeout`/`WriteTimeout` |
 
 **条件请求 / 静态缓存元数据（Wave C2）**：
 
@@ -804,6 +838,12 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
 | 2026-07-24 | 3.23 | Wave PD-3-3：Windows `platform_socket_pair` TCP loopback → waitable cancel |
+| 2026-03-14 | 3.24 | Wave SAFE-1：`HTTP_DEFAULT_BODY_READ_MAX`；`HttpReadRequestBodyBytes*` 默认有界；`BodyCacheMiddlewareWith`；超限 hekBody/413 |
+| 2026-03-14 | 3.25 | Wave SAFE-2：`DecompressMiddleware` 默认 `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`；`0` 仅显式无界；超限仍 400 |
+| 2026-03-14 | 3.26 | Wave SAFE-3：`IHttpRequestWithArena` 请求附着；删除 `GArenaMap`；`test_http_mem` 入主 PROJECTS |
+| 2026-03-14 | 3.27 | Wave TRUTH-1：`DeadlineMiddleware` 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占语义入 CONTRACT |
+| 2026-03-14 | 3.28 | Wave TRUTH-2：`HttpWriteStream` 注释对齐实现；`middleware.timeout`→`responsetime`；inventory 对齐 |
+| 2026-03-14 | 3.29 | Wave STRUCT-1/3：`impl.h1.pool` 抽出；`test_http_stream`/`test_http_sse` 入主 PROJECTS=43 |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

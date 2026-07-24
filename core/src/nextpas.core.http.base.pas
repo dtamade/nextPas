@@ -247,6 +247,11 @@ const
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
   TCP_SERVER_BACKEND_IOCP = nextpas.core.net.server.base.tsbIocp;
 
+  {** Default max for in-memory request body helpers / BodyCache / Decompress
+     (bytes). Aligned with THttpServerOptions.Default.MaxBodySize (4 MiB).
+     Explicit 0 on Max overloads means unlimited (tests/tools only). }
+  HTTP_DEFAULT_BODY_READ_MAX = Int64(4) * 1024 * 1024;
+
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 function HttpStrToMethod(const AStr: string): THttpMethod;
 function HttpStatusText(const ACode: THttpStatus): string;

@@ -5,7 +5,6 @@
 #   test_http_smoke       — broad smoke; prefer focused suites
 #   test_http_integration — long multi-surface integration
 #   test_http_tls_real    — needs OpenSSL host env; side suite (not main gate)
-#   test_http_mem         — RequestArena / mem path; side suite (optional product gate)
 #   bench_http_h2         — H2 bench harness, not a correctness gate
 PROJECTS := \
 	test_http_base \
@@ -17,6 +16,9 @@ PROJECTS := \
 	test_http_router \
 	test_http_middleware \
 	test_http_middlewares \
+	test_http_stream \
+	test_http_sse \
+	test_http_mem \
 	test_http_hsts \
 	test_http_static \
 	test_http_client \

@@ -1,7 +1,7 @@
-unit nextpas.core.http.middleware.timeout;
+unit nextpas.core.http.middleware.responsetime;
 {**
  * @desc Response-time middleware. Records handler elapsed time in the
- *       X-Response-Time header.
+ *       X-Response-Time header. Not a request deadline (see middleware.deadline).
  *}
 
 {$I nextpas.core.settings.inc}

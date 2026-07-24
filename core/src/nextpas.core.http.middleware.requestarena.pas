@@ -4,6 +4,9 @@ unit nextpas.core.http.middleware.requestarena;
  *       and releases it when the handler chain returns. Handlers obtain the
  *       arena via HttpRequestArenaOf(AReq).
  *
+ *       Arena is attached on the request via IHttpRequestWithArena (O(1)
+ *       Supports lookup; no process-global map).
+ *
  *       Usage:
  *         router.Use(RequestArenaMiddleware);
  *         // In handler:
@@ -33,8 +36,8 @@ function RequestArenaMiddleware: IHttpMiddleware;
 {** @desc Request-scoped Arena middleware with custom capacity (0 = default). }
 function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware;
 
-{** @desc Arena attached to the request by RequestArenaMiddleware.
- *  Returns nil if middleware is not active for this request. }
+{** @desc Arena attached to the request by RequestArenaMiddleware / attach.
+ *  Returns nil if middleware / kernel wire is not active for this request. }
 function HttpRequestArenaOf(const AReq: IHttpRequest): IArena;
 
 {** @desc Wrap any IHttpHandler with RequestArenaMiddleware (server-level wire).
@@ -57,75 +60,12 @@ procedure HttpDetachRequestArena(const AReq: IHttpRequest);
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.mem,
   nextpas.core.mem.allocator.arena;
-
-{ Global map: IHttpRequest pointer → IArena (released after handler). }
-var
-  GArenaMap: array of record
-    Req: Pointer;
-    Arena: IArena;
-  end;
-  GArenaMapLock: TRTLCriticalSection;
-
-procedure MapPut(const AReq: IHttpRequest; const AArena: IArena);
-var
-  LI, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GArenaMap);
-  for LI := 0 to LLen - 1 do
-  begin
-    if GArenaMap[LI].Req = LPtr then
-    begin
-      GArenaMap[LI].Arena := AArena;
-      Exit;
-    end;
-  end;
-  SetLength(GArenaMap, LLen + 1);
-  GArenaMap[LLen].Req := LPtr;
-  GArenaMap[LLen].Arena := AArena;
-end;
-
-function MapGet(const AReq: IHttpRequest): IArena;
-var
-  LI, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GArenaMap);
-  for LI := 0 to LLen - 1 do
-  begin
-    if GArenaMap[LI].Req = LPtr then
-      Exit(GArenaMap[LI].Arena);
-  end;
-  Result := nil;
-end;
-
-procedure MapRemove(const AReq: IHttpRequest);
-var
-  LI, LWrite, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GArenaMap);
-  LWrite := 0;
-  for LI := 0 to LLen - 1 do
-  begin
-    if GArenaMap[LI].Req <> LPtr then
-    begin
-      if LWrite <> LI then
-        GArenaMap[LWrite] := GArenaMap[LI];
-      Inc(LWrite);
-    end;
-  end;
-  if LWrite < LLen then
-    SetLength(GArenaMap, LWrite);
-end;
 
 function RequestArenaMiddleware: IHttpMiddleware;
 begin
@@ -142,39 +82,37 @@ begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LArena: IArena;
+      LWith: IHttpRequestWithArena;
+      LAttached: Boolean;
     begin
-      LArena := HttpCreateRequestArena(LCap);
-      EnterCriticalSection(GArenaMapLock);
-      try
-        MapPut(AReq, LArena);
-      finally
-        LeaveCriticalSection(GArenaMapLock);
+      LAttached := False;
+      LArena := nil;
+      if Supports(AReq, IHttpRequestWithArena, LWith) then
+      begin
+        LArena := HttpCreateRequestArena(LCap);
+        LWith.SetArena(LArena);
+        LAttached := True;
       end;
       try
         ANext.ServeHTTP(AReq, AW);
       finally
-        EnterCriticalSection(GArenaMapLock);
-        try
-          MapRemove(AReq);
-        finally
-          LeaveCriticalSection(GArenaMapLock);
+        if LAttached then
+        begin
+          LWith.SetArena(nil);
+          LArena := nil; { bulk release when last ref drops }
         end;
-        LArena := nil; { bulk release }
       end;
     end);
   end);
 end;
 
 function HttpRequestArenaOf(const AReq: IHttpRequest): IArena;
+var
+  LWith: IHttpRequestWithArena;
 begin
-  if AReq = nil then
-    Exit(nil);
-  EnterCriticalSection(GArenaMapLock);
-  try
-    Result := MapGet(AReq);
-  finally
-    LeaveCriticalSection(GArenaMapLock);
-  end;
+  if Supports(AReq, IHttpRequestWithArena, LWith) then
+    Exit(LWith.GetArena);
+  Result := nil;
 end;
 
 function HttpWithRequestArena(const AHandler: IHttpHandler;
@@ -199,33 +137,23 @@ begin
 end;
 
 procedure HttpAttachRequestArena(const AReq: IHttpRequest; const AArena: IArena);
+var
+  LWith: IHttpRequestWithArena;
 begin
   if (AReq = nil) or (AArena = nil) then
     Exit;
-  EnterCriticalSection(GArenaMapLock);
-  try
-    MapPut(AReq, AArena);
-  finally
-    LeaveCriticalSection(GArenaMapLock);
-  end;
+  if Supports(AReq, IHttpRequestWithArena, LWith) then
+    LWith.SetArena(AArena);
 end;
 
 procedure HttpDetachRequestArena(const AReq: IHttpRequest);
+var
+  LWith: IHttpRequestWithArena;
 begin
   if AReq = nil then
     Exit;
-  EnterCriticalSection(GArenaMapLock);
-  try
-    MapRemove(AReq);
-  finally
-    LeaveCriticalSection(GArenaMapLock);
-  end;
+  if Supports(AReq, IHttpRequestWithArena, LWith) then
+    LWith.SetArena(nil);
 end;
-
-initialization
-  InitCriticalSection(GArenaMapLock);
-
-finalization
-  DoneCriticalSection(GArenaMapLock);
 
 end.

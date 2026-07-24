@@ -64,24 +64,17 @@ uses
   nextpas.core.text.conv,
   nextpas.core.encoding,
   nextpas.core.http.headers, nextpas.core.http.message,
-  nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
+  nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.pool,
+  nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer,
   nextpas.core.http.impl.h1.chunked,
   nextpas.core.http.impl.tls.stream,
   nextpas.core.tls.quick,
-  nextpas.core.sync,
   nextpas.core.mem.arena.intf,
   nextpas.core.http.mem,
   nextpas.core.http.middleware.requestarena;
 
 type
-  TPoolEntry = record
-    Host: string;
-    Port: UInt16;
-    Conn: ITcpStream;
-    IdleAtMs: UInt64;
-  end;
-
   TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
   private
     FInner: ITcpStream;
@@ -152,17 +145,9 @@ type
     IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
-    FPoolLock: IMutex;
-    FPool: array of TPoolEntry;
-    FPoolCount: Int32;
+    FPool: TH1IdleConnectionPool;
     FPending: string;
     FDefaultTLSContext: ISSLContext;
-    function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
-    function PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
-    procedure PoolRemoveAt(const AIndex: Int32);
-    function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
-    procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
-    procedure PoolClear;
     function SecureClientContext: ISSLContext;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
       const AAutoHost: string; const AAbsoluteForm: Boolean;
@@ -452,11 +437,6 @@ begin
     Result := 443
   else
     Result := 80;
-end;
-
-function CanonicalPoolHostKey(const AHost: string): string; inline;
-begin
-  Result := LowerCase(AHost);
 end;
 
 function HeadersHaveConnectionCloseToken(const AHeaders: IHttpHeaders): Boolean;
@@ -2296,15 +2276,14 @@ begin
   FOptions := AOptions;
   if FOptions.MaxPoolSize <= 0 then
     FOptions.MaxPoolSize := 64;
-  FPoolLock := Mutex;
-  FPoolCount := 0;
+  FPool := TH1IdleConnectionPool.Create(FOptions.MaxPoolSize, FOptions.IdleTTL);
   FDefaultTLSContext := nil;
 end;
 
 destructor TH1ClientTransport.Destroy;
 begin
-  PoolClear;
-  FPoolLock := nil;
+  FPool.Free;
+  FPool := nil;
   FDefaultTLSContext := nil;
   inherited Destroy;
 end;
@@ -2382,230 +2361,6 @@ begin
     AConn := TReadPrependTcpStream.Create(AConn, FPending);
     FPending := '';
   end;
-end;
-
-function TH1ClientTransport.PooledConnectionIsReusable(
-  const AConn: ITcpStream): Boolean;
-var
-  LRuntime: ITcpStreamRuntime;
-  LByte: Byte;
-  LRead: SizeUInt;
-begin
-  { Active health probe on borrow (Wave I1): non-blocking peek. WouldBlock =
-    idle/live; any data/EOF/error = discard (peer closed or half-closed).
-    Must not run while holding FPoolLock. }
-  Result := False;
-  if AConn = nil then
-    Exit;
-  if not Supports(AConn, ITcpStreamRuntime, LRuntime) then
-    Exit;
-
-  try
-    LRuntime.SetBlocking(False);
-    try
-      Result := LRuntime.TryRead(LByte, 1, LRead) = tsiorWouldBlock;
-    finally
-      LRuntime.SetBlocking(True);
-    end;
-  except
-    Result := False;
-  end;
-end;
-
-function TH1ClientTransport.PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
-var
-  LNow: UInt64;
-  LAge: UInt64;
-begin
-  Result := False;
-  if FOptions.IdleTTL <= 0 then
-    Exit;
-  LNow := GetTickCount64;
-  if LNow >= AEntry.IdleAtMs then
-    LAge := LNow - AEntry.IdleAtMs
-  else
-    LAge := 0;
-  Result := LAge >= UInt64(FOptions.IdleTTL);
-end;
-
-procedure TH1ClientTransport.PoolRemoveAt(const AIndex: Int32);
-begin
-  if (AIndex < 0) or (AIndex >= FPoolCount) then
-    Exit;
-  FPool[AIndex] := FPool[FPoolCount - 1];
-  Dec(FPoolCount);
-end;
-
-function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
-var
-  LI: Int32;
-  LCandidate: ITcpStream;
-  LToClose: array of ITcpStream;
-  LCloseCount: Int32;
-begin
-  { Never Close or probe sockets while holding FPoolLock: Close/TryRead can
-    block or re-enter pool paths and hang the IdleTTL client suite. }
-  Result := nil;
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  while True do
-  begin
-    LCandidate := nil;
-    FPoolLock.Acquire;
-    try
-      LI := 0;
-      while LI < FPoolCount do
-      begin
-        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
-        begin
-          if PoolEntryExpired(FPool[LI]) then
-          begin
-            if FPool[LI].Conn <> nil then
-            begin
-              if LCloseCount >= Length(LToClose) then
-                SetLength(LToClose, LCloseCount + 4);
-              LToClose[LCloseCount] := FPool[LI].Conn;
-              Inc(LCloseCount);
-            end;
-            PoolRemoveAt(LI);
-            Continue;
-          end;
-          LCandidate := FPool[LI].Conn;
-          PoolRemoveAt(LI);
-          Break;
-        end;
-        Inc(LI);
-      end;
-    finally
-      FPoolLock.Release;
-    end;
-
-    if LCandidate = nil then
-      Break;
-
-    if PooledConnectionIsReusable(LCandidate) then
-    begin
-      Result := LCandidate;
-      Break;
-    end;
-
-    if LCloseCount >= Length(LToClose) then
-      SetLength(LToClose, LCloseCount + 4);
-    LToClose[LCloseCount] := LCandidate;
-    Inc(LCloseCount);
-  end;
-
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-    except
-    end;
-end;
-
-procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
-  const AConn: ITcpStream);
-var
-  LI: Int32;
-  LAuthorityIdle: Int32;
-  LToClose: array of ITcpStream;
-  LCloseCount: Int32;
-  LReject: Boolean;
-begin
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  LReject := False;
-  FPoolLock.Acquire;
-  try
-    { Drop expired peers for this authority so MaxPoolSize counts live idle only. }
-    LI := 0;
-    while LI < FPoolCount do
-    begin
-      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-         PoolEntryExpired(FPool[LI]) then
-      begin
-        if FPool[LI].Conn <> nil then
-        begin
-          if LCloseCount >= Length(LToClose) then
-            SetLength(LToClose, LCloseCount + 4);
-          LToClose[LCloseCount] := FPool[LI].Conn;
-          Inc(LCloseCount);
-        end;
-        PoolRemoveAt(LI);
-      end
-      else
-        Inc(LI);
-    end;
-
-    if FOptions.MaxPoolSize > 0 then
-    begin
-      LAuthorityIdle := 0;
-      for LI := 0 to FPoolCount - 1 do
-        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
-          Inc(LAuthorityIdle);
-      if LAuthorityIdle >= FOptions.MaxPoolSize then
-      begin
-        LReject := True;
-        Exit;
-      end;
-    end;
-    AConn.SetReadDeadline(TDeadline.Infinite);
-    AConn.SetWriteDeadline(TDeadline.Infinite);
-    if FPoolCount >= Length(FPool) then
-      SetLength(FPool, FPoolCount + 4);
-    FPool[FPoolCount].Host := AHost;
-    FPool[FPoolCount].Port := APort;
-    FPool[FPoolCount].Conn := AConn;
-    FPool[FPoolCount].IdleAtMs := GetTickCount64;
-    Inc(FPoolCount);
-  finally
-    FPoolLock.Release;
-  end;
-
-  if LReject then
-  begin
-    if LCloseCount >= Length(LToClose) then
-      SetLength(LToClose, LCloseCount + 4);
-    LToClose[LCloseCount] := AConn;
-    Inc(LCloseCount);
-  end;
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-    except
-    end;
-end;
-
-procedure TH1ClientTransport.PoolClear;
-var
-  LI: Int32;
-  LToClose: array of ITcpStream;
-  LCloseCount: Int32;
-begin
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  FPoolLock.Acquire;
-  try
-    for LI := 0 to FPoolCount - 1 do
-      if FPool[LI].Conn <> nil then
-      begin
-        if LCloseCount >= Length(LToClose) then
-          SetLength(LToClose, LCloseCount + 4);
-        LToClose[LCloseCount] := FPool[LI].Conn;
-        Inc(LCloseCount);
-      end;
-    FPoolCount := 0;
-    SetLength(FPool, 0);
-  finally
-    FPoolLock.Release;
-  end;
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-    except
-    end;
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
@@ -3023,7 +2778,7 @@ begin
   FPending := '';
   if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
     HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
-  LConn := PoolGet(LPoolHostKey, LConnectPort);
+  LConn := FPool.Get(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
     PrepareFreshConnection
@@ -3101,7 +2856,7 @@ begin
   end;
 
   if LKeepAlive and (not LRequestClose) then
-    PoolPut(LPoolHostKey, LConnectPort, LConn)
+    FPool.Put(LPoolHostKey, LConnectPort, LConn)
   else
     LConn.Close;
 
@@ -3110,7 +2865,7 @@ end;
 
 procedure TH1ClientTransport.CloseIdleConnections;
 begin
-  PoolClear;
+  FPool.Clear;
 end;
 
 { TH1ServerTransport }

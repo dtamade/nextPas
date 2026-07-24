@@ -4,15 +4,21 @@ unit nextpas.core.http.middleware.decompress;
  *       gzip or deflate compressed request bodies when Content-Encoding
  *       header is present. Strips the Content-Encoding header and updates
  *       Content-Length after decompression.
+ *
+ *       Default AMaxSize = HTTP_DEFAULT_BODY_READ_MAX (4 MiB). Explicit 0 =
+ *       unlimited (tests/tools only; production checklist forbids it).
  *}
 {$I nextpas.core.settings.inc}
 interface
 uses
+  nextpas.core.http.base,
   nextpas.core.http.intf;
 {** @desc Create decompression middleware.
-   Decompresses gzip/deflate request bodies up to AMaxSize bytes.
-   AMaxSize = 0 means no limit (not recommended for production). }
-function DecompressMiddleware(const AMaxSize: Int64 = 0): IHttpMiddleware;
+   Decompresses gzip/deflate request bodies up to AMaxSize bytes
+   (default HTTP_DEFAULT_BODY_READ_MAX). AMaxSize = 0 means no limit
+   (tests/tools only). }
+function DecompressMiddleware(
+  const AMaxSize: Int64 = HTTP_DEFAULT_BODY_READ_MAX): IHttpMiddleware;
 implementation
 uses
   nextpas.core.base,
@@ -22,7 +28,6 @@ uses
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.compress,
-  nextpas.core.http.base,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.stream,

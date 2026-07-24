@@ -34,7 +34,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Parity Campaign** | **H1 scale-ready Met** + **H1+H2 package Yes** + **HTTPS H1/H2 scale Yes** + **Q1 Met** + **S2/S3 Met**；H3 Blocked |
 | **Era PD** | **Done (ext)** — PD-0/1A/2 + **PD-1B** RW=30s + **PD-3-1/2/3**（Windows waitable pair） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
-| 主 Makefile gate | **39** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS） |
+| 主 Makefile gate | **43** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS；含 `test_http_mem` / `test_http_stream` / `test_http_sse`） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。

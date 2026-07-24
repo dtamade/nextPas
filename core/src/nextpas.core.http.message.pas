@@ -11,7 +11,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.url,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.mem.arena.intf;
 
 type
   { Builder body discriminant: distinguishes "no body" from empty string/bytes. }
@@ -23,7 +24,7 @@ type
   );
 
   THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions,
-    IHttpRequestWithContext)
+    IHttpRequestWithContext, IHttpRequestWithArena)
   private
     type
       TPathParam = record
@@ -49,6 +50,7 @@ type
       FQueryParams: TQueryParams;
       FRequestOptions: THttpRequestOptions;
       FContext: IHttpContext;
+      FArena: IArena;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -79,6 +81,8 @@ type
     function GetRequestOptions: THttpRequestOptions;
     function GetContext: IHttpContext;
     procedure SetContext(const ACtx: IHttpContext);
+    function GetArena: IArena;
+    procedure SetArena(const AArena: IArena);
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -128,11 +132,20 @@ function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
 {** @desc Write HTML response: sets text/html content-type, writes string body. }
 function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ABody: string): SizeUInt;
-{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+{** @desc Read request body as TBytes up to HTTP_DEFAULT_BODY_READ_MAX.
+   Returns nil if body is nil. Raises on nil request.
+   Exceeds max → EHttpError(hekBody, Op=body). }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
-{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+{** @desc Read request body as TBytes with explicit max.
+   AMaxBytes <= 0 means unlimited (tests/tools only).
+   Exceeds max → EHttpError(hekBody, Op=body). }
+function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
+  const AMaxBytes: Int64): TBytes;
+{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request.
+   Uses HTTP_DEFAULT_BODY_READ_MAX (see HttpReadRequestBodyBytes). }
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
-{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON.
+   Uses HTTP_DEFAULT_BODY_READ_MAX (see HttpReadRequestBodyBytes). }
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
 {** @desc Write a redirect response with Location header and optional HTML body.
    AStatus should be a 3xx code (301/302/303/307/308). }
@@ -718,6 +731,16 @@ begin
   FContext := ACtx;
 end;
 
+function THttpRequest.GetArena: IArena;
+begin
+  Result := FArena;
+end;
+
+procedure THttpRequest.SetArena(const AArena: IArena);
+begin
+  FArena := AArena;
+end;
+
 { THttpResponse }
 
 constructor THttpResponse.Create(const AStatusCode: THttpStatus;
@@ -974,29 +997,44 @@ begin
   Result := HttpWriteResponseString(AW, AStatus, 'text/html; charset=utf-8', ABody);
 end;
 
-function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
+  const AMaxBytes: Int64): TBytes;
 var
   LBody: IReader;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
-  LTotal: SizeUInt;
+  LTotal: Int64;
+  LBounded: Boolean;
 begin
   if AReq = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP request is nil');
+    raise EHttpError.CreateOp(hekArgument, 'body', 'HTTP request is nil');
   LBody := AReq.Body;
   if LBody = nil then
     Exit(nil);
+  LBounded := AMaxBytes > 0;
   Result := nil;
   LTotal := 0;
   repeat
     LN := LBody.Read(LBuf[0], SizeUInt(Length(LBuf)));
     if LN > 0 then
     begin
-      SetLength(Result, LTotal + LN);
-      Move(LBuf[0], Result[LTotal], LN);
-      Inc(LTotal, LN);
+      if Int64(LN) > High(Int64) - LTotal then
+        raise EHttpError.CreateOp(hekBody, 'body',
+          'HTTP request body byte count overflow');
+      Inc(LTotal, Int64(LN));
+      if LBounded and (LTotal > AMaxBytes) then
+        raise EHttpError.CreateOp(hekBody, 'body',
+          'Request body exceeds maximum allowed size (' +
+          IntToStr(AMaxBytes) + ' bytes)');
+      SetLength(Result, LTotal);
+      Move(LBuf[0], Result[LTotal - Int64(LN)], LN);
     end;
   until LN = 0;
+end;
+
+function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
+begin
+  Result := HttpReadRequestBodyBytesMax(AReq, HTTP_DEFAULT_BODY_READ_MAX);
 end;
 
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;

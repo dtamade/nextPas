@@ -30,6 +30,10 @@ middleware chaining, and a centralized internal transport registry.
 | Keep-alive | 默认开（INV-1）；长连接写失败见 CONTRACT §4.4 | 大 body / 背压缺口已有 Q1-4 + 413 矩阵，勿空写 KPI |
 | TLS | `TLSContext` + H1/H2 产品路径（C-A / H2P-3） | 空 facade / 假 H3 |
 | 宣称 | 只说 [`CLAIM.md`](CLAIM.md) 允许句 | Windows scale / 跨机榜 / H1÷H2 RPS package KPI |
+| Body 读入内存 | `HttpReadRequestBody*` 默认 4 MiB；更大用 `BytesMax` / `BodyCacheMiddlewareWith` | 依赖旧无界默认；BodyCache 不设 max |
+| 请求解压 | `DecompressMiddleware` 默认 4 MiB 解压输出上限 | `DecompressMiddleware(0)` 当生产默认 |
+| Deadline | **默认不装**；短 JSON 才考虑；知悉非抢占 + 全缓冲 | 当 Go `context.WithTimeout`；大 body 不设缓冲上限 |
+| ResponseTime | 仅写 `X-Response-Time`（`middleware.responsetime`） | 当成限时中间件；限时用 server RW timeout / Deadline |
 
 细节权威：[`CONTRACT.md`](CONTRACT.md) §2.2 Default vs Production + IdleTimeout vs IdleTTL。
 

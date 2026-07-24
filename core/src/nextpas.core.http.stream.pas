@@ -1,8 +1,11 @@
 unit nextpas.core.http.stream;
 {**
- * @desc Streaming response helpers. Allows sending large bodies without
- *       buffering the entire content in memory.
- *       Uses chunked transfer-encoding when no Content-Length is declared.
+ * @desc Streaming body helpers. Copy large bodies without buffering the
+ *       entire payload in a single TBytes allocation.
+ *
+ *       HttpWriteStream only copies bytes to IHttpResponseWriter — it does
+ *       NOT set Transfer-Encoding or call WriteHeader. Wire framing (chunked
+ *       vs content-length) is owned by the concrete writer (e.g. H1 writer).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -16,9 +19,8 @@ uses
   nextpas.core.http.intf;
 
 { Copy data from AReader to the response writer in chunks.
-  The response must not have been committed yet (no WriteHeader/Write called).
-  Sets transfer-encoding: chunked if no Content-Length is declared.
-  Returns total bytes written.
+  Does not set Transfer-Encoding or Content-Length; does not WriteHeader.
+  Framing is the writer's responsibility. Returns total bytes written.
   ABufSize controls the internal buffer size (default 32KB). }
 function HttpWriteStream(const AW: IHttpResponseWriter;
   const AReader: IReader; const ABufSize: SizeUInt = 32768): Int64;

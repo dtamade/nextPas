@@ -22,7 +22,7 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
-  nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.responsetime,
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.logger,
@@ -70,6 +70,7 @@ type
   IHttpRequest = nextpas.core.http.intf.IHttpRequest;
   IHttpRequestWithOptions = nextpas.core.http.intf.IHttpRequestWithOptions;
   IHttpRequestWithContext = nextpas.core.http.intf.IHttpRequestWithContext;
+  IHttpRequestWithArena = nextpas.core.http.intf.IHttpRequestWithArena;
   IHttpResponse = nextpas.core.http.intf.IHttpResponse;
   IHttpResponseWriter = nextpas.core.http.intf.IHttpResponseWriter;
   IHttpHandler = nextpas.core.http.intf.IHttpHandler;
@@ -343,8 +344,11 @@ function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddle
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware; inline;
 {** @desc Method guard middleware — rejects disallowed methods with 405. }
 function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware; inline;
-{** @desc Body cache middleware — caches request body for re-reading. }
+{** @desc Body cache middleware — caches request body for re-reading
+   (default max HTTP_DEFAULT_BODY_READ_MAX). }
 function BodyCacheMiddleware: IHttpMiddleware; inline;
+{** @desc Body cache with explicit max; <=0 unlimited (tests/tools only). }
+function BodyCacheMiddlewareWith(const AMaxBytes: Int64): IHttpMiddleware; inline;
 {** @desc Metrics middleware with structured fields (method, path, status, duration). }
 function MetricsMiddlewareWithFields(
   const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware; inline;
@@ -382,16 +386,23 @@ function HttpWithRequestArena(const AHandler: IHttpHandler;
 function CompressionMiddleware: IHttpMiddleware; inline;
 {** @desc Response compression middleware with custom minimum body size. }
 function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware; inline;
-{** @desc Request body decompression middleware (gzip/deflate). }
-function DecompressMiddleware(const AMaxSize: Int64 = 0): IHttpMiddleware; inline;
+{** @desc Request body decompression middleware (gzip/deflate).
+   Default max decompressed size = HTTP_DEFAULT_BODY_READ_MAX; 0 = unlimited. }
+function DecompressMiddleware(
+  const AMaxSize: Int64 = HTTP_DEFAULT_BODY_READ_MAX): IHttpMiddleware; inline;
 {** @desc Write 415 Unsupported Media Type JSON error response. }
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 {** @desc Write 504 Gateway Timeout JSON error response. }
 function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
-{** @desc Request deadline middleware. Returns 504 if handler exceeds ATimeoutMs. }
+{** @desc Post-hoc deadline middleware (non-preemptive).
+   Handler-return check only; buffers response (default max HTTP_DEFAULT_BODY_READ_MAX).
+   Timeout → 504; oversize buffer → 413. Prefer server Read/WriteTimeout in production. }
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
+{** @desc Post-hoc deadline with explicit response buffer max (0 = unlimited, tests only). }
+function DeadlineMiddlewareWith(ATimeoutMs: Int64;
+  const AMaxBufferBytes: Int64): IHttpMiddleware; inline;
 {** @desc HSTS middleware — adds Strict-Transport-Security header (1 year, includeSubDomains). }
 function HstsMiddleware: IHttpMiddleware; inline;
 {** @desc HSTS middleware with custom options (max-age, includeSubDomains, preload). }
@@ -401,6 +412,7 @@ function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inli
 
 const
   HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
+  HTTP_DEFAULT_BODY_READ_MAX = nextpas.core.http.base.HTTP_DEFAULT_BODY_READ_MAX;
 
 {** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
 function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
@@ -452,11 +464,14 @@ procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter); inline;
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter); inline;
 {** @desc Write 410 Gone response with no body. }
 procedure HttpWriteResponseGone(const AW: IHttpResponseWriter); inline;
-{** @desc Read request body as TBytes. Returns nil if body is nil. Raises on nil request. }
+{** @desc Read request body as TBytes (default max HTTP_DEFAULT_BODY_READ_MAX). }
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes; inline;
-{** @desc Read request body as string. Returns '' if body is nil. Raises on nil request. }
+{** @desc Read request body as TBytes with explicit max (<=0 unlimited). }
+function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
+  const AMaxBytes: Int64): TBytes; inline;
+{** @desc Read request body as string (default max HTTP_DEFAULT_BODY_READ_MAX). }
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string; inline;
-{** @desc Read request body and parse as JSON document. Raises on nil request or invalid JSON. }
+{** @desc Read request body and parse as JSON (default max HTTP_DEFAULT_BODY_READ_MAX). }
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument; inline;
 {** @desc Write a redirect response with Location header and HTML body. }
 procedure HttpRedirect(const AW: IHttpResponseWriter;
@@ -852,7 +867,7 @@ end;
 
 function ResponseTimeMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.timeout.ResponseTimeMiddleware;
+  Result := nextpas.core.http.middleware.responsetime.ResponseTimeMiddleware;
 end;
 
 function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
@@ -967,6 +982,11 @@ end;
 function BodyCacheMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddleware;
+end;
+
+function BodyCacheMiddlewareWith(const AMaxBytes: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddlewareWith(AMaxBytes);
 end;
 
 function MetricsMiddlewareWithFields(
@@ -1089,6 +1109,13 @@ begin
   Result := nextpas.core.http.middleware.deadline.DeadlineMiddleware(ATimeoutMs);
 end;
 
+function DeadlineMiddlewareWith(ATimeoutMs: Int64;
+  const AMaxBufferBytes: Int64): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.deadline.DeadlineMiddlewareWith(
+    ATimeoutMs, AMaxBufferBytes);
+end;
+
 function HstsMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.hsts.HstsMiddleware;
@@ -1202,6 +1229,12 @@ end;
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 begin
   Result := nextpas.core.http.message.HttpReadRequestBodyBytes(AReq);
+end;
+
+function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
+  const AMaxBytes: Int64): TBytes;
+begin
+  Result := nextpas.core.http.message.HttpReadRequestBodyBytesMax(AReq, AMaxBytes);
 end;
 
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
