@@ -8,7 +8,6 @@ program test_http_h2_tls_alpn;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.test,
