@@ -406,11 +406,8 @@ const
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
-  {$IFDEF NEXTPAS_WINDOWS}
-  Result := ALib.Handle <> 0;
-  {$ELSE}
-  Result := ALib.Handle <> nil;
-  {$ENDIF}
+  { Use record helper — Handle is PtrUInt on Windows, Pointer on Unix. }
+  Result := ALib.IsValid;
 end;
 
 function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;

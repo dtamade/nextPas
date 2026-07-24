@@ -134,7 +134,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave PD-3-1 Idle 对照 | **landed** — IdleTimeout vs IdleTTL 表 + spot-check |
 | Wave PD-3-2 large body residual | **landed** — 审计：Q1-4/413 已 Met；无新代码 |
 | Wave PD-3-3 Windows cancel wake | **landed** — Windows TCP loopback pair + waitable cancel |
-| **下一执行点** | **STOP** / path-limited landing（SAFE+TRUTH+STRUCT-1/2/3 done；STRUCT-opt 在 Inbox） |
+| **下一执行点** | **Era R2-0..5** findings remediation（RTL / safety / STRUCT-opt / test split / Wine）；见下表 |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -160,11 +160,27 @@ CHECKPOINT（不阻塞续波）:
 | **STRUCT-1** h1.pool | **done** | `impl.h1.pool` 抽出；client IdleTTL/pool 行为冻结 | `test_http_client` |
 | **STRUCT-2** client redirect/decorator | **done** | `client.redirect` + `client.decorator` 机械抽出；行为冻结 | `test_http_client` |
 | **STRUCT-3** SSE/stream suite | **done** | `test_http_stream` + `test_http_sse` 入主 PROJECTS；middlewares 去挂靠 | stream/sse/middlewares |
-| **STRUCT-opt** | Inbox | h1 poll 再拆；server 巨石；opt 项 | 行为冻结 |
+| **STRUCT-opt** | **done** | `impl.h2.client.pool` + `client.helpers` + `impl.h1.wire`；decorator 无 `uses client`；**不做**真 h1.poll 硬切 | h2_client / client / server |
+
+---
+
+## Era R2 — Findings Round-2 remediation
+
+**目标**：第二轮 `findings.md` 可修项落地（P0 无；P1 RTL + 可维护性 + 安全逃生口）。
+**非目标**：H3 实现；Windows scale-ready 宣称；抢占 Deadline。
+
+| Wave | Status | Do | Gate |
+|------|--------|-----|------|
+| **R2-0** RTL+docs | **done** | 测试去 `SysUtils`；source-contract 禁 FPC RTL；CONTRACT inventory 64 | `test_http_contract` + 6 TLS/smoke suites |
+| **R2-1** Safety | **done** | Unlimited 显式 API；RateLimit MaxKeys；Recovery CommitState | middlewares 126/0 + message 120/0 |
+| **R2-2** STRUCT-opt | **done** | `h2.client.pool` + `client.helpers` + `h1.wire`；inventory **67** | h2_client 72/0 + client 272/0 + server 286/0 |
+| **R2-3** Test split | **done** | client redirect/body + server expect/chunk；PROJECTS=**47**；client 8662 / server 8143 | 6 suite 双绿（redirect 44 / body 71 / client 157 / expect 74 / chunk 76 / server 136） |
+| **R2-4** Polish | **done** | fuzz → tests support；BodyCache 共享只读 GetBody；ARCH inventory 对齐 | fuzz + middlewares BodyCache |
+| **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 IOCP **Parked** | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（path-limited landing 就绪；STRUCT-opt 仍在 Inbox）
+NEXT = STOP / path-limited Landing（findings 不进 main；H3 Blocked）
 ```
 
 ---

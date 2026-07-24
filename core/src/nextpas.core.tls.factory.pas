@@ -1537,9 +1537,8 @@ class function TSSLFactory.GetSystemInfo: string;
 begin
   Result := 'SSL/TLS System Information' + LineEnding;
   {$IFDEF WINDOWS}
+  { Avoid SysUtils Win32* globals (not available under nextpas.core RTL isolation). }
   Result := Result + 'Platform: Windows' + LineEnding;
-  Result := Result + Format('OS Version: %d.%d Build %d' + LineEnding,
-    [Win32MajorVersion, Win32MinorVersion, Win32BuildNumber]);
   {$ENDIF}
   {$IFDEF LINUX}
   Result := Result + 'Platform: Linux' + LineEnding;
