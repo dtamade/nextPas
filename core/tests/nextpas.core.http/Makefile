@@ -6,6 +6,13 @@
 #   test_http_integration — long multi-surface integration
 #   test_http_tls_real    — needs OpenSSL host env; side suite (not main gate)
 #   bench_http_h2         — H2 bench harness, not a correctness gate
+#   test_http_threaded_host — multi-OS host smoke (make test / http-host-ci-matrix.sh);
+#                             truth=host-runtime; NOT scale-ready / NOT IOCP
+#   test_http_threaded_wine — Win64+Wine smoke (make wine-runtime-smoke; *_wine path);
+#                             NOT real-Windows / NOT Windows scale-ready
+# Era3 theme suites (also in PROJECTS; extracted from client/server monoliths):
+#   test_http_client_redirect / test_http_client_body_helpers
+#   test_http_server_expect / test_http_server_chunk
 PROJECTS := \
 	test_http_base \
 	test_http_url \
@@ -22,6 +29,8 @@ PROJECTS := \
 	test_http_hsts \
 	test_http_static \
 	test_http_client \
+	test_http_client_redirect \
+	test_http_client_body_helpers \
 	test_http_contract \
 	test_http_registry \
 	test_http_h1scan \
@@ -31,6 +40,8 @@ PROJECTS := \
 	test_http_h1chunked \
 	test_http_h1outbound \
 	test_http_server \
+	test_http_server_expect \
+	test_http_server_chunk \
 	test_http_security \
 	test_http_stress \
 	test_http_h2_frame \
