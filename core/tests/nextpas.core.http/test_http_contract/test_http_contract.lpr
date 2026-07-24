@@ -1118,8 +1118,10 @@ procedure TestHttpWithStarChainSemanticsSourceContract;
 { Wave E2: decorator vs rebuild classification stays as CONTRACT table. }
 var
   LClient: string;
+  LDeco: string;
 begin
   LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+  LDeco := ReadTextFile('../../../src/nextpas.core.http.client.decorator.pas');
 
   Check(SourceHas(LClient,
     'Result := TOptionsOverrideClient.Create(Self,'#10 +
@@ -1134,13 +1136,13 @@ begin
   Check(SourceHas(LClient,
     'Result := NewHttpClient(FOptions.WithTLSContext(ATLSContext));'),
     'WithTLSContext rebuilds base client');
-  Check(SourceHas(LClient,
+  Check(SourceHas(LDeco,
     'Result := RebindInner(FInner.WithConnectTimeout(ATimeoutMs));'),
     'decorator rebinds around ConnectTimeout rebuild');
-  Check(SourceHas(LClient,
+  Check(SourceHas(LDeco,
     'Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));'),
     'decorator rebinds around ProxyUrl rebuild');
-  Check(SourceHas(LClient,
+  Check(SourceHas(LDeco,
     'Result := RebindInner(FInner.WithTLSContext(ATLSContext));'),
     'decorator rebinds around TLSContext rebuild');
   Check(SourceHas(LClient, 'Result := TRetryClient.Create(Self, AMaxRetries);'),

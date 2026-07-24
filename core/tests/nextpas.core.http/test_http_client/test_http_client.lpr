@@ -10560,15 +10560,17 @@ end;
 procedure TestClientWithConnectTimeoutSourceContract;
 var
   LSource: string;
+  LDeco: string;
 begin
   LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  LDeco := ReadFileText('../../../src/nextpas.core.http.client.decorator.pas');
   Check(Pos('function THttpClient.WithConnectTimeout(', LSource) > 0,
     'client implements WithConnectTimeout');
   Check(Pos('NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
     'WithConnectTimeout rebuilds transport via NewHttpClient');
-  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LSource) > 0,
-    'forwarder rebinds WithConnectTimeout');
-  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LDeco) > 0,
+    'forwarder rebinds WithConnectTimeout (decorator unit)');
+  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LDeco) > 0,
     'forwarder re-stacks around rebuilt base client');
   LSource := ReadFileText('../../../src/nextpas.core.http.intf.pas');
   Check(Pos('function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;',

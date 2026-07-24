@@ -844,6 +844,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-03-14 | 3.27 | Wave TRUTH-1：`DeadlineMiddleware` 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占语义入 CONTRACT |
 | 2026-03-14 | 3.28 | Wave TRUTH-2：`HttpWriteStream` 注释对齐实现；`middleware.timeout`→`responsetime`；inventory 对齐 |
 | 2026-03-14 | 3.29 | Wave STRUCT-1/3：`impl.h1.pool` 抽出；`test_http_stream`/`test_http_sse` 入主 PROJECTS=43 |
+| 2026-03-14 | 3.30 | Wave STRUCT-2：`client.redirect` + `client.decorator` 机械抽出；redirect/retry 语义冻结 |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

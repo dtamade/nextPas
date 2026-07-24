@@ -16,14 +16,14 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
 - `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
-- `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造/decorator，server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
+- `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责 RoundTrip/redirect 编排与便捷请求构造，redirect 纯函数与 decorator 栈已抽出独立单元；server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
 - 推荐请求构造入口是 `THttpRequestBuilder`；公开工厂白名单仅
   `NewRequest(Method, TUrl|string)` 与 `NewGetRequest`；多参 `NewRequest` 与
   `NewStreamingRequest` 已物理删除（Wave K surface freeze）。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实源码库存约 **62** 个 `nextpas.core.http*` 单元；测试目录约 **48** 个；主 Makefile **PROJECTS = 43** 正确性门禁（含 `test_http_mem` / `test_http_stream` / `test_http_sse`；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实源码库存约 **64** 个 `nextpas.core.http*` 单元；测试目录约 **48** 个；主 Makefile **PROJECTS = 43** 正确性门禁（含 `test_http_mem` / `test_http_stream` / `test_http_sse`；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`, 1534 行)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
@@ -179,7 +179,9 @@ src/
   nextpas.core.http.middleware.deadline.pas     ← 后验 504；默认缓冲有界
   nextpas.core.http.stream.pas           ← body copy helpers（不设 TE）
   nextpas.core.http.server.pas           ← Server facade（委托 nextpas.core.net.server）
-  nextpas.core.http.client.pas           ← Client 骨架（redirect + helper request build）
+  nextpas.core.http.client.pas           ← Client 编排骨架（DoRequest/Send + 便捷 API）
+  nextpas.core.http.client.redirect.pas  ← redirect 纯函数（STRUCT-2）
+  nextpas.core.http.client.decorator.pas ← Forwarder + Auth/Header/Cookie/Options/Retry（STRUCT-2）
   nextpas.core.http.static.pas           ← 静态文件/目录服务
   nextpas.core.http.websocket.pas        ← WebSocket upgrade 与 frame IO
 

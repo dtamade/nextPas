@@ -134,7 +134,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave PD-3-1 Idle 对照 | **landed** — IdleTimeout vs IdleTTL 表 + spot-check |
 | Wave PD-3-2 large body residual | **landed** — 审计：Q1-4/413 已 Met；无新代码 |
 | Wave PD-3-3 Windows cancel wake | **landed** — Windows TCP loopback pair + waitable cancel |
-| **下一执行点** | **STOP** / path-limited landing（SAFE+TRUTH+STRUCT 已 done；STRUCT-2/opt 在 Inbox） |
+| **下一执行点** | **STOP** / path-limited landing（SAFE+TRUTH+STRUCT-1/2/3 done；STRUCT-opt 在 Inbox） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -158,12 +158,13 @@ CHECKPOINT（不阻塞续波）:
 | **TRUTH-1** Deadline 诚实 | **done** | 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占文档 | middlewares 123/0 |
 | **TRUTH-2** 命名/文档 | **done** | stream 注释对齐；`timeout`→`responsetime` unit；PROJECTS inventory | middlewares + docs |
 | **STRUCT-1** h1.pool | **done** | `impl.h1.pool` 抽出；client IdleTTL/pool 行为冻结 | `test_http_client` |
+| **STRUCT-2** client redirect/decorator | **done** | `client.redirect` + `client.decorator` 机械抽出；行为冻结 | `test_http_client` |
 | **STRUCT-3** SSE/stream suite | **done** | `test_http_stream` + `test_http_sse` 入主 PROJECTS；middlewares 去挂靠 | stream/sse/middlewares |
-| **STRUCT-2/opt** | Inbox | client redirect/retry 或 poll 再拆；server 巨石；opt 项 | 行为冻结 |
+| **STRUCT-opt** | Inbox | h1 poll 再拆；server 巨石；opt 项 | 行为冻结 |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（path-limited landing 就绪；STRUCT-2/opt 仍在 Inbox）
+NEXT = STOP（path-limited landing 就绪；STRUCT-opt 仍在 Inbox）
 ```
 
 ---
