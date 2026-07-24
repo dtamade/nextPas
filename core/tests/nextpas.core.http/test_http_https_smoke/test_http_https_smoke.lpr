@@ -10,7 +10,6 @@ program test_http_https_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.base.utils,

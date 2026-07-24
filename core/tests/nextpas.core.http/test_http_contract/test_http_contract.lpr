@@ -14,6 +14,7 @@ uses
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,
+  nextpas.core.fs,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.http,
@@ -195,20 +196,9 @@ begin
 end;
 
 function ReadTextFile(const APath: string): string;
-var
-  F: file;
-  LSize: Int64;
+{ Prefer fs.ReadFileText so nextpas.core.fs does not shadow System.file/FileSize. }
 begin
-  Assign(F, APath);
-  Reset(F, 1);
-  try
-    LSize := FileSize(F);
-    SetLength(Result, Int32(LSize));
-    if LSize > 0 then
-      BlockRead(F, Result[1], Int32(LSize));
-  finally
-    Close(F);
-  end;
+  Result := ReadFileText(APath);
 end;
 
 function SourceHas(const ASource, AText: string): Boolean;
@@ -1149,15 +1139,123 @@ begin
     'WithRetry remains a decorator');
 end;
 
+function SourceMentionsForbiddenFpcRtlUnit(const ASource: string): string;
+{ Return first forbidden FPC RTL unit name if it appears as a uses-clause token. }
+const
+  Forbidden: array[0..10] of string = (
+    'SysUtils', 'Classes', 'BaseUnix', 'Unix', 'Linux', 'Windows',
+    'Sockets', 'ctypes', 'DynLibs', 'SyncObjs', 'Contnrs');
+var
+  LI: Integer;
+  U: string;
+begin
+  Result := '';
+  for LI := Low(Forbidden) to High(Forbidden) do
+  begin
+    U := Forbidden[LI];
+    if SourceHas(ASource, 'uses ' + U + ',') or
+       SourceHas(ASource, 'uses ' + U + ';') or
+       SourceHas(ASource, #10'  ' + U + ',') or
+       SourceHas(ASource, #13#10'  ' + U + ',') or
+       SourceHas(ASource, #10'  ' + U + ';') or
+       SourceHas(ASource, #13#10'  ' + U + ';') or
+       SourceHas(ASource, ', ' + U + ',') or
+       SourceHas(ASource, ',' + U + ',') or
+       SourceHas(ASource, ', ' + U + ';') or
+       SourceHas(ASource, ',' + U + ';') then
+      Exit(U);
+  end;
+end;
+
+procedure AssertNoForbiddenFpcRtlInFile(const APath: string);
+var
+  LSource: string;
+  LHit: string;
+begin
+  LSource := ReadTextFile(APath);
+  LHit := SourceMentionsForbiddenFpcRtlUnit(LSource);
+  Check(LHit = '',
+    'HTTP dual-compiler isolation forbids FPC RTL unit ' + LHit + ' in ' + APath);
+end;
+
+procedure AssertNoForbiddenFpcRtlInDirFiles(const ADir, ASuffix: string);
+var
+  LEntries: TDirEntryArray;
+  LI: Integer;
+  LName: string;
+  LPath: string;
+begin
+  LEntries := ReadDir(ADir);
+  for LI := 0 to High(LEntries) do
+  begin
+    LName := LEntries[LI].Name;
+    if (LName = '.') or (LName = '..') then
+      Continue;
+    LPath := ADir + '/' + LName;
+    if LEntries[LI].IsDir then
+      AssertNoForbiddenFpcRtlInDirFiles(LPath, ASuffix)
+    else if (Length(LName) >= Length(ASuffix)) and
+            (Copy(LName, Length(LName) - Length(ASuffix) + 1, Length(ASuffix)) = ASuffix) then
+      AssertNoForbiddenFpcRtlInFile(LPath);
+  end;
+end;
+
+function IsHttpProductionUnitName(const AName: string): Boolean;
+{ Match nextpas.core.http.pas and nextpas.core.http.*.pas (prefix length=17). }
+const
+  Prefix = 'nextpas.core.http';
+begin
+  if Length(AName) < Length(Prefix) + 4 then
+    Exit(False);
+  if Copy(AName, 1, Length(Prefix)) <> Prefix then
+    Exit(False);
+  if Copy(AName, Length(AName) - 3, 4) <> '.pas' then
+    Exit(False);
+  { nextpas.core.http.pas or nextpas.core.http.<rest>.pas — not nextpas.core.httpX }
+  Result := (Length(AName) = Length(Prefix) + 4) or
+            (AName[Length(Prefix) + 1] = '.');
+end;
+
+procedure TestHttpFpcRtlIsolationSourceContract;
+{ Era0 / F-2026-02: only nextpas.core.system may uses FPC RTL; HTTP production
+  units and HTTP tests must go through nextpas.core.* abstractions. }
+var
+  LEntries: TDirEntryArray;
+  LI: Integer;
+  LName: string;
+  LPath: string;
+  LCount: Integer;
+begin
+  LCount := 0;
+  LEntries := ReadDir('../../../src');
+  for LI := 0 to High(LEntries) do
+  begin
+    LName := LEntries[LI].Name;
+    if LEntries[LI].IsDir then
+      Continue;
+    if not IsHttpProductionUnitName(LName) then
+      Continue;
+    LPath := '../../../src/' + LName;
+    AssertNoForbiddenFpcRtlInFile(LPath);
+    Inc(LCount);
+  end;
+  Check(LCount >= 60,
+    'expected >=60 nextpas.core.http*.pas production units, got ' + IntToStr(LCount));
+
+  AssertNoForbiddenFpcRtlInDirFiles('../../nextpas.core.http', '.lpr');
+end;
+
 procedure TestHttpErrorStableOpSetSourceContract;
 { Wave E1 aligns Wave J Op names; lock the stable Op string set. }
 var
   LClient: string;
+  LHelpers: string;
   LBase: string;
   LH1: string;
   LWs: string;
 begin
   LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+  LHelpers := ReadTextFile('../../../src/nextpas.core.http.client.helpers.pas');
   LBase := ReadTextFile('../../../src/nextpas.core.http.base.pas');
   LH1 := ReadTextFile('../../../src/nextpas.core.http.impl.h1.pas');
   LWs := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
@@ -1166,14 +1264,14 @@ begin
     'client uses Op=redirect');
   Check(SourceHas(LClient, '''round_trip'''),
     'client uses Op=round_trip');
-  Check(SourceHas(LClient, '''ensure'''),
-    'client uses Op=ensure');
-  Check(SourceHas(LClient, '''download'''),
-    'client uses Op=download');
-  Check(SourceHas(LClient, '''json'''),
-    'client uses Op=json');
-  Check(SourceHas(LClient, '''content_encoding'''),
-    'client uses Op=content_encoding');
+  Check(SourceHas(LHelpers, '''ensure'''),
+    'client helpers use Op=ensure');
+  Check(SourceHas(LHelpers, '''download'''),
+    'client helpers use Op=download');
+  Check(SourceHas(LHelpers, '''json'''),
+    'client helpers use Op=json');
+  Check(SourceHas(LHelpers, '''content_encoding'''),
+    'client helpers use Op=content_encoding');
   Check(SourceHas(LBase, '''cancel'''),
     'base uses Op=cancel');
   Check(SourceHas(LBase, '''transport'''),
@@ -1415,6 +1513,8 @@ begin
     @TestHttpErrorStableOpSetSourceContract);
   T.Test('With* chain semantics source contract',
     @TestHttpWithStarChainSemanticsSourceContract);
+  T.Test('FPC RTL isolation source contract (src+tests)',
+    @TestHttpFpcRtlIsolationSourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',
