@@ -19,6 +19,10 @@ uses
    (tests/tools only). }
 function DecompressMiddleware(
   const AMaxSize: Int64 = HTTP_DEFAULT_BODY_READ_MAX): IHttpMiddleware;
+
+{** @desc Decompress with no size bound (tests/tools only).
+   Prefer DecompressMiddleware / DecompressMiddleware(positive) in production. }
+function DecompressMiddlewareUnlimited: IHttpMiddleware;
 implementation
 uses
   nextpas.core.base,
@@ -151,6 +155,11 @@ begin
       ANext.ServeHTTP(LNewReq, AW);
     end);
   end);
+end;
+
+function DecompressMiddlewareUnlimited: IHttpMiddleware;
+begin
+  Result := DecompressMiddleware(0);
 end;
 
 end.

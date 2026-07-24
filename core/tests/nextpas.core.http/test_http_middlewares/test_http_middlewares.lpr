@@ -42,7 +42,8 @@ var
   GTrackedWriterDestroyCount: Int32;
 
 type
-  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpResponseBodyBytes)
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter,
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState)
   private
     FStatus: THttpStatus;
     FBody: string;
@@ -63,6 +64,7 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
     function GetBodyBytesWritten: Int64;
+    function HeadersCommitted: Boolean;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
@@ -187,10 +189,17 @@ begin
   Result := FBodyBytesWritten;
 end;
 
+function TMockResponseWriter.HeadersCommitted: Boolean;
+begin
+  Result := FWriteHeaderCount > 0;
+end;
+
 function MakeRateLimitOpts(AMax, AWindow: Int32): TRateLimitOptions;
 begin
+  Result := Default(TRateLimitOptions);
   Result.MaxRequests := AMax;
   Result.WindowSeconds := AWindow;
+  Result.MaxKeys := 10000;
 end;
 
 { TMockRequest }
@@ -1640,6 +1649,109 @@ begin
       LRaised := E.Kind = hekArgument;
   end;
   Check(LRaised, 'raises hekArgument on zero window');
+end;
+
+procedure TestRateLimitMaxKeysRejectsNewKey;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TRateLimitOptions;
+  LHandlerCalled: Boolean;
+begin
+  LOpts := MakeRateLimitOpts(100, 60);
+  LOpts.MaxKeys := 1;
+  LOpts.TrustProxyHeaders := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(LOpts)]
+  );
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetHeader('x-forwarded-for', '10.0.0.1');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandlerCalled := False;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'first key allowed');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'first key 200');
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetHeader('x-forwarded-for', '10.0.0.2');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandlerCalled := False;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'second distinct key rejected when MaxKeys=1');
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'MaxKeys full returns 429');
+end;
+
+procedure TestRateLimitMaxKeysZeroUnlimitedKeys;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TRateLimitOptions;
+  LI: Int32;
+  LOk: Int32;
+begin
+  LOpts := MakeRateLimitOpts(100, 60);
+  LOpts.MaxKeys := 0; { unlimited keys, tests-only }
+  LOpts.TrustProxyHeaders := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(LOpts)]
+  );
+  LOk := 0;
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReq.SetHeader('x-forwarded-for', '10.0.0.' + IntToStr(LI));
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+    if LWObj.Status = HTTP_STATUS_OK then
+      Inc(LOk);
+  end;
+  CheckEqual(Int64(5), Int64(LOk), 'MaxKeys=0 allows many distinct keys');
+end;
+
+procedure TestRecoveryDoesNotRewriteAfterCommitted;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      raise Exception.Create('after commit');
+    end),
+    [RecoveryMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/partial');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'keeps committed status');
+  CheckEqual(Int64(1), Int64(LWObj.WriteHeaderCount), 'no second WriteHeader for 500');
+  Check(Pos('internal_error', LWObj.Body) = 0, 'no 500 JSON after commit');
 end;
 
 { WhenMiddleware tests }
@@ -3643,6 +3755,7 @@ begin
   T.Test('RecoveryWith: callback receives exception', @TestRecoveryWithCallbackReceivesException);
   T.Test('RecoveryWith: nil callback behaves like silent', @TestRecoveryWithNilCallbackBehavesLikeSilent);
   T.Test('RecoveryWith: success passes through', @TestRecoveryWithSuccessPassesThrough);
+  T.Test('Recovery: no rewrite after headers committed', @TestRecoveryDoesNotRewriteAfterCommitted);
   { Logger }
   T.Test('Logger: calls next handler', @TestLoggerCallsNext);
   T.Test('Logger: preserves status', @TestLoggerPreservesStatus);
@@ -3698,6 +3811,8 @@ begin
   T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
   T.Test('RateLimit: negative max raises', @TestRateLimitNegativeMaxRaises);
   T.Test('RateLimit: zero window raises', @TestRateLimitZeroWindowRaises);
+  T.Test('RateLimit: MaxKeys rejects new key', @TestRateLimitMaxKeysRejectsNewKey);
+  T.Test('RateLimit: MaxKeys=0 unlimited keys', @TestRateLimitMaxKeysZeroUnlimitedKeys);
   { WhenMiddleware }
   T.Test('When: applies when predicate true', @TestWhenMiddlewareAppliesWhenTrue);
   T.Test('When: skips when predicate false', @TestWhenMiddlewareSkipsWhenFalse);

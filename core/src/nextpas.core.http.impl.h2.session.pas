@@ -73,7 +73,8 @@ type
     function ItemAt(const AIndex: SizeInt): TH2Stream;
   end;
 
-  TH2ResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  TH2ResponseWriter = class(TInterfacedObject, IHttpResponseWriter,
+    IHttpResponseWriterCommitState)
   private
     FStatus: THttpStatus;
     FHeaders: IHttpHeaders;
@@ -87,6 +88,7 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
     function BodyStream: IStream;
+    function HeadersCommitted: Boolean;
   end;
 
   TH2ServerSession = class(TInterfacedObject, ITcpServerSession,
@@ -388,6 +390,11 @@ end;
 function TH2ResponseWriter.BodyStream: IStream;
 begin
   Result := FBody;
+end;
+
+function TH2ResponseWriter.HeadersCommitted: Boolean;
+begin
+  Result := FCommitted;
 end;
 
 { TH2StreamMap }

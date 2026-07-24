@@ -159,6 +159,14 @@ type
     function Hijack: ITcpStream;
   end;
 
+  { Optional commit probe for response writers.
+    RecoveryMiddleware uses this to avoid rewriting a 500 after headers
+    are already on the wire (or otherwise committed by the transport). }
+  IHttpResponseWriterCommitState = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000E}']
+    function HeadersCommitted: Boolean;
+  end;
+
   { Forward declarations for handler types }
   IHttpHandler = interface;
 

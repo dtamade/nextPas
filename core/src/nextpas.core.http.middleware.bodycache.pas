@@ -8,6 +8,9 @@ unit nextpas.core.http.middleware.bodycache;
  *       Default max = HTTP_DEFAULT_BODY_READ_MAX (4 MiB). Exceeding the limit
  *       writes 413 and does not enter the next handler.
  *       BodyCacheMiddlewareWith(0) = unlimited (tests/tools only).
+ *
+ *       GetBody reuses the cached TBytes via dynarray refcount (read-only
+ *       IReader per call); no per-read payload copy.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -28,15 +31,28 @@ function BodyCacheMiddleware: IHttpMiddleware;
    Oversize → 413 Payload Too Large, next handler not called. }
 function BodyCacheMiddlewareWith(const AMaxBytes: Int64): IHttpMiddleware;
 
+{** @desc Cache request body with no size bound (tests/tools only).
+   Prefer BodyCacheMiddleware / BodyCacheMiddlewareWith(positive) in production. }
+function BodyCacheMiddlewareUnlimited: IHttpMiddleware;
+
 implementation
 
 uses
   nextpas.core.errors,
   nextpas.core.http.middleware,
-  nextpas.core.http.message,
-  nextpas.core.io.memory;
+  nextpas.core.http.message;
 
 type
+  { Read-only view over shared cached TBytes (dynarray refcount; no Copy). }
+  TCachedBodyReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPos: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   { Wraps IHttpRequest, replacing Body with a cached TBytes buffer.
     Forwards context/options via THttpRequestWrapper. }
   TCachedBodyRequest = class(THttpRequestWrapper)
@@ -48,6 +64,33 @@ type
     constructor Create(const AInner: IHttpRequest; const ACachedBody: TBytes);
   end;
 
+constructor TCachedBodyReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData; { share dynarray }
+  FPos := 0;
+end;
+
+function TCachedBodyReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvail: SizeUInt;
+begin
+  if (ACount = 0) or (FData = nil) then
+    Exit(0);
+  if FPos >= SizeUInt(Length(FData)) then
+    Exit(0);
+  LAvail := SizeUInt(Length(FData)) - FPos;
+  if ACount < LAvail then
+    Result := ACount
+  else
+    Result := LAvail;
+  if Result > 0 then
+  begin
+    Move(FData[FPos], ABuf, Result);
+    Inc(FPos, Result);
+  end;
+end;
+
 constructor TCachedBodyRequest.Create(const AInner: IHttpRequest;
   const ACachedBody: TBytes);
 begin
@@ -56,13 +99,10 @@ begin
 end;
 
 function TCachedBodyRequest.GetBody: IReader;
-var
-  LCopy: TBytes;
 begin
   if FCachedBody = nil then
     Exit(nil);
-  LCopy := Copy(FCachedBody, 0, Length(FCachedBody));
-  Result := CreateBytesStreamFrom(LCopy) as IReader;
+  Result := TCachedBodyReader.Create(FCachedBody);
 end;
 
 function BodyCacheMiddleware: IHttpMiddleware;
@@ -96,6 +136,11 @@ begin
       ANext.ServeHTTP(LCachedReq, AW);
     end);
   end);
+end;
+
+function BodyCacheMiddlewareUnlimited: IHttpMiddleware;
+begin
+  Result := BodyCacheMiddlewareWith(0);
 end;
 
 end.
