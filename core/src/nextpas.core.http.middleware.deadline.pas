@@ -32,10 +32,15 @@ function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
 function DeadlineMiddlewareWith(ATimeoutMs: Int64;
   const AMaxBufferBytes: Int64): IHttpMiddleware;
 
+{** @desc Post-hoc deadline with unlimited response buffer (tests/tools only).
+   Prefer DeadlineMiddleware / DeadlineMiddlewareWith(positive) in production. }
+function DeadlineMiddlewareUnlimitedBuffer(ATimeoutMs: Int64): IHttpMiddleware;
+
 implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.time.base,
   nextpas.core.http.middleware,
@@ -43,8 +48,10 @@ uses
 
 type
   { Response writer wrapper: buffers body until Finalize.
-    Timed-out → 504; oversize buffer → 413; else flush status+body. }
-  TDeadlineResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+    Timed-out → 504; oversize buffer → 413; else flush status+body.
+    Forwards CommitState of the real writer so Recovery can see wire commit. }
+  TDeadlineResponseWriter = class(TInterfacedObject, IHttpResponseWriter,
+    IHttpResponseWriterCommitState)
   private
     FReal: IHttpResponseWriter;
     FStart: TInstant;
@@ -55,6 +62,7 @@ type
     FBodyLen: SizeUInt;
     FTimedOut: Boolean;
     FOversize: Boolean;
+    FLocalCommitted: Boolean;
     procedure EnsureCapacity(AExtra: SizeUInt);
     function WouldExceedMax(AExtra: SizeUInt): Boolean;
   public
@@ -65,6 +73,7 @@ type
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    function HeadersCommitted: Boolean;
     { Call after handler returns. Writes buffered output, 504, or 413. }
     procedure Finalize;
     property TimedOut: Boolean read FTimedOut;
@@ -86,6 +95,7 @@ begin
   FBodyLen := 0;
   FTimedOut := False;
   FOversize := False;
+  FLocalCommitted := False;
 end;
 
 function TDeadlineResponseWriter.WouldExceedMax(AExtra: SizeUInt): Boolean;
@@ -117,6 +127,7 @@ begin
   if FOversize then
     Exit;
   FStatus := AStatus;
+  FLocalCommitted := True;
 end;
 
 function TDeadlineResponseWriter.GetStatus: THttpStatus;
@@ -148,12 +159,23 @@ begin
   EnsureCapacity(ACount);
   Move(ABuf, FBody[FBodyLen], ACount);
   Inc(FBodyLen, ACount);
+  FLocalCommitted := True;
   Result := ACount;
 end;
 
 procedure TDeadlineResponseWriter.Flush;
 begin
   { No-op — we flush in Finalize }
+end;
+
+function TDeadlineResponseWriter.HeadersCommitted: Boolean;
+var
+  LRealCommit: IHttpResponseWriterCommitState;
+begin
+  if Supports(FReal, IHttpResponseWriterCommitState, LRealCommit) and
+     LRealCommit.HeadersCommitted then
+    Exit(True);
+  Result := FLocalCommitted;
 end;
 
 procedure TDeadlineResponseWriter.Finalize;
@@ -207,6 +229,11 @@ begin
       end;
     end);
   end);
+end;
+
+function DeadlineMiddlewareUnlimitedBuffer(ATimeoutMs: Int64): IHttpMiddleware;
+begin
+  Result := DeadlineMiddlewareWith(ATimeoutMs, 0);
 end;
 
 end.

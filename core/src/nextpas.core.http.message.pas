@@ -141,6 +141,9 @@ function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
    Exceeds max → EHttpError(hekBody, Op=body). }
 function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
   const AMaxBytes: Int64): TBytes;
+{** @desc Read request body with no size bound (tests/tools only).
+   Prefer HttpReadRequestBodyBytes / HttpReadRequestBodyBytesMax(positive). }
+function HttpReadRequestBodyBytesUnlimited(const AReq: IHttpRequest): TBytes;
 {** @desc Read request body as string. Returns '' if body is nil. Raises on nil request.
    Uses HTTP_DEFAULT_BODY_READ_MAX (see HttpReadRequestBodyBytes). }
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
@@ -1035,6 +1038,11 @@ end;
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 begin
   Result := HttpReadRequestBodyBytesMax(AReq, HTTP_DEFAULT_BODY_READ_MAX);
+end;
+
+function HttpReadRequestBodyBytesUnlimited(const AReq: IHttpRequest): TBytes;
+begin
+  Result := HttpReadRequestBodyBytesMax(AReq, 0);
 end;
 
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;

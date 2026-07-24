@@ -14,6 +14,10 @@ unit nextpas.core.http.middleware.ratelimit;
  *
  *       Each middleware instance maintains its own isolated rate-limit state,
  *       so different routes can have independent limits.
+ *
+ *       MaxKeys caps distinct tracked IPs (default 10000). When full, new
+ *       keys are rejected with 429 (predictable; no LRU eviction).
+ *       MaxKeys=0 means unlimited keys (tests/tools only).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -31,14 +35,19 @@ type
       Only enable when behind a trusted reverse proxy that sets these headers.
       Default: False (use RemoteAddr only). }
     TrustProxyHeaders: Boolean;
+    { Max distinct client keys retained. Default 10000.
+      0 = unlimited (tests/tools only). Negative rejected at construct. }
+    MaxKeys: Int32;
   end;
 
-{** @desc Rate limit middleware with default 100 requests per 60 seconds. }
+{** @desc Rate limit middleware with default 100 requests per 60 seconds,
+   MaxKeys=10000. }
 function RateLimitMiddleware: IHttpMiddleware;
 
 {** @desc Rate limit middleware with custom options.
    AOptions.MaxRequests: max requests per window (must be > 0).
-   AOptions.WindowSeconds: window duration in seconds (must be > 0). }
+   AOptions.WindowSeconds: window duration in seconds (must be > 0).
+   AOptions.MaxKeys: max distinct IPs (0=unlimited tests-only; default 10000). }
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
 
 implementation
@@ -68,8 +77,10 @@ type
     FCleanupCounter: Int32;
     FMaxRequests: Int32;
     FWindowSeconds: Int32;
+    FMaxKeys: Int32;
     FTrustProxyHeaders: Boolean;
     procedure CleanupExpiredEntries(ANow: Int64);
+    { Returns entry index, or -1 when a new key cannot be created (MaxKeys full). }
     function FindOrCreateEntry(const AIP: string; ANow: Int64): Int32;
   public
     constructor Create(const AOptions: TRateLimitOptions);
@@ -92,6 +103,7 @@ type
 
 const
   CLEANUP_INTERVAL = 64;
+  DEFAULT_MAX_KEYS = 10000;
 
 function NowEpoch: Int64;
 begin
@@ -106,6 +118,7 @@ begin
   FMaxRequests := AOptions.MaxRequests;
   FWindowSeconds := AOptions.WindowSeconds;
   FTrustProxyHeaders := AOptions.TrustProxyHeaders;
+  FMaxKeys := AOptions.MaxKeys; { 0 = unlimited keys (tests/tools) }
   FCleanupCounter := 0;
   FLock := Mutex;
 end;
@@ -154,6 +167,15 @@ begin
       Exit(LI);
     end;
   end;
+
+  if (FMaxKeys > 0) and (LLen >= FMaxKeys) then
+  begin
+    CleanupExpiredEntries(ANow);
+    LLen := Length(FEntries);
+    if LLen >= FMaxKeys then
+      Exit(-1);
+  end;
+
   SetLength(FEntries, LLen + 1);
   FEntries[LLen].IP := AIP;
   FEntries[LLen].Count := 0;
@@ -203,23 +225,36 @@ begin
   FLock.Acquire;
   try
     LIdx := FindOrCreateEntry(LIP, LNow);
-    Inc(FEntries[LIdx].Count);
-    LRemaining := FMaxRequests - FEntries[LIdx].Count;
-    if LRemaining < 0 then
-      LRemaining := 0;
-    LReset := Int64(FWindowSeconds) - (LNow - FEntries[LIdx].WindowStart);
-    if LReset < 0 then
-      LReset := 0;
-
-    AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(FMaxRequests)));
-    AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));
-    AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(LReset));
-
-    if FEntries[LIdx].Count > FMaxRequests then
+    if LIdx < 0 then
     begin
-      AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
-      HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
+      { Distinct-key capacity exhausted: reject new IP without allocating. }
+      AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(FMaxRequests)));
+      AW.GetHeaders.SetHeader('x-ratelimit-remaining', '0');
+      AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(Int64(FWindowSeconds)));
+      AW.GetHeaders.SetHeader('retry-after', IntToStr(Int64(FWindowSeconds)));
+      HttpWriteErrorTooManyRequests(AW, 'Rate limit key capacity exceeded');
       Result := False;
+    end
+    else
+    begin
+      Inc(FEntries[LIdx].Count);
+      LRemaining := FMaxRequests - FEntries[LIdx].Count;
+      if LRemaining < 0 then
+        LRemaining := 0;
+      LReset := Int64(FWindowSeconds) - (LNow - FEntries[LIdx].WindowStart);
+      if LReset < 0 then
+        LReset := 0;
+
+      AW.GetHeaders.SetHeader('x-ratelimit-limit', IntToStr(Int64(FMaxRequests)));
+      AW.GetHeaders.SetHeader('x-ratelimit-remaining', IntToStr(Int64(LRemaining)));
+      AW.GetHeaders.SetHeader('x-ratelimit-reset', IntToStr(LReset));
+
+      if FEntries[LIdx].Count > FMaxRequests then
+      begin
+        AW.GetHeaders.SetHeader('retry-after', IntToStr(LReset));
+        HttpWriteErrorTooManyRequests(AW, 'Rate limit exceeded');
+        Result := False;
+      end;
     end;
 
     { Periodic cleanup: after we're done using LIdx, evict expired entries
@@ -243,6 +278,7 @@ begin
   LOpts.MaxRequests := 100;
   LOpts.WindowSeconds := 60;
   LOpts.TrustProxyHeaders := False;
+  LOpts.MaxKeys := DEFAULT_MAX_KEYS;
   Result := RateLimitMiddlewareWith(LOpts);
 end;
 
@@ -252,6 +288,8 @@ begin
     raise EHttpError.Create(hekArgument, 'rate limit max requests must be positive');
   if AOptions.WindowSeconds <= 0 then
     raise EHttpError.Create(hekArgument, 'rate limit window seconds must be positive');
+  if AOptions.MaxKeys < 0 then
+    raise EHttpError.Create(hekArgument, 'rate limit max keys must be >= 0');
   Result := TRateLimitMiddleware.Create(AOptions);
 end;
 
