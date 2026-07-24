@@ -14,10 +14,10 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.intf,
-  nextpas.core.sync,
   nextpas.core.time.deadline,
   nextpas.core.http.base,
   nextpas.core.http.intf,
+  nextpas.core.http.impl.h2.client.pool,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.types,
@@ -40,7 +40,7 @@ type
     h2ccsClosed
   );
 
-  TH2ClientConnection = class(TInterfacedObject)
+  TH2ClientConnection = class(TH2PooledClientConnection)
   private type
     TH2ResponseState = record
       StreamID: UInt32;
@@ -167,42 +167,24 @@ type
     { Same-connection multiplex: open concurrent streams, demux responses
       in request order. Does not change serial RoundTrip semantics. }
     function RoundTripMany(const AReqs: array of IHttpRequest): THttpResponseArray;
-    function IsReusable: Boolean;
+    function IsReusable: Boolean; override;
     { Active liveness probe for pool borrow: PING/ACK when PingTimeout > 0.
       Must not be called while holding the transport pool lock. }
-    function ProbeHealth: Boolean;
+    function ProbeHealth: Boolean; override;
     { Wire/clear IHttpCancelToken for mid-read/write cancel slices on FConn. }
     procedure ApplyCancelToken(const AToken: IHttpCancelToken);
     procedure ClearCancelToken;
-    procedure Close;
+    procedure Close; override;
     property State: TH2ClientConnectionState read FState;
     property NextStreamID: UInt32 read FNextStreamID;
   end;
 
   TH2ClientTransport = class(TInterfacedObject, IHttpTransport,
     IHttpTransportMultiplex, IHttpTransportIdleConnections)
-  private type
-    TH2PoolEntry = record
-      Host: string;
-      Port: UInt16;
-      Secure: Boolean;
-      Conn: TH2ClientConnection;
-      IdleAtMs: UInt64;
-    end;
   private
     FOptions: TH2ClientTransportOptions;
     FDefaultTLSContext: ISSLContext;
-    FPoolLock: IMutex;
-    FPool: array of TH2PoolEntry;
-    FPoolCount: Int32;
-    function PoolEntryExpired(const AEntry: TH2PoolEntry): Boolean;
-    procedure PoolRemoveAt(const AIndex: Int32);
-    function PoolGet(const AHost: string; const APort: UInt16;
-      const ASecure: Boolean): TH2ClientConnection;
-    procedure PoolPut(const AHost: string; const APort: UInt16;
-      const ASecure: Boolean;
-      const AConn: TH2ClientConnection);
-    procedure PoolClear;
+    FPool: TH2IdleConnectionPool;
     function SecureClientContext: ISSLContext;
     function AcquireConnection(const AHost: string; const APort: UInt16;
       const ASecure: Boolean; out APooled: Boolean): TH2ClientConnection;
@@ -285,11 +267,6 @@ begin
     Result := ALeft
   else
     Result := ARight;
-end;
-
-function CanonicalPoolHostKey(const AHost: string): string; inline;
-begin
-  Result := LowerCase(AHost);
 end;
 
 procedure ValidateH2ClientUrlScheme(const AUrl: TUrl);
@@ -1856,244 +1833,14 @@ begin
   AOptions.Validate;
   FOptions := AOptions;
   FDefaultTLSContext := nil;
-  FPoolLock := Mutex;
-  FPool := nil;
-  FPoolCount := 0;
+  FPool := TH2IdleConnectionPool.Create(FOptions.MaxPoolSize, FOptions.IdleTTL);
 end;
 
 destructor TH2ClientTransport.Destroy;
 begin
-  PoolClear;
-  FPoolLock := nil;
+  FreeAndNil(FPool);
   FDefaultTLSContext := nil;
   inherited Destroy;
-end;
-
-function TH2ClientTransport.PoolEntryExpired(const AEntry: TH2PoolEntry): Boolean;
-var
-  LNow: UInt64;
-  LAge: UInt64;
-begin
-  Result := False;
-  if FOptions.IdleTTL <= 0 then
-    Exit;
-  LNow := GetTickCount64;
-  if LNow >= AEntry.IdleAtMs then
-    LAge := LNow - AEntry.IdleAtMs
-  else
-    LAge := 0;
-  Result := LAge >= UInt64(FOptions.IdleTTL);
-end;
-
-procedure TH2ClientTransport.PoolRemoveAt(const AIndex: Int32);
-begin
-  if (AIndex < 0) or (AIndex >= FPoolCount) then
-    Exit;
-  FPool[AIndex] := FPool[FPoolCount - 1];
-  Dec(FPoolCount);
-end;
-
-function TH2ClientTransport.PoolGet(const AHost: string;
-  const APort: UInt16; const ASecure: Boolean): TH2ClientConnection;
-const
-  { Skip wire PING when the conn was just returned — RoundTripMany / tight
-    keep-alive loops were paying a full RTT per batch (H2 peer ~10× gap). }
-  H2_POOL_PROBE_GRACE_MS = 1000;
-var
-  LI: Int32;
-  LCandidate: TH2ClientConnection;
-  LToClose: array of TH2ClientConnection;
-  LCloseCount: Int32;
-  LIdleAtMs: UInt64;
-  LIdleMs: UInt64;
-  LNow: UInt64;
-  LNeedProbe: Boolean;
-begin
-  { Never Close/Free while holding FPoolLock — same hang class as H1 pool. }
-  Result := nil;
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  while True do
-  begin
-    LCandidate := nil;
-    LIdleAtMs := 0;
-    FPoolLock.Acquire;
-    try
-      LI := 0;
-      while LI < FPoolCount do
-      begin
-        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-           (FPool[LI].Secure = ASecure) then
-        begin
-          if PoolEntryExpired(FPool[LI]) then
-          begin
-            if FPool[LI].Conn <> nil then
-            begin
-              if LCloseCount >= Length(LToClose) then
-                SetLength(LToClose, LCloseCount + 4);
-              LToClose[LCloseCount] := FPool[LI].Conn;
-              Inc(LCloseCount);
-            end;
-            PoolRemoveAt(LI);
-            Continue;
-          end;
-          LCandidate := FPool[LI].Conn;
-          LIdleAtMs := FPool[LI].IdleAtMs;
-          PoolRemoveAt(LI);
-          Break;
-        end;
-        Inc(LI);
-      end;
-    finally
-      FPoolLock.Release;
-    end;
-
-    if LCandidate = nil then
-      Break;
-
-    { Probe outside the pool lock: PING/Read can block (same hang class as Close).
-      Fresh idle: only IsReusable (no wire PING). }
-    LNeedProbe := True;
-    if LIdleAtMs > 0 then
-    begin
-      LNow := GetTickCount64;
-      if LNow >= LIdleAtMs then
-        LIdleMs := LNow - LIdleAtMs
-      else
-        LIdleMs := 0;
-      if LIdleMs < H2_POOL_PROBE_GRACE_MS then
-        LNeedProbe := False;
-    end;
-    if LCandidate.IsReusable and
-       ((not LNeedProbe) or LCandidate.ProbeHealth) then
-    begin
-      Result := LCandidate;
-      Break;
-    end;
-
-    if LCloseCount >= Length(LToClose) then
-      SetLength(LToClose, LCloseCount + 4);
-    LToClose[LCloseCount] := LCandidate;
-    Inc(LCloseCount);
-  end;
-
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-      LToClose[LI].Free;
-    except
-    end;
-end;
-
-procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
-  const ASecure: Boolean; const AConn: TH2ClientConnection);
-var
-  LI: Int32;
-  LAuthorityIdle: Int32;
-  LToClose: array of TH2ClientConnection;
-  LCloseCount: Int32;
-  LReject: Boolean;
-begin
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  LReject := False;
-  FPoolLock.Acquire;
-  try
-    if (AConn = nil) or (not AConn.IsReusable) then
-    begin
-      LReject := AConn <> nil;
-      Exit;
-    end;
-    LI := 0;
-    while LI < FPoolCount do
-    begin
-      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-         (FPool[LI].Secure = ASecure) and PoolEntryExpired(FPool[LI]) then
-      begin
-        if FPool[LI].Conn <> nil then
-        begin
-          if LCloseCount >= Length(LToClose) then
-            SetLength(LToClose, LCloseCount + 4);
-          LToClose[LCloseCount] := FPool[LI].Conn;
-          Inc(LCloseCount);
-        end;
-        PoolRemoveAt(LI);
-      end
-      else
-        Inc(LI);
-    end;
-    if FOptions.MaxPoolSize > 0 then
-    begin
-      LAuthorityIdle := 0;
-      for LI := 0 to FPoolCount - 1 do
-        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-           (FPool[LI].Secure = ASecure) then
-          Inc(LAuthorityIdle);
-      if LAuthorityIdle >= FOptions.MaxPoolSize then
-      begin
-        LReject := True;
-        Exit;
-      end;
-    end;
-    if FPoolCount >= Length(FPool) then
-      SetLength(FPool, FPoolCount + 4);
-    FPool[FPoolCount].Host := AHost;
-    FPool[FPoolCount].Port := APort;
-    FPool[FPoolCount].Secure := ASecure;
-    FPool[FPoolCount].Conn := AConn;
-    FPool[FPoolCount].IdleAtMs := GetTickCount64;
-    Inc(FPoolCount);
-  finally
-    FPoolLock.Release;
-  end;
-
-  if LReject and (AConn <> nil) then
-  begin
-    if LCloseCount >= Length(LToClose) then
-      SetLength(LToClose, LCloseCount + 4);
-    LToClose[LCloseCount] := AConn;
-    Inc(LCloseCount);
-  end;
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-      LToClose[LI].Free;
-    except
-    end;
-end;
-
-procedure TH2ClientTransport.PoolClear;
-var
-  LI: Int32;
-  LToClose: array of TH2ClientConnection;
-  LCloseCount: Int32;
-begin
-  LCloseCount := 0;
-  SetLength(LToClose, 0);
-  FPoolLock.Acquire;
-  try
-    for LI := 0 to FPoolCount - 1 do
-      if FPool[LI].Conn <> nil then
-      begin
-        if LCloseCount >= Length(LToClose) then
-          SetLength(LToClose, LCloseCount + 4);
-        LToClose[LCloseCount] := FPool[LI].Conn;
-        Inc(LCloseCount);
-      end;
-    FPool := nil;
-    FPoolCount := 0;
-  finally
-    FPoolLock.Release;
-  end;
-  for LI := 0 to LCloseCount - 1 do
-    if LToClose[LI] <> nil then
-    try
-      LToClose[LI].Close;
-      LToClose[LI].Free;
-    except
-    end;
 end;
 
 function TH2ClientTransport.SecureClientContext: ISSLContext;
@@ -2135,7 +1882,7 @@ var
   LHostKey: string;
 begin
   LHostKey := CanonicalPoolHostKey(AHost);
-  Result := PoolGet(LHostKey, APort, ASecure);
+  Result := TH2ClientConnection(FPool.Get(LHostKey, APort, ASecure));
   APooled := Result <> nil;
   if APooled then
     Exit;
@@ -2173,7 +1920,7 @@ begin
     AConn.Free;
   end
   else
-    PoolPut(LHostKey, APort, ASecure, AConn);
+    FPool.Put(LHostKey, APort, ASecure, AConn);
 end;
 
 function TH2ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -2385,7 +2132,8 @@ end;
 
 procedure TH2ClientTransport.CloseIdleConnections;
 begin
-  PoolClear;
+  if FPool <> nil then
+    FPool.Clear;
 end;
 
 function NewH2ClientTransport(
