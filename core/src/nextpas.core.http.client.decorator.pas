@@ -137,7 +137,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
-  nextpas.core.http.client,
+  nextpas.core.http.client.helpers,
   nextpas.core.platform.thread,
   nextpas.core.time,
   nextpas.core.time.datetime,

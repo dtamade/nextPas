@@ -167,79 +167,22 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.errors,
-  nextpas.core.fs,
   nextpas.core.io,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.encoding,
-  nextpas.core.compress,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
   nextpas.core.http.impl.registry,
   nextpas.core.http.client.redirect,
   nextpas.core.http.client.decorator,
+  nextpas.core.http.client.helpers,
   nextpas.core.platform.thread,
   nextpas.core.time,
   nextpas.core.time.datetime,
   nextpas.core.time.offsetdatetime,
   nextpas.core.time.timezone;
-
-
-{ Prefix client failure messages with "METHOD url: detail" when context is known. }
-function FormatHttpClientContext(const AMethod, AUrl: string): string;
-begin
-  if (AMethod <> '') and (AUrl <> '') then
-    Result := AMethod + ' ' + AUrl
-  else if AUrl <> '' then
-    Result := AUrl
-  else
-    Result := AMethod;
-end;
-
-function FormatHttpClientError(const AMethod, AUrl, ADetail: string): string;
-var
-  LCtx: string;
-begin
-  LCtx := FormatHttpClientContext(AMethod, AUrl);
-  if LCtx = '' then
-    Result := ADetail
-  else if ADetail = '' then
-    Result := LCtx
-  else
-    Result := LCtx + ': ' + ADetail;
-end;
-
-function FormatHttpStatusFailure(const AMethod, AUrl: string;
-  const AStatus: THttpStatus): string;
-begin
-  Result := FormatHttpClientError(AMethod, AUrl,
-    'HTTP request failed with status ' +
-    IntToStr(Int64(AStatus)) + ' ' +
-    nextpas.core.http.base.HttpStatusText(AStatus));
-end;
-
-procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
-begin
-  if AClient = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP download client is nil');
-  if AUrl = '' then
-    raise EHttpError.Create(hekArgument, 'HTTP download URL is empty');
-end;
-
-procedure CheckDownloadResponse(const AResp: IHttpResponse; const AUrl: string);
-begin
-  if AResp = nil then
-    raise EHttpError.CreateOp(hekConnect, 'download',
-      FormatHttpClientError('GET', AUrl, 'HTTP download returned no response'));
-  if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
-    raise EHttpError.CreateOp(hekStatus, 'download',
-      FormatHttpClientError('GET', AUrl,
-        'HTTP download failed with status ' +
-        IntToStr(Int64(AResp.StatusCode)) + ' ' +
-        nextpas.core.http.base.HttpStatusText(AResp.StatusCode)),
-      AResp.StatusCode);
-end;
 
 procedure ValidateClientOptions(const AOptions: THttpClientOptions);
 begin
@@ -307,22 +250,6 @@ begin
   Result := LBuilder.Body(ABody).Build;
 end;
 
-
-procedure ReleaseResponseBody(const AResp: IHttpResponse);
-begin
-  if AResp = nil then
-    Exit;
-  AResp.Close;
-end;
-
-procedure ReleaseResponseBodyIgnoringErrors(const AResp: IHttpResponse);
-begin
-  try
-    ReleaseResponseBody(AResp);
-  except
-    on E: Exception do ;
-  end;
-end;
 
 
 { THttpClient }
@@ -808,557 +735,154 @@ begin
   Result := THttpClient.Create(ATransport, AOptions);
 end;
 
-function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
-  const ADest: IWriter): Int64;
-var
-  LResp: IHttpResponse;
+function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string; const ADest: IWriter): Int64;
 begin
-  CheckDownloadArgs(AClient, AUrl);
-  if ADest = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP download destination writer is nil');
-
-  LResp := AClient.Get(AUrl);
-  try
-    CheckDownloadResponse(LResp, AUrl);
-    if LResp.Body = nil then
-      Result := 0
-    else
-      Result := nextpas.core.io.Copy(ADest, LResp.Body);
-  except
-    ReleaseResponseBodyIgnoringErrors(LResp);
-    raise;
-  end;
-  ReleaseResponseBody(LResp);
+  Result := nextpas.core.http.client.helpers.HttpGetToWriter(AClient, AUrl, ADest);
 end;
 
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
-var
-  LResp: IHttpResponse;
-  LDestDir: string;
-  LTempPath: string;
-  LTempFile: IFile;
-  LCommitted: Boolean;
 begin
-  CheckDownloadArgs(AClient, AUrl);
-  if ADestPath = '' then
-    raise EHttpError.Create(hekArgument, 'HTTP download destination path is empty');
-
-  LResp := AClient.Get(AUrl);
-  try
-    CheckDownloadResponse(LResp, AUrl);
-
-    LDestDir := nextpas.core.fs.PathDir(ADestPath);
-    try
-      nextpas.core.fs.MkdirAll(LDestDir);
-    except
-      on E: Exception do
-        raise EHttpError.CreateOp(hekBody, 'download',
-          FormatHttpClientError('GET', AUrl,
-            'HTTP download could not create directory: ' + LDestDir));
-    end;
-
-    LTempFile := nextpas.core.fs.TempFile(LDestDir,
-      '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
-    LTempPath := LTempFile.Name;
-    LCommitted := False;
-    try
-      if LResp.Body <> nil then
-        Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
-      else
-        Result := 0;
-      LTempFile.Sync;
-      LTempFile.Close;
-      LTempFile := nil;
-
-      try
-        nextpas.core.fs.Rename(LTempPath, ADestPath);
-      except
-        on E: Exception do
-          raise EHttpError.CreateOp(hekBody, 'download',
-            FormatHttpClientError('GET', AUrl,
-              'HTTP download could not publish file: ' + ADestPath));
-      end;
-      LCommitted := True;
-    finally
-      if LTempFile <> nil then
-      begin
-        try
-          LTempFile.Close;
-        except
-          on E: Exception do ;
-        end;
-      end;
-      if (not LCommitted) and (LTempPath <> '') then
-        nextpas.core.fs.Remove(LTempPath);
-    end;
-  except
-    ReleaseResponseBodyIgnoringErrors(LResp);
-    raise;
-  end;
-  ReleaseResponseBody(LResp);
+  Result := nextpas.core.http.client.helpers.HttpGetToFile(AClient, AUrl, ADestPath);
 end;
 
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 begin
-  if AResp = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
-  ReleaseResponseBody(AResp);
+  nextpas.core.http.client.helpers.HttpReleaseResponseBody(AResp);
 end;
 
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
-var
-  LBody: IReader;
 begin
-  if AResp = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
-
-  LBody := AResp.Body;
-  if LBody = nil then
-    Exit;
-
-  try
-    Result := nextpas.core.io.ReadAll(LBody);
-  except
-    ReleaseResponseBodyIgnoringErrors(AResp);
-    raise;
-  end;
-  ReleaseResponseBody(AResp);
+  Result := nextpas.core.http.client.helpers.HttpReadResponseBodyBytes(AResp);
 end;
 
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
-var
-  LBody: TBytes;
 begin
-  LBody := HttpReadResponseBodyBytes(AResp);
-  Result := '';
-  SetLength(Result, Length(LBody));
-  if Length(LBody) > 0 then
-    Move(LBody[0], Result[1], Length(LBody));
-end;
-
-function HttpDecodeContentEncoding(const AEncoding: string;
-  const ABody: TBytes; const AMaxSize: Int64): TBytes;
-var
-  LEncoding: string;
-  LComma: SizeInt;
-begin
-  if AMaxSize < 0 then
-    raise EHttpError.Create(hekArgument,
-      'content-encoding max decompressed size must not be negative');
-
-  LEncoding := LowerCase(Trim(AEncoding));
-  if (LEncoding = '') or (LEncoding = 'identity') then
-  begin
-    Result := ABody;
-    Exit;
-  end;
-
-  { C1: single coding only; stacked encodings are unsupported. }
-  LComma := Pos(',', LEncoding);
-  if LComma > 0 then
-    raise EHttpError.CreateOp(hekProtocol, 'content_encoding',
-      'unsupported Content-Encoding: multi-coding not supported');
-
-  if (LEncoding <> 'gzip') and (LEncoding <> 'deflate') and
-    (LEncoding <> 'x-gzip') then
-    raise EHttpError.CreateOp(hekProtocol, 'content_encoding',
-      'unsupported Content-Encoding: ' + LEncoding);
-
-  if (AMaxSize > 0) and (UInt64(AMaxSize) > UInt64(High(SizeUInt))) then
-    raise EHttpError.Create(hekArgument,
-      'content-encoding max decompressed size exceeds platform capacity');
-
-  try
-    if (LEncoding = 'gzip') or (LEncoding = 'x-gzip') then
-    begin
-      if AMaxSize > 0 then
-        Result := GzipDecompressWithMaxOutputSize(ABody, SizeUInt(AMaxSize))
-      else
-        Result := GzipDecompress(ABody);
-    end
-    else
-    begin
-      if AMaxSize > 0 then
-        Result := DeflateDecompressWithMaxOutputSize(ABody, SizeUInt(AMaxSize))
-      else
-        Result := DeflateDecompress(ABody);
-    end;
-  except
-    on E: EHttpError do
-      raise;
-    on E: Exception do
-      raise EHttpError.CreateOp(hekBody, 'content_encoding',
-        'failed to decode Content-Encoding: ' + E.Message);
-  end;
-end;
-
-function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
-  const AMaxSize: Int64): TBytes;
-var
-  LRaw: TBytes;
-  LEncoding: string;
-begin
-  if AResp = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
-
-  LRaw := HttpReadResponseBodyBytes(AResp);
-  LEncoding := '';
-  if (AResp.Headers <> nil) then
-    LEncoding := AResp.Headers.Get('content-encoding');
-  Result := HttpDecodeContentEncoding(LEncoding, LRaw, AMaxSize);
-end;
-
-function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
-  const AMaxSize: Int64): string;
-var
-  LBody: TBytes;
-begin
-  LBody := HttpReadResponseBodyBytesDecoded(AResp, AMaxSize);
-  Result := '';
-  SetLength(Result, Length(LBody));
-  if Length(LBody) > 0 then
-    Move(LBody[0], Result[1], Length(LBody));
-end;
-
-function ExtractCharsetFromContentType(const AContentType: string): string;
-var
-  LLower, LCharset: string;
-  LStart, LEnd: SizeInt;
-begin
-  Result := '';
-  if AContentType = '' then Exit;
-  LLower := LowerCase(AContentType);
-  LStart := Pos('charset=', LLower);
-  if LStart = 0 then Exit;
-  Inc(LStart, 8); { skip 'charset=' }
-  LEnd := LStart;
-  while (LEnd <= Length(AContentType)) and (AContentType[LEnd] <> ';') and
-    (AContentType[LEnd] <> ' ') do
-    Inc(LEnd);
-  SetLength(LCharset, LEnd - LStart);
-  if LEnd > LStart then
-    Move(AContentType[LStart], LCharset[1], LEnd - LStart);
-  { Remove surrounding quotes if present }
-  if (Length(LCharset) >= 2) and (LCharset[1] = '"') and
-    (LCharset[Length(LCharset)] = '"') then
-  begin
-    SetLength(Result, Length(LCharset) - 2);
-    if Length(Result) > 0 then
-      Move(LCharset[2], Result[1], Length(Result));
-  end
-  else
-    Result := LCharset;
-end;
-
-function BytesToLatin1String(const ABytes: TBytes): string;
-var
-  I, LLen: SizeInt;
-begin
-  LLen := Length(ABytes);
-  SetLength(Result, LLen);
-  for I := 0 to LLen - 1 do
-    Result[I + 1] := Chr(ABytes[I]);
+  Result := nextpas.core.http.client.helpers.HttpReadResponseBodyString(AResp);
 end;
 
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
-var
-  LBody: TBytes;
-  LContentType, LCharset: string;
-  LLowerCharset: string;
 begin
-  LBody := HttpReadResponseBodyBytes(AResp);
-  if Length(LBody) = 0 then
-    Exit('');
-
-  LContentType := '';
-  if AResp <> nil then
-    LContentType := AResp.Headers.Get('content-type');
-  LCharset := ExtractCharsetFromContentType(LContentType);
-  LLowerCharset := LowerCase(LCharset);
-
-  { Default to UTF-8 if no charset specified }
-  if (LLowerCharset = '') or (LLowerCharset = 'utf-8') or
-    (LLowerCharset = 'utf8') or (LLowerCharset = 'us-ascii') then
-  begin
-    Result := '';
-    SetLength(Result, Length(LBody));
-    Move(LBody[0], Result[1], Length(LBody));
-  end
-  else if (LLowerCharset = 'iso-8859-1') or (LLowerCharset = 'latin1') or
-    (LLowerCharset = 'latin-1') or (LLowerCharset = 'windows-1252') then
-    Result := BytesToLatin1String(LBody)
-  else
-  begin
-    { Unknown charset — fall back to raw bytes (UTF-8 compatible) }
-    Result := '';
-    SetLength(Result, Length(LBody));
-    Move(LBody[0], Result[1], Length(LBody));
-  end;
+  Result := nextpas.core.http.client.helpers.HttpReadResponseBodyStringAuto(AResp);
 end;
 
-function HttpEnsureSuccess(const AResp: IHttpResponse;
-  const AMethod, AUrl: string): IHttpResponse;
+function HttpDecodeContentEncoding(const AEncoding: string; const ABody: TBytes; const AMaxSize: Int64): TBytes;
 begin
-  if AResp = nil then
-    raise EHttpError.Create(hekArgument,
-      FormatHttpClientError(AMethod, AUrl, 'HTTP response is nil'));
-  if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
-    raise EHttpError.CreateOp(hekStatus, 'ensure',
-      FormatHttpStatusFailure(AMethod, AUrl, AResp.StatusCode),
-      AResp.StatusCode);
-  Result := AResp;
+  Result := nextpas.core.http.client.helpers.HttpDecodeContentEncoding(AEncoding, ABody, AMaxSize);
+end;
+
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse; const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.helpers.HttpReadResponseBodyBytesDecoded(AResp, AMaxSize);
+end;
+
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse; const AMaxSize: Int64): string;
+begin
+  Result := nextpas.core.http.client.helpers.HttpReadResponseBodyStringDecoded(AResp, AMaxSize);
+end;
+
+function HttpEnsureSuccess(const AResp: IHttpResponse; const AMethod, AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.helpers.HttpEnsureSuccess(AResp, AMethod, AUrl);
 end;
 
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
-  Result := HttpEnsureSuccess(AResp, '', '');
+  Result := nextpas.core.http.client.helpers.HttpEnsureSuccess(AResp);
 end;
 
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
-var
-  LResp: IHttpResponse;
 begin
-  LResp := AClient.Get(AUrl);
-  try
-    HttpEnsureSuccess(LResp, 'GET', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpGetString(AClient, AUrl);
 end;
 
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
-var
-  LResp: IHttpResponse;
 begin
-  LResp := AClient.Get(AUrl);
-  try
-    HttpEnsureSuccess(LResp, 'GET', AUrl);
-    Result := HttpReadResponseBodyBytes(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpGetBytes(AClient, AUrl);
 end;
 
-function HttpReadResponseJson(const AResp: IHttpResponse;
-  const AMethod, AUrl: string): IJsonDocument;
-var
-  LBody: string;
+function HttpReadResponseJson(const AResp: IHttpResponse; const AMethod, AUrl: string): IJsonDocument;
 begin
-  HttpEnsureSuccess(AResp, AMethod, AUrl);
-  LBody := HttpReadResponseBodyString(AResp);
-  Result := JsonParse(LBody);
-  if (Result <> nil) and Result.HasError then
-    raise EHttpError.CreateOp(hekProtocol, 'json',
-      FormatHttpClientError(AMethod, AUrl, 'HTTP response body contains invalid JSON'));
+  Result := nextpas.core.http.client.helpers.HttpReadResponseJson(AResp, AMethod, AUrl);
 end;
 
 function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument;
 begin
-  Result := HttpReadResponseJson(AResp, '', '');
+  Result := nextpas.core.http.client.helpers.HttpReadResponseJson(AResp);
 end;
 
 function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
-var
-  LResp: IHttpResponse;
 begin
-  if AClient = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
-  LResp := AClient.Get(AUrl);
-  try
-    Result := HttpReadResponseJson(LResp, 'GET', AUrl);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpGetJson(AClient, AUrl);
 end;
 
-function HttpPostString(const AClient: IHttpClient;
-  const AUrl, AContentType, ABody: string): string;
-var
-  LResp: IHttpResponse;
+function HttpPostString(const AClient: IHttpClient; const AUrl, AContentType, ABody: string): string;
 begin
-  LResp := AClient.Post(AUrl, AContentType, ABody);
-  try
-    HttpEnsureSuccess(LResp, 'POST', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPostString(AClient, AUrl, AContentType, ABody);
 end;
 
-function HttpPutString(const AClient: IHttpClient;
-  const AUrl, AContentType, ABody: string): string;
-var
-  LResp: IHttpResponse;
+function HttpPutString(const AClient: IHttpClient; const AUrl, AContentType, ABody: string): string;
 begin
-  LResp := AClient.Put(AUrl, AContentType, ABody);
-  try
-    HttpEnsureSuccess(LResp, 'PUT', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPutString(AClient, AUrl, AContentType, ABody);
 end;
 
-function HttpPatchString(const AClient: IHttpClient;
-  const AUrl, AContentType, ABody: string): string;
-var
-  LResp: IHttpResponse;
+function HttpPatchString(const AClient: IHttpClient; const AUrl, AContentType, ABody: string): string;
 begin
-  LResp := AClient.Patch(AUrl, AContentType, ABody);
-  try
-    HttpEnsureSuccess(LResp, 'PATCH', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPatchString(AClient, AUrl, AContentType, ABody);
 end;
 
-function HttpDeleteString(const AClient: IHttpClient;
-  const AUrl: string): string;
-var
-  LResp: IHttpResponse;
+function HttpDeleteString(const AClient: IHttpClient; const AUrl: string): string;
 begin
-  LResp := AClient.Delete(AUrl);
-  try
-    HttpEnsureSuccess(LResp, 'DELETE', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpDeleteString(AClient, AUrl);
 end;
 
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
-  Result := AClient.Head(AUrl);
-  HttpEnsureSuccess(Result, 'HEAD', AUrl);
+  Result := nextpas.core.http.client.helpers.HttpHead(AClient, AUrl);
 end;
 
 function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
-  Result := AClient.Options(AUrl);
-  HttpEnsureSuccess(Result, 'OPTIONS', AUrl);
+  Result := nextpas.core.http.client.helpers.HttpOptions(AClient, AUrl);
 end;
 
-function HttpPostJson(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): string;
-var
-  LResp: IHttpResponse;
+function HttpPostJson(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
-  try
-    HttpEnsureSuccess(LResp, 'POST', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPostJson(AClient, AUrl, ABody);
 end;
 
-function HttpPutJson(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): string;
-var
-  LResp: IHttpResponse;
+function HttpPutJson(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
-  try
-    HttpEnsureSuccess(LResp, 'PUT', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPutJson(AClient, AUrl, ABody);
 end;
 
-function HttpPatchJson(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): string;
-var
-  LResp: IHttpResponse;
+function HttpPatchJson(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
-  try
-    HttpEnsureSuccess(LResp, 'PATCH', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPatchJson(AClient, AUrl, ABody);
 end;
 
-function HttpDeleteJson(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): string;
-var
-  LResp: IHttpResponse;
+function HttpDeleteJson(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  LResp := AClient.Delete(AUrl, 'application/json', ABody.Stringify);
-  try
-    HttpEnsureSuccess(LResp, 'DELETE', AUrl);
-    Result := HttpReadResponseBodyString(LResp);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
-function HttpPostJsonDocument(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
-var
-  LResp: IHttpResponse;
+function HttpPostJsonDocument(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  if AClient = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
-  if ABody = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
-  LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
-  try
-    Result := HttpReadResponseJson(LResp, 'POST', AUrl);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPostJsonDocument(AClient, AUrl, ABody);
 end;
 
-function HttpPutJsonDocument(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
-var
-  LResp: IHttpResponse;
+function HttpPutJsonDocument(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  if AClient = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
-  if ABody = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
-  LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
-  try
-    Result := HttpReadResponseJson(LResp, 'PUT', AUrl);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPutJsonDocument(AClient, AUrl, ABody);
 end;
 
-function HttpPatchJsonDocument(const AClient: IHttpClient;
-  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
-var
-  LResp: IHttpResponse;
+function HttpPatchJsonDocument(const AClient: IHttpClient; const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  if AClient = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
-  if ABody = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
-  LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
-  try
-    Result := HttpReadResponseJson(LResp, 'PATCH', AUrl);
-  except
-    HttpReleaseResponseBody(LResp);
-    raise;
-  end;
+  Result := nextpas.core.http.client.helpers.HttpPatchJsonDocument(AClient, AUrl, ABody);
+end;
+
+function ExtractCharsetFromContentType(const AContentType: string): string;
+begin
+  Result := nextpas.core.http.client.helpers.ExtractCharsetFromContentType(AContentType);
 end;
 
 end.
