@@ -6,7 +6,7 @@ unit nextpas.core.simd.cpuinfo.lazy.testcase;
 interface
 
 uses
-  Classes,
+  nextpas.core.thread.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.test,
@@ -16,7 +16,7 @@ uses
 
 {$M+}
 type
-  TLazyCPUInfoReaderThread = class(TThread)
+  TLazyCPUInfoReaderThread = class(TWorkerThread)
   private
     FIterations: Integer;
     FFailed: Boolean;
@@ -50,8 +50,7 @@ implementation
 
 constructor TLazyCPUInfoReaderThread.Create(const aIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FFailed := False;
   FErrorMessage := '';

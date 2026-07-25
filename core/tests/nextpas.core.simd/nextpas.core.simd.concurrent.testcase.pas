@@ -22,7 +22,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes,
+  nextpas.core.thread.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.format,
@@ -131,7 +131,7 @@ type
   // === Worker Thread Classes ===
 
   {** F32x4 加法工作线程 *}
-  TF32x4AddWorker = class(TThread)
+  TF32x4AddWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -146,7 +146,7 @@ type
   end;
 
   {** F32x4 乘法工作线程 *}
-  TF32x4MulWorker = class(TThread)
+  TF32x4MulWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -161,7 +161,7 @@ type
   end;
 
   {** F64x2 操作工作线程 *}
-  TF64x2OpsWorker = class(TThread)
+  TF64x2OpsWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -176,7 +176,7 @@ type
   end;
 
   {** Dispatch Table 访问工作线程 *}
-  TDispatchAccessWorker = class(TThread)
+  TDispatchAccessWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -191,7 +191,7 @@ type
   end;
 
   {** 混合数学运算工作线程 *}
-  TMixedMathWorker = class(TThread)
+  TMixedMathWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -206,7 +206,7 @@ type
   end;
 
   {** 归约操作工作线程 *}
-  TReductionWorker = class(TThread)
+  TReductionWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -221,7 +221,7 @@ type
   end;
 
   {** 复合运算工作线程 *}
-  TCompoundOpsWorker = class(TThread)
+  TCompoundOpsWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -236,7 +236,7 @@ type
   end;
 
   {** 压力测试工作线程 *}
-  TStressWorker = class(TThread)
+  TStressWorker = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FIterations: Integer;
@@ -253,7 +253,7 @@ type
   end;
 
   {** 后端查询工作线程 *}
-  TBackendQueryThread = class(TThread)
+  TBackendQueryThread = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FResult: TSimdBackend;
@@ -267,7 +267,7 @@ type
   end;
 
   {** vector-asm 开关写线程 *}
-  TVectorAsmToggleWorker = class(TThread)
+  TVectorAsmToggleWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FInitialValue: Boolean;
@@ -282,7 +282,7 @@ type
   end;
 
   {** 多 writer 场景下的 vector-asm 开关写线程 *}
-  TVectorAsmMultiToggleWorker = class(TThread)
+  TVectorAsmMultiToggleWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FWriterPhase: Integer;
@@ -297,7 +297,7 @@ type
   end;
 
   {** dispatch 只读工作线程（与开关写线程并发） *}
-  TVectorAsmReadWorker = class(TThread)
+  TVectorAsmReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FSuccess: Boolean;
@@ -311,7 +311,7 @@ type
   end;
 
   {** public ABI 只读工作线程（与重绑写线程并发） *}
-  TPublicApiReadWorker = class(TThread)
+  TPublicApiReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FSuccess: Boolean;
@@ -325,7 +325,7 @@ type
   end;
 
   {** RegisterBackend 可用性切换写线程（用于 public ABI pod info 并发回归） *}
-  TBackendRegisterToggleWorker = class(TThread)
+  TBackendRegisterToggleWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FBackend: TSimdBackend;
@@ -343,7 +343,7 @@ type
   end;
 
   {** public ABI backend pod info 只读线程（与 RegisterBackend 写线程并发） *}
-  TPublicAbiPodInfoReadWorker = class(TThread)
+  TPublicAbiPodInfoReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FBackend: TSimdBackend;
@@ -364,7 +364,7 @@ type
   end;
 
   {** public ABI backend text getter 只读线程（与 RegisterBackend 写线程并发） *}
-  TPublicAbiBackendTextReadWorker = class(TThread)
+  TPublicAbiBackendTextReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FBackend: TSimdBackend;
@@ -384,7 +384,7 @@ type
   end;
 
   {** current backend pod info 只读线程（允许 enabled-active / enabled-inactive / disabled-inactive 三态） *}
-  TCurrentBackendPodInfoReadWorker = class(TThread)
+  TCurrentBackendPodInfoReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FBackend: TSimdBackend;
@@ -406,7 +406,7 @@ type
   end;
 
   {** current backend info 只读线程（与 RegisterBackend 写线程并发） *}
-  TCurrentBackendReadWorker = class(TThread)
+  TCurrentBackendReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedBackendA: TSimdBackend;
@@ -423,7 +423,7 @@ type
   end;
 
   {** current backend info 只读线程（与 RegisterBackend 写线程并发） *}
-  TCurrentBackendInfoReadWorker = class(TThread)
+  TCurrentBackendInfoReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedInfoA: TSimdBackendInfo;
@@ -440,7 +440,7 @@ type
   end;
 
   {** current runtime snapshot 只读线程（与 vector-asm toggle 写线程并发） *}
-  TCurrentRuntimeSnapshotReadWorker = class(TThread)
+  TCurrentRuntimeSnapshotReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedSnapshotA: TSimdRuntimeSnapshot;
@@ -457,7 +457,7 @@ type
   end;
 
   {** backend adapter ops 只读线程（与 RegisterBackend 写线程并发） *}
-  TBackendOpsReadWorker = class(TThread)
+  TBackendOpsReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FBackend: TSimdBackend;
@@ -475,7 +475,7 @@ type
   end;
 
   {** dispatchable helper 只读线程（与 vector-asm toggle 写线程并发） *}
-  TDispatchableHelpersReadWorker = class(TThread)
+  TDispatchableHelpersReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedListEnabled: TSimdBackendArray;
@@ -495,7 +495,7 @@ type
   end;
 
   {** public API active metadata 只读线程（与 RegisterBackend 写线程并发） *}
-  TPublicApiActiveMetadataReadWorker = class(TThread)
+  TPublicApiActiveMetadataReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedBackendA: TSimdBackend;
@@ -514,7 +514,7 @@ type
   end;
 
   {** 首次注册序列写线程（按给定顺序把 previously-unregistered backend 注册进 binary） *}
-  TBackendFirstRegisterSequenceWorker = class(TThread)
+  TBackendFirstRegisterSequenceWorker = class(TWorkerThread)
   private
     FBackends: TSimdBackendArray;
     FTables: TSimdDispatchTableArray;
@@ -530,7 +530,7 @@ type
   end;
 
   {** registered backend list 只读线程（与首次 RegisterBackend 写线程并发） *}
-  TRegisteredBackendListReadWorker = class(TThread)
+  TRegisteredBackendListReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FExpectedStates: TSimdBackendArrayStates;
@@ -545,7 +545,7 @@ type
   end;
 
   {** dispatch 控制面混合并发线程 *}
-  TDispatchMixedControlWorker = class(TThread)
+  TDispatchMixedControlWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FWorkerPhase: Integer;
@@ -560,7 +560,7 @@ type
   end;
 
   {** 大数据处理工作线程 *}
-  TLargeDataThread = class(TThread)
+  TLargeDataThread = class(TWorkerThread)
   private
     FWorkerIndex: Integer;
     FSuccess: Boolean;
@@ -771,8 +771,7 @@ end;
 
 constructor TF32x4AddWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);  // Create suspended
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -821,8 +820,7 @@ end;
 
 constructor TF32x4MulWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -867,8 +865,7 @@ end;
 
 constructor TF64x2OpsWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -914,8 +911,7 @@ end;
 
 constructor TDispatchAccessWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -980,8 +976,7 @@ end;
 
 constructor TMixedMathWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -1030,8 +1025,7 @@ end;
 
 constructor TReductionWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -1075,8 +1069,7 @@ end;
 
 constructor TCompoundOpsWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -1125,8 +1118,7 @@ end;
 
 constructor TStressWorker.Create(AWorkerIndex, AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FIterations := AIterations;
   FSuccess := False;
@@ -1179,8 +1171,7 @@ end;
 
 constructor TBackendQueryThread.Create(AWorkerIndex: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FSuccess := False;
 end;
@@ -1202,8 +1193,7 @@ end;
 
 constructor TVectorAsmToggleWorker.Create(AIterations: Integer; AInitialValue: Boolean);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := AIterations;
   FInitialValue := AInitialValue;
   FSuccess := False;
@@ -1251,8 +1241,7 @@ end;
 
 constructor TVectorAsmMultiToggleWorker.Create(AIterations, AWriterPhase: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := AIterations;
   FWriterPhase := AWriterPhase;
   FSuccess := False;
@@ -1301,8 +1290,7 @@ end;
 
 constructor TVectorAsmReadWorker.Create(AIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := AIterations;
   FSuccess := False;
   FErrorMsg := '';
@@ -1346,8 +1334,7 @@ end;
 
 constructor TPublicApiReadWorker.Create(aIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FSuccess := False;
   FErrorMsg := '';
@@ -1437,8 +1424,7 @@ end;
 constructor TBackendRegisterToggleWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   const aTableEnabled, aTableDisabled: TSimdDispatchTable);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FBackend := aBackend;
   FTableEnabled := aTableEnabled;
@@ -1472,8 +1458,7 @@ constructor TPublicAbiPodInfoReadWorker.Create(aIterations: Integer; aBackend: T
   aExpectedCapsA, aExpectedCapsB: UInt64;
   aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FBackend := aBackend;
   FExpectedCapsA := aExpectedCapsA;
@@ -1487,8 +1472,7 @@ end;
 constructor TPublicAbiBackendTextReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   const aExpectedNameA, aExpectedNameB, aExpectedDescriptionA, aExpectedDescriptionB: AnsiString);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FBackend := aBackend;
   FExpectedNameA := aExpectedNameA;
@@ -1608,8 +1592,7 @@ end;
 constructor TCurrentBackendInfoReadWorker.Create(aIterations: Integer;
   const aExpectedInfoA, aExpectedInfoB: TSimdBackendInfo);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FExpectedInfoA := aExpectedInfoA;
   FExpectedInfoB := aExpectedInfoB;
@@ -1620,8 +1603,7 @@ end;
 constructor TCurrentBackendReadWorker.Create(aIterations: Integer;
   aExpectedBackendA, aExpectedBackendB: TSimdBackend);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FExpectedBackendA := aExpectedBackendA;
   FExpectedBackendB := aExpectedBackendB;
@@ -1632,8 +1614,7 @@ end;
 constructor TCurrentRuntimeSnapshotReadWorker.Create(aIterations: Integer;
   const aExpectedSnapshotA, aExpectedSnapshotB: TSimdRuntimeSnapshot);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FExpectedSnapshotA := aExpectedSnapshotA;
   FExpectedSnapshotB := aExpectedSnapshotB;
@@ -1644,8 +1625,7 @@ end;
 constructor TBackendOpsReadWorker.Create(aIterations: Integer; aBackend: TSimdBackend;
   const aExpectedTableA, aExpectedTableB: TSimdDispatchTable);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FBackend := aBackend;
   FExpectedTableA := aExpectedTableA;
@@ -1658,8 +1638,7 @@ constructor TCurrentBackendPodInfoReadWorker.Create(aIterations: Integer; aBacke
   aExpectedCapsEnabled, aExpectedCapsDisabled: UInt64;
   aExpectedFlagsEnabledActive, aExpectedFlagsEnabledInactive, aExpectedFlagsDisabledInactive: TNextPasSimdAbiFlags);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FBackend := aBackend;
   FExpectedCapsEnabled := aExpectedCapsEnabled;
@@ -1843,8 +1822,7 @@ constructor TDispatchableHelpersReadWorker.Create(aIterations: Integer;
   const aExpectedListEnabled, aExpectedListDisabled: TSimdBackendArray;
   aExpectedBestEnabled, aExpectedBestDisabled: TSimdBackend);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FExpectedListEnabled := Copy(aExpectedListEnabled);
   FExpectedListDisabled := Copy(aExpectedListDisabled);
@@ -1903,8 +1881,7 @@ constructor TPublicApiActiveMetadataReadWorker.Create(aIterations: Integer;
   aExpectedBackendA, aExpectedBackendB: TSimdBackend;
   aExpectedFlagsA, aExpectedFlagsB: TNextPasSimdAbiFlags);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FExpectedBackendA := aExpectedBackendA;
   FExpectedBackendB := aExpectedBackendB;
@@ -1919,8 +1896,7 @@ constructor TBackendFirstRegisterSequenceWorker.Create(const aBackends: TSimdBac
 var
   LIndex: Integer;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   SetLength(FBackends, Length(aBackends));
   for LIndex := 0 to High(aBackends) do
     FBackends[LIndex] := aBackends[LIndex];
@@ -1953,8 +1929,7 @@ constructor TRegisteredBackendListReadWorker.Create(aIterations: Integer;
 var
   LIndex: Integer;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   SetLength(FExpectedStates, Length(aExpectedStates));
   for LIndex := 0 to High(aExpectedStates) do
@@ -2060,8 +2035,7 @@ end;
 
 constructor TDispatchMixedControlWorker.Create(AIterations, AWorkerPhase: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := AIterations;
   FWorkerPhase := AWorkerPhase;
   FSuccess := False;
@@ -2147,8 +2121,7 @@ end;
 
 constructor TLargeDataThread.Create(AWorkerIndex: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerIndex := AWorkerIndex;
   FSuccess := False;
   FErrorMsg := '';

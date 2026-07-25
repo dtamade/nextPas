@@ -8,7 +8,7 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.text.conv,
-  Classes,
+  nextpas.core.thread.base,
   nextpas.core.math,
   nextpas.core.simd,
   nextpas.core.simd.base,
@@ -20,7 +20,7 @@ const
   ARRAY_SIZE = 256;
 
 type
-  TWorkerThread = class(TThread)
+  TSimdConcurrentWorker = class(TWorkerThread)
   private
     FWorkerId: Integer;
     FFailures: Integer;
@@ -31,15 +31,14 @@ type
     property Failures: Integer read FFailures;
   end;
 
-constructor TWorkerThread.Create(aId: Integer);
+constructor TSimdConcurrentWorker.Create(aId: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FWorkerId := aId;
   FFailures := 0;
 end;
 
-procedure TWorkerThread.Execute;
+procedure TSimdConcurrentWorker.Execute;
 var
   LSrc1, LSrc2, LDst: array[0..ARRAY_SIZE-1] of Single;
   LExpected, LActual, LSum: Single;
@@ -84,7 +83,7 @@ begin
 end;
 
 var
-  LThreads: array[0..NUM_THREADS-1] of TWorkerThread;
+  LThreads: array[0..NUM_THREADS-1] of TSimdConcurrentWorker;
   LTotalFailures: Integer;
   i: Integer;
 begin
@@ -95,7 +94,7 @@ begin
   WriteLn('');
 
   for i := 0 to NUM_THREADS - 1 do
-    LThreads[i] := TWorkerThread.Create(i);
+    LThreads[i] := TSimdConcurrentWorker.Create(i);
 
   for i := 0 to NUM_THREADS - 1 do
     LThreads[i].Start;

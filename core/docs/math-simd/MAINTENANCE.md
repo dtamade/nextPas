@@ -4,7 +4,7 @@
 > Lane: `codex/math-simd` @ `.worktrees/math-simd`
 > Mode: **A — maintenance only** (green gates, doc truth, debt inventory)
 > Goal pointer: [`GOAL_QUEUE.md`](GOAL_QUEUE.md) (`CURRENT=IDLE`)
-> Latest residual cut: **D-RTL-2/3 closed** (dispatchapi `TSourceLines`; transcendental `Power`)
+> Latest residual cut: **D-RTL-1/2/3 closed** (TWorkerThread BeginThread + test migration)
 
 This file is the maintenance authority for residual debt and re-verify evidence.
 It does **not** invent feature milestones. Feature work needs a new Goal Card.
@@ -53,7 +53,7 @@ simd ↛ math
 
 | ID | Item | Where | Severity | Unblock |
 |----|------|-------|----------|---------|
-| D-RTL-1 | Tests still `uses Classes` + `TThread` | `core/tests/nextpas.core.simd/{concurrent.pas,concurrent.testcase.pas,direct.testcase.pas}` and `core/tests/nextpas.core.simd.cpuinfo/cpuinfo.lazy.testcase.pas` | WARN | **thread** lane: harden `TWorkerThread` join/lifecycle, then migrate |
+| D-RTL-1 | ~~Tests `Classes` + `TThread`~~ | concurrent / direct / cpuinfo.lazy | **closed 2026-07-26** | Migrated to `TWorkerThread`; base uses **BeginThread** (FPC TLS/heap init) + Destroy joins |
 | D-RTL-2 | ~~dispatchapi `Classes` + `TStringList`~~ | `dispatchapi.testcase.pas` | **closed 2026-07-26** | Local `TSourceLines` + `nextpas.core.fs` ReadFile*; focused **1762**/0 |
 | D-RTL-3 | ~~`Math.Power` + TextFormat `%g` crash~~ | `transcendental_f32.pas` | **closed 2026-07-26** | math `Power`; Format specs `%f`; standalone **PASS 1050**/0 |
 | D-DOC-1 | Historical pass counts in archive sections | GOAL_QUEUE card EVIDENCE, plan.md history | low | Keep history; only §current baseline must match latest re-verify |

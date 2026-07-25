@@ -6,6 +6,7 @@ unit nextpas.core.simd.direct.testcase;
 interface
 
 uses
+  nextpas.core.thread.base,
   nextpas.core.math,
   nextpas.core.exception,
   nextpas.core.text.conv,
@@ -68,10 +69,6 @@ type
 
 implementation
 
-uses
-  nextpas.core.math,
-  Classes;
-
 function DirectBackendName(const aBackend: TSimdBackend): string;
 begin
   Result := GetBackendInfo(aBackend).Name;
@@ -86,7 +83,7 @@ begin
 end;
 
 type
-  TDirectDispatchMutationWorker = class(TThread)
+  TDirectDispatchMutationWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FWriterPhase: Integer;
@@ -104,7 +101,7 @@ type
     property ErrorMsg: string read FErrorMsg;
   end;
 
-  TDirectDispatchReadWorker = class(TThread)
+  TDirectDispatchReadWorker = class(TWorkerThread)
   private
     FIterations: Integer;
     FSuccess: Boolean;
@@ -318,8 +315,7 @@ end;
 constructor TDirectDispatchMutationWorker.Create(aIterations, aWriterPhase: Integer;
   aBackend: TSimdBackend; const aTableA, aTableB: TSimdDispatchTable);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FWriterPhase := aWriterPhase;
   FBackend := aBackend;
@@ -348,8 +344,7 @@ end;
 
 constructor TDirectDispatchReadWorker.Create(aIterations: Integer);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
+  inherited Create;
   FIterations := aIterations;
   FSuccess := False;
   FErrorMsg := '';

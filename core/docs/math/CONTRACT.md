@@ -28,14 +28,12 @@ FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIM
 
 **测试树 residual（2026-07-26；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
 - `core/tests/nextpas.core.math/**`：无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
-- `core/tests/nextpas.core.simd/**`：生产路径无 FPC `Math`；cpuinfo sysfs 用 `nextpas.core.fs.ReadDir`。
-- **已关闭**：`dispatchapi.testcase` 本地 `TSourceLines`（无 `Classes`/`TStringList`）；
-  `transcendental_f32` 用 math `Power`（无 `Math.Power`）。
-- **仍保留 live residual（`Classes` + `TThread`，4 files）**：
-  `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`。
-  原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
-  （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
-- Gate：`production=0`；test residual **WARN**（不阻塞 landing）。
+- `core/tests/nextpas.core.simd/**`（含 concurrent/direct/cpuinfo.lazy）：无 FPC `Math`/`Classes`/`TThread`。
+- **已关闭**：
+  - dispatchapi `TSourceLines`（无 `Classes`/`TStringList`）
+  - transcendental_f32 math `Power` + TextFormat `%f`
+  - concurrent/direct/cpuinfo.lazy → `TWorkerThread`（`thread.base` 用 BeginThread + Destroy join）
+- Gate：`production=0`；math/simd 测试树 RTL residual **0**（相对上述清单）。
 
 `System.Sin/Sqrt/...` 等语言级 intrinsic 应集中在 `math.trig`/`math.scalar` 出口；consumer 与 simd 应调用 math owner，避免业务路径散落 `System.*`。
 

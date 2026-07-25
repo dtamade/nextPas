@@ -66,6 +66,20 @@ CURRENT=IDLE
 | **GATES** | simd focused **1762**/0; transcendental_f32 standalone PASS; hygiene |
 | **EVIDENCE** | 2026-07-26: focused **1762**/0; `transcendental_f32` **1050** checks / 0 failures |
 
+### M2 — D-RTL-1 TThread residual cut  【done 2026-07-26】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **WHY** | Clear last math-simd test `Classes`/`TThread` residual; fix TWorkerThread FPC lifecycle root cause |
+| **IN_SCOPE_PATHS** | `core/src/nextpas.core.thread.base.pas` (cross-module, required); simd concurrent/direct/cpuinfo.lazy tests; MAINTENANCE/CONTRACT |
+| **OUT_OF_SCOPE** | thread pool redesign; non-simd TThread consumers in other modules |
+| **DELIVERABLES** | `TWorkerThread` → BeginThread/WaitForThreadTerminate + Destroy join; migrate 4 simd test files off Classes.TThread |
+| **GATES** | simd focused **1762**/0; concurrent standalone PASS; cpuinfo-focused green; `core/tests/nextpas.core.thread/test_thread` **19**/0; hygiene |
+| **EVIDENCE** | 2026-07-26: all gates green; root cause = platform_thread_create skipped FPC TLS/heap init (same note as test.runner) |
+| **CROSS-MODULE** | `nextpas.core.thread.base` lifecycle fix — required for correct worker threads under FPC host |
+
 ### Usability P0/P1 package  【done 2026-07-20】
 
 Strict batch equal-length (default); `BatchLog*` alias; `TryBatchLn*`; docs CONTRACT 1.5 / API app-vs-kernel / numeric contract pointer.
