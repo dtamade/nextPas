@@ -1387,11 +1387,15 @@ end;
 
 function TMock.Setup(const AMethodName: string): IMockSetup;
 begin
+  { v8.29: owner-thread guard — Setup is not thread-safe. }
+  FState.CheckThread('Setup');
   Result := TMockSetup.Create(FState, AMethodName);
 end;
 
 function TMock.Verify(const AMethodName: string): IMockVerify;
 begin
+  { Verify* body paths also hit CallCount CheckThread; guard at entry too. }
+  FState.CheckThread('Verify');
   Result := TMockVerifier.Create(FState, AMethodName);
 end;
 
@@ -1401,6 +1405,7 @@ var
   LUncalled: string;
   I: Integer;
 begin
+  FState.CheckThread('VerifyAll');
   LNames := FState.GetSetupMethodNames;
   LUncalled := '';
   for I := 0 to High(LNames) do
@@ -1576,11 +1581,13 @@ end;
 
 procedure TMock.ResetCalls;
 begin
+  FState.CheckThread('ResetCalls');
   FState.Reset;
 end;
 
 procedure TMock.ResetAll;
 begin
+  FState.CheckThread('ResetAll');
   FState.ResetAll;
 end;
 
@@ -1626,6 +1633,7 @@ var
   LOrder: specialize TArray<string>;
   LActual: string;
 begin
+  FState.CheckThread('VerifyInOrder');
   if Length(AMethods) < 2 then
   begin
     if Length(AMethods) = 1 then

@@ -88,6 +88,11 @@ require_output_line "$TMP_ROOT/config.out" '^focus=core/tests/nextpas[.]core[.]c
 require_output_line "$TMP_ROOT/http.out" '^truth=runtime$' 'http truth'
 require_output_line "$TMP_ROOT/http.out" '^focus=core/tests/nextpas[.]core[.]http/test_http_client$' 'http focus'
 
+"$SCRIPT_UNDER_TEST" --lane test --print-command >"$TMP_ROOT/test.out"
+require_output_line "$TMP_ROOT/test.out" '^truth=source-contract$' 'test truth'
+require_output_line "$TMP_ROOT/test.out" '^focus=core/tests/nextpas[.]core[.]test/lane_gate$' 'test focus'
+require_output_line "$TMP_ROOT/test.out" '^command=make focused FOCUS=core/tests/nextpas[.]core[.]test/lane_gate$' 'test command'
+
 if "$SCRIPT_UNDER_TEST" --lane hash --print-command >"$TMP_ROOT/hash.out" 2>"$TMP_ROOT/hash.err"; then
   printf 'hash lane should not have a default lane-focused gate while hash gates are SKIP placeholders\n' >&2
   cat "$TMP_ROOT/hash.out" >&2
@@ -96,8 +101,8 @@ fi
 grep -q 'unknown lane: hash' "$TMP_ROOT/hash.err"
 
 "$SCRIPT_UNDER_TEST" --list >"$TMP_ROOT/list.out"
-if [ "$(wc -l <"$TMP_ROOT/list.out" | tr -d ' ')" != "5" ]; then
-  printf 'lane-focused --list should print exactly five default lane rows\n' >&2
+if [ "$(wc -l <"$TMP_ROOT/list.out" | tr -d ' ')" != "6" ]; then
+  printf 'lane-focused --list should print exactly six default lane rows\n' >&2
   cat "$TMP_ROOT/list.out" >&2
   exit 1
 fi
@@ -109,6 +114,7 @@ awk -F '\t' '
     expected["system"] = 1
     expected["config"] = 1
     expected["http"] = 1
+    expected["test"] = 1
   }
   NF != 3 {
     printf "lane-focused --list row is not lane/truth/focus: %s\n", $0 > "/dev/stderr"

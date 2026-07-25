@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: **v8.28** Runner/Subtest/CLI Go-testing 行为密度（B61–B65）
+> 治理状态: **v8.29** 并行竞态 + Mock 误用密度（B66–B70）+ G1 contracts 默认入口
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
@@ -506,18 +506,50 @@ after each test in serial mode.
 
 ## Build & Test
 
+### 默认门禁（日常 / PR / Ready）
+
+test lane **默认**证据命令（与 `make focused FOCUS=core/tests/nextpas.core.test/lane_gate` /
+`make lane-focused LANE=test` 等价）：
+
+```bash
+make -C core/tests/nextpas.core.test contracts
+# = api source-contract + runner source-contract + scale report
+# SCALE_MIN=6500  FAIL_PATH_MIN_RATIO=0.35  LOW_SIGNAL_MAX_RATIO=0.40
+```
+
+| 场景 | 命令 |
+|------|------|
+| 日常改动 / Ready first evidence | `make -C core/tests/nextpas.core.test contracts` |
+| 只改某一 suite | `make -C core/tests/nextpas.core.test/<suite> clean test` |
+| 版本 land 前 | `make -C core/tests/nextpas.core.test clean test`（全套件）+ demos |
+| 严格 golden（CI 意图） | `NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1` + 相关 suite |
+| 卫生 | `make hygiene` |
+
+> **说明**：仓库 `core-ci` 全量 walk 已会跑到 contracts 三门（它们是独立 Makefile 工程）；
+> 上述默认是 **lane 本地 / PR 首选轻量入口**，不是「CI 从未跑 contracts」。
+> 未把 contracts 拆成独立 GitHub job（见路线图 B76 文档部分；显式 CI job 另议）。
+
 ```bash
 # Single test suite
 make -C core/tests/nextpas.core.test/test_assertions clean test
 
-# All test framework suites
+# All test framework suites (or: make -C core/tests/nextpas.core.test clean test)
 for d in core/tests/nextpas.core.test/test_*; do
   make -C "$d" clean test
 done
 
 # List all test suites
-ls core/tests/nextpas.core.test/
+make -C core/tests/nextpas.core.test list
 ```
+
+### 消费者约定（框架侧规范，不跨 lane 扫库）
+
+| 规则 | 说明 |
+|------|------|
+| 新 runtime 单元测试 | 必须 `uses nextpas.core.test` + `TTestSuite` / `Check*` / `Expect` |
+| 禁止 | 手写 `AssertTrue` 迷你 runner、`WriteLn('[PASS]')` 自计分、裸 `assert`、`fpcunit` |
+| 允许 | shell/python **source-contract** 门禁；compile-only gate；模块 owner 的历史债按 lane 消化 |
+| 示例 | `core/examples/nextpas.core.test/{smoke_suite,softfail_demo,nested_softfail_demo}` |
 
 ## Architecture
 
