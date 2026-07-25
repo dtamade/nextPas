@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（17 个 .pas + 4 个 .inc）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
-**最后更新**：2026-07-21
-**版本**：v8.28
+**最后更新**：2026-07-26
+**版本**：v8.29
 **路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
 
 ---
@@ -418,6 +418,15 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.29 (2026-07-26) — 并行竞态与 Mock 误用密度（B66–B70）+ G1 治理
+
+- **B66**：parallel hard-fail/Expect/Soft fail-path 表（120）+ Expect storm 全员失败计数 exact
+- **B67**：Mock 跨线程 ops 扩 Setup/VerifyInOrder/CalledAtLeast/ResetCalls；产品侧 `CheckThread` 补齐；CalledExactly/InOrder 负路径表
+- **B68**：RegisterStub/Fixture 非主线程消息 **exact prefix** + `tid=`/`expected=` 表（80）
+- **B69**：TimeoutWorkerLeaks 只读契约（serial+parallel 清零）；**不**模拟 stuck worker（防 flaky CI）
+- **B70**：双 `TestSeq` marker + 结果名在 `RunParallelWithResult` 可见
+- **G1**：`contracts` 默认门禁文档；`lane_gate` + `make lane-focused LANE=test`；禁止新迷你 runner
 
 ### v8.28 (2026-07-21) — Runner / Subtest / CLI ≈ Go testing（B61–B65）
 

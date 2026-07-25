@@ -2,8 +2,8 @@
 
 **Owner**: test lane（`.worktrees/test`）— **全权**
 **北极星**: 对标 **Go `testing` + 工程门禁** / **Rust 测试工程纪律** 的**质量与规模**，不是 API 化妆。
-**当前基线**: **v8.28**（Runner/Subtest/CLI ≈ Go testing）
-**最后更新**: 2026-07-21
+**当前基线**: **v8.29**（并行竞态 + Mock 误用密度）
+**最后更新**: 2026-07-26
 
 ---
 
@@ -48,6 +48,7 @@
 | **v8.26** | 灭 identity + SCALE≥6500 + 三门收紧 | 质量跃迁 **done** |
 | **v8.27** | Soft 第二波 + Soft golden + join 契约 | Soft 可用面 **done** |
 | **v8.28** | Runner/Subtest/CLI ≈ Go testing | 行为密度 **done** |
+| **v8.29** | 并行竞态 + Mock 误用密度 | 误用必红 **done** |
 
 ---
 
@@ -59,8 +60,8 @@
 v8.26  规模质量跃迁（替换 identity + SCALE≥6500）  ✅
 v8.27  Soft 第二波 + Soft 诊断 golden              ✅
 v8.28  Runner/Subtest/CLI 深度（Go testing 行为）  ✅
-v8.29  并行竞态与 Mock 误用密度                    ← next
-v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500
+v8.29  并行竞态与 Mock 误用密度                    ✅
+v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500    ← next
 v8.31+ 收紧 low-signal≤25%；消费者示例；CI 默认 contracts
 v9     （另拍板）IExpectation 拆分 / SoftExpect
 ```
@@ -107,17 +108,18 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ---
 
-### v8.29 — 并行竞态与 Mock 误用密度（P1）
+### v8.29 — 并行竞态与 Mock 误用密度（**done**）
 
 **目标**: 无 TSAN 下最大化「误用必红」。
 
-| ID | 任务 | 验收 |
+| ID | 任务 | 状态 |
 |----|------|------|
-| B66 | 并行原子计数/Expect 风暴再加 **可计数** fail-path 变体 | parallel scale↑ |
-| B67 | Mock：跨线程 + Verify 次数 + InOrder 负路径表加厚 | mock fail-path |
-| B68 | RegisterStub/Fixture 非主线程 **消息 exact** 表 | runner contracts |
-| B69 | TimeoutWorkerLeaks：可控 stuck 路径（若可安全模拟）或文档+计数只读契约 | 不 flaky CI |
-| B70 | `TestSeq` 与 parallel 可见性契约再钉 | parallel |
+| B66 | 并行 hard-fail/Expect/Soft fail-path 表（120）+ storm 计数 exact | **done** |
+| B67 | Mock 跨线程表加厚；Setup/VerifyInOrder/Reset* CheckThread；CalledExactly/InOrder 负路径表 | **done** |
+| B68 | RegisterStub/Fixture 非主线程 **消息 exact** 表（80） | **done** |
+| B69 | TimeoutWorkerLeaks：只读计数契约（**不做** stuck 模拟，防 flaky） | **done** |
+| B70 | `TestSeq` 双 marker + 结果名可见性 under RunParallel | **done** |
+| G1 | contracts 文档默认 + `lane_gate` + `LANE=test` focused matrix | **done** |
 
 ---
 
@@ -137,7 +139,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 | ID | 任务 | 验收 |
 |----|------|------|
-| B76 | 仓库 CI 文档默认 `make -C core/tests/nextpas.core.test contracts` | docs |
+| B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | scale |
 | B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | 条件抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | discovery |
@@ -169,7 +171,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.29** 并行竞态与 Mock 误用密度（B66–B70）。
+**v8.30** Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）。
 
 ---
 

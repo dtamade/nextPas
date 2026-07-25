@@ -201,6 +201,181 @@ begin
   end;
 end;
 
+{ ── B68: RegisterStub/Fixture non-main-thread message exact ──────────────── }
+
+procedure TestB68RegisterMainThreadMsgExactCase(const AC: TTestCase);
+{ Data: 'stub' | 'fixture'. Message must start with fixed prefix and include tid=. }
+var
+  LSuite: TTestSuite;
+  Ctx: TRegThreadCtx;
+  TID: TThreadID;
+  LPrefix: string;
+begin
+  if AC.Data = 'stub' then
+    LPrefix := 'RegisterStub must be called from the main thread'
+  else
+    LPrefix := 'RegisterFixture must be called from the main thread';
+  LSuite := TTestSuite.Create('b68-' + AC.Name);
+  Ctx.Suite := LSuite;
+  Ctx.OpStub := AC.Data = 'stub';
+  Ctx.Caught := False;
+  Ctx.Msg := '';
+  TID := BeginThread(@RegisterCrossThreadWorker, @Ctx);
+  CheckTrue(TID <> TThreadID(0), 'BeginThread ok');
+  WaitForThreadTerminate(TID, 10000);
+  CheckTrue(Ctx.Caught, 'worker must raise');
+  CheckTrue(Pos(LPrefix, Ctx.Msg) = 1, 'exact prefix: ' + Ctx.Msg);
+  CheckContains(Ctx.Msg, 'tid=');
+  CheckContains(Ctx.Msg, 'expected=');
+  LSuite := Default(TTestSuite);
+end;
+
+{ ── B66: parallel hard-fail / Expect storm fail-path (countable) ──────────── }
+
+procedure TestB66ParallelHardFailPathCase(const AC: TTestCase);
+{ Data: 'check' | 'fail' | 'expect' | 'soft'. Peer must still pass under parallel. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LBadFound: Boolean;
+begin
+  LSuite := TTestSuite.Create('b66-' + AC.Name);
+  LSuite.Test('bad', procedure
+    begin
+      if AC.Data = 'check' then
+        CheckEqual(Int64(1), Int64(2), 'b66 check fail-path')
+      else if AC.Data = 'fail' then
+        Fail('b66 intentional fail-path')
+      else if AC.Data = 'expect' then
+        ExpectInt(1).ToEqualInt(2)
+      else
+        SoftFail('b66 soft fail-path');
+    end);
+  LSuite.Test('peer', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult), 'suite must fail');
+  CheckEqual(1, LResult.Failed, 'exactly one failure');
+  CheckEqual(1, LResult.Passed, 'peer still passes');
+  LBadFound := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Name = 'bad') and
+       (LResult.Results[I].Status = tsFailed) then
+      LBadFound := True;
+  CheckTrue(LBadFound, 'bad entry recorded as failed');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB66ParallelExpectStormFailPath;
+{ Expect storm with intentional mismatch: all workers fail, counts exact. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('b66-storm-fail');
+  LSuite.Test('e1', procedure
+    begin
+      ExpectInt(1).ToEqualInt(2);
+    end);
+  LSuite.Test('e2', procedure
+    begin
+      CheckEqual(Int64(0), Int64(1));
+    end);
+  LSuite.Test('e3', procedure
+    begin
+      Fail('b66 storm fail-path');
+    end);
+  LSuite.Test('e4', procedure
+    begin
+      SoftFail('b66 storm soft');
+    end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult));
+  CheckEqual(4, LResult.Failed, 'all four workers fail');
+  CheckEqual(0, LResult.Passed, 'no passes');
+  LSuite := Default(TTestSuite);
+end;
+
+{ ── B69: TimeoutWorkerLeaks readonly (no stuck-thread simulation in CI) ──── }
+
+procedure TestB69TimeoutWorkerLeakReadonlyContract;
+{ Stuck timeout workers are NOT simulated here (would flaky CI). Contract:
+  clean serial + parallel runs keep leaks at 0; Reset/Get are consistent. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  ResetTimeoutWorkerLeakCount;
+  CheckEqual(0, GetTimeoutWorkerLeakCount, 'reset → 0');
+
+  LSuite := TTestSuite.Create('b69-serial');
+  LSuite.Test('s1', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckTrue(LSuite.RunWithResult(LResult), 'serial clean');
+  CheckEqual(0, LResult.TimeoutWorkerLeaks, 'serial TimeoutWorkerLeaks=0');
+  CheckEqual(0, GetTimeoutWorkerLeakCount, 'global still 0 after serial');
+  LSuite := Default(TTestSuite);
+
+  LSuite := TTestSuite.Create('b69-par');
+  LSuite.Test('p1', procedure
+    begin
+      CheckTrue(True);
+    end);
+  LSuite.Test('p2', procedure
+    begin
+      CheckTrue(True);
+    end);
+  CheckTrue(LSuite.RunParallelWithResult(nil, LResult), 'parallel clean');
+  CheckEqual(0, LResult.TimeoutWorkerLeaks, 'parallel TimeoutWorkerLeaks=0');
+  CheckEqual(0, GetTimeoutWorkerLeakCount, 'global still 0 after parallel');
+  LSuite := Default(TTestSuite);
+end;
+
+{ ── B70: TestSeq visibility under RunParallel ────────────────────────────── }
+
+procedure SeqMarkerBodyB;
+begin
+  CheckEqual(Int64(1), Int64(GSeqDone), 'seq-b sees seq-a done');
+  GSeqDone := 2;
+  CheckTrue(True, 'seq-b marker');
+end;
+
+procedure ParSeesSeqDoneB;
+begin
+  CheckEqual(Int64(2), Int64(GSeqDone), 'parallel sees both TestSeq done');
+end;
+
+procedure TestB70TestSeqVisibilityParallel;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LNames: string;
+begin
+  ResetDefaultConfig;
+  GSeqDone := 0;
+  LSuite := TTestSuite.Create('b70-seq-vis');
+  LSuite.TestSeq('seq-a', @SeqMarkerBody);
+  LSuite.TestSeq('seq-b', @SeqMarkerBodyB);
+  LSuite.Test('par-x', @ParSeesSeqDoneB);
+  LSuite.Test('par-y', @ParSeesSeqDoneB);
+  CheckTrue(LSuite.RunParallelWithResult(nil, LResult), 'all must pass');
+  CheckEqual(4, LResult.Passed, '2 seq + 2 par');
+  CheckEqual(0, LResult.Failed);
+  CheckEqual(Int64(2), Int64(GSeqDone), 'final seq marker');
+  LNames := '';
+  for I := 0 to High(LResult.Results) do
+    LNames := LNames + '|' + LResult.Results[I].Name;
+  CheckContains(LNames, 'seq-a');
+  CheckContains(LNames, 'seq-b');
+  CheckContains(LNames, 'par-x');
+  CheckContains(LNames, 'par-y');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestParallelSoftFail;
 var
   LSuite: TTestSuite;
@@ -798,6 +973,12 @@ var
   LB30Suite: TTestSuite;
   LB30Cases: specialize TArray<TTestCase>;
   LB30I: Integer;
+  LB66Suite: TTestSuite;
+  LB66Cases: specialize TArray<TTestCase>;
+  LB66I: Integer;
+  LB68Suite: TTestSuite;
+  LB68Cases: specialize TArray<TTestCase>;
+  LB68I: Integer;
 begin
   WriteLn('=== test_parallel ===');
   LSuite := TTestSuite.Create('Parallel Tests');
@@ -1227,6 +1408,67 @@ begin
       FailTest('B30 parallel soft fail-path table failed');
     PassTest('B30 parallel soft fail-path table');
     LB30Suite := Default(TTestSuite);
+  end;
+
+  WriteLn;
+  SectionHeader('B66: parallel hard-fail / Expect storm fail-path');
+  begin
+    SetLength(LB66Cases, 120);
+    for LB66I := 0 to High(LB66Cases) do
+    begin
+      LB66Cases[LB66I].Name := 'h' + IntToStr(LB66I);
+      case LB66I mod 4 of
+        0: LB66Cases[LB66I].Data := 'check';
+        1: LB66Cases[LB66I].Data := 'fail';
+        2: LB66Cases[LB66I].Data := 'expect';
+      else
+        LB66Cases[LB66I].Data := 'soft';
+      end;
+    end;
+    LB66Suite := TTestSuite.Create('par-b66');
+    LB66Suite.TestTable('B66 parallel hard fail-path', LB66Cases,
+      @TestB66ParallelHardFailPathCase);
+    if not LB66Suite.Run then
+      FailTest('B66 parallel hard fail-path table failed');
+    PassTest('B66 parallel hard fail-path table');
+    TestB66ParallelExpectStormFailPath;
+    PassTest('B66 parallel Expect storm fail-path');
+    LB66Suite := Default(TTestSuite);
+  end;
+
+  WriteLn;
+  SectionHeader('B68: RegisterStub/Fixture message exact');
+  begin
+    SetLength(LB68Cases, 80);
+    for LB68I := 0 to High(LB68Cases) do
+    begin
+      LB68Cases[LB68I].Name := 'r' + IntToStr(LB68I);
+      if (LB68I mod 2) = 0 then
+        LB68Cases[LB68I].Data := 'stub'
+      else
+        LB68Cases[LB68I].Data := 'fixture';
+    end;
+    LB68Suite := TTestSuite.Create('par-b68');
+    LB68Suite.TestTable('B68 RegisterStub main thread fail-path', LB68Cases,
+      @TestB68RegisterMainThreadMsgExactCase);
+    if not LB68Suite.Run then
+      FailTest('B68 Register message exact table failed');
+    PassTest('B68 RegisterStub/Fixture message exact');
+    LB68Suite := Default(TTestSuite);
+  end;
+
+  WriteLn;
+  SectionHeader('B69: TimeoutWorkerLeaks readonly contract');
+  begin
+    TestB69TimeoutWorkerLeakReadonlyContract;
+    PassTest('B69 TimeoutWorkerLeaks readonly (no stuck sim)');
+  end;
+
+  WriteLn;
+  SectionHeader('B70: TestSeq visibility under parallel');
+  begin
+    TestB70TestSeqVisibilityParallel;
+    PassTest('B70 TestSeq names + ordering under RunParallel');
   end;
 
   WriteLn;

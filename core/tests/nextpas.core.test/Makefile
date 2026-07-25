@@ -1,10 +1,14 @@
 # nextpas.core.test — Unified test runner
 # =========================================================
 # Usage:
-#   make -C core/tests/nextpas.core.test test       # run all suites
-#   make -C core/tests/nextpas.core.test contracts  # source-contract + scale gates
+#   make -C core/tests/nextpas.core.test contracts  # DEFAULT lane gate (api+runner+scale)
+#   make -C core/tests/nextpas.core.test test       # run all suites (version land)
 #   make -C core/tests/nextpas.core.test clean
 #   make -C core/tests/nextpas.core.test list
+#
+# Focused / lane helper (same as contracts):
+#   make focused FOCUS=core/tests/nextpas.core.test/lane_gate
+#   make lane-focused LANE=test
 #
 # CI tip (strict goldens): export NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1
 #   (committed goldens must exist; no auto-create of new snapshot files)

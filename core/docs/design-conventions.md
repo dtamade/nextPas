@@ -534,8 +534,15 @@ examples/nextpas.core.time/    ← 模块示例目录
 
 ### 测试框架 & 基准框架
 
-- 所有 `core/` 内的单元测试 **必须** 使用 `nextpas.core.test` 框架（即 `uses nextpas.core.test`）。
-- 禁止使用旧的 `nextpas.core.testing`、裸 `assert`、或自行编写的 `WriteLn` 验证。
+- 所有 `core/` 内的 **runtime 单元测试** **必须** 使用 `nextpas.core.test` 框架（即 `uses nextpas.core.test`）。
+- 禁止使用旧的 `nextpas.core.testing`、裸 `assert`、`fpcunit`/`testregistry`。
+- **禁止新增** 手写迷你 runner：本地 `procedure AssertTrue` + 自计 `Passed/Failed` +
+  `WriteLn('[PASS]'/'[FAIL]')` 自报分。新测试应走 `TTestSuite` + `Check*` / `Expect` /
+  `SoftCheck*`（见 `core/docs/test/README.md` 与 examples）。
+- **允许** 不经框架的：shell/python **source-contract** 门禁、compile-only gate、
+  纯构建卫生脚本。历史手写 runner 由 **模块 owner lane** 在触碰时迁移，不由 test lane 跨库扫改。
+- test 框架自身门禁：`make -C core/tests/nextpas.core.test contracts`
+  （或 `make focused FOCUS=core/tests/nextpas.core.test/lane_gate`）。
 - 测试程序入口为 `.lpr`，标准模式：
 
 ```pascal

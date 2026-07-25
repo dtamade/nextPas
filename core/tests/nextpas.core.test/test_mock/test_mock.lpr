@@ -1771,7 +1771,10 @@ end;
 { ── B8 v8.10: cross-thread isolation (not thread-safe by contract) ────────── }
 
 type
-  TMockCrossOp = (mcoRecordCall, mcoGetReturn, mcoVerify);
+  TMockCrossOp = (
+    mcoRecordCall, mcoGetReturn, mcoVerify,
+    mcoSetup, mcoVerifyInOrder, mcoCalledAtLeast, mcoResetCalls
+  );
   PMockThreadCtx = ^TMockThreadCtx;
   TMockThreadCtx = record
     Mock: TMock;
@@ -1797,6 +1800,14 @@ begin
         C^.Mock.GetReturn('bind');
       mcoVerify:
         C^.Mock.Verify('bind').CalledExactly(1);
+      mcoSetup:
+        C^.Mock.Setup('Cross').Returns('x');
+      mcoVerifyInOrder:
+        C^.Mock.VerifyInOrder(['bind']);
+      mcoCalledAtLeast:
+        C^.Mock.Verify('bind').CalledAtLeast(1);
+      mcoResetCalls:
+        C^.Mock.ResetCalls;
     end;
   except
     on E: EAssertionFailed do
@@ -1847,6 +1858,118 @@ end;
 procedure TestMockCrossThreadVerify;
 begin
   RunMockCrossThread(mcoVerify, 'Verify');
+end;
+
+procedure TestMockCrossThreadSetup;
+begin
+  RunMockCrossThread(mcoSetup, 'Setup');
+end;
+
+procedure TestMockCrossThreadVerifyInOrder;
+begin
+  RunMockCrossThread(mcoVerifyInOrder, 'VerifyInOrder');
+end;
+
+procedure TestMockCrossThreadCalledAtLeast;
+begin
+  RunMockCrossThread(mcoCalledAtLeast, 'CalledAtLeast');
+end;
+
+procedure TestMockCrossThreadResetCalls;
+begin
+  RunMockCrossThread(mcoResetCalls, 'ResetCalls');
+end;
+
+procedure TestB67CrossThreadFailPathCase(const AC: TTestCase);
+{ Data: op name. Each op from non-owner thread must fail with not thread-safe. }
+var
+  LOp: TMockCrossOp;
+begin
+  if AC.Data = 'RecordCall' then
+    LOp := mcoRecordCall
+  else if AC.Data = 'GetReturn' then
+    LOp := mcoGetReturn
+  else if AC.Data = 'Verify' then
+    LOp := mcoVerify
+  else if AC.Data = 'Setup' then
+    LOp := mcoSetup
+  else if AC.Data = 'VerifyInOrder' then
+    LOp := mcoVerifyInOrder
+  else if AC.Data = 'CalledAtLeast' then
+    LOp := mcoCalledAtLeast
+  else
+    LOp := mcoResetCalls;
+  RunMockCrossThread(LOp, AC.Data);
+end;
+
+procedure TestB67CalledExactlyCountFailPath(const AC: TTestCase);
+{ Data: 'N|M' — record N calls, CalledExactly(M) must fail (N<>M). }
+var
+  LM: TMock;
+  LArgs: specialize TArray<string>;
+  LN, LMExpect, I: Integer;
+  LSep: Integer;
+  LLeft, LRight: string;
+begin
+  LSep := Pos('|', AC.Data);
+  CheckTrue(LSep > 0, 'data must be N|M');
+  LLeft := Copy(AC.Data, 1, LSep - 1);
+  LRight := Copy(AC.Data, LSep + 1, Length(AC.Data));
+  LN := StrToInt(LLeft);
+  LMExpect := StrToInt(LRight);
+  CheckTrue(LN <> LMExpect, 'case must be mismatch');
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    for I := 1 to LN do
+      LM.RecordCall('Foo', LArgs);
+    ExpectFail(procedure
+      begin
+        LM.Verify('Foo').CalledExactly(LMExpect);
+      end, 'time');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB67InOrderFailPathCase(const AC: TTestCase);
+{ Data: 'wrong' | 'missing' | 'partial' — ordered verify negative paths. }
+var
+  LM: TMock;
+  LArgs: specialize TArray<string>;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    if AC.Data = 'wrong' then
+    begin
+      LM.RecordCall('B', LArgs);
+      LM.RecordCall('A', LArgs);
+      ExpectFail(procedure
+        begin
+          LM.VerifyInOrder(['A', 'B']);
+        end, 'order');
+    end
+    else if AC.Data = 'missing' then
+    begin
+      LM.RecordCall('A', LArgs);
+      ExpectFail(procedure
+        begin
+          LM.VerifyInOrder(['A', 'B', 'C']);
+        end, 'order');
+    end
+    else
+    begin
+      LM.RecordCall('A', LArgs);
+      LM.RecordCall('C', LArgs);
+      ExpectFail(procedure
+        begin
+          LM.Verify('A').CalledInOrder(['A', 'B', 'C']);
+        end, 'order');
+    end;
+  finally
+    LM.Free;
+  end;
 end;
 
 procedure TestMockSameThreadOk;
@@ -2014,6 +2137,12 @@ var
   LSuccess: Boolean;
   LB14Cases: specialize TArray<TTestCase>;
   LB14I: Integer;
+  LB67Cross: specialize TArray<TTestCase>;
+  LB67Count: specialize TArray<TTestCase>;
+  LB67Order: specialize TArray<TTestCase>;
+  LB67I: Integer;
+  LOps: array[0..6] of string;
+  LModes: array[0..2] of string;
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
@@ -2188,6 +2317,10 @@ begin
   Suite.Test('B8 cross-thread RecordCall', @TestMockCrossThreadNotSafe);
   Suite.Test('B9 cross-thread GetReturn', @TestMockCrossThreadGetReturn);
   Suite.Test('B9 cross-thread Verify', @TestMockCrossThreadVerify);
+  Suite.Test('B67 cross-thread Setup', @TestMockCrossThreadSetup);
+  Suite.Test('B67 cross-thread VerifyInOrder', @TestMockCrossThreadVerifyInOrder);
+  Suite.Test('B67 cross-thread CalledAtLeast', @TestMockCrossThreadCalledAtLeast);
+  Suite.Test('B67 cross-thread ResetCalls', @TestMockCrossThreadResetCalls);
   Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
 
   { B14: meaningful fail-path table — CalledTimes mismatch messages }
@@ -2200,6 +2333,48 @@ begin
   end;
   Suite.TestTable('B14 mock CalledTimes fail-path', LB14Cases,
     @TestB14MockCalledTimesFailPath);
+
+  { B67: cross-thread fail-path table (ops × repeats) }
+  LOps[0] := 'RecordCall';
+  LOps[1] := 'GetReturn';
+  LOps[2] := 'Verify';
+  LOps[3] := 'Setup';
+  LOps[4] := 'VerifyInOrder';
+  LOps[5] := 'CalledAtLeast';
+  LOps[6] := 'ResetCalls';
+  SetLength(LB67Cross, 140);
+  for LB67I := 0 to High(LB67Cross) do
+  begin
+    LB67Cross[LB67I].Name := 'x' + IntToStr(LB67I);
+    LB67Cross[LB67I].Data := LOps[LB67I mod 7];
+  end;
+  Suite.TestTable('B67 mock cross-thread fail-path', LB67Cross,
+    @TestB67CrossThreadFailPathCase);
+
+  { B67: CalledExactly count mismatch fail-path }
+  SetLength(LB67Count, 120);
+  for LB67I := 0 to High(LB67Count) do
+  begin
+    LB67Count[LB67I].Name := 'c' + IntToStr(LB67I);
+    { actual calls = LB67I mod 5; expected = actual+1 (always mismatch) }
+    LB67Count[LB67I].Data :=
+      IntToStr(LB67I mod 5) + '|' + IntToStr((LB67I mod 5) + 1);
+  end;
+  Suite.TestTable('B67 mock CalledExactly fail-path', LB67Count,
+    @TestB67CalledExactlyCountFailPath);
+
+  { B67: InOrder negative path table }
+  LModes[0] := 'wrong';
+  LModes[1] := 'missing';
+  LModes[2] := 'partial';
+  SetLength(LB67Order, 90);
+  for LB67I := 0 to High(LB67Order) do
+  begin
+    LB67Order[LB67I].Name := 'o' + IntToStr(LB67I);
+    LB67Order[LB67I].Data := LModes[LB67I mod 3];
+  end;
+  Suite.TestTable('B67 mock InOrder fail-path', LB67Order,
+    @TestB67InOrderFailPathCase);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
