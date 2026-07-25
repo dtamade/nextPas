@@ -19,6 +19,9 @@ uses
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   nextpas.core.net.server.kqueue,
   {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
+  nextpas.core.net.server.iocp,
+  {$ENDIF}
   nextpas.core.net.server.threaded;
 
 type
@@ -129,6 +132,10 @@ begin
   {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   RegisterTcpServerFactory(tsbKqueue,
     @nextpas.core.net.server.kqueue.NewTcpKqueueServer);
+  {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
+  RegisterTcpServerFactory(tsbIocp,
+    @nextpas.core.net.server.iocp.NewTcpIocpServer);
   {$ENDIF}
 end;
 

@@ -331,7 +331,7 @@ end;
 - Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。Wine smoke：`make -C core/tests/nextpas.core.platform.socket/test_platform_socket_wine wine-runtime-smoke`（含 socket_pair 字节唤醒；**非** real-Windows / **非** Windows scale-ready）。
 - Multi-OS HTTP threaded host（R2-5+）：`bash core/scripts/http-host-ci-matrix.sh` → `test_http_threaded_host` — 钉 `THttpServerOptions.Default.Backend=tsbThreaded` + HTTP/1.1 wire GET（net.server.threaded）。**CI hosts**：Linux / macOS / Windows / FreeBSD（`core-ci.yml`）。truth=`host-runtime`；**非** scale-ready / **非** IOCP / **非** full facade TLS。
 - Windows HTTP threaded wine（R2-5）：`make -C core/tests/nextpas.core.http/test_http_threaded_wine wine-runtime-smoke` — 同上 wire 在 Win64+Wine；**非** real-Windows / **非** scale-ready。full `uses nextpas.core.http` Win64 交叉仍 residual（TLS 链触 `system.sysutils` FPC internal）。
-- Windows IOCP（WIN-3）：**Parked** — `TCP_SERVER_BACKEND_IOCP` 枚举在，factory 未注册；跨模块 net.server 另立。
+- Windows IOCP（WIN-3 phase-1）：`TCP_SERVER_BACKEND_IOCP` factory 在 Windows 注册；`nextpas.core.net.server.iocp` = AcceptEx + worker handoff；Wine smoke `make -C core/tests/nextpas.core.http/test_http_iocp_wine wine-runtime-smoke`；**非** real-Windows / **非** scale-ready / **非** completion-driven per-conn protocol path。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）

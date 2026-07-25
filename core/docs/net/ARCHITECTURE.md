@@ -109,6 +109,11 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   现在也已落成 BSD/macOS 命名 backend 入口；和 `epoll` 一样先复用
   `nextpas.core.net.server.readiness`，把 `kqueue` 的差异收口在
   host poller 与 facade 注册边界，而不是再复制一份 runtime owner。
+- [src/nextpas.core.net.server.iocp.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.iocp.pas:1)
+  Windows phase-1 IOCP backend：`TIocpReactor.AsyncAccept`（AcceptEx）驱动 accept，
+  accepted connection 交给 foundation worker 执行同步 session/handler；
+  facade 仅在 `NEXTPAS_WINDOWS` 注册 `tsbIocp`。证据层当前是 wine-runtime-smoke，
+  **不是** Windows scale-ready / 全量 completion-driven per-conn protocol path。
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
   现在提供了 `ITcpSocketRuntime`、`ITcpListenerRuntime.TryAccept`、
   `ITcpStreamRuntime.TryRead/TryWrite` 这组 runtime-only seam，用来暴露 native socket
