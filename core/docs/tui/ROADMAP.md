@@ -1,8 +1,10 @@
 # nextpas.core.tui 完整开发地图
 
-**状态**: Active map（2026-07-20）  
-**Owner**: tui lane  
+**状态**: **Maintenance Idle（主线封板）**（2026-07-21）
+**Owner**: tui lane
 **权威**: 本文件；质量门禁细节见 [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [SCORECARD.md](SCORECARD.md) · [CONTRACT.md](CONTRACT.md)
+
+> **封板**: Phase A 质量 + B 形状 + U1/U2 可用性已 Done。默认 **不** 新开建设波；只接回归 / 泄漏 / 平台绿 / 已批准单点。
 
 ---
 
@@ -34,17 +36,17 @@
 
 与 **ratatui / crossterm / tcell** 公平对齐的只有：
 
-1. **正确性可证** — 输入韧性、布局守恒、diff 边界、SGR/DECSET、焦点/键绑定  
-2. **测量诚实** — scorecard 权威；`bench_go_rust` = **简化核** 非假胜  
-3. **分层诚实** — core/ext/experimental 边界可测（含 reject）  
-4. **可维护** — 契约脚本 C7/C8 防文档/门禁漂移  
+1. **正确性可证** — 输入韧性、布局守恒、diff 边界、SGR/DECSET、焦点/键绑定
+2. **测量诚实** — scorecard 权威；`bench_go_rust` = **简化核** 非假胜
+3. **分层诚实** — core/ext/experimental 边界可测（含 reject）
+4. **可维护** — 契约脚本 C7/C8 防文档/门禁漂移
 
 **不算 Done 条件（可选 / 禁止假完成）**：
 
-- 完整 ratatui crate 性能广告  
-- 无 TTY 的 Truecolor DA「真查询」  
-- 把 full 里 30+ widget 全部晋升到 ext  
-- Windows 真控制台端到端 FPS  
+- 完整 ratatui crate 性能广告
+- 无 TTY 的 Truecolor DA「真查询」
+- 把 full 里 30+ widget 全部晋升到 ext
+- Windows 真控制台端到端 FPS
 
 ### 1.3 模块 Done 清单（总出口）
 
@@ -168,9 +170,9 @@ Q1–M1。退出：D1–D4 + SC1–SC27 + C7/C8。
 
 D1–D6 已满足 → **进入 Maintenance Idle**：
 
-1. 默认只接：回归 bug、泄漏、平台绿、**已批准**的单点晋升  
-2. 新 SC 必须附失败场景 + ROADMAP 维度缺口  
-3. **禁止**开放式「对标 go/rust Qxx」波次  
+1. 默认只接：回归 bug、泄漏、平台绿、**已批准**的单点晋升
+2. 新 SC 必须附失败场景 + ROADMAP 维度缺口
+3. **禁止**开放式「对标 go/rust Qxx」波次
 
 ### Phase C / D / E — 可选（不阻塞 Idle）
 
@@ -191,7 +193,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 | E2 | DECSET 2026 Synchronized Update（EndFrame 包裹 + SC28 + opt-out） | **Done** |
 | E3 | DECAWM（DECSET 7）EnterAlternate 关 wrap / Leave 恢复 + SC29 | **Done** |
 | U1 | 可用性闭环：Enter 诊断 + Stateful 约定 + C10 + 工厂/别名文档 + SC30 | **Done** |
-| U2 | 去双别名 + IInputEditor.HandleKey Boolean + Enter enable_ansi | **Done**（本批） |
+| U2 | 去双别名 + IInputEditor.HandleKey Boolean + Enter enable_ansi | **Done** |
+| Idle-Seal | 文档封板（状态行对齐，无行为变更） | **Done** |
 | E-ongoing | 重大变更后刷新快照；**不对 ns 设硬阈值**；禁止假胜营销 | 持续 |
 
 ---
@@ -215,7 +218,9 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
    ↓
 [DONE] Phase U2 双别名移除 + HandleKey + Win VT glue
    ↓
-[NOW] Phase F Maintenance Idle
+[DONE] Idle-Seal 文档封板
+   ↓
+[NOW] Phase F Maintenance Idle（主线封板；默认不新开建设波）
    │
    ├─ C3/C4 真机（可选，挂 platform）
    ├─ D 协议（可选，experimental）
@@ -242,5 +247,5 @@ make -C core/tests/nextpas.core.tui/test_tui_input_wine clean test
 
 ## 7. 一句话
 
-**tui 有终点**：Phase A 质量 + Phase B 稳定应用集已完成 → **Maintenance Idle**。  
+**tui 有终点**：Phase A 质量 + Phase B 稳定应用集已完成 → **Maintenance Idle**。
 后续默认修回归；可选 C/D/E；**不是 SC28 / 不是再搬 full 全家桶**。

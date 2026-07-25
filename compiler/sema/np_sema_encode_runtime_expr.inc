@@ -345,6 +345,44 @@ begin
     ABlob := 'field self ' + IntToStr(Folded + 1) + #10;
     Exit(True);
   end;
+  { Batch 25: Length(R.S) / Length(obj.Field) — GEP + tstring_len. }
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'Length') and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(1).ChildCount >= 2) and
+    (ANode.ChildAt(1).ChildAt(0) <> nil) and
+    (ANode.ChildAt(1).ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    ReceiverVarName := ANode.ChildAt(1).ChildAt(0).Text;
+    if SameText(ReceiverVarName, 'Self') and (FCurrentMethodClass <> '') then
+    begin
+      ReceiverVarName := 'self';
+      FuncName := FCurrentMethodClass;
+    end
+    else
+    begin
+      FuncName := LookupClassVar(ReceiverVarName);
+      if FuncName = '' then
+        FuncName := LookupRecordVar(ReceiverVarName);
+    end;
+    if FuncName <> '' then
+    begin
+      ArgName := ANode.ChildAt(1).ChildAt(1).Text;
+      if TypeMetaFieldIsStr(FuncName, ArgName) then
+      begin
+        Folded := TypeMetaFieldIndex(FuncName, ArgName);
+        if Folded >= 0 then
+        begin
+          ABlob := 'fieldstrlen ' + ReceiverVarName + ' ' + IntToStr(Folded) + #10;
+          Exit(True);
+        end;
+      end;
+    end;
+  end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 3) and
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and

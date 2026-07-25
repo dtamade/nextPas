@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-21（**H2-opt**：TCP_NODELAY 等；peer mid **~2.07× Met**；package **仍 No**；默认 **STOP**）
+**Updated**: 2026-07-26（residual do-all 收口 → NEXT=STOP）
 
 ---
 
@@ -48,7 +48,7 @@ LOOP:
        core/src/nextpas.core.http*
        core/tests/nextpas.core.http/**
        core/docs/http/**
-       examples/nextpas.core.http/**（若本波触及）
+       examples/nextpas.core.http/** 或 core/examples/nextpas.core.http/**（若本波触及）
        benchmarks/nextpas.core.http/**（若本波触及）
      跨模块：必须在本波「Land paths」声明，且最小必要
   5. 回写：本 Wave → landed；下一可执行行 → NEXT；changelog 一行
@@ -118,13 +118,77 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
 | Wave H2P-1..3 | **landed** — mid/press scale evidence + TLS-ALPN e2e |
-| Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
-| **下一执行点** | **STOP**（无新需求；H3 Blocked；勿假 package scale-ready） |
+| Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；当时 package **No**（后 HS-2a 升） |
+| Wave HS-0 H2 KPI freeze | **landed** — peer multi-run 门闩冻结；self press/mid≥3× Dropped |
+| Wave HS-1 multi-run | **landed** — mid median **1.86×** / press **0.93× Met**（runs=3）；`--runs` harness |
+| Wave HS-2a package claim | **landed** — 产品 Yes → *Scale-ready (H1+H2 package)* |
+| Wave D0 doc-truth | **landed** — residual/路径/双状态 hygiene |
+| Wave C-A H1 HTTPS server | **landed** — `NewH1TlsServerTransport` + registry；`test_http_h1_tls_server` |
+| Wave C-D HTTPS H2 scale KPI | **landed** — evidence mid **2.57×** / press **3.03× Met** |
+| Wave C-D-claim HTTPS H2 scale | **landed** — 产品 Yes → *Scale-ready (HTTPS H2)* |
+| Wave C-H1 HTTPS H1 scale KPI | **landed** — `run_h1_tls_comparison.sh`；`no_url` **2.10×** / `response_1k` **2.13× Met** |
+| Wave PD-0 Production honesty | **landed** — checklist + residual + source-contract |
+| Wave PD-1A Production guidance | **landed** — Default RW Keep（历史）；后 PD-1B 升格 |
+| Wave PD-2 Latency readbook | **landed** — REPRO §2.1 + BENCHMARKS 指针 |
+| Wave PD-1B Default RW finite | **landed** — Default Read/Write=30000 |
+| Wave PD-3-1 Idle 对照 | **landed** — IdleTimeout vs IdleTTL 表 + spot-check |
+| Wave PD-3-2 large body residual | **landed** — 审计：Q1-4/413 已 Met；无新代码 |
+| Wave PD-3-3 Windows cancel wake | **landed** — Windows TCP loopback pair + waitable cancel |
+| **下一执行点** | **Era R2-0..5** findings remediation（RTL / safety / STRUCT-opt / test split / Wine）；见下表 |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~95%   规模 ~82%   优雅 ~88%   诚实 ~95%  (Q1 生产深度 Done)
+质量 ~95%   规模 ~94%   优雅 ~88%   诚实 ~95%  (H1/H2 package + HTTPS H1/H2 scale)
+```
+
+---
+
+## Era SAFE — 默认安全（findings F-01..F-04）
+
+**目标**：生产 copy-paste 默认有界；request-scoped 状态不进全局 map.
+**权威方案**：worktree 审计 + SAFE/TRUTH/STRUCT 计划（`findings.md` 不进 main）。
+**非目标**：H3、Windows scale/IOCP、async handler。
+
+| Wave | Status | Do | Gate |
+|------|--------|-----|------|
+| **SAFE-1** Body 有界 | **done** | `HTTP_DEFAULT_BODY_READ_MAX=4MiB`；`HttpReadRequestBodyBytes` 默认有界；`HttpReadRequestBodyBytesMax`；`BodyCacheMiddlewareWith`；超限 helper=`hekBody` Op=`body`，BodyCache→413 | `test_http_message` + `test_http_middlewares` |
+| **SAFE-2** Decompress 默认有界 | **done** | 默认 `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`；0 仅显式；超限 400 | decompress suite + CONTRACT/README |
+| **SAFE-3** RequestArena 附着 | **done** | `IHttpRequestWithArena`；删 `GArenaMap`；`test_http_mem` 入主 PROJECTS | `test_http_mem` 9/0 + message/middlewares |
+| **TRUTH-1** Deadline 诚实 | **done** | 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占文档 | middlewares 123/0 |
+| **TRUTH-2** 命名/文档 | **done** | stream 注释对齐；`timeout`→`responsetime` unit；PROJECTS inventory | middlewares + docs |
+| **STRUCT-1** h1.pool | **done** | `impl.h1.pool` 抽出；client IdleTTL/pool 行为冻结 | `test_http_client` |
+| **STRUCT-2** client redirect/decorator | **done** | `client.redirect` + `client.decorator` 机械抽出；行为冻结 | `test_http_client` |
+| **STRUCT-3** SSE/stream suite | **done** | `test_http_stream` + `test_http_sse` 入主 PROJECTS；middlewares 去挂靠 | stream/sse/middlewares |
+| **STRUCT-opt** | **done** | `impl.h2.client.pool` + `client.helpers` + `impl.h1.wire`；decorator 无 `uses client`；**不做**真 h1.poll 硬切 | h2_client / client / server |
+
+---
+
+## Era R2 — Findings Round-2 remediation
+
+**目标**：第二轮 `findings.md` 可修项落地（P0 无；P1 RTL + 可维护性 + 安全逃生口）。
+**非目标**：H3 实现；Windows scale-ready 宣称；抢占 Deadline。
+
+| Wave | Status | Do | Gate |
+|------|--------|-----|------|
+| **R2-0** RTL+docs | **done** | 测试去 `SysUtils`；source-contract 禁 FPC RTL；CONTRACT inventory 64 | `test_http_contract` + 6 TLS/smoke suites |
+| **R2-1** Safety | **done** | Unlimited 显式 API；RateLimit MaxKeys；Recovery CommitState | middlewares 126/0 + message 120/0 |
+| **R2-2** STRUCT-opt | **done** | `h2.client.pool` + `client.helpers` + `h1.wire`；inventory **67** | h2_client 72/0 + client 272/0 + server 286/0 |
+| **R2-3** Test split | **done** | client redirect/body + server expect/chunk；PROJECTS=**47**；client 8662 / server 8143 | 6 suite 双绿（redirect 44 / body 71 / client 157 / expect 74 / chunk 76 / server 136） |
+| **R2-4** Polish | **done** | fuzz → tests support；BodyCache 共享只读 GetBody；ARCH inventory 对齐 | fuzz + middlewares BodyCache |
+| **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 IOCP **Parked** | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked |
+| **R2-x residual** STRUCT 2.4 | **done** | `impl.h1.client` + `impl.h1.prepend`；source-contract 跟路径；inventory **68** | client 157/0 + contract 35/0 + server 136/0 |
+| **R2-x residual** STRUCT 2.4b | **done** | `TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；`impl.h1` ~1673 | h1fast 32/0 + contract 35/0 + server 136/0 |
+| **R2-x** h1.poll / h1.serve hard-cut | **done** | `impl.h1.conn`（state+shared）+ `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（Advance/handoff/drain）；`impl.h1` ~116 门面；inventory **71** | server 136/0 + expect 74/0 + contract 35/0 + h1fast 32/0 |
+| **R2 residual do-all** | **done** | tooling mem/lane_gate 合同；`http.minimal`；except 卫生；`h2.client.body`；docs inventory **73** | tooling + contract + server + h2_client |
+| **R2 residual session-extract** | **done** | `h2.streammap` + `h2.session.preface` + `h2.session.writer` + `h2.session.helpers`；session ~1536；inventory **77** | h2_session 37/0 + h2_client 72/0 |
+| **R2 residual client-helpers** | **done** | `h2.client.helpers`；client ~2022；inventory **78** | h2_client 72/0 |
+| **R2 residual cancel-adapter** | **done** | `impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79** | h2_client + client + websocket |
+| **R2 residual h2-settings-share** | **done** | `H2ParseSettingsPayload`/`H2MinUInt32` → `h2.types`；client ~1932 / session ~1494 | h2_client 72/0 + h2_session 37/0 + h2_types 23/0 |
+
+```text
+──── 当前 ────
+NEXT = STOP（h2 settings 共享已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
 ```
 
 ---
@@ -147,22 +211,29 @@ CHECKPOINT（不阻塞续波）:
 
 ---
 
-## 推荐默认执行路径（goal 默认跟这条）
+## 推荐默认执行路径（历史；已完成 → 默认 STOP）
 
 ```text
 Era 0–8:  landed（framework-complete non-H3 + Excellence + Residual + Inbox depth）
 Era 5/H3: Blocked — 跳过
-Era 9:    N0 landed；N1–N3 并入 Q1（不再单独 STOP）
-──── Parity Campaign（对标 Go/Rust 质量+规模）────
-Q0:  Q0-0 → Q0-1 → Q0-2     开壳 + workload + 基线比值  ← 当前
-Q1:  Q1-1 SSE → Q1-2 stream → Q1-3 obs → Q1-4 backpressure
-S1:  Server scale foundation（epoll 连接/吞吐）
-S2:  H1 hot path（分配/fast path）
-S3:  H2 server scale
-Q2:  证据收口 / Scale-ready 评审
+Era 9:    N0 landed；N1–N3 并入 Q1
+──── Parity Campaign（对标 Go/Rust 质量+规模）—— 全部 landed ────
+Q0:  Q0-0 → Q0-1 → Q0-2     开壳 + workload + 基线比值  ← done
+Q1:  Q1-1 SSE → Q1-2 stream → Q1-3 obs → Q1-4 backpressure  ← done
+S1:  Server scale foundation（epoll 连接/吞吐）  ← done
+S2:  H1 hot path（分配/fast path）  ← done
+S3:  H2 server scale  ← done
+Q2 / E / Q3 / H2P / R / HS:  收口 + 证据 + Seal  ← done
+D0 / C-A:  doc-truth + H1 HTTPS server product path  ← done
+C-D / C-D-claim: HTTPS H2 peer evidence + scale claim  ← done
+HS-2a: package claim Yes  ← done
+C-H1: HTTPS H1 peer multi-run + scale claim  ← done
+──── residual do-all（tooling + docs + minimal + except + h2.body）← done
+──── 当前 ────
+NEXT = STOP（硬排除：H3 Blocked；WIN-3 IOCP Parked；Windows scale=No）
 ```
 
-**插队规则**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
+**插队规则（历史）**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
 
 ---
 
@@ -575,9 +646,9 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 项 | 立场 |
 |----|------|
-| server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
+| server `Default` RW | **PD-1B**：Read/Write=**30000**；长轮询显式 0；Production 命名模板 |
 | cancel ~50 ms 切片 | **X2 landed**：Unix waitable 近即时；probe-only ~10ms；**Windows = probe-only only**（**R3**） |
-| OpenSSL factory unfreed | **X4 landed**：PinValidator 已修；HTTPS **1×41B** process-lifetime 无可靠栈（**R2** 诚实 Park） |
+| OpenSSL factory unfreed | **X4 + R4 landed**：PinValidator free；HTTPS **0 unfreed**（R2 的 1×41B dig 仅为历史） |
 | pool idle TTL | **X3 landed**；suite hang residual → **R1 landed**（close-outside-lock） |
 | client suite hang after IdleTTL | **R1 landed** |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
@@ -857,7 +928,21 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 **R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐；默认 STOP。 **R0+R1 Met (2026-07-21).**
 
-**推荐路径**：`… → H2P-3 → R1 → STOP`（H3 Blocked；升 package 须新 KPI + 产品需求）
+**推荐路径（历史）**：`… → H2P-3 → R1 → STOP` → 现接 **Era HS**。
+
+## Era HS — H2 Seal（KPI freeze + multi-run；不开 package）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **HS-0** | **landed** | 冻结 H2 peer KPI：mid 8×16×100 / press 16×32×100；peer **ratio of medians ≥0.80×**（runs≥3）；stable=1；废弃 self press/mid≥3× |
+| **HS-1** | **landed** | `run_h2_comparison.sh --runs`；mid median **1.86×** / press **0.93× Met**；h2_client/facade/tls_alpn |
+| **HS-1b** | parked | 仅 press/mid multi-run NotMet 时：有界热修再跑；**本轮不需要** |
+| **HS-2a** | **landed** | 产品 Yes → CLAIM *Scale-ready (H1+H2 package, Linux epoll)*；禁止 H1/H2 直接 RPS 比值 |
+
+**HS Done when（默认）**：HS-0+HS-1 landed；multi-run 表可 1h 复核。 **Met (2026-07-21).**
+**升 package**：HS-2a **Met (2026-07-23)**（multi-run Met + 产品 Yes）。
+
+**推荐路径（历史）**：`… → R1 → HS-0 → HS-1 → STOP` → 现接 C-D / HS-2a / C-H1。
 
 ---
 
@@ -878,13 +963,158 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 + H2P-1..3 + R1 Met
-2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = STOP**（idle；有产品/KPI 需求再开波）
-4. 无指令时不要空转 H3 / 不要假 package scale-ready
+1. Scale 战役已 Met：HS-2a package + C-D-claim HTTPS H2 + C-H1 HTTPS H1
+2. Era PD 默认路径 Met：PD-0 + PD-1A + PD-2 + PD-1B + PD-3
+3. R2 + residual STRUCT 2.4/2.4b + h1.poll/serve hard-cut **landed**
+4. residual do-all **done**：tooling lane_gate 合同；http.minimal；except 注释；h2.client.body；docs inventory 73
+5. session 机械抽 **done**：streammap/preface/writer/helpers；inventory 77
+6. client pure helpers **done**：`h2.client.helpers`；inventory 78
+7. cancel-adapter **done**：`impl.cancel.adapter`；h1/h2/websocket 共用；inventory 79
+8. h2 settings 共享 **done**：`H2ParseSettingsPayload`/`H2MinUInt32` → types；client ~1932 / session ~1494
+9. H3 Blocked / WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
+10. **NEXT = STOP**（idle）；新战役需再升格
 ```
 
-**默认 STOP。** 升 CLAIM package 须：冻结 H2 KPI 门闩 + multi-run 证据 + 产品明确 Yes（见 `CLAIM.md` §6）。
+**默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)。
+
+### 命名对照（middleware）
+
+| 名字 | 含义 |
+|------|------|
+| `http.middleware` unit | 链原语：`HandlerFunc` / `MiddlewareFunc` / `Chain` |
+| `http.middleware.*` | 产品中间件：cors / recovery / logger / … |
+| `test_http_middleware` | 链原语 suite |
+| `test_http_middlewares` | 产品中间件 suite |
+
+---
+
+## Era PD — Production Defaults & Depth
+
+**目标**：生产默认诚实 + latency 可读 + 深度对照（Idle/body/Windows residual）。
+
+**推荐路径（产品 2026-07-23 再授权 + 2026-07-24 跨模块授权）**：`PD-1B → PD-3-1 → PD-3-2 → PD-3-3`
+
+### Wave PD-0 — Production honesty（契约 / 清单 / source-contract）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Next** | PD-1A |
+
+### Wave PD-1A — Production guidance（不改 Default 数值）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（历史 Keep RW=0） |
+| **Next** | PD-2 |
+
+### Wave PD-2 — Latency readbook
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Next** | PD-1B（产品再升格） |
+
+### Wave PD-1B — Default RW 有限化（产品授权）
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | `THttpServerOptions.Default` Read/Write = **30000**；Production 保持命名模板同量级；更新 CONTRACT/README/CLAIM；改 focused 期望；长轮询文档要求显式 0 |
+| **Don't** | 改 IdleTimeout/MaxBody 数值；改 scale KPI；实现 Windows wake |
+| **Done when** | Default RW 测试 + source-contract 绿；docs 一致 |
+| **Gates** | `test_http_base`；`test_http_server`；`test_http_mem`；hygiene |
+| **Land paths** | `core/src/nextpas.core.http.base.pas`；`http.server.pas`；`core/docs/http/**`；相关 tests |
+| **Evidence** | Default RW=30000；stall/idle 单测显式短 ReadTimeout；pipeline-while-drain 用例 `WriteTimeout:=0`；`test_http_server` 286/0；base 36/0；mem 8/0；hygiene pass |
+| **Status** | **landed** |
+| **Next** | PD-3-1 |
+
+### Wave PD-3-1 — IdleTimeout vs IdleTTL 对照
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | CONTRACT 对照表；spot-check 默认 30s vs 90s；README checklist 一行 |
+| **Don't** | 改默认数值；合并两个旋钮 API |
+| **Done when** | 表 + `test_http_base` spot-check 绿 |
+| **Gates** | `test_http_base`；hygiene |
+| **Status** | **landed** |
+| **Next** | PD-3-2 |
+
+### Wave PD-3-2 — 长连接 / 大 body residual 审计
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | 只读审计：Q1-4 backpressure + MaxBody 413 矩阵（server/security/q3）是否覆盖；无缺口则 residual Met、**不写代码** |
+| **Don't** | 无测空加功能；改 KPI |
+| **Done when** | CLAIM residual 行 + ROADMAP 诚实结论 |
+| **Gates** | docs + hygiene（不强制重跑全 suite） |
+| **Status** | **landed** — 证据：`test_http_server`/`security`/`q3_matrix` 413 + Q1-4 source-contract；无新增真缺口 |
+| **Next** | PD-3-3 或 STOP |
+
+### Wave PD-3-3 — Windows cancel wake
+
+| 字段 | 内容 |
+|------|------|
+| **Do** | `platform_socket_pair` Windows TCP loopback 模拟 → net cancel waitable |
+| **Don't** | 在 http 层假 wake；宣称 Windows scale-ready |
+| **Status** | **landed** — loopback pair + CONTRACT/source-contract；probe-only 仅 pair 失败兜底 |
+| **Evidence** | `platform.socket` Windows pair；`net.cancel` 注释；`test_http_client` waitable pair source-contract；`test_net` / `test_platform_socket` Linux 回归 |
+| **Next** | STOP |
+
+**Era PD 扩展 Done when**：PD-1B + PD-3-1 + PD-3-2 + PD-3-3 landed。 **Met (2026-07-24).**
+
+---
+
+## Era D0 — Doc truth hygiene（零碎收口）
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **D0** | **landed** | 对齐 live residual 与证据：API_COVERAGE R4 0 unfreed；GOAL_TREE p99 Met；README 路径/H2/cancel；ARCHITECTURE 库存；ROADMAP 推荐路径去「Q0 当前」；Era X residual 表 R4；Makefile side 列表；REPRO tls_real side 标注 |
+
+**D0 Done when**：docs 无 live 假 residual（1×41B / p99 Partial / ~50ms cancel / examples 错路径 / Q0 当前）；NEXT 仍 STOP。 **Met (2026-07-23).**
+
+---
+
+## Era C-A — H1 HTTPS server product path
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-A** | **landed** | `impl.h1.tls`：TLS accept → ALPN `http/1.1` → 内层 H1；registry `CreateH1ServerTransport` 对称 H2 wrap；`test_http_h1_tls_server`；docs 去 H2-only residual |
+
+**C-A Done when**：`NewHttpServer` + `TLSContext` 默认 H1 可 HTTPS e2e；source-contract 无 H2-only raise；HTTPS scale **仍 No**。 **Met (2026-07-23).**
+
+---
+
+## Era C-D — HTTPS H2 peer scale evidence
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-D** | **landed** | `bench_h2_server --tls` + Go `compare_h2 --tls` + `run_h2_comparison.sh --tls`；shape 与 HS-0 同（mid 8×16×100 / press 16×32×100）；runs≥3 median peer ≥0.80×；docs residual；当时 **不**升宣称 |
+| **C-D-claim** | **landed** | 产品 Yes → CLAIM *Scale-ready (HTTPS H2, Linux epoll)*；对齐 REPRO/BENCHMARKS residual |
+
+**C-D Done when**：HTTPS ALPN h2 multi-run 表 + REPRO 命令；gate Met。 **Met (2026-07-23).**
+**C-D-claim Done when**：CLAIM 升格 + residual 对齐。 **Met (2026-07-23).**
+
+**Evidence（runs=3，stable=1）**：mid median **93586 / 36420 = 2.57× Met**；press median **253405 / 83588 = 3.03× Met**。
+产物：`build/projects/nextpas.core.http/h2_tls_comparison/cd-mid-*.md` / `cd-press-*.md`。
+
+---
+
+## Era C-H1 — HTTPS H1 peer scale KPI
+
+| Wave | Status | Do |
+|------|--------|-----|
+| **C-H1** | **landed** | 冻结 HTTPS H1 KPI：20k×4 `no_url` / `response_1k`；epoll；TLS ALPN `http/1.1`；peer Go `net/http`；runs≥3；RPS median ≥0.80×；p99 median ≤2×；`bench_http_server --tls` + `compare_go --tls` + `run_h1_tls_comparison.sh`；CLAIM *Scale-ready (HTTPS H1)* |
+
+**C-H1 Done when**：harness + multi-run 表 + REPRO/CLAIM/BENCHMARKS；gate Met。 **Met (2026-07-23).**
+
+**Evidence（runs=3）**：
+
+| Workload | median nextPas req/s | median Go req/s | RPS ratio | p99 ratio | gate |
+|----------|---------------------:|----------------:|----------:|----------:|------|
+| `no_url` | **40851** | **19446** | **2.10×** | **0.15×** | **Met** |
+| `response_1k` | **40787** | **19149** | **2.13×** | **0.17×** | **Met** |
+
+产物：`build/projects/nextpas.core.http/h1_tls_comparison/ch1-*-20k4-runs3.md`。
 
 ---
 
@@ -893,7 +1123,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | 文档 | 角色 |
 |------|------|
 | **ROADMAP.md（本文件）** | 向前做什么、顺序、状态、Goal Loop |
-| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R1 冻结） |
+| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R1 + HS-2a / C-D-claim / C-H1） |
 | **[`REPRO.md`](REPRO.md)** | 1h 复现剧本 |
 | **GOAL_TREE.md** | 为什么做、阶段定义、不漂移；**不**维护日更 backlog |
 | **CONTRACT.md** | 对外行为契约 |
@@ -907,6 +1137,22 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **h2 settings share landed**：`H2ParseSettingsPayload`/`H2MinUInt32` → `h2.types`；client ~1932 / session ~1494；NEXT=STOP |
+| 2026-07-26 | **cancel-adapter extract landed**：`impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79**；NEXT=STOP |
+| 2026-07-26 | **client helpers extract landed**：`h2.client.helpers`；client ~2022；inventory **78**；NEXT=STOP |
+| 2026-07-26 | **session residual extract landed**：`h2.streammap` + `session.preface` + `session.writer` + `session.helpers`；session ~1536；inventory **77**；NEXT=STOP |
+| 2026-07-26 | **residual do-all landed**：tooling mem/`lane_gate` 合同；`http.minimal`；H1 except 卫生；`h2.client.body`；docs inventory **73**；NEXT=STOP（H3/WIN-3 硬排除） |
+| 2026-07-25 | **h1.poll/serve hard-cut landed**：`impl.h1.conn`/`serve`/`poll`；inventory **71** |
+| 2026-07-24 | **PD-3-3 landed**：Windows `platform_socket_pair` TCP loopback → waitable cancel；Era PD 扩展完整 Met；NEXT=STOP |
+| 2026-07-23 | **PD-1B + PD-3-1/2 landed**：Default RW=30000；IdleTimeout/IdleTTL 对照；large-body residual Met；PD-3-3 Windows wake parked；NEXT=STOP |
+| 2026-07-23 | **Era PD landed**：PD-0 honesty + PD-1A Default Keep + PD-2 latency readbook；NEXT=STOP |
+| 2026-07-23 | **Era PD open**（产品授权）：PD-0 honesty → PD-1A guidance → PD-2 latency readbook；Default RW **Keep**；NEXT=PD-0 |
+| 2026-07-23 | **HS-2a + C-D-claim + C-H1 landed**：package Yes；HTTPS H2 scale Yes；HTTPS H1 multi-run **2.10× / 2.13× Met**；NEXT=STOP |
+| 2026-07-23 | **C-D landed**：HTTPS ALPN h2 peer multi-run mid **2.57×** / press **3.03× Met**；`--tls` harness；当时 package No |
+| 2026-07-23 | **C-A landed**：H1 HTTPS server product path（`NewH1TlsServerTransport` + registry + focused gate）；package No；NEXT=STOP |
+| 2026-07-23 | **D0 landed**：doc-truth hygiene（R4/p99/路径/H2/cancel/ARCHITECTURE/推荐路径/Makefile/REPRO）；package No；NEXT=STOP |
+| 2026-07-21 | **HS-1 landed**：`--runs` + mid **1.86×** / press **0.93× Met**（runs=3）；package No；NEXT=STOP |
+| 2026-07-21 | **HS-0 landed**：H2 peer KPI 冻结（mid/press ≥0.80× multi-run；self 3× Dropped）；package No；NEXT=HS-1 |
 | 2026-07-21 | **H2-opt**：TCP_NODELAY + write coalesce + pool probe grace；peer mid ~2.07× / press ~0.92× **Met**；package No；STOP |
 | 2026-07-21 | **Go h2 peer**：`compare_h2` + `run_h2_comparison`；pre-fix mid 0.10×；package No |
 | 2026-07-21 | **E3s 抽检** RPS 1.97×/1.72× p99 0.23×/0.27× ladder stable；**H2 KPI draft**；NEXT 仍 STOP |

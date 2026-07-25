@@ -117,7 +117,7 @@ make -C core/benchmarks/nextpas.core.bench clean test
 | `core/examples/bench/custom_metrics.pas` | 自定义指标 |
 | `core/benchmarks/nextpas.core.hash/bench_hash/` | 真实模块 bench |
 
-对照表：[consumer-checklist.md](consumer-checklist.md)（**19** 模块抽检；C3 模板见该文）。
+对照表：[consumer-checklist.md](consumer-checklist.md)（**22** 模块抽检；C3 模板见该文）。
 
 ## 8b. 轻量跨语言子集重跑
 

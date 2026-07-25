@@ -39,7 +39,7 @@ LT4 is no longer a residual-only stage. Track and execute under:
 ### Snapshot evidence (2026-07-17) — frozen historical
 
 Numbers below are **as of 2026-07-17 only**. Current counts: [ROADMAP.md](ROADMAP.md)
-(wine **24** secondary; Windows **27** platform-gate `ci-matrix`; macOS **9** layer A).
+(wine **25** secondary; Windows **28** platform-gate `ci-matrix`; macOS **9** layer A).
 
 | Item | State (2026-07-17) |
 |------|--------|

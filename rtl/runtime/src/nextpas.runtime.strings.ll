@@ -19,9 +19,9 @@ declare void @np_free(ptr %raw, i64 %size)
 declare void @np_memcpy(ptr %dst, ptr %src, i64 %n)
 
 ; ============================================================
-; write_i64_decimal — i64 转十进制直接写 stdout
+; write_i64_decimal — i64 转十进制写到 fd（Batch 29: 支持 stderr）
 ; ============================================================
-define void @write_i64_decimal(i64 %v) {
+define void @write_i64_decimal(i64 %v, i64 %fd) {
 entry:
   %buf = alloca [24 x i8]
   %is_neg = icmp slt i64 %v, 0
@@ -53,7 +53,7 @@ finish:
   %len = ptrtoint ptr %end_ptr to i64
   %start_int = ptrtoint ptr %start_next to i64
   %write_len = sub i64 %len, %start_int
-  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr %start_next, i64 %write_len)
+  call void asm sideeffect "movq $$1, %rax; syscall", "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 %fd, ptr %start_next, i64 %write_len)
   ret void
 }
 

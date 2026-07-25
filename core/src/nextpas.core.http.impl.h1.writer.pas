@@ -16,7 +16,8 @@ uses
   nextpas.core.http.intf;
 
 type
-  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker, IHttpResponseBodyBytes)
+  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker,
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -56,6 +57,7 @@ type
     procedure Flush;
     function Hijack: ITcpStream;
     function HasCommitted: Boolean;
+    function HeadersCommitted: Boolean;
     function IsHijacked: Boolean;
     function GetBodyBytesWritten: Int64;
     property Headers: IHttpHeaders read GetHeaders;
@@ -517,6 +519,11 @@ begin
 end;
 
 function TH1ResponseWriter.HasCommitted: Boolean;
+begin
+  Result := FHeadersSent;
+end;
+
+function TH1ResponseWriter.HeadersCommitted: Boolean;
 begin
   Result := FHeadersSent;
 end;

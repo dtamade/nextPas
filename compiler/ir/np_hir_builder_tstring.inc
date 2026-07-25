@@ -1,27 +1,57 @@
 procedure THIRBuilder.ProcessVarDeclTString(const ANode: TTypedHirNode);
 var
   ParamIdx: LongInt;
-  ParamValueId: THIRValueId;
+  ParamValueId, LenValueId, TsSlot, LenI64: THIRValueId;
+  Func: THIRFunction;
+  Instr: THIRInstr;
 begin
   if FPendingParamCount > 0 then
   begin
-    { Function parameter: store incoming sret/value into alloca }
+    { Const/open string params are ABI (ptr, i32 len). Materialize a real
+      24B TString so write-str-var / strcmp / assign all see a TString slot.
+      Historical bug: only stored the data ptr into $ts then called
+      np_tstring_data/len on that ptr-slot → garbage human-summary. }
+    Func := FModule.FunctionAt(FModule.FunctionCount - 1);
     ParamIdx := FPendingParamLlvmIdx;
-    ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
-    EnsureAlloca(ANode.Operand + '$ts', GetPtrType);
-    EmitStore(GetPtrType, ParamValueId, FindAlloca(ANode.Operand + '$ts'));
+    if (ParamIdx < 0) or (ParamIdx + 1 >= LongInt(Func.Params.Count)) then
+      Exit;
+    ParamValueId := Func.Params[ParamIdx].ValueId;
+    LenValueId := Func.Params[ParamIdx + 1].ValueId;
+    EmitTStringInit(ANode.Operand);
+    TsSlot := FindAlloca(ANode.Operand + '$ts');
+    if TsSlot = 0 then
+      Exit;
+    { np_tstring_from_literal expects i64 len; formal is i32. }
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikZext;
+    Instr.TypeId := GetIntTypeByWidth(64, True);
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeTypedOperand(LenValueId, GetIntTypeByWidth(32, True));
+    EmitInstr(Instr);
+    LenI64 := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.Kind := hikIntrinsic;
+    Instr.IntrinsicName := 'tstring_from_literal';
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(TsSlot, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(ParamValueId, GetPtrType);
+    Instr.Operands[2] := MakeTypedOperand(LenI64, GetIntTypeByWidth(64, True));
+    EmitInstr(Instr);
     Dec(FPendingParamCount);
-    Inc(FPendingParamLlvmIdx);
+    Inc(FPendingParamLlvmIdx, 2);
   end
-  else if FInStartFunc then
+  else if FInStartFunc and (Length(ANode.Operand) > 0) and
+    (ANode.Operand[1] <> '$') then
   begin
-    { Global variable: register as global }
+    { True program-level string global. Compiler temps ($str_len_tmp_*,
+      $str_arg_*) must stay function-local 24B allocas so sret + Length work. }
     RegisterGlobal(ANode.Operand + '$ts', GetPtrType);
     FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType);
   end
   else
   begin
-    { Local variable: single 24B alloca + tstring_init }
+    { Local / temp: single 24B alloca + tstring_init }
     EmitTStringInit(ANode.Operand);
   end;
 end;
@@ -29,6 +59,8 @@ end;
 procedure THIRBuilder.EmitTStringInit(const AName: string);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
+  SlotId: THIRValueId;
 begin
   if FindAlloca(AName + '$ts') <> 0 then Exit;
   { alloca [24 x i8] — uses tstring IntrinsicName for emitter dispatch }
@@ -43,12 +75,17 @@ begin
   else
     EmitInstr(Instr);
   RegisterAllocaEntry(AName + '$ts', Instr.ResultId, GetPtrType, False);
-  { call tstring_init to zero-fill 24B }
+  { Typed string_init: SystemContractKind authority; CallTarget = runtime map. }
+  SlotId := FindAlloca(AName + '$ts');
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := 0;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_init';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringInit);
+  ContractDefinition := SystemContractAt(sckStringInit);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0].ValueId := FindAlloca(AName + '$ts');
+  Instr.Operands[0].ValueId := SlotId;
   Instr.Operands[0].TypeId := GetPtrType;
   EmitInstr(Instr);
 end;
@@ -56,10 +93,15 @@ end;
 procedure THIRBuilder.EmitTStringFini(AValue: THIRValueId);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_fini';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringFini);
+  ContractDefinition := SystemContractAt(sckStringFini);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0].ValueId := AValue;
   Instr.Operands[0].TypeId := GetPtrType;
@@ -69,10 +111,15 @@ end;
 procedure THIRBuilder.EmitTStringAssign(ADst, ASrc: THIRValueId);
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := 0;
   Instr.Kind := hikIntrinsic;
-  Instr.IntrinsicName := 'tstring_assign';
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckStringAssign);
+  ContractDefinition := SystemContractAt(sckStringAssign);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   SetLength(Instr.Operands, 2);
   Instr.Operands[0].ValueId := ADst;
   Instr.Operands[0].TypeId := GetPtrType;
@@ -88,7 +135,8 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntTypeByWidth(32, True);
+  { Runtime ABI: np_tstring_len returns i64 (SizeInt-compatible). }
+  Instr.TypeId := GetIntTypeByWidth(64, True);
   Instr.IntrinsicName := 'tstring_len';
   SetLength(Instr.Operands, 1);
   Instr.Operands[0].ValueId := AValue;
@@ -134,11 +182,11 @@ begin
   Instr.CallTarget := LitValue;
   EmitInstr(Instr);
   LitPtr := Instr.ResultId;
-  { Step 2: emit literal length as i32 constant }
+  { Step 2: emit literal length as i64 constant (matches np_tstring_from_literal). }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntTypeByWidth(32, True);
+  Instr.TypeId := GetIntTypeByWidth(64, True);
   Instr.IntrinsicName := 'const:' + IntToStr(Length(LitValue));
   EmitInstr(Instr);
   LenConst := Instr.ResultId;
@@ -152,7 +200,7 @@ begin
   Instr.Operands[1].ValueId := LitPtr;
   Instr.Operands[1].TypeId := GetPtrType;
   Instr.Operands[2].ValueId := LenConst;
-  Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
+  Instr.Operands[2].TypeId := GetIntTypeByWidth(64, True);
   EmitInstr(Instr);
 end;
 
@@ -205,6 +253,7 @@ var
   FuncName, ArgBlob, DstName, PartBlob, ObjName, SlotText: string;
   DstPtr, V, DataPtr, LenVal, ObjSlot, SelfPtr, TablePtr, FnPtr,
     SlotVal: THIRValueId;
+  ArgTypeId: THIRTypeId;
   TabPos, I, ArgPartCount, ArgCount, SlotIdx: LongInt;
   ArgParts: array of string;
   ArgValues: array of THIRValueId;
@@ -345,7 +394,8 @@ begin
         Instr.CallTarget := PartBlob;
         EmitInstr(Instr);
         DataPtr := Instr.ResultId;
-        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntTypeByWidth(32, True));
+        { Open-ABI / runtime len is i64 (np_tstring_from_literal / create). }
+        LenVal := EmitConstIntOfType(Length(PartBlob) - 2, GetIntTypeByWidth(64, True));
         if (DataPtr <> 0) and (LenVal <> 0) then
         begin
           if (ArgCount + 1) >= Length(ArgValues) then
@@ -357,13 +407,13 @@ begin
           ArgTypes[ArgCount] := GetPtrType;
           Inc(ArgCount);
           ArgValues[ArgCount] := LenVal;
-          ArgTypes[ArgCount] := GetIntTypeByWidth(32, True);
+          ArgTypes[ArgCount] := GetIntTypeByWidth(64, True);
           Inc(ArgCount);
         end;
       end
       else
       begin
-        V := ParseIntExprArg(ArgParts[I]);
+        V := ParseIntExprArgTyped(ArgParts[I], ArgTypeId);
         if V <> 0 then
         begin
           if ArgCount >= Length(ArgValues) then
@@ -372,7 +422,19 @@ begin
             SetLength(ArgTypes, ArgCount + 8);
           end;
           ArgValues[ArgCount] := V;
-          ArgTypes[ArgCount] := GetIntType;
+          { recvar / varref / pointer formals must stay ptr — defaulting to
+            GetIntType made constref record args into i64 and broke sret calls
+            like GetS(R) / Length(GetS(R)). }
+          if (Copy(ArgParts[I], 1, 7) = 'recvar ') or
+            (Copy(ArgParts[I], 1, 7) = 'varref ') or
+            (ArgTypeId = GetPtrType) then
+            ArgTypes[ArgCount] := GetPtrType
+          else if (ArgTypeId <> 0) and HirTypeIsInt(ArgTypeId) then
+            ArgTypes[ArgCount] := GetIntType
+          else if ArgTypeId <> 0 then
+            ArgTypes[ArgCount] := ArgTypeId
+          else
+            ArgTypes[ArgCount] := GetIntType;
           Inc(ArgCount);
         end;
       end;
@@ -472,7 +534,10 @@ begin
   if DstPtr = 0 then Exit;
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
-  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { Class / var-param record slots hold a pointer; local record allocas are
+    the buffer itself. Only load when the slot is ptr-typed. }
+  if FindAllocaType(VarName) = GetPtrType then
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
   { GEP to field offset }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -521,7 +586,10 @@ begin
 
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
-  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  { Class / var-param record slots hold a pointer; local record allocas are
+    the buffer itself (record:N). Only load when the slot is ptr-typed. }
+  if FindAllocaType(VarName) = GetPtrType then
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -542,8 +610,9 @@ begin
   EmitInstr(Instr);
   FieldPtr := Instr.ResultId;
 
-  { Resolve source: 'lit ...' → from_literal, 'var ...' → tstring_assign, raw name → tstring_assign }
-  if (Length(SrcSpec) > 4) and (Copy(SrcSpec, 1, 4) = 'lit ') then
+  { Resolve source: 'lit ...' → from_literal, 'var ...' → tstring_assign, raw name → tstring_assign.
+    Use >= 4 so empty lit (SrcSpec = 'lit ') is accepted — SelectorName := '' was dropped. }
+  if (Length(SrcSpec) >= 4) and (Copy(SrcSpec, 1, 4) = 'lit ') then
   begin
     { Literal source: tstring_from_literal(field_ptr, lit_data, lit_len) }
     SrcName := Copy(SrcSpec, 5, Length(SrcSpec));
@@ -564,17 +633,20 @@ begin
     EmitInstr(Instr);
     TsTmp := Instr.ResultId;
     FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := 0;
     Instr.Kind := hikIntrinsic;
-    Instr.IntrinsicName := 'tstring_init';
+    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+    AssignSystemContract(Instr, sckStringInit);
+    Instr.CallTarget := SystemContractAt(sckStringInit).RuntimeMapping;
     SetLength(Instr.Operands, 1);
     Instr.Operands[0].ValueId := TsTmp;
     Instr.Operands[0].TypeId := GetPtrType;
     EmitInstr(Instr);
-    { literal length constant }
+    { literal length constant — i64 to match np_tstring_from_literal ABI }
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikLoad;
-    Instr.TypeId := GetIntTypeByWidth(32, True);
+    Instr.TypeId := GetIntTypeByWidth(64, True);
     Instr.IntrinsicName := 'const:' + IntToStr(Length(SrcName));
     EmitInstr(Instr);
     LenConst := Instr.ResultId;
@@ -587,7 +659,7 @@ begin
     Instr.Operands[1].ValueId := SrcPtr;
     Instr.Operands[1].TypeId := GetPtrType;
     Instr.Operands[2].ValueId := LenConst;
-    Instr.Operands[2].TypeId := GetIntTypeByWidth(32, True);
+    Instr.Operands[2].TypeId := GetIntTypeByWidth(64, True);
     EmitInstr(Instr);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.Kind := hikIntrinsic;

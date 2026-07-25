@@ -116,8 +116,6 @@ implementation
 
 uses
   SysUtils,
-  {$IFDEF UNIX}BaseUnix,{$ENDIF}
-  {$IFDEF WINDOWS}Windows,{$ENDIF}
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.base.utils;
@@ -367,18 +365,9 @@ begin
 end;
 
 function GetProcessID: SizeUInt;
-{$IFDEF UNIX}
-var
-  LPid: LongInt;
-{$ENDIF}
 begin
-  {$IFDEF UNIX}
-  { system facade may use FPC RTL directly }
-  LPid := fpgetpid;
-  Result := SizeUInt(LPid);
-  {$ELSE}
-  Result := SizeUInt(GetCurrentProcessId);
-  {$ENDIF}
+  { FPC System owns GetProcessID; no BaseUnix/Windows in system facade. }
+  Result := SizeUInt(System.GetProcessID);
 end;
 
 function ExecuteProcess(const APath, AParams: string): Integer;

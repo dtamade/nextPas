@@ -34,21 +34,24 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (24-module matrix, including
-`platform.watch` RDCW create/timeout with soft event residual under Wine and
-`platform.pty` ConPTY smoke), and durable GHA **`ci-matrix`** for the
-**documented 27 platform gates** in `platform-windows-ci-matrix.sh` / `.ps1`.
+Windows compile gates, Wine runtime smoke (**25**-module matrix, including
+`platform.watch` RDCW create/timeout with soft event residual under Wine,
+`platform.pty` ConPTY smoke, and `platform.console` is_terminal/size/ansi/write),
+and durable GHA **`ci-matrix`** for the
+**documented 28 platform gates** in `platform-windows-ci-matrix.sh` / `.ps1`
+(+… +pty +watch +console). Console promote: GHA **30168411064** @ `5464b31c4`.
 
 ### Count honesty (do not mix)
 
 | Count | Meaning |
 | --- | --- |
-| **27 platform gates** | Promoted `ci-matrix`: suite dirs through `info`+`which`+`dl`+`args`+`pipe`+`resource`+`pty`+`watch` + iocp + poller + io/socket real. `watch` PASS on GHA **29746628175** @ `2020db503` (pass=28 fail=0 with mem.host). |
-| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 28 — do **not** call mem.host a platform facade gate. |
+| **28 platform gates** | Promoted `ci-matrix`: suite dirs through `…`+`pty`+`watch`+`console` + iocp + poller + io/socket real. `console` PASS on GHA **30168411064** @ `5464b31c4` (pass=29 fail=0 with mem.host). |
+| **mem.host in total** | Optional **`mem.host_runtime`** (mem G4.x). Job `total` may be 29 — do **not** call mem.host a platform facade gate. |
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
-modules outside that list (e.g. signal, console, native secure-zero) or for
-IOCP AcceptEx/ConnectEx depth beyond current smoke gaps.
+modules outside that list (e.g. signal, native secure-zero) or for
+IOCP AcceptEx/ConnectEx depth beyond current smoke gaps. Console promote is
+facade smoke (is_terminal/size/ansi/write), **not** full TUI true-console product.
 
 Allowed wording:
 
@@ -56,8 +59,8 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented **27 platform gates** only (ROADMAP)
-- do **not** say “28-gate platform ci-matrix” when the extra is only mem.host
+- `ci-matrix` for the documented **28 platform gates** only (ROADMAP)
+- do **not** say “29-gate platform ci-matrix” when the extra is only mem.host
 
 ## Current macOS truth
 

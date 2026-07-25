@@ -46,90 +46,200 @@ begin
     end;
     hikLoad:
     begin
+      { TypeId 0 maps to void; cannot load void. Prefer i64 for scalar residual. }
+      if (LlvmType = '') or (LlvmType = 'void') then
+        LlvmType := 'i64';
       if AInstr.IntrinsicName <> '' then
       begin
         if Copy(AInstr.IntrinsicName, 1, 6) = 'const:' then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
-            ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0')
+            ' ' + Copy(AInstr.IntrinsicName, 7, Length(AInstr.IntrinsicName)) + ', 0');
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end
         else if AInstr.IntrinsicName = 'null' then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = inttoptr i64 0 to ptr')
+            ' = inttoptr i64 0 to ptr');
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end
         else if Length(AInstr.Operands) > 0 then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
+            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end
         else
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+        begin
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+            ', ptr null');
+          NoteValueLlvmType(AInstr.ResultId, LlvmType);
+        end;
       end
       else if Length(AInstr.Operands) > 0 then
+      begin
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId))
+          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end
       else
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType + ', ptr null');
+      begin
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
+          ', ptr null');
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     end;
     hikStore:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  store ' + LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+      begin
+        { Value SSA may be wider/narrower than store TypeId (e.g. call i64 →
+          store i32 for Integer unit vars). Reuse B25 cast helper. }
+        if (LlvmType = '') or (LlvmType = 'void') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'st.' + IntToStr(AInstr.Operands[0].ValueId) + '.' +
+          IntToStr(AInstr.Operands[1].ValueId));
+        Emit('  store ' + LlvmType + ' ' + Op +
           ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
+      end;
     hikAdd:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikSub:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikMul:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = mul ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikDiv:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
           DivOpcodeToLlvm(AInstr) + ' ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikMod:
       if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
           ModOpcodeToLlvm(AInstr) + ' ' + LlvmType +
-          ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikNeg:
       if Length(AInstr.Operands) >= 1 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'neg.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = sub ' + LlvmType +
-          ' 0, ' + ValueRef(AInstr.Operands[0].ValueId));
+          ' 0, ' + Op);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikCmpEq, hikCmpNe, hikCmpLt, hikCmpLe, hikCmpGt, hikCmpGe:
     begin
-      Op := CompareOpcodeToLlvm(AInstr);
       if Length(AInstr.Operands) >= 2 then
       begin
         LlvmType := OperandTypeToLlvm(AInstr.Operands[0], 'i64');
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' ' +
-          LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-          ', ' + ValueRef(AInstr.Operands[1].ValueId));
+        if ValueLlvmType(AInstr.Operands[0].ValueId, '') <> '' then
+          LlvmType := ValueLlvmType(AInstr.Operands[0].ValueId, LlvmType);
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'cmp0.' + IntToStr(AInstr.ResultId));
+        Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'cmp1.' + IntToStr(AInstr.ResultId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' +
+          CompareOpcodeToLlvm(AInstr) + ' ' + LlvmType + ' ' + LTruncVal +
+          ', ' + Op);
+        NoteValueLlvmType(AInstr.ResultId, 'i1');
       end;
     end;
     hikTrunc:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        { Prefer noted SSA type: HIR TypeId may still say i32 after i64 load/call. }
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikZext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i1') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i1'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikSext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sext ' +
-          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
-          TypeToLlvm(AInstr.TypeId));
+      begin
+        Op := ValueLlvmType(AInstr.Operands[0].ValueId,
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64'));
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if Op = LlvmType then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = sext ' + Op + ' ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikCall:
     begin
       if AInstr.CallTarget = 'np_process_init' then
@@ -147,7 +257,7 @@ begin
       begin
         FNeedsProcessLifecycle := True;
         if FProcessFiniEmitted then
-          Exit; // already emitted before halt syscall
+          Exit; // already emitted (HIR node or halt-path inject)
         // Before process_fini, emit unit fini calls in reverse order
         if not FUnitFiniCallsEmitted then
         begin
@@ -155,51 +265,55 @@ begin
           FUnitFiniCallsEmitted := True;
         end;
         EmitCallInstr(AInstr);
+        FProcessFiniEmitted := True;
       end
       else
         EmitCallInstr(AInstr);
     end;
     hikIntrinsic:
     begin
-      if AInstr.IntrinsicName = 'halt' then
+      if AInstr.IntrinsicName = 'write_int' then
       begin
-        if FNeedsProcessLifecycle and not FProcessFiniEmitted then
-        begin
-          // Emit unit fini calls in reverse order before process_fini
-          if not FUnitFiniCallsEmitted then
-          begin
-            EmitUnitFiniCalls;
-            FUnitFiniCallsEmitted := True;
-          end;
-          Emit('  call void @np_process_fini()');
-          FProcessFiniEmitted := True;
-        end;
-        if AInstr.CallTarget <> '' then
-          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
-            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
-        else if Length(AInstr.Operands) >= 1 then
-          Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
-            ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'write_int' then
-      begin
+        { Batch 29: Operands[0]=value, optional [1]=fd (default 1). }
         FNeedsWriteInt := True;
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @write_i64_decimal(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
+        if Length(AInstr.Operands) >= 2 then
+          Emit('  call void @write_i64_decimal(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')')
+        else if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @write_i64_decimal(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 1)');
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin
+        { Batch 27: optional Operands[0] = fd (default 1). }
         I := AddStrConstant(AInstr.CallTarget);
-        Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
-          ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
-          IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr @.str.' +
+            IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')')
+        else
+          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr @.str.' +
+            IntToStr(I) + ', i64 ' + IntToStr(Length(AInstr.CallTarget)) + ')');
       end
       else if AInstr.IntrinsicName = 'write_str_var' then
       begin
+        { Batch 27: Operands[0]=data, [1]=len, optional [2]=fd (default 1). }
         if Length(AInstr.Operands) >= 2 then
         begin
-          Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
-            ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ')');
+          if Length(AInstr.Operands) >= 3 then
+            Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+              ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 ' +
+              ValueRef(AInstr.Operands[2].ValueId) + ', ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')')
+          else
+            Emit('  call void asm sideeffect "movq $$1, %rax; syscall",' +
+              ' "{rdi},{rsi},{rdx},~{rax},~{rcx},~{r11},~{memory}"(i64 1, ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+              ValueRef(AInstr.Operands[1].ValueId) + ')');
         end;
       end
       else if AInstr.IntrinsicName = 'string_owned_extract_ptr' then
@@ -328,7 +442,13 @@ begin
       end
       else if AInstr.IntrinsicName = 'str_const' then
       begin
-        Op := Copy(AInstr.CallTarget, 2, Length(AInstr.CallTarget) - 2);
+        { CallTarget may be decoded content (assign-tstring-literal) or a
+          quoted token from older paths. Only strip one surrounding quote pair. }
+        Op := AInstr.CallTarget;
+        if (Length(Op) >= 2) and
+          (((Op[1] = '''') and (Op[Length(Op)] = '''')) or
+           ((Op[1] = '"') and (Op[Length(Op)] = '"'))) then
+          Op := Copy(Op, 2, Length(Op) - 2);
         Emit('  ' + ValueRef(AInstr.ResultId) +
           ' = getelementptr i8, ptr @.str.' + IntToStr(
             AddStrConstant(Op)) + ', i64 0');
@@ -337,16 +457,28 @@ begin
       begin
         if Length(AInstr.Operands) >= 4 then
         begin
+          { Lengths may still be typed i32 in HIR while SSA is i64 (tstring_len). }
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'strcmp.a.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[3].ValueId, 'i64',
+            'strcmp.b.' + IntToStr(AInstr.ResultId));
           if AInstr.CallTarget = 'ne' then
           begin
             Emit('  %strcmp.' + IntToStr(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
+              ' = call i64 @np_str_cmp(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + Op +
+              ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) +
+              ', i64 ' + LTruncVal + ')');
             Emit('  ' + ValueRef(AInstr.ResultId) +
               ' = xor i64 %strcmp.' + IntToStr(AInstr.ResultId) + ', 1');
           end
           else
             Emit('  ' + ValueRef(AInstr.ResultId) +
-              ' = call i64 @np_str_cmp(ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[3].ValueId) + ')');
+              ' = call i64 @np_str_cmp(ptr ' +
+              ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + Op +
+              ', ptr ' + ValueRef(AInstr.Operands[2].ValueId) +
+              ', i64 ' + LTruncVal + ')');
+          NoteValueLlvmType(AInstr.ResultId, 'i64');
           FNeedsStrCmp := True;
         end;
       end
@@ -361,6 +493,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
+        { Legacy bare path; production field setlength uses typed sckHeapAlloc. }
         FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 1 then
         begin
@@ -373,6 +506,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc_sized' then
       begin
+        { Legacy bare path; no production builder site. }
         FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 2 then
         begin
@@ -384,33 +518,9 @@ begin
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
       end
-      else if AInstr.IntrinsicName = 'dynarray_resize' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsMemcpy := True;
-        FNeedsDynArrayHelpers := True;
-        if Length(AInstr.Operands) >= 4 then
-          Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = call ptr @np_dynarray_resize(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[3].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'dynarray_release' then
-      begin
-        FNeedsAlloc := True;
-        FNeedsFree := True;
-        FNeedsDynArrayHelpers := True;
-        if Length(AInstr.Operands) >= 3 then
-          Emit('  call void @np_dynarray_release(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ')');
-      end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
+        { Legacy bare path; production uses typed sckObjectAlloc. }
         FNeedsAlloc := True;
         FNeedsObjectAlloc := True;
         if Length(AInstr.Operands) >= 1 then
@@ -427,18 +537,6 @@ begin
       begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
           Emit('  store ptr @' + AInstr.CallTarget + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
-      end
-      else if AInstr.IntrinsicName = 'intf_addref' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @np_intf_addref(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-      end
-      else if AInstr.IntrinsicName = 'intf_release' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @np_intf_release(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'exc_store' then
       begin
@@ -564,24 +662,6 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
             ValueRef(AInstr.Operands[2].ValueId) + ')');
           FNeedsMemmove := True;
-        end;
-      end
-      else if AInstr.IntrinsicName = 'getmem' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @np_alloc(i64 ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-          FNeedsAlloc := True;
-        end;
-      end
-      else if AInstr.IntrinsicName = 'freemem' then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-        begin
-          Emit('  call void @np_free(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
-          FNeedsFree := True;
         end;
       end
       else if AInstr.IntrinsicName = 'interlocked-cas' then
@@ -731,9 +811,12 @@ begin
       begin
         FNeedsTStringRuntime := True;
         if Length(AInstr.Operands) >= 1 then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call i64 @np_tstring_len(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
+          NoteValueLlvmType(AInstr.ResultId, 'i64');
+        end;
       end
       else if AInstr.IntrinsicName = 'tstring_from_int' then
       begin
@@ -754,6 +837,7 @@ begin
     end;
     hikTryBegin:
     begin
+      { Legacy bare path; production uses typed sckExceptionTryPush. }
       FNeedsExceptionRuntime := True;
       Inc(FTryCounter);
       Emit('  ; --- try begin ---');

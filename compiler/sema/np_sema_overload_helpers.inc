@@ -83,6 +83,30 @@ begin
   Result := Count > 1;
 end;
 
+function FirstBodyIndexForName(const ABodies: TProcedureBodyVec;
+  const AName: string): LongInt;
+var
+  Index: LongInt;
+begin
+  for Index := 0 to LongInt(ABodies.Count) - 1 do
+    if SameText(ABodies[Index].Name, AName) then
+      Exit(Index);
+  Result := -1;
+end;
+
+function NextBodyIndexForName(const ABodies: TProcedureBodyVec;
+  const AName: string; const APrevIndex: LongInt): LongInt;
+var
+  Index: LongInt;
+begin
+  if APrevIndex < 0 then
+    Exit(-1);
+  for Index := APrevIndex + 1 to LongInt(ABodies.Count) - 1 do
+    if SameText(ABodies[Index].Name, AName) then
+      Exit(Index);
+  Result := -1;
+end;
+
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;

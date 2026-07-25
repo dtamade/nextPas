@@ -72,9 +72,9 @@ var
   LPort: UInt16;
 
 begin
-  LOptions := THttpServerOptions.Default;
+  LOptions := THttpServerOptions.Production;
   LOptions.Backend := ParseBackend(ParamStr(1));
-  { Explicit finite Read/Write (demo also tightens MaxHeader/MaxBody). }
+  { Demo tightens Production RW + MaxHeader/MaxBody (not bare Default). }
   LOptions.ReadTimeout := 5000;
   LOptions.WriteTimeout := 5000;
   LOptions.MaxHeaderSize := 1024;

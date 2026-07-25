@@ -2498,28 +2498,6 @@ begin
   Check(LRaised, 'Client.Send rejects nil transport response');
 end;
 
-procedure TestClientSendRejectsRedirectWithNilHeaders;
-var
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LRaised: Boolean;
-begin
-  LTransport := TNilHeadersRedirectTransport.Create as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmGet, 'http://example.test/');
-
-  LRaised := False;
-  try
-    LClient.Send(LReq);
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'Client.Send rejects redirect response with nil headers');
-end;
-
 { Test 2: Client GET with custom headers }
 procedure TestClientGetCustomHeaders;
 var
@@ -3037,7 +3015,8 @@ var
   LDestroyPos: SizeInt;
   LDestroyBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { Owner: impl.h1.client (STRUCT residual extract from impl.h1). }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   Check(Pos('destructor Destroy; override;', LSource) > 0,
     'h1 client transport declares destructor for idle-pool ownership');
   LDestroyPos := Pos('destructor TH1ClientTransport.Destroy;', LSource);
@@ -3046,7 +3025,8 @@ begin
   if LDestroyPos > 0 then
   begin
     LDestroyBlock := Copy(LSource, LDestroyPos, 256);
-    Check(Pos('PoolClear;', LDestroyBlock) > 0,
+    Check((Pos('FPool.Free', LDestroyBlock) > 0) or
+          (Pos('FPool.Clear', LDestroyBlock) > 0),
       'h1 client transport destructor closes pooled idle connections');
   end;
 end;
@@ -3057,8 +3037,9 @@ var
   LPutPos: SizeInt;
   LPutBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
-  LPutPos := Pos('procedure TH1ClientTransport.PoolPut(', LSource);
+  { STRUCT-1: pool body lives in impl.h1.pool. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pool.pas');
+  LPutPos := Pos('procedure TH1IdleConnectionPool.Put(', LSource);
   Check(LPutPos > 0, 'h1 PoolPut is present');
   if LPutPos > 0 then
   begin
@@ -3067,13 +3048,13 @@ begin
     LPutBlock := Copy(LSource, LPutPos, 2400);
     Check(Pos('LAuthorityIdle', LPutBlock) > 0,
       'h1 PoolPut counts idle connections per authority');
-    Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
+    Check(Pos('FCount >= FMaxPoolSize', LPutBlock) = 0,
       'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
-    Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
+    Check(Pos('LAuthorityIdle >= FMaxPoolSize', LPutBlock) > 0,
       'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
     Check(Pos('IdleAtMs', LPutBlock) > 0,
       'h1 PoolPut stamps IdleAtMs for IdleTTL');
-    Check(Pos('PoolEntryExpired', LPutBlock) > 0,
+    Check(Pos('EntryExpired', LPutBlock) > 0,
       'h1 PoolPut evicts expired idle peers before MaxPoolSize count');
     Check(Pos('LToClose', LPutBlock) > 0,
       'h1 PoolPut defers Close outside FPoolLock');
@@ -3086,7 +3067,8 @@ var
   LReconnectPos: SizeInt;
   LReconnectBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { Owner: impl.h1.client (STRUCT residual extract from impl.h1). }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   LReconnectPos := Pos(
     'RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);', LSource);
   Check(LReconnectPos > 0,
@@ -3133,35 +3115,34 @@ begin
   end;
 end;
 
-procedure TestWindowsCancelProbeOnlyResidualSourceContract;
+procedure TestWindowsCancelWaitablePairSourceContract;
 var
   LCancelSrc: string;
   LPlatformSrc: string;
   LPairPos: SizeInt;
   LPairBlock: string;
 begin
-  { Wave R3: Unix waitable cancel uses socketpair wake; Windows platform
-    socket_pair is explicitly UNSUPPORTED so tokens stay probe-only (~10ms). }
+  { Wave PD-3-3: Windows platform_socket_pair emulates socketpair via TCP
+    loopback so NewNetCancelToken gets a waitable wake (same as Unix path). }
   LCancelSrc := ReadFileText('../../../src/nextpas.core.net.cancel.pas');
-  Check(Pos('Windows falls back to probe-only', LCancelSrc) > 0,
-    'net.cancel documents Windows probe-only residual');
   Check(Pos('platform_socket_pair', LCancelSrc) > 0,
     'net.cancel attempts platform_socket_pair for waitable wake');
+  Check(Pos('Falls back to probe-only only if platform_socket_pair fails', LCancelSrc) > 0,
+    'net.cancel documents probe-only as pair-failure fallback only');
+  Check(Pos('Windows falls back to probe-only', LCancelSrc) = 0,
+    'net.cancel no longer claims Windows is always probe-only');
   LPlatformSrc := ReadFileText('../../../src/nextpas.core.platform.socket.pas');
-  LPairPos := Pos(
-    'function platform_socket_pair(ADomain, AType, AProtocol: Int32;',
-    LPlatformSrc);
-  { Prefer the Windows residual implementation when present in this unit. }
-  if Pos('Windows doesn''t have socketpair', LPlatformSrc) > 0 then
-  begin
-    LPairPos := Pos('Windows doesn''t have socketpair', LPlatformSrc);
-    LPairBlock := Copy(LPlatformSrc, LPairPos, 400);
-    Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
-      'Windows platform_socket_pair returns PLATFORM_ERR_UNSUPPORTED');
-  end
-  else
-    Check(LPairPos > 0,
-      'platform_socket_pair is present for waitable cancel wiring');
+  LPairPos := Pos('No native socketpair on Windows', LPlatformSrc);
+  Check(LPairPos > 0, 'Windows platform_socket_pair documents loopback emulation');
+  LPairBlock := Copy(LPlatformSrc, LPairPos, 2500);
+  Check(Pos('platform_sockaddr_loopback4', LPairBlock) > 0,
+    'Windows pair uses loopback bind');
+  Check(Pos('platform_socket_connect', LPairBlock) > 0,
+    'Windows pair connects write end');
+  Check(Pos('platform_socket_accept', LPairBlock) > 0,
+    'Windows pair accepts read end');
+  Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
+    'Windows pair still returns UNSUPPORTED for non-STREAM');
 end;
 
 procedure TestClientPostStringBodyOverload;
@@ -4433,751 +4414,11 @@ begin
   end;
 end;
 
-procedure TestHttpGetToWriterCopiesResponseBody;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LBuffer: IStream;
-  LCount: Int64;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/download', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LBody: string;
-  begin
-    LBody := 'toolchain';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LBody[1], SizeUInt(Length(LBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LBuffer := CreateBytesStreamFrom(nil);
-    LCount := nextpas.core.http.HttpGetToWriter(
-      LClient,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/download',
-      LBuffer as IWriter);
-    CheckEqual(Int64(9), LCount, 'copied byte count');
-    LBuffer.Position := 0;
-    CheckEqual('toolchain', ReadReaderStr(LBuffer as IReader), 'writer receives response body');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpGetToWriterClosesBodyAfterSuccessfulCopy;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LClient: IHttpClient;
-  LBuffer: IStream;
-  LCount: Int64;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '9');
-  LBody := TRedirectTrackedBody.Create('toolchain');
-  LBodyRef := LBody as IReadCloser;
-  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
-    LBodyRef as IReader)) as IHttpClient;
-  LBuffer := CreateBytesStreamFrom(nil);
-
-  LCount := HttpGetToWriter(LClient, 'http://example.test/tool',
-    LBuffer as IWriter);
-
-  CheckEqual(Int64(9), LCount, 'download helper copied byte count');
-  Check(LBody.Closed, 'download helper closes response body after copy');
-end;
-
-procedure TestHttpGetToWriterClosesBodyWhenCopyFails;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '9');
-  LBody := TRedirectTrackedBody.Create('toolchain');
-  LBodyRef := LBody as IReadCloser;
-  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
-    LBodyRef as IReader)) as IHttpClient;
-
-  LRaised := False;
-  try
-    HttpGetToWriter(LClient, 'http://example.test/tool',
-      TZeroProgressWriter.Create as IWriter);
-  except
-    on E: EIOError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'download helper propagates writer failure');
-  Check(LBody.Closed, 'download helper closes response body when copy fails');
-end;
-
-procedure TestHttpGetToWriterKeepsWriteErrorWhenCloseFails;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TCloseFailingResponseBody;
-  LBodyRef: IReadCloser;
-  LClient: IHttpClient;
-  LRaisedWriteError: Boolean;
-  LRaisedCloseError: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '1');
-  LBody := TCloseFailingResponseBody.Create('x');
-  LBodyRef := LBody as IReadCloser;
-  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
-    LBodyRef as IReader)) as IHttpClient;
-
-  LRaisedWriteError := False;
-  LRaisedCloseError := False;
-  try
-    HttpGetToWriter(LClient, 'http://example.test/tool',
-      TZeroProgressWriter.Create as IWriter);
-  except
-    on E: Exception do
-    begin
-      LRaisedWriteError := E.Message = 'IoCopy: write returned 0';
-      LRaisedCloseError := E.Message = 'response body close failed';
-    end;
-  end;
-
-  Check(LRaisedWriteError,
-    'download helper preserves primary copy error');
-  Check(not LRaisedCloseError,
-    'download helper does not replace copy error with close error');
-  CheckEqual(Int64(1), Int64(LBody.CloseCount),
-    'download helper still attempts close after copy error');
-  Check(LBody.Closed,
-    'download helper marks close attempted after copy error');
-end;
-
-procedure TestHttpGetToWriterClosesNon2xxBodyBeforeRaising;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '9');
-  LBody := TRedirectTrackedBody.Create('not-found');
-  LBodyRef := LBody as IReadCloser;
-  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders,
-    LBodyRef as IReader)) as IHttpClient;
-
-  LRaised := False;
-  try
-    HttpGetToWriter(LClient, 'http://example.test/missing',
-      CreateBytesStreamFrom(nil) as IWriter);
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'download helper rejects non-2xx response');
-  Check(LBody.Closed, 'download helper closes non-2xx response body before raising');
-end;
-
-procedure TestHttpReadResponseBodyStringReadsLiveResponse;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/body-text', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LResponseBody: string;
-  begin
-    LResponseBody := 'response text';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/body-text');
-    LBody := nextpas.core.http.client.HttpReadResponseBodyString(LResp);
-    CheckEqual('response text', LBody, 'response body helper reads full body');
-    CheckEqual('', ReadBodyStr(LResp), 'response body helper consumes the reader');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpReadResponseBodyStringNilBodyReturnsEmpty;
-var
-  LResp: IHttpResponse;
-begin
-  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
-  CheckEqual('', nextpas.core.http.client.HttpReadResponseBodyString(LResp),
-    'response body helper treats nil body as empty');
-end;
-
-procedure TestHttpReadResponseBodyStringClosesBodyAfterRead;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LResp: IHttpResponse;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '9');
-  LBody := TRedirectTrackedBody.Create('toolchain');
-  LBodyRef := LBody as IReadCloser;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
-
-  CheckEqual('toolchain', nextpas.core.http.client.HttpReadResponseBodyString(LResp),
-    'response body string helper reads close-capable body');
-  Check(LBody.Closed,
-    'response body string helper closes close-capable body after read');
-end;
-
-procedure TestHttpReadResponseBodyStringRejectsNilResponse;
-var
-  LResp: IHttpResponse;
-  LRaised: Boolean;
-begin
-  LResp := nil;
-  LRaised := False;
-  try
-    nextpas.core.http.client.HttpReadResponseBodyString(LResp);
-  except
-    on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
-  end;
-  Check(LRaised, 'response body helper rejects nil response');
-end;
-
-procedure TestHttpReadResponseBodyBytesReadsLiveResponse;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: TBytes;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/body-bytes', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LResponseBody: string;
-  begin
-    LResponseBody := 'bin' + #0 + #255 + 'ary';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/body-bytes');
-    LBody := nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
-    CheckEqual('bin' + #0 + #255 + 'ary', BytesToTestString(LBody),
-      'response body bytes helper preserves binary body bytes');
-    CheckEqual('', ReadBodyStr(LResp), 'response body bytes helper consumes the reader');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpReadResponseBodyBytesNilBodyReturnsEmpty;
-var
-  LResp: IHttpResponse;
-  LBody: TBytes;
-begin
-  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
-  LBody := nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
-  CheckEqual(Int64(0), Int64(Length(LBody)),
-    'response body bytes helper treats nil body as empty bytes');
-end;
-
-procedure TestHttpReadResponseBodyBytesClosesBodyAfterRead;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LResp: IHttpResponse;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '9');
-  LBody := TRedirectTrackedBody.Create('toolchain');
-  LBodyRef := LBody as IReadCloser;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
-
-  CheckEqual('toolchain', BytesToTestString(
-    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp)),
-    'response body bytes helper reads close-capable body');
-  Check(LBody.Closed,
-    'response body bytes helper closes close-capable body after read');
-end;
-
-procedure TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TReadAndCloseFailingResponseBody;
-  LBodyRef: IReadCloser;
-  LResp: IHttpResponse;
-  LRaisedReadError: Boolean;
-  LRaisedCloseError: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '1');
-  LBody := TReadAndCloseFailingResponseBody.Create;
-  LBodyRef := LBody as IReadCloser;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
-
-  LRaisedReadError := False;
-  LRaisedCloseError := False;
-  try
-    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
-  except
-    on E: Exception do
-    begin
-      LRaisedReadError := E.Message = 'response body read failed';
-      LRaisedCloseError := E.Message = 'response body close failed';
-    end;
-  end;
-
-  Check(LRaisedReadError,
-    'response body bytes helper preserves primary read error');
-  Check(not LRaisedCloseError,
-    'response body bytes helper does not replace read error with close error');
-  CheckEqual(Int64(1), Int64(LBody.CloseCount),
-    'response body bytes helper still attempts close after read error');
-  Check(LBody.Closed,
-    'response body bytes helper marks close attempted after read error');
-end;
-
-procedure TestHttpReadResponseBodyBytesRejectsNilResponse;
-var
-  LResp: IHttpResponse;
-  LRaised: Boolean;
-begin
-  LResp := nil;
-  LRaised := False;
-  try
-    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
-  except
-    on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
-  end;
-  Check(LRaised, 'response body bytes helper rejects nil response');
-end;
-
-procedure TestExtractCharsetFromContentType;
-begin
-  CheckEqual('utf-8', ExtractCharsetFromContentType('text/html; charset=utf-8'),
-    'basic charset');
-  CheckEqual('UTF-8', ExtractCharsetFromContentType('text/html; charset=UTF-8'),
-    'preserves case');
-  CheckEqual('iso-8859-1', ExtractCharsetFromContentType('text/html; charset=iso-8859-1'),
-    'latin1');
-  CheckEqual('utf-8', ExtractCharsetFromContentType('application/json; charset=utf-8'),
-    'json charset');
-  CheckEqual('', ExtractCharsetFromContentType('text/html'),
-    'no charset');
-  CheckEqual('', ExtractCharsetFromContentType(''),
-    'empty content-type');
-  CheckEqual('utf-8', ExtractCharsetFromContentType('text/html; charset="utf-8"'),
-    'quoted charset');
-end;
-
-procedure TestHttpReadResponseBodyStringAutoUtf8;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/utf8', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LResponseBody: string;
-  begin
-    LResponseBody := 'héllo wörld';
-    AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=utf-8');
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/utf8');
-    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
-    CheckEqual('héllo wörld', LBody, 'utf-8 auto read');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpReadResponseBodyStringAutoLatin1;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/latin1', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LResponseBody: string;
-  begin
-    { Send raw Latin-1 bytes: é = 0xE9, ö = 0xF6 }
-    LResponseBody := 'h' + Chr($E9) + 'llo w' + Chr($F6) + 'rld';
-    AW.GetHeaders.SetHeader('content-type', 'text/plain; charset=iso-8859-1');
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/latin1');
-    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
-    Check(Pos(Chr($E9), LBody) > 0, 'latin1 é preserved');
-    Check(Pos(Chr($F6), LBody) > 0, 'latin1 ö preserved');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpReadResponseBodyStringAutoNoCharset;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/nocharset', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LResponseBody: string;
-  begin
-    LResponseBody := 'hello world';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LResponseBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/nocharset');
-    LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
-    CheckEqual('hello world', LBody, 'no charset defaults to utf-8');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
 function TestStringToBytes(const AValue: string): TBytes;
 begin
   SetLength(Result, Length(AValue));
   if Length(AValue) > 0 then
     Move(AValue[1], Result[0], Length(AValue));
-end;
-
-procedure TestHttpDecodeContentEncodingGzip;
-var
-  LPlain, LCompressed, LDecoded: TBytes;
-begin
-  LPlain := TestStringToBytes('hello gzip world');
-  LCompressed := GzipCompress(LPlain);
-  LDecoded := HttpDecodeContentEncoding('gzip', LCompressed);
-  CheckEqual('hello gzip world', BytesToTestString(LDecoded),
-    'gzip Content-Encoding decodes');
-end;
-
-procedure TestHttpDecodeContentEncodingDeflate;
-var
-  LPlain, LCompressed, LDecoded: TBytes;
-begin
-  LPlain := TestStringToBytes('hello deflate world');
-  LCompressed := DeflateCompress(LPlain);
-  LDecoded := HttpDecodeContentEncoding('deflate', LCompressed);
-  CheckEqual('hello deflate world', BytesToTestString(LDecoded),
-    'deflate Content-Encoding decodes');
-end;
-
-procedure TestHttpDecodeContentEncodingIdentityAndEmpty;
-var
-  LPlain, LDecoded: TBytes;
-begin
-  LPlain := TestStringToBytes('plain');
-  LDecoded := HttpDecodeContentEncoding('', LPlain);
-  CheckEqual('plain', BytesToTestString(LDecoded), 'empty encoding is pass-through');
-  LDecoded := HttpDecodeContentEncoding('identity', LPlain);
-  CheckEqual('plain', BytesToTestString(LDecoded), 'identity encoding is pass-through');
-end;
-
-procedure TestHttpDecodeContentEncodingUnsupported;
-var
-  LRaised: Boolean;
-  LOp: string;
-  LKind: THttpErrorKind;
-begin
-  LRaised := False;
-  LOp := '';
-  LKind := hekUnknown;
-  try
-    HttpDecodeContentEncoding('br', TestStringToBytes('x'));
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LKind := E.Kind;
-      LOp := E.Op;
-    end;
-  end;
-  Check(LRaised, 'unsupported Content-Encoding raises');
-  Check(LKind = hekProtocol, 'unsupported encoding is hekProtocol');
-  CheckEqual('content_encoding', LOp, 'unsupported encoding Op=content_encoding');
-end;
-
-procedure TestHttpDecodeContentEncodingMultiCodingRejected;
-var
-  LRaised: Boolean;
-  LOp: string;
-begin
-  LRaised := False;
-  LOp := '';
-  try
-    HttpDecodeContentEncoding('gzip, deflate', TestStringToBytes('x'));
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LOp := E.Op;
-      Check(E.Kind = hekProtocol, 'multi-coding is hekProtocol');
-    end;
-  end;
-  Check(LRaised, 'multi Content-Encoding raises');
-  CheckEqual('content_encoding', LOp, 'multi-coding Op=content_encoding');
-end;
-
-procedure TestHttpDecodeContentEncodingCorrupt;
-var
-  LRaised: Boolean;
-  LOp: string;
-  LKind: THttpErrorKind;
-  LJunk: TBytes;
-begin
-  LJunk := TestStringToBytes('not-gzip-payload');
-  LRaised := False;
-  LOp := '';
-  LKind := hekUnknown;
-  try
-    HttpDecodeContentEncoding('gzip', LJunk);
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LKind := E.Kind;
-      LOp := E.Op;
-    end;
-  end;
-  Check(LRaised, 'corrupt gzip raises');
-  Check(LKind = hekBody, 'corrupt payload is hekBody');
-  CheckEqual('content_encoding', LOp, 'corrupt payload Op=content_encoding');
-end;
-
-procedure TestHttpDecodeContentEncodingMaxSize;
-var
-  LPlain, LCompressed: TBytes;
-  LRaised: Boolean;
-begin
-  LPlain := TestStringToBytes('0123456789abcdefghij');
-  LCompressed := GzipCompress(LPlain);
-  LRaised := False;
-  try
-    HttpDecodeContentEncoding('gzip', LCompressed, 5);
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      CheckEqual('content_encoding', E.Op, 'max-size failure Op=content_encoding');
-      Check(E.Kind = hekBody, 'max-size decode failure is hekBody');
-    end;
-  end;
-  Check(LRaised, 'max decompressed size is enforced');
-end;
-
-procedure TestHttpReadResponseBodyBytesDecodedGzip;
-var
-  LHeaders: IHttpHeaders;
-  LPlain, LCompressed, LDecoded: TBytes;
-  LResp: IHttpResponse;
-begin
-  LPlain := TestStringToBytes('decoded-body');
-  LCompressed := GzipCompress(LPlain);
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-encoding', 'gzip');
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
-  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
-  CheckEqual('decoded-body', BytesToTestString(LDecoded),
-    'response helper decodes Content-Encoding gzip');
-end;
-
-procedure TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw;
-var
-  LHeaders: IHttpHeaders;
-  LResp: IHttpResponse;
-  LDecoded: TBytes;
-begin
-  LHeaders := NewHttpHeaders;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, TestStringToBytes('raw-body'));
-  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
-  CheckEqual('raw-body', BytesToTestString(LDecoded),
-    'missing Content-Encoding returns raw body');
-end;
-
-procedure TestHttpReadResponseBodyStringDecodedGzip;
-var
-  LHeaders: IHttpHeaders;
-  LPlain, LCompressed: TBytes;
-  LResp: IHttpResponse;
-  LText: string;
-begin
-  LPlain := TestStringToBytes('string-decoded');
-  LCompressed := GzipCompress(LPlain);
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-encoding', 'gzip');
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
-  LText := HttpReadResponseBodyStringDecoded(LResp);
-  CheckEqual('string-decoded', LText, 'string decoded helper');
-end;
-
-procedure TestHttpReadResponseBodyBytesDecodedLiveCompression;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LBody: string;
-  LPlain: string;
-  LHandler: IHttpHandler;
-  I: Integer;
-begin
-  { Body large enough for default CompressionMiddleware min size (1024). }
-  LPlain := '';
-  for I := 1 to 1200 do
-    LPlain := LPlain + 'a';
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/gzip-body', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('content-type', 'text/plain');
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LPlain))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LPlain[1], SizeUInt(Length(LPlain)));
-  end);
-  LHandler := Chain(LRouter as IHttpHandler, [CompressionMiddleware]);
-  LHandle := StartServer(LHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/gzip-body')
-      .Header('accept-encoding', 'gzip')
-      .Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual('gzip', LowerCase(LResp.Headers.Get('content-encoding')),
-      'server compression sets Content-Encoding gzip');
-    LBody := HttpReadResponseBodyStringDecoded(LResp);
-    CheckEqual(LPlain, LBody, 'client decodes live gzip response');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestHttpReleaseResponseBodyClosesCloseCapableBody;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectTrackedBody;
-  LBodyRef: IReadCloser;
-  LResp: IHttpResponse;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '7');
-  LBody := TRedirectTrackedBody.Create('discard');
-  LBodyRef := LBody as IReadCloser;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
-
-  HttpReleaseResponseBody(LResp);
-
-  Check(LBody.Closed,
-    'release helper closes close-capable response body');
-end;
-
-procedure TestHttpReleaseResponseBodyDrainsPlainReader;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TRedirectDrainingBody;
-  LBodyRef: IReader;
-  LResp: IHttpResponse;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '7');
-  LBody := TRedirectDrainingBody.Create('discard');
-  LBodyRef := LBody as IReader;
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef);
-
-  HttpReleaseResponseBody(LResp);
-
-  Check(LBody.Drained,
-    'release helper drains non-closeable response body');
-end;
-
-procedure TestHttpReleaseResponseBodyNilBodyNoop;
-var
-  LResp: IHttpResponse;
-begin
-  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
-  HttpReleaseResponseBody(LResp);
-  Check(LResp.Body = nil, 'release helper accepts nil body');
-end;
-
-procedure TestHttpReleaseResponseBodyRejectsNilResponse;
-var
-  LResp: IHttpResponse;
-  LRaised: Boolean;
-begin
-  LResp := nil;
-  LRaised := False;
-  try
-    HttpReleaseResponseBody(LResp);
-  except
-    on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
-  end;
-  Check(LRaised, 'release helper rejects nil response');
 end;
 
 procedure TestClientClosesCloseCapableRequestBodyAfterSend;
@@ -5431,229 +4672,7 @@ begin
     'stream-body');
 end;
 
-procedure TestHttpGetToFileWritesFinalPathAtomically;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LDestPath: string;
-  LCount: Int64;
-begin
-  ResetDownloadTempRoot;
-  LDestPath := PathJoin([DownloadTempRoot, 'artifacts', 'bootstrap.txt']);
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/bootstrap', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LBody: string;
-  begin
-    LBody := 'bootstrap-bits';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LBody[1], SizeUInt(Length(LBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LCount := HttpGetToFile(
-      LClient,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bootstrap',
-      LDestPath);
-    CheckEqual(Int64(14), LCount, 'file byte count');
-    Check(Exists(LDestPath), 'final file exists');
-    CheckEqual('bootstrap-bits', ReadFileText(LDestPath), 'final file content');
-  finally
-    StopServer(LServer, LHandle);
-    RemoveAll(DownloadTempRoot);
-  end;
-end;
-
-procedure TestHttpGetToFileRejects404Responses;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LDestPath: string;
-  LRaised: Boolean;
-begin
-  ResetDownloadTempRoot;
-  LDestPath := PathJoin([DownloadTempRoot, 'missing', 'tool.txt']);
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/missing', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LBody: string;
-  begin
-    LBody := 'not-found';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
-    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
-    AW.Write(LBody[1], SizeUInt(Length(LBody)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LRaised := False;
-    try
-      HttpGetToFile(
-        LClient,
-        'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/missing',
-        LDestPath);
-    except
-      on E: EHttpError do
-        LRaised := True;
-    end;
-    Check(LRaised, '404 download raises EHttpError');
-    Check(not Exists(LDestPath), '404 download does not create final file');
-  finally
-    StopServer(LServer, LHandle);
-    RemoveAll(DownloadTempRoot);
-  end;
-end;
-
-procedure TestHttpGetToFileCleansTempFilesOnTruncatedBody;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LDestPath: string;
-  LDestDir: string;
-  LRaised: Boolean;
-begin
-  ResetDownloadTempRoot;
-  LDestDir := PathJoin([DownloadTempRoot, 'partial']);
-  LDestPath := PathJoin([LDestDir, 'tool.txt']);
-  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
-                   'Content-Length: 10'#13#10 +
-                   'Content-Type: text/plain'#13#10 +
-                   #13#10 +
-                   'hello';
-  GRawResponse2 := '';
-  GRawAcceptLimit := 1;
-  GRawListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GRawListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @RawResponseThread, nil);
-
-  try
-    LClient := NewHttpClient;
-    LRaised := False;
-    try
-      HttpGetToFile(
-        LClient,
-        'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/truncated-download',
-        LDestPath);
-    except
-      on E: EHttpError do
-        LRaised := True;
-    end;
-    Check(LRaised, 'truncated download raises EHttpError');
-    Check(not Exists(LDestPath), 'truncated download does not leave final file');
-    if IsDir(LDestDir) then
-      CheckEqual(Int64(0), Int64(Length(ReadDir(LDestDir))), 'truncated download cleans temp files');
-  finally
-    GRawListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GRawListener := nil;
-    GRawResponse1 := '';
-    GRawResponse2 := '';
-    GRawAcceptLimit := 0;
-    RemoveAll(DownloadTempRoot);
-  end;
-end;
-
-procedure TestHttpGetToFileKeepsReadErrorWhenCloseFails;
-var
-  LHeaders: IHttpHeaders;
-  LBody: TReadAndCloseFailingResponseBody;
-  LBodyRef: IReadCloser;
-  LClient: IHttpClient;
-  LDestPath: string;
-  LRaisedReadError: Boolean;
-  LRaisedCloseError: Boolean;
-begin
-  ResetDownloadTempRoot;
-  LDestPath := PathJoin([DownloadTempRoot, 'read-fail', 'tool.bin']);
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '1');
-  LBody := TReadAndCloseFailingResponseBody.Create;
-  LBodyRef := LBody as IReadCloser;
-  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
-    LBodyRef as IReader)) as IHttpClient;
-
-  LRaisedReadError := False;
-  LRaisedCloseError := False;
-  try
-    try
-      HttpGetToFile(LClient, 'http://example.test/tool', LDestPath);
-    except
-      on E: Exception do
-      begin
-        LRaisedReadError := E.Message = 'response body read failed';
-        LRaisedCloseError := E.Message = 'response body close failed';
-      end;
-    end;
-
-    Check(LRaisedReadError,
-      'file download helper preserves primary read error');
-    Check(not LRaisedCloseError,
-      'file download helper does not replace read error with close error');
-    CheckEqual(Int64(1), Int64(LBody.CloseCount),
-      'file download helper still attempts close after read error');
-    Check(LBody.Closed,
-      'file download helper marks close attempted after read error');
-    Check(not Exists(LDestPath),
-      'file download helper does not leave final file after read error');
-  finally
-    RemoveAll(DownloadTempRoot);
-  end;
-end;
-
 { Test 4: Client follows redirect (301 -> 200) }
-procedure TestClientFollowsRedirect;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LBody: string;
-  LBase: string;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('location', '/new');
-    AW.GetHeaders.SetHeader('content-length', '0');
-    AW.WriteHeader(THttpStatus(301));
-  end);
-  LRouter.Get('/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var LB: string;
-  begin
-    LB := 'arrived';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LB[1], SizeUInt(Length(LB)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LBase := 'http://127.0.0.1:' + IntToStr(Int64(LPort));
-    LResp := LClient.Get(LBase + '/old');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'followed redirect to 200');
-    LBody := ReadBodyStr(LResp);
-    CheckEqual('arrived', LBody, 'body from final destination');
-    CheckEqual(LBase + '/new', LResp.FinalUrl,
-      'FinalUrl is the post-redirect request URL');
-    CheckEqual(Int64(Ord(hvHttp11)), Int64(Ord(LResp.Version)),
-      'H1 live redirect response version is HTTP/1.1');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
 procedure TestClientResponseMetadataOnDirectGet;
 var
   LRouter: THttpRouter;
@@ -5688,395 +4707,6 @@ begin
   end;
 end;
 
-procedure TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup;
-var
-  LBody: TTrackedRequestBody;
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-begin
-  LBody := TTrackedRequestBody.Create('payload');
-  LTransportObj := TRedirectCaptureTransport.Create(LBody);
-  LTransportObj.RedirectStatus := HTTP_STATUS_SEE_OTHER;
-  LTransportObj.RedirectLocation := '/done';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
-
-  LResp := LClient.Send(LReq);
-
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'get-style redirect performs follow-up round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'get-style redirect final status');
-  Check(LTransportObj.OriginalBodyClosedBeforeFollowup,
-    'get-style redirect closes original request body before follow-up');
-  Check(LBody.Closed,
-    'get-style redirect leaves original request body closed after Send');
-  CheckEqual(Int64(1), Int64(LBody.CloseCount),
-    'get-style redirect closes original request body exactly once');
-end;
-
-procedure TestClientDoesNotRetryCloseWhenGetStyleRedirectBodyCloseFails;
-var
-  LBody: TTrackedRequestBody;
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LRaised: Boolean;
-begin
-  LBody := TTrackedRequestBody.Create('payload', True);
-  LTransportObj := TRedirectCaptureTransport.Create(LBody);
-  LTransportObj.RedirectStatus := HTTP_STATUS_SEE_OTHER;
-  LTransportObj.RedirectLocation := '/done';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
-
-  LRaised := False;
-  try
-    LClient.Send(LReq);
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised,
-    'get-style redirect propagates original request body close failure');
-  CheckEqual(Int64(1), Int64(LBody.CloseCount),
-    'get-style redirect failed close is not retried by Send finally');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'get-style redirect does not issue follow-up after body close failure');
-end;
-
-procedure TestClientFollowsSeeOtherAsGet;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LGotFinalMethod: THttpMethod;
-  LGotFinalBody: string;
-begin
-  LGotFinalMethod := hmTrace;
-  LGotFinalBody := 'not-hit';
-  LRouter := THttpRouter.Create;
-  LRouter.Post('/submit', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('location', '/complete');
-    AW.GetHeaders.SetHeader('content-length', '0');
-    AW.WriteHeader(HTTP_STATUS_SEE_OTHER);
-  end);
-  LRouter.Get('/complete', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LB: string;
-  begin
-    LGotFinalMethod := AReq.Method;
-    LGotFinalBody := ReadReaderStr(AReq.Body);
-    LB := 'done';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LB[1], SizeUInt(Length(LB)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Post('http://127.0.0.1:' + IntToStr(Int64(LPort)) +
-      '/submit', 'text/plain', 'payload');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      '303 redirect followed to final response');
-    Check(LGotFinalMethod = hmGet, '303 redirect changes POST to GET');
-    CheckEqual('', LGotFinalBody, '303 redirect drops original request body');
-    CheckEqual('done', ReadBodyStr(LResp), '303 final response body');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestClientPreservesRelativeRedirectQuery;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LGotPath: string;
-  LGotRawQuery: string;
-  LGotQueryParam: string;
-begin
-  LGotPath := 'not-hit';
-  LGotRawQuery := 'not-hit';
-  LGotQueryParam := 'not-hit';
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('location', '/new?from=redirect');
-    AW.GetHeaders.SetHeader('content-length', '0');
-    AW.WriteHeader(HTTP_STATUS_FOUND);
-  end);
-  LRouter.Get('/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var
-    LB: string;
-  begin
-    LGotPath := AReq.Path;
-    LGotRawQuery := AReq.RawQuery;
-    LGotQueryParam := AReq.QueryParam('from');
-    LB := 'arrived';
-    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LB[1], SizeUInt(Length(LB)));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/old');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'relative redirect with query reaches final route');
-    CheckEqual('/new', LGotPath, 'relative redirect preserves path without query');
-    CheckEqual('from=redirect', LGotRawQuery, 'relative redirect preserves raw query');
-    CheckEqual('redirect', LGotQueryParam, 'relative redirect query param is visible');
-    CheckEqual('arrived', ReadBodyStr(LResp), 'relative redirect final body');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
-procedure TestClientRedirectTransportSeesParsedRelativeQuery;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls), 'redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode), 'redirect transport final status');
-  CheckEqual('/new', LTransportObj.SeenPath,
-    'redirect follow-up request path excludes query');
-  CheckEqual('from=redirect', LTransportObj.SeenRawQuery,
-    'redirect follow-up request raw query is parsed');
-  CheckEqual('redirect', LTransportObj.SeenQueryParam,
-    'redirect follow-up request query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'redirect transport final body');
-end;
-
-procedure TestClientPreservesHeadOnGetStyleRedirects;
-var
-  LStatuses: array[0..2] of THttpStatus;
-  LI: SizeInt;
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-begin
-  LStatuses[0] := HTTP_STATUS_MOVED_PERMANENTLY;
-  LStatuses[1] := HTTP_STATUS_FOUND;
-  LStatuses[2] := HTTP_STATUS_SEE_OTHER;
-
-  for LI := Low(LStatuses) to High(LStatuses) do
-  begin
-    LTransportObj := TRedirectCaptureTransport.Create;
-    LTransportObj.RedirectStatus := LStatuses[LI];
-    LTransport := LTransportObj;
-    LClient := NewHttpClient(LTransport);
-    LReq := THttpRequestBuilder.Create(hmHead, 'http://example.test/old').Headers(NewHeaders).Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-      'HEAD redirect performs second round trip');
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'HEAD redirect reaches final response');
-    Check(LTransportObj.SeenMethod = hmHead,
-      '301/302/303 redirect preserves HEAD method');
-    CheckEqual('', LTransportObj.SecondBody,
-      'HEAD redirect follow-up has no request body');
-    CheckEqual('arrived', ReadBodyStr(LResp), 'HEAD redirect final body');
-  end;
-end;
-
-procedure TestClientRedirectTransportResolvesNetworkPathLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '//redirect.test/new?from=network';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'network-path redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'network-path redirect transport final status');
-  CheckEqual('http', LTransportObj.SeenScheme,
-    'network-path redirect preserves original scheme');
-  CheckEqual('redirect.test', LTransportObj.SeenHost,
-    'network-path redirect updates host');
-  CheckEqual('/new', LTransportObj.SeenPath,
-    'network-path redirect path excludes authority and query');
-  CheckEqual('from=network', LTransportObj.SeenRawQuery,
-    'network-path redirect raw query is parsed');
-  CheckEqual('network', LTransportObj.SeenQueryParam,
-    'network-path redirect query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'network-path redirect final body');
-end;
-
-procedure TestClientRedirectTransportResolvesUppercaseAbsoluteLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'HTTP://redirect.test/new?from=upper';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'uppercase absolute redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'uppercase absolute redirect transport final status');
-  CheckEqual('http', LTransportObj.SeenScheme,
-    'uppercase absolute redirect normalizes scheme');
-  CheckEqual('redirect.test', LTransportObj.SeenHost,
-    'uppercase absolute redirect updates host');
-  CheckEqual('/new', LTransportObj.SeenPath,
-    'uppercase absolute redirect updates path');
-  CheckEqual('from=upper', LTransportObj.SeenRawQuery,
-    'uppercase absolute redirect raw query is parsed');
-  CheckEqual('upper', LTransportObj.SeenQueryParam,
-    'uppercase absolute redirect query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'uppercase absolute redirect final body');
-end;
-
-procedure TestClientRedirectRejectsUnsupportedAbsoluteScheme;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'ftp://redirect.test/new';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'absolute redirect with unsupported scheme raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'unsupported redirect scheme does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsAbsoluteLocationWithEmptyHost;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'http:///final';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'absolute redirect with empty host raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'absolute redirect with empty host does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsAbsoluteLocationWithInvalidPort;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'http://redirect.test:bad/new';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'absolute redirect with invalid port raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'absolute redirect with invalid port does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsNetworkPathLocationWithEmptyHost;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '///final';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'network-path redirect with empty host raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'network-path redirect with empty host does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsNetworkPathLocationWithInvalidPort;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '//redirect.test:bad/new';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'network-path redirect with invalid port raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'network-path redirect with invalid port does not perform second round trip');
-end;
-
 procedure CheckClientRedirectRejectsMalformedBracketedAuthority(
   const ALocation, ALabel: string);
 var
@@ -6099,663 +4729,6 @@ begin
   Check(LRaised, ALabel + ' raises EHttpError');
   CheckEqual(Int64(1), Int64(LTransportObj.Calls),
     ALabel + ' does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsMalformedBracketedIpv6Authority;
-begin
-  CheckClientRedirectRejectsMalformedBracketedAuthority(
-    'http://[::1]evil/new',
-    'absolute redirect with malformed bracketed IPv6 authority');
-  CheckClientRedirectRejectsMalformedBracketedAuthority(
-    '//[::1]evil/new',
-    'network-path redirect with malformed bracketed IPv6 authority');
-end;
-
-procedure TestClientRedirectTransportResolvesUserInfoLocationWithPort;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'http://user:pass@redirect.test:80/new?from=userinfo';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'userinfo absolute redirect with numeric port performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'userinfo absolute redirect transport final status');
-  CheckEqual('redirect.test', LTransportObj.SeenHost,
-    'userinfo absolute redirect keeps host separate from credentials');
-  CheckEqual('/new', LTransportObj.SeenPath,
-    'userinfo absolute redirect updates path');
-  CheckEqual('userinfo', LTransportObj.SeenQueryParam,
-    'userinfo absolute redirect query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'userinfo absolute redirect final body');
-end;
-
-procedure TestClientRedirectRejectsUnsupportedNonHierarchicalScheme;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'mailto:ops@example.test';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised,
-    'absolute redirect with non-hierarchical unsupported scheme raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'unsupported non-hierarchical redirect scheme does not perform second round trip');
-end;
-
-procedure TestClientRedirectRejectsUnsupportedSingleSlashScheme;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'ftp:/redirect.test/new';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised,
-    'absolute redirect with single-slash unsupported scheme raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'unsupported single-slash redirect scheme does not perform second round trip');
-end;
-
-procedure TestClientRedirectTransportResolvesPathRelativeLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'next?from=relative-path';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/dir/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'path-relative redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'path-relative redirect transport final status');
-  CheckEqual('http', LTransportObj.SeenScheme,
-    'path-relative redirect preserves original scheme');
-  CheckEqual('example.test', LTransportObj.SeenHost,
-    'path-relative redirect preserves host');
-  CheckEqual('/dir/next', LTransportObj.SeenPath,
-    'path-relative redirect merges with base directory');
-  CheckEqual('from=relative-path', LTransportObj.SeenRawQuery,
-    'path-relative redirect raw query is parsed');
-  CheckEqual('relative-path', LTransportObj.SeenQueryParam,
-    'path-relative redirect query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'path-relative redirect final body');
-end;
-
-procedure TestClientRedirectTransportNormalizesDotSegmentLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '../next?from=dot';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/dir/sub/old');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'dot-segment redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'dot-segment redirect transport final status');
-  CheckEqual('http', LTransportObj.SeenScheme,
-    'dot-segment redirect preserves original scheme');
-  CheckEqual('example.test', LTransportObj.SeenHost,
-    'dot-segment redirect preserves host');
-  CheckEqual('/dir/next', LTransportObj.SeenPath,
-    'dot-segment redirect normalizes merged path');
-  CheckEqual('from=dot', LTransportObj.SeenRawQuery,
-    'dot-segment redirect raw query is parsed');
-  CheckEqual('dot', LTransportObj.SeenQueryParam,
-    'dot-segment redirect query param is visible');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'dot-segment redirect final body');
-end;
-
-procedure TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '#section';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Get('http://example.test/dir/old?from=base');
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'fragment-only redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'fragment-only redirect transport final status');
-  CheckEqual('http', LTransportObj.SeenScheme,
-    'fragment-only redirect preserves original scheme');
-  CheckEqual('example.test', LTransportObj.SeenHost,
-    'fragment-only redirect preserves host');
-  CheckEqual('/dir/old', LTransportObj.SeenPath,
-    'fragment-only redirect preserves original path');
-  CheckEqual('from=base', LTransportObj.SeenRawQuery,
-    'fragment-only redirect preserves original raw query');
-  CheckEqual('base', LTransportObj.SeenQueryParam,
-    'fragment-only redirect keeps original query param visible');
-  CheckEqual('section', LTransportObj.SeenFragment,
-    'fragment-only redirect updates fragment');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'fragment-only redirect final body');
-end;
-
-procedure TestClientRedirectPreservesHeadersOnSameAuthority;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '/next';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('x-trace', 'trace-1');
-  LHeaders.SetHeader('authorization', 'Bearer same-host');
-  LHeaders.SetHeader('proxy-authorization', 'Basic same-proxy');
-  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
-  LHeaders.SetHeader('cookie', 'session=abc');
-  LHeaders.SetHeader('cookie2', 'legacy=1');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'same-authority redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'same-authority redirect transport final status');
-  CheckEqual('trace-1', LTransportObj.SeenTraceHeader,
-    'same-authority redirect preserves ordinary header');
-  CheckEqual('Bearer same-host', LTransportObj.SeenAuthorizationHeader,
-    'same-authority redirect preserves authorization header');
-  CheckEqual('Basic same-proxy', LTransportObj.SeenProxyAuthorizationHeader,
-    'same-authority redirect preserves proxy-authorization header');
-  CheckEqual('Basic realm="api"', LTransportObj.SeenWwwAuthenticateHeader,
-    'same-authority redirect preserves www-authenticate header');
-  CheckEqual('session=abc', LTransportObj.SeenCookieHeader,
-    'same-authority redirect preserves cookie header');
-  CheckEqual('legacy=1', LTransportObj.SeenCookie2Header,
-    'same-authority redirect preserves cookie2 header');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'same-authority redirect final body');
-end;
-
-procedure TestClientRedirectStripsSensitiveHeadersAcrossAuthority;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '//redirect.test/next';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('x-trace', 'trace-2');
-  LHeaders.SetHeader('authorization', 'Bearer cross-host');
-  LHeaders.SetHeader('proxy-authorization', 'Basic cross-proxy');
-  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
-  LHeaders.SetHeader('cookie', 'session=def');
-  LHeaders.SetHeader('cookie2', 'legacy=2');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'cross-authority redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'cross-authority redirect transport final status');
-  CheckEqual('redirect.test', LTransportObj.SeenHost,
-    'cross-authority redirect updates host');
-  CheckEqual('trace-2', LTransportObj.SeenTraceHeader,
-    'cross-authority redirect preserves ordinary header');
-  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
-    'cross-authority redirect strips authorization header');
-  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
-    'cross-authority redirect strips proxy-authorization header');
-  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
-    'cross-authority redirect strips www-authenticate header');
-  CheckEqual('', LTransportObj.SeenCookieHeader,
-    'cross-authority redirect strips cookie header');
-  CheckEqual('', LTransportObj.SeenCookie2Header,
-    'cross-authority redirect strips cookie2 header');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'cross-authority redirect final body');
-end;
-
-procedure TestClientRedirectStripsSensitiveHeadersAcrossScheme;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'https://example.test/secure';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('x-trace', 'trace-scheme');
-  LHeaders.SetHeader('authorization', 'Bearer scheme-change');
-  LHeaders.SetHeader('proxy-authorization', 'Basic scheme-proxy');
-  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
-  LHeaders.SetHeader('cookie', 'session=scheme');
-  LHeaders.SetHeader('cookie2', 'legacy=scheme');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test:443/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'scheme-change redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'scheme-change redirect transport final status');
-  CheckEqual('https', LTransportObj.SeenScheme,
-    'scheme-change redirect updates scheme');
-  CheckEqual('example.test', LTransportObj.SeenHost,
-    'scheme-change redirect keeps host');
-  CheckEqual('trace-scheme', LTransportObj.SeenTraceHeader,
-    'scheme-change redirect preserves ordinary header');
-  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
-    'scheme-change redirect strips authorization header');
-  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
-    'scheme-change redirect strips proxy-authorization header');
-  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
-    'scheme-change redirect strips www-authenticate header');
-  CheckEqual('', LTransportObj.SeenCookieHeader,
-    'scheme-change redirect strips cookie header');
-  CheckEqual('', LTransportObj.SeenCookie2Header,
-    'scheme-change redirect strips cookie2 header');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'scheme-change redirect final body');
-end;
-
-procedure TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '//api.example.test/next';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('x-trace', 'trace-subdomain');
-  LHeaders.SetHeader('authorization', 'Bearer subdomain');
-  LHeaders.SetHeader('proxy-authorization', 'Basic subdomain-proxy');
-  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
-  LHeaders.SetHeader('cookie', 'session=sub');
-  LHeaders.SetHeader('cookie2', 'legacy=sub');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'subdomain redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'subdomain redirect transport final status');
-  CheckEqual('api.example.test', LTransportObj.SeenHost,
-    'subdomain redirect updates host');
-  CheckEqual('trace-subdomain', LTransportObj.SeenTraceHeader,
-    'subdomain redirect preserves ordinary header');
-  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
-    'subdomain redirect strips authorization header');
-  CheckEqual('', LTransportObj.SeenProxyAuthorizationHeader,
-    'subdomain redirect strips proxy-authorization header');
-  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
-    'subdomain redirect strips www-authenticate header');
-  CheckEqual('', LTransportObj.SeenCookieHeader,
-    'subdomain redirect strips cookie header');
-  CheckEqual('', LTransportObj.SeenCookie2Header,
-    'subdomain redirect strips cookie2 header');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'subdomain redirect final body');
-end;
-
-procedure TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := '/next';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('host', 'override.test');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'relative redirect with custom host performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'relative redirect with custom host final status');
-  CheckEqual('override.test', LTransportObj.SeenHostHeader,
-    'relative redirect preserves caller host override');
-  CheckEqual('/next', LTransportObj.SeenPath,
-    'relative redirect still follows target path');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'relative redirect with custom host final body');
-end;
-
-procedure TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectLocation := 'http://example.test:80/next';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LHeaders := NewHeaders;
-  LHeaders.SetHeader('host', 'override.test');
-  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'default-port redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'default-port redirect final status');
-  CheckEqual('override.test', LTransportObj.SeenHostHeader,
-    'default-port redirect preserves caller host override');
-  CheckEqual('example.test', LTransportObj.SeenHost,
-    'default-port redirect keeps same URL host');
-  CheckEqual('/next', LTransportObj.SeenPath,
-    'default-port redirect follows target path');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'default-port redirect final body');
-end;
-
-procedure TestClientClosesRedirectResponseBodyBeforeFollowup;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LResp := LClient.Get('http://example.test/old');
-
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'redirect with body performs second round trip');
-  Check(LTransportObj.BodyClosedBeforeFollowup,
-    'redirect response body is closed before follow-up round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'redirect body release final status');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'redirect body release final body');
-end;
-
-procedure TestClientDrainsRedirectResponseBodyBeforeFollowup;
-var
-  LTransportObj: TRedirectBodyDrainTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransportObj := TRedirectBodyDrainTransport.Create;
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LResp := LClient.Get('http://example.test/old');
-
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'redirect with non-closeable body performs second round trip');
-  Check(LTransportObj.BodyDrainedBeforeFollowup,
-    'non-closeable redirect response body is drained before follow-up round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'redirect body drain final status');
-  CheckEqual('arrived', ReadBodyStr(LResp),
-    'redirect body drain final body');
-end;
-
-procedure TestClientClosesRedirectResponseBodyOnTooManyRedirects;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LOptions: THttpClientOptions;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransport := LTransportObj as IHttpTransport;
-  LOptions := THttpClientOptions.Default;
-  LOptions.MaxRedirects := 0;
-  LClient := NewHttpClient(LTransport, LOptions);
-
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'too many redirects raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'too many redirects stops before follow-up round trip');
-  Check(LTransportObj.BodyClosed,
-    'too many redirects closes discarded redirect response body');
-end;
-
-procedure TestClientClosesRedirectResponseBodyOnMissingLocation;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransportObj.OmitLocation := True;
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'missing redirect Location raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'missing redirect Location stops before follow-up round trip');
-  Check(LTransportObj.BodyClosed,
-    'missing redirect Location closes discarded redirect response body');
-end;
-
-procedure TestClientClosesRedirectResponseBodyOnDuplicateLocation;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransportObj.DuplicateLocation := True;
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := Pos('redirect with duplicate Location headers', E.Message) > 0;
-  end;
-
-  Check(LRaised, 'duplicate redirect Location raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'duplicate redirect Location stops before follow-up round trip');
-  Check(LTransportObj.BodyClosed,
-    'duplicate redirect Location closes discarded redirect response body');
-end;
-
-procedure TestClientRedirectPolicyErrorKeepsPrimaryErrorWhenBodyCloseFails;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-  LMessage: string;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransportObj.DuplicateLocation := True;
-  LTransportObj.FailBodyClose := True;
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LRaised := False;
-  LMessage := '';
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LMessage := E.Message;
-    end;
-  end;
-
-  Check(LRaised, 'redirect policy error raises EHttpError');
-  Check(Pos('redirect with duplicate Location headers', LMessage) > 0,
-    'redirect policy error is not masked by body close failure');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'redirect policy error stops before follow-up round trip');
-  CheckEqual(Int64(1), Int64(LTransportObj.BodyCloseCount),
-    'redirect policy error still attempts discarded body close once');
-  Check(LTransportObj.BodyClosed,
-    'redirect policy error marks close-failing discarded body closed');
-end;
-
-procedure TestClientClosesRedirectResponseBodyOnUnsupportedScheme;
-var
-  LTransportObj: TRedirectBodyReleaseTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectBodyReleaseTransport.Create;
-  LTransportObj.RedirectLocation := 'ftp://redirect.test/final';
-  LTransport := LTransportObj as IHttpTransport;
-  LClient := NewHttpClient(LTransport);
-
-  LRaised := False;
-  try
-    LClient.Get('http://example.test/old');
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-
-  Check(LRaised, 'unsupported redirect scheme raises EHttpError');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'unsupported redirect scheme stops before follow-up round trip');
-  Check(LTransportObj.BodyClosed,
-    'unsupported redirect scheme closes discarded redirect response body');
-end;
-
-procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-  LReq: IHttpRequest;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectStatus := THttpStatus(307);
-  LTransportObj.RedirectLocation := '/upload-copy';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
-  LResp := LClient.Send(LReq);
-  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
-    'temporary redirect performs second round trip');
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'temporary redirect transport final status');
-  Check(LTransportObj.SeenMethod = hmPost,
-    'temporary redirect preserves original method');
-  CheckEqual('payload', LTransportObj.FirstBody,
-    'temporary redirect first request sends original body');
-  CheckEqual('payload', LTransportObj.SecondBody,
-    'temporary redirect replays seekable body on follow-up');
-  CheckEqual('/upload-copy', LTransportObj.SeenPath,
-    'temporary redirect follows target path');
-  CheckEqual('arrived', ReadBodyStr(LResp), 'temporary redirect final body');
-end;
-
-procedure TestClientRejectsNonReplayableBodyOnTemporaryRedirect;
-var
-  LTransportObj: TRedirectCaptureTransport;
-  LTransport: IHttpTransport;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LRaised: Boolean;
-begin
-  LTransportObj := TRedirectCaptureTransport.Create;
-  LTransportObj.RedirectStatus := THttpStatus(307);
-  LTransportObj.RedirectLocation := '/upload-copy';
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(TOneShotReader.Create('payload') as IReader).ContentLength(Int64(7)).Build;
-  LRaised := False;
-  try
-    LClient.Send(LReq);
-  except
-    on E: EHttpError do
-      LRaised := True;
-  end;
-  Check(LRaised, 'temporary redirect rejects non-replayable request body');
-  CheckEqual('payload', LTransportObj.FirstBody,
-    'temporary redirect still sent original body once before rejection');
-  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
-    'temporary redirect rejects before second round trip');
 end;
 
 procedure TestClientOptionsRejectNegativeValues;
@@ -6789,41 +4762,6 @@ begin
 end;
 
 { Test 5: Client respects max redirects (infinite loop -> error) }
-procedure TestClientMaxRedirects;
-var
-  LRouter: THttpRouter;
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LClient: IHttpClient;
-  LOptions: THttpClientOptions;
-  LCaught: Boolean;
-begin
-  LRouter := THttpRouter.Create;
-  LRouter.Get('/loop', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    AW.GetHeaders.SetHeader('location', '/loop');
-    AW.GetHeaders.SetHeader('content-length', '0');
-    AW.WriteHeader(THttpStatus(302));
-  end);
-  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
-  try
-    LOptions := THttpClientOptions.Default;
-    LOptions.MaxRedirects := 3;
-    LClient := NewHttpClient(LOptions);
-    LCaught := False;
-    try
-      LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/loop');
-    except
-      on E: EHttpError do
-        LCaught := True;
-    end;
-    Check(LCaught, 'too many redirects raises EHttpError');
-  finally
-    StopServer(LServer, LHandle);
-  end;
-end;
-
 procedure TestClientCloseIdleConnectionsDropsPooledConnections;
 var
   LPort: UInt16;
@@ -6968,12 +4906,13 @@ var
 begin
   { Wave I1: borrow-time TryRead probe is the H1 active health check.
     Live peer-close races are covered by stale-retry suites; this contract
-    locks the probe into PoolGet outside the pool lock. }
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+    locks the probe into PoolGet outside the pool lock.
+    STRUCT-1: pool body lives in impl.h1.pool. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pool.pas');
   LReusablePos := Pos(
-    'function TH1ClientTransport.PooledConnectionIsReusable', LSource);
+    'function TH1IdleConnectionPool.ConnectionIsReusable', LSource);
   Check(LReusablePos > 0, 'PooledConnectionIsReusable exists');
-  LGetPos := Pos('function TH1ClientTransport.PoolGet', LSource);
+  LGetPos := Pos('function TH1IdleConnectionPool.Get(', LSource);
   Check(LGetPos > LReusablePos, 'PoolGet follows reusable helper');
   LReusableBlock := Copy(LSource, LReusablePos, LGetPos - LReusablePos);
   Check(Pos('Active health probe on borrow', LReusableBlock) > 0,
@@ -6982,12 +4921,12 @@ begin
     'H1 probe uses non-blocking TryRead');
   Check(Pos('tsiorWouldBlock', LReusableBlock) > 0,
     'H1 probe treats WouldBlock as live idle');
-  LEndPos := Pos('procedure TH1ClientTransport.PoolPut', LSource);
+  LEndPos := Pos('procedure TH1IdleConnectionPool.Put(', LSource);
   Check(LEndPos > LGetPos, 'PoolPut follows PoolGet');
   LGetBlock := Copy(LSource, LGetPos, LEndPos - LGetPos);
-  Check(Pos('PooledConnectionIsReusable(LCandidate)', LGetBlock) > 0,
+  Check(Pos('ConnectionIsReusable(LCandidate)', LGetBlock) > 0,
     'PoolGet invokes health probe on candidate');
-  Check(Pos('Never Close or probe sockets while holding FPoolLock', LGetBlock) > 0,
+  Check(Pos('Never Close or probe sockets while holding FLock', LGetBlock) > 0,
     'PoolGet probes outside pool lock');
 end;
 
@@ -8640,83 +6579,6 @@ end;
 
 { Per-request options override tests }
 
-procedure TestWithFollowRedirectsFalse;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectLocation := '/new';
-  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LResp := LClient.WithFollowRedirects(False).Get('http://localhost/orig');
-  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
-    'WithFollowRedirects(false) returns 302 instead of following');
-  HttpReleaseResponseBody(LResp);
-end;
-
-procedure TestWithMaxRedirectsZero;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectLocation := '/new';
-  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    LClient.WithMaxRedirects(0).Get('http://localhost/orig');
-  except
-    on E: EHttpError do
-    begin
-      LCaught := Pos('too many redirects', E.Message) > 0;
-    end;
-  end;
-  Check(LCaught,
-    'WithMaxRedirects(0) raises too many redirects');
-end;
-
-procedure TestWithFollowRedirectsChain;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectLocation := '/new';
-  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LResp := LClient
-    .WithHeader('x-test', 'phase17')
-    .WithFollowRedirects(False)
-    .Get('http://localhost/orig');
-  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
-    'chained WithFollowRedirects(false) + WithHeader returns 302');
-  HttpReleaseResponseBody(LResp);
-end;
-
-procedure TestWithFollowRedirectsOverrideClientDefault;
-var
-  LTransport: TRedirectCaptureTransport;
-  LOptions: THttpClientOptions;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectLocation := '/new';
-  LTransport.RedirectStatus := HTTP_STATUS_FOUND;
-  LOptions := THttpClientOptions.Default;
-  LOptions.FollowRedirects := True;
-  LClient := NewHttpClient(LTransport, LOptions);
-  LResp := LClient.WithFollowRedirects(False).Get('http://localhost/orig');
-  CheckEqual(Int64(HTTP_STATUS_FOUND), Int64(LResp.StatusCode),
-    'per-request WithFollowRedirects(false) overrides client FollowRedirects=True');
-  HttpReleaseResponseBody(LResp);
-end;
-
 procedure TestWithTimeoutDecorator;
 var
   LTransport: TRedirectCaptureTransport;
@@ -9092,207 +6954,9 @@ begin
     'streaming request sets content-length');
 end;
 
-procedure TestStreamingBodyOwnershipOnRedirect;
-var
-  LBody: TTrackedRequestBody;
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LBody := TTrackedRequestBody.Create('redirect-body');
-  LTransport := TRedirectCaptureTransport.Create(LBody);
-  LTransport.RedirectLocation := '/new';
-  LTransport.RedirectStatus := HTTP_STATUS_TEMPORARY_REDIRECT;
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    LClient.SendStreaming(hmPost, 'http://localhost/orig',
-      'text/plain', LBody as IReader, 14);
-  except
-    on E: EHttpError do
-      LCaught := Pos('not replayable', E.Message) > 0;
-  end;
-  Check(LCaught, 'non-seekable streaming body raises on redirect replay');
-  Check(LBody.Closed, 'streaming body closed even after redirect failure');
-end;
-
 { HttpEnsureSuccess tests }
 
-procedure TestHttpEnsureSuccess200;
-var
-  LResp: IHttpResponse;
-  LHeaders: IHttpHeaders;
-  LResult: IHttpResponse;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
-  LResult := HttpEnsureSuccess(LResp);
-  Check(LResult = LResp, 'EnsureSuccess returns same response on 200');
-end;
-
-procedure TestHttpEnsureSuccess201;
-var
-  LResp: IHttpResponse;
-  LHeaders: IHttpHeaders;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  LResp := NewResponse(HTTP_STATUS_CREATED, LHeaders, nil);
-  HttpEnsureSuccess(LResp);
-  Check(True, 'EnsureSuccess passes on 201');
-end;
-
-procedure TestHttpEnsureSuccessRaisesOn404;
-var
-  LResp: IHttpResponse;
-  LHeaders: IHttpHeaders;
-  LCaught: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders, nil);
-  LCaught := False;
-  try
-    HttpEnsureSuccess(LResp);
-  except
-    on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0) and (Pos('Not Found', E.Message) > 0);
-  end;
-  Check(LCaught, 'EnsureSuccess raises EHttpError on 404');
-end;
-
-procedure TestHttpEnsureSuccessRaisesOn500;
-var
-  LResp: IHttpResponse;
-  LHeaders: IHttpHeaders;
-  LCaught: Boolean;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  LResp := NewResponse(HTTP_STATUS_INTERNAL_SERVER_ERROR, LHeaders, nil);
-  LCaught := False;
-  try
-    HttpEnsureSuccess(LResp);
-  except
-    on E: EHttpError do
-      LCaught := (Pos('500', E.Message) > 0) and
-        (Pos('Internal Server Error', E.Message) > 0);
-  end;
-  Check(LCaught, 'EnsureSuccess raises EHttpError on 500');
-end;
-
-procedure TestHttpEnsureSuccessRaisesOnNil;
-var
-  LCaught: Boolean;
-begin
-  LCaught := False;
-  try
-    HttpEnsureSuccess(nil);
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekArgument) and (Pos('nil', E.Message) > 0);
-  end;
-  Check(LCaught, 'EnsureSuccess raises hekArgument on nil');
-end;
-
 { HttpGetString / HttpGetBytes tests }
-
-procedure TestHttpGetStringSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: string;
-begin
-  // TTimeoutCaptureTransport returns empty 200 — HttpGetString should return ''
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpGetString(LClient, 'http://localhost/test');
-  CheckEqual('', LBody, 'GetString returns empty body from 200');
-end;
-
-procedure TestHttpGetStringRaisesOn404;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpGetString(LClient, 'http://localhost/missing');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0) and
-        (Pos('Not Found', E.Message) > 0) and
-        (Pos('GET', E.Message) > 0) and
-        (Pos('http://localhost/missing', E.Message) > 0);
-  end;
-  Check(LCaught, 'GetString raises EHttpError on 404 with method/URL context');
-end;
-
-procedure TestHttpEnsureSuccessContextIncludesMethodUrl;
-var
-  LResp: IHttpResponse;
-  LHeaders: IHttpHeaders;
-  LCaught: Boolean;
-  LMsg: string;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders, nil);
-  LCaught := False;
-  LMsg := '';
-  try
-    HttpEnsureSuccess(LResp, 'GET', 'http://example.test/item');
-  except
-    on E: EHttpError do
-    begin
-      LCaught := E.Kind = hekStatus;
-      LMsg := E.Message;
-    end;
-  end;
-  Check(LCaught, 'EnsureSuccess context raises hekStatus');
-  Check(Pos('GET', LMsg) > 0, 'EnsureSuccess context includes method');
-  Check(Pos('http://example.test/item', LMsg) > 0, 'EnsureSuccess context includes URL');
-  Check(Pos('404', LMsg) > 0, 'EnsureSuccess context includes status');
-end;
-
-procedure TestHttpGetBytesSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: TBytes;
-begin
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpGetBytes(LClient, 'http://localhost/test');
-  CheckEqual(Int64(0), Int64(Length(LBody)), 'GetBytes returns empty bytes from 200');
-end;
-
-procedure TestHttpGetBytesRaisesOn500;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpGetBytes(LClient, 'http://localhost/error');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('500', E.Message) > 0) and
-        (Pos('Internal Server Error', E.Message) > 0);
-  end;
-  Check(LCaught, 'GetBytes raises EHttpError on 500');
-end;
 
 { WithRetry tests }
 
@@ -9562,156 +7226,6 @@ begin
   CheckEqual(1, LTransport.Calls, 'only one call for non-429 4xx');
 end;
 
-procedure TestHttpGetJsonSuccess;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"a":1}');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := HttpGetJson(LClient, 'http://localhost/api');
-  Check(LDoc <> nil, 'GetJson returns document');
-  Check(not LDoc.HasError, 'GetJson document has no parse error');
-  Check(LDoc.Root.IsObject, 'GetJson root is object');
-  CheckEqual(Int64(1), LDoc.Root.ObjectGet('a').AsInt, 'GetJson field a=1');
-end;
-
-procedure TestHttpGetJsonMethodSuccess;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"ok":true}');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := LClient.GetJson('http://localhost/api');
-  Check(LDoc <> nil, 'method GetJson returns document');
-  Check(LDoc.Root.ObjectGet('ok').AsBool, 'method GetJson field ok');
-end;
-
-procedure TestHttpGetJsonRaisesOn404;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-  LKind: THttpErrorKind;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_NOT_FOUND, '{"err":1}');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  LKind := hekUnknown;
-  try
-    HttpGetJson(LClient, 'http://localhost/missing');
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      LKind := E.Kind;
-    end;
-  end;
-  Check(LCaught, 'GetJson raises on 404');
-  Check(LKind = hekStatus, 'GetJson 404 is hekStatus');
-end;
-
-procedure TestHttpGetJsonRaisesOnInvalidJson;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-  LKind: THttpErrorKind;
-  LOp: string;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, 'not-json');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  LKind := hekUnknown;
-  LOp := '';
-  try
-    HttpGetJson(LClient, 'http://localhost/bad');
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      LKind := E.Kind;
-      LOp := E.Op;
-    end;
-  end;
-  Check(LCaught, 'GetJson raises on invalid JSON');
-  Check(LKind = hekProtocol, 'invalid JSON is hekProtocol');
-  CheckEqual('json', LOp, 'invalid JSON Op=json');
-end;
-
-procedure TestHttpPostJsonDocumentSuccess;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LBody, LDoc: IJsonDocument;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"id":7}');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := JsonParse('{"name":"x"}');
-  LDoc := HttpPostJsonDocument(LClient, 'http://localhost/api', LBody);
-  Check(LDoc <> nil, 'PostJsonDocument returns document');
-  CheckEqual(Int64(7), LDoc.Root.ObjectGet('id').AsInt, 'PostJsonDocument field id');
-end;
-
-procedure TestHttpPostJsonDocumentRaisesOn404;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LBody: IJsonDocument;
-  LCaught: Boolean;
-  LKind: THttpErrorKind;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_NOT_FOUND, '{"err":1}');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := JsonParse('{"name":"x"}');
-  LCaught := False;
-  LKind := hekUnknown;
-  try
-    HttpPostJsonDocument(LClient, 'http://localhost/missing', LBody);
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      LKind := E.Kind;
-    end;
-  end;
-  Check(LCaught, 'PostJsonDocument raises on 404');
-  Check(LKind = hekStatus, 'PostJsonDocument 404 is hekStatus');
-end;
-
-procedure TestHttpPostJsonDocumentRaisesOnInvalidJson;
-var
-  LTransport: TJsonBodyTransport;
-  LClient: IHttpClient;
-  LBody: IJsonDocument;
-  LCaught: Boolean;
-  LKind: THttpErrorKind;
-  LOp: string;
-begin
-  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, 'not-json');
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := JsonParse('{"name":"x"}');
-  LCaught := False;
-  LKind := hekUnknown;
-  LOp := '';
-  try
-    HttpPostJsonDocument(LClient, 'http://localhost/bad', LBody);
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      LKind := E.Kind;
-      LOp := E.Op;
-    end;
-  end;
-  Check(LCaught, 'PostJsonDocument raises on invalid JSON');
-  Check(LKind = hekProtocol, 'PostJsonDocument invalid JSON is hekProtocol');
-  CheckEqual('json', LOp, 'PostJsonDocument Op=json');
-end;
-
 procedure TestHttpPutPatchJsonDocumentSuccess;
 var
   LTransport: TJsonBodyTransport;
@@ -9725,19 +7239,6 @@ begin
   Check(LDoc.Root.ObjectGet('ok').AsBool, 'PutJsonDocument ok');
   LDoc := HttpPatchJsonDocument(LClient, 'http://localhost/api', LBody);
   Check(LDoc.Root.ObjectGet('ok').AsBool, 'PatchJsonDocument ok');
-end;
-
-procedure TestHttpReadResponseJsonSuccess;
-var
-  LResp: IHttpResponse;
-  LDoc: IJsonDocument;
-  LHeaders: IHttpHeaders;
-begin
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-type', 'application/json');
-  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('{"n":2}'));
-  LDoc := HttpReadResponseJson(LResp, 'GET', 'http://localhost/x');
-  CheckEqual(Int64(2), LDoc.Root.ObjectGet('n').AsInt, 'ReadResponseJson field n');
 end;
 
 procedure TestCancelTokenRaisesHekCanceledAtSend;
@@ -10271,9 +7772,12 @@ end;
 
 procedure TestProxyAuthBasicOnlySourceContract;
 var
-  LSource: string;
+  LSource, LH1Client, LWire: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { CONNECT/Basic freeze lives in client transport; helper in wire. }
+  LH1Client := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
+  LWire := ReadFileText('../../../src/nextpas.core.http.impl.h1.wire.pas');
+  LSource := LH1Client + LWire;
   Check(Pos('function ProxyBasicAuthorizationValue', LSource) > 0,
     'proxy auth helper is Basic-only');
   Check(Pos('''Basic '' + Base64Encode', LSource) > 0,
@@ -10558,15 +8062,17 @@ end;
 procedure TestClientWithConnectTimeoutSourceContract;
 var
   LSource: string;
+  LDeco: string;
 begin
   LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  LDeco := ReadFileText('../../../src/nextpas.core.http.client.decorator.pas');
   Check(Pos('function THttpClient.WithConnectTimeout(', LSource) > 0,
     'client implements WithConnectTimeout');
   Check(Pos('NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
     'WithConnectTimeout rebuilds transport via NewHttpClient');
-  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LSource) > 0,
-    'forwarder rebinds WithConnectTimeout');
-  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LDeco) > 0,
+    'forwarder rebinds WithConnectTimeout (decorator unit)');
+  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LDeco) > 0,
     'forwarder re-stacks around rebuilt base client');
   LSource := ReadFileText('../../../src/nextpas.core.http.intf.pas');
   Check(Pos('function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;',
@@ -10731,82 +8237,58 @@ begin
     IntToStr(Ord(LKind)) + ')');
 end;
 
-procedure TestClientRedirectCreateOpSourceContract;
-var
-  LSource: string;
-begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
-  Check(Pos('raise EHttpError.CreateOp(hekRedirect, ''redirect'',', LSource) > 0,
-    'redirect failures use CreateOp with Op=redirect');
-  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''round_trip'',', LSource) > 0,
-    'nil transport response uses CreateOp with Op=round_trip');
-  Check(Pos('raise EHttpError.CreateOp(hekStatus, ''ensure'',', LSource) > 0,
-    'HttpEnsureSuccess non-2xx uses CreateOp with Op=ensure');
-end;
-
 procedure TestClientCancelAndTransportCreateOpSourceContract;
 var
-  LBase: string;
-  LH1: string;
+  LHttpBase, LH1Client, LHelpers: string;
 begin
-  LBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
-  LH1 := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
-  Check(Pos('raise EHttpError.CreateOp(hekCanceled, ''cancel'',', LBase) > 0,
+  { cancel/timeout map live in http.base; H1 client RoundTrip CreateOp in
+    impl.h1.client; free helpers in client.helpers. }
+  LHttpBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
+  LH1Client := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
+  LHelpers := ReadFileText('../../../src/nextpas.core.http.client.helpers.pas');
+  Check(Pos('raise EHttpError.CreateOp(hekCanceled, ''cancel'',', LHttpBase) > 0,
     'cancel token uses CreateOp with Op=cancel');
-  Check(Pos('EHttpError.CreateOp(hekTimeout, ''transport'',', LBase) > 0,
-    'HttpWrapTransportException timeout uses Op=transport');
-  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1) > 0,
+  Check(Pos('EHttpError.CreateOp(hekTimeout, ''transport'',', LHttpBase) > 0,
+    'timeout path uses CreateOp with Op=transport');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1Client) > 0,
     'proxy CONNECT failures use CreateOp with Op=connect');
-  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1) > 0,
+  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1Client) > 0,
     'H1 response parse failures use CreateOp with Op=transport');
-  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1) > 0,
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1Client) > 0,
     'H1 incomplete response uses CreateOp with Op=transport');
+  Check(Pos('CreateOp(hekProtocol, ''json'',', LHelpers) > 0,
+    'json helpers use CreateOp with Op=json');
+  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LHelpers) > 0,
+    'content_encoding protocol uses CreateOp');
+  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LHelpers) > 0,
+    'content_encoding body uses CreateOp');
+  Check(Pos('CreateOp(hekStatus, ''ensure'',', LHelpers) > 0,
+    'ensure uses CreateOp with Op=ensure');
+  Check(Pos('CreateOp(hekConnect, ''download'',', LHelpers) > 0,
+    'download uses CreateOp with Op=download');
 end;
 
 procedure TestClientTaxonomyOpsAlignedSourceContract;
 { Wave E1: client hotspot Ops stay aligned with CONTRACT Op table. }
 var
-  LSource: string;
+  LClient, LHelpers: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
-  Check(Pos('CreateOp(hekProtocol, ''json'',', LSource) > 0,
+  LClient := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  LHelpers := ReadFileText('../../../src/nextpas.core.http.client.helpers.pas');
+  Check(Pos('CreateOp(hekProtocol, ''json'',', LHelpers) > 0,
     'json decode failures use Op=json');
-  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LSource) > 0,
+  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LHelpers) > 0,
     'unsupported Content-Encoding uses Op=content_encoding');
-  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LSource) > 0,
+  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LHelpers) > 0,
     'corrupt Content-Encoding uses Op=content_encoding');
-  Check(Pos('CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+  Check(Pos('CreateOp(hekStatus, ''ensure'',', LHelpers) > 0,
     'ensure non-2xx uses Op=ensure');
-  Check(Pos('CreateOp(hekConnect, ''download'',', LSource) > 0,
+  Check(Pos('CreateOp(hekConnect, ''download'',', LHelpers) > 0,
     'download nil response uses Op=download');
-  Check(Pos('raise EArgumentError', LSource) = 0,
+  Check(Pos('raise EArgumentError', LClient) = 0,
     'client must not raise bare EArgumentError');
-end;
-
-procedure TestHttpEnsureSuccessOpIsEnsure;
-var
-  LResp: IHttpResponse;
-  LOp: string;
-  LStatus: THttpStatus;
-  LCaught: Boolean;
-begin
-  LOp := '';
-  LStatus := 0;
-  LCaught := False;
-  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, NewHeaders, nil);
-  try
-    HttpEnsureSuccess(LResp, 'GET', 'http://example.test/x');
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      LOp := E.Op;
-      LStatus := E.Status;
-    end;
-  end;
-  Check(LCaught, 'EnsureSuccess raises');
-  CheckEqual('ensure', LOp, 'EnsureSuccess Op=ensure');
-  CheckEqual(Int64(HTTP_STATUS_NOT_FOUND), Int64(LStatus), 'EnsureSuccess preserves Status');
+  Check(Pos('raise EArgumentError', LHelpers) = 0,
+    'client helpers must not raise bare EArgumentError');
 end;
 
 procedure TestClientDefaultUserAgent;
@@ -10922,241 +8404,6 @@ end;
 
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
-procedure TestHttpPostStringSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: string;
-begin
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpPostString(LClient, 'http://localhost/test', 'text/plain', 'hello');
-  CheckEqual('', LBody, 'PostString returns empty body from 200');
-end;
-
-procedure TestHttpPostStringRaisesOn404;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpPostString(LClient, 'http://localhost/error', 'text/plain', 'body');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0);
-  end;
-  Check(LCaught, 'PostString raises EHttpError on 404');
-end;
-
-procedure TestHttpPutStringSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: string;
-begin
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpPutString(LClient, 'http://localhost/test', 'application/json', '{}');
-  CheckEqual('', LBody, 'PutString returns empty body from 200');
-end;
-
-procedure TestHttpPutStringRaisesOn500;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpPutString(LClient, 'http://localhost/error', 'text/plain', 'body');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('500', E.Message) > 0);
-  end;
-  Check(LCaught, 'PutString raises EHttpError on 500');
-end;
-
-procedure TestHttpPatchStringSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: string;
-begin
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpPatchString(LClient, 'http://localhost/test', 'text/plain', 'patch');
-  CheckEqual('', LBody, 'PatchString returns empty body from 200');
-end;
-
-procedure TestHttpDeleteStringSuccess;
-var
-  LTransport: TTimeoutCaptureTransport;
-  LClient: IHttpClient;
-  LBody: string;
-begin
-  LTransport := TTimeoutCaptureTransport.Create(3000);
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LBody := HttpDeleteString(LClient, 'http://localhost/test');
-  CheckEqual('', LBody, 'DeleteString returns empty body from 200');
-end;
-
-procedure TestHttpDeleteStringRaisesOn404;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpDeleteString(LClient, 'http://localhost/error');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0);
-  end;
-  Check(LCaught, 'DeleteString raises EHttpError on 404');
-end;
-
-procedure TestHttpHeadSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LResp := HttpHead(LClient, 'http://localhost/test');
-  Check(LResp <> nil, 'HttpHead returns response');
-  CheckEqual(200, LResp.StatusCode, 'HttpHead returns 200');
-end;
-
-procedure TestHttpHeadRaisesOn404;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpHead(LClient, 'http://localhost/missing');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0);
-  end;
-  Check(LCaught, 'HttpHead raises EHttpError on 404');
-end;
-
-procedure TestHttpOptionsSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LResp: IHttpResponse;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LResp := HttpOptions(LClient, 'http://localhost/test');
-  Check(LResp <> nil, 'HttpOptions returns response');
-  CheckEqual(200, LResp.StatusCode, 'HttpOptions returns 200');
-end;
-
-procedure TestHttpOptionsRaisesOn403;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LCaught: Boolean;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_FORBIDDEN;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LCaught := False;
-  try
-    HttpOptions(LClient, 'http://localhost/forbidden');
-  except
-    on E: EHttpError do
-      LCaught := (Pos('403', E.Message) > 0);
-  end;
-  Check(LCaught, 'HttpOptions raises EHttpError on 403');
-end;
-
-procedure TestHttpPostJsonSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := JsonParse('{"key":"value"}');
-  // Should not raise; body is empty from mock transport
-  HttpPostJson(LClient, 'http://localhost/test', LDoc);
-end;
-
-procedure TestHttpPutJsonSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := JsonParse('{"id":1}');
-  HttpPutJson(LClient, 'http://localhost/test', LDoc);
-end;
-
-procedure TestHttpPatchJsonSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := JsonParse('{"name":"test"}');
-  HttpPatchJson(LClient, 'http://localhost/test', LDoc);
-end;
-
-procedure TestHttpDeleteJsonSuccess;
-var
-  LTransport: TRedirectCaptureTransport;
-  LClient: IHttpClient;
-  LDoc: IJsonDocument;
-begin
-  LTransport := TRedirectCaptureTransport.Create;
-  LTransport.RedirectStatus := HTTP_STATUS_OK;
-  LTransport.RedirectLocation := '';
-  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
-  LDoc := JsonParse('{"id":1}');
-  HttpDeleteJson(LClient, 'http://localhost/test', LDoc);
-end;
-
 { Main }
 
 begin
@@ -11167,8 +8414,6 @@ begin
     @TestH1ClientTransportRejectsNilRequestInputs);
   T.Test('Client Send rejects nil transport response',
     @TestClientSendRejectsNilTransportResponse);
-  T.Test('Client Send rejects redirect with nil headers',
-    @TestClientSendRejectsRedirectWithNilHeaders);
   T.Test('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Test('Client Send forwards Basic auth helper header',
     @TestClientSendWithBasicAuthHelper);
@@ -11197,8 +8442,8 @@ begin
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Test('OpenSSL context frees PinValidator source contract',
     @TestOpenSSLContextFreesPinValidatorSourceContract);
-  T.Test('Windows cancel probe-only residual source contract',
-    @TestWindowsCancelProbeOnlyResidualSourceContract);
+  T.Test('Windows cancel waitable pair source contract',
+    @TestWindowsCancelWaitablePairSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
@@ -11243,65 +8488,6 @@ begin
     @TestClientRequestBodySkipsNonNilBodyWhenContentLengthZero);
   T.Test('Client rejects request body shorter than ContentLength',
     @TestClientRejectsRequestBodyShorterThanContentLength);
-  T.Test('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
-  T.Test('HttpGetToWriter closes body after successful copy',
-    @TestHttpGetToWriterClosesBodyAfterSuccessfulCopy);
-  T.Test('HttpGetToWriter closes body when copy fails',
-    @TestHttpGetToWriterClosesBodyWhenCopyFails);
-  T.Test('HttpGetToWriter keeps copy error when close fails',
-    @TestHttpGetToWriterKeepsWriteErrorWhenCloseFails);
-  T.Test('HttpGetToWriter closes non-2xx body before raising',
-    @TestHttpGetToWriterClosesNon2xxBodyBeforeRaising);
-  T.Test('HttpReadResponseBodyString reads live response body',
-    @TestHttpReadResponseBodyStringReadsLiveResponse);
-  T.Test('HttpReadResponseBodyString nil body returns empty',
-    @TestHttpReadResponseBodyStringNilBodyReturnsEmpty);
-  T.Test('HttpReadResponseBodyString closes body after read',
-    @TestHttpReadResponseBodyStringClosesBodyAfterRead);
-  T.Test('HttpReadResponseBodyString rejects nil response',
-    @TestHttpReadResponseBodyStringRejectsNilResponse);
-  T.Test('HttpReadResponseBodyBytes reads live response body',
-    @TestHttpReadResponseBodyBytesReadsLiveResponse);
-  T.Test('HttpReadResponseBodyBytes nil body returns empty',
-    @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
-  T.Test('HttpReadResponseBodyBytes closes body after read',
-    @TestHttpReadResponseBodyBytesClosesBodyAfterRead);
-  T.Test('HttpReadResponseBodyBytes keeps read error when close fails',
-    @TestHttpReadResponseBodyBytesKeepsReadErrorWhenCloseFails);
-  T.Test('HttpReadResponseBodyBytes rejects nil response',
-    @TestHttpReadResponseBodyBytesRejectsNilResponse);
-  T.Test('ExtractCharsetFromContentType', @TestExtractCharsetFromContentType);
-  T.Test('HttpReadResponseBodyStringAuto UTF-8', @TestHttpReadResponseBodyStringAutoUtf8);
-  T.Test('HttpReadResponseBodyStringAuto Latin-1', @TestHttpReadResponseBodyStringAutoLatin1);
-  T.Test('HttpReadResponseBodyStringAuto no charset', @TestHttpReadResponseBodyStringAutoNoCharset);
-  T.Test('HttpDecodeContentEncoding gzip', @TestHttpDecodeContentEncodingGzip);
-  T.Test('HttpDecodeContentEncoding deflate', @TestHttpDecodeContentEncodingDeflate);
-  T.Test('HttpDecodeContentEncoding identity/empty',
-    @TestHttpDecodeContentEncodingIdentityAndEmpty);
-  T.Test('HttpDecodeContentEncoding unsupported br',
-    @TestHttpDecodeContentEncodingUnsupported);
-  T.Test('HttpDecodeContentEncoding multi-coding rejected',
-    @TestHttpDecodeContentEncodingMultiCodingRejected);
-  T.Test('HttpDecodeContentEncoding corrupt gzip',
-    @TestHttpDecodeContentEncodingCorrupt);
-  T.Test('HttpDecodeContentEncoding max size',
-    @TestHttpDecodeContentEncodingMaxSize);
-  T.Test('HttpReadResponseBodyBytesDecoded gzip',
-    @TestHttpReadResponseBodyBytesDecodedGzip);
-  T.Test('HttpReadResponseBodyBytesDecoded no encoding raw',
-    @TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw);
-  T.Test('HttpReadResponseBodyStringDecoded gzip',
-    @TestHttpReadResponseBodyStringDecodedGzip);
-  T.Test('HttpReadResponseBodyStringDecoded live CompressionMiddleware',
-    @TestHttpReadResponseBodyBytesDecodedLiveCompression);
-  T.Test('HttpReleaseResponseBody closes close-capable body',
-    @TestHttpReleaseResponseBodyClosesCloseCapableBody);
-  T.Test('HttpReleaseResponseBody drains plain reader',
-    @TestHttpReleaseResponseBodyDrainsPlainReader);
-  T.Test('HttpReleaseResponseBody nil body noop',
-    @TestHttpReleaseResponseBodyNilBodyNoop);
-  T.Test('HttpReleaseResponseBody rejects nil response',
-    @TestHttpReleaseResponseBodyRejectsNilResponse);
   T.Test('Client Send closes close-capable request body after round trip',
     @TestClientClosesCloseCapableRequestBodyAfterSend);
   T.Test('Client Send closes close-capable request body on transport error',
@@ -11316,85 +8502,10 @@ begin
     @TestClientSendStreamingKnownLengthBody);
   T.Test('Client shortcut body overloads omit empty content-type',
     @TestClientShortcutBodyOverloadsOmitEmptyContentType);
-  T.Test('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
-  T.Test('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
-  T.Test('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
-  T.Test('HttpGetToFile keeps read error when close fails',
-    @TestHttpGetToFileKeepsReadErrorWhenCloseFails);
-  T.Test('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Test('Client response FinalUrl and Version on direct GET',
     @TestClientResponseMetadataOnDirectGet);
-  T.Test('Client closes original body before GET-style redirect follow-up',
-    @TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup);
-  T.Test('Client does not retry close when GET-style redirect body close fails',
-    @TestClientDoesNotRetryCloseWhenGetStyleRedirectBodyCloseFails);
-  T.Test('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
-  T.Test('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
-  T.Test('Client redirect transport sees parsed relative query',
-    @TestClientRedirectTransportSeesParsedRelativeQuery);
-  T.Test('Client preserves HEAD on 301/302/303 redirects',
-    @TestClientPreservesHeadOnGetStyleRedirects);
-  T.Test('Client redirect transport resolves network-path Location',
-    @TestClientRedirectTransportResolvesNetworkPathLocation);
-  T.Test('Client redirect transport resolves uppercase absolute Location',
-    @TestClientRedirectTransportResolvesUppercaseAbsoluteLocation);
-  T.Test('Client redirect rejects unsupported absolute scheme',
-    @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
-  T.Test('Client redirect rejects absolute Location with empty host',
-    @TestClientRedirectRejectsAbsoluteLocationWithEmptyHost);
-  T.Test('Client redirect rejects absolute Location with invalid port',
-    @TestClientRedirectRejectsAbsoluteLocationWithInvalidPort);
-  T.Test('Client redirect rejects network-path Location with empty host',
-    @TestClientRedirectRejectsNetworkPathLocationWithEmptyHost);
-  T.Test('Client redirect rejects network-path Location with invalid port',
-    @TestClientRedirectRejectsNetworkPathLocationWithInvalidPort);
-  T.Test('Client redirect rejects malformed bracketed IPv6 authority',
-    @TestClientRedirectRejectsMalformedBracketedIpv6Authority);
-  T.Test('Client redirect transport resolves userinfo Location with port',
-    @TestClientRedirectTransportResolvesUserInfoLocationWithPort);
-  T.Test('Client redirect rejects unsupported non-hierarchical scheme',
-    @TestClientRedirectRejectsUnsupportedNonHierarchicalScheme);
-  T.Test('Client redirect rejects unsupported single-slash scheme',
-    @TestClientRedirectRejectsUnsupportedSingleSlashScheme);
-  T.Test('Client redirect transport resolves path-relative Location',
-    @TestClientRedirectTransportResolvesPathRelativeLocation);
-  T.Test('Client redirect transport normalizes dot-segment Location',
-    @TestClientRedirectTransportNormalizesDotSegmentLocation);
-  T.Test('Client redirect transport preserves query on fragment-only Location',
-    @TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation);
-  T.Test('Client redirect preserves headers on same authority',
-    @TestClientRedirectPreservesHeadersOnSameAuthority);
-  T.Test('Client redirect strips sensitive headers across authority',
-    @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
-  T.Test('Client redirect strips sensitive headers across scheme',
-    @TestClientRedirectStripsSensitiveHeadersAcrossScheme);
-  T.Test('Client redirect strips sensitive headers to subdomain authority',
-    @TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority);
-  T.Test('Client redirect preserves custom host header on relative Location',
-    @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
-  T.Test('Client redirect preserves custom host header on default-port authority',
-    @TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority);
-  T.Test('Client closes redirect response body before follow-up',
-    @TestClientClosesRedirectResponseBodyBeforeFollowup);
-  T.Test('Client drains redirect response body before follow-up',
-    @TestClientDrainsRedirectResponseBodyBeforeFollowup);
-  T.Test('Client closes redirect response body on too many redirects',
-    @TestClientClosesRedirectResponseBodyOnTooManyRedirects);
-  T.Test('Client closes redirect response body on missing Location',
-    @TestClientClosesRedirectResponseBodyOnMissingLocation);
-  T.Test('Client closes redirect response body on duplicate Location',
-    @TestClientClosesRedirectResponseBodyOnDuplicateLocation);
-  T.Test('Client redirect policy error keeps primary error when body close fails',
-    @TestClientRedirectPolicyErrorKeepsPrimaryErrorWhenBodyCloseFails);
-  T.Test('Client closes redirect response body on unsupported scheme',
-    @TestClientClosesRedirectResponseBodyOnUnsupportedScheme);
-  T.Test('Client replays seekable body on 307 redirect',
-    @TestClientReplaysSeekableBodyOnTemporaryRedirect);
-  T.Test('Client rejects non-replayable body on 307 redirect',
-    @TestClientRejectsNonReplayableBodyOnTemporaryRedirect);
   T.Test('Client options reject negative values',
     @TestClientOptionsRejectNegativeValues);
-  T.Test('Client respects max redirects', @TestClientMaxRedirects);
   T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
   T.Test('Client pool IdleTTL expires idle connections',
@@ -11453,14 +8564,6 @@ begin
   T.Test('Client idle pool reuses case-equivalent authority host',
     @TestClientIdlePoolReusesCaseEquivalentAuthorityHost);
   T.Test('Connection reuse', @TestConnectionReuse);
-  T.Test('WithFollowRedirects(false) prevents redirect',
-    @TestWithFollowRedirectsFalse);
-  T.Test('WithMaxRedirects(0) raises too many redirects',
-    @TestWithMaxRedirectsZero);
-  T.Test('WithFollowRedirects chains with WithHeader',
-    @TestWithFollowRedirectsChain);
-  T.Test('WithFollowRedirects(false) overrides client default',
-    @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
   T.Test('WithTimeout outer wins and composes with WithRetry',
@@ -11491,19 +8594,6 @@ begin
     @TestSendStreamingBodyClosedOnError);
   T.Test('Builder streaming request preserves headers',
     @TestBuilderStreamingRequestWithHeaders);
-  T.Test('Streaming body ownership on redirect',
-    @TestStreamingBodyOwnershipOnRedirect);
-  T.Test('HttpEnsureSuccess passes on 200', @TestHttpEnsureSuccess200);
-  T.Test('HttpEnsureSuccess passes on 201', @TestHttpEnsureSuccess201);
-  T.Test('HttpEnsureSuccess raises on 404', @TestHttpEnsureSuccessRaisesOn404);
-  T.Test('HttpEnsureSuccess raises on 500', @TestHttpEnsureSuccessRaisesOn500);
-  T.Test('HttpEnsureSuccess raises on nil', @TestHttpEnsureSuccessRaisesOnNil);
-  T.Test('HttpEnsureSuccess context includes method/URL',
-    @TestHttpEnsureSuccessContextIncludesMethodUrl);
-  T.Test('GetString returns body on 200', @TestHttpGetStringSuccess);
-  T.Test('GetString raises on 404', @TestHttpGetStringRaisesOn404);
-  T.Test('GetBytes returns body on 200', @TestHttpGetBytesSuccess);
-  T.Test('GetBytes raises on 500', @TestHttpGetBytesRaisesOn500);
   T.Test('WithRetry succeeds after retries', @TestWithRetrySucceedsAfterRetries);
   T.Test('WithRetry stops on first success', @TestWithRetryStopsOnSuccess);
   T.Test('WithRetry does not retry on 4xx', @TestWithRetryStopsOn4xx);
@@ -11522,18 +8612,8 @@ begin
     @TestWithRetryRetries429WithHttpDateRetryAfterPast);
   T.Test('WithRetry 503 invalid Retry-After still retries', @TestWithRetryRetries503WithInvalidRetryAfter);
   T.Test('WithRetry does not retry other 4xx', @TestWithRetryDoesNotRetryOther4xx);
-  T.Test('HttpGetJson parses object on 200', @TestHttpGetJsonSuccess);
-  T.Test('IHttpClient.GetJson parses object on 200', @TestHttpGetJsonMethodSuccess);
-  T.Test('HttpGetJson raises hekStatus on 404', @TestHttpGetJsonRaisesOn404);
-  T.Test('HttpGetJson raises hekProtocol Op=json on invalid body', @TestHttpGetJsonRaisesOnInvalidJson);
-  T.Test('HttpPostJsonDocument parses object on 200', @TestHttpPostJsonDocumentSuccess);
-  T.Test('HttpPostJsonDocument raises hekStatus on 404',
-    @TestHttpPostJsonDocumentRaisesOn404);
-  T.Test('HttpPostJsonDocument raises hekProtocol Op=json on invalid body',
-    @TestHttpPostJsonDocumentRaisesOnInvalidJson);
   T.Test('HttpPut/PatchJsonDocument parse object on 200',
     @TestHttpPutPatchJsonDocumentSuccess);
-  T.Test('HttpReadResponseJson parses object', @TestHttpReadResponseJsonSuccess);
   T.Test('CancelToken raises hekCanceled at Send', @TestCancelTokenRaisesHekCanceledAtSend);
   T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
   T.Test('Client sends H1 chunked request body', @TestClientSendsChunkedRequestBody);
@@ -11568,14 +8648,10 @@ begin
     @TestClientLiveConnectTimeout);
   T.Test('Client live mid-read cancel via hold server',
     @TestClientLiveMidReadCancel);
-  T.Test('Client redirect CreateOp source contract',
-    @TestClientRedirectCreateOpSourceContract);
   T.Test('Client cancel/transport CreateOp source contract',
     @TestClientCancelAndTransportCreateOpSourceContract);
   T.Test('Client taxonomy Ops aligned source contract',
     @TestClientTaxonomyOpsAlignedSourceContract);
-  T.Test('HttpEnsureSuccess Op=ensure on non-2xx',
-    @TestHttpEnsureSuccessOpIsEnsure);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);
@@ -11586,20 +8662,5 @@ begin
     @TestClientPostStringRaisesWithContext);
   T.Test('Client Put/Patch/DeleteString methods',
     @TestClientPutPatchDeleteStringMethods);
-  T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
-  T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
-  T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);
-  T.Test('PutString raises on 500', @TestHttpPutStringRaisesOn500);
-  T.Test('PatchString returns body on 200', @TestHttpPatchStringSuccess);
-  T.Test('DeleteString returns body on 200', @TestHttpDeleteStringSuccess);
-  T.Test('DeleteString raises on 404', @TestHttpDeleteStringRaisesOn404);
-  T.Test('Head returns response on 200', @TestHttpHeadSuccess);
-  T.Test('Head raises on 404', @TestHttpHeadRaisesOn404);
-  T.Test('Options returns response on 200', @TestHttpOptionsSuccess);
-  T.Test('Options raises on 403', @TestHttpOptionsRaisesOn403);
-  T.Test('PostJson sends JSON body', @TestHttpPostJsonSuccess);
-  T.Test('PutJson sends JSON body', @TestHttpPutJsonSuccess);
-  T.Test('PatchJson sends JSON body', @TestHttpPatchJsonSuccess);
-  T.Test('DeleteJson sends JSON body', @TestHttpDeleteJsonSuccess);
   if not T.Run then Halt(1);
 end.

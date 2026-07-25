@@ -675,6 +675,88 @@ begin
   LFailSuite := Default(TTestSuite);
 end;
 
+procedure B61Level3Soft(constref C3: ITestContext);
+begin
+  SoftFail('soft-L3-a');
+  SoftFail('soft-L3-b');
+  C3.Run('leaf',
+    procedure
+    begin
+      SoftFail('soft-leaf');
+    end);
+end;
+
+procedure B61Level2Soft(constref C2: ITestContext);
+begin
+  SoftFail('soft-L2');
+  SoftCheckEqual(Int64(1), Int64(2), 'soft-L2-eq');
+  C2.RunNested('L3', @B61Level3Soft);
+end;
+
+procedure B61Level1Soft(constref Ctx: ITestContext);
+begin
+  SoftFail('soft-L1');
+  Ctx.RunNested('L2', @B61Level2Soft);
+end;
+
+procedure HarnessB61DeepSoftLayering;
+{ v8.28 B61: ≥3-level RunNested SoftFail — leaf exact; mid/parent Soft visible. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LTopMsg, LMidMsg, LLeafMsg: string;
+  LLeafFailed, LMidFailed, LTopFailed, LSawL3: Boolean;
+begin
+  LSuite := TTestSuite.Create('deep-soft');
+  LSuite.TestSubtest('L1', @B61Level1Soft);
+  CheckFalse(LSuite.RunWithResult(LResult), 'deep soft suite fails');
+  LTopMsg := '';
+  LMidMsg := '';
+  LLeafMsg := '';
+  LLeafFailed := False;
+  LMidFailed := False;
+  LTopFailed := False;
+  LSawL3 := False;
+  for I := 0 to High(LResult.Results) do
+  begin
+    if LResult.Results[I].Name = 'L1' then
+    begin
+      LTopFailed := LResult.Results[I].Status = tsFailed;
+      LTopMsg := LResult.Results[I].Message;
+    end
+    else if LResult.Results[I].Name = 'L1/L2' then
+    begin
+      LMidFailed := LResult.Results[I].Status = tsFailed;
+      LMidMsg := LResult.Results[I].Message;
+    end
+    else if LResult.Results[I].Name = 'L1/L2/L3/leaf' then
+    begin
+      LLeafFailed := LResult.Results[I].Status = tsFailed;
+      LLeafMsg := LResult.Results[I].Message;
+    end
+    else if LResult.Results[I].Name = 'L1/L2/L3' then
+    begin
+      LSawL3 := True;
+      CheckEqual(Ord(tsFailed), Ord(LResult.Results[I].Status), 'L3 failed');
+      CheckContains(LResult.Results[I].Message, 'soft-L3-a');
+      CheckContains(LResult.Results[I].Message, 'soft-L3-b');
+    end;
+  end;
+  CheckTrue(LLeafFailed, 'leaf SoftFail fails leaf');
+  CheckEqual('soft-leaf', LLeafMsg, 'leaf SoftFail message exact');
+  CheckTrue(LMidFailed, 'L2 SoftFail fails mid (result collected)');
+  CheckContains(LMidMsg, 'soft-L2');
+  CheckContains(LMidMsg, 'soft-L2-eq');
+  CheckTrue(LSawL3, 'L3 Soft layer in Results');
+  CheckTrue(LTopFailed, 'L1 SoftFail fails top');
+  CheckContains(LTopMsg, 'soft-L1');
+  { Parent soft join must not absorb leaf-only text into top Message. }
+  CheckFalse(Pos('soft-leaf', LTopMsg) > 0,
+    'top SoftFail join stays parent-local (not leaf text)');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure HarnessSoftFailTopLevelExact;
 { SoftFail only on top-level TestSubtest body (no nested Run) → full join. }
 var
@@ -866,6 +948,7 @@ begin
   LMeta.Test('SoftFail in subtest', @HarnessSoftFailInSubtest);
   LMeta.Test('SoftFail top-level exact', @HarnessSoftFailTopLevelExact);
   LMeta.Test('SoftFail leaf multi exact', @HarnessSoftFailLeafMultiExact);
+  LMeta.Test('B61 deep Soft layering 3+', @HarnessB61DeepSoftLayering);
   { B33 fail-path table }
   SetLength(LB33Cases, 48);
   for LB33I := 0 to High(LB33Cases) do

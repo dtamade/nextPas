@@ -7,14 +7,16 @@ program bench_fair;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.core.text.tstring;
+  nextpas.core.text.tstring,
+  nextpas.core.time,
+  nextpas.core.text.conv;
 
 const
   N = 500000;
 
 var
   i: Integer;
-  t0, t1: TDateTime;
+  sw: TStopwatch;
   SinkS: string = '';
   SinkTS: TString;
 
@@ -33,16 +35,16 @@ procedure FPC_SSO_Lifecycle;
 var
   s: string;
 begin
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     s := 'hello';  { 5B, 每次 alloc+free }
     Sink(s);
     s := '';
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[FPC]    SSO lifecycle  (5B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_SSO_Assign;
@@ -50,32 +52,32 @@ var
   s, s2: string;
 begin
   s := 'test string';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     s2 := s;   { refcount incr/decr }
     Sink(s2);
   end;
-  t1 := Now;
+  sw.Stop;
   s := ''; s2 := '';
   WriteLn('[FPC]    SSO assign     (11B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_Heap_Lifecycle;
 var
   s: string;
 begin
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     s := 'this is a long string over 15'; { 30B, heap }
     Sink(s);
     s := '';
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[FPC]    heap lifecycle (30B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure FPC_Heap_Assign;
@@ -83,16 +85,16 @@ var
   s, s2: string;
 begin
   s := 'this is a long string over 15';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     s2 := s;   { refcount only }
     Sink(s2);
   end;
-  t1 := Now;
+  sw.Stop;
   s := ''; s2 := '';
   WriteLn('[FPC]    heap assign    (30B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 { === TString 测试 === }
@@ -103,16 +105,16 @@ var
   ts: TString;
 begin
   src := 'hello';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     ts := TString.Create(@src[1], Length(src));
     SinkT(ts);
     StringFini(ts);
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[TStr]   SSO lifecycle  (5B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 { Note: FPC SSO assign 实际是 heap AnsiString (有引用计数),
@@ -123,17 +125,17 @@ var
   ts, ts2: TString;
 begin
   ts := S('test string');
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     StringAssign(ts2, ts);
     SinkT(ts2);
   end;
-  t1 := Now;
+  sw.Stop;
   StringFini(ts);
   StringFini(ts2);
   WriteLn('[TStr]   SSO assign     (11B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure TS_Heap_Lifecycle;
@@ -142,16 +144,16 @@ var
   ts: TString;
 begin
   src := 'this is a long string over 15';
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     ts := TString.Create(@src[1], Length(src));
     SinkT(ts);
     StringFini(ts);
   end;
-  t1 := Now;
+  sw.Stop;
   WriteLn('[TStr]   heap lifecycle (30B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 procedure TS_Heap_Assign;
@@ -161,17 +163,17 @@ var
 begin
   src := 'this is a long string over 15';
   ts := TString.Create(@src[1], Length(src));
-  t0 := Now;
+  sw := TStopwatch.StartNew;
   for i := 1 to N do
   begin
     StringAssign(ts2, ts);
     SinkT(ts2);
   end;
-  t1 := Now;
+  sw.Stop;
   StringFini(ts);
   StringFini(ts2);
   WriteLn('[TStr]   heap assign    (30B) x', N, ': ',
-    FormatFloat('0.000', (t1 - t0) * 86400 * 1000), ' ms');
+    IntToStr(sw.ElapsedMilliseconds), ' ms');
 end;
 
 begin

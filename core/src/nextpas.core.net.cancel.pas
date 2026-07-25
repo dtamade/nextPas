@@ -1,9 +1,9 @@
 unit nextpas.core.net.cancel;
 {**
  * @desc Cooperative cancel tokens for blocking TCP IO.
- *       Waitable tokens use a socketpair wake so poll can interrupt reads/writes
- *       without SO_*TIMEO slice polling (Unix). Windows falls back to probe-only
- *       when socketpair is unavailable.
+ *       Waitable tokens use a socketpair (Unix) or TCP-loopback pair (Windows)
+ *       wake so poll can interrupt reads/writes without SO_*TIMEO slice polling.
+ *       Falls back to probe-only only if platform_socket_pair fails.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -47,7 +47,7 @@ begin
   FHasWake := False;
   FWakeRead := PLATFORM_INVALID_SOCKET;
   FWakeWrite := PLATFORM_INVALID_SOCKET;
-  { AF_UNIX=1 on Linux/macOS/FreeBSD/Windows winsock headers. }
+  { AF_UNIX=1 on Linux/macOS/FreeBSD; Windows pair accepts 1 and emulates via TCP loopback. }
   LRc := platform_socket_pair(1, PLATFORM_SOCK_STREAM, 0, FWakeRead, FWakeWrite);
   FHasWake := LRc = 0;
   if not FHasWake then

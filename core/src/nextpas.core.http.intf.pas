@@ -15,7 +15,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.mem.arena.intf;
 
 type
   TStringArray = nextpas.core.base.TStringArray;
@@ -101,6 +102,15 @@ type
     property Context: IHttpContext read GetContext;
   end;
 
+  {** Optional request-scoped Arena (RequestArenaMiddleware / H1-H2 attach).
+     Attached on the request object — not a process-global map. }
+  IHttpRequestWithArena = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010013}']
+    function GetArena: IArena;
+    procedure SetArena(const AArena: IArena);
+    property Arena: IArena read GetArena;
+  end;
+
   IHttpResponse = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000003}']
     function GetStatusCode: THttpStatus;
@@ -147,6 +157,14 @@ type
   IHttpHijacker = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000C}']
     function Hijack: ITcpStream;
+  end;
+
+  { Optional commit probe for response writers.
+    RecoveryMiddleware uses this to avoid rewriting a 500 after headers
+    are already on the wire (or otherwise committed by the transport). }
+  IHttpResponseWriterCommitState = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000E}']
+    function HeadersCommitted: Boolean;
   end;
 
   { Forward declarations for handler types }

@@ -195,7 +195,6 @@ type
     Condition: Boolean;      {< false 时跳过此条目（用于条件基准） }
     EnableParallel: Boolean; {< true 时使用 ParallelThreads 个线程并行执行 }
     ParallelThreads: Integer; {< 并行线程数，0 = 使用默认值 (CPU 核心数) }
-    TimeoutMs: Int64;        {< F-017: per-benchmark 超时(毫秒)，0 = 使用 suite 级超时 }
     CollectRawSamples: Boolean; {< F-04: 强制收集原始样本，覆盖 config 级别设置 }
     SimpleFunc: TBenchSimpleFunc; {< F-03: 最简版本函数（框架控制循环） }
   end;

@@ -1,7 +1,9 @@
 # nextpas.core.tui
 
-**完整开发地图（北极星 / Done / 阶段）**: [ROADMAP.md](ROADMAP.md)
-**质量对标**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [SCORECARD.md](SCORECARD.md) · [CONTRACT.md](CONTRACT.md)
+**状态**: **Maintenance Idle · 主线封板**（A+B+U1/U2 Done）— 详见 [ROADMAP.md](ROADMAP.md)
+**完整开发地图**: [ROADMAP.md](ROADMAP.md) · **质量对标**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · [SCORECARD.md](SCORECARD.md) · [CONTRACT.md](CONTRACT.md)
+
+新代码默认 `uses nextpas.core.tui.ext`；自管循环用 `core`；**不要默认 `full`**。
 
 `nextpas.core.tui` 是一个 FreePascal TUI 框架。它保留了 ratatui 风格的 immediate-mode
 rendering、双缓冲 diff 和数组化 cell 布局，但现在 public surface 已经按方案 C 冻结成四层 facade，

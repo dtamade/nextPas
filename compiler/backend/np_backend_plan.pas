@@ -289,8 +289,10 @@ begin
     FPlan.AddArtifact('llvm-ir', LlvmIrArtifactPath);
     FPlan.AddArtifact('llvm-bitcode', BitcodeArtifactPath);
 
-    if not FsMkdirAll(IntermediateRoot) then
-    begin
+    { FsMkdirAll is procedure (INV-5): failure raises; map to plan failure. }
+    try
+      FsMkdirAll(IntermediateRoot);
+    except
       FPlan.MarkFailure;
       Exit;
     end;

@@ -295,12 +295,13 @@ var
   end;
 
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
-    const AOperand: string);
+    const AOperand: string; const ADisplayName: string);
   var
     LocalExprId, LocalNodeId: LongInt;
   begin
+    { Batch 29: ADisplayName Write|WriteErr → write_i64_decimal fd. }
     LocalNodeId := FModel.AddTypedHirNode(
-      'write-int-runtime', 'Write', 0, 0, AOperand
+      'write-int-runtime', ADisplayName, 0, 0, AOperand
     );
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
@@ -408,6 +409,18 @@ begin
         LowerRuntimeIfStatement(Child, Operand);
         Continue;
       end;
+      { Do NOT WalkHaltCalls(if-node): that emits then+else unconditionally when
+        the condition cannot be folded. Fall back to integer condition encoding
+        (field loads, comparisons) before giving up. }
+      if FNoFold and (Child.ChildCount >= 2) and
+        EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+      begin
+        Operand := Operand + 'int 0' + #10 + 'cmp ne' + #10;
+        LowerRuntimeIfStatement(Child, Operand);
+        Continue;
+      end;
+      if FNoFold then
+        Continue;
       WalkHaltCalls(Child);
       Continue;
     end;
@@ -483,6 +496,50 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
+      { Exit(expr) must assign into Result before cleanup/return. Bare Exit
+        keeps the current Result value (or void for procedures). }
+      if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+        (FCurrentRetVarName <> '') then
+      begin
+        if IsRuntimeStrVar(FCurrentRetVarName) then
+        begin
+          if Child.ChildAt(0).NodeKind = gnkStringLiteral then
+            FModel.AddTypedHirNode('assign-tstring-literal-runtime',
+              FCurrentRetVarName, 0, 0,
+              DecodePascalStringLiteral(Child.ChildAt(0).Text))
+          else if (Child.ChildAt(0).NodeKind = gnkIdentifier) and
+            IsRuntimeStrVar(Child.ChildAt(0).Text) then
+            FModel.AddTypedHirNode('assign-tstring-runtime',
+              FCurrentRetVarName, 0, 0,
+              FCurrentRetVarName + #9 + 'strvar ' +
+              Child.ChildAt(0).Text + #10)
+          else if (Child.ChildAt(0).NodeKind = gnkDotAccess) and
+            (Child.ChildAt(0).ChildCount >= 2) and
+            (Child.ChildAt(0).ChildAt(0) <> nil) and
+            (Child.ChildAt(0).ChildAt(1) <> nil) and
+            (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+            (Child.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
+          begin
+            { Exit(AState.SelectorName) / Exit(AState.CommandName) }
+            FuncName := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
+            if FuncName = '' then
+              FuncName := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
+            if (FuncName <> '') and
+              TypeMetaFieldIsStr(FuncName, Child.ChildAt(0).ChildAt(1).Text) then
+            begin
+              Value := TypeMetaFieldIndex(FuncName,
+                Child.ChildAt(0).ChildAt(1).Text);
+              if Value >= 0 then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-field-load-runtime', FCurrentRetVarName, 0, 0,
+                  Child.ChildAt(0).ChildAt(0).Text + #9 + IntToStr(Value));
+            end;
+          end;
+        end
+        else if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+          FModel.AddTypedHirNode('assign-runtime', FCurrentRetVarName, 0, 0,
+            FCurrentRetVarName + #9 + Operand);
+      end;
       EmitClassVarFreeCleanupNodes;
       EmitOwnedManagedRecordCleanupNodes;
       EmitOwnedDynArrayCleanupNodes;
@@ -581,6 +638,35 @@ begin
             Arg := nil;
             if Child.ChildCount >= 2 then
               Arg := Child.ChildAt(1);
+            { Batch 25: string fields on records use TString field-store. }
+            if (Arg <> nil) and (StringValue <> '') and
+              (Child.ChildAt(0).ChildAt(1) <> nil) and
+              TypeMetaFieldIsStr(StringValue, Child.ChildAt(0).ChildAt(1).Text) then
+            begin
+              if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+                (FCurrentRetVarName <> '') then
+                ReceiverName := FCurrentRetVarName
+              else
+                ReceiverName := Child.ChildAt(0).ChildAt(0).Text;
+              if Arg.NodeKind = gnkStringLiteral then
+                FModel.AddTypedHirNode(
+                  'field-store-tstring-runtime', Decoded, 0, 0,
+                  ReceiverName + #9 + IntToStr(Value) + #9 + 'lit ' +
+                  DecodePascalStringLiteral(Arg.Text)
+                )
+              else if EvaluateStringConstant(Arg, Operand) then
+                FModel.AddTypedHirNode(
+                  'field-store-tstring-runtime', Decoded, 0, 0,
+                  ReceiverName + #9 + IntToStr(Value) + #9 + 'lit ' + Operand
+                )
+              else if (Arg.NodeKind = gnkIdentifier) and
+                IsRuntimeStrVar(Arg.Text) then
+                FModel.AddTypedHirNode(
+                  'field-store-tstring-runtime', Decoded, 0, 0,
+                  ReceiverName + #9 + IntToStr(Value) + #9 + 'var ' + Arg.Text
+                );
+              Continue;
+            end;
             if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
             begin
               if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
@@ -1241,28 +1327,45 @@ begin
             (Arg.ChildAt(1) <> nil) and
             (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
             (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
-            (LookupClassVar(Arg.ChildAt(0).Text) <> '') then
+            ((LookupClassVar(Arg.ChildAt(0).Text) <> '') or
+             (LookupRecordVar(Arg.ChildAt(0).Text) <> '')) then
           begin
+            { M := E.Message (class) or Result := A.S (record param/local).
+              Batch 25: const record string field load was missing → empty sret. }
             FuncName := LookupClassVar(Arg.ChildAt(0).Text);
-            Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
-            if (Value >= 0) and TypeMetaIsInterface(FuncName) then
-              FModel.AddTypedHirNode(
-                'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
-                Decoded + #9 + Arg.ChildAt(0).Text + #9 +
-                IntToStr(Value)
-              )
-            else if Value >= 0 then
-              FModel.AddTypedHirNode(
-                'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
-                Decoded + #9 + Arg.ChildAt(0).Text + #9 +
-                IntToStr(Value)
-              )
+            if FuncName = '' then
+              FuncName := LookupRecordVar(Arg.ChildAt(0).Text);
+            if TypeMetaFieldIsStr(FuncName, Arg.ChildAt(1).Text) then
+            begin
+              Value := TypeMetaFieldIndex(FuncName, Arg.ChildAt(1).Text);
+              if Value >= 0 then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-field-load-runtime', Decoded, 0, 0,
+                  Arg.ChildAt(0).Text + #9 + IntToStr(Value)
+                );
+            end
             else
-              FModel.AddTypedHirNode(
-                'assign-tstring-call-runtime',
-                FuncName + '.' + Arg.ChildAt(1).Text, 0, 0,
-                Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
-              );
+            begin
+              Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
+              if (Value >= 0) and TypeMetaIsInterface(FuncName) then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
+                  Decoded + #9 + Arg.ChildAt(0).Text + #9 +
+                  IntToStr(Value)
+                )
+              else if Value >= 0 then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', Arg.ChildAt(1).Text, 0, 0,
+                  Decoded + #9 + Arg.ChildAt(0).Text + #9 +
+                  IntToStr(Value)
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime',
+                  FuncName + '.' + Arg.ChildAt(1).Text, 0, 0,
+                  Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
+                );
+            end;
           end
           else if (Arg.NodeKind = gnkBinaryExpression) and
             (Arg.Text = '+') and (Arg.ChildCount >= 2) and
@@ -1624,6 +1727,9 @@ begin
           Arg := Child;
         if FNoFold then
         begin
+          { Batch 27: WriteLn(ErrOutput/StdErr, ...) maps host-free write to
+            fd 2; Output/StdOut stay fd 1. ArgName = Write | WriteErr. }
+          ArgName := 'Write';
           if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) then
             ArgIndex := 1
           else
@@ -1636,33 +1742,50 @@ begin
               Inc(ArgIndex);
               Continue;
             end;
-            if RhsNode.NodeKind = gnkStringLiteral then
+            { Batch 25/27: textfile handle is not an integer payload. }
+            if (RhsNode.NodeKind = gnkIdentifier) and
+              (SameText(RhsNode.Text, 'ErrOutput') or
+               SameText(RhsNode.Text, 'Output') or
+               SameText(RhsNode.Text, 'StdOut') or
+               SameText(RhsNode.Text, 'StdErr') or
+               SameText(RhsNode.Text, 'Input')) then
+            begin
+              if SameText(RhsNode.Text, 'ErrOutput') or
+                SameText(RhsNode.Text, 'StdErr') then
+                ArgName := 'WriteErr'
+              else if SameText(RhsNode.Text, 'Output') or
+                SameText(RhsNode.Text, 'StdOut') then
+                ArgName := 'Write';
+              Inc(ArgIndex);
+              Continue;
+            end
+            else if RhsNode.NodeKind = gnkStringLiteral then
               FModel.AddTypedHirNode(
-                'write-string-runtime', 'Write', 0, 0,
+                'write-string-runtime', ArgName, 0, 0,
                 DecodePascalStringLiteral(RhsNode.Text)
               )
             else if EvaluateStringConstant(RhsNode, StringValue) then
               FModel.AddTypedHirNode(
-                'write-string-runtime', 'Write', 0, 0, StringValue
+                'write-string-runtime', ArgName, 0, 0, StringValue
               )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               IsRuntimeStrVar(RhsNode.Text) and
               not LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, RhsNode.Text
+                'write-str-var-runtime', ArgName, 0, 0, RhsNode.Text
               )
             else if (RhsNode.NodeKind = gnkFunctionCall) and
               (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
               SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
-              AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
+              AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand, ArgName)
             else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               )
             else if EmitOwnedStringConcatWriteTemp(RhsNode, Operand) then
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               )
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
@@ -1677,8 +1800,38 @@ begin
                 'assign-tstring-call-runtime', RhsNode.Text, 0, 0, Operand
               );
               FModel.AddTypedHirNode(
-                'write-str-var-runtime', 'Write', 0, 0, Operand
+                'write-str-var-runtime', ArgName, 0, 0, Operand
               );
+            end
+            else if (RhsNode.NodeKind = gnkFunctionCall) and
+              LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
+              (IsOwnedStringReturnFunc(RhsNode.Text) or
+               IsRuntimeStrVar(RhsNode.Text)) then
+            begin
+              { Batch 26: WriteLn(..., EnvelopeSelectorName(AState)) — string
+                sret call as Write arg must use a private temp, not clobber the
+                AState ptr slot (historical Fail SEGV) or fall through to
+                write_i64_decimal. }
+              Inc(FBlockLabelCounter);
+              Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+              RegisterRuntimeVar(Operand);
+              RegisterRuntimeStrVar(Operand);
+              FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+              StringValue := EncodeStrCallArgs(RhsNode, Operand);
+              if StringValue <> '' then
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
+                  Operand + #9 + 'callee ' + RhsNode.Text + #9 + StringValue
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
+                  Operand + #9 + 'callee ' + RhsNode.Text
+                );
+              FModel.AddTypedHirNode(
+                'write-str-var-runtime', ArgName, 0, 0, Operand
+              );
+              EmitPendingStringTempReleases;
             end
             else if (RhsNode.NodeKind = gnkDotAccess) and
               (RhsNode.ChildCount >= 2) and
@@ -1686,39 +1839,65 @@ begin
               (RhsNode.ChildAt(1) <> nil) and
               (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
               (RhsNode.ChildAt(1).NodeKind = gnkIdentifier) and
-              (LookupClassVar(RhsNode.ChildAt(0).Text) <> '') then
+              ((LookupClassVar(RhsNode.ChildAt(0).Text) <> '') or
+               (LookupRecordVar(RhsNode.ChildAt(0).Text) <> '')) then
             begin
+              { Write(E.Message) class or Write(AState.CommandName) record. }
               FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
-              Value := TypeMetaVmtSlot(FuncName, RhsNode.ChildAt(1).Text);
-              if (Value >= 0) and
-                (not FModel.LookupConstValue(
-                  FuncName + '$ret_str_' + RhsNode.ChildAt(1).Text, CondValue)) and
-                EncodeRuntimeIntExprFold(RhsNode, Operand) then
-                AddWriteIntRuntimeNode(RhsNode, Operand)
-              else if Value >= 0 then
+              if FuncName = '' then
+                FuncName := LookupRecordVar(RhsNode.ChildAt(0).Text);
+              if TypeMetaFieldIsStr(FuncName, RhsNode.ChildAt(1).Text) then
               begin
-                Inc(FBlockLabelCounter);
-                Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
-                RegisterRuntimeVar(Operand);
-                RegisterRuntimeStrVar(Operand);
-                FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
-                FModel.AddTypedHirNode(
-                  'assign-tstring-call-runtime', RhsNode.ChildAt(1).Text, 0, 0,
-                  Operand + #9 + RhsNode.ChildAt(0).Text + #9 +
-                  IntToStr(Value)
-                );
-                FModel.AddTypedHirNode(
-                  'write-str-var-runtime', 'Write', 0, 0, Operand
-                );
+                Value := TypeMetaFieldIndex(FuncName, RhsNode.ChildAt(1).Text);
+                if Value >= 0 then
+                begin
+                  Inc(FBlockLabelCounter);
+                  Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+                  RegisterRuntimeVar(Operand);
+                  RegisterRuntimeStrVar(Operand);
+                  FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+                  FModel.AddTypedHirNode(
+                    'assign-tstring-field-load-runtime', Operand, 0, 0,
+                    RhsNode.ChildAt(0).Text + #9 + IntToStr(Value)
+                  );
+                  FModel.AddTypedHirNode(
+                    'write-str-var-runtime', ArgName, 0, 0, Operand
+                  );
+                end;
+              end
+              else
+              begin
+                Value := TypeMetaVmtSlot(FuncName, RhsNode.ChildAt(1).Text);
+                if (Value >= 0) and
+                  (not FModel.LookupConstValue(
+                    FuncName + '$ret_str_' + RhsNode.ChildAt(1).Text, CondValue)) and
+                  EncodeRuntimeIntExprFold(RhsNode, Operand) then
+                  AddWriteIntRuntimeNode(RhsNode, Operand, ArgName)
+                else if Value >= 0 then
+                begin
+                  Inc(FBlockLabelCounter);
+                  Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+                  RegisterRuntimeVar(Operand);
+                  RegisterRuntimeStrVar(Operand);
+                  FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+                  FModel.AddTypedHirNode(
+                    'assign-tstring-call-runtime', RhsNode.ChildAt(1).Text, 0, 0,
+                    Operand + #9 + RhsNode.ChildAt(0).Text + #9 +
+                    IntToStr(Value)
+                  );
+                  FModel.AddTypedHirNode(
+                    'write-str-var-runtime', ArgName, 0, 0, Operand
+                  );
+                end;
               end;
             end
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
-              AddWriteIntRuntimeNode(RhsNode, Operand);
+              AddWriteIntRuntimeNode(RhsNode, Operand, ArgName);
             Inc(ArgIndex);
           end;
           if SameText(Child.Text, 'WriteLn') then
             FModel.AddTypedHirNode(
-              'write-string-runtime', 'Write', 0, 0, #10
+              'write-string-runtime', ArgName, 0, 0, #10
             );
           EmitPendingStringTempReleases;
           Continue;

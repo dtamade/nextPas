@@ -1,35 +1,43 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 **79** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-18（Wave I1 pool active health probe）
-**版本**：3.15
+**最后更新**：2026-07-26（h2 settings share）
+**版本**：3.45
 
 ---
 
 ## 1. 模块边界
 
 ```
-http.pas                 ← 统一门面（re-export）
+http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶）
+http.minimal             ← 薄门面：base/intf/headers/url/router/message + server/client + chain 原语
 http.base                ← THttpMethod/Status/Version, TUrl, options, EHttpError
 http.intf                ← IHttp* 接口（Request/Response/Client/Server/Router/…）
 http.message             ← THttpRequest/THttpResponse + helpers + THttpRequestBuilder
 http.headers             ← IHttpHeaders 实现
 http.url                 ← URL parse / encode helpers（base/TUrl 拥有核心类型）
 http.router[+group]      ← radix router + path params + regex routes + groups
-http.middleware.*        ← 中间件链与内建 middleware
+http.middleware          ← 链原语（HandlerFunc / MiddlewareFunc / Chain）
+http.middleware.*        ← 内建产品 middleware（cors/recovery/logger/…）
 http.client / server     ← facade 编排（server 委托 net.server）
 http.static / websocket  ← helper 级公开面
 http.form / cookie / sse ← 表单、Cookie、SSE 辅助
 http.impl.registry       ← 版本 → transport factory
-http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast
-http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client/TLS
+http.impl.cancel.adapter ← 共享 IHttpCancelToken → INetCancelToken 桥（h1/h2/websocket）
+http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast + poll/serve
+http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client(+body)/TLS
 http.impl.tls.stream     ← TLS over TCP stream wrapper
-http.fuzz                ← 模糊测试辅助（测试/安全验证用）
+{ tests only } support/nextpas.core.http.fuzz ← 模糊测试辅助（非生产 inventory）
 ```
 
-公开消费方默认只 `uses nextpas.core.http`。
+| 入口 | 何时用 |
+|------|--------|
+| `uses nextpas.core.http.minimal` | 只要类型 + router + server/client + HandlerFunc/Chain，不要 cors/recovery/… |
+| `uses nextpas.core.http` | 完整产品面（middleware 全家桶、static/websocket re-export 等） |
+
+公开消费方默认仍可 `uses nextpas.core.http`；生产 checklist 可二选一。
 
 ---
 
@@ -76,12 +84,51 @@ end;
 | 侧 | API | 行为 |
 |----|-----|------|
 | server 响应压缩 | `CompressionMiddleware` / `CompressionMiddlewareWith` | 按 `Accept-Encoding` 选 gzip/deflate；默认最小 body 1024 |
-| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；失败 → 400 |
+| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；**默认** `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`（4 MiB）；`0`=无界（仅测试/工具）；超限/损坏 → **400** `invalid_body`，不进 next |
 | client raw body | `HttpReadResponseBodyBytes` / `String` / `StringAuto` | **不**自动解 Content-Encoding（wire 字节） |
 | client 显式解码 | `HttpDecodeContentEncoding` / `HttpReadResponseBodyBytesDecoded` / `HttpReadResponseBodyStringDecoded` | 单 coding：`gzip`/`x-gzip`/`deflate`/`identity`/缺省；`AMaxSize>0` 限制解压输出 |
 | 不支持编码 | 同上 | `hekProtocol` Op=`content_encoding`（含 multi-coding） |
 | 损坏 payload | 同上 | `hekBody` Op=`content_encoding` |
 | 非目标 | br / zstd / 浏览器完整 content 栈 / 默认自动 Accept-Encoding 协商 | 不在 C1；未支持编码诚实失败 |
+
+**In-memory request body helpers（Wave SAFE-1）**：
+
+| API | 行为 |
+|-----|------|
+| `HTTP_DEFAULT_BODY_READ_MAX` | **4 MiB**（与 server `Default.MaxBodySize` 对齐） |
+| `HttpReadRequestBodyBytes` / `String` / `Json` | 默认有界；超限 → `EHttpError(hekBody)` Op=`body` |
+| `HttpReadRequestBodyBytesMax(AReq, AMax)` | 显式上限；`AMax <= 0` = 无界（**仅**测试/工具） |
+| `HttpReadRequestBodyBytesUnlimited` | 命名逃生口 = Max(0)（**仅**测试/工具） |
+| `BodyCacheMiddleware` | 默认 max=常量；超限 → **413**，不进入 next |
+| `BodyCacheMiddlewareWith(AMax)` | 显式 max；`<=0` 无界（仅测试/工具） |
+| `BodyCacheMiddlewareUnlimited` | 命名逃生口 = With(0)（仅测试/工具） |
+| `DecompressMiddleware` | 默认解压输出上限=常量；`DecompressMiddleware(0)` 无界（仅测试/工具） |
+| `DecompressMiddlewareUnlimited` | 命名逃生口 = (0)（仅测试/工具） |
+| Server `MaxBodySize` | **Default=4 MiB**；**`0`=unlimited**（兼容；生产 checklist 禁止无界） |
+| `IHttpRequestWithArena` / `HttpRequestArenaOf` | Arena 附着在 request 上（Supports O(1)）；**无**进程全局 map |
+| Migration | 需要更大 body/解压时用 Max/With/显式 AMaxSize 放宽；生产禁止依赖无界默认 |
+
+**DeadlineMiddleware（Wave TRUTH-1）**：
+
+| 项 | 行为 |
+|----|------|
+| 语义 | **非抢占**；仅在 handler **返回后**判定；响应 body **全缓冲** |
+| 超时 | 返回后 elapsed ≥ `ATimeoutMs` → **504** `gateway_timeout`（handler 死循环则永不 504） |
+| 缓冲上限 | 默认 `HTTP_DEFAULT_BODY_READ_MAX`；`DeadlineMiddlewareWith(ms, max)`；`max<=0` 无界（仅测试）；`DeadlineMiddlewareUnlimitedBuffer` 命名逃生口 |
+| 超缓冲 | **413** `payload_too_large`，丢弃缓冲；不 Finalize 成功路径 |
+| Headers | `GetHeaders` 透传真实 writer（与 body 缓冲不完全对称） |
+| 生产建议 | **默认不装**；硬限时用 server `ReadTimeout`/`WriteTimeout` + cancel；仅短 handler + 小 body 可考虑后验 504 |
+| Recovery | 若 `Supports(IHttpResponseWriterCommitState)` 且 `HeadersCommitted` → **不**再写 500；无 CommitState 时 500 失败 → 空 except 有意吞掉 |
+| RateLimit | 默认 100 req / 60s；`MaxKeys` 默认 **10000**（满则新 IP **429**，不 LRU）；`MaxKeys=0` 无界键（仅测试） |
+
+**Stream / ResponseTime（Wave TRUTH-2）**：
+
+| API | 行为 |
+|-----|------|
+| `HttpWriteStream` | 仅从 `IReader` copy 到 writer；**不**设 TE、**不** `WriteHeader`；framing 归 writer |
+| `HttpWriteStreamWithLength` | 设 `Content-Length` 后 copy |
+| `ResponseTimeMiddleware` | 写 `X-Response-Time`；单元名 `middleware.responsetime`（原 `middleware.timeout` 已改名） |
+| 限时对照 | ResponseTime ≠ Deadline（后验）≠ server `ReadTimeout`/`WriteTimeout` |
 
 **条件请求 / 静态缓存元数据（Wave C2）**：
 
@@ -155,14 +202,13 @@ end;
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
   接到 `ITcpStream.SetCancelToken`：`NewHttpCancelToken` 为 waitable
-  （socketpair wake + `platform_socket_poll_or_wake`，Unix）；probe-only
-  token 退回 ~10ms `SO_*TIMEO` 切片。中途取消抛 `hekCanceled`（经
-  `ECancelledError` 包装）。
-  **Windows residual（Wave R3）**：`platform_socket_pair` 在 Windows 路径
-  固定返回 `PLATFORM_ERR_UNSUPPORTED`（无原生 socketpair；loopback 方案未
-  落地）。`TNetCancelToken` 因此 `FHasWake=False`，`WakeHandle=0`，全程
-  **probe-only**（~10ms `NET_IO_CANCEL_SLICE_MS`），**不**声称近即时唤醒。
-  Linux/macOS/FreeBSD waitable 证据不变（X2）。
+  （socketpair / TCP-loopback wake + `platform_socket_poll_or_wake`）；
+  仅当 `platform_socket_pair` 失败时退回 probe-only ~10ms `SO_*TIMEO` 切片。
+  中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  **Windows（Wave PD-3-3）**：`platform_socket_pair` 用 127.0.0.1 TCP
+  loopback 模拟 socketpair；`TNetCancelToken` 拿到 `FHasWake=True`，与 Unix
+  同 waitable 路径。probe-only 仅作 pair 失败兜底。
+  Linux/macOS/FreeBSD 仍用原生 socketpair（X2）。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -177,11 +223,12 @@ end;
     默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
   - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（waitable 近即时；
     probe-only 仍有 ~10ms 切片上界）。
-  - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
-    （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
-    （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
-    IdleTimeout alone 不是完整生产模板。示例 `http_hello_server` /
-    `http_websocket_echo_demo` 使用 Production。
+  - 生产 server：**PD-1B** 起 `THttpServerOptions.Default` 的 Read/Write =
+    **30000** ms（与 `Production` 同量级）。长轮询/SSE/需要无界 IO 时显式
+    `WithReadTimeout(0)` / `WithWriteTimeout(0)`。产品代码仍推荐命名模板
+    **`THttpServerOptions.Production`** 表达意图。IdleTimeout alone 不是完整
+    生产模板。示例 `http_hello_server` / `http_websocket_echo_demo` 使用
+    Production。
   - 示例 `http_get_client` 使用有限 client timeout。
 
 #### With* 链语义（Wave E2）
@@ -204,20 +251,39 @@ end;
 | `Timeout` | socket 就绪后 request 读/写 | 无界（仅测试/工具） | options / `WithTimeout` / builder / request options |
 | `ConnectTimeout` | OS `connect` + 新连接首写 | 回退到 `Timeout`（`Timeout` 亦 0 则无界） | options / `WithConnectTimeout`（rebuild） |
 
-**Default vs Production**：
+**Default vs Production**（PD-1B）：
 
 | 载体 | Default | Production / 生产建议 |
 |------|---------|----------------------|
 | `THttpClientOptions` | `Timeout=30000`，`ConnectTimeout=0` | 保持 Default 或显式有限 `WithTimeout`；勿依赖 cancel-only |
-| `THttpServerOptions` | Read/Write=**0**（测兼容） | **`Production`** Read/Write=30000；Idle  alone 不足 |
+| `THttpServerOptions` | Read/Write=**30000**（PD-1B）；Idle=30000 | **`Production`** 同 RW 命名模板；长轮询用 `WithReadTimeout(0)`；Idle alone 不足 |
 | `TWebSocketOptions` | ConnectTimeout=Timeout=30000 | 同 Default；`=0` 仅显式无界 |
+
+**工厂**：`NewHttpServer(Handler)` → `Default`（现已有限 RW）；`NewHttpServerWithRequestArena`（无 options）→ **Production** + RequestArena。生产 checklist 见 `README.md` § Production checklist。
+
+#### Server IdleTimeout vs client IdleTTL（PD-3-1）
+
+| 旋钮 | 所有者 | 默认 | 作用 | 0 含义 | 不是 |
+|------|--------|------|------|--------|------|
+| **Server `IdleTimeout`** | `THttpServerOptions` | **30000** ms | keep-alive **请求间隙**等待下一请求；`ReadTimeout=0` 时作读 deadline 回退 | 不因 idle 主动关连接（仍受 RW 等约束） | **不是** mid-request body stall 时钟（有限 `ReadTimeout` 时用 `ReadTimeout`）；**不是** client 池淘汰 |
+| **Client `IdleTTL`** | `THttpClientOptions` | **90000** ms | 连接池**空闲连接**墙钟淘汰（借出/归还路径检查 `IdleAtMs`） | 关闭墙钟淘汰（仍可 MaxPoolSize / CloseIdle） | **不是** server keep-alive；**不是** per-request Timeout |
+| Server `ReadTimeout` / `WriteTimeout` | `THttpServerOptions` | **30000**（PD-1B） | 单次读/写 IO 有界；**mid-request** stall / partial body 用 Read；`WriteTimeout>0` 时 poll 路径优先 drain、不做 parse-while-draining | 无界 IO（长轮询/SSE 才显式 0） | 替代不了 IdleTimeout 间隙语义 |
+| Client `Timeout` | `THttpClientOptions` | **30000** | request 读/写 budget | 无界（测试/工具） | 替代不了 IdleTTL |
+
+**对照要点**：
+
+1. IdleTimeout（server）关的是 **已接受连接上的请求间隙**；IdleTTL（client）关的是 **池里空闲连接**。
+2. 数值刻意不同（30s vs 90s）：client 池可多持一会儿，server 更短清理 idle socket。
+3. PD-1B 后 Default `ReadTimeout>0`：**只改 IdleTimeout 不会**缩短 mid-request body stall 时钟（需同步 `WithReadTimeout`）。
+4. 生产 checklist：server 用有限 RW（Default/Production）+ 合适 IdleTimeout；client 按需 `WithIdleTTL` / `CloseIdleConnections`。
+5. 抽查：`test_http_base` IdleTimeout vs IdleTTL spot-check；IdleTTL 行为见 `test_http_client`。
 
 ### 2.2.0a Net-dependent capabilities
 
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); **Windows = probe-only only**（R3；`platform_socket_pair` → UNSUPPORTED） |
+| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only only if pair fails | net + H1/H2/WS client wire | **Landed** (X2); **Windows waitable via TCP loopback pair（PD-3-3）** |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
@@ -262,7 +328,10 @@ end;
 **诚实 residual**
 
 - Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
-- Windows cancel 仍为 probe-only residual（R3）；Unix waitable 近即时。
+- Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。Wine smoke：`make -C core/tests/nextpas.core.platform.socket/test_platform_socket_wine wine-runtime-smoke`（含 socket_pair 字节唤醒；**非** real-Windows / **非** Windows scale-ready）。
+- Multi-OS HTTP threaded host（R2-5+）：`bash core/scripts/http-host-ci-matrix.sh` → `test_http_threaded_host` — 钉 `THttpServerOptions.Default.Backend=tsbThreaded` + HTTP/1.1 wire GET（net.server.threaded）。**CI hosts**：Linux / macOS / Windows / FreeBSD（`core-ci.yml`）。truth=`host-runtime`；**非** scale-ready / **非** IOCP / **非** full facade TLS。
+- Windows HTTP threaded wine（R2-5）：`make -C core/tests/nextpas.core.http/test_http_threaded_wine wine-runtime-smoke` — 同上 wire 在 Win64+Wine；**非** real-Windows / **非** scale-ready。full `uses nextpas.core.http` Win64 交叉仍 residual（TLS 链触 `system.sysutils` FPC internal）。
+- Windows IOCP（WIN-3）：**Parked** — `TCP_SERVER_BACKEND_IOCP` 枚举在，factory 未注册；跨模块 net.server 另立。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
@@ -643,7 +712,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 | **Direct error 响应** | parser/size/Expect 等 fail-fast 错误响应同样 arm write timeout | Direct error response arms write timeout on … |
 | **S1-1 关系** | `PreferPollWorkerHandoff=False`（默认）只决定 **handler 在 reactor 还是 worker 执行**；**不改变** drain/backpressure/WriteTimeout 语义 | S1-1 + 本表 drain 测 |
 
-**生产建议**：使用 `THttpServerOptions.Production` 或显式 `WithWriteTimeout`；勿依赖 Default 的 RW=0。
+**生产建议**：使用 `THttpServerOptions.Production` 或 Default（PD-1B 后 RW 同为 30s）；长写流式仍设有限 `WithWriteTimeout`；勿把 IdleTimeout alone 当完整模板。
 
 **非目标**：严格 wall-clock SLA 冻结为 CI 阈值；跨机 backpressure 排行榜；改 WriteTimeout 默认值。
 
@@ -690,19 +759,24 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
     在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
     修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
     其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
-- **Q3-3 / RH-1 H1 HTTPS**：
+- **Q3-3 / RH-1 / C-A H1 HTTPS**：
   - **Client H1 direct HTTPS**（`TLSContext` + `https://`）：生产路径；smoke
     见 `test_http_https_smoke`（吞吐 + p50/p99；heaptrc **0 unfreed**）。
   - **RH-1 连接复用**：根因 = `TTlsTcpStream` 未实现 `ITcpStreamRuntime` →
     `PooledConnectionIsReusable` 恒 false → 每请求 re-dial。已补 runtime 委托
     到 inner TCP；smoke 锁 `server_accepts=1` 且 N keep-alive GET。
-  - **Server `THttpServerOptions.TLSContext`**：**registry 仅选 H2 TLS transport**
-    （`TLS HTTP server currently requires HTTP/2`）；**不是** H1 HTTPS 服务器
-    产品入口。Q3-3 smoke origin 用 `NewTlsServerTcpStream` 最小 H1 TLS 源。
+  - **Server `THttpServerOptions.TLSContext`**：**产品路径**按版本 wrap：
+    - **H1**（默认 / `hvHttp10`/`hvHttp11`）：`NewH1TlsServerTransport` →
+      TLS accept + ALPN `http/1.1`（空 ALPN 兼容）→ 内层 H1 serve
+      （`test_http_h1_tls_server`）。
+    - **H2**：`NewH2TlsServerTransport` → ALPN `h2` 强制
+      （`test_http_h2_tls_alpn`）。
+  - Q3-3 smoke origin 仍可用最小 `NewTlsServerTcpStream` 字节源做 client
+    latency 测；产品 server 入口是 `NewHttpServer` + `TLSContext`。
   - **仍不**宣称 HTTPS scale-ready；scale KPI 仍是 **plain H1 epoll**。
-- Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
-  `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
-  §2.2.0a。
+- Cancel 平台路径（**Wave PD-3-3**）：Unix 原生 socketpair+poll；Windows
+  TCP loopback pair + 同一 waitable 路径。probe-only 仅 pair 失败兜底。
+  见 §2.2.0 / §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
 #### Client connection pool（Wave A2）
@@ -779,6 +853,29 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.16 | Wave R1：H1/H2 pool Close 锁外，IdleTTL suite 稳定 |
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
+| 2026-07-24 | 3.23 | Wave PD-3-3：Windows `platform_socket_pair` TCP loopback → waitable cancel |
+| 2026-03-14 | 3.24 | Wave SAFE-1：`HTTP_DEFAULT_BODY_READ_MAX`；`HttpReadRequestBodyBytes*` 默认有界；`BodyCacheMiddlewareWith`；超限 hekBody/413 |
+| 2026-03-14 | 3.25 | Wave SAFE-2：`DecompressMiddleware` 默认 `AMaxSize=HTTP_DEFAULT_BODY_READ_MAX`；`0` 仅显式无界；超限仍 400 |
+| 2026-03-14 | 3.26 | Wave SAFE-3：`IHttpRequestWithArena` 请求附着；删除 `GArenaMap`；`test_http_mem` 入主 PROJECTS |
+| 2026-03-14 | 3.27 | Wave TRUTH-1：`DeadlineMiddleware` 默认缓冲 4 MiB；`DeadlineMiddlewareWith`；超缓冲 413；非抢占语义入 CONTRACT |
+| 2026-03-14 | 3.28 | Wave TRUTH-2：`HttpWriteStream` 注释对齐实现；`middleware.timeout`→`responsetime`；inventory 对齐 |
+| 2026-03-14 | 3.29 | Wave STRUCT-1/3：`impl.h1.pool` 抽出；`test_http_stream`/`test_http_sse` 入主 PROJECTS=43 |
+| 2026-03-14 | 3.30 | Wave STRUCT-2：`client.redirect` + `client.decorator` 机械抽出；redirect/retry 语义冻结 |
+| 2026-03-14 | 3.31 | Era0：inventory **64** 单元；HTTP 生产/测试禁止 `uses` FPC RTL（`test_http_contract` source-contract）；6 suite 去掉 `SysUtils` |
+| 2026-03-14 | 3.32 | Era R2-2 STRUCT-opt：`impl.h2.client.pool` + `client.helpers` + `impl.h1.wire`；inventory **67**；decorator 无 `uses client` |
+| 2026-03-14 | 3.33 | Era R2-3 test split：`test_http_client_redirect` / `body_helpers` / `server_expect` / `server_chunk` 入主 PROJECTS=**47**；client/server lpr 各 <10k |
+| 2026-03-14 | 3.34 | Era R2-4：`http.fuzz` → tests support；BodyCache GetBody 共享 TBytes 只读视图；inventory **66** |
+| 2026-03-14 | 3.35 | Era R2-5：Wine WIN-0..2；`test_http_threaded_wine`；WIN-3 IOCP Parked；H3 Blocked；Windows scale=No |
+| 2026-03-14 | 3.36 | Era R2-5+：`test_http_threaded_host` + `http-host-ci-matrix.sh` 挂 Linux/macOS/Windows/FreeBSD CI；Wine 仍 smoke-only；scale=No |
+| 2026-03-14 | 3.37 | STRUCT residual：`impl.h1.client`（TH1ClientTransport）+ `impl.h1.prepend`（TReadPrependTcpStream）；`impl.h1` 保留 server + re-export；inventory **68** |
+| 2026-03-14 | 3.38 | STRUCT residual：`TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；server 仅保留 gate + factory 调用 |
+| 2026-07-25 | 3.39 | h1.poll/serve hard-cut：`impl.h1.conn` + `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（`H1PollAdvance*`）；`impl.h1` 门面；inventory **71** |
+| 2026-07-26 | 3.40 | residual do-all：`http.minimal`；`impl.h2.client.body`；H1 except 卫生；tooling mem/`lane_gate`；inventory **73** |
+| 2026-07-26 | 3.41 | h2.session 机械抽：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer`；session ~1582；inventory **76** |
+| 2026-07-26 | 3.42 | h2.session 纯 helper 抽出：`impl.h2.session.helpers`；session ~1536；inventory **77** |
+| 2026-07-26 | 3.43 | h2.client 纯 helper 抽出：`impl.h2.client.helpers`；client ~2022；inventory **78** |
+| 2026-07-26 | 3.44 | 共享 cancel 桥接：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`）；h1/h2/websocket 去重；inventory **79** |
+| 2026-07-26 | 3.45 | h2 settings 共享：`H2ParseSettingsPayload` + `H2MinUInt32` → `impl.h2.types`；client/session 去重 |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

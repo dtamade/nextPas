@@ -71,6 +71,9 @@ procedure TDiagnosticsSink.EmitErrorAtSpan(
 var
   EmptyPayload: TDiagnosticPayload;
 begin
+  { Must Default the whole payload: partial field init leaves Candidates garbage
+    and FreeDiagnosticNestedTables AVs on sink Destroy. }
+  EmptyPayload := Default(TDiagnosticPayload);
   EmptyPayload.Kind := dpkNone;
   EmitErrorWithPayload(ACode, APhase, APrimarySpan, AMessageText, EmptyPayload);
 end;

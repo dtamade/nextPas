@@ -69,6 +69,82 @@ begin
   ResetDefaultConfig;
 end;
 
+procedure TestB63CLICrossCase(const AC: TTestCase);
+{ v8.28 B63: --short/--failfast/--failures-max/--count cross matrix.
+  Data: short|failfast|maxfail|count  (0/1 flags; ints for max/count). }
+var
+  LParts: specialize TArray<string>;
+  LShort, LFF, LMax, LCount: Integer;
+  LArgs: specialize TArray<string>;
+  LN: Integer;
+  LRest, LTok: string;
+  P: Integer;
+begin
+  SetLength(LParts, 0);
+  LRest := AC.Data;
+  while LRest <> '' do
+  begin
+    P := Pos('|', LRest);
+    if P = 0 then
+    begin
+      LTok := LRest;
+      LRest := '';
+    end
+    else
+    begin
+      LTok := Copy(LRest, 1, P - 1);
+      Delete(LRest, 1, P);
+    end;
+    SetLength(LParts, Length(LParts) + 1);
+    LParts[High(LParts)] := LTok;
+  end;
+  CheckEqual(4, Length(LParts), 'B63 needs 4 fields ' + AC.Name);
+  LShort := StrToInt(LParts[0]);
+  LFF := StrToInt(LParts[1]);
+  LMax := StrToInt(LParts[2]);
+  LCount := StrToInt(LParts[3]);
+
+  ResetDefaultConfig;
+  SetLength(LArgs, 0);
+  LN := 0;
+  if LShort <> 0 then
+  begin
+    SetLength(LArgs, LN + 1);
+    LArgs[LN] := '--short';
+    Inc(LN);
+  end;
+  if LFF <> 0 then
+  begin
+    SetLength(LArgs, LN + 1);
+    LArgs[LN] := '--failfast';
+    Inc(LN);
+  end;
+  if LMax > 0 then
+  begin
+    SetLength(LArgs, LN + 1);
+    LArgs[LN] := '--failures-max=' + IntToStr(LMax);
+    Inc(LN);
+  end;
+  if LCount > 0 then
+  begin
+    SetLength(LArgs, LN + 1);
+    LArgs[LN] := '--count=' + IntToStr(LCount);
+    Inc(LN);
+  end;
+  ApplyCLIArgsFrom(LArgs);
+  CheckEqual(LShort <> 0, GetShortMode(DefaultConfig), 'short ' + AC.Name);
+  CheckEqual(LFF <> 0, GetFailFast(DefaultConfig), 'failfast ' + AC.Name);
+  if LMax > 0 then
+    CheckEqual(LMax, GetMaxFailures(DefaultConfig), 'maxfail ' + AC.Name)
+  else
+    CheckEqual(0, GetMaxFailures(DefaultConfig), 'maxfail0 ' + AC.Name);
+  if LCount > 0 then
+    CheckEqual(LCount, GetRepeatAllCount(DefaultConfig), 'count ' + AC.Name)
+  else
+    CheckEqual(0, GetRepeatAllCount(DefaultConfig), 'count0 ' + AC.Name);
+  ResetDefaultConfig;
+end;
+
 procedure TestB38CacheKeyFingerprintCase(const AC: TTestCase);
 { Data names a config field that ComputeKey hashes (v8.22: includes stop semantics). }
 var
@@ -1080,6 +1156,41 @@ begin
     CheckEqual(2, LMaxFailResult.Failed, 'FailFast+Soft still limited by MaxFailures');
     ResetDefaultConfig;
 
+    { v8.27 B58: SoftCheck* (not only SoftFail) counts toward MaxFailures. }
+    LMaxFailSuite := TTestSuite.Create('SoftCheckMax');
+    LMaxFailSuite.Test('s1', procedure
+      begin
+        SoftCheckNil(Pointer(1));
+        SoftCheckEmpty('x');
+      end);
+    LMaxFailSuite.Test('s2', procedure begin SoftCheckNotNil(nil); end);
+    LMaxFailSuite.Test('s3', procedure begin SoftCheckContainsCI('a', 'z'); end);
+    LMaxFailSuite.Test('pass_after', procedure begin CheckTrue(True); end);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LMaxFailSuite.Config := LMaxFailConfig;
+    CheckFalse(LMaxFailSuite.RunWithResult(LMaxFailResult));
+    CheckEqual(2, LMaxFailResult.Failed, 'SoftCheck MaxFailures stops at 2');
+    CheckEqual(0, LMaxFailResult.Passed, 'SoftCheck MaxFailures skips rest');
+    CheckContains(LMaxFailResult.Results[0].Message, 'Expected nil',
+      'SoftCheck MaxFailures msg on s1');
+    ResetDefaultConfig;
+
+    { FailFast + SoftCheck-only: continue until MaxFailures. }
+    LFailFastSuite := TTestSuite.Create('SoftCheckFFMax');
+    LFailFastSuite.Test('s1', procedure begin SoftCheckEmpty('z'); end);
+    LFailFastSuite.Test('s2', procedure begin SoftCheckNil(Pointer(2)); end);
+    LFailFastSuite.Test('s3', procedure begin SoftCheckNotNil(nil); end);
+    LFailFastSuite.Test('s4', procedure begin CheckTrue(True); end);
+    SetDefaultFailFast(True);
+    SetDefaultMaxFailures(2);
+    LMaxFailConfig := DefaultConfig;
+    LFailFastSuite.Config := LMaxFailConfig;
+    CheckFalse(LFailFastSuite.RunWithResult(LMaxFailResult));
+    CheckEqual(2, LMaxFailResult.Failed, 'FF+SoftCheck MaxFailures=2');
+    CheckEqual(0, LMaxFailResult.Passed, 'no pass after max');
+    ResetDefaultConfig;
+
     { Unknown flags ignored; known flag still applied (lock current behavior). }
     ApplyCLIArgsFrom(['--not-a-real-flag', '--failures-max=4', '--bogus=x']);
     CheckEqual(GetMaxFailures(DefaultConfig), 4, 'unknown flags ignored');
@@ -1113,6 +1224,36 @@ begin
     LResultSuite := Default(TTestSuite);
     LMaxFailSuite := Default(TTestSuite);
     LFailFastSuite := Default(TTestSuite);
+  end;
+
+  { ── B63: CLI short/failfast/max/count cross table ──────────────────────── }
+  WriteLn;
+  SectionHeader('B63: CLI cross matrix (short/failfast/max/count)');
+  begin
+    SetLength(LTableCases, 48);
+    for LB34I := 0 to High(LTableCases) do
+    begin
+      LTableCases[LB34I].Name := 'cli-' + IntToStr(LB34I);
+      { cycle useful combinations; half are pure negative zeros }
+      case LB34I mod 8 of
+        0: LTableCases[LB34I].Data := '0|0|0|0';
+        1: LTableCases[LB34I].Data := '1|0|0|0';
+        2: LTableCases[LB34I].Data := '0|1|0|0';
+        3: LTableCases[LB34I].Data := '0|0|3|0';
+        4: LTableCases[LB34I].Data := '0|0|0|2';
+        5: LTableCases[LB34I].Data := '1|1|2|0';
+        6: LTableCases[LB34I].Data := '1|0|5|3';
+      else
+        LTableCases[LB34I].Data := '0|1|1|4';
+      end;
+    end;
+    LResultSuite := TTestSuite.Create('b63-cli');
+    LResultSuite.TestTable('B63 CLI cross fail-path', LTableCases,
+      @TestB63CLICrossCase);
+    if not LResultSuite.Run then
+      FailTest('B63 CLI cross table failed');
+    PassTest('B63 CLI cross matrix');
+    LResultSuite := Default(TTestSuite);
   end;
 
   WriteLn;

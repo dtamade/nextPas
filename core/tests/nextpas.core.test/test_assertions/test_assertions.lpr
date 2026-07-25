@@ -796,6 +796,88 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestSoftCheckSecondWave;
+{ v8.27 B56: SoftCheckNil/NotNil/Empty/ContainsCI — continue + exact messages. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LMsg: string;
+  LPtr: Pointer;
+begin
+  LPtr := Pointer(NativeUInt($DEADBEEF));
+  LSuite := TTestSuite.Create('soft-wave2');
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckNil(nil);
+      SoftCheckNotNil(Pointer(1));
+      SoftCheckEmpty('');
+      SoftCheckContainsCI('Hello World', 'WORLD');
+      SoftCheckNil(LPtr, 'nil soft');
+      SoftCheckNotNil(nil, 'notnil soft');
+      SoftCheckEmpty('abc', 'empty soft');
+      SoftCheckContainsCI('Hello', 'ZZ', 'ci soft');
+      SoftCheckContainsCI('Hello', ''); { empty needle = match }
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LMsg := LResult.Results[0].Message;
+  CheckContains(LMsg, 'nil soft', 'nil soft prefix');
+  CheckContains(LMsg, 'Expected nil but got $', 'nil soft detail');
+  CheckContains(LMsg, 'notnil soft', 'notnil soft prefix');
+  CheckContains(LMsg, 'Expected non-nil but got nil', 'notnil soft detail');
+  CheckContains(LMsg, 'empty soft', 'empty soft prefix');
+  CheckContains(LMsg, 'Expected empty string but got 3 char(s)', 'empty soft detail');
+  CheckContains(LMsg, 'ci soft', 'ci soft prefix');
+  CheckContains(LMsg, 'does not contain (ci)', 'ci soft detail');
+  LSuite := Default(TTestSuite);
+
+  { Default messages without AMessage }
+  LSuite := TTestSuite.Create('soft-wave2-defaults');
+  LSuite.Test('defaults', procedure
+    begin
+      SoftCheckNil(Pointer(1));
+      SoftCheckNotNil(nil);
+      SoftCheckEmpty('x');
+      SoftCheckContainsCI('abc', 'zz');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LMsg := LResult.Results[0].Message;
+  CheckContains(LMsg, 'Expected nil but got $', 'nil default');
+  CheckContains(LMsg, 'Expected non-nil but got nil', 'notnil default');
+  CheckContains(LMsg, 'Expected empty string but got 1 char(s)', 'empty default');
+  CheckContains(LMsg, 'SoftCheckContainsCI expected to find "zz" in "abc"',
+    'ci default');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestSoftColorDiffJoinStable;
+{ v8.27 B59: Soft join keeps '; ' between msgs even when ColorDiff has newlines. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LMsg: string;
+  LSemiPos, LNLPos: Integer;
+begin
+  LSuite := TTestSuite.Create('soft-join-nl');
+  LSuite.Test('body', procedure
+    begin
+      SoftCheckEqual('hello', 'hallo'); { ColorDiff multi-line }
+      SoftFail('tail-marker');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  LMsg := LResult.Results[0].Message;
+  CheckContains(LMsg, 'Strings differ at position', 'ColorDiff present');
+  CheckContains(LMsg, #10, 'ColorDiff embeds newline');
+  CheckContains(LMsg, 'tail-marker', 'second soft after ColorDiff');
+  { Contract: join separator is '; ' immediately before the next soft message. }
+  CheckContains(LMsg, '; tail-marker', 'join uses ''; '' before next soft msg');
+  LSemiPos := Pos('; tail-marker', LMsg);
+  CheckTrue(LSemiPos > 0, 'semi join position');
+  LNLPos := Pos(#10, LMsg);
+  CheckTrue((LNLPos > 0) and (LNLPos < LSemiPos),
+    'newline from ColorDiff appears before join separator');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestSoftFailDoesNotFailFast;
 var
   LSuite: TTestSuite;
@@ -2402,6 +2484,8 @@ begin
   LSuite.Test('SoftFail exact defaults+hard',  @TestSoftFailExactDefaultsAndHardAlsoSoft);
   LSuite.Test('SoftFail cap +N more',          @TestSoftFailCapMoreSuffix);
   LSuite.Test('SoftCheck high-freq surface',   @TestSoftCheckHighFreqSurface);
+  LSuite.Test('SoftCheck second wave',         @TestSoftCheckSecondWave);
+  LSuite.Test('Soft ColorDiff join stable',    @TestSoftColorDiffJoinStable);
 
   { Outside-context SoftFail only valid when no suite entry is active. }
   AssertSoftFailOutsideContextExact;

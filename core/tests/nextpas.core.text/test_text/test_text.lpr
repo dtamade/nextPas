@@ -3,9 +3,8 @@ program test_text;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.fs,
   nextpas.core.text,
   nextpas.core.text.utils;
 
@@ -13,17 +12,9 @@ var
   T: TTestSuite;
 
 function LoadSourceText(const ARelativePath: string): string;
-var
-  LLines: TStringList;
 begin
   Check(FileExists(ARelativePath), 'source file exists: ' + ARelativePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(ARelativePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := ReadFileText(ARelativePath);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);

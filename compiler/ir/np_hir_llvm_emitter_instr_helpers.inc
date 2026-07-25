@@ -60,6 +60,7 @@ begin
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FNeedsDynArrayHelpers := False;
+  FNeedsIntfRefCountHelpers := False;
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -183,7 +184,84 @@ begin
   if AOperand.TypeId <> 0 then
     Result := TypeToLlvm(AOperand.TypeId)
   else
-    Result := AFallback;
+    Result := ValueLlvmType(AOperand.ValueId, AFallback);
+end;
+
+procedure THIRLlvmEmitter.NoteValueLlvmType(AValueId: THIRValueId;
+  const ALlvmType: string);
+begin
+  if (AValueId = 0) or (ALlvmType = '') then
+    Exit;
+  if AValueId > Length(FValueLlvmTypes) then
+    SetLength(FValueLlvmTypes, AValueId + 64);
+  FValueLlvmTypes[AValueId - 1] := ALlvmType;
+end;
+
+function THIRLlvmEmitter.ValueLlvmType(AValueId: THIRValueId;
+  const AFallback: string): string;
+begin
+  if (AValueId > 0) and (AValueId <= Length(FValueLlvmTypes)) and
+    (FValueLlvmTypes[AValueId - 1] <> '') then
+    Exit(FValueLlvmTypes[AValueId - 1]);
+  Result := AFallback;
+end;
+
+function THIRLlvmEmitter.EmitCastValueToLlvmType(AValueId: THIRValueId;
+  const AWantedTy, ATag: string): string;
+var
+  HaveTy: string;
+  CastName: string;
+  WantW, HaveW: LongInt;
+begin
+  if AValueId = 0 then
+  begin
+    if (AWantedTy = 'ptr') or (AWantedTy = '') then
+      Exit('null');
+    if (AWantedTy = 'float') or (AWantedTy = 'double') or
+      (AWantedTy = 'x86_fp80') then
+      Exit('0.0');
+    Exit('0');
+  end;
+  Result := ValueRef(AValueId);
+  if AWantedTy = '' then
+    Exit;
+  HaveTy := ValueLlvmType(AValueId, AWantedTy);
+  if (HaveTy = '') or (HaveTy = AWantedTy) then
+    Exit;
+  CastName := '%cast.' + ATag + '.' + IntToStr(AValueId);
+  if (HaveTy = 'ptr') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = ptrtoint ptr ' + Result + ' to ' + AWantedTy);
+    Result := CastName;
+  end
+  else if (AWantedTy = 'ptr') and (Copy(HaveTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = inttoptr ' + HaveTy + ' ' + Result + ' to ptr');
+    Result := CastName;
+  end
+  else if (Copy(HaveTy, 1, 1) = 'i') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    WantW := StrToIntDef(Copy(AWantedTy, 2, 8), 0);
+    HaveW := StrToIntDef(Copy(HaveTy, 2, 8), 0);
+    if WantW > HaveW then
+    begin
+      Emit('  ' + CastName + ' = sext ' + HaveTy + ' ' + Result +
+        ' to ' + AWantedTy);
+      Result := CastName;
+    end
+    else if WantW < HaveW then
+    begin
+      Emit('  ' + CastName + ' = trunc ' + HaveTy + ' ' + Result +
+        ' to ' + AWantedTy);
+      Result := CastName;
+    end;
+  end
+  else if (HaveTy = 'i1') and (Copy(AWantedTy, 1, 1) = 'i') then
+  begin
+    Emit('  ' + CastName + ' = zext i1 ' + Result + ' to ' + AWantedTy);
+    Result := CastName;
+  end;
+  { Other mismatched pairs left uncast — prefer crash at opt over wrong IR. }
 end;
 
 function THIRLlvmEmitter.IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
@@ -276,12 +354,67 @@ end;
 procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
 var
   I: LongInt;
-  LlvmType, Op: string;
+  LlvmType, Op, SretRef, FirstTy, ArgTy: string;
   IsTStringSret: Boolean;
+  NeedSretInject: Boolean;
 begin
   LlvmType := TypeToLlvm(AInstr.TypeId);
+  if (LlvmType = '') or (LlvmType = 'void') then
+    if AInstr.ResultId <> 0 then
+      LlvmType := 'i64';
   IsTStringSret := IsTStringSretFunction(AInstr.CallTarget);
-  if IsSretFunction(AInstr.CallTarget) or IsTStringSret then
+  SretRef := '';
+  NeedSretInject := False;
+  { Batch 25: TString-return ABI is void(ptr sret(%TString), formals...).
+    Scalar-encoded call sites pass only formals and store ResultId; inject a
+    temp slot and bind ResultId so Length(GetS(...)) / field consumers work. }
+  if IsTStringSret then
+  begin
+    FNeedsTStringRuntime := True;
+    if Length(AInstr.Operands) = 0 then
+      NeedSretInject := True
+    else
+    begin
+      if AInstr.Operands[0].TypeId <> 0 then
+        FirstTy := TypeToLlvm(AInstr.Operands[0].TypeId)
+      else
+        FirstTy := 'i64';
+      if (FirstTy <> 'ptr') and (Pos('ptr', FirstTy) <> 1) then
+        NeedSretInject := True
+      else
+        SretRef := ValueRef(AInstr.Operands[0].ValueId);
+    end;
+    if NeedSretInject then
+    begin
+      SretRef := '%sret.tmp.' + IntToStr(AInstr.ResultId);
+      Emit('  ' + SretRef + ' = alloca [24 x i8], align 8');
+      Emit('  call void @np_tstring_init(ptr ' + SretRef + ')');
+    end;
+    Op := '  call void @' + AInstr.CallTarget + '(ptr sret(%TString) ' + SretRef;
+    for I := 0 to High(AInstr.Operands) do
+    begin
+      if (not NeedSretInject) and (I = 0) then
+        Continue;
+      Op := Op + ', ';
+      if AInstr.Operands[I].TypeId <> 0 then
+        ArgTy := TypeToLlvm(AInstr.Operands[I].TypeId)
+      else
+        ArgTy := 'i64';
+      if ArgTy = '' then
+        ArgTy := 'i64';
+      Op := Op + ArgTy + ' ' + ValueRef(AInstr.Operands[I].ValueId);
+    end;
+    Op := Op + ')';
+    Emit(Op);
+    if AInstr.ResultId <> 0 then
+    begin
+      Emit('  ' + ValueRef(AInstr.ResultId) + ' = bitcast ptr ' +
+        SretRef + ' to ptr');
+      NoteValueLlvmType(AInstr.ResultId, 'ptr');
+    end;
+    Exit;
+  end;
+  if IsSretFunction(AInstr.CallTarget) then
     Op := '  call void @' + AInstr.CallTarget + '('
   else if LlvmType = 'void' then
     Op := '  call void @' + AInstr.CallTarget + '('
@@ -291,10 +424,7 @@ begin
   for I := 0 to High(AInstr.Operands) do
   begin
     if I > 0 then Op := Op + ', ';
-    { First operand of TString sret call gets sret(%TString) annotation }
-    if IsTStringSret and (I = 0) then
-      Op := Op + 'ptr sret(%TString) '
-    else if AInstr.Operands[I].TypeId <> 0 then
+    if AInstr.Operands[I].TypeId <> 0 then
       Op := Op + TypeToLlvm(AInstr.Operands[I].TypeId) + ' '
     else
       Op := Op + 'i64 ';
@@ -302,6 +432,9 @@ begin
   end;
   Op := Op + ')';
   Emit(Op);
+  if (AInstr.ResultId <> 0) and (not IsSretFunction(AInstr.CallTarget)) and
+    (LlvmType <> 'void') then
+    NoteValueLlvmType(AInstr.ResultId, LlvmType);
 end;
 
 procedure THIRLlvmEmitter.ClosePendingObjectFreeGuard;
@@ -360,6 +493,265 @@ begin
     ;
   end;
   case AInstr.SystemContractKind of
+    sckProcessInit:
+    begin
+      FNeedsProcessLifecycle := True;
+      if AInstr.CallTarget <> '' then
+        Emit('  call void @' + AInstr.CallTarget + '()')
+      else
+        Emit('  call void @' +
+          SystemContractAt(sckProcessInit).RuntimeMapping + '()');
+      if not FUnitInitCallsEmitted then
+      begin
+        EmitUnitInitCalls;
+        FUnitInitCallsEmitted := True;
+      end;
+    end;
+    sckProcessFini:
+    begin
+      FNeedsProcessLifecycle := True;
+      if not FProcessFiniEmitted then
+      begin
+        if not FUnitFiniCallsEmitted then
+        begin
+          EmitUnitFiniCalls;
+          FUnitFiniCallsEmitted := True;
+        end;
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '()')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckProcessFini).RuntimeMapping + '()');
+        FProcessFiniEmitted := True;
+      end;
+    end;
+    sckStringInit:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringInit).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckStringFini:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringFini).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckStringAssign:
+    begin
+      FNeedsTStringRuntime := True;
+      if Length(AInstr.Operands) >= 2 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckStringAssign).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ')');
+      end;
+    end;
+    sckDynArraySetLength:
+    begin
+      FNeedsAlloc := True;
+      FNeedsFree := True;
+      FNeedsMemcpy := True;
+      FNeedsDynArrayHelpers := True;
+      if Length(AInstr.Operands) >= 4 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @' +
+            SystemContractAt(sckDynArraySetLength).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end;
+    end;
+    sckDynArrayFini:
+    begin
+      FNeedsAlloc := True;
+      FNeedsFree := True;
+      FNeedsDynArrayHelpers := True;
+      if Length(AInstr.Operands) >= 3 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckDynArrayFini).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
+      end;
+    end;
+    sckInterfaceAddRef:
+    begin
+      FNeedsIntfRefCountHelpers := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckInterfaceAddRef).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckInterfaceRelease:
+    begin
+      FNeedsIntfRefCountHelpers := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckInterfaceRelease).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckHalt:
+    begin
+      { Typed halt: inject process_fini once, then backend-private syscall. }
+      if FNeedsProcessLifecycle and not FProcessFiniEmitted then
+      begin
+        if not FUnitFiniCallsEmitted then
+        begin
+          EmitUnitFiniCalls;
+          FUnitFiniCallsEmitted := True;
+        end;
+        Emit('  call void @np_process_fini()');
+        FProcessFiniEmitted := True;
+      end;
+      if AInstr.CallTarget <> '' then
+        Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+          ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + AInstr.CallTarget + ')')
+      else if Length(AInstr.Operands) >= 1 then
+        Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
+          ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ')');
+    end;
+    sckHeapAlloc:
+    begin
+      FNeedsAlloc := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+            AInstr.CallTarget + '(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+            SystemContractAt(sckHeapAlloc).RuntimeMapping + '(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end;
+    end;
+    sckObjectAlloc:
+    begin
+      { Typed class instance alloc: byte size → @np_object_alloc. }
+      FNeedsAlloc := True;
+      FNeedsObjectAlloc := True;
+      if Length(AInstr.Operands) >= 1 then
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = call ptr @' +
+          SystemContractAt(sckObjectAlloc).RuntimeMapping + '(i64 ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ')');
+    end;
+    sckHeapFree:
+    begin
+      FNeedsFree := True;
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        if AInstr.CallTarget <> '' then
+          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)')
+        else
+          Emit('  call void @' +
+            SystemContractAt(sckHeapFree).RuntimeMapping + '(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 0)');
+      end;
+    end;
+    sckExceptionTryPush:
+    begin
+      { Typed try frame: alloca jmpbuf + push + setjmp branch.
+        Handler label is CallTarget (bbN); empty → synthetic try.exc.N. }
+      FNeedsExceptionRuntime := True;
+      Inc(FTryCounter);
+      Emit('  ; --- try begin ---');
+      Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [9 x ptr]');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionTryPush).RuntimeMapping +
+        '(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %setjmp.' + IntToStr(FTryCounter) +
+        ' = call i32 @setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %is_exc.' + IntToStr(FTryCounter) + ' = icmp ne i32 %setjmp.' +
+        IntToStr(FTryCounter) + ', 0');
+      if AInstr.CallTarget <> '' then
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) + ', label %' +
+          Trim(AInstr.CallTarget) + ', label %try.body.' +
+          IntToStr(FTryCounter))
+      else
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) +
+          ', label %try.exc.' + IntToStr(FTryCounter) +
+          ', label %try.body.' + IntToStr(FTryCounter));
+      Emit('try.body.' + IntToStr(FTryCounter) + ':');
+    end;
+    sckExceptionTryPop:
+    begin
+      Emit('  ; --- try end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionTryPop).RuntimeMapping + '()');
+    end;
+    sckExceptionFinallyEnd:
+    begin
+      Emit('  ; --- finally end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionFinallyEnd).RuntimeMapping + '()');
+    end;
+    sckExceptionExceptEnd:
+    begin
+      Emit('  ; --- except end ---');
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionExceptEnd).RuntimeMapping + '()');
+    end;
+    sckExceptionRaise:
+    begin
+      FNeedsExceptionRuntime := True;
+      Emit('  call void @' +
+        SystemContractAt(sckExceptionRaise).RuntimeMapping + '()');
+      Emit('  unreachable');
+    end;
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:
@@ -369,6 +761,9 @@ begin
         ValueRef(AInstr.Operands[0].ValueId) + ')');
     sckObjectFreeRelease:
       EmitObjectFreeRelease(AInstr);
+    sckManagedRecordFini:
+      { Marker only: nested sckStringFini / sckDynArrayFini do the work. }
+      Emit('  ; --- managed-record-fini (compiler-planned field cleanup) ---');
   else
     raise Exception.Create('Unsupported typed System contract kind: ' +
       IntToStr(Ord(AInstr.SystemContractKind)));

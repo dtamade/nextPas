@@ -4,12 +4,30 @@ This document defines the acceptance criteria for nextPas to reach self-hosting 
 can compile itself). It focuses on the `np.system.*` contract vocabulary and runtime
 support that a self-hosted compiler will require.
 
-## Status: M0 truth convergence; not self-host ready
+## Status: M1 typed production closed; M2 two-hop harness started; not self-host ready
 
 ## Current readiness boundary
 
+**M2 authority** is `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` §M2
+(executable A→B→C). Do not confuse with historical bootstrap-spine “M2 typed contracts”
+(that work closed under M1).
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Stage0 A via pinned FPC | yes | `make rebuild-compiler` → `build/stage0-bootstrap/nextpas` |
+| M2-0 harness + LLVM smoke | yes | `make m2-two-hop` → `scripts/m2-two-hop.sh` a-ready + llvm-smoke |
+| Immutable source manifest (declared) | yes | `docs/plans/m2/source-manifest.txt` + `ladder.txt` |
+| M2-1 LLVM ladder L0–L2 | yes | `make m2-ladder` → L0 hello + L1 `np_target_facts` + L2 `nextpas_projection_types` on LLVM |
+| A→B linked nextpas (L3) | **no** | full `tools/stage0/nextpas.pas` still hangs/timeouts under A LLVM |
+| B→C + equivalence | **no** | M2-3 |
+| Host self-compile module probes | **not** M2 evidence | `build/probe_self_compile_module.sh` forces host FPC assemble |
+
+Known hang under stage0 unit build (host or LLVM, empty envelope): e.g.
+`compiler/diagnostics/np_diagnostics_sink.pas`, `compiler/frontend/np_source_database.pas`.
+Ladder deliberately uses units that complete.
+
 Current focused fixtures are partial evidence for individual compiler/runtime contracts. A -> B -> C has not executed:
-the repository has not built a runnable stage A compiler-system bundle, used it to build stage B, then used
+the repository has not built a runnable stage B from A’s LLVM path over the declared closure, then used
 stage B to build and compare stage C.
 
 The `PHASE 0 COMPLETE` labels in the historical assessments below are archived assessments, not present
@@ -292,59 +310,68 @@ These gates should be reviewed quarterly. Update `goal-tree.md` and this documen
 each gate progresses toward completion. The first gate to close (Gate 5, exception unwind)
 is already partially covered by the `test_hir_exception` test suite.
 
-## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 2 实现)
+## Gate 2: Unit Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 host-free re-probe)
 
-**状态: PHASE 0 COMPLETE** (编译器管线 + 拓扑排序 + _start 驱动全部就绪)
+**历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
+当前权威：`contract-coverage-table.md` / README 将 `np.system.unit_init`/`unit_fini` 标为
+**future compiler/runtime only**；typed ledger 为 `scelSemantic`。已有：
+- LLVM multi-unit **call-order**（`test_unit_lifecycle_llvm_ordering`）
+- **focused host-free multi-unit executable** 切片（`make test-compiler-unit-init-chain` Halt 33；
+  `make test-compiler-unit-fini-body`）—— **不**抬 ledger
 
-| 验收标准 | 状态 |
+| 验收标准 | 当前诚实记录 |
 |----------|------|
-| UnitGraph → HIR nodes for each resolved unit | ✅ `SeedUnitLifecycleBodies` 已为每个 unit 生成 init/fini HIR |
-| np.system.unit_init/unit_fini seeded for multi-unit programs | ✅ 生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
-| LLVM emitter generates init/fini call sequences | ✅ `_start` 中直接调用 (拓扑序 init, 逆序 fini) |
-| Multi-unit program runs with correct init ordering via nextPas | ✅ Kahn BFS 拓扑排序，System 强制首位 |
+| UnitGraph → HIR nodes for each resolved unit | 报告：`SeedUnitLifecycleBodies` 生成 init/fini 相关产物 |
+| np.system.unit_init/unit_fini seeded for multi-unit programs | 报告：生成 `np_unit_init_<unit>`/`np_unit_fini_<unit>` LLVM 函数 |
+| LLVM emitter generates init/fini call sequences | **D3**：`test_unit_lifecycle_llvm_ordering` 证明 topo init / reverse fini 相对 `process_*` 的 call 序（IR 级） |
+| Multi-unit program runs with correct init ordering via nextPas | **切片绿**：`llvm_unit_init_chain` 经 `…-llvm` binding + `llvm-stable` primary，Halt(33)；ledger 仍 `scelSemantic` |
 
-**关键变更 (2026-06-19)**:
-- `TUnitGraph.TopologicalInitOrder`: Kahn BFS 拓扑排序 (np_unit_graph.pas)
-- 删除 `@llvm.global_ctors`/`@llvm.global_dtors`，替换为 `_start` 中直接调用
-- 数据流: UnitGraph → SemanticModel → HIRModule → Emitter
-- `_start` 序列: `process_init → unit_init (拓扑序) → 用户代码 → unit_fini (逆序) → process_fini → halt`
+**强制 host-free 路径**（stage0）:
+```bash
+./build/stage0-bootstrap/nextpas build <src> \
+  --target linux-x86_64 \
+  --toolchain-binding linux-x86_64-to-linux-x86_64-llvm \
+  --workspace . --out-dir <out>
+# 期望 transcript: backend-family=llvm, primary-tool-profile-id=llvm-stable,
+# llvm-toolchain-status=ready（非 fpc-stage0-host）
+```
 
-**已有基础**:
-- Lexer 解析 initialization/finalization 关键字 ✅
-- Green tree 解析器解析 init/fini sections ✅
-- 契约常量 NPSYSTEM_UNIT_INIT/FINI 已定义 ✅
-- 文档契约已完整登记 ✅
-- `SeedUnitLifecycleBodies` 为每个 unit 生成 LLVM 函数 ✅
-- `@llvm.global_ctors`/`@llvm.global_dtors` 注册 ✅
+**已有基础**（编译器/契约侧）:
+- Lexer / green tree 解析 initialization/finalization
+- 契约常量 `NPSYSTEM_UNIT_INIT`/`FINI`；coverage 表与 ledger 名称 1:1
+- 语义/发射侧 unit_init/fini 产物（focused：`test_semantic_runtime_contract_seed`）
+- LLVM multi-unit call-order（focused：`test_unit_lifecycle_llvm_ordering`）
+- Host-free multi-unit init/fini gates（Makefile 目标见上）
 
-**缺口 (按实现顺序)**:
-1. ~~SeedRuntimeContracts 扩展~~ ✅ 已完成
-2. ~~HIR 层: unit-init-runtime/unit-fini-runtime 节点类型~~ ✅ 已完成
-3. ~~LLVM emitter: @np_unit_init/@np_unit_fini helper~~ ✅ 已完成
-4. **优先级排序**: 当前全为 65535，需实现 `_start` 驱动拓扑排序
-5. Runtime: `_start` 驱动器（process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt）
-6. 端到端测试（非 FPC 依赖的 nextPas 编译器运行时测试）
+**当前 residual（相对 M0 权威，按优先级）**:
+1. **已关闭（切片）**：host-free multi-unit init 副作用门禁（Halt 33）+ anti-masquerade 断言
+2. **已关闭（切片）**：`unit_lifecycle_pass` + llvm binding 可执行（`make test-compiler-unit-lifecycle-llvm`；store 路径 i64→i32 trunc）
+3. **策略固定（非 bug）**：默认 stage0 build 无 llvm binding → `fpc-stage0-host`；compiler-pass 默认绿 **不算** host-free（**不改**全局默认 binding）
+4. ledger 保持 `scelSemantic`，**禁止**因切片绿抬 executable / 声称 self-host
+5. process residual 见 Gate 3（call-shape 已收口；业务 init 仍 deferred）
+6. 不在本轮做 typed 热路径大迁移 / A→B→C / M2-A
 
-## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-06-19 Gate 3 实现)
+## Gate 3: Process Lifecycle — 验证结果 (2026-06-18, 更新于 2026-07-23 D3 residual 诚实收口)
 
-**状态: PHASE 0 COMPLETE** (编译器侧 + 运行时 Phase 0 已完成)
+**历史状态标签: PHASE 0 COMPLETE**（archived assessment；**不是**当前 readiness）。
+当前权威：README/coverage 写 `process_init`/`process_fini` = **compiler semantic live; runtime execution deferred**；
+typed ledger = **scelHir**（`test_process_lifecycle`），**不是** self-host 完成证明。
 
-| 验收标准 | 状态 |
+| 验收标准 | 当前诚实记录 |
 |----------|------|
-| process_init 在 main 前执行 | ✅ 编译器 seed 顺序正确 + 运行时实现存在 |
-| process_fini 在 main 后执行 | ✅ seed 移到 SeedHaltCalls 之后，HIR 顺序正确 |
-| 退出码通过关闭序列保留 | ✅ halt syscall 在 process_fini 之前，退出码直接保留 |
-| void call LLVM IR 正确性 | ✅ emitter 不再给 void call 结果名 |
-| 链接器符号解析 | ✅ libnprt.a 中导出 np_process_init/fini |
+| process_init 在 main 前 seed/call | **scelHir 已证**：typed 节点 → `_start` HIR call `np_process_init` |
+| process_fini 在 main 后 seed/call | **scelHir 已证**：typed 节点 → `_start` HIR call `np_process_fini`（单次） |
+| void call LLVM IR 正确性 | **已证**：`declare void` + `call void`（非 `call i64`；fini 不双发） |
+| 全量 runtime 业务 init | **未证 / deferred**（Phase 0 helper ≠ unit 表/堆/ExitProc） |
+| host-free process 业务 e2e | **未证**（现有 process 门禁是 host-fpc 单元测试，不是 llvm binding 可执行门禁） |
+| 退出码经关闭序列保留 | 历史主张；**不作**当前 readiness 权威 |
+| 链接器符号 / runtime 导出 | inventory 存在；≠ 业务 init 证明 |
 
-**已有基础** (2026-06-19 更新):
-- `'process-init-runtime'` 正确映射到 `hnkProcessInitRuntime` (hir_types:259) ✅
-- `EmitProcessInit`/`EmitProcessFini` 存在 (hir_builder:7430-7452) ✅
-- LLVM emitter 声明 `@np_process_init`/`@np_process_fini` (emitter:1310-1311) ✅
-- **运行时实现**: `rtl/runtime/src/nextpas.runtime.lifecycle.ll` (Phase 0) ✅
-- **void call 修复**: emitter void call 不再带结果名 (emitter:314-315) ✅
-- **HIR 顺序修复**: process_fini seed 移到 SeedHaltCalls 之后 (sema:6201-6211) ✅
-- **System.pas**: `cdecl; external` 声明指向 libnprt.a 实现 ✅
+**已有基础**（inventory）:
+- HIR/emitter：`process-init-runtime` / `process-fini-runtime`；`@np_process_init` / `@np_process_fini`
+- Phase 0 运行时：`rtl/runtime/src/nextpas.runtime.lifecycle.ll`（状态标志 + fsync；**不做** unit 表/堆/ExitProc）
+- System.pas：`cdecl; external` 声明
+- Focused：**call-shape only** — `test_process_lifecycle`（HIR）/ `test_process_lifecycle_llvm`（LLVM IR）
 
 **Phase 0 运行时职责** (nextpas.runtime.lifecycle.ll):
 - `np_process_init`: 防重入检查 + 全局状态标记
@@ -352,13 +379,18 @@ is already partially covered by the `test_hir_exception` test suite.
 - 使用 Linux x86_64 syscall (不依赖 libc)
 - 全局 `__np_lifecycle_state` 跟踪生命周期阶段 (0→1→2→3)
 
-**缺口 (按实现顺序)**:
-1. ~~THirNodeKind 新增 hnkProcessInitRuntime/hnkProcessFiniRuntime~~ ✅ 已完成
-2. ~~THIRBuilder 处理~~ ✅ 已完成
-3. ~~LLVM emitter 新增 @np_process_init/@np_process_fini~~ ✅ 已完成
-4. ~~运行时: np_process_init/np_process_fini 实际实现~~ ✅ Phase 0 完成
-5. **_start 驱动拓扑排序**: `process_init → 拓扑序 unit_init → main → 逆序 unit_fini → process_fini → halt` (Gate 2 职责)
-6. **端到端集成**: halt 改为调用 process_fini + haltproc (当前 halt 直接 syscall 绕过 process_fini)
+**Host-free 绑定（与 Gate 2 相同；本 Gate 当前无 host-free process 业务门禁）**:
+```bash
+# host-free 证明必须显式 llvm binding；默认 nextpas build = fpc-stage0-host ≠ host-free
+--toolchain-binding linux-x86_64-to-linux-x86_64-llvm
+# 期望: backend-family=llvm, primary-tool-profile-id=llvm-stable（非 fpc-stage0-host）
+```
+
+**当前 residual（相对 M0 权威）— 诚实收口**:
+1. **已收口**：call-shape 证据边界（HIR + LLVM void form）= ledger **scelHir** + coverage **Runtime execution deferred**
+2. **仍 deferred（非本刀生产）**：全量 process 业务 init；host-free process 业务 e2e；ledger 升 `scelExecutable`
+3. **禁止**：把 HIR/LLVM 绿 / Phase 0 helper / 历史 PHASE 0 勾选读成生产就绪或 self-host
+4. **禁止**：改默认 toolchain binding；M2-A / A→B→C
 
 ## Gate 4: Heap Manager — 验证结果 (2026-06-18)
 

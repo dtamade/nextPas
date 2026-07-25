@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics test-compiler-rec-str-abi test-compiler-astatestr-fail test-compiler-erroutput-fd test-compiler-write-i64-fd test-compiler-unit-init-chain test-compiler-unit-fini-body test-compiler-unit-lifecycle-llvm m2-two-hop m2-a-ready m2-llvm-smoke m2-ladder m2-ladder-all focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -53,6 +53,69 @@ test-incremental-gate: hygiene
 test-compiler-system-intrinsics: hygiene system-projection-check
 	./compiler/tests/run_system_intrinsic_self_aliases_test.sh
 	$(MAKE) hygiene
+
+test-compiler-rec-str-abi: hygiene
+	bash tests/regression/verify_compiler_rec_str_abi_focused.sh
+	$(MAKE) hygiene
+
+# Batch 26: multi-arg WriteLn + inline string sret (not M2-A).
+test-compiler-astatestr-fail: hygiene
+	bash tests/regression/verify_compiler_astatestr_fail_focused.sh
+	$(MAKE) hygiene
+
+# Batch 27: ErrOutput/StdErr → fd 2 host-free write routing (not M2-A).
+test-compiler-erroutput-fd: hygiene
+	bash tests/regression/verify_compiler_erroutput_fd_focused.sh
+	$(MAKE) hygiene
+
+# Batch 29: write_i64_decimal(value, fd) integer write to stderr (not M2-A).
+test-compiler-write-i64-fd: hygiene
+	bash tests/regression/verify_compiler_write_i64_fd_focused.sh
+	$(MAKE) hygiene
+
+# --- host-free unit lifecycle gates (D3) ---
+# REQUIRE: scripts force --toolchain-binding linux-x86_64-to-linux-x86_64-llvm and
+# anti-masquerade (backend-family=llvm, primary=llvm-stable; refuse fpc-stage0-host).
+# Default `nextpas build` without that binding is host FPC — NOT host-free evidence.
+# Do NOT change the global default toolchain binding from these targets.
+
+# D3 host-free multi-unit unit_init side-effect (LLVM binding; not host FPC; not ledger raise).
+test-compiler-unit-init-chain: hygiene
+	bash tests/regression/verify_compiler_unit_init_chain.sh
+	$(MAKE) hygiene
+
+# D3 host-free multi-unit unit_fini body IR + executable oracle (LLVM binding).
+test-compiler-unit-fini-body: hygiene
+	bash tests/regression/verify_compiler_unit_fini_body.sh
+	$(MAKE) hygiene
+
+# D3 host-free unit_lifecycle_pass under LLVM (store i64→i32 trunc; not ledger raise).
+test-compiler-unit-lifecycle-llvm: hygiene
+	bash tests/regression/verify_compiler_unit_lifecycle_llvm.sh
+	$(MAKE) hygiene
+
+# --- M2 executable two-hop (excellence plan M2; not host self-compile probes) ---
+# REQUIRE: scripts force --toolchain-binding linux-x86_64-to-linux-x86_64-llvm.
+# Host self-compile / stage2-bootstrap module lists are NOT M2 evidence.
+# M2-0 green: m2-two-hop (a-ready + llvm-smoke). A→B only when ladder L3 closes.
+
+m2-two-hop: hygiene
+	bash scripts/m2-two-hop.sh --phase a-ready --phase llvm-smoke
+	$(MAKE) hygiene
+
+m2-a-ready:
+	bash scripts/m2-two-hop.sh --phase a-ready
+
+m2-llvm-smoke:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase llvm-smoke
+
+m2-ladder:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase ladder-l2
+
+# Full ladder including L3 probe (L3 expected fail/timeout until M2-2; reports partial)
+m2-ladder-all:
+	bash scripts/m2-two-hop.sh --phase a-ready --phase ladder
+
 focused: hygiene
 	@test -n "$(FOCUS)" || { echo "FOCUS is required, e.g. make focused FOCUS=core/tests/nextpas.core.http/test_http_client" >&2; exit 1; }
 	@test -d "$(FOCUS)" || { echo "FOCUS directory not found: $(FOCUS)" >&2; exit 1; }

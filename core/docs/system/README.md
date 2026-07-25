@@ -203,9 +203,18 @@ documents them here but does not claim implementation readiness in this slice:
 
 Process-level startup and shutdown currently have compiler semantic seed truth:
 program, library and package roots project exact `runtime-contract` entries for
-`np.system.process_init` followed by `np.system.process_fini`. Runtime execution,
-unit lifecycle ordering and fault handling are still deferred and must not be
-treated as a public callable facade.
+`np.system.process_init` followed by `np.system.process_fini`. Focused HIR/LLVM
+call-shape evidence exists (`test_process_lifecycle` / `_llvm`); ledger stays
+**scelHir**. Runtime **business** execution, full process init, and fault handling
+are still deferred and must not be treated as a public callable facade or
+self-host proof.
+
+**Host-free policy (stage0)**: claims of host-free executable lifecycle evidence
+must use `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm` (see Makefile
+targets `test-compiler-unit-init-chain`, `test-compiler-unit-fini-body`,
+`test-compiler-unit-lifecycle-llvm`). Default `nextpas build` without that binding
+uses `fpc-stage0-host` and must not be cited as host-free. The global default
+binding is intentionally unchanged.
 
 Object-free lowering now has source-backed System truth: `rtl/core/system/System.pas`
 is the compiler-visible minimum root for `TObject.Create`, `TObject.Destroy`,

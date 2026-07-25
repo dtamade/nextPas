@@ -38,6 +38,9 @@ begin
         Entry.Decl := ADecl;
         Entry.OwnerUnitId := AOwnerUnitId;
         Entry.ScopeId := FCurrentScopeId;
+        { Mid-seed body update: re-encode only if already reachable. }
+        if (ABody <> nil) and Entry.Needed then
+          Entry.Encoded := False;
         FProcedureBodies[Index] := Entry;
         Exit;
       end;
@@ -47,6 +50,9 @@ begin
   Entry.Decl := ADecl;
   Entry.OwnerUnitId := AOwnerUnitId;
   Entry.ScopeId := FCurrentScopeId;
+  { Reachability seed: default not Needed; Collect/Mark pull reachable set. }
+  Entry.Needed := False;
+  Entry.Encoded := False;
   FProcedureBodies.Push(Entry);
 end;
 

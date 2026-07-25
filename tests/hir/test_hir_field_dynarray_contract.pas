@@ -300,16 +300,17 @@ begin
     ScoreLlvm := ExtractDefinitionSlice(LlvmText, '@TWorker.Score(');
     if ScoreLlvm = '' then
       Fail('missing-score-function');
+    { Len slots are i32 (builder GetIntTypeByWidth(32)); resize maps to np_dynarray_resize. }
     RequireSequence(ScoreLlvm, [
       'add i64 1, 0',
       'getelementptr i64, ptr ',
       'add i64 2, 0',
       'getelementptr i64, ptr ',
       'load ptr, ptr ',
-      'load i64, ptr ',
+      'load i32, ptr ',
       'call ptr @np_dynarray_resize(',
       'store ptr ',
-      'store i64 '
+      'store i32 '
     ], 'missing-fieldarr-ptr-len-resize-sequence');
     RequireSequence(ScoreLlvm, [
       'add i64 3, 0',
@@ -317,10 +318,10 @@ begin
       'add i64 4, 0',
       'getelementptr i64, ptr ',
       'load ptr, ptr ',
-      'load i64, ptr ',
+      'load i32, ptr ',
       'call ptr @np_dynarray_resize(',
       'store ptr ',
-      'store i64 '
+      'store i32 '
     ], 'missing-more-ptr-len-resize-sequence');
   finally
     Model.Free;

@@ -38,8 +38,11 @@ type
   TBidiPairedBracketType = nextpas.core.text.unicode.types.TBidiPairedBracketType;
   TEastAsianWidth = nextpas.core.text.unicode.types.TEastAsianWidth;
   TBidiResolveResult = nextpas.core.text.unicode.bidi.TBidiResolveResult;
+  TBidiLevel = nextpas.core.text.unicode.bidi.TBidiLevel;
   TBidiLevelArray = nextpas.core.text.unicode.bidi.TBidiLevelArray;
   TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
+  TIDNAErrorKind = nextpas.core.text.unicode.idna.TIDNAErrorKind;
+  TIDNAMapStatus = nextpas.core.text.unicode.idna.TIDNAMapStatus;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationVariableWeighting = nextpas.core.text.unicode.collate.TCollationVariableWeighting;
@@ -65,6 +68,24 @@ const
   UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_LAST;
   cvwNonIgnorable = nextpas.core.text.unicode.collate.cvwNonIgnorable;
   cvwShifted = nextpas.core.text.unicode.collate.cvwShifted;
+  idnaOk = nextpas.core.text.unicode.idna.idnaOk;
+  idnaEmptyDomain = nextpas.core.text.unicode.idna.idnaEmptyDomain;
+  idnaEmptyLabel = nextpas.core.text.unicode.idna.idnaEmptyLabel;
+  idnaInvalidDomain = nextpas.core.text.unicode.idna.idnaInvalidDomain;
+  idnaInvalidAsciiLabel = nextpas.core.text.unicode.idna.idnaInvalidAsciiLabel;
+  idnaNfcFailed = nextpas.core.text.unicode.idna.idnaNfcFailed;
+  idnaPunycodeEncodeFailed = nextpas.core.text.unicode.idna.idnaPunycodeEncodeFailed;
+  idnaPunycodeDecodeFailed = nextpas.core.text.unicode.idna.idnaPunycodeDecodeFailed;
+  idnaEmptyAceBody = nextpas.core.text.unicode.idna.idnaEmptyAceBody;
+  idnaAceLabelTooLong = nextpas.core.text.unicode.idna.idnaAceLabelTooLong;
+  idnaDomainTooLong = nextpas.core.text.unicode.idna.idnaDomainTooLong;
+  idnaDisallowed = nextpas.core.text.unicode.idna.idnaDisallowed;
+  idnaInvalidUtf8 = nextpas.core.text.unicode.idna.idnaInvalidUtf8;
+  idmsValid = nextpas.core.text.unicode.idna.idmsValid;
+  idmsMapped = nextpas.core.text.unicode.idna.idmsMapped;
+  idmsIgnored = nextpas.core.text.unicode.idna.idmsIgnored;
+  idmsDeviation = nextpas.core.text.unicode.idna.idmsDeviation;
+  idmsDisallowed = nextpas.core.text.unicode.idna.idmsDisallowed;
 
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
@@ -80,6 +101,13 @@ function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBrac
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
 function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean; inline;
 function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray; inline;
+function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
+  const ALogicalCount: SizeInt): TBidiIndexArray; inline;
+function ApplyBidiVisualOrder(const AText: string;
+  const AParagraphDir: Integer = 2): string; inline;
 
 function PunycodeEncode(const ALabel: string): string; inline;
 function PunycodeDecode(const AAscii: string): string; inline;
@@ -87,8 +115,12 @@ function IDNAToASCII(const ADomain: string): string; overload; inline;
 function IDNAToUnicode(const ADomain: string): string; overload; inline;
 function IDNAToASCII(const ADomain: string; out AError: string): string; overload; inline;
 function IDNAToUnicode(const ADomain: string; out AError: string): string; overload; inline;
-function ResolveBidiClasses(const AClasses: array of TBidiClass;
-  const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
+function IDNAErrorKindName(const AKind: TIDNAErrorKind): string; inline;
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus; inline;
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -105,6 +137,9 @@ function IsSeparator(const ACp: TUnicodeCodepoint): Boolean; inline;
 // Script/Block 属性查询
 function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript; inline;
 function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean; inline;
+function GetScriptExtensions(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeScript; out ACount: Byte): Boolean; inline;
+function HasScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean; inline;
 function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock; inline;
 function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean; inline;
 
@@ -267,6 +302,23 @@ begin
   Result := nextpas.core.text.unicode.bidi.ResolveBidiClasses(AClasses, AParagraphDir);
 end;
 
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray;
+begin
+  Result := nextpas.core.text.unicode.bidi.ReorderBidiVisually(ALevels);
+end;
+
+function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
+  const ALogicalCount: SizeInt): TBidiIndexArray;
+begin
+  Result := nextpas.core.text.unicode.bidi.InvertBidiIndexMap(AVisualToLogical, ALogicalCount);
+end;
+
+function ApplyBidiVisualOrder(const AText: string;
+  const AParagraphDir: Integer): string;
+begin
+  Result := nextpas.core.text.unicode.bidi.ApplyBidiVisualOrder(AText, AParagraphDir);
+end;
+
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
 begin
   Result := nextpas.core.text.unicode.props.IsUpper(ACp);
@@ -335,6 +387,17 @@ end;
 function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean;
 begin
   Result := nextpas.core.text.unicode.script.IsScript(ACp, AScript);
+end;
+
+function GetScriptExtensions(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeScript; out ACount: Byte): Boolean;
+begin
+  Result := nextpas.core.text.unicode.script.GetScriptExtensions(ACp, ADst, ACount);
+end;
+
+function HasScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean;
+begin
+  Result := nextpas.core.text.unicode.script.HasScript(ACp, AScript);
 end;
 
 function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
@@ -722,5 +785,30 @@ begin
   Result := nextpas.core.text.unicode.idna.IDNAToUnicode(ADomain, AError);
 end;
 
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToASCII(ADomain, AKind);
+end;
+
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAToUnicode(ADomain, AKind);
+end;
+
+function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
+begin
+  Result := nextpas.core.text.unicode.idna.IDNAErrorKindName(AKind);
+end;
+
+function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
+  out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
+begin
+  Result := nextpas.core.text.unicode.idna.GetIdnaMapStatus(ACp, AMap, AMapLen);
+end;
+
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
+begin
+  Result := nextpas.core.text.unicode.idna.ApplyIdnaMap(AText, AKind);
+end;
 
 end.

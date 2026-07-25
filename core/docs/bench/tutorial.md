@@ -19,7 +19,7 @@
 
 ### 安装
 
-bench 是 `nextpas.core` 的一部分，无需额外安装。  
+bench 是 `nextpas.core` 的一部分，无需额外安装。
 **模块作者请先看 [consumer-guide.md](consumer-guide.md)**；可运行示例：`core/examples/bench/quick_start.pas`。
 
 ### 第一个基准

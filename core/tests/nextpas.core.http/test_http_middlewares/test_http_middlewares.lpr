@@ -16,7 +16,7 @@ uses
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.logger,
   nextpas.core.http.middleware.cors,
-  nextpas.core.http.middleware.timeout,
+  nextpas.core.http.middleware.responsetime,
   nextpas.core.http.middleware.bodylimit,
   nextpas.core.http.middleware.contenttype,
   nextpas.core.http.middleware.requestid,
@@ -31,8 +31,6 @@ uses
   nextpas.core.http.middleware.compression,
   nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
-  nextpas.core.http.stream,
-  nextpas.core.http.sse,
   nextpas.core.compress,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -44,7 +42,8 @@ var
   GTrackedWriterDestroyCount: Int32;
 
 type
-  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpResponseBodyBytes)
+  TMockResponseWriter = class(TInterfacedObject, IHttpResponseWriter,
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState)
   private
     FStatus: THttpStatus;
     FBody: string;
@@ -65,6 +64,7 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
     function GetBodyBytesWritten: Int64;
+    function HeadersCommitted: Boolean;
     property Status: THttpStatus read FStatus;
     property Body: string read FBody;
     property BodyBytes: TBytes read FBodyBytes;
@@ -189,10 +189,17 @@ begin
   Result := FBodyBytesWritten;
 end;
 
+function TMockResponseWriter.HeadersCommitted: Boolean;
+begin
+  Result := FWriteHeaderCount > 0;
+end;
+
 function MakeRateLimitOpts(AMax, AWindow: Int32): TRateLimitOptions;
 begin
+  Result := Default(TRateLimitOptions);
   Result.MaxRequests := AMax;
   Result.WindowSeconds := AWindow;
+  Result.MaxKeys := 10000;
 end;
 
 { TMockRequest }
@@ -1644,6 +1651,109 @@ begin
   Check(LRaised, 'raises hekArgument on zero window');
 end;
 
+procedure TestRateLimitMaxKeysRejectsNewKey;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TRateLimitOptions;
+  LHandlerCalled: Boolean;
+begin
+  LOpts := MakeRateLimitOpts(100, 60);
+  LOpts.MaxKeys := 1;
+  LOpts.TrustProxyHeaders := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(LOpts)]
+  );
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetHeader('x-forwarded-for', '10.0.0.1');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandlerCalled := False;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LHandlerCalled, 'first key allowed');
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'first key 200');
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetHeader('x-forwarded-for', '10.0.0.2');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandlerCalled := False;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'second distinct key rejected when MaxKeys=1');
+  CheckEqual(Int64(429), Int64(LWObj.Status), 'MaxKeys full returns 429');
+end;
+
+procedure TestRateLimitMaxKeysZeroUnlimitedKeys;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LOpts: TRateLimitOptions;
+  LI: Int32;
+  LOk: Int32;
+begin
+  LOpts := MakeRateLimitOpts(100, 60);
+  LOpts.MaxKeys := 0; { unlimited keys, tests-only }
+  LOpts.TrustProxyHeaders := True;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(LOpts)]
+  );
+  LOk := 0;
+  for LI := 1 to 5 do
+  begin
+    LReq := TMockRequest.Create(hmGet, '/api');
+    LReq.SetHeader('x-forwarded-for', '10.0.0.' + IntToStr(LI));
+    LReqIntf := LReq;
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReqIntf, LW);
+    if LWObj.Status = HTTP_STATUS_OK then
+      Inc(LOk);
+  end;
+  CheckEqual(Int64(5), Int64(LOk), 'MaxKeys=0 allows many distinct keys');
+end;
+
+procedure TestRecoveryDoesNotRewriteAfterCommitted;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      raise Exception.Create('after commit');
+    end),
+    [RecoveryMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/partial');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'keeps committed status');
+  CheckEqual(Int64(1), Int64(LWObj.WriteHeaderCount), 'no second WriteHeader for 500');
+  Check(Pos('internal_error', LWObj.Body) = 0, 'no 500 JSON after commit');
+end;
+
 { WhenMiddleware tests }
 
 procedure TestWhenMiddlewareAppliesWhenTrue;
@@ -2411,6 +2521,39 @@ begin
   CheckEqual(200, LWObj.FStatus, 'status 200');
 end;
 
+procedure TestBodyCacheMiddlewareOversizeReturns413;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LBodyBytes: TBytes;
+  LCalled: Boolean;
+  LI: SizeInt;
+begin
+  LCalled := False;
+  SetLength(LBodyBytes, 64);
+  for LI := 0 to High(LBodyBytes) do
+    LBodyBytes[LI] := Ord('z');
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [BodyCacheMiddlewareWith(16)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetBodyReader(CreateBytesStreamFrom(LBodyBytes) as IReader);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LCalled, 'handler not entered on oversize');
+  CheckEqual(413, LWObj.FStatus, 'status 413');
+end;
+
 procedure TestMetricsWithFieldsCallbackInvoked;
 var
   LHandler: IHttpHandler;
@@ -2774,6 +2917,79 @@ begin
   CheckEqual(Int64(2), Int64(Length(LValues)), 'duplicate headers preserved');
   CheckEqual('one', LValues[0], 'first duplicate value preserved');
   CheckEqual('two', LValues[1], 'second duplicate value preserved');
+end;
+
+procedure TestDecompressDefaultBoundRejectsOversize;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware]
+  );
+  SetLength(LPlain, HTTP_DEFAULT_BODY_READ_MAX + 1);
+  FillChar(LPlain[0], Length(LPlain), Ord('A'));
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(not LHandlerCalled, 'default max must reject oversize decompress');
+  CheckEqual(Int64(400), Int64(LWObj.GetStatus),
+    'default oversize decompress returns 400');
+end;
+
+procedure TestDecompressExplicitZeroAllowsOverDefault;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCompressed: TBytes;
+  LPlain: TBytes;
+  LGotLen: Int64;
+begin
+  LGotLen := -1;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LGotLen := AReq.ContentLength;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [DecompressMiddleware(0)]
+  );
+  SetLength(LPlain, HTTP_DEFAULT_BODY_READ_MAX + 1);
+  FillChar(LPlain[0], Length(LPlain), Ord('B'));
+  LCompressed := GzipCompress(LPlain);
+  LReq := TMockRequest.Create(hmPost, '/api');
+  LReq.SetContentLength(Length(LCompressed));
+  LReq.GetHeaders.SetHeader('content-encoding', 'gzip');
+  LReq.SetBodyBytes(LCompressed);
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.GetStatus),
+    'explicit 0 allows over-default decompress');
+  CheckEqual(HTTP_DEFAULT_BODY_READ_MAX + 1, LGotLen,
+    'explicit 0 yields full decompressed length');
 end;
 
 { ServerHeader middleware tests }
@@ -3465,525 +3681,67 @@ begin
     'deadline releases its buffered writer and real writer');
 end;
 
-{ Mock reader for stream tests }
-type
-  TMockReader = class(TInterfacedObject, IReader)
-  private
-    FData: TBytes;
-    FPos: Int64;
-  public
-    constructor Create(const AData: TBytes);
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-  end;
-
-constructor TMockReader.Create(const AData: TBytes);
-begin
-  inherited Create;
-  FData := AData;
-  FPos := 0;
-end;
-
-function TMockReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+procedure TestDeadlineBufferLimitRejectsOversize;
 var
-  LRemaining: Int64;
-begin
-  LRemaining := Int64(Length(FData)) - FPos;
-  if LRemaining <= 0 then
-    Exit(0);
-  if Int64(ACount) > LRemaining then
-    Result := SizeUInt(LRemaining)
-  else
-    Result := ACount;
-  if Result > 0 then
-  begin
-    Move(FData[FPos], ABuf, Result);
-    Inc(FPos, Int64(Result));
-  end;
-end;
-
-{ Stream tests }
-procedure TestHttpWriteStreamCopiesData;
-var
+  LHandler: IHttpHandler;
   LWObj: TMockResponseWriter;
   LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-  LN: Int64;
+  LReq: IHttpRequest;
+  LHandlerCalled: Boolean;
+  LPayload: TBytes;
   I: Integer;
 begin
-  SetLength(LData, 100);
-  for I := 0 to 99 do
-    LData[I] := Byte(I);
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LReader := TMockReader.Create(LData);
-  LN := HttpWriteStream(LW, LReader as IReader, 32);
-  CheckEqual(100, LN, 'stream copies all bytes');
-  CheckEqual(100, Int64(Length(LWObj.BodyBytes)), 'stream writes to writer');
-end;
-
-procedure TestHttpWriteStreamEmptyReader;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-  LN: Int64;
-begin
-  SetLength(LData, 0);
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LReader := TMockReader.Create(LData);
-  LN := HttpWriteStream(LW, LReader as IReader);
-  CheckEqual(0, LN, 'empty stream writes zero bytes');
-end;
-
-procedure TestHttpWriteStreamWithLengthSetsHeader;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-  LN: Int64;
-begin
-  SetLength(LData, 50);
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LReader := TMockReader.Create(LData);
-  LN := HttpWriteStreamWithLength(LW, 50, LReader as IReader, 16);
-  CheckEqual(50, LN, 'stream with length copies all bytes');
-  CheckEqual('50', LWObj.GetHeaders.Get('content-length'),
-    'stream with length sets content-length header');
-end;
-
-procedure TestHttpWriteStreamHandlesShortWrites;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-  LN: Int64;
-  I: Integer;
-begin
-  SetLength(LData, 100);
-  for I := 0 to High(LData) do
-    LData[I] := Byte(I);
-  LWObj := TMockResponseWriter.Create;
-  LWObj.SetMaxWriteSize(3);
-  LW := LWObj;
-  LReader := TMockReader.Create(LData);
-  LN := HttpWriteStream(LW, LReader as IReader, 32);
-  CheckEqual(Int64(100), LN, 'short writes still copy all bytes');
-  CheckEqual(Int64(100), Int64(Length(LWObj.BodyBytes)),
-    'short writes do not truncate response');
-end;
-
-procedure TestHttpWriteStreamWithLengthHandlesShortWrites;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-  LN: Int64;
-begin
-  SetLength(LData, 50);
-  LWObj := TMockResponseWriter.Create;
-  LWObj.SetMaxWriteSize(2);
-  LW := LWObj;
-  LReader := TMockReader.Create(LData);
-  LN := HttpWriteStreamWithLength(LW, 50, LReader as IReader, 16);
-  CheckEqual(Int64(50), LN, 'length stream handles short writes');
-  CheckEqual(Int64(50), Int64(Length(LWObj.BodyBytes)),
-    'length stream does not truncate response');
-end;
-
-procedure TestHttpStreamRejectsZeroBufferSize;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LReader: TMockReader;
-  LData: TBytes;
-begin
-  SetLength(LData, 1);
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-
-  LReader := TMockReader.Create(LData);
-  try
-    HttpWriteStream(LW, LReader as IReader, 0);
-    Check(False, 'HttpWriteStream zero buffer must raise');
-  except
-    on E: EHttpError do Check(True, 'HttpWriteStream zero buffer rejected');
-  end;
-
-  LReader := TMockReader.Create(LData);
-  try
-    HttpWriteStreamWithLength(LW, 1, LReader as IReader, 0);
-    Check(False, 'HttpWriteStreamWithLength zero buffer must raise');
-  except
-    on E: EHttpError do Check(True,
-      'HttpWriteStreamWithLength zero buffer rejected');
-  end;
-
-  LReader := TMockReader.Create(LData);
-  try
-    HttpRequestReadChunks(LReader as IReader, 0,
-      procedure(const AChunk: TBytes; ACount: SizeUInt)
-      begin
-      end);
-    Check(False, 'HttpRequestReadChunks zero buffer must raise');
-  except
-    on E: EHttpError do Check(True,
-      'HttpRequestReadChunks zero buffer rejected');
-  end;
-
-  LReader := TMockReader.Create(LData);
-  try
-    HttpRequestReadBody(LReader as IReader, 1, 0);
-    Check(False, 'HttpRequestReadBody zero buffer must raise');
-  except
-    on E: EHttpError do Check(True,
-      'HttpRequestReadBody zero buffer rejected');
-  end;
-end;
-
-procedure TestHttpRequestReadChunksCollectsData;
-var
-  LData: TBytes;
-  LReader: TMockReader;
-  LN: Int64;
-  LChunks: Integer;
-  LTotalBytes: Integer;
-  I: Integer;
-begin
-  SetLength(LData, 100);
-  for I := 0 to 99 do
-    LData[I] := Byte(I);
-  LReader := TMockReader.Create(LData);
-  LChunks := 0;
-  LTotalBytes := 0;
-  LN := HttpRequestReadChunks(LReader as IReader, 32,
-    procedure(const AChunk: TBytes; ACount: SizeUInt)
+  LHandlerCalled := False;
+  SetLength(LPayload, 64);
+  for I := 0 to High(LPayload) do
+    LPayload[I] := Ord('X');
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
-      Inc(LChunks);
-      Inc(LTotalBytes, Integer(ACount));
-    end);
-  CheckEqual(100, LN, 'read chunks returns total bytes');
-  CheckEqual(4, LChunks, 'read chunks calls callback 4 times (100/32=4)');
-  CheckEqual(100, LTotalBytes, 'read chunks total bytes in callbacks');
+      LHandlerCalled := True;
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LPayload[0], Length(LPayload));
+    end),
+    [DeadlineMiddlewareWith(5000, 32)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/big');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  Check(LHandlerCalled, 'handler still runs (post-hoc buffer)');
+  CheckEqual(Int64(413), Int64(LWObj.GetStatus), 'oversize deadline buffer → 413');
+  Check(Pos('payload_too_large', LWObj.Body) > 0, '413 error code');
+  Check(Pos('X', LWObj.Body) = 0, 'buffered body discarded');
 end;
 
-procedure TestHttpRequestReadBodyCollectsAll;
+procedure TestDeadlineWithUnlimitedBufferAllowsLarge;
 var
-  LData: TBytes;
-  LReader: TMockReader;
-  LBody: TBytes;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LPayload: TBytes;
   I: Integer;
 begin
-  SetLength(LData, 80);
-  for I := 0 to 79 do
-    LData[I] := Byte(I + 10);
-  LReader := TMockReader.Create(LData);
-  LBody := HttpRequestReadBody(LReader as IReader, 1000, 32);
-  CheckEqual(80, Length(LBody), 'read body returns all bytes');
-  CheckEqual(10, Integer(LBody[0]), 'read body first byte correct');
-  CheckEqual(89, Integer(LBody[79]), 'read body last byte correct');
-end;
-
-procedure TestHttpRequestReadBodyRespectsMaxBytes;
-var
-  LData: TBytes;
-  LReader: TMockReader;
-begin
-  SetLength(LData, 100);
-  LReader := TMockReader.Create(LData);
-  try
-    HttpRequestReadBody(LReader as IReader, 50, 32);
-    Check(False, 'should have raised');
-  except
-    on E: EHttpError do
-      Check(Pos('exceeds maximum', E.Message) > 0, 'error mentions max size');
-  end;
-end;
-
-{ SSE tests }
-procedure TestSSEEventWriterWritesEvents;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
+  SetLength(LPayload, 128);
+  for I := 0 to High(LPayload) do
+    LPayload[I] := Ord('Y');
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LPayload[0], Length(LPayload));
+    end),
+    [DeadlineMiddlewareWith(5000, 0)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/unbounded');
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
-  LWriter := StartSSE(LW);
-  Check(LWriter.IsOpen, 'SSE writer is open');
-  LWriter.WriteEventSimple('message', 'hello', '');
-  Check(Pos('data: hello', LWObj.Body) > 0, 'SSE writes data line');
-  LWriter.Close;
-  Check(not LWriter.IsOpen, 'SSE writer is closed after Close');
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(200), Int64(LWObj.GetStatus), 'explicit 0 buffer allows large body');
+  CheckEqual(Int64(Length(LPayload)), Int64(Length(LWObj.Body)), 'full body flushed');
 end;
 
-procedure TestSSEEventWriterWritesEventType;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.WriteEventSimple('update', '{"x":1}', 'evt-1');
-  Check(Pos('event: update', LWObj.Body) > 0, 'SSE writes event type');
-  Check(Pos('id: evt-1', LWObj.Body) > 0, 'SSE writes event id');
-  Check(Pos('data: {"x":1}', LWObj.Body) > 0, 'SSE writes event data');
-  LWriter.Close;
-end;
-
-procedure TestSSEEventWriterWritesComment;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.WriteComment('heartbeat');
-  Check(Pos(': heartbeat', LWObj.Body) > 0, 'SSE writes comment');
-  LWriter.Close;
-end;
-
-procedure TestSSEEventWriterSetsHeaders;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  CheckEqual('text/event-stream', LWObj.GetHeaders.Get('content-type'),
-    'SSE sets content-type');
-  CheckEqual('no-cache', LWObj.GetHeaders.Get('cache-control'),
-    'SSE sets cache-control');
-  LWriter.Close;
-end;
-
-procedure TestSSEEventWriterMultilineData;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.WriteEventSimple('message', 'line1'#10'line2', '');
-  Check(Pos('data: line1', LWObj.Body) > 0, 'SSE writes first data line');
-  Check(Pos('data: line2', LWObj.Body) > 0, 'SSE writes second data line');
-  LWriter.Close;
-end;
-
-procedure TestSSEEventWriterHandlesShortWrites;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LWObj.SetMaxWriteSize(2);
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.WriteEventSimple('message', 'hello', '');
-  Check(Pos('event: message'#10, LWObj.Body) > 0,
-    'SSE event line survives short writes');
-  Check(Pos('data: hello'#10#10, LWObj.Body) > 0,
-    'SSE data and terminator survive short writes');
-end;
-
-procedure TestSSEEventWriterSplitsCarriageReturnData;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.WriteEventSimple('message', 'line1'#13'line2', '');
-  Check(Pos('data: line1'#10, LWObj.Body) > 0,
-    'SSE writes first CR-delimited data line');
-  Check(Pos('data: line2'#10, LWObj.Body) > 0,
-    'SSE writes second CR-delimited data line');
-end;
-
-procedure TestSSEEventWriterRejectsFieldInjection;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-  LCaught: Boolean;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LCaught := False;
-  try
-    LWriter.WriteEventSimple('message'#10'id: injected', 'body', '');
-    Check(False, 'SSE event name newline must raise');
-  except
-    on E: EHttpError do
-      LCaught := E.Kind = hekArgument;
-  end;
-  Check(LCaught, 'SSE event name injection rejected as hekArgument');
-  LCaught := False;
-  try
-    LWriter.WriteEventSimple('message', 'body', 'ok'#13#10'retry: 1');
-    Check(False, 'SSE id newline must raise');
-  except
-    on E: EHttpError do
-      LCaught := E.Kind = hekArgument;
-  end;
-  Check(LCaught, 'SSE id injection rejected as hekArgument');
-end;
-
-procedure TestSSEStartNilWriterRaisesHekArgument;
-var
-  LCaught: Boolean;
-begin
-  LCaught := False;
-  try
-    StartSSE(nil);
-    Check(False, 'StartSSE(nil) must raise');
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekArgument) and (Pos('nil', E.Message) > 0);
-  end;
-  Check(LCaught, 'StartSSE(nil) raises hekArgument');
-end;
-
-procedure TestSSEWriteRetryNegativeRaisesHekArgument;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-  LEvt: TSSEvent;
-  LCaught: Boolean;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LCaught := False;
-  try
-    LWriter.WriteRetry(-1);
-    Check(False, 'WriteRetry(-1) must raise');
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
-  end;
-  Check(LCaught, 'WriteRetry(-1) raises hekArgument');
-  LEvt := MakeSSEvent('message', 'body', '');
-  LEvt.Retry := -5;
-  LCaught := False;
-  try
-    LWriter.WriteEvent(LEvt);
-    Check(False, 'WriteEvent negative retry must raise');
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
-  end;
-  Check(LCaught, 'WriteEvent negative retry raises hekArgument');
-end;
-
-procedure TestSSEWriteAfterCloseIsHekProtocol;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-  LCaught: Boolean;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.Close;
-  LCaught := False;
-  try
-    LWriter.WriteEventSimple('message', 'late', '');
-    Check(False, 'write after Close must raise');
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekProtocol) and (E.Op = 'sse');
-  end;
-  Check(LCaught, 'write after Close is hekProtocol Op=sse');
-end;
-
-procedure TestSSECloseIsIdempotent;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LWriter.Close;
-  Check(not LWriter.IsOpen, 'closed after first Close');
-  LWriter.Close;
-  Check(not LWriter.IsOpen, 'still closed after second Close');
-end;
-
-procedure TestSSEFlushesAfterEvent;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-  LFlushBefore: Int32;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LFlushBefore := LWObj.FlushCount;
-  LWriter.WriteEventSimple('message', 'hello', '');
-  Check(LWObj.FlushCount > LFlushBefore, 'WriteEvent flushes writer');
-  LFlushBefore := LWObj.FlushCount;
-  LWriter.WriteComment('ping');
-  Check(LWObj.FlushCount > LFlushBefore, 'WriteComment flushes writer');
-  LWriter.Close;
-end;
-
-procedure TestSSEWriteFailureIsHekProtocolOpSse;
-var
-  LWObj: TMockResponseWriter;
-  LW: IHttpResponseWriter;
-  LWriter: ISSEEventWriter;
-  LCaught: Boolean;
-begin
-  LWObj := TMockResponseWriter.Create;
-  LWObj.SetRaiseOnWrite(True);
-  LW := LWObj;
-  LWriter := StartSSE(LW);
-  LCaught := False;
-  try
-    LWriter.WriteEventSimple('message', 'x', '');
-    Check(False, 'write failure must raise');
-  except
-    on E: EHttpError do
-      LCaught := (E.Kind = hekProtocol) and (E.Op = 'sse');
-  end;
-  Check(LCaught, 'write failure is hekProtocol Op=sse');
-end;
-
-procedure TestSSEErrorsUseOpSse;
-var
-  LSrc: string;
-begin
-  LSrc := ReadFileText('../../../src/nextpas.core.http.sse.pas');
-  Check(Pos('SSE_OP = ''sse''', LSrc) > 0, 'SSE Op constant is sse');
-  Check(Pos('CreateOp(hekArgument, SSE_OP', LSrc) > 0,
-    'SSE argument failures use CreateOp');
-  Check(Pos('CreateOp(hekProtocol, SSE_OP', LSrc) > 0,
-    'SSE protocol failures use CreateOp');
-end;
 
 var
   T: TTestSuite;
@@ -3997,6 +3755,7 @@ begin
   T.Test('RecoveryWith: callback receives exception', @TestRecoveryWithCallbackReceivesException);
   T.Test('RecoveryWith: nil callback behaves like silent', @TestRecoveryWithNilCallbackBehavesLikeSilent);
   T.Test('RecoveryWith: success passes through', @TestRecoveryWithSuccessPassesThrough);
+  T.Test('Recovery: no rewrite after headers committed', @TestRecoveryDoesNotRewriteAfterCommitted);
   { Logger }
   T.Test('Logger: calls next handler', @TestLoggerCallsNext);
   T.Test('Logger: preserves status', @TestLoggerPreservesStatus);
@@ -4052,6 +3811,8 @@ begin
   T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
   T.Test('RateLimit: negative max raises', @TestRateLimitNegativeMaxRaises);
   T.Test('RateLimit: zero window raises', @TestRateLimitZeroWindowRaises);
+  T.Test('RateLimit: MaxKeys rejects new key', @TestRateLimitMaxKeysRejectsNewKey);
+  T.Test('RateLimit: MaxKeys=0 unlimited keys', @TestRateLimitMaxKeysZeroUnlimitedKeys);
   { WhenMiddleware }
   T.Test('When: applies when predicate true', @TestWhenMiddlewareAppliesWhenTrue);
   T.Test('When: skips when predicate false', @TestWhenMiddlewareSkipsWhenFalse);
@@ -4085,6 +3846,7 @@ begin
   { BodyCache }
   T.Test('BodyCache: caches body for re-reading', @TestBodyCacheMiddlewareCachesBody);
   T.Test('BodyCache: nil body passes through', @TestBodyCacheMiddlewareNilBody);
+  T.Test('BodyCache: oversize returns 413', @TestBodyCacheMiddlewareOversizeReturns413);
   { MetricsWithFields }
   T.Test('MetricsWithFields: callback receives method+path+status', @TestMetricsWithFieldsCallbackInvoked);
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
@@ -4099,6 +3861,10 @@ begin
   T.Test('Decompress: enforces output limit', @TestDecompressEnforcesOutputLimit);
   T.Test('Decompress: rejects negative limit', @TestDecompressRejectsNegativeLimit);
   T.Test('Decompress: preserves duplicate headers', @TestDecompressPreservesDuplicateHeaders);
+  T.Test('Decompress: default bound rejects oversize',
+    @TestDecompressDefaultBoundRejectsOversize);
+  T.Test('Decompress: explicit 0 allows over-default',
+    @TestDecompressExplicitZeroAllowsOverDefault);
   { ServerHeader }
   T.Test('ServerHeader: default nextpas', @TestServerHeaderDefault);
   T.Test('ServerHeader: custom name', @TestServerHeaderCustom);
@@ -4132,32 +3898,10 @@ begin
   T.Test('Deadline: slow handler times out', @TestDeadlineSlowHandlerTimesOut);
   T.Test('Deadline: zero timeout raises', @TestDeadlineZeroRaises);
   T.Test('Deadline: releases buffered writer', @TestDeadlineReleasesBufferedWriter);
-  { Stream }
-  T.Test('Stream: copies data', @TestHttpWriteStreamCopiesData);
-  T.Test('Stream: empty reader', @TestHttpWriteStreamEmptyReader);
-  T.Test('Stream: with length sets header', @TestHttpWriteStreamWithLengthSetsHeader);
-  T.Test('Stream: handles short writes', @TestHttpWriteStreamHandlesShortWrites);
-  T.Test('Stream: with length handles short writes', @TestHttpWriteStreamWithLengthHandlesShortWrites);
-  T.Test('Stream: rejects zero buffer size', @TestHttpStreamRejectsZeroBufferSize);
-  T.Test('Stream: read chunks collects data', @TestHttpRequestReadChunksCollectsData);
-  T.Test('Stream: read body collects all', @TestHttpRequestReadBodyCollectsAll);
-  T.Test('Stream: read body respects max', @TestHttpRequestReadBodyRespectsMaxBytes);
-  { SSE }
-  T.Test('SSE: writes events', @TestSSEEventWriterWritesEvents);
-  T.Test('SSE: writes event type and id', @TestSSEEventWriterWritesEventType);
-  T.Test('SSE: writes comment', @TestSSEEventWriterWritesComment);
-  T.Test('SSE: sets headers', @TestSSEEventWriterSetsHeaders);
-  T.Test('SSE: multiline data', @TestSSEEventWriterMultilineData);
-  T.Test('SSE: handles short writes', @TestSSEEventWriterHandlesShortWrites);
-  T.Test('SSE: splits CR data lines', @TestSSEEventWriterSplitsCarriageReturnData);
-  T.Test('SSE: rejects field injection', @TestSSEEventWriterRejectsFieldInjection);
-  T.Test('SSE: StartSSE(nil) is hekArgument', @TestSSEStartNilWriterRaisesHekArgument);
-  T.Test('SSE: negative retry is hekArgument', @TestSSEWriteRetryNegativeRaisesHekArgument);
-  T.Test('SSE: write after Close is hekProtocol Op=sse', @TestSSEWriteAfterCloseIsHekProtocol);
-  T.Test('SSE: Close is idempotent', @TestSSECloseIsIdempotent);
-  T.Test('SSE: flushes after event/comment', @TestSSEFlushesAfterEvent);
-  T.Test('SSE: write failure is hekProtocol Op=sse', @TestSSEWriteFailureIsHekProtocolOpSse);
-  T.Test('SSE: errors use CreateOp Op=sse', @TestSSEErrorsUseOpSse);
+  T.Test('Deadline: buffer limit rejects oversize',
+    @TestDeadlineBufferLimitRejectsOversize);
+  T.Test('Deadline: unlimited buffer allows large',
+    @TestDeadlineWithUnlimitedBufferAllowsLarge);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

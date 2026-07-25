@@ -30,24 +30,30 @@ Current S3 stance:
 - The runtime-fault contract name is `np.system.runtime_fault`.
 - Exception helper contracts map HIR intrinsics to LLVM helpers:
 
-| Contract | Meaning | HIR intrinsic | LLVM helper |
+| Contract | Meaning | HIR evidence | LLVM helper |
 | --- | --- | --- | --- |
-| `np.system.exception_try_push` | push an exception frame onto the stack | `try-begin-runtime` / `try-end-runtime` | `@np_try_push` |
-| `np.system.exception_try_pop` | pop an exception frame from the stack | `finally-end-runtime` / `except-end-runtime` | `@np_try_pop` |
-| `np.system.exception_raise` | raise an exception through the current frame | `raise-runtime` | `@np_raise` |
-| `np.system.exception_finally_end` | complete a finally block and resume exception propagation | `finally-end-runtime` | `@np_finally_end` |
-| `np.system.exception_except_end` | complete an except block and resume normal flow | `except-end-runtime` | `@np_except_end` |
+| `np.system.exception_try_push` | push an exception frame onto the stack | typed `sckExceptionTryPush` / `try-begin-runtime` | `@np_try_push` |
+| `np.system.exception_try_pop` | pop an exception frame from the stack | typed `sckExceptionTryPop` / `try-end-runtime` | `@np_try_pop` |
+| `np.system.exception_raise` | raise an exception through the current frame | typed `sckExceptionRaise` / `raise-runtime` | `@np_raise` |
+| `np.system.exception_finally_end` | complete a finally block and resume exception propagation | typed `sckExceptionFinallyEnd` / `finally-end-runtime` | `@np_finally_end` |
+| `np.system.exception_except_end` | complete an except block and resume normal flow | typed `sckExceptionExceptEnd` / `except-end-runtime` | `@np_except_end` |
 
-- Current LLVM exception lowering may use backend-private exception helpers
+- Exception helper contracts map HIR intrinsic / typed `sckException*` evidence
+  to LLVM helpers. Production paths use `AssignSystemContract`; legacy bare
+  `hikTryBegin` / `hikRaise` remain for non-production models only.
+- Marker-only `hikFinallyBegin` / `hikExceptBegin` remain non-contract (no
+  `sck*` kind).
+- Current LLVM exception lowering uses backend-private exception helpers
   such as `@np_try_push`, `@np_try_pop`, `@np_finally_end`,
   `@np_except_end`, and `@np_raise`. These helper names are LLVM/backend
   evidence only, not public ABI, not public Pascal facade, not final unwind ABI,
   and not exception taxonomy owned by system.
-- Source-contract checks verify helper existence in `np_hir_llvm_emitter.pas`
+- Source-contract checks verify helper existence in `np_hir_llvm_emitter`
   and contract documentation in `lifecycle-contracts.md`.
-- HIR exception tests may use those helpers to prove try/finally/except/raise
-  lowering shape. They do not prove final exception object layout, unwinder
-  strategy, diagnostics, or public taxonomy behavior.
+- HIR exception tests (`test_hir_exception_contract`, `test_hir_exception`)
+  prove typed identity and try/finally/except/raise lowering shape. They do
+  not prove final exception object layout, unwinder strategy, diagnostics, or
+  public taxonomy behavior.
 
 ## RTTI And TypeInfo Boundary
 
@@ -84,11 +90,19 @@ Current S3 stance:
 - `np.system.process_init` and `np.system.process_fini` are live compiler
   semantic contracts.
 - Runtime execution of process startup/shutdown remains deferred.
+- Focused evidence is **HIR/LLVM call-shape only** (`test_process_lifecycle`,
+  `test_process_lifecycle_llvm`); typed ledger remains **scelHir**.
+- Phase 0 helper is state flag + fsync only — not unit table / heap / ExitProc
+  (business process init still deferred).
+- Host-free claims for any lifecycle slice require explicit
+  `--toolchain-binding linux-x86_64-to-linux-x86_64-llvm`; default stage0 build
+  is `fpc-stage0-host` and is not host-free evidence. Default binding is not
+  changed by this policy.
 - No callable `nextpas.core.system` facade function is exposed for either
   contract.
-- Unit initialization and finalization are not upgraded by this contract; they
-  still require compiler-owned unit graph execution evidence before becoming
-  live.
+- Unit initialization and finalization are not upgraded by process contracts; they
+  need their own unit-graph evidence (semantic + focused host-free slices under
+  llvm binding; ledger stays scelSemantic).
 
 ## Unit Lifecycle
 

@@ -14,7 +14,7 @@ type
    * @note 非递归，同一线程重入会返回错误
    *}
   TMutex = class(TInterfacedObject, ILock, IMutex, INativeMutex)
-  public
+  private
     FHandle: TPlatformMutex;
   public
     constructor Create;
@@ -42,10 +42,28 @@ type
     function Lock: ILockGuard;
   end;
 
+  {**
+   * @desc 递归互斥锁，基于 platform pthread_mutex (RECURSIVE)
+   * @note 同一线程可重入；必须配对相同次数的 Release
+   * @note 实现 INativeMutex，可与 ICondVar 配对
+   *}
+  TRecursiveMutex = class(TInterfacedObject, ILock, IMutex, INativeMutex)
+  private
+    FHandle: TPlatformMutex;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Acquire;
+    function TryAcquire: Boolean;
+    procedure Release;
+    function Lock: ILockGuard;
+    function NativeHandle: Pointer;
+  end;
+
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.sync.errors;
 
 type
   TLockGuardImpl = class(TInterfacedObject, ILockGuard)
@@ -80,7 +98,7 @@ begin
   inherited Create;
   LRet := platform_mutex_init(FHandle, PLATFORM_MUTEX_ERRORCHECK);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Create failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Create', LRet);
 end;
 
 destructor TMutex.Destroy;
@@ -89,7 +107,7 @@ var
 begin
   LRet := platform_mutex_destroy(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Destroy failed: %d (held lock?)', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Destroy', LRet);
   inherited;
 end;
 
@@ -99,7 +117,7 @@ var
 begin
   LRet := platform_mutex_lock(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Acquire failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Acquire', LRet);
 end;
 
 function TMutex.TryAcquire: Boolean;
@@ -113,7 +131,7 @@ var
 begin
   LRet := platform_mutex_unlock(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Release failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Release', LRet);
 end;
 
 function TMutex.Lock: ILockGuard;
@@ -145,12 +163,10 @@ var
   LOld: Int32;
   LSpins: Int32;
 begin
-  // Fast path: CAS unlocked -> locked
   LOld := InterlockedCompareExchange(FState, STATE_LOCKED, STATE_UNLOCKED);
   if LOld = STATE_UNLOCKED then
     Exit;
 
-  // Medium path: short spin
   for LSpins := 0 to 39 do
   begin
     if FState = STATE_UNLOCKED then
@@ -166,7 +182,6 @@ begin
     {$ENDIF}
   end;
 
-  // Slow path: mark as contended and wait
   while True do
   begin
     LOld := InterlockedExchange(FState, STATE_LOCKED_WITH_WAITERS);
@@ -194,6 +209,62 @@ function TFutexMutex.Lock: ILockGuard;
 begin
   Acquire;
   Result := TLockGuardImpl.Create(Self);
+end;
+
+{ TRecursiveMutex }
+
+constructor TRecursiveMutex.Create;
+var
+  LRet: Int32;
+begin
+  inherited Create;
+  LRet := platform_mutex_init(FHandle, PLATFORM_MUTEX_RECURSIVE);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Create', LRet);
+end;
+
+destructor TRecursiveMutex.Destroy;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_destroy(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Destroy', LRet);
+  inherited;
+end;
+
+procedure TRecursiveMutex.Acquire;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_lock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Acquire', LRet);
+end;
+
+function TRecursiveMutex.TryAcquire: Boolean;
+begin
+  Result := platform_mutex_trylock(FHandle) = 0;
+end;
+
+procedure TRecursiveMutex.Release;
+var
+  LRet: Int32;
+begin
+  LRet := platform_mutex_unlock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRecursiveMutex', 'Release', LRet);
+end;
+
+function TRecursiveMutex.Lock: ILockGuard;
+begin
+  Acquire;
+  Result := TLockGuardImpl.Create(Self);
+end;
+
+function TRecursiveMutex.NativeHandle: Pointer;
+begin
+  Result := @FHandle;
 end;
 
 end.

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tui*.pas`（81 个源文件）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：1.29
+**最后更新**：2026-07-21
+**版本**：1.30
 
 ---
 
@@ -12,6 +12,8 @@
 
 L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / experimental / full）。
 默认 `nextpas.core.tui` 只保证终端正确性；app/runtime 走 `.ext`，协议能力走 `.experimental`。
+
+**模块状态**: Maintenance Idle · 主线封板（见 [ROADMAP.md](ROADMAP.md)）。
 
 **模块完整开发地图（北极星 / Done / 阶段）**: [ROADMAP.md](ROADMAP.md)
 
@@ -227,6 +229,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-21 | 1.30 | Idle-Seal：文档主线封板（无 API/行为变更） | Claude |
 | 2026-07-20 | 1.29 | Phase U2：去双别名 + HandleKey Boolean + Enter enable_ansi | Claude |
 | 2026-07-20 | 1.28 | Phase U1：Enter 诊断 + Stateful 约定 + C10 facade 纪律 | Claude |
 | 2026-07-20 | 1.27 | Phase E3：DECAWM wrap-off on EnterAlternate + SC29 | Claude |

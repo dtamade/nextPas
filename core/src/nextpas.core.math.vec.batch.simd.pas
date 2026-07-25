@@ -113,7 +113,35 @@ function BatchClampSimd3f(const AVectors: array of TVec3f;
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.errors,
+  nextpas.core.simd,
+  nextpas.core.text.conv;
+
+{ Length policy (usability Wave-2): same as math.batch.simd. }
+
+function ResolveEqualOrMin(const A, B: SizeInt): SizeInt; inline;
+begin
+  if (A = 0) or (B = 0) then
+    Exit(0);
+  if A = B then
+    Exit(A);
+{$IFDEF NEXTPAS_MATH_BATCH_TRUNCATE_MIN}
+  if A < B then
+    Result := A
+  else
+    Result := B;
+{$ELSE}
+  raise EArgumentError.Create(
+    'Batch: array lengths must match (got ' + IntToStr(Int64(A)) +
+    ' vs ' + IntToStr(Int64(B)) + ')');
+{$ENDIF}
+end;
+
+function ResolveEqualOrMin3(const A, B, C: SizeInt): SizeInt; inline;
+begin
+  Result := ResolveEqualOrMin(ResolveEqualOrMin(A, B), C);
+end;
+
 
 { Helper: Convert TVec4f to TVecF32x4 }
 function Vec4fToSimd(const V: TVec4f): TVecF32x4; inline;
@@ -148,11 +176,7 @@ var
   i, LCount: SizeInt;
   LLeft, LRight: TVecF32x4;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
 
   for i := 0 to LCount - 1 do
   begin
@@ -171,11 +195,7 @@ var
   i, LCount: SizeInt;
   LLeft, LRight: TVecF32x4;
 begin
-  LCount := Length(ALeft);
-  if LCount > Length(ARight) then
-    LCount := Length(ARight);
-  if LCount > Length(AResults) then
-    LCount := Length(AResults);
+  LCount := ResolveEqualOrMin3(Length(ALeft), Length(ARight), Length(AResults));
 
   for i := 0 to LCount - 1 do
   begin
@@ -230,9 +250,7 @@ var
   i, LCount: SizeInt;
   LV: TVecF32x4;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
 
   for i := 0 to LCount - 1 do
   begin
@@ -254,9 +272,7 @@ var
   LSrc, LResult: TVecF32x4;
   LX, LY, LZ, LW: TVecF32x4;
 begin
-  LCount := Length(ASource);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(ASource), Length(ADest));
 
   { Load matrix columns into SIMD registers }
   LMat0 := VecF32x4Load(@AMatrix.Data[0, 0]);
@@ -295,11 +311,7 @@ var
   i, LCount: SizeInt;
   LStart, LEnd, LT, LResult: TVecF32x4;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin3(Length(AStart), Length(AEnd), Length(ADest));
 
   LT := VecF32x4Splat(AT);
 
@@ -327,11 +339,7 @@ var
   i, LCount: SizeInt;
   LStart, LEnd, LT, LResult: TVecF32x4;
 begin
-  LCount := Length(AStart);
-  if LCount > Length(AEnd) then
-    LCount := Length(AEnd);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin3(Length(AStart), Length(AEnd), Length(ADest));
 
   LT := VecF32x4Splat(AT);
 
@@ -359,9 +367,7 @@ var
   i, LCount: SizeInt;
   LV, LMin, LMax: TVecF32x4;
 begin
-  LCount := Length(AVectors);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(AVectors), Length(ADest));
 
   LMin := Vec4fToSimd(AMin);
   LMax := Vec4fToSimd(AMax);
@@ -384,9 +390,7 @@ var
   i, LCount: SizeInt;
   LV, LMin, LMax: TVecF32x4;
 begin
-  LCount := Length(AVectors);
-  if LCount > Length(ADest) then
-    LCount := Length(ADest);
+  LCount := ResolveEqualOrMin(Length(AVectors), Length(ADest));
 
   LMin := Vec3fToSimd(AMin);
   LMax := Vec3fToSimd(AMax);

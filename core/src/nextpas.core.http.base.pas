@@ -170,12 +170,12 @@ type
     RequestArena: Boolean;
     { RequestArenaCapacity: 0 = HTTP_DEFAULT_REQUEST_ARENA when RequestArena. }
     RequestArenaCapacity: SizeUInt;
-    { Default: ReadTimeout/WriteTimeout = 0 (unbounded) for tests and special
-      tools. Production servers should use Production or set finite
-      WithReadTimeout/WithWriteTimeout (IdleTimeout alone is not enough). }
+    { Default (PD-1B): Read/Write = 30000 ms. Long-poll/SSE/tests that need
+      unbounded IO must set WithReadTimeout(0)/WithWriteTimeout(0) explicitly.
+      IdleTimeout alone is not a complete production template. }
     class function Default: THttpServerOptions; static;
-    { Production template: Default plus finite Read/Write = 30000 ms.
-      Does not change MaxHeader/MaxBody/Idle; not a silent Default flip. }
+    { Production: named production template (currently same RW as Default).
+      Prefer Production in product code for intent; still chain With*. }
     class function Production: THttpServerOptions; static;
     function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
     function WithReadTimeout(const AMs: Int64): THttpServerOptions;
@@ -246,6 +246,11 @@ const
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
   TCP_SERVER_BACKEND_IOCP = nextpas.core.net.server.base.tsbIocp;
+
+  {** Default max for in-memory request body helpers / BodyCache / Decompress
+     (bytes). Aligned with THttpServerOptions.Default.MaxBodySize (4 MiB).
+     Explicit 0 on Max overloads means unlimited (tests/tools only). }
+  HTTP_DEFAULT_BODY_READ_MAX = Int64(4) * 1024 * 1024;
 
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 function HttpStrToMethod(const AStr: string): THttpMethod;
@@ -1056,9 +1061,10 @@ end;
 
 class function THttpServerOptions.Default: THttpServerOptions;
 begin
+  { PD-1B: finite Read/Write by default (30s). Unbounded needs explicit 0. }
   Result.Backend := tsbThreaded;
-  Result.ReadTimeout := 0;
-  Result.WriteTimeout := 0;
+  Result.ReadTimeout := 30000;
+  Result.WriteTimeout := 30000;
   Result.IdleTimeout := 30000;
   Result.MaxHeaderSize := 8192;
   Result.MaxBodySize := 4194304;
@@ -1073,6 +1079,7 @@ end;
 
 class function THttpServerOptions.Production: THttpServerOptions;
 begin
+  { Named production template; RW currently matches Default after PD-1B. }
   Result := Default;
   Result.ReadTimeout := 30000;
   Result.WriteTimeout := 30000;

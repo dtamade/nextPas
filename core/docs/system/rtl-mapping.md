@@ -19,19 +19,20 @@ ownership status so future slices can expand the module without turning it into 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | Program startup and shutdown | `compiler semantic contract live; runtime execution deferred` | Semantic analysis seeds exact `np.system.process_init` then `np.system.process_fini` contracts for program, library and package roots; runtime execution remains deferred. |
-| `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` maps sema `halt-call-runtime` to HIR intrinsic `halt`; backend termination lowering remains private. |
+| `Halt` / exit code semantics | `compiler/HIR contract live; no public facade` | `np.system.halt` is production typed HIR (`sckHalt`); sema `halt-call` / `halt-call-runtime` lower via `AssignSystemContract`; backend termination lowering remains private. |
 | Unit initialization/finalization order | `future compiler/runtime only` | Compiler owns `UnitGraph`; runtime executes `np.system.unit_init` / `np.system.unit_fini`. |
 | Compiler intrinsic names | `future compiler/runtime only` | Intrinsic contract names stay explicit; backend must not invent private helper strings. |
 | Pointer/integer/ABI truth | `system-owned` | Minimal constants are surfaced from `nextpas.core.base`; `SizeInt`, `SizeUInt`, `PtrInt`, `PtrUInt`, `NativeInt` and `NativeUInt` alias compiler `System` truth. Host/target ABI remains platform-owned. |
 | `TObject`, constructor, destructor, `Free` | `compiler/HIR contract live; no public facade` | `np.system.object_free` records nil guard, effective destroy, optional cleanup and heap release. Source-backed System truth comes from `rtl/core/system/System.pas`, where `TObject.Free` is the minimum compiler-visible root. `test-stage0-system-object-free-query` provides explicit and implicit stage0 query evidence that `Free` calls bind back to `System.TObject.Free`; the core facade still does not re-declare it. |
 | `TBytes` and basic byte containers | `system facade delegating to owner` | Delegates to `nextpas.core.base.TBytes`. |
 | Memory primitives: fill/copy/compare | `system facade delegating to owner` | Delegates to `nextpas.core.base.utils`; heap ownership stays with `nextpas.core.mem`. |
-| Heap manager contract | `future compiler/runtime only` | Future contract over `nextpas.core.mem`, not an allocator implementation inside system. |
+| Heap manager contract | `compiler/HIR contract live; no public facade` | `np.system.heap_alloc` / `np.system.heap_free` are production typed HIR (`sckHeapAlloc` / `sckHeapFree`); LLVM maps to `@np_alloc` / `@np_free`. Field setlength byte-size path uses `sckHeapAlloc`. Owner remains `nextpas.core.mem`. |
+| Object instance allocation | `compiler/HIR contract live; no public facade` | `np.system.object_alloc` is production typed HIR (`sckObjectAlloc` / class-new); LLVM maps to `@np_object_alloc`. Pairs with `np.system.object_free` lifecycle. |
 | Managed strings | `future compiler/runtime only` | Runtime lifetime contract belongs here eventually; advanced Unicode/text APIs stay in `nextpas.core.text`. |
 | Dynamic arrays | `future compiler/runtime only` | Managed lifetime and compiler lowering contract; no public ABI in S0/S1. |
 | Interfaces | `future compiler/runtime only` | Managed lifetime and reference-count contract; no public ABI in S0/S1. |
-| Managed records | `future compiler/runtime only` | Compiler/runtime lifetime contract; no public ABI in S0/S1. |
-| Exception raise/unwind root | `system facade delegating to owner` | Canonical owner is `nextpas.core.exception`; `system` aliases only. |
+| Managed records | `compiler/HIR contract live; no public facade` | `np.system.managed_record_fini` is production typed HIR (`sckManagedRecordFini` / managed-record-cleanup); compiler-planned field cleanup expands nested string/dynarray contracts. `managed_record_init` remains vocabulary. |
+| Exception raise/unwind root | `compiler/HIR contract live; no public facade` | Five `np.system.exception_*` kinds are production typed HIR (`sckException*`); LLVM maps to `@np_try_*` / `@np_raise` / `@np_finally_end` / `@np_except_end`. Taxonomy owner remains `nextpas.core.exception`. |
 | RTTI / `TypeInfo` primitive contract | `system facade delegating to owner` | Minimal `nextpas.core.system.typinfo` names the seven-symbol contract; compiler/System still own `TypeInfo` and `GetTypeKind` compile-truth. |
 | File I/O helpers | `owned by another module, no system facade yet` | `nextpas.core.fs` / `nextpas.core.io`. |
 | Time/date helpers | `owned by another module, no system facade yet` | `nextpas.core.time` and platform time modules. |

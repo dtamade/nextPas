@@ -3,6 +3,7 @@ var
   V: THIRValueId;
   ValueType: THIRTypeId;
   Instr: THIRInstr;
+  Fd: Int64;
 begin
   V := LowerNodeExprOrBlobTyped(ANode, ANode.Operand, ValueType);
   if (V <> 0) and (ValueType <> 0) then
@@ -13,13 +14,19 @@ begin
   end;
   if V <> 0 then
   begin
+    { Batch 29: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+    if SameText(ANode.DisplayName, 'WriteErr') then
+      Fd := 2
+    else
+      Fd := 1;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
     Instr.IntrinsicName := 'write_int';
-    SetLength(Instr.Operands, 1);
+    SetLength(Instr.Operands, 2);
     Instr.Operands[0] := MakeTypedOperand(V, GetIntType);
+    Instr.Operands[1] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
     EmitInstr(Instr);
   end;
 end;
@@ -27,13 +34,21 @@ end;
 procedure THIRBuilder.ProcessWriteStr(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
+  Fd: Int64;
 begin
+  { Batch 27: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+  if SameText(ANode.DisplayName, 'WriteErr') then
+    Fd := 2
+  else
+    Fd := 1;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.IntrinsicName := 'write_str';
   Instr.CallTarget := ANode.Operand;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
   EmitInstr(Instr);
 end;
 
@@ -51,6 +66,7 @@ procedure THIRBuilder.ProcessWriteStrVar(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
   TsSlot, DataPtr, LenVal: THIRValueId;
+  Fd: Int64;
 begin
   TsSlot := FindAlloca(ANode.Operand + '$ts');
   if TsSlot = 0 then
@@ -61,14 +77,21 @@ begin
   if (DataPtr = 0) or (LenVal = 0) then
     Exit;
 
+  { Batch 27: DisplayName WriteErr → fd 2 (ErrOutput/StdErr). }
+  if SameText(ANode.DisplayName, 'WriteErr') then
+    Fd := 2
+  else
+    Fd := 1;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
   Instr.IntrinsicName := 'write_str_var';
-  SetLength(Instr.Operands, 2);
+  SetLength(Instr.Operands, 3);
   Instr.Operands[0] := MakeTypedOperand(DataPtr, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+  Instr.Operands[2] := MakeTypedOperand(EmitConstInt(Fd), GetIntType);
   EmitInstr(Instr);
 end;
 
@@ -155,32 +178,12 @@ end;
 
 procedure THIRBuilder.ProcessStringTempOwnedRuntime(
   const ANode: TTypedHirNode);
-var
-  Instr: THIRInstr;
-  FuncName, TempName: string;
-  TabPos: LongInt;
-  TsSlot: THIRValueId;
 begin
-  TempName := ANode.Operand;
-  TabPos := Pos(#9, TempName);
-  if TabPos > 0 then
-    TempName := Copy(TempName, 1, TabPos - 1);
-  FuncName := ANode.DisplayName;
-
-  TsSlot := FindAlloca(TempName + '$ts');
-  if TsSlot <> 0 then
-  begin
-    { TString path: call function, result stored via tstring_assign or sret }
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikCall;
-    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.CallTarget := FuncName;
-    SetLength(Instr.Operands, 1);
-    Instr.Operands[0].ValueId := TsSlot;
-    Instr.Operands[0].TypeId := GetPtrType;
-    EmitInstr(Instr);
-  end;
+  { Same operand shape as assign-tstring-call-runtime:
+      TempName #9 'callee ' FuncName #9 arg0 #9 arg1 ...
+    Earlier path only passed the sret slot (no formals), so
+    Length(GetS(R)) dropped the const record arg and broke sret ABI. }
+  ProcessAssignTStringCall(ANode);
 end;
 
 procedure THIRBuilder.ProcessStringTempBorrowArgRuntime(
@@ -207,9 +210,11 @@ begin
   TsSlot := FindAlloca(TempName + '$ts');
   if TsSlot <> 0 then
   begin
+    { np_tstring_len is i64; keep $len as i64 so store/load match without
+      requiring tip-only store.cast ValueLlvmType machinery. }
     LenSlot := EmitTStringLen(TsSlot);
-    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(32, True));
-    EmitStore(GetIntTypeByWidth(32, True), LenSlot, FindAlloca(TempName + '$len'));
+    EnsureAlloca(TempName + '$len', GetIntTypeByWidth(64, True));
+    EmitStore(GetIntTypeByWidth(64, True), LenSlot, FindAlloca(TempName + '$len'));
   end;
 end;
 

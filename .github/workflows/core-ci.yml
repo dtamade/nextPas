@@ -61,6 +61,9 @@ jobs:
       - name: Run Wine runtime smoke (not real Windows evidence)
         run: make wine-smoke
 
+      - name: HTTP threaded host smoke (Linux runtime; not scale-ready)
+        run: bash scripts/http-host-ci-matrix.sh
+
       - name: Async host matrix (Linux runtime; strict)
         run: bash scripts/async-host-matrix.sh
 
@@ -160,6 +163,11 @@ jobs:
         run: |
           # Documented 8-gate set (ROADMAP D2.b). truth=macos-focused-runtime for that set only.
           bash scripts/platform-macos-ci-matrix.sh
+
+      - name: HTTP threaded host smoke (macOS runtime; not scale-ready)
+        run: |
+          # Same host smoke as Linux/Windows/FreeBSD. truth=host-runtime only.
+          bash scripts/http-host-ci-matrix.sh
 
       - name: Kqueue runtime smoke (fail-closed on Darwin)
         run: |
@@ -303,8 +311,24 @@ jobs:
           "${FPC}" -iTO
           # Real Windows host evidence (not Wine).
           # Documented 17-gate set: 14 suite dirs + poller/io/socket real gates.
-          # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host parity.
+          # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host Windows parity.
           bash scripts/platform-windows-ci-matrix.sh
+
+      - name: HTTP threaded host smoke (Windows runtime; not scale-ready)
+        if: ${{ always() && !cancelled() && steps.install-fpc-win64.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          FPC_ROOT="${HOME}/fpc-trunk"
+          BIN_DIR="${FPC_ROOT}/bin/x86_64-win64"
+          export PATH="${BIN_DIR}:${FPC_ROOT}/bin:${PATH}"
+          if [[ -f "${BIN_DIR}/fpc.exe" ]]; then
+            export FPC="${BIN_DIR}/fpc.exe"
+          else
+            export FPC="${BIN_DIR}/fpc"
+          fi
+          # Real Windows host evidence for threaded HTTP/1.1 wire.
+          # truth=host-runtime; NOT scale-ready / NOT IOCP / NOT full facade TLS.
+          bash scripts/http-host-ci-matrix.sh
 
       - name: L2 process/fs/path/env Windows min-set (host-windows)
         # Independent of platform matrix (same pattern as async Q34).
@@ -356,4 +380,6 @@ jobs:
           run: |
             sudo pkg install -y fpc
             fpc -iV
+            # Host smoke first (fail-closed if present); then best-effort inventory.
+            CORE_CI_HOST=FreeBSD bash "$GITHUB_WORKSPACE/core/scripts/http-host-ci-matrix.sh"
             make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD

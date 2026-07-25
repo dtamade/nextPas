@@ -57,23 +57,17 @@ uses
 
 var
   FUnicodeData: IUnicodeDataManager;
-  FCritSection: TRTLCriticalSection;
-  FInitialized: Boolean = False;
+  FLock: IMutex;
 
 function UnicodeData: IUnicodeDataManager;
 begin
-  if not FInitialized then
-  begin
-    System.InitCriticalSection(FCritSection);
-    FInitialized := True;
-  end;
-  System.EnterCriticalSection(FCritSection);
+  FLock.Acquire;
   try
     if FUnicodeData = nil then
       FUnicodeData := TUnicodeDataManager.Create;
     Result := FUnicodeData;
   finally
-    System.LeaveCriticalSection(FCritSection);
+    FLock.Release;
   end;
 end;
 
@@ -155,5 +149,9 @@ function TUnicodeDataManager.GetCompositionExclusion(const ACp: TUnicodeCodepoin
 begin
   Result := nextpas.core.text.unicode.normalize.IsCompositionExcluded(ACp);
 end;
+
+
+initialization
+  FLock := Mutex;
 
 end.

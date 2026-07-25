@@ -1,6 +1,6 @@
 # Usability Fix Plan: nextpas.core.http cycle-10 Wave E
 
-**Status**: ready to land (client 240; contract 31; base 31; hygiene pass)
+**Status**: landed main `2820157d2` (client 240; contract 31; base 31; landing-check pass; pushed)
 **Assessment**: `2026-07-17-usability-assessment-cycle10.md`
 **Research**: `2026-07-17-usability-cycle10-research.md`
 

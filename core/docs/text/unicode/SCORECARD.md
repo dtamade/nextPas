@@ -64,7 +64,8 @@
 - **全绿对标项**：C1–C5b（Compare 1.10× ≤2.0×）
 - **库存冻结**：C6 Segment、C7 Width
 - **债（非阻塞）**：GetSortKey BMP-Latin 1.66×
-- 下一默认岛：**P2-3 Bidi 视觉序**
+- **下一默认**：文档可用性 **P3-3** 后 → **Idle**（可选拉票：P3-4 IDNA Validity 子集；CLDR 仍锁）
+- 注：P3-0…P3-3 为文档/错误/IDNA 岛，**不改**本表 perf 数字
 
 ---
 
@@ -82,5 +83,6 @@ cd core/benchmarks/nextpas.core.text.unicode/compare_go && go test -bench=. -ben
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-21 | **P3-3**：下一岛导航修正（不再指向已完成的 P2-3） |
 | 2026-07-20 | **P2-2 v3**：同机全量重跑 + Width 测项 + C6/C7 库存冻结 |
 | 2026-07-20 | v2 / M3b–M3d 历史见 git |

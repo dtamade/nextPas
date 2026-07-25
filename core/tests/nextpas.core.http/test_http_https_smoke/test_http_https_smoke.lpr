@@ -1,8 +1,8 @@
 program test_http_https_smoke;
 {**
  * @desc Q3-3 H1 HTTPS smoke: keep-alive throughput + client latency under
- *       heaptrc. Origin is a minimal TLS H1 server (registry TLS server path
- *       is H2-only residual — see CONTRACT residual).
+ *       heaptrc. Origin is a minimal TLS H1 byte server (not THttpServer);
+ *       product H1 HTTPS server path is test_http_h1_tls_server (C-A).
  *
  * Not a scale-ready claim for HTTPS; plain H1 epoll RPS remains the KPI.
  *}
@@ -10,7 +10,6 @@ program test_http_https_smoke;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.base.utils,
@@ -299,17 +298,17 @@ begin
   end;
 end;
 
-procedure TestH1HttpsServerTlsRegistryResidualSourceContract;
-{ Registry: THttpServerOptions.TLSContext currently selects H2 TLS transport
-  only — H1 HTTPS origin for Q3-3 smoke uses NewTlsServerTcpStream (client
-  H1 direct HTTPS is production). }
+procedure TestH1HttpsProductServerPathSourceContract;
+{ C-A: product H1 HTTPS server is wired; Q3-3 residual still documents 0 unfreed. }
 var
   LReg, LContract: string;
 begin
   LReg := ReadFileText('../../../src/nextpas.core.http.impl.registry.pas');
   LContract := ReadFileText('../../../docs/http/CONTRACT.md');
-  Check(Pos('TLS HTTP server currently requires HTTP/2', LReg) > 0,
-    'registry documents H1 server TLS residual');
+  Check(Pos('NewH1TlsServerTransport', LReg) > 0,
+    'registry wires H1 TLS server product path');
+  Check(Pos('TLS HTTP server currently requires HTTP/2', LReg) = 0,
+    'registry no longer H1-TLS residual raise');
   Check(Pos('Q3-3', LContract) > 0, 'CONTRACT has Q3-3 residual section');
   Check(Pos('0 unfreed', LContract) > 0, 'HTTPS residual claims 0 unfreed (R4)');
 end;
@@ -358,8 +357,8 @@ begin
     @TestH1HttpsKeepAliveSmokeThroughputLatency);
   T.Test('H1 HTTPS single round-trip still green',
     @TestH1HttpsClientRoundTripStillGreen);
-  T.Test('H1 server TLS registry residual source-contract',
-    @TestH1HttpsServerTlsRegistryResidualSourceContract);
+  T.Test('H1 HTTPS product server path source-contract',
+    @TestH1HttpsProductServerPathSourceContract);
   if not T.Run then
     Halt(1);
 end.

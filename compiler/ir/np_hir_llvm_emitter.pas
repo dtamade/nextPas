@@ -46,6 +46,7 @@ type
     FNeedsObjectAlloc: Boolean;
     FNeedsObjectFreeRelease: Boolean;
     FNeedsDynArrayHelpers: Boolean;
+    FNeedsIntfRefCountHelpers: Boolean;
     FStrConstants: TLlvmNameVec;
     FCurrentReturnTypeId: THIRTypeId;
     FCurrentFuncIsTStringSret: Boolean;
@@ -61,6 +62,9 @@ type
     FUnitInitCallsEmitted: Boolean;
     FUnitFiniCallsEmitted: Boolean;
     FTryCounter: LongInt;
+    { ResultId -> actual LLVM type for the current function (1-based ValueId).
+      Load/call/const may disagree with HIR TypeId (e.g. Integer i32 vs call i64). }
+    FValueLlvmTypes: array of string;
     { Debug info metadata }
     FDebugInfoEnabled: Boolean;
     FDebugMetadata: TLlvmNameVec;
@@ -84,6 +88,12 @@ type
     function BlockEndsWithIntrinsicReturn(const ABlock: THIRBlock): Boolean;
     function OperandTypeToLlvm(const AOperand: THIROperand;
       const AFallback: string): string;
+    function ValueLlvmType(AValueId: THIRValueId;
+      const AFallback: string): string;
+    procedure NoteValueLlvmType(AValueId: THIRValueId; const ALlvmType: string);
+    { Cast SSA value to AWantedTy when noted type differs; returns ref (maybe temp). }
+    function EmitCastValueToLlvmType(AValueId: THIRValueId;
+      const AWantedTy, ATag: string): string;
     function IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
     function IsUnsignedOrderedCompareType(const ATypeId: THIRTypeId): Boolean;
     function DivOpcodeToLlvm(const AInstr: THIRInstr): string;
@@ -122,6 +132,8 @@ type
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
     procedure EmitImtGlobals;
+    function HasEmittedFunction(const AName: string): Boolean;
+    function NormalizeUnitLifecycleName(const AUnitName: string): string;
     procedure EmitUnitDeclares;
     procedure EmitUnitInitCalls;
     procedure EmitUnitFiniCalls;
@@ -162,6 +174,7 @@ begin
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
   FNeedsDynArrayHelpers := False;
+  FNeedsIntfRefCountHelpers := False;
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
   FProcessFiniEmitted := False;
@@ -221,14 +234,29 @@ begin
       if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal thread_local global ptr null')
       else
-        Emit('@g_' + G.Name + ' = internal thread_local global i64 0');
+      begin
+        { Match RegisterGlobal DeclType (e.g. Integer → i32). }
+        if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
+          Emit('@g_' + G.Name + ' = internal thread_local global i64 0')
+        else
+          Emit('@g_' + G.Name + ' = internal thread_local global ' +
+            TypeToLlvm(G.TypeId) + ' 0');
+      end;
     end
     else
     begin
       if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal global ptr null')
       else
-        Emit('@g_' + G.Name + ' = internal global i64 0');
+      begin
+        { Match RegisterGlobal DeclType (e.g. Integer → i32). Hardcoding i64
+          made load/store of unit vars like GMuAcc type-inconsistent. }
+        if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
+          Emit('@g_' + G.Name + ' = internal global i64 0')
+        else
+          Emit('@g_' + G.Name + ' = internal global ' +
+            TypeToLlvm(G.TypeId) + ' 0');
+      end;
     end;
   end;
 
@@ -316,7 +344,7 @@ begin
   if FNeedsAlloc then
     EmitAllocatorFaultHelper;
 
-  if FNeedsObjectAlloc then
+  if FNeedsObjectAlloc or FNeedsIntfRefCountHelpers then
     EmitIntfRefCountHelpers;
 
   if FNeedsExceptionRuntime then
@@ -338,6 +366,10 @@ begin
   { Emit debug info metadata section at the end of the module }
   if FDebugInfoEnabled then
     EmitDebugMetadataSection;
+
+  { Shared by all define bodies (#0). Keep freestanding stack 16-byte aligned. }
+  Emit('');
+  Emit('attributes #0 = { alignstack=16 nounwind }');
 end;
 
 {$I np_hir_llvm_emitter_helpers.inc}

@@ -82,7 +82,6 @@ begin
   Result.Condition := True;
   Result.EnableParallel := False;
   Result.ParallelThreads := 0;
-  Result.TimeoutMs := 0;
   Result.CollectRawSamples := False;
   Result.SimpleFunc := nil;
 end;

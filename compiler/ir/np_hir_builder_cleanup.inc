@@ -38,11 +38,13 @@ begin
   OldPtrVal := EmitLoad(GetPtrType, PtrAlloca);
   OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
 
+  { Typed dynarray set_length: SystemContractKind authority; CallTarget = runtime map. }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'dynarray_resize';
+  AssignSystemContract(Instr, sckDynArraySetLength);
+  Instr.CallTarget := SystemContractAt(sckDynArraySetLength).RuntimeMapping;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
@@ -141,7 +143,8 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'dynarray_resize';
+  AssignSystemContract(Instr, sckDynArraySetLength);
+  Instr.CallTarget := SystemContractAt(sckDynArraySetLength).RuntimeMapping;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
@@ -189,11 +192,13 @@ begin
   if ElemSizeVal = 0 then
     Exit;
 
+  { Typed dynarray fini: SystemContractKind authority; CallTarget = runtime map. }
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := 'dynarray_release';
+  AssignSystemContract(Instr, sckDynArrayFini);
+  Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
   SetLength(Instr.Operands, 3);
   Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
@@ -235,7 +240,18 @@ begin
   if FindAllocaType(VarName) = GetPtrType then
     RecPtr := EmitLoad(GetPtrType, RecAlloca);
 
-  { 遍历每个需要清理的字段 }
+  { Typed authority: managed_record_fini marker (record base ptr).
+    Nested field contracts (string/dynarray) perform actual release. }
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  AssignSystemContract(Instr, sckManagedRecordFini);
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(RecPtr, GetPtrType);
+  EmitInstr(Instr);
+
+  { Expand each managed field into its typed nested contract. }
   while Blob <> '' do
   begin
     TabPos := Pos(#9, Blob);
@@ -266,7 +282,7 @@ begin
       if FieldPtr <> 0 then
         EmitTStringFini(FieldPtr);
 
-      ZeroVal := EmitConstIntSmart(0);
+      ZeroVal := EmitConstIntOfType(0, GetIntType);
       if ZeroVal <> 0 then
       begin
         for Offset := 0 to 2 do
@@ -289,11 +305,12 @@ begin
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikIntrinsic;
         Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-        Instr.IntrinsicName := 'dynarray_release';
+        AssignSystemContract(Instr, sckDynArrayFini);
+        Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
         SetLength(Instr.Operands, 3);
         Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, PtrSlot), GetPtrType);
         Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), LenSlot), GetIntTypeByWidth(32, True));
-        Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+        Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
         EmitInstr(Instr);
       end;
     end;
@@ -539,7 +556,8 @@ begin
       Instr.ResultId := FModule.NewValue;
       Instr.Kind := hikIntrinsic;
       Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-      Instr.IntrinsicName := 'dynarray_release';
+      AssignSystemContract(Instr, sckDynArrayFini);
+      Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
       SetLength(Instr.Operands, 3);
       Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
       Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));

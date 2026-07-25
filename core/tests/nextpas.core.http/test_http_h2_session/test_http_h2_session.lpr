@@ -32,6 +32,10 @@ const
     '../../../src/nextpas.core.http.impl.h2.session.pas';
   H2_SESSION_SOURCE_PATH_FROM_ROOT =
     'core/src/nextpas.core.http.impl.h2.session.pas';
+  H2_STREAMMAP_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.h2.streammap.pas';
+  H2_STREAMMAP_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.h2.streammap.pas';
 
 type
   TFakeTcpStream = class(TInterfacedObject, ITcpStream)
@@ -1596,19 +1600,22 @@ end;
 
 procedure TestStreamMapFindAndRemoveSourceContract;
 var
-  LSource: string;
+  LSessionSource: string;
+  LMapSource: string;
 begin
-  LSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
+  LSessionSource := ReadSourceFile(ResolveSourcePath(H2_SESSION_SOURCE_PATH_FROM_TEST,
     H2_SESSION_SOURCE_PATH_FROM_ROOT));
-  Check(Pos('SLOT_EMPTY', LSource) > 0,
+  LMapSource := ReadSourceFile(ResolveSourcePath(H2_STREAMMAP_SOURCE_PATH_FROM_TEST,
+    H2_STREAMMAP_SOURCE_PATH_FROM_ROOT));
+  Check(Pos('SLOT_EMPTY', LMapSource) > 0,
     'TH2StreamMap uses hash table with slot states');
-  Check(Pos('SLOT_USED', LSource) > 0,
+  Check(Pos('SLOT_USED', LMapSource) > 0,
     'TH2StreamMap tracks used slots');
-  Check(Pos('FindSlot', LSource) > 0,
+  Check(Pos('FindSlot', LMapSource) > 0,
     'TH2StreamMap uses hash-based FindSlot');
-  Check(Pos('FStreams.Remove(', LSource) > 0,
+  Check(Pos('FStreams.Remove(', LSessionSource) > 0,
     'session uses hash-based Remove');
-  Check(Pos('FStreams.Find(', LSource) > 0,
+  Check(Pos('FStreams.Find(', LSessionSource) > 0,
     'session uses hash-based Find');
 end;
 

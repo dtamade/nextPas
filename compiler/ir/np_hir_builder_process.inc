@@ -119,6 +119,7 @@ begin
       else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
       else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)
       else if Token = 'rload' then EmitExprRLoad(S, Arg)
+      else if Token = 'fieldstrlen' then EmitExprFieldStrLen(S, Arg)
       else if Token = 'add' then EmitExprBinOp(S, hikAdd)
       else if Token = 'sub' then EmitExprBinOp(S, hikSub)
       else if Token = 'mul' then EmitExprBinOp(S, hikMul)
@@ -606,24 +607,32 @@ end;
 procedure THIRBuilder.EmitProcessInit;
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikCall;
+  { Typed process family: SystemContractKind is authority; CallTarget holds
+    runtime symbol for emitter. ResultId=0 keeps the call void-shaped. }
+  Instr.ResultId := 0;
+  Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.CallTarget := 'np_process_init';
+  AssignSystemContract(Instr, sckProcessInit);
+  ContractDefinition := SystemContractAt(sckProcessInit);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   EmitInstr(Instr);
 end;
 
 procedure THIRBuilder.EmitProcessFini;
 var
   Instr: THIRInstr;
+  ContractDefinition: TSystemContractDefinition;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikCall;
+  Instr.ResultId := 0;
+  Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.CallTarget := 'np_process_fini';
+  AssignSystemContract(Instr, sckProcessFini);
+  ContractDefinition := SystemContractAt(sckProcessFini);
+  Instr.CallTarget := ContractDefinition.RuntimeMapping;
   EmitInstr(Instr);
 end;
 
@@ -687,7 +696,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'halt';
+    AssignSystemContract(Instr, sckHalt);
     Instr.CallTarget := '0';
     EmitInstr(Instr);
   end;

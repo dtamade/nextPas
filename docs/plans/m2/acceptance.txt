@@ -1,0 +1,7 @@
+# M2 B/C shared acceptance subset (M2-3)
+# Not required for M2-0 harness green.
+
+smoke examples/smoke/hello.pas
+smoke examples/smoke/halt_42.pas
+# query symbols — enable when B/C CLI path is stable under LLVM two-hop
+# query-symbols tools/stage0/nextpas.pas

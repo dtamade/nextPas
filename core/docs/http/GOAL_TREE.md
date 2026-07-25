@@ -1,9 +1,9 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-21 (H2-opt peer mid ~2.07× Met single-run; package No; NEXT → ROADMAP STOP)
+> Last updated: 2026-07-24 (PD-3-3 Windows cancel waitable; NEXT → ROADMAP STOP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
-> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
+> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Era PD + Parity history, Goal Loop, Inbox.
 > **Scale battlefield**: **HTTP server** throughput and connection scale (Linux epoll default).
 > **H3**: blocked/honest, never fake facade.
 
@@ -31,9 +31,10 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
 | **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
 | **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
-| **Parity Campaign** | **H1 scale-ready Met** + **Q1 Met** + **S2/S3 Met**（H2 multiplex 证据；非 H1/H2 整包宣称）；H3 Blocked |
+| **Parity Campaign** | **H1 scale-ready Met** + **H1+H2 package Yes** + **HTTPS H1/H2 scale Yes** + **Q1 Met** + **S2/S3 Met**；H3 Blocked |
+| **Era PD** | **Done (ext)** — PD-0/1A/2 + **PD-1B** RW=30s + **PD-3-1/2/3**（Windows waitable pair） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
-| 主 Makefile gate | ~35 focused suites |
+| 主 Makefile gate | **43** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS；含 `test_http_mem` / `test_http_stream` / `test_http_sse`） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
@@ -84,7 +85,7 @@ Live product push is **Go/Rust-class quality + server scale** on H1/H2 — not H
 |------|---------|
 | Enter parity zone | epoll Direct keep-alive **≥ 0.5×** Go `net/http` same workload |
 | Scale-ready RPS | **Met (Q2-1)** — epoll `no_url` median **2.20×** Go（`--runs 3`）；`response_1k` **1.93×** |
-| Scale-ready p99 | **Partial (L1)** — nextPas multi-conn `p50_ns`/`p99_ns`；Go 行未仪器 |
+| Scale-ready p99 | **Met (E1+E3)** — nextPas + Go nearest-rank p50/p99；E3 runs=3 median p99 **0.21× / 0.22×** Go（≤2×）；见 [`CLAIM.md`](CLAIM.md) / [`BENCHMARKS.md`](BENCHMARKS.md) § E3 |
 | Connection ladder | **Met (S1-3)** — 1k / 10k idle keep-alive + soft-nofile failure mode |
 | H2 scale evidence | **Met (S3)** — multiplex ~3k req/s threaded+epoll；≪ H1 KPI shape |
 | Claim | **Scale-ready (H1 server, Linux epoll)** — yes with residuals；**not** H1/H2 整包 |

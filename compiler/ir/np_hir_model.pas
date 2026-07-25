@@ -309,6 +309,7 @@ function ValidateSystemContractInstr(const AInstr: THIRInstr;
 var
   ContractDefinition: TSystemContractDefinition;
   ContractOrdinal: LongInt;
+  OperandIndex: LongInt;
   OperandType: THIRTypeRec;
 begin
   AError := '';
@@ -324,10 +325,29 @@ begin
   end;
 
   case AInstr.SystemContractKind of
+    sckProcessInit,
+    sckProcessFini,
+    sckHalt,
+    sckStringInit,
+    sckStringFini,
+    sckStringAssign,
+    sckDynArrayFini,
+    sckDynArraySetLength,
+    sckInterfaceAddRef,
+    sckInterfaceRelease,
+    sckHeapAlloc,
+    sckHeapFree,
+    sckObjectAlloc,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
-    sckObjectFreeRelease:
+    sckObjectFreeRelease,
+    sckManagedRecordFini,
+    sckExceptionTryPush,
+    sckExceptionTryPop,
+    sckExceptionRaise,
+    sckExceptionFinallyEnd,
+    sckExceptionExceptEnd:
       ;
   else
     AError := 'system-contract-kind-unsupported:' +
@@ -341,6 +361,177 @@ begin
     AError := 'system-contract-name-mismatch:' + IntToStr(ContractOrdinal);
     Exit(False);
   end;
+
+  { Zero-arg void lifecycle contracts (process init/fini + exception boundary).
+    try_push may carry handler label in CallTarget. }
+  if (AInstr.SystemContractKind = sckProcessInit) or
+    (AInstr.SystemContractKind = sckProcessFini) or
+    (AInstr.SystemContractKind = sckExceptionTryPush) or
+    (AInstr.SystemContractKind = sckExceptionTryPop) or
+    (AInstr.SystemContractKind = sckExceptionRaise) or
+    (AInstr.SystemContractKind = sckExceptionFinallyEnd) or
+    (AInstr.SystemContractKind = sckExceptionExceptEnd) then
+  begin
+    if Length(AInstr.Operands) <> 0 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Halt: const exit-code in CallTarget, or one int operand for dynamic code. }
+  if AInstr.SystemContractKind = sckHalt then
+  begin
+    if Length(AInstr.Operands) = 0 then
+    begin
+      if AInstr.CallTarget = '' then
+      begin
+        AError := 'system-contract-target-missing:' +
+          IntToStr(ContractOrdinal);
+        Exit(False);
+      end;
+      Exit(True);
+    end;
+    if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkInt then
+    begin
+      AError := 'system-contract-operand-not-int:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Managed string TString triad: init/fini = 1 ptr; assign = 2 ptr. }
+  if (AInstr.SystemContractKind = sckStringInit) or
+    (AInstr.SystemContractKind = sckStringFini) or
+    (AInstr.SystemContractKind = sckStringAssign) then
+  begin
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    if AInstr.SystemContractKind = sckStringAssign then
+    begin
+      if Length(AInstr.Operands) <> 2 then
+      begin
+        AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+          ':' + IntToStr(Length(AInstr.Operands));
+        Exit(False);
+      end;
+    end
+    else if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    for OperandIndex := 0 to High(AInstr.Operands) do
+    begin
+      OperandType := ATypes.GetType(AInstr.Operands[OperandIndex].TypeId);
+      if OperandType.Kind <> htkPointer then
+      begin
+        AError := 'system-contract-operand-not-pointer:' +
+          IntToStr(ContractOrdinal) + ':' +
+          IntToStr(AInstr.Operands[OperandIndex].TypeId);
+        Exit(False);
+      end;
+    end;
+    Exit(True);
+  end;
+
+  { Dynarray fini: (ptr, len:int, elem_size:int). SetLength: + new_len:int. }
+  if (AInstr.SystemContractKind = sckDynArrayFini) or
+    (AInstr.SystemContractKind = sckDynArraySetLength) then
+  begin
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    if AInstr.SystemContractKind = sckDynArraySetLength then
+    begin
+      if Length(AInstr.Operands) <> 4 then
+      begin
+        AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+          ':' + IntToStr(Length(AInstr.Operands));
+        Exit(False);
+      end;
+    end
+    else if Length(AInstr.Operands) <> 3 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkPointer then
+    begin
+      AError := 'system-contract-operand-not-pointer:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
+      Exit(False);
+    end;
+    for OperandIndex := 1 to High(AInstr.Operands) do
+    begin
+      OperandType := ATypes.GetType(AInstr.Operands[OperandIndex].TypeId);
+      if OperandType.Kind <> htkInt then
+      begin
+        AError := 'system-contract-operand-not-int:' +
+          IntToStr(ContractOrdinal) + ':' +
+          IntToStr(AInstr.Operands[OperandIndex].TypeId);
+        Exit(False);
+      end;
+    end;
+    Exit(True);
+  end;
+
+  { Heap / object alloc: one size:int operand; result is caller-owned pointer. }
+  if (AInstr.SystemContractKind = sckHeapAlloc) or
+    (AInstr.SystemContractKind = sckObjectAlloc) then
+  begin
+    if Length(AInstr.Operands) <> 1 then
+    begin
+      AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+        ':' + IntToStr(Length(AInstr.Operands));
+      Exit(False);
+    end;
+    if ATypes = nil then
+    begin
+      AError := 'system-contract-type-table-missing:' +
+        IntToStr(ContractOrdinal);
+      Exit(False);
+    end;
+    OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+    if OperandType.Kind <> htkInt then
+    begin
+      AError := 'system-contract-operand-not-int:' +
+        IntToStr(ContractOrdinal) + ':' +
+        IntToStr(AInstr.Operands[0].TypeId);
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  { Heap free falls through: one pointer operand (default path). }
 
   if Length(AInstr.Operands) <> 1 then
   begin

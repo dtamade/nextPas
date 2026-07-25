@@ -8,7 +8,7 @@ middleware chaining, and a centralized internal transport registry.
 | Doc | Role |
 |-----|------|
 | **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
-| [`CLAIM.md`](CLAIM.md) | **What we claim** — allow/deny + p99 conditions (R0 freeze) |
+| [`CLAIM.md`](CLAIM.md) | **What we claim** — allow/deny + p99 conditions (R1 + HS freeze) |
 | [`REPRO.md`](REPRO.md) | 1h release-evidence playbook |
 | [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
 | [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
@@ -17,21 +17,48 @@ middleware chaining, and a centralized internal transport registry.
 | [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
 | [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
+## Production checklist（PD-0 / PD-1B）
+
+复制粘贴生产服务时按此表：
+
+| 项 | 做 | 别做 |
+|----|----|------|
+| Server options | `THttpServerOptions.Production`（或 Default，PD-1B 后 RW 同为 30s） | 长轮询/SSE 忘了 `WithReadTimeout(0)` 导致 30s 断流 |
+| Server 工厂 | `NewHttpServer(handler, Production…)`；arena 便利工厂已走 Production | 用 IdleTimeout **alone** 当完整模板 |
+| Client options | `Default.Timeout=30000` 或 `WithTimeout`；池淘汰见 IdleTTL | 只挂 cancel、不设 Timeout 当唯一模板 |
+| Idle 对照 | server IdleTimeout（默认 30s）≠ client IdleTTL（默认 90s） | 把两个旋钮当成同一个 |
+| Keep-alive | 默认开（INV-1）；长连接写失败见 CONTRACT §4.4 | 大 body / 背压缺口已有 Q1-4 + 413 矩阵，勿空写 KPI |
+| TLS | `TLSContext` + H1/H2 产品路径（C-A / H2P-3） | 空 facade / 假 H3 |
+| 宣称 | 只说 [`CLAIM.md`](CLAIM.md) 允许句 | Windows scale / 跨机榜 / H1÷H2 RPS package KPI |
+| Body 读入内存 | `HttpReadRequestBody*` 默认 4 MiB；更大用 `BytesMax` / `BodyCacheMiddlewareWith` | 依赖旧无界默认；BodyCache 不设 max |
+| 请求解压 | `DecompressMiddleware` 默认 4 MiB 解压输出上限 | `DecompressMiddleware(0)` 当生产默认 |
+| Deadline | **默认不装**；短 JSON 才考虑；知悉非抢占 + 全缓冲 | 当 Go `context.WithTimeout`；大 body 不设缓冲上限 |
+| ResponseTime | 仅写 `X-Response-Time`（`middleware.responsetime`） | 当成限时中间件；限时用 server RW timeout / Deadline |
+
+细节权威：[`CONTRACT.md`](CONTRACT.md) §2.2 Default vs Production + IdleTimeout vs IdleTTL。
+
 ## Architecture
 
 ```
-Facade (nextpas.core.http) — single uses entry point
+Facade:
+  nextpas.core.http         — full surface (product middleware family re-exports)
+  nextpas.core.http.minimal — thin surface (types + router + server/client + chain)
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
-  Protocol layer: impl.h1 (landed), impl.h2 foundation (started), impl.h2 transport / impl.h3 (planned)
+  Protocol layer: impl.h1 (landed), impl.h2 transport (landed), impl.h3 (blocked on QUIC)
 ```
+
+| uses | 内容 |
+|------|------|
+| `nextpas.core.http.minimal` | base/intf/headers/url/router/message + server/client + HandlerFunc/Chain |
+| `nextpas.core.http` | 上表全部 + cors/recovery/logger/… 产品 middleware 与扩展 re-export |
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
 as the default client/server version.
 
 ## Public Surface Map (by scenario)
 
-Use a single `uses nextpas.core.http` entry; pick APIs by job:
+默认 `uses nextpas.core.http`；只要服务/路由/客户端可用 `uses nextpas.core.http.minimal`：
 
 | Scenario | Start here |
 | --- | --- |
@@ -40,7 +67,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → **Basic only**), `WithTLSContext` |
 | Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap；pool reuse after RH-1) |
-| HTTPS **server** | `THttpServerOptions.TLSContext` → **registry selects H2 TLS only**（not H1 HTTPS server）；see CONTRACT residual |
+| HTTPS **server** | `THttpServerOptions.TLSContext` → H1: `NewH1TlsServerTransport`（ALPN `http/1.1`）；H2: `NewH2TlsServerTransport`（ALPN `h2`） |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
@@ -54,10 +81,11 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 Run the examples instead of copy-pasting a partial snippet:
 
 ```sh
-make -C examples/nextpas.core.http/http_hello_server run
-make -C examples/nextpas.core.http/http_get_client run
-make -C examples/nextpas.core.http/http_server_options_demo run
-make -C examples/nextpas.core.http/http_websocket_echo_demo run
+# from repo root (or any cwd that can reach core/)
+make -C core/examples/nextpas.core.http/http_hello_server run
+make -C core/examples/nextpas.core.http/http_get_client run
+make -C core/examples/nextpas.core.http/http_server_options_demo run
+make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
 ```
 
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
@@ -169,20 +197,22 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
   (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
   such as `http_get_client` use a finite timeout for this reason.
-- **Production server defaults**: `THttpServerOptions.Default` keeps
-  `ReadTimeout`/`WriteTimeout` = **0** (unbounded) for tests/compat.
-  Production servers must use **`THttpServerOptions.Production`** (finite
-  Read/Write = 30000 ms) or explicit `WithReadTimeout` / `WithWriteTimeout`.
+- **Production server defaults**: `THttpServerOptions.Default` Read/Write =
+  **30000** ms (**PD-1B**). `Production` is the same RW named template — prefer
+  it in product code for intent. Long-poll/SSE must set
+  `WithReadTimeout(0)` / `WithWriteTimeout(0)` explicitly.
   IdleTimeout alone is not a full production template. Examples
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
   Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
-  on **Production** + RequestArena so arena demos do not inherit unbounded RW.
+  on **Production** + RequestArena so arena demos inherit finite RW defaults.
 - **With* chain / Timeout vs ConnectTimeout / Default vs Production**：权威表见
   [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
   redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
-  `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with
-  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`.
+  `ITcpStream.SetCancelToken`. **Unix**: waitable wake (socketpair+poll);
+  **Windows**: waitable wake via TCP-loopback `platform_socket_pair` (PD-3-3).
+  Prefer pairing with
+  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`. Details: CONTRACT §2.2.0.
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
   the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
   budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if

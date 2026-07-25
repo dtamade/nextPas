@@ -53,7 +53,7 @@
 |-----------|------|------|
 | M0 | compiler/System gate、rebuild 与状态真相恢复 | 🏗️ |
 | M1 | compiler/System bootstrap contract 收敛 | 🏗️ |
-| M2 | 最小可执行 A→B→C 两跳自举证明 | 🔲 |
+| M2 | 最小可执行 A→B→C 两跳自举证明 | 🏗️ |
 | M3 | session owner、stable IDs、immutable snapshots | 🔲 |
 | M4 | typed query + dependency-aware incremental | 🔲 |
 | M5 | deterministic parallel + data-oriented performance | 🔲 |
@@ -68,8 +68,11 @@
 - NPC V2 framing 与 path-safe entry identity 已落地；framing 14/14 和五阶段 fail-closed
   incremental gate 通过。compiler-pass harness 尚未隔离或清空 workspace `.nextpas` artifact
   roots，因此两次 53/53 都不能写成 cold/warm-cache 证明。
-- M1 已落地第一个 production typed family：object-free 的 root、destroy、cleanup、release
-  由 `TSystemContractKind` 控制 HIR validation 和 LLVM dispatch；其余 contract families 仍待迁移。
+- M1 production typed families 已落地：object-free（root/destroy/cleanup/release）、
+  process_init/fini、string ownership triad（init/fini/assign）、dynarray
+  set_length/fini（`sckDynArray*`）、interface addref/release（`sckInterface*`）、
+  halt（`sckHalt`）；均由 `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。
+  `dynarray_init` 仍 vocabulary。下一 family 与其余 residual 仍待迁移。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
@@ -175,8 +178,27 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、compiler-fail 16/16。
 5. [x] 恢复 canonical `make rebuild-compiler`。
 6. [ ] 建立 fail-closed B0 benchmark 与 process-tree resource evidence。
-7. [ ] 继续 System typed contract migration；object-free 是第一个 production family，M1 未完成。
-8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
+7. [x] M1 typed production families closed（2026-07-23）。
+   - [x] object-free production family（root/destroy/cleanup/release）
+   - [x] process_init/fini typed HIR family（`SystemContractKind` 权威；ledger 仍 scelHir）
+   - [x] string ownership triad typed HIR（init/fini/assign → `np_tstring_*`；ledger scelHir）
+   - [x] dynarray set_length/fini typed HIR（→ `np_dynarray_*`；init 仍 vocabulary；ledger scelExecutable）
+   - [x] interface addref/release typed HIR（→ `np_intf_*`；ledger scelHir call-shape）
+   - [x] halt typed HIR（`sckHalt` → backend syscall lowering；ledger scelHir）
+   - [x] heap_alloc/free typed HIR（GetMem/FreeMem + field arr byte-size → `sckHeapAlloc`/`sckHeapFree` → `@np_alloc`/`@np_free`；ledger scelHir）
+   - [x] exception boundary typed HIR（try_push/pop/raise/finally_end/except_end → `@np_try_*` 等；ledger scelHir；begin markers 仍 bare）
+   - [x] object_alloc typed HIR（class-new → `sckObjectAlloc` → `@np_object_alloc`；ledger scelHir；arr_alloc 归并进 heap_alloc）
+   - [x] managed_record_fini typed HIR（cleanup → `sckManagedRecordFini` 权威 marker + 嵌套 string/dynarray；init 仍 vocabulary；ledger scelHir）
+   - Residual **non-blocking / intentionally deferred**（不挡 M1 关账）：
+     `dynarray_init` / `managed_record_init` = vocabulary；
+     `unit_init` / `unit_fini` = semantic；
+     `object_free` root/release + `runtime_fault` = backend evidence boundary；
+     runtime-closure / 全表 `scelExecutable` = M1 之后。
+8. [ ] M2 A→B→C 两跳证明（进行中）
+   - [x] M2-0 harness：`docs/plans/m2/*` + `scripts/m2-two-hop.sh` + `make m2-two-hop`（a-ready + LLVM hello 基线；禁 host FPC 伪装）
+   - [x] M2-1 LLVM 闭包阶梯 L0–L2：`make m2-ladder`（L1=`np_target_facts` L2=`nextpas_projection_types`；L3 未过）
+   - [ ] M2-2 A→B 可执行（ladder L3 / source-manifest entry）
+   - [ ] M2-3 B→C + acceptance 子集 + 等价报告
 
 ---
 
@@ -195,6 +217,15 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-12 | Compiler excellence roadmap | 采用 Rust 式内部严谨性 + Go 式构建反馈，重新按 production evidence 计分 |
 | 2026-07-13 | M0 truth revalidation | NPC gates、53/53 immediate repeat、16/16 fail、rebuild 与 tooling fresh 通过；cache-root isolation 保持 open |
 | 2026-07-13 | M1 typed contract slice | object-free root/destroy/cleanup/release 成为首个 typed HIR-to-LLVM production family |
+| 2026-07-23 | M1 process + string families | process_init/fini 与 string init/fini/assign 进入 typed HIR（scelHir call-shape） |
+| 2026-07-23 | M1 dynarray + interface families | dynarray set_length/fini（scelExecutable）与 interface addref/release（scelHir）进入 typed HIR |
+| 2026-07-23 | M1 halt + heap families | halt（scelHir syscall）与 GetMem/FreeMem heap_alloc/free（scelHir → np_alloc/np_free）进入 typed HIR |
+| 2026-07-23 | M1 exception boundary family | try_push/pop/raise/finally_end/except_end 进入 typed HIR（scelHir；setjmp call-shape） |
+| 2026-07-23 | M1 object_alloc + arr 归并 | class-new → sckObjectAlloc→np_object_alloc；field arr_alloc → sckHeapAlloc（scelHir） |
+| 2026-07-23 | M1 managed_record_fini | cleanup → sckManagedRecordFini marker + nested string/dynarray（scelHir） |
+| 2026-07-23 | M1 typed production families closed | vocabulary/semantic/backend residual 标 non-blocking；下一主线 M2 |
+| 2026-07-23 | M2-0 harness | source-manifest + ladder + `m2-two-hop.sh` + `make m2-two-hop`；A→B 未关闭 |
+| 2026-07-23 | M2-1 ladder L0–L2 | LLVM unit object path 过 `np_target_facts` + `nextpas_projection_types`；L3/driver 仍挂 |
 
 ---
 

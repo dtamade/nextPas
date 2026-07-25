@@ -37,14 +37,17 @@ does not freeze a backend syscall ABI.
 
 Rules:
 
-- The semantic source node is `halt-call-runtime`; sema owns selecting the exit
+- The semantic source nodes are `halt-call` (const exit code) and
+  `halt-call-runtime` (expression exit code); sema owns selecting the exit
   expression and sequencing required cleanup before termination.
-- HIR uses `halt` as the internal intrinsic name for program termination.
-  This is implementation vocabulary, not the `np.system.halt` contract name.
-- LLVM emitter translates `halt` intrinsic to inline syscall
-  (`movq $60, %rax; syscall`). No named LLVM helper for halt.
-- HIR may project the contract as HIR intrinsic `halt`; this is a compiler/HIR
-  lowering detail, not a public Pascal symbol.
+- HIR authority is typed `sckHalt` via `AssignSystemContract`; `IntrinsicName`
+  is the semantic contract name `np.system.halt` (not bare `halt`).
+- LLVM emitter dispatches `sckHalt` before legacy intrinsic-name matching and
+  lowers to inline syscall (`movq $60, %rax; syscall`). No named LLVM helper
+  for halt.
+- Const form stores the exit code in `CallTarget`; expression form uses one
+  int operand. When process lifecycle is active, halt injects `process_fini`
+  (and reverse unit fini) once before the syscall.
 - Current LLVM output may use syscall inline assembly as backend-private
   termination lowering evidence. This backend-private termination lowering is
   not public ABI and must not become a facade contract.
@@ -60,9 +63,9 @@ for compiler-emitted operations. Advanced Unicode, parsing, formatting and text 
 
 | Contract | Meaning | Owner boundary |
 | --- | --- | --- |
-| `np.system.string_init` | initialize a managed string slot to a safe empty state | system contract, runtime implementation deferred |
-| `np.system.string_fini` | finalize a managed string slot and release owned storage if needed | system contract over mem owner |
-| `np.system.string_assign` | assign one managed string value to another with correct lifetime behavior | system contract over text/mem owners |
+| `np.system.string_init` | initialize a managed string slot to a safe empty state | system contract; HIR typed (`sckStringInit` → `np_tstring_init`); full runtime lifecycle proof deferred |
+| `np.system.string_fini` | finalize a managed string slot and release owned storage if needed | system contract over mem owner; HIR typed (`sckStringFini` → `np_tstring_fini`) |
+| `np.system.string_assign` | assign one managed string value to another with correct lifetime behavior | system contract over text/mem owners; HIR typed (`sckStringAssign` → `np_tstring_assign`) |
 
 Non-goals for this stage:
 
@@ -86,12 +89,16 @@ Rules:
 - Resizing must define failure behavior before implementation appears.
 - Element finalization must be explicit for managed element types.
 - Allocation must route through the heap manager owned by `nextpas.core.mem`.
-- Compiler HIR may project `np.system.dynarray_set_length`,
-  `np.system.dynarray_fini` and element contracts such as
+- Compiler HIR assigns typed `sckDynArraySetLength` / `sckDynArrayFini` via
+  `AssignSystemContract` (semantic names `np.system.dynarray_set_length` /
+  `np.system.dynarray_fini`); LLVM dispatches those kinds before any legacy
+  intrinsic string. Element contracts such as
   `np.system.string_fini` for `array of string` and
-  `np.system.interface_release` for `array of interface`. Backend-private
+  `np.system.interface_release` for `array of interface` may nest. Backend-private
   helpers such as `@np_dynarray_resize`, `@np_dynarray_release` and
   `@np_dynarray_fault` remain implementation details, not public ABI.
+- `dynarray_init` remains vocabulary: empty slot is established by compiler stores
+  to `{ptr,len}`, not a typed runtime call in this slice.
 - The dynamic-array fault helper is current backend evidence for rejecting
   impossible helper states in generated LLVM. It is not a public runtime-fault
   taxonomy, not a Pascal exception facade, and not proof that all dynamic-array
@@ -118,17 +125,17 @@ Rules:
 - Nil interface references must be safe.
 - Release ordering must be deterministic and testable.
 - Any interaction with object destruction must align with `np.system.object_free`.
-- HIR uses `intf_addref` and `intf_release` as internal intrinsic names (not the full `np.system.*` contract names).
-- LLVM emitter translates `intf_addref` → `@np_intf_addref` and `intf_release` → `@np_intf_release`.
-- Compiler/HIR may currently project interface reference ownership through
-  backend-private interface helpers such as `@np_intf_addref` and
-  `@np_intf_release`. These names are LLVM/backend evidence only,
+- Compiler HIR assigns typed `sckInterfaceAddRef` / `sckInterfaceRelease` via
+  `AssignSystemContract` (semantic names `np.system.interface_addref` /
+  `np.system.interface_release`); LLVM dispatches those kinds before any legacy
+  intrinsic string. Runtime mapping still goes through backend-private interface helpers
+  `@np_intf_addref` and `@np_intf_release` as LLVM/backend evidence only,
   not public ABI, not Pascal facade symbols, not object-free completion, and
   not finalized reference-counting strategy.
 - Current helper bodies are allowed to show nil-safety and refcount-slot
   mechanics in LLVM-focused tests. They must not be read as a final COM,
   elision, destruction, or interface-table policy for the future runtime.
-- Source-contract check `check_system_source_contracts.sh:675-680` verifies HIR intrinsic name and LLVM helper existence.
+- Source-contract check verifies typed builder assignment and LLVM helper existence.
 
 ## Object Free
 
@@ -189,6 +196,14 @@ Rules:
 - Partial initialization must have a defined cleanup path.
 - Finalization must be idempotent only where compiler semantics require it; do not silently mask double-finalize bugs.
 - Record field ownership stays explicit; system does not own text, array, interface or heap internals.
+- Scope cleanup lowers to production typed HIR `sckManagedRecordFini`
+  (`np.system.managed_record_fini` via `AssignSystemContract` on
+  `managed-record-cleanup-runtime`). The marker carries the record base pointer;
+  nested managed contracts (`sckStringFini` → `@np_tstring_fini`,
+  `sckDynArrayFini` → `@np_dynarray_release`) perform field release. LLVM emits
+  a compiler-planned marker comment only (no standalone `@np_managed_record_fini`
+  helper in this slice). Focused evidence: `test_hir_managed_record_contract`.
+  `managed_record_init` remains vocabulary-only.
 
 ## Heap Manager
 
@@ -206,13 +221,18 @@ Rules:
 - The heap manager contract must preserve size/alignment truth needed by mem.
 - Out-of-memory behavior must map to canonical exception/error taxonomy.
 - Any implementation must prove leak-sensitive behavior before it can be treated as Ready.
-- HIR uses `arr_alloc` and `arr_alloc_sized` as internal intrinsic names for dynamic
-  array allocation; `class_alloc` for object instance allocation. These are
-  implementation vocabulary, not the `np.system.heap_alloc` contract name.
-- LLVM emitter translates `arr_alloc` → `@np_alloc` (array allocation) and
-  `class_alloc` → `@np_object_alloc` (object allocation). HIR does not currently
-  use `np.system.heap_alloc` or `np.system.heap_free` intrinsic names.
-- Compiler/HIR may currently project heap ownership through backend-private allocator helpers
+- GetMem/FreeMem lower to production typed HIR `sckHeapAlloc` / `sckHeapFree`
+  (`np.system.heap_alloc` / `np.system.heap_free` semantic names via
+  `AssignSystemContract`); LLVM emits backend-private `@np_alloc` / `@np_free`.
+  Field setlength element-count paths re-home onto `sckHeapAlloc` after
+  count×8 byte-size lowering. Focused evidence: `test_hir_heap_contract`.
+- Class instance allocation lowers to production typed HIR `sckObjectAlloc`
+  (`np.system.object_alloc` via `AssignSystemContract`); LLVM emits
+  `@np_object_alloc`. Focused evidence: `test_hir_object_alloc_contract`.
+- Legacy bare HIR names `arr_alloc` / `arr_alloc_sized` / `class_alloc` may still
+  appear only as residual emitter fallbacks; production builder sites no longer
+  assign those IntrinsicName values.
+- Compiler/HIR may project heap ownership through backend-private allocator helpers
   such as `@np_alloc`, `@np_free`, `@np_object_alloc` and `@np_allocator_fault`.
   These helper names are LLVM/backend evidence only,
   not public ABI, not Pascal facade symbols, and not allocator owner transfer

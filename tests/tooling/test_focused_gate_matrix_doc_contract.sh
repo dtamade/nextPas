@@ -75,7 +75,7 @@ require_exact_matrix_lanes() {
       }
     ' "$WORKTREES_DOC" | sort | tr '\n' ' '
   )
-  expected_lanes="compiler config http mem platform system "
+  expected_lanes="compiler config http mem platform system test "
 
   if [ "$actual_lanes" != "$expected_lanes" ]; then
     printf 'focused gate matrix lanes differ from contract\n' >&2
@@ -161,7 +161,7 @@ require_skip_exception_contract() {
 
 require_doc_pattern 'Focused Gate Matrix' 'focused gate matrix section'
 require_exact_matrix_lanes
-require_doc_pattern 'make lane-focused LANE=<platform[|]mem[|]system[|]config[|]http>' 'lane-focused helper command'
+require_doc_pattern 'make lane-focused LANE=<platform[|]mem[|]system[|]config[|]http[|]test>' 'lane-focused helper command'
 require_doc_pattern 'lane-focused[.]sh --list|--list' 'lane-focused matrix list command'
 require_doc_pattern '`lane`' 'lane-focused lane field'
 require_doc_pattern '`truth`' 'lane-focused truth field'
@@ -175,10 +175,11 @@ require_doc_pattern 'runtime' 'runtime truth category'
 require_doc_pattern 'CI truth' 'CI truth category'
 
 require_focused_path_contract 'core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix' 'platform lane simulated host compile gate'
-require_focused_path_contract 'core/tests/nextpas.core.mem/test_usability_guardrails' 'mem lane usability guardrails gate'
+require_focused_path_contract 'core/tests/nextpas.core.mem/lane_gate' 'mem lane gate'
 require_focused_path_contract 'core/tests/nextpas.core.system/test_system_source_contracts' 'system lane source contract gate'
 require_focused_path_contract 'core/tests/nextpas.core.config/test_config' 'config lane focused gate'
 require_focused_path_contract 'core/tests/nextpas.core.http/test_http_client' 'http lane focused gate'
+require_focused_path_contract 'core/tests/nextpas.core.test/lane_gate' 'test lane contracts gate'
 require_lane_focused_list_matches_doc_matrix
 require_doc_pattern 'compiler.*not.*default focused gate|compiler.*不是.*默认 focused gate' 'compiler is not default focused gate'
 require_doc_pattern 'compiler.*build/verify_local[.]sh|build/verify_local[.]sh.*compiler' 'compiler verify local exception'

@@ -23,71 +23,36 @@ uses
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.stream,
+  nextpas.core.http.impl.h2.streammap,
+  nextpas.core.http.impl.h2.session.helpers,
+  nextpas.core.http.impl.h2.session.preface,
+  nextpas.core.http.impl.h2.session.writer,
   nextpas.core.http.impl.h2.types;
 
 type
-  TH2PrefaceStatus = (
-    h2psNeedMore,
-    h2psOk,
-    h2psConnectionError
-  );
+  { Mechanical extracts re-exported for existing tests/source contracts. }
+  TH2PrefaceStatus =
+    nextpas.core.http.impl.h2.session.preface.TH2PrefaceStatus;
+  TH2StreamMap =
+    nextpas.core.http.impl.h2.streammap.TH2StreamMap;
+  TH2ResponseWriter =
+    nextpas.core.http.impl.h2.session.writer.TH2ResponseWriter;
 
+const
+  h2psNeedMore =
+    nextpas.core.http.impl.h2.session.preface.h2psNeedMore;
+  h2psOk =
+    nextpas.core.http.impl.h2.session.preface.h2psOk;
+  h2psConnectionError =
+    nextpas.core.http.impl.h2.session.preface.h2psConnectionError;
+
+type
   TH2SessionState = (
     h2sesExpectPreface,
     h2sesActive,
     h2sesShuttingDown,
     h2sesClosed
   );
-
-  TH2StreamMap = class
-  private const
-    INITIAL_CAPACITY = 16;
-    LOAD_FACTOR_NUM = 3; { numerator: 3/4 = 75% }
-    LOAD_FACTOR_DEN = 4;
-    SLOT_EMPTY = 0;
-    SLOT_USED = 1;
-    SLOT_DELETED = 2;
-  private
-    FKeys: array of UInt32;
-    FStreams: array of TH2Stream;
-    FSlots: array of Byte;
-    FCapacity: SizeInt;
-    FCount: SizeInt;
-    FDeletedCount: SizeInt;
-    procedure Grow;
-    function FindSlot(const AStreamID: UInt32): SizeInt;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    function Find(const AStreamID: UInt32): TH2Stream;
-    function FindOrCreate(const AStreamID: UInt32;
-      const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
-      var AConnectionFlow: TH2ConnectionFlowControl;
-      var ADecoder: THPackDecoder;
-      const AMaxHeaderListSize: UInt32 = H2_DEFAULT_MAX_HEADER_LIST_SIZE): TH2Stream;
-    procedure Remove(const AStreamID: UInt32);
-    function ActiveCount: SizeInt;
-    function AnyPending: Boolean;
-    procedure CloseAll(const AErrorCode: UInt32);
-    procedure ApplyPeerInitialWindowSize(const ANewInitialWindowSize: UInt32);
-    function ItemAt(const AIndex: SizeInt): TH2Stream;
-  end;
-
-  TH2ResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
-  private
-    FStatus: THttpStatus;
-    FHeaders: IHttpHeaders;
-    FBody: IStream;
-    FCommitted: Boolean;
-  public
-    constructor Create;
-    procedure WriteHeader(const AStatus: THttpStatus);
-    function GetStatus: THttpStatus;
-    function GetHeaders: IHttpHeaders;
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    procedure Flush;
-    function BodyStream: IStream;
-  end;
 
   TH2ServerSession = class(TInterfacedObject, ITcpServerSession,
     ITcpServerPollDrivenSession, ITcpServerPollDrivenSessionWithDeadline)
@@ -164,8 +129,6 @@ type
       const AFrame: TH2Frame): Boolean;
     function RejectFrame(const AStreamID: UInt32; const AErrorCode: UInt32;
       const AConnectionLevel: Boolean): Boolean;
-    function ParseSettingsPayload(const APayload: AnsiString;
-      out ASettings: TH2Settings): Boolean;
     function ExtractPseudoHeader(const AHeaders: IHttpHeaders;
       const AName: string): string;
     function BuildRequestFromStream(const AStream: TH2Stream): IHttpRequest;
@@ -199,7 +162,7 @@ type
   end;
 
 function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
-  out AConsumed: SizeUInt; out AErrorCode: UInt32): TH2PrefaceStatus;
+  out AConsumed: SizeUInt; out AErrorCode: UInt32): TH2PrefaceStatus; inline;
 
 implementation
 
@@ -207,7 +170,6 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.errors,
-  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.io.memory,
   nextpas.core.time.base,
@@ -222,384 +184,11 @@ uses
 const
   H2_READ_BUFFER_HARD_LIMIT: SizeInt = 16 * 1024 * 1024;
 
-function H2PrefaceResult(const AStatus: TH2PrefaceStatus;
-  const AConsumed: SizeUInt; const AErrorCode: UInt32; out AOutConsumed: SizeUInt;
-  out AOutErrorCode: UInt32): TH2PrefaceStatus;
-begin
-  AOutConsumed := AConsumed;
-  AOutErrorCode := AErrorCode;
-  Result := AStatus;
-end;
-
-function H2PrefacePrefixMatches(const ABuf: PAnsiChar;
-  const ALen: SizeUInt): Boolean;
-var
-  LI: SizeUInt;
-begin
-  if ALen = 0 then
-    Exit(True);
-
-  if ABuf = nil then
-    Exit(False);
-
-  for LI := 0 to ALen - 1 do
-  begin
-    if ABuf[LI] <> H2_CLIENT_PREFACE[LI + 1] then
-      Exit(False);
-  end;
-
-  Result := True;
-end;
-
 function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
   out AConsumed: SizeUInt; out AErrorCode: UInt32): TH2PrefaceStatus;
-var
-  LFrame: TH2Frame;
-  LFrameBytes: SizeUInt;
-  LFrameBuf: PAnsiChar;
-  LFrameError: UInt32;
-  LFrameLen: SizeUInt;
 begin
-  if ALen < SizeUInt(Length(H2_CLIENT_PREFACE)) then
-  begin
-    if H2PrefacePrefixMatches(ABuf, ALen) then
-      Exit(H2PrefaceResult(h2psNeedMore, 0, H2_ERR_NO_ERROR, AConsumed,
-        AErrorCode));
-
-    Exit(H2PrefaceResult(h2psConnectionError, 0, H2_ERR_PROTOCOL_ERROR,
-      AConsumed, AErrorCode));
-  end;
-
-  if not H2PrefacePrefixMatches(ABuf, Length(H2_CLIENT_PREFACE)) then
-    Exit(H2PrefaceResult(h2psConnectionError, 0, H2_ERR_PROTOCOL_ERROR,
-      AConsumed, AErrorCode));
-
-  LFrameLen := ALen - Length(H2_CLIENT_PREFACE);
-  if LFrameLen < H2_FRAME_HEADER_SIZE then
-    Exit(H2PrefaceResult(h2psNeedMore, 0, H2_ERR_NO_ERROR, AConsumed,
-      AErrorCode));
-
-  LFrameBuf := @ABuf[Length(H2_CLIENT_PREFACE)];
-  if not H2DecodeFrame(LFrameBuf, LFrameLen, LFrame, LFrameBytes) then
-    Exit(H2PrefaceResult(h2psNeedMore, 0, H2_ERR_NO_ERROR, AConsumed,
-      AErrorCode));
-
-  if not H2ValidateFrame(LFrame, H2_DEFAULT_MAX_FRAME_SIZE, LFrameError) then
-    Exit(H2PrefaceResult(h2psConnectionError, 0, LFrameError, AConsumed,
-      AErrorCode));
-
-  if LFrame.Header.FrameType <> H2_FRAME_SETTINGS then
-    Exit(H2PrefaceResult(h2psConnectionError, 0, H2_ERR_PROTOCOL_ERROR,
-      AConsumed, AErrorCode));
-
-  if (LFrame.Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0 then
-    Exit(H2PrefaceResult(h2psConnectionError, 0, H2_ERR_PROTOCOL_ERROR,
-      AConsumed, AErrorCode));
-
-  Result := H2PrefaceResult(h2psOk,
-    Length(H2_CLIENT_PREFACE) + LFrameBytes, H2_ERR_NO_ERROR, AConsumed,
-    AErrorCode);
-end;
-
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
-begin
-  if ALeft < ARight then
-    Result := ALeft
-  else
-    Result := ARight;
-end;
-
-{ RFC 9113 §6.5.2: SETTINGS_MAX_CONCURRENT_STREAMS default is100.
-  A value of0 means "not advertised" and should use the RFC default. }
-function EffectiveMaxConcurrentStreams(const ASettings: TH2Settings): UInt32;
-begin
-  if ASettings.MaxConcurrentStreams = 0 then
-    Result := 100
-  else
-    Result := ASettings.MaxConcurrentStreams;
-end;
-
-function AnsiToString(const AValue: AnsiString): string; inline;
-begin
-  Result := string(AValue);
-end;
-
-function StringToAnsi(const AValue: string): AnsiString; inline;
-begin
-  Result := AnsiString(AValue);
-end;
-
-function StatusHeaderValue(const AStatus: THttpStatus): string; inline;
-begin
-  Result := IntToStr(Int64(AStatus));
-end;
-
-function HttpMethodFromPseudo(const AValue: string): THttpMethod;
-begin
-  Result := HttpStrToMethod(AValue);
-end;
-
-function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
-begin
-  Result := HttpStatusIsInformational(AStatus) or
-    (AStatus = HTTP_STATUS_NO_CONTENT) or
-    (AStatus = HTTP_STATUS_NOT_MODIFIED) or
-    (AStatus = HTTP_STATUS_RESET_CONTENT);
-end;
-
-{ TH2ResponseWriter }
-
-constructor TH2ResponseWriter.Create;
-begin
-  inherited Create;
-  FStatus := HTTP_STATUS_OK;
-  FHeaders := NewHttpHeaders;
-  FBody := CreateBytesStream;
-  FCommitted := False;
-end;
-
-procedure TH2ResponseWriter.WriteHeader(const AStatus: THttpStatus);
-begin
-  FStatus := AStatus;
-  FCommitted := True;
-end;
-
-function TH2ResponseWriter.GetStatus: THttpStatus;
-begin
-  Result := FStatus;
-end;
-
-function TH2ResponseWriter.GetHeaders: IHttpHeaders;
-begin
-  Result := FHeaders;
-end;
-
-function TH2ResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-begin
-  if not FCommitted then
-    WriteHeader(HTTP_STATUS_OK);
-  Result := FBody.Write(ABuf, ACount);
-end;
-
-procedure TH2ResponseWriter.Flush;
-begin
-end;
-
-function TH2ResponseWriter.BodyStream: IStream;
-begin
-  Result := FBody;
-end;
-
-{ TH2StreamMap }
-
-constructor TH2StreamMap.Create;
-begin
-  inherited Create;
-  FCapacity := INITIAL_CAPACITY;
-  SetLength(FKeys, FCapacity);
-  SetLength(FStreams, FCapacity);
-  SetLength(FSlots, FCapacity);
-  { FSlots is zero-initialized (SLOT_EMPTY = 0) }
-end;
-
-destructor TH2StreamMap.Destroy;
-begin
-  CloseAll(H2_ERR_CANCEL);
-  FKeys := nil;
-  FStreams := nil;
-  FSlots := nil;
-  inherited Destroy;
-end;
-
-function TH2StreamMap.FindSlot(const AStreamID: UInt32): SizeInt;
-var
-  LMask: SizeInt;
-  LIndex: SizeInt;
-  LFirstDeleted: SizeInt;
-begin
-  LMask := FCapacity - 1;
-  LIndex := (AStreamID * 2654435761) and LMask; { Fibonacci hashing }
-  LFirstDeleted := -1;
-  while True do
-  begin
-    case FSlots[LIndex] of
-      SLOT_EMPTY:
-        begin
-          if LFirstDeleted >= 0 then
-            Result := LFirstDeleted
-          else
-            Result := LIndex;
-          Exit;
-        end;
-      SLOT_USED:
-        begin
-          if FKeys[LIndex] = AStreamID then
-          begin
-            Result := LIndex;
-            Exit;
-          end;
-        end;
-      SLOT_DELETED:
-        begin
-          if LFirstDeleted < 0 then
-            LFirstDeleted := LIndex;
-        end;
-    end;
-    LIndex := (LIndex + 1) and LMask;
-  end;
-end;
-
-procedure TH2StreamMap.Grow;
-var
-  LOldKeys: array of UInt32;
-  LOldStreams: array of TH2Stream;
-  LOldSlots: array of Byte;
-  LOldCapacity: SizeInt;
-  LI: SizeInt;
-  LIndex: SizeInt;
-  LMask: SizeInt;
-begin
-  LOldKeys := FKeys;
-  LOldStreams := FStreams;
-  LOldSlots := FSlots;
-  LOldCapacity := FCapacity;
-
-  FCapacity := FCapacity * 2;
-  SetLength(FKeys, FCapacity);
-  SetLength(FStreams, FCapacity);
-  SetLength(FSlots, FCapacity);
-  FCount := 0;
-  FDeletedCount := 0;
-  { FSlots is zero-initialized }
-
-  LMask := FCapacity - 1;
-  for LI := 0 to LOldCapacity - 1 do
-  begin
-    if LOldSlots[LI] = SLOT_USED then
-    begin
-      LIndex := (LOldKeys[LI] * 2654435761) and LMask;
-      while FSlots[LIndex] = SLOT_USED do
-        LIndex := (LIndex + 1) and LMask;
-      FKeys[LIndex] := LOldKeys[LI];
-      FStreams[LIndex] := LOldStreams[LI];
-      FSlots[LIndex] := SLOT_USED;
-      Inc(FCount);
-    end;
-  end;
-end;
-
-function TH2StreamMap.Find(const AStreamID: UInt32): TH2Stream;
-var
-  LIndex: SizeInt;
-begin
-  LIndex := FindSlot(AStreamID);
-  if (LIndex >= 0) and (FSlots[LIndex] = SLOT_USED) and
-     (FKeys[LIndex] = AStreamID) then
-    Result := FStreams[LIndex]
-  else
-    Result := nil;
-end;
-
-function TH2StreamMap.FindOrCreate(const AStreamID: UInt32;
-  const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
-  var AConnectionFlow: TH2ConnectionFlowControl;
-  var ADecoder: THPackDecoder; const AMaxHeaderListSize: UInt32): TH2Stream;
-var
-  LIndex: SizeInt;
-begin
-  LIndex := FindSlot(AStreamID);
-  if (LIndex >= 0) and (FSlots[LIndex] = SLOT_USED) and
-     (FKeys[LIndex] = AStreamID) then
-    Exit(FStreams[LIndex]);
-
-  { Check load factor: (used + deleted + 1) / capacity > 3/4?
-    Must include FDeletedCount: tombstones consume probe slots, so a table
-    with many deleted entries degrades to O(n) probing unless we rehash. }
-  if (FCount + FDeletedCount + 1) * LOAD_FACTOR_DEN > FCapacity * LOAD_FACTOR_NUM then
-  begin
-    Grow;
-    LIndex := FindSlot(AStreamID);
-  end;
-
-  FKeys[LIndex] := AStreamID;
-  FStreams[LIndex] := TH2Stream.Create(AStreamID, ASendWindowSize,
-    ARecvWindowSize, AConnectionFlow, ADecoder, AMaxHeaderListSize);
-  if FSlots[LIndex] = SLOT_DELETED then
-    Dec(FDeletedCount);
-  FSlots[LIndex] := SLOT_USED;
-  Inc(FCount);
-  Result := FStreams[LIndex];
-end;
-
-procedure TH2StreamMap.Remove(const AStreamID: UInt32);
-var
-  LIndex: SizeInt;
-begin
-  LIndex := FindSlot(AStreamID);
-  if (LIndex < 0) or (FSlots[LIndex] <> SLOT_USED) or
-     (FKeys[LIndex] <> AStreamID) then
-    Exit;
-  FStreams[LIndex].Free;
-  FStreams[LIndex] := nil;
-  FSlots[LIndex] := SLOT_DELETED;
-  Dec(FCount);
-  Inc(FDeletedCount);
-end;
-
-function TH2StreamMap.ActiveCount: SizeInt;
-begin
-  Result := FCount;
-end;
-
-function TH2StreamMap.AnyPending: Boolean;
-begin
-  Result := FCount > 0;
-end;
-
-procedure TH2StreamMap.CloseAll(const AErrorCode: UInt32);
-var
-  LI: SizeInt;
-begin
-  for LI := 0 to FCapacity - 1 do
-  begin
-    if FSlots[LI] = SLOT_USED then
-    begin
-      FStreams[LI].Reset(AErrorCode);
-      FStreams[LI].Free;
-      FStreams[LI] := nil;
-      FSlots[LI] := SLOT_EMPTY;
-    end;
-  end;
-  FCount := 0;
-  FDeletedCount := 0;
-end;
-
-procedure TH2StreamMap.ApplyPeerInitialWindowSize(
-  const ANewInitialWindowSize: UInt32);
-var
-  LI: SizeInt;
-begin
-  for LI := 0 to FCapacity - 1 do
-    if FSlots[LI] = SLOT_USED then
-      FStreams[LI].ApplyPeerInitialWindowSize(ANewInitialWindowSize);
-end;
-
-function TH2StreamMap.ItemAt(const AIndex: SizeInt): TH2Stream;
-var
-  LI, LFound: SizeInt;
-begin
-  { Iterate hash table to find the AIndex-th active entry }
-  LFound := 0;
-  for LI := 0 to FCapacity - 1 do
-  begin
-    if FSlots[LI] = SLOT_USED then
-    begin
-      if LFound = AIndex then
-        Exit(FStreams[LI]);
-      Inc(LFound);
-    end;
-  end;
-  Result := nil;
+  Result := nextpas.core.http.impl.h2.session.preface.H2ValidateServerPreface(
+    ABuf, ALen, AConsumed, AErrorCode);
 end;
 
 { TH2ServerSession }
@@ -1143,53 +732,13 @@ begin
   end;
 end;
 
-function TH2ServerSession.ParseSettingsPayload(const APayload: AnsiString;
-  out ASettings: TH2Settings): Boolean;
-var
-  LEntries: TH2SettingEntries;
-  LI: SizeInt;
-begin
-  ASettings := FRemoteSettings;
-  if not H2DecodeSettingsPayload(APayload, LEntries) then
-    Exit(False);
-  for LI := 0 to High(LEntries) do
-  begin
-    case LEntries[LI].Identifier of
-      H2_SETTINGS_HEADER_TABLE_SIZE:
-        ASettings.HeaderTableSize := LEntries[LI].Value;
-      H2_SETTINGS_ENABLE_PUSH:
-        begin
-          if LEntries[LI].Value > 1 then
-            Exit(False);
-          ASettings.EnablePush := LEntries[LI].Value <> 0;
-        end;
-      H2_SETTINGS_MAX_CONCURRENT_STREAMS:
-        ASettings.MaxConcurrentStreams := LEntries[LI].Value;
-      H2_SETTINGS_INITIAL_WINDOW_SIZE:
-        ASettings.InitialWindowSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_FRAME_SIZE:
-        ASettings.MaxFrameSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_HEADER_LIST_SIZE:
-        ASettings.MaxHeaderListSize := LEntries[LI].Value;
-      else
-        { unknown setting ignored }
-    end;
-  end;
-  try
-    ASettings.Validate;
-  except
-    Exit(False);
-  end;
-  Result := True;
-end;
-
 function TH2ServerSession.HandleSettings(const AFrame: TH2Frame): Boolean;
 var
   LSettings: TH2Settings;
 begin
   if (AFrame.Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0 then
     Exit(True);
-  if not ParseSettingsPayload(AFrame.Payload, LSettings) then
+  if not H2ParseSettingsPayload(FRemoteSettings, AFrame.Payload, LSettings) then
     Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   FRemoteSettings := LSettings;
   FEncoder.SetDynamicTableSize(FRemoteSettings.HeaderTableSize);
@@ -1706,7 +1255,7 @@ begin
     LCapacity := AStream.AvailableSendCapacity;
     if LCapacity = 0 then
       Break;
-    LChunkSize := MinUInt32(LMaxChunk, LCapacity);
+    LChunkSize := H2MinUInt32(LMaxChunk, LCapacity);
     SetLength(LPayload, LChunkSize);
     LRead := ABody.Read(LPayload[1], LChunkSize);
     if LRead = 0 then

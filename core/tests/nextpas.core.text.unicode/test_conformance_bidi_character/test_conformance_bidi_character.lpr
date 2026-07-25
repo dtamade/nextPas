@@ -7,11 +7,23 @@ program test_conformance_bidi_character;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.bidi;
+
+
+function StrToIntDefLocal(const S: string; const ADefault: Integer = 0): Integer;
+var
+  V: Int64;
+begin
+  if TryStrToInt(S, V) then
+    Result := Integer(V)
+  else
+    Result := ADefault;
+end;
 
 var
   T: TTestSuite;
@@ -66,8 +78,9 @@ end;
 
 procedure TestBidiCharacter;
 var
+  LLines: TStringArray;
+  LLineIdx: Integer;
   LPath: string;
-  LFile: Text;
   LLine: string;
   LLineNo, LChecked, LFail, I, Fld, Start, N, NT: Integer;
   LFields: array[0..4] of string;
@@ -85,15 +98,13 @@ begin
     LPath := ResolveFixture('bidi_character_test_smoke.txt');
   Check(FileExists(LPath), 'fixture exists: ' + LPath);
 
-  Assign(LFile, LPath);
-  Reset(LFile);
+  LLines := ReadFileLines(LPath);
   LLineNo := 0;
   LChecked := 0;
   LFail := 0;
-  try
-    while not Eof(LFile) do
-    begin
-      ReadLn(LFile, LLine);
+  for LLineIdx := 0 to High(LLines) do
+  begin
+    LLine := LLines[LLineIdx];
       Inc(LLineNo);
       if (LLine = '') or (LLine[1] = '#') then
         Continue;
@@ -104,7 +115,7 @@ begin
         if (I > Length(LLine)) or (LLine[I] = ';') then
         begin
           if Fld <= 4 then
-            LFields[Fld] := Trim(Copy(LLine, Start, I - Start));
+            LFields[Fld] := TextTrim(Copy(LLine, Start, I - Start));
           Inc(Fld);
           Start := I + 1;
         end;
@@ -120,11 +131,11 @@ begin
         LCls[I] := GetBidiClass(LCps[I]);
       end;
 
-      LDir := StrToIntDef(LFields[1], 2);
-      LExpPara := StrToIntDef(LFields[2], 0);
+      LDir := StrToIntDefLocal(LFields[1], 2);
+      LExpPara := StrToIntDefLocal(LFields[2], 0);
 
       ParseSpaceTokens(LFields[3], LToks, NT);
-      CheckEqual(Int64(N), Int64(NT), Format('level count line %d', [LLineNo]));
+      CheckEqual(Int64(N), Int64(NT), TextFormat('level count line %d', [LLineNo]));
       SetLength(LExpLevels, N);
       for I := 0 to N - 1 do
         if LToks[I] = 'x' then
@@ -165,17 +176,14 @@ begin
       begin
         Inc(LFail);
         if LFail <= 30 then
-          WriteLn(Format('FAIL line %d dir=%d expPara=%d gotPara=%d',
+          WriteLn(TextFormat('FAIL line %d dir=%d expPara=%d gotPara=%d',
             [LLineNo, LDir, LExpPara, LRes.ParagraphLevel]));
       end;
       Inc(LChecked);
-    end;
-  finally
-    Close(LFile);
   end;
 
-  WriteLn(Format('checked=%d fail=%d pass=%d', [LChecked, LFail, LChecked - LFail]));
-  CheckEqual(Int64(0), Int64(LFail), Format('bidi character failures: %d', [LFail]));
+  WriteLn(TextFormat('checked=%d fail=%d pass=%d', [LChecked, LFail, LChecked - LFail]));
+  CheckEqual(Int64(0), Int64(LFail), TextFormat('bidi character failures: %d', [LFail]));
   Check(LChecked > 0, 'expected some bidi rows');
 end;
 

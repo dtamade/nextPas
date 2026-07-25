@@ -1,6 +1,7 @@
 unit nextpas.core.sync;
 {**
- * @desc 同步原语门面：Mutex、RWLock、SpinLock、WaitGroup、CondVar、Semaphore。
+ * @desc 同步原语门面：Mutex、RWLock、SpinLock、WaitGroup、CondVar、Semaphore、
+ *       Latch、Notify、Channel、Scoped 组合器与 TSyncPool（advanced）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -18,10 +19,21 @@ uses
   nextpas.core.sync.spinlock,
   nextpas.core.sync.semaphore,
   nextpas.core.sync.barrier,
-  nextpas.core.sync.event;
+  nextpas.core.sync.event,
+  nextpas.core.sync.latch,
+  nextpas.core.sync.notify,
+  nextpas.core.sync.channel,
+  nextpas.core.sync.scoped,
+  nextpas.core.sync.pool;
 
 type
   TLockState = nextpas.core.sync.base.TLockState;
+  TOnceProc = nextpas.core.sync.base.TOnceProc;
+  TSyncProc = nextpas.core.sync.base.TSyncProc;
+  TBarrierWaitResult = nextpas.core.sync.base.TBarrierWaitResult;
+  TChannelSendResult = nextpas.core.sync.base.TChannelSendResult;
+  TChannelRecvResult = nextpas.core.sync.base.TChannelRecvResult;
+
   ILockGuard = nextpas.core.sync.intf.ILockGuard;
   ILock = nextpas.core.sync.intf.ILock;
   IMutex = nextpas.core.sync.intf.IMutex;
@@ -34,10 +46,19 @@ type
   ISemaphore = nextpas.core.sync.intf.ISemaphore;
   IBarrier = nextpas.core.sync.intf.IBarrier;
   IEvent = nextpas.core.sync.intf.IEvent;
-  TOnceProc = nextpas.core.sync.base.TOnceProc;
-  TBarrierWaitResult = nextpas.core.sync.base.TBarrierWaitResult;
+  ILatch = nextpas.core.sync.intf.ILatch;
+  INotify = nextpas.core.sync.intf.INotify;
+  IChannel = nextpas.core.sync.intf.IChannel;
+
+  TPoolFactory = nextpas.core.sync.pool.TPoolFactory;
+  TPoolDestroy = nextpas.core.sync.pool.TPoolDestroy;
+  TPoolItem = nextpas.core.sync.pool.TPoolItem;
+  TSyncPoolConfig = nextpas.core.sync.pool.TSyncPoolConfig;
+  TSyncPool = nextpas.core.sync.pool.TSyncPool;
+  TSyncPoolBuilder = nextpas.core.sync.pool.TSyncPoolBuilder;
 
 function Mutex: INativeMutex; inline;
+function RecursiveMutex: INativeMutex; inline;
 function FutexMutex: IMutex; inline;
 function RWLock: IRWLock; inline;
 function WaitGroup: IWaitGroup; inline;
@@ -47,12 +68,29 @@ function SpinLock: ISpinLock; inline;
 function Semaphore(const AInitial: Int32 = 1): ISemaphore; inline;
 function Barrier(const ACount: Int32): IBarrier; inline;
 function Event(const AManualReset: Boolean = True): IEvent; inline;
+function Latch(const ACount: Int32): ILatch; inline;
+function Notify: INotify; inline;
+function Channel(const ACapacity: SizeInt): IChannel; inline;
+
+procedure WithLock(const ALock: ILock; const AProc: TSyncProc); inline;
+procedure WithReadLock(const ARW: IRWLock; const AProc: TSyncProc); inline;
+procedure WithWriteLock(const ARW: IRWLock; const AProc: TSyncProc); inline;
+function Guard(const ALock: ILock): ILockGuard; inline;
+function ReadGuard(const ARW: IRWLock): ILockGuard; inline;
+function WriteGuard(const ARW: IRWLock): ILockGuard; inline;
+
+function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
 
 implementation
 
 function Mutex: INativeMutex;
 begin
   Result := nextpas.core.sync.mutex.TMutex.Create;
+end;
+
+function RecursiveMutex: INativeMutex;
+begin
+  Result := nextpas.core.sync.mutex.TRecursiveMutex.Create;
 end;
 
 function FutexMutex: IMutex;
@@ -98,6 +136,56 @@ end;
 function Event(const AManualReset: Boolean): IEvent;
 begin
   Result := nextpas.core.sync.event.CreateEvent(AManualReset);
+end;
+
+function Latch(const ACount: Int32): ILatch;
+begin
+  Result := nextpas.core.sync.latch.CreateLatch(ACount);
+end;
+
+function Notify: INotify;
+begin
+  Result := nextpas.core.sync.notify.CreateNotify;
+end;
+
+function Channel(const ACapacity: SizeInt): IChannel;
+begin
+  Result := nextpas.core.sync.channel.CreateChannel(ACapacity);
+end;
+
+procedure WithLock(const ALock: ILock; const AProc: TSyncProc);
+begin
+  nextpas.core.sync.scoped.WithLock(ALock, AProc);
+end;
+
+procedure WithReadLock(const ARW: IRWLock; const AProc: TSyncProc);
+begin
+  nextpas.core.sync.scoped.WithReadLock(ARW, AProc);
+end;
+
+procedure WithWriteLock(const ARW: IRWLock; const AProc: TSyncProc);
+begin
+  nextpas.core.sync.scoped.WithWriteLock(ARW, AProc);
+end;
+
+function Guard(const ALock: ILock): ILockGuard;
+begin
+  Result := nextpas.core.sync.scoped.Guard(ALock);
+end;
+
+function ReadGuard(const ARW: IRWLock): ILockGuard;
+begin
+  Result := nextpas.core.sync.scoped.ReadGuard(ARW);
+end;
+
+function WriteGuard(const ARW: IRWLock): ILockGuard;
+begin
+  Result := nextpas.core.sync.scoped.WriteGuard(ARW);
+end;
+
+function CreateSyncPool(AFactory: TPoolFactory): TSyncPool;
+begin
+  Result := nextpas.core.sync.pool.CreateSyncPool(AFactory);
 end;
 
 end.

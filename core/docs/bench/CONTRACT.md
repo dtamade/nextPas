@@ -1,9 +1,9 @@
 # nextpas.core.bench 代码契约
 
 **模块路径**：`core/src/nextpas.core.bench*.pas`
-**层级**：L1（依赖 L0: base / text / platform.time 等）
-**最后更新**：2026-07-20（B45：可用性 — BlackBox、方法索引、错误约定、示例隔离）
-**权威状态**：`goal-tree.md`（B0–B45）；API 冻结见 README；truth = focused-runtime
+**层级**：tooling harness（registry `tooling`）；**非**「纯 L1→L0」。真实依赖见 [ARCHITECTURE.md](ARCHITECTURE.md)（fs/json/atomic/collections/system.classes 等）。
+**最后更新**：2026-07-21（T1：SetTimeout/层级/ IBenchResults 索引对齐）
+**权威状态**：`goal-tree.md`（B0–B47）；API 冻结见 README；truth = focused-runtime
 
 ### 0.1 测量辅助（base / 门面 re-export）
 
@@ -83,6 +83,7 @@ IBenchSuite = interface
     const AParams: array of Int64;
     ASetup: TBenchSetupFunc; ATeardown: TBenchTeardownFunc): IBenchSuite;
   function AddLoop(const AName: string; AFunc: TBenchLoopFunc): IBenchSuite;
+  function AddLoopWithContext(const AName: string; AFunc: TBenchLoopContextFunc): IBenchSuite;
   function Clear: IBenchSuite;
   function RemoveByName(const AName: string): IBenchSuite;
   function SetMinDuration(ADuration: TDuration): IBenchSuite;
@@ -98,8 +99,11 @@ IBenchSuite = interface
   function AddBaselines(const ABaselines: array of TBaselineData): IBenchSuite;
   function LoadBaseline(const APath: string): IBenchSuite;
   function SetFilter(const AFilter: string): IBenchSuite;
-  function SetTimeout(ATimeoutMs: Cardinal): IBenchSuite;
+  { 真实签名为 TDuration（非 Cardinal 毫秒） }
+  function SetTimeout(ADuration: TDuration): IBenchSuite;
   function Run: IBenchResults;
+  { 另有：AddSimple / TryRemoveByName / TryLoadBaseline / RunParallel /
+    SetAdaptiveWarmup / SetOnProgress / SetOutput / SetEntryCollectRawSamples 等 — 见 intf }
 end;
 
 IBenchResults = interface
@@ -121,27 +125,21 @@ IBenchResults = interface
   procedure SaveBaseline(const APath: string; const AGitHash: string = '');
   procedure AppendToTimeline(const APath: string);
   function CompareMultipleBaselines(
-    const ABaselines: array of TBenchBaseline): TMatrixResult;
-  function ToMatrixReport(const ABaselines: array of TBenchBaseline): string;
-  function ToMatrixHTML(const ABaselines: array of TBenchBaseline): string;
-  function ToMatrixJSON(const ABaselines: array of TBenchBaseline): string;
+    const ABaselines: array of TBaselineData): TMatrixResult;
+  function ToMatrixReport(const ABaselines: array of TBaselineData): string;
+  function ToMatrixHTML(const ABaselines: array of TBaselineData): string;
+  function ToMatrixJSON(const ABaselines: array of TBaselineData): string;
   function HasRegression(AThreshold: Double): Boolean;
   function GetEnvironment: TBenchEnvironment;
   property Count: Integer read GetCount;
   property Environment: TBenchEnvironment read GetEnvironment;
-  { 查询 / 聚合 / 分组 — 完整签名见 bench.intf + README；测试: test_bench_results_api
-    GetFastest / GetSlowest / GetTopN
-    GetStableResults / GetUnstableResults
-    FilterByPrefix / FilterBySuffix / FilterBySubstring / FilterByNamePattern
-    FilterByNsPerOpRange / FilterByStdDevRange
-    SortByNsPerOp / SortByOpsPerSec / SortByCustomMetric
-    GetSummaryStats / GetPercentileStats / GetOutlierSummary
-    GetTotalOpsPerSec / GetTotalIterations / GetTotalElapsed
-    GetGroups / GetGroupStats / CompareGroups / GetGroupRegressionReport
-    ToCSV / SaveToCSV / ToMarkdown / SaveToMarkdown
-    ToJSON_Grouped / ToMarkdown_Grouped / ToHTML_Grouped + SaveTo*_Grouped
-    ToMatrixCSV / SaveToMatrixJSON / SaveToMatrixHTML / SaveToMatrixCSV
-    GetRegressionReport
+  { 完整接口约 77 方法 — 以 bench.intf 为准；测试: test_bench_results_api
+    查询/过滤: GetSkipped/GetExecuted/FilterBy*/SortBy*/GetFastest/Slowest/TopN
+    聚合: GetSummaryStats/GetPercentileStats/GetOutlierSummary/GetTotal*
+    分组: GetGroups/GetGroupStats/CompareGroups(启发式)/GetGroupRegressionReport/To*_Grouped
+    矩阵/导出: ToCSV/ToMarkdown/ToSummary/ToMatrixCSV/SaveToMatrix*
+    注意: GetTotalBytesPerOp/GetTotalAllocsPerOp 为 per-op 指标求和，通常无物理意义
+    对比: CompareTwoResults = MWU(需 RawSamples)；CompareGroups = 组均值启发式
   }
 end;
 
@@ -297,7 +295,7 @@ end;
 ## 6. 测试覆盖
 
 - 默认 gate：`make bench-module-test` → **22** PROJECTS（见 `goal-tree.md` 测试套件分布）
-- **非 gate**：`test_test_bench_integration/`（历史集成草稿，不进 Makefile PROJECTS）
+- `nextpas.core.test.bench` 桥接测试在 **test lane**：`core/tests/nextpas.core.test/test_bench`
 - 结果 API 专项：`test_bench_results_api`
 - 契约脚本：`scripts/bench-contract-check.sh`（含 examples RTL 禁扫、PROJECTS=22、LANE-DUTY）
 

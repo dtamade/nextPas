@@ -58,8 +58,8 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Error / return | `PLATFORM_ERR_*` authority in ERROR-HANDLING; three-tier return model frozen |
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
-| Wine matrix (24) | **pass=24** modules via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **27 platform-gate `ci-matrix`** (+… +pty +watch; GHA 29746628175 pass=28 fail=0); wine 24 secondary |
+| Wine matrix (25) | **pass=25** modules via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
+| Real Windows GHA | **28 platform-gate `ci-matrix`** (+… +pty +watch +console; GHA 30168411064 pass=29 fail=0 with mem.host); wine **25** secondary |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -67,7 +67,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 
 | Gap | Severity | Notes |
 |-----|----------|--------|
-| Windows beyond documented 27 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
+| Windows beyond documented 28 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
 | `async-windows-native-smoke` job red | **P2 (not platform)** | Owner **net/async**; not a platform facade gate or promote blocker |
 | macOS beyond documented 9 platform gates | **P1** | Layer A fail-closed only; whole job (async inventory) is not platform evidence |
 | `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
@@ -83,7 +83,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for 27 platform gates** + wine 24 secondary | expand candidates one-at-a-time; keep wine + GHA green |
+| Windows x86_64 | **`ci-matrix` for 28 platform gates** + wine **25** secondary | expand candidates one-at-a-time; keep wine + GHA green |
 | macOS | **`focused-runtime` layer A** (9 platform gates; script total may be 10) | keep fail-closed green; do not treat whole job as platform evidence |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -117,7 +117,7 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 
 | Slice | Deliverable | Acceptance |
 |-------|-------------|------------|
-| **D1.a** | Keep wine matrix green (current **24** modules); optional expand without claiming ci-matrix | `platform-wine-ci-matrix.sh` pass=total; honest SKIP/FAIL classification |
+| **D1.a** | Keep wine matrix green (current **25** modules); optional expand without claiming ci-matrix | `platform-wine-ci-matrix.sh` pass=total; honest SKIP/FAIL classification |
 | **D1.b** | Expand GHA `test-windows-runtime` via `scripts/platform-windows-ci-matrix.ps1` (14 wine-suite dirs natively + 3 dedicated real gates) | Each gate is native Windows `make clean test` (not Wine); job fails closed |
 | **D1.c** | Fix remaining Win64 compile/runtime blockers found by D1.a/b | focused host tests still green on Linux; wine/GHA evidence attached in goal-tree |
 | **D1.d** | Promote Windows to **`ci-matrix`** only when criteria below all true | Update runtime-truth-matrix + goal-tree + master-spec in same land |
@@ -145,7 +145,7 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 `io.reactor.iocp`, `poller.windows_runtime_smoke`, `platform.io.windows_real`,
 `platform.socket.windows_real`.
 
-**Not claimed:** full-host Windows parity; modules outside the list (e.g. signal, console, secure-zero native); AcceptEx/ConnectEx beyond existing smoke gaps.
+**Not claimed:** full-host Windows parity; modules outside the list (e.g. signal, secure-zero native); AcceptEx/ConnectEx beyond existing smoke gaps; TUI true-console product path.
 
 **Non-goals for D1:** macOS promotion; dual-IO removal; F7 mapping rewrite.
 
@@ -264,12 +264,12 @@ Optional readiness inventory (not a promotion):
 ## 5. Default execution queue (after confirmation)
 
 1. **D0** done.
-2. **D1.a–D1.d** done; Windows **`ci-matrix` expanded through 27 platform gates** (+watch promote Batch-21b; multi-dir Batch-23); keep wine + GHA green.
+2. **D1.a–D1.d** done; Windows **`ci-matrix` expanded through 28 platform gates** (+watch Batch-21b; multi-dir Batch-23; **+console Batch-console-promote**); wine secondary **25**; keep wine + GHA green.
 3. **D2.a–D2.c** done; **9-gate macOS `focused-runtime`** (+memory, Batch-5B); keep GHA matrix green.
 4. **D3.a–D3.d** done (signal compile, secure-zero permanent fallback, dual-IO owner-only, freetype stay); D3.e remains Won't.
 5. **Windows watch expand series closed** (2026-07-21): S1–S3 + multi-dir + L2 multi-path/AddTree; **no `bWatchSubtree`**.
 6. **D4/D5** opportunistic / owner-gated.
-7. **Standing default:** §4 maintenance gates + keep Windows 27-gate / macOS 9-gate green. New platform work only with consumer pain or named owner (FreeBSD/Android/D5).
+7. **Standing default:** §4 maintenance gates + keep Windows 28-gate / macOS 9-gate green. New platform work only with consumer pain or named owner (FreeBSD/Android/D5).
 
 ---
 
@@ -346,6 +346,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-21 | **Decision (recursive)**: RDCW `bWatchSubtree=True` **out of scope** for v1 product path. Platform always arms with `bWatchSubtree=False`. Tree watch = L2 `AddTree` walk + multi-`Add` only (inotify-parity, WIN_MAX=8). Reopen only via explicit consumer batch + design revise. See [watch-windows-design.md](watch-windows-design.md). |
 | 2026-07-21 | **Watch series closeout**: Batch-15 S1–S3 + Batch-22/23 multi-dir + L2 multi-path/AddTree **done**. **27 platform-gate** matrix + L2 `l2.fs.watch` host-windows green. **No further platform.watch expand batch** unless consumer pain. Next: standing maintenance (§4); D4/D5 opportunistic / owner-gated. |
 | 2026-07-21 | **Docs hygiene (H3/H1)**: live inventory wine matrix count **14→24** (matches `platform-wine-ci-matrix.sh`); master-spec watch claim updated off UNSUPPORTED; residual snapshot marked historical; current counts point at this ROADMAP. |
+| 2026-07-21 | **Batch-console-wine**: add `platform.console` to wine matrix (**24→25**) after Linux console 22/0 + raw 5/0 + wine-runtime-smoke 8/0 + full wine matrix pass=25 fail=0. TUI hangs Windows true-console on this ladder. Windows scripts **+console candidate** (no 28-gate ci-matrix promote until GHA green). Consumer-contract-audit refreshed (Windows readiness = ci-matrix for documented 27, not source/compile-only). |
+| 2026-07-26 | **Batch-console-promote**: promote **28 platform-gate** set (+console) after GHA `test-windows-runtime` success run **30168411064** @ `5464b31c4` (PASS platform.console; matrix pass=29 fail=0 with mem.host). Facade smoke only — not TUI true-console product. Docs + matrix script scope strings updated 27→28. |
 
 ---
 

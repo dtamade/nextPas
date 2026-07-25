@@ -1,8 +1,9 @@
 unit nextpas.core.http.impl.h1.fast;
 {**
- * @desc SIMD-accelerated HTTP/1.1 fast path parser.
+ * @desc SIMD-accelerated HTTP/1.1 fast path parser + snapshot adapter.
  *       Handles common requests without llhttp state machine overhead.
  *       Falls back (Success=False) on chunked encoding, obs-fold, or malformed input.
+ *       TH1FastRequestSnapshot adapts TFastParseResult to IH1Parser for server reuse.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -10,8 +11,10 @@ unit nextpas.core.http.impl.h1.fast;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.http.impl.h1.parser;
 
 type
   TFastParseResult = record
@@ -38,6 +41,10 @@ type
   Returns Success=True if parsed successfully, False if should fallback to llhttp.
   Only handles simple cases: complete headers in buffer, no chunked request body. }
 function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastParseResult;
+
+{ Snapshot adapter: complete fixed-length request already in ABuf (same scan buffer). }
+function NewH1FastRequestSnapshot(const AResult: TFastParseResult;
+  const ABuf: PAnsiChar): IH1Parser;
 
 implementation
 
@@ -741,6 +748,220 @@ begin
   LHeadersLen := SizeUInt(LHeaderEnd) - LHeadersStart;
   Result.Headers := TFastLazyHeaders.Create(ABuf + LHeadersStart, LHeadersLen);
   Result.Success := True;
+end;
+
+type
+  TH1FastSnapshotBodyReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPosition: SizeUInt;
+    FSize: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
+  TH1FastRequestSnapshot = class(TInterfacedObject, IH1Parser)
+  private
+    FMethod: THttpMethod;
+    FUrl: string;
+    FVersion: THttpVersion;
+    FHeaders: IHttpHeaders;
+    FBody: TBytes;
+    FBodySize: Int64;
+    FComplete: Boolean;
+    FRequestMetadata: TH1RequestMetadata;
+  public
+    { ABuf is the same buffer FastParseRequest scanned; used to copy a complete
+      fixed-length body into the snapshot when ContentLength > 0. }
+    constructor Create(const AResult: TFastParseResult; const ABuf: PAnsiChar);
+    function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+    procedure Finish;
+    function GetMethod: THttpMethod;
+    function GetStatusCode: THttpStatus;
+    function GetHttpVersion: THttpVersion;
+    function GetUrl: string;
+    function GetHeaders: IHttpHeaders;
+    function GetBody: string;
+    function GetBodySize: Int64;
+    function NewBodyReader: IReader;
+    function HeadersComplete: Boolean;
+    function IsComplete: Boolean;
+    function ShouldKeepAlive: Boolean;
+    function GetTrailerBytes: Int64;
+    function GetRequestMetadata: TH1RequestMetadata;
+    function HasError: Boolean;
+    function ErrorMessage: string;
+    function ErrorKind: TH1ParserErrorKind;
+    procedure Reset;
+  end;
+
+{ TH1FastSnapshotBodyReader }
+
+constructor TH1FastSnapshotBodyReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPosition := 0;
+  FSize := SizeUInt(Length(AData));
+end;
+
+function TH1FastSnapshotBodyReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  if (ACount = 0) or (FPosition >= FSize) then
+    Exit(0);
+  LAvailable := FSize - FPosition;
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  Move(FData[FPosition], ABuf, Result);
+  Inc(FPosition, Result);
+end;
+
+{ TH1FastRequestSnapshot }
+
+constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult;
+  const ABuf: PAnsiChar);
+begin
+  inherited Create;
+  FMethod := AResult.Method;
+  FUrl := AResult.Path;
+  FVersion := AResult.Version;
+  FHeaders := AResult.Headers;
+  FBodySize := AResult.ContentLength;
+  SetLength(FBody, 0);
+  if (AResult.ContentLength > 0) and (ABuf <> nil) then
+  begin
+    SetLength(FBody, AResult.ContentLength);
+    Move(ABuf[AResult.BodyStart], FBody[0], AResult.ContentLength);
+  end;
+  FComplete := True;
+  FRequestMetadata := Default(TH1RequestMetadata);
+  FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HasDuplicateHost := AResult.HostRepeated;
+  FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
+  FRequestMetadata.HasContentLength := AResult.HasContentLength;
+  FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
+  FRequestMetadata.RequestDeclaresBody := AResult.ContentLength > 0;
+  FRequestMetadata.ExpectsContinue := False;
+  FRequestMetadata.HasUnsupportedExpect := False;
+  FRequestMetadata.ConnectionClose := AResult.ConnectionClose;
+  FRequestMetadata.ConnectionKeepAlive := AResult.ConnectionKeepAlive;
+end;
+
+function TH1FastRequestSnapshot.Execute(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+procedure TH1FastRequestSnapshot.Finish;
+begin
+end;
+
+function TH1FastRequestSnapshot.GetMethod: THttpMethod;
+begin
+  Result := FMethod;
+end;
+
+function TH1FastRequestSnapshot.GetStatusCode: THttpStatus;
+begin
+  Result := 0;
+end;
+
+function TH1FastRequestSnapshot.GetHttpVersion: THttpVersion;
+begin
+  Result := FVersion;
+end;
+
+function TH1FastRequestSnapshot.GetUrl: string;
+begin
+  Result := FUrl;
+end;
+
+function TH1FastRequestSnapshot.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TH1FastRequestSnapshot.GetBody: string;
+begin
+  if Length(FBody) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@FBody[0]), Length(FBody));
+end;
+
+function TH1FastRequestSnapshot.GetBodySize: Int64;
+begin
+  Result := FBodySize;
+end;
+
+function TH1FastRequestSnapshot.NewBodyReader: IReader;
+begin
+  if Length(FBody) = 0 then
+    Exit(nil);
+  Result := TH1FastSnapshotBodyReader.Create(FBody);
+end;
+
+function TH1FastRequestSnapshot.HeadersComplete: Boolean;
+begin
+  Result := FComplete;
+end;
+
+function TH1FastRequestSnapshot.IsComplete: Boolean;
+begin
+  Result := FComplete;
+end;
+
+function TH1FastRequestSnapshot.ShouldKeepAlive: Boolean;
+begin
+  if FVersion = hvHttp10 then
+    Result := FRequestMetadata.ConnectionKeepAlive
+  else
+    Result := not FRequestMetadata.ConnectionClose;
+end;
+
+function TH1FastRequestSnapshot.GetTrailerBytes: Int64;
+begin
+  Result := 0;
+end;
+
+function TH1FastRequestSnapshot.GetRequestMetadata: TH1RequestMetadata;
+begin
+  Result := FRequestMetadata;
+end;
+
+function TH1FastRequestSnapshot.HasError: Boolean;
+begin
+  Result := False;
+end;
+
+function TH1FastRequestSnapshot.ErrorMessage: string;
+begin
+  Result := '';
+end;
+
+function TH1FastRequestSnapshot.ErrorKind: TH1ParserErrorKind;
+begin
+  Result := pekNone;
+end;
+
+procedure TH1FastRequestSnapshot.Reset;
+begin
+  FComplete := False;
+  FHeaders := NewHttpHeaders;
+  FUrl := '';
+  FBodySize := 0;
+  FRequestMetadata := Default(TH1RequestMetadata);
+end;
+
+function NewH1FastRequestSnapshot(const AResult: TFastParseResult;
+  const ABuf: PAnsiChar): IH1Parser;
+begin
+  Result := TH1FastRequestSnapshot.Create(AResult, ABuf);
 end;
 
 end.

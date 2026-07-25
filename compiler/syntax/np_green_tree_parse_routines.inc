@@ -229,6 +229,7 @@ begin
     end;
   end;
 
+  Node.Text := FullName;
   AParent.AppendChild(Node);
   Inc(ATree.FNodeCount);
   Result := True;
@@ -485,6 +486,7 @@ begin
     end;
   end;
 
+  Node.Text := FullName;
   AParent.AppendChild(Node);
   Inc(ATree.FNodeCount);
   Result := True;

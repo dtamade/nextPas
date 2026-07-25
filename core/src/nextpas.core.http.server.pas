@@ -228,6 +228,8 @@ end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
+  { PD-1B: Default has finite RW=30000. Prefer Production for product intent;
+    long-poll/SSE: WithReadTimeout(0)/WithWriteTimeout(0). }
   Result := THttpServer.Create(AHandler, THttpServerOptions.Default);
 end;
 

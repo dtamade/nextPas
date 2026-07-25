@@ -96,6 +96,8 @@ type
     FWarningCount: LongInt;
     FDiagnostics: TDiagnosticRecordVec;
   public
+    { Prefer CreateDefault; Create redirects so callers of bare Create do not AV. }
+    constructor Create;
     constructor CreateDefault;
     destructor Destroy; override;
     procedure SetWarningAsError(const AValue: Boolean);
@@ -205,6 +207,11 @@ begin
   AEvent.SuggestedFixes := nil;
   AEvent.Payload.Candidates.Free;
   AEvent.Payload.Candidates := nil;
+end;
+
+constructor TDiagnosticsSink.Create;
+begin
+  CreateDefault;
 end;
 
 constructor TDiagnosticsSink.CreateDefault;

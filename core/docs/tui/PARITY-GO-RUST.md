@@ -1,6 +1,6 @@
 # tui × Go / Rust 对标纲领（Wave Q）
 
-**状态**: **Maintenance Idle**（2026-07-20）— 完整阶段图见 [ROADMAP.md](ROADMAP.md)
+**状态**: **Maintenance Idle · 主线封板**（U1+U2 sealed，2026-07-21）— 阶段图见 [ROADMAP.md](ROADMAP.md)
 **Owner**: tui lane
 **活入口**: [ROADMAP.md](ROADMAP.md) · [SCORECARD.md](SCORECARD.md) · [BENCHMARK.md](BENCHMARK.md) · [CONTRACT.md](CONTRACT.md)
 
@@ -93,13 +93,14 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **Done** (`main@17b18c4c8`+) |
 | M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **Done** (`main@c06f621a8`+) |
 | Phase B | scrollview+modal → ext；B3 停止再晋升 | **Done**（B1 `main@d0009c00f`+） |
-| 当前 | **Maintenance Idle**（见 ROADMAP） | Active |
+| 当前 | **Maintenance Idle · 主线封板**（见 ROADMAP） | Sealed |
 | Idle 单点 | dialog + split_pane + **select** → ext | **Done**；B3 候选表清空 |
-| Phase E1 | RELEASE=1 快照 + bench_go_rust 刷新 + C2 wine + C9 | **Done**（2026-07-20） |
-| Phase E2 | DECSET 2026 Synchronized Update + SC28 | **Done**（2026-07-20） |
-| Phase E3 | DECAWM wrap-off on EnterAlternate + SC29 | **Done**（2026-07-20） |
-| Phase U1 | Enter 诊断 + C10 facade 纪律 + SC30 | **Done**（2026-07-20） |
-| Phase U2 | 去双别名 + HandleKey Boolean + enable_ansi | **Done**（2026-07-20） |
+| Phase E1 | RELEASE=1 快照 + bench_go_rust 刷新 + C2 wine + C9 | **Done** |
+| Phase E2 | DECSET 2026 Synchronized Update + SC28 | **Done** |
+| Phase E3 | DECAWM wrap-off on EnterAlternate + SC29 | **Done** |
+| Phase U1 | Enter 诊断 + C10 facade 纪律 + SC30 | **Done** |
+| Phase U2 | 去双别名 + HandleKey Boolean + enable_ansi | **Done** |
+| Idle-Seal | 文档状态封板（无行为变更） | **Done**（2026-07-21） |
 | 可选 | Truecolor DA / crate / Windows console | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）

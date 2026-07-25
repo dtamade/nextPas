@@ -26,6 +26,7 @@ type
     sckManagedRecordFini,
     sckHeapAlloc,
     sckHeapFree,
+    sckObjectAlloc,
     sckObjectFree,
     sckObjectFreeDestroy,
     sckObjectFreeCleanup,
@@ -130,10 +131,10 @@ const
       TargetIdentity: 'exit-code';
       OwnershipIntent: 'none';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'halt-call-runtime';
+      HirEvidence: 'typed sckHalt / halt-call-runtime';
       RuntimeMapping: 'backend halt lowering';
-      FocusedEvidence: 'test_hir_node_kind';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_halt_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckStringInit;
@@ -143,10 +144,10 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'owned destination';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'deferred';
-      RuntimeMapping: 'deferred';
-      FocusedEvidence: 'runtime-contracts.md';
-      EvidenceLevel: scelVocabulary
+      HirEvidence: 'tstring_init / np.system.string_init';
+      RuntimeMapping: 'np_tstring_init';
+      FocusedEvidence: 'test_hir_string_ownership_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckStringFini;
@@ -156,8 +157,8 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'owned value release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'string cleanup nodes';
-      RuntimeMapping: 'string release helpers';
+      HirEvidence: 'tstring_fini / np.system.string_fini';
+      RuntimeMapping: 'np_tstring_fini';
       FocusedEvidence: 'test_hir_string_ownership_contract';
       EvidenceLevel: scelHir
     ),
@@ -169,8 +170,8 @@ const
       TargetIdentity: 'managed-string';
       OwnershipIntent: 'copy or move assignment';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'string assignment nodes';
-      RuntimeMapping: 'string assignment helpers';
+      HirEvidence: 'tstring_assign / np.system.string_assign';
+      RuntimeMapping: 'np_tstring_assign';
       FocusedEvidence: 'test_hir_string_ownership_contract';
       EvidenceLevel: scelHir
     ),
@@ -195,9 +196,9 @@ const
       TargetIdentity: 'managed-dynarray';
       OwnershipIntent: 'owned value release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'dynarray-cleanup-runtime';
+      HirEvidence: 'typed sckDynArrayFini / dynarray-cleanup-runtime';
       RuntimeMapping: 'np_dynarray_release';
-      FocusedEvidence: 'test_hir_dynarray_release_runtime_smoke';
+      FocusedEvidence: 'test_hir_dynarray_typed_contract';
       EvidenceLevel: scelExecutable
     ),
     (
@@ -208,9 +209,9 @@ const
       TargetIdentity: 'managed-dynarray';
       OwnershipIntent: 'owned buffer resize';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'setlength-arr-runtime';
+      HirEvidence: 'typed sckDynArraySetLength / setlength-arr-runtime';
       RuntimeMapping: 'np_dynarray_resize';
-      FocusedEvidence: 'test_hir_dynarray_release_runtime_smoke';
+      FocusedEvidence: 'test_hir_dynarray_typed_contract';
       EvidenceLevel: scelExecutable
     ),
     (
@@ -221,10 +222,10 @@ const
       TargetIdentity: 'interface-reference';
       OwnershipIntent: 'shared reference acquire';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'intf_addref';
+      HirEvidence: 'typed sckInterfaceAddRef / intf-addref-runtime';
       RuntimeMapping: 'np_intf_addref';
       FocusedEvidence: 'test_hir_interface_contract';
-      EvidenceLevel: scelBackend
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckInterfaceRelease;
@@ -234,10 +235,10 @@ const
       TargetIdentity: 'interface-reference';
       OwnershipIntent: 'shared reference release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'intf_release';
+      HirEvidence: 'typed sckInterfaceRelease / intf-release-runtime';
       RuntimeMapping: 'np_intf_release';
       FocusedEvidence: 'test_hir_interface_contract';
-      EvidenceLevel: scelBackend
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckManagedRecordInit;
@@ -260,36 +261,49 @@ const
       TargetIdentity: 'managed-record';
       OwnershipIntent: 'owned fields release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'managed-record-cleanup-runtime';
-      RuntimeMapping: 'deferred';
-      FocusedEvidence: 'test_hir_node_kind';
+      HirEvidence: 'typed sckManagedRecordFini / managed-record-cleanup-runtime';
+      RuntimeMapping: 'compiler-planned field cleanup';
+      FocusedEvidence: 'test_hir_managed_record_contract';
       EvidenceLevel: scelHir
     ),
     (
       Kind: sckHeapAlloc;
       SemanticName: NPSYSTEM_HEAP_ALLOC;
       DeclarationOwner: SYSTEM_CONTRACT_OWNER;
-      SourceSymbol: 'System memory manager hook';
+      SourceSymbol: 'System.GetMem';
       TargetIdentity: 'allocation-size';
       OwnershipIntent: 'caller-owned allocation';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'arr_alloc and class_alloc';
-      RuntimeMapping: 'np_alloc and np_object_alloc';
-      FocusedEvidence: 'test_hir_class_alloc_contract';
-      EvidenceLevel: scelBackend
+      HirEvidence: 'typed sckHeapAlloc / getmem-runtime';
+      RuntimeMapping: 'np_alloc';
+      FocusedEvidence: 'test_hir_heap_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckHeapFree;
       SemanticName: NPSYSTEM_HEAP_FREE;
       DeclarationOwner: SYSTEM_CONTRACT_OWNER;
-      SourceSymbol: 'System memory manager hook';
+      SourceSymbol: 'System.FreeMem';
       TargetIdentity: 'allocation';
       OwnershipIntent: 'owned allocation release';
       FailureBehavior: 'runtime-fault';
-      HirEvidence: 'object and array release nodes';
+      HirEvidence: 'typed sckHeapFree / freemem-runtime';
       RuntimeMapping: 'np_free';
-      FocusedEvidence: 'test_hir_large_alloc_runtime_smoke';
-      EvidenceLevel: scelExecutable
+      FocusedEvidence: 'test_hir_heap_contract';
+      EvidenceLevel: scelHir
+    ),
+    (
+      Kind: sckObjectAlloc;
+      SemanticName: NPSYSTEM_OBJECT_ALLOC;
+      DeclarationOwner: SYSTEM_CONTRACT_OWNER;
+      SourceSymbol: 'System.TObject.Create / class-new';
+      TargetIdentity: 'class-instance';
+      OwnershipIntent: 'caller-owned object allocation';
+      FailureBehavior: 'runtime-fault';
+      HirEvidence: 'typed sckObjectAlloc / class-new-runtime';
+      RuntimeMapping: 'np_object_alloc';
+      FocusedEvidence: 'test_hir_object_alloc_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckObjectFree;
@@ -364,10 +378,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'try-begin-runtime';
+      HirEvidence: 'typed sckExceptionTryPush / try-begin-runtime';
       RuntimeMapping: 'np_try_push';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionTryPop;
@@ -377,10 +391,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'try-end-runtime';
+      HirEvidence: 'typed sckExceptionTryPop / try-end-runtime';
       RuntimeMapping: 'np_try_pop';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionRaise;
@@ -390,10 +404,10 @@ const
       TargetIdentity: 'exception-object';
       OwnershipIntent: 'transferred exception object';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'raise-runtime';
+      HirEvidence: 'typed sckExceptionRaise / raise-runtime';
       RuntimeMapping: 'np_raise';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionFinallyEnd;
@@ -403,10 +417,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'finally-end-runtime';
+      HirEvidence: 'typed sckExceptionFinallyEnd / finally-end-runtime';
       RuntimeMapping: 'np_finally_end';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     ),
     (
       Kind: sckExceptionExceptEnd;
@@ -416,10 +430,10 @@ const
       TargetIdentity: 'exception-frame';
       OwnershipIntent: 'runtime-owned exception frame';
       FailureBehavior: 'runtime-abort';
-      HirEvidence: 'except-end-runtime';
+      HirEvidence: 'typed sckExceptionExceptEnd / except-end-runtime';
       RuntimeMapping: 'np_except_end';
-      FocusedEvidence: 'test_hir_exception';
-      EvidenceLevel: scelBackend
+      FocusedEvidence: 'test_hir_exception_contract';
+      EvidenceLevel: scelHir
     )
   );
 

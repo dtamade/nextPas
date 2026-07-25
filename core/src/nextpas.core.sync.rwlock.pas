@@ -9,9 +9,6 @@ uses
   nextpas.core.platform.sync;
 
 type
-  {**
-   * @desc 读写锁，基于 platform pthread_rwlock / SRWLOCK
-   *}
   TRWLock = class(TInterfacedObject, IRWLock)
   private
     FHandle: TPlatformRwLock;
@@ -31,7 +28,7 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.sync.errors;
 
 type
   TReadGuard = class(TInterfacedObject, ILockGuard)
@@ -50,8 +47,6 @@ type
     destructor Destroy; override;
   end;
 
-{ TReadGuard }
-
 constructor TReadGuard.Create(const ARwLock: IRWLock);
 begin
   inherited Create;
@@ -64,8 +59,6 @@ begin
     FRwLock.ReleaseRead;
   inherited;
 end;
-
-{ TWriteGuard }
 
 constructor TWriteGuard.Create(const ARwLock: IRWLock);
 begin
@@ -80,8 +73,6 @@ begin
   inherited;
 end;
 
-{ TRWLock }
-
 constructor TRWLock.Create;
 var
   LRet: Int32;
@@ -89,7 +80,7 @@ begin
   inherited Create;
   LRet := platform_rwlock_init(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TRWLock.Create failed: %d', [LRet]);
+    SyncRaiseOpFailed('TRWLock', 'Create', LRet);
 end;
 
 destructor TRWLock.Destroy;
@@ -98,14 +89,17 @@ var
 begin
   LRet := platform_rwlock_destroy(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TRWLock.Destroy failed: %d (held lock?)', [LRet]);
+    SyncRaiseOpFailed('TRWLock', 'Destroy', LRet);
   inherited;
 end;
 
 procedure TRWLock.AcquireRead;
+var
+  LRet: Int32;
 begin
-  if platform_rwlock_rdlock(FHandle) <> 0 then
-    raise ENextPasError.Create('TRWLock.AcquireRead failed');
+  LRet := platform_rwlock_rdlock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRWLock', 'AcquireRead', LRet);
 end;
 
 function TRWLock.TryAcquireRead: Boolean;
@@ -114,9 +108,12 @@ begin
 end;
 
 procedure TRWLock.AcquireWrite;
+var
+  LRet: Int32;
 begin
-  if platform_rwlock_wrlock(FHandle) <> 0 then
-    raise ENextPasError.Create('TRWLock.AcquireWrite failed');
+  LRet := platform_rwlock_wrlock(FHandle);
+  if LRet <> 0 then
+    SyncRaiseOpFailed('TRWLock', 'AcquireWrite', LRet);
 end;
 
 function TRWLock.TryAcquireWrite: Boolean;

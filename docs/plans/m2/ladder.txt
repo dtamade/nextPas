@@ -1,0 +1,20 @@
+# M2 LLVM closure ladder (execution levels)
+# L0 calibrates harness; L3 == full source-manifest entry = A→B close.
+# Levels are independent path lines; comments and blank lines ignored.
+# Format: LEVEL path
+#
+# Note: some compiler units currently hang under stage0 (host or LLVM) with no
+# envelope output (e.g. np_diagnostics_sink, np_source_database). Ladder uses
+# units proven to complete on LLVM object path.
+
+# L0: program smoke (executable, run)
+L0 examples/smoke/hello.pas
+
+# L1: single compiler unit on LLVM (object-file OK; not host FPC)
+L1 compiler/targets/np_target_facts.pas
+
+# L2: stage0 support unit on LLVM (still not full driver)
+L2 tools/stage0/nextpas_projection_types.pas
+
+# L3: full stage0 driver (A→B close when this links an executable nextpas)
+L3 tools/stage0/nextpas.pas

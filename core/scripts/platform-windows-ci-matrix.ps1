@@ -10,7 +10,8 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the listed module dirs only — not full-host Windows parity.
-# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
+# 28 platform gates promoted (+… +pty +watch +console).
+# console promote: GHA 30168411064 @ 5464b31c4 PASS platform.console.
 
 $ErrorActionPreference = 'Stop'
 
@@ -52,6 +53,7 @@ $ModuleEntries = @(
   @{ Name = 'platform.resource'; Dir = 'tests/nextpas.core.platform.resource/test_platform_resource_wine' }
   @{ Name = 'platform.pty';     Dir = 'tests/nextpas.core.platform.pty/test_platform_pty_wine' }
   @{ Name = 'platform.watch';   Dir = 'tests/nextpas.core.platform.watch/test_platform_watch_wine' }
+  @{ Name = 'platform.console'; Dir = 'tests/nextpas.core.platform.console/test_platform_console_wine' }
   @{ Name = 'io.reactor.iocp'; Dir = 'tests/nextpas.core.io.uring/test_reactor_iocp_wine' }
 )
 
@@ -67,7 +69,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 27 platform gates (+watch); not full-host Windows parity'
+Write-Output 'truth=ci-matrix; documented 28 platform gates (+watch +console); not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -95,7 +97,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-27-platform-gate-set"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-28-platform-gate-set"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'

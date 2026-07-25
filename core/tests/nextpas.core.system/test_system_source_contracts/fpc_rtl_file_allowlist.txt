@@ -89,3 +89,5 @@ SysUtils|nextpas.core.numa.linux.pas
 SysUtils|nextpas.core.numa.pas
 SysUtils|nextpas.core.numa.windows.pas
 Windows|nextpas.core.numa.windows.pas
+# 2026-07-23 D2 M0: pre-existing main debt (net async UDP uses SysUtils)
+SysUtils|nextpas.core.net.async.udp.pas

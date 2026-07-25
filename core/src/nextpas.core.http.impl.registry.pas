@@ -51,6 +51,7 @@ implementation
 
 uses
   nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.h1.tls,
   nextpas.core.http.impl.h2.client,
   nextpas.core.http.impl.h2.server,
   nextpas.core.http.impl.h2.tls,
@@ -93,10 +94,8 @@ function CreateH1ServerTransport(
   const AOptions: THttpServerOptions): IHttpServerTransport;
 var
   LH1Options: TH1ServerTransportOptions;
+  LInnerTransport: IHttpServerTransport;
 begin
-  if AOptions.TLSContext <> nil then
-    raise EHttpError.Create(hekRegistry,
-      'TLS HTTP server currently requires HTTP/2 transport selection');
   LH1Options.ReadTimeout := AOptions.ReadTimeout;
   LH1Options.WriteTimeout := AOptions.WriteTimeout;
   LH1Options.IdleTimeout := AOptions.IdleTimeout;
@@ -108,7 +107,12 @@ begin
   LH1Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
   { S1-1 scale default: reactor-inline handlers on poll-owned path. }
   LH1Options.PreferPollWorkerHandoff := False;
-  Result := NewH1ServerTransport(LH1Options);
+  LInnerTransport := NewH1ServerTransport(LH1Options);
+  { Product H1 HTTPS: same TLS wrap pattern as H2 (ALPN http/1.1). }
+  if AOptions.TLSContext <> nil then
+    Result := NewH1TlsServerTransport(AOptions.TLSContext, LInnerTransport)
+  else
+    Result := LInnerTransport;
 end;
 
 function CreateH2ServerTransport(

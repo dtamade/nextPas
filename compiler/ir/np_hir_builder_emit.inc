@@ -70,12 +70,17 @@ begin
     if IsVarParamAlloca(AArg) then
     begin
       V := EmitLoad(GetPtrType, V);
-      S.Push(EmitLoad(FindAllocaType(AArg), V));
+      if FindAllocaType(AArg) <> 0 then
+        S.PushTyped(EmitLoad(FindAllocaType(AArg), V), FindAllocaType(AArg))
+      else
+        S.PushTyped(EmitLoad(GetIntType, V), GetIntType);
     end
     else if FindAllocaType(AArg) = GetPtrType then
       S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+    else if FindAllocaType(AArg) <> 0 then
+      S.PushTyped(EmitLoad(FindAllocaType(AArg), V), FindAllocaType(AArg))
     else
-      S.Push(EmitLoad(FindAllocaType(AArg), V));
+      S.PushTyped(EmitLoad(GetIntType, V), GetIntType);
   end
   else if FSemaModel.LookupConstValue(AArg, ConstVal) then
   begin
@@ -137,6 +142,14 @@ var
   V: THIRValueId;
 begin
   V := FindAlloca(AArg);
+  if V = 0 then
+    Exit;
+  { const/var record formals allocate a ptr slot (points at the real buffer).
+    Local record allocas are the buffer itself. Match field-load / field-store:
+    only load when the slot is ptr-typed — otherwise sret helpers like
+    EnvelopeSelectorName(AState) receive ptr-to-ptr and return garbage strings. }
+  if FindAllocaType(AArg) = GetPtrType then
+    V := EmitLoad(GetPtrType, V);
   if V <> 0 then
     S.PushTyped(V, GetPtrType);
 end;
@@ -155,13 +168,15 @@ begin
     Exit;
 
   S.PushTyped(DataPtr, GetPtrType);
-  S.PushTyped(LenVal, GetIntTypeByWidth(32, True));
+  { np_tstring_len is i64; stack type must match or str_cmp coerces with bad sext. }
+  S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
 end;
 
 procedure THIRBuilder.EmitExprStrLit(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   LenVal: THIRValueId;
+  LitLen: Int64;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -172,9 +187,16 @@ begin
   EmitInstr(Instr);
   S.PushTyped(Instr.ResultId, GetPtrType);
 
-  LenVal := EmitConstIntOfType(Length(AArg) - 2, GetIntTypeByWidth(32, True));
+  { np_str_cmp / tstring_from_literal use i64 lengths. Quoted form '' is
+    length 2 with payload 0 — keep i64 so empty strlit compares type-check. }
+  LitLen := Length(AArg);
+  if LitLen >= 2 then
+    Dec(LitLen, 2)
+  else
+    LitLen := 0;
+  LenVal := EmitConstIntOfType(LitLen, GetIntTypeByWidth(64, True));
   if LenVal <> 0 then
-    S.PushTyped(LenVal, GetIntTypeByWidth(32, True));
+    S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
 end;
 
 procedure THIRBuilder.EmitExprIs(var S: TExprStack; const AArg: string);
@@ -345,6 +367,55 @@ begin
   S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
+procedure THIRBuilder.EmitExprFieldStrLen(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  V, Rhs, LenVal: THIRValueId;
+  Target, Rest: string;
+  FieldIdx, SpacePos: LongInt;
+begin
+  { Length(Self.FName) / Length(R.S): GEP to inline TString field, then
+    np_tstring_len(field_ptr). Arg format: "<base> <fieldIdx>".
+    Class/var-param slots hold a pointer; local record allocas/globals are the
+    buffer itself (same rule as ProcessAssignTStringFieldLoad). }
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+  begin
+    Target := Copy(AArg, 1, SpacePos - 1);
+    Rest := Copy(AArg, SpacePos + 1, Length(AArg));
+    FieldIdx := StrToIntDef(Rest, 0);
+  end
+  else
+  begin
+    Target := AArg;
+    FieldIdx := 0;
+  end;
+  V := FindAlloca(Target);
+  if V = 0 then
+    Exit;
+  if FindAllocaType(Target) = GetPtrType then
+    V := EmitLoad(GetPtrType, V);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(FieldIdx);
+  EmitInstr(Instr);
+  Rhs := Instr.ResultId;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  LenVal := EmitTStringLen(Instr.ResultId);
+  if LenVal <> 0 then
+    S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
+end;
+
 procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
   const AIntrinsic: string);
 var
@@ -410,40 +481,48 @@ end;
 
 procedure THIRBuilder.EmitExprStrCmp(var S: TExprStack; const AArg: string);
 var
-  APtr, ALen, BPtr, BLen, ResultVal, OneVal: THIRValueId;
-  PtrType, LenType: THIRTypeId;
+  APtr, ALen, BPtr, BLen, ResultVal: THIRValueId;
+  PtrType, ALenType, BLenType, Len64: THIRTypeId;
   Instr: THIRInstr;
 begin
-  BLen := S.PopTyped(LenType);
+  Len64 := GetIntTypeByWidth(64, True);
+  BLen := S.PopTyped(BLenType);
   BPtr := S.PopTyped(PtrType);
-  ALen := S.PopTyped(LenType);
+  ALen := S.PopTyped(ALenType);
   APtr := S.PopTyped(PtrType);
   if (APtr = 0) or (ALen = 0) or (BPtr = 0) or (BLen = 0) then
     Exit;
 
+  { Coerce by bit-width, not TypeId identity — multiple i64 TypeIds exist. }
+  if (ALenType = 0) or (FModule.Types.GetType(ALenType).BitWidth <> 64) then
+  begin
+    ALen := NormalizeScalarValueToType(ALen, ALenType, Len64);
+    if ALen = 0 then
+      Exit;
+  end;
+  if (BLenType = 0) or (FModule.Types.GetType(BLenType).BitWidth <> 64) then
+  begin
+    BLen := NormalizeScalarValueToType(BLen, BLenType, Len64);
+    if BLen = 0 then
+      Exit;
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntTypeByWidth(32, True);
+  Instr.TypeId := Len64;
   Instr.IntrinsicName := 'str_cmp';
   Instr.CallTarget := AArg;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(APtr, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(ALen, GetIntTypeByWidth(32, True));
+  Instr.Operands[1] := MakeTypedOperand(ALen, Len64);
   Instr.Operands[2] := MakeTypedOperand(BPtr, GetPtrType);
-  Instr.Operands[3] := MakeTypedOperand(BLen, GetIntTypeByWidth(32, True));
+  Instr.Operands[3] := MakeTypedOperand(BLen, Len64);
   EmitInstr(Instr);
   ResultVal := Instr.ResultId;
 
-  if SameText(AArg, 'ne') then
-  begin
-    OneVal := EmitConstIntSmart(1);
-    if OneVal = 0 then
-      Exit;
-    ResultVal := EmitBinOp(hikSub, GetIntTypeByWidth(32, True), OneVal, ResultVal);
-  end;
-
-  S.PushTyped(ResultVal, GetIntTypeByWidth(32, True));
+  { Emitter already xors for CallTarget='ne'; do not double-invert here. }
+  S.PushTyped(ResultVal, Len64);
 end;
 
 procedure THIRBuilder.EmitExprZext(var S: TExprStack);

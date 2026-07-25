@@ -52,6 +52,13 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 2. **官方一致性**：`BidiTest.txt` abstract 全量（~770k 方向×行）fail=0
 3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
 4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
+5. **视觉序（P2-3）**：`ResolveBidi.VisualToLogical`（UAX#9 L2，官方 harness）；`ReorderBidiVisually(levels)`；`InvertBidiIndexMap`；`ApplyBidiVisualOrder`（UTF-8 按码点重排，TUI 显示用）。索引为 **码点下标**，非字节。
+
+### Script / Script_Extensions
+
+1. `GetScript` / `IsScript`：Scripts.txt
+2. `GetScriptExtensions` / `HasScript`：ScriptExtensions.txt（UAX#24）；无表项时退回 `{GetScript}`（Result=False）
+3. 少数 Unicode 16 新 script 短名若未进 `TUnicodeScript` 枚举，池中为 `usUnknown`（债）
 
 ### 二值属性（BinaryProperty）
 
@@ -77,17 +84,17 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 ## 错误处理
 
-| 场景 | 行为 |
-|------|------|
-| 空输入 | 空结果 |
-| 非法 UTF-8 | 按 U+FFFD、消费 1 字节（可与 Prepend 组簇） |
-| 代理对 | 无效序列 |
+**真源**：[../ERROR_MODEL.md](../ERROR_MODEL.md)（P3-2）。
 
-### IDNA / Punycode（P2-5）
+| 场景 | 行为 | 层 |
+|------|------|-----|
+| 空输入 | 空结果 | L0 |
+| 非法 UTF-8 | U+FFFD、消费 1 字节（可与 Prepend 组簇） | L0 |
+| 代理对 | 无效序列 | L0 |
+| IDNA 失败 | `Result=''` + `TIDNAErrorKind`（string 兼容 = KindName） | L2 |
+| MappingTable disallowed | `idnaDisallowed` | L2 |
 
-1. `PunycodeEncode` / `PunycodeDecode`：RFC 3492
-2. `IDNAToASCII` / `IDNAToUnicode`：UTS#46 Nontransitional 实用子集（NFC + xn-- + LDH）
-3. 未含完整 IdnaMappingTable / Transitional / 全量 Bidi Rule
+L0 算法路径 **不因坏 UTF-8 抛异常**。IDNA **不抛**，见 ERROR_MODEL §4。
 
 ## 已知限制
 
@@ -112,7 +119,11 @@ Fixture / UCD 升版生成：见 [README.md#ucd-升版一条龙](README.md#ucd-�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | P3-2：错误策略链接 ERROR_MODEL.md |
+| 2026-07-21 | P3-1：IdnaMappingTable + ApplyIdnaMap |
+| 2026-07-21 | P3-0：TIDNAErrorKind + 门面 re-export SCX/Bidi visual |
 | 2026-07-20 | M2：UTF8ToTitleWords + clLithuanian |
+| 2026-07-20 | P2-3：Bidi 视觉序 API（Reorder/Apply/Invert） |
 | 2026-07-20 | P2-1：BinaryProperty PropList 扩展（Go unicode 对标） |
 | 2026-07-20 | M1：ROADMAP + SCORECARD + `make gate`；测试入口收敛 |
 | 2026-07-20 | Turkic/locale Case：TCaseLocale + CaseFold T + SpecialCasing tr/az |

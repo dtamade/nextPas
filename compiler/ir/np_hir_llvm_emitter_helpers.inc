@@ -1,8 +1,9 @@
 procedure THIRLlvmEmitter.EmitWriteIntHelper;
 begin
   // Phase 4: write_i64_decimal 已移至 nextpas.runtime.strings.ll
+  // Batch 29: second arg is fd (1=stdout, 2=stderr).
   Emit('');
-  Emit('declare void @write_i64_decimal(i64 %v)');
+  Emit('declare void @write_i64_decimal(i64 %v, i64 %fd)');
 end;
 
 function THIRLlvmEmitter.AddStrConstant(const AValue: string): LongInt;

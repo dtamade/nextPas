@@ -1,0 +1,17 @@
+# M2 target source manifest (immutable entry declaration)
+# Authority: docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md §M2
+#
+# One program entry for A→B→C. Transitive units are resolved by the compiler
+# from this entry (compiler/*, tools/stage0/*, projected System, min runtime).
+# Do not treat host self-compile module lists as M2 evidence.
+#
+# Revision policy: any path change is a new manifest revision; re-run M2 from
+# empty gen-b/gen-c roots after edits.
+#
+# Status: declared target. A→B is closed only when ladder L3 builds this entry
+# under --toolchain-binding linux-x86_64-to-linux-x86_64-llvm without host FPC
+# compiling B sources.
+
+entry: tools/stage0/nextpas.pas
+target: linux-x86_64
+binding: linux-x86_64-to-linux-x86_64-llvm

@@ -235,8 +235,9 @@ source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 tru
 | system | `make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts` | source-contract result plus any runtime or forced-compile gate for changed `system.*` units |
 | config | `make focused FOCUS=core/tests/nextpas.core.config/test_config` | format-specific export/import gate when INI, TOML, YAML, examples, or mutation semantics change |
 | http | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` | parser/writer/router/server/runtime gate matching the touched HTTP surface |
+| test | `make focused FOCUS=core/tests/nextpas.core.test/lane_gate` (api + runner source-contracts + scale; same as `make -C core/tests/nextpas.core.test contracts`) | changed suite(s) under `core/tests/nextpas.core.test/test_*`; demos when examples change; full `make -C core/tests/nextpas.core.test clean test` before version land; `NEXTPAS_SNAPSHOT_FAIL_ON_CREATE=1` when touching goldens |
 
-也可以用 `make lane-focused LANE=<platform|mem|system|config|http>` 读取当前默认矩阵并执行
+也可以用 `make lane-focused LANE=<platform|mem|system|config|http|test>` 读取当前默认矩阵并执行
 对应的根目录 `make focused FOCUS=...`。这个入口会打印 `lane`、`truth`、`focus` 和
 `command` 字段，适合模块负责人放进 `Ready` evidence。它是 local/reporting helper；
 CI 目前仍跑 `make test-tooling` 和 `make verify`，不要把 `lane-focused` 当成 CI matrix。

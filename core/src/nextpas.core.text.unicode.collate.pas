@@ -100,7 +100,8 @@ uses
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.utils,
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.sync;
 
 {$I nextpas.core.text.unicode.collate.inc}
 
@@ -619,7 +620,7 @@ end;
 
 var
   FUnicodeCollator: IUnicodeCollator;
-  FCollatorCS: TRTLCriticalSection;
+  FCollatorLock: IMutex;
 
 function DefaultCollationOptions: TCollationOptions;
 begin
@@ -643,12 +644,12 @@ function UnicodeCollator: IUnicodeCollator;
 begin
   if FUnicodeCollator = nil then
   begin
-    EnterCriticalSection(FCollatorCS);
+    FCollatorLock.Acquire;
     try
       if FUnicodeCollator = nil then
         FUnicodeCollator := TUnicodeCollator.Create(DefaultCollationOptions);
     finally
-      LeaveCriticalSection(FCollatorCS);
+      FCollatorLock.Release;
     end;
   end;
   Result := FUnicodeCollator;
@@ -1249,9 +1250,9 @@ end;
 
 initialization
   GAsciiCEReady := False;
-  InitCriticalSection(FCollatorCS);
+  FCollatorLock := Mutex;
 
 finalization
-  DoneCriticalSection(FCollatorCS);
+
 
 end.

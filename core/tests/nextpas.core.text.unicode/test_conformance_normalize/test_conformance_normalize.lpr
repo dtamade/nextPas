@@ -17,7 +17,8 @@ program test_conformance_normalize;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
@@ -94,7 +95,7 @@ procedure ExpectNorm(const AExpected, AActual, ALabel: string; const ALineNo: In
 begin
   if AExpected <> AActual then
     CheckEqual(AExpected, AActual,
-      Format('line %d %s', [ALineNo, ALabel]));
+      TextFormat('line %d %s', [ALineNo, ALabel]));
 end;
 
 procedure TestNormalizationConformance;
@@ -129,7 +130,7 @@ begin
       begin
         if (I > Length(LLine)) or (LLine[I] = ';') then
         begin
-          Check(LFieldIdx <= 4, Format('too many fields line %d', [LLineNo]));
+          Check(LFieldIdx <= 4, TextFormat('too many fields line %d', [LLineNo]));
           LParts[LFieldIdx] := Copy(LLine, LStart, I - LStart);
           Inc(LFieldIdx);
           LStart := I + 1;
@@ -137,7 +138,7 @@ begin
             Break;
         end;
       end;
-      CheckEqual(Int64(5), Int64(LFieldIdx), Format('need 5 fields line %d', [LLineNo]));
+      CheckEqual(Int64(5), Int64(LFieldIdx), TextFormat('need 5 fields line %d', [LLineNo]));
 
       LC1 := Utf8FromHexField(LParts[0]);
       LC2 := Utf8FromHexField(LParts[1]);
@@ -179,7 +180,7 @@ begin
     Close(LFile);
   end;
 
-  Check(LChecked >= 19000, Format('expected ~19965 rows, got %d', [LChecked]));
+  Check(LChecked >= 19000, TextFormat('expected ~19965 rows, got %d', [LChecked]));
 end;
 
 begin
