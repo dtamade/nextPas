@@ -176,7 +176,7 @@ CHECKPOINT（不阻塞续波）:
 | **R2-2** STRUCT-opt | **done** | `h2.client.pool` + `client.helpers` + `h1.wire`；inventory **67** | h2_client 72/0 + client 272/0 + server 286/0 |
 | **R2-3** Test split | **done** | client redirect/body + server expect/chunk；PROJECTS=**47**；client 8662 / server 8143 | 6 suite 双绿（redirect 44 / body 71 / client 157 / expect 74 / chunk 76 / server 136） |
 | **R2-4** Polish | **done** | fuzz → tests support；BodyCache 共享只读 GetBody；ARCH inventory 对齐 | fuzz + middlewares BodyCache |
-| **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 IOCP **Parked** | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked |
+| **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 phase-1 `net.server.iocp` + `test_http_iocp_wine` | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked（无独立 QUIC） |
 | **R2-x residual** STRUCT 2.4 | **done** | `impl.h1.client` + `impl.h1.prepend`；source-contract 跟路径；inventory **68** | client 157/0 + contract 35/0 + server 136/0 |
 | **R2-x residual** STRUCT 2.4b | **done** | `TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；`impl.h1` ~1673 | h1fast 32/0 + contract 35/0 + server 136/0 |
 | **R2-x** h1.poll / h1.serve hard-cut | **done** | `impl.h1.conn`（state+shared）+ `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（Advance/handoff/drain）；`impl.h1` ~116 门面；inventory **71** | server 136/0 + expect 74/0 + contract 35/0 + h1fast 32/0 |
@@ -189,7 +189,7 @@ CHECKPOINT（不阻塞续波）:
 
 ```text
 ──── 当前 ────
-NEXT = STOP（h2 巨石机械拆 Wave A/B1/B2 已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
+NEXT = WIN-3 phase-1 IOCP server（AcceptEx + worker）+ H3 QUIC 阻塞钉死 + Windows scale claim 仍 No
 ```
 
 ---

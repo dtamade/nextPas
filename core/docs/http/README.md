@@ -323,11 +323,13 @@ make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
 当前默认值是 `TCP_SERVER_BACKEND_THREADED`。在 Linux 上，
 `TCP_SERVER_BACKEND_EPOLL` 已有第一阶段 backend：`epoll` 负责 listener
 readiness 与 accept，accepted connection 仍交给 foundation worker 执行同步
-HTTP handler，所以 public HTTP contract 保持不变。`kqueue` / `IOCP` 仍未实现；
-非 Linux 平台显式选择 `epoll` 也仍会得到 `ENotSupportedError`。后续 `kqueue`
-会继续沿用当前 readiness-family session seam；Windows `IOCP` 则会保持相同
-public HTTP contract，但通过 foundation 的 completion-aware runtime path 接入，
-而不是把 HTTP facade 改成 event-loop-first API。
+HTTP handler，所以 public HTTP contract 保持不变。`kqueue` 在 macOS/FreeBSD
+为 readiness 命名入口（compile truth）。Windows `TCP_SERVER_BACKEND_IOCP`
+已有 phase-1：`net.server.iocp` 用 AcceptEx 做 completion-driven accept，
+再 worker handoff 执行同步 handler（Wine smoke：`test_http_iocp_wine`；
+**非** scale-ready / **非** real-Windows host 全量宣称）。非对应平台显式选择
+未注册 backend 仍会得到 `ENotSupportedError`。后续 IOCP 可在 foundation 内
+扩展 completion-driven per-conn path，而不改 public HTTP facade。
 
 ## Cross-Platform
 

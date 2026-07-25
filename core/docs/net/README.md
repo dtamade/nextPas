@@ -95,10 +95,11 @@ protocol modules such as HTTP.
 - **not macos/freebsd runtime ready** — no runtime verification has been done on an actual macOS or FreeBSD host; compile-only confidence
 
 #### Windows truth
-- `tsbIocp` exists in the backend enum but `iocp is not registered` as a built-in server factory
-- `nextpas.core.io.reactor.iocp.pas` is a compile-only stub — no functional IOCP server backend exists
-- `nextpas.core.net.server.iocp.pas` does not yet exist as a source unit
-- **not windows server runtime ready** — no Windows server runtime verification
+- `tsbIocp` exists in the backend enum and is registered as a built-in factory on Windows (`RegisterTcpServerFactory(tsbIocp, ...)`)
+- `nextpas.core.net.server.iocp.pas` is the phase-1 iocp server unit: AcceptEx via `io.reactor.iocp` + foundation worker handoff for sync session/handler execution
+- `nextpas.core.io.reactor.iocp.pas` is a full completion reactor (not a stub): AcceptEx/ConnectEx/WSASend/WSARecv etc.
+- Evidence tier today: `wine-runtime-smoke` via `test_http_iocp_wine` (and reactor wine suite) — **not real-Windows host runtime ready**, **not windows scale-ready**
+- **not windows server runtime ready** as a whole-host / production scale claim; phase-1 only proves accept path + worker handoff contract
 
 The public goal is a stable, synchronous application-facing contract with
 runtime/backend policy hidden underneath the foundation layer.
@@ -118,7 +119,7 @@ TNetAddress.IPv6('::1', 8080)
 - `nextpas.core.net.server` currently ships a threaded runtime backend and a
   Linux-only phase-1 `epoll` backend.
 - macOS/FreeBSD: kqueue source-landed, readiness-backed, compile truth only — not macOS/FreeBSD runtime ready.
-- Windows: tsbIocp enum exists but IOCP is not registered as a built-in server factory — not windows server runtime ready.
+- Windows: phase-1 iocp factory registered on Windows hosts; wine-runtime-smoke only — not windows server runtime ready, not windows scale-ready.
 - IOCP is a completion/proactor family backend and must plug into a completion-aware foundation driver.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.

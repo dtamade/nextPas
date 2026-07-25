@@ -2423,10 +2423,18 @@ begin
     'net README should separate macOS/FreeBSD compile truth');
   CheckSourceContains(LReadme, 'not macos/freebsd runtime ready',
     'net README should not claim kqueue runtime readiness without runtime proof');
-  CheckSourceContains(LReadme, 'iocp is not registered',
-    'net README should state IOCP has no built-in server factory');
+  CheckSourceContains(LReadme, 'windows truth',
+    'net README should separate Windows truth');
+  CheckSourceContains(LReadme, 'phase-1 iocp',
+    'net README should state IOCP phase-1 server backend truth');
+  CheckSourceContains(LReadme, 'wine-runtime-smoke',
+    'net README should name wine-runtime-smoke evidence tier for IOCP');
   CheckSourceContains(LReadme, 'not windows server runtime ready',
-    'net README should not claim Windows server runtime readiness');
+    'net README should not claim full Windows server runtime readiness');
+  CheckSourceContains(LReadme, 'not windows scale-ready',
+    'net README must not claim Windows scale-ready');
+  CheckSourceNotContains(LReadme, 'iocp is not registered',
+    'net README should no longer claim IOCP factory is unregistered');
   CheckSourceNotContains(LReadme, 'planned next backends are `kqueue` and `iocp`',
     'net README should not describe source-landed kqueue as merely planned');
 
@@ -2440,9 +2448,38 @@ begin
   CheckSourceContains(LFacadeSource,
     'registertcpserverfactory(tsbkqueue',
     'facade should register kqueue on supported hosts');
-  CheckSourceNotContains(LFacadeSource,
+  CheckSourceContains(LFacadeSource,
     'registertcpserverfactory(tsbiocp',
-    'facade should not register IOCP as a built-in server backend yet');
+    'facade should register IOCP on Windows hosts');
+  CheckSourceContains(LFacadeSource,
+    'nextpas.core.net.server.iocp',
+    'facade should include the IOCP backend unit on Windows');
+end;
+
+procedure TestIocpBackendSourceContract;
+var
+  LIocpSource: string;
+  LFacadeSource: string;
+begin
+  LIocpSource := LoadSourceText('src/nextpas.core.net.server.iocp.pas');
+  Check(Pos('function newtcpiocpserver', LIocpSource) > 0,
+    'iocp unit should expose a named backend constructor');
+  Check(Pos('nextpas.core.io.reactor.iocp', LIocpSource) > 0,
+    'iocp unit should depend on IOCP reactor owner');
+  Check(Pos('asyncaccept', LIocpSource) > 0,
+    'iocp unit should arm AcceptEx via AsyncAccept');
+  Check(Pos('phase-1', LIocpSource) > 0,
+    'iocp unit should document phase-1 accept+worker shape');
+
+  LFacadeSource := LoadSourceText('src/nextpas.core.net.server.pas');
+  Check(Pos('nextpas.core.net.server.iocp', LFacadeSource) > 0,
+    'facade should include the iocp backend unit');
+  Check(Pos('@nextpas.core.net.server.iocp.newtcpiocpserver', LFacadeSource) > 0,
+    'facade should register the iocp backend factory');
+  {$IFNDEF NEXTPAS_WINDOWS}
+  Check(not HasTcpServerFactory(TCP_SERVER_BACKEND_IOCP),
+    'non-Windows should not expose built-in iocp backend registration');
+  {$ENDIF}
 end;
 
 procedure TestReadinessConsumerUsesPlatformPollerSourceContract;
@@ -4024,6 +4061,8 @@ begin
     @TestBuiltInThreadedBackendFactoryExists);
   T.Test('Kqueue backend source contract',
     @TestKqueueBackendSourceContract);
+  T.Test('IOCP backend source contract',
+    @TestIocpBackendSourceContract);
   T.Test('Net README backend truth source contract',
     @TestNetReadmeBackendTruthSourceContract);
   T.Test('Readiness consumer uses platform poller source contract',
