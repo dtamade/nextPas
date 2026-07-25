@@ -180,7 +180,7 @@ end;
 
 { TH1ServerConnectionState }
 
-function H1PollAdvanceWholeRunBridge(const AState: TH1ServerConnectionState; 
+function H1PollAdvanceWholeRunBridge(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
@@ -233,7 +233,7 @@ begin
   Result := tsprDone;
 end;
 
-function H1PollSubmitCurrentRequest(const AState: TH1ServerConnectionState; 
+function H1PollSubmitCurrentRequest(const AState: TH1ServerConnectionState;
   out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
@@ -320,7 +320,7 @@ begin
   Result := tsprWait;
 end;
 
-function H1PollContinueAfterCompletion(const AState: TH1ServerConnectionState; 
+function H1PollContinueAfterCompletion(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents;
   out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
@@ -360,7 +360,7 @@ begin
   Result := H1PollAdvanceRequestParse(AState, [], ANextEvents, AOwnership);
 end;
 
-function H1PollAdvanceResponseDrain(const AState: TH1ServerConnectionState; 
+function H1PollAdvanceResponseDrain(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
@@ -449,7 +449,7 @@ begin
   end;
 end;
 
-function H1PollAdvanceRequestParse(const AState: TH1ServerConnectionState; 
+function H1PollAdvanceRequestParse(const AState: TH1ServerConnectionState;
   const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
