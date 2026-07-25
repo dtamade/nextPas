@@ -189,7 +189,7 @@ CHECKPOINT（不阻塞续波）:
 
 ```text
 ──── 当前 ────
-NEXT = WIN-3 phase-1 IOCP server（AcceptEx + worker）+ H3 QUIC 阻塞钉死 + Windows scale claim 仍 No
+NEXT = STOP（WIN-3 phase-1 IOCP AcceptEx server landed；H3 仍 Blocked on QUIC；Windows scale claim 仍 No）
 ```
 
 ---
