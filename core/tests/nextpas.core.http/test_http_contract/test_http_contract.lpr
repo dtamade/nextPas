@@ -1006,6 +1006,57 @@ begin
     'HTTP IsRunning delegates runtime truth to TCP server');
 end;
 
+procedure TestHttpMinimalFacadeSourceContract;
+{ Thin facade: core types + router/server/client; no product middleware family. }
+var
+  LMinimal: string;
+begin
+  LMinimal := ReadTextFile('../../../src/nextpas.core.http.minimal.pas');
+
+  Check(SourceHas(LMinimal, 'unit nextpas.core.http.minimal;'),
+    'minimal unit exists');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.base,'),
+    'minimal uses base');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.intf,'),
+    'minimal uses intf');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.headers,'),
+    'minimal uses headers');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.url,'),
+    'minimal uses url');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.router,'),
+    'minimal uses router');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.middleware,'),
+    'minimal uses chain primitives unit middleware');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.message,'),
+    'minimal uses message');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.server,'),
+    'minimal uses server');
+  Check(SourceHas(LMinimal, 'nextpas.core.http.client;'),
+    'minimal uses client');
+
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.middleware.cors'),
+    'minimal does not pull middleware.cors');
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.middleware.recovery'),
+    'minimal does not pull middleware.recovery');
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.middleware.logger'),
+    'minimal does not pull middleware.logger');
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.middleware.compression'),
+    'minimal does not pull middleware.compression');
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.websocket'),
+    'minimal does not pull websocket product surface');
+  Check(not SourceHas(LMinimal, 'nextpas.core.http.static'),
+    'minimal does not pull static product surface');
+
+  Check(SourceHas(LMinimal, 'function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;'),
+    'minimal exports NewHttpServer');
+  Check(SourceHas(LMinimal, 'function NewHttpClient: IHttpClient;'),
+    'minimal exports NewHttpClient');
+  Check(SourceHas(LMinimal, 'function NewRouter: IHttpRouter;'),
+    'minimal exports NewRouter');
+  Check(SourceHas(LMinimal, 'function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;'),
+    'minimal exports HandlerFunc');
+end;
+
 procedure TestNewRequestFacadeDeprecationParitySourceContract;
 { Whitelist only: NewRequest(Method, TUrl|string) + NewGetRequest.
   Multi-arg NewRequest and NewStreamingRequest are physically deleted. }
@@ -1506,6 +1557,8 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Test('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
+  T.Test('Http minimal facade source contract',
+    @TestHttpMinimalFacadeSourceContract);
   T.Test('NewRequest facade deprecation parity source contract',
     @TestNewRequestFacadeDeprecationParitySourceContract);
   T.Test('Error taxonomy: no bare EArgumentError source contract',

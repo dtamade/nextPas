@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-23（**PD-1B + PD-3** 升格执行中 → 默认路径见下）
+**Updated**: 2026-07-26（residual do-all 收口 → NEXT=STOP）
 
 ---
 
@@ -180,10 +180,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2-x residual** STRUCT 2.4 | **done** | `impl.h1.client` + `impl.h1.prepend`；source-contract 跟路径；inventory **68** | client 157/0 + contract 35/0 + server 136/0 |
 | **R2-x residual** STRUCT 2.4b | **done** | `TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；`impl.h1` ~1673 | h1fast 32/0 + contract 35/0 + server 136/0 |
 | **R2-x** h1.poll / h1.serve hard-cut | **done** | `impl.h1.conn`（state+shared）+ `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（Advance/handoff/drain）；`impl.h1` ~116 门面；inventory **71** | server 136/0 + expect 74/0 + contract 35/0 + h1fast 32/0 |
+| **R2 residual do-all** | **done** | tooling mem/lane_gate 合同；`http.minimal`；except 卫生；`h2.client.body`；docs inventory **73** | tooling + contract + server + h2_client |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（h1.poll/serve 硬切已落地；H3 Blocked；Windows scale=No）
+NEXT = STOP（do-all residual 已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
 ```
 
 ---
@@ -223,8 +224,9 @@ D0 / C-A:  doc-truth + H1 HTTPS server product path  ← done
 C-D / C-D-claim: HTTPS H2 peer evidence + scale claim  ← done
 HS-2a: package claim Yes  ← done
 C-H1: HTTPS H1 peer multi-run + scale claim  ← done
+──── residual do-all（tooling + docs + minimal + except + h2.body）← done
 ──── 当前 ────
-NEXT = SAFE-1（Era SAFE：默认安全；Body 有界）
+NEXT = STOP（硬排除：H3 Blocked；WIN-3 IOCP Parked；Windows scale=No）
 ```
 
 **插队规则（历史）**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
@@ -958,15 +960,24 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 ```text
 1. Scale 战役已 Met：HS-2a package + C-D-claim HTTPS H2 + C-H1 HTTPS H1
-2. Era PD 默认路径 Met：PD-0 + PD-1A + PD-2
-3. **PD-1B Met**：Default RW=30000
-4. **PD-3-1/2 Met**：Idle 对照 + large-body residual 审计
-5. **PD-3-3 Met**：Windows cancel waitable（TCP loopback pair）
-6. H3 Blocked — 跳过；禁止空 facade
+2. Era PD 默认路径 Met：PD-0 + PD-1A + PD-2 + PD-1B + PD-3
+3. R2 + residual STRUCT 2.4/2.4b + h1.poll/serve hard-cut **landed**
+4. residual do-all **done**：tooling lane_gate 合同；http.minimal；except 注释；h2.client.body；docs inventory 73
+5. H3 Blocked — 跳过；禁止空 facade
+6. WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
 7. **NEXT = STOP**（idle）；新战役需再升格
 ```
 
 **默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)。
+
+### 命名对照（middleware）
+
+| 名字 | 含义 |
+|------|------|
+| `http.middleware` unit | 链原语：`HandlerFunc` / `MiddlewareFunc` / `Chain` |
+| `http.middleware.*` | 产品中间件：cors / recovery / logger / … |
+| `test_http_middleware` | 链原语 suite |
+| `test_http_middlewares` | 产品中间件 suite |
 
 ---
 
@@ -1119,6 +1130,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **residual do-all landed**：tooling mem/`lane_gate` 合同；`http.minimal`；H1 except 卫生；`h2.client.body`；docs inventory **73**；NEXT=STOP（H3/WIN-3 硬排除） |
+| 2026-07-25 | **h1.poll/serve hard-cut landed**：`impl.h1.conn`/`serve`/`poll`；inventory **71** |
 | 2026-07-24 | **PD-3-3 landed**：Windows `platform_socket_pair` TCP loopback → waitable cancel；Era PD 扩展完整 Met；NEXT=STOP |
 | 2026-07-23 | **PD-1B + PD-3-1/2 landed**：Default RW=30000；IdleTimeout/IdleTTL 对照；large-body residual Met；PD-3-3 Windows wake parked；NEXT=STOP |
 | 2026-07-23 | **Era PD landed**：PD-0 honesty + PD-1A Default Keep + PD-2 latency readbook；NEXT=STOP |

@@ -175,7 +175,7 @@ require_doc_pattern 'runtime' 'runtime truth category'
 require_doc_pattern 'CI truth' 'CI truth category'
 
 require_focused_path_contract 'core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix' 'platform lane simulated host compile gate'
-require_focused_path_contract 'core/tests/nextpas.core.mem/test_usability_guardrails' 'mem lane usability guardrails gate'
+require_focused_path_contract 'core/tests/nextpas.core.mem/lane_gate' 'mem lane gate'
 require_focused_path_contract 'core/tests/nextpas.core.system/test_system_source_contracts' 'system lane source contract gate'
 require_focused_path_contract 'core/tests/nextpas.core.config/test_config' 'config lane focused gate'
 require_focused_path_contract 'core/tests/nextpas.core.http/test_http_client' 'http lane focused gate'

@@ -40,18 +40,25 @@ middleware chaining, and a centralized internal transport registry.
 ## Architecture
 
 ```
-Facade (nextpas.core.http) — single uses entry point
+Facade:
+  nextpas.core.http         — full surface (product middleware family re-exports)
+  nextpas.core.http.minimal — thin surface (types + router + server/client + chain)
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
   Protocol layer: impl.h1 (landed), impl.h2 transport (landed), impl.h3 (blocked on QUIC)
 ```
+
+| uses | 内容 |
+|------|------|
+| `nextpas.core.http.minimal` | base/intf/headers/url/router/message + server/client + HandlerFunc/Chain |
+| `nextpas.core.http` | 上表全部 + cors/recovery/logger/… 产品 middleware 与扩展 re-export |
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
 as the default client/server version.
 
 ## Public Surface Map (by scenario)
 
-Use a single `uses nextpas.core.http` entry; pick APIs by job:
+默认 `uses nextpas.core.http`；只要服务/路由/客户端可用 `uses nextpas.core.http.minimal`：
 
 | Scenario | Start here |
 | --- | --- |

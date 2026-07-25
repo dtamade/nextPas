@@ -11,7 +11,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 消费方只需 `uses nextpas.core.http` 即可获得当前 H1/H2 能力；默认版本解析对应用层透明。
 `hvHttp2` 已注册到内建 registry：`http://` 使用 cleartext prior knowledge，`https://` 强制 ALPN `h2`。
 
-## 当前落地状态（2026-07-23）
+## 当前落地状态（2026-07-26）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 **server transport 门面**；connection state 在 `impl.h1.conn`，blocking serve 驱动在 `impl.h1.serve`，poll/epoll 驱动在 `impl.h1.poll`；client RoundTrip 在 `impl.h1.client`（re-export 经 `impl.h1`）。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -20,15 +20,18 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 推荐请求构造入口是 `THttpRequestBuilder`；公开工厂白名单仅
   `NewRequest(Method, TUrl|string)` 与 `NewGetRequest`；多参 `NewRequest` 与
   `NewStreamingRequest` 已物理删除（Wave K surface freeze）。
+- 双入口：`nextpas.core.http`（完整门面）与 `nextpas.core.http.minimal`（薄门面；不拉产品 middleware 全家桶）。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实生产源码库存约 **71** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **73** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
+- H2 client response body `IReader` 已抽出：`impl.h2.client.body`（`TH2ClientResponseBodyReader`）。
 - Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
 - H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
 - H1 client transport 已抽出：`impl.h1.client`；共享 prepend stream：`impl.h1.prepend`。
 - H1 server poll/serve 硬切：`impl.h1.conn`（`TH1ServerConnectionState` + shared helpers）/ `impl.h1.serve`（`H1ServeRun`）/ `impl.h1.poll`（`H1PollAdvance*` + WorkerHandoff work）。
+- H2 session residual：`impl.h2.session` 仍大；无低风险独立块时不硬切。`impl.h1.llhttp` 为生成物边界，不重写。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
@@ -171,15 +174,16 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 ```
 src/
   { 门面 + 公共层 }
-  nextpas.core.http.pas                  ← 统一门面（re-export）
+  nextpas.core.http.pas                  ← 完整门面（re-export；含产品 middleware）
+  nextpas.core.http.minimal.pas          ← 薄门面（core + router/server/client；无产品 middleware）
   nextpas.core.http.base.pas             ← 公共类型 + public options carrier
   nextpas.core.http.intf.pas             ← 统一接口
   nextpas.core.http.message.pas          ← Request/Response 实现
   nextpas.core.http.headers.pas          ← Header 集合（解析/序列化/查找）
   nextpas.core.http.url.pas              ← URL 解析（scheme/host/path/query/fragment）
   nextpas.core.http.router.pas           ← Radix tree 路由 + 路径参数
-  nextpas.core.http.middleware.pas       ← 中间件链
-  nextpas.core.http.middleware.cors.pas
+  nextpas.core.http.middleware.pas       ← 链原语（HandlerFunc / Chain）
+  nextpas.core.http.middleware.cors.pas  ← 产品 middleware（cors 等，与链原语 unit 区分）
   nextpas.core.http.middleware.logger.pas
   nextpas.core.http.middleware.recovery.pas
   nextpas.core.http.middleware.responsetime.pas  ← X-Response-Time（非限时）
@@ -219,8 +223,10 @@ src/
   nextpas.core.http.impl.h2.hpack.pas         ← HPACK encoder/decoder、dynamic table、MRU cache、DecodeView
   nextpas.core.http.impl.h2.types.pas         ← H2 settings、7-state stream machine、flow-control bookkeeping
   nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、trailer、body reader
-  nextpas.core.http.impl.h2.session.pas       ← H2 server session（preface、SETTINGS、frame dispatch、poll-driven）
+  nextpas.core.http.impl.h2.session.pas       ← H2 server session（preface、SETTINGS、frame dispatch、poll-driven；session residual）
   nextpas.core.http.impl.h2.client.pas        ← H2 client transport（RoundTrip、连接池、GOAWAY、stale retry）
+  nextpas.core.http.impl.h2.client.pool.pas   ← H2 client idle pool
+  nextpas.core.http.impl.h2.client.body.pas   ← H2 client response body IReader
   nextpas.core.http.impl.h2.server.pas        ← H2 server transport factory（IHttpServerSessionFactory）
   nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
   nextpas.core.http.impl.h1.tls.pas           ← H1 TLS wrapper（ALPN http/1.1 + session factory）

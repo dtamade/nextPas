@@ -411,6 +411,7 @@ begin
   try
     LFast := FastParseRequest(ABuf, ALen);
   except
+    { Fast path is optional; any parse fault falls back to llhttp. }
     Exit(False);
   end;
 
@@ -687,6 +688,7 @@ begin
             LOutbound.DrainAllTo(FConn as IWriter);
           end;
         except
+          { Best-effort drain after a committed error response; keep-alive ends. }
         end;
       end;
       ReleaseOutboundBuffer(LOutbound);
@@ -804,6 +806,7 @@ begin
           AOutbound := LOutbound;
           ACloseAfterDrain := True;
         except
+          { Secondary failure while writing 500 — drop buffer; peer sees close. }
           ReleaseOutboundBuffer(LOutbound);
           AOutbound := nil;
           ACloseAfterDrain := False;

@@ -18,20 +18,16 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.client.pool,
+  nextpas.core.http.impl.h2.client.body,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.types,
   nextpas.core.tls.base;
 
 type
-  TH2ClientResponseBodyReader = class(TInterfacedObject, IReader)
-  private
-    FData: nextpas.core.base.TBytes;
-    FPosition: SizeInt;
-  public
-    constructor Create(const AData: nextpas.core.base.TBytes);
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-  end;
+  { Response body reader lives in impl.h2.client.body (mechanical extract). }
+  TH2ClientResponseBodyReader =
+    nextpas.core.http.impl.h2.client.body.TH2ClientResponseBodyReader;
 
   TH2ClientConnectionState = (
     h2ccsConnecting,
@@ -231,35 +227,6 @@ type
 
 var
   GH2ClientDialFunc: TH2ClientDialFunc = nil;
-
-{ TH2ClientResponseBodyReader }
-
-constructor TH2ClientResponseBodyReader.Create(
-  const AData: nextpas.core.base.TBytes);
-begin
-  inherited Create;
-  FData := AData;
-  FPosition := 0;
-end;
-
-function TH2ClientResponseBodyReader.Read(var ABuf;
-  const ACount: SizeUInt): SizeUInt;
-var
-  LAvailable: SizeUInt;
-begin
-  Result := 0;
-  if (ACount = 0) or (FPosition >= Length(FData)) then
-    Exit;
-  LAvailable := SizeUInt(Length(FData) - FPosition);
-  if ACount < LAvailable then
-    Result := ACount
-  else
-    Result := LAvailable;
-  if Result = 0 then
-    Exit;
-  Move(FData[FPosition], ABuf, Result);
-  Inc(FPosition, SizeInt(Result));
-end;
 
 function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
 begin

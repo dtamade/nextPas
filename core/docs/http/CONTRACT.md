@@ -1,35 +1,42 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 **71** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 **73** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-25（h1.poll / h1.serve hard-cut）
-**版本**：3.39
+**最后更新**：2026-07-26（minimal facade + h2.client.body extract）
+**版本**：3.40
 
 ---
 
 ## 1. 模块边界
 
 ```
-http.pas                 ← 统一门面（re-export）
+http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶）
+http.minimal             ← 薄门面：base/intf/headers/url/router/message + server/client + chain 原语
 http.base                ← THttpMethod/Status/Version, TUrl, options, EHttpError
 http.intf                ← IHttp* 接口（Request/Response/Client/Server/Router/…）
 http.message             ← THttpRequest/THttpResponse + helpers + THttpRequestBuilder
 http.headers             ← IHttpHeaders 实现
 http.url                 ← URL parse / encode helpers（base/TUrl 拥有核心类型）
 http.router[+group]      ← radix router + path params + regex routes + groups
-http.middleware.*        ← 中间件链与内建 middleware
+http.middleware          ← 链原语（HandlerFunc / MiddlewareFunc / Chain）
+http.middleware.*        ← 内建产品 middleware（cors/recovery/logger/…）
 http.client / server     ← facade 编排（server 委托 net.server）
 http.static / websocket  ← helper 级公开面
 http.form / cookie / sse ← 表单、Cookie、SSE 辅助
 http.impl.registry       ← 版本 → transport factory
-http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast
-http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client/TLS
+http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast + poll/serve
+http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client(+body)/TLS
 http.impl.tls.stream     ← TLS over TCP stream wrapper
 { tests only } support/nextpas.core.http.fuzz ← 模糊测试辅助（非生产 inventory）
 ```
 
-公开消费方默认只 `uses nextpas.core.http`。
+| 入口 | 何时用 |
+|------|--------|
+| `uses nextpas.core.http.minimal` | 只要类型 + router + server/client + HandlerFunc/Chain，不要 cors/recovery/… |
+| `uses nextpas.core.http` | 完整产品面（middleware 全家桶、static/websocket re-export 等） |
+
+公开消费方默认仍可 `uses nextpas.core.http`；生产 checklist 可二选一。
 
 ---
 
