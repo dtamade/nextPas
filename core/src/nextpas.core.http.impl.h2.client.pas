@@ -108,8 +108,6 @@ type
       const AMessage: string);
     procedure SendConnectionWindowDelta;
     function AllocateStreamID: UInt32;
-    function RequestPath(const AUrl: TUrl): AnsiString;
-    function RequestAuthority(const AUrl: TUrl): AnsiString;
     function EncodeRequestHeaders(const AReq: IHttpRequest): AnsiString;
     procedure SendRequestHeaders(const AStreamID: UInt32; const AReq: IHttpRequest;
       const AEndStream: Boolean);
@@ -124,10 +122,6 @@ type
       var AStreamFlow: TH2StreamFlowControl; var AResponse: TH2ResponseState);
     procedure SendRequestBody(const AStreamID: UInt32; const AReq: IHttpRequest;
       var AStreamFlow: TH2StreamFlowControl; var AResponse: TH2ResponseState);
-    class function ExtractHeadersFragment(const AFlags: Byte;
-      const APayload: AnsiString; out AFragment: AnsiString): Boolean; static;
-    class function ExtractDataPayload(const AFlags: Byte;
-      const APayload: AnsiString; out AData: AnsiString): Boolean; static;
     procedure AppendResponseHeaderFragment(var AResponse: TH2ResponseState;
       const AFragment: AnsiString);
     procedure DecodeResponseHeaders(var AResponse: TH2ResponseState);
@@ -588,20 +582,6 @@ begin
     Inc(FNextStreamID, 2);
 end;
 
-function TH2ClientConnection.RequestPath(const AUrl: TUrl): AnsiString;
-begin
-  Result := AnsiString(AUrl.Path);
-  if Result = '' then
-    Result := '/';
-  if AUrl.RawQuery <> '' then
-    Result := Result + '?' + AnsiString(AUrl.RawQuery);
-end;
-
-function TH2ClientConnection.RequestAuthority(const AUrl: TUrl): AnsiString;
-begin
-  Result := AnsiString(AUrl.HostPort);
-end;
-
 function TH2ClientConnection.EncodeRequestHeaders(const AReq: IHttpRequest): AnsiString;
 var
   LHeaderList: array of THPackHeader;
@@ -621,9 +601,9 @@ begin
   else
     LHeaderList[1].Value := 'http';
   LHeaderList[2].Name := ':authority';
-  LHeaderList[2].Value := RequestAuthority(LUrl);
+  LHeaderList[2].Value := H2ClientRequestAuthority(LUrl);
   LHeaderList[3].Name := ':path';
-  LHeaderList[3].Value := RequestPath(LUrl);
+  LHeaderList[3].Value := H2ClientRequestPath(LUrl);
   LHeaderCount := 4;
   if AReq.Headers <> nil then
     AReq.Headers.ForEach(
@@ -791,60 +771,6 @@ begin
       LFlags := 0;
     SendFrame(H2_FRAME_DATA, LFlags, AStreamID, LPayload);
   end;
-end;
-
-class function TH2ClientConnection.ExtractHeadersFragment(const AFlags: Byte;
-  const APayload: AnsiString; out AFragment: AnsiString): Boolean;
-var
-  LPadLength: SizeInt;
-  LStart: SizeInt;
-  LFragmentLen: SizeInt;
-begin
-  Result := False;
-  AFragment := '';
-  LStart := 1;
-  LPadLength := 0;
-  if (AFlags and H2_FLAG_HEADERS_PADDED) <> 0 then
-  begin
-    if Length(APayload) < 1 then
-      Exit;
-    LPadLength := Byte(APayload[1]);
-    Inc(LStart);
-  end;
-  if (AFlags and H2_FLAG_HEADERS_PRIORITY) <> 0 then
-  begin
-    if Length(APayload) < LStart + 4 then
-      Exit;
-    Inc(LStart, 5);
-  end;
-  LFragmentLen := Length(APayload) - LStart + 1 - LPadLength;
-  if LFragmentLen < 0 then
-    Exit;
-  if LFragmentLen > 0 then
-    AFragment := Copy(APayload, LStart, LFragmentLen);
-  Result := True;
-end;
-
-class function TH2ClientConnection.ExtractDataPayload(const AFlags: Byte;
-  const APayload: AnsiString; out AData: AnsiString): Boolean;
-var
-  LPadLength: SizeInt;
-begin
-  Result := False;
-  AData := '';
-  if (AFlags and H2_FLAG_DATA_PADDED) = 0 then
-  begin
-    AData := APayload;
-    Exit(True);
-  end;
-  if Length(APayload) < 1 then
-    Exit;
-  LPadLength := Byte(APayload[1]);
-  if Length(APayload) < 1 + LPadLength then
-    Exit;
-  if Length(APayload) > 1 + LPadLength then
-    AData := Copy(APayload, 2, Length(APayload) - 1 - LPadLength);
-  Result := True;
 end;
 
 procedure TH2ClientConnection.AppendResponseHeaderFragment(
@@ -1086,7 +1012,7 @@ begin
       'HTTP/2 HEADERS received on connection stream');
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
-  if not ExtractHeadersFragment(AFrame.Header.Flags, AFrame.Payload, LFragment) then
+  if not H2ExtractHeadersFragment(AFrame.Header.Flags, AFrame.Payload, LFragment) then
     raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid HEADERS payload');
   AResponse.HeaderFragments := nil;
   AppendResponseHeaderFragment(AResponse, LFragment);
@@ -1137,7 +1063,7 @@ begin
       'HTTP/2 DATA received on connection stream');
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
-  if not ExtractDataPayload(AFrame.Header.Flags, AFrame.Payload, LData) then
+  if not H2ExtractDataPayload(AFrame.Header.Flags, AFrame.Payload, LData) then
     raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid DATA payload');
   { Flow control accounts for entire frame payload including padding }
   LFrameLen := UInt32(Length(AFrame.Payload));
