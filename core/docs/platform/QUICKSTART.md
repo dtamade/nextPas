@@ -2,6 +2,14 @@
 
 > For new developers getting started with `nextpas.core.platform.*`
 
+## Hard rules (do not skip)
+
+1. **No FPC RTL** in production/tests/examples (`SysUtils` / `BaseUnix` / `Windows` / `Classes`). Only `nextpas.core.system` may uses FPC RTL.
+2. **No new `platform_io_*` call sites** — dual-IO is permanent owner-only on `platform.process`. Prefer `platform.files` and `platform_process_*_ex`.
+3. **console read/write**: success `>= 0` bytes, failure **`-1`** (value/sentinel). Do not treat positive `PLATFORM_ERR_*` as a length.
+4. Prefer feature units (`platform.files`, `.process`, `.socket`, …); root `platform` is thin info/time only.
+5. Host truth is evidence-tiered — see [host-capability-matrix.md](host-capability-matrix.md).
+
 ## Common Patterns
 
 ### 1. Open, Read, Close a File

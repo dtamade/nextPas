@@ -1,5 +1,7 @@
 # Platform 模块测试覆盖率报告
 
+> **Historical / non-authority.** Live gates: [README.md](README.md) focused verification + [ROADMAP.md](ROADMAP.md) §4. Do not treat body counts as current.
+
 **日期**: 2026-07-06
 **负责人**: Claude (AI)
 **工作目录**: .worktrees/platform

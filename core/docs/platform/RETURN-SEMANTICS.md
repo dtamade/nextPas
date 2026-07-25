@@ -8,7 +8,7 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 |------|---------|---------|----------|
 | **Error-code** | `0` | `PLATFORM_ERR_*` only (never bare `-1` as a portable error code) | `platform_file_open`, `platform_process_write_stdin_ex`, `platform_resource_get_limit`, `platform_io_close` |
 | **Length / size** | `>= 0` bytes or count written | `PLATFORM_ERR_*` (negative portable codes; not raw errno unless already a `PLATFORM_ERR_*`) | `platform_args_get`, `platform_error_message`, `platform_fs_temp_dir` |
-| **Value / sentinel** | domain value | domain sentinel (`-1` fd/pid/index, `nil` pointer) | `platform_getpid`, `platform_io_read`/`write` (byte counts), `platform_pty_master_fd`, poller index find, `platform_aligned_alloc` |
+| **Value / sentinel** | domain value | domain sentinel (`-1` fd/pid/index, `nil` pointer) | `platform_getpid`, `platform_console_read`/`write` (byte counts; **never** positive `PLATFORM_ERR_*` as bytes), `platform_io_read`/`write` (byte counts), `platform_pty_master_fd`, poller index find, `platform_aligned_alloc` |
 
 ## Rules
 
@@ -27,6 +27,15 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 13. **Out-init**: for error-code APIs with `out` handles/positions/stats, initialize sentinels **before** host work (`AHandle.Value := -1`, `ANewPos := -1`, `FillChar(AStat, …)`, …) so failure paths never leave out-params undefined. **Unsupported stubs** with `out` handles must set the same sentinels (not only `Result := PLATFORM_ERR_UNSUPPORTED`).
 14. **Error-code stubs** on unsupported hosts must return `PLATFORM_ERR_UNSUPPORTED` (or another `PLATFORM_ERR_*`), not bare `Result := -1` (value/sentinel APIs may still use domain `-1`).
 15. **Index / find value-sentinel**: `platform_str_find` returns the byte index on hit and **`-1` when not found** (not an error-code API). Same family as poller entry index find.
+
+## Console read/write (F-001 freeze)
+
+- **Tier**: value/sentinel (not error-code).
+- **Success**: `>= 0` bytes transferred.
+- **Failure**: always `-1`. Callers must use `if N < 0` / `N = expected`, never treat positive `PLATFORM_ERR_*` as a length.
+- **Detail**: after a host I/O failure, `platform_get_last_error` / `platform_get_last_os_error` may reflect errno/GetLastError. Pure validation failures (nil buffer) return `-1` without guaranteeing a fresh last_error.
+- **Hosts**: Linux / macOS / FreeBSD use POSIX termios+read/write; Windows uses std handles; other Unix may leave `set_raw` unsupported while still offering read/write where libc allows.
+- **Error-code console APIs** (`get_size`, `set_raw`, `enable_ansi`, `cursor_move`, `clear_*`): remain `0` / `PLATFORM_ERR_*`.
 
 ## files / fs / io stance
 

@@ -193,6 +193,8 @@ const
 
 { termios ioctl constants and winsize }
 {$I nextpas.core.platform.darwin.base.termios.inc}
+{ termios flag constants and record layout }
+{$I nextpas.core.platform.darwin.base.termios.flags.inc}
 
 { stat structure - Darwin 64-bit (new iostructs layout) }
 const

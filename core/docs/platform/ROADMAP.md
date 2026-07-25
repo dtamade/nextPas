@@ -237,6 +237,12 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 | **Priority** | **P3** |
 | **Acceptance** | Bench reports under docs; no truth-tier language change from benches alone |
 
+**D5 extensions (audit F-021 / F-025, not opened as waves):**
+
+- Optional fuzz/soak for `files`/`path`/`socket`/`process` (no default harness this program).
+- process/socket/sync **file split** only when a consumer pain + landing plan exists (F-004/F-005 deferred).
+- Strategic Go/Rust gaps (typed errors, cancel tokens) stay L1+ / Won't at L0.
+
 ---
 
 ## 4. Standing maintenance (always green)
@@ -348,6 +354,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-21 | **Docs hygiene (H3/H1)**: live inventory wine matrix count **14→24** (matches `platform-wine-ci-matrix.sh`); master-spec watch claim updated off UNSUPPORTED; residual snapshot marked historical; current counts point at this ROADMAP. |
 | 2026-07-21 | **Batch-console-wine**: add `platform.console` to wine matrix (**24→25**) after Linux console 22/0 + raw 5/0 + wine-runtime-smoke 8/0 + full wine matrix pass=25 fail=0. TUI hangs Windows true-console on this ladder. Windows scripts **+console candidate** (no 28-gate ci-matrix promote until GHA green). Consumer-contract-audit refreshed (Windows readiness = ci-matrix for documented 27, not source/compile-only). |
 | 2026-07-26 | **Batch-console-promote**: promote **28 platform-gate** set (+console) after GHA `test-windows-runtime` success run **30168411064** @ `5464b31c4` (PASS platform.console; matrix pass=29 fail=0 with mem.host). Facade smoke only — not TUI true-console product. Docs + matrix script scope strings updated 27→28. |
+| 2026-07-26 | **Audit closeout F-001…F-025**: console read/write value/sentinel **failure=-1** (F-001); Darwin/FreeBSD termios console path (F-002); wine/host hard asserts (F-003); docs for dual-IO ban / no process-socket-sync split / freetype-x11 stay / host-capability-matrix (F-004…F-025). macOS matrix **+console candidate** only (no 10-gate promote without GHA). |
 
 ---
 

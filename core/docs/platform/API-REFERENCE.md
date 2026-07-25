@@ -33,8 +33,8 @@
 | `platform_console_enable_ansi: Int32` | 启用 ANSI 转义序列(Windows) |
 | `platform_console_set_raw(AFd, out AMode): Int32` | 设置原始模式 |
 | `platform_console_restore_raw(AFd, AMode): Int32` | 恢复终端模式 |
-| `platform_console_read(AFd, ABuf, ACount): Int32` | 从终端读取 |
-| `platform_console_write(AFd, ABuf, ACount): Int32` | 写入终端 |
+| `platform_console_read(AFd, ABuf, ACount): Int32` | 从终端读取；**value/sentinel**：成功 `>=0` 字节，失败 **`-1`**（勿把正 `PLATFORM_ERR_*` 当字节数） |
+| `platform_console_write(AFd, ABuf, ACount): Int32` | 写入终端；同上 value/sentinel |
 | `platform_console_wait_readable(AFd, ATimeoutMs): TPlatformConsoleWait` | 等待数据可读 |
 
 ## 3. dl — 动态库加载
@@ -56,7 +56,7 @@
 | `platform_env_exists(AName): Boolean` | 检查环境变量是否存在 |
 | `platform_env_enumerate(ACallback, AUserData): Int32` | 遍历所有环境变量 |
 | `platform_env_names_case_sensitive: Boolean` | 名称是否区分大小写 |
-| `platform_env_get_str(AName): AnsiString` | 获取环境变量(字符串版，不存在/空值都返回空字符串) |
+| `platform_env_get_str(AName): AnsiString` | **FPC managed 便捷面**（非稳定 C ABI）；可移植路径优先 `platform_env_get` buffer API |
 
 ## 5. error — 错误处理
 

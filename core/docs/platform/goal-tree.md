@@ -24,6 +24,10 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
 Usability maintenance baseline 8.21 is closed (LT0–LT3 + dual-IO/F6 freeze). D0–D3 closed.
 F7/F9/F10 Won't; F14 freetype stays under platform.
 
+**CI narrative (F-023):** whole Core CI job red (linux/macos/freebsd inventory) does **not**
+demote platform when `test-windows-runtime` / macOS layer A matrix steps are green.
+Always cite the platform matrix job, not the workflow aggregate.
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

@@ -7,9 +7,13 @@ interface
 uses
   nextpas.core.platform.posix.errno;
 
-{ POSIX raw/read/write/wait support is Linux-only; Windows uses a separate
-  standard-handle implementation; macOS/FreeBSD return PLATFORM_ERR_UNSUPPORTED
-  or cwError for raw/read/write/wait. }
+{ Console host map:
+  - POSIX (Linux/macOS/FreeBSD): termios + read/write/poll via host base + posix.ffi
+  - Windows: standard-handle ReadFile/WriteFile + console mode
+  - Other Unix (e.g. Android generic): read/write/poll/isatty; set_raw may be UNSUPPORTED
+  platform_console_read/write are value/sentinel: success >=0 bytes, failure -1
+  (detail via platform_get_last_error / host errno). Never return positive PLATFORM_ERR_*
+  as a byte count. }
 
 type
   {** @desc 控制台尺寸结构体 *}
@@ -170,22 +174,12 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.posix.helpers
-  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.base{$ENDIF};
-
-type
-  TWinSize = packed record
-    ws_row: UInt16;
-    ws_col: UInt16;
-    ws_xpixel: UInt16;
-    ws_ypixel: UInt16;
-  end;
+  {$IFDEF NEXTPAS_LINUX}, nextpas.core.platform.linux.base{$ENDIF}
+  {$IFDEF NEXTPAS_MACOS}, nextpas.core.platform.darwin.base{$ENDIF}
+  {$IFDEF NEXTPAS_FREEBSD}, nextpas.core.platform.freebsd.base{$ENDIF};
 
 const
-{$IFDEF NEXTPAS_LINUX}
-  TIOCGWINSZ = $5413;
-{$ELSE}
-  TIOCGWINSZ = $40087468;
-{$ENDIF}
+  CONSOLE_EINTR = 4; { EINTR — Linux/macOS/BSD }
 
 function TPlatformConsoleSize.IsValid: Boolean;
 begin
@@ -213,6 +207,7 @@ begin
 end;
 
 function platform_console_get_size_fd(AFd: Int32; out ASize: TPlatformConsoleSize): Int32;
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 var
   LWin: TWinSize;
 begin
@@ -225,6 +220,13 @@ begin
     ASize.Rows := Int32(LWin.ws_row);
   end;
 end;
+{$ELSE}
+begin
+  ASize.Cols := 0;
+  ASize.Rows := 0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+{$ENDIF}
 
 function platform_console_get_size(out ASize: TPlatformConsoleSize): Int32;
 begin
@@ -236,10 +238,7 @@ begin
   Result := 0;
 end;
 
-{$IFDEF NEXTPAS_LINUX}
-const
-  CONSOLE_EINTR = 4;   { EINTR，Linux/macOS/BSD 一致 }
-
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
 function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
 var
   LSaved, LRaw: TTermios;
@@ -268,14 +267,30 @@ begin
   Move(AMode.Opaque[0], LSaved, SizeOf(TTermios));
   Result := PosixCheck(tcsetattr(AFd, TCSANOW, @LSaved));
 end;
+{$ELSE}
+function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
+begin
+  FillChar(AMode, SizeOf(AMode), 0);
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
+function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
+begin
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+{$ENDIF}
 
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
 var
   LRc: ssize_t;
 begin
+  if ACount <= 0 then Exit(0);
+  if ABuf = nil then Exit(-1);
   repeat
     LRc := read(AFd, ABuf, ACount);
   until (LRc >= 0) or (platform_get_errno <> CONSOLE_EINTR);
+  if LRc < 0 then
+    Exit(-1);
   Result := Int32(LRc);
 end;
 
@@ -285,6 +300,7 @@ var
   LPtr: PByte;
 begin
   if ACount <= 0 then Exit(0);
+  if ABuf = nil then Exit(-1);
   LPtr := PByte(ABuf);
   LSent := 0;
   while LSent < ACount do
@@ -293,9 +309,9 @@ begin
     if LWrote < 0 then
     begin
       if platform_get_errno = CONSOLE_EINTR then Continue;
-      Exit(platform_get_errno);
+      Exit(-1);
     end;
-    if LWrote = 0 then Exit(PLATFORM_ERR_IO);
+    if LWrote = 0 then Exit(-1);
     Inc(LSent, LWrote);
   end;
   Result := LSent;
@@ -335,23 +351,21 @@ var
   LTotal, LWritten: Int32;
 begin
   LTotal := 0;
-  { Write foreground color }
   if Length(AFg) > 0 then
   begin
     LWritten := platform_console_write(1, PAnsiChar(AFg), Length(AFg));
-    if LWritten < 0 then Exit(LWritten);
+    if LWritten < 0 then Exit(-1);
     Inc(LTotal, LWritten);
   end;
-  { Write text }
   if (AStr <> nil) and (ALen > 0) then
   begin
     LWritten := platform_console_write(1, AStr, ALen);
-    if LWritten < 0 then Exit(LWritten);
+    if LWritten < 0 then Exit(-1);
     Inc(LTotal, LWritten);
   end;
-  { Write reset }
-  LWritten := platform_console_write(1, PAnsiChar(PLATFORM_CONSOLE_RESET), Length(PLATFORM_CONSOLE_RESET));
-  if LWritten < 0 then Exit(LWritten);
+  LWritten := platform_console_write(1, PAnsiChar(PLATFORM_CONSOLE_RESET),
+    Length(PLATFORM_CONSOLE_RESET));
+  if LWritten < 0 then Exit(-1);
   Inc(LTotal, LWritten);
   Result := LTotal;
 end;
@@ -360,12 +374,12 @@ function platform_console_cursor_move(ACol, ARow: Int32): Int32;
 var
   LBuf: array[0..31] of AnsiChar;
   LLen: Int32;
+  LWrote: Int32;
 begin
-  { ESC[row;colH - cursor position (1-based) }
+  { ESC[row;colH - cursor position (1-based); error-code: 0 / PLATFORM_ERR_* }
   LLen := 0;
   LBuf[LLen] := #27; Inc(LLen);
   LBuf[LLen] := '['; Inc(LLen);
-  { Convert row to string }
   if ARow >= 10 then
   begin
     LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) div 10); Inc(LLen);
@@ -376,7 +390,6 @@ begin
     LBuf[LLen] := AnsiChar(Ord('0') + ARow + 1); Inc(LLen);
   end;
   LBuf[LLen] := ';'; Inc(LLen);
-  { Convert col to string }
   if ACol >= 10 then
   begin
     LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) div 10); Inc(LLen);
@@ -387,46 +400,41 @@ begin
     LBuf[LLen] := AnsiChar(Ord('0') + ACol + 1); Inc(LLen);
   end;
   LBuf[LLen] := 'H'; Inc(LLen);
-  Result := platform_console_write(1, @LBuf[0], LLen);
+  LWrote := platform_console_write(1, @LBuf[0], LLen);
+  if LWrote < 0 then
+    Exit(PLATFORM_ERR_IO);
+  if LWrote <> LLen then
+    Exit(PLATFORM_ERR_IO);
+  Result := 0;
 end;
 
 function platform_console_clear_line: Int32;
 const
   CLEAR_LINE = #27'[2K';
+var
+  LWrote: Int32;
 begin
-  Result := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+  LWrote := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+  if LWrote = 3 then
+    Exit(0);
+  if LWrote < 0 then
+    Exit(PLATFORM_ERR_IO);
+  Result := PLATFORM_ERR_IO;
 end;
 
 function platform_console_clear_screen: Int32;
 const
   CLEAR_SCREEN = #27'[2J';
+var
+  LWrote: Int32;
 begin
-  Result := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+  LWrote := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+  if LWrote = 4 then
+    Exit(0);
+  if LWrote < 0 then
+    Exit(PLATFORM_ERR_IO);
+  Result := PLATFORM_ERR_IO;
 end;
-{$ELSE}
-{ 非 Linux Unix（macOS/FreeBSD 等）：host base 单元尚未就绪，提供诚实 stub。 }
-function platform_console_set_raw(AFd: Int32; out AMode: TPlatformConsoleMode): Int32;
-begin FillChar(AMode, SizeOf(AMode), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
-begin Result := cwError; end;
-function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
-  const AFg: AnsiString): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_cursor_move(ACol, ARow: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_clear_line: Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_console_clear_screen: Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-{$ENDIF}
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -575,12 +583,13 @@ var
   LHandle: HANDLE;
   LRead: DWORD;
 begin
+  { value/sentinel: >=0 bytes, -1 failure (last_error via GetLastError path) }
   if ACount <= 0 then Exit(0);
-  if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
-  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(PLATFORM_ERR_INVALID_HANDLE);
+  if ABuf = nil then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
   LRead := 0;
   if not ReadFile(LHandle, ABuf, DWORD(ACount), @LRead, nil) then
-    Exit(platform_get_errno);
+    Exit(-1);
   Result := Int32(LRead);
 end;
 
@@ -591,18 +600,19 @@ var
   LPtr: PByte;
   LChunk: DWORD;
 begin
+  { value/sentinel: >=0 bytes, -1 failure }
   if ACount <= 0 then Exit(0);
-  if ABuf = nil then Exit(PLATFORM_ERR_INVALID);
-  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(PLATFORM_ERR_INVALID_HANDLE);
+  if ABuf = nil then Exit(-1);
+  if WindowsConsoleHandleFromFd(AFd, LHandle) <> 0 then Exit(-1);
   LPtr := PByte(ABuf);
   LSent := 0;
   while LSent < ACount do
   begin
     LChunk := 0;
     if not WriteFile(LHandle, @LPtr[LSent], DWORD(ACount - LSent), @LChunk, nil) then
-      Exit(platform_get_errno);
+      Exit(-1);
     LWritten := Int32(LChunk);
-    if LWritten <= 0 then Exit(platform_get_errno);
+    if LWritten <= 0 then Exit(-1);
     Inc(LSent, LWritten);
   end;
   Result := LSent;
@@ -668,12 +678,11 @@ function platform_console_cursor_move(ACol, ARow: Int32): Int32;
 var
   LBuf: array[0..31] of AnsiChar;
   LLen: Int32;
+  LWrote: Int32;
 begin
-  { ESC[row;colH - cursor position (1-based) }
   LLen := 0;
   LBuf[LLen] := #27; Inc(LLen);
   LBuf[LLen] := '['; Inc(LLen);
-  { Convert row to string }
   if ARow >= 10 then
   begin
     LBuf[LLen] := AnsiChar(Ord('0') + (ARow + 1) div 10); Inc(LLen);
@@ -684,7 +693,6 @@ begin
     LBuf[LLen] := AnsiChar(Ord('0') + ARow + 1); Inc(LLen);
   end;
   LBuf[LLen] := ';'; Inc(LLen);
-  { Convert col to string }
   if ACol >= 10 then
   begin
     LBuf[LLen] := AnsiChar(Ord('0') + (ACol + 1) div 10); Inc(LLen);
@@ -695,21 +703,34 @@ begin
     LBuf[LLen] := AnsiChar(Ord('0') + ACol + 1); Inc(LLen);
   end;
   LBuf[LLen] := 'H'; Inc(LLen);
-  Result := platform_console_write(1, @LBuf[0], LLen);
+  LWrote := platform_console_write(1, @LBuf[0], LLen);
+  if LWrote = LLen then
+    Exit(0);
+  Result := PLATFORM_ERR_IO;
 end;
 
 function platform_console_clear_line: Int32;
 const
   CLEAR_LINE = #27'[2K';
+var
+  LWrote: Int32;
 begin
-  Result := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+  LWrote := platform_console_write(1, PAnsiChar(CLEAR_LINE), 3);
+  if LWrote = 3 then
+    Exit(0);
+  Result := PLATFORM_ERR_IO;
 end;
 
 function platform_console_clear_screen: Int32;
 const
   CLEAR_SCREEN = #27'[2J';
+var
+  LWrote: Int32;
 begin
-  Result := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+  LWrote := platform_console_write(1, PAnsiChar(CLEAR_SCREEN), 4);
+  if LWrote = 4 then
+    Exit(0);
+  Result := PLATFORM_ERR_IO;
 end;
 {$ENDIF}
 
@@ -733,16 +754,16 @@ begin FillChar(AMode, SizeOf(AMode), 0); Result := PLATFORM_ERR_UNSUPPORTED; end
 function platform_console_restore_raw(AFd: Int32; const AMode: TPlatformConsoleMode): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_read(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin Result := -1; end;
 function platform_console_write(AFd: Int32; ABuf: Pointer; ACount: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin Result := -1; end;
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin Result := -1; end;
 function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
   const AFg: AnsiString): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin Result := -1; end;
 function platform_console_cursor_move(ACol, ARow: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_clear_line: Int32;

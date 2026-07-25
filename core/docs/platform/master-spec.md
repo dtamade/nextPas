@@ -126,3 +126,16 @@ make -C core/tests/architecture/source_contracts host-raw-ffi-audit
 
 A new allowlist entry is owner-boundary debt. The landing report must name the
 path, token, reason, and follow-up owner route.
+
+## Optional host bindings (F-006)
+
+`platform.freetype` and `platform.x11` are **optional dlopen host bindings**, not
+core OS facades. They may use independent `FT_ERR_*` / `X11_ERR_*` domains.
+Move-out requires a dedicated owner lane (ROADMAP D3.d). Do not treat them as
+evidence for Windows/macOS platform matrix promotion.
+
+## L0 heap policy (F-009)
+
+Feature modules under platform may use System `GetMem`/`FreeMem` for internal
+buffers. They must **not** depend on `nextpas.core.mem` (layer cycle). This is an
+intentional L0 invariant.

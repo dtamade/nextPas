@@ -55,14 +55,18 @@ is owned with **io/net-async**, not as a blanket platform facade claim.
 
 - `nextpas.core.tui` depends on `platform.console` (+ signal for SIGWINCH/SIGTERM on POSIX).
 - `platform.console` is on wine secondary matrix (**25**) and promoted Windows
-  **`ci-matrix` 28 platform gates** (GHA 30168411064 PASS) as facade smoke.
-- Windows true-console TUI remains tui-lane product work; platform supplies
-  evidence ladder only (not full TUI product path).
+  **`ci-matrix` 28 platform gates** as facade smoke (hard value/sentinel asserts after F-001/F-003).
+- **read/write**: success `>=0` bytes, failure **`-1`** (TUI `Result = LLen` remains safe).
+- Darwin/FreeBSD: termios path implemented (F-002); macOS matrix lists console as **candidate** only.
+- Windows true-console TUI remains tui-lane product work.
+- **Cancellation** (F-020): not an L0 platform primitive; net/http/async own cancel tokens.
 
 ## Current route
 
 1. Keep readiness/completion split honest.
 2. Expand Windows/macOS matrices only with consumer pain + one-gate ladder.
 3. Do not promote full-host Windows or macOS parity from wine or partial matrices.
+4. No new dual-IO call sites; no process/socket/sync split without a dedicated batch.
 
-Deferred: FreeBSD/Android device runtime, D5 benches as truth language, dual-IO sunset.
+Deferred: FreeBSD/Android device runtime, D5 fuzz as truth language, dual-IO sunset,
+freetype/x11 move-out (independent lane).

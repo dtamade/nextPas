@@ -5,8 +5,16 @@
 **FPC RTL**：生产/测试/示例 **禁止** `uses SysUtils` / `BaseUnix` / `Windows` / `Classes` 等 FPC RTL。
 仅 `nextpas.core.system` 允许直接引用 FPC RTL（仓库级编译器无关性原则）。
 **Owner**：platform lane（`.worktrees/platform`）
-**最后更新**：2026-07-17
-**版本**：2.2
+**最后更新**：2026-07-26
+**版本**：2.3
+
+### 0.1 审计闭环不变量（2026-07-26）
+
+- **console read/write**：value/sentinel；失败 `-1`；禁止正 `PLATFORM_ERR_*` 冒充字节数。
+- **L0 堆**：platform 可用 System `GetMem`/`FreeMem`；**不得** `uses nextpas.core.mem`。
+- **dual-IO**：`platform_io_*` 符号仅 `platform.process` 拥有；无新 call site。
+- **freetype/x11**：optional host binding，非 OS 契约核心；迁出需独立 lane。
+- **process/socket/sync 巨型单元**：本轮不物理拆分；拆包为后续 ROADMAP batch。
 
 ---
 
@@ -36,7 +44,7 @@
 | platform.mmap.pas | 内存映射 | platform_mmap_file, platform_mmap_close, platform_shm_create |
 | platform.env.pas | 环境变量 | platform_env_get, platform_env_set（`env_get_str` 为 FPC managed 便捷面） |
 | platform.args.pas | 命令行参数 | platform_args_count, platform_args_get |
-| platform.console.pas | 控制台 I/O | platform_console_read, platform_console_write |
+| platform.console.pas | 控制台 I/O | platform_console_read/write (**-1** 失败), set_raw, get_size |
 | platform.random.pas | 随机数 | platform_random_bytes |
 | platform.resource.pas | 资源限制 | platform_resource_get_limit, platform_resource_set_limit |
 | platform.secure.pas | 安全操作 | platform_secure_zero |
