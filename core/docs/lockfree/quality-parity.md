@@ -1,11 +1,12 @@
 # Atomic / Lockfree — Q 线（Quality / Parity）
 
-> **状态**: **Q0–Q5 done** · **Q1-b/c done** · Maintenance
-> **日期**: 2026-07-20
+> **状态**: **Q0–Q5 done** · **Q1-b/c done** · **Maintenance**（H5-1 + HTTP notes 2026-07-26）
+> **日期**: 2026-07-26
 > **Owner**: atomic-lockfree lane（全权）
 > **目标**: 对标 Go/Rust 的 **质量与可用规模**，并保持清洁
 > **编号**: **Q0–Q5**（**不是** R9；R8 仍为研究 opt-in）
 > **对标矩阵**: [`parity-go-rust.md`](parity-go-rust.md)
+> **HTTP**: 协作见 [`http-integration-notes.md`](http-integration-notes.md)；不默认改 http 实现
 
 权威契约仍是 [`CONTRACT.md`](CONTRACT.md)。状态入口 [`READY.md`](READY.md)。
 
@@ -152,6 +153,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **Phase A (T1 deepen) done**：MSQueue Try*Ex；stress Close race（MSQueue/Stack/SegQueue）；Close 幂等边角
 - **Polish P2d done**：api-ref.en T2 短 prose 与中文对齐；`t1_msqueue_close_join_free`；`t2_hashmap_join_free`（无 Close 诚实）；Skiplist 不 invent Close
 - **剩余（本模块内）**：可选更多 T2 教学示例；legacy public API 仍可在 `atomic.compat` 保留
+- **2026-07-26 Maintenance slice**：H5 文档终态；`http-integration-notes.md`；T2 N1 推荐档；atomic `preferred-path.md`；Q5 rust/go compare source-contract 对齐（`Compiler flags` / 函数名）
 
 ### Q3-a checklist
 

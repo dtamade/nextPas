@@ -1,9 +1,10 @@
 # Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 状态
 
 > **Status**: **H3–H5 + Q0–Q5 + A–E done** → **Maintenance**（preferred residual **0** · 消费者门 widen · **H5-1 net completion MPSC**）
-> **Date**: 2026-07-21
+> **Date**: 2026-07-26
 > **Owner**: atomic-lockfree lane（全权）
 > **Scope**: atomic + lockfree + 跨模块消费者；执行主线见 [`quality-parity.md`](quality-parity.md)
+> **HTTP**: 由其他 lane 开发；本 lane 仅 [`http-integration-notes.md`](http-integration-notes.md) 协作，**不**默认改 `nextpas.core.http*`
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 / Horizon-3 (H3-1…H3-5) are complete** — see [`roadmap-h2.md`](roadmap-h2.md) / [`roadmap-h3.md`](roadmap-h3.md).
@@ -21,8 +22,8 @@ H3 close-out remains the production baseline; Q 线 / A–E / H5 加深质量与
 ## Maintenance preferred close-out（三句话 · 给总控）
 
 1. **底座**：`nextpas.core.atomic` preferred（`atomic_*` / `mo_*` / `TAtomic*`）+ lockfree T1 生产契约就绪；legacy PascalCase 仅 compat；**生产热路径 residual 0**，钉 `test_lockfree_preferred_path`。
-2. **消费者**：async→mpsc、worksteal→deque、pool→SegQueue、**H5-1 net completion→MPSC**；`verify-t1` / `verify-h3-consumers`（含 H4-1 + H3-5）绿。
-3. **边界**：H3-2 仅 bag/multimap；T2 不进默认门面；不 invent R9；I1 inventory 诚实抽检 + C1 跨模块 legacy 再扫 0。
+2. **消费者**：async→mpsc、worksteal→deque、pool→SegQueue、**H5-1 net completion→MPSC**；`verify-t1` / `verify-h3-consumers`（含 H4-1 + H3-5 + **H5-1 test_net_server**）绿。
+3. **边界**：H3-2 仅 bag/multimap；T2 不进默认门面；不 invent R9；HTTP 接线归 http lane（见 integration notes）；I1 inventory 诚实抽检 + C1 跨模块 legacy 再扫 0。
 
 选型导航：[`selection-guide.md`](selection-guide.md)（含「任务投递」对照）。
 生命周期示例：`t1_close_join_free/`（Channel）、`t1_segqueue_workers/`（SegQueue）、`t1_msqueue_close_join_free/`（MSQueue）、`t2_bag_close_join_free/`（Bag）、`t2_multimap_close_join_free/`（MultiMap）、`t2_hashmap_join_free/`（HashMap Close→join→Free，Charter C）。
@@ -49,7 +50,7 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 | **T2 concurrent containers** | **Guarded tiers + H3-2 subset** | H2-2 tiers; **bag/multimap** have H3-2 production contract (§0.3); **not** default facade |
 | **T3 / research** | Experimental | RTM / NUMA / formal models — direct import only; R8 status in [`r8-research-status.md`](r8-research-status.md) |
 | **Cross-module T1 consumer** | **H3-1 + H3-5 + H4-1 + H5-1 done** | async→mpsc；worksteal→deque；thread.pool→SegQueue；**net completion→MPSC** |
-| **Consumer regression gate** | **H3-3 + widen** | `verify-h3-consumers`：async + bag/multimap + 示例 + **H4-1 test_thread** + **H3-5 test_worksteal** |
+| **Consumer regression gate** | **H3-3 + widen** | `verify-h3-consumers`：async + bag/multimap + 示例 + **H4-1 test_thread** + **H3-5 test_worksteal** + **H5-1 test_net_server** |
 
 Authoritative contract: [`CONTRACT.md`](CONTRACT.md). Product entry: [`README.md`](README.md).
 R-line map: [`roadmap.md`](roadmap.md). **H2**: [`roadmap-h2.md`](roadmap-h2.md). **H3**: [`roadmap-h3.md`](roadmap-h3.md).
@@ -181,9 +182,9 @@ git diff --check
 
 Expected:
 - `verify-t1`: atomic + lockfree main suite + stress green; log `core/build/verify-lockfree/verify-t1.log`
-- `verify-h3-consumers`: async (H3-1) + bag/multimap (H3-2) + lifecycle examples + **H4-1 test_thread** + **H3-5 test_worksteal** green；log `core/build/verify-lockfree/verify-h3-consumers.log`
+- `verify-h3-consumers`: async (H3-1) + bag/multimap (H3-2) + lifecycle examples + **H4-1 test_thread** + **H3-5 test_worksteal** + **H5-1 test_net_server** green；log `core/build/verify-lockfree/verify-h3-consumers.log`
 
-Current main-suite size: **lockfree ~178** tests (includes `TestDequeTryExDiagnostics` from H2-1).
+Current main-suite size: **lockfree ~190** tests (includes Deque Try\*Ex、MSQueue Try\*Ex、Close idempotent edges).
 
 Optional R8 research gate (does not replace T1):
 

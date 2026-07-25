@@ -1,6 +1,6 @@
 # T2 Inventory — nextpas.core.lockfree
 
-> **Status**: Q4 audit (2026-07-20) · **I1 honesty pass** (2026-07-20 night)
+> **Status**: Q4 audit (2026-07-20) · **I1 honesty pass** (2026-07-20 night) · **N1 recommend column** (2026-07-26)
 > **Authority**: tiers abstract CONTRACT §0.2; H3-2 production subset remains §0.3 only
 > **Rule**: T2 never enters default `uses nextpas.core.lockfree` facade
 
@@ -8,8 +8,25 @@
 
 1. Need production-contract Close/managed/progress? → **only** H3-2: `bag`, `multimap`.
 2. Otherwise pick tier from table; open unit header for progress truth.
-3. Name contains LockFree/Concurrent ≠ lock-free progress (see `deque_lf`).
+3. Name contains LockFree/Concurrent ≠ lock-free progress (see `deque_lf` / `deque_spin`).
 4. Unlisted future units: default **Available** until audited; Experimental if RTM/NUMA/formal-only.
+5. **New-code recommend** (N1, docs only — **no delete**):
+
+| Tag | Meaning |
+|-----|---------|
+| **Runtime recommended** | Prefer for new concurrent design **if** T1 does not fit; still **direct import**; only bag/multimap have H3-2 production Close contract |
+| **OK** | Usable; read progress column + unit header; not a default runtime pick |
+| **Avoid for new code** | Experimental, easy-to-misread name, or research-only; keep for existing callers |
+
+### N1 recommend summary (not a full re-tier)
+
+| Tag | Units (illustrative; full table Progress still authoritative) |
+|-----|----------------------------------------------------------------|
+| **Runtime recommended** | `bag`, `multimap` (H3-2); useful Guarded helpers often chosen in runtime: `counter`, `countdown`, `rwlock`, `mutex`, `semaphore`, `exchanger`, `ringbuffer`, `timeoutqueue`, `workstealing` (pool helper; T1 deque is separate) |
+| **Avoid for new code** | `hashmap.rtm`, `hashmap.numa`, `rtm` (Experimental); prefer `deque` T1 over `deque_spin`/`deque_lf` alias; do not assume LF from `hashtable` / tree names |
+| **OK** | All other Guarded/Available rows — invent nothing; expand H3-2 only with charter |
+
+**T1 first**: queues/stack/deque/channel/selector/sharded map live on default facade — see [`selection-guide.md`](selection-guide.md).
 
 ## I1 honesty pass (2026-07-20)
 
