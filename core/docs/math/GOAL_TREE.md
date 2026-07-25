@@ -1,9 +1,10 @@
 # nextpas.core.math Goal Tree
 
-> Last updated: 2026-07-19
+> Last updated: 2026-07-26
 > Goal: make `nextpas.core.math.*` the only official framework math API for
 > scalar math, trig, vectors, matrices, quaternions, transforms, easing, random,
 > and noise via `nextpas.core.math.random.TNoiseGen`.
+> Maintenance: [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md).
 
 ## North Star
 
@@ -29,14 +30,15 @@ Quality wave **Q1/Q2: closed**; queue **CURRENT=IDLE** in
 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) — no new in-lane math
 milestones.
 
-Verified (2026-07-19 V0 re-verify, `math-simd`):
+Verified (2026-07-26 M0 maintenance re-verify, `math-simd` @ main `e9d92ab5b`):
 
 - `make -C core/tests/nextpas.core.math clean test` → exit 0
-  (18 projects; Pascal suites green; heaptrc 0 unfreed)
+  (Pascal suites **313** passed / 0 failed; heaptrc 0 unfreed)
 - `MATH_API_SURFACE OK: scanned=71 findings=0`
 - Production math imports only public `nextpas.core.simd` (no private backends)
 - Public batch: scalar F32/F64 + `vec.batch` F32 core + **Double minimal parity (M-V1)**
 - M8 complete for available host matrix; macOS trig host proof remains deferred until a mac runner exists.
+- Shared lane simd focused **1762**/0；debt inventory in `MAINTENANCE.md`.
 
 ### Residual archive (closed)
 

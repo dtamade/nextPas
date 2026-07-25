@@ -89,6 +89,7 @@ git status --short --branch
 - `API.md` is the public behavior contract and command reference.
 - `GOAL_TREE.md` is the roadmap/status control map.
 - Executable goals for this lane: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) (shared math+simd queue; **CURRENT=IDLE** — in-lane residual + quality wave closed).
+- Maintenance debt + latest re-verify: [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md) (2026-07-26: API surface **71/0**, Pascal **313**/0, simd focused **1762**/0).
 - `FINAL_API_MIGRATION_DESIGN.md` records stable design decisions only.
 - Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
 - Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.

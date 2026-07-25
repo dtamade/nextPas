@@ -1,8 +1,9 @@
 # math-simd Goal Queue
 
-> Last updated: 2026-07-19
-> Lane: `math-simd` worktree
+> Last updated: 2026-07-26
+> Lane: `math-simd` worktree (`codex/math-simd`)
 > Purpose: **single CURRENT pointer** so agents run end-to-end cards without human “继续”.
+> Maintenance posture: [`MAINTENANCE.md`](MAINTENANCE.md) (debt inventory + re-verify baseline).
 
 ## How to execute (agent contract)
 
@@ -41,6 +42,16 @@ BLOCKED_UNTIL: (optional)
 ```text
 CURRENT=IDLE
 ```
+
+### M0 — maintenance re-verify  【done 2026-07-26 · docs only】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done (no code change) |
+| **NEXT** | IDLE |
+| **WHY** | Mode A: green gates + doc truth + debt inventory after FF to main |
+| **EVIDENCE** | HEAD `e9d92ab5b` (= main); hygiene pass; math clean test exit 0 + API surface **71/0** + Pascal **313**/0 + heaptrc 0; simd focused **1762**/0; inventory in `MAINTENANCE.md` |
+| **OUT_OF_SCOPE** | Feature work; Wave 4 walls; neon-optin re-run (x86 host) |
 
 ### Usability P0/P1 package  【done 2026-07-20】
 
@@ -692,12 +703,20 @@ math ──//──► nextpas.core.simd.{dispatch,backend*,cpuinfo,dataplane,*}
 
 When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates or stops.
 Wave 4 walls (S26/S27/S24b/M9) stay blocked — never auto-start.
+Debt inventory and latest baseline: [`MAINTENANCE.md`](MAINTENANCE.md).
 
 **V0 re-verify (2026-07-19, ownership takeover):**
 
 - `make -C core/tests/nextpas.core.math clean test` → exit 0；`MATH_API_SURFACE OK: scanned=71 findings=0`；Pascal heaptrc 0 unfreed
 - `make focused FOCUS=core/tests/nextpas.core.simd` → **1741** passed / 0 failed
 - `make hygiene` → pass；`git diff --check` clean on tracked tree
+
+**M0 re-verify (2026-07-26, maintenance mode A):**
+
+- FF to main `e9d92ab5b`；hygiene pass
+- math clean test exit 0；API surface **71/0**；Pascal suites **313**/0；heaptrc 0 unfreed
+- simd focused **1762**/0
+- debt inventory written to `MAINTENANCE.md`
 
 ---
 

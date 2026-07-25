@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.math*.pas`（约 20 个源文件）
 **层级**：L0（注册表权威；与 `base`/`simd`/`atomic` 同属 L0 治理集。batch/impl 可消费公开 `nextpas.core.simd` 门面）
 **Owner**：math-simd lane
-**最后更新**：2026-07-20
-**版本**：1.5
+**最后更新**：2026-07-26
+**版本**：1.5.1
 
 ---
 
@@ -26,15 +26,15 @@
 **FPU mask 契约**：`Get/SetExceptionMask` 在 x86_64 上同时写 MXCSR 与 x87 CW，并清 sticky 状态；
 FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIMD batch 的 `fsin`/`fcos`/`fyl2x` scalar tail。
 
-**测试树 residual（Wave-2 部分收口）**：
+**测试树 residual（2026-07-26 审计；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
 - `core/tests/nextpas.core.math/**`：无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
-- `core/tests/nextpas.core.simd/**`：无 FPC `Math`；cpuinfo sysfs 用 `nextpas.core.fs.ReadDir`；
-  dispatchapi 源审计用本地 `TSourceLines`（不再 `Classes.TStringList`）。
-- **仍保留 live residual（4 files，`Classes`+`TThread`）**：
-  `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`。
-  原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
-  （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
-- Gate：`production=0`；`test=4` WARN（不阻塞 landing）。
+- `core/tests/nextpas.core.simd/**`：生产路径无 FPC `Math`；cpuinfo sysfs 用 `nextpas.core.fs.ReadDir`。
+- **仍保留 live residual（`Classes` + `TThread` / `TStringList`）**：
+  - `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`：`Classes`+`TThread`
+  - `simd.dispatchapi.testcase`：仍 `Classes`+`TStringList`（本地 `TSourceLines` 替换 **未完成**）
+  - 原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
+    （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
+- Gate：`production=0`；test residual **WARN**（不阻塞 landing）。
 
 `System.Sin/Sqrt/...` 等语言级 intrinsic 应集中在 `math.trig`/`math.scalar` 出口；consumer 与 simd 应调用 math owner，避免业务路径散落 `System.*`。
 

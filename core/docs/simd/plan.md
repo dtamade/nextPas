@@ -1,8 +1,9 @@
 # SIMD 当前活动计划
 
-> 最后更新: 2026-07-19
+> 最后更新: 2026-07-26
 > **权威主线**: [roadmap.md](roadmap.md)
 > **Goal 队列（执行入口）**: [../math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)
+> **维护态**: [../math-simd/MAINTENANCE.md](../math-simd/MAINTENANCE.md)
 
 ## 当前 Goal
 
@@ -12,9 +13,9 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | IDLE — 本 lane 无在途代码目标 |
+| 阶段 | IDLE — 本 lane 无在途代码目标（M0 maintenance re-verify 2026-07-26 已记） |
 | 优先级 | — |
-| 验收 | 仅 re-verify gates；勿自启 Wave 4 |
+| 验收 | 仅 re-verify gates；勿自启 Wave 4；债务见 MAINTENANCE.md |
 
 **不要在聊天里用「继续」驱动开发。** 开 goal 时只跑 `CURRENT` 卡片到 commit，并翻指针。`IDLE` 时默认停止。
 
@@ -47,6 +48,7 @@ CURRENT = IDLE  (见 GOAL_QUEUE.md)
 - [x] **Wave C5d** F64 Sin/Exp（1762 passed）
 - [x] **Wave C5e** F32 Sin/Exp 4-wide NEON asm（1762 passed）
 - [x] **Wave C5e-ext** Cos/Log F32 + Sin/Exp F64 vector asm（1762 passed）
+- [x] **M0 maintenance**（2026-07-26）：FF main + re-verify 1762/math 71/0 + `MAINTENANCE.md`
 
 ### 队列摘要
 

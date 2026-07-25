@@ -1,7 +1,8 @@
 # nextpas.core.simd 开发路线图
 
-> 最后更新: 2026-07-19
+> 最后更新: 2026-07-26
 > 权威性: **本文件是 forward-looking 主线**。历史 Phase 1–19 / Wave B 的细节见下方「已完成归档」；活动设计见 `design/`；过期实施草稿见 `plans/` 与旧 plan 文件（仅存档）。
+> 维护态债务与最新 re-verify：[`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)。
 
 ## 0. 文档权威图
 
@@ -20,7 +21,7 @@
 
 ---
 
-## 1. 现状盘点 (2026-07-17；Phase 20–25 + math residual 收口后)
+## 1. 现状盘点 (2026-07-26 maintenance re-verify；Phase 20–25 + Wave C 已收口)
 
 ### 1.1 定位
 
@@ -47,13 +48,13 @@ Facade (flat public API)
 | Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
 | SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
 | AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
-| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **BatchF32 代表集 23 叶**（B1–B9 closed）；超越/舍入/F64/Integer scalar | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **BatchF32 代表集 23 + Wave C**（F64 代数 + 超越 sample/asm）；其余 Integer 等仍 scalar | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
 | **RVV** | 大量（~412） | **0/15 故意 scalar**（S24a） | **20/20 本地** | **0 故意 scalar**（S24a） | MaskedOps 跟 vector-asm；实验性；真叶等 S24b |
 | LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
 
 **NEON Memory**：Phase 22 已关闭全部 15 槽（asm 叶 + register，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管；非 asm 编译保留 scalar fallback 符号）。
 
-**NEON Batch 进度**：**代表集 closed（B1–B9，23 叶）**。已拥有：Add/Sub/Mul/Div/Min/Max/Abs/Neg、MulScalar/AddScalar、Clamp/Lerp/Fma/Axpy、Sqrt/Rcp/Rsqrt/RcpRefine/RsqrtRefine、ReduceSum/Dot/Min/Max。**故意 scalar**：Sin/Cos/Exp/…、Ceil/Floor/…、BatchF64、BatchInteger。
+**NEON Batch 进度**：**代表集 closed（B1–B9，23 叶）** + **Wave C closed**（C1–C4e F64 代数；C5–C5e-ext F32/F64 超越 sample 与 4-wide/2-wide asm）。**故意 scalar 边界**：BatchInteger 全表、未选中的超越/舍入叶（契约锁定，非整表抄写）。
 
 **RVV Memory/Batch 诚实矩阵（S24a）**：
 
@@ -68,8 +69,9 @@ Facade (flat public API)
 
 | Gate | 状态 | 说明 |
 |------|------|------|
-| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1750** passed（2026-07-20 Batch B9 + 代表集收口） |
-| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 与 focused 同量级 suite |
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1762** passed（2026-07-26 M0 re-verify；C5e-ext 后基线） |
+| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 历史 C5e-ext **1762**；本 maintenance 未在 x86 重跑 |
+| `make -C core/tests/nextpas.core.math clean test` | ✅ | exit 0；API surface **71/0**；Pascal **313**/0 |
 | `make hygiene` | ✅ | pass |
 | `api-coverage-contract` | ✅ | missing=0 / thin=0（Phase 21 收口，strict-thin 未降） |
 | RVV 真机 Phase 3 | ⏸ | 需 RISC-V 硬件证据 |
@@ -213,6 +215,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
 
 **默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **IDLE** — 在途卡已空）。
 不要用聊天「继续」驱动；`IDLE` 时仅 re-verify 或等新卡/Wave 4 解阻。
+维护债务清单：[`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)。
 
 ---
 
@@ -334,3 +337,5 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-20: Batch B7 NEON `ArrayRcpF32`/`ReduceDotF32`；focused **1748**；CURRENT→IDLE。
 - 2026-07-20: Batch B8 NEON `ArrayRsqrtF32`/`ArrayRcpRefineF32`；focused **1749**；CURRENT→IDLE。
 - 2026-07-20: Batch B9 `ArrayRsqrtRefineF32` + **NEON BatchF32 代表集 23 叶 closed**；focused **1750**；CURRENT→IDLE。
+- 2026-07-20: Wave C0–C5e-ext（F64 代数 + 超越 sample/asm）；focused **1762**；CURRENT→IDLE。
+- 2026-07-26: **M0 maintenance** — FF main + re-verify（simd **1762** / math API **71/0** / Pascal **313**/0）+ `MAINTENANCE.md` 债务清单；CURRENT 保持 IDLE。

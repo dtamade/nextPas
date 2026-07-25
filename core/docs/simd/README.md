@@ -1,7 +1,8 @@
 # nextpas.core.simd 模块
 
-> 最后更新: 2026-07-21
+> 最后更新: 2026-07-26
 > **开发主线**: [roadmap.md](roadmap.md)（Phase 20+）。当前活动清单: [plan.md](plan.md)。
+> **维护态**: [math-simd/MAINTENANCE.md](../math-simd/MAINTENANCE.md)（债务 + re-verify；`CURRENT=IDLE`）。
 
 > **⚠ 应用入口不是本模块。** 游戏 / 业务 / 一般数值请用
 > [`nextpas.core.math`](../math/API.md)（`Batch*`、`TVec*`，有 open-array 长度策略）。
@@ -34,10 +35,10 @@
 - **cpuinfo**: ✅ 主路径稳定
 - **活动阶段**: Phase 20–23b + Phase 25 + math residual + Q1/Q2 已收口；**Goal CURRENT=IDLE**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **math 消费者边界**: **应用默认 math**（`Batch*`）；`Array*`/`Vec*` 为 **内核/专家** API；edit-where 见 GOAL_QUEUE Q2；长度策略见 math `API.md`
-- **验证基线 (2026-07-20 C5e-ext)** — 与 roadmap §1.4 同源:
-  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1762 passed**（0 failed；C5e-ext Cos/Log/F64 vector asm）
-  - `neon-optin-focused` → **1762 passed**（0 failed）
-  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（API surface **71/0**；Pascal suites heaptrc 0 unfreed）
+- **验证基线 (2026-07-26 M0 re-verify)** — 与 roadmap §1.4 / [MAINTENANCE.md](../math-simd/MAINTENANCE.md) 同源:
+  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1762 passed**（0 failed）
+  - `neon-optin-focused` → 历史 C5e-ext **1762**（本 maintenance 未在 x86 重跑）
+  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（API surface **71/0**；Pascal **313**/0；heaptrc 0 unfreed）
   - `make hygiene` → pass
   - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin；历史 Phase 21 收口）
   - **S25b SLA（vsTrue 主指标，S25a 主机）** — 四热点全绿:
@@ -84,6 +85,8 @@ end;
 |------|------|
 | **[roadmap.md](roadmap.md)** | **开发路线图（权威）**：现状、Phase 20+、验收、优先级 |
 | **[plan.md](plan.md)** | 当前阶段任务清单（薄指针） |
+| [../math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md) | Goal CURRENT 执行队列 |
+| [../math-simd/MAINTENANCE.md](../math-simd/MAINTENANCE.md) | 维护态债务清单 + re-verify 基线 |
 | [methodology.md](methodology.md) | 协作与验证纪律 |
 | [performance-methodology.md](performance-methodology.md) | **S25a** 基准方法（vsTrue/vsLib）与热点数字 |
 
