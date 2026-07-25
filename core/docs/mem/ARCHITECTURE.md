@@ -53,19 +53,18 @@ Allocator 侧：
 - `nextpas.core.mem.allocator.callback` — 回调委托后端
 - `nextpas.core.mem.allocator.foundation` — 最小 L0 门面（RTL + Callback）
 - `nextpas.core.mem.allocator.arena` — Arena → IAllocator 包装（`TVirtualArenaAllocator`）
-- `nextpas.core.mem.allocator.tracking` — 跟踪包装（统计 + 回调）
-- `nextpas.core.mem.allocator.leak_check` — 泄漏检测包装
+- `nextpas.core.mem.allocator.tracking` — 跟踪包装（统计 + 回调；门面可达）
+- `nextpas.core.mem.allocator.leak_check` — 泄漏检测包装（门面可达）
 - `nextpas.core.mem.allocator.leak_report` — 增强泄漏报告（调用栈+时间戳+标签聚合）
 - `nextpas.core.mem.allocator.fallback` — 多后端 fallback 链
-- `nextpas.core.mem.allocator.mmap` — mmap 匿名映射后端
-- `nextpas.core.mem.allocator.mimalloc.loader` — mimalloc 动态库路径发现
-- `nextpas.core.mem.allocator.mimalloc` — mimalloc FFI 绑定 + allocator 语义
-- `nextpas.core.mem.allocator.guard` — Guard page 调试分配器（PROT_NONE 保护）
+- `nextpas.core.mem.allocator.guard` — Guard page 调试分配器（PROT_NONE 保护；门面可达）
 - `nextpas.core.mem.allocator.growing` — **核心**: TLS + Central Pool 三层通用分配器
-- `nextpas.core.mem.allocator.sentinel` — 哨兵守卫分配器（双端哨兵+延迟释放+校验和）
-- `nextpas.core.mem.allocator.numa` — NUMA 感知分配器（拓扑检测+节点路由）
-- `nextpas.core.mem.allocator.prediction` — 分配预测器（频率跟踪+预分配）
+- `nextpas.core.mem.allocator.sentinel` — 哨兵守卫分配器（双端哨兵+延迟释放+校验和；门面可达）
+- 冷门诊断包装（**不**进门面 re-export）：`fail` / `stats` / `sampling` / `logging` / `hotswap` / `counting` / `bounded` / … — 见 [FACADES-SURFACE.md](FACADES-SURFACE.md)
+- 可选后端（子单元 `uses`）：`allocator.mimalloc`(+loader) / `allocator.mmap`
 - `nextpas.core.mem.allocator` — Allocator 侧聚合门面
+
+**已删除（P-a / P-b，禁止复活）**：`allocator.numa` / `prediction` / `bump` / `dual` / `freelist` / `thread_cache` / `size_class` / `slab`（allocator 变体）/ `arena2` / `arena_group` / `page` / `stack`（allocator 变体）及其余 Tier-3 博物馆单元。履历见 [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md) · [PRUNE-P-b-DESIGN](PRUNE-P-b-DESIGN-2026-07-19.md)。
 
 Growing allocator 内部层（不单独对外暴露）：
 

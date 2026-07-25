@@ -1,8 +1,8 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking；**可用性债 R-* CLOSED**（见 USABILITY-FIX-PLAN-2026-07-20）
+**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking；**可用性债 R-* CLOSED**（见 USABILITY-FIX-PLAN-2026-07-20）；**P2 residual CLOSED** 2026-07-26
 **Owner**: mem lane（`.worktrees/mem`）全权
-**更新**: 2026-07-20
+**更新**: 2026-07-26
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 **Steward 观测**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
@@ -347,3 +347,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | **Era K CLOSED**：growable/chunked/stack/ring FreeMemOf（既有 size 字段） |
 | 2026-07-20 | **Era L CLOSED**：LocalBlockPool + FixedSlab FRaw + Slab fallback FreeMemOf |
 | 2026-07-20 | **Era M CLOSED**：FixedSlab AlignedFallback FreeMemOf + sharded TLS sized free |
+| 2026-07-26 | **P2 residual CLOSED**（子类 FormatAllocErrorMsg + stem + SAFETY 入口证据）；H1 RequestArena 门禁对齐 `impl.h1.conn`；ARCHITECTURE 去掉已删 allocator 名 |
