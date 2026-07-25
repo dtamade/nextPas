@@ -21,10 +21,12 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,
+  nextpas.core.http.impl.h2.wire,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.stream,
   nextpas.core.http.impl.h2.streammap,
   nextpas.core.http.impl.h2.session.helpers,
+  nextpas.core.http.impl.h2.session.request,
   nextpas.core.http.impl.h2.session.preface,
   nextpas.core.http.impl.h2.session.writer,
   nextpas.core.http.impl.h2.types;
@@ -61,8 +63,7 @@ type
     FHandler: IHttpHandler;
     FOptions: TH2ServerTransportOptions;
     FState: TH2SessionState;
-    FReadBuffer: AnsiString;
-    FWriteBuffer: AnsiString;
+    FWire: TH2WireBuffers;
     FStreams: TH2StreamMap;
     FRemoteSettings: TH2Settings;
     FLocalSettings: TH2Settings;
@@ -178,12 +179,6 @@ uses
   nextpas.core.http.mem,
   nextpas.core.http.middleware.requestarena;
 
-{** Hard limit on accumulated read buffer to prevent memory exhaustion.
-    16 MB is generous for legitimate traffic; an attacker sending tiny
-    frames that never complete would hit this long before OOM. }
-const
-  H2_READ_BUFFER_HARD_LIMIT: SizeInt = 16 * 1024 * 1024;
-
 function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
   out AConsumed: SizeUInt; out AErrorCode: UInt32): TH2PrefaceStatus;
 begin
@@ -218,8 +213,7 @@ begin
     FOptions.InitialConnectionWindowSize);
   FDecoder.Init(FLocalSettings.HeaderTableSize);
   FEncoder.Init(FLocalSettings.HeaderTableSize);
-  FReadBuffer := '';
-  FWriteBuffer := '';
+  H2WireInit(FWire);
   FPrefaceValidated := False;
   FServerSettingsSent := False;
   FPeerSettingsReceived := False;
@@ -278,14 +272,8 @@ begin
 end;
 
 procedure TH2ServerSession.AppendWrite(const ABytes: AnsiString);
-var
-  LOldLen: SizeInt;
 begin
-  if ABytes = '' then
-    Exit;
-  LOldLen := Length(FWriteBuffer);
-  SetLength(FWriteBuffer, LOldLen + Length(ABytes));
-  Move(ABytes[1], FWriteBuffer[LOldLen + 1], Length(ABytes));
+  H2WireAppendWrite(FWire, ABytes);
 end;
 
 procedure TH2ServerSession.QueueFrame(const AFrameType: Byte; const AFlags: Byte;
@@ -402,25 +390,17 @@ end;
 function TH2ServerSession.DrainWriteBuffer: Boolean;
 var
   LWritten: SizeUInt;
-  LRemaining: SizeInt;
 begin
   Result := True;
-  while FWriteBuffer <> '' do
+  while H2WireHasWriteData(FWire) do
   begin
     ArmWriteDeadline(FOptions.WriteTimeout);
-    LWritten := FConn.Write(FWriteBuffer[1], SizeUInt(Length(FWriteBuffer)));
+    LWritten := FConn.Write(FWire.WriteBuf[1], SizeUInt(Length(FWire.WriteBuf)));
     if LWritten = 0 then
       Exit(False);
-    if LWritten > SizeUInt(Length(FWriteBuffer)) then
+    if LWritten > SizeUInt(Length(FWire.WriteBuf)) then
       raise EIOError.Create('h2 session write over-reported progress');
-    LRemaining := Length(FWriteBuffer) - SizeInt(LWritten);
-    if LRemaining > 0 then
-    begin
-      Move(FWriteBuffer[LWritten + 1], FWriteBuffer[1], LRemaining);
-      SetLength(FWriteBuffer, LRemaining);
-    end
-    else
-      FWriteBuffer := '';
+    H2WireConsumeWriteFront(FWire, LWritten);
   end;
   ClearWriteDeadline;
 end;
@@ -429,22 +409,21 @@ function TH2ServerSession.DrainWriteBufferPoll(out AWouldBlock: Boolean): Boolea
 var
   LRuntime: ITcpStreamRuntime;
   LWritten: SizeUInt;
-  LRemaining: SizeInt;
   LRes: TTcpStreamIOResult;
 begin
   Result := True;
   AWouldBlock := False;
-  if FWriteBuffer = '' then
+  if not H2WireHasWriteData(FWire) then
     Exit(True);
   if not Supports(FConn, ITcpStreamRuntime, LRuntime) then
   begin
     Result := DrainWriteBuffer;
     Exit;
   end;
-  while FWriteBuffer <> '' do
+  while H2WireHasWriteData(FWire) do
   begin
     ArmWriteDeadline(FOptions.WriteTimeout);
-    LRes := LRuntime.TryWrite(FWriteBuffer[1], SizeUInt(Length(FWriteBuffer)),
+    LRes := LRuntime.TryWrite(FWire.WriteBuf[1], SizeUInt(Length(FWire.WriteBuf)),
       LWritten);
     ClearWriteDeadline;
     case LRes of
@@ -455,16 +434,9 @@ begin
             AWouldBlock := True;
             Exit(True);
           end;
-          if LWritten > SizeUInt(Length(FWriteBuffer)) then
+          if LWritten > SizeUInt(Length(FWire.WriteBuf)) then
             raise EIOError.Create('h2 session write over-reported progress');
-          LRemaining := Length(FWriteBuffer) - SizeInt(LWritten);
-          if LRemaining > 0 then
-          begin
-            Move(FWriteBuffer[LWritten + 1], FWriteBuffer[1], LRemaining);
-            SetLength(FWriteBuffer, LRemaining);
-          end
-          else
-            FWriteBuffer := '';
+          H2WireConsumeWriteFront(FWire, LWritten);
         end;
       tsiorWouldBlock:
         begin
@@ -483,12 +455,12 @@ function TH2ServerSession.FillReadBufferBlocking: Boolean;
 var
   LBuf: array[0..16383] of AnsiChar;
   LRead: SizeUInt;
-  LOldLen: SizeInt;
 begin
   { Reject if read buffer has grown beyond hard limit — prevents memory
     exhaustion from an attacker sending tiny fragments that never form
     a complete frame. }
-  if Length(FReadBuffer) >= H2_READ_BUFFER_HARD_LIMIT then
+  H2WirePrepareAppendRead(FWire);
+  if H2WireReadStored(FWire) >= H2_WIRE_READ_HARD_LIMIT then
   begin
     QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
     FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
@@ -499,9 +471,7 @@ begin
   LRead := FConn.Read(LBuf[0], SizeOf(LBuf));
   if LRead = 0 then
     Exit(False);
-  LOldLen := Length(FReadBuffer);
-  SetLength(FReadBuffer, LOldLen + SizeInt(LRead));
-  Move(LBuf[0], FReadBuffer[LOldLen + 1], LRead);
+  H2WireAppendReadBytes(FWire, LBuf[0], SizeInt(LRead));
   ClearReadDeadline;
   Result := True;
 end;
@@ -512,7 +482,6 @@ var
   LRuntime: ITcpStreamRuntime;
   LBuf: array[0..16383] of AnsiChar;
   LRead: SizeUInt;
-  LOldLen: SizeInt;
   LRes: TTcpStreamIOResult;
 begin
   Result := False;
@@ -521,7 +490,8 @@ begin
   if not (peReadable in AEvents) then
     Exit(False);
 
-  if Length(FReadBuffer) >= H2_READ_BUFFER_HARD_LIMIT then
+  H2WirePrepareAppendRead(FWire);
+  if H2WireReadStored(FWire) >= H2_WIRE_READ_HARD_LIMIT then
   begin
     QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
     FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
@@ -547,9 +517,7 @@ begin
             ANextEvents := [];
             Exit(False);
           end;
-          LOldLen := Length(FReadBuffer);
-          SetLength(FReadBuffer, LOldLen + SizeInt(LRead));
-          Move(LBuf[0], FReadBuffer[LOldLen + 1], LRead);
+          H2WireAppendReadBytes(FWire, LBuf[0], SizeInt(LRead));
           Exit(True);
         end;
       tsiorWouldBlock:
@@ -590,10 +558,10 @@ begin
   Result := True;
   if FPrefaceValidated then
     Exit(True);
-  if FReadBuffer = '' then
+  if not H2WireHasReadData(FWire) then
     Exit(False);
-  LStatus := H2ValidateServerPreface(@FReadBuffer[1], Length(FReadBuffer),
-    LConsumed, LErrorCode);
+  LStatus := H2ValidateServerPreface(H2WireReadPtr(FWire),
+    SizeUInt(H2WireReadAvailable(FWire)), LConsumed, LErrorCode);
   case LStatus of
     h2psNeedMore:
       Exit(False);
@@ -608,7 +576,7 @@ begin
       ;
   end;
 
-  Delete(FReadBuffer, 1, LConsumed);
+  H2WireDiscardConsumed(FWire, LConsumed);
   FPrefaceValidated := True;
   FPeerSettingsReceived := True;
   FState := h2sesActive;
@@ -626,14 +594,12 @@ begin
   Result := False;
   AFrame := Default(TH2Frame);
   AConsumed := 0;
-  if Length(FReadBuffer) < H2_FRAME_HEADER_SIZE then
+  if not H2WirePeekFrameHeader(FWire, LHeader) then
     Exit(False);
   { Early reject: parse 9-byte header and check declared payload length
     against negotiated MAX_FRAME_SIZE BEFORE allocating payload memory.
     This prevents a client from declaring a 16 MB frame that would be
     copied into memory before validation. }
-  if not H2DecodeFrameHeader(@FReadBuffer[1], H2_FRAME_HEADER_SIZE, LHeader) then
-    Exit(False);
   LDeclaredPayloadLen := SizeUInt(LHeader.Len);
   if LDeclaredPayloadLen > H2_ABSOLUTE_MAX_FRAME_SIZE then
   begin
@@ -650,10 +616,9 @@ begin
     Exit(False);
   end;
   { Not enough data yet for the full frame — wait for more }
-  if SizeUInt(H2_FRAME_HEADER_SIZE) + LDeclaredPayloadLen > SizeUInt(Length(FReadBuffer)) then
+  if not H2WireHasFullFrame(FWire, LHeader) then
     Exit(False);
-  Result := H2DecodeFrame(@FReadBuffer[1], Length(FReadBuffer), AFrame,
-    AConsumed);
+  Result := H2WireTryDecodeFrame(FWire, AFrame, AConsumed);
 end;
 
 function TH2ServerSession.ProcessFrames: Boolean;
@@ -672,7 +637,7 @@ begin
       FState := h2sesClosed;
       Exit(False);
     end;
-    Delete(FReadBuffer, 1, LConsumed);
+    H2WireDiscardConsumed(FWire, LConsumed);
     if not HandleFrame(LFrame) then
       Exit(False);
   end;
@@ -1005,61 +970,13 @@ end;
 
 function TH2ServerSession.ExtractPseudoHeader(const AHeaders: IHttpHeaders;
   const AName: string): string;
-var
-  LFound: string;
 begin
-  if AHeaders = nil then
-    Exit('');
-  LFound := '';
-  AHeaders.ForEach(
-    procedure(const AHeaderName, AHeaderValue: string)
-    begin
-      if AHeaderName = AName then
-        LFound := AHeaderValue;
-    end);
-  Result := LFound;
+  Result := H2ExtractPseudoHeader(AHeaders, AName);
 end;
 
 function TH2ServerSession.BuildRequestFromStream(const AStream: TH2Stream): IHttpRequest;
-var
-  LOriginalHeaders: IHttpHeaders;
-  LHeaders: IHttpHeaders;
-  LMethod: THttpMethod;
-  LPath: string;
-  LScheme: string;
-  LAuthority: string;
-  LRequest: THttpRequest;
-  LBody: IH2BodyReader;
 begin
-  LOriginalHeaders := AStream.Headers;
-  if LOriginalHeaders = nil then
-    raise EHttpError.Create(hekProtocol, 'h2 stream missing headers');
-  LMethod := HttpMethodFromPseudo(ExtractPseudoHeader(LOriginalHeaders, ':method'));
-  LPath := ExtractPseudoHeader(LOriginalHeaders, ':path');
-  LScheme := ExtractPseudoHeader(LOriginalHeaders, ':scheme');
-  LAuthority := ExtractPseudoHeader(LOriginalHeaders, ':authority');
-  if LPath = '' then
-    LPath := '/';
-  LBody := AStream.CreateBodyReader;
-  LHeaders := NewHttpHeaders;
-  LOriginalHeaders.ForEach(
-    procedure(const AName, AValue: string)
-    begin
-      if (AName <> '') and (AName[1] = ':') then
-        Exit;
-      LHeaders.Add(AName, AValue);
-    end);
-  if LAuthority <> '' then
-    LHeaders.SetHeader('host', LAuthority);
-  { RFC 9113 §8.1.2.3: :scheme is informational; never trust it for
-    x-forwarded-proto since clients can set it to 'https' over cleartext.
-    Only a trusted reverse proxy should inject x-forwarded-proto. }
-  LRequest := THttpRequest.CreateFromRequestTarget(LMethod, LPath, hvHttp2,
-    LHeaders, LBody, Int64(Length(AStream.BodyBuffer)));
-  if AStream.Trailers <> nil then
-    LRequest.SetTrailers(AStream.Trailers.Clone);
-  LRequest.SetRemoteNetAddr(FConn.RemoteAddr);
-  Result := LRequest;
+  Result := H2BuildRequestFromStream(AStream, FConn.RemoteAddr);
 end;
 
 procedure TH2ServerSession.HandleRequestHeaderListTooLarge(
@@ -1340,7 +1257,7 @@ begin
         Break;
       Break;
     end;
-    if FReadBuffer = '' then
+    if not H2WireHasReadData(FWire) then
       if not FillReadBufferBlocking then
         Break;
   end;
@@ -1350,7 +1267,7 @@ end;
 
 function TH2ServerSession.PollEvents: TPlatformPollEvents;
 begin
-  if FWriteBuffer <> '' then
+  if H2WireHasWriteData(FWire) then
     Result := [peWritable]
   else
     Result := [peReadable];
@@ -1371,7 +1288,7 @@ begin
   end;
 
   { 1. Drain pending writes (non-blocking). }
-  if FWriteBuffer <> '' then
+  if H2WireHasWriteData(FWire) then
   begin
     if not (peWritable in AEvents) then
     begin
@@ -1384,7 +1301,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    if LWouldBlock and (FWriteBuffer <> '') then
+    if LWouldBlock and H2WireHasWriteData(FWire) then
     begin
       ANextEvents := [peWritable];
       Exit(tsprWait);
@@ -1418,7 +1335,7 @@ begin
     begin
       if LClosed then
       begin
-        if FWriteBuffer <> '' then
+        if H2WireHasWriteData(FWire) then
         begin
           ANextEvents := [peWritable];
           Exit(tsprWait);
@@ -1435,7 +1352,7 @@ begin
   begin
     if FState = h2sesClosed then
     begin
-      if FWriteBuffer <> '' then
+      if H2WireHasWriteData(FWire) then
       begin
         ANextEvents := [peWritable];
         Exit(tsprWait);
@@ -1450,7 +1367,7 @@ begin
   ExecuteReadyStreams;
 
   { 3. Flush responses produced by handlers. }
-  if FWriteBuffer <> '' then
+  if H2WireHasWriteData(FWire) then
   begin
     if not DrainWriteBufferPoll(LWouldBlock) then
     begin
@@ -1458,7 +1375,7 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    if LWouldBlock and (FWriteBuffer <> '') then
+    if LWouldBlock and H2WireHasWriteData(FWire) then
     begin
       ANextEvents := [peWritable];
       Exit(tsprWait);
@@ -1469,7 +1386,7 @@ begin
   begin
     if not FGoawaySent then
       StartGracefulShutdown(FLastSeenPeerStreamID, FShutdownErrorCode);
-    if FWriteBuffer <> '' then
+    if H2WireHasWriteData(FWire) then
     begin
       ANextEvents := [peWritable];
       Exit(tsprWait);
@@ -1479,7 +1396,7 @@ begin
     Exit(tsprDone);
   end;
 
-  if FWriteBuffer <> '' then
+  if H2WireHasWriteData(FWire) then
     ANextEvents := [peWritable]
   else
     ANextEvents := [peReadable];

@@ -20,8 +20,10 @@ uses
   nextpas.core.http.impl.h2.client.pool,
   nextpas.core.http.impl.h2.client.body,
   nextpas.core.http.impl.h2.client.helpers,
+  nextpas.core.http.impl.h2.client.streams,
   nextpas.core.http.impl.cancel.adapter,
   nextpas.core.http.impl.h2.frame,
+  nextpas.core.http.impl.h2.wire,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.types,
   nextpas.core.tls.base;
@@ -56,20 +58,12 @@ type
       PendingWindowUpdate: UInt32;
       class procedure Init(out AState: TH2ResponseState); static;
     end;
-    TH2ActiveStreamState = record
-      StreamID: UInt32;
-      Flow: TH2StreamFlowControl;
-    end;
   private
     FConn: ITcpStream;
     FOptions: TH2ClientTransportOptions;
     FState: TH2ClientConnectionState;
-    FReadBuffer: AnsiString;
-    { 0-based index into FReadBuffer (1-based AnsiString). Avoids O(n) Copy
-      on every DiscardConsumed (H2 peer gap: demux many frames per batch). }
-    FReadPos: SizeInt;
-    { Coalesce HEADERS/DATA/control frames into one Write before ReadFrame. }
-    FWriteBuffer: AnsiString;
+    { Shared read/write wire buffers (impl.h2.wire). }
+    FWire: TH2WireBuffers;
     FRemoteSettings: TH2Settings;
     FLocalSettings: TH2Settings;
     FConnectionFlow: TH2ConnectionFlowControl;
@@ -82,8 +76,7 @@ type
     FLastPeerStreamID: UInt32;
     FPendingContinuationStreamID: UInt32;
     FPendingConnectionWindowUpdate: UInt32;
-    FActiveStreams: array of TH2ActiveStreamState;
-    FActiveStreamCount: SizeInt;
+    FActiveStreams: TH2ClientActiveStreams;
     FLastPingData: UInt64;
     procedure ApplyDeadline;
     procedure EnsureActive;
@@ -93,7 +86,6 @@ type
     function DecodeNextFrame(out AFrame: TH2Frame; out AConsumed: SizeUInt): Boolean;
     function ReadFrame(out AFrame: TH2Frame): Boolean;
     procedure DiscardConsumed(const AConsumed: SizeUInt);
-    procedure CompactReadBuffer;
     procedure FlushWriteBuffer;
     procedure SendBytes(const ABytes: AnsiString);
     procedure SendFrame(const AFrameType: Byte; const AFlags: Byte;
@@ -292,9 +284,7 @@ begin
   FConn := AConn;
   FOptions := AOptions;
   FState := h2ccsConnecting;
-  FReadBuffer := '';
-  FReadPos := 0;
-  FWriteBuffer := '';
+  H2WireInit(FWire);
   FRemoteSettings := TH2Settings.Default;
   FLocalSettings := FOptions.ToSettings;
   FConnectionFlow.Init(FRemoteSettings.InitialWindowSize,
@@ -308,8 +298,7 @@ begin
   FLastPeerStreamID := 0;
   FPendingContinuationStreamID := 0;
   FPendingConnectionWindowUpdate := 0;
-  FActiveStreams := nil;
-  FActiveStreamCount := 0;
+  H2ClientStreamsInit(FActiveStreams);
   FLastPingData := 0;
 end;
 
@@ -341,58 +330,24 @@ begin
   FState := h2ccsClosed;
 end;
 
-procedure TH2ClientConnection.CompactReadBuffer;
-var
-  LRemain: SizeInt;
-  LNew: AnsiString;
-begin
-  if FReadPos <= 0 then
-    Exit;
-  LRemain := Length(FReadBuffer) - FReadPos;
-  if LRemain <= 0 then
-  begin
-    FReadBuffer := '';
-    FReadPos := 0;
-    Exit;
-  end;
-  SetLength(LNew, LRemain);
-  Move(FReadBuffer[FReadPos + 1], LNew[1], LRemain);
-  FReadBuffer := LNew;
-  FReadPos := 0;
-end;
-
 function TH2ClientConnection.FillReadBuffer: Boolean;
 var
   LBuf: array[0..65535] of Byte;
   LRead: SizeUInt;
-  LOldLen: SizeInt;
 begin
   Result := False;
-  { Drop consumed prefix before appending so the string does not grow forever. }
-  if FReadPos > 0 then
-    CompactReadBuffer;
+  H2WirePrepareAppendRead(FWire);
   LRead := FConn.Read(LBuf[0], SizeOf(LBuf));
   if LRead = 0 then
     Exit;
-  LOldLen := Length(FReadBuffer);
-  SetLength(FReadBuffer, LOldLen + SizeInt(LRead));
-  Move(LBuf[0], FReadBuffer[LOldLen + 1], LRead);
+  H2WireAppendReadBytes(FWire, LBuf[0], SizeInt(LRead));
   Result := True;
 end;
 
 function TH2ClientConnection.DecodeNextFrame(out AFrame: TH2Frame;
   out AConsumed: SizeUInt): Boolean;
-var
-  LAvail: SizeInt;
 begin
-  LAvail := Length(FReadBuffer) - FReadPos;
-  if LAvail <= 0 then
-  begin
-    AFrame := Default(TH2Frame);
-    AConsumed := 0;
-    Exit(False);
-  end;
-  Result := H2DecodeFrame(@FReadBuffer[FReadPos + 1], LAvail, AFrame, AConsumed);
+  Result := H2WireTryDecodeFrame(FWire, AFrame, AConsumed);
 end;
 
 function TH2ClientConnection.ReadFrame(out AFrame: TH2Frame): Boolean;
@@ -419,60 +374,31 @@ begin
 end;
 
 procedure TH2ClientConnection.DiscardConsumed(const AConsumed: SizeUInt);
-var
-  LAvail: SizeInt;
 begin
-  if AConsumed = 0 then
-    Exit;
-  LAvail := Length(FReadBuffer) - FReadPos;
-  if AConsumed >= SizeUInt(LAvail) then
-  begin
-    FReadBuffer := '';
-    FReadPos := 0;
-    Exit;
-  end;
-  Inc(FReadPos, SizeInt(AConsumed));
-  { Compact when wasted prefix dominates (keep demux loop O(frame) not O(buffer)). }
-  if (FReadPos >= 8192) and (FReadPos * 2 >= Length(FReadBuffer)) then
-    CompactReadBuffer;
+  H2WireDiscardConsumed(FWire, AConsumed);
 end;
 
 procedure TH2ClientConnection.FlushWriteBuffer;
 var
-  LOffset: SizeInt;
   LWritten: SizeUInt;
-  LLen: SizeUInt;
 begin
-  if FWriteBuffer = '' then
-    Exit;
-  LOffset := 1;
-  LLen := Length(FWriteBuffer);
-  while SizeUInt(LOffset) <= LLen do
+  while H2WireHasWriteData(FWire) do
   begin
-    LWritten := FConn.Write(FWriteBuffer[LOffset], LLen - SizeUInt(LOffset) + 1);
+    LWritten := FConn.Write(FWire.WriteBuf[1], SizeUInt(Length(FWire.WriteBuf)));
     if LWritten = 0 then
     begin
-      FWriteBuffer := '';
+      H2WireClearWrite(FWire);
       TransitionClosed;
       raise EHttpError.Create(hekProtocol,
         'HTTP/2 client write failed: connection closed');
     end;
-    Inc(LOffset, SizeInt(LWritten));
+    H2WireConsumeWriteFront(FWire, LWritten);
   end;
-  FWriteBuffer := '';
 end;
 
 procedure TH2ClientConnection.SendBytes(const ABytes: AnsiString);
-var
-  LOldLen: SizeInt;
-  LAdd: SizeInt;
 begin
-  if ABytes = '' then
-    Exit;
-  LAdd := Length(ABytes);
-  LOldLen := Length(FWriteBuffer);
-  SetLength(FWriteBuffer, LOldLen + LAdd);
-  Move(ABytes[1], FWriteBuffer[LOldLen + 1], LAdd);
+  H2WireAppendWrite(FWire, ABytes);
 end;
 
 procedure TH2ClientConnection.SendFrame(const AFrameType: Byte; const AFlags: Byte;
@@ -554,7 +480,7 @@ begin
       end;
       FConn := nil;
     end;
-    FWriteBuffer := '';
+    H2WireClear(FWire);
     TransitionClosed;
   end;
   raise EHttpError.Create(hekProtocol, AMessage);
@@ -640,48 +566,25 @@ end;
 
 function TH2ClientConnection.FindActiveStreamIndex(
   const AStreamID: UInt32): SizeInt;
-var
-  LI: SizeInt;
 begin
-  for LI := 0 to FActiveStreamCount - 1 do
-    if FActiveStreams[LI].StreamID = AStreamID then
-      Exit(LI);
-  Result := -1;
+  Result := H2ClientStreamsFindIndex(FActiveStreams, AStreamID);
 end;
 
 function TH2ClientConnection.AddActiveStream(const AStreamID: UInt32): SizeInt;
 begin
-  if FindActiveStreamIndex(AStreamID) >= 0 then
-    raise EHttpError.Create(hekProtocol, 'HTTP/2 client stream is already active');
-  if FActiveStreamCount >= Length(FActiveStreams) then
-    SetLength(FActiveStreams, FActiveStreamCount + 4);
-  Result := FActiveStreamCount;
-  FActiveStreams[Result].StreamID := AStreamID;
-  FActiveStreams[Result].Flow.Init(AStreamID, FRemoteSettings.InitialWindowSize,
-    FLocalSettings.InitialWindowSize);
-  Inc(FActiveStreamCount);
+  Result := H2ClientStreamsAdd(FActiveStreams, AStreamID,
+    FRemoteSettings.InitialWindowSize, FLocalSettings.InitialWindowSize);
 end;
 
 procedure TH2ClientConnection.RemoveActiveStream(const AStreamID: UInt32);
-var
-  LIndex: SizeInt;
 begin
-  LIndex := FindActiveStreamIndex(AStreamID);
-  if LIndex < 0 then
-    Exit;
-  Dec(FActiveStreamCount);
-  if LIndex <> FActiveStreamCount then
-    FActiveStreams[LIndex] := FActiveStreams[FActiveStreamCount];
-  FActiveStreams[FActiveStreamCount] := Default(TH2ActiveStreamState);
+  H2ClientStreamsRemove(FActiveStreams, AStreamID);
 end;
 
 procedure TH2ClientConnection.ApplyRemoteInitialWindowSizeToActiveStreams(
   const ANewInitialWindowSize: UInt32);
-var
-  LI: SizeInt;
 begin
-  for LI := 0 to FActiveStreamCount - 1 do
-    FActiveStreams[LI].Flow.ApplyPeerInitialWindowSize(ANewInitialWindowSize);
+  H2ClientStreamsApplyPeerInitialWindow(FActiveStreams, ANewInitialWindowSize);
 end;
 
 function TH2ClientConnection.RequestBodySendCapacity(
@@ -1235,13 +1138,13 @@ begin
     LHasBody := (AReq.Body <> nil) and (AReq.ContentLength > 0);
     SendRequestHeaders(LStreamID, AReq, not LHasBody);
     if LHasBody then
-      SendRequestBody(LStreamID, AReq, FActiveStreams[LStreamIndex].Flow,
+      SendRequestBody(LStreamID, AReq, FActiveStreams.Items[LStreamIndex].Flow,
         LResponse);
     while not LResponse.EndStream do
     begin
       if not ReadFrame(LFrame) then
         raise EHttpError.Create(hekProtocol, 'HTTP/2 response incomplete: connection closed');
-      DispatchFrame(LFrame, LStreamID, FActiveStreams[LStreamIndex].Flow,
+      DispatchFrame(LFrame, LStreamID, FActiveStreams.Items[LStreamIndex].Flow,
         LResponse);
       { RFC 9113 §6.8: GOAWAY indicates the server is shutting down.
         If we receive GOAWAY while waiting for a response, abort immediately. }
@@ -1254,7 +1157,7 @@ begin
       end;
       FlushPendingConnectionWindowUpdate;
     end;
-    DrainBufferedFrames(LStreamID, FActiveStreams[LStreamIndex].Flow,
+    DrainBufferedFrames(LStreamID, FActiveStreams.Items[LStreamIndex].Flow,
       LResponse);
     FlushWriteBuffer;
     Result := BuildResponse(LResponse);
@@ -1337,7 +1240,7 @@ begin
       begin
         LStreamIndex := FindActiveStreamIndex(LStreamIDs[LI]);
         SendRequestBody(LStreamIDs[LI], AReqs[LI],
-          FActiveStreams[LStreamIndex].Flow, LResponses[LI]);
+          FActiveStreams.Items[LStreamIndex].Flow, LResponses[LI]);
         if LResponses[LI].EndStream then
         begin
           { RST while sending body — count as finished. }
@@ -1387,7 +1290,7 @@ begin
             'HTTP/2 active stream missing for ' +
             IntToStr(LStreamIDs[LRespIndex]));
         DispatchFrame(LFrame, LStreamIDs[LRespIndex],
-          FActiveStreams[LStreamIndex].Flow, LResponses[LRespIndex]);
+          FActiveStreams.Items[LStreamIndex].Flow, LResponses[LRespIndex]);
         if LResponses[LRespIndex].PendingWindowUpdate > 0 then
         begin
           SendWindowUpdate(LStreamIDs[LRespIndex],
@@ -1453,7 +1356,7 @@ begin
   { Residual buffered frames mean the peer has already written on this
     connection (live). Serial RoundTrip fixtures may also pre-queue the next
     response; do not fail the probe on that data. }
-  if Length(FReadBuffer) > FReadPos then
+  if H2WireHasReadData(FWire) then
     Exit(True);
 
   try
@@ -1529,9 +1432,7 @@ begin
   except
   end;
   FConn := nil;
-  FWriteBuffer := '';
-  FReadBuffer := '';
-  FReadPos := 0;
+  H2WireClear(FWire);
   TransitionClosed;
 end;
 

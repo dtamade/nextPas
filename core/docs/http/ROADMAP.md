@@ -185,10 +185,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2 residual client-helpers** | **done** | `h2.client.helpers`；client ~2022；inventory **78** | h2_client 72/0 |
 | **R2 residual cancel-adapter** | **done** | `impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79** | h2_client + client + websocket |
 | **R2 residual h2-settings-share** | **done** | `H2ParseSettingsPayload`/`H2MinUInt32` → `h2.types`；client ~1932 / session ~1494 | h2_client 72/0 + h2_session 37/0 + h2_types 23/0 |
+| **R2 residual h2-monolith-extract** | **done** | `h2.wire` + `h2.client.streams` + `h2.session.request`；client ~1759 / session ~1411；inventory **82** | h2_client 72/0 + h2_session 37/0 + h2_types 23/0 + contract 36/0 |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（h2 settings 共享已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
+NEXT = STOP（h2 巨石机械拆 Wave A/B1/B2 已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
 ```
 
 ---
@@ -1137,6 +1138,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **h2 monolith extract landed**：`h2.wire` + `h2.client.streams` + `h2.session.request`；client ~1759 / session ~1411；inventory **82**；NEXT=STOP |
 | 2026-07-26 | **h2 settings share landed**：`H2ParseSettingsPayload`/`H2MinUInt32` → `h2.types`；client ~1932 / session ~1494；NEXT=STOP |
 | 2026-07-26 | **cancel-adapter extract landed**：`impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79**；NEXT=STOP |
 | 2026-07-26 | **client helpers extract landed**：`h2.client.helpers`；client ~2022；inventory **78**；NEXT=STOP |
