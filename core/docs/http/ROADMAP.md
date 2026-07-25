@@ -181,10 +181,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2-x residual** STRUCT 2.4b | **done** | `TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；`impl.h1` ~1673 | h1fast 32/0 + contract 35/0 + server 136/0 |
 | **R2-x** h1.poll / h1.serve hard-cut | **done** | `impl.h1.conn`（state+shared）+ `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（Advance/handoff/drain）；`impl.h1` ~116 门面；inventory **71** | server 136/0 + expect 74/0 + contract 35/0 + h1fast 32/0 |
 | **R2 residual do-all** | **done** | tooling mem/lane_gate 合同；`http.minimal`；except 卫生；`h2.client.body`；docs inventory **73** | tooling + contract + server + h2_client |
+| **R2 residual session-extract** | **done** | `h2.streammap` + `h2.session.preface` + `h2.session.writer`；session ~1582；inventory **76** | h2_session 37/0 + h2_client 72/0 |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（do-all residual 已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
+NEXT = STOP（session 机械抽已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
 ```
 
 ---
@@ -963,9 +964,10 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 2. Era PD 默认路径 Met：PD-0 + PD-1A + PD-2 + PD-1B + PD-3
 3. R2 + residual STRUCT 2.4/2.4b + h1.poll/serve hard-cut **landed**
 4. residual do-all **done**：tooling lane_gate 合同；http.minimal；except 注释；h2.client.body；docs inventory 73
-5. H3 Blocked — 跳过；禁止空 facade
-6. WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
-7. **NEXT = STOP**（idle）；新战役需再升格
+5. session 机械抽 **done**：streammap/preface/writer；inventory 76
+6. H3 Blocked — 跳过；禁止空 facade
+7. WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
+8. **NEXT = STOP**（idle）；新战役需再升格
 ```
 
 **默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)。
@@ -1130,6 +1132,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **session residual extract landed**：`h2.streammap` + `session.preface` + `session.writer`；session ~1582；inventory **76**；NEXT=STOP |
 | 2026-07-26 | **residual do-all landed**：tooling mem/`lane_gate` 合同；`http.minimal`；H1 except 卫生；`h2.client.body`；docs inventory **73**；NEXT=STOP（H3/WIN-3 硬排除） |
 | 2026-07-25 | **h1.poll/serve hard-cut landed**：`impl.h1.conn`/`serve`/`poll`；inventory **71** |
 | 2026-07-24 | **PD-3-3 landed**：Windows `platform_socket_pair` TCP loopback → waitable cancel；Era PD 扩展完整 Met；NEXT=STOP |
