@@ -7837,16 +7837,20 @@ end;
 procedure TestH1FastPathFixedBodySourceContract;
 var
   LSrc: string;
+  LFastSrc: string;
 begin
   LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LFastSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.fast.pas');
   Check(Pos('FAST_PATH_MAX_BODY = 65536', LSrc) > 0,
     'S2-2 body size cap for snapshot copy');
   Check(Pos('LFast.ContentLength > FAST_PATH_MAX_BODY', LSrc) > 0,
     'S2-2 oversize body falls back to llhttp');
-  Check(Pos('TH1FastSnapshotBodyReader', LSrc) > 0,
-    'S2-2 snapshot body reader');
-  Check(Pos('TH1FastRequestSnapshot.Create(LFast, ABuf)', LSrc) > 0,
-    'S2-2 snapshot copies body from parse buffer');
+  Check(Pos('TH1FastSnapshotBodyReader', LFastSrc) > 0,
+    'S2-2 snapshot body reader lives in h1.fast');
+  Check(Pos('NewH1FastRequestSnapshot(LFast, ABuf)', LSrc) > 0,
+    'S2-2 server uses fast-unit snapshot factory');
+  Check(Pos('function NewH1FastRequestSnapshot', LFastSrc) > 0,
+    'S2-2 snapshot factory owned by h1.fast');
   { Still reject expect / TE / connection close }
   Check(Pos('LFast.HasExpect', LSrc) > 0, 'S2-2 still rejects Expect');
   Check(Pos('LFast.HasTransferEncoding', LSrc) > 0, 'S2-2 still rejects TE');

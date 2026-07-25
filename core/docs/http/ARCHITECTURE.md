@@ -101,9 +101,11 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
 - H1 server ingress 现在也有一条保守 fast path：
-  对完整 HTTP/1.1、恰好一个非空 `Host`、无 `Connection` / `Expect` /
-  `Transfer-Encoding`、且无 request body 的普通请求，先用
-  `nextpas.core.http.impl.h1.fast.FastParseRequest` 构造请求 snapshot；
+  对完整 HTTP/1.1、恰好一个非空 `Host`、无 `Expect` /
+  `Transfer-Encoding`、connection-policy 友好、且固定长度 body
+  已完整缓冲（含 0-body GET）的请求，先用
+  `nextpas.core.http.impl.h1.fast.FastParseRequest` + `NewH1FastRequestSnapshot`
+  构造请求 snapshot（adapter 与 FastParse 同 unit）；
   其他请求一律回退 llhttp adapter，继续沿用既有 malformed framing、
   chunked、body、Expect 与 connection-policy 安全契约。
 - 因此 H1 剩余的真实阻塞点已经进一步收窄为：
@@ -201,7 +203,7 @@ src/
   nextpas.core.http.impl.h1.llhttp.pas   ← llhttp 翻译产物
   nextpas.core.http.impl.h1.parser.pas   ← H1 协议解析（基于 llhttp 翻译）
   nextpas.core.http.impl.h1.scan.pas     ← H1 扫描辅助
-  nextpas.core.http.impl.h1.fast.pas     ← H1 快速解析路径
+  nextpas.core.http.impl.h1.fast.pas     ← H1 FastParse + TH1FastRequestSnapshot adapter
   nextpas.core.http.impl.h1.outbound.pas ← H1 internal outbound queue/drain helper
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
