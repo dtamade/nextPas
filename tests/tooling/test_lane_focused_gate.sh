@@ -74,7 +74,7 @@ require_output_line "$TMP_ROOT/platform.out" '^command=make focused FOCUS=core/t
 
 "$SCRIPT_UNDER_TEST" --lane mem --print-command >"$TMP_ROOT/mem.out"
 require_output_line "$TMP_ROOT/mem.out" '^truth=runtime$' 'mem truth'
-require_output_line "$TMP_ROOT/mem.out" '^focus=core/tests/nextpas[.]core[.]mem/test_usability_guardrails$' 'mem focus'
+require_output_line "$TMP_ROOT/mem.out" '^focus=core/tests/nextpas[.]core[.]mem/lane_gate$' 'mem focus'
 
 "$SCRIPT_UNDER_TEST" --lane system --print-command >"$TMP_ROOT/system.out"
 require_output_line "$TMP_ROOT/system.out" '^truth=source-contract$' 'system truth'

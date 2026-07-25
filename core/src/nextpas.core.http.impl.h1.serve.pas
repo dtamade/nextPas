@@ -173,6 +173,7 @@ begin
         Continue;
       LIdleBeforeNextRequest := AState.FKeepAlive and (AState.FPending = '');
     except
+      { Per-request isolation: handler/IO fault ends keep-alive; loop may exit. }
       on E: Exception do
       begin
         if not IsRequestReadFailure(E) then
