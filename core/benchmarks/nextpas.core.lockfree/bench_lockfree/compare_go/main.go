@@ -28,7 +28,7 @@ func printResult(name string, elapsed time.Duration, operations int64) {
 }
 
 // C1: buffered chan 1P+1C (closest Go peer to TLockFreeChannel 1P+1C).
-func benchC1() uint64 {
+func benchChannelSPSC() uint64 {
 	ch := make(chan uint64, Capacity)
 	var wg sync.WaitGroup
 	var sum uint64
@@ -54,7 +54,7 @@ func benchC1() uint64 {
 }
 
 // C2: buffered chan 2P+2C.
-func benchC2() uint64 {
+func benchChannelMPMC() uint64 {
 	ch := make(chan uint64, Capacity)
 	results := make(chan uint64, 2)
 	var wg sync.WaitGroup
@@ -94,14 +94,15 @@ func benchC2() uint64 {
 func main() {
 	fmt.Println("=== Q5 Go matched suite (chan vs nextpas Channel) ===")
 	fmt.Println("Platform:", runtime.GOOS, runtime.GOARCH)
-	fmt.Println("Compiler: go build (gc)")
-	fmt.Printf("Input: OPS=%d CAPACITY=%d scenarios=C1 1P+1C, C2 2P+2C\n", Ops, Capacity)
+	fmt.Println("Compiler flags: go build (gc)")
+	fmt.Println("Input size: OPS=1000000; capacity=1024")
 	fmt.Println("Peer: nextpas TLockFreeChannel (bounded sequence channel)")
+	fmt.Println("Baselines: Go chan peers only; manual comparison source, not auto-run by Pascal benchmark")
 	fmt.Println("Honesty: not bit-identical to lockfree channel; same-host relative only + envelope.")
 	fmt.Println()
 
-	sink = benchC1()
-	sink += benchC2()
+	sink = benchChannelSPSC()
+	sink += benchChannelMPMC()
 	runtime.KeepAlive(sink)
 
 	fmt.Println()

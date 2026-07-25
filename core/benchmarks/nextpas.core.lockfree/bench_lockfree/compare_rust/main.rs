@@ -61,7 +61,7 @@ fn print_result(name: &str, elapsed: Duration, operations: usize) {
     );
 }
 
-fn bench_c1_mpsc_spsc() -> u64 {
+fn bench_std_mpsc_spsc() -> u64 {
     let start = Instant::now();
     let (tx, rx) = mpsc::channel::<u64>();
     let producer = thread::spawn(move || {
@@ -82,7 +82,7 @@ fn bench_c1_mpsc_spsc() -> u64 {
     sum
 }
 
-fn bench_c2_bounded_mpmc() -> u64 {
+fn bench_bounded_mutex_condvar_mpmc() -> u64 {
     let start = Instant::now();
     let queue = Arc::new(BoundedQueue::new());
     let mut producers = Vec::new();
@@ -128,17 +128,17 @@ fn main() {
         std::env::consts::OS,
         std::env::consts::ARCH
     );
-    println!("Compiler: rustc -C opt-level=3");
-    println!(
-        "Input: OPS={} CAPACITY={} scenarios=C1 mpsc 1P+1C, C2 bounded mutex queue 2P+2C",
-        N, CAPACITY
-    );
+    println!("Compiler flags: rustc -C opt-level=3");
+    println!("Input size: OPS=1000000; capacity=1024");
     println!("Peer: nextpas TLockFreeChannel (bounded). C1 mpsc is unbounded — semantic gap.");
+    println!(
+        "Baselines: Rust std peers only; manual comparison source, not auto-run by Pascal benchmark"
+    );
     println!("Honesty: same-host relative only; require bench-envelope.md fields for absolute Mops.");
     println!();
 
-    let mut sink = bench_c1_mpsc_spsc();
-    sink = sink.wrapping_add(bench_c2_bounded_mpmc());
+    let mut sink = bench_std_mpsc_spsc();
+    sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());
     black_box(sink);
 
     println!();
