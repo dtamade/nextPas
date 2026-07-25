@@ -2,11 +2,16 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-> **Lane 状态：Maintenance Idle（2026-07-20 · post-Era M）**  
-> A–C **CLOSED** · D–G Steady · H **Idle** · I–M **CLOSED**  
-> FreeMemOf consumer + mem-owner 路径已关；残余仅 tui inject WAIVE。  
-> 日常：只响应回归、命名 D3、GHA `mem.host_runtime` 红。  
-> **不**默认排期：Phase 29、全仓 FreeMem 扫。  
+> **Lane 状态：Maintenance Idle（2026-07-26 · post-Era M + P2 residual CLOSED）**
+>
+> A–C **CLOSED** · D–G Steady · H **Idle** · I–M **CLOSED** · P2 residual **CLOSED**
+>
+> FreeMemOf consumer + mem-owner 路径已关；残余仅 tui inject WAIVE。
+>
+> 日常：只响应回归、命名 D3、GHA `mem.host_runtime` 红。
+>
+> **不**默认排期：Phase 29、全仓 FreeMem 扫。
+>
 > 路线图：[ROADMAP](ROADMAP.md) · 决策树：[API-GUIDE](API-GUIDE.md) · 性能：[SCORECARD](SCORECARD.md) · 真机 CI：[MEM-HOST-RUNTIME-CI](MEM-HOST-RUNTIME-CI.md)
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。
 **可用性修复（2026-07-20 Implemented）**: [调研](USABILITY-FIX-RESEARCH-2026-07-20.md) · [实施规划](USABILITY-FIX-PLAN-2026-07-20.md)。

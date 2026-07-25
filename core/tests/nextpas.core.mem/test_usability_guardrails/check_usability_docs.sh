@@ -268,8 +268,11 @@ need_grep "$ROOT/core/src/nextpas.core.http.base.pas" 'function WithRequestArena
   'THttpServerOptions must expose WithRequestArena'
 need_grep "$ROOT/core/src/nextpas.core.http.server.pas" 'HttpWithRequestArena|RequestArena' \
   'http.server must honor RequestArena options wire'
-need_grep "$ROOT/core/src/nextpas.core.http.impl.h1.pas" 'InvokeHandler|HttpAttachRequestArena' \
-  'H1 must wire connection-scoped RequestArena attach path'
+# H1 attach path lives in impl.h1.conn after server transport split (h1.pas is re-export).
+need_grep "$ROOT/core/src/nextpas.core.http.impl.h1.conn.pas" 'HttpAttachRequestArena' \
+  'H1 conn must attach connection-scoped RequestArena before ServeHTTP'
+need_grep "$ROOT/core/src/nextpas.core.http.impl.h1.conn.pas" 'InvokeHandler' \
+  'H1 conn must keep InvokeHandler for request dispatch'
 need_grep "$ROOT/core/src/nextpas.core.http.impl.h2.session.pas" 'InvokeHandler|HttpAttachRequestArena' \
   'H2 must wire connection-scoped RequestArena attach path'
 need_grep "$ROOT/core/src/nextpas.core.http.impl.h2.types.pas" 'RequestArena' \
