@@ -7802,35 +7802,39 @@ end;
 { Q1-4: lock write/backpressure semantics in H1 source (CONTRACT §4.4). }
 procedure TestH1WriteBackpressureContractSource;
 var
-  LSrc: string;
+  LConnSrc: string;
+  LPollSrc: string;
 begin
-  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
-  Check(Pos('procedure TH1ServerConnectionState.ArmPollWriteDeadline', LSrc) > 0,
+  LConnSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.conn.pas');
+  LPollSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.poll.pas');
+  Check(Pos('procedure TH1ServerConnectionState.ArmPollWriteDeadline', LConnSrc) > 0,
     'poll write deadline arm exists');
-  Check(Pos('tsiorWouldBlock', LSrc) > 0, 'would-block drain path present');
-  Check(Pos('ANextEvents := [peWritable]', LSrc) > 0,
+  Check(Pos('tsiorWouldBlock', LPollSrc) > 0, 'would-block drain path present');
+  Check(Pos('ANextEvents := [peWritable]', LPollSrc) > 0,
     'would-block subscribes peWritable');
-  Check(Pos('FPollWriteDeadline := TDeadline.Infinite', LSrc) > 0,
+  Check(Pos('FPollWriteDeadline := TDeadline.Infinite', LPollSrc) > 0,
     'successful/timeout drain clears write deadline');
-  Check(Pos('PreferPollWorkerHandoff', LSrc) > 0,
+  Check(Pos('PreferPollWorkerHandoff', LConnSrc) > 0,
     'S1-1 handoff flag coexists with drain path');
-  Check(Pos('not FOptions.PreferPollWorkerHandoff', LSrc) > 0,
+  Check(Pos('not AState.FOptions.PreferPollWorkerHandoff', LPollSrc) > 0,
     'reactor-inline default does not remove drain/backpressure path');
 end;
 
 procedure TestH1OutboundBufferReuseSourceContract;
 var
-  LSrc: string;
+  LConnSrc: string;
+  LPollSrc: string;
 begin
-  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
-  Check(Pos('function TH1ServerConnectionState.AcquireOutboundBuffer', LSrc) > 0,
+  LConnSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.conn.pas');
+  LPollSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.poll.pas');
+  Check(Pos('function TH1ServerConnectionState.AcquireOutboundBuffer', LConnSrc) > 0,
     'S2-1 acquire outbound free-list');
-  Check(Pos('procedure TH1ServerConnectionState.ReleaseOutboundBuffer', LSrc) > 0,
+  Check(Pos('procedure TH1ServerConnectionState.ReleaseOutboundBuffer', LConnSrc) > 0,
     'S2-1 release outbound free-list');
-  Check(Pos('FSpareOutbound0', LSrc) > 0, 'S2-1 spare slot 0');
-  Check(Pos('FSpareOutbound1', LSrc) > 0, 'S2-1 spare slot 1 (pipeline depth)');
-  Check(Pos('AcquireOutboundBuffer', LSrc) > 0, 'poll/threaded paths use acquire');
-  Check(Pos('ReleaseOutboundBuffer(FPollOutbound)', LSrc) > 0,
+  Check(Pos('FSpareOutbound0', LConnSrc) > 0, 'S2-1 spare slot 0');
+  Check(Pos('FSpareOutbound1', LConnSrc) > 0, 'S2-1 spare slot 1 (pipeline depth)');
+  Check(Pos('AcquireOutboundBuffer', LConnSrc) > 0, 'poll/threaded paths use acquire');
+  Check(Pos('AState.ReleaseOutboundBuffer(AState.FPollOutbound)', LPollSrc) > 0,
     'drain completion returns buffer to free-list');
 end;
 
@@ -7839,7 +7843,7 @@ var
   LSrc: string;
   LFastSrc: string;
 begin
-  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.conn.pas');
   LFastSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.fast.pas');
   Check(Pos('FAST_PATH_MAX_BODY = 65536', LSrc) > 0,
     'S2-2 body size cap for snapshot copy');

@@ -179,10 +179,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 IOCP **Parked** | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked |
 | **R2-x residual** STRUCT 2.4 | **done** | `impl.h1.client` + `impl.h1.prepend`；source-contract 跟路径；inventory **68** | client 157/0 + contract 35/0 + server 136/0 |
 | **R2-x residual** STRUCT 2.4b | **done** | `TH1FastRequestSnapshot` / body reader → `impl.h1.fast`；`NewH1FastRequestSnapshot`；`impl.h1` ~1673 | h1fast 32/0 + contract 35/0 + server 136/0 |
+| **R2-x** h1.poll / h1.serve hard-cut | **done** | `impl.h1.conn`（state+shared）+ `impl.h1.serve`（`H1ServeRun`）+ `impl.h1.poll`（Advance/handoff/drain）；`impl.h1` ~116 门面；inventory **71** | server 136/0 + expect 74/0 + contract 35/0 + h1fast 32/0 |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（residual STRUCT 机械切片已 land；真 h1.poll/serve 硬切仍 Parked；H3 Blocked；Windows scale=No）
+NEXT = STOP（h1.poll/serve 硬切已落地；H3 Blocked；Windows scale=No）
 ```
 
 ---
