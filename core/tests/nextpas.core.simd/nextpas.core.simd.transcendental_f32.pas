@@ -36,7 +36,7 @@ begin
   Inc(g_TotalChecks);
   LScale := Max(Abs(aExpected), 1e-7);
   if Abs(aExpected - aActual) > aRelTol * LScale then
-    Fail(Format('%s: expected %.8g got %.8g (diff=%.8g)',
+    Fail(Format('%s: expected %.8f got %.8f (diff=%.8f)',
       [aCtx, aExpected, aActual, aActual - aExpected]));
 end;
 
@@ -46,12 +46,12 @@ begin
   if IsNan(aExpected) then
   begin
     if not IsNan(aActual) then
-      Fail(Format('%s: expected NaN got %.8g', [aCtx, aActual]));
+      Fail(Format('%s: expected NaN got %.8f', [aCtx, aActual]));
   end
   else if IsInfinite(aExpected) then
   begin
     if aActual <> aExpected then
-      Fail(Format('%s: expected %.8g got %.8g', [aCtx, aExpected, aActual]));
+      Fail(Format('%s: expected %.8f got %.8f', [aCtx, aExpected, aActual]));
   end
   else
     CheckNearRelative(aCtx, aExpected, aActual, REL_TOL);
@@ -76,7 +76,7 @@ begin
     for i := 0 to Integer(LCount) - 1 do
     begin
       LExpected := Single(System.Exp(LSrc[i]));
-      CheckNearRelative(Format('Exp[count=%d,i=%d,x=%.3g]', [LCount, i, Double(LSrc[i])]),
+      CheckNearRelative(Format('Exp[count=%d,i=%d,x=%.3f]', [LCount, i, Double(LSrc[i])]),
         LExpected, LDst[i], REL_TOL);
     end;
   end;
@@ -102,7 +102,7 @@ begin
     for i := 0 to Integer(LCount) - 1 do
     begin
       LExpected := Single(System.Ln(LSrc[i]));
-      CheckNearRelative(Format('Log[count=%d,i=%d,x=%.3g]', [LCount, i, Double(LSrc[i])]),
+      CheckNearRelative(Format('Log[count=%d,i=%d,x=%.3f]', [LCount, i, Double(LSrc[i])]),
         LExpected, LDst[i], LOG_REL_TOL);
     end;
   end;
@@ -129,8 +129,8 @@ begin
       ArrayPowF32(@LSrc[0], @LDst[0], LCount, LExponents[ei]);
       for i := 0 to Integer(LCount) - 1 do
       begin
-        LExpected := Single(Math.Power(LSrc[i], LExponents[ei]));
-        CheckNearRelative(Format('Pow[count=%d,exp=%.2g,i=%d]',
+        LExpected := Power(LSrc[i], LExponents[ei]);
+        CheckNearRelative(Format('Pow[count=%d,exp=%.2f,i=%d]',
           [LCount, Double(LExponents[ei]), i]),
           LExpected, LDst[i], POW_REL_TOL);
       end;

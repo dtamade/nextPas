@@ -53,6 +53,19 @@ CURRENT=IDLE
 | **EVIDENCE** | HEAD `e9d92ab5b` (= main); hygiene pass; math clean test exit 0 + API surface **71/0** + Pascal **313**/0 + heaptrc 0; simd focused **1762**/0; inventory in `MAINTENANCE.md` |
 | **OUT_OF_SCOPE** | Feature work; Wave 4 walls; neon-optin re-run (x86 host) |
 
+### M1 — D-RTL-2/3 residual cut  【done 2026-07-26】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | IDLE |
+| **WHY** | Close in-lane test RTL residuals that do not need thread owner |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas`; `transcendental_f32.pas`; math-simd / math CONTRACT + MAINTENANCE docs |
+| **OUT_OF_SCOPE** | D-RTL-1 `TThread` four files; production API; Wave 4 |
+| **DELIVERABLES** | Local `TSourceLines` (fs ReadFile*); drop `Classes`/`TStringList` from dispatchapi; math `Power`; TextFormat-compatible `%f` |
+| **GATES** | simd focused **1762**/0; transcendental_f32 standalone PASS; hygiene |
+| **EVIDENCE** | 2026-07-26: focused **1762**/0; `transcendental_f32` **1050** checks / 0 failures |
+
 ### Usability P0/P1 package  【done 2026-07-20】
 
 Strict batch equal-length (default); `BatchLog*` alias; `TryBatchLn*`; docs CONTRACT 1.5 / API app-vs-kernel / numeric contract pointer.

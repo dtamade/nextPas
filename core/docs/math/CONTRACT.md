@@ -26,14 +26,15 @@
 **FPU mask 契约**：`Get/SetExceptionMask` 在 x86_64 上同时写 MXCSR 与 x87 CW，并清 sticky 状态；
 FPC host 下同步 `softfloat_exception_mask`。仅写 MXCSR 不足以覆盖 SIMD batch 的 `fsin`/`fcos`/`fyl2x` scalar tail。
 
-**测试树 residual（2026-07-26 审计；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
+**测试树 residual（2026-07-26；详见 [`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)）**：
 - `core/tests/nextpas.core.math/**`：无 FPC `Math`/`SysUtils`/`Classes`/OS 单元。
 - `core/tests/nextpas.core.simd/**`：生产路径无 FPC `Math`；cpuinfo sysfs 用 `nextpas.core.fs.ReadDir`。
-- **仍保留 live residual（`Classes` + `TThread` / `TStringList`）**：
-  - `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`：`Classes`+`TThread`
-  - `simd.dispatchapi.testcase`：仍 `Classes`+`TStringList`（本地 `TSourceLines` 替换 **未完成**）
-  - 原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
-    （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
+- **已关闭**：`dispatchapi.testcase` 本地 `TSourceLines`（无 `Classes`/`TStringList`）；
+  `transcendental_f32` 用 math `Power`（无 `Math.Power`）。
+- **仍保留 live residual（`Classes` + `TThread`，4 files）**：
+  `simd.concurrent(.testcase)`、`direct.testcase`、`cpuinfo.lazy.testcase`。
+  原因：迁到 `nextpas.core.thread.base.TWorkerThread` 在并发压力下出现 AV/segfault
+  （生命周期/join 语义与 FPC `TThread` 不完全等价）；需 thread owner 加固后再迁。
 - Gate：`production=0`；test residual **WARN**（不阻塞 landing）。
 
 `System.Sin/Sqrt/...` 等语言级 intrinsic 应集中在 `math.trig`/`math.scalar` 出口；consumer 与 simd 应调用 math owner，避免业务路径散落 `System.*`。

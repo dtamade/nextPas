@@ -1,9 +1,10 @@
 # math-simd Maintenance Posture
 
-> Last updated: 2026-07-26  
-> Lane: `codex/math-simd` @ `.worktrees/math-simd`  
-> Mode: **A — maintenance only** (green gates, doc truth, debt inventory)  
+> Last updated: 2026-07-26
+> Lane: `codex/math-simd` @ `.worktrees/math-simd`
+> Mode: **A — maintenance only** (green gates, doc truth, debt inventory)
 > Goal pointer: [`GOAL_QUEUE.md`](GOAL_QUEUE.md) (`CURRENT=IDLE`)
+> Latest residual cut: **D-RTL-2/3 closed** (dispatchapi `TSourceLines`; transcendental `Power`)
 
 This file is the maintenance authority for residual debt and re-verify evidence.
 It does **not** invent feature milestones. Feature work needs a new Goal Card.
@@ -53,8 +54,8 @@ simd ↛ math
 | ID | Item | Where | Severity | Unblock |
 |----|------|-------|----------|---------|
 | D-RTL-1 | Tests still `uses Classes` + `TThread` | `core/tests/nextpas.core.simd/{concurrent.pas,concurrent.testcase.pas,direct.testcase.pas}` and `core/tests/nextpas.core.simd.cpuinfo/cpuinfo.lazy.testcase.pas` | WARN | **thread** lane: harden `TWorkerThread` join/lifecycle, then migrate |
-| D-RTL-2 | dispatchapi still `Classes` + `TStringList` for source audits | `core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas` | WARN | Replace with local `TSourceLines` (docs claimed partial cut; **still live**) |
-| D-RTL-3 | Test residual `Math.Power` qualified call | `core/tests/nextpas.core.simd/nextpas.core.simd.transcendental_f32.pas` | low | Prefer `nextpas.core.math` owner API for expectations |
+| D-RTL-2 | ~~dispatchapi `Classes` + `TStringList`~~ | `dispatchapi.testcase.pas` | **closed 2026-07-26** | Local `TSourceLines` + `nextpas.core.fs` ReadFile*; focused **1762**/0 |
+| D-RTL-3 | ~~`Math.Power` + TextFormat `%g` crash~~ | `transcendental_f32.pas` | **closed 2026-07-26** | math `Power`; Format specs `%f`; standalone **PASS 1050**/0 |
 | D-DOC-1 | Historical pass counts in archive sections | GOAL_QUEUE card EVIDENCE, plan.md history | low | Keep history; only §current baseline must match latest re-verify |
 | D-SIZE-1 | simd surface very large (~247 files under `nextpas.core.simd*`, ~137k LOC pas+inc) | `core/src/` | maintainability | Prefer `tools/simdgen` + contracts over hand-copy tables |
 | D-CPU-1 | Registry: simd **CPUInfo debt** | `core/docs/core-module-registry.md`; `simd.cpuinfo.*` | governance | Audit L0 boundary / host unit ownership; no silent OS unit creep |
@@ -80,10 +81,10 @@ simd ↛ math
 
 ## Recommended maintenance order (when touching code)
 
-1. Re-verify gates if tree moved or main advanced  
-2. Fix red tests / hygiene / contract lies only  
-3. Doc number alignment (this file + README/roadmap current sections)  
-4. Optional small residual cuts that stay **inside** math-simd tests (e.g. D-RTL-2/3)  
+1. Re-verify gates if tree moved or main advanced
+2. Fix red tests / hygiene / contract lies only
+3. Doc number alignment (this file + README/roadmap current sections)
+4. Optional small residual cuts that stay **inside** math-simd tests (e.g. D-RTL-2/3)
 5. Cross-lane residuals (D-RTL-1, W-*) → report **Needs Review**, do not solo
 
 ## Verification commands (copy/paste)
@@ -100,6 +101,6 @@ git diff --check
 
 ## Related docs
 
-- [`GOAL_QUEUE.md`](GOAL_QUEUE.md) — executable CURRENT  
-- [`../math/README.md`](../math/README.md) / [`../math/CONTRACT.md`](../math/CONTRACT.md)  
+- [`GOAL_QUEUE.md`](GOAL_QUEUE.md) — executable CURRENT
+- [`../math/README.md`](../math/README.md) / [`../math/CONTRACT.md`](../math/CONTRACT.md)
 - [`../simd/README.md`](../simd/README.md) / [`../simd/roadmap.md`](../simd/roadmap.md) / [`../simd/plan.md`](../simd/plan.md)

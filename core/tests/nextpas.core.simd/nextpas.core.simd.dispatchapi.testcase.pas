@@ -44,9 +44,10 @@ unit nextpas.core.simd.dispatchapi.testcase;
 interface
 
 uses
-  Classes,
+  nextpas.core.base,
   nextpas.core.math,
   nextpas.core.path,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
@@ -68,6 +69,32 @@ uses
   nextpas.core.simd.scalar;
 
 type
+
+  { Local source-audit line buffer — avoids FPC Classes.TStringList. }
+  TSourceLinesEnumerator = record
+  private
+    FLines: TStringArray;
+    FIndex: Integer;
+  public
+    class function Create(const ALines: TStringArray): TSourceLinesEnumerator; static;
+    function MoveNext: Boolean;
+    function GetCurrent: string;
+    property Current: string read GetCurrent;
+  end;
+
+  TSourceLines = class
+  private
+    FLines: TStringArray;
+    FText: string;
+  public
+    procedure LoadFromFile(const APath: string);
+    function GetCount: Integer;
+    function GetItem(AIndex: Integer): string;
+    function GetEnumerator: TSourceLinesEnumerator;
+    property Count: Integer read GetCount;
+    property Items[AIndex: Integer]: string read GetItem; default;
+    property Text: string read FText;
+  end;
 
   TDispatchAPIStatefulTestCase = class(TSimdVectorAsmStatefulTestCase)
   end;
@@ -346,6 +373,53 @@ type
   end;
 
 implementation
+
+{ TSourceLines — source-contract file loader without Classes }
+
+class function TSourceLinesEnumerator.Create(const ALines: TStringArray): TSourceLinesEnumerator;
+begin
+  Result.FLines := ALines;
+  Result.FIndex := -1;
+end;
+
+function TSourceLinesEnumerator.MoveNext: Boolean;
+begin
+  Inc(FIndex);
+  Result := FIndex < Length(FLines);
+end;
+
+function TSourceLinesEnumerator.GetCurrent: string;
+begin
+  if (FIndex < 0) or (FIndex >= Length(FLines)) then
+    Result := ''
+  else
+    Result := FLines[FIndex];
+end;
+
+procedure TSourceLines.LoadFromFile(const APath: string);
+begin
+  FText := ReadFileText(APath);
+  FLines := ReadFileLines(APath);
+end;
+
+function TSourceLines.GetCount: Integer;
+begin
+  Result := Length(FLines);
+end;
+
+function TSourceLines.GetItem(AIndex: Integer): string;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FLines)) then
+    Result := ''
+  else
+    Result := FLines[AIndex];
+end;
+
+function TSourceLines.GetEnumerator: TSourceLinesEnumerator;
+begin
+  Result := TSourceLinesEnumerator.Create(FLines);
+end;
+
 
 var
   GDispatchHookCountA: Integer = 0;
@@ -6538,7 +6612,7 @@ var
   LMulI32Source: string;
   LMulU32Source: string;
   LMulI32I386Source: string;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LIndex: Integer;
 
   procedure AssertVecI32x4Equal(const aOp: string; const aExpected, aActual: TVecI32x4);
@@ -6557,7 +6631,7 @@ var
       CheckEqual(QWord(aExpected.u[LLane]), QWord(aActual.u[LLane]), aOp + ' lane ' + IntToStr(LLane));
   end;
 
-  function ExtractFunctionSource(aLines: TStrings; const aName: string): string;
+  function ExtractFunctionSource(aLines: TSourceLines; const aName: string): string;
   var
     LLine: string;
     LIndexLocal: Integer;
@@ -6604,7 +6678,7 @@ var
 begin
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.sse2.pas');
     CheckTrue(FileExists(LSourcePath), 'SSE2 source file should exist for implementation-shape audit: ' + LSourcePath);
@@ -6883,7 +6957,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_PlatformFacadeSlots_Reuse_BaseScalar_W
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LRegisterSource: string;
@@ -6899,7 +6973,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot until a real NEON leaf exists');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -6954,7 +7028,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_FacadeFastSlots_OnlyBind_When_NEONAsm_
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAsmFacadeSourcePath: string;
   LScalarFacadeSourcePath: string;
@@ -6976,7 +7050,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -8935,7 +9009,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_WideFloatMemoryUtilitySlots_Bind_AsmHe
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -8965,7 +9039,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9062,7 +9136,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_DotFallbackSlots_Reuse_BaseScalar_When
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LDotSourcePath: string;
   LRegisterSource: string;
@@ -9083,7 +9157,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the NEON dot wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9124,7 +9198,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_WideFallbackOnlySlots_Reuse_BaseScalar
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9145,7 +9219,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the NEON wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9387,7 +9461,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmFloatCompareSlots_Reuse_BaseScala
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9408,7 +9482,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the no-asm NEON wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9512,7 +9586,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_WideRcpAndReductionSlots_Reuse_BaseSca
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9533,7 +9607,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the NEON wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9616,7 +9690,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_ExtractInsertSelectSlots_Reuse_BaseSca
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9638,7 +9712,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the NEON wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9726,7 +9800,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmFMASlots_Reuse_BaseScalar_When_Wr
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LExtMathSourcePath: string;
   LAutowrapSourcePath: string;
@@ -9758,7 +9832,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9813,7 +9887,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowReciprocalSlots_Reuse_BaseS
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LExtMathSourcePath: string;
   LRegisterSource: string;
@@ -9838,7 +9912,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9876,7 +9950,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowI16U16ShiftSlots_Reuse_Base
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9901,7 +9975,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -9948,7 +10022,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64MemorySlots_Reuse_BaseSc
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -9973,7 +10047,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10017,7 +10091,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideF32x8ArithmeticSlots_Reuse_Ba
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFallbackSourcePath: string;
   LRegisterSource: string;
@@ -10042,7 +10116,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10086,7 +10160,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10111,7 +10185,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10179,7 +10253,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wr
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10209,7 +10283,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10266,7 +10340,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64MinMaxSlots_Keep_SourceC
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10298,7 +10372,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10338,7 +10412,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64SqrtSlots_Reuse_BaseScal
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10363,7 +10437,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10401,7 +10475,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64ExtremaReductionSlots_Re
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10426,7 +10500,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10464,7 +10538,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64RoundFamilySlots_Reuse_B
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10489,7 +10563,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10535,7 +10609,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideSqrtSlots_Reuse_BaseScalar_Wh
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10560,7 +10634,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10604,7 +10678,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideRoundTruncSlots_Reuse_BaseSca
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10629,7 +10703,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10685,7 +10759,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64CompareAndSimpleReductio
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10710,7 +10784,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10766,7 +10840,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_F
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10797,7 +10871,7 @@ var
     CheckTrue(aBackendSlot <> aScalarSlot, 'NEON ' + aLabel + ' should keep backend ownership when the asm leaf is compiled');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10850,7 +10924,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmAbsAndWideFloorCeilSlots_Reuse_Ba
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -10871,7 +10945,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the no-asm NEON wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -10942,7 +11016,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_MaskHelperSlots_Bind_SharedMask_Withou
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LUtilitySourcePath: string;
   LRegisterSource: string;
@@ -10969,7 +11043,7 @@ var
     CheckTrue(PtrUInt(aBackendSlot) <> PtrUInt(aScalarSlot), 'NEON ' + aLabel + ' should own SharedMask rather than reuse the base scalar slot');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -11107,7 +11181,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_Sour
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LAutowrapSourcePath: string;
   LRegisterSource: string;
@@ -11137,7 +11211,7 @@ begin
   Exit;
   {$ENDIF}
 
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -11285,7 +11359,7 @@ procedure TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseSc
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
 
@@ -11304,7 +11378,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when no NEON asm-backed integer ownership exists');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'NEON register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -11510,7 +11584,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_SelectF32x4_Keep_LocalSourceCompanion_But_Reuse_BaseScalar_RuntimeSlot;
 var
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LNEONSourcePath: string;
   LScalarUtilityPath: string;
   LRegisterSourcePath: string;
@@ -11535,7 +11609,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should fall back to the base scalar slot when vector asm is not compiled');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LNEONSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.pas');
     CheckTrue(FileExists(LNEONSourcePath), 'NEON source should exist for implementation-shape audit: ' + LNEONSourcePath);
@@ -11573,7 +11647,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_AndNotSlots_Keep_AsmOwnedCompositions_And_RuntimeOwnership;
 var
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LCompareSourcePath: string;
   LRegisterSourcePath: string;
   LCompareSource: string;
@@ -11602,7 +11676,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should fall back to the base scalar slot when vector asm is not compiled');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LCompareSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.compare.inc');
     CheckTrue(FileExists(LCompareSourcePath), 'NEON compare source should exist for implementation-shape audit: ' + LCompareSourcePath);
@@ -11649,7 +11723,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_DotF64Slots_Reuse_BaseScalar_When_Sc
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LUnitSourcePath: string;
   LFacadeSourcePath: string;
@@ -11673,7 +11747,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should reuse the base scalar slot when both asm/common and no-asm wrappers are dead scalar-forwarders');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -11716,7 +11790,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseSca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LHelperSourcePath: string;
   LUnitSourcePath: string;
@@ -11740,7 +11814,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should reuse the base scalar slot when both owners are dead scalar-forwarders');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for exact-scalar helper audit: ' + LRegisterSourcePath);
@@ -11804,7 +11878,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wr
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LUnitSourcePath: string;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
@@ -11838,7 +11912,7 @@ var
     CheckTrue(PtrUInt(aScalarSlot) <> PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should keep a backend-owned slot when the implementation is intentionally backend-local');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.pas');
     CheckTrue(FileExists(LUnitSourcePath), 'RISCVV unit source should exist for implementation-shape audit: ' + LUnitSourcePath);
@@ -11968,7 +12042,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_MemoryBatch_Intentionally_Scalar_Unt
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LUnitSourcePath: string;
   LFacadeSourcePath: string;
@@ -12005,7 +12079,7 @@ begin
   // RVV Memory (15) and all Batch* groups intentionally inherit FillBaseDispatchTable
   // scalar baseline. No Mem*_RISCVV / RISCVVArray* dead wrappers, no register overrides.
   // Real leaves require S24b (hardware/QEMU evidence).
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for Memory/Batch honesty audit: ' + LRegisterSourcePath);
@@ -12092,7 +12166,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_WideFallbackOnlySlots_Reuse_BaseScal
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LRegisterSource: string;
@@ -12113,7 +12187,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should reuse the base scalar slot when the RISCVV wrapper is only a scalar forwarder');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -12357,7 +12431,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ClampF64x2_Drops_DeadNoAsmFacade_Whi
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12381,7 +12455,7 @@ var
     end;
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for ClampF64x2 dead-facade audit: ' + LRegisterSourcePath);
@@ -12428,7 +12502,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ExactF64x2Slots_Drop_DeadNoAsmFacade
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12477,7 +12551,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for exact F64x2 dead-facade audit: ' + LRegisterSourcePath);
@@ -12525,7 +12599,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ArithmeticF64x2Slots_Drop_DeadNoAsmF
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12574,7 +12648,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for arithmetic F64x2 dead-facade audit: ' + LRegisterSourcePath);
@@ -12626,7 +12700,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ArithmeticF32x4Slots_Drop_DeadNoAsmF
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12675,7 +12749,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for arithmetic F32x4 dead-facade audit: ' + LRegisterSourcePath);
@@ -12727,7 +12801,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_I32x4ConditionalIntegerSlots_Drop_De
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12776,7 +12850,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for I32x4 integer dead-facade audit: ' + LRegisterSourcePath);
@@ -12864,7 +12938,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_I64x2ConditionalIntegerSlots_Drop_De
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -12913,7 +12987,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for I64x2 integer dead-facade audit: ' + LRegisterSourcePath);
@@ -12973,7 +13047,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_U32x4ConditionalIntegerSlots_Drop_De
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13022,7 +13096,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for U32x4 integer dead-facade audit: ' + LRegisterSourcePath);
@@ -13102,7 +13176,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_I32x4CompareSlots_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13149,7 +13223,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for I32x4 compare dead-facade audit: ' + LRegisterSourcePath);
@@ -13203,7 +13277,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_I64x2CompareSlots_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13250,7 +13324,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for I64x2 compare dead-facade audit: ' + LRegisterSourcePath);
@@ -13304,7 +13378,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13353,7 +13427,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for exact F32x4 dead-facade audit: ' + LRegisterSourcePath);
@@ -13413,7 +13487,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_F32x4UtilitySlots_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13462,7 +13536,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for utility F32x4 dead-facade audit: ' + LRegisterSourcePath);
@@ -13522,7 +13596,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_F64x2UtilitySlots_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13571,7 +13645,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for utility F64x2 dead-facade audit: ' + LRegisterSourcePath);
@@ -13627,7 +13701,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_WideFloatLoadSlots_Drop_DeadNoAsmFac
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13676,7 +13750,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for wide float load dead-facade audit: ' + LRegisterSourcePath);
@@ -13728,7 +13802,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_FloatStoreSlots_Keep_BackendOwnershi
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13772,7 +13846,7 @@ var
     CheckTrue(PtrUInt(aScalarSlot) <> PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should stay backend-owned instead of reusing the scalar slot');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for float store ownership audit: ' + LRegisterSourcePath);
@@ -13836,7 +13910,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF64x2_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13885,7 +13959,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for local extrema F64x2 dead-facade audit: ' + LRegisterSourcePath);
@@ -13929,7 +14003,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF32x4_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -13978,7 +14052,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for local extrema F32x4 dead-facade audit: ' + LRegisterSourcePath);
@@ -14022,7 +14096,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_CrossF32x3_Drops_DeadNoAsmFacade_Whi
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -14072,7 +14146,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for CrossF32x3 dead-facade audit: ' + LRegisterSourcePath);
@@ -14113,7 +14187,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_NormalizeF32Slots_Drop_DeadNoAsmFaca
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -14163,7 +14237,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for normalize dead-facade audit: ' + LRegisterSourcePath);
@@ -14209,7 +14283,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ReduceF64x2_Stays_BackendOwned_With_
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
@@ -14268,7 +14342,7 @@ var
     CheckTrue(PtrUInt(aScalarSlot) <> PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should stay backend-owned instead of reusing the scalar slot');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for exact reduction F64x2 witness audit: ' + LRegisterSourcePath);
@@ -14316,7 +14390,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned;
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
   LSavedMask: TFPUExceptionMask;
@@ -14342,7 +14416,7 @@ var
     Move(aValue, Result, SizeOf(Result));
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -14439,7 +14513,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_AndNotSlots_Keep_AsmOwnedComposition
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LUnitSourcePath: string;
   LHelpersSourcePath: string;
   LRegisterSourcePath: string;
@@ -14474,7 +14548,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.pas');
     CheckTrue(FileExists(LUnitSourcePath), 'RISCVV unit source should exist for implementation-shape audit: ' + LUnitSourcePath);
@@ -14524,7 +14598,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_N
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LFacadeSourcePath: string;
   LAsmSourcePath: string;
   LRegisterSourcePath: string;
@@ -14576,7 +14650,7 @@ var
     {$ENDIF}
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.facade.inc');
     CheckTrue(FileExists(LFacadeSourcePath), 'RISCVV facade source should exist for implementation-shape audit: ' + LFacadeSourcePath);
@@ -14655,7 +14729,7 @@ procedure TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_B
 var
   LScalarTable: TSimdDispatchTable;
   LRISCVVTable: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LUnitSourcePath: string;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
@@ -14680,7 +14754,7 @@ var
     CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'RISCVV ' + aLabel + ' should reuse the canonical base scalar slot when the RISCVV-specific wrapper is fully dead');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.pas');
     CheckTrue(FileExists(LUnitSourcePath), 'RISCVV unit source should exist for implementation-shape audit: ' + LUnitSourcePath);
@@ -15290,7 +15364,7 @@ var
   LIndex: Integer;
   LU32SourcePath, LU64SourcePath: string;
   LU32Source, LU64Source: string;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LU32A, LU32Result, LU32Expected: TVecU32x16;
   LU64A, LU64Result, LU64Expected: TVecU64x8;
 
@@ -15310,7 +15384,7 @@ var
       CheckEqual(aExpected.u[LLane], aActual.u[LLane], aLabel + ' lane ' + IntToStr(LLane));
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LU32SourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx512.u32x16_family.inc');
     CheckTrue(FileExists(LU32SourcePath), 'AVX512 U32x16 family source should exist for shift-boundary audit: ' + LU32SourcePath);
@@ -16134,11 +16208,11 @@ var
   LIndex: Integer;
   LF32A, LF32B, LF32C, LF32Actual, LF32Expected: TVecF32x16;
   LF64A, LF64B, LF64C, LF64Actual, LF64Expected: TVecF64x8;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath, LWideSourcePath: string;
   LRegisterSource, LWideSource: string;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx2.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'AVX2 register source should exist for wide FMA half-composition audit: ' + LRegisterSourcePath);
@@ -16231,11 +16305,11 @@ var
   LIndex: Integer;
   LF32A, LF32B, LF32Actual, LF32Expected: TVecF32x16;
   LF64A, LF64B, LF64Actual, LF64Expected: TVecF64x8;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath, LWideSourcePath: string;
   LRegisterSource, LWideSource: string;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx2.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'AVX2 register source should exist for wide select audit: ' + LRegisterSourcePath);
@@ -16867,13 +16941,13 @@ procedure TTestCase_DispatchAPI.Test_AVX2_FacadeScalarFallback_Uses_BaseFill_Wit
 var
   LScalarTable: TSimdDispatchTable;
   LAVX2Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
   LRegisterSource: string;
   LFacadeSource: string;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx2.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'AVX2 register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -16938,7 +17012,7 @@ procedure TTestCase_DispatchAPI.Test_SSE3_RepresentativeOverrides_Reuse_SSE2_Cor
 var
   LSSE2Table: TSimdDispatchTable;
   LSSE3Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
   LOldVectorAsm: Boolean;
@@ -16963,7 +17037,7 @@ var
     CheckTrue(PtrUInt(aSSE2Slot) <> PtrUInt(aSSE3Slot), 'SSE3 ' + aLabel + ' should stay on the SSE3 override instead of collapsing back to SSE2');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.sse3.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'SSE3 register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -17004,7 +17078,7 @@ procedure TTestCase_DispatchAPI.Test_SSSE3_RepresentativeOverrides_Reuse_SSE3_Co
 var
   LSSE3Table: TSimdDispatchTable;
   LSSSE3Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
 
@@ -17019,7 +17093,7 @@ var
   end;
 
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.ssse3.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'SSSE3 register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -17054,7 +17128,7 @@ procedure TTestCase_DispatchAPI.Test_SSE41_RepresentativeOverrides_Reuse_SSSE3_C
 var
   LSSSE3Table: TSimdDispatchTable;
   LSSE41Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
 
@@ -17078,7 +17152,7 @@ var
     CheckTrue(PtrUInt(aSSSE3Slot) <> PtrUInt(aSSE41Slot), 'SSE4.1 ' + aLabel + ' should stay on the SSE4.1 override instead of collapsing back to SSSE3');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.sse41.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'SSE4.1 register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -17117,7 +17191,7 @@ procedure TTestCase_DispatchAPI.Test_SSE42_RepresentativeOverride_Reuse_SSE41_Co
 var
   LSSE41Table: TSimdDispatchTable;
   LSSE42Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LRegisterSourcePath: string;
   LRegisterSource: string;
 
@@ -17141,7 +17215,7 @@ var
     CheckTrue(PtrUInt(aSSE41Slot) <> PtrUInt(aSSE42Slot), 'SSE4.2 ' + aLabel + ' should stay on the SSE4.2 override instead of collapsing back to SSE4.1');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.sse42.register.inc');
     CheckTrue(FileExists(LRegisterSourcePath), 'SSE4.2 register source should exist for implementation-shape audit: ' + LRegisterSourcePath);
@@ -17525,7 +17599,7 @@ procedure TTestCase_DispatchAPI.Test_AVX512_PassThroughFacadeSlots_Reuse_AVX2_Wh
 var
   LAVX2Table: TSimdDispatchTable;
   LAVX512Table: TSimdDispatchTable;
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LUnitSourcePath: string;
   LRegisterSourcePath: string;
   LFacadeSourcePath: string;
@@ -17545,7 +17619,7 @@ var
     CheckEqual(PtrUInt(aAVX2Slot), PtrUInt(aAVX512Slot), 'AVX512 ' + aLabel + ' should reuse the cloned AVX2 slot when the AVX512 wrapper is only a pass-through');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.avx2.pas');
     CheckTrue(FileExists(LUnitSourcePath), 'AVX2 unit source should exist for implementation-shape audit: ' + LUnitSourcePath);
@@ -17875,7 +17949,7 @@ end;
 
 procedure TTestCase_DispatchAPI.Test_Phase19_DispatchTable_NestedOnly_NoDeadDraftArtifacts;
 var
-  LSourceLines: TStringList;
+  LSourceLines: TSourceLines;
   LTableSource: string;
   LTypesSource: string;
   LRegisterSource: string;
@@ -17902,7 +17976,7 @@ var
       (aGroup = 'backendinfo');
   end;
 begin
-  LSourceLines := TStringList.Create;
+  LSourceLines := TSourceLines.Create;
   try
     LPath := ExpandSimdRepoPath('src/nextpas.core.simd.dispatch.table.inc');
     CheckTrue(FileExists(LPath), 'dispatch.table.inc should exist: ' + LPath);
