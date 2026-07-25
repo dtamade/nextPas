@@ -3015,7 +3015,8 @@ var
   LDestroyPos: SizeInt;
   LDestroyBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { Owner: impl.h1.client (STRUCT residual extract from impl.h1). }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   Check(Pos('destructor Destroy; override;', LSource) > 0,
     'h1 client transport declares destructor for idle-pool ownership');
   LDestroyPos := Pos('destructor TH1ClientTransport.Destroy;', LSource);
@@ -3066,7 +3067,8 @@ var
   LReconnectPos: SizeInt;
   LReconnectBlock: string;
 begin
-  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { Owner: impl.h1.client (STRUCT residual extract from impl.h1). }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   LReconnectPos := Pos(
     'RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);', LSource);
   Check(LReconnectPos > 0,
@@ -7770,11 +7772,12 @@ end;
 
 procedure TestProxyAuthBasicOnlySourceContract;
 var
-  LSource, LH1, LWire: string;
+  LSource, LH1Client, LWire: string;
 begin
-  LH1 := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  { CONNECT/Basic freeze lives in client transport; helper in wire. }
+  LH1Client := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   LWire := ReadFileText('../../../src/nextpas.core.http.impl.h1.wire.pas');
-  LSource := LH1 + LWire;
+  LSource := LH1Client + LWire;
   Check(Pos('function ProxyBasicAuthorizationValue', LSource) > 0,
     'proxy auth helper is Basic-only');
   Check(Pos('''Basic '' + Base64Encode', LSource) > 0,
@@ -8236,21 +8239,22 @@ end;
 
 procedure TestClientCancelAndTransportCreateOpSourceContract;
 var
-  LHttpBase, LH1, LHelpers: string;
+  LHttpBase, LH1Client, LHelpers: string;
 begin
-  { cancel/timeout map live in http.base; H1 wire errors in impl.h1; free helpers in client.helpers. }
+  { cancel/timeout map live in http.base; H1 client RoundTrip CreateOp in
+    impl.h1.client; free helpers in client.helpers. }
   LHttpBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
-  LH1 := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LH1Client := ReadFileText('../../../src/nextpas.core.http.impl.h1.client.pas');
   LHelpers := ReadFileText('../../../src/nextpas.core.http.client.helpers.pas');
   Check(Pos('raise EHttpError.CreateOp(hekCanceled, ''cancel'',', LHttpBase) > 0,
     'cancel token uses CreateOp with Op=cancel');
   Check(Pos('EHttpError.CreateOp(hekTimeout, ''transport'',', LHttpBase) > 0,
     'timeout path uses CreateOp with Op=transport');
-  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1) > 0,
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1Client) > 0,
     'proxy CONNECT failures use CreateOp with Op=connect');
-  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1) > 0,
+  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1Client) > 0,
     'H1 response parse failures use CreateOp with Op=transport');
-  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1) > 0,
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1Client) > 0,
     'H1 incomplete response uses CreateOp with Op=transport');
   Check(Pos('CreateOp(hekProtocol, ''json'',', LHelpers) > 0,
     'json helpers use CreateOp with Op=json');

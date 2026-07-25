@@ -177,10 +177,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2-3** Test split | **done** | client redirect/body + server expect/chunk；PROJECTS=**47**；client 8662 / server 8143 | 6 suite 双绿（redirect 44 / body 71 / client 157 / expect 74 / chunk 76 / server 136） |
 | **R2-4** Polish | **done** | fuzz → tests support；BodyCache 共享只读 GetBody；ARCH inventory 对齐 | fuzz + middlewares BodyCache |
 | **R2-5** Wine + multi-OS host | **done** | WIN-0 文档；WIN-1 platform socket wine；WIN-2 `test_http_threaded_wine`；**host** `test_http_threaded_host` + `http-host-ci-matrix`（Linux/macOS/Windows/FreeBSD CI）；WIN-3 IOCP **Parked** | host-runtime + Wine residual；CLAIM scale=No；H3 Blocked |
+| **R2-x residual** STRUCT 2.4 | **done (lane)** | `impl.h1.client` + `impl.h1.prepend`；source-contract 跟路径；inventory **68** | client 157/0 + contract 35/0 + server 136/0 |
 
 ```text
 ──── 当前 ────
-NEXT = STOP / path-limited Landing（findings 不进 main；H3 Blocked）
+NEXT = commit residual STRUCT on lane → path-limited Landing（findings 不进 main；H3 Blocked）
 ```
 
 ---
