@@ -217,15 +217,8 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-{$IFDEF NEXTPAS_UNIX}
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-  nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi,
-{$ENDIF}
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.system.heap;
 
 var
   GShardedBlockPoolIdGen: UInt64 = 0;
@@ -250,12 +243,7 @@ var
   GPoolRegistryLock: TMemMutex;
   GThreadExitKeyInitialized: Boolean = False;
   GThreadExitKeyCreated: Boolean = False;
-{$IFDEF NEXTPAS_UNIX}
-  GThreadExitKey: pthread_key_t = 0;
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-  GThreadExitKey: DWORD = DWORD($FFFFFFFF);
-{$ENDIF}
+  GThreadExitKey: TPlatformTLSKey = 0;
   GThreadExitKeyLock: TMemMutex;
 
 procedure PoolRegistryRegister(APool: Pointer; APoolId: UInt64);
@@ -327,10 +315,9 @@ end;
 {$ENDIF}
 
 procedure EnsureThreadExitKey;
-{$IFDEF NEXTPAS_UNIX}
 var
   LRc: Int32;
-{$ENDIF}
+  LDtor: Pointer;
 begin
   if GThreadExitKeyInitialized then Exit;
 
@@ -345,29 +332,23 @@ begin
   try
     if GThreadExitKeyInitialized then Exit;
 
-    { Create the TLS key with a destructor callback. On POSIX, pthread_key_create
-      takes a destructor that runs when a thread exits. On Windows, FlsAlloc
-      provides an equivalent fiber-local-storage callback. }
+    { Host-native dtor pointer: cdecl on POSIX, stdcall Fls on Windows. }
   {$IFDEF NEXTPAS_UNIX}
-    LRc := pthread_key_create(@GThreadExitKey, @ThreadExitDestructor);
+    LDtor := @ThreadExitDestructor;
+  {$ELSE}
+  {$IFDEF NEXTPAS_WINDOWS}
+    LDtor := @ThreadExitFlsCallback;
+  {$ELSE}
+    LDtor := nil;
+  {$ENDIF}
+  {$ENDIF}
+    LRc := platform_tls_create_with_destructor(GThreadExitKey, LDtor);
     if LRc <> 0 then
     begin
       GThreadExitKeyCreated := False;
       Exit;
     end;
     GThreadExitKeyCreated := True;
-  {$ENDIF}
-
-  {$IFDEF NEXTPAS_WINDOWS}
-    GThreadExitKey := FlsAlloc(@ThreadExitFlsCallback);
-    if GThreadExitKey = FLS_OUT_OF_INDEXES then
-    begin
-      GThreadExitKeyCreated := False;
-      Exit;
-    end;
-    GThreadExitKeyCreated := True;
-  {$ENDIF}
-
     GThreadExitKeyInitialized := True;
   finally
     GThreadExitKeyLock.Release;
@@ -454,11 +435,11 @@ begin
         GPoolRegistryLock.Release;
       end;
     end;
-    { Pair System.GetMem on create; prefer sized free when AllocSize recorded. }
+    { Pair NpSystemGetMem on create; prefer sized free when AllocSize recorded. }
     if LNode^.AllocSize > 0 then
-      System.FreeMem(LNode, LNode^.AllocSize)
+      NpSystemFreeMem(LNode, LNode^.AllocSize)
     else
-      System.FreeMem(LNode);
+      NpSystemFreeMem(LNode);
     LNode := LNext;
   end;
   GShardedBlockPoolThreadCacheHead := nil;
@@ -469,19 +450,10 @@ end;
   TLS slot (not the threadvar) because FPC zeroes threadvars before
   pthread_key destructors run during thread teardown. }
 procedure SetThreadExitSentinel; inline;
-{$IFDEF NEXTPAS_WINDOWS}
-var
-  LOk: BOOL;
-{$ENDIF}
 begin
   if not GThreadExitKeyCreated then Exit;
-{$IFDEF NEXTPAS_UNIX}
-  pthread_setspecific(GThreadExitKey, Pointer(GShardedBlockPoolThreadCacheHead));
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-  LOk := FlsSetValue(GThreadExitKey, Pointer(GShardedBlockPoolThreadCacheHead));
-  if not LOk then ;  { best-effort; destructor may not fire for this thread }
-{$ENDIF}
+  { best-effort; destructor may not fire if set fails }
+  platform_tls_set(GThreadExitKey, Pointer(GShardedBlockPoolThreadCacheHead));
 end;
 
 class function TShardedBlockPoolConfig.Default(aBlockSize, aCapacity: SizeUInt; aShardCount: Integer): TShardedBlockPoolConfig;
@@ -1139,7 +1111,7 @@ begin
     (SizeUInt(FShardCount) > ((High(SizeUInt) - SizeUInt(SizeOf(TThreadCacheNode))) div SizeUInt(SizeOf(TRemoteFreeBuf)))) then
     Exit(nil);
   LAllocSize := SizeUInt(SizeOf(TThreadCacheNode)) + SizeUInt(FShardCount) * SizeUInt(SizeOf(TRemoteFreeBuf));
-  LNode := PThreadCacheNode(System.GetMem(LAllocSize));
+  LNode := PThreadCacheNode(NpSystemGetMem(LAllocSize));
   if LNode = nil then
     Exit(nil);
   ZeroMem(LNode, LAllocSize);
@@ -1806,14 +1778,8 @@ end;
 finalization
   if GThreadExitKeyInitialized then
   begin
-{$IFDEF NEXTPAS_UNIX}
     if GThreadExitKeyCreated then
-      pthread_key_delete(GThreadExitKey);
-{$ENDIF}
-{$IFDEF NEXTPAS_WINDOWS}
-    if GThreadExitKeyCreated then
-      FlsFree(GThreadExitKey);
-{$ENDIF}
+      platform_tls_destroy_dtor(GThreadExitKey);
     GPoolRegistryLock.Done;
     GThreadExitKeyLock.Done;
   end;

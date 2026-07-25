@@ -21,14 +21,23 @@ PLATFORM_TESTS := test_platform_virtual test_shared_memory test_l0_dependency_bo
 # 快速测试列表（排除 compile-gate 和平台测试）
 FAST_TESTS := $(filter-out $(COMPILE_GATE_TESTS) $(PLATFORM_TESTS), $(ALL_TESTS))
 
-.PHONY: test test-fast clean list help $(ALL_TESTS)
+.PHONY: test test-fast test-extended clean list help $(ALL_TESTS)
 
 help:
 	@echo "nextpas.core.mem test targets:"
 	@echo "  make test       — 运行全部测试"
 	@echo "  make test-fast  — 跳过 compile-gate 和平台测试"
+	@echo "  make test-extended — kernel evidence set (scorecard+soak+cross-os+lane deps)"
 	@echo "  make clean      — 清理所有构建产物"
 	@echo "  make list       — 列出所有测试项目"
+
+# Kernel evidence (not default lane_gate): Growing/scavenge + long-run + host compile.
+test-extended:
+	$(MAKE) -C test_usability_guardrails clean test
+	$(MAKE) -C test_contract_matrix clean test
+	$(MAKE) -C scorecard clean test RELEASE=1
+	$(MAKE) -C test_soak clean test
+	$(MAKE) -C test_mem_cross_os_compile_gate clean test
 
 list:
 	@echo "All test projects ($(words $(ALL_TESTS))):"

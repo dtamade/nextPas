@@ -23,6 +23,18 @@ make lane-focused LANE=mem
 # make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
 ```
 
+**内核必跑集合**（改 Growing / TLS / free 路径时，不止 lane_gate）：
+
+```bash
+make lane-focused LANE=mem
+make -C core/tests/nextpas.core.mem test-extended
+# ≡ guardrails+contract + scorecard RELEASE=1 + soak + cross-os compile gate
+```
+
+**堆后端 / RTL 隔离**：过程式热路径用 `GetMem`/`FreeMem(ptr,size)`；底层 `System.*` 仅 `nextpas.core.system.heap`（`NpSystem*`）。见 [HEAP-BACKEND-OWNER.md](HEAP-BACKEND-OWNER.md)。
+
+**查泄漏**：`NEXTPAS_MEM_DEBUG=leak` 只看插件面；过程式 `GetMem` 须再开 `NEXTPAS_MEM_HEAP_DEBUG=1`（慢）。**禁止**用 HEAP_DEBUG 当 SCORECARD 性能基线。
+
 **活路线图**: [ROADMAP.md](ROADMAP.md) · 决策树：[API-GUIDE.md](API-GUIDE.md) · 性能：[SCORECARD.md](SCORECARD.md) · Tier 规则：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
 
 **Consumer audit（FIX CLOSED）**: [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)。回归：`check_consumer_audit_contracts.sh`（guardrails source-contract）。

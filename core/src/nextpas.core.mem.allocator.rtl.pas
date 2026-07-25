@@ -29,41 +29,45 @@ function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.sync,
-  nextpas.core.mem.allocator.growing_ia;
+  nextpas.core.mem.allocator.growing_ia,
+  nextpas.core.system.heap;
 
 var
   _RTLAllocatorObj: TInterfacedObject = nil;
   _RTLAllocatorIntf: IAllocator = nil;
+  { 0 = unpublished; 1 = ready. Acquire-load / release-store for portable DCL. }
+  _RTLAllocatorReady: Int32 = 0;
   GRtlAllocLock: TPlatformMutex;
 
 function TRtlAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
-  Result := System.GetMem(ASize);
+  Result := NpSystemGetMem(ASize);
 end;
 
 function TRtlAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
-  Result := System.AllocMem(ASize);
+  Result := NpSystemAllocMem(ASize);
 end;
 
 function TRtlAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
   begin
-    System.FreeMem(APtr);
+    NpSystemFreeMem(APtr);
     Exit(nil);
   end;
-  Result := System.ReallocMem(APtr, ASize);
+  Result := NpSystemReallocMem(APtr, ASize);
 end;
 
 procedure TRtlAllocator.FreeMem(APtr: Pointer); inline;
 begin
-  System.FreeMem(APtr);
+  NpSystemFreeMem(APtr);
 end;
 
 function TRtlAllocator.Traits: TAllocatorTraits; inline;
@@ -75,25 +79,21 @@ end;
 
 function GetRtlAllocator: IAllocator;
 begin
-  { Double-check locking. Safe on x86 (TSO: stores visible in program order).
-    On ARM/AArch64 the outer nil check may read a stale pointer; this module
-    targets x86-64 Linux where the pattern is correct.
+  { Portable double-checked locking: acquire-load of ready flag, then read
+    interface. Publisher writes interface then release-stores ready=1 under mutex. }
+  if AtomicLoad32(_RTLAllocatorReady, moAcquire) <> 0 then
+    Exit(_RTLAllocatorIntf);
 
-    GRtlAllocLock is a TPlatformMutex — zero-initialized (valid pthread_mutex_t
-    default), no explicit Init needed. This avoids TMemMutex's lazy-init state
-    machine which would fail if called before the mutex's unit initialization. }
-  if _RTLAllocatorObj = nil then
-  begin
-    platform_mutex_lock(GRtlAllocLock);
-    try
-      if _RTLAllocatorObj = nil then
-      begin
-        _RTLAllocatorObj := TRtlAllocator.Create;
-        _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator; // anchor lifetime via interface
-      end;
-    finally
-      platform_mutex_unlock(GRtlAllocLock);
+  platform_mutex_lock(GRtlAllocLock);
+  try
+    if AtomicLoad32(_RTLAllocatorReady, moAcquire) = 0 then
+    begin
+      _RTLAllocatorObj := TRtlAllocator.Create;
+      _RTLAllocatorIntf := _RTLAllocatorObj as IAllocator;
+      AtomicStore32(_RTLAllocatorReady, 1, moRelease);
     end;
+  finally
+    platform_mutex_unlock(GRtlAllocLock);
   end;
   Result := _RTLAllocatorIntf;
 end;

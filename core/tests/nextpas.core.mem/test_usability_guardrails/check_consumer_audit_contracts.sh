@@ -220,8 +220,8 @@ need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FreeMemOf\(FAllocator, FA
 need_file "$SRC/nextpas.core.mem.blockpool.sharded.pas"
 need_grep "$SRC/nextpas.core.mem.blockpool.sharded.pas" 'AllocSize: SizeUInt' \
   'TThreadCacheNode must record AllocSize (M3)'
-need_grep "$SRC/nextpas.core.mem.blockpool.sharded.pas" 'System\.FreeMem\(LNode, LNode\^\.AllocSize\)' \
-  'ThreadExitCleanup must sized FreeMem TLS node (M3)'
+need_grep "$SRC/nextpas.core.mem.blockpool.sharded.pas" 'NpSystemFreeMem\(LNode, LNode\^\.AllocSize\)' \
+  'ThreadExitCleanup must sized NpSystemFreeMem TLS node (M3)'
 
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2

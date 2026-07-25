@@ -349,3 +349,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | **Era M CLOSED**：FixedSlab AlignedFallback FreeMemOf + sharded TLS sized free |
 | 2026-07-26 | **P2 residual CLOSED**（子类 FormatAllocErrorMsg + stem + SAFETY 入口证据）；H1 RequestArena 门禁对齐 `impl.h1.conn`；ARCHITECTURE 去掉已删 allocator 名 |
 | 2026-07-26 | Idle steward：SCORECARD RELEASE=1 + soak 3/3 复跑（无回归）；数字刷新 |
+| 2026-07-26 | **Audit remediation**：system.heap 收口 System.*；RTL isolation 门禁；sharded TLS 经 platform.thread；删 pressure/registry/watermark |

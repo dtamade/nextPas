@@ -142,7 +142,8 @@ type
 implementation
 
 uses
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.system.heap;
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
@@ -337,7 +338,7 @@ begin
       FormatAllocErrorMsg('TGrowingBlockPool', 'Create', 'allocation size overflow (bytes=' + IntToStr(Int64(LBytes)) + ', align=' + IntToStr(Int64(FAlignment)) + ')'));
 
   if FAllocator = nil then
-    LRaw := System.GetMem(LAllocSize)
+    LRaw := NpSystemGetMem(LAllocSize)
   else
     LRaw := FAllocator.GetMem(LAllocSize);
   if LRaw = nil then
@@ -354,7 +355,7 @@ begin
       if FAllocator <> nil then
         FreeMemOf(FAllocator, LRaw, LAllocSize)
       else
-        System.FreeMem(LRaw);
+        NpSystemFreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -485,7 +486,7 @@ begin
   if FAllocator <> nil then
     FreeMemOf(FAllocator, LRaw, LRawSize)
   else
-    System.FreeMem(LRaw);
+    NpSystemFreeMem(LRaw);
 end;
 
 procedure TGrowingBlockPool.ShrinkToSegmentCount(ACount: SizeInt);
