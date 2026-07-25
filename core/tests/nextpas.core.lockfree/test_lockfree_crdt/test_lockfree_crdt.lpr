@@ -3,7 +3,7 @@ program test_lockfree_crdt;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.lockfree.crdt;
 
 var

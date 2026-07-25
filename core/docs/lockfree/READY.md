@@ -176,15 +176,21 @@ Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-1…H3-5 complete → Maintenanc
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
 make -C core/tests/nextpas.core.lockfree verify-t1
 make -C core/tests/nextpas.core.lockfree verify-h3-consumers
+make -C core/tests/nextpas.core.lockfree verify-t2-smoke   # F-006 curated T2 + test RTL isolation
 make hygiene
 git diff --check
 ```
 
 Expected:
-- `verify-t1`: atomic + lockfree main suite + stress green; log `core/build/verify-lockfree/verify-t1.log`
+- `verify-t1`: RTL isolation script + atomic + lockfree main suite + stress green; log `core/build/verify-lockfree/verify-t1.log`
 - `verify-h3-consumers`: async (H3-1) + bag/multimap (H3-2) + lifecycle examples + **H4-1 test_thread** + **H3-5 test_worksteal** + **H5-1 test_net_server** green；log `core/build/verify-lockfree/verify-h3-consumers.log`
+- `verify-t2-smoke`: curated T2 subset + test RTL isolation；**不**替代全 T2 inventory
 
 Current main-suite size: **lockfree ~190** tests (includes Deque Try\*Ex、MSQueue Try\*Ex、Close idempotent edges).
+
+**T2 freeze（F-004）**: 无 charter 禁止新增 T2 算法单元；H3-2 生产子集仍仅 bag+multimap；N1 推荐档见 `t2-inventory.md`。
+
+**LOCKFREE_DEBUG（F-005）**: 编译加 `-dLOCKFREE_DEBUG` 时，MPSC consumer / SPSC P+C / Deque owner 会 claim thread id 并在违例时 raise（默认构建零开销）。
 
 Optional R8 research gate (does not replace T1):
 

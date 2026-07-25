@@ -398,8 +398,8 @@ begin
     raise EArgumentError.Create('TShardedHashMap: TKey must be unmanaged (no string/interface/dynarray)');
   if IsManagedType(TValue) then
     raise EArgumentError.Create('TShardedHashMap: TValue must be unmanaged (no string/interface/dynarray)');
-  if SizeOf(TKey) = 0 then
-    raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
+  { SizeOf(TKey)=0 is not reachable for FPC specializations used here; omit to avoid
+    Unreachable-code noise (audit F-007). Managed checks above remain the Create gate. }
   inherited Create;
   FClosed := 0;
   LCap := AInitialCapacity;

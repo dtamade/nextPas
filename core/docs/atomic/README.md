@@ -157,6 +157,12 @@ check the value before waiting, wait only while the predicate is still false, an
 
 Do not report a backend as runtime ready without a matching focused runtime gate.
 
+### Host implementation note（F-002 / F-003）
+
+- On the **FPC host**, scalar RMW often routes through FPC `Interlocked*` intrinsics inside `nextpas.core.atomic.pas`. That is **not** a `uses SysUtils` violation, but it **is** a dual-compiler backend dependency until nextpas provides its own atomic lowering.
+- **Windows / non-x86_64**: no local runtime gate in this lane — source-contract / forced compile only. Do not market “cross-platform wait/atomic ready” without matching gates.
+- Wait/notify on fallback buckets can collide by address; always use a **predicate loop** (F-012).
+
 ## 跨平台边界
 
 当前 focused gate 在本地 Linux x86_64 上运行，source-contract 额外约束了一些 arch-specific

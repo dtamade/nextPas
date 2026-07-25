@@ -12,6 +12,7 @@ unit nextpas.core.lockfree.deque;
  *   - TryPush/TryPop: only owner thread can call
  *   - TrySteal: multiple thief threads compete via CAS
  *   - Close: safe to call from any thread
+ *   - {$IFDEF LOCKFREE_DEBUG}: claim/check owner thread on push/pop (audit F-005)
  *
  * @see Work Stealing — Blumofe & Leiserson, 1999
  * @see Cilk — work-stealing based parallel programming
@@ -45,6 +46,10 @@ type
     FPadBottom: TCacheLinePad;
     {$POP}
     FClosed: Int32;
+    {$IFDEF LOCKFREE_DEBUG}
+    FOwnerThreadId: UInt64;
+    procedure DebugClaimOwner; inline;
+    {$ENDIF}
   public
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
@@ -72,7 +77,10 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.atomic;
+  nextpas.core.atomic
+  {$IFDEF LOCKFREE_DEBUG}
+  , nextpas.core.platform.thread
+  {$ENDIF};
 
 constructor TWorkStealingDequeImpl.Create(const ACapacity: PtrUInt);
 var
@@ -90,12 +98,32 @@ begin
   FTop := 0;
   FBottom := 0;
   FClosed := 0;
+  {$IFDEF LOCKFREE_DEBUG}
+  FOwnerThreadId := 0;
+  {$ENDIF}
 end;
+
+{$IFDEF LOCKFREE_DEBUG}
+procedure TWorkStealingDequeImpl.DebugClaimOwner;
+var
+  LSelf: UInt64;
+begin
+  LSelf := platform_thread_id;
+  if FOwnerThreadId = 0 then
+    FOwnerThreadId := LSelf
+  else if FOwnerThreadId <> LSelf then
+    raise EInvalidOperationError.Create(
+      'TWorkStealingDeque LOCKFREE_DEBUG: push/pop must run on a single owner thread');
+end;
+{$ENDIF}
 
 function TWorkStealingDequeImpl.TryPush(const AValue: T): Boolean;
 var
   LBottom, LTop, LSize: Int64;
 begin
+  {$IFDEF LOCKFREE_DEBUG}
+  DebugClaimOwner;
+  {$ENDIF}
   if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LBottom := atomic_load_64(FBottom, mo_relaxed);
@@ -127,6 +155,9 @@ var
   LBottom, LTop: Int64;
   LExpected: Int64;
 begin
+  {$IFDEF LOCKFREE_DEBUG}
+  DebugClaimOwner;
+  {$ENDIF}
   LBottom := atomic_load_64(FBottom, mo_relaxed) - 1;
   atomic_store_64(FBottom, LBottom, mo_seq_cst);
   LTop := atomic_load_64(FTop, mo_seq_cst);

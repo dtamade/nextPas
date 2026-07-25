@@ -13,6 +13,7 @@ unit nextpas.core.lockfree.spsc;
  *   - Enqueue: only producer thread can call
  *   - Dequeue: only consumer thread can call
  *   - Close: safe to call from any thread
+ *   - {$IFDEF LOCKFREE_DEBUG}: claim/check producer and consumer thread ids (audit F-005)
  *
  * @see Dmitry Vyukov SPSC queue — lock-free bounded queue
  * @see crossbeam (Rust) — similar SPSC implementation
@@ -53,6 +54,12 @@ type
     FTailPublished: Int64;
     FHeadPublished: Int64;
     FClosed: Int32;
+    {$IFDEF LOCKFREE_DEBUG}
+    FProducerThreadId: UInt64;
+    FConsumerThreadId: UInt64;
+    procedure DebugClaimProducer; inline;
+    procedure DebugClaimConsumer; inline;
+    {$ENDIF}
   public
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
@@ -86,7 +93,10 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.wait,
-  nextpas.core.time.base;
+  nextpas.core.time.base
+  {$IFDEF LOCKFREE_DEBUG}
+  , nextpas.core.platform.thread
+  {$ENDIF};
 
 constructor TSpscQueueImpl.Create(const ACapacity: PtrUInt);
 var
@@ -112,12 +122,45 @@ begin
   FSpaceEpoch := 0;
   FDataWaiters := 0;
   FSpaceWaiters := 0;
+  {$IFDEF LOCKFREE_DEBUG}
+  FProducerThreadId := 0;
+  FConsumerThreadId := 0;
+  {$ENDIF}
 end;
+
+{$IFDEF LOCKFREE_DEBUG}
+procedure TSpscQueueImpl.DebugClaimProducer;
+var
+  LSelf: UInt64;
+begin
+  LSelf := platform_thread_id;
+  if FProducerThreadId = 0 then
+    FProducerThreadId := LSelf
+  else if FProducerThreadId <> LSelf then
+    raise EInvalidOperationError.Create(
+      'TSpscQueue LOCKFREE_DEBUG: enqueue must run on a single producer thread');
+end;
+
+procedure TSpscQueueImpl.DebugClaimConsumer;
+var
+  LSelf: UInt64;
+begin
+  LSelf := platform_thread_id;
+  if FConsumerThreadId = 0 then
+    FConsumerThreadId := LSelf
+  else if FConsumerThreadId <> LSelf then
+    raise EInvalidOperationError.Create(
+      'TSpscQueue LOCKFREE_DEBUG: dequeue must run on a single consumer thread');
+end;
+{$ENDIF}
 
 function TSpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LTail: Int64;
 begin
+  {$IFDEF LOCKFREE_DEBUG}
+  DebugClaimProducer;
+  {$ENDIF}
   if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LTail := FTail;
@@ -152,6 +195,9 @@ function TSpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LHead: Int64;
 begin
+  {$IFDEF LOCKFREE_DEBUG}
+  DebugClaimConsumer;
+  {$ENDIF}
   LHead := FHead;
   if LHead >= FTailCache then
   begin

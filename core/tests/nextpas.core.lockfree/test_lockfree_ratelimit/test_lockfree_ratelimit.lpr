@@ -3,7 +3,7 @@ program test_lockfree_ratelimit;
 {$mode objfpc}{$H+}
 
 uses
-  Math,
+  nextpas.core.math.scalar,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.ratelimit,
   nextpas.core.lockfree,
@@ -124,7 +124,7 @@ var
   LLimiter: TTokenBucketLimiter;
   LRaised: Boolean;
 begin
-  { Prefer Math.NaN/Infinity over 0/0 which raises EInvalidOp under heaptrc/FPU traps. }
+  { Prefer nextpas.core.math.scalar NaN/Infinity over 0/0 (FPU traps under heaptrc). }
   LRaised := False;
   try
     LLimiter := TTokenBucketLimiter.Create(NaN, 1.0);
