@@ -24,13 +24,14 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实生产源码库存约 **79** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **82** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
 - H2 client response body `IReader` 已抽出：`impl.h2.client.body`（`TH2ClientResponseBodyReader`）。
-- H2 client pure helpers 已抽出：`impl.h2.client.helpers`；`impl.h2.client` ~1932。
+- H2 client pure helpers 已抽出：`impl.h2.client.helpers`；active streams 表：`impl.h2.client.streams`；`impl.h2.client` ~1759。
+- 共享 H2 wire 缓冲：`impl.h2.wire`（`TH2WireBuffers` + compact/decode helpers；client/session 共用）。
 - 共享 cancel 桥接已抽出：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`；h1/h2/websocket 共用）。
 - H2 settings 解析去重：`H2ParseSettingsPayload` / `H2MinUInt32` 落在 `impl.h2.types`（client/session 共用）。
-- H2 server session 机械拆：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer` + `impl.h2.session.helpers`；`impl.h2.session` ~1494（状态机主体仍在）。
+- H2 server session 机械拆：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer` + `impl.h2.session.helpers` + `impl.h2.session.request`；`impl.h2.session` ~1411（状态机主体仍在）。
 - Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
 - H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
 - H1 client transport 已抽出：`impl.h1.client`；共享 prepend stream：`impl.h1.prepend`。
@@ -228,15 +229,18 @@ src/
   nextpas.core.http.impl.h2.hpack.pas         ← HPACK encoder/decoder、dynamic table、MRU cache、DecodeView
   nextpas.core.http.impl.h2.types.pas         ← H2 settings、7-state stream machine、flow-control bookkeeping
   nextpas.core.http.impl.h2.stream.pas        ← H2 per-stream state machine、header/body accumulation、trailer、body reader
+  nextpas.core.http.impl.h2.wire.pas          ← shared H2 read/write buffers + decode helpers
   nextpas.core.http.impl.h2.session.pas       ← H2 server session 状态机（SETTINGS/frame/poll）
   nextpas.core.http.impl.h2.session.preface.pas ← client preface validation
   nextpas.core.http.impl.h2.session.writer.pas  ← buffered response writer
   nextpas.core.http.impl.h2.session.helpers.pas ← pure session helpers
+  nextpas.core.http.impl.h2.session.request.pas ← request assemble from stream headers
   nextpas.core.http.impl.h2.streammap.pas      ← stream ID hash map
   nextpas.core.http.impl.h2.client.pas        ← H2 client transport（RoundTrip、连接池、GOAWAY、stale retry）
   nextpas.core.http.impl.h2.client.pool.pas   ← H2 client idle pool
   nextpas.core.http.impl.h2.client.body.pas   ← H2 client response body IReader
   nextpas.core.http.impl.h2.client.helpers.pas ← pure client free helpers
+  nextpas.core.http.impl.h2.client.streams.pas ← client active-stream table helpers
   nextpas.core.http.impl.h2.server.pas        ← H2 server transport factory（IHttpServerSessionFactory）
   nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
   nextpas.core.http.impl.h1.tls.pas           ← H1 TLS wrapper（ALPN http/1.1 + session factory）
