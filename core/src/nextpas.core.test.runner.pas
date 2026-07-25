@@ -1123,6 +1123,7 @@ begin
     SetCurrentTestContext(nil);
     LTestResult := MakeTestResult(LEntry.Name, tsPassed, '', 0);
     SetTestContext(Name, LEntry.Name);
+    NoteHeapBaseline; { optional leak delta (F-05/F-11); no-op without probe }
 
     { Global run timeout check }
     if (LRunTimeout > TDuration.Zero) and
@@ -1694,6 +1695,18 @@ begin
   LOutSink := ResolveOutSink(LConfig);
   LErrSink := ResolveErrSink(LConfig);
   LTagFilter := GetTagFilter(LConfig);
+  { F-20: fail fast at suite start if any TestSubtest registered (not silent skip). }
+  for I := 0 to High(Tests) do
+    if Tests[I].Kind = ekSubtest then
+    begin
+      LErrSink.WriteLn(AnsiRed(
+        'ERROR: TestSubtest "' + Tests[I].Name +
+        '" cannot run under RunParallel (use serial Run)', LConfig));
+      AResult.Failed := 1;
+      AResult.AllPassed := False;
+      Result := False;
+      Exit;
+    end;
   { Cache setup }
   if LConfig.CacheEnabled then
   begin

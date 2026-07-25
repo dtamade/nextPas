@@ -163,6 +163,7 @@ type
     SkipReason    : string;
     SoftFailCount : Integer;  { Go t.Error style: fail but continue }
     SoftFailMsgs  : specialize TArray<string>; { up to CMaxSoftFailMsgs }
+    HeapAtStart   : Int64;    { optional leak delta baseline; -1 = unset }
   end;
   PTestExecState = ^TTestExecState;
 
@@ -1095,6 +1096,7 @@ begin
   GExecState^.SkipReason     := '';
   GExecState^.SoftFailCount  := 0;
   SetLength(GExecState^.SoftFailMsgs, 0);
+  GExecState^.HeapAtStart    := -1; { set by runner if heap probe installed }
 end;
 
 { ── SleepMs ───────────────────────────────────────────────────────────────── }

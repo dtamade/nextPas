@@ -66,6 +66,15 @@ begin Result := nextpas.core.test.output.GetTestTimeout; end;
 procedure ReportLeakIfAny(AStatus: TTestStatus);
 begin nextpas.core.test.output.ReportLeakIfAny(AStatus); end;
 
+procedure SetHeapProbe(AProbe: THeapProbeFunc);
+begin nextpas.core.test.output.SetHeapProbe(AProbe); end;
+
+function GetHeapProbe: THeapProbeFunc;
+begin Result := nextpas.core.test.output.GetHeapProbe; end;
+
+procedure NoteHeapBaseline;
+begin nextpas.core.test.output.NoteHeapBaseline; end;
+
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string): string;
 begin Result := nextpas.core.test.output.JUnitXML(AResults, ASuiteName); end;

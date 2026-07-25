@@ -2,7 +2,7 @@
 
 **Owner**: test lane（`.worktrees/test`）— **全权**
 **北极星**: 对标 **Go `testing` + 工程门禁** / **Rust 测试工程纪律** 的**质量与规模**，不是 API 化妆。
-**当前基线**: **v8.30**（Prop/Fuzz/Snapshot + SCALE≥7500）
+**当前基线**: **v8.31**（findings remediation）
 **最后更新**: 2026-07-26
 
 ---
@@ -63,7 +63,8 @@ v8.27  Soft 第二波 + Soft 诊断 golden              ✅
 v8.28  Runner/Subtest/CLI 深度（Go testing 行为）  ✅
 v8.29  并行竞态与 Mock 误用密度                    ✅
 v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500    ✅
-v8.31+ CI 默认巩固；SCALE→9000（条件）；Discovery stub  ← next
+v8.31  Findings 全量 remediation（分层/RTL/规模信号） ✅
+v8.32+ SCALE→9000（条件）；prop 大拆分；SoftExpect(v9)
 v9     （另拍板）IExpectation 拆分 / SoftExpect
 ```
 
@@ -172,7 +173,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.31+** 巩固：B77 已随 v8.30 默认 low-signal≤25%；B78 SCALE→9000 条件抬门；B79 Discovery stub；B80 release checklist。
+**v8.32+** / backlog：prop god-unit 拆分（F-03）；SCALE→9000 条件抬门（B78）；release checklist（B80）；v9 SoftExpect。
 
 ---
 

@@ -14,6 +14,7 @@ uses
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.test,
+  nextpas.core.test.helpers,
   nextpas.core.test.bench,
   nextpas.core.bench;
 
@@ -441,10 +442,28 @@ begin
   end, 'throughput');
 end;
 
+{ ── F-13: fail-path density for thin suite ────────────────────────────────── }
+
+procedure TestBenchFailPathCase(const AC: TTestCase);
+var
+  LRes: TBenchTestResult;
+begin
+  FillChar(LRes, SizeOf(LRes), 0);
+  LRes.Name := 'fp-' + AC.Name;
+  LRes.Executed := False;
+  ExpectFail(procedure
+    begin
+      { Empty message → default format still fails when not executed }
+      CheckBenchPerformance(LRes, 1.0, '');
+    end, 'performance');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   S: TTestSuite;
+  LFpCases: specialize TArray<TTestCase>;
+  LFpI: Integer;
 begin
   S := TTestSuite.Create('test_bench');
 
@@ -492,6 +511,14 @@ begin
   S.Test('B39 huge threshold pass', @TestB39BenchHugeThresholdPass);
   S.Test('B43 not executed performance fail', @TestB43BenchNotExecutedPerfFail);
   S.Test('B43 throughput high threshold fail', @TestB43BenchThroughputTooHigh);
+
+  SetLength(LFpCases, 40);
+  for LFpI := 0 to High(LFpCases) do
+  begin
+    LFpCases[LFpI].Name := 'bench-fp-' + IntToStr(LFpI);
+    LFpCases[LFpI].Data := IntToStr(LFpI);
+  end;
+  S.TestTable('bench fail-path ExpectFail', LFpCases, @TestBenchFailPathCase);
 
   S.Run;
   S.Summary;

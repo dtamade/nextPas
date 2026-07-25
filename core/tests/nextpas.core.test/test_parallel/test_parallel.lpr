@@ -1472,6 +1472,23 @@ begin
   end;
 
   WriteLn;
+  SectionHeader('F-20: TestSubtest rejected under RunParallel');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('par-sub-reject');
+    LSuite.TestSubtest('nested', procedure(constref Ctx: ITestContext)
+      begin
+        Ctx.Run('x', procedure begin CheckTrue(True); end);
+      end);
+    if LSuite.RunParallelWithResult(nil, GVerbResult) then
+      FailTest('RunParallel must fail when TestSubtest is registered');
+    if GVerbResult.Failed < 1 then
+      FailTest('expected configuration failure recorded');
+    LSuite := Default(TTestSuite);
+    PassTest('F-20 parallel+TestSubtest config fail');
+  end;
+
+  WriteLn;
   PassTest('ALL PARALLEL TESTS PASSED');
   { Release global managed records before heaptrc tally.
     FPC global finalization runs after heaptrc DumpHeap. }

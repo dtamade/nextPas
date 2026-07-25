@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: **v8.30** Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）
+> 治理状态: **v8.31** Findings remediation（分层/RTL 边角/规模信号/契约单源）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
@@ -112,11 +112,11 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
 
-**Note on Double comparisons**:
-- `CheckEqual(Double)` performs IEEE 754 **exact comparison** (`=` operator). NaN != NaN, -0.0 = +0.0.
-- `CheckNear(Double)` performs **tolerance comparison** with absolute epsilon.
-- `CheckApprox(Double)` performs **tolerance comparison** with relative epsilon (better for magnitude-spanning comparisons).
-- For floating-point tolerance, use `CheckNear` or `CheckApprox` instead of `CheckEqual`.
+**Note on Double comparisons**（F-16，与实现一致）:
+- `CheckEqual(Double [, Epsilon])` **delegates to `CheckNear`** (default absolute epsilon `1e-10`).
+- `CheckNear` / `CheckNotNear`: absolute epsilon.
+- `CheckApprox` / `CheckNearRel`: relative epsilon (better across magnitudes).
+- For bitwise/IEEE exact identity, write `CheckTrue(A = B)` explicitly (no separate `CheckEqualExact` yet).
 
 ### Fluent API (IExpectation)
 
@@ -612,8 +612,9 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 
 ## Test Coverage
 
-> 实测：`make -C core/tests/nextpas.core.test clean test` → **16/16 suites passed**（2026-07-19）。
-> 下表「Tests」列为各套件主 suite 报告的测试过程数；multi-suite 程序取主路径合计近似值。不含 stress 内 10K 空测试展开。
+> 规模与套件列表以 `make -C core/tests/nextpas.core.test contracts` 与
+> `make -C core/tests/nextpas.core.test list` 为准（v8.31：SCALE≥7500，含 source-contract/scale 门）。
+> 下表为历史近似，**勿当作权威覆盖数**（F-14）。
 
 | Test Suite | Tests | Coverage |
 |-----------|-------|----------|

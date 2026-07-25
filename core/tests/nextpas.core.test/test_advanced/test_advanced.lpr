@@ -11,7 +11,8 @@ program test_advanced;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.helpers;
 
 { ── Fixtures and globals ──────────────────────────────────────────────────── }
 
@@ -504,12 +505,24 @@ begin
   CheckContains(LTAP, 'not ok');
 end;
 
+{ ── F-13: fail-path density for thin suite ────────────────────────────────── }
+
+procedure TestAdvancedFailPathCase(const AC: TTestCase);
+begin
+  ExpectFail(procedure
+    begin
+      CheckEqual(Int64(0), Int64(StrToInt(AC.Data)));
+    end, 'expected');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
   LRunner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
+  LFpCases: specialize TArray<TTestCase>;
+  LFpI: Integer;
 begin
   WriteLn('=== test_advanced ===');
   LSuite := TTestSuite.Create('advanced');
@@ -547,6 +560,15 @@ begin
   LSuite.Test('B26 TAP multi suite header', @TestB26TAPMultiSuite);
   LSuite.Test('B39 SoftFail join exact', @TestB39SoftFailAdvancedExact);
   LSuite.Test('B43 SoftFail TAP multi soft msg', @TestB43SoftFailTAPMessage);
+
+  SetLength(LFpCases, 40);
+  for LFpI := 0 to High(LFpCases) do
+  begin
+    LFpCases[LFpI].Name := 'adv-fp-' + IntToStr(LFpI);
+    LFpCases[LFpI].Data := IntToStr(LFpI + 1);
+  end;
+  LSuite.TestTable('advanced fail-path ExpectFail', LFpCases,
+    @TestAdvancedFailPathCase);
 
   LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);

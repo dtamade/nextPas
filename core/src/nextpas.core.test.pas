@@ -4,12 +4,15 @@
     test.base, test.check, test.config, test.expect, test.output,
     test.output.tap, test.output.json, test.runner, test.discovery,
     test.mock, test.helpers, test.prop
-  White-box modules (not re-exported — import directly for internals):
-    test.runner.cli, test.runner.context, test.runner.parallel
+  White-box / optional (import directly when needed):
+    test.runner.cli, test.runner.context, test.runner.parallel,
+    test.bench (bench integration — optional side unit, F-04),
+    test.diff, test.snapshot (shared L0/L1 internals)
   Dual API: procedural Check* + fluent IExpectation chain.
-  Parallel execution, subtests, ANSI output, leak detection,
+  Parallel execution, subtests, ANSI output, optional leak probe,
   RTTI discovery, retry, TAP/JSON/JUnit output, mock framework,
-  property-based testing. }
+  property-based testing.
+  Note: FuzzParallel is deprecated alias of sequential FuzzMultiStrategy (F-07). }
 
 unit nextpas.core.test;
 
@@ -66,6 +69,8 @@ type
   TTestConfigBuilder = nextpas.core.test.config.TTestConfigBuilder;
   TCacheEntry = nextpas.core.test.config.TCacheEntry;
   TTestCache = nextpas.core.test.config.TTestCache;
+  { Optional host heap probe (F-05) }
+  THeapProbeFunc = nextpas.core.test.output.THeapProbeFunc;
 
 const
   tsPassed  = nextpas.core.test.base.tsPassed;
@@ -381,6 +386,9 @@ function  GetRunPattern: string;
 procedure SetTestTimeout(AMillis: Integer);
 function  GetTestTimeout: Integer;
 procedure ReportLeakIfAny(AStatus: TTestStatus);
+procedure SetHeapProbe(AProbe: THeapProbeFunc);
+function GetHeapProbe: THeapProbeFunc;
+procedure NoteHeapBaseline;
 function JUnitXML(const AResults: specialize TArray<TTestRunResult>;
   const ASuiteName: string = ''): string;
 function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;

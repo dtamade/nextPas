@@ -152,6 +152,37 @@ begin
   CheckTrue(GetDiscoveryBackend <> nil, 'default backend non-nil');
 end;
 
+{ F-19 / B79: fixed-name discovery backend (nextpas stub contract) }
+type
+  TFixedNameDiscoveryBackend = class(TInterfacedObject, ITestDiscoveryBackend)
+  public
+    function EnumeratePublishedMethods(AClass: TClass;
+      out AMethods: TDiscoveredMethods): Boolean;
+  end;
+
+function TFixedNameDiscoveryBackend.EnumeratePublishedMethods(AClass: TClass;
+  out AMethods: TDiscoveredMethods): Boolean;
+begin
+  SetLength(AMethods, 2);
+  AMethods[0].Name := 'TestAlpha';
+  AMethods[0].CodeAddr := nil;
+  AMethods[1].Name := 'TestBeta';
+  AMethods[1].CodeAddr := nil;
+  Result := True;
+end;
+
+procedure TestDiscoveryBackendFixedNames;
+var
+  LBackend: ITestDiscoveryBackend;
+  LMethods: TDiscoveredMethods;
+begin
+  LBackend := TFixedNameDiscoveryBackend.Create as ITestDiscoveryBackend;
+  CheckTrue(LBackend.EnumeratePublishedMethods(TObject, LMethods));
+  CheckEqual(2, Length(LMethods));
+  CheckEqual('TestAlpha', LMethods[0].Name);
+  CheckEqual('TestBeta', LMethods[1].Name);
+end;
+
 { ── DiscoverTests tests ───────────────────────────────────────────────────── }
 
 procedure TestDiscoverSimple;
@@ -457,6 +488,7 @@ begin
   LSuite.Test('v8.24 empty backend inject', @TestDiscoveryBackendEmptyInject);
   LSuite.Test('v8.24 reset restores FPC', @TestDiscoveryBackendResetRestoresFpc);
   LSuite.Test('v8.24 FPC enumerate direct', @TestFpcBackendEnumerateDirect);
+  LSuite.Test('F-19 fixed-name backend stub', @TestDiscoveryBackendFixedNames);
 
   { B26: meaningful name fail-path table (metadata only, no Discover run) }
   SetLength(LB26Cases, 90);

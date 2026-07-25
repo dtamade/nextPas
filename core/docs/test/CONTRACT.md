@@ -4,8 +4,9 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-26
-**版本**：v8.30
+**版本**：v8.31
 **路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
+**审计 remediation**：`v8.31-findings-remediation-plan.md` / `findings.md`
 
 ---
 
@@ -418,6 +419,20 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.31 (2026-07-26) — Findings 全量 remediation（F-01…F-25 可落地项）
+
+- **F-01/F-02**：`test.diff`（ColorDiff L0）+ `test.snapshot`（共享 CheckSnapshot）；check 不再依赖 output；expect 不再依赖 check
+- **F-05/F-11**：移除默认 `GetFPCHeapStatus`；`SetHeapProbe`/`NoteHeapBaseline` 可选 delta 泄漏警告
+- **F-06**：Coverage 警告改 ErrSink（无 `WriteLn(StdErr)`）
+- **F-07**：`FuzzParallel` 标注 **NOT parallel** → `FuzzMultiStrategy`
+- **F-08**：`GFuzzRng` threadvar + in-place 更新（修 record 拷贝失效）
+- **F-10**：`TMock.GetCallHistory` CheckThread
+- **F-13**：scale `MIN_NON_TABLE`；advanced/bench fail-path 表
+- **F-15/F-16**：`docs/contracts/test.md` 改为指针；Double=`CheckNear`
+- **F-19**：Discovery 固定名表 stub 测
+- **F-20**：`RunParallel` 遇 TestSubtest **配置期失败**（非静默 skip）
+- **F-03 分期**：prop 大拆分 backlog；本版仅 RNG/文档
 
 ### v8.30 (2026-07-26) — Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）
 

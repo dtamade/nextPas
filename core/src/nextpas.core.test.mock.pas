@@ -1597,6 +1597,7 @@ var
   LCall: TMockCall;
   LSb: specialize TArray<string>;
 begin
+  FState.CheckThread('GetCallHistory');
   if Length(FState.Calls) = 0 then
   begin
     Result := '(no calls recorded)';

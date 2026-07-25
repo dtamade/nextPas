@@ -314,19 +314,23 @@ procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer = 4;
   AIterationsPerWorker: Integer = 2500);
 
-{ Deprecated: use FuzzMultiStrategy. }
+{ Deprecated name: NOT parallel. Sequential multi-strategy only (F-07).
+  Use FuzzMultiStrategy. }
 procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer = 4;
-  AIterationsPerWorker: Integer = 2500); deprecated 'use FuzzMultiStrategy';
+  AIterationsPerWorker: Integer = 2500); deprecated 'NOT parallel — use FuzzMultiStrategy';
 
 implementation
 
 uses
   nextpas.core.math.random,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.test.config;  { DefaultConfig for coverage warning sink }
 
 threadvar
   GCoverageWarned: Boolean;  { P2 #14: warn once per thread on out-of-range coverage ID }
+  GFuzzRng: TRandomGen;
+  GFuzzRngInitialized: Boolean;
 
 { ── String Generator ──────────────────────────────────────────────────────── }
 
@@ -1952,18 +1956,14 @@ end;
 
 { ── Mutation-based Fuzzing (v7.2a) ───────────────────────────────────────── }
 
-var
-  GFuzzRng: TRandomGen;
-  GFuzzRngInitialized: Boolean = False;
-
-function GetFuzzRng: TRandomGen;
+{ Per-thread RNG (F-08). Mutate GFuzzRng in place — never copy via function return. }
+procedure EnsureFuzzRng;
 begin
   if not GFuzzRngInitialized then
   begin
     GFuzzRng := TRandomGen.Init(0);
     GFuzzRngInitialized := True;
   end;
-  Result := GFuzzRng;
 end;
 
 { Convert bytes to hex string efficiently (pre-allocates) }
@@ -1995,33 +1995,34 @@ var
   LRng: TRandomGen;
   LLen, LPos, LPos2, LBlockLen, LStrategy, I, LTmp: Integer;
 begin
-  LRng := GetFuzzRng;
+  EnsureFuzzRng;
   LLen := Length(AData);
 
   { Empty input → insert a random byte }
   if LLen = 0 then
   begin
     SetLength(Result, 1);
-    Result[0] := Byte(LRng.NextIntRange(0, 255));
+    Result[0] := Byte(GFuzzRng.NextIntRange(0, 255));
     Exit;
   end;
 
-  LStrategy := LRng.NextIntRange(0, 99);
-  LPos := LRng.NextIntRange(0, LLen - 1);
+  LStrategy := GFuzzRng.NextIntRange(0, 99);
+  LPos := GFuzzRng.NextIntRange(0, LLen - 1);
 
   if LStrategy < 40 then
   begin
     { Bit flip: flip 1-3 random bits in one byte }
     Result := Copy(AData);
-    Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
-    if LRng.NextIntRange(0, 2) = 0 then
-      Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+    Result[LPos] := Result[LPos] xor Byte(1 shl GFuzzRng.NextIntRange(0, 7));
+    if GFuzzRng.NextIntRange(0, 2) = 0 then
+      Result[LPos] := Result[LPos] xor Byte(1 shl GFuzzRng.NextIntRange(0, 7));
   end
   else if LStrategy < 65 then
   begin
     { Byte replace: replace with random byte }
     Result := Copy(AData);
-    Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+    EnsureFuzzRng;
+    Result[LPos] := Byte(GFuzzRng.NextIntRange(0, 255));
   end
   else if LStrategy < 80 then
   begin
@@ -2029,7 +2030,7 @@ begin
     SetLength(Result, LLen + 1);
     if LPos > 0 then
       Move(AData[0], Result[0], LPos);
-    Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+    Result[LPos] := Byte(GFuzzRng.NextIntRange(0, 255));
     if LPos < LLen then
       Move(AData[LPos], Result[LPos + 1], LLen - LPos);
   end
@@ -2046,9 +2047,9 @@ begin
   begin
     { Block duplicate: duplicate a random block (1-16 bytes) }
     if 15 < LLen - 1 then
-      LBlockLen := 1 + LRng.NextIntRange(0, 15)
+      LBlockLen := 1 + GFuzzRng.NextIntRange(0, 15)
     else
-      LBlockLen := 1 + LRng.NextIntRange(0, LLen - 1);
+      LBlockLen := 1 + GFuzzRng.NextIntRange(0, LLen - 1);
     if LPos + LBlockLen > LLen then
       LBlockLen := LLen - LPos;
     SetLength(Result, LLen + LBlockLen);
@@ -2060,12 +2061,12 @@ begin
     { Block swap: swap two random positions (1-8 bytes) }
     Result := Copy(AData);
     if 7 < LLen div 2 then
-      LBlockLen := 1 + LRng.NextIntRange(0, 7)
+      LBlockLen := 1 + GFuzzRng.NextIntRange(0, 7)
     else
-      LBlockLen := 1 + LRng.NextIntRange(0, LLen div 2);
+      LBlockLen := 1 + GFuzzRng.NextIntRange(0, LLen div 2);
     { Re-choose LPos: must fit LBlockLen bytes from LPos }
-    LPos := LRng.NextIntRange(0, LLen - LBlockLen);
-    LPos2 := LRng.NextIntRange(0, LLen - LBlockLen);
+    LPos := GFuzzRng.NextIntRange(0, LLen - LBlockLen);
+    LPos2 := GFuzzRng.NextIntRange(0, LLen - LBlockLen);
     { Swap bytes at LPos and LPos2 }
     for I := 0 to LBlockLen - 1 do
     begin
@@ -2154,7 +2155,8 @@ begin
   for I := 1 to AMaxIterations do
   begin
     { Pick random corpus item and mutate }
-    LIdx := GetFuzzRng.NextIntRange(0, High(LCorpus));
+    EnsureFuzzRng;
+    LIdx := GFuzzRng.NextIntRange(0, High(LCorpus));
     LInput := FuzzMutate(LCorpus[LIdx]);
 
     try
@@ -2204,18 +2206,20 @@ function FuzzGenBytes(ALen: Integer): TBytes;
 var
   I: Integer;
 begin
+  EnsureFuzzRng;
   SetLength(Result, ALen);
   for I := 0 to ALen - 1 do
-    Result[I] := Byte(GetFuzzRng.NextIntRange(0, 255));
+    Result[I] := Byte(GFuzzRng.NextIntRange(0, 255));
 end;
 
 function FuzzGenString(ALen: Integer): string;
 var
   I: Integer;
 begin
+  EnsureFuzzRng;
   SetLength(Result, ALen);
   for I := 1 to ALen do
-    Result[I] := Char(32 + GetFuzzRng.NextIntRange(0, 95)); { printable ASCII }
+    Result[I] := Char(32 + GFuzzRng.NextIntRange(0, 95)); { printable ASCII }
 end;
 
 { ── Corpus Management (v7.3a) ───────────────────────────────────────────── }
@@ -2403,7 +2407,8 @@ begin
     for I := 1 to AMaxIterations do
     begin
       { Pick random corpus item and mutate }
-      LIdx := GetFuzzRng.NextIntRange(0, LCorpus.Count - 1);
+      EnsureFuzzRng;
+      LIdx := GFuzzRng.NextIntRange(0, LCorpus.Count - 1);
       LInput := FuzzMutate(LCorpus.GetItem(LIdx));
 
       try
@@ -2487,7 +2492,8 @@ begin
     { P2 #14 fix: warn once on out-of-range coverage ID instead of silent discard }
     if not GCoverageWarned then
     begin
-      WriteLn(StdErr, 'WARNING: Coverage ID ', AId,
+      ResolveErrSink(DefaultConfig).WriteLn(
+        'WARNING: Coverage ID ' + IntToStr(AId) +
         ' out of range [0..32767], coverage data discarded');
       GCoverageWarned := True;
     end;
@@ -2558,11 +2564,12 @@ begin
   for I := 1 to AMaxIterations do
   begin
     { Pick random corpus item and mutate }
-    LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+    EnsureFuzzRng;
+    LIdx := GFuzzRng.NextIntRange(0, LCorpusCount - 1);
     LValue := LCorpus[LIdx];
 
     { Mutate: apply generator shrink to get variants, or generate fresh }
-    if GetFuzzRng.NextIntRange(0, 3) = 0 then
+    if GFuzzRng.NextIntRange(0, 3) = 0 then
     begin
       { 25% chance: generate fresh value }
       LValue := AGen.Generate;
@@ -2572,7 +2579,7 @@ begin
       { 75% chance: shrink existing value to get mutation }
       LShrunk := AGen.Shrink(LValue);
       if Length(LShrunk) > 0 then
-        LValue := LShrunk[GetFuzzRng.NextIntRange(0, High(LShrunk))];
+        LValue := LShrunk[GFuzzRng.NextIntRange(0, High(LShrunk))];
     end;
 
     try
@@ -2659,16 +2666,17 @@ begin
   LFailCount := 0;
   for I := 1 to AMaxIterations do
   begin
-    LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+    EnsureFuzzRng;
+    LIdx := GFuzzRng.NextIntRange(0, LCorpusCount - 1);
     LValue := LCorpus[LIdx];
 
-    if GetFuzzRng.NextIntRange(0, 3) = 0 then
+    if GFuzzRng.NextIntRange(0, 3) = 0 then
       LValue := AGen.Generate
     else
     begin
       LShrunk := AGen.Shrink(LValue);
       if Length(LShrunk) > 0 then
-        LValue := LShrunk[GetFuzzRng.NextIntRange(0, High(LShrunk))];
+        LValue := LShrunk[GFuzzRng.NextIntRange(0, High(LShrunk))];
     end;
 
     try
@@ -2732,13 +2740,13 @@ var
   LRng: TRandomGen;
   LLen, LPos, LPos2, LBlockLen, I, LTmp: Integer;
 begin
-  LRng := GetFuzzRng;
+  EnsureFuzzRng;
   LLen := Length(AData);
 
   if LLen = 0 then
   begin
     SetLength(Result, 1);
-    Result[0] := Byte(LRng.NextIntRange(0, 255));
+    Result[0] := Byte(GFuzzRng.NextIntRange(0, 255));
     Exit;
   end;
 
@@ -2747,31 +2755,32 @@ begin
     begin
       { Pure bit flips: 1-3 bits }
       Result := Copy(AData);
-      LPos := LRng.NextIntRange(0, LLen - 1);
-      Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
-      if LRng.NextIntRange(0, 2) = 0 then
-        Result[LPos] := Result[LPos] xor Byte(1 shl LRng.NextIntRange(0, 7));
+      LPos := GFuzzRng.NextIntRange(0, LLen - 1);
+      Result[LPos] := Result[LPos] xor Byte(1 shl GFuzzRng.NextIntRange(0, 7));
+      if GFuzzRng.NextIntRange(0, 2) = 0 then
+        Result[LPos] := Result[LPos] xor Byte(1 shl GFuzzRng.NextIntRange(0, 7));
     end;
     fsByteReplace:
     begin
       { Byte replacements: replace 1-4 bytes }
       Result := Copy(AData);
-      for I := 1 to 1 + LRng.NextIntRange(0, 3) do
+      for I := 1 to 1 + GFuzzRng.NextIntRange(0, 3) do
       begin
-        LPos := LRng.NextIntRange(0, LLen - 1);
-        Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+        EnsureFuzzRng;
+        LPos := GFuzzRng.NextIntRange(0, LLen - 1);
+        Result[LPos] := Byte(GFuzzRng.NextIntRange(0, 255));
       end;
     end;
     fsHavoc:
     begin
       { Heavy mutations: insert, delete, dup, swap }
-      case LRng.NextIntRange(0, 3) of
+      case GFuzzRng.NextIntRange(0, 3) of
         0: begin { Insert }
-          LPos := LRng.NextIntRange(0, LLen);
+          LPos := GFuzzRng.NextIntRange(0, LLen);
           SetLength(Result, LLen + 1);
           if LPos > 0 then
             Move(AData[0], Result[0], LPos);
-          Result[LPos] := Byte(LRng.NextIntRange(0, 255));
+          Result[LPos] := Byte(GFuzzRng.NextIntRange(0, 255));
           if LPos < LLen then
             Move(AData[LPos], Result[LPos + 1], LLen - LPos);
         end;
@@ -2781,7 +2790,7 @@ begin
             Result := Copy(AData);
             Exit;
           end;
-          LPos := LRng.NextIntRange(0, LLen - 1);
+          LPos := GFuzzRng.NextIntRange(0, LLen - 1);
           SetLength(Result, LLen - 1);
           if LPos > 0 then
             Move(AData[0], Result[0], LPos);
@@ -2790,10 +2799,10 @@ begin
         end;
         2: begin { Block duplicate }
           if 7 < LLen then
-            LBlockLen := 1 + LRng.NextIntRange(0, 7)
+            LBlockLen := 1 + GFuzzRng.NextIntRange(0, 7)
           else
-            LBlockLen := 1 + LRng.NextIntRange(0, LLen - 1);
-          LPos := LRng.NextIntRange(0, LLen - 1);
+            LBlockLen := 1 + GFuzzRng.NextIntRange(0, LLen - 1);
+          LPos := GFuzzRng.NextIntRange(0, LLen - 1);
           if LPos + LBlockLen > LLen then
             LBlockLen := LLen - LPos;
           SetLength(Result, LLen + LBlockLen);
@@ -2803,13 +2812,13 @@ begin
         3: begin { Block swap }
           Result := Copy(AData);
           if 3 < LLen div 2 then
-            LBlockLen := 1 + LRng.NextIntRange(0, 3)
+            LBlockLen := 1 + GFuzzRng.NextIntRange(0, 3)
           else
-            LBlockLen := 1 + LRng.NextIntRange(0, LLen div 2);
+            LBlockLen := 1 + GFuzzRng.NextIntRange(0, LLen div 2);
           if LLen - LBlockLen < 0 then
             LBlockLen := LLen;
-          LPos := LRng.NextIntRange(0, LLen - LBlockLen);
-          LPos2 := LRng.NextIntRange(0, LLen - LBlockLen);
+          LPos := GFuzzRng.NextIntRange(0, LLen - LBlockLen);
+          LPos2 := GFuzzRng.NextIntRange(0, LLen - LBlockLen);
           for I := 0 to LBlockLen - 1 do
           begin
             LTmp := Result[LPos + I];
@@ -2877,7 +2886,8 @@ begin
     for J := 1 to AIterationsPerWorker do
     begin
       { Pick random corpus item and mutate with strategy }
-      LIdx := GetFuzzRng.NextIntRange(0, LCorpusCount - 1);
+      EnsureFuzzRng;
+      LIdx := GFuzzRng.NextIntRange(0, LCorpusCount - 1);
       LInput := FuzzMutateStrategy(LCorpus[LIdx], LStrategy);
 
       try
