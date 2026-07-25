@@ -183,10 +183,11 @@ CHECKPOINT（不阻塞续波）:
 | **R2 residual do-all** | **done** | tooling mem/lane_gate 合同；`http.minimal`；except 卫生；`h2.client.body`；docs inventory **73** | tooling + contract + server + h2_client |
 | **R2 residual session-extract** | **done** | `h2.streammap` + `h2.session.preface` + `h2.session.writer` + `h2.session.helpers`；session ~1536；inventory **77** | h2_session 37/0 + h2_client 72/0 |
 | **R2 residual client-helpers** | **done** | `h2.client.helpers`；client ~2022；inventory **78** | h2_client 72/0 |
+| **R2 residual cancel-adapter** | **done** | `impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79** | h2_client + client + websocket |
 
 ```text
 ──── 当前 ────
-NEXT = STOP（session 机械抽已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
+NEXT = STOP（cancel-adapter 已收口；硬排除：H3 / WIN-3 IOCP / Windows scale claim）
 ```
 
 ---
@@ -967,8 +968,9 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 4. residual do-all **done**：tooling lane_gate 合同；http.minimal；except 注释；h2.client.body；docs inventory 73
 5. session 机械抽 **done**：streammap/preface/writer/helpers；inventory 77
 6. client pure helpers **done**：`h2.client.helpers`；inventory 78
-7. H3 Blocked / WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
-8. **NEXT = STOP**（idle）；新战役需再升格
+7. cancel-adapter **done**：`impl.cancel.adapter`；h1/h2/websocket 共用；inventory 79
+8. H3 Blocked / WIN-3 IOCP / Windows scale-ready — 不做 / 不宣称
+9. **NEXT = STOP**（idle）；新战役需再升格
 ```
 
 **默认 STOP。** 当前允许宣称见 [`CLAIM.md`](CLAIM.md)。
@@ -1133,6 +1135,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **cancel-adapter extract landed**：`impl.cancel.adapter`；h1/h2/websocket 去重；inventory **79**；NEXT=STOP |
 | 2026-07-26 | **client helpers extract landed**：`h2.client.helpers`；client ~2022；inventory **78**；NEXT=STOP |
 | 2026-07-26 | **session residual extract landed**：`h2.streammap` + `session.preface` + `session.writer` + `session.helpers`；session ~1536；inventory **77**；NEXT=STOP |
 | 2026-07-26 | **residual do-all landed**：tooling mem/`lane_gate` 合同；`http.minimal`；H1 except 卫生；`h2.client.body`；docs inventory **73**；NEXT=STOP（H3/WIN-3 硬排除） |

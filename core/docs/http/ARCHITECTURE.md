@@ -24,10 +24,11 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实生产源码库存约 **78** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **79** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
 - H2 client response body `IReader` 已抽出：`impl.h2.client.body`（`TH2ClientResponseBodyReader`）。
 - H2 client pure helpers 已抽出：`impl.h2.client.helpers`；`impl.h2.client` ~2022。
+- 共享 cancel 桥接已抽出：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`；h1/h2/websocket 共用）。
 - H2 server session 机械拆：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer` + `impl.h2.session.helpers`；`impl.h2.session` ~1536（状态机主体仍在）。
 - Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
 - H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
@@ -217,6 +218,7 @@ src/
   nextpas.core.http.impl.h1.outbound.pas ← H1 internal outbound queue/drain helper
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
+  nextpas.core.http.impl.cancel.adapter.pas ← shared IHttpCancelToken → INetCancelToken bridge
 
   { HTTP/2 完整实现（frame/HPACK/stream/session/client/TLS） }
   nextpas.core.http.impl.h2.frame.pas         ← H2 9-byte frame header、10 种帧类型 codec、frame validation（RFC 9113）
