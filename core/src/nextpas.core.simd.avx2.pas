@@ -76,31 +76,7 @@ uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar, // For fallback functions
-  nextpas.core.simd.mathutil, // For SimdMax in stable normalization
-  nextpas.core.math.trig; // For ArcTan2
-
-// Thread-local scratch buffers for Tan computation (AVX2 specific)
-// 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
-threadvar
-  GAVX2TanSinBuf: PSingle;
-  GAVX2TanCosBuf: PSingle;
-  GAVX2TanBufCapacity: SizeUInt;
-
-procedure EnsureAVX2TanScratch(aCount: SizeUInt);
-begin
-  if (GAVX2TanBufCapacity < aCount) or (aCount < GAVX2TanBufCapacity div 4) then
-  begin
-    // 释放旧缓冲区
-    if GAVX2TanSinBuf <> nil then
-      FreeMem(GAVX2TanSinBuf);
-    if GAVX2TanCosBuf <> nil then
-      FreeMem(GAVX2TanCosBuf);
-    // 分配新缓冲区
-    GAVX2TanBufCapacity := aCount;
-    GetMem(GAVX2TanSinBuf, aCount * SizeOf(Single));
-    GetMem(GAVX2TanCosBuf, aCount * SizeOf(Single));
-  end;
-end;
+  nextpas.core.simd.mathutil; // SimdMax + scalar math owner
 
 function AVX2CmpGtI32x4(const a, b: TVecI32x4): TMask4; forward;
 function AVX2CmpGtI16x8(const a, b: TVecI16x8): TMask8; forward;
@@ -3253,16 +3229,5 @@ end;
 
 {$I nextpas.core.simd.avx2.register.inc}
 
-finalization
-  if GAVX2TanSinBuf <> nil then
-  begin
-    FreeMem(GAVX2TanSinBuf);
-    GAVX2TanSinBuf := nil;
-  end;
-  if GAVX2TanCosBuf <> nil then
-  begin
-    FreeMem(GAVX2TanCosBuf);
-    GAVX2TanCosBuf := nil;
-  end;
 
 end.

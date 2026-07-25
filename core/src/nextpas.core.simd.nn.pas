@@ -95,6 +95,7 @@ procedure ChannelSoftmaxF32(aInput, aOutput: PSingle;
 implementation
 
 uses
+  nextpas.core.simd.mathutil,
   nextpas.core.simd,
   nextpas.core.simd.alloc,
   nextpas.core.simd.linalg.gemm;
@@ -135,7 +136,7 @@ begin
   LMean := ReduceSumF32(aX, aFeatureCount) / aFeatureCount;
   LVar := ReduceDotF32(aX, aX, aFeatureCount) / aFeatureCount - LMean * LMean;
   if LVar < 0 then LVar := 0;
-  LInvStd := 1.0 / System.Sqrt(LVar + aEpsilon);
+  LInvStd := 1.0 / SimdSqrt(LVar + aEpsilon);
   ArrayNormF32(aX, aDst, aFeatureCount, LMean, LInvStd);
   if (aGamma <> nil) and (aBeta <> nil) then
     ArrayFmaF32(aDst, aGamma, aBeta, aDst, aFeatureCount)
@@ -255,7 +256,7 @@ begin
     LBias := PSingle(SimdAlloc(aFeatures * SizeOf(Single)));
     for f := 0 to aFeatures - 1 do
     begin
-      LInvStd := 1.0 / System.Sqrt(aVariance[f] + aEpsilon);
+      LInvStd := 1.0 / SimdSqrt(aVariance[f] + aEpsilon);
       LScale[f] := LInvStd * aGamma[f];
       LBias[f] := aBeta[f] - aMean[f] * LScale[f];
     end;
@@ -268,7 +269,7 @@ begin
   begin
     for f := 0 to aFeatures - 1 do
     begin
-      LInvStd := 1.0 / System.Sqrt(aVariance[f] + aEpsilon);
+      LInvStd := 1.0 / SimdSqrt(aVariance[f] + aEpsilon);
       for b := 0 to aBatchSize - 1 do
         aDst[b * aFeatures + f] := (aX[b * aFeatures + f] - aMean[f]) * LInvStd * aGamma[f] + aBeta[f];
     end;
@@ -374,7 +375,7 @@ var
   LScale: Single;
 begin
   if aCount = 0 then Exit;
-  LNorm := System.Sqrt(ReduceDotF32(aGrad, aGrad, aCount));
+  LNorm := SimdSqrt(ReduceDotF32(aGrad, aGrad, aCount));
   if LNorm > aMaxNorm then
   begin
     LScale := aMaxNorm / LNorm;
@@ -496,7 +497,7 @@ procedure RMSNormF32(aX, aGamma, aDst: PSingle; aFeatureCount: SizeUInt; aEpsilo
 var LInvRMS: Single;
 begin
   if aFeatureCount = 0 then Exit;
-  LInvRMS := 1.0 / System.Sqrt(
+  LInvRMS := 1.0 / SimdSqrt(
     ReduceDotF32(aX, aX, aFeatureCount) / aFeatureCount + aEpsilon);
   ArrayMulScalarF32(aX, aDst, aFeatureCount, LInvRMS);
   if aGamma <> nil then
@@ -527,7 +528,7 @@ begin
     LMean := ReduceSumF32(@aX[g * LGroupSize], LGroupSize) / LGroupSize;
     LVar := ReduceDotF32(@aX[g * LGroupSize], @aX[g * LGroupSize], LGroupSize) / LGroupSize - LMean * LMean;
     if LVar < 0 then LVar := 0;
-    LInvStd := 1.0 / System.Sqrt(LVar + aEpsilon);
+    LInvStd := 1.0 / SimdSqrt(LVar + aEpsilon);
     ArrayNormF32(@aX[g * LGroupSize], @aDst[g * LGroupSize], LGroupSize, LMean, LInvStd);
   end;
   if (aGamma <> nil) and (aBeta <> nil) then
@@ -874,7 +875,7 @@ begin
   LSpatialSize := aHeight * aWidth;
   for c := 0 to aChannels - 1 do
   begin
-    LScale := aGamma[c] / System.Sqrt(aVar[c] + aEpsilon);
+    LScale := aGamma[c] / SimdSqrt(aVar[c] + aEpsilon);
     LBias := aBeta[c] - aMean[c] * LScale;
     ArrayLinearF32(@aInput[c * LSpatialSize], @aOutput[c * LSpatialSize],
       LSpatialSize, LScale, LBias);

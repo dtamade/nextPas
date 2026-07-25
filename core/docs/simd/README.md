@@ -79,6 +79,10 @@ end;
 
 ## 文档索引
 
+- [size-report.md](size-report.md) — 大文件清单（F-007）
+- [cpuinfo-debt.md](cpuinfo-debt.md) — CPUInfo platform allowlist（F-005）
+- [../math/numeric-error-budget.md](../math/numeric-error-budget.md) — 误差预算（F-014）
+
 ### 主线（先读）
 
 | 文档 | 内容 |

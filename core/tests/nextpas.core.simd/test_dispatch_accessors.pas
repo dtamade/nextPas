@@ -915,13 +915,13 @@ begin
   for i := 0 to 3 do
     CheckEqual(c16[i], Int16((i + 1) * (i + 5)), 'BatchI MulI16');
 
-  // F32 <-> I32 conversion
-  aF32[0] := 1.9; aF32[1] := -2.5; aF32[2] := 3.1; aF32[3] := 0.0;
+  // F32 <-> I32 conversion (cvttps/cvtps + scalar Round: avoid .5 ties)
+  aF32[0] := 1.9; aF32[1] := -2.6; aF32[2] := 3.1; aF32[3] := 0.0;
   LAcc.ArrayF32toI32(@aF32, @c32, 4);
-  CheckEqual(c32[0], 2, 'BatchI F32toI32 0');  // Round(1.9)=2
-  CheckEqual(c32[1], -3, 'BatchI F32toI32 1'); // Round(-2.5)=-3 in FPC
-  CheckEqual(c32[2], 3, 'BatchI F32toI32 2');  // Round(3.1)=3
-  CheckEqual(c32[3], 0, 'BatchI F32toI32 3');  // Round(0.0)=0
+  CheckEqual(2, c32[0], 'BatchI F32toI32 0');   // Round(1.9)=2
+  CheckEqual(-3, c32[1], 'BatchI F32toI32 1');  // Round(-2.6)=-3 (no .5 tie)
+  CheckEqual(3, c32[2], 'BatchI F32toI32 2');   // Round(3.1)=3
+  CheckEqual(0, c32[3], 'BatchI F32toI32 3');   // Round(0.0)=0
 
   a32[0] := 10; a32[1] := -20; a32[2] := 30; a32[3] := 0;
   LAcc.ArrayI32toF32(@a32, @cF32, 4);

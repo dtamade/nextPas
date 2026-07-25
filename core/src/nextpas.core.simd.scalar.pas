@@ -809,9 +809,7 @@ function ScalarSelectF32x8(const mask: TVecU32x8; const a, b: TVecF32x8): TVecF3
 function ScalarSelectF64x4(const mask: TVecU64x4; const a, b: TVecF64x4): TVecF64x4;
 implementation
 uses
-  nextpas.core.simd.mathutil,
-  nextpas.core.math.trig,
-  nextpas.core.math.scalar;
+  nextpas.core.simd.mathutil;
 {$I nextpas.core.simd.scalar.arith.inc}
 {$I nextpas.core.simd.scalar.compare.inc}
 {$I nextpas.core.simd.scalar.math.inc}

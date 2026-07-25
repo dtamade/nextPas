@@ -657,3 +657,15 @@ link/run proof and it does not cover macOS.
 
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
+
+
+## vec.batch Double coverage (F-013)
+
+| Op family | F32 | Double (minimal parity) |
+|-----------|-----|-------------------------|
+| Dot | yes | yes (2d/3d/4d) |
+| Normalize | yes | yes |
+| Transform | yes | yes (core) |
+| Lerp / Clamp | yes | yes (TVec3d) |
+| Full F32-only extras | yes | **no** — not residual; expand only with consumer demand |
+

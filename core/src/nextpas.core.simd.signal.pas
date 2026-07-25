@@ -90,7 +90,6 @@ procedure MFCCF32(aSignal: PSingle; aSignalCount: SizeUInt;
 implementation
 
 uses
-  nextpas.core.math.trig,
   nextpas.core.simd.mathutil,
   nextpas.core.simd;
 
@@ -952,7 +951,7 @@ begin
   for i := 0 to aCount - 1 do
   begin
     Lx := LScale * i - 1.0; // [-1, 1]
-    Ly := aAlpha * System.Sqrt(1.0 - Lx * Lx);
+    Ly := aAlpha * SimdSqrt(1.0 - Lx * Lx);
     // Compute I0(Ly) using series approximation
     LTmp := 1.0;
     LTerm := 1.0;
@@ -1100,7 +1099,7 @@ var
 begin
   LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
   for i := 0 to aCount - 1 do
-    aDst[i] := aAmplitude * System.Sin(LPhaseInc * i + aPhase);
+    aDst[i] := aAmplitude * SimdSin(LPhaseInc * i + aPhase);
 end;
 
 // Generate cosine wave: x[n] = amplitude * cos(2*pi*freq*n/sampleRate + phase)
@@ -1112,7 +1111,7 @@ var
 begin
   LPhaseInc := SIMD_TWO_PI * aFrequency / aSampleRate;
   for i := 0 to aCount - 1 do
-    aDst[i] := aAmplitude * System.Cos(LPhaseInc * i + aPhase);
+    aDst[i] := aAmplitude * SimdCos(LPhaseInc * i + aPhase);
 end;
 
 
@@ -1291,7 +1290,7 @@ end;
 function RmsF32(aSrc: PSingle; aCount: SizeUInt): Single;
 begin
   if aCount = 0 then Exit(0);
-  Result := System.Sqrt(EnergyF32(aSrc, aCount) / aCount);
+  Result := SimdSqrt(EnergyF32(aSrc, aCount) / aCount);
 end;
 
 function ZeroCrossingRateF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -1462,8 +1461,8 @@ begin
   if (aFilterCount = 0) or (aFftSize = 0) or (aSampleRate <= 0) then Exit;
 
   // Convert Hz to Mel
-  LLowMel := 2595 * Log10(1 + aLowFreq / 700);
-  LHighMel := 2595 * Log10(1 + aHighFreq / 700);
+  LLowMel := 2595 * SimdLog10F64(1 + aLowFreq / 700);
+  LHighMel := 2595 * SimdLog10F64(1 + aHighFreq / 700);
 
   // Create mel points
   SetLength(LMelPoints, aFilterCount + 2);
@@ -1473,7 +1472,7 @@ begin
   for i := 0 to aFilterCount + 1 do
   begin
     LMelPoints[i] := LLowMel + i * LStep;
-    LFreqPoints[i] := 700 * (Power(10, LMelPoints[i] / 2595) - 1);
+    LFreqPoints[i] := 700 * (SimdPowerF64(10, LMelPoints[i] / 2595) - 1);
   end;
 
   // Initialize output to zero
@@ -1591,7 +1590,7 @@ begin
       LSum := 0;
       for j := 0 to LFilterCount - 1 do
       begin
-        LVal := Cos(PI * i * (2 * j + 1) / (2 * LFilterCount));
+        LVal := SimdCosF64(PI * i * (2 * j + 1) / (2 * LFilterCount));
         LSum := LSum + LLogMel[j] * LVal;
       end;
       aDst[LFrame * aCoeffCount + i] := LSum;

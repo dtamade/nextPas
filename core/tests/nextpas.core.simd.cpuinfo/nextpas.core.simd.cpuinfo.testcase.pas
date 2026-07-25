@@ -7,7 +7,12 @@ interface
 
 uses
   nextpas.core.test,
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.fs,
+  nextpas.core.fs.base,
   nextpas.core.simd.base,
   nextpas.core.simd.intrinsics,
   nextpas.core.simd.cpuinfo.base,
@@ -143,6 +148,7 @@ var
   LCode: Integer;
   LValue: Int64;
   LUnit: Char;
+  LIdx: Integer;
 
   function ClampKBToIntegerLocal(const aValue: Int64): Integer; inline;
   begin
@@ -168,8 +174,12 @@ begin
   if LText = '' then
     Exit;
 
-  LText := StringReplace(LText, ' ', '', [rfReplaceAll]);
-  LText := StringReplace(LText, #9, '', [rfReplaceAll]);
+  { Strip spaces/tabs without SysUtils.StringReplace. }
+  LNumText := '';
+  for LIdx := 1 to Length(LText) do
+    if (LText[LIdx] <> ' ') and (LText[LIdx] <> #9) then
+      LNumText := LNumText + LText[LIdx];
+  LText := LNumText;
   if LText = '' then
     Exit;
 
@@ -268,8 +278,9 @@ var
   LCpuBase: string;
   LCpuCacheBase: string;
   LDir: string;
-  LCpuRec: TSearchRec;
-  LIndexRec: TSearchRec;
+  LCpuEntries: TDirEntryArray;
+  LIndexEntries: TDirEntryArray;
+  LCpuIdx, LIndexIdx: Integer;
   LTypeText: string;
   LLevelText: string;
   LSizeText: string;
@@ -286,85 +297,82 @@ begin
 
   if not DirectoryExists(LCpuBase) then
     Exit;
-  if FindFirst(LCpuBase + '/cpu*', faDirectory, LCpuRec) <> 0 then
-    Exit;
-  try
-    repeat
-      if (LCpuRec.Name = '.') or (LCpuRec.Name = '..') then
+
+  LCpuEntries := ReadDir(LCpuBase);
+  for LCpuIdx := 0 to High(LCpuEntries) do
+  begin
+    if not LCpuEntries[LCpuIdx].IsDir then
+      Continue;
+    if (LCpuEntries[LCpuIdx].Name = '.') or (LCpuEntries[LCpuIdx].Name = '..') then
+      Continue;
+    if not IsLinuxCpuDirectoryNameLocal(LCpuEntries[LCpuIdx].Name) then
+      Continue;
+
+    LCpuCacheBase := LCpuBase + '/' + LCpuEntries[LCpuIdx].Name + '/cache';
+    if not DirectoryExists(LCpuCacheBase) then
+      Continue;
+
+    LIndexEntries := ReadDir(LCpuCacheBase);
+    for LIndexIdx := 0 to High(LIndexEntries) do
+    begin
+      if not LIndexEntries[LIndexIdx].IsDir then
         Continue;
-      if (LCpuRec.Attr and faDirectory) = 0 then
+      if (LIndexEntries[LIndexIdx].Name = '.') or (LIndexEntries[LIndexIdx].Name = '..') then
         Continue;
-      if not IsLinuxCpuDirectoryNameLocal(LCpuRec.Name) then
+      if (Length(LIndexEntries[LIndexIdx].Name) < 5) or
+         (Copy(LIndexEntries[LIndexIdx].Name, 1, 5) <> 'index') then
         Continue;
 
-      LCpuCacheBase := LCpuBase + '/' + LCpuRec.Name + '/cache';
-      if not DirectoryExists(LCpuCacheBase) then
+      LDir := LCpuCacheBase + '/' + LIndexEntries[LIndexIdx].Name;
+      LTypeText := LowerCase(ReadFirstLineTrimmedLocal(LDir + '/type'));
+      LLevelText := ReadFirstLineTrimmedLocal(LDir + '/level');
+      LSizeText := ReadFirstLineTrimmedLocal(LDir + '/size');
+      LLineSizeText := ReadFirstLineTrimmedLocal(LDir + '/coherency_line_size');
+
+      LLevel := Integer(StrToIntDef(LLevelText, 0));
+      LSizeKB := ParseCacheSizeToKBLocal(LSizeText);
+      LLineSize := Integer(StrToIntDef(LLineSizeText, 0));
+
+      if LLineSize > aCache.LineSize then
+        aCache.LineSize := LLineSize;
+
+      if (LLevel <= 0) or (LSizeKB <= 0) then
         Continue;
-      if FindFirst(LCpuCacheBase + '/index*', faDirectory, LIndexRec) <> 0 then
-        Continue;
-      try
-        repeat
-          if (LIndexRec.Name = '.') or (LIndexRec.Name = '..') then
-            Continue;
-          if (LIndexRec.Attr and faDirectory) = 0 then
-            Continue;
 
-          LDir := LCpuCacheBase + '/' + LIndexRec.Name;
-          LTypeText := LowerCase(ReadFirstLineTrimmedLocal(LDir + '/type'));
-          LLevelText := ReadFirstLineTrimmedLocal(LDir + '/level');
-          LSizeText := ReadFirstLineTrimmedLocal(LDir + '/size');
-          LLineSizeText := ReadFirstLineTrimmedLocal(LDir + '/coherency_line_size');
-
-          LLevel := StrToIntDef(LLevelText, 0);
-          LSizeKB := ParseCacheSizeToKBLocal(LSizeText);
-          LLineSize := StrToIntDef(LLineSizeText, 0);
-
-          if LLineSize > aCache.LineSize then
-            aCache.LineSize := LLineSize;
-
-          if (LLevel <= 0) or (LSizeKB <= 0) then
-            Continue;
-
-          LHasAnyValue := True;
-          case LLevel of
-            1:
-              begin
-                if LTypeText = 'instruction' then
-                begin
-                  if LSizeKB > aCache.L1InstrKB then
-                    aCache.L1InstrKB := LSizeKB;
-                end
-                else if LTypeText = 'unified' then
-                begin
-                  if LSizeKB > aCache.L1DataKB then
-                    aCache.L1DataKB := LSizeKB;
-                  if LSizeKB > aCache.L1InstrKB then
-                    aCache.L1InstrKB := LSizeKB;
-                end
-                else
-                begin
-                  if LSizeKB > aCache.L1DataKB then
-                    aCache.L1DataKB := LSizeKB;
-                end;
-              end;
-            2:
-              begin
-                if LSizeKB > aCache.L2KB then
-                  aCache.L2KB := LSizeKB;
-              end;
-            3:
-              begin
-                if LSizeKB > aCache.L3KB then
-                  aCache.L3KB := LSizeKB;
-              end;
+      LHasAnyValue := True;
+      case LLevel of
+        1:
+          begin
+            if LTypeText = 'instruction' then
+            begin
+              if LSizeKB > aCache.L1InstrKB then
+                aCache.L1InstrKB := LSizeKB;
+            end
+            else if LTypeText = 'unified' then
+            begin
+              if LSizeKB > aCache.L1DataKB then
+                aCache.L1DataKB := LSizeKB;
+              if LSizeKB > aCache.L1InstrKB then
+                aCache.L1InstrKB := LSizeKB;
+            end
+            else
+            begin
+              if LSizeKB > aCache.L1DataKB then
+                aCache.L1DataKB := LSizeKB;
+            end;
           end;
-        until FindNext(LIndexRec) <> 0;
-      finally
-        FindClose(LIndexRec);
+        2:
+          begin
+            if LSizeKB > aCache.L2KB then
+              aCache.L2KB := LSizeKB;
+          end;
+        3:
+          begin
+            if LSizeKB > aCache.L3KB then
+              aCache.L3KB := LSizeKB;
+          end;
       end;
-    until FindNext(LCpuRec) <> 0;
-  finally
-    FindClose(LCpuRec);
+    end;
   end;
 
   Result := LHasAnyValue or (aCache.LineSize > 0);
@@ -2153,7 +2161,7 @@ begin
     // 兼容两种语义：抛出 RangeError 或返回不可用描述。
     CheckFalse(info.Available, 'Invalid backend should not be available');
   except
-    on ERangeError do
+    on E: Exception do
       Exit;
   end;
 end;

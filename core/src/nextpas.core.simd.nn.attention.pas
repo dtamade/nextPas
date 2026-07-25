@@ -39,7 +39,7 @@ var
 begin
   if (ASeqLen = 0) or (AHeadDim = 0) then Exit;
 
-  LScale := 1.0 / System.Sqrt(Single(AHeadDim));
+  LScale := 1.0 / SimdSqrt(Single(AHeadDim));
 
   // Scores = Q * K^T [SeqLen, SeqLen]
   LScores := PSingle(SimdAlloc(ASeqLen * ASeqLen * SizeOf(Single)));
@@ -62,7 +62,7 @@ begin
     LSum := 0;
     for LJ := 0 to ASeqLen - 1 do
     begin
-      LVal := System.Exp(LScores[LI * ASeqLen + LJ] - LMax);
+      LVal := SimdExp(LScores[LI * ASeqLen + LJ] - LMax);
       LScores[LI * ASeqLen + LJ] := LVal;
       LSum := LSum + LVal;
     end;

@@ -129,6 +129,7 @@ type
 implementation
 
 uses
+  nextpas.core.simd.mathutil,
   nextpas.core.simd,
   nextpas.core.simd.nn;
 
@@ -793,12 +794,12 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := System.Sqrt(nextpas.core.simd.BatchF32.ReduceDot(FSrc, FSrc, FCount))
+    Result := SimdSqrt(nextpas.core.simd.BatchF32.ReduceDot(FSrc, FSrc, FCount))
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := System.Sqrt(nextpas.core.simd.BatchF32.ReduceDot(LTmp.Data, LTmp.Data, FCount));
+    Result := SimdSqrt(nextpas.core.simd.BatchF32.ReduceDot(LTmp.Data, LTmp.Data, FCount));
     LTmp.Free;
   end;
 end;

@@ -58,6 +58,7 @@ function ZScoreNormalizeF64(aSrc, aDst: PDouble; aCount: SizeUInt): Boolean;
 implementation
 
 uses
+  nextpas.core.simd.mathutil,
   nextpas.core.simd;
 
 function WeightedSumF32(aValues, aWeights: PSingle; aCount: SizeUInt): Single;
@@ -102,7 +103,7 @@ end;
 
 function StdDevF32(aX: PSingle; aCount: SizeUInt; aSample: Boolean): Single;
 begin
-  Result := System.Sqrt(VarianceF32(aX, aCount, aSample));
+  Result := SimdSqrt(VarianceF32(aX, aCount, aSample));
 end;
 
 function CorrelationF32(aX, aY: PSingle; aCount: SizeUInt): Single;
@@ -124,7 +125,7 @@ begin
   if LVarY < 0 then LVarY := 0;
   if (LVarX = 0) or (LVarY = 0) then Exit(0);
   LCov := (LDotXY - aCount * LMeanX * LMeanY) / LDiv;
-  Result := LCov / (System.Sqrt(LVarX) * System.Sqrt(LVarY));
+  Result := LCov / (SimdSqrt(LVarX) * SimdSqrt(LVarY));
 end;
 
 // Welford's online algorithm
@@ -182,7 +183,7 @@ end;
 
 function TSimdF32OnlineStats.GetStdDev: Double;
 begin
-  Result := System.Sqrt(GetVariance);
+  Result := SimdSqrt(GetVariance);
 end;
 
 
@@ -324,7 +325,7 @@ begin
   LVar := ReduceDotF32(aSrc, aSrc, aCount) / aCount - LMean * LMean;
   if LVar < 0 then LVar := 0;
   if LVar = 0 then begin FillChar(aDst^, aCount * SizeOf(Single), 0); Exit(True); end;
-  LInvStd := 1.0 / System.Sqrt(LVar);
+  LInvStd := 1.0 / SimdSqrt(LVar);
   ArrayNormF32(aSrc, aDst, aCount, LMean, LInvStd);
   Result := True;
 end;
@@ -336,7 +337,7 @@ begin
   LDot := ReduceDotF32(aX, aY, aCount);
   LNormX2 := ReduceDotF32(aX, aX, aCount);
   LNormY2 := ReduceDotF32(aY, aY, aCount);
-  LDenom := System.Sqrt(LNormX2 * LNormY2);
+  LDenom := SimdSqrt(LNormX2 * LNormY2);
   if LDenom = 0 then Exit(0);
   Result := LDot / LDenom;
 end;
@@ -374,7 +375,7 @@ end;
 
 function StdDevF64(aX: PDouble; aCount: SizeUInt; aSample: Boolean): Double;
 begin
-  Result := System.Sqrt(VarianceF64(aX, aCount, aSample));
+  Result := SimdSqrt(VarianceF64(aX, aCount, aSample));
 end;
 
 function CovarianceF64(aX, aY: PDouble; aCount: SizeUInt; aSample: Boolean): Double;
@@ -409,7 +410,7 @@ begin
   if LVarY < 0 then LVarY := 0;
   if (LVarX = 0) or (LVarY = 0) then Exit(0);
   LCov := (LDotXY - aCount * LMeanX * LMeanY) / LDiv;
-  Result := LCov / (System.Sqrt(LVarX) * System.Sqrt(LVarY));
+  Result := LCov / (SimdSqrt(LVarX) * SimdSqrt(LVarY));
 end;
 
 function CosineSimilarityF64(aX, aY: PDouble; aCount: SizeUInt): Double;
@@ -417,8 +418,8 @@ var LDot, LNormX, LNormY, LDenom: Double;
 begin
   if aCount = 0 then Exit(0);
   LDot := ReduceDotF64(aX, aY, aCount);
-  LNormX := System.Sqrt(ReduceDotF64(aX, aX, aCount));
-  LNormY := System.Sqrt(ReduceDotF64(aY, aY, aCount));
+  LNormX := SimdSqrt(ReduceDotF64(aX, aX, aCount));
+  LNormY := SimdSqrt(ReduceDotF64(aY, aY, aCount));
   LDenom := LNormX * LNormY;
   if LDenom = 0 then Exit(0);
   Result := LDot / LDenom;
@@ -446,7 +447,7 @@ begin
   LVar := ReduceDotF64(aSrc, aSrc, aCount) / aCount - LMean * LMean;
   if LVar < 0 then LVar := 0;
   if LVar = 0 then begin FillChar(aDst^, aCount * SizeOf(Double), 0); Exit(True); end;
-  LInvStd := 1.0 / System.Sqrt(LVar);
+  LInvStd := 1.0 / SimdSqrt(LVar);
   ArrayLinearF64(aSrc, aDst, aCount, LInvStd, -LMean * LInvStd);
   Result := True;
 end;

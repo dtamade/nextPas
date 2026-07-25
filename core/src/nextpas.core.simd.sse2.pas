@@ -392,31 +392,7 @@ uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
   nextpas.core.simd.intrinsics.base,
-  nextpas.core.simd.intrinsics.sse2,
-  nextpas.core.math.trig;
-
-// Thread-local scratch buffers for Tan computation
-// 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
-threadvar
-  GTanSinBuf: PSingle;
-  GTanCosBuf: PSingle;
-  GTanBufCapacity: SizeUInt;
-
-procedure EnsureTanScratch(aCount: SizeUInt);
-begin
-  if (GTanBufCapacity < aCount) or (aCount < GTanBufCapacity div 4) then
-  begin
-    // 释放旧缓冲区
-    if GTanSinBuf <> nil then
-      FreeMem(GTanSinBuf);
-    if GTanCosBuf <> nil then
-      FreeMem(GTanCosBuf);
-    // 分配新缓冲区
-    GTanBufCapacity := aCount;
-    GetMem(GTanSinBuf, aCount * SizeOf(Single));
-    GetMem(GTanCosBuf, aCount * SizeOf(Single));
-  end;
-end;
+  nextpas.core.simd.intrinsics.sse2;
 
 {$PUSH}
 {$WARN 5026 OFF} // 低层桥接函数通过 raw leaf 间接使用参数，FPC 误报“未使用”
@@ -5986,16 +5962,5 @@ end;
 
 {$POP}
 
-finalization
-  if GTanSinBuf <> nil then
-  begin
-    FreeMem(GTanSinBuf);
-    GTanSinBuf := nil;
-  end;
-  if GTanCosBuf <> nil then
-  begin
-    FreeMem(GTanCosBuf);
-    GTanCosBuf := nil;
-  end;
 
 end.

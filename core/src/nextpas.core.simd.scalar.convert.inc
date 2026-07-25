@@ -95,7 +95,7 @@ var i: SizeUInt;
 begin
   if aCount = 0 then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Sqrt(aSrc[i]);
+    aDst[i] := SimdSqrtF32(aSrc[i]);
 end;
 
 
@@ -499,7 +499,7 @@ var i: SizeUInt;
 begin
   if aCount = 0 then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Round(aSrc[i]);
+    aDst[i] := System.Round(aSrc[i]);
 end;
 
 
@@ -615,7 +615,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Tan(aSrc[i]);
+    aDst[i] := SimdTanF32(aSrc[i]);
 end;
 
 
@@ -625,8 +625,8 @@ begin
   if (aCount = 0) or (aSrc = nil) or (aSinDst = nil) or (aCosDst = nil) then Exit;
   for i := 0 to aCount - 1 do
   begin
-    aSinDst[i] := Sin(aSrc[i]);
-    aCosDst[i] := Cos(aSrc[i]);
+    aSinDst[i] := SimdSinF32(aSrc[i]);
+    aCosDst[i] := SimdCosF32(aSrc[i]);
   end;
 end;
 
@@ -636,7 +636,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Log2(aSrc[i]);
+    aDst[i] := SimdLnF32(aSrc[i]) / SimdLnF32(2.0);
 end;
 
 
@@ -645,7 +645,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Log10(aSrc[i]);
+    aDst[i] := SimdLog10F32(aSrc[i]);
 end;
 
 
@@ -654,7 +654,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Ceil(aSrc[i]);
+    aDst[i] := SimdCeilF32(aSrc[i]);
 end;
 
 
@@ -663,7 +663,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Floor(aSrc[i]);
+    aDst[i] := SimdFloorF32(aSrc[i]);
 end;
 
 
@@ -672,7 +672,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Round(aSrc[i]);
+    aDst[i] := SimdRoundF32(aSrc[i]);
 end;
 
 
@@ -681,7 +681,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Trunc(aSrc[i]);
+    aDst[i] := SimdTruncFloatF32(aSrc[i]);
 end;
 
 
@@ -699,7 +699,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aY = nil) or (aX = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := ArcTan2(aY[i], aX[i]);
+    aDst[i] := SimdArcTan2F32(aY[i], aX[i]);
 end;
 
 
@@ -708,7 +708,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aX = nil) or (aY = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Sqrt(aX[i] * aX[i] + aY[i] * aY[i]);
+    aDst[i] := SimdSqrtF32(aX[i] * aX[i] + aY[i] * aY[i]);
 end;
 
 
@@ -849,7 +849,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Ceil(aSrc[i]);
+    aDst[i] := SimdCeilF64(aSrc[i]);
 end;
 
 
@@ -858,7 +858,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Floor(aSrc[i]);
+    aDst[i] := SimdFloorF64(aSrc[i]);
 end;
 
 
@@ -867,7 +867,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Round(aSrc[i]);
+    aDst[i] := SimdRoundF64(aSrc[i]);
 end;
 
 
@@ -876,7 +876,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Trunc(aSrc[i]);
+    aDst[i] := SimdTruncFloatF64(aSrc[i]);
 end;
 
 
@@ -933,7 +933,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := Tan(aSrc[i]);
+    aDst[i] := SimdSinF64(aSrc[i]) / SimdCosF64(aSrc[i]);
 end;
 
 
@@ -1065,7 +1065,7 @@ var i: SizeUInt;
 begin
   if (aCount = 0) or (aY = nil) or (aX = nil) or (aDst = nil) then Exit;
   for i := 0 to aCount - 1 do
-    aDst[i] := ArcTan2(aY[i], aX[i]);
+    aDst[i] := SimdArcTan2F64(aY[i], aX[i]);
 end;
 
 

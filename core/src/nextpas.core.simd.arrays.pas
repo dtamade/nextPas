@@ -294,6 +294,7 @@ procedure SimdArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: S
 implementation
 
 uses
+  nextpas.core.simd.mathutil,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.direct,
@@ -502,12 +503,12 @@ end;
 
 function SimdArrayStdDevF64(aSrc: PDouble; aCount: SizeUInt): Double;
 begin
-  Result := System.Sqrt(SimdArrayVarianceF64(aSrc, aCount));
+  Result := SimdSqrt(SimdArrayVarianceF64(aSrc, aCount));
 end;
 
 function SimdArrayPopulationStdDevF64(aSrc: PDouble; aCount: SizeUInt): Double;
 begin
-  Result := System.Sqrt(SimdArrayPopulationVarianceF64(aSrc, aCount));
+  Result := SimdSqrt(SimdArrayPopulationVarianceF64(aSrc, aCount));
 end;
 
 function SimdArrayDotProductF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
@@ -521,7 +522,7 @@ end;
 
 function SimdArrayL2NormF64(aSrc: PDouble; aCount: SizeUInt): Double;
 begin
-  Result := System.Sqrt(SimdArrayDotProductF64(aSrc, aSrc, aCount));
+  Result := SimdSqrt(SimdArrayDotProductF64(aSrc, aSrc, aCount));
 end;
 
 // ============================================================================
@@ -716,12 +717,12 @@ end;
 
 function SimdArrayStdDevF32(aSrc: PSingle; aCount: SizeUInt): Single;
 begin
-  Result := System.Sqrt(SimdArrayVarianceF32(aSrc, aCount));
+  Result := SimdSqrt(SimdArrayVarianceF32(aSrc, aCount));
 end;
 
 function SimdArrayPopulationStdDevF32(aSrc: PSingle; aCount: SizeUInt): Single;
 begin
-  Result := System.Sqrt(SimdArrayPopulationVarianceF32(aSrc, aCount));
+  Result := SimdSqrt(SimdArrayPopulationVarianceF32(aSrc, aCount));
 end;
 
 function SimdArrayDotProductF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
@@ -735,7 +736,7 @@ end;
 
 function SimdArrayL2NormF32(aSrc: PSingle; aCount: SizeUInt): Single;
 begin
-  Result := System.Sqrt(SimdArrayDotProductF32(aSrc, aSrc, aCount));
+  Result := SimdSqrt(SimdArrayDotProductF32(aSrc, aSrc, aCount));
 end;
 
 // ============================================================================

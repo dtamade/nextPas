@@ -3024,7 +3024,7 @@ begin
   if aCount = 0 then Exit;
   pS := aSrc; pD := aDst;
   for i := 0 to aCount - 1 do
-    pD[i] := Sin(pS[i]) / Cos(pS[i]);
+    pD[i] := SimdSinF64(pS[i]) / SimdCosF64(pS[i]);
   {$POP}
 end;
 
@@ -3367,7 +3367,7 @@ begin
   if aCount = 0 then Exit;
   pY := aY; pX := aX; pD := aDst;
   for i := 0 to aCount - 1 do
-    pD[i] := ArcTan2(pY[i], pX[i]);
+    pD[i] := SimdArcTan2F64(pY[i], pX[i]);
   {$POP}
 end;
 
@@ -3553,20 +3553,20 @@ begin
 
   while i + 8 <= aCount do
   begin
-    pD[i] := Log2(pS[i]);
-    pD[i+1] := Log2(pS[i+1]);
-    pD[i+2] := Log2(pS[i+2]);
-    pD[i+3] := Log2(pS[i+3]);
-    pD[i+4] := Log2(pS[i+4]);
-    pD[i+5] := Log2(pS[i+5]);
-    pD[i+6] := Log2(pS[i+6]);
-    pD[i+7] := Log2(pS[i+7]);
+    pD[i] := SimdLog2F64(pS[i]);
+    pD[i+1] := SimdLog2F64(pS[i+1]);
+    pD[i+2] := SimdLog2F64(pS[i+2]);
+    pD[i+3] := SimdLog2F64(pS[i+3]);
+    pD[i+4] := SimdLog2F64(pS[i+4]);
+    pD[i+5] := SimdLog2F64(pS[i+5]);
+    pD[i+6] := SimdLog2F64(pS[i+6]);
+    pD[i+7] := SimdLog2F64(pS[i+7]);
     Inc(i, 8);
   end;
 
   while i < aCount do
   begin
-    pD[i] := Log2(pS[i]);
+    pD[i] := SimdLog2F64(pS[i]);
     Inc(i);
   end;
   {$POP}
@@ -3583,20 +3583,20 @@ begin
 
   while i + 8 <= aCount do
   begin
-    pD[i] := Log10(pS[i]);
-    pD[i+1] := Log10(pS[i+1]);
-    pD[i+2] := Log10(pS[i+2]);
-    pD[i+3] := Log10(pS[i+3]);
-    pD[i+4] := Log10(pS[i+4]);
-    pD[i+5] := Log10(pS[i+5]);
-    pD[i+6] := Log10(pS[i+6]);
-    pD[i+7] := Log10(pS[i+7]);
+    pD[i] := SimdLog10F64(pS[i]);
+    pD[i+1] := SimdLog10F64(pS[i+1]);
+    pD[i+2] := SimdLog10F64(pS[i+2]);
+    pD[i+3] := SimdLog10F64(pS[i+3]);
+    pD[i+4] := SimdLog10F64(pS[i+4]);
+    pD[i+5] := SimdLog10F64(pS[i+5]);
+    pD[i+6] := SimdLog10F64(pS[i+6]);
+    pD[i+7] := SimdLog10F64(pS[i+7]);
     Inc(i, 8);
   end;
 
   while i < aCount do
   begin
-    pD[i] := Log10(pS[i]);
+    pD[i] := SimdLog10F64(pS[i]);
     Inc(i);
   end;
   {$POP}
@@ -6478,21 +6478,22 @@ end;
 procedure AVX2ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 var
   pS, pCos, pD: PSingle;
+  LSin, LCos: PSingle;
+  LBytes: SizeUInt;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
 
-  // 使用 threadvar 缓冲区，避免每次堆分配
-  EnsureAVX2TanScratch(aCount);
+  LBytes := aCount * SizeOf(Single);
+  GetMem(LSin, LBytes);
+  GetMem(LCos, LBytes);
+  try
+    AVX2ArraySinF32(aSrc, LSin, aCount);
+    AVX2ArrayCosF32(aSrc, LCos, aCount);
 
-  // Compute sin and cos using AVX2 SIMD
-  AVX2ArraySinF32(aSrc, GAVX2TanSinBuf, aCount);
-  AVX2ArrayCosF32(aSrc, GAVX2TanCosBuf, aCount);
-
-  // Divide: tan(x) = sin(x) / cos(x)
-  pS := GAVX2TanSinBuf;
-  pCos := GAVX2TanCosBuf;
-  pD := aDst;
+    pS := LSin;
+    pCos := LCos;
+    pD := aDst;
 
   asm
     mov rax, pS
@@ -6541,6 +6542,10 @@ begin
 
   @done:
     vzeroupper
+  end;
+  finally
+    FreeMem(LSin, LBytes);
+    FreeMem(LCos, LBytes);
   end;
   {$POP}
 end;

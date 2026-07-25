@@ -354,7 +354,7 @@ end;
 
 function TSimdF32Array.Norm: Single;
 begin
-  Result := System.Sqrt(Dot(Self));
+  Result := SimdSqrt(Dot(Self));
 end;
 
 function TSimdF32Array.Variance: Single;
@@ -369,7 +369,7 @@ end;
 
 function TSimdF32Array.StdDev: Single;
 begin
-  Result := System.Sqrt(Variance);
+  Result := SimdSqrt(Variance);
 end;
 
 function TSimdF32Array.Median: Single;
@@ -404,7 +404,7 @@ begin
     ArrayAbsF32(FData, Result.FData, FCount)
   else
     for i := 0 to FCount - 1 do
-      Result.FData[i] := System.Abs(FData[i * FStride]);
+      Result.FData[i] := SimdAbs(FData[i * FStride]);
 end;
 
 function TSimdF32Array.Negated: TSimdF32Array;
@@ -689,7 +689,7 @@ begin
   begin
 
     for i := 0 to FCount - 1 do
-      aDst.FData[i * aDst.FStride] := Single(System.Exp(FData[i * FStride]));
+      aDst.FData[i * aDst.FStride] := Single(SimdExp(FData[i * FStride]));
   end;
 end;
 
@@ -969,9 +969,9 @@ function TSimdF64Array.Norm: Double;
 begin
   if FCount = 0 then begin Result := 0; Exit; end;
   if IsContiguous then
-    Result := System.Sqrt(ReduceDotF64(FData, FData, FCount))
+    Result := SimdSqrt(ReduceDotF64(FData, FData, FCount))
   else
-    Result := System.Sqrt(Dot(Self));
+    Result := SimdSqrt(Dot(Self));
 end;
 
 function TSimdF64Array.Variance: Double;
@@ -989,7 +989,7 @@ end;
 
 function TSimdF64Array.StdDev: Double;
 begin
-  Result := System.Sqrt(Variance);
+  Result := SimdSqrt(Variance);
 end;
 
 function TSimdF64Array.Clone: TSimdF64Array;
@@ -1013,7 +1013,7 @@ begin
     ArrayAbsF64(FData, Result.FData, FCount)
   else
     for i := 0 to FCount - 1 do
-      Result.FData[i] := System.Abs(FData[i * FStride]);
+      Result.FData[i] := SimdAbs(FData[i * FStride]);
 end;
 
 function TSimdF64Array.Negated: TSimdF64Array;

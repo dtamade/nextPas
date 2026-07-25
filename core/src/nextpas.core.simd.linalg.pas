@@ -120,7 +120,7 @@ function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 implementation
 
 uses
-  nextpas.core.math.trig,
+  nextpas.core.simd.mathutil,
   nextpas.core.simd,
   nextpas.core.simd.linalg.gemm,
   {$IFDEF SIMD_X86_AVAILABLE}
@@ -464,13 +464,13 @@ var r: SizeUInt; LSum: Single;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) then begin Result := 0; Exit; end;
   if SizeUInt(aA.RowStride) = aA.Cols then
-    Result := System.Sqrt(ReduceDotF32(aA.Data, aA.Data, aA.Rows * aA.Cols))
+    Result := SimdSqrt(ReduceDotF32(aA.Data, aA.Data, aA.Rows * aA.Cols))
   else
   begin
     LSum := 0;
     for r := 0 to aA.Rows - 1 do
       LSum := LSum + ReduceDotF32(@aA.Data[r * aA.RowStride], @aA.Data[r * aA.RowStride], aA.Cols);
-    Result := System.Sqrt(LSum);
+    Result := SimdSqrt(LSum);
   end;
 end;
 
@@ -827,7 +827,7 @@ end;
 function MatFrobeniusNormF64(const aA: TSimdF64Matrix): Double;
 begin
   if (aA.Rows = 0) or (aA.Cols = 0) then begin Result := 0; Exit; end;
-  Result := System.Sqrt(ReduceDotF64(aA.Data, aA.Data, aA.Rows * aA.Cols));
+  Result := SimdSqrt(ReduceDotF64(aA.Data, aA.Data, aA.Rows * aA.Cols));
 end;
 
 // ============================================================================
@@ -875,7 +875,7 @@ begin
     end;
 
     // Normalize using strided dot product
-    LNorm := System.Sqrt(ReduceDotStridedF32(
+    LNorm := SimdSqrt(ReduceDotStridedF32(
       @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
       @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
       m));
@@ -907,7 +907,7 @@ begin
     end;
 
     // Normalize
-    LNorm := System.Sqrt(ReduceDotStridedF32(
+    LNorm := SimdSqrt(ReduceDotStridedF32(
       @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
       @aQ.Data[j], aQ.RowStride * SizeOf(Single),  // Column j
       m));
@@ -958,7 +958,7 @@ begin
           aL.Free;
           Exit(False); // Not positive definite
         end;
-        aL.Put(i, j, System.Sqrt(LSum));
+        aL.Put(i, j, SimdSqrt(LSum));
       end
       else
         aL.Put(i, j, (aA.Get(i, j) - LSum) / aL.Get(j, j));
@@ -1015,16 +1015,16 @@ begin
         LApq := LAtA.Get(p, q);
         LAqq := LAtA.Get(q, q);
 
-        if Abs(LApq) < 1e-10 then Continue;
+        if SimdAbsF64(LApq) < 1e-10 then Continue;
         LConverged := False;
 
-        if Abs(LApp - LAqq) < 1e-10 then
-          LTheta := PI_VALUE / 4
+        if SimdAbsF64(LApp - LAqq) < 1e-10 then
+          LTheta := Double(SIMD_PI) / 4
         else
-          LTheta := 0.5 * ArcTan2(2 * LApq, LApp - LAqq);
+          LTheta := 0.5 * SimdArcTan2F64(2 * LApq, LApp - LAqq);
 
-        LCos := Cos(LTheta);
-        LSin := Sin(LTheta);
+        LCos := SimdCosF64(LTheta);
+        LSin := SimdSinF64(LTheta);
 
         // Apply rotation to A^T A
         for i := 0 to n - 1 do
@@ -1058,7 +1058,7 @@ begin
   begin
     LTemp := LAtA.Get(i, i);
     if LTemp < 0 then LTemp := 0; // Numerical stability
-    LSigma.Put(i, 0, System.Sqrt(LTemp));
+    LSigma.Put(i, 0, SimdSqrt(LTemp));
   end;
 
   // Step 4: Sort singular values in descending order
@@ -1110,7 +1110,7 @@ begin
     LSum := 0;
     for i := 0 to m - 1 do
       LSum := LSum + LU.Get(i, j) * LU.Get(i, j);
-    LSum := System.Sqrt(LSum);
+    LSum := SimdSqrt(LSum);
     if LSum > 1e-10 then
       for i := 0 to m - 1 do
         LU.Put(i, j, LU.Get(i, j) / LSum);

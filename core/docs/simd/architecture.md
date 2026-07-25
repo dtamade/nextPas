@@ -1,6 +1,7 @@
 # nextpas.core.simd 架构设计
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-26
+> 公共 API 符号数以 `check_public_api_test_coverage.py` 为准（当前 720 covered）。
 
 ## 分层架构
 
@@ -10,7 +11,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  L4: 门面 (nextpas.core.simd)                               │
 │  VecF32x4Add, MemEqual, Utf8Validate, ...                   │
-│  776 个公共函数                                              │
+│  公共 API：见 coverage 工具（~720 symbols）                    │
 ├─────────────────────────────────────────────────────────────┤
 │  L3: 高级算法                                                │
 │  algorithms.pas (批量操作、数组运算)                         │

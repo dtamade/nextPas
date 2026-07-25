@@ -99,6 +99,7 @@ type
 implementation
 
 uses
+  nextpas.core.simd.mathutil,
   nextpas.core.simd;
 
 // --- Scalar helpers for F64 ops not yet in dispatch ---
@@ -448,12 +449,12 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := System.Sqrt(nextpas.core.simd.BatchF64.ReduceDot(FSrc, FSrc, FCount))
+    Result := SimdSqrt(nextpas.core.simd.BatchF64.ReduceDot(FSrc, FSrc, FCount))
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := System.Sqrt(nextpas.core.simd.BatchF64.ReduceDot(LTmp.Data, LTmp.Data, FCount));
+    Result := SimdSqrt(nextpas.core.simd.BatchF64.ReduceDot(LTmp.Data, LTmp.Data, FCount));
     LTmp.Free;
   end;
 end;

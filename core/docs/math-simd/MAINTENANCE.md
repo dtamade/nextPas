@@ -4,6 +4,7 @@
 > Lane: `codex/math-simd` @ `.worktrees/math-simd`
 > Mode: **A — maintenance only** (green gates, doc truth, debt inventory)
 > Goal pointer: [`GOAL_QUEUE.md`](GOAL_QUEUE.md) (`CURRENT=IDLE`)
+> Latest residual cut: **audit findings F-001…F-020 package (2026-07-26)**; prior:
 > Latest residual cut: **D-RTL-1/2/3 closed** (TWorkerThread BeginThread + test migration)
 
 This file is the maintenance authority for residual debt and re-verify evidence.

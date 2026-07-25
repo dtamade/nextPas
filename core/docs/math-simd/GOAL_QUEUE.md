@@ -40,8 +40,13 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=IDLE
+CURRENT=IDLE  # audit remediation package landed 2026-07-26; see findings.md Remediation status
 ```
+
+### Audit remediation package  【done 2026-07-26】
+
+P1 F-001…F-005/F-020 closed with source-contracts + rtl --fail-tests.
+See root `findings.md` remediation table and commits on this branch.
 
 ### M0 — maintenance re-verify  【done 2026-07-26 · docs only】
 

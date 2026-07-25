@@ -57,6 +57,35 @@ function SimdTanF32(AX: Single): Single; inline;
 function SimdArcSinF32(AX: Single): Single;
 function SimdArcCosF32(AX: Single): Single;
 function SimdArcTan2F32(AY, AX: Single): Single;
+function SimdArcTan2F64(AY, AX: Double): Double;
+
+{ Scalar owners for simd production — prefer these over System.* / math.* }
+function SimdSinF64(AX: Double): Double; inline;
+function SimdCosF64(AX: Double): Double; inline;
+function SimdSqrtF32(AX: Single): Single; inline;
+function SimdSqrtF64(AX: Double): Double; inline;
+function SimdAbsF32(AX: Single): Single; inline;
+function SimdAbsF64(AX: Double): Double; inline;
+function SimdLog10F32(AX: Single): Single; inline;
+function SimdLog10F64(AX: Double): Double; inline;
+function SimdLog2F32(AX: Single): Single; inline;
+function SimdLog2F64(AX: Double): Double; inline;
+function SimdExpF32(AX: Single): Single; inline;
+function SimdExpF64(AX: Double): Double; inline;
+
+{ Unsuffixed overloads for call-site migration from System.* }
+function SimdSqrt(AX: Single): Single; inline; overload;
+function SimdSqrt(AX: Double): Double; inline; overload;
+function SimdSin(AX: Single): Single; inline; overload;
+function SimdSin(AX: Double): Double; inline; overload;
+function SimdCos(AX: Single): Single; inline; overload;
+function SimdCos(AX: Double): Double; inline; overload;
+function SimdExp(AX: Single): Single; inline; overload;
+function SimdExp(AX: Double): Double; inline; overload;
+function SimdLn(AX: Single): Single; inline; overload;
+function SimdLn(AX: Double): Double; inline; overload;
+function SimdAbs(AX: Single): Single; inline; overload;
+function SimdAbs(AX: Double): Double; inline; overload;
 
 implementation
 
@@ -463,6 +492,122 @@ begin
   end;
   Result := LR;
 end;
+
+function SimdArcTan2F64(AY, AX: Double): Double;
+{ Double ArcTan2 without Math unit — quadrant-correct via System.ArcTan. }
+var
+  LAbsX, LAbsY: Double;
+begin
+  LAbsX := System.Abs(AX);
+  LAbsY := System.Abs(AY);
+  if (LAbsX = 0.0) and (LAbsY = 0.0) then
+    Exit(0.0);
+  if LAbsX >= LAbsY then
+  begin
+    Result := System.ArcTan(AY / AX);
+    if AX < 0.0 then
+    begin
+      if AY >= 0.0 then
+        Result := Result + Double(SIMD_PI)
+      else
+        Result := Result - Double(SIMD_PI);
+    end;
+  end
+  else
+  begin
+    Result := System.ArcTan(AX / AY);
+    if AY > 0.0 then
+      Result := Double(SIMD_PI) * 0.5 - Result
+    else
+      Result := -Double(SIMD_PI) * 0.5 - Result;
+  end;
+end;
+
+function SimdSinF64(AX: Double): Double; inline;
+begin
+  Result := System.Sin(AX);
+end;
+
+function SimdCosF64(AX: Double): Double; inline;
+begin
+  Result := System.Cos(AX);
+end;
+
+function SimdSqrtF32(AX: Single): Single; inline;
+begin
+  Result := System.Sqrt(AX);
+end;
+
+function SimdSqrtF64(AX: Double): Double; inline;
+begin
+  Result := System.Sqrt(AX);
+end;
+
+function SimdAbsF32(AX: Single): Single; inline;
+begin
+  Result := System.Abs(AX);
+end;
+
+function SimdAbsF64(AX: Double): Double; inline;
+begin
+  Result := System.Abs(AX);
+end;
+
+function SimdLog10F32(AX: Single): Single; inline;
+begin
+  Result := Single(System.Ln(Double(AX)) / System.Ln(10.0));
+end;
+
+function SimdLog10F64(AX: Double): Double; inline;
+begin
+  Result := System.Ln(AX) / System.Ln(10.0);
+end;
+
+function SimdLog2F32(AX: Single): Single; inline;
+begin
+  Result := Single(System.Ln(Double(AX)) / System.Ln(2.0));
+end;
+
+function SimdLog2F64(AX: Double): Double; inline;
+begin
+  Result := System.Ln(AX) / System.Ln(2.0);
+end;
+
+function SimdExpF32(AX: Single): Single; inline;
+begin
+  Result := Single(System.Exp(Double(AX)));
+end;
+
+function SimdExpF64(AX: Double): Double; inline;
+begin
+  Result := System.Exp(AX);
+end;
+
+
+function SimdSqrt(AX: Single): Single; inline; overload;
+begin Result := SimdSqrtF32(AX); end;
+function SimdSqrt(AX: Double): Double; inline; overload;
+begin Result := SimdSqrtF64(AX); end;
+function SimdSin(AX: Single): Single; inline; overload;
+begin Result := SimdSinF32(AX); end;
+function SimdSin(AX: Double): Double; inline; overload;
+begin Result := SimdSinF64(AX); end;
+function SimdCos(AX: Single): Single; inline; overload;
+begin Result := SimdCosF32(AX); end;
+function SimdCos(AX: Double): Double; inline; overload;
+begin Result := SimdCosF64(AX); end;
+function SimdExp(AX: Single): Single; inline; overload;
+begin Result := SimdExpF32(AX); end;
+function SimdExp(AX: Double): Double; inline; overload;
+begin Result := SimdExpF64(AX); end;
+function SimdLn(AX: Single): Single; inline; overload;
+begin Result := SimdLnF32(AX); end;
+function SimdLn(AX: Double): Double; inline; overload;
+begin Result := System.Ln(AX); end;
+function SimdAbs(AX: Single): Single; inline; overload;
+begin Result := SimdAbsF32(AX); end;
+function SimdAbs(AX: Double): Double; inline; overload;
+begin Result := SimdAbsF64(AX); end;
 
 initialization
   UInt32((@SimdInfinity)^) := $7F800000;
