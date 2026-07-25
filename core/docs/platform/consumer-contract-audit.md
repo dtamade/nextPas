@@ -24,7 +24,7 @@ Contracts:
 | Host | Tier | Scope |
 |------|------|--------|
 | Linux | focused-runtime | platform/io + consumer gates |
-| Windows | **ci-matrix** (documented **27** platform gates) + wine **25** secondary | Includes poller/iocp real gates in `platform-windows-ci-matrix.sh`; **not** full-host parity |
+| Windows | **ci-matrix** (documented **28** platform gates) + wine **25** secondary | Includes poller/iocp + console; **not** full-host parity |
 | macOS | focused-runtime layer A (**9** platform gates) | Fail-closed `platform-macos-ci-matrix.sh` only; whole job is not platform evidence |
 
 Wine is forever `wine-runtime-smoke` and never substitutes for real Windows `ci-matrix`.
@@ -54,10 +54,10 @@ is owned with **io/net-async**, not as a blanket platform facade claim.
 ## Console / TUI consumer note
 
 - `nextpas.core.tui` depends on `platform.console` (+ signal for SIGWINCH/SIGTERM on POSIX).
-- `platform.console` is on the **wine secondary matrix (25)** as of 2026-07-21;
-  **not** yet a promoted Windows `ci-matrix` platform gate.
+- `platform.console` is on wine secondary matrix (**25**) and promoted Windows
+  **`ci-matrix` 28 platform gates** (GHA 30168411064 PASS) as facade smoke.
 - Windows true-console TUI remains tui-lane product work; platform supplies
-  evidence ladder only.
+  evidence ladder only (not full TUI product path).
 
 ## Current route
 

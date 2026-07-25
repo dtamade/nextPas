@@ -21,10 +21,11 @@ Not an FPC `BaseUnix` / `Windows` / `SysUtils` compatibility layer.
 ## Current truth (one line)
 
 Linux x86_64 is `focused-runtime` across facade modules. Windows has Wine smoke
-plus partial real-Windows runtime (GHA focused gates); macOS / FreeBSD / Android remain
-`source-contract` / `forced-compile` / best-effort. Evidence: [goal-tree.md](goal-tree.md).
-Usability **8.21** is maintenance-only. **Execute work from [ROADMAP.md](ROADMAP.md)**, not from
-open-ended assessment waves or historical ROADMAP-v2.
+plus **`ci-matrix` 28 platform gates** (GHA, including console); macOS / FreeBSD /
+Android remain `source-contract` / `forced-compile` / best-effort. Evidence:
+[goal-tree.md](goal-tree.md). Usability **8.21** is maintenance-only. **Execute
+work from [ROADMAP.md](ROADMAP.md)**, not from open-ended assessment waves or
+historical ROADMAP-v2.
 
 ## Focused verification
 

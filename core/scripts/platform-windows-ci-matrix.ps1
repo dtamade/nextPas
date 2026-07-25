@@ -10,7 +10,8 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the listed module dirs only — not full-host Windows parity.
-# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
+# 28 platform gates promoted (+… +pty +watch +console).
+# console promote: GHA 30168411064 @ 5464b31c4 PASS platform.console.
 
 $ErrorActionPreference = 'Stop'
 
@@ -68,7 +69,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 27 platform gates (+watch); console=candidate until GHA promote; not full-host Windows parity'
+Write-Output 'truth=ci-matrix; documented 28 platform gates (+watch +console); not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -96,7 +97,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-27-platform-gate-set"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-28-platform-gate-set"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'

@@ -7,12 +7,13 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **27 platform gates**
-  on GHA `test-windows-runtime` (+… +pty +watch S1–S3 multi-dir). `watch` PASS on run
-  29746628175 (pass=28 fail=0 with mem.host). L2 `l2.fs.watch` (multi-path +
+- **Windows x86_64**: durable **`ci-matrix`** for documented **28 platform gates**
+  on GHA `test-windows-runtime` (+… +pty +watch +console). `console` PASS on run
+  30168411064 @ `5464b31c4` (pass=29 fail=0 with mem.host; job success).
+  `watch` PASS on run 29746628175. L2 `l2.fs.watch` (multi-path +
   AddTree walk, no `bWatchSubtree`) step-green on GHA 29759582229 @ `1790012ef`.
-  Wine secondary **25** (+console). Watch expand series **closed** 2026-07-21.
-  **Not full-host real-Windows runtime** parity: modules outside the 27-gate list,
+  Wine secondary **25** (includes console). Watch expand series **closed** 2026-07-21.
+  **Not full-host real-Windows runtime** parity: modules outside the 28-gate list,
   AcceptEx/ConnectEx depth, and whole-job reds (async native) are not platform claims.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
@@ -28,7 +29,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 27 platform gates (+ optional mem.host in script) | keep GHA+wine green; remaining real-Windows runtime gap = full-host parity / non-matrix modules; expand only on consumer pain |
+| Windows x86_64 | **ci-matrix** 28 platform gates (+ optional mem.host in script) | keep GHA+wine green; remaining real-Windows runtime gap = full-host parity / non-matrix modules; expand only on consumer pain |
 | macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -58,14 +59,14 @@ event soft under Wine), pty (ConPTY open/close; resize may E_NOTIMPL under Wine)
 console (is_terminal/get_size/enable_ansi/write smoke), io.reactor.iocp.
 Not covered: signal, freetype/net.
 
-**Real Windows ci-matrix (27 platform gates)** via `platform-windows-ci-matrix.sh`:
+**Real Windows ci-matrix (28 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
-socket, error, fmt, info, which, dl, args, pipe, resource, pty, watch,
+socket, error, fmt, info, which, dl, args, pipe, resource, pty, watch, console,
 io.reactor.iocp, poller.windows_runtime_smoke, platform.io.windows_real,
-platform.socket.windows_real. Promoted with `watch` after GHA PASS
-platform.watch (run 29746628175). Optional **mem.host_runtime** is mem-owned.
-L2 consumer min-set (`l2-windows-ci-matrix.sh`) includes `l2.fs.watch`
-(multi-path + AddTree; host-windows hard asserts).
+platform.socket.windows_real. Promoted with `console` after GHA PASS
+platform.console (run 30168411064 @ `5464b31c4`). Optional **mem.host_runtime**
+is mem-owned. L2 consumer min-set (`l2-windows-ci-matrix.sh`) includes
+`l2.fs.watch` (multi-path + AddTree; host-windows hard asserts).
 
 ## IOCP / readiness boundary
 

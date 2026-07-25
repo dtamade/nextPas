@@ -3,12 +3,12 @@
 | Host / seam | Evidence | Current truth |
 | --- | --- | --- |
 | Linux readiness poller | focused-runtime | Runtime-covered through focused platform/io and consumer gates. |
-| Windows readiness poller | wine-runtime-smoke + **ci-matrix** (27 **platform** gates) | Durable on `windows-latest` for platform matrix modules (+… +pty +watch). Wine **25** secondary (+console). Job `total` may be **28** when `mem.host_runtime` is listed (not a platform facade gate). |
-| Windows platform.console | wine-runtime-smoke | In wine matrix (25); **not** promoted Windows `ci-matrix` yet. TUI hangs Windows true-console product path on this ladder. |
+| Windows readiness poller | wine-runtime-smoke + **ci-matrix** (28 **platform** gates) | Durable on `windows-latest` for platform matrix modules (+… +pty +watch +console). Wine **25** secondary. Job `total` may be **29** when `mem.host_runtime` is listed (not a platform facade gate). |
+| Windows platform.console | wine-runtime-smoke + **ci-matrix** | Promoted after GHA **30168411064** @ `5464b31c4` PASS. Facade smoke only; TUI true-console product remains tui-lane. |
 | Windows IOCP lifecycle | source-contract, forced-compile, wine-runtime-smoke, GHA `poller.windows_runtime_smoke` | Real port lifecycle exists in matrix; broader IOCP completion beyond smoke is not real Windows runtime ready as a whole-host claim. |
 | Windows IOCP AsyncRead/AsyncWrite file completion | source-contract, forced-compile, wine-runtime-smoke, GHA poller smoke | File completion is covered under documented ci-matrix poller gate; remaining AcceptEx/ConnectEx depth is not real Windows runtime ready beyond current smoke gaps. |
 | Windows IOCP socket completion | focused-runtime + ci-matrix (socket wine + windows_real gates) | `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` verified on Wine and real Windows GHA/VM. |
-| Windows documented facade matrix | **ci-matrix** (27 platform) | Suite dirs through +info +which +dl +args +pipe +resource +pty +watch + iocp + 3 real gates. watch PASS on GHA 29746628175. Multi-dir + L2 AddTree (walk, no bWatchSubtree) step-green GHA 29759582229. |
+| Windows documented facade matrix | **ci-matrix** (28 platform) | Suite dirs through +… +pty +watch +console + iocp + 3 real gates. console PASS on GHA 30168411064. Multi-dir + L2 AddTree (walk, no bWatchSubtree) step-green GHA 29759582229. |
 | L2 fs.watch Windows | host-windows min-set + wine-runtime-smoke | `test_fs_watch_wine` in `l2-windows-ci-matrix.sh`; hard create/multi/AddTree on real host; Wine soft OK. Expand series closed 2026-07-21. |
 | Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat, directory enumeration through getdents64, and mmap size paths compile through host-owned declarations; no Android device runtime proof exists. |
 | Resource limits | Linux focused-runtime, Android forced-compile/source-contract | Linux rlimit get/set is focused-runtime covered; Android is compile/source proof only, not device runtime proof. |
