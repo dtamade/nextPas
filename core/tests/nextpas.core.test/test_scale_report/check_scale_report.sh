@@ -11,14 +11,14 @@
 #           test_perf_bench (optional CI).
 #
 # v8.25 quality gate: low-signal TestTable share capped.
-# v8.26: SCALE_MIN=6500, FAIL_PATH≥35%, LOW_SIGNAL≤40%; per-suite breakdown.
+# v8.30: SCALE_MIN=7500, FAIL_PATH≥35%, LOW_SIGNAL≤25%; per-suite breakdown.
 set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-6500}"
+MIN_COUNT="${SCALE_MIN:-7500}"
 MIN_FAIL_RATIO="${FAIL_PATH_MIN_RATIO:-0.35}"
-MAX_LOW_SIGNAL_RATIO="${LOW_SIGNAL_MAX_RATIO:-0.40}"
+MAX_LOW_SIGNAL_RATIO="${LOW_SIGNAL_MAX_RATIO:-0.25}"
 
 python3 - "$TESTS" "$MIN_COUNT" "$MIN_FAIL_RATIO" "$MAX_LOW_SIGNAL_RATIO" <<'PY'
 import re, sys

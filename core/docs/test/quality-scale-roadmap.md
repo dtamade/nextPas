@@ -2,7 +2,7 @@
 
 **Owner**: test lane（`.worktrees/test`）— **全权**
 **北极星**: 对标 **Go `testing` + 工程门禁** / **Rust 测试工程纪律** 的**质量与规模**，不是 API 化妆。
-**当前基线**: **v8.29**（并行竞态 + Mock 误用密度）
+**当前基线**: **v8.30**（Prop/Fuzz/Snapshot + SCALE≥7500）
 **最后更新**: 2026-07-26
 
 ---
@@ -11,9 +11,9 @@
 
 | 指标 | 当前 (v8.25) | 近中期目标 | 对标意图 |
 |------|--------------|------------|----------|
-| 可计数过程 `SCALE_MIN` | **6500**（v8.26 门） | **7500 → 9000** | Go 大模块自测体量 |
+| 可计数过程 `SCALE_MIN` | **7500**（v8.30 门） | **9000**（条件抬门） | Go 大模块自测体量 |
 | fail-path 占比 | **≥35%** 硬门 | 维持 **≥35%** | 有意义负路径，非绿灌水 |
-| low-signal 占比 | **≤40%** 硬门 | 收紧 **≤25%** | 反 identity/meta 灌水 |
+| low-signal 占比 | **≤25%** 硬门 | 维持 **≤25%** | 反 identity/meta 灌水 |
 | 公开 API 裸奔 | Check*/To*/runner 门禁 | **扩大到 Soft* 全名 + runner 报告字段** | 导出必有测 |
 | Soft 语义 | Fatal/Soft 分离 + 高频 Soft | Soft 高频再扩 + Soft 消息 golden | Go `t.Error` vs `t.Fatal` |
 | 并行/竞态 | 契约 + 原子压力 + TimeoutWorkerLeaks | 再加「误用必 fail」表 + 压力可计数 | Go `-race` 意图（无 TSAN） |
@@ -49,6 +49,7 @@
 | **v8.27** | Soft 第二波 + Soft golden + join 契约 | Soft 可用面 **done** |
 | **v8.28** | Runner/Subtest/CLI ≈ Go testing | 行为密度 **done** |
 | **v8.29** | 并行竞态 + Mock 误用密度 | 误用必红 **done** |
+| **v8.30** | Prop/Fuzz/Snapshot + SCALE≥7500 | 工程密度 **done** |
 
 ---
 
@@ -61,8 +62,8 @@ v8.26  规模质量跃迁（替换 identity + SCALE≥6500）  ✅
 v8.27  Soft 第二波 + Soft 诊断 golden              ✅
 v8.28  Runner/Subtest/CLI 深度（Go testing 行为）  ✅
 v8.29  并行竞态与 Mock 误用密度                    ✅
-v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500    ← next
-v8.31+ 收紧 low-signal≤25%；消费者示例；CI 默认 contracts
+v8.30  Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500    ✅
+v8.31+ CI 默认巩固；SCALE→9000（条件）；Discovery stub  ← next
 v9     （另拍板）IExpectation 拆分 / SoftExpect
 ```
 
@@ -123,15 +124,15 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ---
 
-### v8.30 — Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（P1）
+### v8.30 — Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（**done**）
 
-| ID | 任务 | 验收 |
+| ID | 任务 | 状态 |
 |----|------|------|
-| B71 | Prop shrink 确定性种子表 + ExpectFail 消息 | prop |
-| B72 | Fuzz corpus 读写边界 + 空/坏语料 | prop |
-| B73 | Snapshot：create/update/mismatch/ColorDiff 表再扩 | assertions |
-| B74 | `SCALE_MIN=7500`；low-signal **≤25%** | scale 三门 |
-| B75 | 消费者：`table_driven_demo` 或扩 smoke_suite（Table+Soft+Subtest） | examples |
+| B71 | Prop shrink 确定性表（100）+ PropWithResult counterexample + PropFail ExpectFail | **done** |
+| B72 | Fuzz corpus 空/缺目录/坏文件/OOB/roundtrip 边界表（80） | **done** |
+| B73 | Snapshot match/mismatch/ColorDiff/fail_create/update 表（100） | **done** |
+| B74 | `SCALE_MIN=7500`；`LOW_SIGNAL_MAX_RATIO=0.25` | **done** |
+| B75 | 消费者 `table_driven_demo`（Table+Soft+Subtest） | **done** |
 
 ---
 
@@ -140,7 +141,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 | ID | 任务 | 验收 |
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
-| B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | scale |
+| B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
 | B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | 条件抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | discovery |
 | B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | docs |
@@ -171,7 +172,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.30** Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）。
+**v8.31+** 巩固：B77 已随 v8.30 默认 low-signal≤25%；B78 SCALE→9000 条件抬门；B79 Discovery stub；B80 release checklist。
 
 ---
 

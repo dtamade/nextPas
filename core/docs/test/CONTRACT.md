@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-26
-**版本**：v8.29
+**版本**：v8.30
 **路线图**：`quality-scale-roadmap.md`（v8.26+ 质量/规模全权序列）
 
 ---
@@ -418,6 +418,14 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.30 (2026-07-26) — Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）
+
+- **B71**：shrink 确定性表（int/str/bytes）+ PropWithResult 反例边界 + PropFail ExpectFail 针
+- **B72**：corpus 空/缺目录/空 bin/junk/OOB/roundtrip/dup 边界表（80）
+- **B73**：Snapshot match/mismatch/ColorDiff/fail_create/update 表（100）
+- **B74**：`SCALE_MIN=7500`，`LOW_SIGNAL_MAX_RATIO=0.25`
+- **B75**：消费者 `table_driven_demo`（TestTable + SoftCheck + TestSubtest）
 
 ### v8.29 (2026-07-26) — 并行竞态与 Mock 误用密度（B66–B70）+ G1 治理
 

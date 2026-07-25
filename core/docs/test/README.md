@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: **v8.29** 并行竞态 + Mock 误用密度（B66–B70）+ G1 contracts 默认入口
+> 治理状态: **v8.30** Prop/Fuzz/Snapshot 工程密度 + SCALE≥7500（B71–B75）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
@@ -514,7 +514,7 @@ test lane **默认**证据命令（与 `make focused FOCUS=core/tests/nextpas.co
 ```bash
 make -C core/tests/nextpas.core.test contracts
 # = api source-contract + runner source-contract + scale report
-# SCALE_MIN=6500  FAIL_PATH_MIN_RATIO=0.35  LOW_SIGNAL_MAX_RATIO=0.40
+# SCALE_MIN=7500  FAIL_PATH_MIN_RATIO=0.35  LOW_SIGNAL_MAX_RATIO=0.25
 ```
 
 | 场景 | 命令 |
@@ -549,7 +549,7 @@ make -C core/tests/nextpas.core.test list
 | 新 runtime 单元测试 | 必须 `uses nextpas.core.test` + `TTestSuite` / `Check*` / `Expect` |
 | 禁止 | 手写 `AssertTrue` 迷你 runner、`WriteLn('[PASS]')` 自计分、裸 `assert`、`fpcunit` |
 | 允许 | shell/python **source-contract** 门禁；compile-only gate；模块 owner 的历史债按 lane 消化 |
-| 示例 | `core/examples/nextpas.core.test/{smoke_suite,softfail_demo,nested_softfail_demo}` |
+| 示例 | `core/examples/nextpas.core.test/{smoke_suite,softfail_demo,nested_softfail_demo,table_driven_demo}` |
 
 ## Architecture
 

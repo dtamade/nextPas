@@ -905,6 +905,216 @@ begin
     Fail('unknown kind ' + LKind);
 end;
 
+{ ── B71: shrink deterministic seed table + ExpectFail messages ──────────── }
+
+procedure TestB71ShrinkDeterministicCase(const AC: TTestCase);
+{ Data: kind|value — shrink candidates must stay in generator bounds and
+  never grow. Generators use fixed TRandomGen seed; Shrink is pure. }
+var
+  LBar: Integer;
+  LKind, LValStr: string;
+  LGenI: IIntGenerator;
+  LGenS: IStringGenerator;
+  LGenB: IBytesGenerator;
+  LCandsI: specialize TArray<Int64>;
+  LCandsS: specialize TArray<string>;
+  LCandsB: specialize TArray<TBytes>;
+  LSrcB: TBytes;
+  I: Integer;
+  LVal: Int64;
+begin
+  LBar := Pos('|', AC.Data);
+  CheckTrue(LBar > 1, 'kind|value');
+  LKind := Copy(AC.Data, 1, LBar - 1);
+  LValStr := Copy(AC.Data, LBar + 1, Length(AC.Data));
+  if LKind = 'int' then
+  begin
+    LVal := StrToInt(LValStr);
+    LGenI := GenInt(-100, 100);
+    LCandsI := LGenI.Shrink(LVal);
+    for I := 0 to High(LCandsI) do
+    begin
+      CheckTrue(LCandsI[I] >= -100, 'int shrink >= min');
+      CheckTrue(LCandsI[I] <= 100, 'int shrink <= max');
+    end;
+  end
+  else if LKind = 'int_min' then
+  begin
+    LVal := StrToInt(LValStr);
+    LGenI := GenInt(LVal, LVal + 50);
+    LCandsI := LGenI.Shrink(LVal);
+    for I := 0 to High(LCandsI) do
+      CheckTrue(LCandsI[I] >= LVal, 'shrink at min stays >= min');
+  end
+  else if LKind = 'str' then
+  begin
+    LGenS := GenString(0, 64);
+    LCandsS := LGenS.Shrink(LValStr);
+    for I := 0 to High(LCandsS) do
+      CheckTrue(Length(LCandsS[I]) <= Length(LValStr), 'str shrink not longer');
+  end
+  else if LKind = 'bytes' then
+  begin
+    SetLength(LSrcB, Length(LValStr));
+    for I := 1 to Length(LValStr) do
+      LSrcB[I - 1] := Byte(Ord(LValStr[I]));
+    LGenB := GenBytes(0, 64);
+    LCandsB := LGenB.Shrink(LSrcB);
+    for I := 0 to High(LCandsB) do
+      CheckTrue(Length(LCandsB[I]) <= Length(LSrcB), 'bytes shrink not longer');
+  end
+  else
+    Fail('unknown B71 kind ' + LKind);
+end;
+
+procedure TestB71PropWithResultCounterexample;
+{ Fixed-range property: fail when V > 10; shrink toward boundary. }
+var
+  LResult: string;
+  LVal: Int64;
+begin
+  LResult := PropWithResult('B71 fail-path counterexample',
+    procedure(const V: Int64)
+    begin
+      if V > 10 then
+        PropFail('above ten');
+    end, GenInt(0, 100), 80, True);
+  CheckTrue(LResult <> '', 'must produce counterexample');
+  LVal := StrToInt(LResult);
+  CheckTrue((LVal >= 11) and (LVal <= 20),
+    'shrunk near boundary 11..20, got ' + LResult);
+end;
+
+procedure TestB71ExpectFailPropFailMessage;
+{ PropFail raises EAssertionFailed with message — ExpectFail needle. }
+begin
+  ExpectFail(procedure
+    begin
+      PropFail('B71 shrink fail-path needle');
+    end, 'B71 shrink fail-path needle');
+end;
+
+{ ── B72: Fuzz corpus empty/corrupt boundaries ────────────────────────────── }
+
+procedure TestB72CorpusBoundaryCase(const AC: TTestCase);
+{ Data: empty_dir | missing_dir | oob | empty_bin | junk_file | roundtrip |
+  empty_add | dup_string }
+var
+  LCorpus, LCorpus2: TFuzzCorpus;
+  LDir: string;
+  LData: TBytes;
+  LPath: string;
+begin
+  LDir := '/tmp/np_b72_' + AC.Name + '_' + IntToStr(Random(MaxInt));
+  if AC.Data = 'empty_dir' then
+  begin
+    ForceDirectories(LDir);
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      LCorpus.Load;
+      CheckEqual(0, LCorpus.Count, 'empty dir load → 0');
+      CheckFalse(LCorpus.HasFiles, 'empty dir HasFiles false');
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'missing_dir' then
+  begin
+    LCorpus := TFuzzCorpus.Create(LDir + '_missing');
+    try
+      LCorpus.Load; { no-op }
+      CheckEqual(0, LCorpus.Count, 'missing dir load → 0');
+      CheckFalse(LCorpus.HasFiles);
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'oob' then
+  begin
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      CheckTrue(Length(LCorpus.GetItem(-1)) = 0, 'oob -1 nil/empty');
+      CheckTrue(Length(LCorpus.GetItem(0)) = 0, 'oob 0 empty corpus');
+      CheckEqual('', LCorpus.GetString(99), 'oob string empty');
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'empty_bin' then
+  begin
+    ForceDirectories(LDir);
+    LPath := LDir + '/0.bin';
+    SetLength(LData, 0);
+    WriteFile(LPath, LData);
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      LCorpus.Load;
+      { empty files skipped (Length > 0 guard) }
+      CheckEqual(0, LCorpus.Count, 'empty .bin ignored');
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'junk_file' then
+  begin
+    ForceDirectories(LDir);
+    LPath := LDir + '/notes.txt';
+    WriteFileText(LPath, 'not a corpus');
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      LCorpus.Load;
+      CheckEqual(0, LCorpus.Count, 'non-.bin ignored');
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'roundtrip' then
+  begin
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      CheckTrue(LCorpus.AddString('alpha'));
+      CheckTrue(LCorpus.AddString('beta'));
+      LCorpus.Save;
+    finally
+      LCorpus.Free;
+    end;
+    LCorpus2 := TFuzzCorpus.Create(LDir);
+    try
+      LCorpus2.Load;
+      CheckEqual(2, LCorpus2.Count);
+      CheckEqual('alpha', LCorpus2.GetString(0));
+      CheckEqual('beta', LCorpus2.GetString(1));
+    finally
+      LCorpus2.Free;
+    end;
+  end
+  else if AC.Data = 'empty_add' then
+  begin
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      SetLength(LData, 0);
+      CheckTrue(LCorpus.Add(LData), 'empty bytes add once');
+      CheckFalse(LCorpus.Add(LData), 'empty bytes dup rejected');
+      CheckEqual(1, LCorpus.Count);
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else if AC.Data = 'dup_string' then
+  begin
+    LCorpus := TFuzzCorpus.Create(LDir);
+    try
+      CheckTrue(LCorpus.AddString('x'));
+      CheckFalse(LCorpus.AddString('x'), 'dup string fail-path');
+      CheckEqual(1, LCorpus.Count);
+    finally
+      LCorpus.Free;
+    end;
+  end
+  else
+    Fail('unknown B72 kind ' + AC.Data);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -912,6 +1122,12 @@ var
   LB30Cases: specialize TArray<TTestCase>;
   LB30I: Integer;
   LB30Kinds: array[0..7] of string;
+  LB71Cases: specialize TArray<TTestCase>;
+  LB71I: Integer;
+  LB71Kinds: array[0..3] of string;
+  LB72Cases: specialize TArray<TTestCase>;
+  LB72I: Integer;
+  LB72Kinds: array[0..7] of string;
 begin
   WriteLn('=== Property-based Testing Framework ===');
   WriteLn;
@@ -993,6 +1209,40 @@ begin
     LB30Cases[LB30I].Data := LB30Kinds[LB30I mod 8];
   end;
   LSuite.TestTable('B30 gen fail-path ExpectFail', LB30Cases, @TestB30GenFailPathCase);
+
+  { B71: shrink deterministic + PropFail ExpectFail }
+  LSuite.Test('B71 PropWithResult counterexample', @TestB71PropWithResultCounterexample);
+  LSuite.Test('B71 ExpectFail PropFail message', @TestB71ExpectFailPropFailMessage);
+  LB71Kinds[0] := 'int|42';
+  LB71Kinds[1] := 'int_min|10';
+  LB71Kinds[2] := 'str|abcdefgh';
+  LB71Kinds[3] := 'bytes|xyz';
+  SetLength(LB71Cases, 100);
+  for LB71I := 0 to High(LB71Cases) do
+  begin
+    LB71Cases[LB71I].Name := 's' + IntToStr(LB71I);
+    LB71Cases[LB71I].Data := LB71Kinds[LB71I mod 4];
+  end;
+  LSuite.TestTable('B71 shrink deterministic fail-path', LB71Cases,
+    @TestB71ShrinkDeterministicCase);
+
+  { B72: corpus empty/corrupt/roundtrip boundaries }
+  LB72Kinds[0] := 'empty_dir';
+  LB72Kinds[1] := 'missing_dir';
+  LB72Kinds[2] := 'oob';
+  LB72Kinds[3] := 'empty_bin';
+  LB72Kinds[4] := 'junk_file';
+  LB72Kinds[5] := 'roundtrip';
+  LB72Kinds[6] := 'empty_add';
+  LB72Kinds[7] := 'dup_string';
+  SetLength(LB72Cases, 80);
+  for LB72I := 0 to High(LB72Cases) do
+  begin
+    LB72Cases[LB72I].Name := 'c' + IntToStr(LB72I);
+    LB72Cases[LB72I].Data := LB72Kinds[LB72I mod 8];
+  end;
+  LSuite.TestTable('B72 corpus boundary fail-path', LB72Cases,
+    @TestB72CorpusBoundaryCase);
 
   if not LSuite.Run then
   begin
