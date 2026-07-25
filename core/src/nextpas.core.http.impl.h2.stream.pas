@@ -14,6 +14,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.http.intf,
+  nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.types;
 
@@ -72,10 +73,6 @@ type
     procedure ApplyRemoteEndStream;
     procedure ApplyLocalEndStream;
     procedure InternalReset(const AErrorCode: UInt32);
-    function ExtractHeadersFragment(const AFlags: Byte;
-      const APayload: AnsiString; out AFragment: AnsiString): Boolean;
-    function ExtractDataPayload(const AFlags: Byte;
-      const APayload: AnsiString; out AData: AnsiString): Boolean;
     function IsWritableState: Boolean; inline;
     function CanReceiveRemoteData: Boolean; inline;
     function UnreadBodyBytes: UInt32; inline;
@@ -707,64 +704,6 @@ begin
   FState := h2ssClosed;
 end;
 
-function TH2Stream.ExtractHeadersFragment(const AFlags: Byte;
-  const APayload: AnsiString; out AFragment: AnsiString): Boolean;
-var
-  LPadLength: SizeInt;
-  LStart: SizeInt;
-  LFragmentLen: SizeInt;
-begin
-  Result := False;
-  AFragment := '';
-  LStart := 1;
-  LPadLength := 0;
-
-  if (AFlags and H2_FLAG_HEADERS_PADDED) <> 0 then
-  begin
-    if Length(APayload) < 1 then
-      Exit;
-    LPadLength := Byte(APayload[1]);
-    Inc(LStart);
-  end;
-
-  if (AFlags and H2_FLAG_HEADERS_PRIORITY) <> 0 then
-  begin
-    if Length(APayload) < LStart + 4 then
-      Exit;
-    Inc(LStart, 5);
-  end;
-
-  LFragmentLen := Length(APayload) - LStart + 1 - LPadLength;
-  if LFragmentLen < 0 then
-    Exit;
-  if LFragmentLen > 0 then
-    AFragment := Copy(APayload, LStart, LFragmentLen);
-  Result := True;
-end;
-
-function TH2Stream.ExtractDataPayload(const AFlags: Byte;
-  const APayload: AnsiString; out AData: AnsiString): Boolean;
-var
-  LPadLength: SizeInt;
-begin
-  Result := False;
-  AData := '';
-  if (AFlags and H2_FLAG_DATA_PADDED) = 0 then
-  begin
-    AData := APayload;
-    Exit(True);
-  end;
-
-  if Length(APayload) < 1 then
-    Exit;
-  LPadLength := Byte(APayload[1]);
-  if Length(APayload) < 1 + LPadLength then
-    Exit;
-  if Length(APayload) > 1 + LPadLength then
-    AData := Copy(APayload, 2, Length(APayload) - 1 - LPadLength);
-  Result := True;
-end;
-
 function TH2Stream.IsWritableState: Boolean; inline;
 begin
   Result := FState in [h2ssOpen, h2ssHalfClosedRemote];
@@ -813,7 +752,7 @@ begin
     InternalReset(H2_ERR_PROTOCOL_ERROR);
     Exit;
   end;
-  if not ExtractHeadersFragment(AFlags, APayload, LFragment) then
+  if not H2ExtractHeadersFragment(AFlags, APayload, LFragment) then
   begin
     InternalReset(H2_ERR_PROTOCOL_ERROR);
     Exit;
@@ -867,7 +806,7 @@ begin
     Exit;
   if not CanReceiveRemoteData then
     Exit;
-  if not ExtractDataPayload(AFlags, APayload, LData) then
+  if not H2ExtractDataPayload(AFlags, APayload, LData) then
   begin
     InternalReset(H2_ERR_PROTOCOL_ERROR);
     Exit;

@@ -28,6 +28,9 @@ procedure RewindRetryBody(const AReq: IHttpRequest; const ABodyStream: IStream;
   const AStartPosition: Int64);
 function ClientRequestDeadline(const ATimeoutMs: Int64): TDeadline;
 procedure ApplyClientDeadline(const AConn: ITcpStream; const ADeadline: TDeadline);
+{ Pseudo-header :path / :authority from TUrl (no connection state). }
+function H2ClientRequestPath(const AUrl: TUrl): AnsiString;
+function H2ClientRequestAuthority(const AUrl: TUrl): AnsiString;
 
 implementation
 
@@ -122,6 +125,20 @@ begin
   { Always set, including Infinite, so Timeout=0 can clear a prior ConnectTimeout. }
   AConn.SetReadDeadline(ADeadline);
   AConn.SetWriteDeadline(ADeadline);
+end;
+
+function H2ClientRequestPath(const AUrl: TUrl): AnsiString;
+begin
+  Result := AnsiString(AUrl.Path);
+  if Result = '' then
+    Result := '/';
+  if AUrl.RawQuery <> '' then
+    Result := Result + '?' + AnsiString(AUrl.RawQuery);
+end;
+
+function H2ClientRequestAuthority(const AUrl: TUrl): AnsiString;
+begin
+  Result := AnsiString(AUrl.HostPort);
 end;
 
 end.
