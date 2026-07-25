@@ -2,6 +2,7 @@
 # ======================================================
 # verify-t1:     atomic + lockfree main suite + stress (R6 baseline)
 # verify-h3-consumers: H3-3 consumer regression (does NOT replace verify-t1)
+# verify-t2-smoke: curated T2 gates + test RTL isolation (F-006; does NOT replace t1)
 # verify-r8:     numa + rtm + formal research axes (opt-in; does NOT replace verify-t1)
 #
 # Prerequisite:
@@ -10,14 +11,16 @@
 # From repo root:
 #   make -C core/tests/nextpas.core.lockfree verify-t1
 #   make -C core/tests/nextpas.core.lockfree verify-h3-consumers
+#   make -C core/tests/nextpas.core.lockfree verify-t2-smoke
 #   make -C core/tests/nextpas.core.lockfree verify-r8
 #
 # Default logs (under core/build, hygiene-ignored):
 #   core/build/verify-lockfree/verify-t1.log
 #   core/build/verify-lockfree/verify-h3-consumers.log
+#   core/build/verify-lockfree/verify-t2-smoke.log
 #   core/build/verify-lockfree/verify-r8.log
 
-.PHONY: verify-t1 clean-verify-t1 verify-h3-consumers verify-r8
+.PHONY: verify-t1 clean-verify-t1 verify-h3-consumers verify-t2-smoke verify-r8 test-rtl-isolation
 
 ATOMIC_TEST_DIR := ../nextpas.core.atomic/test_atomic
 LOCKFREE_TEST_DIR := test_lockfree
@@ -37,11 +40,24 @@ NET_SERVER_TEST_DIR := ../nextpas.core.net.server/test_net_server
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
+# F-006 curated T2 smoke (not full T2 inventory)
+T2_SMOKE_TDIGEST := test_lockfree_tdigest
+T2_SMOKE_CRDT := test_lockfree_crdt
+T2_SMOKE_COWARRAY := test_lockfree_cowarray
+T2_SMOKE_SORTEDSET := test_lockfree_sortedset
+T2_SMOKE_COUNTER := test_lockfree_counter
+T2_SMOKE_BLOOM := test_lockfree_bloom
+T2_SMOKE_RINGBUFFER := test_lockfree_ringbuffer
+T2_SMOKE_MUTEX := test_lockfree_mutex
 
 VERIFY_LOG_DIR ?= ../../../build/verify-lockfree
 VERIFY_T1_LOG ?= $(VERIFY_LOG_DIR)/verify-t1.log
 VERIFY_H3_CONSUMERS_LOG ?= $(VERIFY_LOG_DIR)/verify-h3-consumers.log
+VERIFY_T2_SMOKE_LOG ?= $(VERIFY_LOG_DIR)/verify-t2-smoke.log
 VERIFY_R8_LOG ?= $(VERIFY_LOG_DIR)/verify-r8.log
+
+test-rtl-isolation:
+	@bash ./check_test_rtl_isolation.sh
 
 verify-t1:
 	@mkdir -p $(VERIFY_LOG_DIR)
@@ -52,6 +68,8 @@ verify-t1:
 	  echo "=== which fpc ==="; \
 	  command -v fpc; \
 	  fpc -iV; \
+	  echo "=== test/example RTL isolation (F-001) ==="; \
+	  bash ./check_test_rtl_isolation.sh; \
 	  echo "=== atomic ==="; \
 	  $(MAKE) -C $(ATOMIC_TEST_DIR) clean test; \
 	  echo "=== lockfree main ==="; \
@@ -61,6 +79,38 @@ verify-t1:
 	  echo "verify-t1-status=pass"; \
 	} 2>&1 | tee $(VERIFY_T1_LOG)
 	@echo "verify-t1-status=pass log=$(VERIFY_T1_LOG)"
+
+# Curated T2 smoke + RTL isolation. Does not run all ~90 T2 dirs.
+verify-t2-smoke:
+	@mkdir -p $(VERIFY_LOG_DIR)
+	@echo "verify-t2-smoke: starting (log -> $(VERIFY_T2_SMOKE_LOG))"
+	@set -euo pipefail; \
+	{ \
+	  echo "=== verify-t2-smoke $$(date -Iseconds) ==="; \
+	  echo "=== which fpc ==="; \
+	  command -v fpc; \
+	  fpc -iV; \
+	  echo "=== test RTL isolation ==="; \
+	  bash ./check_test_rtl_isolation.sh; \
+	  echo "=== T2 tdigest ==="; \
+	  $(MAKE) -C $(T2_SMOKE_TDIGEST) clean test; \
+	  echo "=== T2 crdt ==="; \
+	  $(MAKE) -C $(T2_SMOKE_CRDT) clean test; \
+	  echo "=== T2 cowarray ==="; \
+	  $(MAKE) -C $(T2_SMOKE_COWARRAY) clean test; \
+	  echo "=== T2 sortedset ==="; \
+	  $(MAKE) -C $(T2_SMOKE_SORTEDSET) clean test; \
+	  echo "=== T2 counter ==="; \
+	  $(MAKE) -C $(T2_SMOKE_COUNTER) clean test; \
+	  echo "=== T2 bloom ==="; \
+	  $(MAKE) -C $(T2_SMOKE_BLOOM) clean test; \
+	  echo "=== T2 ringbuffer ==="; \
+	  $(MAKE) -C $(T2_SMOKE_RINGBUFFER) clean test; \
+	  echo "=== T2 mutex ==="; \
+	  $(MAKE) -C $(T2_SMOKE_MUTEX) clean test; \
+	  echo "verify-t2-smoke-status=pass"; \
+	} 2>&1 | tee $(VERIFY_T2_SMOKE_LOG)
+	@echo "verify-t2-smoke-status=pass log=$(VERIFY_T2_SMOKE_LOG)"
 
 # H3-3 (+ H4/H3-5 widen): cross-module + H3-2 Guarded subset consumer regression.
 # Does not replace verify-t1. Covers:

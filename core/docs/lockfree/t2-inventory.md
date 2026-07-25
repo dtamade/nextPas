@@ -1,8 +1,9 @@
 # T2 Inventory — nextpas.core.lockfree
 
-> **Status**: Q4 audit (2026-07-20) · **I1 honesty pass** (2026-07-20 night) · **N1 recommend column** (2026-07-26)
+> **Status**: Q4 audit (2026-07-20) · **I1 honesty pass** (2026-07-20 night) · **N1 recommend column** (2026-07-26) · **F-004 freeze** (2026-07-26)
 > **Authority**: tiers abstract CONTRACT §0.2; H3-2 production subset remains §0.3 only
 > **Rule**: T2 never enters default `uses nextpas.core.lockfree` facade
+> **Freeze**: **No new T2 algorithm units** without a one-page charter + owner approve (audit F-004). Expand H3-2 beyond bag/multimap only with charter.
 
 ## How to use
 

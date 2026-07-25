@@ -24,6 +24,8 @@ type
    *
    * @safety
    *   FTail 的非原子读取是刻意设计，依赖 single-consumer contract 保证安全。
+   *   Under {$IFDEF LOCKFREE_DEBUG}, consumer-side methods claim/check owner thread id
+   *   (audit F-005). Default builds keep zero overhead.
    *}
   generic TMpscQueueImpl<T> = class
   private
@@ -42,6 +44,10 @@ type
     FCount: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    {$IFDEF LOCKFREE_DEBUG}
+    FConsumerThreadId: UInt64;
+    procedure DebugClaimConsumer; inline;
+    {$ENDIF}
     function LoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
     procedure StoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
     function ExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
@@ -78,6 +84,9 @@ implementation
 
 uses
   nextpas.core.errors,
+  {$IFDEF LOCKFREE_DEBUG}
+  nextpas.core.platform.thread,
+  {$ENDIF}
   nextpas.core.atomic,
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
@@ -109,8 +118,25 @@ begin
   FCount := 0;
   FDataEpoch := 0;
   FDataWaiters := 0;
+  {$IFDEF LOCKFREE_DEBUG}
+  FConsumerThreadId := 0;
+  {$ENDIF}
   FConstructed := True;
 end;
+
+{$IFDEF LOCKFREE_DEBUG}
+procedure TMpscQueueImpl.DebugClaimConsumer;
+var
+  LSelf: UInt64;
+begin
+  LSelf := platform_thread_id;
+  if FConsumerThreadId = 0 then
+    FConsumerThreadId := LSelf
+  else if FConsumerThreadId <> LSelf then
+    raise EInvalidOperationError.Create(
+      'TMpscQueue LOCKFREE_DEBUG: consumer methods must run on a single owner thread');
+end;
+{$ENDIF}
 
 destructor TMpscQueueImpl.Destroy;
 var
@@ -177,6 +203,9 @@ function TMpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LTail, LNext, LPrev: PNode;
 begin
+  {$IFDEF LOCKFREE_DEBUG}
+  DebugClaimConsumer;
+  {$ENDIF}
   LTail := FTail;
   LNext := LoadNode(LTail^.Next, mo_acquire);
   if LTail = @FStub then

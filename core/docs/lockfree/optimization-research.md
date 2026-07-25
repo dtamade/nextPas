@@ -36,7 +36,7 @@ var
   LWrap: PtrUInt;
 begin
   // ... 前置检查不变 ...
-  
+
   // 计算连续区域和环绕区域
   LContiguous := FCapacity - (PtrUInt(LTail) and FMask);
   if LCount <= LContiguous then
@@ -50,7 +50,7 @@ begin
     Move(AValues[0], FSlots[PtrUInt(LTail) and FMask], LContiguous * SizeOf(T));
     Move(AValues[LContiguous], FSlots[0], (LCount - LContiguous) * SizeOf(T));
   end;
-  
+
   // ... 后置更新不变 ...
 end;
 ```
@@ -132,7 +132,7 @@ begin
     LPos := FEnqueuePos;
     LReserved := Min(Length(AValues), FCapacity - (LPos - FDequeueCache));
   until AtomicCompareExchange64(FEnqueuePos, LPos, LPos + LReserved) = LPos;
-  
+
   // 填充预留的位置
   for LI := 0 to LReserved - 1 do
   begin
@@ -192,7 +192,7 @@ end;
 
 **优先级**: 中
 **原因**: 当前性能已接近 C++ (94.2%)，进一步优化收益有限
-**实施**: 
+**实施**:
 - 方案 A: 0.5-1 小时
 - 方案 B: 2-4 小时
 

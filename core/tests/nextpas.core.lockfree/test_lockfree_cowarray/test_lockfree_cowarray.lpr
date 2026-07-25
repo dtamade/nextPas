@@ -3,7 +3,7 @@ program test_lockfree_cowarray;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.lockfree.cowarray;
 
 type

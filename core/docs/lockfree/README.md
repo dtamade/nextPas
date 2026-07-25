@@ -25,7 +25,8 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |
 | [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口（含 H5-1） |
 | [`http-integration-notes.md`](http-integration-notes.md) | **HTTP 协作**（只读审计 + 选型；不抢实现） |
-| [`t2-inventory.md`](t2-inventory.md) | T2 库存 + 推荐档 |
+| [`t2-inventory.md`](t2-inventory.md) | T2 库存 + 推荐档 + **freeze** |
+| [`findings.md`](findings.md) | 2026-07-26 系统审计 + 实施状态 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |

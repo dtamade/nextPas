@@ -110,6 +110,17 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 与 lockfree 共享 isolation source-contract（见 `core/docs/lockfree/CONTRACT.md` §2.1）。
 公开类型名是 **`TAtomicInt32`**（不是 `TAtomicInt`）。
 
+### 2.2 Backend / dual-compiler debt（F-002 · 登记）
+
+| 项 | 现状 | 目标 |
+|----|------|------|
+| 公开 API | `atomic_*` / `TAtomic*` / `mo_*` | 稳定；新代码只走此面 |
+| Host FPC 实现 | 热路径调用 FPC `System` **`Interlocked*`** intrinsic（非 `uses SysUtils`） | 可接受为 **FPC bootstrap host** |
+| nextpas 自举编译器 | 须提供等价 atomic backend（LLVM atomic / asm / platform seam） | **双编译器透明的前置债**；未完成前不得宣称 host 无关 |
+| 证据 | Linux x86_64 focused runtime；其它见 README Backend Truth Matrix（F-003） | 有 CI 机再升 runtime 级 |
+
+**`mo_consume`（F-011）**：实现侧多规范为 **≥ acquire**；不保证可移植 dependency-ordered consume 优化。调用方不得按更弱 consume 模型做跨平台推理。
+
 ---
 
 ## 3. 错误处理

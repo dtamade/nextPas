@@ -1,7 +1,7 @@
 # Lockfree Formal Models（TLA+）
 
-> **角色**: R8 研究证据入口 · **非** T1 默认验证门  
-> **诚实状态**: [`../r8-research-status.md`](../r8-research-status.md)  
+> **角色**: R8 研究证据入口 · **非** T1 默认验证门
+> **诚实状态**: [`../r8-research-status.md`](../r8-research-status.md)
 > **契约**: formal 加深 **不** 改变 T1 运行时语义（见 [`../CONTRACT.md`](../CONTRACT.md) §6.1）
 
 ### 能声称 / 不能声称（P5）

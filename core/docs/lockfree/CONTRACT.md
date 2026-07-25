@@ -3,8 +3,10 @@
 **模块路径**：`core/src/nextpas.core.lockfree*.pas`（约 100+ 源文件；默认门面仅 T1）
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-20
-**版本**：2.8
+**最后更新**：2026-07-26
+**版本**：2.9
+
+**Audit follow-ups（2026-07-26）**：见 [`findings.md`](findings.md)。要点：T2 freeze（F-004）；`-dLOCKFREE_DEBUG` owner 检查（F-005）；`verify-t2-smoke` + 测试 RTL isolation（F-001/F-006）。
 
 ---
 
@@ -369,11 +371,13 @@ type
 - 文本转换走 `nextpas.core.text.conv`
 - 时间/休眠走 `nextpas.core.time` / `nextpas.core.platform`（`platform_monotonic_ns`、`platform_thread_sleep_ms` 等）
 
-**测试同样适用**（`core/tests/nextpas.core.atomic/**` 与 `core/tests/nextpas.core.lockfree/**` 的 `.lpr`）：
+**测试 / 示例 / bench 同样适用**（`core/tests/nextpas.core.atomic/**`、`core/tests/nextpas.core.lockfree/**`、`core/examples/**lockfree**`、`core/benchmarks/nextpas.core.{atomic,lockfree}/**`）：
 - 不得直接 `uses` 上述 banned RTL
 - 需要 `IntToStr`/`Format` 时 `uses nextpas.core.text.conv`
 - 需要 `TStringList`/`TFileStream` 等时经 `nextpas.core.system.classes` / `nextpas.core.fs`，不得直接 `uses Classes`
-- source-contract（`TestFpcRtlIsolationSourceContract`）覆盖全部生产 `atomic*`/`lockfree*` 单元 + example；并对主测试入口做 isolation 断言
+- 需要 `NaN`/`Infinity` 时 `uses nextpas.core.math.scalar`，不得 `uses Math`
+- source-contract（`TestFpcRtlIsolationSourceContract`）覆盖生产 `atomic*`/`lockfree*` 单元 + example
+- **回归脚本**：`core/tests/nextpas.core.lockfree/check_test_rtl_isolation.sh`（挂入 `verify-t1` / `verify-t2-smoke`）
 
 ---
 
