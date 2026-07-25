@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 **79** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（cancel.adapter extract）
-**版本**：3.44
+**最后更新**：2026-07-26（h2 settings share）
+**版本**：3.45
 
 ---
 
@@ -875,6 +875,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-26 | 3.42 | h2.session 纯 helper 抽出：`impl.h2.session.helpers`；session ~1536；inventory **77** |
 | 2026-07-26 | 3.43 | h2.client 纯 helper 抽出：`impl.h2.client.helpers`；client ~2022；inventory **78** |
 | 2026-07-26 | 3.44 | 共享 cancel 桥接：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`）；h1/h2/websocket 去重；inventory **79** |
+| 2026-07-26 | 3.45 | h2 settings 共享：`H2ParseSettingsPayload` + `H2MinUInt32` → `impl.h2.types`；client/session 去重 |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

@@ -107,8 +107,6 @@ type
     procedure FailConnection(const AErrorCode: UInt32; const ADebugData: AnsiString;
       const AMessage: string);
     procedure SendConnectionWindowDelta;
-    function ParseSettingsPayload(const APayload: AnsiString;
-      out ASettings: TH2Settings): Boolean;
     function AllocateStreamID: UInt32;
     function RequestPath(const AUrl: TUrl): AnsiString;
     function RequestAuthority(const AUrl: TUrl): AnsiString;
@@ -579,44 +577,6 @@ begin
   SendWindowUpdate(0, LDelta);
 end;
 
-function TH2ClientConnection.ParseSettingsPayload(const APayload: AnsiString;
-  out ASettings: TH2Settings): Boolean;
-var
-  LEntries: TH2SettingEntries;
-  LI: SizeInt;
-begin
-  ASettings := FRemoteSettings;
-  if not H2DecodeSettingsPayload(APayload, LEntries) then
-    Exit(False);
-  for LI := 0 to High(LEntries) do
-  begin
-    case LEntries[LI].Identifier of
-      H2_SETTINGS_HEADER_TABLE_SIZE:
-        ASettings.HeaderTableSize := LEntries[LI].Value;
-      H2_SETTINGS_ENABLE_PUSH:
-        begin
-          if LEntries[LI].Value > 1 then
-            Exit(False);
-          ASettings.EnablePush := LEntries[LI].Value <> 0;
-        end;
-      H2_SETTINGS_MAX_CONCURRENT_STREAMS:
-        ASettings.MaxConcurrentStreams := LEntries[LI].Value;
-      H2_SETTINGS_INITIAL_WINDOW_SIZE:
-        ASettings.InitialWindowSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_FRAME_SIZE:
-        ASettings.MaxFrameSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_HEADER_LIST_SIZE:
-        ASettings.MaxHeaderListSize := LEntries[LI].Value;
-    end;
-  end;
-  try
-    ASettings.Validate;
-  except
-    Exit(False);
-  end;
-  Result := True;
-end;
-
 function TH2ClientConnection.AllocateStreamID: UInt32;
 begin
   if FNextStreamID = 0 then
@@ -806,7 +766,7 @@ begin
       ReadRequestBodyFlowControlFrame(AStreamID, AStreamFlow, AResponse);
       LCapacity := RequestBodySendCapacity(AStreamFlow);
     end;
-    LChunkSize := MinUInt32(FRemoteSettings.MaxFrameSize, LCapacity);
+    LChunkSize := H2MinUInt32(FRemoteSettings.MaxFrameSize, LCapacity);
     if Int64(LChunkSize) > LRemaining then
       LChunkSize := UInt32(LRemaining);
     SetLength(LBuffer, LChunkSize);
@@ -1051,7 +1011,7 @@ begin
     FPeerSettingsAcked := True;
     Exit;
   end;
-  if not ParseSettingsPayload(AFrame.Payload, LSettings) then
+  if not H2ParseSettingsPayload(FRemoteSettings, AFrame.Payload, LSettings) then
     raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid SETTINGS payload');
   LOldInitialWindowSize := FRemoteSettings.InitialWindowSize;
   FRemoteSettings := LSettings;
