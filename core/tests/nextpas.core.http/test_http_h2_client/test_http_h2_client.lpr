@@ -37,6 +37,10 @@ const
     '../../../src/nextpas.core.http.impl.h2.client.pas';
   H2_CLIENT_SOURCE_PATH_FROM_ROOT =
     'core/src/nextpas.core.http.impl.h2.client.pas';
+  H2_CANCEL_ADAPTER_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.cancel.adapter.pas';
+  H2_CANCEL_ADAPTER_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.cancel.adapter.pas';
   H2_REGISTRY_SOURCE_PATH_FROM_TEST =
     '../../../src/nextpas.core.http.impl.registry.pas';
   H2_REGISTRY_SOURCE_PATH_FROM_ROOT =
@@ -2034,11 +2038,15 @@ end;
 procedure TestH2DialAndCancelSourceContract;
 var
   LSrc: string;
+  LAdapterSrc: string;
   LSecurePos: SizeInt;
   LSecureBlock: string;
 begin
   LSrc := ReadSourceFile(ResolveSourcePath(H2_CLIENT_SOURCE_PATH_FROM_TEST,
     H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  LAdapterSrc := ReadSourceFile(ResolveSourcePath(
+    H2_CANCEL_ADAPTER_SOURCE_PATH_FROM_TEST,
+    H2_CANCEL_ADAPTER_SOURCE_PATH_FROM_ROOT));
   Check(Pos('function H2ClientDial(const AHost: string; const APort: UInt16;',
     LSrc) > 0, 'H2ClientDial helper is present');
   Check(Pos('LRawConn := H2ClientDial(LHost, LPort, FOptions.ConnectTimeout,',
@@ -2058,8 +2066,12 @@ begin
     'H2 RoundTrip applies cancel token to connection stream');
   Check(Pos('LConn.ClearCancelToken;', LSrc) > 0,
     'H2 RoundTrip clears cancel token before pool return');
+  Check(Pos('nextpas.core.http.impl.cancel.adapter', LSrc) > 0,
+    'H2 client uses shared cancel adapter unit');
+  Check(Pos('ApplyHttpCancelToken(FConn, AToken);', LSrc) > 0,
+    'H2 ApplyCancelToken delegates to shared ApplyHttpCancelToken');
   Check(Pos('THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)',
-    LSrc) > 0, 'H2 bridges IHttpCancelToken to INetCancelToken/waitable');
+    LAdapterSrc) > 0, 'shared cancel adapter bridges IHttpCancelToken to INetCancelToken/waitable');
   Check(Pos('HttpWrapTransportException', LSrc) > 0,
     'H2 wraps transport cancel/timeout into EHttpError');
 end;

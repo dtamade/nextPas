@@ -1,10 +1,10 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（约 **78** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 **79** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（h2.client.helpers extract）
-**版本**：3.43
+**最后更新**：2026-07-26（cancel.adapter extract）
+**版本**：3.44
 
 ---
 
@@ -25,6 +25,7 @@ http.client / server     ← facade 编排（server 委托 net.server）
 http.static / websocket  ← helper 级公开面
 http.form / cookie / sse ← 表单、Cookie、SSE 辅助
 http.impl.registry       ← 版本 → transport factory
+http.impl.cancel.adapter ← 共享 IHttpCancelToken → INetCancelToken 桥（h1/h2/websocket）
 http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast + poll/serve
 http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client(+body)/TLS
 http.impl.tls.stream     ← TLS over TCP stream wrapper
@@ -873,6 +874,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-26 | 3.41 | h2.session 机械抽：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer`；session ~1582；inventory **76** |
 | 2026-07-26 | 3.42 | h2.session 纯 helper 抽出：`impl.h2.session.helpers`；session ~1536；inventory **77** |
 | 2026-07-26 | 3.43 | h2.client 纯 helper 抽出：`impl.h2.client.helpers`；client ~2022；inventory **78** |
+| 2026-07-26 | 3.44 | 共享 cancel 桥接：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`）；h1/h2/websocket 去重；inventory **79** |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

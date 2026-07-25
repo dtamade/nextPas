@@ -52,6 +52,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.encoding,
   nextpas.core.http.headers, nextpas.core.http.message,
+  nextpas.core.http.impl.cancel.adapter,
   nextpas.core.http.impl.h1.pool,
   nextpas.core.http.impl.h1.wire,
   nextpas.core.http.impl.h1.parser,
@@ -83,20 +84,6 @@ type
     destructor Destroy; override;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
-  end;
-
-
-type
-  { Bridge IHttpCancelToken → INetCancelToken when token is probe-only. }
-  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
-  private
-    FToken: IHttpCancelToken;
-    FWaitable: INetCancelWaitable;
-  public
-    constructor Create(const AToken: IHttpCancelToken);
-    function IsCanceled: Boolean;
-    function WakeHandle: PtrUInt;
-    procedure DrainWake;
   end;
 
 
@@ -162,48 +149,10 @@ begin
   AConn.SetWriteDeadline(ADeadline);
 end;
 
-constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
-begin
-  inherited Create;
-  FToken := AToken;
-  FWaitable := nil;
-  if (AToken <> nil) and
-     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
-    FWaitable := nil;
-end;
-
-function THttpNetCancelAdapter.IsCanceled: Boolean;
-begin
-  Result := (FToken <> nil) and FToken.IsCanceled;
-end;
-
-function THttpNetCancelAdapter.WakeHandle: PtrUInt;
-begin
-  if FWaitable <> nil then
-    Result := FWaitable.WakeHandle
-  else
-    Result := 0;
-end;
-
-procedure THttpNetCancelAdapter.DrainWake;
-begin
-  if FWaitable <> nil then
-    FWaitable.DrainWake;
-end;
-
 procedure ApplyClientCancelToken(const AConn: ITcpStream;
   const AToken: IHttpCancelToken);
-var
-  LNet: INetCancelToken;
 begin
-  if AConn = nil then
-    Exit;
-  if AToken = nil then
-    AConn.SetCancelToken(nil)
-  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
-    AConn.SetCancelToken(LNet)
-  else
-    AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
+  ApplyHttpCancelToken(AConn, AToken);
 end;
 
 function H1ClientDial(const AHost: string; const APort: UInt16;

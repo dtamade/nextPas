@@ -130,6 +130,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.client,
+  nextpas.core.http.impl.cancel.adapter,
   nextpas.core.http.impl.tls.stream,
   nextpas.core.tls.random,
   nextpas.core.compress.deflate;
@@ -175,18 +176,6 @@ type
     procedure Pong(const AData: TBytes);
     procedure Close(const ACode: UInt16; const AReason: string);
     function IsOpen: Boolean;
-  end;
-
-  { Bridge IHttpCancelToken → INetCancelToken; forward waitable when present. }
-  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
-  private
-    FToken: IHttpCancelToken;
-    FWaitable: INetCancelWaitable;
-  public
-    constructor Create(const AToken: IHttpCancelToken);
-    function IsCanceled: Boolean;
-    function WakeHandle: PtrUInt;
-    procedure DrainWake;
   end;
 
 { Helpers }
@@ -304,48 +293,10 @@ begin
   AConn.SetWriteDeadline(TDeadline.Infinite);
 end;
 
-constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
-begin
-  inherited Create;
-  FToken := AToken;
-  FWaitable := nil;
-  if (AToken <> nil) and
-     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
-    FWaitable := nil;
-end;
-
-function THttpNetCancelAdapter.IsCanceled: Boolean;
-begin
-  Result := (FToken <> nil) and FToken.IsCanceled;
-end;
-
-function THttpNetCancelAdapter.WakeHandle: PtrUInt;
-begin
-  if FWaitable <> nil then
-    Result := FWaitable.WakeHandle
-  else
-    Result := 0;
-end;
-
-procedure THttpNetCancelAdapter.DrainWake;
-begin
-  if FWaitable <> nil then
-    FWaitable.DrainWake;
-end;
-
 procedure ApplyWebSocketCancelToken(const AConn: ITcpStream;
   const AToken: IHttpCancelToken);
-var
-  LNet: INetCancelToken;
 begin
-  if AConn = nil then
-    Exit;
-  if AToken = nil then
-    AConn.SetCancelToken(nil)
-  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
-    AConn.SetCancelToken(LNet)
-  else
-    AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
+  ApplyHttpCancelToken(AConn, AToken);
 end;
 
 procedure ClearWebSocketCancelToken(const AConn: ITcpStream);
