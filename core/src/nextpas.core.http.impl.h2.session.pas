@@ -129,8 +129,6 @@ type
       const AFrame: TH2Frame): Boolean;
     function RejectFrame(const AStreamID: UInt32; const AErrorCode: UInt32;
       const AConnectionLevel: Boolean): Boolean;
-    function ParseSettingsPayload(const APayload: AnsiString;
-      out ASettings: TH2Settings): Boolean;
     function ExtractPseudoHeader(const AHeaders: IHttpHeaders;
       const AName: string): string;
     function BuildRequestFromStream(const AStream: TH2Stream): IHttpRequest;
@@ -734,53 +732,13 @@ begin
   end;
 end;
 
-function TH2ServerSession.ParseSettingsPayload(const APayload: AnsiString;
-  out ASettings: TH2Settings): Boolean;
-var
-  LEntries: TH2SettingEntries;
-  LI: SizeInt;
-begin
-  ASettings := FRemoteSettings;
-  if not H2DecodeSettingsPayload(APayload, LEntries) then
-    Exit(False);
-  for LI := 0 to High(LEntries) do
-  begin
-    case LEntries[LI].Identifier of
-      H2_SETTINGS_HEADER_TABLE_SIZE:
-        ASettings.HeaderTableSize := LEntries[LI].Value;
-      H2_SETTINGS_ENABLE_PUSH:
-        begin
-          if LEntries[LI].Value > 1 then
-            Exit(False);
-          ASettings.EnablePush := LEntries[LI].Value <> 0;
-        end;
-      H2_SETTINGS_MAX_CONCURRENT_STREAMS:
-        ASettings.MaxConcurrentStreams := LEntries[LI].Value;
-      H2_SETTINGS_INITIAL_WINDOW_SIZE:
-        ASettings.InitialWindowSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_FRAME_SIZE:
-        ASettings.MaxFrameSize := LEntries[LI].Value;
-      H2_SETTINGS_MAX_HEADER_LIST_SIZE:
-        ASettings.MaxHeaderListSize := LEntries[LI].Value;
-      else
-        { unknown setting ignored }
-    end;
-  end;
-  try
-    ASettings.Validate;
-  except
-    Exit(False);
-  end;
-  Result := True;
-end;
-
 function TH2ServerSession.HandleSettings(const AFrame: TH2Frame): Boolean;
 var
   LSettings: TH2Settings;
 begin
   if (AFrame.Header.Flags and H2_FLAG_SETTINGS_ACK) <> 0 then
     Exit(True);
-  if not ParseSettingsPayload(AFrame.Payload, LSettings) then
+  if not H2ParseSettingsPayload(FRemoteSettings, AFrame.Payload, LSettings) then
     Exit(RejectFrame(0, H2_ERR_PROTOCOL_ERROR, True));
   FRemoteSettings := LSettings;
   FEncoder.SetDynamicTableSize(FRemoteSettings.HeaderTableSize);
@@ -1297,7 +1255,7 @@ begin
     LCapacity := AStream.AvailableSendCapacity;
     if LCapacity = 0 then
       Break;
-    LChunkSize := MinUInt32(LMaxChunk, LCapacity);
+    LChunkSize := H2MinUInt32(LMaxChunk, LCapacity);
     SetLength(LPayload, LChunkSize);
     LRead := ABody.Read(LPayload[1], LChunkSize);
     if LRead = 0 then

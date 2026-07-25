@@ -16,7 +16,6 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
 procedure ValidateH2ClientUrlScheme(const AUrl: TUrl);
 function HeadersHaveConnectionCloseToken(const AHeaders: IHttpHeaders): Boolean;
 function IsH2ForbiddenRequestHeader(const AName: string): Boolean; inline;
@@ -38,14 +37,6 @@ uses
   nextpas.core.text.conv,
   nextpas.core.time.base,
   nextpas.core.http.message;
-
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
-begin
-  if ALeft < ARight then
-    Result := ALeft
-  else
-    Result := ARight;
-end;
 
 procedure ValidateH2ClientUrlScheme(const AUrl: TUrl);
 var

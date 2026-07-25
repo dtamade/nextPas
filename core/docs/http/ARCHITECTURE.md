@@ -27,9 +27,10 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前真实生产源码库存约 **79** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
 - H2 client response body `IReader` 已抽出：`impl.h2.client.body`（`TH2ClientResponseBodyReader`）。
-- H2 client pure helpers 已抽出：`impl.h2.client.helpers`；`impl.h2.client` ~2022。
+- H2 client pure helpers 已抽出：`impl.h2.client.helpers`；`impl.h2.client` ~1932。
 - 共享 cancel 桥接已抽出：`impl.cancel.adapter`（`THttpNetCancelAdapter` + `ApplyHttpCancelToken`；h1/h2/websocket 共用）。
-- H2 server session 机械拆：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer` + `impl.h2.session.helpers`；`impl.h2.session` ~1536（状态机主体仍在）。
+- H2 settings 解析去重：`H2ParseSettingsPayload` / `H2MinUInt32` 落在 `impl.h2.types`（client/session 共用）。
+- H2 server session 机械拆：`impl.h2.streammap` + `impl.h2.session.preface` + `impl.h2.session.writer` + `impl.h2.session.helpers`；`impl.h2.session` ~1494（状态机主体仍在）。
 - Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
 - H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
 - H1 client transport 已抽出：`impl.h1.client`；共享 prepend stream：`impl.h1.prepend`。

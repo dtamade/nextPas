@@ -253,6 +253,11 @@ type
     procedure ApplyLocalInitialWindowSize(const ANewInitialWindowSize: UInt32);
   end;
 
+{ Shared pure helpers used by both client and server session. }
+function H2MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
+function H2ParseSettingsPayload(const ABase: TH2Settings;
+  const APayload: AnsiString; out ASettings: TH2Settings): Boolean;
+
 implementation
 
 procedure RaiseH2ConfigError(const AMessage: string);
@@ -333,6 +338,54 @@ begin
   InitialWindowSize := ASettings.InitialWindowSize;
   MaxFrameSize := ASettings.MaxFrameSize;
   MaxHeaderListSize := ASettings.MaxHeaderListSize;
+end;
+
+function H2MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
+begin
+  if ALeft < ARight then
+    Result := ALeft
+  else
+    Result := ARight;
+end;
+
+function H2ParseSettingsPayload(const ABase: TH2Settings;
+  const APayload: AnsiString; out ASettings: TH2Settings): Boolean;
+var
+  LEntries: TH2SettingEntries;
+  LI: SizeInt;
+begin
+  ASettings := ABase;
+  if not H2DecodeSettingsPayload(APayload, LEntries) then
+    Exit(False);
+  for LI := 0 to High(LEntries) do
+  begin
+    case LEntries[LI].Identifier of
+      H2_SETTINGS_HEADER_TABLE_SIZE:
+        ASettings.HeaderTableSize := LEntries[LI].Value;
+      H2_SETTINGS_ENABLE_PUSH:
+        begin
+          if LEntries[LI].Value > 1 then
+            Exit(False);
+          ASettings.EnablePush := LEntries[LI].Value <> 0;
+        end;
+      H2_SETTINGS_MAX_CONCURRENT_STREAMS:
+        ASettings.MaxConcurrentStreams := LEntries[LI].Value;
+      H2_SETTINGS_INITIAL_WINDOW_SIZE:
+        ASettings.InitialWindowSize := LEntries[LI].Value;
+      H2_SETTINGS_MAX_FRAME_SIZE:
+        ASettings.MaxFrameSize := LEntries[LI].Value;
+      H2_SETTINGS_MAX_HEADER_LIST_SIZE:
+        ASettings.MaxHeaderListSize := LEntries[LI].Value;
+      else
+        { unknown setting ignored }
+    end;
+  end;
+  try
+    ASettings.Validate;
+  except
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 { TH2ServerTransportOptions }

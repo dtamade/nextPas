@@ -13,7 +13,6 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.impl.h2.types;
 
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
 function EffectiveMaxConcurrentStreams(const ASettings: TH2Settings): UInt32;
 function AnsiToString(const AValue: AnsiString): string; inline;
 function StringToAnsi(const AValue: string): AnsiString; inline;
@@ -26,16 +25,8 @@ implementation
 uses
   nextpas.core.text.conv;
 
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
-begin
-  if ALeft < ARight then
-    Result := ALeft
-  else
-    Result := ARight;
-end;
-
-{ RFC 9113 §6.5.2: SETTINGS_MAX_CONCURRENT_STREAMS default is100.
-  A value of0 means "not advertised" and should use the RFC default. }
+{ RFC 9113 §6.5.2: SETTINGS_MAX_CONCURRENT_STREAMS default is 100.
+  A value of 0 means "not advertised" and should use the RFC default. }
 function EffectiveMaxConcurrentStreams(const ASettings: TH2Settings): UInt32;
 begin
   if ASettings.MaxConcurrentStreams = 0 then
