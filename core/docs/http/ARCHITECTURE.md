@@ -13,7 +13,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 
 ## 当前落地状态（2026-07-23）
 
-- `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
+- `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 **server** transport owner；client RoundTrip 在 `impl.h1.client`（re-export 经 `impl.h1`）。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
 - `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
 - `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责 RoundTrip/redirect 编排与便捷请求构造，redirect 纯函数与 decorator 栈已抽出独立单元；server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
@@ -23,10 +23,11 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实生产源码库存约 **66** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **68** 个 `nextpas.core.http*` 单元（fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
 - Client free helpers 已抽出：`client.helpers`（破 decorator→client 环；`client` 仍 re-export 公开 API）。
 - H1 wire free helpers 已抽出：`impl.h1.wire`（ValidateWire* / WriteError* / proxy authority）。
+- H1 client transport 已抽出：`impl.h1.client`；共享 prepend stream：`impl.h1.prepend`。
 - **H2 transport 已完整落地**：
   - server session (`h2.session.pas`)：client preface 验证、SETTINGS 握手、frame dispatch、
     per-stream request execution、response encoding、flow control、poll-driven execution（实现 `ITcpServerSession` + `ITcpServerPollDrivenSession`）
@@ -192,8 +193,11 @@ src/
   nextpas.core.http.impl.registry.pas    ← 默认版本注册表 + transport factory 解析
 
   { HTTP/1.1 实现 }
-  nextpas.core.http.impl.h1.pas          ← H1 transport owner（client round-trip + server per-conn serve）
+  nextpas.core.http.impl.h1.pas          ← H1 server transport owner + client factory re-export
+  nextpas.core.http.impl.h1.client.pas   ← H1 client transport（RoundTrip / idle pool use）
+  nextpas.core.http.impl.h1.prepend.pas  ← shared TReadPrependTcpStream（CONNECT leftover + hijack）
   nextpas.core.http.impl.h1.pool.pas     ← client idle connection pool（STRUCT-1）
+  nextpas.core.http.impl.h1.wire.pas     ← wire free helpers / proxy Basic helper
   nextpas.core.http.impl.h1.llhttp.pas   ← llhttp 翻译产物
   nextpas.core.http.impl.h1.parser.pas   ← H1 协议解析（基于 llhttp 翻译）
   nextpas.core.http.impl.h1.scan.pas     ← H1 扫描辅助

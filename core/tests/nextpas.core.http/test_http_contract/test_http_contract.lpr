@@ -1257,7 +1257,8 @@ begin
   LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
   LHelpers := ReadTextFile('../../../src/nextpas.core.http.client.helpers.pas');
   LBase := ReadTextFile('../../../src/nextpas.core.http.base.pas');
-  LH1 := ReadTextFile('../../../src/nextpas.core.http.impl.h1.pas');
+  { Op=connect owner: H1 client transport (STRUCT residual extract). }
+  LH1 := ReadTextFile('../../../src/nextpas.core.http.impl.h1.client.pas');
   LWs := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
 
   Check(SourceHas(LClient, '''redirect'''),
@@ -1277,7 +1278,7 @@ begin
   Check(SourceHas(LBase, '''transport'''),
     'base uses Op=transport');
   Check(SourceHas(LH1, '''connect'''),
-    'H1 uses Op=connect');
+    'H1 client uses Op=connect');
   Check(SourceHas(LWs, '''websocket'''),
     'websocket uses Op=websocket');
 
