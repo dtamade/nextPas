@@ -19,6 +19,7 @@ test-source-contract:
 	bash check_usability_docs.sh
 	bash check_consumer_audit_contracts.sh
 	bash check_alloc_error_raises.sh
+	bash check_mem_rtl_isolation.sh
 
 test: test-source-contract run
 

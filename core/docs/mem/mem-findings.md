@@ -1,5 +1,9 @@
 # nextpas.core.mem 全面审查 — Findings
 
+> **SUPERSEDED（部分）**: 2026-07-26 起以 `core/docs/mem/findings.md`（audit-only，exclude）
+> 与本战役 **Audit remediation**（system.heap / RTL isolation / 死单元）为活基线。
+> 下文 2026-06/07 条目保留为历史履历；RTL 隔离与 System.* 堆收口以新审计为准。
+
 **审查日期**: 2026-06-24
 **审查范围**: 54 源文件 (18,942 行) + 25 测试项目 (5,610 行)
 **最终审计**: 2026-07-06

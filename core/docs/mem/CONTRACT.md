@@ -1,9 +1,10 @@
 # nextpas.core.mem 代码契约
 
-**模块路径**：`core/src/nextpas.core.mem*.pas`（105 个源文件）
-**层级**：L0-L3（内部分层）
-**最后更新**：2026-07-15
-**版本**：1.7
+**模块路径**：`core/src/nextpas.core.mem*.pas`（约 79 源文件；以 `core/src/nextpas.core.mem*.pas` glob 为准）
+**层级**：仓库 L0；mem 内部分层见 ARCHITECTURE（M0–M3）
+**最后更新**：2026-07-26
+**版本**：1.8
+**堆后端**：`System.*` 堆原语仅允许在 `nextpas.core.system.heap`；mem 使用 `NpSystem*`（见 [HEAP-BACKEND-OWNER.md](HEAP-BACKEND-OWNER.md)）
 
 **关联冻结策略**：[ERROR-POLICY.md](ERROR-POLICY.md)（nil vs raise）
 **默认双轨**：[README.md](README.md) — 热路径 `DefaultHeap` / 插件面 `DefaultAllocator`
@@ -18,7 +19,7 @@
 | `DefaultAllocator: IAllocator` | Growing IAllocator 根 ± `NEXTPAS_MEM_DEBUG` | **注入/诊断面**，非热路径；**同进程堆** |
 | `GetRtlAllocator` | `TRtlAllocator` | 显式 RTL 后端 / bootstrap |
 
-- Growing 原生 free：`FreeMem(ptr, size)`；单参 `FreeMem(ptr)` 为兼容路径（span 扫描；非 size-class 块可回落 `System.FreeMem`）。
+- Growing 原生 free：`FreeMem(ptr, size)`；单参 `FreeMem(ptr)` 为兼容路径（span 扫描；非 size-class 块可回落 `NpSystemFreeMem`）。
 - 过程式 `TryBlockSize(ptr, out size)`：查询 `DefaultHeap` 是否拥有该 size-class 块；True 时 `size` 为 size-class 容量（≥ 原请求）。nil / huge / 外源指针 → False。
 - **同堆互释（S5）**：`DefaultHeap` 与未包装 `DefaultAllocator`（`GetGrowingIAllocator`）分配的 size-class 块可互相释放；DEBUG wrap 链上的块必须经同一 wrap 链释放（除非 HEAP_DEBUG 把过程式也并入链）。`FreeMemOf` 仅在 wrap 关闭时短路 sized DefaultHeap free，避免绕过 tracking。
 - 双轨税证据：Scorecard **SC9**（`hot_heap` vs `plugin_ia`）。

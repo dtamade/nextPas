@@ -72,10 +72,22 @@ procedure platform_thread_sleep_sec(const ASeconds: UInt64);
     @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 
+{** @desc 创建带线程退出析构回调的 TLS 键（mem sharded 等需要）。
+    @param AKey 输出 TLS 键
+    @param ADestructor 宿主约定函数指针：POSIX = cdecl procedure(Pointer);
+      Windows = stdcall Fls callback。调用方负责提供正确约定的符号。
+    @return 0 成功，PLATFORM_ERR_* 错误码
+    @note Windows 使用 FlsAlloc（非 TlsAlloc），必须用 platform_tls_destroy_dtor 释放。 *}
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey;
+  ADestructor: Pointer): Int32;
+
 {** @desc 销毁 TLS 键
     @param AKey TLS 键
     @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
+
+{** @desc 销毁 platform_tls_create_with_destructor 创建的键（Windows=FlsFree）。 *}
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32;
 
 {** @desc 设置 TLS 值
     @param AKey TLS 键
@@ -579,8 +591,31 @@ begin
   Result := platform_thread_host_tls_create(AKey);
 end;
 
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey;
+  ADestructor: Pointer): Int32;
+type
+  TPthreadKeyDtor = procedure(AData: Pointer); cdecl;
+var
+  LKey: pthread_key_t;
+begin
+  AKey := 0;
+  if ADestructor = nil then
+    Exit(platform_tls_create(AKey));
+  Result := pthread_key_create(@LKey, TPthreadKeyDtor(ADestructor));
+  if Result = 0 then
+    AKey := PtrUInt(LKey)
+  else
+    AKey := 0;
+end;
+
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
+  Result := platform_thread_host_tls_destroy(AKey);
+end;
+
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32;
+begin
+  { POSIX: same as destroy (pthread_key_delete). }
   Result := platform_thread_host_tls_destroy(AKey);
 end;
 
@@ -943,6 +978,26 @@ begin
   Result := platform_thread_windows_tls_create(AKey);
 end;
 
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey;
+  ADestructor: Pointer): Int32;
+var
+  LIndex: DWORD;
+begin
+  { Windows FLS supports exit callbacks; TlsAlloc does not. }
+  AKey := 0;
+  if ADestructor = nil then
+    Exit(platform_tls_create(AKey));
+  LIndex := FlsAlloc(TFlsCallbackFunction(ADestructor));
+  if LIndex = FLS_OUT_OF_INDEXES then
+  begin
+    Result := platform_thread_windows_last_error_i32;
+    Exit;
+  end;
+  { Mark high bit so set/get/destroy_dtor use Fls* APIs. }
+  AKey := TPlatformTLSKey(LIndex) or (TPlatformTLSKey(1) shl (SizeOf(TPlatformTLSKey) * 8 - 1));
+  Result := 0;
+end;
+
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 begin
   if TlsFree(DWORD(AKey)) then
@@ -951,17 +1006,57 @@ begin
     Result := platform_thread_windows_last_error_i32;
 end;
 
-function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32;
+var
+  LIndex: DWORD;
+  LMask: TPlatformTLSKey;
 begin
-  if TlsSetValue(DWORD(AKey), AValue) then
+  LMask := TPlatformTLSKey(1) shl (SizeOf(TPlatformTLSKey) * 8 - 1);
+  if (AKey and LMask) <> 0 then
+  begin
+    LIndex := DWORD(AKey and not LMask);
+    if FlsFree(LIndex) then
+      Result := 0
+    else
+      Result := platform_thread_windows_last_error_i32;
+  end
+  else
+    Result := platform_tls_destroy(AKey);
+end;
+
+function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
+var
+  LMask: TPlatformTLSKey;
+  LIndex: DWORD;
+begin
+  LMask := TPlatformTLSKey(1) shl (SizeOf(TPlatformTLSKey) * 8 - 1);
+  if (AKey and LMask) <> 0 then
+  begin
+    LIndex := DWORD(AKey and not LMask);
+    if FlsSetValue(LIndex, AValue) then
+      Result := 0
+    else
+      Result := platform_thread_windows_last_error_i32;
+  end
+  else if TlsSetValue(DWORD(AKey), AValue) then
     Result := 0
   else
     Result := platform_thread_windows_last_error_i32;
 end;
 
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
+var
+  LMask: TPlatformTLSKey;
+  LIndex: DWORD;
 begin
-  Result := TlsGetValue(DWORD(AKey));
+  LMask := TPlatformTLSKey(1) shl (SizeOf(TPlatformTLSKey) * 8 - 1);
+  if (AKey and LMask) <> 0 then
+  begin
+    LIndex := DWORD(AKey and not LMask);
+    Result := FlsGetValue(LIndex);
+  end
+  else
+    Result := TlsGetValue(DWORD(AKey));
 end;
 
 function platform_cpu_count: Int32;
@@ -1003,7 +1098,9 @@ procedure platform_thread_sleep_ns(const ANanoseconds: UInt64); begin end;
 procedure platform_thread_sleep_ms(const AMilliseconds: UInt64); begin end;
 procedure platform_thread_sleep_sec(const ASeconds: UInt64); begin end;
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32; begin AKey := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey; ADestructor: Pointer): Int32; begin AKey := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;

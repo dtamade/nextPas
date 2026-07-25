@@ -108,7 +108,8 @@ implementation
 
 uses
   nextpas.core.mem.utils,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.system.heap;
 
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in arena internals
@@ -251,7 +252,7 @@ begin
     Exit(False);
 
   if FAllocator = nil then
-    LRaw := System.GetMem(LAllocSize)
+    LRaw := NpSystemGetMem(LAllocSize)
   else
     LRaw := FAllocator.GetMem(LAllocSize);
   if LRaw = nil then
@@ -268,7 +269,7 @@ begin
       if FAllocator <> nil then
         FreeMemOf(FAllocator, LRaw, LAllocSize)
       else
-        System.FreeMem(LRaw);
+        NpSystemFreeMem(LRaw);
       Exit(False);
     end;
     LAligned := (LAddr + PtrUInt(LMask)) and not PtrUInt(LMask);
@@ -279,7 +280,7 @@ begin
     if FAllocator <> nil then
       FreeMemOf(FAllocator, LRaw, LAllocSize)
     else
-      System.FreeMem(LRaw);
+      NpSystemFreeMem(LRaw);
     Exit(False);
   end;
 
@@ -326,7 +327,7 @@ begin
   if FAllocator <> nil then
     FreeMemOf(FAllocator, LRaw, LRawSize)
   else
-    System.FreeMem(LRaw);
+    NpSystemFreeMem(LRaw);
 end;
 
 { CacheSegment - move segment to free list for reuse instead of freeing }
@@ -412,7 +413,7 @@ begin
       if FAllocator <> nil then
         FreeMemOf(FAllocator, FFreeSegments[I].Raw, FFreeSegments[I].RawSize)
       else
-        System.FreeMem(FFreeSegments[I].Raw);
+        NpSystemFreeMem(FFreeSegments[I].Raw);
     end;
     FFreeSegments[I].Raw := nil;
   end;
@@ -786,7 +787,7 @@ begin
       if FAllocator <> nil then
         LNewRaw := FAllocator.GetMem(LNewSize)
       else
-        LNewRaw := System.GetMem(LNewSize);
+        LNewRaw := NpSystemGetMem(LNewSize);
       if LNewRaw <> nil then
       begin
         { Copy A's content }
@@ -802,8 +803,8 @@ begin
         end
         else
         begin
-          System.FreeMem(LSegA^.Raw);
-          System.FreeMem(LSegB^.Raw);
+          NpSystemFreeMem(LSegA^.Raw);
+          NpSystemFreeMem(LSegB^.Raw);
         end;
 
         { Update A to be the merged segment }

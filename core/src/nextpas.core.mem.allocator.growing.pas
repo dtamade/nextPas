@@ -38,7 +38,7 @@ type
       Architecture (matches Go mcache/mcentral/mheap pattern):
         Layer 1: TThreadCache (threadvar, zero contention, ~5ns)
         Layer 2: TCentralPool (spinlock, batch refill/flush)
-        Layer 3: System.GetMem (large allocations only)
+        Layer 3: NpSystemGetMem (large allocations only)
 
       Thread-safe: TLS cache absorbs most traffic; central pool uses spinlock. }
   TGrowingAllocator = class
@@ -117,7 +117,8 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.system.heap;
 
 const
   { Max threads tracked in global registry (power of 2 for fast modulo). }
@@ -399,10 +400,10 @@ begin
       ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
         SCAVENGER_IDLE_THRESHOLD);
   end;
-  { Huge allocation: skip size class lookup, direct System.GetMem. }
+  { Huge allocation: skip size class lookup, direct NpSystemGetMem. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
-    System.GetMem(Result, ASize);
+    Result := NpSystemGetMem(ASize);
     Exit;
   end;
   { Size-class index: must match SizeClassIndex (see FastSizeClassIndex).
@@ -433,7 +434,7 @@ begin
     Result := Pointer(LNode);
   end
   else
-    System.GetMem(Result, ASize);
+    Result := NpSystemGetMem(ASize);
   {$IFDEF DEBUG}
   if Result <> nil then
     FillChar(Result^, ASize, MEM_POISON_ALLOC);
@@ -455,14 +456,14 @@ begin
   { Huge allocation: skip size class lookup. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
-    System.FreeMem(APtr);
+    NpSystemFreeMem(APtr);
     Exit;
   end;
   { Compute size class index (must match GetMem / SizeClassIndex). }
   LIndex := FastSizeClassIndex(ASize);
   if LIndex < 0 then
   begin
-    System.FreeMem(APtr);
+    NpSystemFreeMem(APtr);
     Exit;
   end;
   { Cross-thread free optimization: check if block belongs to another thread.
@@ -534,7 +535,7 @@ procedure TGrowingAllocator.FreeMem(APtr: Pointer);
 {**
  * Compat free without caller size (slower than FreeMem(ptr, size)).
  * Prefer FreeMem(APtr, ASize) on hot paths.
- * Lookup order: TLS / span map → if owned, sized free; else System.FreeMem
+ * Lookup order: TLS / span map → if owned, sized free; else NpSystemFreeMem
  * (huge blocks that bypassed size-classes). Wrong-heap pointers remain UB.
  *}
 var
@@ -545,7 +546,7 @@ begin
   if TryBlockSize(APtr, LSize) then
     FreeMem(APtr, LSize)
   else
-    System.FreeMem(APtr);
+    NpSystemFreeMem(APtr);
 end;
 {$pop}
 
@@ -566,13 +567,13 @@ begin
   Result := 0;
   if (ASize = 0) or (ACount = 0) then
     Exit;
-  { Huge: System.GetMem per block. }
+  { Huge: NpSystemGetMem per block. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     while Result < ACount do
     begin
       Inc(GThreadCache.FOpCount);
-      System.GetMem(ABlocks^, ASize);
+      ABlocks^ := NpSystemGetMem(ASize);
       if ABlocks^ = nil then
         Break;
       Inc(ABlocks);
@@ -621,14 +622,14 @@ begin
   { Guard: ASize=0 would produce invalid size class index }
   if ASize = 0 then
     Exit;
-  { Huge: System.FreeMem per block. }
+  { Huge: NpSystemFreeMem per block. }
   if ASize > MEM_SIZECLASS_MAX then
   begin
     for I := 0 to ACount - 1 do
     begin
       Inc(GThreadCache.FOpCount);
       if ABlocks^ <> nil then
-        System.FreeMem(ABlocks^);
+        NpSystemFreeMem(ABlocks^);
       Inc(ABlocks);
     end;
     Exit;
@@ -693,7 +694,7 @@ begin
   begin
     if LClasses[I] < 0 then
     begin
-      System.GetMem(LBase[I], LSizes[I]);
+      LBase[I] := NpSystemGetMem(LSizes[I]);
       Continue;
     end;
     LClass := LClasses[I];
@@ -725,7 +726,7 @@ begin
       Continue;
     if LClasses[I] < 0 then
     begin
-      System.FreeMem(LBase[I]);
+      NpSystemFreeMem(LBase[I]);
       Continue;
     end;
     LClass := LClasses[I];
@@ -780,7 +781,7 @@ begin
     Result := ReallocMem(APtr, LOldSize, ANewSize)
   else
     { Huge or foreign block: host System path (compiler kernel System). }
-    Result := System.ReallocMem(APtr, ANewSize);
+    Result := NpSystemReallocMem(APtr, ANewSize);
 end;
 
 function TGrowingAllocator.Scavenge: Int32;

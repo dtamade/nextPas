@@ -151,8 +151,8 @@ function CalcGeometricGrowth(aCurrentCapacity: SizeUInt; aGrowthFactor: Double):
  *   aSize Number of bytes to copy.
  *         要拷贝的字节数.
  *
- * @remark This function is a safe wrapper around `System.Move`.
- *         本函数是 `System.Move` 的安全包装.
+ * @remark This function is a safe wrapper around `NpSystemMove`.
+ *         本函数是 `NpSystemMove` 的安全包装.
  *
  * @exceptions
  *   EArgumentNil If `aSrc` or `aDst` is `nil`.
@@ -817,7 +817,8 @@ function DebugIsDoubleFree(APtr: Pointer): Boolean;
 implementation
 
 uses
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.system.heap;
 
 {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
 function memcpy(aDst, aSrc : pointer; aSize : SizeUInt): Pointer; cdecl external {$IFDEF MSWINDOWS}'msvcrt.dll'{$ELSE}'libc'{$ENDIF} name 'memcpy';
@@ -884,9 +885,9 @@ begin
     raise EArgumentNil.Create('nextpas.core.mem.utils.Copy: aDst is nil.');
 
   {$IFNDEF NEXTPAS_CORE_CRT_MEMMOVE}
-  // 当使用 `System.Move` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `System.Move` 兼容
+  // 当使用 `NpSystemMove` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `NpSystemMove` 兼容
   if aSize > MAX_SIZE_INT then
-    raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.Copy: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
+    raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.Copy: aSize (%d) exceeds maximum allowed for NpSystemMove (%d).', [aSize, MAX_SIZE_INT]);
   {$ENDIF}
 
   CopyUnchecked(aSrc, aDst, aSize);
@@ -897,7 +898,7 @@ begin
   {$IFDEF NEXTPAS_CORE_CRT_MEMMOVE}
     memmove(aDst, aSrc, aSize);
   {$ELSE}
-    System.Move(aSrc^, aDst^, SizeInt(aSize));
+    NpSystemMove(aSrc^, aDst^, SizeInt(aSize));
   {$ENDIF}
 end;
 
@@ -913,9 +914,9 @@ begin
     raise EArgumentNil.Create('nextpas.core.mem.utils.CopyNonOverlap: aDst is nil.');
 
   {$IFNDEF NEXTPAS_CORE_CRT_MEMCPY}
-  // 当使用 `System.Move` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `System.Move` 兼容
+  // 当使用 `NpSystemMove` 做后端时, 检查 `aSize` 是否超出 `SizeInt` 的最大值, 以确保与 `NpSystemMove` 兼容
   if aSize > MAX_SIZE_INT then
-    raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.CopyNonOverlap: aSize (%d) exceeds maximum allowed for System.Move (%d).', [aSize, MAX_SIZE_INT]);
+    raise EOutOfRange.CreateFmt('nextpas.core.mem.utils.CopyNonOverlap: aSize (%d) exceeds maximum allowed for NpSystemMove (%d).', [aSize, MAX_SIZE_INT]);
   {$ENDIF}
 
   CopyNonOverlapUnchecked(aSrc, aDst, aSize);
@@ -926,7 +927,7 @@ begin
   {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
     memcpy(aDst, aSrc, aSize);
   {$ELSE}
-    System.Move(aSrc^, aDst^, SizeInt(aSize));
+    NpSystemMove(aSrc^, aDst^, SizeInt(aSize));
   {$ENDIF}
 end;
 
