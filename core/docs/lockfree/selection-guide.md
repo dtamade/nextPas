@@ -1,6 +1,6 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-07-21（H5-1 net completion → MPSC 生产例）
+> 更新: 2026-07-26（H5-1 done；HTTP 协作 notes；T2 N1 推荐档）
 
 [English](selection-guide.en.md)
 
@@ -27,6 +27,9 @@
 
 **SegQueue 与 MPSC 一样**：Close 后停止新入队方 → join → Free；段回收依赖 EBR，勿在活跃生产者上 Free。
 **managed 元素**：interface/string 不能直接进 T1 — 用 **Pointer 节点**（H4-1 / H5-1 模式）。
+
+**HTTP 模块**：由其他 lane 开发；接线前读 [`http-integration-notes.md`](http-integration-notes.md)（本 lane **不**默认改 http 码）。
+**T2 推荐档**：[`t2-inventory.md`](t2-inventory.md) N1（不删码、不进默认门面）。
 
 ## 快速决策树
 

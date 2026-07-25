@@ -1,10 +1,10 @@
-# Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3 + H4 + H5 prep)
+# Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3 + H4 + H5)
 
-> **日期**: 2026-07-21（verify-h3 widen H4/H3-5；登记 DIY 旁路 + H5 候选）
+> **日期**: 2026-07-26（H5-1 done 终态；verify-h3 含 H4/H3-5/H5；HTTP notes 协作）
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate（**含 H4-1 + H3-5**）；**H3-5 thread worksteal → T1 deque**；**H4-1 thread.pool → SegQueue**；Maintenance preferred residual 0；**H5 候选：net completion → MPSC**
-> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3/H3-5** + **H4-1** + **preferred-path M6 nail** + **gate widen 2026-07-21**
+> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate（**含 H4-1 + H3-5 + H5-1**）；**H3-5 thread worksteal → T1 deque**；**H4-1 thread.pool → SegQueue**；**H5-1 net completion → MPSC**；Maintenance preferred residual 0
+> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3/H3-5** + **H4-1** + **H5-1 done** + **preferred-path M6 nail** + **gate widen 2026-07-21/26**
 
 ---
 
@@ -86,9 +86,10 @@
 
 | 入口 | 覆盖 |
 |------|------|
-| `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` | `test_async`（H3-1）+ bag/multimap（H3-2）+ lifecycle 示例 + **`test_thread`（H4-1）** + **`test_worksteal`（H3-5）** |
+| `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` | `test_async`（H3-1）+ bag/multimap（H3-2）+ lifecycle 示例 + **`test_thread`（H4-1）** + **`test_worksteal`（H3-5）** + **`test_net_server`（H5-1）** |
 | 日志 | `core/build/verify-lockfree/verify-h3-consumers.log` |
 | 与 `verify-t1` | **不替代**；Maintenance / land 推荐两者都跑 |
+| HTTP | **未**直接 uses lockfree；协作见 [`http-integration-notes.md`](http-integration-notes.md)（只读审计，不抢实现） |
 
 ### 2.6 H3-5 thread worksteal → T1 deque
 

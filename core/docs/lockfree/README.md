@@ -23,10 +23,13 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
 | [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-5 complete） |
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |
-| [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
+| [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口（含 H5-1） |
+| [`http-integration-notes.md`](http-integration-notes.md) | **HTTP 协作**（只读审计 + 选型；不抢实现） |
+| [`t2-inventory.md`](t2-inventory.md) | T2 库存 + 推荐档 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
+| [`../atomic/preferred-path.md`](../atomic/preferred-path.md) | atomic preferred vs legacy 短页 |
 
 历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**；当前 **Maintenance preferred close-out**（[`READY.md`](READY.md) 三句话；[`quality-parity.md`](quality-parity.md)；**不 invent R9**）。生产热路径 preferred residual **0**（钉 `test_lockfree_preferred_path`）。
 

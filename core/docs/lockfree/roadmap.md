@@ -1,12 +1,14 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **Maintenance + Q 线**（2026-07-19）· R0–R7 + H2 + **H3-1…H3-5 done** · **Owner**: atomic-lockfree lane（全权）
-> **范围**: atomic + lockfree + H3 消费者面
-> **当前执行主线**: **[Q 线 Quality/Parity](quality-parity.md)**（对标 Go/Rust 质量与规模；**不是 R9**）。
+> **状态**: **Maintenance**（2026-07-26）· R0–R7 + H2 + **H3-1…H3-5 done** + **H4-1/H5-1 done** + **Q0–Q5 done** · **Owner**: atomic-lockfree lane（全权）
+> **范围**: atomic + lockfree + 已授权跨模块消费者（async/thread/net）
+> **当前执行主线**: **Maintenance**（保绿 + 消费者回归 + 文档诚实）；Q 线见 [`quality-parity.md`](quality-parity.md)（**不是 R9**）。
 > **H3**: **H3-1…H3-5 all done**。H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
+> **H4/H5**: pool→SegQueue；**net completion→MPSC**（[`charter-h5-net-completion-mpsc.md`](charter-h5-net-completion-mpsc.md)）。
+> **HTTP**: 其他 lane；协作 [`http-integration-notes.md`](http-integration-notes.md)（不默认改 http 码）。
 > **R8**: 研究 opt-in — [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
 > **Lane**: `.worktrees/atomic-lockfree`；见 [`READY.md`](READY.md)。
-> 冲突时以 **CONTRACT + 本路线图 + quality-parity** 为准。
+> 冲突时以 **CONTRACT + 本路线图 + quality-parity + READY** 为准。
 > **已锁定 (R/H2)**: 见历史节；**不 invent R9**；R8 仍为 opt-in 研究。
 > **状态入口**: [`READY.md`](READY.md)。
 

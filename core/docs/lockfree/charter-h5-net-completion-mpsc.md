@@ -1,9 +1,10 @@
 # H5-1 Charter — net poll completion queue → T1 MPSC
 
-> **Status**: **implemented**（2026-07-21）
+> **Status**: **done / landed on lane**（2026-07-21 implement · 2026-07-26 Maintenance 终态）
 > **Owner**: atomic-lockfree（跨模块触 `net.server`）
 > **编号**: **H5-1**（**不是** R9）
 > **依据**: READY「主战场在高层消费者」；consumer-audit；用户批准 Wave 0–2 方案
+> **Evidence**: `test_net_server`（行为 + H5 source-contract）；挂入 `verify-h3-consumers`（`NET_SERVER_TEST_DIR`）；feat `fc0db1c0f`
 
 ---
 
