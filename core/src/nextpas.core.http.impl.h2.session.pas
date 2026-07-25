@@ -24,6 +24,7 @@ uses
   nextpas.core.http.impl.h2.hpack,
   nextpas.core.http.impl.h2.stream,
   nextpas.core.http.impl.h2.streammap,
+  nextpas.core.http.impl.h2.session.helpers,
   nextpas.core.http.impl.h2.session.preface,
   nextpas.core.http.impl.h2.session.writer,
   nextpas.core.http.impl.h2.types;
@@ -171,7 +172,6 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.errors,
-  nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.io.memory,
   nextpas.core.time.base,
@@ -191,52 +191,6 @@ function H2ValidateServerPreface(const ABuf: PAnsiChar; const ALen: SizeUInt;
 begin
   Result := nextpas.core.http.impl.h2.session.preface.H2ValidateServerPreface(
     ABuf, ALen, AConsumed, AErrorCode);
-end;
-
-function MinUInt32(const ALeft, ARight: UInt32): UInt32; inline;
-begin
-  if ALeft < ARight then
-    Result := ALeft
-  else
-    Result := ARight;
-end;
-
-{ RFC 9113 §6.5.2: SETTINGS_MAX_CONCURRENT_STREAMS default is100.
-  A value of0 means "not advertised" and should use the RFC default. }
-function EffectiveMaxConcurrentStreams(const ASettings: TH2Settings): UInt32;
-begin
-  if ASettings.MaxConcurrentStreams = 0 then
-    Result := 100
-  else
-    Result := ASettings.MaxConcurrentStreams;
-end;
-
-function AnsiToString(const AValue: AnsiString): string; inline;
-begin
-  Result := string(AValue);
-end;
-
-function StringToAnsi(const AValue: string): AnsiString; inline;
-begin
-  Result := AnsiString(AValue);
-end;
-
-function StatusHeaderValue(const AStatus: THttpStatus): string; inline;
-begin
-  Result := IntToStr(Int64(AStatus));
-end;
-
-function HttpMethodFromPseudo(const AValue: string): THttpMethod;
-begin
-  Result := HttpStrToMethod(AValue);
-end;
-
-function ResponseStatusMustNotHaveBody(const AStatus: THttpStatus): Boolean;
-begin
-  Result := HttpStatusIsInformational(AStatus) or
-    (AStatus = HTTP_STATUS_NO_CONTENT) or
-    (AStatus = HTTP_STATUS_NOT_MODIFIED) or
-    (AStatus = HTTP_STATUS_RESET_CONTENT);
 end;
 
 { TH2ServerSession }
