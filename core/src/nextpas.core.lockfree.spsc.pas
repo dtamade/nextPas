@@ -37,25 +37,30 @@ type
     {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
     FPadHeader: TCacheLinePad;
     {$POP}
-    // Producer-owned fields (cache line 1)
+    // Grouped by ACCESSING THREAD, not by direction: each line holds what
+    // one thread writes per-op — its index, its published copy, its private
+    // cache of the other side's progress, and the wait cell it bumps when
+    // notifying.  The other thread touches these only on a cache refresh or
+    // while blocking, so steady-state ops stay on the owner's line.
+    // Producer-thread line
     FTail: Int64;
-    FTailCache: Int64;
-    FSpaceEpoch: Int32;
-    FSpaceWaiters: Int32;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadProducer: TCacheLinePad;
-    {$POP}
-    // Consumer-owned fields (cache line 2)
-    FHead: Int64;
+    FTailPublished: Int64;
     FHeadCache: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadProducer: TCacheLinePad;
+    {$POP}
+    // Consumer-thread line (mirror of the producer line)
+    FHead: Int64;
+    FHeadPublished: Int64;
+    FTailCache: Int64;
+    FSpaceEpoch: Int32;
+    FSpaceWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadConsumer: TCacheLinePad;
     {$POP}
-    // Shared (published) fields (cache line 3)
-    FTailPublished: Int64;
-    FHeadPublished: Int64;
+    // Cold shared fields
     FClosed: Int32;
     {$IFDEF LOCKFREE_DEBUG}
     FProducerThreadId: UInt64;

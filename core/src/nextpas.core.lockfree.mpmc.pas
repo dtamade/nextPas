@@ -49,22 +49,26 @@ type
     {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
     FPadHeader: TCacheLinePad;
     {$POP}
-    // Producer-owned fields (cache line 1)
+    // Wait cells live with the NOTIFYING side: producers check the data-side
+    // cell after every enqueue (consumers touch it only while blocking), and
+    // consumers check the space-side cell after every dequeue — so the per-op
+    // waiter read stays on the line the op just wrote anyway.
+    // Producer-side line
     FEnqueuePos: Int64;
     FActiveEnqueues: Int32;
-    FSpaceEpoch: Int32;
-    FSpaceWaiters: Int32;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadProducer: TCacheLinePad;
-    {$POP}
-    // Consumer-owned fields (cache line 2)
-    FDequeuePos: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadProducer: TCacheLinePad;
+    {$POP}
+    // Consumer-side line (mirror)
+    FDequeuePos: Int64;
+    FSpaceEpoch: Int32;
+    FSpaceWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadConsumer: TCacheLinePad;
     {$POP}
-    // Shared (published) fields (cache line 3)
+    // Cold shared fields
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);

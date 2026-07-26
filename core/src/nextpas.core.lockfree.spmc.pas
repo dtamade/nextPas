@@ -44,18 +44,22 @@ type
     {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
     FPadHeader: TCacheLinePad;
     {$POP}
+    // Wait cells live with the NOTIFYING side: the producer checks the
+    // data-side cell after every enqueue, consumers check the space-side
+    // cell after every dequeue — the per-op waiter read stays on the line
+    // the op just wrote anyway.
     FEnqueuePos: Int64;
+    FDataEpoch: Int32;
+    FDataWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF}
     FPadEnqueue: TCacheLinePad;
     {$POP}
     FDequeuePos: Int64;
+    FSpaceEpoch: Int32;
+    FSpaceWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF}
     FPadDequeue: TCacheLinePad;
     {$POP}
-    FSpaceEpoch: Int32;
-    FSpaceWaiters: Int32;
-    FDataEpoch: Int32;
-    FDataWaiters: Int32;
     FClosed: Int32;
   public
     {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
