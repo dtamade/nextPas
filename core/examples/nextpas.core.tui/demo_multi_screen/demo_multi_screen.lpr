@@ -3,6 +3,7 @@ program demo_multi_screen;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,  { 必须第一：链接 tui.task（线程前置契约，见 CONTRACT §4） }
   nextpas.core.tui.ext,
   nextpas.core.tui.event;
 
