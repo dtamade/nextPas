@@ -100,6 +100,12 @@ const
   ESysEINTR = 4;
   {** @desc EINVAL 错误码 *}
   ESysEINVAL = 22;
+  {** @desc EACCES 错误码 *}
+  ESysEACCES = 13;
+  {** @desc ENOENT 错误码 *}
+  ESysENOENT = 2;
+  {** @desc ENOMEM 错误码 *}
+  ESysENOMEM = 12;
   {** @desc EOPNOTSUPP 错误码 *}
   ESysEOPNOTSUPP = 95;
   {** @desc ETIMEDOUT 错误码 *}

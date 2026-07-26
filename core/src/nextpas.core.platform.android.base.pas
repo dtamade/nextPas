@@ -139,6 +139,9 @@ const
   ESysEBUSY = 16;
   ESysEINTR = 4;
   ESysEINVAL = 22;
+  ESysEACCES = 13;
+  ESysENOENT = 2;
+  ESysENOMEM = 12;
   ESysEMFILE = 24;
   ESysENFILE = 23;
   ESysEINPROGRESS = 115;
