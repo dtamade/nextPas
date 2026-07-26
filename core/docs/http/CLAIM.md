@@ -69,7 +69,7 @@
 |------|------|------|
 | H3 ready | **No** | Blocked：仓库仅有 `tls.quic.crypto` 原语，无独立可链 QUIC transport / QPACK / H3 stack；**禁止**空 facade |
 | Windows scale-ready | **No** | scale KPI 与 epoll 路径以 Linux 为准；cancel residual 见 CONTRACT |
-| Multi-OS HTTP threaded host path | **Smoke only** | `test_http_threaded_host` via `scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI）；**非** scale-ready / **非** IOCP / **非** full facade TLS |
+| Multi-OS HTTP host path | **Smoke only** | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire，Windows host 真用例）via `scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI）；**非** scale-ready / **非** full facade TLS |
 | Windows Wine path | **Smoke only** | `test_platform_socket_wine` + `test_http_threaded_wine`（threaded HTTP/1.1 wire）；**非** real-Windows / **非** scale-ready / **非** IOCP |
 | Cross-machine leaderboard / “已全面对标 Go/Rust” | **No** | 仅同机比值 + 契约诚实 |
 | H2 mid RPS ÷ H1 multi-conn RPS 作为 package KPI | **Forbidden forever** | 形状不同；见 `BENCHMARKS` § H2 KPI |
@@ -103,7 +103,7 @@
 | Windows cancel | waitable via TCP-loopback pair（**PD-3-3**）；probe-only only if pair fails；Wine smoke `test_platform_socket_wine` 含 socket_pair 字节唤醒（**非** real-Windows / **非** scale-ready） |
 | Multi-OS HTTP host | **R2-5+**：`test_http_threaded_host` + `http-host-ci-matrix.sh` — Default backend=`tsbThreaded` + HTTP/1.1 wire GET on real CI hosts（Linux/macOS/Windows/FreeBSD）；**非** scale-ready |
 | Windows HTTP wine | **R2-5 WIN-2**：`test_http_threaded_wine` — same wire under Wine（0 unfreed）；full `nextpas.core.http` facade Win64 cross residual（TLS→`system.sysutils` FPC internal）— cleartext net.threaded path is the verifiable smoke |
-| Windows IOCP server | **WIN-3 phase-1 landed** — `net.server.iocp` AcceptEx + worker handoff；Windows 注册 `RegisterTcpServerFactory(tsbIocp)`；证据 `test_http_iocp_wine`（`wine-runtime-smoke`）；**非** real-Windows host / **禁止** scale claim |
+| Windows IOCP server | **W2-1..W2-3 landed** — `net.server.iocp` completion 驱动 recv/send 数据路径（零字节 recv readiness 桥 + server 自有 GQCS 循环 + writable waiter timeout 重试）；**real-Windows host 证据**：`http.iocp_wire` 5 用例 + heaptrc 0 unfreed（windows-latest via `http-host-ci-matrix.sh`，2026-07-26 run 30195741147）；含 16MB backpressure（真机部分写语义验证）；**禁止** scale claim（wire smoke ≠ scale） |
 | Server `Default` RW | **PD-1B** — Read/Write=**30000**（与 Production 同量级）；长轮询显式 0 |
 | Server IdleTimeout vs client IdleTTL | **PD-3-1** — Idle=30s / IdleTTL=90s 对照表见 CONTRACT |
 | 长连接 / 大 body | **PD-3-2** residual Met — Q1-4 + 413/backpressure 矩阵已有测；无新增缺口 |
