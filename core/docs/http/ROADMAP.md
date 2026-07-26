@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（Era P h2 DoS defense：rapid-reset + control-frame flood + CONTINUATION flood 连接级升级 + HPACK 放大 backstop + doc-truth；P-1..P-5 landed；NEXT=P-band 继续/剩余 h2 DoS 向量评估）
+**Updated**: 2026-07-26（Era P h2 DoS defense 收官：rapid-reset + control-frame flood + CONTINUATION flood 连接级升级 + HPACK 放大硬 backstop + P-band 向量评估结论；P-1..P-5 landed；NEXT=M-band 维护带）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -44,7 +44,7 @@
 | Windows | **W2-3b landed**：`net.server.iocp` completion 驱动 recv/send/deadline-wake 三路齐备——server 自有 GQCS 事件循环（`PollOneWait` 三态），writable waiter 1ms timeout 重试，有限 `WakeDeadline` 经 GQCS-timeout 扫描 + `TryCancelByContext`/`WakePending` 取消唤醒（单路等待不变式保持：recv op 挂起 XOR waiter/sleeper）；生产 H1 session 走完成路径。真机证据：`http.iocp_wire` **6 用例** + 0 unfreed on windows-latest（Core CI run 30196530589；deadline wake 真机 437ms ≈ Wine 445ms，`CancelIoEx` 语义一致）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 整块吞下不 WouldBlock，须分块写（真机无此差异，已验证） |
 | Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire）+ `test_http_iocp_facade_wine`（**M-1**：产品 `THttpServer`+`tsbIocp` GET/keep-alive 端到端；uses 常驻钉住 full facade Win64 交叉编译——原 TLS 链 FPC internal residual 已消除；Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
-| **NEXT** | **P-band 继续**——Era P（h2 DoS defense）P-1..P-5 已 landed（rapid-reset + control-frame flood + CONTINUATION flood 连接级升级 + HPACK 放大硬 backstop）；剩余 DoS 向量评估（默认无限并发 `MAX_CONCURRENT_STREAMS=0` / window-update flood / 空 DATA flood）；改方向先改本行 + §11 changelog |
+| **NEXT** | **M-band 维护带**——Era P（h2 DoS defense）P-1..P-5 全 landed + P-band 向量评估完成（并发流已由 `EffectiveMaxConcurrentStreams`=100 防御，PRIORITY/WINDOW_UPDATE/空 DATA 为对称成本无放大且已由 16MB 读上限+100 并发+socket 速率封顶）；取 §5 M-band 有界项；改方向先改本行 + §11 changelog |
 
 ---
 
@@ -234,6 +234,7 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 | 日期 | 变更 |
 |------|------|
 | 2026-07-26 | **Era P-5 landed**（HPACK 放大炸弹硬 backstop，RFC 7541 §10.5）：`FinalizeHeaders` 的 header-list-size 守卫原被 `if FMaxHeaderListSize > 0` 门控，默认 `MAX_HEADER_LIST_SIZE=0`（RFC「不广播显式上限」的有意姿态）→ 守卫关闭 → ~4KB 压缩块经索引引用（对单个大 dynamic-table 条目的重复 1 字节引用）解码成 ~1.26MB 无界物化（放大 ~315×，且默认 `MAX_CONCURRENT_STREAMS=0` 无并发上限）。新增 `H2_HEADER_LIST_HARD_LIMIT=1MB` 绝对上限（与 `H2_WIRE_READ_HARD_LIMIT=16MB` 同型，独立于软 setting）：size 累计移出软门控、无条件强制，超限 → `h2hfrHeaderListTooLarge` → 431（复用既有 431 通道，软限>0 时取 min）。不变式：64KB 压缩块上限使合法请求解码 ≤~64KB，硬 backstop 只在放大时触发、永不误伤。`test_http_h2_stream` 39 passed（+2：攻击 320 索引引用 / no-harm 普通请求，RED→GREEN，no-harm 经过度激进 mutation(=100) 验证）；h2 全家回归全绿（session 43 含 431 soft 路径、client 72、hpack 30、frame 37、types 23）+ 双端 0 unfreed；CONTRACT v3.51 |
+| 2026-07-26 | **Era P 收官，NEXT→M-band**：P-band 向量评估完成——并发流由 `EffectiveMaxConcurrentStreams`(setting=0→100) 防御（session.helpers:32），PRIORITY(no-op/5字节) 无响应无分配非放大向量，WINDOW_UPDATE 预算化会误伤合法流控（高吞吐流频繁发 window update 是正常行为），空 DATA 已由 16MB 读上限+100 并发+socket 速率封顶；P-5 是最后一个高价值非对称向量（315× 放大）。按 ROADMAP §3 反碰壁规则（本 Era 全完成 → 取 §5 M-band 有界项，无需授权）|
 | 2026-07-26 | **Era P-4 landed**（CVE-2024-27316 CONTINUATION flood 连接级升级）：既有 stream 层三重边界（`H2_MAX_HEADER_BLOCK_BYTES=64KB` / `H2_MAX_HEADER_FRAGMENTS=512` / `H2_MAX_EMPTY_FRAGMENTS=64`）已防内存 exhaustion，但 session 层 HandleContinuation/HandleHeaders 只把超限 reset 降级为 RST 单流 + 不清 `FPendingContinuationStreamID` → 连接挂起、1:1 RST 放大。新增 `EscalateHeaderBlockFlood` 助手：stream reset code==ENHANCE_YOUR_CALM（经 33 处 `InternalReset` 审计确认为 header-block flood 唯一信号）→ GOAWAY(EYC) + 关闭 + 清 pending；两处 reset 分支共用。+2 测试（攻击 70 空 CONTINUATION → GOAWAY；no-harm 合法 3 分片 → handler 执行，经过度激进 mutation RED-verify）；43 passed / 0 failed / 0 unfreed；h2 全家 + server 回归全绿；CONTRACT v3.50 |
 | 2026-07-26 | **Era P-1/P-2/P-3 landed**（h2 DoS defense family）：**P-1 CVE-2023-44487 rapid-reset**——`FRapidResetCount` 计数 + `H2_MAX_RAPID_RESETS=100` → GOAWAY(ENHANCE_YOUR_CALM)，完成路径清零；+2 测试（攻击 201 resets + 不误伤 198 resets 中间穿插1完成）；**P-2 CVE-2019-9512/9515 control-frame flood**——`FControlFrameFloodCount` + `RegisterControlFrameFlood` helper（PING/SETTINGS flood 共用计数器）→ GOAWAY(EYC)，`H2_MAX_CONTROL_FRAME_FLOOD=100`；+2 测试（攻击 150 PINGs + 不误伤 198 PINGs 中间穿插1完成）；41 passed / 0 failed / 0 unfreed；**P-3 doc-truth**——CONTRACT §6 suites 35→47 + DoS stance 四象限表；CONTRACT v3.49 |
 | 2026-07-26 | **M-6 landed**（side suites 健康度补查）：主 gate 47 suites 可信后补查 5 个 Linux 正确性类 side suite（smoke / integration / examples / threaded_host / tls_real——不在 PROJECTS 的验证盲区）：**4 绿 + examples 编译失败 1 处**——`DrainPipePair` 7→9 参数（process lane e252064ba 加 `AMaxTotal`/`ALimited` 输出上限，产品侧 child.pas 已适配、http examples 未跟进；与 M-2 同型「API 演进 side suite 未跟进」腐化）；修：传 `AMaxTotal=0`（不限制，保持原轮询收集语义）+ 局部 `LLimited`；修复后 5/5 绿（examples 5 passed + 0 unfreed）。Wine 3 suite 已有 CI 真机证据、bench 2 harness 非正确性 gate，均不在本刀范围 |
