@@ -134,29 +134,37 @@ bench-build:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) -B $(RUNNER).lpr
 
+# audit runs every step and only fails at the end, so one broken checker can
+# never mask the rest (M3.4: a first-step failure hid 13 downstream failures).
 audit:
-	$(PYTHON) $(CORE_ROOT)/tools/simdgen/simdgen.py --verify
-	$(PYTHON) $(CORE_ROOT)/tools/simdgen/simdgen_verify_slots.py
-	$(PYTHON) check_avx512_alignment_contract.py
-	$(PYTHON) check_simd_contract_roadmap.py
-	$(PYTHON) check_shell_runner_contract.py
-	$(PYTHON) check_qemu_runner_contract.py
-	$(PYTHON) check_intrinsics_coverage_layout_contract.py --summary-line
-	$(PYTHON) check_riscvv_native_evidence_surface.py --summary-line
-	$(PYTHON) check_linux_evidence_shell_surface.py --summary-line
-	$(PYTHON) check_windows_freeze_shell_surface.py --summary-line
-	$(PYTHON) check_nonx86_helper_semantics.py --summary-line
-	$(PYTHON) check_static_avx2_misalignment_contract.py
-	$(PYTHON) check_sse2_structure.py --summary-line
-	$(PYTHON) check_intrinsics_experimental_status.py --summary-line
-	$(PYTHON) check_dispatch_contract_signature.py --summary-line
-	$(PYTHON) check_public_abi_signature.py --summary-line
-	$(PYTHON) check_windows_publicabi_contract.py
-	$(PYTHON) check_cpuinfo_runner_contract.py --summary-line
-	$(PYTHON) check_cpuinfo_boundary_contract.py
-	$(PYTHON) -B ../nextpas.core.math/test_rtl_isolation/check_rtl_isolation.py --root $(CORE_ROOT) --fail-tests --summary-line
-	$(PYTHON) check_math_simd_source_contracts.py --root $(CORE_ROOT) --summary-line
-	$(PYTHON) check_riscvv_facade_optin_contract.py --summary-line
+	@l_fails=0; \
+	step() { l_desc="$$1"; shift; \
+	  if "$$@"; then echo "[audit] PASS $$l_desc"; \
+	  else echo "[audit] FAIL $$l_desc"; l_fails=$$((l_fails+1)); fi; }; \
+	step simdgen-verify $(PYTHON) $(CORE_ROOT)/tools/simdgen/simdgen.py --verify; \
+	step simdgen-verify-slots $(PYTHON) $(CORE_ROOT)/tools/simdgen/simdgen_verify_slots.py; \
+	step avx512-alignment $(PYTHON) check_avx512_alignment_contract.py; \
+	step contract-roadmap $(PYTHON) check_simd_contract_roadmap.py; \
+	step shell-runner $(PYTHON) check_shell_runner_contract.py; \
+	step qemu-runner $(PYTHON) check_qemu_runner_contract.py; \
+	step intrinsics-coverage-layout $(PYTHON) check_intrinsics_coverage_layout_contract.py --summary-line; \
+	step riscvv-native-evidence $(PYTHON) check_riscvv_native_evidence_surface.py --summary-line; \
+	step linux-evidence-shell $(PYTHON) check_linux_evidence_shell_surface.py --summary-line; \
+	step windows-freeze-shell $(PYTHON) check_windows_freeze_shell_surface.py --summary-line; \
+	step nonx86-helper-semantics $(PYTHON) check_nonx86_helper_semantics.py --summary-line; \
+	step static-avx2-misalignment $(PYTHON) check_static_avx2_misalignment_contract.py; \
+	step sse2-structure $(PYTHON) check_sse2_structure.py --summary-line; \
+	step intrinsics-experimental $(PYTHON) check_intrinsics_experimental_status.py --summary-line; \
+	step dispatch-signature $(PYTHON) check_dispatch_contract_signature.py --summary-line; \
+	step public-abi-signature $(PYTHON) check_public_abi_signature.py --summary-line; \
+	step windows-publicabi $(PYTHON) check_windows_publicabi_contract.py; \
+	step cpuinfo-runner $(PYTHON) check_cpuinfo_runner_contract.py --summary-line; \
+	step cpuinfo-boundary $(PYTHON) check_cpuinfo_boundary_contract.py; \
+	step rtl-isolation $(PYTHON) ../nextpas.core.math/test_rtl_isolation/check_rtl_isolation.py --root $(CORE_ROOT) --fail-tests --summary-line; \
+	step math-simd-source-contracts $(PYTHON) check_math_simd_source_contracts.py --root $(CORE_ROOT) --summary-line; \
+	step riscvv-facade-optin $(PYTHON) check_riscvv_facade_optin_contract.py --summary-line; \
+	echo "[audit] failures: $$l_fails/22"; \
+	test $$l_fails -eq 0
 
 audit-hygiene-contract:
 	rm -rf $(CORE_ROOT)/tools/simdgen/__pycache__
