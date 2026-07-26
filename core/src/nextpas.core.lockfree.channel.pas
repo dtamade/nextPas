@@ -35,9 +35,20 @@ const
   CHANNEL_NOTIFIER_NONE = 0;
   CHANNEL_NOTIFIER_ENABLED = 1;
   CHANNEL_NOTIFIER_DRAINING = 2;
+  { Resize-guard stripes: threads hash onto separate counter lines so the
+    per-op Enter/Leave RMW pair stays uncontended; TryResize scans them all. }
+  CHANNEL_OP_STRIPES = 8; { power of 2 }
 
 type
   TChannelNotifier = procedure(AData: Pointer) of object;
+
+  { One resize-guard counter per stripe. The trailing full-line pad keeps
+    consecutive Count fields >= 64B apart, so no two stripes can share a
+    cache line at any heap placement phase (same argument as TCacheLinePad). }
+  TChannelOpStripe = record
+    Count: Int32;
+    Pad: TCacheLinePad;
+  end;
 
   generic TLockFreeChannelImpl<T> = class
   private
@@ -45,6 +56,7 @@ type
       Same encoding as TMpmcQueue: empty(pos)=pos*2, full(pos)=pos*2+1. }
     class function EmptySequence(const APos: Int64): Int64; static; inline;
     class function FullSequence(const APos: Int64): Int64; static; inline;
+    class function OpStripeIndex: PtrUInt; static; inline;
   private type
     TSlot = record
       Sequence: Int64;
@@ -73,12 +85,11 @@ type
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadRecv: TCacheLinePad;
     {$POP}
-    // RMW'd by every operation from both sides (resize guard) — kept on its
-    // own line so it cannot slow the read-mostly control words below.
-    FActiveOperations: Int32;
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadActive: TCacheLinePad;
-    {$POP}
+    // RMW'd by every operation from both sides (resize guard) — striped by
+    // thread-id hash so the per-op RMW pair lands on an uncontended line
+    // instead of ping-ponging one shared counter between all threads.
+    // Each stripe carries its own full-line pad (isolates the cold tail too).
+    FOpStripes: array[0..CHANNEL_OP_STRIPES - 1] of TChannelOpStripe;
     // Read-mostly control words + cold notifier state
     FClosed: Int32;
     FResizing: Int32; { 0 = normal, 1 = resize in progress }
@@ -94,8 +105,8 @@ type
     procedure LockNotifier; inline;
     procedure UnlockNotifier; inline;
     function SameNotifier(const ALeft, ARight: TChannelNotifier): Boolean; inline;
-    procedure EnterOperation; inline;
-    procedure LeaveOperation; inline;
+    procedure EnterOperation(const AStripe: PtrUInt); inline;
+    procedure LeaveOperation(const AStripe: PtrUInt); inline;
   public
     {** @desc 创建有界无锁 Channel }
     constructor Create(const ACapacity: PtrUInt);
@@ -182,7 +193,8 @@ begin
   FDataWaiters := 0;
   FClosed := 0;
   FResizing := 0;
-  FActiveOperations := 0;
+  for LI := 0 to CHANNEL_OP_STRIPES - 1 do
+    FOpStripes[LI].Count := 0;
   FNotifierLock := 0;
   FNotifierState := CHANNEL_NOTIFIER_NONE;
   FNotifierCallbacks := 0;
@@ -341,22 +353,34 @@ begin
   end;
 end;
 
-procedure TLockFreeChannelImpl.EnterOperation;
+{$PUSH} {$Q-} {$R-} { hash multiply wraps mod 2^N by design }
+class function TLockFreeChannelImpl.OpStripeIndex: PtrUInt;
+begin
+  { Thread ids on Linux are pthread descriptor addresses, often exactly 8MB
+    apart (stack-top allocation) — a bare shift would collide systematically.
+    Multiplying by an odd constant is a bijection mod 2^N and spreads any
+    fixed stride across the high bits; take bits 24.. for the stripe. }
+  Result := (PtrUInt(GetCurrentThreadId) * PtrUInt($9E3779B9)) shr 24
+    and (CHANNEL_OP_STRIPES - 1);
+end;
+{$POP}
+
+procedure TLockFreeChannelImpl.EnterOperation(const AStripe: PtrUInt);
 begin
   while True do
   begin
     while atomic_load(FResizing, mo_acquire) <> 0 do
       CpuPause;
-    atomic_fetch_add(FActiveOperations, 1, mo_acq_rel);
+    atomic_fetch_add(FOpStripes[AStripe].Count, 1, mo_acq_rel);
     if atomic_load(FResizing, mo_acquire) = 0 then
       Exit;
-    atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
+    atomic_fetch_sub(FOpStripes[AStripe].Count, 1, mo_acq_rel);
   end;
 end;
 
-procedure TLockFreeChannelImpl.LeaveOperation;
+procedure TLockFreeChannelImpl.LeaveOperation(const AStripe: PtrUInt);
 begin
-  atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
+  atomic_fetch_sub(FOpStripes[AStripe].Count, 1, mo_acq_rel);
 end;
 
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
@@ -367,10 +391,12 @@ var
   LPosExpected: Int64;
   LBackoff: Integer;
   LI: Integer;
+  LStripe: PtrUInt;
 begin
   if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     LBackoff := 1;
     while True do
@@ -412,7 +438,7 @@ begin
         CpuPause;
     end;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
@@ -478,8 +504,10 @@ var
   LPosExpected: Int64;
   LBackoff: Integer;
   LI: Integer;
+  LStripe: PtrUInt;
 begin
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     LBackoff := 1;
     while True do
@@ -522,7 +550,7 @@ begin
         CpuPause;
     end;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
@@ -602,8 +630,10 @@ function TLockFreeChannelImpl.ApproxLen: PtrUInt;
 var
   LSent: Int64;
   LRecv: Int64;
+  LStripe: PtrUInt;
 begin
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     LSent := atomic_load_64(FSendPos, mo_relaxed);
     LRecv := atomic_load_64(FRecvPos, mo_relaxed);
@@ -612,17 +642,20 @@ begin
     else
       Result := 0;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
 function TLockFreeChannelImpl.Capacity: PtrUInt;
+var
+  LStripe: PtrUInt;
 begin
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     Result := FCapacity;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
@@ -647,8 +680,12 @@ begin
   if not atomic_compare_exchange_strong(FResizing, LResizeExpected, 1, mo_acq_rel, mo_acquire) then
     Exit(False);
   try
-    while atomic_load(FActiveOperations, mo_acquire) <> 0 do
-      CpuPause;
+    { Quiescence: once FResizing=1 is visible, any new entrant that bumps a
+      stripe re-checks FResizing and backs off — a stripe observed at 0 here
+      can only see transient (immediately undone) increments afterwards. }
+    for LI := 0 to CHANNEL_OP_STRIPES - 1 do
+      while atomic_load(FOpStripes[LI].Count, mo_acquire) <> 0 do
+        CpuPause;
     { Compute new capacity (power of 2, at least 1) }
     LNewCap := LockFreeNextPow2(ANewCapacity);
     if LNewCap < 1 then
