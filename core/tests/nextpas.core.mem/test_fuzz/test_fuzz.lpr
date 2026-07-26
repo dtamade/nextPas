@@ -19,7 +19,8 @@ uses
   nextpas.core.mem.blockpool,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.tracking;
+  nextpas.core.mem.allocator.tracking,
+  nextpas.core.mem; { last so procedural GetMem/FreeMem resolve to the facade, not FPC System }
 
 var
   T: TTestSuite;
@@ -290,6 +291,189 @@ begin
   end;
 end;
 
+{ --- Fuzz Growing default heap (content-verified churn) ---
+  Unlike the write-only fuzzes above, every live block carries a deterministic
+  byte pattern that is fully re-read before free/realloc: catches block overlap,
+  TLS-cache cross-wiring and span bitmap bugs, not just crashes. }
+
+procedure FillPattern(APtr: Pointer; ASize: SizeUInt; ATag: Byte);
+var
+  LB: PByte;
+  LI: SizeUInt;
+begin
+  LB := PByte(APtr);
+  for LI := 0 to ASize - 1 do
+    LB[LI] := Byte((SizeUInt(ATag) + LI) and $FF);
+end;
+
+function PatternIntact(APtr: Pointer; ASize: SizeUInt; ATag: Byte): Boolean;
+var
+  LB: PByte;
+  LI: SizeUInt;
+begin
+  Result := False;
+  LB := PByte(APtr);
+  for LI := 0 to ASize - 1 do
+    if LB[LI] <> Byte((SizeUInt(ATag) + LI) and $FF) then
+      Exit;
+  Result := True;
+end;
+
+function RngFuzzSize: Integer;
+begin
+  { Mixed distribution: small classes, mid classes, and >57344 huge path }
+  case RngRange(10) of
+    0..5: Result := RngRange(256) + 1;
+    6..8: Result := RngRange(3840) + 257;
+  else
+    Result := RngRange(65536) + 4097; { crosses MEM_SIZECLASS_MAX huge path }
+  end;
+end;
+
+procedure TestFuzzGrowingHeap;
+var
+  LPtrs: array[0..383] of Pointer;
+  LSizes: array[0..383] of SizeUInt;
+  LTags: array[0..383] of Byte;
+  LCount: Integer;
+  LI, LOp, LIdx, LSize: Integer;
+  LNewSize, LProbe, LKeep: SizeUInt;
+  LNew: Pointer;
+begin
+  RngSeed(SEED + 7);
+  Check(GetMem(0) = nil, 'fuzz growing: GetMem(0) = nil');
+  FreeMem(nil); { contract: silent no-op }
+  LCount := 0;
+  for LI := 1 to FUZZ_ITERATIONS do
+  begin
+    LOp := RngRange(20);
+    if (LOp < 10) or (LCount = 0) then
+    begin
+      if LCount < 384 then
+      begin
+        LSize := RngFuzzSize;
+        LPtrs[LCount] := GetMem(SizeUInt(LSize));
+        if LPtrs[LCount] <> nil then
+        begin
+          LSizes[LCount] := SizeUInt(LSize);
+          LTags[LCount] := Byte(RngNext and $FF);
+          FillPattern(LPtrs[LCount], LSizes[LCount], LTags[LCount]);
+          Inc(LCount);
+        end;
+      end;
+    end
+    else if LOp < 14 then
+    begin
+      { Sized free (hot path) — verify content first }
+      LIdx := RngRange(LCount);
+      Check(PatternIntact(LPtrs[LIdx], LSizes[LIdx], LTags[LIdx]),
+        'fuzz growing: pattern intact before sized free');
+      FreeMem(LPtrs[LIdx], LSizes[LIdx]);
+      LPtrs[LIdx] := LPtrs[LCount - 1];
+      LSizes[LIdx] := LSizes[LCount - 1];
+      LTags[LIdx] := LTags[LCount - 1];
+      Dec(LCount);
+    end
+    else if LOp < 16 then
+    begin
+      { Unsized free (scan/fallback path) — verify content first }
+      LIdx := RngRange(LCount);
+      Check(PatternIntact(LPtrs[LIdx], LSizes[LIdx], LTags[LIdx]),
+        'fuzz growing: pattern intact before unsized free');
+      FreeMem(LPtrs[LIdx]);
+      LPtrs[LIdx] := LPtrs[LCount - 1];
+      LSizes[LIdx] := LSizes[LCount - 1];
+      LTags[LIdx] := LTags[LCount - 1];
+      Dec(LCount);
+    end
+    else if LOp < 18 then
+    begin
+      { Sized realloc — old content verified, then min(old,new) prefix must survive }
+      LIdx := RngRange(LCount);
+      Check(PatternIntact(LPtrs[LIdx], LSizes[LIdx], LTags[LIdx]),
+        'fuzz growing: pattern intact before realloc');
+      LNewSize := SizeUInt(RngFuzzSize);
+      LNew := ReallocMem(LPtrs[LIdx], LSizes[LIdx], LNewSize);
+      if LNew <> nil then
+      begin
+        LKeep := LSizes[LIdx];
+        if LNewSize < LKeep then
+          LKeep := LNewSize;
+        Check(PatternIntact(LNew, LKeep, LTags[LIdx]),
+          'fuzz growing: realloc preserves min(old,new) prefix');
+        LPtrs[LIdx] := LNew;
+        LSizes[LIdx] := LNewSize;
+        LTags[LIdx] := Byte(RngNext and $FF);
+        FillPattern(LPtrs[LIdx], LSizes[LIdx], LTags[LIdx]);
+      end
+      else
+      begin
+        { OOM contract: original block untouched — drop it via sized free }
+        FreeMem(LPtrs[LIdx], LSizes[LIdx]);
+        LPtrs[LIdx] := LPtrs[LCount - 1];
+        LSizes[LIdx] := LSizes[LCount - 1];
+        LTags[LIdx] := LTags[LCount - 1];
+        Dec(LCount);
+      end;
+    end
+    else if LOp = 18 then
+    begin
+      { TryBlockSize invariant: recovered size >= requested size }
+      LIdx := RngRange(LCount);
+      if TryBlockSize(LPtrs[LIdx], LProbe) then
+        Check(LProbe >= LSizes[LIdx],
+          'fuzz growing: TryBlockSize >= requested size');
+    end
+    else
+      DefaultHeap.Scavenge; { force span release/reuse under churn }
+  end;
+  { Drain: verify + free every survivor }
+  for LIdx := 0 to LCount - 1 do
+  begin
+    Check(PatternIntact(LPtrs[LIdx], LSizes[LIdx], LTags[LIdx]),
+      'fuzz growing: pattern intact at drain');
+    FreeMem(LPtrs[LIdx], LSizes[LIdx]);
+  end;
+  DefaultHeap.Scavenge;
+  WriteLn('PASS: fuzz Growing heap (', FUZZ_ITERATIONS,
+    ' iterations, content-verified)');
+end;
+
+{ --- Fuzz Growing realloc chain across size-class boundaries --- }
+
+procedure TestFuzzGrowingReallocChain;
+var
+  LPtr, LNew: Pointer;
+  LSize, LNewSize, LKeep: SizeUInt;
+  LTag: Byte;
+  LI: Integer;
+begin
+  RngSeed(SEED + 8);
+  LSize := 16;
+  LPtr := GetMem(LSize);
+  Check(LPtr <> nil, 'fuzz realloc chain: initial alloc');
+  LTag := $5A;
+  FillPattern(LPtr, LSize, LTag);
+  for LI := 1 to 400 do
+  begin
+    LNewSize := SizeUInt(RngFuzzSize);
+    LNew := ReallocMem(LPtr, LSize, LNewSize);
+    if LNew = nil then
+      Break; { OOM: original still owned, freed below }
+    LKeep := LSize;
+    if LNewSize < LKeep then
+      LKeep := LNewSize;
+    Check(PatternIntact(LNew, LKeep, LTag),
+      'fuzz realloc chain: prefix preserved step ' + IntToStr(LI));
+    LPtr := LNew;
+    LSize := LNewSize;
+    LTag := Byte((SizeUInt(LTag) + 1) and $FF);
+    FillPattern(LPtr, LSize, LTag);
+  end;
+  FreeMem(LPtr, LSize);
+  WriteLn('PASS: fuzz Growing realloc chain (400 steps, prefix-verified)');
+end;
+
 { --- Fuzz IAllocator via TTrackingAllocator (leak detection) --- }
 
 procedure TestFuzzAllocatorLeakCheck;
@@ -434,6 +618,8 @@ begin
   T.Test('fuzz TChunkedArena', @TestFuzzChunkedArena);
   T.Test('fuzz TLocalBlockPool', @TestFuzzBlockPool);
   T.Test('fuzz TSlabPool', @TestFuzzSlabPool);
+  T.Test('fuzz Growing heap content-verified', @TestFuzzGrowingHeap);
+  T.Test('fuzz Growing realloc chain', @TestFuzzGrowingReallocChain);
   T.Test('fuzz allocator leak-check', @TestFuzzAllocatorLeakCheck);
   T.Test('fuzz Arena AllocAligned', @TestFuzzArenaAligned);
   T.Test('fuzz mixed allocators', @TestFuzzMixedAllocators);
