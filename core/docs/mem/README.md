@@ -2,9 +2,9 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-> **Lane 状态：Maintenance Idle（2026-07-26 · post-Era M + P2 residual CLOSED）**
+> **Lane 状态：Maintenance Idle（2026-07-26 · post-Era M + P2 residual CLOSED + RTL isolation / system.heap CLOSED）**
 >
-> A–C **CLOSED** · D–G Steady · H **Idle** · I–M **CLOSED** · P2 residual **CLOSED**
+> A–C **CLOSED** · D–G Steady · H **Idle** · I–M **CLOSED** · P2 residual **CLOSED** · **RTL isolation CLOSED**（源+测试 0 `System.*` 堆原语 / 0 OS FFI，堆 owner = `nextpas.core.system.heap`，门禁覆盖 tests/examples）
 >
 > FreeMemOf consumer + mem-owner 路径已关；残余仅 tui inject WAIVE。
 >

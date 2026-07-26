@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking；**可用性债 R-* CLOSED**（见 USABILITY-FIX-PLAN-2026-07-20）；**P2 residual CLOSED** 2026-07-26
+**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking；**可用性债 R-* CLOSED**（见 USABILITY-FIX-PLAN-2026-07-20）；**P2 residual CLOSED** 2026-07-26；**findings P0/P1 全清 + RTL isolation 全域门禁** 2026-07-26
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-26
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -350,3 +350,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-26 | **P2 residual CLOSED**（子类 FormatAllocErrorMsg + stem + SAFETY 入口证据）；H1 RequestArena 门禁对齐 `impl.h1.conn`；ARCHITECTURE 去掉已删 allocator 名 |
 | 2026-07-26 | Idle steward：SCORECARD RELEASE=1 + soak 3/3 复跑（无回归）；数字刷新 |
 | 2026-07-26 | **Audit remediation**：system.heap 收口 System.*；RTL isolation 门禁；sharded TLS 经 platform.thread；删 pressure/registry/watermark |
+| 2026-07-26 | **修复轮（findings P1 全清）**：A-001 TLS/clock FFI 归零 `ab5a9fc9f` · C-004 主线程 TLS 链排干（heaptrc 0 unfreed）`dbabf4de7` · A-002+T-001 测试 43 处 → NpSystem* + 门禁扩 tests/examples `6cf848f65`；OPEN 25→20，P0/P1=0 |
