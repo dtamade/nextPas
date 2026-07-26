@@ -53,7 +53,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | Property-based test | QuickCheck (3rd party) | proptest | **v7.1** GenString/GenInt/GenBool/GenBytes + Map/Filter combinators |
 | Coverage tracking | — | — | **v8.0b** ICoverageTracker bitset (4096 points) |
 | Structured fuzzing | — | — | **v8.0b** FuzzStructured + coverage-guided corpus |
-| Parallel fuzzing | — | — | **v8.0b** FuzzParallel 4 strategies |
+| Multi-strategy fuzzing | — | — | **v8.0b** FuzzMultiStrategy 4 strategies（顺序执行；FuzzParallel 为 deprecated 别名，F-07） |
 | Output | text | text | ANSI/TAP/JSON/JUnit |
 
 ## 套件列表
@@ -219,7 +219,7 @@ Suite := Suite.WithSetup(Proc);
 
 ### 并行模式限制
 
-子测试 (`TestSubtest`)、benchmarks、RTTI discovery 子测试在 `RunParallel` 模式下自动跳过（输出 "subtests not supported in parallel mode"）。这是因为子测试需要嵌套线程调度，架构复杂度高。**如需并行执行子测试，请使用串行模式 `Run`。**
+子测试 (`TestSubtest`) 在 `RunParallel` 模式下是**配置错误**（v8.31 F-20）：suite 启动即失败并输出 "cannot run under RunParallel (use serial Run)"，不再静默跳过。benchmarks、RTTI discovery 子测试在并行 worker 中仍会 skip（"subtests not supported in parallel mode"）。**如需子测试，请使用串行模式 `Run`。**
 
 ### Mock.ResetCalls vs ResetAll
 
@@ -240,7 +240,8 @@ core/src/nextpas.core.test.check.pas        ← Check* 断言 + 快照测试
 core/src/nextpas.core.test.expect.pas       ← IExpectation 流式断言
 core/src/nextpas.core.test.discovery.pas    ← RTTI 测试发现
 core/src/nextpas.core.test.mock.pas         ← TMock + VerifyAll
-core/src/nextpas.core.test.runner.pas       ← TTestSuite/TTestRunner + 批次调度
+core/src/nextpas.core.test.runner.pas       ← TTestSuite 注册 + 执行引擎
+core/src/nextpas.core.test.runner.multi.pas ← TSuiteRunner 多 suite 编排
 core/src/nextpas.core.test.runner.cli.pas   ← CLI 参数解析 (FromArgs/ApplyCLIArgs)
 core/src/nextpas.core.test.runner.parallel.pas ← 超时+并行 worker
 core/src/nextpas.core.test.runner.context.pas  ← 子测试 ITestContext
@@ -300,6 +301,9 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v8.0b**: Structured Fuzzing + Coverage Tracking — `ICoverageTracker` bitset 覆盖追踪 (4096 点)；`FuzzStructured` 基于生成器的结构化 fuzzing，coverage-guided 语料库扩展；`FuzzParallel` 多策略并行 fuzzing (4 策略: BitFlip/ByteReplace/Havoc/Structured)；37 测试
 - **v8.0c**: Assertion + Error Messages — `CheckArrayEqual` for array of Int64 with diff reporting (first differing index + values)；`CheckIsNil`/`CheckIsNotNil` for IInterface nil checks；all with AMessage overloads；135 tests
 - **v8.0d**: Documentation + Examples — comprehensive property-testing-guide.md API reference covering generators, combinators, property testing, fuzzing, coverage tracking, assertions；386 total tests across 12 suites
+- **v8.1–v8.31**: 见 `CONTRACT.md` §11 变更日志（本文件此后只记 prop/fuzz 家族大事件）
+- **v8.32**: F-03 拆分 — `test.prop.pas` (2938L) → `test.prop.gen.pas` (生成器) + `test.prop.pas` (Prop 执行) + `test.fuzz.pas` (模糊测试全家)；门面 API 不变；`FuzzMultiStrategy` 补进门面 re-export（F-07 收口，FuzzParallel 仍为 deprecated 别名）
+- **v8.33**: runner 拆分 — `test.runner.pas` (2369L) → `test.runner.pas` (TTestSuite 引擎, 1994L) + `test.runner.multi.pas` (TSuiteRunner 编排, 402L)；门面 API 不变；修正 test_parallel R6-54/B10 对 v8.31 F-20 语义的遗留断言（配置期 fail-fast，非静默 skip）
 
 ## 路线图
 

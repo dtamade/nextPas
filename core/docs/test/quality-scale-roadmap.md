@@ -143,9 +143,29 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
-| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | 条件抬门 |
-| B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | discovery |
-| B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | docs |
+| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（v8.32 实测 fail-path 83.2% / low-signal 0%），但 countable=7609 < 9000 —— 需先密度增长 ~1400 再抬门 |
+| B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | **done (v8.31 F-19)** |
+| B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | **done (v8.32)** README §Release Checklist |
+
+---
+
+### v8.32 — prop god-unit 拆分（F-03 收口）
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| F-03 | `test.prop.pas` 2938L → `prop.gen`(1368) + `prop`(457) + `fuzz`(1175)；门面 API 不变 | **done** |
+| F-07 残余 | 门面补 `FuzzMultiStrategy` re-export + 规范名测试（此前仅 deprecated 别名可达/被测） | **done** |
+| — | 文档同步：CONTRACT 子模块表/变更日志、README 分层图/文件清单/Release Checklist | **done** |
+
+---
+
+### v8.33 — runner god-unit 拆分 + F-20 测试语义修正
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| — | `test.runner.pas` 2369L → `runner`(1994, TTestSuite 引擎) + `runner.multi`(402, TSuiteRunner 编排)；门面别名重定向 | **done** |
+| F-20 遗留 | test_parallel R6-54/B10 仍断言旧「静默 skip」语义（v8.31 起即红，被 heaptrc 噪声掩盖）；改断言配置期 fail-fast | **done** |
+| — | 文档同步：CONTRACT §1/§11、README 分层图/文件清单、version-history 并行限制表述 | **done** |
 
 ---
 
@@ -173,7 +193,10 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.32+** / backlog：prop god-unit 拆分（F-03）；SCALE→9000 条件抬门（B78）；release checklist（B80）；v9 SoftExpect。
+**v8.34+** / backlog：SCALE→9000 密度增长 + 抬门（B78，质量条件已满足，缺 ~1400 countable）；
+F-12 COW lint；v9 SoftExpect。
+已完成：~~prop god-unit 拆分（F-03，v8.32）~~；~~release checklist（B80，v8.32）~~；
+~~runner 拆分 + F-20 测试语义修正（v8.33）~~。
 
 ---
 

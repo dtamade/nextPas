@@ -2,8 +2,9 @@
   =========================================================
   Re-exports all public API from sub-modules:
     test.base, test.check, test.config, test.expect, test.output,
-    test.output.tap, test.output.json, test.runner, test.discovery,
-    test.mock, test.helpers, test.prop
+    test.output.tap, test.output.json, test.runner, test.runner.multi,
+    test.discovery, test.mock, test.helpers, test.prop.gen, test.prop,
+    test.fuzz
   White-box / optional (import directly when needed):
     test.runner.cli, test.runner.context, test.runner.parallel,
     test.bench (bench integration — optional side unit, F-04),
@@ -30,10 +31,13 @@ uses
   nextpas.core.test.output.tap,
   nextpas.core.test.output.json,
   nextpas.core.test.runner,
+  nextpas.core.test.runner.multi,
   nextpas.core.test.discovery,
   nextpas.core.test.mock,
   nextpas.core.test.helpers,
-  nextpas.core.test.prop;
+  nextpas.core.test.prop.gen,
+  nextpas.core.test.prop,
+  nextpas.core.test.fuzz;
 
 { ── Re-exported types from test.base ─────────────────────────────────────── }
 
@@ -100,7 +104,7 @@ type
 
 type
   TTestSuite = nextpas.core.test.runner.TTestSuite;
-  TSuiteRunner = nextpas.core.test.runner.TSuiteRunner;
+  TSuiteRunner = nextpas.core.test.runner.multi.TSuiteRunner;
 
 { v8.25: timeout-worker leak counter (parallel/serial timeout path). }
 function GetTimeoutWorkerLeakCount: Integer;
@@ -519,14 +523,14 @@ type
   TIntTest = nextpas.core.test.prop.TIntTest;
   TBoolTest = nextpas.core.test.prop.TBoolTest;
   TBytesTest = nextpas.core.test.prop.TBytesTest;
-  IStringGenerator = nextpas.core.test.prop.IStringGenerator;
-  IIntGenerator = nextpas.core.test.prop.IIntGenerator;
-  IBoolGenerator = nextpas.core.test.prop.IBoolGenerator;
-  IBytesGenerator = nextpas.core.test.prop.IBytesGenerator;
-  TIntToString = nextpas.core.test.prop.TIntToString;
-  TIntPred = nextpas.core.test.prop.TIntPred;
-  TStringPred = nextpas.core.test.prop.TStringPred;
-  TBytesPred = nextpas.core.test.prop.TBytesPred;
+  IStringGenerator = nextpas.core.test.prop.gen.IStringGenerator;
+  IIntGenerator = nextpas.core.test.prop.gen.IIntGenerator;
+  IBoolGenerator = nextpas.core.test.prop.gen.IBoolGenerator;
+  IBytesGenerator = nextpas.core.test.prop.gen.IBytesGenerator;
+  TIntToString = nextpas.core.test.prop.gen.TIntToString;
+  TIntPred = nextpas.core.test.prop.gen.TIntPred;
+  TStringPred = nextpas.core.test.prop.gen.TStringPred;
+  TBytesPred = nextpas.core.test.prop.gen.TBytesPred;
 
 function GenString(AMinLen, AMaxLen: Integer): IStringGenerator; overload;
 function GenString(AMaxLen: Integer = 256): IStringGenerator; overload;
@@ -553,9 +557,9 @@ function PropWithResult(const AName: string; ATest: TIntTest;
 type
   TIntArrayTest = nextpas.core.test.prop.TIntArrayTest;
   TTupleTest = nextpas.core.test.prop.TTupleTest;
-  IArrayGenerator = nextpas.core.test.prop.IArrayGenerator;
-  ITupleGenerator = nextpas.core.test.prop.ITupleGenerator;
-  TIntToGenerator = nextpas.core.test.prop.TIntToGenerator;
+  IArrayGenerator = nextpas.core.test.prop.gen.IArrayGenerator;
+  ITupleGenerator = nextpas.core.test.prop.gen.ITupleGenerator;
+  TIntToGenerator = nextpas.core.test.prop.gen.TIntToGenerator;
 
 function GenArray(AGen: IIntGenerator; AMaxLen: Integer = 100): IArrayGenerator; overload;
 function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator; overload;
@@ -569,8 +573,8 @@ procedure PropTuple(const AName: string; ATest: TTupleTest;
 { ── Re-exported fuzzing from test.prop (v7.2a) ───────────────────────────── }
 
 type
-  TFuzzBytesTest = nextpas.core.test.prop.TFuzzBytesTest;
-  TFuzzStringTest = nextpas.core.test.prop.TFuzzStringTest;
+  TFuzzBytesTest = nextpas.core.test.fuzz.TFuzzBytesTest;
+  TFuzzStringTest = nextpas.core.test.fuzz.TFuzzStringTest;
 
 procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AMaxIterations: Integer = 10000);
@@ -582,7 +586,7 @@ function FuzzGenString(ALen: Integer): string;
 { ── Re-exported corpus management from test.prop (v7.3a) ─────────────────── }
 
 type
-  TFuzzCorpus = nextpas.core.test.prop.TFuzzCorpus;
+  TFuzzCorpus = nextpas.core.test.fuzz.TFuzzCorpus;
 
 procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
   const ACorpusDir: string; AMaxIterations: Integer = 10000);
@@ -592,10 +596,10 @@ procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
 { ── Re-exported coverage tracking from test.prop (v8.0b) ──────────────────── }
 
 type
-  ICoverageTracker = nextpas.core.test.prop.ICoverageTracker;
-  TFuzzStructuredIntTest = nextpas.core.test.prop.TFuzzStructuredIntTest;
-  TFuzzStructuredStringTest = nextpas.core.test.prop.TFuzzStructuredStringTest;
-  TFuzzStrategy = nextpas.core.test.prop.TFuzzStrategy;
+  ICoverageTracker = nextpas.core.test.fuzz.ICoverageTracker;
+  TFuzzStructuredIntTest = nextpas.core.test.fuzz.TFuzzStructuredIntTest;
+  TFuzzStructuredStringTest = nextpas.core.test.fuzz.TFuzzStructuredStringTest;
+  TFuzzStrategy = nextpas.core.test.fuzz.TFuzzStrategy;
 
 function CreateCoverageTracker: ICoverageTracker;
 
@@ -606,6 +610,9 @@ procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
   AGen: IStringGenerator; ACorpus: ICoverageTracker = nil;
   AMaxIterations: Integer = 10000); overload;
 
+procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer = 4;
+  AIterationsPerWorker: Integer = 2500);
 procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer = 4;
   AIterationsPerWorker: Integer = 2500);

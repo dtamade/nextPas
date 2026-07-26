@@ -29,6 +29,7 @@ uses
   nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.test.check,
+  nextpas.core.test.prop.gen,
   nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }

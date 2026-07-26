@@ -11,7 +11,9 @@ uses
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.test,
-  nextpas.core.test.prop;
+  nextpas.core.test.prop.gen,
+  nextpas.core.test.prop,
+  nextpas.core.test.fuzz;
 
 var
   GTestCount: Integer;
@@ -736,9 +738,11 @@ end;
 
 { ── Parallel fuzzing tests (v8.0b) ────────────────────────────────────────── }
 
-procedure TestFuzzParallel;
+procedure TestFuzzMultiStrategy;
 begin
-  FuzzParallel('Parallel bytes', procedure(const Data: TBytes)
+  { Facade-qualified: exercises the canonical name via nextpas.core.test
+    re-export (v8.32) — FuzzParallel below covers the deprecated alias. }
+  nextpas.core.test.FuzzMultiStrategy('MultiStrategy bytes', procedure(const Data: TBytes)
   begin
     { Always-passes property: data is accessible }
     if Length(Data) < 0 then
@@ -1178,7 +1182,7 @@ begin
   LSuite.Test('CoverageTracker', @TestCoverageTracker);
   LSuite.Test('FuzzStructuredInt', @TestFuzzStructuredInt);
   LSuite.Test('FuzzStructuredString', @TestFuzzStructuredString);
-  LSuite.Test('FuzzParallel', @TestFuzzParallel);
+  LSuite.Test('FuzzMultiStrategy', @TestFuzzMultiStrategy);
   LSuite.Test('FuzzParallelCoverage', @TestFuzzParallelCoverage);
   LSuite.Test('GenIntLargeRange', @TestGenIntLargeRange);
   LSuite.Test('GenIntSameMinMax', @TestGenIntSameMinMax);

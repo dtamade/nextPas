@@ -37,21 +37,26 @@
 
 | 文件 | 职责 | LOC |
 |------|------|-----|
-| test.pas | 门面：re-export 所有公共 API | ~580 |
-| test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~913 |
-| test.check.pas | 过程式 Check* 断言 API（50+ 方法, 含 OneOf/InstanceOf/Snapshot） | ~1734 |
+| test.pas | 门面：re-export 所有公共 API | ~625 |
+| test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~1129 |
+| test.diff.pas | ColorDiff 共享着色 diff（L0, v8.31 F-01） | ~112 |
+| test.check.pas | 过程式 Check* 断言 API（50+ 方法, 含 OneOf/InstanceOf/Snapshot） | ~1897 |
 | test.expect.pas | 流式 IExpectation + TExpectation（40+ 方法 + InstanceOf/MatchSnapshot） | ~1768 |
-| test.mock.pas | TMock/TMockState + TMockCaptor + 线程断言 | ~1814 |
-| test.config.pas | TTestConfig record（28 字段含 Version）+ IOutputSink + TTestCache + TBufferSink | ~1214 |
-| test.runner.pas | TTestSuite/TSuiteRunner + 串行/并行执行 + retry/shuffle/failfast | ~2269 |
-| test.runner.cli.pas | CLI 参数解析（--filter, --bench, --cache 等） | ~408 |
-| test.runner.parallel.pas | 并行 worker + timeout watchdog | ~580 |
-| test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender + SetEnv/UnsetEnv | ~620 |
-| test.discovery.pas | RTTI VMT 方法表扫描自动发现测试 | ~179 |
-| test.output.pas | ANSI 辅助、glob 匹配、JUnit XML、泄漏报告 | ~1273 |
+| test.snapshot.pas | CheckSnapshot 共享实现（L1, v8.31 F-02） | ~92 |
+| test.mock.pas | TMock/TMockState + TMockCaptor + 线程断言 | ~1824 |
+| test.config.pas | TTestConfig record（28 字段含 Version）+ IOutputSink + TTestCache + TBufferSink | ~1238 |
+| test.runner.pas | TTestSuite 注册 + 串行/并行执行 + retry/shuffle/failfast | ~1994 |
+| test.runner.multi.pas | TSuiteRunner 多 suite 编排 + banner/list/summary（v8.33 拆分） | ~402 |
+| test.runner.cli.pas | CLI 参数解析（--filter, --bench, --cache 等） | ~430 |
+| test.runner.parallel.pas | 并行 worker + timeout watchdog | ~598 |
+| test.runner.context.pas | TTestContext (ITestContext) + TTestResultAppender + SetEnv/UnsetEnv | ~667 |
+| test.discovery.pas | RTTI VMT 方法表扫描自动发现测试 | ~285 |
+| test.output.pas | ANSI 辅助、glob 匹配、JUnit XML、泄漏报告 | ~1260 |
 | test.output.json.pas | JSON 输出格式 | ~185 |
 | test.output.tap.pas | TAP v13 输出格式 | ~123 |
-| test.prop.pas | 属性测试 + 模糊测试 + 语料库 + shrinking | ~2928 |
+| test.prop.gen.pas | 生成器接口/工厂/组合器（v8.32 F-03 拆分） | ~1368 |
+| test.prop.pas | Prop 注册 + shrink 执行循环 | ~457 |
+| test.fuzz.pas | 模糊测试 + 语料库 + 覆盖追踪 + 多策略（v8.32 F-03 拆分） | ~1175 |
 | test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile, IntOverflowCheck | ~281 |
 | test.bench.pas | 测试框架与 bench 模块集成 | ~206 |
 
@@ -419,6 +424,29 @@ end;
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.33 (2026-07-26) — runner god-unit 拆分 + F-20 测试语义修正
+
+- **runner 拆分**：`test.runner.pas`（2369 行）拆出 `test.runner.multi.pas`（~402）—
+  `TSuiteRunner` 多 suite 编排 + `WriteRunnerBanner`/`WriteListMode`/`RunnerConfig`；
+  runner.pas 收敛为 TTestSuite 注册 + 执行引擎（~1994）
+- 依赖方向：`runner ← runner.multi`（multi 消费 TTestSuite 公共 API，无反向依赖）
+- 门面 API **不变**：`TSuiteRunner` 别名重定向到 `runner.multi`；直接 uses
+  `nextpas.core.test.runner` 拿 TSuiteRunner 的消费者需改 uses（仓内 0 个：全部经门面）
+- **F-20 遗留修正**：test_parallel 的 R6-54/B10 两测试仍断言旧「静默 skip」语义，
+  与 v8.31 F-20「配置期 fail-fast」冲突（**v8.31 起即红**，被 heaptrc 噪声掩盖）；
+  改为断言 config failure（Passed=0 / Failed≥1 / AllPassed=False）
+
+### v8.32 (2026-07-26) — prop god-unit 拆分（F-03 收口）
+
+- **F-03**：`test.prop.pas`（2938 行）拆为三个单一职责单元：
+  - `test.prop.gen.pas`（~1368）— 生成器接口/工厂/组合器；各生成器自持 `TRandomGen`，无全局态
+  - `test.prop.pas`（~457）— Prop 注册 + shrink 执行循环
+  - `test.fuzz.pas`（~1175）— Fuzz/Corpus/Coverage/Structured/MultiStrategy + `GFuzzRng` threadvar
+- 依赖方向：`prop.gen ← prop`、`prop.gen ← fuzz`（均 L4 内）；fs/config 依赖收敛到 fuzz
+- 门面 API **不变**：`nextpas.core.test` 别名/转发重定向到新单元；外部消费者零改动
+- **F-07 残余收口**：门面补 `FuzzMultiStrategy` re-export（此前只导出 deprecated 的 `FuzzParallel`）；
+  test_prop 新增门面限定的规范名测试，deprecated 别名保留回归测
 
 ### v8.31 (2026-07-26) — Findings 全量 remediation（F-01…F-25 可落地项）
 
