@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.40**
+**当前版本**: **v8.41**
 **最后更新**: 2026-07-26
 
 ---
@@ -92,7 +92,7 @@
 | B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | **done** |
 | B66–B70 | **v8.29** 并行竞态 + Mock 误用密度 | **done** |
 | B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | **done** |
-| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done**；B77 **done (v8.30)**；B79 **done (v8.31)**；B80 **done (v8.32)**；B78 质量条件已满足（fail-path 81.2%/low-signal 0%），countable 8085 → 待密度增长后抬 9000 |
+| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done**；B77 **done (v8.30)**；B79 **done (v8.31)**；B80 **done (v8.32)**；B78 质量条件已满足（fail-path 80.7%/low-signal 0%），countable 8140 → 待密度增长后抬 9000 |
 | F-03 | **v8.32** prop god-unit 拆分：prop.gen + prop + fuzz，门面不变；FuzzMultiStrategy 补门面导出 | **done** |
 | — | **v8.33** runner 拆分：runner(TTestSuite 引擎) + runner.multi(TSuiteRunner 编排)；F-20 遗留测试语义修正 | **done** |
 | F-12 | **v8.34** COW lint（source-contract 静态门）+ runner.multi 编排契约（M1 定点 + M2/M3 矩阵 66 行 fail-path）；countable 7609→7686 | **done** |
@@ -102,6 +102,7 @@
 | B78 t5 | **v8.38** CheckBench 判定矩阵 22 行 + bench 结构 13 行 + discovery 过滤/VMT 枚举 22 行 + %.0f 尾点修复（跨模块 text.format）；countable 7938→7997 | **done** |
 | B78 t6 | **v8.39** subtest 聚合消息 exact 14 行（嵌套失败逐层折叠）+ 结果收集 13 行（pass 节点不收集/post-order/root log 残留）+ suite 计数 9 行 + env 隔离状态机 12 行（SetEnv/UnsetEnv 零覆盖收口、逆序恢复、empty≠missing）；countable 7997→8050（test_subtests 93→146） | **done** |
 | B78 t7 | **v8.40** FuzzMinimize 公开化（fuzz 家族唯一私有核心算法零覆盖收口；interface+门面 re-export）+ minimize 契约表 35 行（精确结果 17 + probe 序列 exact 10 + len≥k 阈值矩阵 8；空/单字节 0 probe 原样、非 EAssertionFailed 穿透、k>4 幸存最后 k 字节）；countable 8050→8085（test_prop 421→456） | **done** |
+| B78 t8 | **v8.41** mock `MatchingCallCount` 跨轨 hash 门修复（typed 记录 → string 验证经 legacy Args 桥接被 hash 错杀；`StrArgHash` 双 hash，typed 轨 kind-strict 不变）+ verify/matching/dispatch 契约表 54 行（count-message 矩阵 detail 三态 + CalledWith 双轨/消息不对称 + call-order exact index/`<start>` + When 后注册胜出/Reset 状态机）；countable 8085→8140（test_mock 1430→1485） | **done** |
 
 ### 暂缓 / 阻塞
 

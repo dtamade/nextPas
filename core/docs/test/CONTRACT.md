@@ -425,6 +425,47 @@ end;
 
 ## 11. 变更日志
 
+### v8.41 (2026-07-26) — mock 双轨匹配修复 + verify/matching/dispatch 契约表（B78 tranche 8）
+
+- **产品修复：`MatchingCallCount` 跨轨 hash 门错杀**（mock.pas）。
+  string-domain 查询的 hash 用 `MockValueHash(MockStr(...))` 计算，却与
+  记录时按 **typed kind** 域算出的 `ArgHash` 比较——kind 参与 hash
+  （`MockStr('5')`=32 vs `MockInt(5)`=67 恒不等）→ 提前 `Continue`，
+  后续 legacy `Args` 字段比较永远不达。后果：`RecordCallTyped('M',[MockInt(5)])`
+  后 `CalledWith(['5'])` 必失败，而 `TestRecordCallTypedPreservesLegacyArgs`
+  证明 legacy Args 渲染是既定契约——P2 #6 hash 加速引入的真回归。
+  修复：`TMockCall` 增设 `StrArgHash` 双 hash 字段（RecordCall 两域同值；
+  RecordCallTyped 按 `MockStr(渲染串)` 补算），string 查询门改比 `StrArgHash`。
+  typed 轨（`MatchingCallCountTyped`）仍比 `ArgHash`，kind-strict 语义不变
+- **文档矛盾修复**：test_mock.lpr 头注释宣称 Verify 走 `CompareText`
+  （case-insensitive）；probe 实证 `CallCount` 是精确 `=` 比较（case-SENSITIVE），
+  注释改为与实现一致（行为不动）
+- **test_mock 四张契约表（54 行，其中 22 行 fail-path）**，全部消息 exact：
+  - `verify count-message matrix`（14 行，8 fp）：qualifier 词汇
+    exactly/at least/at most；CalledNever=exactly 0、Times=CalledExactly 同义；
+    **detail 三态**——有调用列 `calls to <m>:`、方法未调用列
+    `all recorded calls:`（帮抓 typo）、零调用无 detail
+  - `CalledWith dual-rail matrix`（16 行，7 fp）：**b-bridge-int/bool 两行
+    直接锁本次修复**（typed 记录 → string 验证经 legacy Args 桥接）；
+    typed 轨 kind-strict（`MockStr("5")`≠`MockInt(5)`）；消息不对称——
+    string 轨带 `(first actual call: ...)`、typed 轨仅 `(total calls: N)`；
+    CalledExactlyWith 措辞 `times`（含 "1 times"）+ `xw0` never-with 惯用法；
+    first-actual 渲染 arity-blind（列首个同名调用全参）
+  - `call-order matrix`（12 行，7 fp）：Before/After 三失败态带 exact index
+    （self-never 先判）；首次出现语义；同名退化边 `A was called at index 0
+    (after A at index 0)`；CalledInOrder 贪心子序列（空数组恒过、重名消耗、
+    I=0 前驱名 `<start>`）
+  - `When/Returns dispatch + reset`（12 行）：后注册 When 胜出
+    （High downto 0）；When miss 回退默认 Returns（无默认=''）；
+    GetReturnInt64 kind 回退经字符串解析（bool 'true'→0）；GetReturnBool
+    `SameText`；Returns 原位覆盖；Reset 保 setup 清 calls、ResetAll 全清
+- probe 先行实证 27 场景（/tmp/mock_probe，不入库）；54 行零修正一次全绿
+  （第 7 个连续 tranche）
+- heaptrc unfreed 4182 vs 基线 4020：+162 = 3 块/行 × 54 行，
+  与 v8.35 记录的表注册数据线性模式一致，非新泄漏
+- scale：countable 8085 → **8140**（test_mock 1430→1485）；
+  fail-path 80.7% / low-signal 0% / non-table 1736
+
 ### v8.40 (2026-07-26) — FuzzMinimize 公开化 + minimize 契约表（B78 tranche 7）
 
 - **架构收口：`FuzzMinimize` 公开化**（fuzz.pas interface + 门面 re-export）。

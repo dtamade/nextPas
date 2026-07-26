@@ -143,7 +143,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
-| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 81.2% / low-signal 0%），但 countable=8085 < 9000（v8.40 tranche 7 后）—— 需再增 ~915 再抬门 |
+| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 80.7% / low-signal 0%），但 countable=8140 < 9000（v8.41 tranche 8 后）—— 需再增 ~860 再抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | **done (v8.31 F-19)** |
 | B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | **done (v8.32)** README §Release Checklist |
 
@@ -238,6 +238,18 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ---
 
+### v8.41 — B78 密度 tranche 8（mock 双轨匹配修复 + verify/matching/dispatch 契约表）
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| 产品修复 | **MatchingCallCount 跨轨 hash 门错杀**（mock.pas）：string 查询 hash（MockStr 域）vs 记录时 typed-kind 域 ArgHash 恒不等 → 提前 Continue，legacy Args 字段比较永不达 → `RecordCallTyped` 后 string `CalledWith` 必失败（P2 #6 hash 加速引入的真回归；`TestRecordCallTypedPreservesLegacyArgs` 证明 legacy Args 是既定契约）。修复：TMockCall 增 `StrArgHash` 双 hash；typed 轨 kind-strict 不变 | **done** |
+| 文档修复 | test_mock.lpr 头注释宣称 Verify CompareText（case-insensitive）；probe 实证精确 `=`（case-SENSITIVE），注释纠正 | **done** |
+| B78 部分 | test_mock 四张契约表 54 行（22 fp），消息全 exact：count-message 矩阵 14 行（qualifier 词汇 + detail 三态：calls-to/all-recorded/无 detail）+ CalledWith 双轨 16 行（**b-bridge-int/bool 锁修复**；kind-strict；消息不对称 first-actual vs total-only；xw `times` 措辞 + xw0 never-with；arity-blind first-actual）+ call-order 12 行（Before/After 三失败态 exact index、同名退化边、InOrder 贪心子序列/`<start>`）+ When/Returns 分派 12 行（后注册胜出、miss 回退、kind 回退、SameText、Reset/ResetAll 状态机）| **done** |
+| 实证 | probe 27 场景先行（/tmp/mock_probe 不入库）；54 行零修正一次全绿（第 7 个连续 tranche）；unfreed +162=3 块/行 × 54 行符合 v8.35 表注册线性模式 | **done** |
+| B78 余量 | countable 8140 / 9000 — 缺 ~860；候选：test_advanced 续密、assertions/expect 消息 exact 化 | 待后续 tranche |
+
+---
+
 ## 4. 每版执行纪律（不变）
 
 1. 仅 `.worktrees/test` 开发
@@ -262,15 +274,16 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.41+** / backlog：SCALE→9000 密度增长续（B78，缺 ~915 countable；候选
-test_advanced/test_bench 续密）；v9 SoftExpect（需拍板）。
+**v8.42+** / backlog：SCALE→9000 密度增长续（B78，缺 ~860 countable；候选
+test_advanced 续密、assertions/expect 消息 exact 化）；v9 SoftExpect（需拍板）。
 已完成：~~prop god-unit 拆分（F-03，v8.32）~~；~~release checklist（B80，v8.32）~~；
 ~~runner 拆分 + F-20 测试语义修正（v8.33）~~；~~F-12 COW lint + runner.multi 契约（v8.34）~~；
 ~~output 转义/结构 fail-path 92 行（v8.35）~~；~~prop.gen shrink 精确序列 85 行（v8.36）~~；
 ~~retry/repeat 执行语义 + fuzz 可观测契约 + DEL 修复（v8.37）~~；
 ~~bench/discovery 契约表 57 行 + %.0f 尾点修复（v8.38）~~；
 ~~subtest 聚合/收集/env 隔离契约表 48 行（v8.39）~~；
-~~FuzzMinimize 公开化 + minimize 契约表 35 行（v8.40）~~。
+~~FuzzMinimize 公开化 + minimize 契约表 35 行（v8.40）~~；
+~~mock 双轨匹配修复 + verify/matching/dispatch 契约表 54 行（v8.41）~~。
 
 ---
 

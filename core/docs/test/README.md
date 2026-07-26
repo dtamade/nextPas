@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-26
-> 治理状态: **v8.40** FuzzMinimize 公开化 + minimize 契约表（v8.39 subtest 聚合/收集/env 隔离契约表）
+> 治理状态: **v8.41** mock 双轨匹配修复 + verify/matching/dispatch 契约表（v8.40 FuzzMinimize 公开化 + minimize 契约表）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 

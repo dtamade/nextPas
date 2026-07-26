@@ -66,6 +66,10 @@ type
     ResultValue     : string;
     TypedReturnValue: TMockValue;
     ArgHash         : Integer;  { P2 #6: pre-computed hash for O(1) arg mismatch detection }
+    StrArgHash      : Integer;  { hash over legacy string Args (all-MockStr domain);
+                                  ArgHash uses typed kinds, so a typed-recorded call
+                                  would never hash-match a string-domain query even
+                                  though the field comparison uses Args }
   end;
 
   TMockCalls = specialize TArray<TMockCall>;
@@ -511,6 +515,7 @@ begin
   ACall.ResultValue      := '';
   ACall.TypedReturnValue := MockUnsetValue;
   ACall.ArgHash          := 0;
+  ACall.StrArgHash       := 0;
 end;
 
 procedure RecordOrder(var AOrder: specialize TArray<string>;
@@ -604,6 +609,7 @@ begin
     LCall.TypedArgs[I] := MockStr(AArgs[I]);
     LCall.ArgHash := LCall.ArgHash * 31 + MockValueHash(LCall.TypedArgs[I]);
   end;
+  LCall.StrArgHash := LCall.ArgHash; { all-MockStr: both domains identical }
   AppendCall(LCall, AMethodName);
 end;
 
@@ -622,6 +628,7 @@ begin
     LCall.TypedArgs[I] := AArgs[I];
     LCall.Args[I] := MockValueToString(AArgs[I]);
     LCall.ArgHash := LCall.ArgHash * 31 + MockValueHash(AArgs[I]);
+    LCall.StrArgHash := LCall.StrArgHash * 31 + MockValueHash(MockStr(LCall.Args[I]));
   end;
   AppendCall(LCall, AMethodName);
 end;
@@ -846,7 +853,7 @@ begin
       Continue;
     if Length(FCalls[I].Args) <> Length(AArgs) then
       Continue;
-    if LHash <> FCalls[I].ArgHash then
+    if LHash <> FCalls[I].StrArgHash then
       Continue;
     LMatch := True;
     for J := 0 to High(AArgs) do

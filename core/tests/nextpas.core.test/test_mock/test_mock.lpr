@@ -17,7 +17,7 @@
 
     ⚠ When/Returns/RecordCall all use string-based method names.
        Typos in method names are NOT caught at compile time.
-       Verify calls CompareText (case-insensitive) — 'Foo' matches 'foo'.
+       Method name matching is case-SENSITIVE — 'Foo' does NOT match 'foo'.
 
     VerifyAll checks all methods configured via Setup (Returns/When).
        If you need to verify a method was called but don't need Setup, use:
@@ -2128,6 +2128,352 @@ begin
   end;
 end;
 
+{ ── v8.41: verify/matching/dispatch contract tables ────────────────────────── }
+
+function MkNextSeg(var ARest: string): string;
+var
+  LP: Integer;
+begin
+  LP := Pos('|', ARest);
+  if LP = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LP - 1);
+    ARest := Copy(ARest, LP + 1, Length(ARest));
+  end;
+end;
+
+procedure AppendMkCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := AData + '|' + AFlag;
+end;
+
+function MkDecodeNl(const S: string): string;
+{ '\n' in table want-segments encodes #10 (data cell stays single-line). }
+var
+  I: Integer;
+begin
+  Result := '';
+  I := 1;
+  while I <= Length(S) do
+  begin
+    if (I < Length(S)) and (S[I] = '\') and (S[I + 1] = 'n') then
+    begin
+      Result := Result + #10;
+      Inc(I, 2);
+    end
+    else
+    begin
+      Result := Result + S[I];
+      Inc(I);
+    end;
+  end;
+end;
+
+procedure MkSplitComma(const AList: string;
+  out AParts: specialize TArray<string>);
+var
+  LRest: string;
+  LP: Integer;
+begin
+  SetLength(AParts, 0);
+  LRest := AList;
+  while LRest <> '' do
+  begin
+    SetLength(AParts, Length(AParts) + 1);
+    LP := Pos(',', LRest);
+    if LP = 0 then
+    begin
+      AParts[High(AParts)] := LRest;
+      LRest := '';
+    end
+    else
+    begin
+      AParts[High(AParts)] := Copy(LRest, 1, LP - 1);
+      LRest := Copy(LRest, LP + 1, Length(LRest));
+    end;
+  end;
+end;
+
+function MkParseTypedArg(const AToken: string): TMockValue;
+{ typed-arg DSL: i<n> MockInt / bt|bf MockBool / s<text> MockStr }
+var
+  LNum: Int64;
+begin
+  if AToken = 'bt' then
+    Result := MockBool(True)
+  else if AToken = 'bf' then
+    Result := MockBool(False)
+  else if (AToken <> '') and (AToken[1] = 'i') then
+  begin
+    if not TryStrToInt64(Copy(AToken, 2, Length(AToken)), LNum) then
+      LNum := 0;
+    Result := MockInt(LNum);
+  end
+  else
+    Result := MockStr(Copy(AToken, 2, Length(AToken)));
+end;
+
+procedure MkApplyRecSpec(AMock: TMock; const ASpec: string);
+{ recSpec: ';'-chained calls — S~Name:a,b RecordCall / T~Name:i5,bt RecordCallTyped }
+var
+  LRest, LSeg, LBody, LName, LArgSpec: string;
+  LP, LColon, I: Integer;
+  LStrArgs, LTokens: specialize TArray<string>;
+  LTyped: specialize TArray<TMockValue>;
+begin
+  LRest := ASpec;
+  while LRest <> '' do
+  begin
+    LP := Pos(';', LRest);
+    if LP = 0 then
+    begin
+      LSeg := LRest;
+      LRest := '';
+    end
+    else
+    begin
+      LSeg := Copy(LRest, 1, LP - 1);
+      LRest := Copy(LRest, LP + 1, Length(LRest));
+    end;
+    LBody := Copy(LSeg, 3, Length(LSeg));
+    LColon := Pos(':', LBody);
+    if LColon = 0 then
+    begin
+      LName := LBody;
+      LArgSpec := '';
+    end
+    else
+    begin
+      LName := Copy(LBody, 1, LColon - 1);
+      LArgSpec := Copy(LBody, LColon + 1, Length(LBody));
+    end;
+    if LSeg[1] = 'T' then
+    begin
+      MkSplitComma(LArgSpec, LTokens);
+      SetLength(LTyped, Length(LTokens));
+      for I := 0 to High(LTokens) do
+        LTyped[I] := MkParseTypedArg(LTokens[I]);
+      AMock.RecordCallTyped(LName, LTyped);
+    end
+    else
+    begin
+      MkSplitComma(LArgSpec, LStrArgs);
+      AMock.RecordCall(LName, LStrArgs);
+    end;
+  end;
+end;
+
+procedure MkApplyVerifyOp(AMock: TMock; const AMethod, AOp: string);
+{ verifyOp DSL: ex/al/am/tm<N>, nv, on, w:args, wt:typedargs, xw<N>:args,
+  bf:/af:Other, io:M1,M2 }
+var
+  LColon, I, LN: Integer;
+  LStrArgs, LTokens: specialize TArray<string>;
+  LTyped: specialize TArray<TMockValue>;
+begin
+  if Copy(AOp, 1, 3) = 'wt:' then
+  begin
+    MkSplitComma(Copy(AOp, 4, Length(AOp)), LTokens);
+    SetLength(LTyped, Length(LTokens));
+    for I := 0 to High(LTokens) do
+      LTyped[I] := MkParseTypedArg(LTokens[I]);
+    AMock.Verify(AMethod).CalledWith(LTyped);
+  end
+  else if Copy(AOp, 1, 2) = 'w:' then
+  begin
+    MkSplitComma(Copy(AOp, 3, Length(AOp)), LStrArgs);
+    AMock.Verify(AMethod).CalledWith(LStrArgs);
+  end
+  else if Copy(AOp, 1, 2) = 'xw' then
+  begin
+    LColon := Pos(':', AOp);
+    if not TryStrToInt(Copy(AOp, 3, LColon - 3), LN) then
+      LN := 0;
+    MkSplitComma(Copy(AOp, LColon + 1, Length(AOp)), LStrArgs);
+    AMock.Verify(AMethod).CalledExactlyWith(LN, LStrArgs);
+  end
+  else if Copy(AOp, 1, 3) = 'bf:' then
+    AMock.Verify(AMethod).CalledBefore(Copy(AOp, 4, Length(AOp)))
+  else if Copy(AOp, 1, 3) = 'af:' then
+    AMock.Verify(AMethod).CalledAfter(Copy(AOp, 4, Length(AOp)))
+  else if Copy(AOp, 1, 3) = 'io:' then
+  begin
+    MkSplitComma(Copy(AOp, 4, Length(AOp)), LStrArgs);
+    AMock.Verify(AMethod).CalledInOrder(LStrArgs);
+  end
+  else if AOp = 'nv' then
+    AMock.Verify(AMethod).CalledNever
+  else if AOp = 'on' then
+    AMock.Verify(AMethod).CalledOnce
+  else
+  begin
+    if not TryStrToInt(Copy(AOp, 3, Length(AOp)), LN) then
+      LN := -1;
+    if Copy(AOp, 1, 2) = 'ex' then
+      AMock.Verify(AMethod).CalledExactly(LN)
+    else if Copy(AOp, 1, 2) = 'al' then
+      AMock.Verify(AMethod).CalledAtLeast(LN)
+    else if Copy(AOp, 1, 2) = 'am' then
+      AMock.Verify(AMethod).CalledAtMost(LN)
+    else if Copy(AOp, 1, 2) = 'tm' then
+      AMock.Verify(AMethod).Times(LN)
+    else
+      CheckTrue(False, 'unknown verify op: ' + AOp);
+  end;
+end;
+
+procedure TestMkVerifyContractCase(const AC: TTestCase);
+{ Data: recSpec|method|verifyOp|wantMsg|flag.
+  wantMsg 'PASS' = no raise; otherwise exact EAssertionFailed message
+  ('\n' encodes #10). flag '0' ⟺ wantMsg<>'PASS' (fail-path self-check). }
+var
+  LRest, LRecSpec, LMethod, LOp, LWant, LGot: string;
+  LM: TMock;
+begin
+  LRest := AC.Data;
+  LRecSpec := MkNextSeg(LRest);
+  LMethod := MkNextSeg(LRest);
+  LOp := MkNextSeg(LRest);
+  LWant := MkNextSeg(LRest);
+  CheckTrue((LWant <> 'PASS') = (LRest = '0'), 'flag self-check');
+  LM := TMock.Create;
+  try
+    MkApplyRecSpec(LM, LRecSpec);
+    LGot := 'PASS';
+    try
+      MkApplyVerifyOp(LM, LMethod, LOp);
+    except
+      on E: EAssertionFailed do
+        LGot := E.Message;
+    end;
+    CheckEqual(MkDecodeNl(LWant), LGot);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMkDispatchCase(const AC: TTestCase);
+{ Data: setupSpec|query|want|flag — When/Returns dispatch + Reset state machine.
+  setup DSL (';'-chained): R~F:v Setup.Returns / RI~F:n ReturnsInt /
+    RB~F:t|f ReturnsBool / W~F:args>v Setup.When().Returns / SR~F:v SetReturn /
+    C~F:args RecordCall / X State.Reset / XA State.ResetAll
+  query: g:F GetReturn / ga:F:args GetReturn typed / gi:F GetReturnInt64 /
+    gb:F GetReturnBool ('T'/'F') / cc:F CallCount }
+var
+  LRest, LSetup, LQuery, LWant, LGot: string;
+  LSeg, LBody, LName, LTail, LArgSpec, LVal: string;
+  LM: TMock;
+  LP, LColon, LGt, I: Integer;
+  LNum: Int64;
+  LTokens, LStrArgs: specialize TArray<string>;
+  LTyped: specialize TArray<TMockValue>;
+begin
+  LRest := AC.Data;
+  LSetup := MkNextSeg(LRest);
+  LQuery := MkNextSeg(LRest);
+  LWant := MkNextSeg(LRest);
+  CheckEqual('1', LRest);  { dispatch rows are semantic, not fail-path }
+  LM := TMock.Create;
+  try
+    while LSetup <> '' do
+    begin
+      LP := Pos(';', LSetup);
+      if LP = 0 then
+      begin
+        LSeg := LSetup;
+        LSetup := '';
+      end
+      else
+      begin
+        LSeg := Copy(LSetup, 1, LP - 1);
+        LSetup := Copy(LSetup, LP + 1, Length(LSetup));
+      end;
+      if LSeg = 'X' then
+        LM.State.Reset
+      else if LSeg = 'XA' then
+        LM.State.ResetAll
+      else
+      begin
+        LBody := Copy(LSeg, Pos('~', LSeg) + 1, Length(LSeg));
+        LColon := Pos(':', LBody);
+        LName := Copy(LBody, 1, LColon - 1);
+        LTail := Copy(LBody, LColon + 1, Length(LBody));
+        if Copy(LSeg, 1, 3) = 'RI~' then
+        begin
+          if not TryStrToInt64(LTail, LNum) then
+            LNum := 0;
+          LM.Setup(LName).ReturnsInt(LNum);
+        end
+        else if Copy(LSeg, 1, 3) = 'RB~' then
+          LM.Setup(LName).ReturnsBool(LTail = 't')
+        else if Copy(LSeg, 1, 3) = 'SR~' then
+          LM.State.SetReturn(LName, LTail)
+        else if Copy(LSeg, 1, 2) = 'R~' then
+          LM.Setup(LName).Returns(LTail)
+        else if Copy(LSeg, 1, 2) = 'W~' then
+        begin
+          LGt := Pos('>', LTail);
+          LArgSpec := Copy(LTail, 1, LGt - 1);
+          LVal := Copy(LTail, LGt + 1, Length(LTail));
+          MkSplitComma(LArgSpec, LTokens);
+          SetLength(LTyped, Length(LTokens));
+          for I := 0 to High(LTokens) do
+            LTyped[I] := MkParseTypedArg(LTokens[I]);
+          LM.Setup(LName).When(LTyped).Returns(LVal);
+        end
+        else if Copy(LSeg, 1, 2) = 'C~' then
+        begin
+          MkSplitComma(LTail, LStrArgs);
+          LM.RecordCall(LName, LStrArgs);
+        end
+        else
+          CheckTrue(False, 'unknown setup op: ' + LSeg);
+      end;
+    end;
+    LColon := Pos(':', LQuery);
+    LBody := Copy(LQuery, LColon + 1, Length(LQuery));
+    if Copy(LQuery, 1, 3) = 'ga:' then
+    begin
+      LP := Pos(':', LBody);
+      LName := Copy(LBody, 1, LP - 1);
+      MkSplitComma(Copy(LBody, LP + 1, Length(LBody)), LTokens);
+      SetLength(LTyped, Length(LTokens));
+      for I := 0 to High(LTokens) do
+        LTyped[I] := MkParseTypedArg(LTokens[I]);
+      LGot := LM.State.GetReturn(LName, LTyped);
+    end
+    else if Copy(LQuery, 1, 3) = 'gi:' then
+      LGot := IntToStr(LM.State.GetReturnInt64(LBody, []))
+    else if Copy(LQuery, 1, 3) = 'gb:' then
+    begin
+      if LM.State.GetReturnBool(LBody, []) then
+        LGot := 'T'
+      else
+        LGot := 'F';
+    end
+    else if Copy(LQuery, 1, 3) = 'cc:' then
+      LGot := IntToStr(LM.State.CallCount(LBody))
+    else if Copy(LQuery, 1, 2) = 'g:' then
+      LGot := LM.State.GetReturn(LBody)
+    else
+    begin
+      LGot := '';
+      CheckTrue(False, 'unknown query: ' + LQuery);
+    end;
+    CheckEqual(LWant, LGot);
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -2143,6 +2489,10 @@ var
   LB67I: Integer;
   LOps: array[0..6] of string;
   LModes: array[0..2] of string;
+  LMkCount: specialize TArray<TTestCase>;
+  LMkWith: specialize TArray<TTestCase>;
+  LMkOrder: specialize TArray<TTestCase>;
+  LMkDispatch: specialize TArray<TTestCase>;
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
@@ -2376,6 +2726,115 @@ begin
   Suite.TestTable('B67 mock InOrder fail-path', LB67Order,
     @TestB67InOrderFailPathCase);
 
+  { v8.41 Table A: verify count-message exact matrix (probe-verified formats).
+    Contracts: qualifier wording exactly/at least/at most; CalledNever = exactly 0;
+    Times = CalledExactly synonym; 3-state detail block (calls-to / all-recorded
+    fallback on never-called / no detail when zero calls recorded). }
+  AppendMkCase(LMkCount, 'a-ex-fail-detail',
+    'S~Foo:a,b|Foo|ex2|Expected Foo called exactly 2 time(s), but was called 1 time(s)\n  calls to Foo:\n    Foo("a", "b")', '0');
+  AppendMkCase(LMkCount, 'a-ex-pass', 'S~Foo:a|Foo|ex1|PASS', '1');
+  AppendMkCase(LMkCount, 'a-never-fail',
+    'S~Foo|Foo|nv|Expected Foo called exactly 0 time(s), but was called 1 time(s)\n  calls to Foo:\n    Foo()', '0');
+  AppendMkCase(LMkCount, 'a-never-pass', '|Foo|nv|PASS', '1');
+  AppendMkCase(LMkCount, 'a-once-others-listed',
+    'S~Bar:x|Foo|on|Expected Foo called exactly 1 time(s), but was called 0 time(s)\n  all recorded calls:\n    Bar("x")', '0');
+  AppendMkCase(LMkCount, 'a-once-empty-nodetail',
+    '|Foo|on|Expected Foo called exactly 1 time(s), but was called 0 time(s)', '0');
+  AppendMkCase(LMkCount, 'a-atleast-fail',
+    'S~F|F|al2|Expected F called at least 2 time(s), but was called 1 time(s)\n  calls to F:\n    F()', '0');
+  AppendMkCase(LMkCount, 'a-atleast-pass-exceed', 'S~F;S~F|F|al1|PASS', '1');
+  AppendMkCase(LMkCount, 'a-atleast-pass-equal', 'S~F|F|al1|PASS', '1');
+  AppendMkCase(LMkCount, 'a-atmost-fail',
+    'S~F;S~F|F|am1|Expected F called at most 1 time(s), but was called 2 time(s)\n  calls to F:\n    F()\n    F()', '0');
+  AppendMkCase(LMkCount, 'a-atmost-pass-zero', '|F|am0|PASS', '1');
+  AppendMkCase(LMkCount, 'a-atmost-pass-equal', 'S~F|F|am1|PASS', '1');
+  AppendMkCase(LMkCount, 'a-times-fail',
+    'S~F|F|tm2|Expected F called exactly 2 time(s), but was called 1 time(s)\n  calls to F:\n    F()', '0');
+  AppendMkCase(LMkCount, 'a-multi-call-detail',
+    'S~F:a;S~F:b|F|ex3|Expected F called exactly 3 time(s), but was called 2 time(s)\n  calls to F:\n    F("a")\n    F("b")', '0');
+  Suite.TestTable('v8.41 mock verify count-message matrix', LMkCount,
+    @TestMkVerifyContractCase);
+
+  { v8.41 Table B: CalledWith dual-rail matching matrix.
+    Contracts: typed-record→string-verify bridge over legacy Args (StrArgHash
+    fix rows b-bridge-*); kind-strict typed rail; message asymmetry (string rail
+    has first-actual, typed rail only total); CalledExactlyWith 'times' wording
+    + count-0 never-with idiom; arity-blind first-actual rendering. }
+  AppendMkCase(LMkWith, 'b-ss-match', 'S~F:a|F|w:a|PASS', '1');
+  AppendMkCase(LMkWith, 'b-ss-miss',
+    'S~F:a|F|w:b|Expected F called with ["b"], but no matching call found (first actual call: ["a"], total calls: 1)', '0');
+  AppendMkCase(LMkWith, 'b-s-nocall',
+    '|F|w:b|Expected F called with ["b"], but no matching call found (first actual call: (none), total calls: 0)', '0');
+  AppendMkCase(LMkWith, 'b-bridge-int', 'T~F:i5|F|w:5|PASS', '1');
+  AppendMkCase(LMkWith, 'b-bridge-bool', 'T~F:bt|F|w:true|PASS', '1');
+  AppendMkCase(LMkWith, 'b-str-to-typed-mockstr', 'S~F:5|F|wt:s5|PASS', '1');
+  AppendMkCase(LMkWith, 'b-str-to-typed-int-blind',
+    'S~F:5|F|wt:i5|Expected F called with [MockInt(5)], but no matching call found (total calls: 1)', '0');
+  AppendMkCase(LMkWith, 'b-tt-match', 'T~F:i5|F|wt:i5|PASS', '1');
+  AppendMkCase(LMkWith, 'b-tt-kindmiss',
+    'T~F:i5|F|wt:s5|Expected F called with [MockStr("5")], but no matching call found (total calls: 1)', '0');
+  AppendMkCase(LMkWith, 'b-xw-wording',
+    'S~F:a|F|xw2:a|Expected F called exactly 2 times with ["a"], but was called 1 times', '0');
+  AppendMkCase(LMkWith, 'b-xw-zero-never-with', 'S~F:a|F|xw0:zz|PASS', '1');
+  AppendMkCase(LMkWith, 'b-xw-pass', 'S~F:a;S~F:a|F|xw2:a|PASS', '1');
+  AppendMkCase(LMkWith, 'b-typed-msg-no-first',
+    'T~F:i1|F|wt:i2|Expected F called with [MockInt(2)], but no matching call found (total calls: 1)', '0');
+  AppendMkCase(LMkWith, 'b-arity-blind',
+    'S~F:a,b|F|w:a|Expected F called with ["a"], but no matching call found (first actual call: ["a", "b"], total calls: 1)', '0');
+  AppendMkCase(LMkWith, 'b-xw-selective-count', 'S~F:a;S~F:b;S~F:a|F|xw2:a|PASS', '1');
+  AppendMkCase(LMkWith, 'b-empty-args-match', 'S~F|F|w:|PASS', '1');
+  Suite.TestTable('v8.41 mock CalledWith dual-rail matrix', LMkWith,
+    @TestMkVerifyContractCase);
+
+  { v8.41 Table C: call-order matrix.
+    Contracts: Before/After 3 failure modes with exact indexes (self-never
+    checked first); first-occurrence semantics; same-method degenerate edge;
+    CalledInOrder greedy subsequence (empty passes, duplicate consumes,
+    I=0 prev name is <start>). }
+  AppendMkCase(LMkOrder, 'c-bf-pass', 'S~A;S~B|A|bf:B|PASS', '1');
+  AppendMkCase(LMkOrder, 'c-bf-self-never',
+    'S~B|A|bf:B|Expected A called before B, but A was never called', '0');
+  AppendMkCase(LMkOrder, 'c-bf-other-never',
+    'S~A|A|bf:B|Expected A called before B, but B was never called', '0');
+  AppendMkCase(LMkOrder, 'c-bf-violation',
+    'S~B;S~A|A|bf:B|Expected A called before B, but A was called at index 1 (after B at index 0)', '0');
+  AppendMkCase(LMkOrder, 'c-bf-same-method',
+    'S~A|A|bf:A|Expected A called before A, but A was called at index 0 (after A at index 0)', '0');
+  AppendMkCase(LMkOrder, 'c-af-pass', 'S~B;S~A|A|af:B|PASS', '1');
+  AppendMkCase(LMkOrder, 'c-af-violation',
+    'S~A;S~B|A|af:B|Expected A called after B, but A was called at index 0 (before B at index 1)', '0');
+  AppendMkCase(LMkOrder, 'c-first-occurrence', 'S~A;S~B;S~A|A|bf:B|PASS', '1');
+  AppendMkCase(LMkOrder, 'c-io-nonconsecutive', 'S~A;S~X;S~B|A|io:A,B|PASS', '1');
+  AppendMkCase(LMkOrder, 'c-io-empty-pass', '|A|io:|PASS', '1');
+  AppendMkCase(LMkOrder, 'c-io-dup-consume',
+    'S~A|A|io:A,A|Expected methods called in order [A -> A], but A was not called (or not after A)', '0');
+  AppendMkCase(LMkOrder, 'c-io-missing-first',
+    '|A|io:Z|Expected methods called in order [Z], but Z was not called (or not after <start>)', '0');
+  Suite.TestTable('v8.41 mock call-order matrix', LMkOrder,
+    @TestMkVerifyContractCase);
+
+  { v8.41 Table D: When/Returns dispatch priority + Reset state machine.
+    Contracts: later When registration wins (High downto 0); When-miss falls
+    back to default Returns (miss with no default = ''); GetReturnInt64 kind
+    fallback via string parse (bool 'true' → 0); GetReturnBool SameText;
+    Returns override-in-place; Reset keeps setups/clears calls, ResetAll all. }
+  AppendMkCase(LMkDispatch, 'd-when-later-wins',
+    'W~G:i1>first;W~G:i1>second|ga:G:i1|second', '1');
+  AppendMkCase(LMkDispatch, 'd-when-miss-default',
+    'R~G:def;W~G:i1>one|ga:G:i2|def', '1');
+  AppendMkCase(LMkDispatch, 'd-when-hit', 'R~G:def;W~G:i1>one|ga:G:i1|one', '1');
+  AppendMkCase(LMkDispatch, 'd-when-miss-nodefault', 'W~G:i1>one|ga:G:i2|', '1');
+  AppendMkCase(LMkDispatch, 'd-int-direct', 'RI~F:42|gi:F|42', '1');
+  AppendMkCase(LMkDispatch, 'd-int-kind-fallback-bool', 'RB~F:t|gi:F|0', '1');
+  AppendMkCase(LMkDispatch, 'd-bool-sametext', 'SR~F:TRUE|gb:F|T', '1');
+  AppendMkCase(LMkDispatch, 'd-bool-nontrue', 'SR~F:yes|gb:F|F', '1');
+  AppendMkCase(LMkDispatch, 'd-returns-override', 'R~F:x;R~F:y|g:F|y', '1');
+  AppendMkCase(LMkDispatch, 'd-reset-keeps-setup', 'R~F:x;C~F;X|g:F|x', '1');
+  AppendMkCase(LMkDispatch, 'd-reset-clears-calls', 'R~F:x;C~F;X|cc:F|0', '1');
+  AppendMkCase(LMkDispatch, 'd-resetall-clears', 'R~F:x;XA|g:F|', '1');
+  Suite.TestTable('v8.41 mock When/Returns dispatch + reset', LMkDispatch,
+    @TestMkDispatchCase);
+
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
@@ -2391,4 +2850,8 @@ begin
   Runner := Default(TSuiteRunner);
   Suite := Default(TTestSuite);
   LResults := nil;
+  LMkCount := nil;
+  LMkWith := nil;
+  LMkOrder := nil;
+  LMkDispatch := nil;
 end.
