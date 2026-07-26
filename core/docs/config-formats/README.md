@@ -189,6 +189,16 @@ Stringify 幂等 + 600 层洪水、yaml 锚点/别名碎片 + 300 层 flow 洪�
 xml `Root.Text` 消费面 + 实体/标签碎片。config 为 DOM 聚合层：输入面
 由底层各格式 parser fuzz 覆盖，插值环有专测。
 
+流式面差分 fuzz（Wave T）：两条真流式路径用差分 oracle（两条独立
+代码路径互为参照，抓"安静算错"而不只是崩溃）——
+
+- `test_csv_stream_fuzz`：chunked `IReader`（1/3/7 字节强制多次
+  refill）vs 整串解析，行/字段/错误状态必须全等；引号/CRLF 逐字节
+  跨 chunk 酷刑。
+- `test_xml_pull_fuzz`：`TXmlReader` pull vs DOM 先序元素序列全等；
+  深度豁免两面验证（600 层 DOM 拒 / pull 通过，5000 层无隐藏递归）；
+  失配闭合 in-band 报错。
+
 泄漏验证走诚实通道（`-gh` 默认通道泄漏时 exit 仍为 0，不构成门禁）：
 `HEAPTRC='haltonnotreleased,log=<file>' ./<binary>` — 泄漏 exit=203，
 干净时 dump 含 `0 unfreed memory blocks : 0`。证据与 follow-up

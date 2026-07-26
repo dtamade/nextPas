@@ -1,4 +1,4 @@
-# config-formats 全族 SCORECARD（Wave S — 全族确定性 fuzz 覆盖）
+# config-formats 全族 SCORECARD（Wave T — 流式面差分 fuzz）
 
 **truth**：`host-linux`
 **lane**：`config-json-xml-toml-yaml-csv-ini`
@@ -18,7 +18,32 @@ make hygiene
 
 ---
 
-## B. Wave S 关闭项
+## B. Wave T 关闭项 — 流式面差分 fuzz
+
+| 项 | 状态 |
+|----|------|
+| `test_csv_stream_fuzz`（chunked IReader 1/3/7 字节 vs 整串差分，5 tests） | Done |
+| `test_xml_pull_fuzz`（TXmlReader pull vs DOM 先序差分，6 tests） | Done |
+
+**痛点**：Wave S 只覆盖各格式整串 parse 面；家族两条真流式路径
+（CSV chunked refill、XML pull）是独立代码路径、豁免 bulk cap/深度上限，
+恰恰零 fuzz。**oracle 升级**：从"不崩溃"弱断言升级为差分测试——
+同一输入两条路径结果必须逐字节一致（CSV：行/字段/错误状态全等；
+XML：start/empty 元素先序序列全等），refill 边界撕裂（引号/CRLF 跨
+chunk）与两面不一致直接变断言失败。
+
+关键覆盖：引号转义对/CRLF 逐字节跨 chunk 酷刑；深度豁免两面验证
+（600 层 DOM 拒 512 上限 / pull 完整读完，5000 层证无隐藏递归）；
+失配/孤儿闭合标签 pull in-band 报错。两套件 11 tests 全绿、
+诚实通道 exit=0 + pin 命中。**flip check 双向验证有牙**：chunked 路
+悄悄丢 1 字节 → CSV 差分红；漏计 empty 元素 → XML 差分红 2 测试。
+零新缺陷 = 流式/整串两面实现一致性的独立证据。
+发现（契约确认非缺陷）：`TCsvReader` 默认执行字段数一致性校验
+（"Wrong number of fields"，Go encoding/csv 语义），首行定列数。
+
+---
+
+## B2. Wave S 关闭项（历史）
 
 | 项 | 状态 |
 |----|------|
