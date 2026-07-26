@@ -171,6 +171,25 @@ Format and config production sources do not `uses SysUtils` and do not use langu
 - Format/config tests must not `uses SysUtils` or `Classes` (use `fs` / `process` / `text.*`).
 - Out of scope for this stack (honest): Schema / XPath / YAML multi-doc streams; true streaming JSON only if >64 MiB demand appears.
 
+### Deterministic fuzz coverage (family-wide)
+
+Every parser has a `test_<fmt>_fuzz` suite using the same deterministic
+xorshift32 pattern (seed=12345 — failures are reproducible, no flaky CI):
+
+| 路 | 断言 |
+|----|------|
+| random（格式敏感字符加权） | 不崩溃 + in-band/Try 契约不外泄异常 |
+| binary garbage（全字节随机） | 同上 |
+| semi-valid（语法片段拼装） | 部分轮次解析成功；成功文档可安全消费 |
+| repeated structures（括号/引号/等号洪水） | 不崩溃、深度洪水撞上限走 in-band 报错 |
+| large valid document | 大文档正确物化 |
+
+模块特色路：csv writer→parser 往返、ini write→reparse 往返、json
+Stringify 幂等 + 600 层洪水、yaml 锚点/别名碎片 + 300 层 flow 洪水、
+xml `Root.Text` 消费面 + 实体/标签碎片。config 为 DOM 聚合层：输入面
+由底层各格式 parser fuzz 覆盖，插值环有专测。全部套件 heaptrc 0 泄漏
+门禁内置（`-gh`）。
+
 ## Format Surface Gates
 
 Run surface contract tests for each format:
