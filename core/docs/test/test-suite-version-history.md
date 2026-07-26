@@ -305,6 +305,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v8.32**: F-03 拆分 — `test.prop.pas` (2938L) → `test.prop.gen.pas` (生成器) + `test.prop.pas` (Prop 执行) + `test.fuzz.pas` (模糊测试全家)；门面 API 不变；`FuzzMultiStrategy` 补进门面 re-export（F-07 收口，FuzzParallel 仍为 deprecated 别名）
 - **v8.33**: runner 拆分 — `test.runner.pas` (2369L) → `test.runner.pas` (TTestSuite 引擎, 1994L) + `test.runner.multi.pas` (TSuiteRunner 编排, 402L)；门面 API 不变；修正 test_parallel R6-54/B10 对 v8.31 F-20 语义的遗留断言（配置期 fail-fast，非静默 skip）
 - **v8.34**: F-12 COW lint（source-contract 静态检测 Add 后改原 suite 的丢改陷阱，`{ cow-lint-ok }` 豁免）+ TSuiteRunner 编排契约密度（M1 定点 + M2 聚合矩阵 54 行 + M3 FailFast/MaxFailures 停止矩阵 12 行）；scale 7609→7686
+- **v8.35**: B78 密度 tranche 2 — test_output 四张契约表 92 行（51 fail-path）：XmlEscape 五实体/双重转义/ctrl 折叠、JsonEscape `\u00XX`/穿透面、TAP plan/YAML block/skip directive/footer 计数字段语义（tsError→Failed）、FormatDuration 截断+负值穿透；scale 7686→7781
 
 ## 路线图
 

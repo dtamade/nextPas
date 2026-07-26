@@ -2210,12 +2210,204 @@ begin
   ACases[High(ACases)].Data := APattern + '|' + ASubject + '|' + AExpect;
 end;
 
+{ ── v8.35: report formatter fail-path tables (JUnit XML / JSON / TAP / duration) ── }
+
+function NextField(var ARest: string): string;
+var
+  LP: Integer;
+begin
+  LP := Pos('|', ARest);
+  if LP = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LP - 1);
+    ARest := Copy(ARest, LP + 1, MaxInt);
+  end;
+end;
+
+procedure AppendEscCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFailFlag: string);
+{ AData: field|raw|want|notwant — AFailFlag '0' marks a fail-path row and is
+  appended to Data so the table proc can enforce flag/assertion consistency. }
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := AData + '|' + AFailFlag;
+end;
+
+procedure AppendTapCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFailFlag: string);
+{ AData: mask|want|notwant — mask chars: p/f/s/e (one synthetic test each). }
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := AData + '|' + AFailFlag;
+end;
+
+procedure AppendDurCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData: string);
+{ AData: millis|want — FormatDuration output contract rows. }
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := AData;
+end;
+
+procedure BuildEscResults(const AField, ARaw: string;
+  out AResults: specialize TArray<TTestRunResult>);
+{ One suite, one test; ARaw lands in Name (passed) or Message (failed). }
+begin
+  SetLength(AResults, 1);
+  AResults[0] := TTestRunResult.Create('esc');
+  SetLength(AResults[0].Results, 1);
+  if AField = 'name' then
+  begin
+    AResults[0].Results[0].Name := ARaw;
+    AResults[0].Results[0].Status := tsPassed;
+    AResults[0].Passed := 1;
+  end
+  else
+  begin
+    AResults[0].Results[0].Name := 'et';
+    AResults[0].Results[0].Status := tsFailed;
+    AResults[0].Results[0].Message := ARaw;
+    AResults[0].Failed := 1;
+  end;
+end;
+
+procedure TestXmlEscTableCase(const AC: TTestCase);
+{ End-to-end XmlEscape contract via JUnitXML: dangerous chars must appear
+  escaped (want) and the raw form must be gone (notwant on '0' rows). }
+var
+  LRest, LField, LRaw, LWant, LNotWant, LFlag, LXml: string;
+  LEscResults: specialize TArray<TTestRunResult>;
+begin
+  LRest := AC.Data;
+  LField := NextField(LRest);
+  LRaw := NextField(LRest);
+  LWant := NextField(LRest);
+  LNotWant := NextField(LRest);
+  LFlag := NextField(LRest);
+  if LFlag = '0' then
+    CheckTrue(LNotWant <> '', AC.Name + ': fail-path row needs notwant')
+  else
+    CheckEqual('', LNotWant, AC.Name + ': pass row must not carry notwant');
+  BuildEscResults(LField, LRaw, LEscResults);
+  LXml := JUnitXML(LEscResults, 'escrun');
+  CheckContains(LXml, LWant);
+  if LNotWant <> '' then
+    CheckNotContains(LXml, LNotWant);
+end;
+
+procedure TestJsonEscTableCase(const AC: TTestCase);
+{ End-to-end JsonEscape contract via JSONReport: quotes/backslash/control
+  chars must be escaped; raw forms must not leak into the document. }
+var
+  LRest, LField, LRaw, LWant, LNotWant, LFlag, LJson: string;
+  LEscResults: specialize TArray<TTestRunResult>;
+begin
+  LRest := AC.Data;
+  LField := NextField(LRest);
+  LRaw := NextField(LRest);
+  LWant := NextField(LRest);
+  LNotWant := NextField(LRest);
+  LFlag := NextField(LRest);
+  if LFlag = '0' then
+    CheckTrue(LNotWant <> '', AC.Name + ': fail-path row needs notwant')
+  else
+    CheckEqual('', LNotWant, AC.Name + ': pass row must not carry notwant');
+  BuildEscResults(LField, LRaw, LEscResults);
+  LJson := JSONReport(LEscResults);
+  CheckContains(LJson, LWant);
+  if LNotWant <> '' then
+    CheckNotContains(LJson, LNotWant);
+end;
+
+procedure TestTapTableCase(const AC: TTestCase);
+{ TAPReport structure contract: plan line, ok/not ok numbering, YAML
+  failure blocks, skip directives, trailing skip count. }
+var
+  LRest, LMask, LWant, LNotWant, LFlag, LTap: string;
+  LTapResults: specialize TArray<TTestRunResult>;
+  LJ: Integer;
+  LHasNonPass: Boolean;
+begin
+  LRest := AC.Data;
+  LMask := NextField(LRest);
+  LWant := NextField(LRest);
+  LNotWant := NextField(LRest);
+  LFlag := NextField(LRest);
+  LHasNonPass := LMask = '';
+  for LJ := 1 to Length(LMask) do
+    if LMask[LJ] in ['f', 's', 'e'] then
+      LHasNonPass := True;
+  if LFlag = '0' then
+    CheckTrue(LHasNonPass, AC.Name + ': fail-path row needs f/s/e or empty mask')
+  else
+    CheckFalse(LHasNonPass, AC.Name + ': pass row must be all-p non-empty mask');
+  SetLength(LTapResults, 1);
+  LTapResults[0] := TTestRunResult.Create('S');
+  SetLength(LTapResults[0].Results, Length(LMask));
+  for LJ := 1 to Length(LMask) do
+  begin
+    LTapResults[0].Results[LJ - 1].Name := 't' + IntToStr(LJ - 1);
+    case LMask[LJ] of
+      'p': LTapResults[0].Results[LJ - 1].Status := tsPassed;
+      'f':
+        begin
+          LTapResults[0].Results[LJ - 1].Status := tsFailed;
+          LTapResults[0].Results[LJ - 1].Message := 'boom';
+        end;
+      's':
+        begin
+          LTapResults[0].Results[LJ - 1].Status := tsSkipped;
+          LTapResults[0].Results[LJ - 1].Message := 'why';
+        end;
+      'e':
+        begin
+          LTapResults[0].Results[LJ - 1].Status := tsError;
+          LTapResults[0].Results[LJ - 1].Message := 'err';
+        end;
+    end;
+    { TAP footer counts read the suite counter fields, not Results[].Status;
+      mirror runner semantics (IncByStatus: tsError -> Failed). }
+    case LTapResults[0].Results[LJ - 1].Status of
+      tsPassed:  Inc(LTapResults[0].Passed);
+      tsSkipped: Inc(LTapResults[0].Skipped);
+    else
+      Inc(LTapResults[0].Failed);
+    end;
+  end;
+  LTap := TAPReport(LTapResults);
+  if LWant <> '' then
+    CheckContains(LTap, LWant);
+  if LNotWant <> '' then
+    CheckNotContains(LTap, LNotWant);
+end;
+
+procedure TestDurTableCase(const AC: TTestCase);
+{ FormatDuration format contract: ms below 1s, 's'/'N.Ds'/'N.DDs' above,
+  including truncation (1234 -> 1.23s) and pass-through negatives. }
+var
+  LRest, LMillis, LWant: string;
+begin
+  LRest := AC.Data;
+  LMillis := NextField(LRest);
+  LWant := NextField(LRest);
+  CheckEqual(LWant, FormatDuration(StrToInt64Def(LMillis, -12345)));
+end;
+
 var
   Suite: TTestSuite;
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
   LFilterCases: specialize TArray<TTestCase>;
+  LFmtCases: specialize TArray<TTestCase>;
   LI: Integer;
 begin
   WriteLn('=== test_output ===');
@@ -2404,6 +2596,114 @@ begin
   Suite.TestTable('B62 hierarchical filter fail-path', LFilterCases,
     @TestB62HierarchicalFilterCase);
 
+  { ── v8.35: JUnit XML escape fail-path (end-to-end via JUnitXML) ── }
+  SetLength(LFmtCases, 0);
+  AppendEscCase(LFmtCases, 'x-amp-name', 'name|a&b|name="a&amp;b"|name="a&b"', '0');
+  AppendEscCase(LFmtCases, 'x-lt-name', 'name|a<b|name="a&lt;b"|name="a<b"', '0');
+  AppendEscCase(LFmtCases, 'x-gt-name', 'name|a>b|name="a&gt;b"|name="a>b"', '0');
+  AppendEscCase(LFmtCases, 'x-quot-name', 'name|a"b|name="a&quot;b"|name="a"b"', '0');
+  AppendEscCase(LFmtCases, 'x-apos-name', 'name|a''b|name="a&apos;b"|name="a''b"', '0');
+  AppendEscCase(LFmtCases, 'x-double-escape', 'name|a&amp;b|name="a&amp;amp;b"|name="a&amp;b"', '0');
+  AppendEscCase(LFmtCases, 'x-all-five', 'name|<>&"''|&lt;&gt;&amp;&quot;&apos;|<>', '0');
+  AppendEscCase(LFmtCases, 'x-repeat-amp', 'name|&&&|&amp;&amp;&amp;|&&', '0');
+  AppendEscCase(LFmtCases, 'x-ctrl-bell', 'name|a'#7'b|name="a b"|'#7, '0');
+  AppendEscCase(LFmtCases, 'x-ctrl-esc', 'name|a'#27'b|name="a b"|'#27, '0');
+  AppendEscCase(LFmtCases, 'x-tab-through', 'name|a'#9'b|name="a'#9'b"|', '1');
+  AppendEscCase(LFmtCases, 'x-lf-through', 'name|a'#10'b|name="a'#10'b"|', '1');
+  AppendEscCase(LFmtCases, 'x-cr-through', 'name|a'#13'b|name="a'#13'b"|', '1');
+  AppendEscCase(LFmtCases, 'x-plain', 'name|plain_ok|name="plain_ok"|', '1');
+  AppendEscCase(LFmtCases, 'x-empty-name', 'name||name=""|', '1');
+  AppendEscCase(LFmtCases, 'x-name-unicode', 'name|测试&名|name="测试&amp;名"|测试&名', '0');
+  AppendEscCase(LFmtCases, 'x-name-space', 'name|a b c|name="a b c"|', '1');
+  AppendEscCase(LFmtCases, 'x-msg-amp', 'msg|x&y|message="x&amp;y"|message="x&y"', '0');
+  AppendEscCase(LFmtCases, 'x-msg-lt', 'msg|x<y|message="x&lt;y"|message="x<y"', '0');
+  AppendEscCase(LFmtCases, 'x-msg-quot', 'msg|say "no"|message="say &quot;no&quot;"|say "no', '0');
+  AppendEscCase(LFmtCases, 'x-msg-apos', 'msg|it''s|message="it&apos;s"|it''s', '0');
+  AppendEscCase(LFmtCases, 'x-msg-ctrl', 'msg|a'#1'b|message="a b"|'#1, '0');
+  AppendEscCase(LFmtCases, 'x-msg-multiline', 'msg|l1'#10'l2|message="l1'#10'l2"|', '1');
+  AppendEscCase(LFmtCases, 'x-msg-empty', 'msg||message=""|', '1');
+  AppendEscCase(LFmtCases, 'x-msg-unicode', 'msg|失败<原因>|失败&lt;原因&gt;|失败<原因>', '0');
+  AppendEscCase(LFmtCases, 'x-msg-mixed', 'msg|a<b>c&d|a&lt;b&gt;c&amp;d|a<b>c&d', '0');
+  Suite.TestTable('v8.35 junit xml-escape fail-path', LFmtCases, @TestXmlEscTableCase);
+
+  { ── v8.35: JSON escape fail-path (end-to-end via JSONReport) ── }
+  SetLength(LFmtCases, 0);
+  AppendEscCase(LFmtCases, 'j-quote-name', 'name|a"b|"name": "a\"b"|"name": "a"b"', '0');
+  AppendEscCase(LFmtCases, 'j-backslash-name', 'name|a\b|"name": "a\\b"|: "a\b"', '0');
+  AppendEscCase(LFmtCases, 'j-tab', 'name|a'#9'b|"name": "a\tb"|a'#9'b', '0');
+  AppendEscCase(LFmtCases, 'j-lf', 'name|a'#10'b|"name": "a\nb"|a'#10'b', '0');
+  AppendEscCase(LFmtCases, 'j-cr', 'name|a'#13'b|"name": "a\rb"|a'#13'b', '0');
+  AppendEscCase(LFmtCases, 'j-bs', 'name|a'#8'b|"name": "a\bb"|a'#8'b', '0');
+  AppendEscCase(LFmtCases, 'j-ff', 'name|a'#12'b|"name": "a\fb"|a'#12'b', '0');
+  AppendEscCase(LFmtCases, 'j-ctrl1', 'name|a'#1'b|"name": "a\u0001b"|a'#1'b', '0');
+  AppendEscCase(LFmtCases, 'j-ctrl31', 'name|a'#31'b|"name": "a\u001Fb"|a'#31'b', '0');
+  AppendEscCase(LFmtCases, 'j-ctrl2', 'name|a'#2'b|"name": "a\u0002b"|a'#2'b', '0');
+  AppendEscCase(LFmtCases, 'j-space', 'name|a b|"name": "a b"|', '1');
+  AppendEscCase(LFmtCases, 'j-del127', 'name|a'#127'b|"name": "a'#127'b"|', '1');
+  AppendEscCase(LFmtCases, 'j-slash', 'name|a/b|"name": "a/b"|\/', '0');
+  AppendEscCase(LFmtCases, 'j-plain', 'name|plain|"name": "plain"|', '1');
+  AppendEscCase(LFmtCases, 'j-unicode', 'name|中文名|"name": "中文名"|', '1');
+  AppendEscCase(LFmtCases, 'j-combo', 'name|"\|"name": "\"\\"|: ""\', '0');
+  AppendEscCase(LFmtCases, 'j-crlf', 'name|a'#13#10'b|"name": "a\r\nb"|a'#13#10'b', '0');
+  AppendEscCase(LFmtCases, 'j-name-empty', 'name||"name": ""|', '1');
+  AppendEscCase(LFmtCases, 'j-msg-quote', 'msg|say "hi"|"message": "say \"hi\""|say "hi', '0');
+  AppendEscCase(LFmtCases, 'j-msg-newline', 'msg|l1'#10'l2|"message": "l1\nl2"|l1'#10'l2', '0');
+  AppendEscCase(LFmtCases, 'j-msg-ctrl31', 'msg|x'#31'y|"message": "x\u001Fy"|x'#31'y', '0');
+  AppendEscCase(LFmtCases, 'j-msg-space', 'msg|x y|"message": "x y"|', '1');
+  AppendEscCase(LFmtCases, 'j-msg-injection', 'msg|x","hack": "1|\"hack\": \"1|"hack": ', '0');
+  AppendEscCase(LFmtCases, 'j-msg-combo', 'msg|a'#9'b'#10'c|"message": "a\tb\nc"|a'#9'b', '0');
+  Suite.TestTable('v8.35 json-escape fail-path', LFmtCases, @TestJsonEscTableCase);
+
+  { ── v8.35: TAP structure fail-path (end-to-end via TAPReport) ── }
+  SetLength(LFmtCases, 0);
+  AppendTapCase(LFmtCases, 't-empty-plan', '|1..0|', '0');
+  AppendTapCase(LFmtCases, 't-single-pass-plan', 'p|1..1|', '1');
+  AppendTapCase(LFmtCases, 't-pass-line', 'p|ok 1 - S / t0|', '1');
+  AppendTapCase(LFmtCases, 't-pass-no-notok', 'p||not ok', '1');
+  AppendTapCase(LFmtCases, 't-fail-line', 'f|not ok 1 - S / t0|', '0');
+  AppendTapCase(LFmtCases, 't-fail-yaml-open', 'f|  ---|', '0');
+  AppendTapCase(LFmtCases, 't-fail-severity', 'f|  severity: fail|', '0');
+  AppendTapCase(LFmtCases, 't-fail-msg', 'f|boom|', '0');
+  AppendTapCase(LFmtCases, 't-fail-yaml-close', 'f|  ...|', '0');
+  AppendTapCase(LFmtCases, 't-error-severity', 'e|  severity: error|', '0');
+  AppendTapCase(LFmtCases, 't-error-not-failsev', 'e||  severity: fail', '0');
+  AppendTapCase(LFmtCases, 't-skip-directive', 's|# skip|', '0');
+  AppendTapCase(LFmtCases, 't-skip-msg', 's|# skip why|', '0');
+  AppendTapCase(LFmtCases, 't-mixed-plan', 'pfs|1..3|', '0');
+  AppendTapCase(LFmtCases, 't-mixed-skipline', 'pfs|ok 3 - S / t2 # skip|', '0');
+  AppendTapCase(LFmtCases, 't-mixed-skipcount', 'pfs|# skipped: 1|', '0');
+  AppendTapCase(LFmtCases, 't-allpass-lastline', 'ppp|ok 3 - S / t2|', '1');
+  AppendTapCase(LFmtCases, 't-allpass-nofail', 'ppp||not ok', '1');
+  AppendTapCase(LFmtCases, 't-two-fails', 'ff|not ok 2 - S / t1|', '0');
+  AppendTapCase(LFmtCases, 't-sss-count', 'sss|# skipped: 3|', '0');
+  Suite.TestTable('v8.35 tap structure fail-path', LFmtCases, @TestTapTableCase);
+
+  { ── v8.35: FormatDuration format contract table ── }
+  SetLength(LFmtCases, 0);
+  AppendDurCase(LFmtCases, 'd-zero', '0|0ms');
+  AppendDurCase(LFmtCases, 'd-one', '1|1ms');
+  AppendDurCase(LFmtCases, 'd-999', '999|999ms');
+  AppendDurCase(LFmtCases, 'd-1000', '1000|1s');
+  AppendDurCase(LFmtCases, 'd-1001', '1001|1.00s');
+  AppendDurCase(LFmtCases, 'd-1005', '1005|1.00s');
+  AppendDurCase(LFmtCases, 'd-1050', '1050|1.05s');
+  AppendDurCase(LFmtCases, 'd-1090', '1090|1.09s');
+  AppendDurCase(LFmtCases, 'd-1100', '1100|1.1s');
+  AppendDurCase(LFmtCases, 'd-1200', '1200|1.2s');
+  AppendDurCase(LFmtCases, 'd-1230', '1230|1.23s');
+  AppendDurCase(LFmtCases, 'd-1234-truncate', '1234|1.23s');
+  AppendDurCase(LFmtCases, 'd-1999', '1999|1.99s');
+  AppendDurCase(LFmtCases, 'd-2000', '2000|2s');
+  AppendDurCase(LFmtCases, 'd-2500', '2500|2.5s');
+  AppendDurCase(LFmtCases, 'd-9999', '9999|9.99s');
+  AppendDurCase(LFmtCases, 'd-10000', '10000|10s');
+  AppendDurCase(LFmtCases, 'd-59999', '59999|59.99s');
+  AppendDurCase(LFmtCases, 'd-60000', '60000|60s');
+  AppendDurCase(LFmtCases, 'd-61234', '61234|61.23s');
+  AppendDurCase(LFmtCases, 'd-599999', '599999|599.99s');
+  AppendDurCase(LFmtCases, 'd-negative-passthrough', '-1|-1ms');
+  Suite.TestTable('v8.35 format-duration contract', LFmtCases, @TestDurTableCase);
+
   Runner := TSuiteRunner.Create('output-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
@@ -2422,4 +2722,6 @@ begin
   Runner := Default(TSuiteRunner);
   Suite := Default(TTestSuite);
   LResults := nil;
+  LFilterCases := nil;
+  LFmtCases := nil;
 end.

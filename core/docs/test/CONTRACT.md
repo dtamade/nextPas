@@ -425,6 +425,25 @@ end;
 
 ## 11. 变更日志
 
+### v8.35 (2026-07-26) — B78 密度 tranche 2：output 转义/结构 fail-path
+
+- **test_output 四张契约表（92 行，其中 51 行 fail-path）**，全部绑 formatter 真实行为：
+  - `junit xml-escape fail-path`（26 行）：XmlEscape 五实体（`&amp;/&lt;/&gt;/&quot;/&apos;`）、
+    双重转义（`&amp;`→`&amp;amp;`）、控制字符折叠为空格（#9/#10/#13 除外，穿透）、
+    failure `message=` 属性无条件输出（含空串）；notwant 断言原始未转义形不得出现
+  - `json-escape fail-path`（24 行）：JsonEscape 短转义（`\"` `\\` `\b` `\t` `\n` `\f` `\r`）、
+    其余 ctrl<32 → `\u00XX` 大写十六进制、`/` 与 #127 穿透；
+    `message` 字段仅非空输出、name 无条件输出
+  - `tap structure fail-path`（20 行）：plan `1..N`（含 `1..0`）、ok/not ok 编号、
+    YAML failure block（`---`/message/`severity: fail|error`/`...`）、skip directive
+    （`# skip <msg>`）、footer 计数——**footer 读 suite 计数字段而非遍历
+    Results[].Status，`# passed` 为推导值（total−failed−skipped），tsError 按
+    IncByStatus 语义计入 Failed**（合成结果须双轨维护 Status + 计数字段）
+  - `format-duration contract`（22 行）：`<1s`→`Nms`、整秒→`Ns`、`N.Ds`/`N.DDs`
+    截断非四舍五入（1234→`1.23s`、1999→`1.99s`）、负值穿透（-1→`-1ms`）
+- scale：countable 7686 → **7781**（test_output 151→246，fp 17→68）；
+  fail-path 82.9% / low-signal 0% / non-table 1377；SCALE_MIN 维持 7500（9000 待密度达标）
+
 ### v8.34 (2026-07-26) — F-12 COW lint + runner.multi 编排契约密度
 
 - **F-12 收口**：`test_runner_source_contracts` 新增 COW lint —— 静态检测

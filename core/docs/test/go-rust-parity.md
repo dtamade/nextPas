@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.34**
+**当前版本**: **v8.35**
 **最后更新**: 2026-07-26
 
 ---
@@ -92,10 +92,11 @@
 | B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | **done** |
 | B66–B70 | **v8.29** 并行竞态 + Mock 误用密度 | **done** |
 | B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | **done** |
-| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done**；B77 **done (v8.30)**；B79 **done (v8.31)**；B80 **done (v8.32)**；B78 质量条件已满足（fail-path 83.2%/low-signal 0%），countable 7686 → 待密度增长后抬 9000 |
+| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done**；B77 **done (v8.30)**；B79 **done (v8.31)**；B80 **done (v8.32)**；B78 质量条件已满足（fail-path 82.9%/low-signal 0%），countable 7781 → 待密度增长后抬 9000 |
 | F-03 | **v8.32** prop god-unit 拆分：prop.gen + prop + fuzz，门面不变；FuzzMultiStrategy 补门面导出 | **done** |
 | — | **v8.33** runner 拆分：runner(TTestSuite 引擎) + runner.multi(TSuiteRunner 编排)；F-20 遗留测试语义修正 | **done** |
 | F-12 | **v8.34** COW lint（source-contract 静态门）+ runner.multi 编排契约（M1 定点 + M2/M3 矩阵 66 行 fail-path）；countable 7609→7686 | **done** |
+| B78 t2 | **v8.35** output 转义/结构 fail-path 92 行（XmlEscape/JsonEscape/TAP 结构/FormatDuration）；countable 7686→7781（test_output fp 17→68） | **done** |
 
 ### 暂缓 / 阻塞
 

@@ -143,7 +143,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
-| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 83.2% / low-signal 0%），但 countable=7686 < 9000（v8.34 tranche 1 后）—— 需再增 ~1314 再抬门 |
+| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 82.9% / low-signal 0%），但 countable=7781 < 9000（v8.35 tranche 2 后）—— 需再增 ~1219 再抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | **done (v8.31 F-19)** |
 | B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | **done (v8.32)** README §Release Checklist |
 
@@ -175,7 +175,16 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | F-12 | COW lint 进 `test_runner_source_contracts`：检测 `Add` 后继续改原 suite 未 re-Add；`{ cow-lint-ok }` 豁免；对合成违规样例自测确认会触发 | **done** |
 | B78 部分 | TSuiteRunner 编排契约密度：M1a–M1e 定点（深拷贝快照/ListMode/惰性 AllPassed/Summary 格式/first-suite config）+ M2 聚合矩阵 54 行 + M3 停止矩阵 12 行，全绑 fail-path | **done** |
-| B78 余量 | countable 7686 / 9000 — 缺 ~1314；候选：test_output fail-path（现 17/151）、prop.gen/fuzz 边界表 | 待后续 tranche |
+| B78 余量 | countable 7686 / 9000 — 缺 ~1314；候选：test_output fail-path（现 17/151）、prop.gen/fuzz 边界表 | → v8.35 tranche 2 |
+
+---
+
+### v8.35 — B78 密度 tranche 2（output 转义/结构 fail-path）
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| B78 部分 | test_output 四张契约表 92 行（51 fail-path）：XmlEscape 五实体/双重转义/ctrl 折叠、JsonEscape `\u00XX`/穿透面、TAP plan/YAML block/skip directive/footer 计数字段语义（tsError→Failed）、FormatDuration 截断+负值穿透 | **done** |
+| B78 余量 | countable 7781 / 9000 — 缺 ~1219；候选：prop.gen/fuzz 边界表 | 待后续 tranche |
 
 ---
 
@@ -203,10 +212,11 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.35+** / backlog：SCALE→9000 密度增长续（B78，缺 ~1314 countable；候选 test_output
-fail-path 17/151、prop.gen/fuzz 边界表）；v9 SoftExpect（需拍板）。
+**v8.36+** / backlog：SCALE→9000 密度增长续（B78，缺 ~1219 countable；候选
+prop.gen/fuzz 边界表）；v9 SoftExpect（需拍板）。
 已完成：~~prop god-unit 拆分（F-03，v8.32）~~；~~release checklist（B80，v8.32）~~；
-~~runner 拆分 + F-20 测试语义修正（v8.33）~~；~~F-12 COW lint + runner.multi 契约（v8.34）~~。
+~~runner 拆分 + F-20 测试语义修正（v8.33）~~；~~F-12 COW lint + runner.multi 契约（v8.34）~~；
+~~output 转义/结构 fail-path 92 行（v8.35）~~。
 
 ---
 
