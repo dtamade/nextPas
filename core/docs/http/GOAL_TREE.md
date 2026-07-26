@@ -35,7 +35,8 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Era PD** | **Done (ext)** — PD-0/1A/2 + **PD-1B** RW=30s + **PD-3-1/2/3**（Windows waitable pair） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | **Era SAFE + R2** | **Done** — 默认安全（body/decompress 有界、RequestArena 附着）+ findings 两轮 remediation + STRUCT 抽取（源码 **82** 单元）；详见 ROADMAP archive 快照 |
-| **WIN-3 phase-1** | **landed** — `net.server.iocp` AcceptEx + worker handoff（Wine smoke `test_http_iocp_wine`）；completion 数据路径 = ROADMAP Era W2 |
+| **WIN-3 phase-1** | **landed** — `net.server.iocp` AcceptEx + worker handoff（Wine smoke `test_http_iocp_wine`）；completion 数据路径已由 Era W2 完成 |
+| **Era W2（W2-1..W2-3b）** | **landed** — IOCP completion 驱动 recv/send/deadline-wake 数据路径；真 Windows host CI 证据（`http.iocp_wire`，run 30195741147）；生产 H1 session 走完成路径；scale 宣称维持 No |
 | 主 Makefile gate | **47** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS；含 `test_http_mem` / `test_http_stream` / `test_http_sse` / R2-3 拆分套件） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
