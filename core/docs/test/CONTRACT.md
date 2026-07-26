@@ -425,6 +425,35 @@ end;
 
 ## 11. 变更日志
 
+### v8.39 (2026-07-26) — B78 密度 tranche 6：subtest 聚合/收集/env 隔离契约表
+
+- **test_subtests 四张契约表（48 行，其中 27 行 fail-path）**，spec 驱动树构建
+  （token：p/f/s/e/l/m 叶 + A/B 嵌套节点；`TSubtestProc` 为普通过程指针 →
+  嵌套节点用全局 spec + 静态 proc，叶用 `Ctx.Run` 闭包）：
+  - `subtest aggregate message`（14 行，11 fp）：聚合消息 exact——
+    `N subtest(s) failed in <parent>: <名单>`；名单为**全路径**、`', '` join、执行序；
+    **嵌套失败逐层折叠为直接子节点名**（深链 root/a/b/f1 →
+    "failed in root/a/b: root/a/b/f1" → "failed in root/a: root/a/b" →
+    "failed in root: root/a"）；error 叶消息 `ClassName: Message` 计入名单
+  - `subtest result collection`（13 行，9 fp）：**pass 的 subtest 节点不进 Results**
+    （仅 fail/error/skip 叶与失败节点收集）；post-order（叶先于其父）；
+    root 条目恒在 Results[0]；CapturedLog 仅 fail/error 复制；
+    **root 失败条目携带最后一个失败叶的 log 残留**（已锁为契约）
+  - `subtest suite counters`（9 行，5 fp）：subtest 内部 pass/skip 对 suite 级
+    Passed/Skipped **不可见**；整条 TestSubtest 失败恰计 1 Failed（与叶数无关）；
+    与 plain Test 混排计数正交
+  - `subtest env isolation`（12 行，2 fp）：**SetEnv/UnsetEnv 此前零测试覆盖**
+    （公开 API 裸奔收口）。RestoreEnvVars **逆序恢复**——double-set 恢复
+    **原始值**（非中间值）；`platform_env_exists` 区分 empty 与 missing
+    （'~'=空串 / '-'=不存在哨兵）；**测试失败后仍完整恢复**（restore-after-fail）；
+    missing/empty/orig × set/unset/double-set 全矩阵
+- 「sibling pass 计数丢失」经 probe 实证**非外部可见 bug**：叶结果经 FOnResult
+  即时推送，父层 FSubPass 仅内部聚合用——记录为设计事实而非缺陷
+- 表行 flag 自校验：A/C 表 wantOk='F' ⟺ '0'；B 表 status∈{1,3} ⟺ '0'；
+  D 表 inFail='F' ⟺ '0'
+- scale：countable 7997 → **8050**（test_subtests 93→146）；
+  fail-path 81.3% / low-signal 0% / non-table 1646
+
 ### v8.38 (2026-07-26) — B78 密度 tranche 5：bench/discovery 契约表 + %.0f 尾点修复
 
 - **修复（跨模块 text.format）**：`FormatFloat` 在小数位数 0 时无条件追加 `'.'`——

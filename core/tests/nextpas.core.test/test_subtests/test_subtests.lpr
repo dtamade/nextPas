@@ -8,6 +8,7 @@ program test_subtests;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
+  nextpas.core.platform.env,
   nextpas.core.fs,
   nextpas.core.test;
 
@@ -887,6 +888,307 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+{ ── v8.39 subtest aggregation / collection / counters / env isolation ─────── }
+{ Spec-driven tree builder: GTree* globals drive static node procs because
+  TSubtestProc is a plain procedure pointer (no closure capture for RunNested).
+  Tokens: p=pass leaf, f=fail leaf (msg 'boom'), s=skip leaf (reason 'why'),
+  e=error leaf (Exception 'kaboom'), l=log 2 lines + fail, m=log 1 line + pass,
+  A/B=RunNested node expanding GTreeA/GTreeB. Leaf names: token + 1-based
+  position among the level's tokens (matches Ctx.Run registration order). }
+
+var
+  GTreeRoot, GTreeRoot2, GTreeA, GTreeB: string;
+  GEnvOps, GEnvWantInside: string;
+  GEnvInFail: Boolean;
+
+function NextTokS(var S: string; ASep: Char): string;
+var
+  P: Integer;
+begin
+  P := Pos(ASep, S);
+  if P = 0 then
+  begin
+    Result := S;
+    S := '';
+  end
+  else
+  begin
+    Result := Copy(S, 1, P - 1);
+    S := Copy(S, P + 1, Length(S));
+  end;
+end;
+
+function NextSegS(var S: string): string;
+begin
+  Result := NextTokS(S, '|');
+  if Result = '-' then Result := '';
+end;
+
+procedure AppendSCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+var
+  LIdx: Integer;
+begin
+  LIdx := Length(ACases);
+  SetLength(ACases, LIdx + 1);
+  ACases[LIdx].Name := AName;
+  ACases[LIdx].Data := AData + '|' + AFlag;
+end;
+
+procedure TreeExpandSpec(constref Ctx: ITestContext; const ASpec: string); forward;
+
+procedure TreeNodeB(constref Ctx: ITestContext);
+begin
+  TreeExpandSpec(Ctx, GTreeB);
+end;
+
+procedure TreeNodeA(constref Ctx: ITestContext);
+begin
+  TreeExpandSpec(Ctx, GTreeA);
+end;
+
+procedure TreeExpandSpec(constref Ctx: ITestContext; const ASpec: string);
+var
+  I, LN: Integer;
+begin
+  LN := 0;
+  for I := 1 to Length(ASpec) do
+  begin
+    Inc(LN);
+    case ASpec[I] of
+      'p': Ctx.Run('p' + IntToStr(LN), procedure begin CheckTrue(True); end);
+      'f': Ctx.Run('f' + IntToStr(LN), procedure begin CheckTrue(False, 'boom'); end);
+      's': Ctx.Run('s' + IntToStr(LN), procedure begin Skip('why'); end);
+      'e': Ctx.Run('e' + IntToStr(LN), procedure begin
+             raise Exception.Create('kaboom');
+           end);
+      'l': Ctx.Run('l' + IntToStr(LN), procedure begin
+             Ctx.Log('line-one'); Ctx.Log('line-two');
+             CheckTrue(False, 'logfail');
+           end);
+      'm': Ctx.Run('m' + IntToStr(LN), procedure begin
+             Ctx.Log('quiet-line'); CheckTrue(True);
+           end);
+      'A': Ctx.RunNested('a', @TreeNodeA);
+      'B': Ctx.RunNested('b', @TreeNodeB);
+    end;
+  end;
+end;
+
+procedure TreeRootProc(constref Ctx: ITestContext);
+begin
+  TreeExpandSpec(Ctx, GTreeRoot);
+end;
+
+procedure TreeRoot2Proc(constref Ctx: ITestContext);
+begin
+  TreeExpandSpec(Ctx, GTreeRoot2);
+end;
+
+function BuildTreeAndRun(const ARoot, AA, AB, ARoot2: string;
+  AWithPlain: Boolean; out ARes: TTestRunResult): Boolean;
+var
+  LTreeSuite: TTestSuite;
+begin
+  GTreeRoot := ARoot;
+  GTreeA := AA;
+  GTreeB := AB;
+  GTreeRoot2 := ARoot2;
+  LTreeSuite := TTestSuite.Create('tree');
+  LTreeSuite.Config.OutSink := TBufferSink.Create;
+  LTreeSuite.Config.ErrSink := TBufferSink.Create;
+  LTreeSuite.Config.AnsiMode := amOff;
+  LTreeSuite.TestSubtest('root', @TreeRootProc);
+  if ARoot2 <> '' then
+    LTreeSuite.TestSubtest('root2', @TreeRoot2Proc);
+  if AWithPlain then
+    LTreeSuite.Test('plain', procedure begin CheckTrue(True); end);
+  Result := LTreeSuite.RunWithResult(ARes);
+  LTreeSuite := Default(TTestSuite);
+end;
+
+procedure RunAggMsgCase(const AC: TTestCase);
+{ Data: root|specA|specB|wantOk|wantRootMsg|flag — root aggregate message exact:
+  'N subtest(s) failed in root: <full-path1>, <full-path2>' (execution order,
+  full paths for direct children only; nested failures collapse to node name). }
+var
+  LData, LRoot, LA, LB, LWantOk, LWantMsg, LFlag: string;
+  LRes: TTestRunResult;
+  LOk: Boolean;
+begin
+  LData := AC.Data;
+  LRoot := NextSegS(LData);
+  LA := NextSegS(LData);
+  LB := NextSegS(LData);
+  LWantOk := NextSegS(LData);
+  LWantMsg := NextSegS(LData);
+  LFlag := LData;
+  CheckTrue((LWantOk = 'F') = (LFlag = '0'), 'flag self-check ' + AC.Name);
+  LOk := BuildTreeAndRun(LRoot, LA, LB, '', False, LRes);
+  CheckTrue(LOk = (LWantOk = 'T'), 'suite ok ' + AC.Name);
+  CheckTrue(Length(LRes.Results) >= 1, 'root entry present ' + AC.Name);
+  CheckEqual('root', LRes.Results[0].Name, 'root entry first ' + AC.Name);
+  CheckEqual(LWantMsg, LRes.Results[0].Message, 'root msg ' + AC.Name);
+end;
+
+procedure RunNodeResultCase(const AC: TTestCase);
+{ Data: root|specA|specB|node|wantIdx|wantStatus|wantMsg|wantLog|flag —
+  RunWithResult collection contract: passing ekSubtest nodes are NOT collected
+  (wantStatus '-'); results are post-order (leaf index < parent node index);
+  CapturedLog copied only on fail/error. }
+var
+  LData, LRoot, LA, LB, LNode, LWantIdx, LWantStatus, LWantMsg, LWantLog,
+    LFlag: string;
+  LRes: TTestRunResult;
+  LFoundIdx, I: Integer;
+begin
+  LData := AC.Data;
+  LRoot := NextSegS(LData);
+  LA := NextSegS(LData);
+  LB := NextSegS(LData);
+  LNode := NextSegS(LData);
+  LWantIdx := NextSegS(LData);
+  LWantStatus := NextSegS(LData);
+  LWantMsg := NextSegS(LData);
+  LWantLog := NextSegS(LData);
+  LFlag := LData;
+  CheckTrue(((LWantStatus = '1') or (LWantStatus = '3')) = (LFlag = '0'),
+    'flag self-check ' + AC.Name);
+  BuildTreeAndRun(LRoot, LA, LB, '', False, LRes);
+  LFoundIdx := -1;
+  for I := 0 to High(LRes.Results) do
+    if LRes.Results[I].Name = LNode then
+    begin
+      LFoundIdx := I;
+      Break;
+    end;
+  if LWantStatus = '' then
+    CheckEqual(-1, LFoundIdx, 'node absent ' + AC.Name)
+  else
+  begin
+    CheckTrue(LFoundIdx >= 0, 'node found ' + AC.Name);
+    if LWantIdx <> '' then
+      CheckEqual(StrToIntDef(LWantIdx, -99), LFoundIdx, 'node idx ' + AC.Name);
+    CheckEqual(StrToIntDef(LWantStatus, -99), Ord(LRes.Results[LFoundIdx].Status),
+      'node status ' + AC.Name);
+    CheckEqual(LWantMsg, LRes.Results[LFoundIdx].Message, 'node msg ' + AC.Name);
+    CheckEqual(StrToIntDef(LWantLog, -99),
+      Length(LRes.Results[LFoundIdx].CapturedLog), 'node log ' + AC.Name);
+  end;
+end;
+
+procedure RunCountCase(const AC: TTestCase);
+{ Data: root1|root2|plain|specA|wantOk|pass|fail|skip|flag — suite counters:
+  subtest-internal pass/skip invisible to suite Passed/Skipped; a failing
+  TestSubtest entry counts exactly 1 Failed regardless of leaf fail count;
+  plain Test entries count normally. }
+var
+  LData, LRoot1, LRoot2, LPlain, LA, LWantOk, LWantPass, LWantFail, LWantSkip,
+    LFlag: string;
+  LRes: TTestRunResult;
+  LOk: Boolean;
+begin
+  LData := AC.Data;
+  LRoot1 := NextSegS(LData);
+  LRoot2 := NextSegS(LData);
+  LPlain := NextSegS(LData);
+  LA := NextSegS(LData);
+  LWantOk := NextSegS(LData);
+  LWantPass := NextSegS(LData);
+  LWantFail := NextSegS(LData);
+  LWantSkip := NextSegS(LData);
+  LFlag := LData;
+  CheckTrue((LWantOk = 'F') = (LFlag = '0'), 'flag self-check ' + AC.Name);
+  LOk := BuildTreeAndRun(LRoot1, LA, '', LRoot2, LPlain = 'y', LRes);
+  CheckTrue(LOk = (LWantOk = 'T'), 'suite ok ' + AC.Name);
+  CheckEqual(StrToIntDef(LWantPass, -99), LRes.Passed, 'passed ' + AC.Name);
+  CheckEqual(StrToIntDef(LWantFail, -99), LRes.Failed, 'failed ' + AC.Name);
+  CheckEqual(StrToIntDef(LWantSkip, -99), LRes.Skipped, 'skipped ' + AC.Name);
+end;
+
+procedure EnvProbeProc(constref Ctx: ITestContext);
+var
+  LOps, LOp: string;
+begin
+  LOps := GEnvOps;
+  while LOps <> '' do
+  begin
+    LOp := NextTokS(LOps, ',');
+    if LOp = 'sa' then Ctx.SetEnv('NP_V839_ENV', 'aa')
+    else if LOp = 'sb' then Ctx.SetEnv('NP_V839_ENV', 'bb')
+    else if LOp = 'se' then Ctx.SetEnv('NP_V839_ENV', '')
+    else if LOp = 'u' then Ctx.UnsetEnv('NP_V839_ENV');
+  end;
+  if GEnvWantInside = '' then
+    CheckFalse(platform_env_exists('NP_V839_ENV'), 'inside missing')
+  else if GEnvWantInside = '~' then
+  begin
+    CheckTrue(platform_env_exists('NP_V839_ENV'), 'inside exists (empty)');
+    CheckEqual('', string(platform_env_get_str('NP_V839_ENV')), 'inside empty');
+  end
+  else
+  begin
+    CheckTrue(platform_env_exists('NP_V839_ENV'), 'inside exists');
+    CheckEqual(GEnvWantInside, string(platform_env_get_str('NP_V839_ENV')),
+      'inside value');
+  end;
+  if GEnvInFail then
+    CheckTrue(False, 'envfail');
+end;
+
+procedure RunEnvCase(const AC: TTestCase);
+{ Data: init|ops|inFail|wantInside|wantExists|wantValue|flag — SetEnv/UnsetEnv
+  isolation state machine: restore in reverse order (double-set restores the
+  ORIGINAL value); platform_env_exists distinguishes empty ('~') from missing
+  ('-'); restore also runs after a failing subtest body.
+  init: x=missing y=empty o='orig'. ops: sa/sb/se=SetEnv aa/bb/'' u=UnsetEnv. }
+var
+  LData, LInit, LOps, LInFail, LWantInside, LWantExists, LWantValue,
+    LFlag: string;
+  LEnvSuite: TTestSuite;
+  LOk: Boolean;
+begin
+  LData := AC.Data;
+  LInit := NextSegS(LData);
+  LOps := NextSegS(LData);
+  LInFail := NextSegS(LData);
+  LWantInside := NextSegS(LData);
+  LWantExists := NextSegS(LData);
+  LWantValue := NextSegS(LData);
+  LFlag := LData;
+  CheckTrue((LInFail = 'F') = (LFlag = '0'), 'flag self-check ' + AC.Name);
+  if LInit = 'x' then
+    platform_env_unset('NP_V839_ENV')
+  else if LInit = 'y' then
+    platform_env_set('NP_V839_ENV', '')
+  else
+    platform_env_set('NP_V839_ENV', 'orig');
+  GEnvOps := LOps;
+  GEnvInFail := LInFail = 'F';
+  GEnvWantInside := LWantInside;
+  LEnvSuite := TTestSuite.Create('env-' + AC.Name);
+  LEnvSuite.Config.OutSink := TBufferSink.Create;
+  LEnvSuite.Config.ErrSink := TBufferSink.Create;
+  LEnvSuite.Config.AnsiMode := amOff;
+  LEnvSuite.TestSubtest('env', @EnvProbeProc);
+  LOk := LEnvSuite.Run;
+  CheckTrue(LOk = (LInFail <> 'F'), 'suite ok ' + AC.Name);
+  if LWantExists = 'T' then
+  begin
+    CheckTrue(platform_env_exists('NP_V839_ENV'), 'after exists ' + AC.Name);
+    if LWantValue = '~' then
+      CheckEqual('', string(platform_env_get_str('NP_V839_ENV')),
+        'after empty ' + AC.Name)
+    else
+      CheckEqual(LWantValue, string(platform_env_get_str('NP_V839_ENV')),
+        'after value ' + AC.Name);
+  end
+  else
+    CheckFalse(platform_env_exists('NP_V839_ENV'), 'after missing ' + AC.Name);
+  platform_env_unset('NP_V839_ENV');
+  LEnvSuite := Default(TTestSuite);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -894,6 +1196,7 @@ var
   LMeta: TTestSuite;
   LB33Cases: specialize TArray<TTestCase>;
   LB33I: Integer;
+  LAggCases, LNodeCases, LCntCases, LEnvCases: specialize TArray<TTestCase>;
 begin
   WriteLn('=== test_subtests ===');
   LSuite := TTestSuite.Create('Subtest Integration');
@@ -962,6 +1265,85 @@ begin
     end;
   end;
   LMeta.TestTable('B33 SoftFail subtest fail-path', LB33Cases, @TestB33SoftFailPathCase);
+
+  { v8.39 表 A：聚合消息 exact（全路径、', ' join、执行序、嵌套折叠只列直接子） }
+  AppendSCase(LAggCases, 'am-flat-pass', 'pp|-|-|T|-', '1');
+  AppendSCase(LAggCases, 'am-flat-one-fail',
+    'pf|-|-|F|1 subtest(s) failed in root: root/f2', '0');
+  AppendSCase(LAggCases, 'am-flat-two-fail',
+    'ffp|-|-|F|2 subtest(s) failed in root: root/f1, root/f2', '0');
+  AppendSCase(LAggCases, 'am-flat-three-fail',
+    'fff|-|-|F|3 subtest(s) failed in root: root/f1, root/f2, root/f3', '0');
+  AppendSCase(LAggCases, 'am-order-skip-mid-pass',
+    'fpf|-|-|F|2 subtest(s) failed in root: root/f1, root/f3', '0');
+  AppendSCase(LAggCases, 'am-skip-not-fail', 'sp|-|-|T|-', '1');
+  AppendSCase(LAggCases, 'am-skip-fail-mix',
+    'sf|-|-|F|1 subtest(s) failed in root: root/f2', '0');
+  AppendSCase(LAggCases, 'am-error-counted',
+    'e|-|-|F|1 subtest(s) failed in root: root/e1', '0');
+  AppendSCase(LAggCases, 'am-error-fail-mix',
+    'ef|-|-|F|2 subtest(s) failed in root: root/e1, root/f2', '0');
+  AppendSCase(LAggCases, 'am-empty-root', '-|-|-|T|-', '1');
+  AppendSCase(LAggCases, 'am-nested-collapse',
+    'Ap|pf|-|F|1 subtest(s) failed in root: root/a', '0');
+  AppendSCase(LAggCases, 'am-nested-pass-hidden',
+    'Af|pp|-|F|1 subtest(s) failed in root: root/f2', '0');
+  AppendSCase(LAggCases, 'am-deep-chain-top',
+    'A|B|f|F|1 subtest(s) failed in root: root/a', '0');
+  AppendSCase(LAggCases, 'am-nested-and-flat-fail',
+    'Af|f|-|F|2 subtest(s) failed in root: root/a, root/f2', '0');
+  LMeta.TestTable('v8.39 subtest aggregate message', LAggCases, @RunAggMsgCase);
+
+  { v8.39 表 B：RunWithResult 收集契约（pass 节点不收集、post-order、log 仅败留） }
+  AppendSCase(LNodeCases, 'rc-root-first',
+    'pf|-|-|root|0|1|1 subtest(s) failed in root: root/f2|0', '0');
+  AppendSCase(LNodeCases, 'rc-pass-leaf-collected', 'pf|-|-|root/p1|1|0|-|0', '1');
+  AppendSCase(LNodeCases, 'rc-fail-leaf-msg', 'pf|-|-|root/f2|2|1|boom|0', '0');
+  AppendSCase(LNodeCases, 'rc-skip-leaf-reason', 'sp|-|-|root/s1|1|2|why|0', '1');
+  AppendSCase(LNodeCases, 'rc-error-leaf-classmsg',
+    'e|-|-|root/e1|1|3|Exception: kaboom|0', '0');
+  AppendSCase(LNodeCases, 'rc-pass-nested-absent', 'Ap|pp|-|root/a|-|-|-|-', '1');
+  AppendSCase(LNodeCases, 'rc-fail-nested-collapsed',
+    'Ap|pf|-|root/a|3|1|1 subtest(s) failed in root/a: root/a/f2|0', '0');
+  AppendSCase(LNodeCases, 'rc-post-order-leaf', 'Ap|pf|-|root/a/f2|2|1|boom|0', '0');
+  AppendSCase(LNodeCases, 'rc-deep-mid-node',
+    'A|B|f|root/a/b|2|1|1 subtest(s) failed in root/a/b: root/a/b/f1|0', '0');
+  AppendSCase(LNodeCases, 'rc-deep-top-node',
+    'A|B|f|root/a|3|1|1 subtest(s) failed in root/a: root/a/b|0', '0');
+  AppendSCase(LNodeCases, 'rc-log-captured-on-fail',
+    'l|-|-|root/l1|1|1|logfail|2', '0');
+  AppendSCase(LNodeCases, 'rc-log-dropped-on-pass', 'm|-|-|root/m1|1|0|-|0', '1');
+  AppendSCase(LNodeCases, 'rc-root-carries-last-log',
+    'l|-|-|root|0|1|1 subtest(s) failed in root: root/l1|2', '0');
+  LMeta.TestTable('v8.39 subtest result collection', LNodeCases, @RunNodeResultCase);
+
+  { v8.39 表 C：suite 计数（subtest 内 pass/skip 不可见、fail 整条计 1） }
+  AppendSCase(LCntCases, 'sc-sub-pass-invisible', 'pp|-|-|-|T|0|0|0', '1');
+  AppendSCase(LCntCases, 'sc-sub-skip-invisible', 'sp|-|-|-|T|0|0|0', '1');
+  AppendSCase(LCntCases, 'sc-two-leaf-fail-one', 'ff|-|-|-|F|0|1|0', '0');
+  AppendSCase(LCntCases, 'sc-nested-fail-one', 'Ap|-|-|ff|F|0|1|0', '0');
+  AppendSCase(LCntCases, 'sc-two-roots-one-fail', 'pf|pp|-|-|F|0|1|0', '0');
+  AppendSCase(LCntCases, 'sc-two-roots-both-fail', 'f|f|-|-|F|0|2|0', '0');
+  AppendSCase(LCntCases, 'sc-plain-counted', 'pp|-|y|-|T|1|0|0', '1');
+  AppendSCase(LCntCases, 'sc-plain-plus-subfail', 'f|-|y|-|F|1|1|0', '0');
+  AppendSCase(LCntCases, 'sc-empty-suite-sub', '-|-|-|-|T|0|0|0', '1');
+  LMeta.TestTable('v8.39 subtest suite counters', LCntCases, @RunCountCase);
+
+  { v8.39 表 D：env 隔离状态机（逆序恢复、empty vs missing、fail 后仍恢复） }
+  AppendSCase(LEnvCases, 'env-set-on-missing', 'x|sa|-|aa|F|-', '1');
+  AppendSCase(LEnvCases, 'env-set-on-empty', 'y|sa|-|aa|T|~', '1');
+  AppendSCase(LEnvCases, 'env-set-on-orig', 'o|sa|-|aa|T|orig', '1');
+  AppendSCase(LEnvCases, 'env-unset-on-orig', 'o|u|-|-|T|orig', '1');
+  AppendSCase(LEnvCases, 'env-unset-on-missing', 'x|u|-|-|F|-', '1');
+  AppendSCase(LEnvCases, 'env-double-set-restore-first', 'o|sa,sb|-|bb|T|orig', '1');
+  AppendSCase(LEnvCases, 'env-set-then-unset', 'o|sa,u|-|-|T|orig', '1');
+  AppendSCase(LEnvCases, 'env-unset-then-set', 'o|u,sb|-|bb|T|orig', '1');
+  AppendSCase(LEnvCases, 'env-restore-after-fail', 'o|sa|F|aa|T|orig', '0');
+  AppendSCase(LEnvCases, 'env-restore-after-fail-missing', 'x|sa|F|aa|F|-', '0');
+  AppendSCase(LEnvCases, 'env-missing-double-set', 'x|sa,sb|-|bb|F|-', '1');
+  AppendSCase(LEnvCases, 'env-set-empty-value', 'o|se|-|~|T|orig', '1');
+  LMeta.TestTable('v8.39 subtest env isolation', LEnvCases, @RunEnvCase);
+
   if not LMeta.Run then
   begin
     WriteLn;
