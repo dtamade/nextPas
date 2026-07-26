@@ -63,12 +63,6 @@ const
   MEM_STACK_SCOPE_HELPERS_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.stack_scope_helpers.pas';
   MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.pas';
   MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.pas';
-  MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.guard.pas';
-  MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.guard.pas';
-  MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.allocator.tracking.pas';
-  MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.allocator.tracking.pas';
-  MEM_CENTRAL_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.mem.central.pas';
-  MEM_CENTRAL_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.mem.central.pas';
 
 type
   TByteArray = array[0..5] of Byte;
@@ -815,44 +809,10 @@ begin
   end;
 end;
 
-procedure TestNoFpcRtlViolationInCoreAllocatorUnits;
-var
-  LAllocatorSrc: string;
-  LGuardSrc: string;
-  LTrackingSrc: string;
-  LCentralSrc: string;
-begin
-  { The core allocator units must NOT import FPC RTL units directly. }
-  LAllocatorSrc := LowerCase(ReadSourceText(ResolveSourcePath(
-    MEM_ALLOCATOR_SOURCE_PATH_FROM_TEST,
-    MEM_ALLOCATOR_SOURCE_PATH_FROM_ROOT)));
-  LGuardSrc := LowerCase(ReadSourceText(ResolveSourcePath(
-    MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_TEST,
-    MEM_ALLOCATOR_GUARD_SOURCE_PATH_FROM_ROOT)));
-  LTrackingSrc := LowerCase(ReadSourceText(ResolveSourcePath(
-    MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_TEST,
-    MEM_ALLOCATOR_TRACKING_SOURCE_PATH_FROM_ROOT)));
-  LCentralSrc := LowerCase(ReadSourceText(ResolveSourcePath(
-    MEM_CENTRAL_SOURCE_PATH_FROM_TEST,
-    MEM_CENTRAL_SOURCE_PATH_FROM_ROOT)));
-
-  CheckNotContains(LAllocatorSrc, 'sysutils',
-    'allocator.pas must not import SysUtils');
-  CheckNotContains(LAllocatorSrc, 'classes',
-    'allocator.pas must not import Classes');
-  CheckNotContains(LGuardSrc, 'sysutils',
-    'allocator.guard.pas must not import SysUtils');
-  CheckNotContains(LGuardSrc, 'classes',
-    'allocator.guard.pas must not import Classes');
-  CheckNotContains(LTrackingSrc, 'sysutils',
-    'allocator.tracking.pas must not import SysUtils');
-  CheckNotContains(LTrackingSrc, 'classes',
-    'allocator.tracking.pas must not import Classes');
-  CheckNotContains(LCentralSrc, 'sysutils',
-    'central.pas must not import SysUtils');
-  CheckNotContains(LCentralSrc, 'classes',
-    'central.pas must not import Classes');
-end;
+{ RTL isolation is enforced by the single authority
+  test_usability_guardrails/check_mem_rtl_isolation.sh (all 79 mem units +
+  tests/examples tree, uses-block scoped) — the former 4-file substring
+  spot check here was redundant and is gone (MEM2-T-003). }
 
 procedure TestDualCompilerAllocatorParity;
 var
@@ -909,7 +869,6 @@ begin
   T.Test('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);
   T.Test('ring buffer advance-index fast path contract', @TestRingBufferAdvanceIndexFastPathContract);
   T.Test('guard allocator runtime contract', @TestGuardAllocatorRuntimeContract);
-  T.Test('no FPC RTL violation in core allocator units', @TestNoFpcRtlViolationInCoreAllocatorUnits);
   T.Test('dual-compiler allocator parity', @TestDualCompilerAllocatorParity);
   LRunPassed := T.Run;
 
