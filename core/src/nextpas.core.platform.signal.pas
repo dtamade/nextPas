@@ -65,6 +65,12 @@ function platform_signal_raise(ASignal: Int32): Int32;
 
 implementation
 
+{$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
+{ Android/generic-unix: unsupported stubs below still need PLATFORM_ERR_* }
+uses
+  nextpas.core.platform.error;
+{$ENDIF}
+
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
@@ -271,6 +277,7 @@ end;
 {$IFDEF NEXTPAS_FREEBSD}
 uses
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.freebsd.base,
   nextpas.core.platform.freebsd.ffi,
   nextpas.core.platform.error;
