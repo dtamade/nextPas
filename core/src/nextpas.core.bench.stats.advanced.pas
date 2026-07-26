@@ -962,19 +962,26 @@ begin
 end;
 
 function TAdvancedStats.TestNormalityByMoments: TNormalityTest;
-{ D'Agostino-Pearson K2 正态性检验
-  K2 = Z_skewness^2 + Z_kurtosis^2 ~ χ²(2)
-  参考: D'Agostino, R.B. (1971), "An omnibus test of normality for moderate and large samples" }
+{ D'Agostino-Pearson K2 正态性检验，逐式对齐 scipy.stats.normaltest。
+  K2 = Z_skew^2 + Z_kurt^2 ~ χ²(2)；p = exp(-K2/2) 即 chi2(2).sf 精确式。
+  两个变换的输入都是有偏样本矩（除以 n）：
+    Z_skew (D'Agostino 1970) 吃 √b1 = m3/m2^1.5，再乘标准化因子得 Y；
+    Z_kurt (Anscombe-Glynn 1983) 吃 b2 = m4/m2²（期望 3(n-1)/(n+1)≈3），
+    不能喂 Fisher G2（0 中心无偏超额峰度）——口径混用会让近正态数据
+    的 K2 爆炸、偏斜数据的 K2 被压平（F-33，双向误判）。
+  金标: test_bench_stats_advanced Golden_Normality_WelchEffect。 }
 var
-  LCount: Integer;
-  LGamma1, LGamma2: Double;
-  LWSq, LA, LB, LC, LZSkew: Double;
-  LMu2, LSigma2, LTerm1, LTerm2, LZKurt: Double;
-  LP, LK2, LCubeArg: Double;
+  I, LValidCount: Integer;
+  LMean, LVariance: Double;
+  LDiff, LD2, LSum2, LSum3, LSum4, LM2, LM3, LM4: Double;
+  LB1, LY, LBeta2, LWSq, LDelta, LAlpha, LYA, LZSkew: Double;
+  LB2, LE, LVarB2, LX, LSqrtB1, LA, LDenom, LTerm2, LZKurt: Double;
+  LK2: Double;
 begin
-  LCount := Length(FData);
+  Result.Method := 'D''Agostino-Pearson K2';
+  WelfordMeanVariance(FData, LMean, LVariance, LValidCount);
 
-  if LCount < 8 then
+  if LValidCount < 8 then
   begin
     Result.IsNormal := True;
     Result.ApproximatePValue := 1.0;
@@ -983,69 +990,77 @@ begin
     Exit;
   end;
 
-  { Z_skewness: D'Agostino (1970) 变换 }
-  LGamma1 := Skewness;
-  // sqrt((n+1)(n+3) / (6(n-2)))
-  LB := Sqrt((LCount + 1) * (LCount + 3) / (6.0 * (LCount - 2)));
-  // 3(n^2+27n-70)(n+1)(n+3) / ((n-2)(n+5)(n+7)(n+9))
-  LC := 3.0 * (Sqr(LCount) + 27.0 * LCount - 70.0) * (LCount + 1) * (LCount + 3) /
-        ((LCount - 2) * (LCount + 5) * (LCount + 7) * (LCount + 9));
-  // W^2 = -1 + sqrt(2(C-1))
-  LWSq := -1.0 + Sqrt(2.0 * (LC - 1.0));
-  // delta = 1/sqrt(ln(sqrt(W^2)))
-  // alpha = sqrt(2/(W^2-1))
-  if LWSq > 1.001 then
+  { 有偏样本矩 m2/m3/m4（除以 n；与 Kurtosis 的 G2 口径刻意不同） }
+  LSum2 := 0.0; LSum3 := 0.0; LSum4 := 0.0;
+  for I := 0 to High(FData) do
   begin
-    LA := Sqrt(2.0 / (LWSq - 1.0));
-    { asinh(Gamma1/alpha) = ln(Gamma1/alpha + sqrt((Gamma1/alpha)^2 + 1)) }
-    if Abs(LGamma1) > 1e-15 then
-      LZSkew := LB * Ln(Abs(LGamma1) / LA + Sqrt(Sqr(Abs(LGamma1) / LA) + 1.0))
-    else
-      LZSkew := 0.0;
+    if IsDoubleNaN(FData[I]) or IsInfinite(FData[I]) then Continue;
+    LDiff := FData[I] - LMean;
+    LD2 := LDiff * LDiff;
+    LSum2 := LSum2 + LD2;
+    LSum3 := LSum3 + LD2 * LDiff;
+    LSum4 := LSum4 + LD2 * LD2;
+  end;
+  if LSum2 = 0 then
+  begin
+    { 常数序列：矩检验无定义，按无证据拒绝处理 }
+    Result.IsNormal := True;
+    Result.ApproximatePValue := 1.0;
+    Result.TestStatistic := 0.0;
+    Exit;
+  end;
+  LM2 := LSum2 / LValidCount;
+  LM3 := LSum3 / LValidCount;
+  LM4 := LSum4 / LValidCount;
+  LB1 := LM3 / Sqrt(LM2 * LM2 * LM2);
+  LB2 := LM4 / (LM2 * LM2);
+
+  { Z_skew: D'Agostino (1970)。Y = √b1 · sqrt((n+1)(n+3)/(6(n-2)))，
+    Z = delta·asinh(Y/alpha)，带符号（n 整型算术全程提升为浮点防溢出） }
+  LY := LB1 * Sqrt((LValidCount + 1.0) * (LValidCount + 3.0) /
+    (6.0 * (LValidCount - 2.0)));
+  LBeta2 := 3.0 * (Sqr(LValidCount + 0.0) + 27.0 * LValidCount - 70.0) *
+    (LValidCount + 1.0) * (LValidCount + 3.0) /
+    ((LValidCount - 2.0) * (LValidCount + 5.0) * (LValidCount + 7.0) *
+     (LValidCount + 9.0));
+  LWSq := -1.0 + Sqrt(2.0 * (LBeta2 - 1.0));
+  { n>=8 时 β2(√b1)>3 → W²>1 → Ln(W²)>0 }
+  LDelta := 1.0 / Sqrt(0.5 * Ln(LWSq));
+  LAlpha := Sqrt(2.0 / (LWSq - 1.0));
+  if LY <> 0 then
+  begin
+    LYA := LY / LAlpha;
+    LZSkew := LDelta * Ln(LYA + Sqrt(LYA * LYA + 1.0));
   end
   else
     LZSkew := 0.0;
 
-  { Z_kurtosis: Anscombe-Glynn (1983) 变换 }
-  LGamma2 := Kurtosis;
-  // E[K] = 3(n-1)/(n+1)
-  LMu2 := 3.0 * (LCount - 1) / (LCount + 1);
-  // Var[K] = 24n(n-2)(n-3) / ((n+1)^2(n+3)(n+5))
-  LSigma2 := 24.0 * LCount * (LCount - 2) * (LCount - 3) /
-              (Sqr(LCount + 1.0) * (LCount + 3) * (LCount + 5));
-  // Term1 = (6(n^2-5n+2)/((n+7)(n+9))) * sqrt(6(n+3)(n+5)/(n(n-2)(n-3)))
-  LTerm1 := 6.0 * (Sqr(LCount) - 5.0 * LCount + 2.0) / ((LCount + 7) * (LCount + 9)) *
-            Sqrt(6.0 * (LCount + 3) * (LCount + 5) / (LCount * (LCount - 2) * (LCount - 3)));
-  // Term2 = 6 + 8/LTerm1 * (2/LTerm1 + sqrt(1 + 4/LTerm1^2))
-  if Abs(LTerm1) > 1e-15 then
-    LTerm2 := 6.0 + 8.0 / LTerm1 * (2.0 / LTerm1 + Sqrt(1.0 + 4.0 / Sqr(LTerm1)))
-  else
-    LTerm2 := 6.0;
-  // Z = ((1 - 2/(9*Term2)) - ((1-2/Term2)/(1+((Kurtosis-LMu2)/sqrt(Var) - LTerm1)/sqrt(LTerm2)))^(1/3))
-  //     / sqrt(2/(9*Term2))
-  LP := (LGamma2 - LMu2) / Sqrt(LSigma2);
-  if Abs(LTerm2) > 1e-15 then
+  { Z_kurt: Anscombe-Glynn (1983)。x = (b2 - E[b2])/sqrt(Var[b2])，
+    Z = ((1-2/(9A)) - sign(denom)·cbrt((1-2/A)/|denom|)) / sqrt(2/(9A)) }
+  LE := 3.0 * (LValidCount - 1.0) / (LValidCount + 1.0);
+  LVarB2 := 24.0 * LValidCount * (LValidCount - 2.0) * (LValidCount - 3.0) /
+    (Sqr(LValidCount + 1.0) * (LValidCount + 3.0) * (LValidCount + 5.0));
+  LX := (LB2 - LE) / Sqrt(LVarB2);
+  LSqrtB1 := 6.0 * (Sqr(LValidCount + 0.0) - 5.0 * LValidCount + 2.0) /
+    ((LValidCount + 7.0) * (LValidCount + 9.0)) *
+    Sqrt(6.0 * (LValidCount + 3.0) * (LValidCount + 5.0) /
+      (LValidCount * (LValidCount - 2.0) * (LValidCount - 3.0)));
+  LA := 6.0 + 8.0 / LSqrtB1 *
+    (2.0 / LSqrtB1 + Sqrt(1.0 + 4.0 / Sqr(LSqrtB1)));
+  LDenom := 1.0 + LX * Sqrt(2.0 / (LA - 4.0));
+  if LDenom <> 0 then
   begin
-    // cube root via Exp(Ln(x)/3) — Power 不在 uses 中
-    LCubeArg := (1.0 - 2.0 / LTerm2) / (1.0 + (LP - LTerm1) / Sqrt(LTerm2));
-    if LCubeArg > 0 then
-      LZKurt := ((1.0 - 2.0 / (9.0 * LTerm2)) - Exp(Ln(LCubeArg) / 3.0)) /
-                Sqrt(2.0 / (9.0 * LTerm2))
-    else if LCubeArg < 0 then
-      LZKurt := ((1.0 - 2.0 / (9.0 * LTerm2)) + Exp(Ln(-LCubeArg) / 3.0)) /
-                Sqrt(2.0 / (9.0 * LTerm2))
-    else
-      LZKurt := (1.0 - 2.0 / (9.0 * LTerm2)) / Sqrt(2.0 / (9.0 * LTerm2));
+    { n>=8 时 A>4 → cbrt 实参 (1-2/A)/|denom| > 0；cbrt 用 Exp(Ln/3) }
+    LTerm2 := Exp(Ln((1.0 - 2.0 / LA) / Abs(LDenom)) / 3.0);
+    if LDenom < 0 then
+      LTerm2 := -LTerm2;
+    LZKurt := ((1.0 - 2.0 / (9.0 * LA)) - LTerm2) / Sqrt(2.0 / (9.0 * LA));
   end
   else
     LZKurt := 0.0;
 
-  { K2 = Z_skewness^2 + Z_kurtosis^2 ~ χ²(2) }
   LK2 := Sqr(LZSkew) + Sqr(LZKurt);
-
-  // χ²(2) 的 p-value: P = exp(-K2/2)（指数分布 CDF）
   Result.TestStatistic := LK2;
-  Result.Method := 'D''Agostino-Pearson K2';
   Result.ApproximatePValue := Exp(-LK2 / 2.0);
   if Result.ApproximatePValue > 1.0 then
     Result.ApproximatePValue := 1.0;

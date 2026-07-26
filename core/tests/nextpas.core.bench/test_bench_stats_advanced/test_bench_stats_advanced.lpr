@@ -799,6 +799,46 @@ begin
   end;
 end;
 
+procedure Test_Golden_Normality_WelchEffect;
+var
+  LDesc, LNorm: TDoubleArray;
+  LStats: TAdvancedStats;
+  LNT: TNormalityTest;
+begin
+  LDesc := CreateTestData(GOLDEN_DESC_DATA);
+  LNorm := CreateTestData(GOLDEN_NT_NORMISH);
+  { 右偏组：K2 必须显著（F-33 修复面：旧口径把偏斜数据误判为正态） }
+  LStats := TAdvancedStats.Create(LDesc);
+  try
+    LNT := LStats.TestNormalityByMoments;
+    CheckNear(GOLDEN_NT_DESC_K2, LNT.TestStatistic, GOLDEN_NT_TOL,
+      'Golden K2 (skewed) matches scipy normaltest');
+    CheckNear(GOLDEN_NT_DESC_P, LNT.ApproximatePValue, GOLDEN_NT_TOL,
+      'Golden p (skewed) matches scipy normaltest');
+    Check(LNT.IsNormal = GOLDEN_NT_DESC_ISNORMAL,
+      'Golden IsNormal (skewed) = False');
+    CheckNear(GOLDEN_WT_T, LStats.ApproximateWelchTScore(LNorm), GOLDEN_WT_TOL,
+      'Golden Welch t matches scipy ttest_ind equal_var=False');
+    CheckNear(GOLDEN_WT_EFFECT, LStats.EffectSize(LNorm), GOLDEN_WT_TOL,
+      'Golden Cohen d matches pooled ddof=1');
+  finally
+    LStats.Free;
+  end;
+  { 近正态组：K2 必须不显著（F-33 修复面：旧口径 G2 喂给 b2 公式致 K2 爆炸） }
+  LStats := TAdvancedStats.Create(LNorm);
+  try
+    LNT := LStats.TestNormalityByMoments;
+    CheckNear(GOLDEN_NT_NORMISH_K2, LNT.TestStatistic, GOLDEN_NT_TOL,
+      'Golden K2 (normish) matches scipy normaltest');
+    CheckNear(GOLDEN_NT_NORMISH_P, LNT.ApproximatePValue, GOLDEN_NT_TOL,
+      'Golden p (normish) matches scipy normaltest');
+    Check(LNT.IsNormal = GOLDEN_NT_NORMISH_ISNORMAL,
+      'Golden IsNormal (normish) = True');
+  finally
+    LStats.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -840,6 +880,7 @@ begin
   T.Test('Golden_Descriptive', @Test_Golden_Descriptive);
   T.Test('Golden_ConfidenceInterval', @Test_Golden_ConfidenceInterval);
   T.Test('Golden_Outliers', @Test_Golden_Outliers);
+  T.Test('Golden_Normality_WelchEffect', @Test_Golden_Normality_WelchEffect);
   T.Test('Count', @Test_Count);
   T.Test('OutlierSeverity_None', @Test_OutlierSeverity_None);
   T.Test('OutlierSeverity_Mild', @Test_OutlierSeverity_Mild);

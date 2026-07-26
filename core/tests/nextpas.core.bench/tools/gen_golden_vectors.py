@@ -253,6 +253,13 @@ BAYES_DATA = [5.2, 4.8, 5.5, 5.1, 4.9, 5.3, 5.0, 5.4, 4.7, 5.6]
 BAYES_PRIOR_MEAN, BAYES_PRIOR_STD, BAYES_SIGMA = 4.0, 1.0, 0.5
 BAYES2_PRIOR_MEAN, BAYES2_PRIOR_STD = 6.0, 0.8  # 第二例 ASigma=0 → σ=样本 ddof=1 标准差
 
+# --- tranche 4: D'Agostino-Pearson K2 正态性检验 (F-33) + Welch t / EffectSize ---
+# 近正态对照组（n=20，手写，大致对称无重尾）；DESC_DATA 为右偏组。
+# 两组 p 值须对 alpha=0.05 有决定性裕度（偏斜组 < alpha/2，正态组 > 2*alpha）。
+NT_NORMISH = [9.6, 10.4, 9.9, 10.8, 10.1, 9.5, 10.6, 10.0, 9.8, 10.3,
+              10.7, 9.7, 10.2, 10.5, 9.9, 10.1, 9.4, 10.9, 10.0, 10.2]
+NT_ALPHA = 0.05
+
 # --- tranche 3: OLS 回归 + 变异系数 ---
 # x = 迭代次数量级；y = slope*x + intercept + 手写噪声（全整数, double 精确）。
 # TIGHT: 3.7x+250 ± <=60  → R² 贴近但严格小于 1（走 LDenY 正常路径）；
@@ -554,6 +561,97 @@ def gen_descriptive():
     out.append(f"  GOLDEN_OUT_TUKEY_FACTOR = {fmt(TUKEY_FACTOR)};")
     out.append(f"  GOLDEN_OUT_Z_THR = {fmt(ZSCORE_THR)};")
     out.append(f"  GOLDEN_OUT_MODZ_THR = {fmt(MODZ_THR)};")
+    out.append("")
+
+    # --- tranche 4: D'Agostino-Pearson K2 (scipy.stats.normaltest, F-33) ---
+    def welford_mean(xs):
+        mean_ = 0.0
+        cnt = 0
+        for v in xs:
+            cnt += 1
+            mean_ += (v - mean_) / cnt
+        return mean_
+
+    def pascal_k2_replica(xs):
+        # Pascal 修复后实现的逐字复刻：Welford 均值 + 单遍有偏矩，
+        # 再走 D'Agostino(1970)/Anscombe-Glynn(1983) 变换（scipy 同口径）
+        n_ = len(xs)
+        mean_ = welford_mean(xs)
+        s2 = s3 = s4 = 0.0
+        for v in xs:
+            diff = v - mean_
+            d2 = diff * diff
+            s2 += d2
+            s3 += d2 * diff
+            s4 += d2 * d2
+        m2, m3, m4 = s2 / n_, s3 / n_, s4 / n_
+        b1 = m3 / math.sqrt(m2 * m2 * m2)
+        b2 = m4 / (m2 * m2)
+        y = b1 * math.sqrt((n_ + 1) * (n_ + 3) / (6.0 * (n_ - 2)))
+        beta2 = (3.0 * (n_ * n_ + 27.0 * n_ - 70.0) * (n_ + 1) * (n_ + 3)
+                 / ((n_ - 2.0) * (n_ + 5) * (n_ + 7) * (n_ + 9)))
+        w2 = -1.0 + math.sqrt(2.0 * (beta2 - 1.0))
+        delta = 1.0 / math.sqrt(0.5 * math.log(w2))
+        alpha_ = math.sqrt(2.0 / (w2 - 1.0))
+        zs = (delta * math.log(y / alpha_ + math.sqrt((y / alpha_) ** 2 + 1.0))
+              if y != 0.0 else 0.0)
+        e_ = 3.0 * (n_ - 1) / (n_ + 1)
+        varb2 = (24.0 * n_ * (n_ - 2) * (n_ - 3)
+                 / ((n_ + 1.0) ** 2 * (n_ + 3) * (n_ + 5)))
+        x_ = (b2 - e_) / math.sqrt(varb2)
+        sb1 = (6.0 * (n_ * n_ - 5.0 * n_ + 2.0) / ((n_ + 7) * (n_ + 9))
+               * math.sqrt(6.0 * (n_ + 3) * (n_ + 5)
+                           / (n_ * (n_ - 2.0) * (n_ - 3))))
+        a_ = 6.0 + 8.0 / sb1 * (2.0 / sb1 + math.sqrt(1.0 + 4.0 / (sb1 * sb1)))
+        denom = 1.0 + x_ * math.sqrt(2.0 / (a_ - 4.0))
+        cbrt = math.exp(math.log((1.0 - 2.0 / a_) / abs(denom)) / 3.0)
+        term2 = -cbrt if denom < 0 else cbrt
+        zk = ((1.0 - 2.0 / (9.0 * a_)) - term2) / math.sqrt(2.0 / (9.0 * a_))
+        k2 = zs * zs + zk * zk
+        return k2, math.exp(-k2 / 2.0)
+
+    nt_tol = 1e-9
+    out.append("  { D'Agostino-Pearson K2: scipy normaltest 金标 (F-33)；")
+    out.append("    p = exp(-K2/2) 即 chi2(2).sf 精确式 }")
+    out.append(f"  {{ n={len(NT_NORMISH)}，近正态对照组 }}")
+    out.append(pas_array("GOLDEN_NT_NORMISH", NT_NORMISH))
+    for tag, data, expect_normal in (("DESC", DESC_DATA, False),
+                                     ("NORMISH", NT_NORMISH, True)):
+        st_, p_ = stats.normaltest(np.asarray(data))
+        st_, p_ = float(st_), float(p_)
+        rk2, rp = pascal_k2_replica(data)
+        require(abs(rk2 - st_) < nt_tol / 2.0,
+                f"NT {tag}: K2 复刻偏差 {abs(rk2 - st_):.3g}")
+        require(abs(rp - p_) < nt_tol / 2.0,
+                f"NT {tag}: p 复刻偏差 {abs(rp - p_):.3g}")
+        if expect_normal:
+            require(p_ > 2.0 * NT_ALPHA, f"NT {tag}: p={p_:.4g} 正态裕度不足")
+        else:
+            require(p_ < NT_ALPHA / 2.0, f"NT {tag}: p={p_:.4g} 非正态裕度不足")
+        note(f"NT {tag:7s} K2={st_:.12g} p={p_:.12g} IsNormal={expect_normal}")
+        out.append(f"  GOLDEN_NT_{tag}_K2 = {fmt(st_)};")
+        out.append(f"  GOLDEN_NT_{tag}_P = {fmt(p_)};")
+        out.append(f"  GOLDEN_NT_{tag}_ISNORMAL = {expect_normal};")
+    out.append(f"  GOLDEN_NT_TOL = {fmt(nt_tol)};")
+    out.append("")
+
+    # --- tranche 4: Welch t 数值 + Cohen's d EffectSize (DESC vs NORMISH) ---
+    dd, nn = np.asarray(DESC_DATA), np.asarray(NT_NORMISH)
+    wt = float(stats.ttest_ind(dd, nn, equal_var=False).statistic)
+    va, vb = float(np.var(dd, ddof=1)), float(np.var(nn, ddof=1))
+    na_, nb_ = len(dd), len(nn)
+    pooled = ((na_ - 1) * va + (nb_ - 1) * vb) / (na_ + nb_ - 2)
+    eff = float((np.mean(dd) - np.mean(nn)) / math.sqrt(pooled))
+    wt_replica = (float(np.mean(dd) - np.mean(nn))
+                  / math.sqrt(va / na_ + vb / nb_))
+    require(abs(wt_replica - wt) < nt_tol / 2.0,
+            f"WT: Welch t 复刻偏差 {abs(wt_replica - wt):.3g}")
+    note(f"WT t={wt:.12g} effect_d={eff:.12g}")
+    out.append("  { Welch t (带符号, self vs other) + Cohen's d pooled ddof=1；")
+    out.append("    数据对 = GOLDEN_DESC_DATA vs GOLDEN_NT_NORMISH }")
+    out.append(f"  GOLDEN_WT_T = {fmt(wt)};")
+    out.append(f"  GOLDEN_WT_EFFECT = {fmt(eff)};")
+    out.append(f"  GOLDEN_WT_TOL = {fmt(nt_tol)};")
     out.append("")
     return "\n".join(out)
 

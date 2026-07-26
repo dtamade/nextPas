@@ -58,3 +58,26 @@ const
   GOLDEN_OUT_TUKEY_FACTOR = 1.5;
   GOLDEN_OUT_Z_THR = 2.5;
   GOLDEN_OUT_MODZ_THR = 3.5;
+
+  { D'Agostino-Pearson K2: scipy normaltest 金标 (F-33)；
+    p = exp(-K2/2) 即 chi2(2).sf 精确式 }
+  { n=20，近正态对照组 }
+  GOLDEN_NT_NORMISH: array[0..19] of Double = (
+    9.6, 10.4, 9.9, 10.8,
+    10.1, 9.5, 10.6, 10.0,
+    9.8, 10.3, 10.7, 9.7,
+    10.2, 10.5, 9.9, 10.1,
+    9.4, 10.9, 10.0, 10.2);
+  GOLDEN_NT_DESC_K2 = 13.775156644595553;
+  GOLDEN_NT_DESC_P = 0.0010203818874473327;
+  GOLDEN_NT_DESC_ISNORMAL = False;
+  GOLDEN_NT_NORMISH_K2 = 0.6622143105848137;
+  GOLDEN_NT_NORMISH_P = 0.7181282136788345;
+  GOLDEN_NT_NORMISH_ISNORMAL = True;
+  GOLDEN_NT_TOL = 1e-09;
+
+  { Welch t (带符号, self vs other) + Cohen's d pooled ddof=1；
+    数据对 = GOLDEN_DESC_DATA vs GOLDEN_NT_NORMISH }
+  GOLDEN_WT_T = 4.388977232239662;
+  GOLDEN_WT_EFFECT = 1.3879164652499125;
+  GOLDEN_WT_TOL = 1e-09;
