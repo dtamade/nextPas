@@ -100,10 +100,14 @@ end;
 procedure TExampleChild.AppendAvailableOutput(var AOutput: string);
 var
   LOut, LErr: string;
+  LLimited: Boolean;
 begin
   LOut := '';
   LErr := '';
-  DrainPipePair(FStdout, FStderr, 10, LOut, LErr, FStdoutClosed, FStderrClosed);
+  LLimited := False;
+  { AMaxTotal=0: unlimited — this helper polls in a loop and appends per call }
+  DrainPipePair(FStdout, FStderr, 10, LOut, LErr, FStdoutClosed, FStderrClosed,
+    0, LLimited);
   if LOut <> '' then
     AOutput := AOutput + LOut;
   if LErr <> '' then
