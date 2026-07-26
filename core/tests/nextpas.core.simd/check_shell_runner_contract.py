@@ -119,7 +119,10 @@ def build_result() -> dict[str, Any]:
         (r'BuildOrTest\.sh coverage', "main Makefile coverage target missing shell runner delegation"),
         (r'BuildOrTest\.sh experimental-intrinsics-tests', "main Makefile experimental tests target missing shell runner delegation"),
         (r'BuildOrTest\.sh experimental-intrinsics-closure', "main Makefile experimental closure target missing shell runner delegation"),
-        (r'^test-all:\s*test test-vec audit cpuinfo-focused\s*$', "main Makefile test-all should remain stable/default and exclude experimental closure"),
+        # M4.3: test-all is the maintenance gate — every stable target must be
+        # scheduled here or it rots unnoticed (sse-raw was uncompilable since
+        # c14df4986 because nothing ran it). Experimental stays excluded below.
+        (r'^test-all:\s*test test-vec audit cpuinfo-focused api-coverage-focused test-sse-raw-heaptrc test-mmx-raw-heaptrc static-avx2-misalignment concurrent-heaptrc direct-dispatch-focused riscvv-facade-optin-compile\s*$', "main Makefile test-all must schedule every stable gate (and exclude experimental closure)"),
     ):
         l_checks += require_pattern(
             l_main_makefile,

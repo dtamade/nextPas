@@ -38,11 +38,14 @@ NEON_OPTIN_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-test-neon-optin
 RISCVV_FACADE_OPTIN_SMOKE := nextpas.core.simd.riscvv_facade_optin_smoke
 RISCVV_FACADE_OPTIN_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-riscvv-facade-optin
 RISCVV_FACADE_OPTIN_LOG := $(CORE_ROOT)/build/tests/nextpas.core.simd/riscvv_facade_optin_smoke.txt
-CONCURRENT_HEAPTRC_RUNNER := nextpas.core.simd.test.concurrentheaptrc
-CONCURRENT_HEAPTRC_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-test-concurrent-heaptrc
+X86_HEAPTRC_RUNNER := nextpas.core.simd.test.x86heaptrc
+X86_HEAPTRC_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-test-x86-heaptrc
 CONCURRENT_HEAPTRC_LOG := $(CORE_ROOT)/build/tests/nextpas.core.simd/concurrent_heaptrc.txt
 CONCURRENT_SUITES := TTestCase_DirectDispatchConcurrent,TTestCase_SimdConcurrent,TTestCase_SimdConcurrentPublicAbi,TTestCase_SimdConcurrentFramework,TTestCase_SimdConcurrentRegistration
 CONCURRENT_SUITE_COUNT := 5
+DIRECT_DISPATCH_LOG := $(CORE_ROOT)/build/tests/nextpas.core.simd/direct_dispatch_heaptrc.txt
+DIRECT_DISPATCH_SUITE := TTestCase_DirectDispatch
+DIRECT_DISPATCH_SUITE_COUNT := 1
 EXPERIMENTAL_INTRINSICS_TEST_DIR := $(CORE_ROOT)/tests/nextpas.core.simd.intrinsics.experimental
 
 # FPC trunk 3.3.1-19195 never delivers the heaptrc exit dump to the program's
@@ -57,7 +60,7 @@ HEAPTRC_PINS = if ! grep -q '^Heap dump by heaptrc unit' $(1); then echo "[HEAPT
 
 .DEFAULT_GOAL := test
 
-.PHONY: check coverage test test-vec test-algorithms api-coverage-contract api-coverage-refresh-checklist api-coverage-test api-coverage-heaptrc api-coverage-focused test-sse-raw test-sse-raw-heaptrc static-avx2-misalignment test-mmx-raw test-mmx-raw-heaptrc test-all bench-build bench audit audit-hygiene-contract cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile neon-optin-focused riscvv-facade-optin-compile concurrent-heaptrc experimental-intrinsics-tests experimental-intrinsics-focused experimental-intrinsics-closure clean
+.PHONY: check coverage test test-vec test-algorithms api-coverage-contract api-coverage-refresh-checklist api-coverage-test api-coverage-heaptrc api-coverage-focused test-sse-raw test-sse-raw-heaptrc static-avx2-misalignment test-mmx-raw test-mmx-raw-heaptrc test-all bench-build bench audit audit-hygiene-contract cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile neon-optin-focused riscvv-facade-optin-compile x86-heaptrc-build concurrent-heaptrc direct-dispatch-focused experimental-intrinsics-tests experimental-intrinsics-focused experimental-intrinsics-closure clean
 
 check:
 	bash ./BuildOrTest.sh check
@@ -151,7 +154,11 @@ test-mmx-raw-heaptrc:
 	HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/$(MMX_RAW_TEST).heaptrc' $(BUILD_DIR)/$(MMX_RAW_TEST)
 	@$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$(MMX_RAW_TEST).heaptrc)
 
-test-all: test test-vec audit cpuinfo-focused
+# test-all is the module maintenance gate: every stable target that would
+# otherwise rot unscheduled belongs here (M4.3 closed the gap where sse-raw
+# had been uncompilable since c14df4986 and nobody noticed). Experimental
+# intrinsics stay excluded by contract.
+test-all: test test-vec audit cpuinfo-focused api-coverage-focused test-sse-raw-heaptrc test-mmx-raw-heaptrc static-avx2-misalignment concurrent-heaptrc direct-dispatch-focused riscvv-facade-optin-compile
 
 bench-build:
 	@mkdir -p $(BUILD_DIR)
@@ -222,14 +229,19 @@ riscvv-facade-optin-compile:
 	HEAPTRC='$(HEAPTRC_OPTS),log=$(RISCVV_FACADE_OPTIN_LOG).heaptrc' $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) > $(RISCVV_FACADE_OPTIN_LOG) 2>&1
 	@$(call HEAPTRC_PINS,$(RISCVV_FACADE_OPTIN_LOG).heaptrc)
 
+# Shared -gh + -dSIMD_X86_AVAILABLE runner build: concurrent-heaptrc and
+# direct-dispatch-focused reuse one compile instead of two -B rebuilds.
+x86-heaptrc-build:
+	@mkdir -p $(BUILD_DIR) $(X86_HEAPTRC_BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B -gh -dSIMD_X86_AVAILABLE -FU$(X86_HEAPTRC_BUILD_DIR) -o$(X86_HEAPTRC_RUNNER) $(RUNNER).lpr
+
 # F-009 slice: concurrent suites run leak-checked on demand; default test stays
 # heaptrc-free. The suite-count pin fails closed if the --suite filter matches
 # nothing (typo) or a new concurrent suite is not added to CONCURRENT_SUITES.
-concurrent-heaptrc:
-	@mkdir -p $(BUILD_DIR) $(CONCURRENT_HEAPTRC_BUILD_DIR) $(dir $(CONCURRENT_HEAPTRC_LOG))
-	$(FPC) $(FPC_FLAGS) -B -gh -dSIMD_X86_AVAILABLE -FU$(CONCURRENT_HEAPTRC_BUILD_DIR) -o$(CONCURRENT_HEAPTRC_RUNNER) $(RUNNER).lpr
+concurrent-heaptrc: x86-heaptrc-build
+	@mkdir -p $(dir $(CONCURRENT_HEAPTRC_LOG))
 	@rm -f $(CONCURRENT_HEAPTRC_LOG).heaptrc
-	@if ! HEAPTRC='$(HEAPTRC_OPTS),log=$(CONCURRENT_HEAPTRC_LOG).heaptrc' $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER) --no-bench --suite=$(CONCURRENT_SUITES) > $(CONCURRENT_HEAPTRC_LOG) 2>&1; then \
+	@if ! HEAPTRC='$(HEAPTRC_OPTS),log=$(CONCURRENT_HEAPTRC_LOG).heaptrc' $(BUILD_DIR)/$(X86_HEAPTRC_RUNNER) --no-bench --suite=$(CONCURRENT_SUITES) > $(CONCURRENT_HEAPTRC_LOG) 2>&1; then \
 		echo "[CONCURRENT-HEAPTRC] FAILED: runner exited non-zero (203 = unfreed blocks)"; \
 		tail -40 $(CONCURRENT_HEAPTRC_LOG); \
 		cat $(CONCURRENT_HEAPTRC_LOG).heaptrc 2>/dev/null; \
@@ -241,6 +253,24 @@ concurrent-heaptrc:
 		exit 1; \
 	fi
 	@$(call HEAPTRC_PINS,$(CONCURRENT_HEAPTRC_LOG).heaptrc)
+
+# The big DirectDispatch parity suite only compiles under -dSIMD_X86_AVAILABLE
+# and had no scheduled runner before this target (changes to it were blind).
+direct-dispatch-focused: x86-heaptrc-build
+	@mkdir -p $(dir $(DIRECT_DISPATCH_LOG))
+	@rm -f $(DIRECT_DISPATCH_LOG).heaptrc
+	@if ! HEAPTRC='$(HEAPTRC_OPTS),log=$(DIRECT_DISPATCH_LOG).heaptrc' $(BUILD_DIR)/$(X86_HEAPTRC_RUNNER) --no-bench --suite=$(DIRECT_DISPATCH_SUITE) > $(DIRECT_DISPATCH_LOG) 2>&1; then \
+		echo "[DIRECT-DISPATCH] FAILED: runner exited non-zero (203 = unfreed blocks)"; \
+		tail -40 $(DIRECT_DISPATCH_LOG); \
+		cat $(DIRECT_DISPATCH_LOG).heaptrc 2>/dev/null; \
+		exit 1; \
+	fi
+	@if ! grep -Eq '^ *Suites: $(DIRECT_DISPATCH_SUITE_COUNT)$$' $(DIRECT_DISPATCH_LOG); then \
+		echo "[DIRECT-DISPATCH] FAILED: expected Suites: $(DIRECT_DISPATCH_SUITE_COUNT) (suite filter drifted?)"; \
+		cat $(DIRECT_DISPATCH_LOG); \
+		exit 1; \
+	fi
+	@$(call HEAPTRC_PINS,$(DIRECT_DISPATCH_LOG).heaptrc)
 
 experimental-intrinsics-focused:
 	$(MAKE) -C $(EXPERIMENTAL_INTRINSICS_TEST_DIR) test-all
@@ -255,5 +285,5 @@ bench: bench-build
 	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
 
 clean:
-	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(API_COVERAGE_TEST_BINARIES) $(BUILD_DIR)/$(SSE_RAW_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE) $(BUILD_DIR)/$(MMX_RAW_TEST) $(BUILD_DIR)/$(NEON_OPTIN_RUNNER) $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER)
-	rm -rf $(API_COVERAGE_BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(NEON_OPTIN_BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR) $(CONCURRENT_HEAPTRC_BUILD_DIR)
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(API_COVERAGE_TEST_BINARIES) $(BUILD_DIR)/$(SSE_RAW_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE) $(BUILD_DIR)/$(MMX_RAW_TEST) $(BUILD_DIR)/$(NEON_OPTIN_RUNNER) $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) $(BUILD_DIR)/$(X86_HEAPTRC_RUNNER)
+	rm -rf $(API_COVERAGE_BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(NEON_OPTIN_BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR) $(X86_HEAPTRC_BUILD_DIR)

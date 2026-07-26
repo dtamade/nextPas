@@ -4,6 +4,8 @@ program test_sse_raw_leaf_parity;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.simd.intrinsics.base,
   nextpas.core.simd.intrinsics.sse,
   nextpas.core.simd.memutils;

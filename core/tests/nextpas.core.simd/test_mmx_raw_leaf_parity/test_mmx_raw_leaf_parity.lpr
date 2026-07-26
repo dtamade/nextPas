@@ -3,6 +3,7 @@ program test_mmx_raw_leaf_parity;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.simd.intrinsics.mmx;
 
 type
