@@ -19,6 +19,7 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.server,
   nextpas.core.http.client,
+  nextpas.core.tls.exceptions,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
@@ -101,7 +102,12 @@ begin
   CheckEqual(0, LUrl.Port, 'HTTPS default port (not specified)');
 end;
 
-{ Test: Client correctly handles HTTP to HTTPS redirect }
+{ Test: client follows an HTTP -> HTTPS redirect into the TLS path.
+  The redirect targets the local plain-HTTP port with an https:// scheme so
+  the request never leaves loopback: without a registered SSL provider the
+  TLS transport raises ESSLException; with one, the handshake against a
+  plain-HTTP listener fails as EHttpError. Either proves the client
+  followed the cross-scheme redirect. }
 procedure TestHttpToHttpsRedirect;
 var
   LRouter: THttpRouter;
@@ -114,7 +120,8 @@ begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/redirect', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.SetHeader('location', 'https://example.com/secure');
+    AW.GetHeaders.SetHeader('location',
+      'https://127.0.0.1:' + IntToStr(LPort) + '/secure');
     AW.WriteHeader(HTTP_STATUS_MOVED_PERMANENTLY);
   end);
 
@@ -127,9 +134,10 @@ begin
     except
       on E: EHttpError do
         LCaught := True;
+      on E: ESSLException do
+        LCaught := True;
     end;
-    { Client should raise error for unsupported HTTPS scheme }
-    CheckTrue(LCaught, 'expected HTTPS redirect error');
+    CheckTrue(LCaught, 'client followed redirect into https scheme (TLS attempt raised)');
   finally
     StopServer(LServer, LHandle);
   end;
