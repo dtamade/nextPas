@@ -23,6 +23,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.thread.init,
   nextpas.core.base,
+  nextpas.core.system.heap,
   nextpas.core.atomic.core,
   nextpas.core.platform.time,
   nextpas.core.mem.intf,
@@ -206,20 +207,20 @@ begin
   LOk := True;
   for I := 1 to SC1_WARMUP do
   begin
-    System.GetMem(LPtr, 64);
+    LPtr := NpSystemGetMem(64);
     if LPtr = nil then LOk := False;
-    System.FreeMem(LPtr);
+    NpSystemFreeMem(LPtr);
   end;
   LStart := platform_monotonic_ns;
   for I := 1 to SC1_ITERS do
   begin
-    System.GetMem(LPtr, 64);
+    LPtr := NpSystemGetMem(64);
     if LPtr = nil then LOk := False;
-    System.FreeMem(LPtr);
+    NpSystemFreeMem(LPtr);
   end;
   LEnd := platform_monotonic_ns;
   LNs := Int64((LEnd - LStart) div LOps);
-  AddRow('SC1', 'system', LNs, 0, LOps, LOk, 'glibc via System.GetMem');
+  AddRow('SC1', 'system', LNs, 0, LOps, LOk, 'glibc via NpSystemGetMem');
 
   { Process DefaultHeap (same Growing singleton; proves D1 wiring) }
   LOk := True;
@@ -265,14 +266,14 @@ begin
       if AUseGrowing then
         LPtrs[J] := GAlloc.GetMem(SC2_SIZES[J])
       else
-        System.GetMem(LPtrs[J], SC2_SIZES[J]);
+        LPtrs[J] := NpSystemGetMem(SC2_SIZES[J]);
       if LPtrs[J] = nil then LOk := False;
     end;
     for J := High(SC2_SIZES) downto 0 do
       if AUseGrowing then
         GAlloc.FreeMem(LPtrs[J], SC2_SIZES[J])
       else
-        System.FreeMem(LPtrs[J]);
+        NpSystemFreeMem(LPtrs[J]);
   end;
 
   LStart := platform_monotonic_ns;
@@ -284,14 +285,14 @@ begin
       if AUseGrowing then
         LPtrs[J] := GAlloc.GetMem(SC2_SIZES[J])
       else
-        System.GetMem(LPtrs[J], SC2_SIZES[J]);
+        LPtrs[J] := NpSystemGetMem(SC2_SIZES[J]);
       if LPtrs[J] = nil then LOk := False;
     end;
     for J := High(SC2_SIZES) downto 0 do
       if AUseGrowing then
         GAlloc.FreeMem(LPtrs[J], SC2_SIZES[J])
       else
-        System.FreeMem(LPtrs[J]);
+        NpSystemFreeMem(LPtrs[J]);
     LBatchEnd := platform_monotonic_ns;
     { per-op ns inside this batch (6 alloc+free pairs) }
     LSamples[I] := Int64((LBatchEnd - LBatchStart) div 6);
@@ -687,14 +688,14 @@ begin
       end
       else
       begin
-        System.GetMem(LHdr, 128);
-        System.GetMem(LBody, SC7_BODY_SIZES[R mod Length(SC7_BODY_SIZES)]);
-        System.GetMem(LTmp, 64);
+        LHdr := NpSystemGetMem(128);
+        LBody := NpSystemGetMem(SC7_BODY_SIZES[R mod Length(SC7_BODY_SIZES)]);
+        LTmp := NpSystemGetMem(64);
         if (LHdr = nil) or (LBody = nil) or (LTmp = nil) then
           LOk := False;
-        System.FreeMem(LHdr);
-        System.FreeMem(LBody);
-        System.FreeMem(LTmp);
+        NpSystemFreeMem(LHdr);
+        NpSystemFreeMem(LBody);
+        NpSystemFreeMem(LTmp);
       end;
     end;
 
@@ -728,8 +729,8 @@ begin
       else
       begin
         LSysCount := 0;
-        System.GetMem(LHdr, 128);
-        System.GetMem(LBody, LBodySize);
+        LHdr := NpSystemGetMem(128);
+        LBody := NpSystemGetMem(LBodySize);
         LSysPtrs[0] := LHdr;
         LSysPtrs[1] := LBody;
         LSysCount := 2;
@@ -742,7 +743,7 @@ begin
         end;
         for K := 0 to 3 do
         begin
-          System.GetMem(LTmp, 48 + SizeUInt(K) * 16);
+          LTmp := NpSystemGetMem(48 + SizeUInt(K) * 16);
           LSysPtrs[LSysCount] := LTmp;
           Inc(LSysCount);
           if LTmp = nil then
@@ -752,7 +753,7 @@ begin
         end;
         for K := LSysCount - 1 downto 0 do
           if LSysPtrs[K] <> nil then
-            System.FreeMem(LSysPtrs[K]);
+            NpSystemFreeMem(LSysPtrs[K]);
       end;
       LReqEnd := platform_monotonic_ns;
       LSamples[R] := Int64(LReqEnd - LReqStart);

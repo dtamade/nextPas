@@ -7,6 +7,7 @@ program bench_allocator;
 uses
   nextpas.core.thread.init,
   nextpas.core.base,
+  nextpas.core.system.heap,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -191,10 +192,10 @@ procedure BenchSystemSmall64(const ACtx: IBenchContext);
 var
   LPtr: Pointer;
 begin
-  System.GetMem(LPtr, 64);
+  LPtr := NpSystemGetMem(64);
   if ACtx <> nil then
     ACtx.SetBytes(64);
-  System.FreeMem(LPtr);
+  NpSystemFreeMem(LPtr);
 end;
 
 { Pattern 8: System allocator baseline (1024B). }
@@ -202,10 +203,10 @@ procedure BenchSystemMedium1K(const ACtx: IBenchContext);
 var
   LPtr: Pointer;
 begin
-  System.GetMem(LPtr, 1024);
+  LPtr := NpSystemGetMem(1024);
   if ACtx <> nil then
     ACtx.SetBytes(1024);
-  System.FreeMem(LPtr);
+  NpSystemFreeMem(LPtr);
 end;
 
 { --- Concurrent benchmark (manual timing, bypasses framework) --- }

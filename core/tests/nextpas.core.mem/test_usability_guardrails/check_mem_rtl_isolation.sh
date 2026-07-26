@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Source-contract: mem must not use FPC RTL units or System heap/Move primitives.
 # Heap owner is nextpas.core.system.heap (NpSystem*).
+# Scope: mem sources AND mem tests/examples — process-heap comparisons in
+# tests must go through NpSystem* (same codegen, isolation preserved).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
@@ -57,7 +59,9 @@ while IFS= read -r -d '' f; do
     grep -nE "$OS_PRIM_FFI_RE" "$f" || true
     FAIL=1
   fi
-done < <(find "$SRC" -maxdepth 1 -name 'nextpas.core.mem*.pas' -print0)
+done < <(find "$SRC" -maxdepth 1 -name 'nextpas.core.mem*.pas' -print0;
+         find "$ROOT/core/tests/nextpas.core.mem" "$ROOT/core/examples/nextpas.core.mem" \
+           \( -name '*.pas' -o -name '*.lpr' \) -print0 2>/dev/null)
 
 # Forbid resurrected dead units
 for dead in pressure registry watermark; do

@@ -4,6 +4,7 @@ program test_contracts;
 
 uses
   nextpas.core.base,
+  nextpas.core.system.heap,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.test,
@@ -174,25 +175,25 @@ end;
 function CallbackGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GGetMemCalls);
-  Result := System.GetMem(ASize);
+  Result := NpSystemGetMem(ASize);
 end;
 
 function CallbackAllocMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GAllocMemCalls);
-  Result := System.AllocMem(ASize);
+  Result := NpSystemAllocMem(ASize);
 end;
 
 function CallbackReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Inc(GReallocMemCalls);
-  Result := System.ReallocMem(ADst, ASize);
+  Result := NpSystemReallocMem(ADst, ASize);
 end;
 
 procedure CallbackFreeMem(ADst: Pointer);
 begin
   Inc(GFreeMemCalls);
-  System.FreeMem(ADst);
+  NpSystemFreeMem(ADst);
 end;
 
 procedure TestCallbackAllocatorCompatibilityMethods;

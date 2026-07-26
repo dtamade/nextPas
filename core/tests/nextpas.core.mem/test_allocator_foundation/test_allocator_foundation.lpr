@@ -4,6 +4,7 @@ program test_allocator_foundation;
 
 uses
   nextpas.core.test,
+  nextpas.core.system.heap,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.rtl;
@@ -27,25 +28,25 @@ end;
 function FoundationGetMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GGetMemCalls);
-  Result := System.GetMem(ASize);
+  Result := NpSystemGetMem(ASize);
 end;
 
 function FoundationAllocMem(ASize: SizeUInt): Pointer;
 begin
   Inc(GAllocMemCalls);
-  Result := System.AllocMem(ASize);
+  Result := NpSystemAllocMem(ASize);
 end;
 
 function FoundationReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
 begin
   Inc(GReallocMemCalls);
-  Result := System.ReallocMem(ADst, ASize);
+  Result := NpSystemReallocMem(ADst, ASize);
 end;
 
 procedure FoundationFreeMem(ADst: Pointer);
 begin
   Inc(GFreeMemCalls);
-  System.FreeMem(ADst);
+  NpSystemFreeMem(ADst);
 end;
 
 procedure TestFoundationRtlAllocatorMatchesCanonicalSingleton;

@@ -4,6 +4,7 @@ program test_pool_allocator;
 
 uses
   nextpas.core.test,
+  nextpas.core.system.heap,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
@@ -78,7 +79,7 @@ function TRecordingFallback.GetMem(ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
   Inc(GetCalls);
-  Result := System.GetMem(ASize);
+  Result := NpSystemGetMem(ASize);
   Track(Result);
 end;
 
@@ -86,7 +87,7 @@ function TRecordingFallback.AllocMem(ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then Exit(nil);
   Inc(AllocCalls);
-  Result := System.AllocMem(ASize);
+  Result := NpSystemAllocMem(ASize);
   Track(Result);
 end;
 
@@ -100,7 +101,7 @@ begin
   LIndex := IndexOf(ADst);
   if LIndex < 0 then
     Exit(nil);
-  Result := System.ReallocMem(ADst, ASize);
+  Result := NpSystemReallocMem(ADst, ASize);
   FPtrs[LIndex] := Result;
 end;
 
@@ -109,7 +110,7 @@ begin
   if ADst = nil then Exit;
   Inc(FreeCalls);
   if Untrack(ADst) then
-    System.FreeMem(ADst);
+    NpSystemFreeMem(ADst);
 end;
 
 function TRecordingFallback.Traits: TAllocatorTraits;

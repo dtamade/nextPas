@@ -4,6 +4,7 @@ program test_hotswap;
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.system.heap,
   nextpas.core.test,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
@@ -40,14 +41,14 @@ function TDestroyTrackingAllocator.GetMem(ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then
     Exit(nil);
-  Result := System.GetMem(ASize);
+  Result := NpSystemGetMem(ASize);
 end;
 
 function TDestroyTrackingAllocator.AllocMem(ASize: SizeUInt): Pointer;
 begin
   if ASize = 0 then
     Exit(nil);
-  Result := System.AllocMem(ASize);
+  Result := NpSystemAllocMem(ASize);
 end;
 
 function TDestroyTrackingAllocator.ReallocMem(APtr: Pointer;
@@ -60,13 +61,13 @@ begin
   end;
   if APtr = nil then
     Exit(GetMem(ASize));
-  Result := System.ReallocMem(APtr, ASize);
+  Result := NpSystemReallocMem(APtr, ASize);
 end;
 
 procedure TDestroyTrackingAllocator.FreeMem(APtr: Pointer);
 begin
   if APtr <> nil then
-    System.FreeMem(APtr);
+    NpSystemFreeMem(APtr);
 end;
 
 function TDestroyTrackingAllocator.Traits: TAllocatorTraits;
