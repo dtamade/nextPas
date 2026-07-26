@@ -308,8 +308,7 @@ def build_experimental_intrinsics_test_carriers(a_repo_root: Path) -> tuple[Path
 def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[ModuleConfig]:
     l_tests_root = a_repo_root / "tests" / "nextpas.core.simd"
     l_current_intrinsics_tests = build_current_intrinsics_test_carriers(a_repo_root)
-    l_experimental_intrinsics_tests = build_experimental_intrinsics_test_carriers(a_repo_root)
-    return [
+    l_configs = [
         ModuleConfig(
             name="sse",
             prefix="sse",
@@ -335,31 +334,41 @@ def build_module_configs(a_repo_root: Path, a_args: argparse.Namespace) -> list[
             tests=(l_tests_root / "nextpas.core.simd.intrinsics.avx2.testcase.pas",),
         ),
         ModuleConfig(
-            name="aes",
-            prefix="aes",
-            test_mode="symbol_ref",
-            required=a_args.require_experimental,
-            src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.aes.pas",
-            tests=l_experimental_intrinsics_tests,
-        ),
-        ModuleConfig(
-            name="sha",
-            prefix="sha",
-            test_mode="symbol_ref",
-            required=a_args.require_experimental,
-            src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.sha.pas",
-            tests=l_experimental_intrinsics_tests,
-        ),
-        ModuleConfig(
             name="sse2-x86-raw",
             prefix="simd",
             test_mode="symbol_ref",
             required=True,
-            src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.x86.sse2.pas",
+            src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.sse2.pas",
             tests=(l_tests_root / "test_sse2_raw_leaf_parity.pas",),
             min_refs=a_args.sse2_min_refs,
         ),
     ]
+
+    # aes/sha 的专属实验测试项目(tests/nextpas.core.simd.intrinsics.experimental)
+    # 从未在本仓库任何 ref 落地(fc8f2520a 部分合并只带入 checker 与委派入口)。
+    # 默认/layout 模式不登记二者；显式 --require-experimental 仍登记，
+    # 使缺失载体在 main() 中 fail-close 而非静默跳过。
+    if a_args.require_experimental:
+        l_experimental_intrinsics_tests = build_experimental_intrinsics_test_carriers(a_repo_root)
+        l_configs[3:3] = [
+            ModuleConfig(
+                name="aes",
+                prefix="aes",
+                test_mode="symbol_ref",
+                required=True,
+                src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.aes.pas",
+                tests=l_experimental_intrinsics_tests,
+            ),
+            ModuleConfig(
+                name="sha",
+                prefix="sha",
+                test_mode="symbol_ref",
+                required=True,
+                src=a_repo_root / "src" / "nextpas.core.simd.intrinsics.sha.pas",
+                tests=l_experimental_intrinsics_tests,
+            ),
+        ]
+    return l_configs
 
 
 def check_module(a_config: ModuleConfig) -> dict:

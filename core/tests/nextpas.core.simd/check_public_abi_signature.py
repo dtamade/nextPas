@@ -31,17 +31,11 @@ EXPECTED_SECTION_SIGNATURES: dict[str, str] = {
     "pascal_api_decls": "a4ef9ba77541182d41f8710f6b3fc787c790de97aa38b95c546479a19fa2d44b",
     "c_export_alias_decls": "5fcc81bcbfb225ad91bb9a5e6763cbaf168918a49f402d9a2086ad8055ac9b4f",
     "abi_const_decls": "a5bd2ca11df5f727f5572399fac72761c1e7c83c5f2ffbff7aa8107573c949eb",
-    "smoke_header_flag_alias": "aa3bc7fd35d9bdcb7cf471808da815e7aa5c5b1a3794fd303f914f97e9094bed",
-    "smoke_header_flag_consts": "a09957d8c74c6c52c31b2e0ec7eb95dec7ef7fd99aab044a76ebf292a53c6425",
-    "smoke_header_public_api_v2_flag_alias": "61d05f3fe8c9f49d378f122ebb802804fa49afefb92ace70a2e25a4e045bc3f8",
-    "smoke_header_public_api_v2_flag_consts": "303e5be84e2efc97582cbf3abdea9a6bdfdfb7c5fa8df7a9167479591418f567",
-    "smoke_header_func_types": "80e1d165c79c76242a5000874022b95c232f5eff0a4a1f76422925aaec89d39c",
-    "smoke_header_backend_pod_struct": "08edf6c988d4eefd471380630a56b097202b17448b2729edaaf09696f0058026",
-    "smoke_header_public_api_struct": "c7fd54b8505cbbf0f11cfaa61f828f2d138eb2deb993eee6e0adfc028693d92d",
-    "smoke_header_public_api_v2_struct": "781395f8d962804c98e5ec4490739aea53aef4727649be1004a5d2464f28a00b",
-    "smoke_header_pack_directives": "8fee125e481b3ab5e61a7ab6f2b01572ebb04af8c66ebf0773c066d5d8314e26",
 }
-EXPECTED_OVERALL_SIGNATURE = "76b16c58445a06aea25b259d69b382bb79605acefbca26a33b16bdf3b9bd9c65"
+# smoke_header_* 段已移除：tests/nextpas.core.simd.publicabi(含 publicabi_smoke.h)
+# 从未在本仓库任何 ref 落地(fc8f2520a 部分合并只带入 checker)。
+# overall 基线由上方 13 个 Pascal 段的期望 sha 派生。
+EXPECTED_OVERALL_SIGNATURE = "1e9e591bee71cc89821fdeb5d015e7095ed56dabc06d3affc6b8b2f3722086e4"
 
 PASCAL_ABI_FLAG_NAMES = [
     "FAF_SIMD_ABI_FLAG_SUPPORTED_ON_CPU",
@@ -108,39 +102,6 @@ PASCAL_ABI_CONST_NAMES = [
     "NEXTPAS_SIMD_PUBLIC_ABI_V2_SIGNATURE_LO",
 ]
 
-C_HEADER_FLAG_CONST_NAMES = [
-    "FAF_SIMD_ABI_FLAG_SUPPORTED_ON_CPU",
-    "FAF_SIMD_ABI_FLAG_REGISTERED",
-    "FAF_SIMD_ABI_FLAG_DISPATCHABLE",
-    "FAF_SIMD_ABI_FLAG_ACTIVE",
-    "FAF_SIMD_ABI_FLAG_EXPERIMENTAL",
-]
-
-C_HEADER_PUBLIC_API_V2_FLAG_CONST_NAMES = [
-    "FAF_SIMD_PUBLIC_API_V2_FLAG_SNAPSHOT_BOUND",
-    "FAF_SIMD_PUBLIC_API_V2_FLAG_DIRECT_DATA_PLANE",
-    "FAF_SIMD_PUBLIC_API_V2_FLAG_COMPAT_V1",
-]
-
-C_HEADER_FUNC_TYPE_NAMES = [
-    "nextpas_simd_mem_equal_fn",
-    "nextpas_simd_mem_find_byte_fn",
-    "nextpas_simd_mem_diff_range_fn",
-    "nextpas_simd_sum_bytes_fn",
-    "nextpas_simd_count_byte_fn",
-    "nextpas_simd_bitset_popcount_fn",
-    "nextpas_simd_utf8_validate_fn",
-    "nextpas_simd_ascii_iequal_fn",
-    "nextpas_simd_bytes_index_of_fn",
-    "nextpas_simd_mem_copy_fn",
-    "nextpas_simd_mem_set_fn",
-    "nextpas_simd_to_lower_ascii_fn",
-    "nextpas_simd_to_upper_ascii_fn",
-    "nextpas_simd_mem_reverse_fn",
-    "nextpas_simd_min_max_bytes_fn",
-]
-
-
 @dataclass(frozen=True)
 class PublicAbiSnapshot:
     generated_at: str
@@ -179,13 +140,6 @@ def strip_line_comment(line: str, marker: str) -> str:
 
 
 def normalize_pascal_line(line: str) -> str:
-    line = strip_line_comment(line, "//").strip()
-    if not line:
-        return ""
-    return " ".join(line.split())
-
-
-def normalize_c_line(line: str) -> str:
     line = strip_line_comment(line, "//").strip()
     if not line:
         return ""
@@ -297,71 +251,12 @@ def extract_pascal_const_lines(text: str, names: list[str]) -> list[str]:
     return result
 
 
-def extract_c_struct_signature_lines(text: str, struct_name: str) -> list[str]:
-    lines = text.splitlines()
-    in_struct = False
-    signature_lines: list[str] = []
-
-    start_pattern = re.compile(rf"^\s*typedef\s+struct\s+{re.escape(struct_name)}\s*\{{\s*$")
-    end_pattern = re.compile(rf"^\s*\}}\s*{re.escape(struct_name)}\s*;\s*$")
-
-    for line in lines:
-        if not in_struct:
-            if start_pattern.match(line):
-                in_struct = True
-                signature_lines.append(normalize_c_line(line))
-            continue
-
-        normalized = normalize_c_line(line)
-        if not normalized:
-            continue
-        signature_lines.append(normalized)
-        if end_pattern.match(line):
-            return signature_lines
-
-    raise RuntimeError(f"c struct not found or unterminated: {struct_name}")
-
-
-def extract_c_named_lines(text: str, names: list[str], prefix_pattern: str) -> list[str]:
-    lines = [normalize_c_line(line) for line in text.splitlines()]
-    lines = [line for line in lines if line]
-    result: list[str] = []
-
-    for name in names:
-        pattern = re.compile(rf"^{prefix_pattern}{re.escape(name)}\b")
-        for line in lines:
-            if pattern.match(line):
-                result.append(line)
-                break
-        else:
-            raise RuntimeError(f"c declaration not found: {name}")
-
-    return result
-
-
-def extract_c_exact_lines(text: str, exact_lines: list[str]) -> list[str]:
-    lines = [normalize_c_line(line) for line in text.splitlines()]
-    lines = [line for line in lines if line]
-    result: list[str] = []
-
-    for exact_line in exact_lines:
-        normalized = normalize_c_line(exact_line)
-        for line in lines:
-            if line == normalized:
-                result.append(line)
-                break
-        else:
-            raise RuntimeError(f"c exact line not found: {exact_line}")
-
-    return result
-
-
 def compute_signature(lines: list[str]) -> str:
     payload = "\n".join(lines).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
-def build_sections(base_text: str, intf_text: str, impl_text: str, header_text: str) -> dict[str, list[str]]:
+def build_sections(base_text: str, intf_text: str, impl_text: str) -> dict[str, list[str]]:
     sections: dict[str, list[str]] = {}
 
     sections["simd_backend_enum"] = extract_pascal_enum_items(base_text, "TSimdBackend")
@@ -381,45 +276,16 @@ def build_sections(base_text: str, intf_text: str, impl_text: str, header_text: 
     sections["pascal_api_decls"] = extract_pascal_named_lines(intf_text, PASCAL_API_NAMES, r"(?:function|procedure)")
     sections["c_export_alias_decls"] = extract_pascal_named_lines(intf_text, PASCAL_EXPORT_ALIAS_NAMES, r"(?:function|procedure)")
     sections["abi_const_decls"] = extract_pascal_const_lines(impl_text, PASCAL_ABI_CONST_NAMES)
-    sections["smoke_header_flag_alias"] = extract_c_named_lines(
-        header_text, ["nextpas_simd_abi_flags_t"], r"typedef\s+[A-Za-z0-9_]+\s+"
-    )
-    sections["smoke_header_public_api_v2_flag_alias"] = extract_c_named_lines(
-        header_text, ["nextpas_simd_public_api_v2_flags_t"], r"typedef\s+[A-Za-z0-9_]+\s+"
-    )
-    sections["smoke_header_flag_consts"] = extract_c_named_lines(
-        header_text, C_HEADER_FLAG_CONST_NAMES, r""
-    )
-    sections["smoke_header_public_api_v2_flag_consts"] = extract_c_named_lines(
-        header_text, C_HEADER_PUBLIC_API_V2_FLAG_CONST_NAMES, r""
-    )
-    sections["smoke_header_func_types"] = extract_c_named_lines(
-        header_text, C_HEADER_FUNC_TYPE_NAMES, r"typedef\s+.*\(\*"
-    )
-    sections["smoke_header_backend_pod_struct"] = extract_c_struct_signature_lines(
-        header_text, "nextpas_simd_backend_pod_info_t"
-    )
-    sections["smoke_header_public_api_struct"] = extract_c_struct_signature_lines(
-        header_text, "nextpas_simd_public_api_t"
-    )
-    sections["smoke_header_public_api_v2_struct"] = extract_c_struct_signature_lines(
-        header_text, "nextpas_simd_public_api_v2_t"
-    )
-    sections["smoke_header_pack_directives"] = extract_c_exact_lines(
-        header_text,
-        ["#pragma pack(push, 1)", "#pragma pack(pop)"],
-    )
 
     return sections
 
 
-def build_snapshot(base_file: Path, intf_file: Path, impl_file: Path, header_file: Path) -> PublicAbiSnapshot:
+def build_snapshot(base_file: Path, intf_file: Path, impl_file: Path) -> PublicAbiSnapshot:
     base_text = read_text_with_local_includes(base_file)
     intf_text = read_text_with_local_includes(intf_file)
     impl_text = read_text_with_local_includes(impl_file)
-    header_text = header_file.read_text(encoding="utf-8", errors="ignore")
 
-    sections = build_sections(base_text, intf_text, impl_text, header_text)
+    sections = build_sections(base_text, intf_text, impl_text)
     signatures = {name: compute_signature(lines) for name, lines in sections.items()}
     overall_lines = [f"{name}:{signatures[name]}" for name in sorted(signatures)]
     overall_signature = compute_signature(overall_lines)
@@ -443,7 +309,6 @@ def main() -> int:
     parser.add_argument("--base-file", default="src/nextpas.core.simd.base.pas")
     parser.add_argument("--public-intf-file", default="src/nextpas.core.simd.public_abi.intf.inc")
     parser.add_argument("--public-impl-file", default="src/nextpas.core.simd.public_abi.impl.inc")
-    parser.add_argument("--smoke-header-file", default="tests/nextpas.core.simd.publicabi/publicabi_smoke.h")
     parser.add_argument("--json-file")
     parser.add_argument("--summary-line", action="store_true")
     parser.add_argument("--dump-current", action="store_true")
@@ -453,14 +318,13 @@ def main() -> int:
     base_file = (repo_root / args.base_file).resolve()
     intf_file = (repo_root / args.public_intf_file).resolve()
     impl_file = (repo_root / args.public_impl_file).resolve()
-    header_file = (repo_root / args.smoke_header_file).resolve()
 
-    for required_path in (base_file, intf_file, impl_file, header_file):
+    for required_path in (base_file, intf_file, impl_file):
         if not required_path.exists():
             print(f"[PUBLIC-ABI] Missing required file: {required_path}")
             return 2
 
-    snapshot = build_snapshot(base_file, intf_file, impl_file, header_file)
+    snapshot = build_snapshot(base_file, intf_file, impl_file)
 
     if args.json_file:
         json_path = Path(args.json_file)
@@ -474,7 +338,6 @@ def main() -> int:
             f"overall_sha={snapshot.overall_signature} "
             f"backend_enum_sha={snapshot.signatures['simd_backend_enum']} "
             f"public_api_sha={snapshot.signatures['public_api_record']} "
-            f"header_public_api_sha={snapshot.signatures['smoke_header_public_api_struct']} "
             f"backends={len(snapshot.sections['simd_backend_enum'])} "
             f"capabilities={len(snapshot.sections['simd_capability_enum'])} "
             f"backend_pod_fields={len(snapshot.sections['backend_pod_record']) - 2} "

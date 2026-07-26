@@ -8,16 +8,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-NEON_FILE = ROOT / "src" / "nextpas.core.simd.neon.shared_wide_memory_asm.inc"
+NEON_FILE = ROOT / "src" / "nextpas.core.simd.neon.shared.wide.memory.asm.inc"
 NEON_IMPL_FILE = ROOT / "src" / "nextpas.core.simd.neon.pas"
-NEON_SCALAR_FALLBACK_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar_fallback.inc"
+NEON_SCALAR_FALLBACK_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.fallback.inc"
 NEON_SCALAR_VECTOR_MATH_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.vector_math.inc"
 NEON_SCALAR_REDUCTION_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.reduction.inc"
 NEON_SCALAR_MEMORY_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.memory.inc"
 NEON_SCALAR_UTILITY_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.utility.inc"
-NEON_SHARED_UTILITY_FILE = ROOT / "src" / "nextpas.core.simd.neon.shared_utility.inc"
+NEON_SHARED_UTILITY_FILE = ROOT / "src" / "nextpas.core.simd.neon.shared.utility.inc"
 NEON_SCALAR_MATH_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.math.inc"
-NEON_SCALAR_EXT_MATH_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.ext_math.inc"
+NEON_SCALAR_EXT_MATH_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.ext.math.inc"
 NEON_SCALAR_AUTOWRAP_FILE = ROOT / "src" / "nextpas.core.simd.neon.scalar.autowrap.inc"
 NEON_COMPARE_FILE = ROOT / "src" / "nextpas.core.simd.neon.compare.inc"
 RISCVV_FILE = ROOT / "src" / "nextpas.core.simd.riscvv.pas"
@@ -33,9 +33,8 @@ NATIVE_EVIDENCE_VERIFY_FILE = ROOT / "tests" / "nextpas.core.simd" / "verify_non
 NATIVE_EVIDENCE_IMPORT_FILE = ROOT / "tests" / "nextpas.core.simd" / "import_nonx86_native_evidence_artifacts.sh"
 QEMU_RUNNER_FILE = ROOT / "tests" / "nextpas.core.simd" / "docker" / "run_multiarch_qemu.sh"
 KEY_SLOT_AUDIT_FILE = ROOT / "tests" / "nextpas.core.simd" / "check_nonx86_key_slot_audit.py"
-CHECKLIST_FILE = ROOT / "docs" / "simd" / "checklist.md"
-CLOSEOUT_FILE = ROOT / "docs" / "simd" / "closeout.md"
-IMPLEMENTATION_MATRIX_FILE = ROOT / "docs" / "simd" / "implementation-matrix.md"
+# docs/simd/{checklist,closeout,implementation-matrix}.md 已在 9ab2e83fc 文档重组中删除；
+# 对应 doc 侧片段检查一并移除，nonx86 语义矩阵由 runner/源码侧片段继续守护。
 
 
 ROUTINE_BLOCK_PATTERN = r"(?ims)^(function|procedure)\s+{name}\b.*?(?=^(function|procedure)\s+[A-Za-z_][A-Za-z0-9_\.]*\b|^initialization\b|\Z)"
@@ -109,9 +108,6 @@ def main() -> int:
     native_evidence_import_source = read_text(NATIVE_EVIDENCE_IMPORT_FILE)
     qemu_runner_source = read_text(QEMU_RUNNER_FILE)
     key_slot_audit_source = read_text(KEY_SLOT_AUDIT_FILE)
-    checklist_source = read_text(CHECKLIST_FILE)
-    closeout_source = read_text(CLOSEOUT_FILE)
-    implementation_matrix_source = read_text(IMPLEMENTATION_MATRIX_FILE)
 
     checks = 0
 
@@ -1074,9 +1070,9 @@ def main() -> int:
     require_fragments(
         neon_impl_source,
         [
-            "{$I nextpas.core.simd.neon.shared_utility.inc}",
+            "{$I nextpas.core.simd.neon.shared.utility.inc}",
             "{$I nextpas.core.simd.neon.scalar.autowrap.inc}",
-            "{$I nextpas.core.simd.neon.shared_wide_memory_asm.inc}",
+            "{$I nextpas.core.simd.neon.shared.wide.memory.asm.inc}",
         ],
         "src/nextpas.core.simd.neon.pas include layout",
     )
@@ -1084,7 +1080,7 @@ def main() -> int:
 
     if "{$I nextpas.core.simd.neon.scalar.autowrap.inc}" in neon_scalar_fallback_source:
         raise AssertionError(
-            "src/nextpas.core.simd.neon.scalar_fallback.inc should not include scalar.autowrap directly"
+            "src/nextpas.core.simd.neon.scalar.fallback.inc should not include scalar.autowrap directly"
         )
     checks += 1
 
@@ -1539,69 +1535,6 @@ def main() -> int:
                 'LDirectParityLog="\\${SIMD_OUTPUT_ROOT}/logs/direct_nonx86_runtime_parity.txt";',
                 '--suite=TTestCase_NonX86BackendParity,TTestCase_DataPlane',
                 "bash tests/nextpas.core.simd/run_backend_benchmarks.sh",
-            ],
-        ),
-        (
-            checklist_source,
-            "docs/simd/checklist.md",
-            [
-                "x86_64 主机只能跑 source checker",
-                "bash tests/nextpas.core.simd/BuildOrTest.sh impl-audit-nonx86",
-                "bash tests/nextpas.core.simd/BuildOrTest.sh closeout-host-local",
-                "bash tests/nextpas.core.simd/BuildOrTest.sh import-nonx86-native-evidence",
-                "bash tests/nextpas.core.simd/BuildOrTest.sh closeout-host-local-from-import",
-                "qemu-nonx86-evidence",
-                "SIMD_GATE_QEMU_NONX86_EVIDENCE=1",
-                "SIMD_GATE_REQUIRE_NONX86_NATIVE_EVIDENCE=0",
-                "python3 tests/nextpas.core.simd/check_nonx86_helper_semantics.py --summary-line",
-                "python3 tests/nextpas.core.simd/check_nonx86_key_slot_audit.py --summary-line",
-                "docs/simd/implementation-matrix.md",
-                "没有硬件时，不再把 native host 当成 blocker",
-                "compare/mask / shift/bitwise / arithmetic/minmax 的 source-side 语义矩阵",
-                "backend_owned",
-                "reuse_base_scalar",
-                "Test_DirectDispatchTable_MultiBackend_SignedWideCompareMaskMatrix_Parity",
-                "Test_WideCompareMaskParity_IfAvailable",
-                "Test_WideSignedBitwiseShiftParity_IfAvailable",
-                "Test_WideIntegerArithmeticMinMaxParity_IfAvailable",
-                "Test_DataPlane_WideBitwiseShiftSnapshot_Follows_CurrentDispatchSemantics",
-                "Test_DataPlane_WideArithmeticMinMaxSnapshot_Follows_CurrentDispatchSemantics",
-            ],
-        ),
-        (
-            closeout_source,
-            "docs/simd/closeout.md",
-            [
-                "2026-04-11 implementation audit snapshot",
-                "NONX86_IMPL_AUDIT_SUMMARY",
-                "NONX86_HELPER_SEMANTICS_SUMMARY",
-                "NONX86_KEY_SLOT_AUDIT_SUMMARY",
-                "impl-smoke-nonx86",
-                "WIRING_SYNC_SUMMARY",
-                "closeout-host-local",
-                "import-nonx86-native-evidence",
-                "closeout-host-local-from-import",
-                "docs/simd/implementation-matrix.md",
-                "TTestCase_NonX86BackendParity,TTestCase_DataPlane",
-                "TTestCase_NonX86BackendParity,TTestCase_DirectDispatch,TTestCase_DataPlane",
-                "DataPlane wide snapshot",
-                "QEMU non-x86 runtime evidence",
-                "当前 arm64 / riscv64 closeout 的充分证明",
-            ],
-        ),
-        (
-            implementation_matrix_source,
-            "docs/simd/implementation-matrix.md",
-            [
-                "# SIMD Implementation Matrix",
-                "## Current Focus",
-                "## Non-X86 Ownership Matrix",
-                "backend | slot | expected contract | source truth | runtime evidence | current status | next action",
-                "impl-smoke-nonx86",
-                "NEON | AndI64x8 | reuse_base_scalar",
-                "RISCVV | MaxU32x16 | reuse_base_scalar",
-                "DispatchAPI source truth",
-                "BuildOrTest.sh impl-audit-nonx86",
             ],
         ),
         (

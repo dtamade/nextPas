@@ -15,7 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 SHELL_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "BuildOrTest.sh"
 DOCKER_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "docker" / "run_fpc_tests.sh"
 MAIN_MAKEFILE = ROOT / "tests" / "nextpas.core.simd" / "Makefile"
-EXPERIMENTAL_MAKEFILE = ROOT / "tests" / "nextpas.core.simd.intrinsics.experimental" / "Makefile"
+
+# tests/nextpas.core.simd.intrinsics.experimental 项目从未在本仓库任何 ref 落地
+# (fc8f2520a 从 codex/core-simd 部分合并只带入了 checker)；主 runner/Makefile 的
+# experimental 委派入口仍受下方 pattern 检查守护，运行时对缺失项目 fail-close。
 
 
 def read_text(a_path: Path) -> str:
@@ -54,7 +57,7 @@ def build_result() -> dict[str, Any]:
     l_issues: list[dict[str, str]] = []
     l_checks = 0
 
-    for l_path in (SHELL_RUNNER, DOCKER_RUNNER, MAIN_MAKEFILE, EXPERIMENTAL_MAKEFILE):
+    for l_path in (SHELL_RUNNER, DOCKER_RUNNER, MAIN_MAKEFILE):
         if not l_path.is_file():
             add_issue(l_issues, l_path, "missing shell runner contract file")
 
@@ -69,7 +72,6 @@ def build_result() -> dict[str, Any]:
     l_shell_runner = read_text(SHELL_RUNNER)
     l_docker_runner = read_text(DOCKER_RUNNER)
     l_main_makefile = read_text(MAIN_MAKEFILE)
-    l_experimental_makefile = read_text(EXPERIMENTAL_MAKEFILE)
 
     for l_pattern, l_message in (
         (r'case "\$\{ACTION\}" in', "shell runner missing action dispatcher"),
@@ -134,20 +136,6 @@ def build_result() -> dict[str, Any]:
         "main Makefile test-all must not promote experimental intrinsics into the default stable gate",
         l_issues,
     )
-
-    for l_pattern, l_message in (
-        (r'^check:\s*$', "experimental Makefile missing check target"),
-        (r'^test-all:\s*$', "experimental Makefile missing test-all target"),
-        (r'BuildOrTest\.sh check', "experimental Makefile check target missing runner delegation"),
-        (r'BuildOrTest\.sh test-all', "experimental Makefile test-all target missing runner delegation"),
-    ):
-        l_checks += require_pattern(
-            l_experimental_makefile,
-            EXPERIMENTAL_MAKEFILE,
-            l_pattern,
-            l_message,
-            l_issues,
-        )
 
     for l_pattern, l_message in (
         (r'BuildOrTest\.sh', "docker runner missing top-level shell-runner delegation"),

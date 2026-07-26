@@ -64,12 +64,9 @@ QUALIFICATION_RUNTIME_FAIL_CLOSE_TOKENS = {
     "src/nextpas.core.simd.intrinsics.neon.pas": "only qualified on arm-class targets whose cpuinfo reports neon",
     "src/nextpas.core.simd.intrinsics.rvv.pas": "only qualified on risc-v targets whose cpuinfo reports rvv",
 }
-EXPERIMENTAL_TEST_RUNTIME_GUARD_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "{$IFNDEF CPUX86_64}",
-        "requires a CPUX86_64 SHA-NI implementation path",
-    ],
-}
+# 实验测试项目 tests/nextpas.core.simd.intrinsics.experimental 从未在本仓库任何
+# ref 落地(fc8f2520a 部分合并只带入 checker)，其测试侧运行时守卫/语义向量/
+# forced 作用域检查腿已删除；src 侧 AES/SHA fail-close 契约检查全部保留。
 SHA_SOURCE_CONTRACT_FILE = "src/nextpas.core.simd.intrinsics.sha.pas"
 AES_SOURCE_CONTRACT_FILE = "src/nextpas.core.simd.intrinsics.aes.pas"
 SHA_PUBLIC_INTRINSIC_FUNCTIONS = [
@@ -139,60 +136,8 @@ AESIMC_REQUIRED_CODE_TOKENS = [
     "rawaesimcsi128",
     "constref data",
 ]
-AESENC_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aesenc_si128_aesnisemanticvector",
-        "requireaesencintrinsicsavailable",
-        "7a",
-        "43",
-        "only test_aes_aesenc_si128_aesnisemanticvector proves one aes-ni semantic vector",
-    ],
-}
-AESENCLAST_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aesenclast_si128_aesnisemanticvector",
-        "requireaesenclastintrinsicsavailable",
-        "73",
-        "34",
-        "only test_aes_aesenclast_si128_aesnisemanticvector proves one aes-ni semantic vector",
-    ],
-}
-AESDEC_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aesdec_si128_aesnisemanticvector",
-        "requireaesdecintrinsicsavailable",
-        "03",
-        "4e",
-        "only test_aes_aesdec_si128_aesnisemanticvector proves one aes-ni semantic vector",
-    ],
-}
-AESDECLAST_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aesdeclast_si128_aesnisemanticvector",
-        "requireaesdeclastintrinsicsavailable",
-        "42",
-        "ca",
-        "only test_aes_aesdeclast_si128_aesnisemanticvector proves one aes-ni semantic vector",
-    ],
-}
-AESKEYGENASSIST_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aeskeygenassist_si128_aesnisemanticvectors",
-        "requireaeskeygenassistintrinsicsavailable",
-        "f2",
-        "e1",
-        "standard rcon values only",
-    ],
-}
-AESIMC_SEMANTIC_VECTOR_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "test_aes_aesimc_si128_aesnisemanticvector",
-        "requireaesimcintrinsicsavailable",
-        "0a",
-        "01",
-        "only test_aes_aesimc_si128_aesnisemanticvector proves one aes-ni semantic vector",
-    ],
-}
+# AES-NI 语义向量证据腿已删除：唯一载体是幻影实验 testcase(仓库全树对
+# aesnisemanticvector 零命中)，该证据在本仓库从未存在过，无重定向目标。
 AES_HARDWARE_SEMANTIC_BOUNDARY_TOKENS = {
     "tests/nextpas.core.simd/docs/intrinsics_coverage_workflow.md": [
         "aesenc, aesenclast, aesdec, aesdeclast, aeskeygenassist standard-rcon, and aesimc each have hardware semantic evidence",
@@ -205,39 +150,10 @@ AES_HARDWARE_SEMANTIC_BOUNDARY_TOKENS = {
         "aes key schedule rcon subset",
         "unsupported rcon values fail-close",
     ],
-    "docs/simd/checklist.md": [
-        "aesenc, aesenclast, aesdec, aesdeclast, aeskeygenassist standard-rcon, and aesimc each have hardware semantic evidence",
-        "aes_aesenc_si128",
-        "aes_aesenclast_si128",
-        "aes_aesdec_si128",
-        "aes_aesdeclast_si128",
-        "aes_aeskeygenassist_si128",
-        "aes_aesimc_si128",
-        "aes key schedule rcon subset",
-        "unsupported rcon values fail-close",
-    ],
-    "docs/simd/closeout.md": [
-        "aesenc, aesenclast, aesdec, aesdeclast, aeskeygenassist standard-rcon, and aesimc each have hardware semantic evidence",
-        "aes_aesenc_si128",
-        "aes_aesenclast_si128",
-        "aes_aesdec_si128",
-        "aes_aesdeclast_si128",
-        "aes_aeskeygenassist_si128",
-        "aes_aesimc_si128",
-        "aes key schedule rcon subset",
-        "unsupported rcon values fail-close",
-    ],
 }
+# docs/simd/checklist.md 与 docs/simd/closeout.md 已在 9ab2e83fc 文档重组中删除；
+# AES 边界措辞与禁完成声明检查降级为现存的 intrinsics_coverage_workflow.md。
 EXPERIMENTAL_SEMANTIC_BOUNDARY_TOKENS = {
-    "tests/nextpas.core.simd.intrinsics.experimental/nextpas.core.simd.intrinsics.experimental.testcase.pas": [
-        "only test_aes_aesenc_si128_aesnisemanticvector proves one aes-ni semantic vector",
-        "only test_aes_aesenclast_si128_aesnisemanticvector proves one aes-ni semantic vector",
-        "only test_aes_aesdec_si128_aesnisemanticvector proves one aes-ni semantic vector",
-        "only test_aes_aesdeclast_si128_aesnisemanticvector proves one aes-ni semantic vector",
-        "test_aes_aeskeygenassist_si128_aesnisemanticvectors proves aes-ni semantic vectors for standard rcon values only",
-        "only test_aes_aesimc_si128_aesnisemanticvector proves one aes-ni semantic vector",
-        "sha smoke-only availability checks are not sha semantic vectors",
-    ],
     "tests/nextpas.core.simd/docs/intrinsics_coverage_workflow.md": [
         "experimental closure proof is not stable public semantic proof",
         "aes_aeskeygenassist_si128",
@@ -254,47 +170,11 @@ FORBIDDEN_AES_COMPLETION_CLAIM_PATTERNS = {
         r"\bcomplete\s+aes\s+family\b",
         r"\bfull\s+aes(?:-ni)?\s+semantic",
     ],
-    "docs/simd/checklist.md": [
-        r"\ball\s+aes\s+intrinsics\s+(?:have|are)\s+.*semantic",
-        r"\baes\s+family\s+(?:complete|full|fully)\b",
-        r"\bcomplete\s+aes\s+family\b",
-        r"\bfull\s+aes(?:-ni)?\s+semantic",
-    ],
-    "docs/simd/closeout.md": [
-        r"\ball\s+aes\s+intrinsics\s+(?:have|are)\s+.*semantic",
-        r"\baes\s+family\s+(?:complete|full|fully)\b",
-        r"\bcomplete\s+aes\s+family\b",
-        r"\bfull\s+aes(?:-ni)?\s+semantic",
-    ],
 }
 EXPERIMENTAL_RUNNER_FAIL_CLOSE_TOKENS = {
     "src/nextpas.core.simd.intrinsics.aes.pas": [
         "NEXTPAS_SIMD_TEST_FORCE_NONX86_AES_FAILCLOSE",
         "test-only non-x86 AES fail-close hook",
-    ],
-    "tests/nextpas.core.simd.intrinsics.experimental/BuildOrTest.sh": [
-        "check_sha_default_failclose",
-        "check_aeskeygenassist_unsupported_failclose",
-        "check_aes_forced_nonx86_import_failclose",
-        "check_aes_nonx86_import_failclose",
-        "SHA-DEFAULT-FAILCLOSE",
-        "AESKEYGENASSIST-UNSUPPORTED-FAILCLOSE",
-        "AES-FORCED-NONX86-IMPORT-FAILCLOSE",
-        "AES-NONX86-IMPORT-FAILCLOSE",
-        "-dNEXTPAS_SIMD_TEST_FORCE_NONX86_AES_FAILCLOSE",
-        "expected exit 217",
-    ],
-    "tests/nextpas.core.simd.intrinsics.experimental/test_sha_default_failclose.pas": [
-        "sha_sha1msg1_epu32",
-    ],
-    "tests/nextpas.core.simd.intrinsics.experimental/test_aeskeygenassist_unsupported_failclose.pas": [
-        "aes_aeskeygenassist_si128",
-        "$7F",
-    ],
-    "tests/nextpas.core.simd.intrinsics.experimental/test_aes_nonx86_import_failclose.pas": [
-        "non-x86 import/fail-close probe",
-        "nextpas.core.simd.intrinsics.aes",
-        "aes_aesenc_si128",
     ],
     "tests/nextpas.core.simd/docker/run_multiarch_qemu.sh": [
         "BuildOrTest.sh nonx86-aes-import-failclose",
@@ -304,25 +184,11 @@ EXPERIMENTAL_RUNNER_FAIL_CLOSE_TOKENS = {
         "forced non-x86 AES import/fail-close",
         "not real non-x86 runtime evidence",
     ],
-    "docs/simd/GOAL_TREE.md": [
-        "forced non-x86 AES import/fail-close",
-        "not non-x86 runtime evidence",
-    ],
-    "docs/simd/checklist.md": [
-        "forced non-x86 AES import/fail-close",
-        "not real non-x86 runtime evidence",
-    ],
-    "docs/simd/closeout.md": [
-        "forced non-x86 AES import/fail-close",
-        "not real non-x86 runtime evidence",
-    ],
 }
 FORBIDDEN_DEFAULT_DEFINE_PATTERNS = [
     r"(?i)-dNEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS\b",
     r"(?i)\{\$DEFINE\s+NEXTPAS_SIMD_EXPERIMENTAL_INTRINSICS\}",
 ]
-FORCED_NONX86_AES_DEFINE = "-dNEXTPAS_SIMD_TEST_FORCE_NONX86_AES_FAILCLOSE"
-FORCED_NONX86_AES_RUNNER_FILE = "tests/nextpas.core.simd.intrinsics.experimental/BuildOrTest.sh"
 
 
 def _scan_leaks(a_repo_root: Path, a_entry_files: list[str], a_units: list[str]) -> dict[str, list[str]]:
@@ -370,53 +236,6 @@ def _scan_forbidden_default_defines(a_repo_root: Path, a_files: list[str], a_pat
     return sorted(l_hits)
 
 
-def _extract_shell_function(a_text: str, a_name: str) -> str:
-    l_match = re.search(
-        rf"(?ms)^{re.escape(a_name)}\(\)\s*\{{.*?(?=^[A-Za-z0-9_]+\(\)\s*\{{|\Z)",
-        a_text,
-    )
-    return l_match.group(0) if l_match else ""
-
-
-def _extract_shell_case_branch(a_text: str, a_label_pattern: str) -> str:
-    l_match = re.search(
-        rf"(?ms)^\s*{a_label_pattern}\)\s*.*?(?=^\s*[A-Za-z0-9_*|?-]+\)\s*$|^\s*esac\b)",
-        a_text,
-    )
-    return l_match.group(0) if l_match else ""
-
-
-def _scan_forced_nonx86_aes_define_scope(a_repo_root: Path) -> list[str]:
-    l_rel = FORCED_NONX86_AES_RUNNER_FILE
-    l_path = a_repo_root / l_rel
-    if not l_path.is_file():
-        return [l_rel]
-
-    l_text = l_path.read_text(encoding="utf-8", errors="ignore")
-    l_build_runner = _extract_shell_function(l_text, "build_runner")
-    l_check_runner = _extract_shell_function(l_text, "check_aes_forced_nonx86_import_failclose")
-    l_probe_action_branch = _extract_shell_case_branch(l_text, "nonx86-aes-import-failclose")
-    l_test_branch = _extract_shell_case_branch(l_text, r"test\|test-all")
-    l_define_count = l_text.count(FORCED_NONX86_AES_DEFINE)
-    l_scoped_define_count = l_check_runner.count(FORCED_NONX86_AES_DEFINE)
-    l_issues: list[str] = []
-
-    if FORCED_NONX86_AES_DEFINE in l_build_runner:
-        l_issues.append(f"{l_rel}: force define must not be in build_runner")
-    if l_define_count != 1:
-        l_issues.append(f"{l_rel}: force define must appear exactly once")
-    if l_define_count != l_scoped_define_count:
-        l_issues.append(f"{l_rel}: force define appears outside AES non-x86 probe")
-    if FORCED_NONX86_AES_DEFINE not in l_check_runner:
-        l_issues.append(f"{l_rel}: force define must stay scoped to AES non-x86 probe")
-    if "check_aes_nonx86_import_failclose" not in l_probe_action_branch:
-        l_issues.append(f"{l_rel}: nonx86-aes-import-failclose action must call AES non-x86 probe")
-    if "check_aes_nonx86_import_failclose" not in l_test_branch:
-        l_issues.append(f"{l_rel}: test/test-all must include AES non-x86 probe")
-
-    return sorted(l_issues)
-
-
 def _scan_x86_only_runtime_fail_close_markers(a_repo_root: Path, a_files: list[str], a_token: str) -> list[str]:
     l_missing: list[str] = []
     for l_rel in a_files:
@@ -440,22 +259,6 @@ def _scan_required_runtime_fail_close_tokens(a_repo_root: Path, a_file_tokens: d
         l_text = l_path.read_text(encoding="utf-8", errors="ignore").lower()
         if l_token not in l_text:
             l_missing.append(l_rel)
-    return sorted(l_missing)
-
-
-def _scan_required_test_runtime_guard_tokens(a_repo_root: Path, a_file_tokens: dict[str, list[str]]) -> list[str]:
-    l_missing: list[str] = []
-    for l_rel, l_tokens in a_file_tokens.items():
-        l_path = a_repo_root / l_rel
-        if not l_path.is_file():
-            l_missing.append(l_rel)
-            continue
-        l_text = l_path.read_text(encoding="utf-8", errors="ignore")
-        l_text_lower = l_text.lower()
-        for l_token in l_tokens:
-            if l_token.lower() not in l_text_lower:
-                l_missing.append(l_rel)
-                break
     return sorted(l_missing)
 
 
@@ -1033,27 +836,19 @@ def _render_summary_line(a_result: dict[str, Any]) -> str:
         f"missing_cross_host_opt_in={a_result['missing_cross_host_opt_in']} "
         f"missing_hold_runtime_fail_close={a_result['missing_hold_runtime_fail_close']} "
         f"missing_qualification_runtime_fail_close={a_result['missing_qualification_runtime_fail_close']} "
-        f"missing_test_runtime_guards={a_result['missing_test_runtime_guards']} "
         f"missing_sha_code_tokens={a_result['missing_sha_code_tokens']} "
         f"sha_public_asm_functions={a_result['sha_public_asm_functions']} "
         f"sha_raw_constref_missing={a_result['sha_raw_constref_missing']} "
         f"missing_aesenc_code_tokens={a_result['missing_aesenc_code_tokens']} "
-        f"missing_aesenc_semantic_vector={a_result['missing_aesenc_semantic_vector']} "
         f"missing_aesenclast_code_tokens={a_result['missing_aesenclast_code_tokens']} "
-        f"missing_aesenclast_semantic_vector={a_result['missing_aesenclast_semantic_vector']} "
         f"missing_aesdec_code_tokens={a_result['missing_aesdec_code_tokens']} "
-        f"missing_aesdec_semantic_vector={a_result['missing_aesdec_semantic_vector']} "
         f"missing_aesdeclast_code_tokens={a_result['missing_aesdeclast_code_tokens']} "
-        f"missing_aesdeclast_semantic_vector={a_result['missing_aesdeclast_semantic_vector']} "
         f"missing_aeskeygenassist_code_tokens={a_result['missing_aeskeygenassist_code_tokens']} "
-        f"missing_aeskeygenassist_semantic_vector={a_result['missing_aeskeygenassist_semantic_vector']} "
         f"missing_aesimc_code_tokens={a_result['missing_aesimc_code_tokens']} "
-        f"missing_aesimc_semantic_vector={a_result['missing_aesimc_semantic_vector']} "
         f"missing_aes_hardware_boundaries={a_result['missing_aes_hardware_boundaries']} "
         f"forbidden_aes_completion_claims={a_result['forbidden_aes_completion_claims']} "
         f"missing_semantic_boundaries={a_result['missing_semantic_boundaries']} "
-        f"missing_runner_fail_close={a_result['missing_runner_fail_close']} "
-        f"forced_nonx86_aes_define_scope_issues={a_result['forced_nonx86_aes_define_scope_issues']}"
+        f"missing_runner_fail_close={a_result['missing_runner_fail_close']}"
     )
 
 
@@ -1069,27 +864,19 @@ def _print_human_result(a_result: dict[str, Any]) -> None:
     print(f"  - missing cross-host opt-in:  {a_result['missing_cross_host_opt_in']}")
     print(f"  - missing hold fail-close:    {a_result['missing_hold_runtime_fail_close']}")
     print(f"  - missing qualification fail-close: {a_result['missing_qualification_runtime_fail_close']}")
-    print(f"  - missing test runtime guards: {a_result['missing_test_runtime_guards']}")
     print(f"  - missing SHA code tokens:    {a_result['missing_sha_code_tokens']}")
     print(f"  - SHA public asm functions:   {a_result['sha_public_asm_functions']}")
     print(f"  - SHA raw constref missing:   {a_result['sha_raw_constref_missing']}")
     print(f"  - missing AESENC code tokens: {a_result['missing_aesenc_code_tokens']}")
-    print(f"  - missing AESENC vector:      {a_result['missing_aesenc_semantic_vector']}")
     print(f"  - missing AESENCLAST code tokens: {a_result['missing_aesenclast_code_tokens']}")
-    print(f"  - missing AESENCLAST vector:      {a_result['missing_aesenclast_semantic_vector']}")
     print(f"  - missing AESDEC code tokens: {a_result['missing_aesdec_code_tokens']}")
-    print(f"  - missing AESDEC vector:      {a_result['missing_aesdec_semantic_vector']}")
     print(f"  - missing AESDECLAST code tokens: {a_result['missing_aesdeclast_code_tokens']}")
-    print(f"  - missing AESDECLAST vector:      {a_result['missing_aesdeclast_semantic_vector']}")
     print(f"  - missing AESKEYGENASSIST code tokens: {a_result['missing_aeskeygenassist_code_tokens']}")
-    print(f"  - missing AESKEYGENASSIST vector:      {a_result['missing_aeskeygenassist_semantic_vector']}")
     print(f"  - missing AESIMC code tokens: {a_result['missing_aesimc_code_tokens']}")
-    print(f"  - missing AESIMC vector:      {a_result['missing_aesimc_semantic_vector']}")
     print(f"  - missing AES hardware boundaries: {a_result['missing_aes_hardware_boundaries']}")
     print(f"  - forbidden AES completion claims: {a_result['forbidden_aes_completion_claims']}")
     print(f"  - missing semantic boundaries: {a_result['missing_semantic_boundaries']}")
     print(f"  - missing runner fail-close:  {a_result['missing_runner_fail_close']}")
-    print(f"  - forced non-x86 AES define scope issues: {a_result['forced_nonx86_aes_define_scope_issues']}")
 
     if a_result["leaks"]:
         print("[EXPERIMENTAL] Leaks found:")
@@ -1127,11 +914,6 @@ def _print_human_result(a_result: dict[str, Any]) -> None:
         for l_file in a_result["missing_qualification_runtime_fail_close_files"]:
             print(f"  - {l_file}")
 
-    if a_result["missing_test_runtime_guard_files"]:
-        print("[EXPERIMENTAL] Missing experimental test runtime guard marker in:")
-        for l_file in a_result["missing_test_runtime_guard_files"]:
-            print(f"  - {l_file}")
-
     if a_result["missing_sha_code_token_list"]:
         print("[EXPERIMENTAL] Missing SHA source fail-close code tokens:")
         for l_token in a_result["missing_sha_code_token_list"]:
@@ -1152,60 +934,30 @@ def _print_human_result(a_result: dict[str, Any]) -> None:
         for l_token in a_result["missing_aesenc_code_token_list"]:
             print(f"  - {l_token}")
 
-    if a_result["missing_aesenc_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESENC semantic vector evidence in:")
-        for l_file in a_result["missing_aesenc_semantic_vector_files"]:
-            print(f"  - {l_file}")
-
     if a_result["missing_aesenclast_code_token_list"]:
         print("[EXPERIMENTAL] Missing AESENCLAST source code tokens:")
         for l_token in a_result["missing_aesenclast_code_token_list"]:
             print(f"  - {l_token}")
-
-    if a_result["missing_aesenclast_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESENCLAST semantic vector evidence in:")
-        for l_file in a_result["missing_aesenclast_semantic_vector_files"]:
-            print(f"  - {l_file}")
 
     if a_result["missing_aesdec_code_token_list"]:
         print("[EXPERIMENTAL] Missing AESDEC source code tokens:")
         for l_token in a_result["missing_aesdec_code_token_list"]:
             print(f"  - {l_token}")
 
-    if a_result["missing_aesdec_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESDEC semantic vector evidence in:")
-        for l_file in a_result["missing_aesdec_semantic_vector_files"]:
-            print(f"  - {l_file}")
-
     if a_result["missing_aesdeclast_code_token_list"]:
         print("[EXPERIMENTAL] Missing AESDECLAST source code tokens:")
         for l_token in a_result["missing_aesdeclast_code_token_list"]:
             print(f"  - {l_token}")
-
-    if a_result["missing_aesdeclast_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESDECLAST semantic vector evidence in:")
-        for l_file in a_result["missing_aesdeclast_semantic_vector_files"]:
-            print(f"  - {l_file}")
 
     if a_result["missing_aeskeygenassist_code_token_list"]:
         print("[EXPERIMENTAL] Missing AESKEYGENASSIST source code tokens:")
         for l_token in a_result["missing_aeskeygenassist_code_token_list"]:
             print(f"  - {l_token}")
 
-    if a_result["missing_aeskeygenassist_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESKEYGENASSIST semantic vector evidence in:")
-        for l_file in a_result["missing_aeskeygenassist_semantic_vector_files"]:
-            print(f"  - {l_file}")
-
     if a_result["missing_aesimc_code_token_list"]:
         print("[EXPERIMENTAL] Missing AESIMC source code tokens:")
         for l_token in a_result["missing_aesimc_code_token_list"]:
             print(f"  - {l_token}")
-
-    if a_result["missing_aesimc_semantic_vector_files"]:
-        print("[EXPERIMENTAL] Missing AESIMC semantic vector evidence in:")
-        for l_file in a_result["missing_aesimc_semantic_vector_files"]:
-            print(f"  - {l_file}")
 
     if a_result["missing_aes_hardware_boundary_files"]:
         print("[EXPERIMENTAL] Missing AES hardware semantic-boundary wording in:")
@@ -1227,11 +979,6 @@ def _print_human_result(a_result: dict[str, Any]) -> None:
         for l_file in a_result["missing_runner_fail_close_files"]:
             print(f"  - {l_file}")
 
-    if a_result["forced_nonx86_aes_define_scope_issue_list"]:
-        print("[EXPERIMENTAL] Forced non-x86 AES define scope issues:")
-        for l_issue in a_result["forced_nonx86_aes_define_scope_issue_list"]:
-            print(f"  - {l_issue}")
-
     if (
         (not a_result["leaks"])
         and (not a_result["missing_guard_files"])
@@ -1240,27 +987,19 @@ def _print_human_result(a_result: dict[str, Any]) -> None:
         and (not a_result["missing_cross_host_opt_in_files"])
         and (not a_result["missing_hold_runtime_fail_close_files"])
         and (not a_result["missing_qualification_runtime_fail_close_files"])
-        and (not a_result["missing_test_runtime_guard_files"])
         and (not a_result["missing_sha_code_token_list"])
         and (not a_result["sha_public_asm_function_list"])
         and (not a_result["sha_raw_constref_missing_list"])
         and (not a_result["missing_aesenc_code_token_list"])
-        and (not a_result["missing_aesenc_semantic_vector_files"])
         and (not a_result["missing_aesenclast_code_token_list"])
-        and (not a_result["missing_aesenclast_semantic_vector_files"])
         and (not a_result["missing_aesdec_code_token_list"])
-        and (not a_result["missing_aesdec_semantic_vector_files"])
         and (not a_result["missing_aesdeclast_code_token_list"])
-        and (not a_result["missing_aesdeclast_semantic_vector_files"])
         and (not a_result["missing_aeskeygenassist_code_token_list"])
-        and (not a_result["missing_aeskeygenassist_semantic_vector_files"])
         and (not a_result["missing_aesimc_code_token_list"])
-        and (not a_result["missing_aesimc_semantic_vector_files"])
         and (not a_result["missing_aes_hardware_boundary_files"])
         and (not a_result["forbidden_aes_completion_claim_files"])
         and (not a_result["missing_semantic_boundary_files"])
         and (not a_result["missing_runner_fail_close_files"])
-        and (not a_result["forced_nonx86_aes_define_scope_issue_list"])
     ):
         print("[EXPERIMENTAL] OK (no experimental units in default entry chain)")
 
@@ -1309,10 +1048,6 @@ def main() -> int:
         a_repo_root=l_repo_root,
         a_file_tokens=QUALIFICATION_RUNTIME_FAIL_CLOSE_TOKENS,
     )
-    l_missing_test_runtime_guard_files = _scan_required_test_runtime_guard_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=EXPERIMENTAL_TEST_RUNTIME_GUARD_TOKENS,
-    )
     l_sha_source_contract = _scan_sha_source_contract(a_repo_root=l_repo_root)
     l_aesenc_source_contract = _scan_aesenc_source_contract(a_repo_root=l_repo_root)
     l_aesenclast_source_contract = _scan_aesenclast_source_contract(a_repo_root=l_repo_root)
@@ -1320,30 +1055,6 @@ def main() -> int:
     l_aesdeclast_source_contract = _scan_aesdeclast_source_contract(a_repo_root=l_repo_root)
     l_aeskeygenassist_source_contract = _scan_aeskeygenassist_source_contract(a_repo_root=l_repo_root)
     l_aesimc_source_contract = _scan_aesimc_source_contract(a_repo_root=l_repo_root)
-    l_missing_aesenc_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESENC_SEMANTIC_VECTOR_TOKENS,
-    )
-    l_missing_aesenclast_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESENCLAST_SEMANTIC_VECTOR_TOKENS,
-    )
-    l_missing_aesdec_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESDEC_SEMANTIC_VECTOR_TOKENS,
-    )
-    l_missing_aesdeclast_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESDECLAST_SEMANTIC_VECTOR_TOKENS,
-    )
-    l_missing_aeskeygenassist_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESKEYGENASSIST_SEMANTIC_VECTOR_TOKENS,
-    )
-    l_missing_aesimc_semantic_vector_files = _scan_required_text_tokens(
-        a_repo_root=l_repo_root,
-        a_file_tokens=AESIMC_SEMANTIC_VECTOR_TOKENS,
-    )
     l_missing_aes_hardware_boundary_files = _scan_required_text_tokens(
         a_repo_root=l_repo_root,
         a_file_tokens=AES_HARDWARE_SEMANTIC_BOUNDARY_TOKENS,
@@ -1360,7 +1071,6 @@ def main() -> int:
         a_repo_root=l_repo_root,
         a_file_tokens=EXPERIMENTAL_RUNNER_FAIL_CLOSE_TOKENS,
     )
-    l_forced_nonx86_aes_define_scope_issues = _scan_forced_nonx86_aes_define_scope(a_repo_root=l_repo_root)
 
     l_result: dict[str, Any] = {
         "ok": (
@@ -1371,7 +1081,6 @@ def main() -> int:
             and (len(l_missing_cross_host_opt_in_files) == 0)
             and (len(l_missing_hold_runtime_fail_close_files) == 0)
             and (len(l_missing_qualification_runtime_fail_close_files) == 0)
-            and (len(l_missing_test_runtime_guard_files) == 0)
             and (len(l_sha_source_contract["missing_code_tokens"]) == 0)
             and (len(l_sha_source_contract["public_assembler_functions"]) == 0)
             and (len(l_sha_source_contract["missing_raw_constref_signatures"]) == 0)
@@ -1381,17 +1090,10 @@ def main() -> int:
             and (len(l_aesdeclast_source_contract["missing_code_tokens"]) == 0)
             and (len(l_aeskeygenassist_source_contract["missing_code_tokens"]) == 0)
             and (len(l_aesimc_source_contract["missing_code_tokens"]) == 0)
-            and (len(l_missing_aesenc_semantic_vector_files) == 0)
-            and (len(l_missing_aesenclast_semantic_vector_files) == 0)
-            and (len(l_missing_aesdec_semantic_vector_files) == 0)
-            and (len(l_missing_aesdeclast_semantic_vector_files) == 0)
-            and (len(l_missing_aeskeygenassist_semantic_vector_files) == 0)
-            and (len(l_missing_aesimc_semantic_vector_files) == 0)
             and (len(l_missing_aes_hardware_boundary_files) == 0)
             and (len(l_forbidden_aes_completion_claim_files) == 0)
             and (len(l_missing_semantic_boundary_files) == 0)
             and (len(l_missing_runner_fail_close_files) == 0)
-            and (len(l_forced_nonx86_aes_define_scope_issues) == 0)
         ),
         "experimental_units": len(EXPERIMENTAL_UNITS),
         "entry_files": len(l_entry_files),
@@ -1403,27 +1105,19 @@ def main() -> int:
         "missing_cross_host_opt_in": len(l_missing_cross_host_opt_in_files),
         "missing_hold_runtime_fail_close": len(l_missing_hold_runtime_fail_close_files),
         "missing_qualification_runtime_fail_close": len(l_missing_qualification_runtime_fail_close_files),
-        "missing_test_runtime_guards": len(l_missing_test_runtime_guard_files),
         "missing_sha_code_tokens": len(l_sha_source_contract["missing_code_tokens"]),
         "sha_public_asm_functions": len(l_sha_source_contract["public_assembler_functions"]),
         "sha_raw_constref_missing": len(l_sha_source_contract["missing_raw_constref_signatures"]),
         "missing_aesenc_code_tokens": len(l_aesenc_source_contract["missing_code_tokens"]),
-        "missing_aesenc_semantic_vector": len(l_missing_aesenc_semantic_vector_files),
         "missing_aesenclast_code_tokens": len(l_aesenclast_source_contract["missing_code_tokens"]),
-        "missing_aesenclast_semantic_vector": len(l_missing_aesenclast_semantic_vector_files),
         "missing_aesdec_code_tokens": len(l_aesdec_source_contract["missing_code_tokens"]),
-        "missing_aesdec_semantic_vector": len(l_missing_aesdec_semantic_vector_files),
         "missing_aesdeclast_code_tokens": len(l_aesdeclast_source_contract["missing_code_tokens"]),
-        "missing_aesdeclast_semantic_vector": len(l_missing_aesdeclast_semantic_vector_files),
         "missing_aeskeygenassist_code_tokens": len(l_aeskeygenassist_source_contract["missing_code_tokens"]),
-        "missing_aeskeygenassist_semantic_vector": len(l_missing_aeskeygenassist_semantic_vector_files),
         "missing_aesimc_code_tokens": len(l_aesimc_source_contract["missing_code_tokens"]),
-        "missing_aesimc_semantic_vector": len(l_missing_aesimc_semantic_vector_files),
         "missing_aes_hardware_boundaries": len(l_missing_aes_hardware_boundary_files),
         "forbidden_aes_completion_claims": len(l_forbidden_aes_completion_claim_files),
         "missing_semantic_boundaries": len(l_missing_semantic_boundary_files),
         "missing_runner_fail_close": len(l_missing_runner_fail_close_files),
-        "forced_nonx86_aes_define_scope_issues": len(l_forced_nonx86_aes_define_scope_issues),
         "entry_file_list": l_entry_files,
         "leaks": l_leaks,
         "leaked_unit_list": l_leaked_units,
@@ -1433,27 +1127,19 @@ def main() -> int:
         "missing_cross_host_opt_in_files": l_missing_cross_host_opt_in_files,
         "missing_hold_runtime_fail_close_files": l_missing_hold_runtime_fail_close_files,
         "missing_qualification_runtime_fail_close_files": l_missing_qualification_runtime_fail_close_files,
-        "missing_test_runtime_guard_files": l_missing_test_runtime_guard_files,
         "missing_sha_code_token_list": l_sha_source_contract["missing_code_tokens"],
         "sha_public_asm_function_list": l_sha_source_contract["public_assembler_functions"],
         "sha_raw_constref_missing_list": l_sha_source_contract["missing_raw_constref_signatures"],
         "missing_aesenc_code_token_list": l_aesenc_source_contract["missing_code_tokens"],
-        "missing_aesenc_semantic_vector_files": l_missing_aesenc_semantic_vector_files,
         "missing_aesenclast_code_token_list": l_aesenclast_source_contract["missing_code_tokens"],
-        "missing_aesenclast_semantic_vector_files": l_missing_aesenclast_semantic_vector_files,
         "missing_aesdec_code_token_list": l_aesdec_source_contract["missing_code_tokens"],
-        "missing_aesdec_semantic_vector_files": l_missing_aesdec_semantic_vector_files,
         "missing_aesdeclast_code_token_list": l_aesdeclast_source_contract["missing_code_tokens"],
-        "missing_aesdeclast_semantic_vector_files": l_missing_aesdeclast_semantic_vector_files,
         "missing_aeskeygenassist_code_token_list": l_aeskeygenassist_source_contract["missing_code_tokens"],
-        "missing_aeskeygenassist_semantic_vector_files": l_missing_aeskeygenassist_semantic_vector_files,
         "missing_aesimc_code_token_list": l_aesimc_source_contract["missing_code_tokens"],
-        "missing_aesimc_semantic_vector_files": l_missing_aesimc_semantic_vector_files,
         "missing_aes_hardware_boundary_files": l_missing_aes_hardware_boundary_files,
         "forbidden_aes_completion_claim_files": l_forbidden_aes_completion_claim_files,
         "missing_semantic_boundary_files": l_missing_semantic_boundary_files,
         "missing_runner_fail_close_files": l_missing_runner_fail_close_files,
-        "forced_nonx86_aes_define_scope_issue_list": l_forced_nonx86_aes_define_scope_issues,
     }
 
     if l_args.json:

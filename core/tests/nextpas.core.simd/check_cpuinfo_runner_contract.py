@@ -17,21 +17,17 @@ CPUINFO_X86_SHELL = ROOT / "tests" / "nextpas.core.simd.cpuinfo.x86" / "BuildOrT
 SIMD_BATCH = ROOT / "tests" / "nextpas.core.simd" / "buildOrTest.bat"
 QEMU_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "docker" / "run_multiarch_qemu.sh"
 WINDOWS_EVIDENCE_BATCH = ROOT / "tests" / "nextpas.core.simd" / "collect_windows_b07_evidence.bat"
-CPUINFO_DOC = ROOT / "docs" / "simd" / "cpuinfo.md"
 
-CLOSEOUT_DOC = ROOT / "docs" / "simd" / "closeout.md"
-CHECKLIST_DOC = ROOT / "docs" / "simd" / "checklist.md"
+# docs/simd/{cpuinfo,closeout,checklist,intrinsics.avx2}.md 已在 9ab2e83fc 文档重组中删除；
+# 针对它们的 doc 侧检查一并移除，runner/脚本侧 source contract 与存活文档的
+# stale-token 扫描继续守护 cpuinfo.x86 归一化事实。
 MAINTENANCE_DOC = ROOT / "docs" / "simd" / "maintenance.md"
-AVX2_DOC = ROOT / "docs" / "simd" / "intrinsics.avx2.md"
 RC_CHECKLIST_DOC = ROOT / "tests" / "nextpas.core.simd" / "docs" / "simd_release_candidate_checklist.md"
 COMPLETENESS_DOC = ROOT / "tests" / "nextpas.core.simd" / "docs" / "simd_completeness_matrix.md"
 GATE_SUMMARY_SAMPLE = ROOT / "tests" / "nextpas.core.simd" / "generate_gate_summary_sample.py"
 
 ACTIVE_DOCS = (
-    CLOSEOUT_DOC,
-    CHECKLIST_DOC,
     MAINTENANCE_DOC,
-    AVX2_DOC,
     RC_CHECKLIST_DOC,
     COMPLETENESS_DOC,
 )
@@ -55,11 +51,7 @@ def build_result() -> dict[str, Any]:
         SIMD_BATCH,
         QEMU_RUNNER,
         WINDOWS_EVIDENCE_BATCH,
-        CPUINFO_DOC,
-        CLOSEOUT_DOC,
-        CHECKLIST_DOC,
         MAINTENANCE_DOC,
-        AVX2_DOC,
         RC_CHECKLIST_DOC,
         COMPLETENESS_DOC,
         GATE_SUMMARY_SAMPLE,
@@ -80,11 +72,7 @@ def build_result() -> dict[str, Any]:
     l_cpuinfo_shell = read_text(CPUINFO_SHELL)
     l_qemu_runner = read_text(QEMU_RUNNER)
     l_windows_evidence = read_text(WINDOWS_EVIDENCE_BATCH)
-    l_cpuinfo_doc = read_text(CPUINFO_DOC)
-    l_closeout = read_text(CLOSEOUT_DOC)
-    l_checklist = read_text(CHECKLIST_DOC)
     l_maintenance = read_text(MAINTENANCE_DOC)
-    l_avx2 = read_text(AVX2_DOC)
 
     l_missing_doc_refs = [
         (CPUINFO_X86_SHELL, "tests/nextpas.core.simd.cpuinfo.x86/BuildOrTest.sh"),
@@ -130,19 +118,6 @@ def build_result() -> dict[str, Any]:
                 l_issues,
                 QEMU_RUNNER,
                 f"qemu runner missing cpuinfo shell-runner command `{l_required}`",
-            )
-
-    for l_required in (
-        "bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh test --suite=TTestCase_PlatformSpecific",
-        "bash tests/nextpas.core.simd.cpuinfo/BuildOrTest.sh log-layout-check",
-        "bash tests/nextpas.core.simd/BuildOrTest.sh qemu-cpuinfo-nonx86-evidence",
-    ):
-        l_checks += 1
-        if l_required not in l_cpuinfo_doc:
-            add_issue(
-                l_issues,
-                CPUINFO_DOC,
-                f"cpuinfo doc missing active shell-runner entry `{l_required}`",
             )
 
     for l_forbidden in (
@@ -195,48 +170,12 @@ def build_result() -> dict[str, Any]:
             )
 
     l_checks += 1
-    if "make -C core/tests/nextpas.core.simd cpuinfo-focused" not in l_closeout:
-        add_issue(
-            l_issues,
-            CLOSEOUT_DOC,
-            "closeout guide must point Linux CPUInfo verification at `make -C core/tests/nextpas.core.simd cpuinfo-focused`",
-        )
-
-    l_checks += 1
-    if r"tests\nextpas.core.simd.cpuinfo\buildOrTest.bat test --suite=TTestCase_Global" not in l_closeout:
-        add_issue(
-            l_issues,
-            CLOSEOUT_DOC,
-            "closeout guide must point Windows x86/global CPUInfo verification at the cpuinfo batch runner",
-        )
-
-    l_checks += 1
-    if "`cpuinfo` / `cpuinfo.x86` / `publicabi` / `nonx86.optin`" in l_checklist:
-        add_issue(
-            l_issues,
-            CHECKLIST_DOC,
-            "shell checklist must not describe cpuinfo.x86 as a shell sub-runner",
-        )
-
-    l_checks += 1
     if "`cpuinfo`、`cpuinfo.x86` 与 `publicabi` 子 runner" in l_maintenance:
         add_issue(
             l_issues,
             MAINTENANCE_DOC,
             "maintenance guide must not describe cpuinfo.x86 as a shell sub-runner",
         )
-
-    for l_forbidden in (
-        "nextpas.core.simd.cpuinfo.x86",
-        "`cpuinfo`/`cpuinfo.x86` runner",
-    ):
-        l_checks += 1
-        if l_forbidden in l_avx2:
-            add_issue(
-                l_issues,
-                AVX2_DOC,
-                f"AVX2 doc must not describe stale cpuinfo.x86 runner token `{l_forbidden}`",
-            )
 
     for l_doc in (RC_CHECKLIST_DOC, COMPLETENESS_DOC):
         l_checks += 1

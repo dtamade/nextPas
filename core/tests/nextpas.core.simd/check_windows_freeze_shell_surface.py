@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SHELL_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "BuildOrTest.sh"
 BATCH_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "buildOrTest.bat"
 RUNBOOK = ROOT / "tests" / "nextpas.core.simd" / "docs" / "windows_b07_closeout_runbook.md"
-CLOSEOUT_DOC = ROOT / "docs" / "simd" / "closeout.md"
+# docs/simd/closeout.md 已在 9ab2e83fc 文档重组中删除；其"helpers 未恢复"诚实性声明
+# 由 runner/runbook/RC checklist 侧片段继续守护。
 CHECKLIST_DOC = ROOT / "tests" / "nextpas.core.simd" / "docs" / "simd_release_candidate_checklist.md"
 SCRIPT_MANIFEST = ROOT / "tests" / "nextpas.core.simd" / "scripts" / "SCRIPT_MANIFEST.csv"
 
@@ -92,21 +93,6 @@ REQUIRED_RUNBOOK_FRAGMENTS = [
     '`buildOrTest.bat evidence-win-verify`',
 ]
 
-REQUIRED_CLOSEOUT_FRAGMENTS = [
-    'Current worktree does not restore the historical Windows/GH closeout shell helpers.',
-    '`BuildOrTest.sh closeout-release`',
-    '`BuildOrTest.sh win-evidence-preflight`',
-    '`BuildOrTest.sh win-evidence-via-gh`',
-    '`BuildOrTest.sh finalize-win-evidence`',
-    '`BuildOrTest.sh win-closeout-snippets`',
-    '`BuildOrTest.sh win-closeout-finalize`',
-    '`BuildOrTest.sh evidence-linux`',
-    '`BuildOrTest.sh freeze-status`',
-    '`BuildOrTest.sh freeze-status-linux`',
-    '`BuildOrTest.sh gate-summary-selfcheck`',
-    '`BuildOrTest.sh win-closeout-3cmd`',
-]
-
 REQUIRED_CHECKLIST_FRAGMENTS = [
     'Historical Windows/GH closeout shell helpers are not restored in this worktree.',
     '`BuildOrTest.sh closeout-release`',
@@ -146,7 +132,6 @@ def build_result() -> dict[str, Any]:
         SHELL_RUNNER,
         BATCH_RUNNER,
         RUNBOOK,
-        CLOSEOUT_DOC,
         CHECKLIST_DOC,
         SCRIPT_MANIFEST,
     ):
@@ -164,7 +149,6 @@ def build_result() -> dict[str, Any]:
     l_shell_source = read_text(SHELL_RUNNER)
     l_batch_source = read_text(BATCH_RUNNER)
     l_runbook_source = read_text(RUNBOOK)
-    l_closeout_source = read_text(CLOSEOUT_DOC)
     l_checklist_source = read_text(CHECKLIST_DOC)
 
     for l_fragment in REQUIRED_SHELL_FRAGMENTS:
@@ -200,15 +184,6 @@ def build_result() -> dict[str, Any]:
             RUNBOOK,
             l_fragment,
             f"Windows runbook missing current worktree truth fragment: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in REQUIRED_CLOSEOUT_FRAGMENTS:
-        l_checks += require_fragment(
-            l_closeout_source,
-            CLOSEOUT_DOC,
-            l_fragment,
-            f"closeout doc missing current worktree truth fragment: {l_fragment}",
             l_issues,
         )
 

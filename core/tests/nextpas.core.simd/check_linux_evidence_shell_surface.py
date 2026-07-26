@@ -14,9 +14,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 SHELL_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "BuildOrTest.sh"
 WORKFLOW_DOC = ROOT / "tests" / "nextpas.core.simd" / "docs" / "intrinsics_coverage_workflow.md"
-CHECKLIST_DOC = ROOT / "docs" / "simd" / "checklist.md"
-CLOSEOUT_DOC = ROOT / "docs" / "simd" / "closeout.md"
 SCRIPT_MANIFEST = ROOT / "tests" / "nextpas.core.simd" / "scripts" / "SCRIPT_MANIFEST.csv"
+
+# docs/simd/checklist.md 与 docs/simd/closeout.md 已在 9ab2e83fc 文档重组中删除；
+# 其中的 Linux shell surface 诚实性声明由 runner/workflow 侧片段继续守护。
 
 REQUIRED_SHELL_FRAGMENTS = [
     "coverage)",
@@ -70,46 +71,6 @@ FORBIDDEN_WORKFLOW_FRAGMENTS = [
     '当某一步失败时，会记录失败步骤与错误码',
 ]
 
-FORBIDDEN_CHECKLIST_FRAGMENTS = [
-    'FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh gate\n',
-    'SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict\n',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh evidence-linux',
-]
-
-FORBIDDEN_CLOSEOUT_FRAGMENTS = [
-    'FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh gate\n',
-    'SIMD_GATE_REQUIRE_WINDOWS_EVIDENCE=1 bash tests/nextpas.core.simd/BuildOrTest.sh gate',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh gate-strict\n',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh evidence-linux',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh adapter-sync\n',
-    'bash tests/nextpas.core.simd/BuildOrTest.sh experimental-intrinsics\n',
-    '或者走 `evidence-linux` 这条固定会把 perf 带进去的证据链',
-    '它也会把 `wiring-sync`、`interface-completeness`、`adapter-sync` 这类结构一致性检查一起带上',
-]
-
-REQUIRED_CHECKLIST_FRAGMENTS = [
-    '当前 worktree 的 shell runner 已恢复 `coverage`，但 historical Linux gate/closeout mainline 仍未恢复。',
-    '`BuildOrTest.sh coverage`',
-    '`BuildOrTest.sh wiring-sync`',
-    '`BuildOrTest.sh nonx86-ieee754`',
-    '`BuildOrTest.sh perf-smoke`',
-    '`BuildOrTest.sh gate`',
-    '`BuildOrTest.sh gate-strict`',
-    '`BuildOrTest.sh evidence-linux`',
-]
-
-REQUIRED_CLOSEOUT_FRAGMENTS = [
-    'Current worktree restores the Linux shell `coverage` helper, but the historical Linux shell `gate` / `gate-strict` / `evidence-linux` mainline remains unavailable.',
-    '`BuildOrTest.sh coverage`',
-    '`BuildOrTest.sh wiring-sync`',
-    '`BuildOrTest.sh nonx86-ieee754`',
-    '`BuildOrTest.sh perf-smoke`',
-    '`BuildOrTest.sh gate`',
-    '`BuildOrTest.sh gate-strict`',
-    '`BuildOrTest.sh evidence-linux`',
-]
-
 REQUIRED_MANIFEST_ROWS = {
     "collect_linux_simd_evidence.sh": "historical",
     "run_backend_benchmarks.sh": "active",
@@ -157,8 +118,6 @@ def build_result() -> dict[str, Any]:
     for l_path in (
         SHELL_RUNNER,
         WORKFLOW_DOC,
-        CHECKLIST_DOC,
-        CLOSEOUT_DOC,
         SCRIPT_MANIFEST,
     ):
         if not l_path.is_file():
@@ -174,8 +133,6 @@ def build_result() -> dict[str, Any]:
 
     l_shell_source = read_text(SHELL_RUNNER)
     l_workflow_source = read_text(WORKFLOW_DOC)
-    l_checklist_source = read_text(CHECKLIST_DOC)
-    l_closeout_source = read_text(CLOSEOUT_DOC)
 
     for l_fragment in REQUIRED_SHELL_FRAGMENTS:
         l_checks += require_fragment(
@@ -201,42 +158,6 @@ def build_result() -> dict[str, Any]:
             WORKFLOW_DOC,
             l_fragment,
             f"intrinsics workflow still cites unavailable dedicated SIMD workflow: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in REQUIRED_CHECKLIST_FRAGMENTS:
-        l_checks += require_fragment(
-            l_checklist_source,
-            CHECKLIST_DOC,
-            l_fragment,
-            f"checklist missing current Linux shell surface fragment: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in FORBIDDEN_CHECKLIST_FRAGMENTS:
-        l_checks += forbid_fragment(
-            l_checklist_source,
-            CHECKLIST_DOC,
-            l_fragment,
-            f"checklist still presents historical shell surface as a live command: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in REQUIRED_CLOSEOUT_FRAGMENTS:
-        l_checks += require_fragment(
-            l_closeout_source,
-            CLOSEOUT_DOC,
-            l_fragment,
-            f"closeout doc missing current Linux shell surface fragment: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in FORBIDDEN_CLOSEOUT_FRAGMENTS:
-        l_checks += forbid_fragment(
-            l_closeout_source,
-            CLOSEOUT_DOC,
-            l_fragment,
-            f"closeout doc still presents historical shell surface as a live command: {l_fragment}",
             l_issues,
         )
 

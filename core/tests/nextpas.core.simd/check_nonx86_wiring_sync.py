@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Check non-x86 wiring checklist consistency between:
+Check non-x86 wiring consistency between:
 1) shared helper slot list
 2) legacy wiring assertions
 3) grouped wiring assertions
-4) non-x86 interface checklist markdown markers
+
+docs/simd/checklist.md 标记腿已删除：该文档在 9ab2e83fc 文档重组中被删除，
+且现存 docs/simd 与 tests/nextpas.core.simd/docs 中对 wiring 标记零命中、
+无重定向目标；代码侧三方 slot 同步检查是本脚本的全部现存价值。
 """
 
 from __future__ import annotations
@@ -72,8 +75,6 @@ def evaluate_exit_code(result: dict[str, Any], strict_extra: bool) -> int:
         return 1
     if strict_extra and result["extra_in_grouped"]:
         return 1
-    if result["missing_markers"]:
-        return 1
     if not result["legacy_uses_shared_helper"]:
         return 1
     if not result["grouped_uses_shared_helper"]:
@@ -89,7 +90,6 @@ def render_summary_line(result: dict[str, Any], strict_extra: bool) -> str:
         f"helper={result['helper_count']} "
         f"missing={len(result['missing_in_grouped'])} "
         f"extra={len(result['extra_in_grouped'])} "
-        f"markers_missing={len(result['missing_markers'])} "
         f"strict_extra={1 if strict_extra else 0} "
         f"shared_legacy={1 if result['legacy_uses_shared_helper'] else 0} "
         f"shared_grouped={1 if result['grouped_uses_shared_helper'] else 0}"
@@ -124,11 +124,6 @@ def print_human_result(result: dict[str, Any], strict_extra: bool) -> None:
     if not result["grouped_uses_shared_helper"]:
         print(f"[WIRING-SYNC] Grouped method does not delegate to {HELPER_NAME}")
 
-    if result["missing_markers"]:
-        print("[WIRING-SYNC] Checklist missing markers:")
-        for marker in result["missing_markers"]:
-            print(f"  - {marker}")
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check non-x86 wiring sync")
@@ -136,34 +131,26 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON result")
     parser.add_argument("--summary-line", action="store_true", help="print one-line summary for gate logs")
     parser.add_argument("--testcase", default="tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas")
-    parser.add_argument("--checklist", default="docs/simd/checklist.md")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]
     testcase_path = repo_root / args.testcase
-    checklist_path = repo_root / args.checklist
 
-    if not testcase_path.exists() or not checklist_path.exists():
+    if not testcase_path.exists():
         error_result = {
             "ok": False,
             "error": "input-file-missing",
-            "testcase_exists": testcase_path.exists(),
-            "checklist_exists": checklist_path.exists(),
+            "testcase_exists": False,
             "testcase": str(testcase_path),
-            "checklist": str(checklist_path),
         }
         if args.json:
             print(json.dumps(error_result, ensure_ascii=False, sort_keys=True))
         else:
-            if not testcase_path.exists():
-                print(f"[WIRING-SYNC] Missing testcase: {testcase_path}")
-            if not checklist_path.exists():
-                print(f"[WIRING-SYNC] Missing checklist: {checklist_path}")
+            print(f"[WIRING-SYNC] Missing testcase: {testcase_path}")
         return 2
 
     try:
         testcase_text = testcase_path.read_text(encoding="utf-8")
-        checklist_text = checklist_path.read_text(encoding="utf-8")
 
         helper_body = extract_routine_block(testcase_text, HELPER_NAME)
         legacy_body = extract_routine_block(testcase_text, LEGACY_METHOD)
@@ -173,23 +160,6 @@ def main() -> int:
         legacy_slots, legacy_uses_shared_helper = parse_slots_from_method(legacy_body, helper_slots)
         grouped_slots, grouped_uses_shared_helper = parse_slots_from_method(grouped_body, helper_slots)
 
-        checklist_markers = {
-            "wiring_grouped_line": [
-                "Wiring grouped-batch assertions",
-                "Wiring 分组批量断言已落地",
-                "`Wiring` grouped-batch assertions",
-            ],
-            "wiring_grouped_method": ["Test_NonX86_DispatchTable_WiringChecklist_Grouped"],
-            "wiring_grouped_tag": ["WiringGrouped"],
-            "wiring_shared_helper": [HELPER_NAME],
-        }
-
-        missing_markers = [
-            name
-            for name, marker_candidates in checklist_markers.items()
-            if not any(marker in checklist_text for marker in marker_candidates)
-        ]
-
         result = {
             "helper_count": len(helper_slots),
             "legacy_count": len(legacy_slots),
@@ -198,10 +168,8 @@ def main() -> int:
             "grouped_uses_shared_helper": grouped_uses_shared_helper,
             "missing_in_grouped": sorted(legacy_slots - grouped_slots),
             "extra_in_grouped": sorted(grouped_slots - legacy_slots),
-            "missing_markers": missing_markers,
             "strict_extra": bool(args.strict_extra),
             "testcase": str(testcase_path),
-            "checklist": str(checklist_path),
         }
         exit_code = evaluate_exit_code(result, bool(args.strict_extra))
         result["ok"] = exit_code == 0

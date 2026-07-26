@@ -12,8 +12,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PUBLICABI_RUNNER = ROOT / "tests" / "nextpas.core.simd.publicabi" / "BuildOrTest.bat"
-PUBLICABI_SMOKE = ROOT / "tests" / "nextpas.core.simd.publicabi" / "publicabi_smoke.ps1"
+# tests/nextpas.core.simd.publicabi 项目从未在本仓库任何 ref 落地(fc8f2520a 从
+# codex/core-simd 部分合并只带入了 checker)；本脚本只守护主 batch runner /
+# evidence collector / runbook 里仍然存在的 publicabi 委派面(运行时 fail-close)。
 SIMD_BATCH_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "buildOrTest.bat"
 WINDOWS_EVIDENCE = ROOT / "tests" / "nextpas.core.simd" / "collect_windows_b07_evidence.bat"
 WINDOWS_RUNBOOK = ROOT / "tests" / "nextpas.core.simd" / "docs" / "windows_b07_closeout_runbook.md"
@@ -44,8 +45,6 @@ def build_result() -> dict[str, Any]:
     l_checks = 0
 
     for l_path in (
-        PUBLICABI_RUNNER,
-        PUBLICABI_SMOKE,
         SIMD_BATCH_RUNNER,
         WINDOWS_EVIDENCE,
         WINDOWS_RUNBOOK,
@@ -61,46 +60,9 @@ def build_result() -> dict[str, Any]:
             "issue_entries": l_issues,
         }
 
-    l_runner = read_text(PUBLICABI_RUNNER)
-    l_smoke = read_text(PUBLICABI_SMOKE)
     l_batch = read_text(SIMD_BATCH_RUNNER)
     l_evidence = read_text(WINDOWS_EVIDENCE)
     l_runbook = read_text(WINDOWS_RUNBOOK)
-
-    for l_pattern, l_message in (
-        (
-            r'DEFAULT_OUTPUT_ROOT=%REPO_ROOT%\\build\\tests\\nextpas\.core\.simd\.publicabi',
-            "runner missing core/build publicabi output root",
-        ),
-        (r'call :resolve_powershell', "runner missing PowerShell resolver call"),
-        (r'where pwsh', "runner missing pwsh-first probe"),
-        (r'where powershell', "runner missing powershell fallback probe"),
-        (r'tried pwsh and powershell', "runner missing fail-close PowerShell error"),
-        (r'-ValidateOnly', "runner missing validate-only export path"),
-    ):
-        l_checks += require_pattern(l_runner, PUBLICABI_RUNNER, l_pattern, l_message, l_issues)
-
-    for l_pattern, l_message in (
-        (r'\[switch\]\$ValidateOnly', "PowerShell smoke missing ValidateOnly parameter"),
-        (
-            r'public struct NextPasSimdBackendPodInfo',
-            "PowerShell smoke missing NextPas backend pod contract",
-        ),
-        (
-            r'public struct NextPasSimdPublicApiV2',
-            "PowerShell smoke missing NextPas public API v2 contract",
-        ),
-        (
-            r'EntryPoint = "nextpas_simd_get_backend_pod_info"',
-            "PowerShell smoke missing backend pod entrypoint",
-        ),
-        (
-            r'EntryPoint = "nextpas_simd_get_public_api_v2"',
-            "PowerShell smoke missing public_api_v2 entrypoint",
-        ),
-        (r'if \(-not \$ValidateOnly\)', "PowerShell smoke missing ValidateOnly fast path"),
-    ):
-        l_checks += require_pattern(l_smoke, PUBLICABI_SMOKE, l_pattern, l_message, l_issues)
 
     for l_pattern, l_message in (
         (

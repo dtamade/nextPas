@@ -15,7 +15,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 BATCH_RUNNER = ROOT / "tests" / "nextpas.core.simd" / "buildOrTest.bat"
 RUNBOOK = ROOT / "tests" / "nextpas.core.simd" / "docs" / "riscvv_native_closeout_runbook.md"
-CLOSEOUT_DOC = ROOT / "docs" / "simd" / "closeout.md"
+# docs/simd/closeout.md 已在 9ab2e83fc 文档重组中删除；"helpers 未恢复"诚实性声明
+# 由 batch runner 与 riscvv runbook 侧片段继续守护。
 SCRIPT_MANIFEST = ROOT / "tests" / "nextpas.core.simd" / "scripts" / "SCRIPT_MANIFEST.csv"
 
 MISSING_HELPERS = {
@@ -60,14 +61,6 @@ REQUIRED_RUNBOOK_FRAGMENTS = [
     "历史 runbook / manifest 里提到的 GH dispatch / clean-worktree / runner-registration helper 在当前 worktree 并未恢复",
 ]
 
-REQUIRED_CLOSEOUT_FRAGMENTS = [
-    "Historical `release-evidence` / `riscvv-runner-3cmd` / `native-evidence-via-gh-clean` helper names are not restored in this worktree.",
-    "collect_nonx86_native_evidence.sh riscvv",
-    "BuildOrTest.sh import-nonx86-native-evidence /path/to/native-evidence-drop",
-    "BuildOrTest.sh closeout-host-local-from-import /path/to/native-evidence-drop",
-]
-
-
 def read_text(a_path: Path) -> str:
     return a_path.read_text(encoding="utf-8", errors="ignore")
 
@@ -92,7 +85,7 @@ def build_result() -> dict[str, Any]:
     l_issues: list[dict[str, str]] = []
     l_checks = 0
 
-    for l_path in (BATCH_RUNNER, RUNBOOK, CLOSEOUT_DOC, SCRIPT_MANIFEST):
+    for l_path in (BATCH_RUNNER, RUNBOOK, SCRIPT_MANIFEST):
         if not l_path.is_file():
             add_issue(l_issues, l_path, "missing truth-source file")
 
@@ -106,7 +99,6 @@ def build_result() -> dict[str, Any]:
 
     l_batch_source = read_text(BATCH_RUNNER)
     l_runbook_source = read_text(RUNBOOK)
-    l_closeout_source = read_text(CLOSEOUT_DOC)
 
     for l_fragment in REQUIRED_BATCH_FRAGMENTS:
         l_checks += require_fragment(
@@ -123,15 +115,6 @@ def build_result() -> dict[str, Any]:
             RUNBOOK,
             l_fragment,
             f"riscvv runbook missing required truth fragment: {l_fragment}",
-            l_issues,
-        )
-
-    for l_fragment in REQUIRED_CLOSEOUT_FRAGMENTS:
-        l_checks += require_fragment(
-            l_closeout_source,
-            CLOSEOUT_DOC,
-            l_fragment,
-            f"closeout doc missing required truth fragment: {l_fragment}",
             l_issues,
         )
 
