@@ -174,6 +174,83 @@ begin
   end;
 end;
 
+{ Preallocated builder: naive concat is O(n^2) at attack-scale depths. }
+function BuildNestedXml(const ADepth: Integer; const ALeaf: string): string;
+var
+  I, LBase: Integer;
+begin
+  Result := '';
+  SetLength(Result, ADepth * 7 + Length(ALeaf));
+  for I := 0 to ADepth - 1 do
+    Move(PChar('<a>')^, Result[1 + I * 3], 3);
+  LBase := 1 + ADepth * 3;
+  if Length(ALeaf) > 0 then
+    Move(PChar(ALeaf)^, Result[LBase], Length(ALeaf));
+  LBase := LBase + Length(ALeaf);
+  for I := 0 to ADepth - 1 do
+    Move(PChar('</a>')^, Result[LBase + I * 4], 4);
+end;
+
+procedure TestNestingDepthAtLimitParses;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.None;
+  Check(TryXmlParse(BuildNestedXml(XML_MAX_NESTING_DEPTH, 'leaf'), LDoc),
+    'depth at XML_MAX_NESTING_DEPTH parses');
+  try
+    Check(LDoc.Root.IsAssigned, 'at-limit doc has root');
+    CheckEqual('leaf', LDoc.Root.Text, 'at-limit leaf text reachable');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestNestingDepthOverLimitRejected;
+var
+  LDoc: TXmlDocument;
+  LRaised: Boolean;
+begin
+  LDoc := TXmlDocument.None;
+  Check(not TryXmlParse(BuildNestedXml(XML_MAX_NESTING_DEPTH + 1, 'x'), LDoc),
+    'depth over limit is rejected');
+  Check(not LDoc.IsAssigned, 'over-limit doc stays unassigned');
+  LRaised := False;
+  try
+    XmlParse(BuildNestedXml(XML_MAX_NESTING_DEPTH + 1, 'x'));
+  except
+    on E: EXmlError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'over-limit XmlParse raises EXmlError');
+end;
+
+procedure TestNestingDepthEmptyElementCounts;
+var
+  LDoc: TXmlDocument;
+begin
+  { <b/> 是树节点，深度按父级+1 计：满深度下再挂空元素必须拒绝。 }
+  LDoc := TXmlDocument.None;
+  Check(not TryXmlParse(BuildNestedXml(XML_MAX_NESTING_DEPTH, '<b/>'), LDoc),
+    'empty element beyond limit is rejected');
+  Check(not LDoc.IsAssigned, 'empty-element over-limit doc stays unassigned');
+  LDoc := TXmlDocument.None;
+  Check(TryXmlParse(BuildNestedXml(XML_MAX_NESTING_DEPTH - 1, '<b/>'), LDoc),
+    'empty element at limit parses');
+  LDoc.Free;
+end;
+
+procedure TestNestingDepthAttackFailsFast;
+var
+  LDoc: TXmlDocument;
+begin
+  { 回归：200k 深文档曾 parse 通过、Root.Text 递归 SIGSEGV。 }
+  LDoc := TXmlDocument.None;
+  Check(not TryXmlParse(BuildNestedXml(200000, 'x'), LDoc),
+    'attack-scale deep document fails fast');
+  Check(not LDoc.IsAssigned, 'attack-scale doc stays unassigned');
+end;
+
 procedure TestEmptyInputTokenize;
 var
   LToks: TXmlTokenArray;
@@ -202,6 +279,10 @@ begin
   T.Test('whitespace-only try parse', @TestWhitespaceOnlyTryParse);
   T.Test('empty element round trip', @TestEmptyElementRoundTripText);
   T.Test('deep nesting', @TestDeepNesting);
+  T.Test('nesting depth at limit parses', @TestNestingDepthAtLimitParses);
+  T.Test('nesting depth over limit rejected', @TestNestingDepthOverLimitRejected);
+  T.Test('nesting depth counts empty elements', @TestNestingDepthEmptyElementCounts);
+  T.Test('nesting depth attack fails fast', @TestNestingDepthAttackFailsFast);
   T.Test('large text payload', @TestLargeTextPayload);
   T.Test('malformed unclosed raises', @TestMalformedUnclosedRaises);
   T.Test('malformed unmatched end raises', @TestMalformedUnmatchedEndRaises);

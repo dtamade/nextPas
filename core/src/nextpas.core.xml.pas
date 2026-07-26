@@ -51,6 +51,9 @@ type
   end;
 
 const
+  { DOM 物化深度上限（详见 xml.base；流式 TXmlReader 不受限） }
+  XML_MAX_NESTING_DEPTH = nextpas.core.xml.base.XML_MAX_NESTING_DEPTH;
+
   { Re-export TXmlTokenKind 枚举值，使 facade 完全自包含（无需 uses base 即可比较 token 类型） }
   xtkNone            = nextpas.core.xml.base.xtkNone;
   xtkStartElement    = nextpas.core.xml.base.xtkStartElement;

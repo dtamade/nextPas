@@ -10,6 +10,12 @@ interface
 uses
   nextpas.core.errors;
 
+const
+  { DOM 物化的元素树深度上限：树建成后 Text 等消费者按元素链递归，
+    无上限的深树会打爆调用栈（家族口径 JSON 512 / YAML 256 / TOML 128）。
+    拉式 TXmlReader 属流式路径，与 CSV 流式同理不设上限。 }
+  XML_MAX_NESTING_DEPTH = 512;
+
 type
   TXmlTokenKind = (
     xtkNone,

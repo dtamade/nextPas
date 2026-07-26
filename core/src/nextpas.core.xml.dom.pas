@@ -625,6 +625,7 @@ var
   LState: IXmlDocumentStateAccessor;
   LCurrent: UInt32;
   LChildIdx: UInt32;
+  LDepth: Integer;
   LRootCount: Integer;
   LSeenDoctype: Boolean;
   LRequiresRoot: Boolean;
@@ -635,6 +636,7 @@ begin
   LState := DocumentState(Self);
   LState.Reset;
   LCurrent := 0;
+  LDepth := 0;
   LRootCount := 0;
   LSeenDoctype := False;
   LRequiresRoot := False;
@@ -652,6 +654,8 @@ begin
               if LRootCount > 1 then
                 raise EXmlError.Create('Multiple root elements', LToken.Position);
             end;
+            if LDepth >= XML_MAX_NESTING_DEPTH then
+              raise EXmlError.Create('Element nesting too deep', LToken.Position);
             LChildIdx := LState.AddNode(xnkElement);
             LNode := LState.NodePtr(LChildIdx);
             LNode^.Name := LToken.Name;
@@ -660,12 +664,17 @@ begin
             if (LCurrent = 0) and (LState.RootIndex = XML_NODE_NONE) then
               LState.SetRootIndex(LChildIdx);
             LCurrent := LChildIdx;
+            Inc(LDepth);
           end;
           xtkEndElement:
           begin
             LNode := LState.NodePtr(LCurrent);
             if (LNode <> nil) and (LNode^.Parent <> XML_NODE_NONE) then
+            begin
               LCurrent := LNode^.Parent;
+              if LDepth > 0 then
+                Dec(LDepth);
+            end;
           end;
           xtkEmptyElement:
           begin
@@ -675,6 +684,9 @@ begin
               if LRootCount > 1 then
                 raise EXmlError.Create('Multiple root elements', LToken.Position);
             end;
+            { 空元素同样是树节点：其深度按父级+1 计入上限。 }
+            if LDepth >= XML_MAX_NESTING_DEPTH then
+              raise EXmlError.Create('Element nesting too deep', LToken.Position);
             LChildIdx := LState.AddNode(xnkElement);
             LNode := LState.NodePtr(LChildIdx);
             LNode^.Name := LToken.Name;

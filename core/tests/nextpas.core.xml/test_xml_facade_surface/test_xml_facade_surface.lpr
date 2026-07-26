@@ -220,6 +220,12 @@ begin
   Check(LRaised, 'malformed xml raises EXmlError');
 end;
 
+procedure TestFacadeExposesNestingDepthLimit;
+begin
+  CheckEqual(Int64(512), Int64(XML_MAX_NESTING_DEPTH),
+    'nesting depth cap re-exported via facade');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.xml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
@@ -230,5 +236,7 @@ begin
     @TestFacadeCdataEntityAndDefaultNs);
   T.Test('facade exposes position Col alias',
     @TestFacadeExposesPositionColAlias);
+  T.Test('facade exposes nesting depth limit',
+    @TestFacadeExposesNestingDepthLimit);
   if not T.Run then Halt(1);
 end.

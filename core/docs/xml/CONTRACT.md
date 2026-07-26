@@ -92,6 +92,9 @@ type
 - **[INV-1]** Reader/Writer/Document 为 class，不是零堆 record（1.0 文档错误）
 - **[INV-2]** well-formedness 检查、namespace、CDATA、注释、PI、XML 声明、DOCTYPE（以实现/测试为准）
 - **[INV-3]** Writer 转义特殊字符；非法 close 操作拒绝
+- **[INV-4]** DOM 物化深度上限 `XML_MAX_NESTING_DEPTH`（512，`xml.base`）：
+  超限 `XmlParse` 抛 `EXmlError('Element nesting too deep')`，`TryXmlParse` 返回 `False`；
+  空元素同样按父级+1 计深。流式 `TXmlReader` 不设上限（与 CSV 流式同理）
 
 ---
 
@@ -127,3 +130,4 @@ make focused FOCUS=core/tests/nextpas.core.xml/test_xml_roundtrip
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始（record Reader/L1 描述错误，已废止） | — |
 | 2026-07-20 | 2.0 | 对齐 class API、IXmlDocument、L2 | config-formats lane |
+| 2026-07-26 | 2.1 | INV-4 DOM 深度上限 512（修复深树 `Text` 递归 SIGSEGV） | config-formats lane |

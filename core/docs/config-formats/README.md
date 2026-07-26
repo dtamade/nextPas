@@ -131,6 +131,19 @@ Lenient `AsBool` / `AsInt` / `AsFloat` / `AsStr` and config `GetInt(..., Default
 - Shared cap: `FORMAT_BULK_PARSE_MAX_BYTES` (64 MiB) in `nextpas.core.format.limits`; overflow raises `EArgumentError`.
 - CSV true streaming (`TCsvReader` + chunked `IReader`) is **not** subject to this bulk cap.
 
+### Nesting depth caps (parse-side stack safety)
+
+Materializing parsers cap tree depth so recursive consumers (stringify, `Text`, flatten) stay stack-safe:
+
+| Format | Cap | Constant | Over-limit behavior |
+|--------|-----|----------|---------------------|
+| json | 512 | parser-internal | `HasError` ("max depth exceeded") |
+| yaml | 256 | parser-internal | `HasError` ("nesting too deep") |
+| toml | 128 | `MAX_NESTING_DEPTH` (parser) | `HasError` |
+| xml | 512 | `XML_MAX_NESTING_DEPTH` (`xml.base`) | `XmlParse` raises / `TryXmlParse` False |
+
+Streaming paths (CSV `TCsvReader`, XML pull `TXmlReader`) are exempt: they materialize no tree, so depth costs no stack. Builders/writers guard their own stacks (`EResourceExhaustedError` / `EInvalidOperationError`) instead of crashing.
+
 ### TryParse Semantics
 
 - JSON/TOML/YAML: Returns `False` and still assigns a diagnostic document
