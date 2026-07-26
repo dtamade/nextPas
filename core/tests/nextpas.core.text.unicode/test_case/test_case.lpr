@@ -3,6 +3,7 @@ program test_case;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,

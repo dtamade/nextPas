@@ -3,6 +3,7 @@ program test_unicode_collate;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.types,
