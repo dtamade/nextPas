@@ -9,8 +9,17 @@ uses
   nextpas.core.io.base,
   nextpas.core.platform.windows.base;
 
+const
+  { PollOneWait timeout for a pure completion-driven wait (no timed retry). }
+  IOCP_WAIT_INFINITE = DWORD($FFFFFFFF);
+
 type
   TIoCompletion = nextpas.core.io.base.TIoCompletion;
+
+  { PollOneWait outcome: a completion was dispatched, the timeout elapsed
+    (GQCS WAIT_TIMEOUT — the epoll_wait-timeout equivalent), or a wake
+    packet arrived (Stop / PostQueuedCompletionStatus with nil overlapped). }
+  TIocpPollWaitResult = (iprDispatched, iprTimeout, iprWoken);
 
   TIocpOpKind = (
     opRead,
@@ -66,6 +75,9 @@ type
 
     function Poll: Int32;
     function PollOne: Boolean;
+    { Single GQCS wait with timeout; lets a caller-owned event loop mix
+      completion dispatch with timed retries (writable waiters, deadlines). }
+    function PollOneWait(const ATimeoutMs: DWORD): TIocpPollWaitResult;
     procedure Run;
     procedure Stop;
     function Flush: Int32;
@@ -957,6 +969,33 @@ begin
   if (not LOk) and (LOverlapped = nil) then
     Exit(False);
   Result := IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
+end;
+
+function TIocpReactor.PollOneWait(const ATimeoutMs: DWORD): TIocpPollWaitResult;
+var
+  LBytes: DWORD;
+  LKey: ULONG_PTR;
+  LOverlapped: LPOVERLAPPED;
+  LOk: BOOL;
+begin
+  if FPort = 0 then
+    Exit(iprWoken); { dead port: report as wake so the caller re-checks state }
+
+  LBytes := 0;
+  LKey := 0;
+  LOverlapped := nil;
+  LOk := GetQueuedCompletionStatus(HANDLE(FPort), @LBytes, @LKey,
+    @LOverlapped, ATimeoutMs);
+  if LOverlapped = nil then
+  begin
+    if (not LOk) and (GetLastError = WAIT_TIMEOUT) then
+      Exit(iprTimeout);
+    { Successful GQCS with nil overlapped is a posted wake packet; a failed
+      GQCS with another error is surfaced as a wake so the caller can react. }
+    Exit(iprWoken);
+  end;
+  IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
+  Result := iprDispatched;
 end;
 
 procedure TIocpReactor.Run;
