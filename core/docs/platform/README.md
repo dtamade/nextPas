@@ -32,10 +32,7 @@ historical ROADMAP-v2.
 
 ```bash
 # Module-local examples
-make focused FOCUS=core/tests/nextpas.core.platform.process/test_platform_process
 make focused FOCUS=core/tests/nextpas.core.platform.console/test_platform_console
-make focused FOCUS=core/tests/nextpas.core.platform.pty/test_platform_pty
-make focused FOCUS=core/tests/nextpas.core.platform.args/test_platform_args
 make focused FOCUS=core/tests/nextpas.core.platform.error/test_platform_error
 make focused FOCUS=core/tests/nextpas.core.platform/test_platform_return_semantics_contract
 make focused FOCUS=core/tests/nextpas.core.platform/test_platform_docs_live_patterns
@@ -59,7 +56,8 @@ make hygiene
 | Console / TTY | `.console` (read/write: value/sentinel `-1` on failure) |
 | Errors | `.error` (`PLATFORM_ERR_*`) |
 
-Root unit `nextpas.core.platform` re-exports a thin info/time surface only.
+Root unit `nextpas.core.platform` re-exports a thin info/time surface only;
+prefer feature units (`platform.files`, `platform.process`, ...) for real work.
 
 ## Source layout
 
@@ -68,8 +66,6 @@ core/src/nextpas.core.platform*.pas     feature facades + host base/ffi
 core/tests/nextpas.core.platform*/      focused runtime / wine / compile gates
 core/docs/platform/                     this documentation set
 ```
-
-Prefer feature units (`platform.files`, `platform.process`, ...) for real work.
 
 ## Historical / non-authority
 
