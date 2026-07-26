@@ -37,15 +37,26 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
-    { Cache line padding to avoid false sharing }
+    {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
+    FPadHeader: TCacheLinePad;
+    {$POP}
+    // Grouped by ACCESSING THREAD; wait cells live with the notifying side.
+    // (The former hand-rolled 48-byte pads never reached one line: 8+48=56.)
+    // Sender line
     FSendPos: Int64;
-    FSendPad: array[0..47] of Byte;
-    FRecvPos: Int64;
-    FRecvPad: array[0..47] of Byte;
-    FSpaceEpoch: Int32;
-    FSpaceWaiters: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadSend: TCacheLinePad;
+    {$POP}
+    // Receiver line (mirror)
+    FRecvPos: Int64;
+    FSpaceEpoch: Int32;
+    FSpaceWaiters: Int32;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadRecv: TCacheLinePad;
+    {$POP}
+    // Cold shared fields
     FClosed: Int32;
   public
     {** @desc 创建有界 SPSC Channel }
