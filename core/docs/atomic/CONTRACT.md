@@ -4,7 +4,7 @@
 **层级**：L0（依赖 base；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-26
-**版本**：1.4
+**版本**：1.5
 
 ---
 
@@ -115,14 +115,17 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 | 项 | 现状 | 目标 |
 |----|------|------|
 | 公开 API | `atomic_*` / `TAtomic*` / `mo_*` | 稳定；新代码只走此面 |
-| **Backend seam** | `atomic.core` 的 `_backend_cmpxchg/xchg/xadd_i32/i64` + `_backend_read/write/full_barrier`；**atomic.core 是唯一允许触碰 host intrinsic/asm 的生产单元**（source-contract 钉在 `test_atomic`） | 稳定；nextpas backend 只替换此面 |
-| Host FPC 实现 | seam 体内调用 FPC `System` **`Interlocked*`** / barrier intrinsic（非 `uses SysUtils`）；`atomic.pas`/`atomic.types` 已 0 直调 | 可接受为 **FPC bootstrap host** |
-| nextpas 自举编译器 | 替换 seam 体（LLVM atomic / asm）+ `atomic.core` 内 fence/pause asm；`atomic.pas` 残留 host 面仅 i386-only inline asm（CMPXCHG8B/cpuid，source-contract 档） | **双编译器透明的前置债**；未完成前不得宣称 host 无关 |
-| 证据 | Linux x86_64 focused runtime；其它见 README Backend Truth Matrix（F-003） | 有 CI 机再升 runtime 级 |
+| **Backend seam** | `atomic.core` 的 `_backend_cmpxchg/xchg/xadd_i32/i64` + `_backend_cmpxchg_weak_i32/i64`（LL/SC，AArch64/ARM/RISC-V asm）+ `_backend_read/write/full/compiler_barrier`；**atomic.core 是唯一允许触碰 host intrinsic / arch asm 的生产单元**——唯一例外见下行（source-contract 钉在 `test_atomic`） | 稳定；nextpas backend 只替换此面 |
+| Host FPC 实现 | seam 体内调用 FPC `System` **`Interlocked*`** / barrier intrinsic（非 `uses SysUtils`）；`atomic.pas`/`atomic.types` 已 0 直调、0 assembler 例程 | 可接受为 **FPC bootstrap host** |
+| nextpas 自举编译器 | 替换 seam 体（LLVM atomic / asm）+ `atomic.core` 内 fence/pause asm；**已知残留**：`atomic.pas` i386-only 内嵌 asm（CMPXCHG8B/cpuid，7 处；无 i386 交叉编译器可验证迁移，暂留原地并由钉登记） | **双编译器透明的前置债**；未完成前不得宣称 host 无关 |
+| 证据 | Linux x86_64 focused runtime；riscv64 **真交叉编译门** `cross-riscv64`（编译全 atomic 闭包含 LL/SC asm）；AArch64/ARM 为逐字搬运 + source-contract（本机交叉 RTL 缺失）；其它见 README Backend Truth Matrix（F-003） | 有 CI 机再升 runtime 级 |
 
 Seam 语义：RMW 返回**旧值（观测值）**；cmpxchg 参数序 `(target, desired, expected)`；
 x86/x86_64 host 上每个 RMW 为 full fence，弱序 host 仅保证 host RTL Interlocked 语义——
 memory_order 策略（额外 fence）由调用层（`atomic.pas`）负责。seam **不是消费者 API**。
+Weak CAS 例外：`_backend_cmpxchg_weak_*` 返回 Boolean、参数序 `(target, var expected, desired)`、
+允许 spurious failure、失败时回写观测值到 expected；仅在有原生 LL/SC 的平台定义（x86 调用方直接走 strong）。
+`_backend_compiler_barrier`：x86（TSO）为纯编译器屏障，弱序平台为硬件读屏障。
 
 **`mo_consume`（F-011）**：实现侧多规范为 **≥ acquire**；不保证可移植 dependency-ordered consume 优化。调用方不得按更弱 consume 模型做跨平台推理。
 
@@ -166,3 +169,4 @@ memory_order 策略（额外 fence）由调用层（`atomic.pas`）负责。seam
 | 2026-07-17 | 1.1 | TAtomicInt32 命名；RTL isolation；~45 tests | Codex |
 | 2026-07-17 | 1.2 | §1.4 Legacy CAS 弃用偏好（R7；不删 API） | Codex |
 | 2026-07-26 | 1.4 | §2.2 F-002 backend seam 落地：atomic.core `_backend_*` 为唯一 host intrinsic 面；atomic.pas/types 0 直调 | Claude |
+| 2026-07-26 | 1.5 | §2.2 seam 补完：LL/SC weak CAS asm + compiler barrier 移入 atomic.core；新增 `cross-riscv64` 真交叉编译门；残留仅 i386 CMPXCHG8B/cpuid | Claude |

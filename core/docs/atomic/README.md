@@ -153,13 +153,14 @@ check the value before waiting, wait only while the predicate is still false, an
 | Windows | forced compile / source-contract | Forced compile and textual contract only until a Windows runtime gate runs. |
 | i386 | source-contract + runtime-detected fallback | 64-bit API exists under `CPUX86`; CMPXCHG8B decides lock-free truth and fallback lock path. |
 | PPC/PPC64 | source-contract | `atomic_seq_cst_fence` uses heavyweight `sync`; no local runtime gate. |
-| ARM/AArch64/RISC-V/LoongArch | source-contract | Non-local fence/load/store text is constrained by source-contract only. |
+| RISC-V 64 | source-contract + cross-compile | `cross-riscv64` gate builds the full atomic closure (incl. the LL/SC weak-CAS asm in atomic.core) with a real riscv64 target compiler; no runtime gate. |
+| ARM/AArch64/LoongArch | source-contract | Non-local fence/load/store text is constrained by source-contract only. |
 
 Do not report a backend as runtime ready without a matching focused runtime gate.
 
 ### Host implementation note（F-002 / F-003）
 
-- On the **FPC host**, scalar RMW routes through the backend seam in `nextpas.core.atomic.core.pas` (`_backend_cmpxchg/xchg/xadd_i32/i64` + `_backend_read/write/full_barrier`, all `inline`), whose bodies delegate to FPC `Interlocked*` / barrier intrinsics. `atomic.pas` / `atomic.types` no longer touch those intrinsics directly (source-contract pinned in `test_atomic`). That is **not** a `uses SysUtils` violation, but it **is** a dual-compiler backend dependency until nextpas replaces the seam bodies (LLVM atomics / asm) with its own atomic lowering.
+- On the **FPC host**, scalar RMW routes through the backend seam in `nextpas.core.atomic.core.pas` (`_backend_cmpxchg/xchg/xadd_i32/i64` + `_backend_read/write/full_barrier`, all `inline`), whose bodies delegate to FPC `Interlocked*` / barrier intrinsics. The LL/SC weak-CAS asm (AArch64/ARM/RISC-V) and the lightweight `_backend_compiler_barrier` also live in the seam. `atomic.pas` / `atomic.types` no longer touch those intrinsics directly and define no assembler routines (source-contract pinned in `test_atomic`); the only backend residue outside atomic.core is the i386-only CMPXCHG8B/cpuid inline asm in `atomic.pas` (no i386 cross compiler available to verify a move). That is **not** a `uses SysUtils` violation, but it **is** a dual-compiler backend dependency until nextpas replaces the seam bodies (LLVM atomics / asm) with its own atomic lowering.
 - **Windows / non-x86_64**: no local runtime gate in this lane — source-contract / forced compile only. Do not market “cross-platform wait/atomic ready” without matching gates.
 - Wait/notify on fallback buckets can collide by address; always use a **predicate loop** (F-012).
 

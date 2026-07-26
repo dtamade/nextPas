@@ -959,6 +959,28 @@ begin
     'atomic.core must declare the F-002 backend seam cmpxchg primitive');
   CheckContains(LAtomicCoreSource, 'procedure _backend_full_barrier; inline;',
     'atomic.core must declare the F-002 backend seam barrier primitives');
+  { F-002 seam completion: LL/SC weak CAS asm lives in atomic.core only.
+    atomic.pas keeps only the i386 CMPXCHG8B/cpuid inline asm (no i386
+    cross-compiler available to verify a move; registered in CONTRACT 2.2). }
+  CheckContains(LAtomicCoreSource,
+    'function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean;',
+    'atomic.core must declare the weak CAS backend seam');
+  CheckContains(LAtomicCoreSource, 'procedure _backend_compiler_barrier;',
+    'atomic.core must declare the compiler-barrier backend seam');
+  CheckContains(LAtomicCoreSource, 'ldaxr',
+    'AArch64 LL/SC weak CAS asm must live in the atomic.core backend');
+  CheckContains(LAtomicCoreSource, 'ldrex',
+    'ARM LL/SC weak CAS asm must live in the atomic.core backend');
+  CheckContains(LAtomicCoreSource, 'lr.w',
+    'RISC-V LL/SC weak CAS asm must live in the atomic.core backend');
+  CheckNotContains(LAtomicSource, 'ldaxr',
+    'main atomic unit must not carry AArch64 LL/SC asm (F-002 seam)');
+  CheckNotContains(LAtomicSource, 'ldrex',
+    'main atomic unit must not carry ARM LL/SC asm (F-002 seam)');
+  CheckNotContains(LAtomicSource, 'lr.w',
+    'main atomic unit must not carry RISC-V LL/SC asm (F-002 seam)');
+  CheckNotContains(LAtomicSource, 'assembler',
+    'main atomic unit must not define assembler routines; only i386 inline asm blocks remain');
   CheckContains(LAtomicCoreSource, 'procedure atomic_seq_cst_fence;',
     'atomic core must define a dedicated seq_cst fence helper');
   CheckNotContains(LSignalFenceSection, 'ReadWriteBarrier',

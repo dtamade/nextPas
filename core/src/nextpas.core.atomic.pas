@@ -730,102 +730,10 @@ uses
 
 {$WARN 5024 off} // keep implementation hint-clean on platforms where order params are intentionally ignored
 
-{ Platform-specific weak CAS — single LL/SC attempt, no retry loop.
-  On x86: weak = strong (LOCK CMPXCHG has no weak variant).
-  On ARM/AArch64/RISC-V: single ldxr+stxr attempt, returns false on spurious failure. }
-
-{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-// x86: weak = strong, no platform-specific implementation needed
-{$ELSEIF DEFINED(CPUAARCH64)}
-function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
-asm
-  // x0 = @aObj, x1 = @aExpected, w2 = aDesired
-  ldaxr  w3,[x0]          // Load-Exclusive with acquire
-  ldr    w4,[x1]          // Load expected
-  subs   w6,w3,w4         // Compare (sets flags)
-  cbnz   w6,.Lweak32_fail // Branch if not equal
-  stlxr  w5,w2,[x0]       // Store-Conditional with release (single attempt)
-  cbnz   w5,.Lweak32_fail
-  mov    w0,#1            // Success
-  ret
-.Lweak32_fail:
-  str    w3,[x1]          // Update expected to actual value
-  mov    w0,#0            // Failure
-  ret
-end;
-
-function _weak_cas_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
-asm
-  // x0 = @aObj, x1 = @aExpected, x2 = aDesired
-  ldaxr  x3,[x0]          // Load-Exclusive with acquire
-  ldr    x4,[x1]          // Load expected
-  subs   x6,x3,x4         // Compare (sets flags)
-  cbnz   x6,.Lweak64_fail // Branch if not equal
-  stlxr  w5,x2,[x0]       // Store-Conditional with release (single attempt)
-  cbnz   w5,.Lweak64_fail
-  mov    w0,#1            // Success
-  ret
-.Lweak64_fail:
-  str    x3,[x1]          // Update expected to actual value
-  mov    w0,#0            // Failure
-  ret
-end;
-
-{$ELSEIF DEFINED(CPUARM)}
-function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
-asm
-  // r0 = @aObj, r1 = @aExpected, r2 = aDesired
-  ldrex  r3,[r0]          // Load-Exclusive
-  ldr    r4,[r1]          // Load expected
-  cmp    r3,r4            // Compare
-  bne    .Lweak32_arm_fail
-  strex  r5,r2,[r0]       // Store-Conditional (single attempt)
-  cmp    r5,#0
-  bne    .Lweak32_arm_fail
-  mov    r0,#1            // Success
-  bx     lr
-.Lweak32_arm_fail:
-  str    r3,[r1]          // Update expected to actual value
-  mov    r0,#0            // Failure
-  bx     lr
-end;
-
-{$ELSEIF DEFINED(CPURISCV64)}
-function _weak_cas_32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
-asm
-  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
-  lr.w    a3, 0(a0)       // Load-Reserved
-  lw      a4, 0(a1)       // Load expected
-  bne     a3, a4, .Lweak32_rv_fail
-  sc.w    a4, a2, 0(a0)   // Store-Conditional (single attempt)
-  bne     a4, x0, .Lweak32_rv_fail
-  addi    a0, x0, 1       // Success
-  ret
-.Lweak32_rv_fail:
-  sw      a3, 0(a1)       // Update expected to actual value
-  addi    a0, x0, 0       // Failure
-  ret
-end;
-
-function _weak_cas_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
-asm
-  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
-  lr.d    a3, 0(a0)       // Load-Reserved
-  ld      a4, 0(a1)       // Load expected
-  bne     a3, a4, .Lweak64_rv_fail
-  sc.d    a4, a2, 0(a0)   // Store-Conditional (single attempt)
-  bne     a4, x0, .Lweak64_rv_fail
-  addi    a0, x0, 1       // Success
-  ret
-.Lweak64_rv_fail:
-  sd      a3, 0(a1)       // Update expected to actual value
-  addi    a0, x0, 0       // Failure
-  ret
-end;
-
-{$ELSE}
-// Fallback: weak = strong
-{$ENDIF}
+{ Platform-specific weak CAS lives in the atomic.core backend seam
+  (_backend_cmpxchg_weak_*): single LL/SC attempt on ARM/AArch64/RISC-V,
+  may fail spuriously.  On x86 weak = strong (LOCK CMPXCHG has no weak
+  variant), so the x86 paths below call the strong CAS directly. }
 
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│              Phase 4: cpu_pause - 减少自旋等待开销                          │
@@ -836,20 +744,9 @@ begin
   nextpas.core.atomic.core.cpu_pause;
 end;
 
-// A lightweight compiler barrier.
-// - For x86/x86_64, acquire/release for plain load/store doesn't require a CPU fence (TSO),
-//   but we still want to prevent compiler reordering.
-{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-procedure _compiler_barrier; inline;
-begin
-  asm end;
-end;
-{$ELSE}
-procedure _compiler_barrier; inline;
-begin
-  _backend_read_barrier;
-end;
-{$ENDIF}
+// Lightweight acquire/release barrier lives in the atomic.core backend seam
+// (_backend_compiler_barrier): compiler-only on x86 (TSO), hardware read
+// barrier on weakly-ordered hosts.
 
 procedure _consume_memory_order(const aOrder: memory_order_t); inline;
 begin
@@ -1376,7 +1273,7 @@ begin
       begin
         Result := aObj;
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          _compiler_barrier;    // Acquire load on x86: compiler barrier is enough
+          _backend_compiler_barrier;    // Acquire load on x86: compiler barrier is enough
         {$ELSE}
           _backend_read_barrier;          // Acquire load on weakly-ordered CPUs
         {$ENDIF}
@@ -1433,7 +1330,7 @@ begin
   Result := _atomic_load_64_x86(aObj);
   case aOrder of
     mo_consume, mo_acquire, mo_acq_rel, mo_seq_cst:
-      _compiler_barrier;
+      _backend_compiler_barrier;
   else
     ; // mo_relaxed, mo_release
   end;
@@ -1447,7 +1344,7 @@ begin
       begin
         Result := aObj;
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          _compiler_barrier;
+          _backend_compiler_barrier;
         {$ELSE}
           _backend_read_barrier;
         {$ENDIF}
@@ -1555,7 +1452,7 @@ begin
     mo_release, mo_acq_rel:
       begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          _compiler_barrier; // Release store on x86: compiler barrier is enough
+          _backend_compiler_barrier; // Release store on x86: compiler barrier is enough
         {$ELSE}
           _backend_write_barrier;      // Release store on weakly-ordered CPUs
         {$ENDIF}
@@ -1607,7 +1504,7 @@ begin
   // 32-bit x86: use CMPXCHG8B-based atomic store (LOCK CMPXCHG8B is already a full fence)
   case aOrder of
     mo_release, mo_acq_rel, mo_seq_cst:
-      _compiler_barrier;
+      _backend_compiler_barrier;
   else
     ; // mo_relaxed, mo_consume, mo_acquire
   end;
@@ -1621,7 +1518,7 @@ begin
     mo_release, mo_acq_rel:
       begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          _compiler_barrier;
+          _backend_compiler_barrier;
         {$ELSE}
           _backend_write_barrier;
         {$ENDIF}
@@ -2279,7 +2176,7 @@ begin
   Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
   {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
-  Result := _weak_cas_32(aObj, aExpected, aDesired);
+  Result := _backend_cmpxchg_weak_i32(aObj, aExpected, aDesired);
   if Result then
   begin
     case aSuccessOrder of
@@ -2320,7 +2217,7 @@ begin
   Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
   {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
-  Result := _weak_cas_64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^);
+  Result := _backend_cmpxchg_weak_i64(PInt64(@aObj)^, PInt64(@aExpected)^, PInt64(@aDesired)^);
   if Result then
   begin
     case aSuccessOrder of
@@ -2362,7 +2259,7 @@ begin
   Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aSuccessOrder, aFailureOrder);
   {$ELSEIF DEFINED(CPUAARCH64) OR DEFINED(CPUARM) OR DEFINED(CPURISCV64)}
   _consume_memory_orders(aSuccessOrder, aFailureOrder);
-  Result := _weak_cas_64(aObj, aExpected, aDesired);
+  Result := _backend_cmpxchg_weak_i64(aObj, aExpected, aDesired);
   if Result then
   begin
     case aSuccessOrder of

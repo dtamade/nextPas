@@ -65,6 +65,28 @@ procedure _backend_read_barrier; inline;
 procedure _backend_write_barrier; inline;
 procedure _backend_full_barrier; inline;
 
+{ Weak CAS seam — a single LL/SC attempt on weakly-ordered hosts; may fail
+  spuriously.  Returns True on success; on failure aExpected is updated to
+  the observed value.  Argument order (target, expected, desired) differs
+  from the strong seam because aExpected is in-out.  Only defined where the
+  host has a native LL/SC weak CAS: x86 callers use the strong seam instead
+  (LOCK CMPXCHG has no weak variant).  Ordering: raw LL/SC without fences —
+  memory_order policy stays in the caller. }
+{$IF DEFINED(CPUAARCH64) OR DEFINED(CPURISCV64)}
+function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean;
+function _backend_cmpxchg_weak_i64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean;
+{$ELSEIF DEFINED(CPUARM)}
+function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean;
+{$ENDIF}
+
+{ Lightweight acquire/release barrier: on x86 (TSO) a compiler-only barrier,
+  on weakly-ordered hosts a hardware read barrier. }
+{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+procedure _backend_compiler_barrier;
+{$ELSE}
+procedure _backend_compiler_barrier; inline;
+{$ENDIF}
+
 type
   atomic_tagged_ptr_t = type PtrUInt;
 
@@ -596,5 +618,108 @@ procedure _backend_full_barrier; inline;
 begin
   ReadWriteBarrier;
 end;
+
+{ Weak CAS seam — single LL/SC attempt, no retry loop.  Moved verbatim from
+  nextpas.core.atomic (F-002 seam completion); a nextpas backend replaces
+  these bodies together with the rest of the seam. }
+
+{$IF DEFINED(CPUAARCH64)}
+function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // x0 = @aObj, x1 = @aExpected, w2 = aDesired
+  ldaxr  w3,[x0]          // Load-Exclusive with acquire
+  ldr    w4,[x1]          // Load expected
+  subs   w6,w3,w4         // Compare (sets flags)
+  cbnz   w6,.Lweak32_fail // Branch if not equal
+  stlxr  w5,w2,[x0]       // Store-Conditional with release (single attempt)
+  cbnz   w5,.Lweak32_fail
+  mov    w0,#1            // Success
+  ret
+.Lweak32_fail:
+  str    w3,[x1]          // Update expected to actual value
+  mov    w0,#0            // Failure
+  ret
+end;
+
+function _backend_cmpxchg_weak_i64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
+asm
+  // x0 = @aObj, x1 = @aExpected, x2 = aDesired
+  ldaxr  x3,[x0]          // Load-Exclusive with acquire
+  ldr    x4,[x1]          // Load expected
+  subs   x6,x3,x4         // Compare (sets flags)
+  cbnz   x6,.Lweak64_fail // Branch if not equal
+  stlxr  w5,x2,[x0]       // Store-Conditional with release (single attempt)
+  cbnz   w5,.Lweak64_fail
+  mov    w0,#1            // Success
+  ret
+.Lweak64_fail:
+  str    x3,[x1]          // Update expected to actual value
+  mov    w0,#0            // Failure
+  ret
+end;
+
+{$ELSEIF DEFINED(CPUARM)}
+function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // r0 = @aObj, r1 = @aExpected, r2 = aDesired
+  ldrex  r3,[r0]          // Load-Exclusive
+  ldr    r4,[r1]          // Load expected
+  cmp    r3,r4            // Compare
+  bne    .Lweak32_arm_fail
+  strex  r5,r2,[r0]       // Store-Conditional (single attempt)
+  cmp    r5,#0
+  bne    .Lweak32_arm_fail
+  mov    r0,#1            // Success
+  bx     lr
+.Lweak32_arm_fail:
+  str    r3,[r1]          // Update expected to actual value
+  mov    r0,#0            // Failure
+  bx     lr
+end;
+
+{$ELSEIF DEFINED(CPURISCV64)}
+function _backend_cmpxchg_weak_i32(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; assembler; nostackframe;
+asm
+  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
+  lr.w    a3, 0(a0)       // Load-Reserved
+  lw      a4, 0(a1)       // Load expected
+  bne     a3, a4, .Lweak32_rv_fail
+  sc.w    a4, a2, 0(a0)   // Store-Conditional (single attempt)
+  bne     a4, x0, .Lweak32_rv_fail
+  addi    a0, x0, 1       // Success
+  ret
+.Lweak32_rv_fail:
+  sw      a3, 0(a1)       // Update expected to actual value
+  addi    a0, x0, 0       // Failure
+  ret
+end;
+
+function _backend_cmpxchg_weak_i64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; assembler; nostackframe;
+asm
+  // a0 = @aObj, a1 = @aExpected, a2 = aDesired
+  lr.d    a3, 0(a0)       // Load-Reserved
+  ld      a4, 0(a1)       // Load expected
+  bne     a3, a4, .Lweak64_rv_fail
+  sc.d    a4, a2, 0(a0)   // Store-Conditional (single attempt)
+  bne     a4, x0, .Lweak64_rv_fail
+  addi    a0, x0, 1       // Success
+  ret
+.Lweak64_rv_fail:
+  sd      a3, 0(a1)       // Update expected to actual value
+  addi    a0, x0, 0       // Failure
+  ret
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+procedure _backend_compiler_barrier; assembler; nostackframe;
+asm
+end;
+{$ELSE}
+procedure _backend_compiler_barrier; inline;
+begin
+  ReadBarrier;
+end;
+{$ENDIF}
 
 end.
