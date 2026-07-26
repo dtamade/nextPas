@@ -6029,30 +6029,39 @@ end;
 // === New Array* F32 Functions ===
 
 procedure SSE2ArrayTanF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+const
+  { Fixed stack scratch keeps Tan heap-free (F-003); 512 is a multiple of the
+    4-lane main loop so only the final chunk can enter the asm tail path. }
+  CTanScratchElems = 512;
 var
-  pSin, pCos, pD: PSingle;
-  LSin, LCos: PSingle;
-  LBytes: SizeUInt;
+  pSrc, pDst, pSin, pCos, pD: PSingle;
+  LSin, LCos: array[0..CTanScratchElems - 1] of Single;
+  LRemaining, LChunk: SizeUInt;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
 
-  LBytes := aCount * SizeOf(Single);
-  GetMem(LSin, LBytes);
-  GetMem(LCos, LBytes);
-  try
-    SSE2ArraySinF32(aSrc, LSin, aCount);
-    SSE2ArrayCosF32(aSrc, LCos, aCount);
+  pSrc := aSrc;
+  pDst := aDst;
+  LRemaining := aCount;
+  while LRemaining > 0 do
+  begin
+    LChunk := LRemaining;
+    if LChunk > CTanScratchElems then
+      LChunk := CTanScratchElems;
 
-    pSin := LSin;
-    pCos := LCos;
-    pD := aDst;
+    SSE2ArraySinF32(pSrc, @LSin[0], LChunk);
+    SSE2ArrayCosF32(pSrc, @LCos[0], LChunk);
+
+    pSin := @LSin[0];
+    pCos := @LCos[0];
+    pD := pDst;
 
   asm
     mov rax, pSin
     mov rdx, pCos
     mov rcx, pD
-    mov r8, aCount
+    mov r8, LChunk
 
     cmp r8, 4
     jb @tail_scalar
@@ -6084,9 +6093,10 @@ begin
 
   @done:
   end;
-  finally
-    FreeMem(LSin, LBytes);
-    FreeMem(LCos, LBytes);
+
+    Inc(pSrc, LChunk);
+    Inc(pDst, LChunk);
+    Dec(LRemaining, LChunk);
   end;
   {$POP}
 end;

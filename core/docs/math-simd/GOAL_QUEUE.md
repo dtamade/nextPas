@@ -40,8 +40,60 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=IDLE  # audit remediation package landed 2026-07-26; see findings.md Remediation status
+CURRENT=M3.2  # Batch M3 polish wave approved by Codex 2026-07-26 (session 019f9dab-d69a-7511-9975-05d023d7bbc9)
 ```
+
+---
+
+## BATCH M3 — post-audit polish wave 【active · Codex-approved 2026-07-26】
+
+> Mode A 内打磨:修债/拆文件/补证据。Codex 审核结论:有条件批准。
+> **OUT_OF_SCOPE(写死)**: F-006 L0/L3 拆分;生产门面拆分;simdgen 强制迁移;Tan 新 API
+> (caller scratch 等);默认 focused 全量 `-gh`;Wave 4 walls;新 ISA;新公共 API。
+
+### M3.1 — F-003 根治:Tan scratch 栈上分块  【done 2026-07-26】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | M3.2 |
+| **WHY** | F-003 现修复为每调用全量 GetMem×2(2×4N 字节堆峰值);根治为固定栈分块,消除 Tan 热路径堆分配 |
+| **IN_SCOPE_PATHS** | `core/src/nextpas.core.simd.avx2.batch.inc`;`core/src/nextpas.core.simd.sse2.batch.inc`;`core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas`;findings/MAINTENANCE 状态行 |
+| **OUT_OF_SCOPE** | ArraySinCos;threadvar 复活;caller-provided scratch API;F64 Tan(无堆);微基准 |
+| **DELIVERABLES** | `CTanScratchElems = 512` 局部常量;`LSin/LCos: array[0..511] of Single` 栈数组;外层 while chunk 循环复用现有 Sin/Cos 叶 + 现有 div asm 尾路径;去 try/finally/GetMem/FreeMem |
+| **UNIT_TESTS** | `Test_BatchF32_ArrayTan_ChunkBoundary_NearParity`:counts 0/1/7/8/511/512/513/1027 逐元素 vs `ScalarArrayTanF32`;能 force 则 force SSE2+AVX2 各跑;count=0 不动 dst;source contract:`AVX2ArrayTanF32`/`SSE2ArrayTanF32` 体内无 `GetMem/FreeMem` |
+| **GATES** | `make focused FOCUS=core/tests/nextpas.core.simd`(允许 +N 新测试);hygiene;`git diff --check` |
+| **DoD** | 门禁绿;Tan 体内零堆分配有契约锁定;findings F-003 标 residual hardening closed;一 commit |
+| **EVIDENCE** | 2026-07-26: focused **1764**/0(1762+2 新测试);hygiene pass;math clean test exit 0 + heaptrc 0 unfreed;diff-check clean;`Test_BatchF32_ArrayTan_ChunkBoundary_NearParity`(SSE2+AVX2 force,counts 0/1/7/8/511/512/513/1027)+ `Test_ArrayTanF32_NoHeapScratch_SourceAudit`(GetMem/FreeMem 禁 + CTanScratchElems 必现) |
+
+### M3.2 — F-007 收尾:dispatchapi 巨测拆分(方案 A)  【pending】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | pending |
+| **NEXT** | M3.3 |
+| **WHY** | dispatchapi.testcase.pas 23879 行 / 单类 251 Test_ 方法;review/bisect/并行编译差 |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi*.pas`(新增拆分单元);`nextpas.core.simd.test.lpr`;size-report/MAINTENANCE |
+| **OUT_OF_SCOPE** | 改断言/阈值/容差;重命名 Test_ 方法;合并重复测试;改 hook 语义;生产代码 |
+| **DELIVERABLES** | 方案 A:按主题缝拆成 5–7 个 `TTestCase_*` 新类/新单元 + `dispatchapi.support.pas`(TSourceLines/hook/globals/基类);文件头 NEON/RISCVV 条件编译镜像块逐单元复制;lpr 注册全量 |
+| **UNIT_TESTS** | 拆前/拆后 `published procedure Test_` 计数对账(拆前实测值);focused 总数与 M3.1 后基线一致 |
+| **GATES** | focused 总数不漂;hygiene;`git diff --check` |
+| **DoD** | 每单元 <5k 行;逻辑 diff≈0;old→new suite 名对照记录;一 commit |
+| **步骤纪律** | 先 support 提取可编译 → 再按主题搬类 → 最后删空壳;禁止同 commit 改断言 |
+| **EVIDENCE** | (待填) |
+
+### M3.3 — F-009 切片:concurrent-heaptrc opt-in  【pending · optional】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | pending (optional) |
+| **NEXT** | IDLE |
+| **WHY** | 并发 suite 默认无 heaptrc;防其他并发泄漏回流(Tan 主路径 M3.1 后已无堆) |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/Makefile`;MAINTENANCE debt 表 |
+| **OUT_OF_SCOPE** | 默认 `test`/`focused` 挂 heaptrc |
+| **DELIVERABLES** | `concurrent-heaptrc` 目标(-gh,解析 0 unfreed,同 cpuinfo-heaptrc 模式) |
+| **GATES** | 新目标本地跑通;hygiene |
+| **EVIDENCE** | (待填) |
 
 ### Audit remediation package  【done 2026-07-26】
 

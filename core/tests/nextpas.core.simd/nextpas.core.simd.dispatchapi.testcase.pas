@@ -213,6 +213,8 @@ type
     procedure Test_BatchF32_ArrayCosSinCos_NearParity;
     procedure Test_BatchF32_ArrayLogFamily_NearParity;
     procedure Test_BatchF64_ArraySinExp_NearParity;
+    procedure Test_BatchF32_ArrayTan_ChunkBoundary_NearParity;
+    procedure Test_ArrayTanF32_NoHeapScratch_SourceAudit;
     procedure Test_NEON_WideFloatMemoryUtilitySlots_Bind_AsmHelpers_When_Available;
     procedure Test_NEON_DotFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
     procedure Test_NEON_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -8771,6 +8773,136 @@ begin
     CheckTrue(Abs(LDstD[0] - 21.0) < 1e-6, 'F32 Exp count=0 leaves dst');
   finally
     SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayTan_ChunkBoundary_NearParity;
+const
+  CMaxCount = 1027;
+var
+  LSrc, LDstS, LDstD: array[0..CMaxCount - 1] of Single;
+  LCounts: array[0..7] of SizeUInt = (0, 1, 7, 8, 511, 512, 513, 1027);
+  LBackends: array[0..1] of TSimdBackend = (sbSSE2, sbAVX2);
+  LCount: SizeUInt;
+  bi, ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  LAbsDiff, LScale, LTol: Single;
+  LForcedAny: Boolean;
+
+  procedure CheckTanParity(const aLabel: string; aCount: SizeUInt);
+  var
+    j: Integer;
+  begin
+    FillChar(LDstS, SizeOf(LDstS), 0);
+    FillChar(LDstD, SizeOf(LDstD), 0);
+    ScalarArrayTanF32(@LSrc[0], @LDstS[0], aCount);
+    LDispatch^.BatchF32.ArrayTan(@LSrc[0], @LDstD[0], aCount);
+    for j := 0 to Integer(aCount) - 1 do
+    begin
+      LAbsDiff := Abs(LDstS[j] - LDstD[j]);
+      LScale := Abs(LDstS[j]);
+      if LScale < 1.0 then
+        LScale := 1.0;
+      LTol := 1e-4 * LScale + 1e-5;
+      CheckTrue(LAbsDiff <= LTol,
+        'Tan chunk parity ' + aLabel + ' count=' + IntToStr(aCount) + ' i=' + IntToStr(j));
+    end;
+  end;
+begin
+  { M3.1: Tan leaves use fixed 512-element stack scratch; verify element parity
+    vs scalar across the chunk boundary. Domain avoids tan poles so the
+    near-parity tolerance stays bounded. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    for i := 0 to CMaxCount - 1 do
+      LSrc[i] := ((i mod 101) - 50) * 0.025; { [-1.25, 1.25]; |tan| <= ~3.1 }
+
+    LForcedAny := False;
+    for bi := 0 to High(LBackends) do
+    begin
+      if not TrySetActiveBackend(LBackends[bi]) then
+        Continue;
+      LForcedAny := True;
+      LDispatch := GetDispatchTable;
+
+      for ci := 0 to High(LCounts) do
+        CheckTanParity(DispatchApiBackendName(LBackends[bi]), LCounts[ci]);
+
+      LDstD[0] := 21.0;
+      LDispatch^.BatchF32.ArrayTan(@LSrc[0], @LDstD[0], 0);
+      CheckTrue(Abs(LDstD[0] - 21.0) < 1e-6,
+        'Tan count=0 leaves dst backend=' + DispatchApiBackendName(LBackends[bi]));
+    end;
+
+    if not LForcedAny then
+    begin
+      { Hosts without SSE2/AVX2 (e.g. AArch64): still exercise the active
+        backend across the chunk boundary. }
+      LDispatch := GetDispatchTable;
+      for ci := 0 to High(LCounts) do
+        CheckTanParity('active', LCounts[ci]);
+    end;
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_ArrayTanF32_NoHeapScratch_SourceAudit;
+var
+  LSourceLines: TSourceLines;
+
+  function ExtractProcedureSource(const aPath, aName: string): string;
+  var
+    LLine: string;
+    LIndexLocal: Integer;
+    LFound: Boolean;
+  begin
+    Result := '';
+    LFound := False;
+    LSourceLines.LoadFromFile(aPath);
+    for LIndexLocal := 0 to LSourceLines.Count - 1 do
+    begin
+      LLine := TrimLeft(LSourceLines[LIndexLocal]);
+      if not LFound then
+      begin
+        if Pos('procedure ' + aName + '(', LLine) = 1 then
+          LFound := True
+        else
+          Continue;
+      end
+      else if (Pos('procedure ', LLine) = 1) or (Pos('function ', LLine) = 1) then
+        Break;
+
+      if Result <> '' then
+        Result := Result + LineEnding;
+      Result := Result + LSourceLines[LIndexLocal];
+    end;
+
+    CheckTrue(LFound, 'Unable to locate procedure source for ' + aName);
+    CheckTrue(Pos('begin', LowerCase(Result)) > 0, 'Unable to locate implementation body for ' + aName);
+  end;
+
+  procedure CheckHeapFree(const aRelPath, aName: string);
+  var
+    LPath, LBody: string;
+  begin
+    LPath := ExpandSimdRepoPath(aRelPath);
+    CheckTrue(FileExists(LPath), 'Tan source file should exist for heap-scratch audit: ' + LPath);
+    LBody := LowerCase(ExtractProcedureSource(LPath, aName));
+    CheckTrue(Pos('getmem', LBody) = 0, aName + ' must not allocate heap scratch (F-003: fixed stack chunking)');
+    CheckTrue(Pos('freemem', LBody) = 0, aName + ' must not free heap scratch (F-003: fixed stack chunking)');
+    CheckTrue(Pos('ctanscratchelems', LBody) > 0, aName + ' should use the named fixed stack scratch constant');
+  end;
+begin
+  { M3.1 source contract: Tan leaves stay heap-free (chunked stack scratch). }
+  LSourceLines := TSourceLines.Create;
+  try
+    CheckHeapFree('src/nextpas.core.simd.avx2.batch.inc', 'AVX2ArrayTanF32');
+    CheckHeapFree('src/nextpas.core.simd.sse2.batch.inc', 'SSE2ArrayTanF32');
+  finally
+    LSourceLines.Free;
   end;
 end;
 
