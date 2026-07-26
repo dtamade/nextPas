@@ -1157,7 +1157,15 @@ begin
   begin
     LValue := Integer(atomic_fetch_add_64(GMpmcCloseRaceNextValue, 1, mo_relaxed));
     if LValue >= MPMC_CLOSE_RACE_MAX_VALUES then
+    begin
+      { Values exhausted before Close: stay live until the queue closes so the
+        main thread's close-while-producers-live assertion holds by
+        construction, not by racing its 1ms poll quantum (3P+2C can burn all
+        values inside one quantum on an idle host). }
+      while not GMpmcCloseRaceQ.IsClosed do
+        CpuPause;
       Break;
+    end;
     if GMpmcCloseRaceQ.TryEnqueue(LValue) then
       atomic_fetch_add_64(GMpmcCloseRacePublished, 1, mo_release)
     else if GMpmcCloseRaceQ.IsClosed then
