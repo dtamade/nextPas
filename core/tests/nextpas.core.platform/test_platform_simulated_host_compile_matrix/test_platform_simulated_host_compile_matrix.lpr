@@ -56,6 +56,20 @@ program test_platform_simulated_host_compile_matrix;
   {$ENDIF}
 {$ENDIF}
 
+{$IFDEF SIM_EXPECT_WINDOWS}
+  { windows leg is a true cross target (-Twin64 -Px86_64), not a forced define:
+    FPC's built-in WINDOWS define drives settings.inc host selection }
+  {$IFNDEF NEXTPAS_WINDOWS}
+    {$fatal simulated windows compile must select NEXTPAS_WINDOWS}
+  {$ENDIF}
+  {$IFDEF NEXTPAS_LINUX}
+    {$fatal simulated windows compile must not keep NEXTPAS_LINUX}
+  {$ENDIF}
+  {$IFDEF NEXTPAS_UNIX}
+    {$fatal simulated windows compile must not keep NEXTPAS_UNIX}
+  {$ENDIF}
+{$ENDIF}
+
 uses
   nextpas.core.platform,
   nextpas.core.platform.time,
@@ -97,6 +111,7 @@ uses
   {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.base, nextpas.core.platform.android.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.base, nextpas.core.platform.freebsd.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_UNIX}, nextpas.core.platform.unix.base, nextpas.core.platform.unix.ffi{$ENDIF}
+  {$IFDEF SIM_EXPECT_WINDOWS}, nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi, nextpas.core.platform.windows.utf16{$ENDIF}
   ;
 
 var
