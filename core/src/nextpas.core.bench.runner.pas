@@ -31,7 +31,7 @@ type
     FElapsedNs: UInt64;
     FSkipped: Boolean;
     FSkipReason: string;
-    FName: string; { ST-03: benchmark name }
+    FName: string;
     FPausedNs: UInt64;  { StopTimer 记录暂停时刻 }
     FCustomMetrics: TCustomMetricArray;
 
@@ -51,7 +51,7 @@ type
     function GetElapsed: TDuration;
     function GetBytesPerOp: Int64;
     function GetAllocsPerOp: Int64;
-    function GetName: string; { ST-03 }
+    function GetName: string;
     procedure SetCustomMetric(const AName: string; AValue: Double);
     function GetCustomMetrics: TCustomMetricArray;
 
@@ -59,7 +59,7 @@ type
     procedure Reset;
     procedure IncrementIterations;
     procedure SetIterations(AValue: Int64);
-    procedure SetName(const AName: string); { ST-03 }
+    procedure SetName(const AName: string);
     function IsSkipped: Boolean;
     function GetSkipReason: string;
     function GetStartNs: UInt64;
@@ -88,7 +88,7 @@ type
   private
     FConfig: TBenchConfig;
     FFilter: string;
-    FFilterLower: string; { PF-08: cached lowercase filter }
+    FFilterLower: string; { cached lowercase filter }
     FFilterIsGlob: Boolean; { 预计算：filter 是否含 glob 字符 }
     FStatsAnalyzer: IBenchStatsAnalyzer;
     FResults: array of TBenchResult;
@@ -97,12 +97,12 @@ type
     FParallelBridgeFunc: TBenchFunc;
     FParallelContexts: array of IBenchContext;
     FParallelContextsInitialized: Boolean;
-    { F-01: bridge data as instance fields (was file-scope GBridgeData global) }
+    { bridge data as instance fields (was file-scope GBridgeData global) }
     FBridgeFunc: TBenchFunc;
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
-    { F-01: bridge entry name for parallel context propagation }
+    { bridge entry name for parallel context propagation }
     FBridgeEntryName: string;
     {** 公共初始化逻辑（Create/CreateNoEnv 共用） }
     procedure InitDefaults;
@@ -507,7 +507,7 @@ var
   LIndex: Integer;
 begin
   SetLength(FParallelContexts, AThreadCount);
-  { F-01: pre-create all TBenchContext objects in main thread to avoid
+  { pre-create all TBenchContext objects in main thread to avoid
     concurrent object creation in worker threads. }
   for LIndex := 0 to AThreadCount - 1 do
     FParallelContexts[LIndex] := TBenchContext.Create;
@@ -582,7 +582,7 @@ begin
       FConfig.EnableMemoryTracking := False;
   end;
 
-  { F-018: BENCH_ENV_TIMEOUT — 整体超时（毫秒） }
+  { BENCH_ENV_TIMEOUT — 整体超时（毫秒） }
   LValue := GetEnvironmentVariable(BENCH_ENV_TIMEOUT);
   if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
   begin
@@ -591,7 +591,7 @@ begin
   end;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
-  FFilterLower := nextpas.core.text.conv.LowerCase(FFilter); { PF-08 }
+  FFilterLower := nextpas.core.text.conv.LowerCase(FFilter);
   FFilterIsGlob := (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0);
 end;
 
@@ -627,7 +627,7 @@ begin
   if AIters <= 0 then
     Exit;
 
-  { F-01: LoopFunc (no context) or LoopContextFunc (with context) }
+  { LoopFunc (no context) or LoopContextFunc (with context) }
   if AEntry.IsLoop and (Assigned(AEntry.LoopFunc) or Assigned(AEntry.LoopContextFunc)) then
     Result := ExecuteLoopEntry(AEntry, AIters, ATrackMemory)
   else if AEntry.EnableParallel and (AEntry.ParallelThreads > 1) then
@@ -682,7 +682,7 @@ begin
     try
       LContextObj.Reset;
       LContextObj.SetIterations(AIters);
-      { F-01: dispatch to LoopContextFunc (with context) or LoopFunc (without) }
+      { dispatch to LoopContextFunc (with context) or LoopFunc (without) }
       if Assigned(AEntry.LoopContextFunc) then
         AEntry.LoopContextFunc(LContext, AIters)
       else
@@ -723,13 +723,13 @@ begin
   InitParallelContexts(AEntry.ParallelThreads);
   try
     FParallelBridgeFunc := AEntry.Func;
-    { F-01: bridge data stored in instance fields, not file-scope global }
+    { bridge data stored in instance fields, not file-scope global }
     FBridgeFunc := FParallelBridgeFunc;
     FBridgeParamFunc := AEntry.ParamFunc;
     FBridgeSimpleFunc := AEntry.SimpleFunc;
     FBridgeParamValue := AEntry.ParamValue;
     FBridgeEntryName := AEntry.Name;
-    { F-16: 禁止进程内并发 parallel RunOne（桥接仍共享 runner 字段） }
+    { 禁止进程内并发 parallel RunOne（桥接仍共享 runner 字段） }
     if InterlockedCompareExchange(GParallelBusy, 1, 0) <> 0 then
       raise EBenchError.Create(
         'TBenchRunner: concurrent parallel benchmark execution detected. ' +
@@ -806,7 +806,7 @@ begin
     end;
     try
       LContextObj.Reset;
-      { PF-13: set iterations on context each time for user-visible correctness.
+      { set iterations on context each time for user-visible correctness.
         The virtual dispatch overhead of SetIterations is minimal (field setter). }
       for LIter := 1 to AIters do
       begin
@@ -875,7 +875,7 @@ begin
 
     if LElapsed = 0 then
     begin
-      { PF-18: guard against unbounded growth when timer resolution is too coarse.
+      { guard against unbounded growth when timer resolution is too coarse.
         If LIters already >= MaxIters, break immediately. ScaleIterationsByTen
         also caps at MaxIters, but add explicit check here for the LElapsed=0 loop. }
       if LIters >= LMaxIters then
@@ -971,7 +971,7 @@ begin
     for I := 1 to FConfig.WarmupIterations do
     begin
       LResult := ExecuteEntry(AEntry, 1, False);
-      { F-06: if warmup is skipped, stop early }
+      { if warmup is skipped, stop early }
       if LResult.Skipped then
         Break;
     end;
@@ -1034,7 +1034,7 @@ begin
   SetLength(LSamples, LSampleCount);
   LSamples[0] := LProbeNsPerOp;  { 第一个样本已在探测中获得 }
 
-  { F-11: 预计算超时阈值 }
+  { 预计算超时阈值 }
   if (ATimeoutMs > 0) and (ATimeoutStartNs > 0) then
     LTimeoutNs := UInt64(ATimeoutMs) * 1000000
   else
@@ -1042,7 +1042,7 @@ begin
 
   for I := 1 to LSampleCount - 1 do
   begin
-    { F-11: 采样前检查 timeout }
+    { 采样前检查 timeout }
     if (LTimeoutNs > 0) and
        (platform_monotonic_ns - ATimeoutStartNs >= LTimeoutNs) then
     begin
@@ -1053,7 +1053,7 @@ begin
       Break;
     end;
 
-    { F-11: 在最后一次采样时启用内存追踪，而非仅第二次 }
+    { 在最后一次采样时启用内存追踪，而非仅第二次 }
     LMeasurement := ExecuteEntry(AEntry, AIters,
       FConfig.EnableMemoryTracking and (I = LSampleCount - 1));
 
@@ -1116,7 +1116,7 @@ begin
   if FFilterIsGlob then
     Result := nextpas.core.bench.base.GlobMatch(FFilterLower, ALowerName)
   else
-    Result := Pos(FFilterLower, ALowerName) > 0; { PF-08: 子串匹配 }
+    Result := Pos(FFilterLower, ALowerName) > 0;
 end;
 
 procedure TBenchRunner.AddResult(const AResult: TBenchResult);
@@ -1226,7 +1226,7 @@ begin
   Result.Executed := True;
   LSetupData := nil;
 
-  { F-04: suite deadline may be passed from TBenchSuite.Run into sampling }
+  { suite deadline may be passed from TBenchSuite.Run into sampling }
   if Assigned(LEntry.Setup) then
     LSetupData := LEntry.Setup();
   try
@@ -1259,7 +1259,7 @@ begin
     LStats := FStatsAnalyzer.ComputeStats(LSamples);
 
     Result.Iterations := LIters;
-    { PF-09: use actual measured total from first sample instead of mean*iters }
+    { use actual measured total from first sample instead of mean*iters }
     Result.TotalNs := LMeasurement.TotalNs;
     Result.NsPerOp := LStats.Mean;
     Result.OpsPerSec := ComputeOpsPerSec(LStats.Mean);
@@ -1370,7 +1370,7 @@ end;
 procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
-  FFilterLower := nextpas.core.text.conv.LowerCase(AFilter); { PF-08: cache lowercase }
+  FFilterLower := nextpas.core.text.conv.LowerCase(AFilter);
   FFilterIsGlob := (Pos('*', AFilter) > 0) or (Pos('?', AFilter) > 0);
 end;
 

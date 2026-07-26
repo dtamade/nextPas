@@ -268,7 +268,7 @@ begin
   if not FEnabled then Exit;
 
   AtomicInc64(FStats.FreeCount, 1);
-  { F-08: unknown size (0) still counts free ops but does not drive Current* negative }
+  { unknown size (0) still counts free ops but does not drive Current* negative }
   if ASize > 0 then
     AtomicInc64(FStats.FreeBytes, ASize);
 
@@ -422,7 +422,7 @@ begin
     if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
       GGlobalTracker := TMemoryTracker.Create(True);
   end;
-  if GGlobalTrackerInitialized <> 0 then  { F-02: guard against CAS loser race }
+  if GGlobalTrackerInitialized <> 0 then  { guard against CAS loser race }
     GGlobalTracker.Reset;
 end;
 

@@ -200,7 +200,7 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.scalar,
   nextpas.core.time.cpu,
-  nextpas.core.bench.intf, { PF-06: for EBenchInvalidParam }
+  nextpas.core.bench.intf, { for EBenchInvalidParam }
   nextpas.core.atomic.types; { P0-2: 线程安全的原子计数器 }
 
 {** F-12: 全局计数器，防止 BootstrapCI 快速连续调用时种子碰撞 }
@@ -384,7 +384,7 @@ end;
 
 function TAdvancedStats.Percentile(APercentile: Double): Double;
 begin
-  { PF-06: range validation — reject out-of-range percentiles }
+  { range validation — reject out-of-range percentiles }
   if (APercentile < 0.0) or (APercentile > 100.0) then
     raise EBenchInvalidParam.CreateFmt(
       'TAdvancedStats.Percentile: APercentile must be in [0, 100], got %.2f', [APercentile]);
@@ -1071,7 +1071,7 @@ begin
   LMean1 := Mean;
   LVar1 := Variance;
 
-  { PF-04: compute mean + variance of AOther in a single pass }
+  { compute mean + variance of AOther in a single pass }
   ComputeMeanVariance(AOther, LMean2, LVar2);
 
   // Welch's t-test
@@ -1097,7 +1097,7 @@ begin
   LMean1 := Mean;
   LVar1 := Variance;
 
-  { PF-04: compute mean + variance of AOther in a single pass }
+  { compute mean + variance of AOther in a single pass }
   ComputeMeanVariance(AOther, LMean2, LVar2);
 
   // Cohen's d — weighted pooled stddev (PF-05)

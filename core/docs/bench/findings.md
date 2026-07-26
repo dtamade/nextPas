@@ -32,7 +32,7 @@
 | F-19 | **Resolved** | 策略：不扩功能，文档对标差距 |
 | F-20 | **Resolved** | 子集为真相；全量推迟 |
 | F-21 | **Resolved** | CONTRACT heaptrc 互斥说明 |
-| F-22 | **Partial** | 未批量清 ticket 注释（低优先） |
+| F-22 | **Resolved** | 46 处 ticket 注释清理：活约束去标签保留，纯历史/噪音整条删 |
 | F-23 | **Deferred-closed** | EBR 明确不实现 |
 | F-24 | **Resolved** | TBenchRun Advanced 文档 |
 | F-25 | **Partial** | 未加 golden 文件（可选） |

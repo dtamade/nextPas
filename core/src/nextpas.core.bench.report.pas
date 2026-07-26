@@ -36,7 +36,7 @@ type
     FResults: array of TBenchResult;
     FResultCount: Integer;
     FEnvironment: TBenchEnvironment;
-    FCachedCSS: string; { PF-19: cached CSS string }
+    FCachedCSS: string; { cached CSS string }
     FCSSCached: Boolean;
     FMaxDetailCount: Integer;
 
@@ -315,7 +315,7 @@ begin
   if ANs < 1000 then
     Result := FormatNumber(ANs, 1) + ' ns'
   else if ANs < 1000000 then
-    Result := FormatNumber(ANs / 1000.0, 2) + ' µs' { ST-19: Unicode micro sign }
+    Result := FormatNumber(ANs / 1000.0, 2) + ' µs' { Unicode micro sign }
   else if ANs < NANOSECONDS_PER_SECOND then
     Result := FormatNumber(ANs / 1000000.0, 2) + ' ms'
   else

@@ -246,7 +246,7 @@ end;
 
 function TBenchStatsAnalyzer.Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 begin
-  { PF-06: range validation — reject out-of-range percentiles }
+  { range validation — reject out-of-range percentiles }
   if (APercent < 0.0) or (APercent > 100.0) then
     raise EBenchInvalidParam.CreateFmt(
       'TBenchStatsAnalyzer.Percentile: APercent must be in [0, 100], got %.2f', [APercent]);
@@ -753,7 +753,7 @@ begin
   for I := 0 to LLen - 1 do
   begin
     if ARatios[I] <= 0.0 then
-      Exit(0.0 / 0.0);  { F-13: 非法 ratio，返回 NaN 而非 0.0 }
+      Exit(0.0 / 0.0);  { 非法 ratio，返回 NaN 而非 0.0 }
     LSumLn := LSumLn + Ln(ARatios[I]);
   end;
 
@@ -1103,7 +1103,7 @@ end;
 
 function TBenchStatsAnalyzer.BootstrapTestDifference(const A, B: TDoubleArray;
   AIterations: Integer; ASeed: UInt64): TBootstrapTestResult;
-{ F-09: 直接调用独立函数，无需创建 TAdvancedStats 实例 }
+{ 直接调用独立函数，无需创建 TAdvancedStats 实例 }
 begin
   Result := nextpas.core.bench.stats.advanced.BootstrapTestDifference(A, B, AIterations, ASeed);
 end;
@@ -1170,7 +1170,7 @@ begin
   Result.PosteriorMean := LPosteriorVar * (APriorMean / LPriorVar + LN * LSampleMean / (LSigma * LSigma));
 
   { 95% 可信区间 }
-  LZ := NormalQuantile(0.975); { F-03: use NormalQuantile instead of hardcoded 1.96 }
+  LZ := NormalQuantile(0.975); { use NormalQuantile instead of hardcoded 1.96 }
   Result.CredibleLower := Result.PosteriorMean - LZ * Result.PosteriorStdDev;
   Result.CredibleUpper := Result.PosteriorMean + LZ * Result.PosteriorStdDev;
   Result.CredibleLevel := 0.95;

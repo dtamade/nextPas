@@ -120,7 +120,7 @@ type
     CurrentNsPerOp: Double;
     Ratio: Double;
     HasStatisticalTest: Boolean;
-    IsSignificant: Boolean; { ST-10: renamed from DifferenceHeuristic for clarity }
+    IsSignificant: Boolean;
     ApproximatePValue: Double;
   end;
 
@@ -258,7 +258,7 @@ type
     BaselineNsPerOp: Double;
     Ratio: Double;              // current / baseline
     IsSignificant: Boolean;     // 阈值启发式：|Ratio-1| > BENCH_MATRIX_DIFF_THRESHOLD
-    SignificanceThreshold: Double; { F-014: was PValue, renamed for clarity (not a real p-value) }
+    SignificanceThreshold: Double; { heuristic threshold — not a real p-value }
   end;
 
   {** 矩阵行：一个 benchmark 对所有 baselines 的对比 }
@@ -601,7 +601,7 @@ var
   LPivot, LTmp: Double;
   I, J: Integer;
 begin
-  { F-19: 尾递归优化，与 DoQuickSortIndirect 一致 }
+  { 尾递归优化，与 DoQuickSortIndirect 一致 }
   while ARight - ALeft >= INSERTION_SORT_THRESHOLD do
   begin
     if ADepthLimit <= 0 then
