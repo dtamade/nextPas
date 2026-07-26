@@ -454,12 +454,239 @@ begin
     CheckTrue(AC.Data <> '', 'name ok');
 end;
 
+{ ── v8.38: DiscoverTests 注册过滤矩阵 + VMT backend 枚举契约（B78 t5） ─────── }
+
+function NextSegD(var ARest: string): string;
+var
+  LP: Integer;
+begin
+  LP := Pos('|', ARest);
+  if LP = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LP - 1);
+    ARest := Copy(ARest, LP + 1, Length(ARest));
+  end;
+end;
+
+procedure AppendDCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+var
+  LIdx: Integer;
+begin
+  LIdx := Length(ACases);
+  SetLength(ACases, LIdx + 1);
+  ACases[LIdx].Name := AName;
+  ACases[LIdx].Data := AData + '|' + AFlag;
+end;
+
+procedure SpecDummyTarget;
+begin
+  { 仅提供非 nil CodePointer；spec 条目注册后不运行 }
+end;
+
+type
+  { spec 驱动 backend：GSpecString 逗号分隔 v/e/n
+    v=有效条目（名 M<位置号>, 非 nil 地址）, e=空名条目, n=nil 地址条目;
+    'F'=枚举失败（返回 False）, ''=成功空枚举 }
+  TSpecDiscoveryBackend = class(TInterfacedObject, ITestDiscoveryBackend)
+  public
+    function EnumeratePublishedMethods(AClass: TClass;
+      out AMethods: TDiscoveredMethods): Boolean;
+  end;
+
+var
+  GSpecString: string;
+
+function TSpecDiscoveryBackend.EnumeratePublishedMethods(AClass: TClass;
+  out AMethods: TDiscoveredMethods): Boolean;
+var
+  LRest, LTok: string;
+  LIdx, LP: Integer;
+begin
+  SetLength(AMethods, 0);
+  if GSpecString = 'F' then
+    Exit(False);
+  Result := True;
+  LRest := GSpecString;
+  LIdx := 0;
+  while LRest <> '' do
+  begin
+    LP := Pos(',', LRest);
+    if LP = 0 then
+    begin
+      LTok := LRest;
+      LRest := '';
+    end
+    else
+    begin
+      LTok := Copy(LRest, 1, LP - 1);
+      LRest := Copy(LRest, LP + 1, Length(LRest));
+    end;
+    Inc(LIdx);
+    SetLength(AMethods, LIdx);
+    if LTok = 'v' then
+    begin
+      AMethods[LIdx - 1].Name := 'M' + IntToStr(LIdx);
+      AMethods[LIdx - 1].CodeAddr := CodePointer(@SpecDummyTarget);
+    end
+    else if LTok = 'e' then
+    begin
+      AMethods[LIdx - 1].Name := '';
+      AMethods[LIdx - 1].CodeAddr := CodePointer(@SpecDummyTarget);
+    end
+    else { 'n' }
+    begin
+      AMethods[LIdx - 1].Name := 'M' + IntToStr(LIdx);
+      AMethods[LIdx - 1].CodeAddr := nil;
+    end;
+  end;
+end;
+
+{ Data: spec|suitename|wantCount|wantNames|flag
+  spec: '-'=成功空枚举, 'F'=backend 枚举失败, 否则逗号分隔 v/e/n
+  suitename: '-'=省略（锁 ClassName 回退）
+  wantNames: 期望 Tests[] 名字逗号串联（锁过滤保序 + 原位置号）, '-'=空
+  锁定契约：Name='' 或 CodeAddr=nil 条目静默跳过；backend False → 空套件。 }
+procedure RunDiscoverFilterCase(const AC: TTestCase);
+var
+  LRest, LSpec, LSuiteName, LWantNames, LFlag, LGotNames: string;
+  LWantCount, I: Integer;
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+begin
+  LRest := AC.Data;
+  LSpec := NextSegD(LRest);
+  LSuiteName := NextSegD(LRest);
+  LWantCount := StrToIntDef(NextSegD(LRest), -1);
+  LWantNames := NextSegD(LRest);
+  LFlag := LRest;
+
+  if LSpec = '-' then
+    GSpecString := ''
+  else
+    GSpecString := LSpec;
+  SetDiscoveryBackend(TSpecDiscoveryBackend.Create as ITestDiscoveryBackend);
+  try
+    LFixture := TSimpleFixture.Create;
+    if LSuiteName = '-' then
+      LSuite := DiscoverTests(LFixture)
+    else
+      LSuite := DiscoverTests(LFixture, LSuiteName);
+
+    CheckEqual(LWantCount, Length(LSuite.Tests), AC.Name + ': test count');
+    if LSuiteName = '-' then
+      CheckEqual('TSimpleFixture', LSuite.Name, AC.Name + ': ClassName fallback')
+    else
+      CheckEqual(LSuiteName, LSuite.Name, AC.Name + ': explicit name');
+
+    LGotNames := '';
+    for I := 0 to High(LSuite.Tests) do
+    begin
+      if I > 0 then
+        LGotNames := LGotNames + ',';
+      LGotNames := LGotNames + LSuite.Tests[I].Name;
+    end;
+    if LWantNames = '-' then
+      CheckEqual('', LGotNames, AC.Name + ': no names')
+    else
+      CheckEqual(LWantNames, LGotNames, AC.Name + ': filtered order + slot names');
+
+    { metadata-only：不 run；fixture/stub 由注册表 finalization 兜底（B3 先例） }
+    LSuite := Default(TTestSuite);
+  finally
+    ResetDiscoveryBackend;
+  end;
+
+  { flag 自校验：'0' ⟺ 零注册行 }
+  if LFlag = '0' then
+    CheckEqual(0, LWantCount, AC.Name + ': flag-0 must be zero-count row')
+  else
+    CheckTrue(LWantCount > 0, AC.Name + ': flag-1 must be positive-count row');
+end;
+
+{ Data: cls|wantOk|wantCount|wantNames|flag
+  cls 选择被枚举类与 backend 来源（getdefault/setnil/fresh 锁注册表语义）。
+  锁定契约：nil class → False；无 published → True+空；名序=声明序；地址非 nil。 }
+procedure RunVmtEnumCase(const AC: TTestCase);
+var
+  LRest, LCls, LWantNames, LFlag, LGotNames: string;
+  LWantOk, LOk: Boolean;
+  LWantCount, I: Integer;
+  LBackend: ITestDiscoveryBackend;
+  LMethods: TDiscoveredMethods;
+  LClass: TClass;
+begin
+  LRest := AC.Data;
+  LCls := NextSegD(LRest);
+  LWantOk := NextSegD(LRest) = 'T';
+  LWantCount := StrToIntDef(NextSegD(LRest), -1);
+  LWantNames := NextSegD(LRest);
+  LFlag := LRest;
+
+  if LCls = 'getdefault' then
+    LBackend := GetDiscoveryBackend
+  else if LCls = 'setnil' then
+  begin
+    SetDiscoveryBackend(nil);  { nil → 重置为 FPC VMT backend }
+    LBackend := GetDiscoveryBackend;
+  end
+  else
+    LBackend := CreateFpcVmtDiscoveryBackend;
+
+  LClass := nil;
+  if LCls = 'tobject' then
+    LClass := TObject
+  else if LCls = 'fixture' then
+    LClass := TTestFixture
+  else if (LCls = 'simple') or (LCls = 'getdefault') or (LCls = 'setnil') then
+    LClass := TSimpleFixture
+  else if (LCls = 'hooks') or (LCls = 'fresh') then
+    LClass := THooksFixture
+  else if LCls = 'fail' then
+    LClass := TFailFixture
+  else if LCls = 'empty' then
+    LClass := TEmptyFixture;
+  { LCls='nil' → LClass 保持 nil }
+
+  LOk := LBackend.EnumeratePublishedMethods(LClass, LMethods);
+  CheckTrue(LOk = LWantOk, AC.Name + ': ok flag');
+  CheckEqual(LWantCount, Length(LMethods), AC.Name + ': method count');
+
+  LGotNames := '';
+  for I := 0 to High(LMethods) do
+  begin
+    if I > 0 then
+      LGotNames := LGotNames + ',';
+    LGotNames := LGotNames + LMethods[I].Name;
+  end;
+  if LWantNames = '-' then
+    CheckEqual('', LGotNames, AC.Name + ': no names')
+  else
+    CheckEqual(LWantNames, LGotNames, AC.Name + ': declaration order');
+
+  for I := 0 to High(LMethods) do
+    CheckTrue(LMethods[I].CodeAddr <> nil, AC.Name + ': non-nil addr');
+
+  { flag 自校验：'0' ⟺ wantCount=0 }
+  if LFlag = '0' then
+    CheckEqual(0, LWantCount, AC.Name + ': flag-0 must be zero-count row')
+  else
+    CheckTrue(LWantCount > 0, AC.Name + ': flag-1 must be positive-count row');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
   LB26Cases: specialize TArray<TTestCase>;
   LB26I: Integer;
+  LFilterCases: specialize TArray<TTestCase>;
+  LVmtCases: specialize TArray<TTestCase>;
 begin
   WriteLn('=== test_discovery ===');
   LSuite := TTestSuite.Create('discovery');
@@ -502,6 +729,36 @@ begin
       LB26Cases[LB26I].Data := '';
   end;
   LSuite.TestTable('B26 discover name contracts', LB26Cases, @TestB26DiscoverNameContract);
+
+  { v8.38: DiscoverTests 注册过滤矩阵（crafted backend, metadata-only） }
+  SetLength(LFilterCases, 0);
+  AppendDCase(LFilterCases, 'd-empty-spec',    '-|-|0|-', '0');
+  AppendDCase(LFilterCases, 'd-backend-false', 'F|-|0|-', '0');
+  AppendDCase(LFilterCases, 'd-one-valid',     'v|-|1|M1', '1');
+  AppendDCase(LFilterCases, 'd-three-valid',   'v,v,v|-|3|M1,M2,M3', '1');
+  AppendDCase(LFilterCases, 'd-emptyname',     'e|-|0|-', '0');
+  AppendDCase(LFilterCases, 'd-niladdr',       'n|-|0|-', '0');
+  AppendDCase(LFilterCases, 'd-mixed',         'v,e,n,v|-|2|M1,M4', '1');
+  AppendDCase(LFilterCases, 'd-all-invalid',   'e,n,e,n|-|0|-', '0');
+  AppendDCase(LFilterCases, 'd-name-override', 'v|custom|1|M1', '1');
+  AppendDCase(LFilterCases, 'd-two-valid',     'v,v|duo|2|M1,M2', '1');
+  AppendDCase(LFilterCases, 'd-lead-invalid',  'e,v|-|1|M2', '1');
+  AppendDCase(LFilterCases, 'd-trail-invalid', 'v,n|-|1|M1', '1');
+  LSuite.TestTable('v8.38 discover filter matrix', LFilterCases, @RunDiscoverFilterCase);
+
+  { v8.38: FPC VMT backend 枚举契约 }
+  SetLength(LVmtCases, 0);
+  AppendDCase(LVmtCases, 'f-nil',            'nil|F|0|-', '0');
+  AppendDCase(LVmtCases, 'f-tobject',        'tobject|T|0|-', '0');
+  AppendDCase(LVmtCases, 'f-fixture',        'fixture|T|0|-', '0');
+  AppendDCase(LVmtCases, 'f-empty',          'empty|T|0|-', '0');
+  AppendDCase(LVmtCases, 'f-simple',         'simple|T|2|TestPass,TestAlsoPass', '1');
+  AppendDCase(LVmtCases, 'f-hooks',          'hooks|T|3|TestOne,TestTwo,TestThree', '1');
+  AppendDCase(LVmtCases, 'f-fail',           'fail|T|1|TestFail', '1');
+  AppendDCase(LVmtCases, 'f-default-vmt',    'getdefault|T|2|TestPass,TestAlsoPass', '1');
+  AppendDCase(LVmtCases, 'f-setnil-resets',  'setnil|T|2|TestPass,TestAlsoPass', '1');
+  AppendDCase(LVmtCases, 'f-create-fresh',   'fresh|T|3|TestOne,TestTwo,TestThree', '1');
+  LSuite.TestTable('v8.38 VMT backend enumeration', LVmtCases, @RunVmtEnumCase);
 
   if not LSuite.Run then
   begin

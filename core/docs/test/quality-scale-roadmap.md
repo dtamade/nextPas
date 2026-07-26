@@ -143,7 +143,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
-| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 81.9% / low-signal 0%），但 countable=7938 < 9000（v8.37 tranche 4 后）—— 需再增 ~1062 再抬门 |
+| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 81.7% / low-signal 0%），但 countable=7997 < 9000（v8.38 tranche 5 后）—— 需再增 ~1003 再抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | **done (v8.31 F-19)** |
 | B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | **done (v8.32)** README §Release Checklist |
 
@@ -203,7 +203,17 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | 修复 | `FuzzGenString` off-by-one：闭区间 `NextIntRange(0,95)` 可产 DEL(127)，改 `(0,94)` → 32..126；`g-str-printable` 行回归绑定 | **done** |
 | B78 部分 | test_advanced retry 矩阵 26 行（三个隐蔽契约：entry=0 回退 config / 负值唯一 opt-out / tsError 也重试）+ repeat 矩阵 10 行（report-last-result / repeat×config-retry 嵌套 execs exact）+ test_prop coverage tracker 状态机 24 行（TotalHits 与 CoverageCount 分离、越界语义、bit 边界）+ fuzzgen 长度 9 行；flag 自校验防灌水 | **done** |
-| B78 余量 | countable 7938 / 9000 — 缺 ~1062；候选：test_bench/test_subtests/test_discovery 密度、FuzzMinimize 公开化评估（现为 implementation 私有不可表驱动） | 待后续 tranche |
+| B78 余量 | countable 7938 / 9000 — 缺 ~1062；候选：test_bench/test_subtests/test_discovery 密度、FuzzMinimize 公开化评估（现为 implementation 私有不可表驱动） | → v8.38 tranche 5 |
+
+---
+
+### v8.38 — B78 密度 tranche 5（bench/discovery 契约表 + %.0f 尾点修复）
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| 修复 | 跨模块 `text.format` FormatFloat：小数位 0 时无条件追加 `'.'` → `%.0f` 渲染 `"5."`；修复后无小数点。影响面仅 bench.report/test.bench（均本 lane 负责域），无 golden 依赖；`b-t-below` 行消息 exact 回归绑定 | **done** |
+| B78 部分 | test_bench CheckBench 判定矩阵 22 行（Executed=False 必败 / Skipped 被忽略 / 闭边界 / 消息 exact / 49.5→"50" 舍入陷阱）+ 结构表 13 行（config 五字段 / 空条目 nil / 保序）+ test_discovery 过滤矩阵 12 行（空名/nil 地址静默跳过保序 `M1,M4`、backend False→空、ClassName 回退）+ VMT 枚举 10 行（nil→False、声明序、SetDiscoveryBackend(nil) 重置）；flag 自校验防灌水 | **done** |
+| B78 余量 | countable 7997 / 9000 — 缺 ~1003；候选：test_subtests 密度、FuzzMinimize 公开化评估 | 待后续 tranche |
 
 ---
 
@@ -231,12 +241,13 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.38+** / backlog：SCALE→9000 密度增长续（B78，缺 ~1062 countable；候选
-test_bench/test_subtests/test_discovery 密度、FuzzMinimize 公开化评估）；v9 SoftExpect（需拍板）。
+**v8.39+** / backlog：SCALE→9000 密度增长续（B78，缺 ~1003 countable；候选
+test_subtests 密度、FuzzMinimize 公开化评估）；v9 SoftExpect（需拍板）。
 已完成：~~prop god-unit 拆分（F-03，v8.32）~~；~~release checklist（B80，v8.32）~~；
 ~~runner 拆分 + F-20 测试语义修正（v8.33）~~；~~F-12 COW lint + runner.multi 契约（v8.34）~~；
 ~~output 转义/结构 fail-path 92 行（v8.35）~~；~~prop.gen shrink 精确序列 85 行（v8.36）~~；
-~~retry/repeat 执行语义 + fuzz 可观测契约 + DEL 修复（v8.37）~~。
+~~retry/repeat 执行语义 + fuzz 可观测契约 + DEL 修复（v8.37）~~；
+~~bench/discovery 契约表 57 行 + %.0f 尾点修复（v8.38）~~。
 
 ---
 

@@ -425,6 +425,38 @@ end;
 
 ## 11. 变更日志
 
+### v8.38 (2026-07-26) — B78 密度 tranche 5：bench/discovery 契约表 + %.0f 尾点修复
+
+- **修复（跨模块 text.format）**：`FormatFloat` 在小数位数 0 时无条件追加 `'.'`——
+  `TextFormat('%.0f', [5.0])` 渲染 `"5."`（C printf 语义应为 `"5"`；巨值分支走
+  `Str(:0:0)` 无尾点，行为自相矛盾坐实 bug）。修复后 `%.0f` → 无小数点；
+  `%.1f`/`%f` 不受影响。影响面：全仓 `%.0f` 消费者仅 `bench.report` + `test.bench`
+  （无 golden/exact 断言依赖尾点；text_conv 此前无任何 `%.0f` 用例）。
+  回归绑定：`b-t-below` 行消息 exact（修复前为 `"25. ops/s"` 必红）
+- **test_bench 两张契约表（35 行，其中 16 行 fail-path）**：
+  - `CheckBench decision matrix`（22 行，合成 `TBenchTestResult` 记录、零计时依赖）：
+    **Executed=False 时指标达标也必败**（且默认消息仍是误导性的 "exceeds/below"——
+    消息本身即锁定契约）；**Skipped 字段被判定完全忽略**（skip+executed 可 pass）；
+    `<=`/`>=` 闭边界（metric=threshold → pass）；自定义消息完全覆盖默认（含
+    NotExecuted 场景）；失败消息 exact（`%.1f`/`%.0f` 渲染）；舍入陷阱行
+    `b-t-round-half`：49.5 经 `%.0f` half-away 渲染为 `"50"`，消息读作
+    "50 ops/s below threshold 50 ops/s" 而数值比较仍败——渲染与判定分离已锁
+  - `bench structure contract`（13 行）：`DefaultBenchTestConfig` 五字段 exact
+    （100/5/0/5000/1）；`RunBenchSuite` 空条目 → nil（len 0）；双条目保序 +
+    Name 传播（alpha/beta）；`RunBenchTest` Name 回传 + Executed/Skipped 旗标
+- **test_discovery 两张契约表（22 行，其中 9 行 fail-path）**：
+  - `discover filter matrix`（12 行，spec 驱动 crafted backend）：
+    **`Name=''` 或 `CodeAddr=nil` 条目静默跳过**（过滤保序 + 原位置号：
+    `v,e,n,v` → `M1,M4`）；backend 枚举失败（False）→ 空套件；
+    套件名 `''` → ClassName 回退 / 显式名覆盖
+  - `VMT backend enumeration`(10 行)：nil class → False；无 published
+    （TObject/TTestFixture/TEmptyFixture）→ True+空枚举；**名序=声明序**
+    （TSimpleFixture/THooksFixture/TFailFixture exact）；`SetDiscoveryBackend(nil)`
+    → 重置为 FPC VMT；枚举产物地址全非 nil
+- 表行 flag 自校验：CheckBench '0' ⟺ 失败行；structure/discovery '0' ⟺ 空/零值行
+- scale：countable 7938 → **7997**（test_bench 71→106、test_discovery 113→134；
+  fp +25：16+9）；fail-path 81.7% / low-signal 0% / non-table 1593
+
 ### v8.37 (2026-07-26) — B78 密度 tranche 4：retry/repeat 执行语义 + fuzz 可观测契约
 
 - **修复**：`FuzzGenString` 字符域 off-by-one——`NextIntRange(0,95)`（闭区间）可产

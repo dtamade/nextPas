@@ -458,12 +458,198 @@ begin
     end, 'performance');
 end;
 
+{ ── v8.38: CheckBench* 判定矩阵 + config/suite 结构契约（B78 tranche 5） ──── }
+
+function NextSegB(var ARest: string): string;
+var
+  LP: Integer;
+begin
+  LP := Pos('|', ARest);
+  if LP = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LP - 1);
+    ARest := Copy(ARest, LP + 1, Length(ARest));
+  end;
+end;
+
+function BoolMark(AB: Boolean): string;
+begin
+  if AB then
+    Result := 'T'
+  else
+    Result := 'F';
+end;
+
+procedure AppendBCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+var
+  LIdx: Integer;
+begin
+  LIdx := Length(ACases);
+  SetLength(ACases, LIdx + 1);
+  ACases[LIdx].Name := AName;
+  ACases[LIdx].Data := AData + '|' + AFlag;
+end;
+
+{ Data: kind|exec|skip|metricTenths|thrTenths|msg|want|flag
+  kind: p=CheckBenchPerformance(NsPerOp<=thr), t=CheckBenchThroughput(OpsPerSec>=thr)
+  metric/thr 以十分位整数编码（'25'=2.5，'-10'=-1.0），避免浮点字面量解析。
+  msg: '-'=无自定义消息。want: 'pass' 或失败消息 exact（含 %.1f/%.0f 渲染）。
+  锁定契约：Executed=False 指标达标也必败；Skipped 字段被判定完全忽略；
+  <=/>= 闭边界；自定义消息完全覆盖默认（含 NotExecuted 场景）。 }
+procedure RunBenchCheckCase(const AC: TTestCase);
+var
+  LRest, LKind, LMsgParam, LWant, LFlag, LGotMsg: string;
+  LRes: TBenchTestResult;
+  LMetric, LThr: Double;
+  LRaised: Boolean;
+begin
+  LRest := AC.Data;
+  LKind := NextSegB(LRest);
+  LRes := Default(TBenchTestResult);
+  LRes.Name := 'probe';
+  LRes.Executed := NextSegB(LRest) = 'T';
+  LRes.Skipped := NextSegB(LRest) = 'T';
+  LMetric := StrToIntDef(NextSegB(LRest), 0) / 10.0;
+  LThr := StrToIntDef(NextSegB(LRest), 0) / 10.0;
+  LMsgParam := NextSegB(LRest);
+  if LMsgParam = '-' then
+    LMsgParam := '';
+  LWant := NextSegB(LRest);
+  LFlag := LRest;
+
+  if LKind = 'p' then
+    LRes.NsPerOp := LMetric
+  else
+    LRes.OpsPerSec := LMetric;
+
+  LRaised := False;
+  LGotMsg := '';
+  try
+    if LKind = 'p' then
+      CheckBenchPerformance(LRes, LThr, LMsgParam)
+    else
+      CheckBenchThroughput(LRes, LThr, LMsgParam);
+  except
+    on E: EAssertionFailed do
+    begin
+      LRaised := True;
+      LGotMsg := E.Message;
+    end;
+  end;
+
+  if LWant = 'pass' then
+    CheckFalse(LRaised, AC.Name + ': no assertion expected')
+  else
+  begin
+    CheckTrue(LRaised, AC.Name + ': assertion expected');
+    CheckEqual(LWant, LGotMsg, AC.Name + ': message exact');
+  end;
+
+  { flag 自校验：'0' ⟺ 失败行 }
+  if LFlag = '0' then
+    CheckTrue(LWant <> 'pass', AC.Name + ': flag-0 must be fail row')
+  else
+    CheckEqual('pass', LWant, AC.Name + ': flag-1 must be pass row');
+end;
+
+{ Data: probe|want|flag — probe 选择探测点，want exact。
+  suite/runtest 行用快速配置（MinDurationMs=1/MinSamples=1/MaxIterations=1）
+  跑真实 bench 引擎，锁定条目保序与 Name 传播。 }
+procedure RunBenchStructCase(const AC: TTestCase);
+var
+  LRest, LProbe, LWant, LFlag, LGot: string;
+  LCfg, LFast: TBenchTestConfig;
+  LEntries: array[0..1] of TBenchTestEntry;
+  LEmpty: array of TBenchTestEntry;
+  LArr: TBenchTestResultArray;
+  LRes: TBenchTestResult;
+begin
+  LRest := AC.Data;
+  LProbe := NextSegB(LRest);
+  LWant := NextSegB(LRest);
+  LFlag := LRest;
+  LGot := '<unset>';
+
+  LFast := DefaultBenchTestConfig;
+  LFast.MinDurationMs := 1;
+  LFast.MinSamples := 1;
+  LFast.MaxIterations := 1;
+
+  LCfg := DefaultBenchTestConfig;
+  if LProbe = 'cfg-mindur' then
+    LGot := IntToStr(LCfg.MinDurationMs)
+  else if LProbe = 'cfg-minsamples' then
+    LGot := IntToStr(LCfg.MinSamples)
+  else if LProbe = 'cfg-maxiter' then
+    LGot := IntToStr(LCfg.MaxIterations)
+  else if LProbe = 'cfg-timeout' then
+    LGot := IntToStr(LCfg.TimeoutMs)
+  else if LProbe = 'cfg-threads' then
+    LGot := IntToStr(LCfg.ThreadCount)
+  else if (LProbe = 'suite-empty-len') or (LProbe = 'suite-empty-nil') then
+  begin
+    SetLength(LEmpty, 0);
+    LArr := RunBenchSuite('v838-empty', LEmpty, LFast);
+    if LProbe = 'suite-empty-len' then
+      LGot := IntToStr(Length(LArr))
+    else if LArr = nil then
+      LGot := 'nil'
+    else
+      LGot := 'non-nil';
+  end
+  else if Pos('suite-two-', LProbe) = 1 then
+  begin
+    LEntries[0].Name := 'alpha';
+    LEntries[0].Func := @BenchNoop;
+    LEntries[1].Name := 'beta';
+    LEntries[1].Func := @BenchIncrement;
+    LArr := RunBenchSuite('v838-duo', LEntries, LFast);
+    if LProbe = 'suite-two-count' then
+      LGot := IntToStr(Length(LArr))
+    else if Length(LArr) = 2 then
+    begin
+      if LProbe = 'suite-two-name0' then
+        LGot := LArr[0].Name
+      else if LProbe = 'suite-two-name1' then
+        LGot := LArr[1].Name
+      else if LProbe = 'suite-two-exec' then
+        LGot := BoolMark(LArr[0].Executed) + BoolMark(LArr[1].Executed);
+    end;
+  end
+  else if Pos('runtest-', LProbe) = 1 then
+  begin
+    LRes := RunBenchTest('gamma', @BenchNoop, LFast);
+    if LProbe = 'runtest-name' then
+      LGot := LRes.Name
+    else if LProbe = 'runtest-flags' then
+      LGot := BoolMark(LRes.Executed) + BoolMark(LRes.Skipped);
+  end;
+
+  CheckEqual(LWant, LGot, AC.Name + ': probe exact');
+
+  { flag 自校验：'0' ⟺ 空/零值输出行 }
+  if LFlag = '0' then
+    CheckTrue((LWant = '0') or (LWant = 'nil'),
+      AC.Name + ': flag-0 must be empty/zero row')
+  else
+    CheckTrue((LWant <> '0') and (LWant <> 'nil'),
+      AC.Name + ': flag-1 must be non-empty row');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   S: TTestSuite;
   LFpCases: specialize TArray<TTestCase>;
   LFpI: Integer;
+  LChkCases: specialize TArray<TTestCase>;
+  LStCases: specialize TArray<TTestCase>;
 begin
   S := TTestSuite.Create('test_bench');
 
@@ -519,6 +705,49 @@ begin
     LFpCases[LFpI].Data := IntToStr(LFpI);
   end;
   S.TestTable('bench fail-path ExpectFail', LFpCases, @TestBenchFailPathCase);
+
+  { v8.38: CheckBench* 判定矩阵（合成记录，零计时依赖） }
+  SetLength(LChkCases, 0);
+  AppendBCase(LChkCases, 'b-p-below',          'p|T|F|15|20|-|pass', '1');
+  AppendBCase(LChkCases, 'b-p-equal',          'p|T|F|20|20|-|pass', '1');
+  AppendBCase(LChkCases, 'b-p-above',          'p|T|F|25|20|-|Benchmark "probe" performance 2.5 ns/op exceeds threshold 2.0 ns/op', '0');
+  AppendBCase(LChkCases, 'b-p-notexec',        'p|F|F|10|20|-|Benchmark "probe" performance 1.0 ns/op exceeds threshold 2.0 ns/op', '0');
+  AppendBCase(LChkCases, 'b-p-skip-pass',      'p|T|T|10|20|-|pass', '1');
+  AppendBCase(LChkCases, 'b-p-skip-fail',      'p|F|T|10|20|-|Benchmark "probe" performance 1.0 ns/op exceeds threshold 2.0 ns/op', '0');
+  AppendBCase(LChkCases, 'b-p-custom',         'p|T|F|30|20|slow!|slow!', '0');
+  AppendBCase(LChkCases, 'b-p-custom-idle',    'p|T|F|10|20|unused|pass', '1');
+  AppendBCase(LChkCases, 'b-p-neg-thr',        'p|T|F|0|-10|-|Benchmark "probe" performance 0.0 ns/op exceeds threshold -1.0 ns/op', '0');
+  AppendBCase(LChkCases, 'b-p-zero-zero',      'p|T|F|0|0|-|pass', '1');
+  AppendBCase(LChkCases, 'b-p-big',            'p|T|F|10000|9999|-|Benchmark "probe" performance 1000.0 ns/op exceeds threshold 999.9 ns/op', '0');
+  AppendBCase(LChkCases, 'b-p-notexec-custom', 'p|F|F|10|20|why|why', '0');
+  AppendBCase(LChkCases, 'b-t-above',          't|T|F|1000|500|-|pass', '1');
+  AppendBCase(LChkCases, 'b-t-equal',          't|T|F|500|500|-|pass', '1');
+  AppendBCase(LChkCases, 'b-t-below',          't|T|F|250|500|-|Benchmark "probe" throughput 25 ops/s below threshold 50 ops/s', '0');
+  AppendBCase(LChkCases, 'b-t-notexec',        't|F|F|1000|500|-|Benchmark "probe" throughput 100 ops/s below threshold 50 ops/s', '0');
+  AppendBCase(LChkCases, 'b-t-skip-pass',      't|T|T|1000|500|-|pass', '1');
+  AppendBCase(LChkCases, 'b-t-skip-fail',      't|F|T|1000|500|-|Benchmark "probe" throughput 100 ops/s below threshold 50 ops/s', '0');
+  AppendBCase(LChkCases, 'b-t-custom',         't|T|F|100|500|slow throughput|slow throughput', '0');
+  AppendBCase(LChkCases, 'b-t-zero-thr',       't|T|F|10|0|-|pass', '1');
+  AppendBCase(LChkCases, 'b-t-round-half',     't|T|F|495|500|-|Benchmark "probe" throughput 50 ops/s below threshold 50 ops/s', '0');
+  AppendBCase(LChkCases, 'b-t-neg-metric',     't|T|F|-10|0|-|Benchmark "probe" throughput -1 ops/s below threshold 0 ops/s', '0');
+  S.TestTable('v8.38 CheckBench decision matrix', LChkCases, @RunBenchCheckCase);
+
+  { v8.38: config 默认值 + suite/runtest 结构契约 }
+  SetLength(LStCases, 0);
+  AppendBCase(LStCases, 'st-cfg-mindur',      'cfg-mindur|100', '1');
+  AppendBCase(LStCases, 'st-cfg-minsamples',  'cfg-minsamples|5', '1');
+  AppendBCase(LStCases, 'st-cfg-maxiter',     'cfg-maxiter|0', '0');
+  AppendBCase(LStCases, 'st-cfg-timeout',     'cfg-timeout|5000', '1');
+  AppendBCase(LStCases, 'st-cfg-threads',     'cfg-threads|1', '1');
+  AppendBCase(LStCases, 'st-suite-empty-len', 'suite-empty-len|0', '0');
+  AppendBCase(LStCases, 'st-suite-empty-nil', 'suite-empty-nil|nil', '0');
+  AppendBCase(LStCases, 'st-suite-two-count', 'suite-two-count|2', '1');
+  AppendBCase(LStCases, 'st-suite-two-name0', 'suite-two-name0|alpha', '1');
+  AppendBCase(LStCases, 'st-suite-two-name1', 'suite-two-name1|beta', '1');
+  AppendBCase(LStCases, 'st-suite-two-exec',  'suite-two-exec|TT', '1');
+  AppendBCase(LStCases, 'st-runtest-name',    'runtest-name|gamma', '1');
+  AppendBCase(LStCases, 'st-runtest-flags',   'runtest-flags|TF', '1');
+  S.TestTable('v8.38 bench structure contract', LStCases, @RunBenchStructCase);
 
   S.Run;
   S.Summary;

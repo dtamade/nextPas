@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-26
-> 治理状态: **v8.37** retry/repeat 执行语义 + fuzz 可观测契约 + FuzzGenString DEL 修复（v8.36 shrink 精确序列）
+> 治理状态: **v8.38** bench/discovery 契约表 + `%.0f` 尾点修复（v8.37 retry/repeat 执行语义 + DEL 修复）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 

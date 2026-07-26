@@ -152,6 +152,8 @@ var
     LFrac := LAbs - LInt;
     Result := FormatInt(LInt);
     if LNeg then Result := '-' + Result;
+    if ADigits <= 0 then
+      Exit;  { %.0f: no decimal point, matching printf and the Str() big-value branch }
     Result := Result + '.';
     for LI := 1 to ADigits do
     begin
