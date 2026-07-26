@@ -60,6 +60,7 @@ simd ↛ math
 | D-DOC-1 | Historical pass counts in archive sections | GOAL_QUEUE card EVIDENCE, plan.md history | low | Keep history; only §current baseline must match latest re-verify |
 | D-SIZE-1 | simd surface very large (~247 files under `nextpas.core.simd*`, ~137k LOC pas+inc) | `core/src/` | maintainability | Prefer `tools/simdgen` + contracts over hand-copy tables |
 | D-CPU-1 | Registry: simd **CPUInfo debt** | `core/docs/core-module-registry.md`; `simd.cpuinfo.*` | governance | Audit L0 boundary / host unit ownership; no silent OS unit creep |
+| D-AUDIT-1 | **audit gate systemically dead**: `make audit` fail-fast at simdgen masked 13/21 failing steps; main byte-identical red (discovered during M3.2, 2026-07-26) | `core/tests/nextpas.core.simd/check_*.py`, `tools/simdgen` | **high** | GOAL_QUEUE **M3.4** W1–W5 (path orphans → baselines → simdgen sync → key_slot/cpuinfo truth → no-fail-fast audit) |
 
 ### Explicitly blocked (Wave 4 / external)
 
@@ -79,6 +80,23 @@ simd ↛ math
 - RVV Memory/Batch intentionally scalar (S24a contracts)
 - S25a/b performance methodology + vsTrue SLA re-baseline
 - Q1/Q2 pointer + linkage; usability equal-length Batch policy
+
+## dispatchapi split size report (M3.2, 2026-07-26)
+
+`nextpas.core.simd.dispatchapi.testcase.pas` 24012 → 7 units; published-method conservation 253 = 253; focused 1764/0 unchanged; suites 61 → 65.
+
+| Unit | Lines | Suite (registered class) | Published |
+|------|-------|--------------------------|-----------|
+| `dispatchapi.testcase.pas` (original) | **7159** ⚠ >5k | `TTestCase_DispatchAPI` (narrowed: NEON/RISCVV/NonX86_/X86-grouped-wiring/Phase19 script-coupled only) | 71 |
+| `dispatchapi.support.pas` | 353 | — (shared helpers/types/hook globals, uses-LAST for shadowing parity) | 0 |
+| `dispatchapi.controlplane.testcase.pas` | 3995 | `TTestCase_DispatchAPIControlPlane` + `TTestCase_RISCVFallbackDispatchContract` | 59+2 |
+| `dispatchapi.parity.testcase.pas` | 3084 | `TTestCase_DispatchAPIParity` | 29 |
+| `dispatchapi.batchparity.testcase.pas` | 1819 | `TTestCase_DispatchAPIBatchParity` | 23 |
+| `dispatchapi.capabilities.testcase.pas` | 2336 | `TTestCase_DispatchAPICapabilities` + masked-contract classes | 37+3 |
+| `dispatchapi.nonx86.testcase.pas` | **5742** ⚠ >5k | `TTestCase_NonX86BackendParity` (cohesive single class, kept whole) | 29 |
+
+Size exceptions (documented, accepted): original keeps script-coupled methods (immutable gate scripts pin qualified names + same-file helper); nonx86 is one cohesive class.
+Old→new suite mapping: methods formerly under `TTestCase_DispatchAPI` now run under the 4 new suites above; `--suite=TTestCase_DispatchAPI` filters now cover **only** the 71 script-coupled methods.
 
 ## Recommended maintenance order (when touching code)
 

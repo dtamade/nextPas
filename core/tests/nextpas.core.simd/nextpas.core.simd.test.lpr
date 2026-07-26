@@ -20,6 +20,12 @@ uses
   nextpas.core.simd.vecf64x4.testcase,
   nextpas.core.simd.ieee754.testcase,
   nextpas.core.simd.dispatchapi.testcase,
+  nextpas.core.simd.dispatchapi.support,
+  nextpas.core.simd.dispatchapi.controlplane.testcase,
+  nextpas.core.simd.dispatchapi.parity.testcase,
+  nextpas.core.simd.dispatchapi.batchparity.testcase,
+  nextpas.core.simd.dispatchapi.capabilities.testcase,
+  nextpas.core.simd.dispatchapi.nonx86.testcase,
   nextpas.core.simd.sse2contracts.testcase,
   nextpas.core.simd.dataplane.testcase,
   nextpas.core.simd.runtime.testcase,
@@ -185,6 +191,10 @@ begin
   AddFixture(TTestCase_NonX86IEEE754.Create, 'TTestCase_NonX86IEEE754');
   AddFixture(TTestCase_NonX86BackendParity.Create, 'NonX86BackendParity');
   AddFixture(TTestCase_DispatchAPI.Create, 'TTestCase_DispatchAPI');
+  AddFixture(TTestCase_DispatchAPIControlPlane.Create, 'TTestCase_DispatchAPIControlPlane');
+  AddFixture(TTestCase_DispatchAPIParity.Create, 'TTestCase_DispatchAPIParity');
+  AddFixture(TTestCase_DispatchAPIBatchParity.Create, 'TTestCase_DispatchAPIBatchParity');
+  AddFixture(TTestCase_DispatchAPICapabilities.Create, 'TTestCase_DispatchAPICapabilities');
   AddFixture(TTestCase_SSE2Contracts.Create, 'TTestCase_SSE2Contracts');
   AddFixture(TTestCase_DataPlane.Create, 'TTestCase_DataPlane');
   AddFixture(TTestCase_RuntimeAPI.Create, 'TTestCase_RuntimeAPI');

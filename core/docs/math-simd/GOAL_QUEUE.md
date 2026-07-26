@@ -40,7 +40,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=M3.2  # Batch M3 polish wave approved by Codex 2026-07-26 (session 019f9dab-d69a-7511-9975-05d023d7bbc9)
+CURRENT=M3.4  # M3.2 done 2026-07-26;M3.3 保持 optional。用户 2026-07-26 指令:不再调用 Codex,Claude 全权推进 math/simd
 ```
 
 ---
@@ -66,11 +66,11 @@ CURRENT=M3.2  # Batch M3 polish wave approved by Codex 2026-07-26 (session 019f9
 | **DoD** | 门禁绿;Tan 体内零堆分配有契约锁定;findings F-003 标 residual hardening closed;一 commit |
 | **EVIDENCE** | 2026-07-26: focused **1764**/0(1762+2 新测试);hygiene pass;math clean test exit 0 + heaptrc 0 unfreed;diff-check clean;`Test_BatchF32_ArrayTan_ChunkBoundary_NearParity`(SSE2+AVX2 force,counts 0/1/7/8/511/512/513/1027)+ `Test_ArrayTanF32_NoHeapScratch_SourceAudit`(GetMem/FreeMem 禁 + CTanScratchElems 必现) |
 
-### M3.2 — F-007 收尾:dispatchapi 巨测拆分(方案 A)  【pending】
+### M3.2 — F-007 收尾:dispatchapi 巨测拆分(方案 A′)  【done 2026-07-26】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done |
 | **NEXT** | M3.3 |
 | **WHY** | dispatchapi.testcase.pas 23879 行 / 单类 251 Test_ 方法;review/bisect/并行编译差 |
 | **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi*.pas`(新增拆分单元);`nextpas.core.simd.test.lpr`;size-report/MAINTENANCE |
@@ -80,7 +80,7 @@ CURRENT=M3.2  # Batch M3 polish wave approved by Codex 2026-07-26 (session 019f9
 | **GATES** | focused 总数不漂;hygiene;`git diff --check` |
 | **DoD** | 每单元 <5k 行;逻辑 diff≈0;old→new suite 名对照记录;一 commit |
 | **步骤纪律** | 先 support 提取可编译 → 再按主题搬类 → 最后删空壳;禁止同 commit 改断言 |
-| **EVIDENCE** | (待填) |
+| **EVIDENCE** | 2026-07-26: 原单元 24012→**7159** 行(保留 71 个脚本耦合方法 + wiring helper 同文件);新增 6 单元:support **353**(13 共享 helper + TSourceLines + hook 全局)、controlplane **3995**(59+2 方法)、parity **3084**(29 方法 + 36 Synthetic private)、batchparity **1819**(23)、capabilities **2336**(37+3)、nonx86 **5742**(29)。质量守恒:interface 声明 71+61+29+23+40+29=**253** = implementation body 253。focused **1764**/0(与 M3.1 基线一致,零漂移),Suites 61→**65**(+4 新注册);hygiene pass;math clean test exit 0 + heaptrc 0 unfreed;`git diff --check` clean。脚本改动仅 `check_nonx86_helper_semantics.py` DISPATCHAPI_FILE 重定向 → nonx86 单元;用脚本自身 extract/require 函数隔离对照:HEAD 原文件 vs 新单元提取行为**逐字节等价**(相同 5/6/16 缺失 fragment 集,清单漂移系历史遗留,见 M3.4)。wiring_sync/key_slot_audit 与 main 输出一致(均为 pre-existing 失败,见 M3.4)。**DoD 偏差记录**:①「每单元 <5k」两处例外:原单元 7159(脚本耦合方法不可移)、nonx86 5742(单类内聚不拆),已记入 MAINTENANCE size report;②「audit green」不可达成——audit 门在 main 上已系统性死亡(fail-fast 掩盖 13/21 步失败),M3.2 以「audit 零新增失败(main 逐字节对照)」替代,恢复立卡 M3.4 |
 
 ### M3.3 — F-009 切片:concurrent-heaptrc opt-in  【pending · optional】
 
@@ -93,6 +93,21 @@ CURRENT=M3.2  # Batch M3 polish wave approved by Codex 2026-07-26 (session 019f9
 | **OUT_OF_SCOPE** | 默认 `test`/`focused` 挂 heaptrc |
 | **DELIVERABLES** | `concurrent-heaptrc` 目标(-gh,解析 0 unfreed,同 cpuinfo-heaptrc 模式) |
 | **GATES** | 新目标本地跑通;hygiene |
+| **EVIDENCE** | (待填) |
+
+### M3.4 — audit 门系统性恢复  【active 2026-07-26】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | active |
+| **NEXT** | M3.3 (optional) → IDLE |
+| **WHY** | `make audit` 第一步 simdgen --verify 失败即停,掩盖了后续 13/21 步失败;main 逐字节同红(M3.2 期间发现)。整个 simd 契约门形同虚设:文档重组(9ab2e83fc)与 inc 重命名(e42ac7416)后脚本从未同步 |
+| **失败分类(2026-07-26 实测)** | ① 路径遗孤:contract_roadmap(缺 docs/simd/GOAL_TREE.md)、wiring_sync(checklist.md)、riscvv_native_evidence / linux_evidence / windows_freeze / cpuinfo_runner(closeout.md / cpuinfo.md 等)、helper_semantics(neon.shared_wide_memory_asm.inc)、shell_runner(intrinsics.experimental Makefile 契约);② 契约基线漂移:dispatch_contract_signature(TSimdDispatchTable sha,分组重构未更新基线)、avx512_alignment(base.pas 缺 64B 否认 token)、sse2_structure(failure_count=8,缺 truth 行 + migration-map 文档)、intrinsics_coverage_layout / intrinsics_experimental_status、helper_semantics fragment 清单(5/6/16 缺失);③ 缺失载体:publicabi_smoke.h/.ps1、BuildOrTest.bat、intrinsics.x86.sse2.pas;④ simdgen DRIFT×4:baseline 分组前缀(生成器无 group 模型,1398 diff 行)+ AVX2 Add/Mul 小数组快速路径(401540bad)+ Clamp NaN-safe(6835a2aec);⑤ 跨模块 token:cpuinfo_boundary 对 hash.sha256 / tls.chacha20poly1305 期望失配;⑥ key_slot_audit:NEON issues=58 / RISCVV issues=38(与 main 一致) |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/check_*.py`;`core/tools/simdgen/**`;`core/src/nextpas.core.simd.base.pas`(仅契约注释 token);simd 文档 truth 源;`core/tests/nextpas.core.simd/Makefile` |
+| **OUT_OF_SCOPE** | 改测试断言/阈值;hash/tls 生产源码(跨 lane,只能改 checker 期望或报 Needs Review);删除仍有价值的检查逻辑(先修后删,删除需逐条论证) |
+| **分波(每波一 commit)** | **W1** 路径遗孤:逐脚本判定「重定向到现存 truth 源 / 检查逻辑降级为现存文件 / 死检查删除并论证」;**W2** 契约基线有意更新:dispatch sha、avx512 token、sse2 structure、intrinsics 状态、helper_semantics fragment 对齐现代码;**W3** simdgen 同步:baseline 分组前缀建模(从 base.pas 解析 TSimdDispatchTable 派生 slot→group,避免手维护映射)+ Add/Mul 快速路径 + Clamp NaN-safe 入模板(先例 033d75664 FMA sync);**W4** key_slot 真值对账 + cpuinfo_boundary 跨模块期望(hash/tls 若需源码改动则 Needs Review);**W5** Makefile audit 改为逐步全跑不 fail-fast(收集全部失败再退出),防再次掩盖 |
+| **GATES** | 每波后:`make -C core/tests/nextpas.core.simd audit` 失败步数单调下降;focused 1764/0 不漂;hygiene;终态 audit **全绿** |
+| **DoD** | audit 21/21 步绿;focused/math 门不漂;每个被删检查有书面论证;EVIDENCE 记录每波前后失败步数 |
 | **EVIDENCE** | (待填) |
 
 ### Audit remediation package  【done 2026-07-26】
