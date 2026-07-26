@@ -313,6 +313,9 @@ docs/simd/
 | 债项 | 状态 | 约束 |
 |------|------|------|
 | LoongArch/SVE/SVE2 | experimental/stub intrinsics only；仅作为 opt-in qualification surface；not stable backend；有源码、有 fail-close guard、有环境变量守卫，但缺 release-grade runtime proof | 不可在生产路径激活；已标注为 experimental stub |
+| 并发 suite heaptrc | opt-in：`make concurrent-heaptrc`（-gh + `-dSIMD_X86_AVAILABLE`，5 个并发 suite / 30 tests，泄漏解析 + `Suites:` 计数 pin + runner `--suite` fail-close）；2026-07-26 落地 | 默认 `test`/focused 不挂 -gh（M3 OUT_OF_SCOPE）；新增并发 suite 必须同步 Makefile `CONCURRENT_SUITES` 与 `CONCURRENT_SUITE_COUNT`，否则计数 pin fail-close |
+| TTestCase_DirectDispatch 无调度 | `direct.testcase` 仅在 `-dSIMD_X86_AVAILABLE` 构建可编译（lpr 只含 core settings.inc，该宏默认未定义）；2026-07-26 修复 f9bc1d94e 引入的 const `Infinity` 断裂后复活，其 Concurrent suite 已由 `concurrent-heaptrc` 调度；非并发大 parity suite 编译但无任何目标运行 | 需专项卡决定归宿（并入常规目标或建 direct-dispatch-focused）；在此之前对它的改动等同盲改 |
+| runner 未知参数静默忽略 | `nextpas.core.simd.test.lpr` 的 `ParseCustomArgs` 跳过不认识的参数（历史上 `--suite=` 因此被吞、`neon-optin-focused` 静默全量跑）；`--suite=` 已于 2026-07-26 实装并 fail-close | 传给 runner 的新参数必须实测生效（看 Summary 计数），不能只看退出码 |
 
 ## 公开 façade 边界提醒
 

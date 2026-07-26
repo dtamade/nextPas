@@ -40,7 +40,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=M3.4  # M3.2 done 2026-07-26;M3.3 保持 optional。用户 2026-07-26 指令:不再调用 Codex,Claude 全权推进 math/simd
+CURRENT=IDLE  # BATCH M3 全部收口(M3.1–M3.4 done 2026-07-26);等待 landing 指令或下一批规划。用户 2026-07-26 指令:不再调用 Codex,Claude 全权推进 math/simd
 ```
 
 ---
@@ -82,18 +82,18 @@ CURRENT=M3.4  # M3.2 done 2026-07-26;M3.3 保持 optional。用户 2026-07-26 �
 | **步骤纪律** | 先 support 提取可编译 → 再按主题搬类 → 最后删空壳;禁止同 commit 改断言 |
 | **EVIDENCE** | 2026-07-26: 原单元 24012→**7159** 行(保留 71 个脚本耦合方法 + wiring helper 同文件);新增 6 单元:support **353**(13 共享 helper + TSourceLines + hook 全局)、controlplane **3995**(59+2 方法)、parity **3084**(29 方法 + 36 Synthetic private)、batchparity **1819**(23)、capabilities **2336**(37+3)、nonx86 **5742**(29)。质量守恒:interface 声明 71+61+29+23+40+29=**253** = implementation body 253。focused **1764**/0(与 M3.1 基线一致,零漂移),Suites 61→**65**(+4 新注册);hygiene pass;math clean test exit 0 + heaptrc 0 unfreed;`git diff --check` clean。脚本改动仅 `check_nonx86_helper_semantics.py` DISPATCHAPI_FILE 重定向 → nonx86 单元;用脚本自身 extract/require 函数隔离对照:HEAD 原文件 vs 新单元提取行为**逐字节等价**(相同 5/6/16 缺失 fragment 集,清单漂移系历史遗留,见 M3.4)。wiring_sync/key_slot_audit 与 main 输出一致(均为 pre-existing 失败,见 M3.4)。**DoD 偏差记录**:①「每单元 <5k」两处例外:原单元 7159(脚本耦合方法不可移)、nonx86 5742(单类内聚不拆),已记入 MAINTENANCE size report;②「audit green」不可达成——audit 门在 main 上已系统性死亡(fail-fast 掩盖 13/21 步失败),M3.2 以「audit 零新增失败(main 逐字节对照)」替代,恢复立卡 M3.4 |
 
-### M3.3 — F-009 切片:concurrent-heaptrc opt-in  【pending · optional】
+### M3.3 — F-009 切片:concurrent-heaptrc opt-in  【done 2026-07-26】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending (optional) |
+| **STATUS** | done |
 | **NEXT** | IDLE |
 | **WHY** | 并发 suite 默认无 heaptrc;防其他并发泄漏回流(Tan 主路径 M3.1 后已无堆) |
-| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/Makefile`;MAINTENANCE debt 表 |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/Makefile`;MAINTENANCE debt 表;(扩容,见 EVIDENCE)`nextpas.core.simd.test.lpr`;`nextpas.core.simd.direct.testcase.pas` |
 | **OUT_OF_SCOPE** | 默认 `test`/`focused` 挂 heaptrc |
 | **DELIVERABLES** | `concurrent-heaptrc` 目标(-gh,解析 0 unfreed,同 cpuinfo-heaptrc 模式) |
 | **GATES** | 新目标本地跑通;hygiene |
-| **EVIDENCE** | (待填) |
+| **EVIDENCE** | 2026-07-26。**规格外发现(实施前提)**:①runner 从无 suite 级选择——框架 `--filter` 只匹配裸方法名,`neon-optin-focused` 传的 `--suite=` 自诞生起被 `ParseCustomArgs` 静默忽略,实际一直全量跑 65 suites(目标名撒谎);②`direct.testcase` 双重死亡——lpr 只含 core settings.inc(非 simd settings.inc),`SIMD_X86_AVAILABLE` 在 lpr 视角恒未定义 → `TTestCase_DirectDispatch/Concurrent` 从未编入任何目标;且 f9bc1d94e(Math→nextpas.core.math)后 `Infinity` 变函数,typed const 初始化器断裂(4 errors),76a25981e 的 TThread 迁移亦属盲改。**处置**:lpr 实装真 `--suite=`(注册名精确匹配、逗号多值、未命中数≠请求数 → ERROR+Halt(2) fail-close;被滤 fixture 即时 Free 无泄漏);direct.testcase const 修复(有限行留 typed const `C_FINITE_CASES`,Infinity 两行运行时填充,**零断言变更**);Makefile `concurrent-heaptrc`(-gh `-dSIMD_X86_AVAILABLE`,5 并发 suite,泄漏解析 + `Suites: 5` pin 防过滤器空转);`neon-optin-focused` 清单修正为 M3.2 拆分后 7 suites。**实测**:concurrent-heaptrc 5 suites/**30**/0(SimdConcurrent 16+PublicAbi 5+Framework 7+Registration 1+DirectDispatchConcurrent 1),heaptrc **37,423,966** blocks alloc=freed、0 unfreed、`[LEAK] OK`;拼错 suite 名 exit=**2**;neon-optin **7 suites/323/0**(201ms,原静默全量数分钟);focused **1764**/0(65 suites,24.87s,零漂移);audit **22/22**;math exit 0;hygiene pass;diff-check clean。**残余登记**(MAINTENANCE debt 表):非并发 `TTestCase_DirectDispatch` 大 parity suite 现已编译但仍无目标调度;runner 未知参数仍静默忽略 |
 
 ### M3.4 — audit 门系统性恢复  【done 2026-07-26】
 

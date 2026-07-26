@@ -38,11 +38,16 @@ NEON_OPTIN_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-test-neon-optin
 RISCVV_FACADE_OPTIN_SMOKE := nextpas.core.simd.riscvv_facade_optin_smoke
 RISCVV_FACADE_OPTIN_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-riscvv-facade-optin
 RISCVV_FACADE_OPTIN_LOG := $(CORE_ROOT)/build/tests/nextpas.core.simd/riscvv_facade_optin_smoke.txt
+CONCURRENT_HEAPTRC_RUNNER := nextpas.core.simd.test.concurrentheaptrc
+CONCURRENT_HEAPTRC_BUILD_DIR := $(CORE_ROOT)/build/lib/simd-test-concurrent-heaptrc
+CONCURRENT_HEAPTRC_LOG := $(CORE_ROOT)/build/tests/nextpas.core.simd/concurrent_heaptrc.txt
+CONCURRENT_SUITES := TTestCase_DirectDispatchConcurrent,TTestCase_SimdConcurrent,TTestCase_SimdConcurrentPublicAbi,TTestCase_SimdConcurrentFramework,TTestCase_SimdConcurrentRegistration
+CONCURRENT_SUITE_COUNT := 5
 EXPERIMENTAL_INTRINSICS_TEST_DIR := $(CORE_ROOT)/tests/nextpas.core.simd.intrinsics.experimental
 
 .DEFAULT_GOAL := test
 
-.PHONY: check coverage test test-vec test-algorithms api-coverage-contract api-coverage-refresh-checklist api-coverage-test api-coverage-heaptrc api-coverage-focused test-sse-raw test-sse-raw-heaptrc static-avx2-misalignment test-mmx-raw test-mmx-raw-heaptrc test-all bench-build bench audit audit-hygiene-contract cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile neon-optin-focused riscvv-facade-optin-compile experimental-intrinsics-tests experimental-intrinsics-focused experimental-intrinsics-closure clean
+.PHONY: check coverage test test-vec test-algorithms api-coverage-contract api-coverage-refresh-checklist api-coverage-test api-coverage-heaptrc api-coverage-focused test-sse-raw test-sse-raw-heaptrc static-avx2-misalignment test-mmx-raw test-mmx-raw-heaptrc test-all bench-build bench audit audit-hygiene-contract cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile neon-optin-focused riscvv-facade-optin-compile concurrent-heaptrc experimental-intrinsics-tests experimental-intrinsics-focused experimental-intrinsics-closure clean
 
 check:
 	bash ./BuildOrTest.sh check
@@ -187,7 +192,7 @@ cpuinfo-nonx86-compile:
 neon-optin-focused:
 	@mkdir -p $(BUILD_DIR) $(NEON_OPTIN_BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) -B -FU$(NEON_OPTIN_BUILD_DIR) -dNEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND -o$(NEON_OPTIN_RUNNER) $(RUNNER).lpr
-	$(BUILD_DIR)/$(NEON_OPTIN_RUNNER) --no-bench --suite=TTestCase_DispatchAPI,TTestCase_PublicAbi
+	$(BUILD_DIR)/$(NEON_OPTIN_RUNNER) --no-bench --suite=TTestCase_DispatchAPI,TTestCase_DispatchAPIControlPlane,TTestCase_DispatchAPIParity,TTestCase_DispatchAPIBatchParity,TTestCase_DispatchAPICapabilities,NonX86BackendParity,TTestCase_PublicAbi
 
 riscvv-facade-optin-compile:
 	@mkdir -p $(BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR) $(dir $(RISCVV_FACADE_OPTIN_LOG))
@@ -197,6 +202,29 @@ riscvv-facade-optin-compile:
 	@if grep -Eq '(^|[[:space:]])[1-9][0-9]* unfreed memory blocks' $(RISCVV_FACADE_OPTIN_LOG); then \
 		echo "[LEAK] FAILED: heaptrc reported unfreed blocks"; \
 		cat $(RISCVV_FACADE_OPTIN_LOG); \
+		exit 1; \
+	fi
+	@echo "[LEAK] OK"
+
+# F-009 slice: concurrent suites run leak-checked on demand; default test stays
+# heaptrc-free. The suite-count pin fails closed if the --suite filter matches
+# nothing (typo) or a new concurrent suite is not added to CONCURRENT_SUITES.
+concurrent-heaptrc:
+	@mkdir -p $(BUILD_DIR) $(CONCURRENT_HEAPTRC_BUILD_DIR) $(dir $(CONCURRENT_HEAPTRC_LOG))
+	$(FPC) $(FPC_FLAGS) -B -gh -dSIMD_X86_AVAILABLE -FU$(CONCURRENT_HEAPTRC_BUILD_DIR) -o$(CONCURRENT_HEAPTRC_RUNNER) $(RUNNER).lpr
+	@if ! $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER) --no-bench --suite=$(CONCURRENT_SUITES) > $(CONCURRENT_HEAPTRC_LOG) 2>&1; then \
+		echo "[CONCURRENT-HEAPTRC] FAILED: runner exited non-zero"; \
+		cat $(CONCURRENT_HEAPTRC_LOG); \
+		exit 1; \
+	fi
+	@if ! grep -Eq '^ *Suites: $(CONCURRENT_SUITE_COUNT)$$' $(CONCURRENT_HEAPTRC_LOG); then \
+		echo "[CONCURRENT-HEAPTRC] FAILED: expected Suites: $(CONCURRENT_SUITE_COUNT) (suite filter drifted?)"; \
+		cat $(CONCURRENT_HEAPTRC_LOG); \
+		exit 1; \
+	fi
+	@if grep -Eq '(^|[[:space:]])[1-9][0-9]* unfreed memory blocks' $(CONCURRENT_HEAPTRC_LOG); then \
+		echo "[LEAK] FAILED: heaptrc reported unfreed blocks"; \
+		cat $(CONCURRENT_HEAPTRC_LOG); \
 		exit 1; \
 	fi
 	@echo "[LEAK] OK"
@@ -214,5 +242,5 @@ bench: bench-build
 	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
 
 clean:
-	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(API_COVERAGE_TEST_BINARIES) $(BUILD_DIR)/$(SSE_RAW_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE) $(BUILD_DIR)/$(MMX_RAW_TEST) $(BUILD_DIR)/$(NEON_OPTIN_RUNNER) $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE)
-	rm -rf $(API_COVERAGE_BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(NEON_OPTIN_BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR)
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST) $(API_COVERAGE_TEST_BINARIES) $(BUILD_DIR)/$(SSE_RAW_TEST) $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST) $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE) $(BUILD_DIR)/$(MMX_RAW_TEST) $(BUILD_DIR)/$(NEON_OPTIN_RUNNER) $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER)
+	rm -rf $(API_COVERAGE_BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(NEON_OPTIN_BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR) $(CONCURRENT_HEAPTRC_BUILD_DIR)

@@ -75,9 +75,60 @@ var
   LBenchOnly: Boolean;
   LPauseAtEnd: Boolean;
   LVectorAsmEnabled: Boolean;
+  LSuiteFilter: string;
+  LSuiteFilterMatched: Integer;
+
+{ --suite= selects registered suites by exact registered name (the framework's
+  --filter matches bare test-method names, so it cannot select whole suites).
+  Unmatched request names are rejected after registration (fail-close): a typo
+  or a renamed suite aborts the run instead of silently shrinking coverage. }
+function SuiteSelected(const ASuiteName: string): Boolean;
+var
+  LRest, LItem: string;
+  LComma: Integer;
+begin
+  if LSuiteFilter = '' then
+    Exit(True);
+  LRest := LSuiteFilter;
+  while LRest <> '' do
+  begin
+    LComma := Pos(',', LRest);
+    if LComma > 0 then
+    begin
+      LItem := Copy(LRest, 1, LComma - 1);
+      Delete(LRest, 1, LComma);
+    end
+    else
+    begin
+      LItem := LRest;
+      LRest := '';
+    end;
+    if LItem = ASuiteName then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
+function SuiteFilterItemCount: Integer;
+var
+  I: Integer;
+begin
+  if LSuiteFilter = '' then
+    Exit(0);
+  Result := 1;
+  for I := 1 to Length(LSuiteFilter) do
+    if LSuiteFilter[I] = ',' then
+      Inc(Result);
+end;
 
 procedure AddFixture(AFixture: TTestFixture; const ASuiteName: string);
 begin
+  if not SuiteSelected(ASuiteName) then
+  begin
+    AFixture.Free;
+    Exit;
+  end;
+  Inc(LSuiteFilterMatched);
   LRunner.Add(DiscoverTests(AFixture, ASuiteName));
 end;
 
@@ -126,6 +177,7 @@ begin
   WriteLn('Usage: ', LExe, ' [options]');
   WriteLn('Options:');
   WriteLn('  --filter=<substring>   Run only tests whose name contains substring');
+  WriteLn('  --suite=<name[,name]>  Run only the named registered suites (exact match)');
   WriteLn('  --list                 List available test suites');
   WriteLn('  --bench                Run performance benchmarks after tests');
   WriteLn('  --bench-only           Run benchmarks only');
@@ -234,13 +286,16 @@ begin
   LBenchOnly := False;
   LPauseAtEnd := False;
   LVectorAsmEnabled := False;
+  LSuiteFilter := '';
 
   LArgIndex := 1;
   while LArgIndex <= ParamCount do
   begin
     LArg := ParamStr(LArgIndex);
 
-    if LArg = '--bench' then
+    if Copy(LArg, 1, Length('--suite=')) = '--suite=' then
+      LSuiteFilter := Copy(LArg, Length('--suite=') + 1, MaxInt)
+    else if LArg = '--bench' then
       LDoBench := True
     else if LArg = '--no-bench' then
       LDoBench := False
@@ -296,7 +351,14 @@ begin
   end;
 
   LRunner := TSuiteRunner.Create('SIMD Tests');
+  LSuiteFilterMatched := 0;
   RegisterAllSuites;
+  if (LSuiteFilter <> '') and (LSuiteFilterMatched <> SuiteFilterItemCount) then
+  begin
+    WriteLn('ERROR: --suite matched ', LSuiteFilterMatched, ' of ',
+      SuiteFilterItemCount, ' requested suites: ', LSuiteFilter);
+    Halt(2);
+  end;
   LRunner.RunAll;
   LRunner.Summary;
 

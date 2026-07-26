@@ -1646,12 +1646,16 @@ end;
 
 procedure TTestCase_DirectDispatch.Test_DirectDispatchTable_MultiBackend_F64CompareEdgeMatrix_Parity;
 const
-  C_CASES: array[0..5, 0..3] of Double = (
+  { Infinity cells filled at runtime: nextpas.core.math.Infinity is a function,
+    not a compile-time constant, so it cannot appear in a typed const. }
+  C_FINITE_CASES: array[0..3, 0..3] of Double = (
     (-0.0, 0.0, -0.0, 0.0), (0.0, -0.0, 0.0, -0.0),
-    (1.0, -1.0, -1.0, 1.0), (-123.5, 123.5, -123.5, 100.0),
-    (Infinity, 3.0, Infinity, 3.0), (-Infinity, 3.0, 3.0, -Infinity)
+    (1.0, -1.0, -1.0, 1.0), (-123.5, 123.5, -123.5, 100.0)
   );
 var
+  LCases: array[0..5, 0..3] of Double;
+  LInf: Double;
+  LRow, LCol: Integer;
   LBackend: TSimdBackend;
   LDispatch: PSimdDispatchTable;
   LDirectDispatch: PSimdDispatchTable;
@@ -1673,6 +1677,13 @@ var
 
   LTestedCount: Integer;
 begin
+  for LRow := Low(C_FINITE_CASES) to High(C_FINITE_CASES) do
+    for LCol := 0 to 3 do
+      LCases[LRow][LCol] := C_FINITE_CASES[LRow][LCol];
+  LInf := Infinity;
+  LCases[4][0] := LInf;  LCases[4][1] := 3.0;  LCases[4][2] := LInf;  LCases[4][3] := 3.0;
+  LCases[5][0] := -LInf; LCases[5][1] := 3.0;  LCases[5][2] := 3.0;   LCases[5][3] := -LInf;
+
   LTestedCount := 0;
   try
     for LBackend := Low(TSimdBackend) to High(TSimdBackend) do
@@ -1691,12 +1702,12 @@ begin
       CheckTrue(Assigned(LDirectDispatch^.CoreVectors.CmpEqF64x2), 'CmpEqF64x2 should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.Mask.Mask2All), 'Mask2All should be assigned for backend ' + DirectBackendName(LBackend));
 
-      for LCaseIdx := Low(C_CASES) to High(C_CASES) do
+      for LCaseIdx := Low(LCases) to High(LCases) do
       begin
-        LA.d[0] := C_CASES[LCaseIdx, 0];
-        LA.d[1] := C_CASES[LCaseIdx, 1];
-        LB.d[0] := C_CASES[LCaseIdx, 2];
-        LB.d[1] := C_CASES[LCaseIdx, 3];
+        LA.d[0] := LCases[LCaseIdx, 0];
+        LA.d[1] := LCases[LCaseIdx, 1];
+        LB.d[0] := LCases[LCaseIdx, 2];
+        LB.d[1] := LCases[LCaseIdx, 3];
 
         LMaskEqFacade := VecF64x2CmpEq(LA, LB);
         LMaskEqDirect := LDirectDispatch^.CoreVectors.CmpEqF64x2(LA, LB);
