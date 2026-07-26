@@ -38,6 +38,7 @@ uses
   , nextpas.core.platform.io.base
   , nextpas.core.platform.socket
   , nextpas.core.platform.socket.base
+  , nextpas.core.time.base
   , nextpas.core.time.deadline
   , nextpas.core.thread
   , nextpas.core.text.conv
@@ -60,6 +61,10 @@ type
   TIocpConnDriver = record
     Server: TTcpIocpServer;
     Target: TTcpServerPollSessionTarget;
+    { deadline wake requested while a recv op is parked: the op has been
+      cancelled via TryCancelByContext and the wake is delivered when its
+      completion arrives (racing data wins and is delivered as readable) }
+    WakePending: Boolean;
   end;
 
   TTcpIocpConnTask = class(TInterfacedObject)
@@ -106,6 +111,7 @@ type
     procedure AdvanceConnDriver(const ADriver: PIocpConnDriver;
       const AEvents: TPlatformPollEvents);
     procedure RetryWritableWaiters;
+    procedure WakeExpiredDeadlines;
     function ComputeWaitTimeoutMs: UInt32;
     procedure AddConnDriver(const ADriver: PIocpConnDriver);
     procedure RemoveConnDriver(const ADriver: PIocpConnDriver);
@@ -345,12 +351,11 @@ begin
     Exit;
   if not TryCreateTcpServerPollSessionTarget(AConn, ASession, LTarget) then
     Exit;
-  { W2-2 scope: initial interest must be readable-only (sessions start by
-    reading a request; writable interest is entered later via Advance and
-    served by the timeout retry loop). Finite wake deadlines still need a
-    reactor timer — those sessions stay on worker handoff. }
-  if (not LTarget.WakeDeadline.IsInfinite) or
-     (LTarget.CurrentEvents <> [peReadable]) then
+  { Initial interest must be readable-only (sessions start by reading a
+    request; writable interest is entered later via Advance and served by
+    the timeout retry loop). Finite wake deadlines are served by the
+    GQCS-timeout deadline sweep (WakeExpiredDeadlines). }
+  if LTarget.CurrentEvents <> [peReadable] then
   begin
     LTarget.RestoreBlocking;
     LTarget.Free;
@@ -359,6 +364,7 @@ begin
   New(LDriver);
   LDriver^.Server := Self;
   LDriver^.Target := LTarget;
+  LDriver^.WakePending := False;
   if not ArmConnRecv(LDriver) then
   begin
     Dispose(LDriver);
@@ -373,7 +379,24 @@ end;
 procedure TTcpIocpServer.HandleConnRecvDone(const ADriver: PIocpConnDriver;
   const AResult: Int32);
 begin
-  if (not FRunning) or (AResult < 0) then
+  if not FRunning then
+  begin
+    CloseConnDriver(ADriver, tscoServer);
+    Exit;
+  end;
+  if ADriver^.WakePending then
+  begin
+    ADriver^.WakePending := False;
+    { Deadline wake: the cancelled recv completes with an error and is fed
+      as an empty event set (epoll expired-target parity); racing data
+      wins and is delivered as readable instead. }
+    if AResult >= 0 then
+      AdvanceConnDriver(ADriver, [peReadable])
+    else
+      AdvanceConnDriver(ADriver, []);
+    Exit;
+  end;
+  if AResult < 0 then
   begin
     CloseConnDriver(ADriver, tscoServer);
     Exit;
@@ -414,6 +437,13 @@ begin
       CloseConnDriver(ADriver, tscoServer);
     Exit;
   end;
+  { Empty wait set with a finite deadline: pure sleeper — the deadline
+    sweep wakes it (HandleEvents already refreshed WakeDeadline). }
+  if (LNext = []) and (not ADriver^.Target.WakeDeadline.IsInfinite) then
+  begin
+    ADriver^.Target.SetCurrentEvents(LNext);
+    Exit;
+  end;
   { Empty wait set without a deadline cannot make progress — close honestly. }
   CloseConnDriver(ADriver, tscoServer);
 end;
@@ -436,14 +466,85 @@ begin
     AdvanceConnDriver(LWaiters[LI], [peWritable]);
 end;
 
+procedure TTcpIocpServer.WakeExpiredDeadlines;
+var
+  LI: SizeInt;
+  LExpired: array of PIocpConnDriver;
+  LDriver: PIocpConnDriver;
+begin
+  { Snapshot first: AdvanceConnDriver may close drivers and mutate
+    FConnDrivers (swap-remove) while we iterate. }
+  LExpired := nil;
+  for LI := 0 to High(FConnDrivers) do
+  begin
+    LDriver := FConnDrivers[LI];
+    if LDriver^.WakePending then
+      Continue; { cancel in flight — wake rides its completion }
+    if LDriver^.Target.WakeDeadline.IsInfinite then
+      Continue;
+    if not LDriver^.Target.WakeDeadline.IsExpired then
+      Continue;
+    SetLength(LExpired, Length(LExpired) + 1);
+    LExpired[High(LExpired)] := LDriver;
+  end;
+  for LI := 0 to High(LExpired) do
+  begin
+    LDriver := LExpired[LI];
+    if (LDriver^.Target.CurrentEvents = []) or
+       (peWritable in LDriver^.Target.CurrentEvents) then
+    begin
+      { sleeper / writable waiter: no recv op parked — wake directly with
+        an empty event set (epoll HandleExpiredPollTargets parity) }
+      AdvanceConnDriver(LDriver, []);
+      Continue;
+    end;
+    { recv op parked: cancel it and defer the wake to its completion.
+      A miss means the op is no longer pending — its completion is about
+      to be dispatched and will re-advance the session anyway. }
+    if FReactor.TryCancelByContext(LDriver) then
+      LDriver^.WakePending := True;
+  end;
+end;
+
 function TTcpIocpServer.ComputeWaitTimeoutMs: UInt32;
 var
   LI: SizeInt;
+  LBest: Int64;
+  LMs: Int64;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
 begin
+  { min over writable retry cadence and the nearest finite wake deadline
+    (epoll ComputePollTimeoutMs parity: expired -> 0, sub-ms -> 1ms). }
+  LBest := -1;
   for LI := 0 to High(FConnDrivers) do
+  begin
     if peWritable in FConnDrivers[LI]^.Target.CurrentEvents then
-      Exit(IOCP_WRITABLE_RETRY_MS);
-  Result := IOCP_WAIT_INFINITE;
+      if (LBest < 0) or (LBest > IOCP_WRITABLE_RETRY_MS) then
+        LBest := IOCP_WRITABLE_RETRY_MS;
+    if FConnDrivers[LI]^.WakePending then
+      Continue; { deadline already handled — waiting on the cancel packet }
+    LDeadline := FConnDrivers[LI]^.Target.WakeDeadline;
+    if LDeadline.IsInfinite then
+      Continue;
+    if LDeadline.IsExpired then
+      LMs := 0
+    else
+    begin
+      LRemaining := LDeadline.Remaining;
+      LMs := LRemaining.AsMilliseconds;
+      if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+        LMs := 1;
+      if LMs > High(Int32) then
+        LMs := High(Int32);
+    end;
+    if (LBest < 0) or (LMs < LBest) then
+      LBest := LMs;
+  end;
+  if LBest < 0 then
+    Result := IOCP_WAIT_INFINITE
+  else
+    Result := UInt32(LBest);
 end;
 
 procedure TTcpIocpServer.DispatchAcceptedSession(const AConn: ITcpStream;
@@ -594,7 +695,10 @@ begin
       while FRunning do
         case FReactor.PollOneWait(ComputeWaitTimeoutMs) of
           iprTimeout:
-            RetryWritableWaiters;
+            begin
+              WakeExpiredDeadlines;
+              RetryWritableWaiters;
+            end;
           iprWoken:
             ; { stop wake — loop condition re-checks FRunning }
         end;
