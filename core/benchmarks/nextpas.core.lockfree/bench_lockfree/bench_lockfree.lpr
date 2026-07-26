@@ -49,6 +49,7 @@ var
 
   { Matched multi-thread state }
   GMatchCh: TIntChannel;
+  GMatchChSpsc: TIntChannelSpsc;
   GMatchSum: Int64;
 
 procedure SimpleReclaim(const AData: Pointer; const AUserData: Pointer);
@@ -152,6 +153,54 @@ begin
   InterlockedExchangeAdd64(GMatchSum, LLocal);
 end;
 
+function MatchProducerSpsc(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  for LI := 1 to LCount do
+    GMatchChSpsc.Send(LI);
+end;
+
+function MatchConsumerSpsc(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+  LV: Integer;
+  LLocal: Int64;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  LLocal := 0;
+  for LI := 1 to LCount do
+    if GMatchChSpsc.Receive(LV) then
+      LLocal := LLocal + LV;
+  InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+{ 1P1C only — TLockFreeChannelSpsc is strictly single producer/consumer. }
+procedure RunMatchedChannelSpscOnce;
+var
+  LProducer, LConsumer: TPlatformThreadHandle;
+  LRet: Pointer;
+begin
+  GMatchChSpsc := TIntChannelSpsc.Create(CAPACITY);
+  GMatchSum := 0;
+  try
+    if platform_thread_create(LConsumer, @MatchConsumerSpsc, Pointer(PtrUInt(OPS))) <> 0 then
+      raise EInvalidOperationError.Create('spsc consumer create failed');
+    if platform_thread_create(LProducer, @MatchProducerSpsc, Pointer(PtrUInt(OPS))) <> 0 then
+      raise EInvalidOperationError.Create('spsc producer create failed');
+    platform_thread_join(LProducer, LRet);
+    platform_thread_join(LConsumer, LRet);
+    GBenchSink := GBenchSink + GMatchSum;
+  finally
+    GMatchChSpsc.Close;
+    GMatchChSpsc.Free;
+    GMatchChSpsc := nil;
+  end;
+end;
+
 procedure RunMatchedChannelOnce(const AProducers, AConsumers: Integer);
 var
   LProducers: array[0..7] of TPlatformThreadHandle;
@@ -200,6 +249,12 @@ begin
   ACtx.SetBytes(OPS * SizeOf(Integer));
 end;
 
+procedure BenchMatchedC1Spsc(const ACtx: IBenchContext);
+begin
+  RunMatchedChannelSpscOnce;
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
 procedure RunMatchedSuite;
 var
   LResults: IBenchResults;
@@ -207,6 +262,7 @@ begin
   WriteLn('=== Q5 matched suite (multi-thread; compare with Go/Rust) ===');
   WriteLn('Scenario C1: TLockFreeChannel 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
   WriteLn('Scenario C2: TLockFreeChannel 2P+2C  OPS=', OPS, ' CAP=', CAPACITY);
+  WriteLn('Scenario C1s: TLockFreeChannelSpsc 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
   WriteLn('Note: Go uses buffered chan; Rust C1 uses std::sync::mpsc (unbounded).');
   WriteLn('      Absolute Mops only valid with full bench-envelope.md fields.');
   WriteLn;
@@ -219,6 +275,7 @@ begin
     .SetMinDuration(TDuration.FromMicroseconds(1))
     .Add('lockfree/matched/C1_1P1C', @BenchMatchedC1)
     .Add('lockfree/matched/C2_2P2C', @BenchMatchedC2)
+    .Add('lockfree/matched/C1s_ChannelSpsc_1P1C', @BenchMatchedC1Spsc)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');

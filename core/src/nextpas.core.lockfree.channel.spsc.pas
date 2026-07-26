@@ -44,6 +44,7 @@ type
     // (The former hand-rolled 48-byte pads never reached one line: 8+48=56.)
     // Sender line
     FSendPos: Int64;
+    FRecvCache: Int64;  // sender-private cache of FRecvPos (refresh only on apparent-full)
     FDataEpoch: Int32;
     FDataWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
@@ -51,6 +52,7 @@ type
     {$POP}
     // Receiver line (mirror)
     FRecvPos: Int64;
+    FSendCache: Int64;  // receiver-private cache of FSendPos (refresh only on apparent-empty)
     FSpaceEpoch: Int32;
     FSpaceWaiters: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
@@ -117,6 +119,8 @@ begin
     FSlots[LI].Value := Default(T);
   FSendPos := 0;
   FRecvPos := 0;
+  FRecvCache := 0;
+  FSendCache := 0;
   FSpaceEpoch := 0;
   FDataEpoch := 0;
   FSpaceWaiters := 0;
@@ -142,15 +146,18 @@ end;
 
 function TLockFreeChannelSpscImpl.TrySend(const AValue: T): Boolean;
 var
-  LSendPos, LRecvPos: Int64;
+  LSendPos: Int64;
   LIdx: PtrUInt;
 begin
   if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LSendPos := atomic_load_64(FSendPos, mo_relaxed);
-  LRecvPos := atomic_load_64(FRecvPos, mo_acquire);
-  if LSendPos - LRecvPos >= Int64(FCapacity) then
-    Exit(False);
+  if LSendPos - FRecvCache >= Int64(FCapacity) then
+  begin
+    FRecvCache := atomic_load_64(FRecvPos, mo_acquire);
+    if LSendPos - FRecvCache >= Int64(FCapacity) then
+      Exit(False);
+  end;
   LIdx := PtrUInt(LSendPos) and FMask;
   FSlots[LIdx].Value := AValue;
   atomic_store_64(FSendPos, LSendPos + 1, mo_release);
@@ -219,16 +226,15 @@ end;
 
 function TLockFreeChannelSpscImpl.TryReceive(out AValue: T): Boolean;
 var
-  LSendPos, LRecvPos: Int64;
+  LRecvPos: Int64;
   LIdx: PtrUInt;
 begin
   LRecvPos := atomic_load_64(FRecvPos, mo_relaxed);
-  LSendPos := atomic_load_64(FSendPos, mo_acquire);
-  if LRecvPos >= LSendPos then
+  if LRecvPos >= FSendCache then
   begin
-    if (atomic_load(FClosed, mo_acquire) <> 0) and (LRecvPos >= atomic_load_64(FSendPos, mo_acquire)) then
+    FSendCache := atomic_load_64(FSendPos, mo_acquire);
+    if LRecvPos >= FSendCache then
       Exit(False);
-    Exit(False);
   end;
   LIdx := PtrUInt(LRecvPos) and FMask;
   AValue := FSlots[LIdx].Value;
