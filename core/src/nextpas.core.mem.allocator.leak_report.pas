@@ -132,29 +132,17 @@ implementation
 
 uses
   nextpas.core.mem.utils,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.platform.time;
 
 const
   LEAK_MAP_MIN_CAP = 64;
   LEAK_TOMBSTONE = PtrUInt(1);
-  CLOCK_MONOTONIC = 1;
-
-type
-  TTimeSpecRec = record
-    tv_sec: Int64;
-    tv_nsec: Int64;
-  end;
-
-function clock_gettime(clk_id: Int32; tp: Pointer): Int32; cdecl;
-  external 'c' name 'clock_gettime';
 
 { 获取单调时钟毫秒数 }
 function MonotonicMs: QWord;
-var
-  LTime: TTimeSpecRec;
 begin
-  clock_gettime(CLOCK_MONOTONIC, @LTime);
-  Result := QWord(LTime.tv_sec) * 1000 + QWord(LTime.tv_nsec) div 1000000;
+  Result := platform_monotonic_ns div 1000000;
 end;
 
 { 获取调用者的调用者地址 (跳过 GetMem/GetMem 帧) }

@@ -119,7 +119,8 @@ implementation
 uses
   nextpas.core.atomic,
   nextpas.core.mem.error,
-  nextpas.core.system.heap;
+  nextpas.core.system.heap,
+  nextpas.core.platform.thread;
 
 const
   { Max threads tracked in global registry (power of 2 for fast modulo). }
@@ -239,32 +240,9 @@ end;
   When a thread exits, the callback flushes all cached blocks
   back to the central pool to prevent leakage. }
 
-type
-  TThreadExitProc = procedure(AData: Pointer); cdecl;
-
-{$IFDEF UNIX}
 var
-  GCacheCleanupKey: QWord;  { pthread_key_t = unsigned long on Linux x86-64 }
-
-function pthread_key_create(var AKey: QWord;
-  ADestructor: TThreadExitProc): Integer; cdecl; external 'c' name 'pthread_key_create';
-function pthread_key_delete(AKey: QWord): Integer; cdecl; external 'c' name 'pthread_key_delete';
-function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; external 'c' name 'pthread_setspecific';
-{$ENDIF}
-
-{$IFDEF MSWINDOWS}
-type
-  TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
-  { Local Win32 ABI aliases — avoid FPC Windows unit and platform.windows.base. }
-  TFlsDWord = UInt32;
-  TFlsBool = LongBool;
-var
-  GCacheCleanupIndex: TFlsDWord;
-
-function FlsAlloc(lpCallback: TFlsCallback): TFlsDWord; stdcall; external 'kernel32.dll' name 'FlsAlloc';
-function FlsFree(dwFlsIndex: TFlsDWord): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsFree';
-function FlsSetValue(dwFlsIndex: TFlsDWord; lpFlsData: Pointer): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsSetValue';
-{$ENDIF}
+  GCacheCleanupKey: TPlatformTLSKey;
+  GCacheCleanupKeyCreated: Boolean = False;
 
 procedure ThreadExitFlush(AData: Pointer); cdecl;
 begin
@@ -279,7 +257,7 @@ begin
   end;
 end;
 
-{$IFDEF MSWINDOWS}
+{$IFDEF NEXTPAS_WINDOWS}
 procedure ThreadExitFlsCallback(lpFlsData: Pointer); stdcall;
 begin
   ThreadExitFlush(lpFlsData);
@@ -387,12 +365,8 @@ begin
   if GThreadCache.FOpCount = 1 then
   begin
     RegisterThreadCache;
-    {$IFDEF UNIX}
-    pthread_setspecific(GCacheCleanupKey, @GThreadCache);
-    {$ENDIF}
-    {$IFDEF MSWINDOWS}
-    FlsSetValue(GCacheCleanupIndex, @GThreadCache);
-    {$ENDIF}
+    if GCacheCleanupKeyCreated then
+      platform_tls_set(GCacheCleanupKey, @GThreadCache);
   end;
   { Periodic scavenge: uses thread-local counter in GThreadCache. }
   if (GThreadCache.FOpCount and (SCAVENGER_CHECK_INTERVAL - 1)) = 0 then
@@ -834,13 +808,23 @@ end;
 
 initialization
   ValidateFastSizeClassIndex;
-  {$IFDEF UNIX}pthread_key_create(GCacheCleanupKey, @ThreadExitFlush);{$ENDIF}
-  {$IFDEF MSWINDOWS}GCacheCleanupIndex := FlsAlloc(@ThreadExitFlsCallback);{$ENDIF}
+{$IFDEF NEXTPAS_UNIX}
+  GCacheCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GCacheCleanupKey, @ThreadExitFlush) = 0;
+{$ELSE}
+{$IFDEF NEXTPAS_WINDOWS}
+  GCacheCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GCacheCleanupKey, @ThreadExitFlsCallback) = 0;
+{$ELSE}
+  GCacheCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GCacheCleanupKey, nil) = 0;
+{$ENDIF}
+{$ENDIF}
   GGrowingAllocator := TGrowingAllocator.Create;
 
 finalization
   FreeAndNil(GGrowingAllocator);
-  {$IFDEF UNIX}pthread_key_delete(GCacheCleanupKey);{$ENDIF}
-  {$IFDEF MSWINDOWS}FlsFree(GCacheCleanupIndex);{$ENDIF}
+  if GCacheCleanupKeyCreated then
+    platform_tls_destroy_dtor(GCacheCleanupKey);
 
 end.

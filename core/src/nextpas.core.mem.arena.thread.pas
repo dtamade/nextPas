@@ -145,6 +145,9 @@ function DefaultThreadArenaConfig: TThreadArenaConfig;
 
 implementation
 
+uses
+  nextpas.core.platform.thread;
+
 const
   DEFAULT_ARENA_CAPACITY = 1024 * 1024;  { 1MB }
   DEFAULT_MAX_POOL_SIZE  = 8;
@@ -156,33 +159,11 @@ threadvar
 { --- Thread-exit cleanup ---
   UNIX: pthread TLS key destructor. Windows: FlsCallback.
   When a thread exits, the callback returns the arena to the manager's pool.
-  Each TThreadArenaManager instance creates its own key/callback. }
+  Key ownership is unit-global via platform TLS. }
 
-type
-  TThreadExitProc = procedure(AData: Pointer); cdecl;
-
-{$IFDEF UNIX}
 var
-  GThreadArenaCleanupKey: QWord;  { pthread_key_t }
-
-function pthread_key_create(var AKey: QWord;
-  ADestructor: TThreadExitProc): Integer; cdecl; external 'c' name 'pthread_key_create';
-function pthread_key_delete(AKey: QWord): Integer; cdecl; external 'c' name 'pthread_key_delete';
-function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; external 'c' name 'pthread_setspecific';
-{$ENDIF}
-
-{$IFDEF MSWINDOWS}
-type
-  TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
-  TFlsDWord = UInt32;
-  TFlsBool = LongBool;
-var
-  GThreadArenaCleanupIndex: TFlsDWord;
-
-function FlsAlloc(lpCallback: TFlsCallback): TFlsDWord; stdcall; external 'kernel32.dll' name 'FlsAlloc';
-function FlsFree(dwFlsIndex: TFlsDWord): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsFree';
-function FlsSetValue(dwFlsIndex: TFlsDWord; lpFlsData: Pointer): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsSetValue';
-{$ENDIF}
+  GThreadArenaCleanupKey: TPlatformTLSKey;
+  GThreadArenaCleanupKeyCreated: Boolean = False;
 
 { Global manager pointer for the cleanup callback to find the owning manager.
   Only one active TThreadArenaManager per thread is supported (matching the
@@ -207,7 +188,7 @@ begin
   end;
 end;
 
-{$IFDEF MSWINDOWS}
+{$IFDEF NEXTPAS_WINDOWS}
 procedure ThreadArenaFlsCallback(lpFlsData: Pointer); stdcall;
 begin
   ThreadArenaCleanup(lpFlsData);
@@ -331,14 +312,8 @@ begin
     Result.Reset;
     TLSCurrentArena := Result;
     TLSCurrentManager := Pointer(Self);
-    {$IFDEF UNIX}
-    if FTlsCleanupRegistered then
-      pthread_setspecific(GThreadArenaCleanupKey, Pointer(1));
-    {$ENDIF}
-    {$IFDEF MSWINDOWS}
-    if FTlsCleanupRegistered then
-      FlsSetValue(GThreadArenaCleanupIndex, Pointer(1));
-    {$ENDIF}
+    if GThreadArenaCleanupKeyCreated then
+      platform_tls_set(GThreadArenaCleanupKey, Pointer(1));
     Exit;
   end;
 
@@ -347,14 +322,8 @@ begin
   InterLockedIncrement(FTotalCreated);
   TLSCurrentArena := Result;
   TLSCurrentManager := Pointer(Self);
-  {$IFDEF UNIX}
-  if FTlsCleanupRegistered then
-    pthread_setspecific(GThreadArenaCleanupKey, Pointer(1));
-  {$ENDIF}
-  {$IFDEF MSWINDOWS}
-  if FTlsCleanupRegistered then
-    FlsSetValue(GThreadArenaCleanupIndex, Pointer(1));
-  {$ENDIF}
+  if GThreadArenaCleanupKeyCreated then
+    platform_tls_set(GThreadArenaCleanupKey, Pointer(1));
 end;
 
 procedure TThreadArenaManager.DrainTLS;
@@ -469,23 +438,22 @@ end;
 
 initialization
   GActiveManager := nil;
-  {$IFDEF UNIX}
-  GThreadArenaCleanupKey := 0;
-  pthread_key_create(GThreadArenaCleanupKey, @ThreadArenaCleanup);
-  {$ENDIF}
-  {$IFDEF MSWINDOWS}
-  GThreadArenaCleanupIndex := FlsAlloc(@ThreadArenaFlsCallback);
-  {$ENDIF}
+{$IFDEF NEXTPAS_UNIX}
+  GThreadArenaCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GThreadArenaCleanupKey, @ThreadArenaCleanup) = 0;
+{$ELSE}
+{$IFDEF NEXTPAS_WINDOWS}
+  GThreadArenaCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GThreadArenaCleanupKey, @ThreadArenaFlsCallback) = 0;
+{$ELSE}
+  GThreadArenaCleanupKeyCreated :=
+    platform_tls_create_with_destructor(GThreadArenaCleanupKey, nil) = 0;
+{$ENDIF}
+{$ENDIF}
 
 finalization
   GActiveManager := nil;
-  {$IFDEF UNIX}
-  if GThreadArenaCleanupKey <> 0 then
-    pthread_key_delete(GThreadArenaCleanupKey);
-  {$ENDIF}
-  {$IFDEF MSWINDOWS}
-  if GThreadArenaCleanupIndex <> 0 then
-    FlsFree(GThreadArenaCleanupIndex);
-  {$ENDIF}
+  if GThreadArenaCleanupKeyCreated then
+    platform_tls_destroy_dtor(GThreadArenaCleanupKey);
 
 end.

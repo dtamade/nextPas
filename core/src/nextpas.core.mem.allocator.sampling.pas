@@ -96,26 +96,15 @@ type
 implementation
 
 uses
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.platform.time;
 
 const
   SAMPLE_INITIAL_CAP = 256;
 
-type
-  TTimeSpecRec = record
-    tv_sec: Int64;
-    tv_nsec: Int64;
-  end;
-
-function clock_gettime(clk_id: Int32; tp: Pointer): Int32; cdecl;
-  external 'c' name 'clock_gettime';
-
 function MonotonicMs: UInt64;
-var
-  LTime: TTimeSpecRec;
 begin
-  clock_gettime(1, @LTime);
-  Result := UInt64(LTime.tv_sec) * 1000 + UInt64(LTime.tv_nsec) div 1000000;
+  Result := platform_monotonic_ns div 1000000;
 end;
 
 { TSamplingAllocator }

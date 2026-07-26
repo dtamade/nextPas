@@ -12,6 +12,8 @@ RTL_UNIT_RE='\b(SysUtils|Classes|BaseUnix|Unix|Windows|ctypes|DynLibs|StrUtils|T
 SYSTEM_HEAP_RE='\bSystem\.(GetMem|FreeMem|ReallocMem|AllocMem|Move)\b'
 # OS sub-units — mem must use platform.thread/sync/memory/mmap/env/dl only.
 OS_FFI_RE='nextpas\.core\.platform\.(posix|windows|linux)\.'
+# OS thread/TLS/clock primitives — mem must use nextpas.core.platform.* APIs.
+OS_PRIM_FFI_RE="name '(pthread_|Fls(Alloc|Free|SetValue)|TlsAlloc|TlsSetValue|clock_gettime)"
 
 while IFS= read -r -d '' f; do
   base="$(basename "$f")"
@@ -49,6 +51,11 @@ while IFS= read -r -d '' f; do
       echo "FAIL: $base uses platform OS sub-unit (use platform.thread/sync/memory/…)"
       FAIL=1
     fi
+  fi
+  if grep -nE "$OS_PRIM_FFI_RE" "$f" >/dev/null 2>&1; then
+    echo "FAIL: $base: mem must not declare OS thread/TLS/clock FFI (use nextpas.core.platform.*)"
+    grep -nE "$OS_PRIM_FFI_RE" "$f" || true
+    FAIL=1
   fi
 done < <(find "$SRC" -maxdepth 1 -name 'nextpas.core.mem*.pas' -print0)
 
