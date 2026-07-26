@@ -425,6 +425,34 @@ end;
 
 ## 11. 变更日志
 
+### v8.37 (2026-07-26) — B78 密度 tranche 4：retry/repeat 执行语义 + fuzz 可观测契约
+
+- **修复**：`FuzzGenString` 字符域 off-by-one——`NextIntRange(0,95)`（闭区间）可产
+  Char(127)=DEL，与 "printable ASCII" 注释矛盾；改为 `(0,94)` → 32..126。
+  回归绑定：`g-str-printable` 行（4096 长度全字符 ∈[32,126]，修复前必红）
+- **test_advanced 两张矩阵表（36 行，其中 19 行 fail-path）**，锁定 runner 执行语义：
+  - `retry execution matrix`（26 行）：三个此前未文档化的契约——
+    1. **entry RetryCount=0 视为未设置**，回退 `config.RetryCount`（0 无法显式禁用）；
+    2. **负 RetryCount 是唯一 opt-out**：非 0 不回退 config 且首轮后立即停止；
+    3. retry 循环仅对 tsPassed/tsSkipped 提前 Break——**tsError 也重试**；
+    skip 首轮即停不重试；执行次数 exact（fail-always + R 重试 = 1+R 次）
+  - `repeat execution matrix`（10 行）：fail 不中断轮次、**报告最后一轮结果**
+    （首轮败末轮过 → passed）、`TestRepeat` entry.RetryCount 恒 0 →
+    config.RetryCount 每轮内嵌套生效（execs = N × (1 + configR)，3×(1+2)=9 已锁）；
+    skip/error 同样不中断轮次
+- **test_prop 两张契约表（33 行，其中 8 行 fail-path）**：
+  - `coverage tracker state machine`（24 行）：ops 微语言（`h<id>`/`r` 序列）——
+    **TotalHits 与 CoverageCount 分离**（Hit 先计 hits 再做 [0..32767] 范围检查，
+    越界计 hits 不计 count 也不置 new）、bitset byte/bit 边界（7/8/15/32767）、
+    Reset 后重复 Hit 不置 new、越界后有效 id 继续正常计数
+  - `fuzzgen length contract`（9 行）：产物长度 = 入参 exact（0 → 空）；
+    printable 范围行绑 DEL 修复；**负长度 = FPC SetLength RTE 201**（非异常路径，
+    调用方责任，不表驱动——实验确认，文档即契约）
+- 表行 flag 自校验：retry/repeat '0' ⟺ 非 pass 结果；coverage '0' ⟺ 零覆盖；
+  fuzzgen '0' ⟺ 空产物——防标签灌水
+- scale：countable 7867 → **7938**（test_advanced 68→104、test_prop 388→421；
+  fp +27：19+8）；fail-path 81.9% / low-signal 0% / non-table 1534
+
 ### v8.36 (2026-07-26) — B78 密度 tranche 3：prop.gen shrink 精确序列 + Name 词汇表
 
 - **test_prop 四张契约表（85 行，其中 31 行 fail-path）**，全部绑 prop.gen 真实算法

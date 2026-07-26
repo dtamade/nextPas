@@ -1381,6 +1381,99 @@ begin
       AC.Name + ': fail-path row must assert boundary behavior');
 end;
 
+{ ── v8.37: coverage tracker 状态机 + fuzzgen 长度契约 ─────────────────────────
+  CoverageTracker 锁定：TotalHits 与 CoverageCount 分离（Hit 先计 hits 再做
+  [0..32767] 范围检查——越界计 hits 不计 count 也不置 new）、bitset byte/bit
+  边界（id shr 3 / id and 7）、ResetNewCoverage 后重复 Hit 不置 new。
+  FuzzGen 锁定：产物长度 = 入参 exact；FuzzGenString 全字符 ∈ [32,126]
+  （绑 v8.37 修复：此前 NextIntRange(0,95) 闭区间可产 DEL=127）。
+  负长度 = FPC SetLength RTE 201，非异常路径，不表驱动（调用方责任）。
+  flag 自校验：'0' ⟺ 空产物/零覆盖行。 }
+
+{ Data: ops|wantCount|wantHits|wantNew|flag；ops 为逗号分隔 h<id>/r 序列，
+  '<none>' = 无操作。 }
+procedure TestCoverageOpsCase(const AC: TTestCase);
+var
+  LRest, LOps, LOp, LWantNew, LFlag: string;
+  LWantCount, LWantHits: Integer;
+  LTracker: ICoverageTracker;
+  LP: Integer;
+begin
+  LRest := AC.Data;
+  LOps := NextSeg(LRest);
+  LWantCount := StrToIntDef(NextSeg(LRest), -1);
+  LWantHits := StrToIntDef(NextSeg(LRest), -1);
+  LWantNew := NextSeg(LRest);
+  LFlag := LRest;
+
+  LTracker := CreateCoverageTracker;
+  if LOps <> '<none>' then
+    while LOps <> '' do
+    begin
+      LP := Pos(',', LOps);
+      if LP = 0 then
+      begin
+        LOp := LOps;
+        LOps := '';
+      end
+      else
+      begin
+        LOp := Copy(LOps, 1, LP - 1);
+        LOps := Copy(LOps, LP + 1, Length(LOps));
+      end;
+      if LOp = 'r' then
+        LTracker.ResetNewCoverage
+      else
+        LTracker.Hit(StrToIntDef(Copy(LOp, 2, Length(LOp)), 0));
+    end;
+
+  CheckEqual(Int64(LWantCount), Int64(LTracker.CoverageCount),
+    AC.Name + ' count');
+  CheckEqual(Int64(LWantHits), Int64(LTracker.TotalHits), AC.Name + ' hits');
+  CheckEqual(LWantNew = 'T', LTracker.HasNewCoverage, AC.Name + ' new');
+  if LFlag = '0' then
+    CheckTrue(LWantCount = 0,
+      AC.Name + ': fail-path row must assert zero-coverage boundary');
+end;
+
+{ Data: kind|len|wantLen|flag；kind = bytes / str / strrange（长度 + 全字符
+  可打印范围断言）。 }
+procedure TestGenLenCase(const AC: TTestCase);
+var
+  LRest, LKind, LFlag: string;
+  LLen, LWantLen, LI, LBad: Integer;
+  LBytes: TBytes;
+  LStr: string;
+begin
+  LRest := AC.Data;
+  LKind := NextSeg(LRest);
+  LLen := StrToIntDef(NextSeg(LRest), -1);
+  LWantLen := StrToIntDef(NextSeg(LRest), -1);
+  LFlag := LRest;
+
+  if LKind = 'bytes' then
+  begin
+    LBytes := FuzzGenBytes(LLen);
+    CheckEqual(Int64(LWantLen), Int64(Length(LBytes)), AC.Name + ' len');
+  end
+  else
+  begin
+    LStr := FuzzGenString(LLen);
+    CheckEqual(Int64(LWantLen), Int64(Length(LStr)), AC.Name + ' len');
+    if LKind = 'strrange' then
+    begin
+      LBad := 0;
+      for LI := 1 to Length(LStr) do
+        if (Ord(LStr[LI]) < 32) or (Ord(LStr[LI]) > 126) then
+          Inc(LBad);
+      CheckEqual(Int64(0), Int64(LBad), AC.Name + ' printable range');
+    end;
+  end;
+  if LFlag = '0' then
+    CheckTrue(LWantLen = 0,
+      AC.Name + ': fail-path row must assert empty-output boundary');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1633,6 +1726,49 @@ begin
   AppendShrCase(LShrCases, 'm-filter-none-50', 'filter-none-50|<none>', '0');
   LSuite.TestTable('v8.36 generator meta contract', LShrCases,
     @TestGenMetaCase);
+
+  { v8.37: coverage tracker 状态机 — ops|wantCount|wantHits|wantNew }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'c-empty',          '<none>|0|0|F', '0');
+  AppendShrCase(LShrCases, 'c-single',         'h0|1|1|T', '1');
+  AppendShrCase(LShrCases, 'c-dup',            'h0,h0|1|2|T', '1');
+  AppendShrCase(LShrCases, 'c-two',            'h0,h1|2|2|T', '1');
+  AppendShrCase(LShrCases, 'c-reset',          'h0,r|1|1|F', '1');
+  AppendShrCase(LShrCases, 'c-reset-dup',      'h0,r,h0|1|2|F', '1');
+  AppendShrCase(LShrCases, 'c-reset-fresh',    'h0,r,h1|2|2|T', '1');
+  AppendShrCase(LShrCases, 'c-reset-empty',    'r|0|0|F', '0');
+  AppendShrCase(LShrCases, 'c-double-reset',   'h0,r,r|1|1|F', '1');
+  AppendShrCase(LShrCases, 'c-bit7',           'h7|1|1|T', '1');
+  AppendShrCase(LShrCases, 'c-bit8',           'h8|1|1|T', '1');
+  AppendShrCase(LShrCases, 'c-byte-cross',     'h7,h8|2|2|T', '1');
+  AppendShrCase(LShrCases, 'c-bit-corners',    'h0,h7,h8,h15|4|4|T', '1');
+  AppendShrCase(LShrCases, 'c-max',            'h32767|1|1|T', '1');
+  AppendShrCase(LShrCases, 'c-oob-high',       'h32768|0|1|F', '0');
+  AppendShrCase(LShrCases, 'c-oob-neg',        'h-1|0|1|F', '0');
+  AppendShrCase(LShrCases, 'c-oob-big',        'h100000|0|1|F', '0');
+  AppendShrCase(LShrCases, 'c-oob-then-valid', 'h32768,h0|1|2|T', '1');
+  AppendShrCase(LShrCases, 'c-valid-then-oob', 'h0,h32768|1|2|T', '1');
+  AppendShrCase(LShrCases, 'c-oob-not-new',    'h0,r,h32768|1|2|F', '1');
+  AppendShrCase(LShrCases, 'c-dup-max',        'h32767,h32767|1|2|T', '1');
+  AppendShrCase(LShrCases, 'c-many',           'h0,h1,h2,h3,h4|5|5|T', '1');
+  AppendShrCase(LShrCases, 'c-interleave',     'h0,r,h1,h0|2|3|T', '1');
+  AppendShrCase(LShrCases, 'c-oob-only-dup',   'h-1,h-1|0|2|F', '0');
+  LSuite.TestTable('v8.37 coverage tracker state machine', LShrCases,
+    @TestCoverageOpsCase);
+
+  { v8.37: fuzzgen 长度契约 — kind|len|wantLen }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'g-bytes-0',       'bytes|0|0', '0');
+  AppendShrCase(LShrCases, 'g-bytes-1',       'bytes|1|1', '1');
+  AppendShrCase(LShrCases, 'g-bytes-16',      'bytes|16|16', '1');
+  AppendShrCase(LShrCases, 'g-bytes-1024',    'bytes|1024|1024', '1');
+  AppendShrCase(LShrCases, 'g-str-0',         'str|0|0', '0');
+  AppendShrCase(LShrCases, 'g-str-1',         'str|1|1', '1');
+  AppendShrCase(LShrCases, 'g-str-16',        'str|16|16', '1');
+  AppendShrCase(LShrCases, 'g-str-1024',      'str|1024|1024', '1');
+  AppendShrCase(LShrCases, 'g-str-printable', 'strrange|4096|4096', '1');
+  LSuite.TestTable('v8.37 fuzzgen length contract', LShrCases,
+    @TestGenLenCase);
 
   if not LSuite.Run then
   begin

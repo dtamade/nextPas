@@ -455,7 +455,7 @@ begin
   EnsureFuzzRng;
   SetLength(Result, ALen);
   for I := 1 to ALen do
-    Result[I] := Char(32 + GFuzzRng.NextIntRange(0, 95)); { printable ASCII }
+    Result[I] := Char(32 + GFuzzRng.NextIntRange(0, 94)); { printable ASCII 32..126 }
 end;
 
 { ── Corpus Management (v7.3a) ───────────────────────────────────────────── }

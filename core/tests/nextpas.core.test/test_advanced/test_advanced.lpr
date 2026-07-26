@@ -515,6 +515,136 @@ begin
     end, 'expected');
 end;
 
+{ ── v8.37: retry/repeat 执行语义矩阵 ──────────────────────────────────────────
+  锁定 runner 三个隐蔽契约：
+  1. entry RetryCount=0 视为未设置，回退 config.RetryCount（无法用 0 显式禁用）；
+  2. 负 RetryCount 是唯一 opt-out：非 0 不回退 config，且首轮后立即停止；
+  3. retry 循环仅对 tsPassed/tsSkipped 提前 Break —— tsError 也会重试。
+  repeat：fail 不中断轮次、报告最后一轮结果、entry.RetryCount 恒 0 故
+  config.RetryCount 在每轮内嵌套生效（execs = N × (1 + configR)）。
+  flag 自校验：'0' ⟺ wantStatus <> 'pass'（负路径行），防灌水。 }
+
+var
+  GProbeExecs: Integer = 0;
+  GProbeFailUntil: Integer = 0;  { fail while exec# <= this (999 = always) }
+  GProbeMode: Integer = 0;       { 0=assert-fail, 1=skip, 2=error }
+
+procedure RetryProbe;
+begin
+  Inc(GProbeExecs);
+  if GProbeExecs <= GProbeFailUntil then
+    case GProbeMode of
+      1: raise ETestSkipped.Create('probe skip');
+      2: raise Exception.Create('probe error');
+    else
+      CheckTrue(False, 'probe fail ' + IntToStr(GProbeExecs));
+    end;
+end;
+
+function NextSeg(var ARest: string): string;
+var
+  LP: Integer;
+begin
+  LP := Pos('|', ARest);
+  if LP = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LP - 1);
+    ARest := Copy(ARest, LP + 1, Length(ARest));
+  end;
+end;
+
+function StatusWord(AStatus: TTestStatus): string;
+begin
+  case AStatus of
+    tsPassed:  Result := 'pass';
+    tsFailed:  Result := 'fail';
+    tsSkipped: Result := 'skip';
+    tsError:   Result := 'error';
+  else
+    Result := 'unknown';
+  end;
+end;
+
+procedure AppendRRCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+var
+  LN: Integer;
+begin
+  LN := Length(ACases);
+  SetLength(ACases, LN + 1);
+  ACases[LN].Name := AName;
+  ACases[LN].Data := AData + '|' + AFlag;
+end;
+
+{ Data: countParam|configR|mode|failUntil|wantStatus|wantExecs|flag.
+  ARepeatMode=False → countParam 是 entry RetryCount（Test overload）；
+  True → countParam 是 TestRepeat 的 RepeatCount。 }
+procedure RunRetryRepeatCase(const AC: TTestCase; ARepeatMode: Boolean);
+var
+  LRest, LWantStatus, LFlag: string;
+  LCountParam, LConfigR, LWantExecs: Integer;
+  LSub: TTestSuite;
+  LSubRunner: TSuiteRunner;
+  LSubResults: specialize TArray<TTestRunResult>;
+  LSink: TBufferSink;
+begin
+  LRest := AC.Data;
+  LCountParam := StrToIntDef(NextSeg(LRest), 0);
+  LConfigR := StrToIntDef(NextSeg(LRest), 0);
+  GProbeMode := StrToIntDef(NextSeg(LRest), 0);
+  GProbeFailUntil := StrToIntDef(NextSeg(LRest), 0);
+  LWantStatus := NextSeg(LRest);
+  LWantExecs := StrToIntDef(NextSeg(LRest), -1);
+  LFlag := LRest;
+  GProbeExecs := 0;
+
+  LSink := TBufferSink.Create;
+  LSub := TTestSuite.Create('rr-probe');
+  LSub.Config.OutSink := LSink;
+  LSub.Config.ErrSink := LSink;
+  LSub.Config.AnsiMode := amOff;
+  LSub.Config.RetryCount := LConfigR;
+  if ARepeatMode then
+    LSub.TestRepeat('probe', @RetryProbe, LCountParam)
+  else
+    LSub.Test('probe', @RetryProbe, LCountParam);
+  LSubRunner := TSuiteRunner.Create('rr-runner');
+  LSubRunner.Add(LSub);
+  LSubRunner.RunAllWithResult(LSubResults);
+
+  CheckEqual(LWantStatus, StatusWord(LSubResults[0].Results[0].Status),
+    AC.Name + ' status');
+  CheckEqual(Int64(LWantExecs), Int64(GProbeExecs), AC.Name + ' execs');
+  if LFlag = '0' then
+    CheckTrue(LWantStatus <> 'pass',
+      AC.Name + ': flag 0 requires non-pass status')
+  else
+    CheckTrue(LWantStatus = 'pass',
+      AC.Name + ': flag 1 requires pass status');
+
+  LSub.Config.OutSink := nil;
+  LSub.Config.ErrSink := nil;
+  LSink := nil;
+  LSubRunner := Default(TSuiteRunner);
+  LSub := Default(TTestSuite);
+  LSubResults := nil;
+end;
+
+procedure TestRetryMatrixCase(const AC: TTestCase);
+begin
+  RunRetryRepeatCase(AC, False);
+end;
+
+procedure TestRepeatMatrixCase(const AC: TTestCase);
+begin
+  RunRetryRepeatCase(AC, True);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -523,6 +653,7 @@ var
   LResults: specialize TArray<TTestRunResult>;
   LFpCases: specialize TArray<TTestCase>;
   LFpI: Integer;
+  LRRCases: specialize TArray<TTestCase>;
 begin
   WriteLn('=== test_advanced ===');
   LSuite := TTestSuite.Create('advanced');
@@ -569,6 +700,52 @@ begin
   end;
   LSuite.TestTable('advanced fail-path ExpectFail', LFpCases,
     @TestAdvancedFailPathCase);
+
+  { v8.37: retry 执行语义矩阵 — entryR|configR|mode|failUntil|wantStatus|wantExecs }
+  SetLength(LRRCases, 0);
+  AppendRRCase(LRRCases, 'a-pass-noretry',   '0|0|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'a-pass-retry2',    '2|0|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'a-pass-cfg2',      '0|2|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'a-fail-noretry',   '0|0|0|999|fail|1', '0');
+  AppendRRCase(LRRCases, 'a-fail-r1',        '1|0|0|999|fail|2', '0');
+  AppendRRCase(LRRCases, 'a-fail-r2',        '2|0|0|999|fail|3', '0');
+  AppendRRCase(LRRCases, 'a-fail-r3',        '3|0|0|999|fail|4', '0');
+  AppendRRCase(LRRCases, 'a-flaky1-r1',      '1|0|0|1|pass|2', '1');
+  AppendRRCase(LRRCases, 'a-flaky1-r2',      '2|0|0|1|pass|2', '1');
+  AppendRRCase(LRRCases, 'a-flaky2-r2',      '2|0|0|2|pass|3', '1');
+  AppendRRCase(LRRCases, 'a-flaky2-r3',      '3|0|0|2|pass|3', '1');
+  AppendRRCase(LRRCases, 'a-flaky2-r1',      '1|0|0|2|fail|2', '0');
+  AppendRRCase(LRRCases, 'a-flaky3-r2',      '2|0|0|3|fail|3', '0');
+  AppendRRCase(LRRCases, 'a-cfgfb-fail',     '0|2|0|999|fail|3', '0');
+  AppendRRCase(LRRCases, 'a-cfgfb-flaky1',   '0|1|0|1|pass|2', '1');
+  AppendRRCase(LRRCases, 'a-cfgfb-flaky2',   '0|3|0|2|pass|3', '1');
+  AppendRRCase(LRRCases, 'a-entrywin-r1',    '1|3|0|999|fail|2', '0');
+  AppendRRCase(LRRCases, 'a-entrywin-r2',    '2|1|0|2|pass|3', '1');
+  AppendRRCase(LRRCases, 'a-neg-shield',     '-1|2|0|999|fail|1', '0');
+  AppendRRCase(LRRCases, 'a-neg-pass',       '-1|0|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'a-neg5-shield',    '-5|3|0|999|fail|1', '0');
+  AppendRRCase(LRRCases, 'a-skip-r2',        '2|0|1|999|skip|1', '0');
+  AppendRRCase(LRRCases, 'a-skip-cfg2',      '0|2|1|999|skip|1', '0');
+  AppendRRCase(LRRCases, 'a-error-noretry',  '0|0|2|999|error|1', '0');
+  AppendRRCase(LRRCases, 'a-error-r2',       '2|0|2|999|error|3', '0');
+  AppendRRCase(LRRCases, 'a-error1-r1',      '1|0|2|1|pass|2', '1');
+  LSuite.TestTable('v8.37 retry execution matrix', LRRCases,
+    @TestRetryMatrixCase);
+
+  { v8.37: repeat 执行语义矩阵 — repeatN|configR|mode|failUntil|wantStatus|wantExecs }
+  SetLength(LRRCases, 0);
+  AppendRRCase(LRRCases, 'r-zero',           '0|0|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'r-one',            '1|0|0|0|pass|1', '1');
+  AppendRRCase(LRRCases, 'r-three-pass',     '3|0|0|0|pass|3', '1');
+  AppendRRCase(LRRCases, 'r-three-fail',     '3|0|0|999|fail|3', '0');
+  AppendRRCase(LRRCases, 'r-lastwin',        '2|0|0|1|pass|2', '1');
+  AppendRRCase(LRRCases, 'r-rep2-cfg1-fail', '2|1|0|999|fail|4', '0');
+  AppendRRCase(LRRCases, 'r-rep2-cfg1-flaky','2|1|0|1|pass|3', '1');
+  AppendRRCase(LRRCases, 'r-rep3-cfg2-fail', '3|2|0|999|fail|9', '0');
+  AppendRRCase(LRRCases, 'r-rep2-skip',      '2|0|1|999|skip|2', '0');
+  AppendRRCase(LRRCases, 'r-rep2-error',     '2|0|2|999|error|2', '0');
+  LSuite.TestTable('v8.37 repeat execution matrix', LRRCases,
+    @TestRepeatMatrixCase);
 
   LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);
