@@ -129,8 +129,9 @@ end;
 
 ## Examples
 
-7 个示例覆盖从单屏 hello 到主题切换的完整教学路径。所有示例都进入
-`uses nextpas.core.tui.ext`（除 `demo_widgets` 用 full facade 演示高级 widget）。
+7 个教学示例覆盖从单屏 hello 到主题切换的完整路径，另有 1 个 dogfood
+真实应用。所有示例都进入 `uses nextpas.core.tui.ext`（除 `demo_widgets`
+用 full facade 演示高级 widget）。
 
 | 示例 | 教学目标 | 关键 API |
 |------|----------|----------|
@@ -141,8 +142,13 @@ end;
 | [`demo_task_completion`](../../examples/nextpas.core.tui/demo_task_completion/) | 后台任务 + 主线程 completion | `TTaskManager.Spawn`, `HandleTaskCompletions` |
 | [`demo_panel_layout`](../../examples/nextpas.core.tui/demo_panel_layout/) | panel 网格组合 | `TPanel.Grid`, `PanelCell` |
 | [`demo_theme_focus_keybind`](../../examples/nextpas.core.tui/demo_theme_focus_keybind/) | 主题切换 + 键绑定 | `TTheme.Dark/Light/Nord/Dracula`, `TKeybindManager` |
+| [`app_test_runner`](../../examples/nextpas.core.tui/app_test_runner/) | **dogfood 真实应用**：测试套件运行器（列表+日志双栏、并发任务、过滤） | `TListWidget` stateful, `RunInTimeout`, task FIFO 排队 |
 
 每个示例都有自己的 Makefile，运行：`make -C core/examples/nextpas.core.tui/<demo> run`。
+
+> **线程前置契约**：任何触发 `TTaskManager.Spawn` 的程序必须把
+> `nextpas.core.thread.init` 放在 uses **第一位**（缺失 = Unix 下随机
+> segfault，编译不报错）。详见 [CONTRACT.md](./CONTRACT.md) §4，门禁 C11。
 
 ## 当前 focused verification envelope
 
