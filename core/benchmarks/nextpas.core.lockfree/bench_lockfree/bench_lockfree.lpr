@@ -8,10 +8,12 @@ program bench_lockfree;
  *   C1s — TLockFreeChannelSpsc 1P+1C
  *   M1/M2 — TMpscQueue 1P+1C / 2P+1C (unbounded)
  *   Q1/Q2 — TLockFreeMsQueue 1P+1C / 2P+2C (unbounded, MPMC)
+ *   R1/R2 — TRingBufferImpl 1P+1C / 2P+2C (bounded ring, MPMC)
  *   W1/W2 — TWorkStealingPool 1S+1T / 2S+2T (4 workers, bounded deques)
  *   J1/J2 — TLockFreeForkJoinPool 1F+1W / 2F+2W (4 workers, bounded deques)
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
  *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC/MPSC/MsQueue TryEnqueue+TryDequeue pair,
+ *   Ring TryWrite+TryRead pair,
  *   Channel 1T TrySendReceive, Pool 1T Submit+Steal pair,
  *   ForkJoin 1T Fork+PopOrSteal pair, EBR Retire
  *
@@ -28,7 +30,7 @@ uses
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.channel, nextpas.core.lockfree.channel.spsc,
   nextpas.core.lockfree.mpsc, nextpas.core.lockfree.workstealing,
-  nextpas.core.lockfree.forkjoin,
+  nextpas.core.lockfree.forkjoin, nextpas.core.lockfree.ringbuffer,
   nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info,
   nextpas.core.fs,
   nextpas.core.exception;
@@ -46,6 +48,7 @@ type
   TIntChannelSpsc = specialize TLockFreeChannelSpsc<Integer>;
   TIntMpsc = specialize TMpscQueue<Integer>;
   TIntMsQueue = specialize TLockFreeMsQueue<Integer>;
+  TIntRing = specialize TRingBufferImpl<Integer>;
 
 var
   GSpsc: TIntSpsc;
@@ -59,6 +62,7 @@ var
 
   GMpsc: TIntMpsc;
   GMsQ: TIntMsQueue;
+  GRing: TIntRing;
   GPool: TWorkStealingPool;
   GJPool: TLockFreeForkJoinPool;
 
@@ -67,6 +71,7 @@ var
   GMatchChSpsc: TIntChannelSpsc;
   GMatchMpsc: TIntMpsc;
   GMatchMsQ: TIntMsQueue;
+  GMatchRing: TIntRing;
   GMatchPool: TWorkStealingPool;
   GMatchJPool: TLockFreeForkJoinPool;
   GMatchSum: Int64;
@@ -138,6 +143,18 @@ var
 begin
   if GMsQ.TryEnqueue(42) then
     if GMsQ.TryDequeue(LV) then
+      GBenchSink := GBenchSink + LV;
+end;
+
+{ Ring is bounded but drained at steady state (~0..1 items): every iteration
+  is a successful write+read pair. Try* return an enum, success = rbWritten
+  for BOTH sides (TryRead reports the slot it consumed was written). }
+procedure BenchRingTryPair(const ACtx: IBenchContext);
+var
+  LV: Integer;
+begin
+  if GRing.TryWrite(42) = rbWritten then
+    if GRing.TryRead(LV) = rbWritten then
       GBenchSink := GBenchSink + LV;
 end;
 
@@ -300,6 +317,35 @@ begin
   begin
     while not GMatchMsQ.TryDequeue(LV) do
       CpuPause; { spin on empty until this consumer's share arrives }
+    LLocal := LLocal + LV;
+  end;
+  InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+function MatchProducerRing(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  for LI := 1 to LCount do
+    while GMatchRing.TryWrite(LI) <> rbWritten do
+      CpuPause; { bounded ring: spin on rbFull until a consumer drains }
+end;
+
+function MatchConsumerRing(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+  LV: Integer;
+  LLocal: Int64;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  LLocal := 0;
+  for LI := 1 to LCount do
+  begin
+    while GMatchRing.TryRead(LV) <> rbWritten do
+      CpuPause; { spin on rbEmpty until this consumer's share arrives }
     LLocal := LLocal + LV;
   end;
   InterlockedExchangeAdd64(GMatchSum, LLocal);
@@ -497,6 +543,44 @@ begin
   end;
 end;
 
+{ Bounded MPMC ring (Vyukov-style slot sequences): both sides scale;
+  producers spin on rbFull, consumers on rbEmpty. }
+procedure RunMatchedRingOnce(const AProducers, AConsumers: Integer);
+var
+  LProducers: array[0..7] of TPlatformThreadHandle;
+  LConsumers: array[0..7] of TPlatformThreadHandle;
+  LI: Integer;
+  LRet: Pointer;
+  LOpsPerP, LOpsPerC: Integer;
+begin
+  if (AProducers < 1) or (AConsumers < 1) or (AProducers > 8) or (AConsumers > 8) then
+    raise EInvalidOperationError.Create('RunMatchedRingOnce: bad producer/consumer count');
+  if (OPS mod AProducers <> 0) or (OPS mod AConsumers <> 0) then
+    raise EInvalidOperationError.Create('RunMatchedRingOnce: OPS must divide thread counts');
+
+  LOpsPerP := OPS div AProducers;
+  LOpsPerC := OPS div AConsumers;
+  GMatchRing := TIntRing.Create(CAPACITY);
+  GMatchSum := 0;
+  try
+    for LI := 0 to AConsumers - 1 do
+      if platform_thread_create(LConsumers[LI], @MatchConsumerRing, Pointer(PtrUInt(LOpsPerC))) <> 0 then
+        raise EInvalidOperationError.Create('ring consumer create failed');
+    for LI := 0 to AProducers - 1 do
+      if platform_thread_create(LProducers[LI], @MatchProducerRing, Pointer(PtrUInt(LOpsPerP))) <> 0 then
+        raise EInvalidOperationError.Create('ring producer create failed');
+    for LI := 0 to AProducers - 1 do
+      platform_thread_join(LProducers[LI], LRet);
+    for LI := 0 to AConsumers - 1 do
+      platform_thread_join(LConsumers[LI], LRet);
+    GBenchSink := GBenchSink + GMatchSum;
+  finally
+    GMatchRing.Close;
+    GMatchRing.Free;
+    GMatchRing := nil;
+  end;
+end;
+
 { Single consumer only — TMpscQueue is strictly single-consumer.
   Unbounded: producers never block; consumer blocks via DequeueWait. }
 procedure RunMatchedMpscOnce(const AProducers: Integer);
@@ -633,6 +717,18 @@ begin
   ACtx.SetBytes(OPS * SizeOf(Integer));
 end;
 
+procedure BenchMatchedR1Ring(const ACtx: IBenchContext);
+begin
+  RunMatchedRingOnce(1, 1);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
+procedure BenchMatchedR2Ring(const ACtx: IBenchContext);
+begin
+  RunMatchedRingOnce(2, 2);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
 procedure BenchMatchedW1Pool(const ACtx: IBenchContext);
 begin
   RunMatchedPoolOnce(1, 1);
@@ -669,6 +765,8 @@ begin
   WriteLn('Scenario M2: TMpscQueue 2P+1C  OPS=', OPS, ' (unbounded)');
   WriteLn('Scenario Q1: TLockFreeMsQueue 1P+1C  OPS=', OPS, ' (unbounded, MPMC)');
   WriteLn('Scenario Q2: TLockFreeMsQueue 2P+2C  OPS=', OPS, ' (unbounded, MPMC)');
+  WriteLn('Scenario R1: TRingBufferImpl 1P+1C  OPS=', OPS, ' CAP=', CAPACITY, ' (bounded ring, MPMC)');
+  WriteLn('Scenario R2: TRingBufferImpl 2P+2C  OPS=', OPS, ' CAP=', CAPACITY, ' (bounded ring, MPMC)');
   WriteLn('Scenario W1: TWorkStealingPool 1S+1T  OPS=', OPS, ' (4 workers, bounded deques)');
   WriteLn('Scenario W2: TWorkStealingPool 2S+2T  OPS=', OPS, ' (4 workers, bounded deques)');
   WriteLn('Scenario J1: TLockFreeForkJoinPool 1F+1W  OPS=', OPS, ' (4 workers, bounded deques)');
@@ -690,6 +788,8 @@ begin
     .Add('lockfree/matched/M2_Mpsc_2P1C', @BenchMatchedM2Mpsc)
     .Add('lockfree/matched/Q1_MsQueue_1P1C', @BenchMatchedQ1MsQueue)
     .Add('lockfree/matched/Q2_MsQueue_2P2C', @BenchMatchedQ2MsQueue)
+    .Add('lockfree/matched/R1_Ring_1P1C', @BenchMatchedR1Ring)
+    .Add('lockfree/matched/R2_Ring_2P2C', @BenchMatchedR2Ring)
     .Add('lockfree/matched/W1_Pool_1S1T', @BenchMatchedW1Pool)
     .Add('lockfree/matched/W2_Pool_2S2T', @BenchMatchedW2Pool)
     .Add('lockfree/matched/J1_ForkJoin_1F1W', @BenchMatchedJ1ForkJoin)
@@ -717,6 +817,7 @@ begin
   GChannelSpsc := TIntChannelSpsc.Create(CAPACITY);
   GMpsc := TIntMpsc.Create;
   GMsQ := TIntMsQueue.Create;
+  GRing := TIntRing.Create(CAPACITY);
   GPool := TWorkStealingPool.Create(1);
   GJPool := TLockFreeForkJoinPool.Create(1);
   GEbrDomain := TEbrDomain.Create;
@@ -739,6 +840,7 @@ begin
       .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
       .Add('lockfree/micro/MPSC/TryEnqueueDequeuePair', @BenchMpscTryPair)
       .Add('lockfree/micro/MsQueue/TryEnqueueDequeuePair', @BenchMsQueueTryPair)
+      .Add('lockfree/micro/Ring/TryWriteReadPair', @BenchRingTryPair)
       .Add('lockfree/micro/Pool/SubmitStealPair', @BenchPoolSubmitStealPair)
       .Add('lockfree/micro/ForkJoin/ForkPopPair', @BenchForkJoinPair)
       .Add('lockfree/micro/EBR/Retire', @BenchEbrRetire)
@@ -755,6 +857,7 @@ begin
     GPool.Close;
     GPool.Free;
     GMsQ.Free;
+    GRing.Free;
     GMpsc.Free;
     GSpsc.Free;
     GMpmc.Free;

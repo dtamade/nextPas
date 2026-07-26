@@ -24,11 +24,27 @@ type
       Value: T;
     end;
   private
+    { Read-mostly header: written once in Create, read every op — keep off
+      the CAS-hot lines below (F-033 thread-affinity layout rule). }
     FSlots: array of TSlot;
     FCapacity: Int64;
     FMask: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadHeader: TCacheLinePad;
+    {$POP}
+    { Producer line: FHead is CAS'd by every producer (TryWrite); consumers
+      only acquire-read it. Isolating it keeps producer CAS invalidations
+      from stomping the consumer CAS target below. }
     FHead: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadHead: TCacheLinePad;
+    {$POP}
+    { Consumer line: FTail is CAS'd by every consumer (TryRead). }
     FTail: Int64;
+    {$PUSH} {$WARN 05029 OFF}
+    FPadTail: TCacheLinePad;
+    {$POP}
+    { Cold: written once on Close. }
     FClosed: Int32;
   public
     constructor Create(const ACapacity: Int64);
