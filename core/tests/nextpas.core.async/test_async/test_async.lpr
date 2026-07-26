@@ -461,7 +461,7 @@ begin
     'function tasyncloop.isvalid', 'async loop Close implementation');
   LPostBody := ExtractSourceRange(LSource, 'procedure tasyncloop.post(',
     'procedure tasyncloop.drainwake', 'async loop Post implementation');
-  LDrainBody := ExtractSourceRange(LSource, 'procedure tasyncloop.drainpending;',
+  LDrainBody := ExtractSourceRange(LSource, 'function tasyncloop.drainpending: uint32;',
     'function tasyncloop.schedule', 'async loop DrainPending implementation');
 
   CheckSourceContains(LCloseBody, 'lpendingwasready',

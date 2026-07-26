@@ -39,8 +39,12 @@ type
     FPending: TAsyncPendingQueue;
     FPendingReady: Boolean;
     FClosed: Boolean;
-    procedure DrainPending;
+    { Wake coalescing (Go netpollBreak-style): 1 = a wake signal is in flight
+      since the consumer's last drain, so producers skip the wake syscall. }
+    FWakeSignaled: Int32;
+    function DrainPending: UInt32;
     procedure DrainWake;
+    procedure ResetWakeSignal;
     procedure WaitForWake(ATimeoutMs: Int32);
   public
     constructor Create(AQueueDepth: UInt32 = 64);
@@ -428,6 +432,7 @@ begin
   FPendingReady := False;
   FPending := nil;
   FRunning := 0;
+  FWakeSignaled := 0;
   FPoller := TPoller.Create(AQueueDepth);
   if not FPoller.IsValid then
     raise EInvalidOperationError.Create('async loop: poller creation failed');
@@ -516,7 +521,11 @@ procedure TAsyncLoop.Wake;
 begin
   if not FWakeReady then
     Exit;
-  platform_poller_wake(FWakePoller);
+  { Coalesce: only the 0→1 transition pays the wake syscall. Must be an RMW
+    (not load-then-exchange): the full barrier orders the producer's enqueue
+    before this flag op, which the lost-wakeup proof relies on. }
+  if atomic_exchange(FWakeSignaled, 1, mo_seq_cst) = 0 then
+    platform_poller_wake(FWakePoller);
 end;
 
 procedure TAsyncLoop.Post(ACallback: TAsyncCallback; AContext: Pointer);
@@ -583,6 +592,14 @@ begin
     platform_poller_drain_wake(FWakePoller);
 end;
 
+procedure TAsyncLoop.ResetWakeSignal;
+begin
+  { Consumer pre-sleep order is mandatory: drain wake fd → RMW-reset flag →
+    recheck queue. The RMW's full barrier prevents StoreLoad reordering of the
+    reset against the queue recheck, which would allow a lost wakeup. }
+  atomic_exchange(FWakeSignaled, 0, mo_seq_cst);
+end;
+
 procedure TAsyncLoop.WaitForWake(ATimeoutMs: Int32);
 var
   LEntry: TPlatformPollEntry;
@@ -595,10 +612,11 @@ begin
   platform_poller_wait(FWakePoller, @LEntry, 1, ATimeoutMs, LCount);
 end;
 
-procedure TAsyncLoop.DrainPending;
+function TAsyncLoop.DrainPending: UInt32;
 var
   LItem: TAsyncPendingItem;
 begin
+  Result := 0;
   { Single-consumer: only the loop thread may TryDequeue. }
   if (not FPendingReady) or (FPending = nil) then
     Exit;
@@ -608,6 +626,7 @@ begin
       LItem.Callback(LItem.Context)
     else if Assigned(LItem.Method) then
       LItem.Method(LItem.Context);
+    Inc(Result);
   end;
 end;
 
@@ -763,25 +782,29 @@ end;
 
 function TAsyncLoop.Poll: Int32;
 var
-  LFired: UInt32;
+  LDrained, LFired: UInt32;
   LIo: Int32;
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
-  { Drain wake signal and process pending callbacks }
-  DrainWake;
-  DrainPending;
-  { Fire expired timers }
+  { No DrainWake here: the MPSC queue is the truth for pending callbacks; the
+    wake fd only exists to make WaitForWake return, and Poll never blocks. }
+  LDrained := DrainPending;
   LFired := FTimers.FireExpired;
-  { Poll I/O non-blocking }
-  FPoller.Flush;
-  LIo := FPoller.Poll;
-  Result := LIo + Int32(LFired);
+  LIo := 0;
+  { HasPending is an O(1) registration counter on every backend; when zero
+    there is nothing armed, so Flush/Poll would only burn a syscall. }
+  if FPoller.HasPending then
+  begin
+    FPoller.Flush;
+    LIo := FPoller.Poll;
+  end;
+  Result := LIo + Int32(LFired) + Int32(LDrained);
 end;
 
 procedure TAsyncLoop.Run;
 var
-  LFired: UInt32;
+  LDrained, LFired: UInt32;
   LIo: Int32;
   LNext: TDeadline;
 begin
@@ -791,21 +814,31 @@ begin
   try
     while atomic_load(FRunning, mo_acquire) <> 0 do
     begin
-      { Drain wake signal and process pending callbacks }
-      DrainWake;
-      DrainPending;
+      { Process pending callbacks; the queue is the truth (no wake-fd syscall
+        on the hot path — the fd is only drained on the idle transition). }
+      LDrained := DrainPending;
       { Fire expired timers }
       LFired := FTimers.FireExpired;
       { Check if stopped from callback }
       if atomic_load(FRunning, mo_acquire) = 0 then
         Break;
-      { Poll I/O non-blocking }
-      FPoller.Flush;
-      LIo := FPoller.Poll;
+      { Poll I/O non-blocking; skip the syscall when nothing is armed }
+      LIo := 0;
+      if FPoller.HasPending then
+      begin
+        FPoller.Flush;
+        LIo := FPoller.Poll;
+      end;
       { If we did work, loop immediately }
-      if (LFired > 0) or (LIo > 0) then
+      if (LDrained > 0) or (LFired > 0) or (LIo > 0) then
         Continue;
-      { Nothing happened: sleep on the platform wake seam until woken or next timer. }
+      { Idle transition: drain the wake fd, reset the coalescing flag, then
+        recheck the queue — only sleep when nothing raced in. A producer that
+        enqueues after the reset sees FWakeSignaled=0 and pays the wake. }
+      DrainWake;
+      ResetWakeSignal;
+      if DrainPending > 0 then
+        Continue;
       LNext := FTimers.NextDeadline;
       WaitForWake(AsyncIdleWakeTimeoutMs(FPoller, LNext));
     end;
@@ -816,7 +849,7 @@ end;
 
 procedure TAsyncLoop.RunOnce;
 var
-  LFired: UInt32;
+  LDrained, LFired: UInt32;
   LIo: Int32;
   LNext: TDeadline;
 begin
@@ -824,29 +857,41 @@ begin
     raise EInvalidOperationError.Create('async loop: run once after close');
   atomic_store(FRunning, 1, mo_release);
   try
-    { Drain pending first }
-    DrainWake;
-    DrainPending;
+    { Drain pending first (queue is the truth; no wake-fd syscall) }
+    LDrained := DrainPending;
     { Timers first (consistent with Run) }
     LFired := FTimers.FireExpired;
     if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
-    { Then I/O }
-    FPoller.Flush;
-    LIo := FPoller.Poll;
-    if (LFired > 0) or (LIo > 0) then
+    { Then I/O; skip the syscall when nothing is armed }
+    LIo := 0;
+    if FPoller.HasPending then
+    begin
+      FPoller.Flush;
+      LIo := FPoller.Poll;
+    end;
+    if (LDrained > 0) or (LFired > 0) or (LIo > 0) then
+      Exit;
+    { Idle transition: same drain → reset → recheck protocol as Run }
+    DrainWake;
+    ResetWakeSignal;
+    if DrainPending > 0 then
       Exit;
     { Block until next timer or wake }
     LNext := FTimers.NextDeadline;
     WaitForWake(AsyncIdleWakeTimeoutMs(FPoller, LNext));
     { Drain and fire after sleep }
     DrainWake;
+    ResetWakeSignal;
     DrainPending;
     FTimers.FireExpired;
     if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
-    FPoller.Flush;
-    FPoller.Poll;
+    if FPoller.HasPending then
+    begin
+      FPoller.Flush;
+      FPoller.Poll;
+    end;
   finally
     atomic_store(FRunning, 0, mo_release);
   end;

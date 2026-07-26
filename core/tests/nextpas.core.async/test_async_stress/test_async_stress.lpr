@@ -12,6 +12,7 @@ uses
   nextpas.core.platform.pipe,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.thread,
+  nextpas.core.atomic,
   nextpas.core.async.base,
   nextpas.core.async.timer,
   nextpas.core.async.loop,
@@ -382,6 +383,142 @@ begin
   LLoop.Free;
 end;
 
+{ === Test 10: PingPongWakeLatency === }
+{ Lost-wakeup detector: each round posts exactly one item while the loop is
+  (very likely) blocked in WaitForWake with only a distant safety timer.
+  A wake-coalescing bug that drops a wakeup stalls the round until the
+  safety timer, so the final ack count comes up short. }
+
+const
+  PING_PONG_ROUNDS = 200;
+
+var
+  GAckCount: Int32 = 0;
+
+procedure PingAckCallback(AContext: Pointer);
+begin
+  atomic_fetch_add(GAckCount, 1, mo_acq_rel);
+end;
+
+function PingPongThreadProc(AArg: Pointer): Pointer; cdecl;
+var
+  LLoop: ^TAsyncLoop;
+  LRound: Int32;
+  LDeadline: TDeadline;
+begin
+  LLoop := AArg;
+  LDeadline := TDeadline.After(TDuration.FromSeconds(10));
+  for LRound := 1 to PING_PONG_ROUNDS do
+  begin
+    LLoop^.Post(@PingAckCallback, nil);
+    while (atomic_load(GAckCount, mo_acquire) < LRound) and
+          (not LDeadline.IsExpired) do
+      platform_thread_sleep_ns(50000);
+    if LDeadline.IsExpired then
+      Break;
+  end;
+  LLoop^.Post(@StopCallback, nil);
+  Result := nil;
+end;
+
+procedure TestPingPongWakeLatency;
+var
+  LLoop: TAsyncLoop;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+begin
+  ResetState;
+  atomic_store(GAckCount, 0, mo_release);
+  LLoop := TAsyncLoop.Create(64);
+  GLoopRef := @LLoop;
+  platform_thread_create(LHandle, @PingPongThreadProc, @LLoop);
+  { Safety net: bounded exit even if a wakeup is lost }
+  LLoop.Schedule(TDuration.FromMilliseconds(12000), @StopCallback, nil);
+  LLoop.Run;
+  platform_thread_join(LHandle, LRetVal);
+  CheckEqual(Int64(PING_PONG_ROUNDS), Int64(atomic_load(GAckCount, mo_acquire)),
+    'every post against a sleeping loop woke it');
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
+{ === Test 11: PollOnlyCrossThreadDrain === }
+{ Poll (non-blocking pump) must observe cross-thread posts through the MPSC
+  queue alone — no reliance on the wake fd. }
+
+const
+  POLL_DRAIN_TOTAL = 10000;
+
+function PollDrainThreadProc(AArg: Pointer): Pointer; cdecl;
+var
+  LLoop: ^TAsyncLoop;
+  LI: Int32;
+begin
+  LLoop := AArg;
+  for LI := 1 to POLL_DRAIN_TOTAL do
+    LLoop^.Post(@IncrementCallback, nil);
+  Result := nil;
+end;
+
+procedure TestPollOnlyCrossThreadDrain;
+var
+  LLoop: TAsyncLoop;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LDeadline: TDeadline;
+begin
+  ResetState;
+  LLoop := TAsyncLoop.Create(64);
+  GLoopRef := @LLoop;
+  platform_thread_create(LHandle, @PollDrainThreadProc, @LLoop);
+  LDeadline := TDeadline.After(TDuration.FromSeconds(10));
+  while (GCallCount < POLL_DRAIN_TOTAL) and (not LDeadline.IsExpired) do
+    LLoop.Poll;
+  platform_thread_join(LHandle, LRetVal);
+  CheckEqual(Int64(POLL_DRAIN_TOTAL), Int64(GCallCount),
+    'poll-only consumer drained all cross-thread posts');
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
+{ === Test 12: StopDuringDeepSleep === }
+{ Loop sleeping with only a distant safety timer must exit promptly on a
+  cross-thread Stop (stop wake must not be coalesced away). }
+
+function DeepSleepStopThreadProc(AArg: Pointer): Pointer; cdecl;
+var
+  LLoop: ^TAsyncLoop;
+begin
+  LLoop := AArg;
+  platform_thread_sleep_ns(30000000);
+  LLoop^.Stop;
+  Result := nil;
+end;
+
+procedure TestStopDuringDeepSleep;
+var
+  LLoop: TAsyncLoop;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LStart: TInstant;
+  LElapsedMs: Int64;
+begin
+  ResetState;
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+  { Distant safety timer bounds the test if the stop wake is lost }
+  LLoop.Schedule(TDuration.FromMilliseconds(10000), @StopCallback, nil);
+  platform_thread_create(LHandle, @DeepSleepStopThreadProc, @LLoop);
+  LStart := TInstant.Now;
+  LLoop.Run;
+  LElapsedMs := TInstant.Now.DurationSince(LStart).AsMilliseconds;
+  platform_thread_join(LHandle, LRetVal);
+  Check(LElapsedMs < 5000,
+    'stop during deep sleep exited promptly: ' + IntToStr(LElapsedMs) + 'ms');
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
 { === Main === }
 
 begin
@@ -396,6 +533,9 @@ begin
   T.Test('PostStress', @TestPostStress);
   T.Test('TimerPlusIO', @TestTimerPlusIO);
   T.Test('StopFromPost', @TestStopFromPost);
+  T.Test('PingPongWakeLatency', @TestPingPongWakeLatency);
+  T.Test('PollOnlyCrossThreadDrain', @TestPollOnlyCrossThreadDrain);
+  T.Test('StopDuringDeepSleep', @TestStopDuringDeepSleep);
 
   if not T.Run then Halt(1);
 end.
