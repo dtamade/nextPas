@@ -139,8 +139,12 @@ const
   ESysEBUSY = 16;
   ESysEINTR = 4;
   ESysEINVAL = 22;
+  ESysEMFILE = 24;
+  ESysENFILE = 23;
+  ESysEINPROGRESS = 115;
   ESysEOPNOTSUPP = 95;
   ESysETIMEDOUT = 110;
+  ESysEWOULDBLOCK = ESysEAGAIN;
 
   WNOHANG = Int32(1);
   WUNTRACED = Int32(2);
@@ -185,6 +189,10 @@ const
   O_DIRECTORY = Int32($10000);
   {$ENDIF}
   O_CLOEXEC = Int32($80000);
+  O_NONBLOCK = Int32($800);
+
+  { AF_UNSPEC 各宿主统一为 0；其余 AF_*/SOCK_* 可移植常量在 posix.base }
+  AF_UNSPEC = 0;
 
   SEEK_SET = Int32(0);
   SEEK_CUR = Int32(1);

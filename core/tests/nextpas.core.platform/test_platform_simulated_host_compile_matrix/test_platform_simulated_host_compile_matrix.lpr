@@ -61,7 +61,15 @@ uses
   nextpas.core.platform.time,
   nextpas.core.platform.thread,
   nextpas.core.platform.sync,
-  nextpas.core.platform.console
+  nextpas.core.platform.console,
+  nextpas.core.platform.error,
+  { wave10 contract: generic unix stat stays deferred — no invented stat record,
+    so platform.files is host-gated and excluded from the generic-unix leg }
+  {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.files,{$ENDIF}
+  nextpas.core.platform.path,
+  nextpas.core.platform.env,
+  nextpas.core.platform.socket,
+  nextpas.core.platform.memory
   {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.base, nextpas.core.platform.darwin.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.base, nextpas.core.platform.android.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.base, nextpas.core.platform.freebsd.ffi{$ENDIF}
