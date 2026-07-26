@@ -16,10 +16,12 @@ asm
   cmp rdi, rsi
   je @equal              // Same pointer = equal
 
+  // i = 0：必须先于 <128 短路径分支，@loop32/@loop16/@remainder 共用 rcx
+  xor rcx, rcx
+
   // 大数组路径: 4x YMM 展开 (128 bytes/iter)
   cmp rdx, 128
   jb @loop32
-  xor rcx, rcx           // i = 0
 
 @loop128:
   lea r8, [rcx + 128]

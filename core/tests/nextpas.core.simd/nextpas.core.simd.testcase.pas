@@ -100,6 +100,7 @@ type
   TTestCase_BackendConsistency = class(TTestFixture)
   published
     procedure Test_MemEqual_Consistency;
+    procedure Test_MemEqual_SmallLen_PoisonedIndex;
     procedure Test_MemFindByte_Consistency;
     procedure Test_SumBytes_Consistency;
     procedure Test_CountByte_Consistency;
@@ -1246,6 +1247,50 @@ end;
 {$IFDEF CPUX86_64}
 
 { TTestCase_BackendConsistency }
+
+{$IFDEF UNIX}
+// 回归防线：MemEqual_AVX2 曾在 len<128 短路径跳过 rcx 初始化，结果取决于
+// 调用点 rcx 残留值——常规测试上下文 rcx 恰为小值时逐字节兜底会假绿。
+// 这里显式毒化 rcx 后尾跳内核（参数已在 rdi/rsi/rdx），确定性暴露该类回归。
+function MemEqualAVX2_PoisonedRcx(a, b: Pointer; len: SizeUInt): LongBool; assembler; nostackframe;
+asm
+  mov rcx, $7FFFFFFFFFFF
+  jmp MemEqual_AVX2
+end;
+{$ENDIF}
+
+procedure TTestCase_BackendConsistency.Test_MemEqual_SmallLen_PoisonedIndex;
+{$IFDEF UNIX}
+const
+  CLens: array[0..12] of SizeUInt = (1, 2, 3, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127);
+var
+  buf1, buf2: array[0..127] of Byte;
+  i, k: Integer;
+  len: SizeUInt;
+begin
+  if not (HasAVX2 and IsBackendRegistered(sbAVX2)) then
+    Exit;
+  for i := 0 to 127 do
+  begin
+    buf1[i] := Byte(i);
+    buf2[i] := Byte(i);
+  end;
+  for k := 0 to High(CLens) do
+  begin
+    len := CLens[k];
+    CheckTrue(MemEqualAVX2_PoisonedRcx(@buf1[0], @buf2[0], len),
+      'equal buffers, len=' + IntToStr(len));
+    buf2[len - 1] := buf2[len - 1] xor $FF;
+    CheckFalse(MemEqualAVX2_PoisonedRcx(@buf1[0], @buf2[0], len),
+      'diff at tail byte, len=' + IntToStr(len));
+    buf2[len - 1] := buf1[len - 1];
+  end;
+end;
+{$ELSE}
+begin
+  // Win64 路径的索引寄存器 r10 无条件初始化；毒化场景仅覆盖 SysV 路径
+end;
+{$ENDIF}
 
 procedure TTestCase_BackendConsistency.Test_MemEqual_Consistency;
 var
