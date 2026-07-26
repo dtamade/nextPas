@@ -37,6 +37,7 @@
 | F-24 | **Resolved** | TBenchRun Advanced 文档 |
 | F-25 | **Partial** | 未加 golden 文件（可选） |
 | F-26 | **Resolved** | roadmap/ebr 状态句 |
+| F-27 | **Mitigated** | 门禁构建阶段 host fpc 偶发 "Can't find unit"；gate 循环构建重试一次 |
 
 ---
 
@@ -391,6 +392,19 @@
 | 等级 | **P3** |
 | 描述 | 文档完备度高（优于多数内部模块）。B48 去重后根目录更干净。残余：`roadmap.md` 与 goal-tree 阶段叙事可能部分过时。 |
 | 建议 | roadmap 顶注「历史竞争路线，状态以 goal-tree 为准」。 |
+
+---
+
+### F-27 · 基础设施 · P2（2026-07-26 新增）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | 门禁基础设施（非 bench 源码） |
+| 位置 | `core/tests/nextpas.core.bench/Makefile` test 循环；host fpc trunk（3.3.1-19195-gebfc7485b1-dirty） |
+| 分类 | 基础设施 / flake |
+| 等级 | **P2**（侵蚀门禁可信度） |
+| 描述 | 全量 gate 中 `test_bench_matrix` 偶发编译失败：`test.check.pas(375,3) Fatal: Can't find unit nextpas.core.test.diff`，而 `core/src/nextpas.core.test.diff.pas` 存在且同目录几十个单元均正常解析。观测频率：2026-07-26 连续 3 次全量 gate 中 1 次；失败运行的 Compiling 序列是成功运行的**严格前缀**（前 207 单元完全一致，第 208 个 `test.diff` 查找失败）→ 编译顺序确定，属编译器/文件查找瞬态。单独 `make clean all` 循环 6/6 通过，无法离线复现。 |
+| 处置 | gate 循环拆分构建/运行两阶段：构建失败带 `[BUILD-FLAKE-RETRY]` 标记重试一次（真回归连挂两次仍红）；运行期失败不重试保持严格。根因疑在 host fpc trunk dirty 构建的单元查找路径，非 bench/test 源码问题；若复发频率升高，升级为向 FPC 上游取证报告。 |
 
 ---
 

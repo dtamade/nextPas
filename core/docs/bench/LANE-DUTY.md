@@ -89,6 +89,8 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-26 | **Landed** `ab54e9a9d` → `origin/main` | path-limited `core/docs/bench`；`landing-candidate=pass` + focused gate | B48 根目录历史 docs 去重；archive 保留；**已 push** |
 | 2026-07-26 | idle cycle；`origin/main`=`796bd168e`；behind=0 | `bench-module-test` + contract + scorecard-smoke + consumer build | **22/22**；**506** tests；contract **12/12**；inttohex ok；hash/json bench build ok |
 | 2026-07-26 | audit 全量闭环（F-01–F-26）；HEAD `c28c60fb8` | `bench-module-test` + contract + scorecard/consumer smoke | **22/22**；**510** tests；contract **13/13**（+C10）；inttohex+hash/json ok；见 findings.md |
+| 2026-07-26 | merge origin/main（吸收 audit landing `a5075603c`）；SCORECARD 行尾对齐 main | 连续 3 次 `bench-module-test` | 2 绿 1 红：`test_bench_matrix` 偶发 fpc `Can't find unit test.diff`（**F-27** flake，严格前缀取证；单独 6/6 绿） |
+| 2026-07-26 | F-27 缓解：gate 循环拆构建/运行、构建重试一次；report 套件补 `all` 别名 | `bench-module-test` + contract-check | **exit 0**；**22/22**；**510** tests；0 retry 触发；hygiene pass |
 
 > 新一次回归后更新本表一行即可。
 

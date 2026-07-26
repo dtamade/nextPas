@@ -6,7 +6,9 @@ SOURCE := $(PROGRAM).lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: build run test clean
+.PHONY: all build run test clean
+
+all: build
 
 build:
 	@mkdir -p $(BUILD_DIR)
