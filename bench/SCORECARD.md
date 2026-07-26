@@ -1,19 +1,22 @@
 # nextPas Benchmark Scorecard
 
-> **权威状态（2026-07-20）**
+> # ⛔ HISTORICAL ONLY — NOT LIVE CI / NOT CURRENT RANKING
 >
-> - **当前可复现子集**：`core/docs/bench/scorecard-tracks.txt`（**11** track）、
->   `core/docs/bench/scripts/run-scorecard-subset.sh`、
->   `core/docs/bench/scorecard-subset-2026-07-19.md`
-> - **本文件全文 W/L 与逐 track 数字** 仍为 **2026-07-02 历史基线**，**不是**当前 CI 真相
-> - 全量 60+ track 刷新在 Maintenance Idle 下**明确推迟**（见 `core/docs/bench/goal-tree.md`）
-> - 请勿将下方 Overall Score 当作 live 排行榜引用
+> **Do not quote Overall Score or per-track W/L as current performance.**
+> Snapshot date: **2026-07-02**. Machine and compiler below are of that day only.
+>
+> **Live / reproducible truth (use these):**
+> - `core/docs/bench/scorecard-tracks.txt` (**11** tracks)
+> - `core/docs/bench/scripts/run-scorecard-subset.sh`
+> - `make bench-scorecard-smoke`
+>
+> Full 60+ track refresh is **explicitly deferred** (Maintenance Idle). See `core/docs/bench/goal-tree.md`.
 
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
 **Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE | Go default -O2 (no explicit flag)
 **Date**: 2026-07-02（historical baseline only）
 
-## Overall Score
+## Overall Score (historical 2026-07-02 — not live)
 
 | vs | W | D | L | Win% | Tracks | Ops |
 |----|---|---|---|------|--------|-----|

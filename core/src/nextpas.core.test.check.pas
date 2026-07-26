@@ -372,7 +372,8 @@ uses
   nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
   nextpas.core.regex,          { RegexIsMatch for CheckMatch }
   nextpas.core.test.config,    { DefaultConfig for ColorDiff }
-  nextpas.core.test.output;    { ColorDiff for colored string comparison }
+  nextpas.core.test.diff,      { ColorDiff — L0 (no L1→L2 output dep) }
+  nextpas.core.test.snapshot;  { CheckSnapshot shared with expect }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -1443,49 +1444,9 @@ end;
 
 procedure CheckSnapshot(const AActual: string;
   const ASnapshotDir, ASnapshotName: string);
-var
-  LPath, LExisting: string;
-  LShouldUpdate: Boolean;
-  LDirCreated: Boolean;
-  LStatus: TReadFileStatus;
 begin
-  LPath := ASnapshotDir + DirectorySeparator + ASnapshotName;
-  LShouldUpdate := platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS') = '1';
-  ReadFileContents(LPath, LExisting, LStatus);
-  case LStatus of
-    rfsFound:
-    begin
-      if LShouldUpdate then
-      begin
-        WriteFileContents(LPath, AActual);
-        Exit;
-      end;
-      if AActual <> LExisting then
-      begin
-        { Prefer ColorDiff (same contract as CheckEqual string: position +
-          expected/actual). Falls back to plain text when ANSI is off. }
-        InternalFail('Snapshot mismatch: ' + LPath +
-          ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
-          ColorDiff(LExisting, AActual, DefaultConfig));
-      end;
-    end;
-    rfsNotFound:
-    begin
-      { Fail-on-create mode: reject new snapshots (e.g., CI with strict snapshot policy) }
-      if platform_env_get_str('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE') = '1' then
-        InternalFail('CheckSnapshot: snapshot does not exist: ' + LPath +
-          ' (remove NEXTPAS_SNAPSHOT_FAIL_ON_CREATE to auto-create)');
-      { First run — create snapshot directory tree and file }
-      LDirCreated := ForceDirectories(ASnapshotDir);
-      if not LDirCreated then
-        InternalFail('CheckSnapshot: cannot create directory ' + ASnapshotDir);
-      WriteFileContents(LPath, AActual);
-    end;
-    rfsReadError:
-    begin
-      InternalFail('CheckSnapshot: file exists but cannot be read: ' + LPath);
-    end;
-  end;
+  { Shared L1 implementation — also used by Expect.ToMatchSnapshot. }
+  nextpas.core.test.snapshot.CheckSnapshot(AActual, ASnapshotDir, ASnapshotName);
 end;
 
 { ── Array Comparison (v8.0c) ──────────────────────────────────────────────── }

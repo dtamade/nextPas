@@ -1,14 +1,12 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.bench/test_bench_report
-PROGRAM := test_bench_report
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.test/table_driven_demo
+PROGRAM := table_driven_demo
 SOURCE := $(PROGRAM).lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: all build run test clean
-
-all: build
+.PHONY: build run clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -16,8 +14,6 @@ build:
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)
-
-test: run
 
 clean:
 	rm -rf $(BUILD_DIR)

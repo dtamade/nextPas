@@ -324,6 +324,7 @@ begin
   LTimeoutMs := GetTestTimeout(LConfig);
   try
   SetTestContext(R^.SuiteName, R^.Entry.Name);
+  NoteHeapBaseline;
   { P1 fix: install TTestContext in parallel workers so Ctx.Log, Ctx.OnCleanup,
     Ctx.TempDir, and Ctx.SetEnv work for regular tests under RunParallel. }
   if R^.Entry.Kind = ekTest then

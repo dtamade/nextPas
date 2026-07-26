@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-21
-> 治理状态: **v8.29** 并行竞态 + Mock 误用密度（B66–B70）+ G1 contracts 默认入口
+> 治理状态: **v8.31** Findings remediation（分层/RTL 边角/规模信号/契约单源）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 
@@ -112,11 +112,11 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
 
-**Note on Double comparisons**:
-- `CheckEqual(Double)` performs IEEE 754 **exact comparison** (`=` operator). NaN != NaN, -0.0 = +0.0.
-- `CheckNear(Double)` performs **tolerance comparison** with absolute epsilon.
-- `CheckApprox(Double)` performs **tolerance comparison** with relative epsilon (better for magnitude-spanning comparisons).
-- For floating-point tolerance, use `CheckNear` or `CheckApprox` instead of `CheckEqual`.
+**Note on Double comparisons**（F-16，与实现一致）:
+- `CheckEqual(Double [, Epsilon])` **delegates to `CheckNear`** (default absolute epsilon `1e-10`).
+- `CheckNear` / `CheckNotNear`: absolute epsilon.
+- `CheckApprox` / `CheckNearRel`: relative epsilon (better across magnitudes).
+- For bitwise/IEEE exact identity, write `CheckTrue(A = B)` explicitly (no separate `CheckEqualExact` yet).
 
 ### Fluent API (IExpectation)
 
@@ -514,7 +514,7 @@ test lane **默认**证据命令（与 `make focused FOCUS=core/tests/nextpas.co
 ```bash
 make -C core/tests/nextpas.core.test contracts
 # = api source-contract + runner source-contract + scale report
-# SCALE_MIN=6500  FAIL_PATH_MIN_RATIO=0.35  LOW_SIGNAL_MAX_RATIO=0.40
+# SCALE_MIN=7500  FAIL_PATH_MIN_RATIO=0.35  LOW_SIGNAL_MAX_RATIO=0.25
 ```
 
 | 场景 | 命令 |
@@ -549,7 +549,7 @@ make -C core/tests/nextpas.core.test list
 | 新 runtime 单元测试 | 必须 `uses nextpas.core.test` + `TTestSuite` / `Check*` / `Expect` |
 | 禁止 | 手写 `AssertTrue` 迷你 runner、`WriteLn('[PASS]')` 自计分、裸 `assert`、`fpcunit` |
 | 允许 | shell/python **source-contract** 门禁；compile-only gate；模块 owner 的历史债按 lane 消化 |
-| 示例 | `core/examples/nextpas.core.test/{smoke_suite,softfail_demo,nested_softfail_demo}` |
+| 示例 | `core/examples/nextpas.core.test/{smoke_suite,softfail_demo,nested_softfail_demo,table_driven_demo}` |
 
 ## Architecture
 
@@ -562,8 +562,9 @@ test.pas (facade, 537 lines) — 纯 re-export, 无逻辑
   ├── test.output (1166)   — L2: ANSI + 过滤 + JUnit XML + 泄漏报告
   ├── test.output.json (185)  — L2: JSON 输出
   ├── test.output.tap (123)   — L2: TAP v13 输出
-  ├── test.runner (2225)   — L3: TTestSuite + TSuiteRunner + retry/shuffle/failfast
-  ├── test.runner.cli (408)   — L3: CLI 参数解析 (--filter, --bench, --cache 等)
+  ├── test.runner (1994)   — L3: TTestSuite 注册 + 执行引擎 + retry/shuffle/failfast
+  ├── test.runner.multi (402) — L3: TSuiteRunner 多 suite 编排 (banner/list/summary)
+  ├── test.runner.cli (430)   — L3: CLI 参数解析 (--filter, --bench, --cache 等)
   ├── test.discovery (177) — L4: RTTI 自动发现
   ├── test.mock (1529)     — L4: Mock 框架 (TMock + 期望验证 + 调用历史)
   ├── test.prop (2704)     — L4: 属性测试 + 模糊测试 + 语料库 + shrinking
@@ -582,6 +583,7 @@ Dependency graph:
       output.json ← base, output, text.conv
       output.tap ← base, output, text.conv
   L3: runner ← base, check, config, output, atomic, sync, thread.*, platform.*, time.cpu
+      runner.multi ← base, config, runner, output, output.json, runner.cli, time
       runner.cli ← config, output, text.conv
       runner.context ← base, config, output
       runner.parallel ← base, config, output
@@ -612,8 +614,9 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 
 ## Test Coverage
 
-> 实测：`make -C core/tests/nextpas.core.test clean test` → **16/16 suites passed**（2026-07-19）。
-> 下表「Tests」列为各套件主 suite 报告的测试过程数；multi-suite 程序取主路径合计近似值。不含 stress 内 10K 空测试展开。
+> 规模与套件列表以 `make -C core/tests/nextpas.core.test contracts` 与
+> `make -C core/tests/nextpas.core.test list` 为准（v8.31：SCALE≥7500，含 source-contract/scale 门）。
+> 下表为历史近似，**勿当作权威覆盖数**（F-14）。
 
 | Test Suite | Tests | Coverage |
 |-----------|-------|----------|
@@ -642,16 +645,19 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 ### 分层架构
 
 ```
-L0 基础层:  base.pas, config.pas
+L0 基础层:  base.pas, config.pas, diff.pas
             ↓ 不依赖任何 test.* 模块
-L1 断言层:  check.pas, expect.pas
+L1 断言层:  check.pas, expect.pas, snapshot.pas
             ↓ 只依赖 L0
 L2 输出层:  output.pas, output.json.pas, output.tap.pas
             ↓ 依赖 L0
-L3 执行层:  runner.pas, runner.cli.pas, runner.context.pas, runner.parallel.pas
+L3 执行层:  runner.pas, runner.multi.pas, runner.cli.pas, runner.context.pas,
+            runner.parallel.pas
+            层内 runner ← runner.multi
             ↓ 依赖 L0-L2
-L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
-            ↓ 依赖 L0 + L3
+L4 扩展层:  discovery.pas, mock.pas, prop.gen.pas, prop.pas, fuzz.pas,
+            helpers.pas, bench.pas
+            ↓ 依赖 L0 + L3；层内 prop.gen ← prop、prop.gen ← fuzz
 门面:       test.pas — 纯 re-export，无逻辑
 ```
 
@@ -746,12 +752,12 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | `WriteRetryHint`, `WriteWarning` | **Internal** | 诊断输出 |
 | `WriteSuiteHeader`, `WriteSlowTests` | **Internal** | 套件输出 |
 
-#### L3: runner.pas
+#### L3: runner.pas / runner.multi.pas
 
 | 符号 | 稳定性 | 说明 |
 |------|--------|------|
-| `TTestSuite` (record + 所有 public 方法) | Stable | 测试套件 |
-| `TSuiteRunner` (record + 所有 public 方法) | Stable | 多套件 runner |
+| `TTestSuite` (record + 所有 public 方法) | Stable | 测试套件 (runner.pas) |
+| `TSuiteRunner` (record + 所有 public 方法) | Stable | 多套件 runner (runner.multi.pas, v8.33) |
 | `Ctx` | Stable | 当前测试上下文 |
 | `RegisterStub`, `RegisterFixture` | **Internal** | 注册辅助 |
 | `ParseFilter`, `ParseTag` | **Internal** | CLI 解析 |
@@ -814,24 +820,29 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 
 | 文件 | 行数 | 层 | 职责 |
 |------|------|----|------|
-| test.base.pas | 913 | L0 | 基础类型、异常、内部状态 |
-| test.config.pas | 1214 | L0 | TTestConfig、IOutputSink、TTestCache、TBufferSink |
-| test.check.pas | 1734 | L1 | Check* 断言 API (50+ 方法, 含 OneOf/InstanceOf/Snapshot) |
+| test.base.pas | 1129 | L0 | 基础类型、异常、内部状态 |
+| test.config.pas | 1238 | L0 | TTestConfig、IOutputSink、TTestCache、TBufferSink |
+| test.diff.pas | 112 | L0 | ColorDiff 共享着色 diff (v8.31) |
+| test.check.pas | 1897 | L1 | Check* 断言 API (50+ 方法, 含 OneOf/InstanceOf/Snapshot) |
 | test.expect.pas | 1768 | L1 | IExpectation fluent API (40+ 方法 + InstanceOf/MatchSnapshot) |
-| test.output.pas | 1273 | L2 | ANSI、过滤、JUnit XML、泄漏报告 |
+| test.snapshot.pas | 92 | L1 | CheckSnapshot 共享实现 (v8.31) |
+| test.output.pas | 1260 | L2 | ANSI、过滤、JUnit XML、泄漏报告 |
 | test.output.json.pas | 185 | L2 | JSON 输出 |
 | test.output.tap.pas | 123 | L2 | TAP v13 输出 |
-| test.runner.pas | 2269 | L3 | TTestSuite、TSuiteRunner、retry/shuffle/failfast |
-| test.runner.cli.pas | 408 | L3 | CLI 参数解析 |
-| test.runner.context.pas | 620 | L3 | 子测试上下文、TTestResultAppender |
-| test.runner.parallel.pas | 580 | L3 | 并行执行、timeout watchdog |
-| test.discovery.pas | 179 | L4 | RTTI 自动发现 |
-| test.mock.pas | 1814 | L4 | Mock 框架 + TMockCaptor |
-| test.prop.pas | 2928 | L4 | 属性测试、模糊测试、语料库 |
+| test.runner.pas | 1994 | L3 | TTestSuite 注册 + 执行引擎、retry/shuffle/failfast |
+| test.runner.multi.pas | 402 | L3 | TSuiteRunner 多 suite 编排（v8.33 拆分） |
+| test.runner.cli.pas | 430 | L3 | CLI 参数解析 |
+| test.runner.context.pas | 667 | L3 | 子测试上下文、TTestResultAppender |
+| test.runner.parallel.pas | 598 | L3 | 并行执行、timeout watchdog |
+| test.discovery.pas | 285 | L4 | RTTI 自动发现 |
+| test.mock.pas | 1824 | L4 | Mock 框架 + TMockCaptor |
+| test.prop.gen.pas | 1368 | L4 | 生成器接口/工厂/组合器 (v8.32 F-03) |
+| test.prop.pas | 457 | L4 | Prop 注册 + shrink 执行循环 |
+| test.fuzz.pas | 1175 | L4 | 模糊测试、语料库、覆盖追踪、多策略 (v8.32 F-03) |
 | test.helpers.pas | 281 | L4 | ExpectFail, WithMock, WithTempDir/File, IntOverflowCheck |
 | test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
-| test.pas | 580 | 门面 | 纯 re-export |
-| **总计** | **~17075** (.pas) | | 另有 4 个 fwd*.inc |
+| test.pas | 625 | 门面 | 纯 re-export |
+| **总计** | **~18116** (.pas) | | 另有 4 个 fwd*.inc |
 
 ### 测试覆盖矩阵
 
@@ -844,7 +855,7 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test_config | config.pas | 38 |
 | test_discovery | discovery.pas | 8 |
 | test_runner | runner*.pas | multi |
-| test_prop | prop.pas | ~50 |
+| test_prop | prop.gen / prop / fuzz | ~50 |
 | test_lifecycle | runner (lifecycle) | 17 |
 | test_bench | bench.pas | 22 |
 | test_advanced | runner (advanced) | 13 |
@@ -854,6 +865,30 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test_stress | stress | 10 |
 | test_perf_bench | perf regression | microbench |
 | **总计** | 16 suites | **~930** (2026-07-19 全绿) |
+
+### Release Checklist（B80，每版 landing 前必过）
+
+```bash
+# 1. 卫生门（源码树无构建产物）
+make hygiene
+
+# 2. 契约三门（api/runner source contracts + scale report）
+make -C core/tests/nextpas.core.test contracts
+
+# 3. 全量 19/19 suites（lane_gate 聚合入口）
+make focused FOCUS=core/tests/nextpas.core.test/lane_gate
+
+# 4. demos（消费者视角冒烟）
+make -C core/examples/nextpas.core.test/table_driven_demo run
+make -C core/examples/nextpas.core.test/smoke_suite run
+make -C core/examples/nextpas.core.test/softfail_demo run
+make -C core/examples/nextpas.core.test/nested_softfail_demo run
+```
+
+- 19 suites = `core/tests/nextpas.core.test/` 下除 `lane_gate` 外全部工程
+- 通过标准：所有 suite `OK`/绿、heaptrc 0 unfreed（FPC 全局闭包时序伪影除外，见 §10）、
+  scale 三门（SCALE≥7500 / fail-path≥35% / low-signal≤25% / non-table≥1200）PASS
+- Ready 报告须附：HEAD SHA、scale 三数字、改动文件清单
 
 ### Deferred / Backlog
 

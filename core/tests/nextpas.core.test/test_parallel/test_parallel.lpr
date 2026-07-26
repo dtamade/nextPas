@@ -760,17 +760,16 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
-{ ── R6-54: Parallel subtest skip behavior ────────────────────────────────── }
+{ ── R6-54 (F-20 semantics): TestSubtest under RunParallel = config failure ── }
 
 procedure TestParallelSubtestSkip;
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
-  I: Integer;
-  LFoundSubtestSkip: Boolean;
 begin
-  { In parallel mode, subtests (TestSubtest) should get tsSkipped
-    since they cannot run in parallel workers. }
+  { v8.31 F-20: registering TestSubtest then calling RunParallel is a
+    configuration error — the suite fails fast at start instead of the old
+    silent skip. This locks the mixed normal+subtest shape. }
   LSuite := TTestSuite.Create('ParSubtestSkip');
   LSuite.Test('normal_pass', @TestParallelPassA);
   LSuite.TestSubtest('subtest_entry',
@@ -778,38 +777,25 @@ begin
     begin
       Ctx.Run('sub1', procedure begin CheckTrue(True); end);
     end);
-  LSuite.RunParallelWithResult(nil, LResult);
-  { The normal test should pass }
-  CheckTrue(LResult.Passed >= 1, 'At least 1 normal test should pass');
-  { Subtests in parallel mode get skipped — verify they don't crash the suite }
-  CheckTrue(LResult.Failed = 0, 'No tests should fail');
-  { T-03: Verify skip message mentions parallel mode }
-  LFoundSubtestSkip := False;
-  for I := 0 to High(LResult.Results) do
-    if (LResult.Results[I].Status = tsSkipped) and
-       (LResult.Results[I].Name = 'subtest_entry') then
-    begin
-      LFoundSubtestSkip := True;
-      CheckTrue(
-        Pos('subtests not supported', LResult.Results[I].Message) > 0,
-        'Skip message should mention parallel mode');
-      Break;
-    end;
-  CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
-  PassTest('✓ Parallel subtest skip');
+  if LSuite.RunParallelWithResult(nil, LResult) then
+    FailTest('RunParallel must fail when TestSubtest is registered (F-20)');
+  CheckTrue(LResult.Failed >= 1, 'configuration failure must be recorded');
+  CheckTrue(not LResult.AllPassed, 'AllPassed must be False on config failure');
+  { Fail-fast happens before any test executes — nothing may pass }
+  CheckEqual(LResult.Passed, 0, 'no test may run after config failure');
+  PassTest('✓ Parallel subtest rejected (F-20)');
   LSuite := Default(TTestSuite);
 end;
 
-{ ── B10: Parallel mixed suite — normal run + subtest skipped count ───────── }
+{ ── B10 (F-20 semantics): mixed suite fails fast, no partial execution ────── }
 
 procedure TestParallelMixedSubtestCounts;
 var
   LSuite: TTestSuite;
   LResult: TTestRunResult;
-  I: Integer;
-  LSkippedSub: Integer;
-  LPassedNormal: Integer;
 begin
+  { v8.31 F-20: mixed normal+subtest suite under RunParallel fails at
+    config check — normal tests must NOT run partially. }
   LSuite := TTestSuite.Create('ParMixedSub');
   LSuite.Test('n1', @TestParallelPassA);
   LSuite.Test('n2', @TestParallelPassA);
@@ -823,27 +809,12 @@ begin
     begin
       Ctx.Run('leaf2', procedure begin CheckTrue(False, 'must not run'); end);
     end);
-  LSuite.RunParallelWithResult(nil, LResult);
-  LSkippedSub := 0;
-  LPassedNormal := 0;
-  for I := 0 to High(LResult.Results) do
-  begin
-    if (LResult.Results[I].Status = tsSkipped) and
-       ((LResult.Results[I].Name = 's1') or (LResult.Results[I].Name = 's2')) then
-    begin
-      Inc(LSkippedSub);
-      CheckTrue(Pos('subtests not supported', LResult.Results[I].Message) > 0,
-        'skip message for ' + LResult.Results[I].Name);
-    end;
-    if (LResult.Results[I].Status = tsPassed) and
-       ((LResult.Results[I].Name = 'n1') or (LResult.Results[I].Name = 'n2')) then
-      Inc(LPassedNormal);
-  end;
-  CheckEqual(LPassedNormal, 2, 'two normal tests pass in parallel');
-  CheckEqual(LSkippedSub, 2, 'two subtests skipped in parallel');
-  CheckTrue(LResult.Failed = 0, 'mixed suite no failures');
-  CheckTrue(LResult.Skipped >= 2, 'Skipped counter >= 2');
-  PassTest('✓ B10 parallel mixed subtest counts');
+  if LSuite.RunParallelWithResult(nil, LResult) then
+    FailTest('mixed suite must fail under RunParallel (F-20)');
+  CheckEqual(LResult.Passed, 0, 'normal tests must not run after config failure');
+  CheckTrue(LResult.Failed >= 1, 'config failure recorded');
+  CheckTrue(not LResult.AllPassed, 'AllPassed False on mixed suite');
+  PassTest('✓ B10 parallel mixed subtest rejected (F-20)');
   LSuite := Default(TTestSuite);
 end;
 
@@ -1469,6 +1440,23 @@ begin
   begin
     TestB70TestSeqVisibilityParallel;
     PassTest('B70 TestSeq names + ordering under RunParallel');
+  end;
+
+  WriteLn;
+  SectionHeader('F-20: TestSubtest rejected under RunParallel');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('par-sub-reject');
+    LSuite.TestSubtest('nested', procedure(constref Ctx: ITestContext)
+      begin
+        Ctx.Run('x', procedure begin CheckTrue(True); end);
+      end);
+    if LSuite.RunParallelWithResult(nil, GVerbResult) then
+      FailTest('RunParallel must fail when TestSubtest is registered');
+    if GVerbResult.Failed < 1 then
+      FailTest('expected configuration failure recorded');
+    LSuite := Default(TTestSuite);
+    PassTest('F-20 parallel+TestSubtest config fail');
   end;
 
   WriteLn;

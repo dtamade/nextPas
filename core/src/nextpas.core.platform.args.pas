@@ -33,15 +33,14 @@ uses
   nextpas.core.platform.posix.ffi
   {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_MACOS}
+  {$ELSEIF defined(NEXTPAS_MACOS)}
   , nextpas.core.platform.darwin.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD}
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
   , nextpas.core.platform.freebsd.base
-  {$ENDIF}
-  {$IFDEF NEXTPAS_ANDROID}
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
   , nextpas.core.platform.android.base
+  {$ELSE}
+  , nextpas.core.platform.unix.base
   {$ENDIF}
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}

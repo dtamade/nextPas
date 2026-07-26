@@ -60,7 +60,33 @@ uses
   nextpas.core.platform,
   nextpas.core.platform.time,
   nextpas.core.platform.thread,
-  nextpas.core.platform.sync
+  nextpas.core.platform.sync,
+  nextpas.core.platform.console,
+  nextpas.core.platform.error,
+  { wave10 contract: generic unix stat stays deferred — no invented stat record,
+    so platform.files is host-gated and excluded from the generic-unix leg }
+  {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.files,{$ENDIF}
+  nextpas.core.platform.path,
+  nextpas.core.platform.env,
+  nextpas.core.platform.socket,
+  nextpas.core.platform.memory,
+  nextpas.core.platform.args,
+  nextpas.core.platform.dl,
+  nextpas.core.platform.fmt,
+  nextpas.core.platform.info,
+  nextpas.core.platform.pipe,
+  nextpas.core.platform.random,
+  nextpas.core.platform.secure,
+  { mmap → files 传递命中同一条 deferred generic-unix stat 链 }
+  {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.mmap,{$ENDIF}
+  nextpas.core.platform.process,
+  { pty needs host-owned termios/pty ABI (winsize/openpty/TIOCSCTTY);
+    android/generic-unix hosts have no verified declarations yet — deferred }
+  {$IF not (defined(SIM_EXPECT_ANDROID) or defined(SIM_EXPECT_UNIX))}nextpas.core.platform.pty,{$ENDIF}
+  nextpas.core.platform.resource,
+  nextpas.core.platform.signal
+  { which → fs → files transitively hits the same deferred generic-unix stat }
+  {$IFNDEF SIM_EXPECT_UNIX}, nextpas.core.platform.which{$ENDIF}
   {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.base, nextpas.core.platform.darwin.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.base, nextpas.core.platform.android.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.base, nextpas.core.platform.freebsd.ffi{$ENDIF}

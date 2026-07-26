@@ -29,6 +29,7 @@ uses
   nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.test.check,
+  nextpas.core.test.prop.gen,
   nextpas.core.test.prop;
 
 { ── Test procedures ──────────────────────────────────────────────────────── }
@@ -948,6 +949,80 @@ begin
   ExpectFail(procedure begin
     CheckSnapshot('beta-line', LSnapDir, 'diff.txt');
   end, 'differ at position');
+end;
+
+{ ── B73: Snapshot create/update/mismatch/ColorDiff fail-path table ──────── }
+
+procedure TestB73SnapshotFailPathCase(const AC: TTestCase);
+{ Data: mismatch | mismatch_color | fail_create | match | update
+  Each case uses a unique snapshot dir to avoid cross-case pollution. }
+var
+  LDir, LName, LPath, LContents: string;
+  LStatus: TReadFileStatus;
+begin
+  LDir := '/tmp/np_b73_' + AC.Name + '_' + IntToStr(Random(MaxInt));
+  LName := 'snap.txt';
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  try
+    if AC.Data = 'match' then
+    begin
+      CheckSnapshot('same-body', LDir, LName);
+      CheckSnapshot('same-body', LDir, LName); { second pass matches }
+    end
+    else if AC.Data = 'mismatch' then
+    begin
+      CheckSnapshot('expected-aaa', LDir, LName);
+      ExpectFail(procedure
+        begin
+          CheckSnapshot('actual-bbb', LDir, LName);
+        end, 'Snapshot mismatch');
+    end
+    else if AC.Data = 'mismatch_color' then
+    begin
+      EnvSet('NEXTPAS_COLOR', '0');
+      try
+        CheckSnapshot('line-one', LDir, LName);
+        ExpectFail(procedure
+          begin
+            CheckSnapshot('line-two', LDir, LName);
+          end, 'differ at position');
+      finally
+        EnvUnset('NEXTPAS_COLOR');
+      end;
+    end
+    else if AC.Data = 'fail_create' then
+    begin
+      EnvSet('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE', '1');
+      try
+        ExpectFail(procedure
+          begin
+            CheckSnapshot('never-created', LDir, 'missing.txt');
+          end, 'does not exist');
+      finally
+        EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+      end;
+    end
+    else if AC.Data = 'update' then
+    begin
+      CheckSnapshot('old-v', LDir, LName);
+      EnvSet('NEXTPAS_UPDATE_SNAPSHOTS', '1');
+      try
+        CheckSnapshot('new-v', LDir, LName);
+      finally
+        EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+      end;
+      LPath := LDir + DirectorySeparator + LName;
+      CheckTrue(ReadFileContents(LPath, LContents, LStatus));
+      CheckEqual('new-v', LContents);
+    end
+    else
+      Fail('unknown B73 kind ' + AC.Data);
+  finally
+    EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+    EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+    EnvUnset('NEXTPAS_COLOR');
+  end;
 end;
 
 { B2.2: string CheckEqual diagnostic contracts (go-cmp style markers) }
@@ -2204,6 +2279,9 @@ var
   LSuite: TTestSuite;
   LB26SoftCases: specialize TArray<TTestCase>;
   LB26SoftI: Integer;
+  LB73Cases: specialize TArray<TTestCase>;
+  LB73I: Integer;
+  LB73Kinds: array[0..4] of string;
 begin
   WriteLn('=== test_assertions ===');
   Randomize;
@@ -2501,6 +2579,21 @@ begin
   end;
   LSuite.TestTable('v8.26 SoftCheck fail-path', LB26SoftCases,
     @TestSoftCheckFailPathCase);
+
+  { B73: Snapshot create/update/mismatch/ColorDiff fail-path density }
+  LB73Kinds[0] := 'match';
+  LB73Kinds[1] := 'mismatch';
+  LB73Kinds[2] := 'mismatch_color';
+  LB73Kinds[3] := 'fail_create';
+  LB73Kinds[4] := 'update';
+  SetLength(LB73Cases, 100);
+  for LB73I := 0 to High(LB73Cases) do
+  begin
+    LB73Cases[LB73I].Name := 'snap-' + IntToStr(LB73I);
+    LB73Cases[LB73I].Data := LB73Kinds[LB73I mod 5];
+  end;
+  LSuite.TestTable('B73 Snapshot fail-path', LB73Cases,
+    @TestB73SnapshotFailPathCase);
 
   if not LSuite.Run then
   begin

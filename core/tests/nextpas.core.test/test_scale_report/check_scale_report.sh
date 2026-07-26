@@ -11,16 +11,19 @@
 #           test_perf_bench (optional CI).
 #
 # v8.25 quality gate: low-signal TestTable share capped.
-# v8.26: SCALE_MIN=6500, FAIL_PATH≥35%, LOW_SIGNAL≤40%; per-suite breakdown.
+# v8.31: SCALE_MIN=7500, FAIL_PATH≥35%, LOW_SIGNAL≤25%;
+#         MIN_NON_TABLE (Test+TestSubtest+AppendCase) softens TestTable domination (F-13).
 set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-6500}"
+MIN_COUNT="${SCALE_MIN:-7500}"
 MIN_FAIL_RATIO="${FAIL_PATH_MIN_RATIO:-0.35}"
-MAX_LOW_SIGNAL_RATIO="${LOW_SIGNAL_MAX_RATIO:-0.40}"
+MAX_LOW_SIGNAL_RATIO="${LOW_SIGNAL_MAX_RATIO:-0.25}"
+# Non-table floor: named Test/TestSubtest/AppendCase (not TestTable expansions).
+MIN_NON_TABLE="${MIN_NON_TABLE:-1200}"
 
-python3 - "$TESTS" "$MIN_COUNT" "$MIN_FAIL_RATIO" "$MAX_LOW_SIGNAL_RATIO" <<'PY'
+python3 - "$TESTS" "$MIN_COUNT" "$MIN_FAIL_RATIO" "$MAX_LOW_SIGNAL_RATIO" "$MIN_NON_TABLE" <<'PY'
 import re, sys
 from pathlib import Path
 from collections import defaultdict
@@ -29,6 +32,7 @@ tests_root = Path(sys.argv[1])
 min_count = int(sys.argv[2])
 min_fail_ratio = float(sys.argv[3])
 max_low_signal_ratio = float(sys.argv[4])
+min_non_table = int(sys.argv[5])
 
 EXCLUDE_DIRS = {
     "test_stress",
@@ -109,8 +113,11 @@ print(f"  breakdown: Test={breakdown['Test']} TestSubtest={breakdown['TestSubtes
 print("  per-suite (total / fail-path / low-signal):")
 for k in sorted(per):
     print(f"  {k:28} {per[k]:5}  fp={per_fail.get(k, 0):5}  low={per_low.get(k, 0):5}")
+non_table = breakdown["Test"] + breakdown["TestSubtest"] + breakdown["AppendCase"]
 print(f"TOTAL countable: {total}")
 print(f"MIN required:    {min_count}")
+print(f"non-table count: {non_table}  (Test+Subtest+Append; MIN_NON_TABLE={min_non_table})")
+print(f"TestTable share: {100.0 * breakdown['TestTable'] / total if total else 0:.1f}%")
 failed = False
 if total > 0:
     ratio = fail_path_hint / total
@@ -131,9 +138,12 @@ else:
 if total < min_count:
     print(f"FAIL: scale {total} < {min_count}")
     failed = True
+if non_table < min_non_table:
+    print(f"FAIL: non-table count {non_table} < {min_non_table}")
+    failed = True
 if failed:
     sys.exit(1)
 print(f"PASS: scale >= {min_count}, fail-path >= {min_fail_ratio:.0%}, "
-      f"low-signal <= {max_low_signal_ratio:.0%}")
+      f"low-signal <= {max_low_signal_ratio:.0%}, non-table >= {min_non_table}")
 sys.exit(0)
 PY

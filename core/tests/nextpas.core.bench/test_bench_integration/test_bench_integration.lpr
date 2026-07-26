@@ -1582,6 +1582,24 @@ begin
   end;
 end;
 
+procedure TestCompareTwoResults_NoRawSamples_NotSignificant;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LComparison: TBenchComparison;
+begin
+  { F-10: without CollectRawSamples, no formal test and not significant }
+  LSuite := CreateFastSuite('CompareNoRaw');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('Medium', @BenchMedium);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+
+  LComparison := LResults.CompareTwoResults('Fast', 'Medium');
+  Check(not LComparison.HasStatisticalTest, 'NoRaw: HasStatisticalTest=False');
+  Check(not LComparison.IsSignificant, 'NoRaw: IsSignificant=False without MWU');
+end;
+
 procedure TestGetEnvironment;
 var
   LSuite: IBenchSuite;
@@ -1599,6 +1617,26 @@ begin
   Check(LEnv.Cores > 0, 'GetEnvironment: Cores > 0');
   Check(LEnv.FPCVersion <> '', 'GetEnvironment: FPCVersion is non-empty');
   Check(LEnv.Timestamp <> '', 'GetEnvironment: Timestamp is non-empty');
+end;
+
+{ === F-04: Suite timeout aborts long single-entry sampling === }
+
+procedure TestTimeout_AbortsLongEntry;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LAll: TBenchResultArray;
+begin
+  LSuite := TBenchSuite.Create('timeout-abort-entry');
+  LSuite.Add('Sleep20ms', @BenchSleep20ms);
+  LSuite.SetTimeout(TDuration.FromMilliseconds(15));
+  LSuite.SetMinSamples(30);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+  Check(LResults.Count = 1, 'F-04: one entry result');
+  LAll := LResults.GetAll;
+  Check(LAll[0].Skipped, 'F-04: long entry skipped');
+  Check(Pos('Timeout', LAll[0].SkipReason) > 0, 'F-04: SkipReason mentions Timeout');
 end;
 
 { === F-14: Suite-level SetTimeout skips remaining entries === }
@@ -2010,8 +2048,10 @@ begin
     T.Test('SaveBaseline_RoundTrip', @TestSaveBaseline_RoundTrip);
     T.Test('AppendToTimeline', @TestAppendToTimeline);
     T.Test('CompareTwoResults', @TestCompareTwoResults);
+    T.Test('CompareTwoResults NoRaw not significant', @TestCompareTwoResults_NoRawSamples_NotSignificant);
     T.Test('GetEnvironment', @TestGetEnvironment);
     T.Test('Timeout_Combined (F-14)', @TestTimeout_Combined);
+    T.Test('Timeout_AbortsLongEntry (F-04)', @TestTimeout_AbortsLongEntry);
     T.Test('AddLoopWithContext (F-15)', @TestAddLoopWithContext);
     T.Test('AddSimple (F-03)', @TestAddSimple);
     T.Test('AddSimple_Nil (F-03)', @TestAddSimple_Nil);

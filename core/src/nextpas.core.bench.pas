@@ -1045,7 +1045,7 @@ begin
   if (FEntryCount = 0) and (not FConfig.Quiet) then
     FConfig.Output.WriteLine('WARNING: TBenchSuite.Run called with no registered entries');
 
-  { ST-04: suite 级超时（无 per-entry TimeoutMs；公开 API 仅 SetTimeout） }
+  { ST-04 / F-04: suite 级超时 — 条目间跳过 + 传入 RunOne 中断采样 }
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
   if LTimeoutNs > 0 then
     LStartNs := platform_monotonic_ns
@@ -1065,10 +1065,9 @@ begin
     if not FEntries[I].Condition then
       Continue;
 
-    // ST-04: 条目间超时检查 (suite-level)
+    // 条目间：已超时则剩余全部 skip（不再启动 RunOne）
     if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
     begin
-      // 剩余条目标记为 skipped
       LRunResult := Default(TBenchResult);
       LRunResult.Name := FEntries[I].Name;
       LRunResult.Executed := True;
@@ -1079,13 +1078,8 @@ begin
       Continue;
     end;
 
-    LRunResult := FRunner.RunOne(FEntries[I]);
-    { P1-15: RunOne 可能耗时很长，完成后也检查 suite 超时 }
-    if (LTimeoutNs > 0) and (platform_monotonic_ns - LStartNs >= LTimeoutNs) then
-    begin
-      LRunResult.Skipped := True;
-      LRunResult.SkipReason := 'Timeout exceeded';
-    end;
+    { F-04: pass suite deadline into sampling so long single entries abort }
+    LRunResult := FRunner.RunOne(FEntries[I], FConfig.TimeoutMs, LStartNs);
     if LRunResult.Executed then
     begin
       LResults[LResultCount] := LRunResult;
@@ -2526,9 +2520,10 @@ begin
   else
     Result.Ratio := 1.0;
 
+  { Group means only — heuristic, NOT a formal statistical test (F-03). }
   Result.IsSignificant := FStatsAnalyzer.HasHeuristicDifference(LStatsA, LStatsB);
   Result.ApproximatePValue := FStatsAnalyzer.ComputeApproximatePValue(LStatsA, LStatsB);
-  Result.HasStatisticalTest := True;
+  Result.HasStatisticalTest := False;
 end;
 
 function TBenchResults.GetGroupRegressionReport(AThreshold: Double): TBenchRegressionReport;
@@ -2652,6 +2647,7 @@ begin
 end;
 
 function TBenchResults.GetTotalOpsPerSec: Double;
+{ Sum of per-entry OpsPerSec — NOT a process-wide throughput (F-07). }
 var
   I: Integer;
 begin
@@ -2688,6 +2684,7 @@ begin
 end;
 
 function TBenchResults.GetTotalBytesPerOp: Int64;
+{ Sum of per-entry BytesPerOp — usually not a physical bandwidth (F-07). }
 var
   I: Integer;
 begin
@@ -2700,6 +2697,7 @@ begin
 end;
 
 function TBenchResults.GetTotalAllocsPerOp: Int64;
+{ Sum of per-entry AllocsPerOp — display aggregate only (F-07). }
 var
   I: Integer;
 begin
@@ -2939,7 +2937,7 @@ begin
   else
     Result.Ratio := 1.0;
 
-  { Mann-Whitney U 检验：需要两组原始样本 }
+  { Mann-Whitney U：需要两组原始样本。无 raw 时不得冒充显著 (F-10). }
   if (Length(LA.RawSamples) > 1) and (Length(LB.RawSamples) > 1) then
   begin
     LPValue := FStatsAnalyzer.ComputeMannWhitneyPValue(LA.RawSamples, LB.RawSamples);
@@ -2949,9 +2947,8 @@ begin
   end
   else
   begin
-    { 无原始样本，退回启发式 }
     Result.HasStatisticalTest := False;
-    Result.IsSignificant := Abs(Result.Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+    Result.IsSignificant := False;
     Result.ApproximatePValue := CNoPValue;
   end;
 end;

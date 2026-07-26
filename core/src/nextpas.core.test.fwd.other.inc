@@ -91,52 +91,52 @@ end;
 { ── Forward to test.prop ──────────────────────────────────────────────────── }
 
 function GenString(AMinLen, AMaxLen: Integer): IStringGenerator;
-begin Result := nextpas.core.test.prop.GenString(AMinLen, AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenString(AMinLen, AMaxLen); end;
 
 function GenString(AMaxLen: Integer): IStringGenerator;
-begin Result := nextpas.core.test.prop.GenString(AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenString(AMaxLen); end;
 
 function GenInt(AMin, AMax: Int64): IIntGenerator;
-begin Result := nextpas.core.test.prop.GenInt(AMin, AMax); end;
+begin Result := nextpas.core.test.prop.gen.GenInt(AMin, AMax); end;
 
 function GenInt(AMax: Int64): IIntGenerator;
-begin Result := nextpas.core.test.prop.GenInt(AMax); end;
+begin Result := nextpas.core.test.prop.gen.GenInt(AMax); end;
 
 function GenBytes(AMinLen, AMaxLen: Integer): IBytesGenerator;
-begin Result := nextpas.core.test.prop.GenBytes(AMinLen, AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenBytes(AMinLen, AMaxLen); end;
 
 function GenBytes(AMaxLen: Integer): IBytesGenerator;
-begin Result := nextpas.core.test.prop.GenBytes(AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenBytes(AMaxLen); end;
 
 function GenBool: IBoolGenerator;
-begin Result := nextpas.core.test.prop.GenBool; end;
+begin Result := nextpas.core.test.prop.gen.GenBool; end;
 
 function MapIntToStr(AGen: IIntGenerator; AMap: TIntToString): IStringGenerator;
-begin Result := nextpas.core.test.prop.MapIntToStr(AGen, AMap); end;
+begin Result := nextpas.core.test.prop.gen.MapIntToStr(AGen, AMap); end;
 
 function FilterInt(AGen: IIntGenerator; APred: TIntPred): IIntGenerator;
-begin Result := nextpas.core.test.prop.FilterInt(AGen, APred); end;
+begin Result := nextpas.core.test.prop.gen.FilterInt(AGen, APred); end;
 
 function FilterString(AGen: IStringGenerator; APred: TStringPred): IStringGenerator;
-begin Result := nextpas.core.test.prop.FilterString(AGen, APred); end;
+begin Result := nextpas.core.test.prop.gen.FilterString(AGen, APred); end;
 
 function FilterBytes(AGen: IBytesGenerator; APred: TBytesPred): IBytesGenerator;
-begin Result := nextpas.core.test.prop.FilterBytes(AGen, APred); end;
+begin Result := nextpas.core.test.prop.gen.FilterBytes(AGen, APred); end;
 
 function GenChoiceInt(const AValues: array of Int64): IIntGenerator;
-begin Result := nextpas.core.test.prop.GenChoiceInt(AValues); end;
+begin Result := nextpas.core.test.prop.gen.GenChoiceInt(AValues); end;
 
 function GenChoiceString(const AValues: array of string): IStringGenerator;
-begin Result := nextpas.core.test.prop.GenChoiceString(AValues); end;
+begin Result := nextpas.core.test.prop.gen.GenChoiceString(AValues); end;
 
 function GenChoiceBool(const AValues: array of Boolean): IBoolGenerator;
-begin Result := nextpas.core.test.prop.GenChoiceBool(AValues); end;
+begin Result := nextpas.core.test.prop.gen.GenChoiceBool(AValues); end;
 
 function GenOneOfInt(const AGens: array of IIntGenerator): IIntGenerator;
-begin Result := nextpas.core.test.prop.GenOneOfInt(AGens); end;
+begin Result := nextpas.core.test.prop.gen.GenOneOfInt(AGens); end;
 
 function GenOneOfString(const AGens: array of IStringGenerator): IStringGenerator;
-begin Result := nextpas.core.test.prop.GenOneOfString(AGens); end;
+begin Result := nextpas.core.test.prop.gen.GenOneOfString(AGens); end;
 
 procedure PropFail(const AMsg: string);
 begin nextpas.core.test.prop.PropFail(AMsg); end;
@@ -146,16 +146,16 @@ function PropWithResult(const AName: string; ATest: TIntTest;
 begin Result := nextpas.core.test.prop.PropWithResult(AName, ATest, AGen, ARuns, AShrink); end;
 
 function GenArray(AGen: IIntGenerator; AMaxLen: Integer): IArrayGenerator;
-begin Result := nextpas.core.test.prop.GenArray(AGen, AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenArray(AGen, AMaxLen); end;
 
 function GenArray(AGen: IIntGenerator; AMinLen, AMaxLen: Integer): IArrayGenerator;
-begin Result := nextpas.core.test.prop.GenArray(AGen, AMinLen, AMaxLen); end;
+begin Result := nextpas.core.test.prop.gen.GenArray(AGen, AMinLen, AMaxLen); end;
 
 function GenTuple(AGen1: IIntGenerator; AGen2: IStringGenerator): ITupleGenerator;
-begin Result := nextpas.core.test.prop.GenTuple(AGen1, AGen2); end;
+begin Result := nextpas.core.test.prop.gen.GenTuple(AGen1, AGen2); end;
 
 function BindInt(AGen: IIntGenerator; AFn: TIntToGenerator): IIntGenerator;
-begin Result := nextpas.core.test.prop.BindInt(AGen, AFn); end;
+begin Result := nextpas.core.test.prop.gen.BindInt(AGen, AFn); end;
 
 procedure PropArray(const AName: string; ATest: TIntArrayTest;
   AGen: IArrayGenerator; ARuns: Integer; AShrink: Boolean);
@@ -167,37 +167,41 @@ begin nextpas.core.test.prop.PropTuple(AName, ATest, AGen, ARuns); end;
 
 procedure Fuzz(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AMaxIterations: Integer);
-begin nextpas.core.test.prop.Fuzz(AName, ATest, ACorpus, AMaxIterations); end;
+begin nextpas.core.test.fuzz.Fuzz(AName, ATest, ACorpus, AMaxIterations); end;
 
 procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
   const ACorpus: array of string; AMaxIterations: Integer);
-begin nextpas.core.test.prop.FuzzString(AName, ATest, ACorpus, AMaxIterations); end;
+begin nextpas.core.test.fuzz.FuzzString(AName, ATest, ACorpus, AMaxIterations); end;
 
 function FuzzGenBytes(ALen: Integer): TBytes;
-begin Result := nextpas.core.test.prop.FuzzGenBytes(ALen); end;
+begin Result := nextpas.core.test.fuzz.FuzzGenBytes(ALen); end;
 
 function FuzzGenString(ALen: Integer): string;
-begin Result := nextpas.core.test.prop.FuzzGenString(ALen); end;
+begin Result := nextpas.core.test.fuzz.FuzzGenString(ALen); end;
 
 procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
   const ACorpusDir: string; AMaxIterations: Integer);
-begin nextpas.core.test.prop.FuzzWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
+begin nextpas.core.test.fuzz.FuzzWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
 
 procedure FuzzStringWithCorpus(const AName: string; ATest: TFuzzStringTest;
   const ACorpusDir: string; AMaxIterations: Integer);
-begin nextpas.core.test.prop.FuzzStringWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
+begin nextpas.core.test.fuzz.FuzzStringWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;
 
 function CreateCoverageTracker: ICoverageTracker;
-begin Result := nextpas.core.test.prop.CreateCoverageTracker; end;
+begin Result := nextpas.core.test.fuzz.CreateCoverageTracker; end;
 
 procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredIntTest;
   AGen: IIntGenerator; ACorpus: ICoverageTracker; AMaxIterations: Integer);
-begin nextpas.core.test.prop.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
+begin nextpas.core.test.fuzz.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
 
 procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
   AGen: IStringGenerator; ACorpus: ICoverageTracker; AMaxIterations: Integer);
-begin nextpas.core.test.prop.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
+begin nextpas.core.test.fuzz.FuzzStructured(AName, ATest, AGen, ACorpus, AMaxIterations); end;
+
+procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
+  const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
+begin nextpas.core.test.fuzz.FuzzMultiStrategy(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;
 
 procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer; AIterationsPerWorker: Integer);
-begin nextpas.core.test.prop.FuzzParallel(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;
+begin nextpas.core.test.fuzz.FuzzParallel(AName, ATest, ACorpus, AWorkers, AIterationsPerWorker); end;

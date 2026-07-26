@@ -143,7 +143,7 @@ implementation
 uses
   nextpas.core.math.scalar,    { IsNan / IsInfinite for Double guards }
   nextpas.core.regex,          { RegexIsMatch for ToMatch }
-  nextpas.core.test.check;     { CheckSnapshot delegation for ToMatchSnapshot }
+  nextpas.core.test.snapshot;  { CheckSnapshot — shared L1, not via check }
 
 { ── Local helpers ─────────────────────────────────────────────────────────── }
 

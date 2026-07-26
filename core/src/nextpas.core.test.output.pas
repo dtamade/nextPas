@@ -151,6 +151,15 @@ function WriteJUnitXML(const AResults: specialize TArray<TTestRunResult>;
 
 { ── Leak reporting ────────────────────────────────────────────────────────── }
 
+{ Optional host heap probe (returns current heap bytes, or -1 if unavailable).
+  Default is nil — no FPC GetFPCHeapStatus dependency. }
+type
+  THeapProbeFunc = function: Int64;
+procedure SetHeapProbe(AProbe: THeapProbeFunc);
+function GetHeapProbe: THeapProbeFunc;
+{ Record GExecState^.HeapAtStart from current probe (call after SetTestContext). }
+procedure NoteHeapBaseline;
+
 procedure ReportLeakIfAny(AStatus: TTestStatus); overload;
 procedure ReportLeakIfAny(AStatus: TTestStatus; const AConfig: TTestConfig); overload;
 
@@ -162,6 +171,9 @@ function CountFailed(const AResults: specialize TArray<TTestRunResult>): Integer
 function CountSkipped(const AResults: specialize TArray<TTestRunResult>): Integer;
 
 implementation
+
+uses
+  nextpas.core.test.diff;
 
 { Local wrapper: platform_env_get_str returns '' for missing vars }
 function GetEnv(const AName: string): string;
@@ -597,63 +609,9 @@ end;
 
 function ColorDiff(const AExpected, AActual: string;
   const AConfig: TTestConfig): string;
-var
-  I, LMin, LDiffAt: Integer;
-  LUseAnsi: Boolean;
-  LExpLine, LActLine: string;
 begin
-  LUseAnsi := UseAnsi(AConfig);
-
-  { Find first differing position }
-  LMin := Length(AExpected);
-  if Length(AActual) < LMin then
-    LMin := Length(AActual);
-  LDiffAt := 1;
-  while (LDiffAt <= LMin) and (AExpected[LDiffAt] = AActual[LDiffAt]) do
-    Inc(LDiffAt);
-  if LDiffAt > LMin then
-    LDiffAt := LMin + 1; { difference is purely in length }
-
-  if LUseAnsi then
-  begin
-    { Build colored diff: common prefix in normal, difference highlighted }
-    if LDiffAt > 1 then
-    begin
-      { Common prefix }
-      LExpLine := C_DIM + Copy(AExpected, 1, LDiffAt - 1) + C_RESET;
-      LActLine := C_DIM + Copy(AActual, 1, LDiffAt - 1) + C_RESET;
-    end
-    else
-    begin
-      LExpLine := '';
-      LActLine := '';
-    end;
-
-    { Differing part: expected in green+strikethrough, actual in red+bold }
-    if LDiffAt <= Length(AExpected) then
-      LExpLine := LExpLine + C_GREEN + C_STRIKE +
-        Copy(AExpected, LDiffAt, Length(AExpected) - LDiffAt + 1) + C_RESET
-    else
-      LExpLine := LExpLine + C_DIM + '(empty)' + C_RESET;
-
-    if LDiffAt <= Length(AActual) then
-      LActLine := LActLine + C_RED + C_BOLD +
-        Copy(AActual, LDiffAt, Length(AActual) - LDiffAt + 1) + C_RESET
-    else
-      LActLine := LActLine + C_DIM + '(empty)' + C_RESET;
-
-    Result := 'Strings differ at position ' + IntToStr(LDiffAt) + ':' + #10 +
-      '  expected: ' + LExpLine + #10 +
-      '    actual: ' + LActLine;
-  end
-  else
-  begin
-    { Plain text fallback }
-    Result := 'Strings differ at position ' + IntToStr(LDiffAt) + ':' + #10 +
-      '  expected: "' + AExpected + '"'#10 +
-      '    actual: "' + AActual + '"'#10 +
-      '            ' + StringOfChar(' ', LDiffAt - 1) + '^';
-  end;
+  { Implementation lives in L0 test.diff (F-01: check must not depend on output). }
+  Result := nextpas.core.test.diff.ColorDiff(AExpected, AActual, AConfig);
 end;
 
 function FormatBenchLine(const AR: nextpas.core.test.base.TBenchResult;
@@ -1203,19 +1161,48 @@ end;
 { Leak Reporting                                                               }
 { ═════════════════════════════════════════════════════════════════════════════ }
 
-procedure ReportLeakIfAny(AStatus: TTestStatus; const AConfig: TTestConfig);
+{ Optional heap probe — no default FPC GetFPCHeapStatus dependency (F-05). }
+var
+  GHeapProbe: THeapProbeFunc = nil;
+
+procedure SetHeapProbe(AProbe: THeapProbeFunc);
 begin
-  {$IFDEF HASHEAPTRACE}
-  if (AStatus = tsPassed) and
-     (GExecState <> nil) and (not GExecState^.Failed) and
-     (GetFPCHeapStatus.CurrHeapUsed > 0) then
-  begin
+  GHeapProbe := AProbe;
+end;
+
+function GetHeapProbe: THeapProbeFunc;
+begin
+  Result := GHeapProbe;
+end;
+
+procedure NoteHeapBaseline;
+begin
+  if (GHeapProbe = nil) or (GExecState = nil) then
+    Exit;
+  GExecState^.HeapAtStart := GHeapProbe();
+end;
+
+procedure ReportLeakIfAny(AStatus: TTestStatus; const AConfig: TTestConfig);
+var
+  LNow, LStart, LDelta: Int64;
+begin
+  if GHeapProbe = nil then
+    Exit;
+  if not ((AStatus = tsPassed) and
+     (GExecState <> nil) and (not GExecState^.Failed)) then
+    Exit;
+  LNow := GHeapProbe();
+  if LNow < 0 then
+    Exit;
+  LStart := GExecState^.HeapAtStart;
+  if LStart < 0 then
+    Exit;
+  LDelta := LNow - LStart;
+  if LDelta > 0 then
     ResolveOutSink(AConfig).WriteLn(
-      '  ' + AnsiYellow('WARNING leak', AConfig) + ': ' +
-      IntToStr(GetFPCHeapStatus.CurrHeapUsed) + ' bytes not freed in ' +
+      '  ' + AnsiYellow('WARNING leak', AConfig) + ': +' +
+      IntToStr(LDelta) + ' bytes (delta) in ' +
       AnsiBold(GExecState^.TestName, AConfig));
-  end;
-  {$ENDIF}
 end;
 
 procedure ReportLeakIfAny(AStatus: TTestStatus);

@@ -16,11 +16,21 @@ PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
 
 .PHONY: test clean bench $(PROJECTS)
 
+# 构建阶段重试一次：host fpc (trunk) 偶发 "Can't find unit"（见 docs/bench/findings.md F-27）。
+# 真编译回归会连挂两次仍红；运行期失败不重试，保持严格。
 test:
 	@status=0; \
 	for project in $(PROJECTS); do \
 		echo "=== $$project ==="; \
-		if ! $(MAKE) -C $$project clean test; then \
+		if ! $(MAKE) -C $$project clean all; then \
+			echo "[BUILD-FLAKE-RETRY] $$project build failed; retrying once"; \
+			if ! $(MAKE) -C $$project clean all; then \
+				status=1; \
+				echo ""; \
+				continue; \
+			fi; \
+		fi; \
+		if ! $(MAKE) -C $$project test; then \
 			status=1; \
 		fi; \
 		echo ""; \

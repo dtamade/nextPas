@@ -100,10 +100,26 @@ const
   ESysEINTR = 4;
   {** @desc EINVAL 错误码 *}
   ESysEINVAL = 22;
+  {** @desc EACCES 错误码 *}
+  ESysEACCES = 13;
+  {** @desc ENOENT 错误码 *}
+  ESysENOENT = 2;
+  {** @desc ENOMEM 错误码 *}
+  ESysENOMEM = 12;
+  {** @desc EPERM 错误码 *}
+  ESysEPERM = 1;
   {** @desc EOPNOTSUPP 错误码 *}
   ESysEOPNOTSUPP = 95;
   {** @desc ETIMEDOUT 错误码 *}
   ESysETIMEDOUT = 110;
+  {** @desc EMFILE 错误码 *}
+  ESysEMFILE = 24;
+  {** @desc ENFILE 错误码 *}
+  ESysENFILE = 23;
+  {** @desc EINPROGRESS 错误码 *}
+  ESysEINPROGRESS = 115;
+  {** @desc EWOULDBLOCK 错误码（与 EAGAIN 同值别名） *}
+  ESysEWOULDBLOCK = ESysEAGAIN;
 
   {** @desc waitpid 不阻塞标志 *}
   WNOHANG = Int32(1);
@@ -125,6 +141,10 @@ const
   O_EXCL = Int32($400);
   O_TRUNC = Int32($200);
   O_APPEND = Int32($8);
+  O_NONBLOCK = Int32($4);
+
+  { AF_UNSPEC 各宿主统一为 0；其余 AF_*/SOCK_* 可移植常量在 posix.base }
+  AF_UNSPEC = 0;
 
   SEEK_SET = Int32(0);
   SEEK_CUR = Int32(1);

@@ -1,8 +1,7 @@
 {**
  * @desc 并行基准执行器
  *
- * 提供并行执行基准测试的功能，
- * 用于测量多线程性能和扩展性。
+ * 使用 platform.thread（非 Classes.TThread）驱动多线程测量 (F-01)。
  *}
 unit nextpas.core.bench.parallel;
 
@@ -12,7 +11,6 @@ unit nextpas.core.bench.parallel;
 interface
 
 uses
-  nextpas.core.system.classes,
   nextpas.core.bench.base;
 
 type
@@ -22,13 +20,18 @@ type
   TBenchParallelFunc = procedure(AThreadId: Integer; AIterations: Int64);
 
   {**
+   * 带用户数据的并行函数（runner 桥接用，避免全局 GBridgeRunner）(F-05)
+   *}
+  TBenchParallelUserDataFunc = procedure(AThreadId: Integer; AIterations: Int64;
+    AUserData: Pointer);
+
+  {**
    * 并行基准配置
    *}
   TParallelBenchConfig = record
-    ThreadCount: Integer;      // 线程数
-    IterationsPerThread: Int64; // 每个线程的迭代次数
-    WarmupIterations: Int64;   // 预热迭代次数
-    {** 顺序基准 NsPerOp（可选，>0 时用于计算真实加速比） }
+    ThreadCount: Integer;
+    IterationsPerThread: Int64;
+    WarmupIterations: Int64;
     SequentialNsPerOp: Double;
   end;
 
@@ -37,11 +40,11 @@ type
    *}
   TParallelBenchResult = record
     Config: TParallelBenchConfig;
-    TotalNs: UInt64;           // 总耗时（纳秒）
-    NsPerOp: Double;           // 每次操作耗时
-    OpsPerSec: Double;         // 每秒操作数
-    Speedup: Double;           // 加速比
-    Efficiency: Double;        // 并行效率
+    TotalNs: UInt64;
+    NsPerOp: Double;
+    OpsPerSec: Double;
+    Speedup: Double;
+    Efficiency: Double;
     ThreadResults: array of record
       ThreadId: Integer;
       Iterations: Int64;
@@ -59,104 +62,186 @@ type
     FFunc: TBenchParallelFunc;
     FResults: TParallelBenchResult;
   public
-    {**
-     * 创建并行基准执行器
-     *}
     class function Create(AFunc: TBenchParallelFunc;
                          AThreadCount: Integer = BENCH_DEFAULT_PARALLEL_THREADS;
                          AIterationsPerThread: Int64 = 1000000;
                          AWarmupIterations: Int64 = 1000): TParallelBenchmark; static;
-
-    {**
-     * 执行并行基准测试
-     *}
     function Execute: TParallelBenchResult;
-
-    {**
-     * 获取结果
-     *}
     function GetResults: TParallelBenchResult;
   end;
 
-  {**
-   * 执行并行基准测试
-   *}
   function RunParallelBench(AFunc: TBenchParallelFunc;
                            AThreadCount: Integer = BENCH_DEFAULT_PARALLEL_THREADS;
                            AIterationsPerThread: Int64 = 1000000): TParallelBenchResult;
+
+  {** Runner bridge: pass Self as AUserData (no process-global runner pointer). }
+  function RunParallelBenchWithUserData(AFunc: TBenchParallelUserDataFunc;
+                                        AUserData: Pointer;
+                                        AThreadCount: Integer;
+                                        AIterationsPerThread: Int64;
+                                        AWarmupIterations: Int64 = 0): TParallelBenchResult;
 
 implementation
 
 uses
   nextpas.core.platform.time,
+  nextpas.core.platform.thread,
   nextpas.core.exception,
   nextpas.core.bench.intf;
 
-
-
 type
-  {**
-   * 基准线程
-   *}
-  TBenchThread = class(TThread)
-  private
-    FBenchThreadId: Integer;
-    FFunc: TBenchParallelFunc;
-    FIterations: Int64;
-    FElapsedNs: UInt64;
-    FExceptionMessage: string; { F-02: capture exception message }
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AThreadId: Integer; AFunc: TBenchParallelFunc;
-                      AIterations: Int64);
-    property BenchThreadId: Integer read FBenchThreadId;
-    property Iterations: Int64 read FIterations;
-    property ElapsedNs: UInt64 read FElapsedNs;
-    property ExceptionMessage: string read FExceptionMessage;
+  PBenchParallelJob = ^TBenchParallelJob;
+  TBenchParallelJob = record
+    ThreadId: Integer;
+    Iterations: Int64;
+    Func: TBenchParallelFunc;
+    UserFunc: TBenchParallelUserDataFunc;
+    UserData: Pointer;
+    UseUserData: Boolean;
+    ElapsedNs: UInt64;
+    ExceptionMessage: string;
   end;
 
-{ TBenchThread }
-
-constructor TBenchThread.Create(AThreadId: Integer; AFunc: TBenchParallelFunc;
-                                AIterations: Int64);
-begin
-  inherited Create(True); // Create suspended
-  FreeOnTerminate := False;
-  FBenchThreadId := AThreadId;
-  FFunc := AFunc;
-  FIterations := AIterations;
-  FElapsedNs := 0;
-  FExceptionMessage := '';
-end;
-
-procedure TBenchThread.Execute;
+function ParallelJobWorker(AArg: Pointer): Pointer; cdecl;
 var
-  LStartNs: UInt64;
-  LEndNs: UInt64;
+  LJob: PBenchParallelJob;
+  LStartNs, LEndNs: UInt64;
 begin
+  Result := nil;
+  LJob := PBenchParallelJob(AArg);
+  if LJob = nil then
+    Exit;
   try
-    // Record start time using high-precision timer
     LStartNs := platform_monotonic_ns;
-
-    // Execute the benchmark function
-    FFunc(FBenchThreadId, FIterations);
-
-    // Record end time
+    if LJob^.UseUserData then
+    begin
+      if Assigned(LJob^.UserFunc) then
+        LJob^.UserFunc(LJob^.ThreadId, LJob^.Iterations, LJob^.UserData);
+    end
+    else if Assigned(LJob^.Func) then
+      LJob^.Func(LJob^.ThreadId, LJob^.Iterations);
     LEndNs := platform_monotonic_ns;
-
-    // Calculate elapsed time in nanoseconds
-    FElapsedNs := LEndNs - LStartNs;
+    LJob^.ElapsedNs := LEndNs - LStartNs;
   except
     on E: Exception do
     begin
-      FElapsedNs := 0;
-      FExceptionMessage := E.Message;
+      LJob^.ElapsedNs := 0;
+      LJob^.ExceptionMessage := E.Message;
     end;
   end;
 end;
 
-{ TParallelBenchmark }
+function ExecuteParallelJobs(var AJobs: array of TBenchParallelJob;
+  const AConfig: TParallelBenchConfig): TParallelBenchResult;
+var
+  LHandles: array of TPlatformThreadHandle;
+  I: Integer;
+  LStartNs, LEndNs: UInt64;
+  LTotalIterations: Int64;
+  LRet: Pointer;
+  LHandle: TPlatformThreadHandle;
+begin
+  Result := Default(TParallelBenchResult);
+  Result.Config := AConfig;
+  SetLength(LHandles, Length(AJobs));
+  for I := 0 to High(LHandles) do
+    LHandles[I] := nil;
+
+  LStartNs := platform_monotonic_ns;
+  try
+    for I := 0 to High(AJobs) do
+    begin
+      if platform_thread_create(LHandle, @ParallelJobWorker, @AJobs[I]) = 0 then
+        LHandles[I] := LHandle
+      else
+        raise EBenchError.CreateFmt('RunParallelBench: platform_thread_create failed for thread %d',
+          [AJobs[I].ThreadId]);
+    end;
+
+    for I := 0 to High(LHandles) do
+      if LHandles[I] <> nil then
+        platform_thread_join(LHandles[I], LRet);
+
+    LEndNs := platform_monotonic_ns;
+    LTotalIterations := 0;
+    SetLength(Result.ThreadResults, Length(AJobs));
+    for I := 0 to High(AJobs) do
+    begin
+      if AJobs[I].ExceptionMessage <> '' then
+        raise EBenchError.CreateFmt('Thread %d failed: %s',
+          [AJobs[I].ThreadId, AJobs[I].ExceptionMessage]);
+      Result.ThreadResults[I].ThreadId := AJobs[I].ThreadId;
+      Result.ThreadResults[I].Iterations := AJobs[I].Iterations;
+      Result.ThreadResults[I].ElapsedNs := AJobs[I].ElapsedNs;
+      if AJobs[I].Iterations > 0 then
+        Result.ThreadResults[I].NsPerOp := AJobs[I].ElapsedNs / AJobs[I].Iterations
+      else
+        Result.ThreadResults[I].NsPerOp := 0;
+      Inc(LTotalIterations, AJobs[I].Iterations);
+    end;
+
+    Result.TotalNs := LEndNs - LStartNs;
+    if LTotalIterations > 0 then
+      Result.NsPerOp := Result.TotalNs / LTotalIterations
+    else
+      Result.NsPerOp := 0;
+    if Result.NsPerOp > 0 then
+      Result.OpsPerSec := NANOSECONDS_PER_SECOND / Result.NsPerOp
+    else
+      Result.OpsPerSec := 0;
+    if (AConfig.SequentialNsPerOp > 0) and (Result.NsPerOp > 0) then
+      Result.Speedup := AConfig.SequentialNsPerOp / Result.NsPerOp
+    else
+      Result.Speedup := 0;
+    if (AConfig.ThreadCount > 0) and (Result.Speedup > 0) then
+      Result.Efficiency := Result.Speedup / AConfig.ThreadCount
+    else
+      Result.Efficiency := 0;
+  except
+    { join any started threads before re-raise }
+    for I := 0 to High(LHandles) do
+      if LHandles[I] <> nil then
+        platform_thread_join(LHandles[I], LRet);
+    raise;
+  end;
+end;
+
+procedure RunWarmupJobs(AFunc: TBenchParallelFunc; AUserFunc: TBenchParallelUserDataFunc;
+  AUserData: Pointer; AUseUserData: Boolean; AThreadCount: Integer; AWarmupIters: Int64);
+var
+  LJobs: array of TBenchParallelJob;
+  LConfig: TParallelBenchConfig;
+  I: Integer;
+begin
+  if AWarmupIters <= 0 then
+    Exit;
+  if AThreadCount <= 1 then
+  begin
+    if AUseUserData then
+    begin
+      if Assigned(AUserFunc) then
+        AUserFunc(0, AWarmupIters, AUserData);
+    end
+    else if Assigned(AFunc) then
+      AFunc(0, AWarmupIters);
+    Exit;
+  end;
+  SetLength(LJobs, AThreadCount);
+  for I := 0 to AThreadCount - 1 do
+  begin
+    LJobs[I] := Default(TBenchParallelJob);
+    LJobs[I].ThreadId := I;
+    LJobs[I].Iterations := AWarmupIters;
+    LJobs[I].Func := AFunc;
+    LJobs[I].UserFunc := AUserFunc;
+    LJobs[I].UserData := AUserData;
+    LJobs[I].UseUserData := AUseUserData;
+  end;
+  LConfig := Default(TParallelBenchConfig);
+  LConfig.ThreadCount := AThreadCount;
+  LConfig.IterationsPerThread := AWarmupIters;
+  ExecuteParallelJobs(LJobs, LConfig);
+end;
 
 class function TParallelBenchmark.Create(AFunc: TBenchParallelFunc;
                                          AThreadCount: Integer;
@@ -166,115 +251,31 @@ begin
   Result.FConfig.ThreadCount := AThreadCount;
   Result.FConfig.IterationsPerThread := AIterationsPerThread;
   Result.FConfig.WarmupIterations := AWarmupIterations;
+  Result.FConfig.SequentialNsPerOp := 0;
   Result.FFunc := AFunc;
   Result.FResults := Default(TParallelBenchResult);
 end;
 
 function TParallelBenchmark.Execute: TParallelBenchResult;
 var
-  LThreads: array of TBenchThread;
+  LJobs: array of TBenchParallelJob;
   I: Integer;
-  LStartNs: UInt64;
-  LEndNs: UInt64;
-  LTotalIterations: Int64;
 begin
-  // F-12: 并行热身 - 如果 ThreadCount > 1，用线程池预热各核心缓存
-  if FConfig.WarmupIterations > 0 then
+  if FConfig.ThreadCount < 1 then
+    FConfig.ThreadCount := 1;
+
+  RunWarmupJobs(FFunc, nil, nil, False, FConfig.ThreadCount, FConfig.WarmupIterations);
+
+  SetLength(LJobs, FConfig.ThreadCount);
+  for I := 0 to FConfig.ThreadCount - 1 do
   begin
-    if FConfig.ThreadCount > 1 then
-    begin
-      SetLength(LThreads, FConfig.ThreadCount);
-      try
-        for I := 0 to FConfig.ThreadCount - 1 do
-          LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.WarmupIterations);
-        for I := 0 to High(LThreads) do
-          LThreads[I].Start;
-        for I := 0 to High(LThreads) do
-          LThreads[I].WaitFor;
-      finally
-        for I := 0 to High(LThreads) do
-          LThreads[I].Free;
-        SetLength(LThreads, 0);
-      end;
-    end
-    else
-    begin
-      for I := 0 to FConfig.ThreadCount - 1 do
-        FFunc(I, FConfig.WarmupIterations);
-    end;
+    LJobs[I] := Default(TBenchParallelJob);
+    LJobs[I].ThreadId := I;
+    LJobs[I].Iterations := FConfig.IterationsPerThread;
+    LJobs[I].Func := FFunc;
+    LJobs[I].UseUserData := False;
   end;
-
-  // Create threads (PF-16: try-finally to prevent thread object leak)
-  SetLength(LThreads, FConfig.ThreadCount);
-  try
-    for I := 0 to FConfig.ThreadCount - 1 do
-      LThreads[I] := TBenchThread.Create(I, FFunc, FConfig.IterationsPerThread);
-
-    // Record start time using high-precision timer
-    LStartNs := platform_monotonic_ns;
-
-    // Start all threads
-    for I := 0 to High(LThreads) do
-      LThreads[I].Start;
-
-    // Wait for all threads to complete
-    for I := 0 to High(LThreads) do
-      LThreads[I].WaitFor;
-
-    // Record end time
-    LEndNs := platform_monotonic_ns;
-
-    // Collect results
-    LTotalIterations := 0;
-    SetLength(FResults.ThreadResults, Length(LThreads));
-
-    for I := 0 to High(LThreads) do
-    begin
-      { F-02: check for exceptions in worker threads }
-      if LThreads[I].ExceptionMessage <> '' then
-        raise EBenchError.CreateFmt('Thread %d failed: %s',
-          [LThreads[I].BenchThreadId, LThreads[I].ExceptionMessage]);
-
-      FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;
-      FResults.ThreadResults[I].Iterations := LThreads[I].Iterations;
-      FResults.ThreadResults[I].ElapsedNs := LThreads[I].ElapsedNs;
-      if LThreads[I].Iterations > 0 then
-        FResults.ThreadResults[I].NsPerOp := LThreads[I].ElapsedNs / LThreads[I].Iterations
-      else
-        FResults.ThreadResults[I].NsPerOp := 0;
-      Inc(LTotalIterations, LThreads[I].Iterations);
-    end;
-
-    // Calculate total results
-    FResults.Config := FConfig;
-    FResults.TotalNs := LEndNs - LStartNs;
-    if LTotalIterations > 0 then
-      FResults.NsPerOp := FResults.TotalNs / LTotalIterations
-    else
-      FResults.NsPerOp := 0;
-
-    if FResults.NsPerOp > 0 then
-      FResults.OpsPerSec := NANOSECONDS_PER_SECOND / FResults.NsPerOp
-    else
-      FResults.OpsPerSec := 0;
-
-    // Calculate speedup and efficiency
-    if (FConfig.SequentialNsPerOp > 0) and (FResults.NsPerOp > 0) then
-      FResults.Speedup := FConfig.SequentialNsPerOp / FResults.NsPerOp
-    else
-      FResults.Speedup := 0; { 无顺序基准时标记为 N/A }
-
-    if (FConfig.ThreadCount > 0) and (FResults.Speedup > 0) then
-      FResults.Efficiency := FResults.Speedup / FConfig.ThreadCount
-    else
-      FResults.Efficiency := 0;
-  finally
-    // Cleanup — always free thread objects (PF-16)
-    for I := 0 to High(LThreads) do
-      LThreads[I].Free;
-    SetLength(LThreads, 0);
-  end;
-
+  FResults := ExecuteParallelJobs(LJobs, FConfig);
   Result := FResults;
 end;
 
@@ -282,8 +283,6 @@ function TParallelBenchmark.GetResults: TParallelBenchResult;
 begin
   Result := FResults;
 end;
-
-{ RunParallelBench }
 
 function RunParallelBench(AFunc: TBenchParallelFunc;
                          AThreadCount: Integer;
@@ -295,6 +294,37 @@ begin
     AThreadCount := 1;
   LBench := TParallelBenchmark.Create(AFunc, AThreadCount, AIterationsPerThread);
   Result := LBench.Execute;
+end;
+
+function RunParallelBenchWithUserData(AFunc: TBenchParallelUserDataFunc;
+                                      AUserData: Pointer;
+                                      AThreadCount: Integer;
+                                      AIterationsPerThread: Int64;
+                                      AWarmupIterations: Int64): TParallelBenchResult;
+var
+  LJobs: array of TBenchParallelJob;
+  LConfig: TParallelBenchConfig;
+  I: Integer;
+begin
+  if AThreadCount < 1 then
+    AThreadCount := 1;
+  RunWarmupJobs(nil, AFunc, AUserData, True, AThreadCount, AWarmupIterations);
+
+  SetLength(LJobs, AThreadCount);
+  for I := 0 to AThreadCount - 1 do
+  begin
+    LJobs[I] := Default(TBenchParallelJob);
+    LJobs[I].ThreadId := I;
+    LJobs[I].Iterations := AIterationsPerThread;
+    LJobs[I].UserFunc := AFunc;
+    LJobs[I].UserData := AUserData;
+    LJobs[I].UseUserData := True;
+  end;
+  LConfig := Default(TParallelBenchConfig);
+  LConfig.ThreadCount := AThreadCount;
+  LConfig.IterationsPerThread := AIterationsPerThread;
+  LConfig.WarmupIterations := AWarmupIterations;
+  Result := ExecuteParallelJobs(LJobs, LConfig);
 end;
 
 end.

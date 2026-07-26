@@ -22,27 +22,25 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.errno,
   nextpas.core.platform.linux.ffi;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_MACOS}
+{$ELSEIF defined(NEXTPAS_MACOS)}
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.darwin.ffi,
   nextpas.core.platform.posix.errno;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_FREEBSD}
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.freebsd.ffi,
   nextpas.core.platform.posix.errno;
-{$ENDIF}
-
-{$IFDEF NEXTPAS_WINDOWS}
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
+{$ELSE}
+{ Android/generic-unix: unsupported stub below still needs PLATFORM_ERR_* }
+uses
+  nextpas.core.platform.error;
 {$ENDIF}
 
 function platform_random_check_request(ABuf: Pointer; ALen: PtrUInt; out AResult: Int32): Boolean; inline;

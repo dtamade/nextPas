@@ -172,6 +172,10 @@ type
     {** 运行单个基准测试 }
     function RunOne(const AName: string; AFunc: TBenchFunc): TBenchResult;
     function RunOne(const AEntry: TBenchEntry): TBenchResult; overload;
+    {** Suite-level deadline: ATimeoutMs>0 + ATimeoutStartNs from suite Run start.
+     *  Propagates into CollectEntrySamples so a single long entry aborts mid-sampling (F-04). }
+    function RunOne(const AEntry: TBenchEntry; ATimeoutMs: Int64;
+      ATimeoutStartNs: UInt64): TBenchResult; overload;
 
     {** 运行多个基准测试 }
     procedure RunAll(const AEntries: array of TBenchEntry);
@@ -220,20 +224,12 @@ uses
   nextpas.core.bench.parallel,
   nextpas.core.io.linewriter;
 
-{** F-01: GBridgeRunner is file-scope because ParallelBenchBridge's callback
- *  signature does not allow user data. Safe under DS-13 (single-runner). }
+{** F-05: no process-global GBridgeRunner — AUserData carries TBenchRunner. }
+{** F-16: CAS flag to detect concurrent parallel RunOne calls on any runner }
 var
-  GBridgeRunner: TBenchRunner;
-  {** F-16: CAS flag to detect concurrent RunOne calls }
-  GBridgeBusy: Integer = 0;
+  GParallelBusy: Integer = 0;
 
-{** 并行基准桥接函数
- *
- *  CR-10 修复：记录线程起始/结束时间（通过 RecordElapsed），
- *  并传播到 FParallelContexts 以便 RunOne 计算精确的 NsPerOp。
- *
- *  F-01：桥接数据从 GBridgeRunner 实例字段读取。 }
-procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64);
+procedure ParallelBenchBridge(AThreadId: Integer; AIterations: Int64; AUserData: Pointer);
 var
   LContext: IBenchContext;
   LContextObj: TBenchContext;
@@ -241,8 +237,7 @@ var
   LRunner: TBenchRunner;
   LTargetCtx: TBenchContext;
 begin
-  { F-01: runner instance accessed via file-scope GBridgeRunner }
-  LRunner := GBridgeRunner;
+  LRunner := TBenchRunner(AUserData);
   if (LRunner = nil) or
      ((not Assigned(LRunner.FBridgeFunc)) and
       (not Assigned(LRunner.FBridgeParamFunc)) and
@@ -265,7 +260,6 @@ begin
       Break;
   end;
 
-  // CR-10: Record wall-clock elapsed time for this thread
   LContextObj.RecordElapsed;
 
   if LRunner.FParallelContextsInitialized and
@@ -273,7 +267,6 @@ begin
      (AThreadId < Length(LRunner.FParallelContexts)) and
      Assigned(LRunner.FParallelContexts[AThreadId]) then
   begin
-    { F-01: write to pre-created context instead of creating new one }
     LTargetCtx := LRunner.FParallelContexts[AThreadId] as TBenchContext;
     LTargetCtx.SetName(LRunner.FBridgeEntryName);
     LTargetCtx.SetIterations(LContextObj.GetIterations);
@@ -281,9 +274,7 @@ begin
     LTargetCtx.SetAllocs(LContextObj.GetAllocsPerOp);
     if LContextObj.IsSkipped then
       LTargetCtx.Skip(LContextObj.GetSkipReason);
-    // CR-10: Propagate elapsed ns from bridge context to parallel context
     LTargetCtx.FElapsedNs := LContextObj.GetElapsedNs;
-    // Copy custom metrics from bridge context
     LTargetCtx.FCustomMetrics := Copy(LContextObj.FCustomMetrics);
   end;
 end;
@@ -738,23 +729,21 @@ begin
     FBridgeSimpleFunc := AEntry.SimpleFunc;
     FBridgeParamValue := AEntry.ParamValue;
     FBridgeEntryName := AEntry.Name;
-    { F-16: 并发断言 — 检测是否已有另一个 RunOne 在执行并行 benchmark }
-    if InterlockedCompareExchange(GBridgeBusy, 1, 0) <> 0 then
+    { F-16: 禁止进程内并发 parallel RunOne（桥接仍共享 runner 字段） }
+    if InterlockedCompareExchange(GParallelBusy, 1, 0) <> 0 then
       raise EBenchError.Create(
         'TBenchRunner: concurrent parallel benchmark execution detected. ' +
         'Each TBenchSuite must Run() from a single thread.');
-    GBridgeRunner := Self;
     try
-      LParallelResult := RunParallelBench(@ParallelBenchBridge,
-        AEntry.ParallelThreads, LPerThreadIterations);
+      LParallelResult := RunParallelBenchWithUserData(@ParallelBenchBridge, Self,
+        AEntry.ParallelThreads, LPerThreadIterations, 0);
     finally
       FBridgeFunc := nil;
       FBridgeParamFunc := nil;
       FBridgeSimpleFunc := nil;
       FBridgeParamValue := 0;
       FBridgeEntryName := '';
-      GBridgeRunner := nil;
-      GBridgeBusy := 0;
+      GParallelBusy := 0;
       FParallelBridgeFunc := nil;
     end;
 
@@ -1060,7 +1049,7 @@ begin
       SetLength(LSamples, I);
       LSamples[I - 1] := 0.0;  { 标记最后一个样本为无效 }
       AFirstSample.Skipped := True;
-      AFirstSample.SkipReason := 'Per-benchmark timeout exceeded during sampling';
+      AFirstSample.SkipReason := 'Timeout exceeded during sampling';
       Break;
     end;
 
@@ -1209,6 +1198,12 @@ begin
 end;
 
 function TBenchRunner.RunOne(const AEntry: TBenchEntry): TBenchResult;
+begin
+  Result := RunOne(AEntry, 0, 0);
+end;
+
+function TBenchRunner.RunOne(const AEntry: TBenchEntry; ATimeoutMs: Int64;
+  ATimeoutStartNs: UInt64): TBenchResult;
 var
   LEntry: TBenchEntry;
   LSetupData: Pointer;
@@ -1216,8 +1211,6 @@ var
   LSamples: TDoubleArray;
   LStats: TBenchStats;
   LMeasurement: TBenchResult;
-  LStartNs: UInt64;
-  LTimeoutMs: Int64;
   LLowerName: string;
 begin
   LEntry := AEntry;
@@ -1233,16 +1226,24 @@ begin
   Result.Executed := True;
   LSetupData := nil;
 
-  { suite 级超时由 TBenchSuite.Run 在条目间/条目后检查；单 entry 采样不设 per-entry 截止 }
-  LTimeoutMs := 0;
-  LStartNs := 0;
+  { F-04: suite deadline may be passed from TBenchSuite.Run into sampling }
   if Assigned(LEntry.Setup) then
     LSetupData := LEntry.Setup();
   try
+    { Already past suite deadline before this entry starts }
+    if (ATimeoutMs > 0) and (ATimeoutStartNs > 0) and
+       (platform_monotonic_ns - ATimeoutStartNs >= UInt64(ATimeoutMs) * 1000000) then
+    begin
+      Result.Skipped := True;
+      Result.SkipReason := 'Timeout exceeded';
+      AddResult(Result);
+      Exit;
+    end;
+
     LIters := CalibrateEntryIterations(LEntry);
 
     LSamples := CollectEntrySamples(LEntry, LIters, LMeasurement,
-      LTimeoutMs, LStartNs);
+      ATimeoutMs, ATimeoutStartNs);
     if LMeasurement.Skipped then
     begin
       Result.Iterations := LMeasurement.Iterations;

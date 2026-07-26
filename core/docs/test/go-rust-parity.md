@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.29**
+**当前版本**: **v8.33**
 **最后更新**: 2026-07-26
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥6500**（SCALE_MIN 默认 6500；FAIL_PATH≥35%；LOW_SIGNAL≤40%） |
+| 可计数过程 | **≥7500**（SCALE_MIN 默认 7500；FAIL_PATH≥35%；LOW_SIGNAL≤25%） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -91,8 +91,10 @@
 | B56–B60 | **v8.27** Soft 第二波 + Soft golden | **done** |
 | B61–B65 | **v8.28** Runner/Subtest/CLI ≈ Go testing | **done** |
 | B66–B70 | **v8.29** 并行竞态 + Mock 误用密度 | **done** |
-| B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | planned |
-| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done (G1)**；B77–B80 planned |
+| B71–B75 | **v8.30** Prop/Fuzz/Snapshot + SCALE≥7500 | **done** |
+| B76–B80 | **v8.31+** CI 默认 contracts + low-signal≤25% + SCALE→9000 | B76 docs **done**；B77 **done (v8.30)**；B79 **done (v8.31)**；B80 **done (v8.32)**；B78 质量条件已满足（fail-path 83.2%/low-signal 0%），countable 7609 → 待密度增长后抬 9000 |
+| F-03 | **v8.32** prop god-unit 拆分：prop.gen + prop + fuzz，门面不变；FuzzMultiStrategy 补门面导出 | **done** |
+| — | **v8.33** runner 拆分：runner(TTestSuite 引擎) + runner.multi(TSuiteRunner 编排)；F-20 遗留测试语义修正 | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -136,7 +138,7 @@ core-ci 全量 walk 会间接跑到这三门；lane 默认用 contracts 做轻�
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=6500 FAIL_PATH_MIN_RATIO=0.35 LOW_SIGNAL_MAX_RATIO=0.40 (defaults)
+# SCALE_MIN=7500 FAIL_PATH_MIN_RATIO=0.35 LOW_SIGNAL_MAX_RATIO=0.25 (defaults)
 ```
 
 消费者示例：
@@ -147,6 +149,8 @@ make -C core/examples/nextpas.core.test/smoke_suite run
 make -C core/examples/nextpas.core.test/softfail_demo run
 # Nested SoftFail layering (expect exit 1):
 make -C core/examples/nextpas.core.test/nested_softfail_demo run
+# Table + Soft + Subtest:
+make -C core/examples/nextpas.core.test/table_driven_demo run
 ```
 
 
@@ -180,4 +184,4 @@ core/tests/nextpas.core.test/test_output/goldens/
 ```
 
 更新：在 suite 目录执行 `NEXTPAS_UPDATE_SNAPSHOTS=1 make test`。
-Parallel 下 `TestSubtest` 仍 serial-only（skip + 消息契约）。
+Parallel 下 `TestSubtest` 为配置错误（v8.31 F-20：suite 启动即 fail，非静默 skip）。

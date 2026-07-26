@@ -12,7 +12,8 @@ unit nextpas.core.bench.memtrack;
 interface
 
 uses
-  nextpas.core.system.memmanager;
+  nextpas.core.system.memmanager,
+  nextpas.core.exception;
 
 type
   {**
@@ -79,12 +80,22 @@ type
   end;
 
   {**
-   * 全局内存跟踪器
+   * 全局内存跟踪器（返回 record 拷贝 — 勿对结果调用 Record*；用 GetGlobalMemoryStats）。
+   * @deprecated Prefer GetGlobalMemoryStats / ResetGlobalMemoryTracker.
    *}
   function GlobalMemoryTracker: TMemoryTracker;
 
   {**
-   * 启用全局内存跟踪
+   * 尝试启用全局内存跟踪。
+   * @return True if tracking is active after the call.
+   *         False if heaptrc is active, CAS contention, or install failed.
+   *}
+  function TryEnableGlobalMemoryTracking: Boolean;
+
+  {**
+   * 启用全局内存跟踪。
+   * heaptrc 激活时静默 no-op（防双重 hook OOM）。
+   * 其它失败路径抛 EBenchError（F-02：禁止静默假成功）。
    *}
   procedure EnableGlobalMemoryTracking;
 
@@ -93,8 +104,14 @@ type
    *
    * heaptrc (FPC -gh) 会 hook 内存管理器。如果 memtrack 也 hook，
    * 每次分配会经过两层追踪，开销 10-20x，可能导致 OOM。
+   * 测试构建通过 -dHEAPTRC_ACTIVE 标志告知此函数（与 -gh 互斥矩阵见 CONTRACT）。
    *}
   function IsHeaptrcEnabled: Boolean;
+
+  {**
+   * 是否已安装全局 memtrack hook
+   *}
+  function IsGlobalMemoryTrackingEnabled: Boolean;
 
   {**
    * 禁用全局内存跟踪
@@ -107,7 +124,7 @@ type
   procedure ResetGlobalMemoryTracker;
 
   {**
-   * 获取全局内存统计
+   * 获取全局内存统计（推荐读侧 API）
    *}
   function GetGlobalMemoryStats: TMemoryStats;
 
@@ -245,13 +262,35 @@ begin
 end;
 
 procedure TMemoryTracker.RecordFree(ASize: Int64);
+var
+  LOld, LNew: Int64;
 begin
   if not FEnabled then Exit;
 
   AtomicInc64(FStats.FreeCount, 1);
-  AtomicInc64(FStats.FreeBytes, ASize);
-  AtomicDec64(FStats.CurrentAllocs, 1);
-  AtomicDec64(FStats.CurrentBytes, ASize);
+  { F-08: unknown size (0) still counts free ops but does not drive Current* negative }
+  if ASize > 0 then
+    AtomicInc64(FStats.FreeBytes, ASize);
+
+  if ASize > 0 then
+  begin
+    repeat
+      LOld := FStats.CurrentAllocs;
+      if LOld <= 0 then
+        Break;
+      LNew := LOld - 1;
+    until InterlockedCompareExchange64(FStats.CurrentAllocs, LNew, LOld) = LOld;
+
+    repeat
+      LOld := FStats.CurrentBytes;
+      if LOld <= 0 then
+        Break;
+      if ASize >= LOld then
+        LNew := 0
+      else
+        LNew := LOld - ASize;
+    until InterlockedCompareExchange64(FStats.CurrentBytes, LNew, LOld) = LOld;
+  end;
 end;
 
 function TMemoryTracker.GetStats: TMemoryStats;
@@ -301,24 +340,24 @@ begin
   {$endif}
 end;
 
-procedure EnableGlobalMemoryTracking;
+function TryEnableGlobalMemoryTracking: Boolean;
 begin
-  { OOM guard: 如果 heaptrc 已激活，跳过 memtrack，避免双重追踪 OOM }
+  Result := False;
+  { OOM guard: heaptrc 已激活则不装第二层 hook }
   if IsHeaptrcEnabled then
-    Exit;
-  if GTrackingEnabled then Exit;
+    Exit(False);
+  if GTrackingEnabled then
+    Exit(True);
 
-  // CAS try-lock: 防止并发调用
   if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
-    Exit;  // 另一个线程正在启用，直接返回
+    Exit(False);  { concurrent enable/disable in progress }
 
   try
-    if GTrackingEnabled then Exit;  // double-check
+    if GTrackingEnabled then
+      Exit(True);
 
-    // 保存原始 memory manager
     GetMemoryManager(GOriginalMemoryManager);
 
-    // 设置跟踪 memory manager
     GTrackingMemoryManager := GOriginalMemoryManager;
     GTrackingMemoryManager.GetMem := @TrackingGetMem;
     GTrackingMemoryManager.AllocMem := @TrackingAllocMem;
@@ -326,33 +365,49 @@ begin
     GTrackingMemoryManager.FreeMemSize := @TrackingFreeMemSize;
     GTrackingMemoryManager.ReAllocMem := @TrackingReAllocMem;
 
-    // 重置统计
     if InterlockedCompareExchange(GGlobalTrackerInitialized, 1, 0) = 0 then
     begin
       GGlobalTracker := TMemoryTracker.Create(True);
-      GGlobalTracker.Reset; { F-10: only reset in CAS winner branch }
+      GGlobalTracker.Reset;
     end;
 
-    // 启用跟踪
     GTrackingEnabled := True;
     SetMemoryManager(GTrackingMemoryManager);
+    Result := True;
   finally
     GEnableLock := 0;
   end;
+end;
+
+procedure EnableGlobalMemoryTracking;
+begin
+  if TryEnableGlobalMemoryTracking then
+    Exit;
+  { heaptrc: intentional soft skip (documented process isolation) }
+  if IsHeaptrcEnabled then
+    Exit;
+  if GTrackingEnabled then
+    Exit;
+  raise ENextPasError.Create(
+    'EnableGlobalMemoryTracking failed: concurrent enable/disable or install rejected. ' +
+    'Memtrack is process-global; run one suite per process.');
+end;
+
+function IsGlobalMemoryTrackingEnabled: Boolean;
+begin
+  Result := GTrackingEnabled;
 end;
 
 procedure DisableGlobalMemoryTracking;
 begin
   if not GTrackingEnabled then Exit;
 
-  // CAS try-lock: 防止并发调用
   if InterlockedCompareExchange(GEnableLock, 1, 0) <> 0 then
-    Exit;  // 另一个线程正在操作，直接返回
+    Exit;  { concurrent op — caller may retry; state unchanged }
 
   try
-    if not GTrackingEnabled then Exit;  // double-check
+    if not GTrackingEnabled then Exit;
 
-    // 恢复原始 memory manager
     SetMemoryManager(GOriginalMemoryManager);
     GTrackingEnabled := False;
   finally

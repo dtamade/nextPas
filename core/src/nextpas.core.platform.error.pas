@@ -430,6 +430,20 @@ begin
     ESysEINTR:
       Result := ecInterrupted;
     {$ENDIF}
+    {$IF defined(NEXTPAS_UNIX) and not (defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD))}
+    { Android/generic-unix base units export only this errno subset }
+    ESysEINVAL:
+      Result := ecInvalidArgument;
+    ESysEOPNOTSUPP:
+      Result := ecNotSupported;
+    ESysETIMEDOUT:
+      Result := ecTimeout;
+    ESysEAGAIN,
+    ESysEBUSY:
+      Result := ecWouldBlock;
+    ESysEINTR:
+      Result := ecInterrupted;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     ERROR_FILE_NOT_FOUND,
     ERROR_PATH_NOT_FOUND,

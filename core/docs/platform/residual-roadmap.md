@@ -46,7 +46,7 @@ Numbers below are **as of 2026-07-17 only**. Current counts: [ROADMAP.md](ROADMA
 | Wine CI matrix (15 modules) | includes `platform.error`; secondary only |
 | Real Windows GHA gates | `platform-windows-ci-matrix.sh`: 15 suite dirs + poller/io/socket real (18 total) |
 | Windows `ci-matrix` | **Promoted** for documented 18-gate set (+error); not full-host parity |
-| macOS `focused-runtime` | **Promoted (D2.c + Batch-5B)** for documented 9-gate set (+memory); not full-host parity |
+| macOS `focused-runtime` | **Promoted (D2.c + Batch-5B)** for documented gate set (+memory; console added 2026-07-26 → 10); not full-host parity |
 
 Wine remains `wine-runtime-smoke` forever: useful regression signal, **never** substitute for real Windows `ci-matrix`.
 

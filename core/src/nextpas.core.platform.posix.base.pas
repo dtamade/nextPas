@@ -287,6 +287,10 @@ const
   PLATFORM_SC_OPEN_MAX = 4;
 {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   PLATFORM_SC_OPEN_MAX = 5;
+{$ELSE}
+  { generic-unix: sysconf 键未验证，用 -1 哨兵让 sysconf 失败、调用方走回退
+    （与 unix.base 的 _SC_PAGESIZE = -1 同一模式） }
+  PLATFORM_SC_OPEN_MAX = -1;
 {$ENDIF}
 
   AF_INET     = cint(2);
