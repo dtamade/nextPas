@@ -1,10 +1,14 @@
 program test_http_iocp_wine;
 {**
- * @desc HTTP IOCP Wine runtime smoke (Win64 cross + wine).
- *       Proves tsbIocp factory registration + AcceptEx phase-1 accept path
- *       + worker handoff HTTP/1.1 wire under Wine.
- *       Uses net.server.iocp + minimal wire (not full http facade/TLS chain).
- *       truth=wine-runtime-smoke — NOT real-Windows, NOT Windows scale-ready.
+ * @desc HTTP IOCP wire smoke: tsbIocp factory + completion-driven
+ *       recv/send data path (GET, keep-alive two requests, 16MB writable
+ *       backpressure) over net.server.iocp with a minimal HTTP/1.1 wire
+ *       (not full http facade/TLS chain). Non-Windows hosts run the skip
+ *       branch (assert tsbIocp factory absent).
+ *       truth tier depends on the executor: wine-runtime-smoke via
+ *       `make wine-runtime-smoke` (Win64 cross + wine), host-windows via
+ *       scripts/http-host-ci-matrix.sh on a real Windows CI host.
+ *       Never Windows scale-ready evidence.
  *}
 
 {$I nextpas.core.settings.inc}
