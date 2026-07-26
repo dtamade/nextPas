@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-07-23（D0 doc-truth：R4 0 unfreed + p99 Met 对齐 + Static range 已落地）
+最近更新：2026-07-26（路线图重构对齐：矩阵内容未变；前进入口与历史快照见 [`ROADMAP.md`](ROADMAP.md) / `archive/`）
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 

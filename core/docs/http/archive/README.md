@@ -22,6 +22,7 @@ waves A–F. Do not extend these files as if they were the roadmap.
 
 | Era | Outcome | Sample archive files |
 |-----|---------|----------------------|
+| **Era 0 – R2 residual 全史（2026-07 冻结快照）** | framework-complete (non-H3) + Parity/HTTPS scale claims + SAFE/R2 remediation + WIN-3 phase-1 的全部 Wave 详表与 changelog | [`2026-07-26-roadmap-history-era0-to-r2.md`](2026-07-26-roadmap-history-era0-to-r2.md) |
 | Phase 1 base / server foundation | Early module foundation | `2026-05-31-*`, `2026-06-01-*`, `2026-06-03-*` |
 | Deferred / investigation dumps | Superseded by stage-complete + ROADMAP | `deferred-items-investigation.md`, `investigation-report.md`, `implementation-plan.md`, `inbox.md` |
 | Usability residual → cycle-3 | hekArgument, factories, ensure-string | `2026-07-17-usability-residual-*`, `*-cycle3-*` |
