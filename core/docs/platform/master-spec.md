@@ -34,12 +34,10 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (**25**-module matrix, including
-`platform.watch` RDCW create/timeout with soft event residual under Wine,
-`platform.pty` ConPTY smoke, and `platform.console` is_terminal/size/ansi/write),
-and durable GHA **`ci-matrix`** for the
-**documented 28 platform gates** in `platform-windows-ci-matrix.sh` / `.ps1`
-(+… +pty +watch +console). Console promote: GHA **30168411064** @ `5464b31c4`.
+Windows compile gates, Wine runtime smoke (**25**-module matrix incl. watch RDCW,
+pty ConPTY, console), and durable GHA **`ci-matrix`** for the **documented 28
+platform gates** (`platform-windows-ci-matrix.sh` / `.ps1`, +… +pty +watch
++console). Console promote: GHA **30168411064** @ `5464b31c4`.
 
 ### Count honesty (do not mix)
 
@@ -53,14 +51,10 @@ modules outside that list (e.g. signal, native secure-zero) or for
 IOCP AcceptEx/ConnectEx depth beyond current smoke gaps. Console promote is
 facade smoke (is_terminal/size/ansi/write), **not** full TUI true-console product.
 
-Allowed wording:
-
-- `source-contract covered`
-- `forced Windows compile covered`
-- `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
-- `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented **28 platform gates** only (ROADMAP)
-- do **not** say “29-gate platform ci-matrix” when the extra is only mem.host
+Allowed wording: `source-contract covered`; `forced Windows compile covered`;
+`wine-runtime-smoke` (secondary; never substitutes for real Windows);
+`focused-runtime` for real-Windows host logs outside CI matrix; `ci-matrix` for
+the documented **28 platform gates** only — never “29-gate” (extra is mem.host).
 
 ## Current macOS truth
 
@@ -75,42 +69,26 @@ Allowed wording:
 `platform.{time,sync,thread,files,path,env,error,socket,memory}` (ROADMAP D2.c +
 Batch-5B). Script may also list **`mem.host_runtime`** → summary `total=10`.
 
-- Promoted platform 9-gate: GHA **29696318492** @ `d160cbc46`
-- Re-confirmed layer A green **pass=10 fail=0** (9 platform + mem.host) on
-  run **29719632518** @ `918241bd4`. Overall job red on that run was
-  **non-platform** (`net.async.dial` / `accept4`) — does **not** demote layer A.
+- Promoted 9-gate: GHA **29696318492** @ `d160cbc46`; layer A re-confirmed
+  **pass=10 fail=0** on **29719632518** (job red there was non-platform
+  `net.async.dial` — does **not** demote layer A).
 
-Darwin `platform.memory` notes (honest residual, not a demotion):
-- aligned alloc uses SysGetMem fallback (not posix_memalign) on Darwin
-- secure-zero uses FillChar+barrier (not memset_s) on Darwin
-- virtual reserve uses MAP_ANON + mprotect (not MAP_FIXED)
+Darwin `platform.memory` honest residual (not a demotion): SysGetMem
+aligned-alloc fallback; FillChar+barrier secure-zero; MAP_ANON+mprotect reserve.
 
 D2.c / Batch-5 promote is **scoped**: it does **not** claim full-host macOS
 parity or treat best-effort whole-suite inventory as evidence.
 
-Allowed wording:
-
-- `focused-runtime` for the documented **9 platform gates** only (layer A)
-- layer B / async inventory failures are out of scope for platform promotion
+Allowed wording: `focused-runtime` for the documented **9 platform gates** only
+(layer A); layer B / async inventory failures are out of platform scope.
 
 ### IOCP completion operations
 
-IOCP socket completion operations are structurally implemented in
-`nextpas.core.io.reactor.iocp`:
-
-| Operation | API | Status |
-|-----------|-----|--------|
-| AsyncRead | `ReadFile` + OVERLAPPED | implemented |
-| AsyncWrite | `WriteFile` + OVERLAPPED | implemented |
-| AsyncSend | `WSASend` + OVERLAPPED | implemented |
-| AsyncRecv | `WSARecv` + OVERLAPPED | implemented |
-| AsyncClose | `CancelIoEx` + `closesocket` | implemented |
-| AsyncConnect | `ConnectEx` (WSAIoctl-loaded) | implemented |
-| AsyncAccept | `AcceptEx` (WSAIoctl-loaded) | implemented — accepts pre-created socket via `winsock_socket`, caller retrieves via `LastAcceptedSocket` |
-
-All seven operations have source-contract coverage and forced Windows compile
-gates. `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` have
-focused-runtime evidence on Wine and a real Windows VM.
+All seven IOCP socket completion ops (AsyncRead/Write/Send/Recv/Close +
+WSAIoctl-loaded ConnectEx/AcceptEx) live in `nextpas.core.io.reactor.iocp`
+with source-contract coverage and forced Windows compile gates;
+Send/Recv and Accept/Connect have focused-runtime evidence on Wine and a
+real Windows VM.
 
 ## Host raw FFI ownership
 

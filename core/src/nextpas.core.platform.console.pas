@@ -319,7 +319,7 @@ end;
 
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 var
-  LPfd: pollfd;
+  LPfd: TPollFd;
   LRc: cint;
 begin
   LPfd.fd := AFd;
