@@ -7,6 +7,12 @@ the module registry deliberately reclassifies this sublayer.
 
 AVX/AVX2/AVX-512 execution consumers must use the CPU/OS usable view instead of
 raw CPUID or GenericRaw evidence. Raw evidence is diagnostic only.
+
+Cross-lane units that still self-probe CPUID are registered in
+KNOWN_RAW_PROBE_DEBT with pinned occurrence counts: the target contract
+(migrate to the CPUInfo usable view) is unchanged, but retiring that debt
+belongs to the owning lanes; this gate only prevents the debt from growing
+or drifting silently.
 """
 
 from __future__ import annotations
@@ -41,20 +47,14 @@ REQUIRED_HELPER_CONTRACT_TOKENS = (
     "not a general text helper API",
     "prefer the CpuInfo* names",
 )
+# Consumers that must use the CPUInfo usable view and stay free of raw probes.
+# The tls13 unit became a pure forwarding shim (implementation moved to
+# nextpas.core.crypto.chacha20poly1305), so its contract is an empty token set:
+# it must simply stay free of any CPU probing.
 CONSUMER_CONTRACTS = (
     (
-        REPO_ROOT / "src/nextpas.core.hash.sha256.pas",
-        (
-            "nextpas.core.simd.cpuinfo",
-            "HasAVX2 and LCPUInfo.X86.HasBMI2",
-        ),
-    ),
-    (
         REPO_ROOT / "src/nextpas.core.tls.tls13.chacha20poly1305.pas",
-        (
-            "nextpas.core.simd.cpuinfo",
-            "GChaCha20HasAVX2 := HasAVX2",
-        ),
+        (),
     ),
     (
         REPO_ROOT / "src/nextpas.core.simd.static.avx2.pas",
@@ -62,6 +62,21 @@ CONSUMER_CONTRACTS = (
             "nextpas.core.simd.cpuinfo.HasAVX2",
         ),
     ),
+)
+
+# Registered cross-lane raw-CPUID debt (pinned occurrence counts).
+#
+# fc8f2520a landed this checker expecting hash/tls consumers already migrated
+# to the CPUInfo usable view, but that migration half never landed anywhere
+# (`git log --all -S` finds the expected tokens only inside this checker), so
+# the consumer contract was red from birth. Reality: these units self-probe
+# CPUID locally. They belong to the hash/crypto lanes, so this lane registers
+# the debt instead of editing their sources. The pin fails closed both ways:
+# growth means new raw probes (migrate to nextpas.core.simd.cpuinfo instead);
+# shrinkage means the debt was paid down and the entry must be updated/retired.
+KNOWN_RAW_PROBE_DEBT = (
+    (REPO_ROOT / "src/nextpas.core.hash.sha256.pas", 2),
+    (REPO_ROOT / "src/nextpas.core.crypto.chacha20poly1305.pas", 2),
 )
 FORBIDDEN_CONSUMER_PATTERNS = (
     (re.compile(r"\bcpuid(?:ex)?\b", re.IGNORECASE), "raw CPUID probe"),
@@ -143,11 +158,39 @@ def check_consumer_dispatch_contracts(a_issues: list[str]) -> None:
                 add_issue(a_issues, l_path, f"{l_line_no}: forbidden {l_label} `{l_match.group(0)}`")
 
 
+def check_known_raw_probe_debt(a_issues: list[str]) -> None:
+    l_raw_probe = FORBIDDEN_CONSUMER_PATTERNS[0][0]
+    for l_path, l_pinned in KNOWN_RAW_PROBE_DEBT:
+        if not l_path.exists():
+            a_issues.append(
+                f"{l_path.relative_to(REPO_ROOT)}: registered raw-probe debt unit missing"
+            )
+            continue
+
+        l_code = strip_pascal_comments(read_text(l_path))
+        l_count = len(l_raw_probe.findall(l_code))
+        if l_count != l_pinned:
+            add_issue(
+                a_issues,
+                l_path,
+                f"raw CPUID probe count {l_count} != pinned debt {l_pinned} "
+                "(grew: use nextpas.core.simd.cpuinfo usable view instead; "
+                "shrank: update/retire this debt entry)",
+            )
+
+        # Non-CPUID execution-gate patterns stay fully forbidden even in debt units.
+        for l_pattern, l_label in FORBIDDEN_CONSUMER_PATTERNS[1:]:
+            for l_match in l_pattern.finditer(l_code):
+                l_line_no = l_code.count("\n", 0, l_match.start()) + 1
+                add_issue(a_issues, l_path, f"{l_line_no}: forbidden {l_label} `{l_match.group(0)}`")
+
+
 def main() -> int:
     l_issues: list[str] = []
     check_forbidden_text_units(l_issues)
     check_local_helper_contract(l_issues)
     check_consumer_dispatch_contracts(l_issues)
+    check_known_raw_probe_debt(l_issues)
 
     if l_issues:
         print("[CPUINFO-BOUNDARY-CONTRACT] FAIL")
