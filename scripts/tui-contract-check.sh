@@ -173,8 +173,16 @@ for src in "$EX_DIR"/*/*.lpr \
   [ -f "$src" ] || continue
   case "$src" in *rejects_*) continue;; esac   # reject 用例只编译不运行
   if grep -qE "$TASK_CLOSURE" "$src"; then
-    if grep -q 'nextpas\.core\.thread\.init' "$src"; then
+    # 仅存在不够: 非首位仍启动 211(前面单元的 initialization 已触碰线程 API)
+    first_unit=$(awk '
+      /^[[:space:]]*uses/ { f=1; line=$0; sub(/^[[:space:]]*uses/,"",line)
+        if (line ~ /[A-Za-z]/) { print line; exit }; next }
+      f { sub(/\{[^}]*\}/,""); if ($0 ~ /[A-Za-z]/) { print; exit } }' "$src")
+    if printf '%s' "$first_unit" | grep -q 'nextpas\.core\.thread\.init'; then
       c11_ok=$((c11_ok + 1))
+    elif grep -q 'nextpas\.core\.thread\.init' "$src"; then
+      fail_check "$(basename "$src") thread.init 非 uses 首位（实测仍启动 runerror 211）"
+      c11_missing=1
     else
       fail_check "$(basename "$src") 链接 tui.task 闭包但缺 nextpas.core.thread.init（启动即 runerror 211）"
       c11_missing=1
