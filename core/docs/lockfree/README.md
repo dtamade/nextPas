@@ -23,6 +23,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
 | [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-5 complete） |
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |
+| [`cacheline-layout-rules.md`](cacheline-layout-rules.md) | **布局与热路径法则**（F-032～F-037 沉淀；新结构检查单） |
 | [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口（含 H5-1） |
 | [`http-integration-notes.md`](http-integration-notes.md) | **HTTP 协作**（只读审计 + 选型；不抢实现） |
 | [`t2-inventory.md`](t2-inventory.md) | T2 库存 + 推荐档 + **freeze** |
