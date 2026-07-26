@@ -61,7 +61,7 @@ begin
 
   R := IDNAToASCII('-bad.com', K);
   Check(R = '', 'leading hyphen empty result');
-  CheckEqual(Integer(K), Integer(idnaInvalidAsciiLabel), 'kind invalid ASCII label');
+  CheckEqual(Integer(K), Integer(idnaCheckHyphens), 'kind CheckHyphens');
 
   R := IDNAToASCII('example.com', K);
   CheckEqual(R, 'example.com', 'ok domain');
@@ -90,13 +90,14 @@ begin
   CheckEqual(Integer(K), Integer(idnaOk), 'map soft hyphen ok');
   CheckEqual(S, 'foobar', 'soft hyphen dropped');
 
-  { Nontransitional: ß (U+00DF) → ss }
+  { Deviation ß (U+00DF): table carries the transitional mapping, but
+    Nontransitional processing keeps ß as-is → xn--strae-oqa.de }
   St := GetIdnaMapStatus($00DF, Map, MapLen);
   CheckEqual(Integer(St), Integer(idmsDeviation), 'sharp s deviation');
-  CheckEqual(Integer(MapLen), 2, 'ß → two cps');
+  CheckEqual(Integer(MapLen), 2, 'ß table map is ss');
   CheckEqual(Integer(Map[0]), Ord('s'), 'ß[0]=s');
   CheckEqual(Integer(Map[1]), Ord('s'), 'ß[1]=s');
-  CheckEqual(IDNAToASCII('stra' + #$C3#$9F + 'e.de', K), 'strasse.de', 'Nontransitional ß → ss ASCII');
+  CheckEqual(IDNAToASCII('stra' + #$C3#$9F + 'e.de', K), 'xn--strae-oqa.de', 'Nontransitional keeps ß');
   CheckEqual(Integer(K), Integer(idnaOk), 'straße ok');
 
   { mixed case ASCII via mapping }

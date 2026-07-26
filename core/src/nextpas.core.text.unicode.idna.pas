@@ -1,13 +1,24 @@
 unit nextpas.core.text.unicode.idna;
 
 {**
- * UTS #46 IDNA — Nontransitional profile with IdnaMappingTable (P3-1).
- * Pipeline: Map (UTS#46 table) · NFC · LDH/Punycode · length checks.
- * UseSTD3ASCIIRules = True (disallowed_STD3_* → disallowed).
- * Transitional processing is out of scope.
+ * UTS #46 IDNA (rev 33 / Unicode 16.0) — Nontransitional profile.
  *
- * Errors: TIDNAErrorKind is the structured code; string overloads map via
- * IDNAErrorKindName for legacy call sites.
+ * Processing (§4): Map(full string) → NFC → Break('.') → Convert/Validate.
+ * Validity Criteria (§4.1): NFC · CheckHyphens · no leading combining mark ·
+ * per-codepoint status ∈ {valid, deviation} · ContextJ (RFC 5892 App A) ·
+ * CheckBidi (RFC 5893 §2, when the domain is a Bidi domain name).
+ *
+ * Profile flags (fixed): UseSTD3ASCIIRules=True (enforced in validity per
+ * 16.0), CheckHyphens/CheckBidi/CheckJoiners=True, Transitional=False,
+ * IgnoreInvalidPunycode=False, VerifyDnsLength=True (ToASCII only; the empty
+ * root label "a.b." is therefore a ToASCII error, but valid for ToUnicode).
+ *
+ * Deviation codepoints (ß, ς, ZWJ, ZWNJ) are kept as-is (Nontransitional).
+ * ACE ("xn--") labels are Punycode-decoded and re-validated in both
+ * directions; ToASCII re-encodes from the validated Unicode form.
+ *
+ * Error model: first error wins; Result = '' and AKind <> idnaOk (no
+ * best-effort partial output). String overloads map via IDNAErrorKindName.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -21,7 +32,7 @@ const
   IDNA_ACE_PREFIX = 'xn--';
 
 type
-  { Stable IDNA failure codes. Success = idnaOk. }
+  { Stable IDNA failure codes. Success = idnaOk. Only append new members. }
   TIDNAErrorKind = (
     idnaOk = 0,
     idnaEmptyDomain,
@@ -35,7 +46,13 @@ type
     idnaAceLabelTooLong,
     idnaDomainTooLong,
     idnaDisallowed,
-    idnaInvalidUtf8
+    idnaInvalidUtf8,
+    idnaNotNfc,
+    idnaCheckHyphens,
+    idnaLeadingCombiningMark,
+    idnaInvalidAceLabel,
+    idnaContextJ,
+    idnaCheckBidi
   );
 
   { IdnaMappingTable status (UTS#46). }
@@ -55,7 +72,10 @@ function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
 function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
   out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus;
 
-{ Apply UTS#46 Map step to a UTF-8 string (Nontransitional + STD3). }
+{ Apply UTS#46 §4 Map step to a UTF-8 string (Nontransitional).
+  ignored → dropped; mapped/disallowed_STD3_mapped → mapping applied;
+  valid/deviation/disallowed/disallowed_STD3_valid → kept unchanged
+  (disallowed codepoints are rejected later by the validity criteria). }
 function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
 
 { ToASCII / ToUnicode with structured kind. On failure Result='' and AKind<>idnaOk. }
@@ -74,11 +94,20 @@ implementation
 
 uses
   nextpas.core.text.unicode.normalize,
+  nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.punycode,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.utils;
 
 {$I nextpas.core.text.unicode.idna_mapping.inc}
+
+const
+  UNICODE_ZWNJ = $200C;
+  UNICODE_ZWJ = $200D;
+
+type
+  TCpArray = array of TUnicodeCodepoint;
+  TLabelArray = array of string;
 
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
 begin
@@ -96,6 +125,12 @@ begin
     idnaDomainTooLong: Result := 'domain too long';
     idnaDisallowed: Result := 'disallowed code point';
     idnaInvalidUtf8: Result := 'invalid UTF-8';
+    idnaNotNfc: Result := 'label not NFC';
+    idnaCheckHyphens: Result := 'CheckHyphens violation';
+    idnaLeadingCombiningMark: Result := 'label begins with combining mark';
+    idnaInvalidAceLabel: Result := 'invalid ACE label';
+    idnaContextJ: Result := 'ContextJ violation';
+    idnaCheckBidi: Result := 'CheckBidi violation';
   else
     Result := 'unknown IDNA error';
   end;
@@ -185,43 +220,51 @@ begin
     LCp := LDec.CodePoint;
     LStatus := GetIdnaMapStatus(LCp, LMap, LMapLen);
     case LStatus of
-      idmsValid:
-        if not AppendUtf8Cp(Result, LCp) then
-        begin
-          AKind := idnaInvalidUtf8;
-          Result := '';
-          Exit;
-        end;
       idmsIgnored:
         { drop };
-      idmsMapped, idmsDeviation:
-        begin
-          { Nontransitional: use mapping (empty mapping ⇒ drop, e.g. ZWJ). }
-          for I := 0 to Integer(LMapLen) - 1 do
-            if not AppendUtf8Cp(Result, LMap[I]) then
-            begin
-              AKind := idnaInvalidUtf8;
-              Result := '';
-              Exit;
-            end;
-        end;
-      idmsDisallowedSTD3Valid, idmsDisallowedSTD3Mapped:
-        begin
-          { UseSTD3ASCIIRules = True → treat as disallowed. }
-          AKind := idnaDisallowed;
-          Result := '';
-          Exit;
-        end;
+      idmsMapped, idmsDisallowedSTD3Mapped:
+        for I := 0 to Integer(LMapLen) - 1 do
+          if not AppendUtf8Cp(Result, LMap[I]) then
+          begin
+            AKind := idnaInvalidUtf8;
+            Result := '';
+            Exit;
+          end;
     else
-      { idmsDisallowed or unknown }
+      { valid / deviation / disallowed / disallowed_STD3_valid: keep as-is.
+        Disallowed codepoints are rejected by the validity criteria. }
+      if not AppendUtf8Cp(Result, LCp) then
       begin
-        AKind := idnaDisallowed;
+        AKind := idnaInvalidUtf8;
         Result := '';
         Exit;
       end;
     end;
     Inc(LPos, LDec.ByteLen);
   end;
+end;
+
+function DecodeCps(const S: string; out ACps: TCpArray): Boolean;
+var
+  LPos, LLen: SizeUInt;
+  LDec: TUTF8DecodeResult;
+  LCount: SizeInt;
+begin
+  SetLength(ACps, Length(S));
+  LCount := 0;
+  LPos := 0;
+  LLen := SizeUInt(Length(S));
+  while LPos < LLen do
+  begin
+    LDec := UTF8Decode(@PByte(PAnsiChar(S))[LPos], LLen - LPos);
+    if LDec.ByteLen = 0 then
+      Exit(False);
+    ACps[LCount] := LDec.CodePoint;
+    Inc(LCount);
+    Inc(LPos, LDec.ByteLen);
+  end;
+  SetLength(ACps, LCount);
+  Result := True;
 end;
 
 function IsAsciiLabel(const ALabel: string): Boolean;
@@ -234,211 +277,356 @@ begin
   Result := True;
 end;
 
-function IsLDHLabel(const ALabel: string): Boolean;
-var
-  I: Integer;
-  C: Char;
+function StartsWithAcePrefix(const ALabel: string): Boolean;
 begin
-  if (ALabel = '') or (Length(ALabel) > 63) then
+  Result := (Length(ALabel) >= 4) and (ALabel[1] = 'x') and (ALabel[2] = 'n')
+    and (ALabel[3] = '-') and (ALabel[4] = '-');
+end;
+
+{ ContextJ — RFC 5892 Appendix A.1 (ZWNJ) / A.2 (ZWJ). Virama ccc = 9. }
+function CheckContextJ(const ACps: TCpArray; const AIdx: SizeInt): Boolean;
+var
+  J: SizeInt;
+  LJt: TJoiningType;
+begin
+  if (AIdx > 0) and (GetCanonicalCombiningClass(ACps[AIdx - 1]) = 9) then
+    Exit(True);
+  if ACps[AIdx] = UNICODE_ZWJ then
     Exit(False);
-  if (ALabel[1] = '-') or (ALabel[Length(ALabel)] = '-') then
+  { ZWNJ: (Joining_Type:{L,D})(T)* ZWNJ (T)*(Joining_Type:{R,D}) }
+  J := AIdx - 1;
+  while (J >= 0) and (GetJoiningType(ACps[J]) = jtTransparent) do
+    Dec(J);
+  if J < 0 then
     Exit(False);
-  for I := 1 to Length(ALabel) do
+  LJt := GetJoiningType(ACps[J]);
+  if not (LJt in [jtLeftJoining, jtDualJoining]) then
+    Exit(False);
+  J := AIdx + 1;
+  while (J <= High(ACps)) and (GetJoiningType(ACps[J]) = jtTransparent) do
+    Inc(J);
+  if J > High(ACps) then
+    Exit(False);
+  LJt := GetJoiningType(ACps[J]);
+  Result := LJt in [jtRightJoining, jtDualJoining];
+end;
+
+{ UTS#46 §4.1 Validity Criteria for one Unicode label (Nontransitional,
+  UseSTD3ASCIIRules=True, CheckHyphens=True, CheckJoiners=True).
+  CheckBidi is domain-level and handled separately. }
+function ValidateULabel(const ALabel: string; out AKind: TIDNAErrorKind): Boolean;
+var
+  LCps: TCpArray;
+  LMap: array[0..0] of TUnicodeCodepoint;
+  LMapLen: Byte;
+  LStatus: TIDNAMapStatus;
+  I: SizeInt;
+begin
+  Result := False;
+  if not DecodeCps(ALabel, LCps) then
   begin
-    C := ALabel[I];
-    if not (C in ['A'..'Z', 'a'..'z', '0'..'9', '-']) then
-      Exit(False);
+    AKind := idnaInvalidUtf8;
+    Exit;
   end;
+  if not IsNormalizedNFC(ALabel) then
+  begin
+    AKind := idnaNotNfc;
+    Exit;
+  end;
+  if (Length(LCps) >= 4) and (LCps[2] = Ord('-')) and (LCps[3] = Ord('-')) then
+  begin
+    AKind := idnaCheckHyphens;
+    Exit;
+  end;
+  if (LCps[0] = Ord('-')) or (LCps[High(LCps)] = Ord('-')) then
+  begin
+    AKind := idnaCheckHyphens;
+    Exit;
+  end;
+  if IsMark(LCps[0]) then
+  begin
+    AKind := idnaLeadingCombiningMark;
+    Exit;
+  end;
+  for I := 0 to High(LCps) do
+  begin
+    LStatus := GetIdnaMapStatus(LCps[I], LMap, LMapLen);
+    if not (LStatus in [idmsValid, idmsDeviation]) then
+    begin
+      AKind := idnaDisallowed;
+      Exit;
+    end;
+    if ((LCps[I] = UNICODE_ZWNJ) or (LCps[I] = UNICODE_ZWJ))
+      and (not CheckContextJ(LCps, I)) then
+    begin
+      AKind := idnaContextJ;
+      Exit;
+    end;
+  end;
+  AKind := idnaOk;
   Result := True;
 end;
 
-function LowerAscii(const S: string): string;
+{ RFC 5893 §2 rules 1–6 for one label. Assumes ALabelCps non-empty. }
+function CheckBidiLabel(const ACps: TCpArray): Boolean;
+const
+  LTR_ALLOWED = [bcL, bcEN, bcES, bcCS, bcET, bcON, bcBN, bcNSM];
+  RTL_ALLOWED = [bcR, bcAL, bcAN, bcEN, bcES, bcCS, bcET, bcON, bcBN, bcNSM];
 var
-  I: Integer;
+  LFirst, LBc: TBidiClass;
+  LRtl: Boolean;
+  LHasEN, LHasAN: Boolean;
+  I: SizeInt;
 begin
-  Result := S;
-  for I := 1 to Length(Result) do
-    if Result[I] in ['A'..'Z'] then
-      Result[I] := Chr(Ord(Result[I]) + 32);
-end;
-
-function ProcessLabelToASCII(const ALabel: string; out AKind: TIDNAErrorKind): string;
-var
-  LMapped, LNorm, LPuny: string;
-begin
-  AKind := idnaOk;
-  Result := '';
-  if ALabel = '' then
-  begin
-    AKind := idnaEmptyLabel;
-    Exit;
+  Result := False;
+  LFirst := GetBidiClass(ACps[0]);
+  case LFirst of
+    bcL: LRtl := False;
+    bcR, bcAL: LRtl := True;
+  else
+    Exit; { rule 1 }
   end;
-  LMapped := ApplyIdnaMap(ALabel, AKind);
-  if AKind <> idnaOk then
-    Exit;
-  if LMapped = '' then
+  LHasEN := False;
+  LHasAN := False;
+  for I := 0 to High(ACps) do
   begin
-    { Entire label ignored (e.g. only soft hyphens) → empty label }
-    AKind := idnaEmptyLabel;
-    Exit;
-  end;
-  LNorm := NFC(LMapped);
-  if LNorm = '' then
-  begin
-    AKind := idnaNfcFailed;
-    Exit;
-  end;
-  if IsAsciiLabel(LNorm) then
-  begin
-    Result := LowerAscii(LNorm);
-    if not IsLDHLabel(Result) then
+    LBc := GetBidiClass(ACps[I]);
+    if LRtl then
     begin
-      AKind := idnaInvalidAsciiLabel;
-      Result := '';
-    end;
-    Exit;
+      if not (LBc in RTL_ALLOWED) then
+        Exit; { rule 2 }
+      if LBc = bcEN then
+        LHasEN := True
+      else if LBc = bcAN then
+        LHasAN := True;
+    end
+    else if not (LBc in LTR_ALLOWED) then
+      Exit; { rule 5 }
   end;
-  LPuny := PunycodeEncode(LNorm);
-  if LPuny = '' then
+  if LRtl and LHasEN and LHasAN then
+    Exit; { rule 4 }
+  I := High(ACps);
+  while (I > 0) and (GetBidiClass(ACps[I]) = bcNSM) do
+    Dec(I);
+  LBc := GetBidiClass(ACps[I]);
+  if LRtl then
   begin
-    AKind := idnaPunycodeEncodeFailed;
-    Exit;
-  end;
-  Result := IDNA_ACE_PREFIX + LowerAscii(LPuny);
-  if Length(Result) > 63 then
-  begin
-    AKind := idnaAceLabelTooLong;
-    Result := '';
-  end;
-end;
-
-function ProcessLabelToUnicode(const ALabel: string; out AKind: TIDNAErrorKind): string;
-var
-  LMapped, LLower, LBody, LDecoded, LNorm: string;
-begin
-  AKind := idnaOk;
-  Result := '';
-  if ALabel = '' then
-  begin
-    AKind := idnaEmptyLabel;
-    Exit;
-  end;
-  LMapped := ApplyIdnaMap(ALabel, AKind);
-  if AKind <> idnaOk then
-    Exit;
-  if LMapped = '' then
-  begin
-    AKind := idnaEmptyLabel;
-    Exit;
-  end;
-  LLower := LowerAscii(LMapped);
-  if (Length(LLower) >= 4) and (Copy(LLower, 1, 4) = IDNA_ACE_PREFIX) then
-  begin
-    LBody := Copy(LLower, 5, Length(LLower));
-    if LBody = '' then
-    begin
-      AKind := idnaEmptyAceBody;
-      Exit;
-    end;
-    LDecoded := PunycodeDecode(LBody);
-    if LDecoded = '' then
-    begin
-      AKind := idnaPunycodeDecodeFailed;
-      Exit;
-    end;
-    Result := NFC(LDecoded);
-    if Result = '' then
-      AKind := idnaNfcFailed;
-    Exit;
-  end;
-  LNorm := NFC(LMapped);
-  if LNorm = '' then
-  begin
-    AKind := idnaNfcFailed;
-    Exit;
-  end;
-  if IsAsciiLabel(LNorm) then
-  begin
-    if not IsLDHLabel(LowerAscii(LNorm)) then
-    begin
-      AKind := idnaInvalidAsciiLabel;
-      Exit;
-    end;
-    Result := LowerAscii(LNorm);
-    Exit;
-  end;
-  Result := LNorm;
-end;
-
-function SplitDomain(const ADomain: string; out ALabels: array of string;
-  out ACount: Integer): Boolean;
-var
-  I, Start: Integer;
-begin
-  ACount := 0;
+    if not (LBc in [bcR, bcAL, bcEN, bcAN]) then
+      Exit; { rule 3 }
+  end
+  else if not (LBc in [bcL, bcEN]) then
+    Exit; { rule 6 }
   Result := True;
-  if ADomain = '' then
-    Exit(False);
-  Start := 1;
-  for I := 1 to Length(ADomain) + 1 do
+end;
+
+{ CheckBidi: RFC 5893 applies to every label iff the domain is a Bidi
+  domain name (any label contains an R, AL, or AN codepoint). }
+function CheckBidiDomain(const ALabels: TLabelArray;
+  out AKind: TIDNAErrorKind): Boolean;
+var
+  LCpsPerLabel: array of TCpArray;
+  LBidiDomain: Boolean;
+  I: SizeInt;
+  J: SizeInt;
+begin
+  Result := False;
+  AKind := idnaOk;
+  SetLength(LCpsPerLabel, Length(ALabels));
+  LBidiDomain := False;
+  for I := 0 to High(ALabels) do
   begin
-    if (I > Length(ADomain)) or (ADomain[I] = '.') then
+    if not DecodeCps(ALabels[I], LCpsPerLabel[I]) then
     begin
-      if I = Start then
+      AKind := idnaInvalidUtf8;
+      Exit;
+    end;
+    for J := 0 to High(LCpsPerLabel[I]) do
+      if GetBidiClass(LCpsPerLabel[I][J]) in [bcR, bcAL, bcAN] then
       begin
-        if I <= Length(ADomain) then
-          Exit(False);
+        LBidiDomain := True;
         Break;
       end;
-      if ACount >= Length(ALabels) then
-        Exit(False);
-      ALabels[ACount] := Copy(ADomain, Start, I - Start);
-      Inc(ACount);
-      Start := I + 1;
+  end;
+  if LBidiDomain then
+    for I := 0 to High(LCpsPerLabel) do
+      if (Length(LCpsPerLabel[I]) > 0) and (not CheckBidiLabel(LCpsPerLabel[I])) then
+      begin
+        AKind := idnaCheckBidi;
+        Exit;
+      end;
+  Result := True;
+end;
+
+{ Split at U+002E. Always emits empty labels ("a..b" → 'a','','b';
+  "a.b." → 'a','b',''). }
+procedure SplitLabels(const ADomain: string; out ALabels: TLabelArray);
+var
+  I, LStart, LCount: SizeInt;
+begin
+  LCount := 1;
+  for I := 1 to Length(ADomain) do
+    if ADomain[I] = '.' then
+      Inc(LCount);
+  SetLength(ALabels, LCount);
+  LCount := 0;
+  LStart := 1;
+  for I := 1 to Length(ADomain) + 1 do
+    if (I > Length(ADomain)) or (ADomain[I] = '.') then
+    begin
+      ALabels[LCount] := Copy(ADomain, LStart, I - LStart);
+      Inc(LCount);
+      LStart := I + 1;
     end;
-  end;
-  Result := ACount > 0;
 end;
 
-function JoinLabels(const ALabels: array of string; const ACount: Integer): string;
+{ UTS#46 §4 Processing: Map → NFC → Break → Convert/Validate (+ CheckBidi).
+  On success ALabels holds the Unicode form of every non-root label and
+  ARootDot tells whether the input carried a trailing empty root label. }
+function ProcessDomain(const ADomain: string; out ALabels: TLabelArray;
+  out ARootDot: Boolean; out AKind: TIDNAErrorKind): Boolean;
 var
-  I: Integer;
+  LMapped, LNorm, LBody, LDecoded: string;
+  LRaw: TLabelArray;
+  LBuf: TCpArray;
+  LCount: SizeInt;
+  I, J: SizeInt;
 begin
-  Result := '';
-  for I := 0 to ACount - 1 do
-  begin
-    if I > 0 then
-      Result := Result + '.';
-    Result := Result + ALabels[I];
-  end;
-end;
-
-function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string;
-var
-  LLabels: array[0..127] of string;
-  LOut: array[0..127] of string;
-  LCount, I: Integer;
-  LTotal: Integer;
-begin
-  AKind := idnaOk;
-  Result := '';
+  Result := False;
+  ARootDot := False;
+  SetLength(ALabels, 0);
   if ADomain = '' then
   begin
     AKind := idnaEmptyDomain;
     Exit;
   end;
-  if not SplitDomain(ADomain, LLabels, LCount) then
+  LMapped := ApplyIdnaMap(ADomain, AKind);
+  if AKind <> idnaOk then
+    Exit;
+  LNorm := NFC(LMapped);
+  if (LNorm = '') and (LMapped <> '') then
   begin
-    AKind := idnaInvalidDomain;
+    AKind := idnaNfcFailed;
     Exit;
   end;
-  LTotal := 0;
-  for I := 0 to LCount - 1 do
+  SplitLabels(LNorm, LRaw);
+  if (Length(LRaw) > 1) and (LRaw[High(LRaw)] = '') then
   begin
-    LOut[I] := ProcessLabelToASCII(LLabels[I], AKind);
-    if AKind <> idnaOk then
+    ARootDot := True;
+    SetLength(LRaw, Length(LRaw) - 1);
+  end;
+  for I := 0 to High(LRaw) do
+    if LRaw[I] = '' then
     begin
-      Result := '';
+      if Length(LRaw) = 1 then
+        AKind := idnaEmptyDomain
+      else
+        AKind := idnaEmptyLabel;
+      Exit;
+    end;
+  SetLength(ALabels, Length(LRaw));
+  for I := 0 to High(LRaw) do
+  begin
+    if StartsWithAcePrefix(LRaw[I]) then
+    begin
+      if not IsAsciiLabel(LRaw[I]) then
+      begin
+        AKind := idnaInvalidAceLabel;
+        Exit;
+      end;
+      LBody := Copy(LRaw[I], 5, Length(LRaw[I]));
+      if LBody = '' then
+      begin
+        AKind := idnaEmptyAceBody;
+        Exit;
+      end;
+      SetLength(LBuf, Length(LBody));
+      if not PunycodeDecodeToCodepoints(LBody, LBuf, LCount) then
+      begin
+        AKind := idnaPunycodeDecodeFailed;
+        Exit;
+      end;
+      LDecoded := '';
+      for J := 0 to LCount - 1 do
+        if not AppendUtf8Cp(LDecoded, LBuf[J]) then
+        begin
+          AKind := idnaPunycodeDecodeFailed;
+          Exit;
+        end;
+      { Decoded ACE must be a real U-label: non-empty and not all-ASCII. }
+      if (LDecoded = '') or IsAsciiLabel(LDecoded) then
+      begin
+        AKind := idnaInvalidAceLabel;
+        Exit;
+      end;
+      if not ValidateULabel(LDecoded, AKind) then
+        Exit;
+      ALabels[I] := LDecoded;
+    end
+    else
+    begin
+      if not ValidateULabel(LRaw[I], AKind) then
+        Exit;
+      ALabels[I] := LRaw[I];
+    end;
+  end;
+  if not CheckBidiDomain(ALabels, AKind) then
+    Exit;
+  AKind := idnaOk;
+  Result := True;
+end;
+
+function JoinLabels(const ALabels: TLabelArray; const ARootDot: Boolean): string;
+var
+  I: SizeInt;
+begin
+  Result := '';
+  for I := 0 to High(ALabels) do
+  begin
+    if I > 0 then
+      Result := Result + '.';
+    Result := Result + ALabels[I];
+  end;
+  if ARootDot then
+    Result := Result + '.';
+end;
+
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string;
+var
+  LLabels: TLabelArray;
+  LOut: TLabelArray;
+  LRootDot: Boolean;
+  LPuny: string;
+  LTotal: SizeInt;
+  I: SizeInt;
+begin
+  Result := '';
+  if not ProcessDomain(ADomain, LLabels, LRootDot, AKind) then
+    Exit;
+  { VerifyDnsLength=True: the empty root label is disallowed. }
+  if LRootDot then
+  begin
+    AKind := idnaEmptyLabel;
+    Exit;
+  end;
+  SetLength(LOut, Length(LLabels));
+  LTotal := 0;
+  for I := 0 to High(LLabels) do
+  begin
+    if IsAsciiLabel(LLabels[I]) then
+      LOut[I] := LLabels[I]
+    else
+    begin
+      LPuny := PunycodeEncode(LLabels[I]);
+      if LPuny = '' then
+      begin
+        AKind := idnaPunycodeEncodeFailed;
+        Exit;
+      end;
+      LOut[I] := IDNA_ACE_PREFIX + LPuny;
+    end;
+    if Length(LOut[I]) > 63 then
+    begin
+      AKind := idnaAceLabelTooLong;
       Exit;
     end;
     Inc(LTotal, Length(LOut[I]));
@@ -450,37 +638,18 @@ begin
     AKind := idnaDomainTooLong;
     Exit;
   end;
-  Result := JoinLabels(LOut, LCount);
+  Result := JoinLabels(LOut, False);
 end;
 
 function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string;
 var
-  LLabels: array[0..127] of string;
-  LOut: array[0..127] of string;
-  LCount, I: Integer;
+  LLabels: TLabelArray;
+  LRootDot: Boolean;
 begin
-  AKind := idnaOk;
   Result := '';
-  if ADomain = '' then
-  begin
-    AKind := idnaEmptyDomain;
+  if not ProcessDomain(ADomain, LLabels, LRootDot, AKind) then
     Exit;
-  end;
-  if not SplitDomain(ADomain, LLabels, LCount) then
-  begin
-    AKind := idnaInvalidDomain;
-    Exit;
-  end;
-  for I := 0 to LCount - 1 do
-  begin
-    LOut[I] := ProcessLabelToUnicode(LLabels[I], AKind);
-    if AKind <> idnaOk then
-    begin
-      Result := '';
-      Exit;
-    end;
-  end;
-  Result := JoinLabels(LOut, LCount);
+  Result := JoinLabels(LLabels, LRootDot);
 end;
 
 function IDNAToASCII(const ADomain: string; out AError: string): string;

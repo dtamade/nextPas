@@ -81,11 +81,19 @@ const
   idnaDomainTooLong = nextpas.core.text.unicode.idna.idnaDomainTooLong;
   idnaDisallowed = nextpas.core.text.unicode.idna.idnaDisallowed;
   idnaInvalidUtf8 = nextpas.core.text.unicode.idna.idnaInvalidUtf8;
+  idnaNotNfc = nextpas.core.text.unicode.idna.idnaNotNfc;
+  idnaCheckHyphens = nextpas.core.text.unicode.idna.idnaCheckHyphens;
+  idnaLeadingCombiningMark = nextpas.core.text.unicode.idna.idnaLeadingCombiningMark;
+  idnaInvalidAceLabel = nextpas.core.text.unicode.idna.idnaInvalidAceLabel;
+  idnaContextJ = nextpas.core.text.unicode.idna.idnaContextJ;
+  idnaCheckBidi = nextpas.core.text.unicode.idna.idnaCheckBidi;
   idmsValid = nextpas.core.text.unicode.idna.idmsValid;
   idmsMapped = nextpas.core.text.unicode.idna.idmsMapped;
   idmsIgnored = nextpas.core.text.unicode.idna.idmsIgnored;
   idmsDeviation = nextpas.core.text.unicode.idna.idmsDeviation;
   idmsDisallowed = nextpas.core.text.unicode.idna.idmsDisallowed;
+  idmsDisallowedSTD3Valid = nextpas.core.text.unicode.idna.idmsDisallowedSTD3Valid;
+  idmsDisallowedSTD3Mapped = nextpas.core.text.unicode.idna.idmsDisallowedSTD3Mapped;
 
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
@@ -96,6 +104,7 @@ function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
+function GetJoiningType(const ACp: TUnicodeCodepoint): TJoiningType; inline;
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
@@ -268,6 +277,11 @@ end;
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass;
 begin
   Result := nextpas.core.text.unicode.props.GetBidiClass(ACp);
+end;
+
+function GetJoiningType(const ACp: TUnicodeCodepoint): TJoiningType;
+begin
+  Result := nextpas.core.text.unicode.props.GetJoiningType(ACp);
 end;
 
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
