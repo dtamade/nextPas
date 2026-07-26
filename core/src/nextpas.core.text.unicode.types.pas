@@ -423,6 +423,17 @@ type
     bcPDI = 22
   );
 
+  // Joining_Type (ArabicShaping.txt / DerivedJoiningType.txt)
+  // Ordinals match gen_unicode_joining_type.py / joining_type.inc
+  TJoiningType = (
+    jtNonJoining = 0,   // U
+    jtJoinCausing = 1,  // C
+    jtDualJoining = 2,  // D
+    jtLeftJoining = 3,  // L
+    jtRightJoining = 4, // R
+    jtTransparent = 5   // T
+  );
+
   // Bidi_Paired_Bracket_Type
   TBidiPairedBracketType = (
     bpbtNone = 0,

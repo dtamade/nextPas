@@ -16,6 +16,7 @@ function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
+function GetJoiningType(const ACp: TUnicodeCodepoint): TJoiningType; inline;
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
@@ -90,6 +91,7 @@ const
 {$I nextpas.core.text.unicode.sbp.inc}
 {$I nextpas.core.text.unicode.lbp.inc}
 {$I nextpas.core.text.unicode.bcp.inc}
+{$I nextpas.core.text.unicode.joining_type.inc}
 {$I nextpas.core.text.unicode.brackets.inc}
 {$I nextpas.core.text.unicode.eaw.inc}
 
@@ -331,6 +333,15 @@ begin
     Exit(TBidiClass(LValue));
 
   Result := bcL;
+end;
+
+function GetJoiningType(const ACp: TUnicodeCodepoint): TJoiningType;
+var
+  LValue: Byte;
+begin
+  if FindRange3Value(ACp, JOINING_TYPE_RANGES, LValue) then
+    Exit(TJoiningType(LValue));
+  Result := jtNonJoining;
 end;
 
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth;
