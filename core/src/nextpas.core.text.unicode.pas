@@ -87,6 +87,7 @@ const
   idnaInvalidAceLabel = nextpas.core.text.unicode.idna.idnaInvalidAceLabel;
   idnaContextJ = nextpas.core.text.unicode.idna.idnaContextJ;
   idnaCheckBidi = nextpas.core.text.unicode.idna.idnaCheckBidi;
+  idnaDisallowedSTD3 = nextpas.core.text.unicode.idna.idnaDisallowedSTD3;
   idmsValid = nextpas.core.text.unicode.idna.idmsValid;
   idmsMapped = nextpas.core.text.unicode.idna.idmsMapped;
   idmsIgnored = nextpas.core.text.unicode.idna.idmsIgnored;

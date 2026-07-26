@@ -52,7 +52,8 @@ type
     idnaLeadingCombiningMark,
     idnaInvalidAceLabel,
     idnaContextJ,
-    idnaCheckBidi
+    idnaCheckBidi,
+    idnaDisallowedSTD3
   );
 
   { IdnaMappingTable status (UTS#46). }
@@ -131,6 +132,7 @@ begin
     idnaInvalidAceLabel: Result := 'invalid ACE label';
     idnaContextJ: Result := 'ContextJ violation';
     idnaCheckBidi: Result := 'CheckBidi violation';
+    idnaDisallowedSTD3: Result := 'STD3 disallowed ASCII code point';
   else
     Result := 'unknown IDNA error';
   end;
@@ -283,6 +285,15 @@ begin
     and (ALabel[3] = '-') and (ALabel[4] = '-');
 end;
 
+{ UseSTD3ASCIIRules (tr46 rev 33): since 16.0 the STD3 restriction is a
+  validity rule, not a table status — ASCII must be [-a-z0-9]. }
+function IsStd3Ascii(const ACp: TUnicodeCodepoint): Boolean; inline;
+begin
+  Result := ((ACp >= Ord('a')) and (ACp <= Ord('z')))
+    or ((ACp >= Ord('0')) and (ACp <= Ord('9')))
+    or (ACp = Ord('-'));
+end;
+
 { ContextJ — RFC 5892 Appendix A.1 (ZWNJ) / A.2 (ZWJ). Virama ccc = 9. }
 function CheckContextJ(const ACps: TCpArray; const AIdx: SizeInt): Boolean;
 var
@@ -354,6 +365,11 @@ begin
     if not (LStatus in [idmsValid, idmsDeviation]) then
     begin
       AKind := idnaDisallowed;
+      Exit;
+    end;
+    if (LCps[I] < $80) and (not IsStd3Ascii(LCps[I])) then
+    begin
+      AKind := idnaDisallowedSTD3;
       Exit;
     end;
     if ((LCps[I] = UNICODE_ZWNJ) or (LCps[I] = UNICODE_ZWJ))

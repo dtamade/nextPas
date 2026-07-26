@@ -12,7 +12,8 @@ CONFORMANCE := \
 	test_conformance_bidi_character \
 	test_conformance_bidi \
 	test_conformance_collate \
-	test_conformance_case
+	test_conformance_case \
+	test_conformance_idna
 
 UNIT := \
 	test_case \
