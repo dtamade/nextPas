@@ -307,3 +307,17 @@ docs/simd/
 2. 检查文档一致性
 3. 运行文档测试 (如果有的话)
 4. 提交文档
+
+## 已知技术债（Known Technical Debt）
+
+| 债项 | 状态 | 约束 |
+|------|------|------|
+| LoongArch/SVE/SVE2 | experimental/stub intrinsics only；仅作为 opt-in qualification surface；not stable backend；有源码、有 fail-close guard、有环境变量守卫，但缺 release-grade runtime proof | 不可在生产路径激活；已标注为 experimental stub |
+
+## 公开 façade 边界提醒
+
+维护时不要把以下面误当稳定 ABI：
+
+- `VecF32x4Gather` / `VecI32x4Gather` 及 scatter 家族可经 public facade 调用，但目前 not part of the current stable public ABI wrapper（public ABI wrapper 只覆盖已冻结的核心原语面）；语义契约见 `docs/simd/api.md`。
+- `TF16` / `THalf`（含 `AVX512BF16`、`NEON FP16` 候选路径）仍在 future ABI boundary 之外，只规划显式转换 API。
+- 矩阵转置是两条独立 owner 路径：`TSimdF32Matrix.Transpose` / `TSimdF64Matrix.Transpose` 与 SIMD lane transpose 原语；不存在统一 Transpose 稳定面。

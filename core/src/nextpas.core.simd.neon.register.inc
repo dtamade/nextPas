@@ -22,7 +22,7 @@ begin
   table.BackendInfo.Backend := sbNEON;
   table.BackendInfo.Available := (not LAsmCapable) or LUseVectorAsm;
   table.BackendInfo.Name := 'NEON';
-  table.BackendInfo.Description := 'ARM NEON 128-bit SIMD';
+  table.BackendInfo.Description := 'ARM NEON 128-bit SIMD (default scalar fallback; asm opt-in)';
   // Mask helpers own SharedMask* (portable Pascal / x86 BSF leaves) on every
   // host. They are not NEON-asm gated, matching the SSE2 always-on Mask model.
   LCapabilities := [scBasicArithmetic, scComparison, scMathFunctions,
@@ -698,6 +698,9 @@ end;
 initialization
   // Test-only opt-in path: allow non-native hosts to register NEON scalar-fallback
   // implementations so DispatchAPI/PublicAbi suites can verify metadata contracts.
+  // Registration is asm-gated: unless a build has explicitly opted in via the
+  // defines below, the default public behavior remains scalar fallback and the
+  // default public path stays scalar.
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND}
     // Delayed to the test runner so list-only startup paths do not need to
     // execute non-native backend registration during unit initialization.

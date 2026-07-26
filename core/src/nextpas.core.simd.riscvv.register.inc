@@ -22,7 +22,7 @@ begin
   table.Backend := sbRISCVV;
   table.BackendInfo.Backend := sbRISCVV;
   table.BackendInfo.Name := 'RISC-V V';
-  table.BackendInfo.Description := 'RISC-V Vector Extension (RVV)';
+  table.BackendInfo.Description := 'RISC-V Vector Extension (RVV) (experimental opt-in)';
   table.BackendInfo.Available := (not LAsmCapable) or LUseVectorAsm;
   table.BackendInfo.Priority := GetSimdBackendPriorityValue(sbRISCVV);
   LCapabilities := [

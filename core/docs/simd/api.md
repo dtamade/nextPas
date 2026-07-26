@@ -6,6 +6,8 @@
 
 本文档提供 SIMD 模块的公开 API 参考，包括向量操作、内存操作、文本操作、统计操作等。
 
+Runtime 绑定语义：所有门面入口经 façade dispatch table 按当前 `active backend` 派发；backend 绑定由 runtime/control-plane（`nextpas.core.simd.runtime`）完成——`GetCurrentBackend` / `GetCurrentRuntimeSnapshot` 查询当前状态，`TrySetCurrentBackend` 显式指定，`ResetCurrentBackendSelection` 恢复自动选择；无可派发（dispatchable）SIMD backend 时保持 scalar fallback。
+
 ## 向量操作
 
 ### 128-bit 浮点向量 (TVecF32x4)
@@ -107,6 +109,13 @@ function VecI32x4Gather(Base: PInt32; const Indices: TVecI32x4): TVecI32x4; inli
 procedure VecF32x4Scatter(Base: PSingle; const Indices: TVecI32x4; const Values: TVecF32x4); inline;
 procedure VecI32x4Scatter(Base: PInt32; const Indices: TVecI32x4; const Values: TVecI32x4); inline;
 ```
+
+**语义契约（Gather/Scatter）**：
+
+- 这些原语可经 public facade 调用，但 gather/scatter 家族目前 not part of the current stable public ABI wrapper（public ABI wrapper 只覆盖已冻结的核心原语面）。
+- duplicate indices：gather 允许重复索引，各 lane 独立读取（重复 lane 取重复值）；scatter 遇重复索引时按 lane order 顺序写入，later lanes overwrite earlier writes；ScatterSelect 语义为 last enabled lane wins。
+- Gather/scatter nil-base contract：`Base=nil` 且存在 enabled lane 时抛 `EArgumentNil`；GatherSelect 在 `Base=nil` 且全部 enable=0 时不读内存，returns `orVal`；ScatterSelect 在全部 enable=0 时为 no-op。
+- 以上契约由 focused tests 钉住（`nextpas.core.simd.testcase.pas` 与 `test_api_coverage_gather_scatter.pas` 的 duplicate/nil-base 用例）。
 
 ### 256-bit 浮点向量 (TVecF32x8)
 
@@ -278,13 +287,24 @@ procedure ArrayPackSatI32toI16(A: PInt32; B: PInt16; Count: SizeUInt);
 
 ## 运行时控制
 
+公开 control-plane 推荐使用 `nextpas.core.simd.runtime` 的 canonical 入口：
+
+```pascal
+function GetCurrentBackend: TSimdBackend;
+function GetCurrentRuntimeSnapshot: TSimdRuntimeSnapshot;
+function GetDispatchableBackendList: TSimdBackendArray;
+function GetBestDispatchableBackend: TSimdBackend;
+function TrySetCurrentBackend(aBackend: TSimdBackend): Boolean;
+procedure ResetCurrentBackendSelection;
+```
+
+`dispatch` 层入口保留给更低层维护与测试：
+
 ```pascal
 function GetActiveBackend: TSimdBackend;
 procedure SetActiveBackend(Backend: TSimdBackend);
 function TrySetActiveBackend(Backend: TSimdBackend): Boolean;
 procedure ResetToAutomaticBackend;
-function GetBestDispatchableBackend: TSimdBackend;
-function GetDispatchableBackends: TSimdBackendArray;
 function IsBackendDispatchable(Backend: TSimdBackend): Boolean;
 ```
 
@@ -341,7 +361,45 @@ type
     sbScalar,
     sbSSE2, sbSSE3, sbSSSE3, sbSSE41, sbSSE42,
     sbAVX2, sbAVX512,
-    sbNEON,
-    sbRISCVV
+    sbNEON,      // AArch64 default scalar fallback；NEON asm opt-in 需显式启用
+    sbRISCVV,    // EXPERIMENTAL opt-in；not a stable public backend
+    sbLASX,      // EXPERIMENTAL；LoongArch LASX
+    sbWASM,      // EXPERIMENTAL；WebAssembly SIMD128
+    sbVSX,       // EXPERIMENTAL；POWER VSX
+    sbMSA        // EXPERIMENTAL；MIPS MSA
   );
 ```
+
+### 支持的后端
+
+| Backend | 平台 | 状态 |
+|---------|------|------|
+| Scalar | 全平台 | 永远可用（scalar fallback 基线） |
+| SSE2 / SSE3 / SSSE3 / SSE4.1 / SSE4.2 | x86_64 | 稳定 dispatchable 候选 |
+| AVX2 | x86_64 | 稳定 dispatchable 候选 |
+| AVX-512 | x86_64 | dispatchable 候选（受构建/验证范围限制） |
+| NEON | AArch64 | default scalar fallback；仅在 NEON asm opt-in 后成为可派发候选 |
+| RISC-V V | riscv64 | experimental；仅 opt-in（`SIMD_EXPERIMENTAL_RISCVV`）构建可派发 |
+| LASX / WASM / VSX / MSA | LoongArch / WebAssembly / POWER / MIPS | experimental 隔离 stub，不在稳定面内 |
+
+> `sbNEON` 的 dispatch / activation truth：默认 public 构建仍是 default scalar fallback，只有 NEON asm opt-in（FPC 3.3.1+ 且显式定义相应宏）后 NEON 才成为可派发候选。
+
+## 公开 façade 边界
+
+### Transpose 双路径边界
+
+- 矩阵转置目前是两条彼此独立的 owner 路径：`TSimdF32Matrix.Transpose` / `TSimdF64Matrix.Transpose`（linalg 矩阵语义）与 SIMD lane transpose 原语 `VecF32x4Transpose`（`LaneTranspose` 语义，4x4 lane 重排）；两者各自由 focused tests 圈定边界，目前没有统一的 Transpose facade。
+
+### F16/half 家族（future ABI boundary）
+
+`TF16` / `THalf` 家族目前只规划 explicit conversion APIs（`F32 <-> F16`、`F32 <-> BF16`），而不是 implicit arithmetic（half 不会被当作可直接算术的数值类型）。硬件候选路径包括 `F16C`、`AVX-512 FP16`、`AVX512BF16` 与 `NEON FP16`；语义上必须先钉住 rounding、NaN payload、infinities、denormals、saturation 行为并配 focused tests，之后才可能跨过 future ABI boundary；在此之前 TF16/THalf 不进入 stable ABI，也 not part of the current stable public ABI wrapper。
+
+### 对齐内存参数契约
+
+- `AlignedAlloc` / `AlignedRealloc`：`alignment` 必须是非零 2 次幂且 ≥ `SizeOf(Pointer)`，否则抛 `EArgumentError`；分配失败抛 `EOutOfMemory`。
+- `IsAligned` / `AlignUp` / `AlignUpSize`：对齐判定与向上取整工具，遵循同样的 2 次幂参数契约。
+- `AlignedMemCopy` / `AlignedMemFill`：调用方保证指针满足声明的对齐；长度为 0 时安全返回。
+- `TAlignedArray<T>`：以对齐分配为底座的泛型数组包装。
+- 对齐常量：`SIMD_ALIGN_16` / `SIMD_ALIGN_32` / `SIMD_ALIGN_64`。
+- `SimdAlloc` / `SimdRealloc`：内部按 size + header + alignment 预留空间（带溢出检查）；`saAuto` 按当前 active backend 的默认 profile 取对齐值（AVX-512=64B, AVX2=32B, 其余=16B）。
+- `SimdFree(nil)` 是安全 no-op；`SimdFree` 只接受来自 `SimdAlloc`/`SimdRealloc` 且尚未释放过的指针。
