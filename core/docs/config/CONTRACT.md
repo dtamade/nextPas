@@ -95,6 +95,8 @@ function TryParseConfigByteSize(const AText: string; out ABytes: Int64): Boolean
 2. 扩展加载失败或无/未知扩展 → `TrySniffConfigFormat`（试解析：JSON 对象/数组 → TOML → YAML map/seq → INI 含 `=`）
 3. 仍失败 → 诊断错误（含 path / sniff）
 
+**显式格式路径**（`AddFile(path, format)` / `TryLoadFromFile(path, format)` / watcher 重载）**严格按指定格式**：解析失败即失败，**不做**内容嗅探降级。理由：热重载撕裂写场景下，截断的 TOML（如 `key = `）会被嗅探成合法 INI 而静默替换活配置。
+
 ### 2.4 可变 `TConfig`（摘要）
 
 - 加载：`LoadFromIni/Json/Yaml/Toml/File/Env` + `TryLoad*` / `TryLoadJson|Yaml|Toml` 别名；`LoadFromFile`/`TryLoadFromFile` 支持显式格式或扩展名自动识别
@@ -236,3 +238,4 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | 2026-07-20 | 2.1 | `AddKeyValues` 浅覆盖源 | config-formats lane |
 | 2026-07-20 | 2.2 | 插值 mode / ConfigBorrow 契约对齐；扩展名自动识别 | config-formats lane |
 | 2026-07-20 | 2.3 | 内容嗅探 `TrySniffConfigFormat`；错扩展恢复 | config-formats lane |
+| 2026-07-26 | 2.4 | 显式格式路径收紧为严格（去嗅探降级）；无格式路径嗅探不变 | hotfix |

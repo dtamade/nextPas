@@ -156,8 +156,6 @@ function TConfig.TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
   out AError: string): Boolean;
 var
   LContent: string;
-  LSniff: TConfigFormat;
-  LFirstError: string;
 begin
   AError := '';
   if APath = '' then
@@ -182,18 +180,11 @@ begin
   end;
 
   try
+    { 显式格式是调用方契约：解析失败不嗅探降级——热重载撕裂写场景下坏 TOML
+      可能被嗅探成合法 INI 而静默替换活配置。容错加载走无格式重载。 }
     Result := TryLoadConfigTextByFormat(Self, LContent, AFormat, AError);
-    if Result then
-      Exit;
-    LFirstError := AError;
-    { Wrong extension recovery: sniff content and retry once if format differs. }
-    if TrySniffConfigFormat(LContent, LSniff) and (LSniff <> AFormat) then
-    begin
-      if TryLoadConfigTextByFormat(Self, LContent, LSniff, AError) then
-        Exit(True);
-    end;
-    AError := FormatConfigFileLoadError(APath, LFirstError);
-    Result := False;
+    if not Result then
+      AError := FormatConfigFileLoadError(APath, AError);
   except
     on E: Exception do
     begin
