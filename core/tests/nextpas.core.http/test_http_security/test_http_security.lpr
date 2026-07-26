@@ -1098,42 +1098,29 @@ begin
     'threaded request-target over max-header');
 end;
 
-procedure RunIdleTimeoutCloseSecurityCase(
+procedure RunStallReadTimeoutCloseSecurityCase(
   const AOpts: THttpServerOptions; const APartial: string; const ALabel: string);
 var
   LServer: THttpServer;
   LPort: UInt16;
   LHandle: TPlatformThreadHandle;
   LConn: ITcpStream;
-  LBuf: array[0..1023] of Byte;
-  LN: SizeUInt;
   LResp: string;
   LClosed: Boolean;
+  LTimedOut: Boolean;
 begin
   LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LConn := TcpConnect('127.0.0.1', LPort);
     try
-      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
       LConn.Write(APartial[1], SizeUInt(Length(APartial)));
-      LResp := '';
-      LClosed := False;
-      repeat
-        try
-          LN := LConn.Read(LBuf[0], 1024);
-        except
-          LN := 0;
-        end;
-        if LN > 0 then
-        begin
-          SetLength(LResp, Length(LResp) + Int32(LN));
-          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
-        end
-        else
-          LClosed := True;
-      until LClosed;
+      { Honest close detection: a client-side read timeout must FAIL the case,
+        not masquerade as a server close. }
+      LResp := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
 
       Check(LClosed, ALabel + ': server closed connection after timeout');
+      Check(not LTimedOut,
+        ALabel + ': close arrives within observation window');
       Check(Pos('HTTP/1.1 200', LResp) = 0,
         ALabel + ': partial request must not reach success response');
       Check(Pos('echo:', LResp) = 0,
@@ -1154,11 +1141,11 @@ const
   PARTIAL = 'GET / HTTP/1.1'#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 1000; { 1 second idle timeout }
-  RunIdleTimeoutCloseSecurityCase(LOpts, PARTIAL, 'Slowloris');
+  LOpts.ReadTimeout := 1000; { 1 second read timeout }
+  RunStallReadTimeoutCloseSecurityCase(LOpts, PARTIAL, 'Slowloris');
 end;
 
-procedure TestPartialFixedLengthBodyIdleTimeout;
+procedure TestPartialFixedLengthBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -1170,14 +1157,14 @@ const
     'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'Partial fixed-length body idle-timeout');
+    'Partial fixed-length body read-timeout');
 end;
 
-procedure TestPartialChunkSizeLineIdleTimeout;
+procedure TestPartialChunkSizeLineReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -1189,14 +1176,14 @@ const
     'A';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'Partial chunk-size line idle-timeout');
+    'Partial chunk-size line read-timeout');
 end;
 
-procedure TestPartialChunkedBodyIdleTimeout;
+procedure TestPartialChunkedBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -1209,14 +1196,14 @@ const
     'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'Partial chunked body idle-timeout');
+    'Partial chunked body read-timeout');
 end;
 
-procedure TestPartialChunkedTrailerIdleTimeout;
+procedure TestPartialChunkedTrailerReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -1232,11 +1219,11 @@ const
     'X-Test: value'#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'Partial chunked trailer idle-timeout');
+    'Partial chunked trailer read-timeout');
 end;
 
 { Test 8: HTTP/0.9 request — no version. llhttp may reject or parse as HTTP/1.0 }
@@ -1896,7 +1883,7 @@ begin
     AOpts, '', AReqBody, AExpectedStatusLine, ALabel, False);
 end;
 
-procedure RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+procedure RunExpectContinueBodyStallReadTimeoutSecurityCase(
   const AOpts: THttpServerOptions; const AReqHeaders, APartialBody,
   ALabel: string);
 var
@@ -1954,7 +1941,7 @@ begin
       Check(Pos('HTTP/1.1 500', LResp2) = 0,
         ALabel + ': stalled body does not append synthetic 500');
       CheckEqual(Int64(0), Int64(CountSubstring(LResp2, 'HTTP/1.1 ')),
-        ALabel + ': no final status line is emitted after idle timeout close');
+        ALabel + ': no final status line is emitted after read timeout close');
       Check(not LHandlerCalled,
         ALabel + ': handler is never entered when body stalls after interim 100');
     finally
@@ -2413,7 +2400,7 @@ begin
     'Expect chunked oversize trailer rejects after interim 100');
 end;
 
-procedure TestExpectContinuePartialFixedLengthBodyIdleTimeout;
+procedure TestExpectContinuePartialFixedLengthBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -2426,15 +2413,15 @@ const
   PARTIAL_BODY = 'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     PARTIAL_BODY,
-    'Expect fixed-length partial body idle-timeout');
+    'Expect fixed-length partial body read-timeout');
 end;
 
-procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeout;
+procedure TestExpectContinueZeroProgressFixedLengthBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -2446,15 +2433,15 @@ const
     'Connection: close'#13#10#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     '',
-    'Expect fixed-length zero body progress idle-timeout');
+    'Expect fixed-length zero body progress read-timeout');
 end;
 
-procedure TestExpectContinuePartialChunkedBodyIdleTimeout;
+procedure TestExpectContinuePartialChunkedBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -2469,15 +2456,15 @@ const
     'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     PARTIAL_BODY,
-    'Expect chunked partial body idle-timeout');
+    'Expect chunked partial body read-timeout');
 end;
 
-procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeout;
+procedure TestExpectContinueZeroProgressChunkedBodyReadTimeout;
 var
   LOpts: THttpServerOptions;
 const
@@ -2489,12 +2476,12 @@ const
     'Connection: close'#13#10#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     '',
-    'Expect chunked zero body progress idle-timeout');
+    'Expect chunked zero body progress read-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarly;
@@ -3631,7 +3618,7 @@ begin
     'epoll Expect chunked oversize trailer rejects after interim 100');
 end;
 
-procedure TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend;
+procedure TestExpectContinuePartialFixedLengthBodyReadTimeoutEpollBackend;
 var
   LOpts: THttpServerOptions;
 const
@@ -3644,16 +3631,16 @@ const
   PARTIAL_BODY = 'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
+  LOpts.ReadTimeout := 200;
   LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     PARTIAL_BODY,
-    'epoll Expect fixed-length partial body idle-timeout');
+    'epoll Expect fixed-length partial body read-timeout');
 end;
 
-procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutEpollBackend;
+procedure TestExpectContinueZeroProgressFixedLengthBodyReadTimeoutEpollBackend;
 var
   LOpts: THttpServerOptions;
 const
@@ -3665,16 +3652,16 @@ const
     'Connection: close'#13#10#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
+  LOpts.ReadTimeout := 200;
   LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     '',
-    'epoll Expect fixed-length zero body progress idle-timeout');
+    'epoll Expect fixed-length zero body progress read-timeout');
 end;
 
-procedure TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend;
+procedure TestExpectContinuePartialChunkedBodyReadTimeoutEpollBackend;
 var
   LOpts: THttpServerOptions;
 const
@@ -3689,16 +3676,16 @@ const
     'ab';
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
+  LOpts.ReadTimeout := 200;
   LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     PARTIAL_BODY,
-    'epoll Expect chunked partial body idle-timeout');
+    'epoll Expect chunked partial body read-timeout');
 end;
 
-procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend;
+procedure TestExpectContinueZeroProgressChunkedBodyReadTimeoutEpollBackend;
 var
   LOpts: THttpServerOptions;
 const
@@ -3710,13 +3697,13 @@ const
     'Connection: close'#13#10#13#10;
 begin
   LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 200;
+  LOpts.ReadTimeout := 200;
   LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
-  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  RunExpectContinueBodyStallReadTimeoutSecurityCase(
     LOpts,
     REQ_HEADERS,
     '',
-    'epoll Expect chunked zero body progress idle-timeout');
+    'epoll Expect chunked zero body progress read-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarlyEpollBackend;
@@ -5726,14 +5713,14 @@ var
   LOpts: THttpServerOptions;
 begin
   LOpts := EpollSecurityServerOptions;
-  LOpts.IdleTimeout := 1000;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 1000;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
     'epoll slowloris');
 end;
 
-procedure TestPartialFixedLengthBodyIdleTimeoutEpollBackend;
+procedure TestPartialFixedLengthBodyReadTimeoutEpollBackend;
 const
   PARTIAL =
     'POST / HTTP/1.1'#13#10 +
@@ -5745,14 +5732,14 @@ var
   LOpts: THttpServerOptions;
 begin
   LOpts := EpollSecurityServerOptions;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'epoll partial fixed-length body idle-timeout');
+    'epoll partial fixed-length body read-timeout');
 end;
 
-procedure TestPartialChunkSizeLineIdleTimeoutEpollBackend;
+procedure TestPartialChunkSizeLineReadTimeoutEpollBackend;
 const
   PARTIAL =
     'POST / HTTP/1.1'#13#10 +
@@ -5764,14 +5751,14 @@ var
   LOpts: THttpServerOptions;
 begin
   LOpts := EpollSecurityServerOptions;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'epoll partial chunk-size line idle-timeout');
+    'epoll partial chunk-size line read-timeout');
 end;
 
-procedure TestPartialChunkedBodyIdleTimeoutEpollBackend;
+procedure TestPartialChunkedBodyReadTimeoutEpollBackend;
 const
   PARTIAL =
     'POST / HTTP/1.1'#13#10 +
@@ -5784,14 +5771,14 @@ var
   LOpts: THttpServerOptions;
 begin
   LOpts := EpollSecurityServerOptions;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'epoll partial chunked body idle-timeout');
+    'epoll partial chunked body read-timeout');
 end;
 
-procedure TestPartialChunkedTrailerIdleTimeoutEpollBackend;
+procedure TestPartialChunkedTrailerReadTimeoutEpollBackend;
 const
   PARTIAL =
     'POST / HTTP/1.1'#13#10 +
@@ -5807,11 +5794,11 @@ var
   LOpts: THttpServerOptions;
 begin
   LOpts := EpollSecurityServerOptions;
-  LOpts.IdleTimeout := 200;
-  RunIdleTimeoutCloseSecurityCase(
+  LOpts.ReadTimeout := 200;
+  RunStallReadTimeoutCloseSecurityCase(
     LOpts,
     PARTIAL,
-    'epoll partial chunked trailer idle-timeout');
+    'epoll partial chunked trailer read-timeout');
 end;
 {$ENDIF}
 
@@ -5857,14 +5844,14 @@ begin
   T.Test('Request-target over MaxHeaderSize -> explicit 431',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431);
   T.Test('Slowloris partial request', @TestSlowloris);
-  T.Test('Partial fixed-length body idle-timeout closes connection',
-    @TestPartialFixedLengthBodyIdleTimeout);
-  T.Test('Partial chunk-size line idle-timeout closes connection',
-    @TestPartialChunkSizeLineIdleTimeout);
-  T.Test('Partial chunked body idle-timeout closes connection',
-    @TestPartialChunkedBodyIdleTimeout);
-  T.Test('Partial chunked trailer idle-timeout closes connection',
-    @TestPartialChunkedTrailerIdleTimeout);
+  T.Test('Partial fixed-length body read-timeout closes connection',
+    @TestPartialFixedLengthBodyReadTimeout);
+  T.Test('Partial chunk-size line read-timeout closes connection',
+    @TestPartialChunkSizeLineReadTimeout);
+  T.Test('Partial chunked body read-timeout closes connection',
+    @TestPartialChunkedBodyReadTimeout);
+  T.Test('Partial chunked trailer read-timeout closes connection',
+    @TestPartialChunkedTrailerReadTimeout);
   T.Test('HTTP/0.9 no version -> 400', @TestHttp09Request);
   T.Test('CRLF injection in path -> 400', @TestCrlfInjection);
   T.Test('Missing Host header -> 400', @TestMissingHost);
@@ -5917,14 +5904,14 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterim);
   T.Test('Expect chunked oversize trailer rejects after interim 100',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
-  T.Test('Expect fixed-length partial body idle-timeout closes after interim 100',
-    @TestExpectContinuePartialFixedLengthBodyIdleTimeout);
-  T.Test('Expect fixed-length zero body progress idle-timeout closes after interim 100',
-    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeout);
-  T.Test('Expect chunked partial body idle-timeout closes after interim 100',
-    @TestExpectContinuePartialChunkedBodyIdleTimeout);
-  T.Test('Expect chunked zero body progress idle-timeout closes after interim 100',
-    @TestExpectContinueZeroProgressChunkedBodyIdleTimeout);
+  T.Test('Expect fixed-length partial body read-timeout closes after interim 100',
+    @TestExpectContinuePartialFixedLengthBodyReadTimeout);
+  T.Test('Expect fixed-length zero body progress read-timeout closes after interim 100',
+    @TestExpectContinueZeroProgressFixedLengthBodyReadTimeout);
+  T.Test('Expect chunked partial body read-timeout closes after interim 100',
+    @TestExpectContinuePartialChunkedBodyReadTimeout);
+  T.Test('Expect chunked zero body progress read-timeout closes after interim 100',
+    @TestExpectContinueZeroProgressChunkedBodyReadTimeout);
   T.Test('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
   T.Test('Expect huge Content-Length rejects early without interim 100',
@@ -6165,14 +6152,14 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterimEpollBackend);
   T.Test('Expect chunked oversize trailer rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
-  T.Test('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
-    @TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Test('Expect fixed-length zero body progress idle-timeout closes after interim 100 with epoll backend',
-    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Test('Expect chunked partial body idle-timeout closes after interim 100 with epoll backend',
-    @TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend);
-  T.Test('Expect chunked zero body progress idle-timeout closes after interim 100 with epoll backend',
-    @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend);
+  T.Test('Expect fixed-length partial body read-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinuePartialFixedLengthBodyReadTimeoutEpollBackend);
+  T.Test('Expect fixed-length zero body progress read-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinueZeroProgressFixedLengthBodyReadTimeoutEpollBackend);
+  T.Test('Expect chunked partial body read-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinuePartialChunkedBodyReadTimeoutEpollBackend);
+  T.Test('Expect chunked zero body progress read-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinueZeroProgressChunkedBodyReadTimeoutEpollBackend);
   T.Test('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
   T.Test('Expect huge Content-Length rejects early without interim 100 with epoll backend',
@@ -6187,14 +6174,14 @@ begin
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
   T.Test('Slowloris partial request with epoll backend',
     @TestSlowlorisEpollBackend);
-  T.Test('Partial fixed-length body idle-timeout closes connection with epoll backend',
-    @TestPartialFixedLengthBodyIdleTimeoutEpollBackend);
-  T.Test('Partial chunk-size line idle-timeout closes connection with epoll backend',
-    @TestPartialChunkSizeLineIdleTimeoutEpollBackend);
-  T.Test('Partial chunked body idle-timeout closes connection with epoll backend',
-    @TestPartialChunkedBodyIdleTimeoutEpollBackend);
-  T.Test('Partial chunked trailer idle-timeout closes connection with epoll backend',
-    @TestPartialChunkedTrailerIdleTimeoutEpollBackend);
+  T.Test('Partial fixed-length body read-timeout closes connection with epoll backend',
+    @TestPartialFixedLengthBodyReadTimeoutEpollBackend);
+  T.Test('Partial chunk-size line read-timeout closes connection with epoll backend',
+    @TestPartialChunkSizeLineReadTimeoutEpollBackend);
+  T.Test('Partial chunked body read-timeout closes connection with epoll backend',
+    @TestPartialChunkedBodyReadTimeoutEpollBackend);
+  T.Test('Partial chunked trailer read-timeout closes connection with epoll backend',
+    @TestPartialChunkedTrailerReadTimeoutEpollBackend);
   T.Test('Malformed direct error backpressure safe handling with epoll backend',
     @TestMalformedRequestBackpressureSafeHandlingEpollBackend);
   T.Test('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',

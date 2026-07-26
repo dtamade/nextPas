@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 **82** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-26（h2 wire/streams/request extract）
-**版本**：3.48
+**最后更新**：2026-07-26（M-4 security 停滞用例 ReadTimeout 语义对齐）
+**版本**：3.49
 
 ---
 
@@ -276,7 +276,7 @@ end;
 2. 数值刻意不同（30s vs 90s）：client 池可多持一会儿，server 更短清理 idle socket。
 3. PD-1B 后 Default `ReadTimeout>0`：**只改 IdleTimeout 不会**缩短 mid-request body stall 时钟（需同步 `WithReadTimeout`）。
 4. 生产 checklist：server 用有限 RW（Default/Production）+ 合适 IdleTimeout；client 按需 `WithIdleTTL` / `CloseIdleConnections`。
-5. 抽查：`test_http_base` IdleTimeout vs IdleTTL spot-check；IdleTTL 行为见 `test_http_client`。
+5. 抽查：`test_http_base` IdleTimeout vs IdleTTL spot-check；IdleTTL 行为见 `test_http_client`；`test_http_security` 全部停滞族用例（Slowloris/partial body/Expect body stall，threaded+epoll）= **ReadTimeout** 语义（M-4 对齐：曾误设 IdleTimeout 致 8 红 + 10 假绿，helper 已诚实区分 client 超时 vs server 关闭）。
 
 ### 2.2.0a Net-dependent capabilities
 

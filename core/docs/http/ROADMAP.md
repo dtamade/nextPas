@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（Era W2 收官 + **M-1 landed**：产品 facade over IOCP 端到端 gate + full facade Win64 交叉 residual 消除；NEXT=M-band）
+**Updated**: 2026-07-26（Era W2 收官 + M-1..M-4 landed：facade over IOCP 端到端（真机证据闭环）+ 测试债三连修（https_redirect / `-Sc` 可移植性 / security 超时语义对齐）；NEXT=M-band）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -233,6 +233,8 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **M-4 landed**（M-band 测试债修复）：`test_http_security` 全部停滞族用例超时语义对齐——41a7e1614（6月8日）引入 ReadTimeout/IdleTimeout 分离（Go 风格：ReadTimeout 管请求内读含 body，IdleTimeout 只管 keep-alive 间隙，见 CONTRACT PD-3-1）时 `test_http_server` 跟进但 security 未跟进：8 个 Expect body 停滞用例（threaded+epoll）只设 IdleTimeout=200 → 停滞归 ReadTimeout=30000 管 → 5s 观察窗永不关 → 诚实 helper 如实红；另 10 个非 Expect 停滞用例的 helper 把 client 读超时误判为 server 关闭 → 假绿掩盖同一问题七周。修：18 用例 IdleTimeout→ReadTimeout + helper 改 `ReadUntilClosedOrDeadline` 诚实区分 + 标识符/label idle-timeout→read-timeout；247/247 绿 + 0 unfreed；实现与契约本来就对，纯测试债；CONTRACT v3.49 |
+| 2026-07-26 | **M-3 landed + M-1 真机复验闭环**：CI windows job 编译失败根因=core/src 4 单元 22 处 C 风格赋值操作符（`+=`）依赖宿主 fpc.cfg `-Sc`（GHA runner 无此配置；stage0 亦不支持）——`fpc -n` 镜像 RED 复现后机械展开为 `X := X + Y` 并入 design-conventions「可移植语法约束」；main@7a4145ef2。修复后 Core CI run 30200508397 `test-windows-runtime` success：**PASS `http.iocp_facade` 3 用例（真机 windows-latest，M-1 产品 facade over IOCP 端到端真机证据落地）** + threaded_host/iocp_wire 全 PASS + heaptrc 干净；CLAIM @106 真机占位已回填 |
 | 2026-07-26 | **M-2 landed**（M-band 测试债修复）：`test_http_https_redirect`「HTTP to HTTPS redirect」用例语义滞后——写于 client 无 HTTPS 年代（期望 EHttpError unsupported scheme），client HTTPS 化后真跟进 redirect 抛 ESSLException 致 unexpected exception；修：捕 ESSLException/EHttpError 二者 + location 从 example.com 改本地回环防外连；6/6 + 0 unfreed；存量债（与 M-1 无关，全量首次曝光） |
 | 2026-07-26 | **M-1 landed**（M-band 证据补强）：`test_http_iocp_facade_wine`——产品 `THttpServer`（full facade）+ `Backend=tsbIocp` 端到端 GET + keep-alive 两连发，Wine 3 用例一次绿 + 0 unfreed；探针发现 CONTRACT @333「full facade Win64 交叉触 TLS 链 FPC internal」residual 已不复现——测试 uses 常驻钉住防回归；host matrix 增 `http.iocp_facade` 第三条目；iocp server guard 注释同步 W2-3b 语义；CONTRACT v3.48；NEXT=M-band |
 | 2026-07-26 | **W2-4 landed / Era W2 收官**：CLAIM/CONTRACT(v3.47)/GOAL_TREE 三处对齐 IOCP 真实状态（completion recv/send/deadline-wake + 真机证据）；Windows 性能 harness 维持候选（升格需产品确认）；Windows scale 宣称维持 No；NEXT=M-band |
