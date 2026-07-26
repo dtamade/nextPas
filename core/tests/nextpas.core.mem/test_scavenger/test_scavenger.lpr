@@ -14,17 +14,20 @@ var
   T: TTestSuite;
   LRunPassed: Boolean;
 
-{ Allocate ACount blocks and free them all at AOpCounter. }
+{ Allocate ACount blocks and free them all so the span is stamped idle at
+  pool tick AFreeTick. CentralPoolFree advances FTick by 1 before stamping,
+  so seed the clock one below the desired stamp. }
 procedure AllocAndFreeAll(var APool: TCentralPool; ACount: Word;
-  AOpCounter: UInt64);
+  AFreeTick: UInt64);
 var
   LBlocks: array of Pointer;
   LCount: Word;
 begin
   SetLength(LBlocks, ACount);
-  LCount := CentralPoolAlloc(APool, ACount, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(APool, ACount, @LBlocks[0]);
   Check(LCount = ACount, 'alloc ' + IntToStr(ACount));
-  CentralPoolFree(APool, ACount, @LBlocks[0], AOpCounter);
+  APool.FTick := AFreeTick - 1;
+  CentralPoolFree(APool, ACount, @LBlocks[0]);
 end;
 
 { Test: recently idle spans are NOT released (below threshold). }
@@ -36,7 +39,8 @@ begin
   CentralPoolInit(LPool, 64);
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 100);
   Check(LPool.FEntries[0].FLastFreeTick = 100, 'tick = 100');
-  LReleased := ScavengeCentralPools(LPool, 150, 1000);
+  LPool.FTick := 150;
+  LReleased := ScavengeCentralPools(LPool, 1000);
   Check(LReleased = 0, 'no releases');
   Check(LPool.FEntries[0].FMemory <> nil, 'memory kept');
   CentralPoolDestroy(LPool);
@@ -51,7 +55,8 @@ var
 begin
   CentralPoolInit(LPool, 64);
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 100);
-  LReleased := ScavengeCentralPools(LPool, 200, 50);
+  LPool.FTick := 200;
+  LReleased := ScavengeCentralPools(LPool, 50);
   Check(LReleased = 1, 'released 1');
   Check(LPool.FEntries[0].FMemory = nil, 'memory released');
   Check(LPool.FEntries[0].FLastFreeTick = 0, 'tick cleared');
@@ -68,9 +73,10 @@ var
 begin
   CentralPoolInit(LPool, 64);
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 100);
-  ScavengeCentralPools(LPool, 200, 50);
+  LPool.FTick := 200;
+  ScavengeCentralPools(LPool, 50);
   Check(LPool.FEntries[0].FMemory = nil, 'released');
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LCount = 1, 'alloc 1');
   Check(LPool.FEntryCount = 2, '2 entries');
   CentralPoolDestroy(LPool);
@@ -89,20 +95,23 @@ begin
   { Fill and empty span 0 at tick 10. }
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 10);
   { Fill span 0 again (64 allocs) to exhaust it, don't free. }
-  CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0], 0);
+  CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0]);
   { Allocate 1 more → creates span 1 (span 0 is full). }
-  CentralPoolAlloc(LPool, 1, @LOne[0], 0);
+  CentralPoolAlloc(LPool, 1, @LOne[0]);
   Check(LPool.FEntryCount = 2, '2 entries');
   { Free the 64 from span 0 back at tick 150. }
-  CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0], 150);
+  LPool.FTick := 149;
+  CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LKeep[0]);
   { Free the 1 from span 1 at tick 250. }
-  CentralPoolFree(LPool, 1, @LOne[0], 250);
+  LPool.FTick := 249;
+  CentralPoolFree(LPool, 1, @LOne[0]);
   { Span 0: tick=150. Span 1: tick=250. }
   Check(LPool.FEntries[0].FLastFreeTick = 150, 'span 0 tick=150');
   Check(LPool.FEntries[1].FLastFreeTick = 250, 'span 1 tick=250');
   { Scavenge at 300, threshold 100. Span 0 age=150 ≥ 100 → released.
     Span 1 age=50 < 100 → kept. }
-  LReleased := ScavengeCentralPools(LPool, 300, 100);
+  LPool.FTick := 300;
+  LReleased := ScavengeCentralPools(LPool, 100);
   Check(LReleased = 1, 'released 1');
   Check(LPool.FEntries[0].FMemory = nil, 'span 0 released');
   Check(LPool.FEntries[1].FMemory <> nil, 'span 1 kept');
@@ -117,7 +126,8 @@ var
   LReleased: Int32;
 begin
   CentralPoolInit(LPool, 64);
-  LReleased := ScavengeCentralPools(LPool, 1000, 1);
+  LPool.FTick := 1000;
+  LReleased := ScavengeCentralPools(LPool, 1);
   Check(LReleased = 0, 'nothing to release');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: scavenger empty');
@@ -131,12 +141,13 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0]);
   Check(LCount = 64, 'alloc 64');
-  CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0], 200);
+  LPool.FTick := 199;
+  CentralPoolFree(LPool, CENTRAL_SPAN_SLOTS, @LBlocks[0]);
   Check(LPool.FEntries[0].FLastFreeTick = 200, 'tick set');
   { Re-alloc from span — tick should clear. }
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LCount = 1, 're-alloc 1');
   Check(LPool.FEntries[0].FLastFreeTick = 0, 'tick cleared');
   CentralPoolDestroy(LPool);
@@ -151,10 +162,10 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0]);
   Check(LCount = 4, 'alloc 4');
   { Free 1 — span still has 60 allocated (not empty). }
-  CentralPoolFree(LPool, 1, @LBlocks[0], 100);
+  CentralPoolFree(LPool, 1, @LBlocks[0]);
   Check(LPool.FEntries[0].FLastFreeTick = 0, 'no tick (partial)');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: partial span no tick');
@@ -176,7 +187,8 @@ begin
   Check(LStats.LiveBytes > 0, 'live bytes > 0');
   Check(LStats.ReleasedSpans = 0, 'no release yet');
   LBytes := LStats.LiveBytes;
-  LReleased := ScavengeCentralPools(LPool, 200, 50);
+  LPool.FTick := 200;
+  LReleased := ScavengeCentralPools(LPool, 50);
   Check(LReleased = 1, 'released 1');
   CentralPoolGetStats(LPool, LStats);
   Check(LStats.LiveSpans = 0, 'live 0 after');
@@ -200,7 +212,8 @@ begin
   AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 1);
   { age = SCAVENGER_DECOMMIT_THRESHOLD (>= soft, < hard) → decommit only. }
   LOp := 1 + SCAVENGER_DECOMMIT_THRESHOLD;
-  LReleased := ScavengeCentralPools(LPool, LOp, SCAVENGER_IDLE_THRESHOLD);
+  LPool.FTick := LOp;
+  LReleased := ScavengeCentralPools(LPool, SCAVENGER_IDLE_THRESHOLD);
   Check(LReleased = 0, 'no hard release');
   Check(LPool.FEntries[0].FMemory <> nil, 'virtual kept');
   Check(LPool.FEntries[0].FDecommitted, 'decommitted');

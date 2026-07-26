@@ -33,7 +33,7 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LCount = 1, 'allocated 1');
   Check(LBlocks[0] <> nil, 'non-nil');
   Check(CentralPoolFreeCount(LPool) = CENTRAL_SPAN_SLOTS - 1, 'free = 63');
@@ -49,7 +49,7 @@ var
   I: Integer;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 32, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 32, @LBlocks[0]);
   Check(LCount = 32, 'allocated 32');
   for I := 0 to 30 do
     Check(LBlocks[I] <> LBlocks[I + 1], 'unique ' + IntToStr(I));
@@ -64,7 +64,7 @@ var
   LCount: Word;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0]);
   Check(LCount = 128, 'allocated 128 across 2 spans');
   Check(LPool.FEntryCount = 2, '2 spans created');
   CentralPoolDestroy(LPool);
@@ -79,14 +79,14 @@ var
   LFreeBefore, LFreeAfter: SizeUInt;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 4, @LBlocks[0]);
   Check(LCount = 4, 'alloc 4');
   LFreeBefore := CentralPoolFreeCount(LPool);
-  CentralPoolFree(LPool, 4, @LBlocks[0], 0);
+  CentralPoolFree(LPool, 4, @LBlocks[0]);
   LFreeAfter := CentralPoolFreeCount(LPool);
   Check(LFreeAfter = LFreeBefore + 4, 'free increased by 4');
-  { Span is partial (not fully empty): FLastFreeTick stays 0. }
-  Check(LPool.FEntries[0].FLastFreeTick = 0, 'not idle (partial)');
+  { All 4 blocks freed → span fully empty → stamped idle at the pool tick. }
+  Check(LPool.FEntries[0].FLastFreeTick <> 0, 'idle stamped (fully empty)');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: central free');
 end;
@@ -98,11 +98,11 @@ var
   LSaved: Pointer;
 begin
   CentralPoolInit(LPool, 64);
-  CentralPoolAlloc(LPool, 4, @LBlocks[0], 0);
+  CentralPoolAlloc(LPool, 4, @LBlocks[0]);
   LSaved := LBlocks[0];
-  CentralPoolFree(LPool, 1, @LBlocks[0], 0);
+  CentralPoolFree(LPool, 1, @LBlocks[0]);
   { Free 1 of 4 → span not empty → stays in partial list. }
-  CentralPoolAlloc(LPool, 1, @LBlocks[0], 0);
+  CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LBlocks[0] = LSaved, 're-alloc returns freed slot');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: free and realloc');
@@ -115,9 +115,9 @@ var
 begin
   CentralPoolInit(LPool, 32);
   Check(CentralPoolFreeCount(LPool) = 0, 'initial free = 0');
-  CentralPoolAlloc(LPool, 10, @LBlocks[0], 0);
+  CentralPoolAlloc(LPool, 10, @LBlocks[0]);
   Check(CentralPoolFreeCount(LPool) = 64 - 10, 'free after alloc');
-  CentralPoolFree(LPool, 5, @LBlocks[0], 0);
+  CentralPoolFree(LPool, 5, @LBlocks[0]);
   Check(CentralPoolFreeCount(LPool) = 64 - 5, 'free after partial free');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: free count');
@@ -131,10 +131,10 @@ var
 begin
   CentralPoolInit(LPool, 32);
   { Allocate and free all blocks — all go back to the same span. }
-  CentralPoolAlloc(LPool, 10, @LBlocks[0], 0);
+  CentralPoolAlloc(LPool, 10, @LBlocks[0]);
   for I := 0 to 9 do
   begin
-    CentralPoolFree(LPool, 1, @LBlocks[I], 0);
+    CentralPoolFree(LPool, 1, @LBlocks[I]);
     { After each free, subsequent frees to the same span should benefit
       from the MRU cache (FLastHitIndex), making FindSpanIndex O(1). }
   end;
@@ -151,11 +151,11 @@ var
 begin
   CentralPoolInit(LPool, 64);
   { Allocate blocks across multiple spans. }
-  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0]);
   Check(LCount = 128, 'allocated 128');
   Check(LPool.FEntryCount = 2, '2 spans created');
   { Free blocks — optimized lookup should find them. }
-  CentralPoolFree(LPool, 128, @LBlocks[0], 0);
+  CentralPoolFree(LPool, 128, @LBlocks[0]);
   Check(CentralPoolFreeCount(LPool) = 128, 'all blocks returned');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: optimized lookup');
@@ -170,16 +170,16 @@ var
 begin
   CentralPoolInit(LPool, 32);
   { Allocate blocks across 4 spans. }
-  LCount := CentralPoolAlloc(LPool, 256, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 256, @LBlocks[0]);
   Check(LCount = 256, 'allocated 256');
   Check(LPool.FEntryCount = 4, '4 spans created');
   { Free blocks in alternating order — optimized lookup should handle it. }
   for I := 0 to 127 do
-    CentralPoolFree(LPool, 1, @LBlocks[I * 2], 0);
+    CentralPoolFree(LPool, 1, @LBlocks[I * 2]);
   Check(CentralPoolFreeCount(LPool) = 128, '128 blocks freed');
   { Free remaining blocks. }
   for I := 0 to 127 do
-    CentralPoolFree(LPool, 1, @LBlocks[I * 2 + 1], 0);
+    CentralPoolFree(LPool, 1, @LBlocks[I * 2 + 1]);
   Check(CentralPoolFreeCount(LPool) = 256, 'all blocks freed');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: optimized lookup multiple spans');
@@ -250,16 +250,18 @@ var
 begin
   CentralPoolInit(LPool, 64);
   { 分配 2 个 span (128 blocks) }
-  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 128, @LBlocks[0]);
   Check(LCount = 128, 'allocated 128');
   Check(LPool.FEntryCount = 2, '2 spans created');
 
-  { 释放所有 blocks — 传入 AOpCounter=100 让 FLastFreeTick 被设置 }
-  CentralPoolFree(LPool, 128, @LBlocks[0], 100);
+  { 释放所有 blocks — 先把池时钟拨到 99,free 内部 +1 → FLastFreeTick=100 }
+  LPool.FTick := 99;
+  CentralPoolFree(LPool, 128, @LBlocks[0]);
   Check(CentralPoolFreeCount(LPool) = 128, 'all 128 blocks freed');
 
-  { Scavenge: idle threshold = 50, op counter = 200 → age = 100 >= 50 → 释放 }
-  LReleased := ScavengeCentralPools(LPool, 200, 50);
+  { Scavenge: idle threshold = 50, pool tick = 200 → age = 100 >= 50 → 释放 }
+  LPool.FTick := 200;
+  LReleased := ScavengeCentralPools(LPool, 50);
   Check(LReleased = 2, 'released 2 idle spans');
   Check(LPool.FEntries[0].FMemory = nil, 'span 0 memory released');
   Check(LPool.FEntries[1].FMemory = nil, 'span 1 memory released');
@@ -276,14 +278,16 @@ var
   LReleased: Int32;
 begin
   CentralPoolInit(LPool, 64);
-  LCount := CentralPoolAlloc(LPool, 64, @LBlocks[0], 0);
+  LCount := CentralPoolAlloc(LPool, 64, @LBlocks[0]);
   Check(LCount = 64, 'allocated 64');
 
-  { 释放时 AOpCounter=100 → FLastFreeTick=100 }
-  CentralPoolFree(LPool, 64, @LBlocks[0], 100);
+  { 释放时池时钟=99,free 内部 +1 → FLastFreeTick=100 }
+  LPool.FTick := 99;
+  CentralPoolFree(LPool, 64, @LBlocks[0]);
 
-  { Scavenge at op=120, threshold=50 → age=20 < 50 → 不释放 }
-  LReleased := ScavengeCentralPools(LPool, 120, 50);
+  { Scavenge at tick=120, threshold=50 → age=20 < 50 → 不释放 }
+  LPool.FTick := 120;
+  LReleased := ScavengeCentralPools(LPool, 50);
   Check(LReleased = 0, 'not idle long enough');
   Check(LPool.FEntries[0].FMemory <> nil, 'span 0 memory still alive');
 

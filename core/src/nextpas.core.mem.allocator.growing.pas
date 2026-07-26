@@ -12,8 +12,7 @@ uses
   nextpas.core.mem.span,
   nextpas.core.mem.central,
   nextpas.core.mem.cache.thread,
-  nextpas.core.mem.shuffle,
-  nextpas.core.platform.thread;
+  nextpas.core.mem.shuffle;
 
 type
   {** Aggregate scavenger / retention snapshot for TGrowingAllocator.
@@ -45,7 +44,9 @@ type
   TGrowingAllocator = class
   private
     FCentrals: array[0..MEM_SIZECLASS_COUNT - 1] of TCentralPool;
-    FOpCounter: UInt64;  { Monotonic op counter for scavenger idle tracking. }
+    FOpCounter: UInt64;  { Stats-only: last observed per-thread op count
+                           (OpCounter property / GetHeapStats). Idle aging
+                           uses the pool-local FTick in central instead. }
     procedure InitCentrals;
   public
     constructor Create;
@@ -172,8 +173,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  { Portable thread id — not Windows GetCurrentThreadId (bare residual on linux). }
-  LThreadId := QWord(platform_thread_id);
+  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -194,7 +194,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := QWord(platform_thread_id);
+  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -298,8 +298,7 @@ begin
     Exit(0);
   if GGrowingAllocator = nil then
     Exit(0);
-  Result := CentralPoolAlloc(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks,
-    GThreadCache.FOpCount);
+  Result := CentralPoolAlloc(GGrowingAllocator.FCentrals[AIndex], ACount, ABlocks);
 end;
 
 procedure FlushToCentral(AIndex: Int32; ACount: Word;
@@ -376,8 +375,7 @@ begin
   begin
     atomic_exchange_64(FOpCounter, GThreadCache.FOpCount, mo_relaxed);
     for LIndex := 0 to MEM_SIZECLASS_COUNT - 1 do
-      ScavengeCentralPools(FCentrals[LIndex], GThreadCache.FOpCount,
-        SCAVENGER_IDLE_THRESHOLD);
+      ScavengeCentralPools(FCentrals[LIndex], SCAVENGER_IDLE_THRESHOLD);
   end;
   { Huge allocation: skip size class lookup, direct NpSystemGetMem. }
   if ASize > MEM_SIZECLASS_MAX then
@@ -413,7 +411,11 @@ begin
     Result := Pointer(LNode);
   end
   else
-    Result := NpSystemGetMem(ASize);
+    { Central exhausted (OOM): fall back to the System heap. Allocate the
+      FULL class capacity, not ASize — the block is indistinguishable from
+      span slots to the free paths, and BatchFreeMem may push it into the
+      TLS cache where it can be handed out for any request of this class. }
+    Result := NpSystemGetMem(SizeClasses[LIndex]);
   {$IFDEF DEBUG}
   if Result <> nil then
     FillChar(Result^, ASize, MEM_POISON_ALLOC);
@@ -426,6 +428,7 @@ procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
+  LOwnerThreadId: QWord;
 begin
   if APtr = nil then
     Exit;
@@ -444,14 +447,33 @@ begin
     NpSystemFreeMem(APtr);
     Exit;
   end;
-  { Hot free path: always push to freeer's TLS freelist — O(1), no span scan.
-    Prior design scanned FindSpanOwnerThreadId every free for cross-thread
-    routing to central; under high span counts (compiler unit-graph free) that
-    became the dominant cost (linear in spans per size class).
-
-    Cross-thread free remains correct: freeer's TLS reuses the block; flush
-    returns it to the owning span via FindSpanIndex. Avoid owner-inbox push
-    (thread exit UAF). Central-only cross-thread path is optional optimization. }
+  { Cross-thread free optimization: check if block belongs to another thread.
+    If so, return directly to central pool. We avoid pushing to the owner's
+    per-thread inbox because the owner thread may be exiting concurrently,
+    making its threadvar cache a dangling pointer (use-after-free).
+    Central pool free is always safe and correct. }
+  LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
+  if LOwnerThreadId = 0 then
+  begin
+    { Not from any span of this instance: either the OOM fallback block
+      GetMem handed out via NpSystemGetMem, or a block of another instance.
+      It must NOT enter the TLS cache — on flush, central would silently
+      drop it (leak). Route to the owning instance when identifiable,
+      else free it back to the System heap. Wrong-heap pointers remain UB
+      per ERROR-POLICY. }
+    if (GGrowingAllocator <> nil) and (GGrowingAllocator <> Self) and
+       (FindSpanOwnerThreadId(GGrowingAllocator.FCentrals[LIndex], APtr) <> 0) then
+      GGrowingAllocator.FreeMem(APtr, ASize)
+    else
+      NpSystemFreeMem(APtr);
+    Exit;
+  end;
+  if LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId)) then
+  begin
+    CentralPoolFree(FCentrals[LIndex], 1, @APtr);
+    Exit;
+  end;
+  { Same-thread free: push to local TLS cache. }
   if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
   begin
     LNode := PFreeNode(APtr);
@@ -774,7 +796,7 @@ begin
     LOp := FOpCounter;
   atomic_exchange_64(FOpCounter, LOp, mo_relaxed);
   for I := 0 to MEM_SIZECLASS_COUNT - 1 do
-    Inc(Result, ScavengeCentralPools(FCentrals[I], LOp, 0));
+    Inc(Result, ScavengeCentralPools(FCentrals[I], 0));
 end;
 
 procedure TGrowingAllocator.GetHeapStats(out AStats: TGrowingHeapStats);

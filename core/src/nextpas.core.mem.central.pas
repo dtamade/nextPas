@@ -16,14 +16,19 @@ const
   { Default number of slots per span. }
   CENTRAL_SPAN_SLOTS = 64;
 
-  { Scavenger: soft purge — return physical pages, keep virtual reservation.
-    Must be < SCAVENGER_IDLE_THRESHOLD so decommit can fire before hard release.
-    At ~10M ops/s, 100K ops ≈ 10ms idle. }
-  SCAVENGER_DECOMMIT_THRESHOLD = 100000;
+  { Scavenger ages are measured in CENTRAL ticks (FTick): one tick per
+    locked central operation (batch refill / batch flush / inbox drain).
+    With a TLS batch of 64 user ops per central op, 16K ticks ≈ 1M user
+    ops. Ticks are pool-local and monotonic under the spinlock — never
+    compare against per-thread op counters (threadvars from different
+    threads made ages meaningless and could underflow). }
 
-  { Scavenger: hard release — FreeMem backing store after longer idle.
-    At ~10M ops/s, 1M ops ≈ 100ms idle. }
-  SCAVENGER_IDLE_THRESHOLD = 1000000;
+  { Scavenger: soft purge — return physical pages, keep virtual reservation.
+    Must be < SCAVENGER_IDLE_THRESHOLD so decommit can fire before hard release. }
+  SCAVENGER_DECOMMIT_THRESHOLD = 2048;
+
+  { Scavenger: hard release — free backing store after longer idle. }
+  SCAVENGER_IDLE_THRESHOLD = 16384;
 
   { Scavenger: how often (in ops) to run a scavenge check.
     Must be power of 2 for cheap masking. }
@@ -33,16 +38,25 @@ const
   SCAVENGER_MAX_RELEASE = 16;
 
 type
-  {** Entry in the central span pool: a span + its memory region. }
+  {** Entry in the central span pool: a span + its memory region.
+      Lock-free reader invariants (FindSpanOwnerThreadId reads entries
+      without the spinlock):
+      - entry slots are append-only and never recycled: an index valid in
+        one array generation stays valid (same content) in every later one
+      - FMemory / FMemorySize / FOwnerThreadId are write-once while the
+        span is live; FMemory only returns to nil on hard release, which
+        requires the span to be empty (no live block can point into it) }
   PCentralSpanEntry = ^TCentralSpanEntry;
   TCentralSpanEntry = record
     FSpan: TSpan;
     FMemory: Pointer;     { Allocated memory backing the span. }
     FMemorySize: SizeUInt;
-    FLastFreeTick: UInt64; { Op counter when span became fully free (0 = not idle). }
+    FLastFreeTick: UInt64; { Pool-local tick when span became fully free (0 = not idle). }
     FOwnerThreadId: QWord; { Thread that allocated this span (for cross-thread free). }
     FDecommitted: Boolean; { True if physical pages returned to OS (virtual reservation kept). }
   end;
+
+  TCentralSpanEntryArray = array of TCentralSpanEntry;
 
   {** Snapshot of one central pool (live + lifetime counters). }
   TCentralPoolStats = record
@@ -64,12 +78,27 @@ type
       Lock-free inbox: cross-thread frees push via CAS, alloc drains under lock.
       Page-indexed lookup: O(1) FindSpanIndex via span base address comparison. }
   TCentralPool = record
-    FEntries: array of TCentralSpanEntry;
+    FEntries: TCentralSpanEntryArray;
+    { Raw shadow of FEntries for LOCK-FREE readers. FEntries itself must
+      never be read without the spinlock: FPC's SetLength copy-on-write
+      writes nil into the field between copying and publishing the new
+      array (fpc_dynarray_clear in dynarr.inc), so a lock-free reader can
+      observe a transient nil. This shadow is RTL-untouched and published
+      with release ordering in AddSpan after the grown array is ready. }
+    FEntriesBase: Pointer;
+    { Superseded FEntries generations, kept alive for lock-free readers
+      (see AddSpan). Total size is bounded by one current array. }
+    FRetired: array of TCentralSpanEntryArray;
     FEntryCount: Int32;
     FPartialHead: Int32;    { Index of first partial entry (-1 = none). }
     FPartialNext: array of Int32; { Intrusive linked list via indices. }
     FSlotSize: SizeUInt;
     FSpinLock: SizeUInt;    { CentralPoolLock/CentralPoolUnlock. }
+    { Pool-local logical clock: incremented under the spinlock on every
+      central operation (alloc / free / inbox drain). Idle ages compare
+      only against this clock — per-thread op counters are NOT comparable
+      across threads (subtracting them underflows into huge fake ages). }
+    FTick: UInt64;
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
     FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
     { Lifetime scavenger counters (monotonic; not reset by scavenge). }
@@ -87,16 +116,15 @@ procedure CentralPoolDestroy(var APool: TCentralPool);
 
 {** Batch allocate: fill ABlocks[] with ACount pointers to free slots.
     Returns actual count allocated (may be < ACount if pool exhausted).
-    AOpCounter: current op counter (for idle tracking on inbox drain).
-    Thread-safe. }
+    Advances the pool-local tick (idle tracking). Thread-safe. }
 function CentralPoolAlloc(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
+  ACount: Word; ABlocks: PPointer): Word;
 
 {** Batch free: return ABlocks[] to their respective spans.
-    Fully free spans are marked with the current op counter for scavenging.
-    AOpCounter: current op counter (for idle tracking). Thread-safe. }
+    Fully free spans are stamped with the pool-local tick for scavenging.
+    Thread-safe. }
 procedure CentralPoolFree(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64);
+  ACount: Word; ABlocks: PPointer);
 
 {** Return total free slots across all non-released spans. }
 function CentralPoolFreeCount(var APool: TCentralPool): SizeUInt;
@@ -105,13 +133,12 @@ function CentralPoolFreeCount(var APool: TCentralPool): SizeUInt;
 procedure CentralPoolGetStats(var APool: TCentralPool;
   out AStats: TCentralPoolStats);
 
-{** Scan fully-free spans:
+{** Scan fully-free spans (ages measured in pool-local ticks, see FTick):
     - age >= AIdleThreshold → hard FreeMem (counts as Released*)
     - else age >= SCAVENGER_DECOMMIT_THRESHOLD → soft decommit (Decommit*)
-    AOpCounter: current monotonic operation counter.
     Returns number of spans hard-released this pass. Thread-safe. }
 function ScavengeCentralPools(var APool: TCentralPool;
-  AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
+  AIdleThreshold: UInt64): Int32;
 
 {** Push a freed block to the lock-free inbox (CAS, no spinlock).
     Safe to call from any thread without locking.
@@ -171,6 +198,7 @@ begin
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
   APool.FSpinLock := 0;
+  APool.FTick := 0;
   APool.FInboxHead := nil;
   APool.FLastHitIndex := -1;
   APool.FReleasedSpans := 0;
@@ -179,6 +207,7 @@ begin
   APool.FDecommittedBytes := 0;
   SetLength(APool.FEntries, INITIAL_CAPACITY);
   SetLength(APool.FPartialNext, INITIAL_CAPACITY);
+  APool.FEntriesBase := Pointer(APool.FEntries);
 end;
 
 procedure CentralPoolDestroy(var APool: TCentralPool);
@@ -192,7 +221,9 @@ begin
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
   APool.FInboxHead := nil;
+  APool.FEntriesBase := nil;
   SetLength(APool.FEntries, 0);
+  SetLength(APool.FRetired, 0);
   SetLength(APool.FPartialNext, 0);
 end;
 
@@ -216,6 +247,7 @@ var
   LIdx: Int32;
   LMemSize: SizeUInt;
   LMem: Pointer;
+  LRetired: Int32;
 begin
   Result := -1;
   { Span backing comes from the virtual-memory backend, not the process
@@ -236,12 +268,29 @@ begin
   { Grow arrays if needed. }
   if APool.FEntryCount >= Length(APool.FEntries) then
   begin
+    { Retire the current generation before growing: FindSpanOwnerThreadId
+      scans FEntries WITHOUT the spinlock, so the old array must never be
+      freed under a concurrent reader. Holding a second reference forces
+      SetLength into copy-on-write — the reader keeps a valid (possibly
+      stale) generation, which is safe because entry slots are append-only
+      and the fields the reader uses are write-once while live (see
+      TCentralSpanEntry). Generations sum to < one current array and are
+      freed in CentralPoolDestroy. }
+    LRetired := Length(APool.FRetired);
+    SetLength(APool.FRetired, LRetired + 1);
+    APool.FRetired[LRetired] := APool.FEntries;
     SetLength(APool.FEntries, Length(APool.FEntries) * 2);
     SetLength(APool.FPartialNext, Length(APool.FPartialNext) * 2);
+    { Publish the grown array via the raw shadow pointer. SetLength above
+      briefly wrote nil into FEntries (FPC COW clears the field before
+      assigning the new block), which is exactly why lock-free readers must
+      go through FEntriesBase, never FEntries. Release pairs with the
+      acquire load in FindSpanOwnerThreadId. }
+    atomic_store(APool.FEntriesBase, Pointer(APool.FEntries), mo_release);
   end;
   LIdx := APool.FEntryCount;
-  Inc(APool.FEntryCount);
-  { Initialize span. }
+  { Initialize the entry BEFORE publishing the new count: lock-free readers
+    must never observe a published slot with half-written fields. }
   SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
@@ -252,6 +301,10 @@ begin
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;
   APool.FPartialHead := LIdx;
+  { Release-publish: pairs with the acquire load in FindSpanOwnerThreadId.
+    A reader that observes the new count is guaranteed to see the entry
+    fields above and an array base with capacity >= count. }
+  atomic_store(APool.FEntryCount, LIdx + 1, mo_release);
   Result := LIdx;
 end;
 
@@ -263,10 +316,10 @@ function GrabInboxChain(var APool: TCentralPool): PInboxNode; forward;
 {** Process a grabbed inbox chain: return blocks to their spans.
     Caller must hold spinlock. Returns number of blocks processed. }
 function ProcessInboxChain(var APool: TCentralPool;
-  AChain: PInboxNode; AOpCounter: UInt64): Word; forward;
+  AChain: PInboxNode): Word; forward;
 
 function CentralPoolAlloc(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64): Word;
+  ACount: Word; ABlocks: PPointer): Word;
 var
   LCount: Word;
   LIdx: Int32;
@@ -279,10 +332,11 @@ begin
   LInboxChain := GrabInboxChain(APool);
   CentralPoolLock(APool.FSpinLock);
   try
+    Inc(APool.FTick);
     { Phase 2: Process grabbed chain under spinlock.
       FindSpanIndex + SpanFree need spinlock protection. }
     if LInboxChain <> nil then
-      ProcessInboxChain(APool, LInboxChain, AOpCounter);
+      ProcessInboxChain(APool, LInboxChain);
     while LCount < ACount do
     begin
       { Find a partial span. }
@@ -370,7 +424,7 @@ end;
 {** Process a grabbed inbox chain: return blocks to their spans.
     Caller must hold spinlock. Returns number of blocks processed. }
 function ProcessInboxChain(var APool: TCentralPool;
-  AChain: PInboxNode; AOpCounter: UInt64): Word;
+  AChain: PInboxNode): Word;
 var
   LHead, LNext: PInboxNode;
   LIdx: Int32;
@@ -388,7 +442,7 @@ begin
       if SpanFree(APool.FEntries[LIdx].FSpan, Pointer(LHead)) then
       begin
         if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+          APool.FEntries[LIdx].FLastFreeTick := APool.FTick;
         if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
         begin
           APool.FPartialNext[LIdx] := APool.FPartialHead;
@@ -402,7 +456,7 @@ begin
 end;
 
 procedure CentralPoolFree(var APool: TCentralPool;
-  ACount: Word; ABlocks: PPointer; AOpCounter: UInt64);
+  ACount: Word; ABlocks: PPointer);
 var
   I: Word;
   LIdx: Int32;
@@ -413,6 +467,7 @@ begin
     Exit;
   CentralPoolLock(APool.FSpinLock);
   try
+    Inc(APool.FTick);
     for I := 0 to ACount - 1 do
     begin
       LIdx := FindSpanIndex(APool, ABlocks^);
@@ -426,7 +481,7 @@ begin
       begin
         { If span became completely empty, mark it as idle for scavenging. }
         if SpanIsEmpty(APool.FEntries[LIdx].FSpan) then
-          APool.FEntries[LIdx].FLastFreeTick := AOpCounter;
+          APool.FEntries[LIdx].FLastFreeTick := APool.FTick;
         { If span was full and now has space, re-add to partial list. }
         if LWasFull and SpanHasFree(APool.FEntries[LIdx].FSpan) then
         begin
@@ -488,7 +543,7 @@ begin
 end;
 
 function ScavengeCentralPools(var APool: TCentralPool;
-  AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
+  AIdleThreshold: UInt64): Int32;
 var
   I, LPrev, LCur: Int32;
   LAge: UInt64;
@@ -501,7 +556,7 @@ begin
   CentralPoolLock(APool.FSpinLock);
   try
     if LInboxChain <> nil then
-      ProcessInboxChain(APool, LInboxChain, AOpCounter);
+      ProcessInboxChain(APool, LInboxChain);
     for I := 0 to APool.FEntryCount - 1 do
     begin
       if Result >= SCAVENGER_MAX_RELEASE then
@@ -513,8 +568,10 @@ begin
         Continue;
       if APool.FEntries[I].FLastFreeTick = 0 then
         Continue;
-      { Check if idle long enough. }
-      LAge := AOpCounter - APool.FEntries[I].FLastFreeTick;
+      { Check if idle long enough. Both sides are pool-local ticks, so the
+        subtraction can never underflow (FTick only moves forward and the
+        stamp was taken from the same clock). }
+      LAge := APool.FTick - APool.FEntries[I].FLastFreeTick;
       if LAge >= AIdleThreshold then
       begin
         { Unlink from partial list if present (safety for edge cases). }
@@ -566,31 +623,57 @@ end;
 
 function FindSpanOwnerThreadId(var APool: TCentralPool; APtr: Pointer): QWord;
 var
-  I: Int32;
+  I, LCount: Int32;
+  LEntries, LEntry: PCentralSpanEntry;
   LBase: PByte;
   LSize: SizeUInt;
 begin
-  { Check MRU cache first. }
+  { LOCK-FREE reader (called from the FreeMem hot path without the
+    spinlock). Safety protocol, paired with AddSpan:
+    - acquire-load the published count, then snapshot the array base ONCE
+      from FEntriesBase — NEVER from FEntries directly: FPC's SetLength
+      COW transits the field through nil, which a lock-free reader would
+      see as an empty pool (false-negative owner=0). AddSpan
+      release-publishes base before count, so seeing count = N guarantees
+      a base with capacity >= N and fully initialized entries 0..N-1
+    - a stale base is still valid memory: superseded generations are kept
+      alive in FRetired, and entry slots are append-only with write-once
+      live fields, so stale entries carry correct data for live spans }
+  LCount := atomic_load(APool.FEntryCount, mo_acquire);
+  LEntries := PCentralSpanEntry(atomic_load(APool.FEntriesBase, mo_acquire));
+  if (LCount <= 0) or (LEntries = nil) then
+    Exit(0);
+  { Check MRU cache first (racy hint: bounds-checked, validated by range). }
   I := APool.FLastHitIndex;
-  if (I >= 0) and (I < APool.FEntryCount) and (APool.FEntries[I].FMemory <> nil) then
+  if (I >= 0) and (I < LCount) then
   begin
-    LBase := PByte(APool.FEntries[I].FMemory);
-    LSize := APool.FEntries[I].FMemorySize;
-    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
-      Exit(APool.FEntries[I].FOwnerThreadId);
+    LEntry := LEntries;
+    Inc(LEntry, I);
+    if LEntry^.FMemory <> nil then
+    begin
+      LBase := PByte(LEntry^.FMemory);
+      LSize := LEntry^.FMemorySize;
+      if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+        Exit(LEntry^.FOwnerThreadId);
+    end;
   end;
   { Scan in reverse order. }
-  for I := APool.FEntryCount - 1 downto 0 do
+  LEntry := LEntries;
+  Inc(LEntry, LCount - 1);
+  for I := LCount - 1 downto 0 do
   begin
-    if APool.FEntries[I].FMemory = nil then
-      Continue;
-    LBase := PByte(APool.FEntries[I].FMemory);
-    LSize := APool.FEntries[I].FMemorySize;
-    if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+    if LEntry^.FMemory <> nil then
     begin
-      APool.FLastHitIndex := I;
-      Exit(APool.FEntries[I].FOwnerThreadId);
+      LBase := PByte(LEntry^.FMemory);
+      LSize := LEntry^.FMemorySize;
+      if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
+      begin
+        { Racy MRU hint write: benign — aligned Int32, always re-validated. }
+        APool.FLastHitIndex := I;
+        Exit(LEntry^.FOwnerThreadId);
+      end;
     end;
+    Dec(LEntry);
   end;
   Result := 0;
 end;
