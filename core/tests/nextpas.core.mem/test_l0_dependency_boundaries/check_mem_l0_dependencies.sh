@@ -17,8 +17,11 @@ ALLOWED_NEXTPAS_UNIT_FAMILIES=(
   "nextpas.core.system"
 )
 
+# nextpas.core.platform.time was forbidden here while mem still declared raw
+# clock_gettime FFI inline. Since MEM2-A-001, check_mem_rtl_isolation.sh bans
+# that raw FFI and platform.time is the sanctioned clock owner (itself L0:
+# only platform.posix/windows ffi), so the entry was retired.
 FORBIDDEN_UNITS=(
-  "nextpas.core.platform.time"
   "SysUtils"
   "Windows"
   "BaseUnix"
@@ -80,7 +83,7 @@ assert_forbidden_unit() {
 }
 
 assert_forbidden_unit "nextpas.core.text"
-assert_forbidden_unit "nextpas.core.platform.time"
+assert_forbidden_unit "SysUtils"
 
 tmp_found="$(mktemp)"
 tmp_unknown="$(mktemp)"
