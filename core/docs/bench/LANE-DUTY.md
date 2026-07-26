@@ -1,8 +1,8 @@
 # bench lane 值班备忘
 
 **对象**：`.worktrees/bench` / 分支 `bench`
-**状态默认**：Maintenance Idle（B43+；B48 T1 文档卫生已落 lane）
-**最后更新**：2026-07-21
+**状态默认**：Maintenance Idle（B43+；B48 文档卫生已 land `origin/main`）
+**最后更新**：2026-07-26
 
 ## 1. 职责边界
 
@@ -85,11 +85,16 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-20 | B47 消费侧 API drift | 原红 12 + json_raw + Skip 修复；`make -C <bench> clean build` 全绿；`bench-contract-check` | 见 commit；门面大拆/EBR/SCORECARD 仍 Idle |
 | 2026-07-21 | B48 T1 文档卫生 | `bench-contract-check` + `make hygiene` + `git diff --check` | 历史 docs→archive；CONTRACT/ARCH/API/22 口径；无源码变更 |
 | 2026-07-21 | B49 T2 半成品收口 | integration/timeout 路径 + contract-check | 删 entry TimeoutMs；object_pool→recipe；删 orphan test |
-| 2026-07-26 | landing/bench-20260726 on origin/main | `make landing-check` + prior lane `bench-module-test` | B48 根目录历史 docs 去重（仅 archive 保留）；源码无变更 |
+| 2026-07-26 | lane merge origin/main 后 | `make bench-module-test` + `bench-contract-check` + `bench-scorecard-smoke` | **22/22**；**506** tests；contract **12/12**；hygiene pass |
+| 2026-07-26 | **Landed** `ab54e9a9d` → `origin/main` | path-limited `core/docs/bench`；`landing-candidate=pass` + focused gate | B48 根目录历史 docs 去重；archive 保留；**已 push** |
+| 2026-07-26 | idle cycle；`origin/main`=`796bd168e`；behind=0 | `bench-module-test` + contract + scorecard-smoke + consumer build | **22/22**；**506** tests；contract **12/12**；inttohex ok；hash/json bench build ok |
+| 2026-07-26 | audit 全量闭环（F-01–F-26）；HEAD `c28c60fb8` | `bench-module-test` + contract + scorecard/consumer smoke | **22/22**；**510** tests；contract **13/13**（+C10）；inttohex+hash/json ok；见 findings.md |
 
 > 新一次回归后更新本表一行即可。
 
-### 2026-07-26 landing 说明
+### 2026-07-26 收口
 
-- 本 landing **仅** `core/docs/bench/**`：删除与 `archive/` 重复的根目录历史报告。
-- 权威入口仍是 README / CONTRACT / goal-tree / LANE-DUTY；archive 只作历史索引。
+- B48 文档卫生已 **push 到 origin/main**（`ab54e9a9d`）。
+- 源码/测试/示例此前已在 main；本次仅 docs 去重。
+- landing worktree：`.worktrees/landing/bench-20260726`（可删）。
+- **Idle 值班中**：不排期 API/EBR/全量 SCORECARD；只合 main、跑门禁、修回归。

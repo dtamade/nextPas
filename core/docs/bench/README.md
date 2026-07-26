@@ -2,15 +2,13 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
-> **Lane 状态：Maintenance Idle（2026-07-21 · B47 后；T1 文档卫生）**
+> **Lane 状态：Maintenance Idle + audit 闭环（2026-07-26）**
 >
-> - API 冻结；消费 checklist **22** 模块 C1–C5 全绿；scorecard 子集 **11** track
-> - 默认 gate：**22** suites（`core/tests/nextpas.core.bench/Makefile` PROJECTS）
-> - 日常：只响应回归、明确授权的小修（文档/卫生/契约口径可做）
-> - **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆
-> - **值班 / Landing 纪律**（含 **FF 后必 push**）：[LANE-DUTY.md](LANE-DUTY.md)
-> - **B45–B47**：Canonical API、BlackBox、benchmarks RTL 隔离、消费侧 API drift
-> - **B48–B49**：文档卫生；删 per-entry Timeout 半成品；orphan test 清理；recipe 示例
+> - API 冻结；gate **22** suites；scorecard 子集 **11** track
+> - **不**排期：EBR、全量 SCORECARD、门面物理大拆（F-06 以冻结收口）
+> - 2026-07-26 audit：`findings.md` 全量处理（统计诚实 / timeout / memtrack / platform parallel）
+> - 入口：`make bench-module-test` · `make bench-scorecard-smoke` · `make bench-consumer-smoke`
+> - 值班：[LANE-DUTY.md](LANE-DUTY.md)
 
 ## Canonical API（唯一推荐路径）
 
@@ -70,6 +68,9 @@ make bench-module-test
 
 # 轻量 scorecard smoke（inttohex；需 fpc + go）
 make bench-scorecard-smoke
+
+# 消费侧 compile smoke（API drift 哨兵）
+make bench-consumer-smoke
 
 # 子集脚本（可 --tracks a,b 或 --summary）
 bash core/docs/bench/scripts/run-scorecard-subset.sh --list

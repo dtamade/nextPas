@@ -359,7 +359,9 @@ procedure TestGetTotalOpsPerSec;
 var
   LSuite: IBenchSuite;
   LResults: IBenchResults;
-  LTotalOps: Double;
+  LTotalOps, LSum: Double;
+  LAll: TBenchResultArray;
+  I: Integer;
 begin
   LSuite := CreateFastSuite('TotalOpsTest');
   LSuite.Add('Fast', @BenchFast);
@@ -369,6 +371,12 @@ begin
 
   LTotalOps := LResults.GetTotalOpsPerSec;
   Check(LTotalOps > 0, 'GetTotalOpsPerSec: total > 0');
+  { F-07: API is arithmetic sum of per-entry OpsPerSec, not geometric/aggregate throughput. }
+  LAll := LResults.GetExecuted;
+  LSum := 0;
+  for I := 0 to High(LAll) do
+    LSum := LSum + LAll[I].OpsPerSec;
+  Check(Abs(LTotalOps - LSum) < 1e-6, 'GetTotalOpsPerSec: equals sum of entry OpsPerSec');
 end;
 
 procedure TestGetTotalOutliers;
@@ -1108,11 +1116,11 @@ begin
   LSuite.SetQuiet(True);
   LResults := LSuite.Run;
 
-  { 比较两个分组 }
+  { 比较两个分组 — 组均值启发式，非正式统计检验 (F-03) }
   LComparison := LResults.CompareGroups('Sort', 'Search');
   Check(LComparison.Ratio > 0, 'CompareGroups: ratio > 0');
   CheckEqual('Sort', LComparison.BaselineName, 'CompareGroups: baseline name');
-  Check(LComparison.HasStatisticalTest, 'CompareGroups: has statistical test');
+  Check(not LComparison.HasStatisticalTest, 'CompareGroups: heuristic only, not formal test');
   Check(LComparison.BaselineNsPerOp > 0, 'CompareGroups: baseline ns/op > 0');
   Check(LComparison.CurrentNsPerOp > 0, 'CompareGroups: current ns/op > 0');
 

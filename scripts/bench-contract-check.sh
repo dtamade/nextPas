@@ -79,6 +79,17 @@ else
   ok "无 orphan test_test_bench_integration"
 fi
 
+printf "\n${BOLD}C10: bench 源禁止 system.classes / class(TThread)${NC}\n"
+C10_HITS=$(rg -n --glob 'nextpas.core.bench*.pas' \
+  -e 'nextpas\.core\.system\.classes' -e 'class\s*\(\s*TThread\s*\)' \
+  "$SRC_DIR" 2>/dev/null || true)
+if [ -n "$C10_HITS" ]; then
+  fail_check "bench 源仍引用 system.classes/TThread"
+  printf '%s\n' "$C10_HITS"
+else
+  ok "bench 源无 system.classes/TThread 依赖"
+fi
+
 printf "\n${BOLD}C9: core/benchmarks/nextpas.core.* 禁止直连 FPC RTL${NC}\n"
 BENCH_ROOT="$REPO_ROOT/core/benchmarks"
 # 白名单：刻意 FPC RTL 对照

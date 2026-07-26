@@ -1,7 +1,7 @@
 # EBR × BenchRun 设计备忘（未立项）
 
-**状态**：备忘 only · **不实现** · 2026-07-20
-**相关**：`goal-tree.md` 未来候选；`nextpas.core.lockfree.ebr`（`TEbrDomain`）；现有 `TBenchRun`（原子结果收集）
+**状态**：备忘 only · **明确不实现（F-23 Deferred-closed）** · 2026-07-20 / 确认 2026-07-26
+**相关**：`goal-tree.md`；`nextpas.core.lockfree.ebr`（`TEbrDomain`）；现有 `TBenchRun`（原子结果收集）
 
 ---
 

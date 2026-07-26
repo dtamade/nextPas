@@ -1,9 +1,25 @@
 # nextpas.core.bench 代码契约
 
 **模块路径**：`core/src/nextpas.core.bench*.pas`
-**层级**：tooling harness（registry `tooling`）；**非**「纯 L1→L0」。真实依赖见 [ARCHITECTURE.md](ARCHITECTURE.md)（fs/json/atomic/collections/system.classes 等）。
-**最后更新**：2026-07-21（T1：SetTimeout/层级/ IBenchResults 索引对齐）
-**权威状态**：`goal-tree.md`（B0–B47）；API 冻结见 README；truth = focused-runtime
+**层级**：tooling harness（registry `tooling`）；**非**「纯 L1→L0」。真实依赖见 [ARCHITECTURE.md](ARCHITECTURE.md)（fs/json/atomic/platform.thread/system.memmanager 等）。
+**最后更新**：2026-07-26（audit 闭环：统计诚实、timeout 采样中断、platform parallel、memtrack）
+**权威状态**：`goal-tree.md`；API 冻结见 README；truth = focused-runtime
+
+### 0.0 统计与超时契约（2026-07-26）
+
+| 项 | 契约 |
+|----|------|
+| `CompareGroups.HasStatisticalTest` | **始终 False**（组均值启发式） |
+| `CompareTwoResults` 无 RawSamples | `HasStatisticalTest=False`，`IsSignificant=False` |
+| `GetTotalOpsPerSec` 等 | 各 entry **算术相加**，非整体吞吐 |
+| `SetTimeout` | suite 级；**传入采样循环**；单 entry 超时中止 |
+| parallel | `platform.thread` only；**禁止** `system.classes`/`TThread` |
+| memtrack | 进程级 MM hook；`TryEnable*`；heaptrc 下 soft-skip；单 suite/进程 |
+
+### 0.0b Advanced 路径
+
+- `TBenchRunner` / `TBenchRun`：**非默认**；新代码优先 `TBenchSuite`。
+- EBR×BenchRun：**明确不实现**（见 ebr-benchrun-design-note.md）。
 
 ### 0.1 测量辅助（base / 门面 re-export）
 

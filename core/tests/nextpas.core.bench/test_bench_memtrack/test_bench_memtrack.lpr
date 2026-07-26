@@ -462,6 +462,35 @@ begin
   Check(LTracker1.IsEnabled = LTracker2.IsEnabled, 'GlobalMemoryTracker returns consistent state');
 end;
 
+procedure Test_RecordFree_ClampNonNegative;
+var
+  LTracker: TMemoryTracker;
+  LStats: TMemoryStats;
+begin
+  { F-08: free without matching alloc must not drive Current* negative }
+  LTracker := TMemoryTracker.Create(True);
+  LTracker.RecordFree(64);
+  LStats := LTracker.GetStats;
+  Check(LStats.CurrentAllocs >= 0, 'RecordFree clamp: CurrentAllocs >= 0');
+  Check(LStats.CurrentBytes >= 0, 'RecordFree clamp: CurrentBytes >= 0');
+  Check(LStats.FreeCount = 1, 'RecordFree clamp: FreeCount counted');
+end;
+
+procedure Test_TryEnableGlobalMemoryTracking;
+var
+  LOk: Boolean;
+begin
+  DisableGlobalMemoryTracking;
+  LOk := TryEnableGlobalMemoryTracking;
+  {$ifdef HEAPTRC_ACTIVE}
+  Check(not LOk, 'TryEnable under heaptrc returns False');
+  {$else}
+  Check(LOk, 'TryEnable succeeds without heaptrc');
+  Check(IsGlobalMemoryTrackingEnabled, 'tracking enabled after Try');
+  {$endif}
+  DisableGlobalMemoryTracking;
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -484,6 +513,8 @@ begin
   T.Test('GetGlobalMemoryStats', @Test_GetGlobalMemoryStats);
   T.Test('ReAllocMem_Tracking', @Test_ReAllocMem_Tracking);
   T.Test('GlobalMemoryTracker_Singleton', @Test_GlobalMemoryTracker_Singleton);
+  T.Test('RecordFree_ClampNonNegative', @Test_RecordFree_ClampNonNegative);
+  T.Test('TryEnableGlobalMemoryTracking', @Test_TryEnableGlobalMemoryTracking);
 
   LRunPassed := T.Run;
   T.Summary;

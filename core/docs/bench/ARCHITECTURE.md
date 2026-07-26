@@ -32,9 +32,9 @@ bench.base          ← exception, time.base, io.linewriter
 bench.intf          ← bench.base, time.base, exception, io.linewriter
 bench.stats         ← bench.base, bench.intf
 bench.stats.advanced← bench.base, platform (+ impl atomic)
-bench.memtrack      ← system.memmanager
+bench.memtrack      ← system.memmanager (process-global MM hook; process isolation)
 bench.run           ← atomic, platform.thread, bench.*
-bench.parallel      ← system.classes (TThread), bench.*, platform
+bench.parallel      ← platform.thread (NOT Classes.TThread), bench.*, platform.time
 bench.runner        ← bench.*, platform.time, time.base
 bench.baseline      ← fs, fs.util, json, json.writer, platform.time, text.*
 bench.report        ← bench.* (+ impl fs, json.writer)
@@ -43,16 +43,26 @@ bench (facade)      ← bench.* 子单元; impl: fs, json.writer, collections.ha
 
 **说明**:
 - `fs`/`json`：基线与报告落盘
-- `atomic`/`platform.thread`：TBenchRun 并发收集
-- `system.classes`：并行路径 `TThread`
+- `atomic`/`platform.thread`：TBenchRun 与 **parallel** 并发路径
+- **无** `system.classes` / `TThread`（F-01 已迁 platform.thread）
 - `collections.hashmap`：GenerateComparisons O(n) 名称匹配
+- **tooling harness**（registry），非严格 L1→L0
 
 ## 门面策略
 
 - `bench.pas` 是用户唯一入口；TBenchResults 查询/聚合 API 已使门面 >3k 行。
 - **2026-07-19 起默认冻结** 向 `IBenchResults`/`IBenchSuite` 新增公共便捷方法。
-- 后续增量优先：`bench.report` / `bench.stats` 子单元，或明确 bugfix。
+- **F-06 闭环**：不物理大拆门面；增量只进 `report`/`stats` 或 bugfix。
 - 分组内部 helper：`ExtractGroupName` / `CollectGroupResults` / `CollectGroupNsPerOp`。
+
+## 语义陷阱（读侧，F-03/F-07/F-10）
+
+| API | 含义 |
+|-----|------|
+| `CompareGroups` | 组均值启发式；**`HasStatisticalTest=False`** |
+| `CompareTwoResults` | 有 RawSamples 才 MWU；无 raw → 不显著、无正式检验 |
+| `GetTotalOpsPerSec` 等 | 各 entry 指标 **算术相加**，非整体吞吐 |
+| `SetTimeout` | suite 级；**采样循环内也会中止**（F-04） |
 
 ## 数据流
 
@@ -91,16 +101,9 @@ TBenchComparison / CI
 
 **注意**: `CompareTwoResults` 用 MWU（需 RawSamples）；`CompareGroups` 仅组均值 + 启发式 p-value，严格性更弱。
 
-## 语义陷阱（读侧）
-
-| API | 含义 |
-|-----|------|
-| `GetTotalIterations` / `GetTotalOutliers` | 合理求和 |
-| `GetTotalOpsPerSec` | 各基准 OpsPerSec **相加**（非「整体吞吐」的严谨定义） |
-| `GetTotalBytesPerOp` / `GetTotalAllocsPerOp` | 各基准 per-op 指标 **相加**，**通常无物理意义**；仅作汇总展示 |
-
 ## 超时模型
 
-- **suite 级**：`TBenchSuite.SetTimeout(TDuration)` → `TBenchConfig.TimeoutMs`；条目间与条目完成后跳过剩余。
-- **无 per-entry Timeout**：`TBenchEntry` 不再含 `TimeoutMs`（B48/T2 删除半成品字段）。
-- 采样循环内 `CollectEntrySamples` 仍接受可选截止参数，当前 `RunOne` 传 0。
+- **suite 级**：`TBenchSuite.SetTimeout(TDuration)` → `TimeoutMs` + suite start ns 传入 `RunOne`/`CollectEntrySamples`。
+- **条目间**：已超时 → 剩余 Skip `Timeout exceeded`。
+- **条目内**：采样前检查同一 deadline → Skip `Timeout exceeded during sampling`。
+- **无** 公开 per-entry `TimeoutMs` 字段（B49）。
