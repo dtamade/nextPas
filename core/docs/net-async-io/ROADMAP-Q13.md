@@ -35,6 +35,7 @@
 | **Q38** | Windows smoke 诚实化 | STRICT 收窄 + suite timeout；dial/udp/pool soft | **done** |
 | **Q39** | IOCP ConnectEx pre-bind | ConnectEx 前 wildcard bind + WSAGetLastError | **done** |
 | **Q40** | IOCP datagram | AsyncSendTo/AsyncRecvFrom via WSASendTo/WSARecvFrom | **done** |
+| **Q41** | Wake coalescing + bench 旗标诚实化 | post/channel 与 Go 同数量级；stress 3 新测试 0 leak | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
 | **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
@@ -89,6 +90,37 @@ UDP soft 仍待 IOCP `AsyncSendTo`/`AsyncRecvFrom`（poller 明确未实现）�
 - `TIocpReactor.AsyncSendTo` / `AsyncRecvFrom` + poller `pbIocp` 接线
 - 与 epoll 路径同样的回调契约（`AAddrLen` 指针 out for recvfrom）
 - soft 套件仍报告；GHA 绿后再升 STRICT
+
+### Q41 细节（wake coalescing）
+
+痛点：post ~3.2e5 vs Go ~1.2e7（37×）。归因（strace 不可用，改代码路径推演 + 旗标 A/B 实验证实）：
+
+1. **每 Post 一次 eventfd write**：`PostEx` = MPSC Enqueue + 无条件 `Wake`。
+2. **每 Poll 两次 syscall**：无条件 `DrainWake`（eventfd read）+ 无条件 `FPoller.Poll`（epoll_wait(0)）。
+3. **bench 旗标不对等**：`common.mk` 默认 `-gh` heaptrc 全量堆跟踪，Go/Rust peer 是 release。
+
+修复（Go netpollBreak 协议）：
+
+- `FWakeSignaled: Int32` 合并标志；`Wake` = `atomic_exchange(flag,1,seq_cst)=0` 才付 `platform_poller_wake`。
+- 消费者睡前序（顺序强制）：DrainWake(fd) → `atomic_exchange(flag,0,seq_cst)` → DrainPending 重查 → 才 WaitForWake。两侧必须 RMW（防 StoreLoad 重排 lost wakeup；全交错已推演）。
+- `Poll`/`Run` 热路径去 DrainWake（MPSC 队列是 truth；fd 只服务 WaitForWake 返回）。
+- `FPoller.HasPending=false` 时跳过 Flush+Poll（4 后端 HasPending 均 O(1) 注册计数）。
+- `async-bench-parity.sh` 改 release 旗标（`NEXTPAS_BENCH_FPC_FLAGS`，可覆写）；泄漏纪律仍归默认 `make test`。
+
+归因表（post / channel，ops/s）：
+
+| 配置 | post | channel |
+|------|------|---------|
+| 旧代码 + heaptrc（旧记分卡） | 2.9e5 | 4.1e5 |
+| 旧代码 + release | 4.8e5 | 7.9e6 |
+| 新代码 + heaptrc | 7.0e5 | 4.6e5 |
+| **新代码 + release** | **~4–5.4e6** | **~7.7e6** |
+
+结论：post 瓶颈 = syscall（合并贡献 ~11×）；channel 瓶颈 = heaptrc（旗标贡献 ~19×）。
+
+新回归测试（test_async_stress 10–12）：PingPongWakeLatency（lost-wakeup 探测器，200 轮对睡眠 loop 单发 Post）、PollOnlyCrossThreadDrain（Poll 去 DrainWake 后队列即 truth）、StopDuringDeepSleep（跨线程 Stop 不被合并吞掉）。
+
+已知次级成本（不动）：MPSC per-node New/Dispose——lockfree F-044 已证明池化为否定结果（FPC per-thread 堆即 TLS 池）。
 
 ### 待升 STRICT 条件
 

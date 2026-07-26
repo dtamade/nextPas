@@ -18,6 +18,11 @@ PARITY_DIR="$SCRIPT_DIR/async-bench-parity"
 OUT_DIR="${ASYNC_BENCH_OUT:-$CORE_ROOT/build/async-bench-parity}"
 mkdir -p "$OUT_DIR"
 
+# Parity honesty: go/rust peers build release; the default test flags add
+# heaptrc (-gh), which taxes every alloc on the nextpas side only. Benches
+# here build release; leak discipline stays with the default `make test`.
+NEXTPAS_BENCH_FPC_FLAGS="${NEXTPAS_BENCH_FPC_FLAGS:--MObjFPC -Sh -Sg -O2}"
+
 echo "=== async-bench-parity (same host) ==="
 echo "core=$CORE_ROOT out=$OUT_DIR"
 echo "truth=same-host-order-of-magnitude; not API-equivalent; not CI-gating"
@@ -25,7 +30,8 @@ echo
 
 echo "--- nextpas test_async_bench ---"
 set +e
-make -C "$CORE_ROOT/tests/nextpas.core.async/test_async_bench" clean test >"$OUT_DIR/nextpas.log" 2>&1
+make -C "$CORE_ROOT/tests/nextpas.core.async/test_async_bench" clean test \
+  BASE_FPC_FLAGS="$NEXTPAS_BENCH_FPC_FLAGS" >"$OUT_DIR/nextpas.log" 2>&1
 np_rc=$?
 set -e
 grep -E 'metric=' "$OUT_DIR/nextpas.log" | tee "$OUT_DIR/nextpas.metrics" || true
@@ -56,7 +62,8 @@ fi
 echo
 echo "--- nextpas dial_ops_per_s ---"
 set +e
-make -C "$CORE_ROOT/tests/nextpas.core.net/test_net_async_dial_bench" clean test >"$OUT_DIR/nextpas-dial.log" 2>&1
+make -C "$CORE_ROOT/tests/nextpas.core.net/test_net_async_dial_bench" clean test \
+  BASE_FPC_FLAGS="$NEXTPAS_BENCH_FPC_FLAGS" >"$OUT_DIR/nextpas-dial.log" 2>&1
 dial_rc=$?
 set -e
 grep -E 'metric=' "$OUT_DIR/nextpas-dial.log" | tee "$OUT_DIR/nextpas-dial.metrics" || true
