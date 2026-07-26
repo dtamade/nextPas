@@ -12,7 +12,13 @@ const
   LOCKFREE_YIELD_COUNT = 32;
 
 type
-  TCacheLinePad = array[0..3] of Int64;
+  { A full 64-byte line: FPC heap only guarantees 8/16-byte instance
+    alignment, so with any pad narrower than one line two padded field
+    groups can still land on the same line depending on where the
+    allocator placed the instance (measured: ~50% of placements with the
+    former 32-byte pad).  A full-line gap separates the groups for every
+    possible base alignment. }
+  TCacheLinePad = array[0..7] of Int64;
 
   {** @desc Diagnostic failure reason for optional Try*Ex APIs.
     @details Hot-path Boolean Try* APIs stay unchanged. Try*Ex fills AError:

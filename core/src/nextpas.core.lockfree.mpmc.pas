@@ -46,6 +46,9 @@ type
     FSlots: array of TSlot;
     FCapacity: PtrUInt;
     FMask: PtrUInt;
+    {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
+    FPadHeader: TCacheLinePad;
+    {$POP}
     // Producer-owned fields (cache line 1)
     FEnqueuePos: Int64;
     FActiveEnqueues: Int32;

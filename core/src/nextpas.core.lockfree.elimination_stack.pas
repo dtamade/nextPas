@@ -57,6 +57,9 @@ type
     { Treiber stack }
     FSlots: TSlotArray;
     FCapacity: Int32;
+    {$PUSH} {$WARN 05029 OFF} // keep the read-mostly header off the hot lines
+    FPadHeader: TCacheLinePad;
+    {$POP}
     FTop: Int64;
     {$PUSH} {$WARN 05029 OFF}
     FPadTop: TCacheLinePad;
