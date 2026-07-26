@@ -142,6 +142,7 @@ const
   ESysEACCES = 13;
   ESysENOENT = 2;
   ESysENOMEM = 12;
+  ESysEPERM = 1;
   ESysEMFILE = 24;
   ESysENFILE = 23;
   ESysEINPROGRESS = 115;

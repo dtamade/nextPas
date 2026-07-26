@@ -106,6 +106,8 @@ const
   ESysENOENT = 2;
   {** @desc ENOMEM 错误码 *}
   ESysENOMEM = 12;
+  {** @desc EPERM 错误码 *}
+  ESysEPERM = 1;
   {** @desc EOPNOTSUPP 错误码 *}
   ESysEOPNOTSUPP = 95;
   {** @desc ETIMEDOUT 错误码 *}

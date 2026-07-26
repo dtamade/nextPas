@@ -76,7 +76,15 @@ uses
   nextpas.core.platform.info,
   nextpas.core.platform.pipe,
   nextpas.core.platform.random,
-  nextpas.core.platform.secure
+  nextpas.core.platform.secure,
+  { mmap → files 传递命中同一条 deferred generic-unix stat 链 }
+  {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.mmap,{$ENDIF}
+  nextpas.core.platform.process,
+  { pty needs host-owned termios/pty ABI (winsize/openpty/TIOCSCTTY);
+    android/generic-unix hosts have no verified declarations yet — deferred }
+  {$IF not (defined(SIM_EXPECT_ANDROID) or defined(SIM_EXPECT_UNIX))}nextpas.core.platform.pty,{$ENDIF}
+  nextpas.core.platform.resource,
+  nextpas.core.platform.signal
   { which → fs → files transitively hits the same deferred generic-unix stat }
   {$IFNDEF SIM_EXPECT_UNIX}, nextpas.core.platform.which{$ENDIF}
   {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.base, nextpas.core.platform.darwin.ffi{$ENDIF}

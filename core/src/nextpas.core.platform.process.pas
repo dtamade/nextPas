@@ -288,14 +288,18 @@ uses
   nextpas.core.platform.time
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
-{$ENDIF}
-{$IFDEF NEXTPAS_MACOS}
+{$ELSEIF defined(NEXTPAS_MACOS)}
   , nextpas.core.platform.darwin.base
   , nextpas.core.platform.darwin.ffi
-{$ENDIF}
-{$IFDEF NEXTPAS_FREEBSD}
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
   , nextpas.core.platform.freebsd.base
   , nextpas.core.platform.freebsd.ffi
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.android.base
+  , nextpas.core.platform.android.ffi
+{$ELSE}
+  , nextpas.core.platform.unix.base
+  , nextpas.core.platform.unix.ffi
 {$ENDIF}
 {$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
   , nextpas.core.platform.linux.modern
