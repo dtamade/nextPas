@@ -425,6 +425,29 @@ end;
 
 ## 11. 变更日志
 
+### v8.36 (2026-07-26) — B78 密度 tranche 3：prop.gen shrink 精确序列 + Name 词汇表
+
+- **test_prop 四张契约表（85 行，其中 31 行 fail-path）**，全部绑 prop.gen 真实算法
+  （区别于 B71 的性质断言——本批断言**精确候选序列**）：
+  - `int-shrink exact-sequence`（28 行）：`[target, mid, step, quarter]` 序列 +
+    域夹紧/去重剪枝；域外输入 → 单边界候选；value=target → 空序列；
+    **跨零域重复候选为锁定行为**（`Shrink(1)=[0,0,0]`：mid/step 不与 target 查重）；
+    负数 `div` 向零截断语义（`-999997 div 2 = -499998`）
+  - `string-shrink exact-sequence`（16 行）：8 策略序列（empty/half/drop-last/
+    all-a/drop-first/drop-middle/shorter-a/half-a）逐一受 FMinLen 门控；
+    域外 pad 'a' 或截断；all-a 恒在域内（len=minlen 时唯一候选）
+  - `bytes-shrink exact-sequence`（12 行）：**仅 3 策略**（empty/half/drop-last，
+    无 all-a 类似物）；`len=FMinLen` → 零候选（string 系有 all-a 兜底而 bytes 无）；
+    域外低 → FillChar 零填充、域外高 → 截断
+  - `generator meta contract`（29 行）：16 个生成器 Name 词汇表（含嵌套组合名
+    `MapIntToStr(GenInt(0..5))`、单参重载默认 min=0、`GenOneOfString(1 generators)`
+    单复数不分）+ bool shrink 恒 `[False]`（False 不动点仍产出候选）+
+    choice shrink 保数组序过滤 `< input`（域外输入全集通过、最简值空序列）+
+    filter shrink 对源序列施谓词（可滤至空）
+- 表行 flag 自校验：'0' 行强制 ≤1 候选/边界 kind，'1' 行强制完整序列——防标签灌水
+- scale：countable 7781 → **7867**（test_prop 302→388，fp 244→275）；
+  fail-path 82.3% / low-signal 0% / non-table 1463；SCALE_MIN 维持 7500（9000 待密度达标）
+
 ### v8.35 (2026-07-26) — B78 密度 tranche 2：output 转义/结构 fail-path
 
 - **test_output 四张契约表（92 行，其中 51 行 fail-path）**，全部绑 formatter 真实行为：

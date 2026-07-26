@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-26
-> 治理状态: **v8.35** output 转义/结构 fail-path 密度（v8.34 F-12 COW lint + runner.multi 编排契约）
+> 治理状态: **v8.36** prop.gen shrink 精确序列密度（v8.35 output 转义/结构 fail-path）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 

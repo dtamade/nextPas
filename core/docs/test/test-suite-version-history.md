@@ -306,6 +306,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v8.33**: runner 拆分 — `test.runner.pas` (2369L) → `test.runner.pas` (TTestSuite 引擎, 1994L) + `test.runner.multi.pas` (TSuiteRunner 编排, 402L)；门面 API 不变；修正 test_parallel R6-54/B10 对 v8.31 F-20 语义的遗留断言（配置期 fail-fast，非静默 skip）
 - **v8.34**: F-12 COW lint（source-contract 静态检测 Add 后改原 suite 的丢改陷阱，`{ cow-lint-ok }` 豁免）+ TSuiteRunner 编排契约密度（M1 定点 + M2 聚合矩阵 54 行 + M3 FailFast/MaxFailures 停止矩阵 12 行）；scale 7609→7686
 - **v8.35**: B78 密度 tranche 2 — test_output 四张契约表 92 行（51 fail-path）：XmlEscape 五实体/双重转义/ctrl 折叠、JsonEscape `\u00XX`/穿透面、TAP plan/YAML block/skip directive/footer 计数字段语义（tsError→Failed）、FormatDuration 截断+负值穿透；scale 7686→7781
+- **v8.36**: B78 密度 tranche 3 — test_prop 四张契约表 85 行（31 fail-path）：int/string/bytes shrink **精确候选序列**（锁定跨零域重复候选 `Shrink(1)=[0,0,0]`、bytes 仅 3 策略 len=min 零候选）+ 16 生成器 Name 词汇表 + bool/choice/filter shrink 语义；scale 7781→7867
 
 ## 路线图
 

@@ -1119,6 +1119,268 @@ begin
     Fail('unknown B72 kind ' + AC.Data);
 end;
 
+{ ── v8.36: shrink exact-sequence + generator meta contracts ──────────────── }
+
+function NextSeg(var ARest: string): string;
+{ Consume up to the next '|'; after the last '|' the whole tail is returned. }
+var
+  LBar: Integer;
+begin
+  LBar := Pos('|', ARest);
+  if LBar = 0 then
+  begin
+    Result := ARest;
+    ARest := '';
+  end
+  else
+  begin
+    Result := Copy(ARest, 1, LBar - 1);
+    ARest := Copy(ARest, LBar + 1, Length(ARest));
+  end;
+end;
+
+procedure AppendShrCase(var ACases: specialize TArray<TTestCase>;
+  const AName, AData, AFlag: string);
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := AData + '|' + AFlag;
+end;
+
+function JoinInt64Seq(const ASeq: specialize TArray<Int64>): string;
+{ Empty array renders as '<none>' so it stays distinguishable from a
+  sequence containing empty-string candidates in the sibling joiners. }
+var
+  I: Integer;
+begin
+  if Length(ASeq) = 0 then Exit('<none>');
+  Result := '';
+  for I := 0 to High(ASeq) do
+  begin
+    if I > 0 then Result := Result + ',';
+    Result := Result + IntToStr(ASeq[I]);
+  end;
+end;
+
+function JoinStrSeq(const ASeq: specialize TArray<string>): string;
+var
+  I: Integer;
+begin
+  if Length(ASeq) = 0 then Exit('<none>');
+  Result := '';
+  for I := 0 to High(ASeq) do
+  begin
+    if I > 0 then Result := Result + ',';
+    Result := Result + ASeq[I];
+  end;
+end;
+
+function BytesToHexStr(const ABytes: TBytes): string;
+const
+  CHexDigits: array[0..15] of Char = '0123456789abcdef';
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(ABytes) do
+    Result := Result + CHexDigits[ABytes[I] shr 4] + CHexDigits[ABytes[I] and 15];
+end;
+
+function JoinBytesSeq(const ASeq: specialize TArray<TBytes>): string;
+var
+  I: Integer;
+begin
+  if Length(ASeq) = 0 then Exit('<none>');
+  Result := '';
+  for I := 0 to High(ASeq) do
+  begin
+    if I > 0 then Result := Result + ',';
+    Result := Result + BytesToHexStr(ASeq[I]);
+  end;
+end;
+
+function HexNibble(ACh: Char): Byte;
+begin
+  case ACh of
+    '0'..'9': Result := Ord(ACh) - Ord('0');
+    'a'..'f': Result := Ord(ACh) - Ord('a') + 10;
+  else
+    Result := 0;
+  end;
+end;
+
+function HexStrToBytes(const AHex: string): TBytes;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AHex) div 2);
+  for I := 0 to High(Result) do
+    Result[I] := (HexNibble(AHex[I * 2 + 1]) shl 4) or HexNibble(AHex[I * 2 + 2]);
+end;
+
+procedure TestIntShrinkSeqCase(const AC: TTestCase);
+{ TIntGenerator.Shrink exact candidate sequence: [target, mid, step, quarter]
+  with domain-clamp/dedup pruning; out-of-domain input yields one boundary
+  candidate; value=target yields no candidates. Duplicate candidates (e.g.
+  Shrink(1) in a zero-crossing domain = 0,0,0) are locked-in behavior. }
+var
+  LRest, LWant, LFlag: string;
+  LMin, LMax, LVal: Int64;
+  LCands: specialize TArray<Int64>;
+begin
+  LRest := AC.Data;
+  LMin := StrToInt64Def(NextSeg(LRest), 0);
+  LMax := StrToInt64Def(NextSeg(LRest), 0);
+  LVal := StrToInt64Def(NextSeg(LRest), 0);
+  LWant := NextSeg(LRest);
+  LFlag := LRest;
+  LCands := GenInt(LMin, LMax).Shrink(LVal);
+  CheckEqual(LWant, JoinInt64Seq(LCands), AC.Name);
+  if LFlag = '0' then
+    CheckTrue(Length(LCands) <= 1,
+      AC.Name + ': fail-path row must be empty/single-candidate boundary')
+  else
+    CheckTrue(Length(LCands) >= 2,
+      AC.Name + ': pass row must carry a full shrink sequence');
+end;
+
+procedure TestStrShrinkSeqCase(const AC: TTestCase);
+{ TStringGenerator.Shrink exact 8-strategy sequence: empty, half, drop-last,
+  all-a, drop-first, drop-middle, shorter-a, half-a — each gated on
+  FMinLen; out-of-domain input pads with 'a' or truncates. }
+var
+  LRest, LVal, LWant, LFlag: string;
+  LMinLen, LMaxLen: Int64;
+  LCands: specialize TArray<string>;
+begin
+  LRest := AC.Data;
+  LMinLen := StrToInt64Def(NextSeg(LRest), 0);
+  LMaxLen := StrToInt64Def(NextSeg(LRest), 0);
+  LVal := NextSeg(LRest);
+  LWant := NextSeg(LRest);
+  LFlag := LRest;
+  LCands := GenString(Integer(LMinLen), Integer(LMaxLen)).Shrink(LVal);
+  CheckEqual(LWant, JoinStrSeq(LCands), AC.Name);
+  if LFlag = '0' then
+    CheckTrue(Length(LCands) <= 1,
+      AC.Name + ': fail-path row must be empty/single-candidate boundary')
+  else
+    CheckTrue(Length(LCands) >= 2,
+      AC.Name + ': pass row must carry a full shrink sequence');
+end;
+
+procedure TestBytesShrinkSeqCase(const AC: TTestCase);
+{ TBytesGenerator.Shrink exact 3-strategy sequence: empty, half, drop-last —
+  no all-a analog (narrower than string shrink); len=FMinLen yields no
+  candidates; out-of-domain pads with zero bytes or truncates. }
+var
+  LRest, LHex, LWant, LFlag: string;
+  LMinLen, LMaxLen: Int64;
+  LCands: specialize TArray<TBytes>;
+begin
+  LRest := AC.Data;
+  LMinLen := StrToInt64Def(NextSeg(LRest), 0);
+  LMaxLen := StrToInt64Def(NextSeg(LRest), 0);
+  LHex := NextSeg(LRest);
+  LWant := NextSeg(LRest);
+  LFlag := LRest;
+  LCands := GenBytes(Integer(LMinLen), Integer(LMaxLen)).Shrink(HexStrToBytes(LHex));
+  CheckEqual(LWant, JoinBytesSeq(LCands), AC.Name);
+  if LFlag = '0' then
+    CheckTrue(Length(LCands) <= 1,
+      AC.Name + ': fail-path row must be empty/single-candidate boundary')
+  else
+    CheckTrue(Length(LCands) >= 2,
+      AC.Name + ': pass row must carry a full shrink sequence');
+end;
+
+procedure TestGenMetaCase(const AC: TTestCase);
+{ Generator Name vocabulary (incl. nested combinator names) + bool/choice/
+  filter shrink sequences: choice keeps array order filtering values < input,
+  filter applies the predicate to the source sequence. }
+var
+  LRest, LKind, LWant, LFlag, LGot: string;
+  LCandsB: specialize TArray<Boolean>;
+  I: Integer;
+begin
+  LRest := AC.Data;
+  LKind := NextSeg(LRest);
+  LWant := NextSeg(LRest);
+  LFlag := LRest;
+  LGot := '';
+  if LKind = 'name-int2' then LGot := GenInt(-5, 10).Name
+  else if LKind = 'name-int1' then LGot := GenInt(7).Name
+  else if LKind = 'name-str2' then LGot := GenString(2, 8).Name
+  else if LKind = 'name-str1' then LGot := GenString(9).Name
+  else if LKind = 'name-bytes2' then LGot := GenBytes(1, 4).Name
+  else if LKind = 'name-bytes1' then LGot := GenBytes(3).Name
+  else if LKind = 'name-bool' then LGot := GenBool.Name
+  else if LKind = 'name-choice-int' then LGot := GenChoiceInt([1, 2, 3]).Name
+  else if LKind = 'name-choice-str' then LGot := GenChoiceString(['a', 'b']).Name
+  else if LKind = 'name-choice-bool' then LGot := GenChoiceBool([True]).Name
+  else if LKind = 'name-oneof-int' then
+    LGot := GenOneOfInt([GenInt(0, 1), GenInt(2, 3)]).Name
+  else if LKind = 'name-oneof-str1' then
+    LGot := GenOneOfString([GenString(0, 4)]).Name
+  else if LKind = 'name-map' then
+    LGot := MapIntToStr(GenInt(0, 5),
+      function(V: Int64): string begin Result := IntToStr(V) end).Name
+  else if LKind = 'name-filter-int' then
+    LGot := FilterInt(GenInt(0, 5),
+      function(V: Int64): Boolean begin Result := True end).Name
+  else if LKind = 'name-filter-str' then
+    LGot := FilterString(GenString(0, 5),
+      function(const V: string): Boolean begin Result := True end).Name
+  else if LKind = 'name-filter-bytes' then
+    LGot := FilterBytes(GenBytes(0, 5),
+      function(const V: TBytes): Boolean begin Result := True end).Name
+  else if LKind = 'name-array2' then
+    LGot := GenArray(GenInt(0, 5), 0, 10).Name
+  else if LKind = 'name-array1' then
+    LGot := GenArray(GenInt(0, 3)).Name
+  else if LKind = 'name-tuple' then
+    LGot := GenTuple(GenInt(0, 1), GenString(0, 2)).Name
+  else if LKind = 'name-bind' then
+    LGot := BindInt(GenInt(0, 3),
+      function(V: Int64): IIntGenerator begin Result := GenInt(0, 1) end).Name
+  else if (LKind = 'bool-shrink-true') or (LKind = 'bool-shrink-false') then
+  begin
+    LCandsB := GenBool.Shrink(LKind = 'bool-shrink-true');
+    if Length(LCandsB) = 0 then
+      LGot := '<none>'
+    else
+      for I := 0 to High(LCandsB) do
+      begin
+        if I > 0 then LGot := LGot + ',';
+        if LCandsB[I] then LGot := LGot + 'True' else LGot := LGot + 'False';
+      end;
+  end
+  else if LKind = 'choice-shrink-8' then
+    LGot := JoinInt64Seq(GenChoiceInt([5, 3, 8, 1]).Shrink(8))
+  else if LKind = 'choice-shrink-1' then
+    LGot := JoinInt64Seq(GenChoiceInt([5, 3, 8, 1]).Shrink(1))
+  else if LKind = 'choice-shrink-5' then
+    LGot := JoinInt64Seq(GenChoiceInt([5, 3, 8, 1]).Shrink(5))
+  else if LKind = 'choice-shrink-oob9' then
+    LGot := JoinInt64Seq(GenChoiceInt([5, 3, 8, 1]).Shrink(9))
+  else if LKind = 'filter-even-50' then
+    LGot := JoinInt64Seq(FilterInt(GenInt(-100, 100),
+      function(V: Int64): Boolean begin Result := (V mod 2) = 0 end).Shrink(50))
+  else if LKind = 'filter-even-2' then
+    LGot := JoinInt64Seq(FilterInt(GenInt(-100, 100),
+      function(V: Int64): Boolean begin Result := (V mod 2) = 0 end).Shrink(2))
+  else if LKind = 'filter-none-50' then
+    LGot := JoinInt64Seq(FilterInt(GenInt(0, 100),
+      function(V: Int64): Boolean begin Result := V > 1000 end).Shrink(50))
+  else
+    Fail('unknown meta kind ' + LKind);
+  CheckEqual(LWant, LGot, AC.Name);
+  if LFlag = '0' then
+    CheckTrue((LWant = '<none>') or (Pos('oob', LKind) > 0) or
+      (LKind = 'bool-shrink-false'),
+      AC.Name + ': fail-path row must assert boundary behavior');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1132,6 +1394,7 @@ var
   LB72Cases: specialize TArray<TTestCase>;
   LB72I: Integer;
   LB72Kinds: array[0..7] of string;
+  LShrCases: specialize TArray<TTestCase>;
 begin
   WriteLn('=== Property-based Testing Framework ===');
   WriteLn;
@@ -1247,6 +1510,129 @@ begin
   end;
   LSuite.TestTable('B72 corpus boundary fail-path', LB72Cases,
     @TestB72CorpusBoundaryCase);
+
+  { v8.36: int-shrink exact-sequence — min|max|value|want(csv or <none>) }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'i-zero-at-target', '-100|100|0|<none>', '0');
+  AppendShrCase(LShrCases, 'i-mid-pos', '-100|100|50|0,25,49,12', '1');
+  AppendShrCase(LShrCases, 'i-mid-neg', '-100|100|-50|0,-25,-49,-12', '1');
+  AppendShrCase(LShrCases, 'i-one-dup', '-100|100|1|0,0,0', '1');
+  AppendShrCase(LShrCases, 'i-neg-one-dup', '-100|100|-1|0,0,0', '1');
+  AppendShrCase(LShrCases, 'i-two', '-100|100|2|0,1,1,0', '1');
+  AppendShrCase(LShrCases, 'i-max', '-100|100|100|0,50,99,25', '1');
+  AppendShrCase(LShrCases, 'i-min', '-100|100|-100|0,-50,-99,-25', '1');
+  AppendShrCase(LShrCases, 'i-posmin-at-target', '1|100|1|<none>', '0');
+  AppendShrCase(LShrCases, 'i-posmin-max', '1|100|100|1,50,99,25', '1');
+  AppendShrCase(LShrCases, 'i-posmin-two-dup', '1|100|2|1,1,1', '1');
+  AppendShrCase(LShrCases, 'i-negmax-at-target', '-100|-1|-1|<none>', '0');
+  AppendShrCase(LShrCases, 'i-negmax-min', '-100|-1|-100|-1,-50,-99,-25', '1');
+  AppendShrCase(LShrCases, 'i-oob-high', '0|10|20|10', '0');
+  AppendShrCase(LShrCases, 'i-oob-low', '0|10|-5|0', '0');
+  AppendShrCase(LShrCases, 'i-point-at', '5|5|5|<none>', '0');
+  AppendShrCase(LShrCases, 'i-point-oob-high', '5|5|7|5', '0');
+  AppendShrCase(LShrCases, 'i-point-oob-low', '5|5|3|5', '0');
+  AppendShrCase(LShrCases, 'i-min-at-target', '10|100|10|<none>', '0');
+  AppendShrCase(LShrCases, 'i-zero-point', '0|0|0|<none>', '0');
+  AppendShrCase(LShrCases, 'i-neg-point', '-5|-5|-5|<none>', '0');
+  AppendShrCase(LShrCases, 'i-three', '0|100|3|0,1,2,0', '1');
+  AppendShrCase(LShrCases, 'i-four', '0|100|4|0,2,3,1', '1');
+  AppendShrCase(LShrCases, 'i-eight', '0|100|8|0,4,7,2', '1');
+  AppendShrCase(LShrCases, 'i-ninetynine', '-100|100|99|0,49,98,24', '1');
+  AppendShrCase(LShrCases, 'i-large',
+    '1|1000000|1000000|1,500000,999999,250000', '1');
+  AppendShrCase(LShrCases, 'i-negband-at', '-1000000|-3|-3|<none>', '0');
+  AppendShrCase(LShrCases, 'i-negband-min',
+    '-1000000|-3|-1000000|-3,-500001,-999999,-250002', '1');
+  LSuite.TestTable('v8.36 int-shrink exact-sequence', LShrCases,
+    @TestIntShrinkSeqCase);
+
+  { v8.36: string-shrink exact-sequence — minlen|maxlen|value|want }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 's-empty-at', '0|64||<none>', '0');
+  AppendShrCase(LShrCases, 's-two', '0|64|ab|,a,a,aa,b', '1');
+  AppendShrCase(LShrCases, 's-two-min1', '1|64|ab|a,a,aa,b', '1');
+  AppendShrCase(LShrCases, 's-two-min2', '2|64|ab|aa', '0');
+  AppendShrCase(LShrCases, 's-six',
+    '0|64|abcdef|,abc,abcde,aaaaaa,bcdef,abcef,aaaaa,aaa', '1');
+  AppendShrCase(LShrCases, 's-three', '0|64|abc|,a,ab,aaa,bc,ac', '1');
+  AppendShrCase(LShrCases, 's-four', '0|64|abcd|,ab,abc,aaaa,bcd,abd,aaa', '1');
+  AppendShrCase(LShrCases, 's-oob-high', '2|4|abcdef|abcd', '0');
+  AppendShrCase(LShrCases, 's-oob-low', '3|64|ab|aaa', '0');
+  AppendShrCase(LShrCases, 's-one-dup', '0|64|a|,,,a', '1');
+  AppendShrCase(LShrCases, 's-one-min1', '1|64|a|a', '0');
+  AppendShrCase(LShrCases, 's-oob-high-tight', '0|6|abcdefgh|abcdef', '0');
+  AppendShrCase(LShrCases, 's-alla-seven',
+    '0|64|aaaaaaa|,aaa,aaaaaa,aaaaaaa,aaaaaa,aaaaaa,aaaaaa,aaa', '1');
+  AppendShrCase(LShrCases, 's-empty-domain', '0|0||<none>', '0');
+  AppendShrCase(LShrCases, 's-point4', '4|4|abcd|aaaa', '0');
+  AppendShrCase(LShrCases, 's-xy', '0|64|xy|,x,x,aa,y', '1');
+  LSuite.TestTable('v8.36 string-shrink exact-sequence', LShrCases,
+    @TestStrShrinkSeqCase);
+
+  { v8.36: bytes-shrink exact-sequence — minlen|maxlen|hex|want(hex csv) }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'y-empty-at', '0|64||<none>', '0');
+  AppendShrCase(LShrCases, 'y-two', '0|64|0102|,01,01', '1');
+  AppendShrCase(LShrCases, 'y-two-min1', '1|64|0102|01,01', '1');
+  AppendShrCase(LShrCases, 'y-two-min2', '2|64|0102|<none>', '0');
+  AppendShrCase(LShrCases, 'y-one', '0|64|01|,', '1');
+  AppendShrCase(LShrCases, 'y-oob-high', '0|2|010203|0102', '0');
+  AppendShrCase(LShrCases, 'y-oob-low', '3|64|01|000000', '0');
+  AppendShrCase(LShrCases, 'y-eight',
+    '0|64|0102030405060708|,01020304,01020304050607', '1');
+  AppendShrCase(LShrCases, 'y-five-min4', '4|8|0102030405|01020304', '0');
+  AppendShrCase(LShrCases, 'y-empty-domain', '0|0||<none>', '0');
+  AppendShrCase(LShrCases, 'y-point5', '5|5|0102030405|<none>', '0');
+  AppendShrCase(LShrCases, 'y-four', '0|64|aabbccdd|,aabb,aabbcc', '1');
+  LSuite.TestTable('v8.36 bytes-shrink exact-sequence', LShrCases,
+    @TestBytesShrinkSeqCase);
+
+  { v8.36: generator meta — kind|want }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'm-name-int2', 'name-int2|GenInt(-5..10)', '1');
+  AppendShrCase(LShrCases, 'm-name-int1', 'name-int1|GenInt(0..7)', '1');
+  AppendShrCase(LShrCases, 'm-name-str2', 'name-str2|GenString(2..8)', '1');
+  AppendShrCase(LShrCases, 'm-name-str1', 'name-str1|GenString(0..9)', '1');
+  AppendShrCase(LShrCases, 'm-name-bytes2', 'name-bytes2|GenBytes(1..4)', '1');
+  AppendShrCase(LShrCases, 'm-name-bytes1', 'name-bytes1|GenBytes(0..3)', '1');
+  AppendShrCase(LShrCases, 'm-name-bool', 'name-bool|GenBool', '1');
+  AppendShrCase(LShrCases, 'm-name-choice-int',
+    'name-choice-int|GenChoiceInt(3 values)', '1');
+  AppendShrCase(LShrCases, 'm-name-choice-str',
+    'name-choice-str|GenChoiceString(2 values)', '1');
+  AppendShrCase(LShrCases, 'm-name-choice-bool',
+    'name-choice-bool|GenChoiceBool', '1');
+  AppendShrCase(LShrCases, 'm-name-oneof-int',
+    'name-oneof-int|GenOneOfInt(2 generators)', '1');
+  AppendShrCase(LShrCases, 'm-name-oneof-str1',
+    'name-oneof-str1|GenOneOfString(1 generators)', '1');
+  AppendShrCase(LShrCases, 'm-name-map',
+    'name-map|MapIntToStr(GenInt(0..5))', '1');
+  AppendShrCase(LShrCases, 'm-name-filter-int',
+    'name-filter-int|FilterInt(GenInt(0..5))', '1');
+  AppendShrCase(LShrCases, 'm-name-filter-str',
+    'name-filter-str|FilterString(GenString(0..5))', '1');
+  AppendShrCase(LShrCases, 'm-name-filter-bytes',
+    'name-filter-bytes|FilterBytes(GenBytes(0..5))', '1');
+  AppendShrCase(LShrCases, 'm-name-array2',
+    'name-array2|GenArray(GenInt(0..5), 0..10)', '1');
+  AppendShrCase(LShrCases, 'm-name-array1',
+    'name-array1|GenArray(GenInt(0..3), 0..100)', '1');
+  AppendShrCase(LShrCases, 'm-name-tuple',
+    'name-tuple|GenTuple(GenInt(0..1), GenString(0..2))', '1');
+  AppendShrCase(LShrCases, 'm-name-bind', 'name-bind|BindInt(GenInt(0..3))', '1');
+  AppendShrCase(LShrCases, 'm-bool-shrink-true', 'bool-shrink-true|False', '1');
+  AppendShrCase(LShrCases, 'm-bool-shrink-false', 'bool-shrink-false|False', '0');
+  AppendShrCase(LShrCases, 'm-choice-shrink-8', 'choice-shrink-8|5,3,1', '1');
+  AppendShrCase(LShrCases, 'm-choice-shrink-1', 'choice-shrink-1|<none>', '0');
+  AppendShrCase(LShrCases, 'm-choice-shrink-5', 'choice-shrink-5|3,1', '1');
+  AppendShrCase(LShrCases, 'm-choice-shrink-oob9',
+    'choice-shrink-oob9|5,3,8,1', '0');
+  AppendShrCase(LShrCases, 'm-filter-even-50', 'filter-even-50|0,12', '1');
+  AppendShrCase(LShrCases, 'm-filter-even-2', 'filter-even-2|0,0', '1');
+  AppendShrCase(LShrCases, 'm-filter-none-50', 'filter-none-50|<none>', '0');
+  LSuite.TestTable('v8.36 generator meta contract', LShrCases,
+    @TestGenMetaCase);
 
   if not LSuite.Run then
   begin
