@@ -38,6 +38,7 @@ type
   IMappedLines = nextpas.core.io.mapped.IMappedLines;
   IDirIterator = nextpas.core.fs.intf.IDirIterator;
   TWalkFunc = nextpas.core.fs.dir.TWalkFunc;
+  TWalkFuncEx = nextpas.core.fs.dir.TWalkFuncEx;
 
 const
   fmRead = nextpas.core.fs.base.fmRead;
@@ -196,8 +197,12 @@ function ReadDir(const APath: string): TDirEntryArray; inline;
 function OpenDir(const APath: string): IDirIterator; inline;
 {** @desc 递归遍历目录树，对每个条目调用回调函数 *}
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
+procedure WalkEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer); inline;
 {** @desc 递归遍历目录树，只访问文件（跳过目录） *}
 procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc); inline;
+procedure WalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer); inline;
 {**
  * @desc 列出目录中匹配 glob 模式的文件名
  *
@@ -542,6 +547,18 @@ end;
 procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc);
 begin
   nextpas.core.fs.dir.FsWalkFiles(ARoot, AFunc);
+end;
+
+procedure WalkEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
+begin
+  nextpas.core.fs.dir.FsWalkEx(ARoot, AFunc, AUserData);
+end;
+
+procedure WalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
+begin
+  nextpas.core.fs.dir.FsWalkFilesEx(ARoot, AFunc, AUserData);
 end;
 
 function Glob(const ADir, APattern: string): TStringArray;

@@ -13,6 +13,9 @@ uses
 type
   TWalkFunc = function(const APath: string; const AInfo: TFileInfo;
     const AErr: Exception): Boolean;
+  {** @desc Walk callback with user data pointer for thread-safe state passing *}
+  TWalkFuncEx = function(const APath: string; const AInfo: TFileInfo;
+    const AErr: Exception; AUserData: Pointer): Boolean;
 
 function FsReadDir(const APath: string): TDirEntryArray;
 function FsOpenDir(const APath: string): IDirIterator;
@@ -39,6 +42,8 @@ procedure FsRename(const AOld, ANew: string);
 procedure FsCopyTree(const ASrc, ADst: string;
   const APerm: TFilePermission = PermDirDefault);
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
+procedure FsWalkEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
 {** @desc 递归遍历目录树，只访问文件（跳过目录条目）
  *
  * @param ARoot  起始目录
@@ -48,6 +53,8 @@ procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
  * @note 不跟随符号链接
  *}
 procedure FsWalkFiles(const ARoot: string; const AFunc: TWalkFunc);
+procedure FsWalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
 
 implementation
 
@@ -521,6 +528,105 @@ var
 begin
   LBridge.Callback := AFunc;
   LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkFilesPlatformCallback,
+    @LBridge, False{no follow symlinks});
+  if (LResult <> PLATFORM_WALK_COMPLETED) and
+     (LResult <> PLATFORM_WALK_STOPPED) then
+    RaiseFsError(LResult, 'walk', ARoot);
+end;
+
+{ FsWalkEx — extended walk with user data pointer for thread-safe state }
+
+type
+  PFsWalkBridgeEx = ^TFsWalkBridgeEx;
+  TFsWalkBridgeEx = record
+    CallbackEx: TWalkFuncEx;
+    UserData: Pointer;
+  end;
+
+function FsWalkExPlatformCallback(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+var
+  LBridge: PFsWalkBridgeEx;
+  LPath: string;
+  LInfo: TFileInfo;
+  LErr: Exception;
+  LKeepGoing: Boolean;
+begin
+  LBridge := PFsWalkBridgeEx(AUserData);
+  SetString(LPath, AEntry.Path, AEntry.PathLen);
+
+  if AEntry.ErrorCode <> 0 then
+  begin
+    LInfo := Default(TFileInfo);
+    LInfo.Name := LPath;
+    LErr := EIOError.Create('walk error (' +
+      IntToStr(AEntry.ErrorCode) + '): ' + LPath);
+    try
+      LKeepGoing := LBridge^.CallbackEx(LPath, LInfo, LErr, LBridge^.UserData);
+    finally
+      LErr.Free;
+    end;
+    if not LKeepGoing then
+      Exit(pwaStop);
+    if AEntry.FileType = nextpas.core.platform.files.base.ftDirectory then
+      Exit(pwaSkipSubtree);
+    Exit(pwaContinue);
+  end;
+
+  LInfo := BuildWalkInfo(AEntry);
+  if not LBridge^.CallbackEx(LPath, LInfo, nil, LBridge^.UserData) then
+    Exit(pwaStop);
+  Result := pwaContinue;
+end;
+
+function FsWalkFilesExPlatformCallback(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+var
+  LBridge: PFsWalkBridgeEx;
+  LPasInfo: TFileInfo;
+  LPath: string;
+begin
+  LBridge := PFsWalkBridgeEx(AUserData);
+  LPasInfo := BuildWalkInfo(AEntry);
+  if LPasInfo.IsDir then
+  begin
+    Result := pwaContinue;
+    Exit;
+  end;
+  if AEntry.PathLen > 0 then
+    SetString(LPath, AEntry.Path, AEntry.PathLen)
+  else
+    LPath := '';
+  if LBridge^.CallbackEx(LPath, LPasInfo, nil, LBridge^.UserData) then
+    Result := pwaContinue
+  else
+    Result := pwaStop;
+end;
+
+procedure FsWalkEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
+var
+  LBridge: TFsWalkBridgeEx;
+  LResult: Int32;
+begin
+  LBridge.CallbackEx := AFunc;
+  LBridge.UserData := AUserData;
+  LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkExPlatformCallback,
+    @LBridge, False{no follow symlinks});
+  if (LResult <> PLATFORM_WALK_COMPLETED) and
+     (LResult <> PLATFORM_WALK_STOPPED) then
+    RaiseFsError(LResult, 'walk', ARoot);
+end;
+
+procedure FsWalkFilesEx(const ARoot: string; const AFunc: TWalkFuncEx;
+  AUserData: Pointer);
+var
+  LBridge: TFsWalkBridgeEx;
+  LResult: Int32;
+begin
+  LBridge.CallbackEx := AFunc;
+  LBridge.UserData := AUserData;
+  LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkFilesExPlatformCallback,
     @LBridge, False{no follow symlinks});
   if (LResult <> PLATFORM_WALK_COMPLETED) and
      (LResult <> PLATFORM_WALK_STOPPED) then

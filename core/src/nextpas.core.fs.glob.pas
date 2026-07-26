@@ -263,44 +263,44 @@ end;
 
 { FsGlob — file system glob }
 
-var
-  { Unit-level context used by the walk callback.
-    Safe because FsGlob is single-threaded and not re-entrant. }
-  GGlobDir: string;
-  GGlobDirLen: Integer;
-  GGlobPattern: string;
-  GGlobResults: TStringArray;
-  GGlobResultCount: Integer;
-
-procedure FsGlobGrow;
-begin
-  if Length(GGlobResults) = 0 then
-    SetLength(GGlobResults, 16)
-  else
-    SetLength(GGlobResults, Length(GGlobResults) * 2);
-end;
+type
+  TFsGlobState = record
+    Dir: string;
+    DirLen: Integer;
+    Pattern: string;
+    Results: TStringArray;
+    Count: Integer;
+  end;
+  PFsGlobState = ^TFsGlobState;
 
 function FsGlobWalkCallback(const APath: string; const AInfo: TFileInfo;
-  const AErr: Exception): Boolean;
+  const AErr: Exception; AUserData: Pointer): Boolean;
 var
+  LState: PFsGlobState;
   LRelPath: string;
 begin
+  LState := PFsGlobState(AUserData);
   Result := True;
   if AErr <> nil then
     Exit;
   if AInfo.IsDir then
     Exit;
   { Compute relative path from the root dir }
-  if Length(APath) > GGlobDirLen then
-    LRelPath := Copy(APath, GGlobDirLen + 1, MaxInt)
+  if Length(APath) > LState^.DirLen then
+    LRelPath := Copy(APath, LState^.DirLen + 1, MaxInt)
   else
     LRelPath := APath;
-  if GlobMatch(GGlobPattern, LRelPath) then
+  if GlobMatch(LState^.Pattern, LRelPath) then
   begin
-    if GGlobResultCount >= Length(GGlobResults) then
-      FsGlobGrow;
-    GGlobResults[GGlobResultCount] := APath;
-    Inc(GGlobResultCount);
+    if LState^.Count >= Length(LState^.Results) then
+    begin
+      if Length(LState^.Results) = 0 then
+        SetLength(LState^.Results, 16)
+      else
+        SetLength(LState^.Results, Length(LState^.Results) * 2);
+    end;
+    LState^.Results[LState^.Count] := APath;
+    Inc(LState^.Count);
   end;
 end;
 
@@ -324,20 +324,19 @@ end;
 
 function FsGlob(const ADir, APattern: string): TStringArray;
 var
-  LDirWithSep: string;
+  LState: TFsGlobState;
 begin
-  LDirWithSep := FsPathTrimSep(ADir) + '/';
-  GGlobDir := LDirWithSep;
-  GGlobDirLen := Length(LDirWithSep);
-  GGlobPattern := APattern;
-  GGlobResults := nil;
-  GGlobResultCount := 0;
+  LState.Dir := FsPathTrimSep(ADir) + '/';
+  LState.DirLen := Length(LState.Dir);
+  LState.Pattern := APattern;
+  LState.Results := nil;
+  LState.Count := 0;
 
-  FsWalk(ADir, @FsGlobWalkCallback);
+  FsWalkEx(ADir, @FsGlobWalkCallback, @LState);
 
-  SortStrings(GGlobResults, GGlobResultCount);
-  SetLength(GGlobResults, GGlobResultCount);
-  Result := GGlobResults;
+  SortStrings(LState.Results, LState.Count);
+  SetLength(LState.Results, LState.Count);
+  Result := LState.Results;
 end;
 
 function FsGlob(const APattern: string): TStringArray;
