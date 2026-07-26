@@ -352,8 +352,17 @@ begin
         ApplyFilter;
     Exit;
   end;
-  if IsKeyChar(Ev, Ord('q')) or IsKeyCode(Ev, kcEsc) then
+  if IsKeyChar(Ev, Ord('q')) then
     Stack.RequestQuit
+  else if IsKeyCode(Ev, kcEsc) then
+  begin
+    { Esc 只清过滤，不退出——终端 ESC 粘连/误触不应丢掉整个会话 }
+    if FFilter.Text <> '' then
+    begin
+      FFilter := TInputState.Empty;
+      ApplyFilter;
+    end;
+  end
   else if IsKeyCode(Ev, kcUp) then
     FList.Previous
   else if IsKeyCode(Ev, kcDown) then
@@ -431,17 +440,9 @@ end;
 procedure TRunnerScreen.RenderSuites(const ACell: TRect; ABuffer: TBuffer);
 var
   LItems: TListItems;
-  LPassed, LFailed, I: Integer;
+  I: Integer;
   LSuite: TSuiteInfo;
 begin
-  LPassed := 0;
-  LFailed := 0;
-  for I := 0 to High(FSuites) do
-    case FSuites[I].Status of
-      ssPassed: Inc(LPassed);
-      ssFailed: Inc(LFailed);
-    else
-    end;
   SetLength(LItems, Length(FVisible));
   for I := 0 to High(FVisible) do
   begin
@@ -449,8 +450,9 @@ begin
     LItems[I] := TListItem.FromString(StatusGlyph(LSuite) + ' ' + LSuite.Name)
       .WithStyle(StatusStyle(LSuite.Status));
   end;
+  { 标题显示可见/总数（完成统计在状态栏，不重复） }
   TListWidget.New(LItems)
-    .WithBlock(TBlock.Rounded(' Suites ' + IntToStr(LPassed + LFailed) + '/' +
+    .WithBlock(TBlock.Rounded(' Suites ' + IntToStr(Length(FVisible)) + '/' +
       IntToStr(Length(FSuites)) + ' '))
     .WithHighlightStyle(StyleFgBg(TUI_BLACK, TUI_CYAN))
     .WithHighlightSymbol('')
