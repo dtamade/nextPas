@@ -41,8 +41,9 @@ asm
   pshufd  $0x1B, %xmm1, %xmm10
   pshufd  $0x1B, %xmm2, %xmm2
   movdqa  %xmm2, %xmm1
-  punpckhqdq %xmm10, %xmm1
-  punpcklqdq %xmm10, %xmm2
+  // sha256rnds2 语义(Intel SDM): 目的寄存器必须持 CDGH,源寄存器持 ABEF
+  punpcklqdq %xmm10, %xmm1    // xmm1 = CDGH
+  punpckhqdq %xmm10, %xmm2    // xmm2 = ABEF
 
   movdqa  %xmm1, %xmm7
   movdqa  %xmm2, %xmm8
@@ -197,6 +198,7 @@ asm
   palignr $4, %xmm6, %xmm10
   paddd   %xmm10, %xmm4
   sha256msg2 %xmm3, %xmm4
+  sha256msg1 %xmm3, %xmm6
 
   // Rounds 52-55
   movdqa  208(%rax), %xmm0
@@ -215,6 +217,10 @@ asm
   sha256rnds2 %xmm2, %xmm1
   pshufd  $0x0E, %xmm0, %xmm0
   sha256rnds2 %xmm1, %xmm2
+  movdqa  %xmm5, %xmm10
+  palignr $4, %xmm4, %xmm10
+  paddd   %xmm10, %xmm6
+  sha256msg2 %xmm5, %xmm6
 
   // Rounds 60-63
   movdqa  240(%rax), %xmm0
@@ -227,13 +233,13 @@ asm
   paddd   %xmm7, %xmm1
   paddd   %xmm8, %xmm2
 
-  // Convert back to memory layout
-  movdqa  %xmm1, %xmm10
-  punpckhqdq %xmm2, %xmm1
-  punpcklqdq %xmm2, %xmm10
-  pshufd  $0xB1, %xmm1, %xmm1
+  // Convert back to memory layout (xmm1 = CDGH, xmm2 = ABEF)
+  movdqa  %xmm2, %xmm10
+  punpckhqdq %xmm1, %xmm2
+  punpcklqdq %xmm1, %xmm10
+  pshufd  $0xB1, %xmm2, %xmm2
   pshufd  $0xB1, %xmm10, %xmm10
 
-  movdqu  %xmm1, (%rsi)
+  movdqu  %xmm2, (%rsi)
   movdqu  %xmm10, 16(%rsi)
 end;
