@@ -2,6 +2,7 @@ unit nextpas.core.simd.direct.testcase;
 
 {$I ../../src/nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
+{$IFDEF CPUX86_64}{$asmmode intel}{$ENDIF}
 
 interface
 
@@ -60,6 +61,9 @@ type
     procedure Test_DirectDispatchTable_MultiBackend_MemWindowMatrix_Parity;
     procedure Test_DirectDispatchTable_MultiBackend_MemSearchFuzzSeed_Parity;
     procedure Test_DirectDispatchTable_WideIntegerHelperMatrix_Parity;
+    {$IF DEFINED(CPUX86_64) AND DEFINED(UNIX)}
+    procedure Test_DirectDispatch_BatchLerpF32_PreservesCalleeSavedRbx;
+    {$ENDIF}
   end;
 
   TTestCase_DirectDispatchConcurrent = class(TDirectDispatchStatefulTestCase)
@@ -5208,5 +5212,59 @@ begin
   RunDirectDispatchConcurrentReRegisterSnapshotConsistency;
 end;
 
+{$IF DEFINED(CPUX86_64) AND DEFINED(UNIX)}
+// SysV ABI:rbx 为 callee-saved。FPC 对无 clobber list 的内嵌 asm 块不保存任何
+// callee-saved 寄存器(2026-07-26 探针实证,win64/SysV 同),内核裸写 rbx 会静默
+// 破坏调用方。本包装先在 rbx 放哨兵再调用内核,返回后校验哨兵完好。
+// SysV 整型参数 rdi/rsi/rdx/rcx 与 xmm0(aT)原位透传给内核;aKernel 落 r8。
+function DirectLerpKernelPreservesRbx(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single; aKernel: CodePointer): Boolean; assembler; nostackframe;
+asm
+  push rbx
+  mov rbx, $5A5AC3C3D00DFEED
+  call r8
+  mov rax, $5A5AC3C3D00DFEED
+  cmp rbx, rax
+  sete al
+  pop rbx
+end;
+
+procedure TTestCase_DirectDispatch.Test_DirectDispatch_BatchLerpF32_PreservesCalleeSavedRbx;
+const
+  C_COUNT = 17;  // 4×4 主环 + 1 标量尾部,两条 asm 路径都走到
+  C_T: Single = 0.25;
+var
+  LSrc1, LSrc2, LDst: array[0..C_COUNT - 1] of Single;
+  LKernel: CodePointer;
+  LExpected: Single;
+  LIndex: Integer;
+begin
+  if not (IsBackendRegistered(sbSSE2) and TrySetActiveBackend(sbSSE2)) then
+  begin
+    CheckTrue(True, 'SSE2 backend unavailable; skip rbx preservation probe');
+    Exit;
+  end;
+
+  LKernel := CodePointer(GetDirectDispatchTable^.BatchF32.ArrayLerp);
+  CheckTrue(LKernel <> nil, 'BatchF32.ArrayLerp should be assigned under SSE2 backend');
+
+  for LIndex := 0 to C_COUNT - 1 do
+  begin
+    LSrc1[LIndex] := LIndex;
+    LSrc2[LIndex] := LIndex * 3 + 1;
+    LDst[LIndex] := -99.0;
+  end;
+
+  CheckTrue(
+    DirectLerpKernelPreservesRbx(@LSrc1[0], @LSrc2[0], @LDst[0], C_COUNT, C_T, LKernel),
+    'SysV callee-saved rbx must survive BatchF32.ArrayLerp kernel');
+
+  // 输入取整数与 0.25 步进,lerp 结果二进制精确,探针透传正确性一并钉死
+  for LIndex := 0 to C_COUNT - 1 do
+  begin
+    LExpected := LSrc1[LIndex] + (LSrc2[LIndex] - LSrc1[LIndex]) * C_T;
+    CheckNear(LExpected, LDst[LIndex], 1e-6, 'lerp lane ' + IntToStr(LIndex));
+  end;
+end;
+{$ENDIF}
 
 end.

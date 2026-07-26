@@ -6387,25 +6387,26 @@ begin
   if aCount = 0 then Exit;
   pS1 := aStart; pS2 := aEnd; pD := aDst; LT := aT;
   asm
+    // rdx/xmm2 双 ABI volatile;禁用 rbx(SysV/win64 callee-saved)与 xmm6+(win64 callee-saved)
     mov rax, pS1
-    mov rbx, pS2
+    mov rdx, pS2
     mov rcx, pD
     mov r8, aCount
-    movss xmm7, [LT]
-    shufps xmm7, xmm7, 0  // Broadcast t to all lanes
+    movss xmm2, [LT]
+    shufps xmm2, xmm2, 0  // Broadcast t to all lanes
 
     cmp r8, 4
     jb @tail_scalar
 
   @loop4:
     movups xmm0, [rax]    // start
-    movups xmm1, [rbx]    // end
+    movups xmm1, [rdx]    // end
     subps xmm1, xmm0      // diff = end - start
-    mulps xmm1, xmm7      // diff * t
+    mulps xmm1, xmm2      // diff * t
     addps xmm0, xmm1      // start + diff * t
     movups [rcx], xmm0
     add rax, 16
-    add rbx, 16
+    add rdx, 16
     add rcx, 16
     sub r8, 4
     cmp r8, 4
@@ -6417,13 +6418,13 @@ begin
 
   @scalar_loop:
     movss xmm0, [rax]     // start
-    movss xmm1, [rbx]     // end
+    movss xmm1, [rdx]     // end
     subss xmm1, xmm0      // diff = end - start
-    mulss xmm1, xmm7      // diff * t
+    mulss xmm1, xmm2      // diff * t
     addss xmm0, xmm1      // start + diff * t
     movss [rcx], xmm0
     add rax, 4
-    add rbx, 4
+    add rdx, 4
     add rcx, 4
     sub r8, 1
     jnz @scalar_loop

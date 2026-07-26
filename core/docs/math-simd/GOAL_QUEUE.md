@@ -40,8 +40,63 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=IDLE  # BATCH M4 全部收口(M4.1–M4.3 done 2026-07-26);等待 landing 指令或下一批规划。用户 2026-07-26 指令:不再调用 Codex,Claude 全权推进 math/simd
+CURRENT=M5.2  # BATCH M5 asm ABI 契约恢复;M5.1 done。用户 2026-07-26 指令:不再调用 Codex,Claude 全权推进 math/simd
 ```
+
+---
+
+## BATCH M5 — 内嵌 asm callee-saved ABI 契约恢复
+
+> 起点:审查 sse2.batch.inc 时发现内嵌 asm 块裸写 callee-saved 寄存器。2026-07-26 用 4 个
+> 独立探针(win64 xmm / win64 GP / SysV GP / list-omission)实证 FPC trunk 的真实行为:
+> **无 clobber list 的内嵌 `asm...end;` 块,FPC 在任何平台都不保存任何 callee-saved 寄存器**
+> (民间传说「无 list = 全 clobber = 编译器代保存」为假)。带 list 时 FPC 正确生成
+> `movdqa` 保存 + win64 `.seh_savexmm` unwind 指令 + 恢复(-O2/-O3 均 PRESERVED)。
+> 全树排查:gemm/nn.quantize/atomic 均有手写 push/pop 保护;**唯一裸写 = SSE2ArrayLerpF32
+> 写 rbx(SysV callee-saved,Linux 主平台现役 P0)**;xmm6-15 违规仅危及 win64(12 文件)。
+> 同病跨模块文件(crypto.aesni/aesgcm/chacha20*/hash.sha256.avx2/sha1.ssse3/regex.teddy)
+> 不在本 lane,已列 Needs Review 上报总控。
+
+### M5.1 — P0:SSE2ArrayLerpF32 裸写 rbx(SysV callee-saved)  【done 2026-07-26】
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | done |
+| **NEXT** | M5.2 |
+| **WHY** | 内核 asm 块 `mov rbx, pS2`/`add rbx,16`/`add rbx,4` 无任何保护;Linux 调用方 rbx 持值即被静默破坏(同类缺陷 main@fac92c975 曾致 MemEqual_AVX2 恒 TRUE) |
+| **IN_SCOPE_PATHS** | `core/src/nextpas.core.simd.sse2.batch.inc`;`core/tests/nextpas.core.simd/nextpas.core.simd.direct.testcase.pas` |
+| **OUT_OF_SCOPE** | 全树 clobber list 清扫(M5.2);win64 xmm 验证门(M5.3) |
+| **DELIVERABLES** | ①毒化 rbx 探针测试(assembler nostackframe 包装:push rbx→哨兵→call 内核指针→校验哨兵→pop,SysV 参数原位透传,内核指针经 direct dispatch 表取得,零生产接口污染);②内核修复:rbx→rdx(块内空闲 volatile),顺带 xmm7→xmm2(消除该核 win64 xmm 违规,xmm2 双 ABI volatile);③结果正确性断言(17 元素=4×4 主环+尾部) |
+| **GATES** | RED 先行:未修内核上探针必须 FAIL;修后 GREEN;`make -C core/tests/nextpas.core.simd test-all` 10 门全绿 |
+| **DoD** | 探针 RED→GREEN 实证记录;test-all EXIT=0;单 commit |
+| **EVIDENCE** | 2026-07-26:RED=未修内核上 direct-dispatch-focused `Passed: 32, Failed: 1`,唯一失败即探针 `SysV callee-saved rbx must survive BatchF32.ArrayLerp kernel`(FPC 确实未保护该块,探针结论对现役内核成立);修后 GREEN=`Passed: 33, Failed: 0` + `[HEAPTRC] OK`;test-all 全量 EXIT=0,11×`[HEAPTRC] OK`(M4 EVIDENCE 写「10 个」为笔误,其列表 api-coverage×4+7 门本就 11 项),主 runner 1764/0 不含 direct suite(lpr 注册在 `{$IFDEF SIMD_X86_AVAILABLE}` 内,主 runner 无该 define,65/70 fixtures)——新测试由 direct-dispatch-focused 门(33 tests)承载,已在 test-all 内,覆盖闭环。内核指针经 GetDirectDispatchTable^.BatchF32.ArrayLerp 取得,零生产接口污染;17 元素结果逐 lane 断言(输入取整数与 0.25 步进,lerp 二进制精确) |
+| **STOP** | 若 RED 不红(FPC 碰巧保护该函数)→ 停下重新评估探针结论再动内核 |
+
+### M5.2 — clobber list 契约:检查器先行 + 12 文件清扫
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | queued |
+| **NEXT** | M5.3 |
+| **WHY** | FPC 真实语义下,唯一可靠修法是显式 clobber list(带 SEH unwind,优于手写 push/pop);~150 个内嵌 asm 块无 list,win64 xmm6-15 系统性裸露 |
+| **IN_SCOPE_PATHS** | 新 `check_asm_clobber_contract.py`;simd 12 个含 xmm6+ 文件;audit 接线 |
+| **OUT_OF_SCOPE** | 跨模块同病文件(crypto/hash/regex,Needs Review);纯 assembler 例程已有 push/pop 者不强改 |
+| **DELIVERABLES** | 检查器:解析 asm 块,提取被写寄存器(未知指令 fail-close),内嵌块要求穷尽 end-list / assembler 例程要求 push-pop 平衡;按分析产出补 list;挂入 audit + test-all pin |
+| **GATES** | 检查器自证(对已知违规文件 RED);补完后全绿;test-all 10 门 |
+| **EVIDENCE** | (待填) |
+
+### M5.3 — win64 交叉 + wine ABI 验证门(opt-in)
+
+| Field | Content |
+|-------|---------|
+| **STATUS** | queued |
+| **NEXT** | IDLE |
+| **WHY** | xmm6+ 违规只在 win64 发病;本机 `fpc -Twin64`(units 齐备)+ wine 可端到端实证,不再靠推理 |
+| **IN_SCOPE_PATHS** | `core/tests/nextpas.core.simd/Makefile` 新 opt-in 目标 |
+| **OUT_OF_SCOPE** | CI 集成;非 simd 模块 |
+| **DELIVERABLES** | `test-win64-abi` opt-in 目标:交叉编译探针+内核 ABI 检查,wine 运行断言 xmm6/rbx 保持 |
+| **GATES** | 本机实跑 wine 全绿;不进默认 test-all(依赖 wine,记 opt-in;检查器 pin 防烂) |
+| **EVIDENCE** | (待填) |
 
 ---
 
