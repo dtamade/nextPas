@@ -31,7 +31,9 @@ begin
   Check(Abs(dst2[0] - 1.0) < 1e-10, 'SinCos Cos[0]');
   Check(Abs(dst2[1]) < 1e-10, 'SinCos Cos[pi/2]');
 
-  src[0] := 1; src[1] := Exp(1.0); src[2] := Exp(2.0); src[3] := 1;
+  // Double() casts: bare real literals bind nextpas.core.math's Single Exp
+  // overload, whose 2^-25 rounding blows the 1e-10 tolerance below.
+  src[0] := 1; src[1] := Exp(Double(1.0)); src[2] := Exp(Double(2.0)); src[3] := 1;
   ArrayLogF64(@src[0], @dst[0], 4);
   Check(Abs(dst[0]) < 1e-10, 'Log[1]');
   Check(Abs(dst[1] - 1.0) < 1e-10, 'Log[e]');
@@ -175,8 +177,8 @@ begin
 
   src[0] := 0.0; src[1] := 1.0; src[2] := -1.0; src[3] := 2.0;
   ArrayExpF64(@src[0], @dst[0], 4);
-  CheckDouble(dst[2], Exp(-1.0), 'ExpF64 sample2[2]', 1e-8);
-  src[0] := 1.0; src[1] := Exp(1.0); src[2] := Exp(2.0); src[3] := 10.0;
+  CheckDouble(dst[2], Exp(Double(-1.0)), 'ExpF64 sample2[2]', 1e-8);
+  src[0] := 1.0; src[1] := Exp(Double(1.0)); src[2] := Exp(Double(2.0)); src[3] := 10.0;
   ArrayLogF64(@src[0], @dst[0], 4);
   CheckDouble(dst[2], 2.0, 'LogF64 sample2[2]', 1e-8);
 
@@ -300,10 +302,10 @@ begin
   // Compare against 1/Sqrt(x) (same formula as impl); 1/3 is not bit-exact for Sqrt(9).
   src[0] := 1; src[1] := 4; src[2] := 9; src[3] := 16;
   ArrayRsqrtF64(@src[0], @dst[0], 4);
-  Check(Abs(dst[0] - 1.0/Sqrt(1.0)) < 1e-12, 'Rsqrt[1]');
-  Check(Abs(dst[1] - 1.0/Sqrt(4.0)) < 1e-12, 'Rsqrt[4]');
-  Check(Abs(dst[2] - 1.0/Sqrt(9.0)) < 1e-12, 'Rsqrt[9]');
-  Check(Abs(dst[3] - 1.0/Sqrt(16.0)) < 1e-12, 'Rsqrt[16]');
+  Check(Abs(dst[0] - 1.0/Sqrt(Double(1.0))) < 1e-12, 'Rsqrt[1]');
+  Check(Abs(dst[1] - 1.0/Sqrt(Double(4.0))) < 1e-12, 'Rsqrt[4]');
+  Check(Abs(dst[2] - 1.0/Sqrt(Double(9.0))) < 1e-12, 'Rsqrt[9]');
+  Check(Abs(dst[3] - 1.0/Sqrt(Double(16.0))) < 1e-12, 'Rsqrt[16]');
 
   // Test ArrayTanF64
   src[0] := 0; src[1] := Pi/4; src[2] := Pi/6; src[3] := Pi/3;

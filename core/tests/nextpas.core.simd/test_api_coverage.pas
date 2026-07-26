@@ -290,7 +290,8 @@ begin
   src[0]:=0;src[1]:=Pi/2;src[2]:=Pi;src[3]:=1;
   ArraySinF64(@src[0],@dst[0],4); Check(Abs(dst[0])<1e-10,'Sin[0]'); Check(Abs(dst[1]-1.0)<1e-10,'Sin[pi/2]');
   ArrayCosF64(@src[0],@dst[0],4); Check(Abs(dst[0]-1.0)<1e-10,'Cos[0]');
-  src[0]:=1;src[1]:=Exp(1.0);src[2]:=Exp(2.0);src[3]:=1;
+  // Double() casts: bare literals bind nextpas.core.math's Single Exp overload.
+  src[0]:=1;src[1]:=Exp(Double(1.0));src[2]:=Exp(Double(2.0));src[3]:=1;
   ArrayLogF64(@src[0],@dst[0],4); Check(Abs(dst[0])<1e-10,'Log[1]'); Check(Abs(dst[1]-1.0)<1e-10,'Log[e]');
   src[0]:=0;src[1]:=1;src[2]:=2;src[3]:=3;
   ArrayExpF64(@src[0],@dst[0],4); Check(Abs(dst[0]-1.0)<1e-10,'Exp[0]');

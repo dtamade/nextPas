@@ -9,6 +9,9 @@ const
   SIMD_PI: Single = 3.14159265358979323846;
   SIMD_TWO_PI: Single = 6.28318530717958647692;
   SIMD_LN10: Single = 2.30258509299404568402;
+  // F64 paths must not widen the Single SIMD_PI (Double(SIMD_PI) keeps the
+  // 2^-24 rounding and poisons atan2/rotation results to ~1e-7 error).
+  SIMD_PI_F64: Double = 3.14159265358979323846;
 
 var
   SimdInfinity: Single;
@@ -508,18 +511,18 @@ begin
     if AX < 0.0 then
     begin
       if AY >= 0.0 then
-        Result := Result + Double(SIMD_PI)
+        Result := Result + SIMD_PI_F64
       else
-        Result := Result - Double(SIMD_PI);
+        Result := Result - SIMD_PI_F64;
     end;
   end
   else
   begin
     Result := System.ArcTan(AX / AY);
     if AY > 0.0 then
-      Result := Double(SIMD_PI) * 0.5 - Result
+      Result := SIMD_PI_F64 * 0.5 - Result
     else
-      Result := -Double(SIMD_PI) * 0.5 - Result;
+      Result := -SIMD_PI_F64 * 0.5 - Result;
   end;
 end;
 

@@ -1019,7 +1019,7 @@ begin
         LConverged := False;
 
         if SimdAbsF64(LApp - LAqq) < 1e-10 then
-          LTheta := Double(SIMD_PI) / 4
+          LTheta := SIMD_PI_F64 / 4
         else
           LTheta := 0.5 * SimdArcTan2F64(2 * LApq, LApp - LAqq);
 
