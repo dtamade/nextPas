@@ -27,7 +27,9 @@ uses
   nextpas.core.net.server,
   nextpas.core.http.base,
   nextpas.core.platform.io.base,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline;
 
 var
   T: TTestSuite;
@@ -126,10 +128,31 @@ type
     function PollEvents: TPlatformPollEvents;
     function Advance(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
-      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult; virtual;
+  end;
+
+  { finite rolling idle deadline (production H1 session shape); a deadline
+    wake — empty event set — closes the connection }
+  TIdleDeadlineWireSession = class(TPollWireSession,
+    ITcpServerPollDrivenSessionWithDeadline)
+  private
+    FIdle: TDuration;
+  public
+    constructor Create(const AConn: ITcpStream; const AIdle: TDuration);
+    function WakeDeadline: TDeadline;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult; override;
   end;
 
   TPollWireFactoryHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactory)
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream): ITcpServerSession;
+  end;
+
+  TIdleDeadlineWireFactoryHandler = class(TInterfacedObject, ITcpServerHandler,
     ITcpServerSessionFactory)
   public
     function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
@@ -241,6 +264,33 @@ begin
   until False;
 end;
 
+constructor TIdleDeadlineWireSession.Create(const AConn: ITcpStream;
+  const AIdle: TDuration);
+begin
+  inherited Create(AConn);
+  FIdle := AIdle;
+end;
+
+function TIdleDeadlineWireSession.WakeDeadline: TDeadline;
+begin
+  { rolling: the target re-reads this after every Advance }
+  Result := TDeadline.After(FIdle);
+end;
+
+function TIdleDeadlineWireSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+begin
+  if AEvents = [] then
+  begin
+    { deadline wake: idle timeout — close the connection }
+    ANextEvents := [];
+    AOwnership := tscoServer;
+    Exit(tsprDone);
+  end;
+  Result := inherited Advance(AEvents, ANextEvents, AOwnership);
+end;
+
 function TPollWireFactoryHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
 begin
   GWorkerRunUsed := True;
@@ -251,6 +301,19 @@ end;
 function TPollWireFactoryHandler.NewSession(const AConn: ITcpStream): ITcpServerSession;
 begin
   Result := TPollWireSession.Create(AConn) as ITcpServerSession;
+end;
+
+function TIdleDeadlineWireFactoryHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  GWorkerRunUsed := True;
+  Result := tscoServer;
+  ServeWireBlocking(AConn, 'poll-ok');
+end;
+
+function TIdleDeadlineWireFactoryHandler.NewSession(const AConn: ITcpStream): ITcpServerSession;
+begin
+  Result := TIdleDeadlineWireSession.Create(AConn,
+    TDuration.FromMilliseconds(400)) as ITcpServerSession;
 end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -444,6 +507,65 @@ begin
   Result := Copy(LResp, LHdrEnd + 4, Length(LResp) - LHdrEnd - 3);
 end;
 
+{ send a keep-alive GET, read the first response fully, then go silent and
+  wait for the server's idle deadline wake to close the connection; returns
+  True when the close is observed within ~6s }
+function ClientIdleUntilServerClose(const APort: UInt16): Boolean;
+var
+  LConn: ITcpStream;
+  LRuntime: ITcpStreamRuntime;
+  LReq, LResp: string;
+  LBuf: array[0..2047] of Byte;
+  LN: SizeUInt;
+  LHdrEnd: SizeInt;
+  LSpins: Int32;
+begin
+  Result := False;
+  LConn := NetTcpConnect('127.0.0.1', APort);
+  try
+    LReq :=
+      'GET / HTTP/1.1'#13#10 +
+      'Host: 127.0.0.1'#13#10 +
+      #13#10;
+    LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+    LResp := '';
+    repeat
+      LHdrEnd := Pos(#13#10#13#10, LResp);
+      if (LHdrEnd > 0) and (Length(LResp) >= LHdrEnd + 3 + 7) then
+        Break;
+      LN := LConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      if LN = 0 then
+        Break;
+      SetLength(LResp, Length(LResp) + Int32(LN));
+      Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+    until False;
+    Check(Pos('HTTP/1.1 200', LResp) = 1, 'idle-wake first response 200');
+    LHdrEnd := Pos(#13#10#13#10, LResp);
+    Check(LHdrEnd > 0, 'idle-wake first response headers terminated');
+    CheckEqual('poll-ok', Copy(LResp, LHdrEnd + 4, 7), 'idle-wake first body');
+
+    { nonblocking poll so a missing wake fails the test instead of hanging }
+    Check(Supports(LConn, ITcpStreamRuntime, LRuntime), 'client runtime iface');
+    LRuntime.SetBlocking(False);
+    LSpins := 0;
+    while LSpins < 600 do
+    begin
+      case LRuntime.TryRead(LBuf[0], SizeUInt(SizeOf(LBuf)), LN) of
+        tsiorOk:
+          if LN = 0 then
+            Exit(True); { orderly shutdown observed }
+        tsiorWouldBlock:
+          platform_thread_sleep_ns(Int64(10) * 1000000);
+      else
+        Exit(True); { closed/reset by server }
+      end;
+      Inc(LSpins);
+    end;
+  finally
+    LConn.Close;
+  end;
+end;
+
 procedure TestIocpFactoryRegistered;
 begin
   Check(HasTcpServerFactory(TCP_SERVER_BACKEND_IOCP),
@@ -530,6 +652,26 @@ begin
     'backpressure drain stays on the completion path (no worker Run)');
 end;
 
+procedure TestIocpIdleDeadlineWake;
+var
+  LServer: ITcpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClosed: Boolean;
+begin
+  GWorkerRunUsed := False;
+  LHandle := StartIocpHttpWire(
+    TIdleDeadlineWireFactoryHandler.Create as ITcpServerHandler, LServer, LPort);
+  try
+    LClosed := ClientIdleUntilServerClose(LPort);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+  Check(LClosed, 'idle keep-alive connection closed by deadline wake');
+  Check(not GWorkerRunUsed,
+    'finite-deadline session stays on the completion path (no worker Run)');
+end;
+
 {$ELSE}
 
 procedure TestNonWindowsSkip;
@@ -553,6 +695,7 @@ begin
     @TestIocpKeepAliveTwoRequests);
   T.Test('IOCP writable backpressure big body under Wine',
     @TestIocpWritableBackpressureBigBody);
+  T.Test('IOCP idle deadline wake under Wine', @TestIocpIdleDeadlineWake);
   {$ELSE}
   T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}
