@@ -89,13 +89,18 @@ def build_result() -> dict[str, Any]:
         "RISC-V V facade opt-in smoke must import the public facade, not the backend directly",
         l_issues,
     )
+    # FPC trunk never delivers the heaptrc exit dump to program output, so the
+    # old `unfreed memory blocks` output-grep token was vacuous. The honest
+    # channel is the HEAPTRC env (haltonnotreleased -> exit 203) plus the
+    # HEAPTRC_PINS dump-file assertions.
     for l_token in (
         "-dSIMD_RISCV_AVAILABLE",
         "-dSIMD_EXPERIMENTAL_RISCVV",
         "-gh",
         "$(RISCVV_FACADE_OPTIN_SMOKE).pas",
         "$(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE)",
-        "unfreed memory blocks",
+        "HEAPTRC='$(HEAPTRC_OPTS),log=",
+        "$(call HEAPTRC_PINS,",
     ):
         l_checks += require_pattern(
             l_riscvv_target_body,

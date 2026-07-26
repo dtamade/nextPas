@@ -37,8 +37,24 @@ build: clean-src
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
+# Opt-in leak gate (HEAPTRC_GATE=1, e.g. as a sub-make argument): FPC trunk
+# 3.3.1 never delivers the heaptrc exit dump to the console, so grepping test
+# output for leaks is vacuous. The env channels still work: haltonnotreleased
+# turns unfreed blocks into exit code 203, log= writes the dump to a file. The
+# dump pins below also fail closed when heaptrc did not run at all.
+HEAPTRC_GATE ?=
+HEAPTRC_DUMP ?= $(BUILD_DIR)/$(PROGRAM).heaptrc
+
 run: build
+ifeq ($(HEAPTRC_GATE),)
 	$(BUILD_DIR)/$(PROGRAM)
+else
+	@rm -f $(HEAPTRC_DUMP)
+	HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(BUILD_DIR)/$(PROGRAM)
+	@grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }
+	@grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }
+	@echo "[HEAPTRC] OK"
+endif
 
 test: run
 

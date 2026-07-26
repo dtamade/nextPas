@@ -4,11 +4,13 @@ PROJECTS := test_rtl_isolation test_api_surface test_impl_simd test_facade test_
 
 .PHONY: test clean $(PROJECTS)
 
+# HEAPTRC_GATE=1: real leak gate via common.mk (exit 203 + dump pins); the
+# console heaptrc dump is lost on FPC trunk, so this is the only honest channel.
 test:
 	@status=0; \
 	for project in $(PROJECTS); do \
 		echo "=== $$project ==="; \
-		if ! $(MAKE) -C $$project clean test; then \
+		if ! $(MAKE) -C $$project clean test HEAPTRC_GATE=1; then \
 			status=1; \
 		fi; \
 		echo ""; \
@@ -21,4 +23,4 @@ clean:
 	done
 
 $(PROJECTS):
-	$(MAKE) -C $@ test
+	$(MAKE) -C $@ test HEAPTRC_GATE=1

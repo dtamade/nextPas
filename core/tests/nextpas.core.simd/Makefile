@@ -45,6 +45,16 @@ CONCURRENT_SUITES := TTestCase_DirectDispatchConcurrent,TTestCase_SimdConcurrent
 CONCURRENT_SUITE_COUNT := 5
 EXPERIMENTAL_INTRINSICS_TEST_DIR := $(CORE_ROOT)/tests/nextpas.core.simd.intrinsics.experimental
 
+# FPC trunk 3.3.1-19195 never delivers the heaptrc exit dump to the program's
+# stderr/stdout (the log= file channel and the haltonnotreleased exit-code-203
+# channel both work), so any leak gate that greps program output is vacuous.
+# Every -gh run below therefore sets HEAPTRC=haltonnotreleased,log=<dump>:
+# unfreed blocks fail the run with exit 203, and HEAPTRC_PINS requires the dump
+# file to exist with an explicit "0 unfreed" line to prove heaptrc actually ran.
+HEAPTRC_OPTS := haltonnotreleased
+HEAPTRC_DUMP_DIR := $(CORE_ROOT)/build/tests/nextpas.core.simd
+HEAPTRC_PINS = if ! grep -q '^Heap dump by heaptrc unit' $(1); then echo "[HEAPTRC] FAILED: no heap dump in $(1) (heaptrc vacuous?)"; exit 1; fi; if ! grep -q '^0 unfreed memory blocks : 0$$' $(1); then echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(1); exit 1; fi; echo "[HEAPTRC] OK $(1)"
+
 .DEFAULT_GOAL := test
 
 .PHONY: check coverage test test-vec test-algorithms api-coverage-contract api-coverage-refresh-checklist api-coverage-test api-coverage-heaptrc api-coverage-focused test-sse-raw test-sse-raw-heaptrc static-avx2-misalignment test-mmx-raw test-mmx-raw-heaptrc test-all bench-build bench audit audit-hygiene-contract cpuinfo-focused cpuinfo-heaptrc cpuinfo-nonx86-compile neon-optin-focused riscvv-facade-optin-compile concurrent-heaptrc experimental-intrinsics-tests experimental-intrinsics-focused experimental-intrinsics-closure clean
@@ -91,11 +101,13 @@ api-coverage-test:
 	done
 
 api-coverage-heaptrc:
-	@mkdir -p $(BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR)
+	@mkdir -p $(BUILD_DIR) $(API_COVERAGE_HEAPTRC_BUILD_DIR) $(HEAPTRC_DUMP_DIR)
 	@for l_test in $(API_COVERAGE_TESTS); do \
 		mkdir -p $(API_COVERAGE_HEAPTRC_BUILD_DIR)/$$l_test; \
 		$(FPC) $(FPC_FLAGS) -B -gh -FU$(API_COVERAGE_HEAPTRC_BUILD_DIR)/$$l_test -o$$l_test $$l_test.pas || exit $$?; \
-		$(BUILD_DIR)/$$l_test || exit $$?; \
+		rm -f $(HEAPTRC_DUMP_DIR)/$$l_test.heaptrc; \
+		HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/'$$l_test.heaptrc $(BUILD_DIR)/$$l_test || exit $$?; \
+		$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$$l_test.heaptrc); \
 	done
 
 api-coverage-focused: api-coverage-contract api-coverage-test api-coverage-heaptrc
@@ -106,14 +118,16 @@ test-sse-raw:
 	$(BUILD_DIR)/$(SSE_RAW_TEST)
 
 test-sse-raw-heaptrc:
-	@mkdir -p $(BUILD_DIR) $(SSE_RAW_HEAPTRC_BUILD_DIR)
+	@mkdir -p $(BUILD_DIR) $(SSE_RAW_HEAPTRC_BUILD_DIR) $(HEAPTRC_DUMP_DIR)
 	$(FPC) $(FPC_FLAGS) -B -gh -FU$(SSE_RAW_HEAPTRC_BUILD_DIR) -o$(SSE_RAW_TEST) $(SSE_RAW_TEST).pas
-	$(BUILD_DIR)/$(SSE_RAW_TEST)
+	@rm -f $(HEAPTRC_DUMP_DIR)/$(SSE_RAW_TEST).heaptrc
+	HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/$(SSE_RAW_TEST).heaptrc' $(BUILD_DIR)/$(SSE_RAW_TEST)
+	@$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$(SSE_RAW_TEST).heaptrc)
 
 static-avx2-misalignment:
-	@mkdir -p $(BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR)
+	@mkdir -p $(BUILD_DIR) $(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) $(HEAPTRC_DUMP_DIR)
 	$(FPC) $(FPC_FLAGS) -B -gh -FU$(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) -o$(STATIC_AVX2_USABLE_PROBE) $(STATIC_AVX2_USABLE_PROBE).pas
-	@$(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE); \
+	@HEAPTRC='$(HEAPTRC_OPTS)' $(BUILD_DIR)/$(STATIC_AVX2_USABLE_PROBE); \
 	l_status=$$?; \
 	if [ $$l_status -eq 77 ]; then \
 		exit 0; \
@@ -121,7 +135,9 @@ static-avx2-misalignment:
 		exit $$l_status; \
 	fi
 	$(FPC) $(FPC_FLAGS) -B -gh -FU$(STATIC_AVX2_MISALIGNMENT_BUILD_DIR) -o$(STATIC_AVX2_MISALIGNMENT_TEST) $(STATIC_AVX2_MISALIGNMENT_TEST).pas
-	$(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST)
+	@rm -f $(HEAPTRC_DUMP_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST).heaptrc
+	HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST).heaptrc' $(BUILD_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST)
+	@$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$(STATIC_AVX2_MISALIGNMENT_TEST).heaptrc)
 
 test-mmx-raw:
 	@mkdir -p $(BUILD_DIR) $(MMX_RAW_BUILD_DIR)
@@ -129,9 +145,11 @@ test-mmx-raw:
 	$(BUILD_DIR)/$(MMX_RAW_TEST)
 
 test-mmx-raw-heaptrc:
-	@mkdir -p $(BUILD_DIR) $(MMX_RAW_HEAPTRC_BUILD_DIR)
+	@mkdir -p $(BUILD_DIR) $(MMX_RAW_HEAPTRC_BUILD_DIR) $(HEAPTRC_DUMP_DIR)
 	$(FPC) $(FPC_FLAGS) -B -gh -FU$(MMX_RAW_HEAPTRC_BUILD_DIR) -o$(MMX_RAW_TEST) $(MMX_RAW_TEST_PROJECT)
-	$(BUILD_DIR)/$(MMX_RAW_TEST)
+	@rm -f $(HEAPTRC_DUMP_DIR)/$(MMX_RAW_TEST).heaptrc
+	HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/$(MMX_RAW_TEST).heaptrc' $(BUILD_DIR)/$(MMX_RAW_TEST)
+	@$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$(MMX_RAW_TEST).heaptrc)
 
 test-all: test test-vec audit cpuinfo-focused
 
@@ -179,9 +197,11 @@ audit-hygiene-contract:
 cpuinfo-focused: cpuinfo-heaptrc cpuinfo-nonx86-compile
 
 cpuinfo-heaptrc:
-	@mkdir -p $(BUILD_DIR) $(CORE_ROOT)/build/lib/cpuinfo-test
+	@mkdir -p $(BUILD_DIR) $(CORE_ROOT)/build/lib/cpuinfo-test $(HEAPTRC_DUMP_DIR)
 	$(FPC) $(CPUINFO_FPC_FLAGS) -gh -dSIMD_X86_AVAILABLE -Fu$(CPUINFO_TEST_DIR) -FU$(CORE_ROOT)/build/lib/cpuinfo-test -FE$(BUILD_DIR) -o$(CPUINFO_TEST_BIN) $(CPUINFO_TEST_DIR)/$(CPUINFO_TEST_BIN).lpr
-	$(BUILD_DIR)/$(CPUINFO_TEST_BIN)
+	@rm -f $(HEAPTRC_DUMP_DIR)/$(CPUINFO_TEST_BIN).heaptrc
+	HEAPTRC='$(HEAPTRC_OPTS),log=$(HEAPTRC_DUMP_DIR)/$(CPUINFO_TEST_BIN).heaptrc' $(BUILD_DIR)/$(CPUINFO_TEST_BIN)
+	@$(call HEAPTRC_PINS,$(HEAPTRC_DUMP_DIR)/$(CPUINFO_TEST_BIN).heaptrc)
 
 cpuinfo-nonx86-compile:
 	@mkdir -p $(CORE_ROOT)/build/lib/cpuinfo-arm $(CORE_ROOT)/build/lib/cpuinfo-riscv $(CORE_ROOT)/build/lib/cpuinfo-loongarch
@@ -198,13 +218,9 @@ riscvv-facade-optin-compile:
 	@mkdir -p $(BUILD_DIR) $(RISCVV_FACADE_OPTIN_BUILD_DIR) $(dir $(RISCVV_FACADE_OPTIN_LOG))
 	$(PYTHON) check_riscvv_facade_optin_contract.py --summary-line
 	$(FPC) $(FPC_FLAGS) -B -gh -dSIMD_RISCV_AVAILABLE -dSIMD_EXPERIMENTAL_RISCVV -FU$(RISCVV_FACADE_OPTIN_BUILD_DIR) -o$(RISCVV_FACADE_OPTIN_SMOKE) $(RISCVV_FACADE_OPTIN_SMOKE).pas
-	$(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) > $(RISCVV_FACADE_OPTIN_LOG) 2>&1
-	@if grep -Eq '(^|[[:space:]])[1-9][0-9]* unfreed memory blocks' $(RISCVV_FACADE_OPTIN_LOG); then \
-		echo "[LEAK] FAILED: heaptrc reported unfreed blocks"; \
-		cat $(RISCVV_FACADE_OPTIN_LOG); \
-		exit 1; \
-	fi
-	@echo "[LEAK] OK"
+	@rm -f $(RISCVV_FACADE_OPTIN_LOG).heaptrc
+	HEAPTRC='$(HEAPTRC_OPTS),log=$(RISCVV_FACADE_OPTIN_LOG).heaptrc' $(BUILD_DIR)/$(RISCVV_FACADE_OPTIN_SMOKE) > $(RISCVV_FACADE_OPTIN_LOG) 2>&1
+	@$(call HEAPTRC_PINS,$(RISCVV_FACADE_OPTIN_LOG).heaptrc)
 
 # F-009 slice: concurrent suites run leak-checked on demand; default test stays
 # heaptrc-free. The suite-count pin fails closed if the --suite filter matches
@@ -212,9 +228,11 @@ riscvv-facade-optin-compile:
 concurrent-heaptrc:
 	@mkdir -p $(BUILD_DIR) $(CONCURRENT_HEAPTRC_BUILD_DIR) $(dir $(CONCURRENT_HEAPTRC_LOG))
 	$(FPC) $(FPC_FLAGS) -B -gh -dSIMD_X86_AVAILABLE -FU$(CONCURRENT_HEAPTRC_BUILD_DIR) -o$(CONCURRENT_HEAPTRC_RUNNER) $(RUNNER).lpr
-	@if ! $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER) --no-bench --suite=$(CONCURRENT_SUITES) > $(CONCURRENT_HEAPTRC_LOG) 2>&1; then \
-		echo "[CONCURRENT-HEAPTRC] FAILED: runner exited non-zero"; \
-		cat $(CONCURRENT_HEAPTRC_LOG); \
+	@rm -f $(CONCURRENT_HEAPTRC_LOG).heaptrc
+	@if ! HEAPTRC='$(HEAPTRC_OPTS),log=$(CONCURRENT_HEAPTRC_LOG).heaptrc' $(BUILD_DIR)/$(CONCURRENT_HEAPTRC_RUNNER) --no-bench --suite=$(CONCURRENT_SUITES) > $(CONCURRENT_HEAPTRC_LOG) 2>&1; then \
+		echo "[CONCURRENT-HEAPTRC] FAILED: runner exited non-zero (203 = unfreed blocks)"; \
+		tail -40 $(CONCURRENT_HEAPTRC_LOG); \
+		cat $(CONCURRENT_HEAPTRC_LOG).heaptrc 2>/dev/null; \
 		exit 1; \
 	fi
 	@if ! grep -Eq '^ *Suites: $(CONCURRENT_SUITE_COUNT)$$' $(CONCURRENT_HEAPTRC_LOG); then \
@@ -222,12 +240,7 @@ concurrent-heaptrc:
 		cat $(CONCURRENT_HEAPTRC_LOG); \
 		exit 1; \
 	fi
-	@if grep -Eq '(^|[[:space:]])[1-9][0-9]* unfreed memory blocks' $(CONCURRENT_HEAPTRC_LOG); then \
-		echo "[LEAK] FAILED: heaptrc reported unfreed blocks"; \
-		cat $(CONCURRENT_HEAPTRC_LOG); \
-		exit 1; \
-	fi
-	@echo "[LEAK] OK"
+	@$(call HEAPTRC_PINS,$(CONCURRENT_HEAPTRC_LOG).heaptrc)
 
 experimental-intrinsics-focused:
 	$(MAKE) -C $(EXPERIMENTAL_INTRINSICS_TEST_DIR) test-all
