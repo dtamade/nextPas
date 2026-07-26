@@ -351,3 +351,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-26 | Idle steward：SCORECARD RELEASE=1 + soak 3/3 复跑（无回归）；数字刷新 |
 | 2026-07-26 | **Audit remediation**：system.heap 收口 System.*；RTL isolation 门禁；sharded TLS 经 platform.thread；删 pressure/registry/watermark |
 | 2026-07-26 | **修复轮（findings P1 全清）**：A-001 TLS/clock FFI 归零 `ab5a9fc9f` · C-004 主线程 TLS 链排干（heaptrc 0 unfreed）`dbabf4de7` · A-002+T-001 测试 43 处 → NpSystem* + 门禁扩 tests/examples `6cf848f65`；OPEN 25→20，P0/P1=0 |
+| 2026-07-26 | **Go/Rust 质量轮（审计行动项清零）**：T-003 门禁收敛单一权威 `65524386e` · T-002+T-004 test-extended 硬化（+sharded +heap-safety）`583ffaf4a` · C-001 外源指针安全契约文档 + N-001 12 份零引用文档归档（顶层 47→35）`47af5b8fa`；findings OPEN 14 条均为既定 stance |
