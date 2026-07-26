@@ -17,6 +17,7 @@ Not an FPC `BaseUnix` / `Windows` / `SysUtils` compatibility layer.
 | [QUICKSTART.md](QUICKSTART.md) | Common usage patterns |
 | [API-REFERENCE.md](API-REFERENCE.md) | Public API catalog; error names must match ERROR-HANDLING (no phantoms) |
 | [residual-roadmap.md](residual-roadmap.md) | Closed residual program LT0–LT3 + dual-IO/F6 freeze; remaining host work → ROADMAP |
+| [host-capability-matrix.md](host-capability-matrix.md) | Per-API-family host honesty table (audit F-015) |
 
 ## Current truth (one line)
 
@@ -46,6 +47,20 @@ make -C core/tests/architecture/source_contracts host-raw-ffi-audit
 make hygiene
 ```
 
+## Recommended uses (feature units)
+
+| Need | Unit |
+|------|------|
+| OS/CPU info, monotonic time | `nextpas.core.platform` or `.info` / `.time` |
+| Files / dirs | `.files` / `.fs` / `.path` |
+| Process / pipes | `.process` / `.pipe` (prefer `*_ex`; **no** new `platform_io_*` call sites) |
+| Sockets | `.socket` |
+| Sync / threads | `.sync` / `.thread` |
+| Console / TTY | `.console` (read/write: value/sentinel `-1` on failure) |
+| Errors | `.error` (`PLATFORM_ERR_*`) |
+
+Root unit `nextpas.core.platform` re-exports a thin info/time surface only.
+
 ## Source layout
 
 ```
@@ -54,8 +69,7 @@ core/tests/nextpas.core.platform*/      focused runtime / wine / compile gates
 core/docs/platform/                     this documentation set
 ```
 
-Root unit `nextpas.core.platform` re-exports a thin info/time surface. Prefer
-feature units (`platform.files`, `platform.process`, ...) for real work.
+Prefer feature units (`platform.files`, `platform.process`, ...) for real work.
 
 ## Historical / non-authority
 

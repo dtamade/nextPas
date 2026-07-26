@@ -150,7 +150,7 @@ var
 begin
   LBuf[0] := 't'; LBuf[1] := 'e'; LBuf[2] := 's'; LBuf[3] := 't';
   R := platform_console_write(-1, @LBuf[0], 4);
-  Check(R <> 0, 'write to invalid fd fails');
+  Check(R = -1, 'write to invalid fd returns -1 sentinel');
 end;
 
 procedure TestWaitReadablePipe;
@@ -196,30 +196,40 @@ begin
     'Windows console wait must use WaitForSingleObject');
   CheckContains(LWindowsBranch, 'cwtimeout',
     'Windows console wait must map timeout result');
-  CheckContains(LWindowsBranch, 'platform_err_invalid_handle',
-    'invalid Windows std fd must return stable invalid-handle semantics');
+  CheckContains(LWindowsBranch, 'exit(-1)',
+    'Windows console read/write failures must use value/sentinel -1');
+  CheckContains(LWindowsBranch, 'value/sentinel',
+    'Windows console read/write must document value/sentinel semantics');
   CheckAbsent(LWindowsBranch, 'windows raw mode / io / wait',
     'Windows console branch must not document raw/io/wait as stubs');
 end;
 
-procedure TestPosixConsoleLinuxOnlySourceContract;
+procedure TestPosixConsoleUnixSourceContract;
 var
   LConsole: string;
 begin
   LConsole := LoadSourceText('src/nextpas.core.platform.console.pas');
-  CheckContains(LConsole, 'posix raw/read/write/wait support is linux-only',
-    'console docs must state POSIX raw/read/write/wait Linux-only support');
-  CheckContains(LConsole, 'macos/freebsd return platform_err_unsupported',
-    'console docs must state macOS/FreeBSD unsupported behavior');
+  CheckContains(LConsole, 'posix (linux/macos/freebsd)',
+    'console docs must state POSIX path for Linux/macOS/FreeBSD');
+  CheckContains(LConsole, 'platform_console_read/write are value/sentinel',
+    'console docs must lock value/sentinel read/write contract');
+  CheckContains(LConsole, 'nextpas_macos',
+    'console must wire Darwin host base for termios');
+  CheckContains(LConsole, 'nextpas_freebsd',
+    'console must wire FreeBSD host base for termios');
 end;
 
-procedure TestUnsupportedWriteStubSourceContract;
+procedure TestConsoleReadWriteValueSentinelSourceContract;
 var
   LConsole: string;
 begin
   LConsole := LoadSourceText('src/nextpas.core.platform.console.pas');
-  CheckAbsent(LConsole, 'begin result := -1; end;',
-    'console unsupported write stubs must not return raw -1');
+  CheckContains(LConsole, 'exit(-1)',
+    'console read/write must fail with -1 sentinel');
+  CheckContains(LConsole, 'never return positive platform_err_*',
+    'console docs must forbid positive PLATFORM_ERR_* as byte counts');
+  CheckAbsent(LConsole, 'exit(platform_get_errno)',
+    'console read/write must not return raw errno as byte count');
 end;
 
 procedure TestReadFromPipe;
@@ -252,7 +262,7 @@ var
   R: Int32;
 begin
   R := platform_console_write(1, nil, 4);
-  Check(R <> 0, 'write nil buffer fails');
+  Check(R = -1, 'write nil buffer returns -1 sentinel');
 end;
 
 procedure TestWriteZeroLength;
@@ -331,10 +341,10 @@ begin
   T.Test('enable ansi', @TestEnableAnsi);
   T.Test('pipe not terminal', @TestPipeNotTerminal);
   T.Test('Windows console source contract', @TestWindowsConsoleSourceContract);
-  T.Test('POSIX console Linux-only source contract',
-    @TestPosixConsoleLinuxOnlySourceContract);
-  T.Test('unsupported write stub source contract',
-    @TestUnsupportedWriteStubSourceContract);
+  T.Test('POSIX console Unix source contract',
+    @TestPosixConsoleUnixSourceContract);
+  T.Test('console read/write value/sentinel source contract',
+    @TestConsoleReadWriteValueSentinelSourceContract);
   T.Test('get size fd', @TestGetSizeFd);
   T.Test('set raw / restore raw', @TestSetRawRestore);
   T.Test('write stdout', @TestWriteStdout);

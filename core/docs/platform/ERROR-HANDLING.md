@@ -8,6 +8,10 @@
 
 These mirror focused-runtime Linux errno numbers. Non-Linux hosts map native errors into this set via `platform_get_last_error` / host errno helpers.
 
+**Canonical names** (prefer in new code): `PERM`, `NOENT`, `INTR`, `IO`, `BADF`, `AGAIN`, `NOMEM`, `BUSY`, `EXIST`, `NOTDIR`, `INVALID`, `NOSPC`, `PIPE`, `NOSYS`, `UNSUPPORTED`, `CONNRESET`, `CONNREFUSED`, `TIMEDOUT`, `PATH_TOO_LONG`, `UNKNOWN`.
+
+**Aliases** (compat only): `ENOENT`→`NOENT`, `EEXIST`→`EXIST`, `ENOTDIR`→`NOTDIR`, `TIMEOUT`→`TIMEDOUT`, `INVALID_HANDLE`→`BADF`.
+
 | Constant | Value | Meaning |
 |----------|------:|---------|
 | *(success)* | 0 | Success for error-code APIs |

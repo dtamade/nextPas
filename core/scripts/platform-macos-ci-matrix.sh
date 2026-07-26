@@ -52,6 +52,7 @@ MODULE_ENTRIES=(
   "platform.error tests/nextpas.core.platform.error/test_platform_error"
   "platform.socket tests/nextpas.core.platform.socket/test_platform_socket"
   "platform.memory tests/nextpas.core.platform.memory/test_platform_memory"
+  "platform.console tests/nextpas.core.platform.console/test_platform_console"
   "mem.host_runtime tests/nextpas.core.mem/test_mem_cross_os_compile_gate host-runtime"
 )
 
@@ -62,7 +63,7 @@ failed=()
 GATE_TIMEOUT_SEC="${NEXTPAS_MACOS_GATE_TIMEOUT_SEC:-180}"
 
 echo "=== Platform macOS CI Matrix (real host) ==="
-echo "truth=macos-focused-runtime; documented 9 platform gates (+ optional mem.host); layer A fail-closed only; not full-host macOS parity"
+echo "truth=macos-focused-runtime; documented 9 platform gates (+ optional mem.host); platform.console=candidate (not promoted 10 until GHA green); layer A fail-closed only; not full-host macOS parity"
 echo "core=$CORE_ROOT"
 echo "gate_timeout_sec=$GATE_TIMEOUT_SEC"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"

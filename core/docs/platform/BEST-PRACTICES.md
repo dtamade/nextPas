@@ -3,8 +3,10 @@
 **权威示例**: 请优先阅读 [EXAMPLES.md](EXAMPLES.md)、[RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)、[ERROR-HANDLING.md](ERROR-HANDLING.md)。
 **API 目录**: [API-REFERENCE.md](API-REFERENCE.md)（唯一 API 参考权威）。
 **约束**: 禁止 `uses SysUtils` / `BaseUnix` / `Windows` / `Classes`；仅 `nextpas.core.system` 可直接引用 FPC RTL。
+**dual-IO**: 禁止新的 `platform_io_read/write/poll` 生产 call site（owner 仅 `platform.process`）。
+**console**: `read`/`write` 失败返回 `-1`（value/sentinel），细节走 `platform_get_last_error`。
 
-本文示例与 **live** `core/src/nextpas.core.platform*.pas` 对齐（2026-07-17）。
+本文示例与 **live** `core/src/nextpas.core.platform*.pas` 对齐（2026-07-26 audit closeout）。
 
 ---
 

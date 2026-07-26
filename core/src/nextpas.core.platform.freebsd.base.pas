@@ -175,6 +175,8 @@ const
 
 { termios ioctl constants and winsize }
 {$I nextpas.core.platform.freebsd.base.termios.inc}
+{ termios flag constants and record layout }
+{$I nextpas.core.platform.freebsd.base.termios.flags.inc}
 
 { stat structure - FreeBSD 12+ }
 const

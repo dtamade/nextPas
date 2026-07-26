@@ -4,7 +4,8 @@
 | --- | --- | --- |
 | Linux readiness poller | focused-runtime | Runtime-covered through focused platform/io and consumer gates. |
 | Windows readiness poller | wine-runtime-smoke + **ci-matrix** (28 **platform** gates) | Durable on `windows-latest` for platform matrix modules (+… +pty +watch +console). Wine **25** secondary. Job `total` may be **29** when `mem.host_runtime` is listed (not a platform facade gate). |
-| Windows platform.console | wine-runtime-smoke + **ci-matrix** | Promoted after GHA **30168411064** @ `5464b31c4` PASS. Facade smoke only; TUI true-console product remains tui-lane. |
+| Windows platform.console | wine-runtime-smoke + **ci-matrix** | Promoted after GHA **30168411064**; F-001/F-003 hard value/sentinel (`-1` fail). TUI true-console product remains tui-lane. |
+| macOS platform.console | implemented + matrix **candidate** | termios path (F-002); not 10-gate promote without GHA layer A green. |
 | Windows IOCP lifecycle | source-contract, forced-compile, wine-runtime-smoke, GHA `poller.windows_runtime_smoke` | Real port lifecycle exists in matrix; broader IOCP completion beyond smoke is not real Windows runtime ready as a whole-host claim. |
 | Windows IOCP AsyncRead/AsyncWrite file completion | source-contract, forced-compile, wine-runtime-smoke, GHA poller smoke | File completion is covered under documented ci-matrix poller gate; remaining AcceptEx/ConnectEx depth is not real Windows runtime ready beyond current smoke gaps. |
 | Windows IOCP socket completion | focused-runtime + ci-matrix (socket wine + windows_real gates) | `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` verified on Wine and real Windows GHA/VM. |
