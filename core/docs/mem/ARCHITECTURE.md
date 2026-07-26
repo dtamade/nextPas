@@ -206,6 +206,39 @@ type
   - 池层 (TFixedPool, TGrowingBlockPool, TBlockPool) 在 Release/FreeMem 时毒化
   - 分配器在 GetMem 时毒化（通过 `DebugPoisonAlloc` 工具函数）
 
+### Central span 表并发协议（central.pas）
+
+跨线程 FreeMem 热路径的 `FindSpanOwnerThreadId` **无锁**扫描 span 表，
+而写者（AddSpan / scavenger）持 spinlock 并发变更同一张表。正确性由四条
+协议共同保证（详细注释在 `central.pas` 对应位置，此处是统一视图）：
+
+1. **发布协议（FEntriesBase 影子指针）**：FPC 的 `SetLength` COW 分支会把
+   managed 字段瞬时清 nil 再发布新数组——RTL 管理字段**永远不能**当
+   lock-free 发布点。读者只从 RTL 不触碰的裸影子 `FEntriesBase` 取数组基址
+   （release 发布 / acquire 读取），且 base 先于 count 发布：读到
+   count = N 就保证 base 容量 ≥ N 且 0..N-1 已初始化。
+2. **代际保留（FRetired，RCU-via-COW）**：数组扩容后旧代际不释放、挂入
+   FRetired 保活——持旧 base 的读者仍在合法内存上扫描（读到的是旧快照，
+   合法：那个时刻的表就长那样）。FEntryCount 有界（见 4）⇒ 代际总量有界
+   （几何级数 < 2× 终态容量）。
+3. **槽位效验门（FMemory）**：`FMemory` 是 entry 唯一的 atomic 写点——
+   两条写路径（AddSpan 复活 / 追加）都**先写全部字段再**
+   `atomic_store(FMemory, mo_release)`；scavenger 硬释放
+   `atomic_store(nil)`。读者 `atomic_load(mo_acquire)` 非 nil ⇒ 该槽
+   FMemorySize / FOwnerThreadId 是配套值。
+4. **死链复活（FDeadHead）**：scavenger 硬释放的槽推入死链（链域复用
+   `FPartialNext`——死槽必不在 partial 链上），AddSpan 先复活再考虑追加
+   ⇒ FEntryCount 被峰值并发度钉死，长生命周期进程不再无界增长。复活会
+   改变槽位身份（旧 span → 新 span），安全论证：硬释放前置条件是 span
+   全空 ⇒ 无活块指入死槽旧区间 ⇒ 合法探测（sized free 持有合法指针）只
+   可能命中复活后的块，而该指针必经同步移交（channel/锁/原子）到达本
+   线程，happens-before 携带复活写入——同时关闭 stale-nil 窗口与
+   munmap-remap ABA 窗口。
+
+**时钟纪律**：scavenger 的 idle age 只用 pool 本地 `FTick`（锁内自增）。
+线程 A 的 threadvar 计数减线程 B 写的 stamp 会 QWord 下溢成假 age——
+**跨线程比较的时间戳必须同源**。
+
 ## 四类 arena 的定位
 
 ### `TLocalArena`
