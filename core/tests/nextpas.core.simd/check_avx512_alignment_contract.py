@@ -76,7 +76,8 @@ def check_backend_mnemonics(a_issues: list[str]) -> None:
 def check_base_contract(a_issues: list[str]) -> None:
     l_path = ROOT / "src/nextpas.core.simd.base.pas"
     l_text = read_text(l_path)
-    l_lower = l_text.lower()
+    # 契约短语可能被注释换行拆开,先把空白归一化再做子串匹配。
+    l_lower = re.sub(r"\s+", " ", l_text.lower())
     if "编译器通常会保证足够对齐" in l_text:
         add_issue(a_issues, l_path, "ordinary stack/record 64-byte alignment claim is still present")
     if "ordinary record" not in l_lower:

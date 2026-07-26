@@ -18,7 +18,8 @@ RECORD_START_RE = re.compile(r"^\s*(T[A-Za-z0-9_]+)\s*=\s*record\b", re.IGNORECA
 
 # Baseline signatures for the current in-repo dispatch contract.
 EXPECTED_BACKEND_INFO_SIGNATURE = "5475286897138f473cd3148caa3e4df907f45b52b2eff55d2e67b7d2161b4b3a"
-EXPECTED_DISPATCH_TABLE_SIGNATURE = "eaf3be0efbe96178963b61ce9317ac0679e71b715e33d6d9f58dddaa6823b1d4"
+# 分组表基线:401540bad(Phase 19-25 嵌套分组)/1fbab101d(I8/U8)/4947a7e32(U32)有意演进。
+EXPECTED_DISPATCH_TABLE_SIGNATURE = "fbe4c25cd6add54be1fe4d33e53d63a1b2301ed5025de2e589b0184cd78bb1fb"
 
 
 @dataclass(frozen=True)

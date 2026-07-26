@@ -32,24 +32,26 @@ def extract_routine_block(source_text: str, symbol_name: str) -> str:
         rf"^(procedure|function)\s+{re.escape(symbol_name)}\b.*$",
         re.IGNORECASE | re.MULTILINE,
     )
-    header_match = header_pattern.search(source_text)
-    if not header_match:
+    header_matches = list(header_pattern.finditer(source_text))
+    if not header_matches:
         raise RuntimeError(f"routine not found: {symbol_name}")
 
+    # interface 段可能有同名 forward 声明;实现体总在其后,取最后一个匹配。
+    header_match = header_matches[-1]
     start = header_match.start()
     next_match = ROUTINE_START_PATTERN.search(source_text, header_match.end())
-    while next_match is not None and next_match.start() == start:
-        next_match = ROUTINE_START_PATTERN.search(source_text, next_match.end())
     end = next_match.start() if next_match is not None else len(source_text)
     return source_text[start:end]
 
 
+# 派发表已分组(CoreVectors.* 等嵌套 record),slot 引用形如
+# aTable.CoreVectors.AndNotI64x2;捕获叶名、允许任意层组前缀。
 def parse_slots_from_assigned(method_body: str) -> set[str]:
-    return set(re.findall(r"Assigned\((?:LTable|aTable)\.([A-Za-z0-9_]+)\)", method_body))
+    return set(re.findall(r"Assigned\((?:LTable|aTable)\.(?:[A-Za-z0-9_]+\.)*([A-Za-z0-9_]+)\)", method_body))
 
 
 def parse_slots_from_pointers(method_body: str) -> set[str]:
-    return set(re.findall(r"Pointer\((?:LTable|aTable)\.([A-Za-z0-9_]+)\)", method_body))
+    return set(re.findall(r"Pointer\((?:LTable|aTable)\.(?:[A-Za-z0-9_]+\.)*([A-Za-z0-9_]+)\)", method_body))
 
 
 def parse_slots_from_method(method_body: str, helper_slots: set[str]) -> tuple[set[str], bool]:

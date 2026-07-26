@@ -18,7 +18,8 @@ RECORD_START_RE = re.compile(
 )
 
 EXPECTED_SECTION_SIGNATURES: dict[str, str] = {
-    "simd_backend_enum": "56fba1c6fcf6dfd04a2bf96ad7440055375242a72361c5157deead2bbe7fd1fc",
+    # 14 后端基线:e9fe7b0b7(LASX)/1124ad877(VSX+MSA)等特性提交有意扩展枚举。
+    "simd_backend_enum": "863386c3bc91406b26a95c579183938aaf4e82b6c06c1d11b0764afc74582884",
     "simd_capability_enum": "0d5c0668547e51e0ee31cb419ef410617c0c03e8201e197d1770bd3fbc1c2468",
     "abi_type_alias": "c59aba2a579f26662126de6cf04cc5416e47850530ece9ed980f60170bee3719",
     "abi_flag_consts": "50e4c58d110b769e4f49e175705e922092417fc670ecd51b617fe1f4bb34f3c4",
@@ -35,7 +36,7 @@ EXPECTED_SECTION_SIGNATURES: dict[str, str] = {
 # smoke_header_* 段已移除：tests/nextpas.core.simd.publicabi(含 publicabi_smoke.h)
 # 从未在本仓库任何 ref 落地(fc8f2520a 部分合并只带入 checker)。
 # overall 基线由上方 13 个 Pascal 段的期望 sha 派生。
-EXPECTED_OVERALL_SIGNATURE = "1e9e591bee71cc89821fdeb5d015e7095ed56dabc06d3affc6b8b2f3722086e4"
+EXPECTED_OVERALL_SIGNATURE = "388f222a5210871f0225e612e02da00a16e8478c69731cf2dd602e4d92883511"
 
 PASCAL_ABI_FLAG_NAMES = [
     "FAF_SIMD_ABI_FLAG_SUPPORTED_ON_CPU",

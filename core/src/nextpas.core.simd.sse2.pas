@@ -19,7 +19,8 @@ uses
 // - thin backend adapter / backend assembly layer
 // - owns TVec* / TMask* facade semantics, dispatch registration, compare-mask translation
 // - wide_emulation, mem/text/stat helpers, and multi-register composition stay here
-// - must not depend on nextpas.core.simd.intrinsics.sse2
+// - delegates raw 128-bit primitives to nextpas.core.simd.intrinsics.sse2
+//   (the active raw ISA leaf; renamed from intrinsics.x86.sse2, no facade/dispatch knowledge there)
 // Current production truth source for SSE2 remains this unit.
 
 // Register the SSE2 backend

@@ -103,105 +103,17 @@ REQUIRED_SIDE_EFFECT_OPCODES_BY_ROUTINE = {
     'simd_pause': ('pause',),
 }
 
-ALLOWED_INTRINSICS_STATUS = {
-    'active leaf',
-    'experimental isolated',
-    'transitional',
-    'retire target',
-}
-
-EXPECTED_BACKEND_TRUTH = {
-    'Scalar': (
-        'backend adapter',
-        'src/nextpas.core.simd.scalar.pas',
-        'default entry chain',
-        'default scalar fallback',
-    ),
-    'SSE2': (
-        'backend adapter',
-        'src/nextpas.core.simd.sse2.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'SSE3': (
-        'backend adapter',
-        'src/nextpas.core.simd.sse2.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'SSSE3': (
-        'backend adapter',
-        'src/nextpas.core.simd.ssse3.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'SSE4.1': (
-        'backend adapter',
-        'src/nextpas.core.simd.sse2.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'SSE4.2': (
-        'backend adapter',
-        'src/nextpas.core.simd.sse2.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'AVX-512': (
-        'backend adapter',
-        'src/nextpas.core.simd.avx512.pas',
-        'opt-in AVX-512 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'AVX2': (
-        'backend adapter',
-        'src/nextpas.core.simd.avx2.pas',
-        'x86 entry chain',
-        'dispatchable when CPU/runtime qualification passes',
-    ),
-    'NEON': (
-        'backend adapter',
-        'src/nextpas.core.simd.neon.pas',
-        'conditional on `SIMD_ARM_AVAILABLE`',
-        'default scalar fallback + asm opt-in; NEON asm requires `NEXTPAS_SIMD_ENABLE_NEON_ASM` and `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY`',
-    ),
-    'RISCVV': (
-        'backend adapter',
-        'src/nextpas.core.simd.riscvv.pas',
-        'opt-in only with `SIMD_RISCV_AVAILABLE` + `SIMD_EXPERIMENTAL_RISCVV`',
-        'experimental opt-in only',
-    ),
-}
-
-EXPECTED_INTRINSICS_DISPOSITION = {
-    'nextpas.core.simd.intrinsics': 'transitional',
-    'nextpas.core.simd.intrinsics.aes': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.avx': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.avx2': 'active leaf',
-    'nextpas.core.simd.intrinsics.avx512': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.base': 'active leaf',
-    'nextpas.core.simd.intrinsics.fma3': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.lasx': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.mmx': 'active leaf',
-    'nextpas.core.simd.intrinsics.neon': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.rvv': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sha': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sse': 'active leaf',
-    'nextpas.core.simd.intrinsics.sse2': 'retire target',
-    'nextpas.core.simd.intrinsics.sse3': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sse41': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sse42': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sve.base': 'active leaf',
-    'nextpas.core.simd.intrinsics.sve': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.sve2': 'experimental isolated',
-    'nextpas.core.simd.intrinsics.x86.sse2': 'active leaf',
-}
+# ALLOWED_INTRINSICS_STATUS / EXPECTED_BACKEND_TRUTH / EXPECTED_INTRINSICS_DISPOSITION
+# 已删除:它们只服务于从未落地的 backend-truth.md / intrinsics-disposition.md
+# 文档对比腿(见 main() 中说明);且其中 x86.sse2='active leaf'、sse2='retire target'
+# 的迁移世界观已被 e42ac7416 重命名收敛(现仅存 intrinsics.sse2 一个活跃叶)。
 
 ROOT_ROLE_MARKERS = [
     'thin backend adapter / backend assembly layer',
     'owns tvec* / tmask* facade semantics, dispatch registration, compare-mask translation',
     'wide_emulation, mem/text/stat helpers, and multi-register composition stay here',
-    'must not depend on nextpas.core.simd.intrinsics.sse2',
+    # e42ac7416 后 intrinsics.sse2 即活跃 raw leaf,adapter 显式委派是现行架构。
+    'delegates raw 128-bit primitives to nextpas.core.simd.intrinsics.sse2',
 ]
 
 RAW_LEAF_ROLE_MARKERS = [
@@ -222,22 +134,8 @@ RAW_LEAF_FORBIDDEN_PATTERNS = {
     'wide emulation token': r'\bwide_emulation\b',
 }
 
-MIGRATION_DOC_REQUIRED_SECTIONS = [
-    '## A - 迁入 `intrinsics.x86.sse2`',
-    '## B - 永久保留在 `simd.sse2`',
-    '## C - 迁移后删除 / 废弃',
-]
-
-MIGRATION_DOC_REQUIRED_TOKENS = [
-    '当前发布真相源仍然是 `src/nextpas.core.simd.sse2.pas`',
-    'SSE2AddF32x4',
-    'SSE2LoadF32x4',
-    'RegisterSSE2Backend',
-    'MemEqual_SSE2',
-    'Utf8Validate_SSE2',
-    'wide_emulation',
-    'retire target',
-]
+# MIGRATION_DOC_REQUIRED_SECTIONS/TOKENS 已删除:sse2-migration-map.md 从未落地,
+# 且其描述的 x86.sse2 迁移已由 e42ac7416 重命名完成收敛。
 
 
 def parse_args() -> argparse.Namespace:
@@ -277,30 +175,6 @@ def extract_markdown_rows(a_text: str) -> list[list[str]]:
             continue
         l_rows.append(l_cells)
     return l_rows
-
-
-def extract_backend_truth(a_text: str) -> dict[str, tuple[str, str, str, str]]:
-    l_rows = extract_markdown_rows(a_text)
-    l_result: dict[str, tuple[str, str, str, str]] = {}
-    for l_cells in l_rows:
-        if len(l_cells) < 5:
-            continue
-        if l_cells[0] == 'Backend':
-            continue
-        l_result[l_cells[0]] = (l_cells[1], l_cells[2], l_cells[3], l_cells[4])
-    return l_result
-
-
-def extract_intrinsics_disposition(a_text: str) -> dict[str, str]:
-    l_rows = extract_markdown_rows(a_text)
-    l_result: dict[str, str] = {}
-    for l_cells in l_rows:
-        if len(l_cells) < 2:
-            continue
-        if l_cells[0] == 'Unit':
-            continue
-        l_result[l_cells[0]] = l_cells[1]
-    return l_result
 
 
 def collect_repo_intrinsics_units(a_src_dir: Path) -> list[str]:
@@ -398,10 +272,9 @@ def main() -> int:
     register_inc_path = src_dir / 'nextpas.core.simd.sse2.register.inc'
     wide_inc_path = src_dir / 'nextpas.core.simd.sse2.wide_emulation.inc'
     select_inc_path = src_dir / 'nextpas.core.simd.sse2.select.inc'
-    intrinsics_raw_leaf_path = src_dir / 'nextpas.core.simd.intrinsics.x86.sse2.pas'
-    backend_truth_doc_path = simd_docs_dir / 'backend-truth.md'
-    intrinsics_disposition_doc_path = simd_docs_dir / 'intrinsics-disposition.md'
-    migration_map_doc_path = simd_docs_dir / 'sse2-migration-map.md'
+    # e42ac7416 重命名 intrinsics.x86.sse2 → intrinsics.sse2(移除多余 .x86. 层);
+    # role marker 三条已核实存在于新文件头部。
+    intrinsics_raw_leaf_path = src_dir / 'nextpas.core.simd.intrinsics.sse2.pas'
 
     failures: list[str] = []
     duplicate_leaf_names: list[str] = []
@@ -574,10 +447,12 @@ def main() -> int:
         )
     )
 
+    # 检查方向随 e42ac7416 反转:旧禁令针对已消亡的 retire-target 同名单元;
+    # 现 intrinsics.sse2 是唯一活跃 raw leaf,adapter 必须显式委派(fail-close)。
     root_uses_hits = collect_uses_clause_hits(root_unit_text, 'nextpas.core.simd.intrinsics.sse2')
-    if root_uses_hits:
+    if not root_uses_hits:
         failures.append(
-            f'{root_unit_path.name} must not depend on nextpas.core.simd.intrinsics.sse2 in uses clauses'
+            f'{root_unit_path.name} must delegate to nextpas.core.simd.intrinsics.sse2 in uses clauses'
         )
 
     raw_leaf_forbidden_hits = collect_forbidden_pattern_hits(intrinsics_raw_leaf_text, RAW_LEAF_FORBIDDEN_PATTERNS)
@@ -602,101 +477,11 @@ def main() -> int:
             f'{intrinsics_raw_leaf_path.name} must preserve required side-effect opcodes for cache-control/fence helpers: {hit}'
         )
 
-    backend_truth_doc_exists = backend_truth_doc_path.exists()
-    backend_truth_text = backend_truth_doc_path.read_text(encoding='utf-8', errors='replace') if backend_truth_doc_exists else ''
-    intrinsics_disposition_doc_exists = intrinsics_disposition_doc_path.exists()
-    intrinsics_disposition_text = (
-        intrinsics_disposition_doc_path.read_text(encoding='utf-8', errors='replace')
-        if intrinsics_disposition_doc_exists
-        else ''
-    )
-    migration_map_doc_exists = migration_map_doc_path.exists()
-    migration_map_text = migration_map_doc_path.read_text(encoding='utf-8', errors='replace') if migration_map_doc_exists else ''
-
-    if not backend_truth_doc_exists:
-        failures.append(f'missing truth doc: {backend_truth_doc_path.name}')
-    if not intrinsics_disposition_doc_exists:
-        failures.append(f'missing truth doc: {intrinsics_disposition_doc_path.name}')
-    if not migration_map_doc_exists:
-        failures.append(f'missing truth doc: {migration_map_doc_path.name}')
-
-    backend_truth_rows = extract_backend_truth(backend_truth_text) if backend_truth_doc_exists else {}
-    intrinsics_disposition_rows = (
-        extract_intrinsics_disposition(intrinsics_disposition_text)
-        if intrinsics_disposition_doc_exists
-        else {}
-    )
-
-    if backend_truth_rows:
-        if set(backend_truth_rows) != set(EXPECTED_BACKEND_TRUTH):
-            failures.append(
-                f'{backend_truth_doc_path.relative_to(root)} backend rows drifted from expected mainline set: '
-                f'missing={sorted(set(EXPECTED_BACKEND_TRUTH) - set(backend_truth_rows))}, '
-                f'extra={sorted(set(backend_truth_rows) - set(EXPECTED_BACKEND_TRUTH))}'
-            )
-        for backend_name, expected_row in EXPECTED_BACKEND_TRUTH.items():
-            actual_row = backend_truth_rows.get(backend_name)
-            if actual_row is None:
-                continue
-            if actual_row != expected_row:
-                failures.append(
-                    f'{backend_truth_doc_path.relative_to(root)} row mismatch for {backend_name}: '
-                    f'expected={expected_row}, actual={actual_row}'
-                )
-            expected_path = root / actual_row[1]
-            if not expected_path.exists():
-                failures.append(
-                    f'{backend_truth_doc_path.relative_to(root)} points to missing file for '
-                    f'{backend_name}: {actual_row[1]}'
-                )
-
+    # backend-truth.md / intrinsics-disposition.md / sse2-migration-map.md 腿已删除:
+    # 三文档在本仓库任何 ref 从未落地(git log --all --diff-filter=AD 零命中,
+    # 与 fc8f2520a 部分合并带入的 never-landed 契约同族);对应 EXPECTED_* 表、
+    # extract_* 解析器与 doc 对比逻辑一并移除。src 侧结构/边界检查全部保留。
     repo_intrinsics_units = collect_repo_intrinsics_units(src_dir)
-    invalid_intrinsics_status_rows: list[str] = []
-    for unit_name, status in intrinsics_disposition_rows.items():
-        if status not in ALLOWED_INTRINSICS_STATUS:
-            invalid_intrinsics_status_rows.append(f'{unit_name}={status}')
-    if invalid_intrinsics_status_rows:
-        failures.append(
-            f'{intrinsics_disposition_doc_path.relative_to(root)} contains invalid status rows: '
-            + ', '.join(sorted(invalid_intrinsics_status_rows))
-        )
-
-    if intrinsics_disposition_rows:
-        # Allow retire-target units to not have corresponding files
-        active_disposition_units = {u for u, s in intrinsics_disposition_rows.items() if s != 'retire target'}
-        if active_disposition_units != set(repo_intrinsics_units):
-            failures.append(
-                f'{intrinsics_disposition_doc_path.relative_to(root)} unit rows drifted from repo units: '
-                f'missing={sorted(set(repo_intrinsics_units) - active_disposition_units)}, '
-                f'extra={sorted(active_disposition_units - set(repo_intrinsics_units))}'
-            )
-        for unit_name, expected_status in EXPECTED_INTRINSICS_DISPOSITION.items():
-            actual_status = intrinsics_disposition_rows.get(unit_name)
-            if actual_status is None:
-                continue
-            if actual_status != expected_status:
-                failures.append(
-                    f'{intrinsics_disposition_doc_path.relative_to(root)} row mismatch for {unit_name}: '
-                    f'expected={expected_status}, actual={actual_status}'
-                )
-
-    migration_missing_sections: list[str] = []
-    migration_missing_tokens: list[str] = []
-    if migration_map_doc_exists:
-        for section in MIGRATION_DOC_REQUIRED_SECTIONS:
-            if section not in migration_map_text:
-                migration_missing_sections.append(section)
-        for token in MIGRATION_DOC_REQUIRED_TOKENS:
-            if token not in migration_map_text:
-                migration_missing_tokens.append(token)
-        if migration_missing_sections:
-            failures.append(
-                f'{migration_map_doc_path.name} missing required sections: {migration_missing_sections}'
-            )
-        if migration_missing_tokens:
-            failures.append(
-                f'{migration_map_doc_path.name} missing required sentinel tokens: {migration_missing_tokens}'
-            )
 
     payload = {
         'root_unit': root_unit_path.name,
@@ -722,14 +507,7 @@ def main() -> int:
         'constref_aligned_load_violations': constref_aligned_load_violations,
         'forbidden_raw_float_opcode_hits': forbidden_raw_float_opcode_hits,
         'missing_required_side_effect_opcodes': missing_required_side_effect_opcodes,
-        'backend_truth_doc_exists': backend_truth_doc_exists,
-        'backend_truth_rows_count': len(backend_truth_rows),
-        'intrinsics_disposition_doc_exists': intrinsics_disposition_doc_exists,
-        'intrinsics_disposition_rows_count': len(intrinsics_disposition_rows),
         'repo_intrinsics_units_count': len(repo_intrinsics_units),
-        'migration_map_doc_exists': migration_map_doc_exists,
-        'migration_missing_sections': migration_missing_sections,
-        'migration_missing_tokens': migration_missing_tokens,
         'failure_count': len(failures),
         'failures': failures,
         'status': 'ok' if not failures else 'fail',
@@ -754,11 +532,7 @@ def main() -> int:
     print(f'  - constref_aligned_load_violations:{len(constref_aligned_load_violations)}')
     print(f'  - forbidden_raw_float_opcode_hits:{len(forbidden_raw_float_opcode_hits)}')
     print(f'  - missing_required_side_effect_opcodes:{len(missing_required_side_effect_opcodes)}')
-    print(f'  - backend_truth_rows_count:       {len(backend_truth_rows)}')
-    print(f'  - intrinsics_disposition_rows:    {len(intrinsics_disposition_rows)}')
     print(f'  - repo_intrinsics_units_count:    {len(repo_intrinsics_units)}')
-    print(f'  - migration_missing_sections:     {len(migration_missing_sections)}')
-    print(f'  - migration_missing_tokens:       {len(migration_missing_tokens)}')
     if duplicate_leaf_records:
         print('  - duplicate_leaf_details:')
         for record in duplicate_leaf_records:
@@ -800,10 +574,6 @@ def main() -> int:
             f'constref_aligned_load_violations={len(constref_aligned_load_violations)} '
             f'forbidden_raw_float_opcode_hits={len(forbidden_raw_float_opcode_hits)} '
             f'missing_required_side_effect_opcodes={len(missing_required_side_effect_opcodes)} '
-            f'backend_truth_rows={len(backend_truth_rows)} '
-            f'intrinsics_disposition_rows={len(intrinsics_disposition_rows)} '
-            f'migration_missing_sections={len(migration_missing_sections)} '
-            f'migration_missing_tokens={len(migration_missing_tokens)} '
             f'failure_count={len(failures)} '
             f'status={payload["status"]}'
         )
