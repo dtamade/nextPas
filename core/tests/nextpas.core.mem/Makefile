@@ -27,16 +27,20 @@ help:
 	@echo "nextpas.core.mem test targets:"
 	@echo "  make test       — 运行全部测试"
 	@echo "  make test-fast  — 跳过 compile-gate 和平台测试"
-	@echo "  make test-extended — kernel evidence set (scorecard+soak+cross-os+lane deps)"
+	@echo "  make test-extended — kernel evidence set (scorecard+soak+sharded+safety+cross-os+lane deps)"
 	@echo "  make clean      — 清理所有构建产物"
 	@echo "  make list       — 列出所有测试项目"
 
 # Kernel evidence (not default lane_gate): Growing/scavenge + long-run + host compile.
+# sharded = TLS/concurrency regression face (MEM2-T-002); safety = tracked
+# double-free/foreign-pointer raise net (MEM2-T-004).
 test-extended:
 	$(MAKE) -C test_usability_guardrails clean test
 	$(MAKE) -C test_contract_matrix clean test
 	$(MAKE) -C scorecard clean test RELEASE=1
 	$(MAKE) -C test_soak clean test
+	$(MAKE) -C test_sharded_pools clean test
+	$(MAKE) -C test_heap_safety_profile test
 	$(MAKE) -C test_mem_cross_os_compile_gate clean test
 
 list:
