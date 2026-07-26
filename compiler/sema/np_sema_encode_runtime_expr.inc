@@ -1021,6 +1021,19 @@ begin
           else
             ABlob := ABlob + #10;
         end
+        else if FModel.LookupStringConstValue(
+          FuncName + '.' + ANode.ChildAt(1).Text + '$read', Operand) and
+          (TypeMetaFieldIndex(FuncName, Operand) >= 0) then
+        begin
+          { Field-backed property off a ptr field receiver: the receiver ptr is
+            already on the stack, so index it instead of calling @Type.FField. }
+          ABlob := ArgName +
+            'int ' + IntToStr(TypeMetaFieldIndex(FuncName, Operand)) + #10;
+          if TypeMetaFieldIsPtr(FuncName, Operand) then
+            ABlob := ABlob + 'arr_load_ptr' + #10
+          else
+            ABlob := ABlob + 'arr_load' + #10;
+        end
         else
           ABlob := ArgName +
             'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
@@ -1032,8 +1045,22 @@ begin
     begin
       if FModel.LookupStringConstValue(
         FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) then
-        ABlob := 'var ' + ReceiverVarName + #10 +
-          'call ' + FuncName + '.' + ArgName + ' 1' + #10
+      begin
+        { A declared read target may be a backing FIELD (property RootNode
+          read FRootNode), not a getter — call @Type.FField is undefined. }
+        Folded := TypeMetaFieldIndex(FuncName, ArgName);
+        if Folded >= 0 then
+        begin
+          ABlob := 'field ' + ReceiverVarName + ' ' + IntToStr(Folded);
+          if TypeMetaFieldIsPtr(FuncName, ArgName) then
+            ABlob := ABlob + ' p' + #10
+          else
+            ABlob := ABlob + #10;
+        end
+        else
+          ABlob := 'var ' + ReceiverVarName + #10 +
+            'call ' + FuncName + '.' + ArgName + ' 1' + #10;
+      end
       else
       begin
         Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
@@ -1213,6 +1240,21 @@ begin
       ABlob := 'rload ' + ANode.ChildAt(0).Text + ' ' +
         IntToStr(Folded) + #10;
       Exit(True);
+    end;
+    { Record properties are absent from type meta, so falling through here
+      residual-calls @Type.Member. Field-backed props still resolve via the
+      declared read target. }
+    if (FuncName <> '') and FModel.LookupStringConstValue(
+      FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) and
+      (ArgName <> '') then
+    begin
+      Folded := TypeMetaFieldIndex(FuncName, ArgName);
+      if Folded >= 0 then
+      begin
+        ABlob := 'rload ' + ANode.ChildAt(0).Text + ' ' +
+          IntToStr(Folded) + #10;
+        Exit(True);
+      end;
     end;
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
