@@ -3,6 +3,7 @@ program demo_task_completion;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,  { 必须第一：TTaskManager.Spawn 线程依赖线程管理器初始化 }
   SysUtils,
   nextpas.core.tui.ext,
   nextpas.core.tui.event;
