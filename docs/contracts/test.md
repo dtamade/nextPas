@@ -1,8 +1,8 @@
 # nextpas.core.test 代码契约
 
-> **权威文档已迁移**  
-> 请以模块契约为准：**[`core/docs/test/CONTRACT.md`](../../core/docs/test/CONTRACT.md)**  
-> 路线图：[`core/docs/test/quality-scale-roadmap.md`](../../core/docs/test/quality-scale-roadmap.md)  
+> **权威文档已迁移**
+> 请以模块契约为准：**[`core/docs/test/CONTRACT.md`](../../core/docs/test/CONTRACT.md)**
+> 路线图：[`core/docs/test/quality-scale-roadmap.md`](../../core/docs/test/quality-scale-roadmap.md)
 > 审计 findings：[`core/docs/test/findings.md`](../../core/docs/test/findings.md)
 
 本文件（`docs/contracts/test.md`）仅为仓库级入口指针，**不再维护 API 正文**（F-15）。
