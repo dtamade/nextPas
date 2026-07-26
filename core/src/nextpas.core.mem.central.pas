@@ -41,11 +41,22 @@ type
   {** Entry in the central span pool: a span + its memory region.
       Lock-free reader invariants (FindSpanOwnerThreadId reads entries
       without the spinlock):
-      - entry slots are append-only and never recycled: an index valid in
-        one array generation stays valid (same content) in every later one
-      - FMemory / FMemorySize / FOwnerThreadId are write-once while the
-        span is live; FMemory only returns to nil on hard release, which
-        requires the span to be empty (no live block can point into it) }
+      - an index valid in one array generation stays valid in every later
+        one (arrays only grow; superseded generations are retired, not
+        freed)
+      - FMemory is the slot's validity gate for lock-free readers: it is
+        written ONLY with atomic_store (nil on hard release, new base with
+        release ordering on revival) and read with atomic_load(acquire).
+        A reader that observes a non-nil base is guaranteed to see the
+        matching FMemorySize / FOwnerThreadId written before it.
+      - dead slots (FMemory = nil) are recycled by AddSpan (revival). This
+        is safe for stale readers because a hard release requires the span
+        to be empty: no live block points into the old region, so a legal
+        caller can never probe a pointer that would match the slot's old
+        identity. A caller probing a block from the REVIVED span must have
+        received that block through a synchronizing handoff, which carries
+        the revival writes with it (happens-before), so it cannot observe
+        the slot's dead state. }
   PCentralSpanEntry = ^TCentralSpanEntry;
   TCentralSpanEntry = record
     FSpan: TSpan;
@@ -92,6 +103,12 @@ type
     FEntryCount: Int32;
     FPartialHead: Int32;    { Index of first partial entry (-1 = none). }
     FPartialNext: array of Int32; { Intrusive linked list via indices. }
+    { Dead-slot chain head (-1 = none): slots whose span was hard-released.
+      Reuses FPartialNext as the link field (a dead slot is never on the
+      partial list). AddSpan pops from here before growing, so FEntryCount
+      stays bounded by peak concurrency instead of growing forever across
+      peak-idle cycles. }
+    FDeadHead: Int32;
     FSlotSize: SizeUInt;
     FSpinLock: SizeUInt;    { CentralPoolLock/CentralPoolUnlock. }
     { Pool-local logical clock: incremented under the spinlock on every
@@ -197,6 +214,7 @@ begin
   APool.FSlotSize := ASlotSize;
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
+  APool.FDeadHead := -1;
   APool.FSpinLock := 0;
   APool.FTick := 0;
   APool.FInboxHead := nil;
@@ -220,6 +238,7 @@ begin
         APool.FEntries[I].FMemorySize);
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
+  APool.FDeadHead := -1;
   APool.FInboxHead := nil;
   APool.FEntriesBase := nil;
   SetLength(APool.FEntries, 0);
@@ -265,6 +284,27 @@ begin
     end;
   if LMem = nil then
     Exit; { OOM: caller treats a negative index as allocation failure }
+  { Revive a dead slot before growing: keeps FEntryCount bounded across
+    peak-idle cycles. Write every field FIRST, then release-store FMemory
+    as the validity gate — a lock-free reader that observes the new base
+    is guaranteed to see the fields written before it. A reader still
+    seeing nil treats the slot as dead, which is also correct: no block
+    of the revived span can be legally probed before its alloc result is
+    handed over through a synchronizing edge that carries these writes. }
+  if APool.FDeadHead >= 0 then
+  begin
+    LIdx := APool.FDeadHead;
+    APool.FDeadHead := APool.FPartialNext[LIdx];
+    SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
+    APool.FEntries[LIdx].FMemorySize := LMemSize;
+    APool.FEntries[LIdx].FLastFreeTick := 0;
+    APool.FEntries[LIdx].FOwnerThreadId := QWord(PtrUInt(GetCurrentThreadId));
+    APool.FEntries[LIdx].FDecommitted := False;
+    atomic_store(APool.FEntries[LIdx].FMemory, LMem, mo_release);
+    APool.FPartialNext[LIdx] := APool.FPartialHead;
+    APool.FPartialHead := LIdx;
+    Exit(LIdx);
+  end;
   { Grow arrays if needed. }
   if APool.FEntryCount >= Length(APool.FEntries) then
   begin
@@ -292,12 +332,15 @@ begin
   { Initialize the entry BEFORE publishing the new count: lock-free readers
     must never observe a published slot with half-written fields. }
   SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
-  APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
   APool.FEntries[LIdx].FLastFreeTick := 0;
   { Portable thread id (not Windows GetCurrentThreadId). }
   APool.FEntries[LIdx].FOwnerThreadId := QWord(platform_thread_id);
   APool.FEntries[LIdx].FDecommitted := False;
+  { FMemory last, release-ordered: same "validity gate" shape as the
+    revival path, so a non-nil base implies ready fields on BOTH paths
+    (this slot is additionally guarded by the FEntryCount release below). }
+  atomic_store(APool.FEntries[LIdx].FMemory, LMem, mo_release);
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;
   APool.FPartialHead := LIdx;
@@ -592,11 +635,18 @@ begin
         end;
         LMemSize := APool.FEntries[I].FMemorySize;
         platform_virtual_release(APool.FEntries[I].FMemory, LMemSize);
-        APool.FEntries[I].FMemory := nil;
+        { atomic_store pairs with the acquire load in FindSpanOwnerThreadId
+          (plain store vs atomic load would be a data race). }
+        atomic_store(APool.FEntries[I].FMemory, nil, mo_release);
         APool.FEntries[I].FLastFreeTick := 0;
         APool.FEntries[I].FDecommitted := False;
         APool.FEntries[I].FSpan.FBitmap := 0;
         APool.FEntries[I].FSpan.FFreeCount := 0;
+        { Push the slot onto the dead chain for revival by AddSpan.
+          FPartialNext[I] is free to reuse: the slot was just unlinked
+          from the partial list above (if it was there at all). }
+        APool.FPartialNext[I] := APool.FDeadHead;
+        APool.FDeadHead := I;
         { Invalidate MRU cache if it points to the released span. }
         if APool.FLastHitIndex = I then
           APool.FLastHitIndex := -1;
@@ -637,21 +687,26 @@ begin
       release-publishes base before count, so seeing count = N guarantees
       a base with capacity >= N and fully initialized entries 0..N-1
     - a stale base is still valid memory: superseded generations are kept
-      alive in FRetired, and entry slots are append-only with write-once
-      live fields, so stale entries carry correct data for live spans }
+      alive in FRetired. Slot contents may change on revival (dead slot
+      reused for a new span), but a legal caller only probes pointers it
+      received through a synchronizing handoff, which carries the revival
+      writes — see the TCentralSpanEntry invariants. }
   LCount := atomic_load(APool.FEntryCount, mo_acquire);
   LEntries := PCentralSpanEntry(atomic_load(APool.FEntriesBase, mo_acquire));
   if (LCount <= 0) or (LEntries = nil) then
     Exit(0);
+  { FMemory is the slot validity gate: acquire-load pairs with the
+    release-store in AddSpan's revival path, so a non-nil base guarantees
+    the slot's FMemorySize / FOwnerThreadId are the matching values. }
   { Check MRU cache first (racy hint: bounds-checked, validated by range). }
   I := APool.FLastHitIndex;
   if (I >= 0) and (I < LCount) then
   begin
     LEntry := LEntries;
     Inc(LEntry, I);
-    if LEntry^.FMemory <> nil then
+    LBase := PByte(atomic_load(LEntry^.FMemory, mo_acquire));
+    if LBase <> nil then
     begin
-      LBase := PByte(LEntry^.FMemory);
       LSize := LEntry^.FMemorySize;
       if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
         Exit(LEntry^.FOwnerThreadId);
@@ -662,9 +717,9 @@ begin
   Inc(LEntry, LCount - 1);
   for I := LCount - 1 downto 0 do
   begin
-    if LEntry^.FMemory <> nil then
+    LBase := PByte(atomic_load(LEntry^.FMemory, mo_acquire));
+    if LBase <> nil then
     begin
-      LBase := PByte(LEntry^.FMemory);
       LSize := LEntry^.FMemorySize;
       if (PByte(APtr) >= LBase) and (PByte(APtr) < LBase + LSize) then
       begin

@@ -344,6 +344,142 @@ begin
   WriteLn('PASS: cross-instance sized free routed to owning instance');
 end;
 
+{ ── Test 6: scavenger revival racing lock-free owner lookups ──
+
+  Producer alternates batch churn with Scavenge (idle threshold 0): every
+  round the just-emptied spans are hard-released, their entry slots pushed
+  onto the dead chain, and revived by the next round's refill — while
+  consumers concurrently free published blocks through the lock-free
+  FindSpanOwnerThreadId scan. Exercises the revival validity gate (atomic
+  FMemory store/load) under continuous slot identity turnover. }
+
+const
+  REVIVAL_ROUNDS = 400;
+  REVIVAL_BATCH = 32;
+  REVIVAL_SIZE = 128;
+  REVIVAL_CONSUMERS = 2;
+  REVIVAL_TOTAL = REVIVAL_ROUNDS * REVIVAL_BATCH;
+
+type
+  PRevivalShared = ^TRevivalShared;
+  TRevivalShared = record
+    Alloc: TGrowingAllocator;
+    Ring: array[0..RING_SIZE - 1] of Pointer;
+    Consumed: Int32;
+    CorruptCount: Int32;
+    ProducerFailed: Boolean;
+  end;
+
+function RevivalProducer(Parameter: Pointer): PtrInt;
+var
+  LShared: PRevivalShared;
+  LKeep: array[0..REVIVAL_BATCH - 1] of Pointer;
+  LRound, LI, LSlot: Integer;
+  LPtr, LExpected: Pointer;
+  LSeq: QWord;
+begin
+  LShared := PRevivalShared(Parameter);
+  LSeq := 0;
+  for LRound := 0 to REVIVAL_ROUNDS - 1 do
+  begin
+    { Publish a batch for cross-thread free. }
+    for LI := 0 to REVIVAL_BATCH - 1 do
+    begin
+      LPtr := LShared^.Alloc.GetMem(REVIVAL_SIZE);
+      if LPtr = nil then
+      begin
+        LShared^.ProducerFailed := True;
+        Break;
+      end;
+      TagBlock(LPtr, LSeq);
+      LSlot := Integer(LSeq mod RING_SIZE);
+      Inc(LSeq);
+      repeat
+        LExpected := nil;
+        if atomic_compare_exchange_strong(LShared^.Ring[LSlot], LExpected,
+          LPtr, mo_acq_rel, mo_acquire) then
+          Break;
+        ThreadSwitch;
+      until False;
+    end;
+    if LShared^.ProducerFailed then
+      Break;
+    { Churn a same-thread batch, then force-scavenge: emptied spans are
+      hard-released (threshold 0), slots go to the dead chain, and the
+      next round's refill revives them. }
+    for LI := 0 to REVIVAL_BATCH - 1 do
+    begin
+      LKeep[LI] := LShared^.Alloc.GetMem(REVIVAL_SIZE);
+      if LKeep[LI] = nil then
+      begin
+        LShared^.ProducerFailed := True;
+        Break;
+      end;
+    end;
+    if LShared^.ProducerFailed then
+      Break;
+    for LI := 0 to REVIVAL_BATCH - 1 do
+      LShared^.Alloc.FreeMem(LKeep[LI], REVIVAL_SIZE);
+    LShared^.Alloc.Scavenge;
+  end;
+  { Unblock consumers if the producer bailed early. }
+  if LShared^.ProducerFailed then
+    atomic_store(LShared^.Consumed, REVIVAL_TOTAL, mo_release);
+  Result := 0;
+end;
+
+function RevivalConsumer(Parameter: Pointer): PtrInt;
+var
+  LShared: PRevivalShared;
+  LPtr: Pointer;
+  LSlot: Integer;
+begin
+  LShared := PRevivalShared(Parameter);
+  while atomic_load(LShared^.Consumed, mo_acquire) < REVIVAL_TOTAL do
+  begin
+    for LSlot := 0 to RING_SIZE - 1 do
+    begin
+      LPtr := atomic_exchange(LShared^.Ring[LSlot], nil, mo_acq_rel);
+      if LPtr <> nil then
+      begin
+        if not VerifyBlock(LPtr) then
+          atomic_fetch_add(LShared^.CorruptCount, 1);
+        LShared^.Alloc.FreeMem(LPtr, REVIVAL_SIZE);
+        atomic_fetch_add(LShared^.Consumed, 1);
+      end;
+    end;
+    ThreadSwitch;
+  end;
+  Result := 0;
+end;
+
+procedure TestScavengeRevivalRace;
+var
+  LShared: PRevivalShared;
+  LProducer: TThreadID;
+  LConsumers: array[0..REVIVAL_CONSUMERS - 1] of TThreadID;
+  I: Integer;
+begin
+  LShared := PRevivalShared(NpSystemGetMem(SizeOf(TRevivalShared)));
+  Check(LShared <> nil, 'test state allocated');
+  FillChar(LShared^, SizeOf(TRevivalShared), 0);
+  LShared^.Alloc := DefaultGrowingAllocator;
+  LProducer := BeginThread(@RevivalProducer, LShared);
+  for I := 0 to REVIVAL_CONSUMERS - 1 do
+    LConsumers[I] := BeginThread(@RevivalConsumer, LShared);
+  WaitForThreadTerminate(LProducer, 0);
+  for I := 0 to REVIVAL_CONSUMERS - 1 do
+    WaitForThreadTerminate(LConsumers[I], 0);
+  Check(not LShared^.ProducerFailed, 'producer allocated all blocks');
+  Check(LShared^.CorruptCount = 0,
+    'zero corrupted tags (got ' + IntToStr(LShared^.CorruptCount) + ')');
+  Check(atomic_load(LShared^.Consumed, mo_acquire) >= REVIVAL_TOTAL,
+    'all published blocks consumed');
+  NpSystemFreeMem(LShared);
+  WriteLn('PASS: scavenge-revival race x ' + IntToStr(REVIVAL_ROUNDS) +
+    ' rounds (span identity turnover under lock-free lookups)');
+end;
+
 begin
   T := TTestSuite.Create('test_cross_thread_free');
   T.Test('WorkerAllocMainFree', @TestWorkerAllocMainFree);
@@ -351,6 +487,7 @@ begin
   T.Test('GrowthRaceStress', @TestGrowthRaceStress);
   T.Test('SystemFallbackBlockFree', @TestSystemFallbackBlockFree);
   T.Test('CrossInstanceRouting', @TestCrossInstanceRouting);
+  T.Test('ScavengeRevivalRace', @TestScavengeRevivalRace);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

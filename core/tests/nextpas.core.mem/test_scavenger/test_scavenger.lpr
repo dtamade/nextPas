@@ -64,7 +64,8 @@ begin
   WriteLn('PASS: scavenger releases old');
 end;
 
-{ Test: alloc creates new span after scavenge releases old one. }
+{ Test: alloc after scavenge REVIVES the dead slot instead of appending
+  a new entry (dead-slot chain keeps FEntryCount bounded). }
 procedure TestAllocAfterScavenge;
 var
   LPool: TCentralPool;
@@ -78,9 +79,33 @@ begin
   Check(LPool.FEntries[0].FMemory = nil, 'released');
   LCount := CentralPoolAlloc(LPool, 1, @LBlocks[0]);
   Check(LCount = 1, 'alloc 1');
-  Check(LPool.FEntryCount = 2, '2 entries');
+  Check(LPool.FEntryCount = 1, 'slot revived, no append');
+  Check(LPool.FEntries[0].FMemory <> nil, 'revived slot has memory');
   CentralPoolDestroy(LPool);
   WriteLn('PASS: alloc after scavenge');
+end;
+
+{ Test: repeated release-revive cycles never grow the entry table.
+  Before the dead-slot chain, every peak-idle cycle leaked one entry
+  slot (append-only AddSpan) — unbounded FEntryCount in long-lived
+  processes. }
+procedure TestRevivalKeepsEntryCountBounded;
+var
+  LPool: TCentralPool;
+  LRound: Int32;
+  LReleased: Int32;
+begin
+  CentralPoolInit(LPool, 64);
+  for LRound := 1 to 16 do
+  begin
+    AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, LPool.FTick + 10);
+    LPool.FTick := LPool.FTick + 1000;
+    LReleased := ScavengeCentralPools(LPool, 50);
+    Check(LReleased = 1, 'round ' + IntToStr(LRound) + ' released');
+  end;
+  Check(LPool.FEntryCount = 1, 'entry count stays 1 after 16 cycles');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: revival keeps entry count bounded');
 end;
 
 { Test: only old spans released, recent ones kept. }
@@ -303,6 +328,7 @@ begin
   T.Test('scavenger_skip_recent', @TestScavengerSkipsRecent);
   T.Test('scavenger_release_old', @TestScavengerReleasesOld);
   T.Test('alloc_after_scavenge', @TestAllocAfterScavenge);
+  T.Test('revival_bounded_entries', @TestRevivalKeepsEntryCountBounded);
   T.Test('scavenger_selective', @TestScavengerSelective);
   T.Test('scavenger_empty', @TestScavengerEmpty);
   T.Test('reused_span_clears_tick', @TestReusedSpanClearsTick);
