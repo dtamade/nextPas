@@ -187,8 +187,12 @@ xorshift32 pattern (seed=12345 — failures are reproducible, no flaky CI):
 模块特色路：csv writer→parser 往返、ini write→reparse 往返、json
 Stringify 幂等 + 600 层洪水、yaml 锚点/别名碎片 + 300 层 flow 洪水、
 xml `Root.Text` 消费面 + 实体/标签碎片。config 为 DOM 聚合层：输入面
-由底层各格式 parser fuzz 覆盖，插值环有专测。全部套件 heaptrc 0 泄漏
-门禁内置（`-gh`）。
+由底层各格式 parser fuzz 覆盖，插值环有专测。
+
+泄漏验证走诚实通道（`-gh` 默认通道泄漏时 exit 仍为 0，不构成门禁）：
+`HEAPTRC='haltonnotreleased,log=<file>' ./<binary>` — 泄漏 exit=203，
+干净时 dump 含 `0 unfreed memory blocks : 0`。证据与 follow-up
+（common.mk `HEAPTRC_GATE` 待落 main 后接线）见 SCORECARD Wave S 附录。
 
 ## Format Surface Gates
 

@@ -35,6 +35,29 @@ make hygiene
 parser fuzz 覆盖，插值环已有专测（`test_config` cycle 两测试）。
 本轮 fuzz 未挖出新缺陷 = Wave R 防线的独立验证。
 
+### Wave S 附录：heaptrc 泄漏门禁真空 + 诚实通道验证
+
+**发现（2026-07-26）**：FPC trunk 3.3.1 heaptrc 有泄漏时进程仍 exit=0，
+`common.mk` 的 `test: run` 永不因泄漏失败——`-gh` 只产出 dump，不构成门禁。
+"0 泄漏" 若只看 make 绿灯，是不可证伪的口头声明。
+
+**诚实通道**：`HEAPTRC='haltonnotreleased,log=<file>'` 环境变量下，
+泄漏 → exit=203 + dump 落文件；干净 → exit=0 + dump 含
+`0 unfreed memory blocks : 0`（该 pin 同时证明 heaptrc 确实运行了，fail closed）。
+
+**证据（host-linux，lane HEAD）**：家族 7 个二进制全部通过诚实通道：
+
+| 套件 | exit | pin `0 unfreed` |
+|------|------|------------------|
+| test_csv_fuzz / test_ini_fuzz / test_json_fuzz / test_yaml_fuzz / test_xml_fuzz | 0 | ✅ |
+| test_toml_fuzz | 0 | ✅ |
+| test_config | 0 | ✅ |
+
+**Follow-up**：math lane（`codex/math-simd` c1dbdfe26）已为 `common.mk` 加
+opt-in `HEAPTRC_GATE=1` 同款机制；落 main 后本家族套件直接接线即可，
+本 lane 不重复改 `common.mk`（避免合并冲突）。在此之前，泄漏声明以
+本节诚实通道复跑为准。
+
 ---
 
 ## C. Wave R 关闭项（历史）
