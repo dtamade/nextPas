@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（Era W2 收官 + M-1..M-6 landed：facade over IOCP 端到端（真机证据闭环）+ 测试债三连修 + gate 可信度收口（首次可信全量绿 1910/0）+ side suites 健康度补查（5/5 绿）；NEXT=M-band）
+**Updated**: 2026-07-26（Era P h2 DoS defense：rapid-reset + control-frame flood 防护 + doc-truth 修正；main@2e474c1d7；NEXT=P-band 收口）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -44,7 +44,7 @@
 | Windows | **W2-3b landed**：`net.server.iocp` completion 驱动 recv/send/deadline-wake 三路齐备——server 自有 GQCS 事件循环（`PollOneWait` 三态），writable waiter 1ms timeout 重试，有限 `WakeDeadline` 经 GQCS-timeout 扫描 + `TryCancelByContext`/`WakePending` 取消唤醒（单路等待不变式保持：recv op 挂起 XOR waiter/sleeper）；生产 H1 session 走完成路径。真机证据：`http.iocp_wire` **6 用例** + 0 unfreed on windows-latest（Core CI run 30196530589；deadline wake 真机 437ms ≈ Wine 445ms，`CancelIoEx` 语义一致）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 整块吞下不 WouldBlock，须分块写（真机无此差异，已验证） |
 | Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire）+ `test_http_iocp_facade_wine`（**M-1**：产品 `THttpServer`+`tsbIocp` GET/keep-alive 端到端；uses 常驻钉住 full facade Win64 交叉编译——原 TLS 链 FPC internal residual 已消除；Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
-| **NEXT** | **M-band（§5 维护带）**——Era W2 已收官；候选战役（DX cookbook / Windows 性能 harness）升格待产品确认（§6）；改方向先改本行 + §4 |
+| **NEXT** | **P-band 收口**——Era P（h2 DoS defense）P-1/P-2/P-3 已 landed；剩余 DoS 向量评估（CONTINUATION flood CVE-2024-27316 / HPACK bomb）；改方向先改本行 + §11 changelog |
 
 ---
 
@@ -233,6 +233,7 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **Era P-1/P-2/P-3 landed**（h2 DoS defense family）：**P-1 CVE-2023-44487 rapid-reset**——`FRapidResetCount` 计数 + `H2_MAX_RAPID_RESETS=100` → GOAWAY(ENHANCE_YOUR_CALM)，完成路径清零；+2 测试（攻击 201 resets + 不误伤 198 resets 中间穿插1完成）；**P-2 CVE-2019-9512/9515 control-frame flood**——`FControlFrameFloodCount` + `RegisterControlFrameFlood` helper（PING/SETTINGS flood 共用计数器）→ GOAWAY(EYC)，`H2_MAX_CONTROL_FRAME_FLOOD=100`；+2 测试（攻击 150 PINGs + 不误伤 198 PINGs 中间穿插1完成）；41 passed / 0 failed / 0 unfreed；**P-3 doc-truth**——CONTRACT §6 suites 35→47 + DoS stance 四象限表；CONTRACT v3.49 |
 | 2026-07-26 | **M-6 landed**（side suites 健康度补查）：主 gate 47 suites 可信后补查 5 个 Linux 正确性类 side suite（smoke / integration / examples / threaded_host / tls_real——不在 PROJECTS 的验证盲区）：**4 绿 + examples 编译失败 1 处**——`DrainPipePair` 7→9 参数（process lane e252064ba 加 `AMaxTotal`/`ALimited` 输出上限，产品侧 child.pas 已适配、http examples 未跟进；与 M-2 同型「API 演进 side suite 未跟进」腐化）；修：传 `AMaxTotal=0`（不限制，保持原轮询收集语义）+ 局部 `LLimited`；修复后 5/5 绿（examples 5 passed + 0 unfreed）。Wine 3 suite 已有 CI 真机证据、bench 2 harness 非正确性 gate，均不在本刀范围 |
 | 2026-07-26 | **M-5 landed**（gate 可信度收口）：(1) **首次可信全量绿**——M-4 后全量 47 suites clean test：**1910 passed / 0 failed / 42 heaptrc 报告全 0 unfreed**（此前「全量绿」被 tail 截断读法证伪：M-1 时实为 8 红被掩盖，M-3 时 239/8）；(2) 聚合 Makefile `test` 目标加失败 suite 汇总（`FAILED SUITES: ...` / `ALL 47 SUITES GREEN` 末尾输出）——中段失败不再可能被日志尾部读法静默归因给最后一个 suite；(3) 假绿模式审计：全 http 测试 `except` 吞异常 10 处——security 为唯一假绿点（M-4 已修），其余 9 处为响应收集 helper（断言基于内容、超时自然失败），无假绿风险 |
 | 2026-07-26 | **M-4 landed**（M-band 测试债修复）：`test_http_security` 全部停滞族用例超时语义对齐——41a7e1614（6月8日）引入 ReadTimeout/IdleTimeout 分离（Go 风格：ReadTimeout 管请求内读含 body，IdleTimeout 只管 keep-alive 间隙，见 CONTRACT PD-3-1）时 `test_http_server` 跟进但 security 未跟进：8 个 Expect body 停滞用例（threaded+epoll）只设 IdleTimeout=200 → 停滞归 ReadTimeout=30000 管 → 5s 观察窗永不关 → 诚实 helper 如实红；另 10 个非 Expect 停滞用例的 helper 把 client 读超时误判为 server 关闭 → 假绿掩盖同一问题七周。修：18 用例 IdleTimeout→ReadTimeout + helper 改 `ReadUntilClosedOrDeadline` 诚实区分 + 标识符/label idle-timeout→read-timeout；247/247 绿 + 0 unfreed；实现与契约本来就对，纯测试债；CONTRACT v3.49 |
