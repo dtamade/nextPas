@@ -111,6 +111,47 @@ begin
   end;
 end;
 
+{ 超限请求走 inner fallback 的三重回归：
+  ① 指针须保留 inner 分配器对齐（旧实现返回 base+1 错位指针）
+  ② 路由不得依赖块内容/块外字节（旧实现读 [-1] magic,mmap 基址会段错误）
+  ③ AllocMem 须整块清零（旧实现只清 FBlockSize 前缀） }
+procedure TestFallbackLargeBlocks;
+var
+  LPool: TPoolAllocator;
+  LPtr, LZeroPtr: Pointer;
+  LI: Integer;
+  LAllZero: Boolean;
+  LStats: TPoolStats;
+begin
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64);
+  try
+    LPtr := LPool.GetMem(256);
+    Check(LPtr <> nil, 'fallback alloc should succeed');
+    Check(PtrUInt(LPtr) and $F = 0, 'fallback pointer should stay 16-aligned');
+    FillChar(LPtr^, 256, $A7);
+    LPool.FreeMem(LPtr);
+
+    LZeroPtr := LPool.AllocMem(256);
+    Check(LZeroPtr <> nil, 'fallback AllocMem should succeed');
+    LAllZero := True;
+    for LI := 0 to 255 do
+      if PByte(LZeroPtr)[LI] <> 0 then
+      begin
+        LAllZero := False;
+        Break;
+      end;
+    Check(LAllZero, 'fallback AllocMem should zero the whole block');
+    LPool.FreeMem(LZeroPtr);
+
+    LStats := LPool.GetStats;
+    Check(LStats.AllocCount = 2, 'fallback allocs counted');
+    Check(LStats.FreeCount = 2, 'fallback frees counted');
+    Check(LStats.FreeBlocks = LStats.TotalBlocks, 'pool blocks untouched');
+  finally
+    LPool.Free;
+  end;
+end;
+
 procedure TestFixedSizeNoRealloc;
 var
   LPool: TPoolAllocator;
@@ -205,6 +246,7 @@ begin
   T.Test('alloc_and_free', @TestAllocAndFree);
   T.Test('alloc_mem_zero_init', @TestAllocMemZeroInitialized);
   T.Test('grow_pool', @TestGrowPool);
+  T.Test('fallback_large_blocks', @TestFallbackLargeBlocks);
   T.Test('fixed_size_no_realloc', @TestFixedSizeNoRealloc);
   T.Test('stats', @TestStats);
   T.Test('invalid_params', @TestInvalidParams);

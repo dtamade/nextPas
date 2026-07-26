@@ -35,8 +35,6 @@ const
   POOL_DEFAULT_INITIAL_COUNT = 256;
   {** 默认扩展增量 }
   POOL_DEFAULT_GROW_COUNT = 128;
-  {** 内部 fallback 分配标记（放在用户指针前 1 字节） }
-  POOL_INNER_MAGIC = $A7;
 
 type
   {** 池统计信息 }
@@ -56,9 +54,12 @@ type
    *  所有块大小相同，使用空闲链表管理，O(1) 分配/释放。
    *  零外部碎片，适合高频同尺寸对象分配。
    *
-   *  内存布局（每个块）:
-   *  [NextPtr 8B][User data...]
-   *               ^ returned pointer
+   *  块布局: 返回指针即块基址；空闲时用户区前 8 字节复用为
+   *  freelist Next 指针（intrusive freelist，无独立头部）。
+   *
+   *  FreeMem 路由: 指针落在任一池 chunk 范围内 → 池块回收；
+   *  否则视为超限 fallback 块原样归还内部分配器。禁止依赖
+   *  块外字节做类型判定（chunk 可落在 mmap 映射基址,[-1] 不可读）。
    *
    *  @warning 不支持 ReallocMem（固定大小块无法调整大小）
    *}
@@ -66,7 +67,7 @@ type
   private
     FInner: IAllocator;
     FBlockSize: SizeUInt;
-    FActualBlockSize: SizeUInt;  { 含 NextPtr 的实际块大小 }
+    FActualBlockSize: SizeUInt;  { 含 freelist 指针预留的实际块大小 }
     FFreeHead: Pointer;          { 空闲链表头 }
     FFreeCount: UInt64;
     FTotalBlocks: UInt64;
@@ -74,13 +75,15 @@ type
     FAllocCount: UInt64;
     FFreeCountStat: UInt64;
     FGrowCount: UInt64;
-    { 池内存块管理（用于释放） }
+    { 池内存块管理（用于释放 + FreeMem 范围路由） }
     FPoolChunks: array of Pointer;
     FPoolChunkSizes: array of SizeUInt;
     FPoolChunkCount: Integer;
+    FLastHitChunk: Integer;      { MRU: 上次范围命中的 chunk 索引 }
     procedure GrowPool(AGrowCount: UInt64);
     function PopFree: Pointer;
     procedure PushFree(APtr: Pointer);
+    function OwnsBlock(APtr: Pointer): Boolean;
   public
     {** 创建固定大小块池分配器
      *  @param AInner 内部分配器（用于批量获取内存）
@@ -142,6 +145,7 @@ begin
   FFreeCountStat := 0;
   FGrowCount := 0;
   FPoolChunkCount := 0;
+  FLastHitChunk := 0;
 
   { 初始扩展池 }
   GrowPool(AInitialCount);
@@ -219,21 +223,44 @@ begin
   Inc(FFreeCount);
 end;
 
-function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
+function TPoolAllocator.OwnsBlock(APtr: Pointer): Boolean;
 var
-  LRaw: PByte;
+  LI: Integer;
+  LBase: PtrUInt;
+begin
+  { 热路径释放通常连续命中同一 chunk,先查 MRU 摊销成 O(1) }
+  if FLastHitChunk < FPoolChunkCount then
+  begin
+    LBase := PtrUInt(FPoolChunks[FLastHitChunk]);
+    if (PtrUInt(APtr) >= LBase) and
+       (PtrUInt(APtr) - LBase < FPoolChunkSizes[FLastHitChunk]) then
+      Exit(True);
+  end;
+  for LI := 0 to FPoolChunkCount - 1 do
+  begin
+    LBase := PtrUInt(FPoolChunks[LI]);
+    if (PtrUInt(APtr) >= LBase) and
+       (PtrUInt(APtr) - LBase < FPoolChunkSizes[LI]) then
+    begin
+      FLastHitChunk := LI;
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
   if ASize = 0 then
     Exit(nil);
-  { 超过固定块大小的请求，fallback 到内部分配器（带标记头） }
+  { 超过固定块大小的请求，fallback 到内部分配器。
+    原样透传（不加头部字节）,保留内部分配器的对齐保证；
+    FreeMem 用 chunk 范围判定路由,无需 in-band 标记。 }
   if ASize > FBlockSize then
   begin
-    LRaw := PByte(FInner.GetMem(ASize + 1));
-    if LRaw = nil then
-      Exit(nil);
-    LRaw^ := POOL_INNER_MAGIC;
-    Result := Pointer(LRaw + 1);
-    Inc(FAllocCount);
+    Result := FInner.GetMem(ASize);
+    if Result <> nil then
+      Inc(FAllocCount);
     Exit;
   end;
   if FFreeHead = nil then
@@ -246,8 +273,9 @@ end;
 function TPoolAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
   Result := GetMem(ASize);
+  { 按请求大小清零：fallback 块可大于 FBlockSize,清 FBlockSize 会漏尾部 }
   if Result <> nil then
-    FillChar(Result^, FBlockSize, 0);
+    FillChar(Result^, ASize, 0);
 end;
 
 function TPoolAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -261,14 +289,11 @@ end;
 procedure TPoolAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr = nil then Exit;
-  { 检查是否为 inner fallback 分配 }
-  if PByte(APtr)[-1] = POOL_INNER_MAGIC then
-  begin
-    FInner.FreeMem(Pointer(PByte(APtr) - 1));
-    Inc(FFreeCountStat);
-    Exit;
-  end;
-  PushFree(APtr);
+  if OwnsBlock(APtr) then
+    PushFree(APtr)
+  else
+    { 非池内指针 → 必是超限 fallback 块,原样归还内部分配器 }
+    FInner.FreeMem(APtr);
   Inc(FFreeCountStat);
 end;
 
