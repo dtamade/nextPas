@@ -1952,10 +1952,15 @@ begin
   LFile.Close;
   Result := LSeedPath + '.' + LName;
   RemoveIfExists(Result);
-  if not Rename(LSeedPath, Result) then
-  begin
-    RemoveIfExists(LSeedPath);
-    Result := LSeedPath;
+  try
+    Rename(LSeedPath, Result);
+  except
+    // R9 起 fs.Rename 为异常式 procedure；失败时回退到无扩展名的种子路径
+    on ENextPasError do
+    begin
+      RemoveIfExists(LSeedPath);
+      Result := LSeedPath;
+    end;
   end;
 end;
 
