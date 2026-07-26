@@ -302,14 +302,15 @@ var
 begin
   LSource := ReadSource('nextpas.core.lockfree.channel.pas');
   LResize := ExtractSection(LSource, 'function TLockFreeChannelImpl.TryResize', 'end.' + LineEnding);
-  CheckContains(LSource, 'FActiveOperations: Int32',
-    'channel tracks admitted operations during resize');
+  CheckContains(LSource,
+    'FOpStripes: array[0..CHANNEL_OP_STRIPES - 1] of TChannelOpStripe',
+    'channel tracks admitted operations in striped counters (F-037)');
   CheckContains(LSource, 'procedure TLockFreeChannelImpl.EnterOperation',
     'channel has double-checked operation admission');
   CheckContains(LSource, 'procedure TLockFreeChannelImpl.LeaveOperation',
     'channel releases operation admission');
-  CheckContains(LResize, 'atomic_load(FActiveOperations, mo_acquire)',
-    'resize waits for admitted operations');
+  CheckContains(LResize, 'atomic_load(FOpStripes[LI].Count, mo_acquire)',
+    'resize waits for admitted operations across all stripes');
   CheckContains(LResize, 'atomic_store_64(FRecvPos, 0, mo_release)',
     'resize rebases receive position');
   CheckContains(LResize, 'atomic_store_64(FSendPos, Int64(LCount), mo_release)',
@@ -385,9 +386,14 @@ begin
   CheckContains(LStack, 'FCount: Int64', 'stack count is an independent atomic');
   CheckContains(LStack, 'if LCount > FCapacity then Break;',
     'stack ApproxCount must keep traversal best-effort with capacity cap');
-  CheckContains(LMpsc, 'FCount: Int64', 'MPSC count has unbounded-queue width');
-  CheckBefore(LMpscEnqueue, 'atomic_fetch_add_64(FCount, 1',
+  CheckContains(LMpsc, 'FEnqueued: Int64', 'MPSC enqueue count has unbounded-queue width');
+  CheckContains(LMpsc, 'FDequeued: Int64',
+    'MPSC dequeue count is a split single-writer counter (F-038)');
+  CheckBefore(LMpscEnqueue, 'atomic_fetch_add_64(FEnqueued, 1',
     'StoreNode(LPrev^.Next', 'MPSC count publishes before the consumer-visible link');
+  CheckBefore(LMpsc, 'atomic_load_64(FDequeued, mo_acquire)',
+    'LEnqueued := atomic_load_64(FEnqueued, mo_relaxed)',
+    'MPSC ApproxCount must read FDequeued first so the difference stays non-negative');
 end;
 
 procedure TestEliminationStackSourceContracts;

@@ -5,8 +5,10 @@ program bench_lockfree;
  * Matched suite (compare with compare_go / compare_rust under same OPS/CAPACITY):
  *   C1 — TLockFreeChannel 1P+1C
  *   C2 — TLockFreeChannel 2P+2C
+ *   C1s — TLockFreeChannelSpsc 1P+1C
+ *   M1/M2 — TMpscQueue 1P+1C / 2P+1C (unbounded)
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
- *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC TryEnqueue+TryDequeue pair,
+ *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC/MPSC TryEnqueue+TryDequeue pair,
  *   Channel 1T TrySendReceive, EBR Retire
  *
  * B40: both suites use TBenchSuite (Quiet + short config for micro;
@@ -21,6 +23,7 @@ uses
   nextpas.core.lockfree.ebr, nextpas.core.lockfree.spsc, nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.channel, nextpas.core.lockfree.channel.spsc,
+  nextpas.core.lockfree.mpsc,
   nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info,
   nextpas.core.fs,
   nextpas.core.exception;
@@ -36,6 +39,7 @@ type
   TIntSpmc = specialize TSpmcQueue<Integer>;
   TIntChannel = specialize TLockFreeChannel<Integer>;
   TIntChannelSpsc = specialize TLockFreeChannelSpsc<Integer>;
+  TIntMpsc = specialize TMpscQueue<Integer>;
 
 var
   GSpsc: TIntSpsc;
@@ -47,9 +51,12 @@ var
   GBenchSink: Int64;
   GEbrDomain: TEbrDomain;
 
+  GMpsc: TIntMpsc;
+
   { Matched multi-thread state }
   GMatchCh: TIntChannel;
   GMatchChSpsc: TIntChannelSpsc;
+  GMatchMpsc: TIntMpsc;
   GMatchSum: Int64;
 
 procedure SimpleReclaim(const AData: Pointer; const AUserData: Pointer);
@@ -98,6 +105,17 @@ var
 begin
   if GSpmc.TryDequeue(LV) then
     GBenchSink := GBenchSink + LV;
+end;
+
+{ MPSC is unbounded (no pre-fill): every iteration is a successful
+  enqueue+dequeue pair from empty (steady state ~0..1 items). }
+procedure BenchMpscTryPair(const ACtx: IBenchContext);
+var
+  LV: Integer;
+begin
+  if GMpsc.TryEnqueue(42) then
+    if GMpsc.TryDequeue(LV) then
+      GBenchSink := GBenchSink + LV;
 end;
 
 procedure BenchEbrRetire(const ACtx: IBenchContext);
@@ -178,6 +196,66 @@ begin
   InterlockedExchangeAdd64(GMatchSum, LLocal);
 end;
 
+function MatchProducerMpsc(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  for LI := 1 to LCount do
+    GMatchMpsc.Enqueue(LI);
+end;
+
+function MatchConsumerMpsc(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+  LV: Integer;
+  LLocal: Int64;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  LLocal := 0;
+  for LI := 1 to LCount do
+    if GMatchMpsc.DequeueWait(LV) then
+      LLocal := LLocal + LV;
+  InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+{ Single consumer only — TMpscQueue is strictly single-consumer.
+  Unbounded: producers never block; consumer blocks via DequeueWait. }
+procedure RunMatchedMpscOnce(const AProducers: Integer);
+var
+  LProducers: array[0..7] of TPlatformThreadHandle;
+  LConsumer: TPlatformThreadHandle;
+  LI: Integer;
+  LRet: Pointer;
+  LOpsPerP: Integer;
+begin
+  if (AProducers < 1) or (AProducers > 8) then
+    raise EInvalidOperationError.Create('RunMatchedMpscOnce: bad producer count');
+  if OPS mod AProducers <> 0 then
+    raise EInvalidOperationError.Create('RunMatchedMpscOnce: OPS must divide producer count');
+
+  LOpsPerP := OPS div AProducers;
+  GMatchMpsc := TIntMpsc.Create;
+  GMatchSum := 0;
+  try
+    if platform_thread_create(LConsumer, @MatchConsumerMpsc, Pointer(PtrUInt(OPS))) <> 0 then
+      raise EInvalidOperationError.Create('mpsc consumer create failed');
+    for LI := 0 to AProducers - 1 do
+      if platform_thread_create(LProducers[LI], @MatchProducerMpsc, Pointer(PtrUInt(LOpsPerP))) <> 0 then
+        raise EInvalidOperationError.Create('mpsc producer create failed');
+    for LI := 0 to AProducers - 1 do
+      platform_thread_join(LProducers[LI], LRet);
+    platform_thread_join(LConsumer, LRet);
+    GBenchSink := GBenchSink + GMatchSum;
+  finally
+    GMatchMpsc.Close;
+    GMatchMpsc.Free;
+    GMatchMpsc := nil;
+  end;
+end;
+
 { 1P1C only — TLockFreeChannelSpsc is strictly single producer/consumer. }
 procedure RunMatchedChannelSpscOnce;
 var
@@ -255,6 +333,18 @@ begin
   ACtx.SetBytes(OPS * SizeOf(Integer));
 end;
 
+procedure BenchMatchedM1Mpsc(const ACtx: IBenchContext);
+begin
+  RunMatchedMpscOnce(1);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
+procedure BenchMatchedM2Mpsc(const ACtx: IBenchContext);
+begin
+  RunMatchedMpscOnce(2);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
 procedure RunMatchedSuite;
 var
   LResults: IBenchResults;
@@ -263,6 +353,8 @@ begin
   WriteLn('Scenario C1: TLockFreeChannel 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
   WriteLn('Scenario C2: TLockFreeChannel 2P+2C  OPS=', OPS, ' CAP=', CAPACITY);
   WriteLn('Scenario C1s: TLockFreeChannelSpsc 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
+  WriteLn('Scenario M1: TMpscQueue 1P+1C  OPS=', OPS, ' (unbounded)');
+  WriteLn('Scenario M2: TMpscQueue 2P+1C  OPS=', OPS, ' (unbounded)');
   WriteLn('Note: Go uses buffered chan; Rust C1 uses std::sync::mpsc (unbounded).');
   WriteLn('      Absolute Mops only valid with full bench-envelope.md fields.');
   WriteLn;
@@ -276,6 +368,8 @@ begin
     .Add('lockfree/matched/C1_1P1C', @BenchMatchedC1)
     .Add('lockfree/matched/C2_2P2C', @BenchMatchedC2)
     .Add('lockfree/matched/C1s_ChannelSpsc_1P1C', @BenchMatchedC1Spsc)
+    .Add('lockfree/matched/M1_Mpsc_1P1C', @BenchMatchedM1Mpsc)
+    .Add('lockfree/matched/M2_Mpsc_2P1C', @BenchMatchedM2Mpsc)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
@@ -297,6 +391,7 @@ begin
   GSpmc := TIntSpmc.Create(CAPACITY);
   GChannel := TIntChannel.Create(CAPACITY);
   GChannelSpsc := TIntChannelSpsc.Create(CAPACITY);
+  GMpsc := TIntMpsc.Create;
   GEbrDomain := TEbrDomain.Create;
   try
     for LI := 1 to CAPACITY do
@@ -315,6 +410,7 @@ begin
       .Add('lockfree/micro/MPMC/TryDequeue', @BenchMpmcTryDequeue)
       .Add('lockfree/micro/SegQueue/TryDequeue', @BenchSegTryDequeue)
       .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
+      .Add('lockfree/micro/MPSC/TryEnqueueDequeuePair', @BenchMpscTryPair)
       .Add('lockfree/micro/EBR/Retire', @BenchEbrRetire)
       .Add('lockfree/micro/Channel/TrySendReceive', @BenchChannelTrySendReceive)
       .Add('lockfree/micro/ChannelSpsc/TrySendReceive', @BenchChannelSpscTrySendReceive)
@@ -324,6 +420,7 @@ begin
     LResults.SaveToJSON('build/bench-lockfree-micro.json');
   finally
     GEbrDomain.Free;
+    GMpsc.Free;
     GSpsc.Free;
     GMpmc.Free;
     GSeg.Free;

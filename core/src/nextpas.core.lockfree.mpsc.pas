@@ -36,16 +36,30 @@ type
         Next: PNode;
       end;
   private
+    { Fields grouped by accessing thread (cacheline-layout-rules.md §2), not by
+      semantics. Producer line: FHead (every-op XCHG) + FEnqueued (every-op
+      fetch_add) + the data wait unit (producers notify it; the consumer only
+      touches it when blocking). Consumer line: FTail cursor + FDequeued —
+      single-writer, so a plain load+store replaces a locked RMW. FStub gets
+      its own line: both sides hit FStub.Next at the empty boundary, which is
+      exactly where a draining consumer oscillates. Cold tail: read-mostly
+      control words, kept off every hot-write line. }
     FHead: PNode;
-    FTail: PNode;
-    FStub: TNode;
-    FConstructed: Boolean;
-    FClosed: Int32;
-    FCount: Int64;
+    FEnqueued: Int64;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    FPadProducer: TCacheLinePad;
+    FTail: PNode;
+    FDequeued: Int64;
     {$IFDEF LOCKFREE_DEBUG}
     FConsumerThreadId: UInt64;
+    {$ENDIF}
+    FPadConsumer: TCacheLinePad;
+    FStub: TNode;
+    FPadStub: TCacheLinePad;
+    FConstructed: Boolean;
+    FClosed: Int32;
+    {$IFDEF LOCKFREE_DEBUG}
     procedure DebugClaimConsumer; inline;
     {$ENDIF}
     function LoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
@@ -115,7 +129,8 @@ begin
   FHead := @FStub;
   FTail := @FStub;
   FClosed := 0;
-  FCount := 0;
+  FEnqueued := 0;
+  FDequeued := 0;
   FDataEpoch := 0;
   FDataWaiters := 0;
   {$IFDEF LOCKFREE_DEBUG}
@@ -162,7 +177,9 @@ begin
   LNode^.Value := AValue;
   LNode^.Next := nil;
   LPrev := ExchangeNode(FHead, LNode, mo_acq_rel);
-  atomic_fetch_add_64(FCount, 1, mo_relaxed);
+  { Count must publish before the consumer-visible link so ApproxCount never
+    under-reports a node the consumer can already dequeue. }
+  atomic_fetch_add_64(FEnqueued, 1, mo_relaxed);
   StoreNode(LPrev^.Next, LNode, mo_release);
   { Fast path: only notify if there are waiters }
   if atomic_load(FDataWaiters, mo_relaxed) > 0 then
@@ -221,7 +238,8 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+    { Single-consumer: FDequeued has one writer, plain load+store, no locked RMW. }
+    atomic_store_64(FDequeued, atomic_load_64(FDequeued, mo_relaxed) + 1, mo_relaxed);
     Result := True;
     Exit;
   end;
@@ -236,7 +254,8 @@ begin
     FTail := LNext;
     AValue := LTail^.Value;
     Dispose(LTail);
-    atomic_fetch_sub_64(FCount, 1, mo_relaxed);
+    { Single-consumer: FDequeued has one writer, plain load+store, no locked RMW. }
+    atomic_store_64(FDequeued, atomic_load_64(FDequeued, mo_relaxed) + 1, mo_relaxed);
     Result := True;
     Exit;
   end;
@@ -337,11 +356,15 @@ end;
 
 function TMpscQueueImpl.ApproxCount: PtrUInt;
 var
-  LCount: Int64;
+  LDequeued, LEnqueued: Int64;
 begin
-  LCount := atomic_load_64(FCount, mo_relaxed);
-  if LCount > 0 then
-    Result := PtrUInt(LCount)
+  { Read FDequeued first (acquire keeps the loads ordered): both counters are
+    monotonic, so LEnqueued >= enqueued-at-FDequeued-read >= LDequeued — the
+    difference is non-negative and conservatively over-reports backlog. }
+  LDequeued := atomic_load_64(FDequeued, mo_acquire);
+  LEnqueued := atomic_load_64(FEnqueued, mo_relaxed);
+  if LEnqueued > LDequeued then
+    Result := PtrUInt(LEnqueued - LDequeued)
   else
     Result := 0;
 end;
