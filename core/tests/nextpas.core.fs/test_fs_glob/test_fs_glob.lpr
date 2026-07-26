@@ -385,6 +385,30 @@ begin
       'results must be sorted: ' + LResults[LI-1] + ' <= ' + LResults[LI]);
 end;
 
+{ T32: ReDoS regression — must complete in polynomial time }
+
+procedure TestFsGlob_ReDoSRegression;
+var
+  LName: AnsiString;
+begin
+  { Build a long name that would cause exponential backtracking in recursive
+    implementation: *a*a*a*a*a*a*a*a*b vs 10000 a's + b. }
+  LName := '';
+  while Length(LName) < 10000 do
+    LName := LName + 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  LName := LName + 'b';
+
+  { Must produce correct result (TRUE) in polynomial time }
+  Check(GlobMatch('*a*a*a*a*a*a*a*a*b', LName),
+    'ReDoS: *a*a*a*a*a*a*a*a*b must match 10000 a''s + b');
+  Check(not GlobMatch('*a*a*a*a*a*a*a*a*c', LName),
+    'ReDoS: *a*a*a*a*a*a*a*a*c must not match 10000 a''s + b');
+
+  { ** variant must also be polynomial }
+  Check(GlobMatch('**a**a**a**a**a**b', LName),
+    'ReDoS: **a**a**a**a**a**b must match 10000 a''s + b');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -453,6 +477,9 @@ begin
       @TestFsGlob_NoMatch);
     T.Test('FsGlob_Sorted: results are sorted',
       @TestFsGlob_Sorted);
+
+    T.Test('FsGlob_ReDoSRegression: polynomial time',
+      @TestFsGlob_ReDoSRegression);
 
   if not T.Run then Halt(1);
   finally

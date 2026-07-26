@@ -218,17 +218,19 @@ end;
 function FsPathMatch(const APattern, AName: string): Boolean;
 var
   PI, NI: Integer;
-  PSaved, NSaved: Integer;
   LP, LN: Integer;
   LChar, LMin, LMax: Char;
   LMatched, LNegate: Boolean;
+  LSavedP, LSavedN: Integer;
 begin
   LP := Length(APattern);
   LN := Length(AName);
   PI := 1;
   NI := 1;
+  LSavedP := 0;
+  LSavedN := 0;
 
-  while (PI <= LP) or (NI <= LN) do
+  while NI <= LN do
   begin
     if PI <= LP then
     begin
@@ -238,10 +240,20 @@ begin
       if (LChar = '\') and (PI < LP) then
       begin
         Inc(PI);
-        if (NI <= LN) and (AName[NI] = APattern[PI]) then
+        if AName[NI] = APattern[PI] then
         begin
           Inc(PI);
           Inc(NI);
+          Continue;
+        end;
+        { Mismatch: extend star if available }
+        if LSavedP > 0 then
+        begin
+          Inc(LSavedN);
+          if (LSavedN <= LN) and ((AName[LSavedN] = '/') or (AName[LSavedN] = '\')) then
+            Exit(False);
+          PI := LSavedP;
+          NI := LSavedN;
           Continue;
         end;
         Exit(False);
@@ -251,13 +263,11 @@ begin
       if LChar = '*' then
       begin
         Inc(PI);
-        { Collapse consecutive stars }
         while (PI <= LP) and (APattern[PI] = '*') do
           Inc(PI);
-        { Star at end matches rest of name (if no separators) }
+        { Star at end: rest of name must have no separators }
         if PI > LP then
         begin
-          { Check no separators in remaining name }
           while NI <= LN do
           begin
             if (AName[NI] = '/') or (AName[NI] = '\') then
@@ -266,28 +276,27 @@ begin
           end;
           Exit(True);
         end;
-        { Save position and try matching from here }
-        PSaved := PI;
-        NSaved := NI;
-        while NSaved <= LN do
-        begin
-          if (AName[NSaved] = '/') or (AName[NSaved] = '\') then
-            Break;
-          PI := PSaved;
-          NI := NSaved;
-          if FsPathMatch(Copy(APattern, PI, LP - PI + 1),
-            Copy(AName, NI, LN - NI + 1)) then
-            Exit(True);
-          Inc(NSaved);
-        end;
-        Exit(False);
+        LSavedP := PI;
+        LSavedN := NI;
+        Continue;
       end;
 
       { Question mark: match one non-separator char }
       if LChar = '?' then
       begin
-        if (NI > LN) or (AName[NI] = '/') or (AName[NI] = '\') then
+        if (AName[NI] = '/') or (AName[NI] = '\') then
+        begin
+          if LSavedP > 0 then
+          begin
+            Inc(LSavedN);
+            if (LSavedN <= LN) and ((AName[LSavedN] = '/') or (AName[LSavedN] = '\')) then
+              Exit(False);
+            PI := LSavedP;
+            NI := LSavedN;
+            Continue;
+          end;
           Exit(False);
+        end;
         Inc(PI);
         Inc(NI);
         Continue;
@@ -297,8 +306,6 @@ begin
       if LChar = '[' then
       begin
         Inc(PI);
-        if NI > LN then
-          Exit(False);
         LNegate := False;
         if (PI <= LP) and ((APattern[PI] = '!') or (APattern[PI] = '^')) then
         begin
@@ -313,7 +320,6 @@ begin
             Inc(PI);
           if (PI + 2 <= LP) and (APattern[PI + 1] = '-') then
           begin
-            { Range: a-z }
             LMin := APattern[PI];
             LMax := APattern[PI + 2];
             if (LMax = '\') and (PI + 3 <= LP) then
@@ -331,7 +337,18 @@ begin
         end;
         if LNegate then LMatched := not LMatched;
         if not LMatched then
+        begin
+          if LSavedP > 0 then
+          begin
+            Inc(LSavedN);
+            if (LSavedN <= LN) and ((AName[LSavedN] = '/') or (AName[LSavedN] = '\')) then
+              Exit(False);
+            PI := LSavedP;
+            NI := LSavedN;
+            Continue;
+          end;
           Exit(False);
+        end;
         if (PI <= LP) and (APattern[PI] = ']') then
           Inc(PI);
         Inc(NI);
@@ -339,8 +356,19 @@ begin
       end;
 
       { Literal match }
-      if (NI > LN) or (AName[NI] <> LChar) then
+      if AName[NI] <> LChar then
+      begin
+        if LSavedP > 0 then
+        begin
+          Inc(LSavedN);
+          if (LSavedN <= LN) and ((AName[LSavedN] = '/') or (AName[LSavedN] = '\')) then
+            Exit(False);
+          PI := LSavedP;
+          NI := LSavedN;
+          Continue;
+        end;
         Exit(False);
+      end;
       Inc(PI);
       Inc(NI);
       Continue;
@@ -348,7 +376,11 @@ begin
     { Pattern exhausted but name remains }
     Exit(False);
   end;
-  Result := True;
+
+  { Name exhausted: skip any trailing stars }
+  while (PI <= LP) and (APattern[PI] = '*') do
+    Inc(PI);
+  Result := (PI > LP);
 end;
 
 end.
