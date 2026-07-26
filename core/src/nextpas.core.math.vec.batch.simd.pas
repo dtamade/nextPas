@@ -113,9 +113,9 @@ function BatchClampSimd3f(const AVectors: array of TVec3f;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
-  nextpas.core.simd,
-  nextpas.core.text.conv;
+  nextpas.core.simd;
 
 { Length policy (usability Wave-2): same as math.batch.simd. }
 

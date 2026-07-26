@@ -38,6 +38,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `event` | L3 | event dispatch | yes | L0-L2 | draft |
 | `exception` | L0 root | exception taxonomy | yes | bootstrap RTL | source-contract |
 | `font` | L3 | font face/raster/atlas | yes | L0-L2 | draft |
+| `format` | L2 support | shared format parse limits | no | L0-L1 | focused-runtime |
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |

@@ -109,10 +109,10 @@ function BatchClamp(const AVectors: array of TVec3d;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.math.scalar,
-  nextpas.core.math.vec.batch.simd,
-  nextpas.core.text.conv;
+  nextpas.core.math.vec.batch.simd;
 
 { Length policy (usability Wave-2): same as math.batch.simd ResolveEqualOrMin. }
 
