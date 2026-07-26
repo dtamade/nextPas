@@ -847,7 +847,7 @@ end;
 {$ELSE}
 procedure _compiler_barrier; inline;
 begin
-  ReadBarrier;
+  _backend_read_barrier;
 end;
 {$ENDIF}
 
@@ -957,14 +957,14 @@ end;
 {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
 function _atomic_seq_cst_load_32_x86(var aObj: Int32): Int32; inline;
 begin
-  Result := InterlockedCompareExchange(aObj, 0, 0);
+  Result := _backend_cmpxchg_i32(aObj, 0, 0);
 end;
 {$ENDIF}
 
 {$IF DEFINED(CPUX86_64)}
 function _atomic_seq_cst_load_64_x86(var aObj: Int64): Int64; inline;
 begin
-  Result := InterlockedCompareExchange64(aObj, 0, 0);
+  Result := _backend_cmpxchg_i64(aObj, 0, 0);
 end;
 {$ENDIF}
 
@@ -1109,13 +1109,13 @@ procedure _atomic64_fallback_lock; inline;
 begin
   // NOTE: Prefer XCHG-based acquire so the fallback doesn't implicitly require CMPXCHG.
   // This matters on very old 32-bit x86 where CMPXCHG8B/CPUID may be missing.
-  while InterlockedExchange(gAtomic64FallbackLock, 1) <> 0 do
+  while _backend_xchg_i32(gAtomic64FallbackLock, 1) <> 0 do
     cpu_pause;
 end;
 
 procedure _atomic64_fallback_unlock; inline;
 begin
-  InterlockedExchange(gAtomic64FallbackLock, 0);
+  _backend_xchg_i32(gAtomic64FallbackLock, 0);
 end;
 
 function _x86_has_cpuid: Boolean; inline;
@@ -1378,7 +1378,7 @@ begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           _compiler_barrier;    // Acquire load on x86: compiler barrier is enough
         {$ELSE}
-          ReadBarrier;          // Acquire load on weakly-ordered CPUs
+          _backend_read_barrier;          // Acquire load on weakly-ordered CPUs
         {$ENDIF}
       end;
 
@@ -1449,7 +1449,7 @@ begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           _compiler_barrier;
         {$ELSE}
-          ReadBarrier;
+          _backend_read_barrier;
         {$ENDIF}
       end;
 
@@ -1557,7 +1557,7 @@ begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           _compiler_barrier; // Release store on x86: compiler barrier is enough
         {$ELSE}
-          WriteBarrier;      // Release store on weakly-ordered CPUs
+          _backend_write_barrier;      // Release store on weakly-ordered CPUs
         {$ENDIF}
         aObj := aDesired;
       end;
@@ -1566,12 +1566,12 @@ begin
       begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           // XCHG is already a full fence on x86/x86_64.
-          InterlockedExchange(aObj, aDesired);
+          _backend_xchg_i32(aObj, aDesired);
         {$ELSE}
-          // On weakly-ordered CPUs, InterlockedExchange provides atomicity but
+          // On weakly-ordered CPUs, the backend xchg provides atomicity but
           // not a global seq_cst edge on its own. Surround it with full fences.
           atomic_seq_cst_fence;
-          InterlockedExchange(aObj, aDesired);
+          _backend_xchg_i32(aObj, aDesired);
           atomic_seq_cst_fence;
         {$ENDIF}
       end;
@@ -1623,7 +1623,7 @@ begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           _compiler_barrier;
         {$ELSE}
-          WriteBarrier;
+          _backend_write_barrier;
         {$ENDIF}
         aObj := aDesired;
       end;
@@ -1631,10 +1631,10 @@ begin
     mo_seq_cst:
       begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          InterlockedExchange64(aObj, aDesired);
+          _backend_xchg_i64(aObj, aDesired);
         {$ELSE}
           atomic_seq_cst_fence;
-          InterlockedExchange64(aObj, aDesired);
+          _backend_xchg_i64(aObj, aDesired);
           atomic_seq_cst_fence;
         {$ENDIF}
       end;
@@ -1718,26 +1718,26 @@ begin
   AtomicValidateRmwOrder(aOrder);
 
   // Exchange is a RMW.
-  // On x86/x86_64, InterlockedExchange is implemented via XCHG/LOCK and already provides a full fence.
+  // On x86/x86_64, the backend xchg (FPC host: XCHG/LOCK) already provides a full fence.
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
   {$ENDIF}
 
-  Result := InterlockedExchange(aObj, aDesired);
+  Result := _backend_xchg_i32(aObj, aDesired);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ; // mo_relaxed, mo_release
   end;
@@ -1808,7 +1808,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -1818,7 +1818,7 @@ begin
   // 32-bit x86: use CMPXCHG8B-based atomic exchange
   Result := _atomic_exchange_64_x86(aObj, aDesired);
   {$ELSE}
-  Result := InterlockedExchange64(aObj, aDesired);
+  Result := _backend_xchg_i64(aObj, aDesired);
   {$ENDIF}
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
@@ -1826,7 +1826,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ; // mo_relaxed, mo_release
   end;
@@ -2051,13 +2051,13 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ; // mo_relaxed, mo_consume, mo_acquire 不需要写屏障
   end;
   {$ENDIF}
 
-  LOld := InterlockedCompareExchange(aObj, aDesired, aExpected);
+  LOld := _backend_cmpxchg_i32(aObj, aDesired, aExpected);
   Result := (LOld = aExpected);
 
   if Result then
@@ -2068,7 +2068,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ; // mo_relaxed, mo_release 不需要读屏障
     end;
@@ -2083,7 +2083,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ; // mo_relaxed, mo_release 不需要读屏障
     end;
@@ -2117,14 +2117,14 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
   {$ENDIF}
 
   // Use an explicit Int64 view to avoid var-parameter type mismatches on non-x86_64 64-bit targets.
-  LOld := InterlockedCompareExchange64(PInt64(@aObj)^, Int64(aDesired), Int64(aExpected));
+  LOld := _backend_cmpxchg_i64(PInt64(@aObj)^, Int64(aDesired), Int64(aExpected));
   Result := (LOld = Int64(aExpected));
 
   if Result then
@@ -2134,7 +2134,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ;
     end;
@@ -2148,7 +2148,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ;
     end;
@@ -2185,7 +2185,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -2200,7 +2200,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ;
     end;
@@ -2209,7 +2209,7 @@ begin
   end;
   Result := True;
   {$ELSE}
-  LOld := InterlockedCompareExchange64(aObj, aDesired, aExpected);
+  LOld := _backend_cmpxchg_i64(aObj, aDesired, aExpected);
   Result := (LOld = aExpected);
 
   if not Result then
@@ -2220,7 +2220,7 @@ begin
       mo_seq_cst:
         atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
-        ReadBarrier;
+        _backend_read_barrier;
     else
       ;
     end;
@@ -2234,7 +2234,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -2284,7 +2284,7 @@ begin
   begin
     case aSuccessOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end
@@ -2292,7 +2292,7 @@ begin
   begin
     case aFailureOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end;
@@ -2325,7 +2325,7 @@ begin
   begin
     case aSuccessOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end
@@ -2333,7 +2333,7 @@ begin
   begin
     case aFailureOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end;
@@ -2367,7 +2367,7 @@ begin
   begin
     case aSuccessOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end
@@ -2375,7 +2375,7 @@ begin
   begin
     case aFailureOrder of
       mo_seq_cst: atomic_seq_cst_fence;
-      mo_consume, mo_acquire, mo_acq_rel: ReadBarrier;
+      mo_consume, mo_acquire, mo_acq_rel: _backend_read_barrier;
     else ;
     end;
   end;
@@ -2870,26 +2870,26 @@ function atomic_fetch_add(var aObj: Int32; aArg: Int32; aOrder: memory_order_t):
 begin
   AtomicValidateRmwOrder(aOrder);
 
-  // x86/x86_64: InterlockedExchangeAdd uses LOCK XADD and already provides a full fence.
+  // x86/x86_64: the backend xadd (FPC host: LOCK XADD) already provides a full fence.
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
   {$ENDIF}
 
-  Result := InterlockedExchangeAdd(aObj, aArg);
+  Result := _backend_xadd_i32(aObj, aArg);
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -2934,7 +2934,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -2943,7 +2943,7 @@ begin
   {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
   Result := _atomic_fetch_add_64_x86(aObj, aArg);
   {$ELSE}
-  Result := InterlockedExchangeAdd64(aObj, aArg);
+  Result := _backend_xadd_i64(aObj, aArg);
   {$ENDIF}
 
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
@@ -2951,7 +2951,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3033,7 +3033,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3041,7 +3041,7 @@ begin
   repeat
     LOld := aObj;
     LNew := LOld and aArg;
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3051,7 +3051,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3095,7 +3095,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3107,7 +3107,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3118,7 +3118,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3144,7 +3144,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3152,7 +3152,7 @@ begin
   repeat
     LOld := aObj;
     LNew := LOld or aArg;
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3162,7 +3162,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3206,7 +3206,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3218,7 +3218,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3229,7 +3229,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3255,7 +3255,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3263,7 +3263,7 @@ begin
   repeat
     LOld := aObj;
     LNew := LOld xor aArg;
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3273,7 +3273,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3317,7 +3317,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3329,7 +3329,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3340,7 +3340,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3370,7 +3370,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3381,7 +3381,7 @@ begin
       LNew := aArg
     else
       LNew := LOld;
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3391,7 +3391,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3414,7 +3414,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3425,7 +3425,7 @@ begin
       LNew := aArg
     else
       LNew := LOld;
-    if UInt32(InterlockedCompareExchange(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
+    if UInt32(_backend_cmpxchg_i32(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3435,7 +3435,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3460,7 +3460,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3475,7 +3475,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3486,7 +3486,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3509,7 +3509,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3534,7 +3534,7 @@ begin
       Break;
     {$POP}
     {$ELSE}
-    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+    if UInt64(_backend_cmpxchg_i64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3545,7 +3545,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3571,7 +3571,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3582,7 +3582,7 @@ begin
       LNew := aArg
     else
       LNew := LOld;
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3592,7 +3592,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3615,7 +3615,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3626,7 +3626,7 @@ begin
       LNew := aArg
     else
       LNew := LOld;
-    if UInt32(InterlockedCompareExchange(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
+    if UInt32(_backend_cmpxchg_i32(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3636,7 +3636,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3661,7 +3661,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3676,7 +3676,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3687,7 +3687,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3710,7 +3710,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3735,7 +3735,7 @@ begin
       Break;
     {$POP}
     {$ELSE}
-    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+    if UInt64(_backend_cmpxchg_i64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3746,7 +3746,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3772,7 +3772,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3780,7 +3780,7 @@ begin
   repeat
     LOld := aObj;
     LNew := not (LOld and aArg);
-    if InterlockedCompareExchange(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i32(aObj, LNew, LOld) = LOld then
       Break;
     cpu_pause;
   until False;
@@ -3790,7 +3790,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3815,7 +3815,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3827,7 +3827,7 @@ begin
     if _atomic_cmpxchg_64_x86(aObj, LOld, LNew) then
       Break;
     {$ELSE}
-    if InterlockedCompareExchange64(aObj, LNew, LOld) = LOld then
+    if _backend_cmpxchg_i64(aObj, LNew, LOld) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3838,7 +3838,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;
@@ -3861,7 +3861,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
-      WriteBarrier;
+      _backend_write_barrier;
   else
     ;
   end;
@@ -3883,7 +3883,7 @@ begin
       Break;
     {$POP}
     {$ELSE}
-    if UInt64(InterlockedCompareExchange64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
+    if UInt64(_backend_cmpxchg_i64(PInt64(@aObj)^, Int64(LNew), Int64(LOld))) = LOld then
       Break;
     {$ENDIF}
     cpu_pause;
@@ -3894,7 +3894,7 @@ begin
     mo_seq_cst:
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
-      ReadBarrier;
+      _backend_read_barrier;
   else
     ;
   end;

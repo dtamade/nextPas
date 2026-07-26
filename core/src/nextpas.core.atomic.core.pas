@@ -36,6 +36,35 @@ procedure atomic_seq_cst_fence;
 procedure atomic_thread_fence(aOrder: memory_order_t);
 procedure atomic_signal_fence(aOrder: memory_order_t);
 
+{ ── Backend seam (F-002) ────────────────────────────────────────────────
+  The ONLY sanctioned home for host-compiler atomic primitives (FPC System
+  `Interlocked*` intrinsics and Read/Write barriers).  atomic/lockfree
+  production units must call this seam instead of the FPC RTL, so a future
+  nextpas compiler backend (LLVM atomics / asm) only replaces this surface.
+
+  Contract:
+  - RMW seam functions are atomic read-modify-write ops returning the
+    PREVIOUS (observed) value.  cmpxchg argument order is
+    (target, desired, expected) — mirrors the FPC host intrinsic.
+  - Ordering: on the x86/x86_64 host every RMW is a full fence; on
+    weakly-ordered hosts only the host RTL's Interlocked semantics are
+    guaranteed — memory_order policy (extra fences) stays in the caller
+    (see nextpas.core.atomic).
+  - Barrier seam procedures map 1:1 to host compiler/hardware barriers.
+  - Not a consumer API: use atomic_* / TAtomic* instead. }
+
+function _backend_cmpxchg_i32(var aTarget: Int32; aDesired, aExpected: Int32): Int32; inline;
+function _backend_xchg_i32(var aTarget: Int32; aValue: Int32): Int32; inline;
+function _backend_xadd_i32(var aTarget: Int32; aValue: Int32): Int32; inline;
+{$IFDEF CPU64}
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; inline;
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+{$ENDIF}
+procedure _backend_read_barrier; inline;
+procedure _backend_write_barrier; inline;
+procedure _backend_full_barrier; inline;
+
 type
   atomic_tagged_ptr_t = type PtrUInt;
 
@@ -515,6 +544,57 @@ begin
   LResultBits := ((LHighSum and UInt64($FFFFFFFF)) shl 32) or
     (LLowSum and UInt64($FFFFFFFF));
   Result := PInt64(@LResultBits)^;
+end;
+
+{ Backend seam (F-002) — FPC host backend.
+  A nextpas compiler backend replaces the bodies below (LLVM atomics / asm)
+  while keeping the seam signatures and the previous-value contract. }
+
+function _backend_cmpxchg_i32(var aTarget: Int32; aDesired, aExpected: Int32): Int32; inline;
+begin
+  Result := InterlockedCompareExchange(aTarget, aDesired, aExpected);
+end;
+
+function _backend_xchg_i32(var aTarget: Int32; aValue: Int32): Int32; inline;
+begin
+  Result := InterlockedExchange(aTarget, aValue);
+end;
+
+function _backend_xadd_i32(var aTarget: Int32; aValue: Int32): Int32; inline;
+begin
+  Result := InterlockedExchangeAdd(aTarget, aValue);
+end;
+
+{$IFDEF CPU64}
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; inline;
+begin
+  Result := InterlockedCompareExchange64(aTarget, aDesired, aExpected);
+end;
+
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+begin
+  Result := InterlockedExchange64(aTarget, aValue);
+end;
+
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+begin
+  Result := InterlockedExchangeAdd64(aTarget, aValue);
+end;
+{$ENDIF}
+
+procedure _backend_read_barrier; inline;
+begin
+  ReadBarrier;
+end;
+
+procedure _backend_write_barrier; inline;
+begin
+  WriteBarrier;
+end;
+
+procedure _backend_full_barrier; inline;
+begin
+  ReadWriteBarrier;
 end;
 
 end.

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.atomic*.pas`（4 个源文件）
 **层级**：L0（依赖 base；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-17
-**版本**：1.3
+**最后更新**：2026-07-26
+**版本**：1.4
 
 ---
 
@@ -110,14 +110,19 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 与 lockfree 共享 isolation source-contract（见 `core/docs/lockfree/CONTRACT.md` §2.1）。
 公开类型名是 **`TAtomicInt32`**（不是 `TAtomicInt`）。
 
-### 2.2 Backend / dual-compiler debt（F-002 · 登记）
+### 2.2 Backend seam / dual-compiler debt（F-002 · seam 已落地 2026-07-26）
 
 | 项 | 现状 | 目标 |
 |----|------|------|
 | 公开 API | `atomic_*` / `TAtomic*` / `mo_*` | 稳定；新代码只走此面 |
-| Host FPC 实现 | 热路径调用 FPC `System` **`Interlocked*`** intrinsic（非 `uses SysUtils`） | 可接受为 **FPC bootstrap host** |
-| nextpas 自举编译器 | 须提供等价 atomic backend（LLVM atomic / asm / platform seam） | **双编译器透明的前置债**；未完成前不得宣称 host 无关 |
+| **Backend seam** | `atomic.core` 的 `_backend_cmpxchg/xchg/xadd_i32/i64` + `_backend_read/write/full_barrier`；**atomic.core 是唯一允许触碰 host intrinsic/asm 的生产单元**（source-contract 钉在 `test_atomic`） | 稳定；nextpas backend 只替换此面 |
+| Host FPC 实现 | seam 体内调用 FPC `System` **`Interlocked*`** / barrier intrinsic（非 `uses SysUtils`）；`atomic.pas`/`atomic.types` 已 0 直调 | 可接受为 **FPC bootstrap host** |
+| nextpas 自举编译器 | 替换 seam 体（LLVM atomic / asm）+ `atomic.core` 内 fence/pause asm；`atomic.pas` 残留 host 面仅 i386-only inline asm（CMPXCHG8B/cpuid，source-contract 档） | **双编译器透明的前置债**；未完成前不得宣称 host 无关 |
 | 证据 | Linux x86_64 focused runtime；其它见 README Backend Truth Matrix（F-003） | 有 CI 机再升 runtime 级 |
+
+Seam 语义：RMW 返回**旧值（观测值）**；cmpxchg 参数序 `(target, desired, expected)`；
+x86/x86_64 host 上每个 RMW 为 full fence，弱序 host 仅保证 host RTL Interlocked 语义——
+memory_order 策略（额外 fence）由调用层（`atomic.pas`）负责。seam **不是消费者 API**。
 
 **`mo_consume`（F-011）**：实现侧多规范为 **≥ acquire**；不保证可移植 dependency-ordered consume 优化。调用方不得按更弱 consume 模型做跨平台推理。
 
@@ -160,3 +165,4 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-17 | 1.1 | TAtomicInt32 命名；RTL isolation；~45 tests | Codex |
 | 2026-07-17 | 1.2 | §1.4 Legacy CAS 弃用偏好（R7；不删 API） | Codex |
+| 2026-07-26 | 1.4 | §2.2 F-002 backend seam 落地：atomic.core `_backend_*` 为唯一 host intrinsic 面；atomic.pas/types 0 直调 | Claude |

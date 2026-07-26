@@ -944,6 +944,21 @@ begin
   CheckNotContains(LAtomicSource,
     'use only a compiler barrier to prevent reordering.',
     'seq_cst load docs must not describe compiler-barrier-only x86 mapping');
+  { F-002 backend seam: outside atomic.core, production atomic units must not
+    touch FPC host intrinsics (Interlocked*/Read/Write barriers) directly. }
+  CheckNotContains(LAtomicSource, 'Interlocked',
+    'main atomic unit must route host RMW atomics through the atomic.core backend seam (F-002)');
+  CheckNotContains(LAtomicSource, 'Barrier',
+    'main atomic unit must route host barriers through the atomic.core backend seam (F-002)');
+  CheckNotContains(LAtomicTypesSource, 'Interlocked',
+    'atomic.types must route host RMW atomics through the atomic.core backend seam (F-002)');
+  CheckNotContains(LAtomicTypesSource, 'Barrier',
+    'atomic.types must route host barriers through the atomic.core backend seam (F-002)');
+  CheckContains(LAtomicCoreSource,
+    'function _backend_cmpxchg_i32(var aTarget: Int32; aDesired, aExpected: Int32): Int32; inline;',
+    'atomic.core must declare the F-002 backend seam cmpxchg primitive');
+  CheckContains(LAtomicCoreSource, 'procedure _backend_full_barrier; inline;',
+    'atomic.core must declare the F-002 backend seam barrier primitives');
   CheckContains(LAtomicCoreSource, 'procedure atomic_seq_cst_fence;',
     'atomic core must define a dedicated seq_cst fence helper');
   CheckNotContains(LSignalFenceSection, 'ReadWriteBarrier',
@@ -2705,84 +2720,84 @@ begin
     'non-x86 seq_cst 64-bit store must use the dedicated seq_cst fence helper');
   CheckContains(LFetchAnd64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_and_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchAnd64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_and_64 non-x86 read-order case must have explicit else');
   CheckContains(LFetchOr64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_or_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchOr64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_or_64 non-x86 read-order case must have explicit else');
   CheckContains(LFetchXor64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_xor_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchXor64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_xor_64 non-x86 read-order case must have explicit else');
   CheckContains(LFetchMax64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_max_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchMax64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_max_64 non-x86 read-order case must have explicit else');
   CheckContains(LFetchMin64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_min_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchMin64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_min_64 non-x86 read-order case must have explicit else');
   CheckContains(LFetchNand64Section,
     '    mo_release, mo_acq_rel:' + LineEnding +
-    '      WriteBarrier;' + LineEnding +
+    '      _backend_write_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
     'atomic_fetch_nand_64 non-x86 write-order case must have explicit else');
   CheckContains(LFetchNand64Section,
     '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
-    '      ReadBarrier;' + LineEnding +
+    '      _backend_read_barrier;' + LineEnding +
     '  else' + LineEnding +
     '    ;' + LineEnding +
     '  end;',
