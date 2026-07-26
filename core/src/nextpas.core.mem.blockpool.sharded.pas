@@ -1778,6 +1778,9 @@ end;
 finalization
   if GThreadExitKeyInitialized then
   begin
+    { TLS destructors never fire for the exiting main thread (process exit
+      skips key dtors), so its cache node chain must be drained here. }
+    ThreadExitCleanupCore(Pointer(GShardedBlockPoolThreadCacheHead));
     if GThreadExitKeyCreated then
       platform_tls_destroy_dtor(GThreadExitKey);
     GPoolRegistryLock.Done;
