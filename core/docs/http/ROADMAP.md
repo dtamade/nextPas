@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（W2-2 landed：IOCP send/drain + server 自有 GQCS 事件循环；NEXT=W2-3）
+**Updated**: 2026-07-26（W2-2 landed + W2-3 wiring landed；NEXT=W2-3 证据回填 → W2-4）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -42,7 +42,7 @@
 | 源码结构 | **82** 个 `nextpas.core.http*` 单元；SAFE/R2 remediation + STRUCT 抽取已完成 |
 | 测试门禁 | 主 Makefile **PROJECTS = 47** focused suites（heaptrc 敏感套件 0 unfreed） |
 | Windows | **W2-2 landed**：`net.server.iocp` phase-2 recv + send drain——server 自有 GQCS 事件循环（`PollOneWait` 三态：dispatched/timeout/woken），writable waiter 靠 1ms timeout 重试 re-advance（单路等待不变式：recv op 挂起 XOR writable waiter）；keep-alive 多请求 + 16MB backpressure 用例绿；**deadline wake 未做（守卫外回退 worker）**；证据 `test_http_iocp_wine` 5 用例（Wine smoke，非真机）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 被整块吞下不 WouldBlock，分块（≤64KB）写才有真实 backpressure——wire 测试 session 必须分块写 |
-| Multi-OS host | `test_http_threaded_host` + `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
+| Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire，Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
 | **NEXT** | **Wave W2-3**（改方向先改本行 + §4） |
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **wiring landed**（2026-07-26；matrix 增 `http.iocp_wire` 行 + truth 措辞对齐；Linux 本地 matrix pass=2/2 验证接线；**Windows CI run 证据待回填**——push 后 `test-windows-runtime` job 异步出结果，绿则关波，红则按差异 residual 记录） |
 | **Do** | `core/scripts/http-host-ci-matrix.sh` 增 IOCP 行：Windows host 上 `tsbIocp` wire smoke；Wine 与真机差异 residual 写入 CONTRACT/CLAIM |
 | **Don't** | 不在 CI 里跑性能 harness（那是候选战役）；不因 CI 排队阻塞 lane（异步等结果） |
 | **Done when** | Windows CI 行绿（或差异 residual 诚实记录并给出堵点报告）；CLAIM「Windows scale=No」措辞随证据更新 |
@@ -186,7 +186,7 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 想法 | 备注 |
 |------|------|
-| （空） | 新想法只追加 |
+| IOCP deadline wake | 有限 `WakeDeadline` 的 session（生产 http session 常见）仍回退 worker handoff——完成路径生产覆盖缺口；`PollOneWait` 的 timeout 通道已铺路（min(writable retry, 最近 deadline)）；W2-4 评审定夺是否升格 |
 
 ---
 
@@ -220,6 +220,7 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **W2-3 wiring landed**：host CI matrix 增 `http.iocp_wire` 行（Windows host 真用例 / 其他 host skip 断言）+ truth 措辞对齐 + 测试头/Makefile truth 层级更新；Linux 本地 matrix pass=2/2；Windows CI run 证据待回填；Inbox 增 deadline wake 候选 |
 | 2026-07-26 | **W2-2 landed**：IOCP send/drain——reactor `PollOneWait` 三态 + server 自有 GQCS 事件循环 + writable waiter 1ms timeout 重试；keep-alive 两请求 + 16MB backpressure 用例（RED→GREEN）；发现并记录 Wine 大 buffer send 语义差异（整块吞下不 WouldBlock，须分块写）；Wine 5 用例 + Linux 136 双绿、双端 0 unfreed；NEXT=W2-3 |
 | 2026-07-26 | **W2-1 landed**：IOCP completion 驱动 recv——零字节 overlapped `WSARecv` readiness 桥 + poll session reactor 线程 `Advance`；守卫外回退 worker handoff；`test_http_iocp_wine` 增 completion-recv 用例（RED→GREEN）；Linux 回归绿；NEXT=W2-2 |
 | 2026-07-26 | **路线图重构**：Era 0–R2 全史（原 1220 行）冻结进 `archive/2026-07-26-roadmap-history-era0-to-r2.md`；本文件精简为单一前进入口；新增反碰壁兜底链（Era → M-band → STOP 报告）；重开前进路线 **Era W2 Windows 生产化 phase-2**，NEXT=W2-1（会话授权） |
