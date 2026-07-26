@@ -37,6 +37,13 @@ type
 
   TTaskDeque = specialize TWorkStealingDequeImpl<TQueuedTask>;
 
+  { One owner lock per cache line: bare Int32 elements packed 16 locks/line,
+    so CAS spins on one worker's lock evicted every other worker's lock. }
+  TWorkStealingOwnerLock = record
+    Lock: Int32;
+    Pad: TCacheLinePad;
+  end;
+
   {** @desc 并发工作窃取线程池（Work Stealing Pool）
     @details 每个工作线程有自己的双端队列。
       本地任务 LIFO push/pop，窃取任务 FIFO steal。
@@ -45,11 +52,18 @@ type
   }
   TWorkStealingPool = class
   private
+    { Read-mostly header: worker count + array refs, read on every op. }
     FWorkerCount: Int64;
     FDeques: array of TTaskDeque;
-    FOwnerLocks: array of Int32;
+    FOwnerLocks: array of TWorkStealingOwnerLock;
+    FPadHeader: TCacheLinePad;
+    { Submit rotor: every Submit RMWs it. }
     FNextSubmit: Int64;
+    FPadSubmit: TCacheLinePad;
+    { Steal rotor: every Steal RMWs it. }
     FNextSteal: Int64;
+    FPadSteal: TCacheLinePad;
+    { Cold: written once at Close. }
     FClosed: Int32;
     procedure AcquireOwner(const AWorkerIndex: Int64);
     procedure ReleaseOwner(const AWorkerIndex: Int64);
@@ -82,7 +96,7 @@ begin
   for LI := 0 to AWorkerCount - 1 do
   begin
     FDeques[LI] := TTaskDeque.Create(64);
-    FOwnerLocks[LI] := 0;
+    FOwnerLocks[LI].Lock := 0;
   end;
   FNextSubmit := 0;
   FNextSteal := 0;
@@ -109,7 +123,7 @@ begin
   while True do
   begin
     LCasExpected := 0;
-    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerIndex], LCasExpected, 1, mo_acquire, mo_relaxed) then
+    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerIndex].Lock, LCasExpected, 1, mo_acquire, mo_relaxed) then
       Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
@@ -121,7 +135,7 @@ end;
 
 procedure TWorkStealingPool.ReleaseOwner(const AWorkerIndex: Int64);
 begin
-  atomic_store(FOwnerLocks[AWorkerIndex], 0, mo_release);
+  atomic_store(FOwnerLocks[AWorkerIndex].Lock, 0, mo_release);
 end;
 
 function TWorkStealingPool.Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;

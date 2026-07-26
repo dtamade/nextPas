@@ -7,9 +7,10 @@ program bench_lockfree;
  *   C2 — TLockFreeChannel 2P+2C
  *   C1s — TLockFreeChannelSpsc 1P+1C
  *   M1/M2 — TMpscQueue 1P+1C / 2P+1C (unbounded)
+ *   W1/W2 — TWorkStealingPool 1S+1T / 2S+2T (4 workers, bounded deques)
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
  *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC/MPSC TryEnqueue+TryDequeue pair,
- *   Channel 1T TrySendReceive, EBR Retire
+ *   Channel 1T TrySendReceive, Pool 1T Submit+Steal pair, EBR Retire
  *
  * B40: both suites use TBenchSuite (Quiet + short config for micro;
  * matched uses MaxIterations/MinSamples=1 so multi-thread OPS runs once per entry).
@@ -23,7 +24,7 @@ uses
   nextpas.core.lockfree.ebr, nextpas.core.lockfree.spsc, nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.channel, nextpas.core.lockfree.channel.spsc,
-  nextpas.core.lockfree.mpsc,
+  nextpas.core.lockfree.mpsc, nextpas.core.lockfree.workstealing,
   nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info,
   nextpas.core.fs,
   nextpas.core.exception;
@@ -52,11 +53,13 @@ var
   GEbrDomain: TEbrDomain;
 
   GMpsc: TIntMpsc;
+  GPool: TWorkStealingPool;
 
   { Matched multi-thread state }
   GMatchCh: TIntChannel;
   GMatchChSpsc: TIntChannelSpsc;
   GMatchMpsc: TIntMpsc;
+  GMatchPool: TWorkStealingPool;
   GMatchSum: Int64;
 
 procedure SimpleReclaim(const AData: Pointer; const AUserData: Pointer);
@@ -116,6 +119,22 @@ begin
   if GMpsc.TryEnqueue(42) then
     if GMpsc.TryDequeue(LV) then
       GBenchSink := GBenchSink + LV;
+end;
+
+procedure PoolDummyTask(AData: Pointer);
+begin
+end;
+
+{ Pool pair from empty: every iteration is one Submit + one Steal (bounded
+  deques never fill at steady state ~0..1 tasks). }
+procedure BenchPoolSubmitStealPair(const ACtx: IBenchContext);
+var
+  LTask: TWorkStealingTask;
+  LData: Pointer;
+begin
+  if GPool.Submit(@PoolDummyTask, Pointer(PtrUInt(42))) then
+    if GPool.Steal(LTask, LData) = wsStolen then
+      GBenchSink := GBenchSink + PtrUInt(LData);
 end;
 
 procedure BenchEbrRetire(const ACtx: IBenchContext);
@@ -219,6 +238,80 @@ begin
     if GMatchMpsc.DequeueWait(LV) then
       LLocal := LLocal + LV;
   InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+function MatchSubmitterPool(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  for LI := 1 to LCount do
+    while not GMatchPool.Submit(@PoolDummyTask, Pointer(PtrUInt(LI))) do
+      CpuPause; { bounded deques: spin until a stealer drains capacity }
+end;
+
+function MatchStealerPool(AArg: Pointer): Pointer; cdecl;
+var
+  LCount: Integer;
+  LGot: Integer;
+  LTask: TWorkStealingTask;
+  LData: Pointer;
+  LLocal: Int64;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  LGot := 0;
+  LLocal := 0;
+  while LGot < LCount do
+  begin
+    if GMatchPool.Steal(LTask, LData) = wsStolen then
+    begin
+      LLocal := LLocal + Int64(PtrUInt(LData));
+      Inc(LGot);
+    end
+    else
+      CpuPause;
+  end;
+  InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+{ Fixed 4 workers (4 bounded deques): Submit round-robins across them,
+  Steal scans from a rotating start index. }
+procedure RunMatchedPoolOnce(const ASubmitters, AStealers: Integer);
+var
+  LSubmitters: array[0..7] of TPlatformThreadHandle;
+  LStealers: array[0..7] of TPlatformThreadHandle;
+  LI: Integer;
+  LRet: Pointer;
+  LOpsPerS, LOpsPerT: Integer;
+begin
+  if (ASubmitters < 1) or (AStealers < 1) or (ASubmitters > 8) or (AStealers > 8) then
+    raise EInvalidOperationError.Create('RunMatchedPoolOnce: bad submitter/stealer count');
+  if (OPS mod ASubmitters <> 0) or (OPS mod AStealers <> 0) then
+    raise EInvalidOperationError.Create('RunMatchedPoolOnce: OPS must divide thread counts');
+
+  LOpsPerS := OPS div ASubmitters;
+  LOpsPerT := OPS div AStealers;
+  GMatchPool := TWorkStealingPool.Create(4);
+  GMatchSum := 0;
+  try
+    for LI := 0 to AStealers - 1 do
+      if platform_thread_create(LStealers[LI], @MatchStealerPool, Pointer(PtrUInt(LOpsPerT))) <> 0 then
+        raise EInvalidOperationError.Create('pool stealer create failed');
+    for LI := 0 to ASubmitters - 1 do
+      if platform_thread_create(LSubmitters[LI], @MatchSubmitterPool, Pointer(PtrUInt(LOpsPerS))) <> 0 then
+        raise EInvalidOperationError.Create('pool submitter create failed');
+    for LI := 0 to ASubmitters - 1 do
+      platform_thread_join(LSubmitters[LI], LRet);
+    for LI := 0 to AStealers - 1 do
+      platform_thread_join(LStealers[LI], LRet);
+    GBenchSink := GBenchSink + GMatchSum;
+  finally
+    GMatchPool.Close;
+    GMatchPool.Free;
+    GMatchPool := nil;
+  end;
 end;
 
 { Single consumer only — TMpscQueue is strictly single-consumer.
@@ -345,6 +438,18 @@ begin
   ACtx.SetBytes(OPS * SizeOf(Integer));
 end;
 
+procedure BenchMatchedW1Pool(const ACtx: IBenchContext);
+begin
+  RunMatchedPoolOnce(1, 1);
+  ACtx.SetBytes(OPS * SizeOf(Pointer));
+end;
+
+procedure BenchMatchedW2Pool(const ACtx: IBenchContext);
+begin
+  RunMatchedPoolOnce(2, 2);
+  ACtx.SetBytes(OPS * SizeOf(Pointer));
+end;
+
 procedure RunMatchedSuite;
 var
   LResults: IBenchResults;
@@ -355,6 +460,8 @@ begin
   WriteLn('Scenario C1s: TLockFreeChannelSpsc 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
   WriteLn('Scenario M1: TMpscQueue 1P+1C  OPS=', OPS, ' (unbounded)');
   WriteLn('Scenario M2: TMpscQueue 2P+1C  OPS=', OPS, ' (unbounded)');
+  WriteLn('Scenario W1: TWorkStealingPool 1S+1T  OPS=', OPS, ' (4 workers, bounded deques)');
+  WriteLn('Scenario W2: TWorkStealingPool 2S+2T  OPS=', OPS, ' (4 workers, bounded deques)');
   WriteLn('Note: Go uses buffered chan; Rust C1 uses std::sync::mpsc (unbounded).');
   WriteLn('      Absolute Mops only valid with full bench-envelope.md fields.');
   WriteLn;
@@ -370,6 +477,8 @@ begin
     .Add('lockfree/matched/C1s_ChannelSpsc_1P1C', @BenchMatchedC1Spsc)
     .Add('lockfree/matched/M1_Mpsc_1P1C', @BenchMatchedM1Mpsc)
     .Add('lockfree/matched/M2_Mpsc_2P1C', @BenchMatchedM2Mpsc)
+    .Add('lockfree/matched/W1_Pool_1S1T', @BenchMatchedW1Pool)
+    .Add('lockfree/matched/W2_Pool_2S2T', @BenchMatchedW2Pool)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
@@ -392,6 +501,7 @@ begin
   GChannel := TIntChannel.Create(CAPACITY);
   GChannelSpsc := TIntChannelSpsc.Create(CAPACITY);
   GMpsc := TIntMpsc.Create;
+  GPool := TWorkStealingPool.Create(1);
   GEbrDomain := TEbrDomain.Create;
   try
     for LI := 1 to CAPACITY do
@@ -411,6 +521,7 @@ begin
       .Add('lockfree/micro/SegQueue/TryDequeue', @BenchSegTryDequeue)
       .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
       .Add('lockfree/micro/MPSC/TryEnqueueDequeuePair', @BenchMpscTryPair)
+      .Add('lockfree/micro/Pool/SubmitStealPair', @BenchPoolSubmitStealPair)
       .Add('lockfree/micro/EBR/Retire', @BenchEbrRetire)
       .Add('lockfree/micro/Channel/TrySendReceive', @BenchChannelTrySendReceive)
       .Add('lockfree/micro/ChannelSpsc/TrySendReceive', @BenchChannelSpscTrySendReceive)
@@ -420,6 +531,8 @@ begin
     LResults.SaveToJSON('build/bench-lockfree-micro.json');
   finally
     GEbrDomain.Free;
+    GPool.Close;
+    GPool.Free;
     GMpsc.Free;
     GSpsc.Free;
     GMpmc.Free;
