@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-24 (PD-3-3 Windows cancel waitable; NEXT → ROADMAP STOP)
+> Last updated: 2026-07-26 (roadmap restructure: history frozen to archive; forward path reopened — NEXT → ROADMAP)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Era PD + Parity history, Goal Loop, Inbox.
@@ -34,7 +34,9 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Parity Campaign** | **H1 scale-ready Met** + **H1+H2 package Yes** + **HTTPS H1/H2 scale Yes** + **Q1 Met** + **S2/S3 Met**；H3 Blocked |
 | **Era PD** | **Done (ext)** — PD-0/1A/2 + **PD-1B** RW=30s + **PD-3-1/2/3**（Windows waitable pair） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
-| 主 Makefile gate | **43** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS；含 `test_http_mem` / `test_http_stream` / `test_http_sse`） |
+| **Era SAFE + R2** | **Done** — 默认安全（body/decompress 有界、RequestArena 附着）+ findings 两轮 remediation + STRUCT 抽取（源码 **82** 单元）；详见 ROADMAP archive 快照 |
+| **WIN-3 phase-1** | **landed** — `net.server.iocp` AcceptEx + worker handoff（Wine smoke `test_http_iocp_wine`）；completion 数据路径 = ROADMAP Era W2 |
+| 主 Makefile gate | **47** focused suites（`core/tests/nextpas.core.http/Makefile` PROJECTS；含 `test_http_mem` / `test_http_stream` / `test_http_sse` / R2-3 拆分套件） |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。

@@ -212,4 +212,4 @@
 | **REPRO.md** | 如何在 1h 内复核 |
 | **BENCHMARKS.md** | 数字表与日期 |
 | **CONTRACT.md** | 行为契约与 residual 细节 |
-| **ROADMAP.md** | 下一波执行（默认 **STOP**） |
+| **ROADMAP.md** | 下一波执行（当前 NEXT 见该文件 §2 快照） |
