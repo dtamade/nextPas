@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（**Era W2 收官**：W2-1..W2-4 全 landed；IOCP completion 数据路径 + 真机证据 + 文档对齐；NEXT=M-band）
+**Updated**: 2026-07-26（Era W2 收官 + **M-1 landed**：产品 facade over IOCP 端到端 gate + full facade Win64 交叉 residual 消除；NEXT=M-band）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -42,7 +42,7 @@
 | 源码结构 | **82** 个 `nextpas.core.http*` 单元；SAFE/R2 remediation + STRUCT 抽取已完成 |
 | 测试门禁 | 主 Makefile **PROJECTS = 47** focused suites（heaptrc 敏感套件 0 unfreed） |
 | Windows | **W2-3b landed**：`net.server.iocp` completion 驱动 recv/send/deadline-wake 三路齐备——server 自有 GQCS 事件循环（`PollOneWait` 三态），writable waiter 1ms timeout 重试，有限 `WakeDeadline` 经 GQCS-timeout 扫描 + `TryCancelByContext`/`WakePending` 取消唤醒（单路等待不变式保持：recv op 挂起 XOR waiter/sleeper）；生产 H1 session 走完成路径。真机证据：`http.iocp_wire` **6 用例** + 0 unfreed on windows-latest（Core CI run 30196530589；deadline wake 真机 437ms ≈ Wine 445ms，`CancelIoEx` 语义一致）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 整块吞下不 WouldBlock，须分块写（真机无此差异，已验证） |
-| Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire，Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
+| Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire）+ `test_http_iocp_facade_wine`（**M-1**：产品 `THttpServer`+`tsbIocp` GET/keep-alive 端到端；uses 常驻钉住 full facade Win64 交叉编译——原 TLS 链 FPC internal residual 已消除；Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
 | **NEXT** | **M-band（§5 维护带）**——Era W2 已收官；候选战役（DX cookbook / Windows 性能 harness）升格待产品确认（§6）；改方向先改本行 + §4 |
 
@@ -233,6 +233,8 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **M-2 landed**（M-band 测试债修复）：`test_http_https_redirect`「HTTP to HTTPS redirect」用例语义滞后——写于 client 无 HTTPS 年代（期望 EHttpError unsupported scheme），client HTTPS 化后真跟进 redirect 抛 ESSLException 致 unexpected exception；修：捕 ESSLException/EHttpError 二者 + location 从 example.com 改本地回环防外连；6/6 + 0 unfreed；存量债（与 M-1 无关，全量首次曝光） |
+| 2026-07-26 | **M-1 landed**（M-band 证据补强）：`test_http_iocp_facade_wine`——产品 `THttpServer`（full facade）+ `Backend=tsbIocp` 端到端 GET + keep-alive 两连发，Wine 3 用例一次绿 + 0 unfreed；探针发现 CONTRACT @333「full facade Win64 交叉触 TLS 链 FPC internal」residual 已不复现——测试 uses 常驻钉住防回归；host matrix 增 `http.iocp_facade` 第三条目；iocp server guard 注释同步 W2-3b 语义；CONTRACT v3.48；NEXT=M-band |
 | 2026-07-26 | **W2-4 landed / Era W2 收官**：CLAIM/CONTRACT(v3.47)/GOAL_TREE 三处对齐 IOCP 真实状态（completion recv/send/deadline-wake + 真机证据）；Windows 性能 harness 维持候选（升格需产品确认）；Windows scale 宣称维持 No；NEXT=M-band |
 | 2026-07-26 | **W2-3b landed**：IOCP deadline wake（TDD RED→GREEN）——guard 放宽接受有限 `WakeDeadline`；`ComputeWaitTimeoutMs` 聚合最近 deadline（epoll `ComputePollTimeoutMs` 对等）；`WakeExpiredDeadlines` 扫描：sleeper/writable waiter 直接喂 `[]`，recv-parked 经 `TryCancelByContext`+`WakePending` 延迟到取消完成（数据竞先喂 `[peReadable]`）；纯 sleeper 合法化。Wine 6 用例（idle wake 445ms 时序精确）+ Linux 136 双绿、双端 0 unfreed；生产 H1 session 自此走完成路径；NEXT=W2-4 |
 | 2026-07-26 | **W2-3 landed（证据回填）**：Core CI run 30195741147 `test-windows-runtime` success——真 Windows host `http.iocp_wire` 5 用例 + 0 unfreed（含 16MB backpressure 真机部分写语义验证；Wine 整块吞差异真机不存在）；CLAIM 72/106 行措辞更新；Linux/macOS/FreeBSD job 失败为先例非 HTTP 引起；Inbox deadline wake 升格 W2-3b；NEXT=W2-3b |
