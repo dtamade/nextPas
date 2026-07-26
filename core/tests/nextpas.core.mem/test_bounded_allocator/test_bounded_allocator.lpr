@@ -33,15 +33,15 @@ end;
 procedure TestLimitEnforced;
 var
   LAlloc: TBoundedAllocator;
-  LPtr: Pointer;
+  LPtr, LRejected: Pointer;
 begin
   LAlloc := TBoundedAllocator.Create(GetRtlAllocator, 128);
   try
     LPtr := LAlloc.GetMem(64);
     Check(LPtr <> nil, 'first alloc ok');
 
-    LPtr := LAlloc.GetMem(128);
-    Check(LPtr = nil, 'over limit rejected');
+    LRejected := LAlloc.GetMem(128);
+    Check(LRejected = nil, 'over limit rejected');
 
     LAlloc.FreeMem(LPtr);
   finally
