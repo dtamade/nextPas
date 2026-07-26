@@ -64,15 +64,23 @@ PROJECTS := \
 
 .PHONY: test clean $(PROJECTS)
 
+# Failed-suite summary at the end: a mid-log failure must not be silently
+# attributed to the last suite when only the log tail is inspected.
 test:
-	@status=0; \
+	@status=0; failed=""; \
 	for project in $(PROJECTS); do \
 		echo "=== $$project ==="; \
 		if ! $(MAKE) -C $$project clean test; then \
 			status=1; \
+			failed="$$failed $$project"; \
 		fi; \
 		echo ""; \
 	done; \
+	if [ -n "$$failed" ]; then \
+		echo "FAILED SUITES:$$failed"; \
+	else \
+		echo "ALL $(words $(PROJECTS)) SUITES GREEN"; \
+	fi; \
 	exit $$status
 
 clean:
