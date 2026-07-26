@@ -41,7 +41,6 @@ type
     FPendingHead: Pointer;
     FPendingCount: Int32;
     FPendingDone: Int32;
-    FAssociatedHead: Pointer;
     FNextUserData: UInt64;
     FLastAcceptSocket: PtrInt;
     FLastConnectSocket: PtrInt;
@@ -97,7 +96,9 @@ uses
 
 const
   WSAID_ACCEPTEX: TGUID = '{b5367df1-cbac-11cf-95ca-00805f48a192}';
-  WSAID_CONNECTEX: TGUID = '{25a3ac90-4c1d-11d1-82b9-00c04fb98a36}';
+  { mswsock.h WSAID_CONNECTEX (FPC jwamswsock.pas agrees). A wrong GUID makes
+    WSAIoctl fail silently and every Windows dial dies as ERROR_NOT_SUPPORTED. }
+  WSAID_CONNECTEX: TGUID = '{25a207b9-ddf3-4660-8ee9-76e58c74063e}';
   WSA_FLAG_OVERLAPPED = $01;
   SO_UPDATE_ACCEPT_CONTEXT = $700B;
   SO_UPDATE_CONNECT_CONTEXT = $7010;
@@ -138,12 +139,6 @@ type
     Context: Pointer;
     UserData: UInt64;
     Next: PIocpPendingOp;
-  end;
-
-  PIocpAssociatedHandle = ^TIocpAssociatedHandle;
-  TIocpAssociatedHandle = record
-    Handle: HANDLE;
-    Next: PIocpAssociatedHandle;
   end;
 
 function IocpDispatchCompletion(var AReactor: TIocpReactor; ABytes: DWORD;
@@ -352,49 +347,19 @@ begin
     raise Exception.Create(LExceptionMessage);
 end;
 
-function IocpHasAssociatedHandle(const AReactor: TIocpReactor;
-  AHandle: HANDLE): Boolean;
-var
-  LNode: PIocpAssociatedHandle;
-begin
-  LNode := PIocpAssociatedHandle(AReactor.FAssociatedHead);
-  while LNode <> nil do
-  begin
-    if LNode^.Handle = AHandle then
-      Exit(True);
-    LNode := LNode^.Next;
-  end;
-  Result := False;
-end;
-
-procedure IocpRememberAssociatedHandle(var AReactor: TIocpReactor;
-  AHandle: HANDLE);
-var
-  LNode: PIocpAssociatedHandle;
-begin
-  New(LNode);
-  LNode^.Handle := AHandle;
-  LNode^.Next := PIocpAssociatedHandle(AReactor.FAssociatedHead);
-  AReactor.FAssociatedHead := LNode;
-end;
-
-procedure IocpReleaseAssociatedHandles(var AReactor: TIocpReactor);
-var
-  LNode, LNext: PIocpAssociatedHandle;
-begin
-  LNode := PIocpAssociatedHandle(AReactor.FAssociatedHead);
-  AReactor.FAssociatedHead := nil;
-  while LNode <> nil do
-  begin
-    LNext := LNode^.Next;
-    Dispose(LNode);
-    LNode := LNext;
-  end;
-end;
-
 function IocpEnsureAssociatedHandle(var AReactor: TIocpReactor;
   AHandle: HANDLE; out AError: DWORD): Boolean;
 begin
+  { Always ask the kernel — never cache "already associated" by handle value.
+    The OS recycles handle values right after closesocket, so a cached entry
+    can match a brand-new socket that was never associated; its completions
+    then silently never post (observed as multi-attempt dial hangs until
+    CancelIoEx forced ERROR_OPERATION_ABORTED). Re-associating an already
+    associated handle fails with ERROR_INVALID_PARAMETER on both Windows and
+    Wine, which makes this call a safe idempotency probe: treat that error
+    as success. A genuinely bad handle surfaces again at overlapped submit
+    with its real error. }
+  AError := 0;
   if (AReactor.FPort = 0) or (AHandle = nil) or
      (AHandle = HANDLE(PtrInt(INVALID_HANDLE_VALUE))) then
   begin
@@ -402,18 +367,17 @@ begin
     Exit(False);
   end;
 
-  if IocpHasAssociatedHandle(AReactor, AHandle) then
+  if CreateIoCompletionPort(AHandle, HANDLE(AReactor.FPort), 0,
+     AReactor.FMaxEvents) <> nil then
     Exit(True);
 
-  if CreateIoCompletionPort(AHandle, HANDLE(AReactor.FPort), 0,
-     AReactor.FMaxEvents) = nil then
+  AError := GetLastError;
+  if AError = ERROR_INVALID_PARAMETER then
   begin
-    AError := GetLastError;
-    Exit(False);
+    AError := 0;
+    Exit(True);
   end;
-
-  IocpRememberAssociatedHandle(AReactor, AHandle);
-  Result := True;
+  Result := False;
 end;
 
 procedure IocpSetOffset(AOp: PIocpPendingOp; AOffset: Int64);
@@ -590,7 +554,6 @@ begin
     end;
     IocpReleasePendingOps(Self, ERROR_OPERATION_ABORTED);
   finally
-    IocpReleaseAssociatedHandles(Self);
     if LPort <> 0 then
       CloseHandle(HANDLE(LPort));
   end;
@@ -659,17 +622,13 @@ begin
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
 
-  { Associate accepting socket with IOCP and track it so subsequent
-    IocpEnsureAssociatedHandle skips the redundant CreateIoCompletionPort
-    call (Wine returns ERROR_INVALID_PARAMETER on double association). }
-  if CreateIoCompletionPort(HANDLE(LAcceptSock), HANDLE(FPort), 0,
-     FMaxEvents) = nil then
+  { Associate accepting socket with IOCP so post-accept read/write submits
+    find it already wired to the port. }
+  if not IocpEnsureAssociatedHandle(Self, HANDLE(LAcceptSock), LError) then
   begin
     closesocket(LAcceptSock);
-    LError := GetLastError;
     Exit(IocpFail(ACallback, AContext, 0, LError));
   end;
-  IocpRememberAssociatedHandle(Self, HANDLE(LAcceptSock));
 
   { Ensure the listening socket is also associated with the IOCP port.
     AcceptEx completion is posted through the listening socket, not the

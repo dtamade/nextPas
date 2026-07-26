@@ -260,7 +260,7 @@ begin
   LWaitBody := ExtractBetween(LIocp, 'function iocpwaitforpendingops',
     'procedure iocpreleasependingops');
   LReleaseBody := ExtractBetween(LIocp, 'procedure iocpreleasependingops',
-    'function iocphasassociatedhandle');
+    'function iocpensureassociatedhandle');
   LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
     'function tiocpreactor.isvalid');
 
@@ -299,9 +299,10 @@ begin
   CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
     'finally',
     'IOCP Close must dispatch abort callbacks before mandatory cleanup');
-  CheckBefore(LCloseBody, 'finally',
-    'iocpreleaseassociatedhandles(self);',
-    'IOCP Close must release handle associations in the protected cleanup path');
+  CheckContains(LIocp, 'if aerror = error_invalid_parameter then',
+    'IOCP handle association must treat double-association as idempotent success');
+  CheckAbsent(LIocp, 'iocphasassociatedhandle',
+    'IOCP must not cache association by handle value: closesocket recycles values and a stale hit skips the port wiring');
   CheckBefore(LCloseBody, 'finally',
     'closehandle(handle(lport))',
     'IOCP Close must close the port handle in the protected cleanup path');
