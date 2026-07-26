@@ -187,7 +187,8 @@ var
 begin
   for I := 0 to APool.FEntryCount - 1 do
     if APool.FEntries[I].FMemory <> nil then
-      FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
+      platform_virtual_release(APool.FEntries[I].FMemory,
+        APool.FEntries[I].FMemorySize);
   APool.FEntryCount := 0;
   APool.FPartialHead := -1;
   APool.FInboxHead := nil;
@@ -216,6 +217,22 @@ var
   LMemSize: SizeUInt;
   LMem: Pointer;
 begin
+  Result := -1;
+  { Span backing comes from the virtual-memory backend, not the process
+    heap: the scavenger decommits/recommits spans, which requires the
+    page-aligned private mappings mmap/VirtualAlloc provide (heap pointers
+    are unaligned, so decommit would either fail or scribble neighbours).
+    Anonymous committed pages are zero-filled — no FillChar needed. }
+  LMemSize := SizeUInt(CENTRAL_SPAN_SLOTS) * APool.FSlotSize;
+  LMem := platform_virtual_reserve(LMemSize);
+  if LMem <> nil then
+    if not platform_virtual_commit(LMem, LMemSize) then
+    begin
+      platform_virtual_release(LMem, LMemSize);
+      LMem := nil;
+    end;
+  if LMem = nil then
+    Exit; { OOM: caller treats a negative index as allocation failure }
   { Grow arrays if needed. }
   if APool.FEntryCount >= Length(APool.FEntries) then
   begin
@@ -224,10 +241,6 @@ begin
   end;
   LIdx := APool.FEntryCount;
   Inc(APool.FEntryCount);
-  { Allocate memory for the span. }
-  LMemSize := SizeUInt(CENTRAL_SPAN_SLOTS) * APool.FSlotSize;
-  GetMem(LMem, LMemSize);
-  FillChar(LMem^, LMemSize, 0);
   { Initialize span. }
   SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
   APool.FEntries[LIdx].FMemory := LMem;
@@ -285,8 +298,9 @@ begin
       { Recommit memory if it was decommitted to OS. }
       if APool.FEntries[LIdx].FDecommitted then
       begin
-        platform_virtual_commit(APool.FEntries[LIdx].FMemory,
-          APool.FEntries[LIdx].FMemorySize);
+        if not platform_virtual_commit(APool.FEntries[LIdx].FMemory,
+          APool.FEntries[LIdx].FMemorySize) then
+          Break; { commit failed (OOM): stop refilling, caller falls back }
         APool.FEntries[LIdx].FDecommitted := False;
       end;
       { Alloc from this span. }
@@ -520,7 +534,7 @@ begin
           LCur := APool.FPartialNext[LCur];
         end;
         LMemSize := APool.FEntries[I].FMemorySize;
-        FreeMem(APool.FEntries[I].FMemory, LMemSize);
+        platform_virtual_release(APool.FEntries[I].FMemory, LMemSize);
         APool.FEntries[I].FMemory := nil;
         APool.FEntries[I].FLastFreeTick := 0;
         APool.FEntries[I].FDecommitted := False;
