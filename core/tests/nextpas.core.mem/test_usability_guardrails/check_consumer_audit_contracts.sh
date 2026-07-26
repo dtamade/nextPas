@@ -185,9 +185,7 @@ need_file "$SRC/nextpas.core.mem.ring_buffer.pas"
 need_grep "$SRC/nextpas.core.mem.ring_buffer.pas" 'FreeMemOf\(FBaseAllocator, FBuffer, FCapacity \* FElementSize\)' \
   'TRingBuffer Destroy must FreeMemOf capacity*elem (K4)'
 
-need_file "$SRC/nextpas.core.mem.pool.fixed.growable.pas"
-need_grep "$SRC/nextpas.core.mem.pool.fixed.growable.pas" 'FreeMemOf\(FAllocator, FArenas\[LArenaIndex\]\.Base, FArenas\[LArenaIndex\]\.Size\)' \
-  'TGrowingFixedPool Destroy must FreeMemOf arena Base/Size (K5)'
+# K5 (pool.fixed.growable) retired 2026-07-26: unit pruned (zero consumers, unclassified surface).
 
 # --- Era L: LocalBlockPool + FixedSlab raw + SlabPool fallback ---
 need_file "$SRC/nextpas.core.mem.pool.pas"

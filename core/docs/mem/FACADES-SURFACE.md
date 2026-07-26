@@ -44,6 +44,13 @@ nextpas.core.mem.blockpool.growable   # KEEP — blockpool.sharded; 见 GROWABLE
 
 **P-a / P-b 已删除** — 不得复活（见历史清单；guardrails forbid 已删名）。
 
+**P-c 批 2026-07-26 已删除**（未分类 + 全域零 consumer + 从未进门面）— 不得复活：
+
+```text
+nextpas.core.mem.pool.object_pool     # IObjectPool<T> 泛型对象池（仅自测引用）
+nextpas.core.mem.pool.fixed.growable  # TGrowingFixedPool（仅自测 + guardrail K5 引用；K5 同步退役）
+```
+
 ---
 
 ## 3. 默认产品表面（必须可从门面发现）

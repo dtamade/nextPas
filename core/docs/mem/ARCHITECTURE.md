@@ -80,16 +80,13 @@ Growing allocator 内部层（不单独对外暴露）：
 
 Pool 侧：
 
-- `nextpas.core.mem.pool.base` — `IPool` 接口定义
+- `nextpas.core.mem.pool.base` — `IPool` / `IMemoryPool` 接口定义
 - `nextpas.core.mem.pool.fixed` — 固定大小块池（位图 + free list）
-- `nextpas.core.mem.pool.fixed.growable` — 可增长固定池
 - `nextpas.core.mem.pool.fixed_slab` — 固定 slab 池（nginx 移植算法）
 - `nextpas.core.mem.pool.sizeclass` — 大小类池（多尺寸自动选择）
 - `nextpas.core.mem.pool.slab` — 页级 slab 池
 - `nextpas.core.mem.pool.slab.concurrent` — 并发 slab 池
 - `nextpas.core.mem.pool.slab.sharded` — 分片 slab 池
-- `nextpas.core.mem.pool.base` — `IPool` / `IMemoryPool` 接口定义
-- `nextpas.core.mem.pool.object_pool` — 泛型对象池（`IObjectPool<T>`）
 - `nextpas.core.mem.pool.allocator` — 池分配器（池 → IAllocator 包装）
 - `nextpas.core.mem.pool` — Pool 侧聚合门面
 
