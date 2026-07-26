@@ -21,6 +21,7 @@
       "applies_to": [],
       "avx2_template": {
         "kind": "elementwise",
+        "fast_path": true,
         "dtype": "f32",
         "input_stream_count": 2,
         "streams": {
@@ -73,6 +74,7 @@
       "applies_to": [],
       "avx2_template": {
         "kind": "elementwise",
+        "fast_path": true,
         "dtype": "f32",
         "input_stream_count": 2,
         "streams": {

@@ -1066,6 +1066,81 @@ def _scalar_name_for_slot(slot_def: dict) -> str:
     return f"Scalar{name}"
 
 
+# Slot names whose table field diverges beyond the mechanical naming rules.
+_SLOT_FIELD_ALIASES = {
+    "MemSet": ("Memory", "Fill"),
+}
+
+
+def _load_group_fields() -> dict[str, set]:
+    """Parse the live grouped dispatch table: group name -> set of field names.
+
+    TSimdDispatchTable (dispatch.table.inc) holds nested group sub-records
+    (CoreVectors/Memory/Mask/BatchF32/...); each group's fields live in
+    dispatch.types.inc. Parsing both keeps the generator in sync with the
+    Phase 19 grouped layout without a hand-maintained mapping.
+    """
+    src_dir = PROJECT_ROOT / "src"
+    table_text = (src_dir / "nextpas.core.simd.dispatch.table.inc").read_text()
+    types_text = (src_dir / "nextpas.core.simd.dispatch.types.inc").read_text()
+
+    # Group field name -> sub-record type, e.g. CoreVectors -> TSimdCoreVectorOps
+    type_to_group = {
+        type_name: group_name
+        for group_name, type_name in re.findall(
+            r"^\s*(\w+):\s*(TSimd\w+Ops);", table_text, re.MULTILINE)
+    }
+    if not type_to_group:
+        raise RuntimeError("dispatch.table.inc: no nested group sub-records found")
+
+    groups: dict[str, set] = {}
+    for type_name, body in re.findall(
+            r"^(TSimd\w+Ops) = record\n(.*?)^end;", types_text,
+            re.MULTILINE | re.DOTALL):
+        group_name = type_to_group.get(type_name)
+        if group_name is None:
+            continue
+        groups[group_name] = set(re.findall(r"^\s+(\w+)\s*:", body, re.MULTILINE))
+    return groups
+
+
+def _resolve_slot_group(name: str, groups: dict[str, set]) -> tuple[str, str]:
+    """Map a dispatch_slots.json slot name to its (group, field) in the table.
+
+    Naming architecture (dispatch.types.inc): CoreVectors/Mask/BatchInteger
+    keep flat slot names unchanged; BatchF32/BatchF64 absorb the F32/F64
+    suffix into the group name; Memory absorbs the Mem prefix. Everything
+    else is an explicit alias, and unresolved names are a hard error.
+    """
+    alias = _SLOT_FIELD_ALIASES.get(name)
+    if alias:
+        group, field = alias
+        if field not in groups.get(group, set()):
+            raise RuntimeError(
+                f"slot '{name}': alias target {group}.{field} not present in "
+                "dispatch.types.inc")
+        return alias
+
+    exact = [g for g, fields in groups.items() if name in fields]
+    if len(exact) == 1:
+        return exact[0], name
+    if len(exact) > 1:
+        raise RuntimeError(
+            f"slot '{name}': present in multiple groups {sorted(exact)} - "
+            "ambiguous exact match")
+
+    for suffix, group in (("F32", "BatchF32"), ("F64", "BatchF64")):
+        if name.endswith(suffix) and name[:-len(suffix)] in groups.get(group, set()):
+            return group, name[:-len(suffix)]
+
+    if name.startswith("Mem") and name[3:] in groups.get("Memory", set()):
+        return "Memory", name[3:]
+
+    raise RuntimeError(
+        f"dispatch_slots.json slot '{name}' not found in any "
+        "TSimdDispatchTable group (dispatch.types.inc)")
+
+
 def generate_baseline_inc() -> str:
     """Generate the complete FillBaseDispatchTable procedure from dispatch_slots.json.
 
@@ -1075,6 +1150,8 @@ def generate_baseline_inc() -> str:
     slots_path = OPS_DIR / "dispatch_slots.json"
     with open(slots_path) as f:
         data = json.load(f)
+
+    groups = _load_group_fields()
 
     lines = [
         "{",
@@ -1102,7 +1179,8 @@ def generate_baseline_inc() -> str:
 
         name = slot_def["name"]
         scalar = _scalar_name_for_slot(slot_def)
-        lines.append(f"  dispatchTable.{name} := @{scalar};")
+        group, field = _resolve_slot_group(name, groups)
+        lines.append(f"  dispatchTable.{group}.{field} := @{scalar};")
 
     lines.append("end;")
     return "\n".join(lines) + "\n"

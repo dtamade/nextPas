@@ -99,7 +99,6 @@ begin
     sub r8, 64
     cmp r8, 64
     jae @loop64_prefetch
-    jmp @tail32
 
   @tail32:
     cmp r8, 32

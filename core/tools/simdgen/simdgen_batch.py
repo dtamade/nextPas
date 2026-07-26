@@ -129,6 +129,135 @@ def emit_elementwise_2input(op: dict) -> list[str]:
     return lines
 
 
+def emit_elementwise_2input_fastpath(op: dict) -> list[str]:
+    """Generate hand-tuned 2-input elementwise kernel (ArrayAdd/ArrayMul form).
+
+    Layout: small arrays (<64) go straight to the tail ladder; medium arrays
+    use an 8x-YMM unrolled loop; large arrays (>=1024) add prefetchnta for
+    both source streams one iteration ahead.
+    """
+    tpl = op["avx2_template"]
+    inputs = tpl["streams"]["inputs"]
+    output = tpl["streams"]["output"]
+    src0, src1, dst = inputs[0]["reg"], inputs[1]["reg"], output["reg"]
+    vec_op = tpl["steps"][0]["vector"]
+    scl_op = tpl["steps"][0]["scalar"]
+    locals_list = [s["local"] for s in inputs] + [output["local"]]
+    assigns = "; ".join(f'{s["local"]} := {s["param"]}' for s in inputs + [output])
+
+    def unroll8(lines: list):
+        for i, off in enumerate(range(0, 256, 32)):
+            emit_triplet(lines, src0, src1, dst, vec_op, f"ymm{i}", off)
+
+    def advance(lines: list, step: int, count: int):
+        lines.append(asm_line("add", f"{src0}, {step}"))
+        lines.append(asm_line("add", f"{src1}, {step}"))
+        lines.append(asm_line("add", f"{dst}, {step}"))
+        lines.append(asm_line("sub", f"r8, {count}"))
+
+    lines = [
+        f'procedure AVX2{op["name"]}({inputs[0]["param"]}, {inputs[1]["param"]}, {output["param"]}: PSingle; aCount: SizeUInt);',
+        "var",
+        f'  {", ".join(locals_list)}: PSingle;',
+        "begin",
+        "  {$PUSH}{$Q-}{$R-}",
+        "  if aCount = 0 then Exit;",
+        f"  {assigns};",
+        "",
+        "  asm",
+        asm_line("mov", f"{src0}, {inputs[0]['local']}"),
+        asm_line("mov", f"{src1}, {inputs[1]['local']}"),
+        asm_line("mov", f"{dst}, {output['local']}"),
+        asm_line("mov", "r8, aCount"),
+        "",
+        "    // 小数组快速路径 (<64 elements)",
+        asm_line("cmp", "r8, 64"),
+        asm_line("jb", "@tail32"),
+        "",
+        "    // 大数组路径: 8x YMM 展开 + 预取",
+        asm_line("cmp", "r8, 1024"),
+        asm_line("jae", "@loop64_prefetch"),
+        "",
+        "  @loop64:",
+        "    // 8x YMM 展开 (64 elements/iter)",
+    ]
+    unroll8(lines)
+    advance(lines, 256, 64)
+    lines += [
+        asm_line("cmp", "r8, 64"),
+        asm_line("jae", "@loop64"),
+        asm_line("jmp", "@tail32"),
+        "",
+        "  @loop64_prefetch:",
+        "    // 大数组路径: 8x YMM 展开 + 预取下一批数据",
+        asm_line("prefetchnta", mem(src0, 512)),
+        asm_line("prefetchnta", mem(src1, 512)),
+        asm_line("prefetchnta", mem(src0, 576)),
+        asm_line("prefetchnta", mem(src1, 576)),
+        "",
+    ]
+    unroll8(lines)
+    advance(lines, 256, 64)
+    lines += [
+        asm_line("cmp", "r8, 64"),
+        asm_line("jae", "@loop64_prefetch"),
+        "",
+        "  @tail32:",
+        asm_line("cmp", "r8, 32"),
+        asm_line("jb", "@tail16"),
+    ]
+    for i, off in enumerate((0, 32, 64, 96)):
+        emit_triplet(lines, src0, src1, dst, vec_op, f"ymm{i}", off)
+    advance(lines, 128, 32)
+    lines += [
+        "",
+        "  @tail16:",
+        asm_line("cmp", "r8, 16"),
+        asm_line("jb", "@tail8"),
+    ]
+    for i, off in enumerate((0, 32)):
+        emit_triplet(lines, src0, src1, dst, vec_op, f"ymm{i}", off)
+    advance(lines, 64, 16)
+    lines += [
+        "",
+        "  @tail8:",
+        asm_line("cmp", "r8, 8"),
+        asm_line("jb", "@tail4"),
+    ]
+    emit_triplet(lines, src0, src1, dst, vec_op, "ymm0", 0)
+    advance(lines, 32, 8)
+    lines += [
+        "",
+        "  @tail4:",
+        asm_line("cmp", "r8, 4"),
+        asm_line("jb", "@tail_scalar"),
+    ]
+    emit_triplet(lines, src0, src1, dst, vec_op, "xmm0", 0)
+    advance(lines, 16, 4)
+    lines += [
+        "",
+        "  @tail_scalar:",
+        asm_line("test", "r8, r8"),
+        asm_line("jz", "@done"),
+        "  @scalar_loop:",
+        asm_line("vmovss", f"xmm0, {mem(src0)}"),
+        asm_line(scl_op, f"xmm0, xmm0, {mem(src1)}"),
+        asm_line("vmovss", f"{mem(dst)}, xmm0"),
+        asm_line("add", f"{src0}, 4"),
+        asm_line("add", f"{src1}, 4"),
+        asm_line("add", f"{dst}, 4"),
+        asm_line("dec", "r8"),
+        asm_line("jnz", "@scalar_loop"),
+        "",
+        "  @done:",
+        asm_line("vzeroupper"),
+        "  end;",
+        "  {$POP}",
+        "end;",
+    ]
+    return lines
+
+
 def emit_elementwise_1input_scalar(op: dict) -> list[str]:
     """Generate elementwise kernel with 1 input + broadcast scalar (MulScalar)."""
     tpl = op["avx2_template"]
@@ -347,6 +476,8 @@ def generate_avx2_batch_kernel(op: dict) -> str:
 
     if kind == "elementwise":
         if tpl["input_stream_count"] == 2 and not tpl.get("broadcast_scalar"):
+            if tpl.get("fast_path"):
+                return "\n".join(emit_elementwise_2input_fastpath(op))
             return "\n".join(emit_elementwise_2input(op))
         elif tpl["input_stream_count"] == 1 and tpl.get("broadcast_scalar"):
             return "\n".join(emit_elementwise_1input_scalar(op))
@@ -494,8 +625,34 @@ def emit_unary(op: dict) -> list[str]:
     return lines
 
 
+def _clamp_nan_safe_block(regs: tuple, src: str, dst: str, off: int,
+                          lo: str, hi: str, step_ops: tuple,
+                          comments: bool = False) -> list[str]:
+    """One NaN-safe clamp block: save original, force NaN lanes to lo so the
+    max/min clamp is well-defined, then blend the original NaN values back."""
+    r0, r3, r4, r5 = regs
+    max_op, min_op = step_ops
+
+    def c(line: str, note: str) -> str:
+        return f"{line:<34}// {note}" if comments else line
+
+    return [
+        asm_line("vmovups", f"{r0}, {mem(src, off)}"),
+        asm_line("vmovaps", f"{r4}, {r0}"),
+        c(asm_line("vcmpunordps", f"{r5}, {r0}, {r0}"), "NaN mask"),
+        c(asm_line("vandps", f"{r3}, {lo}, {r5}"), "min & NaN_mask"),
+        c(asm_line("vandnps", f"{r5}, {r5}, {r0}"), "~NaN_mask & input"),
+        c(asm_line("vorps", f"{r5}, {r5}, {r3}"), "safe_input"),
+        asm_line(max_op, f"{r5}, {r5}, {lo}"),
+        asm_line(min_op, f"{r5}, {r5}, {hi}"),
+        c(asm_line("vcmpunordps", f"{r3}, {r4}, {r4}"), "recompute NaN mask"),
+        asm_line("vblendvps", f"{r5}, {r5}, {r4}, {r3}"),
+        asm_line("vmovups", f"{mem(dst, off)}, {r5}"),
+    ]
+
+
 def emit_clamp(op: dict) -> list[str]:
-    """Generate clamp kernel: dst = min(max(src, lo), hi) with 2 broadcast scalars."""
+    """Generate NaN-safe clamp kernel: dst = min(max(src, lo), hi), NaN passthrough."""
     tpl = op["avx2_template"]
     inputs = tpl["streams"]["inputs"]
     output = tpl["streams"]["output"]
@@ -505,6 +662,10 @@ def emit_clamp(op: dict) -> list[str]:
     step0_scl = tpl["steps"][0]["scalar"]
     step1_op = tpl["steps"][1]["vector"]
     step1_scl = tpl["steps"][1]["scalar"]
+    ymm_regs = ("ymm0", "ymm3", "ymm4", "ymm5")
+    xmm_regs = ("xmm0", "xmm3", "xmm4", "xmm5")
+    lo_y, hi_y = sp[0]["ymm"], sp[1]["ymm"]
+    lo_x, hi_x = sp[0]["xmm"], sp[1]["xmm"]
 
     lines = [
         f'procedure AVX2{op["name"]}({inputs[0]["param"]}, {output["param"]}: PSingle; aCount: SizeUInt; {sp[0]["param"]}, {sp[1]["param"]}: Single);',
@@ -521,21 +682,23 @@ def emit_clamp(op: dict) -> list[str]:
         asm_line("mov", f"{dst}, {output['local']}"),
         asm_line("mov", "r8, aCount"),
         asm_line("vmovss", f'{sp[0]["xmm"]}, [{sp[0]["local"]}]'),
-        asm_line("vbroadcastss", f'{sp[0]["ymm"]}, {sp[0]["xmm"]}'),
+        asm_line(sp[0]["broadcast"], f'{sp[0]["ymm"]}, {sp[0]["xmm"]}'),
         asm_line("vmovss", f'{sp[1]["xmm"]}, [{sp[1]["local"]}]'),
-        asm_line("vbroadcastss", f'{sp[1]["ymm"]}, {sp[1]["xmm"]}'),
+        asm_line(sp[1]["broadcast"], f'{sp[1]["ymm"]}, {sp[1]["xmm"]}'),
         "",
         asm_line("cmp", "r8, 32"),
         asm_line("jb", "@tail16"),
         "",
         "  @loop32:",
+        "    // NaN-safe: detect NaN, replace with min, clamp, blend original NaN back",
     ]
     for i, off in enumerate((0, 32, 64, 96)):
-        lines.append(asm_line("vmovups", f"ymm{i}, {mem(src0, off)}"))
-        lines.append(asm_line(step0_op, f"ymm{i}, ymm{i}, {sp[0]['ymm']}"))
-        lines.append(asm_line(step1_op, f"ymm{i}, ymm{i}, {sp[1]['ymm']}"))
-        lines.append(asm_line("vmovups", f"{mem(dst, off)}, ymm{i}"))
+        if i > 0:
+            lines.append("")
+        lines += _clamp_nan_safe_block(ymm_regs, src0, dst, off, lo_y, hi_y,
+                                       (step0_op, step1_op), comments=(i == 0))
     lines += [
+        "",
         asm_line("add", f"{src0}, 128"),
         asm_line("add", f"{dst}, 128"),
         asm_line("sub", "r8, 32"),
@@ -546,12 +709,12 @@ def emit_clamp(op: dict) -> list[str]:
         asm_line("cmp", "r8, 16"),
         asm_line("jb", "@tail8"),
     ]
-    for i, off in enumerate((0, 32)):
-        lines.append(asm_line("vmovups", f"ymm{i}, {mem(src0, off)}"))
-        lines.append(asm_line(step0_op, f"ymm{i}, ymm{i}, {sp[0]['ymm']}"))
-        lines.append(asm_line(step1_op, f"ymm{i}, ymm{i}, {sp[1]['ymm']}"))
-        lines.append(asm_line("vmovups", f"{mem(dst, off)}, ymm{i}"))
+    for off in (0, 32):
+        lines.append("")
+        lines += _clamp_nan_safe_block(ymm_regs, src0, dst, off, lo_y, hi_y,
+                                       (step0_op, step1_op))
     lines += [
+        "",
         asm_line("add", f"{src0}, 64"),
         asm_line("add", f"{dst}, 64"),
         asm_line("sub", "r8, 16"),
@@ -559,10 +722,12 @@ def emit_clamp(op: dict) -> list[str]:
         "  @tail8:",
         asm_line("cmp", "r8, 8"),
         asm_line("jb", "@tail4"),
-        asm_line("vmovups", f"ymm0, {mem(src0)}"),
-        asm_line(step0_op, f"ymm0, ymm0, {sp[0]['ymm']}"),
-        asm_line(step1_op, f"ymm0, ymm0, {sp[1]['ymm']}"),
-        asm_line("vmovups", f"{mem(dst)}, ymm0"),
+        "",
+    ]
+    lines += _clamp_nan_safe_block(ymm_regs, src0, dst, 0, lo_y, hi_y,
+                                   (step0_op, step1_op))
+    lines += [
+        "",
         asm_line("add", f"{src0}, 32"),
         asm_line("add", f"{dst}, 32"),
         asm_line("sub", "r8, 8"),
@@ -570,10 +735,12 @@ def emit_clamp(op: dict) -> list[str]:
         "  @tail4:",
         asm_line("cmp", "r8, 4"),
         asm_line("jb", "@tail_scalar"),
-        asm_line("vmovups", f"xmm0, {mem(src0)}"),
-        asm_line(step0_op, f"xmm0, xmm0, {sp[0]['xmm']}"),
-        asm_line(step1_op, f"xmm0, xmm0, {sp[1]['xmm']}"),
-        asm_line("vmovups", f"{mem(dst)}, xmm0"),
+        "",
+    ]
+    lines += _clamp_nan_safe_block(xmm_regs, src0, dst, 0, lo_x, hi_x,
+                                   (step0_op, step1_op))
+    lines += [
+        "",
         asm_line("add", f"{src0}, 16"),
         asm_line("add", f"{dst}, 16"),
         asm_line("sub", "r8, 4"),
@@ -583,9 +750,16 @@ def emit_clamp(op: dict) -> list[str]:
         asm_line("jz", "@done"),
         "  @scalar_loop:",
         asm_line("vmovss", f"xmm0, {mem(src0)}"),
-        asm_line(step0_scl, f"xmm0, xmm0, {sp[0]['xmm']}"),
-        asm_line(step1_scl, f"xmm0, xmm0, {sp[1]['xmm']}"),
-        asm_line("vmovss", f"{mem(dst)}, xmm0"),
+        asm_line("vmovaps", "xmm4, xmm0"),
+        asm_line("vcmpunordss", "xmm5, xmm0, xmm0"),
+        asm_line("vandps", f"xmm3, {lo_x}, xmm5"),
+        asm_line("vandnps", "xmm5, xmm5, xmm0"),
+        asm_line("vorps", "xmm5, xmm5, xmm3"),
+        asm_line(step0_scl, f"xmm5, xmm5, {lo_x}"),
+        asm_line(step1_scl, f"xmm5, xmm5, {hi_x}"),
+        asm_line("vcmpunordss", "xmm3, xmm4, xmm4"),
+        asm_line("vblendvps", "xmm5, xmm5, xmm4, xmm3"),
+        asm_line("vmovss", f"{mem(dst)}, xmm5"),
         asm_line("add", f"{src0}, 4"),
         asm_line("add", f"{dst}, 4"),
         asm_line("dec", "r8"),
