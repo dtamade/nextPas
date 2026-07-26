@@ -41,7 +41,7 @@
 | Scale claims | **H1 / H1+H2 package / HTTPS H1 / HTTPS H2 全 Met**（Linux epoll，冻结于 `CLAIM.md`） |
 | 源码结构 | **82** 个 `nextpas.core.http*` 单元；SAFE/R2 remediation + STRUCT 抽取已完成 |
 | 测试门禁 | 主 Makefile **PROJECTS = 47** focused suites（heaptrc 敏感套件 0 unfreed） |
-| Windows | **W2-3b landed**：`net.server.iocp` completion 驱动 recv/send/deadline-wake 三路齐备——server 自有 GQCS 事件循环（`PollOneWait` 三态），writable waiter 1ms timeout 重试，有限 `WakeDeadline` 经 GQCS-timeout 扫描 + `TryCancelByContext`/`WakePending` 取消唤醒（单路等待不变式保持：recv op 挂起 XOR waiter/sleeper）；生产 H1 session 走完成路径。真机证据：`http.iocp_wire` 5 用例 + 0 unfreed on windows-latest（Core CI run 30195741147，W2-3）；deadline wake 用例 Wine 绿（真机复验待下次 CI run）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 整块吞下不 WouldBlock，须分块写（真机无此差异，已验证） |
+| Windows | **W2-3b landed**：`net.server.iocp` completion 驱动 recv/send/deadline-wake 三路齐备——server 自有 GQCS 事件循环（`PollOneWait` 三态），writable waiter 1ms timeout 重试，有限 `WakeDeadline` 经 GQCS-timeout 扫描 + `TryCancelByContext`/`WakePending` 取消唤醒（单路等待不变式保持：recv op 挂起 XOR waiter/sleeper）；生产 H1 session 走完成路径。真机证据：`http.iocp_wire` **6 用例** + 0 unfreed on windows-latest（Core CI run 30196530589；deadline wake 真机 437ms ≈ Wine 445ms，`CancelIoEx` 语义一致）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 整块吞下不 WouldBlock，须分块写（真机无此差异，已验证） |
 | Multi-OS host | `test_http_threaded_host` + `test_http_iocp_wine`（IOCP wire，Windows host 真用例/其他 host skip 断言）经 `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
 | **NEXT** | **M-band（§5 维护带）**——Era W2 已收官；候选战役（DX cookbook / Windows 性能 harness）升格待产品确认（§6）；改方向先改本行 + §4 |
@@ -130,7 +130,7 @@ CHECKPOINT（不阻塞续波）:
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **landed**（2026-07-26；TDD RED→GREEN；RED：有限 deadline 被 guard 拒绝 → worker fallback（GWorkerRunUsed 断言失败）；GREEN：guard 放宽 + `WakeExpiredDeadlines` 扫描 + `ComputeWaitTimeoutMs` deadline 聚合 + `WakePending`/`TryCancelByContext` 取消唤醒 + 纯 sleeper 合法化；Wine 6 用例绿（idle wake 用例 445ms ≈ 400ms deadline + 派发开销，时序精确）+ Linux `test_http_server` 136 绿 + 双端 heaptrc 0 unfreed。生产 H1 session（恒有限 WakeDeadline）自此走完成路径） |
+| **Status** | **landed**（2026-07-26；TDD RED→GREEN；RED：有限 deadline 被 guard 拒绝 → worker fallback（GWorkerRunUsed 断言失败）；GREEN：guard 放宽 + `WakeExpiredDeadlines` 扫描 + `ComputeWaitTimeoutMs` deadline 聚合 + `WakePending`/`TryCancelByContext` 取消唤醒 + 纯 sleeper 合法化；Wine 6 用例绿（idle wake 用例 445ms ≈ 400ms deadline + 派发开销，时序精确）+ Linux `test_http_server` 136 绿 + 双端 heaptrc 0 unfreed。**真机复验**：windows-latest `http.iocp_wire` 6/6 + 0 unfreed，deadline wake 437ms（Core CI run 30196530589）。生产 H1 session（恒有限 WakeDeadline）自此走完成路径） |
 | **Do** | ①guard 放宽：接受有限 `WakeDeadline`（保留初始兴趣 =[peReadable] 要求）；②`ComputeWaitTimeoutMs` 聚合最近 deadline（min(writable 1ms, deadline remaining)，epoll `ComputePollTimeoutMs` 对等）；③过期唤醒：writable waiter/纯 sleeper 直接喂 `[]`（epoll `HandleExpiredPollTargets` 契约）；recv-parked driver 经 `TryCancelByContext` + `WakePending` 标志——取消完成到达后喂 `[]`（数据竞先则喂 `[peReadable]`），不破坏单路等待不变式 |
 | **Don't** | 不动公开 API；不改 epoll 路径；不动 reactor（`TryCancelByContext` 已存在）；不宣称 scale |
 | **Done when** | Wine smoke 增 idle deadline wake 用例（有限 deadline session 走完成路径、idle 超时被 wake 关闭、无 worker Run）绿；Linux 回归绿；双端 heaptrc 0 unfreed |
