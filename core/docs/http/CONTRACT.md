@@ -813,12 +813,21 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 
 ## 6. 测试门禁
 
-主门禁：`core/tests/nextpas.core.http/Makefile`（35 suites）
+主门禁：`core/tests/nextpas.core.http/Makefile`（**47** suites）
 
 纳入：base/url/headers/message/form/cookie/router/middleware(s)/hsts/static/
 client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_redirect
 
 旁路：benchmarks、examples、smoke、integration、tls_real（环境/性能/长集成）
+
+#### h2 DoS 防御 stance
+
+| 攻击向量 | 防御机制 | 阈值 | 清零条件 | 测试对 |
+|----------|---------|------|---------|-------|
+| CVE-2023-44487 rapid-reset（HEADERS+RST 循环） | `FRapidResetCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_RAPID_RESETS = 100` | 任意请求成功完成（`MarkRequestHandled`） | 攻击测试 + 不误伤（198 resets 中间穿插1完成） |
+| CVE-2019-9512 PING flood | `FControlFrameFloodCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_CONTROL_FRAME_FLOOD = 100` per batch | 任意请求成功完成 | 攻击测试 + 不误伤（198 PINGs 中间穿插1完成） |
+| CVE-2019-9515 SETTINGS flood | 同上计数器（共用 `FControlFrameFloodCount`） | 同上 | 同上 | 同框架覆盖 |
+| 内存 exhaustion（巨型帧） | `H2_WIRE_READ_HARD_LIMIT = 16MB` → GOAWAY(ENHANCE_YOUR_CALM) | 16 MB | — | 既有测试 |
 
 单套件：
 
@@ -879,6 +888,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-26 | 3.46 | h2 巨石机械拆：`impl.h2.wire` + `impl.h2.client.streams` + `impl.h2.session.request`；client ~1759 / session ~1411；inventory **82** |
 | 2026-07-26 | 3.47 | Era W2（W2-1..W2-3b）：IOCP completion 驱动 recv/send/deadline-wake；host matrix 增 `http.iocp_wire`（真 Windows 证据 run 30195741147）；residual 措辞对齐；scale=No 维持 |
 | 2026-07-26 | 3.48 | M-1 产品 facade over IOCP：`test_http_iocp_facade_wine`（THttpServer+tsbIocp GET/keep-alive，Wine 3 用例）；full facade Win64 交叉 residual 消除（uses 常驻钉住）；host matrix 增 `http.iocp_facade` |
+| 2026-07-26 | 3.49 | Era P DoS defense：`FRapidResetCount` + `FControlFrameFloodCount` → GOAWAY(ENHANCE_YOUR_CALM)；`H2_MAX_RAPID_RESETS=100`/`H2_MAX_CONTROL_FRAME_FLOOD=100`；request-completion 清零；`test_http_h2_session` 4 passed + 4 RED→GREEN；`CONTRACT.md` DoS stance 表 + §6 suites 计数修正 35→47 |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
