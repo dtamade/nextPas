@@ -183,7 +183,7 @@ begin
     'IOCP PollOne must use nonblocking zero-timeout completion polling');
   CheckContains(LPollOneBody, 'iocpdispatchcompletion(self, lbytes, lok, loverlapped)',
     'IOCP PollOne must dispatch real overlapped completions');
-  CheckContains(LRunBody, 'atomicstore32(frunning, 1, morelease);',
+  CheckContains(LRunBody, 'atomic_store(frunning, 1, mo_release);',
     'IOCP Run must publish running state before blocking');
   CheckContains(LRunBody, 'getqueuedcompletionstatus(handle(fport), @lbytes, @lkey',
     'IOCP Run must block on the completion port');
@@ -191,9 +191,9 @@ begin
     'IOCP Run must use the blocking completion wait');
   CheckContains(LRunBody, 'finally',
     'IOCP Run must clear running state when it returns');
-  CheckContains(LRunBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckContains(LRunBody, 'atomic_store(frunning, 0, mo_release);',
     'IOCP Run must leave running state cleared on every exit path');
-  CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckContains(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'IOCP Stop must publish stopped state');
   CheckContains(LStopBody, 'postqueuedcompletionstatus(handle(fport), 0, 0, nil)',
     'IOCP Stop must wake the blocking completion wait with a control packet');
@@ -224,7 +224,7 @@ begin
     'async loop idle timeout policy must observe pending I/O truth');
   CheckContains(LAsyncLoop, 'async_pending_io_idle_poll_ms',
     'async loop must bound wake-only waits while completion work is pending');
-  CheckContains(LRunBody, 'atomicstore32(frunning, 1, morelease);',
+  CheckContains(LRunBody, 'atomic_store(frunning, 1, mo_release);',
     'async loop run must publish running state before entering the event loop');
   CheckContains(LRunBody, 'drainwake;',
     'async loop run must continue to drain the platform wake seam');
@@ -240,9 +240,9 @@ begin
     'async loop run-once must use the same pending-I/O bounded wake timeout policy');
   CheckContains(LRunBody, 'finally',
     'async loop run must clear running state when it returns');
-  CheckContains(LRunBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckContains(LRunBody, 'atomic_store(frunning, 0, mo_release);',
     'async loop run must leave running state cleared on every exit path');
-  CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
+  CheckContains(LStopBody, 'atomic_store(frunning, 0, mo_release);',
     'async loop stop must publish stopped state');
 end;
 
@@ -266,7 +266,7 @@ begin
 
   CheckContains(LIocp, 'fpendingdone: int32',
     'IOCP reactor must track a drained pending state for close waiting');
-  CheckContains(LCloseBody, 'if atomicload32(fpendingcount, moacquire) > 0 then',
+  CheckContains(LCloseBody, 'if atomic_load(fpendingcount, mo_acquire) > 0 then',
     'IOCP Close must only enter the pending-drain path when work is still outstanding');
   CheckContains(LCloseBody, 'iocpcancelpendingops(self);',
     'IOCP Close must request cancellation for every pending overlapped operation');
@@ -318,9 +318,9 @@ begin
     'IOCP pending wait must retire completions through the normal dispatch path');
   CheckContains(LReleaseBody, 'areactor.fpendinghead := nil;',
     'IOCP pending release must detach the owned list before callbacks');
-  CheckContains(LReleaseBody, 'atomicstore32(areactor.fpendingcount, 0, morelease);',
+  CheckContains(LReleaseBody, 'atomic_store(areactor.fpendingcount, 0, mo_release);',
     'IOCP pending release must clear the pending count before callbacks');
-  CheckContains(LReleaseBody, 'atomicstore32(areactor.fpendingdone, 1, morelease);',
+  CheckContains(LReleaseBody, 'atomic_store(areactor.fpendingdone, 1, mo_release);',
     'IOCP pending release must signal the drained state when it detaches the list');
   CheckContains(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
     'IOCP pending release must cancel each overlapped operation');
@@ -376,15 +376,15 @@ begin
   LUnlinkBody := ExtractBetween(LIocp, 'procedure iocpunlinkop',
     'procedure iocpfreeop');
 
-  CheckContains(LAllocBody, 'atomicfetchadd32(areactor.fpendingcount, 1, moacqrel);',
+  CheckContains(LAllocBody, 'atomic_fetch_add(areactor.fpendingcount, 1, mo_acq_rel);',
     'IOCP submit path must increment the pending count when ownership is retained');
-  CheckContains(LAllocBody, 'atomicstore32(areactor.fpendingdone, 0, morelease);',
+  CheckContains(LAllocBody, 'atomic_store(areactor.fpendingdone, 0, mo_release);',
     'IOCP submit path must clear the drained signal before async ownership escapes');
-  CheckContains(LUnlinkBody, 'atomicfetchsub32(areactor.fpendingcount, 1, moacqrel) - 1;',
+  CheckContains(LUnlinkBody, 'atomic_fetch_sub(areactor.fpendingcount, 1, mo_acq_rel) - 1;',
     'IOCP completion path must decrement the pending count as ownership returns');
   CheckContains(LUnlinkBody, 'if lpendingcount = 0 then',
     'IOCP completion path must detect the all-drained transition');
-  CheckContains(LUnlinkBody, 'atomicstore32(areactor.fpendingdone, 1, morelease);',
+  CheckContains(LUnlinkBody, 'atomic_store(areactor.fpendingdone, 1, mo_release);',
     'IOCP completion path must signal the drained state when the last op finishes');
 end;
 
@@ -479,11 +479,11 @@ begin
   CheckAbsent(LTimeoutCtxBody, 'timerfired',
     'timeout context must not rely on non-atomic timer-fired booleans');
 
-  CheckContains(LClaimBody, 'atomiccompareexchange32',
+  CheckContains(LClaimBody, 'atomic_compare_exchange_strong',
     'timeout completion claim must be atomic');
   CheckContains(LClaimBody, 'timeout_completion_pending',
     'timeout completion claim must only win from pending state');
-  CheckContains(LReleaseBody, 'atomicfetchsub32',
+  CheckContains(LReleaseBody, 'atomic_fetch_sub',
     'timeout cleanup release must be atomic');
   CheckContains(LReleaseBody, 'dispose(actx);',
     'timeout cleanup release must free the context only from the last owner');
