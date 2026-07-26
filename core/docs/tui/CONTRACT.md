@@ -132,17 +132,19 @@ end;
 - UI 线程单线程操作
 - 事件队列通过 `nextpas.core.sync` 原语跨线程投递
 - `TTaskManager` 提供后台任务调度
-- **线程前置契约**：任何会触发 `TTaskManager.Spawn` 的程序（含所有 `TApp`
-  应用），必须把 `nextpas.core.thread.init` 作为 uses 的**第一个单元**。
-  缺失时 FPC Unix 无线程管理器：任务线程内的堆/AnsiString/异常机制
-  未按多线程初始化，表现为随机 segfault（编译不会报错）。
-  门禁：C11（examples 引用 task API 必须 uses thread.init）。
+- **线程前置契约**：任何链接 `tui.task` 传递闭包（`ext`/`full`/`app`/
+  `app.screen`/`loading`/`task`）的程序，必须把 `nextpas.core.thread.init`
+  作为 uses 的**第一个单元**。历史根因：缺失时 FPC Unix 无线程管理器，
+  `TTaskManager.Spawn` 的任务线程跑在单线程 RTL 上（堆无锁/AnsiString
+  引用计数非原子/异常帧共享），表现为随机 segfault 且编译零告警。
+  门禁：C11（examples/tests/benchmarks 全量扫描）。
 - **fail-fast 门卫**：`nextpas.core.tui.task` 自身 implementation uses
   `thread.init`。这**不能**替代应用侧首位声明——FPC 约束：sync/mem 等更
   底层单元的 initialization 已触碰线程 API（置 `ThreadingAlreadyUsed`），
   cthreads 晚装即 runerror 211。但正因如此，忘记首位声明的程序会在**启动
   时确定性报错**（"Make cthreads one of the first units..."）而非随机
-  segfault。库内引用的价值 = 把静默死亡换成自解释失败。
+  segfault。库内引用的价值 = 把静默死亡换成自解释失败；代价 = 链接闭包内
+  所有程序（含从不 Spawn 的）都必须显式首位声明，demo 模板已全部带上。
 
 ---
 

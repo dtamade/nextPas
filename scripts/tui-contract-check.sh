@@ -162,21 +162,30 @@ else
   fail_check "examples 目录缺失"
 fi
 
-printf "\n${BOLD}C11: 线程前置契约（task 使用者必须 uses thread.init）${NC}\n"
-if [ -d "$EX_DIR" ]; then
-  for ex in "$EX_DIR"/*/; do
-    [ -d "$ex" ] || continue
-    name=$(basename "$ex")
-    src=$(ls "$ex"/*.lpr 2>/dev/null | head -1)
-    [ -n "$src" ] || continue
-    if grep -qE 'Tasks\.Spawn|MakeSpec\(' "$src"; then
-      if grep -q 'nextpas\.core\.thread\.init' "$src"; then
-        ok "$name 引用 task API 且 uses thread.init"
-      else
-        fail_check "$name 引用 task API 但缺 nextpas.core.thread.init（线程未初始化 → 运行时 segfault）"
-      fi
+printf "\n${BOLD}C11: 线程前置契约（链接 tui.task 闭包必须 uses thread.init）${NC}\n"
+# tui.task 的传递引用者: ext/full/app/app.screen/loading。链接即拉入 cthreads
+# fail-fast 门卫: 缺 thread.init 首位 → 启动 runerror 211（而非随机 segfault）。
+TASK_CLOSURE='^[[:space:]]*nextpas\.core\.tui\.(ext|full|app|app\.screen|task|loading)[[:space:]]*[,;]'
+c11_missing=0; c11_ok=0
+for src in "$EX_DIR"/*/*.lpr \
+           "$TEST_DIR"/*/*.lpr \
+           "$REPO_ROOT"/core/benchmarks/nextpas.core.tui/*/*.lpr; do
+  [ -f "$src" ] || continue
+  case "$src" in *rejects_*) continue;; esac   # reject 用例只编译不运行
+  if grep -qE "$TASK_CLOSURE" "$src"; then
+    if grep -q 'nextpas\.core\.thread\.init' "$src"; then
+      c11_ok=$((c11_ok + 1))
+    else
+      fail_check "$(basename "$src") 链接 tui.task 闭包但缺 nextpas.core.thread.init（启动即 runerror 211）"
+      c11_missing=1
     fi
-  done
+  fi
+done
+[ "$c11_missing" -eq 0 ] && ok "task 闭包程序 $c11_ok 个全部 uses thread.init"
+if grep -q 'nextpas\.core\.thread\.init' "$SRC_DIR/nextpas.core.tui.task.pas"; then
+  ok "tui.task 内置 fail-fast 门卫（implementation uses thread.init）"
+else
+  fail_check "tui.task 缺 fail-fast 门卫"
 fi
 if grep -q '线程前置契约' "$REPO_ROOT/core/docs/tui/CONTRACT.md"; then
   ok "CONTRACT.md 记载线程前置契约"
