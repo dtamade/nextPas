@@ -15,8 +15,9 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
   Wine secondary **25** (includes console). Watch expand series **closed** 2026-07-21.
   **Not full-host real-Windows runtime** parity: modules outside the 28-gate list,
   AcceptEx/ConnectEx depth, and whole-job reds (async native) are not platform claims.
-- **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
-  `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
+- **macOS**: **focused-runtime** for documented **10 platform gates** (layer A:
+  `platform-macos-ci-matrix.sh` fail-closed; console promoted 2026-07-26).
+  Script may list mem.host → total=11.
   **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
   does not demote layer A.
 - **FreeBSD / Android**: source-contract, forced-compile, or best-effort CI only.
@@ -34,7 +35,7 @@ Always cite the platform matrix job, not the workflow aggregate.
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
 | Windows x86_64 | **ci-matrix** 28 platform gates (+ optional mem.host in script) | keep GHA+wine green; remaining real-Windows runtime gap = full-host parity / non-matrix modules; expand only on consumer pain |
-| macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
+| macOS | **focused-runtime** 10 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
 
@@ -90,7 +91,7 @@ is mem-owned. L2 consumer min-set (`l2-windows-ci-matrix.sh`) includes
 | P4 Completion lane | IOCP/proactor | ci-matrix poller/iocp + focused-runtime | deepen AcceptEx/ConnectEx |
 | P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile |
 | P6 Benchmarks | performance baseline | 14-operation baseline | cross-platform compare |
-| P7 macOS/Darwin | host truth | focused-runtime 9-gate set | keep matrix green |
+| P7 macOS/Darwin | host truth | focused-runtime 10-gate set | keep matrix green |
 | P8 FreeBSD | host truth | deferred | cross-platform-actions CI |
 | P9 Android | host truth | deferred | NDK + bionic runtime |
 

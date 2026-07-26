@@ -69,7 +69,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |-----|----------|--------|
 | Windows beyond documented 28 platform gates | **P1** | Full AcceptEx-ConnectEx depth / modules outside platform list not in matrix |
 | `async-windows-native-smoke` job red | **P2 (not platform)** | Owner **net/async**; not a platform facade gate or promote blocker |
-| macOS beyond documented 9 platform gates | **P1** | Layer A fail-closed only; whole job (async inventory) is not platform evidence |
+| macOS beyond documented 10 platform gates | **P1** | Layer A fail-closed only; whole job (async inventory) is not platform evidence |
 | `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
 | Windows secure-zero native export | **P2** | D3.b closed: permanent FillChar+barrier; no stable DLL export across Wine+real Windows |
 | dual-IO symbols on `platform.process` | **P2** | D3.c: **permanent owner-only** (no sunset this program) |
@@ -84,7 +84,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
 | Windows x86_64 | **`ci-matrix` for 28 platform gates** + wine **25** secondary | expand candidates one-at-a-time; keep wine + GHA green |
-| macOS | **`focused-runtime` layer A** (9 platform gates; script total may be 10) | keep fail-closed green; do not treat whole job as platform evidence |
+| macOS | **`focused-runtime` layer A** (10 platform gates incl. console; script total may be 11) | keep fail-closed green; do not treat whole job as platform evidence |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -271,11 +271,11 @@ Optional readiness inventory (not a promotion):
 
 1. **D0** done.
 2. **D1.a–D1.d** done; Windows **`ci-matrix` expanded through 28 platform gates** (+watch Batch-21b; multi-dir Batch-23; **+console Batch-console-promote**); wine secondary **25**; keep wine + GHA green.
-3. **D2.a–D2.c** done; **9-gate macOS `focused-runtime`** (+memory, Batch-5B); keep GHA matrix green.
+3. **D2.a–D2.c** done; **10-gate macOS `focused-runtime`** (+memory Batch-5B; +console 2026-07-26); keep GHA matrix green.
 4. **D3.a–D3.d** done (signal compile, secure-zero permanent fallback, dual-IO owner-only, freetype stay); D3.e remains Won't.
 5. **Windows watch expand series closed** (2026-07-21): S1–S3 + multi-dir + L2 multi-path/AddTree; **no `bWatchSubtree`**.
 6. **D4/D5** opportunistic / owner-gated.
-7. **Standing default:** §4 maintenance gates + keep Windows 28-gate / macOS 9-gate green. New platform work only with consumer pain or named owner (FreeBSD/Android/D5).
+7. **Standing default:** §4 maintenance gates + keep Windows 28-gate / macOS 10-gate green. New platform work only with consumer pain or named owner (FreeBSD/Android/D5).
 
 ---
 
@@ -357,6 +357,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-26 | **Audit closeout F-001…F-025**: console read/write value/sentinel **failure=-1** (F-001); Darwin/FreeBSD termios console path (F-002); wine/host hard asserts (F-003); docs for dual-IO ban / no process-socket-sync split / freetype-x11 stay / host-capability-matrix (F-004…F-025). macOS matrix **+console candidate** only (no 10-gate promote without GHA). |
 | 2026-07-26 | **hotfix(macOS matrix red)**: F-002 console path used Linux-only `pollfd` alias → all macOS focused gates exit 2 (Core CI run 30196911416). Fix: portable `TPollFd` (posix.base). Prevention: `console` added to simulated-host forced-compile matrix (darwin/android/freebsd/unix); matrix then exposed empty errno `case` in `platform.error` on Android/generic-unix → subset mapping added. Governance docs trimmed to limits (README 79/80, master-spec 119/120). Non-platform Core CI reds remain: math×2 text.conv, `format` registry, FreeBSD FPC 3.2.2 `reference to`. |
 | 2026-07-26 | **Simulated-host matrix expanded to 11 facades** (+error/files/path/env/socket/memory). Exposed and fixed: `socket` impl-uses dangling comma on Android/generic-unix (never compiled there) + missing errno/`AF_UNSPEC`/`O_NONBLOCK` in android/unix base. `files` stays excluded from the generic-unix leg per wave10 contract (generic unix stat deferred — no invented stat record; first attempt to add one was correctly blocked by `test_platform_host_abi_wave10_posix_stat_hosts`). Evidence: matrix 4/4, wave10 7/7, wave5 5/5, socket_types 13/13, struct_sizes 12/12, return_semantics 25/25, Linux socket 12/12 0-leak, tier-2 aarch64/arm32/riscv64 compile exit 0. |
+| 2026-07-26 | **macOS console promoted → 10-gate `focused-runtime`**: hotfix landed main@`20f9c6de6`; GHA Core CI **30198722396** layer A fail-closed matrix **pass=11 fail=0** (10 platform + mem.host), console 22/22 0-leak on macos-14 aarch64. Job-level red is non-platform `http.threaded_host` (`nextpas.core.log.pas` C-styled operators, log/http lane) — layer B, not platform evidence. Docs/script updated 9→10 (master-spec, goal-tree, residual, ROADMAP §2/§5, matrix script banner). |
 
 ---
 
