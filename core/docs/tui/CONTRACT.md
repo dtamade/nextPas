@@ -137,6 +137,12 @@ end;
   缺失时 FPC Unix 无线程管理器：任务线程内的堆/AnsiString/异常机制
   未按多线程初始化，表现为随机 segfault（编译不会报错）。
   门禁：C11（examples 引用 task API 必须 uses thread.init）。
+- **fail-fast 门卫**：`nextpas.core.tui.task` 自身 implementation uses
+  `thread.init`。这**不能**替代应用侧首位声明——FPC 约束：sync/mem 等更
+  底层单元的 initialization 已触碰线程 API（置 `ThreadingAlreadyUsed`），
+  cthreads 晚装即 runerror 211。但正因如此，忘记首位声明的程序会在**启动
+  时确定性报错**（"Make cthreads one of the first units..."）而非随机
+  segfault。库内引用的价值 = 把静默死亡换成自解释失败。
 
 ---
 

@@ -103,6 +103,11 @@ function IsCancelled(const Ctx: TTaskContext): Boolean; inline;
 function MakeSpec(Func: TTaskFunc; Param: Pointer; ParamSize: UInt32;
                   const Name: ShortString): TTaskSpec;
 implementation
+uses
+  { 线程前置契约的库内保证：本单元 spawn 平台线程，FPC 单元初始化顺序
+    确保 thread.init（Unix=cthreads）在任何 Spawn 可能发生之前完成安装。
+    应用侧仍建议显式将 thread.init 放 uses 首位（纵深防御，见 CONTRACT §4/C11）。 }
+  nextpas.core.thread.init;
 type
   TTaskThreadPayload = record
     Id: TTaskId;
