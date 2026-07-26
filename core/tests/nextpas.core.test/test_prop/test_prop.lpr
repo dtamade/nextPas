@@ -1474,6 +1474,175 @@ begin
       AC.Name + ': fail-path row must assert empty-output boundary');
 end;
 
+{ ── v8.40 FuzzMinimize contract (public since v8.40) ─────────────────────── }
+
+var
+  GMinProbes: specialize TArray<TBytes>;
+  GMinThreshold: Integer;
+
+function MinContainsFF(const D: TBytes): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to High(D) do
+    if D[I] = $FF then Exit(True);
+end;
+
+function MinSumOf(const D: TBytes): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(D) do
+    Inc(Result, D[I]);
+end;
+
+{ Predicate families for FuzzMinimize probing; every call is recorded in
+  GMinProbes so tables can lock the exact probe sequence. F=contains $FF,
+  L=len>=3, H=head byte=7, S=byte sum>=10, K=len>=GMinThreshold,
+  N=never fails, B=raises a plain Exception (must escape FuzzMinimize). }
+function MinMakePred(const AKind: string): TFuzzBytesTest;
+begin
+  case AKind of
+    'F': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        if MinContainsFF(D) then raise EAssertionFailed.Create('ff');
+      end;
+    'L': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        if Length(D) >= 3 then raise EAssertionFailed.Create('len');
+      end;
+    'H': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        if (Length(D) > 0) and (D[0] = 7) then raise EAssertionFailed.Create('h7');
+      end;
+    'S': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        if MinSumOf(D) >= 10 then raise EAssertionFailed.Create('sum');
+      end;
+    'K': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        if Length(D) >= GMinThreshold then raise EAssertionFailed.Create('k');
+      end;
+    'B': Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+        raise Exception.Create('kaboom');
+      end;
+  else
+    Result := procedure(const D: TBytes)
+      begin
+        GMinProbes := Concat(GMinProbes, [Copy(D)]);
+      end;
+  end;
+end;
+
+procedure TestMinResultCase(const AC: TTestCase);
+{ FuzzMinimize exact result + probe count — pred|inHex|wantOutHex|probes.
+  Locks: phase 1 keeps the first ceil(n/2) bytes while failing (stops at the
+  first passing prefix, no finer granularity); phase 2 removes single bytes
+  left-to-right, retrying the index after acceptance. Empty/single-byte
+  inputs return unchanged with ZERO probes (the input itself is never
+  re-validated). 'ESC' rows lock non-EAssertionFailed escape. A failing but
+  1-minimal input (m-sum10-min) also returns unchanged. }
+var
+  LRest, LPred, LInHex, LWantOut, LFlag, LEscaped: string;
+  LWantProbes: Integer;
+  LIn, LOut: TBytes;
+begin
+  LRest := AC.Data;
+  LPred := NextSeg(LRest);
+  LInHex := NextSeg(LRest);
+  LWantOut := NextSeg(LRest);
+  LWantProbes := StrToIntDef(NextSeg(LRest), -1);
+  LFlag := LRest;
+  if LInHex = '-' then LInHex := '';
+  LIn := HexStrToBytes(LInHex);
+  GMinProbes := nil;
+  LEscaped := '';
+  try
+    LOut := FuzzMinimize(LIn, MinMakePred(LPred));
+  except
+    on E: EAssertionFailed do
+      raise;
+    on E: Exception do
+      LEscaped := E.ClassName + ': ' + E.Message;
+  end;
+  if LWantOut = 'ESC' then
+  begin
+    CheckEqual('Exception: kaboom', LEscaped, AC.Name + ' escape');
+    CheckEqual(Int64(LWantProbes), Int64(Length(GMinProbes)), AC.Name + ' probes');
+    CheckEqual('0', LFlag, AC.Name + ': escape row must be fail-path');
+    Exit;
+  end;
+  CheckEqual('', LEscaped, AC.Name + ' no escape');
+  if LWantOut = '-' then LWantOut := '';
+  CheckEqual(LWantOut, BytesToHexStr(LOut), AC.Name + ' out');
+  CheckEqual(Int64(LWantProbes), Int64(Length(GMinProbes)), AC.Name + ' probes');
+  if LFlag = '0' then
+    CheckTrue(LWantOut <> LInHex, AC.Name + ': fail-path row must shrink')
+  else
+    CheckEqual(LInHex, LWantOut, AC.Name + ': pass row must return input unchanged');
+end;
+
+procedure TestMinProbeSeqCase(const AC: TTestCase);
+{ Exact probe sequence FuzzMinimize feeds the predicate (','-joined hex,
+  <none> when zero). Locks phase ORDER: halving prefixes first, then
+  single-byte removals; rejected removal probes appear in the sequence but
+  their result is discarded (e.g. ps-sum10: 09,01 probed, 0901 kept). }
+var
+  LRest, LPred, LInHex, LWantSeq, LFlag: string;
+  LIn, LOut: TBytes;
+begin
+  LRest := AC.Data;
+  LPred := NextSeg(LRest);
+  LInHex := NextSeg(LRest);
+  LWantSeq := NextSeg(LRest);
+  LFlag := LRest;
+  if LInHex = '-' then LInHex := '';
+  LIn := HexStrToBytes(LInHex);
+  GMinProbes := nil;
+  LOut := FuzzMinimize(LIn, MinMakePred(LPred));
+  CheckEqual(LWantSeq, JoinBytesSeq(GMinProbes), AC.Name + ' seq');
+  if LFlag = '0' then
+    CheckTrue(BytesToHexStr(LOut) <> LInHex, AC.Name + ': fail-path row must shrink')
+  else
+    CheckEqual(LInHex, BytesToHexStr(LOut), AC.Name + ': pass row unchanged');
+end;
+
+procedure TestMinLenThresholdCase(const AC: TTestCase);
+{ len>=k predicate over fixed input 0102030405060708 — k|wantOutHex|probes.
+  Locks the phase interaction: phase 1 shrinks along the ceil-halving chain
+  8→4→2, phase 2 trims from the FRONT — so for k>4 the survivor is the last
+  k bytes of the original, while k<=4 keeps the front-of-chain remnant.
+  k=8 probes all removals but cannot shrink; k=9 never fails (unchanged). }
+var
+  LRest, LWantOut, LFlag: string;
+  LWantProbes: Integer;
+  LIn, LOut: TBytes;
+begin
+  LRest := AC.Data;
+  GMinThreshold := StrToIntDef(NextSeg(LRest), -1);
+  LWantOut := NextSeg(LRest);
+  LWantProbes := StrToIntDef(NextSeg(LRest), -1);
+  LFlag := LRest;
+  LIn := HexStrToBytes('0102030405060708');
+  GMinProbes := nil;
+  LOut := FuzzMinimize(LIn, MinMakePred('K'));
+  CheckEqual(LWantOut, BytesToHexStr(LOut), AC.Name + ' out');
+  CheckEqual(Int64(LWantProbes), Int64(Length(GMinProbes)), AC.Name + ' probes');
+  if LFlag = '0' then
+    CheckTrue(LWantOut <> '0102030405060708', AC.Name + ': fail-path row must shrink')
+  else
+    CheckEqual('0102030405060708', LWantOut, AC.Name + ': pass row unchanged');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1769,6 +1938,58 @@ begin
   AppendShrCase(LShrCases, 'g-str-printable', 'strrange|4096|4096', '1');
   LSuite.TestTable('v8.37 fuzzgen length contract', LShrCases,
     @TestGenLenCase);
+
+  { v8.40: FuzzMinimize 精确结果 — pred|inHex|wantOutHex|wantProbes }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'm-ff-head',     'F|ff000000|ff|2', '0');
+  AppendShrCase(LShrCases, 'm-ff-mid',      'F|00ff00|ff|3', '0');
+  AppendShrCase(LShrCases, 'm-ff-tail',     'F|0000ff|ff|3', '0');
+  AppendShrCase(LShrCases, 'm-ff-multi',    'F|ff00ff00|ff|2', '0');
+  AppendShrCase(LShrCases, 'm-ff-single',   'F|ff|ff|0', '1');
+  AppendShrCase(LShrCases, 'm-empty',       'F|-|-|0', '1');
+  AppendShrCase(LShrCases, 'm-never-4',     'N|01020304|01020304|5', '1');
+  AppendShrCase(LShrCases, 'm-never-2',     'N|0102|0102|3', '1');
+  AppendShrCase(LShrCases, 'm-never-1',     'N|07|07|0', '1');
+  AppendShrCase(LShrCases, 'm-len3-8',      'L|0102030405060708|020304|6', '0');
+  AppendShrCase(LShrCases, 'm-len3-4',      'L|01020304|020304|5', '0');
+  AppendShrCase(LShrCases, 'm-len3-3',      'L|010203|010203|4', '1');
+  AppendShrCase(LShrCases, 'm-head7-5',     'H|0701020304|07|3', '0');
+  AppendShrCase(LShrCases, 'm-head7-2',     'H|0755|07|1', '0');
+  AppendShrCase(LShrCases, 'm-sum10',       'S|09010000|0901|4', '0');
+  AppendShrCase(LShrCases, 'm-sum10-min',   'S|0505|0505|3', '1');
+  AppendShrCase(LShrCases, 'm-boom',        'B|aabb|ESC|1', '0');
+  LSuite.TestTable('v8.40 minimize exact result', LShrCases,
+    @TestMinResultCase);
+
+  { v8.40: FuzzMinimize probe 序列 — pred|inHex|wantSeq }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'ps-ff-head',  'F|ff000000|ff00,ff', '0');
+  AppendShrCase(LShrCases, 'ps-ff-tail',  'F|0000ff|0000,00ff,ff', '0');
+  AppendShrCase(LShrCases, 'ps-ff-mid',   'F|00ff00|00ff,00,ff', '0');
+  AppendShrCase(LShrCases, 'ps-len3-8',
+    'L|0102030405060708|01020304,0102,020304,0304,0204,0203', '0');
+  AppendShrCase(LShrCases, 'ps-head7-5',  'H|0701020304|070102,0701,07', '0');
+  AppendShrCase(LShrCases, 'ps-sum10',    'S|09010000|0901,09,01,09', '0');
+  AppendShrCase(LShrCases, 'ps-never-4',
+    'N|01020304|0102,020304,010304,010204,010203', '1');
+  AppendShrCase(LShrCases, 'ps-never-1',  'N|07|<none>', '1');
+  AppendShrCase(LShrCases, 'ps-empty',    'F|-|<none>', '1');
+  AppendShrCase(LShrCases, 'ps-single',   'F|ff|<none>', '1');
+  LSuite.TestTable('v8.40 minimize probe sequence', LShrCases,
+    @TestMinProbeSeqCase);
+
+  { v8.40: FuzzMinimize len>=k 阈值矩阵 — k|wantOutHex|wantProbes }
+  SetLength(LShrCases, 0);
+  AppendShrCase(LShrCases, 'mk-2', '2|0102|5', '0');
+  AppendShrCase(LShrCases, 'mk-3', '3|020304|6', '0');
+  AppendShrCase(LShrCases, 'mk-4', '4|01020304|6', '0');
+  AppendShrCase(LShrCases, 'mk-5', '5|0405060708|9', '0');
+  AppendShrCase(LShrCases, 'mk-6', '6|030405060708|9', '0');
+  AppendShrCase(LShrCases, 'mk-7', '7|02030405060708|9', '0');
+  AppendShrCase(LShrCases, 'mk-8', '8|0102030405060708|9', '1');
+  AppendShrCase(LShrCases, 'mk-9', '9|0102030405060708|9', '1');
+  LSuite.TestTable('v8.40 minimize len-threshold matrix', LShrCases,
+    @TestMinLenThresholdCase);
 
   if not LSuite.Run then
   begin

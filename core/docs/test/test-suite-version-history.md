@@ -310,6 +310,7 @@ core/src/nextpas.core.testing.pas           ← v1 兼容层（deprecated）
 - **v8.37**: B78 密度 tranche 4 — **FuzzGenString DEL 修复**（闭区间 `(0,95)` 可产 Char(127)，改 `(0,94)` → 32..126，`g-str-printable` 回归绑定）+ test_advanced retry/repeat 执行语义矩阵 36 行（entry=0 回退 config、负值唯一 opt-out、tsError 也重试、report-last-result、嵌套 execs=N×(1+C)）+ test_prop coverage tracker 状态机 24 行（TotalHits/CoverageCount 分离、越界 [0..32767]）+ fuzzgen 长度 9 行；scale 7867→7938
 - **v8.38**: B78 密度 tranche 5 — **`%.0f` 尾点修复**（跨模块 text.format：FormatFloat 小数位 0 无条件追加 `'.'` → `"5."`；修复后无小数点，`b-t-below` 消息 exact 回归绑定）+ test_bench CheckBench 判定矩阵 22 行（Executed=False 必败、Skipped 被忽略、闭边界、消息 exact、49.5→"50" 舍入陷阱）+ bench 结构 13 行 + test_discovery 过滤矩阵 12 行（空名/nil 地址静默跳过保序 `M1,M4`）+ VMT 枚举 10 行（nil→False、声明序）；scale 7938→7997
 - **v8.39**: B78 密度 tranche 6 — test_subtests 四张契约表 48 行（27 fail-path）：聚合消息 exact（全路径名单 `', '` join 执行序、**嵌套失败逐层折叠为直接子名**）+ 结果收集（pass 节点不进 Results、post-order、root 恒 Results[0]、root 失败携带最后失败叶 log 残留）+ suite 计数（subtest 内部 pass/skip 不可见、整条失败恰计 1 Failed）+ **env 隔离状态机**（SetEnv/UnsetEnv 零覆盖收口；逆序恢复、double-set 还原始值、empty≠missing、fail 后仍恢复）；「sibling pass 丢失」probe 实证非外部 bug；scale 7997→8050
+- **v8.40**: B78 密度 tranche 7 — **FuzzMinimize 公开化**（fuzz 家族唯一私有核心算法、仅失败路径调用=零覆盖裸奔收口；interface+门面 re-export，语义文档化：两阶段贪心收缩、只认 EAssertionFailed、1-minimal 非全局最小）+ test_prop 三张契约表 35 行（22 fail-path）：精确结果+probe 计数（空/单字节 0 probe 原样、失败但 1-minimal 原样、非 EAssertionFailed 穿透 exact）+ probe 序列 exact（两阶段顺序、被拒探测入序列）+ len≥k 阈值矩阵（k>4 幸存最后 k 字节 / k≤4 对半链残余）；scale 8050→8085
 
 ## 路线图
 

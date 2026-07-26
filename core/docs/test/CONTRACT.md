@@ -425,6 +425,36 @@ end;
 
 ## 11. 变更日志
 
+### v8.40 (2026-07-26) — FuzzMinimize 公开化 + minimize 契约表（B78 tranche 7）
+
+- **架构收口：`FuzzMinimize` 公开化**（fuzz.pas interface + 门面 re-export）。
+  此前它是 fuzz 家族唯一私有的核心算法，且只在 Fuzz/FuzzWithCorpus/
+  FuzzMultiStrategy 的失败路径被调用——**算法自身零测试覆盖**（正确性只能
+  透过 fuzz 失败消息间接观察）。公开签名：
+  `function FuzzMinimize(const AData: TBytes; ATest: TFuzzBytesTest): TBytes`
+- **公开语义（interface 注释 + 表锁定）**：确定性两阶段贪心收缩——
+  phase 1 反复保留前 ceil(n/2) 字节（首个 pass 前缀即停，不试更细粒度，
+  非 ddmin）；phase 2 从左到右单字节删除，删除被接受后重试同一 index。
+  **只认 EAssertionFailed 为"仍失败"**，其他异常穿透传播；非失败输入
+  原样返回；结果是单字节删除意义下的 1-minimal，非全局最小
+- **test_prop 三张契约表（35 行，其中 22 行 fail-path）**：
+  - `minimize exact result`（17 行）：输出 hex + probe 次数 exact；
+    **空/单字节输入 0 probe 原样返回**（输入本身从不被复验）；
+    失败但已 1-minimal 的输入（m-sum10-min：sum≥10 的 `0505`）也原样返回；
+    `m-boom` 行锁非 EAssertionFailed 异常穿透（`Exception: kaboom`，1 probe）
+  - `minimize probe sequence`（10 行）：谓词收到的**完整探测序列 exact**
+    （','-join hex）——锁两阶段顺序：先对半前缀链、后单字节删除；
+    被拒绝的删除探测出现在序列中但结果被丢弃
+  - `minimize len-threshold matrix`（8 行，len≥k × k=2..9 固定 8 字节输入）：
+    锁两阶段交互——k>4 时幸存者是原串**最后 k 字节**（phase 1 未收缩、
+    phase 2 从前修剪）；k≤4 时是对半链前缀残余；k=8 探测全部删除但
+    无法收缩；k=9 永不失败原样返回
+- 表行 flag 自校验：'0' ⟺ 发生收缩（wantOut≠wantIn）；escape 行强制 '0'
+- 已知陷阱记录：`make test` 二次调用（FPC 增量读回 PPU）触发 ICE——
+  基线复现确认为既有 FPC 陷阱非本版引入；clean 路径恒绿
+- scale：countable 8050 → **8085**（test_prop 421→456）；
+  fail-path 81.2% / low-signal 0% / non-table 1681
+
 ### v8.39 (2026-07-26) — B78 密度 tranche 6：subtest 聚合/收集/env 隔离契约表
 
 - **test_subtests 四张契约表（48 行，其中 27 行 fail-path）**，spec 驱动树构建

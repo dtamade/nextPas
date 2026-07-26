@@ -51,6 +51,18 @@ function FuzzGenBytes(ALen: Integer): TBytes;
 { Generate random printable ASCII string for seed corpus }
 function FuzzGenString(ALen: Integer): string;
 
+{ Minimize a failing input to a smaller one that still fails ATest (v8.40).
+  Deterministic two-phase greedy shrink:
+    1. repeatedly keep only the first ceil(n/2) bytes while that prefix
+       still fails; stop at the first passing prefix (no finer granularity);
+    2. left-to-right single-byte removal, retrying the same index after
+       each accepted removal.
+  Only EAssertionFailed counts as "still failing" — any other exception
+  propagates to the caller. An input that does not fail ATest is returned
+  unchanged. Result is 1-minimal w.r.t. single-byte removal, not globally
+  minimal. Used internally by Fuzz/FuzzWithCorpus/FuzzMultiStrategy. }
+function FuzzMinimize(const AData: TBytes; ATest: TFuzzBytesTest): TBytes;
+
 { ── Corpus Management (v7.3a) ─────────────────────────────────────────────── }
 
 type

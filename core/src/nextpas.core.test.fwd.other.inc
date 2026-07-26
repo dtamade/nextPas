@@ -179,6 +179,9 @@ begin Result := nextpas.core.test.fuzz.FuzzGenBytes(ALen); end;
 function FuzzGenString(ALen: Integer): string;
 begin Result := nextpas.core.test.fuzz.FuzzGenString(ALen); end;
 
+function FuzzMinimize(const AData: TBytes; ATest: TFuzzBytesTest): TBytes;
+begin Result := nextpas.core.test.fuzz.FuzzMinimize(AData, ATest); end;
+
 procedure FuzzWithCorpus(const AName: string; ATest: TFuzzBytesTest;
   const ACorpusDir: string; AMaxIterations: Integer);
 begin nextpas.core.test.fuzz.FuzzWithCorpus(AName, ATest, ACorpusDir, AMaxIterations); end;

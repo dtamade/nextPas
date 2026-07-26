@@ -582,6 +582,7 @@ procedure FuzzString(const AName: string; ATest: TFuzzStringTest;
   const ACorpus: array of string; AMaxIterations: Integer = 10000);
 function FuzzGenBytes(ALen: Integer): TBytes;
 function FuzzGenString(ALen: Integer): string;
+function FuzzMinimize(const AData: TBytes; ATest: TFuzzBytesTest): TBytes;
 
 { ── Re-exported corpus management from test.prop (v7.3a) ─────────────────── }
 

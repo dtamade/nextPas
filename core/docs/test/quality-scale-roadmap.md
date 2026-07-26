@@ -143,7 +143,7 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B76 | 仓库 **文档/入口** 默认 contracts + test lane focused matrix | **docs done (G1)**：README/go-rust-parity/worktrees/`lane_gate`/`lane-focused LANE=test`；**不做**独立 GitHub job（另议） |
 | B77 | `LOW_SIGNAL_MAX_RATIO=0.25` 默认 | **done (v8.30 B74)** |
-| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 81.3% / low-signal 0%），但 countable=8050 < 9000（v8.39 tranche 6 后）—— 需再增 ~950 再抬门 |
+| B78 | `SCALE_MIN=9000` 仅当 fail-path≥35% 且 low-signal≤25% | **条件已满足**（fail-path 81.2% / low-signal 0%），但 countable=8085 < 9000（v8.40 tranche 7 后）—— 需再增 ~915 再抬门 |
 | B79 | nextpas Discovery backend **stub 单元测试**（返回空/固定名表） | **done (v8.31 F-19)** |
 | B80 | 全量 19/19 + demos 作为 release checklist 固化进 README | **done (v8.32)** README §Release Checklist |
 
@@ -223,7 +223,18 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 |----|------|------|
 | B78 部分 | test_subtests（全模块最薄 93）四张契约表 48 行（27 fp）：聚合消息 exact 14 行（全路径名单执行序、嵌套失败逐层折叠为直接子名、error 叶 `ClassName: Message`）+ 结果收集 13 行（pass 节点不进 Results、post-order、root 恒 [0]、root 失败携带最后失败叶 log 残留）+ suite 计数 9 行（subtest 内部 pass/skip 不可见、整条失败恰计 1 Failed）+ env 隔离状态机 12 行（**SetEnv/UnsetEnv 零覆盖收口**；逆序恢复、double-set 还原始值、empty≠missing、fail 后仍恢复）；spec 驱动树构建（p/f/s/e/l/m 叶 + A/B 嵌套）；flag 自校验防灌水 | **done** |
 | 实证 | 「sibling pass 计数丢失」probe 证明非外部可见 bug（FOnResult 即时推送叶结果，FSubPass 仅内部）——记录为设计事实 | **done** |
-| B78 余量 | countable 8050 / 9000 — 缺 ~950；候选：FuzzMinimize 公开化评估、test_advanced/test_bench 续密 | 待后续 tranche |
+| B78 余量 | countable 8050 / 9000 — 缺 ~950；候选：FuzzMinimize 公开化评估、test_advanced/test_bench 续密 | → v8.40 tranche 7 |
+
+---
+
+### v8.40 — B78 密度 tranche 7（FuzzMinimize 公开化 + minimize 契约表）
+
+| ID | 任务 | 状态 |
+|----|------|------|
+| 架构 | **FuzzMinimize 公开化**（fuzz.pas interface + test.pas 门面 re-export + 语义文档注释）：fuzz 家族唯一私有核心算法、仅 Fuzz/FuzzWithCorpus/FuzzMultiStrategy 失败路径调用 → 算法自身零测试覆盖，公开后可表驱动精确锁定 | **done** |
+| B78 部分 | test_prop 三张契约表 35 行（22 fp）：精确结果 17 行（输出 hex + probe 计数 exact；空/单字节 0 probe 原样「输入从不复验」、失败但 1-minimal 原样、非 EAssertionFailed 穿透 `Exception: kaboom`）+ probe 序列 exact 10 行（两阶段顺序：对半前缀链先、单字节删除后；被拒探测入序列但结果丢弃）+ len≥k 阈值矩阵 8 行（k>4 幸存原串**最后 k 字节**、k≤4 对半链残余、k=8 全探测不可缩、k=9 永不失败）；flag 自校验防灌水 | **done** |
+| 实证 | `make test` 二次调用（FPC 增量读回 PPU）ICE——stash 基线复现确认既有陷阱非本版引入；clean 路径恒绿 | **done** |
+| B78 余量 | countable 8085 / 9000 — 缺 ~915；候选：test_advanced/test_bench 续密 | 待后续 tranche |
 
 ---
 
@@ -251,14 +262,15 @@ v9     （另拍板）IExpectation 拆分 / SoftExpect
 
 ## 6. 立即下一刀（默认开工序）
 
-**v8.40+** / backlog：SCALE→9000 密度增长续（B78，缺 ~950 countable；候选
-FuzzMinimize 公开化评估、test_advanced/test_bench 续密）；v9 SoftExpect（需拍板）。
+**v8.41+** / backlog：SCALE→9000 密度增长续（B78，缺 ~915 countable；候选
+test_advanced/test_bench 续密）；v9 SoftExpect（需拍板）。
 已完成：~~prop god-unit 拆分（F-03，v8.32）~~；~~release checklist（B80，v8.32）~~；
 ~~runner 拆分 + F-20 测试语义修正（v8.33）~~；~~F-12 COW lint + runner.multi 契约（v8.34）~~；
 ~~output 转义/结构 fail-path 92 行（v8.35）~~；~~prop.gen shrink 精确序列 85 行（v8.36）~~；
 ~~retry/repeat 执行语义 + fuzz 可观测契约 + DEL 修复（v8.37）~~；
 ~~bench/discovery 契约表 57 行 + %.0f 尾点修复（v8.38）~~；
-~~subtest 聚合/收集/env 隔离契约表 48 行（v8.39）~~。
+~~subtest 聚合/收集/env 隔离契约表 48 行（v8.39）~~；
+~~FuzzMinimize 公开化 + minimize 契约表 35 行（v8.40）~~。
 
 ---
 
