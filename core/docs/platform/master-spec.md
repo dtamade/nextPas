@@ -65,13 +65,14 @@ the documented **28 platform gates** only — never “29-gate” (extra is mem.
 | **A. Platform fail-closed matrix** | `platform-macos-ci-matrix.sh` step in job `test-macos` | **`focused-runtime`** for listed platform gates only |
 | **B. Whole `test-macos` job** | May also run async-host / best-effort inventory | Job red/green is **not** platform promotion evidence |
 
-**Documented platform set (layer A):** 9 platform gates
-`platform.{time,sync,thread,files,path,env,error,socket,memory}` (ROADMAP D2.c +
-Batch-5B). Script may also list **`mem.host_runtime`** → summary `total=10`.
+**Documented platform set (layer A):** 10 platform gates
+`platform.{time,sync,thread,files,path,env,error,socket,memory,console}`
+(ROADMAP D2.c + Batch-5B; console promoted 2026-07-26). Script may also list
+**`mem.host_runtime`** → summary `total=11`.
 
-- Promoted 9-gate: GHA **29696318492** @ `d160cbc46`; layer A re-confirmed
-  **pass=10 fail=0** on **29719632518** (job red there was non-platform
-  `net.async.dial` — does **not** demote layer A).
+- Promoted 9-gate: GHA **29696318492** @ `d160cbc46`; console promote to 10:
+  GHA **30198722396** @ `20f9c6de6` layer A **pass=11 fail=0** (job red there
+  was non-platform `http.threaded_host` log.pas — does **not** demote layer A).
 
 Darwin `platform.memory` honest residual (not a demotion): SysGetMem
 aligned-alloc fallback; FillChar+barrier secure-zero; MAP_ANON+mprotect reserve.
@@ -79,7 +80,7 @@ aligned-alloc fallback; FillChar+barrier secure-zero; MAP_ANON+mprotect reserve.
 D2.c / Batch-5 promote is **scoped**: it does **not** claim full-host macOS
 parity or treat best-effort whole-suite inventory as evidence.
 
-Allowed wording: `focused-runtime` for the documented **9 platform gates** only
+Allowed wording: `focused-runtime` for the documented **10 platform gates** only
 (layer A); layer B / async inventory failures are out of platform scope.
 
 ### IOCP completion operations
