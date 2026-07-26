@@ -482,30 +482,30 @@ begin
   if AReq.PlatformPreferences.PreferOSNative then
   begin
     if ACaps.BackendImplType = sslImplOSNative then
-      Score += 30;
+      Score := Score + 30;
   end;
 
   // 硬件加速偏好
   if AReq.PlatformPreferences.PreferHardwareAccel then
   begin
     if ACaps.HasHardwareAcceleration then
-      Score += 25;
+      Score := Score + 25;
   end;
 
   // FIPS 兼容偏好
   if AReq.PlatformPreferences.PreferFIPSCompliant then
   begin
     if ACaps.SupportsFIPSMode then
-      Score += 25;
+      Score := Score + 25;
   end;
 
   // PKCS#11 支持
   if ACaps.SupportsPKCS11 then
-    Score += 10;
+    Score := Score + 10;
 
   // TPM 支持
   if ACaps.SupportsTPM then
-    Score += 10;
+    Score := Score + 10;
 
   Result := Score;
   if Result > 100 then
