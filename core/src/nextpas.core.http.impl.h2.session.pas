@@ -41,6 +41,20 @@ type
     nextpas.core.http.impl.h2.session.writer.TH2ResponseWriter;
 
 const
+  { CVE-2023-44487 rapid-reset budget: max consecutive peer RST_STREAMs that
+    cancel a not-yet-handled request before the server treats the peer as
+    abusive and closes with ENHANCE_YOUR_CALM. Any request that runs to
+    completion resets the budget, so legitimate cancellation never trips it. }
+  H2_MAX_RAPID_RESETS = 100;
+
+  { CVE-2019-9512 (Ping Flood) / CVE-2019-9515 (Settings Flood) budget: max
+    ack-demanding control frames (non-ACK PING/SETTINGS) the peer may send
+    without any request making progress before the server treats the peer as
+    abusive and closes with ENHANCE_YOUR_CALM. Any request that runs to
+    completion resets the budget, so a client's occasional keep-alive PING or
+    SETTINGS update never trips it. }
+  H2_MAX_CONTROL_FRAME_FLOOD = 100;
+
   h2psNeedMore =
     nextpas.core.http.impl.h2.session.preface.h2psNeedMore;
   h2psOk =
@@ -79,6 +93,8 @@ type
     FLastLocalStreamID: UInt32;
     FPeerGoawayLastLocalStreamID: UInt32;
     FPendingContinuationStreamID: UInt32;
+    FRapidResetCount: UInt32;
+    FControlFrameFloodCount: UInt32;
     FShutdownErrorCode: UInt32;
     FReadDeadline: TDeadline;
     FWriteDeadline: TDeadline;
@@ -123,6 +139,10 @@ type
     function HandleWindowUpdate(const AFrame: TH2Frame): Boolean;
     function HandleRstStream(const AFrame: TH2Frame): Boolean;
     function HandlePing(const AFrame: TH2Frame): Boolean;
+    { Charges one ack-demanding control frame against the flood budget.
+      Returns False (and queues GOAWAY(ENHANCE_YOUR_CALM), closing the
+      session) once the budget is exceeded; the caller must Exit(False). }
+    function RegisterControlFrameFlood: Boolean;
     function HandleGoaway(const AFrame: TH2Frame): Boolean;
     function ClosedStreamDataLength(const AFrame: TH2Frame;
       out ADataLen: UInt32): Boolean;
@@ -223,6 +243,8 @@ begin
   FLastLocalStreamID := 0;
   FPeerGoawayLastLocalStreamID := 0;
   FPendingContinuationStreamID := 0;
+  FRapidResetCount := 0;
+  FControlFrameFloodCount := 0;
   FShutdownErrorCode := H2_ERR_NO_ERROR;
   FReadDeadline := TDeadline.Infinite;
   FWriteDeadline := TDeadline.Infinite;
@@ -708,6 +730,8 @@ begin
   FRemoteSettings := LSettings;
   FEncoder.SetDynamicTableSize(FRemoteSettings.HeaderTableSize);
   FStreams.ApplyPeerInitialWindowSize(FRemoteSettings.InitialWindowSize);
+  if not RegisterControlFrameFlood then
+    Exit(False);
   QueueSettingsAck;
   Result := True;
 end;
@@ -913,8 +937,38 @@ begin
   LStream := FStreams.Find(AFrame.Header.StreamID);
   if LStream <> nil then
   begin
+    { CVE-2023-44487: cancelling a stream whose request never ran is the
+      rapid-reset signature. Count it against the budget; a completed request
+      clears the counter (see ExecuteStreamRequest), so this only fires under
+      a sustained open-then-reset flood. }
+    if not LStream.RequestHandled then
+    begin
+      Inc(FRapidResetCount);
+      if FRapidResetCount > H2_MAX_RAPID_RESETS then
+      begin
+        LStream.OnRstStream(LErrorCode);
+        FStreams.Remove(AFrame.Header.StreamID);
+        QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
+        FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
+        FState := h2sesClosed;
+        Exit(True);
+      end;
+    end;
     LStream.OnRstStream(LErrorCode);
     FStreams.Remove(AFrame.Header.StreamID);
+  end;
+  Result := True;
+end;
+
+function TH2ServerSession.RegisterControlFrameFlood: Boolean;
+begin
+  Inc(FControlFrameFloodCount);
+  if FControlFrameFloodCount > H2_MAX_CONTROL_FRAME_FLOOD then
+  begin
+    QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
+    FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
+    FState := h2sesClosed;
+    Exit(False);
   end;
   Result := True;
 end;
@@ -926,7 +980,11 @@ begin
   if not H2DecodePing(AFrame.Payload, LData) then
     Exit(RejectFrame(0, H2_ERR_FRAME_SIZE_ERROR, True));
   if (AFrame.Header.Flags and H2_FLAG_PING_ACK) = 0 then
+  begin
+    if not RegisterControlFrameFlood then
+      Exit(False);
     QueuePingAck(LData);
+  end;
   Result := True;
 end;
 
@@ -1046,6 +1104,8 @@ begin
   if StreamBodyTooLarge(AStream) then
   begin
     AStream.MarkRequestHandled;
+    FRapidResetCount := 0;
+    FControlFrameFloodCount := 0;
     SendResponseHeaders(AStream, HTTP_STATUS_PAYLOAD_TOO_LARGE, nil, True);
     AStream.DiscardUnreadBody;
     ApplyPendingWindowUpdates(AStream);
@@ -1057,6 +1117,8 @@ begin
   try
     InvokeHandler(LReq, LWriterObj as IHttpResponseWriter);
     AStream.MarkRequestHandled;
+    FRapidResetCount := 0;
+    FControlFrameFloodCount := 0;
     EncodeResponse(AStream, LWriterObj);
   except
     on E: Exception do

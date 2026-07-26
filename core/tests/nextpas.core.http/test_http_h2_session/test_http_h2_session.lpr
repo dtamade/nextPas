@@ -1837,6 +1837,255 @@ begin
   end;
 end;
 
+{ CVE-2023-44487 rapid reset: a peer opens a stream (HEADERS without
+  END_STREAM, so the handler never runs) then immediately RST_STREAMs it,
+  repeating without bound. Each pair frees the concurrency slot before the
+  next, so MaxConcurrentStreams never trips — yet the server keeps allocating
+  per-stream state. A hardened server must detect the abuse and shut the
+  connection with GOAWAY(ENHANCE_YOUR_CALM). }
+procedure TestRunRapidResetFloodTriggersGoawayEnhanceYourCalm;
+const
+  { Must exceed the production rapid-reset budget so the flood is unambiguous. }
+  RESET_PAIRS = 201;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..15] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+  LI: Integer;
+  LStreamID: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake;
+    for LI := 0 to RESET_PAIRS - 1 do
+    begin
+      LStreamID := UInt32(1 + LI * 2);
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, LStreamID,
+          ComposeRequestHeaders('POST', '/cancel')) +
+        H2EncodeFrame(H2_FRAME_RST_STREAM, 0, LStreamID,
+          H2EncodeRstStream(H2_ERR_CANCEL));
+    end;
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'rapid reset flood triggers a connection GOAWAY');
+      CheckEqual(Int64(H2_ERR_ENHANCE_YOUR_CALM), Int64(LErrorCode),
+        'rapid reset GOAWAY carries ENHANCE_YOUR_CALM');
+      CheckEqual(Int64(0), Int64(LHandler.CallCount),
+        'no handler runs for reset-canceled streams');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+{ Guard against over-eager rapid-reset defense: a legitimate peer may cancel
+  many requests over a long-lived connection, but as long as real requests
+  keep completing, the budget resets and the connection must survive. Here 99
+  resets bring the counter just under the limit, one completed GET clears it,
+  then another 99 resets follow — 198 resets total, never a GOAWAY. }
+procedure TestRunResetsInterleavedWithCompletionDoNotTripGoaway;
+const
+  BURST = 99;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..15] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+  LI: Integer;
+  LStreamID: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake;
+    LStreamID := 1;
+    for LI := 0 to BURST - 1 do
+    begin
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, LStreamID,
+          ComposeRequestHeaders('POST', '/cancel')) +
+        H2EncodeFrame(H2_FRAME_RST_STREAM, 0, LStreamID,
+          H2EncodeRstStream(H2_ERR_CANCEL));
+      Inc(LStreamID, 2);
+    end;
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, LStreamID,
+        ComposeRequestHeaders('GET', '/ok'));
+    Inc(LStreamID, 2);
+    for LI := 0 to BURST - 1 do
+    begin
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, LStreamID,
+          ComposeRequestHeaders('POST', '/cancel')) +
+        H2EncodeFrame(H2_FRAME_RST_STREAM, 0, LStreamID,
+          H2EncodeRstStream(H2_ERR_CANCEL));
+      Inc(LStreamID, 2);
+    end;
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'interleaved completion keeps the connection alive (no GOAWAY)');
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'the one completed GET runs its handler');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+{ CVE-2019-9512 (Ping Flood) / CVE-2019-9515 (Settings Flood): a peer streams
+  empty PING/SETTINGS frames, each forcing the server to queue an ACK. With no
+  bound the outbound queue grows without limit (memory/CPU exhaustion). The
+  server must cut the connection with GOAWAY(ENHANCE_YOUR_CALM) once a flood of
+  ack-demanding control frames arrives without any real request making progress. }
+procedure TestRunControlFrameFloodTriggersGoawayEnhanceYourCalm;
+const
+  PING_FLOOD = 150;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..255] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+  LI: Integer;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake;
+    for LI := 0 to PING_FLOOD - 1 do
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_PING, 0, 0, HexToBytes('0102030405060708'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'control frame flood triggers a connection GOAWAY');
+      CheckEqual(Int64(H2_ERR_ENHANCE_YOUR_CALM), Int64(LErrorCode),
+        'control frame flood GOAWAY carries ENHANCE_YOUR_CALM');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+{ Same budget-clear logic as rapid-reset: interleaving a real completed request
+  between bursts of PING frames resets the flood counter. Without the clear
+  the total would exceed the limit; with it, 99+99 PINGs never trip the
+  defense. }
+procedure TestRunControlFrameFloodInterleavedWithCompletionDoNotTripGoaway;
+const
+  BURST = 99;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..255] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+  LI: Integer;
+  LStreamID: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake;
+    for LI := 0 to BURST - 1 do
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_PING, 0, 0, HexToBytes('0102030405060708'));
+    LStreamID := 1;
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_HEADERS,
+        H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM, LStreamID,
+        ComposeRequestHeaders('GET', '/ok'));
+    for LI := 0 to BURST - 1 do
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_PING, 0, 0, HexToBytes('0102030405060708'));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'control frame flood with interleaved completion keeps connection alive');
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'the one completed GET runs its handler');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.session');
   T.Test('Partial preface waits', @TestPartialPrefaceWaits);
@@ -1904,5 +2153,13 @@ begin
     @TestRunTrailingHeadersCompleteRequestWithoutOverwritingHeaders);
   T.Test('Run WINDOW_UPDATE resumes blocked response body',
     @TestRunWindowUpdateResumesBlockedResponseBody);
+  T.Test('Run rapid reset flood triggers GOAWAY ENHANCE_YOUR_CALM',
+    @TestRunRapidResetFloodTriggersGoawayEnhanceYourCalm);
+  T.Test('Run resets interleaved with completion do not trip GOAWAY',
+    @TestRunResetsInterleavedWithCompletionDoNotTripGoaway);
+  T.Test('Run control frame flood triggers GOAWAY ENHANCE_YOUR_CALM',
+    @TestRunControlFrameFloodTriggersGoawayEnhanceYourCalm);
+  T.Test('Run control frame flood interleaved with completion does not trip GOAWAY',
+    @TestRunControlFrameFloodInterleavedWithCompletionDoNotTripGoaway);
   if not T.Run then Halt(1);
 end.
