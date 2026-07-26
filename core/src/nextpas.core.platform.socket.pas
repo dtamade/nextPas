@@ -529,10 +529,18 @@ implementation
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.helpers,
-  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.base{$ENDIF}
-  {$IFDEF NEXTPAS_MACOS}nextpas.core.platform.darwin.base{$ENDIF}
-  {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
+  nextpas.core.platform.posix.helpers
+  {$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+  , nextpas.core.platform.darwin.base
+  {$ELSEIF defined(NEXTPAS_FREEBSD)}
+  , nextpas.core.platform.freebsd.base
+  {$ELSEIF defined(NEXTPAS_ANDROID)}
+  , nextpas.core.platform.android.base
+  {$ELSE}
+  , nextpas.core.platform.unix.base
+  {$ENDIF}
   ;
 
 const
