@@ -69,7 +69,16 @@ uses
   nextpas.core.platform.path,
   nextpas.core.platform.env,
   nextpas.core.platform.socket,
-  nextpas.core.platform.memory
+  nextpas.core.platform.memory,
+  nextpas.core.platform.args,
+  nextpas.core.platform.dl,
+  nextpas.core.platform.fmt,
+  nextpas.core.platform.info,
+  nextpas.core.platform.pipe,
+  nextpas.core.platform.random,
+  nextpas.core.platform.secure
+  { which → fs → files transitively hits the same deferred generic-unix stat }
+  {$IFNDEF SIM_EXPECT_UNIX}, nextpas.core.platform.which{$ENDIF}
   {$IFDEF SIM_EXPECT_DARWIN}, nextpas.core.platform.darwin.base, nextpas.core.platform.darwin.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_ANDROID}, nextpas.core.platform.android.base, nextpas.core.platform.android.ffi{$ENDIF}
   {$IFDEF SIM_EXPECT_FREEBSD}, nextpas.core.platform.freebsd.base, nextpas.core.platform.freebsd.ffi{$ENDIF}
