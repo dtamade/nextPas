@@ -41,10 +41,10 @@
 | Scale claims | **H1 / H1+H2 package / HTTPS H1 / HTTPS H2 全 Met**（Linux epoll，冻结于 `CLAIM.md`） |
 | 源码结构 | **82** 个 `nextpas.core.http*` 单元；SAFE/R2 remediation + STRUCT 抽取已完成 |
 | 测试门禁 | 主 Makefile **PROJECTS = 47** focused suites（heaptrc 敏感套件 0 unfreed） |
-| Windows | **WIN-3 phase-1 landed**：`net.server.iocp`（435 行）AcceptEx 完成驱动 accept + worker handoff；**尚无 completion 驱动的 per-conn 数据路径**（源码注释明示）；证据 `test_http_iocp_wine`（Wine smoke，非真机） |
+| Windows | **W2-1 landed**：`net.server.iocp` phase-2 recv——零字节 overlapped `WSARecv` 把完成翻译为 readiness，poll session 在 reactor 线程经 `Advance` 推进；守卫外 session（有限 wake deadline / 非 readable 初始兴趣）回退 worker handoff；**写侧完成驱动 + deadline wake 未做（W2-2）**；证据 `test_http_iocp_wine` 3 用例（Wine smoke，非真机） |
 | Multi-OS host | `test_http_threaded_host` + `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
-| **NEXT** | **Wave W2-1**（2026-07-26 会话授权重开前进路线；改方向先改本行 + §4） |
+| **NEXT** | **Wave W2-2**（改方向先改本行 + §4） |
 
 ---
 
@@ -94,7 +94,7 @@ CHECKPOINT（不阻塞续波）:
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed**（2026-07-26；TDD RED→GREEN；Wine smoke 3 用例绿 + Linux `test_http_server` 136 绿 + 双端 heaptrc 0 unfreed；缺口注释已缩小为写侧/deadline） |
 | **Do** | `net.server.iocp` 增加 completion 驱动的 per-conn 读路径（overlapped `WSARecv` → 协议层喂数据），替换读侧 worker handoff；复用 `io.reactor.iocp` 既有完成端口反应器；threaded 回退路径保留 |
 | **Don't** | 不动公开 HTTP API；不改 epoll/Linux 路径；不做写侧（W2-2）；不宣称 scale |
 | **Done when** | `test_http_iocp_wine` 覆盖 completion-recv 的 HTTP/1.1 GET wire smoke 绿；源码不再有「no completion-driven per-conn protocol path」注释（或注释缩小为写侧）；Linux 回归绿 |
@@ -107,7 +107,7 @@ CHECKPOINT（不阻塞续波）:
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | overlapped `WSASend` 完成驱动写/drain；keep-alive 多请求 wire smoke（Wine）；连接关闭/错误路径诚实（Kind/Op 对齐 CONTRACT） |
 | **Don't** | 不引入第二套 outbound 缓冲模型（复用既有 free-list 契约）；不宣称 scale |
 | **Done when** | Wine smoke 多请求 keep-alive 绿；泄漏证据：heaptrc 若 Wine 下可用则 0 unfreed，否则写明由 W2-3 host gate 兜底 |
@@ -222,5 +222,6 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **W2-1 landed**：IOCP completion 驱动 recv——零字节 overlapped `WSARecv` readiness 桥 + poll session reactor 线程 `Advance`；守卫外回退 worker handoff；`test_http_iocp_wine` 增 completion-recv 用例（RED→GREEN）；Linux 回归绿；NEXT=W2-2 |
 | 2026-07-26 | **路线图重构**：Era 0–R2 全史（原 1220 行）冻结进 `archive/2026-07-26-roadmap-history-era0-to-r2.md`；本文件精简为单一前进入口；新增反碰壁兜底链（Era → M-band → STOP 报告）；重开前进路线 **Era W2 Windows 生产化 phase-2**，NEXT=W2-1（会话授权） |
 | 2026-07-26 | （重构前）h2 monolith extract / settings share / cancel-adapter / client helpers / session extract 等 residual 波全部 landed；详见 archive 快照 changelog |
