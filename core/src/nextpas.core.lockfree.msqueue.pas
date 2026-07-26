@@ -31,6 +31,13 @@ type
     Pad: TCacheLinePad;
   end;
 
+  { One free-list head per stripe (same self-padding argument). Each Head is
+    a packed (index:32 | aba:32) Treiber-stack top with a per-stripe tag. }
+  TMsQueueFreeStripe = record
+    Head: Int64;
+    Pad: TCacheLinePad;
+  end;
+
   {** @desc Michael-Scott 无锁无界 MPMC 队列
     @details 经典无锁队列算法，使用 index-based 节点池。
       - 入队: CAS 更新 tail.next，然后 CAS 移动 tail 指针
@@ -75,13 +82,13 @@ type
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadHead: TCacheLinePad;
     {$POP}
-    // Free-list head is CAS'd by BOTH sides every op (alloc on enqueue,
-    // recycle on dequeue) — it cannot join either side's line, so it gets
-    // its own.
-    FFreeHead: Int64;   // packed: (index:32 | aba:32)
-    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
-    FPadFree: TCacheLinePad;
-    {$POP}
+    // Free list striped by the SAME thread-id hash as the op guard (the
+    // caller passes its already-computed op stripe): alloc on enqueue and
+    // recycle on dequeue from differently-hashed threads land on separate
+    // heads instead of all CAS'ing one word — the measured serial point
+    // left after F-041 (Q2 still > Q1). 1P1C limit: one producer + one
+    // consumer still drain through a single stripe pair at steady state.
+    FFreeStripes: array[0..MSQUEUE_OP_STRIPES - 1] of TMsQueueFreeStripe;
     // Resize guard striped by thread-id hash so the per-op Enter/Leave RMW
     // pair lands on an uncontended line (each stripe self-padded, F-037).
     FOpStripes: array[0..MSQUEUE_OP_STRIPES - 1] of TMsQueueOpStripe;
@@ -89,8 +96,8 @@ type
     FResizing: Int32;
     FClosed: Int32;
 
-    function TryAllocNodeIdx(out AIdx: Int32): Boolean;
-    procedure FreeNodeIdx(AIdx: Int32);
+    function TryAllocNodeIdx(const AStripe: PtrUInt; out AIdx: Int32): Boolean;
+    procedure FreeNodeIdx(AIdx: Int32; const AStripe: PtrUInt);
     function Pack(AIdx, ATag: Int32): Int64;
     function UnpackIdx(APacked: Int64): Int32;
     function UnpackTag(APacked: Int64): Int32;
@@ -142,37 +149,67 @@ begin
   Result := Int32(APacked shr 32);
 end;
 
-function TLockFreeMsQueueImpl.TryAllocNodeIdx(out AIdx: Int32): Boolean;
+function TLockFreeMsQueueImpl.TryAllocNodeIdx(const AStripe: PtrUInt; out AIdx: Int32): Boolean;
 var
   LOld, LNew: Int64;
   LIdx: Int32;
   LExpected: Int64;
+  LProbe, LS: PtrUInt;
 begin
+  { Fast path: the caller's own stripe, peeled into the same single-loop
+    shape as the pre-stripe allocator (micro-sensitive hot path). }
   repeat
-    LOld := atomic_load_64(FFreeHead, mo_acquire);
+    LOld := atomic_load_64(FFreeStripes[AStripe].Head, mo_acquire);
     LIdx := UnpackIdx(LOld);
     if LIdx < 0 then
-      Exit(False);
+      Break;
     LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
-  LExpected := LOld;
-  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNew, mo_acq_rel, mo_acquire);
-  FNodes[LIdx].FHasValue := False;
-  AIdx := LIdx;
-  Result := True;
+    LExpected := LOld;
+    if atomic_compare_exchange_strong_64(FFreeStripes[AStripe].Head, LExpected, LNew, mo_acq_rel, mo_acquire) then
+    begin
+      FNodes[LIdx].FHasValue := False;
+      AIdx := LIdx;
+      Exit(True);
+    end;
+  until False;
+  { Slow path: own stripe empty — probe the others (a node recycled by a
+    differently-hashed thread sits on THAT stripe). A CAS failure retries
+    the SAME stripe; only an observed empty moves on. A stripe-local miss
+    is not a capacity miss: only all-empty may report False (→ Grow). }
+  for LProbe := 1 to MSQUEUE_OP_STRIPES - 1 do
+  begin
+    LS := (AStripe + LProbe) and (MSQUEUE_OP_STRIPES - 1);
+    while True do
+    begin
+      LOld := atomic_load_64(FFreeStripes[LS].Head, mo_acquire);
+      LIdx := UnpackIdx(LOld);
+      if LIdx < 0 then
+        Break;
+      LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
+      LExpected := LOld;
+      if atomic_compare_exchange_strong_64(FFreeStripes[LS].Head, LExpected, LNew, mo_acq_rel, mo_acquire) then
+      begin
+        FNodes[LIdx].FHasValue := False;
+        AIdx := LIdx;
+        Exit(True);
+      end;
+    end;
+  end;
+  Result := False;
 end;
 
-procedure TLockFreeMsQueueImpl.FreeNodeIdx(AIdx: Int32);
+procedure TLockFreeMsQueueImpl.FreeNodeIdx(AIdx: Int32; const AStripe: PtrUInt);
 var
   LOld, LNew: Int64;
   LExpected: Int64;
 begin
   FNodes[AIdx].FHasValue := False;
   repeat
-    LOld := atomic_load_64(FFreeHead, mo_relaxed);
+    LOld := atomic_load_64(FFreeStripes[AStripe].Head, mo_relaxed);
     FFreeList[AIdx].FNext := UnpackIdx(LOld);
     LNew := Pack(AIdx, UnpackTag(LOld) + 1);
-  LExpected := LOld;
-  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNew, mo_acq_rel, mo_acquire);
+    LExpected := LOld;
+  until atomic_compare_exchange_strong_64(FFreeStripes[AStripe].Head, LExpected, LNew, mo_acq_rel, mo_acquire);
 end;
 
 {$PUSH} {$Q-} {$R-} { hash multiply wraps mod 2^N by design }
@@ -230,9 +267,11 @@ begin
     for LI := 0 to MSQUEUE_OP_STRIPES - 1 do
       while atomic_load(FOpStripes[LI].Count, mo_acquire) <> 0 do
         CpuPause;
-    LOldFree := atomic_load_64(FFreeHead, mo_acquire);
-    if UnpackIdx(LOldFree) >= 0 then
-      Exit;
+    { A recycle racing ahead of quiescence may have refilled a stripe; any
+      available node anywhere means no growth is needed. }
+    for LI := 0 to MSQUEUE_OP_STRIPES - 1 do
+      if UnpackIdx(atomic_load_64(FFreeStripes[LI].Head, mo_acquire)) >= 0 then
+        Exit;
 
     LOldCap := atomic_load(FCapacity, mo_relaxed);
     if (LOldCap > High(Int32) div 2) or
@@ -249,17 +288,29 @@ begin
     begin
       LNewNodes[LI].FHasValue := False;
       LNewNodes[LI].FNext := Pack(-1, 0);
-      if LI < LNewCap - 1 then
-        LNewFreeList[LI].FNext := LI + 1
+      { Round-robin the new nodes into the per-stripe free chains (all
+        stripes verified empty above, so each chain is exactly its slice). }
+      if LI + MSQUEUE_OP_STRIPES < LNewCap then
+        LNewFreeList[LI].FNext := LI + MSQUEUE_OP_STRIPES
       else
-        LNewFreeList[LI].FNext := UnpackIdx(LOldFree);
+        LNewFreeList[LI].FNext := -1;
     end;
 
-    LNewFree := Pack(LOldCap, UnpackTag(LOldFree) + 1);
     FNodes := LNewNodes;
     FFreeList := LNewFreeList;
     atomic_store(FCapacity, LNewCap, mo_relaxed);
-    atomic_store_64(FFreeHead, LNewFree, mo_release);
+    for LI := 0 to MSQUEUE_OP_STRIPES - 1 do
+    begin
+      { Keep each stripe's aba tag monotone across the resize (same
+        convention as the pre-stripe code) so no stale snapshot can ever
+        CAS-succeed against the rebuilt chain. }
+      LOldFree := atomic_load_64(FFreeStripes[LI].Head, mo_relaxed);
+      if LOldCap + LI < LNewCap then
+        LNewFree := Pack(LOldCap + LI, UnpackTag(LOldFree) + 1)
+      else
+        LNewFree := Pack(-1, UnpackTag(LOldFree) + 1);
+      atomic_store_64(FFreeStripes[LI].Head, LNewFree, mo_release);
+    end;
   finally
     atomic_store(FResizing, 0, mo_release);
   end;
@@ -279,15 +330,22 @@ begin
   inherited Create;
   SetLength(FNodes, ACapacity);
   SetLength(FFreeList, ACapacity);
-  for I := 0 to ACapacity - 2 do
-    FFreeList[I].FNext := I + 1;
-  FFreeList[ACapacity - 1].FNext := -1;
+  for I := 0 to ACapacity - 1 do
+    if I + MSQUEUE_OP_STRIPES < ACapacity then
+      FFreeList[I].FNext := I + MSQUEUE_OP_STRIPES
+    else
+      FFreeList[I].FNext := -1;
   FCapacity := ACapacity;
-  FFreeHead := Pack(0, 0);
+  for I := 0 to MSQUEUE_OP_STRIPES - 1 do
+    if I < ACapacity then
+      FFreeStripes[I].Head := Pack(I, 0)
+    else
+      FFreeStripes[I].Head := Pack(-1, 0);
   for I := 0 to MSQUEUE_OP_STRIPES - 1 do
     FOpStripes[I].Count := 0;
   FResizing := 0;
-  if not TryAllocNodeIdx(LSentinel) then
+  { Create is single-threaded; stripe 0 is as good as any. }
+  if not TryAllocNodeIdx(0, LSentinel) then
     raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue: sentinel allocation failed'));
   FNodes[LSentinel].FHasValue := False;
   FNodes[LSentinel].FNext := Pack(-1, 0);
@@ -335,7 +393,7 @@ begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     EnterOperation(LStripe);
-    if TryAllocNodeIdx(LNodeIdx) then
+    if TryAllocNodeIdx(LStripe, LNodeIdx) then
       Break;
     LeaveOperation(LStripe);
     Grow;
@@ -441,7 +499,7 @@ begin
               AValue := LCandidateValue;
               Result := True;
             end;
-            FreeNodeIdx(LHeadIdx);
+            FreeNodeIdx(LHeadIdx, LStripe);
             atomic_fetch_add_64(FDequeued, 1, mo_relaxed);
             Exit;
           end;
