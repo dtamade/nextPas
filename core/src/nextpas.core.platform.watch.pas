@@ -128,6 +128,13 @@ function platform_watch_debug_pending_count(const AWatcher: TPlatformWatcher): I
 
 implementation
 
+{ 条件拼写刻意与下方 unsupported 区域标记不同：源契约测试用首次出现定位区域 }
+{$IF not (defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_WINDOWS))}
+{ Android/generic-unix: unsupported stubs below still need PLATFORM_ERR_* }
+uses
+  nextpas.core.platform.error;
+{$ENDIF}
+
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
@@ -968,8 +975,22 @@ function TPlatformWatchEvent.IsFileModified: Boolean;
 begin Result := Modified and (not IsDir); end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin Result := Modified and IsDir; end;
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin Result := Created; end;
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
+function TPlatformWatcher.IsValid: Boolean;
+begin Result := Fd >= 0; end;
+function TPlatformWatcher.IsInvalid: Boolean;
+begin Result := Fd < 0; end;
+function TPlatformWatcher.Add(const APath: PAnsiChar): Int32;
+begin Result := platform_watch_add(Self, APath); end;
+function TPlatformWatcher.Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+begin Result := platform_watch_poll(Self, AEvent, ATimeoutMs); end;
+function TPlatformWatcher.Close: Int32;
+begin Result := platform_watch_close(Self); end;
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin AWatcher.Fd := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;

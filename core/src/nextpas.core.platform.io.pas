@@ -74,6 +74,13 @@ implementation
 
 { L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform). }
 
+{ 条件拼写刻意与下方 unsupported 区域标记不同：源契约测试用首次出现定位区域 }
+{$IF not (defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_WINDOWS))}
+{ Android/generic-unix: unsupported stubs below still need PLATFORM_ERR_* }
+uses
+  nextpas.core.platform.error;
+{$ENDIF}
+
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
