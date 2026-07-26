@@ -63,6 +63,16 @@
 - wine **最小生产集**（M2-W4）：process **11** / fs **3** / path **4** / env **3** / watch **3**（合计 **24**）；`bash core/tests/run_l2_wine_min_set.sh`
 - fs 同方法 64KB×200 / 1MB×20 见 SCORECARD
 
+### 3.4a ReDoS 消除（2026-07-26）
+
+| 匹配器 | 原算法 | 新算法 | 测试 |
+|--------|--------|--------|------|
+| `GlobMatch` (fs.glob) | 递归回溯 — 指数级 | 双追踪器迭代(LSStar+LDStar) | 32/32 ✓ |
+| `FsPathMatch` (fs.path) | 递归回溯 — 指数级 | 单追踪器迭代 | 65/65 ✓ |
+
+- ReDoS 探针: `*a*a*a*a*a*a*a*a*b` × 10000 字符 = **67ms** (原 30s+)
+- 复杂度保证: O(pattern × name)，多项式时间，与 LeetCode 44 两指针同构
+
 ### 3.4 分层债（分轨）
 
 | 轨 | 主责 | 内容 | L2 动作 |
