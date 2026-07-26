@@ -8,9 +8,11 @@ program bench_lockfree;
  *   C1s — TLockFreeChannelSpsc 1P+1C
  *   M1/M2 — TMpscQueue 1P+1C / 2P+1C (unbounded)
  *   W1/W2 — TWorkStealingPool 1S+1T / 2S+2T (4 workers, bounded deques)
+ *   J1/J2 — TLockFreeForkJoinPool 1F+1W / 2F+2W (4 workers, bounded deques)
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
  *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC/MPSC TryEnqueue+TryDequeue pair,
- *   Channel 1T TrySendReceive, Pool 1T Submit+Steal pair, EBR Retire
+ *   Channel 1T TrySendReceive, Pool 1T Submit+Steal pair,
+ *   ForkJoin 1T Fork+PopOrSteal pair, EBR Retire
  *
  * B40: both suites use TBenchSuite (Quiet + short config for micro;
  * matched uses MaxIterations/MinSamples=1 so multi-thread OPS runs once per entry).
@@ -25,6 +27,7 @@ uses
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.channel, nextpas.core.lockfree.channel.spsc,
   nextpas.core.lockfree.mpsc, nextpas.core.lockfree.workstealing,
+  nextpas.core.lockfree.forkjoin,
   nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info,
   nextpas.core.fs,
   nextpas.core.exception;
@@ -54,12 +57,14 @@ var
 
   GMpsc: TIntMpsc;
   GPool: TWorkStealingPool;
+  GJPool: TLockFreeForkJoinPool;
 
   { Matched multi-thread state }
   GMatchCh: TIntChannel;
   GMatchChSpsc: TIntChannelSpsc;
   GMatchMpsc: TIntMpsc;
   GMatchPool: TWorkStealingPool;
+  GMatchJPool: TLockFreeForkJoinPool;
   GMatchSum: Int64;
 
 procedure SimpleReclaim(const AData: Pointer; const AUserData: Pointer);
@@ -135,6 +140,22 @@ begin
   if GPool.Submit(@PoolDummyTask, Pointer(PtrUInt(42))) then
     if GPool.Steal(LTask, LData) = wsStolen then
       GBenchSink := GBenchSink + PtrUInt(LData);
+end;
+
+procedure ForkJoinDummyTask(AUserData: Pointer);
+begin
+end;
+
+{ ForkJoin pair from empty: one Fork + one local PopOrSteal per iteration. }
+procedure BenchForkJoinPair(const ACtx: IBenchContext);
+var
+  LTask: TForkJoinTask;
+begin
+  LTask.Proc := @ForkJoinDummyTask;
+  LTask.UserData := Pointer(PtrUInt(42));
+  if GJPool.Fork(LTask) = fjOk then
+    if GJPool.PopOrSteal(0, LTask) then
+      GBenchSink := GBenchSink + PtrUInt(LTask.UserData);
 end;
 
 procedure BenchEbrRetire(const ACtx: IBenchContext);
@@ -274,6 +295,87 @@ begin
       CpuPause;
   end;
   InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+function MatchForkerFj(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LCount: Integer;
+  LTask: TForkJoinTask;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg));
+  LTask.Proc := @ForkJoinDummyTask;
+  for LI := 1 to LCount do
+  begin
+    LTask.UserData := Pointer(PtrUInt(LI));
+    while GMatchJPool.Fork(LTask) <> fjOk do
+      CpuPause; { bounded deques: spin until a worker drains capacity }
+  end;
+end;
+
+{ AArg packs (workerId shl 32) or count — PopOrSteal needs a worker identity. }
+function MatchWorkerFj(AArg: Pointer): Pointer; cdecl;
+var
+  LCount, LGot: Integer;
+  LWorkerId: Int32;
+  LTask: TForkJoinTask;
+  LLocal: Int64;
+begin
+  Result := nil;
+  LCount := Integer(PtrUInt(AArg) and $FFFFFFFF);
+  LWorkerId := Int32(PtrUInt(AArg) shr 32);
+  LGot := 0;
+  LLocal := 0;
+  while LGot < LCount do
+  begin
+    if GMatchJPool.PopOrSteal(LWorkerId, LTask) then
+    begin
+      LLocal := LLocal + Int64(PtrUInt(LTask.UserData));
+      Inc(LGot);
+    end
+    else
+      CpuPause;
+  end;
+  InterlockedExchangeAdd64(GMatchSum, LLocal);
+end;
+
+{ Fixed 4 workers: Fork round-robins across deques, each worker thread pops
+  its own deque first then steals from the others. }
+procedure RunMatchedForkJoinOnce(const AForkers, AWorkers: Integer);
+var
+  LForkers: array[0..7] of TPlatformThreadHandle;
+  LWorkers: array[0..7] of TPlatformThreadHandle;
+  LI: Integer;
+  LRet: Pointer;
+  LOpsPerF, LOpsPerW: Integer;
+begin
+  if (AForkers < 1) or (AWorkers < 1) or (AForkers > 8) or (AWorkers > 4) then
+    raise EInvalidOperationError.Create('RunMatchedForkJoinOnce: bad forker/worker count');
+  if (OPS mod AForkers <> 0) or (OPS mod AWorkers <> 0) then
+    raise EInvalidOperationError.Create('RunMatchedForkJoinOnce: OPS must divide thread counts');
+
+  LOpsPerF := OPS div AForkers;
+  LOpsPerW := OPS div AWorkers;
+  GMatchJPool := TLockFreeForkJoinPool.Create(4);
+  GMatchSum := 0;
+  try
+    for LI := 0 to AWorkers - 1 do
+      if platform_thread_create(LWorkers[LI], @MatchWorkerFj,
+        Pointer((PtrUInt(LI) shl 32) or PtrUInt(LOpsPerW))) <> 0 then
+        raise EInvalidOperationError.Create('forkjoin worker create failed');
+    for LI := 0 to AForkers - 1 do
+      if platform_thread_create(LForkers[LI], @MatchForkerFj, Pointer(PtrUInt(LOpsPerF))) <> 0 then
+        raise EInvalidOperationError.Create('forkjoin forker create failed');
+    for LI := 0 to AForkers - 1 do
+      platform_thread_join(LForkers[LI], LRet);
+    for LI := 0 to AWorkers - 1 do
+      platform_thread_join(LWorkers[LI], LRet);
+    GBenchSink := GBenchSink + GMatchSum;
+  finally
+    GMatchJPool.Close;
+    GMatchJPool.Free;
+    GMatchJPool := nil;
+  end;
 end;
 
 { Fixed 4 workers (4 bounded deques): Submit round-robins across them,
@@ -450,6 +552,18 @@ begin
   ACtx.SetBytes(OPS * SizeOf(Pointer));
 end;
 
+procedure BenchMatchedJ1ForkJoin(const ACtx: IBenchContext);
+begin
+  RunMatchedForkJoinOnce(1, 1);
+  ACtx.SetBytes(OPS * SizeOf(Pointer));
+end;
+
+procedure BenchMatchedJ2ForkJoin(const ACtx: IBenchContext);
+begin
+  RunMatchedForkJoinOnce(2, 2);
+  ACtx.SetBytes(OPS * SizeOf(Pointer));
+end;
+
 procedure RunMatchedSuite;
 var
   LResults: IBenchResults;
@@ -462,6 +576,8 @@ begin
   WriteLn('Scenario M2: TMpscQueue 2P+1C  OPS=', OPS, ' (unbounded)');
   WriteLn('Scenario W1: TWorkStealingPool 1S+1T  OPS=', OPS, ' (4 workers, bounded deques)');
   WriteLn('Scenario W2: TWorkStealingPool 2S+2T  OPS=', OPS, ' (4 workers, bounded deques)');
+  WriteLn('Scenario J1: TLockFreeForkJoinPool 1F+1W  OPS=', OPS, ' (4 workers, bounded deques)');
+  WriteLn('Scenario J2: TLockFreeForkJoinPool 2F+2W  OPS=', OPS, ' (4 workers, bounded deques)');
   WriteLn('Note: Go uses buffered chan; Rust C1 uses std::sync::mpsc (unbounded).');
   WriteLn('      Absolute Mops only valid with full bench-envelope.md fields.');
   WriteLn;
@@ -479,6 +595,8 @@ begin
     .Add('lockfree/matched/M2_Mpsc_2P1C', @BenchMatchedM2Mpsc)
     .Add('lockfree/matched/W1_Pool_1S1T', @BenchMatchedW1Pool)
     .Add('lockfree/matched/W2_Pool_2S2T', @BenchMatchedW2Pool)
+    .Add('lockfree/matched/J1_ForkJoin_1F1W', @BenchMatchedJ1ForkJoin)
+    .Add('lockfree/matched/J2_ForkJoin_2F2W', @BenchMatchedJ2ForkJoin)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
@@ -502,6 +620,7 @@ begin
   GChannelSpsc := TIntChannelSpsc.Create(CAPACITY);
   GMpsc := TIntMpsc.Create;
   GPool := TWorkStealingPool.Create(1);
+  GJPool := TLockFreeForkJoinPool.Create(1);
   GEbrDomain := TEbrDomain.Create;
   try
     for LI := 1 to CAPACITY do
@@ -522,6 +641,7 @@ begin
       .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
       .Add('lockfree/micro/MPSC/TryEnqueueDequeuePair', @BenchMpscTryPair)
       .Add('lockfree/micro/Pool/SubmitStealPair', @BenchPoolSubmitStealPair)
+      .Add('lockfree/micro/ForkJoin/ForkPopPair', @BenchForkJoinPair)
       .Add('lockfree/micro/EBR/Retire', @BenchEbrRetire)
       .Add('lockfree/micro/Channel/TrySendReceive', @BenchChannelTrySendReceive)
       .Add('lockfree/micro/ChannelSpsc/TrySendReceive', @BenchChannelSpscTrySendReceive)
@@ -531,6 +651,8 @@ begin
     LResults.SaveToJSON('build/bench-lockfree-micro.json');
   finally
     GEbrDomain.Free;
+    GJPool.Close;
+    GJPool.Free;
     GPool.Close;
     GPool.Free;
     GMpsc.Free;

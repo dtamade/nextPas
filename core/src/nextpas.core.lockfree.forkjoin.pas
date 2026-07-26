@@ -44,6 +44,13 @@ type
 
   TTaskDeque = specialize TWorkStealingDequeImpl<TForkJoinTask>;
 
+  { One owner lock per cache line: bare Int32 elements packed 16 locks/line,
+    so CAS spins on one worker's lock evicted every other worker's lock. }
+  TForkJoinOwnerLock = record
+    Lock: Int32;
+    Pad: TCacheLinePad;
+  end;
+
   {** @desc ForkJoin 并行执行框架
     @details 类似 Java ForkJoinPool，支持递归分治任务。
       - 每个工作者线程有本地双端队列
@@ -55,13 +62,22 @@ type
   }
   TLockFreeForkJoinPool = class
   private
-    FDeques: array of TTaskDeque;
-    FOwnerLocks: array of Int32;
+    { Read-mostly header: worker count + array refs, read on every op. }
     FWorkerCount: Int32;
-    FNextWorker: Int64;  // round-robin for task submission
+    FDeques: array of TTaskDeque;
+    FOwnerLocks: array of TForkJoinOwnerLock;
+    FPadHeader: TCacheLinePad;
+    { Fork-side line: round-robin rotor + forked counter, both RMW'd by the
+      same writer population (every Fork), so one line pulled once serves
+      both — splitting them would double the fork side's line traffic. }
+    FNextWorker: Int64;
+    FForked: Int64;
+    FPadFork: TCacheLinePad;
+    { PopOrSteal-side line: done counter, RMW'd by workers only. }
+    FDone: Int64;
+    FPadDone: TCacheLinePad;
+    { Cold: written once at Close. }
     FClosed: Int32;
-    FTaskCount: Int64;
-    FCompletedCount: Int64;
     procedure AcquireOwner(const AWorkerId: Int32);
     procedure ReleaseOwner(const AWorkerId: Int32);
   public
@@ -109,12 +125,12 @@ begin
   for I := 0 to AWorkerCount - 1 do
   begin
     FDeques[I] := TTaskDeque.Create(64);
-    FOwnerLocks[I] := 0;
+    FOwnerLocks[I].Lock := 0;
   end;
   FNextWorker := 0;
   FClosed := 0;
-  FTaskCount := 0;
-  FCompletedCount := 0;
+  FForked := 0;
+  FDone := 0;
 end;
 
 destructor TLockFreeForkJoinPool.Destroy;
@@ -137,7 +153,7 @@ begin
   while True do
   begin
     LCasExpected := 0;
-    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerId], LCasExpected, 1, mo_acquire, mo_relaxed) then
+    if atomic_compare_exchange_strong(FOwnerLocks[AWorkerId].Lock, LCasExpected, 1, mo_acquire, mo_relaxed) then
       Break;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
@@ -149,7 +165,7 @@ end;
 
 procedure TLockFreeForkJoinPool.ReleaseOwner(const AWorkerId: Int32);
 begin
-  atomic_store(FOwnerLocks[AWorkerId], 0, mo_release);
+  atomic_store(FOwnerLocks[AWorkerId].Lock, 0, mo_release);
 end;
 
 function TLockFreeForkJoinPool.Fork(const ATask: TForkJoinTask): TLockFreeForkJoinResult;
@@ -165,10 +181,12 @@ begin
   try
     if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(fjClosed);
-    atomic_fetch_add_64(FTaskCount, 1, mo_relaxed);
+    { Rollback on full deque only briefly overstates FForked; readers see
+      pending biased conservative (never negative), safe direction. }
+    atomic_fetch_add_64(FForked, 1, mo_relaxed);
     if FDeques[LWorkerId].TryPush(ATask) then
       Exit(fjOk);
-    atomic_fetch_sub_64(FTaskCount, 1, mo_relaxed);
+    atomic_fetch_sub_64(FForked, 1, mo_relaxed);
   finally
     ReleaseOwner(LWorkerId);
   end;
@@ -186,8 +204,7 @@ begin
   try
     if FDeques[AWorkerId].TryPop(ATask) then
     begin
-      atomic_fetch_add_64(FCompletedCount, 1);
-      atomic_fetch_sub_64(FTaskCount, 1);
+      atomic_fetch_add_64(FDone, 1, mo_relaxed);
       Exit(True);
     end;
   finally
@@ -199,8 +216,7 @@ begin
     LVictim := (AWorkerId + I) mod FWorkerCount;
     if FDeques[LVictim].TrySteal(ATask) then
     begin
-      atomic_fetch_add_64(FCompletedCount, 1);
-      atomic_fetch_sub_64(FTaskCount, 1);
+      atomic_fetch_add_64(FDone, 1, mo_relaxed);
       Exit(True);
     end;
   end;
@@ -223,13 +239,23 @@ begin
 end;
 
 function TLockFreeForkJoinPool.ApproxPendingCount: Int64; inline;
+var
+  LDone, LForked: Int64;
 begin
-  Result := atomic_load_64(FTaskCount, mo_relaxed);
+  { Read FDone first (acquire): FForked read afterwards is at least as fresh,
+    so the difference never goes negative and only overstates pending —
+    conservative direction for callers polling for drain. }
+  LDone := atomic_load_64(FDone, mo_acquire);
+  LForked := atomic_load_64(FForked, mo_relaxed);
+  if LForked > LDone then
+    Result := LForked - LDone
+  else
+    Result := 0;
 end;
 
 function TLockFreeForkJoinPool.ApproxCompletedCount: Int64; inline;
 begin
-  Result := atomic_load_64(FCompletedCount, mo_relaxed);
+  Result := atomic_load_64(FDone, mo_relaxed);
 end;
 
 end.
