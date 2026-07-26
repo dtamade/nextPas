@@ -1,9 +1,11 @@
 unit nextpas.core.net.server.iocp;
 {**
- * @desc Windows IOCP TCP server backend (phase-1).
- *       Completion-driven AcceptEx + foundation worker handoff for sync
- *       session/handler execution. Mirrors epoll phase-1 shape: evented
- *       accept path, not full completion-driven per-connection protocol I/O.
+ * @desc Windows IOCP TCP server backend (phase-2 recv).
+ *       Completion-driven AcceptEx + zero-byte overlapped recv bridging
+ *       completions to readiness: poll-driven sessions advance on the
+ *       reactor thread via TryRead/TryWrite. Send-side completion driving
+ *       and deadline wake are still worker-handoff scope (W2-2); sessions
+ *       outside the recv-only guard fall back to worker handoff.
  *       truth: registered only on Windows; wine-runtime-smoke is not
  *       real-Windows scale-ready evidence.
  *}
@@ -31,8 +33,10 @@ uses
   , nextpas.core.net.intf
   , nextpas.core.net.tcp
   , nextpas.core.net.server.runtime
+  , nextpas.core.platform.io.base
   , nextpas.core.platform.socket
   , nextpas.core.platform.socket.base
+  , nextpas.core.time.deadline
   , nextpas.core.thread
   , nextpas.core.text.conv
   {$ENDIF}
@@ -42,6 +46,13 @@ uses
 
 type
   TTcpIocpServer = class;
+
+  { one per completion-driven conn; context for zero-byte recv completions }
+  PIocpConnDriver = ^TIocpConnDriver;
+  TIocpConnDriver = record
+    Server: TTcpIocpServer;
+    Target: TTcpServerPollSessionTarget;
+  end;
 
   TTcpIocpConnTask = class(TInterfacedObject)
   private
@@ -71,6 +82,7 @@ type
     FReactor: TIocpReactor;
     FReactorReady: Boolean;
     FAcceptArmed: Boolean;
+    FConnDrivers: array of PIocpConnDriver;
     procedure EnsureRuntimeContext;
     procedure ReleaseRuntimeContext;
     procedure ArmAccept;
@@ -78,6 +90,16 @@ type
     procedure DispatchAcceptedConn(const AConn: ITcpStream);
     procedure DispatchAcceptedSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession);
+    function TryRegisterCompletionRecvSession(const AConn: ITcpStream;
+      const ASession: ITcpServerSession): Boolean;
+    function ArmConnRecv(const ADriver: PIocpConnDriver): Boolean;
+    procedure HandleConnRecvDone(const ADriver: PIocpConnDriver;
+      const AResult: Int32);
+    procedure AddConnDriver(const ADriver: PIocpConnDriver);
+    procedure RemoveConnDriver(const ADriver: PIocpConnDriver);
+    procedure CloseConnDriver(const ADriver: PIocpConnDriver;
+      const AOwnership: TTcpServerConnOwnership);
+    procedure ReleaseConnDrivers;
     function RemoteFromSocket(const ASock: TPlatformSocket): TNetAddress;
   public
     constructor Create(const AOptions: TTcpServerOptions);
@@ -101,6 +123,17 @@ begin
   { Capture before any re-arm overwrites reactor last-accept state. }
   LAccepted := LServer.FReactor.LastAcceptedSocket;
   LServer.HandleAcceptDone(AResult, LAccepted);
+end;
+
+procedure IocpServerConnRecvCallback(AUserData: UInt64; AResult: Int32;
+  AContext: Pointer);
+var
+  LDriver: PIocpConnDriver;
+begin
+  if AContext = nil then
+    Exit;
+  LDriver := PIocpConnDriver(AContext);
+  LDriver^.Server.HandleConnRecvDone(LDriver, AResult);
 end;
 
 constructor TTcpIocpConnTask.CreateForHandler(const AConn: ITcpStream;
@@ -153,12 +186,14 @@ begin
   FHandler := nil;
   FReactorReady := False;
   FAcceptArmed := False;
+  FConnDrivers := nil;
 end;
 
 destructor TTcpIocpServer.Destroy;
 begin
   if FRunning then
     Shutdown;
+  ReleaseConnDrivers;
   FHandler := nil;
   FSessionContext := nil;
   FWorkerHandoff := nil;
@@ -228,6 +263,134 @@ begin
   FAcceptArmed := True;
 end;
 
+procedure TTcpIocpServer.AddConnDriver(const ADriver: PIocpConnDriver);
+begin
+  SetLength(FConnDrivers, Length(FConnDrivers) + 1);
+  FConnDrivers[High(FConnDrivers)] := ADriver;
+end;
+
+procedure TTcpIocpServer.RemoveConnDriver(const ADriver: PIocpConnDriver);
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to High(FConnDrivers) do
+    if FConnDrivers[LI] = ADriver then
+    begin
+      FConnDrivers[LI] := FConnDrivers[High(FConnDrivers)];
+      SetLength(FConnDrivers, Length(FConnDrivers) - 1);
+      Exit;
+    end;
+end;
+
+procedure TTcpIocpServer.CloseConnDriver(const ADriver: PIocpConnDriver;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  RemoveConnDriver(ADriver);
+  if AOwnership = tscoServer then
+    CloseServerOwnedTcpConn(ADriver^.Target.Connection)
+  else
+    ADriver^.Target.RestoreBlocking;
+  ADriver^.Target.Free;
+  Dispose(ADriver);
+end;
+
+procedure TTcpIocpServer.ReleaseConnDrivers;
+var
+  LI: SizeInt;
+  LDriver: PIocpConnDriver;
+begin
+  for LI := 0 to High(FConnDrivers) do
+  begin
+    LDriver := FConnDrivers[LI];
+    if LDriver = nil then
+      Continue;
+    CloseServerOwnedTcpConn(LDriver^.Target.Connection);
+    LDriver^.Target.Free;
+    Dispose(LDriver);
+  end;
+  FConnDrivers := nil;
+end;
+
+function TTcpIocpServer.ArmConnRecv(const ADriver: PIocpConnDriver): Boolean;
+begin
+  Result := False;
+  if (not FRunning) or (not FReactorReady) then
+    Exit;
+  { Zero-byte overlapped recv: completion signals readability without
+    consuming data — bridges IOCP completions to readiness semantics. }
+  Result := FReactor.AsyncRecv(PtrInt(ADriver^.Target.SocketHandle), nil, 0, 0,
+    @IocpServerConnRecvCallback, ADriver);
+end;
+
+function TTcpIocpServer.TryRegisterCompletionRecvSession(
+  const AConn: ITcpStream; const ASession: ITcpServerSession): Boolean;
+var
+  LTarget: TTcpServerPollSessionTarget;
+  LDriver: PIocpConnDriver;
+begin
+  Result := False;
+  if not FReactorReady then
+    Exit;
+  if not TryCreateTcpServerPollSessionTarget(AConn, ASession, LTarget) then
+    Exit;
+  { W2-1 recv-only scope: no reactor timer for deadline wake, and initial
+    interest must be readable-only (send-side completion driving is W2-2). }
+  if (not LTarget.WakeDeadline.IsInfinite) or
+     (LTarget.CurrentEvents <> [peReadable]) then
+  begin
+    LTarget.RestoreBlocking;
+    LTarget.Free;
+    Exit;
+  end;
+  New(LDriver);
+  LDriver^.Server := Self;
+  LDriver^.Target := LTarget;
+  if not ArmConnRecv(LDriver) then
+  begin
+    Dispose(LDriver);
+    LTarget.RestoreBlocking;
+    LTarget.Free;
+    Exit;
+  end;
+  AddConnDriver(LDriver);
+  Result := True;
+end;
+
+procedure TTcpIocpServer.HandleConnRecvDone(const ADriver: PIocpConnDriver;
+  const AResult: Int32);
+var
+  LNext: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LResult: TTcpServerPollResult;
+begin
+  if (not FRunning) or (AResult < 0) then
+  begin
+    CloseConnDriver(ADriver, tscoServer);
+    Exit;
+  end;
+  try
+    LResult := ADriver^.Target.HandleEvents([peReadable], LNext, LOwnership);
+  except
+    CloseConnDriver(ADriver, tscoServer);
+    Exit;
+  end;
+  if LResult = tsprDone then
+  begin
+    CloseConnDriver(ADriver, LOwnership);
+    Exit;
+  end;
+  if LNext = [peReadable] then
+  begin
+    ADriver^.Target.SetCurrentEvents(LNext);
+    if not ArmConnRecv(ADriver) then
+      CloseConnDriver(ADriver, tscoServer);
+    Exit;
+  end;
+  { Writable interest / empty wait set have no completion driver yet (W2-2):
+    close defensively instead of leaking a stalled connection. }
+  CloseConnDriver(ADriver, tscoServer);
+end;
+
 procedure TTcpIocpServer.DispatchAcceptedSession(const AConn: ITcpStream;
   const ASession: ITcpServerSession);
 var
@@ -280,7 +443,10 @@ begin
   end;
   if LSession <> nil then
   begin
-    { Phase-1: no completion-driven per-conn protocol path yet — worker handoff. }
+    if TryRegisterCompletionRecvSession(AConn, LSession) then
+      Exit;
+    { Session outside the completion-recv guard (finite wake deadline,
+      non-readable initial interest, or no poll shape) — worker handoff. }
     DispatchAcceptedSession(AConn, LSession);
     Exit;
   end;
@@ -376,9 +542,12 @@ begin
       ReleaseRuntimeContext;
       if FReactorReady then
       begin
+        { Close fires pending zero-byte recv callbacks with a negative
+          error — surviving drivers are cleaned via HandleConnRecvDone. }
         FReactor.Close;
         FReactorReady := False;
       end;
+      ReleaseConnDrivers;
     end;
   finally
     if LRuntimeContextReady then
