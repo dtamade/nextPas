@@ -163,6 +163,56 @@ if rg -q '\$IFNDEF WINDOWS\}cdecl\{\$ENDIF\}' "$EXPECT"; then
   fail=1
 fi
 
+echo "=== F-12 COW lint: suite mutated after Runner.Add without re-Add ==="
+# TTestSuite is a record: Runner.Add() deep-copies it. Registering more tests
+# on the original afterwards is a lost update — the runner keeps the Add-time
+# snapshot. Deliberate contract tests opt out with a { cow-lint-ok } comment.
+cow_out="$(python3 - "$TESTS" "$CORE_ROOT/examples/nextpas.core.test" <<'PYEOF'
+import re, sys
+from pathlib import Path
+
+add_re = re.compile(r'\.Add\(\s*([A-Za-z_]\w*)\s*\)')
+assign_re = re.compile(r'^\s*([A-Za-z_]\w*)\s*:=')
+mut_re = re.compile(
+    r'\b([A-Za-z_]\w*)\.(Test|TestSeq|TestSubtest|TestTable|SetSetup|'
+    r'SetTeardown|OnBeforeEach|OnAfterEach|Cleanup)\s*\(')
+
+bad = []
+for root in sys.argv[1:]:
+    rp = Path(root)
+    if not rp.is_dir():
+        continue
+    for f in sorted(rp.rglob('*.lpr')) + sorted(rp.rglob('*.pas')):
+        added = set()
+        pend = {}
+        for no, line in enumerate(f.read_text(errors='replace').splitlines(), 1):
+            if 'cow-lint-ok' in line:
+                continue
+            m = add_re.search(line)
+            if m:
+                added.add(m.group(1))
+                pend.pop(m.group(1), None)  # mutations before this Add are captured
+                continue
+            m = assign_re.match(line)
+            if m:
+                added.discard(m.group(1))  # whole-record reassign: fresh copy
+            m = mut_re.search(line)
+            if m and m.group(1) in added:
+                pend.setdefault(m.group(1), []).append(no)
+        for v, nos in sorted(pend.items()):
+            bad.append("%s:%d: '%s' mutated after Runner.Add (lines %s) without re-Add"
+                       % (f, nos[0], v, ','.join(map(str, nos))))
+print('\n'.join(bad))
+PYEOF
+)"
+if [[ -n "$cow_out" ]]; then
+  echo "$cow_out"
+  echo "FAIL: F-12 COW trap — register tests BEFORE Add, or re-Add after mutation"
+  fail=1
+else
+  echo "OK: no suite mutation after Add without re-Add"
+fi
+
 if [[ "$fail" -ne 0 ]]; then
   echo "FAIL: runner/expect ABI source contracts"
   exit 1

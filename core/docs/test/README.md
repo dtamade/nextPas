@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
-> 最后更新: 2026-07-21
-> 治理状态: **v8.31** Findings remediation（分层/RTL 边角/规模信号/契约单源）
+> 最后更新: 2026-07-26
+> 治理状态: **v8.34** F-12 COW lint + runner.multi 编排契约（v8.32/v8.33 完成 prop/runner god-unit 拆分）
 >
 > Go/Rust 质量与规模路线图: [`quality-scale-roadmap.md`](quality-scale-roadmap.md)
 

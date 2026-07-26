@@ -485,6 +485,142 @@ var
   LShouldFailResult: TTestRunResult;
   { T-11: ListMode }
   LListOutput: string;
+
+{ ═══ v8.34 M1–M3: runner.multi (TSuiteRunner) orchestration contracts ═══ }
+var
+  GMultiExecCount: Integer = 0;
+  LMultiRunner: TSuiteRunner;
+  LMultiSuiteA, LMultiSuiteB: TTestSuite;
+  LMultiResults: specialize TArray<TTestRunResult>;
+  LMultiSnapResult: TTestRunResult;
+  LMultiSink, LMultiFailSink: TBufferSink;
+  LMultiOut: string;
+  LMultiTableSuite: TTestSuite;
+  LMultiAggCases: specialize TArray<TTestCase>;
+  LMultiStopCases: specialize TArray<TTestCase>;
+  LMultiI, LMultiA, LMultiB, LMultiC, LMultiN: Integer;
+  LMultiDurSum: Int64;
+
+function MultiKindLetter(AIdx: Integer): string;
+begin
+  case AIdx of
+    0: Result := 'p';
+    1: Result := 'f';
+  else
+    Result := 's';
+  end;
+end;
+
+procedure MultiAggPass;
+begin
+  Inc(GMultiExecCount);
+  CheckTrue(True, 'agg pass');
+end;
+
+procedure MultiAggFail;
+begin
+  Inc(GMultiExecCount);
+  CheckTrue(False, 'agg fail');
+end;
+
+procedure MultiAggSkip;
+begin
+  Inc(GMultiExecCount);
+  Skip('agg skip');
+end;
+
+{ M2: Data = '<kinds>|<n>' — one suite per kind letter (p/f/s), n tests each;
+  asserts Total* aggregation and the RunAll Boolean match the composition. }
+procedure TestMultiAggMatrixCase(const AC: TTestCase);
+var
+  LKinds: string;
+  LN, I, J, LBar: Integer;
+  LRunner: TSuiteRunner;
+  LSuite: TTestSuite;
+  LSink: TBufferSink;
+  LResults: specialize TArray<TTestRunResult>;
+  LOk: Boolean;
+  LExpPass, LExpFail, LExpSkip: Integer;
+begin
+  LBar := Pos('|', AC.Data);
+  LKinds := Copy(AC.Data, 1, LBar - 1);
+  LN := StrToInt(Copy(AC.Data, LBar + 1, Length(AC.Data)));
+  LSink := TBufferSink.Create;
+  LRunner := TSuiteRunner.Create('agg-' + AC.Name);
+  LExpPass := 0; LExpFail := 0; LExpSkip := 0;
+  for I := 1 to Length(LKinds) do
+  begin
+    LSuite := TTestSuite.Create('agg-s' + IntToStr(I));
+    LSuite.Config.OutSink := LSink;
+    LSuite.Config.ErrSink := LSink;
+    LSuite.Config.AnsiMode := amOff;
+    for J := 1 to LN do
+      case LKinds[I] of
+        'p': begin LSuite.Test('agg_p' + IntToStr(J), @MultiAggPass); Inc(LExpPass); end;
+        'f': begin LSuite.Test('agg_f' + IntToStr(J), @MultiAggFail); Inc(LExpFail); end;
+      else
+        begin LSuite.Test('agg_s' + IntToStr(J), @MultiAggSkip); Inc(LExpSkip); end;
+      end;
+    LRunner.Add(LSuite);
+  end;
+  LOk := LRunner.RunAllWithResult(LResults);
+  CheckTrue(LOk = (LExpFail = 0), 'RunAll Boolean vs composition ' + AC.Data);
+  CheckEqual(LExpPass, LRunner.TotalPass, 'TotalPass aggregation ' + AC.Data);
+  CheckEqual(LExpFail, LRunner.TotalFail, 'TotalFail aggregation ' + AC.Data);
+  CheckEqual(LExpSkip, LRunner.TotalSkip, 'TotalSkip aggregation ' + AC.Data);
+  CheckEqual(3, Length(LResults), 'one result per suite ' + AC.Data);
+  CheckTrue(LRunner.HasRun, 'HasRun after RunAll ' + AC.Data);
+  CheckTrue(LRunner.AllPassed = (LExpFail = 0), 'AllPassed cached read ' + AC.Data);
+end;
+
+{ M3: Data = '<mode>|<mask>|<expected-executed>' — mode ff / mf<N> set on the
+  FIRST suite's config (RunnerConfig contract); mask marks failing suites.
+  GMultiExecCount counts how many suites actually executed their test. }
+procedure TestMultiStopMatrixCase(const AC: TTestCase);
+var
+  LMode, LMask, LRest: string;
+  LExpExec, I, LBar1, LBar2: Integer;
+  LRunner: TSuiteRunner;
+  LSuite: TTestSuite;
+  LSink: TBufferSink;
+  LResults: specialize TArray<TTestRunResult>;
+  LOk: Boolean;
+begin
+  LBar1 := Pos('|', AC.Data);
+  LMode := Copy(AC.Data, 1, LBar1 - 1);
+  LRest := Copy(AC.Data, LBar1 + 1, Length(AC.Data));
+  LBar2 := Pos('|', LRest);
+  LMask := Copy(LRest, 1, LBar2 - 1);
+  LExpExec := StrToInt(Copy(LRest, LBar2 + 1, Length(LRest)));
+  LSink := TBufferSink.Create;
+  LRunner := TSuiteRunner.Create('stop-' + AC.Name);
+  GMultiExecCount := 0;
+  for I := 1 to 3 do
+  begin
+    LSuite := TTestSuite.Create('stop-s' + IntToStr(I));
+    LSuite.Config.OutSink := LSink;
+    LSuite.Config.ErrSink := LSink;
+    LSuite.Config.AnsiMode := amOff;
+    if I = 1 then
+    begin
+      if LMode = 'ff' then
+        LSuite.Config.FailFast := True
+      else
+        LSuite.Config.MaxFailures := StrToInt(Copy(LMode, 3, 1));
+    end;
+    if LMask[I] = '1' then
+      LSuite.Test('stop_f', @MultiAggFail)
+    else
+      LSuite.Test('stop_p', @MultiAggPass);
+    LRunner.Add(LSuite);
+  end;
+  LOk := LRunner.RunAllWithResult(LResults);
+  CheckEqual(LExpExec, GMultiExecCount,
+    LMode + '/' + LMask + ' executed-suite count');
+  CheckTrue(LOk = (Pos('1', LMask) = 0),
+    LMode + '/' + LMask + ' RunAll Boolean vs mask');
+end;
+
 begin
   WriteLn('=== test_runner ===');
   { Suite 1: lifecycle }
@@ -2792,6 +2928,210 @@ begin
     PassTest('WithEachCleanup');
   end;
 
+  { ── v8.34 M1a: TSuiteRunner initial state + empty runner ────────────────── }
+  WriteLn;
+  SectionHeader('M1a: SuiteRunner initial state + empty runner');
+  begin
+    LMultiRunner := TSuiteRunner.Create('M1aRunner');
+    if LMultiRunner.HasRun then
+      FailTest('M1a: HasRun must start False');
+    if (LMultiRunner.TotalPass <> 0) or (LMultiRunner.TotalFail <> 0) or
+       (LMultiRunner.TotalSkip <> 0) or (LMultiRunner.TotalDuration <> 0) then
+      FailTest('M1a: totals must start at zero');
+    if (Length(LMultiRunner.Suites) <> 0) or
+       (Length(LMultiRunner.LastResults) <> 0) then
+      FailTest('M1a: Suites/LastResults must start empty');
+    { empty runner: RunAll succeeds, marks HasRun, totals stay zero }
+    LMultiSink := TBufferSink.Create;
+    SetDefaultOutSink(LMultiSink);
+    if not LMultiRunner.RunAllWithResult(LMultiResults) then
+      FailTest('M1a: empty runner RunAll must return True');
+    ResetDefaultConfig;
+    if not LMultiRunner.HasRun then
+      FailTest('M1a: HasRun after empty RunAll');
+    if Length(LMultiResults) <> 0 then
+      FailTest('M1a: empty runner yields no results');
+    if (LMultiRunner.TotalPass <> 0) or (LMultiRunner.TotalFail <> 0) then
+      FailTest('M1a: empty runner totals stay zero');
+    if not LMultiRunner.AllPassed then
+      FailTest('M1a: empty runner AllPassed (cached read)');
+    PassTest('M1a SuiteRunner initial state + empty runner');
+  end;
+
+  { ── v8.34 M1b: Add deep-copy snapshot (F-12 positive contract) ──────────── }
+  WriteLn;
+  SectionHeader('M1b: Add deep-copy snapshot (F-12)');
+  begin
+    GMultiExecCount := 0;
+    LMultiSink := TBufferSink.Create;
+    LMultiSuiteA := TTestSuite.Create('M1bSnap');
+    LMultiSuiteA.Config.OutSink := LMultiSink;
+    LMultiSuiteA.Config.ErrSink := LMultiSink;
+    LMultiSuiteA.Config.AnsiMode := amOff;
+    LMultiSuiteA.Test('snap_t1', @MultiAggPass);
+    LMultiRunner := TSuiteRunner.Create('M1bRunner');
+    LMultiRunner.Add(LMultiSuiteA);
+    { registration AFTER Add must not reach the runner's deep copy }
+    LMultiSuiteA.Test('snap_t2', @MultiAggPass); { cow-lint-ok: F-12 contract }
+    if not LMultiRunner.RunAllWithResult(LMultiResults) then
+      FailTest('M1b: snapshot run should pass');
+    if LMultiRunner.TotalPass <> 1 then
+      FailTest('M1b: runner must run Add-time snapshot only, got ' +
+        IntToStr(LMultiRunner.TotalPass));
+    if GMultiExecCount <> 1 then
+      FailTest('M1b: post-Add registration must not execute via runner');
+    { original suite keeps both registrations }
+    if not LMultiSuiteA.RunWithResult(LMultiSnapResult) then
+      FailTest('M1b: original suite run should pass');
+    if LMultiSnapResult.Passed <> 2 then
+      FailTest('M1b: original must retain both tests, got ' +
+        IntToStr(LMultiSnapResult.Passed));
+    PassTest('M1b Add deep-copy snapshot (F-12)');
+  end;
+
+  { ── v8.34 M1c: list mode lists without running (P2 #17) ─────────────────── }
+  WriteLn;
+  SectionHeader('M1c: list mode lists without running');
+  begin
+    GMultiExecCount := 0;
+    LMultiSink := TBufferSink.Create;
+    LMultiSuiteA := TTestSuite.Create('M1cList');
+    LMultiSuiteA.Config.OutSink := LMultiSink;
+    LMultiSuiteA.Config.ErrSink := LMultiSink;
+    LMultiSuiteA.Config.AnsiMode := amOff;
+    LMultiSuiteA.Config.ListMode := True;
+    LMultiSuiteA.Test('m1c_probe', @MultiAggPass);
+    LMultiRunner := TSuiteRunner.Create('M1cRunner');
+    LMultiRunner.Add(LMultiSuiteA);
+    if not LMultiRunner.RunAllWithResult(LMultiResults) then
+      FailTest('M1c: list mode must report success');
+    if GMultiExecCount <> 0 then
+      FailTest('M1c: list mode must not execute tests');
+    if LMultiRunner.HasRun then
+      FailTest('M1c: list mode must not set HasRun');
+    if Pos('m1c_probe', LMultiSink.GetOutput) = 0 then
+      FailTest('M1c: listing must contain test name');
+    PassTest('M1c list mode lists without running');
+  end;
+
+  { ── v8.34 M1d: AllPassed lazy-run semantics ─────────────────────────────── }
+  WriteLn;
+  SectionHeader('M1d: AllPassed lazy-run semantics');
+  begin
+    GMultiExecCount := 0;
+    LMultiSink := TBufferSink.Create;
+    LMultiSuiteA := TTestSuite.Create('M1dLazy');
+    LMultiSuiteA.Config.OutSink := LMultiSink;
+    LMultiSuiteA.Config.ErrSink := LMultiSink;
+    LMultiSuiteA.Config.AnsiMode := amOff;
+    LMultiSuiteA.Test('m1d_lazy', @MultiAggPass);
+    LMultiRunner := TSuiteRunner.Create('M1dRunner');
+    LMultiRunner.Add(LMultiSuiteA);
+    if not LMultiRunner.AllPassed then
+      FailTest('M1d: lazy AllPassed should run and pass');
+    if GMultiExecCount <> 1 then
+      FailTest('M1d: AllPassed must trigger RunAll when not yet run');
+    if not LMultiRunner.HasRun then
+      FailTest('M1d: HasRun set by lazy AllPassed');
+    if not LMultiRunner.AllPassed then
+      FailTest('M1d: cached AllPassed after run');
+    if GMultiExecCount <> 1 then
+      FailTest('M1d: cached AllPassed must not re-run');
+    PassTest('M1d AllPassed lazy-run semantics');
+  end;
+
+  { ── v8.34 M1e: Summary/banner/LastResults contract ──────────────────────── }
+  WriteLn;
+  SectionHeader('M1e: Summary/banner/LastResults contract');
+  begin
+    LMultiSink := TBufferSink.Create;
+    LMultiFailSink := TBufferSink.Create;
+    LMultiSuiteA := TTestSuite.Create('M1eA');
+    LMultiSuiteA.Config.OutSink := LMultiSink;
+    LMultiSuiteA.Config.ErrSink := LMultiSink;
+    LMultiSuiteA.Config.AnsiMode := amOff;
+    LMultiSuiteA.Test('m1e_pass', @MultiAggPass);
+    LMultiSuiteB := TTestSuite.Create('M1eB');
+    LMultiSuiteB.Config.OutSink := LMultiFailSink;
+    LMultiSuiteB.Config.ErrSink := LMultiFailSink;
+    LMultiSuiteB.Config.AnsiMode := amOff;
+    LMultiSuiteB.Test('m1e_fail', @MultiAggFail);
+    LMultiRunner := TSuiteRunner.Create('M1eRunner');
+    LMultiRunner.Add(LMultiSuiteA);
+    LMultiRunner.Add(LMultiSuiteB);
+    if LMultiRunner.RunAllWithResult(LMultiResults) then
+      FailTest('M1e: mixed pass/fail run must return False');
+    if Length(LMultiRunner.LastResults) <> 2 then
+      FailTest('M1e: LastResults must hold one entry per suite');
+    if LMultiRunner.LastResults[0].SuiteName <> 'M1eA' then
+      FailTest('M1e: LastResults[0] suite name mismatch');
+    LMultiDurSum := LMultiRunner.LastResults[0].Duration +
+      LMultiRunner.LastResults[1].Duration;
+    if LMultiRunner.TotalDuration <> LMultiDurSum then
+      FailTest('M1e: TotalDuration must equal sum of suite durations');
+    LMultiRunner.Summary;
+    LMultiOut := LMultiSink.GetOutput;
+    if Pos('M1eRunner', LMultiOut) = 0 then
+      FailTest('M1e: banner must go to first suite sink (RunnerConfig)');
+    if Pos('=== Summary ===', LMultiOut) = 0 then
+      FailTest('M1e: Summary header missing');
+    if Pos('Suites: 2', LMultiOut) = 0 then
+      FailTest('M1e: suite count line missing');
+    if Pos('Passed: 1, Failed: 1, Skipped: 0', LMultiOut) = 0 then
+      FailTest('M1e: exact totals line missing');
+    if Pos('50.0%', LMultiOut) = 0 then
+      FailTest('M1e: pass rate missing');
+    if Pos('=== Failures ===', LMultiOut) = 0 then
+      FailTest('M1e: failures section missing');
+    if Pos('m1e_fail', LMultiOut) = 0 then
+      FailTest('M1e: failing test not listed in Summary');
+    if Pos('agg fail', LMultiOut) = 0 then
+      FailTest('M1e: failure message detail missing');
+    PassTest('M1e Summary/banner/LastResults contract');
+  end;
+
+  { ── v8.34 M2+M3: aggregation & stop matrices (runner.multi) ─────────────── }
+  WriteLn;
+  SectionHeader('M2+M3: SuiteRunner aggregation + stop matrices');
+  begin
+    SetLength(LMultiAggCases, 54);
+    LMultiI := 0;
+    for LMultiA := 0 to 2 do
+      for LMultiB := 0 to 2 do
+        for LMultiC := 0 to 2 do
+          for LMultiN := 1 to 2 do
+          begin
+            LMultiAggCases[LMultiI].Name := 'agg-' + MultiKindLetter(LMultiA) +
+              MultiKindLetter(LMultiB) + MultiKindLetter(LMultiC) + '-n' +
+              IntToStr(LMultiN);
+            LMultiAggCases[LMultiI].Data := MultiKindLetter(LMultiA) +
+              MultiKindLetter(LMultiB) + MultiKindLetter(LMultiC) + '|' +
+              IntToStr(LMultiN);
+            Inc(LMultiI);
+          end;
+    SetLength(LMultiStopCases, 12);
+    LMultiStopCases[0].Name  := 'ff-100';  LMultiStopCases[0].Data  := 'ff|100|1';
+    LMultiStopCases[1].Name  := 'ff-010';  LMultiStopCases[1].Data  := 'ff|010|2';
+    LMultiStopCases[2].Name  := 'ff-001';  LMultiStopCases[2].Data  := 'ff|001|3';
+    LMultiStopCases[3].Name  := 'ff-000';  LMultiStopCases[3].Data  := 'ff|000|3';
+    LMultiStopCases[4].Name  := 'mf1-100'; LMultiStopCases[4].Data  := 'mf1|100|1';
+    LMultiStopCases[5].Name  := 'mf1-010'; LMultiStopCases[5].Data  := 'mf1|010|2';
+    LMultiStopCases[6].Name  := 'mf1-001'; LMultiStopCases[6].Data  := 'mf1|001|3';
+    LMultiStopCases[7].Name  := 'mf1-000'; LMultiStopCases[7].Data  := 'mf1|000|3';
+    LMultiStopCases[8].Name  := 'mf2-110'; LMultiStopCases[8].Data  := 'mf2|110|2';
+    LMultiStopCases[9].Name  := 'mf2-011'; LMultiStopCases[9].Data  := 'mf2|011|3';
+    LMultiStopCases[10].Name := 'mf2-101'; LMultiStopCases[10].Data := 'mf2|101|3';
+    LMultiStopCases[11].Name := 'mf2-100'; LMultiStopCases[11].Data := 'mf2|100|3';
+    LMultiTableSuite := TTestSuite.Create('multi-orchestration');
+    LMultiTableSuite.TestTable('M2 SuiteRunner aggregation matrix fail-path',
+      LMultiAggCases, @TestMultiAggMatrixCase);
+    LMultiTableSuite.TestTable('M3 SuiteRunner failfast/max-failures stop fail-path',
+      LMultiStopCases, @TestMultiStopMatrixCase);
+    if not LMultiTableSuite.Run then
+      FailTest('M2/M3 orchestration tables failed');
+    PassTest('M2+M3 aggregation + stop matrices (66 rows)');
+  end;
+
   ResetDefaultConfig;
   WriteLn;
   PassTest('test_runner');
@@ -2832,4 +3172,15 @@ begin
   LClosureSuite := Default(TTestSuite);
   LCleanupSuite := Default(TTestSuite);
   LCache := Default(TTestCache);
+  { v8.34 M1–M3 }
+  LMultiRunner := Default(TSuiteRunner);
+  LMultiSuiteA := Default(TTestSuite);
+  LMultiSuiteB := Default(TTestSuite);
+  LMultiTableSuite := Default(TTestSuite);
+  LMultiResults := nil;
+  LMultiSnapResult := Default(TTestRunResult);
+  LMultiAggCases := nil;
+  LMultiStopCases := nil;
+  LMultiSink := nil;
+  LMultiFailSink := nil;
 end.

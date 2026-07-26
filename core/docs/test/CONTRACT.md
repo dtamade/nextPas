@@ -425,6 +425,25 @@ end;
 
 ## 11. 变更日志
 
+### v8.34 (2026-07-26) — F-12 COW lint + runner.multi 编排契约密度
+
+- **F-12 收口**：`test_runner_source_contracts` 新增 COW lint —— 静态检测
+  「`Runner.Add(Suite)` 之后继续在原 suite 上注册/改配置且未 re-Add」的丢改陷阱
+  （TTestSuite 是 record，Add 深拷贝快照）；扫描 tests + examples 全部 `.lpr/.pas`；
+  故意的契约测试用 `{ cow-lint-ok }` 行内注释豁免；整记录重赋值视为新副本
+- **TSuiteRunner 编排契约**（test_runner M1–M3，绑 v8.33 拆出的 runner.multi）：
+  - M1a–M1e 定点契约：初始状态零值；空 runner RunAll；**Add 深拷贝快照**
+    （F-12 正向契约：Add 后注册的测试不进 runner，原 suite 自身仍可运行全部）；
+    ListMode 只列出不执行、不置 HasRun；`AllPassed` 惰性触发 RunAll 且缓存；
+    Summary 输出格式（`=== Summary ===`/`Suites: N`/pass-rate/`=== Failures ===` 明细）；
+    LastResults/TotalDuration=各 suite Duration 之和；**config 取第一个 suite**（RunnerConfig）
+  - M2 聚合矩阵 54 行 fail-path：p/f/s 三 suite 组合 × n∈{1,2}，断言 RunAll 布尔值、
+    TotalPass/Fail/Skip 聚合、结果数组长度、执行计数
+  - M3 停止矩阵 12 行 fail-path：FailFast / MaxFailures∈{1,2} × 失败位掩码，
+    断言**实际执行的 suite 数**（stop 语义读第一个 suite 的 config）
+- scale：countable 7609 → **7686**（test_runner 313→390，fp 143→209）；
+  fail-path 83.2% / low-signal 0% / non-table 1282；SCALE_MIN 维持 7500（9000 待密度达标）
+
 ### v8.33 (2026-07-26) — runner god-unit 拆分 + F-20 测试语义修正
 
 - **runner 拆分**：`test.runner.pas`（2369 行）拆出 `test.runner.multi.pas`（~402）—
