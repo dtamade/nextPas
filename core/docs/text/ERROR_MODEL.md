@@ -72,15 +72,21 @@
 | Kind | 含义 |
 |------|------|
 | `idnaOk` | 成功 |
-| `idnaEmptyDomain` / `idnaEmptyLabel` | 空域/空标签 |
-| `idnaInvalidDomain` | 分割失败（如连续点） |
-| `idnaInvalidAsciiLabel` | 非 LDH / 首尾 `-` |
-| `idnaNfcFailed` | NFC 后不可用 |
+| `idnaEmptyDomain` / `idnaEmptyLabel` | 空域 / 空标签（连续点、ToASCII 尾点） |
+| `idnaNfcFailed` | NFC 结果不可用 |
 | `idnaPunycodeEncodeFailed` / `DecodeFailed` | Punycode 失败 |
 | `idnaEmptyAceBody` | `xn--` 无 body |
-| `idnaAceLabelTooLong` / `idnaDomainTooLong` | 长度 >63 / >253 |
-| `idnaDisallowed` | MappingTable disallowed（含 STD3 规则下的 STD3_*） |
-| `idnaInvalidUtf8` | Map 步遇到非法 UTF-8 |
+| `idnaAceLabelTooLong` / `idnaDomainTooLong` | 长度 >63 / >253（VerifyDnsLength，仅 ToASCII） |
+| `idnaDisallowed` | 码点 status ∉ {valid, deviation} |
+| `idnaInvalidUtf8` | 非法 UTF-8 输入 |
+| `idnaNotNfc` | label 非 NFC（V1，见于 ACE 解码复验） |
+| `idnaCheckHyphens` | 3-4 位 `--` 或首尾 `-`（V2/V3） |
+| `idnaLeadingCombiningMark` | 首字符 GC=Mark（V6） |
+| `idnaInvalidAceLabel` | ACE 解码结果非 U-label（空/全 ASCII/含非 ASCII 的 `xn--`） |
+| `idnaContextJ` | ZWJ/ZWNJ 上下文不满足（RFC 5892 App A） |
+| `idnaCheckBidi` | Bidi 域中 label 违反 RFC 5893 规则 1–6 |
+| `idnaDisallowedSTD3` | ASCII ∉ `[-a-z0-9]`（UseSTD3ASCIIRules，16.0 起为规则非表状态） |
+| `idnaInvalidDomain` / `idnaInvalidAsciiLabel` | 保留序数，P3-4 起不再产生 |
 
 **策略钉死（P3-1）**：Nontransitional + UseSTD3ASCIIRules=True；**无** Transitional、**无** 完整 Validity Criteria 扩展报告。
 

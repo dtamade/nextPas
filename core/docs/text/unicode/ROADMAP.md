@@ -58,6 +58,7 @@
 | **P3-1** IDNA MappingTable | ✅ | UTS#46 IdnaMappingTable 全表 + Nontransitional Map 步 |
 | **P3-2** 统一 text 错误策略 | ✅ | [ERROR_MODEL.md](../ERROR_MODEL.md) L0/L1/L2 真源 |
 | **P3-3** 可用性 P1 文档 | ✅ | API-REF 对齐 tip；SCORECARD 导航；IDNA kind 样板；RTL 边界 |
+| **P3-4** IDNA UTS#46 全合规 | ✅ | §4 Processing 重排 + §4.1 Validity 全量（CheckHyphens/Mark/STD3/ContextJ/CheckBidi）+ Joining_Type 表 + IdnaTestV2 官方 harness 6387 行 0-fail |
 | **P2-6** CLDR Collation | 🔒 | 仍深水 |
 
 
@@ -175,6 +176,7 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-26 | **P3-4**：IDNA UTS#46 rev33 全合规 — Map→NFC→Break 重排；Validity 全量（含 16.0 STD3 规则化）；ContextJ (Joining_Type 新表)；CheckBidi；ACE 解码复验；IdnaTestV2 6387 行 0-fail |
 | 2026-07-21 | **P3-3**：可用性 P1 — API-REFERENCE / SCORECARD tip / IDNA kind / RTL |
 | 2026-07-21 | **P3-2**：ERROR_MODEL L0/L1/L2 统一错误策略 |
 | 2026-07-21 | **P3-1**：IdnaMappingTable 全表 + ApplyIdnaMap / GetIdnaMapStatus |

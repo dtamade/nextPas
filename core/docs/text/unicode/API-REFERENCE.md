@@ -338,9 +338,11 @@ function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
 function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean;
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth;
 function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean;
+function GetJoiningType(const ACp: TUnicodeCodepoint): TJoiningType;
 ```
 
 - **Script_Extensions（P2-4）**：`GetScriptExtensions` / `HasScript`；无表项时默认 `{GetScript}`。稀有 script 可能为 `usUnknown`（债）。
+- **Joining_Type（P3-4）**：`TJoiningType`（U/C/D/L/R/T）来自 DerivedJoiningType.txt，默认 `jtNonJoining`；IDNA ContextJ 判定用。
 - **BinaryProperty**：含 PropList 扩展（P2-1），对标 Go `unicode.Is*` 高价值集。
 
 ---
@@ -425,13 +427,15 @@ IsAsciiString('')          // → True
 
 ---
 
-## IDNA / Punycode (idna.pas · punycode.pas · P2-5/P3-1)
+## IDNA / Punycode (idna.pas · punycode.pas · P2-5/P3-1/P3-4)
 
 ```pascal
 const IDNA_ACE_PREFIX = 'xn--';
 
 type
-  TIDNAErrorKind = (idnaOk, idnaEmptyDomain, …, idnaDisallowed, idnaInvalidUtf8);
+  TIDNAErrorKind = (idnaOk, idnaEmptyDomain, …, idnaDisallowed, idnaInvalidUtf8,
+    idnaNotNfc, idnaCheckHyphens, idnaLeadingCombiningMark,
+    idnaInvalidAceLabel, idnaContextJ, idnaCheckBidi, idnaDisallowedSTD3);
   TIDNAMapStatus = (idmsValid, idmsMapped, idmsIgnored, idmsDeviation, idmsDisallowed, …);
 
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
@@ -456,9 +460,14 @@ function PunycodeEncode(const ALabel: string): string;
 function PunycodeDecode(const AAscii: string): string;
 ```
 
-- 管线：**Map（IdnaMappingTable）→ NFC → LDH/Punycode**；Nontransitional + UseSTD3ASCIIRules。
-- 失败：`Result=''` 且 `AKind <> idnaOk`（L2，见 [ERROR_MODEL](../ERROR_MODEL.md)）。
-- **未实现**：Transitional、完整 Validity Criteria / Bidi Rule。
+- 管线（UTS#46 rev33 §4）：**Map（全串）→ NFC → Break('.') → 逐 label Convert/Validate**。
+- Validity（§4.1 全量）：NFC · CheckHyphens · 首字符非 Mark · status ∈ {valid, deviation} ·
+  STD3 ASCII `[-a-z0-9]` · ContextJ（RFC 5892）· CheckBidi（RFC 5893，域级）。
+- 固定 profile：Nontransitional（ß/ς/ZWJ/ZWNJ 保持原样）；`xn--` label 解码后复验；
+  VerifyDnsLength 仅 ToASCII（尾点 ToUnicode 保留、ToASCII 报 `idnaEmptyLabel`）。
+- 失败：`Result=''` 且 `AKind <> idnaOk`（L2，见 [ERROR_MODEL](../ERROR_MODEL.md)）；首错即停。
+- 合规：IdnaTestV2.txt 16.0.0 官方 harness **6387 行 0-fail**（test_conformance_idna）。
+- **未实现**：Transitional 模式（无需求；接口预留）。
 
 ```pascal
 var K: TIDNAErrorKind;

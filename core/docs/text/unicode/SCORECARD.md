@@ -64,8 +64,8 @@
 - **全绿对标项**：C1–C5b（Compare 1.10× ≤2.0×）
 - **库存冻结**：C6 Segment、C7 Width
 - **债（非阻塞）**：GetSortKey BMP-Latin 1.66×
-- **下一默认**：文档可用性 **P3-3** 后 → **Idle**（可选拉票：P3-4 IDNA Validity 子集；CLDR 仍锁）
-- 注：P3-0…P3-3 为文档/错误/IDNA 岛，**不改**本表 perf 数字
+- **下一默认**：**P3-4** IDNA UTS#46 全合规（IdnaTestV2 6387 行 0-fail）后 → **Idle**（CLDR 仍锁）
+- 注：P3-0…P3-4 为文档/错误/IDNA 岛，**不改**本表 perf 数字
 
 ---
 
