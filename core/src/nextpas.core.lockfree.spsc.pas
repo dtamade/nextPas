@@ -181,7 +181,9 @@ begin
   FSlots[LTail and Int64(FMask)] := AValue;
   FTail := LTail + 1;
   atomic_store_64(FTailPublished, LTail + 1, mo_release);
-  LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+  { Fast path: only notify if there are waiters }
+  if atomic_load(FDataWaiters, mo_relaxed) > 0 then
+    LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := True;
 end;
 
@@ -216,7 +218,9 @@ begin
   AValue := FSlots[LHead and Int64(FMask)];
   FHead := LHead + 1;
   atomic_store_64(FHeadPublished, LHead + 1, mo_release);
-  LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+  { Fast path: only notify if there are waiters }
+  if atomic_load(FSpaceWaiters, mo_relaxed) > 0 then
+    LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
 end;
 
@@ -352,7 +356,9 @@ begin
   end;
   FTail := LTail + Int64(LCount);
   atomic_store_64(FTailPublished, FTail, mo_release);
-  LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
+  { Fast path: only notify if there are waiters }
+  if atomic_load(FDataWaiters, mo_relaxed) > 0 then
+    LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := LCount;
 end;
 
@@ -388,7 +394,9 @@ begin
   end;
   FHead := LHead + Int64(LCount);
   atomic_store_64(FHeadPublished, FHead, mo_release);
-  LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+  { Fast path: only notify if there are waiters }
+  if atomic_load(FSpaceWaiters, mo_relaxed) > 0 then
+    LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := LCount;
 end;
 

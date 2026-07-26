@@ -6,7 +6,8 @@ program bench_lockfree;
  *   C1 — TLockFreeChannel 1P+1C
  *   C2 — TLockFreeChannel 2P+2C
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
- *   SPSC/MPMC/Seg/SPMC TryDequeue, Channel 1T TrySendReceive, EBR Retire
+ *   SPSC/MPMC/Seg/SPMC TryDequeue, SPSC TryEnqueue+TryDequeue pair,
+ *   Channel 1T TrySendReceive, EBR Retire
  *
  * B40: both suites use TBenchSuite (Quiet + short config for micro;
  * matched uses MaxIterations/MinSamples=1 so multi-thread OPS runs once per entry).
@@ -61,6 +62,17 @@ var
 begin
   if GSpsc.TryDequeue(LV) then
     GBenchSink := GBenchSink + LV;
+end;
+
+{ Registered after SPSC/TryDequeue, which drains GSpsc — so every iteration
+  here is a successful enqueue+dequeue pair (steady state ~0..1 items). }
+procedure BenchSpscTryPair(const ACtx: IBenchContext);
+var
+  LV: Integer;
+begin
+  if GSpsc.TryEnqueue(42) then
+    if GSpsc.TryDequeue(LV) then
+      GBenchSink := GBenchSink + LV;
 end;
 
 procedure BenchMpmcTryDequeue(const ACtx: IBenchContext);
@@ -242,6 +254,7 @@ begin
       .SetMinDuration(TDuration.FromMilliseconds(50))
       .SetMinSamples(5)
       .Add('lockfree/micro/SPSC/TryDequeue', @BenchSpscTryDequeue)
+      .Add('lockfree/micro/SPSC/TryEnqueueDequeuePair', @BenchSpscTryPair)
       .Add('lockfree/micro/MPMC/TryDequeue', @BenchMpmcTryDequeue)
       .Add('lockfree/micro/SegQueue/TryDequeue', @BenchSegTryDequeue)
       .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
