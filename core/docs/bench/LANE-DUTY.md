@@ -96,6 +96,7 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-26 | **Landed** `bf61139c9`（F-22 注释卫生）→ `origin/main`；lane 回吸至最新 main | rebase×2 追热仓库 + landing-check pass×2 + 单套件构建探针 + 回吸后 `bench-module-test` | **exit 0**；**22/22**；**510** tests；0 retry；内容探针 F-22 Resolved / SRC-CLEAN |
 | 2026-07-26 | F-25 scipy 金标落地：4 个 `golden_*.inc` + 生成器自检 + 22 断言接入 4 既存套件；顺手修出 F-28（Skewness G1）/F-29（KS2 tie 走查）/F-30（`{$MINFPCONSTPREC 64}`×3 单元） | `bench-module-test` + `bench-contract-check`；四套件单跑 heaptrc 0 leaks | **exit 0**；**22/22** 全 0 failed；**521** tests（510+11 golden 用例）；0 retry；contract **13/13** |
 | 2026-07-26 | 金标 tranche 2：CI/离群点/TrimmedMean/CohenD/Welch 布尔/Bayesian 六组金标 + 5 新测试过程；揪出并修复 F-31（ModZ MAD 双奇偶 off-by-one，修复前金标实测红）/F-32（level/alpha 边界比较失配，`BENCH_LEVEL_EPS`）；F-30 补涂 report 单元收尾 | `bench-module-test` + `bench-contract-check`；两改动套件单跑 heaptrc 0 leaks | **exit 0**；**22/22** 全 0 failed；**526** tests（+5）；0 retry；contract **13/13** |
+| 2026-07-26 | 金标 tranche 3：OLS 回归双数据集（TIGHT R²≈0.9998 / LOOSE R²≈0.904，复刻公式自检 <tol/2）+ CoefficientOfVariation（ddof=1，Welford 复刻自检）；一次全绿无新 bug——统计面主干至此全部有外部金标 | `bench-module-test` + `bench-contract-check`；stats 套件单跑 heaptrc 0 leaks | **exit 0**；**22/22** 全 0 failed；**527** tests（+1）；0 retry；contract **13/13** |
 
 > 新一次回归后更新本表一行即可。
 

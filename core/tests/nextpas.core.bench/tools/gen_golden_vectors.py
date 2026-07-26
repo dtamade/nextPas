@@ -253,6 +253,14 @@ BAYES_DATA = [5.2, 4.8, 5.5, 5.1, 4.9, 5.3, 5.0, 5.4, 4.7, 5.6]
 BAYES_PRIOR_MEAN, BAYES_PRIOR_STD, BAYES_SIGMA = 4.0, 1.0, 0.5
 BAYES2_PRIOR_MEAN, BAYES2_PRIOR_STD = 6.0, 0.8  # 第二例 ASigma=0 → σ=样本 ddof=1 标准差
 
+# --- tranche 3: OLS 回归 + 变异系数 ---
+# x = 迭代次数量级；y = slope*x + intercept + 手写噪声（全整数, double 精确）。
+# TIGHT: 3.7x+250 ± <=60  → R² 贴近但严格小于 1（走 LDenY 正常路径）；
+# LOOSE: 5x+800 ± <=1500 → R² 中段，公式/口径错误无法躲进「反正都接近 1」。
+OLS_X = [10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0]
+OLS_Y_TIGHT = [299.0, 316.0, 460.0, 590.0, 1008.0, 2055.0, 4010.0, 7628.0]
+OLS_Y_LOOSE = [1750.0, 200.0, 2150.0, 350.0, 3100.0, 2100.0, 7300.0, 10400.0]
+
 
 def t_ppf_2sided(level, df):
     return float(stats.t.ppf(0.5 + level / 2.0, df))
@@ -669,9 +677,74 @@ def gen_analyzer():
     out.append(f"  GOLDEN_BAYES2_PRIOR_STD = {fmt(BAYES2_PRIOR_STD)};")
     out.append(f"  GOLDEN_BAYES2_POST_MEAN = {fmt(pm2)};")
     out.append(f"  GOLDEN_BAYES2_POST_STD = {fmt(ps2)};")
+    # --- tranche 3: OLS 回归 (scipy.stats.linregress; R² = rvalue²) ---
+    def ols_replica(xs, ys):
+        # Pascal ComputeOLSRegression 单循环公式逐字复刻（同序求和, double 语义）
+        n_ = len(xs)
+        sx = sy = sxy = sx2 = sy2 = 0.0
+        for xi, yi in zip(xs, ys):
+            sx += xi
+            sy += yi
+            sxy += xi * yi
+            sx2 += xi * xi
+            sy2 += yi * yi
+        dd = n_ * sx2 - sx * sx
+        slope = (n_ * sxy - sx * sy) / dd
+        icept = (sy - slope * sx) / n_
+        num = n_ * sxy - sx * sy
+        deny = n_ * sy2 - sy * sy
+        return slope, icept, (num * num) / (dd * deny)
+
+    ols_tol = 1e-8
+    out.append("  { OLS: scipy.stats.linregress 金标; 复刻公式自检 < tol/2 }")
+    out.append(pas_array("GOLDEN_OLS_X", OLS_X))
+    r2_by_tag = {}
+    for tag, ys in (("TIGHT", OLS_Y_TIGHT), ("LOOSE", OLS_Y_LOOSE)):
+        lr = stats.linregress(np.asarray(OLS_X), np.asarray(ys))
+        r2 = float(lr.rvalue) ** 2
+        r2_by_tag[tag] = r2
+        ps_, pi_, pr2 = ols_replica(OLS_X, ys)
+        require(abs(ps_ - float(lr.slope)) < ols_tol / 2.0,
+                f"OLS {tag}: slope 复刻偏差 {abs(ps_ - float(lr.slope)):.3g}")
+        require(abs(pi_ - float(lr.intercept)) < ols_tol / 2.0,
+                f"OLS {tag}: intercept 复刻偏差 {abs(pi_ - float(lr.intercept)):.3g}")
+        require(abs(pr2 - r2) < ols_tol / 2.0,
+                f"OLS {tag}: R2 复刻偏差 {abs(pr2 - r2):.3g}")
+        note(f"OLS {tag}: slope={float(lr.slope):.12g} "
+             f"icept={float(lr.intercept):.12g} R2={r2:.12g}")
+        out.append(pas_array(f"GOLDEN_OLS_Y_{tag}", ys))
+        out.append(f"  GOLDEN_OLS_{tag}_SLOPE = {fmt(lr.slope)};")
+        out.append(f"  GOLDEN_OLS_{tag}_INTERCEPT = {fmt(lr.intercept)};")
+        out.append(f"  GOLDEN_OLS_{tag}_R2 = {fmt(r2)};")
+    # 数据集设计契约：TIGHT 近乎完美但严格 < 1，LOOSE 落中段，两组真正分档
+    require(0.999 < r2_by_tag["TIGHT"] < 1.0,
+            f"OLS TIGHT R2 不在 (0.999,1): {r2_by_tag['TIGHT']}")
+    require(0.5 < r2_by_tag["LOOSE"] < 0.99,
+            f"OLS LOOSE R2 不在 (0.5,0.99): {r2_by_tag['LOOSE']}")
+
+    # --- tranche 3: CoefficientOfVariation = std(ddof=1)/mean（比值非百分比）---
+    def welford_cv(xs):
+        # Pascal WelfordMeanVariance + Sqrt/mean 复刻
+        mean_ = 0.0
+        m2 = 0.0
+        cnt = 0
+        for v in xs:
+            cnt += 1
+            delta = v - mean_
+            mean_ += delta / cnt
+            m2 += delta * (v - mean_)
+        return math.sqrt(m2 / (cnt - 1)) / mean_
+
+    cv = float(np.std(d, ddof=1) / np.mean(d))
+    require(abs(welford_cv(AN_DATA) - cv) < tol / 2.0,
+            f"CV: Welford 复刻偏差 {abs(welford_cv(AN_DATA) - cv):.3g}")
+    note(f"AN   CV      = {cv:.15g}")
+    out.append(f"  GOLDEN_AN_CV = {fmt(cv)};")
+    out.append("")
     out.append(f"  GOLDEN_TRIM_TOL = {fmt(1e-9)};")
     out.append(f"  GOLDEN_CD_TOL = {fmt(1e-9)};")
     out.append(f"  GOLDEN_BAYES_TOL = {fmt(1e-8)};")
+    out.append(f"  GOLDEN_OLS_TOL = {fmt(ols_tol)};")
     out.append("")
     return "\n".join(out)
 

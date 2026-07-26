@@ -384,7 +384,7 @@
 | 等级 | **P3** |
 | 描述 | 有已知分布与交叉校验倾向，整体有效。缺少与外部金标（R/Python 固定种子向量）的 **冻结 golden 向量** 文件化（部分数值硬编码在 lpr）。 |
 | 建议 | 可选 `testdata/*.json` golden，降低魔法数漂移。 |
-| 收口（2026-07-26） | scipy 1.18.0 金标冻结为 4 个 `golden_*.inc`（mwu/ks/descriptive/analyzer），生成器 `tools/gen_golden_vectors.py` 自带 Pascal 近似复刻自检（近似误差 < tol/2 才允许冻结）；数据集为手写字面量（无 RNG，Pascal/Python 解析出相同 double）。22 条 golden 断言接入 4 既存套件（不新增套件，PROJECTS 保持 22）。金标当场揪出三个真 bug：F-28（Skewness 因子）、F-29（KS2 tie 分支）、F-30（Single 字面量精度），证实原区间断言会放过「方向对、数值错」的实现。 |
+| 收口（2026-07-26） | scipy 1.18.0 金标冻结为 4 个 `golden_*.inc`（mwu/ks/descriptive/analyzer），生成器 `tools/gen_golden_vectors.py` 自带 Pascal 近似复刻自检（近似误差 < tol/2 才允许冻结）；数据集为手写字面量（无 RNG，Pascal/Python 解析出相同 double）。22 条 golden 断言接入 4 既存套件（不新增套件，PROJECTS 保持 22）。金标当场揪出三个真 bug：F-28（Skewness 因子）、F-29（KS2 tie 分支）、F-30（Single 字面量精度），证实原区间断言会放过「方向对、数值错」的实现。tranche 2 再揪出 F-31/F-32 两个 P1。tranche 3（OLS 回归双数据集 TIGHT R²≈0.9998 / LOOSE R²≈0.904 + CoefficientOfVariation）一次全绿——两条路径实现与 scipy 精确一致，金标在此转为纯防回归钉；统计面主干（描述统计/检验/回归/贝叶斯）至此全部有外部金标覆盖。 |
 
 ---
 

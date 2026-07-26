@@ -1220,6 +1220,36 @@ begin
     'Golden Bayesian(default sigma) posterior stddev matches closed form');
 end;
 
+procedure TestGolden_OLS_CV;
+var
+  LX: TDoubleArray;
+  LReg: TOLSRegression;
+begin
+  LX := GoldenArr(GOLDEN_OLS_X);
+  { 近乎完美拟合但 R² 严格 < 1：走 LDenY 正常路径 }
+  LReg := GAnalyzer.ComputeOLSRegression(LX, GoldenArr(GOLDEN_OLS_Y_TIGHT));
+  Check(LReg.Valid, 'Golden OLS tight regression is valid');
+  CheckNear(GOLDEN_OLS_TIGHT_SLOPE, LReg.Slope, GOLDEN_OLS_TOL,
+    'Golden OLS tight slope matches scipy linregress');
+  CheckNear(GOLDEN_OLS_TIGHT_INTERCEPT, LReg.Intercept, GOLDEN_OLS_TOL,
+    'Golden OLS tight intercept matches scipy linregress');
+  CheckNear(GOLDEN_OLS_TIGHT_R2, LReg.RSquared, GOLDEN_OLS_TOL,
+    'Golden OLS tight R2 matches scipy rvalue^2');
+  { 中段 R²（~0.90）：公式/口径错误无法躲进「反正都接近 1」 }
+  LReg := GAnalyzer.ComputeOLSRegression(LX, GoldenArr(GOLDEN_OLS_Y_LOOSE));
+  Check(LReg.Valid, 'Golden OLS loose regression is valid');
+  CheckNear(GOLDEN_OLS_LOOSE_SLOPE, LReg.Slope, GOLDEN_OLS_TOL,
+    'Golden OLS loose slope matches scipy linregress');
+  CheckNear(GOLDEN_OLS_LOOSE_INTERCEPT, LReg.Intercept, GOLDEN_OLS_TOL,
+    'Golden OLS loose intercept matches scipy linregress');
+  CheckNear(GOLDEN_OLS_LOOSE_R2, LReg.RSquared, GOLDEN_OLS_TOL,
+    'Golden OLS loose R2 matches scipy rvalue^2');
+  { CV = std(ddof=1)/mean，比值非百分比 }
+  CheckNear(GOLDEN_AN_CV,
+    GAnalyzer.CoefficientOfVariation(GoldenArr(GOLDEN_AN_DATA)), GOLDEN_AN_TOL,
+    'Golden CV matches numpy std(ddof=1)/mean');
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -1276,6 +1306,7 @@ begin
   T.Test('Golden_TrimCohenD', @TestGolden_TrimCohenD);
   T.Test('Golden_WelchHeuristic', @TestGolden_WelchHeuristic);
   T.Test('Golden_Bayesian', @TestGolden_Bayesian);
+  T.Test('Golden_OLS_CV', @TestGolden_OLS_CV);
 
   LRunPassed := T.Run;
   T.Summary;
