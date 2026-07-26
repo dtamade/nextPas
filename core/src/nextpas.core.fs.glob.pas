@@ -69,7 +69,6 @@ function MatchOne(var AP: PChar; AN: PChar): Boolean;
 var
   LNegate: Boolean;
   LMatched: Boolean;
-  LC: AnsiChar;
   P: PChar;
 begin
   case AP^ of
