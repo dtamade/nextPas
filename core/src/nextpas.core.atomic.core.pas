@@ -32,6 +32,7 @@ type
   );
 
 procedure cpu_pause;
+procedure cpu_prefetch_nta(const aAddr: Pointer); inline;
 procedure atomic_seq_cst_fence;
 procedure atomic_thread_fence(aOrder: memory_order_t);
 procedure atomic_signal_fence(aOrder: memory_order_t);
@@ -254,6 +255,16 @@ begin
     end;
   {$ELSE}
   {$ENDIF}
+end;
+
+// Non-temporal prefetch hint.  The FPC Prefetch intrinsic emits PREFETCHNTA
+// on x86 targets and degrades to a no-op where the backend has no prefetch
+// support; prefetch never faults, so any address (including nil) is safe.
+// Being an intrinsic (not an asm statement) it stays inlinable, unlike the
+// former hand-written asm block this replaces.
+procedure cpu_prefetch_nta(const aAddr: Pointer); inline;
+begin
+  Prefetch(PByte(aAddr)^);
 end;
 
 // FPC does not expose a dedicated compiler-fence intrinsic here, so use an

@@ -1817,6 +1817,52 @@ begin
       ALabel + ': Int' + 'ToStr requires nextpas.core.text.conv');
 end;
 
+{ Arch asm belongs to the atomic.core backend seam (F-002); the lockfree
+  production surface must stay asm-free.  Line-based scan: this codebase
+  writes Pascal keywords in lowercase, so a trimmed line equal to the asm
+  keyword (or starting an asm statement) or any assembler-directive marker
+  is a violation.  Needles are built by concatenation to avoid self-match. }
+procedure AssertNoAssemblerCode(const APath, ALabel: string);
+var
+  LText, LLine, LAsmKw, LAssemblerKw: string;
+  LI, LLen, LStart: Integer;
+
+  procedure CheckLine(const ARaw: string);
+  var
+    LFirst, LLast: Integer;
+  begin
+    LFirst := 1;
+    LLast := Length(ARaw);
+    while (LFirst <= LLast) and (ARaw[LFirst] in [' ', #9]) do
+      Inc(LFirst);
+    while (LLast >= LFirst) and (ARaw[LLast] in [' ', #9, #13]) do
+      Dec(LLast);
+    LLine := Copy(ARaw, LFirst, LLast - LFirst + 1);
+    Check((LLine <> LAsmKw) and (Pos(LAsmKw + ' ', LLine) <> 1),
+      ALabel + ': lockfree production units must not contain ' + LAsmKw +
+      ' blocks (arch code lives in the atomic.core backend seam)');
+    Check(Pos(LAssemblerKw, LLine) = 0,
+      ALabel + ': lockfree production units must not declare ' + LAssemblerKw +
+      ' routines (arch code lives in the atomic.core backend seam)');
+  end;
+
+begin
+  LAsmKw := 'as' + 'm';
+  LAssemblerKw := 'assem' + 'bler;';
+  Check(FileExists(APath), ALabel + ' must exist for the no-asm contract');
+  LText := ReadUtf8TextFile(APath);
+  LLen := Length(LText);
+  LStart := 1;
+  for LI := 1 to LLen do
+    if LText[LI] = #10 then
+    begin
+      CheckLine(Copy(LText, LStart, LI - LStart));
+      LStart := LI + 1;
+    end;
+  if LStart <= LLen then
+    CheckLine(Copy(LText, LStart, LLen - LStart + 1));
+end;
+
 procedure TestFpcRtlIsolationSourceContract;
 const
   Src = '../../../src/';
@@ -1937,7 +1983,13 @@ var
   LTtwoCompile: string;
 begin
   for LI := Low(Paths) to High(Paths) do
+  begin
     AssertNoForbiddenRtlUses(Src + Paths[LI], Paths[LI]);
+    { atomic.* units carry their own seam pins in test_atomic (atomic.core owns
+      the sanctioned arch code; atomic.pas has the registered i386 residue). }
+    if Pos('lockfree', Paths[LI]) > 0 then
+      AssertNoAssemblerCode(Src + Paths[LI], Paths[LI]);
+  end;
   AssertNoForbiddenRtlUses('../../../examples/lockfree_example.lpr', 'lockfree_example');
 
   { Main test harnesses must not direct-uses banned RTL after M6 migration. }
@@ -1974,6 +2026,18 @@ begin
     'T2 isolation compile must touch consistent_hashring');
   CheckContains(LTtwoCompile, 'nextpas.core.lockfree.trie_hmt',
     'T2 isolation compile must touch trie_hmt');
+end;
+
+procedure TestLockFreePrefetchSmoke;
+var
+  LBuf: array[0..255] of Byte;
+begin
+  LBuf[128] := $5A;
+  { Prefetch is a hint: it must never fault, alter data, or block — including
+    on nil.  Also exercises the atomic.core cpu_prefetch_nta delegation. }
+  LockFreePrefetch(@LBuf[128]);
+  LockFreePrefetch(nil);
+  Check(LBuf[128] = $5A, 'prefetch hint must not modify target memory');
 end;
 
 procedure TestMpscMultiProducer;
@@ -7817,6 +7881,7 @@ begin
   T.Test('MPSC destroy auto-close and drain', @TestMpscDestroyAutoCloseAndDrain);
   T.Test('T1 Destroy calls Close (source-contract)', @TestT1DestroyCallsCloseSourceContract);
   T.Test('FPC RTL isolation (source-contract)', @TestFpcRtlIsolationSourceContract);
+  T.Test('LockFreePrefetch smoke', @TestLockFreePrefetchSmoke);
   T.Test('MPSC multi-producer', @TestMpscMultiProducer);
   T.Test('Deque basic', @TestDequeBasic);
   T.Test('Deque query contract', @TestDequeQueryContract);

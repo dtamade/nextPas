@@ -1703,8 +1703,10 @@ begin
     'atomic backend truth matrix must document i386 CMPXCHG8B/fallback truth');
   CheckContains(LAtomicDocsReadme, '| PPC/PPC64 | source-contract |',
     'atomic backend truth matrix must document PPC/PPC64 seq_cst fence truth');
-  CheckContains(LAtomicDocsReadme, '| ARM/AArch64/RISC-V/LoongArch | source-contract |',
-    'atomic backend truth matrix must keep non-local RISC/ARM targets source-contract only');
+  CheckContains(LAtomicDocsReadme, '| RISC-V 64 | source-contract + cross-compile |',
+    'atomic backend truth matrix must document the riscv64 real cross-compile gate');
+  CheckContains(LAtomicDocsReadme, '| ARM/AArch64/LoongArch | source-contract |',
+    'atomic backend truth matrix must keep targets without local cross RTL source-contract only');
   CheckContains(LAtomicDocsReadme,
     'Do not report a backend as runtime ready without a matching focused runtime gate.',
     'atomic backend truth matrix must forbid runtime-ready claims without runtime evidence');
@@ -1771,10 +1773,14 @@ begin
     'atomic forced compile gate must print ARM source-contract truth when no cross compiler is configured');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=arm status=source-contract-only runtime=false',
     'atomic forced compile gate must explicitly mark ARM source-contract truth as non-runtime evidence');
-  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-only',
-    'atomic forced compile gate must print RISC-V source-contract truth when no cross compiler is configured');
-  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-only runtime=false',
-    'atomic forced compile gate must explicitly mark RISC-V source-contract truth as non-runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-plus-cross-compile-gate',
+    'atomic forced compile gate must print the upgraded RISC-V truth (source-contract plus real cross-compile gate)');
+  CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=riscv64 status=source-contract-plus-cross-compile-gate runtime=false',
+    'atomic forced compile gate must keep the upgraded RISC-V truth marked as non-runtime evidence');
+  CheckContains(LAtomicTestMakefile, 'cross-riscv64:',
+    'atomic Makefile must provide the real riscv64 cross-compile gate target');
+  CheckContains(LAtomicTestMakefile, 'status=skipped-no-cross-compiler',
+    'riscv64 cross gate must skip honestly when no cross compiler is installed');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc status=source-contract-only',
     'atomic forced compile gate must print PPC source-contract truth when no cross compiler is configured');
   CheckContains(LAtomicTestMakefile, 'atomic-architecture-truth-target=ppc status=source-contract-only runtime=false',

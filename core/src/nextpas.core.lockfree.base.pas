@@ -4,6 +4,9 @@ unit nextpas.core.lockfree.base;
 
 interface
 
+uses
+  nextpas.core.atomic;
+
 const
   LOCKFREE_SPIN_COUNT = 32;
   LOCKFREE_YIELD_COUNT = 32;
@@ -25,9 +28,10 @@ type
 function LockFreeNextPow2(const AValue: PtrUInt): PtrUInt;
 function LockFreeIsPow2(const AValue: PtrUInt): Boolean;
 
-{** @desc 预取内存地址到缓存（x86_64 专用）
+{** @desc 预取内存地址到缓存的非时序提示（NTA），减少对缓存的污染
   @param AAddr 要预取的内存地址
-  @note 使用 prefetchnta 指令，减少对缓存的污染 }
+  @note 委派 atomic 后端的 cpu_prefetch_nta；不支持预取的目标为 no-op，
+    预取提示永不触发访存异常（含 nil） }
 procedure LockFreePrefetch(const AAddr: Pointer); inline;
 
 implementation
@@ -63,12 +67,7 @@ end;
 
 procedure LockFreePrefetch(const AAddr: Pointer); inline;
 begin
-  {$IFDEF CPUX86_64}
-  {$ASMMODE intel}
-  asm
-    prefetchnta [AAddr]
-  end;
-  {$ENDIF}
+  cpu_prefetch_nta(AAddr);
 end;
 
 end.

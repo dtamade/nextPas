@@ -108,6 +108,8 @@ const
 // cpu_pause: self-spin hint (PAUSE/YIELD/no-op), useful for CAS loops.
 procedure cpu_pause;
 procedure CpuPause; inline;
+// cpu_prefetch_nta: non-temporal prefetch hint (no-op where unsupported).
+procedure cpu_prefetch_nta(const aAddr: Pointer); inline;
 
 // Legacy PascalCase compatibility facade.
 // Prefer atomic_* or TAtomic* in new code.
@@ -742,6 +744,11 @@ uses
 procedure cpu_pause;
 begin
   nextpas.core.atomic.core.cpu_pause;
+end;
+
+procedure cpu_prefetch_nta(const aAddr: Pointer); inline;
+begin
+  nextpas.core.atomic.core.cpu_prefetch_nta(aAddr);
 end;
 
 // Lightweight acquire/release barrier lives in the atomic.core backend seam
