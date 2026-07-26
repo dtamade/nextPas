@@ -54,8 +54,8 @@ type
   {** @desc ForkJoin 并行执行框架
     @details 类似 Java ForkJoinPool，支持递归分治任务。
       - 每个工作者线程有本地双端队列
-      - 本地任务 LIFO 执行（栈式热缓存）
-      - 窃取任务 FIFO 执行（公平性）
+      - Fork round-robin 撒任务到各队列
+      - 消费侧无锁：本地与窃取统一 FIFO steal
       - 支持 Fork/Join 同步等待
       - 支持 Close 语义
     @see TWorkStealingDeque 底层双端队列
@@ -78,6 +78,8 @@ type
     FPadDone: TCacheLinePad;
     { Cold: written once at Close. }
     FClosed: Int32;
+    { Owner lock only serializes Fork's TryPush (deque owner contract);
+      the consume side is lock-free via TrySteal. }
     procedure AcquireOwner(const AWorkerId: Int32);
     procedure ReleaseOwner(const AWorkerId: Int32);
   public
@@ -199,19 +201,14 @@ var
 begin
   if (AWorkerId < 0) or (AWorkerId >= FWorkerCount) then
     raise EArgumentError.Create('TLockFreeForkJoinPool.PopOrSteal: invalid worker ID');
-  // Try local pop first (LIFO)
-  AcquireOwner(AWorkerId);
-  try
-    if FDeques[AWorkerId].TryPop(ATask) then
-    begin
-      atomic_fetch_add_64(FDone, 1, mo_relaxed);
-      Exit(True);
-    end;
-  finally
-    ReleaseOwner(AWorkerId);
-  end;
-  // Try stealing from other workers (FIFO)
-  for I := 1 to FWorkerCount - 1 do
+  { Lock-free consume side: TrySteal is multi-thief safe, so the worker takes
+    from its own deque the same way it steals from others — no owner lock on
+    this path. Round-robin Fork means tasks are never locally forked, so the
+    old locked LIFO pop bought no locality; FIFO take is semantically free
+    (task pool, no ordering contract) and drops two locked RMWs plus the
+    lock-word contention with Fork on every consume. False may mean "lost a
+    steal race", not "empty" — callers already poll. }
+  for I := 0 to FWorkerCount - 1 do
   begin
     LVictim := (AWorkerId + I) mod FWorkerCount;
     if FDeques[LVictim].TrySteal(ATask) then
