@@ -162,6 +162,28 @@ else
   fail_check "examples 目录缺失"
 fi
 
+printf "\n${BOLD}C11: 线程前置契约（task 使用者必须 uses thread.init）${NC}\n"
+if [ -d "$EX_DIR" ]; then
+  for ex in "$EX_DIR"/*/; do
+    [ -d "$ex" ] || continue
+    name=$(basename "$ex")
+    src=$(ls "$ex"/*.lpr 2>/dev/null | head -1)
+    [ -n "$src" ] || continue
+    if grep -qE 'Tasks\.Spawn|MakeSpec\(' "$src"; then
+      if grep -q 'nextpas\.core\.thread\.init' "$src"; then
+        ok "$name 引用 task API 且 uses thread.init"
+      else
+        fail_check "$name 引用 task API 但缺 nextpas.core.thread.init（线程未初始化 → 运行时 segfault）"
+      fi
+    fi
+  done
+fi
+if grep -q '线程前置契约' "$REPO_ROOT/core/docs/tui/CONTRACT.md"; then
+  ok "CONTRACT.md 记载线程前置契约"
+else
+  fail_check "CONTRACT.md 缺线程前置契约条目"
+fi
+
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

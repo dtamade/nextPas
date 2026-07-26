@@ -132,6 +132,11 @@ end;
 - UI 线程单线程操作
 - 事件队列通过 `nextpas.core.sync` 原语跨线程投递
 - `TTaskManager` 提供后台任务调度
+- **线程前置契约**：任何会触发 `TTaskManager.Spawn` 的程序（含所有 `TApp`
+  应用），必须把 `nextpas.core.thread.init` 作为 uses 的**第一个单元**。
+  缺失时 FPC Unix 无线程管理器：任务线程内的堆/AnsiString/异常机制
+  未按多线程初始化，表现为随机 segfault（编译不会报错）。
+  门禁：C11（examples 引用 task API 必须 uses thread.init）。
 
 ---
 
