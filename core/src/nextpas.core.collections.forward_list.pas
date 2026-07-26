@@ -2440,7 +2440,7 @@ begin
     LPosNode^.Next := LCopyHead;
   end;
 
-  FCount += aOther.FCount;
+  FCount := FCount + aOther.FCount;
   // 若插到尾部或本就是空表，则更新 FLast
   if LCopyTail^.Next = nil then FLast := LCopyTail;
 

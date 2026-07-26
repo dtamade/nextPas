@@ -197,7 +197,7 @@ begin
   if LLen = 0 then Exit(0.0);
   LSum := 0;
   for I := 0 to High(LValid) do
-    LSum += LValid[I];
+    LSum := LSum + LValid[I];
   Result := LSum / LLen;
 end;
 
@@ -556,8 +556,8 @@ begin
   for I := 0 to LN - 1 do
   begin
     LDev := ASorted[I] - AMean;
-    LSumSq += Sqr(LDev);
-    LSumWeighted += LDev * (1.0 - I * LInvNm1);
+    LSumSq := LSumSq + Sqr(LDev);
+    LSumWeighted := LSumWeighted + LDev * (1.0 - I * LInvNm1);
   end;
 
   if LSumSq < 1e-10 then
@@ -1224,7 +1224,7 @@ begin
 
   LSum := 0;
   for I := LStart to LEnd - 1 do
-    LSum += LSorted[I];
+    LSum := LSum + LSorted[I];
   Result := LSum / (LEnd - LStart);
 end;
 

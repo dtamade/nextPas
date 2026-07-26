@@ -815,25 +815,25 @@ begin
       for LI := 0 to FPrefixCount - 1 do
       begin
         Write(FFile, ' ', LKeyPrefix, FPrefix[LI].Key, '=');
-        LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
+        LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
         case FPrefix[LI].Kind of
-          akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
-          akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
-          akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
-          akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-                  else begin Write(FFile, 'false'); LSize += 5; end;
+          akString: begin Write(FFile, FPrefix[LI].SVal); LSize := LSize + Int64(Length(FPrefix[LI].SVal)); end;
+          akInt: begin Write(FFile, FPrefix[LI].IVal); LSize := LSize + 12; end;
+          akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize := LSize + 10; end;
+          akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
+                  else begin Write(FFile, 'false'); LSize := LSize + 5; end;
         end;
       end;
       for LI := 0 to ARecord.AttrCount - 1 do
       begin
         Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
-        LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
+        LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
         case ARecord.Attrs[LI].Kind of
-          akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
-          akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
-          akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
-          akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-                  else begin Write(FFile, 'false'); LSize += 5; end;
+          akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize := LSize + Int64(Length(ARecord.Attrs[LI].SVal)); end;
+          akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize := LSize + 12; end;
+          akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize := LSize + 10; end;
+          akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
+                  else begin Write(FFile, 'false'); LSize := LSize + 5; end;
         end;
       end;
       WriteLn(FFile);
