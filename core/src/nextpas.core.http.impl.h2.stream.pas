@@ -142,6 +142,14 @@ const
   { Maximum number of empty CONTINUATION fragments.
     Prevents DoS via many empty frames that don't contribute to the header block. }
   H2_MAX_EMPTY_FRAGMENTS: SizeInt = 64;
+  { Absolute ceiling on the *decoded* header-list size (RFC 7541 §4.1 units),
+    enforced regardless of the advertised SETTINGS_MAX_HEADER_LIST_SIZE (which
+    defaults to 0 = "no explicit limit").  A compact HPACK block can decompress
+    far past its wire size via repeated indexed references to a large dynamic-
+    table entry (RFC 7541 §10.5 amplification); this hard backstop caps the
+    materialized cost.  1 MB is generous for legitimate traffic, which the
+    64 KB compressed-block limit already bounds to ~64 KB decoded. }
+  H2_HEADER_LIST_HARD_LIMIT: UInt64 = 1024 * 1024;
 
   H2_FORBIDDEN_CONNECTION_HEADERS: array[0..4] of AnsiString = (
     'connection',
@@ -537,31 +545,33 @@ begin
       end;
     end;
 
-    if FMaxHeaderListSize > 0 then
+    { Accumulate the decoded header-list size unconditionally (RFC 7541 §4.1:
+      name + value + 32 per field), saturating to avoid UInt64 overflow. }
+    if LHeaderListSize > High(UInt64) - (UInt64(LHeaders[LIndex].Name.Len) +
+       UInt64(LHeaders[LIndex].Value.Len) + 32) then
+      LHeaderListSize := High(UInt64)
+    else
+      LHeaderListSize := LHeaderListSize + UInt64(LHeaders[LIndex].Name.Len) +
+        UInt64(LHeaders[LIndex].Value.Len) + 32;
+    { Reject past the absolute hard backstop (fires only on amplification, since
+      the 64 KB compressed-block bound keeps legit lists far below it), or past
+      the advertised soft SETTINGS_MAX_HEADER_LIST_SIZE when one is set. }
+    if (LHeaderListSize > H2_HEADER_LIST_HARD_LIMIT) or
+       ((FMaxHeaderListSize > 0) and (LHeaderListSize > UInt64(FMaxHeaderListSize))) then
     begin
-      { Saturating-add guard to prevent UInt64 overflow }
-      if LHeaderListSize > High(UInt64) - (UInt64(LHeaders[LIndex].Name.Len) +
-         UInt64(LHeaders[LIndex].Value.Len) + 32) then
-        LHeaderListSize := High(UInt64)
-      else
-        LHeaderListSize := LHeaderListSize + UInt64(LHeaders[LIndex].Name.Len) +
-          UInt64(LHeaders[LIndex].Value.Len) + 32;
-      if LHeaderListSize > UInt64(FMaxHeaderListSize) then
+      if not LIsTrailerSection then
       begin
-        if not LIsTrailerSection then
-        begin
-          FHeaderStore := nil;
-          FHeadersDecoded := nil;
-        end
-        else
-        begin
-          FTrailerStore := nil;
-          FTrailersDecoded := nil;
-        end;
-        FHeaderFragments := nil;
-        FHeaderBlock := '';
-        Exit(h2hfrHeaderListTooLarge);
+        FHeaderStore := nil;
+        FHeadersDecoded := nil;
+      end
+      else
+      begin
+        FTrailerStore := nil;
+        FTrailersDecoded := nil;
       end;
+      FHeaderFragments := nil;
+      FHeaderBlock := '';
+      Exit(h2hfrHeaderListTooLarge);
     end;
 
     SetString(LNameStr, LHeaders[LIndex].Name.Ptr, LHeaders[LIndex].Name.Len);

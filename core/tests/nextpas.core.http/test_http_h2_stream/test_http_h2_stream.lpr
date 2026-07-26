@@ -1090,6 +1090,83 @@ begin
   end;
 end;
 
+function BuildAmplificationBomb(const ACopies: SizeInt): AnsiString;
+var
+  LHeaders: array of THPackHeader;
+  LBigValue: AnsiString;
+  LIndex: SizeInt;
+begin
+  { A single ~3.9 KB dynamic-table entry, then ACopies 1-byte indexed
+    references to it: compact compressed block, huge decoded header list. }
+  SetLength(LBigValue, 3900);
+  FillChar(LBigValue[1], 3900, Ord('a'));
+  SetLength(LHeaders, 4 + ACopies);
+  LHeaders[0].Name := ':method';    LHeaders[0].Value := 'GET';
+  LHeaders[1].Name := ':path';      LHeaders[1].Value := '/';
+  LHeaders[2].Name := ':scheme';    LHeaders[2].Value := 'https';
+  LHeaders[3].Name := ':authority'; LHeaders[3].Value := 'example.com';
+  for LIndex := 0 to ACopies - 1 do
+  begin
+    LHeaders[4 + LIndex].Name := 'x-a';
+    LHeaders[4 + LIndex].Value := LBigValue;
+  end;
+  Result := EncodeHeaders(LHeaders);
+end;
+
+procedure TestHpackAmplificationBombRejected;
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LStream: TH2Stream;
+  LBlock: AnsiString;
+begin
+  LConnectionFlow.Init(65535, 65535);
+  LDecoder.Init;
+  { Default MaxHeaderListSize = 0 (RFC "no explicit limit"): the soft guard is
+    off, so an unconditional hard backstop must still reject a compact block
+    that decompresses past the absolute cap (HPACK amplification, RFC 7541 §10.5). }
+  LStream := TH2Stream.Create(1, 65535, 65535, LConnectionFlow, LDecoder);
+  try
+    { ~4 KB compressed -> ~1.26 MB decoded via repeated indexed references. }
+    LBlock := BuildAmplificationBomb(320);
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      LBlock);
+    CheckEqual(Ord(h2hfrHeaderListTooLarge),
+      Ord(LStream.LastHeaderFinalizeResult),
+      'amplification bomb must trip the hard header-list backstop');
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure TestNormalRequestUnderHardLimitAccepted;
+var
+  LConnectionFlow: TH2ConnectionFlowControl;
+  LDecoder: THPackDecoder;
+  LStream: TH2Stream;
+  LHeaders: array[0..5] of THPackHeader;
+begin
+  LConnectionFlow.Init(65535, 65535);
+  LDecoder.Init;
+  { No-harm: an ordinary request (default MaxHeaderListSize = 0) must still be
+    accepted; the hard backstop only fires on amplification, never legit traffic. }
+  LStream := TH2Stream.Create(1, 65535, 65535, LConnectionFlow, LDecoder);
+  try
+    FillMinimalRequestHeaders(LHeaders);
+    LHeaders[4].Name := 'user-agent';
+    LHeaders[4].Value := 'nextpas-http/1.0 (integration test client)';
+    LHeaders[5].Name := 'accept';
+    LHeaders[5].Value := 'text/html,application/json;q=0.9,*/*;q=0.8';
+    LStream.OnHeaders(H2_FLAG_HEADERS_END_HEADERS or H2_FLAG_HEADERS_END_STREAM,
+      EncodeHeaders(LHeaders));
+    CheckEqual(Ord(h2hfrOk), Ord(LStream.LastHeaderFinalizeResult),
+      'ordinary request must not be rejected by the hard backstop');
+    Check(not LStream.ResetReceived, 'ordinary request must not reset');
+  finally
+    LStream.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.stream');
   T.Test('Headers with END_STREAM decode and transition',
@@ -1178,5 +1255,10 @@ begin
   { -- New tests: header block byte limit -- }
   T.Test('Header block byte limit resets stream on overflow',
     @TestHeaderBlockByteLimitResetsStream);
+  { -- New tests: HPACK amplification hard backstop (RFC 7541 §10.5) -- }
+  T.Test('HPACK amplification bomb trips the hard header-list backstop',
+    @TestHpackAmplificationBombRejected);
+  T.Test('Ordinary request is accepted under the hard header-list backstop',
+    @TestNormalRequestUnderHardLimitAccepted);
   if not T.Run then Halt(1);
 end.
