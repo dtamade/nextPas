@@ -43,6 +43,7 @@
 | F-30 | **Resolved** | FPC 实数字面量默认 Single 致 1.0/N 降精度；bench 四单元加 {$MINFPCONSTPREC 64}（tranche 2 补涂 report） |
 | F-31 | **Resolved** | ModifiedZScore O(N) MAD 归并双奇偶 off-by-one：MAD 恒偏高、漏检异常值；金标索引集钉死 |
 | F-32 | **Resolved** | level/alpha 表选择边界比较失配：请求 99%/95% 拿到 95%/90% 表；比较加 BENCH_LEVEL_EPS 余量 |
+| F-33 | **Resolved** | D'Agostino-Pearson K2 四处口径错致双向误判（偏斜判正态、正态判非正态）；重写逐式对齐 scipy normaltest |
 
 ---
 
@@ -384,7 +385,7 @@
 | 等级 | **P3** |
 | 描述 | 有已知分布与交叉校验倾向，整体有效。缺少与外部金标（R/Python 固定种子向量）的 **冻结 golden 向量** 文件化（部分数值硬编码在 lpr）。 |
 | 建议 | 可选 `testdata/*.json` golden，降低魔法数漂移。 |
-| 收口（2026-07-26） | scipy 1.18.0 金标冻结为 4 个 `golden_*.inc`（mwu/ks/descriptive/analyzer），生成器 `tools/gen_golden_vectors.py` 自带 Pascal 近似复刻自检（近似误差 < tol/2 才允许冻结）；数据集为手写字面量（无 RNG，Pascal/Python 解析出相同 double）。22 条 golden 断言接入 4 既存套件（不新增套件，PROJECTS 保持 22）。金标当场揪出三个真 bug：F-28（Skewness 因子）、F-29（KS2 tie 分支）、F-30（Single 字面量精度），证实原区间断言会放过「方向对、数值错」的实现。tranche 2 再揪出 F-31/F-32 两个 P1。tranche 3（OLS 回归双数据集 TIGHT R²≈0.9998 / LOOSE R²≈0.904 + CoefficientOfVariation）一次全绿——两条路径实现与 scipy 精确一致，金标在此转为纯防回归钉；统计面主干（描述统计/检验/回归/贝叶斯）至此全部有外部金标覆盖。 |
+| 收口（2026-07-26） | scipy 1.18.0 金标冻结为 4 个 `golden_*.inc`（mwu/ks/descriptive/analyzer），生成器 `tools/gen_golden_vectors.py` 自带 Pascal 近似复刻自检（近似误差 < tol/2 才允许冻结）；数据集为手写字面量（无 RNG，Pascal/Python 解析出相同 double）。22 条 golden 断言接入 4 既存套件（不新增套件，PROJECTS 保持 22）。金标当场揪出三个真 bug：F-28（Skewness 因子）、F-29（KS2 tie 分支）、F-30（Single 字面量精度），证实原区间断言会放过「方向对、数值错」的实现。tranche 2 再揪出 F-31/F-32 两个 P1。tranche 3（OLS 回归双数据集 TIGHT R²≈0.9998 / LOOSE R²≈0.904 + CoefficientOfVariation）一次全绿——两条路径实现与 scipy 精确一致，金标在此转为纯防回归钉；统计面主干（描述统计/检验/回归/贝叶斯）至此全部有外部金标覆盖。tranche 4（D'Agostino-Pearson K2 双数据集 + Welch t + Cohen's d）揪出 F-33 四重口径错（K2 双向误判），Welch/Effect 一次全绿。 |
 
 ---
 
@@ -476,6 +477,19 @@
 | 等级 | **P1**（对所有调用者系统性生效：请求 95% CI 拿到 90% 表，alpha=0.01 拿到 95% 临界值反保守虚报显著性） |
 | 描述 | `Double` 参数与不精确实数字面量在阈值边界比较时精度失配：字面量解析为 extended（`{$MINFPCONSTPREC 64}` 只设下限），而 `Double(0.95)=0.94999999999999996 < extended 0.95` 恒成立 → `ALevel >= 0.95` 对字面量调用者恒 False。探针实证：`ConfidenceInterval(0.95)` 落 90% 表（t=1.729 而非 2.093），`(0.99)` 落 95% 表；`TInvAlpha(0.01)` 因 `Double(0.01) > extended 0.01` 落 95% 表（反保守）。alpha=0.05 靠 else 兜底分支侥幸正确。危险点：常用值 0.95/0.99/0.01 恰好全部踩在边界上。 |
 | 处置 | `base` 新增 `BENCH_LEVEL_EPS = 1e-6`（覆盖 extended/Double/Single 三种来源的表示差 ~1.2e-8，远小于相邻档位间距 ≥0.04）；`ConfidenceInterval` 三处 `>=` 改 `>= X - EPS`，`TInvAlpha` 两处 `<=` 改 `<= X + EPS`。scipy t 区间金标（CI95/CI99，tol 1e-3）+ Welch 布尔金标钉死。 |
+
+---
+
+### F-33 · 正确性 · P1（2026-07-26 由金标 tranche 4 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats.advanced` |
+| 位置 | `TAdvancedStats.TestNormalityByMoments` |
+| 分类 | 数值正确性 |
+| 等级 | **P1**（双向随机判决器：偏斜数据误判为正态、近正态数据误判为非正态） |
+| 描述 | 与 scipy.stats.normaltest 对照发现四处独立口径错：**(a)** Z_kurt 输入喂 `Kurtosis`（Fisher G2，0 中心无偏超额峰度），而 Anscombe-Glynn (1983) 要求 Pearson b2 = m4/m2²（有偏，E[b2]=3(n-1)/(n+1)≈2.7）——近正态数据得 x=(0−2.7)/σ≈−3.9，立方变换放大后 Zk≈20、K2≈410；**(b)** Z_skew 外层系数用 LB=sqrt((n+1)(n+3)/(6(n−2)))（这是 Y 的标准化因子），而 D'Agostino (1970) 要求 delta=1/sqrt(0.5·ln W²)；**(c)** asinh 实参用 \|G1\|/α——丢了 ×LB（应为 Y/α，Y=√b1·LB）且用偏差校正 G1 而非有偏 √b1=m3/m2^1.5；**(d)** Z_kurt 分母用 `1+(x−t1)/sqrt(t2)`，正确式为 denom=1+x·sqrt(2/(A−4))、term2=sign(denom)·cbrt((1−2/A)/\|denom\|)。探针实证：右偏组 scipy K2=13.775/p=0.001 → 旧码 1.880/0.391（**偏斜判正态**）；近正态组 scipy K2=0.662/p=0.718 → 旧码 K2≈410/p≈0（**正态判非正态**）。区间断言（p>0、Method 非空）对此完全不可见；n=5 既存用例走 n<8 退化分支同样不可见。 |
+| 处置 | 重写为逐式对齐 scipy.stats.normaltest：单趟有偏矩 m2/m3/m4（÷n，NaN/Inf skip），Z_skew 走 delta·asinh(Y/α) 带符号，Z_kurt 走 Anscombe-Glynn 符号 cbrt；p=exp(−K2/2)（chi2(2).sf 精确式）与 n<8 守卫保持原状，新增常数序列 m2=0 退化守卫。生成器带 Pascal 逐字复刻自检（vs scipy < tol/2=5e-10 才允许冻结，证明修复公式先于 Pascal 落码即已验证）；两组金标（右偏 GOLDEN_DESC_DATA / 近正态 GOLDEN_NT_NORMISH）K2/p/IsNormal 六断言钉死（tol 1e-9），修复前实测红（K2=1.880 vs 期望 13.775）。同 tranche 冻结 Welch t（scipy ttest_ind equal_var=False）与 Cohen's d（pooled ddof=1）金标——两实现公式本就正确，一次全绿，转为防回归钉。 |
 
 ---
 
