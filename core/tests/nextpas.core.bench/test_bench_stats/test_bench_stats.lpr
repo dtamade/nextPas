@@ -1159,6 +1159,67 @@ begin
     'Golden geometric mean matches scipy gmean');
 end;
 
+procedure TestGolden_TrimCohenD;
+var
+  LData, LA, LB: TDoubleArray;
+begin
+  LData := GoldenArr(GOLDEN_AN_DATA);
+  CheckNear(GOLDEN_AN_TRIM_20,
+    GAnalyzer.TrimmedMean(LData, GOLDEN_AN_TRIM_PCT_20), GOLDEN_TRIM_TOL,
+    'Golden trimmed mean 20% matches scipy trim_mean');
+  CheckNear(GOLDEN_AN_TRIM_125,
+    GAnalyzer.TrimmedMean(LData, GOLDEN_AN_TRIM_PCT_125), GOLDEN_TRIM_TOL,
+    'Golden trimmed mean 12.5% matches scipy trim_mean');
+
+  LA := GoldenArr(GOLDEN_CD_A);
+  LB := GoldenArr(GOLDEN_CD_B);
+  CheckNear(GOLDEN_COHEND, GAnalyzer.CohenD(LA, LB), GOLDEN_CD_TOL,
+    'Golden Cohen''s d matches numpy pooled ddof=1');
+end;
+
+procedure TestGolden_WelchHeuristic;
+var
+  LA, LB, LN: TDoubleArray;
+  LSa, LSb, LSn: TBenchStats;
+begin
+  LA := GoldenArr(GOLDEN_CD_A);
+  LB := GoldenArr(GOLDEN_CD_B);
+  LN := GoldenArr(GOLDEN_WN_B);
+  LSa := GAnalyzer.ComputeStats(LA);
+  LSb := GAnalyzer.ComputeStats(LB);
+  LSn := GAnalyzer.ComputeStats(LN);
+  Check(GAnalyzer.HasHeuristicDifferenceAt(LSa, LSb, 0.05) = GOLDEN_WELCH_AB_DIFF,
+    'Golden Welch heuristic detects shifted mean (scipy t >= 20% margin)');
+  Check(GAnalyzer.HasHeuristicDifferenceAt(LSa, LSn, 0.05) = GOLDEN_WELCH_AWN_DIFF,
+    'Golden Welch heuristic rejects near-identical mean');
+end;
+
+procedure TestGolden_Bayesian;
+var
+  LData: TDoubleArray;
+  LEst: TBayesianEstimate;
+begin
+  LData := GoldenArr(GOLDEN_BAYES_DATA);
+  { 例1：显式观测 sigma }
+  LEst := GAnalyzer.BayesianEstimate(LData,
+    GOLDEN_BAYES_PRIOR_MEAN, GOLDEN_BAYES_PRIOR_STD, GOLDEN_BAYES_SIGMA);
+  CheckNear(GOLDEN_BAYES_POST_MEAN, LEst.PosteriorMean, GOLDEN_BAYES_TOL,
+    'Golden Bayesian posterior mean matches conjugate closed form');
+  CheckNear(GOLDEN_BAYES_POST_STD, LEst.PosteriorStdDev, GOLDEN_BAYES_TOL,
+    'Golden Bayesian posterior stddev matches conjugate closed form');
+  CheckNear(GOLDEN_BAYES_CRED_LO, LEst.CredibleLower, GOLDEN_BAYES_TOL,
+    'Golden Bayesian credible lower matches scipy norm.ppf(0.975)');
+  CheckNear(GOLDEN_BAYES_CRED_HI, LEst.CredibleUpper, GOLDEN_BAYES_TOL,
+    'Golden Bayesian credible upper matches scipy norm.ppf(0.975)');
+  { 例2：ASigma=0 -> 样本 ddof=1 标准差作为观测 sigma }
+  LEst := GAnalyzer.BayesianEstimate(LData,
+    GOLDEN_BAYES2_PRIOR_MEAN, GOLDEN_BAYES2_PRIOR_STD);
+  CheckNear(GOLDEN_BAYES2_POST_MEAN, LEst.PosteriorMean, GOLDEN_BAYES_TOL,
+    'Golden Bayesian(default sigma) posterior mean matches closed form');
+  CheckNear(GOLDEN_BAYES2_POST_STD, LEst.PosteriorStdDev, GOLDEN_BAYES_TOL,
+    'Golden Bayesian(default sigma) posterior stddev matches closed form');
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -1212,6 +1273,9 @@ begin
   T.Test('Median_NaNInfinity', @TestMedian_NaNInfinity);
   T.Test('TrimmedMean_NaNInfinity', @TestTrimmedMean_NaNInfinity);
   T.Test('Golden_Analyzer', @TestGolden_Analyzer);
+  T.Test('Golden_TrimCohenD', @TestGolden_TrimCohenD);
+  T.Test('Golden_WelchHeuristic', @TestGolden_WelchHeuristic);
+  T.Test('Golden_Bayesian', @TestGolden_Bayesian);
 
   LRunPassed := T.Run;
   T.Summary;

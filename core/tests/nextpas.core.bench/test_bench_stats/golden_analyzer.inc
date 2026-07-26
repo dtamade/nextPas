@@ -25,3 +25,48 @@ const
   GOLDEN_AN_P99 = 7.947999999999999;
   GOLDEN_AN_GEOMEAN = 0.9959138494510776;
   GOLDEN_AN_TOL = 1e-09;
+
+  { TrimmedMean: scipy trim_mean(data, pct/100)；双侧各截 Trunc(n*pct/100) }
+  GOLDEN_AN_TRIM_PCT_20 = 20.0;
+  GOLDEN_AN_TRIM_20 = 4.983333333333333;
+  GOLDEN_AN_TRIM_PCT_125 = 12.5;
+  GOLDEN_AN_TRIM_125 = 5.0625;
+
+  { Cohen's d: (meanA-meanB)/sqrt(pooled ddof=1 var)，带符号 }
+  GOLDEN_CD_A: array[0..11] of Double = (
+    15.2, 16.1, 14.8, 15.9,
+    15.5, 16.4, 14.9, 15.7,
+    15.3, 16.0, 15.1, 15.8);
+  GOLDEN_CD_B: array[0..11] of Double = (
+    16.8, 17.5, 16.2, 17.9,
+    17.1, 16.5, 17.3, 16.9,
+    17.6, 16.4, 17.0, 17.8);
+  GOLDEN_COHEND = -2.8759549369101345;
+
+  { Welch 启发式布尔: alpha=0.05；t 对表临界值双向 >=20% 裕度 }
+  GOLDEN_WN_B: array[0..11] of Double = (
+    15.25, 16.0, 14.95, 15.85,
+    15.6, 16.3, 15.0, 15.65,
+    15.4, 16.05, 15.05, 15.9);
+  GOLDEN_WELCH_AB_DIFF = True;
+  GOLDEN_WELCH_AWN_DIFF = False;
+
+  { Bayesian 正态-正态共轭: 例1 显式 sigma；例2 ASigma=0 -> 样本 ddof=1 std }
+  GOLDEN_BAYES_DATA: array[0..9] of Double = (
+    5.2, 4.8, 5.5, 5.1,
+    4.9, 5.3, 5.0, 5.4,
+    4.7, 5.6);
+  GOLDEN_BAYES_PRIOR_MEAN = 4.0;
+  GOLDEN_BAYES_PRIOR_STD = 1.0;
+  GOLDEN_BAYES_SIGMA = 0.5;
+  GOLDEN_BAYES_POST_MEAN = 5.121951219512195;
+  GOLDEN_BAYES_POST_STD = 0.15617376188860607;
+  GOLDEN_BAYES_CRED_LO = 4.815856270880393;
+  GOLDEN_BAYES_CRED_HI = 5.4280461681439975;
+  GOLDEN_BAYES2_PRIOR_MEAN = 6.0;
+  GOLDEN_BAYES2_PRIOR_STD = 0.8;
+  GOLDEN_BAYES2_POST_MEAN = 5.162002567394095;
+  GOLDEN_BAYES2_POST_STD = 0.0950643319777581;
+  GOLDEN_TRIM_TOL = 1e-09;
+  GOLDEN_CD_TOL = 1e-09;
+  GOLDEN_BAYES_TOL = 1e-08;

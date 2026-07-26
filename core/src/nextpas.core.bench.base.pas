@@ -296,6 +296,11 @@ const
   BENCH_SIGNIFICANCE_ALPHA = 0.05;       // 统计检验 alpha 水平 (Mann-Whitney/Welch's t)
   BENCH_SIGNIFICANCE_ALPHA_HIGH = 0.01;  // 高显著性 alpha 水平 (99% 置信)
   BENCH_MATRIX_DIFF_THRESHOLD = 0.05;    // ratio 启发式阈值 (baseline 无原始样本时)
+  { F-32: level/alpha 表选择边界比较必须带余量。0.95/0.99/0.05/0.01 等常用值
+    在 Double 与 extended 精度字面量间表示不一致（如 Double(0.95) < extended 0.95），
+    裸比较会让调用者恰好落在边界外拿到错误的临界值表；1e-6 同时覆盖
+    Single 精度来源的调用值（偏差 ~1.2e-8），且远小于相邻档位间距（>= 0.04）。 }
+  BENCH_LEVEL_EPS = 1e-6;
 
   {** 时间单位常量 }
   NANOSECONDS_PER_SECOND = 1000000000;

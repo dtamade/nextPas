@@ -40,7 +40,9 @@
 | F-27 | **Mitigated** | 门禁构建阶段 host fpc 偶发 "Can't find unit"；gate 循环构建重试一次 |
 | F-28 | **Resolved** | Skewness 调整因子错配：样本矩 z 分套总体矩因子，偏低 ((n-1)/n)^1.5；改 G1=n·Σz³/((n-1)(n-2)) |
 | F-29 | **Resolved** | KS 双样本 tie 分支 D 错：改值消耗合并走查（同值两侧全消费后取跳后 ECDF 差） |
-| F-30 | **Resolved** | FPC 实数字面量默认 Single 致 1.0/N 降精度；bench 三单元加 {$MINFPCONSTPREC 64} |
+| F-30 | **Resolved** | FPC 实数字面量默认 Single 致 1.0/N 降精度；bench 四单元加 {$MINFPCONSTPREC 64}（tranche 2 补涂 report） |
+| F-31 | **Resolved** | ModifiedZScore O(N) MAD 归并双奇偶 off-by-one：MAD 恒偏高、漏检异常值；金标索引集钉死 |
+| F-32 | **Resolved** | level/alpha 表选择边界比较失配：请求 99%/95% 拿到 95%/90% 表；比较加 BENCH_LEVEL_EPS 余量 |
 
 ---
 
@@ -447,7 +449,33 @@
 | 分类 | 数值精度 / FPC 语言陷阱 |
 | 等级 | **P2**（~1e-8 级系统误差，叠加统计量后可放大） |
 | 描述 | FPC 默认把实数字面量取「能精确表示的最小类型」，`1.0` 为 Single；`1.0 / LN`（LN 整型）整个表达式落在 Single 精度计算，误差 ~1e-8。经最小探针复现：KS D=0.29999999701976776，偏差恰为 2×(Double(Single(0.1))−0.1)。 |
-| 处置 | 三个统计相关单元头部加 `{$MINFPCONSTPREC 64}`（字面量最低 Double）。core 全局 settings.inc 属跨模块变更，超出本 lane 范围，同类隐患在其他模块普遍存在——已在注释中说明，留待仓库治理层决策。 |
+| 处置 | 三个统计相关单元头部加 `{$MINFPCONSTPREC 64}`（字面量最低 Double）。tranche 2 全模块扫描后补涂 `report`（`FormatBytes` 的 `ABytes/1024.0` 为最后一处暴露面），其余单元无整型/字面量混算。core 全局 settings.inc 属跨模块变更，超出本 lane 范围，同类隐患在其他模块普遍存在——已在注释中说明，留待仓库治理层决策。 |
+
+---
+
+### F-31 · 正确性 · P1（2026-07-26 由金标 tranche 2 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats.advanced` |
+| 位置 | `TAdvancedStats.DetectOutliers_ModifiedZScore` O(N) MAD 双指针归并 |
+| 分类 | 数值正确性 |
+| 等级 | **P1**（MAD 恒 ≥ 真值 → Modified Z 恒偏低 → 系统性漏检异常值） |
+| 描述 | 双奇偶各有一处 off-by-one：奇数 n 时归并流从 `medIdx±1` 起、不含 median 自身的 0 偏差（全集最小值），但目标秩仍按全集 `n div 2` 取，MAD 高一个秩（手算 [1,2,3,4,100]：真值 1，旧码 2）；偶数 n 时右指针从 `medIdx+1` 起，S[n/2] 的非零偏差被整个跳过（手算 [1,2,3,4]：真值 0.5，旧码 1.5）。两条路径 MAD 均只偏高不偏低，异常值只漏不误报，区间断言不可见。 |
+| 处置 | 奇数分支目标秩 `Dec(LTarget)`（n=1 时循环自然跳过，MAD=0 正确）；偶数分支 `RJ := LMedIdx`。金标数据集特意植入横跨新旧 MAD 判界的边界点（生成器 require 强制 `旧MAD > 新MAD` 且新旧索引集不同），修复前实测红（奇偶两路 ModZ 索引集均不符），修复后绿；numpy MAD 索引集金标钉死于 `Golden_Outliers`。 |
+
+---
+
+### F-32 · 正确性 · P1（2026-07-26 由金标 tranche 2 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats.advanced` / `stats` / `base` |
+| 位置 | `ConfidenceInterval` level 分支、`TInvAlpha` alpha 分支 |
+| 分类 | 数值正确性 / FPC 语言陷阱（F-30 姊妹症） |
+| 等级 | **P1**（对所有调用者系统性生效：请求 95% CI 拿到 90% 表，alpha=0.01 拿到 95% 临界值反保守虚报显著性） |
+| 描述 | `Double` 参数与不精确实数字面量在阈值边界比较时精度失配：字面量解析为 extended（`{$MINFPCONSTPREC 64}` 只设下限），而 `Double(0.95)=0.94999999999999996 < extended 0.95` 恒成立 → `ALevel >= 0.95` 对字面量调用者恒 False。探针实证：`ConfidenceInterval(0.95)` 落 90% 表（t=1.729 而非 2.093），`(0.99)` 落 95% 表；`TInvAlpha(0.01)` 因 `Double(0.01) > extended 0.01` 落 95% 表（反保守）。alpha=0.05 靠 else 兜底分支侥幸正确。危险点：常用值 0.95/0.99/0.01 恰好全部踩在边界上。 |
+| 处置 | `base` 新增 `BENCH_LEVEL_EPS = 1e-6`（覆盖 extended/Double/Single 三种来源的表示差 ~1.2e-8，远小于相邻档位间距 ≥0.04）；`ConfidenceInterval` 三处 `>=` 改 `>= X - EPS`，`TInvAlpha` 两处 `<=` 改 `<= X + EPS`。scipy t 区间金标（CI95/CI99，tol 1e-3）+ Welch 布尔金标钉死。 |
 
 ---
 

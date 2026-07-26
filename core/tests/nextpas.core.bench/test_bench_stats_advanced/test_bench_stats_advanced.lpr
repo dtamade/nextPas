@@ -727,6 +727,78 @@ begin
   end;
 end;
 
+procedure Test_Golden_ConfidenceInterval;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+  LCI: TConfidenceInterval;
+begin
+  LData := CreateTestData(GOLDEN_DESC_DATA);
+  LStats := TAdvancedStats.Create(LData);
+  try
+    LCI := LStats.ConfidenceInterval(0.95);
+    CheckNear(GOLDEN_CI95_LO, LCI.Lower, GOLDEN_CI_TOL,
+      'Golden CI95 lower matches scipy t-interval');
+    CheckNear(GOLDEN_CI95_HI, LCI.Upper, GOLDEN_CI_TOL,
+      'Golden CI95 upper matches scipy t-interval');
+    LCI := LStats.ConfidenceInterval(0.99);
+    CheckNear(GOLDEN_CI99_LO, LCI.Lower, GOLDEN_CI_TOL,
+      'Golden CI99 lower matches scipy t-interval');
+    CheckNear(GOLDEN_CI99_HI, LCI.Upper, GOLDEN_CI_TOL,
+      'Golden CI99 upper matches scipy t-interval');
+  finally
+    LStats.Free;
+  end;
+end;
+
+procedure CheckGoldenIdx(const AExpected: array of Integer;
+  const AActual: TInt64Array; const AMsg: string);
+var
+  I: Integer;
+begin
+  Check(Length(AActual) = Length(AExpected), AMsg + ': count');
+  if Length(AActual) <> Length(AExpected) then
+    Exit;
+  for I := 0 to High(AExpected) do
+    Check(AActual[I] = AExpected[I], AMsg + ': idx');
+end;
+
+procedure Test_Golden_Outliers;
+var
+  LStats: TAdvancedStats;
+begin
+  { 奇数 n=15：ModZ 走奇数 MAD 归并路径（F-31 修复面） }
+  LStats := TAdvancedStats.Create(CreateTestData(GOLDEN_OUT_ODD));
+  try
+    CheckGoldenIdx(GOLDEN_OUT_ODD_TUKEY_IDX,
+      LStats.DetectOutliers_Tukey(GOLDEN_OUT_TUKEY_FACTOR).OutlierIndices,
+      'Golden odd Tukey indices match numpy fences');
+    CheckGoldenIdx(GOLDEN_OUT_ODD_Z_IDX,
+      LStats.DetectOutliers_ZScore(GOLDEN_OUT_Z_THR).OutlierIndices,
+      'Golden odd z-score indices match numpy ddof=1');
+    CheckGoldenIdx(GOLDEN_OUT_ODD_MODZ_IDX,
+      LStats.DetectOutliers_ModifiedZScore(GOLDEN_OUT_MODZ_THR).OutlierIndices,
+      'Golden odd modified z indices match numpy MAD');
+  finally
+    LStats.Free;
+  end;
+  { 偶数 n=12：ModZ 走偶数 MAD 归并路径（F-31 修复面） }
+  LStats := TAdvancedStats.Create(CreateTestData(GOLDEN_OUT_EVEN));
+  try
+    CheckGoldenIdx(GOLDEN_OUT_EVEN_TUKEY_IDX,
+      LStats.DetectOutliers_Tukey(GOLDEN_OUT_TUKEY_FACTOR).OutlierIndices,
+      'Golden even Tukey indices match numpy fences');
+    CheckGoldenIdx(GOLDEN_OUT_EVEN_Z_IDX,
+      LStats.DetectOutliers_ZScore(GOLDEN_OUT_Z_THR).OutlierIndices,
+      'Golden even z-score indices match numpy ddof=1');
+    CheckGoldenIdx(GOLDEN_OUT_EVEN_MODZ_IDX,
+      LStats.DetectOutliers_ModifiedZScore(GOLDEN_OUT_MODZ_THR).OutlierIndices,
+      'Golden even modified z indices match numpy MAD');
+  finally
+    LStats.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -766,6 +838,8 @@ begin
   T.Test('Percentile_RangeValidation', @Test_Percentile_RangeValidation);
   T.Test('GetData', @Test_GetData);
   T.Test('Golden_Descriptive', @Test_Golden_Descriptive);
+  T.Test('Golden_ConfidenceInterval', @Test_Golden_ConfidenceInterval);
+  T.Test('Golden_Outliers', @Test_Golden_Outliers);
   T.Test('Count', @Test_Count);
   T.Test('OutlierSeverity_None', @Test_OutlierSeverity_None);
   T.Test('OutlierSeverity_Mild', @Test_OutlierSeverity_Mild);

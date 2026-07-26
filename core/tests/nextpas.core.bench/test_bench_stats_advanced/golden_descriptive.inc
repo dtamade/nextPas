@@ -25,3 +25,36 @@ const
   GOLDEN_DESC_P99 = 14.938999999999998;
   GOLDEN_DESC_IQR = 1.375;
   GOLDEN_DESC_TOL = 1e-09;
+
+  { ConfidenceInterval: t 分布双侧临界值 (df=n-1)；Pascal 用 3 位小数
+    t 表，容差覆盖表舍入 (|dt|<=5e-4 -> |d 界|<=dt*sem) }
+  GOLDEN_CI95_LO = 10.853251445890384;
+  GOLDEN_CI95_HI = 12.046748554109618;
+  GOLDEN_CI99_LO = 10.63431009609549;
+  GOLDEN_CI99_HI = 12.265689903904512;
+  GOLDEN_CI_TOL = 0.001;
+
+  { 离群点金标: 下标数组按原始数据顺序；ModZ 集含 F-31 边界点
+    (正确 MAD 判离群、旧 off-by-one MAD 漏判) }
+  { n=15: MAD=0.8, 旧 off-by-one MAD=0.95 }
+  GOLDEN_OUT_ODD: array[0..14] of Double = (
+    49.85, 50.45, 45.5, 49.2,
+    50.95, 49.45, 50.0, 51.45,
+    48.7, 50.25, 72.4, 49.65,
+    51.15, 48.1, 50.65);
+  GOLDEN_OUT_ODD_TUKEY_IDX: array[0..1] of Integer = (2, 10);
+  GOLDEN_OUT_ODD_Z_IDX: array[0..0] of Integer = (10);
+  GOLDEN_OUT_ODD_MODZ_IDX: array[0..1] of Integer = (2, 10);
+
+  { n=12: MAD=0.775, 旧 off-by-one MAD=0.95 }
+  GOLDEN_OUT_EVEN: array[0..11] of Double = (
+    19.55, 20.6, 15.5, 19.8,
+    20.85, 18.95, 20.35, 29.6,
+    19.3, 21.25, 20.1, 18.4);
+  GOLDEN_OUT_EVEN_TUKEY_IDX: array[0..1] of Integer = (2, 7);
+  GOLDEN_OUT_EVEN_Z_IDX: array[0..0] of Integer = (7);
+  GOLDEN_OUT_EVEN_MODZ_IDX: array[0..1] of Integer = (2, 7);
+
+  GOLDEN_OUT_TUKEY_FACTOR = 1.5;
+  GOLDEN_OUT_Z_THR = 2.5;
+  GOLDEN_OUT_MODZ_THR = 3.5;

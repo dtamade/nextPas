@@ -228,6 +228,53 @@ AN_RATIOS = [1.25, 0.8, 1.1, 0.95, 1.4, 0.7, 1.05, 0.9]
 
 NQ_POINTS = [0.001, 0.025, 0.16, 0.84, 0.975, 0.999]
 
+# --- tranche 2 (F-25 扩展): CI / 离群点 / TrimmedMean / CohenD / Bayesian / Welch ---
+
+CI_LEVELS = [0.95, 0.99]
+
+# 离群点数据集：偏差集设计为排名无并列，且各含一个
+# 「正确 MAD 判为离群、旧 off-by-one MAD (F-31) 判为正常」的边界点。
+OUT_ODD = [49.85, 50.45, 45.5, 49.2, 50.95, 49.45, 50.0, 51.45,
+           48.7, 50.25, 72.4, 49.65, 51.15, 48.1, 50.65]  # n=15 (奇数 MAD 路径)
+OUT_EVEN = [19.55, 20.6, 15.5, 19.8, 20.85, 18.95, 20.35, 29.6,
+            19.3, 21.25, 20.1, 18.4]  # n=12 (偶数 MAD 路径)
+TUKEY_FACTOR = 1.5
+ZSCORE_THR = 2.5
+MODZ_THR = 3.5
+
+TRIM_PCTS = [20.0, 12.5]  # 12.5% 覆盖 Trunc(n*pct/100) 非整乘积路径
+
+CD_A = [15.2, 16.1, 14.8, 15.9, 15.5, 16.4, 14.9, 15.7, 15.3, 16.0, 15.1, 15.8]
+CD_B = [16.8, 17.5, 16.2, 17.9, 17.1, 16.5, 17.3, 16.9, 17.6, 16.4, 17.0, 17.8]
+# 与 CD_A 几乎同分布的对照组（Welch 布尔 False 例）
+WN_B = [15.25, 16.0, 14.95, 15.85, 15.6, 16.3, 15.0, 15.65, 15.4, 16.05, 15.05, 15.9]
+
+BAYES_DATA = [5.2, 4.8, 5.5, 5.1, 4.9, 5.3, 5.0, 5.4, 4.7, 5.6]
+BAYES_PRIOR_MEAN, BAYES_PRIOR_STD, BAYES_SIGMA = 4.0, 1.0, 0.5
+BAYES2_PRIOR_MEAN, BAYES2_PRIOR_STD = 6.0, 0.8  # 第二例 ASigma=0 → σ=样本 ddof=1 标准差
+
+
+def t_ppf_2sided(level, df):
+    return float(stats.t.ppf(0.5 + level / 2.0, df))
+
+
+def pascal_tinv(level, df):
+    """Pascal TINV9x_DATA 复刻：3 位小数标准 t 表 (df 1..30)，超出回退 z。"""
+    if 1 <= df <= 30:
+        return round(t_ppf_2sided(level, df), 3)
+    return {0.90: 1.645, 0.95: 1.96, 0.99: 2.576}[level]
+
+
+def old_buggy_mad(data):
+    """F-31 修复前的 MAD 复刻（奇偶双 off-by-one），仅用于取证边界点。"""
+    s = sorted(data)
+    n = len(s)
+    mid = n // 2
+    med = s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2.0
+    devs = sorted([med - x for x in s[:mid]] + [x - med for x in s[mid + 1:]])
+    t = n // 2
+    return devs[t] if n % 2 else (devs[t - 1] + devs[t]) / 2.0
+
 
 # ---------------------------------------------------------------------------
 # .inc 生成辅助
@@ -251,6 +298,12 @@ def pas_array(name, values, indent="  "):
             lines.append(indent + "  " + ", ".join(row) + sep)
             row = []
     return "\n".join(lines)
+
+
+def pas_int_array(name, values, indent="  "):
+    require(len(values) > 0, f"{name}: 离群点金标集不应为空")
+    body = ", ".join(str(int(v)) for v in values)
+    return f"{indent}{name}: array[0..{len(values) - 1}] of Integer = ({body});"
 
 
 def header(purpose):
@@ -427,6 +480,73 @@ def gen_descriptive():
         out.append(f"  GOLDEN_DESC_{k} = {fmt(v)};")
     out.append(f"  GOLDEN_DESC_TOL = {fmt(tol)};")
     out.append("")
+
+    # --- tranche 2: ConfidenceInterval (t 表) ---
+    n = len(DESC_DATA)
+    mean = vals["MEAN"]
+    sem = vals["STDDEV"] / math.sqrt(n)
+    ci_tol = 1e-3
+    out.append("  { ConfidenceInterval: t 分布双侧临界值 (df=n-1)；Pascal 用 3 位小数")
+    out.append("    t 表，容差覆盖表舍入 (|dt|<=5e-4 -> |d 界|<=dt*sem) }")
+    for level in CI_LEVELS:
+        t_exact = t_ppf_2sided(level, n - 1)
+        t_table = pascal_tinv(level, n - 1)
+        lo, hi = mean - t_exact * sem, mean + t_exact * sem
+        sim_lo, sim_hi = mean - t_table * sem, mean + t_table * sem
+        delta = max(abs(sim_lo - lo), abs(sim_hi - hi))
+        require(delta < ci_tol / 2,
+                f"CI {level}: t 表舍入偏差 {delta:.3g} >= tol/2")
+        tag = str(int(level * 100))
+        note(f"CI{tag} t_exact={t_exact:.6f} t_table={t_table} "
+             f"[{lo:.10g}, {hi:.10g}] |d|={delta:.2e}")
+        out.append(f"  GOLDEN_CI{tag}_LO = {fmt(lo)};")
+        out.append(f"  GOLDEN_CI{tag}_HI = {fmt(hi)};")
+    out.append(f"  GOLDEN_CI_TOL = {fmt(ci_tol)};")
+    out.append("")
+
+    # --- tranche 2: 离群点检测 (Tukey / ZScore / ModifiedZScore) ---
+    out.append("  { 离群点金标: 下标数组按原始数据顺序；ModZ 集含 F-31 边界点")
+    out.append("    (正确 MAD 判离群、旧 off-by-one MAD 漏判) }")
+    for dname, data in (("ODD", OUT_ODD), ("EVEN", OUT_EVEN)):
+        d = np.asarray(data)
+        med = float(np.median(d))
+        q1, q3 = float(np.percentile(d, 25)), float(np.percentile(d, 75))
+        iqr = q3 - q1
+        lo_f, hi_f = q1 - TUKEY_FACTOR * iqr, q3 + TUKEY_FACTOR * iqr
+        tukey_idx = [i for i, x in enumerate(data) if x < lo_f or x > hi_f]
+        for x in data:  # 边界决定性: 每点距最近围栏至少 0.5
+            require(min(abs(x - lo_f), abs(x - hi_f)) > 0.5,
+                    f"OUT_{dname} Tukey: 点 {x} 距围栏过近")
+        mean_, std_ = float(np.mean(d)), float(np.std(d, ddof=1))
+        zs = [abs(x - mean_) / std_ for x in data]
+        z_idx = [i for i, z in enumerate(zs) if z > ZSCORE_THR]
+        require(all(abs(z - ZSCORE_THR) > 0.2 for z in zs),
+                f"OUT_{dname} ZScore: 存在距阈值 <0.2 的临界 z")
+        mad = float(np.median(np.abs(d - med)))
+        modz = [abs(0.6745 * (x - med) / mad) for x in data]
+        modz_idx = [i for i, z in enumerate(modz) if z > MODZ_THR]
+        require(all(abs(z - MODZ_THR) > 0.2 for z in modz),
+                f"OUT_{dname} ModZ: 存在距阈值 <0.2 的临界 modz")
+        # F-31 取证: 旧 MAD 必须更大且改变离群集合
+        omad = old_buggy_mad(data)
+        old_modz_idx = [i for i, x in enumerate(data)
+                        if abs(0.6745 * (x - med) / omad) > MODZ_THR]
+        require(omad > mad,
+                f"OUT_{dname}: 旧 MAD {omad} 未大于正确 MAD {mad}")
+        require(old_modz_idx != modz_idx,
+                f"OUT_{dname}: 数据集未能区分 F-31 新旧 MAD 行为")
+        note(f"OUT_{dname:4s} MAD={mad:g} (旧 bug MAD={omad:g}) "
+             f"tukey={tukey_idx} z={z_idx} modz={modz_idx} (旧 modz={old_modz_idx})")
+        out.append(f"  {{ n={len(data)}: MAD={mad:g}, 旧 off-by-one MAD={omad:g} }}")
+        out.append(pas_array(f"GOLDEN_OUT_{dname}", data))
+        out.append(pas_int_array(f"GOLDEN_OUT_{dname}_TUKEY_IDX", tukey_idx))
+        out.append(pas_int_array(f"GOLDEN_OUT_{dname}_Z_IDX", z_idx))
+        out.append(pas_int_array(f"GOLDEN_OUT_{dname}_MODZ_IDX", modz_idx))
+        out.append("")
+    out.append(f"  GOLDEN_OUT_TUKEY_FACTOR = {fmt(TUKEY_FACTOR)};")
+    out.append(f"  GOLDEN_OUT_Z_THR = {fmt(ZSCORE_THR)};")
+    out.append(f"  GOLDEN_OUT_MODZ_THR = {fmt(MODZ_THR)};")
+    out.append("")
     return "\n".join(out)
 
 
@@ -459,6 +579,99 @@ def gen_analyzer():
     for k, v in vals.items():
         out.append(f"  GOLDEN_AN_{k} = {fmt(v)};")
     out.append(f"  GOLDEN_AN_TOL = {fmt(tol)};")
+    out.append("")
+
+    # --- tranche 2: TrimmedMean (scipy.stats.trim_mean, 双侧 floor 截断) ---
+    out.append("  { TrimmedMean: scipy trim_mean(data, pct/100)；双侧各截 "
+               "Trunc(n*pct/100) }")
+    for pct in TRIM_PCTS:
+        tv = float(stats.trim_mean(d, pct / 100.0))
+        cut_scipy = int(pct / 100.0 * len(AN_DATA))
+        cut_pascal = math.trunc(len(AN_DATA) * pct / 100.0)
+        require(cut_scipy == cut_pascal,
+                f"TRIM {pct}: scipy/Pascal 截断口径不一致 {cut_scipy}/{cut_pascal}")
+        tag = {20.0: "20", 12.5: "125"}[pct]
+        note(f"TRIM {pct:>5}% cut={cut_scipy} -> {tv:.15g}")
+        out.append(f"  GOLDEN_AN_TRIM_PCT_{tag} = {fmt(pct)};")
+        out.append(f"  GOLDEN_AN_TRIM_{tag} = {fmt(tv)};")
+    out.append("")
+
+    # --- tranche 2: Cohen's d (合并 ddof=1 方差) ---
+    a, b = np.asarray(CD_A), np.asarray(CD_B)
+    na, nb = len(a), len(b)
+    pooled = (((na - 1) * np.var(a, ddof=1) + (nb - 1) * np.var(b, ddof=1))
+              / (na + nb - 2))
+    cohend = float((np.mean(a) - np.mean(b)) / math.sqrt(pooled))
+    note(f"COHEND = {cohend:.15g}")
+    out.append("  { Cohen's d: (meanA-meanB)/sqrt(pooled ddof=1 var)，带符号 }")
+    out.append(pas_array("GOLDEN_CD_A", CD_A))
+    out.append(pas_array("GOLDEN_CD_B", CD_B))
+    out.append(f"  GOLDEN_COHEND = {fmt(cohend)};")
+    out.append("")
+
+    # --- tranche 2: Welch 启发式布尔 (HasHeuristicDifferenceAt @ alpha=0.05) ---
+    def welch_t_df(x, y):
+        vx, vy = np.var(x, ddof=1) / len(x), np.var(y, ddof=1) / len(y)
+        t = abs(float(np.mean(x) - np.mean(y))) / math.sqrt(vx + vy)
+        df = (vx + vy) ** 2 / (vx ** 2 / (len(x) - 1) + vy ** 2 / (len(y) - 1))
+        return t, df
+
+    wn = np.asarray(WN_B)
+    t_ab, df_ab = welch_t_df(a, b)
+    t_an, df_an = welch_t_df(a, wn)
+    # 决定性: |t| 相对 t 表临界值（df 下取整与上取整两种取法）都有 >=20% 裕度
+    for dfp in (math.floor(df_ab), math.ceil(df_ab)):
+        require(t_ab > 1.2 * pascal_tinv(0.95, dfp),
+                f"WELCH AB: t={t_ab:.3f} 对 df={dfp} 裕度不足")
+    for dfp in (math.floor(df_an), math.ceil(df_an)):
+        require(t_an < 0.8 * pascal_tinv(0.95, dfp),
+                f"WELCH A-WN: t={t_an:.3f} 对 df={dfp} 裕度不足")
+    note(f"WELCH AB t={t_ab:.4f} df={df_ab:.2f} -> True; "
+         f"A-WN t={t_an:.4f} df={df_an:.2f} -> False")
+    out.append("  { Welch 启发式布尔: alpha=0.05；t 对表临界值双向 >=20% 裕度 }")
+    out.append(pas_array("GOLDEN_WN_B", WN_B))
+    out.append("  GOLDEN_WELCH_AB_DIFF = True;")
+    out.append("  GOLDEN_WELCH_AWN_DIFF = False;")
+    out.append("")
+
+    # --- tranche 2: Bayesian 正态-正态共轭 ---
+    bd = np.asarray(BAYES_DATA)
+    z975 = float(norm.ppf(0.975))
+
+    def conjugate(prior_mean, prior_std, sigma):
+        n_ = len(bd)
+        post_var = 1.0 / (1.0 / prior_std ** 2 + n_ / sigma ** 2)
+        post_mean = post_var * (prior_mean / prior_std ** 2
+                                + n_ * float(np.mean(bd)) / sigma ** 2)
+        post_std = math.sqrt(post_var)
+        return post_mean, post_std, post_mean - z975 * post_std, \
+            post_mean + z975 * post_std
+
+    pm1, ps1, cl1, cu1 = conjugate(BAYES_PRIOR_MEAN, BAYES_PRIOR_STD, BAYES_SIGMA)
+    sigma2 = math.sqrt(float(np.var(bd, ddof=1)))  # ASigma=0 -> 样本 ddof=1 std
+    pm2, ps2, _, _ = conjugate(BAYES2_PRIOR_MEAN, BAYES2_PRIOR_STD, sigma2)
+    # Acklam z 与 scipy ppf 的偏差对可信区间的实际影响须 < tol/2
+    require(abs(acklam_ppf(0.975) - z975) * ps1 < 1e-8 / 2.0,
+            "BAYES: Acklam z 偏差对可信区间影响过大")
+    note(f"BAYES1 post=({pm1:.12g}, {ps1:.12g}) cred=[{cl1:.12g}, {cu1:.12g}]")
+    note(f"BAYES2 sigma={sigma2:.12g} post=({pm2:.12g}, {ps2:.12g})")
+    out.append("  { Bayesian 正态-正态共轭: 例1 显式 sigma；例2 ASigma=0 -> "
+               "样本 ddof=1 std }")
+    out.append(pas_array("GOLDEN_BAYES_DATA", BAYES_DATA))
+    out.append(f"  GOLDEN_BAYES_PRIOR_MEAN = {fmt(BAYES_PRIOR_MEAN)};")
+    out.append(f"  GOLDEN_BAYES_PRIOR_STD = {fmt(BAYES_PRIOR_STD)};")
+    out.append(f"  GOLDEN_BAYES_SIGMA = {fmt(BAYES_SIGMA)};")
+    out.append(f"  GOLDEN_BAYES_POST_MEAN = {fmt(pm1)};")
+    out.append(f"  GOLDEN_BAYES_POST_STD = {fmt(ps1)};")
+    out.append(f"  GOLDEN_BAYES_CRED_LO = {fmt(cl1)};")
+    out.append(f"  GOLDEN_BAYES_CRED_HI = {fmt(cu1)};")
+    out.append(f"  GOLDEN_BAYES2_PRIOR_MEAN = {fmt(BAYES2_PRIOR_MEAN)};")
+    out.append(f"  GOLDEN_BAYES2_PRIOR_STD = {fmt(BAYES2_PRIOR_STD)};")
+    out.append(f"  GOLDEN_BAYES2_POST_MEAN = {fmt(pm2)};")
+    out.append(f"  GOLDEN_BAYES2_POST_STD = {fmt(ps2)};")
+    out.append(f"  GOLDEN_TRIM_TOL = {fmt(1e-9)};")
+    out.append(f"  GOLDEN_CD_TOL = {fmt(1e-9)};")
+    out.append(f"  GOLDEN_BAYES_TOL = {fmt(1e-8)};")
     out.append("")
     return "\n".join(out)
 

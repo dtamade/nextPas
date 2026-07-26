@@ -453,9 +453,11 @@ end;
 function TBenchStatsAnalyzer.TInvAlpha(ADF, AAlpha: Double): Double;
 begin
   // DS-04: map common alpha values to lookup tables; fallback to 95%
-  if AAlpha <= BENCH_SIGNIFICANCE_ALPHA_HIGH then
+  // 边界比较带 F-32 余量，否则 Double(0.01) > extended 0.01 会让
+  // alpha=0.01 的调用者拿到 95% 临界值（反保守）
+  if AAlpha <= BENCH_SIGNIFICANCE_ALPHA_HIGH + BENCH_LEVEL_EPS then
     Result := TInvLookup(ADF, TINV99_DATA, Z_SCORE_99)
-  else if AAlpha <= BENCH_SIGNIFICANCE_ALPHA then
+  else if AAlpha <= BENCH_SIGNIFICANCE_ALPHA + BENCH_LEVEL_EPS then
     Result := TInvLookup(ADF, TINV95_DATA, Z_SCORE_95)
   else
     // alpha > BENCH_SIGNIFICANCE_ALPHA: use 95% critical value (conservative)

@@ -8,6 +8,9 @@ unit nextpas.core.bench.report;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
+{ 实数字面量最低 Double，防止与整型混算落到 Single 精度（见 stats 同注）；
+  本单元 FormatBytes 的 ABytes/1024.0 依赖此指令 (F-30) }
+{$MINFPCONSTPREC 64}
 
 interface
 

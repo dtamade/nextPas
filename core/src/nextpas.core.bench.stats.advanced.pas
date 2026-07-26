@@ -509,7 +509,10 @@ begin
 
   if LN mod 2 = 1 then
   begin
-    { 奇数个元素: 找第 LTarget 小的 deviation }
+    { 奇数个元素: 归并流不含 median 自身的 0 偏差（全集最小值），
+      全集第 LTarget 小在流中是第 LTarget-1 小 (F-31)；
+      n=1 时 LTarget 变 -1，循环不执行，LMAD=0 走无异常值路径 }
+    Dec(LTarget);
     LSteps := 0;
     LMAD := 0;
     while LSteps <= LTarget do
@@ -542,7 +545,9 @@ begin
   end
   else
   begin
-    { 偶数个元素: 找第 LTarget-1 和第 LTarget 小的 deviation，取平均 }
+    { 偶数个元素: 右半必须从 LMedIdx 起——S[LMedIdx] 的偏差非零且属于全集，
+      从 LMedIdx+1 起会整个漏掉它 (F-31)；找第 LTarget-1/LTarget 小取平均 }
+    RJ := LMedIdx;
     LSteps := 0;
     LMAD := 0;
     while LSteps <= LTarget do
@@ -623,12 +628,13 @@ begin
     Exit;
   end;
 
-  // 使用 t 分布临界值（小样本更准确）
-  if ALevel >= 0.99 then
+  // 使用 t 分布临界值（小样本更准确）；边界比较带 F-32 余量，
+  // 否则 Double(0.95) < extended 0.95 会让请求 95% 的调用者拿到 90% 表
+  if ALevel >= 0.99 - BENCH_LEVEL_EPS then
     LTCritical := TInvLookup(LCount - 1, TINV99_DATA, 2.576)
-  else if ALevel >= 0.95 then
+  else if ALevel >= 0.95 - BENCH_LEVEL_EPS then
     LTCritical := TInvLookup(LCount - 1, TINV95_DATA, 1.96)
-  else if ALevel >= 0.90 then
+  else if ALevel >= 0.90 - BENCH_LEVEL_EPS then
     LTCritical := TInvLookup(LCount - 1, TINV90_DATA, 1.645)
   else
     // DS-05: <90% level has no lookup table; conservatively use 95% critical value.
