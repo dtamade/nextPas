@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
 **最后更新**：2026-07-26（h2 wire/streams/request extract）
-**版本**：3.47
+**版本**：3.48
 
 ---
 
@@ -329,9 +329,9 @@ end;
 
 - Go 错误字符串 / `errors.Is` 树 **不** 1:1 复刻；调用方用 `EHttpError.Kind` / `HttpErrorIsTimeout` / `HttpErrorIsUserError`。
 - Windows cancel waitable via TCP-loopback `platform_socket_pair`（PD-3-3）；probe-only 仅 pair 失败兜底。Wine smoke：`make -C core/tests/nextpas.core.platform.socket/test_platform_socket_wine wine-runtime-smoke`（含 socket_pair 字节唤醒；**非** real-Windows / **非** Windows scale-ready）。
-- Multi-OS HTTP host（R2-5+ / W2-3）：`bash core/scripts/http-host-ci-matrix.sh` → `test_http_threaded_host`（钉 `THttpServerOptions.Default.Backend=tsbThreaded`）+ `test_http_iocp_wine`（IOCP wire，Windows host 真用例 / 其他 host skip 断言）。**CI hosts**：Linux / macOS / Windows / FreeBSD（`core-ci.yml`）。truth=`host-runtime`；**非** scale-ready / **非** full facade TLS。
-- Windows HTTP threaded wine（R2-5）：`make -C core/tests/nextpas.core.http/test_http_threaded_wine wine-runtime-smoke` — 同上 wire 在 Win64+Wine；**非** real-Windows / **非** scale-ready。full `uses nextpas.core.http` Win64 交叉仍 residual（TLS 链触 `system.sysutils` FPC internal）。
-- Windows IOCP（W2-1..W2-3b landed）：`TCP_SERVER_BACKEND_IOCP` factory 在 Windows 注册；`nextpas.core.net.server.iocp` = AcceptEx + **completion 驱动 recv/send/deadline-wake 数据路径**（零字节 recv readiness 桥 + server 自有 GQCS 循环 + writable waiter timeout 重试 + 有限 `WakeDeadline` 经 `TryCancelByContext` 取消唤醒；生产 H1 session 走完成路径；guard 外仍回退 worker handoff）。**real-Windows host 证据**：`http.iocp_wire` 5 用例 + 0 unfreed（windows-latest，2026-07-26 run 30195741147）；Wine smoke `make -C core/tests/nextpas.core.http/test_http_iocp_wine wine-runtime-smoke`（6 用例；Wine 大 buffer send 整块吞语义差异——backpressure 测试须分块写，真机无此差异）；**非** scale-ready。
+- Multi-OS HTTP host（R2-5+ / W2-3 / M-1）：`bash core/scripts/http-host-ci-matrix.sh` → `test_http_threaded_host`（钉 `THttpServerOptions.Default.Backend=tsbThreaded`）+ `test_http_iocp_wine`（IOCP wire）+ `test_http_iocp_facade_wine`（产品 facade over IOCP；Windows host 真用例 / 其他 host skip 断言）。**CI hosts**：Linux / macOS / Windows / FreeBSD（`core-ci.yml`）。truth=`host-runtime`；**非** scale-ready / **非** TLS-over-Windows。
+- Windows HTTP threaded wine（R2-5）：`make -C core/tests/nextpas.core.http/test_http_threaded_wine wine-runtime-smoke` — 同上 wire 在 Win64+Wine；**非** real-Windows / **非** scale-ready。~~full `uses nextpas.core.http` Win64 交叉 residual（TLS 链触 `system.sysutils` FPC internal）~~ **已消除（M-1，2026-07-26）**：full facade Win64 交叉编译成功，由 `test_http_iocp_facade_wine` 的 uses 常驻钉住防回归；TLS 运行时在 Windows 仍未验证（无 OpenSSL host 环境）。
+- Windows IOCP（W2-1..W2-3b landed）：`TCP_SERVER_BACKEND_IOCP` factory 在 Windows 注册；`nextpas.core.net.server.iocp` = AcceptEx + **completion 驱动 recv/send/deadline-wake 数据路径**（零字节 recv readiness 桥 + server 自有 GQCS 循环 + writable waiter timeout 重试 + 有限 `WakeDeadline` 经 `TryCancelByContext` 取消唤醒；生产 H1 session 走完成路径；guard 外仍回退 worker handoff）。**real-Windows host 证据**：`http.iocp_wire` 5 用例 + 0 unfreed（windows-latest，2026-07-26 run 30195741147）；Wine smoke `make -C core/tests/nextpas.core.http/test_http_iocp_wine wine-runtime-smoke`（6 用例；Wine 大 buffer send 整块吞语义差异——backpressure 测试须分块写，真机无此差异）；**产品 facade 端到端（M-1）**：`test_http_iocp_facade_wine` = `THttpServer`（full facade）+ `Backend=tsbIocp` 真 HTTP/1.1 GET + keep-alive 两连发（Wine 3 用例 + 0 unfreed；completion-vs-worker 路径归属仍由 wire suite 证明）；**非** scale-ready。
 - 413/431 的深度边角（Expect 后 413、queued follow-up、write-timeout 不串写）见 `test_http_server` / `test_http_security`；Q3-2 矩阵只锁 **主路径语义**。
 
 #### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
@@ -878,6 +878,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-26 | 3.45 | h2 settings 共享：`H2ParseSettingsPayload` + `H2MinUInt32` → `impl.h2.types`；client/session 去重 |
 | 2026-07-26 | 3.46 | h2 巨石机械拆：`impl.h2.wire` + `impl.h2.client.streams` + `impl.h2.session.request`；client ~1759 / session ~1411；inventory **82** |
 | 2026-07-26 | 3.47 | Era W2（W2-1..W2-3b）：IOCP completion 驱动 recv/send/deadline-wake；host matrix 增 `http.iocp_wire`（真 Windows 证据 run 30195741147）；residual 措辞对齐；scale=No 维持 |
+| 2026-07-26 | 3.48 | M-1 产品 facade over IOCP：`test_http_iocp_facade_wine`（THttpServer+tsbIocp GET/keep-alive，Wine 3 用例）；full facade Win64 交叉 residual 消除（uses 常驻钉住）；host matrix 增 `http.iocp_facade` |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |

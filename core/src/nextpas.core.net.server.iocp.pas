@@ -601,8 +601,8 @@ begin
   begin
     if TryRegisterCompletionRecvSession(AConn, LSession) then
       Exit;
-    { Session outside the completion-recv guard (finite wake deadline,
-      non-readable initial interest, or no poll shape) — worker handoff. }
+    { Session outside the completion-recv guard (non-readable initial
+      interest or no poll shape) — worker handoff. }
     DispatchAcceptedSession(AConn, LSession);
     Exit;
   end;
