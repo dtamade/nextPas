@@ -36,6 +36,7 @@
 | **Q39** | IOCP ConnectEx pre-bind | ConnectEx 前 wildcard bind + WSAGetLastError | **done** |
 | **Q40** | IOCP datagram | AsyncSendTo/AsyncRecvFrom via WSASendTo/WSARecvFrom | **done** |
 | **Q41** | Wake coalescing + bench 旗标诚实化 | post/channel 与 Go 同数量级；stress 3 新测试 0 leak | **done** |
+| **Q42** | Windows dial 根治 | ConnectEx GUID 修正 + 关联缓存废除；wine dial 19/19、pool 4/4 | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
 | **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
@@ -122,13 +123,36 @@ UDP soft 仍待 IOCP `AsyncSendTo`/`AsyncRecvFrom`（poller 明确未实现）�
 
 已知次级成本（不动）：MPSC per-node New/Dispose——lockfree F-044 已证明池化为否定结果（FPC per-thread 堆即 TLS 池）。
 
+### Q42 细节（Windows dial 根治）
+
+GHA 真机证据（Q39/Q40 后仍红）：dial 16/19 失败全 -111、pool 120s timeout。wine 10.0 完整复现同模式，成为本地迭代通道。probe 二分出两层根因：
+
+1. **WSAID_CONNECTEX GUID 抄错**：仓库值 `{25a3ac90-...}` 不是任何已知 WSAID（权威值
+   `{25a207b9-ddf3-4660-8ee9-76e58c74063e}`，mswsock.h / FPC jwamswsock.pas 一致）。
+   `WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER)` 静默失败 → `_ConnectEx=nil` →
+   所有 dial 报 ERROR_NOT_SUPPORTED → 兜底成 -111。AcceptEx GUID 正确，解释了
+   accept 绿 / dial 红的失败面切割。wine dial 3→12 passed。
+2. **关联缓存被 handle 复用欺骗**：`IocpEnsureAssociatedHandle` 按 handle 值缓存
+   「已关联」。closesocket 后 OS 立即复用 handle 值（probe 证实两个 attempt 同
+   fd），多地址 dial 的二号 socket 命中陈旧缓存跳过 `CreateIoCompletionPort`，
+   ConnectEx 完成永不投递，挂到 Close 的 CancelIoEx 强杀（-995）。修复：废除缓存，
+   总是关联，`ERROR_INVALID_PARAMETER`（重复关联，Windows/Wine 同语义）视为幂等
+   成功。wine dial 12→19/19；pool 4/4（原 GHA 120s timeout 同根因）。
+
+契约测试新增两条防回归断言：幂等 87 语义 + 禁止按 handle 值缓存关联。
+
+已知残留（未动）：IOCP 完成回调携带 Windows 系统码（-1225 CONNECTION_REFUSED、
+-995 OPERATION_ABORTED），dial 层兜底把它们覆盖成 -111；POSIX 语义映射
+（-1225→-111、-995→-125）缺失——真机 DialTokenCancel expected -125 actual -111
+即此债。候选下一刀。
+
 ### 待升 STRICT 条件
 
 | soft 套件 | 阻塞 | 修复 |
 |-----------|------|------|
-| dial / pool | ConnectEx unbound | **Q39** |
+| dial / pool | ConnectEx unbound → GUID + 关联缓存 | **Q39 + Q42**；wine 全绿，待 GHA 真机确认后升 |
 | udp | 无 IOCP datagram | **Q40** |
-| cancel_bridge | 依赖 stream bind + dial | Q39 后应连带改善 |
+| cancel_bridge | 依赖 stream bind + dial | GHA 真机已绿；wine 剩 WaitableWakePresentOnUnix（socketpair 模拟差距，非产品 bug） |
 
 ## Q13 细节
 
