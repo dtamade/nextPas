@@ -33,7 +33,9 @@ help:
 
 # Kernel evidence (not default lane_gate): Growing/scavenge + long-run + host compile.
 # sharded = TLS/concurrency regression face (MEM2-T-002); safety = tracked
-# double-free/foreign-pointer raise net (MEM2-T-004).
+# double-free/foreign-pointer raise net (MEM2-T-004); cross_thread_free +
+# mt_fuzz = growing cross-thread routing / lock-free span-table face
+# (directed races + unplanned-interleaving fuzz).
 test-extended:
 	$(MAKE) -C test_usability_guardrails clean test
 	$(MAKE) -C test_contract_matrix clean test
@@ -41,6 +43,8 @@ test-extended:
 	$(MAKE) -C test_soak clean test
 	$(MAKE) -C test_sharded_pools clean test
 	$(MAKE) -C test_heap_safety_profile test
+	$(MAKE) -C test_cross_thread_free clean test
+	$(MAKE) -C test_mt_fuzz clean test
 	$(MAKE) -C test_mem_cross_os_compile_gate clean test
 
 list:
