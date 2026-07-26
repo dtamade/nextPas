@@ -307,6 +307,13 @@ else
   FreeMem(P);  // huge/foreign：兼容扫描或 System 回落
 ```
 
+> **外源指针安全契约（MEM2-C-001）**：`FreeMem(P)` 对非本堆拥有的指针会回落
+> `NpSystemFreeMem` —— 外源/错堆指针是 **UB**（与 Rust `dealloc` 错 layout 同级）。
+> 生产代码对来源不确定的指针一律用 `TryFreeMemOf`（foreign → False，fail-closed）。
+> 检测网：`NEXTPAS_MEM_HEAP_SAFETY=1` 一键开启（process route + tracking+sentinel），
+> free 未追踪指针 `raise EDoubleFree`（"pointer not tracked (double-free or foreign pointer)"）；
+> 冒烟入口 `make -C core/tests/nextpas.core.mem/test_heap_safety_profile test`（已进 test-extended）。
+
 ## 高级路径（子模块入口）
 
 门面 `nextpas.core.mem` 导出 65 个常用类型。以下高级功能需直接引用子模块：

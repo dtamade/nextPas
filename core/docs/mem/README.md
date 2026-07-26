@@ -427,4 +427,4 @@ end;
 | [BENCHMARKS.md](BENCHMARKS.md) | 历史微基准（非 Ready 权威） |
 | [API.md](API.md) | 长参考；冲突时以 README/GUIDE 为准 |
 | [USABILITY-AUDIT.md](USABILITY-AUDIT.md) | 历史可用性长报告（SUPERSEDED） |
-| [archive/](archive/) | 时代 A ROADMAP phase 清单与旧设计 |
+| [archive/](archive/) | 历史归档：时代 A phase 清单、旧设计、已收口的计划/审计履历（零引用即入档，MEM2-N-001） |
