@@ -332,10 +332,13 @@ begin
     'constructor TLockFreeMsQueueImpl.Create');
   LDequeue := ExtractSection(LSource, 'function TLockFreeMsQueueImpl.TryDequeue',
     'procedure TLockFreeMsQueueImpl.Close');
-  CheckContains(LSource, 'FActiveOperations: Int32',
-    'MS queue tracks admitted array readers');
+  CheckContains(LSource,
+    'FOpStripes: array[0..MSQUEUE_OP_STRIPES - 1] of TMsQueueOpStripe',
+    'MS queue tracks admitted operations in striped counters (F-041)');
   CheckContains(LSource, 'FResizing: Int32',
     'MS queue serializes growth');
+  CheckContains(LGrow, 'atomic_load(FOpStripes[LI].Count, mo_acquire)',
+    'growth waits for admitted operations across all stripes');
   CheckContains(LGrow, 'LNewNodes', 'MS queue grows into local node storage');
   CheckContains(LGrow, 'LNewFreeList', 'MS queue grows into local free-list storage');
   CheckBefore(LDequeue, 'LCandidateValue := FNodes[LNextIdx].FValue',

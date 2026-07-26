@@ -17,6 +17,20 @@ type
     msqEmpty
   );
 
+const
+  { Resize-guard stripes: threads hash onto separate counter lines so the
+    per-op Enter/Leave RMW pair stays uncontended; Grow scans them all. }
+  MSQUEUE_OP_STRIPES = 8; { power of 2 }
+
+type
+  { One resize-guard counter per stripe. The trailing full-line pad keeps
+    consecutive Count fields >= 64B apart, so no two stripes can share a
+    cache line at any heap placement phase (same argument as TCacheLinePad). }
+  TMsQueueOpStripe = record
+    Count: Int32;
+    Pad: TCacheLinePad;
+  end;
+
   {** @desc Michael-Scott 无锁无界 MPMC 队列
     @details 经典无锁队列算法，使用 index-based 节点池。
       - 入队: CAS 更新 tail.next，然后 CAS 移动 tail 指针
@@ -40,24 +54,49 @@ type
         FNext: Int32;
       end;
   private
+    { Read-mostly header: node/freelist refs + capacity, read on every op;
+      padded off the hot RMW lines below (F-032 rule). }
     FNodes: array of TNode;
     FFreeList: array of TFreeNode;
     FCapacity: Int32;
-    FFreeHead: Int64;   // packed: (index:32 | aba:32)
-    FHead: Int64;        // packed: (index:32 | aba:32)
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadHeader: TCacheLinePad;
+    {$POP}
+    // Producer line: tail pointer + enqueued counter, both RMW'd by every
+    // successful enqueue (same writer population, F-033 rule).
     FTail: Int64;        // packed: (index:32 | aba:32)
-    FCount: Int64;
-    FClosed: Int32;
-    FActiveOperations: Int32;
+    FEnqueued: Int64;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadTail: TCacheLinePad;
+    {$POP}
+    // Consumer line (mirror): head pointer + dequeued counter.
+    FHead: Int64;        // packed: (index:32 | aba:32)
+    FDequeued: Int64;
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadHead: TCacheLinePad;
+    {$POP}
+    // Free-list head is CAS'd by BOTH sides every op (alloc on enqueue,
+    // recycle on dequeue) — it cannot join either side's line, so it gets
+    // its own.
+    FFreeHead: Int64;   // packed: (index:32 | aba:32)
+    {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
+    FPadFree: TCacheLinePad;
+    {$POP}
+    // Resize guard striped by thread-id hash so the per-op Enter/Leave RMW
+    // pair lands on an uncontended line (each stripe self-padded, F-037).
+    FOpStripes: array[0..MSQUEUE_OP_STRIPES - 1] of TMsQueueOpStripe;
+    // Cold tail: FResizing flips only during Grow, FClosed once at Close.
     FResizing: Int32;
+    FClosed: Int32;
 
     function TryAllocNodeIdx(out AIdx: Int32): Boolean;
     procedure FreeNodeIdx(AIdx: Int32);
     function Pack(AIdx, ATag: Int32): Int64;
     function UnpackIdx(APacked: Int64): Int32;
     function UnpackTag(APacked: Int64): Int32;
-    procedure EnterOperation;
-    procedure LeaveOperation;
+    class function OpStripeIndex: PtrUInt; static; inline;
+    procedure EnterOperation(const AStripe: PtrUInt); inline;
+    procedure LeaveOperation(const AStripe: PtrUInt); inline;
     procedure Grow;
   public
     constructor Create(ACapacity: Int32 = 64);
@@ -136,22 +175,34 @@ begin
   until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNew, mo_acq_rel, mo_acquire);
 end;
 
-procedure TLockFreeMsQueueImpl.EnterOperation;
+{$PUSH} {$Q-} {$R-} { hash multiply wraps mod 2^N by design }
+class function TLockFreeMsQueueImpl.OpStripeIndex: PtrUInt;
+begin
+  { Thread ids on Linux are pthread descriptor addresses, often exactly 8MB
+    apart (stack-top allocation) — a bare shift would collide systematically.
+    Multiplying by an odd constant is a bijection mod 2^N and spreads any
+    fixed stride across the high bits; take bits 24.. for the stripe. }
+  Result := (PtrUInt(GetCurrentThreadId) * PtrUInt($9E3779B9)) shr 24
+    and (MSQUEUE_OP_STRIPES - 1);
+end;
+{$POP}
+
+procedure TLockFreeMsQueueImpl.EnterOperation(const AStripe: PtrUInt);
 begin
   while True do
   begin
     while atomic_load(FResizing, mo_acquire) <> 0 do
       CpuPause;
-    atomic_fetch_add(FActiveOperations, 1, mo_acq_rel);
+    atomic_fetch_add(FOpStripes[AStripe].Count, 1, mo_acq_rel);
     if atomic_load(FResizing, mo_acquire) = 0 then
       Exit;
-    atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
+    atomic_fetch_sub(FOpStripes[AStripe].Count, 1, mo_acq_rel);
   end;
 end;
 
-procedure TLockFreeMsQueueImpl.LeaveOperation;
+procedure TLockFreeMsQueueImpl.LeaveOperation(const AStripe: PtrUInt);
 begin
-  atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
+  atomic_fetch_sub(FOpStripes[AStripe].Count, 1, mo_acq_rel);
 end;
 
 procedure TLockFreeMsQueueImpl.Grow;
@@ -173,8 +224,12 @@ begin
     Exit;
   end;
   try
-    while atomic_load(FActiveOperations, mo_acquire) <> 0 do
-      CpuPause;
+    { Quiescence: FResizing=1 is published, so EnterOperation cannot admit
+      new operations (it re-checks and backs out); each stripe drains to 0.
+      Same argument as the single counter, applied per stripe. }
+    for LI := 0 to MSQUEUE_OP_STRIPES - 1 do
+      while atomic_load(FOpStripes[LI].Count, mo_acquire) <> 0 do
+        CpuPause;
     LOldFree := atomic_load_64(FFreeHead, mo_acquire);
     if UnpackIdx(LOldFree) >= 0 then
       Exit;
@@ -229,7 +284,8 @@ begin
   FFreeList[ACapacity - 1].FNext := -1;
   FCapacity := ACapacity;
   FFreeHead := Pack(0, 0);
-  FActiveOperations := 0;
+  for I := 0 to MSQUEUE_OP_STRIPES - 1 do
+    FOpStripes[I].Count := 0;
   FResizing := 0;
   if not TryAllocNodeIdx(LSentinel) then
     raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue: sentinel allocation failed'));
@@ -237,7 +293,8 @@ begin
   FNodes[LSentinel].FNext := Pack(-1, 0);
   FHead := Pack(LSentinel, 0);
   FTail := Pack(LSentinel, 0);
-  FCount := 0;
+  FEnqueued := 0;
+  FDequeued := 0;
   FClosed := 0;
 end;
 
@@ -266,17 +323,21 @@ var
   LNodeIdx, LTailIdx, LNextIdx: Int32;
   LOldTail, LOldNext, LNewTail, LNewNext: Int64;
   LExpected: Int64;
+  LStripe: PtrUInt;
 begin
   if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
+  { Stripe computed ONCE and passed to the paired Enter/Leave: recomputing
+    could decrement a different stripe and let Grow see false quiescence. }
+  LStripe := OpStripeIndex;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
-    EnterOperation;
+    EnterOperation(LStripe);
     if TryAllocNodeIdx(LNodeIdx) then
       Break;
-    LeaveOperation;
+    LeaveOperation(LStripe);
     Grow;
   end;
   try
@@ -300,7 +361,9 @@ begin
             LNewTail := Pack(LNodeIdx, UnpackTag(LOldTail) + 1);
             LExpected := LOldTail;
             atomic_compare_exchange_strong_64(FTail, LExpected, LNewTail, mo_acq_rel, mo_acquire);
-            atomic_fetch_add_64(FCount, 1);
+            { Diagnostic counter only (ApproxCount): relaxed is enough, no
+              algorithm invariant orders on it (F-040 rationale). }
+            atomic_fetch_add_64(FEnqueued, 1, mo_relaxed);
             Exit(True);
           end;
         end
@@ -313,7 +376,7 @@ begin
       end;
     end;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
@@ -340,9 +403,11 @@ var
   LCandidateValue: T;
   LHasCandidate: Boolean;
   LExpected: Int64;
+  LStripe: PtrUInt;
 begin
   Result := False;
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     while True do
     begin
@@ -377,14 +442,14 @@ begin
               Result := True;
             end;
             FreeNodeIdx(LHeadIdx);
-            atomic_fetch_add_64(FCount, -1);
+            atomic_fetch_add_64(FDequeued, 1, mo_relaxed);
             Exit;
           end;
         end;
       end;
     end;
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
@@ -428,16 +493,31 @@ begin
 end;
 
 function TLockFreeMsQueueImpl.ApproxCount: Int64;
+var
+  LEnq, LDeq: Int64;
 begin
-  Result := atomic_load_64(FCount, mo_relaxed);
+  { Read FDequeued first (acquire): FEnqueued read afterwards is at least as
+    fresh, so the difference is biased toward overstating count — the
+    conservative direction for callers polling for drain (F-038 argument).
+    The clamp also covers the pre-existing transient window where a consumer
+    counts its dequeue before the producer counts the matching enqueue (the
+    old single FCount could momentarily read negative there). }
+  LDeq := atomic_load_64(FDequeued, mo_acquire);
+  LEnq := atomic_load_64(FEnqueued, mo_relaxed);
+  if LEnq > LDeq then
+    Result := LEnq - LDeq
+  else
+    Result := 0;
 end;
 
 function TLockFreeMsQueueImpl.IsEmpty: Boolean;
 var
   LHeadIdx, LTailIdx, LNextIdx: Int32;
   LOldHead, LOldTail, LOldNext: Int64;
+  LStripe: PtrUInt;
 begin
-  EnterOperation;
+  LStripe := OpStripeIndex;
+  EnterOperation(LStripe);
   try
     LOldHead := atomic_load_64(FHead, mo_acquire);
     LHeadIdx := UnpackIdx(LOldHead);
@@ -447,7 +527,7 @@ begin
     LNextIdx := UnpackIdx(LOldNext);
     Result := (LHeadIdx = LTailIdx) and (LNextIdx < 0);
   finally
-    LeaveOperation;
+    LeaveOperation(LStripe);
   end;
 end;
 
