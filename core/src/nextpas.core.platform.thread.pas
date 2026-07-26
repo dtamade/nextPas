@@ -531,6 +531,12 @@ function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlat
 var
   LState: PPlatformPThreadState;
 begin
+  { 我们用裸 pthread_create 起线程，绕过 FPC 的 BeginThread——而 BeginThread
+    正是把 IsMultiThread 置 True 的地方。为 False 时 FPC 对 managed 类型
+    (ansistring/interface/dynarray) 用非原子 refcount，真实并发下会撕裂计数
+    导致泄漏/双释放。在 spawn 前置位（BeginThread 同序），让所有后续 refcount
+    走 LOCK 前缀原子指令。 }
+  IsMultiThread := True;
   AHandle := nil;
   Result := platform_thread_host_state_create(LState, Pointer(AProc), AArg);
   if Result = 0 then
@@ -888,6 +894,9 @@ function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlat
 var
   LState: PPlatformWindowsThreadState;
 begin
+  { 见 Unix 分支说明：裸 CreateThread 绕过 FPC BeginThread，须自行置
+    IsMultiThread 让 managed 类型 refcount 走原子路径。 }
+  IsMultiThread := True;
   AHandle := nil;
   Result := platform_thread_windows_state_create(TPlatformWindowsThreadProc(AProc), AArg, LState);
   if Result = 0 then
