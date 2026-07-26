@@ -1,11 +1,13 @@
 unit nextpas.core.net.server.iocp;
 {**
- * @desc Windows IOCP TCP server backend (phase-2 recv).
+ * @desc Windows IOCP TCP server backend (phase-2 recv + send drain).
  *       Completion-driven AcceptEx + zero-byte overlapped recv bridging
  *       completions to readiness: poll-driven sessions advance on the
- *       reactor thread via TryRead/TryWrite. Send-side completion driving
- *       and deadline wake are still worker-handoff scope (W2-2); sessions
- *       outside the recv-only guard fall back to worker handoff.
+ *       server-owned GQCS loop via TryRead/TryWrite. Sessions parked on
+ *       writable interest are re-advanced on a short GQCS timeout (single
+ *       -wait invariant: recv op parked XOR writable waiter). Deadline
+ *       wake is still worker-handoff scope; sessions outside the guard
+ *       fall back to worker handoff.
  *       truth: registered only on Windows; wine-runtime-smoke is not
  *       real-Windows scale-ready evidence.
  *}
@@ -43,6 +45,12 @@ uses
   ;
 
 {$IFDEF NEXTPAS_WINDOWS}
+
+const
+  { Retry cadence for sessions parked on writable interest: kernel send
+    buffers drain in well under a millisecond once the peer reads, so 1ms
+    keeps drain latency low without a busy spin. }
+  IOCP_WRITABLE_RETRY_MS = 1;
 
 type
   TTcpIocpServer = class;
@@ -95,6 +103,10 @@ type
     function ArmConnRecv(const ADriver: PIocpConnDriver): Boolean;
     procedure HandleConnRecvDone(const ADriver: PIocpConnDriver;
       const AResult: Int32);
+    procedure AdvanceConnDriver(const ADriver: PIocpConnDriver;
+      const AEvents: TPlatformPollEvents);
+    procedure RetryWritableWaiters;
+    function ComputeWaitTimeoutMs: UInt32;
     procedure AddConnDriver(const ADriver: PIocpConnDriver);
     procedure RemoveConnDriver(const ADriver: PIocpConnDriver);
     procedure CloseConnDriver(const ADriver: PIocpConnDriver;
@@ -333,8 +345,10 @@ begin
     Exit;
   if not TryCreateTcpServerPollSessionTarget(AConn, ASession, LTarget) then
     Exit;
-  { W2-1 recv-only scope: no reactor timer for deadline wake, and initial
-    interest must be readable-only (send-side completion driving is W2-2). }
+  { W2-2 scope: initial interest must be readable-only (sessions start by
+    reading a request; writable interest is entered later via Advance and
+    served by the timeout retry loop). Finite wake deadlines still need a
+    reactor timer — those sessions stay on worker handoff. }
   if (not LTarget.WakeDeadline.IsInfinite) or
      (LTarget.CurrentEvents <> [peReadable]) then
   begin
@@ -358,18 +372,24 @@ end;
 
 procedure TTcpIocpServer.HandleConnRecvDone(const ADriver: PIocpConnDriver;
   const AResult: Int32);
-var
-  LNext: TPlatformPollEvents;
-  LOwnership: TTcpServerConnOwnership;
-  LResult: TTcpServerPollResult;
 begin
   if (not FRunning) or (AResult < 0) then
   begin
     CloseConnDriver(ADriver, tscoServer);
     Exit;
   end;
+  AdvanceConnDriver(ADriver, [peReadable]);
+end;
+
+procedure TTcpIocpServer.AdvanceConnDriver(const ADriver: PIocpConnDriver;
+  const AEvents: TPlatformPollEvents);
+var
+  LNext: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LResult: TTcpServerPollResult;
+begin
   try
-    LResult := ADriver^.Target.HandleEvents([peReadable], LNext, LOwnership);
+    LResult := ADriver^.Target.HandleEvents(AEvents, LNext, LOwnership);
   except
     CloseConnDriver(ADriver, tscoServer);
     Exit;
@@ -379,6 +399,14 @@ begin
     CloseConnDriver(ADriver, LOwnership);
     Exit;
   end;
+  { Single-wait invariant: a driver either has a recv op parked or sits in
+    the writable-waiter set — never both. Composite wait sets collapse to
+    the writable side (W2-2 simplification); the timeout loop retries them. }
+  if peWritable in LNext then
+  begin
+    ADriver^.Target.SetCurrentEvents(LNext);
+    Exit;
+  end;
   if LNext = [peReadable] then
   begin
     ADriver^.Target.SetCurrentEvents(LNext);
@@ -386,9 +414,36 @@ begin
       CloseConnDriver(ADriver, tscoServer);
     Exit;
   end;
-  { Writable interest / empty wait set have no completion driver yet (W2-2):
-    close defensively instead of leaking a stalled connection. }
+  { Empty wait set without a deadline cannot make progress — close honestly. }
   CloseConnDriver(ADriver, tscoServer);
+end;
+
+procedure TTcpIocpServer.RetryWritableWaiters;
+var
+  LI: SizeInt;
+  LWaiters: array of PIocpConnDriver;
+begin
+  { Snapshot first: AdvanceConnDriver may close drivers and mutate
+    FConnDrivers (swap-remove) while we iterate. }
+  LWaiters := nil;
+  for LI := 0 to High(FConnDrivers) do
+    if peWritable in FConnDrivers[LI]^.Target.CurrentEvents then
+    begin
+      SetLength(LWaiters, Length(LWaiters) + 1);
+      LWaiters[High(LWaiters)] := FConnDrivers[LI];
+    end;
+  for LI := 0 to High(LWaiters) do
+    AdvanceConnDriver(LWaiters[LI], [peWritable]);
+end;
+
+function TTcpIocpServer.ComputeWaitTimeoutMs: UInt32;
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to High(FConnDrivers) do
+    if peWritable in FConnDrivers[LI]^.Target.CurrentEvents then
+      Exit(IOCP_WRITABLE_RETRY_MS);
+  Result := IOCP_WAIT_INFINITE;
 end;
 
 procedure TTcpIocpServer.DispatchAcceptedSession(const AConn: ITcpStream;
@@ -533,8 +588,16 @@ begin
     try
       LRuntimeContextReady := False;
       ArmAccept;
-      { Blocking GQCS loop; Shutdown posts a wake packet via reactor.Stop. }
-      FReactor.Run;
+      { Server-owned event loop (epoll-server parity): dispatch completions,
+        and on timeout re-advance sessions parked on writable interest.
+        Shutdown posts a wake packet via reactor.Stop. }
+      while FRunning do
+        case FReactor.PollOneWait(ComputeWaitTimeoutMs) of
+          iprTimeout:
+            RetryWritableWaiters;
+          iprWoken:
+            ; { stop wake — loop condition re-checks FRunning }
+        end;
     finally
       FRunning := False;
       FAcceptArmed := False;

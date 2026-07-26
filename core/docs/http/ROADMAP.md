@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星背景见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；宣称见 `CLAIM.md`；复现见 `REPRO.md`。
-**Updated**: 2026-07-26（路线图重构：历史冻结进 archive；重开前进路线 → NEXT=W2-1）
+**Updated**: 2026-07-26（W2-2 landed：IOCP send/drain + server 自有 GQCS 事件循环；NEXT=W2-3）
 **历史**: Era 0 至 R2 residual 的全部已完成 Wave 详表与旧 changelog 已冻结在
 [`archive/2026-07-26-roadmap-history-era0-to-r2.md`](archive/2026-07-26-roadmap-history-era0-to-r2.md)——**不是 backlog**，只作证据检索。
 
@@ -10,7 +10,7 @@
 
 ## 0. 进场 30 秒（给执行者 / AI）
 
-1. **当前 NEXT = Wave W2-1**（Era W2，见 §4）。
+1. **当前 NEXT = Wave W2-3**（Era W2，见 §4）。
 2. NEXT 被堵？按 §3「反碰壁规则」逐级兜底——**永远有合法的下一步**，STOP 只在兜底链全空时才合法。
 3. 已冻结的对外宣称只看 [`CLAIM.md`](CLAIM.md)；不要重复采集已 Met 的规模证据。
 4. 硬排除（见 §7）：H3 假 facade、Windows scale 宣称、为对标扩 API。
@@ -41,10 +41,10 @@
 | Scale claims | **H1 / H1+H2 package / HTTPS H1 / HTTPS H2 全 Met**（Linux epoll，冻结于 `CLAIM.md`） |
 | 源码结构 | **82** 个 `nextpas.core.http*` 单元；SAFE/R2 remediation + STRUCT 抽取已完成 |
 | 测试门禁 | 主 Makefile **PROJECTS = 47** focused suites（heaptrc 敏感套件 0 unfreed） |
-| Windows | **W2-1 landed**：`net.server.iocp` phase-2 recv——零字节 overlapped `WSARecv` 把完成翻译为 readiness，poll session 在 reactor 线程经 `Advance` 推进；守卫外 session（有限 wake deadline / 非 readable 初始兴趣）回退 worker handoff；**写侧完成驱动 + deadline wake 未做（W2-2）**；证据 `test_http_iocp_wine` 3 用例（Wine smoke，非真机） |
+| Windows | **W2-2 landed**：`net.server.iocp` phase-2 recv + send drain——server 自有 GQCS 事件循环（`PollOneWait` 三态：dispatched/timeout/woken），writable waiter 靠 1ms timeout 重试 re-advance（单路等待不变式：recv op 挂起 XOR writable waiter）；keep-alive 多请求 + 16MB backpressure 用例绿；**deadline wake 未做（守卫外回退 worker）**；证据 `test_http_iocp_wine` 5 用例（Wine smoke，非真机）。⚠️ Wine 语义差异：非阻塞 send 单次大 buffer 被整块吞下不 WouldBlock，分块（≤64KB）写才有真实 backpressure——wire 测试 session 必须分块写 |
 | Multi-OS host | `test_http_threaded_host` + `core/scripts/http-host-ci-matrix.sh`（Linux/macOS/Windows/FreeBSD CI，smoke only） |
 | H3 | **Blocked**：仓库仅有 `tls.quic.crypto` 原语，无可链 QUIC transport；禁止空 facade |
-| **NEXT** | **Wave W2-2**（改方向先改本行 + §4） |
+| **NEXT** | **Wave W2-3**（改方向先改本行 + §4） |
 
 ---
 
@@ -103,16 +103,14 @@ CHECKPOINT（不阻塞续波）:
 | **风险与兜底** | Wine 对 IOCP 完成语义模拟不全 → 记录差异，smoke 降级为可验证子集，真机验证顺延 W2-3；Wine 环境不可用 → 本波 Blocked，跳 W2-3 或 M-band |
 | **Next** | Wave W2-2 |
 
-### Wave W2-2 — IOCP send/drain 完成路径 + keep-alive
+### Wave W2-2 — IOCP send/drain + keep-alive【landed 2026-07-26】
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
-| **Do** | overlapped `WSASend` 完成驱动写/drain；keep-alive 多请求 wire smoke（Wine）；连接关闭/错误路径诚实（Kind/Op 对齐 CONTRACT） |
-| **Don't** | 不引入第二套 outbound 缓冲模型（复用既有 free-list 契约）；不宣称 scale |
-| **Done when** | Wine smoke 多请求 keep-alive 绿；泄漏证据：heaptrc 若 Wine 下可用则 0 unfreed，否则写明由 W2-3 host gate 兜底 |
-| **Gates** | 同 W2-1 + keep-alive 用例 |
-| **Land paths** | 同 W2-1 |
+| **Status** | **landed** |
+| **实际方案** | 零字节 `WSASend` 探测被否决（MSDN：立即完成，无 backpressure 信号）；改为 reactor `PollOneWait(timeout)` 三态（dispatched/timeout/woken，GQCS timeout = epoll_wait timeout 对等物）+ server 自有事件循环；writable waiter 1ms timeout 重试喂 `[peWritable]`；单路等待不变式（recv op XOR writable waiter）结构性消灭悬垂回调 |
+| **Done 证据** | Wine smoke 5 用例绿（keep-alive 两请求 + 16MB backpressure 慢读端到端）；Linux `test_http_server` 136/136；双端 heaptrc 0 unfreed |
+| **Wine 语义差异（重要）** | Wine AFD 模拟对非阻塞 send 的**单次大 buffer 整块吞下**（16MB 一次 send 返回全长，不 WouldBlock）；分块（≤64KB）写在 ~2.6MB 处正确 WSAEWOULDBLOCK。任何依赖 backpressure 的 Wine 测试必须分块写；真机语义（部分写）W2-3 验证 |
 | **Next** | Wave W2-3 |
 
 ### Wave W2-3 — 真 Windows host CI gate
@@ -222,6 +220,7 @@ Era 全堵时的合法工作池。**有界、行为冻结、不扩面**。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-26 | **W2-2 landed**：IOCP send/drain——reactor `PollOneWait` 三态 + server 自有 GQCS 事件循环 + writable waiter 1ms timeout 重试；keep-alive 两请求 + 16MB backpressure 用例（RED→GREEN）；发现并记录 Wine 大 buffer send 语义差异（整块吞下不 WouldBlock，须分块写）；Wine 5 用例 + Linux 136 双绿、双端 0 unfreed；NEXT=W2-3 |
 | 2026-07-26 | **W2-1 landed**：IOCP completion 驱动 recv——零字节 overlapped `WSARecv` readiness 桥 + poll session reactor 线程 `Advance`；守卫外回退 worker handoff；`test_http_iocp_wine` 增 completion-recv 用例（RED→GREEN）；Linux 回归绿；NEXT=W2-2 |
 | 2026-07-26 | **路线图重构**：Era 0–R2 全史（原 1220 行）冻结进 `archive/2026-07-26-roadmap-history-era0-to-r2.md`；本文件精简为单一前进入口；新增反碰壁兜底链（Era → M-band → STOP 报告）；重开前进路线 **Era W2 Windows 生产化 phase-2**，NEXT=W2-1（会话授权） |
 | 2026-07-26 | （重构前）h2 monolith extract / settings share / cancel-adapter / client helpers / session extract 等 residual 波全部 landed；详见 archive 快照 changelog |
