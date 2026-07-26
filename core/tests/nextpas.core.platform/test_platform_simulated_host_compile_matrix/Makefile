@@ -5,7 +5,7 @@ SOURCE := test_platform_simulated_host_compile_matrix.lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -Cn
 FPC_FLAGS += -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: darwin android freebsd unix test clean
+.PHONY: darwin android freebsd unix windows test clean
 
 darwin:
 	@mkdir -p $(BUILD_DIR)/darwin
@@ -27,7 +27,12 @@ unix:
 	$(FPC) $(FPC_FLAGS) -dNEXTPAS_FORCE_HOST_UNIX -dSIM_EXPECT_UNIX -FU$(BUILD_DIR)/unix -FE$(BUILD_DIR)/unix $(SOURCE)
 	@printf 'simulated-host-compile-target=unix status=pass\n'
 
-test: darwin android freebsd unix
+windows:
+	@mkdir -p $(BUILD_DIR)/windows
+	$(FPC) $(FPC_FLAGS) -Twin64 -Px86_64 -dSIM_EXPECT_WINDOWS -FU$(BUILD_DIR)/windows -FE$(BUILD_DIR)/windows $(SOURCE)
+	@printf 'simulated-host-compile-target=windows status=pass\n'
+
+test: darwin android freebsd unix windows
 	@printf 'simulated-host-compile-truth=forced-compile\n'
 	@printf 'simulated-host-compile-matrix-status=pass\n'
 

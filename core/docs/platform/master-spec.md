@@ -25,7 +25,7 @@
 | Tier | Evidence | What it can claim |
 | --- | --- | --- |
 | `source-contract` | Static/focused source guard. | Owner boundary or source shape is locked. |
-| `forced-compile` | Host branch compiles under a forced target. Carrier: `test_platform_simulated_host_compile_matrix` — darwin/android/freebsd/generic-unix legs × all 29 `platform.*` facades (stat/pty deferrals leg-gated). | Symbols/types/uses are compile-coherent. |
+| `forced-compile` | Host branch compiles under a forced target. Carrier: `test_platform_simulated_host_compile_matrix` — darwin/android/freebsd/generic-unix/windows legs × all 29 `platform.*` facades (stat/pty deferrals leg-gated; windows leg is a true `-Twin64` cross target). | Symbols/types/uses are compile-coherent. |
 | `focused-runtime` | Focused behavior gate runs on a real host. | The named path works on that host. |
 | `ci-matrix` | CI repeats runtime proof across host/arch entries. | Runtime truth is durable for those entries. |
 
