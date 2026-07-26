@@ -51,20 +51,21 @@ type
   }
   generic TLockFreeMsQueueImpl<T> = class
   private
+    { FFreeNext lives inside the node itself (was a separate 4B-element
+      array, 16 links/line), so alloc/recycle touch one line, not two
+      (F-046). A full-line pad per node was also measured and showed no
+      matched-pair signal: the multi-thread cost is CAS contention on
+      head/tail, not neighbor-node false sharing — so nodes stay dense. }
     type TNode = record
         FValue: T;
         FHasValue: Boolean;
         FNext: Int64;  // packed (index:32 | tag:32), index=-1 means nil
-      end;
-    type
-      TFreeNode = record
-        FNext: Int32;
+        FFreeNext: Int32;  // free-chain link, -1 ends the chain
       end;
   private
-    { Read-mostly header: node/freelist refs + capacity, read on every op;
+    { Read-mostly header: node storage ref + capacity, read on every op;
       padded off the hot RMW lines below (F-032 rule). }
     FNodes: array of TNode;
-    FFreeList: array of TFreeNode;
     FCapacity: Int32;
     {$PUSH} {$WARN 05029 OFF} // padding field for cache-line isolation
     FPadHeader: TCacheLinePad;
@@ -163,7 +164,7 @@ begin
     LIdx := UnpackIdx(LOld);
     if LIdx < 0 then
       Break;
-    LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
+    LNew := Pack(FNodes[LIdx].FFreeNext, UnpackTag(LOld) + 1);
     LExpected := LOld;
     if atomic_compare_exchange_strong_64(FFreeStripes[AStripe].Head, LExpected, LNew, mo_acq_rel, mo_acquire) then
     begin
@@ -185,7 +186,7 @@ begin
       LIdx := UnpackIdx(LOld);
       if LIdx < 0 then
         Break;
-      LNew := Pack(FFreeList[LIdx].FNext, UnpackTag(LOld) + 1);
+      LNew := Pack(FNodes[LIdx].FFreeNext, UnpackTag(LOld) + 1);
       LExpected := LOld;
       if atomic_compare_exchange_strong_64(FFreeStripes[LS].Head, LExpected, LNew, mo_acq_rel, mo_acquire) then
       begin
@@ -206,7 +207,7 @@ begin
   FNodes[AIdx].FHasValue := False;
   repeat
     LOld := atomic_load_64(FFreeStripes[AStripe].Head, mo_relaxed);
-    FFreeList[AIdx].FNext := UnpackIdx(LOld);
+    FNodes[AIdx].FFreeNext := UnpackIdx(LOld);
     LNew := Pack(AIdx, UnpackTag(LOld) + 1);
     LExpected := LOld;
   until atomic_compare_exchange_strong_64(FFreeStripes[AStripe].Head, LExpected, LNew, mo_acq_rel, mo_acquire);
@@ -250,7 +251,6 @@ var
   LOldFree: Int64;
   LNewFree: Int64;
   LNewNodes: array of TNode;
-  LNewFreeList: array of TFreeNode;
   LResizeExpected: Int32;
 begin
   LResizeExpected := 0;
@@ -275,15 +275,12 @@ begin
 
     LOldCap := atomic_load(FCapacity, mo_relaxed);
     if (LOldCap > High(Int32) div 2) or
-       (LOldCap > (MaxInt div SizeOf(TNode)) div 2) or
-       (LOldCap > (MaxInt div SizeOf(TFreeNode)) div 2) then
+       (LOldCap > (MaxInt div SizeOf(TNode)) div 2) then
       raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue.Grow: capacity overflow'));
     LNewCap := LOldCap * 2;
 
     SetLength(LNewNodes, LNewCap);
-    SetLength(LNewFreeList, LNewCap);
     Move(FNodes[0], LNewNodes[0], LOldCap * SizeOf(TNode));
-    Move(FFreeList[0], LNewFreeList[0], LOldCap * SizeOf(TFreeNode));
     for LI := LOldCap to LNewCap - 1 do
     begin
       LNewNodes[LI].FHasValue := False;
@@ -291,13 +288,12 @@ begin
       { Round-robin the new nodes into the per-stripe free chains (all
         stripes verified empty above, so each chain is exactly its slice). }
       if LI + MSQUEUE_OP_STRIPES < LNewCap then
-        LNewFreeList[LI].FNext := LI + MSQUEUE_OP_STRIPES
+        LNewNodes[LI].FFreeNext := LI + MSQUEUE_OP_STRIPES
       else
-        LNewFreeList[LI].FNext := -1;
+        LNewNodes[LI].FFreeNext := -1;
     end;
 
     FNodes := LNewNodes;
-    FFreeList := LNewFreeList;
     atomic_store(FCapacity, LNewCap, mo_relaxed);
     for LI := 0 to MSQUEUE_OP_STRIPES - 1 do
     begin
@@ -324,17 +320,15 @@ begin
     raise EArgumentError.Create('TLockFreeMsQueue: T must be unmanaged');
   if ACapacity < 4 then
     ACapacity := 4;
-  if (ACapacity > MaxInt div SizeOf(TNode)) or
-     (ACapacity > MaxInt div SizeOf(TFreeNode)) then
+  if ACapacity > MaxInt div SizeOf(TNode) then
     raise EArgumentError.Create('TLockFreeMsQueue: capacity exceeds allocation limit');
   inherited Create;
   SetLength(FNodes, ACapacity);
-  SetLength(FFreeList, ACapacity);
   for I := 0 to ACapacity - 1 do
     if I + MSQUEUE_OP_STRIPES < ACapacity then
-      FFreeList[I].FNext := I + MSQUEUE_OP_STRIPES
+      FNodes[I].FFreeNext := I + MSQUEUE_OP_STRIPES
     else
-      FFreeList[I].FNext := -1;
+      FNodes[I].FFreeNext := -1;
   FCapacity := ACapacity;
   for I := 0 to MSQUEUE_OP_STRIPES - 1 do
     if I < ACapacity then
@@ -372,7 +366,6 @@ begin
   Close;
   while TryDequeue(LV) do;
   SetLength(FNodes, 0);
-  SetLength(FFreeList, 0);
   inherited Destroy;
 end;
 

@@ -340,7 +340,8 @@ begin
   CheckContains(LGrow, 'atomic_load(FOpStripes[LI].Count, mo_acquire)',
     'growth waits for admitted operations across all stripes');
   CheckContains(LGrow, 'LNewNodes', 'MS queue grows into local node storage');
-  CheckContains(LGrow, 'LNewFreeList', 'MS queue grows into local free-list storage');
+  CheckContains(LGrow, 'LNewNodes[LI].FFreeNext',
+    'MS queue builds the free chain in local node storage (F-046: free link lives in the node line)');
   CheckBefore(LDequeue, 'LCandidateValue := FNodes[LNextIdx].FValue',
     'atomic_compare_exchange_strong_64(FHead', 'MS queue copies value before head CAS');
   CheckContains(LSource, 'if IsManagedType(T) then', 'MS queue rejects managed T');
