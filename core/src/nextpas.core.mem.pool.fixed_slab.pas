@@ -183,6 +183,14 @@ begin
     Exit;
 
   FMinShift := AMinShift;
+  if FMinShift = 0 then
+    FMinShift := 3; { nginx default: 8-byte minimum slot }
+  { min_shift >= page shift makes "page_shift - min_shift" underflow inside
+    ngx_slab_init (SizeUInt loop bound), turning slot init into a wild loop. }
+  if FMinShift >= NGX_SLAB_PAGE_SHIFT then
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create',
+        'min_shift out of range (' + IntToStr(AMinShift) + ')'));
   ngx_slab_sizes_init;
 
   n := NGX_SLAB_PAGE_SHIFT - FMinShift;
@@ -459,6 +467,10 @@ begin
   FOwnMask := ANewCapacity - 1;
   FOwnFill := 0;
 
+  { Guard: LOldCap is SizeUInt; "- 1" underflows on an empty old table
+    (unreachable via OwnershipGrowIfNeeded, kept as a hard boundary). }
+  if LOldCap = 0 then
+    Exit;
   for LIndex := 0 to LOldCap - 1 do
   begin
     LKey := LOldKeys[LIndex];

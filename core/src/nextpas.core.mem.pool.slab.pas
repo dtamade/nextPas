@@ -953,7 +953,9 @@ var
   LPerPage, LNeedUnits: SizeUInt;
   LTmp: array of Pointer;
 begin
-  if aUnitSize = 0 then Exit(0);
+  { Guards: LIndex is SizeUInt; a zero unit/page count would underflow the
+    "count - 1" loop bounds below into 2^64 iterations. }
+  if (aUnitSize = 0) or (aMinPages = 0) then Exit(0);
   LTmp := nil;
   LPerPage := (SizeUInt(1) shl FSegments[0].PageShift) div aUnitSize;
   if LPerPage = 0 then LPerPage := 1;
@@ -965,8 +967,9 @@ begin
     LTmp[LIndex] := GetMem(aUnitSize);
     if LTmp[LIndex] <> nil then Inc(Result) else Break;
   end;
-  for LIndex := 0 to Result-1 do
-    FreeMem(LTmp[LIndex]);
+  if Result > 0 then { Result = 0 on first-alloc OOM; "- 1" would underflow }
+    for LIndex := 0 to Result-1 do
+      FreeMem(LTmp[LIndex]);
 end;
 
 

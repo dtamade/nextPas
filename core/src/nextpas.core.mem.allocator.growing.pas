@@ -315,9 +315,12 @@ begin
   if ACount = 0 then
     Exit;
   { Chain all blocks into a linked list, then CAS entire chain into inbox
-    (single atomic swap instead of N individual CAS pushes). }
-  for I := 0 to ACount - 2 do
-    PFreeNode(ABlocks[I])^.FNext := PFreeNode(ABlocks[I + 1]);
+    (single atomic swap instead of N individual CAS pushes).
+    Loop starts at 1: with I: Word, a bound of "ACount - 2" underflows to
+    65535 when ACount = 1 (FPC converts the bound to the loop var type),
+    turning a single-block flush into a 64Ki wild-write loop. }
+  for I := 1 to ACount - 1 do
+    PFreeNode(ABlocks[I - 1])^.FNext := PFreeNode(ABlocks[I]);
   PFreeNode(ABlocks[ACount - 1])^.FNext := nil;
   repeat
     LOldHead := GGrowingAllocator.FCentrals[AIndex].FInboxHead;

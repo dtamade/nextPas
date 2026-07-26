@@ -394,6 +394,9 @@ var
   LIdx: Int32;
   LWasFull: Boolean;
 begin
+  { Guard: with I: Word, "ACount - 1" underflows to 65535 when ACount = 0. }
+  if ACount = 0 then
+    Exit;
   CentralPoolLock(APool.FSpinLock);
   try
     for I := 0 to ACount - 1 do

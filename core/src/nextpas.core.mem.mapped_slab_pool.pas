@@ -317,6 +317,14 @@ begin
     Exit;
   end;
 
+  { Guard: LPageIndex is UInt32; with a zero-page header (empty pool or
+    corrupted mapping) "TotalPages - 1" underflows into a 2^32 wild scan. }
+  if LHeader^.TotalPages = 0 then
+  begin
+    Inc(LHeader^.FailedAllocs);
+    Exit;
+  end;
+
   LBlockSize := UInt32((aSize + 7) and not UInt64(7));
   LBlockBytes := LBlockSize + SizeOf(TMappedSlabBlockHeader);
 

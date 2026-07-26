@@ -252,6 +252,36 @@ begin
   WriteLn('PASS: growing heap stats');
 end;
 
+{ Regression: a single-block TLS flush must be safe. FlushToCentral used a
+  Word loop bound of "count - 2"; with exactly 1 cached block that underflowed
+  to 65535 and turned the chain-build loop into a 64Ki wild write over the
+  stack. Repeated 1-block free + Scavenge exercises exactly that path. }
+procedure TestSingleBlockFlushScavenge;
+var
+  LAlloc: TGrowingAllocator;
+  LPtr, LPtr2: Pointer;
+  LRound: Int32;
+begin
+  LAlloc := DefaultGrowingAllocator;
+  Check(LAlloc <> nil, 'default growing present');
+  for LRound := 1 to 8 do
+  begin
+    LPtr := LAlloc.GetMem(96);
+    Check(LPtr <> nil, 'single-block alloc round ' + IntToStr(LRound));
+    LAlloc.FreeMem(LPtr, 96);  { exactly one node in this class's TLS list }
+    LAlloc.Scavenge;           { ThreadCacheFlushAll -> FlushToCentral(1) }
+  end;
+  { Heap must stay coherent after repeated single-block flushes. }
+  LPtr := LAlloc.GetMem(96);
+  LPtr2 := LAlloc.GetMem(96);
+  Check((LPtr <> nil) and (LPtr2 <> nil) and (LPtr <> LPtr2),
+    'coherent allocs after single-block scavenges');
+  LAlloc.FreeMem(LPtr, 96);
+  LAlloc.FreeMem(LPtr2, 96);
+  LAlloc.Scavenge;
+  WriteLn('PASS: single-block flush scavenge');
+end;
+
 { --- Main --- }
 
 begin
@@ -267,6 +297,7 @@ begin
   T.Test('pool_stats_released', @TestPoolStatsReleased);
   T.Test('pool_stats_decommit', @TestPoolStatsDecommit);
   T.Test('growing_heap_stats', @TestGrowingHeapStats);
+  T.Test('single_block_flush_scavenge', @TestSingleBlockFlushScavenge);
 
   LRunPassed := T.Run;
   T.Summary;
