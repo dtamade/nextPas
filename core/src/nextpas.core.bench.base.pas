@@ -8,6 +8,8 @@ unit nextpas.core.bench.base;
 
 {$I nextpas.core.settings.inc}
 {$modeswitch advancedrecords}
+{ 实数字面量最低 Double，防止与整型混算落到 Single 精度（见 stats 同注） }
+{$MINFPCONSTPREC 64}
 
 interface
 

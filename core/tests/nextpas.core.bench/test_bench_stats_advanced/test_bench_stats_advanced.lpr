@@ -10,6 +10,8 @@ uses
   nextpas.core.bench.stats.advanced,
   nextpas.core.test;
 
+{$I golden_descriptive.inc}
+
 function MakePositiveInfinity: Double;
 var
   LBits: UInt64;
@@ -686,6 +688,45 @@ begin
   LStats.Free;
 end;
 
+{ ===== scipy/numpy 冻结金标 (F-25)，向量与容差见 golden_descriptive.inc ===== }
+
+procedure Test_Golden_Descriptive;
+var
+  LData: TDoubleArray;
+  LStats: TAdvancedStats;
+begin
+  LData := CreateTestData(GOLDEN_DESC_DATA);
+  LStats := TAdvancedStats.Create(LData);
+  try
+    CheckNear(GOLDEN_DESC_MEAN, LStats.Mean, GOLDEN_DESC_TOL,
+      'Golden mean matches numpy');
+    CheckNear(GOLDEN_DESC_MEDIAN, LStats.Median, GOLDEN_DESC_TOL,
+      'Golden median matches numpy');
+    CheckNear(GOLDEN_DESC_STDDEV, LStats.StdDev, GOLDEN_DESC_TOL,
+      'Golden stddev matches numpy ddof=1');
+    CheckNear(GOLDEN_DESC_SKEW, LStats.Skewness, GOLDEN_DESC_TOL,
+      'Golden skewness matches scipy skew(bias=False)');
+    CheckNear(GOLDEN_DESC_KURT, LStats.Kurtosis, GOLDEN_DESC_TOL,
+      'Golden kurtosis matches scipy kurtosis(fisher, bias=False)');
+    CheckNear(GOLDEN_DESC_P5, LStats.Percentile(5), GOLDEN_DESC_TOL,
+      'Golden P5 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_P25, LStats.Percentile(25), GOLDEN_DESC_TOL,
+      'Golden P25 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_P50, LStats.Percentile(50), GOLDEN_DESC_TOL,
+      'Golden P50 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_P75, LStats.Percentile(75), GOLDEN_DESC_TOL,
+      'Golden P75 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_P95, LStats.Percentile(95), GOLDEN_DESC_TOL,
+      'Golden P95 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_P99, LStats.Percentile(99), GOLDEN_DESC_TOL,
+      'Golden P99 matches numpy linear interpolation');
+    CheckNear(GOLDEN_DESC_IQR, LStats.IQR, GOLDEN_DESC_TOL,
+      'Golden IQR matches numpy P75-P25');
+  finally
+    LStats.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -724,6 +765,7 @@ begin
   T.Test('NaNInfinity_Percentile', @Test_NaNInfinity_Percentile);
   T.Test('Percentile_RangeValidation', @Test_Percentile_RangeValidation);
   T.Test('GetData', @Test_GetData);
+  T.Test('Golden_Descriptive', @Test_Golden_Descriptive);
   T.Test('Count', @Test_Count);
   T.Test('OutlierSeverity_None', @Test_OutlierSeverity_None);
   T.Test('OutlierSeverity_Mild', @Test_OutlierSeverity_Mild);

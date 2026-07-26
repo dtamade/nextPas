@@ -11,8 +11,19 @@ uses
   nextpas.core.bench.intf,
   nextpas.core.bench.stats;
 
+{$I golden_analyzer.inc}
+
 var
   GAnalyzer: IBenchStatsAnalyzer;
+
+function GoldenArr(const AValues: array of Double): TDoubleArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AValues));
+  for I := 0 to High(AValues) do
+    Result[I] := AValues[I];
+end;
 
 function MakePositiveInfinity: Double;
 var
@@ -1114,6 +1125,40 @@ begin
   CheckNear(0.0, LResult, 0.001, 'TrimmedMean with all NaN returns 0');
 end;
 
+{ ===== scipy/numpy 冻结金标 (F-25)，向量与容差见 golden_analyzer.inc ===== }
+
+procedure TestGolden_Analyzer;
+var
+  LData, LSorted, LRatios: TDoubleArray;
+  LPct: TPercentileResult;
+begin
+  LData := GoldenArr(GOLDEN_AN_DATA);
+  CheckNear(GOLDEN_AN_MEAN, GAnalyzer.Mean(LData), GOLDEN_AN_TOL,
+    'Golden analyzer mean matches numpy');
+  CheckNear(GOLDEN_AN_MEDIAN, GAnalyzer.Median(LData), GOLDEN_AN_TOL,
+    'Golden analyzer median matches numpy');
+  CheckNear(GOLDEN_AN_STDDEV, GAnalyzer.StdDev(LData), GOLDEN_AN_TOL,
+    'Golden analyzer stddev matches numpy ddof=1');
+
+  LPct := GAnalyzer.ComputePercentiles(LData);
+  CheckNear(GOLDEN_AN_P5, LPct.P5, GOLDEN_AN_TOL, 'Golden P5 matches numpy');
+  CheckNear(GOLDEN_AN_P25, LPct.P25, GOLDEN_AN_TOL, 'Golden P25 matches numpy');
+  CheckNear(GOLDEN_AN_P50, LPct.P50, GOLDEN_AN_TOL, 'Golden P50 matches numpy');
+  CheckNear(GOLDEN_AN_P75, LPct.P75, GOLDEN_AN_TOL, 'Golden P75 matches numpy');
+  CheckNear(GOLDEN_AN_P95, LPct.P95, GOLDEN_AN_TOL, 'Golden P95 matches numpy');
+  CheckNear(GOLDEN_AN_P99, LPct.P99, GOLDEN_AN_TOL, 'Golden P99 matches numpy');
+
+  { Percentile 走排序后入口，应与 ComputePercentiles 同源同值 }
+  LSorted := GoldenArr(GOLDEN_AN_DATA);
+  SortDoubleArray(LSorted);
+  CheckNear(GOLDEN_AN_P95, GAnalyzer.Percentile(LSorted, 95), GOLDEN_AN_TOL,
+    'Golden Percentile(95) matches numpy');
+
+  LRatios := GoldenArr(GOLDEN_AN_RATIOS);
+  CheckNear(GOLDEN_AN_GEOMEAN, GAnalyzer.GeometricMean(LRatios), GOLDEN_AN_TOL,
+    'Golden geometric mean matches scipy gmean');
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -1166,6 +1211,7 @@ begin
   T.Test('ComputePercentiles', @TestComputePercentiles);
   T.Test('Median_NaNInfinity', @TestMedian_NaNInfinity);
   T.Test('TrimmedMean_NaNInfinity', @TestTrimmedMean_NaNInfinity);
+  T.Test('Golden_Analyzer', @TestGolden_Analyzer);
 
   LRunPassed := T.Run;
   T.Summary;

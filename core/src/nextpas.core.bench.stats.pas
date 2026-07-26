@@ -8,6 +8,9 @@ unit nextpas.core.bench.stats;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
+{ 实数字面量最低 Double：默认下 1.0/12.0 等字面量取 Single 类型，
+  与整型混算时整个表达式落到 Single 精度（如 1.0/LN 的 ECDF 步长）。 }
+{$MINFPCONSTPREC 64}
 
 interface
 
@@ -993,7 +996,7 @@ var
   LN1, LN2: Integer;
   LSorted1, LSorted2: TDoubleArray;
   LI, LJ: Integer;
-  LCDF1, LCDF2: Double;
+  LV: Double;
   LD, LMaxD: Double;
   LCombinedN, LInvN1, LInvN2: Double;
 begin
@@ -1023,71 +1026,34 @@ begin
   LInvN1 := 1.0 / LN1;
   LInvN2 := 1.0 / LN2;
 
-  // 计算 K-S 统计量 D = max|F1(x) - F2(x)|
+  { K-S 统计量 D = max|F1(x) - F2(x)|，按值消费的 merge 走查：
+    每轮取最小未消费值 v，把两侧所有等于 v 的点（含跨样本 tie 与样本内
+    重复）一次消费完，再比较跳变后的 ECDF。并列点上两个 ECDF 同时跳变，
+    分侧推进会在 tie 处产生虚假 D（相同数组会得到 D=1/n 而非 0）。
+    v 处跳变前的 ECDF 对等于上一轮跳变后的值，已在上一轮比较过。 }
   LMaxD := 0.0;
   LI := 0;
   LJ := 0;
-
-  // 合并遍历两个排序数组
-  while (LI < LN1) and (LJ < LN2) do
+  while (LI < LN1) or (LJ < LN2) do
   begin
-    if LSorted1[LI] < LSorted2[LJ] then
+    { 选定较小侧并至少推进一步（NaN 比较恒 False，按下标推进保证终止） }
+    if (LJ >= LN2) or ((LI < LN1) and (LSorted1[LI] <= LSorted2[LJ])) then
     begin
-      // 在 x = LSorted1[LI] 处计算两个经验分布函数
-      LCDF1 := (LI + 1) * LInvN1;
-      LCDF2 := LJ * LInvN2;  // F2(x-) = j/n2
-      LD := Abs(LCDF1 - LCDF2);
-      if LD > LMaxD then
-        LMaxD := LD;
+      LV := LSorted1[LI];
       Inc(LI);
-    end
-    else if LSorted1[LI] > LSorted2[LJ] then
-    begin
-      // 在 x = LSorted2[LJ] 处计算两个经验分布函数
-      LCDF1 := LI * LInvN1;  // F1(x-) = i/n1
-      LCDF2 := (LJ + 1) * LInvN2;
-      LD := Abs(LCDF1 - LCDF2);
-      if LD > LMaxD then
-        LMaxD := LD;
-      Inc(LJ);
     end
     else
     begin
-      // 并列值: 两个样本同时推进，计算两个方向的 D
-      LCDF1 := (LI + 1) * LInvN1;
-      LCDF2 := LJ * LInvN2;
-      LD := Abs(LCDF1 - LCDF2);
-      if LD > LMaxD then
-        LMaxD := LD;
-      LCDF1 := LI * LInvN1;
-      LCDF2 := (LJ + 1) * LInvN2;
-      LD := Abs(LCDF1 - LCDF2);
-      if LD > LMaxD then
-        LMaxD := LD;
-      Inc(LI);
+      LV := LSorted2[LJ];
       Inc(LJ);
     end;
-  end;
-
-  // 处理剩余元素
-  while LI < LN1 do
-  begin
-    LCDF1 := (LI + 1) * LInvN1;
-    LCDF2 := 1.0;
-    LD := Abs(LCDF1 - LCDF2);
+    while (LI < LN1) and (LSorted1[LI] = LV) do
+      Inc(LI);
+    while (LJ < LN2) and (LSorted2[LJ] = LV) do
+      Inc(LJ);
+    LD := Abs(LI * LInvN1 - LJ * LInvN2);
     if LD > LMaxD then
       LMaxD := LD;
-    Inc(LI);
-  end;
-
-  while LJ < LN2 do
-  begin
-    LCDF1 := 1.0;
-    LCDF2 := (LJ + 1) * LInvN2;
-    LD := Abs(LCDF1 - LCDF2);
-    if LD > LMaxD then
-      LMaxD := LD;
-    Inc(LJ);
   end;
 
   Result.Statistic := LMaxD;

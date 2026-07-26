@@ -35,9 +35,12 @@
 | F-22 | **Resolved** | 46 处 ticket 注释清理：活约束去标签保留，纯历史/噪音整条删 |
 | F-23 | **Deferred-closed** | EBR 明确不实现 |
 | F-24 | **Resolved** | TBenchRun Advanced 文档 |
-| F-25 | **Partial** | 未加 golden 文件（可选） |
+| F-25 | **Resolved** | scipy 金标冻结为 4 个 golden_*.inc；22 条断言接入 4 套件；随手揪出 F-28/29/30 三个真 bug |
 | F-26 | **Resolved** | roadmap/ebr 状态句 |
 | F-27 | **Mitigated** | 门禁构建阶段 host fpc 偶发 "Can't find unit"；gate 循环构建重试一次 |
+| F-28 | **Resolved** | Skewness 调整因子错配：样本矩 z 分套总体矩因子，偏低 ((n-1)/n)^1.5；改 G1=n·Σz³/((n-1)(n-2)) |
+| F-29 | **Resolved** | KS 双样本 tie 分支 D 错：改值消耗合并走查（同值两侧全消费后取跳后 ECDF 差） |
+| F-30 | **Resolved** | FPC 实数字面量默认 Single 致 1.0/N 降精度；bench 三单元加 {$MINFPCONSTPREC 64} |
 
 ---
 
@@ -379,6 +382,7 @@
 | 等级 | **P3** |
 | 描述 | 有已知分布与交叉校验倾向，整体有效。缺少与外部金标（R/Python 固定种子向量）的 **冻结 golden 向量** 文件化（部分数值硬编码在 lpr）。 |
 | 建议 | 可选 `testdata/*.json` golden，降低魔法数漂移。 |
+| 收口（2026-07-26） | scipy 1.18.0 金标冻结为 4 个 `golden_*.inc`（mwu/ks/descriptive/analyzer），生成器 `tools/gen_golden_vectors.py` 自带 Pascal 近似复刻自检（近似误差 < tol/2 才允许冻结）；数据集为手写字面量（无 RNG，Pascal/Python 解析出相同 double）。22 条 golden 断言接入 4 既存套件（不新增套件，PROJECTS 保持 22）。金标当场揪出三个真 bug：F-28（Skewness 因子）、F-29（KS2 tie 分支）、F-30（Single 字面量精度），证实原区间断言会放过「方向对、数值错」的实现。 |
 
 ---
 
@@ -405,6 +409,45 @@
 | 等级 | **P2**（侵蚀门禁可信度） |
 | 描述 | 全量 gate 中 `test_bench_matrix` 偶发编译失败：`test.check.pas(375,3) Fatal: Can't find unit nextpas.core.test.diff`，而 `core/src/nextpas.core.test.diff.pas` 存在且同目录几十个单元均正常解析。观测频率：2026-07-26 连续 3 次全量 gate 中 1 次；失败运行的 Compiling 序列是成功运行的**严格前缀**（前 207 单元完全一致，第 208 个 `test.diff` 查找失败）→ 编译顺序确定，属编译器/文件查找瞬态。单独 `make clean all` 循环 6/6 通过，无法离线复现。 |
 | 处置 | gate 循环拆分构建/运行两阶段：构建失败带 `[BUILD-FLAKE-RETRY]` 标记重试一次（真回归连挂两次仍红）；运行期失败不重试保持严格。根因疑在 host fpc trunk dirty 构建的单元查找路径，非 bench/test 源码问题；若复发频率升高，升级为向 FPC 上游取证报告。 |
+
+---
+
+### F-28 · 正确性 · P1（2026-07-26 由 F-25 金标发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats.advanced` |
+| 位置 | `TAdvancedStats.Skewness` |
+| 分类 | 数值正确性 |
+| 等级 | **P1**（结果系统性偏低，区间断言不可见） |
+| 描述 | z 分数用样本标准差（ddof=1）计算，却套用总体矩版调整因子 `sqrt(n(n-1))/(n-2)`，两套口径错配，结果恒偏低 `((n-1)/n)^1.5`（n=20 时约 -7.4%）。原区间断言（如「偏度 > 0」）无法察觉。 |
+| 处置 | 改为 Fisher-Pearson 调整 G1 正确式：`G1 = n·Σz³/((n-1)(n-2))`；scipy `skew(bias=False)` 金标钉死于 `test_bench_stats_advanced`（tol 1e-9）。 |
+
+---
+
+### F-29 · 正确性 · P1（2026-07-26 由 F-25 金标发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats` |
+| 位置 | `KolmogorovSmirnovTwoSampleTest` D 统计量 |
+| 分类 | 数值正确性 |
+| 等级 | **P1**（有 tie 数据时 D 虚高，两组完全相同也报 D=1/n） |
+| 描述 | tie 分支比较「一侧跳后 ECDF vs 另一侧跳前 ECDF」，同值未两侧同步消费。极端症状：两组数组完全相同时 D=1/12（应为 0）；带 tie 的 SHIFT 数据 D=0.56（scipy 精确值 0.52）。 |
+| 处置 | 重写为值消耗合并走查：每轮取两侧最小值，把两侧所有等于该值的元素全部消费，再取跳后 ECDF 差的最大值。scipy 精确 D 金标钉死（tol 1e-12），含 identical→D=0 回归用例。 |
+
+---
+
+### F-30 · 正确性 · P2（2026-07-26 由 F-25 金标发现）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.base` / `stats` / `stats.advanced` |
+| 位置 | 所有 `1.0/整型` 类表达式（KS ECDF 步长、MWU tie 校正、方差归一化等） |
+| 分类 | 数值精度 / FPC 语言陷阱 |
+| 等级 | **P2**（~1e-8 级系统误差，叠加统计量后可放大） |
+| 描述 | FPC 默认把实数字面量取「能精确表示的最小类型」，`1.0` 为 Single；`1.0 / LN`（LN 整型）整个表达式落在 Single 精度计算，误差 ~1e-8。经最小探针复现：KS D=0.29999999701976776，偏差恰为 2×(Double(Single(0.1))−0.1)。 |
+| 处置 | 三个统计相关单元头部加 `{$MINFPCONSTPREC 64}`（字面量最低 Double）。core 全局 settings.inc 属跨模块变更，超出本 lane 范围，同类隐患在其他模块普遍存在——已在注释中说明，留待仓库治理层决策。 |
 
 ---
 

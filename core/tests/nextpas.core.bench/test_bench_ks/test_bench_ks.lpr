@@ -11,9 +11,20 @@ uses
   nextpas.core.bench.stats,
   nextpas.core.test;
 
+{$I golden_ks.inc}
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
+
+function GoldenArr(const AValues: array of Double): TDoubleArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AValues));
+  for I := 0 to High(AValues) do
+    Result[I] := AValues[I];
+end;
 
 { 辅助函数：生成正态分布数据（Box-Muller 变换） }
 function GenerateNormalData(AMean, AStdDev: Double; ACount: Integer): TDoubleArray;
@@ -249,6 +260,73 @@ begin
   Check(LResult.PValue <= 1.0, 'Range: p-value <= 1');
 end;
 
+{ ===== scipy 冻结金标 (F-25)，向量与容差见 golden_ks.inc ===== }
+
+procedure TestGolden_TwoSample_Ties;
+var
+  LAnalyzer: IBenchStatsAnalyzer;
+  LResult: TKSTestResult;
+begin
+  LAnalyzer := TBenchStatsAnalyzer.Create;
+  LResult := LAnalyzer.KolmogorovSmirnovTwoSampleTest(
+    GoldenArr(GOLDEN_KS2_A1), GoldenArr(GOLDEN_KS2_B1));
+  CheckNear(GOLDEN_KS2_D1, LResult.Statistic, GOLDEN_KS_D_TOL,
+    'Golden ties: exact D matches scipy ks_2samp');
+  CheckNear(GOLDEN_KS2_P1, LResult.PValue, GOLDEN_KS_P_TOL,
+    'Golden ties: asymptotic p matches kstwobign.sf');
+end;
+
+procedure TestGolden_TwoSample_Shift;
+var
+  LAnalyzer: IBenchStatsAnalyzer;
+  LResult: TKSTestResult;
+begin
+  LAnalyzer := TBenchStatsAnalyzer.Create;
+  LResult := LAnalyzer.KolmogorovSmirnovTwoSampleTest(
+    GoldenArr(GOLDEN_KS2_A2), GoldenArr(GOLDEN_KS2_B2));
+  CheckNear(GOLDEN_KS2_D2, LResult.Statistic, GOLDEN_KS_D_TOL,
+    'Golden shift: exact D matches scipy ks_2samp');
+  CheckNear(GOLDEN_KS2_P2, LResult.PValue, GOLDEN_KS_P_TOL,
+    'Golden shift: asymptotic p matches kstwobign.sf');
+  Check(LResult.IsSignificant, 'Golden shift: significant at alpha=0.05');
+end;
+
+procedure TestGolden_TwoSample_Identical;
+var
+  LAnalyzer: IBenchStatsAnalyzer;
+  LResult: TKSTestResult;
+begin
+  LAnalyzer := TBenchStatsAnalyzer.Create;
+  LResult := LAnalyzer.KolmogorovSmirnovTwoSampleTest(
+    GoldenArr(GOLDEN_KS2_IDENT), GoldenArr(GOLDEN_KS2_IDENT));
+  CheckNear(0.0, LResult.Statistic, 1e-12, 'Golden identical: D = 0');
+  CheckNear(1.0, LResult.PValue, 1e-12, 'Golden identical: p = 1');
+end;
+
+procedure TestGolden_OneSampleNormal;
+var
+  LAnalyzer: IBenchStatsAnalyzer;
+  LResult: TKSTestResult;
+begin
+  LAnalyzer := TBenchStatsAnalyzer.Create;
+  LResult := LAnalyzer.KolmogorovSmirnovNormalTest(
+    GoldenArr(GOLDEN_KS1_DATA), GOLDEN_KS1_MEAN, GOLDEN_KS1_STD);
+  CheckNear(GOLDEN_KS1_D, LResult.Statistic, GOLDEN_KS1_D_TOL,
+    'Golden 1-sample: D matches exact normal CDF reference');
+  CheckNear(GOLDEN_KS1_P, LResult.PValue, GOLDEN_KS1_P_TOL,
+    'Golden 1-sample: Lilliefors-corrected p matches kstwobign.sf');
+end;
+
+procedure TestGolden_NormalQuantile;
+var
+  I: Integer;
+begin
+  for I := 0 to High(GOLDEN_NQ_P) do
+    CheckNear(GOLDEN_NQ_Z[I], NormalQuantile(GOLDEN_NQ_P[I]), GOLDEN_NQ_TOL,
+      'Golden NormalQuantile matches scipy norm.ppf');
+  CheckNear(0.0, NormalQuantile(0.5), 0.0, 'NormalQuantile(0.5) = 0 exact');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.bench.ks');
   T.Test('KSTestNormal_EmptyData', @TestKSTestNormal_EmptyData);
@@ -263,6 +341,11 @@ begin
   T.Test('KSTestTwoSample_DifferentMeans', @TestKSTestTwoSample_DifferentMeans);
   T.Test('KSTestTwoSample_DifferentSizes', @TestKSTestTwoSample_DifferentSizes);
   T.Test('KSTest_StatisticRange', @TestKSTest_StatisticRange);
+  T.Test('Golden_TwoSample_Ties', @TestGolden_TwoSample_Ties);
+  T.Test('Golden_TwoSample_Shift', @TestGolden_TwoSample_Shift);
+  T.Test('Golden_TwoSample_Identical', @TestGolden_TwoSample_Identical);
+  T.Test('Golden_OneSampleNormal', @TestGolden_OneSampleNormal);
+  T.Test('Golden_NormalQuantile', @TestGolden_NormalQuantile);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

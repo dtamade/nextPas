@@ -8,6 +8,8 @@ unit nextpas.core.bench.stats.advanced;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
+{ 实数字面量最低 Double，防止与整型混算落到 Single 精度（见 stats 同注） }
+{$MINFPCONSTPREC 64}
 
 interface
 
@@ -348,11 +350,13 @@ begin
     LZ := (FData[I] - LMean) / LStdDev;
     LSum := LSum + LZ * Sqr(LZ);
   end;
-  { Fisher's g1: unbiased estimator }
-  if LValidCount > 2 then
-    Result := (LSum / LValidCount) * Sqrt(LValidCount * (LValidCount - 1)) / (LValidCount - 2)
-  else
-    Result := LSum / LValidCount;
+  { Fisher-Pearson 调整 G1。LZ 用的是样本标准差 (ddof=1)，故
+    LSum = n * m3 / s³，G1 = n²/((n-1)(n-2)) * m3/s³ = n * LSum / ((n-1)(n-2))。
+    旧式 (LSum/n)*sqrt(n(n-1))/(n-2) 把总体矩版调整因子套在样本矩上，
+    结果偏低 ((n-1)/n)^1.5（n=20 时约 -7.4%）；scipy.stats.skew(bias=False)
+    金标见 test_bench_stats_advanced。 }
+  Result := (LSum * LValidCount) /
+    ((LValidCount - 1.0) * (LValidCount - 2.0));
 end;
 
 function TAdvancedStats.Kurtosis: Double;

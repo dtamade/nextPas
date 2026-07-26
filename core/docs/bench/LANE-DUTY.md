@@ -93,6 +93,8 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-26 | F-27 缓解：gate 循环拆构建/运行、构建重试一次；report 套件补 `all` 别名 | `bench-module-test` + contract-check | **exit 0**；**22/22**；**510** tests；0 retry 触发；hygiene pass |
 | 2026-07-26 | **Landed** `c90f620c2` → `origin/main`（F-27 gate retry + report all）；landing worktree 已删 | `landing-check`（candidate=pass + focused 22/22 510 + hygiene）；内容探针 BUILD-FLAKE-RETRY/F-27 均在 origin/main | **已 push**；lane 已回吸 origin/main |
 | 2026-07-26 | F-22 注释卫生：8 源文件 46 处 ticket 标签清理（活约束保留说明，噪音整删）；纯注释级 diff | `bench-module-test` + contract-check + `git diff --check` | **exit 0**；**22/22**；**510** tests；contract 全通过 |
+| 2026-07-26 | **Landed** `bf61139c9`（F-22 注释卫生）→ `origin/main`；lane 回吸至最新 main | rebase×2 追热仓库 + landing-check pass×2 + 单套件构建探针 + 回吸后 `bench-module-test` | **exit 0**；**22/22**；**510** tests；0 retry；内容探针 F-22 Resolved / SRC-CLEAN |
+| 2026-07-26 | F-25 scipy 金标落地：4 个 `golden_*.inc` + 生成器自检 + 22 断言接入 4 既存套件；顺手修出 F-28（Skewness G1）/F-29（KS2 tie 走查）/F-30（`{$MINFPCONSTPREC 64}`×3 单元） | `bench-module-test` + `bench-contract-check`；四套件单跑 heaptrc 0 leaks | **exit 0**；**22/22** 全 0 failed；**521** tests（510+11 golden 用例）；0 retry；contract **13/13** |
 
 > 新一次回归后更新本表一行即可。
 

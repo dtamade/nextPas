@@ -8,8 +8,19 @@ uses
   nextpas.core.bench.intf,
   nextpas.core.bench.stats;
 
+{$I golden_mwu.inc}
+
 var
   GAnalyzer: IBenchStatsAnalyzer;
+
+function GoldenArr(const AValues: array of Double): TDoubleArray;
+var
+  I: Integer;
+begin
+  SetLength(Result, Length(AValues));
+  for I := 0 to High(AValues) do
+    Result[I] := AValues[I];
+end;
 
 { 相同分布：两组来自同一分布，p-value 应 > 0.05 }
 procedure TestSameDistribution;
@@ -240,6 +251,41 @@ begin
   { 1% 差异在大噪声下通常不显著 }
 end;
 
+{ ===== scipy 冻结金标 (F-25)，向量与容差见 golden_mwu.inc ===== }
+
+procedure TestGolden_NoTies;
+begin
+  CheckNear(GOLDEN_MWU_P1,
+    GAnalyzer.ComputeMannWhitneyPValue(GoldenArr(GOLDEN_MWU_A1),
+      GoldenArr(GOLDEN_MWU_B1)),
+    GOLDEN_MWU_P_TOL, 'Golden no-ties p matches scipy asymptotic');
+end;
+
+procedure TestGolden_HeavyTies;
+begin
+  { tie 修正写错时该值偏离远超容差 }
+  CheckNear(GOLDEN_MWU_P2,
+    GAnalyzer.ComputeMannWhitneyPValue(GoldenArr(GOLDEN_MWU_A2),
+      GoldenArr(GOLDEN_MWU_B2)),
+    GOLDEN_MWU_P_TOL, 'Golden heavy-ties p matches scipy (tie-corrected sigma)');
+end;
+
+procedure TestGolden_StrongSeparation;
+begin
+  CheckNear(GOLDEN_MWU_P3,
+    GAnalyzer.ComputeMannWhitneyPValue(GoldenArr(GOLDEN_MWU_A3),
+      GoldenArr(GOLDEN_MWU_B3)),
+    GOLDEN_MWU_P_TOL, 'Golden strong-separation small p matches scipy');
+end;
+
+procedure TestGolden_SmallShift;
+begin
+  CheckNear(GOLDEN_MWU_P4,
+    GAnalyzer.ComputeMannWhitneyPValue(GoldenArr(GOLDEN_MWU_A4),
+      GoldenArr(GOLDEN_MWU_B4)),
+    GOLDEN_MWU_P_TOL, 'Golden small-shift high p matches scipy');
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -257,6 +303,10 @@ begin
   T.Test('RightSkewed', @TestRightSkewed);
   T.Test('LargeSample', @TestLargeSample);
   T.Test('MarginalDifference', @TestMarginalDifference);
+  T.Test('Golden_NoTies', @TestGolden_NoTies);
+  T.Test('Golden_HeavyTies', @TestGolden_HeavyTies);
+  T.Test('Golden_StrongSeparation', @TestGolden_StrongSeparation);
+  T.Test('Golden_SmallShift', @TestGolden_SmallShift);
 
   LRunPassed := T.Run;
   T.Summary;
