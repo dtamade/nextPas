@@ -1045,7 +1045,7 @@ begin
   if (FEntryCount = 0) and (not FConfig.Quiet) then
     FConfig.Output.WriteLine('WARNING: TBenchSuite.Run called with no registered entries');
 
-  { ST-04 / F-04: suite 级超时 — 条目间跳过 + 传入 RunOne 中断采样 }
+  { suite 级超时 — 条目间跳过 + 传入 RunOne 中断采样 }
   LTimeoutNs := UInt64(FConfig.TimeoutMs) * 1000000;
   if LTimeoutNs > 0 then
     LStartNs := platform_monotonic_ns
@@ -1078,7 +1078,7 @@ begin
       Continue;
     end;
 
-    { F-04: pass suite deadline into sampling so long single entries abort }
+    { pass suite deadline into sampling so long single entries abort }
     LRunResult := FRunner.RunOne(FEntries[I], FConfig.TimeoutMs, LStartNs);
     if LRunResult.Executed then
     begin
@@ -1099,7 +1099,6 @@ begin
 
   // 创建结果对象
   Result := TBenchResults.Create(LResults, LEnvironment, Copy(FBaselines, 0, FBaselineCount));
-  { ST-08: mark suite as having been run }
   FHasRun := True;
 end;
 
@@ -1128,7 +1127,7 @@ begin
   end;
 
   FReportGenerator := TBenchReportGenerator.Create;
-  { F-18: 构造时一次性设置结果和环境，避免每次 To* 方法重复拷贝 }
+  { 构造时一次性设置结果和环境，避免每次 To* 方法重复拷贝 }
   FReportGenerator.SetResults(FResults);
   FReportGenerator.SetEnvironment(FEnvironment);
   FStatsAnalyzer := TBenchStatsAnalyzer.Create;
@@ -1226,7 +1225,7 @@ begin
       Exit;
     end;
   end;
-  { F-09: 列出可用名称帮助调试 }
+  { 列出可用名称帮助调试 }
   LAvailable := '';
   for I := 0 to FResultCount - 1 do
   begin

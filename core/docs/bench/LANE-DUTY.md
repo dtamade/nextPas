@@ -91,6 +91,8 @@ bench core/docs/bench core/docs/core-module-registry.md
 | 2026-07-26 | audit 全量闭环（F-01–F-26）；HEAD `c28c60fb8` | `bench-module-test` + contract + scorecard/consumer smoke | **22/22**；**510** tests；contract **13/13**（+C10）；inttohex+hash/json ok；见 findings.md |
 | 2026-07-26 | merge origin/main（吸收 audit landing `a5075603c`）；SCORECARD 行尾对齐 main | 连续 3 次 `bench-module-test` | 2 绿 1 红：`test_bench_matrix` 偶发 fpc `Can't find unit test.diff`（**F-27** flake，严格前缀取证；单独 6/6 绿） |
 | 2026-07-26 | F-27 缓解：gate 循环拆构建/运行、构建重试一次；report 套件补 `all` 别名 | `bench-module-test` + contract-check | **exit 0**；**22/22**；**510** tests；0 retry 触发；hygiene pass |
+| 2026-07-26 | **Landed** `c90f620c2` → `origin/main`（F-27 gate retry + report all）；landing worktree 已删 | `landing-check`（candidate=pass + focused 22/22 510 + hygiene）；内容探针 BUILD-FLAKE-RETRY/F-27 均在 origin/main | **已 push**；lane 已回吸 origin/main |
+| 2026-07-26 | F-22 注释卫生：8 源文件 46 处 ticket 标签清理（活约束保留说明，噪音整删）；纯注释级 diff | `bench-module-test` + contract-check + `git diff --check` | **exit 0**；**22/22**；**510** tests；contract 全通过 |
 
 > 新一次回归后更新本表一行即可。
 

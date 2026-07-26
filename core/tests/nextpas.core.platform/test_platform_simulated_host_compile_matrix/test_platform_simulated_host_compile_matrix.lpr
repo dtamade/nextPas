@@ -66,6 +66,12 @@ uses
   { wave10 contract: generic unix stat stays deferred — no invented stat record,
     so platform.files is host-gated and excluded from the generic-unix leg }
   {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.files,{$ENDIF}
+  { fs → files 传递命中同一条 deferred generic-unix stat 链 }
+  {$IFNDEF SIM_EXPECT_UNIX}nextpas.core.platform.fs,{$ENDIF}
+  nextpas.core.platform.io,
+  nextpas.core.platform.watch,
+  nextpas.core.platform.freetype,
+  nextpas.core.platform.x11,
   nextpas.core.platform.path,
   nextpas.core.platform.env,
   nextpas.core.platform.socket,

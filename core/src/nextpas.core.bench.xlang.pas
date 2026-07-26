@@ -336,7 +336,7 @@ begin
     raise EParseError.CreateFmt('Invalid Go bench line: %s', [ALine]);
 
   LName := LParts[0];
-  { ST-25: Remove "-N" GOMAXPROCS suffix by scanning from end for pattern -\d+$ }
+  { Remove "-N" GOMAXPROCS suffix by scanning from end for pattern -\d+$ }
   I := Length(LName);
   { Skip trailing digits }
   while (I > 1) and (LName[I] in ['0'..'9']) do
@@ -347,7 +347,7 @@ begin
 
   LIterations := StrToInt64Def(LParts[1], 0);
   if LIterations < 0 then
-    LIterations := 0; { F-07: guard against negative iterations }
+    LIterations := 0; { guard against negative iterations }
 
   // Go format: "1234 ns/op" or "1.234 us/op"
   // Parts are split: ["1234", "ns/op"] or ["1.234", "us/op"]
@@ -480,7 +480,7 @@ begin
   Result.NsPerOp := LMean * LMultiplier;
   Result.Median := Result.NsPerOp;
   Result.StdDev := 0;
-  { F-016: Rust provides [lower, mean, upper] CI. Use upper as P95 approx.
+  { Rust provides [lower, mean, upper] CI. Use upper as P95 approx.
     Go/FPC only provide mean, so P95 = mean there. This is a cross-format
     limitation: P95 semantics differ between parsers. }
   Result.P95 := LUpper * LMultiplier;
