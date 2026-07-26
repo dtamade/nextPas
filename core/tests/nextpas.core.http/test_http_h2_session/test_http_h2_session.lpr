@@ -2086,6 +2086,126 @@ begin
   end;
 end;
 
+{ CVE-2024-27316 (CONTINUATION flood): a peer opens a header block with
+  HEADERS (no END_HEADERS) then streams endless CONTINUATION frames without
+  ever ending the block. The stream-level bounds reset the stream with
+  ENHANCE_YOUR_CALM, but a header-block flood is connection-level abuse: the
+  session must escalate to a GOAWAY(ENHANCE_YOUR_CALM) and close, not merely
+  RST the stream (which leaves the connection lingering for 1:1 RST
+  amplification). Sixty-four empty CONTINUATION frames trip the empty-fragment
+  bound (H2_MAX_EMPTY_FRAGMENTS). }
+procedure TestRunContinuationFloodTriggersGoawayEnhanceYourCalm;
+const
+  CONTINUATION_FLOOD = 70;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LFrames: array[0..255] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+  LI: Integer;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LWire := ComposePrefaceHandshake;
+    { HEADERS opens the block but does not end it (no END_HEADERS). }
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_HEADERS, 0, 1,
+        ComposeRequestHeaders('POST', '/upload'));
+    { Empty CONTINUATION frames that never end the block. }
+    for LI := 0 to CONTINUATION_FLOOD - 1 do
+      LWire := LWire +
+        H2EncodeFrame(H2_FRAME_CONTINUATION, 0, 1, '');
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'CONTINUATION flood triggers a connection GOAWAY');
+      CheckEqual(Int64(H2_ERR_ENHANCE_YOUR_CALM), Int64(LErrorCode),
+        'CONTINUATION flood GOAWAY carries ENHANCE_YOUR_CALM');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
+{ No-harm counterpart: a legitimate request whose header block spans several
+  CONTINUATION frames (properly ended with END_HEADERS) must complete without
+  tripping the flood defense. Guards against an over-eager escalation that
+  would close the connection on any pending CONTINUATION sequence. }
+procedure TestRunContinuationSplitHeadersDoNotTripGoaway;
+var
+  LHandler: TCollectingHandler;
+  LHandlerRef: IHttpHandler;
+  LStream: TFakeTcpStream;
+  LConnRef: ITcpStream;
+  LSession: TH2ServerSession;
+  LWire: AnsiString;
+  LBlock: AnsiString;
+  LThird: SizeInt;
+  LFrames: array[0..31] of TH2Frame;
+  LFrameCount: SizeInt;
+  LErrorCode: UInt32;
+begin
+  LHandler := TCollectingHandler.Create;
+  LHandlerRef := LHandler as IHttpHandler;
+  try
+    LBlock := ComposeRequestHeaders('GET', '/ok');
+    LThird := Length(LBlock) div 3;
+    LWire := ComposePrefaceHandshake;
+    { END_STREAM on HEADERS, block split across two CONTINUATION frames,
+      final CONTINUATION carries END_HEADERS. }
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_STREAM, 1,
+        Copy(LBlock, 1, LThird));
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_CONTINUATION, 0, 1,
+        Copy(LBlock, LThird + 1, LThird));
+    LWire := LWire +
+      H2EncodeFrame(H2_FRAME_CONTINUATION, H2_FLAG_CONTINUATION_END_HEADERS, 1,
+        Copy(LBlock, 2 * LThird + 1, Length(LBlock) - 2 * LThird));
+    LStream := TFakeTcpStream.Create(LWire);
+    LConnRef := LStream as ITcpStream;
+    try
+      LSession := TH2ServerSession.Create(LStream, LHandler,
+        TH2ServerTransportOptions.Default);
+      try
+        LSession.Run;
+      finally
+        LSession.Free;
+      end;
+      DecodeFrames(LStream.WrittenData, LFrames, LFrameCount);
+      Check(not FindGoawayError(LFrames, LFrameCount, LErrorCode),
+        'legitimate split CONTINUATION headers keep the connection alive');
+      CheckEqual(Int64(1), Int64(LHandler.CallCount),
+        'the split-header GET runs its handler');
+    finally
+      LConnRef := nil;
+      LStream := nil;
+    end;
+  finally
+    LHandlerRef := nil;
+    LHandler := nil;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.impl.h2.session');
   T.Test('Partial preface waits', @TestPartialPrefaceWaits);
@@ -2161,5 +2281,9 @@ begin
     @TestRunControlFrameFloodTriggersGoawayEnhanceYourCalm);
   T.Test('Run control frame flood interleaved with completion does not trip GOAWAY',
     @TestRunControlFrameFloodInterleavedWithCompletionDoNotTripGoaway);
+  T.Test('Run CONTINUATION flood triggers GOAWAY ENHANCE_YOUR_CALM',
+    @TestRunContinuationFloodTriggersGoawayEnhanceYourCalm);
+  T.Test('Run CONTINUATION split headers do not trip GOAWAY',
+    @TestRunContinuationSplitHeadersDoNotTripGoaway);
   if not T.Run then Halt(1);
 end.

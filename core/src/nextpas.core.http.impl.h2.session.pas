@@ -143,6 +143,11 @@ type
       Returns False (and queues GOAWAY(ENHANCE_YOUR_CALM), closing the
       session) once the budget is exceeded; the caller must Exit(False). }
     function RegisterControlFrameFlood: Boolean;
+    { Escalates a stream-level header-block flood reset (ENHANCE_YOUR_CALM is
+      the only reset code produced by the HEADERS/CONTINUATION fragment bounds)
+      to a connection error: GOAWAY(ENHANCE_YOUR_CALM), close, and clear any
+      pending CONTINUATION state. Returns False; the caller must Exit(False). }
+    function EscalateHeaderBlockFlood: Boolean;
     function HandleGoaway(const AFrame: TH2Frame): Boolean;
     function ClosedStreamDataLength(const AFrame: TH2Frame;
       out ADataLen: UInt32): Boolean;
@@ -762,6 +767,8 @@ begin
   LStream.OnHeaders(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
+    if LStream.ResetCode = H2_ERR_ENHANCE_YOUR_CALM then
+      Exit(EscalateHeaderBlockFlood);
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.Remove(LStream.StreamID);
     Exit(True);
@@ -794,6 +801,8 @@ begin
   LStream.OnContinuation(AFrame.Header.Flags, AFrame.Payload);
   if LStream.ResetReceived then
   begin
+    if LStream.ResetCode = H2_ERR_ENHANCE_YOUR_CALM then
+      Exit(EscalateHeaderBlockFlood);
     QueueRstStream(LStream.StreamID, LStream.ResetCode);
     FStreams.Remove(LStream.StreamID);
     Exit(True);
@@ -971,6 +980,15 @@ begin
     Exit(False);
   end;
   Result := True;
+end;
+
+function TH2ServerSession.EscalateHeaderBlockFlood: Boolean;
+begin
+  QueueGoaway(FLastSeenPeerStreamID, H2_ERR_ENHANCE_YOUR_CALM);
+  FShutdownErrorCode := H2_ERR_ENHANCE_YOUR_CALM;
+  FState := h2sesClosed;
+  FPendingContinuationStreamID := 0;
+  Result := False;
 end;
 
 function TH2ServerSession.HandlePing(const AFrame: TH2Frame): Boolean;

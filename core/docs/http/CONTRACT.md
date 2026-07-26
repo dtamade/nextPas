@@ -827,6 +827,7 @@ client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_re
 | CVE-2023-44487 rapid-reset（HEADERS+RST 循环） | `FRapidResetCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_RAPID_RESETS = 100` | 任意请求成功完成（`MarkRequestHandled`） | 攻击测试 + 不误伤（198 resets 中间穿插1完成） |
 | CVE-2019-9512 PING flood | `FControlFrameFloodCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_CONTROL_FRAME_FLOOD = 100` per batch | 任意请求成功完成 | 攻击测试 + 不误伤（198 PINGs 中间穿插1完成） |
 | CVE-2019-9515 SETTINGS flood | 同上计数器（共用 `FControlFrameFloodCount`） | 同上 | 同上 | 同框架覆盖 |
+| CVE-2024-27316 CONTINUATION flood（HEADERS 后无尽 CONTINUATION） | stream 层三重边界超限 → reset code=ENHANCE_YOUR_CALM，session `EscalateHeaderBlockFlood` 升级为 GOAWAY(ENHANCE_YOUR_CALM) + 关闭 + 清 `FPendingContinuationStreamID` | `H2_MAX_HEADER_BLOCK_BYTES=64KB` / `H2_MAX_HEADER_FRAGMENTS=512` / `H2_MAX_EMPTY_FRAGMENTS=64` | — （单次连接级致命） | 攻击测试（70 空 CONTINUATION）+ 不误伤（合法 3 分片 CONTINUATION 完成 handler） |
 | 内存 exhaustion（巨型帧） | `H2_WIRE_READ_HARD_LIMIT = 16MB` → GOAWAY(ENHANCE_YOUR_CALM) | 16 MB | — | 既有测试 |
 
 单套件：
@@ -889,6 +890,7 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-26 | 3.47 | Era W2（W2-1..W2-3b）：IOCP completion 驱动 recv/send/deadline-wake；host matrix 增 `http.iocp_wire`（真 Windows 证据 run 30195741147）；residual 措辞对齐；scale=No 维持 |
 | 2026-07-26 | 3.48 | M-1 产品 facade over IOCP：`test_http_iocp_facade_wine`（THttpServer+tsbIocp GET/keep-alive，Wine 3 用例）；full facade Win64 交叉 residual 消除（uses 常驻钉住）；host matrix 增 `http.iocp_facade` |
 | 2026-07-26 | 3.49 | Era P DoS defense：`FRapidResetCount` + `FControlFrameFloodCount` → GOAWAY(ENHANCE_YOUR_CALM)；`H2_MAX_RAPID_RESETS=100`/`H2_MAX_CONTROL_FRAME_FLOOD=100`；request-completion 清零；`test_http_h2_session` 4 passed + 4 RED→GREEN；`CONTRACT.md` DoS stance 表 + §6 suites 计数修正 35→47 |
+| 2026-07-26 | 3.50 | Era P-4 CONTINUATION flood（CVE-2024-27316）连接级升级：`EscalateHeaderBlockFlood` 把 stream 层 ENHANCE_YOUR_CALM reset 升级为 GOAWAY + 关闭 + 清 `FPendingContinuationStreamID`（原缺口：只 RST 单流留连接 1:1 放大挂起）；HandleHeaders/HandleContinuation 两处 reset 分支共用；`test_http_h2_session` 43 passed（+2：攻击 70 空 CONTINUATION，no-harm 合法 3 分片；均 RED→GREEN，no-harm 经过度激进 mutation 验证） |
 | 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |
 | 2026-07-20 | 3.20 | Q3-2：timeout/cancel/413/431 Go 语义矩阵（§ Kind 表下 + `test_http_q3_matrix`） |
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
