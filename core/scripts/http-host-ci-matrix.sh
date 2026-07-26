@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # http-host-ci-matrix.sh
 #
-# Multi-OS host CI smoke for HTTP threaded cleartext path + IOCP wire.
+# Multi-OS host CI smoke for HTTP threaded cleartext path + IOCP wire
+# + product facade over IOCP.
 # Runs on real Linux / macOS / Windows / FreeBSD CI hosts (not Wine).
 #
 # Usage (cwd = core/ or repo root):
@@ -9,9 +10,9 @@
 #   ./core/scripts/http-host-ci-matrix.sh
 #
 # Evidence: truth=host-runtime for the documented HTTP gate set only.
-# IOCP wire smoke runs its real cases on Windows hosts only; other hosts
-# assert the tsbIocp factory is absent (skip branch of the same suite).
-# NOT Windows scale-ready, NOT full nextpas.core.http facade/TLS.
+# IOCP wire + facade smokes run their real cases on Windows hosts only;
+# other hosts assert the tsbIocp factory is absent (skip branch of the
+# same suites). NOT Windows scale-ready, NOT TLS-over-Windows evidence.
 
 set -euo pipefail
 
@@ -44,6 +45,7 @@ fi
 MODULE_ENTRIES=(
   "http.threaded_host tests/nextpas.core.http/test_http_threaded_host"
   "http.iocp_wire tests/nextpas.core.http/test_http_iocp_wine"
+  "http.iocp_facade tests/nextpas.core.http/test_http_iocp_facade_wine"
 )
 
 pass_count=0
@@ -53,7 +55,7 @@ failed=()
 HOST_LABEL="${CORE_CI_HOST:-$(uname -s 2>/dev/null || echo unknown)}"
 
 echo "=== HTTP host CI Matrix (real host) ==="
-echo "truth=host-runtime; host=$HOST_LABEL; NOT scale-ready; NOT full facade TLS; IOCP wire real cases on Windows hosts only"
+echo "truth=host-runtime; host=$HOST_LABEL; NOT scale-ready; NOT TLS-over-Windows; IOCP wire+facade real cases on Windows hosts only"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 if [[ -n "${FPC:-}" ]]; then
