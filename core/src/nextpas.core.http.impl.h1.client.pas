@@ -67,7 +67,6 @@ type
   private
     FOptions: TH1ClientTransportOptions;
     FPool: TH1IdleConnectionPool;
-    FPending: string;
     FDefaultTLSContext: ISSLContext;
     function SecureClientContext: ISSLContext;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
@@ -75,7 +74,7 @@ type
       const AProxyAuthorization: string): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
-      out AResponseStarted: Boolean): IHttpResponse;
+      out AResponseStarted: Boolean; var APending: string): IHttpResponse;
     procedure EstablishHttpsConnectTunnel(var AConn: ITcpStream;
       const ATargetHost: string; const ATargetPort: UInt16;
       const AProxyAuthorization: string);
@@ -214,6 +213,7 @@ var
   LBody: IReader;
   LTmp: array[0..255] of Byte;
   LN: SizeUInt;
+  LTunnelPending: string;
 begin
   if AConn = nil then
     raise EHttpError.Create(hekArgument, 'proxy CONNECT requires connection');
@@ -236,8 +236,9 @@ begin
   AConn.Write(LRequest[1], SizeUInt(Length(LRequest)));
 
   { CONNECT responses have no payload; any leftover bytes belong to the tunnel. }
-  FPending := '';
-  LResp := ReadResponse(AConn as IReader, hmHead, LKeepAlive, LResponseStarted);
+  LTunnelPending := '';
+  LResp := ReadResponse(AConn as IReader, hmHead, LKeepAlive, LResponseStarted,
+    LTunnelPending);
   if (LResp.StatusCode < 200) or (LResp.StatusCode > 299) then
   begin
     { 407 is not auto-retried with Digest/NTLM. Supported path is preemptive
@@ -259,11 +260,8 @@ begin
     until LN = 0;
   end;
 
-  if FPending <> '' then
-  begin
-    AConn := TReadPrependTcpStream.Create(AConn, FPending);
-    FPending := '';
-  end;
+  if LTunnelPending <> '' then
+    AConn := TReadPrependTcpStream.Create(AConn, LTunnelPending);
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
@@ -448,7 +446,7 @@ end;
 
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
   const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
-  out AResponseStarted: Boolean): IHttpResponse;
+  out AResponseStarted: Boolean; var APending: string): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
@@ -464,8 +462,8 @@ begin
   LHasResponseTail := False;
   LSkippedInformational := False;
   LCurrentResponseStarted := False;
-  LPending := FPending;
-  FPending := '';
+  LPending := APending;
+  APending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     if LPending <> '' then
@@ -523,8 +521,8 @@ begin
     raise EHttpError.CreateOp(hekConnect, 'transport',
       'HTTP response incomplete: connection closed');
 
-  FPending := LPending;
-  LHasResponseTail := FPending <> '';
+  APending := LPending;
+  LHasResponseTail := APending <> '';
   AKeepAlive := LParser.ShouldKeepAlive and (not LHasResponseTail) and
     (LParser.GetStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS);
 
@@ -566,6 +564,7 @@ var
   LTimeoutMs: Int64;
   LReqOpts: IHttpRequestWithOptions;
   LWrapped: Exception;
+  LPendingTail: string;
 
   procedure WrapConnectionWithTls;
   begin
@@ -678,7 +677,7 @@ begin
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(LTimeoutMs);
-  FPending := '';
+  LPendingTail := '';
   if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
     HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
   LConn := FPool.Get(LPoolHostKey, LConnectPort);
@@ -705,7 +704,7 @@ begin
     { Re-arm request deadline for response read (after connect-write budget). }
     ApplyClientDeadline(LConn, LRequestDeadline);
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-      LResponseStarted);
+      LResponseStarted, LPendingTail);
   except
     on E: Exception do
     begin
@@ -735,7 +734,7 @@ begin
             HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
           ApplyClientDeadline(LConn, LRequestDeadline);
           LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-            LResponseStarted);
+            LResponseStarted, LPendingTail);
         except
           on E2: Exception do
           begin

@@ -96,13 +96,18 @@ begin
   GServerReady := False;
   platform_thread_create(GServerHandle, @ServerThreadFunc, nil);
   LWait := 0;
-  while (not GServerReady) and (LWait < 200) do
+  APort := 0;
+  { 等真实就绪：不仅线程创建了 server（GServerReady），还要 ListenAndServe
+    已 bind、拿到 ephemeral 端口。仅靠 GServerReady 会竞争——它在 bind 前就置位，
+    并行门禁下主线程会读到未绑定的端口 0。轮询真实条件（端口>0）消除竞争。 }
+  while (APort = 0) and (LWait < 400) do
   begin
     platform_thread_sleep_ns(5000000);
     Inc(LWait);
+    if GServerReady and (GServer <> nil) then
+      APort := GServer.LocalAddr.Port;
   end;
   Check(GServerReady, 'server started');
-  APort := GServer.LocalAddr.Port;
   Check(APort > 0, 'server has port');
 end;
 
