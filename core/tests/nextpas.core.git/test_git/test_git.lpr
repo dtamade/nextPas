@@ -376,6 +376,99 @@ begin
   CheckEqual(40, Length(LCommit.OIDString), 'HeadCommit should expose 40-byte hex oid');
 end;
 
+procedure TestAddWorktreeCreatesLinkedWorktree;
+var
+  LMgr: IGitManager;
+  LMainDir, LWtDir: string;
+  LRepo, LWtRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+  LWt: IGitWorktree;
+  LList: TStringArray;
+begin
+  LMainDir := nextpas.core.fs.PathJoin([GTmpDir, 'wt-main']);
+  LWtDir := nextpas.core.fs.PathJoin([GTmpDir, 'wt-linked']);
+
+  nextpas.core.fs.MkdirAll(LMainDir);
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for worktree test');
+  LRepo := LMgr.InitRepository(LMainDir, False);
+
+  CheckGitOk(LMainDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LMainDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+  nextpas.core.fs.WriteFile(
+    nextpas.core.fs.PathJoin([LMainDir, 'seed.txt']),
+    BytesOfString('seed')
+  );
+  CheckGitOk(LMainDir, ['add', 'seed.txt'], 'git add seed');
+  CheckGitOk(LMainDir, ['commit', '-m', 'seed'], 'git commit seed');
+
+  if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+  begin
+    Check(False, 'IGitRepository should support IGitWorktreeExt');
+    Exit;
+  end;
+
+  LWt := LWtExt.AddWorktree('my-wt', LWtDir, '', False);
+  Check(LWt <> nil, 'AddWorktree should return a worktree');
+  CheckEqual('my-wt', LWt.Name, 'worktree name');
+  Check(Length(LWt.Path) > 0, 'worktree path should be non-empty');
+
+  LList := LWtExt.ListWorktrees;
+  Check(Length(LList) >= 1, 'ListWorktrees should list at least one worktree');
+
+  { Open the worktree as a repository and verify it is a worktree }
+  LWtRepo := LMgr.OpenRepository(LWtDir);
+  Check(LWtRepo <> nil, 'should be able to open worktree as repository');
+  Check(not LWtRepo.IsBare, 'worktree should not be bare');
+
+  { Cleanup: release worktree handle before repo to avoid dangling ref }
+  LWt := nil;
+  LWtRepo := nil;
+  { Remove worktree directory first, then prune git metadata via CLI }
+  nextpas.core.fs.RemoveAll(LWtDir);
+  { 'git worktree remove' may fail if dir already gone; that's ok }
+  CheckGitOk(LMainDir, ['worktree', 'prune'], 'git worktree prune');
+end;
+
+procedure TestCommitOnHeadCreatesCommit;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LWtExt: IGitWorktreeExt;
+  LCommit: IGitCommit;
+  LOID: string;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'wt-commit']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for commit test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+
+  if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+  begin
+    Check(False, 'IGitRepository should support IGitWorktreeExt');
+    Exit;
+  end;
+
+  nextpas.core.fs.WriteFile(
+    nextpas.core.fs.PathJoin([LRepoDir, 'file1.txt']),
+    BytesOfString('content1')
+  );
+  { Stage via git CLI (libgit2 index add bypath would also work) }
+  CheckGitOk(LRepoDir, ['add', 'file1.txt'], 'git add file1');
+
+  LOID := LWtExt.CommitOnHead('first commit', 'Tester', 'test@example.invalid');
+  CheckEqual(40, Length(LOID), 'CommitOnHead should return 40-char OID');
+
+  LCommit := LRepo.HeadCommit;
+  CheckEqual('first commit', LCommit.ShortMessage, 'HEAD commit should be our commit');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -392,6 +485,8 @@ begin
     T.Test('Status sees untracked file', @TestStatusSeesUntrackedFileAfterInit);
     T.Test('Explicit Finalize waits for live repository', @TestExplicitFinalizeWaitsForLiveRepository);
     T.Test('HeadCommit metadata', @TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease);
+    T.Test('AddWorktree creates linked worktree', @TestAddWorktreeCreatesLinkedWorktree);
+    T.Test('CommitOnHead creates commit', @TestCommitOnHeadCreatesCommit);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

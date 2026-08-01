@@ -25,6 +25,8 @@ type
   IGitRemote = nextpas.core.git.intf.IGitRemote;
   IGitRepository = nextpas.core.git.intf.IGitRepository;
   IGitRepositoryExt = nextpas.core.git.intf.IGitRepositoryExt;
+  IGitWorktree = nextpas.core.git.intf.IGitWorktree;
+  IGitWorktreeExt = nextpas.core.git.intf.IGitWorktreeExt;
   IGitManager = nextpas.core.git.intf.IGitManager;
   EGitError = nextpas.core.git.libgit2.EGitError;
 

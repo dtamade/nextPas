@@ -109,6 +109,7 @@ type
 
     property Path: string read GetPath;
     property WorkDir: string read GetWorkDir;
+    function RawHandle: git_repository;
   end;
   TGitReference = class
   private
@@ -603,6 +604,11 @@ begin
   if FWorkDir = '' then
     FWorkDir := string(git_repository_workdir(FHandle));
   Result := FWorkDir;
+end;
+
+function TGitRepository.RawHandle: git_repository;
+begin
+  Result := FHandle;
 end;
 
 function TGitRepository.GetHead: TGitReference;

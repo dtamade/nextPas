@@ -47,6 +47,7 @@ type
   git_status_list = Pointer;
   git_branch_iterator = Pointer;
   git_revwalk = Pointer;
+  git_worktree = Pointer;
 
   // Git OID (Object ID)
   git_oid = record
@@ -327,6 +328,37 @@ const
   GIT_CHECKOUT_RECREATE_MISSING  = 1 shl 2;
   GIT_CHECKOUT_REMOVE_UNTRACKED  = 1 shl 5;
   GIT_CHECKOUT_NONE              = 1 shl 30;
+
+  // Worktree add flags
+  GIT_WORKTREE_ADD_CREATE_REF = 1 shl 0;
+  GIT_WORKTREE_ADD_LOCK       = 1 shl 1;
+  GIT_WORKTREE_ADD_DETACH     = 1 shl 2;
+
+  // Worktree prune flags
+  GIT_WORKTREE_PRUNE_VALID     = 1 shl 0;
+  GIT_WORKTREE_PRUNE_LOCKED    = 1 shl 1;
+  GIT_WORKTREE_PRUNE_WORKTREE  = 1 shl 2;
+
+  // Worktree option struct versions
+  GIT_WORKTREE_ADD_OPTIONS_VERSION    = 1;
+  GIT_WORKTREE_PRUNE_OPTIONS_VERSION  = 1;
+
+// Worktree add options (matches libgit2 git_worktree_add_options layout)
+type
+  git_worktree_add_options = record
+    version: cuint;
+    lock: cint;
+    checkout_existing: cint;
+    ref_: git_reference;
+    checkout_options: git_checkout_options;
+  end;
+  Pgit_worktree_add_options = ^git_worktree_add_options;
+
+  git_worktree_prune_options = record
+    version: cuint;
+    flags: cuint;       // git_worktree_prune_t
+  end;
+  Pgit_worktree_prune_options = ^git_worktree_prune_options;
 
 implementation
 

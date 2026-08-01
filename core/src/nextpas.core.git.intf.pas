@@ -17,6 +17,7 @@ type
   IGitCommit = interface;
   IGitReference = interface;
   IGitRemote = interface;
+  IGitWorktree = interface;
 
   IGitRepository = interface
     ['{B3A3D3E7-7A20-4D59-8A71-1B8A4E2B2B6E}']
@@ -81,6 +82,31 @@ type
     function Name: string;
     function URL: string;
     function Fetch: Boolean;
+  end;
+
+  IGitWorktree = interface
+    ['{F1A2B3C4-D5E6-7890-ABCD-EF1234567890}']
+    function Name: string;
+    function Path: string;
+    function IsLocked: Boolean;
+  end;
+
+  IGitWorktreeExt = interface
+    ['{A2B3C4D5-E6F7-8901-BCDE-F12345678901}']
+    // Add a new worktree at the given path. Name must be unique. Ref is the
+    // branch/commit/tag to base the worktree on; '' = HEAD. Detach = create a
+    // detached HEAD worktree (no branch tracking).
+    function AddWorktree(const AName, APath, ARef: string;
+      ADetach: Boolean = False): IGitWorktree;
+    function LookupWorktree(const AName: string): IGitWorktree;
+    function ListWorktrees: TStringArray;
+    // Prune (remove) a worktree's git metadata. Does NOT delete the working
+    // directory files — caller must remove the directory separately.
+    function PruneWorktree(const AName: string): Boolean;
+    // Commit all staged changes in the index, creating a new commit on HEAD.
+    // Author/Committer use the repository's default signature (or global config).
+    function CommitOnHead(const AMessage: string;
+      const AAuthorName, AAuthorEmail: string): string;
   end;
 
   IGitManager = interface

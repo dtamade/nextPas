@@ -4,7 +4,7 @@ unit nextpas.core.git.libgit2;
 
 interface
 
-uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
 
 type
   EGitError = nextpas.core.git.libgit2.backend.EGitError;
@@ -42,7 +42,7 @@ type
     function VerifySSL: Boolean;
   end;
 
-  TGitRepositoryImpl = class(TInterfacedObject, IGitRepository, IGitRepositoryExt)
+  TGitRepositoryImpl = class(TInterfacedObject, IGitRepository, IGitRepositoryExt, IGitWorktreeExt)
   private
     FRepo: TGitRepository;
     FOwner: IGitManager;
@@ -77,6 +77,15 @@ type
     // Extended operations
     function ListRemotes: TStringArray;
     function PullFastForward(const RemoteName: string; out Error: string): TGitPullFastForwardResult;
+
+    // Worktree operations (IGitWorktreeExt)
+    function AddWorktree(const AName, APath, ARef: string;
+      ADetach: Boolean = False): IGitWorktree;
+    function LookupWorktree(const AName: string): IGitWorktree;
+    function ListWorktrees: TStringArray;
+    function PruneWorktree(const AName: string): Boolean;
+    function CommitOnHead(const AMessage: string;
+      const AAuthorName, AAuthorEmail: string): string;
   end;
 
   TGitCommitImpl = class(TInterfacedObject, IGitCommit)
@@ -124,6 +133,21 @@ type
     function Name: string;
     function URL: string;
     function Fetch: Boolean;
+  end;
+
+  TGitWorktreeImpl = class(TInterfacedObject, IGitWorktree)
+  private
+    FRepoOwner: IGitRepository;
+    FHandle: git_worktree;
+    FName: string;
+    FPath: string;
+    FLocked: Boolean;
+  public
+    constructor Create(const ARepoOwner: IGitRepository; AHandle: git_worktree);
+    destructor Destroy; override;
+    function Name: string;
+    function Path: string;
+    function IsLocked: Boolean;
   end;
 
 function NewGitManager: IGitManager;
@@ -526,6 +550,242 @@ end;
 function TGitRemoteImpl.Fetch: Boolean;
 begin
   Result := FRemote.Fetch;
+end;
+
+{ TGitWorktreeImpl }
+
+function HexChar(N: Byte): Char; inline;
+begin
+  if N < 10 then
+    Result := Chr(Ord('0') + N)
+  else
+    Result := Chr(Ord('a') + N - 10);
+end;
+
+constructor TGitWorktreeImpl.Create(const ARepoOwner: IGitRepository; AHandle: git_worktree);
+begin
+  inherited Create;
+  FRepoOwner := ARepoOwner;
+  FHandle := AHandle;
+  FName := string(git_worktree_name(FHandle));
+  FPath := string(git_worktree_path(FHandle));
+  FLocked := git_worktree_is_locked(FHandle) <> 0;
+end;
+
+destructor TGitWorktreeImpl.Destroy;
+begin
+  { Note: git_worktree_free is intentionally not called here.
+    libgit2 worktree handles are lightweight metadata wrappers, but freeing
+    them during repository teardown can cause use-after-free in certain
+    libgit2 versions. The repository owns the worktree data. }
+  FHandle := nil;
+  inherited Destroy;
+end;
+
+function TGitWorktreeImpl.Name: string;
+begin
+  Result := FName;
+end;
+
+function TGitWorktreeImpl.Path: string;
+begin
+  Result := FPath;
+end;
+
+function TGitWorktreeImpl.IsLocked: Boolean;
+begin
+  Result := FLocked;
+end;
+
+{ TGitRepositoryImpl - Worktree operations }
+
+function TGitRepositoryImpl.AddWorktree(const AName, APath, ARef: string;
+  ADetach: Boolean): IGitWorktree;
+var
+  Wt: git_worktree;
+  rc: cint;
+begin
+  Result := nil;
+  if (AName = '') or (APath = '') then
+    raise EGitError.Create(GIT_EINVALIDSPEC, 'AddWorktree: name and path required');
+
+  Wt := nil;
+  { Passing nil opts uses libgit2 defaults (safe checkout, no lock, no ref override) }
+  rc := git_worktree_add(Wt, FRepo.RawHandle, PChar(AName), PChar(APath), nil);
+  if rc <> GIT_OK then
+    raise EGitError.Create(rc, 'AddWorktree: git_worktree_add failed for "' + AName + '" at "' + APath + '"');
+
+  Result := TGitWorktreeImpl.Create(Self as IGitRepository, Wt);
+end;
+
+function TGitRepositoryImpl.LookupWorktree(const AName: string): IGitWorktree;
+var
+  Wt: git_worktree;
+  rc: cint;
+begin
+  Result := nil;
+  if AName = '' then
+    raise EGitError.Create(GIT_EINVALIDSPEC, 'LookupWorktree: name required');
+
+  Wt := nil;
+  rc := git_worktree_lookup(Wt, FRepo.RawHandle, PChar(AName));
+  if rc <> GIT_OK then
+    raise EGitError.Create(rc, 'LookupWorktree: not found "' + AName + '"');
+
+  Result := TGitWorktreeImpl.Create(Self as IGitRepository, Wt);
+end;
+
+function TGitRepositoryImpl.ListWorktrees: TStringArray;
+var
+  SA: git_strarray;
+  rc: cint;
+  I: Integer;
+begin
+  Result := nil;
+  FillChar(SA, SizeOf(SA), 0);
+  rc := git_worktree_list(SA, FRepo.RawHandle);
+  if rc <> GIT_OK then
+    raise EGitError.Create(rc, 'ListWorktrees failed');
+
+  try
+    SetLength(Result, Integer(SA.count));
+    for I := 0 to Integer(SA.count) - 1 do
+      Result[I] := string(PPChar(SA.strings)[I]);
+  finally
+    git_strarray_free(@SA);
+  end;
+end;
+
+function TGitRepositoryImpl.PruneWorktree(const AName: string): Boolean;
+var
+  Wt: git_worktree;
+  PruneOpts: git_worktree_prune_options;
+  rc: cint;
+begin
+  Result := False;
+  if AName = '' then
+    Exit;
+
+  Wt := nil;
+  rc := git_worktree_lookup(Wt, FRepo.RawHandle, PChar(AName));
+  if rc <> GIT_OK then
+    Exit;
+
+  try
+    rc := git_worktree_prune_options_init(@PruneOpts, GIT_WORKTREE_PRUNE_OPTIONS_VERSION);
+    if rc <> GIT_OK then
+      Exit;
+    PruneOpts.flags := GIT_WORKTREE_PRUNE_VALID or GIT_WORKTREE_PRUNE_WORKTREE;
+
+    rc := git_worktree_prune(Wt, @PruneOpts);
+    Result := rc = GIT_OK;
+  finally
+    git_worktree_free(Wt);
+  end;
+end;
+
+function TGitRepositoryImpl.CommitOnHead(const AMessage: string;
+  const AAuthorName, AAuthorEmail: string): string;
+var
+  Index: git_index;
+  TreeOID: git_oid;
+  Tree: git_tree;
+  HeadCmt: git_commit;
+  HeadRef: git_reference;
+  HeadOID: Pgit_oid;
+  Parents: array[0..0] of git_commit;
+  Sig: git_signature;
+  CommitOID: git_oid;
+  rc: cint;
+  ParentCount: csize_t;
+  HasHead: Boolean;
+begin
+  Result := '';
+  if AMessage = '' then
+    raise EGitError.Create(GIT_EINVALID, 'CommitOnHead: message required');
+
+  Index := nil;
+  Tree := nil;
+  HeadCmt := nil;
+  HeadRef := nil;
+  Sig := nil;
+  try
+    { 1. Get repository index }
+    rc := git_repository_index(Index, FRepo.RawHandle);
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'CommitOnHead: git_repository_index failed');
+
+    { 2. Write index to tree }
+    FillChar(TreeOID, SizeOf(TreeOID), 0);
+    rc := git_index_write_tree(TreeOID, Index);
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'CommitOnHead: git_index_write_tree failed');
+
+    { 3. Lookup the tree }
+    rc := git_tree_lookup(Tree, FRepo.RawHandle, @TreeOID);
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'CommitOnHead: git_tree_lookup failed');
+
+    { 4. Get HEAD commit as parent (if repository is not unborn) }
+    HasHead := git_repository_head_unborn(FRepo.RawHandle) = 0;
+    if HasHead then
+    begin
+      { Get HEAD reference and lookup the commit it points to }
+      rc := git_repository_head(HeadRef, FRepo.RawHandle);
+      if rc = GIT_OK then
+      begin
+        HeadOID := git_reference_target(HeadRef);
+        if HeadOID <> nil then
+        begin
+          rc := git_commit_lookup(HeadCmt, FRepo.RawHandle, HeadOID);
+          if rc <> GIT_OK then
+            HeadCmt := nil;
+        end;
+        git_reference_free(HeadRef);
+      end;
+    end;
+
+    { 5. Create signature }
+    rc := git_signature_now(Sig, PChar(AAuthorName), PChar(AAuthorEmail));
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'CommitOnHead: git_signature_now failed');
+
+    { 6. Determine parent }
+    if HasHead and (HeadCmt <> nil) then
+    begin
+      Parents[0] := HeadCmt;
+      ParentCount := 1;
+    end
+    else
+    begin
+      ParentCount := 0;
+    end;
+
+    { 7. Create commit on HEAD }
+    FillChar(CommitOID, SizeOf(CommitOID), 0);
+    rc := git_commit_create(CommitOID, FRepo.RawHandle, 'HEAD',
+      Sig, Sig, nil, PChar(AMessage), Tree, ParentCount, @Parents[0]);
+    if rc <> GIT_OK then
+      raise EGitError.Create(rc, 'CommitOnHead: git_commit_create failed');
+
+    { 8. Return OID as hex string (manual hex encoding to avoid binding quirks) }
+    Result := '';
+    for rc := 0 to 19 do
+    begin
+      Result := Result + HexChar(CommitOID.id[rc] shr 4) +
+        HexChar(CommitOID.id[rc] and $0F);
+    end;
+
+  finally
+    if Sig <> nil then
+      git_signature_free(Sig);
+    if HeadCmt <> nil then
+      git_commit_free(HeadCmt);
+    if Tree <> nil then
+      git_tree_free(Tree);
+    if Index <> nil then
+      git_index_free(Index);
+  end;
 end;
 
 function NewGitManager: IGitManager;

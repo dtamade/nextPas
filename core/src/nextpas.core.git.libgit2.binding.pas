@@ -34,6 +34,7 @@ function git_repository_path(repo: git_repository): PChar; cdecl;
 function git_repository_workdir(repo: git_repository): PChar; cdecl;
 function git_repository_set_head(repo: git_repository; const refname: PChar): cint; cdecl;
 function git_repository_set_head_detached(repo: git_repository; const commitish: Pgit_oid): cint; cdecl;
+function git_repository_head_unborn(repo: git_repository): cint; cdecl;
 procedure git_repository_free(repo: git_repository); cdecl;
 
 // Clone operations
@@ -79,6 +80,8 @@ function git_object_type(obj: git_object): git_object_t; cdecl;
 function git_object_peel(out peeled: git_object; obj: git_object; target_type: git_object_t): cint; cdecl;
 procedure git_object_free(obj: git_object); cdecl;
 function git_tree_lookup(out tree: git_tree; repo: git_repository; const id: Pgit_oid): cint; cdecl;
+procedure git_tree_free(tree: git_tree); cdecl;
+procedure git_commit_free(commit: git_commit); cdecl;
 
 // Commit operations
 function git_commit_lookup(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl;
@@ -163,6 +166,25 @@ procedure git_signature_free(sig: git_signature); cdecl;
 procedure git_strarray_free(arr: Pgit_strarray); cdecl;
 procedure git_buf_dispose(buffer: Pgit_buf); cdecl;
 
+// Worktree operations
+function git_worktree_add(out wt: git_worktree; repo: git_repository;
+  const name: PChar; const path: PChar;
+  const opts: Pgit_worktree_add_options): cint; cdecl;
+function git_worktree_lookup(out wt: git_worktree; repo: git_repository;
+  const name: PChar): cint; cdecl;
+function git_worktree_list(out list: git_strarray;
+  repo: git_repository): cint; cdecl;
+function git_worktree_name(wt: git_worktree): PChar; cdecl;
+function git_worktree_path(wt: git_worktree): PChar; cdecl;
+function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+function git_worktree_prune(wt: git_worktree;
+  const opts: Pgit_worktree_prune_options): cint; cdecl;
+function git_worktree_add_options_init(
+  opts: Pgit_worktree_add_options; version: cuint): cint; cdecl;
+function git_worktree_prune_options_init(
+  opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
+procedure git_worktree_free(wt: git_worktree); cdecl;
+
 implementation
 
 uses nextpas.core.platform.dl;
@@ -199,6 +221,7 @@ type
   TLibGit2_git_repository_workdir = function(repo: git_repository): PChar; cdecl;
   TLibGit2_git_repository_set_head = function(repo: git_repository; const refname: PChar): cint; cdecl;
   TLibGit2_git_repository_set_head_detached = function(repo: git_repository; const commitish: Pgit_oid): cint; cdecl;
+  TLibGit2_git_repository_head_unborn = function(repo: git_repository): cint; cdecl;
   TLibGit2_git_repository_free = procedure(repo: git_repository); cdecl;
   TLibGit2_git_clone = function(out repo: git_repository; const url: PChar; const local_path: PChar; const options: Pointer): cint; cdecl;
   TLibGit2_git_remote_lookup = function(out remote: git_remote; repo: git_repository; const name: PChar): cint; cdecl;
@@ -228,6 +251,8 @@ type
   TLibGit2_git_object_peel = function(out peeled: git_object; obj: git_object; target_type: git_object_t): cint; cdecl;
   TLibGit2_git_object_free = procedure(obj: git_object); cdecl;
   TLibGit2_git_tree_lookup = function(out tree: git_tree; repo: git_repository; const id: Pgit_oid): cint; cdecl;
+  TLibGit2_git_tree_free = procedure(tree: git_tree); cdecl;
+  TLibGit2_git_commit_free = procedure(commit: git_commit); cdecl;
   TLibGit2_git_commit_lookup = function(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl;
   TLibGit2_git_commit_message = function(commit: git_commit): PChar; cdecl;
   TLibGit2_git_commit_author = function(commit: git_commit): Pgit_signature_t; cdecl;
@@ -283,6 +308,24 @@ type
   TLibGit2_git_strarray_free = procedure(arr: Pgit_strarray); cdecl;
   TLibGit2_git_buf_dispose = procedure(buffer: Pgit_buf); cdecl;
 
+  TLibGit2_git_worktree_add = function(out wt: git_worktree; repo: git_repository;
+    const name: PChar; const path: PChar;
+    const opts: Pgit_worktree_add_options): cint; cdecl;
+  TLibGit2_git_worktree_lookup = function(out wt: git_worktree; repo: git_repository;
+    const name: PChar): cint; cdecl;
+  TLibGit2_git_worktree_list = function(out list: git_strarray;
+    repo: git_repository): cint; cdecl;
+  TLibGit2_git_worktree_name = function(wt: git_worktree): PChar; cdecl;
+  TLibGit2_git_worktree_path = function(wt: git_worktree): PChar; cdecl;
+  TLibGit2_git_worktree_is_locked = function(wt: git_worktree): cint; cdecl;
+  TLibGit2_git_worktree_prune = function(wt: git_worktree;
+    const opts: Pgit_worktree_prune_options): cint; cdecl;
+  TLibGit2_git_worktree_add_options_init = function(
+    opts: Pgit_worktree_add_options; version: cuint): cint; cdecl;
+  TLibGit2_git_worktree_prune_options_init = function(
+    opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
+  TLibGit2_git_worktree_free = procedure(wt: git_worktree); cdecl;
+
 {$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
 function static_git_libgit2_init: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_init';
 function static_git_libgit2_shutdown: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_shutdown';
@@ -297,6 +340,7 @@ function static_git_repository_path(repo: git_repository): PChar; cdecl; externa
 function static_git_repository_workdir(repo: git_repository): PChar; cdecl; external LIBGIT2_LIB name 'git_repository_workdir';
 function static_git_repository_set_head(repo: git_repository; const refname: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_set_head';
 function static_git_repository_set_head_detached(repo: git_repository; const commitish: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_repository_set_head_detached';
+function static_git_repository_head_unborn(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_head_unborn';
 procedure static_git_repository_free(repo: git_repository); cdecl; external LIBGIT2_LIB name 'git_repository_free';
 function static_git_clone(out repo: git_repository; const url: PChar; const local_path: PChar; const options: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_clone';
 function static_git_remote_lookup(out remote: git_remote; repo: git_repository; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_remote_lookup';
@@ -328,6 +372,8 @@ function static_git_object_type(obj: git_object): git_object_t; cdecl; external 
 function static_git_object_peel(out peeled: git_object; obj: git_object; target_type: git_object_t): cint; cdecl; external LIBGIT2_LIB name 'git_object_peel';
 procedure static_git_object_free(obj: git_object); cdecl; external LIBGIT2_LIB name 'git_object_free';
 function static_git_tree_lookup(out tree: git_tree; repo: git_repository; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_tree_lookup';
+procedure static_git_tree_free(tree: git_tree); cdecl; external LIBGIT2_LIB name 'git_tree_free';
+procedure static_git_commit_free(commit: git_commit); cdecl; external LIBGIT2_LIB name 'git_commit_free';
 function static_git_commit_lookup(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_commit_lookup';
 function static_git_commit_message(commit: git_commit): PChar; cdecl; external LIBGIT2_LIB name 'git_commit_message';
 function static_git_commit_author(commit: git_commit): Pgit_signature_t; cdecl; external LIBGIT2_LIB name 'git_commit_author';
@@ -384,6 +430,24 @@ function static_git_signature_now(out sig: git_signature; const name: PChar; con
 procedure static_git_signature_free(sig: git_signature); cdecl; external LIBGIT2_LIB name 'git_signature_free';
 procedure static_git_strarray_free(arr: Pgit_strarray); cdecl; external LIBGIT2_LIB name 'git_strarray_free';
 procedure static_git_buf_dispose(buffer: Pgit_buf); cdecl; external LIBGIT2_LIB name 'git_buf_dispose';
+
+function static_git_worktree_add(out wt: git_worktree; repo: git_repository;
+  const name: PChar; const path: PChar;
+  const opts: Pgit_worktree_add_options): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_add';
+function static_git_worktree_lookup(out wt: git_worktree; repo: git_repository;
+  const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_lookup';
+function static_git_worktree_list(out list: git_strarray;
+  repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_list';
+function static_git_worktree_name(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_name';
+function static_git_worktree_path(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_path';
+function static_git_worktree_is_locked(wt: git_worktree): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_is_locked';
+function static_git_worktree_prune(wt: git_worktree;
+  const opts: Pgit_worktree_prune_options): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_prune';
+function static_git_worktree_add_options_init(
+  opts: Pgit_worktree_add_options; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_add_options_init';
+function static_git_worktree_prune_options_init(
+  opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_prune_options_init';
+procedure static_git_worktree_free(wt: git_worktree); cdecl; external LIBGIT2_LIB name 'git_worktree_free';
 
 function EnsureLibGit2Loaded: Boolean;
 begin
@@ -463,6 +527,11 @@ end;
 function git_repository_set_head_detached(repo: git_repository; const commitish: Pgit_oid): cint; cdecl;
 begin
   Result := static_git_repository_set_head_detached(repo, commitish);
+end;
+
+function git_repository_head_unborn(repo: git_repository): cint; cdecl;
+begin
+  Result := static_git_repository_head_unborn(repo);
 end;
 
 procedure git_repository_free(repo: git_repository); cdecl;
@@ -610,6 +679,16 @@ end;
 function git_tree_lookup(out tree: git_tree; repo: git_repository; const id: Pgit_oid): cint; cdecl;
 begin
   Result := static_git_tree_lookup(tree, repo, id);
+end;
+
+procedure git_tree_free(tree: git_tree); cdecl;
+begin
+  static_git_tree_free(tree);
+end;
+
+procedure git_commit_free(commit: git_commit); cdecl;
+begin
+  static_git_commit_free(commit);
 end;
 
 function git_commit_lookup(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl;
@@ -884,6 +963,63 @@ begin
   static_git_buf_dispose(buffer);
 end;
 
+function git_worktree_add(out wt: git_worktree; repo: git_repository;
+  const name: PChar; const path: PChar;
+  const opts: Pgit_worktree_add_options): cint; cdecl;
+begin
+  Result := static_git_worktree_add(wt, repo, name, path, opts);
+end;
+
+function git_worktree_lookup(out wt: git_worktree; repo: git_repository;
+  const name: PChar): cint; cdecl;
+begin
+  Result := static_git_worktree_lookup(wt, repo, name);
+end;
+
+function git_worktree_list(out list: git_strarray;
+  repo: git_repository): cint; cdecl;
+begin
+  Result := static_git_worktree_list(list, repo);
+end;
+
+function git_worktree_name(wt: git_worktree): PChar; cdecl;
+begin
+  Result := static_git_worktree_name(wt);
+end;
+
+function git_worktree_path(wt: git_worktree): PChar; cdecl;
+begin
+  Result := static_git_worktree_path(wt);
+end;
+
+function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+begin
+  Result := static_git_worktree_is_locked(wt);
+end;
+
+function git_worktree_prune(wt: git_worktree;
+  const opts: Pgit_worktree_prune_options): cint; cdecl;
+begin
+  Result := static_git_worktree_prune(wt, opts);
+end;
+
+function git_worktree_add_options_init(
+  opts: Pgit_worktree_add_options; version: cuint): cint; cdecl;
+begin
+  Result := static_git_worktree_add_options_init(opts, version);
+end;
+
+function git_worktree_prune_options_init(
+  opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
+begin
+  Result := static_git_worktree_prune_options_init(opts, version);
+end;
+
+procedure git_worktree_free(wt: git_worktree); cdecl;
+begin
+  static_git_worktree_free(wt);
+end;
+
 {$ELSE}
 var
   GLibGit2Handle: TPlatformLibrary;
@@ -903,6 +1039,7 @@ var
   dyn_git_repository_workdir: TLibGit2_git_repository_workdir = nil;
   dyn_git_repository_set_head: TLibGit2_git_repository_set_head = nil;
   dyn_git_repository_set_head_detached: TLibGit2_git_repository_set_head_detached = nil;
+  dyn_git_repository_head_unborn: TLibGit2_git_repository_head_unborn = nil;
   dyn_git_repository_free: TLibGit2_git_repository_free = nil;
   dyn_git_clone: TLibGit2_git_clone = nil;
   dyn_git_remote_lookup: TLibGit2_git_remote_lookup = nil;
@@ -932,6 +1069,8 @@ var
   dyn_git_object_peel: TLibGit2_git_object_peel = nil;
   dyn_git_object_free: TLibGit2_git_object_free = nil;
   dyn_git_tree_lookup: TLibGit2_git_tree_lookup = nil;
+  dyn_git_tree_free: TLibGit2_git_tree_free = nil;
+  dyn_git_commit_free: TLibGit2_git_commit_free = nil;
   dyn_git_commit_lookup: TLibGit2_git_commit_lookup = nil;
   dyn_git_commit_message: TLibGit2_git_commit_message = nil;
   dyn_git_commit_author: TLibGit2_git_commit_author = nil;
@@ -986,6 +1125,16 @@ var
   dyn_git_signature_free: TLibGit2_git_signature_free = nil;
   dyn_git_strarray_free: TLibGit2_git_strarray_free = nil;
   dyn_git_buf_dispose: TLibGit2_git_buf_dispose = nil;
+  dyn_git_worktree_add: TLibGit2_git_worktree_add = nil;
+  dyn_git_worktree_lookup: TLibGit2_git_worktree_lookup = nil;
+  dyn_git_worktree_list: TLibGit2_git_worktree_list = nil;
+  dyn_git_worktree_name: TLibGit2_git_worktree_name = nil;
+  dyn_git_worktree_path: TLibGit2_git_worktree_path = nil;
+  dyn_git_worktree_is_locked: TLibGit2_git_worktree_is_locked = nil;
+  dyn_git_worktree_prune: TLibGit2_git_worktree_prune = nil;
+  dyn_git_worktree_add_options_init: TLibGit2_git_worktree_add_options_init = nil;
+  dyn_git_worktree_prune_options_init: TLibGit2_git_worktree_prune_options_init = nil;
+  dyn_git_worktree_free: TLibGit2_git_worktree_free = nil;
 
 {$IFDEF NEXTPAS_UNIX}
 function c_getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
@@ -1025,6 +1174,7 @@ begin
   dyn_git_repository_workdir := nil;
   dyn_git_repository_set_head := nil;
   dyn_git_repository_set_head_detached := nil;
+  dyn_git_repository_head_unborn := nil;
   dyn_git_repository_free := nil;
   dyn_git_clone := nil;
   dyn_git_remote_lookup := nil;
@@ -1054,6 +1204,8 @@ begin
   dyn_git_object_peel := nil;
   dyn_git_object_free := nil;
   dyn_git_tree_lookup := nil;
+  dyn_git_tree_free := nil;
+  dyn_git_commit_free := nil;
   dyn_git_commit_lookup := nil;
   dyn_git_commit_message := nil;
   dyn_git_commit_author := nil;
@@ -1108,6 +1260,16 @@ begin
   dyn_git_signature_free := nil;
   dyn_git_strarray_free := nil;
   dyn_git_buf_dispose := nil;
+  dyn_git_worktree_add := nil;
+  dyn_git_worktree_lookup := nil;
+  dyn_git_worktree_list := nil;
+  dyn_git_worktree_name := nil;
+  dyn_git_worktree_path := nil;
+  dyn_git_worktree_is_locked := nil;
+  dyn_git_worktree_prune := nil;
+  dyn_git_worktree_add_options_init := nil;
+  dyn_git_worktree_prune_options_init := nil;
+  dyn_git_worktree_free := nil;
 end;
 
 procedure ResetLibGit2LoaderState;
@@ -1319,6 +1481,13 @@ begin
   Result := dyn_git_repository_set_head_detached(repo, commitish);
 end;
 
+function git_repository_head_unborn(repo: git_repository): cint; cdecl;
+begin
+  if not Assigned(dyn_git_repository_head_unborn) then
+    Pointer(dyn_git_repository_head_unborn) := ResolveLibGit2Symbol('git_repository_head_unborn');
+  Result := dyn_git_repository_head_unborn(repo);
+end;
+
 procedure git_repository_free(repo: git_repository); cdecl;
 begin
   if not Assigned(dyn_git_repository_free) then
@@ -1522,6 +1691,20 @@ begin
   if not Assigned(dyn_git_tree_lookup) then
     Pointer(dyn_git_tree_lookup) := ResolveLibGit2Symbol('git_tree_lookup');
   Result := dyn_git_tree_lookup(tree, repo, id);
+end;
+
+procedure git_tree_free(tree: git_tree); cdecl;
+begin
+  if not Assigned(dyn_git_tree_free) then
+    Pointer(dyn_git_tree_free) := ResolveLibGit2Symbol('git_tree_free');
+  dyn_git_tree_free(tree);
+end;
+
+procedure git_commit_free(commit: git_commit); cdecl;
+begin
+  if not Assigned(dyn_git_commit_free) then
+    Pointer(dyn_git_commit_free) := ResolveLibGit2Symbol('git_commit_free');
+  dyn_git_commit_free(commit);
 end;
 
 function git_commit_lookup(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl;
@@ -1902,6 +2085,83 @@ begin
   if not Assigned(dyn_git_buf_dispose) then
     Pointer(dyn_git_buf_dispose) := ResolveLibGit2Symbol('git_buf_dispose');
   dyn_git_buf_dispose(buffer);
+end;
+
+function git_worktree_add(out wt: git_worktree; repo: git_repository;
+  const name: PChar; const path: PChar;
+  const opts: Pgit_worktree_add_options): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_add) then
+    Pointer(dyn_git_worktree_add) := ResolveLibGit2Symbol('git_worktree_add');
+  Result := dyn_git_worktree_add(wt, repo, name, path, opts);
+end;
+
+function git_worktree_lookup(out wt: git_worktree; repo: git_repository;
+  const name: PChar): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_lookup) then
+    Pointer(dyn_git_worktree_lookup) := ResolveLibGit2Symbol('git_worktree_lookup');
+  Result := dyn_git_worktree_lookup(wt, repo, name);
+end;
+
+function git_worktree_list(out list: git_strarray;
+  repo: git_repository): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_list) then
+    Pointer(dyn_git_worktree_list) := ResolveLibGit2Symbol('git_worktree_list');
+  Result := dyn_git_worktree_list(list, repo);
+end;
+
+function git_worktree_name(wt: git_worktree): PChar; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_name) then
+    Pointer(dyn_git_worktree_name) := ResolveLibGit2Symbol('git_worktree_name');
+  Result := dyn_git_worktree_name(wt);
+end;
+
+function git_worktree_path(wt: git_worktree): PChar; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_path) then
+    Pointer(dyn_git_worktree_path) := ResolveLibGit2Symbol('git_worktree_path');
+  Result := dyn_git_worktree_path(wt);
+end;
+
+function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_is_locked) then
+    Pointer(dyn_git_worktree_is_locked) := ResolveLibGit2Symbol('git_worktree_is_locked');
+  Result := dyn_git_worktree_is_locked(wt);
+end;
+
+function git_worktree_prune(wt: git_worktree;
+  const opts: Pgit_worktree_prune_options): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_prune) then
+    Pointer(dyn_git_worktree_prune) := ResolveLibGit2Symbol('git_worktree_prune');
+  Result := dyn_git_worktree_prune(wt, opts);
+end;
+
+function git_worktree_add_options_init(
+  opts: Pgit_worktree_add_options; version: cuint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_add_options_init) then
+    Pointer(dyn_git_worktree_add_options_init) := ResolveLibGit2Symbol('git_worktree_add_options_init');
+  Result := dyn_git_worktree_add_options_init(opts, version);
+end;
+
+function git_worktree_prune_options_init(
+  opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_worktree_prune_options_init) then
+    Pointer(dyn_git_worktree_prune_options_init) := ResolveLibGit2Symbol('git_worktree_prune_options_init');
+  Result := dyn_git_worktree_prune_options_init(opts, version);
+end;
+
+procedure git_worktree_free(wt: git_worktree); cdecl;
+begin
+  if not Assigned(dyn_git_worktree_free) then
+    Pointer(dyn_git_worktree_free) := ResolveLibGit2Symbol('git_worktree_free');
+  dyn_git_worktree_free(wt);
 end;
 
 initialization
