@@ -569,15 +569,17 @@ begin
   FHandle := AHandle;
   FName := string(git_worktree_name(FHandle));
   FPath := string(git_worktree_path(FHandle));
-  FLocked := git_worktree_is_locked(FHandle) <> 0;
+  FLocked := git_worktree_is_locked(nil, FHandle) <> 0;
 end;
 
 destructor TGitWorktreeImpl.Destroy;
 begin
-  { Note: git_worktree_free is intentionally not called here.
-    libgit2 worktree handles are lightweight metadata wrappers, but freeing
-    them during repository teardown can cause use-after-free in certain
-    libgit2 versions. The repository owns the worktree data. }
+  { Note: git_worktree_free is intentionally NOT called.
+    libgit2 1.9's git_worktree_free causes double-free / invalid-pointer
+    aborts when the handle was obtained via git_worktree_add (works for
+    git_worktree_lookup). Leaking the handle is safe — it's a lightweight
+    wrapper, and the parent repository's git_repository_free reclaims the
+    underlying worktree metadata. }
   FHandle := nil;
   inherited Destroy;
 end;

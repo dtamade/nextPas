@@ -176,7 +176,7 @@ function git_worktree_list(out list: git_strarray;
   repo: git_repository): cint; cdecl;
 function git_worktree_name(wt: git_worktree): PChar; cdecl;
 function git_worktree_path(wt: git_worktree): PChar; cdecl;
-function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+function git_worktree_is_locked(reason: Pgit_buf; wt: git_worktree): cint; cdecl;
 function git_worktree_prune(wt: git_worktree;
   const opts: Pgit_worktree_prune_options): cint; cdecl;
 function git_worktree_add_options_init(
@@ -317,7 +317,7 @@ type
     repo: git_repository): cint; cdecl;
   TLibGit2_git_worktree_name = function(wt: git_worktree): PChar; cdecl;
   TLibGit2_git_worktree_path = function(wt: git_worktree): PChar; cdecl;
-  TLibGit2_git_worktree_is_locked = function(wt: git_worktree): cint; cdecl;
+  TLibGit2_git_worktree_is_locked = function(reason: Pgit_buf; wt: git_worktree): cint; cdecl;
   TLibGit2_git_worktree_prune = function(wt: git_worktree;
     const opts: Pgit_worktree_prune_options): cint; cdecl;
   TLibGit2_git_worktree_add_options_init = function(
@@ -440,7 +440,7 @@ function static_git_worktree_list(out list: git_strarray;
   repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_list';
 function static_git_worktree_name(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_name';
 function static_git_worktree_path(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_path';
-function static_git_worktree_is_locked(wt: git_worktree): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_is_locked';
+function static_git_worktree_is_locked(reason: Pgit_buf; wt: git_worktree): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_is_locked';
 function static_git_worktree_prune(wt: git_worktree;
   const opts: Pgit_worktree_prune_options): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_prune';
 function static_git_worktree_add_options_init(
@@ -992,9 +992,9 @@ begin
   Result := static_git_worktree_path(wt);
 end;
 
-function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+function git_worktree_is_locked(reason: Pgit_buf; wt: git_worktree): cint; cdecl;
 begin
-  Result := static_git_worktree_is_locked(wt);
+  Result := static_git_worktree_is_locked(reason, wt);
 end;
 
 function git_worktree_prune(wt: git_worktree;
@@ -2126,11 +2126,11 @@ begin
   Result := dyn_git_worktree_path(wt);
 end;
 
-function git_worktree_is_locked(wt: git_worktree): cint; cdecl;
+function git_worktree_is_locked(reason: Pgit_buf; wt: git_worktree): cint; cdecl;
 begin
   if not Assigned(dyn_git_worktree_is_locked) then
     Pointer(dyn_git_worktree_is_locked) := ResolveLibGit2Symbol('git_worktree_is_locked');
-  Result := dyn_git_worktree_is_locked(wt);
+  Result := dyn_git_worktree_is_locked(reason, wt);
 end;
 
 function git_worktree_prune(wt: git_worktree;
