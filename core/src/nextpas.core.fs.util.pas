@@ -25,6 +25,8 @@ procedure FsAppendFileLines(const APath: string; const ALines: TStringArray);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 function FsCopyFile(const ASrc, ADst: string): Int64;
+{** @desc CoW 克隆文件（reflink/clonefile），不支持时回退普通复制 *}
+function FsCloneFile(const ASrc, ADst: string): Int64;
 function FsTempFile(const ADir, APattern: string): IFile;
 function FsTempDir(const ADir, APattern: string): string;
 function FsStat(const APath: string): TFileInfo;
@@ -272,6 +274,19 @@ begin
   LResult := platform_fs_copy_file(PAnsiChar(ASrc), PAnsiChar(ADst));
   if LResult <> 0 then
     RaiseFsError(LResult, 'copy', ASrc);
+  FsChmod(ADst, LStat.Permission);
+  Result := LStat.Size;
+end;
+
+function FsCloneFile(const ASrc, ADst: string): Int64;
+var
+  LStat: TFileInfo;
+  LResult: Int32;
+begin
+  LStat := FsStat(ASrc);
+  LResult := platform_fs_clone_file(PAnsiChar(ASrc), PAnsiChar(ADst));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'clone', ASrc);
   FsChmod(ADst, LStat.Permission);
   Result := LStat.Size;
 end;

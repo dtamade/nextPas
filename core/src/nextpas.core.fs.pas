@@ -123,6 +123,8 @@ procedure WriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
 {** @desc 复制文件，返回写入的字节数 *}
 function CopyFile(const ASrc, ADst: string): Int64; inline;
+{** @desc CoW 克隆文件（reflink/clonefile），不支持时回退普通复制，返回字节数 *}
+function CloneFile(const ASrc, ADst: string): Int64; inline;
 {**
  * @desc 在指定目录创建临时文件，返回 IFile 接口
  *
@@ -183,6 +185,9 @@ procedure MkdirAll(const APath: string;
 procedure Remove(const APath: string); inline;
 {** @desc 递归删除路径（类似 rm -rf） *}
 procedure RemoveAll(const APath: string); inline;
+{** @desc 递归复制目录树（CoW 优先，回退普通复制）；类似 cp -r *}
+procedure CopyTree(const ASrc, ADst: string;
+  const APerm: TFilePermission = PermDirDefault); inline;
 {** @desc 重命名/移动文件或目录 *}
 procedure Rename(const AOld, ANew: string); inline;
 {** @desc 读取目录内容，返回 TDirEntryArray *}
@@ -399,6 +404,11 @@ begin
   Result := nextpas.core.fs.util.FsCopyFile(ASrc, ADst);
 end;
 
+function CloneFile(const ASrc, ADst: string): Int64;
+begin
+  Result := nextpas.core.fs.util.FsCloneFile(ASrc, ADst);
+end;
+
 function TempFile(const ADir, APattern: string): IFile;
 begin
   Result := nextpas.core.fs.util.FsTempFile(ADir, APattern);
@@ -502,6 +512,11 @@ end;
 procedure RemoveAll(const APath: string);
 begin
   nextpas.core.fs.dir.FsRemoveAll(APath);
+end;
+
+procedure CopyTree(const ASrc, ADst: string; const APerm: TFilePermission);
+begin
+  nextpas.core.fs.dir.FsCopyTree(ASrc, ADst, APerm);
 end;
 
 procedure Rename(const AOld, ANew: string);

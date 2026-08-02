@@ -28,6 +28,16 @@ procedure FsRemove(const APath: string);
 procedure FsRemoveAll(const APath: string);
 {** @desc 重命名/移动；失败抛异常 *}
 procedure FsRename(const AOld, ANew: string);
+{** @desc 递归复制目录树（cp -r，CoW 优先）；失败抛异常
+  *
+  * @param ASrc  源目录（必须存在）
+  * @param ADst  目标目录（自动创建，不应已存在）
+  * @param APerm 新建目录的权限（PermDirDefault）
+  *
+  * @note 文件用 FsCloneFile（CoW 优先，回退普通复制）
+  *       符号链接按 link 本身复制（不跟随） *}
+procedure FsCopyTree(const ASrc, ADst: string;
+  const APerm: TFilePermission = PermDirDefault);
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 {** @desc 递归遍历目录树，只访问文件（跳过目录条目）
  *
@@ -358,6 +368,31 @@ begin
   LResult := platform_file_rename(PAnsiChar(AOld), PAnsiChar(ANew));
   if LResult <> 0 then
     RaiseFsError(LResult, 'rename', AOld);
+end;
+
+procedure FsCopyTree(const ASrc, ADst: string; const APerm: TFilePermission);
+var
+  LEntries: TDirEntryArray;
+  I: Integer;
+  LSrcChild, LDstChild: string;
+begin
+  { 创建目标目录 }
+  FsMkdirAll(ADst, APerm);
+  LEntries := FsReadDir(ASrc);
+  for I := 0 to High(LEntries) do
+  begin
+    { 跳过 . 和 .. }
+    if (LEntries[I].Name = '.') or (LEntries[I].Name = '..') then
+      Continue;
+    LSrcChild := nextpas.core.fs.path.FsPathJoin([ASrc, LEntries[I].Name]);
+    LDstChild := nextpas.core.fs.path.FsPathJoin([ADst, LEntries[I].Name]);
+    if LEntries[I].IsDir then
+      { 递归复制子目录 }
+      FsCopyTree(LSrcChild, LDstChild, APerm)
+    else
+      { 文件：CoW 克隆（不支持时回退普通复制） }
+      nextpas.core.fs.util.FsCloneFile(LSrcChild, LDstChild);
+  end;
 end;
 
 { FsWalk bridge — unit-level so callbacks can be plain functions }

@@ -173,6 +173,14 @@ function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
     @return 0 成功，否则返回错误码 *}
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 
+{** @desc CoW 克隆文件（reflink/clonefile），不支持时回退普通复制
+    @param ASrc 源文件路径
+    @param ADst 目标文件路径
+    @return 0 成功，否则返回错误码
+    @note Linux: ioctl FICLONE (btrfs/xfs)；macOS: clonefile (APFS)
+          不支持时回退 platform_fs_copy_file（透明降级） *}
+function platform_fs_clone_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+
 {** @desc 移动文件（rename 或 copy+delete）
     @param ASrc 源文件路径
     @param ADst 目标文件路径
@@ -244,6 +252,9 @@ uses
   , nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.ffi
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.ffi
 {$ENDIF}
   ;
 
@@ -643,6 +654,60 @@ begin
     LR := LCloseR;
   Result := LR;
 end;
+
+function platform_fs_clone_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
+{$IFDEF NEXTPAS_LINUX}
+var
+  LSrcH, LDstH: TPlatformFileHandle;
+  LR, LCloseR: Int32;
+begin
+  { Linux: ioctl(FICLONE) — dst 成为 src 的 reflink（共享数据块）
+    失败（非 btrfs/xfs）时回退 platform_fs_copy_file }
+  LR := platform_file_open(ASrc, fomReadOnly, fcmOpenExisting, LSrcH);
+  if LR <> 0 then
+    Exit(platform_fs_copy_file(ASrc, ADst));
+  LR := platform_file_open(ADst, fomWriteOnly, fcmCreateAlways, LDstH);
+  if LR <> 0 then
+  begin
+    platform_file_close(LSrcH);
+    Exit(platform_fs_copy_file(ASrc, ADst));
+  end;
+  LR := nextpas.core.platform.linux.ffi.ioctl(
+    LDstH.Value, FICLONE, @LSrcH.Value);
+  if LR <> 0 then
+  begin
+    { FICLONE 不支持 → 回退普通复制 }
+    platform_file_close(LDstH);
+    platform_file_close(LSrcH);
+    Exit(platform_fs_copy_file(ASrc, ADst));
+  end;
+  LCloseR := platform_file_close(LDstH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  LCloseR := platform_file_close(LSrcH);
+  if (LR = 0) and (LCloseR <> 0) then
+    LR := LCloseR;
+  Result := LR;
+end;
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+begin
+  { macOS: clonefile(src, dst, 0) — APFS reflink
+    失败（非 APFS）时回退 platform_fs_copy_file }
+  if nextpas.core.platform.darwin.ffi.clonefile(ASrc, ADst, 0) = 0 then
+    Result := 0
+  else
+    Result := platform_fs_copy_file(ASrc, ADst);
+end;
+{$ENDIF}
+{$IFNDEF NEXTPAS_LINUX}
+{$IFNDEF NEXTPAS_MACOS}
+begin
+  { 其他平台：无 CoW 原语，回退普通复制 }
+  Result := platform_fs_copy_file(ASrc, ADst);
+end;
+{$ENDIF}
+{$ENDIF}
 
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;

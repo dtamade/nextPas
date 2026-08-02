@@ -269,6 +269,11 @@ function sysctlnametomib(name: PAnsiChar; mibp: PInt32; sizep: Pointer): Int32; 
 function copyfile(from: PAnsiChar; to_: PAnsiChar; state: Pointer; flags: UInt32): Int32; cdecl; external 'c' name 'copyfile';
 function fcopyfile(from: Int32; to_: Int32; state: Pointer; flags: UInt32): Int32; cdecl; external 'c' name 'fcopyfile';
 
+{ clonefile — macOS CoW 克隆（APFS reflink）
+  clonefile(src, dst, flags) 让 dst 成为 src 的克隆（共享数据块）
+  flags: CLONE_NOFOLLOW=1 不跟随 symlink }
+function clonefile(const src: PAnsiChar; const dst: PAnsiChar; flags: UInt32): Int32; cdecl; external 'c' name 'clonefile';
+
 { Misc POSIX }
 function ftruncate(fd: Int32; length: Int64): Int32; cdecl; external 'c' name 'ftruncate';
 function fsync(fd: Int32): Int32; cdecl; external 'c' name 'fsync';

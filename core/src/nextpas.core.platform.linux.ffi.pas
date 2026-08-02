@@ -362,6 +362,19 @@ function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer;
     @return 0 成功，-1 失败 *}
 function login_tty(AFd: cint): cint; cdecl; external 'util' name 'login_tty';
 
+{ CoW 克隆 — FICLONE ioctl（btrfs/xfs/...）
+  FICLONE = _IOW(0x94, 9, int) = $80049409
+  ioctl(dst_fd, FICLONE, src_fd) 让 dst 成为 src 的 reflink（共享数据块） }
+const
+  FICLONE = $80049409;
+
+{** @desc I/O 控制
+    @param AFd 文件描述符
+    @param ARequest 设备/操作请求码
+    @param AArgp 参数指针
+    @return 0 成功，-1 失败 *}
+function ioctl(AFd: cint; ARequest: culong; AArgp: Pointer): cint; cdecl; external 'c' name 'ioctl';
+
 implementation
 
 end.
