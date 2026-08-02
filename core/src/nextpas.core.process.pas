@@ -282,11 +282,35 @@ function TryLookPath(const AName: string; out APath: string): Boolean;
  *}
 function Executable: string;
 
+{**
+ * @desc 获取当前进程 PID
+ *
+ * @return 当前进程的 OS PID
+ *
+ * @note 对照 Go os.Getpid / Rust std::process::id
+ *}
+function CurrentPid: Int32;
+
+{**
+ * @desc 检查指定 PID 的进程是否存活
+ *
+ * @params
+ *   APid  目标进程 PID
+ *
+ * @return 进程存活返回 True；进程不存在或权限不足返回 False
+ *
+ * @note Unix 用 kill(pid, 0)（信号 0 不杀进程，仅探活）
+ * @note 对照 grok is_process_alive / Rust std::process::Child::try_wait
+ * @note PID <= 0 一律返回 False（非法 PID）
+ *}
+function IsProcessAlive(APid: Int32): Boolean;
+
 implementation
 
 uses
   nextpas.core.os.env,
   nextpas.core.platform.args,
+  nextpas.core.platform.process,
   nextpas.core.text.conv;
 
 function ProcessSucceeded(const AOut: TProcessOutput): Boolean;
@@ -605,6 +629,23 @@ begin
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(LBuf[0], Result[1], LLen);
+end;
+
+function CurrentPid: Int32;
+begin
+  Result := platform_getpid;
+end;
+
+function IsProcessAlive(APid: Int32): Boolean;
+var
+  Ret: Int32;
+begin
+  if APid <= 0 then
+    Exit(False);
+  { kill(pid, 0)：信号 0 不杀进程，仅检查存活/权限
+    返回 0 = 存活；errno=ESRCH(3) = 不存在；errno=EPERM(1) = 存在但无权限 }
+  Ret := platform_process_signal_pid(APid, 0);
+  Result := (Ret = 0);
 end;
 
 end.

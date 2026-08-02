@@ -107,6 +107,13 @@ procedure platform_process_detach(var AProc: TPlatformProcess);
     @return 0 成功，否则返回错误码 *}
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
 
+{** @desc 向指定 PID 发信号（无需 TPlatformProcess 句柄）
+    @param APid 目标进程 PID（>0）
+    @param ASignal 信号编号（0 = 探活，不杀进程）
+    @return 0 成功；Unix errno（ESRCH=3 不存在，EPERM=1 无权限）；Windows 非 0
+    @note 用于 IsProcessAlive 等场景：kill(pid, 0) 探活 *}
+function platform_process_signal_pid(APid: Int32; ASignal: Int32): Int32;
+
 {** @desc 强制终止进程（SIGKILL）
     @param AProc 进程句柄
     @return 0 成功，否则返回错误码 *}
@@ -866,6 +873,14 @@ begin
     Result := platform_get_errno;
 end;
 
+function platform_process_signal_pid(APid: Int32; ASignal: Int32): Int32;
+begin
+  if kill(APid, ASignal) = 0 then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin
   Result := platform_process_signal(AProc, PLATFORM_SIGKILL);
@@ -1599,6 +1614,12 @@ begin
   end
   else
     Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
+function platform_process_signal_pid(APid: Int32; ASignal: Int32): Int32;
+begin
+  { Windows 无 kill(pid, 0) 语义；用 OpenProcess + GetExitCodeProcess 探活 }
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
@@ -2442,6 +2463,8 @@ begin FillChar(AResult, SizeOf(AResult), 0); Result := PLATFORM_ERR_UNSUPPORTED;
 procedure platform_process_detach(var AProc: TPlatformProcess);
 begin FillChar(AProc, SizeOf(AProc), 0); end;
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_signal_pid(APid: Int32; ASignal: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
