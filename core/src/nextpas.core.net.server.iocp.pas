@@ -1,13 +1,16 @@
 unit nextpas.core.net.server.iocp;
 {**
- * @desc Windows IOCP TCP server backend (phase-2 recv + send drain).
- *       Completion-driven AcceptEx + zero-byte overlapped recv bridging
- *       completions to readiness: poll-driven sessions advance on the
- *       server-owned GQCS loop via TryRead/TryWrite. Sessions parked on
- *       writable interest are re-advanced on a short GQCS timeout (single
- *       -wait invariant: recv op parked XOR writable waiter). Deadline
- *       wake is still worker-handoff scope; sessions outside the guard
- *       fall back to worker handoff.
+ * @desc Windows IOCP TCP server backend.
+ *       phase-1: accept+worker shape — the server owns a GQCS completion
+ *       loop (worker thread), arm AcceptEx via AsyncAccept, and hand each
+ *       accepted conn to a server-owned completion context.
+ *       phase-2: recv + send drain — completion-driven AcceptEx + zero-byte
+ *       overlapped recv bridging completions to readiness: poll-driven
+ *       sessions advance on the server-owned GQCS loop via TryRead/TryWrite.
+ *       Sessions parked on writable interest are re-advanced on a short GQCS
+ *       timeout (single -wait invariant: recv parked XOR writable waiter).
+ *       Deadline wake is still worker-handoff scope; sessions outside the
+ *       guard fall back to worker handoff.
  *       truth: registered only on Windows; wine-runtime-smoke is not
  *       real-Windows scale-ready evidence.
  *}
