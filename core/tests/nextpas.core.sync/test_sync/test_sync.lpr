@@ -29,6 +29,16 @@ type
     constructor Create(const AProc: TThreadTask);
   end;
 
+  { Execute 固定抛异常的线程：用于验证线程异常可观察（反哺回归）。 }
+  TRaiserWorker = class(TWorkerThread)
+  private
+    FMsg: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AMsg: string);
+  end;
+
 constructor TProcWorker.Create(const AProc: TThreadTask);
 begin
   inherited Create;
@@ -39,6 +49,17 @@ procedure TProcWorker.Execute;
 begin
   if Assigned(FProc) then
     FProc();
+end;
+
+constructor TRaiserWorker.Create(const AMsg: string);
+begin
+  inherited Create;
+  FMsg := AMsg;
+end;
+
+procedure TRaiserWorker.Execute;
+begin
+  raise Exception.Create(FMsg);
 end;
 
 procedure SleepMs(const AMs: Integer);
@@ -1414,6 +1435,56 @@ begin
   end;
 end;
 
+{ WorkerThread exception capture: an exception raised in Execute must be
+  observable after WaitFor (thread failures must not be silently swallowed). }
+procedure TestWorkerThreadCapturesException;
+var
+  LThread: TWorkerThread;
+begin
+  LThread := TRaiserWorker.Create('worker boom');
+  LThread.Start;
+  LThread.WaitFor;
+  Check(LThread.HasException, 'Thread.HasException after Execute raised');
+  Check(Pos('worker boom', LThread.ExceptionMessage) > 0,
+    'captured exception message preserved');
+  LThread.Free;
+end;
+
+procedure TestWorkerThreadRethrow;
+var
+  LThread: TWorkerThread;
+  LRaised: Boolean;
+begin
+  LThread := TRaiserWorker.Create('rethrow boom');
+  LThread.Start;
+  LThread.WaitFor;
+  LRaised := False;
+  try
+    LThread.RethrowIfFailed;
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'RethrowIfFailed re-raises captured exception');
+  Check(not LThread.HasException, 'exception ownership transferred to caller');
+  LThread.Free;
+end;
+
+procedure TestWorkerThreadNoException;
+var
+  LThread: TWorkerThread;
+begin
+  LThread := TProcWorker.Create(procedure
+  begin
+    { no-op: Execute succeeds }
+  end);
+  LThread.Start;
+  LThread.WaitFor;
+  Check(not LThread.HasException, 'no exception when Execute succeeds');
+  CheckEqual('', LThread.ExceptionMessage, 'empty message when no exception');
+  LThread.Free;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -1493,6 +1564,10 @@ begin
   T.Test('DoOnce closure exception resets', @TestDoOnceClosureExceptionResets);
   T.Test('Channel Send/Recv Boolean matrix', @TestChannelSendRecvBooleanMatrix);
   T.Test('Barrier two-thread two gens', @TestBarrierTwoThreadTwoGens);
+
+  T.Test('WorkerThread captures Execute exception', @TestWorkerThreadCapturesException);
+  T.Test('WorkerThread RethrowIfFailed re-raises', @TestWorkerThreadRethrow);
+  T.Test('WorkerThread no exception', @TestWorkerThreadNoException);
 
   if not T.Run then Halt(1);
 end.
