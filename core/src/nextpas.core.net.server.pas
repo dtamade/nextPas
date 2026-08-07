@@ -74,6 +74,10 @@ function NewTcpServer(const AOptions: TTcpServerOptions): ITcpServer; overload;
  *  @note 生产服务应优先使用该解析结果而非硬编码后端，以保证跨平台可移植。 *}
 function DefaultTcpServerBackend: TTcpServerBackend;
 
+{** @desc 返回 TCP 后端的可读名称（threaded/epoll/kqueue/iocp），
+    用于启动 banner 与日志展示。 *}
+function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
+
 implementation
 
 uses
@@ -141,6 +145,16 @@ begin
     Exit(tsbIocp);
   {$ENDIF}
   Result := tsbThreaded;
+end;
+
+function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
+begin
+  case ABackend of
+    tsbThreaded: Result := 'threaded';
+    tsbEpoll:    Result := 'epoll';
+    tsbKqueue:   Result := 'kqueue';
+    tsbIocp:     Result := 'iocp';
+  end;
 end;
 
 procedure RegisterBuiltins;

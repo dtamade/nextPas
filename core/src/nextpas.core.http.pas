@@ -233,6 +233,10 @@ const
     后端，以保证跨平台可移植。 *}
 function DefaultTcpServerBackend: TTcpServerBackend;
 
+{** @desc 返回 TCP 后端的可读名称（threaded/epoll/kqueue/iocp），
+    用于启动 banner 与日志展示。 *}
+function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
+
 {** @desc Convert HTTP method enum to/from string }
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;
 function HttpStrToMethod(const AStr: string): THttpMethod; inline;
@@ -701,6 +705,11 @@ implementation
 function DefaultTcpServerBackend: TTcpServerBackend;
 begin
   Result := nextpas.core.net.server.DefaultTcpServerBackend;
+end;
+
+function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
+begin
+  Result := nextpas.core.net.server.TcpServerBackendName(ABackend);
 end;
 
 function HttpMethodToStr(const AMethod: THttpMethod): string;

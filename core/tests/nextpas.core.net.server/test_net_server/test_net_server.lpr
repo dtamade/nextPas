@@ -2397,6 +2397,18 @@ begin
   {$ENDIF}
 end;
 
+procedure TestTcpServerBackendName;
+begin
+  Check(TcpServerBackendName(TCP_SERVER_BACKEND_THREADED) = 'threaded',
+    'threaded backend name');
+  Check(TcpServerBackendName(TCP_SERVER_BACKEND_EPOLL) = 'epoll',
+    'epoll backend name');
+  Check(TcpServerBackendName(TCP_SERVER_BACKEND_KQUEUE) = 'kqueue',
+    'kqueue backend name');
+  Check(TcpServerBackendName(TCP_SERVER_BACKEND_IOCP) = 'iocp',
+    'iocp backend name');
+end;
+
 procedure TestKqueueBackendSourceContract;
 var
   LKqueueSource: string;
@@ -4083,6 +4095,8 @@ begin
     @TestBuiltInThreadedBackendFactoryExists);
   T.Test('Default TCP server backend is platform IO backend',
     @TestDefaultTcpServerBackend);
+  T.Test('TCP server backend name helper',
+    @TestTcpServerBackendName);
   T.Test('Kqueue backend source contract',
     @TestKqueueBackendSourceContract);
   T.Test('IOCP backend source contract',
