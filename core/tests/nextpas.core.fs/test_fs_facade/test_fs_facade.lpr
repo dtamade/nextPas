@@ -9,6 +9,7 @@ uses
 var
   TmpDir, FilePath, RenamedPath: string;
   SplitDir, SplitBase: string;
+  LDelPath, LSubDir: string;
   F: IFile;
   Info: TFileInfo;
   LRunner: TSuiteRunner;
@@ -70,6 +71,25 @@ begin
     { Remove is procedure: success is no exception (INV-5). }
     Remove(RenamedPath);
     CheckTrue(not Exists(RenamedPath), 'Remove through facade');
+  end);
+
+  LSuite.Test('DeleteFile return contract', procedure begin
+    { DeleteFile returns True on success, and treats a missing path as
+      success (FsRemove NOENT semantics, matches SysUtils DeleteFile). }
+    LDelPath := PathJoin([TmpDir, 'delete_me.txt']);
+    WriteFileText(LDelPath, 'x');
+    CheckTrue(DeleteFile(LDelPath), 'DeleteFile existing returns True');
+    CheckTrue(not Exists(LDelPath), 'DeleteFile removes the file');
+    CheckTrue(DeleteFile(LDelPath), 'DeleteFile missing returns True');
+  end);
+
+  LSuite.Test('ForceDirectories return contract', procedure begin
+    { ForceDirectories returns True for a new tree and is idempotent for an
+      existing directory (mkdir -p semantics). }
+    LSubDir := PathJoin([TmpDir, 'sub', 'nested']);
+    CheckTrue(ForceDirectories(LSubDir), 'ForceDirectories creates tree');
+    CheckTrue(IsDir(LSubDir), 'ForceDirectories created directory');
+    CheckTrue(ForceDirectories(LSubDir), 'ForceDirectories idempotent');
   end);
 
   LSuite.SetTeardown(procedure begin
