@@ -51,7 +51,8 @@ uses
   nextpas.core.http.stream,
   nextpas.core.http.sse,
   nextpas.core.http.cookie,
-  nextpas.core.http.mem;
+  nextpas.core.http.mem,
+  nextpas.core.net.server;
 
 type
   { Re-export base types }
@@ -226,6 +227,11 @@ const
   TCP_SERVER_BACKEND_IOCP = nextpas.core.http.base.TCP_SERVER_BACKEND_IOCP;
   TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_SERVER;
   TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_HANDLER;
+
+{** @desc 返回本平台默认的 IO 高并发 TCP 后端（Linux=epoll, macOS/BSD=kqueue,
+    Windows=IOCP；均不可用时回退 threaded）。生产服务应优先使用它而非硬编码
+    后端，以保证跨平台可移植。 *}
+function DefaultTcpServerBackend: TTcpServerBackend;
 
 {** @desc Convert HTTP method enum to/from string }
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;
@@ -691,6 +697,11 @@ function ParseMultipartFormDataFromReader(const ABody: IReader;
   const AOptions: TMultipartParseOptions): TMultipartFormData; inline;
 
 implementation
+
+function DefaultTcpServerBackend: TTcpServerBackend;
+begin
+  Result := nextpas.core.net.server.DefaultTcpServerBackend;
+end;
 
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 begin

@@ -2375,6 +2375,28 @@ begin
   Check(Assigned(LFactory), 'threaded backend factory is assigned');
 end;
 
+procedure TestDefaultTcpServerBackend;
+var
+  LDefault: TTcpServerBackend;
+begin
+  LDefault := DefaultTcpServerBackend;
+  { 返回的后端必须在当前平台已注册（否则运行时 ResolveTcpServer 会抛异常）。 }
+  Check(HasTcpServerFactory(LDefault),
+    'default backend factory is registered on this platform');
+  {$IFDEF NEXTPAS_LINUX}
+  Check((LDefault = TCP_SERVER_BACKEND_EPOLL) or (LDefault = TCP_SERVER_BACKEND_THREADED),
+    'linux default backend is epoll (or threaded fallback)');
+  {$ENDIF}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Check((LDefault = TCP_SERVER_BACKEND_KQUEUE) or (LDefault = TCP_SERVER_BACKEND_THREADED),
+    'macos/freebsd default backend is kqueue (or threaded fallback)');
+  {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
+  Check((LDefault = TCP_SERVER_BACKEND_IOCP) or (LDefault = TCP_SERVER_BACKEND_THREADED),
+    'windows default backend is iocp (or threaded fallback)');
+  {$ENDIF}
+end;
+
 procedure TestKqueueBackendSourceContract;
 var
   LKqueueSource: string;
@@ -4059,6 +4081,8 @@ begin
     @TestThreadedServerPollDrivenSessionFallsBackToRun);
   T.Test('Built-in threaded backend factory exists',
     @TestBuiltInThreadedBackendFactoryExists);
+  T.Test('Default TCP server backend is platform IO backend',
+    @TestDefaultTcpServerBackend);
   T.Test('Kqueue backend source contract',
     @TestKqueueBackendSourceContract);
   T.Test('IOCP backend source contract',

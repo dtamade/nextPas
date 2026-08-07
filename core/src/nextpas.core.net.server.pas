@@ -68,6 +68,11 @@ function TryGetTcpServerFactory(const ABackend: TTcpServerBackend;
 function ResolveTcpServer(const AOptions: TTcpServerOptions): ITcpServer;
 function NewTcpServer: ITcpServer; overload; inline;
 function NewTcpServer(const AOptions: TTcpServerOptions): ITcpServer; overload;
+{** @desc 返回本平台默认的 IO 高并发后端（按 wiki net/ARCHITECTURE：
+    Linux=epoll, macOS/FreeBSD=kqueue, Windows=IOCP；IOCP/kqueue/epoll 均不可用
+    时回退 threaded）。
+ *  @note 生产服务应优先使用该解析结果而非硬编码后端，以保证跨平台可移植。 *}
+function DefaultTcpServerBackend: TTcpServerBackend;
 
 implementation
 
@@ -119,6 +124,23 @@ end;
 function NewTcpServer(const AOptions: TTcpServerOptions): ITcpServer;
 begin
   Result := ResolveTcpServer(AOptions);
+end;
+
+function DefaultTcpServerBackend: TTcpServerBackend;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  if HasTcpServerFactory(tsbEpoll) then
+    Exit(tsbEpoll);
+  {$ENDIF}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  if HasTcpServerFactory(tsbKqueue) then
+    Exit(tsbKqueue);
+  {$ENDIF}
+  {$IFDEF NEXTPAS_WINDOWS}
+  if HasTcpServerFactory(tsbIocp) then
+    Exit(tsbIocp);
+  {$ENDIF}
+  Result := tsbThreaded;
 end;
 
 procedure RegisterBuiltins;
