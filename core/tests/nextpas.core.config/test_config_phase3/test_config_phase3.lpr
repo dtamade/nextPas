@@ -132,6 +132,19 @@ begin
   finally
     UnsetEnv('NEXTPAS_CFG_HOST');
   end;
+
+  { 嵌套 key：env 变量名用双下划线映射点路径，覆盖 YAML 嵌套值。 }
+  SetEnv('NEXTPAS_CFG_SERVER__API_PORT', '7777');
+  try
+    LCfg := ConfigBuilder
+      .AddYaml('server:' + #10 + '  api_port: 9000' + #10)
+      .AddEnv('NEXTPAS_CFG_')
+      .Build;
+    CheckEqual('7777', LCfg.GetString('server.api_port'),
+      'env double underscore overrides nested yaml key');
+  finally
+    UnsetEnv('NEXTPAS_CFG_SERVER__API_PORT');
+  end;
 end;
 
 procedure TestBuildConfigReturnsIndependentMutableConfigs;
@@ -409,6 +422,26 @@ begin
     TryConfigEnvNameToKey('OTHER_HOST', 'APP_', LKey),
     'non matching prefix rejected');
   CheckEqual('', LKey, 'non match clears key');
+
+  { 双下划线 → 点：支持嵌套 key（server_api_port → server.api_port）。 }
+  LKey := '';
+  CheckEqual(True,
+    TryConfigEnvNameToKey('APP_SERVER__API_PORT', 'APP_', LKey),
+    'nested key: double underscore maps');
+  CheckEqual('server.api_port', LKey, 'double underscore becomes dot');
+
+  LKey := '';
+  CheckEqual(True,
+    TryConfigEnvNameToKey('APP_DB__PATH', 'APP_', LKey),
+    'nested key second case maps');
+  CheckEqual('db.path', LKey, 'multi-level underscore maps to dot path');
+
+  { 单下划线保留（不误判为分隔符）：SERVER_PORT 仍是扁平 key。 }
+  LKey := '';
+  CheckEqual(True,
+    TryConfigEnvNameToKey('APP_SERVER_PORT', 'APP_', LKey),
+    'single underscore stays literal');
+  CheckEqual('server_port', LKey, 'single underscore not converted');
 end;
 
 procedure TestWindowsEnvBlockEnumeration;
