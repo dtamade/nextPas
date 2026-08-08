@@ -253,6 +253,27 @@ begin
   Check(LA.IsIPv6, 'is ipv6');
 end;
 
+{ 非法 host 不能静默绑 0.0.0.0：platform_ipv4_parse 解析失败返回 0（与合法
+  0.0.0.0 无法区分），若透传会把服务暴露到全网卡——必须显式报错。
+  空串保留既有契约（等价 0.0.0.0，见 net.server 的 empty-addr 用例）。 }
+procedure TestTcpListenInvalidHost;
+var
+  LListener: ITcpListener;
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    TcpListen('not-an-ip', 0);
+  except
+    on EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'invalid listen host raises EArgumentError');
+
+  LListener := TcpListen('0.0.0.0', 0);
+  LListener.Close;
+end;
+
 { Error test }
 
 procedure TestConnectRefused;
@@ -926,6 +947,7 @@ begin
   T.Test('Resolve', @TestResolve);
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
+  T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
   T.Test('Connect refused', @TestConnectRefused);
   T.Test('Connect timeout', @TestConnectTimeout);
   T.Test('Read cancel token', @TestReadCancelToken);

@@ -681,6 +681,21 @@ var
   LResult: Int32;
   LLocal: TNetAddress;
 begin
+  { 非空 host 必须是合法 IPv4 字面量：platform_ipv4_parse 解析失败返回 0
+    （与合法 "0.0.0.0" 无法区分），透传会把服务意外暴露到全网卡。
+    空串保留既有契约（等价 0.0.0.0 绑全网卡，见 test_net_server 的
+    empty-addr 用例）；要显式绑全网卡请传 "0.0.0.0"。 }
+  if AAddr <> '' then
+  begin
+    try
+      NetResolveIPv4(AAddr);
+    except
+      on EConvertError do
+        raise EArgumentError.Create('tcp listen: invalid host: ' + AAddr);
+      on EArgumentError do
+        raise EArgumentError.Create('tcp listen: invalid host: ' + AAddr);
+    end;
+  end;
   LLocal := TNetAddress.Create(AAddr, APort);
   LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
   if LResult <> 0 then
