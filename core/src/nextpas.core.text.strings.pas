@@ -81,6 +81,7 @@ function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
 
 { Split utilities }
 function StringsSplit(const AStr: string; ASep: Char; ARemoveEmpty: Boolean = False): TStringArray;
+function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
 
 implementation
 
@@ -662,5 +663,42 @@ begin
   if LSegCount < Length(Result) then
     SetLength(Result, LSegCount);
 end;
+
+function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
+var
+  LItem: string;
+  LI: Integer;
+  LUsed: Integer;
+begin
+  Result := nil;
+  if AStr = '' then Exit;
+  LItem := '';
+  LUsed := 0;
+  LI := 1;
+  while LI <= Length(AStr) do
+  begin
+    if AStr[LI] = '\' then
+    begin
+      Inc(LI);
+      if LI <= Length(AStr) then
+        LItem := LItem + AStr[LI];
+    end
+    else if AStr[LI] = ASep then
+    begin
+      Inc(LUsed);
+      if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
+      Result[LUsed - 1] := LItem;
+      LItem := '';
+    end
+    else
+      LItem := LItem + AStr[LI];
+    Inc(LI);
+  end;
+  Inc(LUsed);
+  if LUsed >= Length(Result) then SetLength(Result, LUsed * 2);
+  Result[LUsed - 1] := LItem;
+  SetLength(Result, LUsed);
+end;
+
 
 end.
