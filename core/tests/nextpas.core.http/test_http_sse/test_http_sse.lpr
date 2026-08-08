@@ -396,6 +396,81 @@ begin
     'SSE protocol failures use CreateOp');
 end;
 
+procedure TestParseSSEBasic;
+var
+  Evs: TSSEventArray;
+begin
+  { 单帧 + 多行 data + CRLF + comment }
+  Evs := ParseSSE(
+    ': keep-alive comment'#10 +
+    'id: e1'#13#10 +
+    'event: delta'#10 +
+    'data: {"a":1}'#13#10 +
+    'data: {"b":2}'#10 +
+    ''#10 +
+    'data: [DONE]'#10);
+  CheckEqual(Int64(2), Int64(Length(Evs)), 'two events');
+  CheckEqual('delta', Evs[0].Event, 'event type');
+  CheckEqual('e1', Evs[0].Id, 'event id');
+  CheckEqual('{"a":1}'#10'{"b":2}', Evs[0].Data, 'multiline data joined');
+  CheckEqual('message', Evs[1].Event, 'default event type');
+  CheckEqual('[DONE]', Evs[1].Data, 'done payload kept');
+end;
+
+procedure TestParseSSEDefaultEvent;
+begin
+  { 无 event: → 默认 message }
+  CheckEqual(Int64(1), Int64(Length(ParseSSE('data: hello'#10#10))),
+    'default event emitted');
+end;
+
+procedure TestParseSSESkipsEmptyFrames;
+begin
+  { 空 data 帧丢弃（对齐既有消费者语义）；空 body → 空数组 }
+  CheckEqual(Int64(0), Int64(Length(ParseSSE('data:'#10#10))), 'empty data dropped');
+  CheckEqual(Int64(0), Int64(Length(ParseSSE(''))), 'empty body');
+  CheckEqual(Int64(0), Int64(Length(ParseSSE(':'#10#10))), 'comment only');
+end;
+
+procedure TestParseSSENoTrailingBlank;
+begin
+  { 无尾部空行的末帧仍发射 }
+  CheckEqual(Int64(1), Int64(Length(ParseSSE('data: last'#10))), 'final frame emitted');
+end;
+
+procedure TestParseSSERetry;
+var
+  Evs: TSSEventArray;
+begin
+  Evs := ParseSSE('retry: 1500'#10'data: x'#10#10);
+  CheckEqual(Int64(1), Int64(Length(Evs)), 'frame emitted');
+  CheckEqual(Int64(1500), Evs[0].Retry, 'retry parsed');
+  { 非法 retry 忽略 }
+  Evs := ParseSSE('retry: abc'#10'data: x'#10#10);
+  CheckEqual(Int64(0), Evs[0].Retry, 'bad retry ignored');
+end;
+
+procedure TestParseSSEWriterRoundTrip;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LEvs: TSSEventArray;
+begin
+  { 写端产物 → 读端解析：真实往返 }
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LWriter.WriteEventSimple('delta', 'hello', 'e1');
+  LWriter.WriteEventSimple('', 'world', '');
+  LWriter.Close;
+  LEvs := ParseSSE(LWObj.Body);
+  CheckEqual(Int64(2), Int64(Length(LEvs)), 'round-trip events');
+  CheckEqual('delta', LEvs[0].Event, 'rt type');
+  CheckEqual('hello', LEvs[0].Data, 'rt data');
+  CheckEqual('world', LEvs[1].Data, 'rt second data');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -415,5 +490,11 @@ begin
   T.Test('SSE: flushes after event/comment', @TestSSEFlushesAfterEvent);
   T.Test('SSE: write failure is hekProtocol Op=sse', @TestSSEWriteFailureIsHekProtocolOpSse);
   T.Test('SSE: errors use CreateOp Op=sse', @TestSSEErrorsUseOpSse);
+  T.Test('SSE: ParseSSE basic + comments + CRLF', @TestParseSSEBasic);
+  T.Test('SSE: ParseSSE default event type', @TestParseSSEDefaultEvent);
+  T.Test('SSE: ParseSSE empty frames dropped', @TestParseSSESkipsEmptyFrames);
+  T.Test('SSE: ParseSSE final frame no trailing blank', @TestParseSSENoTrailingBlank);
+  T.Test('SSE: ParseSSE retry field', @TestParseSSERetry);
+  T.Test('SSE: ParseSSE writer round-trip', @TestParseSSEWriterRoundTrip);
   if not T.Run then Halt(1);
 end.

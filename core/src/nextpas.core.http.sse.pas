@@ -30,6 +30,9 @@ type
     Retry: Int64;    { reconnection time in ms (0 = don't set) }
   end;
 
+  { Parsed SSE event stream (client side) }
+  TSSEventArray = array of TSSEvent;
+
   { Writer for Server-Sent Events }
   ISSEEventWriter = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000010}']
@@ -52,6 +55,14 @@ function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
 
 { Create an SSE event record }
 function MakeSSEvent(const AType, AData, AId: string): TSSEvent;
+
+{ Client-side parse: text/event-stream document → events.
+  Spec-aligned: blank-line framed; multi-line data joined with \n;
+  one leading space stripped per data line; event:/id:/retry: fields;
+  comment lines (:) ignored. Deviation: frames whose data is empty are
+  dropped (matches legacy consumers); missing event: defaults to
+  'message' (per spec). }
+function ParseSSE(const ABody: string): TSSEventArray;
 
 implementation
 
@@ -300,6 +311,107 @@ end;
 function TSSEEventWriter.IsOpen: Boolean;
 begin
   Result := FOpen;
+end;
+
+{ ── 客户端解析（client side）─────────────────────────────────────────── }
+
+function ParseSSE(const ABody: string): TSSEventArray;
+var
+  N, I, Start, J: Integer;
+  Line, Field, Value: string;
+  Ev: TSSEvent;
+  Retry: Int64;
+  Flush: Boolean;
+
+  procedure EmitFrame;
+  begin
+    if Ev.Data <> '' then
+    begin
+      if Ev.Event = '' then
+        Ev.Event := 'message';
+      SetLength(Result, N + 1);
+      Result[N] := Ev;
+      Inc(N);
+    end;
+    Ev.Event := '';
+    Ev.Data := '';
+    Ev.Id := '';
+    Ev.Retry := 0;
+  end;
+
+begin
+  Result := nil;
+  N := 0;
+  Ev.Event := '';
+  Ev.Data := '';
+  Ev.Id := '';
+  Ev.Retry := 0;
+  Start := 1;
+  I := 1;
+  while I <= Length(ABody) + 1 do
+  begin
+    Flush := I > Length(ABody);
+    if not Flush then
+    begin
+      if (ABody[I] <> #10) and (ABody[I] <> #13) then
+      begin
+        Inc(I);
+        Continue;
+      end;
+      Line := Copy(ABody, Start, I - Start);
+      { \r\n 视为一个行分隔 }
+      if (ABody[I] = #13) and (I + 1 <= Length(ABody)) and (ABody[I + 1] = #10) then
+        Inc(I);
+      Inc(I);
+    end
+    else
+      Line := Copy(ABody, Start, I - Start);
+    { 行尾 \r 剥离 }
+    if (Length(Line) > 0) and (Line[Length(Line)] = #13) then
+      SetLength(Line, Length(Line) - 1);
+
+    if Line = '' then
+      EmitFrame
+    else
+    begin
+      { 字段解析：data:/event:/id:/retry:；: comment 与未知字段忽略 }
+      J := 1;
+      while (J <= Length(Line)) and (Line[J] <> ':') do
+        Inc(J);
+      Field := Copy(Line, 1, J - 1);
+      if (J <= Length(Line)) and (Line[J] = ':') then
+      begin
+        Value := Copy(Line, J + 1, Length(Line) - J);
+        { 规范：值去除一个前导空格 }
+        if (Length(Value) > 0) and (Value[1] = ' ') then
+          Value := Copy(Value, 2, Length(Value) - 1);
+      end
+      else
+        Value := '';
+      if Field = 'data' then
+      begin
+        if Ev.Data <> '' then
+          Ev.Data := Ev.Data + #10;
+        Ev.Data := Ev.Data + Value;
+      end
+      else if Field = 'event' then
+        Ev.Event := Value
+      else if Field = 'id' then
+        Ev.Id := Value
+      else if Field = 'retry' then
+        if TryStrToInt64(Value, Retry) then
+          Ev.Retry := Retry;
+    end;
+
+    Start := I;
+    if Flush then
+    begin
+      { EOF 残余帧：已是字段行（空行已在上方发射）→ 再发射一次 }
+      if (Line <> '') and (Ev.Data <> '') then
+        EmitFrame;
+      Break;
+    end;
+  end;
 end;
 
 end.
