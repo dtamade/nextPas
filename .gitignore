@@ -108,3 +108,16 @@ bench/sortfast/sortint_bench
 bench/sortfast/sortint_bench_go
 
 tests/toolchain/toolchain-*-fixture/
+
+# Root-level stray artifacts (accidentally committed 2026-08; rebuild from sources)
+/test_result*_link.res
+/*_ppas.sh
+/nextpas-m2-l3-probe
+
+# core example/bench binaries (rebuild from *.lpr)
+core/examples/nextpas.core.bench/demo_comprehensive/demo_comprehensive
+core/examples/nextpas.core.bench/demo_memtrack/demo_memtrack
+core/examples/nextpas.core.bench/demo_xlang/demo_xlang
+
+# simd coverage test binary (source: test_api_coverage_gather_scatter.pas)
+core/tests/nextpas.core.simd/test_api_coverage_gather_scatter
