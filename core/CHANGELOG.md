@@ -36,6 +36,7 @@ Full migration from fafafa.tui to nextpas.core.tui.
 - Input parser fuzz harness with 12-file corpus
 - 4 benchmarks (diff, render, input, layout)
 - TUI benchmark smoke entrypoint for CI compile/run coverage
+- StringDisplayWidth 中文实战用例组（tui888 设计器验证集反哺：混合问候/全角/谚文/标点/数字串）
 
 ### Documentation
 - ARCHITECTURE.md, WIDGET_CATALOG.md, BENCHMARK.md

@@ -234,6 +234,27 @@ begin
   CheckEqual(Int64(0), Int64(StringDisplayWidth('')), 'empty string = 0');
 end;
 
+{ StringDisplayWidth - 中文界面实战（tui888 设计器验证集反哺） }
+procedure TestEverydayCjkString;
+begin
+  { '你好 tui888' = 2+2+1+6 = 11 }
+  CheckEqual(Int64(11), Int64(StringDisplayWidth(#$E4#$BD#$A0#$E5#$A5#$BD + ' tui888')), 'mixed greeting');
+  { 'a你b' = 1+2+1 = 4 }
+  CheckEqual(Int64(4), Int64(StringDisplayWidth('a' + #$E4#$BD#$A0 + 'b')), 'interleaved single');
+  { 'ＡＢ' fullwidth A B = 2+2 = 4 }
+  CheckEqual(Int64(4), Int64(StringDisplayWidth(#$EF#$BC#$A1#$EF#$BC#$A2)), 'fullwidth forms string');
+  { '한글' hangul = 2+2 = 4 }
+  CheckEqual(Int64(4), Int64(StringDisplayWidth(#$ED#$95#$9C#$EA#$B8#$80)), 'hangul string');
+  { '。' ideographic period = 2 }
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E3#$80#$82)), 'ideographic period');
+  { '…' ellipsis U+2026 ambiguous = 1 }
+  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E2#$80#$A6)), 'ellipsis ambiguous');
+  { '文本abc' = 2+2+3 = 7 }
+  CheckEqual(Int64(7), Int64(StringDisplayWidth(#$E6#$96#$87#$E6#$9C#$AC + 'abc')), 'cjk prefix ascii tail');
+  { '1234567890' = 10 }
+  CheckEqual(Int64(10), Int64(StringDisplayWidth('1234567890')), 'digits');
+end;
+
 procedure TestNilNonzeroSpan;
 begin
   CheckEqual(Int64(0), Int64(StringDisplayWidth(nil, 1)), 'nil nonzero span = 0');
@@ -299,6 +320,7 @@ begin
   T.Test('width zero-width combining string', @TestWidthZeroWidthCombiningString);
   T.Test('Indic cluster width', @TestIndicClusterWidth);
   T.Test('empty string', @TestEmptyString);
+  T.Test('everyday cjk string', @TestEverydayCjkString);
   T.Test('nil nonzero span', @TestNilNonzeroSpan);
   T.Test('simd boundary 16B', @TestSimdBoundary16);
   T.Test('simd boundary 32B', @TestSimdBoundary32);
