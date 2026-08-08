@@ -123,11 +123,9 @@ procedure RowEnsure(var P: TParsedRows);
 begin
   if P.Row >= P.MaxRows then
     P.Row := P.MaxRows - 1;
-  while System.Length(P.Rows) <= P.Row do
-  begin
-    System.SetLength(P.Rows, System.Length(P.Rows) + 1);
-    P.Rows[System.Length(P.Rows) - 1] := nil;
-  end;
+  { 容量翻倍增长：避免逐行 realloc 的 O(n²) }
+  if System.Length(P.Rows) <= P.Row then
+    System.SetLength(P.Rows, P.Row * 2 + 16);
 end;
 
 { 保证 P.Rows[P.Row] 有 ACol 列（0-based），新列填 blank }
@@ -174,6 +172,36 @@ begin
       LCell^.Style := P.CurStyle;
     end;
   end;
+end;
+
+{ ASCII 可见字符批量落 cell（一次 RowGrow 扩到位），避开逐字符 SetLength +
+  GraphemeNext 的 UTF-8 解码/宽度表开销——工具输出以 ASCII 为主，热路径。 }
+procedure PutAsciiRun(var P: TParsedRows; ABuf: PByte; ACount: Integer);
+var
+  LCol, LI: Integer;
+  LCell: ^TAnsiCell;
+begin
+  if ACount <= 0 then
+    Exit;
+  if P.Col + ACount > P.MaxColumns then
+    ACount := P.MaxColumns - P.Col;
+  if ACount <= 0 then
+    Exit;
+  RowEnsure(P);
+  RowGrow(P, P.Col + ACount - 1);
+  LCol := P.Col;
+  LI := 0;
+  while LI < ACount do
+  begin
+    LCell := @P.Rows[P.Row][LCol];
+    LCell^.Buf[0] := ABuf[LI];
+    LCell^.Len := 1;
+    LCell^.Width := 1;
+    LCell^.Style := P.CurStyle;
+    Inc(LCol);
+    Inc(LI);
+  end;
+  P.Col := LCol;
 end;
 
 procedure Newline(var P: TParsedRows);
@@ -325,6 +353,7 @@ var
   LSegStyle: TStyle;
   LSegments: array of TAnsiLineSegment;
   LSegCount: Integer;
+  LOutCount, LOutCap: Integer;
   LSB: TStringBuilder;
 begin
   System.SetLength(Result, 0);
@@ -382,6 +411,17 @@ begin
           #0..#7, #14..#26, #28..#31, #127:
             Inc(I);
           else
+            if (Byte(AStr[I]) >= $20) and (Byte(AStr[I]) < $7F) then
+            begin
+              { ASCII 快速路径：批量扫描可见字符段（控制字符已单独处理） }
+              LI := I;
+              while (LI < ALen) and (Byte(AStr[LI]) >= $20) and
+                    (Byte(AStr[LI]) < $7F) do
+                Inc(LI);
+              PutAsciiRun(P, PByte(@AStr[I]), LI - I);
+              I := LI;
+            end
+            else
             begin
               LGR := GraphemeNext(PByte(@AStr[I]), ALen - I);
               if LGR.ByteLen <= 0 then
@@ -496,6 +536,8 @@ begin
     System.SetLength(P.Rows, System.Length(P.Rows) - 1);
 
   LSB.Init(256);
+  LOutCount := 0;
+  LOutCap := 0;
   for LRow := 0 to System.Length(P.Rows) - 1 do
   begin
     LEnd := System.Length(P.Rows[LRow]);
@@ -537,12 +579,19 @@ begin
       Inc(LSegCount);
     end;
 
-    System.SetLength(Result, System.Length(Result) + 1);
-    Result[System.Length(Result) - 1].ColumnCount := LEnd;
-    Result[System.Length(Result) - 1].Chars := LSB.ToString;
-    Result[System.Length(Result) - 1].Segments := LSegments;
-    System.SetLength(Result[System.Length(Result) - 1].Segments, LSegCount);
+    { 输出数组容量翻倍：避免逐行 realloc 的 O(n²) }
+    if LOutCount >= LOutCap then
+    begin
+      LOutCap := LOutCap * 2 + 16;
+      System.SetLength(Result, LOutCap);
+    end;
+    Result[LOutCount].ColumnCount := LEnd;
+    Result[LOutCount].Chars := LSB.ToString;
+    Result[LOutCount].Segments := LSegments;
+    System.SetLength(Result[LOutCount].Segments, LSegCount);
+    Inc(LOutCount);
   end;
+  System.SetLength(Result, LOutCount);
   LSB.Done;
 end;
 
