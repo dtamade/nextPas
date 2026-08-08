@@ -6,6 +6,7 @@ uses
   nextpas.core.test,
   nextpas.core.fs,
   nextpas.core.text,
+  nextpas.core.text.utf8,
   nextpas.core.text.utils;
 
 var
@@ -237,6 +238,25 @@ begin
   Check(nextpas.core.text.utils.IsBlank(#9' '#10), 'utils blank');
 end;
 
+procedure TestCopyStrToBuf;
+var
+  Buf: array[0..7] of AnsiChar;
+begin
+  FillChar(Buf, SizeOf(Buf), $7F);
+  CheckEqual(3, CopyStrToBuf('abc', Buf, SizeOf(Buf)), 'copy len');
+  CheckEqual('abc', StrPas(@Buf[0]), 'copy content');
+  CheckEqual(0, Ord(Buf[3]), 'copy nul term');
+
+  FillChar(Buf, SizeOf(Buf), $7F);
+  CheckEqual(8, CopyStrToBuf('toolongx', Buf, SizeOf(Buf)), 'truncate returns src len');
+  CheckEqual('toolong', StrPas(@Buf[0]), 'truncated content');
+  CheckEqual(0, Ord(Buf[7]), 'last byte nul');
+
+  CheckEqual(0, CopyStrToBuf('', Buf, SizeOf(Buf)), 'empty src');
+  CheckEqual('', StrPas(@Buf[0]), 'empty content');
+  CheckEqual(1, CopyStrToBuf('x', Buf, 1), 'buf len 1 keeps nul only');
+end;
+
 procedure TestFacadeExtendedSurface;
 var
   LBuilder: IStringBuilder;
@@ -449,6 +469,23 @@ begin
     LCompareSource) = 0, 'compare must not fold pattern byte for every subject comparison');
 end;
 
+procedure TestUTF8EncodeToStr;
+begin
+  CheckEqual('h', UTF8EncodeToStr(Ord('h')), 'ascii');
+  CheckEqual(#$C3#$A9, UTF8EncodeToStr($E9), '2-byte e-acute');
+  CheckEqual(#$E4#$B8#$AD, UTF8EncodeToStr($4E2D), '3-byte CJK');
+  CheckEqual(#$F0#$9F#$98#$80, UTF8EncodeToStr($1F600), '4-byte emoji');
+  CheckEqual('', UTF8EncodeToStr($D800), 'surrogate rejected');
+  CheckEqual('', UTF8EncodeToStr($200000), 'out of range rejected');
+end;
+
+procedure TestUTF8TrimLastChar;
+begin
+  CheckEqual('a', UTF8TrimLastChar('ab'), 'ascii trim');
+  CheckEqual('a', UTF8TrimLastChar('a' + #$E4#$B8#$AD), 'cjk trim');
+  CheckEqual('a' + #$E4#$B8#$AD, UTF8TrimLastChar('a' + #$E4#$B8#$AD + #$F0#$9F#$98#$80), 'emoji trim');
+  CheckEqual('', UTF8TrimLastChar(''), 'empty');
+end;
 begin
   T := TTestSuite.Create('nextpas.core.text');
   T.Test('Trim', @TestTrim);
@@ -470,10 +507,14 @@ begin
   T.Test('LastIndexOf', @TestLastIndexOf);
   T.Test('IsEmpty', @TestIsEmpty);
   T.Test('IsBlank', @TestIsBlank);
+
   T.Test('UTF8Length', @TestUTF8Length);
   T.Test('UTF8CodePointAt', @TestUTF8CodePointAt);
+  T.Test('UTF8EncodeToStr', @TestUTF8EncodeToStr);
+  T.Test('UTF8TrimLastChar', @TestUTF8TrimLastChar);
   T.Test('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
   T.Test('Utils surface', @TestUtilsSurface);
+  T.Test('CopyStrToBuf', @TestCopyStrToBuf);
   T.Test('Facade extended surface', @TestFacadeExtendedSurface);
   T.Test('Facade owner routing', @TestFacadeOwnerRouting);
   T.Test('Utils ownership contracts', @TestUtilsOwnershipContracts);

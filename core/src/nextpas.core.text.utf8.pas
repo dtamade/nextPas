@@ -31,6 +31,12 @@ function UTF8Length(const AValue: string): SizeUInt;
 function UTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 
+{ 码点 → UTF-8 字符串（便捷层，UTF8Encode 的 string 版）}
+function UTF8EncodeToStr(const ACodePoint: UInt32): string;
+
+{ 删除末尾完整 UTF-8 序列（编辑缓冲 Backspace/光标移动用） }
+function UTF8TrimLastChar(const AValue: string): string;
+
 implementation
 
 uses
@@ -270,6 +276,32 @@ begin
     Inc(FPos, LDec.ByteLen);
   end;
   Result := True;
+end;
+
+
+function UTF8EncodeToStr(const ACodePoint: UInt32): string;
+var
+  LBuf: array[0..3] of Byte;
+  LLen: Byte;
+  LI: Byte;
+begin
+  Result := '';
+  LLen := UTF8Encode(ACodePoint, @LBuf);
+  if LLen = 0 then Exit;
+  SetLength(Result, LLen);
+  for LI := 0 to LLen - 1 do
+    Byte(Result[LI + 1]) := LBuf[LI];
+end;
+
+function UTF8TrimLastChar(const AValue: string): string;
+var
+  LI: Integer;
+begin
+  if AValue = '' then Exit('');
+  LI := Length(AValue);
+  while (LI > 1) and (Byte(AValue[LI]) and $C0 = $80) do
+    Dec(LI);
+  Result := Copy(AValue, 1, LI - 1);
 end;
 
 end.
