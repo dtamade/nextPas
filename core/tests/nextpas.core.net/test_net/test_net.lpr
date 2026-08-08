@@ -274,6 +274,35 @@ begin
   LListener.Close;
 end;
 
+{ bind 失败（端口被占）的错误消息应含可读 errno 文本：反哺要求
+  platform_error_message 附加 strerror（如 'Address already in use'），
+  而不是只给裸数字 'bind failed (98)'——运维无法直接看出原因。 }
+procedure TestTcpListenBindErrorMessage;
+var
+  LListener: ITcpListener;
+  LPort: UInt16;
+  LMsg: string;
+  LGot: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  LGot := False;
+  try
+    TcpListen('127.0.0.1', LPort);
+  except
+    on E: ENetworkError do
+    begin
+      LMsg := E.Message;
+      LGot := True;
+    end;
+  end;
+  Check(LGot, 'occupied port raises ENetworkError');
+  Check(Pos('bind failed', LMsg) > 0, 'message contains bind failed marker');
+  Check(Pos('Address already in use', LMsg) > 0,
+    'bind error message carries readable errno text, got: ' + LMsg);
+  LListener.Close;
+end;
+
 { Error test }
 
 procedure TestConnectRefused;
@@ -948,6 +977,7 @@ begin
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
   T.Test('TCP listen invalid host', @TestTcpListenInvalidHost);
+  T.Test('TCP listen bind error message', @TestTcpListenBindErrorMessage);
   T.Test('Connect refused', @TestConnectRefused);
   T.Test('Connect timeout', @TestConnectTimeout);
   T.Test('Read cancel token', @TestReadCancelToken);

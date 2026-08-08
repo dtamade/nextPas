@@ -35,6 +35,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.socket.base,
+  nextpas.core.platform.error,
   nextpas.core.net.resolve;
 
 type
@@ -672,6 +673,19 @@ end;
 
 { Factory functions }
 
+{ 构造 bind 失败错误消息：保留 errno 数字，附加可读文本（core
+  platform_error_message，POSIX= strerror；如 EADDRINUSE → 'Address already
+  in use'），避免运维只看到裸数字。 }
+function TcpListenBindError(const ACode: Int32): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+  LMsg: string;
+begin
+  Result := 'tcp listen: bind failed (' + IntToStr(ACode) + ')';
+  if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+    Result := Result + ': ' + string(PAnsiChar(@LBuf[0]));
+end;
+
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 var
   LSock: TPlatformSocket;
@@ -707,7 +721,7 @@ begin
   if LResult <> 0 then
   begin
     platform_socket_close(LSock);
-    raise ENetworkError.Create('tcp listen: bind failed (' + IntToStr(LResult) + ')');
+    raise ENetworkError.Create(TcpListenBindError(LResult));
   end;
   LResult := platform_socket_listen(LSock, NET_DEFAULT_BACKLOG);
   if LResult <> 0 then
