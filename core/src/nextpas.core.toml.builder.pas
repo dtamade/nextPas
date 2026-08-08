@@ -25,6 +25,7 @@ type
   ITomlBuilder = interface
     ['{C3D4E5F6-A7B8-9012-CDEF-345678901234}']
     procedure BeginTable(const AKey: string);
+    procedure BeginTableRaw(const AFormattedPath: string);
     procedure BeginArrayTable(const AKey: string);
     procedure Key(const AKey: string);
     procedure Str(const AValue: string);
@@ -57,6 +58,7 @@ type
     constructor Create(const AInitialCap: SizeUInt);
     destructor Destroy; override;
     procedure BeginTable(const AKey: string);
+    procedure BeginTableRaw(const AFormattedPath: string);
     procedure BeginArrayTable(const AKey: string);
     procedure Key(const AKey: string);
     procedure Str(const AValue: string);
@@ -90,6 +92,9 @@ end;
 
 procedure TTomlBuilderImpl.BeginTable(const AKey: string);
 begin FWriter.BeginTable(AKey); end;
+
+procedure TTomlBuilderImpl.BeginTableRaw(const AFormattedPath: string);
+begin FWriter.BeginTableRaw(AFormattedPath); end;
 
 procedure TTomlBuilderImpl.BeginArrayTable(const AKey: string);
 begin FWriter.BeginArrayTable(AKey); end;

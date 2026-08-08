@@ -143,6 +143,30 @@ begin
   Check(not ColorEquals(ResetColor, IndexedColor(0)), 'reset != indexed');
 end;
 
+procedure TestColorInterp;
+var
+  LC: TColor;
+begin
+  LC := ColorInterp(Rgb(0, 0, 0), Rgb(10, 20, 30), 0.5);
+  Check(LC.Kind = ckRgb, 'interp kind rgb');
+  CheckEqual(Int64(5), Int64(LC.R), 'interp R mid');
+  CheckEqual(Int64(10), Int64(LC.G), 'interp G mid');
+  CheckEqual(Int64(15), Int64(LC.B), 'interp B mid');
+
+  LC := ColorInterp(Rgb(0, 0, 0), Rgb(100, 100, 100), 0);
+  Check(ColorEquals(LC, Rgb(0, 0, 0)), 'interp t=0');
+
+  LC := ColorInterp(Rgb(0, 0, 0), Rgb(100, 100, 100), 1);
+  Check(ColorEquals(LC, Rgb(100, 100, 100)), 'interp t=1');
+
+  { 非 RGB 输入退化为 BColor }
+  LC := ColorInterp(IndexedColor(3), Rgb(10, 20, 30), 0.5);
+  Check(LC.Kind = ckRgb, 'non-rgb A falls back to B');
+  CheckEqual(Int64(10), Int64(LC.R), 'fallback R');
+  LC := ColorInterp(Rgb(10, 20, 30), ResetColor, 0.5);
+  CheckEqual(Int64(0), Int64(LC.Index), 'non-rgb B falls back to B');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.color');
   T.Test('constructors', @TestConstructors);
@@ -158,5 +182,6 @@ begin
   T.Test('HexColor short', @TestHexColorShort);
   T.Test('all named colors', @TestAllNamedColors);
   T.Test('color equals cross kind', @TestColorEqualsCrossKind);
+  T.Test('ColorInterp', @TestColorInterp);
   if not T.Run then Halt(1);
 end.

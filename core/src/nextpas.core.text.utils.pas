@@ -21,6 +21,10 @@ function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFals
 function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 function QuotedStr(const S: string): string;
 
+{** @desc 拷贝字符串到定长字节缓冲(截断至 ABufLen-1,留下 NUL;不抛)。
+        返回源串字符数(截断前)。线程安全(无共享状态)。 *}
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
+
 implementation
 
 uses
@@ -189,6 +193,22 @@ end;
 function QuotedStr(const S: string): string;
 begin
   Result := '''' + StringReplace(S, '''', '''''') + '''';
+end;
+
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
+var
+  P: PAnsiChar;
+  N, I: Integer;
+begin
+  P := @ABuf;
+  if ABufLen > 0 then
+    FillChar(P^, ABufLen, 0);
+  Result := Length(S);
+  N := Result;
+  if N >= ABufLen then N := ABufLen - 1;
+  if N > 0 then
+    for I := 1 to N do
+      P[I - 1] := S[I];
 end;
 
 end.

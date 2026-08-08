@@ -43,6 +43,10 @@ function RgbColor(const AR, AG, AB: Byte): TColor; inline;
 function ColorEquals(const A, B: TColor): Boolean; inline;
 function ColorIsSet(const AColor: TColor): Boolean; inline;
 
+{ RGB 线性插值:t∈[0,1],0=AColor,1=BColor;任一端非 ckRgb 时退化为 BColor
+  (动画层主题过渡/高亮渐显的通用能力;结果恒为 ckRgb) }
+function ColorInterp(const AColor, BColor: TColor; T: Double): TColor;
+
 { 短名便利函数（与 RgbColor/IndexedColor 等价，更简洁） }
 function Rgb(const AR, AG, AB: Byte): TColor; inline;
 function Idx(const AIndex: Byte): TColor; inline;
@@ -108,6 +112,18 @@ begin
   LPA := @A;
   LPB := @B;
   Result := LPA^ = LPB^;
+end;
+
+function ColorInterp(const AColor, BColor: TColor; T: Double): TColor;
+begin
+  if (AColor.Kind <> ckRgb) or (BColor.Kind <> ckRgb) or (T >= 1) then
+    Exit(BColor);
+  if T <= 0 then
+    Exit(AColor);
+  Result := RgbColor(
+    Round(AColor.R + (BColor.R - AColor.R) * T),
+    Round(AColor.G + (BColor.G - AColor.G) * T),
+    Round(AColor.B + (BColor.B - AColor.B) * T));
 end;
 
 function ColorIsSet(const AColor: TColor): Boolean;
