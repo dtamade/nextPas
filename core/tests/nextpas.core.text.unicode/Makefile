@@ -13,7 +13,8 @@ CONFORMANCE := \
 	test_conformance_bidi \
 	test_conformance_collate \
 	test_conformance_case \
-	test_conformance_idna
+	test_conformance_idna \
+	test_conformance_confusables
 
 UNIT := \
 	test_case \
@@ -23,7 +24,8 @@ UNIT := \
 	test_data \
 	test_enhance \
 	test_grapheme_uax29 \
-	test_idna
+	test_idna \
+	test_confusable
 
 help:
 	@echo "Targets:"

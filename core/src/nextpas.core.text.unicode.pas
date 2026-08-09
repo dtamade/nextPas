@@ -17,7 +17,8 @@ uses
   nextpas.core.text.unicode.collate,
   nextpas.core.text.unicode.data,
   nextpas.core.text.unicode.punycode,
-  nextpas.core.text.unicode.idna;
+  nextpas.core.text.unicode.idna,
+  nextpas.core.text.unicode.confusable;
 
 type
   // 基础类型
@@ -64,6 +65,7 @@ type
 
 const
   UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
+  CONFUSABLE_MAX_PROTOTYPE = nextpas.core.text.unicode.confusable.CONFUSABLE_MAX_PROTOTYPE;
   UNICODE_SURROGATE_FIRST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_FIRST;
   UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_LAST;
   cvwNonIgnorable = nextpas.core.text.unicode.collate.cvwNonIgnorable;
@@ -131,6 +133,11 @@ function IDNAErrorKindName(const AKind: TIDNAErrorKind): string; inline;
 function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
   out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus; inline;
 function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string; inline;
+
+function GetConfusablePrototype(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte): Boolean; inline;
+function ConfusableSkeleton(const AText: string): string; inline;
+function AreConfusable(const A, B: string): Boolean; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -824,6 +831,22 @@ end;
 function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
 begin
   Result := nextpas.core.text.unicode.idna.ApplyIdnaMap(AText, AKind);
+end;
+
+function GetConfusablePrototype(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte): Boolean;
+begin
+  Result := nextpas.core.text.unicode.confusable.GetConfusablePrototype(ACp, ADst, ALen);
+end;
+
+function ConfusableSkeleton(const AText: string): string;
+begin
+  Result := nextpas.core.text.unicode.confusable.ConfusableSkeleton(AText);
+end;
+
+function AreConfusable(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.confusable.AreConfusable(A, B);
 end;
 
 end.

@@ -59,6 +59,7 @@
 | **P3-2** 统一 text 错误策略 | ✅ | [ERROR_MODEL.md](../ERROR_MODEL.md) L0/L1/L2 真源 |
 | **P3-3** 可用性 P1 文档 | ✅ | API-REF 对齐 tip；SCORECARD 导航；IDNA kind 样板；RTL 边界 |
 | **P3-4** IDNA UTS#46 全合规 | ✅ | §4 Processing 重排 + §4.1 Validity 全量（CheckHyphens/Mark/STD3/ContextJ/CheckBidi）+ Joining_Type 表 + IdnaTestV2 官方 harness 6387 行 0-fail |
+| **P3-5** UTS#39 confusables | ✅ | skeleton=NFD(map(NFD)) + AreConfusable + confusables.txt 16.0.0 表（6355 对）+ 官方表逐条 harness 0-fail（表查找字节精确 6355/6355；谓词/骨架自洽；predicate 与 ICU uspoof 交叉验证）+ test_confusable 单元锚点；动机：IDNA 之后补 homograph 检测（对标 Rust unicode-security / ICU uspoof） |
 | **P2-6** CLDR Collation | 🔒 | 仍深水 |
 
 
