@@ -1,30 +1,43 @@
-# Module Status Board — 2026-08-09（v2，worktree 整理后）
+# Module Status Board — 2026-08-09（v3，compiler M2 收口后）
 
-> 更新：2026-08-09（会话内第二次快照，worktree 全面整理后）。
+> 更新：2026-08-09（会话内第三次快照，compiler-system lane M2 全量收口后）。
 > 用途：多人并行下恢复上下文 + 未提交工作恢复台账。
 > 纪律：他人 dirty 一律不动原文件；用命名 stash 固化（零丢失、可恢复）；不代他人 sync/landing。
 
 ## main 分支（当前）
 
-- HEAD `8de6f9ea1`，**与 origin/main 零偏差**（已推送）
+- HEAD `1d8dedab5`，**与 origin/main 零偏差**（已推送）
 - 本会话落地并推送的提交：
-  - `962bb9dda` feat(tui): 颜色动画基础（ColorInterp/CopyStrToBuf/BeginTableRaw）
-  - `857df2c6a` chore(hygiene): 移除误入库的 11 个构建产物
-  - `1716ec8d9` docs(governance): v1 状态板
   - `7974a124d` feat(text.unicode): P3-5 UTS#39 confusables 收口
   - `3e8b81dd4` fix(text.unicode): internalSkeleton 补 Default_Ignorable 移除
   - `8de6f9ea1` chore(text.unicode): confusables.txt 规范化行尾空白
-- 他人提交（保留未动）：`1a73814d7` ansi.parse 线性化、`2b54f5830` HTTP/1.0 close、`c07a541bb` Date 头、`d0d2c7b9b` sqlite FFI
-- **他人 dirty（未提交，勿动）**：`core/src/nextpas.core.http.impl.h1.conn.pas`、`core/src/nextpas.core.http.impl.h1.writer.pas`、`core/src/nextpas.core.tui.terminal.pas`、`core/src/nextpas.core.tui.widget.input.pas`、`core/tests/nextpas.core.http/test_http_h1writer/test_http_h1writer.lpr`、`core/tests/nextpas.core.tui/test_tui_terminal/test_tui_terminal.lpr`
+  - `12f657ba8` docs(governance): 状态板 v2
+  - `c62cc14ff` fix(compiler-system): M2 B3a property 读到背后字段不再 residual-call
+  - `147dc6f0f` docs(compiler-system): M2 ROADMAP 作战路线图落地（lane 最终版）
+  - `1d8dedab5` feat(compiler-system): M2 B 系列合入 — B0 基座至 B7 runtime SDK 全量落地
+- 他人提交（保留未动）：`0fb1e7aee` http(h1) Flush/FinalizeResponse SSE 修复 等
+- **他人 dirty（未提交，勿动）**：`core/src/nextpas.core.collections.concurrent.hashmap.pas`、`core/src/nextpas.core.collections.hashmap.swiss.pas`、`core/src/nextpas.core.tui.terminal.pas`、`core/src/nextpas.core.tui.widget.input.pas`、`core/tests/nextpas.core.tui/test_tui_terminal/test_tui_terminal.lpr`
+
+## compiler-system lane 收敛（本次重大动作）
+
+- ✅ M2 B 系列（B0 基座 → B1/B3b/B3c/B4/B4a/B5a-f/B6/B6.5/B7）以单 squash 提交
+  `1d8dedab5` 落入 main（122 文件 +8698/-1483），rebuild-compiler / compiler-pass 58/58 /
+  compiler-fail 16/16 / m2-two-hop / landing-check 全绿后 ff-only merge + push。
+- ✅ 关键裁决：lane 剩余差异经 git cherry + 双向 diff 审计确认全部为已吸收内容或
+  WIP 残留（tools/stage0 的 `[pipe]` 调试输出与 mem-process-stats 置空——已主动剔除，
+  未带入 main；main 侧 `nextpas_projection_context.pas` 的 FormatMemStats 投影保持原状）。
+- ✅ lane 已重置到 main（1d8dedab5），历史存档 tag：`archive/compiler-system-m2-absorbed-20260809`
+- ⚠️ 待 owner 处理：stash@{6}（08-02 的 B5g sema 进行中工作 6 文件 + ROADMAP.md），
+  收口人应为原 owner；如需继续 M2 下一桶请基于最新 main 重开 lane。
 
 ## Worktree 实况（15 个，整理后）
 
 | Worktree | 分支 | HEAD | 状态 | 动作 |
 |---|---|---|---|---|
-| main 根 | main | 8de6f9ea | dirty（他人 6 文件） | 未动 |
+| main 根 | main | 1d8dedab | dirty（他人 5 文件） | 未动 |
 | `.worktrees/atomic-lockfree` | atomic-lockfree | 6533d1d7 | clean（已 stash） | stash@{8} |
 | `.worktrees/bench` | bench | 9c84c277 | clean（已 stash） | stash@{7} |
-| `.worktrees/compiler-system` | codex/compiler-system | 9245e720 | clean（已 stash） | stash@{6}（B5g sema 394 行） |
+| `.worktrees/compiler-system` | codex/compiler-system | 1d8dedab | clean，已收敛 main | ✅ 本会话收口 |
 | `.worktrees/config-json-xml-toml-yaml-csv-ini` | config-json-xml-toml-yaml-csv-ini | 009a2939 | clean（已 stash） | stash@{5} |
 | `.worktrees/core-net-async-io` | core-net-async-io | 339935d9 | clean（已 stash） | stash@{4} |
 | `.worktrees/core-text-unicode` | core-text-unicode | 8de6f9ea | clean，已收敛 main | ✅ 本会话收口 |
@@ -68,3 +81,9 @@
 - ✅ `git worktree prune`（无失效元数据）
 - ✅ 失效 worktree `/tmp/main-check` 已在上轮清理
 - ✅ landing 候选分支/worktree 已清理，archive tag：`archive/core-text-unicode-confusables-20260809`
+- ✅ compiler-system lane 收敛：M2 B 系列单 squash `1d8dedab5` 落入 main 并推送，
+  lane 重置到 main，archive tag：`archive/compiler-system-m2-absorbed-20260809`
+- ✅ 残留裁决：tools/stage0 两个 WIP 文件（`[pipe]` 调试输出 + mem-process-stats 置空）
+  已主动剔除，未带入 main；main 侧 mem-process-stats 投影契约（test_stage0_heap_debug_env_recipe）保持完整
+- ✅ 本会话最终验证：rebuild-compiler pass / compiler-pass 58/58 / compiler-fail 16/16 /
+  m2-two-hop pass / landing-check pass（landing-candidate=pass）
