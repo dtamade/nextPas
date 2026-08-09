@@ -262,6 +262,90 @@ begin
   finally M.Free; end;
 end;
 
+{ ===== ComputeCtx：带 context 的原子读-改-写 =====
+  TComputeFunc 是普通过程变量，无法捕获局部变量（累加/扣减场景需要把
+  「本次增量」传进段锁内回调）。ComputeCtx 对称 ForEachCtx：AContext 透传。
+  语义验证：① context 增量生效 + 回调计数；② 4 线程 × 10000 次 +1
+  并发累加同一键 → 40000 无丢失（段锁内读-改-写原子）。 }
+
+type
+  TAccumCtx = record
+    Delta: Integer;
+    Calls: Integer;
+  end;
+  PAccumCtx = ^TAccumCtx;
+
+function ComputeCtxAccumulate(const AKey: Integer; var AValue: Integer;
+  AExists: Boolean; AContext: Pointer): Boolean;
+begin
+  Inc(PAccumCtx(AContext)^.Calls);
+  if AExists then
+    AValue := AValue + PAccumCtx(AContext)^.Delta
+  else
+    AValue := PAccumCtx(AContext)^.Delta;
+  Result := True;
+end;
+
+var
+  GComputeCtxMap: TIntConcMap;
+
+function ComputeCtxWorkerProc(AArg: Pointer): Pointer; cdecl;
+const
+  ITERS = 10000;
+var
+  LCtx: TAccumCtx;
+  LI: Integer;
+begin
+  LCtx.Delta := 1;
+  LCtx.Calls := 0;
+  for LI := 1 to ITERS do
+    GComputeCtxMap.ComputeCtx(1, @ComputeCtxAccumulate, @LCtx);
+  Result := nil;
+end;
+
+procedure TestComputeCtx;
+const
+  NUM_WORKERS = 4;
+var
+  M: TIntConcMap;
+  v: Integer;
+  Ctx: TAccumCtx;
+  Workers: array[0..NUM_WORKERS - 1] of TPlatformThreadRecord;
+  I: Integer;
+begin
+  { 基本语义：context 增量传入 + 回调调用计数 }
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    Ctx.Delta := 5;
+    Ctx.Calls := 0;
+    M.ComputeCtx(1, @ComputeCtxAccumulate, @Ctx);
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(5), Int64(v), 'compute-ctx new key');
+    M.ComputeCtx(1, @ComputeCtxAccumulate, @Ctx);
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(10), Int64(v), 'compute-ctx existing key');
+    CheckEqual(Int64(2), Int64(Ctx.Calls), 'compute-ctx callback calls');
+  finally
+    M.Free;
+  end;
+
+  { 并发原子累加：4 线程 × 10000 次 +1 → 40000（读-改-写必须原子，防丢失） }
+  GComputeCtxMap := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    for I := 0 to NUM_WORKERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_spawn(Workers[I],
+        @ComputeCtxWorkerProc, nil)), 'spawn compute-ctx worker');
+    for I := 0 to NUM_WORKERS - 1 do
+      CheckEqual(Int64(0), Int64(platform_thread_wait(Workers[I])),
+        'wait compute-ctx worker');
+    GComputeCtxMap.TryGetValue(1, v);
+    CheckEqual(Int64(NUM_WORKERS * 10000), Int64(v),
+      'concurrent accumulate no lost update');
+  finally
+    GComputeCtxMap.Free;
+  end;
+end;
+
 procedure TestKeys;
 var M: TIntConcMap; K: TIntConcMap.TKeyArray; i: Integer;
 begin
@@ -377,6 +461,7 @@ begin
   T.Test('GetOrInsert', @TestGetOrInsert);
   T.Test('PutIfAbsent', @TestPutIfAbsent);
   T.Test('Compute', @TestCompute);
+  T.Test('ComputeCtx', @TestComputeCtx);
   T.Test('Replace', @TestReplace);
   T.Test('IsEmpty', @TestIsEmpty);
   T.Test('Keys', @TestKeys);

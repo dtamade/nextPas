@@ -23,6 +23,10 @@ type
     THashFunc = function(const AKey: K): UInt32;
     TEqualsFunc = function(const A, B: K): Boolean;
     TComputeFunc = function(const AKey: K; var AValue: V; AExists: Boolean): Boolean;
+    {** 带上下文指针的原子读-改-写回调：AContext 透传（普通过程变量无法
+        捕获局部变量，与 ForEachCtx 同构；供累加/扣减等需要传增量的场景）。 }
+    TComputeCtxFunc = function(const AKey: K; var AValue: V; AExists: Boolean;
+      AContext: Pointer): Boolean;
     TForEachFunc = procedure(const AKey: K; const AValue: V);
     TForEachCtxFunc = procedure(const AKey: K; const AValue: V; AContext: Pointer);
     TKeyArray = array of K;
@@ -48,6 +52,7 @@ type
     function Replace(const AKey: K; const ANewValue: V): Boolean;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
+    procedure ComputeCtx(const AKey: K; AFunc: TComputeCtxFunc; AContext: Pointer);
     procedure ForEach(AFunc: TForEachFunc);
     {** @desc 遍历所有元素（带上下文指针，回调可捕获外部状态） }
     procedure ForEachCtx(AFunc: TForEachCtxFunc; AContext: Pointer);
@@ -264,6 +269,29 @@ begin
     if not LExists then
       LValue := Default(V);
     LKeep := AFunc(AKey, LValue, LExists);
+    if LKeep then
+      FSegments[LSeg].Put(AKey, LValue)
+    else if LExists then
+      FSegments[LSeg].Remove(AKey);
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+procedure TConcurrentHashMap.ComputeCtx(const AKey: K; AFunc: TComputeCtxFunc;
+  AContext: Pointer);
+var
+  LSeg: SizeUInt;
+  LValue: V;
+  LExists, LKeep: Boolean;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    LExists := FSegments[LSeg].TryGetValue(AKey, LValue);
+    if not LExists then
+      LValue := Default(V);
+    LKeep := AFunc(AKey, LValue, LExists, AContext);
     if LKeep then
       FSegments[LSeg].Put(AKey, LValue)
     else if LExists then
