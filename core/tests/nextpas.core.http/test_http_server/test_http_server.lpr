@@ -1552,6 +1552,75 @@ begin
   until False;
 end;
 
+{ True when AText contains an RFC 7231 §7.1.1.1 Date header line:
+  "date: Sun, 06 Nov 1994 08:49:37 GMT". Accepts any day/month name,
+  day-of-month (1-2 digits), 4-digit year and HH:MM:SS clock. }
+function MatchesHttpDateHeader(const AText: string): Boolean;
+const
+  DAYS: array[1..7] of string = ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat');
+  MONTHS: array[1..12] of string = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec');
+var
+  LPos, LI, LJ: Integer;
+  LSeg: string;
+  LDD, LYYYY, LHH, LMM, LSS: string;
+begin
+  Result := False;
+  LPos := Pos('date:', AText);
+  if LPos <= 0 then
+    Exit;
+  { Isolate the header value (up to CRLF). }
+  LJ := Pos(#13#10, Copy(AText, LPos + 5, MaxInt));
+  if LJ <= 0 then
+    Exit;
+  LSeg := Trim(Copy(AText, LPos + 5, LJ - 1));
+  { Expect "Sun, 06 Nov 1994 08:49:37 GMT" }
+  LPos := Pos(',', LSeg);
+  if LPos <> 4 then
+    Exit;
+  LI := 1;
+  while LI <= 7 do
+  begin
+    if Copy(LSeg, 1, 3) = DAYS[LI] then
+      Break;
+    Inc(LI);
+  end;
+  if LI > 7 then
+    Exit;
+  { ", DD Mon YYYY HH:MM:SS GMT" }
+  LDD := Copy(LSeg, 6, 2);
+  if (Length(LDD) < 1) or (Length(LDD) > 2) then
+    Exit;
+  if not ((LDD[1] in ['0'..'9']) and ((Length(LDD) = 1) or (LDD[2] in ['0'..'9']))) then
+    Exit;
+  LI := 1;
+  while LI <= 12 do
+  begin
+    if Copy(LSeg, 9, 3) = MONTHS[LI] then
+      Break;
+    Inc(LI);
+  end;
+  if LI > 12 then
+    Exit;
+  LYYYY := Copy(LSeg, 13, 4);
+  if (Length(LYYYY) <> 4) or (LYYYY[1] < '1') or (LYYYY[1] > '9') then
+    Exit;
+  if (LSEG[17] <> ' ') or (LSEG[20] <> ':') or (LSEG[23] <> ':') then
+    Exit;
+  LHH := Copy(LSeg, 18, 2);
+  LMM := Copy(LSeg, 21, 2);
+  LSS := Copy(LSeg, 24, 2);
+  if (Length(LHH) <> 2) or (Length(LMM) <> 2) or (Length(LSS) <> 2) then
+    Exit;
+  if not ((LHH[1] in ['0'..'2']) and (LHH[2] in ['0'..'9']) and
+          (LMM[1] in ['0'..'5']) and (LMM[2] in ['0'..'9']) and
+          (LSS[1] in ['0'..'5']) and (LSS[2] in ['0'..'9'])) then
+    Exit;
+  if Copy(LSeg, 27, 3) <> 'GMT' then
+    Exit;
+  Result := True;
+end;
+
 { Test 1: Server responds 200 to simple GET }
 procedure TestSimpleGet200;
 var
@@ -1575,6 +1644,8 @@ begin
     LResp := SendRawRequest(LPort, 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200 in response');
     Check(Pos('pong', LResp) > 0, 'body pong in response');
+    { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. }
+    Check(MatchesHttpDateHeader(LResp), 'response carries RFC 7231 Date header');
   finally
     StopServer(LServer, LHandle);
   end;

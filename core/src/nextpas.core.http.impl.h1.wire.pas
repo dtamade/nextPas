@@ -43,6 +43,7 @@ uses
   nextpas.core.time,
   nextpas.core.time.deadline,
   nextpas.core.http.headers,
+  nextpas.core.http.static,
   nextpas.core.http.impl.h1.writer;
 
 function LowerTrim(const AValue: string): string; inline;
@@ -174,6 +175,7 @@ begin
         TDuration.FromMilliseconds(AWriteTimeoutMs)));
     LW := TH1ResponseWriter.Create(AConn as IWriter);
     LBody := HttpStatusText(AStatus);
+    HttpEnsureDateHeader(LW.GetHeaders);
     LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
     LW.GetHeaders.SetHeader('connection', 'close');
     LW.WriteHeader(AStatus);
@@ -192,6 +194,7 @@ var
 begin
   LW := TH1ResponseWriter.Create(AWriter);
   LBody := HttpStatusText(AStatus);
+  HttpEnsureDateHeader(LW.GetHeaders);
   LW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LBody))));
   LW.GetHeaders.SetHeader('connection', 'close');
   LW.WriteHeader(AStatus);

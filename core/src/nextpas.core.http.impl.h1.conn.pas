@@ -143,6 +143,7 @@ uses
   nextpas.core.time.base, nextpas.core.time,
   nextpas.core.text.conv,
   nextpas.core.http.headers, nextpas.core.http.message,
+  nextpas.core.http.static,
   nextpas.core.http.impl.h1.wire,
   nextpas.core.http.impl.h1.prepend,
   nextpas.core.http.impl.h1.fast,
@@ -647,6 +648,9 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
+    { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
+      the handler runs; a handler-set date wins (SetHeader replaces). }
+    HttpEnsureDateHeader(LW.GetHeaders);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then
@@ -763,6 +767,9 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
+    { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
+      the handler runs; a handler-set date wins (SetHeader replaces). }
+    HttpEnsureDateHeader(LW.GetHeaders);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
     if not LKeepAlive then

@@ -34,6 +34,13 @@ function HttpTryWriteNotModified(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter; const AETag, ALastModified: string;
   const AModTimeUnix: Int64): Boolean;
 
+{** @desc Format Unix timestamp as HTTP date (RFC 7231 §7.1.1.1).
+   Example: "Sun, 06 Nov 1994 08:49:37 GMT". }
+function FormatHttpDate(const AUnixTimestamp: Int64): string;
+{** @desc Ensure headers carry a Date header (RFC 7231 §7.1.1.2 SHOULD).
+   Injects current UTC time only when the headers do not already have one. }
+procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
+
 implementation
 
 uses
@@ -229,9 +236,7 @@ begin
   Result := True;
 end;
 
-{ Format Unix timestamp as HTTP date (RFC 7231 §7.1.1.1).
-  Example: "Sun, 06 Nov 1994 08:49:37 GMT" }
-function FormatHttpDate(AUnixTimestamp: Int64): string;
+function FormatHttpDate(const AUnixTimestamp: Int64): string;
 var
   LDT: TOffsetDateTime;
   LYear, LMonth, LDay, LHour, LMinute, LSecond: Integer;
@@ -257,6 +262,19 @@ begin
     + Pad2(LDay) + ' ' + MONTH_NAMES[LMonth] + ' ' + IntToStr(LYear)
     + ' ' + Pad2(LHour) + ':' + Pad2(LMinute) + ':' + Pad2(LSecond)
     + ' GMT';
+end;
+
+procedure HttpEnsureDateHeader(const AHeaders: IHttpHeaders);
+begin
+  if AHeaders = nil then
+    Exit;
+  if AHeaders.Has('date') then
+    Exit;
+  { RFC 7231 §7.1.1.2: origin servers MUST NOT send a Date header that is
+    more than 60s from the message origin time. DateTimeUtcNow() derives from
+    platform_realtime_ns, so the value tracks wall-clock closely. }
+  AHeaders.SetHeader('date',
+    FormatHttpDate(DateTimeToUnix(DateTimeUtcNow)));
 end;
 
 { Parse HTTP date string (RFC 7231 §7.1.1.1) to Unix timestamp.
