@@ -1669,6 +1669,35 @@ begin
   CheckEqual('hello', LP.GetBody, 'keep-alive chunked first request preserves body');
 end;
 
+procedure TestHttp10ImplicitCloseTrailingBytesTolerated;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  { HTTP/1.0 without Connection: keep-alive closes implicitly after the
+    response. A pipelined second request is normal 1.0 client behavior
+    (sent before seeing our close); the first request parsed cleanly and
+    must be served — Go net/http does the same. Regression: previously the
+    trailing bytes set a parser error, so the server dropped the valid
+    first response and replied 400. Explicit `Connection: close` keeps the
+    strict 400 policy (see TestContentLengthRequestExtraBytesAfterCloseRejected). }
+  LP := NewH1RequestParser;
+  LReq1 := 'GET /a HTTP/1.0'#13#10#13#10;
+  LReq := LReq1 + 'GET /b HTTP/1.0'#13#10#13#10;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, '1.0 implicit close trailing bytes should not corrupt first request');
+  Check(LP.IsComplete, '1.0 implicit close first request should complete');
+  { llhttp's error position lands at/past the first request's end — consumed
+    covers the whole first request (>= 19) and stops well short of the tail
+    (< 40). Exact value varies by llhttp version; lock the invariant. }
+  Check((LConsumed >= SizeUInt(Length(LReq1))) and (LConsumed < SizeUInt(Length(LReq))),
+    '1.0 implicit close parser consumes only first request');
+  Check(LP.GetMethod = hmGet, '1.0 implicit close first request preserves GET method');
+  CheckEqual('/a', LP.GetUrl, '1.0 implicit close first request preserves url');
+end;
+
 procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly;
 var
   LP: IH1Parser;
@@ -2408,6 +2437,7 @@ begin
   T.Test('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Test('Very long method rejected', @TestVeryLongMethodRejected);
   T.Test('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
+  T.Test('HTTP/1.0 implicit close trailing bytes tolerated', @TestHttp10ImplicitCloseTrailingBytesTolerated);
   T.Test('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Test('Content-Length keep-alive truncated follow-up request line consumes first request only',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);

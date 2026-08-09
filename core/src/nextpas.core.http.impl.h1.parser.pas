@@ -731,12 +731,29 @@ begin
     end
     else
     begin
-      { Server-side: extra bytes after a Connection: close request are
-        genuinely malformed — propagate as parser error. }
-      FError := True;
-      FComplete := False;
-      FErrorKind := pekMalformed;
-      FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
+      { Server-side: extra bytes after a Connection: close request.
+        Two cases with different policy:
+        - Explicit `Connection: close` header: extra bytes are genuinely
+          malformed (request smuggling defense) — propagate as parser error.
+        - Implicit close (HTTP/1.0 without Connection: keep-alive): llhttp
+          already returned HPE_PAUSED on the first request's message-complete
+          (should_keep_alive=0 → not PAUSED → complete), so FComplete is True
+          here. The first request parsed cleanly; the trailing bytes are a
+          second request the client sent before seeing our close, which is
+          normal HTTP/1.0 client behavior (Go net/http serves the first
+          request then closes). Treat as benign — keep the completed state,
+          consume only the first request, no error. }
+      if FRequestMetadata.ConnectionClose then
+      begin
+        FError := True;
+        FComplete := False;
+        FErrorKind := pekMalformed;
+        FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
+        Result := ConsumedUntilErrorPosition(ABuf, ALen);
+        Exit;
+      end;
+      FError := False;
+      FErrorMsg := '';
       Result := ConsumedUntilErrorPosition(ABuf, ALen);
       Exit;
     end;
