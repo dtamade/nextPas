@@ -3,6 +3,7 @@ program test_text;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
   nextpas.core.test,
   nextpas.core.fs,
   nextpas.core.text,
@@ -486,6 +487,40 @@ begin
   CheckEqual('a' + #$E4#$B8#$AD, UTF8TrimLastChar('a' + #$E4#$B8#$AD + #$F0#$9F#$98#$80), 'emoji trim');
   CheckEqual('', UTF8TrimLastChar(''), 'empty');
 end;
+
+procedure TestUTF8BytesRoundTrip;
+var
+  LB: TBytes;
+begin
+  { ASCII 往返 }
+  LB := UTF8ToBytes('hello');
+  CheckEqual(Int64(5), Int64(Length(LB)), 'ascii byte length');
+  CheckEqual(Ord('h'), Integer(LB[0]), 'ascii first byte');
+  CheckEqual('hello', BytesToUTF8(LB), 'ascii round trip');
+
+  { 多字节 UTF-8 往返（e-acute / CJK / emoji） }
+  LB := UTF8ToBytes(#$C3#$A9#$E4#$B8#$AD#$F0#$9F#$98#$80);
+  CheckEqual(Int64(2 + 3 + 4), Int64(Length(LB)), 'multibyte total bytes');
+  CheckEqual(Int64($C3), Int64(LB[0]), 'e-acute lead byte');
+  CheckEqual(Int64($E4), Int64(LB[2]), 'cjk lead byte');
+  CheckEqual(Int64($B8), Int64(LB[3]), 'cjk middle byte');
+  CheckEqual(#$C3#$A9#$E4#$B8#$AD#$F0#$9F#$98#$80, BytesToUTF8(LB), 'multibyte round trip');
+
+  { 空串/空数组 }
+  LB := UTF8ToBytes('');
+  CheckEqual(Int64(0), Int64(Length(LB)), 'empty string to empty bytes');
+  CheckEqual('', BytesToUTF8(nil), 'empty bytes to empty string');
+
+  { 含 NUL 的二进制往返（无损） }
+  LB := UTF8ToBytes('a' + #0 + 'b');
+  CheckEqual(Int64(3), Int64(Length(LB)), 'nul byte length preserved');
+  CheckEqual(Ord('a'), Integer(LB[0]), 'nul first byte');
+  CheckEqual(0, Integer(LB[1]), 'nul byte preserved');
+  CheckEqual('a' + #0 + 'b', BytesToUTF8(LB), 'nul round trip');
+
+  { 门面同语义 }
+  CheckEqual('hello', BytesToUTF8(nextpas.core.text.UTF8ToBytes('hello')), 'facade round trip');
+end;
 begin
   T := TTestSuite.Create('nextpas.core.text');
   T.Test('Trim', @TestTrim);
@@ -512,6 +547,7 @@ begin
   T.Test('UTF8CodePointAt', @TestUTF8CodePointAt);
   T.Test('UTF8EncodeToStr', @TestUTF8EncodeToStr);
   T.Test('UTF8TrimLastChar', @TestUTF8TrimLastChar);
+  T.Test('UTF8BytesRoundTrip', @TestUTF8BytesRoundTrip);
   T.Test('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
   T.Test('Utils surface', @TestUtilsSurface);
   T.Test('CopyStrToBuf', @TestCopyStrToBuf);
