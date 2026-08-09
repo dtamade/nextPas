@@ -57,6 +57,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `numa` | L2 | NUMA topology/alloc | yes | L0-L1; host units debt | draft |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
+| `pg` | L2 | PostgreSQL database (libpq FFI, dlopen) | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
