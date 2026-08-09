@@ -4,6 +4,9 @@ unit nextpas.core.text.utf8;
 
 interface
 
+uses
+  nextpas.core.base;
+
 type
   TUTF8DecodeResult = record
     CodePoint: UInt32;
@@ -36,6 +39,11 @@ function UTF8EncodeToStr(const ACodePoint: UInt32): string;
 
 { 删除末尾完整 UTF-8 序列（编辑缓冲 Backspace/光标移动用） }
 function UTF8TrimLastChar(const AValue: string): string;
+
+{ string <-> TBytes 无损转换（协议报文/落盘/加密输入常用）：
+  FPC $H+ 下 string 即 UTF-8 字节序列，逐字节复制，往返保真。 }
+function UTF8ToBytes(const AValue: string): TBytes;
+function BytesToUTF8(const AData: TBytes): string;
 
 implementation
 
@@ -302,6 +310,28 @@ begin
   while (LI > 1) and (Byte(AValue[LI]) and $C0 = $80) do
     Dec(LI);
   Result := Copy(AValue, 1, LI - 1);
+end;
+
+function UTF8ToBytes(const AValue: string): TBytes;
+var
+  LLen: SizeInt;
+begin
+  Result := nil;
+  LLen := Length(AValue);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AValue[1], Result[0], LLen);
+end;
+
+function BytesToUTF8(const AData: TBytes): string;
+var
+  LLen: SizeInt;
+begin
+  Result := '';
+  LLen := Length(AData);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AData[0], Result[1], LLen);
 end;
 
 end.

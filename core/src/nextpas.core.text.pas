@@ -19,6 +19,7 @@ unit nextpas.core.text;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.base,
   nextpas.core.text.builder,
   nextpas.core.text.compare,
@@ -99,6 +100,11 @@ function UTF8CaseFold(const AValue: string): string; inline;
 function NFD(const AValue: string): string; inline;
 function NFC(const AValue: string): string; inline;
 function IsNormalizedNFC(const AValue: string): Boolean; inline;
+
+{ string <-> TBytes 无损转换（协议报文/落盘/加密输入常用，FPC $H+ 下
+  string 即 UTF-8 字节序列，逐字节复制往返保真） }
+function UTF8ToBytes(const AValue: string): TBytes; inline;
+function BytesToUTF8(const AData: TBytes): string; inline;
 
 { Number conversion (from text.conv) }
 function IntToStr(const AValue: Int64): string; inline;
@@ -310,6 +316,18 @@ end;
 function IsNormalizedNFC(const AValue: string): Boolean;
 begin
   Result := nextpas.core.text.unicode.IsNormalizedNFC(AValue);
+end;
+
+{ Re-export: UTF8ToBytes / BytesToUTF8 }
+
+function UTF8ToBytes(const AValue: string): TBytes;
+begin
+  Result := nextpas.core.text.utf8.UTF8ToBytes(AValue);
+end;
+
+function BytesToUTF8(const AData: TBytes): string;
+begin
+  Result := nextpas.core.text.utf8.BytesToUTF8(AData);
 end;
 
 { Re-export: conv }
