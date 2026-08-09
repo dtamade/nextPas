@@ -216,6 +216,7 @@ const
   { 4xx Client Error }
   HTTP_STATUS_BAD_REQUEST           = THttpStatus(400);
   HTTP_STATUS_UNAUTHORIZED          = THttpStatus(401);
+  HTTP_STATUS_PAYMENT_REQUIRED      = THttpStatus(402);
   HTTP_STATUS_FORBIDDEN             = THttpStatus(403);
   HTTP_STATUS_NOT_FOUND             = THttpStatus(404);
   HTTP_STATUS_METHOD_NOT_ALLOWED    = THttpStatus(405);
