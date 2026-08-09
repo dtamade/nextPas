@@ -4,6 +4,9 @@ program test_log;
 
 uses
   SysUtils,
+  nextpas.core.thread.init,
+  nextpas.core.thread.base,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
@@ -1406,6 +1409,184 @@ begin
   Check(GCaptured[0].TimestampNs > 0, 'record: timestamp > 0');
 end;
 
+{ ===== 并发回归：多线程取槽跨语句持有（原全局轮转槽可被并发清零） ===== }
+
+type
+  TConcCaptureHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FMinLevel: TLogLevel;
+    FLock: TRTLCriticalSection;
+    FRecs: array of TLogRecord;
+    FCount: Int32;
+  public
+    constructor Create(AMinLevel: TLogLevel);
+    destructor Destroy; override;
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(const ARecord: TLogRecord);
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    procedure Flush;
+    function WithGroup(const AName: string): ILogHandler;
+  end;
+
+  TLogWorker = class(TWorkerThread)
+  private
+    FLogger: TLogger;
+    FTid: Int32;
+    FIterations: Int32;
+    FHold: Boolean;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const ALogger: TLogger; ATid: Int32; AIterations: Int32;
+      AHold: Boolean);
+  end;
+
+constructor TConcCaptureHandler.Create(AMinLevel: TLogLevel);
+begin
+  inherited Create;
+  FMinLevel := AMinLevel;
+  SetLength(FRecs, 64);
+  InitCriticalSection(FLock);
+end;
+
+destructor TConcCaptureHandler.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  inherited;
+end;
+
+function TConcCaptureHandler.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := ALevel >= FMinLevel;
+end;
+
+procedure TConcCaptureHandler.Handle(const ARecord: TLogRecord);
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FCount >= Length(FRecs) then
+      SetLength(FRecs, Length(FRecs) + 256);
+    FRecs[FCount] := ARecord;
+    Inc(FCount);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TConcCaptureHandler.Flush;
+begin
+end;
+
+function TConcCaptureHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+begin
+  Result := Self;
+end;
+
+function TConcCaptureHandler.WithGroup(const AName: string): ILogHandler;
+begin
+  Result := Self;
+end;
+
+constructor TLogWorker.Create(const ALogger: TLogger; ATid: Int32;
+  AIterations: Int32; AHold: Boolean);
+begin
+  inherited Create;
+  FLogger := ALogger;
+  FTid := ATid;
+  FIterations := AIterations;
+  FHold := AHold;
+end;
+
+procedure TLogWorker.Execute;
+var
+  LSeq, LI: Int32;
+  LEvt: PLogEvent;
+begin
+  { 复刻 core LoggerMiddleware 用法：Info 取槽 → 跨语句写 attrs →
+    持有（真实场景为跨请求处理的毫秒级持有）→ 再 Msg 提交。
+    双角色：
+      - 快线程：狂取槽不 sleep，制造高轮转速率；
+      - 持有线程：取槽后长睡 20ms（他人轮转必绕 256 圈撞上该槽）。
+    原实现（全局原子轮转、无占用标记）在持有窗口内会被快线程轮转
+    复用清零：持有者记录被抹掉（Msg 直接跳过）或混入他人数据；
+    修复后同槽同时只能有一个持有者，全部记录必须完整且 per-thread
+    seq 递进无隙。 }
+  LSeq := 0;
+  for LI := 1 to FIterations do
+  begin
+    Inc(LSeq);
+    LEvt := FLogger.Info;
+    LEvt^.Int('tid', FTid);
+    LEvt^.Int('seq', LSeq);
+    if FHold then
+      platform_thread_sleep_ms(20) { 长持有：制造确定性撞槽窗口 }
+    else
+      if (LI and 255) = 0 then
+        platform_thread_sleep_ms(1); { 快线程偶尔让步，避免占死调度 }
+    LEvt^.Msg('conc');
+  end;
+end;
+
+procedure TestConcurrentHeldSlots;
+const
+  CFastThreads = 8;
+  CFastIters = 5000;
+  CHoldThreads = 2;
+  CHoldIters = 20;
+  CThreads = CFastThreads + CHoldThreads;
+var
+  LH: ILogHandler;
+  LConc: TConcCaptureHandler;
+  LL: TLogger;
+  LWorkers: array[1..CThreads] of TLogWorker;
+  LNext: array[1..CThreads] of Int32;
+  LTid, LI: Int32;
+begin
+  LConc := TConcCaptureHandler.Create(llDebug);
+  LH := LConc;
+  LL := TLogger.New(LH, llDebug);
+  for LTid := 1 to CThreads do
+  begin
+    LNext[LTid] := 1;
+    if LTid <= CFastThreads then
+      LWorkers[LTid] := TLogWorker.Create(LL, LTid, CFastIters, False)
+    else
+      LWorkers[LTid] := TLogWorker.Create(LL, LTid, CHoldIters, True);
+    LWorkers[LTid].Start;
+  end;
+  for LTid := 1 to CThreads do
+  begin
+    LWorkers[LTid].WaitFor;
+    LWorkers[LTid].Free;
+  end;
+  LH := nil; { 释放 handler 的 interface 引用，LL 随后自动释放 }
+
+  CheckEqual(Int64(CFastThreads * CFastIters + CHoldThreads * CHoldIters),
+    Int64(LConc.FCount), 'conc: total records');
+  for LI := 0 to LConc.FCount - 1 do
+  begin
+    { 槽被并发清零时 Attrs 会为空（AttrCount=0），先挡越界 }
+    if LConc.FRecs[LI].AttrCount < 2 then
+    begin
+      Check(False, 'conc: attrs missing — held slot was cleared');
+      Exit;
+    end;
+    LTid := LConc.FRecs[LI].Attrs[0].IVal;
+    if (LTid < 1) or (LTid > CThreads) then
+    begin
+      Check(False, 'conc: tid out of range — slot cross-contamination');
+      Exit;
+    end;
+    if LConc.FRecs[LI].Attrs[1].IVal <> LNext[LTid] then
+    begin
+      Check(False, 'conc: seq gap/garbage — held slot was reused/cleared');
+      Exit;
+    end;
+    Inc(LNext[LTid]);
+  end;
+  Check(True, 'conc: all records intact, per-thread seq strictly 1..N');
+end;
+
 procedure TestWithLevel;
 var
   LL, LChild: TLogger;
@@ -1508,5 +1689,6 @@ begin
   T.Test('Multi handler empty', @TestMultiHandlerEmpty);
   T.Test('File handler append', @TestFileHandlerAppend);
   T.Test('Log record fields', @TestLogRecordFields);
+  T.Test('Concurrent held slots (8 fast+2 hold)', @TestConcurrentHeldSlots);
   if not T.Run then Halt(1);
 end.

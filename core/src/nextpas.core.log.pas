@@ -39,11 +39,13 @@ type
     function WithGroup(const AName: string): ILogHandler;
   end;
 
-  {** PLogEvent points into a global ring buffer (256 slots).
-   *  Event pool: 256 slots, round-robin. Safe for single-threaded use and
-   *  for multi-threaded use when each log call is a single chained expression
-   *  (Logger.Info^.Str('k','v')^.Msg('text')). Do NOT store PLogEvent across
-   *  multiple statements or yield points. *}
+  {** PLogEvent points into a global 256-slot event pool (see impl).
+   *  Slots are allocated under lock and marked busy; Msg/Send releases.
+   *  Holding a PLogEvent across statements while other threads log is safe
+   *  (core middleware LoggerMiddleware does exactly this): a busy slot can
+   *  never be handed to a second holder, so no cross-thread reuse/clear.
+   *  FPC threadvar per-thread pools were tried first, but core threads are
+   *  bare pthread_create (bypass FPC BeginThread), so threadvar is shared. *}
   PLogEvent = ^TLogEvent;
   TLogEvent = record
   private
@@ -205,6 +207,86 @@ begin
   Result := @Self;
 end;
 
+{ 事件池：全局 256 槽 + 锁内分配 + 占用标记。
+  原实现（原子自增轮转）在多线程「取槽后跨语句持有」时会被其他线程
+  轮转复用同槽清零覆盖，产出拆行/混行（core LoggerMiddleware 即此用法：
+  Info 取槽 → ServeHTTP → 跨请求处理 → Msg）。threadvar 每线程池方案在
+  core 裸 pthread 线程（绕过 FPC BeginThread）下不隔离，同样失效。
+  现改为：NextEventSlot 在锁内扫描空闲槽并标记占用，Msg/Send 后归还，
+  同一槽同一时刻只属于一个持有者。256 并发长持有是理论上限，耗尽时
+  退化为轮转覆盖（兜底，不阻塞）。 }
+var
+  GEventPool: array[0..255] of TLogEvent;
+  GEventBusy: array[0..255] of Boolean;
+  GEventIdx: Int32 = 0;
+  GEventLock: TRTLCriticalSection;
+  GFinI: Int32; { finalization 清理循环用 }
+
+function NextEventSlot: PLogEvent; inline;
+var
+  LIdx, LI: Int32;
+begin
+  EnterCriticalSection(GEventLock);
+  try
+    LIdx := GEventIdx;
+    for LI := 0 to 255 do
+    begin
+      if not GEventBusy[LIdx] then
+      begin
+        GEventBusy[LIdx] := True;
+        GEventIdx := (LIdx + 1) and 255;
+        Exit(@GEventPool[LIdx]);
+      end;
+      LIdx := (LIdx + 1) and 255;
+    end;
+    { 全部占用（≥256 并发长持有，极端）：退化为轮转覆盖，保证不阻塞。 }
+    LIdx := GEventIdx;
+    GEventIdx := (LIdx + 1) and 255;
+    Result := @GEventPool[LIdx];
+  finally
+    LeaveCriticalSection(GEventLock);
+  end;
+end;
+
+procedure ReleaseEventSlot(const AEvent: PLogEvent); inline;
+var
+  LIdx: Int32;
+begin
+  LIdx := Int32((PtrUInt(AEvent) - PtrUInt(@GEventPool[0])) div SizeOf(TLogEvent));
+  if (LIdx >= 0) and (LIdx < 256) and GEventBusy[LIdx] then
+  begin
+    EnterCriticalSection(GEventLock);
+    try
+      GEventBusy[LIdx] := False;
+    finally
+      LeaveCriticalSection(GEventLock);
+    end;
+  end;
+end;
+
+{ 静态只读空槽：level 过滤（disabled）时返回，FEnabled=False 使 Str/Int/
+  Msg 全部跳过，既不占用池槽也避免 nil 解引用。全程零写入，多线程共享
+  无竞争；TLogEvent 含 managed 字段，静态初始化后字段为默认空值，安全。 }
+var
+  GNullEvent: TLogEvent;
+
+{ 分配事件槽并初始化。level 未开启（含 nil handler）时不占池槽，返回静态
+  只读空槽。启用时取锁内槽并标记占用，调用方在 Msg/Send 后归还。 }
+function AllocEventSlot(const ALogger: TLogger; const ALevel: TLogLevel): PLogEvent; inline;
+begin
+  if not ALogger.Enabled(ALevel) then
+  begin
+    Result := @GNullEvent;
+    Exit;
+  end;
+  Result := NextEventSlot;
+  Finalize(Result^);
+  FillChar(Result^, SizeOf(TLogEvent), 0);
+  Result^.FHandler := ALogger.FHandler;
+  Result^.FEnabled := True;
+  Result^.FRec.Level := ALevel;
+end;
+
 { 每线程独立的重入检测计数器（threadvar 自动零初始化） }
 threadvar
   GLogDepth: Int32;
@@ -223,6 +305,8 @@ begin
       FHandler.Handle(FRec);
   finally
     Dec(GLogDepth);
+    { 归还事件槽：正常与异常路径都释放，避免 256 槽耗尽后退化覆盖。 }
+    ReleaseEventSlot(@Self);
   end;
 end;
 
@@ -232,17 +316,6 @@ begin
 end;
 
 { TLogger }
-
-var
-  GEventPool: array[0..255] of TLogEvent;
-  GEventIdx: Int32 = 0;
-
-function NextEventSlot: PLogEvent; inline;
-var LIdx: Int32;
-begin
-  LIdx := InterlockedIncrement(GEventIdx) - 1;
-  Result := @GEventPool[LIdx and 255];
-end;
 
 class function TLogger.New(const AHandler: ILogHandler; ALevel: TLogLevel): TLogger;
 begin
@@ -297,62 +370,32 @@ end;
 
 function TLogger.Trace: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llTrace);
-  Result^.FRec.Level := llTrace;
+  Result := AllocEventSlot(Self, llTrace);
 end;
 
 function TLogger.Debug: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llDebug);
-  Result^.FRec.Level := llDebug;
+  Result := AllocEventSlot(Self, llDebug);
 end;
 
 function TLogger.Info: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llInfo);
-  Result^.FRec.Level := llInfo;
+  Result := AllocEventSlot(Self, llInfo);
 end;
 
 function TLogger.Warn: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llWarn);
-  Result^.FRec.Level := llWarn;
+  Result := AllocEventSlot(Self, llWarn);
 end;
 
 function TLogger.Error: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llError);
-  Result^.FRec.Level := llError;
+  Result := AllocEventSlot(Self, llError);
 end;
 
 function TLogger.Fatal: PLogEvent;
 begin
-  Result := NextEventSlot;
-  Finalize(Result^);
-  FillChar(Result^, SizeOf(TLogEvent), 0);
-  Result^.FHandler := FHandler;
-  Result^.FEnabled := Enabled(llFatal);
-  Result^.FRec.Level := llFatal;
+  Result := AllocEventSlot(Self, llFatal);
 end;
 
 { Console Handler }
@@ -429,6 +472,9 @@ begin
       end;
     end;
     WriteLn(StdErr);
+    { FPC TextFile（StdErr）有内部缓冲：锁内多条 Write 可能滞留，flush 时与
+      其他线程待冲内容粘行。行尾立即 Flush 保证每行原子完整落盘。 }
+    System.Flush(StdErr);
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -576,6 +622,8 @@ begin
     for LI := 0 to ARecord.AttrCount - 1 do
       WriteJsonAttr(LFirst, FGroup, ARecord.Attrs[LI]);
     WriteLn(StdErr, '}');
+    { 与 ConsoleHandler 同理：行尾立即 Flush，避免缓冲滞留与其他线程粘行。 }
+    System.Flush(StdErr);
   finally
     LeaveCriticalSection(FLock);
   end;
@@ -1035,15 +1083,15 @@ begin
   Result := TLoggerAdapter.Create(Self);
 end;
 
-var
-  GFinI: Int32;
-
 initialization
   InitCriticalSection(GDefaultLock);
+  InitCriticalSection(GEventLock);
 
 finalization
+  { 手动清理全局事件池槽的 managed 字段（静态对象 FPC 不自动 Finalize）。
+    正常退出时所有槽均已 Msg 归还，此处幂等清理残留引用。 }
   for GFinI := 0 to High(GEventPool) do
     Finalize(GEventPool[GFinI]);
+  DoneCriticalSection(GEventLock);
   DoneCriticalSection(GDefaultLock);
-
 end.
