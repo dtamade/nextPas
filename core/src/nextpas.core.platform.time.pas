@@ -12,6 +12,9 @@ type
   TPlatformTimeNanoseconds = nextpas.core.platform.time.base.TPlatformTimeNanoseconds;
   TPlatformCounterValue = nextpas.core.platform.time.base.TPlatformCounterValue;
   TPlatformCounterFrequency = nextpas.core.platform.time.base.TPlatformCounterFrequency;
+  { breakdown 类型一并 re-export：业务代码 uses platform.time 即可拿到
+    整数 UTC 分解（NextIntegerDoc：调用方无需钻 base 单元） }
+  TPlatformTimeBreakdown = nextpas.core.platform.time.base.TPlatformTimeBreakdown;
 
 {** @desc 获取单调时钟时间（纳秒，永不回退）
     @return 单调递增时间戳（纳秒） *}
