@@ -668,7 +668,7 @@ begin
       Exit;
     end;
 
-    LW.Flush;
+    (LW as TH1ResponseWriter).FinalizeResponse;
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
@@ -787,7 +787,7 @@ begin
       Exit;
     end;
 
-    LW.Flush;
+    (LW as TH1ResponseWriter).FinalizeResponse;
 
     ACloseAfterDrain := not LKeepAlive;
     AOutbound := LOutbound;

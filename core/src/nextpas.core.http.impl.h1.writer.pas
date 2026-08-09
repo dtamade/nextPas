@@ -55,6 +55,12 @@ type
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    { FinalizeResponse: write the terminal chunk (chunked) or validate the
+      declared content-length (fixed), then mark the response finalized.
+      The server conn loop calls this once after the handler returns;
+      handlers must not call it (Flush stays non-terminating so streaming
+      protocols such as SSE can Flush between frames). }
+    procedure FinalizeResponse;
     function Hijack: ITcpStream;
     function HasCommitted: Boolean;
     function HeadersCommitted: Boolean;
@@ -489,6 +495,20 @@ begin
 end;
 
 procedure TH1ResponseWriter.Flush;
+var
+  LFlusher: IFlusher;
+begin
+  { Flush is non-terminating: SSE and other streaming protocols Flush between
+    frames; only the conn loop's FinalizeResponse writes the terminal chunk. }
+  if FFinalized then
+    Exit;
+  if (not FHeadersSent) and (not FHijacked) then
+    WriteHeader(HTTP_STATUS_OK);
+  if Supports(FWriter, IFlusher, LFlusher) then
+    LFlusher.Flush;
+end;
+
+procedure TH1ResponseWriter.FinalizeResponse;
 var
   LFlusher: IFlusher;
 begin

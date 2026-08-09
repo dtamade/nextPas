@@ -368,7 +368,7 @@ begin
   LP2 := 'lo';
   LRW.Write(LP1[1], SizeUInt(Length(LP1)));
   LRW.Write(LP2[1], SizeUInt(Length(LP2)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('transfer-encoding: chunked', LOut) > 0, 'chunked header added');
   Check(Pos('hel', LOut) > 0, 'first payload present');
@@ -391,7 +391,7 @@ begin
   LBody := #0#1#$7F#$80#$FF#13#10#0;
   LRW.GetHeaders.SetHeader('Content-Length', '8');
   LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   LBodyStart := Pos(#13#10#13#10, LOut) + 4;
 
@@ -419,7 +419,7 @@ begin
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LBody := #0#1#$7F#$80#$FF#13#10#0;
   LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   LChunkStart := Pos('8'#13#10, LOut) + 3;
 
@@ -538,7 +538,7 @@ begin
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('transfer-encoding: gzip'#13#10, LOut) > 0, 'preset transfer-encoding preserved');
   Check(Pos('transfer-encoding: chunked', LOut) = 0, 'chunked header not injected');
@@ -559,7 +559,7 @@ begin
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('content-length: 5'#13#10, LOut) > 0, 'content-length preserved');
   Check(Pos('transfer-encoding: chunked', LOut) = 0, 'chunked header not injected');
@@ -676,7 +676,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LRW.WriteHeader(HTTP_STATUS_NO_CONTENT);
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('HTTP/1.1 204 No Content'#13#10, LOut) = 1, 'status 204 written');
   Check(Pos('transfer-encoding: chunked', LOut) = 0,
@@ -697,7 +697,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LRW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('HTTP/1.1 304 Not Modified'#13#10, LOut) = 1, 'status 304 written');
   Check(Pos('transfer-encoding: chunked', LOut) = 0,
@@ -749,7 +749,7 @@ begin
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'ok';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   LInfoPos := Pos('HTTP/1.1 103 Early Hints'#13#10, LOut);
   LFinalPos := Pos('HTTP/1.1 200 OK'#13#10, LOut);
@@ -770,7 +770,7 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LRW.WriteHeader(HTTP_STATUS_SWITCHING_PROTOCOLS);
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('HTTP/1.1 101 Switching Protocols'#13#10, LOut) = 1,
     'status 101 written');
@@ -845,7 +845,7 @@ begin
   LRW := TH1ResponseWriter.Create(LW as IWriter, nil, True);
   LBody := 'hello';
   LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   CheckEqual(Int64(Length(LBody)), Int64(LWritten),
     'suppressed-body write reports consumed bytes');
@@ -872,7 +872,7 @@ begin
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   Check(Pos('content-length: 5'#13#10, LOut) > 0,
     'suppressed-body path preserves explicit content-length');
@@ -885,7 +885,7 @@ begin
   LRW.Free;
 end;
 
-procedure TestWriteAfterChunkedFlushRaises;
+procedure TestWriteAfterFinalizeRaises;
 var
   LW: TBytesWriter;
   LRW: TH1ResponseWriter;
@@ -897,7 +897,7 @@ begin
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LBefore := LW.GetOutput;
   LRaised := False;
   try
@@ -906,8 +906,41 @@ begin
     on E: EHttpError do
       LRaised := True;
   end;
-  Check(LRaised, 'write after chunked flush raises EHttpError');
-  CheckEqual(LBefore, LW.GetOutput, 'write after flush does not append bytes');
+  Check(LRaised, 'write after finalize raises EHttpError');
+  CheckEqual(LBefore, LW.GetOutput, 'write after finalize does not append bytes');
+  LRW.Free;
+end;
+
+{ SSE/streaming regression: Flush must be non-terminating. A chunked response
+  may Flush repeatedly (each frame) and keep writing; only FinalizeResponse
+  emits the terminal 0-chunk. }
+procedure TestChunkedFlushDoesNotTerminate;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := 'frame-1';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0, 'chunked header written');
+  Check(Pos('frame-1', LOut) > 0, 'first frame bytes written');
+  Check(Pos('0'#13#10#13#10, LOut) = 0, 'flush does not write terminal chunk');
+  { Second frame after flush must still be writable (SSE multi-frame case). }
+  LBody := 'frame-2';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('frame-2', LOut) > Pos('frame-1', LOut), 'second frame follows first');
+  Check(Pos('0'#13#10#13#10, LOut) = 0, 'second flush still does not terminate');
+  { Conn loop finalizes once the handler returns. }
+  LRW.FinalizeResponse;
+  LOut := LW.GetOutput;
+  Check(Pos('0'#13#10#13#10, LOut) > 0, 'finalize writes terminal chunk');
   LRW.Free;
 end;
 
@@ -932,15 +965,15 @@ begin
   LW := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   try
-    LRW.Flush;
+    LRW.FinalizeResponse;
     LOut := LW.GetOutput;
-    Check(LRW.HasCommitted, 'flush commits default response');
+    Check(LRW.HasCommitted, 'finalize commits default response');
     Check(Pos('HTTP/1.1 200 OK'#13#10, LOut) = 1,
-      'flush writes default status');
+      'finalize writes default status');
     Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
-      'flush writes default chunked header');
+      'finalize writes default chunked header');
     Check(Pos('0'#13#10#13#10, LOut) > 0,
-      'flush finalizes empty default chunked body');
+      'finalize writes terminal chunk for empty default body');
   finally
     LRW.Free;
   end;
@@ -1229,7 +1262,7 @@ begin
 
     LRaised := False;
     try
-      LRW.Flush;
+      LRW.FinalizeResponse;
     except
       on E: EHttpError do
         LRaised := True;
@@ -1255,7 +1288,7 @@ begin
   LRW := TH1ResponseWriter.Create(LW as IWriter);
   LBody := 'hello';
   LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
-  LRW.Flush;
+  LRW.FinalizeResponse;
   LOut := LW.GetOutput;
   CheckEqual(Int64(5), Int64(LWritten), 'chunked body reports full bytes');
   CheckEqual('HTTP/1.1 200 OK'#13#10 +
@@ -1425,9 +1458,11 @@ begin
     @TestSuppressBodyWriteDoesNotEmitBodyOrChunkedEncoding);
   T.Test('Suppressed-body preserves explicit content-length',
     @TestSuppressBodyPreservesExplicitContentLength);
-  T.Test('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
+  T.Test('Write after finalize raises', @TestWriteAfterFinalizeRaises);
+  T.Test('Chunked flush does not terminate (SSE regression)',
+    @TestChunkedFlushDoesNotTerminate);
   T.Test('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
-  T.Test('Flush without prior write commits default response',
+  T.Test('Finalize without prior write commits default response',
     @TestFlushWithoutPriorWriteCommitsDefaultResponse);
   T.Test('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
   T.Test('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
