@@ -63,6 +63,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
+| `sqlite` | L2 | SQLite database (system libsqlite3 FFI) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
