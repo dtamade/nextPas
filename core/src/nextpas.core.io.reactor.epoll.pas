@@ -61,6 +61,13 @@ type
     procedure ReleasePendingOps(AResult: Int32);
     procedure DispatchEvent(const AEv: epoll_event);
     procedure ExecuteOp(AIdx: Int32);
+    { 完成一个 op：从 epoll 移除 + 释放 + 回调一次（ExecuteOp 与立即补检共用） }
+    procedure CompleteOp(AIdx: Int32; AResult: Int32);
+    { EPOLLET 注册后立即补检：注册前已就绪的读写/已完成连接不会产生新
+      事件，需此刻做一次非阻塞 syscall（含 SO_ERROR 探测）。返回 True
+      表示 op 已就地完成；False 表示 EAGAIN/EWOULDBLOCK/EINPROGRESS
+      （挂起等事件）或该 op 不可立即补检（close）。 }
+    function TryOpImmediately(AIdx: Int32): Boolean;
   public
     class function Create(AMaxEvents: UInt32 = 64): TEpollReactor; static;
     procedure Close;
@@ -435,6 +442,99 @@ begin
   end;
 end;
 
+procedure TEpollReactor.CompleteOp(AIdx: Int32; AResult: Int32);
+var
+  LCallback: TIoCompletion;
+  LContext: Pointer;
+begin
+  LCallback := FOps[AIdx].Callback;
+  LContext := FOps[AIdx].Context;
+  RemoveFd(FOps[AIdx].Fd);
+  FreeOp(AIdx);
+  if Assigned(LCallback) then
+    LCallback(UInt64(AIdx), AResult, LContext);
+end;
+
+function TEpollReactor.TryOpImmediately(AIdx: Int32): Boolean;
+var
+  LRes: SizeInt;
+  LRes32: Int32;
+  LOptVal: Int32;
+  LOptLen: UInt32;
+begin
+  Result := False;
+  case FOps[AIdx].Kind of
+    opRead:
+    begin
+      if FOps[AIdx].Offset >= 0 then
+        LRes := pread(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Offset)
+      else
+        LRes := read(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opWrite:
+    begin
+      if FOps[AIdx].Offset >= 0 then
+        LRes := pwrite(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Offset)
+      else
+        LRes := write(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opAccept:
+    begin
+      LRes := accept4(FOps[AIdx].Fd, FOps[AIdx].Addr,
+        FOps[AIdx].AddrLen, FOps[AIdx].Flags);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opSend:
+    begin
+      LRes := send(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opRecv:
+    begin
+      LRes := recv(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len, FOps[AIdx].Flags);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opSendTo:
+    begin
+      LRes := sendto(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
+        FOps[AIdx].Flags, FOps[AIdx].Addr, socklen_t(FOps[AIdx].AddrLenVal));
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opRecvFrom:
+    begin
+      LRes := recvfrom(FOps[AIdx].Fd, FOps[AIdx].Buf, FOps[AIdx].Len,
+        FOps[AIdx].Flags, FOps[AIdx].Addr, FOps[AIdx].AddrLen);
+      LRes32 := EpollResultFromSyscall(LRes);
+    end;
+    opConnect:
+    begin
+      { connect() 返回 EINPROGRESS 后才走到注册；本地/快链路可能在注册前
+        已完成握手，EPOLLOUT 边沿已过不再报事件，须补检 SO_ERROR。 }
+      LOptVal := 0;
+      LOptLen := SizeOf(LOptVal);
+      LRes := getsockopt(FOps[AIdx].Fd, SOL_SOCKET, SO_ERROR, @LOptVal, @LOptLen);
+      if LRes < 0 then
+        LRes32 := EpollResultFromSyscall(LRes)
+      else if LOptVal = EINPROGRESS then
+        Exit
+      else
+        LRes32 := -LOptVal;
+    end;
+  else
+    { opClose：同步路径，不做立即补检 }
+    Exit;
+  end;
+  { EAGAIN/EWOULDBLOCK（同为 11）：fd 无就绪数据/不可写，挂起等 epoll 事件；
+    EINTR：fd 必无就绪数据（数据就绪时 read/write 不会返回 EINTR），
+    挂起等事件同样安全。其余结果（含部分读/写）就地完成。 }
+  if (LRes32 = -EAGAIN) or (LRes32 = -EINTR) then
+    Exit;
+  CompleteOp(AIdx, LRes32);
+  Result := True;
+end;
+
 procedure TEpollReactor.DispatchEvent(const AEv: epoll_event);
 var
   LIdx: Int32;
@@ -456,7 +556,10 @@ begin
   LIdx := AllocOp(opRead, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncWrite(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -470,7 +573,10 @@ begin
   LIdx := AllocOp(opWrite, AFd, ABuf, ALen, AOffset, 0, nil, nil, 0,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncAccept(AFd: Int32; AAddr: Pointer;
@@ -484,7 +590,10 @@ begin
   LIdx := AllocOp(opAccept, AFd, nil, 0, -1, AFlags, AAddr, AAddrLen, 0,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncConnect(AFd: Int32; AAddr: Pointer;
@@ -515,7 +624,10 @@ begin
   LIdx := AllocOp(opConnect, AFd, nil, 0, -1, 0, AAddr, nil, AAddrLen,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -528,7 +640,10 @@ begin
   LIdx := AllocOp(opSend, AFd, ABuf, ALen, -1, AFlags, nil, nil, 0,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncRecv(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -544,7 +659,10 @@ begin
   FOps[LIdx].Buf := ABuf;
   FOps[LIdx].Len := ALen;
   Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncSendTo(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -559,7 +677,10 @@ begin
   LIdx := AllocOp(opSendTo, AFd, ABuf, ALen, -1, AFlags, AAddr, nil, AAddrLen,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncRecvFrom(AFd: Int32; ABuf: Pointer; ALen: UInt32;
@@ -576,7 +697,10 @@ begin
   FOps[LIdx].Buf := ABuf;
   FOps[LIdx].Len := ALen;
   Result := RegisterFd(AFd, EPOLLIN or EPOLLET or EPOLLONESHOT, UInt64(LIdx));
-  if not Result then FreeOp(LIdx);
+  if Result then
+    TryOpImmediately(LIdx)
+  else
+    FreeOp(LIdx);
 end;
 
 function TEpollReactor.AsyncClose(AFd: Int32; ACallback: TIoCompletion;
