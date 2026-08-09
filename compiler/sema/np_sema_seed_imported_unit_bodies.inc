@@ -89,11 +89,88 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     end;
   end;
 
+  { Nested local procedure/function decls live as children of the outer
+    routine (before begin). Top-level attach only registered the outer body,
+    so calls like @ConsumePath had no define. Recurse without exporting
+    symbols — body seed only. }
+  procedure RegisterNestedLocalBodies(
+    const ADecl: TGreenNode;
+    const AOwnerUnitId: string
+  );
+  var
+    ChildIdx: LongInt;
+    Child, BodyChild: TGreenNode;
+  begin
+    if ADecl = nil then
+      Exit;
+    for ChildIdx := 0 to ADecl.ChildCount - 1 do
+    begin
+      Child := ADecl.ChildAt(ChildIdx);
+      if Child = nil then
+        Continue;
+      if (Child.NodeKind <> gnkProcedureDecl) and
+        (Child.NodeKind <> gnkFunctionDecl) then
+        Continue;
+      BodyChild := FindDeclBody(Child);
+      if BodyChild <> nil then
+        RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+      RegisterNestedLocalBodies(Child, AOwnerUnitId);
+    end;
+  end;
+
   { Host-free multi-unit: attach implementation bodies + unit init/fini without
     exporting private symbols. RegisterProcedureBody updates the interface
     entry (same name/owner/sig) so SeedFunctionBodies can lower MuTotal/etc.
-    System stays stub-only (full attach floods IR). Recovery counterpart:
+    System stays mostly stub-only (full attach floods IR). Recovery counterpart:
     AttachImplementationBodiesInNode @ recovery/compiler-system-wip-20260722. }
+  function IsSystemMinimalBodyName(const AName: string): Boolean;
+  begin
+    { VMT / inherited Create chain only — not full System flood. }
+    Result := SameText(AName, 'TObject.Create') or
+      SameText(AName, 'TObject.Destroy') or
+      SameText(AName, 'TObject.Free') or
+      SameText(AName, 'TObject.ClassType') or
+      SameText(AName, 'TObject.ClassName') or
+      SameText(AName, 'TObject.InheritsFrom') or
+      SameText(AName, 'TObject.GetInterface') or
+      SameText(AName, 'TObject.InstanceSize') or
+      SameText(AName, 'TInterfacedObject.Create') or
+      SameText(AName, 'TInterfacedObject._AddRef') or
+      SameText(AName, 'TInterfacedObject._Release') or
+      SameText(AName, 'Exception.Create') or
+      SameText(AName, 'Exception.Destroy');
+  end;
+
+  procedure AttachSystemMinimalBodiesInNode(
+    const ANode: TGreenNode;
+    const AOwnerUnitId: string
+  );
+  var
+    ChildIdx: LongInt;
+    Child, BodyChild: TGreenNode;
+  begin
+    if ANode = nil then
+      Exit;
+    for ChildIdx := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(ChildIdx);
+      if Child = nil then
+        Continue;
+      if (Child.NodeKind = gnkProcedureDecl) or
+        (Child.NodeKind = gnkFunctionDecl) then
+      begin
+        if not IsSystemMinimalBodyName(Child.Text) then
+          Continue;
+        BodyChild := FindDeclBody(Child);
+        if BodyChild = nil then
+          Continue;
+        RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+      end
+      else if Child.NodeKind <> gnkUsesClause then
+        AttachSystemMinimalBodiesInNode(Child, AOwnerUnitId);
+    end;
+  end;
+
   procedure AttachImplementationBodiesInNode(
     const ANode: TGreenNode;
     const AOwnerUnitId: string
@@ -136,7 +213,8 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := SavedScopeId;
         end;
       end
-      else if Child.NodeKind = gnkVarSection then
+      else if (Child.NodeKind = gnkVarSection) or
+        (Child.NodeKind = gnkThreadVarSection) then
       begin
         UnitScopeId := EnsureUnitScope(AOwnerUnitId);
         SavedScopeId := FCurrentScopeId;
@@ -161,6 +239,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
         try
           { Body only — do not SeedImportedCallableSymbol for impl-private names. }
           RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+          RegisterNestedLocalBodies(Child, AOwnerUnitId);
         finally
           FCurrentScopeId := SavedScopeId;
         end;
@@ -225,7 +304,8 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           FCurrentScopeId := SavedScopeId;
         end;
       end
-      else if Child.NodeKind = gnkVarSection then
+      else if (Child.NodeKind = gnkVarSection) or
+        (Child.NodeKind = gnkThreadVarSection) then
       begin
         UnitScopeId := EnsureUnitScope(AOwnerUnitId);
         SavedScopeId := FCurrentScopeId;
@@ -248,6 +328,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
           SeedImportedCallableSymbol(Child, AOwnerUnitId, UnitScopeId);
           BodyChild := FindDeclBody(Child);
           RegisterProcedureBody(Child.Text, BodyChild, Child, AOwnerUnitId);
+          RegisterNestedLocalBodies(Child, AOwnerUnitId);
         finally
           FCurrentScopeId := SavedScopeId;
         end;
@@ -256,8 +337,12 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
         RegisterBodiesInNode(Child, AOwnerUnitId)
       else if Child.NodeKind = gnkImplementationSection then
       begin
-        { Multi-unit host-free body attach. Skip full System (IR flood). }
-        if not SameText(NormalizeUnitIdentity(AOwnerUnitId), 'system') then
+        { Multi-unit host-free body attach. Full System floods IR — only the
+          TObject/TInterfacedObject/Exception VMT chain is required so inherited
+          Create/Destroy lower to real defines instead of call @TObject.Create. }
+        if SameText(NormalizeUnitIdentity(AOwnerUnitId), 'system') then
+          AttachSystemMinimalBodiesInNode(Child, AOwnerUnitId)
+        else
           AttachImplementationBodiesInNode(Child, AOwnerUnitId);
       end;
     end;
@@ -376,19 +461,20 @@ begin
       if CacheIdx >= 0 then
       begin
         for J := 0 to LongInt(GImportedUnitCache[SizeUInt(CacheIdx)].Symbols.Count) - 1 do
-          with GImportedUnitCache[SizeUInt(CacheIdx)].Symbols[SizeUInt(J)] do
-          begin
-            { Skip cached type symbols if a type with this name already
-              exists in the model (e.g. seeded in SeedBuiltinTypes). }
-            if SameText(Kind, 'type') and
-              (FModel.FindTypeByName(Name) > 0) then
-              Continue;
-            FModel.AddSymbol(Name, Kind, OwnerUnitId, TypeId, ByteOffset);
-            FModel.SetSymbolParamCount(FModel.SymbolCount, ParamCount);
-            FModel.SetSymbolMinParamCount(FModel.SymbolCount, MinParamCount);
-            FModel.SetSymbolParamSignature(FModel.SymbolCount, ParamSignature);
-            FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
-          end;
+        begin
+          CachedSym := GImportedUnitCache[SizeUInt(CacheIdx)].Symbols[SizeUInt(J)];
+          { Skip cached type symbols if a type with this name already
+            exists in the model (e.g. seeded in SeedBuiltinTypes). }
+          if SameText(CachedSym.Kind, 'type') and
+            (FModel.FindTypeByName(CachedSym.Name) > 0) then
+            Continue;
+          FModel.AddSymbol(CachedSym.Name, CachedSym.Kind, OwnerUnitId,
+            CachedSym.TypeId, CachedSym.ByteOffset);
+          FModel.SetSymbolParamCount(FModel.SymbolCount, CachedSym.ParamCount);
+          FModel.SetSymbolMinParamCount(FModel.SymbolCount, CachedSym.MinParamCount);
+          FModel.SetSymbolParamSignature(FModel.SymbolCount, CachedSym.ParamSignature);
+          FModel.SetSymbolScope(FModel.SymbolCount, EnsureUnitScope(OwnerUnitId));
+        end;
         { Symbol cache has no bodies — re-parse for multi-unit host-free. }
         ParseAndRegisterUnitBodies(SourcePath, ResolvedUnit.CanonicalName,
           OwnerUnitId, TmpDiag);

@@ -81,148 +81,142 @@ begin
   HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
     TypeIdArrayHasKnownTypes(AArgTypeIds);
 
-  for Index := 0 to LongInt(Ctx.ProcedureBodies.Count) - 1 do
-    if SameText(Ctx.ProcedureBodies[Index].Name, AName) then
+  { Name→index chain: O(overloads of AName), not O(all registered bodies).
+    L3 nextpas registers ~12k bodies; full linear scan per call hangs. }
+  Index := CtxFirstBodyIndexForName(Ctx, AName);
+  while Index >= 0 do
+  begin
+    if SameText(Ctx.ProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or
+      SameText(Ctx.ProcedureBodies[Index].OwnerUnitId,
+        Ctx.CurrentProcessingUnitId) then
     begin
-      if SameText(Ctx.ProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or
-        SameText(Ctx.ProcedureBodies[Index].OwnerUnitId,
-          Ctx.CurrentProcessingUnitId) then
+      Inc(RootNameCount);
+      if DeclAcceptsArgCount(Ctx.ProcedureBodies[Index].Decl, AArgCount) then
       begin
-        Inc(RootNameCount);
-        if DeclAcceptsArgCount(Ctx.ProcedureBodies[Index].Decl, AArgCount) then
+        RootMatchIndex := Index;
+        Inc(RootMatchCount);
+        if HasArgTypeIds and DeclParamTypesExactMatch(Ctx,
+          Ctx.ProcedureBodies[Index].Decl,
+          Ctx.ProcedureBodies[Index].OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
         begin
-          RootMatchIndex := Index;
-          Inc(RootMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(Ctx, 
+          RootExactMatchIndex := Index;
+          Inc(RootExactMatchCount);
+        end
+        else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx,
+          Ctx.ProcedureBodies[Index].Decl,
+          Ctx.ProcedureBodies[Index].OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          RootCompatibleMatchIndex := Index;
+          Inc(RootCompatibleMatchCount);
+        end;
+        if AHasArgSignature and
+          DeclParamSignatureMatchesArgs(Ctx,
+            Ctx.ProcedureBodies[Index].Decl,
+            AArgSignature,
+            AArgCount
+          ) then
+        begin
+          RootSignatureMatchIndex := Index;
+          Inc(RootSignatureMatchCount);
+        end;
+      end;
+    end
+    else
+    begin
+      Inc(ImportedNameCount);
+      if OwnerUnitAllowsProjectSourceDiagnostic(Ctx,
+        Ctx.ProcedureBodies[Index].OwnerUnitId
+      ) then
+        Inc(ImportedDiagnosticNameCount);
+      if DeclAcceptsArgCount(Ctx.ProcedureBodies[Index].Decl, AArgCount) then
+      begin
+        ImportedMatchIndex := Index;
+        Inc(ImportedMatchCount);
+        if HasArgTypeIds and DeclParamTypesExactMatch(Ctx,
+          Ctx.ProcedureBodies[Index].Decl,
+          Ctx.ProcedureBodies[Index].OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          ImportedExactMatchIndex := Index;
+          Inc(ImportedExactMatchCount);
+        end
+        else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx,
+          Ctx.ProcedureBodies[Index].Decl,
+          Ctx.ProcedureBodies[Index].OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          ImportedCompatibleMatchIndex := Index;
+          Inc(ImportedCompatibleMatchCount);
+        end;
+        if UnitDirectlyImports(Ctx, RootOwnerUnitId,
+          Ctx.ProcedureBodies[Index].OwnerUnitId) then
+        begin
+          DirectImportMatchIndex := Index;
+          Inc(DirectImportMatchCount);
+          if HasArgTypeIds and DeclParamTypesExactMatch(Ctx,
             Ctx.ProcedureBodies[Index].Decl,
             Ctx.ProcedureBodies[Index].OwnerUnitId,
             AArgTypeIds,
             AArgCount
           ) then
           begin
-            RootExactMatchIndex := Index;
-            Inc(RootExactMatchCount);
+            DirectImportExactMatchIndex := Index;
+            Inc(DirectImportExactMatchCount);
           end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx, 
+          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx,
             Ctx.ProcedureBodies[Index].Decl,
             Ctx.ProcedureBodies[Index].OwnerUnitId,
             AArgTypeIds,
             AArgCount
           ) then
           begin
-            RootCompatibleMatchIndex := Index;
-            Inc(RootCompatibleMatchCount);
-          end;
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(Ctx, 
-              Ctx.ProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            RootSignatureMatchIndex := Index;
-            Inc(RootSignatureMatchCount);
+            DirectImportCompatibleMatchIndex := Index;
+            Inc(DirectImportCompatibleMatchCount);
           end;
         end;
-      end
-      else
-      begin
-        Inc(ImportedNameCount);
-        if OwnerUnitAllowsProjectSourceDiagnostic(Ctx, 
+        if OwnerUnitAllowsProjectSourceDiagnostic(Ctx,
           Ctx.ProcedureBodies[Index].OwnerUnitId
         ) then
-          Inc(ImportedDiagnosticNameCount);
-        if DeclAcceptsArgCount(Ctx.ProcedureBodies[Index].Decl, AArgCount) then
+          Inc(ImportedDiagnosticMatchCount);
+        if AHasArgSignature and
+          DeclParamSignatureMatchesArgs(Ctx,
+            Ctx.ProcedureBodies[Index].Decl,
+            AArgSignature,
+            AArgCount
+          ) then
         begin
-          ImportedMatchIndex := Index;
-          Inc(ImportedMatchCount);
-          if HasArgTypeIds and DeclParamTypesExactMatch(Ctx, 
-            Ctx.ProcedureBodies[Index].Decl,
-            Ctx.ProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedExactMatchIndex := Index;
-            Inc(ImportedExactMatchCount);
-          end
-          else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx, 
-            Ctx.ProcedureBodies[Index].Decl,
-            Ctx.ProcedureBodies[Index].OwnerUnitId,
-            AArgTypeIds,
-            AArgCount
-          ) then
-          begin
-            ImportedCompatibleMatchIndex := Index;
-            Inc(ImportedCompatibleMatchCount);
-          end;
-          if UnitDirectlyImports(Ctx, RootOwnerUnitId,
-            Ctx.ProcedureBodies[Index].OwnerUnitId) then
-          begin
-            DirectImportMatchIndex := Index;
-            Inc(DirectImportMatchCount);
-            if HasArgTypeIds and DeclParamTypesExactMatch(Ctx, 
-              Ctx.ProcedureBodies[Index].Decl,
-              Ctx.ProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportExactMatchIndex := Index;
-              Inc(DirectImportExactMatchCount);
-            end
-            else if HasArgTypeIds and DeclParamTypesCompatibleMatch(Ctx, 
-              Ctx.ProcedureBodies[Index].Decl,
-              Ctx.ProcedureBodies[Index].OwnerUnitId,
-              AArgTypeIds,
-              AArgCount
-            ) then
-            begin
-              DirectImportCompatibleMatchIndex := Index;
-              Inc(DirectImportCompatibleMatchCount);
-            end;
-          end;
-          if OwnerUnitAllowsProjectSourceDiagnostic(Ctx, 
+          ImportedSignatureMatchIndex := Index;
+          Inc(ImportedSignatureMatchCount);
+          if OwnerUnitAllowsProjectSourceDiagnostic(Ctx,
             Ctx.ProcedureBodies[Index].OwnerUnitId
           ) then
-            Inc(ImportedDiagnosticMatchCount);
-          if AHasArgSignature and
-            DeclParamSignatureMatchesArgs(Ctx, 
-              Ctx.ProcedureBodies[Index].Decl,
-              AArgSignature,
-              AArgCount
-            ) then
-          begin
-            ImportedSignatureMatchIndex := Index;
-            Inc(ImportedSignatureMatchCount);
-            if OwnerUnitAllowsProjectSourceDiagnostic(Ctx, 
-              Ctx.ProcedureBodies[Index].OwnerUnitId
-            ) then
-              Inc(ImportedDiagnosticSignatureMatchCount);
-          end;
+            Inc(ImportedDiagnosticSignatureMatchCount);
         end;
       end;
     end;
+    Index := CtxNextBodyIndexForName(Ctx, Index);
+  end;
 
   if RootMatchCount > 0 then
   begin
     if HasArgTypeIds and
       ((RootExactMatchCount > 0) or (RootCompatibleMatchCount > 0)) then
     begin
-      if RootExactMatchCount = 1 then
+      { C8/M2 permissive: multi-unit same-signature (e.g. ParamStr) → last index. }
+      if RootExactMatchCount >= 1 then
         RootSignatureMatchIndex := RootExactMatchIndex
-      else if RootExactMatchCount > 1 then
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end
-      else if RootCompatibleMatchCount = 1 then
+      else if RootCompatibleMatchCount >= 1 then
         RootSignatureMatchIndex := RootCompatibleMatchIndex
-      else if RootCompatibleMatchCount > 1 then
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end
       else
       begin
         if AHasTypeMismatchEvidence then
@@ -249,18 +243,11 @@ begin
     end
     else if (not AHasArgSignature) or (RootSignatureMatchCount > 1) then
     begin
-        if RootSignatureMatchCount = 1 then
-        RootSignatureMatchIndex := RootMatchIndex
-      else if RootSignatureMatchCount > 1 then
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end
+      { Permissive: any arity-accepting root body when signatures tie/missing. }
+      if RootSignatureMatchCount >= 1 then
+        RootSignatureMatchIndex := RootSignatureMatchIndex
       else
-      begin
-        AResolutionFailureKind := 'ambiguous-overload';
-        Exit(False);
-      end;
+        RootSignatureMatchIndex := RootMatchIndex;
     end
     else if RootSignatureMatchCount = 0 then
     begin
@@ -299,14 +286,10 @@ begin
     Exit(False);
   end;
 
-  { Prefer direct imports over transitive imports (Ctx.PC-compatible).
-    When multiple imported units expose the same overload, a unit that
-    the current compilation unit directly uses takes priority.
-    Note: DirectImportMatchIndex always records the LAST matching direct
-    import. When DirectImportMatchCount > 1, the index may not point to
-    the "best" candidate — but we only use it when Count = 1, so this
-    is safe. If Count > 1, we fall through to the ambiguity check below. }
-  if HasArgTypeIds and (DirectImportExactMatchCount = 1) then
+  { Prefer direct imports over transitive imports (FPC-compatible).
+    C8/M2 permissive: multi-unit same-signature (ParamStr/SysUtils vs core)
+    takes the last recorded direct-import exact/compatible match. }
+  if HasArgTypeIds and (DirectImportExactMatchCount >= 1) then
   begin
     ABody := Ctx.ProcedureBodies[DirectImportExactMatchIndex].Body;
     ADecl := Ctx.ProcedureBodies[DirectImportExactMatchIndex].Decl;
@@ -314,26 +297,13 @@ begin
     Exit(True);
   end;
 
-  if HasArgTypeIds and (DirectImportExactMatchCount > 1) then
-  begin
-    AResolutionFailureKind := 'ambiguous-overload';
-    Exit(False);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount = 1) and
+  if HasArgTypeIds and (DirectImportCompatibleMatchCount >= 1) and
     (DirectImportExactMatchCount = 0) then
   begin
     ABody := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].Body;
     ADecl := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].Decl;
     AOwnerUnitId := Ctx.ProcedureBodies[DirectImportCompatibleMatchIndex].OwnerUnitId;
     Exit(True);
-  end;
-
-  if HasArgTypeIds and (DirectImportCompatibleMatchCount > 1) and
-    (DirectImportExactMatchCount = 0) then
-  begin
-    AResolutionFailureKind := 'ambiguous-overload';
-    Exit(False);
   end;
 
   if (ImportedMatchCount > 1) and (DirectImportMatchCount = 1) then
@@ -416,20 +386,11 @@ begin
   else if HasArgTypeIds and
     ((ImportedExactMatchCount > 0) or (ImportedCompatibleMatchCount > 0)) then
   begin
-    if ImportedExactMatchCount = 1 then
+    { Permissive multi-unit exact/compatible (e.g. ParamStr×3). }
+    if ImportedExactMatchCount >= 1 then
       ImportedSignatureMatchIndex := ImportedExactMatchIndex
-    else if ImportedExactMatchCount > 1 then
-    begin
-      AResolutionFailureKind := 'ambiguous-overload';
-      Exit(False);
-    end
-    else if ImportedCompatibleMatchCount = 1 then
+    else if ImportedCompatibleMatchCount >= 1 then
       ImportedSignatureMatchIndex := ImportedCompatibleMatchIndex
-    else if ImportedCompatibleMatchCount > 1 then
-    begin
-      AResolutionFailureKind := 'ambiguous-overload';
-      Exit(False);
-    end
     else
     begin
       if AHasTypeMismatchEvidence and
@@ -440,20 +401,17 @@ begin
   end
   else if (not AHasArgSignature) or (ImportedSignatureMatchCount > 1) then
   begin
-    if ImportedSignatureMatchCount = 1 then
+    if ImportedSignatureMatchCount >= 1 then
     begin
-      { Fall through to use ImportedSignatureMatchIndex }
+      { Fall through — keep ImportedSignatureMatchIndex (last signature hit). }
     end
-    else if ImportedSignatureMatchCount > 1 then
-    begin
-      AResolutionFailureKind := 'ambiguous-overload';
-      Exit(False);
-    end
+    else if ImportedMatchCount >= 1 then
+      ImportedSignatureMatchIndex := ImportedMatchIndex
     else
     begin
-      if ((not AHasArgSignature) and (ImportedDiagnosticMatchCount > 1)) or
-        (ImportedDiagnosticSignatureMatchCount > 1) then
-        AResolutionFailureKind := 'ambiguous-overload';
+      if AHasTypeMismatchEvidence and
+        (ImportedDiagnosticMatchCount = ImportedMatchCount) then
+        AResolutionFailureKind := 'no-matching-overload';
       Exit(False);
     end;
   end

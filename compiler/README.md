@@ -29,6 +29,9 @@
 
 ## 当前已经落地的最小 skeleton
 
+**生产代码生成路径（M2 L3 / gen-B 正确性）**：Typed HIR → LLVM IR（`compiler/ir/np_hir_llvm_emitter*`）→ `opt` / `llc` / `ld`。
+**MIR + backend plan 为 experimental skeleton**：会话里会创建并投影计数，**不**作为 A→B closed 或优化正确性证据；在显式开关 + golden 之前不得把 gen-B 正确性绑到 MIR pass 族（见 findings F-012 / Wave0 冻结）。
+
 `Batch 3/4/5/6/7` 已经把最小但真实的 compiler session、syntax front、unit resolution、
 semantic model，以及 `Typed HIR -> MIR -> backend plan` skeleton 落进仓库：
 

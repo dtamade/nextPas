@@ -56,12 +56,18 @@ begin
           Result := Result + 'f'
         else if SameText(TypeName, 'integer') or SameText(TypeName, 'longint') or
           SameText(TypeName, 'longword') or SameText(TypeName, 'cardinal') or
-          SameText(TypeName, 'smallint') or SameText(TypeName, 'word') or
-          SameText(TypeName, 'byte') or SameText(TypeName, 'shortint') or
-          SameText(TypeName, 'int64') or SameText(TypeName, 'qword') or
-          SameText(TypeName, 'uint64') or SameText(TypeName, 'sizeint') or
-          SameText(TypeName, 'sizeuint') or SameText(TypeName, 'uint32') or
-          SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') then
+          SameText(TypeName, 'dword') or SameText(TypeName, 'smallint') or
+          SameText(TypeName, 'word') or SameText(TypeName, 'byte') or
+          SameText(TypeName, 'shortint') or SameText(TypeName, 'int64') or
+          SameText(TypeName, 'qword') or SameText(TypeName, 'uint64') or
+          SameText(TypeName, 'sizeint') or SameText(TypeName, 'sizeuint') or
+          SameText(TypeName, 'uint32') or SameText(TypeName, 'int32') or
+          SameText(TypeName, 'uint16') or SameText(TypeName, 'uint8') or
+          SameText(TypeName, 'int16') or SameText(TypeName, 'int8') or
+          SameText(TypeName, 'ptruint') or SameText(TypeName, 'ptrint') or
+          SameText(TypeName, 'nativeint') or SameText(TypeName, 'nativeuint') or
+          SameText(TypeName, 'char') or SameText(TypeName, 'ansichar') or
+          SameText(TypeName, 'widechar') then
           Result := Result + 'i'
         else if (TypeChild <> nil) then
         begin
@@ -565,12 +571,18 @@ begin
     Exit('b');
   if SameText(TypeName, 'Integer') or SameText(TypeName, 'LongInt') or
     SameText(TypeName, 'LongWord') or SameText(TypeName, 'Cardinal') or
-    SameText(TypeName, 'SmallInt') or SameText(TypeName, 'Word') or
-    SameText(TypeName, 'Byte') or SameText(TypeName, 'ShortInt') or
-    SameText(TypeName, 'Int64') or SameText(TypeName, 'QWord') or
-    SameText(TypeName, 'UInt64') or SameText(TypeName, 'SizeInt') or
-    SameText(TypeName, 'SizeUInt') or SameText(TypeName, 'UInt32') or
-    SameText(TypeName, 'PtrUInt') or SameText(TypeName, 'PtrInt') then
+    SameText(TypeName, 'DWord') or SameText(TypeName, 'SmallInt') or
+    SameText(TypeName, 'Word') or SameText(TypeName, 'Byte') or
+    SameText(TypeName, 'ShortInt') or SameText(TypeName, 'Int64') or
+    SameText(TypeName, 'QWord') or SameText(TypeName, 'UInt64') or
+    SameText(TypeName, 'SizeInt') or SameText(TypeName, 'SizeUInt') or
+    SameText(TypeName, 'UInt32') or SameText(TypeName, 'Int32') or
+    SameText(TypeName, 'UInt16') or SameText(TypeName, 'UInt8') or
+    SameText(TypeName, 'Int16') or SameText(TypeName, 'Int8') or
+    SameText(TypeName, 'PtrUInt') or SameText(TypeName, 'PtrInt') or
+    SameText(TypeName, 'NativeInt') or SameText(TypeName, 'NativeUInt') or
+    SameText(TypeName, 'Char') or SameText(TypeName, 'AnsiChar') or
+    SameText(TypeName, 'WideChar') then
     Exit('i');
   if Ctx.Model.GetTypeScalarFact(ATypeId, Fact) and (Fact.Kind = sskPointer) then
     Exit('p');

@@ -8,118 +8,392 @@ begin
   Result := IsIdentifierStart(AChar) or (AChar in ['0'..'9']);
 end;
 
+function KeywordCharLower(const AChar: Char): Char; inline;
+begin
+  if (AChar >= 'A') and (AChar <= 'Z') then
+    Result := Char(Ord(AChar) + 32)
+  else
+    Result := AChar;
+end;
+
+{ Case-insensitive equality vs a lowercase keyword; no heap allocation. }
+function KeywordEquals(const ALexeme, AKeyword: string): Boolean; inline;
+var
+  Index: SizeInt;
+  N: SizeInt;
+begin
+  N := Length(AKeyword);
+  if Length(ALexeme) <> N then
+    Exit(False);
+  for Index := 1 to N do
+    if KeywordCharLower(ALexeme[Index]) <> AKeyword[Index] then
+      Exit(False);
+  Result := True;
+end;
+
 function ResolveIdentifierKind(const ALexeme: string): TTokenKind;
 var
-  Lowered: string;
+  Len: SizeInt;
+  First: Char;
 begin
-  Lowered := LowerCase(ALexeme);
-  case Lowered of
-    'program': Exit(tkProgramKeyword);
-    'unit': Exit(tkUnitKeyword);
-    'library': Exit(tkLibraryKeyword);
-    'package': Exit(tkPackageKeyword);
-    'uses': Exit(tkUsesKeyword);
-    'interface': Exit(tkInterfaceKeyword);
-    'implementation': Exit(tkImplementationKeyword);
-    'procedure': Exit(tkProcedureKeyword);
-    'function': Exit(tkFunctionKeyword);
-    'external': Exit(tkExternalKeyword);
-    'cdecl': Exit(tkCdeclKeyword);
-    'begin': Exit(tkBeginKeyword);
-    'end': Exit(tkEndKeyword);
-    'if': Exit(tkIfKeyword);
-    'then': Exit(tkThenKeyword);
-    'else': Exit(tkElseKeyword);
-    'otherwise': Exit(tkElseKeyword); { FPC 兼容: otherwise = else 的 case 别名 }
-    'while': Exit(tkWhileKeyword);
-    'do': Exit(tkDoKeyword);
-    'for': Exit(tkForKeyword);
-    'to': Exit(tkToKeyword);
-    'downto': Exit(tkDownToKeyword);
-    'repeat': Exit(tkRepeatKeyword);
-    'until': Exit(tkUntilKeyword);
-    'with': Exit(tkWithKeyword);
-    'case': Exit(tkCaseKeyword);
-    'of': Exit(tkOfKeyword);
-    'goto': Exit(tkGotoKeyword);
-    'break': Exit(tkBreakKeyword);
-    'continue': Exit(tkContinueKeyword);
-    'exit': Exit(tkExitKeyword);
-    'var': Exit(tkVarKeyword);
-    'const': Exit(tkConstKeyword);
-    'constref': Exit(tkConstRefKeyword);
-    'type': Exit(tkTypeKeyword);
-    'array': Exit(tkArrayKeyword);
-    'set': Exit(tkSetKeyword);
-    'record': Exit(tkRecordKeyword);
-    'string': Exit(tkStringKeyword);
-    'class': Exit(tkClassKeyword);
-    'object': Exit(tkObjectKeyword);
-    'constructor': Exit(tkConstructorKeyword);
-    'destructor': Exit(tkDestructorKeyword);
-    'property': Exit(tkPropertyKeyword);
-    'initialization': Exit(tkInitializationKeyword);
-    'finalization': Exit(tkFinalizationKeyword);
-    'exports': Exit(tkExportsKeyword);
-    'label': Exit(tkLabelKeyword);
-    'threadvar': Exit(tkThreadVarKeyword);
-    'published': Exit(tkPublishedKeyword);
-    'public': Exit(tkPublicKeyword);
-    'private': Exit(tkPrivateKeyword);
-    'protected': Exit(tkProtectedKeyword);
-    'virtual': Exit(tkVirtualKeyword);
-    'override': Exit(tkOverrideKeyword);
-    'abstract': Exit(tkAbstractKeyword);
-    'reintroduce': Exit(tkReintroduceKeyword);
-    'overload': Exit(tkOverloadKeyword);
-    'dynamic': Exit(tkDynamicKeyword);
-    'message': Exit(tkMessageKeyword);
-    'static': Exit(tkStaticKeyword);
-    'inline': Exit(tkInlineKeyword);
-    'forward': Exit(tkForwardKeyword);
-    'deprecated': Exit(tkDeprecatedKeyword);
-    'platform': Exit(tkPlatformKeyword);
-    'experimental': Exit(tkExperimentalKeyword);
-    'stdcall': Exit(tkStdCallKeyword);
-    'safecall': Exit(tkSafeCallKeyword);
-    'register': Exit(tkRegisterKeyword);
-    'pascal': Exit(tkPascalKeyword);
-    'far': Exit(tkFarKeyword);
-    'near': Exit(tkNearKeyword);
-    'cppdecl': Exit(tkCppDeclKeyword);
-    'varargs': Exit(tkVarArgsKeyword);
-    'out': Exit(tkOutKeyword);
-    'absolute': Exit(tkAbsoluteKeyword);
-    'asm': Exit(tkAsmKeyword);
-    'and': Exit(tkAndKeyword);
-    'or': Exit(tkOrKeyword);
-    'not': Exit(tkNotKeyword);
-    'xor': Exit(tkXorKeyword);
-    'shl': Exit(tkShlKeyword);
-    'shr': Exit(tkShrKeyword);
-    'div': Exit(tkDivKeyword);
-    'mod': Exit(tkModKeyword);
-    'in': Exit(tkInKeyword);
-    'is': Exit(tkIsKeyword);
-    'as': Exit(tkAsKeyword);
-    'nil': Exit(tkNilKeyword);
-    'raise': Exit(tkRaiseKeyword);
-    'try': Exit(tkTryKeyword);
-    'except': Exit(tkExceptKeyword);
-    'finally': Exit(tkFinallyKeyword);
-    'on': Exit(tkOnKeyword);
-    'inherited': Exit(tkInheritedKeyword);
-    'self': Exit(tkSelfKeyword);
-    'file': Exit(tkFileKeyword);
-    'resourcestring': Exit(tkResourceStringKeyword);
-    'strict': Exit(tkStrictKeyword);
-    'operator': Exit(tkOperatorKeyword);
-    'generic': Exit(tkGenericKeyword);
-    'specialize': Exit(tkSpecializeKeyword);
-    'reference': Exit(tkReferenceKeyword);
-    'packed': Exit(tkPackedKeyword);
-    'contains': Exit(tkContainsKeyword);
-    'requires': Exit(tkRequiresKeyword);
+  Len := Length(ALexeme);
+  { Shortest keyword length 2 ("if"), longest 14 ("implementation"). }
+  if (Len < 2) or (Len > 14) then
+    Exit(tkIdentifier);
+  First := KeywordCharLower(ALexeme[1]);
+  case Len of
+    2:
+      case First of
+        'a':
+          begin
+            if KeywordEquals(ALexeme, 'as') then Exit(tkAsKeyword);
+          end;
+        'd':
+          begin
+            if KeywordEquals(ALexeme, 'do') then Exit(tkDoKeyword);
+          end;
+        'i':
+          begin
+            if KeywordEquals(ALexeme, 'if') then Exit(tkIfKeyword);
+            if KeywordEquals(ALexeme, 'in') then Exit(tkInKeyword);
+            if KeywordEquals(ALexeme, 'is') then Exit(tkIsKeyword);
+          end;
+        'o':
+          begin
+            if KeywordEquals(ALexeme, 'of') then Exit(tkOfKeyword);
+            if KeywordEquals(ALexeme, 'or') then Exit(tkOrKeyword);
+            if KeywordEquals(ALexeme, 'on') then Exit(tkOnKeyword);
+          end;
+        't':
+          begin
+            if KeywordEquals(ALexeme, 'to') then Exit(tkToKeyword);
+          end;
+      end;
+    3:
+      case First of
+        'a':
+          begin
+            if KeywordEquals(ALexeme, 'asm') then Exit(tkAsmKeyword);
+            if KeywordEquals(ALexeme, 'and') then Exit(tkAndKeyword);
+          end;
+        'd':
+          begin
+            if KeywordEquals(ALexeme, 'div') then Exit(tkDivKeyword);
+          end;
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'end') then Exit(tkEndKeyword);
+          end;
+        'f':
+          begin
+            if KeywordEquals(ALexeme, 'for') then Exit(tkForKeyword);
+            if KeywordEquals(ALexeme, 'far') then Exit(tkFarKeyword);
+          end;
+        'm':
+          begin
+            if KeywordEquals(ALexeme, 'mod') then Exit(tkModKeyword);
+          end;
+        'n':
+          begin
+            if KeywordEquals(ALexeme, 'not') then Exit(tkNotKeyword);
+            if KeywordEquals(ALexeme, 'nil') then Exit(tkNilKeyword);
+          end;
+        'o':
+          begin
+            if KeywordEquals(ALexeme, 'out') then Exit(tkOutKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'set') then Exit(tkSetKeyword);
+            if KeywordEquals(ALexeme, 'shl') then Exit(tkShlKeyword);
+            if KeywordEquals(ALexeme, 'shr') then Exit(tkShrKeyword);
+          end;
+        't':
+          begin
+            if KeywordEquals(ALexeme, 'try') then Exit(tkTryKeyword);
+          end;
+        'v':
+          begin
+            if KeywordEquals(ALexeme, 'var') then Exit(tkVarKeyword);
+          end;
+        'x':
+          begin
+            if KeywordEquals(ALexeme, 'xor') then Exit(tkXorKeyword);
+          end;
+      end;
+    4:
+      case First of
+        'c':
+          begin
+            if KeywordEquals(ALexeme, 'case') then Exit(tkCaseKeyword);
+          end;
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'else') then Exit(tkElseKeyword);
+            if KeywordEquals(ALexeme, 'exit') then Exit(tkExitKeyword);
+          end;
+        'f':
+          begin
+            if KeywordEquals(ALexeme, 'file') then Exit(tkFileKeyword);
+          end;
+        'g':
+          begin
+            if KeywordEquals(ALexeme, 'goto') then Exit(tkGotoKeyword);
+          end;
+        'n':
+          begin
+            if KeywordEquals(ALexeme, 'near') then Exit(tkNearKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'self') then Exit(tkSelfKeyword);
+          end;
+        't':
+          begin
+            if KeywordEquals(ALexeme, 'then') then Exit(tkThenKeyword);
+            if KeywordEquals(ALexeme, 'type') then Exit(tkTypeKeyword);
+          end;
+        'u':
+          begin
+            if KeywordEquals(ALexeme, 'unit') then Exit(tkUnitKeyword);
+            if KeywordEquals(ALexeme, 'uses') then Exit(tkUsesKeyword);
+          end;
+        'w':
+          begin
+            if KeywordEquals(ALexeme, 'with') then Exit(tkWithKeyword);
+          end;
+      end;
+    5:
+      case First of
+        'a':
+          begin
+            if KeywordEquals(ALexeme, 'array') then Exit(tkArrayKeyword);
+          end;
+        'b':
+          begin
+            if KeywordEquals(ALexeme, 'begin') then Exit(tkBeginKeyword);
+            if KeywordEquals(ALexeme, 'break') then Exit(tkBreakKeyword);
+          end;
+        'c':
+          begin
+            if KeywordEquals(ALexeme, 'cdecl') then Exit(tkCdeclKeyword);
+            if KeywordEquals(ALexeme, 'const') then Exit(tkConstKeyword);
+            if KeywordEquals(ALexeme, 'class') then Exit(tkClassKeyword);
+          end;
+        'l':
+          begin
+            if KeywordEquals(ALexeme, 'label') then Exit(tkLabelKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'raise') then Exit(tkRaiseKeyword);
+          end;
+        'u':
+          begin
+            if KeywordEquals(ALexeme, 'until') then Exit(tkUntilKeyword);
+          end;
+        'w':
+          begin
+            if KeywordEquals(ALexeme, 'while') then Exit(tkWhileKeyword);
+          end;
+      end;
+    6:
+      case First of
+        'd':
+          begin
+            if KeywordEquals(ALexeme, 'downto') then Exit(tkDownToKeyword);
+          end;
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'except') then Exit(tkExceptKeyword);
+          end;
+        'i':
+          begin
+            if KeywordEquals(ALexeme, 'inline') then Exit(tkInlineKeyword);
+          end;
+        'o':
+          begin
+            if KeywordEquals(ALexeme, 'object') then Exit(tkObjectKeyword);
+          end;
+        'p':
+          begin
+            if KeywordEquals(ALexeme, 'public') then Exit(tkPublicKeyword);
+            if KeywordEquals(ALexeme, 'pascal') then Exit(tkPascalKeyword);
+            if KeywordEquals(ALexeme, 'packed') then Exit(tkPackedKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'repeat') then Exit(tkRepeatKeyword);
+            if KeywordEquals(ALexeme, 'record') then Exit(tkRecordKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'string') then Exit(tkStringKeyword);
+            if KeywordEquals(ALexeme, 'static') then Exit(tkStaticKeyword);
+            if KeywordEquals(ALexeme, 'strict') then Exit(tkStrictKeyword);
+          end;
+      end;
+    7:
+      case First of
+        'c':
+          begin
+            if KeywordEquals(ALexeme, 'cppdecl') then Exit(tkCppDeclKeyword);
+          end;
+        'd':
+          begin
+            if KeywordEquals(ALexeme, 'dynamic') then Exit(tkDynamicKeyword);
+          end;
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'exports') then Exit(tkExportsKeyword);
+          end;
+        'f':
+          begin
+            if KeywordEquals(ALexeme, 'forward') then Exit(tkForwardKeyword);
+            if KeywordEquals(ALexeme, 'finally') then Exit(tkFinallyKeyword);
+          end;
+        'g':
+          begin
+            if KeywordEquals(ALexeme, 'generic') then Exit(tkGenericKeyword);
+          end;
+        'l':
+          begin
+            if KeywordEquals(ALexeme, 'library') then Exit(tkLibraryKeyword);
+          end;
+        'm':
+          begin
+            if KeywordEquals(ALexeme, 'message') then Exit(tkMessageKeyword);
+          end;
+        'p':
+          begin
+            if KeywordEquals(ALexeme, 'program') then Exit(tkProgramKeyword);
+            if KeywordEquals(ALexeme, 'package') then Exit(tkPackageKeyword);
+            if KeywordEquals(ALexeme, 'private') then Exit(tkPrivateKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'stdcall') then Exit(tkStdCallKeyword);
+          end;
+        'v':
+          begin
+            if KeywordEquals(ALexeme, 'virtual') then Exit(tkVirtualKeyword);
+            if KeywordEquals(ALexeme, 'varargs') then Exit(tkVarArgsKeyword);
+          end;
+      end;
+    8:
+      case First of
+        'a':
+          begin
+            if KeywordEquals(ALexeme, 'abstract') then Exit(tkAbstractKeyword);
+            if KeywordEquals(ALexeme, 'absolute') then Exit(tkAbsoluteKeyword);
+          end;
+        'c':
+          begin
+            if KeywordEquals(ALexeme, 'continue') then Exit(tkContinueKeyword);
+            if KeywordEquals(ALexeme, 'constref') then Exit(tkConstRefKeyword);
+            if KeywordEquals(ALexeme, 'contains') then Exit(tkContainsKeyword);
+          end;
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'external') then Exit(tkExternalKeyword);
+          end;
+        'f':
+          begin
+            if KeywordEquals(ALexeme, 'function') then Exit(tkFunctionKeyword);
+          end;
+        'o':
+          begin
+            if KeywordEquals(ALexeme, 'override') then Exit(tkOverrideKeyword);
+            if KeywordEquals(ALexeme, 'overload') then Exit(tkOverloadKeyword);
+            if KeywordEquals(ALexeme, 'operator') then Exit(tkOperatorKeyword);
+          end;
+        'p':
+          begin
+            if KeywordEquals(ALexeme, 'property') then Exit(tkPropertyKeyword);
+            if KeywordEquals(ALexeme, 'platform') then Exit(tkPlatformKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'register') then Exit(tkRegisterKeyword);
+            if KeywordEquals(ALexeme, 'requires') then Exit(tkRequiresKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'safecall') then Exit(tkSafeCallKeyword);
+          end;
+      end;
+    9:
+      case First of
+        'i':
+          begin
+            if KeywordEquals(ALexeme, 'interface') then Exit(tkInterfaceKeyword);
+            if KeywordEquals(ALexeme, 'inherited') then Exit(tkInheritedKeyword);
+          end;
+        'o':
+          begin
+            if KeywordEquals(ALexeme, 'otherwise') then Exit(tkElseKeyword);
+          end;
+        'p':
+          begin
+            if KeywordEquals(ALexeme, 'procedure') then Exit(tkProcedureKeyword);
+            if KeywordEquals(ALexeme, 'published') then Exit(tkPublishedKeyword);
+            if KeywordEquals(ALexeme, 'protected') then Exit(tkProtectedKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'reference') then Exit(tkReferenceKeyword);
+          end;
+        't':
+          begin
+            if KeywordEquals(ALexeme, 'threadvar') then Exit(tkThreadVarKeyword);
+          end;
+      end;
+    10:
+      case First of
+        'd':
+          begin
+            if KeywordEquals(ALexeme, 'destructor') then Exit(tkDestructorKeyword);
+            if KeywordEquals(ALexeme, 'deprecated') then Exit(tkDeprecatedKeyword);
+          end;
+        's':
+          begin
+            if KeywordEquals(ALexeme, 'specialize') then Exit(tkSpecializeKeyword);
+          end;
+      end;
+    11:
+      case First of
+        'c':
+          begin
+            if KeywordEquals(ALexeme, 'constructor') then Exit(tkConstructorKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'reintroduce') then Exit(tkReintroduceKeyword);
+          end;
+      end;
+    12:
+      case First of
+        'e':
+          begin
+            if KeywordEquals(ALexeme, 'experimental') then Exit(tkExperimentalKeyword);
+          end;
+        'f':
+          begin
+            if KeywordEquals(ALexeme, 'finalization') then Exit(tkFinalizationKeyword);
+          end;
+      end;
+    14:
+      case First of
+        'i':
+          begin
+            if KeywordEquals(ALexeme, 'implementation') then Exit(tkImplementationKeyword);
+            if KeywordEquals(ALexeme, 'initialization') then Exit(tkInitializationKeyword);
+          end;
+        'r':
+          begin
+            if KeywordEquals(ALexeme, 'resourcestring') then Exit(tkResourceStringKeyword);
+          end;
+      end;
   end;
   Result := tkIdentifier;
 end;

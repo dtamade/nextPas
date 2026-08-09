@@ -69,6 +69,8 @@ type
       const AName: string);
     HasOverload: function(const ACtx: Pointer;
       const AName: string): Boolean;
+    EffectiveRuntimeCalleeName: function(const ACtx: Pointer;
+      const AName: string): string;
     EmitSemaError: procedure(const ACtx: Pointer;
       const ACode, AMessage: string; const AByteOffset: LongInt);
     EncodeRuntimeIntExprFold: function(const ACtx: Pointer;

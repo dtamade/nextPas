@@ -1,13 +1,20 @@
 function TSemanticModel.FindSymbolInScope(const AName: string;
   const AScopeId: LongInt): LongInt;
 var
-  I: LongInt;
+  SymbolId: LongInt;
 begin
-  for I := 0 to LongInt(FSymbols.Count) - 1 do
-    if (FSymbols[SizeUInt(I)].ScopeId = AScopeId) and
-      SameText(FSymbols[SizeUInt(I)].Name, AName) then
-      Exit(FSymbols[SizeUInt(I)].SymbolId);
+  { Name-chain O(overloads), not O(all symbols). Chain is newest→oldest;
+    overwrite so final hit matches old ascending-index first-match (oldest). }
   Result := 0;
+  if AName = '' then
+    Exit;
+  SymbolId := FirstSymbolIdByName(AName);
+  while SymbolId > 0 do
+  begin
+    if FSymbols[SizeUInt(SymbolId - 1)].ScopeId = AScopeId then
+      Result := SymbolId;
+    SymbolId := NextSymbolIdSameName(SymbolId);
+  end;
 end;
 
 function TSemanticModel.LookupSymbol(const AName: string;
@@ -15,6 +22,7 @@ function TSemanticModel.LookupSymbol(const AName: string;
 var
   CurrentScope: LongInt;
   Idx: LongInt;
+  SymbolId: LongInt;
 begin
   CurrentScope := AStartScopeId;
   while CurrentScope > 0 do
@@ -28,11 +36,17 @@ begin
     else
       CurrentScope := 0;
   end;
-  for Idx := 0 to LongInt(FSymbols.Count) - 1 do
-    if (FSymbols[SizeUInt(Idx)].ScopeId = 0) and
-      SameText(FSymbols[SizeUInt(Idx)].Name, AName) then
-      Exit(FSymbols[SizeUInt(Idx)].SymbolId);
+  { ScopeId=0 fallback: same name-chain, oldest-wins. }
   Result := 0;
+  if AName = '' then
+    Exit;
+  SymbolId := FirstSymbolIdByName(AName);
+  while SymbolId > 0 do
+  begin
+    if FSymbols[SizeUInt(SymbolId - 1)].ScopeId = 0 then
+      Result := SymbolId;
+    SymbolId := NextSymbolIdSameName(SymbolId);
+  end;
 end;
 
 function TSemanticModel.LookupSymbolWithImports(const AName: string;

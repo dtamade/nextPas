@@ -6,7 +6,9 @@ unit np_workspace_model;
 interface
 
 uses
-  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  { text.conv + base only: full nextpas.core.text facade pulls unicode tables and
+    explodes under A+LLVM self-compile (multi-GB / multi-minute). }
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.exception,
   nextpas.core.collections.vec,
   np_package_manifest;
@@ -108,7 +110,11 @@ begin
     if AValues[SizeUInt(Index)] = AValue then
       Exit;
 
-  AValues.Push(AValue);
+  { EnsureCapacity + PushUnchecked: TVec.Push single-element overloads are
+    ambiguous under nextPas sema (open-array vs element). PushUnchecked does
+    not grow — capacity must be reserved first. }
+  AValues.EnsureCapacity(AValues.Count + 1);
+  AValues.PushUnchecked(AValue);
 end;
 
 function IsAbsolutePath(const APath: string): Boolean;
@@ -446,7 +452,8 @@ begin
 
     if Result.FPackageRefs = nil then
       Result.FPackageRefs := TPackageRefVec.Create;
-    Result.FPackageRefs.Push(PackageRef);
+    Result.FPackageRefs.EnsureCapacity(Result.FPackageRefs.Count + 1);
+    Result.FPackageRefs.PushUnchecked(PackageRef);
   end;
 
   if Length(PackageInfos) > 0 then
@@ -467,7 +474,8 @@ begin
   );
   for Index := 0 to Length(RootInfos) - 1 do
   begin
-    Result.FProjectUnitRootInfos.Push(RootInfos[Index]);
+    Result.FProjectUnitRootInfos.EnsureCapacity(Result.FProjectUnitRootInfos.Count + 1);
+    Result.FProjectUnitRootInfos.PushUnchecked(RootInfos[Index]);
     AppendUniqueRoot(
       Result.FProjectUnitRoots,
       RootInfos[Index].RootPath

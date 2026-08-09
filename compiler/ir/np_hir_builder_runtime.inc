@@ -90,6 +90,9 @@ var
   OwnsObjectFreeDestroy, OwnsObjectFreeHeapRelease: Boolean;
   ObjectFreeCleanupClass: string;
   ExprResult: THIRExprResult;
+  SemaTypeId: LongInt;
+  Fact: TSemanticScalarTypeFact;
+  TargetHirType, SourceHirType: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -134,6 +137,42 @@ begin
     LowerExprValue(ANode.ExprId, ExprResult) then
     Exit;
 
+  { Type-name call-runtime: TypeName(Arg) is a cast, never call @TypeName. }
+  if (not OwnsObjectFreeDestroy) and (FuncName <> '') and (FSemaModel <> nil) then
+  begin
+    SemaTypeId := FSemaModel.FindTypeByName(FuncName);
+    if (SemaTypeId > 0) and FSemaModel.GetTypeScalarFact(SemaTypeId, Fact) and
+      (Fact.Kind in [sskBool, sskInt, sskFloat, sskPointer]) then
+    begin
+      TargetHirType := SemanticTypeIdToHirTypeId(SemaTypeId);
+      if TargetHirType = 0 then
+        TargetHirType := GetIntType;
+      { Single residual arg blob after FuncName tab. }
+      if FirstArgBlob <> '' then
+      begin
+        ArgValue := ParseIntExprArg(FirstArgBlob);
+        if ArgValue <> 0 then
+        begin
+          SourceHirType := GetIntType;
+          if (Length(FirstArgBlob) > 4) and (Copy(FirstArgBlob, 1, 4) = 'var ') then
+          begin
+            FirstArgName := ExtractVarOperandName(FirstArgBlob);
+            if FindAllocaType(FirstArgName) = GetPtrType then
+              SourceHirType := GetPtrType;
+          end;
+          ArgValue := NormalizeScalarValueToType(ArgValue, SourceHirType,
+            TargetHirType);
+          if ArgValue = 0 then
+            Exit;
+          { Value left on stack via side-effect? call-runtime discards result
+            when used as statement; when used as expr, ProcessCall is via
+            ParseIntExprArg 'call' token — handled in EmitExprCall. }
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
   ArgCount := 0;
   SetLength(ArgOps, 0);
   while Rest <> '' do
@@ -172,6 +211,24 @@ begin
           ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
           Inc(ArgCount, 2);
         end;
+      end;
+    end
+    else if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'arrvar ') then
+    begin
+      { open-array formal → (ptr, i32 len); ParseIntExprArg only pops one value }
+      StrVarName := Copy(ArgBlob, 8, Length(ArgBlob));
+      if (Length(StrVarName) > 0) and (StrVarName[Length(StrVarName)] = #10) then
+        StrVarName := Copy(StrVarName, 1, Length(StrVarName) - 1);
+      PtrVal := FindAlloca(StrVarName + '$ptr');
+      LenVal := FindAlloca(StrVarName + '$len');
+      if (PtrVal <> 0) and (LenVal <> 0) then
+      begin
+        PtrVal := EmitLoad(GetPtrType, PtrVal);
+        LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenVal);
+        SetLength(ArgOps, ArgCount + 2);
+        ArgOps[ArgCount] := MakeTypedOperand(PtrVal, GetPtrType);
+        ArgOps[ArgCount + 1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+        Inc(ArgCount, 2);
       end;
     end
     else if (Length(ArgBlob) > 7) and (Copy(ArgBlob, 1, 7) = 'strlit ') then
@@ -476,6 +533,22 @@ var
   Instr: THIRInstr;
   IntrinsicOpName: string;
   IsCas: Boolean;
+  SourceType: THIRTypeId;
+
+  { atomicrmw/cmpxchg operate on i64; pointer-swap call sites (e.g.
+    InterlockedExchange on a head pointer) hand us ptr values — ptrtoint them. }
+  function ToIntOperand(const AValueId: THIRValueId;
+    const ASourceTypeId: THIRTypeId): THIRValueId;
+  begin
+    Result := AValueId;
+    if (AValueId = 0) or (ASourceTypeId = 0) or
+      (ASourceTypeId = GetIntType) then
+      Exit;
+    Result := NormalizeScalarValueToType(AValueId, ASourceTypeId, GetIntType);
+    if Result = 0 then
+      Result := AValueId;
+  end;
+
 begin
   Rest := ANode.Operand;
   TabPos := Pos(#9, Rest);
@@ -499,8 +572,12 @@ begin
     NewValBlob := Trim(Copy(Rest, 1, TabPos - 1));
     CmpValBlob := Trim(Copy(Rest, TabPos + 1, Length(Rest)));
 
-    NewVal := LowerNodeExprOrBlob(ANode, NewValBlob);
-    CmpVal := LowerNodeExprOrBlob(ANode, CmpValBlob);
+    SourceType := 0;
+    NewVal := LowerNodeExprOrBlobTyped(ANode, NewValBlob, SourceType);
+    NewVal := ToIntOperand(NewVal, SourceType);
+    SourceType := 0;
+    CmpVal := LowerNodeExprOrBlobTyped(ANode, CmpValBlob, SourceType);
+    CmpVal := ToIntOperand(CmpVal, SourceType);
     if (NewVal = 0) or (CmpVal = 0) then Exit;
 
     FillChar(Instr, SizeOf(Instr), 0);
@@ -521,7 +598,9 @@ begin
   begin
     { Exchange / FetchAdd: Target #9 Value }
     ArgBlob := Trim(Rest);
-    Addend := LowerNodeExprOrBlob(ANode, ArgBlob);
+    SourceType := 0;
+    Addend := LowerNodeExprOrBlobTyped(ANode, ArgBlob, SourceType);
+    Addend := ToIntOperand(Addend, SourceType);
     if Addend = 0 then Exit;
 
     if ANode.NodeKind = hnkInterlockedXchgRuntime then

@@ -1,5 +1,9 @@
 # Phase 0: 状态真相统一
 
+> **状态：历史快照（2026-07-06）。本表已不再是「冻结权威状态表」。**
+> 当前权威状态见 `PLAN.md` 与
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（2026-07-13 truth reset 后）。
+
 > 日期: 2026-07-06
 > 目的: 冻结权威状态表，消除文档间状态漂移。
 > 决策依据: Codex (gpt-5.6-sol max) 战略审查 + 实际验证。

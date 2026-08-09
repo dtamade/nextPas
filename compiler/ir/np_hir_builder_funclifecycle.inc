@@ -123,6 +123,9 @@ begin
     end
     else if Rest = 'p' then
       FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
+    else if Rest = 'a' then
+      { Dynarray return: local Result is dual-slot; ABI returns the data ptr half. }
+      FCurrentFuncId := FModule.AddFunction(FuncName, GetPtrType)
     else if (Length(Rest) > 1) and (Rest[1] = 'r') then
     begin
       FCurrentFuncId := FModule.AddFunction(FuncName, GetIntType);
@@ -178,6 +181,9 @@ end;
 
 procedure THIRBuilder.ProcessFunctionEnd(const ANode: TTypedHirNode);
 begin
+  FPendingParamCount := 0;
+  FPendingParamLlvmIdx := 0;
+  FSretValueId := 0;
   FCurrentFuncId := FSavedFuncId;
   FCurrentBlockId := FSavedBlockId;
   FEntryBlockId := FSavedEntryBlockId;
@@ -222,12 +228,37 @@ begin
     LParamCount := LSymbol.ParamCount;
   end;
 
-  LFuncId := FModule.AddFunction(LBinding.PascalName, LReturnTypeId);
+  { LLVM symbol is ExternalSymbolName (e.g. getenv); PascalName is lookup key.
+    Prefer ptr return for C string APIs (PChar/PAnsiChar). }
+  if (LSymbol.SymbolId > 0) and (LSymbol.TypeId > 0) then
+  begin
+    { already mapped }
+  end
+  else if SameText(LBinding.ExternalSymbolName, 'getenv') or
+    SameText(LBinding.PascalName, 'getenv') or
+    SameText(LBinding.ExternalSymbolName, 'getcwd') then
+    LReturnTypeId := GetPtrType;
+
+  if (LBinding.ExternalSymbolName <> '') then
+    LFuncId := FModule.AddFunction(LBinding.ExternalSymbolName, LReturnTypeId)
+  else
+    LFuncId := FModule.AddFunction(LBinding.PascalName, LReturnTypeId);
   FModule.SetFunctionExternal(LFuncId, True, LBinding.LibraryId,
     LBinding.ExternalSymbolName);
 
   { Add parameters — use ParamSignature to infer types where possible.
-    'p'→ptr, 's'→string, 'b'→bool, 'r'/'f'/'c'→ptr, 'i'→i64 fallback. }
+    'p'→ptr, 's'→string, 'b'→bool, 'r'/'f'/'c'→ptr, 'i'→i64 fallback.
+    Missing signature: libc-style externals default to ptr args. }
+  if LParamCount <= 0 then
+  begin
+    { getenv(name), getcwd(buf, size): at least one ptr formal }
+    if SameText(LBinding.ExternalSymbolName, 'getenv') or
+      SameText(LBinding.PascalName, 'getenv') then
+      LParamCount := 1
+    else if SameText(LBinding.ExternalSymbolName, 'getcwd') or
+      SameText(LBinding.PascalName, 'getcwd') then
+      LParamCount := 2;
+  end;
   for I := 0 to LParamCount - 1 do
   begin
     if (LSymbol.SymbolId > 0) and (I < Length(LSymbol.ParamSignature)) then
@@ -242,6 +273,6 @@ begin
         FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
       end
     else
-      FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetIntType, False, False);
+      FModule.AddFunctionParam(LFuncId, 'arg' + IntToStr(I), GetPtrType, False, False);
   end;
 end;

@@ -5,7 +5,8 @@ unit np_package_workflow;
 interface
 
 uses
-  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
+  { Avoid nextpas.core.text facade (unicode closure) — Trim/SameText live in conv. }
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
   np_package_manifest, np_package_lock, np_workspace_model;
 
 type
@@ -212,7 +213,7 @@ var
       Exit(True);
 
     for SnapshotIndex := 0 to Length(ALockTruth.Snapshots) - 1 do
-      if nextpas.core.text.SameText(ALockTruth.Snapshots[SnapshotIndex].Target, ATargetId) then
+      if nextpas.core.text.conv.SameText(ALockTruth.Snapshots[SnapshotIndex].Target, ATargetId) then
         Exit(True);
 
     Result := False;

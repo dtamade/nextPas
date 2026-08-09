@@ -209,8 +209,18 @@ var
   IntfPtr, ImtPtr, FnPtr: THIRValueId;
   VcallArgs: array of THIRValueId;
   VcallArgTypes: array of THIRTypeId;
+  RetType: THIRTypeId;
   SlotIdx, SpacePos, ExtraArgCount, VcallI: LongInt;
 begin
+  { Same ' p' ret-ptr flag as EmitExprVcall — interface methods returning
+    ILockGuard/objects must be call ptr, not call i64 (Guard$f store mismatch). }
+  RetType := GetIntType;
+  if (Length(AArg) > 2) and (AArg[Length(AArg)] = 'p') and
+    (AArg[Length(AArg) - 1] = ' ') then
+  begin
+    RetType := GetPtrType;
+    AArg := Copy(AArg, 1, Length(AArg) - 2);
+  end;
   SpacePos := Pos(' ', AArg);
   if SpacePos > 0 then
   begin
@@ -254,7 +264,7 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := RetType;
   Instr.IntrinsicName := 'vcall';
   SetLength(Instr.Operands, 2 + ExtraArgCount);
   Instr.Operands[0] := MakeOperand(FnPtr);
@@ -267,5 +277,8 @@ begin
       Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
   end;
   EmitInstr(Instr);
-  S.Push(Instr.ResultId);
+  if RetType = GetPtrType then
+    S.PushTyped(Instr.ResultId, GetPtrType)
+  else
+    S.Push(Instr.ResultId);
 end;

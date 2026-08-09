@@ -115,7 +115,7 @@ begin
     Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
       TempName);
     Ctx.Model.AddTypedHirNode('string-temp-owned-runtime', LitValue, 0, 0,
-      TempName + #9 + 'callee ' + LitValue + #9 +
+      TempName + #9 + 'callee ' + Ctx.EffectiveRuntimeCalleeName(Ctx.CallbackCtx, LitValue) + #9 +
       'ptr len owner alloc_size');
     Ctx.RuntimeVars.QueuePendingStringTempRelease(TempName, LitValue);
     Exit(TempName);
@@ -266,7 +266,7 @@ begin
     Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
       TempName);
     Ctx.Model.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-      TempName + #9 + 'callee ' + SourceName + #9 +
+      TempName + #9 + 'callee ' + Ctx.EffectiveRuntimeCalleeName(Ctx.CallbackCtx, SourceName) + #9 +
       'ptr len owner alloc_size');
     Ctx.RuntimeVars.QueuePendingStringTempRelease(TempName, SourceName);
     ABlob := 'strvar ' + TempName + #10;

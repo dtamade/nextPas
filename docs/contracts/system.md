@@ -40,7 +40,7 @@ const
 | 单元 | 职责 |
 |------|------|
 | `system.classes` | TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin |
-| `system.sysutils` | SameText/Format/IntToStr/Trim/Exception 别名 |
+| `system.sysutils` | S4 兼容薄门面：SameText/Format/IntToStr/Trim 等 **仅 re-export**；文本实现 owner 为 `nextpas.core.text.conv`；Exception 别名 owner 为 `nextpas.core.exception` |
 | `system.typinfo` | PTypeInfo/TTypeKind/InitializeArray/FinalizeArray/CopyArray |
 | `system.memmanager` | 内存管理器接口 |
 | `system.contracts` | 契约断言（条件编译） |

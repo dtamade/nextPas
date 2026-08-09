@@ -37,9 +37,35 @@ function FindRange32Value(const ACp: TUnicodeCodepoint; const ARanges: array of 
 
 implementation
 
-{ 二分查找模板宏：共享 4 个 FindRange* 的核心逻辑 }
+{ Bodies expanded in-place (no {$I}/IFDEF template). Multi-line DEFINE and
+  include-body were unreliable under nextpas preprocess+green attach, which
+  left bare @FindRange2 / @FindRange3Value residuals on the L3 ladder. }
 
-{$DEFINE FIND_RANGE_BODY:=
+function FindRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Int32;
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp <= ARanges[LMid].Hi then
+    begin
+      if ACp >= ARanges[LMid].Lo then
+        Exit(Int32(LMid));
+      LHi := LMid - 1;
+    end
+    else
+      LLo := LMid + 1;
+  end;
+  Result := -1;
+end;
+
+function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3;
+  out AValue: Byte): Boolean;
 var
   LLo: SizeInt;
   LHi: SizeInt;
@@ -54,40 +80,69 @@ begin
     begin
       if ACp >= ARanges[LMid].Lo then
       begin
-        {$IFDEF FIND_RANGE_RETURN_INDEX}
-          Exit(Int32(LMid));
-        {$ELSE}
-          AValue := ARanges[LMid].Value;
-          Exit(True);
-        {$ENDIF}
+        AValue := ARanges[LMid].Value;
+        Exit(True);
       end;
       LHi := LMid - 1;
     end
     else
       LLo := LMid + 1;
   end;
-  {$IFDEF FIND_RANGE_RETURN_INDEX}
-    Result := -1;
-  {$ELSE}
-    Result := False;
-  {$ENDIF}
-end;}
-
-{$DEFINE FIND_RANGE_RETURN_INDEX}
-function FindRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Int32;
-{$I nextpas.core.text.unicode.base.body.inc}
-{$UNDEF FIND_RANGE_RETURN_INDEX}
-
-function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3;
-  out AValue: Byte): Boolean;
-{$I nextpas.core.text.unicode.base.body.inc}
+  Result := False;
+end;
 
 function FindRange16Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange16;
   out AValue: UInt16): Boolean;
-{$I nextpas.core.text.unicode.base.body.inc}
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp <= ARanges[LMid].Hi then
+    begin
+      if ACp >= ARanges[LMid].Lo then
+      begin
+        AValue := ARanges[LMid].Value;
+        Exit(True);
+      end;
+      LHi := LMid - 1;
+    end
+    else
+      LLo := LMid + 1;
+  end;
+  Result := False;
+end;
 
 function FindRange32Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange32;
   out AValue: UInt32): Boolean;
-{$I nextpas.core.text.unicode.base.body.inc}
+var
+  LLo: SizeInt;
+  LHi: SizeInt;
+  LMid: SizeInt;
+begin
+  LLo := 0;
+  LHi := High(ARanges);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACp <= ARanges[LMid].Hi then
+    begin
+      if ACp >= ARanges[LMid].Lo then
+      begin
+        AValue := ARanges[LMid].Value;
+        Exit(True);
+      end;
+      LHi := LMid - 1;
+    end
+    else
+      LLo := LMid + 1;
+  end;
+  Result := False;
+end;
 
 end.

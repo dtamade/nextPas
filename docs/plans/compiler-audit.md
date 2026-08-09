@@ -4,7 +4,11 @@
 
 # nextPas 编译器完整审计
 
-> **单一真相来源 (Single Source of Truth)**
+> **状态：历史量化审计输入（2026-07-05）。** 按 `PLAN.md` 权威表定位：
+> 本文件是历史审计输入，不单独构成当前完成证明；当前执行顺序见
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`。
+
+> **单一真相来源 (Single Source of Truth)**（限本审计的两份来源文件而言）
 > 本文件合并了 `compiler-findings.md`（36条量化发现）和 `compiler-architecture-critique.md`（架构哲学审视）。
 > 两份旧文件已归档，请只维护这一份。
 >

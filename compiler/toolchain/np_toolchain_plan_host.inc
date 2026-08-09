@@ -179,7 +179,7 @@ begin
       LinkStep,
       LinkerProfile.LibrarySearchFlag + ExpandFileName(RuntimeRootPath)
     );
-    FPlan.AddStepArg(LinkStep, '-lc');
+    AppendDirectLinkLibraryArgs(LinkStep);
   end;
   FPlan.AddStepInput(LinkStep, 'object-file', AObjectPath);
   if HasResolvedLibrary then

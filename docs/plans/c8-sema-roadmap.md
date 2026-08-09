@@ -1,5 +1,8 @@
 # C8 Sema 修复路线图
 
+> **状态：历史快照（C8 时代）。** C8 路线已被 2026-07-13 truth reset 取代；
+> 当前权威路线：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9）。
+
 > Codex 制定 2026-06-27
 
 ## 根因分析

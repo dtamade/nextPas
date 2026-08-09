@@ -49,7 +49,7 @@ begin
   end;
 end;
 
-procedure TestSameTextUsesSystemLocalAsciiFold;
+procedure TestSameTextDelegatesToTextConvOwner;
 begin
   Check(nextpas.core.system.sysutils.SameText('CompilerProc', 'compilerproc'),
     'SameText should satisfy compiler case-insensitive symbol pressure');
@@ -88,7 +88,7 @@ begin
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Test('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Test('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
-  T.Test('SameText uses system-local ASCII fold', @TestSameTextUsesSystemLocalAsciiFold);
+  T.Test('SameText delegates to text conversion owner', @TestSameTextDelegatesToTextConvOwner);
   T.Test('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
   T.Test('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
   if not T.Run then Halt(1);

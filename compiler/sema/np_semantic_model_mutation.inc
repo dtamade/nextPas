@@ -19,6 +19,8 @@ function TSemanticModel.AddSymbol(
 ): LongInt;
 var
   Entry: TSemanticSymbol;
+  Key: string;
+  PrevHead: LongInt;
 begin
   Entry := Default(TSemanticSymbol);
   Entry.SymbolId := LongInt(FSymbols.Count) + 1;
@@ -30,9 +32,14 @@ begin
   Entry.ParamCount := -1;
   Entry.ParamSignature := '';
   Entry.ByteOffset := AByteOffset;
+  Entry.NextSameNameId := 0;
+  Key := LowerCase(AName);
+  if FSymbolNameIndex.TryGetValue(Key, PrevHead) then
+    Entry.NextSameNameId := PrevHead;
   FSymbols.Push(Entry);
   Result := Entry.SymbolId;
-  FSymbolNameIndex.Put(LowerCase(AName), Result);
+  { Newest head — FindSymbolByName keeps last-wins semantics. }
+  FSymbolNameIndex.Put(Key, Result);
 end;
 
 function TSemanticModel.AddType(
@@ -41,15 +48,42 @@ function TSemanticModel.AddType(
 ): LongInt;
 var
   Entry: TSemanticType;
+  PrevId: LongInt;
+  Fact: TSemanticScalarTypeFact;
+  PrevMeta, NewMeta: TTypeMetadata;
 begin
+  { Last-wins name index: unit redefines (PtrUInt=UInt64 etc.) must not drop
+    builtin scalar/layout facts used by SizeOf/High/Low fold. }
+  PrevId := 0;
+  if not FTypeNameIndex.TryGetValue(LowerCase(AName), PrevId) then
+    PrevId := 0;
   Entry := Default(TSemanticType);
   Entry.TypeId := LongInt(FTypes.Count) + 1;
   Entry.Name := AName;
   Entry.Kind := AKind;
   Entry.ParentTypeId := 0;
+  if (PrevId > 0) and (PrevId <= LongInt(FTypes.Count)) then
+    Entry.ParentTypeId := FTypes.GetPtr(SizeUInt(PrevId - 1))^.ParentTypeId;
   FTypes.Push(Entry);
   Result := Entry.TypeId;
   FTypeNameIndex.Put(LowerCase(AName), Result);
+  if (PrevId > 0) and GetTypeScalarFact(PrevId, Fact) then
+    SetTypeScalarFact(Result, Fact.Kind, Fact.BitWidth, Fact.Signed);
+  if (PrevId > 0) and GetTypeMeta(PrevId, PrevMeta) and (PrevMeta.Size > 0) then
+  begin
+    if not GetTypeMeta(Result, NewMeta) then
+    begin
+      FillChar(NewMeta, SizeOf(NewMeta), 0);
+      NewMeta.TypeId := Result;
+    end;
+    if NewMeta.Size <= 0 then
+      NewMeta.Size := PrevMeta.Size;
+    if NewMeta.AliasTargetTypeId <= 0 then
+      NewMeta.AliasTargetTypeId := PrevMeta.AliasTargetTypeId;
+    if (not NewMeta.IsRecord) and PrevMeta.IsRecord then
+      NewMeta.IsRecord := True;
+    SetTypeMeta(Result, NewMeta);
+  end;
 end;
 
 procedure TSemanticModel.SetTypeKind(const ATypeId: LongInt;

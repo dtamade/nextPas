@@ -9,7 +9,8 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.sizeclass,
   nextpas.core.mem.span,
-  nextpas.core.platform.memory;
+  nextpas.core.platform.memory,
+  nextpas.core.platform.thread;
 
 const
   { Default number of slots per span. }
@@ -232,8 +233,8 @@ begin
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
   APool.FEntries[LIdx].FLastFreeTick := 0;
-  { Darwin aarch64 TThreadID is not assignment-compatible with QWord without cast. }
-  APool.FEntries[LIdx].FOwnerThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  { Portable thread id (not Windows GetCurrentThreadId). }
+  APool.FEntries[LIdx].FOwnerThreadId := QWord(platform_thread_id);
   APool.FEntries[LIdx].FDecommitted := False;
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;

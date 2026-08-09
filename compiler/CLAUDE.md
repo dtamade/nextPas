@@ -34,7 +34,9 @@ compiler/
 - 函数不超过 100 行（超过必须拆分）
 
 ### np_semantic_analyzer.pas 治理
-当前 17,678 行。已完成提取:
+主文件已拆薄为 ~584 行门面 + 40 余个 `.inc`/子单元（sema 目录合计 ~26k 行，
+最大热点：`np_sema_walk_halt_calls.inc`、`np_sema_declaration.inc`、`np_sema_codegen.inc`）。
+已完成提取:
 - `np_sema_builtins.pas` — 内置函数注册表 (~500 行) [✅]
 - `np_sema_string_ownership.pas` — 字符串所有权分析 (~836 行) [✅]
 - `np_sema_name_set.pas` — 名称集合查找 (O(log n), ~100 行) [✅]
@@ -52,7 +54,7 @@ compiler/
 ## 质量门禁
 
 ### 提交前必须通过
-1. `make test TEST_FILTER=compiler-pass` — 34/34 pass
+1. `make test TEST_FILTER=compiler-pass` — 全绿（当前基线 53+ fixtures，以 fresh 运行为准）
 2. `make test TEST_FILTER=compiler-fail` — snapshot 匹配
 3. `make hygiene` — 无散落产物
 4. `scripts/rebuild-compiler.sh` — 编译器重建成功
@@ -82,23 +84,44 @@ scripts/rebuild-compiler.sh
 bash scripts/c8_scan.sh
 ```
 
-## 当前状态 (2026-07-05)
+## 当前状态 (2026-07-26)
 
-### 里程碑
-- compiler-pass: 34/34 ✅
-- self-compile: 19/19 ✅
-- C5 `{$IFDEF}` 预处理器支持: ✅ (2026-07-03)
-- C6-H4 owned string return: ✅ (2026-07-03)
-- C7 自举验证: ✅ (2026-07-03)
-- core/ 覆盖率: 963/972 (99.1%) ✅
+> 权威路线：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9）。
+> 状态语言纪律：未通过 promotion gate 的能力只能写 `skeleton` / `experimental` /
+> `integrated`，不能写 `complete` / `production-ready`。
 
-### 残留
-- c2p_win32_compat（平台排除）
-- C7 深化：目标运行时配置、多目标 IR、LLVM O2/LTO
+### 里程碑（M 系列）
+- M0 truth recovery: 🏗️ 进行中（deliverable 4 cache-root 隔离未完成；其余 gate 绿）
+- M1 bootstrap contract: 🏗️ typed families 渐进迁移中（object-free、process init/fini、
+  string triad、dynarray、interface、halt 已由 `TSystemContractKind` 控制；其余 residual 待迁移）
+- M2 两跳自举: 🔴 **当前主战场** — M2-0 harness ✅、M2-1 ladder L0–L2 ✅、
+  M2-2 (L3 = full stage0 driver A→B link) 进行中；卡在 `opt` 阶段 residual
+  undefined symbols（2026-07-26 实测 80 unique / 251 total）。
+  **唯一执行入口：`docs/plans/m2/ROADMAP.md`（咬合队列 B0–B8）**；
+  探针：`scripts/m2-l3-residual.sh`
+- M3+ (kernel/query/parallel/MIR/self-host): 🔲 未开始；slice 9（M2 闭合）之前禁止启动
 
-### 主要债务
-- sema 主文件 12,175 行（已从 17,735 行拆分），需继续拆分（目标 <8000）
-- permissive overload resolution（选第一个候选）是 C8 临时方案
+### 基线 gate（fresh 证据，2026-07-13 起）
+- compiler-pass 53/53（fresh + immediate repeat；非 cold/warm 证明）+ compiler-fail 16/16
+- `make rebuild-compiler` → `rebuild-compiler=pass`
+- NPC V2 framing 14/14 + 五阶段 fail-closed incremental gate
+- 生产代码生成路径 = Typed HIR → LLVM（`ir/np_hir_llvm_emitter*`）→ opt/llc/ld；
+  **MIR/backend plan 是 experimental skeleton，不作为 gen-B 正确性证据**（F-012）
+
+### 主要债务（P0 阻断级，详见审计 findings F-001~F-022）
+- F-001: M2 L3 A→B 未闭合（residual undefined symbols 分桶清理中）
+- F-002: permissive overload resolution（last-wins）会静默绑错 body — 需唯一最优否则诊断
+- F-003: system kernel 并发原语假实现（空 EnterCriticalSection / 非原子 Interlocked*）
+- sema 体量债务（~23k LOC）：Wave0 冻结决定「不并行大拆」，M2 闭合后再做
+
+## M2 探针命令
+
+```bash
+./scripts/m2-l3-residual.sh                 # L3 进度唯一度量：rebuild + build + 分桶
+./scripts/m2-l3-residual.sh --analyze-only  # 秒级复查现有 nextpas.ll
+make m2-two-hop            # a-ready + llvm-smoke
+make m2-ladder             # L0-L2 ladder
+```
 
 ## 已知技术债
 - ~~IsBuiltinProcedure 函数列表过长（150+ 函数），需重构为注册表~~ ✅ 已完成
@@ -106,10 +129,15 @@ bash scripts/c8_scan.sh
 - ~~sema 17,735 行需拆分~~ ✅ 已拆分为 3 文件 (12,175 + 2,217 + 3,345)
 - ~~C6-H4 owned string return 限制需编译器级修复~~ ✅ 已完成 (2026-07-03)
 - ~~C5 `{$IFDEF}` 预处理器支持~~ ✅ 已完成 (2026-07-03)
-- Permissive overload resolution（选第一个候选）是 C8 临时方案
-- sema 主文件 12,175 行仍需继续拆分（目标 <8000）
+- Permissive overload resolution（last-wins）：F-002，M2 Wave1 收紧为唯一最优否则诊断
+- sema 主文件仍需继续拆分（目标 <8000）；Wave0 冻结：M2 闭合前不做大拆
 
 ## 治理关联
 - 项目总控计划: `PLAN.md`
-- 目标树: `docs/plans/goal-tree.md`
-- 自举路线图: `docs/plans/selfhost-roadmap.md`
+- 总控目标树: `docs/plans/goal-tree.md`（v2.5, AL 阶段地图）
+- **当前编译器执行计划**: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9 权威）
+- M2 执行输入: `docs/plans/m2/ROADMAP.md`（**唯一执行入口**）+ `README.md`
+- 稳定架构规格: `docs/architecture/compiler-roadmap.md`、`compiler-pipeline-specification.md`
+- 历史快照（不再是当前计划）: `compiler/docs/compiler-goal-tree.md`（C0–D8 时代）、
+  `docs/plans/selfhost-roadmap.md`、`docs/plans/debt-roadmap.md`、
+  `docs/plans/compiler-architecture-plan.md`

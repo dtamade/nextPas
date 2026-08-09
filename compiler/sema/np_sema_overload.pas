@@ -21,7 +21,8 @@ uses
   np_semantic_model,
   np_sema_builtins,
   np_sema_type_check,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  nextpas.core.collections.hashmap;
 
 type
   TProcedureBodyEntry = record
@@ -31,12 +32,16 @@ type
     OwnerUnitId: string;
     ScopeId: LongInt;
     { Reachable body seed: only Needed bodies enter SeedFunctionBodies encode
-      queue. Encoded avoids re-walking after fixed-point expansion. }
+      queue. Encoded avoids re-walking after fixed-point expansion.
+      Queued avoids O(n) membership scans of FGenericWorkQueue. }
     Needed: Boolean;
     Encoded: Boolean;
+    Queued: Boolean;
   end;
   { Analyzer owns; overload/ownership/HIR contexts borrow the same TVec. }
   TProcedureBodyVec = specialize TVec<TProcedureBodyEntry>;
+  TProcedureBodyNameFirstMap = specialize THashMap<string, LongInt>;
+  TProcedureBodyNameNextVec = specialize TVec<LongInt>;
   TTypeIdArray = array of LongInt;
   TStringArray = array of string;
   { Shared scratch vectors for imported unit tables (analyzer owns, contexts borrow). }
@@ -56,6 +61,10 @@ type
     CurrentProcessingUnitId: string;
     CurrentScopeId: LongInt;
     ProcedureBodies: TProcedureBodyVec;
+    { Optional name→index chain (borrowed from analyzer). When set, body-name
+      scans are O(overloads) instead of O(all bodies). }
+    BodyNameFirst: TProcedureBodyNameFirstMap;
+    BodyNameNext: TProcedureBodyNameNextVec;
     ImportedUnitOwners: TSemaImportedOwnerVec;
     ImportedUnitTrees: TSemaImportedTreeVec;
     BuiltinRegistry: TBuiltinRegistry;
@@ -82,6 +91,11 @@ function FirstBodyIndexForName(const ABodies: TProcedureBodyVec;
   const AName: string): LongInt;
 function NextBodyIndexForName(const ABodies: TProcedureBodyVec;
   const AName: string; const APrevIndex: LongInt): LongInt;
+{ Prefer BodyNameFirst/Next when present (O(overloads)); else linear walk. }
+function CtxFirstBodyIndexForName(const Ctx: TSemaOverloadContext;
+  const AName: string): LongInt;
+function CtxNextBodyIndexForName(const Ctx: TSemaOverloadContext;
+  const APrevIndex: LongInt): LongInt;
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;

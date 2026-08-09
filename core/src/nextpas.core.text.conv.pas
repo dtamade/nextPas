@@ -60,7 +60,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.text.compare,
+  { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
+  nextpas.core.text.char,
   nextpas.core.text.format,
   nextpas.core.text.number,
   nextpas.core.text.utils;
@@ -408,9 +409,20 @@ begin
   SetString(Result, PWideChar(LWChars), LCount);
 end;
 
+{** @note ASCII case-fold only (matches LowerCase/UpperCase stance on this unit).
+    Unicode-aware equality lives in text.compare (UTF8CaseFoldSimple path). *}
 function SameText(const A, B: string): Boolean;
+var
+  I, LenA, LenB: SizeInt;
 begin
-  Result := nextpas.core.text.compare.SameText(A, B);
+  LenA := Length(A);
+  LenB := Length(B);
+  if LenA <> LenB then
+    Exit(False);
+  for I := 1 to LenA do
+    if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
+      Exit(False);
+  Result := True;
 end;
 
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;

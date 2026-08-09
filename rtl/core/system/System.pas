@@ -83,6 +83,7 @@ type
     function ClassType: TClass;
     function ClassName: ShortString;
     function InheritsFrom(AClass: TClass): Boolean;
+    function GetInterface(AIID: PtrUInt; out AObj: Pointer): Boolean;
     class function InstanceSize: SizeInt;
   end;
 
@@ -169,6 +170,13 @@ begin
       Exit(True);
     Cur := TClass(Pointer(PByte(Pointer(Cur))^));
   end;
+  Result := False;
+end;
+
+function TObject.GetInterface(AIID: PtrUInt; out AObj: Pointer): Boolean;
+begin
+  { Interface query needs GUID/imt lookup (M2 B5f); until that lands report
+    "not supported" — Supports() clears the out param on False itself. }
   Result := False;
 end;
 

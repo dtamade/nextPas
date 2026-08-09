@@ -53,12 +53,12 @@
 |-----------|------|------|
 | M0 | compiler/System gate、rebuild 与状态真相恢复 | 🏗️ |
 | M1 | compiler/System bootstrap contract 收敛 | 🏗️ |
-| M2 | 最小可执行 A→B→C 两跳自举证明 | 🏗️ |
+| M2 | 最小可执行 A→B→C 两跳自举证明 | 🏗️ M2-0/M2-1 ✅；M2-2 (L3 A→B) 清 residual 中 |
 | M3 | session owner、stable IDs、immutable snapshots | 🔲 |
 | M4 | typed query + dependency-aware incremental | 🔲 |
 | M5 | deterministic parallel + data-oriented performance | 🔲 |
 
-**当前证据** (2026-07-13):
+**当前证据** (2026-07-26 更新):
 - L6-A (Class helper) 不是自举阻塞点。
 - Resolver 只把真实依赖加入 `UnitGraph`；旧 252-unit 全索引编译结论已废止。
 - System identity、parent graph、source-backed cache 与 canonical projection 已进入当前 main 基线；
@@ -73,6 +73,12 @@
   set_length/fini（`sckDynArray*`）、interface addref/release（`sckInterface*`）、
   halt（`sckHalt`）；均由 `TSystemContractKind` 控制 HIR validation 与 LLVM dispatch。
   `dynarray_init` 仍 vocabulary。下一 family 与其余 residual 仍待迁移。
+- **M2 进度**：M2-0 two-hop harness + LLVM smoke ✅；M2-1 ladder L0–L2 ✅
+  （L0 hello / L1 `np_target_facts` / L2 `nextpas_projection_types` on LLVM）。
+  M2-2（L3 = full `tools/stage0/nextpas.pas` A→B link）进行中：`nextpas.ll` 可产出，
+  卡在 `opt` residual undefined symbols（nofold35 基线 ~305 unique / ~1338 total，
+  分桶与逐刀记录见 `docs/plans/m2/wave0-ledger.md`）。生产 codegen 路径 =
+  Typed HIR → LLVM；MIR 冻结为 experimental，不作为 gen-B 正确性证据（F-012）。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:

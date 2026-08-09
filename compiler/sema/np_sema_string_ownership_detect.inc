@@ -12,7 +12,12 @@ begin
   if ANode.NodeKind = gnkIdentifier then
     AName := ANode.Text
   else if (ANode.NodeKind = gnkFunctionCall) then
+  begin
     AName := ANode.Text;
+    if (AName = '') and (ANode.ChildCount >= 1) and (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+      AName := ANode.ChildAt(0).Text;
+  end;
   if AName = '' then
     Exit;
   if Ctx.LookupProcedureBody(Ctx.CallbackCtx, AName, BodyNode, DeclNode) and

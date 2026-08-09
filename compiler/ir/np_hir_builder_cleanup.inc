@@ -4,6 +4,8 @@ var
   ArrName, Blob, ElemSizeStr: string;
   SizeVal, PtrVal, ElemSizeVal, OldPtrVal, OldLenVal: THIRValueId;
   PtrAlloca, LenAlloca: THIRValueId;
+  SizeType, ElemSizeType, I32, I64: THIRTypeId;
+  SizeI32, SizeI64, OldLenI64, ElemSizeI64: THIRValueId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -20,7 +22,7 @@ begin
   else
     ElemSizeStr := '';
 
-  SizeVal := ParseIntExprArg(Blob);
+  SizeVal := ParseIntExprArgTyped(Blob, SizeType);
   if SizeVal = 0 then Exit;
 
   PtrAlloca := FindAlloca(ArrName + '$ptr');
@@ -28,15 +30,27 @@ begin
   if (PtrAlloca = 0) or (LenAlloca = 0) then
     Exit;
 
+  I32 := GetIntTypeByWidth(32, True);
+  I64 := GetIntTypeByWidth(64, True);
   if ElemSizeStr <> '' then
-    ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
+    ElemSizeVal := ParseIntExprArgTyped('int ' + ElemSizeStr + #10, ElemSizeType)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
+  begin
+    ElemSizeVal := EmitConstIntOfType(8, I64);
+    ElemSizeType := I64;
+  end;
   if ElemSizeVal = 0 then
     Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
+  OldLenVal := EmitLoad(I32, LenAlloca);
+  { Runtime ABI is i64 for len/new_len/elem_size; $len slot stays i32. }
+  OldLenI64 := NormalizeScalarValueToType(OldLenVal, I32, I64);
+  SizeI64 := NormalizeScalarValueToType(SizeVal, SizeType, I64);
+  SizeI32 := NormalizeScalarValueToType(SizeVal, SizeType, I32);
+  ElemSizeI64 := NormalizeScalarValueToType(ElemSizeVal, ElemSizeType, I64);
+  if (OldLenI64 = 0) or (SizeI64 = 0) or (SizeI32 = 0) or (ElemSizeI64 = 0) then
+    Exit;
 
   { Typed dynarray set_length: SystemContractKind authority; CallTarget = runtime map. }
   FillChar(Instr, SizeOf(Instr), 0);
@@ -47,14 +61,14 @@ begin
   Instr.CallTarget := SystemContractAt(sckDynArraySetLength).RuntimeMapping;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[2] := MakeTypedOperand(SizeVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+  Instr.Operands[1] := MakeTypedOperand(OldLenI64, I64);
+  Instr.Operands[2] := MakeTypedOperand(SizeI64, I64);
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeI64, I64);
   EmitInstr(Instr);
   PtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, PtrVal, PtrAlloca);
-  EmitStore(GetIntTypeByWidth(32, True), SizeVal, LenAlloca);
+  EmitStore(I32, SizeI32, LenAlloca);
 end;
 
 function THIRBuilder.FieldSlotPtr(AObjectPtr: THIRValueId;
@@ -89,6 +103,8 @@ var
   ReceiverSlot, ReceiverPtr, PtrSlot, LenSlot: THIRValueId;
   FieldIdx: LongInt;
   NewLenVal, ElemSizeVal, OldPtrVal, OldLenVal, NewPtrVal: THIRValueId;
+  NewLenType, ElemSizeType, I32, I64: THIRTypeId;
+  NewLenI32, NewLenI64, OldLenI64, ElemSizeI64: THIRValueId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -124,12 +140,17 @@ begin
     ReceiverPtr := EmitLoad(GetPtrType, ReceiverSlot);
   if ReceiverPtr = 0 then Exit;
 
-  NewLenVal := ParseIntExprArg(LenBlob);
+  NewLenVal := ParseIntExprArgTyped(LenBlob, NewLenType);
   if NewLenVal = 0 then Exit;
+  I32 := GetIntTypeByWidth(32, True);
+  I64 := GetIntTypeByWidth(64, True);
   if ElemSizeStr <> '' then
-    ElemSizeVal := ParseIntExprArg('int ' + ElemSizeStr + #10)
+    ElemSizeVal := ParseIntExprArgTyped('int ' + ElemSizeStr + #10, ElemSizeType)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
+  begin
+    ElemSizeVal := EmitConstIntOfType(8, I64);
+    ElemSizeType := I64;
+  end;
   if ElemSizeVal = 0 then Exit;
 
   PtrSlot := FieldSlotPtr(ReceiverPtr, FieldIdx);
@@ -137,7 +158,13 @@ begin
   if (PtrSlot = 0) or (LenSlot = 0) then Exit;
 
   OldPtrVal := EmitLoad(GetPtrType, PtrSlot);
-  OldLenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
+  OldLenVal := EmitLoad(I32, LenSlot);
+  OldLenI64 := NormalizeScalarValueToType(OldLenVal, I32, I64);
+  NewLenI64 := NormalizeScalarValueToType(NewLenVal, NewLenType, I64);
+  NewLenI32 := NormalizeScalarValueToType(NewLenVal, NewLenType, I32);
+  ElemSizeI64 := NormalizeScalarValueToType(ElemSizeVal, ElemSizeType, I64);
+  if (OldLenI64 = 0) or (NewLenI64 = 0) or (NewLenI32 = 0) or (ElemSizeI64 = 0) then
+    Exit;
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -147,14 +174,14 @@ begin
   Instr.CallTarget := SystemContractAt(sckDynArraySetLength).RuntimeMapping;
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[2] := MakeTypedOperand(NewLenVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+  Instr.Operands[1] := MakeTypedOperand(OldLenI64, I64);
+  Instr.Operands[2] := MakeTypedOperand(NewLenI64, I64);
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeI64, I64);
   EmitInstr(Instr);
   NewPtrVal := Instr.ResultId;
 
   EmitStore(GetPtrType, NewPtrVal, PtrSlot);
-  EmitStore(GetIntTypeByWidth(32, True), NewLenVal, LenSlot);
+  EmitStore(I32, NewLenI32, LenSlot);
 end;
 
 procedure THIRBuilder.ProcessDynArrayCleanup(const ANode: TTypedHirNode);
@@ -163,6 +190,8 @@ var
   VarName, ElemSizeBlob: string;
   PtrAlloca, LenAlloca: THIRValueId;
   PtrVal, LenVal, ElemSizeVal: THIRValueId;
+  ElemSizeType, I32, I64: THIRTypeId;
+  LenI64, ElemSizeI64: THIRValueId;
   Instr: THIRInstr;
 begin
   VarName := ANode.Operand;
@@ -183,13 +212,22 @@ begin
   if (PtrAlloca = 0) or (LenAlloca = 0) then
     Exit;
 
+  I32 := GetIntTypeByWidth(32, True);
+  I64 := GetIntTypeByWidth(64, True);
   PtrVal := EmitLoad(GetPtrType, PtrAlloca);
-  LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenAlloca);
+  LenVal := EmitLoad(I32, LenAlloca);
   if ElemSizeBlob <> '' then
-    ElemSizeVal := ParseIntExprArg(ElemSizeBlob)
+    ElemSizeVal := ParseIntExprArgTyped(ElemSizeBlob, ElemSizeType)
   else
-    ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True));
+  begin
+    ElemSizeVal := EmitConstIntOfType(8, I64);
+    ElemSizeType := I64;
+  end;
   if ElemSizeVal = 0 then
+    Exit;
+  LenI64 := NormalizeScalarValueToType(LenVal, I32, I64);
+  ElemSizeI64 := NormalizeScalarValueToType(ElemSizeVal, ElemSizeType, I64);
+  if (LenI64 = 0) or (ElemSizeI64 = 0) then
     Exit;
 
   { Typed dynarray fini: SystemContractKind authority; CallTarget = runtime map. }
@@ -201,8 +239,8 @@ begin
   Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
   SetLength(Instr.Operands, 3);
   Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+  Instr.Operands[1] := MakeTypedOperand(LenI64, I64);
+  Instr.Operands[2] := MakeTypedOperand(ElemSizeI64, I64);
   EmitInstr(Instr);
 end;
 
@@ -309,7 +347,12 @@ begin
         Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
         SetLength(Instr.Operands, 3);
         Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, PtrSlot), GetPtrType);
-        Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), LenSlot), GetIntTypeByWidth(32, True));
+        Instr.Operands[1] := MakeTypedOperand(
+          NormalizeScalarValueToType(
+            EmitLoad(GetIntTypeByWidth(32, True), LenSlot),
+            GetIntTypeByWidth(32, True),
+            GetIntTypeByWidth(64, True)),
+          GetIntTypeByWidth(64, True));
         Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
         EmitInstr(Instr);
       end;
@@ -437,7 +480,14 @@ begin
       Instr.IntrinsicName := 'string_release';
       SetLength(Instr.Operands, 2);
       Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
-      Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), AllocSizeSlot), GetIntTypeByWidth(32, True));
+      { Runtime ABI is i64 for alloc_size; the $alloc_size slot stays i32
+        (same slot convention as $len, see dynarray fini above). }
+      Instr.Operands[1] := MakeTypedOperand(
+        NormalizeScalarValueToType(
+          EmitLoad(GetIntTypeByWidth(32, True), AllocSizeSlot),
+          GetIntTypeByWidth(32, True),
+          GetIntTypeByWidth(64, True)),
+        GetIntTypeByWidth(64, True));
       EmitInstr(Instr);
 
       NullVal := EmitNullPtrValue;
@@ -543,6 +593,10 @@ begin
 
       PtrVal := EmitLoad(GetPtrType, PtrSlot);
       LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
+      LenVal := NormalizeScalarValueToType(LenVal,
+        GetIntTypeByWidth(32, True), GetIntTypeByWidth(64, True));
+      if LenVal = 0 then
+        Continue;
       if not FSemaModel.LookupConstValue(
         AClassName + '.' + Meta.Fields[SizeUInt(I)].Name + '$arr_elem_size',
         ElemSize) then
@@ -560,7 +614,7 @@ begin
       Instr.CallTarget := SystemContractAt(sckDynArrayFini).RuntimeMapping;
       SetLength(Instr.Operands, 3);
       Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-      Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+      Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(64, True));
       Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
       EmitInstr(Instr);
 

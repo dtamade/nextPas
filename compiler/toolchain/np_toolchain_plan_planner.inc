@@ -156,6 +156,18 @@ var
   LibraryPath: string;
   LibraryRequest: TBackendLogicalLibraryRequest;
   RuntimeRootPath: string;
+
+  { Standard POSIX library group; on glibc 2.34+ pthread/dl/util/rt are merged
+    into libc, so the SDK ships them as aliases of the same ld script. }
+  function IsSupportedLogicalId(const AId: string): Boolean;
+  begin
+    Result := nextpas.core.text.SameText(AId, 'c') or
+      nextpas.core.text.SameText(AId, 'pthread') or
+      nextpas.core.text.SameText(AId, 'dl') or
+      nextpas.core.text.SameText(AId, 'util') or
+      nextpas.core.text.SameText(AId, 'rt');
+  end;
+
 begin
   ARuntimeRootPath := '';
   ASharedLibraryPath := '';
@@ -168,7 +180,7 @@ begin
   for Index := 0 to FBackendPlan.LogicalLibraryRequestCount - 1 do
   begin
     LibraryRequest := FBackendPlan.LogicalLibraryRequestAt(Index);
-    if not nextpas.core.text.SameText(LibraryRequest.LogicalId, 'c') or
+    if not IsSupportedLogicalId(LibraryRequest.LogicalId) or
       not nextpas.core.text.SameText(LibraryRequest.LinkageKind, 'shared') then
     begin
       FPlan.MarkFailure(
@@ -181,7 +193,8 @@ begin
       Exit(False);
     end;
 
-    LibraryPath := IncludeTrailingPathDelimiter(RuntimeRootPath) + 'libc.so';
+    LibraryPath := IncludeTrailingPathDelimiter(RuntimeRootPath) + 'lib' +
+      LibraryRequest.LogicalId + '.so';
     if not nextpas.core.text.SameText(FTargetFacts.SysrootMode, 'runtime-sdk') or
       not nextpas.core.text.SameText(FTargetFacts.RuntimeRootKind, 'distribution-runtime-root') or
       (RuntimeRootPath = '') or not FsExists(LibraryPath) then
@@ -388,6 +401,24 @@ begin
       LibraryRequest.Strength
     );
   end;
+end;
+
+procedure TToolchainPlanner.AppendDirectLinkLibraryArgs(
+  const AStepIndex: LongInt
+);
+var
+  Index: LongInt;
+begin
+  { Requests were validated by ResolveDirectLinkLibraries; duplicates are
+    harmless to ld. }
+  if FBackendPlan = nil then
+    Exit;
+
+  for Index := 0 to FBackendPlan.LogicalLibraryRequestCount - 1 do
+    FPlan.AddStepArg(
+      AStepIndex,
+      '-l' + FBackendPlan.LogicalLibraryRequestAt(Index).LogicalId
+    );
 end;
 
 procedure TToolchainPlanner.PlanFromBackend;

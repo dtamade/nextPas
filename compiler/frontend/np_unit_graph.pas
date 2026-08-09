@@ -486,7 +486,7 @@ begin
     { Capacity only — Ensure() raises Count and would double after Push. }
     InDeg.EnsureCapacity(SizeUInt(N));
     for I := 0 to N - 1 do
-      InDeg.Push(0);
+      InDeg.PushUnchecked(0);
 
     for I := 0 to E - 1 do
     begin
@@ -508,13 +508,13 @@ begin
 
     for I := 0 to N - 1 do
       if InDeg[I] = 0 then
-        Queue.Push(I);
+        Queue.PushUnchecked(I);
 
     while Front < LongInt(Queue.Count) do
     begin
       I := Queue[Front];
       Inc(Front);
-      Sorted.Push(I);
+      Sorted.PushUnchecked(I);
 
       // For all edges where I is the target (I must init before sources
       // that depend on it), decrease the source's in-degree
@@ -531,7 +531,7 @@ begin
         Dec(Deg);
         InDeg[SrcIdx] := Deg;
         if Deg = 0 then
-          Queue.Push(SrcIdx);
+          Queue.PushUnchecked(SrcIdx);
       end;
     end;
 
@@ -541,7 +541,7 @@ begin
     begin
       for I := 0 to N - 1 do
         if InDeg[I] > 0 then
-          Sorted.Push(I);
+          Sorted.PushUnchecked(I);
     end;
 
     // Convert indices to canonical names

@@ -124,7 +124,7 @@ begin
       { Prefer GetPtr: full record Items[] copy of multi-string events is fragile. }
       Event := FToolStatusEvents.GetPtr(SizeUInt(Index));
       if (Event^.ResolvedPath <> '') and
-        nextpas.core.text.SameText(Event^.StepId, PrimaryToolStepId) then
+        nextpas.core.text.conv.SameText(Event^.StepId, PrimaryToolStepId) then
         Exit(Event^.ResolvedPath);
     end;
 
@@ -156,7 +156,7 @@ var
     if Trim(ABaseName) = '' then
       Exit;
     for ExistingIndex := 0 to Length(Result) - 1 do
-      if nextpas.core.text.SameText(Result[ExistingIndex], ABaseName) then
+      if nextpas.core.text.conv.SameText(Result[ExistingIndex], ABaseName) then
         Exit;
     NextIndex := Length(Result);
     SetLength(Result, NextIndex + 1);
@@ -166,7 +166,7 @@ begin
   SetLength(Result, 0);
   if FUnitGraph = nil then
     Exit;
-  if nextpas.core.text.SameText(AstRootKindName, 'unit') then
+  if nextpas.core.text.conv.SameText(AstRootKindName, 'unit') then
     Exit;
 
   ResolvedSourcePath := ExpandFileName(FOptions.BuildContext.ResolvedSourcePath);
@@ -175,9 +175,9 @@ begin
     ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
     if Trim(ResolvedUnit.SourcePath) = '' then
       Continue;
-    if nextpas.core.text.SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
+    if nextpas.core.text.conv.SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
       Continue;
-    if nextpas.core.text.SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
+    if nextpas.core.text.conv.SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
       Continue;
     CandidateBaseName := ChangeFileExt(
       ExtractFileName(ResolvedUnit.SourcePath),
@@ -199,7 +199,7 @@ begin
     Exit;
 
   for Index := 0 to FToolchainPlan.ToolInvocationCount - 1 do
-    if nextpas.core.text.SameText(FToolchainPlan.StepAt(Index).StepId, AStepId) then
+    if nextpas.core.text.conv.SameText(FToolchainPlan.StepAt(Index).StepId, AStepId) then
       Exit(FToolchainPlan.StepAt(Index));
 end;
 
@@ -267,7 +267,7 @@ begin
       'sidecars',
       BuildExecutedSidecarArrayJson(ExecutedStep.Sidecars)
     );
-    if nextpas.core.text.SameText(ExecutedStep.StepId, AFailedStepId) then
+    if nextpas.core.text.conv.SameText(ExecutedStep.StepId, AFailedStepId) then
       AppendJsonField(
         StepFields,
         'diagnosticRefs',
@@ -546,7 +546,14 @@ begin
     );
     try
       Analyzer.Analyze;
+      WriteLn(StdErr, '[pipe] after Analyze');
+      Flush(StdErr);
       FSemanticModel := Analyzer.DetachModel;
+      if FSemanticModel = nil then
+        WriteLn(StdErr, '[pipe] after DetachModel status=nil')
+      else
+        WriteLn(StdErr, '[pipe] after DetachModel status=', FSemanticModel.Status);
+      Flush(StdErr);
       if FSemanticModel = nil then
         FSemanticStatus := 'deferred'
       else
@@ -555,22 +562,43 @@ begin
         { Cache for incremental compilation — query DB owns the reference }
         if FSemanticStatus = 'ready' then
         begin
+          WriteLn(StdErr, '[pipe] before QueryDB.Store');
+          Flush(StdErr);
           FQueryDB.Store(CacheKey, FSemanticModel);
+          WriteLn(StdErr, '[pipe] after QueryDB.Store before IncrementalCache.Save');
+          Flush(StdErr);
           { Save to persistent disk cache }
           FIncrementalCache.Save(
             FSourceDatabase.RootSourceCanonicalPath,
             FSourceDatabase.RootSourceText,
             [],
             FSemanticModel);
+          WriteLn(StdErr, '[pipe] after IncrementalCache.Save');
+          Flush(StdErr);
         end;
       end;
     finally
+      WriteLn(StdErr, '[pipe] before Analyzer.Free');
+      Flush(StdErr);
       Analyzer.Free;
+      WriteLn(StdErr, '[pipe] after Analyzer.Free before ResetScratch');
+      Flush(StdErr);
       ResetScratchAllocator;
+      WriteLn(StdErr, '[pipe] after ResetScratch');
+      Flush(StdErr);
     end;
+    WriteLn(StdErr, '[pipe] after Analyzer try model=',
+      PtrUInt(Pointer(FSemanticModel)), ' status=', FSemanticStatus);
+    Flush(StdErr);
   finally
+    WriteLn(StdErr, '[pipe] before UnitEnd');
+    Flush(StdErr);
     FMemScope.UnitEnd;
+    WriteLn(StdErr, '[pipe] after UnitEnd');
+    Flush(StdErr);
   end;
+  WriteLn(StdErr, '[pipe] AnalyzeSemantics return');
+  Flush(StdErr);
 end;
 
 procedure TCompilationSession.LowerToMir;
@@ -583,6 +611,8 @@ var
   LlvmOutput: string;
   PhaseScratch: Pointer;
 begin
+  WriteLn(StdErr, '[pipe] LowerToMir begin');
+  Flush(StdErr);
   FMemScope.UnitBegin;
   try
     ResetIrState;
@@ -652,16 +682,22 @@ begin
   finally
     FMemScope.UnitEnd;
   end;
+  WriteLn(StdErr, '[pipe] LowerToMir end status=', FMirStatus);
+  Flush(StdErr);
 end;
 
 procedure TCompilationSession.PlanBackend;
 var
   Planner: TBackendPlanner;
 begin
+  WriteLn(StdErr, '[pipe] PlanBackend begin');
+  Flush(StdErr);
   ResetBackendState;
   if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
   begin
     FBackendStatus := 'failure';
+    WriteLn(StdErr, '[pipe] PlanBackend skip failure');
+    Flush(StdErr);
     Exit;
   end;
 
@@ -676,7 +712,11 @@ begin
     FOptions.OptLevel
   );
   try
+    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan...');
+    Flush(StdErr);
     Planner.Plan;
+    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan done');
+    Flush(StdErr);
     FBackendPlan := Planner.DetachPlan;
     if FBackendPlan = nil then
       FBackendStatus := 'deferred'
@@ -688,5 +728,7 @@ begin
 
   if FBackendStatus = 'ready' then
     PropagateSemanticLibraryRequestsToBackendPlan;
+  WriteLn(StdErr, '[pipe] PlanBackend end status=', FBackendStatus);
+  Flush(StdErr);
 end;
 

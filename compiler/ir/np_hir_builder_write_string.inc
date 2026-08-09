@@ -171,8 +171,9 @@ begin
   SetLength(Instr.Operands, 4);
   Instr.Operands[0] := MakeTypedOperand(DstTs, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(SrcTs, GetPtrType);
-  Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntTypeByWidth(32, True));
-  Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+  { np_tstring_copy ABI is i64 start/count. }
+  Instr.Operands[2] := MakeTypedOperand(StartVal, GetIntTypeByWidth(64, True));
+  Instr.Operands[3] := MakeTypedOperand(LenVal, GetIntTypeByWidth(64, True));
   EmitInstr(Instr);
 end;
 

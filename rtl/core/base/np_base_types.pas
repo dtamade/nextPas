@@ -90,7 +90,10 @@ end;
 
 function BuildCoreOkResult: TCoreResult;
 begin
-  Result := BuildCoreResult(crcOk, '');
+  { Field materialization (not `Result := BuildCoreResult(...)`) keeps the
+    zero-arg helper free of nested record-return residual calls under stage0. }
+  Result.Code := crcOk;
+  Result.Detail := '';
 end;
 
 function CoreByteSpanIsEmpty(const ASpan: TCoreByteSpan): Boolean;

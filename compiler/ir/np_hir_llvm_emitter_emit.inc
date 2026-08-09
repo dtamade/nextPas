@@ -15,7 +15,13 @@ begin
           RetTy := '{ptr, i64}'
         else
           RetTy := TypeToLlvm(FCurrentReturnTypeId);
-        Emit('  ret ' + RetTy + ' ' + ValueRef(ATerm.ReturnValue));
+        if RetTy = '' then
+          RetTy := 'i64';
+        { Object/class returns are often SSA-typed as ptr while func ABI is i64. }
+        Emit('  ret ' + RetTy + ' ' +
+          EmitCastValueToLlvmType(ATerm.ReturnValue, RetTy,
+            'ret.' + IntToStr(ATerm.ReturnValue),
+            ValueLlvmType(ATerm.ReturnValue, '')));
       end;
     htkBranch:
       Emit('  br label %bb' + IntToStr(ATerm.TargetBlock));
@@ -25,7 +31,10 @@ begin
         ', label %bb' + IntToStr(ATerm.FalseBlock));
     htkSwitch:
     begin
-      Emit('  switch i64 ' + ValueRef(ATerm.Condition) +
+      { Selector may be i8/i32 from load of small globals; switch is always i64. }
+      Emit('  switch i64 ' + EmitCastValueToLlvmType(ATerm.Condition, 'i64',
+        'switch.' + IntToStr(ATerm.Condition),
+        ValueLlvmType(ATerm.Condition, '')) +
         ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
       if ATerm.SwitchCases <> nil then
         for I := 0 to LongInt(ATerm.SwitchCases.Count) - 1 do
@@ -85,7 +94,8 @@ begin
         ParamStr := ParamStr + TypeToLlvm(AFunc.Params[SizeUInt(I)].TypeId);
       end;
     RetStr := TypeToLlvm(AFunc.ReturnTypeId);
-    Emit('declare ' + RetStr + ' @' + AFunc.ExternalName + '(' + ParamStr + ')');
+    Emit('declare ' + RetStr + ' ' + LlvmGlobalRef(AFunc.ExternalName) +
+      '(' + ParamStr + ')');
     Exit;
   end;
   ClearGlobalRefs;
@@ -103,6 +113,10 @@ begin
         ParamStr := ParamStr + ', ';
       ParamStr := ParamStr + TypeToLlvm(AFunc.Params[SizeUInt(I)].TypeId) +
         ' ' + ValueRef(AFunc.Params[SizeUInt(I)].ValueId);
+      { SSA type of params is known at define-time — required so call sites
+        can ptrtoint/inttoptr when residual ABI still says i64. }
+      NoteValueLlvmType(AFunc.Params[SizeUInt(I)].ValueId,
+        TypeToLlvm(AFunc.Params[SizeUInt(I)].TypeId));
     end;
 
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
@@ -147,10 +161,10 @@ begin
     llc then emits movaps for bulk zero stores and SIGSEGV on cleanup. }
   if (Pos('np_object_dynarray_cleanup_', AFunc.Name) = 1) or
     (Pos('np_object_string_cleanup_', AFunc.Name) = 1) then
-    Emit('define internal ' + RetStr + ' @' + AFunc.Name +
+    Emit('define internal ' + RetStr + ' ' + LlvmGlobalRef(AFunc.Name) +
       '(' + ParamStr + ') #0 {')
   else
-    Emit('define ' + RetStr + ' @' + AFunc.Name +
+    Emit('define ' + RetStr + ' ' + LlvmGlobalRef(AFunc.Name) +
       '(' + ParamStr + ') #0 {');
 
   if AFunc.Blocks <> nil then
@@ -202,14 +216,14 @@ begin
     LFiniName := 'np_unit_fini_' + LNormalizedUnitName;
     if not HasEmittedFunction(LInitName) then
     begin
-      Emit('define internal i64 @' + LInitName + '() {');
+      Emit('define internal i64 ' + LlvmGlobalRef(LInitName) + '() {');
       Emit('entry:');
       Emit('  ret i64 0');
       Emit('}');
     end;
     if not HasEmittedFunction(LFiniName) then
     begin
-      Emit('define internal i64 @' + LFiniName + '() {');
+      Emit('define internal i64 ' + LlvmGlobalRef(LFiniName) + '() {');
       Emit('entry:');
       Emit('  ret i64 0');
       Emit('}');
@@ -227,7 +241,7 @@ begin
   begin
     LName := FModule.UnitInitOrderAt(I);
     LNormalizedUnitName := NormalizeUnitLifecycleName(LName);
-    Emit('  call i64 @np_unit_init_' + LNormalizedUnitName + '()');
+    Emit('  call i64 ' + LlvmGlobalRef('np_unit_init_' + LNormalizedUnitName) + '()');
   end;
 end;
 
@@ -242,7 +256,7 @@ begin
   begin
     LName := FModule.UnitInitOrderAt(I);
     LNormalizedUnitName := NormalizeUnitLifecycleName(LName);
-    Emit('  call i64 @np_unit_fini_' + LNormalizedUnitName + '()');
+    Emit('  call i64 ' + LlvmGlobalRef('np_unit_fini_' + LNormalizedUnitName) + '()');
   end;
 end;
 

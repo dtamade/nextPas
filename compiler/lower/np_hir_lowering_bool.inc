@@ -2,7 +2,10 @@ function EncodeRuntimeBoolExprFold(const Ctx: TSemaHirLoweringContext;
   const ANode: TGreenNode; out ABlob: string;
   const AAllowOwnedStringCompare: Boolean): Boolean;
 var
-  LeftBlob, RightBlob, Op, Pred: string;
+  LeftBlob, RightBlob, Op, Pred, RecTypeName: string;
+  RecNode: TGreenNode;
+  LeftIsNil, RightIsNil: Boolean;
+  FieldIdx: Int64;
 begin
   ABlob := '';
   if ANode = nil then
@@ -130,6 +133,50 @@ begin
       begin
         ABlob := LeftBlob + RightBlob + 'strcmp ' + Pred + #10 +
           'int 0' + #10 + 'cmp ne' + #10;
+        Exit(True);
+      end;
+    end;
+
+    { TGreenNode (and similar facade records): class operator =/<> nil means
+      FIndex < 0 / FIndex >= 0. Residual recvar+null+cmp compares the buffer
+      address (always non-null) and also emits invalid icmp i64/ptr. }
+    LeftIsNil := (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+      SameText(ANode.ChildAt(0).Text, 'nil');
+    RightIsNil := (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+      SameText(ANode.ChildAt(1).Text, 'nil');
+    RecNode := nil;
+    if RightIsNil and (not LeftIsNil) then
+      RecNode := ANode.ChildAt(0)
+    else if LeftIsNil and (not RightIsNil) then
+      RecNode := ANode.ChildAt(1);
+    if (RecNode <> nil) and (RecNode.NodeKind = gnkIdentifier) and
+      Ctx.RuntimeVars.IsRecordVar(RecNode.Text) then
+    begin
+      RecTypeName := Ctx.RuntimeVars.LookupRecordVar(RecNode.Text);
+      FieldIdx := -1;
+      if RecTypeName <> '' then
+      begin
+        FieldIdx := np_sema_type_check.TypeMetaFieldIndex(Ctx.Model,
+          RecTypeName, 'FIndex');
+        if FieldIdx < 0 then
+          FieldIdx := np_sema_type_check.TypeMetaFieldIndex(Ctx.Model,
+            RecTypeName, 'Index');
+      end;
+      { Layout fallback: TGreenNode = (FOwner:ptr, FIndex:LongInt) → slot 1. }
+      if (FieldIdx < 0) and
+        ((RecTypeName = '') or SameText(RecTypeName, 'TGreenNode')) then
+        FieldIdx := 1;
+      if FieldIdx >= 0 then
+      begin
+        { = nil → FIndex < 0; <> nil → FIndex >= 0 }
+        if Op = '=' then
+          Pred := 'slt'
+        else
+          Pred := 'sge';
+        ABlob := 'rload ' + RecNode.Text + ' ' + IntToStr(FieldIdx) + #10 +
+          'int 0' + #10 + 'cmp ' + Pred + #10;
         Exit(True);
       end;
     end;

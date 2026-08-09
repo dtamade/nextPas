@@ -10,25 +10,105 @@ begin
   Result := np_sema_overload.MangledNameSig(AName, ASig);
 end;
 
+function TSemanticAnalyzer.EffectiveRuntimeCalleeName(const AName: string;
+  const ADecl: TGreenNode): string;
+var
+  BodyNode, DeclNode: TGreenNode;
+  Sig, DeclBare: string;
+  I: LongInt;
+  Binding: TSemanticForeignProcedureBinding;
+begin
+  Result := AName;
+  if AName = '' then
+    Exit;
+  { libc/Win32 externals must stay bare (declare @getenv), never getenv$s. }
+  for I := 0 to FModel.ForeignProcedureBindingCount - 1 do
+  begin
+    Binding := FModel.ForeignProcedureBindingAt(I);
+    if SameText(Binding.PascalName, AName) then
+    begin
+      if Binding.ExternalSymbolName <> '' then
+        Exit(Binding.ExternalSymbolName);
+      Exit(AName);
+    end;
+  end;
+  DeclNode := ADecl;
+  { Stale Decl from a prior Lookup in the same encode walk must not mangle a
+    different callee (classic getenv → getenv$s via leftover string-param decl). }
+  if DeclNode <> nil then
+  begin
+    DeclBare := DeclNode.Text;
+    if Pos(';', DeclBare) > 0 then
+      DeclBare := Copy(DeclBare, 1, Pos(';', DeclBare) - 1);
+    if (DeclBare <> '') and (not SameText(DeclBare, AName)) and
+      (Pos('.', AName) = 0) then
+      DeclNode := nil;
+  end;
+  if DeclNode = nil then
+  begin
+    if not LookupProcedureBody(AName, BodyNode, DeclNode) then
+      Exit;
+  end;
+  if not HasOverload(AName) then
+    Exit;
+  if DeclNode = nil then
+    Exit;
+  Sig := GetParamSignature(DeclNode);
+  if Sig = '' then
+    Exit;
+  Result := MangledNameSig(AName, Sig);
+end;
+
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
   const ABody: TGreenNode; const ADecl: TGreenNode;
   const AOwnerUnitId: string);
 var
   Index: LongInt;
-  Sig, ExistingSig, CleanName: string;
+  Sig, ExistingSig, CleanName, ExtRest, ExtLib, ExtSym: string;
   Entry: TProcedureBodyEntry;
+  ExtPos, ColonPos, SymbolId: LongInt;
 begin
-  if Pos(';compilerproc', AName) > 0 then
+  CleanName := AName;
+  if Pos(';', AName) > 0 then
   begin
     CleanName := Copy(AName, 1, Pos(';', AName) - 1);
-    FCompilerProcNames.Push(CleanName);
-  end
-  else
-    CleanName := AName;
+    if Pos(';compilerproc', AName) > 0 then
+      FCompilerProcNames.Push(CleanName);
+    { function getenv(...); cdecl; external 'c' name 'getenv'
+      → Text "getenv;…;external:c:getenv". Bare name + foreign binding. }
+    ExtPos := Pos(';external:', AName);
+    if ExtPos > 0 then
+    begin
+      ExtRest := Copy(AName, ExtPos + Length(';external:'), MaxInt);
+      if Pos(';', ExtRest) > 0 then
+        ExtRest := Copy(ExtRest, 1, Pos(';', ExtRest) - 1);
+      ColonPos := Pos(':', ExtRest);
+      if ColonPos > 0 then
+      begin
+        ExtLib := Copy(ExtRest, 1, ColonPos - 1);
+        ExtSym := Copy(ExtRest, ColonPos + 1, MaxInt);
+      end
+      else
+      begin
+        ExtLib := ExtRest;
+        ExtSym := CleanName;
+      end;
+      if ExtSym = '' then
+        ExtSym := CleanName;
+      SymbolId := FModel.FindSymbolByName(CleanName);
+      FModel.AddForeignProcedureBinding(
+        CleanName, 'cdecl', ExtLib, ExtSym, SymbolId);
+      FModel.AddTypedHirNode(
+        'foreign-procedure-binding', CleanName, SymbolId, 0, ExtSym);
+      if ExtLib <> '' then
+        FModel.AddLibraryRequest(ExtLib, 'shared', 'strong');
+    end;
+  end;
   Sig := GetParamIdentitySignature(ADecl);
-  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    if SameText(FProcedureBodies[Index].Name, CleanName) and
-      SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
+  Index := FirstBodyIndexForNameLocal(CleanName);
+  while Index >= 0 do
+  begin
+    if SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
       ExistingSig := GetParamIdentitySignature(FProcedureBodies[Index].Decl);
       if ExistingSig = Sig then
@@ -40,11 +120,16 @@ begin
         Entry.ScopeId := FCurrentScopeId;
         { Mid-seed body update: re-encode only if already reachable. }
         if (ABody <> nil) and Entry.Needed then
+        begin
           Entry.Encoded := False;
+          Entry.Queued := False;
+        end;
         FProcedureBodies[Index] := Entry;
         Exit;
       end;
     end;
+    Index := NextBodyIndexForNameLocal(Index);
+  end;
   Entry.Name := CleanName;
   Entry.Body := ABody;
   Entry.Decl := ADecl;
@@ -53,7 +138,9 @@ begin
   { Reachability seed: default not Needed; Collect/Mark pull reachable set. }
   Entry.Needed := False;
   Entry.Encoded := False;
+  Entry.Queued := False;
   FProcedureBodies.Push(Entry);
+  IndexProcedureBodyName(CleanName, LongInt(FProcedureBodies.Count) - 1);
 end;
 
 function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
@@ -67,25 +154,33 @@ begin
   if ADecl = nil then
     Exit;
   DeclName := ADecl.Text;
-  { Try exact pointer match first }
+  if DeclName <> '' then
+  begin
+    { Prefer name-index + pointer match (O(overloads)), not O(all bodies). }
+    Index := FirstBodyIndexForNameLocal(DeclName);
+    while Index >= 0 do
+    begin
+      if FProcedureBodies[Index].Decl = ADecl then
+        Exit(FProcedureBodies[Index].ScopeId);
+      Index := NextBodyIndexForNameLocal(Index);
+    end;
+    { Fallback: unique name when pointer identity failed (shared body entries). }
+    NameMatchCount := 0;
+    NameMatchScopeId := 0;
+    Index := FirstBodyIndexForNameLocal(DeclName);
+    while Index >= 0 do
+    begin
+      Inc(NameMatchCount);
+      NameMatchScopeId := FProcedureBodies[Index].ScopeId;
+      Index := NextBodyIndexForNameLocal(Index);
+    end;
+    if NameMatchCount = 1 then
+      Result := NameMatchScopeId;
+    Exit;
+  end;
   for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if FProcedureBodies[Index].Decl = ADecl then
       Exit(FProcedureBodies[Index].ScopeId);
-  { Fallback: name match for overloaded declarations sharing same body entry.
-    Only when exactly one entry has this name (no ambiguity). }
-  if DeclName <> '' then
-  begin
-    NameMatchCount := 0;
-    NameMatchScopeId := 0;
-    for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
-      if SameText(FProcedureBodies[Index].Name, DeclName) then
-      begin
-        Inc(NameMatchCount);
-        NameMatchScopeId := FProcedureBodies[Index].ScopeId;
-      end;
-    if NameMatchCount = 1 then
-      Result := NameMatchScopeId;
-  end;
 end;
 
 function TSemanticAnalyzer.ParamDeclTypeId(
@@ -107,29 +202,127 @@ end;
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
 var
+  Index, DotPos, J: LongInt;
+  OwnerName, MemberName, Resolved: string;
+begin
+  ABody := nil;
+  ADecl := nil;
+  Index := FirstBodyIndexForNameLocal(AName);
+  if Index < 0 then
+  begin
+    { Empty subclass / alias: Class.Create → $resolve_Create body. }
+    DotPos := 0;
+    for J := Length(AName) downto 1 do
+      if AName[J] = '.' then
+      begin
+        DotPos := J;
+        Break;
+      end;
+    if DotPos > 1 then
+    begin
+      OwnerName := Copy(AName, 1, DotPos - 1);
+      MemberName := Copy(AName, DotPos + 1, MaxInt);
+      if FModel.LookupStringConstValue(OwnerName + '.$resolve_' + MemberName,
+        Resolved) and (Resolved <> '') and (not SameText(Resolved, AName)) then
+        Index := FirstBodyIndexForNameLocal(Resolved);
+      if (Index < 0) and SameText(MemberName, 'CreateFmt') then
+      begin
+        if FModel.LookupStringConstValue(OwnerName + '.$resolve_Create',
+          Resolved) and (Resolved <> '') then
+          Index := FirstBodyIndexForNameLocal(Resolved);
+      end;
+    end;
+  end;
+  if Index >= 0 then
+  begin
+    ABody := FProcedureBodies[Index].Body;
+    ADecl := FProcedureBodies[Index].Decl;
+    Exit(True);
+  end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.FirstBodyIndexForNameLocal(const AName: string): LongInt;
+begin
+  Result := -1;
+  if (AName = '') or (FProcedureBodyNameFirst = nil) then
+    Exit;
+  if not FProcedureBodyNameFirst.TryGetValue(LowerCase(AName), Result) then
+    Result := -1;
+end;
+
+function TSemanticAnalyzer.NextBodyIndexForNameLocal(const APrevIndex: LongInt): LongInt;
+begin
+  Result := -1;
+  if (APrevIndex < 0) or (FProcedureBodyNameNext = nil) then
+    Exit;
+  if APrevIndex >= LongInt(FProcedureBodyNameNext.Count) then
+    Exit;
+  Result := FProcedureBodyNameNext[APrevIndex];
+end;
+
+procedure TSemanticAnalyzer.IndexProcedureBodyName(const AName: string;
+  const AIndex: LongInt);
+var
+  Key: string;
+  Head, Prev: LongInt;
+begin
+  if (AName = '') or (AIndex < 0) or (FProcedureBodyNameFirst = nil) or
+    (FProcedureBodyNameNext = nil) then
+    Exit;
+  while LongInt(FProcedureBodyNameNext.Count) <= AIndex do
+    FProcedureBodyNameNext.Push(-1);
+  FProcedureBodyNameNext[AIndex] := -1;
+  Key := LowerCase(AName);
+  if FProcedureBodyNameFirst.TryGetValue(Key, Head) then
+  begin
+    { Append to preserve registration order (first overload wins lookup). }
+    Prev := Head;
+    while (Prev >= 0) and (Prev < LongInt(FProcedureBodyNameNext.Count)) and
+      (FProcedureBodyNameNext[Prev] >= 0) do
+      Prev := FProcedureBodyNameNext[Prev];
+    if (Prev >= 0) and (Prev < LongInt(FProcedureBodyNameNext.Count)) then
+      FProcedureBodyNameNext[Prev] := AIndex;
+  end
+  else
+    FProcedureBodyNameFirst.Put(Key, AIndex);
+end;
+
+function TSemanticAnalyzer.HasOverload(const AName: string): Boolean;
+var
+  Index, Count: LongInt;
+begin
+  Count := 0;
+  Index := FirstBodyIndexForNameLocal(AName);
+  while Index >= 0 do
+  begin
+    Inc(Count);
+    if Count > 1 then
+      Exit(True);
+    Index := NextBodyIndexForNameLocal(Index);
+  end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.LookupOverload(const AName: string;
+  AArgCount: LongInt; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
+var
   Index: LongInt;
 begin
   ABody := nil;
   ADecl := nil;
-  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) then
+  Index := FirstBodyIndexForNameLocal(AName);
+  while Index >= 0 do
+  begin
+    if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
     begin
       ABody := FProcedureBodies[Index].Body;
       ADecl := FProcedureBodies[Index].Decl;
       Exit(True);
     end;
+    Index := NextBodyIndexForNameLocal(Index);
+  end;
   Result := False;
-end;
-
-function TSemanticAnalyzer.HasOverload(const AName: string): Boolean;
-begin
-  Result := np_sema_overload.HasOverload(AName, FProcedureBodies);
-end;
-
-function TSemanticAnalyzer.LookupOverload(const AName: string;
-  AArgCount: LongInt; out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
-begin
-  Result := np_sema_overload.LookupOverload(AName, AArgCount, FProcedureBodies, ABody, ADecl);
 end;
 
 function TSemanticAnalyzer.LookupCallBindingDeclaration(
@@ -146,6 +339,8 @@ begin
   Ctx.CurrentProcessingUnitId := FCurrentProcessingUnitId;
   Ctx.CurrentScopeId := FCurrentScopeId;
   Ctx.ProcedureBodies := FProcedureBodies;
+  Ctx.BodyNameFirst := FProcedureBodyNameFirst;
+  Ctx.BodyNameNext := FProcedureBodyNameNext;
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
@@ -479,14 +674,17 @@ begin
     end;
   end;
 
-  for Index := 0 to FModel.SymbolCount - 1 do
+  { Name-chain O(overloads), not O(all symbols). }
+  Index := FModel.FirstSymbolIdByName(AName);
+  while Index > 0 do
   begin
-    Symbol := FModel.SymbolAt(Index);
+    Symbol := FModel.SymbolAt(Index - 1);
     if SameText(Symbol.Name, AName) and
       (SameText(Symbol.Kind, 'variable') or
        SameText(Symbol.Kind, 'parameter')) and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
       Exit(Symbol.TypeId);
+    Index := FModel.NextSymbolIdSameName(Index);
   end;
 end;
 
@@ -547,13 +745,18 @@ begin
 
   MatchCount := 0;
   SeenTypeIds := specialize TVec<LongInt>.Create;
-  for Index := 0 to FModel.SymbolCount - 1 do
+  { Name-chain of type symbols for AReceiverName, not full symbol table. }
+  Index := FModel.FirstSymbolIdByName(AReceiverName);
+  while Index > 0 do
   begin
-    Symbol := FModel.SymbolAt(Index);
+    Symbol := FModel.SymbolAt(Index - 1);
     if not SameText(Symbol.Kind, 'type') or
       not SameText(Symbol.Name, AReceiverName) or
       (Symbol.TypeId <= 0) or (Symbol.TypeId > FModel.TypeCount) then
+    begin
+      Index := FModel.NextSymbolIdSameName(Index);
       Continue;
+    end;
 
     CandidateTypeId := Symbol.TypeId;
     TypeAlreadySeen := False;
@@ -564,7 +767,10 @@ begin
         Break;
       end;
     if TypeAlreadySeen then
+    begin
+      Index := FModel.NextSymbolIdSameName(Index);
       Continue;
+    end;
 
     SeenTypeIds.Push(CandidateTypeId);
 
@@ -582,14 +788,21 @@ begin
       Candidates
     );
     if CandidateTargetSymbolId <= 0 then
+    begin
+      Index := FModel.NextSymbolIdSameName(Index);
       Continue;
+    end;
 
     Inc(MatchCount);
     if MatchCount > 1 then
+    begin
+      SeenTypeIds.Free;
       Exit(False);
+    end;
 
     AReceiverTypeId := CandidateTypeId;
     ATargetSymbolId := CandidateTargetSymbolId;
+    Index := FModel.NextSymbolIdSameName(Index);
   end;
 
   SeenTypeIds.Free;
@@ -648,9 +861,19 @@ begin
   Result := np_sema_type_check.TypeMetaSize(FModel, ATypeName);
 end;
 
+function TSemanticAnalyzer.TypeMetaIsDynArrayType(const ATypeName: string): Boolean;
+begin
+  Result := np_sema_type_check.TypeMetaIsDynArrayType(FModel, ATypeName);
+end;
+
 function TSemanticAnalyzer.TypeMetaIsRecord(const ATypeName: string): Boolean;
 begin
   Result := np_sema_type_check.TypeMetaIsRecord(FModel, ATypeName);
+end;
+
+function TSemanticAnalyzer.TypeMetaIsPointer(const ATypeName: string): Boolean;
+begin
+  Result := np_sema_type_check.TypeMetaIsPointer(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsClass(const ATypeName: string): Boolean;

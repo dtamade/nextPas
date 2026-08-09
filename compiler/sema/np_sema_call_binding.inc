@@ -1,28 +1,3 @@
-  if SameText(AMemberName, 'Create') or SameText(AMemberName, 'Destroy') or
-    SameText(AMemberName, 'CreateFmt') or SameText(AMemberName, 'CreateRes') or
-    SameText(AMemberName, 'Equal') then
-  begin
-    QualifiedName := TypeSymbol.Name + '.' + AMemberName;
-    for Index := 0 to FModel.SymbolCount - 1 do
-    begin
-      Symbol := FModel.SymbolAt(Index);
-      if SameText(Symbol.Name, QualifiedName) and
-        (SameText(Symbol.Kind, 'constructor') or
-         SameText(Symbol.Kind, 'destructor') or
-         SameText(Symbol.Kind, 'method')) then
-      begin
-        AMethodNameFound := True;
-        if (AArgCount >= Symbol.MinParamCount) and
-           (AArgCount <= Symbol.ParamCount) then
-        begin
-          Result := Symbol.SymbolId;
-          Exit;
-        end;
-      end;
-    end;
-    Exit;
-  end;
-
   QualifiedName := TypeSymbol.Name + '.' + AMemberName;
   HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
     TypeIdArrayHasKnownTypes(AArgTypeIds);
@@ -31,9 +6,127 @@
   SymbolMatchCount := 0;
   SignatureMatchCount := 0;
   SetLength(ACandidates, 0);
-  for Index := 0 to FModel.SymbolCount - 1 do
+  BodyCandidateCount := 0;
+  BodyCompatibleMatchCount := 0;
+  BodyCompatibleMatchIndex := -1;
+  BodyExactMatchCount := 0;
+  BodyExactMatchIndex := -1;
+  BodyMatchCount := 0;
+
+  { Body name-index first (O(overloads)). L3 SeedCallBindings hits this path
+    for every member call; scanning all ~19k symbols first was the hang. }
+  Index := FirstBodyIndexForNameLocal(QualifiedName);
+  while Index >= 0 do
   begin
-    Symbol := FModel.SymbolAt(Index);
+    if SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
+    begin
+      AMethodNameFound := True;
+      Inc(BodyCandidateCount);
+      if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
+      begin
+        if HasArgTypeIds and DeclParamTypesExactMatch(
+          FProcedureBodies[Index].Decl,
+          TypeSymbol.OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          BodyExactMatchIndex := Index;
+          Inc(BodyExactMatchCount);
+        end
+        else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
+          FProcedureBodies[Index].Decl,
+          TypeSymbol.OwnerUnitId,
+          AArgTypeIds,
+          AArgCount
+        ) then
+        begin
+          BodyCompatibleMatchIndex := Index;
+          Inc(BodyCompatibleMatchCount);
+        end;
+        if (not AHasArgSignature) or
+          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
+          Inc(BodyMatchCount);
+      end;
+    end;
+    Index := NextBodyIndexForNameLocal(Index);
+  end;
+  if HasArgTypeIds and
+    ((BodyExactMatchCount > 0) or (BodyCompatibleMatchCount > 0)) then
+  begin
+    { C8/M2 permissive: identical multi-body exact/compatible → last index. }
+    if BodyExactMatchCount >= 1 then
+      Exit(CallableSymbolIdForDeclaration(
+        FProcedureBodies[BodyExactMatchIndex].Decl,
+        TypeSymbol.OwnerUnitId
+      ));
+    if BodyCompatibleMatchCount >= 1 then
+      Exit(CallableSymbolIdForDeclaration(
+        FProcedureBodies[BodyCompatibleMatchIndex].Decl,
+        TypeSymbol.OwnerUnitId
+      ));
+  end;
+  { Arg types unknown: still bind unique body by arity (common in SeedCallBindings). }
+  if BodyMatchCount = 1 then
+  begin
+    Index := FirstBodyIndexForNameLocal(QualifiedName);
+    while Index >= 0 do
+    begin
+      if SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) and
+        DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) and
+        ((not AHasArgSignature) or
+          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature)) then
+        Exit(CallableSymbolIdForDeclaration(
+          FProcedureBodies[Index].Decl, TypeSymbol.OwnerUnitId));
+      Index := NextBodyIndexForNameLocal(Index);
+    end;
+  end;
+
+  { Create/Destroy-style members: body miss → O(1) name index, not full table. }
+  if SameText(AMemberName, 'Create') or SameText(AMemberName, 'Destroy') or
+    SameText(AMemberName, 'CreateFmt') or SameText(AMemberName, 'CreateRes') or
+    SameText(AMemberName, 'Equal') then
+  begin
+    if BodyMatchCount = 1 then
+    begin
+      { Single argcount-accepting body already found above. }
+      Index := FirstBodyIndexForNameLocal(QualifiedName);
+      while Index >= 0 do
+      begin
+        if SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) and
+          DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
+          Exit(CallableSymbolIdForDeclaration(
+            FProcedureBodies[Index].Decl, TypeSymbol.OwnerUnitId));
+        Index := NextBodyIndexForNameLocal(Index);
+      end;
+    end;
+    SymbolId := FModel.FindSymbolByName(QualifiedName);
+    if SymbolId > 0 then
+    begin
+      Symbol := FModel.SymbolAt(SymbolId - 1);
+      if SameText(Symbol.Kind, 'constructor') or
+        SameText(Symbol.Kind, 'destructor') or
+        SameText(Symbol.Kind, 'method') then
+      begin
+        AMethodNameFound := True;
+        if (AArgCount >= Symbol.MinParamCount) and
+          (AArgCount <= Symbol.ParamCount) then
+          Exit(SymbolId);
+      end;
+    end;
+    Exit;
+  end;
+
+  { Symbol table only when body path did not uniquely resolve.
+    Walk name-chain O(overloads), not O(all ~19k symbols). }
+  SymbolId := 0;
+  SignatureSymbolId := 0;
+  SymbolMatchCount := 0;
+  SignatureMatchCount := 0;
+  Index := FModel.FirstSymbolIdByName(QualifiedName);
+  while Index > 0 do
+  begin
+    Symbol := FModel.SymbolAt(Index - 1);
     if SameText(Symbol.Name, QualifiedName) and
       (SameText(Symbol.Kind, 'method') or
        SameText(Symbol.Kind, 'constructor') or
@@ -65,68 +158,7 @@
         end;
       end;
     end;
-  end;
-  BodyCandidateCount := 0;
-  BodyCompatibleMatchCount := 0;
-  BodyCompatibleMatchIndex := -1;
-  BodyExactMatchCount := 0;
-  BodyExactMatchIndex := -1;
-  BodyMatchCount := 0;
-  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    if SameText(FProcedureBodies[Index].Name, QualifiedName) and
-      SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
-    begin
-      Inc(BodyCandidateCount);
-      if DeclAcceptsArgCount(FProcedureBodies[Index].Decl, AArgCount) then
-      begin
-        if HasArgTypeIds and DeclParamTypesExactMatch(
-          FProcedureBodies[Index].Decl,
-          TypeSymbol.OwnerUnitId,
-          AArgTypeIds,
-          AArgCount
-        ) then
-        begin
-          BodyExactMatchIndex := Index;
-          Inc(BodyExactMatchCount);
-        end
-        else if HasArgTypeIds and DeclParamTypesCompatibleMatch(
-          FProcedureBodies[Index].Decl,
-          TypeSymbol.OwnerUnitId,
-          AArgTypeIds,
-          AArgCount
-        ) then
-        begin
-          BodyCompatibleMatchIndex := Index;
-          Inc(BodyCompatibleMatchCount);
-        end;
-        if (not AHasArgSignature) or
-          SameText(GetParamSignature(FProcedureBodies[Index].Decl), AArgSignature) then
-          Inc(BodyMatchCount);
-      end;
-    end;
-  if HasArgTypeIds and
-    ((BodyExactMatchCount > 0) or (BodyCompatibleMatchCount > 0)) then
-  begin
-    if BodyExactMatchCount = 1 then
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyExactMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
-    if BodyExactMatchCount > 1 then
-    begin
-      AResolutionFailureKind := 'ambiguous-overload';
-      Exit(0);
-    end;
-    if BodyCompatibleMatchCount = 1 then
-      Exit(CallableSymbolIdForDeclaration(
-        FProcedureBodies[BodyCompatibleMatchIndex].Decl,
-        TypeSymbol.OwnerUnitId
-      ));
-    if BodyCompatibleMatchCount > 1 then
-    begin
-      AResolutionFailureKind := 'ambiguous-overload';
-      Exit(0);
-    end;
+    Index := FModel.NextSymbolIdSameName(Index);
   end;
   if SymbolMatchCount = 0 then
   begin
@@ -165,9 +197,10 @@
       // a genuine ambiguous overload within the same unit.
       SameOwnerCount := 0;
       SameOwnerSymbolId := 0;
-      for Index := 0 to FModel.SymbolCount - 1 do
+      Index := FModel.FirstSymbolIdByName(QualifiedName);
+      while Index > 0 do
       begin
-        Symbol := FModel.SymbolAt(Index);
+        Symbol := FModel.SymbolAt(Index - 1);
         if SameText(Symbol.Name, QualifiedName) and
           (SameText(Symbol.Kind, 'method') or
            SameText(Symbol.Kind, 'constructor') or
@@ -182,6 +215,7 @@
           if SameOwnerSymbolId = 0 then
             SameOwnerSymbolId := Symbol.SymbolId;
         end;
+        Index := FModel.NextSymbolIdSameName(Index);
       end;
       if SameOwnerCount = 1 then
         SymbolId := SameOwnerSymbolId
@@ -195,9 +229,10 @@
     begin
         BestDist := MaxInt;
         BestSymbolId := 0;
-        for Index := 0 to FModel.SymbolCount - 1 do
+        Index := FModel.FirstSymbolIdByName(QualifiedName);
+        while Index > 0 do
         begin
-          Symbol := FModel.SymbolAt(Index);
+          Symbol := FModel.SymbolAt(Index - 1);
           if SameText(Symbol.Name, QualifiedName) and
             (SameText(Symbol.Kind, 'method') or
              SameText(Symbol.Kind, 'constructor') or
@@ -214,6 +249,7 @@
               BestSymbolId := Symbol.SymbolId;
             end;
           end;
+          Index := FModel.NextSymbolIdSameName(Index);
         end;
         if BestSymbolId > 0 then
         begin
@@ -641,13 +677,11 @@ var
   ParamCount: LongInt;
   ParamSignature: string;
   Symbol: TSemanticSymbol;
+  SymbolId: LongInt;
   TypeId: LongInt;
 begin
   Result := 0;
   if ADecl = nil then
-    Exit;
-
-  if Pos('.', ADecl.Text) > 0 then
     Exit;
 
   if ADecl.NodeKind = gnkFunctionDecl then
@@ -659,31 +693,62 @@ begin
   ParamCount := CountDeclParams(ADecl);
   ParamSignature := GetParamSignature(ADecl);
 
-  for Index := 0 to FModel.SymbolCount - 1 do
+  { Name-chain scan O(overloads), not O(all symbols). }
+  SymbolId := FModel.FirstSymbolIdByName(ADecl.Text);
+  while SymbolId > 0 do
   begin
-    Symbol := FModel.SymbolAt(Index);
+    Symbol := FModel.SymbolAt(SymbolId - 1);
     if (Symbol.ByteOffset = ADecl.ByteOffset) and
       SameText(Symbol.Name, ADecl.Text) and
       ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
       (SameText(Symbol.Kind, 'procedure') or
        SameText(Symbol.Kind, 'function') or
-       SameText(Symbol.Kind, 'method')) then
+       SameText(Symbol.Kind, 'method') or
+       SameText(Symbol.Kind, 'constructor') or
+       SameText(Symbol.Kind, 'destructor')) then
       Exit(Symbol.SymbolId);
+    SymbolId := FModel.NextSymbolIdSameName(SymbolId);
   end;
 
-  for Index := 0 to FModel.SymbolCount - 1 do
+  SymbolId := FModel.FirstSymbolIdByName(ADecl.Text);
+  while SymbolId > 0 do
   begin
-    Symbol := FModel.SymbolAt(Index);
+    Symbol := FModel.SymbolAt(SymbolId - 1);
     if SameText(Symbol.Name, ADecl.Text) and
       ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
-      ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind)) and
+      ((ExpectedKind = '') or SameText(Symbol.Kind, ExpectedKind) or
+        SameText(Symbol.Kind, 'method') or
+        SameText(Symbol.Kind, 'constructor') or
+        SameText(Symbol.Kind, 'destructor')) and
       (Symbol.ParamCount = ParamCount) and
       SameText(Symbol.ParamSignature, ParamSignature) then
       Exit(Symbol.SymbolId);
+    SymbolId := FModel.NextSymbolIdSameName(SymbolId);
   end;
 
   if (ExpectedKind = '') or (AOwnerUnitId = '') then
     Exit;
+
+  { Qualified method decls (TFoo.Bar) still need a symbol id for bindings. }
+  if Pos('.', ADecl.Text) > 0 then
+  begin
+    SymbolId := FModel.FirstSymbolIdByName(ADecl.Text);
+    while SymbolId > 0 do
+    begin
+      Symbol := FModel.SymbolAt(SymbolId - 1);
+      if SameText(Symbol.Name, ADecl.Text) and
+        ((AOwnerUnitId = '') or SameText(Symbol.OwnerUnitId, AOwnerUnitId)) and
+        (SameText(Symbol.Kind, 'method') or
+         SameText(Symbol.Kind, 'constructor') or
+         SameText(Symbol.Kind, 'destructor') or
+         SameText(Symbol.Kind, 'function') or
+         SameText(Symbol.Kind, 'procedure')) and
+        ((Symbol.ParamCount < 0) or (Symbol.ParamCount = ParamCount)) then
+        Exit(Symbol.SymbolId);
+      SymbolId := FModel.NextSymbolIdSameName(SymbolId);
+    end;
+    Exit(0);
+  end;
 
   TypeId := 0;
   if ADecl.NodeKind = gnkFunctionDecl then

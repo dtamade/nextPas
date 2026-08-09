@@ -81,7 +81,10 @@ begin
   end;
 
   ASourceText := string(Buffer);
-  Result := BuildCoreOkResult;
+  { Avoid bare zero-arg `BuildCoreOkResult` — stage0 residual-calls it as
+    @BuildCoreOkResult() without body/sret. Materialize TCoreResult fields. }
+  Result.Code := crcOk;
+  Result.Detail := '';
 end;
 
 end.

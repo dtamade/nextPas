@@ -12,7 +12,8 @@ uses
   nextpas.core.mem.span,
   nextpas.core.mem.central,
   nextpas.core.mem.cache.thread,
-  nextpas.core.mem.shuffle;
+  nextpas.core.mem.shuffle,
+  nextpas.core.platform.thread;
 
 type
   {** Aggregate scavenger / retention snapshot for TGrowingAllocator.
@@ -170,7 +171,8 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  { Portable thread id — not Windows GetCurrentThreadId (bare residual on linux). }
+  LThreadId := QWord(platform_thread_id);
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -191,7 +193,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  LThreadId := QWord(platform_thread_id);
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -447,7 +449,6 @@ procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 var
   LIndex: Int32;
   LNode: PFreeNode;
-  LOwnerThreadId: QWord;
 begin
   if APtr = nil then
     Exit;
@@ -466,18 +467,14 @@ begin
     NpSystemFreeMem(APtr);
     Exit;
   end;
-  { Cross-thread free optimization: check if block belongs to another thread.
-    If so, return directly to central pool. We avoid pushing to the owner's
-    per-thread inbox because the owner thread may be exiting concurrently,
-    making its threadvar cache a dangling pointer (use-after-free).
-    Central pool free is always safe and correct. }
-  LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
-  if (LOwnerThreadId <> 0) and (LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId))) then
-  begin
-    CentralPoolFree(FCentrals[LIndex], 1, @APtr, GThreadCache.FOpCount);
-    Exit;
-  end;
-  { Same-thread free: push to local TLS cache. }
+  { Hot free path: always push to freeer's TLS freelist — O(1), no span scan.
+    Prior design scanned FindSpanOwnerThreadId every free for cross-thread
+    routing to central; under high span counts (compiler unit-graph free) that
+    became the dominant cost (linear in spans per size class).
+
+    Cross-thread free remains correct: freeer's TLS reuses the block; flush
+    returns it to the owning span via FindSpanIndex. Avoid owner-inbox push
+    (thread exit UAF). Central-only cross-thread path is optional optimization. }
   if GThreadCache.FCounts[LIndex] < CACHE_ADAPTIVE_MAX_SMALL then
   begin
     LNode := PFreeNode(APtr);

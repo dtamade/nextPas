@@ -1,6 +1,6 @@
 # nextPas 项目总控计划
 
-> 最后更新：2026-07-14
+> 最后更新：2026-07-26
 > 当前可证明成熟度：AL1 骨架期；历史 AL2 声明正在按 production gate 复核
 > 当前编译器执行计划：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
 > 成熟度定义：`docs/architecture/architecture-maturity-levels.md`
@@ -27,8 +27,14 @@
 - query database、parallel scheduler 和 MIR 均已有骨架，但尚未成为 typed、deterministic、
   verified 的默认生产路径。
 - System TypeId、type-parent graph、canonical source-backed cache 和 projection 已进入当前 main
-  基线。object-free root/destroy/cleanup/release 是首个由 `TSystemContractKind` 控制 HIR
-  validation 与 LLVM dispatch 的 production family；M1 其余 contract families 仍未迁移。
+  基线。`TSystemContractKind` 控制 HIR validation 与 LLVM dispatch 的 production families
+  已有：object-free、process init/fini、string ownership triad、dynarray set_length/fini、
+  interface addref/release、halt；M1 其余 residual families 仍未迁移。
+- M2 两跳自举已开跑：M2-0 harness + LLVM smoke、M2-1 ladder L0–L2 均绿；
+  M2-2（L3 = full stage0 driver A→B link）卡在 `opt` residual undefined symbols
+  （2026-07-26 实测 80 unique / 251 total；执行入口：`docs/plans/m2/ROADMAP.md`）。
+  生产 codegen 路径 = Typed HIR → LLVM；
+  MIR 冻结为 experimental，不作为 gen-B 正确性证据。
 
 因此当前等级保持 AL1。任何 AL2、self-host、incremental、parallel、MIR 或性能晋级都必须
 由 active roadmap 中的 fresh promotion gate 证明。
@@ -60,8 +66,12 @@
    compiler-fail 16/16。
 5. [x] 恢复 canonical `make rebuild-compiler`。
 6. [ ] 建立 fail-closed B0 benchmark 和完整进程树 RSS。
-7. [ ] 继续 System typed contract migration；object-free 是首个 production family，M1 未完成。
-8. [ ] 完成 M1 exit gate 后进入 FPC-only-A 的 M2 A→B→C 证明。
+7. [ ] 继续 System typed contract migration；object-free、process init/fini、string triad、
+   dynarray、interface、halt families 已落地，其余 residual 待迁移，M1 未完成。
+8. [~] M2 A→B→C 证明已开跑（与 M1 residual 迁移并行）：M2-0 harness + M2-1 ladder
+   L0–L2 ✅；当前主战场是 M2-2（L3 A→B link）residual undefined symbols 清理，
+   唯一执行入口 `docs/plans/m2/ROADMAP.md`（咬合队列 B0–B8，探针
+   `scripts/m2-l3-residual.sh`）。M3+ 大迁移仍以 M2 闭合为前置。
 
 ## 权威文档
 

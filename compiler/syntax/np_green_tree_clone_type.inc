@@ -189,10 +189,91 @@ begin
                     Inc(ACursor);
                 end;
               end
+              else if CurrentToken(ALexer, ACursor).Kind = tkPropertyKeyword then
+              begin
+                { Record properties were token-skipped here, so sema never saw
+                  the declared read/write targets — `S := Rec.Prop` residual-
+                  called @Type.Prop (M2 B3b). Emit the same gnkClassProperty
+                  shape the class branch below produces. }
+                Inc(ACursor);
+                if (ACursor < ALexer.TokenCount) and
+                  (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                begin
+                  ElementNode := TGreenNode.Create(gnkClassProperty,
+                    CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                    CurrentToken(ALexer, ACursor).Lexeme);
+                  TypeNode.AppendChild(ElementNode);
+                  Inc(ATree.FNodeCount);
+                  Inc(ACursor);
+                  if (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind = tkColon) then
+                  begin
+                    Inc(ACursor);
+                    if (ACursor < ALexer.TokenCount) and
+                      ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
+                       (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
+                    begin
+                      IndexNode := TGreenNode.Create(gnkIdentifier,
+                        CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                        CurrentToken(ALexer, ACursor).Lexeme);
+                      ElementNode.AppendChild(IndexNode);
+                      Inc(ATree.FNodeCount);
+                      Inc(ACursor);
+                    end;
+                  end;
+                  while (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                  begin
+                    if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                      (LowerCase(CurrentToken(ALexer, ACursor).Lexeme) = 'read') then
+                    begin
+                      Inc(ACursor);
+                      if (ACursor < ALexer.TokenCount) and
+                        (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                      begin
+                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                          CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                          'read:' + CurrentToken(ALexer, ACursor).Lexeme);
+                        ElementNode.AppendChild(IndexNode);
+                        Inc(ATree.FNodeCount);
+                        Inc(ACursor);
+                      end;
+                    end
+                    else if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                      (LowerCase(CurrentToken(ALexer, ACursor).Lexeme) = 'write') then
+                    begin
+                      Inc(ACursor);
+                      if (ACursor < ALexer.TokenCount) and
+                        (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                      begin
+                        IndexNode := TGreenNode.Create(gnkIdentifier,
+                          CurrentToken(ALexer, ACursor).ByteOffset, 0,
+                          'write:' + CurrentToken(ALexer, ACursor).Lexeme);
+                        ElementNode.AppendChild(IndexNode);
+                        Inc(ATree.FNodeCount);
+                        Inc(ACursor);
+                      end;
+                    end
+                    else
+                      Inc(ACursor);
+                  end;
+                end
+                else
+                begin
+                  while (ACursor < ALexer.TokenCount) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                    Inc(ACursor);
+                end;
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+              end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
                  tkConstructorKeyword, tkDestructorKeyword, tkOperatorKeyword,
-                 tkPropertyKeyword, tkStaticKeyword, tkGenericKeyword] then
+                 tkStaticKeyword, tkGenericKeyword] then
               begin
                 I := 0;
                 while (ACursor < ALexer.TokenCount) and
@@ -348,6 +429,9 @@ begin
             else if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkOfKeyword) then
             begin
+              { Mark class-of so sema can distinguish from empty
+                `ClassName = class(Parent);` (also ChildCount=1). }
+              TypeNode.Text := 'of';
               Inc(ACursor);
               ElementNode := ParseTypeReference(ALexer, ACursor, ADiagnostics,
                 ARootFileId);
@@ -922,9 +1006,20 @@ begin
         tkCaret:
           begin
             Inc(ACursor);
+            { Keep '^Pointee' text — same contract as ParseTypeReference.
+              Dropping the caret made `PFoo = ^TFoo` look like a value alias of
+              TFoo (often a record), so locals/returns became recvar/sret. }
             TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
             if TypeNode <> nil then
             begin
+              if (Length(TypeNode.Text) = 0) or (TypeNode.Text[1] <> '^') then
+              begin
+                ElementNode := TypeNode;
+                TypeNode := TGreenNode.Create(ElementNode.NodeKind,
+                  ElementNode.ByteOffset, Length('^' + ElementNode.Text),
+                  '^' + ElementNode.Text);
+                Inc(ATree.FNodeCount);
+              end;
               Decl.AppendChild(TypeNode);
               Inc(ATree.FNodeCount);
             end;

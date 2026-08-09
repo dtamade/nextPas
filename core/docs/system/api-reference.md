@@ -446,6 +446,10 @@ function GetEnumValue(ATypeInfo: PTypeInfo; const AName: string): SizeInt;
 
 ## 5. SysUtils 门面（nextpas.core.system.sysutils）
 
+薄兼容门面：下列符号在 **sysutils 单元上可见**，但文本类实现 owner 是
+`nextpas.core.text.conv`（Format / SameText / IntToStr / Trim 等），异常别名 owner 是
+`nextpas.core.exception`。**禁止**把 `system.sysutils` 写成这些 API 的实现 owner。
+
 ```pascal
 uses nextpas.core.system.sysutils;
 

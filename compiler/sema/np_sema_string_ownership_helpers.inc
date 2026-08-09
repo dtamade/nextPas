@@ -290,7 +290,7 @@ begin
   Operand := EncodeStrCallArgs(CallNode, TempName);
   FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0, TempName);
   FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    TempName + #9 + 'callee ' + SourceName + #9 + Operand);
+    TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 + Operand);
   FModel.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
     'strvar ' + TempName + #10);
   FModel.AddTypedHirNode('string-temp-release-runtime', SourceName, 0, 0,
@@ -796,6 +796,9 @@ begin
     end;
     if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
       Blob := 'strvar ' + ArgNode.Text + #10
+    else if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeArrVar(ArgNode.Text) then
+      { open-array / array of const formal → (ptr,len) like strvar }
+      Blob := 'arrvar ' + ArgNode.Text + #10
     else if (ArgNode.NodeKind = gnkIdentifier) and IsRecordVar(ArgNode.Text) then
       { const/var record formal (Batch 25 Length(GetS(R))). }
       Blob := 'recvar ' + ArgNode.Text + #10
@@ -809,7 +812,7 @@ begin
       FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
         0, 0, TempName);
       FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
+        0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
         'ptr len owner alloc_size');
       FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
         ACallNode.Text, 0, 0, 'strvar ' + TempName + #10);
@@ -866,6 +869,9 @@ begin
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
       IsRuntimeStrVar(ArgNode.Text) then
       Result := Result + #9 + 'strvar ' + ArgNode.Text + #10
+    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+      IsRuntimeArrVar(ArgNode.Text) then
+      Result := Result + #9 + 'arrvar ' + ArgNode.Text + #10
     else if (ArgNode <> nil) and IsSupportedOwnedStringReturnArgument(
       ACallNode, ArgNode, ParamIndex) and
       StringReturnFunctionNameFromNode(ArgNode, SourceName) then
@@ -877,7 +883,7 @@ begin
       FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
         0, 0, TempName);
       FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + SourceName + #9 +
+        0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
         'ptr len owner alloc_size');
       FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
         ACallName, 0, 0, 'strvar ' + TempName + #10);
@@ -940,6 +946,10 @@ begin
   end;
   FPendingSignatures.Free;
   FProcedureBodies.Free;
+  FProcedureBodyNameNext.Free;
+  FProcedureBodyNameNext := nil;
+  FProcedureBodyNameFirst.Free;
+  FProcedureBodyNameFirst := nil;
   FBuiltinRegistry.Free;
   FRuntimeVars.Free;
   FModel.Free;

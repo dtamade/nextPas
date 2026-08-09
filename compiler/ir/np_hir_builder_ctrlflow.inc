@@ -50,9 +50,20 @@ var
   Blob, LabelPart, ThenLabel, ElseLabel: string;
   TabPos, NlPos: LongInt;
 begin
+  WriteLn(StdErr, '[hir] ProcessCondBr enter');
+  Flush(StdErr);
   Blob := ANode.Operand;
+  WriteLn(StdErr, '[hir] ProcessCondBr begin expr=', IntToStr(ANode.ExprId),
+    ' opLen=', IntToStr(Length(Blob)),
+    ' op=', Copy(Blob, 1, 120));
+  Flush(StdErr);
   NlPos := Pos('labels ', Blob);
-  if NlPos = 0 then Exit;
+  if NlPos = 0 then
+  begin
+    WriteLn(StdErr, '[hir] ProcessCondBr exit no-labels');
+    Flush(StdErr);
+    Exit;
+  end;
 
   LabelPart := Copy(Blob, NlPos + 7, Length(Blob));
   TabPos := Pos(#9, LabelPart);
@@ -64,20 +75,37 @@ begin
       ElseLabel := Copy(ElseLabel, 1, Length(ElseLabel) - 1);
   end
   else
+  begin
+    WriteLn(StdErr, '[hir] ProcessCondBr exit no-tab');
+    Flush(StdErr);
     Exit;
+  end;
 
+  WriteLn(StdErr, '[hir] ProcessCondBr labels then=', ThenLabel,
+    ' else=', ElseLabel, ' lower...');
+  Flush(StdErr);
   V := LowerNodeExprOrBlob(ANode, Copy(Blob, 1, NlPos - 1));
+  WriteLn(StdErr, '[hir] ProcessCondBr lowered V=', IntToStr(V),
+    ' ensure-blocks...');
+  Flush(StdErr);
 
   FillChar(Term, SizeOf(Term), 0);
   Term.Kind := htkCondBranch;
   Term.Condition := V;
   Term.TrueBlock := EnsureBlock(ThenLabel);
   Term.FalseBlock := EnsureBlock(ElseLabel);
+  WriteLn(StdErr, '[hir] ProcessCondBr blocks true=', IntToStr(Term.TrueBlock),
+    ' false=', IntToStr(Term.FalseBlock),
+    ' func=', IntToStr(FCurrentFuncId),
+    ' block=', IntToStr(FCurrentBlockId));
+  Flush(StdErr);
   if (FCurrentFuncId <> 0) and (FCurrentBlockId <> 0) then
   begin
     FModule.SetTerminator(FCurrentFuncId, FCurrentBlockId, Term);
     FBlockTerminated := True;
   end;
+  WriteLn(StdErr, '[hir] ProcessCondBr done');
+  Flush(StdErr);
 end;
 
 procedure THIRBuilder.ProcessSwitch(const ANode: TTypedHirNode);

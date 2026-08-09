@@ -222,7 +222,7 @@ begin
   Inc(ACursor);
 
   while (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) do
+    IsVarNameToken(CurrentToken(ALexer, ACursor).Kind) do
   begin
     NameToken := CurrentToken(ALexer, ACursor);
     Decl := TGreenNode.Create(gnkVarDecl, NameToken.ByteOffset, 0,
@@ -235,7 +235,7 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkComma) do
     begin
       Inc(ACursor);
-      if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+      if IsVarNameToken(CurrentToken(ALexer, ACursor).Kind) then
       begin
         NameToken := CurrentToken(ALexer, ACursor);
         Decl := TGreenNode.Create(gnkVarDecl, NameToken.ByteOffset, 0,
@@ -285,6 +285,25 @@ begin
   Result := True;
 end;
 
+function ConstDeclHasArrayType(const ADecl: TGreenNode): Boolean;
+var
+  I: LongInt;
+  Child: TGreenNode;
+begin
+  { Typed const `Name: array[...] of T = (...)` keeps the array type child.
+    Only those paren lists are aggregate initializers; bare `(expr)` / `(a-b) div c`
+    must go through ParseExpression or ProcessConstSection never seeds the value. }
+  Result := False;
+  if ADecl = nil then
+    Exit;
+  for I := 0 to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(I);
+    if (Child <> nil) and (Child.NodeKind = gnkArrayType) then
+      Exit(True);
+  end;
+end;
+
 function ParseConstSection(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
@@ -331,8 +350,12 @@ begin
       (CurrentToken(ALexer, ACursor).Kind = tkEquals) then
     begin
       Inc(ACursor);
+      { Aggregate skip only for typed array consts. Untyped/scalar
+        `= (BAND0_MAX - BAND0_MIN) div STEP + 1` used to hit this branch,
+        drop the value AST, and residual-call @BAND0_COUNT(). }
       if (ACursor < ALexer.TokenCount) and
-        (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+        (CurrentToken(ALexer, ACursor).Kind = tkLParen) and
+        ConstDeclHasArrayType(Decl) then
       begin
         Inc(ACursor);
         while (ACursor < ALexer.TokenCount) and

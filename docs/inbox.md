@@ -1,5 +1,11 @@
 # nextPas 工作看板
 
+> **状态：历史快照（2026-06-03 C5-P 时代），内容已过期，不再维护。**
+> 当前状态入口：`PLAN.md`（总控）→
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9 权威路线）→
+> `docs/plans/m2/wave0-ledger.md`（M2 当前卡点台账）。
+> 下文「入口文档」指向的 compiler-goal-tree 亦已降级为历史快照。
+
 > 快速扫状态用，不是日志。
 
 ## 当前在做什么

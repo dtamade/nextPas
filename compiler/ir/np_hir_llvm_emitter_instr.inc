@@ -43,6 +43,8 @@ begin
           Op := Op + ' ; ' + AInstr.CallTarget;
         Emit(Op);
       end;
+      { Alloca result is always ptr — note so icmp/load casts can see it. }
+      NoteValueLlvmType(AInstr.ResultId, 'ptr');
     end;
     hikLoad:
     begin
@@ -65,8 +67,11 @@ begin
         end
         else if Length(AInstr.Operands) > 0 then
         begin
+          { Addr may be i64 (PPointer/PUInt64 results); cast to ptr for load. }
+          Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'ldaddr.' + IntToStr(AInstr.ResultId));
           Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+            ', ptr ' + Op);
           NoteValueLlvmType(AInstr.ResultId, LlvmType);
         end
         else
@@ -78,8 +83,10 @@ begin
       end
       else if Length(AInstr.Operands) > 0 then
       begin
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+          'ldaddr.' + IntToStr(AInstr.ResultId));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = load ' + LlvmType +
-          ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          ', ptr ' + Op);
         NoteValueLlvmType(AInstr.ResultId, LlvmType);
       end
       else
@@ -99,8 +106,11 @@ begin
         Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
           'st.' + IntToStr(AInstr.Operands[0].ValueId) + '.' +
           IntToStr(AInstr.Operands[1].ValueId));
+        { Dest may be i64 pointer handle. }
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'ptr',
+          'staddr.' + IntToStr(AInstr.Operands[1].ValueId));
         Emit('  store ' + LlvmType + ' ' + Op +
-          ', ptr ' + ValueRef(AInstr.Operands[1].ValueId));
+          ', ptr ' + LTruncVal);
       end;
     hikAdd:
       if Length(AInstr.Operands) >= 2 then
@@ -184,13 +194,23 @@ begin
     begin
       if Length(AInstr.Operands) >= 2 then
       begin
+        { Prefer noted SSA types so residual recvar/nil never becomes
+          `icmp i64 0, %alloca` without ptrtoint. If either side is ptr,
+          unify on ptr (inttoptr 0) rather than i64. }
         LlvmType := OperandTypeToLlvm(AInstr.Operands[0], 'i64');
         if ValueLlvmType(AInstr.Operands[0].ValueId, '') <> '' then
           LlvmType := ValueLlvmType(AInstr.Operands[0].ValueId, LlvmType);
+        if ValueLlvmType(AInstr.Operands[1].ValueId, '') = 'ptr' then
+          LlvmType := 'ptr'
+        else if (LlvmType <> 'ptr') and
+          (OperandTypeToLlvm(AInstr.Operands[1], '') = 'ptr') then
+          LlvmType := 'ptr';
         LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
-          'cmp0.' + IntToStr(AInstr.ResultId));
+          'cmp0.' + IntToStr(AInstr.ResultId),
+          OperandTypeToLlvm(AInstr.Operands[0], ''));
         Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
-          'cmp1.' + IntToStr(AInstr.ResultId));
+          'cmp1.' + IntToStr(AInstr.ResultId),
+          OperandTypeToLlvm(AInstr.Operands[1], ''));
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' +
           CompareOpcodeToLlvm(AInstr) + ' ' + LlvmType + ' ' + LTruncVal +
           ', ' + Op);
@@ -240,6 +260,24 @@ begin
             ValueRef(AInstr.Operands[0].ValueId) + ' to ' + LlvmType);
         NoteValueLlvmType(AInstr.ResultId, LlvmType);
       end;
+    hikBitcast:
+      if Length(AInstr.Operands) >= 1 then
+      begin
+        { int↔ptr / ptr↔ptr. Helper may emit %cast.*; rebind onto ResultId. }
+        LlvmType := TypeToLlvm(AInstr.TypeId);
+        if (LlvmType = '') or (LlvmType = 'void') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bitcast.' + IntToStr(AInstr.ResultId),
+          OperandTypeToLlvm(AInstr.Operands[0], ''));
+        if Copy(LlvmType, 1, 1) = 'i' then
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = add ' + LlvmType + ' ' +
+            Op + ', 0')
+        else
+          Emit('  ' + ValueRef(AInstr.ResultId) + ' = bitcast ' + LlvmType +
+            ' ' + Op + ' to ' + LlvmType);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikCall:
     begin
       if AInstr.CallTarget = 'np_process_init' then
@@ -270,19 +308,34 @@ begin
       else
         EmitCallInstr(AInstr);
     end;
+    hikIndirectCall:
+    begin
+      { Operands[0]=callee (ptr or i64 fnptr); Operands[1..]=args. }
+      EmitIndirectCallInstr(AInstr);
+    end;
     hikIntrinsic:
     begin
       if AInstr.IntrinsicName = 'write_int' then
       begin
-        { Batch 29: Operands[0]=value, optional [1]=fd (default 1). }
+        { Batch 29: Operands[0]=value, optional [1]=fd (default 1).
+          Cast to i64: global loads may be i32; mis-lowered string temps are ptr. }
         FNeedsWriteInt := True;
         if Length(AInstr.Operands) >= 2 then
           Emit('  call void @write_i64_decimal(i64 ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ')')
+            EmitCastValueToLlvmType(
+              AInstr.Operands[0].ValueId, 'i64',
+              'writeint.v.' + IntToStr(AInstr.Operands[0].ValueId),
+              ValueLlvmType(AInstr.Operands[0].ValueId, '')) + ', i64 ' +
+            EmitCastValueToLlvmType(
+              AInstr.Operands[1].ValueId, 'i64',
+              'writeint.fd.' + IntToStr(AInstr.Operands[1].ValueId),
+              ValueLlvmType(AInstr.Operands[1].ValueId, '')) + ')')
         else if Length(AInstr.Operands) >= 1 then
           Emit('  call void @write_i64_decimal(i64 ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 1)');
+            EmitCastValueToLlvmType(
+              AInstr.Operands[0].ValueId, 'i64',
+              'writeint.v.' + IntToStr(AInstr.Operands[0].ValueId),
+              ValueLlvmType(AInstr.Operands[0].ValueId, '')) + ', i64 1)');
       end
       else if AInstr.IntrinsicName = 'write_str' then
       begin
@@ -401,20 +454,48 @@ begin
       end
       else if AInstr.IntrinsicName = 'global_ref' then
       begin
+        { Materialize a real SSA def in this block. Silent ResultId→@g_ maps
+          break when the global_ref instr is emitted after a use (block order). }
+        Emit('  %v' + IntToStr(AInstr.ResultId) + ' = bitcast ptr @g_' +
+          AInstr.CallTarget + ' to ptr');
+        NoteValueLlvmType(AInstr.ResultId, 'ptr');
         FGlobalRefNames.Push(AInstr.CallTarget);
         FGlobalRefIds.Push(AInstr.ResultId);
       end
+      else if AInstr.IntrinsicName = 'func_ref' then
+      begin
+        { Procedural pointer: materialize @Name as i64 for i64 formals. }
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = ptrtoint ptr ' +
+          LlvmGlobalRef(AInstr.CallTarget) + ' to i64');
+        NoteValueLlvmType(AInstr.ResultId, 'i64');
+      end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
+        { GEP index is always i64 in LLVM; small int consts (i8/i32 Byte/Integer)
+          must be cast — otherwise opt rejects "defined with type 'i8' but expected 'i64'". }
         if Length(AInstr.Operands) >= 2 then
+        begin
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'gep64.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'gep64.base.' + IntToStr(AInstr.ResultId));
           Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = getelementptr i64, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId));
+            ' = getelementptr i64, ptr ' + LTruncVal + ', i64 ' + Op);
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end;
       end
       else if AInstr.IntrinsicName = 'gep_i8' then
       begin
         if Length(AInstr.Operands) >= 2 then
+        begin
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'gep8.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'gep8.base.' + IntToStr(AInstr.ResultId));
           Emit('  ' + ValueRef(AInstr.ResultId) +
-            ' = getelementptr i8, ptr ' + ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' + ValueRef(AInstr.Operands[1].ValueId));
+            ' = getelementptr i8, ptr ' + LTruncVal + ', i64 ' + Op);
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end;
       end
       else if AInstr.IntrinsicName = 'load_zext_i8' then
       begin
@@ -438,6 +519,46 @@ begin
             ' = select i1 %abs.cmp.' + IntToStr(AInstr.ResultId) +
             ', i64 ' + ValueRef(AInstr.Operands[0].ValueId) +
             ', i64 %abs.neg.' + IntToStr(AInstr.ResultId));
+        end;
+      end
+      else if AInstr.IntrinsicName = 'upcase' then
+      begin
+        { UpCase(char): ['a'..'z'] → c-32, branchless select. }
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  %upc.ge.' + IntToStr(AInstr.ResultId) +
+            ' = icmp sge i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ', 97');
+          Emit('  %upc.le.' + IntToStr(AInstr.ResultId) +
+            ' = icmp sle i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ', 122');
+          Emit('  %upc.in.' + IntToStr(AInstr.ResultId) +
+            ' = and i1 %upc.ge.' + IntToStr(AInstr.ResultId) +
+            ', %upc.le.' + IntToStr(AInstr.ResultId));
+          Emit('  %upc.sub.' + IntToStr(AInstr.ResultId) +
+            ' = sub i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ', 32');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = select i1 %upc.in.' + IntToStr(AInstr.ResultId) +
+            ', i64 %upc.sub.' + IntToStr(AInstr.ResultId) +
+            ', i64 ' + ValueRef(AInstr.Operands[0].ValueId));
+        end;
+      end
+      else if AInstr.IntrinsicName = 'bsf' then
+      begin
+        { FPC Bsf*: index of least-significant set bit → llvm.cttz (zero undef). }
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call i64 @llvm.cttz.i64(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i1 true)');
+      end
+      else if AInstr.IntrinsicName = 'bsr' then
+      begin
+        { FPC Bsr*: index of most-significant set bit → 63 - llvm.ctlz. }
+        if Length(AInstr.Operands) >= 1 then
+        begin
+          Emit('  %bsr.lz.' + IntToStr(AInstr.ResultId) +
+            ' = call i64 @llvm.ctlz.i64(i64 ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i1 true)');
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = sub i64 63, %bsr.lz.' + IntToStr(AInstr.ResultId));
         end;
       end
       else if AInstr.IntrinsicName = 'str_const' then
@@ -606,7 +727,7 @@ begin
             ', %is.next.' + IntToStr(FIsCheckCounter) + ' ]');
           Emit('  %is.eq.' + IntToStr(FIsCheckCounter) +
             ' = icmp eq ptr %is.cur.' + IntToStr(FIsCheckCounter) +
-            ', @' + AInstr.CallTarget + '.vmt');
+            ', ' + LlvmGlobalRef(AInstr.CallTarget + '.vmt'));
           Emit('  br i1 %is.eq.' + IntToStr(FIsCheckCounter) +
             ', label %is.true.' + IntToStr(FIsCheckCounter) +
             ', label %is.next.' + IntToStr(FIsCheckCounter));
@@ -631,25 +752,23 @@ begin
       end
       else if AInstr.IntrinsicName = 'fillchar' then
       begin
+        { FillChar(dst, count, value) → np_memset(ptr, i8 val, i64 n).
+          Count/value often land as i8/i32 constants; cast instead of bare trunc i64. }
         if Length(AInstr.Operands) >= 3 then
         begin
+          Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'fill.dst.' + IntToStr(AInstr.Operands[0].ValueId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[2].ValueId, 'i8',
+            'fill.val.' + IntToStr(AInstr.Operands[2].ValueId));
           if AInstr.ResultId > 0 then
           begin
-            Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc i64 ' +
-              ValueRef(AInstr.Operands[2].ValueId) + ' to i8');
-            Emit('  call void @np_memset(ptr ' +
-              ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
-              ValueRef(AInstr.ResultId) + ', i64 ' +
-              ValueRef(AInstr.Operands[1].ValueId) + ')');
-          end
-          else
-          begin
-            { No result ID - use inline trunc }
-            Emit('  call void @np_memset(ptr ' +
-              ValueRef(AInstr.Operands[0].ValueId) + ', i8 ' +
-              'trunc (i64 ' + ValueRef(AInstr.Operands[2].ValueId) + ' to i8), i64 ' +
-              ValueRef(AInstr.Operands[1].ValueId) + ')');
+            Emit('  ' + ValueRef(AInstr.ResultId) + ' = add i8 ' + LTruncVal + ', 0');
+            NoteValueLlvmType(AInstr.ResultId, 'i8');
+            LTruncVal := ValueRef(AInstr.ResultId);
           end;
+          Emit('  call void @np_memset(ptr ' + Op + ', i8 ' + LTruncVal +
+            ', i64 ' + EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+              'fill.len.' + IntToStr(AInstr.Operands[1].ValueId)) + ')');
           FNeedsMemset := True;
         end;
       end
@@ -658,9 +777,12 @@ begin
         if Length(AInstr.Operands) >= 3 then
         begin
           Emit('  call void @np_memmove(ptr ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ', ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ')');
+            EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'ptr',
+              'mv.dst.' + IntToStr(AInstr.Operands[1].ValueId)) + ', ptr ' +
+            EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+              'mv.src.' + IntToStr(AInstr.Operands[0].ValueId)) + ', i64 ' +
+            EmitCastValueToLlvmType(AInstr.Operands[2].ValueId, 'i64',
+              'mv.len.' + IntToStr(AInstr.Operands[2].ValueId)) + ')');
           FNeedsMemmove := True;
         end;
       end
@@ -771,7 +893,9 @@ begin
           Emit('  call void @np_tstring_from_literal(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
             ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ')');
+            EmitCastValueToLlvmType(AInstr.Operands[2].ValueId, 'i64',
+              'tslit.len.' + IntToStr(AInstr.Operands[2].ValueId),
+              OperandTypeToLlvm(AInstr.Operands[2], 'i64')) + ')');
       end
       else if AInstr.IntrinsicName = 'tstring_copy' then
       begin
@@ -780,8 +904,14 @@ begin
           Emit('  call void @np_tstring_copy(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ', ptr ' +
             ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[3].ValueId) + ')');
+            EmitCastValueToLlvmType(AInstr.Operands[2].ValueId, 'i64',
+              'tscopy.start.' + IntToStr(AInstr.Operands[2].ValueId),
+              OperandTypeToLlvm(AInstr.Operands[2],
+                ValueLlvmType(AInstr.Operands[2].ValueId, 'i64'))) + ', i64 ' +
+            EmitCastValueToLlvmType(AInstr.Operands[3].ValueId, 'i64',
+              'tscopy.count.' + IntToStr(AInstr.Operands[3].ValueId),
+              OperandTypeToLlvm(AInstr.Operands[3],
+                ValueLlvmType(AInstr.Operands[3].ValueId, 'i64'))) + ')');
       end
       else if AInstr.IntrinsicName = 'tstring_concat' then
       begin
@@ -824,15 +954,22 @@ begin
         if Length(AInstr.Operands) >= 2 then
           Emit('  call void @np_tstring_from_int(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
-            ValueRef(AInstr.Operands[1].ValueId) + ')');
+            EmitCastValueToLlvmType(
+              AInstr.Operands[1].ValueId, 'i64',
+              'tsfromint.' + IntToStr(AInstr.Operands[0].ValueId) + '.' +
+                IntToStr(AInstr.Operands[1].ValueId),
+              ValueLlvmType(AInstr.Operands[1].ValueId, '')) + ')');
       end
       else if AInstr.IntrinsicName = 'tstring_data' then
       begin
         FNeedsTStringRuntime := True;
         if Length(AInstr.Operands) >= 1 then
+        begin
           Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = call ptr @np_tstring_data(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end;
       end
     end;
     hikTryBegin:

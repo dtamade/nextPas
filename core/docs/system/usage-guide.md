@@ -326,6 +326,10 @@ end.
 
 ## 4. 使用门面函数
 
+下列示例通过 `nextpas.core.system.sysutils` **兼容门面**调用。文本类
+（`IntToStr` / `StrToInt` / `Format` / `SameText` / `Trim` 等）的实现 owner 是
+`nextpas.core.text.conv`；sysutils 只转发，不是 owner。
+
 ### 4.1 数值转换
 
 ```pascal

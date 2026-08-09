@@ -18,13 +18,15 @@ support that a self-hosted compiler will require.
 | M2-0 harness + LLVM smoke | yes | `make m2-two-hop` → `scripts/m2-two-hop.sh` a-ready + llvm-smoke |
 | Immutable source manifest (declared) | yes | `docs/plans/m2/source-manifest.txt` + `ladder.txt` |
 | M2-1 LLVM ladder L0–L2 | yes | `make m2-ladder` → L0 hello + L1 `np_target_facts` + L2 `nextpas_projection_types` on LLVM |
-| A→B linked nextpas (L3) | **no** | full `tools/stage0/nextpas.pas` still hangs/timeouts under A LLVM |
+| A→B linked nextpas (L3) | **no** | full `tools/stage0/nextpas.pas` now emits `nextpas.ll`, but `opt -O2` fails on residual undefined symbols (~305 unique / ~1338 total at nofold35); no linked B. Live ledger: `docs/plans/m2/wave0-ledger.md` |
 | B→C + equivalence | **no** | M2-3 |
 | Host self-compile module probes | **not** M2 evidence | `build/probe_self_compile_module.sh` forces host FPC assemble |
 
-Known hang under stage0 unit build (host or LLVM, empty envelope): e.g.
-`compiler/diagnostics/np_diagnostics_sink.pas`, `compiler/frontend/np_source_database.pas`.
-Ladder deliberately uses units that complete.
+Historical note: earlier L3 attempts hung with an empty envelope on some units
+(e.g. `compiler/diagnostics/np_diagnostics_sink.pas`,
+`compiler/frontend/np_source_database.pas`); that blocker has been passed — the
+current L3 blocker is residual symbol resolution, not a frontend hang. The
+ladder still lists only units proven to complete for L1/L2.
 
 Current focused fixtures are partial evidence for individual compiler/runtime contracts. A -> B -> C has not executed:
 the repository has not built a runnable stage B from A’s LLVM path over the declared closure, then used

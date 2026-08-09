@@ -71,7 +71,8 @@ function MakeStringBuilder(const AInitialCap: SizeUInt = 256): IStringBuilder;
 implementation
 
 uses
-  nextpas.core.mem,
+  { Avoid nextpas.core.mem facade (arena/pool graph; hangs / false cycles under stage0).
+    Default path uses System heap; allocator path uses IAllocator only. }
   nextpas.core.base,
   nextpas.core.text.number;
 
@@ -205,11 +206,12 @@ begin
     LNewCap := LNewCap * 2;
   end;
   if FAllocator <> nil then
-    FBuf := ReallocMemOf(FAllocator, FBuf, FCap, LNewCap)
+    FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
   else
-    { nextpas.core.mem.ReallocMem is a function (returns the new pointer),
-      not System.ReallocMem(var p). Discarding the result leaves FBuf stale. }
-    FBuf := ReallocMem(FBuf, FCap, LNewCap);
+  begin
+    { System.ReallocMem updates the pointer variable in place. }
+    System.ReallocMem(FBuf, LNewCap);
+  end;
   if (LNewCap > 0) and (FBuf = nil) then
     raise EOutOfMemory.Create('string builder allocation failed');
   FCap := LNewCap;
@@ -221,7 +223,7 @@ begin
   FCap := AInitialCap;
   FAllocator := nil;
   if FCap > 0 then
-    FBuf := GetMem(FCap)
+    FBuf := System.GetMem(FCap)
   else
     FBuf := nil;
 end;
@@ -236,7 +238,7 @@ begin
     if FAllocator <> nil then
       FBuf := FAllocator.GetMem(FCap)
     else
-      FBuf := GetMem(FCap);
+      FBuf := System.GetMem(FCap);
   end
   else
     FBuf := nil;
@@ -247,9 +249,9 @@ begin
   if FBuf <> nil then
   begin
     if FAllocator <> nil then
-      FreeMemOf(FAllocator, FBuf, FCap)
+      FAllocator.FreeMem(FBuf)
     else
-      FreeMem(FBuf, FCap);
+      System.FreeMem(FBuf);
     FBuf := nil;
   end;
   FLen := 0;

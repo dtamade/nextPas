@@ -225,7 +225,7 @@ nextpas.core 框架有很多模块（base, mem, text, fs, platform, ...）。需
 | 异常分类 | `nextpas.core.exception` | re-export 别名 |
 | 错误分类 | `nextpas.core.errors` | re-export 别名 |
 | 内存工具 | `nextpas.core.base.utils` | inline forwarding |
-| 文本转换 | `nextpas.core.text.conv` | sysutils facade |
+| 文本转换（含 Format / SameText / IntToStr / Trim） | `nextpas.core.text.conv` | **仅** `system.sysutils` 薄门面 re-export；sysutils **不是** owner |
 | TypInfo | FPC TypInfo + System | typinfo facade |
 | 平台 API | `nextpas.core.platform` | **禁止直接使用** |
 | OS 单元 | — | **禁止直接使用** |

@@ -1,5 +1,11 @@
 # BOOTSTRAP 工作线 — 任务规格
 
+> **状态：历史快照（≈2026-06 中，S0-S5/Gate 时代）。不再是当前自举路线。**
+> 「Gate 0 system.classes 全局阻塞」等判断已被取代（Classes 门面已推迟，见
+> `CLAUDE.md` 禁止事项）。当前自举权威路线：
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9），
+> 当前执行入口：`docs/plans/m2/README.md`。
+
 ## 目标
 
 推进 nextPas 自举（用 nextPas 编译 nextPas）。`nextpas.core.system` 是编译器与运行时的握手契约层，`compiler/` 是自举的执行引擎。两者合并为一条工作线。

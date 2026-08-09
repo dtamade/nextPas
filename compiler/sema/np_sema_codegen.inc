@@ -1769,10 +1769,10 @@ procedure TSemanticAnalyzer.WalkRuntimeVarDecls(const ANode: TGreenNode);
 var
   I, J: LongInt;
   Child, Decl, TypeChild, ArrayTypeNode: TGreenNode;
-  IsStr: Boolean;
-  ArrOperand: string;
+  IsStr, IsThread: Boolean;
+  ArrOperand, Operand: string;
   Folded, Value: Int64;
-  LSymbolId, LTypeId: LongInt;
+  LSymbolId, LTypeId, HirId: LongInt;
 begin
   if ANode = nil then
     Exit;
@@ -1784,7 +1784,10 @@ begin
     if (Child.NodeKind = gnkProcedureDecl) or
       (Child.NodeKind = gnkFunctionDecl) then
       Continue;
-    if Child.NodeKind = gnkVarSection then
+    { threadvar uses gnkThreadVarSection + gnkVarDecl children — same shape
+      as var. Without this, bare GAVX2TanBufCapacity residual-calls @Name(). }
+    IsThread := Child.NodeKind = gnkThreadVarSection;
+    if (Child.NodeKind = gnkVarSection) or IsThread then
     begin
       for J := 0 to Child.ChildCount - 1 do
       begin
@@ -1804,19 +1807,44 @@ begin
         end;
         ArrayTypeNode := FindArrayTypeNodeForVarDecl(Child, J);
         RegisterRuntimeVar(Decl.Text);
+        HirId := 0;
         if IsStr then
         begin
           RegisterRuntimeStrVar(Decl.Text);
           RegisterOwnedRuntimeStrVar(Decl.Text);
-          FModel.AddTypedHirNode(
+          HirId := FModel.AddTypedHirNode(
+            'var-decl-tstring-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          (SameText(Decl.ChildAt(0).Text, 'String') or
+           SameText(Decl.ChildAt(0).Text, 'AnsiString')) then
+        begin
+          RegisterRuntimeStrVar(Decl.Text);
+          RegisterOwnedRuntimeStrVar(Decl.Text);
+          HirId := FModel.AddTypedHirNode(
             'var-decl-tstring-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if ArrayTypeNode <> nil then
         begin
           RegisterArrayVarMetadata(Decl.Text, ArrayTypeNode, ArrOperand);
-          FModel.AddTypedHirNode(
+          HirId := FModel.AddTypedHirNode(
             'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand
+          );
+        end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          TypeMetaIsDynArrayType(Decl.ChildAt(0).Text) then
+        begin
+          RegisterRuntimeArrVar(Decl.Text);
+          if FModel.LookupConstValue(
+            Decl.ChildAt(0).Text + '$arr_elem_size', Value) then
+            FModel.AddConstValue(Decl.Text + '$arr_elem_size', Value);
+          if FModel.LookupStringConstValue(
+            Decl.ChildAt(0).Text + '$arr_elem_type', Operand) then
+            FModel.AddStringConstValue(Decl.Text + '$arr_elem_type', Operand);
+          HirId := FModel.AddTypedHirNode(
+            'var-decl-arr-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
@@ -1825,7 +1853,25 @@ begin
           RegisterRuntimeVar(Decl.Text);
           RegisterPointerVar(Decl.Text, Copy(Decl.ChildAt(0).Text, 2,
             Length(Decl.ChildAt(0).Text)));
-          FModel.AddTypedHirNode(
+          HirId := FModel.AddTypedHirNode(
+            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          TypeMetaIsPointer(Decl.ChildAt(0).Text) then
+        begin
+          RegisterRuntimeVar(Decl.Text);
+          RegisterPointerVar(Decl.Text, Decl.ChildAt(0).Text);
+          HirId := FModel.AddTypedHirNode(
+            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          TypeMetaIsInterface(Decl.ChildAt(0).Text) then
+        begin
+          RegisterRuntimeVar(Decl.Text);
+          RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
+          HirId := FModel.AddTypedHirNode(
             'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
@@ -1835,34 +1881,72 @@ begin
           if TypeMetaIsRecord(Decl.ChildAt(0).Text) then
           begin
             RegisterRecordVar(Decl.Text, Decl.ChildAt(0).Text);
-            FModel.AddTypedHirNode(
+            HirId := FModel.AddTypedHirNode(
               'var-decl-record-runtime', Decl.Text, 0, 0,
               Decl.Text + #9 + IntToStr(TypeMetaSize(Decl.ChildAt(0).Text) div 8)
             );
-            { RAII: 如果 record 含 managed 字段, 注册为 managed record }
             if IsManagedRecord(Decl.ChildAt(0).Text) then
               FRuntimeVars.RegisterManagedRecordVar(Decl.Text, Decl.ChildAt(0).Text);
           end
-          else
+          else if TypeMetaIsClass(Decl.ChildAt(0).Text) then
           begin
             RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
-            FModel.AddTypedHirNode(
+            HirId := FModel.AddTypedHirNode(
               'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+            );
+          end
+          else
+          begin
+            LSymbolId := FindSymbolByName(Decl.Text);
+            if LSymbolId > 0 then
+              LTypeId := FModel.SymbolTypeId(LSymbolId)
+            else
+              LTypeId := 0;
+            HirId := FModel.AddTypedHirNode(
+              'var-decl-runtime', Decl.Text, LSymbolId, LTypeId, Decl.Text
             );
           end;
         end
         else
         begin
-          { 传递变量类型信息给 HIR builder，用于正确创建 alloca 类型 }
           LSymbolId := FindSymbolByName(Decl.Text);
           if LSymbolId > 0 then
             LTypeId := FModel.SymbolTypeId(LSymbolId)
           else
             LTypeId := 0;
-          FModel.AddTypedHirNode(
+          HirId := FModel.AddTypedHirNode(
             'var-decl-runtime', Decl.Text, LSymbolId, LTypeId, Decl.Text
           );
         end;
+        if IsThread and (HirId > 0) then
+          FModel.SetTypedHirNodeIsThreadVar(HirId, True);
+      end;
+      Continue;
+    end;
+    { Typed const arrays need the same arr runtime decl as vars, else
+      open-array uses residual-call @Name() and opt fails first on tables. }
+    if Child.NodeKind = gnkConstSection then
+    begin
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        Decl := Child.ChildAt(J);
+        if (Decl = nil) or (Decl.NodeKind <> gnkConstDecl) or
+          (Decl.Text = '') then
+          Continue;
+        ArrayTypeNode := nil;
+        if Decl.ChildCount > 0 then
+        begin
+          TypeChild := Decl.ChildAt(0);
+          if (TypeChild <> nil) and (TypeChild.NodeKind = gnkArrayType) then
+            ArrayTypeNode := TypeChild;
+        end;
+        if ArrayTypeNode = nil then
+          Continue;
+        RegisterRuntimeVar(Decl.Text);
+        RegisterArrayVarMetadata(Decl.Text, ArrayTypeNode, ArrOperand);
+        FModel.AddTypedHirNode(
+          'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand
+        );
       end;
       Continue;
     end;

@@ -208,6 +208,10 @@ function TSemanticAnalyzer.EvaluateFloatConstant(const ANode: TGreenNode;
 var
   Parsed: Double;
   ParseCode: Word;
+  IntVal: Int64;
+  TypeId: LongInt;
+  ArgNode: TGreenNode;
+  Left, Right: Double;
 begin
   AValue := 0.0;
   if ANode = nil then
@@ -221,9 +225,23 @@ begin
         AValue := Parsed;
         Exit(True);
       end;
+    gnkIntegerLiteral:
+      begin
+        { Integer formals of float const: Double(1) / bare 0 in float context. }
+        Val(ANode.Text, IntVal, ParseCode);
+        if ParseCode <> 0 then
+          Exit(False);
+        AValue := IntVal;
+        Exit(True);
+      end;
     gnkIdentifier:
       begin
-        { Check for known float constants like DEG_TO_RAD, RAD_TO_DEG }
+        { ProcessConstSection / reexport: prefer model table over hardcodes. }
+        if FModel.LookupFloatConstValue(ANode.Text, Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
         if SameText(ANode.Text, 'DEG_TO_RAD') then
         begin
           AValue := 0.01745329251994329577;
@@ -234,9 +252,88 @@ begin
           AValue := 57.2957795130823208768;
           Exit(True);
         end;
-        if SameText(ANode.Text, 'PI') then
+        if SameText(ANode.Text, 'PI') or SameText(ANode.Text, 'PI_VALUE') then
         begin
           AValue := 3.14159265358979323846;
+          Exit(True);
+        end;
+        if SameText(ANode.Text, 'HALF_PI') then
+        begin
+          AValue := 1.57079632679489661923;
+          Exit(True);
+        end;
+        if SameText(ANode.Text, 'TWO_PI') then
+        begin
+          AValue := 6.28318530717958647692;
+          Exit(True);
+        end;
+        if SameText(ANode.Text, 'QUARTER_PI') then
+        begin
+          AValue := 0.78539816339744830962;
+          Exit(True);
+        end;
+        Exit(False);
+      end;
+    gnkDotAccess:
+      begin
+        { unit reexport: nextpas.core.math.base.HALF_PI → bare HALF_PI table. }
+        ArgNode := ANode;
+        while (ArgNode <> nil) and (ArgNode.NodeKind = gnkDotAccess) and
+          (ArgNode.ChildCount >= 2) do
+          ArgNode := ArgNode.ChildAt(1);
+        if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+          EvaluateFloatConstant(ArgNode, Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
+        Exit(False);
+      end;
+    gnkUnaryExpression:
+      begin
+        if (ANode.ChildCount >= 1) and (ANode.Text = '-') and
+          EvaluateFloatConstant(ANode.ChildAt(0), Left) then
+        begin
+          AValue := -Left;
+          Exit(True);
+        end;
+        if (ANode.ChildCount >= 1) and (ANode.Text = '+') and
+          EvaluateFloatConstant(ANode.ChildAt(0), Left) then
+        begin
+          AValue := Left;
+          Exit(True);
+        end;
+        Exit(False);
+      end;
+    gnkBinaryExpression:
+      begin
+        if ANode.ChildCount < 2 then
+          Exit(False);
+        if not EvaluateFloatConstant(ANode.ChildAt(0), Left) then
+          Exit(False);
+        if not EvaluateFloatConstant(ANode.ChildAt(1), Right) then
+          Exit(False);
+        if ANode.Text = '+' then
+          AValue := Left + Right
+        else if ANode.Text = '-' then
+          AValue := Left - Right
+        else if ANode.Text = '*' then
+          AValue := Left * Right
+        else if (ANode.Text = '/') and (Right <> 0.0) then
+          AValue := Left / Right
+        else
+          Exit(False);
+        Exit(True);
+      end;
+    gnkFunctionCall:
+      begin
+        { HALF_PI = Double(1.5707…) — cast form seeds via ProcessConstSection.
+          Without this, bare HALF_PI residual-calls @HALF_PI() (Tan$p first). }
+        if (ANode.ChildCount = 2) and
+          TryGetTypeCastTargetTypeId(ANode, TypeId) and
+          EvaluateFloatConstant(ANode.ChildAt(1), Parsed) then
+        begin
+          AValue := Parsed;
           Exit(True);
         end;
         Exit(False);

@@ -82,7 +82,37 @@ begin
   begin
     FModel.AddStringConstValue(AVarName + '$arr_elem_type',
       ElementNode.Text);
-    if TypeMetaIsRecord(ElementNode.Text) then
+    { Elem size in bytes for SizeOf / dynarray stride.
+      Prefer known scalars first — TypeMetaSize may be bits/slots and must
+      not override Char=1 etc. }
+    if SameText(ElementNode.Text, 'Char') or
+      SameText(ElementNode.Text, 'AnsiChar') or
+      SameText(ElementNode.Text, 'Byte') or
+      SameText(ElementNode.Text, 'Boolean') or
+      SameText(ElementNode.Text, 'ShortInt') then
+      FModel.AddConstValue(AVarName + '$arr_elem_size', 1)
+    else if SameText(ElementNode.Text, 'WideChar') or
+      SameText(ElementNode.Text, 'Word') or
+      SameText(ElementNode.Text, 'SmallInt') then
+      FModel.AddConstValue(AVarName + '$arr_elem_size', 2)
+    else if SameText(ElementNode.Text, 'Integer') or
+      SameText(ElementNode.Text, 'LongInt') or
+      SameText(ElementNode.Text, 'Cardinal') or
+      SameText(ElementNode.Text, 'LongWord') or
+      SameText(ElementNode.Text, 'DWord') then
+      FModel.AddConstValue(AVarName + '$arr_elem_size', 4)
+    else if SameText(ElementNode.Text, 'Int64') or
+      SameText(ElementNode.Text, 'QWord') or
+      SameText(ElementNode.Text, 'NativeInt') or
+      SameText(ElementNode.Text, 'NativeUInt') or
+      SameText(ElementNode.Text, 'Pointer') or
+      SameText(ElementNode.Text, 'PChar') or
+      SameText(ElementNode.Text, 'PAnsiChar') then
+      FModel.AddConstValue(AVarName + '$arr_elem_size', 8)
+    else if TypeMetaSize(ElementNode.Text) > 0 then
+      FModel.AddConstValue(AVarName + '$arr_elem_size',
+        TypeMetaSize(ElementNode.Text))
+    else if TypeMetaIsRecord(ElementNode.Text) then
       FModel.AddConstValue(AVarName + '$arr_elem_size',
         TypeMetaSize(ElementNode.Text));
   end;

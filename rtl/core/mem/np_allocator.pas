@@ -120,7 +120,8 @@ begin
   FBlocks[BlockIndex].Capacity := ACapacity;
   FBlocks[BlockIndex].Used := 0;
   FReservedBytes := FReservedBytes + ACapacity;
-  Result := BuildCoreOkResult;
+  Result.Code := crcOk;
+  Result.Detail := '';
 end;
 
 function TBumpArena.TryAllocate(
@@ -171,7 +172,8 @@ begin
   FBlocks[BlockIndex].Used := FBlocks[BlockIndex].Used + Padding + ASize;
   FCommittedBytes := FCommittedBytes + Padding + ASize;
   APtr := Pointer(AlignedAddress);
-  Result := BuildCoreOkResult;
+  Result.Code := crcOk;
+  Result.Detail := '';
 end;
 
 function TBumpArena.AllocateOrNil(

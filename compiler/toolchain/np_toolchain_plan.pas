@@ -228,6 +228,7 @@ type
     ): Boolean;
     function PrepareLlvmContract: Boolean;
     procedure AppendBackendLogicalLibraryRequests;
+    procedure AppendDirectLinkLibraryArgs(const AStepIndex: LongInt);
     procedure AppendUnitSearchRoots(
       const AStepIndex: LongInt;
       const AUnitsFlag: string

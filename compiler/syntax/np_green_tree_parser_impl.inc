@@ -225,6 +225,10 @@ end;
 
 function IsMethodNameToken(AKind: TTokenKind): Boolean;
 begin
+  { Soft keywords that are also legal as method/procedure names (FPC allows
+    e.g. procedure TFoo.Register). Missing tkRegisterKeyword caused
+    TAllocStatsCollector.Register to break name parse; the bare begin was then
+    misread as unit initialization-section (body leak into np_unit_init_*). }
   Result := (AKind = tkIdentifier) or
     (AKind = tkContainsKeyword) or (AKind = tkRequiresKeyword) or
     (AKind = tkNameKeyword) or (AKind = tkMessageKeyword) or
@@ -237,12 +241,20 @@ begin
     (AKind = tkStaticKeyword) or (AKind = tkDynamicKeyword) or
     (AKind = tkReintroduceKeyword) or (AKind = tkDeprecatedKeyword) or
     (AKind = tkPlatformKeyword) or (AKind = tkExperimentalKeyword) or
-    (AKind = tkForwardKeyword);
+    (AKind = tkForwardKeyword) or
+    (AKind = tkRegisterKeyword) or (AKind = tkStdCallKeyword) or
+    (AKind = tkCdeclKeyword) or (AKind = tkSafeCallKeyword) or
+    (AKind = tkPascalKeyword) or (AKind = tkFarKeyword) or
+    (AKind = tkNearKeyword) or (AKind = tkCppDeclKeyword) or
+    (AKind = tkVarArgsKeyword);
 end;
 
 function IsOperatorNameToken(AKind: TTokenKind): Boolean;
 begin
-  Result := AKind in [tkPlus, tkMinus, tkStar, tkSlash, tkEquals,
+  { Include tkAssign (:=) — advanced-record class operators like
+    TGreenNode.:= were rejected, leaving the cursor on := and desyncing
+    ParseBlockDeclarations so later TGreenNode.Create/GetText vanished. }
+  Result := AKind in [tkPlus, tkMinus, tkStar, tkSlash, tkEquals, tkAssign,
     tkNotEquals, tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
     tkModKeyword, tkDivKeyword, tkShlKeyword, tkShrKeyword, tkAndKeyword,
     tkOrKeyword, tkXorKeyword, tkNotKeyword, tkInKeyword];
@@ -261,6 +273,14 @@ begin
     tkVirtualKeyword, tkOverrideKeyword, tkAbstractKeyword, tkStaticKeyword,
     tkDynamicKeyword, tkReintroduceKeyword, tkMessageKeyword,
     tkDeprecatedKeyword, tkPlatformKeyword, tkExperimentalKeyword];
+end;
+
+{ Soft keywords legal as local/parameter names (FPC allows `var Forward: T`).
+  Missing tkForwardKeyword left `var Forward` unparsed inside LookAt; the bare
+  begin was then taken as unit initialization-section. }
+function IsVarNameToken(AKind: TTokenKind): Boolean;
+begin
+  Result := IsMethodNameToken(AKind);
 end;
 
 procedure SkipDirectives(const ALexer: TLexerResult; var ACursor: LongInt);
@@ -430,6 +450,27 @@ begin
   Result := CurrentToken(ALexer, ACursor).Kind = AExpected;
   if Result then
     AdvanceCursor(ACursor);
+end;
+
+{ Consume one routine directive after the signature semicolon, including optional
+  message payload: deprecated 'msg' | platform 'msg' | experimental 'msg' |
+  message 'msg'|N. Leaving the string uneaten desyncs the cursor so the next
+  begin becomes a fake gnkInitializationSection (L3 residual @AData/@APathBuf). }
+procedure ConsumeRoutineDirectiveToken(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  var AFullName: string
+);
+begin
+  if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+    SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
+    AFullName := AFullName + ';compilerproc';
+  Inc(ACursor);
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind in
+      [tkStringLiteral, tkIntegerLiteral]) then
+    Inc(ACursor);
+  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
 end;
 
 function ParseUsesClause(

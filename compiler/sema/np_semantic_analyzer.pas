@@ -16,7 +16,8 @@ uses
   np_sema_type_check, np_hir_lowering, np_sema_runtime_vars,
   np_sema_string_ownership,
   nextpas.core.mem.intf,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  nextpas.core.collections.hashmap;
 
 {$I np_sema_analyzer_types.inc}
 
@@ -119,6 +120,12 @@ function OwnershipBridge_HasOverload(const ACtx: Pointer;
   const AName: string): Boolean;
 begin
   Result := TSemanticAnalyzer(ACtx).HasOverload(AName);
+end;
+
+function OwnershipBridge_EffectiveRuntimeCalleeName(const ACtx: Pointer;
+  const AName: string): string;
+begin
+  Result := TSemanticAnalyzer(ACtx).EffectiveRuntimeCalleeName(AName, nil);
 end;
 
 function OwnershipBridge_EncodeRuntimeIntExprFold(const ACtx: Pointer;
@@ -237,6 +244,7 @@ begin
   Ctx.RegisterRuntimeStrVar := @OwnershipBridge_RegisterRuntimeStrVar;
   Ctx.RegisterRuntimeVar := @OwnershipBridge_RegisterRuntimeVar;
   Ctx.HasOverload := @OwnershipBridge_HasOverload;
+  Ctx.EffectiveRuntimeCalleeName := @OwnershipBridge_EffectiveRuntimeCalleeName;
   Ctx.EncodeRuntimeIntExprFold := @OwnershipBridge_EncodeRuntimeIntExprFold;
   Ctx.IsVarParamAtPosition := @OwnershipBridge_IsVarParamAtPosition;
   Ctx.DecodePascalStringLiteral := @OwnershipBridge_DecodePascalStringLiteral;
@@ -319,11 +327,18 @@ begin
   Result := (Pos('var:', AName) = 1) or (Pos('out:', AName) = 1);
 end;
 
+{ Strips every modifier prefix the parser can emit (var:/out:/constref:, see
+  ParseParameterList) — not just the by-ref ones. constref params already get a
+  ptr ABI like plain record params, so they only need the clean name; leaving
+  the prefix on made the body reference (aLeaf0) miss its registration and
+  residual-call @aLeaf0(). }
 function StripParamModifier(const AName: string): string;
 begin
   Result := AName;
   if ParamNameIsByRef(AName) then
-    Result := Copy(AName, 5, Length(AName));
+    Result := Copy(AName, 5, Length(AName))
+  else if Pos('constref:', AName) = 1 then
+    Result := Copy(AName, 10, Length(AName));
 end;
 
 constructor TSemanticAnalyzer.Create(
@@ -346,6 +361,9 @@ begin
   FModel := TSemanticModel.Create;
   FBlockLabelCounter := 0;
   FCurrentScopeId := 0;
+  FProcedureBodyNameFirst := nil;
+  FProcedureBodyNameNext := nil;
+  FSeedCallVisitCount := 0;
   if FAllocator <> nil then
   begin
     FBreakLabels := specialize TVec<string>.Create(0, FAllocator);
@@ -356,6 +374,7 @@ begin
     FGenericWorkQueue := specialize TVec<LongInt>.Create(0, FAllocator);
     FPendingSignatures := TPendingSignatureVec.Create(0, FAllocator);
     FProcedureBodies := TProcedureBodyVec.Create(0, FAllocator);
+    FProcedureBodyNameNext := TProcedureBodyNameNextVec.Create(0, FAllocator);
     FImportedUnitOwners := TSemaImportedOwnerVec.Create(0, FAllocator);
     FImportedUnitTrees := TSemaImportedTreeVec.Create(0, FAllocator);
   end
@@ -370,9 +389,11 @@ begin
     FGenericWorkQueue := specialize TVec<LongInt>.Create;
     FPendingSignatures := TPendingSignatureVec.Create;
     FProcedureBodies := TProcedureBodyVec.Create;
+    FProcedureBodyNameNext := TProcedureBodyNameNextVec.Create;
     FImportedUnitOwners := TSemaImportedOwnerVec.Create;
     FImportedUnitTrees := TSemaImportedTreeVec.Create;
   end;
+  FProcedureBodyNameFirst := TProcedureBodyNameFirstMap.Create;
   FBuiltinRegistry := TBuiltinRegistry.Create;
   FRuntimeVars := TSemaRuntimeVarRegistry.Create(FAllocator);
 end;

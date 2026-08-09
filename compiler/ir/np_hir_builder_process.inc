@@ -104,6 +104,40 @@ begin
       else if Token = 'strlit' then EmitExprStrLit(S, Arg)
       else if Token = 'var' then EmitExprVar(S, Arg)
       else if Token = 'varref' then EmitExprVarRef(S, Arg)
+      else if Token = 'funcref' then
+      begin
+        { Unit/threadvar address mistook for free function → residual bare
+          @GThreadCache. Prefer @g_* when name is a registered global. }
+        V := 0;
+        if FGlobalNames.Count > 0 then
+          for ExprId := 0 to LongInt(FGlobalNames.Count) - 1 do
+            if SameText(FGlobalNames[ExprId], Arg) then
+            begin
+              FillChar(Instr, SizeOf(Instr), 0);
+              Instr.ResultId := FModule.NewValue;
+              Instr.Kind := hikIntrinsic;
+              Instr.TypeId := GetPtrType;
+              Instr.IntrinsicName := 'global_ref';
+              Instr.CallTarget := Arg;
+              EmitInstr(Instr);
+              V := Instr.ResultId;
+              Break;
+            end;
+        if V <> 0 then
+          S.PushTyped(V, GetPtrType)
+        else
+        begin
+          { Address of free function/procedure as i64/ptr for procedural formals. }
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikIntrinsic;
+          Instr.TypeId := GetIntType;
+          Instr.IntrinsicName := 'func_ref';
+          Instr.CallTarget := Arg;
+          EmitInstr(Instr);
+          S.PushTyped(Instr.ResultId, GetIntType);
+        end;
+      end
       else if Token = 'deref' then
       begin
         V := S.PopTyped(OperandType);
@@ -127,10 +161,16 @@ begin
       else if Token = 'mod' then EmitExprBinOp(S, hikMod)
       else if Token = 'neg' then EmitExprUnaryOp(S, hikNeg, '')
       else if Token = 'abs' then EmitExprUnaryOp(S, hikIntrinsic, 'abs')
+      else if Token = 'upcase' then EmitExprUnaryOp(S, hikIntrinsic, 'upcase')
+      else if Token = 'bsf' then EmitExprUnaryOp(S, hikIntrinsic, 'bsf')
+      else if Token = 'bsr' then EmitExprUnaryOp(S, hikIntrinsic, 'bsr')
       else if Token = 'cmp' then EmitExprCmp(S, Arg)
       else if Token = 'strcmp' then EmitExprStrCmp(S, Arg)
+      else if Token = 'strpos' then EmitExprStrPos(S)
       else if Token = 'zext' then EmitExprZext(S)
       else if Token = 'call' then EmitExprCall(S, Arg)
+      else if Token = 'ilk' then EmitExprInterlocked(S, Arg)
+      else if Token = 'icall' then EmitExprICall(S, Arg)
       else if Token = 'arrvar' then
       begin
         V := FindAlloca(Arg + '$ptr');
@@ -155,6 +195,7 @@ begin
         end;
       end
       else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
+      else if Token = 'tsload' then EmitExprTsLoad(S, Arg)
       else if Token = 'field' then EmitExprField(S, Arg)
       else if Token = 'vcall' then EmitExprVcall(S, Arg)
       else if Token = 'ivcall' then EmitExprIvcall(S, Arg);
@@ -179,6 +220,7 @@ var
   ArrName: string;
   IsStaticArray: Boolean;
   ArrLow, ArrHigh, ArrLength: Int64;
+  Func: THIRFunction;
 begin
   if ANode.NodeKind = hnkVarDeclRuntime then
   begin
@@ -188,34 +230,44 @@ begin
     if FPendingParamCount > 0 then
     begin
       ParamIdx := FPendingParamLlvmIdx;
-      ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
-
-      if FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].TypeId = GetPtrType then
+      Func := FModule.FunctionAt(FModule.FunctionCount - 1);
+      if (Func.Params = nil) or (ParamIdx < 0) or
+        (ParamIdx >= LongInt(Func.Params.Count)) then
       begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikAlloca;
-        Instr.TypeId := GetPtrType;
-        EmitInstr(Instr);
-
-        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetPtrType, False);
-
-        EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
+        EnsureAlloca(ANode.Operand, DeclType);
+        Dec(FPendingParamCount);
       end
       else
       begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikAlloca;
-        Instr.TypeId := DeclType;
-        EmitInstr(Instr);
+        ParamValueId := Func.Params[ParamIdx].ValueId;
 
-        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, DeclType, False);
+        if Func.Params[ParamIdx].TypeId = GetPtrType then
+        begin
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikAlloca;
+          Instr.TypeId := GetPtrType;
+          EmitInstr(Instr);
 
-        EmitStore(DeclType, ParamValueId, Instr.ResultId);
+          RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetPtrType, False);
+
+          EmitStore(GetPtrType, ParamValueId, Instr.ResultId);
+        end
+        else
+        begin
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikAlloca;
+          Instr.TypeId := DeclType;
+          EmitInstr(Instr);
+
+          RegisterAllocaEntry(ANode.Operand, Instr.ResultId, DeclType, False);
+
+          EmitStore(DeclType, ParamValueId, Instr.ResultId);
+        end;
+        Dec(FPendingParamCount);
+        Inc(FPendingParamLlvmIdx);
       end;
-      Dec(FPendingParamCount);
-      Inc(FPendingParamLlvmIdx);
     end
     else if FInStartFunc then
     begin
@@ -245,15 +297,28 @@ begin
       if FPendingParamCount > 0 then
       begin
         ParamIdx := FPendingParamLlvmIdx;
-        ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
-        EnsureAlloca(ArrName + '$ptr', GetPtrType);
-        EmitStore(GetPtrType, ParamValueId, FindAlloca(ArrName + '$ptr'));
-        Inc(FPendingParamLlvmIdx);
-        ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[FPendingParamLlvmIdx].ValueId;
-        EnsureAlloca(ArrName + '$len', GetIntTypeByWidth(32, True));
-        EmitStore(GetIntTypeByWidth(32, True), ParamValueId, FindAlloca(ArrName + '$len'));
-        Dec(FPendingParamCount);
-        Inc(FPendingParamLlvmIdx);
+        Func := FModule.FunctionAt(FModule.FunctionCount - 1);
+        { open-array formal needs (ptr,len); skip if ABI slots missing }
+        if (Func.Params = nil) or
+          (ParamIdx < 0) or
+          (ParamIdx + 1 >= LongInt(Func.Params.Count)) then
+        begin
+          EnsureAlloca(ArrName + '$ptr', GetPtrType);
+          EnsureAlloca(ArrName + '$len', GetIntTypeByWidth(32, True));
+          Dec(FPendingParamCount);
+        end
+        else
+        begin
+          ParamValueId := Func.Params[ParamIdx].ValueId;
+          EnsureAlloca(ArrName + '$ptr', GetPtrType);
+          EmitStore(GetPtrType, ParamValueId, FindAlloca(ArrName + '$ptr'));
+          Inc(FPendingParamLlvmIdx);
+          ParamValueId := Func.Params[FPendingParamLlvmIdx].ValueId;
+          EnsureAlloca(ArrName + '$len', GetIntTypeByWidth(32, True));
+          EmitStore(GetIntTypeByWidth(32, True), ParamValueId, FindAlloca(ArrName + '$len'));
+          Dec(FPendingParamCount);
+          Inc(FPendingParamLlvmIdx);
+        end;
       end
       else
       begin
@@ -285,10 +350,22 @@ begin
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
     end
-    else if FSretValueId <> 0 then
+    else if (FSretValueId <> 0) and
+      (not FModule.FunctionAt(FModule.FunctionCount - 1).IsTStringReturnAbi) then
     begin
+      { Record/aggregate sret Result: sret_ptr is the result buffer address.
+        TString sret keeps FSretValueId only for tstring_ret_move — local
+        pointers (e.g. Event: ^T) must get real allocas, not steal sret. }
       RegisterAllocaEntry(ANode.Operand, FSretValueId, GetIntType, False);
       FSretValueId := 0;
+    end
+    else if FInStartFunc then
+    begin
+      { Unit-level class/object/pointer vars (ActiveExpressionTree, GRoot…).
+        Must be @g_* — EnsureAlloca only creates a _start temporary that is
+        wiped when function bodies start, leaving residual call @Name(). }
+      RegisterGlobal(ANode.Operand, GetPtrType);
+      FModule.AddGlobal(ANode.Operand, GetPtrType, ANode.IsThreadVar);
     end
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
@@ -312,6 +389,11 @@ begin
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
     end
+    else if FInStartFunc then
+    begin
+      RegisterGlobal(ANode.Operand, GetPtrType);
+      FModule.AddGlobal(ANode.Operand, GetPtrType, ANode.IsThreadVar);
+    end
     else
       EnsureAlloca(ANode.Operand, GetPtrType);
   end
@@ -324,16 +406,26 @@ begin
       Val(Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand)), ParamIdx, Code);
       if Code = 0 then
       begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikAlloca;
-        Instr.TypeId := GetIntType;
-        Instr.IntrinsicName := 'record:' + IntToStr(ParamIdx);
-        EmitInstr(Instr);
+        if FInStartFunc then
+        begin
+          { Unit-level records: emit as i64-slot global (same width as local
+            record alloca base). Multi-slot layout is still coarse. }
+          RegisterGlobal(Arg, GetIntType);
+          FModule.AddGlobal(Arg, GetIntType, ANode.IsThreadVar);
+        end
+        else
+        begin
+          FillChar(Instr, SizeOf(Instr), 0);
+          Instr.ResultId := FModule.NewValue;
+          Instr.Kind := hikAlloca;
+          Instr.TypeId := GetIntType;
+          Instr.IntrinsicName := 'record:' + IntToStr(ParamIdx);
+          EmitInstr(Instr);
 
-        RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
-        if FAllocas.Count > 0 then
-          FAllocas.GetPtr(FAllocas.Count - 1)^.RecordSlots := ParamIdx;
+          RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
+          if FAllocas.Count > 0 then
+            FAllocas.GetPtr(FAllocas.Count - 1)^.RecordSlots := ParamIdx;
+        end;
       end;
     end;
   end;
@@ -370,6 +462,20 @@ begin
   end;
 
   Addr := FindAlloca(VarName);
+  { Dynarr dual-slot: assignment targets Name$ptr, never invent bare Name. }
+  if Addr = 0 then
+  begin
+    PtrVal := FindAlloca(VarName + '$ptr');
+    if (PtrVal <> 0) and (V <> 0) then
+    begin
+      if (ValueType <> 0) and (ValueType <> GetPtrType) then
+        V := NormalizeScalarValueToType(V, ValueType, GetPtrType);
+      if V <> 0 then
+        EmitStore(GetPtrType, V, PtrVal);
+      { Keep $len as-is when RHS is bare ptr return; SetLength/arr copy update it. }
+      Exit;
+    end;
+  end;
   if Addr = 0 then
   begin
     { 尝试从语义模型获取变量类型 }
@@ -400,7 +506,12 @@ begin
       StoreType := FindAllocaType(VarName);
       if StoreType = 0 then
         StoreType := GetIntType;
-      if ValueType <> 0 then
+      { Untyped expr-stack (ivcall/vcall without ' p') is i64. Record Result is
+        often var-decl-ptr (StoreType=ptr) — must inttoptr before store, else
+        `store ptr %i64` fails opt (TCommand.Output := LChild.WaitWithOutput). }
+      if ValueType = 0 then
+        ValueType := GetIntType;
+      if ValueType <> StoreType then
       begin
         V := NormalizeScalarValueToType(V, ValueType, StoreType);
         if V = 0 then
@@ -444,10 +555,24 @@ begin
     (ANode.NodeKind <> hnkHaltCall) and
     (ANode.NodeKind <> hnkRetRuntime) and
     (ANode.NodeKind <> hnkRetTStringRuntime) then
+  begin
+    WriteLn(StdErr, '[hir] FlushPendingCleanup count=',
+      IntToStr(FPendingCleanupNodes.Count),
+      ' before kind=', ANode.Kind);
+    Flush(StdErr);
     FlushPendingCleanupNodes;
+  end;
 
   { Set current source position from node's symbol for debug info }
   SetCurrentSourcePosFromSymbol(ANode.SymbolId);
+
+  if ANode.NodeKind = hnkCondBrRuntime then
+  begin
+    WriteLn(StdErr, '[hir] case-cond-br name=', ANode.DisplayName,
+      ' expr=', IntToStr(ANode.ExprId),
+      ' opLen=', IntToStr(Length(ANode.Operand)));
+    Flush(StdErr);
+  end;
 
   case ANode.NodeKind of
     hnkVarDeclRuntime, hnkVarDeclArrRuntime,
@@ -475,7 +600,11 @@ begin
     hnkHaltCall:
       ProcessHaltCallConst(ANode);
     hnkCondBrRuntime:
-      ProcessCondBr(ANode);
+      begin
+        WriteLn(StdErr, '[hir] dispatch ProcessCondBr');
+        Flush(StdErr);
+        ProcessCondBr(ANode);
+      end;
     hnkSwitchRuntime:
       ProcessSwitch(ANode);
     hnkBrRuntime:
@@ -673,6 +802,12 @@ begin
         FFwdFuncRetTypes.Push(GetStringType)
       else
         FFwdFuncRetTypes.Push(GetIntType);
+    end
+    else if Node.Kind = 'foreign-procedure-binding' then
+    begin
+      { Ensure libc symbols are declare'd even when procedure/function-decl
+        HIR nodes never appear for imported units. }
+      ProcessExternalDecl(Node);
     end;
   end;
 
@@ -683,11 +818,36 @@ begin
   FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
 
+  WriteLn(StdErr, '[hir] Build process nodes count=',
+    IntToStr(FSemaModel.TypedHirNodeCount));
+  Flush(StdErr);
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
   begin
     Node := FSemaModel.TypedHirNodeAt(I);
-    ProcessNode(Node);
+    if ((I mod 1000) = 0) or
+      (Node.Kind = 'function-body-begin') or
+      (Node.Kind = 'method-body-begin') or
+      (Node.Kind = 'function-body-end') then
+    begin
+      WriteLn(StdErr, '[hir] node=', IntToStr(I), '/',
+        IntToStr(FSemaModel.TypedHirNodeCount),
+        ' kind=', Node.Kind,
+        ' name=', Node.DisplayName);
+      Flush(StdErr);
+    end;
+    try
+      ProcessNode(Node);
+    except
+      WriteLn(StdErr, '[hir] AV/exception at node=', IntToStr(I),
+        ' kind=', Node.Kind,
+        ' name=', Node.DisplayName,
+        ' op=', Copy(Node.Operand, 1, 100));
+      Flush(StdErr);
+      raise;
+    end;
   end;
+  WriteLn(StdErr, '[hir] Build process nodes done');
+  Flush(StdErr);
 
   if not FBlockTerminated then
   begin

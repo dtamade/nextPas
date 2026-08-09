@@ -40,6 +40,8 @@ var
   Value: Int64;
   FloatValue: Double;
   StringValue: string;
+  ArrOperand: string;
+  SeededValue: Boolean;
 begin
   if ANode = nil then
     Exit;
@@ -50,6 +52,22 @@ begin
       Continue;
     FModel.AddSymbol(Child.Text, 'constant', AOwnerUnitId, 0,
       Child.ByteOffset);
+    SeededValue := False;
+    { Typed const array `Name: array[L..H] of T = (...)`:
+      parser keeps type child, drops paren initializer. Still register
+      arr metadata so High/SizeOf/open-array args use arrvar not @Name(). }
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      ValueChild := Child.ChildAt(J);
+      if (ValueChild <> nil) and (ValueChild.NodeKind = gnkArrayType) then
+      begin
+        RegisterArrayVarMetadata(Child.Text, ValueChild, ArrOperand);
+        SeededValue := True;
+        Break;
+      end;
+    end;
+    if SeededValue then
+      Continue;
     for J := 0 to Child.ChildCount - 1 do
     begin
       ValueChild := Child.ChildAt(J);
@@ -321,6 +339,31 @@ begin
       end;
       Continue;
     end;
+    if Child.NodeKind = gnkClassProperty then
+    begin
+      { Record properties: register declared read/write targets plus the
+        string-property marker so `S := Rec.Prop` resolves to the real getter
+        instead of residual-calling @Type.Prop (M2 B3b: TGreenNode.Text). }
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        NameNode := Child.ChildAt(J);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
+        begin
+          if Pos('read:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              RecName + '.' + Child.Text + '$read',
+              Copy(NameNode.Text, 6, Length(NameNode.Text)))
+          else if Pos('write:', NameNode.Text) = 1 then
+            FModel.AddStringConstValue(
+              RecName + '.' + Child.Text + '$write',
+              Copy(NameNode.Text, 7, Length(NameNode.Text)))
+          else if SameText(NameNode.Text, 'String') or
+            SameText(NameNode.Text, 'AnsiString') then
+            FModel.AddConstValue(RecName + '$ret_str_' + Child.Text, 1);
+        end;
+      end;
+      Continue;
+    end;
     if Child.NodeKind <> gnkVarDecl then
       Continue;
     FieldTypeId := 0;
@@ -396,48 +439,108 @@ procedure TSemanticAnalyzer.ProcessInterfaceMethods(const ANode: TGreenNode;
 var
   I, J: LongInt;
   Child, NameNode: TGreenNode;
-  IntfName, ParentIntfName, MethShort: string;
+  IntfName, ParentIntfName, ParentResolveName, MethShort: string;
   SymbolId: LongInt;
-  Meta: TTypeMetadata;
+  Meta, ParentMeta: TTypeMetadata;
   Slot: TVmtSlot;
-  ParentIntfTypeId: LongInt;
+  ParentIntfTypeId, ParentResolveTypeId: LongInt;
   Symbol: TSemanticSymbol;
+  HasParentMeta: Boolean;
+  SlotVal: Int64;
+
+  function SymbolNameHasPrefix(const AFull, APrefix: string): Boolean;
+  begin
+    { Case-insensitive "Prefix." head match — Pos() is case-sensitive. }
+    Result := (APrefix <> '') and (Length(AFull) > Length(APrefix) + 1) and
+      SameText(Copy(AFull, 1, Length(APrefix) + 1), APrefix + '.');
+  end;
+
 begin
   if ANode = nil then
     Exit;
   FillChar(Meta, SizeOf(Meta), 0);
   IntfName := FModel.TypeAt(ATypeId - 1).Name;
+  ParentIntfName := '';
+  ParentResolveName := '';
+  ParentIntfTypeId := 0;
+  ParentResolveTypeId := 0;
+  HasParentMeta := False;
   if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
     ParentIntfName := ANode.ChildAt(0).Text;
-    ParentIntfTypeId := 0;
-    for I := 0 to FModel.TypeCount - 1 do
-      if SameText(FModel.TypeAt(I).Name, ParentIntfName) then
-      begin
-        ParentIntfTypeId := FModel.TypeAt(I).TypeId;
-        Break;
-      end;
+    { Prefer name-index (last-wins re-export), then follow AliasTarget to the
+      real interface that owns method symbols / VmtSlots.
+      First-match TypeAt scan can pin a forward shell; TypeId-only parent
+      method copy then misses IWriter.Write → bare @IHasher.Write. }
+    ParentIntfTypeId := FModel.FindTypeByName(ParentIntfName);
+    if ParentIntfTypeId <= 0 then
+      for I := 0 to FModel.TypeCount - 1 do
+        if SameText(FModel.TypeAt(I).Name, ParentIntfName) then
+        begin
+          ParentIntfTypeId := FModel.TypeAt(I).TypeId;
+          Break;
+        end;
+    ParentResolveTypeId := ParentIntfTypeId;
+    ParentResolveName := ParentIntfName;
+    if (ParentResolveTypeId > 0) and
+      FModel.GetTypeMeta(ParentResolveTypeId, ParentMeta) and
+      (ParentMeta.AliasTargetTypeId > 0) and
+      (ParentMeta.AliasTargetTypeId <= FModel.TypeCount) then
+    begin
+      ParentResolveTypeId := ParentMeta.AliasTargetTypeId;
+      if FModel.TypeAt(ParentResolveTypeId - 1).Name <> '' then
+        ParentResolveName := FModel.TypeAt(ParentResolveTypeId - 1).Name;
+    end;
     if ParentIntfTypeId > 0 then
     begin
-      FModel.SetTypeParent(ATypeId, ParentIntfTypeId);
+      FModel.SetTypeParent(ATypeId, ParentResolveTypeId);
       for I := 0 to FModel.SymbolCount - 1 do
       begin
         Symbol := FModel.SymbolAt(I);
-        if (Symbol.TypeId = ParentIntfTypeId) and
-          SameText(Symbol.Kind, 'method') and
-          (Pos(ParentIntfName + '.', Symbol.Name) = 1) then
+        if not SameText(Symbol.Kind, 'method') then
+          Continue;
+        { Match by resolved parent TypeId OR by either parent name prefix.
+          Re-export IWriter last-wins TypeId may not own original methods. }
+        if not (
+          ((ParentResolveTypeId > 0) and (Symbol.TypeId = ParentResolveTypeId)) or
+          ((ParentIntfTypeId > 0) and (Symbol.TypeId = ParentIntfTypeId)) or
+          SymbolNameHasPrefix(Symbol.Name, ParentResolveName) or
+          SymbolNameHasPrefix(Symbol.Name, ParentIntfName)
+        ) then
+          Continue;
+        if SymbolNameHasPrefix(Symbol.Name, ParentResolveName) then
+          MethShort := Copy(Symbol.Name, Length(ParentResolveName) + 2, MaxInt)
+        else if SymbolNameHasPrefix(Symbol.Name, ParentIntfName) then
+          MethShort := Copy(Symbol.Name, Length(ParentIntfName) + 2, MaxInt)
+        else
         begin
-          MethShort := Copy(Symbol.Name, Length(ParentIntfName) + 2, MaxInt);
-          SymbolId := FModel.AddSymbol(IntfName + '.' + MethShort,
-            'method', AOwnerUnitId, ATypeId, Symbol.ByteOffset);
-          FModel.SetSymbolParamCount(SymbolId, Symbol.ParamCount);
-          FModel.SetSymbolMinParamCount(SymbolId, Symbol.MinParamCount);
-          FModel.SetSymbolParamSignature(SymbolId, Symbol.ParamSignature);
-          if TypeMetaRetStr(ParentIntfName, MethShort) then
-            FModel.AddConstValue(IntfName + '$ret_str_' + MethShort, 1);
+          J := Pos('.', Symbol.Name);
+          if J <= 0 then
+            Continue;
+          MethShort := Copy(Symbol.Name, J + 1, MaxInt);
         end;
+        if (MethShort = '') or (Pos('.', MethShort) > 0) then
+          Continue;
+        if FModel.FindSymbolByName(IntfName + '.' + MethShort) <> 0 then
+          Continue;
+        SymbolId := FModel.AddSymbol(IntfName + '.' + MethShort,
+          'method', AOwnerUnitId, ATypeId, Symbol.ByteOffset);
+        FModel.SetSymbolParamCount(SymbolId, Symbol.ParamCount);
+        FModel.SetSymbolMinParamCount(SymbolId, Symbol.MinParamCount);
+        FModel.SetSymbolParamSignature(SymbolId, Symbol.ParamSignature);
+        if TypeMetaRetStr(ParentResolveName, MethShort) or
+          TypeMetaRetStr(ParentIntfName, MethShort) then
+          FModel.AddConstValue(IntfName + '$ret_str_' + MethShort, 1);
+        if TypeMetaRetPtr(ParentResolveName, MethShort) or
+          TypeMetaRetPtr(ParentIntfName, MethShort) then
+          FModel.AddConstValue(IntfName + '$ret_ptr_' + MethShort, 1);
       end;
+      HasParentMeta := FModel.GetTypeMeta(ParentResolveTypeId, ParentMeta);
+      if not HasParentMeta then
+        HasParentMeta := FModel.GetTypeMetaByName(ParentIntfName, ParentMeta);
+      if not HasParentMeta then
+        HasParentMeta := FModel.GetTypeMetaByName(ParentResolveName, ParentMeta);
     end;
   end;
   for I := 0 to ANode.ChildCount - 1 do
@@ -460,37 +563,82 @@ begin
           DeclReturnTypeId(Child, AOwnerUnitId));
         if DeclReturnsString(Child) then
           FModel.AddConstValue(IntfName + '$ret_str_' + NameNode.Text, 1);
+        { Interface methods returning class/interface/object → ivcall ret ptr.
+          Without $ret_ptr_, EmitExprIvcall defaults to i64 → store ptr mismatch
+          (Guard: Result := ALock.Lock). }
+        if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
+          (Child.ChildAt(1).NodeKind = gnkIdentifier) and
+          ((TypeMetaSize(Child.ChildAt(1).Text) > 0) or
+           TypeMetaIsInterface(Child.ChildAt(1).Text) or
+           SameText(Child.ChildAt(1).Text, IntfName) or
+           SameText(Child.ChildAt(1).Text, 'Pointer') or
+           SameText(Child.ChildAt(1).Text, 'PChar') or
+           SameText(Child.ChildAt(1).Text, 'IInterface')) then
+          FModel.AddConstValue(IntfName + '$ret_ptr_' + NameNode.Text, 1);
       end;
     end;
   end;
-  with Meta do
+  { Explicit Meta fields — avoid `with` (stage0 bare-id under with → residual call). }
+  Meta.TypeId := ATypeId;
+  Meta.Size := 8;
+  Meta.IsRecord := False;
+  Meta.VmtCount := 0;
+  if ParentResolveTypeId > 0 then
+    Meta.ParentClassId := ParentResolveTypeId
+  else
+    Meta.ParentClassId := 0;
+  if ParentResolveName <> '' then
+    Meta.ParentClassName := ParentResolveName
+  else
+    Meta.ParentClassName := ParentIntfName;
+  Meta.Interfaces := '';
+  Meta.ArrElemSize := 0;
+  Meta.ArrElemType := '';
+  Meta.ArrLowBound := 0;
+  Meta.ArrHighBound := -1;
+  Meta.ArrLength := 0;
+  Meta.IsStaticArray := False;
+  Meta.Fields := nil;
+  Meta.VmtSlots := nil;
+  Meta.RetPtrMethods := nil;
+  Meta.Properties := nil;
+  Meta.InterfaceSlots := nil;
+  { Inherit parent IMT first so IHasher.Write keeps IWriter slot index. }
+  if HasParentMeta and (ParentMeta.VmtSlots <> nil) then
   begin
-    TypeId := ATypeId;
-    Size := 8;
-    IsRecord := False;
-    VmtCount := 0;
-    ParentClassId := 0;
-    ParentClassName := '';
-    Interfaces := '';
-    ArrElemSize := 0;
-    ArrElemType := '';
-    ArrLowBound := 0;
-    ArrHighBound := -1;
-    ArrLength := 0;
-    IsStaticArray := False;
-    Fields := nil;
-    VmtSlots := nil;
-    RetPtrMethods := nil;
-    Properties := nil;
-    InterfaceSlots := nil;
-  end;
-  for I := 0 to FModel.SymbolCount - 1 do
-  begin
-    Symbol := FModel.SymbolAt(I);
-    if SameText(Symbol.Kind, 'method') and
-      (Pos(IntfName + '.', Symbol.Name) = 1) then
+    for J := 0 to LongInt(ParentMeta.VmtSlots.Count) - 1 do
     begin
-      MethShort := Copy(Symbol.Name, Length(IntfName) + 2, MaxInt);
+      Slot := ParentMeta.VmtSlots[SizeUInt(J)];
+      { Child IMT names use child interface prefix for FuncQualName. }
+      Slot.FuncQualName := IntfName + '.' + Slot.MethodName;
+      Slot.SlotIndex := Meta.VmtCount;
+      if Meta.VmtSlots = nil then
+        Meta.VmtSlots := TSemanticVmtSlotVec.Create;
+      Meta.VmtSlots.Push(Slot);
+      FModel.AddConstValue(IntfName + '$vmt_slot_' + Slot.MethodName, Meta.VmtCount);
+      Inc(Meta.VmtCount);
+    end;
+  end
+  else if ParentResolveName <> '' then
+  begin
+    { Parent meta missing VmtSlots (re-export shell): rebuild IMT prefix from
+      parent method symbols / $vmt_slot_ consts so Write stays slot 0. }
+    for I := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(I);
+      if not SameText(Symbol.Kind, 'method') then
+        Continue;
+      if not (SymbolNameHasPrefix(Symbol.Name, ParentResolveName) or
+        SymbolNameHasPrefix(Symbol.Name, ParentIntfName)) then
+        Continue;
+      if SymbolNameHasPrefix(Symbol.Name, ParentResolveName) then
+        MethShort := Copy(Symbol.Name, Length(ParentResolveName) + 2, MaxInt)
+      else
+        MethShort := Copy(Symbol.Name, Length(ParentIntfName) + 2, MaxInt);
+      if (MethShort = '') or (Pos('.', MethShort) > 0) then
+        Continue;
+      if FModel.LookupConstValue(IntfName + '$vmt_slot_' + MethShort, SlotVal) then
+        Continue;
       Slot := Default(TVmtSlot);
       Slot.MethodName := MethShort;
       Slot.SlotIndex := Meta.VmtCount;
@@ -498,11 +646,40 @@ begin
       if Meta.VmtSlots = nil then
         Meta.VmtSlots := TSemanticVmtSlotVec.Create;
       Meta.VmtSlots.Push(Slot);
+      FModel.AddConstValue(IntfName + '$vmt_slot_' + MethShort, Meta.VmtCount);
       Inc(Meta.VmtCount);
     end;
   end;
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(I);
+    if SameText(Symbol.Kind, 'method') and
+      SymbolNameHasPrefix(Symbol.Name, IntfName) then
+    begin
+      MethShort := Copy(Symbol.Name, Length(IntfName) + 2, MaxInt);
+      if (MethShort = '') or (Pos('.', MethShort) > 0) then
+        Continue;
+      { Skip methods already inherited from parent IMT. }
+      if FModel.LookupConstValue(IntfName + '$vmt_slot_' + MethShort, SlotVal) then
+        Continue;
+      Slot := Default(TVmtSlot);
+      Slot.MethodName := MethShort;
+      Slot.SlotIndex := Meta.VmtCount;
+      Slot.FuncQualName := IntfName + '.' + MethShort;
+      if Meta.VmtSlots = nil then
+        Meta.VmtSlots := TSemanticVmtSlotVec.Create;
+      Meta.VmtSlots.Push(Slot);
+      { Name-keyed slot consts survive same-name unit re-exports that replace
+        type-meta name index without copying VmtSlots (IChild = unit.IChild). }
+      FModel.AddConstValue(IntfName + '$vmt_slot_' + MethShort, Meta.VmtCount);
+      Inc(Meta.VmtCount);
+    end;
+  end;
+  if Meta.ParentClassName <> '' then
+    FModel.AddStringConstValue(IntfName + '$parent_class', Meta.ParentClassName);
   FModel.AddConstValue(IntfName + '$vmt_count', Meta.VmtCount);
   FModel.AddConstValue(IntfName + '$interface', 1);
+  FModel.SetTypeKind(ATypeId, 'interface');
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
@@ -871,7 +1048,7 @@ var
   FieldTypeId: LongInt;
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
-  ClsName, ParentName, ConstName, FieldName, ParentStringVal: string;
+  ClsName, ParentName, ConstName, FieldName, ParentStringVal, InhParentName: string;
   CurrentVisibility: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
@@ -1265,24 +1442,95 @@ begin
   Meta.ArrLength := 0;
   Meta.IsStaticArray := False;
   FModel.SetTypeMeta(ATypeId, Meta);
+  { Empty / partial subclass: map undeclared Create/CreateFmt/Destroy to the
+    nearest non-TObject ancestor that declares them. Encode-time body index is
+    unreliable across import order; declaration-time symbols are stable. }
+  if ParentName <> '' then
+  begin
+    for J := 0 to 2 do
+    begin
+      case J of
+        0: FieldName := 'Create';
+        1: FieldName := 'CreateFmt';
+      else
+        FieldName := 'Destroy';
+      end;
+      if FModel.FindSymbolByName(ClsName + '.' + FieldName) <> 0 then
+        Continue;
+      InhParentName := ParentName;
+      while InhParentName <> '' do
+      begin
+        if (not SameText(InhParentName, 'TObject')) and
+          (FModel.FindSymbolByName(InhParentName + '.' + FieldName) <> 0) then
+        begin
+          FModel.AddStringConstValue(ClsName + '.$resolve_' + FieldName,
+            InhParentName + '.' + FieldName);
+          Break;
+        end;
+        if FModel.LookupStringConstValue(
+          InhParentName + '.$resolve_' + FieldName, ParentStringVal) then
+        begin
+          FModel.AddStringConstValue(ClsName + '.$resolve_' + FieldName,
+            ParentStringVal);
+          Break;
+        end;
+        InhParentName := NextClassAncestorName(InhParentName);
+      end;
+      { CreateFmt often lives only on Exception; fall back to Create. }
+      if SameText(FieldName, 'CreateFmt') and
+        (not FModel.LookupStringConstValue(ClsName + '.$resolve_CreateFmt',
+          ParentStringVal)) then
+      begin
+        if FModel.LookupStringConstValue(ClsName + '.$resolve_Create',
+          ParentStringVal) then
+          FModel.AddStringConstValue(ClsName + '.$resolve_CreateFmt',
+            ParentStringVal)
+        else
+        begin
+          InhParentName := ParentName;
+          while InhParentName <> '' do
+          begin
+            if (not SameText(InhParentName, 'TObject')) and
+              (FModel.FindSymbolByName(InhParentName + '.Create') <> 0) then
+            begin
+              FModel.AddStringConstValue(ClsName + '.$resolve_CreateFmt',
+                InhParentName + '.Create');
+              Break;
+            end;
+            if FModel.LookupStringConstValue(InhParentName + '.$resolve_Create',
+              ParentStringVal) then
+            begin
+              FModel.AddStringConstValue(ClsName + '.$resolve_CreateFmt',
+                ParentStringVal);
+              Break;
+            end;
+            InhParentName := NextClassAncestorName(InhParentName);
+          end;
+        end;
+      end;
+    end;
+  end;
 end;
 
 procedure TSemanticAnalyzer.ProcessTypeSection(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
   I, J, K: LongInt;
-  Child, TypeChild: TGreenNode;
+  Child, TypeChild, NameNode: TGreenNode;
   SymbolId: LongInt;
   TypeId: LongInt;
   ParentTypeId: LongInt;
   InterfaceList: string;
   SizeVal: Int64;
+  LowBound, HighBound, ArrayLength: Int64;
   AliasTargetId: LongInt;
   AliasTargetMeta: TTypeMetadata;
   AliasHasTargetMeta: Boolean;
   AliasLocalMeta: TTypeMetadata;
+  Fact: TSemanticScalarTypeFact;
   TypeName: string;
   TypeKind: string;
+  AliasResolveTarget, CtorName, ResolvedCallee: string;
   ReusedSystemIntrinsic: Boolean;
   function IsSystemIntrinsicSelfAlias(const ADeclaration: TGreenNode;
     const AName: string): Boolean;
@@ -1379,8 +1627,9 @@ begin
         ProcessRecordFields(TypeChild, AOwnerUnitId, TypeId)
       else if TypeChild.NodeKind = gnkClassType then
       begin
-        { Detect "class of TRef" — exactly one identifier child, no body }
-        if (not SameText(TypeChild.Text, 'interface')) and
+        { Detect "class of TRef". Parser sets Text='of'. Do NOT use bare
+          ChildCount=1 — that also matches empty `T = class(Parent);`. }
+        if SameText(TypeChild.Text, 'of') and
           (TypeChild.ChildCount = 1) and
           (TypeChild.ChildAt(0) <> nil) and
           (TypeChild.ChildAt(0).NodeKind = gnkIdentifier) then
@@ -1481,6 +1730,105 @@ begin
       else if (TypeChild.NodeKind = gnkIdentifier) and
         (Pos('<', TypeChild.Text) > 0) then
         InstantiateGenericType(TypeId, TypeChild.Text, AOwnerUnitId)
+      else if TypeChild.NodeKind = gnkArrayType then
+      begin
+        { TBytes = array of Byte / TBuf = array[0..N] of Char — type-level
+          array facts so SizeOf/Length/High and local seeding see dyn/static. }
+        if not FModel.GetTypeMeta(TypeId, AliasLocalMeta) then
+          FillChar(AliasLocalMeta, SizeOf(AliasLocalMeta), 0);
+        AliasLocalMeta.TypeId := TypeId;
+        AliasLocalMeta.IsRecord := False;
+        AliasLocalMeta.VmtCount := 0;
+        AliasLocalMeta.ParentClassId := 0;
+        AliasLocalMeta.ParentClassName := '';
+        AliasLocalMeta.AliasTargetTypeId := 0;
+        NameNode := ArrayElementTypeNode(TypeChild);
+        if NameNode <> nil then
+          AliasLocalMeta.ArrElemType := NameNode.Text
+        else
+          AliasLocalMeta.ArrElemType := '';
+        AliasLocalMeta.ArrElemSize := 0;
+        if NameNode <> nil then
+        begin
+          if SameText(NameNode.Text, 'Char') or
+            SameText(NameNode.Text, 'AnsiChar') or
+            SameText(NameNode.Text, 'Byte') or
+            SameText(NameNode.Text, 'Boolean') or
+            SameText(NameNode.Text, 'ShortInt') then
+            AliasLocalMeta.ArrElemSize := 1
+          else if SameText(NameNode.Text, 'WideChar') or
+            SameText(NameNode.Text, 'Word') or
+            SameText(NameNode.Text, 'SmallInt') then
+            AliasLocalMeta.ArrElemSize := 2
+          else if SameText(NameNode.Text, 'Integer') or
+            SameText(NameNode.Text, 'LongInt') or
+            SameText(NameNode.Text, 'Cardinal') or
+            SameText(NameNode.Text, 'LongWord') or
+            SameText(NameNode.Text, 'DWord') then
+            AliasLocalMeta.ArrElemSize := 4
+          else if TypeMetaSize(NameNode.Text) > 0 then
+            AliasLocalMeta.ArrElemSize := TypeMetaSize(NameNode.Text)
+          else
+            AliasLocalMeta.ArrElemSize := 8;
+          FModel.AddStringConstValue(TypeName + '$arr_elem_type', NameNode.Text);
+          FModel.AddConstValue(TypeName + '$arr_elem_size',
+            AliasLocalMeta.ArrElemSize);
+        end;
+        if TryGetArrayTypeBounds(TypeChild, LowBound, HighBound, ArrayLength) then
+        begin
+          AliasLocalMeta.IsStaticArray := True;
+          AliasLocalMeta.ArrLowBound := LowBound;
+          AliasLocalMeta.ArrHighBound := HighBound;
+          AliasLocalMeta.ArrLength := ArrayLength;
+          if AliasLocalMeta.ArrElemSize <= 0 then
+            AliasLocalMeta.ArrElemSize := 1;
+          AliasLocalMeta.Size := ArrayLength * AliasLocalMeta.ArrElemSize;
+          FModel.AddConstValue(TypeName + '$arr_static', 1);
+          FModel.AddConstValue(TypeName + '$arr_low', LowBound);
+          FModel.AddConstValue(TypeName + '$arr_high', HighBound);
+          FModel.AddConstValue(TypeName + '$arr_len', ArrayLength);
+          FModel.AddConstValue(TypeName + '$size', AliasLocalMeta.Size);
+        end
+        else
+        begin
+          { Dynarray descriptor is a managed pointer — SizeOf(TBytes)=8. }
+          AliasLocalMeta.IsStaticArray := False;
+          AliasLocalMeta.ArrLowBound := 0;
+          AliasLocalMeta.ArrHighBound := -1;
+          AliasLocalMeta.ArrLength := 0;
+          AliasLocalMeta.Size := 8;
+          FModel.AddConstValue(TypeName + '$arr', 1);
+          FModel.AddConstValue(TypeName + '$size', 8);
+        end;
+        FModel.SetTypeMeta(TypeId, AliasLocalMeta);
+        FModel.SetTypeKind(TypeId, 'array');
+      end
+      else if (TypeChild.NodeKind = gnkIdentifier) and
+        (Length(TypeChild.Text) > 1) and (TypeChild.Text[1] = '^') then
+      begin
+        { PFoo = ^TFoo: pointer alias, never inherit TFoo record layout. }
+        AliasTargetId := ResolveTypeIdForOwner(
+          Copy(TypeChild.Text, 2, Length(TypeChild.Text)), AOwnerUnitId);
+        if not FModel.GetTypeMeta(TypeId, AliasLocalMeta) then
+          FillChar(AliasLocalMeta, SizeOf(AliasLocalMeta), 0);
+        AliasLocalMeta.TypeId := TypeId;
+        AliasLocalMeta.Size := 8;
+        AliasLocalMeta.IsRecord := False;
+        AliasLocalMeta.VmtCount := 0;
+        AliasLocalMeta.ParentClassId := 0;
+        AliasLocalMeta.ParentClassName := '';
+        if AliasTargetId > 0 then
+          AliasLocalMeta.AliasTargetTypeId := AliasTargetId
+        else
+          AliasLocalMeta.AliasTargetTypeId := 0;
+        FModel.SetTypeMeta(TypeId, AliasLocalMeta);
+        FModel.SetTypeKind(TypeId, 'alias');
+        FModel.SetTypeScalarFact(TypeId, sskPointer, 64, False);
+        FModel.AddConstValue(TypeName + '$size', 8);
+        AliasTargetId := FModel.FindTypeByName('Pointer');
+        if AliasTargetId > 0 then
+          FModel.SetTypeParent(TypeId, AliasTargetId);
+      end
       else if TypeChild.NodeKind = gnkIdentifier then
       begin
         AliasTargetId := ResolveTypeIdForOwner(
@@ -1503,9 +1851,112 @@ begin
             AliasLocalMeta.ParentClassId := AliasTargetId;
             if FModel.TypeAt(AliasTargetId - 1).Name <> '' then
               AliasLocalMeta.ParentClassName := FModel.TypeAt(AliasTargetId - 1).Name;
+            { Interface/class re-export must keep VmtSlots — name-index last-wins
+              would otherwise drop slots and residual-call bare @IChild.Method. }
+            if AliasTargetMeta.VmtSlots <> nil then
+              AliasLocalMeta.VmtSlots := AliasTargetMeta.VmtSlots;
           end;
           FModel.SetTypeMeta(TypeId, AliasLocalMeta);
           FModel.SetTypeParent(TypeId, AliasTargetId);
+          if TypeMetaIsInterface(TypeChild.Text) or
+            SameText(FModel.TypeAt(AliasTargetId - 1).Kind, 'interface') then
+          begin
+            FModel.SetTypeKind(TypeId, 'interface');
+            FModel.AddConstValue(TypeName + '$interface', 1);
+            if AliasHasTargetMeta and (AliasTargetMeta.VmtCount > 0) then
+              FModel.AddConstValue(TypeName + '$vmt_count', AliasTargetMeta.VmtCount);
+            if AliasHasTargetMeta and (AliasTargetMeta.VmtSlots <> nil) then
+              for K := 0 to LongInt(AliasTargetMeta.VmtSlots.Count) - 1 do
+              begin
+                FModel.AddConstValue(TypeName + '$vmt_slot_' +
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName,
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].SlotIndex);
+                { Keep ret-ptr/ret-str flags on the re-export name so
+                  TypeMetaRetPtr(IChild, WaitWithOutput) still hits after
+                  last-wins name index. }
+                if TypeMetaRetPtr(
+                  FModel.TypeAt(AliasTargetId - 1).Name,
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName) or
+                  TypeMetaRetPtr(TypeChild.Text,
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName) then
+                  FModel.AddConstValue(TypeName + '$ret_ptr_' +
+                    AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName, 1);
+                if TypeMetaRetStr(
+                  FModel.TypeAt(AliasTargetId - 1).Name,
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName) or
+                  TypeMetaRetStr(TypeChild.Text,
+                  AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName) then
+                  FModel.AddConstValue(TypeName + '$ret_str_' +
+                    AliasTargetMeta.VmtSlots[SizeUInt(K)].MethodName, 1);
+              end;
+          end;
+          { Copy scalar / dynarray facts so High(SizeUInt)/Length(TBytesAlias)
+            still fold after unit-local aliases. }
+          if FModel.GetTypeScalarFact(AliasTargetId, Fact) then
+            FModel.SetTypeScalarFact(TypeId, Fact.Kind, Fact.BitWidth,
+              Fact.Signed);
+          if FModel.LookupConstValue(TypeChild.Text + '$arr', SizeVal) then
+          begin
+            FModel.AddConstValue(TypeName + '$arr', 1);
+            if FModel.LookupConstValue(TypeChild.Text + '$arr_elem_size',
+              SizeVal) then
+              FModel.AddConstValue(TypeName + '$arr_elem_size', SizeVal);
+            if FModel.LookupStringConstValue(
+              TypeChild.Text + '$arr_elem_type', InterfaceList) then
+              FModel.AddStringConstValue(TypeName + '$arr_elem_type',
+                InterfaceList);
+            if TypeMetaSize(TypeName) <= 0 then
+              FModel.AddConstValue(TypeName + '$size', 8);
+          end
+          else if (not FModel.GetTypeScalarFact(TypeId, Fact)) and
+            (TypeMetaSize(TypeChild.Text) > 0) then
+            FModel.AddConstValue(TypeName + '$size',
+              TypeMetaSize(TypeChild.Text));
+          { Class/exception re-exports (EDoubleFree = unit.path.EDoubleFree):
+            seed $resolve_Create so raise Alias.Create marks real body. }
+          if AliasHasTargetMeta and (not AliasTargetMeta.IsRecord) and
+            ((AliasTargetMeta.VmtCount > 0) or
+              (AliasTargetMeta.ParentClassName <> '') or
+              (AliasLocalMeta.ParentClassName <> '') or
+              SameText(FModel.TypeAt(AliasTargetId - 1).Kind, 'class')) then
+          begin
+            AliasResolveTarget := FModel.TypeAt(AliasTargetId - 1).Name;
+            if AliasResolveTarget = '' then
+              AliasResolveTarget := TypeChild.Text;
+            for K := 0 to 2 do
+            begin
+              case K of
+                0: CtorName := 'Create';
+                1: CtorName := 'CreateFmt';
+              else
+                CtorName := 'Destroy';
+              end;
+              if FModel.FindSymbolByName(TypeName + '.' + CtorName) <> 0 then
+                Continue;
+              if FModel.LookupStringConstValue(
+                AliasResolveTarget + '.$resolve_' + CtorName,
+                ResolvedCallee) then
+                FModel.AddStringConstValue(TypeName + '.$resolve_' + CtorName,
+                  ResolvedCallee)
+              else if FModel.FindSymbolByName(
+                AliasResolveTarget + '.' + CtorName) <> 0 then
+                FModel.AddStringConstValue(TypeName + '.$resolve_' + CtorName,
+                  AliasResolveTarget + '.' + CtorName)
+              else if SameText(CtorName, 'CreateFmt') then
+              begin
+                if FModel.LookupStringConstValue(
+                  AliasResolveTarget + '.$resolve_Create', ResolvedCallee) or
+                  FModel.LookupStringConstValue(
+                    TypeName + '.$resolve_Create', ResolvedCallee) then
+                  FModel.AddStringConstValue(TypeName + '.$resolve_CreateFmt',
+                    ResolvedCallee)
+                else if FModel.FindSymbolByName(
+                  AliasResolveTarget + '.Create') <> 0 then
+                  FModel.AddStringConstValue(TypeName + '.$resolve_CreateFmt',
+                    AliasResolveTarget + '.Create');
+              end;
+            end;
+          end;
         end;
       end;
     end;
@@ -1983,7 +2434,7 @@ begin
     if Child = nil then
       Continue;
     case Child.NodeKind of
-      gnkVarSection:
+      gnkVarSection, gnkThreadVarSection:
         ProcessVarSection(Child, AOwnerUnitId);
       gnkConstSection:
         ProcessConstSection(Child, AOwnerUnitId);

@@ -121,3 +121,7 @@ core/examples/nextpas.core.bench/demo_xlang/demo_xlang
 
 # simd coverage test binary (source: test_api_coverage_gather_scatter.pas)
 core/tests/nextpas.core.simd/test_api_coverage_gather_scatter
+
+# Dev-host runtime SDK assembled by scripts/setup-runtime-sdk.sh (M2 B7);
+# distribution builds ship real contents here.
+/lib/nextpas/runtime/

@@ -52,10 +52,35 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.SemaTrace(const AMsg: string);
+var
+  F: Text;
+begin
+  { Keep phase breadcrumbs cheap: one open/append/close is fine at phase
+    boundaries, but never call this from hot AST walks. }
+  Assign(F, '/tmp/nextpas-sema.progress');
+  {$I-}
+  Append(F);
+  if IOResult <> 0 then
+  begin
+    Rewrite(F);
+    if IOResult <> 0 then
+    begin
+      WriteLn(StdErr, '[sema] ', AMsg);
+      Exit;
+    end;
+  end;
+  WriteLn(F, AMsg);
+  Close(F);
+  {$I+}
+  WriteLn(StdErr, '[sema] ', AMsg);
+end;
+
 procedure TSemanticAnalyzer.Analyze;
 var
   DuplicateName: string;
 begin
+  SemaTrace('Analyze begin nofold=' + BoolToStr(FNoFold));
   if (FRootAst = nil) or (FUnitGraph = nil) or not FRootAst.IsValid then
   begin
     FModel.MarkFailure;
@@ -76,12 +101,19 @@ begin
   SeedBuiltinTypes;
   FModel.AddScope(skCompilation, FUnitGraph.RootName, 0);
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
+  SemaTrace('SeedImportedUnitBodies...');
   SeedImportedUnitBodies;
+  SemaTrace('SeedImportedUnitBodies done bodies=' +
+    IntToStr(LongInt(FProcedureBodies.Count)) + ' symbols=' +
+    IntToStr(FModel.SymbolCount));
   SeedCachedTypeGaps;
+  SemaTrace('SeedDeclarations...');
   SeedDeclarations;
   RebindExplicitClassParents;
   CompletePendingSignatures;
   AssignScopesToSymbols;
+  SemaTrace('SeedCallBindings...');
+  FSeedCallVisitCount := 0;
   SeedCallBindings;
   CheckDuplicateDeclarations;
   CheckUndeclaredIdentifiers;
@@ -99,6 +131,7 @@ begin
     PreRegisterFunctionReturnTypes;
   FGenericWorkQueue.Clear;
   FGenericWorkQueue.EnsureCapacity(64);
+  SemaTrace('SeedHaltCalls...');
   SeedHaltCalls;
   { process_fini 在用户代码之后 seed，确保退出序列为:
     process_init → 用户 main → process_fini (对标 FPC 的 init→main→flush→finalize 序列) }
@@ -111,7 +144,9 @@ begin
   end;
   if FNoFold then
   begin
+    SemaTrace('SeedFunctionBodies...');
     SeedFunctionBodies;
+    SemaTrace('SeedUnitLifecycleBodies...');
     SeedUnitLifecycleBodies;
   end;
 
@@ -127,6 +162,7 @@ begin
     FModel.MarkFailure
   else
     FModel.MarkReady;
+  SemaTrace('Analyze end status=' + FModel.Status);
 end;
 
 function TSemanticAnalyzer.DetachModel: TSemanticModel;

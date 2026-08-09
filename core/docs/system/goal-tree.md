@@ -11,12 +11,20 @@ verification.
   enforced by `make system-projection-check`.
 - [x] Add the typed `TSystemContractKind` ledger for the current `np.system.*` vocabulary.
 - [x] Make source contracts follow logical compiler owner families rather than one physical include file.
-- [ ] Move semantic/HIR/backend dispatch from strings to typed contract identity.
+- [~] Move semantic/HIR/backend dispatch from strings to typed contract identity — production
+  families landed: object-free (root/destroy/cleanup/release), process init/fini, string
+  ownership triad, dynarray set_length/fini, interface addref/release, halt; remaining
+  residual families still string-dispatched (`dynarray_init` is vocabulary-only).
 - [ ] Add `SystemContractFingerprint` and the immutable semantic snapshot.
-- [ ] Execute the complete A -> B -> C compiler-system bootstrap chain.
+- [~] Execute the complete A -> B -> C compiler-system bootstrap chain — M2-0 harness and
+  M2-1 ladder L0–L2 are green; L3 (full stage0 driver A→B link) is blocked on residual
+  undefined symbols at `opt` (see `docs/plans/m2/wave0-ledger.md` and
+  `self-hosting-readiness.md`); B→C not started.
 
 Current M0 evidence is source-contract, projection, and typed-inventory evidence. It does not prove
-runtime completeness, ABI stability, or self-host readiness.
+runtime completeness, ABI stability, or self-host readiness. The compiler-side milestone
+authority is `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` (M0–M9); this lane's
+M0 items map onto that plan's M0/M1/M2.
 
 ## Historical S-stage capability inventory
 
@@ -75,7 +83,7 @@ Exit evidence:
 - [x] Prepare a TypInfo minimal unlock `Needs Review` packet with exact symbol list, owner boundary, file set, and focused gates.
 - [x] Add the minimal live `nextpas.core.system.typinfo` unit for the seven-symbol pressure set. TypInfo minimal live unit is unlocked.
 - [x] Add the minimal live `nextpas.core.system.sysutils` exception-formatting unit for `Format` and canonical exception aliases.
-- [x] Add the minimal live `SameText` string-comparison slice with system-local ASCII fold.
+- [x] Add the minimal live `SameText` string-comparison facade slice; **owner is `nextpas.core.text.conv`** (ASCII fold), sysutils only re-exports.
 - [x] Add the minimal live `IntToStr` numeric conversion slice, delegating to the text owner.
 - [x] Add the minimal live `Trim` token-normalization slice for compiler generic parameter matching, delegating to the text owner.
 - [x] Expand TypInfo facade: PTypeData, TTypeData, GetPropInfo, GetEnumName, GetEnumValue (S8.11)
@@ -216,7 +224,7 @@ behavior. Focus: close documentation gaps, fill test coverage, define self-hosti
 2. **Leak-sensitive gap documented**: Managed interface array has HIR contract coverage, heaptrc evidence still needed.
 3. **Contract audit**: All 19 contracts consistent across 3 documentation files.
 4. **Self-hosting readiness**: 5 gates with owner assignment, acceptance criteria, and current status.
-5. **SysUtils facade expanded**: `SameText`, `IntToStr`, and `Trim` added to `nextpas.core.system.sysutils`, matching pre-existing tests (6/6 pass).
+5. **SysUtils facade expanded**: `SameText`, `IntToStr`, and `Trim` re-exported via `nextpas.core.system.sysutils` **from owner `nextpas.core.text.conv`**, matching pre-existing tests (6/6 pass).
 6. **FPC RTL enforcement gate**: File-level allowlist (`fpc_rtl_file_allowlist.txt`) prevents new SysUtils/Classes/TypInfo/DateUtils/BaseUnix/Unix/Windows debt from entering `core/src/nextpas.core.*.pas`.
 
 **Debt Landscape Summary** (as of 2026-06-14):

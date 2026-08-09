@@ -20,7 +20,7 @@ begin
   Inc(ACursor);
 
   if (ACursor >= ALexer.TokenCount) or
-    (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
+    not IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
   begin
     { Node.Free } // owned by tree FFacades
     Exit(False);
@@ -84,13 +84,7 @@ begin
     (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
      ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
-  begin
-    if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
-      SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
-      FullName := FullName + ';compilerproc';
-    Inc(ACursor);
-    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
-  end;
+    ConsumeRoutineDirectiveToken(ALexer, ACursor, FullName);
 
   { external 'lib' name 'sym' — mark node and skip body }
   if (ACursor < ALexer.TokenCount) and
@@ -160,8 +154,14 @@ begin
         ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
         ParseVarSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkConstKeyword then
+        { Local const (BUF_SIZE = 1024) must stay in AST — skip loses values. }
+        ParseConstSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword then
+        ParseTypeSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else
       begin
+        { label / unknown: skip section until next local-decl keyword or body. }
         Inc(ACursor);
         while (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
@@ -341,13 +341,7 @@ begin
     (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
      ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
-  begin
-    if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
-      SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
-      FullName := FullName + ';compilerproc';
-    Inc(ACursor);
-    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
-  end;
+    ConsumeRoutineDirectiveToken(ALexer, ACursor, FullName);
 
   { external 'lib' name 'sym' — mark node and skip body }
   if (ACursor < ALexer.TokenCount) and
@@ -417,8 +411,14 @@ begin
         ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
         ParseVarSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkConstKeyword then
+        { Local const (BUF_SIZE = 1024) must stay in AST — skip loses values. }
+        ParseConstSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword then
+        ParseTypeSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else
       begin
+        { label / unknown: skip section until next local-decl keyword or body. }
         Inc(ACursor);
         while (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind <> tkBeginKeyword) and
@@ -555,6 +555,28 @@ begin
       tkOperatorKeyword:
         Result := ParseFunctionDecl(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
+      tkClassKeyword:
+        begin
+          { implementation: `class operator` / `class function` / `class procedure`
+            / `class constructor`. Consume the class prefix then parse the routine
+            so the body is attached; bare `class` advance previously desynced the
+            stream at advanced-record operators (TGreenNode.:=). }
+          Inc(ACursor);
+          SkipDirectives(ALexer, ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkOperatorKeyword) then
+            Result := ParseFunctionDecl(ALexer, ACursor, AParent, ATree,
+              ADiagnostics, ARootFileId) and Result
+          else if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword) then
+            Result := ParseFunctionDecl(ALexer, ACursor, AParent, ATree,
+              ADiagnostics, ARootFileId) and Result
+          else if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind in
+              [tkProcedureKeyword, tkConstructorKeyword, tkDestructorKeyword]) then
+            Result := ParseProcedureDecl(ALexer, ACursor, AParent, ATree,
+              ADiagnostics, ARootFileId) and Result;
+        end;
       tkGenericKeyword:
         begin
           Inc(ACursor);

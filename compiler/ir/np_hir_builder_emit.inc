@@ -1,21 +1,11 @@
 procedure THIRBuilder.EmitExprInt(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
-  Value: Int64;
-  Code: LongInt;
   IntType: THIRTypeId;
 begin
-  Val(AArg, Value, Code);
-  if Code <> 0 then
-    IntType := GetIntType
-  else if (Value >= -128) and (Value <= 127) then
-    IntType := GetIntTypeByWidth(8, True)
-  else if (Value >= -32768) and (Value <= 32767) then
-    IntType := GetIntTypeByWidth(16, True)
-  else if (Value >= -2147483648) and (Value <= 2147483647) then
-    IntType := GetIntTypeByWidth(32, True)
-  else
-    IntType := GetIntType;
+  { Residual stack path is i64-centric (calls, memset len, binops). Narrow
+    consts (i8/i32) pollute SSA notes and force broken trunc/sext chains. }
+  IntType := GetIntType;
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
@@ -41,9 +31,11 @@ end;
 procedure THIRBuilder.EmitExprVar(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
-  V, TsSlot, LenVal: THIRValueId;
+  V, TsSlot, LenVal, DataPtr: THIRValueId;
   ConstVal: Int64;
+  FloatConstVal: Double;
   BaseName: string;
+  LenType: THIRTypeId;
 begin
   V := FindAlloca(AArg);
 
@@ -56,9 +48,65 @@ begin
     if TsSlot <> 0 then
     begin
       LenVal := EmitTStringLen(TsSlot);
-      S.Push(LenVal);
+      { Must keep i64 type: untyped push lets `Length(S)-2` collapse to i8. }
+      S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
       Exit;
     end;
+    { Dynarr dual-slot: Name$ptr + Name$len. Never residual-call @Name$len().
+      Late RegisterRuntimeArrVar / class-misseed may leave $len missing — create. }
+    LenType := GetIntTypeByWidth(32, True);
+    if (FindAlloca(BaseName + '$ptr') <> 0) or (FindAlloca(BaseName) <> 0) or
+      (FindAlloca(AArg) = 0) then
+    begin
+      EnsureAlloca(AArg, LenType);
+      V := FindAlloca(AArg);
+      if V <> 0 then
+      begin
+        S.PushTyped(EmitLoad(LenType, V), LenType);
+        Exit;
+      end;
+    end;
+  end;
+  { TString locals/params only register Name$ts. Scalar uses like
+    PAnsiChar(APath) encode as `var APath` — never residual-call @APath().
+    Surface the payload pointer (matches PChar/PAnsiChar cast of string). }
+  if V = 0 then
+  begin
+    TsSlot := FindAlloca(AArg + '$ts');
+    if TsSlot <> 0 then
+    begin
+      DataPtr := EmitTStringData(TsSlot);
+      if DataPtr <> 0 then
+      begin
+        S.PushTyped(DataPtr, GetPtrType);
+        Exit;
+      end;
+    end;
+  end;
+  { Open-array formals only register Name$ptr / Name$len. Bare `var Name`
+    must not residual-call @Name(); prefer arrvar ABI (ptr then len). }
+  if V = 0 then
+  begin
+    TsSlot := FindAlloca(AArg + '$ptr');
+    if TsSlot <> 0 then
+    begin
+      S.PushTyped(EmitLoad(GetPtrType, TsSlot), GetPtrType);
+      LenVal := FindAlloca(AArg + '$len');
+      if LenVal <> 0 then
+        S.Push(EmitLoad(GetIntTypeByWidth(32, True), LenVal))
+      else
+        S.PushTyped(EmitConstIntOfType(0, GetIntTypeByWidth(32, True)),
+          GetIntTypeByWidth(32, True));
+      Exit;
+    end;
+  end;
+  { Nested-in-method bodies reference outer 'self' with no static link.
+    Zeroed local alloca (same policy as outer-frame captures) — never
+    residual-call @self(). }
+  if (V = 0) and (AArg = 'self') then
+  begin
+    EnsureAlloca(AArg, GetPtrType);
+    V := FindAlloca(AArg);
   end;
   if (V = 0) and (Pos('.', AArg) > 0) then
   begin
@@ -90,7 +138,22 @@ begin
     Instr.TypeId := GetIntType;
     Instr.IntrinsicName := 'const:' + IntToStr(ConstVal);
     EmitInstr(Instr);
-    S.Push(Instr.ResultId);
+    S.PushTyped(Instr.ResultId, GetIntType);
+  end
+  else if FSemaModel.LookupFloatConstValue(AArg, FloatConstVal) then
+  begin
+    { Residual stack path is i64-centric (store/cmp/binop). Pushing bare
+      double from hikConstFloat yields `store i64 %f` / `icmp ptr, double`
+      type errors (opt first after HALF_PI seed). Reinterpret bits as i64 —
+      same shape as the old residual @Name() i64 call, without undeclared. }
+    Move(FloatConstVal, ConstVal, SizeOf(ConstVal));
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IntToStr(ConstVal);
+    EmitInstr(Instr);
+    S.PushTyped(Instr.ResultId, GetIntType);
   end
   else
   begin
@@ -100,7 +163,7 @@ begin
     Instr.TypeId := GetIntType;
     Instr.CallTarget := AArg;
     EmitInstr(Instr);
-    S.Push(Instr.ResultId);
+    S.PushTyped(Instr.ResultId, GetIntType);
   end;
 end;
 
@@ -364,7 +427,7 @@ begin
   Instr.Operands[0] := MakeOperand(V);
   Instr.Operands[1] := MakeOperand(IdxVal);
   EmitInstr(Instr);
-  S.Push(EmitLoad(GetIntType, Instr.ResultId));
+  S.PushTyped(EmitLoad(GetIntType, Instr.ResultId), GetIntType);
 end;
 
 procedure THIRBuilder.EmitExprFieldStrLen(var S: TExprStack; const AArg: string);
@@ -421,18 +484,23 @@ procedure THIRBuilder.EmitExprUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
 var
   Instr: THIRInstr;
   OperandType: THIRTypeId;
+  OperandVal: THIRValueId;
 begin
+  { Must PopTyped + SetLength before Operands[0] write — empty dynarray AV. }
+  OperandVal := S.PopTyped(OperandType);
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := AKind;
-  Instr.Operands[0] := MakeTypedOperand(S.Pop, OperandType);
-  if OperandType <> 0 then
+  if AKind = hikZext then
+    Instr.TypeId := GetIntType
+  else if OperandType <> 0 then
     Instr.TypeId := OperandType
   else
     Instr.TypeId := GetIntType;
   if AIntrinsic <> '' then
     Instr.IntrinsicName := AIntrinsic;
   SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(OperandVal, OperandType);
   EmitInstr(Instr);
   S.PushTyped(Instr.ResultId, Instr.TypeId);
 end;
@@ -441,21 +509,35 @@ procedure THIRBuilder.EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
 var
   Lhs, Rhs: THIRValueId;
   LhsType, RhsType, ResultType: THIRTypeId;
+  LhsW, RhsW: LongInt;
 begin
   Rhs := S.PopTyped(RhsType);
   Lhs := S.PopTyped(LhsType);
-  { 使用操作数类型，优先选择更宽的类型 }
+  { Prefer wider typed operand. Untyped side often hides i64 (Length/call);
+    never let a lone i8/i16 const force the whole op narrow. }
   if (LhsType <> 0) and (RhsType <> 0) then
   begin
-    if FModule.Types.GetType(LhsType).BitWidth >= FModule.Types.GetType(RhsType).BitWidth then
+    LhsW := FModule.Types.GetType(LhsType).BitWidth;
+    RhsW := FModule.Types.GetType(RhsType).BitWidth;
+    if LhsW >= RhsW then
       ResultType := LhsType
     else
       ResultType := RhsType;
   end
   else if LhsType <> 0 then
-    ResultType := LhsType
+  begin
+    if FModule.Types.GetType(LhsType).BitWidth >= 32 then
+      ResultType := LhsType
+    else
+      ResultType := GetIntType;
+  end
   else if RhsType <> 0 then
-    ResultType := RhsType
+  begin
+    if FModule.Types.GetType(RhsType).BitWidth >= 32 then
+      ResultType := RhsType
+    else
+      ResultType := GetIntType;
+  end
   else
     ResultType := GetIntType;
   S.PushTyped(EmitBinOp(AKind, ResultType, Lhs, Rhs), ResultType);
@@ -525,9 +607,119 @@ begin
   S.PushTyped(ResultVal, Len64);
 end;
 
+procedure THIRBuilder.EmitExprStrPos(var S: TExprStack);
+var
+  NeedlePtr, NeedleLen, HayPtr, HayLen: THIRValueId;
+  PtrType, NeedleLenType, HayLenType, Len64: THIRTypeId;
+  Instr: THIRInstr;
+begin
+  { Residual order: needle (ptr,len) then haystack (ptr,len).
+    np_str_pos(sub_ptr, sub_len, s_ptr, s_len) → 1-based index or 0. }
+  Len64 := GetIntTypeByWidth(64, True);
+  HayLen := S.PopTyped(HayLenType);
+  HayPtr := S.PopTyped(PtrType);
+  NeedleLen := S.PopTyped(NeedleLenType);
+  NeedlePtr := S.PopTyped(PtrType);
+  if (NeedlePtr = 0) or (NeedleLen = 0) or (HayPtr = 0) or (HayLen = 0) then
+    Exit;
+
+  if (NeedleLenType = 0) or (FModule.Types.GetType(NeedleLenType).BitWidth <> 64) then
+  begin
+    NeedleLen := NormalizeScalarValueToType(NeedleLen, NeedleLenType, Len64);
+    if NeedleLen = 0 then
+      Exit;
+  end;
+  if (HayLenType = 0) or (FModule.Types.GetType(HayLenType).BitWidth <> 64) then
+  begin
+    HayLen := NormalizeScalarValueToType(HayLen, HayLenType, Len64);
+    if HayLen = 0 then
+      Exit;
+  end;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := Len64;
+  Instr.IntrinsicName := 'str_pos';
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(NeedlePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(NeedleLen, Len64);
+  Instr.Operands[2] := MakeTypedOperand(HayPtr, GetPtrType);
+  Instr.Operands[3] := MakeTypedOperand(HayLen, Len64);
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, Len64);
+end;
+
 procedure THIRBuilder.EmitExprZext(var S: TExprStack);
 begin
   EmitExprUnaryOp(S, hikZext, '');
+end;
+
+procedure THIRBuilder.EmitExprInterlocked(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  TargetPtr, NewVal, CmpVal: THIRValueId;
+  TargetType, NewType, CmpType: THIRTypeId;
+  IsCas: Boolean;
+
+  { atomicrmw/cmpxchg operate on i64; pointer-swap call sites hand us ptr
+    values — ptrtoint them (same policy as ProcessInterlockedOp). }
+  function ToInt(const AValueId: THIRValueId;
+    const ASourceTypeId: THIRTypeId): THIRValueId;
+  begin
+    Result := AValueId;
+    if (AValueId = 0) or (ASourceTypeId = 0) or
+      (ASourceTypeId = GetIntType) then
+      Exit;
+    Result := NormalizeScalarValueToType(AValueId, ASourceTypeId, GetIntType);
+    if Result = 0 then
+      Result := AValueId;
+  end;
+
+begin
+  { Stack (push order): target-addr, new-value[, compare-value]. }
+  IsCas := (AArg = 'cas') or (AArg = 'cas64');
+  CmpVal := 0;
+  if IsCas then
+  begin
+    CmpVal := S.PopTyped(CmpType);
+    CmpVal := ToInt(CmpVal, CmpType);
+  end;
+  NewVal := S.PopTyped(NewType);
+  NewVal := ToInt(NewVal, NewType);
+  TargetPtr := S.PopTyped(TargetType);
+  if (TargetPtr = 0) or (NewVal = 0) or (IsCas and (CmpVal = 0)) then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  if AArg = 'cas' then
+    Instr.IntrinsicName := 'interlocked-cas'
+  else if AArg = 'cas64' then
+    Instr.IntrinsicName := 'interlocked-cas64'
+  else if AArg = 'add' then
+    Instr.IntrinsicName := 'interlocked-fetch-add'
+  else if AArg = 'add64' then
+    Instr.IntrinsicName := 'interlocked-fetch-add64'
+  else
+    Instr.IntrinsicName := 'interlocked-xchg';
+  if IsCas then
+  begin
+    SetLength(Instr.Operands, 3);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(NewVal, GetIntType);
+    Instr.Operands[2] := MakeTypedOperand(CmpVal, GetIntType);
+  end
+  else
+  begin
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeTypedOperand(TargetPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(NewVal, GetIntType);
+  end;
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, GetIntType);
 end;
 
 procedure THIRBuilder.EmitExprCall(var S: TExprStack; const AArg: string);
@@ -537,6 +729,10 @@ var
   CallArgTypes: array of THIRTypeId;
   Target, Rest: string;
   ArgCount, J, SpacePos: LongInt;
+  SemaTypeId: LongInt;
+  TargetHirType, SourceHirType: THIRTypeId;
+  Casted, CalleeSlot, CalleeVal: THIRValueId;
+  Fact: TSemanticScalarTypeFact;
 begin
   SpacePos := Pos(' ', AArg);
   if SpacePos > 0 then
@@ -554,9 +750,39 @@ begin
   SetLength(CallArgTypes, ArgCount);
   for J := ArgCount - 1 downto 0 do
     CallArgs[J] := S.PopTyped(CallArgTypes[J]);
+
+  { Type-name "call" is a cast: PUInt64(x) / Pointer(x) / Byte(x). Never emit
+    call @TypeName — lower via scalar/pointer cast classification. }
+  if (ArgCount = 1) and (FSemaModel <> nil) and (Target <> '') then
+  begin
+    SemaTypeId := FSemaModel.FindTypeByName(Target);
+    if (SemaTypeId > 0) and FSemaModel.GetTypeScalarFact(SemaTypeId, Fact) and
+      (Fact.Kind in [sskBool, sskInt, sskFloat, sskPointer]) then
+    begin
+      TargetHirType := SemanticTypeIdToHirTypeId(SemaTypeId);
+      SourceHirType := CallArgTypes[0];
+      if SourceHirType = 0 then
+      begin
+        if Fact.Kind = sskPointer then
+          SourceHirType := GetIntType
+        else
+          SourceHirType := GetIntType;
+      end;
+      if TargetHirType <> 0 then
+      begin
+        Casted := NormalizeScalarValueToType(CallArgs[0], SourceHirType,
+          TargetHirType);
+        if Casted <> 0 then
+        begin
+          S.PushTyped(Casted, TargetHirType);
+          Exit;
+        end;
+      end;
+    end;
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikCall;
   Instr.TypeId := FModule.FindFunctionReturnType(Target);
   if Instr.TypeId = 0 then
   begin
@@ -569,6 +795,42 @@ begin
           Break;
         end;
   end;
+
+  { Procedural formal: call through local/param slot, not residual @Name. }
+  CalleeSlot := FindAlloca(Target);
+  if CalleeSlot <> 0 then
+  begin
+    Instr.Kind := hikIndirectCall;
+    Instr.CallTarget := Target;
+    if FindAllocaType(Target) = GetPtrType then
+      CalleeVal := EmitLoad(GetPtrType, CalleeSlot)
+    else if IsVarParamAlloca(Target) then
+      CalleeVal := EmitLoad(GetPtrType, EmitLoad(GetPtrType, CalleeSlot))
+    else
+      CalleeVal := EmitLoad(GetIntType, CalleeSlot);
+    SetLength(Instr.Operands, ArgCount + 1);
+    if FindAllocaType(Target) = GetPtrType then
+      Instr.Operands[0] := MakeTypedOperand(CalleeVal, GetPtrType)
+    else if IsVarParamAlloca(Target) then
+      Instr.Operands[0] := MakeTypedOperand(CalleeVal, GetPtrType)
+    else
+      Instr.Operands[0] := MakeTypedOperand(CalleeVal, GetIntType);
+    for J := 0 to ArgCount - 1 do
+    begin
+      if CallArgTypes[J] <> 0 then
+        Instr.Operands[J + 1] := MakeTypedOperand(CallArgs[J], CallArgTypes[J])
+      else
+        Instr.Operands[J + 1] := MakeOperand(CallArgs[J]);
+    end;
+    EmitInstr(Instr);
+    if Instr.TypeId <> 0 then
+      S.PushTyped(Instr.ResultId, Instr.TypeId)
+    else
+      S.PushTyped(Instr.ResultId, GetIntType);
+    Exit;
+  end;
+
+  Instr.Kind := hikCall;
   Instr.CallTarget := Target;
   SetLength(Instr.Operands, ArgCount);
   for J := 0 to ArgCount - 1 do
@@ -579,10 +841,48 @@ begin
       Instr.Operands[J] := MakeOperand(CallArgs[J]);
   end;
   EmitInstr(Instr);
-  if FModule.Types.GetType(Instr.TypeId).Kind = htkPointer then
+  if Instr.TypeId <> 0 then
     S.PushTyped(Instr.ResultId, Instr.TypeId)
   else
-    S.Push(Instr.ResultId);
+    S.PushTyped(Instr.ResultId, GetIntType);
+end;
+
+procedure THIRBuilder.EmitExprICall(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  CallArgs: array of THIRValueId;
+  CallArgTypes: array of THIRTypeId;
+  ArgCount, J: LongInt;
+  Callee: THIRValueId;
+  CalleeType: THIRTypeId;
+begin
+  { Stack order: args pushed first, then callee; pop callee then args. }
+  ArgCount := StrToIntDef(AArg, 0);
+  Callee := S.PopTyped(CalleeType);
+  SetLength(CallArgs, ArgCount);
+  SetLength(CallArgTypes, ArgCount);
+  for J := ArgCount - 1 downto 0 do
+    CallArgs[J] := S.PopTyped(CallArgTypes[J]);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIndirectCall;
+  Instr.TypeId := GetIntType;
+  Instr.CallTarget := '';
+  SetLength(Instr.Operands, ArgCount + 1);
+  if (CalleeType <> 0) and (CalleeType = GetPtrType) then
+    Instr.Operands[0] := MakeTypedOperand(Callee, GetPtrType)
+  else
+    Instr.Operands[0] := MakeTypedOperand(Callee, GetIntType);
+  for J := 0 to ArgCount - 1 do
+  begin
+    if CallArgTypes[J] <> 0 then
+      Instr.Operands[J + 1] := MakeTypedOperand(CallArgs[J], CallArgTypes[J])
+    else
+      Instr.Operands[J + 1] := MakeOperand(CallArgs[J]);
+  end;
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, GetIntType);
 end;
 
 procedure THIRBuilder.EmitExprArrLoadVar(var S: TExprStack; const AArg: string);
@@ -626,6 +926,61 @@ begin
     S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
   else
     S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.EmitExprTsLoad(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  BasePtr, IndexVal, Scale, ByteOff, DataPtr, LenVal: THIRValueId;
+begin
+  { String-array element as (data,len): pop index (and base when no arg),
+    scale by the 24-byte TString stride, then read through the runtime
+    accessors so SSO/heap variants both work. With AArg the base comes from
+    the <name>$ptr slot (open-array/local dynarray); without it the base ptr
+    must already be on the stack (field arrays via 'field ... p'). }
+  IndexVal := S.Pop;
+  if AArg <> '' then
+  begin
+    BasePtr := FindAlloca(AArg + '$ptr');
+    if BasePtr = 0 then
+      Exit;
+    IndexVal := NormalizeArrayIndexValue(AArg, IndexVal);
+    BasePtr := EmitLoad(GetPtrType, BasePtr);
+  end
+  else
+    BasePtr := S.Pop;
+  if (BasePtr = 0) or (IndexVal = 0) then
+    Exit;
+
+  Scale := EmitConstIntOfType(24, GetIntType);
+  if Scale = 0 then
+    Exit;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikMul;
+  Instr.TypeId := GetIntType;
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(IndexVal, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(Scale, GetIntType);
+  EmitInstr(Instr);
+  ByteOff := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i8';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(ByteOff, GetIntType);
+  EmitInstr(Instr);
+
+  DataPtr := EmitTStringData(Instr.ResultId);
+  LenVal := EmitTStringLen(Instr.ResultId);
+  if (DataPtr = 0) or (LenVal = 0) then
+    Exit;
+  S.PushTyped(DataPtr, GetPtrType);
+  S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
 end;
 
 procedure THIRBuilder.EmitExprField(var S: TExprStack; const AArg: string);

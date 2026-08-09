@@ -28,7 +28,10 @@ uses
 { === 基本类型元数据 === }
 
 function TypeMetaSize(const AModel: TSemanticModel; const ATypeName: string): Int64;
+function TypeMetaIsDynArrayType(const AModel: TSemanticModel;
+  const ATypeName: string): Boolean;
 function TypeMetaIsRecord(const AModel: TSemanticModel; const ATypeName: string): Boolean;
+function TypeMetaIsPointer(const AModel: TSemanticModel; const ATypeName: string): Boolean;
 function TypeMetaIsClass(const AModel: TSemanticModel; const ATypeName: string): Boolean;
 function TypeMetaIsInterface(const AModel: TSemanticModel; const ATypeName: string): Boolean;
 function TypeIsInterfaceByName(const AModel: TSemanticModel; const ATypeName: string): Boolean;

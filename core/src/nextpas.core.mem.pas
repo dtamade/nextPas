@@ -214,10 +214,12 @@ function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; inlin
 function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean; inline;
 
 {** Sized free for an IAllocator surface when the block is on DefaultHeap (S5).
- *  Uses DefaultHeap.FreeMem(ptr, classSize) when TryBlockSize succeeds and
- *  neither process route (HEAP_DEBUG/SAFETY) nor NEXTPAS_MEM_DEBUG wrap is on;
- *  otherwise AAllocator.FreeMem(ptr) so plugin tracking still observes free.
- *  Keeps IAllocator five-method freeze; prefer this over bare FreeMem(ptr). }
+ *  When ASize>0, FreeMemOfAllowsSizedHeapFree, and AAllocator is nil or
+ *  DefaultAllocator: O(1) DefaultHeap.FreeMem(ptr, size) (same size-class map
+ *  as GetMem). Skips full TryBlockSize scan (O(classes×spans) pathological on
+ *  large free storms). Other IAllocator surfaces free via AAllocator.FreeMem
+ *  (arena/slab must not enter Growing freelist).
+ *  Under DEBUG wraps: FreeMemOfAllowsSizedHeapFree=False → AAllocator.FreeMem. }
 procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt); inline;
 function TryFreeMemOf(const AAllocator: IAllocator; APtr: Pointer;
   ASize: SizeUInt): Boolean; inline;
@@ -428,15 +430,16 @@ begin
 end;
 
 procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt);
-var
-  LClassSize: SizeUInt;
 begin
   if APtr = nil then
     Exit;
+  { O(1) sized free only for the process DefaultHeap surface.
+    Custom IAllocator (arena/slab/rtl) must not go through DefaultHeap — their
+    pointers are not size-class blocks (would corrupt TLS freelist). }
   if (ASize > 0) and FreeMemOfAllowsSizedHeapFree and
-    TryBlockSize(APtr, LClassSize) then
+    ((AAllocator = nil) or (AAllocator = DefaultAllocator)) then
   begin
-    DefaultHeap.FreeMem(APtr, LClassSize);
+    DefaultHeap.FreeMem(APtr, ASize);
     Exit;
   end;
   if AAllocator <> nil then
@@ -452,10 +455,23 @@ var
 begin
   if APtr = nil then
     Exit(False);
-  if (ASize > 0) and FreeMemOfAllowsSizedHeapFree and
-    TryBlockSize(APtr, LClassSize) then
+  if (ASize > 0) and FreeMemOfAllowsSizedHeapFree then
   begin
-    DefaultHeap.FreeMem(APtr, LClassSize);
+    if AAllocator = nil then
+    begin
+      { U1: nil allocator + sized — fail-closed ownership before free. }
+      if not TryBlockSize(APtr, LClassSize) then
+        Exit(False);
+      DefaultHeap.FreeMem(APtr, LClassSize);
+      Exit(True);
+    end;
+    if AAllocator = DefaultAllocator then
+    begin
+      DefaultHeap.FreeMem(APtr, ASize);
+      Exit(True);
+    end;
+    { Non-default IAllocator: free via surface (may be arena no-op). }
+    AAllocator.FreeMem(APtr);
     Exit(True);
   end;
   if AAllocator <> nil then
@@ -463,10 +479,7 @@ begin
     AAllocator.FreeMem(APtr);
     Exit(True);
   end;
-  { U1: nil allocator — free only when DefaultHeap owns the block (safe),
-    via process FreeMem so HEAP_DEBUG still tracks. Foreign → False (no UB).
-    FreeMemOf(nil, foreign) still falls through to process FreeMem (UB);
-    Try stays the fail-closed form. }
+  { U1: nil allocator unsized — free only when DefaultHeap owns the block. }
   if not TryBlockSize(APtr, LClassSize) then
     Exit(False);
   FreeMem(APtr);
@@ -475,8 +488,6 @@ end;
 
 function ReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
   AOldSize, ANewSize: SizeUInt): Pointer;
-var
-  LClassSize: SizeUInt;
 begin
   if APtr = nil then
   begin
@@ -485,8 +496,8 @@ begin
     Exit(GetMem(ANewSize));
   end;
   if (AOldSize > 0) and FreeMemOfAllowsSizedHeapFree and
-    TryBlockSize(APtr, LClassSize) then
-    Exit(DefaultHeap.ReallocMem(APtr, LClassSize, ANewSize));
+    ((AAllocator = nil) or (AAllocator = DefaultAllocator)) then
+    Exit(DefaultHeap.ReallocMem(APtr, AOldSize, ANewSize));
   if AAllocator <> nil then
     Exit(AAllocator.ReallocMem(APtr, ANewSize));
   Result := ReallocMem(APtr, ANewSize);

@@ -88,10 +88,14 @@ begin
   NameSetAdd(FNames, 'Lo');
   NameSetAdd(FNames, 'Hi');
   NameSetAdd(FNames, 'Odd');
+  NameSetAdd(FNames, 'UpCase');
   NameSetAdd(FNames, 'Char');
   NameSetAdd(FNames, 'Free');
   NameSetAdd(FNames, 'SetString');
   NameSetAdd(FNames, 'Default');
+  NameSetAdd(FNames, 'EOF');
+  NameSetAdd(FNames, 'FilePos');
+  NameSetAdd(FNames, 'FileSize');
   NameSetAdd(FNames, 'TypeInfo');
 
   { SysUtils builtins }
@@ -310,6 +314,7 @@ var
   PPtrIntTypeId, PPtrUIntTypeId: LongInt;
   PCharTypeId, PAnsiCharTypeId: LongInt;
   PUInt32TypeId, PDoubleTypeId, PWideCharTypeId, PNativeUIntTypeId: LongInt;
+  PSizeIntTypeId, PSizeUIntTypeId: LongInt;
 begin
   BooleanTypeId := AModel.AddType('Boolean', 'builtin');
   IntegerTypeId := AModel.AddType('Integer', 'builtin');
@@ -384,6 +389,11 @@ begin
   PDoubleTypeId := AModel.AddType('PDouble', 'alias');
   PWideCharTypeId := AModel.AddType('PWideChar', 'alias');
   PNativeUIntTypeId := AModel.AddType('PNativeUInt', 'alias');
+  { FPC System pointer aliases missing here residual-call as @PSizeUInt(x)
+    when used as casts — EmitExprCall's cast branch needs the sskPointer
+    fact to lower them (M2 B4). }
+  PSizeIntTypeId := AModel.AddType('PSizeInt', 'alias');
+  PSizeUIntTypeId := AModel.AddType('PSizeUInt', 'alias');
 
   AModel.SetTypeParent(PByteTypeId, PointerTypeId);
   AModel.SetTypeParent(PWordTypeId, PointerTypeId);
@@ -400,6 +410,8 @@ begin
   AModel.SetTypeParent(PDoubleTypeId, PointerTypeId);
   AModel.SetTypeParent(PWideCharTypeId, PointerTypeId);
   AModel.SetTypeParent(PNativeUIntTypeId, PointerTypeId);
+  AModel.SetTypeParent(PSizeIntTypeId, PointerTypeId);
+  AModel.SetTypeParent(PSizeUIntTypeId, PointerTypeId);
   AModel.SetTypeParent(Int32TypeId, LongIntTypeId);
   AModel.SetTypeAliasTarget(Int32TypeId, LongIntTypeId);
   AModel.SetTypeParent(UInt32TypeId, LongWordTypeId);
@@ -446,6 +458,18 @@ begin
   AModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
   AModel.SetTypeScalarFact(QWordTypeId, sskInt, 64, False);
   AModel.SetTypeScalarFact(UInt64TypeId, sskInt, 64, False);
+  { Size/Ptr/Native aliases — SizeOf/High/Low residual without these facts. }
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('SizeInt'), sskInt, 64, True);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('SizeUInt'), sskInt, 64, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('PtrInt'), sskInt, 64, True);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('PtrUInt'), sskInt, 64, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('NativeInt'), sskInt, 64, True);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('NativeUInt'), sskInt, 64, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('AnsiChar'), sskInt, 8, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('UInt16'), sskInt, 16, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('UInt8'), sskInt, 8, False);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('Int16'), sskInt, 16, True);
+  AModel.SetTypeScalarFact(AModel.FindTypeByName('Int8'), sskInt, 8, True);
   AModel.SetTypeScalarFact(SingleTypeId, sskFloat, 32, False);
   AModel.SetTypeScalarFact(DoubleTypeId, sskFloat, 64, False);
   AModel.SetTypeScalarFact(PointerTypeId, sskPointer, 64, False);
@@ -464,6 +488,27 @@ begin
   AModel.SetTypeScalarFact(PDoubleTypeId, sskPointer, 64, False);
   AModel.SetTypeScalarFact(PWideCharTypeId, sskPointer, 64, False);
   AModel.SetTypeScalarFact(PNativeUIntTypeId, sskPointer, 64, False);
+  AModel.SetTypeScalarFact(PSizeIntTypeId, sskPointer, 64, False);
+  AModel.SetTypeScalarFact(PSizeUIntTypeId, sskPointer, 64, False);
+
+  { System consts commonly residual-called as @MaxInt() when ProcessConst
+    cannot fold High(Integer) early enough (or System body not yet walked). }
+  AModel.AddConstValue('MaxInt', 2147483647);
+  AModel.AddConstValue('MaxLongint', 2147483647);
+  AModel.AddConstValue('MaxSmallint', 32767);
+  AModel.AddConstValue('MaxLongWord', 4294967295);
+  AModel.AddConstValue('MaxInt64', Int64($7FFFFFFFFFFFFFFF));
+  AModel.AddConstValue('DirectorySeparator', Ord('/'));
+  AModel.AddConstValue('PathDelim', Ord('/'));
+  AModel.AddConstValue('PathSep', Ord(':'));
+  AModel.AddConstValue('IOResult', 0); { L3 residual: bare IOResult → call }
+  AModel.AddConstValue('UNICODE_MAX_CODEPOINT', $10FFFF);
+  AModel.AddStringConstValue('DirectorySeparator', '/');
+  AModel.AddStringConstValue('PathDelim', '/');
+  AModel.AddStringConstValue('LineEnding', #10);
+  AModel.AddStringConstValue('sLineBreak', #10);
+  AModel.AddStringConstValue('PLATFORM_PATH_SEP', '/');
+  AModel.AddConstValue('PLATFORM_PATH_SEP', Ord('/'));
 end;
 
 end.

@@ -19,7 +19,7 @@
 
 | 单元 | 职责 |
 |------|------|
-| `text.conv` | 类型转换（IntToStr/FloatToStr/StrToInt 等） |
+| `text.conv` | 文本转换 owner：IntToStr/FloatToStr/StrToInt、**SameText**（ASCII）、Format、Trim 等 |
 | `text.char` | 字符分类和转换 |
 | `text.utf8` | UTF-8 编解码 |
 | `text.unicode.*` | 属性 / casefold / normalize / segment / collate / script / block |
@@ -55,7 +55,10 @@ function NFC/NFD/NFKC/NFKD(...): string;
 - GB9c（InCB）已实现
 - Line **双语义**：硬 `NextLine`（分隔符）vs 软 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`（UAX#14）
 
-### 类型转换 (text.conv)
+### 类型转换 / 文本工具 (text.conv)
+
+`text.conv` 是 **Format / SameText / IntToStr / Trim** 等文本转换 API 的实现 owner。
+`nextpas.core.system.sysutils` 仅作 SysUtils 名兼容薄门面，不得写成这些 API 的 owner。
 
 ```pascal
 function IntToStr(AValue: Int64): string;
@@ -63,6 +66,9 @@ function FloatToStr(AValue: Double): string;
 function StrToInt(const AValue: string): Int64;
 function StrToFloat(const AValue: string): Double;
 function BoolToStr(AValue: Boolean): string;
+function SameText(const A, B: string): Boolean;  // ASCII fold; not unicode casefold
+function Format(const AFmt: string; const AArgs: array of const): string;
+function Trim(const AStr: string): string;
 ```
 
 ### TStringView / Builder / strings

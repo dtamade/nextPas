@@ -455,147 +455,163 @@ end;
 
 procedure WriteSemanticModel(W: TBinaryWriter; const M: TSemanticModel);
 var
-  I, J, C: LongInt;
+  I, J, C, CC: LongInt;
+  Sym: TSemanticSymbol;
+  Typ: TSemanticType;
+  Scp: TSemanticScope;
+  Bnd: TSemanticBinding;
+  Hir: TTypedHirNode;
+  Expr: TSemanticHirExpr;
+  Rc: TRuntimeContract;
+  Fpb: TSemanticForeignProcedureBinding;
+  Lr: TSemanticLibraryRequest;
+  GP: TGenericParentRef;
 begin
+  { No `with Func()`: stage0 still lacks with-scope field loads, so bare
+    BindingId/Name under with become residual zero-arg calls (@BindingId).
+    Materialize each At() result into a local record, then use explicit fields. }
+
   { Symbols }
   C := M.SymbolCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.SymbolAt(I) do
-    begin
-      W.WriteInt32(SymbolId);
-      W.WriteStr(Name);
-      W.WriteStr(Kind);
-      W.WriteStr(OwnerUnitId);
-      W.WriteInt32(ScopeId);
-      W.WriteInt32(TypeId);
-      W.WriteInt32(ParamCount);
-      W.WriteInt32(MinParamCount);
-      W.WriteStr(ParamSignature);
-      W.WriteStr(Visibility);
-      W.WriteInt32(ByteOffset);
-      W.WriteInt32(ReturnTypeId);
-    end;
+  begin
+    Sym := M.SymbolAt(I);
+    W.WriteInt32(Sym.SymbolId);
+    W.WriteStr(Sym.Name);
+    W.WriteStr(Sym.Kind);
+    W.WriteStr(Sym.OwnerUnitId);
+    W.WriteInt32(Sym.ScopeId);
+    W.WriteInt32(Sym.TypeId);
+    W.WriteInt32(Sym.ParamCount);
+    W.WriteInt32(Sym.MinParamCount);
+    W.WriteStr(Sym.ParamSignature);
+    W.WriteStr(Sym.Visibility);
+    W.WriteInt32(Sym.ByteOffset);
+    W.WriteInt32(Sym.ReturnTypeId);
+  end;
 
   { Types }
   C := M.TypeCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.TypeAt(I) do
-    begin
-      W.WriteInt32(TypeId);
-      W.WriteStr(Name);
-      W.WriteStr(Kind);
-      W.WriteStr(OwnerUnitId);
-      W.WriteInt32(ParentTypeId);
-      W.WriteStr(TypeParams);
-      W.WriteStr(TypeConstraints);
-      W.WriteInt32(InstantiatedFrom);
-      W.WriteInt32(GenericParent.TemplateTypeId);
-      W.WriteInt32(Length(GenericParent.ArgIndices));
-      for J := 0 to High(GenericParent.ArgIndices) do
-        W.WriteInt32(GenericParent.ArgIndices[J]);
-    end;
+  begin
+    Typ := M.TypeAt(I);
+    W.WriteInt32(Typ.TypeId);
+    W.WriteStr(Typ.Name);
+    W.WriteStr(Typ.Kind);
+    W.WriteStr(Typ.OwnerUnitId);
+    W.WriteInt32(Typ.ParentTypeId);
+    W.WriteStr(Typ.TypeParams);
+    W.WriteStr(Typ.TypeConstraints);
+    W.WriteInt32(Typ.InstantiatedFrom);
+    GP := Typ.GenericParent;
+    W.WriteInt32(GP.TemplateTypeId);
+    W.WriteInt32(Length(GP.ArgIndices));
+    for J := 0 to High(GP.ArgIndices) do
+      W.WriteInt32(GP.ArgIndices[J]);
+  end;
 
   { Scopes }
   C := M.ScopeCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.ScopeAt(I) do
-    begin
-      W.WriteInt32(ScopeId);
-      W.WriteByte(Ord(Kind));
-      W.WriteStr(Name);
-      W.WriteInt32(ParentScopeId);
-    end;
+  begin
+    Scp := M.ScopeAt(I);
+    W.WriteInt32(Scp.ScopeId);
+    W.WriteByte(Ord(Scp.Kind));
+    W.WriteStr(Scp.Name);
+    W.WriteInt32(Scp.ParentScopeId);
+  end;
 
   { Bindings }
   C := M.BindingCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.BindingAt(I) do
-    begin
-      W.WriteInt32(BindingId);
-      W.WriteStr(Kind);
-      W.WriteStr(Name);
-      W.WriteStr(OwnerUnitId);
-      W.WriteInt32(ByteOffset);
-      W.WriteInt32(TargetSymbolId);
-    end;
+  begin
+    Bnd := M.BindingAt(I);
+    W.WriteInt32(Bnd.BindingId);
+    W.WriteStr(Bnd.Kind);
+    W.WriteStr(Bnd.Name);
+    W.WriteStr(Bnd.OwnerUnitId);
+    W.WriteInt32(Bnd.ByteOffset);
+    W.WriteInt32(Bnd.TargetSymbolId);
+  end;
 
   { TypedHirNodes }
   C := M.TypedHirNodeCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.TypedHirNodeAt(I) do
-    begin
-      W.WriteInt32(HirNodeId);
-      W.WriteStr(Kind);
-      W.WriteStr(DisplayName);
-      W.WriteInt32(SymbolId);
-      W.WriteInt32(TypeId);
-      W.WriteStr(Operand);
-      W.WriteInt32(ExprId);
-      W.WriteInt32(TargetExprId);
-      W.WriteBool(IsThreadVar);
-    end;
+  begin
+    Hir := M.TypedHirNodeAt(I);
+    W.WriteInt32(Hir.HirNodeId);
+    W.WriteStr(Hir.Kind);
+    W.WriteStr(Hir.DisplayName);
+    W.WriteInt32(Hir.SymbolId);
+    W.WriteInt32(Hir.TypeId);
+    W.WriteStr(Hir.Operand);
+    W.WriteInt32(Hir.ExprId);
+    W.WriteInt32(Hir.TargetExprId);
+    W.WriteBool(Hir.IsThreadVar);
+  end;
 
   { HirExprs }
   C := M.HirExprCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.HirExprAt(I) do
-    begin
-      W.WriteInt32(ExprId);
-      W.WriteByte(Ord(Kind));
-      W.WriteInt32(TypeId);
-      W.WriteInt32(SymbolId);
-      W.WriteInt32(SemanticHirChildCount(Children));
-      for J := 0 to (SemanticHirChildCount(Children) - 1) do
-        W.WriteInt32(Children[SizeUInt(J)]);
-      W.WriteInt64(LiteralInt);
-      W.WriteInt64(Int64(LiteralFloat));  { bitcast }
-      W.WriteStr(LiteralStr);
-      W.WriteStr(Op);
-      W.WriteInt32(SourceOffset);
-      W.WriteByte(Ord(ValueClass));
-    end;
+  begin
+    Expr := M.HirExprAt(I);
+    W.WriteInt32(Expr.ExprId);
+    W.WriteByte(Ord(Expr.Kind));
+    W.WriteInt32(Expr.TypeId);
+    W.WriteInt32(Expr.SymbolId);
+    CC := SemanticHirChildCount(Expr.Children);
+    W.WriteInt32(CC);
+    for J := 0 to CC - 1 do
+      W.WriteInt32(Expr.Children[SizeUInt(J)]);
+    W.WriteInt64(Expr.LiteralInt);
+    W.WriteInt64(Int64(Expr.LiteralFloat));  { bitcast }
+    W.WriteStr(Expr.LiteralStr);
+    W.WriteStr(Expr.Op);
+    W.WriteInt32(Expr.SourceOffset);
+    W.WriteByte(Ord(Expr.ValueClass));
+  end;
 
   { RuntimeContracts }
   C := M.RuntimeContractCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.RuntimeContractAt(I) do
-    begin
-      W.WriteInt32(ContractId);
-      W.WriteStr(Name);
-    end;
+  begin
+    Rc := M.RuntimeContractAt(I);
+    W.WriteInt32(Rc.ContractId);
+    W.WriteStr(Rc.Name);
+  end;
 
   { ForeignProcedureBindings }
   C := M.ForeignProcedureBindingCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.ForeignProcedureBindingAt(I) do
-    begin
-      W.WriteInt32(BindingId);
-      W.WriteStr(PascalName);
-      W.WriteStr(CallingConvention);
-      W.WriteStr(LibraryId);
-      W.WriteStr(ExternalSymbolName);
-      W.WriteInt32(SymbolId);
-    end;
+  begin
+    Fpb := M.ForeignProcedureBindingAt(I);
+    W.WriteInt32(Fpb.BindingId);
+    W.WriteStr(Fpb.PascalName);
+    W.WriteStr(Fpb.CallingConvention);
+    W.WriteStr(Fpb.LibraryId);
+    W.WriteStr(Fpb.ExternalSymbolName);
+    W.WriteInt32(Fpb.SymbolId);
+  end;
 
   { LibraryRequests }
   C := M.LibraryRequestCount;
   W.WriteInt32(C);
   for I := 0 to C - 1 do
-    with M.LibraryRequestAt(I) do
-    begin
-      W.WriteInt32(RequestId);
-      W.WriteStr(LogicalId);
-      W.WriteStr(LinkageKind);
-      W.WriteStr(Strength);
-    end;
+  begin
+    Lr := M.LibraryRequestAt(I);
+    W.WriteInt32(Lr.RequestId);
+    W.WriteStr(Lr.LogicalId);
+    W.WriteStr(Lr.LinkageKind);
+    W.WriteStr(Lr.Strength);
+  end;
 
   { RootName + Status }
   W.WriteStr(M.RootName);

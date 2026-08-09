@@ -726,7 +726,7 @@ The roadmap dashboard records evidence, not optimistic percentages.
 | Parallel compiler        | standalone skeleton                     | no readiness check, worker, or build-path caller                                                         | real worker execution and determinism stress                              |
 | MIR                      | duplicated opt-in side path             | session can report ready without a module; backend rebuilds HIR/MIR and verifier is minimal              | one session-owned verified default input and codegen parity gate          |
 | Benchmark truth          | broken                                  | compiler failures and unsupported targets are timed; stale IR and parent-only metrics are possible       | fail-closed B0 manifest and process-tree resource gate                    |
-| Self-host                | frontend/module probe only              | historical 22/22 stage2 module probe; no executable B/C evidence                                         | M2 isolated A to B to C viability gate                                    |
+| Self-host                | M2 in progress (harness + ladder L0-L2)  | M2-0 two-hop harness and M2-1 LLVM ladder L0-L2 green; L3 emits `nextpas.ll` but `opt` fails on residual undefined symbols (ledger: `docs/plans/m2/wave0-ledger.md`); no executable B/C | Close ladder L3 (link executable B), then B to C and the equivalence report |
 | Internal tooling core    | planned                                 | architecture specifications exist                                                                        | starts after typed query snapshots                                        |
 
 Update this table only in the same commit that adds or invalidates evidence.

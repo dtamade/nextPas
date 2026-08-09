@@ -380,6 +380,32 @@ begin
           end;
         end;
       end
+      else if Copy(ArgParts[I], 1, 7) = 'arrvar ' then
+      begin
+        { open-array / array-of-const formal → (ptr, i32 len) ABI }
+        PartBlob := Copy(ArgParts[I], 8, Length(ArgParts[I]) - 7);
+        if (Length(PartBlob) > 0) and
+          (PartBlob[Length(PartBlob)] = #10) then
+          PartBlob := Copy(PartBlob, 1, Length(PartBlob) - 1);
+        DataPtr := FindAlloca(PartBlob + '$ptr');
+        LenVal := FindAlloca(PartBlob + '$len');
+        if (DataPtr <> 0) and (LenVal <> 0) then
+        begin
+          DataPtr := EmitLoad(GetPtrType, DataPtr);
+          LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenVal);
+          if (ArgCount + 1) >= Length(ArgValues) then
+          begin
+            SetLength(ArgValues, ArgCount + 8);
+            SetLength(ArgTypes, ArgCount + 8);
+          end;
+          ArgValues[ArgCount] := DataPtr;
+          ArgTypes[ArgCount] := GetPtrType;
+          Inc(ArgCount);
+          ArgValues[ArgCount] := LenVal;
+          ArgTypes[ArgCount] := GetIntTypeByWidth(32, True);
+          Inc(ArgCount);
+        end;
+      end
       else if Copy(ArgParts[I], 1, 7) = 'strlit ' then
       begin
         PartBlob := Copy(ArgParts[I], 8, Length(ArgParts[I]) - 7);

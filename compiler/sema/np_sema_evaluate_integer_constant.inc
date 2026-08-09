@@ -3,6 +3,7 @@ function TSemanticAnalyzer.EvaluateIntegerConstant(const ANode: TGreenNode;
 var
   ArgNode: TGreenNode;
   Fact: TSemanticScalarTypeFact;
+  Meta: TTypeMetadata;
   IntrinsicName: string;
   Parsed: Int64;
   ParseCode: Word;
@@ -68,8 +69,45 @@ begin
         end;
         Exit(False);
       end;
+    gnkDotAccess:
+      begin
+        { unit/type-qualified enum const: nextpas.core.exception.ecInvalidArgument
+          → resolve rightmost identifier as const ordinal. }
+        ArgNode := ANode;
+        while (ArgNode <> nil) and (ArgNode.NodeKind = gnkDotAccess) and
+          (ArgNode.ChildCount >= 2) do
+          ArgNode := ArgNode.ChildAt(1);
+        if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+          FModel.LookupConstValue(ArgNode.Text, Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
+        Exit(False);
+      end;
+    gnkStringLiteral:
+      begin
+        { Char ordinal: '/' / #10 style single-char string literals. }
+        if (Length(ANode.Text) = 3) and (ANode.Text[1] = '''') and
+          (ANode.Text[3] = '''') then
+        begin
+          AValue := Ord(ANode.Text[2]);
+          Exit(True);
+        end;
+        Exit(False);
+      end;
     gnkFunctionCall:
       begin
+        { Type cast TypeName(const) — TryGetIntrinsicExprName rejects casts.
+          Needed so `UNICODE_MAX = TUnicodeCodepoint($10FFFF)` / PtrUInt(1)
+          seed via ProcessConstSection. }
+        if (ANode.ChildCount = 2) and
+          TryGetTypeCastTargetTypeId(ANode, TypeId) and
+          EvaluateIntegerConstant(ANode.ChildAt(1), Parsed) then
+        begin
+          AValue := Parsed;
+          Exit(True);
+        end;
         if TryGetIntrinsicExprName(ANode, IntrinsicName) then
         begin
           ArgNode := nil;
@@ -77,6 +115,42 @@ begin
             ArgNode := ANode.ChildAt(1);
           if SameText(IntrinsicName, 'SizeOf') and (ArgNode <> nil) then
           begin
+            { Static/local array vars: arr_len * elem_size (bytes). Prefer this
+              before type-id inference so Buf: array[0..N] of Char is not
+              mis-sized as a pointer/scalar fact. }
+            if (ArgNode.NodeKind = gnkIdentifier) and
+              FModel.LookupConstValue(ArgNode.Text + '$arr_len', Parsed) and
+              (Parsed > 0) then
+            begin
+              Left := DynArrayElemSizeOfVar(ArgNode.Text);
+              if Left <= 0 then
+                Left := 1;
+              AValue := Parsed * Left;
+              Exit(AValue > 0);
+            end;
+            { Dynarray type/var SizeOf is pointer width (descriptor). }
+            if (ArgNode.NodeKind = gnkIdentifier) and
+              (TypeMetaIsDynArrayType(ArgNode.Text) or
+               IsRuntimeArrVar(ArgNode.Text)) and
+              (not FModel.LookupConstValue(ArgNode.Text + '$arr_static', Parsed)) then
+            begin
+              AValue := 8;
+              Exit(True);
+            end;
+            if (ArgNode.NodeKind = gnkIdentifier) then
+            begin
+              TypeName := LookupRecordVar(ArgNode.Text);
+              if (TypeName <> '') and (TypeMetaSize(TypeName) > 0) then
+              begin
+                AValue := TypeMetaSize(TypeName);
+                Exit(True);
+              end;
+              if TypeMetaSize(ArgNode.Text) > 0 then
+              begin
+                AValue := TypeMetaSize(ArgNode.Text);
+                Exit(True);
+              end;
+            end;
             TypeId := 0;
             if ArgNode.NodeKind = gnkIdentifier then
               TypeId := ResolveTypeIdForOwner(
@@ -85,6 +159,8 @@ begin
               );
             if TypeId <= 0 then
               TypeId := InferExpressionType(ArgNode);
+            if TypeId > 0 then
+              TypeId := CanonicalTypeId(TypeId);
             if (TypeId > 0) and FModel.GetTypeScalarFact(TypeId, Fact) then
             begin
               AValue := Fact.BitWidth div 8;
@@ -95,7 +171,8 @@ begin
               TypeName := FModel.TypeAt(TypeId - 1).Name;
               if TypeMetaSize(TypeName) > 0 then
               begin
-                AValue := TypeMetaSize(TypeName) div 8;
+                { TypeMetaSize is bytes for record/class metas. }
+                AValue := TypeMetaSize(TypeName);
                 Exit(AValue > 0);
               end;
             end;
@@ -116,6 +193,8 @@ begin
               );
             if TypeId <= 0 then
               TypeId := InferExpressionType(ArgNode);
+            if TypeId > 0 then
+              TypeId := CanonicalTypeId(TypeId);
             if (TypeId > 0) and FModel.GetTypeScalarFact(TypeId, Fact) and
               (Fact.Kind in [sskBool, sskInt]) then
             begin
@@ -154,6 +233,102 @@ begin
           begin
             AValue := Parsed + 1;
             Exit(True);
+          end
+          else if (SameText(IntrinsicName, 'High') or SameText(IntrinsicName, 'Low')) and
+            (ArgNode <> nil) then
+          begin
+            { High/Low(type): needed so `MaxInt = High(Integer)` seeds via
+              ProcessConstSection → AddConstValue (else residual @MaxInt()).
+              High/Low(static array var): use $arr_high / $arr_low. }
+            if ArgNode.NodeKind = gnkIdentifier then
+            begin
+              if SameText(IntrinsicName, 'High') and
+                FModel.LookupConstValue(ArgNode.Text + '$arr_high', Parsed) then
+              begin
+                AValue := Parsed;
+                Exit(True);
+              end;
+              if SameText(IntrinsicName, 'Low') and
+                FModel.LookupConstValue(ArgNode.Text + '$arr_low', Parsed) then
+              begin
+                AValue := Parsed;
+                Exit(True);
+              end;
+              { High/Low(static array type alias). }
+              if SameText(IntrinsicName, 'High') and
+                FModel.LookupConstValue(ArgNode.Text + '$arr_high', Parsed) then
+              begin
+                AValue := Parsed;
+                Exit(True);
+              end;
+              TypeId := ResolveTypeIdForOwner(
+                ArgNode.Text,
+                NormalizeUnitIdentity(FCurrentProcessingUnitId)
+              );
+              if TypeId <= 0 then
+                TypeId := FModel.FindTypeByName(ArgNode.Text);
+              if TypeId > 0 then
+                TypeId := CanonicalTypeId(TypeId);
+              { Walk parent/alias chain — unit re-AddType can leave the head
+                without a scalar fact even after CanonicalTypeId. }
+              Parsed := 0;
+              while (TypeId > 0) and (TypeId <= FModel.TypeCount) and
+                (Parsed < 16) do
+              begin
+                if FModel.GetTypeScalarFact(TypeId, Fact) and
+                  (Fact.Kind in [sskBool, sskInt]) and (Fact.BitWidth > 0) then
+                begin
+                  if SameText(IntrinsicName, 'Low') then
+                  begin
+                    if Fact.Signed then
+                      AValue := -(Int64(1) shl (Fact.BitWidth - 1))
+                    else
+                      AValue := 0;
+                  end
+                  else
+                  begin
+                    if Fact.Signed then
+                      AValue := (Int64(1) shl (Fact.BitWidth - 1)) - 1
+                    else if Fact.BitWidth >= 64 then
+                      AValue := Int64(-1) { all bits; QWord max as bit pattern }
+                    else
+                      AValue := (Int64(1) shl Fact.BitWidth) - 1;
+                  end;
+                  Exit(True);
+                end;
+                if FModel.GetTypeMeta(TypeId, Meta) and
+                  (Meta.AliasTargetTypeId > 0) and
+                  (Meta.AliasTargetTypeId <> TypeId) then
+                  TypeId := Meta.AliasTargetTypeId
+                else if FModel.TypeAt(TypeId - 1).ParentTypeId > 0 then
+                  TypeId := FModel.TypeAt(TypeId - 1).ParentTypeId
+                else
+                  Break;
+                Inc(Parsed);
+              end;
+              { Hardcoded ordinal extremes for well-known names if facts lost. }
+              if SameText(ArgNode.Text, 'Integer') or
+                SameText(ArgNode.Text, 'LongInt') then
+              begin
+                if SameText(IntrinsicName, 'Low') then
+                  AValue := -2147483648
+                else
+                  AValue := 2147483647;
+                Exit(True);
+              end;
+              if SameText(ArgNode.Text, 'PtrUInt') or
+                SameText(ArgNode.Text, 'SizeUInt') or
+                SameText(ArgNode.Text, 'NativeUInt') or
+                SameText(ArgNode.Text, 'QWord') or
+                SameText(ArgNode.Text, 'UInt64') then
+              begin
+                if SameText(IntrinsicName, 'Low') then
+                  AValue := 0
+                else
+                  AValue := Int64(-1);
+                Exit(True);
+              end;
+            end;
           end;
         end;
         if LookupProcedureBody(ANode.Text, BodyNode, DeclNode) and

@@ -14,7 +14,8 @@ unit np_compilation_session;
 interface
 
 uses
-  nextpas.core.text, nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
+  { SameText via text.conv; full text facade is unicode-heavy under A self-compile. }
+  nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
   nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
   nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
   nextpas.core.collections.vec,

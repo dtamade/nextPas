@@ -1,7 +1,19 @@
 # nextPas 编译器目标树（compiler goal tree）
 
-> 编译器域（`compiler/`）的总控地图。与 `core/docs/platform-goal-tree.md`（RTL 域）并列。
-> 每轮工作前对照本树确认当前节点；每轮结束同步状态。
+> **状态：历史快照（C0–D8 时代，2026-06-01 ~ 2026-07-09）。不再是总控地图。**
+>
+> 本文件的 ✅ 完成标记——包括「C8 自举成功」「D1–D8 全部完成」「226 units → ELF
+> executable」——在 2026-07-13 truth reset 中被降级为 module/source/IR probe 证据：
+> 它们不证明可执行的 B/C 两代编译器（见 `PLAN.md`「当前事实」与
+> excellence plan 的 baseline reset 表）。实际状态是：full stage0 driver 经 LLVM
+> 路径尚未 link 出可执行 gen-B（M2-2 进行中，residual undefined symbols 未清）。
+>
+> - **当前权威路线**：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0–M9）
+> - **当前 M2 执行入口**：`docs/plans/m2/README.md`
+> - **当前卡点台账**：`docs/plans/m2/wave0-ledger.md`
+>
+> 阅读下文时，请把所有「已完成 ✅」理解为该时代的实现与测试记录（变更记录部分
+> 仍是有价值的代码考古索引），而不是 promotion evidence。
 
 ---
 

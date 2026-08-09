@@ -28,6 +28,47 @@ begin
   end;
 end;
 
+function THIRLlvmEmitter.LlvmGlobalName(const AName: string): string;
+var
+  I: LongInt;
+  C: Char;
+  NeedsQuote: Boolean;
+begin
+  { LLVM bare global: [A-Za-z_.][A-Za-z0-9_$.]* — operators like := need quotes. }
+  if AName = '' then
+    Exit('""');
+  if (Length(AName) >= 2) and (AName[1] = '"') and
+    (AName[Length(AName)] = '"') then
+    Exit(AName);
+
+  NeedsQuote := False;
+  C := AName[1];
+  if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+    (C = '_') or (C = '.')) then
+    NeedsQuote := True
+  else
+    for I := 2 to Length(AName) do
+    begin
+      C := AName[I];
+      if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+        ((C >= '0') and (C <= '9')) or (C = '_') or (C = '.') or (C = '$')) then
+      begin
+        NeedsQuote := True;
+        Break;
+      end;
+    end;
+
+  if NeedsQuote then
+    Result := '"' + EscapeLlvmStr(AName) + '"'
+  else
+    Result := AName;
+end;
+
+function THIRLlvmEmitter.LlvmGlobalRef(const AName: string): string;
+begin
+  Result := '@' + LlvmGlobalName(AName);
+end;
+
 procedure THIRLlvmEmitter.EmitStrConstants;
 var
   I: SizeUInt;
@@ -168,6 +209,9 @@ begin
   // llvm.trap 声明保留（其他 helpers 也需要）
   Emit('');
   Emit('declare void @llvm.trap()');
+  { System Bsf*/Bsr* lower to these; declare once with trap helpers. }
+  Emit('declare i64 @llvm.cttz.i64(i64, i1)');
+  Emit('declare i64 @llvm.ctlz.i64(i64, i1)');
 end;
 
 procedure THIRLlvmEmitter.EmitIntfRefCountHelpers;
@@ -246,7 +290,9 @@ begin
     Vmt := FModule.VmtGlobalAt(I);
     if (Vmt.Funcs = nil) or (Vmt.Funcs.Count = 0) then Continue;
     FuncCount := LongInt(Vmt.Funcs.Count);
-    Line := '@' + Vmt.ClassName + '.vmt = internal constant [' +
+    { Generic template class names carry '<T>' — must go through the same
+      quoting as reference sites or opt rejects the bare global (M2 B6.5). }
+    Line := LlvmGlobalRef(Vmt.ClassName + '.vmt') + ' = internal constant [' +
       IntToStr(FuncCount) + ' x ptr] [';
     for J := 0 to FuncCount - 1 do
     begin
@@ -254,7 +300,7 @@ begin
       if Vmt.Funcs[SizeUInt(J)] = '' then
         Line := Line + 'ptr null'
       else
-        Line := Line + 'ptr @' + Vmt.Funcs[SizeUInt(J)];
+        Line := Line + 'ptr ' + LlvmGlobalRef(Vmt.Funcs[SizeUInt(J)]);
     end;
     Line := Line + ']';
     Emit('');
@@ -276,7 +322,7 @@ begin
     if (Imt.ThunkNames = nil) or (Imt.ThunkNames.Count = 0) then Continue;
     ThunkCount := LongInt(Imt.ThunkNames.Count);
 
-    Line := '@' + Imt.ClassName + '.imt.' + Imt.InterfaceName +
+    Line := LlvmGlobalRef(Imt.ClassName + '.imt.' + Imt.InterfaceName) +
       ' = internal constant [' + IntToStr(ThunkCount) + ' x ptr] [';
     for J := 0 to ThunkCount - 1 do
     begin
@@ -284,7 +330,7 @@ begin
       if Imt.ThunkNames[SizeUInt(J)] = '' then
         Line := Line + 'ptr null'
       else
-        Line := Line + 'ptr @' + Imt.ThunkNames[SizeUInt(J)];
+        Line := Line + 'ptr ' + LlvmGlobalRef(Imt.ThunkNames[SizeUInt(J)]);
     end;
     Line := Line + ']';
     Emit('');
@@ -314,10 +360,10 @@ begin
         CallArgs := CallArgs + ', i64 %a' + IntToStr(K);
       end;
       Emit('');
-      Emit('define internal i64 @' + ThunkName + '(' + ParamStr + ') {');
+      Emit('define internal i64 ' + LlvmGlobalRef(ThunkName) + '(' + ParamStr + ') {');
       Emit('entry:');
       Emit('  %obj = getelementptr i8, ptr %intf_self, i64 -' + IntToStr(OffsetBytes));
-      Emit('  %r = tail call i64 @' + RealFunc + '(' + CallArgs + ')');
+      Emit('  %r = tail call i64 ' + LlvmGlobalRef(RealFunc) + '(' + CallArgs + ')');
       Emit('  ret i64 %r');
       Emit('}');
     end;

@@ -57,6 +57,174 @@ begin
   Result := np_sema_type_check.NextClassAncestorName(FModel, ATypeName);
 end;
 
+function TSemanticAnalyzer.ResolveClassMethodCalleeName(const AClassName,
+  AMethodName: string): string;
+var
+  OwnerName, MemberName, Candidate, Resolved, ShortName: string;
+  Guard, DotPos, CharIdx: LongInt;
+  FoundNonTObject: string;
+  FoundAny: string;
+  function ClassHasMethod(const AOwner, AMethod: string): Boolean;
+  begin
+    Result := (FirstBodyIndexForNameLocal(AOwner + '.' + AMethod) >= 0) or
+      (FModel.FindSymbolByName(AOwner + '.' + AMethod) <> 0);
+  end;
+  function PeelAliasClassName(const AName: string): string;
+  var
+    Cur: string;
+    Tid, G, LocalDot, LocalIdx: LongInt;
+    M: TTypeMetadata;
+  begin
+    Result := AName;
+    Cur := AName;
+    G := 0;
+    while (Cur <> '') and (G < 8) do
+    begin
+      Inc(G);
+      Tid := FModel.FindTypeByName(Cur);
+      if Tid <= 0 then
+      begin
+        LocalDot := 0;
+        for LocalIdx := Length(Cur) downto 1 do
+          if Cur[LocalIdx] = '.' then
+          begin
+            LocalDot := LocalIdx;
+            Break;
+          end;
+        if LocalDot > 0 then
+        begin
+          ShortName := Copy(Cur, LocalDot + 1, MaxInt);
+          Tid := FModel.FindTypeByName(ShortName);
+          if Tid > 0 then
+            Cur := ShortName
+          else
+            Break;
+        end
+        else
+          Break;
+      end;
+      if not FModel.GetTypeMeta(Tid, M) then
+        Break;
+      if M.AliasTargetTypeId <= 0 then
+      begin
+        Result := Cur;
+        Break;
+      end;
+      if (M.AliasTargetTypeId > 0) and
+        (M.AliasTargetTypeId <= FModel.TypeCount) then
+      begin
+        ShortName := FModel.TypeAt(M.AliasTargetTypeId - 1).Name;
+        if (ShortName = '') or SameText(ShortName, Cur) then
+        begin
+          Result := Cur;
+          Break;
+        end;
+        Cur := ShortName;
+        Result := Cur;
+      end
+      else
+        Break;
+    end;
+  end;
+  function TryResolveTable(const AOwner, AMethod: string;
+    out AResolved: string): Boolean;
+  begin
+    Result := FModel.LookupStringConstValue(
+      AOwner + '.$resolve_' + AMethod, AResolved) and (AResolved <> '');
+  end;
+begin
+  Result := '';
+  if (AClassName = '') or (AMethodName = '') then
+    Exit;
+  OwnerName := PeelAliasClassName(AClassName);
+  MemberName := AMethodName;
+  if TryResolveTable(AClassName, MemberName, Resolved) or
+    ((not SameText(OwnerName, AClassName)) and
+      TryResolveTable(OwnerName, MemberName, Resolved)) then
+    Exit(Resolved);
+
+  FoundNonTObject := '';
+  FoundAny := '';
+  Candidate := OwnerName;
+  Guard := 0;
+  while (Candidate <> '') and (Guard < 16) do
+  begin
+    Inc(Guard);
+    if ClassHasMethod(Candidate, MemberName) then
+    begin
+      if not SameText(Candidate, 'TObject') then
+      begin
+        FoundNonTObject := Candidate + '.' + MemberName;
+        Break;
+      end
+      else if FoundAny = '' then
+        FoundAny := Candidate + '.' + MemberName;
+    end;
+    Candidate := NextClassAncestorName(Candidate);
+    if Candidate = '' then
+      Break;
+    { unit-qualified parent → short type name when full path is not registered. }
+    if FModel.FindTypeByName(Candidate) <= 0 then
+    begin
+      DotPos := 0;
+      for CharIdx := Length(Candidate) downto 1 do
+        if Candidate[CharIdx] = '.' then
+        begin
+          DotPos := CharIdx;
+          Break;
+        end;
+      if DotPos > 0 then
+      begin
+        ShortName := Copy(Candidate, DotPos + 1, MaxInt);
+        if FModel.FindTypeByName(ShortName) > 0 then
+          Candidate := ShortName;
+      end;
+    end;
+  end;
+  if FoundNonTObject <> '' then
+    Exit(FoundNonTObject);
+  if FoundAny <> '' then
+    Exit(FoundAny);
+
+  { CreateFmt rarely has a body on leaf exception classes; fall back to Create. }
+  if SameText(MemberName, 'CreateFmt') then
+  begin
+    if TryResolveTable(AClassName, 'Create', Resolved) or
+      TryResolveTable(OwnerName, 'Create', Resolved) then
+      Exit(Resolved);
+    Candidate := OwnerName;
+    Guard := 0;
+    while (Candidate <> '') and (Guard < 16) do
+    begin
+      Inc(Guard);
+      if (not SameText(Candidate, 'TObject')) and
+        ClassHasMethod(Candidate, 'Create') then
+        Exit(Candidate + '.Create');
+      Candidate := NextClassAncestorName(Candidate);
+      if Candidate = '' then
+        Break;
+      if FModel.FindTypeByName(Candidate) <= 0 then
+      begin
+        DotPos := 0;
+        for CharIdx := Length(Candidate) downto 1 do
+          if Candidate[CharIdx] = '.' then
+          begin
+            DotPos := CharIdx;
+            Break;
+          end;
+        if DotPos > 0 then
+        begin
+          ShortName := Copy(Candidate, DotPos + 1, MaxInt);
+          if FModel.FindTypeByName(ShortName) > 0 then
+            Candidate := ShortName;
+        end;
+      end;
+    end;
+  end;
+
+  Result := OwnerName + '.' + MemberName;
+end;
+
 function TSemanticAnalyzer.TypeMetaVmtCount(const ATypeName: string): Int64;
 begin
   Result := np_sema_type_check.TypeMetaVmtCount(FModel, ATypeName);

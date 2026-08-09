@@ -899,7 +899,13 @@ procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId;
   AIsThreadVar: Boolean);
 var
   Global: THIRGlobal;
+  I: SizeInt;
 begin
+  { Unit-scope same-name vars across units collapse to one LLVM @g_ name. }
+  if FGlobals <> nil then
+    for I := 0 to SizeInt(FGlobals.Count) - 1 do
+      if SameText(FGlobals[SizeUInt(I)].Name, AName) then
+        Exit;
   Global := Default(THIRGlobal);
   Global.Name := AName;
   Global.TypeId := ATypeId;

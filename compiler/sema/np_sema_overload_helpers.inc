@@ -107,6 +107,36 @@ begin
   Result := -1;
 end;
 
+function CtxFirstBodyIndexForName(const Ctx: TSemaOverloadContext;
+  const AName: string): LongInt;
+begin
+  Result := -1;
+  if AName = '' then
+    Exit;
+  if (Ctx.BodyNameFirst <> nil) and
+    Ctx.BodyNameFirst.TryGetValue(LowerCase(AName), Result) then
+    Exit;
+  if Ctx.BodyNameFirst <> nil then
+    Exit(-1);
+  Result := FirstBodyIndexForName(Ctx.ProcedureBodies, AName);
+end;
+
+function CtxNextBodyIndexForName(const Ctx: TSemaOverloadContext;
+  const APrevIndex: LongInt): LongInt;
+begin
+  Result := -1;
+  if APrevIndex < 0 then
+    Exit;
+  if Ctx.BodyNameNext <> nil then
+  begin
+    if APrevIndex >= LongInt(Ctx.BodyNameNext.Count) then
+      Exit;
+    Exit(Ctx.BodyNameNext[APrevIndex]);
+  end;
+  { Linear fallback needs the name — callers that use Next without First on
+    unindexed context must use NextBodyIndexForName(ABodies, AName, Prev). }
+end;
+
 function LookupOverload(const AName: string; AArgCount: LongInt;
   const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;

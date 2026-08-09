@@ -44,6 +44,11 @@ type
     FModel: TSemanticModel;
     { Procedure body table on FAllocator when present; contexts borrow. }
     FProcedureBodies: TProcedureBodyVec;
+    { Case-insensitive name → first FProcedureBodies index; same-name overloads
+      chained via FProcedureBodyNameNext (parallel to bodies). Types match
+      TSemaOverloadContext.BodyName* so LookupCallBinding can use O(overloads). }
+    FProcedureBodyNameFirst: TProcedureBodyNameFirstMap;
+    FProcedureBodyNameNext: TProcedureBodyNameNextVec;
     { Scratch work tables on FAllocator when present. }
     FCompilerProcNames: TStringVec;
     FGenericWorkQueue: TLongIntVec;
@@ -61,6 +66,8 @@ type
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
     FCurrentOwnedStringReturn: Boolean;
+    { SeedCallBindingsInNode visit counter (progress heartbeat only). }
+    FSeedCallVisitCount: LongInt;
     { Imported unit trees/owners on FAllocator when present; contexts borrow. }
     FImportedUnitTrees: TSemaImportedTreeVec;
     FImportedUnitOwners: TSemaImportedOwnerVec;
@@ -233,7 +240,14 @@ type
       const AParamNames, AArgTypes: array of string): string;
     function MangledName(const AName: string; AParamCount: LongInt): string;
     function MangledNameSig(const AName: string; const ASig: string): string;
+    { Define-side EffName for call/sret sites: bare when unique, else
+      MangledNameSig(Name, GetParamSignature(Decl)). }
+    function EffectiveRuntimeCalleeName(const AName: string;
+      const ADecl: TGreenNode): string;
     function HasOverload(const AName: string): Boolean;
+    function FirstBodyIndexForNameLocal(const AName: string): LongInt;
+    function NextBodyIndexForNameLocal(const APrevIndex: LongInt): LongInt;
+    procedure IndexProcedureBodyName(const AName: string; const AIndex: LongInt);
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;
@@ -287,7 +301,9 @@ type
     function TypeIdHasKnownClassLayout(const ATypeId: LongInt): Boolean;
     function IsDeferredSystemObjectMember(const AMemberName: string): Boolean;
     function TypeMetaSize(const ATypeName: string): Int64;
+    function TypeMetaIsDynArrayType(const ATypeName: string): Boolean;
     function TypeMetaIsRecord(const ATypeName: string): Boolean;
+    function TypeMetaIsPointer(const ATypeName: string): Boolean;
     function TypeMetaIsClass(const ATypeName: string): Boolean;
     function TypeMetaIsInterface(const ATypeName: string): Boolean;
     function TypeIsInterfaceByName(const ATypeName: string): Boolean;
@@ -302,6 +318,9 @@ type
     function TypeMetaRetStr(const ATypeName, AMethodName: string): Boolean;
     function TypeMetaParentClass(const ATypeName: string): string;
     function NextClassAncestorName(const ATypeName: string): string;
+    { Empty subclass / type-alias class-new: Class.Create → nearest body name. }
+    function ResolveClassMethodCalleeName(const AClassName,
+      AMethodName: string): string;
     function TypeMetaVmtCount(const ATypeName: string): Int64;
     function TypeMetaInterfaces(const ATypeName: string): string;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
@@ -570,6 +589,7 @@ type
     procedure SeedFunctionBodies;
     procedure SeedUnitLifecycleBodies;
     procedure SeedImportedUnitBodies;
+    procedure SemaTrace(const AMsg: string);
   public
     constructor Create(
       const ARootAst: TAstFacade;

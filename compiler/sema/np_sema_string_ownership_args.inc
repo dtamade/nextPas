@@ -46,7 +46,7 @@ begin
   Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', TempName, 0, 0,
     TempName);
   Ctx.Model.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    TempName + #9 + 'callee ' + SourceName + #9 +
+    TempName + #9 + 'callee ' + Ctx.EffectiveRuntimeCalleeName(Ctx.CallbackCtx, SourceName) + #9 +
     'ptr len owner alloc_size');
   Ctx.Model.AddTypedHirNode('string-temp-length-runtime', SourceName, 0, 0,
     'strvar ' + TempName + #10);
@@ -111,7 +111,7 @@ begin
   Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
     ATempName);
   Ctx.Model.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
+    ATempName + #9 + 'callee ' + Ctx.EffectiveRuntimeCalleeName(Ctx.CallbackCtx, SourceName) + #9 +
     'ptr len owner alloc_size');
   Ctx.Model.AddTypedHirNode('tstring-copy-runtime', ADestName, 0, 0,
     ADestName + #9 + ATempName + #9 + StartBlob + #9 + LenBlob);
@@ -162,7 +162,7 @@ begin
   Ctx.Model.AddTypedHirNode('var-decl-tstring-runtime', ATempName, 0, 0,
     ATempName);
   Ctx.Model.AddTypedHirNode('string-temp-owned-runtime', SourceName, 0, 0,
-    ATempName + #9 + 'callee ' + SourceName + #9 +
+    ATempName + #9 + 'callee ' + Ctx.EffectiveRuntimeCalleeName(Ctx.CallbackCtx, SourceName) + #9 +
     'ptr len owner alloc_size');
   Ctx.RuntimeVars.QueuePendingStringTempRelease(ATempName, SourceName);
   Result := True;

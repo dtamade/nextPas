@@ -18,7 +18,7 @@
 | system.contracts | 运行时契约常量（np.system.*） |
 | system.memmanager | 内存管理器集成 |
 | system.classes | Classes 最小门面 |
-| system.sysutils | SysUtils 最小门面 |
+| system.sysutils | SysUtils 兼容薄门面（文本 API 实现 owner = `text.conv`，非本单元） |
 | system.typinfo | TypInfo 最小门面 |
 
 ### 1.2 运行时契约

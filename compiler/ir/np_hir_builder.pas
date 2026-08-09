@@ -169,9 +169,13 @@ type
     procedure EmitExprBinOp(var S: TExprStack; AKind: THIRInstrKind);
     procedure EmitExprCmp(var S: TExprStack; const AArg: string);
     procedure EmitExprStrCmp(var S: TExprStack; const AArg: string);
+    procedure EmitExprStrPos(var S: TExprStack);
     procedure EmitExprZext(var S: TExprStack);
     procedure EmitExprCall(var S: TExprStack; const AArg: string);
+    procedure EmitExprInterlocked(var S: TExprStack; const AArg: string);
+    procedure EmitExprICall(var S: TExprStack; const AArg: string);
     procedure EmitExprArrLoadVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprTsLoad(var S: TExprStack; const AArg: string);
     procedure EmitExprField(var S: TExprStack; const AArg: string);
     procedure EmitExprVcall(var S: TExprStack; AArg: string);
     procedure EmitExprIvcall(var S: TExprStack; AArg: string);
@@ -600,7 +604,13 @@ begin
 end;
 
 procedure THIRBuilder.RegisterGlobal(const AName: string; AType: THIRTypeId);
+var
+  I: LongInt;
 begin
+  if FGlobalNames.Count > 0 then
+    for I := 0 to LongInt(FGlobalNames.Count) - 1 do
+      if SameText(FGlobalNames[I], AName) then
+        Exit;
   FGlobalNames.Push(AName);
   FGlobalTypes.Push(AType);
 end;

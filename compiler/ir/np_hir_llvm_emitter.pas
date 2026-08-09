@@ -91,9 +91,10 @@ type
     function ValueLlvmType(AValueId: THIRValueId;
       const AFallback: string): string;
     procedure NoteValueLlvmType(AValueId: THIRValueId; const ALlvmType: string);
-    { Cast SSA value to AWantedTy when noted type differs; returns ref (maybe temp). }
+    { Cast SSA value to AWantedTy when noted/hinted type differs; returns ref. }
     function EmitCastValueToLlvmType(AValueId: THIRValueId;
-      const AWantedTy, ATag: string): string;
+      const AWantedTy, ATag: string;
+      const AHaveTyHint: string = ''): string;
     function IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
     function IsUnsignedOrderedCompareType(const ATypeId: THIRTypeId): Boolean;
     function DivOpcodeToLlvm(const AInstr: THIRInstr): string;
@@ -101,10 +102,14 @@ type
     function CompareOpcodeToLlvm(const AInstr: THIRInstr): string;
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
+    { Bare LLVM global id, or "quoted" when name has operator chars (:=, <>, …). }
+    function LlvmGlobalName(const AName: string): string;
+    function LlvmGlobalRef(const AName: string): string;
     function IsSretFunction(const AName: string): Boolean;
     function IsTStringSretFunction(const AName: string): Boolean;
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitCallInstr(const AInstr: THIRInstr);
+    procedure EmitIndirectCallInstr(const AInstr: THIRInstr);
     procedure ClosePendingObjectFreeGuard;
     function IsObjectFreeGuardContinuation(const AInstr: THIRInstr): Boolean;
     function EmitSystemContractInstr(const AInstr: THIRInstr): Boolean;
@@ -155,6 +160,17 @@ var
   LFunc: THIRFunction;
   LAlreadyEmitted: Boolean;
   J: LongInt;
+  function HirFunctionInstrCount(const AFunc: THIRFunction): LongInt;
+  var
+    BI: LongInt;
+  begin
+    Result := 0;
+    if AFunc.Blocks = nil then
+      Exit;
+    for BI := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(BI)].Instrs <> nil then
+        Inc(Result, LongInt(AFunc.Blocks[SizeUInt(BI)].Instrs.Count));
+  end;
 begin
   FLines.Clear;
   FStrConstants.Clear;
@@ -229,15 +245,27 @@ begin
   begin
     G := FModule.GlobalAt(I);
     Emit('');
+    GType := FModule.Types.GetType(G.TypeId);
     if G.IsThreadVar then
     begin
-      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+      if GType.Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal thread_local global ptr null')
       else
       begin
         { Match RegisterGlobal DeclType (e.g. Integer → i32). }
         if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
           Emit('@g_' + G.Name + ' = internal thread_local global i64 0')
+        else if (GType.Kind = htkFloat) or
+          SameText(TypeToLlvm(G.TypeId), 'float') or
+          SameText(TypeToLlvm(G.TypeId), 'double') then
+          Emit('@g_' + G.Name + ' = internal thread_local global ' +
+            TypeToLlvm(G.TypeId) + ' 0.0')
+        else if (GType.Kind = htkRecord) or (GType.Kind = htkArray) or
+          (GType.Kind = htkDynArray) or
+          (Copy(TypeToLlvm(G.TypeId), 1, 1) = '{') or
+          (Copy(TypeToLlvm(G.TypeId), 1, 1) = '[') then
+          Emit('@g_' + G.Name + ' = internal thread_local global ' +
+            TypeToLlvm(G.TypeId) + ' zeroinitializer')
         else
           Emit('@g_' + G.Name + ' = internal thread_local global ' +
             TypeToLlvm(G.TypeId) + ' 0');
@@ -245,7 +273,7 @@ begin
     end
     else
     begin
-      if FModule.Types.GetType(G.TypeId).Kind = htkPointer then
+      if GType.Kind = htkPointer then
         Emit('@g_' + G.Name + ' = internal global ptr null')
       else
       begin
@@ -253,6 +281,17 @@ begin
           made load/store of unit vars like GMuAcc type-inconsistent. }
         if (G.TypeId = 0) or (TypeToLlvm(G.TypeId) = 'void') then
           Emit('@g_' + G.Name + ' = internal global i64 0')
+        else if (GType.Kind = htkFloat) or
+          SameText(TypeToLlvm(G.TypeId), 'float') or
+          SameText(TypeToLlvm(G.TypeId), 'double') then
+          Emit('@g_' + G.Name + ' = internal global ' +
+            TypeToLlvm(G.TypeId) + ' 0.0')
+        else if (GType.Kind = htkRecord) or (GType.Kind = htkArray) or
+          (GType.Kind = htkDynArray) or
+          (Copy(TypeToLlvm(G.TypeId), 1, 1) = '{') or
+          (Copy(TypeToLlvm(G.TypeId), 1, 1) = '[') then
+          Emit('@g_' + G.Name + ' = internal global ' +
+            TypeToLlvm(G.TypeId) + ' zeroinitializer')
         else
           Emit('@g_' + G.Name + ' = internal global ' +
             TypeToLlvm(G.TypeId) + ' 0');
@@ -263,19 +302,32 @@ begin
   for I := 0 to FModule.FunctionCount - 1 do
   begin
     LFunc := FModule.FunctionAt(I);
-    { Skip duplicate function definitions }
-    if I > 0 then
+    { Same short/mangled name can appear twice (unit facade NewSHA256 vs real
+      impl, TextFormat re-export, …). Prefer the *denser* body by instr count —
+      last-wins dropped real class-new bodies when a later empty facade won. }
+    LAlreadyEmitted := False;
+    for J := 0 to FModule.FunctionCount - 1 do
     begin
-      LAlreadyEmitted := False;
-      for J := 0 to I - 1 do
-        if SameText(FModule.FunctionAt(J).Name, LFunc.Name) then
-        begin
-          LAlreadyEmitted := True;
-          Break;
-        end;
-      if LAlreadyEmitted then
+      if J = I then
         Continue;
+      if not SameText(FModule.FunctionAt(J).Name, LFunc.Name) then
+        Continue;
+      if HirFunctionInstrCount(FModule.FunctionAt(J)) >
+        HirFunctionInstrCount(LFunc) then
+      begin
+        LAlreadyEmitted := True;
+        Break;
+      end;
+      if (HirFunctionInstrCount(FModule.FunctionAt(J)) =
+        HirFunctionInstrCount(LFunc)) and (J < I) then
+      begin
+        { Tie: keep first occurrence only. }
+        LAlreadyEmitted := True;
+        Break;
+      end;
     end;
+    if LAlreadyEmitted then
+      Continue;
     EmitFunction(LFunc);
   end;
 

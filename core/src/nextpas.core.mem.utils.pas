@@ -24,7 +24,9 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.math;
+  { IsPowerOfTwo / NextPowerOfTwo / MulHash64 live in mem.base.
+    Avoid nextpas.core.math / math.scalar facades (pull large stacks; hangs stage0). }
+  nextpas.core.mem.base;
 
 {**
  * IsOverlap
@@ -817,7 +819,6 @@ function DebugIsDoubleFree(APtr: Pointer): Boolean;
 implementation
 
 uses
-  nextpas.core.mem.base,
   nextpas.core.system.heap;
 
 {$IFDEF NEXTPAS_CORE_CRT_MEMCPY}
@@ -845,12 +846,12 @@ begin
   LStart2 := PtrUInt(aPtr2);
   {$POP}
 
-  { 检查是否溢出 }
+  { 检查是否溢出（本地实现，避免 uses math.scalar） }
 
-  if IsAddOverflow(LStart1, aSize1) then
+  if LStart1 > High(SizeUInt) - aSize1 then
     raise EOutOfRange.CreateFmt('aSize1 (%d) is too large for aPtr1 (%p), causing address calculation to overflow.', [aSize1, aPtr1]);
 
-  if IsAddOverflow(LStart2, aSize2) then
+  if LStart2 > High(SizeUInt) - aSize2 then
     raise EOutOfRange.CreateFmt('aSize2 (%d) is too large for aPtr2 (%p), causing address calculation to overflow.', [aSize2, aPtr2]);
 
   Result := IsOverlapUnchecked(aPtr1, aSize1, aPtr2, aSize2);

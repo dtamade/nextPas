@@ -20,8 +20,11 @@ The compiler and L0 System are one bootstrap spine. M0 truth convergence is in p
 `nextpas.core.system*` is a facade/contract family rather than another root implementation.
 
 The repository is not self-host ready. Stage0 compiler fixtures and several runtime contracts work,
-but a complete executable A -> B -> C rebuild has not executed. Historical S0-S12 sections below
-are capability inventories and proposals; they are not current readiness authority.
+but a complete executable A -> B -> C rebuild has not executed: the M2 ladder is green through
+L0-L2, and L3 (full stage0 driver A -> B link) is blocked on residual undefined symbols at the
+LLVM `opt` stage (live status: `self-hosting-readiness.md` and `docs/plans/m2/wave0-ledger.md`).
+Historical S0-S12 sections below are capability inventories and proposals; they are not current
+readiness authority.
 
 ## Position
 
@@ -69,7 +72,7 @@ runtime completeness, self-hosting, or production readiness.
 | `FillByte`, `IndexChar`, `CompareChar`, `MemPos`, `StackTop` | `nextpas.core.system` (kernel) | Bulk fill/search/compare intrinsics. |
 | `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData` | `nextpas.core.system.typinfo` | RTTI type aliases for compiler/runtime. |
 | `GetPropInfo`, `GetEnumName`, `GetEnumValue` | `nextpas.core.system.typinfo` | RTTI access functions. |
-| `Format`, `SameText`, `IntToStr`, `Trim` + 40+ SysUtils functions | `nextpas.core.system.sysutils` | SysUtils compatibility facade delegating to owner modules. |
+| `Format`, `SameText`, `IntToStr`, `Trim` + 40+ SysUtils-named functions | **owner: `nextpas.core.text.conv`** (and path/fs/platform for non-text slices); surface: `nextpas.core.system.sysutils` | SysUtils **compatibility facade only** — re-exports / forwards to owner modules; never the implementation owner of text APIs. |
 
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
@@ -177,7 +180,7 @@ Historical S4 boundary note:
 - `system.errors` is live as an exception taxonomy facade, re-exporting all 38
   exception type aliases and 18 error-category constants from canonical owners
 - `system.classes` is live as a stream-only bootstrap shim (TStream, THandleStream, TMemoryStream, TStringStream, TSeekOrigin). TThread, TList, TInterfacedObject remain outside system scope and belong to their respective owner modules (thread, collections, base).
-- `system.sysutils` is live with 40+ functions: text formatting (Format, SameText, IntToStr, Trim), numeric parsing (StrToInt, StrToInt64, StrToFloat), date/time (Now, Date, Time, FormatDateTime), filesystem (FileExists, DirectoryExists, CreateDir, DeleteFile, CopyFile), path (ExtractFilePath, ExtractFileName, ChangeFileExt), environment (GetEnvironmentVariable, ParamStr), timing (Sleep), error handling (SysErrorMessage, GetLastOSError)
+- `system.sysutils` is a **live thin facade** (not implementation owner) with 40+ SysUtils-named functions: text (Format, SameText, IntToStr, Trim → **owner `text.conv`**), numeric parsing (→ text.conv), date/time (→ time/platform owners), filesystem (→ fs), path (→ path), environment (→ platform), timing, error helpers. Do not document sysutils as owner of these domains.
 - `system.typinfo` is live for `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`
 - `TypeInfo` and `GetTypeKind` are compiler/System compile-truth imports made
   available to consumers after the facade is in `uses`; they are not unit-owned wrapper functions in `nextpas.core.system.typinfo`

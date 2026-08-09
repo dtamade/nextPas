@@ -32,13 +32,27 @@ begin
     Result := 0;
 end;
 
+function TSemanticModel.FirstSymbolIdByName(const AName: string): LongInt;
+begin
+  Result := FindSymbolByName(AName);
+end;
+
+function TSemanticModel.NextSymbolIdSameName(const ASymbolId: LongInt): LongInt;
+begin
+  Result := 0;
+  if (ASymbolId <= 0) or (ASymbolId > LongInt(FSymbols.Count)) then
+    Exit;
+  Result := FSymbols[SizeUInt(ASymbolId - 1)].NextSameNameId;
+end;
+
 function TSemanticModel.SymbolTypeId(const ASymbolId: LongInt): LongInt;
 var
   Index: LongInt;
 begin
-  for Index := 0 to LongInt(FSymbols.Count) - 1 do
-    if FSymbols[SizeUInt(Index)].SymbolId = ASymbolId then
-      Exit(FSymbols[SizeUInt(Index)].TypeId);
+  { SymbolId is 1-based push order (see AddSymbol) — O(1), not full scan. }
+  Index := ASymbolId - 1;
+  if (Index >= 0) and (Index < LongInt(FSymbols.Count)) then
+    Exit(FSymbols[SizeUInt(Index)].TypeId);
   Result := 0;
 end;
 

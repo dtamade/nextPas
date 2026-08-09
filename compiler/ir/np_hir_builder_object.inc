@@ -254,6 +254,12 @@ begin
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntTypeByWidth(32, True), False, False);
     end
+    else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'a') then
+    begin
+      { open/static array formal → (ptr, i32 len) ABI, same as free functions }
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntTypeByWidth(32, True), False, False);
+    end
     else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'v') then
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, True, False)
     else if (I < Length(ParamTypes)) and
@@ -342,25 +348,12 @@ begin
   EmitInstr(Instr);
   PtrVal := Instr.ResultId;
 
+  { Always keep the entry-block slot from EnsureAlloca. Re-alloca in the
+    current block breaks dominance for finally FreeAndNil (load of a body
+    alloca from an earlier finally block → opt "undefined value"). }
   V := FindAlloca(VarName);
   if V = 0 then
-    EnsureAlloca(VarName, GetPtrType)
-  else if not IsVarParamAlloca(VarName) then
-  begin
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikAlloca;
-    Instr.TypeId := GetPtrType;
-    EmitInstr(Instr);
-    if FAllocas.Count > 0 then
-      for I := 0 to LongInt(FAllocas.Count) - 1 do
-        if SameText(FAllocas[I].Name, VarName) then
-        begin
-          FAllocas.GetPtr(I)^.Value := Instr.ResultId;
-          FAllocas.GetPtr(I)^.TypeId := GetPtrType;
-          Break;
-        end;
-  end;
+    EnsureAlloca(VarName, GetPtrType);
   V := FindAlloca(VarName);
   if IsVarParamAlloca(VarName) then
     EmitStore(GetPtrType, PtrVal, EmitLoad(GetPtrType, V))
@@ -644,7 +637,17 @@ var
   IntfName: string;
 begin
   IntfName := ASlot.InterfaceName;
+  { Cross-unit parent classes leak into InterfaceSlots as pseudo-interfaces
+    (EXxx = class(ENextPasError) → slot 'ENextPasError'); class-kind slots
+    must not emit imt_store. Same for 0-thunk interfaces: EmitImtGlobals
+    skips their global, so the store reference would dangle (M2 B5e). }
+  SymId := FSemaModel.FindTypeByName(IntfName);
+  if (SymId > 0) and
+    SameText(FSemaModel.TypeAt(SymId - 1).Kind, 'class') then
+    Exit;
   if not FSemaModel.GetTypeMetaByName(IntfName, IntfMeta) then
+    Exit;
+  if IntfMeta.VmtCount <= 0 then
     Exit;
   SetLength(ThunkNames, IntfMeta.VmtCount);
   SetLength(ParamCounts, IntfMeta.VmtCount);

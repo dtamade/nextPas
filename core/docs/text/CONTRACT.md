@@ -19,7 +19,7 @@ text.utf8          ← UTF-8 编码/解码
 text.view          ← TStringView（非拥有字符串视图）
 text.builder       ← IStringBuilder（可变字符串构建）
 text.strings       ← 字符串操作（Trim/Pad/Split/Join/Contains...）
-text.conv          ← 类型↔字符串转换（IntToStr/Format 等）
+text.conv          ← 类型↔字符串转换 owner（IntToStr/Format/SameText/Trim 等；sysutils 仅门面）
 text.format        ← 格式化引擎
 text.compare       ← 字符串比较（Ordinal/Natural/CaseInsensitive）
 text.escape        ← C/JSON/HTML 转义/反转义

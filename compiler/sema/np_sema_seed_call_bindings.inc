@@ -31,6 +31,11 @@ begin
   if ANode = nil then
     Exit;
 
+  { Coarse progress only: SemaTrace open/append/close per call; never per-node. }
+  Inc(FSeedCallVisitCount);
+  if (FSeedCallVisitCount mod 200000) = 0 then
+    SemaTrace('SeedCallBindings visit=' + IntToStr(FSeedCallVisitCount));
+
   MethodClass := ACurrentMethodClass;
   SavedScopeId := FCurrentScopeId;
   if ANode.NodeKind in [gnkProcedureDecl, gnkFunctionDecl] then
@@ -134,7 +139,6 @@ begin
       HasTypeMismatchEvidence := HasArgSignature and
         CallArgumentSignatureIsStable(ANode, ACurrentOwnerUnitId);
       ImplicitSelfBound := False;
-      if SameText(ANode.Text, 'ACallback') then
       if LookupCallBindingDeclaration(
         ANode.Text,
         CallArgumentCount(ANode),
@@ -248,7 +252,7 @@ end;
 
 procedure TSemanticAnalyzer.SeedCallBindings;
 var
-  Index: LongInt;
+  Index, VisitedQualified: LongInt;
   RootOwnerUnitId: string;
 begin
   if (FRootAst = nil) or (FRootAst.RootNode = nil) then
@@ -256,21 +260,40 @@ begin
 
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
   FCurrentProcessingUnitId := RootOwnerUnitId;
+  SemaTrace('SeedCallBindings root...');
   SeedCallBindingsInNode(FRootAst.RootNode, '', RootOwnerUnitId);
+  VisitedQualified := 0;
   for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    if (Pos('.', FProcedureBodies[Index].Name) > 0) and
-      OwnerUnitAllowsProjectSourceDiagnostic(
-        FProcedureBodies[Index].OwnerUnitId
-      ) then
+  begin
+    if Pos('.', FProcedureBodies[Index].Name) = 0 then
+      Continue;
+    { nofold/L3: only root-unit qualified methods. Full project-source walk is
+      O(all ASTs × resolve) and blocks A→B; codegen re-resolves callees later. }
+    if FNoFold then
     begin
-      FCurrentProcessingUnitId :=
-        NormalizeUnitIdentity(FProcedureBodies[Index].OwnerUnitId);
-      SeedCallBindingsInNode(
-        FProcedureBodies[Index].Decl,
-        '',
-        FProcedureBodies[Index].OwnerUnitId
-      );
-    end;
+      if not SameText(
+        NormalizeUnitIdentity(FProcedureBodies[Index].OwnerUnitId),
+        RootOwnerUnitId
+      ) then
+        Continue;
+    end
+    else if not OwnerUnitAllowsProjectSourceDiagnostic(
+      FProcedureBodies[Index].OwnerUnitId
+    ) then
+      Continue;
+    FCurrentProcessingUnitId :=
+      NormalizeUnitIdentity(FProcedureBodies[Index].OwnerUnitId);
+    SeedCallBindingsInNode(
+      FProcedureBodies[Index].Decl,
+      '',
+      FProcedureBodies[Index].OwnerUnitId
+    );
+    Inc(VisitedQualified);
+    if (VisitedQualified mod 100) = 0 then
+      SemaTrace('SeedCallBindings qualified=' + IntToStr(VisitedQualified) +
+        '/' + IntToStr(LongInt(FProcedureBodies.Count)));
+  end;
+  SemaTrace('SeedCallBindings done qualified=' + IntToStr(VisitedQualified));
 end;
 
 function TSemanticAnalyzer.IsCurrentlyInlining(const AName: string): Boolean;
@@ -397,28 +420,10 @@ begin
       end;
     gnkFunctionCall:
       begin
-        if ANode.ChildCount < 1 then
-          Exit(False);
-        if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
-          Exit(False);
-        if SameText(ANode.ChildAt(0).Text, 'Length') and
-          (ANode.ChildCount = 2) and
-          (ANode.ChildAt(1) <> nil) and
-          (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
-        begin
-          ABlob := 'var ' + ANode.ChildAt(1).Text + '$len' + #10;
-          Exit(True);
-        end;
-        ABlob := '';
-        for Parsed := 1 to ANode.ChildCount - 1 do
-        begin
-          if not EncodeRuntimeIntExpr(ANode.ChildAt(Parsed), RightBlob) then
-            Exit(False);
-          ABlob := ABlob + RightBlob;
-        end;
-        ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
-          IntToStr(ANode.ChildCount - 1) + #10;
-        Exit(True);
+        { Analyzer EncodeRuntimeIntExprFold owns calls (EffectiveRuntimeCalleeName
+          / Abs intrinsic / overload mangling). Free residual must not emit bare
+          `call Abs` that has no define when bodies are Abs$p / Abs$i. }
+        Exit(False);
       end;
     gnkDotAccess:
       begin
@@ -686,15 +691,16 @@ begin
               Exit(LReceiverTypeId);
             LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
             LQualifiedName := LTypeName + '.' + LMemberName;
-            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
-              if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
-              begin
-                Result := DeclReturnTypeId(
-                  FProcedureBodies[LBodyIdx].Decl,
-                  FProcedureBodies[LBodyIdx].OwnerUnitId);
-                if Result > 0 then
-                  Break;
-              end;
+            LBodyIdx := FirstBodyIndexForNameLocal(LQualifiedName);
+            while LBodyIdx >= 0 do
+            begin
+              Result := DeclReturnTypeId(
+                FProcedureBodies[LBodyIdx].Decl,
+                FProcedureBodies[LBodyIdx].OwnerUnitId);
+              if Result > 0 then
+                Break;
+              LBodyIdx := NextBodyIndexForNameLocal(LBodyIdx);
+            end;
           end;
         end
         else if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
@@ -756,15 +762,16 @@ begin
           else
           begin
             LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
-              if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
-              begin
-                Result := DeclReturnTypeId(
-                  FProcedureBodies[LBodyIdx].Decl,
-                  FProcedureBodies[LBodyIdx].OwnerUnitId);
-                if Result > 0 then
-                  Break;
-              end;
+            LBodyIdx := FirstBodyIndexForNameLocal(LQualifiedName);
+            while LBodyIdx >= 0 do
+            begin
+              Result := DeclReturnTypeId(
+                FProcedureBodies[LBodyIdx].Decl,
+                FProcedureBodies[LBodyIdx].OwnerUnitId);
+              if Result > 0 then
+                Break;
+              LBodyIdx := NextBodyIndexForNameLocal(LBodyIdx);
+            end;
             if Result <= 0 then
             begin
               if FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom > 0 then
@@ -772,15 +779,16 @@ begin
                 LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
-                  if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
-                  begin
-                    Result := DeclReturnTypeId(
-                      FProcedureBodies[LBodyIdx].Decl,
-                      FProcedureBodies[LBodyIdx].OwnerUnitId);
-                    if Result > 0 then
-                      Break;
-                  end;
+                LBodyIdx := FirstBodyIndexForNameLocal(LQualifiedName);
+                while LBodyIdx >= 0 do
+                begin
+                  Result := DeclReturnTypeId(
+                    FProcedureBodies[LBodyIdx].Decl,
+                    FProcedureBodies[LBodyIdx].OwnerUnitId);
+                  if Result > 0 then
+                    Break;
+                  LBodyIdx := NextBodyIndexForNameLocal(LBodyIdx);
+                end;
               end;
             end;
             if Result <= 0 then
@@ -792,37 +800,35 @@ begin
                   LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
-                  if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
-                  begin
-                    Result := DeclReturnTypeId(
-                      FProcedureBodies[LBodyIdx].Decl,
-                      FProcedureBodies[LBodyIdx].OwnerUnitId);
-                    if Result > 0 then
-                      Break;
-                  end;
+                LBodyIdx := FirstBodyIndexForNameLocal(LQualifiedName);
+                while LBodyIdx >= 0 do
+                begin
+                  Result := DeclReturnTypeId(
+                    FProcedureBodies[LBodyIdx].Decl,
+                    FProcedureBodies[LBodyIdx].OwnerUnitId);
+                  if Result > 0 then
+                    Break;
+                  LBodyIdx := NextBodyIndexForNameLocal(LBodyIdx);
+                end;
                 if Result > 0 then
                   Break;
               end;
             end;
-            { Fall back to symbol table for class methods not in
-              FProcedureBodies (e.g. TOffsetDateTime.Now) }
+            { Fall back to symbol name index (O(1)), not full symbol table. }
             if Result <= 0 then
             begin
               LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-              for LBodyIdx := 0 to FModel.SymbolCount - 1 do
+              LBodyIdx := FModel.FindSymbolByName(LQualifiedName);
+              if LBodyIdx > 0 then
               begin
-                Sym := FModel.SymbolAt(LBodyIdx);
-                if SameText(Sym.Name, LQualifiedName) and
-                  (SameText(Sym.Kind, 'method') or
-                   SameText(Sym.Kind, 'function')) then
+                Sym := FModel.SymbolAt(LBodyIdx - 1);
+                if SameText(Sym.Kind, 'method') or
+                  SameText(Sym.Kind, 'function') then
                 begin
                   if Sym.ReturnTypeId > 0 then
                     Result := Sym.ReturnTypeId
                   else
                     Result := Sym.TypeId;
-                  if Result > 0 then
-                    Break;
                 end;
               end;
             end;

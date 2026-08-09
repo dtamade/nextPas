@@ -91,6 +91,9 @@ type
     Visibility: string;
     ByteOffset: LongInt;
     ReturnTypeId: LongInt;
+    { Same lowercased Name chain (SymbolId, 0=end). FSymbolNameIndex points
+      at the newest head; walk NextSameNameId for all overloads O(k). }
+    NextSameNameId: LongInt;
   end;
 
   TGenericParentRef = record
@@ -370,6 +373,9 @@ type
     function SymbolAt(const AIndex: LongInt): TSemanticSymbol;
     function FindTypeByName(const AName: string): LongInt;
     function FindSymbolByName(const AName: string): LongInt;
+    { First (newest) SymbolId for AName, or 0. Walk with NextSymbolIdSameName. }
+    function FirstSymbolIdByName(const AName: string): LongInt;
+    function NextSymbolIdSameName(const ASymbolId: LongInt): LongInt;
     function SymbolTypeId(const ASymbolId: LongInt): LongInt;
     function TypeCount: LongInt;
     function TypeAt(const AIndex: LongInt): TSemanticType;

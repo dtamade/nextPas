@@ -3,7 +3,7 @@ var
   I, ArgIndex, ExprId, NodeId: LongInt;
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
-  Value, CondValue: Int64;
+  Value, CondValue, Folded: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
   OwnerClassName: string;
   ReceiverName: string;
@@ -768,7 +768,7 @@ begin
               if Arg.NodeKind = gnkIdentifier then
                 FModel.AddTypedHirNode(
                   'string-temp-owned-runtime', FuncName, 0, 0,
-                  StringValue + #9 + 'callee ' + FuncName + #9 +
+                  StringValue + #9 + 'callee ' + EffectiveRuntimeCalleeName(FuncName, nil) + #9 +
                   'ptr len owner alloc_size')
               else
               begin
@@ -777,7 +777,7 @@ begin
                   Operand := #9 + Operand;
                 FModel.AddTypedHirNode(
                   'assign-tstring-call-runtime', StringValue, 0, 0,
-                  StringValue + #9 + 'callee ' + FuncName + Operand);
+                  StringValue + #9 + 'callee ' + EffectiveRuntimeCalleeName(FuncName, nil) + Operand);
                 EmitPendingStringTempReleases;
               end;
               AddFieldStoreStrOwnedRuntimeNode(
@@ -868,23 +868,27 @@ begin
           begin
             Inc(FBlockLabelCounter);
             FuncName := '$arr_obj_' + IntToStr(FBlockLabelCounter);
-            Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
-            StringValue := FuncName + #9 +
-              RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
-              RhsNode.ChildAt(0).ChildAt(1).Text;
+            OwnerClassName := RhsNode.ChildAt(0).ChildAt(0).Text;
+            InhParentName := ResolveClassMethodCalleeName(OwnerClassName,
+              RhsNode.ChildAt(0).ChildAt(1).Text);
+            if InhParentName = '' then
+              InhParentName := OwnerClassName + '.' +
+                RhsNode.ChildAt(0).ChildAt(1).Text;
+            Value := TypeMetaSize(OwnerClassName);
+            StringValue := FuncName + #9 + InhParentName;
             for K := 1 to RhsNode.ChildCount - 1 do
               if (RhsNode.ChildAt(K) <> nil) and
                 EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
                 StringValue := StringValue + #9 + ArgName;
             RegisterRuntimeVar(FuncName);
-            RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+            RegisterClassVar(FuncName, OwnerClassName);
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
-            if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
-              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
+            if (TypeMetaVmtCount(OwnerClassName) > 0) or
+              (TypeMetaInterfaces(OwnerClassName) <> '') then
               FModel.AddTypedHirNode('vmt-store-runtime',
-                RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
-                FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+                OwnerClassName, 0, 0,
+                FuncName + #9 + OwnerClassName);
             FModel.AddTypedHirNode(
               'assign-arr-elem-runtime', Decoded, 0, 0,
               Decoded + #9 + Operand + #9 + 'var ' + FuncName + #10
@@ -928,27 +932,22 @@ begin
         (Arg.ChildAt(0).NodeKind = gnkDotAccess) and
         (Arg.ChildAt(0).ChildCount >= 2) then
       begin
-        InhParentName := Arg.ChildAt(0).ChildAt(0).Text;
-        StringValue := InhParentName + '.' +
-          Arg.ChildAt(0).ChildAt(1).Text;
+        { Keep source type; ancestor walk must not collapse to residual @.Ctor. }
+        FuncName := Arg.ChildAt(0).ChildAt(0).Text;
+        InhParentName := FuncName;
+        StringValue := ResolveClassMethodCalleeName(InhParentName,
+          Arg.ChildAt(0).ChildAt(1).Text);
+        if StringValue = '' then
+          StringValue := InhParentName + '.' + Arg.ChildAt(0).ChildAt(1).Text;
         if TypeMetaSize(InhParentName) > 0 then
         begin
           Value := TypeMetaSize(InhParentName);
-          if FModel.FindSymbolByName(StringValue) = 0 then
+          if (InhParentName = '') or (Copy(StringValue, 1, 1) = '.') then
           begin
-            InhTypeId := FModel.FindTypeByName(InhParentName);
-            while (InhTypeId > 0) and
-              (FModel.FindSymbolByName(InhParentName + '.' +
-                Arg.ChildAt(0).ChildAt(1).Text) = 0) do
-            begin
-              InhParentName := NextClassAncestorName(InhParentName);
-              if InhParentName = '' then
-                Break;
-              InhTypeId := FModel.FindTypeByName(InhParentName);
-            end;
-            StringValue := InhParentName + '.' +
-              Arg.ChildAt(0).ChildAt(1).Text;
-          end;
+            { skip broken ctor name }
+          end
+          else
+          begin
           Operand := Decoded + #9 + StringValue;
           for ArgIndex := 1 to Arg.ChildCount - 1 do
           begin
@@ -980,23 +979,27 @@ begin
             begin
               Inc(FBlockLabelCounter);
               FuncName := '$arg_tmp_' + IntToStr(FBlockLabelCounter);
-              Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
-              StringValue := FuncName + #9 +
-                RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
-                RhsNode.ChildAt(0).ChildAt(1).Text;
+              OwnerClassName := RhsNode.ChildAt(0).ChildAt(0).Text;
+              InhParentName := ResolveClassMethodCalleeName(OwnerClassName,
+                RhsNode.ChildAt(0).ChildAt(1).Text);
+              if InhParentName = '' then
+                InhParentName := OwnerClassName + '.' +
+                  RhsNode.ChildAt(0).ChildAt(1).Text;
+              Value := TypeMetaSize(OwnerClassName);
+              StringValue := FuncName + #9 + InhParentName;
               for K := 1 to RhsNode.ChildCount - 1 do
                 if (RhsNode.ChildAt(K) <> nil) and
                   EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
                   StringValue := StringValue + #9 + ArgName;
               RegisterRuntimeVar(FuncName);
-              RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+              RegisterClassVar(FuncName, OwnerClassName);
               FModel.AddTypedHirNode(
                 'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
-              if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
-              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
+              if (TypeMetaVmtCount(OwnerClassName) > 0) or
+              (TypeMetaInterfaces(OwnerClassName) <> '') then
                 FModel.AddTypedHirNode('vmt-store-runtime',
-                  RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
-                  FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+                  OwnerClassName, 0, 0,
+                  FuncName + #9 + OwnerClassName);
               Operand := Operand + #9 + 'var ' + FuncName + #10;
             end;
           end;
@@ -1047,31 +1050,67 @@ begin
             end;
           end;
           Continue;
+          end;
         end;
       end;
       if FNoFold and (Arg <> nil) and
         (Arg.NodeKind = gnkDotAccess) and (Arg.ChildCount >= 2) and
         (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
       begin
+        { Prefer enum/const ordinals (qualified unit.path.ecX) over class-new. }
+        if EvaluateIntegerConstant(Arg, Value) then
+        begin
+          FModel.AddVarInitValue(Decoded, Value);
+          if FNoFold then
+          begin
+            RegisterRuntimeVar(Decoded);
+            AddScalarAssignRuntimeNode(Decoded, Arg,
+              'int ' + IntToStr(Value) + #10);
+          end;
+          Continue;
+        end;
+        { unit.qual.FreeFunc — nested DotAccess rightmost name is the callee.
+          Must run before TypeMetaSize(left) class-new (left is not a class). }
+        if (Arg.ChildAt(1).NodeKind = gnkIdentifier) and
+          ((Arg.ChildAt(0).NodeKind = gnkDotAccess) or
+           ((Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+            (TypeMetaSize(Arg.ChildAt(0).Text) <= 0) and
+            (LookupClassVar(Arg.ChildAt(0).Text) = ''))) then
+        begin
+          FuncName := Arg.ChildAt(1).Text;
+          if LookupProcedureBody(FuncName, BranchNode, DeclNode) or
+            (LookupPtrReturnFunc(FuncName) <> '') then
+          begin
+            FuncName := EffectiveRuntimeCalleeName(FuncName, DeclNode);
+            RegisterRuntimeVar(Decoded);
+            if LookupPtrReturnFunc(Arg.ChildAt(1).Text) <> '' then
+              RegisterClassVar(Decoded, LookupPtrReturnFunc(Arg.ChildAt(1).Text));
+            Operand := 'call ' + FuncName + ' 0' + #10;
+            NodeId := FModel.AddTypedHirNode(
+              'assign-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand);
+            if (LookupClassVar(Decoded) <> '') and
+              TypeMetaIsInterface(LookupClassVar(Decoded)) then
+              FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
+            Continue;
+          end;
+        end;
         Value := TypeMetaSize(Arg.ChildAt(0).Text);
         if Value > 0 then
         begin
-          InhParentName := Arg.ChildAt(0).Text;
-          StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
-          if FModel.FindSymbolByName(StringValue) = 0 then
-          begin
-            InhTypeId := FModel.FindTypeByName(InhParentName);
-            while (InhTypeId > 0) and
-              (FModel.FindSymbolByName(InhParentName + '.' +
-                Arg.ChildAt(1).Text) = 0) do
-            begin
-              InhParentName := NextClassAncestorName(InhParentName);
-              if InhParentName = '' then
-                Break;
-              InhTypeId := FModel.FindTypeByName(InhParentName);
-            end;
+          FuncName := Arg.ChildAt(0).Text;
+          InhParentName := FuncName;
+          StringValue := ResolveClassMethodCalleeName(InhParentName,
+            Arg.ChildAt(1).Text);
+          if StringValue = '' then
             StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
-          end;
+          { Empty class prefix → residual @.Ctor; not a real constructor. }
+          if (InhParentName = '') or (Copy(StringValue, 1, 1) = '.') then
+          begin
+            { fall through to scalar encode }
+          end
+          else
+          begin
           Operand := Decoded + #9 + StringValue;
           RegisterRuntimeVar(Decoded);
           RegisterClassVar(Decoded, Arg.ChildAt(0).Text);
@@ -1094,6 +1133,7 @@ begin
               Decoded + #9 + IntToStr(Value div 8));
           end;
           Continue;
+          end;
         end;
       end;
       if Arg <> nil then
@@ -1287,7 +1327,7 @@ begin
           begin
             FModel.AddTypedHirNode(
               'assign-tstring-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text
+              Decoded + #9 + 'callee ' + EffectiveRuntimeCalleeName(Arg.Text, nil)
             );
           end
           else if (Arg.NodeKind = gnkIdentifier) and
@@ -1296,7 +1336,7 @@ begin
           begin
             FModel.AddTypedHirNode(
               'assign-tstring-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text
+              Decoded + #9 + 'callee ' + EffectiveRuntimeCalleeName(Arg.Text, nil)
             );
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
@@ -1306,7 +1346,7 @@ begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
               'assign-tstring-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
+              Decoded + #9 + 'callee ' + EffectiveRuntimeCalleeName(Arg.Text, nil) + #9 + Operand
             );
             EmitPendingStringTempReleases;
           end
@@ -1317,7 +1357,7 @@ begin
             Operand := EncodeStrCallArgs(Arg, Decoded);
             FModel.AddTypedHirNode(
               'assign-tstring-call-runtime', Decoded, 0, 0,
-              Decoded + #9 + 'callee ' + Arg.Text + #9 + Operand
+              Decoded + #9 + 'callee ' + EffectiveRuntimeCalleeName(Arg.Text, nil) + #9 + Operand
             );
             EmitPendingStringTempReleases;
           end
@@ -1360,11 +1400,38 @@ begin
                   IntToStr(Value)
                 )
               else
-                FModel.AddTypedHirNode(
-                  'assign-tstring-call-runtime',
-                  FuncName + '.' + Arg.ChildAt(1).Text, 0, 0,
-                  Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
-                );
+              begin
+                { Non-vmt member: resolve the declared property read target.
+                  Field target → direct load; getter (or no $read) → sret call
+                  with record receivers passed by ref, not loaded as int
+                  (M2 B3b: TGreenNode.Text → @TGreenNode.GetText). }
+                if FModel.LookupStringConstValue(
+                  FuncName + '.' + Arg.ChildAt(1).Text + '$read', Operand) and
+                  (Operand <> '') and
+                  (TypeMetaFieldIndex(FuncName, Operand) >= 0) then
+                  FModel.AddTypedHirNode(
+                    'assign-tstring-field-load-runtime', Decoded, 0, 0,
+                    Arg.ChildAt(0).Text + #9 +
+                    IntToStr(TypeMetaFieldIndex(FuncName, Operand))
+                  )
+                else
+                begin
+                  if Operand = '' then
+                    Operand := Arg.ChildAt(1).Text;
+                  if LookupRecordVar(Arg.ChildAt(0).Text) <> '' then
+                    FModel.AddTypedHirNode(
+                      'assign-tstring-call-runtime',
+                      FuncName + '.' + Operand, 0, 0,
+                      Decoded + #9 + 'recvar ' + Arg.ChildAt(0).Text
+                    )
+                  else
+                    FModel.AddTypedHirNode(
+                      'assign-tstring-call-runtime',
+                      FuncName + '.' + Operand, 0, 0,
+                      Decoded + #9 + 'var ' + Arg.ChildAt(0).Text
+                    );
+                end;
+              end;
             end;
           end
           else if (Arg.NodeKind = gnkBinaryExpression) and
@@ -1413,7 +1480,7 @@ begin
             if Arg.NodeKind = gnkIdentifier then
               FModel.AddTypedHirNode(
                 'string-temp-owned-runtime', FuncName, 0, 0,
-                StringValue + #9 + 'callee ' + FuncName + #9 +
+                StringValue + #9 + 'callee ' + EffectiveRuntimeCalleeName(FuncName, nil) + #9 +
                 'ptr len owner alloc_size')
             else
             begin
@@ -1422,7 +1489,7 @@ begin
                 Operand := #9 + Operand;
               FModel.AddTypedHirNode(
                 'assign-tstring-call-runtime', StringValue, 0, 0,
-                StringValue + #9 + 'callee ' + FuncName + Operand);
+                StringValue + #9 + 'callee ' + EffectiveRuntimeCalleeName(FuncName, nil) + Operand);
               EmitPendingStringTempReleases;
             end;
             AddFieldStoreStrOwnedRuntimeNode(
@@ -1482,14 +1549,46 @@ begin
               FModel.SetTypedHirNodeExprId(NodeId, ExprId);
           end;
         end
+        else if FNoFold and (Arg <> nil) and
+          (Arg.NodeKind = gnkFunctionCall) and (Arg.ChildCount >= 1) and
+          (Arg.ChildAt(0) <> nil) and
+          (Arg.ChildAt(0).NodeKind = gnkDotAccess) and
+          (Arg.ChildAt(0).ChildCount >= 2) and
+          (Arg.ChildAt(0).ChildAt(1) <> nil) and
+          (Arg.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) and
+          (TypeMetaSize(Arg.ChildAt(0).ChildAt(0).Text) <= 0) and
+          ((LookupPtrReturnFunc(Arg.ChildAt(0).ChildAt(1).Text) <> '') or
+           LookupProcedureBody(Arg.ChildAt(0).ChildAt(1).Text, BranchNode, DeclNode)) then
+        begin
+          { unit.qual.NewSHA256() — DotAccess callee is not Class.Create. }
+          FuncName := Arg.ChildAt(0).ChildAt(1).Text;
+          if EncodeRuntimeIntExprFold(Arg, Operand) then
+          begin
+            RegisterRuntimeVar(Decoded);
+            if LookupPtrReturnFunc(FuncName) <> '' then
+              RegisterClassVar(Decoded, LookupPtrReturnFunc(FuncName));
+            NodeId := FModel.AddTypedHirNode(
+              'assign-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand);
+            if (LookupClassVar(Decoded) <> '') and
+              TypeMetaIsInterface(LookupClassVar(Decoded)) then
+              FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
+          end;
+        end
         else if FNoFold and IsRecordVar(Decoded) and
+          { Assignment Text is often the first LHS lexeme (Result for
+            Result.f[i] := Abs(...)). Only plain `Result := Func(...)` is
+            record-sret; field/array LHS must not residual-call bare @Func. }
+          (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkIdentifier) and
           (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
           (Arg.ChildCount >= 1) and (Arg.ChildAt(0) <> nil) and
           (Arg.ChildAt(0).NodeKind = gnkIdentifier) then
         begin
           if LookupProcedureBody(Arg.ChildAt(0).Text, BranchNode, DeclNode) then
           begin
-            Operand := Arg.ChildAt(0).Text + #9 + 'recvar ' + Decoded + #10;
+            FuncName := EffectiveRuntimeCalleeName(Arg.ChildAt(0).Text, DeclNode);
+            Operand := FuncName + #9 + 'recvar ' + Decoded + #10;
             for ArgIndex := 1 to Arg.ChildCount - 1 do
             begin
               RhsNode := Arg.ChildAt(ArgIndex);
@@ -1497,7 +1596,7 @@ begin
                 Operand := Operand + #9 + StringValue;
             end;
             FModel.AddTypedHirNode('call-runtime',
-              Arg.ChildAt(0).Text, 0, 0, Operand);
+              FuncName, 0, 0, Operand);
           end;
         end
         else if FNoFold and IsRecordVar(Decoded) and
@@ -1718,6 +1817,19 @@ begin
       end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
       begin
+        { Bare System.Write/WriteLn only. Method form LH.Write (DotAccess callee)
+          must not fall into write_i64_decimal — that steals interface Write. }
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (((Child.ChildAt(0).NodeKind = gnkDotAccess)) or
+           ((Child.ChildAt(0).NodeKind = gnkFunctionCall) and
+            (Child.ChildAt(0).ChildCount >= 1) and
+            (Child.ChildAt(0).ChildAt(0) <> nil) and
+            (Child.ChildAt(0).ChildAt(0).NodeKind = gnkDotAccess))) then
+        begin
+          { fall through to member-call / ivcall paths below }
+        end
+        else
+        begin
         Arg := nil;
         if (Child.ChildCount >= 1) and
           (Child.ChildAt(0) <> nil) and
@@ -1797,7 +1909,8 @@ begin
               RegisterRuntimeStrVar(Operand);
               FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
               FModel.AddTypedHirNode(
-                'assign-tstring-call-runtime', RhsNode.Text, 0, 0, Operand
+                'assign-tstring-call-runtime',
+                EffectiveRuntimeCalleeName(RhsNode.Text, DeclNode), 0, 0, Operand
               );
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', ArgName, 0, 0, Operand
@@ -1821,17 +1934,61 @@ begin
               if StringValue <> '' then
                 FModel.AddTypedHirNode(
                   'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
-                  Operand + #9 + 'callee ' + RhsNode.Text + #9 + StringValue
+                  Operand + #9 + 'callee ' + EffectiveRuntimeCalleeName(RhsNode.Text, nil) + #9 + StringValue
                 )
               else
                 FModel.AddTypedHirNode(
                   'assign-tstring-call-runtime', RhsNode.Text, 0, 0,
-                  Operand + #9 + 'callee ' + RhsNode.Text
+                  Operand + #9 + 'callee ' + EffectiveRuntimeCalleeName(RhsNode.Text, nil)
                 );
               FModel.AddTypedHirNode(
                 'write-str-var-runtime', ArgName, 0, 0, Operand
               );
               EmitPendingStringTempReleases;
+            end
+            else if (RhsNode.NodeKind = gnkFunctionCall) and
+              (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(0).NodeKind = gnkDotAccess) and
+              (RhsNode.ChildAt(0).ChildCount >= 2) and
+              (RhsNode.ChildAt(0).ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(0).ChildAt(1) <> nil) then
+            begin
+              { WriteLn(Model.Status) — method string sret, not write_i64. }
+              FuncName := LookupClassVar(RhsNode.ChildAt(0).ChildAt(0).Text);
+              if FuncName = '' then
+                FuncName := LookupRecordVar(RhsNode.ChildAt(0).ChildAt(0).Text);
+              if FuncName = '' then
+                FuncName := RhsNode.ChildAt(0).ChildAt(0).Text;
+              StringValue := FuncName + '.' + RhsNode.ChildAt(0).ChildAt(1).Text;
+              if IsOwnedStringReturnFunc(StringValue) or
+                IsOwnedStringReturnFunc(RhsNode.ChildAt(0).ChildAt(1).Text) or
+                FModel.LookupConstValue(
+                  FuncName + '$ret_str_' + RhsNode.ChildAt(0).ChildAt(1).Text,
+                  CondValue) then
+              begin
+                Inc(FBlockLabelCounter);
+                Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
+                RegisterRuntimeVar(Operand);
+                RegisterRuntimeStrVar(Operand);
+                FModel.AddTypedHirNode('var-decl-tstring-runtime', Operand, 0, 0, Operand);
+                Decoded := EncodeStrCallArgs(RhsNode, Operand);
+                if Decoded <> '' then
+                  FModel.AddTypedHirNode(
+                    'assign-tstring-call-runtime', StringValue, 0, 0,
+                    Operand + #9 + 'callee ' + EffectiveRuntimeCalleeName(StringValue, nil) + #9 + Decoded
+                  )
+                else
+                  FModel.AddTypedHirNode(
+                    'assign-tstring-call-runtime', StringValue, 0, 0,
+                    Operand + #9 + 'callee ' + EffectiveRuntimeCalleeName(StringValue, nil)
+                  );
+                FModel.AddTypedHirNode(
+                  'write-str-var-runtime', ArgName, 0, 0, Operand
+                );
+                EmitPendingStringTempReleases;
+              end
+              else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
+                AddWriteIntRuntimeNode(RhsNode, Operand, ArgName);
             end
             else if (RhsNode.NodeKind = gnkDotAccess) and
               (RhsNode.ChildCount >= 2) and
@@ -1927,6 +2084,7 @@ begin
           Decoded := Decoded + #10;
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
         Continue;
+        end;
       end;
       if FNoFold and SameText(Child.Text, 'SetLength') then
       begin
@@ -2024,6 +2182,11 @@ begin
           if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) then
           begin
             Decoded := RhsNode.Text;
+            { Inc/Dec(Result): ret slot is seeded as FCurrentRetVarName, never
+              bare "Result" (same remap as encode @Result path). Bare name
+              would residual-call @Result() and re-alloca a detached slot. }
+            if SameText(Decoded, 'Result') and (FCurrentRetVarName <> '') then
+              Decoded := FCurrentRetVarName;
             if SameText(Child.Text, 'Inc') then
               StringValue := 'add'
             else
@@ -2160,30 +2323,228 @@ begin
         end;
         Continue;
       end;
+      { Interlocked* family (restored from 3d8121441; lost when the monolith
+        was split into .inc files — M2 B6). Lowers to HIR interlocked-*
+        intrinsics -> LLVM cmpxchg/atomicrmw instead of a direct call. }
+      { InterlockedCompareExchange(Target, NewValue, CompareValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          Operand := '';
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            Operand := StringValue
+          else
+            Operand := 'int 0' + #10;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue) then
+            Operand := Operand + #9 + StringValue
+          else
+            Operand := Operand + #9 + 'int 0' + #10;
+          FModel.AddTypedHirNode(
+            'interlocked-cas-runtime', Decoded, 0, 0,
+            Decoded + #9 + Operand);
+        end;
+        Continue;
+      end;
+      { InterlockedExchange(Target, NewValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchange') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-xchg-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedExchangeAdd(Target, Value) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-fetch-add-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedCompareExchange64(Target, NewValue, CompareValue) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange64') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 3) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          Operand := '';
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            Operand := StringValue
+          else
+            Operand := 'int 0' + #10;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 2), StringValue) then
+            Operand := Operand + #9 + StringValue
+          else
+            Operand := Operand + #9 + 'int 0' + #10;
+          FModel.AddTypedHirNode(
+            'interlocked-cas64-runtime', Decoded, 0, 0,
+            Decoded + #9 + Operand);
+        end;
+        Continue;
+      end;
+      { InterlockedExchangeAdd64(Target, Value) -> old value }
+      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd64') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 2) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), StringValue) then
+            FModel.AddTypedHirNode(
+              'interlocked-fetch-add64-runtime', Decoded, 0, 0,
+              Decoded + #9 + StringValue);
+        end;
+        Continue;
+      end;
+      { InterlockedIncrement(Target) -> new value (= old + 1) }
+      if FNoFold and SameText(Child.Text, 'InterlockedIncrement') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'interlocked-fetch-add-runtime', Decoded, 0, 0,
+            Decoded + #9 + 'int 1' + #10);
+        end;
+        Continue;
+      end;
+      { InterlockedDecrement(Target) -> new value (= old - 1) }
+      if FNoFold and SameText(Child.Text, 'InterlockedDecrement') then
+      begin
+        Arg := Child;
+        ArgIndex := 0;
+        if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+          (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+        begin
+          Arg := Child.ChildAt(0);
+          ArgIndex := 1;
+        end;
+        if (Arg <> nil) and (Arg.ChildCount >= ArgIndex + 1) then
+        begin
+          Decoded := Arg.ChildAt(ArgIndex).Text;
+          FModel.AddTypedHirNode(
+            'interlocked-fetch-add-runtime', Decoded, 0, 0,
+            Decoded + #9 + 'int -1' + #10);
+        end;
+        Continue;
+      end;
       if FNoFold and (FCurrentMethodClass <> '') and
         (Pos('inherited ', Child.Text) = 1) then
       begin
         InhMethodName := Copy(Child.Text, 11, Length(Child.Text));
-        InhTypeId := FModel.FindTypeByName(FCurrentMethodClass);
-        if (InhTypeId > 0) then
+        { Walk ancestors: prefer non-TObject with Create body/symbol. }
+        InhParentName := NextClassAncestorName(FCurrentMethodClass);
+        FuncName := '';
+        OwnerClassName := '';
+        while InhParentName <> '' do
         begin
-          InhParentId := FModel.TypeAt(InhTypeId - 1).ParentTypeId;
-          if InhParentId > 0 then
+          if LookupProcedureBody(InhParentName + '.' + InhMethodName,
+            BranchNode, DeclNode) or
+            (FModel.FindSymbolByName(InhParentName + '.' + InhMethodName) <> 0) then
           begin
-            InhParentName := FModel.TypeAt(InhParentId - 1).Name;
-            Operand := InhParentName + '.' + InhMethodName + #9 +
-              'var self' + #10;
-            for ArgIndex := 0 to Child.ChildCount - 1 do
+            if not SameText(InhParentName, 'TObject') then
             begin
-              RhsNode := Child.ChildAt(ArgIndex);
-              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
-                Operand := Operand + #9 + Decoded;
-            end;
-            NodeId := FModel.AddTypedHirNode('call-runtime',
-              InhParentName + '.' + InhMethodName, 0, 0, Operand);
-            AttachStatementCallExpr(NodeId, Child);
-            Continue;
+              FuncName := InhParentName;
+              Break;
+            end
+            else if FuncName = '' then
+              FuncName := InhParentName;
           end;
+          if (OwnerClassName = '') and (not SameText(InhParentName, 'TObject')) then
+            OwnerClassName := InhParentName;
+          InhParentName := NextClassAncestorName(InhParentName);
+        end;
+        { Found-anywhere wins: a TObject-only hit must not be overridden by
+          the method-blind direct-parent guess — TInterfacedObject declares
+          no Destroy, so `inherited Destroy` must land on TObject.Destroy,
+          not residual @TInterfacedObject.Destroy (M2 B4). The OwnerClassName
+          guess only backstops chains where no ancestor symbol was found. }
+        if FuncName <> '' then
+          InhParentName := FuncName
+        else if OwnerClassName <> '' then
+          InhParentName := OwnerClassName;
+        if InhParentName <> '' then
+        begin
+          StringValue := InhParentName + '.' + InhMethodName;
+          { The matched ancestor may be an alias station (ECore): canonicalize
+            via $resolve table / alias peel so the callee names a real body.
+            The OwnerClassName backstop guess stays raw by design. }
+          if (FuncName <> '') and (not SameText(FuncName, 'TObject')) then
+          begin
+            Decoded := ResolveClassMethodCalleeName(FuncName, InhMethodName);
+            if Decoded <> '' then
+              StringValue := Decoded;
+          end;
+          Operand := StringValue + #9 + 'var self' + #10;
+          for ArgIndex := 0 to Child.ChildCount - 1 do
+          begin
+            RhsNode := Child.ChildAt(ArgIndex);
+            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              Operand := Operand + #9 + Decoded;
+          end;
+          NodeId := FModel.AddTypedHirNode('call-runtime',
+            StringValue, 0, 0, Operand);
+          AttachStatementCallExpr(NodeId, Child);
+          Continue;
         end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
@@ -2208,23 +2569,70 @@ begin
           if InhParentName = '' then InhParentName := StringValue;
           if TypeMetaIsInterface(StringValue) then
           begin
+            { Multi-arg interface: ivcall with ExtraArgCount = actual stack
+              pushes (not ChildCount). Const args must fold to int — bare
+              `var SHA256_DIGEST_SIZE` has no alloca and was dropped, leaving
+              @IHasher.Sum undefined via the old direct-call fallback. }
             Value := TypeMetaVmtSlot(StringValue,
               Child.ChildAt(0).ChildAt(0).ChildAt(1).Text);
             if Value >= 0 then
             begin
               Operand := 'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;
+              CondValue := 0; { ExtraArgCount }
               for ArgIndex := 1 to Child.ChildAt(0).ChildCount - 1 do
               begin
                 RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
-                if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                if RhsNode = nil then
+                  Continue;
+                if (RhsNode.NodeKind = gnkIdentifier) and
+                  SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+                begin
+                  Operand := Operand + 'varref ' + FCurrentRetVarName + #10;
+                  Inc(CondValue);
+                  Continue;
+                end;
+                if (RhsNode.NodeKind = gnkIdentifier) and
+                  IsRuntimeArrVar(RhsNode.Text) then
+                begin
+                  Operand := Operand + 'var ' + RhsNode.Text + '$ptr' + #10;
+                  Inc(CondValue);
+                  Continue;
+                end;
+                if (RhsNode.NodeKind = gnkIdentifier) and
+                  SameText(RhsNode.Text, 'Result') and
+                  IsRuntimeArrVar(FCurrentRetVarName) then
+                begin
+                  Operand := Operand + 'var ' + FCurrentRetVarName + '$ptr' + #10;
+                  Inc(CondValue);
+                  Continue;
+                end;
+                if EvaluateIntegerConstant(RhsNode, Folded) then
+                begin
+                  Operand := Operand + 'int ' + IntToStr(Folded) + #10;
+                  Inc(CondValue);
+                  Continue;
+                end;
+                if EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                begin
                   Operand := Operand + Decoded;
+                  Inc(CondValue);
+                end;
               end;
               Operand := Operand + 'ivcall ' + IntToStr(Value) + ' ' +
-                IntToStr(Child.ChildAt(0).ChildCount - 1) + #10;
-              NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+                IntToStr(CondValue);
+              if TypeMetaRetPtr(StringValue,
+                Child.ChildAt(0).ChildAt(0).ChildAt(1).Text) then
+                Operand := Operand + ' p';
+              Operand := Operand + #10;
+              NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__',
+                0, 0, Operand);
+              { Prefer structured shekInterfaceCall when BuildRuntimeScalarHirExpr
+                succeeds; blob ivcall is the reliable fallback. }
               AttachStatementCallExpr(NodeId, Child.ChildAt(0));
               Continue;
             end;
+            { No VmtSlot — fall through to direct Intf.Method (should be rare). }
+            InhParentName := StringValue;
           end;
           Operand := InhParentName + '.' +
             Child.ChildAt(0).ChildAt(0).ChildAt(1).Text + #9 +
@@ -2234,6 +2642,24 @@ begin
             RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
             if RhsNode = nil then
               Continue;
+            { out/untyped + static-array Result need address, not loaded value. }
+            if (RhsNode.NodeKind = gnkIdentifier) and
+              SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+            begin
+              Operand := Operand + #9 + 'varref ' + FCurrentRetVarName + #10;
+              Continue;
+            end;
+            if (RhsNode.NodeKind = gnkIdentifier) and
+              IsRuntimeArrVar(RhsNode.Text) then
+            begin
+              Operand := Operand + #9 + 'var ' + RhsNode.Text + '$ptr' + #10;
+              Continue;
+            end;
+            if EvaluateIntegerConstant(RhsNode, Folded) then
+            begin
+              Operand := Operand + #9 + 'int ' + IntToStr(Folded) + #10;
+              Continue;
+            end;
             if (RhsNode.NodeKind = gnkFunctionCall) and
               (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
               (RhsNode.ChildAt(0).NodeKind = gnkDotAccess) and
@@ -2243,23 +2669,27 @@ begin
             begin
               Inc(FBlockLabelCounter);
               FuncName := '$arg_tmp_' + IntToStr(FBlockLabelCounter);
-              Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
-              Decoded := FuncName + #9 +
-                RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
-                RhsNode.ChildAt(0).ChildAt(1).Text;
+              OwnerClassName := RhsNode.ChildAt(0).ChildAt(0).Text;
+              InhMethodName := ResolveClassMethodCalleeName(OwnerClassName,
+                RhsNode.ChildAt(0).ChildAt(1).Text);
+              if InhMethodName = '' then
+                InhMethodName := OwnerClassName + '.' +
+                  RhsNode.ChildAt(0).ChildAt(1).Text;
+              Value := TypeMetaSize(OwnerClassName);
+              Decoded := FuncName + #9 + InhMethodName;
               for K := 1 to RhsNode.ChildCount - 1 do
                 if (RhsNode.ChildAt(K) <> nil) and
                   EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
                   Decoded := Decoded + #9 + ArgName;
               RegisterRuntimeVar(FuncName);
-              RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+              RegisterClassVar(FuncName, OwnerClassName);
               FModel.AddTypedHirNode(
                 'class-new-runtime', IntToStr(Value), 0, 0, Decoded);
-              if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
-              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
+              if (TypeMetaVmtCount(OwnerClassName) > 0) or
+              (TypeMetaInterfaces(OwnerClassName) <> '') then
                 FModel.AddTypedHirNode('vmt-store-runtime',
-                  RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
-                  FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+                  OwnerClassName, 0, 0,
+                  FuncName + #9 + OwnerClassName);
               Operand := Operand + #9 + 'var ' + FuncName + #10;
             end
             else if EncodeRuntimeIntExprFold(RhsNode, Decoded) then
@@ -2308,6 +2738,61 @@ begin
           FModel.AddTypedHirNode('call-runtime',
             DestroyFuncName, 0, 0, Operand);
           Continue;
+        end
+        else if (FCurrentMethodClass <> '') and
+          (TypeMetaFieldIndex(FCurrentMethodClass,
+             Child.ChildAt(0).ChildAt(0).Text) >= 0) then
+        begin
+          { .Free on a class-typed field receiver (FPlan.Free): no runtime
+            var exists, so the flow above can't fire and the call fell to a
+            residual @TX.Free. Load the field into a ptr temp and run the
+            same object-free contract on the temp (M2 B3c). }
+          for K := 1 to FModel.SymbolCount do
+            if SameText(FModel.SymbolAt(K).Name,
+                Child.ChildAt(0).ChildAt(0).Text) and
+              SameText(FModel.SymbolAt(K).Kind, 'field') then
+            begin
+              if FModel.SymbolAt(K).TypeId > 0 then
+                StringValue := FModel.TypeAt(
+                  FModel.SymbolAt(K).TypeId - 1).Name;
+              Break;
+            end;
+          if (StringValue <> '') and TypeMetaIsClass(StringValue) then
+          begin
+            Inc(FBlockLabelCounter);
+            ReceiverName := '$objfree_tmp_' + IntToStr(FBlockLabelCounter);
+            RegisterRuntimeVar(ReceiverName);
+            RegisterClassVar(ReceiverName, StringValue);
+            FModel.AddTypedHirNode('var-decl-ptr-runtime', ReceiverName,
+              0, 0, ReceiverName);
+            FModel.AddTypedHirNode('assign-runtime', ReceiverName, 0, 0,
+              ReceiverName + #9 + 'field self ' + IntToStr(
+                TypeMetaFieldIndex(FCurrentMethodClass,
+                  Child.ChildAt(0).ChildAt(0).Text)) + ' p' + #10);
+            Value := TypeMetaVmtSlot(StringValue, 'Destroy');
+            DestroyFuncName := StringValue + '.Destroy';
+            if (Value >= 0) and FModel.LookupStringConstValue(
+              StringValue + '$vmt_func_' + IntToStr(Value),
+              FuncName
+            ) then
+              DestroyFuncName := FuncName;
+            FModel.AddTypedHirNode(
+              'object-free-runtime',
+              NPSYSTEM_OBJECT_FREE,
+              0,
+              0,
+              'var ' + ReceiverName + #10 +
+              'destroy ' + DestroyFuncName + #10 +
+              'cleanup-class ' + StringValue + #10 +
+              'nil-guard true' + #10 +
+              'heap-release true' + #10
+            );
+            Operand := DestroyFuncName + #9 +
+              'var ' + ReceiverName + #10;
+            FModel.AddTypedHirNode('call-runtime',
+              DestroyFuncName, 0, 0, Operand);
+            Continue;
+          end;
         end;
       end;
       if FNoFold and (Child.ChildCount >= 1) and
@@ -2433,32 +2918,8 @@ begin
           else
             ArgIndex := Arg.ChildCount;
         end;
-        if HasOverload(Child.Text) then
-        begin
-          StringValue := '';
-          if Arg <> nil then
-          begin
-            if Arg.NodeKind = gnkFunctionCall then
-              DotPos := 1
-            else
-              DotPos := 0;
-            while DotPos < Arg.ChildCount do
-            begin
-              RhsNode := Arg.ChildAt(DotPos);
-              if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
-                IsRuntimeStrVar(RhsNode.Text) then
-                StringValue := StringValue + 's'
-              else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkStringLiteral) then
-                StringValue := StringValue + 's'
-              else
-                StringValue := StringValue + 'i';
-              Inc(DotPos);
-            end;
-          end;
-          Operand := MangledNameSig(Child.Text, StringValue);
-        end
-        else
-          Operand := Child.Text;
+        { Must match SeedFunctionBodies EffName (GetParamSignature, not s/i). }
+        Operand := EffectiveRuntimeCalleeName(Child.Text, DeclNode);
         if Arg <> nil then
           Operand := EncodeCallStatementArgs(Operand, Arg, DeclNode);
         NodeId := FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);

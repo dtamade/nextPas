@@ -1,0 +1,5 @@
+# F-009 Wave0 freeze — only shrink after this baseline
+# path: core/tests/nextpas.core.system/test_system_source_contracts/fpc_rtl_file_allowlist.txt
+ab2d672baa4a0c145131bcd92f06c92f5495afbb4240102afe5e69af91bbda0a  fpc_rtl_file_allowlist.txt
+# lines: 93
+# date: 2026-07-25

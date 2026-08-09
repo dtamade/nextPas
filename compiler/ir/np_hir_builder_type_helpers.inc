@@ -190,6 +190,24 @@ begin
   SourceType := FModule.Types.GetType(ASourceTypeId);
   TargetType := FModule.Types.GetType(ATargetTypeId);
 
+  { Pointer ↔ int / pointer: reify as bitcast; LLVM emitter maps to
+    inttoptr / ptrtoint / identity. }
+  if (SourceType.Kind = htkPointer) or (TargetType.Kind = htkPointer) then
+  begin
+    if (SourceType.Kind = htkPointer) and (TargetType.Kind = htkPointer) then
+    begin
+      ANoOp := True;
+      Exit(True);
+    end;
+    if ((SourceType.Kind = htkPointer) and (TargetType.Kind = htkInt)) or
+      ((SourceType.Kind = htkInt) and (TargetType.Kind = htkPointer)) then
+    begin
+      AKind := hikBitcast;
+      Exit(True);
+    end;
+    Exit(False);
+  end;
+
   if SourceType.Kind = htkBool then
   begin
     if TargetType.Kind = htkBool then
@@ -278,10 +296,10 @@ begin
     for I := LongInt(FAllocas.Count) - 1 downto 0 do
       if SameText(FAllocas[I].Name, AName) then
         Exit(FAllocas[I].Value);
-  if FGlobalRefCache.Count > 0 then
-    for I := 0 to LongInt(FGlobalRefCache.Count) - 1 do
-      if SameText(FGlobalRefCache[I], AName) then
-        Exit(FGlobalRefValues[I]);
+  { Do not reuse a cross-block global_ref ValueId. The first emit may land in
+    a block that does not dominate later uses (e.g. GIntf store in then-arm,
+    Result := GIntf in join). Fresh global_ref in the current block keeps the
+    address def local to the use site. }
   if FGlobalNames.Count > 0 then
     for I := 0 to LongInt(FGlobalNames.Count) - 1 do
       if SameText(FGlobalNames[I], AName) then
@@ -293,8 +311,6 @@ begin
         Instr.IntrinsicName := 'global_ref';
         Instr.CallTarget := AName;
         EmitInstr(Instr);
-        FGlobalRefCache.Push(AName);
-        FGlobalRefValues.Push(Instr.ResultId);
         Exit(Instr.ResultId);
       end;
   Result := 0;
@@ -389,20 +405,73 @@ function THIRBuilder.EmitCmpOp(AKind: THIRInstrKind; AType: THIRTypeId;
   ALhs, ARhs: THIRValueId; ALhsType, ARhsType: THIRTypeId): THIRValueId;
 var
   Instr: THIRInstr;
+  Lhs, Rhs: THIRValueId;
+  LhsType, RhsType, CmpOpType: THIRTypeId;
+  LhsIsPtr, RhsIsPtr: Boolean;
 begin
+  Lhs := ALhs;
+  Rhs := ARhs;
+  LhsType := ALhsType;
+  RhsType := ARhsType;
+  LhsIsPtr := (LhsType <> 0) and
+    (FModule.Types.GetType(LhsType).Kind = htkPointer);
+  RhsIsPtr := (RhsType <> 0) and
+    (FModule.Types.GetType(RhsType).Kind = htkPointer);
+  { Pointer vs int (nil as 0): unify to ptr so icmp gets matching SSA types. }
+  if LhsIsPtr and (not RhsIsPtr) and (RhsType <> 0) and HirTypeIsInt(RhsType) then
+  begin
+    Rhs := NormalizeScalarValueToType(Rhs, RhsType, GetPtrType);
+    if Rhs = 0 then
+      Exit(0);
+    RhsType := GetPtrType;
+    RhsIsPtr := True;
+  end
+  else if RhsIsPtr and (not LhsIsPtr) and (LhsType <> 0) and HirTypeIsInt(LhsType) then
+  begin
+    Lhs := NormalizeScalarValueToType(Lhs, LhsType, GetPtrType);
+    if Lhs = 0 then
+      Exit(0);
+    LhsType := GetPtrType;
+    LhsIsPtr := True;
+  end;
+  if LhsIsPtr and RhsIsPtr then
+    CmpOpType := GetPtrType
+  else if (LhsType <> 0) and HirTypeIsInt(LhsType) then
+    CmpOpType := LhsType
+  else if (RhsType <> 0) and HirTypeIsInt(RhsType) then
+    CmpOpType := RhsType
+  else
+    CmpOpType := GetIntType;
+  if (LhsType <> 0) and (LhsType <> CmpOpType) and HirTypeIsInt(LhsType) and
+    HirTypeIsInt(CmpOpType) then
+  begin
+    Lhs := NormalizeScalarValueToType(Lhs, LhsType, CmpOpType);
+    if Lhs = 0 then
+      Exit(0);
+    LhsType := CmpOpType;
+  end;
+  if (RhsType <> 0) and (RhsType <> CmpOpType) and HirTypeIsInt(RhsType) and
+    HirTypeIsInt(CmpOpType) then
+  begin
+    Rhs := NormalizeScalarValueToType(Rhs, RhsType, CmpOpType);
+    if Rhs = 0 then
+      Exit(0);
+    RhsType := CmpOpType;
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := AKind;
   Instr.TypeId := AType;
   SetLength(Instr.Operands, 2);
-  if ALhsType <> 0 then
-    Instr.Operands[0] := MakeTypedOperand(ALhs, ALhsType)
+  if LhsType <> 0 then
+    Instr.Operands[0] := MakeTypedOperand(Lhs, LhsType)
   else
-    Instr.Operands[0] := MakeOperand(ALhs);
-  if ARhsType <> 0 then
-    Instr.Operands[1] := MakeTypedOperand(ARhs, ARhsType)
+    Instr.Operands[0] := MakeOperand(Lhs);
+  if RhsType <> 0 then
+    Instr.Operands[1] := MakeTypedOperand(Rhs, RhsType)
   else
-    Instr.Operands[1] := MakeOperand(ARhs);
+    Instr.Operands[1] := MakeOperand(Rhs);
   EmitInstr(Instr);
   Result := Instr.ResultId;
 end;
