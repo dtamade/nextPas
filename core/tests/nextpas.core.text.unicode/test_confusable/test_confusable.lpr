@@ -105,6 +105,25 @@ begin
   CheckEqual(ConfusableSkeleton(''), '', 'empty skeleton');
 end;
 
+{ UTS#39 internalSkeleton step 2: Default_Ignorable_Code_Point removed
+  before mapping (VS16/VS15, ZWJ/ZWNJ, soft hyphen, Hangul fillers…).
+  Anchors verified against ICU uspoof (Unicode 17 data). }
+procedure TestDefaultIgnorable;
+begin
+  { ❤(U+2764) + VS16(U+FE0F) ~ ❤ — ICU: YES }
+  Check(AreConfusable(#$E2#$9D#$A4#$EF#$B8#$8F, #$E2#$9D#$A4), 'heart+VS16 ~ heart');
+  { ZWJ(U+200D) / ZWNJ(U+200C) between letters — ICU: YES }
+  Check(AreConfusable('a' + #$E2#$80#$8D + 'b', 'ab'), 'ZWJ ignored');
+  Check(AreConfusable('a' + #$E2#$80#$8C + 'b', 'ab'), 'ZWNJ ignored');
+  { Hangul fillers U+3164 / U+1160 — both Default_Ignorable; ICU: YES }
+  Check(AreConfusable(#$E3#$85#$A4, #$E1#$85#$A0), 'hangul filler pair');
+  { soft hyphen U+00AD — ICU: YES }
+  Check(AreConfusable('foo' + #$C2#$AD + 'bar', 'foobar'), 'soft hyphen ignored');
+  { skeleton strips VS16 so both sides converge }
+  CheckEqual(ConfusableSkeleton(#$E2#$9D#$A4#$EF#$B8#$8F),
+    ConfusableSkeleton(#$E2#$9D#$A4), 'skeleton heart vs heart+VS16');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.confusable');
   T.Test('unknown entry absent', @TestUnknownEntry);
@@ -113,6 +132,7 @@ begin
   T.Test('multi-codepoint prototype U+FDFA', @TestMultiPrototype);
   T.Test('homograph detection', @TestHomographs);
   T.Test('skeleton transform', @TestSkeleton);
+  T.Test('default ignorable removal', @TestDefaultIgnorable);
   if not T.Run then
     Halt(1);
 end.

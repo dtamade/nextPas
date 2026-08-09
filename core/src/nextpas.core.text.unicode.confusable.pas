@@ -2,8 +2,10 @@ unit nextpas.core.text.unicode.confusable;
 
 {**
  * UTS#39 §4 confusable detection (homograph / spoofing defense).
- * skeleton(X) = NFD(mapConfusables(NFD(X))) over the MA table
- * (confusables.txt); two strings are confusable iff skeletons are equal.
+ * internalSkeleton(X) = NFD -> drop Default_Ignorable_Code_Point ->
+ *   mapConfusables -> NFD over the MA table (confusables.txt); two strings
+ *   are confusable iff skeletons are equal. DI removal (VS16/ZWJ/soft
+ *   hyphen/Hangul fillers…) mirrors ICU uspoof.
  * L0 error layer: invalid UTF-8 → U+FFFD (consume 1 byte), never raises.
  *}
 
@@ -33,6 +35,7 @@ implementation
 
 uses
   nextpas.core.text.unicode.normalize,
+  nextpas.core.text.unicode.props,
   nextpas.core.text.utf8;
 
 {$I nextpas.core.text.unicode.confusables.inc}
@@ -108,6 +111,15 @@ begin
     begin
       AppendUtf8Cp(Result, UNICODE_REPLACEMENT);
       Inc(LPos);
+      Continue;
+    end;
+    { UTS #39 §4 internalSkeleton step 2: remove Default_Ignorable_Code_Point
+      before mapping (VS16/VS15, ZWJ/ZWNJ, soft hyphen, Hangul fillers,
+      CGJ, word joiner, …). Skipping them here keeps skeleton("❤️") =
+      skeleton("❤") and skeleton(ㅤ)=skeleton(ᅠ)=≤ — mirroring ICU uspoof. }
+    if HasBinaryProperty(LDec.CodePoint, ubpDefaultIgnorableCodePoint) then
+    begin
+      Inc(LPos, LDec.ByteLen);
       Continue;
     end;
     if GetConfusablePrototype(LDec.CodePoint, LProto, LProtoLen) then
