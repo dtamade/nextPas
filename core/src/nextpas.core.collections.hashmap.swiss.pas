@@ -52,6 +52,7 @@ type
     TEquals = specialize TKeyEqualsFunc<K>;
     TRetainFunc = function(const AKey: K; const AValue: V): Boolean;
     TVisitFunc = procedure(const AKey: K; const AValue: V);
+    TVisitCtxFunc = procedure(const AKey: K; const AValue: V; AContext: Pointer);
     TKeyArray = array of K;
     PSlot = ^TSlot;
     TSlot = record
@@ -138,6 +139,8 @@ type
     procedure ShrinkToFit;
     procedure Retain(AFunc: TRetainFunc);
     procedure ForEach(AFunc: TVisitFunc);
+    {** @desc 遍历所有元素（带上下文指针，回调可捕获外部状态） }
+    procedure ForEachCtx(AFunc: TVisitCtxFunc; AContext: Pointer);
     procedure Drain(AFunc: TVisitFunc);
     function GetKeys: TKeyArray;
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
@@ -936,6 +939,15 @@ begin
   for i := 0 to FCapacity - 1 do
     if FCtrl[i] < $80 then
       AFunc(FSlots[i].Key, FSlots[i].Value);
+end;
+
+procedure TSwissTable.ForEachCtx(AFunc: TVisitCtxFunc; AContext: Pointer);
+var i: SizeUInt;
+begin
+  if FCapacity = 0 then Exit;
+  for i := 0 to FCapacity - 1 do
+    if FCtrl[i] < $80 then
+      AFunc(FSlots[i].Key, FSlots[i].Value, AContext);
 end;
 
 procedure TSwissTable.Drain(AFunc: TVisitFunc);

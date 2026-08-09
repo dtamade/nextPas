@@ -24,6 +24,7 @@ type
     TEqualsFunc = function(const A, B: K): Boolean;
     TComputeFunc = function(const AKey: K; var AValue: V; AExists: Boolean): Boolean;
     TForEachFunc = procedure(const AKey: K; const AValue: V);
+    TForEachCtxFunc = procedure(const AKey: K; const AValue: V; AContext: Pointer);
     TKeyArray = array of K;
   private type
     TSegmentTable = specialize TSwissTable<K, V>;
@@ -48,6 +49,8 @@ type
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure ForEach(AFunc: TForEachFunc);
+    {** @desc 遍历所有元素（带上下文指针，回调可捕获外部状态） }
+    procedure ForEachCtx(AFunc: TForEachCtxFunc; AContext: Pointer);
     // Deprecated: Keys() does not provide a consistent snapshot under concurrent
     // modification. Use ForEach() instead for safe iteration.
     function Keys: TKeyArray;
@@ -278,6 +281,20 @@ begin
     FSegmentLocks[i].AcquireRead;
     try
       FSegments[i].ForEach(TSegmentTable.TVisitFunc(AFunc));
+    finally
+      FSegmentLocks[i].ReleaseRead;
+    end;
+  end;
+end;
+
+procedure TConcurrentHashMap.ForEachCtx(AFunc: TForEachCtxFunc; AContext: Pointer);
+var i: Integer;
+begin
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireRead;
+    try
+      FSegments[i].ForEachCtx(TSegmentTable.TVisitCtxFunc(AFunc), AContext);
     finally
       FSegmentLocks[i].ReleaseRead;
     end;
