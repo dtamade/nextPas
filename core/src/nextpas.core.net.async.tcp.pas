@@ -137,6 +137,10 @@ type
   private
     FListener: ITcpListener;
     FLoop: TAsyncLoop;
+    { 同步 try accept 前确保 listener 非阻塞：NetTcpListen 创建的 listener
+      默认阻塞模式，无连接时阻塞 accept 会卡死事件循环线程。返回 False
+      表示设置失败（此时调用方应放弃本次 accept 而非继续）。 }
+    function EnsureNonBlockingListen: Boolean;
   public
     constructor Create(const AListener: ITcpListener; const ALoop: TAsyncLoop);
     destructor Destroy; override;
@@ -356,6 +360,18 @@ begin
   (FListener as ITcpSocketRuntime).SetBlocking(ABlocking);
 end;
 
+function TAsyncTcpListener.EnsureNonBlockingListen: Boolean;
+begin
+  { SetBlocking(False) 委托到底层 platform_socket_set_nonblocking；失败抛
+    异常（fd 已关等极端情形），此处吞掉并返回 False，不冒泡进事件循环。 }
+  try
+    SetBlocking(False);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
 function TAsyncTcpListener.TryAccept(out AConn: ITcpStream): TTcpAcceptResult;
 begin
   Result := (FListener as ITcpListenerRuntime).TryAccept(AConn);
@@ -371,6 +387,14 @@ var
   LClient: TPlatformSocket;
   LRes: Int32;
 begin
+  { 确保 listener 非阻塞：NetTcpListen 创建的 listener 默认阻塞模式，
+    无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
+    快路径必须先设；Windows 下 winsock accept 同样适用）。 }
+  if not EnsureNonBlockingListen then
+  begin
+    Result := False;
+    Exit;
+  end;
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
@@ -399,6 +423,14 @@ var
   LClient: TPlatformSocket;
   LRes: Int32;
 begin
+  { 确保 listener 非阻塞：NetTcpListen 创建的 listener 默认阻塞模式，
+    无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
+    快路径必须先设；Windows 下 winsock accept 同样适用）。 }
+  if not EnsureNonBlockingListen then
+  begin
+    Result := False;
+    Exit;
+  end;
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
@@ -427,6 +459,14 @@ var
   LClient: TPlatformSocket;
   LRes: Int32;
 begin
+  { 确保 listener 非阻塞：NetTcpListen 创建的 listener 默认阻塞模式，
+    无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
+    快路径必须先设；Windows 下 winsock accept 同样适用）。 }
+  if not EnsureNonBlockingListen then
+  begin
+    Result := False;
+    Exit;
+  end;
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
