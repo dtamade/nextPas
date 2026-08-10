@@ -85,4 +85,5 @@ need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemOf' \
 ## 7. 决策记录
 
 - **mem owner**（2026-08-10）：批准 Step 1 + Step 2（豁免字面检查 → 接口面 helper 替代；CA-016 FIXED）。
-- **compiler-system owner**：待确认「禁 uses mem.pas」守卫与 1d8dedab5 的 stage0 约束描述一致、可长期保留。
+- **核实记录（2026-08-10，总控）**：已核对 `1d8dedab5`（M2 B 系列合入）——commit message 明示 stage0 下 mem 门面（arena/pool graph）在 nextpas 编译器内不可用，text.builder 的 `ReallocMemOf` → `FAllocator.ReallocMem`/`System.ReallocMem` 即该提交所为；替代守卫（禁行首 uses `nextpas.core.mem`）与提交内容一致，可长期保留。退出条件：stage0 解除门面 graph 约束后切回门面 `ReallocMemOf`。
+- **compiler-system owner**：待拍板（核实记录已覆盖客观一致性，长期保留与否由 owner 定夺）。
