@@ -13,6 +13,28 @@ uses
 var
   T: TTestSuite;
 
+{ Streaming body-chunk sink collector: asserts live per-chunk dispatch. }
+type
+  TChunkCollector = class
+  public
+    FChunks: array of string;
+    FTotal: string;
+    procedure OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+  end;
+
+procedure TChunkCollector.OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+var
+  LStr: string;
+begin
+  if ASize = 0 then
+    Exit;
+  SetLength(LStr, SizeInt(ASize));
+  Move(AData^, LStr[1], ASize);
+  SetLength(FChunks, Length(FChunks) + 1);
+  FChunks[High(FChunks)] := LStr;
+  FTotal := FTotal + LStr;
+end;
+
 function ReadReaderStr(const AReader: IReader): string;
 var
   LBuf: array[0..4095] of Byte;
@@ -160,6 +182,61 @@ begin
   Check(LP.IsComplete, 'complete');
   CheckEqual(Int64(204), Int64(LP.GetStatusCode), 'status 204');
   CheckEqual('', LP.GetBody, 'empty body');
+end;
+
+procedure TestResponseBodyChunkSinkContentLength;
+var
+  LP: IH1Parser;
+  LCollector: TChunkCollector;
+  LPart1, LPart2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1ResponseParser;
+  LCollector := TChunkCollector.Create;
+  try
+    LP.SetOnBodyChunk(@LCollector.OnBodyChunk);
+    LPart1 := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10'hello ';
+    LConsumed := LP.Execute(PAnsiChar(LPart1), Length(LPart1));
+    CheckEqual(SizeUInt(Length(LPart1)), LConsumed, 'first execute consumed all input');
+    CheckEqual('hello ', LCollector.FTotal, 'sink received first body part live');
+    CheckEqual(Int64(6), LP.GetBodySize, 'body size so far is 6');
+    LPart2 := 'world';
+    LP.Execute(PAnsiChar(LPart2), Length(LPart2));
+    Check(LP.IsComplete, 'complete after second part');
+    CheckEqual('hello world', LP.GetBody, 'full buffered body');
+    CheckEqual('hello world', LCollector.FTotal, 'sink received full body');
+    Check(Length(LCollector.FChunks) >= 2,
+      'sink dispatched at least two chunks across two executes');
+  finally
+    LCollector.Free;
+  end;
+end;
+
+procedure TestResponseBodyChunkSinkChunked;
+var
+  LP: IH1Parser;
+  LCollector: TChunkCollector;
+  LHead, LChunk1, LChunk2, LTail: string;
+begin
+  LP := NewH1ResponseParser;
+  LCollector := TChunkCollector.Create;
+  try
+    LP.SetOnBodyChunk(@LCollector.OnBodyChunk);
+    LHead := 'HTTP/1.1 200 OK'#13#10'Transfer-Encoding: chunked'#13#10#13#10;
+    LChunk1 := '6'#13#10'hello '#13#10;
+    LChunk2 := '5'#13#10'world'#13#10;
+    LTail := '0'#13#10#13#10;
+    LP.Execute(PAnsiChar(LHead), Length(LHead));
+    LP.Execute(PAnsiChar(LChunk1), Length(LChunk1));
+    LP.Execute(PAnsiChar(LChunk2), Length(LChunk2));
+    LP.Execute(PAnsiChar(LTail), Length(LTail));
+    Check(LP.IsComplete, 'chunked response complete');
+    CheckEqual('hello world', LP.GetBody, 'buffered chunked body');
+    CheckEqual('hello world', LCollector.FTotal,
+      'sink received decoded chunked body');
+  finally
+    LCollector.Free;
+  end;
 end;
 
 procedure TestResponseHeadSkipBodyWithContentLength;
@@ -2485,6 +2562,10 @@ begin
   T.Test('Parser finish short-circuits existing error source contract',
     @TestParserFinishShortCircuitsExistingErrorSourceContract);
   T.Test('Reset and reparse', @TestResetAndReparse);
+  T.Test('Response body chunk sink live dispatch (content-length)',
+    @TestResponseBodyChunkSinkContentLength);
+  T.Test('Response body chunk sink live dispatch (chunked)',
+    @TestResponseBodyChunkSinkChunked);
   T.Test('Request with query', @TestRequestWithQuery);
   T.Test('Multiple headers same name', @TestMultipleHeadersSameName);
   T.Test('Split header callbacks accumulate', @TestSplitHeaderCallbacksAccumulate);

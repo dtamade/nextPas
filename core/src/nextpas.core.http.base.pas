@@ -86,6 +86,16 @@ type
     procedure ThrowIfCanceled;
   end;
 
+  { Streaming response-body sink for client requests (SSE / long-poll).
+     Set on THttpRequestOptions.ResponseBodyChunk; H1 transport dispatches each
+     parsed body chunk synchronously on its IO thread as it arrives, before the
+     request completes. The full body is still buffered (NewBodyReader snapshot
+     and PARSER_BODY_MAX_CAPACITY cap apply), the sink is an additional live
+     dispatch. Implementations MUST NOT raise: the callback crosses the llhttp
+     cdecl boundary. }
+  THttpResponseBodyChunkProc = procedure(const AData: PByte;
+    ASize: SizeUInt) of object;
+
   THttpRequestOptions = record
     TimeoutMs: Int64;
     HasTimeout: Boolean;
@@ -95,12 +105,16 @@ type
     HasFollowRedirects: Boolean;
     CancelToken: IHttpCancelToken;
     HasCancelToken: Boolean;
+    { Optional per-request streaming sink; see THttpResponseBodyChunkProc. }
+    ResponseBodyChunk: THttpResponseBodyChunkProc;
     function WithTimeout(const ATimeoutMs: Int64): THttpRequestOptions;
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpRequestOptions;
     function WithFollowRedirects(
       const AFollow: Boolean): THttpRequestOptions;
     function WithCancelToken(
       const AToken: IHttpCancelToken): THttpRequestOptions;
+    function WithResponseBodyChunk(
+      const AChunkProc: THttpResponseBodyChunkProc): THttpRequestOptions;
     function EffectiveTimeout(const ADefault: Int64): Int64;
     function EffectiveMaxRedirects(const ADefault: Int32): Int32;
     function EffectiveFollowRedirects(const ADefault: Boolean): Boolean;
@@ -930,6 +944,13 @@ begin
   Result := Self;
   Result.CancelToken := AToken;
   Result.HasCancelToken := True;
+end;
+
+function THttpRequestOptions.WithResponseBodyChunk(
+  const AChunkProc: THttpResponseBodyChunkProc): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.ResponseBodyChunk := AChunkProc;
 end;
 
 function THttpRequestOptions.EffectiveTimeout(const ADefault: Int64): Int64;

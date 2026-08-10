@@ -275,6 +275,10 @@ type
     function MaxRedirects(const AMaxRedirects: Int32): THttpRequestBuilder;
     function FollowRedirects(const AFollow: Boolean): THttpRequestBuilder;
     function CancelToken(const AToken: IHttpCancelToken): THttpRequestBuilder;
+    { Streaming response-body sink (SSE / long-poll): live dispatch per parsed
+       body chunk on the transport IO thread. See THttpResponseBodyChunkProc. }
+    function ResponseBodyChunk(
+      const AChunkProc: THttpResponseBodyChunkProc): THttpRequestBuilder;
     function Build: IHttpRequest;
   end;
 
@@ -1447,6 +1451,13 @@ begin
   Result.FRequestOptions.HasCancelToken := True;
 end;
 
+function THttpRequestBuilder.ResponseBodyChunk(
+  const AChunkProc: THttpResponseBodyChunkProc): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.ResponseBodyChunk := AChunkProc;
+end;
+
 function THttpRequestBuilder.Build: IHttpRequest;
 var
   LI: SizeInt;
@@ -1511,7 +1522,8 @@ begin
   end;
 
   if FRequestOptions.HasTimeout or FRequestOptions.HasMaxRedirects or
-    FRequestOptions.HasFollowRedirects or FRequestOptions.HasCancelToken then
+    FRequestOptions.HasFollowRedirects or FRequestOptions.HasCancelToken or
+    Assigned(FRequestOptions.ResponseBodyChunk) then
     (Result as IHttpRequestWithOptions).SetRequestOptions(FRequestOptions);
 end;
 

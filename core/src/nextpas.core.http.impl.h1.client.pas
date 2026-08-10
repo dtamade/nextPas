@@ -74,7 +74,8 @@ type
       const AProxyAuthorization: string): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
-      out AResponseStarted: Boolean; var APending: string): IHttpResponse;
+      out AResponseStarted: Boolean; var APending: string;
+      const AOnBodyChunk: THttpResponseBodyChunkProc = nil): IHttpResponse;
     procedure EstablishHttpsConnectTunnel(var AConn: ITcpStream;
       const ATargetHost: string; const ATargetPort: UInt16;
       const AProxyAuthorization: string);
@@ -446,7 +447,8 @@ end;
 
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
   const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
-  out AResponseStarted: Boolean; var APending: string): IHttpResponse;
+  out AResponseStarted: Boolean; var APending: string;
+  const AOnBodyChunk: THttpResponseBodyChunkProc = nil): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
@@ -465,6 +467,8 @@ begin
   LPending := APending;
   APending := '';
   LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+  if Assigned(AOnBodyChunk) then
+    LParser.SetOnBodyChunk(AOnBodyChunk);
   repeat
     if LPending <> '' then
     begin
@@ -498,6 +502,8 @@ begin
       LSkippedInformational := True;
       LCurrentResponseStarted := False;
       LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+      if Assigned(AOnBodyChunk) then
+        LParser.SetOnBodyChunk(AOnBodyChunk);
       Continue;
     end;
   until LParser.IsComplete or LParser.HasError;
@@ -565,6 +571,7 @@ var
   LReqOpts: IHttpRequestWithOptions;
   LWrapped: Exception;
   LPendingTail: string;
+  LBodyChunkProc: THttpResponseBodyChunkProc;
 
   procedure WrapConnectionWithTls;
   begin
@@ -703,8 +710,11 @@ begin
       HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
     { Re-arm request deadline for response read (after connect-write budget). }
     ApplyClientDeadline(LConn, LRequestDeadline);
+    LBodyChunkProc := nil;
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      LBodyChunkProc := LReqOpts.RequestOptions.ResponseBodyChunk;
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-      LResponseStarted, LPendingTail);
+      LResponseStarted, LPendingTail, LBodyChunkProc);
   except
     on E: Exception do
     begin
@@ -734,7 +744,7 @@ begin
             HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
           ApplyClientDeadline(LConn, LRequestDeadline);
           LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-            LResponseStarted, LPendingTail);
+            LResponseStarted, LPendingTail, LBodyChunkProc);
         except
           on E2: Exception do
           begin

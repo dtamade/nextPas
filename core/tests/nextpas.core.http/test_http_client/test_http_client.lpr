@@ -81,6 +81,9 @@ var
   GDirectHttpsServerCtx: ISSLContext;
   GDirectHttpsRequest: string;
   GDirectHttpsReply: string;
+  { Streaming sink integration: raw listener writes body in two chunks with a
+    sleep between them; client asserts live per-chunk dispatch. }
+  GStreamListener: ITcpListener;
 
 type
   TTrackedRequestBody = class;
@@ -485,6 +488,27 @@ begin
   Dispose(LCtx);
 end;
 
+type
+  { Collects streamed body chunks; asserts live dispatch order/content. }
+  TClientChunkSink = class
+  public
+    FChunks: Int32;
+    FTotal: string;
+    procedure OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+  end;
+
+procedure TClientChunkSink.OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+var
+  LStr: string;
+begin
+  Inc(FChunks);
+  if ASize = 0 then
+    Exit;
+  SetLength(LStr, SizeInt(ASize));
+  Move(AData^, LStr[1], ASize);
+  FTotal := FTotal + LStr;
+end;
+
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
 function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl; forward;
 function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl; forward;
@@ -537,6 +561,50 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+{ Raw listener that writes a Content-Length body in two chunks with a 250ms
+  gap, so the client-side streaming sink can observe live dispatch. }
+function StreamChunkThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LHead: string;
+  LPart1: string;
+  LPart2: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GStreamListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    LAccum := '';
+    repeat
+      LN := LConn.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LP := Pos(#13#10#13#10, LAccum);
+    until LP > 0;
+
+    LHead := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10;
+    LPart1 := 'hello ';
+    LPart2 := 'world';
+    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
+    LConn.Write(LPart1[1], SizeUInt(Length(LPart1)));
+    platform_thread_sleep_ns(250000000);
+    LConn.Write(LPart2[1], SizeUInt(Length(LPart2)));
+  except
+  end;
+  LConn.Close;
 end;
 
 function ConnectProxyThread(AArg: Pointer): Pointer; cdecl;
@@ -3919,6 +3987,42 @@ begin
     GRawResponse1 := '';
     GRawResponse2 := '';
     GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientStreamingBodyChunkSink;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LSink: TClientChunkSink;
+begin
+  GStreamListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GStreamListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StreamChunkThread, nil);
+  LSink := TClientChunkSink.Create;
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/stream')
+      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'streamed response status');
+    CheckEqual('hello world', LSink.FTotal,
+      'sink received complete streamed body');
+    Check(LSink.FChunks >= 2,
+      'sink dispatched multiple chunks across the 250ms gap');
+    { Full buffered body still consistent (NewBodyReader snapshot path). }
+    CheckEqual('hello world', ReadBodyStr(LResp),
+      'buffered response body matches streamed body');
+  finally
+    GStreamListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GStreamListener := nil;
+    LSink.Free;
   end;
 end;
 
@@ -8467,6 +8571,8 @@ begin
   T.Test('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Test('Client does not pool response Connection close token-list',
     @TestClientDoesNotPoolResponseWithConnectionCloseTokenList);
+  T.Test('Client streaming body chunk sink live dispatch',
+    @TestClientStreamingBodyChunkSink);
   T.Test('Client does not pool request Connection close token-list',
     @TestClientDoesNotPoolRequestWithConnectionCloseTokenList);
   T.Test('Client Connection close same-read tail returns first response',

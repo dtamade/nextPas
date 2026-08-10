@@ -51,6 +51,10 @@ type
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
     procedure Reset;
+    { Install streaming body-chunk sink (H1 transport: live dispatch per llhttp
+       body chunk). Passing nil clears it. }
+    procedure SetOnBodyChunk(
+      const AChunkProc: THttpResponseBodyChunkProc);
   end;
 
 function NewH1RequestParser: IH1Parser;
@@ -91,6 +95,7 @@ type
     FHeaders: IHttpHeaders;
     FBody: TBytes;
     FBodySize: SizeUInt;
+    FOnBodyChunk: THttpResponseBodyChunkProc;
     FHeadersComplete: Boolean;
     FComplete: Boolean;
     FError: Boolean;
@@ -151,6 +156,8 @@ type
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
     procedure Reset;
+    procedure SetOnBodyChunk(
+      const AChunkProc: THttpResponseBodyChunkProc);
   end;
 
 { Callback helpers }
@@ -630,6 +637,10 @@ begin
     LSelf.EnsureBodyCapacity(LRequired);
     Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
     LSelf.FBodySize := LRequired;
+    { Streaming dispatch: synchronous per llhttp body chunk. Sink must not
+      raise (cdecl boundary) — callers own exception containment. }
+    if Assigned(LSelf.FOnBodyChunk) then
+      LSelf.FOnBodyChunk(PByte(p1), p2);
   end;
   Result := 0;
 end;
@@ -1179,6 +1190,7 @@ begin
   FUrl := '';
   FHeaderStore.Clear;
   FBodySize := 0;
+  FOnBodyChunk := nil;
   FHeadersComplete := False;
   FComplete := False;
   FError := False;
@@ -1191,6 +1203,12 @@ begin
   llhttp_reset(@FParser);
   FParser.data := Pointer(Self);
   ApplyResponseSkipBodyHint;
+end;
+
+procedure TH1Parser.SetOnBodyChunk(
+  const AChunkProc: THttpResponseBodyChunkProc);
+begin
+  FOnBodyChunk := AChunkProc;
 end;
 
 { Factory functions }

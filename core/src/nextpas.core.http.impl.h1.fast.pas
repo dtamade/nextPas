@@ -794,6 +794,10 @@ type
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
     procedure Reset;
+    { Request snapshot: body is captured once at construction; no live chunk
+       dispatch exists, so this is a no-op (kept for interface parity). }
+    procedure SetOnBodyChunk(
+      const AChunkProc: THttpResponseBodyChunkProc);
   end;
 
 { TH1FastSnapshotBodyReader }
@@ -956,6 +960,13 @@ begin
   FUrl := '';
   FBodySize := 0;
   FRequestMetadata := Default(TH1RequestMetadata);
+end;
+
+procedure TH1FastRequestSnapshot.SetOnBodyChunk(
+  const AChunkProc: THttpResponseBodyChunkProc);
+begin
+  { Request snapshot: body is fully captured in the constructor. Streaming
+     dispatch is a response-side concern only. }
 end;
 
 function NewH1FastRequestSnapshot(const AResult: TFastParseResult;
