@@ -86,4 +86,5 @@ need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemOf' \
 
 - **mem owner**（2026-08-10）：批准 Step 1 + Step 2（豁免字面检查 → 接口面 helper 替代；CA-016 FIXED）。
 - **核实记录（2026-08-10，总控）**：已核对 `1d8dedab5`（M2 B 系列合入）——commit message 明示 stage0 下 mem 门面（arena/pool graph）在 nextpas 编译器内不可用，text.builder 的 `ReallocMemOf` → `FAllocator.ReallocMem`/`System.ReallocMem` 即该提交所为；替代守卫（禁行首 uses `nextpas.core.mem`）与提交内容一致，可长期保留。退出条件：stage0 解除门面 graph 约束后切回门面 `ReallocMemOf`。
+- **观察记录（2026-08-10，总控）**：编译器路径全量 mem 依赖审计——compiler 直接依赖的 36 个 nextpas.core 单元均为接口面 uses（`mem.intf`/`mem.allocator.*`），无一 uses 门面；唯一间接点 `collections.hashmap`（implementation uses `nextpas.core.mem`）被 sema 引用，但 compiler-pass 58/58 通过。结合 1d8dedab5 注释 "hangs / false cycles"，约束本质疑为**初始化时序**（text.builder 在编译器早期热路径使用，graph 未就绪）而非绝对禁用；hashmap 在编译后期使用安全。此推论未单独复现验证，仅作理解记录，不改变 CA-016 落地与守卫。
 - **compiler-system owner**：待拍板（核实记录已覆盖客观一致性，长期保留与否由 owner 定夺）。
