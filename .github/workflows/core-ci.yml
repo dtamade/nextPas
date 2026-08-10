@@ -22,7 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           # ripgrep: many core source-contract shell gates call `rg`
-          sudo apt-get install -y fpc ripgrep
+          # fonts-freefont-ttf: font tests hardcode /usr/share/fonts/truetype/freefont/FreeMono.ttf
+          sudo apt-get install -y fpc ripgrep fonts-freefont-ttf
 
       - name: Cache FPC trunk
         id: cache-fpc

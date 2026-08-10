@@ -60,23 +60,10 @@ begin
     .Add('HashMap.Get/N=100000', @BenchHashMapGet)
     .Run;
 
-  LResults.SaveToJSON(APath);
+  { SaveBaseline 写 baselines schema(与 TryLoadBaseline 配对);
+    SaveToJSON 是完整报告格式,LoadFromFile 解析不出基线 }
+  LResults.SaveBaseline(APath);
   WriteLn('  Saved.');
-end;
-
-{*
- * 模拟当前测试结果
- *}
-function RunCurrentTests: IBenchResults;
-begin
-  WriteLn('Running current tests...');
-
-  Result := TBenchSuite.Create('CICurrent')
-    .SetMinDuration(TDuration.FromSeconds(2))
-    .SetMinSamples(30)
-    .Add('HashMap.Put/N=100000', @BenchHashMapPut)
-    .Add('HashMap.Get/N=100000', @BenchHashMapGet)
-    .Run;
 end;
 
 {*
@@ -105,10 +92,17 @@ end;
 
 {*
  * 主程序：演示 CI 集成流程
+ *
+ * 用法:
+ *   ci_integration --generate-baseline [baseline.json]   生成基线
+ *   ci_integration [baseline.json [report.json]]         跑当前并与基线对比
  *}
 var
   LBaselinePath, LReportPath: string;
+  LSuite: IBenchSuite;
   LCurrent: IBenchResults;
+  LRegression: TBenchRegressionReport;
+  LHaveBaseline: Boolean;
 begin
   WriteLn('=== nextpas.core.bench CI Integration ===');
   WriteLn;
@@ -117,19 +111,62 @@ begin
   LReportPath := 'bench-ci-report.json';
 
   { 1. 生成基线（首次运行或手动触发） }
-  if (ParamCount > 0) and (ParamStr(1) = '--generate-baseline') then
+  if (ParamCount >= 1) and (ParamStr(1) = '--generate-baseline') then
   begin
+    if ParamCount >= 2 then
+      LBaselinePath := ParamStr(2);
     GenerateBaseline(LBaselinePath);
     Exit;
   end;
 
-  { 2. 运行当前测试 }
-  LCurrent := RunCurrentTests;
+  { 2. 对比模式：位置参数覆盖默认路径 }
+  if ParamCount >= 1 then
+    LBaselinePath := ParamStr(1);
+  if ParamCount >= 2 then
+    LReportPath := ParamStr(2);
+
+  LSuite := TBenchSuite.Create('CICurrent')
+    .SetMinDuration(TDuration.FromSeconds(2))
+    .SetMinSamples(30)
+    .Add('HashMap.Put/N=100000', @BenchHashMapPut)
+    .Add('HashMap.Get/N=100000', @BenchHashMapGet);
+
+  LHaveBaseline := LSuite.TryLoadBaseline(LBaselinePath);
+  if not LHaveBaseline then
+    WriteLn('No baseline loaded (', LBaselinePath, '); running without regression gate.');
+
+  WriteLn('Running current tests...');
+  LCurrent := LSuite.Run;
 
   { 3. 生成报告 }
   GenerateCIReport(LCurrent, LReportPath);
 
-  { 4. 返回退出码 }
+  { 4. 回归门：ratio = current/baseline，1.05 = 容忍 5% 劣化 }
+  if LHaveBaseline then
+  begin
+    LRegression := LCurrent.GetRegressionReport(1.05);
+    WriteLn;
+    WriteLn('Regression gate: ', LRegression.RegressedCount, ' regressed / ',
+      LRegression.ImprovedCount, ' improved / ',
+      LRegression.UnchangedCount, ' unchanged  (',
+      LRegression.TotalComparisons, ' compared, threshold ',
+      LRegression.Threshold:0:2, ')');
+    { 基线加载成功却零对比 = schema/名称漂移,静默通过比回归更危险 }
+    if LRegression.TotalComparisons = 0 then
+    begin
+      WriteLn('CI FAILED: baseline loaded but 0 benchmarks compared (schema or name drift?)');
+      ExitCode := 1;
+      Exit;
+    end;
+    if LRegression.HasRegression then
+    begin
+      WriteLn('CI FAILED: worst regression ', LRegression.WorstRegressName,
+        ' ratio ', LRegression.WorstRegressRatio:0:3);
+      ExitCode := 1;
+      Exit;
+    end;
+  end;
+
   WriteLn;
   WriteLn('CI PASSED: Benchmark completed successfully.');
   ExitCode := 0;

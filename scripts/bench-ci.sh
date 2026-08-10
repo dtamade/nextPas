@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BENCH_DIR="$PROJECT_ROOT/core/tests/nextpas.core.bench"
 
 # 颜色输出
@@ -59,8 +59,9 @@ generate_baseline() {
 
     cd "$PROJECT_ROOT"
 
-    # 运行基准测试并保存结果
-    fpc -MObjFPC -Fu core/src core/examples/bench/ci_integration.pas -o /tmp/ci_integration
+    # 运行基准测试并保存结果(FPC 选项必须紧贴;单元产物落 /tmp 保持源码树卫生)
+    mkdir -p /tmp/bench-ci-units
+    fpc -MObjFPC -Sh -Sg -O2 -Fucore/src -Ficore/src -FU/tmp/bench-ci-units -FE/tmp core/examples/bench/ci_integration.pas
     /tmp/ci_integration --generate-baseline "$baseline_file"
 
     log_info "Baseline saved to $baseline_file"
@@ -82,7 +83,8 @@ compare_baseline() {
     cd "$PROJECT_ROOT"
 
     # 运行基准测试并比较
-    fpc -MObjFPC -Fu core/src core/examples/bench/ci_integration.pas -o /tmp/ci_integration
+    mkdir -p /tmp/bench-ci-units
+    fpc -MObjFPC -Sh -Sg -O2 -Fucore/src -Ficore/src -FU/tmp/bench-ci-units -FE/tmp core/examples/bench/ci_integration.pas
     /tmp/ci_integration "$baseline_file" "$report_file"
 
     local exit_code=$?
