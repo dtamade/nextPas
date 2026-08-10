@@ -77,8 +77,8 @@ done
 
 printf "\n${BOLD}C2: 源文件完备性${NC}\n"
 
-# 契约声称的源文件数
-CLAIMED_SRC_COUNT=$(grep -oP '\d+\s*个源文件' "$CONTRACT" | grep -oP '\d+' | head -1)
+# 契约声称的源文件数（文档无"N 个源文件"字样时为 0，不因 pipefail 中断）
+CLAIMED_SRC_COUNT=$(grep -oP '\d+\s*个源文件' "$CONTRACT" | grep -oP '\d+' | head -1 || echo 0)
 ACTUAL_SRC_COUNT=$(find "$SRC_DIR" -name 'nextpas.core.mem*' -type f | wc -l)
 
 if [ "$ACTUAL_SRC_COUNT" -eq "$CLAIMED_SRC_COUNT" ]; then

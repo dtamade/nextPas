@@ -8,6 +8,10 @@
 
 ---
 
+## 概要
+
+以 `TYamlValue` 值语义提供 YAML 子集解析与 Builder 构造;门面 `nextpas.core.yaml`(7 个源文件),错误与失败契约见后文。
+
 ## 1. 源文件与职责
 
 | 单元 | 职责 |
@@ -22,7 +26,7 @@
 
 ---
 
-## 2. 公开 API
+## 2. 接口契约(公开 API)
 
 ### 2.1 门面（`uses nextpas.core.yaml`）
 

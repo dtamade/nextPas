@@ -153,11 +153,17 @@ fi
 printf "\n${BOLD}C9: 测试目录完备性${NC}\n"
 
 CONTRACT_TESTS=$(grep -oP 'test_[a-z0-9_]+' "$CONTRACT" | sort -u)
-ACTUAL_TESTS=$(find "$TEST_DIR" -mindepth 1 -maxdepth 1 -type d -name 'test_*' -exec basename {} \; | sort -u)
+# 测试分散在门面与各子模块目录树（text / text.builder / text.unicode / …），全量扫描
+ACTUAL_TESTS=$(find "$REPO_ROOT/core/tests"/nextpas.core.text* -mindepth 1 -maxdepth 1 -type d -name 'test_*' -exec basename {} \; | sort -u)
 
 MISSING_TESTS=""
 for t in $CONTRACT_TESTS; do
-  if ! echo "$ACTUAL_TESTS" | grep -qx "$t"; then
+  if [[ "$t" == *_ ]]; then
+    # 契约允许尾缀通配（如 test_conformance_*）：按前缀匹配
+    if ! echo "$ACTUAL_TESTS" | grep -q "^${t}"; then
+      MISSING_TESTS="$MISSING_TESTS $t"
+    fi
+  elif ! echo "$ACTUAL_TESTS" | grep -qx "$t"; then
     MISSING_TESTS="$MISSING_TESTS $t"
   fi
 done

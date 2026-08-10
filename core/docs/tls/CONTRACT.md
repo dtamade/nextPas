@@ -51,7 +51,27 @@ OpenSSL / mbedTLS / WolfSSL / WinSSL / FreePascal pure。
 
 ---
 
-## 3. 测试（最小）
+## 错误处理
+
+- 握手失败、证书验证失败必须 **fail-closed**（INV-3），不静默降级、不降级到明文。
+- 便捷 `TLSDial` 失败抛异常；调用方需要区分成功/失败路径时改用 `TryTLSDial`（`out AError: string`）。
+- 后端能力不符在 runtime 检查（capability 不撒谎），提前失败并报告真实原因，不跨后端伪兼容。
+
+## 线程安全
+
+- `TSSLStream` / `TSSLConnector` 实例单线程使用；跨线程共享需调用方同步。
+- `TSSLContextBuilder` 配置完成后不可变；只读共享的安全性取决于后端（原生后端自带锁，pure Pascal 后端无全局状态）。
+- 同一实例并发 Send/Recv 未定义，调用方负责串行化数据面访问。
+
+## 内存管理
+
+- 原生后端（FPC 下 OpenSSL / mbedTLS / WolfSSL / WinSSL）的上下文与连接句柄由 TLS 层在 finalize 路径释放；pure Pascal 后端无外部句柄。
+- `TSSLStream` 释放时发送 close_notify 并释放后端连接资源（INV-2，支持的后端）。
+- 传入的底层 `IStream` 所有权仍归调用方，TLS 层不窃取、不重复释放。
+
+---
+
+## 3. 测试覆盖（最小）
 
 见 `docs/tls/VERIFY.md`。
 

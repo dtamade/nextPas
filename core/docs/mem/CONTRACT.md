@@ -342,11 +342,11 @@ test_zeroed_allocator
 | OOM 降级 | test_oom, test_fallback_allocator | ✅ |
 | 对齐验证 | test_arena, test_pool_allocator, test_contracts | ✅ |
 | 双重释放检测 | test_tracking_allocator, test_contracts | ✅ |
-| 线程安全 | test_concurrent, test_concurrent_wrappers, test_thread_arena, test_thread_cache | ✅ |
+| 线程安全 | test_concurrent, test_concurrent_wrappers, test_thread_arena, test_thread_safe | ✅ |
 | 边界条件（0 大小、最大大小） | test_contracts, test_stability | ✅ |
 | 内存泄漏检测 | test_stability（heaptrc） | ✅ |
 | Arena Reset/Mark | test_arena, test_arena_chunked | ✅ |
-| Pool 扩容 | test_growing_fixed_pool, test_growing_block_pool, test_growing_allocator | ✅ |
+| Pool 扩容 | test_growing, test_growing_block_pool, test_growing_allocator | ✅ |
 | SizeClass 路由 | test_sizeclass, test_sizeclass_pool | ✅ |
 | Slab 分配 | test_slab_pool, test_sharded_pools | ✅ |
 | Ring Buffer 循环 | test_ring_buffer | ✅ |

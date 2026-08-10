@@ -8,6 +8,11 @@
 
 ---
 
+## 概要
+
+统一配置加载与查询：以 `IConfig`/`IConfigBuilder` 只读契约 + `TConfig` 可变实现，
+支持 ini/json/yaml/toml 多格式解析、Builder 优先级合并、`$(key)` 插值与 watch 变更订阅。
+
 ## 1. 源文件与职责
 
 | 单元 | 职责 |
@@ -23,7 +28,7 @@
 
 ---
 
-## 2. 公开 API
+## 2. 接口契约(公开 API)
 
 ### 2.1 格式与错误
 

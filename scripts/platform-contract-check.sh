@@ -48,8 +48,8 @@ check_api_signature() {
   fi
 }
 
-check_api_signature "platform_file_read" "ACount: PtrUInt" "nextpas.core.platform.files.pas"
-check_api_signature "platform_file_write" "ACount: PtrUInt" "nextpas.core.platform.files.pas"
+check_api_signature "platform_file_read" "ALen: PtrUInt" "nextpas.core.platform.files.pas"
+check_api_signature "platform_file_write" "ALen: PtrUInt" "nextpas.core.platform.files.pas"
 check_api_signature "platform_process_wait" "ATimeoutMs: Int64" "nextpas.core.platform.process.pas"
 check_api_signature "platform_watch_poll" "ATimeoutMs: Int64" "nextpas.core.platform.watch.pas"
 check_api_signature "platform_console_wait_readable" "ATimeoutMs: Int64" "nextpas.core.platform.console.pas"

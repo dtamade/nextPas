@@ -8,6 +8,10 @@
 
 ---
 
+## 概要
+
+以 `TJsonValue` 值语义提供 JSON 解析、序列化与遍历,支持 object/array/string/number/bool/null 全类型;门面 `nextpas.core.json`(9 个源文件),错误与失败契约见后文。
+
 ## 1. 源文件与职责
 
 | 单元 | 职责 |
@@ -26,7 +30,7 @@
 
 ---
 
-## 2. 公开 API
+## 2. 接口契约(公开 API)
 
 ### 2.1 门面（`uses nextpas.core.json`）
 

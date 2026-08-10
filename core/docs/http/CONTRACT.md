@@ -8,6 +8,10 @@
 
 ---
 
+## 概要
+
+HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(约 82 个生产源文件)。
+
 ## 1. 模块边界
 
 ```
@@ -41,7 +45,7 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 
 ---
 
-## 2. 核心公开接口（与源码一致）
+## 2. 接口契约（核心公开接口，与源码一致）
 
 ### 2.1 Server / Client
 
