@@ -149,13 +149,69 @@ begin
   Result := HANDLE(AFd);
 end;
 
+{ Map Windows failure codes onto the Linux errno convention the reactor API
+  promises: callbacks deliver negative errno exactly like the epoll/io_uring
+  backends, so consumers (dial, streams, tests) never branch on the host.
+  Both spaces reach here — kernel completion translations (64, 995, 1225 …)
+  via GetLastError and Winsock WSAE* via WSAGetLastError. Codes without a
+  confident errno peer pass through unchanged rather than lie; the raw OS
+  code also stays observable via SetLastError in IocpFail. }
+function IocpMapOsError(AErr: DWORD): Int32;
+const
+  ERROR_NETNAME_DELETED_W     = 64;    { remote hard close surfaces as this }
+  ERROR_SEM_TIMEOUT_W         = 121;
+  ERROR_CONNECTION_REFUSED_W  = 1225;
+  ERROR_NETWORK_UNREACHABLE_W = 1231;
+  ERROR_HOST_UNREACHABLE_W    = 1232;
+  ERROR_CONNECTION_ABORTED_W  = 1236;
+  WSAEACCES_W                 = 10013;
+  WSAEINVAL_W                 = 10022;
+begin
+  case AErr of
+    ERROR_OPERATION_ABORTED:                     { CancelIoEx / Close }
+      Result := 125;                             { ECANCELED }
+    ERROR_CONNECTION_REFUSED_W, DWORD(WSAECONNREFUSED):
+      Result := 111;                             { ECONNREFUSED }
+    ERROR_NETNAME_DELETED_W, DWORD(WSAECONNRESET), DWORD(WSAENETRESET):
+      Result := 104;                             { ECONNRESET }
+    ERROR_CONNECTION_ABORTED_W, DWORD(WSAECONNABORTED):
+      Result := 103;                             { ECONNABORTED }
+    ERROR_SEM_TIMEOUT_W, ERROR_TIMEOUT, DWORD(WSAETIMEDOUT):
+      Result := 110;                             { ETIMEDOUT }
+    ERROR_NETWORK_UNREACHABLE_W, DWORD(WSAENETUNREACH):
+      Result := 101;                             { ENETUNREACH }
+    ERROR_HOST_UNREACHABLE_W, DWORD(WSAEHOSTUNREACH):
+      Result := 113;                             { EHOSTUNREACH }
+    DWORD(WSAENOTCONN):
+      Result := 107;                             { ENOTCONN }
+    DWORD(WSAEADDRINUSE):
+      Result := 98;                              { EADDRINUSE }
+    DWORD(WSAEADDRNOTAVAIL):
+      Result := 99;                              { EADDRNOTAVAIL }
+    ERROR_INVALID_PARAMETER, WSAEINVAL_W:
+      Result := 22;                              { EINVAL }
+    ERROR_INVALID_HANDLE, DWORD(WSAENOTSOCK):
+      Result := 9;                               { EBADF }
+    ERROR_NOT_ENOUGH_MEMORY, ERROR_OUTOFMEMORY, DWORD(WSAENOBUFS):
+      Result := 12;                              { ENOMEM }
+    ERROR_NOT_SUPPORTED, DWORD(WSAEOPNOTSUPP):
+      Result := 95;                              { EOPNOTSUPP }
+    ERROR_BROKEN_PIPE:
+      Result := 32;                              { EPIPE }
+    ERROR_ACCESS_DENIED, WSAEACCES_W:
+      Result := 13;                              { EACCES }
+  else
+    Result := Int32(AErr);
+  end;
+end;
+
 function IocpFail(ACallback: TIoCompletion; AContext: Pointer;
   AUserData: UInt64; AError: DWORD): Boolean;
 begin
   SetLastError(AError);
   if Assigned(ACallback) then
   begin
-    ACallback(AUserData, -Int32(AError), AContext);
+    ACallback(AUserData, -IocpMapOsError(AError), AContext);
     Result := True;
   end
   else
@@ -324,7 +380,7 @@ begin
         closesocket(TSocket(PtrUInt(LOp^.Handle)));
       try
         if Assigned(LCallback) then
-          LCallback(LUserData, -Int32(AError), LContext);
+          LCallback(LUserData, -IocpMapOsError(AError), LContext);
       except
         on E: Exception do
         begin
@@ -491,7 +547,7 @@ begin
   if ASucceeded then
     LResult := Int32(ABytes)
   else
-    LResult := -Int32(GetLastError);
+    LResult := -IocpMapOsError(GetLastError);
 
   if LOp^.Kind = opAccept then
   begin
@@ -860,7 +916,7 @@ begin
     LError := WSAGetLastError;
 
   if Assigned(ACallback) then
-    ACallback(0, -Int32(LError), AContext);
+    ACallback(0, -IocpMapOsError(LError), AContext);
   Result := True;
 end;
 

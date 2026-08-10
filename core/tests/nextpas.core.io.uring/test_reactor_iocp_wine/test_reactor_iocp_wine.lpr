@@ -550,6 +550,53 @@ begin
   end;
 end;
 
+procedure TestIocpConnectRefused;
+var
+  LListener: TPlatformSocket;
+  LClientSock: TPlatformSocket;
+  LReactor: TIocpReactor;
+  LPort: UInt16;
+  LAddr: TPlatformSockAddr;
+begin
+  { Bind+listen then close: the port refuses subsequent connects }
+  Check(CreateListener(LListener, LPort), 'create listener');
+  platform_socket_close(LListener);
+
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  try
+    { Client socket; ConnectEx requires a prior bind. }
+    Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+      PLATFORM_IPPROTO_TCP, LClientSock) = 0, 'create client socket');
+    Check(MakeSockAddrAny(0, LAddr), 'make bind addr');
+    Check(platform_socket_bind(LClientSock, @LAddr.Storage, LAddr.Len) = 0,
+      'bind client socket');
+    Check(platform_sockaddr_loopback4(LPort, LAddr) = 0, 'client addr');
+
+    GConnectDone := False;
+    GConnectResult := 0;
+    if not LReactor.AsyncConnect(PtrInt(LClientSock.Value), @LAddr.Storage,
+      LAddr.Len, @OnConnectDone, nil) then
+    begin
+      { ConnectEx not supported on this host — skip }
+      Check(True, 'ConnectEx skipped: not supported');
+      Exit;
+    end;
+
+    Check(WaitForCompletion(GConnectDone, LReactor),
+      'connect-refused callback should fire');
+    { Cross-host contract: reactor callbacks deliver negative errno like the
+      epoll/io_uring backends — a refused Windows connect must surface as
+      -ECONNREFUSED (-111), never the raw WSAECONNREFUSED (10061). }
+    Check(GConnectResult = -111,
+      'connect refused should map to -ECONNREFUSED, got ' +
+      IntToStr(GConnectResult));
+  finally
+    LReactor.Close;
+    platform_socket_close(LClientSock);
+  end;
+end;
+
 procedure TestIocpTryCancelByContext;
 var
   LListenSock, LAcceptSock, LClientSock: TPlatformSocket;
@@ -606,6 +653,7 @@ begin
   T.Test('AsyncRecv', @TestIocpAsyncRecv);
   T.Test('AcceptEx+Send', @TestIocpAcceptSend);
   T.Test('ConnectEx', @TestIocpConnectEx);
+  T.Test('Connect refused maps to -ECONNREFUSED', @TestIocpConnectRefused);
   T.Test('AcceptEx+Recv', @TestIocpAcceptRecv);
   T.Test('TryCancelByContext', @TestIocpTryCancelByContext);
   {$ELSE}
