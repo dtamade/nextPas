@@ -37,6 +37,19 @@ crypto.pkcs8 / argon2 / …  密钥与口令派生
 
 ---
 
+### 1.3 argon2（口令哈希）
+
+- **接口**：`Argon2Hash`（原始字节，内嵌 v=19/1.3）、`Argon2HashStr`
+  （PHC 编码串：`$argon2id$v=19$m=…,t=…,p=…$b64salt$b64hash`，盐 16B 内部随机）、
+  `Argon2Verify`（按 PHC 解析 + 常量时间重算比对）。
+- **PHC 参数纪律**：m 单位 KiB（≥8，应用层建议 ≥65536）、t ≥ 1、p ≥ 1、hashLen ≥ 4；
+  类型 `atArgon2d`（d）/ `atArgon2i`（i）/ `atArgon2id`（id）。
+- **fail-closed**：`Argon2Verify` 对空串/未知类型/非 v=19/参数越界/段数不符/长度不符
+  一律返回 False，不抛异常；比对走 `crypto.constant_time`（防时序侧信道）。
+- **INV 关联**：盐只走 `crypto.random`（INV-3）；不重新实现摘要（INV-4，H0 走 crypto.hash）。
+
+---
+
 ## 2. 不变量
 
 - **[INV-1]** AEAD tag / nonce 长度符合 RFC（AES-GCM tag 16；ChaCha nonce 12）
@@ -55,6 +68,7 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_facade
 make focused FOCUS=core/tests/nextpas.core.crypto/test_aesgcm
 make focused FOCUS=core/tests/nextpas.core.crypto/test_x25519
 make focused FOCUS=core/tests/nextpas.core.crypto/test_ed25519
+make focused FOCUS=core/tests/nextpas.core.crypto/test_argon2
 ```
 
 ---
@@ -63,5 +77,6 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_ed25519
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-08-11 | 1.2 | argon2 补 PHC `Argon2HashStr` + `Argon2Verify`（去 EXPERIMENTAL）；rand/encoding/constant-time 归一 |
 | 2026-07-20 | 1.1 | ChaCha/ASN.1/random 归属 crypto；禁止 crypto→tls |
 | 2026-07-01 | 1.0 | 初始版本 |
