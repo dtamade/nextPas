@@ -205,13 +205,11 @@ begin
     end;
     LNewCap := LNewCap * 2;
   end;
-  if FAllocator <> nil then
-    FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
-  else
-  begin
-    { System.ReallocMem updates the pointer variable in place. }
-    System.ReallocMem(FBuf, LNewCap);
-  end;
+  { 接口面 sized 辅助（CA-016，owner decision 2026-08-10）：allocator<>nil
+    委托 IAllocator 方法（分配器内部跟踪 size），nil 走 System 堆（RTL
+    自跟踪）。与门面 ReallocMemOf 语义分层——不触碰 mem 门面 graph，
+    满足 stage0 自举约束。 }
+  FBuf := ReallocMemSized(FAllocator, FBuf, FCap, LNewCap);
   if (LNewCap > 0) and (FBuf = nil) then
     raise EOutOfMemory.Create('string builder allocation failed');
   FCap := LNewCap;
@@ -248,10 +246,9 @@ procedure TBufStringBuilder.Done;
 begin
   if FBuf <> nil then
   begin
-    if FAllocator <> nil then
-      FAllocator.FreeMem(FBuf)
-    else
-      System.FreeMem(FBuf);
+    { 与 Grow 的 ReallocMemSized 配对的接口面释放（CA-016）：allocator≠nil
+      委托接口方法，nil 走 nextpas.core.system.heap 封装。 }
+    FreeMemSized(FAllocator, FBuf);
     FBuf := nil;
   end;
   FLen := 0;

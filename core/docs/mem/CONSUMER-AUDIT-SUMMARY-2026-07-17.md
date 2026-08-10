@@ -35,6 +35,7 @@ P0（swiss.i32 错误 IAllocator API）已修；L1+ 分配族已接入 `nextpas.
 | CA-008–010 | **CONFIRMED healthy** |
 | CA-011 | **WAIVED**（product-table keepers） |
 | CA-012 | **FIXED（可证路径）** — mbedtls 私钥 + tls.secure 缓冲全容量 SecureZero + sized free；非全仓敏感字段闭合 |
+| CA-016 | **FIXED（接口面重实现）** — text.builder inject-grow：stage0 约束下禁用 mem 门面（arena/pool graph 在 nextpas 编译器内不可用），改经 `mem.allocator.base.ReallocMemSized`（allocator≠nil→接口方法 / nil→System 堆，均自跟踪 size）；I1 字面检查改替代守卫（决策：core/docs/plans/2026-08-10-text-builder-inject-grow-owner-decision.md） |
 
 ## 验证入口
 

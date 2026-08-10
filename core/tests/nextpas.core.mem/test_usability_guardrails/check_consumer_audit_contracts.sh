@@ -114,9 +114,19 @@ if [[ -f "$SRC/nextpas.core.yaml.builder.pas" ]]; then
 fi
 
 # --- Era I: ReallocMemOf symmetry + owned-string size tables + tui FreeMemOf WAIVE ---
+# I1 (text.builder sized-heap literal) is WAIVED for the mem facade literal:
+# stage0 (nextpas compiler) cannot use the mem facade (arena/pool graph), see
+# core/docs/plans/2026-08-10-text-builder-inject-grow-owner-decision.md (CA-016).
+# Replacement guards keep the intent: interface-surface allocation only, no
+# regression to the mem facade.
 need_file "$SRC/nextpas.core.text.builder.pas"
-need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemOf' \
-  'text.builder must use ReallocMemOf on inject grow (I1)'
+need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemSized|ReallocMemOf' \
+  'text.builder must use interface-surface sized helper on inject grow (I1)'
+need_grep "$SRC/nextpas.core.text.builder.pas" 'nextpas\.core\.mem\.intf' \
+  'text.builder must keep interface-surface allocation (mem.intf) (I1)'
+if grep -Eq '^[[:space:]]*nextpas\.core\.mem([,;]|$)' "$SRC/nextpas.core.text.builder.pas"; then
+  die 'text.builder must not use the mem facade (stage0 graph constraint) (I1)'
+fi
 
 need_file "$SRC/nextpas.core.collections.element_manager.pas"
 need_grep "$SRC/nextpas.core.collections.element_manager.pas" 'ReallocMemOf' \
