@@ -85,6 +85,10 @@
   poller_windows_runtime_smoke 2，全 0 unfreed）；CI 的 make wine-runtime-smoke 不受影响
 - ✅ **http side-suite 健康度 audit**（M-6 腐化未复发）：smoke/integration/examples/
   threaded_host/tls_real 编译 + 运行 5/5 全绿（6/18/5/2/5，0 unfreed）
+- ✅ **本地 wine matrix 全量基线**（2026-08-11）：`win64-wine-smoke.sh` 一次跑完
+  platform-wine-ci-matrix 全部 25 项（24 platform + io.reactor.iocp），**25/25 PASS**
+  ~240 用例、~4.3 分钟；platform 层跨 host 无隐藏问题；doc-truth 核对：http
+  82 单元 / PROJECTS 47 suites 与 ROADMAP §2 一致
 - ✅ 历史遗留 5 个深度确认后 drop：tmp-k（main 已吸收）、PAsyncLoop（过渡态）、
   non-platform dirt（含已推迟 system.classes）、main dirt（153K 行清理快照）、
   test-audit WIP（删除中间态）——drop 前逐一存档，零丢失
