@@ -352,7 +352,7 @@ begin
   Check(LEditor.Content = 'hello', 'Content should be hello after paste');
 end;
 
-procedure TestEditorMoveWordLeftRight;
+procedure TestEditorReplaceContent;
 var
   LEditor: IInputEditor;
 begin
@@ -360,6 +360,36 @@ begin
   LEditor.InsertChar(Ord('h'));
   LEditor.InsertChar(Ord('e'));
   LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('o'));
+  { 整文替换：文本 + 光标定位（UTF-8 字节）}
+  LEditor.ReplaceContent('优化：请以快速排序实现', 27);
+  Check(LEditor.Content = '优化：请以快速排序实现',
+    'Content should be replaced');
+  { 单次 Undo 恢复全文（非逐字符污染撤销栈）}
+  LEditor.Undo;
+  Check(LEditor.Content = 'hello', 'one undo restores original text');
+  LEditor.Redo;
+  Check(LEditor.Content = '优化：请以快速排序实现',
+    'redo reapplies replaced content');
+  { caret 越界 clamp + 选区清除 }
+  LEditor.ReplaceContent('abc', 999);
+  LEditor.SelectAll;
+  LEditor.ReplaceContent('xy', -1);
+  Check(LEditor.Content = 'xy', 'clamped negative caret replaces');
+  LEditor.InsertChar(Ord('z'));
+  Check(LEditor.Content = 'zxy', 'selection anchor cleared by replace');
+  LEditor.Undo;
+  Check(LEditor.Content = 'xy', 'safe to undo after clamp replace');
+end;
+
+procedure TestEditorMoveWordLeftRight;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('h'));
+  LEditor.InsertChar(Ord('e'));
   LEditor.InsertChar(Ord('l'));
   LEditor.InsertChar(Ord('o'));
   LEditor.InsertChar(Ord(' '));
@@ -512,6 +542,7 @@ begin
   T.Test('DeleteLine', @TestEditorDeleteLine);
   T.Test('Copy/Paste', @TestEditorCopyCutPaste);
   T.Test('CutSelection', @TestEditorCutSelection);
+  T.Test('ReplaceContent', @TestEditorReplaceContent);
   T.Test('MoveWordLeft/Right', @TestEditorMoveWordLeftRight);
   T.Test('MoveUp', @TestEditorMoveUp);
   T.Test('MoveDown', @TestEditorMoveDown);

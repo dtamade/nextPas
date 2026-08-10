@@ -49,6 +49,9 @@ type
     procedure Undo;
     procedure Redo;
     procedure Clear;
+    { 整文替换（单 undo 操作：一次 Undo 恢复替换前全文与光标；
+      供 AI 补全/提示词优化等一次性回填，避免逐字符插入污染撤销栈） }
+    procedure ReplaceContent(const AText: AnsiString; ACaret: Integer);
     function Content: AnsiString;
     function IsEmpty: Boolean;
     function LineCount: Integer;
@@ -147,6 +150,7 @@ type
     function CursorScreenPos(const AArea: TRect): TPosition;
 
     procedure Clear;
+    procedure ReplaceContent(const AText: AnsiString; ACaret: Integer);
     function Content: AnsiString;
     function IsEmpty: Boolean; inline;
     function LineCount: Integer; inline;
@@ -271,6 +275,24 @@ begin
   FTargetCol := -1;
   FScrollRow := 0;
   FAnchor := -1;
+end;
+
+procedure TInputEditor.ReplaceContent(const AText: AnsiString; ACaret: Integer);
+begin
+  if (FText = AText) and (FCurByte = ACaret) then
+    Exit;                        { 无变化不压栈（Paste 幂等） }
+  PushUndo;                      { 单快照 = 替换前全文，一次 Undo 即还原 }
+  FText := AText;
+  if ACaret < 0 then
+    FCurByte := 0
+  else if ACaret > Length(AText) then
+    FCurByte := Length(AText)
+  else
+    FCurByte := ACaret;
+  FAnchor := -1;
+  FTargetCol := -1;
+  FScrollRow := 0;
+  NotifySyntaxEdit;
 end;
 
 function TInputEditor.LineStartByte(Row: Integer): Integer;
