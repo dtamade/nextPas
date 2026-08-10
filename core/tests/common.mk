@@ -46,15 +46,15 @@ HEAPTRC_GATE ?=
 HEAPTRC_DUMP ?= $(BUILD_DIR)/$(PROGRAM).heaptrc
 
 run: build
-ifeq ($(HEAPTRC_GATE),)
-	$(BUILD_DIR)/$(PROGRAM)
-else
-	@rm -f $(HEAPTRC_DUMP)
-	HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(BUILD_DIR)/$(PROGRAM)
-	@grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }
-	@grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }
-	@echo "[HEAPTRC] OK"
-endif
+	@if [ -n "$(HEAPTRC_GATE)" ]; then \
+		rm -f $(HEAPTRC_DUMP); \
+		HEAPTRC='haltonnotreleased,log=$(HEAPTRC_DUMP)' $(BUILD_DIR)/$(PROGRAM); \
+		grep -q '^Heap dump by heaptrc unit' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: no heap dump written ($(HEAPTRC_DUMP))"; exit 1; }; \
+		grep -q '^0 unfreed memory blocks : 0$$' $(HEAPTRC_DUMP) || { echo "[HEAPTRC] FAILED: unfreed blocks reported"; cat $(HEAPTRC_DUMP); exit 1; }; \
+		echo "[HEAPTRC] OK"; \
+	else \
+		$(BUILD_DIR)/$(PROGRAM); \
+	fi
 
 test: run
 
