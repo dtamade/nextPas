@@ -552,15 +552,26 @@ end;
 
 procedure TestIocpConnectRefused;
 var
-  LListener: TPlatformSocket;
+  LRefusingSock: TPlatformSocket;
   LClientSock: TPlatformSocket;
   LReactor: TIocpReactor;
+  LAddr, LBound: TPlatformSockAddr;
+  LAddrLen: Int32;
   LPort: UInt16;
-  LAddr: TPlatformSockAddr;
 begin
-  { Bind+listen then close: the port refuses subsequent connects }
-  Check(CreateListener(LListener, LPort), 'create listener');
-  platform_socket_close(LListener);
+  { Bind without listen and keep the socket open: the kernel refuses every
+    connect with RST — deterministic on Wine AND real Windows. (A closed
+    listener's ephemeral port races with reuse/TIME_WAIT and, on real
+    Windows, left the ConnectEx completion pending instead of refusing.) }
+  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
+    PLATFORM_IPPROTO_TCP, LRefusingSock) = 0, 'create refusing socket');
+  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'make bind addr');
+  Check(platform_socket_bind(LRefusingSock, @LAddr.Storage, LAddr.Len) = 0,
+    'bind refusing socket');
+  LAddrLen := SizeOf(LBound.Storage);
+  Check(platform_socket_getsockname(LRefusingSock, @LBound.Storage,
+    @LAddrLen) = 0, 'getsockname refusing socket');
+  LPort := Ntohs16(PSockAddrIn(@LBound.Storage)^.sin_port);
 
   LReactor := TIocpReactor.Create(4);
   Check(LReactor.IsValid, 'reactor valid');
@@ -594,6 +605,7 @@ begin
   finally
     LReactor.Close;
     platform_socket_close(LClientSock);
+    platform_socket_close(LRefusingSock);
   end;
 end;
 
