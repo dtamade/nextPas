@@ -201,13 +201,16 @@ procedure TestDoubleQuotedWithBackslash;
 var
   LD: IYamlDocument;
 begin
-  { Parser preserves literal \n in double-quoted strings (no escape processing) }
-  LD := YamlParse('text: "hello\\nworld"');
+  { YAML 1.2 §7.3.3：双引号标量处理转义——\n 解码为换行、
+    \\ 解码为反斜杠（2026-08-11 修复：此前仅校验不解码）。 }
+  LD := YamlParse('text: "hello\nworld"');
   Check(not LD.HasError, 'double quote backslash: no error');
-  Check(Pos('hello', LD.Root.MapGet('text').AsStr.ToString) > 0,
-    'double quote: contains hello');
-  Check(Pos('world', LD.Root.MapGet('text').AsStr.ToString) > 0,
-    'double quote: contains world');
+  CheckEqual('hello'#10'world', LD.Root.MapGet('text').AsStr.ToString,
+    'double quote: \n decoded to newline');
+  LD := YamlParse('text: "a\"b\\c\td"');
+  Check(not LD.HasError, 'double quote escapes: no error');
+  CheckEqual('a"b\c'#9'd', LD.Root.MapGet('text').AsStr.ToString,
+    'double quote: \" \\ \t decoded');
 end;
 
 procedure TestSingleQuotedLiteral;

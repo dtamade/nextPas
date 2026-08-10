@@ -19,6 +19,15 @@ type
   end;
   PYamlAnchorEntry = ^TYamlAnchorEntry;
 
+  { 解码字符串池块：非 plain 标量（含转义的双引号/单引号折叠）经
+    YamlUnescape 后拷贝入池，节点 Str 视图指向池内存——池块只 append、
+    永不移动，故文档生命周期内视图稳定。 }
+  TYamlStrBlock = record
+    Ptr: Pointer;
+    Size: SizeUInt;
+  end;
+  PYamlStrBlock = ^TYamlStrBlock;
+
   TYamlDocument = record
   private
     FNodes: PYamlNode;
@@ -28,12 +37,18 @@ type
     FAnchors: PYamlAnchorEntry;
     FAnchorCount: UInt32;
     FAnchorCap: UInt32;
+    FStrBlocks: PYamlStrBlock;
+    FStrBlockCount: UInt32;
+    FStrBlockCap: UInt32;
+    FStrCurUsed: SizeUInt;
+    FStrCurBlock: PAnsiChar;
     FAllocator: TMemAllocator;
     FParseDepth: Int32;
     FError: TYamlError;
     FHasError: Boolean;
     FInitMagic: QWord;
     procedure RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
+    function AddStr(const ASrc: string): TStringView;
   public
     procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
@@ -64,12 +79,14 @@ procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView
 implementation
 
 uses
+  nextpas.core.text.unicode.utils,   { AppendUtf8Codepoint — yaml \x/\u/\U 解码 }
   nextpas.core.mem.default,
   nextpas.core.mem;
 
 const
   INITIAL_CAPACITY = 64;
   YAML_DOCUMENT_INIT_MAGIC = QWord($59414D4C444F4331);
+  YAML_STR_BLOCK_SIZE = 4096;
 
 procedure TYamlDocument.Init(const AAllocator: TMemAllocator);
 var
@@ -86,6 +103,11 @@ begin
   FAnchorCap := 16;
   FAnchors := nil;
   FAnchorCount := 0;
+  FStrBlocks := nil;
+  FStrBlockCount := 0;
+  FStrBlockCap := 0;
+  FStrCurBlock := nil;
+  FStrCurUsed := 0;
   FParseDepth := 0;
   FError.Message := TStringView.Empty;
   FError.Line := 0;
@@ -130,6 +152,22 @@ begin
   end;
   FAnchorCap := 0;
   FAnchorCount := 0;
+  if FStrBlocks <> nil then
+  begin
+    while FStrBlockCount > 0 do
+    begin
+      Dec(FStrBlockCount);
+      if FStrBlocks[FStrBlockCount].Ptr <> nil then
+        FreeMemOf(FAllocator, FStrBlocks[FStrBlockCount].Ptr,
+          FStrBlocks[FStrBlockCount].Size);
+    end;
+    FreeMemOf(FAllocator, Pointer(FStrBlocks),
+      SizeUInt(FStrBlockCap) * SizeOf(TYamlStrBlock));
+    FStrBlocks := nil;
+  end;
+  FStrBlockCap := 0;
+  FStrCurBlock := nil;
+  FStrCurUsed := 0;
   FParseDepth := 0;
   FRootIdx := 0;
   FError.Message := TStringView.Empty;
@@ -163,6 +201,55 @@ begin
   FillChar(FNodes[Result], SizeOf(TYamlNode), 0);
   FNodes[Result].Next := YAML_NODE_NONE;
   Inc(FNodeCount);
+end;
+
+function TYamlDocument.AddStr(const ASrc: string): TStringView;
+var
+  LLen, LBlockSize: SizeUInt;
+  LNewCap: UInt32;
+  LNewBlock, LNewArr: Pointer;
+begin
+  LLen := Length(ASrc);
+  if LLen = 0 then
+    Exit(TStringView.Empty);
+  { 新块条件：无当前块，或当前块剩余不足。块只 append、永不移动，
+    节点视图在文档生命周期内稳定。 }
+  if (FStrCurBlock = nil) or (FStrCurUsed + LLen > YAML_STR_BLOCK_SIZE) then
+  begin
+    if LLen > YAML_STR_BLOCK_SIZE then
+      LBlockSize := LLen
+    else
+      LBlockSize := YAML_STR_BLOCK_SIZE;
+    LNewBlock := FAllocator.GetMem(LBlockSize);
+    if LNewBlock = nil then
+      Exit(TStringView.Empty);
+    if FStrBlockCount >= FStrBlockCap then
+    begin
+      LNewCap := FStrBlockCap;
+      if LNewCap = 0 then
+        LNewCap := 16;
+      while LNewCap <= FStrBlockCount do
+        LNewCap := LNewCap * 2;
+      LNewArr := ReallocMemOf(FAllocator, Pointer(FStrBlocks),
+        SizeUInt(FStrBlockCap) * SizeOf(TYamlStrBlock),
+        SizeUInt(LNewCap) * SizeOf(TYamlStrBlock));
+      if LNewArr = nil then
+      begin
+        FreeMemOf(FAllocator, LNewBlock, LBlockSize);
+        Exit(TStringView.Empty);
+      end;
+      FStrBlocks := PYamlStrBlock(LNewArr);
+      FStrBlockCap := LNewCap;
+    end;
+    FStrBlocks[FStrBlockCount].Ptr := LNewBlock;
+    FStrBlocks[FStrBlockCount].Size := LBlockSize;
+    Inc(FStrBlockCount);
+    FStrCurBlock := PAnsiChar(LNewBlock);
+    FStrCurUsed := 0;
+  end;
+  Move(ASrc[1], (FStrCurBlock + FStrCurUsed)^, LLen);
+  Result := TStringView.Create(FStrCurBlock + FStrCurUsed, LLen);
+  Inc(FStrCurUsed, LLen);
 end;
 
 procedure TYamlDocument.RegisterAnchor(const AName: TStringView; ANodeIdx: UInt32);
@@ -407,6 +494,153 @@ begin
   Result := True;
 end;
 
+{ YAML 双引号标量转义解码（YAML 1.2 §7.3.3）。scanner 仅校验并跳过
+  raw 转义序列；值含 \ 时在此解码（无转义则零拷贝返回）。\x/\u/\U hex
+  序列经 codepoint → UTF-8（复用 AppendUtf8Codepoint）。 }
+function UnescapeYamlDoubleQuoted(var ADoc: TYamlDocument;
+  const AValue: TStringView): TStringView;
+var
+  LI, LLen, LUsed, LMk, LHex: SizeInt;
+  LHexV, LMaxHex, LCP: LongInt;
+  LCh: Byte;
+  LOut: string;
+begin
+  LLen := SizeInt(AValue.Len);
+  { 常见路径：无转义——保持零拷贝 }
+  LI := 0;
+  while (LI < LLen) and (AValue.Data[LI] <> '\') do
+    Inc(LI);
+  if LI >= LLen then
+    Exit(AValue);
+  SetLength(LOut, LLen);
+  LUsed := 0;
+  LI := 0;
+  while LI < LLen do
+  begin
+    LCh := Byte(AValue.Data[LI]);
+    if LCh <> Byte('\') then
+    begin
+      Inc(LUsed);
+      LOut[LUsed] := AnsiChar(LCh);
+      Inc(LI);
+      Continue;
+    end;
+    Inc(LI);
+    if LI >= LLen then
+      Break; { 悬空反斜杠：scanner 已校验，防御性保留 }
+    LCh := Byte(AValue.Data[LI]);
+    Inc(LI);
+    case LCh of
+      Byte('0'): begin Inc(LUsed); LOut[LUsed] := #0; end;
+      Byte('a'): begin Inc(LUsed); LOut[LUsed] := #7; end;
+      Byte('b'): begin Inc(LUsed); LOut[LUsed] := #8; end;
+      Byte('t'): begin Inc(LUsed); LOut[LUsed] := #9; end;
+      Byte('n'): begin Inc(LUsed); LOut[LUsed] := #10; end;
+      Byte('v'): begin Inc(LUsed); LOut[LUsed] := #11; end;
+      Byte('f'): begin Inc(LUsed); LOut[LUsed] := #12; end;
+      Byte('r'): begin Inc(LUsed); LOut[LUsed] := #13; end;
+      Byte('e'): begin Inc(LUsed); LOut[LUsed] := #27; end;
+      Byte(' '): begin Inc(LUsed); LOut[LUsed] := ' '; end;
+      9:         begin Inc(LUsed); LOut[LUsed] := #9; end;
+      Byte('"'): begin Inc(LUsed); LOut[LUsed] := '"'; end;
+      Byte('/'): begin Inc(LUsed); LOut[LUsed] := '/'; end;
+      Byte('\'): begin Inc(LUsed); LOut[LUsed] := '\'; end;
+      Byte('N'): AppendUtf8Codepoint(LOut, LUsed, $85);
+      Byte('_'): AppendUtf8Codepoint(LOut, LUsed, $A0);
+      Byte('L'): AppendUtf8Codepoint(LOut, LUsed, $2028);
+      Byte('P'): AppendUtf8Codepoint(LOut, LUsed, $2029);
+      Byte('x'), Byte('u'), Byte('U'):
+      begin
+        if LCh = Byte('x') then LMaxHex := 2
+        else if LCh = Byte('u') then LMaxHex := 4
+        else LMaxHex := 8;
+        LCP := 0;
+        LMk := LI;
+        LHex := 0;
+        while (LHex < LMaxHex) and (LI < LLen) do
+        begin
+          case AValue.Data[LI] of
+            '0'..'9': LHexV := Ord(AValue.Data[LI]) - 48;
+            'a'..'f': LHexV := Ord(AValue.Data[LI]) - 87;
+            'A'..'F': LHexV := Ord(AValue.Data[LI]) - 55;
+          else
+            LHexV := -1;
+          end;
+          if LHexV < 0 then
+            Break;
+          LCP := (LCP shl 4) or LHexV;
+          Inc(LHex);
+          Inc(LI);
+        end;
+        if LHex = 0 then
+        begin
+          { 非法 hex（scanner 未拦的防御路径）：字面保留 \x }
+          LI := LMk;
+          Inc(LUsed);
+          LOut[LUsed] := '\';
+          Inc(LUsed);
+          LOut[LUsed] := AnsiChar(LCh);
+        end
+        else
+        begin
+          if LCP > $10FFFF then
+            LCP := $FFFD;
+          AppendUtf8Codepoint(LOut, LUsed, LCP);
+        end;
+      end;
+    else
+      { 未知转义（scanner 已校验的防御路径）：字面保留 }
+      Inc(LUsed);
+      LOut[LUsed] := '\';
+      Inc(LUsed);
+      LOut[LUsed] := AnsiChar(LCh);
+    end;
+  end;
+  SetLength(LOut, LUsed);
+  Result := ADoc.AddStr(LOut);
+end;
+
+{ YAML 单引号标量：'' 折叠为 '（YAML 1.2 §7.3.2）。含折叠时入池，
+  否则零拷贝。 }
+function FoldYamlSingleQuoted(var ADoc: TYamlDocument;
+  const AValue: TStringView): TStringView;
+var
+  LI, LLen, LUsed: SizeInt;
+  LOut: string;
+begin
+  LLen := SizeInt(AValue.Len);
+  LI := 0;
+  while LI + 1 < LLen do
+  begin
+    if (AValue.Data[LI] = '''') and (AValue.Data[LI + 1] = '''') then
+      Break;
+    Inc(LI);
+  end;
+  if LI + 1 >= LLen then
+    Exit(AValue); { 无 '' 折叠——零拷贝 }
+  SetLength(LOut, LLen);
+  LUsed := 0;
+  LI := 0;
+  while LI < LLen do
+  begin
+    if (LI + 1 < LLen) and (AValue.Data[LI] = '''') and
+       (AValue.Data[LI + 1] = '''') then
+    begin
+      Inc(LUsed);
+      LOut[LUsed] := '''';
+      Inc(LI, 2);
+    end
+    else
+    begin
+      Inc(LUsed);
+      LOut[LUsed] := AValue.Data[LI];
+      Inc(LI);
+    end;
+  end;
+  SetLength(LOut, LUsed);
+  Result := ADoc.AddStr(LOut);
+end;
+
 function ResolveScalar(const AValue: TStringView; const AStyle: TYamlScalarStyle;
   var ADoc: TYamlDocument): UInt32;
 var
@@ -422,7 +656,15 @@ begin
   if AStyle <> yssPlain then
   begin
     ADoc.FNodes[LIdx].Kind := ynkString;
-    ADoc.FNodes[LIdx].Str := AValue;
+    case AStyle of
+      yssDoubleQuoted:
+        ADoc.FNodes[LIdx].Str := UnescapeYamlDoubleQuoted(ADoc, AValue);
+      yssSingleQuoted:
+        ADoc.FNodes[LIdx].Str := FoldYamlSingleQuoted(ADoc, AValue);
+    else
+      { 字面/折叠块样式：原样保留（块内无转义语法） }
+      ADoc.FNodes[LIdx].Str := AValue;
+    end;
     Result := LIdx;
     Exit;
   end;
