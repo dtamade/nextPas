@@ -4,7 +4,9 @@ unit nextpas.core.sqlite.conn;
        - TSqliteDb: open/close, Exec (DDL/DML), prepared queries,
          last_insert_rowid / changes, busy timeout, WAL checkpoint.
        - TSqliteQuery: prepared statement lifecycle (step, bind, columns).
-       - ESqliteError: carries the native SQLite result code.
+       - ESqliteError: carries the native SQLite result code and the
+         extended result code (precise constraint kind for SQLITE_CONSTRAINT,
+         e.g. SQLITE_CONSTRAINT_UNIQUE vs FOREIGNKEY — see sqlite.base).
        Text is UTF-8 (SQLite native). Connections opened with FULLMUTEX
        are safe for cross-thread use; write serialization stays at
        the caller (proxy888 db layer serializes writers). *}
@@ -23,9 +25,14 @@ type
   ESqliteError = class(ENextPasError)
   private
     FErrorCode: Integer;
+    FExtendedErrorCode: Integer;
   public
-    constructor Create(const AErrorCode: Integer; const AMessage: string);
+    { 双参构造保留（extended := AErrorCode 兜底），三参构造带精确 extended code }
+    constructor Create(const AErrorCode: Integer; const AMessage: string); overload;
+    constructor Create(const AErrorCode: Integer; const AExtendedErrorCode: Integer;
+      const AMessage: string); overload;
     property ErrorCode: Integer read FErrorCode;
+    property ExtendedErrorCode: Integer read FExtendedErrorCode;
   end;
 
   TSqliteQuery = class
@@ -81,15 +88,23 @@ implementation
 
 procedure RaiseError(const ACode: Integer; const ADb: TSqliteHandle);
 begin
-  raise ESqliteError.Create(ACode, string(AnsiString(sqlite3_errmsg(ADb))));
+  raise ESqliteError.Create(ACode, sqlite3_extended_errcode(ADb),
+    string(AnsiString(sqlite3_errmsg(ADb))));
 end;
 
 { ===== ESqliteError ===== }
 
 constructor ESqliteError.Create(const AErrorCode: Integer; const AMessage: string);
 begin
+  Create(AErrorCode, AErrorCode, AMessage);
+end;
+
+constructor ESqliteError.Create(const AErrorCode: Integer;
+  const AExtendedErrorCode: Integer; const AMessage: string);
+begin
   inherited Create(AMessage);
   FErrorCode := AErrorCode;
+  FExtendedErrorCode := AExtendedErrorCode;
 end;
 
 { ===== TSqliteDb ===== }
@@ -108,7 +123,8 @@ begin
   FPath := APath;
   LRC := sqlite3_open_v2(PAnsiChar(AnsiString(APath)), FDb, AFlags, nil);
   if LRC <> SQLITE_OK then
-    raise ESqliteError.Create(LRC, string(AnsiString(sqlite3_errmsg(FDb))));
+    raise ESqliteError.Create(LRC, sqlite3_extended_errcode(FDb),
+      string(AnsiString(sqlite3_errmsg(FDb))));
 end;
 
 destructor TSqliteDb.Destroy;
@@ -136,7 +152,8 @@ begin
     if LErr <> nil then
     begin
       try
-        raise ESqliteError.Create(LRC, string(AnsiString(LErr)));
+        raise ESqliteError.Create(LRC, sqlite3_extended_errcode(FDb),
+          string(AnsiString(LErr)));
       finally
         sqlite3_free(LErr);
       end;

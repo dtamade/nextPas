@@ -207,12 +207,59 @@ begin
         while Q.Step do ;
       except
         on E: ESqliteError do
+        begin
           LRaised := True;
+          Check(E.ErrorCode = SQLITE_CONSTRAINT, 'primary code = SQLITE_CONSTRAINT(19)');
+          Check(E.ExtendedErrorCode = SQLITE_CONSTRAINT_UNIQUE,
+            'extended code = SQLITE_CONSTRAINT_UNIQUE(2067), got ' +
+            IntToStr(E.ExtendedErrorCode));
+        end;
       end;
       Check(LRaised, 'UNIQUE violation raised ESqliteError');
     finally
       Q.Free;
     end;
+  finally
+    Db.Free;
+  end;
+end;
+
+{ 约束分类：extended code 精确区分 UNIQUE / PRIMARY KEY / FOREIGN KEY / CHECK，
+  调用方据此做引擎无关的结构化判定（不必解析错误消息文本）。 }
+procedure TestConstraintClassification;
+var
+  Db: TSqliteDb;
+  LErr: Integer;
+  LGot: Integer;
+
+  procedure ExpectConstraint(const ASql: string; const AExpected: Integer);
+  begin
+    LGot := 0;
+    try
+      Db.Exec(ASql);
+    except
+      on E: ESqliteError do
+        LGot := E.ExtendedErrorCode;
+    end;
+    CheckEqual(AExpected, LGot,
+      'extended code mismatch for: ' + ASql + ' (got ' + IntToStr(LGot) + ')');
+  end;
+begin
+  Db := SqliteOpen(':memory:');
+  try
+    Db.Exec('PRAGMA foreign_keys = ON');
+    Db.Exec('CREATE TABLE parent (id INTEGER PRIMARY KEY)');
+    Db.Exec('CREATE TABLE child (pid INTEGER REFERENCES parent(id), ' +
+      'v INTEGER CHECK (v > 0), n TEXT NOT NULL)');
+    Db.Exec('INSERT INTO parent (id) VALUES (1)');
+    ExpectConstraint('INSERT INTO parent (id) VALUES (1)',
+      SQLITE_CONSTRAINT_PRIMARYKEY);
+    ExpectConstraint('INSERT INTO child (pid, v, n) VALUES (2, 1, ''x'')',
+      SQLITE_CONSTRAINT_FOREIGNKEY);
+    ExpectConstraint('INSERT INTO child (pid, v, n) VALUES (1, 0, ''x'')',
+      SQLITE_CONSTRAINT_CHECK);
+    ExpectConstraint('INSERT INTO child (pid, v) VALUES (1, 1)',
+      SQLITE_CONSTRAINT_NOTNULL);
   finally
     Db.Free;
   end;
@@ -293,6 +340,7 @@ begin
   T.Test('exec error raises ESqliteError', @TestExecErrorRaises);
   T.Test('prepare error raises ESqliteError', @TestQueryErrorRaises);
   T.Test('UNIQUE violation raises ESqliteError', @TestConstraintViolationRaises);
+  T.Test('constraint classification (UNIQUE/PK/FK/CHECK/NOTNULL)', @TestConstraintClassification);
   T.Test('disk persistence + WAL checkpoint', @TestDiskPersistence);
   T.Test('busy timeout', @TestBusyTimeout);
   T.Test('version string', @TestVersion);
