@@ -23,7 +23,8 @@ jobs:
           sudo apt-get update
           # ripgrep: many core source-contract shell gates call `rg`
           # fonts-freefont-ttf: font tests hardcode /usr/share/fonts/truetype/freefont/FreeMono.ttf
-          sudo apt-get install -y fpc ripgrep fonts-freefont-ttf
+          # libgit2: test_git FFI loads libgit2 at runtime (fail-closed when absent)
+          sudo apt-get install -y fpc ripgrep fonts-freefont-ttf libgit2-dev
 
       - name: Cache FPC trunk
         id: cache-fpc

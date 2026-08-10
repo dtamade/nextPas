@@ -19,7 +19,8 @@ jobs:
       - name: Install bootstrap FPC
         run: |
           sudo apt-get update
-          sudo apt-get install -y fpc ripgrep
+          # libgit2: test_git FFI loads libgit2 at runtime (fail-closed when absent)
+          sudo apt-get install -y fpc ripgrep libgit2-dev
 
       - name: Cache FPC trunk
         id: cache-fpc
