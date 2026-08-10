@@ -29,7 +29,8 @@ type
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
 
-    {** Shapiro-Wilk 正态性检验辅助函数 }
+    {** SW 风格线性权重启发式（非 Royston Shapiro-Wilk，W 值不可与
+        scipy.stats.shapiro 对标）；仅供 LooksNormalHeuristic 内部使用 }
     function ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
     function ShapiroWilkStatistic(const ASorted: TDoubleArray; AMean: Double): Double;
 
@@ -544,6 +545,11 @@ begin
   // 简化的 Shapiro-Wilk 风格统计量
   // 完整实现需要查表（m_i 系数），这里用线性权重近似。
   // 归一化保证 W ∈ [0,1]（Cauchy-Schwarz 不等式）。
+  // 注意：线性 ramp 是均匀分布的序统计量期望形状，故本统计量实质度量
+  // 「分位数-线性相关」——完美等差数列 W=1.0，而 scipy.shapiro 给 0.96；
+  // 典型形状（右偏/近正态/等差/指数, n=20）与 scipy W 偏差 0.005~0.05，
+  // 0.9 阈值判决方向与 scipy alpha=0.05 一致（F-34 量化评估）。
+  // 不可当作标准 SW W 值对外报告。
   LN := Length(ASorted);
   if LN < 3 then
     Exit(1.0);

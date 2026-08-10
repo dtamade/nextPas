@@ -44,6 +44,7 @@
 | F-31 | **Resolved** | ModifiedZScore O(N) MAD 归并双奇偶 off-by-one：MAD 恒偏高、漏检异常值；金标索引集钉死 |
 | F-32 | **Resolved** | level/alpha 表选择边界比较失配：请求 99%/95% 拿到 95%/90% 表；比较加 BENCH_LEVEL_EPS 余量 |
 | F-33 | **Resolved** | D'Agostino-Pearson K2 四处口径错致双向误判（偏斜判正态、正态判非正态）；重写逐式对齐 scipy normaltest |
+| F-34 | **Deferred-closed** | ShapiroWilkStatistic 名不符实（线性权重启发式，非 Royston SW）；量化评估后文档诚实化，不重写 |
 
 ---
 
@@ -411,7 +412,7 @@
 | 分类 | 基础设施 / flake |
 | 等级 | **P2**（侵蚀门禁可信度） |
 | 描述 | 全量 gate 中 `test_bench_matrix` 偶发编译失败：`test.check.pas(375,3) Fatal: Can't find unit nextpas.core.test.diff`，而 `core/src/nextpas.core.test.diff.pas` 存在且同目录几十个单元均正常解析。观测频率：2026-07-26 连续 3 次全量 gate 中 1 次；失败运行的 Compiling 序列是成功运行的**严格前缀**（前 207 单元完全一致，第 208 个 `test.diff` 查找失败）→ 编译顺序确定，属编译器/文件查找瞬态。单独 `make clean all` 循环 6/6 通过，无法离线复现。 |
-| 处置 | gate 循环拆分构建/运行两阶段：构建失败带 `[BUILD-FLAKE-RETRY]` 标记重试一次（真回归连挂两次仍红）；运行期失败不重试保持严格。根因疑在 host fpc trunk dirty 构建的单元查找路径，非 bench/test 源码问题；若复发频率升高，升级为向 FPC 上游取证报告。 |
+| 处置 | gate 循环拆分构建/运行两阶段：构建失败带 `[BUILD-FLAKE-RETRY]` 标记重试一次（真回归连挂两次仍红）；运行期失败不重试保持严格。根因疑在 host fpc trunk dirty 构建的单元查找路径，非 bench/test 源码问题；若复发频率升高，升级为向 FPC 上游取证报告。**2026-07-26 复发一次**（tranche 4 首跑全量 gate 失败，调用方仅存 tail 输出无法定位套件；重跑两连绿定性瞬态）→ gate 循环末尾新增汇总行 `[GATE-FAILED-SUITES] <suite>(build\|run)` / `[GATE-ALL-GREEN] N suites`，输出被截断时失败套件与阶段仍可取证。 |
 
 ---
 
@@ -490,6 +491,19 @@
 | 等级 | **P1**（双向随机判决器：偏斜数据误判为正态、近正态数据误判为非正态） |
 | 描述 | 与 scipy.stats.normaltest 对照发现四处独立口径错：**(a)** Z_kurt 输入喂 `Kurtosis`（Fisher G2，0 中心无偏超额峰度），而 Anscombe-Glynn (1983) 要求 Pearson b2 = m4/m2²（有偏，E[b2]=3(n-1)/(n+1)≈2.7）——近正态数据得 x=(0−2.7)/σ≈−3.9，立方变换放大后 Zk≈20、K2≈410；**(b)** Z_skew 外层系数用 LB=sqrt((n+1)(n+3)/(6(n−2)))（这是 Y 的标准化因子），而 D'Agostino (1970) 要求 delta=1/sqrt(0.5·ln W²)；**(c)** asinh 实参用 \|G1\|/α——丢了 ×LB（应为 Y/α，Y=√b1·LB）且用偏差校正 G1 而非有偏 √b1=m3/m2^1.5；**(d)** Z_kurt 分母用 `1+(x−t1)/sqrt(t2)`，正确式为 denom=1+x·sqrt(2/(A−4))、term2=sign(denom)·cbrt((1−2/A)/\|denom\|)。探针实证：右偏组 scipy K2=13.775/p=0.001 → 旧码 1.880/0.391（**偏斜判正态**）；近正态组 scipy K2=0.662/p=0.718 → 旧码 K2≈410/p≈0（**正态判非正态**）。区间断言（p>0、Method 非空）对此完全不可见；n=5 既存用例走 n<8 退化分支同样不可见。 |
 | 处置 | 重写为逐式对齐 scipy.stats.normaltest：单趟有偏矩 m2/m3/m4（÷n，NaN/Inf skip），Z_skew 走 delta·asinh(Y/α) 带符号，Z_kurt 走 Anscombe-Glynn 符号 cbrt；p=exp(−K2/2)（chi2(2).sf 精确式）与 n<8 守卫保持原状，新增常数序列 m2=0 退化守卫。生成器带 Pascal 逐字复刻自检（vs scipy < tol/2=5e-10 才允许冻结，证明修复公式先于 Pascal 落码即已验证）；两组金标（右偏 GOLDEN_DESC_DATA / 近正态 GOLDEN_NT_NORMISH）K2/p/IsNormal 六断言钉死（tol 1e-9），修复前实测红（K2=1.880 vs 期望 13.775）。同 tranche 冻结 Welch t（scipy ttest_ind equal_var=False）与 Cohen's d（pooled ddof=1）金标——两实现公式本就正确，一次全绿，转为防回归钉。 |
+
+---
+
+### F-34 · 规范 · P3（2026-07-26 F-33 修复后同族排查）
+
+| 字段 | 内容 |
+|------|------|
+| 模块 | `nextpas.core.bench.stats` |
+| 位置 | `TBenchStatsAnalyzer.ShapiroWilkStatistic`（**private**，唯一消费方 `LooksNormalHeuristic`） |
+| 分类 | 规范 / 命名（非正确性缺陷） |
+| 等级 | **P3** |
+| 描述 | K2 四重口径错（F-33）后对正态性检验族同源排查。函数名暗示 Shapiro-Wilk W，实为线性权重启发式：权重 ramp `w_i=1−2i/(N−1)` 恰是**均匀分布**的序统计量期望形状，故统计量实质度量「分位数-线性相关」。scipy.stats.shapiro 量化对照（n=20 四组形状）：完美等差数列 pascal W=**1.000000** vs scipy **0.960375**（结构性证据）；右偏 0.795 vs 0.845；近正态 0.983 vs 0.978；指数样 0.723 vs 0.756——偏差 0.005~0.05，W 值不可对标。但 0.9 阈值判决方向与 scipy α=0.05 判决**四组全部一致**（等差数列 scipy p=0.55 亦不拒绝），启发式用途成立。 |
+| 处置 | **Deferred-closed，不重写**：方法为 private、不输出 p 值、不参与任何 `IsNormal` 正式判决（`TestNormalityByMoments` 走 K2），无 CI 误用面；消费方 `LooksNormalHeuristic` 名称已自认启发式且有 `TestIsNormal` 行为锚定（正态 pass/双峰 reject/指数 reject）。升级为 Royston AS R94 属功能扩张，Idle 不排期。文档诚实化落地：private 声明与实现注释标注「非 Royston SW、W 不可与 scipy.shapiro 对标、量化偏差与判决一致性结论」。 |
 
 ---
 
