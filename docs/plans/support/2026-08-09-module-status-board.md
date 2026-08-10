@@ -6,8 +6,10 @@
 
 ## main 分支（当前）
 
-- HEAD `5b113b9cf`，**与 origin/main 零偏差**（已推送）
-- 本会话（2026-08-09 之后）落地并推送的提交：
+- HEAD `e060a98c0`，**与 origin/main 零偏差**（已推送）
+- 并行会话提交（未动）：`97d7eb6c4` feat(sqlite) 约束冲突 extended code
+- 本会话（2026-08-11 下午）落地并推送的提交：
+  - `e060a98c0` fix(io): IOCP 回调错误码对齐 -errno 契约（Windows residual 清零）
   - `5b113b9cf` docs(http): IOCP 回调错误码语义漂移 residual 记录
   - `87f8eac61` ci: trunk FPC verify job + bench 基线 schema 修复 + flake 取证
   - `90d2fc26a` docs(bench): F-34 诚实化 + 门禁失败取证汇总行
@@ -61,15 +63,22 @@
 ## 待 owner 决策（本会话未代做）
 
 1. **compiler-system B5g**（stash@{0}）：08-02 的进行中 sema 工作，收口人应为原 owner；
-   如需继续 M2 下一桶请基于最新 main（5b113b9cf）重开 lane。
+   如需继续 M2 下一桶请基于最新 main（e060a98c0）重开 lane。
 2. **tui / process-fs-path-env / platform / http**：均有已提交但未 landing 的工作
    （stale ahead），按纪律不代他人 landing；需要 owner 自评或总控授权。
-3. **IocpMapOsError**：修复补丁已存档，待 Windows 交叉编译环境（ppcrossx64）验证后落地。
+3. ~~**IocpMapOsError**~~：**已解决**（2026-08-11 `e060a98c0`）——交叉环境解锁
+   （`~/fpcupdeluxe` 已有 win64 交叉单元树 + 系统 mingw binutils + Wine 10），
+   TDD 闭环落地（RED `-1225` → GREEN `-111`），Windows residual 清零。
 
 ## 已完成的治理动作（2026-08-11）
 
 - ✅ 处置 2026-08-09 固化的 9 个命名 stash + 历史遗留 6 个：吸收 5 个（fuzz→发现并修复
   yaml 转义 bug、bench F-34、CI 5 文件）、删除 11 个（全部先存档 `build/stash-archive/`）
+- ✅ **IOCP residual 清零**（`e060a98c0`）：交叉环境解锁（`~/fpcupdeluxe` win64 交叉
+  单元树 + 系统 `x86_64-w64-mingw32-*` binutils + Wine 10.0）→ 存档补丁 TDD 落地：
+  `IocpMapOsError` 映射表 + 4 处接线，Wine connect-refused RED `-1225`→GREEN `-111`，
+  `test_reactor_iocp_wine` 10/10 + 0 unfreed；consumer audit 零行为变化；
+  Win64 交叉编译 210K 行 + Linux `test_poller` 12/12 双端绿
 - ✅ 历史遗留 5 个深度确认后 drop：tmp-k（main 已吸收）、PAsyncLoop（过渡态）、
   non-platform dirt（含已推迟 system.classes）、main dirt（153K 行清理快照）、
   test-audit WIP（删除中间态）——drop 前逐一存档，零丢失
