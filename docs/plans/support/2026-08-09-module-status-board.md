@@ -79,6 +79,12 @@
   `IocpMapOsError` 映射表 + 4 处接线，Wine connect-refused RED `-1225`→GREEN `-111`，
   `test_reactor_iocp_wine` 10/10 + 0 unfreed；consumer audit 零行为变化；
   Win64 交叉编译 210K 行 + Linux `test_poller` 12/12 双端绿
+- ✅ **本地 Windows 交叉验证能力沉淀**（`44fd5e994`）：`core/scripts/win64-wine-smoke.sh`
+  ——Linux 上 ppcrossx64 + 安装级 cfg + mingw binutils + Wine 一键交叉跑 `*_wine` 测试；
+  已验证 4 套全绿（reactor 10 / http iocp_wine 6 / http iocp_facade_wine 3 /
+  poller_windows_runtime_smoke 2，全 0 unfreed）；CI 的 make wine-runtime-smoke 不受影响
+- ✅ **http side-suite 健康度 audit**（M-6 腐化未复发）：smoke/integration/examples/
+  threaded_host/tls_real 编译 + 运行 5/5 全绿（6/18/5/2/5，0 unfreed）
 - ✅ 历史遗留 5 个深度确认后 drop：tmp-k（main 已吸收）、PAsyncLoop（过渡态）、
   non-platform dirt（含已推迟 system.classes）、main dirt（153K 行清理快照）、
   test-audit WIP（删除中间态）——drop 前逐一存档，零丢失
