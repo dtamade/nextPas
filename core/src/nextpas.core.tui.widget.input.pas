@@ -35,6 +35,11 @@ type
     procedure MoveRight;
     procedure MoveHome;
     procedure MoveEnd;
+    { 词操作:词边界 = 空白分隔(对齐 bubbles textinput) }
+    procedure MoveWordLeft;    { Ctrl+←:跳到上一词首 }
+    procedure MoveWordRight;   { Ctrl+→:跳到下一词尾 }
+    procedure DeleteWordLeft;  { Ctrl+Backspace:删光标前一词 }
+    procedure DeleteWordRight; { Ctrl+Delete:删光标后一词 }
     function HandleKey(const K: TKeyEvent): Boolean;
     function CursorCol: Integer;
     function TextWidth: Integer;
@@ -245,6 +250,74 @@ begin Cursor := 0; end;
 procedure TInputState.MoveEnd;
 begin Cursor := Length(Text); end;
 
+{ 词操作:词 = 空白(空格/Tab)分隔的连续非空白段,光标为 0-based 字节偏移 }
+
+procedure TInputState.MoveWordLeft;
+begin
+  { 跳到上一词首:先跳过紧邻光标左侧的空白,再越过词内字符停在词首 }
+  if Cursor <= 0 then Exit;
+  while (Cursor > 0) and (Byte(Text[Cursor]) = 32) do
+    Cursor := PrevGraphemeByte(Text, Cursor);
+  while (Cursor > 0) and (Byte(Text[Cursor]) <> 32) do
+    Cursor := PrevGraphemeByte(Text, Cursor);
+end;
+
+procedure TInputState.MoveWordRight;
+var Adv: TInputAdv;
+begin
+  { 跳到词尾:若在词中→本词尾;若在空白/词尾→下一词尾 }
+  if Cursor >= Length(Text) then Exit;
+  while Cursor < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), Cursor);
+    if Byte(Text[Cursor + 1]) <> 32 then Break;
+    Inc(Cursor, Adv.ByteLen);
+  end;
+  while Cursor < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), Cursor);
+    Inc(Cursor, Adv.ByteLen);
+    if Cursor >= Length(Text) then Break;
+    if Byte(Text[Cursor + 1]) = 32 then Break;
+  end;
+end;
+
+procedure TInputState.DeleteWordLeft;
+var Start: Integer;
+begin
+  { 删掉光标前一词(词自身,保留词间空白分隔) }
+  if Cursor <= 0 then Exit;
+  Start := Cursor;
+  while (Start > 0) and (Byte(Text[Start]) = 32) do
+    Start := PrevGraphemeByte(Text, Start);
+  while (Start > 0) and (Byte(Text[Start]) <> 32) do
+    Start := PrevGraphemeByte(Text, Start);
+  Delete(Text, Start + 1, Cursor - Start);
+  Cursor := Start;
+end;
+
+procedure TInputState.DeleteWordRight;
+var EndPos: Integer; Adv: TInputAdv;
+begin
+  { 删掉光标后一词(跳过前导空白) }
+  if Cursor >= Length(Text) then Exit;
+  EndPos := Cursor;
+  while EndPos < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), EndPos);
+    if Byte(Text[EndPos + 1]) <> 32 then Break;
+    Inc(EndPos, Adv.ByteLen);
+  end;
+  while EndPos < Length(Text) do
+  begin
+    Adv := InputGraphemeAt(Text[1], Length(Text), EndPos);
+    Inc(EndPos, Adv.ByteLen);
+    if EndPos >= Length(Text) then Break;
+    if Byte(Text[EndPos + 1]) = 32 then Break;
+  end;
+  Delete(Text, Cursor + 1, EndPos - Cursor);
+end;
+
 function TInputState.HandleKey(const K: TKeyEvent): Boolean;
 begin
   Result := True;
@@ -252,10 +325,18 @@ begin
     kcChar:
       if not (kmCtrl in K.Modifiers) then InsertChar(K.Ch)
       else Result := False;
-    kcBackspace: DeleteBack;
-    kcDelete:    DeleteForward;
-    kcLeft:      MoveLeft;
-    kcRight:     MoveRight;
+    kcBackspace:
+      if kmCtrl in K.Modifiers then DeleteWordLeft
+      else DeleteBack;
+    kcDelete:
+      if kmCtrl in K.Modifiers then DeleteWordRight
+      else DeleteForward;
+    kcLeft:
+      if kmCtrl in K.Modifiers then MoveWordLeft
+      else MoveLeft;
+    kcRight:
+      if kmCtrl in K.Modifiers then MoveWordRight
+      else MoveRight;
     kcHome:      MoveHome;
     kcEnd:       MoveEnd;
   else Result := False;

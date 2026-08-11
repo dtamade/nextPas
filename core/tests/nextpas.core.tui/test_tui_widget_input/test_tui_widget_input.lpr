@@ -131,6 +131,104 @@ begin
   Check(LS.Cursor = 3, 'move end');
 end;
 
+{ === TInputState 词操作（Ctrl+←/→/Backspace/Delete） === }
+
+procedure TestInputStateMoveWordLeft;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello world');
+  LS.MoveWordLeft;
+  Check(LS.Cursor = 6, 'word left from end lands on prior word start');
+  LS.MoveWordLeft;
+  Check(LS.Cursor = 0, 'word left from word start lands on first word');
+  LS.MoveWordLeft;
+  Check(LS.Cursor = 0, 'word left at start stays');
+  LS := TInputState.WithText('hello  world');
+  LS.MoveWordLeft;
+  Check(LS.Cursor = 7, 'word left skips runs of blanks');
+end;
+
+procedure TestInputStateMoveWordRight;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello world');
+  LS.Cursor := 0;
+  LS.MoveWordRight;
+  Check(LS.Cursor = 5, 'word right from start lands just past word');
+  LS.MoveWordRight;
+  Check(LS.Cursor = 11, 'word right from between lands at end');
+  LS.MoveWordRight;
+  Check(LS.Cursor = 11, 'word right at end stays');
+end;
+
+procedure TestInputStateDeleteWordLeft;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello world');
+  LS.DeleteWordLeft;
+  CheckEqual('hello ', LS.Text, 'word left delete keeps separator blank');
+  Check(LS.Cursor = 6, 'word left delete cursor lands after blank');
+  LS.DeleteWordLeft;
+  CheckEqual('', LS.Text, 'word left delete removes last word');
+  Check(LS.Cursor = 0, 'word left delete cursor at start');
+  LS.DeleteWordLeft;
+  CheckEqual('', LS.Text, 'word left delete at start is noop');
+end;
+
+procedure TestInputStateDeleteWordRight;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello world');
+  LS.Cursor := 0;
+  LS.DeleteWordRight;
+  CheckEqual(' world', LS.Text, 'word right delete keeps leading blank');
+  Check(LS.Cursor = 0, 'word right delete cursor stays');
+  LS := TInputState.WithText('hello world');
+  LS.Cursor := 6;
+  LS.DeleteWordRight;
+  CheckEqual('hello ', LS.Text, 'word right delete keeps separator blank');
+  LS := TInputState.Empty;
+  LS.DeleteWordRight;
+  CheckEqual('', LS.Text, 'word right delete at end is noop');
+end;
+
+procedure TestInputStateHandleKeyCtrlWords;
+var LS: TInputState; KE: TKeyEvent;
+begin
+  LS := TInputState.WithText('hello world');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcLeft;
+  KE.Modifiers := [kmCtrl];
+  Check(LS.HandleKey(KE), 'ctrl+left handled');
+  Check(LS.Cursor = 6, 'ctrl+left jumps word');
+  LS := TInputState.WithText('hello world');
+  LS.Cursor := 0;
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcRight;
+  KE.Modifiers := [kmCtrl];
+  LS.HandleKey(KE);
+  Check(LS.Cursor = 5, 'ctrl+right from start jumps past word');
+  LS := TInputState.WithText('hello world');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcBackspace;
+  KE.Modifiers := [kmCtrl];
+  Check(LS.HandleKey(KE), 'ctrl+backspace handled');
+  CheckEqual('hello ', LS.Text, 'ctrl+backspace deletes word left');
+  LS := TInputState.WithText('hello world');
+  LS.Cursor := 0;
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcDelete;
+  KE.Modifiers := [kmCtrl];
+  LS.HandleKey(KE);
+  CheckEqual(' world', LS.Text, 'ctrl+delete deletes word right');
+  LS := TInputState.WithText('hello world');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcLeft;
+  KE.Modifiers := [kmCtrl, kmShift];
+  LS.HandleKey(KE);
+  Check(LS.Cursor = 6, 'ctrl+shift+left still jumps word');
+end;
+
 procedure TestInputStateCursorCol;
 var LS: TInputState;
 begin
@@ -359,6 +457,11 @@ begin
     T.Test('InputState MoveRight', @TestInputStateMoveRight);
     T.Test('InputState MoveHome', @TestInputStateMoveHome);
     T.Test('InputState MoveEnd', @TestInputStateMoveEnd);
+    T.Test('InputState MoveWordLeft', @TestInputStateMoveWordLeft);
+    T.Test('InputState MoveWordRight', @TestInputStateMoveWordRight);
+    T.Test('InputState DeleteWordLeft', @TestInputStateDeleteWordLeft);
+    T.Test('InputState DeleteWordRight', @TestInputStateDeleteWordRight);
+    T.Test('HandleKey ctrl words', @TestInputStateHandleKeyCtrlWords);
     T.Test('InputState CursorCol', @TestInputStateCursorCol);
     T.Test('InputState TextWidth', @TestInputStateTextWidth);
 
