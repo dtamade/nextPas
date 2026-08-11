@@ -95,3 +95,57 @@ common.mk 的 GNU ifeq 在 FreeBSD 全挂、test_git 缺 libgit2、契约门禁 
 - ✅ **FreeBSD 恢复**：bmake 兼容 + fpc-devel(3.3.1) + llhttp stderr 链接修复（CI 验证中）
 - ✅ **Linux 前进一层**：libgit2 修复 test_git，gate 推进到 bench（既有红点）
 - ✅ `git diff --check` / `make hygiene` 通过；main 已推送至 4c6f6499a
+
+## CI 修复工程收口（2026-08-12, main @ 76e733541）
+
+### ✅ BSD sa_len 修复双平台确认（本轮核心目标）
+
+`db395152b`（platform.socket.base IPv4/IPv6 解析兼容 BSD sa_len 布局）在 macOS + FreeBSD
+真机均验证生效，threaded_host 从 FAIL → PASS：
+
+| 平台 | 修复前（df635381） | 修复后 | 证据 |
+|---|---|---|---|
+| macOS | `FAIL http.threaded_host (exit 2)` | `PASS http.threaded_host` | run 31482238922 |
+| FreeBSD | `FAIL http.threaded_host` | `PASS ×3, summary: pass=3 fail=0` | run 76e73354（日志 PASS http.threaded_host / iocp_wire / iocp_facade） |
+
+- Windows `test-windows-runtime` 连续 3 轮 success（IOCP 纯函数契约测试）
+- 连带：`core-ci.yml` freebsd job 支持 `workflow_dispatch`（d72b9c599），
+  手动触发不再缺 freebsd 覆盖
+
+### ⚠️ CI 治理修正：freebsd 砍 914 目录 best-effort
+
+- **问题**：freebsd 首次跑通 http-host 后进入 `core-ci-best-effort-test`（遍历 core/tests
+  下 914 个 Makefile，模拟 VM 上 4-6h+，逼近 GitHub 6h job 上限），实测卡 4.5h 无结论。
+  旧轮（threaded_host 失败）1.5min 即 fail，本轮 4.5h 说明 http-host 已过——行为证据确认
+  修复生效，但全量 inventory 无增量信号（失败也只计 SKIP）。
+- **修法**（76e733541）：freebsd 只保留 `http-host-ci-matrix.sh`（脚本明确支持 FreeBSD 宿主，
+  是 BSD 平台验证的核心价值）+ `timeout-minutes: 60`。砍掉后 freebsd job **90 秒**完成。
+- 遗留：Linux/macOS 的 best-effort 全量仍保留（native runner 上可控）。
+
+### 剩余红点（均既有/他人，非本轮引入）
+
+| 红点 | 归属 | 状态 |
+|---|---|---|
+| linux `test_http_benchmarks` 47 gate | http bench | 既有，建议独立 bench lane（见下） |
+| macos `crypto.field25519(331,3)` aarch64 编译错 | crypto | 既有（两轮同错），待 lane |
+| TUI Tests / Linux Verification workflow | 他人 in-flight | 未动 |
+| compiler snapshot（constructor-typing） | compiler lane | 既有 |
+
+他人新提交已上 main：`54c56569`（fix(tui.terminal): ESC 序列补全等待窗口 50ms→250ms）——
+未触碰，属 TUI lane 成果。
+
+### 待 owner 决策（更新）
+
+1. **linux bench lane**：`test_http_benchmarks` 47 gate 在 CI 稳定失败（部分为 marker
+   source-contract 缺口：`ExpectedDispatchPathForWorkload` 等在 bench_fullchain 源中缺失，
+   部分为 filter env 敏感），建议独立 bench lane 处理或降为 soft gate。
+2. compiler-system B5g（stash@{0}）、tui / http 等 stale lane：维持不代收。
+3. macos field25519 aarch64：建议 crypto lane 或降级该 gate。
+
+### CI 修复工程全景（终版）
+
+- ✅ Windows reactor.iocp 回归 → 纯函数契约测试，windows-runtime 连续绿
+- ✅ FreeBSD 四层：bmake / fpc-devel / llhttp stderr / sa_len sockaddr
+- ✅ macOS + FreeBSD：BSD sa_len 修复双平台确认（threaded_host PASS）
+- ✅ contract 54/54、libgit2（test_git）、workflow_dispatch 语义
+- ⏳ 既有红点：linux bench 47、macos field25519、compiler snapshot、TUI（他人）
