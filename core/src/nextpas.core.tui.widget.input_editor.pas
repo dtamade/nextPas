@@ -55,6 +55,7 @@ type
     function Content: AnsiString;
     function IsEmpty: Boolean;
     function LineCount: Integer;
+    function CursorRow: Integer;  { 光标所在绝对行（0-based，与滚动无关） }
     function CursorScreenPos(const AArea: TRect): TPosition;
     function WithTextStyle(const S: TStyle): IInputEditor;
     function WithPlaceholderStyle(const S: TStyle): IInputEditor;
@@ -154,6 +155,7 @@ type
     function Content: AnsiString;
     function IsEmpty: Boolean; inline;
     function LineCount: Integer; inline;
+    function CursorRow: Integer;
 
     function WithTextStyle(const S: TStyle): IInputEditor;
     function WithPlaceholderStyle(const S: TStyle): IInputEditor;
@@ -256,6 +258,15 @@ end;
 function TInputEditor.LineCount: Integer;
 begin
   Result := LineCount_;
+end;
+
+function TInputEditor.CursorRow: Integer;
+var Row, Col: Integer;
+begin
+  { 绝对行：复用内部 CursorToRowCol（仅依赖 FCurByte/FText，不经过
+    FScrollRow——滚动后依然准确）。0-based，与行内逻辑一致。 }
+  CursorToRowCol(Row, Col);
+  Result := Row;
 end;
 
 function TInputEditor.IsEmpty: Boolean;

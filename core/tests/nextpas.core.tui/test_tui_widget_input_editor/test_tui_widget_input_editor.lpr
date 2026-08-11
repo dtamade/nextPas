@@ -516,6 +516,52 @@ begin
   Check(LPos.Y >= 0, 'Cursor Y should be non-negative');
 end;
 
+{ --- CursorRow（光标绝对行，0-based，与滚动无关）--- }
+
+procedure TestEditorCursorRow;
+var
+  LEditor: IInputEditor;
+  LText: AnsiString;
+  I: Integer;
+begin
+  { 空文本 → 第 0 行 }
+  LEditor := TInputEditor.New;
+  Check(LEditor.CursorRow = 0, 'Empty editor cursor on row 0');
+  { 单行光标尾 → 第 0 行 }
+  LEditor.InsertChar(Ord('a'));
+  LEditor.InsertChar(Ord('b'));
+  LEditor.InsertChar(Ord('c'));
+  Check(LEditor.CursorRow = 0, 'Single line cursor on row 0');
+  { 多行：a\nb 光标尾 → 第 1 行；MoveUp → 0；第 0 行再上移仍 0；MoveDown → 1 }
+  LEditor.InsertNewline;
+  LEditor.InsertChar(Ord('d'));
+  Check(LEditor.CursorRow = 1, 'Two-line text cursor on row 1');
+  LEditor.MoveUp;
+  Check(LEditor.CursorRow = 0, 'Cursor row 0 after MoveUp');
+  LEditor.MoveUp;
+  Check(LEditor.CursorRow = 0, 'Cursor stays row 0 at top');
+  LEditor.MoveDown;
+  Check(LEditor.CursorRow = 1, 'Cursor row 1 after MoveDown');
+  { 行中 InsertNewline：第 0 行尾插换行 → 光标落新行（第 1 行）}
+  LEditor.ReplaceContent('ab', 2);    { 重置为单行 'ab'，光标置尾（第 0 行）}
+  LEditor.InsertNewline;
+  Check(LEditor.CursorRow = 1, 'Cursor on new line after InsertNewline');
+  Check(LEditor.LineCount = 2, 'Two lines after InsertNewline');
+  { 30 行长文本（经 ReplaceContent，不受默认 MaxLines=4 限制）光标深处 →
+    绝对行准确——不经过 FScrollRow，视口/滚动无关。
+    末行不带 #10，光标落最后一行行尾（0-based 29）}
+  LText := '';
+  for I := 1 to 29 do
+    LText := LText + 'line' + #10;
+  LText := LText + 'line30';
+  LEditor.ReplaceContent(LText, Length(LText));
+  Check(LEditor.CursorRow = 29, 'Deep cursor row 29 on 30-line text');
+  LEditor.MoveUp;
+  Check(LEditor.CursorRow = 28, 'Cursor row 28 after MoveUp');
+  LEditor.MoveDown;
+  Check(LEditor.CursorRow = 29, 'Cursor row 29 after MoveDown');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -551,5 +597,6 @@ begin
   T.Test('Multiple undo/redo', @TestEditorMultipleUndoRedo);
   T.Test('Content empty', @TestEditorContentEmpty);
   T.Test('CursorScreenPos', @TestEditorCursorScreenPos);
+  T.Test('CursorRow', @TestEditorCursorRow);
   if not T.Run then Halt(1);
 end.
