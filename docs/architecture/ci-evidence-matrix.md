@@ -23,7 +23,7 @@ runtime evidence。
 | Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make verify` | `runtime`, `forced-compile`, and `CI truth` | Mirrors `build/verify_local.sh` through the root Makefile (rebuild-isolated stage0 + smoke, including mem-session/process-stats and the same HEAP_DEBUG recipe). |
 | Core CI (`.github/workflows/core-ci.yml`) | `test-linux` | `make -C .. core-ci-test` | `runtime` | Runs core tests and TUI benchmark smoke through the root Makefile gate. |
 | Core CI (`.github/workflows/core-ci.yml`) | `test-macos` | `make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS` | `runtime` evidence where tests pass | Pass count 是有用的 host 覆盖；skipped rows 不是模块 readiness。 |
-| Core CI (`.github/workflows/core-ci.yml`) | `test-freebsd` | `make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD` | `runtime` evidence where tests pass | Push-only FreeBSD 覆盖；skipped rows 仍然是显式 non-evidence。 |
+| Core CI (`.github/workflows/core-ci.yml`) | `test-freebsd` | `http-host-ci-matrix.sh`（FreeBSD host smoke） | `runtime` evidence | Push-only FreeBSD 覆盖；模拟 VM 上 914 目录全量 best-effort 已移除（4-6h+ 且失败只计 SKIP，无增量信号），freebsd 的核心平台验证收敛为 http-host matrix。 |
 
 ## Local Helpers Are Not CI Matrix Rows
 

@@ -102,7 +102,7 @@ require_makefile_target 'core-ci-test' 'root core CI test target'
 require_makefile_target 'core-ci-best-effort-test' 'root core CI best-effort target'
 require_pattern "$CORE_CI_WORKFLOW" '^[[:space:]]+run: make -C \.\. core-ci-test$' 'core CI Linux uses root Makefile test gate'
 require_pattern "$CORE_CI_WORKFLOW" 'make -C \.\. core-ci-best-effort-test CORE_CI_HOST=macOS' 'core CI macOS uses root Makefile best-effort gate'
-require_pattern "$CORE_CI_WORKFLOW" 'make -C "[$]GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD' 'core CI FreeBSD uses root Makefile best-effort gate'
+require_pattern "$CORE_CI_WORKFLOW" 'http-host-ci-matrix[.]sh' 'core CI FreeBSD uses http-host matrix gate'
 
 tooling_line=$(root_ci_line_number '^[[:space:]]+run: make test-tooling$')
 rebuild_line=$(root_ci_line_number '^[[:space:]]+run: make rebuild-compiler$')

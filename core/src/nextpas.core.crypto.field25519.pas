@@ -328,6 +328,8 @@ asm
 end;
 {$ELSE}
 procedure FeMul(out H: TFe25519; constref F, G: TFe25519);
+var
+  F0, F1, F2, F3, F4, F5, F6, F7, F8, F9: Int64;
   F1_2, F3_2, F5_2, F7_2, F9_2: Int64;
   G0, G1, G2, G3, G4, G5, G6, G7, G8, G9: Int64;
   G1_19, G2_19, G3_19, G4_19, G5_19, G6_19, G7_19, G8_19, G9_19: Int64;
