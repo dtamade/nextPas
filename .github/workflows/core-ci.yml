@@ -380,7 +380,11 @@ jobs:
           operating_system: freebsd
           version: "14.1"
           run: |
-            sudo pkg install -y fpc
+            # fpc-devel tracks FPC trunk (3.3.x) — the codebase relies on
+            # {$modeswitch anonymousfunctions/functionreferences} which the
+            # stable 3.2.3 FreeBSD package rejects. Fall back to stable fpc
+            # only if the devel package is unavailable.
+            sudo pkg install -y fpc-devel 2>/dev/null || sudo pkg install -y fpc
             fpc -iV
             # Host smoke first (fail-closed if present); then best-effort inventory.
             CORE_CI_HOST=FreeBSD bash "$GITHUB_WORKSPACE/core/scripts/http-host-ci-matrix.sh"

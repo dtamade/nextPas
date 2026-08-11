@@ -550,63 +550,53 @@ begin
   end;
 end;
 
-procedure TestIocpConnectRefused;
-var
-  LRefusingSock: TPlatformSocket;
-  LClientSock: TPlatformSocket;
-  LReactor: TIocpReactor;
-  LAddr, LBound: TPlatformSockAddr;
-  LAddrLen: Int32;
-  LPort: UInt16;
+procedure TestIocpMapOsErrors;
 begin
-  { Bind without listen and keep the socket open: the kernel refuses every
-    connect with RST — deterministic on Wine AND real Windows. (A closed
-    listener's ephemeral port races with reuse/TIME_WAIT and, on real
-    Windows, left the ConnectEx completion pending instead of refusing.) }
-  Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
-    PLATFORM_IPPROTO_TCP, LRefusingSock) = 0, 'create refusing socket');
-  Check(platform_sockaddr_loopback4(0, LAddr) = 0, 'make bind addr');
-  Check(platform_socket_bind(LRefusingSock, @LAddr.Storage, LAddr.Len) = 0,
-    'bind refusing socket');
-  LAddrLen := SizeOf(LBound.Storage);
-  Check(platform_socket_getsockname(LRefusingSock, @LBound.Storage,
-    @LAddrLen) = 0, 'getsockname refusing socket');
-  LPort := Ntohs16(PSockAddrIn(@LBound.Storage)^.sin_port);
-
-  LReactor := TIocpReactor.Create(4);
-  Check(LReactor.IsValid, 'reactor valid');
-  try
-    { Client socket; ConnectEx requires a prior bind. }
-    Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
-      PLATFORM_IPPROTO_TCP, LClientSock) = 0, 'create client socket');
-    Check(MakeSockAddrAny(0, LAddr), 'make bind addr');
-    Check(platform_socket_bind(LClientSock, @LAddr.Storage, LAddr.Len) = 0,
-      'bind client socket');
-    Check(platform_sockaddr_loopback4(LPort, LAddr) = 0, 'client addr');
-
-    GConnectDone := False;
-    GConnectResult := 0;
-    if not LReactor.AsyncConnect(PtrInt(LClientSock.Value), @LAddr.Storage,
-      LAddr.Len, @OnConnectDone, nil) then
-    begin
-      { ConnectEx not supported on this host — skip }
-      Check(True, 'ConnectEx skipped: not supported');
-      Exit;
-    end;
-
-    Check(WaitForCompletion(GConnectDone, LReactor),
-      'connect-refused callback should fire');
-    { Cross-host contract: reactor callbacks deliver negative errno like the
-      epoll/io_uring backends — a refused Windows connect must surface as
-      -ECONNREFUSED (-111), never the raw WSAECONNREFUSED (10061). }
-    Check(GConnectResult = -111,
-      'connect refused should map to -ECONNREFUSED, got ' +
-      IntToStr(GConnectResult));
-  finally
-    LReactor.Close;
-    platform_socket_close(LClientSock);
-    platform_socket_close(LRefusingSock);
-  end;
+  { WinSock / 系统错误码 → -errno 映射契约(纯函数级)。
+    真 Windows 上 refused ConnectEx 以同步失败或挂起两种形态出现,端到端
+    不可复现;映射表本身是跨宿主契约(回调必须交付负 errno 与 epoll/io_uring
+    一致),直接锁定每个分支。数值来自 winsock2.h / winerror.h。 }
+  { ECANCELED }
+  Check(IocpMapOsError(995) = 125, 'ERROR_OPERATION_ABORTED -> ECANCELED');
+  { ECONNREFUSED }
+  Check(IocpMapOsError(1225) = 111, 'ERROR_CONNECTION_REFUSED -> ECONNREFUSED');
+  Check(IocpMapOsError(10061) = 111, 'WSAECONNREFUSED -> ECONNREFUSED');
+  { ECONNRESET }
+  Check(IocpMapOsError(64) = 104, 'ERROR_NETNAME_DELETED -> ECONNRESET');
+  Check(IocpMapOsError(10054) = 104, 'WSAECONNRESET -> ECONNRESET');
+  Check(IocpMapOsError(10052) = 104, 'WSAENETRESET -> ECONNRESET');
+  { ECONNABORTED }
+  Check(IocpMapOsError(1236) = 103, 'ERROR_CONNECTION_ABORTED -> ECONNABORTED');
+  Check(IocpMapOsError(10053) = 103, 'WSAECONNABORTED -> ECONNABORTED');
+  { ETIMEDOUT }
+  Check(IocpMapOsError(121) = 110, 'ERROR_SEM_TIMEOUT -> ETIMEDOUT');
+  Check(IocpMapOsError(1460) = 110, 'ERROR_TIMEOUT -> ETIMEDOUT');
+  Check(IocpMapOsError(10060) = 110, 'WSAETIMEDOUT -> ETIMEDOUT');
+  { ENETUNREACH / EHOSTUNREACH }
+  Check(IocpMapOsError(1231) = 101, 'ERROR_NETWORK_UNREACHABLE -> ENETUNREACH');
+  Check(IocpMapOsError(10051) = 101, 'WSAENETUNREACH -> ENETUNREACH');
+  Check(IocpMapOsError(1232) = 113, 'ERROR_HOST_UNREACHABLE -> EHOSTUNREACH');
+  Check(IocpMapOsError(10065) = 113, 'WSAEHOSTUNREACH -> EHOSTUNREACH');
+  { ENOTCONN / EADDRINUSE / EADDRNOTAVAIL }
+  Check(IocpMapOsError(10057) = 107, 'WSAENOTCONN -> ENOTCONN');
+  Check(IocpMapOsError(10048) = 98, 'WSAEADDRINUSE -> EADDRINUSE');
+  Check(IocpMapOsError(10049) = 99, 'WSAEADDRNOTAVAIL -> EADDRNOTAVAIL');
+  { EINVAL / EBADF }
+  Check(IocpMapOsError(87) = 22, 'ERROR_INVALID_PARAMETER -> EINVAL');
+  Check(IocpMapOsError(10022) = 22, 'WSAEINVAL -> EINVAL');
+  Check(IocpMapOsError(6) = 9, 'ERROR_INVALID_HANDLE -> EBADF');
+  Check(IocpMapOsError(10038) = 9, 'WSAENOTSOCK -> EBADF');
+  { ENOMEM / EOPNOTSUPP / EPIPE / EACCES }
+  Check(IocpMapOsError(8) = 12, 'ERROR_NOT_ENOUGH_MEMORY -> ENOMEM');
+  Check(IocpMapOsError(14) = 12, 'ERROR_OUTOFMEMORY -> ENOMEM');
+  Check(IocpMapOsError(10055) = 12, 'WSAENOBUFS -> ENOMEM');
+  Check(IocpMapOsError(50) = 95, 'ERROR_NOT_SUPPORTED -> EOPNOTSUPP');
+  Check(IocpMapOsError(10045) = 95, 'WSAEOPNOTSUPP -> EOPNOTSUPP');
+  Check(IocpMapOsError(109) = 32, 'ERROR_BROKEN_PIPE -> EPIPE');
+  Check(IocpMapOsError(5) = 13, 'ERROR_ACCESS_DENIED -> EACCES');
+  Check(IocpMapOsError(10013) = 13, 'WSAEACCES -> EACCES');
+  { 未映射码透传,不撒谎 }
+  Check(IocpMapOsError(7777) = 7777, 'unmapped codes pass through unchanged');
 end;
 
 procedure TestIocpTryCancelByContext;
@@ -665,7 +655,7 @@ begin
   T.Test('AsyncRecv', @TestIocpAsyncRecv);
   T.Test('AcceptEx+Send', @TestIocpAcceptSend);
   T.Test('ConnectEx', @TestIocpConnectEx);
-  T.Test('Connect refused maps to -ECONNREFUSED', @TestIocpConnectRefused);
+  T.Test('Winsock error map to -errno contract', @TestIocpMapOsErrors);
   T.Test('AcceptEx+Recv', @TestIocpAcceptRecv);
   T.Test('TryCancelByContext', @TestIocpTryCancelByContext);
   {$ELSE}

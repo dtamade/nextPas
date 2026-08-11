@@ -13,6 +13,13 @@ const
   { PollOneWait timeout for a pure completion-driven wait (no timed retry). }
   IOCP_WAIT_INFINITE = DWORD($FFFFFFFF);
 
+{ Map Windows failure codes onto the -errno convention the reactor API
+  promises: callbacks deliver negative errno exactly like the epoll/io_uring
+  backends, so consumers (dial, streams, tests) never branch on the host.
+  Exposed for contract tests — WinSock error translation is host-independent
+  and must not depend on a real refused connect completing over the network. }
+function IocpMapOsError(AErr: DWORD): Int32;
+
 type
   TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
