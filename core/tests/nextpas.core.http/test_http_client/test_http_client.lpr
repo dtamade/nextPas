@@ -84,6 +84,8 @@ var
   { Streaming sink integration: raw listener writes body in two chunks with a
     sleep between them; client asserts live per-chunk dispatch. }
   GStreamListener: ITcpListener;
+  { Raw listener replying a non-2xx status with a JSON body. }
+  GStatusErrorListener: ITcpListener;
 
 type
   TTrackedRequestBody = class;
@@ -497,6 +499,21 @@ type
     procedure OnBodyChunk(const AData: PByte; ASize: SizeUInt);
   end;
 
+  { ResponseStatus + body chunk sink with an ordering trace: records the call
+     order so tests can assert status fires before the first body chunk. }
+  TClientStreamSink = class
+  public
+    FOrder: Int32;
+    FStatusCalls: Int32;
+    FStatusOrder: Int32;
+    FStatusValue: THttpStatus;
+    FChunks: Int32;
+    FFirstChunkOrder: Int32;
+    FTotal: string;
+    procedure OnResponseStatus(const AStatus: THttpStatus);
+    procedure OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+  end;
+
 procedure TClientChunkSink.OnBodyChunk(const AData: PByte; ASize: SizeUInt);
 var
   LStr: string;
@@ -506,6 +523,30 @@ begin
     Exit;
   SetLength(LStr, SizeInt(ASize));
   Move(AData^, LStr[1], ASize);
+  FTotal := FTotal + LStr;
+end;
+
+procedure TClientStreamSink.OnResponseStatus(const AStatus: THttpStatus);
+begin
+  Inc(FStatusCalls);
+  FStatusValue := AStatus;
+  Inc(FOrder);
+  FStatusOrder := FOrder;
+end;
+
+procedure TClientStreamSink.OnBodyChunk(const AData: PByte; ASize: SizeUInt);
+var
+  LStr: string;
+begin
+  Inc(FChunks);
+  if FFirstChunkOrder = 0 then
+  begin
+    Inc(FOrder);
+    FFirstChunkOrder := FOrder;
+  end;
+  if ASize = 0 then
+    Exit;
+  SetString(LStr, PAnsiChar(AData), SizeInt(ASize));
   FTotal := FTotal + LStr;
 end;
 
@@ -602,6 +643,45 @@ begin
     LConn.Write(LPart1[1], SizeUInt(Length(LPart1)));
     platform_thread_sleep_ns(250000000);
     LConn.Write(LPart2[1], SizeUInt(Length(LPart2)));
+  except
+  end;
+  LConn.Close;
+end;
+
+{ Raw listener replying 429 with a small JSON body — error-transparent path
+  exercises ResponseStatus on a non-2xx final response. }
+function ErrorStatusThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LHead: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GStatusErrorListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    LAccum := '';
+    repeat
+      LN := LConn.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LP := Pos(#13#10#13#10, LAccum);
+    until LP > 0;
+    LHead := 'HTTP/1.1 429 Too Many Requests'#13#10 +
+             'Content-Type: application/json'#13#10 +
+             'Content-Length: 24'#13#10#13#10 +
+             '{"error":"rate limited"}';
+    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
   except
   end;
   LConn.Close;
@@ -4018,6 +4098,127 @@ begin
     { Full buffered body still consistent (NewBodyReader snapshot path). }
     CheckEqual('hello world', ReadBodyStr(LResp),
       'buffered response body matches streamed body');
+  finally
+    GStreamListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GStreamListener := nil;
+    LSink.Free;
+  end;
+end;
+
+procedure TestClientResponseStatusFiresBeforeBodyChunks;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LSink: TClientStreamSink;
+begin
+  GStreamListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GStreamListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StreamChunkThread, nil);
+  LSink := TClientStreamSink.Create;
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/stream')
+      .ResponseStatus(@LSink.OnResponseStatus)
+      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'status-callback response status');
+    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
+      'status callback fires exactly once');
+    CheckEqual(Int64(200), Int64(LSink.FStatusValue),
+      'status callback reports 200');
+    Check(LSink.FStatusOrder > 0, 'status callback observed in order trace');
+    Check(LSink.FFirstChunkOrder > LSink.FStatusOrder,
+      'status callback fires before first body chunk');
+    CheckEqual('hello world', LSink.FTotal,
+      'status+chunk sink received full body');
+    CheckEqual('hello world', ReadBodyStr(LResp),
+      'buffered body intact when status callback is set');
+  finally
+    GStreamListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GStreamListener := nil;
+    LSink.Free;
+  end;
+end;
+
+procedure TestClientResponseStatusReportsErrorStatus;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LSink: TClientStreamSink;
+  LRaised: Boolean;
+begin
+  GStatusErrorListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GStatusErrorListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ErrorStatusThread, nil);
+  LSink := TClientStreamSink.Create;
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/err')
+      .ResponseStatus(@LSink.OnResponseStatus).Build;
+    LRaised := False;
+    try
+      LResp := LClient.Send(LReq);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+    Check(not LRaised, 'non-2xx status is not a transport error');
+    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
+      'status callback fires once for 4xx');
+    CheckEqual(Int64(429), Int64(LSink.FStatusValue),
+      'status callback reports 429');
+    if not LRaised then
+      CheckEqual(Int64(429), Int64(LResp.StatusCode),
+        'response status is 429');
+  finally
+    GStatusErrorListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GStatusErrorListener := nil;
+    LSink.Free;
+  end;
+end;
+
+procedure TestClientSkipBodyBufferStreamsWithoutRetaining;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LSink: TClientChunkSink;
+begin
+  GStreamListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GStreamListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StreamChunkThread, nil);
+  LSink := TClientChunkSink.Create;
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/stream')
+      .ResponseBodyChunk(@LSink.OnBodyChunk).SkipBodyBuffer.Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'skip-buffer streamed status');
+    CheckEqual('hello world', LSink.FTotal,
+      'skip-buffer sink still receives every body byte');
+    Check(LSink.FChunks >= 2,
+      'skip-buffer sink dispatches live chunks across the 250ms gap');
+    Check(LResp.Body = nil,
+      'skip-buffer mode does not retain response body');
   finally
     GStreamListener.Close;
     platform_thread_join(LHandle, LRet);
@@ -8768,5 +8969,11 @@ begin
     @TestClientPostStringRaisesWithContext);
   T.Test('Client Put/Patch/DeleteString methods',
     @TestClientPutPatchDeleteStringMethods);
+  T.Test('Client ResponseStatus fires before body chunks',
+    @TestClientResponseStatusFiresBeforeBodyChunks);
+  T.Test('Client ResponseStatus reports non-2xx error status',
+    @TestClientResponseStatusReportsErrorStatus);
+  T.Test('Client SkipBodyBuffer streams without retaining body',
+    @TestClientSkipBodyBufferStreamsWithoutRetaining);
   if not T.Run then Halt(1);
 end.

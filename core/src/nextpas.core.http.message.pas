@@ -279,6 +279,14 @@ type
        body chunk on the transport IO thread. See THttpResponseBodyChunkProc. }
     function ResponseBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc): THttpRequestBuilder;
+    { Response-headers-ready callback: fires once after response headers are
+       parsed (status visible), before body chunks. See THttpResponseStatusProc. }
+    function ResponseStatus(
+      const AProc: THttpResponseStatusProc): THttpRequestBuilder;
+    { Skip response-body buffering (SSE / long-poll sinks): parsed body bytes go
+       only to ResponseBodyChunk; NewBodyReader returns nil and the parser's
+       32MB body cap no longer applies. }
+    function SkipBodyBuffer: THttpRequestBuilder;
     function Build: IHttpRequest;
   end;
 
@@ -1458,6 +1466,19 @@ begin
   Result.FRequestOptions.ResponseBodyChunk := AChunkProc;
 end;
 
+function THttpRequestBuilder.ResponseStatus(
+  const AProc: THttpResponseStatusProc): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.ResponseStatus := AProc;
+end;
+
+function THttpRequestBuilder.SkipBodyBuffer: THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.SkipBodyBuffer := True;
+end;
+
 function THttpRequestBuilder.Build: IHttpRequest;
 var
   LI: SizeInt;
@@ -1523,7 +1544,9 @@ begin
 
   if FRequestOptions.HasTimeout or FRequestOptions.HasMaxRedirects or
     FRequestOptions.HasFollowRedirects or FRequestOptions.HasCancelToken or
-    Assigned(FRequestOptions.ResponseBodyChunk) then
+    Assigned(FRequestOptions.ResponseBodyChunk) or
+    Assigned(FRequestOptions.ResponseStatus) or
+    FRequestOptions.SkipBodyBuffer then
     (Result as IHttpRequestWithOptions).SetRequestOptions(FRequestOptions);
 end;
 
