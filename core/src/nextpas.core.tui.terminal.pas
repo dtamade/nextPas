@@ -26,6 +26,12 @@ const
   STDIN_FD  = 0;
   STDOUT_FD = 1;
 
+  { ESC 半序列补全等待窗口：CSI/SS3/OSC 常分块到达（PTY/网络终端），
+    窗口太短会把 ESC 前缀误判为裸 ESC 键，余段变打字（方向键全盘失效）。
+    250ms 与 xterm 的 ESC 延迟期（escape delay window）同量级：
+    真实 ESC 键的单字节输入最多少等 ~250ms，换取序列可靠组装。 }
+  kEscSequenceWaitMs = 250;
+
 type
   TTerminalMouseMode = (tmMouseNone, tmMouseClick, tmMouseDrag, tmMouseFull);
   TTerminalWheelMode = (twWheelOff, twWheelMouse, twAlternateScrollKeys);
@@ -1011,7 +1017,7 @@ begin
       Exit;
     end;
     if not LNeedMore then Exit(NoneEvent);
-    if not WaitForInput(STDIN_FD, 50) then
+    if not WaitForInput(STDIN_FD, kEscSequenceWaitMs) then
     begin
       CheckSignals(LResz, LHasResize);
       if LHasResize then Exit(LResz);
