@@ -33,6 +33,8 @@ type
     procedure InsertNewline;
     procedure DeleteBackward;
     procedure DeleteForward;
+    procedure DeleteWordBackward;
+    procedure DeleteWordForward;
     procedure MoveLeft;
     procedure MoveRight;
     procedure MoveUp;
@@ -129,6 +131,8 @@ type
     procedure InsertNewline;
     procedure DeleteBackward;
     procedure DeleteForward;
+    procedure DeleteWordBackward;
+    procedure DeleteWordForward;
     procedure MoveLeft;
     procedure MoveRight;
     procedure MoveUp;
@@ -733,6 +737,35 @@ begin
   NotifySyntaxEdit;
 end;
 
+procedure TInputEditor.DeleteWordBackward;
+var Bound: Integer;
+begin
+  { Ctrl+Backspace：删光标前一词（复用 PrevWordBoundary，与
+    Ctrl+← 移动的边界定义一致；单 undo；选区优先同 DeleteBackward） }
+  if HasSelection then begin PushUndo; DeleteSelection; FTargetCol := -1; NotifySyntaxEdit; Exit; end;
+  if FCurByte <= 0 then Exit;
+  PushUndo;
+  Bound := PrevWordBoundary;
+  Delete(FText, Bound + 1, FCurByte - Bound);
+  FCurByte := Bound;
+  FTargetCol := -1;
+  NotifySyntaxEdit;
+end;
+
+procedure TInputEditor.DeleteWordForward;
+var Bound: Integer;
+begin
+  { Ctrl+Delete：删到下一词首（与 Ctrl+→ 光标落点一致——
+    删到哪光标跳到哪，用户视觉自洽） }
+  if HasSelection then begin PushUndo; DeleteSelection; FTargetCol := -1; NotifySyntaxEdit; Exit; end;
+  if FCurByte >= Length(FText) then Exit;
+  PushUndo;
+  Bound := NextWordBoundary;
+  Delete(FText, FCurByte + 1, Bound - FCurByte);
+  FTargetCol := -1;
+  NotifySyntaxEdit;
+end;
+
 procedure TInputEditor.DeleteForward;
 var Next: Integer;
 begin
@@ -859,9 +892,11 @@ begin
       else
         Result := False;
     kcBackspace:
-      DeleteBackward;
+      if kmCtrl in K.Modifiers then DeleteWordBackward
+      else DeleteBackward;
     kcDelete:
-      DeleteForward;
+      if kmCtrl in K.Modifiers then DeleteWordForward
+      else DeleteForward;
     kcLeft:
       if kmCtrl in K.Modifiers then
         MoveWordLeftInternal(kmShift in K.Modifiers)

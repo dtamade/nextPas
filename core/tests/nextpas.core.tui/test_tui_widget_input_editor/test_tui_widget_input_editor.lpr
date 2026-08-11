@@ -335,6 +335,101 @@ begin
   Check(LEditor.Content = 'hello', 'Content should be hello after paste');
 end;
 
+procedure TestEditorDeleteWordBackward;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = 'hello ', 'backspace word keeps separator blank');
+  Check(LEditor.CursorRow = 0, 'backspace word cursor row');
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = '', 'backspace word removes last word');
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = '', 'backspace word at start is noop');
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello  world');
+  LEditor.MoveEnd;
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = 'hello  ', 'backspace word keeps all leading blanks');
+end;
+
+procedure TestEditorDeleteWordForward;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  LEditor.MoveHome;
+  LEditor.DeleteWordForward;
+  Check(LEditor.Content = 'world', 'delete word forward eats separator (landing = ctrl+right)');
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello');
+  LEditor.MoveEnd;
+  LEditor.DeleteWordForward;
+  Check(LEditor.Content = 'hello', 'delete word forward at end is noop');
+end;
+
+procedure TestEditorDeleteWordUndo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = 'hello ', 'word delete applied');
+  LEditor.Undo;
+  Check(LEditor.Content = 'hello world', 'word delete is single undo op');
+end;
+
+procedure TestEditorDeleteWordSelection;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  LEditor.MoveHome;
+  LEditor.SelectAll;
+  LEditor.DeleteWordBackward;
+  Check(LEditor.Content = '', 'word delete with selection removes selection');
+end;
+
+procedure TestEditorHandleKeyCtrlWordDelete;
+var
+  LEditor: IInputEditor;
+  KE: TKeyEvent;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcBackspace;
+  KE.Modifiers := [kmCtrl];
+  Check(LEditor.HandleKey(KE), 'ctrl+backspace handled');
+  Check(LEditor.Content = 'hello ', 'ctrl+backspace deletes word');
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  { 光标移到 'world' 的 'o'（0-based 8）：Home 后 8 次 MoveRight }
+  LEditor.MoveHome;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  LEditor.MoveRight;
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcDelete;
+  KE.Modifiers := [kmCtrl];
+  LEditor.HandleKey(KE);
+  Check(LEditor.Content = 'hello wo', 'ctrl+delete from word middle deletes word tail');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcBackspace;
+  LEditor.HandleKey(KE);
+  Check(LEditor.Content = 'hello w', 'plain backspace still deletes char');
+end;
+
 procedure TestEditorPasteText;
 var
   LEditor: IInputEditor;
@@ -633,6 +728,11 @@ begin
   T.Test('CutSelection', @TestEditorCutSelection);
   T.Test('ReplaceContent', @TestEditorReplaceContent);
   T.Test('MoveWordLeft/Right', @TestEditorMoveWordLeftRight);
+  T.Test('DeleteWordBackward', @TestEditorDeleteWordBackward);
+  T.Test('DeleteWordForward', @TestEditorDeleteWordForward);
+  T.Test('DeleteWord undo', @TestEditorDeleteWordUndo);
+  T.Test('DeleteWord selection', @TestEditorDeleteWordSelection);
+  T.Test('HandleKey ctrl word delete', @TestEditorHandleKeyCtrlWordDelete);
   T.Test('MoveUp', @TestEditorMoveUp);
   T.Test('MoveDown', @TestEditorMoveDown);
   T.Test('HandleKey backspace', @TestEditorHandleKeyBackspace);
