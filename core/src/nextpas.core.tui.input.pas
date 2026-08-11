@@ -438,7 +438,11 @@ begin
     0:        Out_ := KeyCharEvent(Ord(' '), [kmCtrl]);
     9:        Out_ := KeyCodeEvent(kcTab, []);
     10, 13:   Out_ := KeyCodeEvent(kcEnter, []);
-    127, 8:   Out_ := KeyCodeEvent(kcBackspace, []);
+    127:      Out_ := KeyCodeEvent(kcBackspace, []);       { DEL: 普通 Backspace }
+    8:        Out_ := KeyCodeEvent(kcBackspace, [kmCtrl]); { ^H: Ctrl+Backspace——现代终端
+                                                            约定（xterm/gnome-terminal…）
+                                                            Backspace 键发 127、Ctrl+Backspace
+                                                            发 ^H；并入 [] 会让词删除不可达 }
     32..126:
       Out_ := KeyCharEvent(B, []);
     1..7, 11..12, 14..26:

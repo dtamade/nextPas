@@ -91,6 +91,23 @@ begin
   Check(LEvent.Key.Code = kcBackspace, 'Should be kcBackspace');
 end;
 
+procedure TestParseOneCtrlBackspaceByte;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  { ^H（0x08）= Ctrl+Backspace——现代终端（xterm 等）Backspace 键发
+    0x7f(DEL)、Ctrl+Backspace 发 0x08；并入 [] 会让词删除不可达 }
+  LBuf := #8;
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'Ctrl+Backspace byte parses');
+  Check(LEvent.Key.Code = kcBackspace, 'Ctrl+Backspace is kcBackspace');
+  Check(kmCtrl in LEvent.Key.Modifiers, 'Ctrl+Backspace keeps ctrl mod');
+  Check(not (kmCtrl in LEvent.Key.Modifiers) = False, 'sanity');
+end;
+
 procedure TestParseOneCtrlA;
 var
   LBuf: AnsiString;
@@ -574,6 +591,7 @@ begin
   T.Test('ParseOne LF', @TestParseOneLF);
   T.Test('ParseOne Tab', @TestParseOneTab);
   T.Test('ParseOne Backspace', @TestParseOneBackspace);
+  T.Test('ParseOne Ctrl+Backspace byte', @TestParseOneCtrlBackspaceByte);
   T.Test('ParseOne Ctrl+A', @TestParseOneCtrlA);
   T.Test('ParseOne Esc at EOF', @TestParseOneEscAtEOF);
   T.Test('ParseOne Esc need more', @TestParseOneEscNeedMore);
