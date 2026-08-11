@@ -1643,6 +1643,57 @@ begin
   end;
 end;
 
+procedure TestBracketedPasteWholeChunk;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    { 200~ + 含 \r\n 与 q 的内容 + 201~:必须整包成一次 evPaste,PasteText 完整。
+      逐字符解析会让 \r\n→Enter、q→全局快捷键,这正是「粘贴触发快捷键」的根因。 }
+    LTerm.InjectInputBytesForTest([
+      27, Ord('['), Ord('2'), Ord('0'), Ord('0'), Ord('~'),
+      Ord('q'), 13, 10, Ord('m'),
+      27, Ord('['), Ord('2'), Ord('0'), Ord('1'), Ord('~'),
+      Ord('A')   { 粘贴之后的按键:仍应作为按键到达 }
+    ]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'paste chunk parsed');
+    Check(LEv.Kind = evPaste, 'paste chunk surfaces as single paste event');
+    CheckEqual('q'#13#10'm', LTerm.PasteText, 'paste text keeps raw chunk');
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'next event parses');
+    Check(LEv.Kind = evKey, 'next event is key');
+    CheckEqual(Int64(Ord('A')), Int64(LEv.Key.Ch), 'post-paste key preserved');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestBracketedPasteChunkedInput;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    { 分两次到达:第一次 200~ + 前半(未闭合,应等待);第二次 后半 + 201~ }
+    LTerm.InjectInputBytesForTest([
+      27, Ord('['), Ord('2'), Ord('0'), Ord('0'), Ord('~'),
+      Ord('h'), Ord('e')]);
+    { 未到 EOF 且未闭合:不产出事件,等更多字节 }
+    Check(not LTerm.PollQueuedEventForTest(False, LEv),
+      'unterminated paste waits');
+    LTerm.InjectInputBytesForTest([
+      Ord('l'), Ord('l'), Ord('o'),
+      27, Ord('['), Ord('2'), Ord('0'), Ord('1'), Ord('~')]);
+    Check(LTerm.PollQueuedEventForTest(False, LEv), 'assembled paste parses');
+    Check(LEv.Kind = evPaste, 'assembled paste event');
+    CheckEqual('hello', LTerm.PasteText, 'chunked paste assembled in order');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 procedure TestParseCSIBackTab;
 var
   LTerm: TTerminal;
@@ -2667,6 +2718,8 @@ begin
   T.Test('invalid alt utf8 lead preserves esc',
     @TestInvalidAltUTF8LeadPreservesEsc);
   T.Test('bracketed paste end is swallowed', @TestBracketedPasteEndIsSwallowed);
+  T.Test('bracketed paste whole chunk assembled', @TestBracketedPasteWholeChunk);
+  T.Test('bracketed paste chunked input assembled', @TestBracketedPasteChunkedInput);
   T.Test('parse csi backtab', @TestParseCSIBackTab);
   T.Test('kitty keyboard shift-tab normalizes to backtab',
     @TestKittyKeyboardShiftTabNormalizesToBackTab);

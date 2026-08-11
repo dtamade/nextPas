@@ -130,6 +130,9 @@ type
     FKittyKeyboardPushed: Boolean;
     FFocusReportingEnabled: Boolean;
     FBracketedPasteEnabled: Boolean;
+    { Bracketed paste 聚合:200~ 起 / 201~ 止,内容暂存,整包成一次 evPaste }
+    FInBracketedPaste: Boolean;
+    FPasteBuffer: AnsiString;
     FLastEnterResult: TTuiEnterResult;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
@@ -146,6 +149,10 @@ type
     function GetHasTruecolor: Boolean; inline;
     function GetHasKittyKeyboard: Boolean; inline;
     function GetImageProtocol: TImageProtocol; inline;
+    { bracketed paste 聚合:扫描 FInputQueue 找终止序列 ESC[201~;
+      返回可安全消费的字节数,AEndAt>=0 表示命中(文本在 [0..AEndAt) )}
+    function PasteScan(AAtEOF: Boolean; out AEndAt: Integer): Integer;
+    procedure AppendPasteBytes(ACount: Integer);
   protected
     procedure DoLeaveTui; virtual;
   public
@@ -191,6 +198,8 @@ type
     property CellHeight: Word read FCellHeight;
     property Options: TTerminalOptions read FOptions write FOptions;
     property LastEnterResult: TTuiEnterResult read FLastEnterResult;
+    { 最近一次完成聚合的粘贴文本(收到 evPaste 后读取) }
+    property PasteText: AnsiString read FPasteBuffer;
   end;
 
 implementation
@@ -825,17 +834,101 @@ begin
   end;
 end;
 
+function TTerminal.PasteScan(AAtEOF: Boolean; out AEndAt: Integer): Integer;
+{ 在 FInputQueue[0..FInputLen) 里扫描 bracketed paste 终止序列 ESC[201~。
+  返回本次可安全消费的字节数;命中时 AEndAt = 终止序列起始偏移,否则 -1。
+  未闭合(前缀可能是 201~ 的一部分)且未到 EOF 时,停在 ESC 前等后续字节。 }
+var
+  I: Integer;
+begin
+  Result := 0;
+  AEndAt := -1;
+  I := 0;
+  while I < FInputLen do
+  begin
+    if FInputQueue[I] = 27 then
+    begin
+      if I + 6 > FInputLen then
+      begin
+        { 可能是终止序列前缀;EOF 时按文本整段消费,否则停在此处等更多字节 }
+        if AAtEOF then
+          Result := FInputLen
+        else
+          Result := I;
+        Exit;
+      end;
+      if (FInputQueue[I + 1] = Ord('[')) and (FInputQueue[I + 2] = Ord('2')) and
+         (FInputQueue[I + 3] = Ord('0')) and (FInputQueue[I + 4] = Ord('1')) and
+         (FInputQueue[I + 5] = Ord('~')) then
+      begin
+        AEndAt := I;
+        Result := I + 6;   { 含终止序列一并消费 }
+        Exit;
+      end;
+      { 其他 ESC 序列是粘贴内容的字面字节,原样保留 }
+      Inc(I);
+    end
+    else
+      Inc(I);
+  end;
+  Result := FInputLen;
+end;
+
+procedure TTerminal.AppendPasteBytes(ACount: Integer);
+var
+  LOldLen: Integer;
+begin
+  if ACount <= 0 then Exit;
+  LOldLen := Length(FPasteBuffer);
+  SetLength(FPasteBuffer, LOldLen + ACount);
+  Move(FInputQueue[0], FPasteBuffer[LOldLen + 1], ACount);
+end;
+
 function TTerminal.TryParseQueuedEvent(AAtEOF, AScanInvalid: Boolean;
   out AEv: TEvent; out ANeedMore: Boolean): Boolean;
 var
   LConsumed, LFlags: Integer;
   LR: TParseResult;
+  LEndAt, LTake: Integer;
 begin
   Result := False;
   ANeedMore := False;
   AEv := NoneEvent;
   while FInputLen > 0 do
   begin
+    { bracketed paste 聚合:内容整段暂存,遇 201~ 才发一次 evPaste。
+      逐字符解析会让粘贴里的 \r\n 变 Enter、q/m/1..6 变全局快捷键,
+      这正是老版「粘贴触发快捷键」的根因,必须整包收口。 }
+    if FInBracketedPaste then
+    begin
+      LTake := PasteScan(AAtEOF, LEndAt);
+      if LEndAt >= 0 then
+      begin
+        { 命中终止序列:只把文本(终止序列之前)拼入缓冲,序列一并消费 }
+        if LEndAt > 0 then
+          AppendPasteBytes(LEndAt);
+        DropInputBytes(LEndAt + 6);
+        FInBracketedPaste := False;
+        AEv := PasteEvent;
+        Result := True;
+        Exit;
+      end;
+      if LTake > 0 then
+        AppendPasteBytes(LTake);
+      DropInputBytes(LTake);
+      if AAtEOF then
+      begin
+        { EOF 未闭合:把已聚合内容整包吐出(空内容也发,消费方插空文本无害) }
+        FInBracketedPaste := False;
+        AEv := PasteEvent;
+        Result := True;
+        Exit;
+      end;
+      { 未闭合且未到 EOF:等更多字节,绝不把内容泄漏成独立按键 }
+      ANeedMore := True;
+      Exit;
+    end;
+
     { Prefer explicit Kitty flags-reply parse so Verified can update. }
     LR := TryParseKittyKeyboardFlagsReply(FInputQueue[0], FInputLen, AAtEOF,
       LFlags, LConsumed);
@@ -856,6 +949,13 @@ begin
       prSuccess:
         begin
           DropInputBytes(LConsumed);
+          if IsPaste(AEv) then
+          begin
+            { CSI 200~:进入聚合模式,清空缓冲,继续等整包 }
+            FInBracketedPaste := True;
+            FPasteBuffer := '';
+            Continue;
+          end;
           if IsNone(AEv) then
             Continue;
           Result := True;
@@ -872,6 +972,13 @@ begin
           Exit;
         end;
     end;
+  end;
+  { 进入过聚合模式且 EOF:把已聚合内容吐出(如测试注入 200~ 后直接 EOF) }
+  if FInBracketedPaste and AAtEOF then
+  begin
+    FInBracketedPaste := False;
+    AEv := PasteEvent;
+    Result := True;
   end;
 end;
 
