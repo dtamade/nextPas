@@ -96,6 +96,15 @@ type
   THttpResponseBodyChunkProc = procedure(const AData: PByte;
     ASize: SizeUInt) of object;
 
+  { Response-headers-ready callback for client requests.
+     Set on THttpRequestOptions.ResponseStatus; H1 transport invokes it once,
+     synchronously on its IO thread, after response headers are parsed (status
+     code visible) and before any body chunk is dispatched. Informational
+     (1xx) responses are skipped. Unlike THttpResponseBodyChunkProc this
+     callback runs in Pascal context (not across the llhttp cdecl boundary),
+     so implementations MAY raise; errors propagate through Send normally. }
+  THttpResponseStatusProc = procedure(const AStatus: THttpStatus) of object;
+
   THttpRequestOptions = record
     TimeoutMs: Int64;
     HasTimeout: Boolean;
@@ -107,6 +116,13 @@ type
     HasCancelToken: Boolean;
     { Optional per-request streaming sink; see THttpResponseBodyChunkProc. }
     ResponseBodyChunk: THttpResponseBodyChunkProc;
+    { Optional response-headers-ready callback; see THttpResponseStatusProc. }
+    ResponseStatus: THttpResponseStatusProc;
+    { Skip buffering the response body (H1): parsed body bytes are only
+       dispatched to ResponseBodyChunk (if set) and not retained; NewBodyReader
+       returns nil and PARSER_BODY_MAX_CAPACITY no longer applies. Intended for
+       SSE / long-poll sinks where the full-body snapshot is not needed. }
+    SkipBodyBuffer: Boolean;
     function WithTimeout(const ATimeoutMs: Int64): THttpRequestOptions;
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpRequestOptions;
     function WithFollowRedirects(
@@ -115,6 +131,9 @@ type
       const AToken: IHttpCancelToken): THttpRequestOptions;
     function WithResponseBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc): THttpRequestOptions;
+    function WithResponseStatus(
+      const AProc: THttpResponseStatusProc): THttpRequestOptions;
+    function WithSkipBodyBuffer: THttpRequestOptions;
     function EffectiveTimeout(const ADefault: Int64): Int64;
     function EffectiveMaxRedirects(const ADefault: Int32): Int32;
     function EffectiveFollowRedirects(const ADefault: Boolean): Boolean;
@@ -963,6 +982,19 @@ function THttpRequestOptions.WithResponseBodyChunk(
 begin
   Result := Self;
   Result.ResponseBodyChunk := AChunkProc;
+end;
+
+function THttpRequestOptions.WithResponseStatus(
+  const AProc: THttpResponseStatusProc): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.ResponseStatus := AProc;
+end;
+
+function THttpRequestOptions.WithSkipBodyBuffer: THttpRequestOptions;
+begin
+  Result := Self;
+  Result.SkipBodyBuffer := True;
 end;
 
 function THttpRequestOptions.EffectiveTimeout(const ADefault: Int64): Int64;

@@ -60,6 +60,10 @@ type
 function NewH1RequestParser: IH1Parser;
 function NewH1ResponseParser: IH1Parser; overload;
 function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
+{ ASkipBodyBuffer: parse body but do not retain it (streaming sink mode).
+   Body bytes are only dispatched to SetOnBodyChunk, NewBodyReader returns
+   nil and PARSER_BODY_MAX_CAPACITY does not apply. }
+function NewH1ResponseParser(const ASkipBody, ASkipBodyBuffer: Boolean): IH1Parser; overload;
 
 implementation
 
@@ -87,6 +91,7 @@ type
     FSettings: TLlhttpSettingsT;
     FParserType: TH1ParserType;
     FSkipBody: Boolean;
+    FSkipBodyBuffer: Boolean;
     FMethod: THttpMethod;
     FStatusCode: THttpStatus;
     FVersion: THttpVersion;
@@ -136,7 +141,8 @@ type
     procedure ClearRequestMetadataCache;
   public
     constructor Create(const AType: TH1ParserType;
-      const ASkipBody: Boolean = False);
+      const ASkipBody: Boolean = False;
+      const ASkipBodyBuffer: Boolean = False);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure Finish;
     function GetMethod: THttpMethod;
@@ -626,17 +632,22 @@ begin
   LSelf := GetSelf(p0);
   if p2 > 0 then
   begin
-    if p2 > High(SizeUInt) - LSelf.FBodySize then
-      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
-    LRequired := LSelf.FBodySize + p2;
-    if LRequired > SizeUInt(High(SizeInt)) then
-      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
-    { Safety cap: reject if body would exceed hard limit }
-    if LRequired > PARSER_BODY_MAX_CAPACITY then
-      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
-    LSelf.EnsureBodyCapacity(LRequired);
-    Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
-    LSelf.FBodySize := LRequired;
+    { Skip-body-buffer mode (streaming sink): do not retain the body, so the
+      hard capacity cap does not apply; bytes flow only to the chunk sink. }
+    if not LSelf.FSkipBodyBuffer then
+    begin
+      if p2 > High(SizeUInt) - LSelf.FBodySize then
+        Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+      LRequired := LSelf.FBodySize + p2;
+      if LRequired > SizeUInt(High(SizeInt)) then
+        Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+      { Safety cap: reject if body would exceed hard limit }
+      if LRequired > PARSER_BODY_MAX_CAPACITY then
+        Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+      LSelf.EnsureBodyCapacity(LRequired);
+      Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
+      LSelf.FBodySize := LRequired;
+    end;
     { Streaming dispatch: synchronous per llhttp body chunk. Sink must not
       raise (cdecl boundary) — callers own exception containment. }
     if Assigned(LSelf.FOnBodyChunk) then
@@ -665,13 +676,14 @@ end;
 { TH1Parser }
 
 constructor TH1Parser.Create(const AType: TH1ParserType;
-  const ASkipBody: Boolean);
+  const ASkipBody: Boolean; const ASkipBodyBuffer: Boolean);
 var
   LType: TLlhttpTypeT;
 begin
   inherited Create;
   FParserType := AType;
   FSkipBody := ASkipBody and (AType = ptResponse);
+  FSkipBodyBuffer := ASkipBodyBuffer and (AType = ptResponse);
   FHeaderStore := THttpHeaders.Create;
   FHeaders := FHeaderStore;
   FComplete := False;
@@ -923,6 +935,8 @@ function TH1Parser.GetBody: string;
 begin
   if FError then
     Exit('');
+  if FSkipBodyBuffer then
+    Exit('');
   Result := BytesToString(FBody, FBodySize);
 end;
 
@@ -930,12 +944,16 @@ function TH1Parser.GetBodySize: Int64;
 begin
   if FError then
     Exit(0);
+  if FSkipBodyBuffer then
+    Exit(0);
   Result := Int64(FBodySize);
 end;
 
 function TH1Parser.NewBodyReader: IReader;
 begin
   if FError then
+    Exit(nil);
+  if FSkipBodyBuffer then
     Exit(nil);
   if FBodySize = 0 then
     Exit(nil);
@@ -1225,7 +1243,12 @@ end;
 
 function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser;
 begin
-  Result := TH1Parser.Create(ptResponse, ASkipBody);
+  Result := NewH1ResponseParser(ASkipBody, False);
+end;
+
+function NewH1ResponseParser(const ASkipBody, ASkipBodyBuffer: Boolean): IH1Parser;
+begin
+  Result := TH1Parser.Create(ptResponse, ASkipBody, ASkipBodyBuffer);
 end;
 
 end.

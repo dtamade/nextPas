@@ -75,7 +75,9 @@ type
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
       out AResponseStarted: Boolean; var APending: string;
-      const AOnBodyChunk: THttpResponseBodyChunkProc = nil): IHttpResponse;
+      const AOnBodyChunk: THttpResponseBodyChunkProc = nil;
+      const AOnResponseStatus: THttpResponseStatusProc = nil;
+      const ASkipBodyBuffer: Boolean = False): IHttpResponse;
     procedure EstablishHttpsConnectTunnel(var AConn: ITcpStream;
       const ATargetHost: string; const ATargetPort: UInt16;
       const AProxyAuthorization: string);
@@ -448,7 +450,9 @@ end;
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
   const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
   out AResponseStarted: Boolean; var APending: string;
-  const AOnBodyChunk: THttpResponseBodyChunkProc = nil): IHttpResponse;
+  const AOnBodyChunk: THttpResponseBodyChunkProc = nil;
+  const AOnResponseStatus: THttpResponseStatusProc = nil;
+  const ASkipBodyBuffer: Boolean = False): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
@@ -459,14 +463,16 @@ var
   LBodyReader: IReader;
   LSkippedInformational: Boolean;
   LCurrentResponseStarted: Boolean;
+  LHeadersNotified: Boolean;
 begin
   AResponseStarted := False;
   LHasResponseTail := False;
   LSkippedInformational := False;
   LCurrentResponseStarted := False;
+  LHeadersNotified := False;
   LPending := APending;
   APending := '';
-  LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+  LParser := NewH1ResponseParser(ARequestMethod = hmHead, ASkipBodyBuffer);
   if Assigned(AOnBodyChunk) then
     LParser.SetOnBodyChunk(AOnBodyChunk);
   repeat
@@ -496,12 +502,25 @@ begin
       end;
     end;
 
+    { Response-headers-ready notification: fires once per final response,
+      before any body chunk is dispatched. Informational (1xx) responses are
+      skipped so the callback reports the status that decides the response
+      body semantics. Runs in Pascal context (may raise). }
+    if (not LHeadersNotified) and LParser.HeadersComplete and
+       (not IsSkippableInformationalResponse(LParser.GetStatusCode)) then
+    begin
+      LHeadersNotified := True;
+      if Assigned(AOnResponseStatus) then
+        AOnResponseStatus(LParser.GetStatusCode);
+    end;
+
     if LParser.IsComplete and
       IsSkippableInformationalResponse(LParser.GetStatusCode) then
     begin
       LSkippedInformational := True;
       LCurrentResponseStarted := False;
-      LParser := NewH1ResponseParser(ARequestMethod = hmHead);
+      LHeadersNotified := False;
+      LParser := NewH1ResponseParser(ARequestMethod = hmHead, ASkipBodyBuffer);
       if Assigned(AOnBodyChunk) then
         LParser.SetOnBodyChunk(AOnBodyChunk);
       Continue;
@@ -572,6 +591,8 @@ var
   LWrapped: Exception;
   LPendingTail: string;
   LBodyChunkProc: THttpResponseBodyChunkProc;
+  LResponseStatusProc: THttpResponseStatusProc;
+  LSkipBodyBuffer: Boolean;
 
   procedure WrapConnectionWithTls;
   begin
@@ -711,10 +732,17 @@ begin
     { Re-arm request deadline for response read (after connect-write budget). }
     ApplyClientDeadline(LConn, LRequestDeadline);
     LBodyChunkProc := nil;
+    LResponseStatusProc := nil;
+    LSkipBodyBuffer := False;
     if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    begin
       LBodyChunkProc := LReqOpts.RequestOptions.ResponseBodyChunk;
+      LResponseStatusProc := LReqOpts.RequestOptions.ResponseStatus;
+      LSkipBodyBuffer := LReqOpts.RequestOptions.SkipBodyBuffer;
+    end;
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-      LResponseStarted, LPendingTail, LBodyChunkProc);
+      LResponseStarted, LPendingTail, LBodyChunkProc, LResponseStatusProc,
+      LSkipBodyBuffer);
   except
     on E: Exception do
     begin
@@ -744,7 +772,8 @@ begin
             HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
           ApplyClientDeadline(LConn, LRequestDeadline);
           LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-            LResponseStarted, LPendingTail, LBodyChunkProc);
+            LResponseStarted, LPendingTail, LBodyChunkProc,
+            LResponseStatusProc, LSkipBodyBuffer);
         except
           on E2: Exception do
           begin
