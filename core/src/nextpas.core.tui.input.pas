@@ -411,6 +411,14 @@ begin
     Ord('Q'): Out_ := KeyFunctionEvent(2, []);
     Ord('R'): Out_ := KeyFunctionEvent(3, []);
     Ord('S'): Out_ := KeyFunctionEvent(4, []);
+    // SS3 arrows: application-mode terminals send ESC O A-D for arrows
+    // (CSI ESC [ A-D is used in normal cursor mode). Screen-focused TUI
+    // runs with application mode active, so arrows arrive as SS3 — mapping
+    // them here keeps directional keys working in full-screen UIs.
+    Ord('A'): Out_ := KeyCodeEvent(kcUp, []);
+    Ord('B'): Out_ := KeyCodeEvent(kcDown, []);
+    Ord('C'): Out_ := KeyCodeEvent(kcRight, []);
+    Ord('D'): Out_ := KeyCodeEvent(kcLeft, []);
     Ord('H'): Out_ := KeyCodeEvent(kcHome, []);
     Ord('F'): Out_ := KeyCodeEvent(kcEnd, []);
   else
