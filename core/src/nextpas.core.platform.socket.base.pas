@@ -131,12 +131,19 @@ end;
 
 function TPlatformSockAddr.IsIPv4: Boolean;
 begin
-  Result := (Len > 0) and (PWord(@Storage[0])^ = 2); { AF_INET = 2 }
+  { AF_INET = 2。BSD 系(macOS/FreeBSD)sockaddr_in 带 1 字节 sa_len 头,
+    family 位于 offset 1;Linux/Windows 标准布局 family 位于 offset 0。
+    getsockname 由内核写 BSD 布局,应用读 offset0-1 会得到 0x0210≠2。 }
+  Result := (Len > 0) and
+    ((PWord(@Storage[0])^ = 2) or
+     ((Len > 1) and (Storage[1] = 2)));
 end;
 
 function TPlatformSockAddr.IsIPv6: Boolean;
 begin
-  Result := (Len > 0) and (PWord(@Storage[0])^ = 10); { AF_INET6 = 10 }
+  Result := (Len > 0) and
+    ((PWord(@Storage[0])^ = 10) or
+     ((Len > 1) and (Storage[1] = 10)));
 end;
 
 procedure TPlatformSockAddr.Clear;
@@ -265,18 +272,38 @@ type
     Addr: UInt32;
     Zero: array[0..7] of Byte;
   end;
+  { BSD 系布局:1 字节 sa_len + 1 字节 family(getsockname 内核写) }
+  TBsdSockAddrIn = packed record
+    Len: Byte;
+    Family: Byte;
+    Port: UInt16;
+    Addr: UInt32;
+    Zero: array[0..7] of Byte;
+  end;
 var
   LAddr: TSockAddrIn;
+  LBsd: TBsdSockAddrIn;
 begin
   AAddr := 0;
   APort := 0;
   if ASockAddr.Len < SizeOf(LAddr) then
     Exit;
   Move(ASockAddr.Storage, LAddr, SizeOf(LAddr));
-  if LAddr.Family <> 2 then { AF_INET }
-    Exit;
-  AAddr := LAddr.Addr;
-  APort := platform_ntohs(LAddr.Port);
+  if LAddr.Family = 2 then { AF_INET }
+  begin
+    AAddr := LAddr.Addr;
+    APort := platform_ntohs(LAddr.Port);
+  end
+  else
+  begin
+    { BSD sa_len 布局:offset 0 = sa_len,offset 1 = family }
+    Move(ASockAddr.Storage, LBsd, SizeOf(LBsd));
+    if LBsd.Family = 2 then
+    begin
+      AAddr := LBsd.Addr;
+      APort := platform_ntohs(LBsd.Port);
+    end;
+  end;
 end;
 
 end.
