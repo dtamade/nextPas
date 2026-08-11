@@ -372,6 +372,8 @@ jobs:
     runs-on: ubuntu-latest
     # push 只跑 main;workflow_dispatch 也允许跑,否则手动触发永远缺 freebsd 覆盖。
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    # 模拟 VM + 全量 best-effort 需 4-6h+,已砍;http-host matrix 是 freebsd 的核心平台验证。
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -387,6 +389,7 @@ jobs:
             # only if the devel package is unavailable.
             sudo pkg install -y fpc-devel 2>/dev/null || sudo pkg install -y fpc
             fpc -iV
-            # Host smoke first (fail-closed if present); then best-effort inventory.
+            # Host smoke is the FreeBSD platform evidence (fail-closed if present).
+            # 914-dir full best-effort inventory was removed: on an emulated VM it
+            # takes 4-6h+ and every failure only counts as SKIP (no signal gained).
             CORE_CI_HOST=FreeBSD bash "$GITHUB_WORKSPACE/core/scripts/http-host-ci-matrix.sh"
-            make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD
