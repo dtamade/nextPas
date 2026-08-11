@@ -370,7 +370,8 @@ jobs:
 
   test-freebsd:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # push 只跑 main;workflow_dispatch 也允许跑,否则手动触发永远缺 freebsd 覆盖。
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
