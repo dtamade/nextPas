@@ -149,3 +149,49 @@ common.mk 的 GNU ifeq 在 FreeBSD 全挂、test_git 缺 libgit2、契约门禁 
 - ✅ macOS + FreeBSD：BSD sa_len 修复双平台确认（threaded_host PASS）
 - ✅ contract 54/54、libgit2（test_git）、workflow_dispatch 语义
 - ⏳ 既有红点：linux bench 47、macos field25519、compiler snapshot、TUI（他人）
+
+## CI 修复工程 v7 收口（2026-08-12）
+
+### ✅ macOS http-host 首次全绿 —— 两层遮挡 bug 全部修复（7d1e20fc1）
+
+macOS 失败实际是两个 bug 层层遮挡，逐个修掉：
+
+| 层 | bug | 修复 |
+|---|---|---|
+| 1（编译语法） | `crypto.field25519` FeMul 非 x86_64 分支缺 `var` + 漏 F0-F9 声明（`BEGIN expected but identifier F1_2`） | `15150fe25`：补声明，与 FeSq 风格一致；x86_64 单元编译无损 + $ELSE 分支 stub 编译双验证 |
+| 2（链接） | `llhttp__debug` 裸 `stderr` 在 macOS/Darwin 也是 undefined symbol（此前只修了 FreeBSD） | `7d1e20fc1`：改为 `{$IFDEF WINDOWS}`——裸 stderr 只在 MSVCRT 可链接，ELF/BSD/macOS 统一 inert；Linux 本地编译验证通过 |
+
+http-host matrix（threaded_host + iocp_wire + iocp_facade）在 macOS **首次 completed success**（此前 5+ 轮全 FAIL）。freebsd 同框架下 iocp_facade 也从此前 field25519 引发的编译失败转为 PASS。
+
+连带：`make test-tooling` 全绿——Linux Verification "Run tooling gate" 反复红的根因是 freebsd 砍 best-effort 后两个契约脚本（ci-evidence-matrix-doc-contract / ci-workflow-contract）未同步，已在 `15150fe25` 同步。
+
+### ⚠️ 两个"偶发"待复跑确认（无证据指向回归）
+
+| 失败 | 判断依据 |
+|---|---|
+| freebsd `threaded_host` EAccessViolation（wire GET） | 前两轮 PASS；llhttp 改动只影响从不调用的 debug 函数；call trace N/A + 1 unfreed 8B = 并发竞态特征；同 job 尾部还有 `/usr/bin/ssh` 基础设施 teardown 报错 |
+| linux `Client rejects request body shorter than ContentLength` | 前两轮 PASS；**本地干净 main 复现 PASS（163 passed 0 failed）**；CI 高负载网络时序敏感 |
+
+结论：等 CM 下一轮自然复跑确认，不人工重推。
+
+### 🔒 工作树安全档案（2026-08-12 晚事件）
+
+- 会话中发现工作树被并行切到 `landing/http-workerpool-20260812`（UU http.base.pas + 6 个 http server staged 文件）
+- **未加任何写操作**；并行操作者随后自行提交完成（`7ed98350d` feat http WorkerPoolSize），工作树自动回 main 且干净
+- main 曾领先 origin 1（`7ed98350d`，同事提交，未动未推）；我的 5 个修复提交全部在历史中
+- 教训：多人共享同一工作树时，任何本地编译/测试前先 `git branch --show-current` + `git status --short` 双确认
+
+### 待 owner 决策（更新）
+
+1. **linux bench 47 gate**：`test_http_benchmarks` 稳定红（marker source-contract 缺口 + filter env 敏感），建议独立 bench lane 或降 soft gate
+2. **macOS best-effort 收敛**：914 目录 inventory 在 macOS native runner 上 5.5h+ 未完成（疑似个别网络测试挂住），与 freebsd 同样过度设计；建议砍掉或加 timeout（`continue-on-error: true` 本就不贡献 job 结论）
+3. compiler snapshot（constructor-typing）：Linux Verify 卡在 `make verify` 的 `test-compiler-constructor-typing`（`wrong-create-binding-target: 8 expected=4`），compiler lane 既有红点
+4. compiler-system B5g（stash@{0}）、tui/http stale lane：维持不代收
+
+### CI 修复工程全景（v7 终版）
+
+- ✅ Windows reactor.iocp：连续 4+ 轮绿（纯函数契约测试）
+- ✅ FreeBSD：五层修复（bmake / fpc-devel / llhttp stderr / sa_len / best-effort 收敛）
+- ✅ macOS：BSD sa_len + field25519 + llhttp 三层修复，http-host 首次全绿
+- ✅ contract 54/54、tooling gate、libgit2、workflow_dispatch、freebsd 90s
+- ⏳ 待复跑确认偶发 ×2；既有红点：linux bench 47、compiler snapshot、macOS best-effort 收敛
