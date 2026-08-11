@@ -195,6 +195,24 @@ begin
   Check(not TryBuildGeoIpTable(LData, LTable), '重叠段拒绝');
 end;
 
+procedure TestBuildEmptyTable;
+var
+  LData: TBytes;
+  LTable: IGeoIpTable;
+begin
+  { 合法空表：header 12 字节 + count=0（无记录段）。Count=0 下界曾致
+    UInt32 循环上界 0-1 下溢 42 亿次越界（feedback_core：空表 hang/AV）。 }
+  SetLength(LData, 12);
+  LData[0] := Ord('P'); LData[1] := Ord('P'); LData[2] := Ord('G');
+  LData[3] := Ord('I'); LData[4] := Ord('P');
+  LData[5] := 1;
+  LData[6] := 0; LData[7] := 0;
+  WriteUInt32BE(@LData[8], 0);
+  Check(TryBuildGeoIpTable(LData, LTable), '合法空表应构造成功');
+  CheckEqual(0, LTable.Count, '空表条数');
+  CheckEqual('', LTable.LookupIp('127.0.0.1'), '空表查询全空');
+end;
+
 { === 文件加载 === }
 
 procedure TestLoadMissingFile;
@@ -243,6 +261,7 @@ begin
   T.Test('构造坏魔数拒绝', @TestBuildBadMagic);
   T.Test('构造截断拒绝', @TestBuildTruncated);
   T.Test('构造重叠拒绝', @TestBuildOverlap);
+  T.Test('构造合法空表', @TestBuildEmptyTable);
   T.Test('加载缺文件拒绝', @TestLoadMissingFile);
   T.Test('加载文件成功', @TestLoadFromFile);
   if not T.Run then

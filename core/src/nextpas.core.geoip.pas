@@ -110,6 +110,15 @@ begin
     Exit;   { 长度不匹配（截断/多余）→ 非法 }
   LTable := TGeoIpTable.Create;
   SetLength(LTable.FEntries, LCount);
+  { 合法空表（count=0，仅 header）：LCount 为 UInt32，循环上界 LCount-1
+    会 0-1 下溢成 42 亿次越界迭代（feedback_core）。空表合法：Count=0，
+    Lookup 全空，直接返回。 }
+  if LCount = 0 then
+  begin
+    ATable := LTable;
+    Result := True;
+    Exit;
+  end;
   LP := LP + cGeoIpHeaderSize;
   LPrevTo := 0;
   for LI := 0 to LCount - 1 do
