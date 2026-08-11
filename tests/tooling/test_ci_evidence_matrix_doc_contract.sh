@@ -77,7 +77,7 @@ require_workflow_command_documented "$ROOT_CI" 'make rebuild-compiler' 'root reb
 require_workflow_command_documented "$ROOT_CI" 'make stage0-heap-debug-recipe' 'root stage0 HEAP_DEBUG recipe command'
 require_workflow_command_documented "$ROOT_CI" 'make verify' 'root verify command'
 require_workflow_command_documented "$CORE_CI" 'make -C .. core-ci-test' 'core Linux test command'
-require_workflow_command_documented "$CORE_CI" 'make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS' 'core macOS best-effort command'
+require_workflow_command_documented "$CORE_CI" 'platform-macos-ci-matrix.sh' 'core macOS platform matrix command'
 require_workflow_command_documented "$CORE_CI" 'http-host-ci-matrix.sh' 'core FreeBSD http-host matrix command'
 
 printf 'ci-evidence-matrix-doc-contract=pass\n'

@@ -101,7 +101,7 @@ require_workflow_self_path "$CORE_CI_WORKFLOW" '.github/workflows/core-ci.yml' '
 require_makefile_target 'core-ci-test' 'root core CI test target'
 require_makefile_target 'core-ci-best-effort-test' 'root core CI best-effort target'
 require_pattern "$CORE_CI_WORKFLOW" '^[[:space:]]+run: make -C \.\. core-ci-test$' 'core CI Linux uses root Makefile test gate'
-require_pattern "$CORE_CI_WORKFLOW" 'make -C \.\. core-ci-best-effort-test CORE_CI_HOST=macOS' 'core CI macOS uses root Makefile best-effort gate'
+require_pattern "$CORE_CI_WORKFLOW" 'platform-macos-ci-matrix[.]sh' 'core CI macOS uses platform matrix gate'
 require_pattern "$CORE_CI_WORKFLOW" 'http-host-ci-matrix[.]sh' 'core CI FreeBSD uses http-host matrix gate'
 
 tooling_line=$(root_ci_line_number '^[[:space:]]+run: make test-tooling$')

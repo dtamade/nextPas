@@ -181,9 +181,9 @@ jobs:
           # L1: dial + resolve + kqueue compile — host smoke fail-closed (not full async parity).
           ASYNC_HOST_GATES=dial-resolve ASYNC_HOST_STRICT=1 bash scripts/async-host-matrix.sh
 
-      - name: Run tests (best-effort inventory; non-promotional)
-        continue-on-error: true
-        run: make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS
+      # 914-dir best-effort inventory removed（与 FreeBSD 同因：native runner 上也要数小时，
+      # continue-on-error 不贡献 job 结论，失败只计 SKIP）。macOS 平台验证由上方
+      # platform matrix + host smoke + kqueue + async 覆盖。
 
   test-windows-runtime:
     runs-on: windows-latest
