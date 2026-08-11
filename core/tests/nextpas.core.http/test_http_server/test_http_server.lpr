@@ -59,6 +59,17 @@ begin
   LOpts := LOpts.WithShutdownTimeout(5000);
   CheckEqual(5000, LOpts.ShutdownTimeout, 'WithShutdownTimeout');
 
+  { S1-1: poll-owned (streaming/SSE) worker handoff — default False keeps
+    short-request perf; opt-in routes poll-owned requests to the worker pool }
+  Check(not THttpServerOptions.Default.PreferPollWorkerHandoff,
+    'default PreferPollWorkerHandoff is False');
+
+  LOpts := LOpts.WithPreferPollWorkerHandoff;
+  Check(LOpts.PreferPollWorkerHandoff, 'WithPreferPollWorkerHandoff');
+
+  LOpts := LOpts.WithPreferPollWorkerHandoff(False);
+  Check(not LOpts.PreferPollWorkerHandoff, 'WithPreferPollWorkerHandoff(False)');
+
   { Builder preserves other fields }
   CheckEqual(5000, LOpts.ReadTimeout, 'builder preserves ReadTimeout');
   CheckEqual(10000, LOpts.WriteTimeout, 'builder preserves WriteTimeout');

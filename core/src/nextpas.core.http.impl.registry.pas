@@ -105,8 +105,11 @@ begin
   { H1 native connection-scoped RequestArena (Reset per request). }
   LH1Options.RequestArena := AOptions.RequestArena;
   LH1Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
-  { S1-1 scale default: reactor-inline handlers on poll-owned path. }
-  LH1Options.PreferPollWorkerHandoff := False;
+  { S1-1 scale default: reactor-inline handlers on poll-owned path.
+    Products with blocking streaming handlers opt out via
+    AOptions.PreferPollWorkerHandoff (streaming then runs on the worker pool
+    so one slow upstream does not stall the readiness reactor). }
+  LH1Options.PreferPollWorkerHandoff := AOptions.PreferPollWorkerHandoff;
   LInnerTransport := NewH1ServerTransport(LH1Options);
   { Product H1 HTTPS: same TLS wrap pattern as H2 (ALPN http/1.1). }
   if AOptions.TLSContext <> nil then

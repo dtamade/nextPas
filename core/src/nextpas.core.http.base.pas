@@ -184,6 +184,14 @@ type
     RequestArena: Boolean;
     { RequestArenaCapacity: 0 = HTTP_DEFAULT_REQUEST_ARENA when RequestArena. }
     RequestArenaCapacity: SizeUInt;
+    { PreferPollWorkerHandoff (S1-1): when True, poll-owned (streaming/SSE)
+      requests are submitted to the worker pool instead of running inline on
+      the readiness reactor. Default False keeps short-request perf (inline
+      avoids pool submit + completion wake); set True when handlers block for
+      long stretches (e.g. proxying upstream streams) so one slow request
+      does not stall the whole reactor. Non-poll (regular) requests always
+      run on the worker pool regardless of this flag. }
+    PreferPollWorkerHandoff: Boolean;
     { Default (PD-1B): Read/Write = 30000 ms. Long-poll/SSE/tests that need
       unbounded IO must set WithReadTimeout(0)/WithWriteTimeout(0) explicitly.
       IdleTimeout alone is not a complete production template. }
@@ -201,6 +209,10 @@ type
     function WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
     {** Enable per-request LocalArena at the server root (0 capacity = default). }
     function WithRequestArena(ACapacity: SizeUInt = 0): THttpServerOptions;
+    {** Route poll-owned (streaming/SSE) handlers to the worker pool instead
+      of running them inline on the readiness reactor (see field note). }
+    function WithPreferPollWorkerHandoff(
+      const AValue: Boolean = True): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -1097,6 +1109,7 @@ begin
   Result.TLSContext := nil;
   Result.RequestArena := False;
   Result.RequestArenaCapacity := 0;
+  Result.PreferPollWorkerHandoff := False;
 end;
 
 class function THttpServerOptions.Production: THttpServerOptions;
@@ -1162,6 +1175,13 @@ begin
   Result := Self;
   Result.RequestArena := True;
   Result.RequestArenaCapacity := ACapacity;
+end;
+
+function THttpServerOptions.WithPreferPollWorkerHandoff(
+  const AValue: Boolean): THttpServerOptions;
+begin
+  Result := Self;
+  Result.PreferPollWorkerHandoff := AValue;
 end;
 
 function THttpServerOptions.EffectiveVersion(
