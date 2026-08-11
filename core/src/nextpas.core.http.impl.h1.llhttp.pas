@@ -13356,6 +13356,11 @@ var
   __c2p_discard_1: LongInt;
   __c2p_discard_2: LongInt;
 begin
+  { fprintf(stderr, …) is the C original; FreeBSD's libc exposes
+    stderr/stdout/stdin via __sF macros, so a bare `stderr` symbol does not
+    link under fpc-devel (3.3.1) on FreeBSD. Debug tracing is off by default;
+    keep the routine inert there instead of forking the format per host. }
+  {$IFNDEF NEXTPAS_FREEBSD}
   if (p = endp) then
   begin
     __c2p_discard_1 := fprintf(stderr, 'p=%p type=%d flags=%02x next=null debug=%s'#10, s, s^.&type, s^.flags, msg);
@@ -13364,6 +13369,10 @@ begin
   begin
     __c2p_discard_2 := fprintf(stderr, 'p=%p type=%d flags=%02x next=%02x   debug=%s'#10, s, s^.&type, s^.flags, p^, msg);
   end;
+  {$ELSE}
+  __c2p_discard_1 := 0;
+  __c2p_discard_2 := 0;
+  {$ENDIF}
 end;
 
 function llhttp__before_headers_complete(Parser: PTLlhttpInternalT; P: PAnsiChar; Endp: PAnsiChar): LongInt; cdecl; inline;
