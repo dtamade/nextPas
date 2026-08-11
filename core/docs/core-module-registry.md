@@ -40,6 +40,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `font` | L3 | font face/raster/atlas | yes | L0-L2 | draft |
 | `format` | L2 support | shared format parse limits | no | L0-L1 | focused-runtime |
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
+| `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
