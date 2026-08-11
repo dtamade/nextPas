@@ -804,6 +804,36 @@ begin
   end;
 end;
 
+{ SS3 arrows (ESC O A-D): application-mode terminals send these for
+  arrow keys; they must map to directional keys (full-screen TUI). }
+procedure TestParseSS3Arrows;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InjectInputBytesForTest([27, Ord('O'), Ord('A')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'SS3 A parsed');
+    Check(LEv.Kind = evKey, 'key event');
+    Check(LEv.Key.Code = kcUp, 'SS3 A = Up');
+
+    LTerm.InjectInputBytesForTest([27, Ord('O'), Ord('B')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'SS3 B parsed');
+    Check(LEv.Key.Code = kcDown, 'SS3 B = Down');
+
+    LTerm.InjectInputBytesForTest([27, Ord('O'), Ord('C')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'SS3 C parsed');
+    Check(LEv.Key.Code = kcRight, 'SS3 C = Right');
+
+    LTerm.InjectInputBytesForTest([27, Ord('O'), Ord('D')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'SS3 D parsed');
+    Check(LEv.Key.Code = kcLeft, 'SS3 D = Left');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 procedure TestParseSS3LegacyF4;
 var
   LTerm: TTerminal;
@@ -2786,7 +2816,8 @@ begin
     @TestKittyKeyboardQueryReplyThenKey);
   T.Test('kitty keyboard leave clears verified',
     @TestKittyKeyboardLeaveClearsVerified);
-    T.Test('focus reporting inject events', @TestFocusReportingInjectEvents);
+  T.Test('ss3 arrows map to directions', @TestParseSS3Arrows);
+  T.Test('focus reporting inject events', @TestFocusReportingInjectEvents);
   T.Test('focus reporting option defaults', @TestFocusReportingOptionDefaults);
   T.Test('bracketed paste option defaults', @TestBracketedPasteOptionDefaults);
   T.Test('bracketed paste emits on frame runtime', @TestBracketedPasteEmitsOnFrameRuntime);
