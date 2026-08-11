@@ -335,6 +335,46 @@ begin
   Check(LEditor.Content = 'hello', 'Content should be hello after paste');
 end;
 
+procedure TestEditorPasteText;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('hello world');
+  Check(LEditor.Content = 'hello world', 'paste text inserts text');
+  Check(LEditor.LineCount = 1, 'paste text keeps single line');
+  LEditor.PasteText('');
+  Check(LEditor.Content = 'hello world', 'empty paste text is noop');
+  LEditor.Undo;
+  Check(LEditor.IsEmpty, 'paste text is single undo op');
+end;
+
+procedure TestEditorPasteTextMultilineCrop;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('a' + #10 + 'b' + #10 + 'c');
+  Check(LEditor.Content = 'a' + #10 + 'b' + #10 + 'c', 'paste text keeps newlines');
+  Check(LEditor.LineCount = 3, 'paste text spans lines');
+  LEditor := TInputEditor.New.WithMaxLines(2);
+  LEditor.PasteText('a' + #10 + 'b' + #10 + 'c');
+  Check(LEditor.LineCount = 2, 'paste text cropped to max lines');
+  Check(LEditor.Content = 'a' + #10 + 'b', 'overflow line clipped off');
+end;
+
+procedure TestEditorPasteTextReplacesSelection;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.PasteText('abcdef');
+  LEditor.MoveHome;
+  LEditor.SelectAll;
+  LEditor.PasteText('xy');
+  Check(LEditor.Content = 'xy', 'paste text replaces selection');
+end;
+
 procedure TestEditorCutSelection;
 var
   LEditor: IInputEditor;
@@ -587,6 +627,9 @@ begin
   T.Test('Multiple lines', @TestEditorMultipleLines);
   T.Test('DeleteLine', @TestEditorDeleteLine);
   T.Test('Copy/Paste', @TestEditorCopyCutPaste);
+  T.Test('PasteText', @TestEditorPasteText);
+  T.Test('PasteText multiline crop', @TestEditorPasteTextMultilineCrop);
+  T.Test('PasteText replaces selection', @TestEditorPasteTextReplacesSelection);
   T.Test('CutSelection', @TestEditorCutSelection);
   T.Test('ReplaceContent', @TestEditorReplaceContent);
   T.Test('MoveWordLeft/Right', @TestEditorMoveWordLeftRight);

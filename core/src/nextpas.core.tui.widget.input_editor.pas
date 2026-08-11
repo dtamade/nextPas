@@ -45,6 +45,7 @@ type
     procedure CopySelection;
     procedure CutSelection;
     procedure Paste;
+    procedure PasteText(const AText: AnsiString);
     procedure DeleteLine;
     procedure Undo;
     procedure Redo;
@@ -141,6 +142,8 @@ type
     procedure CopySelection;
     procedure CutSelection;
     procedure Paste;
+    procedure PasteText(const AText: AnsiString);
+    procedure DoPaste(const AText: AnsiString);
     procedure DeleteLine;
     procedure Undo;
     procedure Redo;
@@ -767,13 +770,23 @@ begin
 end;
 
 procedure TInputEditor.Paste;
+begin
+  DoPaste(FClipboard);
+end;
+
+procedure TInputEditor.PasteText(const AText: AnsiString);
+begin
+  DoPaste(AText);
+end;
+
+procedure TInputEditor.DoPaste(const AText: AnsiString);
 var I, NewLines, CurLines: Integer;
     Clipped: AnsiString;
 begin
-  if FClipboard = '' then Exit;
+  if AText = '' then Exit;
   PushUndo;
   if HasSelection then DeleteSelection;
-  Clipped := FClipboard;
+  Clipped := AText;
   CurLines := LineCount_;
   NewLines := 0;
   for I := 1 to Length(Clipped) do
