@@ -55,6 +55,12 @@ type
        body chunk). Passing nil clears it. }
     procedure SetOnBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc);
+    { Split response status from body dispatch: when enabled, the parse pauses
+       right after the final response's headers so the transport can notify the
+       status (Pascal context) before any body chunk callback fires. The pause
+       is auto-resumed on the next Execute call. Informational (1xx except 101)
+       responses never pause: they carry no body and are not the final status. }
+    procedure SetPauseAtHeaders(const AValue: Boolean);
   end;
 
 function NewH1RequestParser: IH1Parser;
@@ -101,6 +107,8 @@ type
     FBody: TBytes;
     FBodySize: SizeUInt;
     FOnBodyChunk: THttpResponseBodyChunkProc;
+    FStatusSplit: Boolean;
+    FPausedAtHeaders: Boolean;
     FHeadersComplete: Boolean;
     FComplete: Boolean;
     FError: Boolean;
@@ -164,6 +172,7 @@ type
     procedure Reset;
     procedure SetOnBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc);
+    procedure SetPauseAtHeaders(const AValue: Boolean);
   end;
 
 { Callback helpers }
@@ -620,7 +629,18 @@ begin
       Exit;
   end
   else
+  begin
     LSelf.FStatusCode := p0^.status_code;
+    { Status-split mode: pause right after the final response's headers so the
+       transport can signal the status (Pascal context) before any body chunk
+       is dispatched. Regular informational (1xx, except 101) responses carry
+       no body and are not the final status, so they must NOT pause — llhttp
+       flows straight on to the next message within the same Execute. }
+    if LSelf.FStatusSplit and
+       (not (HttpStatusIsInformational(LSelf.FStatusCode) and
+             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) then
+      Exit(HPE_PAUSED);
+  end;
   Result := 0;
 end;
 
@@ -731,8 +751,26 @@ begin
     Exit(0);
   end;
 
+  { Resume a headers-pause from a previous Execute (status-split mode). }
+  if FPausedAtHeaders then
+  begin
+    llhttp_resume(@FParser);
+    FPausedAtHeaders := False;
+  end;
+
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
   MaterializeCurrentHeaderSpans;
+  if (LErrno = HPE_PAUSED) and (not FComplete) then
+  begin
+    { Status-split pause: the final response's headers are complete but the
+       message is not — llhttp parked right after the header block. Not an
+       error; the next Execute resumes it via llhttp_resume. }
+    FError := False;
+    FErrorMsg := '';
+    FPausedAtHeaders := True;
+    Result := ConsumedUntilErrorPosition(ABuf, ALen);
+    Exit;
+  end;
   if (LErrno = HPE_PAUSED) and FComplete then
   begin
     FError := False;
@@ -1216,6 +1254,7 @@ begin
   FErrorKind := pekNone;
   FHeaderCompleteUserError := False;
   FTrailerBytes := 0;
+  FPausedAtHeaders := False;
   ClearRequestMetadataCache;
   ClearCurrentHeaderSpans;
   llhttp_reset(@FParser);
@@ -1227,6 +1266,11 @@ procedure TH1Parser.SetOnBodyChunk(
   const AChunkProc: THttpResponseBodyChunkProc);
 begin
   FOnBodyChunk := AChunkProc;
+end;
+
+procedure TH1Parser.SetPauseAtHeaders(const AValue: Boolean);
+begin
+  FStatusSplit := AValue;
 end;
 
 { Factory functions }

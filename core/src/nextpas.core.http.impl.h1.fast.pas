@@ -798,6 +798,8 @@ type
        dispatch exists, so this is a no-op (kept for interface parity). }
     procedure SetOnBodyChunk(
       const AChunkProc: THttpResponseBodyChunkProc);
+    { Request snapshot: status-split is a response-side transport concern. }
+    procedure SetPauseAtHeaders(const AValue: Boolean);
   end;
 
 { TH1FastSnapshotBodyReader }
@@ -967,6 +969,13 @@ procedure TH1FastRequestSnapshot.SetOnBodyChunk(
 begin
   { Request snapshot: body is fully captured in the constructor. Streaming
      dispatch is a response-side concern only. }
+end;
+
+procedure TH1FastRequestSnapshot.SetPauseAtHeaders(
+  const AValue: Boolean);
+begin
+  { Request snapshot: no response headers are ever parsed here, so the
+     status-split hint is irrelevant (kept for interface parity). }
 end;
 
 function NewH1FastRequestSnapshot(const AResult: TFastParseResult;

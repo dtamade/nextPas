@@ -475,6 +475,8 @@ begin
   LParser := NewH1ResponseParser(ARequestMethod = hmHead, ASkipBodyBuffer);
   if Assigned(AOnBodyChunk) then
     LParser.SetOnBodyChunk(AOnBodyChunk);
+  if Assigned(AOnResponseStatus) then
+    LParser.SetPauseAtHeaders(True);
   repeat
     if LPending <> '' then
     begin
@@ -523,6 +525,8 @@ begin
       LParser := NewH1ResponseParser(ARequestMethod = hmHead, ASkipBodyBuffer);
       if Assigned(AOnBodyChunk) then
         LParser.SetOnBodyChunk(AOnBodyChunk);
+      if Assigned(AOnResponseStatus) then
+        LParser.SetPauseAtHeaders(True);
       Continue;
     end;
   until LParser.IsComplete or LParser.HasError;
