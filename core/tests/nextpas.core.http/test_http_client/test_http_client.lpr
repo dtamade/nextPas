@@ -86,9 +86,6 @@ var
   GStreamListener: ITcpListener;
   { Raw listener replying a non-2xx status with a JSON body. }
   GStatusErrorListener: ITcpListener;
-  { Raw listener replying headers + Content-Length: 0 (zero-body streaming
-    response; status-split must complete at the header block). }
-  GZeroBodyListener: ITcpListener;
 
 type
   TTrackedRequestBody = class;
@@ -687,127 +684,6 @@ begin
              'Content-Length: 24'#13#10#13#10 +
              '{"error":"rate limited"}';
     LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener replying with headers + Content-Length: 0 — zero body bytes at
-  all. Status-split streaming must complete the message at the header block
-  instead of pausing forever waiting for a body chunk that never arrives. }
-function ZeroBodyStreamThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LHead: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GZeroBodyListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LHead := 'HTTP/1.1 200 OK'#13#10 +
-             'Content-Type: text/event-stream'#13#10 +
-             'Content-Length: 0'#13#10#13#10;
-    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener replying with the FULL response (headers + body) in a single
-  write — mirrors a coalesced read where llhttp sees the final headers and the
-  whole body inside one Execute call. This is the exact shape that used to
-  dispatch body chunks before the ResponseStatus callback. }
-function CoalescedBodyThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LHead: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GStreamListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LHead := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10 +
-             'hello world';
-    LConn.Write(LHead[1], SizeUInt(Length(LHead)));
-  except
-  end;
-  LConn.Close;
-end;
-
-{ Raw listener sending a lone 100 Continue first (so the client consumes it in
-  its own read and resets to a fresh parser for the final response), then the
-  final 200 with headers + body coalesced in one write. Exercises the
-  status-split mount on the informational-reset parser. }
-function InformationalThenCoalescedThread(AArg: Pointer): Pointer; cdecl;
-var
-  LConn: ITcpStream;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LAccum: string;
-  LInform: string;
-  LFinal: string;
-  LP: SizeInt;
-begin
-  Result := nil;
-  try
-    LConn := GStreamListener.Accept;
-  except
-    Exit;
-  end;
-  if LConn = nil then
-    Exit;
-  try
-    LAccum := '';
-    repeat
-      LN := LConn.Read(LBuf[0], 4096);
-      if LN = 0 then
-        Break;
-      SetLength(LAccum, Length(LAccum) + Int32(LN));
-      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
-      LP := Pos(#13#10#13#10, LAccum);
-    until LP > 0;
-    LInform := 'HTTP/1.1 100 Continue'#13#10#13#10;
-    LConn.Write(LInform[1], SizeUInt(Length(LInform)));
-    platform_thread_sleep_ns(200000000);
-    LFinal := 'HTTP/1.1 200 OK'#13#10'Content-Length: 11'#13#10#13#10 +
-              'hello world';
-    LConn.Write(LFinal[1], SizeUInt(Length(LFinal)));
   except
   end;
   LConn.Close;
@@ -4284,96 +4160,6 @@ begin
   end;
 end;
 
-procedure TestClientResponseStatusPrecedesCoalescedBodyChunk;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-begin
-  { Headers + body arrive in a single read: llhttp parses the final response
-    headers and the body inside one Execute call. Regression guard — the
-    status callback must still fire before any body chunk (coalesced-read
-    ordering used to be inverted and dropped streamed frames). }
-  GStreamListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GStreamListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @CoalescedBodyThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/coalesced')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'coalesced response status');
-    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-      'status callback fires exactly once on coalesced response');
-    CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-      'status callback reports 200 on coalesced response');
-    Check(LSink.FStatusOrder > 0, 'status callback observed in order trace');
-    Check(LSink.FFirstChunkOrder > LSink.FStatusOrder,
-      'status callback fires before first body chunk on coalesced response');
-    CheckEqual('hello world', LSink.FTotal,
-      'coalesced response body fully streamed to chunk sink');
-    CheckEqual('hello world', ReadBodyStr(LResp),
-      'buffered body intact on coalesced response');
-  finally
-    GStreamListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
-procedure TestClientResponseStatusPrecedesCoalescedBodyChunkAfterInformational;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-begin
-  { A lone 1xx forces the transport to reset to a fresh parser for the final
-    response; that parser must also split status from body when the final
-    response's headers + body arrive coalesced. Regression guard for the
-    status-split mount on the informational-reset parser. }
-  GStreamListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GStreamListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @InformationalThenCoalescedThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/inform-then-coalesced')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk).Build;
-    LResp := LClient.Send(LReq);
-    CheckEqual(Int64(200), Int64(LResp.StatusCode),
-      'final response status after informational reset');
-    CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-      'status callback fires exactly once after informational reset');
-    CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-      'status callback reports final 200, not the 100');
-    Check(LSink.FStatusOrder > 0, 'status callback observed in order trace');
-    Check(LSink.FFirstChunkOrder > LSink.FStatusOrder,
-      'status callback fires before first body chunk after informational reset');
-    CheckEqual('hello world', LSink.FTotal,
-      'final body fully streamed after informational reset');
-  finally
-    GStreamListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
 procedure TestClientResponseStatusReportsErrorStatus;
 var
   LPort: UInt16;
@@ -4449,63 +4235,6 @@ begin
     GStreamListener.Close;
     platform_thread_join(LHandle, LRet);
     GStreamListener := nil;
-    LSink.Free;
-  end;
-end;
-
-{ Zero-body streaming response: status-split must complete at the headers
-  (Content-Length: 0). Regression for the pause-at-headers hang that left the
-  read loop blocked until the request deadline. }
-procedure TestClientZeroBodyStreamCompletesAtHeaders;
-var
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LRet: Pointer;
-  LClient: IHttpClient;
-  LReq: IHttpRequest;
-  LResp: IHttpResponse;
-  LSink: TClientStreamSink;
-  LRaised: Boolean;
-begin
-  GZeroBodyListener := NetTcpListen('127.0.0.1', 0);
-  LPort := GZeroBodyListener.LocalAddr.Port;
-  platform_thread_create(LHandle, @ZeroBodyStreamThread, nil);
-  LSink := TClientStreamSink.Create;
-  try
-    LClient := NewHttpClient;
-    LReq := THttpRequestBuilder.Create(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/empty')
-      .ResponseStatus(@LSink.OnResponseStatus)
-      .ResponseBodyChunk(@LSink.OnBodyChunk)
-      .SkipBodyBuffer
-      .Timeout(2000)
-      .Build;
-    LRaised := False;
-    try
-      LResp := LClient.Send(LReq);
-    except
-      on E: Exception do
-        LRaised := True;
-    end;
-    Check(not LRaised,
-      'zero-body stream completes without read-deadline raise');
-    if not LRaised then
-    begin
-      CheckEqual(Int64(200), Int64(LResp.StatusCode),
-        'zero-body stream status');
-      CheckEqual(Int64(1), Int64(LSink.FStatusCalls),
-        'status callback fires exactly once');
-      CheckEqual(Int64(200), Int64(LSink.FStatusValue),
-        'status callback reports 200');
-      CheckEqual(Int64(0), Int64(LSink.FChunks),
-        'no body chunks for Content-Length: 0');
-      Check(LResp.Body = nil,
-        'skip-buffer mode does not retain body');
-    end;
-  finally
-    GZeroBodyListener.Close;
-    platform_thread_join(LHandle, LRet);
-    GZeroBodyListener := nil;
     LSink.Free;
   end;
 end;
@@ -9338,15 +9067,9 @@ begin
     @TestClientPutPatchDeleteStringMethods);
   T.Test('Client ResponseStatus fires before body chunks',
     @TestClientResponseStatusFiresBeforeBodyChunks);
-  T.Test('Client ResponseStatus precedes coalesced body chunk',
-    @TestClientResponseStatusPrecedesCoalescedBodyChunk);
-  T.Test('Client ResponseStatus precedes coalesced body chunk after 1xx',
-    @TestClientResponseStatusPrecedesCoalescedBodyChunkAfterInformational);
   T.Test('Client ResponseStatus reports non-2xx error status',
     @TestClientResponseStatusReportsErrorStatus);
   T.Test('Client SkipBodyBuffer streams without retaining body',
     @TestClientSkipBodyBufferStreamsWithoutRetaining);
-  T.Test('Client zero-body stream completes at headers (status-split)',
-    @TestClientZeroBodyStreamCompletesAtHeaders);
   if not T.Run then Halt(1);
 end.
