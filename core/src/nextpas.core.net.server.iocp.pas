@@ -234,8 +234,8 @@ begin
   if FWorkerHandoff = nil then
   begin
     CreateTcpServerRuntimeContext(FWorkerHandoff, FSessionContext,
-      FOptions.ShutdownTimeoutNs);
-    FConnWorkers := ThreadPool(0);
+      FOptions.ShutdownTimeoutNs, FOptions.WorkerPoolSize);
+    FConnWorkers := ThreadPool(FOptions.WorkerPoolSize);
   end;
 end;
 

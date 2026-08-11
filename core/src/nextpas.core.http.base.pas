@@ -203,7 +203,7 @@ type
     RequestArena: Boolean;
     { RequestArenaCapacity: 0 = HTTP_DEFAULT_REQUEST_ARENA when RequestArena. }
     RequestArenaCapacity: SizeUInt;
-    { PreferPollWorkerHandoff (S1-1): when True, poll-owned (streaming/SSE)
+{ PreferPollWorkerHandoff (S1-1): when True, poll-owned (streaming/SSE)
       requests are submitted to the worker pool instead of running inline on
       the readiness reactor. Default False keeps short-request perf (inline
       avoids pool submit + completion wake); set True when handlers block for
@@ -211,6 +211,11 @@ type
       does not stall the whole reactor. Non-poll (regular) requests always
       run on the worker pool regardless of this flag. }
     PreferPollWorkerHandoff: Boolean;
+    { WorkerPoolSize: h1 poll worker handoff（及 readiness conn workers）的
+      worker 池规模。0 = auto（= platform_cpu_count，默认，保持既有行为）；
+      >0 显式覆盖池规模，用于放开「流式并发上界 = worker 池规模」的伸缩上限
+      （token888 已知差距 #2，wiki/testing.md）。0 语义不变。 }
+    WorkerPoolSize: Integer;
     { Default (PD-1B): Read/Write = 30000 ms. Long-poll/SSE/tests that need
       unbounded IO must set WithReadTimeout(0)/WithWriteTimeout(0) explicitly.
       IdleTimeout alone is not a complete production template. }
@@ -228,10 +233,14 @@ type
     function WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
     {** Enable per-request LocalArena at the server root (0 capacity = default). }
     function WithRequestArena(ACapacity: SizeUInt = 0): THttpServerOptions;
-    {** Route poll-owned (streaming/SSE) handlers to the worker pool instead
+{** Route poll-owned (streaming/SSE) handlers to the worker pool instead
       of running them inline on the readiness reactor (see field note). }
     function WithPreferPollWorkerHandoff(
       const AValue: Boolean = True): THttpServerOptions;
+    {** Override worker pool size (0 = auto = platform_cpu_count, default).
+      See WorkerPoolSize field note. }
+    function WithWorkerPoolSize(
+      const AWorkerCount: Integer = 0): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -1142,6 +1151,7 @@ begin
   Result.RequestArena := False;
   Result.RequestArenaCapacity := 0;
   Result.PreferPollWorkerHandoff := False;
+  Result.WorkerPoolSize := 0;
 end;
 
 class function THttpServerOptions.Production: THttpServerOptions;
@@ -1214,6 +1224,13 @@ function THttpServerOptions.WithPreferPollWorkerHandoff(
 begin
   Result := Self;
   Result.PreferPollWorkerHandoff := AValue;
+end;
+
+function THttpServerOptions.WithWorkerPoolSize(
+  const AWorkerCount: Integer): THttpServerOptions;
+begin
+  Result := Self;
+  Result.WorkerPoolSize := AWorkerCount;
 end;
 
 function THttpServerOptions.EffectiveVersion(

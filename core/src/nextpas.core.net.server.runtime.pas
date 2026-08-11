@@ -130,7 +130,8 @@ type
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
   out ASessionContext: ITcpServerSessionContext;
-  const AShutdownTimeoutNs: Int64 = 0);
+  const AShutdownTimeoutNs: Int64 = 0;
+  const AWorkerPoolSize: Integer = 0);
 function TryCreateTcpServerSession(const AHandler: ITcpServerHandler;
   const AConn: ITcpStream; const AContext: ITcpServerSessionContext;
   out ASession: ITcpServerSession): Boolean;
@@ -172,7 +173,8 @@ type
     FShuttingDown: Boolean;
     FShutdownTimeoutNs: Int64;
   public
-    constructor Create(const AShutdownTimeoutNs: Int64 = 0);
+    constructor Create(const AShutdownTimeoutNs: Int64 = 0;
+      const AWorkerPoolSize: Integer = 0);
     procedure Shutdown;
     function Submit(const AWork: ITcpServerWork;
       const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
@@ -660,10 +662,13 @@ begin
   FWork := nil;
 end;
 
-constructor TTcpServerDefaultWorkerHandoff.Create(const AShutdownTimeoutNs: Int64);
+constructor TTcpServerDefaultWorkerHandoff.Create(
+  const AShutdownTimeoutNs: Int64; const AWorkerPoolSize: Integer);
 begin
   inherited Create;
-  FPool := ThreadPool(0);
+  { WorkerPoolSize: 0 = auto（platform_cpu_count，既有行为）；>0 覆盖，
+    放开流式并发上界（token888 已知差距 #2 收口）。 }
+  FPool := ThreadPool(AWorkerPoolSize);
   FMutex := nextpas.core.sync.mutex.TMutex.Create;
   FShuttingDown := False;
   FShutdownTimeoutNs := AShutdownTimeoutNs;
@@ -742,9 +747,11 @@ end;
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
   out ASessionContext: ITcpServerSessionContext;
-  const AShutdownTimeoutNs: Int64 = 0);
+  const AShutdownTimeoutNs: Int64 = 0;
+  const AWorkerPoolSize: Integer = 0);
 begin
-  AWorkerHandoff := TTcpServerDefaultWorkerHandoff.Create(AShutdownTimeoutNs);
+  AWorkerHandoff := TTcpServerDefaultWorkerHandoff.Create(AShutdownTimeoutNs,
+    AWorkerPoolSize);
   ASessionContext := TTcpServerDefaultSessionContext.Create(AWorkerHandoff);
 end;
 

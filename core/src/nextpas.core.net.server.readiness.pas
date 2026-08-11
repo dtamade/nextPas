@@ -155,8 +155,9 @@ var
 begin
   if FWorkerHandoff = nil then
   begin
-    CreateTcpServerRuntimeContext(FWorkerHandoff, LUnusedContext);
-    FConnWorkers := ThreadPool(0);
+    CreateTcpServerRuntimeContext(FWorkerHandoff, LUnusedContext, 0,
+      FOptions.WorkerPoolSize);
+    FConnWorkers := ThreadPool(FOptions.WorkerPoolSize);
   end;
 end;
 

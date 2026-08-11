@@ -183,6 +183,7 @@ begin
   LTcpOptions := TTcpServerOptions.Default;
   LTcpOptions.Backend := AOptions.Backend;
   LTcpOptions.ShutdownTimeoutNs := AOptions.ShutdownTimeout * Int64(1000000);
+  LTcpOptions.WorkerPoolSize := AOptions.WorkerPoolSize;
   FTcpServer := NewTcpServer(LTcpOptions);
   FConnHandler := THttpConnHandler.Create(FTransport, FHandler);
 end;
