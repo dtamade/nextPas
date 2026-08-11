@@ -13356,11 +13356,12 @@ var
   __c2p_discard_1: LongInt;
   __c2p_discard_2: LongInt;
 begin
-  { fprintf(stderr, …) is the C original; FreeBSD's libc exposes
-    stderr/stdout/stdin via __sF macros, so a bare `stderr` symbol does not
-    link under fpc-devel (3.3.1) on FreeBSD. Debug tracing is off by default;
-    keep the routine inert there instead of forking the format per host. }
-  {$IFNDEF NEXTPAS_FREEBSD}
+  { fprintf(stderr, …) is the C original. A bare `stderr` symbol is only
+    linkable on Windows (MSVCRT exports it); on ELF/BSD/macOS the standard
+    libc exposes it via macros (__sF), so references fail to link. Debug
+    tracing is off by default; keep the routine inert off-Windows instead
+    of forking the format per host. }
+  {$IFDEF WINDOWS}
   if (p = endp) then
   begin
     __c2p_discard_1 := fprintf(stderr, 'p=%p type=%d flags=%02x next=null debug=%s'#10, s, s^.&type, s^.flags, msg);
