@@ -33,6 +33,7 @@ type
     FDeclaredContentLength: Int64;
     FContentLengthWritten: Int64;
     FBodyBytesWritten: Int64;
+    FWriteTimeoutMs: Int64;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteHeaderBlock;
@@ -50,6 +51,8 @@ type
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
       const ASuppressBody: Boolean); overload;
+    constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
+      const ASuppressBody: Boolean; const AWriteTimeoutMs: Int64); overload;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -75,8 +78,11 @@ uses
   nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.text.conv,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.http.headers,
-  nextpas.core.http.impl.h1.chunked;
+  nextpas.core.http.impl.h1.chunked,
+  nextpas.core.http.impl.h1.outbound;
 
 procedure WriteAllOrRaise(const AWriter: IWriter; const ABuf;
   const ACount: SizeUInt);
@@ -133,6 +139,12 @@ end;
 constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream;
   const ASuppressBody: Boolean);
 begin
+  Create(AWriter, AConn, ASuppressBody, 0);
+end;
+
+constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream;
+  const ASuppressBody: Boolean; const AWriteTimeoutMs: Int64);
+begin
   inherited Create;
   FWriter := AWriter;
   FHeaders := NewHttpHeaders;
@@ -147,6 +159,7 @@ begin
   FDeclaredContentLength := 0;
   FContentLengthWritten := 0;
   FBodyBytesWritten := 0;
+  FWriteTimeoutMs := AWriteTimeoutMs;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -497,6 +510,7 @@ end;
 procedure TH1ResponseWriter.Flush;
 var
   LFlusher: IFlusher;
+  LOutbound: IH1OutboundBuffer;
 begin
   { Flush is non-terminating: SSE and other streaming protocols Flush between
     frames; only the conn loop's FinalizeResponse writes the terminal chunk. }
@@ -504,6 +518,22 @@ begin
     Exit;
   if (not FHeadersSent) and (not FHijacked) then
     WriteHeader(HTTP_STATUS_OK);
+  { Handler-level Flush must push buffered bytes to the peer immediately.
+    On the server path FWriter is an IH1OutboundBuffer which has no IFlusher,
+    so without this direct drain a per-frame Flush is a no-op until the conn
+    loop drains after the handler returns (first token then arrives at
+    whole-stream latency). The drain runs on the handler thread; both the
+    poll worker-handoff and reactor-inline paths set the socket blocking and
+    wait for handler completion, so the write needs no extra lock. Hijacked
+    connections are owned by the handler and must not be drained here. }
+  if (not FHijacked) and (FConn <> nil) and
+     Supports(FWriter, IH1OutboundBuffer, LOutbound) and (not LOutbound.IsEmpty) then
+  begin
+    if FWriteTimeoutMs > 0 then
+      FConn.SetWriteDeadline(TDeadline.After(
+        TDuration.FromMilliseconds(FWriteTimeoutMs)));
+    LOutbound.DrainAllTo(FConn as IWriter);
+  end;
   if Supports(FWriter, IFlusher, LFlusher) then
     LFlusher.Flush;
 end;

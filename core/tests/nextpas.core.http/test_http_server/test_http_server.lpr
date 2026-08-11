@@ -1720,6 +1720,94 @@ begin
   end;
 end;
 
+var
+  { Shared between the handler (server worker thread) and the client (test
+    thread): proves Flush pushed frame-1 to the peer before the handler
+    returned. }
+  GFlushFrame1Seen: Int32 = 0;
+  GFlushHandlerTimedOut: Int32 = 0;
+
+{ Deterministic first-frame timing proof: the handler writes frame-1, then
+  spins until the client reports it has read frame-1; frame-2 is only written
+  after that handshake. Without a handler-level Flush push, frame-1 only
+  reaches the client after the handler returns, so the 5s watchdog trips and
+  the test fails. }
+procedure TestLiveSSEFlushPushesFrameBeforeHandlerReturns;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LReq: string;
+  LSpins: Int32;
+begin
+  InterlockedExchange(GFlushFrame1Seen, 0);
+  InterlockedExchange(GFlushHandlerTimedOut, 0);
+
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/sse-flush',
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LWriter: ISSEEventWriter;
+    begin
+      LWriter := StartSSE(AW);
+      LWriter.WriteEventSimple('message', 'flush-frame-1', '1');
+      { Wait for the client's frame-1 report. If Flush does not push the
+        buffered bytes before the handler returns, frame-1 arrives only after
+        this handler returns and the watchdog trips. }
+      LSpins := 0;
+      while (InterlockedExchangeAdd(GFlushFrame1Seen, 0) = 0) and (LSpins < 5000) do
+      begin
+        platform_thread_sleep_ns(1000000); { 1ms }
+        Inc(LSpins);
+      end;
+      if LSpins >= 5000 then
+        InterlockedIncrement(GFlushHandlerTimedOut);
+      LWriter.WriteEventSimple('message', 'flush-frame-2', '2');
+      LWriter.Close;
+    end);
+
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LReq := 'GET /sse-flush HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
+    LResp := '';
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+          if Pos('data: flush-frame-1', LResp) > 0 then
+            InterlockedExchange(GFlushFrame1Seen, 1);
+        end;
+      until (LN = 0) or (Pos('data: flush-frame-2', LResp) > 0);
+    finally
+      LConn.Close;
+    end;
+
+    Check(InterlockedExchangeAdd(GFlushFrame1Seen, 0) = 1,
+      'client saw frame-1 while the handler was still executing (Flush pushed it)');
+    Check(InterlockedExchangeAdd(GFlushHandlerTimedOut, 0) = 0,
+      'handler did not hit the 5s watchdog (Flush pushes before handler returns)');
+    Check(Pos('data: flush-frame-2', LResp) > 0,
+      'client received frame-2 after the frame-1 handshake');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2: Server responds with custom body }
 procedure TestCustomBody;
 var
@@ -7995,6 +8083,8 @@ begin
   T := TTestSuite.Create('nextpas.core.http.server');
   T.Test('Simple GET 200', @TestSimpleGet200);
   T.Test('Live SSE event stream', @TestLiveSSEEventStream);
+  T.Test('Live SSE flush pushes first frame before handler returns',
+    @TestLiveSSEFlushPushesFrameBeforeHandlerReturns);
   T.Test('Empty handler commits default response',
     @TestEmptyHandlerCommitsDefaultResponse);
   T.Test('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);

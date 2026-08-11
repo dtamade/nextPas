@@ -65,6 +65,34 @@ type
   procedure SetCancelToken(const AToken: INetCancelToken);
 end;
 
+  { Capturing connection mock: records written wire bytes and write-deadline
+    calls so Flush-to-connection behavior can be asserted. Implements IWriter
+    so the outbound drain's interface cast works. }
+  TCaptureTcpStream = class(TInterfacedObject, ITcpStream, IWriter)
+  private
+    FOutput: string;
+    FLastWriteDeadline: TDeadline;
+    FSetWriteDeadlineCount: Int32;
+  public
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
+    function GetOutput: string;
+    function GetWriteDeadlineCallCount: Int32;
+  end;
+
   TMockDrainStreamRuntime = class(TInterfacedObject, ITcpStreamRuntime)
   private
     FOutput: string;
@@ -220,6 +248,93 @@ end;
 
 procedure TMockTcpStream.SetCancelToken(const AToken: INetCancelToken);
 begin
+end;
+
+function TCaptureTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+function TCaptureTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOld: SizeUInt;
+begin
+  if ACount = 0 then
+    Exit(0);
+  LOld := SizeUInt(Length(FOutput));
+  SetLength(FOutput, LOld + ACount);
+  Move(ABuf, FOutput[LOld + 1], ACount);
+  Result := ACount;
+end;
+
+function TCaptureTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := 0;
+end;
+
+procedure TCaptureTcpStream.Close;
+begin
+end;
+
+function TCaptureTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TCaptureTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TCaptureTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TCaptureTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TCaptureTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TCaptureTcpStream.Shutdown;
+begin
+end;
+
+procedure TCaptureTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TCaptureTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TCaptureTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TCaptureTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  FLastWriteDeadline := ADeadline;
+  Inc(FSetWriteDeadlineCount);
+end;
+
+procedure TCaptureTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+end;
+
+function TCaptureTcpStream.GetOutput: string;
+begin
+  Result := FOutput;
+end;
+
+function TCaptureTcpStream.GetWriteDeadlineCallCount: Int32;
+begin
+  Result := FSetWriteDeadlineCount;
 end;
 
 constructor TMockDrainStreamRuntime.Create(const AMaxPerWrite: SizeUInt;
@@ -979,6 +1094,83 @@ begin
   end;
 end;
 
+{ SSE/streaming regression: on the server path FWriter is an outbound buffer
+  (no IFlusher); a handler-level Flush must drain buffered bytes straight to
+  the connection so the peer sees the frame before the handler returns. }
+procedure TestFlushDrainsOutboundBufferToConnection;
+var
+  LConn: TCaptureTcpStream;
+  LConnIntf: ITcpStream;
+  LOutbound: IH1OutboundBuffer;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+begin
+  LConn := TCaptureTcpStream.Create;
+  LConnIntf := LConn as ITcpStream;
+  LOutbound := NewH1OutboundBuffer;
+  LRW := TH1ResponseWriter.Create(LOutbound as IWriter, LConnIntf);
+  try
+    LRW.WriteHeader(HTTP_STATUS_OK);
+    LBody := 'frame-1';
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+    LRW.Flush;
+    LOut := LConn.GetOutput;
+    Check(Pos('HTTP/1.1 200 OK'#13#10, LOut) = 1,
+      'flush pushes the status line to the connection');
+    Check(Pos('transfer-encoding: chunked'#13#10, LOut) > 0,
+      'flush pushes the chunked header to the connection');
+    Check(Pos('frame-1', LOut) > 0,
+      'flush pushes the first frame bytes to the connection');
+    Check(Pos('0'#13#10#13#10, LOut) = 0,
+      'flush writes no terminal chunk');
+    Check(LOutbound.IsEmpty,
+      'flush empties the outbound buffer');
+    { Second frame after flush must still be writable (SSE multi-frame case). }
+    LBody := 'frame-2';
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+    LRW.FinalizeResponse;
+    { Conn loop drains the buffer once the handler returns. }
+    LOutbound.DrainAllTo(LConn as IWriter);
+    LOut := LConn.GetOutput;
+    Check(Pos('frame-2', LOut) > Pos('frame-1', LOut),
+      'second frame follows first frame on the wire');
+    Check(Pos('0'#13#10#13#10, LOut) > Pos('frame-2', LOut),
+      'terminal chunk follows the last frame on the wire');
+  finally
+    LRW.Free;
+  end;
+end;
+
+{ A positive write timeout is applied to the connection before a handler-level
+  flush drain (mirrors ArmDirectWriteDeadline); WriteTimeout=0 keeps the
+  unbounded streaming semantics. }
+procedure TestFlushAppliesWriteDeadlineWhenTimeoutPositive;
+var
+  LConn: TCaptureTcpStream;
+  LConnIntf: ITcpStream;
+  LOutbound: IH1OutboundBuffer;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+begin
+  LConn := TCaptureTcpStream.Create;
+  LConnIntf := LConn as ITcpStream;
+  LOutbound := NewH1OutboundBuffer;
+  LRW := TH1ResponseWriter.Create(LOutbound as IWriter, LConnIntf, False, 100);
+  try
+    LRW.WriteHeader(HTTP_STATUS_OK);
+    LBody := 'payload';
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+    LRW.Flush;
+    Check(LConn.GetWriteDeadlineCallCount = 1,
+      'flush applies the write deadline once');
+    Check(not LConn.FLastWriteDeadline.IsInfinite,
+      'applied write deadline is finite');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestHijackWithoutConnectionRaises;
 var
   LW: TBytesWriter;
@@ -1462,6 +1654,10 @@ begin
   T.Test('Chunked flush does not terminate (SSE regression)',
     @TestChunkedFlushDoesNotTerminate);
   T.Test('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
+  T.Test('Flush drains outbound buffer to connection (SSE regression)',
+    @TestFlushDrainsOutboundBufferToConnection);
+  T.Test('Flush applies write deadline when timeout positive',
+    @TestFlushAppliesWriteDeadlineWhenTimeoutPositive);
   T.Test('Finalize without prior write commits default response',
     @TestFlushWithoutPriorWriteCommitsDefaultResponse);
   T.Test('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
