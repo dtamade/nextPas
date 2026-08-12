@@ -33,6 +33,12 @@ help:
 	@echo "  make gate-conformance  - official harnesses only"
 	@echo "  make gate-unit         - unit suites only"
 
+# CI-compatible aliases: core-ci-test runs `make test` on every tests/ Makefile;
+# this module is a gate-style aggregator, so alias the product gate.
+test: gate
+clean:
+	@for t in $(CONFORMANCE) $(UNIT); do $(MAKE) -C $$t clean || exit 1; done
+
 gate: gate-conformance gate-unit
 	@echo ""
 	@echo "=== text.unicode gate: ALL GREEN ==="

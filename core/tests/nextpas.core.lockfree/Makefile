@@ -20,7 +20,7 @@
 #   core/build/verify-lockfree/verify-t2-smoke.log
 #   core/build/verify-lockfree/verify-r8.log
 
-.PHONY: verify-t1 clean-verify-t1 verify-h3-consumers verify-t2-smoke verify-r8 test-rtl-isolation
+.PHONY: test clean verify-t1 clean-verify-t1 verify-h3-consumers verify-t2-smoke verify-r8 test-rtl-isolation
 
 ATOMIC_TEST_DIR := ../nextpas.core.atomic/test_atomic
 LOCKFREE_TEST_DIR := test_lockfree
@@ -58,6 +58,11 @@ VERIFY_R8_LOG ?= $(VERIFY_LOG_DIR)/verify-r8.log
 
 test-rtl-isolation:
 	@bash ./check_test_rtl_isolation.sh
+
+# CI-compatible aliases: core-ci-test runs `make test` on every tests/ Makefile;
+# this module is a verify-style aggregator, so alias the product gate (verify-t1).
+test: verify-t1
+clean: clean-verify-t1
 
 verify-t1:
 	@mkdir -p $(VERIFY_LOG_DIR)
