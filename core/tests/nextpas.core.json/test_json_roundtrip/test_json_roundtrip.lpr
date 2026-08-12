@@ -33,22 +33,27 @@ var
       jnkInt:    B.Int(V.AsInt);
       jnkReal:   B.Float(V.AsFloat);
       jnkString: B.Str(V.AsStr.ToString);
+      { ArrayLen/ObjectLen are UInt32: for empty containers the loop bound
+        Len - 1 wraps to $FFFFFFFF (4.29e9 iterations). Guard so empty
+        arrays/objects terminate (was 40 GiB OOM). }
       jnkArray:
         begin
           B.BeginArray;
-          for I := 0 to V.ArrayLen - 1 do
-            WriteValue(V.ArrayGet(I));
+          if V.ArrayLen > 0 then
+            for I := 0 to V.ArrayLen - 1 do
+              WriteValue(V.ArrayGet(I));
           B.EndArray;
         end;
       jnkObject:
         begin
           B.BeginObject;
-          for I := 0 to V.ObjectLen - 1 do
-          begin
-            K := V.ObjectKeyAt(I);
-            B.Key(K.ToString);
-            WriteValue(V.ObjectValueAt(I));
-          end;
+          if V.ObjectLen > 0 then
+            for I := 0 to V.ObjectLen - 1 do
+            begin
+              K := V.ObjectKeyAt(I);
+              B.Key(K.ToString);
+              WriteValue(V.ObjectValueAt(I));
+            end;
           B.EndObject;
         end;
     end;
