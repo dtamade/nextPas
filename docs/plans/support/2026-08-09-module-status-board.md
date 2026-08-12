@@ -372,3 +372,35 @@ Linux Verification / TUI Tests 仍红，均为既有他人红点（compiler cons
   **main 上 30 个 build/ 文件的陌生删除**（平行 lane 或清理脚本所为，
   本线未触碰、未代收）
 - compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
+
+## Core CI 跟进 4：模块级聚合 Makefile 缺 test 目标（CI 推进第二个真实断链）+ sweep 假 FAIL 澄清（v13，2026-08-12）
+
+### c19ece7d9 修复：两个模块级聚合 Makefile 补 test 别名
+
+- **根因**：`core/Makefile test`（CI 的 core-ci-test）对 `tests/` 下**每个**
+  Makefile 跑 `make test`（首失败即停）。lockfree（verify-t1 聚合）与
+  text.unicode（gate 聚合）只有 verify/gate 目标、无 `test` → json 修复后
+  CI 推进到 lockfree 必然 `No rule to make target 'test'`
+- **修复**（受控跨模块，仅别名委托，不改任何测试语义）：
+  - lockfree: `test -> verify-t1`（atomic + 主套件 + stress + RTL isolation），
+    `clean -> clean-verify-t1`
+  - text.unicode: `test -> gate`（conformance + unit 全部），`clean` 委托子项目
+- **全库排查**：`tests/` 下 640+ Makefile 中仅这 2 个缺 test 目标；其余
+  NO-TEST 扫描命中均为误报——compile_gate 用 `common_compile_gate.mk`
+  （已有 `test: build`，`-Cn` 只编译不链接，linux CI 可过），普通项目
+  include `common.mk`（已有 `test: run`）
+- **验证**：lockfree `make test` → verify-t1-status=pass（stress 20/20）；
+  text.unicode `make test` → ALL GREEN；EXIT=0
+
+### sweep 假 FAIL 澄清（OOM 连带损伤）
+
+- sweep 15:07 跑到 json roundtrip 触发 40GB OOM（用户机器死机数次），
+  系统资源耗尽导致后续 lockfree/log/math 全部假 FAIL——机器恢复后逐个重跑
+  全部 PASS（test_log 70/70、test_log_audit 33/33、test_log_intf ✅、
+  bench_batch_simd ✅）。非真实断链
+
+### ⏳ 下一轮观察
+
+- 新 CI run 应越过 lockfree，继续 log/math/...（compile gates 可过，预期推进到
+  text.unicode 之后）。注意 main 上 30 个 build/ 文件陌生删除仍未动
+- compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
