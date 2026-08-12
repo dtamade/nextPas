@@ -195,3 +195,49 @@ http-host matrix（threaded_host + iocp_wire + iocp_facade）在 macOS **首次 
 - ✅ macOS：BSD sa_len + field25519 + llhttp 三层修复，http-host 首次全绿
 - ✅ contract 54/54、tooling gate、libgit2、workflow_dispatch、freebsd 90s
 - ⏳ 待复跑确认偶发 ×2；既有红点：linux bench 47、compiler snapshot、macOS best-effort 收敛
+
+## test_http_benchmarks 28/28 可修 gate 落地（v8，2026-08-12）
+
+### ✅ 已修复（`ab5ce792b`，10 文件）
+
+bench-gate-diagnose 工作流（`.grok/workflows/bench-gate-diagnose.rhai`）将 47 个失败
+gate 分类为 28 可修 + 19 不可修（bench lane 重写）。28 项全部落地并转绿：
+
+- **marker 契约 ×22**：bench_fullchain 外的 h1parser/h1writer/h1outbound/router/headers
+  均在 Run 前输出 `bench_filter=`（no-match 路径可见）并真正应用 SetFilter；
+  headers 行名对齐 `'Get hit (5 headers, last)'` 等期望 + 移除 SetQuiet
+- **诊断契约 ×5**：h1parser max-iters/backend、fullchain rejects backend/max-iters、
+  no-match 输出统一 `invalid <ENV>` / `No matching ...` + 非零退出
+- **源码契约 ×3**：`H1ServerUnitPath` → impl.h1.conn.pas（helper 实际归属）；
+  parser.pas 抽出 `UpdateConnectionMetadataFromCapturedValue` span 帮助函数
+  （行为零变化）；API_COVERAGE.md 恢复 benchmark evidence summary 区块
+- **陷阱记录**：llhttp.pas 接口区导出 `stderr: PTFILE; external 'c'`，遮蔽全局
+  `StdErr`（Pascal 大小写不敏感）→ WriteLn 编译失败；用 `System.StdErr` 限定名
+- `.gitignore` 忽略 `.grok/`（本地 CLI 目录，与 `.cursor/`、`.ace-tool/` 一致）
+
+### 验证
+
+`make focused FOCUS=core/tests/nextpas.core.http/test_http_benchmarks`：
+**103 passed / 20 failed**（此前 0/47）。
+
+### 剩余 20 = 19 不可修（bench lane 重写）+ 1 环境噪声
+
+- **19 项**：4 个 fullchain 严格校验 source-contract（RunScenario 标记整体缺失，需
+  逐场景校验闭环重做）+ 12 个 fullchain smoke（旧版输出缺
+  `nextpas_h1_path=`/`workload=`/`observed_*` 全套 marker）+ 3 个 flag-matrix
+  （run_flag_matrix.sh sed 解析契约破裂）——均判 bench lane 重写，未动
+- **1 项**（server comparison snapshot small smoke，不在诊断 47 内）：FPC 编译
+  bench_http_server.lpr 时 `platform_posix_timespec_to_ns_u64` inline 不内联
+  Note 落入快照输出（`CheckNotContains ' Note:'` 失败）。**干净 HEAD worktree
+  复现 734 条 Note**（当前树 6 条）——判定先存在的本地环境/FPC 版本噪声，
+  与本次改动无关，未修未动
+
+### 待 owner 决策（更新）
+
+1. **bench lane 重写**（19 gate）：建议独立 bench lane 落地 match + strict-validation
+   闭环（`ReadResponse -> ResponseMatchesScenario -> RecordScenarioResult`）与
+   flag-matrix sed 契约对齐
+2. **snapshot Note 噪声**：可选在 capture 脚本过滤 ` Note:`/` Warning:` 编译器
+   噪声行，属 bench lane 范围
+3. compiler snapshot（constructor-typing）、compiler-system B5g、tui/http stale lane：
+   维持不代收
