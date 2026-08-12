@@ -1,5 +1,8 @@
 # nextpas.core.lockfree module-level verify targets
 # ======================================================
+# Bash is required: recipes use `set -euo pipefail` (same pattern as
+# tests/nextpas.core.id/test_xid_counter_wrap_contract/Makefile).
+SHELL := /bin/bash
 # verify-t1:     atomic + lockfree main suite + stress (R6 baseline)
 # verify-h3-consumers: H3-3 consumer regression (does NOT replace verify-t1)
 # verify-t2-smoke: curated T2 gates + test RTL isolation (F-006; does NOT replace t1)
