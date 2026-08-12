@@ -350,7 +350,7 @@ begin
   CheckContains(LReleaseBody, 'if not lhasexception then',
     'IOCP pending release must retain the first callback exception');
   CheckContains(LReleaseBody,
-    'lcallback(luserdata, -int32(aerror), lcontext);',
+    'lcallback(luserdata, -iocpmaposerror(aerror), lcontext);',
     'IOCP pending release must deliver the abort result to the owned callback');
   CheckContains(LReleaseBody, 'raise exception.create(lexceptionmessage);',
     'IOCP pending release must re-raise the first callback exception after the batch');
@@ -521,7 +521,7 @@ begin
   LFailBody := ExtractBetween(LIocp, 'function iocpfail',
     'function iocpunsupportedasync');
 
-  CheckContains(LFailBody, 'acallback(auserdata, -int32(aerror), acontext);',
+  CheckContains(LFailBody, 'acallback(auserdata, -iocpmaposerror(aerror), acontext);',
     'IOCP synchronous failure helper must deliver the callback inline');
   CheckContains(LFailBody, 'result := true;',
     'IOCP synchronous failure helper must report callback ownership transfer');
