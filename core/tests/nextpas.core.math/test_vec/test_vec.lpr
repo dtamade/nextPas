@@ -1862,6 +1862,56 @@ begin
   Check(V4d.WZYX.PerfectlyEquals(TVec4d.Create(4.5, 3.5, 2.5, 1.5)), 'TVec4d.WZYX');
 end;
 
+procedure TestVecUnitAxes;
+begin
+  CheckVec2f(1.0, 0.0, TVec2f.UnitX, 'TVec2f.UnitX');
+  CheckVec2f(0.0, 1.0, TVec2f.UnitY, 'TVec2f.UnitY');
+  CheckVec3f(1.0, 0.0, 0.0, TVec3f.UnitX, 'TVec3f.UnitX');
+  CheckVec3f(0.0, 1.0, 0.0, TVec3f.UnitY, 'TVec3f.UnitY');
+  CheckVec3f(0.0, 0.0, 1.0, TVec3f.UnitZ, 'TVec3f.UnitZ');
+  CheckVec4f(1.0, 0.0, 0.0, 0.0, TVec4f.UnitX, 'TVec4f.UnitX');
+  CheckVec4f(0.0, 1.0, 0.0, 0.0, TVec4f.UnitY, 'TVec4f.UnitY');
+  CheckVec4f(0.0, 0.0, 1.0, 0.0, TVec4f.UnitZ, 'TVec4f.UnitZ');
+  CheckVec4f(0.0, 0.0, 0.0, 1.0, TVec4f.UnitW, 'TVec4f.UnitW');
+  CheckVec2d(1.0, 0.0, TVec2d.UnitX, 'TVec2d.UnitX');
+  CheckVec2d(0.0, 1.0, TVec2d.UnitY, 'TVec2d.UnitY');
+  CheckVec3d(1.0, 0.0, 0.0, TVec3d.UnitX, 'TVec3d.UnitX');
+  CheckVec3d(0.0, 1.0, 0.0, TVec3d.UnitY, 'TVec3d.UnitY');
+  CheckVec3d(0.0, 0.0, 1.0, TVec3d.UnitZ, 'TVec3d.UnitZ');
+  CheckVec4d(1.0, 0.0, 0.0, 0.0, TVec4d.UnitX, 'TVec4d.UnitX');
+  CheckVec4d(0.0, 1.0, 0.0, 0.0, TVec4d.UnitY, 'TVec4d.UnitY');
+  CheckVec4d(0.0, 0.0, 1.0, 0.0, TVec4d.UnitZ, 'TVec4d.UnitZ');
+  CheckVec4d(0.0, 0.0, 0.0, 1.0, TVec4d.UnitW, 'TVec4d.UnitW');
+end;
+
+procedure TestVecEqualityOperators;
+begin
+  Check(TVec2f.Create(1.0, 2.0) = TVec2f.Create(1.0, 2.0), 'TVec2f = equal');
+  Check(not (TVec2f.Create(1.0, 2.0) = TVec2f.Create(1.0, 3.0)), 'TVec2f = differs');
+  Check(TVec2f.Create(1.0, 2.0) <> TVec2f.Create(1.0, 3.0), 'TVec2f <> differs');
+  Check(not (TVec2f.Create(1.0, 2.0) <> TVec2f.Create(1.0, 2.0)), 'TVec2f <> equal');
+  Check(TVec3f.Create(1.0, 2.0, 3.0) = TVec3f.Create(1.0, 2.0, 3.0), 'TVec3f = equal');
+  Check(TVec3f.Create(1.0, 2.0, 3.0) <> TVec3f.Create(1.0, 2.0, 4.0), 'TVec3f <> differs');
+  Check(TVec4f.Create(1.0, 2.0, 3.0, 4.0) = TVec4f.Create(1.0, 2.0, 3.0, 4.0), 'TVec4f = equal');
+  Check(TVec4f.Create(1.0, 2.0, 3.0, 4.0) <> TVec4f.Create(1.0, 2.0, 3.0, 5.0), 'TVec4f <> differs');
+  Check(TVec2d.Create(1.0, 2.0) = TVec2d.Create(1.0, 2.0), 'TVec2d = equal');
+  Check(TVec2d.Create(1.0, 2.0) <> TVec2d.Create(1.0, 3.0), 'TVec2d <> differs');
+  Check(TVec3d.Create(1.0, 2.0, 3.0) = TVec3d.Create(1.0, 2.0, 3.0), 'TVec3d = equal');
+  Check(TVec3d.Create(1.0, 2.0, 3.0) <> TVec3d.Create(1.0, 2.0, 4.0), 'TVec3d <> differs');
+  Check(TVec4d.Create(1.0, 2.0, 3.0, 4.0) = TVec4d.Create(1.0, 2.0, 3.0, 4.0), 'TVec4d = equal');
+  Check(TVec4d.Create(1.0, 2.0, 3.0, 4.0) <> TVec4d.Create(1.0, 2.0, 3.0, 5.0), 'TVec4d <> differs');
+end;
+
+procedure TestVecToString;
+begin
+  Check(TVec2f.Create(1.5, 2.5).ToString = '1.5 2.5', 'TVec2f.ToString');
+  Check(TVec3f.Create(1.0, 2.0, 3.0).ToString = '1 2 3', 'TVec3f.ToString');
+  Check(TVec4f.Create(1.0, 2.0, 3.0, 4.0).ToString = '1 2 3 4', 'TVec4f.ToString');
+  Check(TVec2d.Create(1.5, 2.5).ToString = '1.5 2.5', 'TVec2d.ToString');
+  Check(TVec3d.Create(1.0, 2.0, 3.0).ToString = '1 2 3', 'TVec3d.ToString');
+  Check(TVec4d.Create(1.0, 2.0, 3.0, 4.0).ToString = '1 2 3 4', 'TVec4d.ToString');
+end;
+
 procedure TestVecClamp;
 var
   V2f, Min2f, Max2f: TVec2f;
@@ -1975,6 +2025,9 @@ begin
   T.Test('Vec extend/truncate', @TestVecExtendTruncate);
   T.Test('Vec swizzle', @TestVecSwizzle);
   T.Test('Vec clamp', @TestVecClamp);
+  T.Test('Vec unit axes', @TestVecUnitAxes);
+  T.Test('Vec equality operators', @TestVecEqualityOperators);
+  T.Test('Vec ToString', @TestVecToString);
   TouchVectorSinks;
   if not T.Run then Halt(1);
 end.

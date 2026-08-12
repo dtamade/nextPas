@@ -108,6 +108,18 @@ type
     property Items[const AColumn, ARow: TIndex]: Single read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec4f read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec4f read GetColumns write SetColumns;
+    {** Multiplies the transpose of this matrix by a 4D vector.
+     * Equivalent to Transpose * AVec (row-major view of Data). }
+    function TransposeMultiply(const AVec: TVec4f): TVec4f; inline;
+    {** Transforms a 2D point (X, Y, 0, 1) and drops the resulting Z. }
+    function MultPoint(const AVec: TVec2f): TVec2f; inline;
+    {** Transforms a 2D direction (X, Y, 0, 0) and drops the resulting Z. }
+    function MultDirection(const AVec: TVec2f): TVec2f; inline;
+    {** Inverts the matrix given its pre-computed determinant.
+     * The determinant is treated as a non-singularity assertion: zero or
+     * degenerate values raise EArgumentError. Numerical inversion still
+     * goes through the stable TryInverse path. }
+    function Inverse(const ADeterminant: Single): TMat4f;
   end;
 
   TMat3d = packed record
@@ -184,6 +196,18 @@ type
     property Items[const AColumn, ARow: TIndex]: Double read GetItems write SetItems; default;
     property Rows[const ARow: TIndex]: TVec4d read GetRows write SetRows;
     property Columns[const AColumn: TIndex]: TVec4d read GetColumns write SetColumns;
+    {** Multiplies the transpose of this matrix by a 4D vector.
+     * Equivalent to Transpose * AVec (row-major view of Data). }
+    function TransposeMultiply(const AVec: TVec4d): TVec4d; inline;
+    {** Transforms a 2D point (X, Y, 0, 1) and drops the resulting Z. }
+    function MultPoint(const AVec: TVec2d): TVec2d; inline;
+    {** Transforms a 2D direction (X, Y, 0, 0) and drops the resulting Z. }
+    function MultDirection(const AVec: TVec2d): TVec2d; inline;
+    {** Inverts the matrix given its pre-computed determinant.
+     * The determinant is treated as a non-singularity assertion: zero or
+     * degenerate values raise EArgumentError. Numerical inversion still
+     * goes through the stable TryInverse path. }
+    function Inverse(const ADeterminant: Double): TMat4d;
   end;
 
 implementation
@@ -877,6 +901,39 @@ begin
     Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z);
 end;
 
+function TMat4f.TransposeMultiply(const AVec: TVec4f): TVec4f;
+begin
+  Result := TVec4f.Create(
+    Data[0, 0] * AVec.X + Data[0, 1] * AVec.Y + Data[0, 2] * AVec.Z + Data[0, 3] * AVec.W,
+    Data[1, 0] * AVec.X + Data[1, 1] * AVec.Y + Data[1, 2] * AVec.Z + Data[1, 3] * AVec.W,
+    Data[2, 0] * AVec.X + Data[2, 1] * AVec.Y + Data[2, 2] * AVec.Z + Data[2, 3] * AVec.W,
+    Data[3, 0] * AVec.X + Data[3, 1] * AVec.Y + Data[3, 2] * AVec.Z + Data[3, 3] * AVec.W);
+end;
+
+function TMat4f.MultPoint(const AVec: TVec2f): TVec2f;
+var
+  LResult: TVec3f;
+begin
+  LResult := MultPoint(TVec3f.Create(AVec.X, AVec.Y, 0.0));
+  Result := TVec2f.Create(LResult.X, LResult.Y);
+end;
+
+function TMat4f.MultDirection(const AVec: TVec2f): TVec2f;
+var
+  LResult: TVec3f;
+begin
+  LResult := MultDirection(TVec3f.Create(AVec.X, AVec.Y, 0.0));
+  Result := TVec2f.Create(LResult.X, LResult.Y);
+end;
+
+function TMat4f.Inverse(const ADeterminant: Single): TMat4f;
+begin
+  if ADeterminant = 0.0 then
+    raise EArgumentError.Create('TMat4f.Inverse: matrix is singular');
+  if not TryInverse(Result) then
+    raise EArgumentError.Create('TMat4f.Inverse: matrix is singular');
+end;
+
 function TMat4f.PerfectlyEquals(const AOther: TMat4f): Boolean;
 var
   LC, LR: TIndex;
@@ -1331,6 +1388,39 @@ begin
     Data[0, 0] * AVec.X + Data[1, 0] * AVec.Y + Data[2, 0] * AVec.Z,
     Data[0, 1] * AVec.X + Data[1, 1] * AVec.Y + Data[2, 1] * AVec.Z,
     Data[0, 2] * AVec.X + Data[1, 2] * AVec.Y + Data[2, 2] * AVec.Z);
+end;
+
+function TMat4d.TransposeMultiply(const AVec: TVec4d): TVec4d;
+begin
+  Result := TVec4d.Create(
+    Data[0, 0] * AVec.X + Data[0, 1] * AVec.Y + Data[0, 2] * AVec.Z + Data[0, 3] * AVec.W,
+    Data[1, 0] * AVec.X + Data[1, 1] * AVec.Y + Data[1, 2] * AVec.Z + Data[1, 3] * AVec.W,
+    Data[2, 0] * AVec.X + Data[2, 1] * AVec.Y + Data[2, 2] * AVec.Z + Data[2, 3] * AVec.W,
+    Data[3, 0] * AVec.X + Data[3, 1] * AVec.Y + Data[3, 2] * AVec.Z + Data[3, 3] * AVec.W);
+end;
+
+function TMat4d.MultPoint(const AVec: TVec2d): TVec2d;
+var
+  LResult: TVec3d;
+begin
+  LResult := MultPoint(TVec3d.Create(AVec.X, AVec.Y, 0.0));
+  Result := TVec2d.Create(LResult.X, LResult.Y);
+end;
+
+function TMat4d.MultDirection(const AVec: TVec2d): TVec2d;
+var
+  LResult: TVec3d;
+begin
+  LResult := MultDirection(TVec3d.Create(AVec.X, AVec.Y, 0.0));
+  Result := TVec2d.Create(LResult.X, LResult.Y);
+end;
+
+function TMat4d.Inverse(const ADeterminant: Double): TMat4d;
+begin
+  if ADeterminant = 0.0 then
+    raise EArgumentError.Create('TMat4d.Inverse: matrix is singular');
+  if not TryInverse(Result) then
+    raise EArgumentError.Create('TMat4d.Inverse: matrix is singular');
 end;
 
 function TMat4d.PerfectlyEquals(const AOther: TMat4d): Boolean;

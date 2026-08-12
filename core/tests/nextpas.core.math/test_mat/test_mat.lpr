@@ -1311,6 +1311,127 @@ begin
     'TMat3d.PerfectlyEquals identity = identity');
 end;
 
+procedure TestMatTransposeMultiply;
+var
+  LM: TMat4f;
+  LV: TVec4f;
+  LR: TVec4f;
+begin
+  LM := TMat4f.Identity;
+  LM[0, 1] := 2.0;
+  LM[1, 0] := 3.0;
+  LV := TVec4f.Create(1.0, 2.0, 3.0, 4.0);
+  LR := LM.TransposeMultiply(LV);
+  Check(LR.PerfectlyEquals(TVec4f.Create(5.0, 5.0, 3.0, 4.0)),
+    'TMat4f.TransposeMultiply');
+end;
+
+procedure TestMatTransposeMultiplyDouble;
+var
+  LM: TMat4d;
+  LV: TVec4d;
+  LR: TVec4d;
+begin
+  LM := TMat4d.Identity;
+  LM[0, 1] := 2.0;
+  LM[1, 0] := 3.0;
+  LV := TVec4d.Create(1.0, 2.0, 3.0, 4.0);
+  LR := LM.TransposeMultiply(LV);
+  Check(LR.PerfectlyEquals(TVec4d.Create(5.0, 5.0, 3.0, 4.0)),
+    'TMat4d.TransposeMultiply');
+end;
+
+procedure TestMatMultPoint2D;
+var
+  LM: TMat4f;
+  LR: TVec2f;
+begin
+  LM := TMat4f.Identity;
+  LM[3, 0] := 10.0;
+  LM[3, 1] := 20.0;
+  LR := LM.MultPoint(TVec2f.Create(1.0, 2.0));
+  Check(LR.PerfectlyEquals(TVec2f.Create(11.0, 22.0)),
+    'TMat4f.MultPoint 2D includes translation');
+end;
+
+procedure TestMatMultDirection2D;
+var
+  LM: TMat4f;
+  LR: TVec2f;
+begin
+  LM := TMat4f.Identity;
+  LM[3, 0] := 10.0;
+  LM[3, 1] := 20.0;
+  LR := LM.MultDirection(TVec2f.Create(1.0, 2.0));
+  Check(LR.PerfectlyEquals(TVec2f.Create(1.0, 2.0)),
+    'TMat4f.MultDirection 2D excludes translation');
+end;
+
+procedure TestMatMultPoint2DDouble;
+var
+  LM: TMat4d;
+  LR: TVec2d;
+begin
+  LM := TMat4d.Identity;
+  LM[3, 0] := 10.0;
+  LM[3, 1] := 20.0;
+  LR := LM.MultPoint(TVec2d.Create(1.0, 2.0));
+  Check(LR.PerfectlyEquals(TVec2d.Create(11.0, 22.0)),
+    'TMat4d.MultPoint 2D includes translation');
+end;
+
+procedure TestMatMultDirection2DDouble;
+var
+  LM: TMat4d;
+  LR: TVec2d;
+begin
+  LM := TMat4d.Identity;
+  LM[3, 0] := 10.0;
+  LM[3, 1] := 20.0;
+  LR := LM.MultDirection(TVec2d.Create(1.0, 2.0));
+  Check(LR.PerfectlyEquals(TVec2d.Create(1.0, 2.0)),
+    'TMat4d.MultDirection 2D excludes translation');
+end;
+
+procedure TestMatInverseWithDeterminant;
+var
+  LM, LI: TMat4f;
+  LDet: Single;
+begin
+  LM := TMat4f.Identity;
+  LM[0, 0] := 2.0;
+  LDet := LM.Determinant;
+  Check(LDet <> 0.0, 'TMat4f determinant non-zero');
+  LI := LM.Inverse(LDet);
+  Check(LI.PerfectlyEquals(LM.Inverse),
+    'TMat4f.Inverse(ADet) matches Inverse');
+end;
+
+procedure TestMatInverseWithDeterminantZeroRaises;
+begin
+  try
+    TMat4f.Zero.Inverse(0.0);
+    Fail('TMat4f.Inverse(ADet=0) should raise');
+  except
+    on E: EArgumentError do
+      { expected };
+  end;
+end;
+
+procedure TestMatInverseWithDeterminantDouble;
+var
+  LM, LI: TMat4d;
+  LDet: Double;
+begin
+  LM := TMat4d.Identity;
+  LM[0, 0] := 2.0;
+  LDet := LM.Determinant;
+  Check(LDet <> 0.0, 'TMat4d determinant non-zero');
+  LI := LM.Inverse(LDet);
+  Check(LI.PerfectlyEquals(LM.Inverse),
+    'TMat4d.Inverse(ADet) matches Inverse');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.mat');
   T.Test('TMat3f contracts', @TestMat3fContracts);
@@ -1338,5 +1459,14 @@ begin
   T.Test('TMat4d MultPoint', @TestMatMultPointDouble);
   T.Test('Mat Lerp', @TestMatLerp);
   T.Test('Mat PerfectlyEquals', @TestMatPerfectlyEquals);
+  T.Test('TMat4f TransposeMultiply', @TestMatTransposeMultiply);
+  T.Test('TMat4d TransposeMultiply', @TestMatTransposeMultiplyDouble);
+  T.Test('TMat4f MultPoint 2D', @TestMatMultPoint2D);
+  T.Test('TMat4f MultDirection 2D', @TestMatMultDirection2D);
+  T.Test('TMat4d MultPoint 2D', @TestMatMultPoint2DDouble);
+  T.Test('TMat4d MultDirection 2D', @TestMatMultDirection2DDouble);
+  T.Test('TMat4f Inverse(ADet)', @TestMatInverseWithDeterminant);
+  T.Test('TMat4f Inverse(ADet) zero raises', @TestMatInverseWithDeterminantZeroRaises);
+  T.Test('TMat4d Inverse(ADet)', @TestMatInverseWithDeterminantDouble);
   if not T.Run then Halt(1);
 end.

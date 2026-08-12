@@ -172,6 +172,16 @@ type
     {** Returns (Y, X) - swaps components. }
     function GetYX: TVec2f; inline;
     property YX: TVec2f read GetYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec2f; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec2f; static; inline;
+    {** Exact component-wise equality (A.X = B.X and A.Y = B.Y). }
+    class operator = (const AA, AB: TVec2f): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec2f): Boolean; inline;
+    {** Human-readable "X Y" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y: Single);
@@ -261,6 +271,18 @@ type
     property YZX: TVec3f read GetYZX;
     property ZXY: TVec3f read GetZXY;
     property ZYX: TVec3f read GetZYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec3f; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec3f; static; inline;
+    {** Returns a unit vector along the Z axis. }
+    class function UnitZ: TVec3f; static; inline;
+    {** Exact component-wise equality. }
+    class operator = (const AA, AB: TVec3f): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec3f): Boolean; inline;
+    {** Human-readable "X Y Z" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y, Z: Single);
@@ -350,6 +372,20 @@ type
     property YZW: TVec3f read GetYZW;
     property WZY: TVec3f read GetWZY;
     property WZYX: TVec4f read GetWZYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec4f; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec4f; static; inline;
+    {** Returns a unit vector along the Z axis. }
+    class function UnitZ: TVec4f; static; inline;
+    {** Returns a unit vector along the W axis. }
+    class function UnitW: TVec4f; static; inline;
+    {** Exact component-wise equality. }
+    class operator = (const AA, AB: TVec4f): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec4f): Boolean; inline;
+    {** Human-readable "X Y Z W" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y, Z, W: Single);
@@ -405,6 +441,16 @@ type
     { Swizzle - component reordering }
     function GetYX: TVec2d; inline;
     property YX: TVec2d read GetYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec2d; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec2d; static; inline;
+    {** Exact component-wise equality (A.X = B.X and A.Y = B.Y). }
+    class operator = (const AA, AB: TVec2d): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec2d): Boolean; inline;
+    {** Human-readable "X Y" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y: Double);
@@ -482,6 +528,18 @@ type
     property YZX: TVec3d read GetYZX;
     property ZXY: TVec3d read GetZXY;
     property ZYX: TVec3d read GetZYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec3d; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec3d; static; inline;
+    {** Returns a unit vector along the Z axis. }
+    class function UnitZ: TVec3d; static; inline;
+    {** Exact component-wise equality. }
+    class operator = (const AA, AB: TVec3d): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec3d): Boolean; inline;
+    {** Human-readable "X Y Z" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y, Z: Double);
@@ -560,6 +618,20 @@ type
     property YZW: TVec3d read GetYZW;
     property WZY: TVec3d read GetWZY;
     property WZYX: TVec4d read GetWZYX;
+    {** Returns a unit vector along the X axis. }
+    class function UnitX: TVec4d; static; inline;
+    {** Returns a unit vector along the Y axis. }
+    class function UnitY: TVec4d; static; inline;
+    {** Returns a unit vector along the Z axis. }
+    class function UnitZ: TVec4d; static; inline;
+    {** Returns a unit vector along the W axis. }
+    class function UnitW: TVec4d; static; inline;
+    {** Exact component-wise equality. }
+    class operator = (const AA, AB: TVec4d): Boolean; inline;
+    {** Component-wise inequality (negation of =). }
+    class operator <> (const AA, AB: TVec4d): Boolean; inline;
+    {** Human-readable "X Y Z W" representation (shortest round-trip form). }
+    function ToString: string;
     var
       case Integer of
         0: (X, Y, Z, W: Double);
@@ -575,7 +647,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.text.conv;
 
 const
   MAX_SINGLE_VALUE: Double = 3.40282346638528859812e38;
@@ -2955,6 +3028,202 @@ end;
 function TVec4d.GetWZYX: TVec4d;
 begin
   Result := TVec4d.Create(W, Z, Y, X);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec2f) ==================== }
+
+class function TVec2f.UnitX: TVec2f;
+begin
+  Result := TVec2f.Create(1.0, 0.0);
+end;
+
+class function TVec2f.UnitY: TVec2f;
+begin
+  Result := TVec2f.Create(0.0, 1.0);
+end;
+
+class operator TVec2f.= (const AA, AB: TVec2f): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y);
+end;
+
+class operator TVec2f.<> (const AA, AB: TVec2f): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec2f.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec3f) ==================== }
+
+class function TVec3f.UnitX: TVec3f;
+begin
+  Result := TVec3f.Create(1.0, 0.0, 0.0);
+end;
+
+class function TVec3f.UnitY: TVec3f;
+begin
+  Result := TVec3f.Create(0.0, 1.0, 0.0);
+end;
+
+class function TVec3f.UnitZ: TVec3f;
+begin
+  Result := TVec3f.Create(0.0, 0.0, 1.0);
+end;
+
+class operator TVec3f.= (const AA, AB: TVec3f): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and (AA.Z = AB.Z);
+end;
+
+class operator TVec3f.<> (const AA, AB: TVec3f): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec3f.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y) + ' ' + FloatToStr(Z);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec4f) ==================== }
+
+class function TVec4f.UnitX: TVec4f;
+begin
+  Result := TVec4f.Create(1.0, 0.0, 0.0, 0.0);
+end;
+
+class function TVec4f.UnitY: TVec4f;
+begin
+  Result := TVec4f.Create(0.0, 1.0, 0.0, 0.0);
+end;
+
+class function TVec4f.UnitZ: TVec4f;
+begin
+  Result := TVec4f.Create(0.0, 0.0, 1.0, 0.0);
+end;
+
+class function TVec4f.UnitW: TVec4f;
+begin
+  Result := TVec4f.Create(0.0, 0.0, 0.0, 1.0);
+end;
+
+class operator TVec4f.= (const AA, AB: TVec4f): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and
+    (AA.Z = AB.Z) and (AA.W = AB.W);
+end;
+
+class operator TVec4f.<> (const AA, AB: TVec4f): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec4f.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y) + ' ' +
+    FloatToStr(Z) + ' ' + FloatToStr(W);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec2d) ==================== }
+
+class function TVec2d.UnitX: TVec2d;
+begin
+  Result := TVec2d.Create(1.0, 0.0);
+end;
+
+class function TVec2d.UnitY: TVec2d;
+begin
+  Result := TVec2d.Create(0.0, 1.0);
+end;
+
+class operator TVec2d.= (const AA, AB: TVec2d): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y);
+end;
+
+class operator TVec2d.<> (const AA, AB: TVec2d): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec2d.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec3d) ==================== }
+
+class function TVec3d.UnitX: TVec3d;
+begin
+  Result := TVec3d.Create(1.0, 0.0, 0.0);
+end;
+
+class function TVec3d.UnitY: TVec3d;
+begin
+  Result := TVec3d.Create(0.0, 1.0, 0.0);
+end;
+
+class function TVec3d.UnitZ: TVec3d;
+begin
+  Result := TVec3d.Create(0.0, 0.0, 1.0);
+end;
+
+class operator TVec3d.= (const AA, AB: TVec3d): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and (AA.Z = AB.Z);
+end;
+
+class operator TVec3d.<> (const AA, AB: TVec3d): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec3d.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y) + ' ' + FloatToStr(Z);
+end;
+
+{ ==================== Unit axes / equality / ToString (TVec4d) ==================== }
+
+class function TVec4d.UnitX: TVec4d;
+begin
+  Result := TVec4d.Create(1.0, 0.0, 0.0, 0.0);
+end;
+
+class function TVec4d.UnitY: TVec4d;
+begin
+  Result := TVec4d.Create(0.0, 1.0, 0.0, 0.0);
+end;
+
+class function TVec4d.UnitZ: TVec4d;
+begin
+  Result := TVec4d.Create(0.0, 0.0, 1.0, 0.0);
+end;
+
+class function TVec4d.UnitW: TVec4d;
+begin
+  Result := TVec4d.Create(0.0, 0.0, 0.0, 1.0);
+end;
+
+class operator TVec4d.= (const AA, AB: TVec4d): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and
+    (AA.Z = AB.Z) and (AA.W = AB.W);
+end;
+
+class operator TVec4d.<> (const AA, AB: TVec4d): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
+function TVec4d.ToString: string;
+begin
+  Result := FloatToStr(X) + ' ' + FloatToStr(Y) + ' ' +
+    FloatToStr(Z) + ' ' + FloatToStr(W);
 end;
 
 end.
