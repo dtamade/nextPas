@@ -136,7 +136,7 @@ append_rows() {
     parsed_rows=$((parsed_rows + 1))
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$variant" "$impl" "$benchmark" "$run_index" "$iterations" "$ns_per_op" "$ops_per_sec" "$flags" >> "$RESULTS_PATH"
-  done < <(sed -nE 's/^[[:space:]]*(.*[^[:space:]])[[:space:]]+([0-9]+)[[:space:]]+iters[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ns\/op[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+ops\/s[[:space:]]*$/\1\t\2\t\3\t\5/p' "$output_file")
+  done < <(sed -nE 's/^[[:space:]]*(.*[^[:space:]])[[:space:]]+([0-9][0-9,]*)[[:space:]]+iters[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+[^[:space:]]*\/op[[:space:]]+([0-9]+(\.[0-9]+)?)[[:space:]]+[^[:space:]]*ops\/s.*$/\1\t\2\t\3\t\5/p' "$output_file" | tr -d ',')
 
   if [ "$parsed_rows" -eq 0 ]; then
     echo "no benchmark rows parsed for $variant run $run_index: $output_file" >&2

@@ -230,7 +230,7 @@ ${RUNNER_COMMAND}
 ## Raw Comparison Output
 
 \`\`\`text
-$(cat "${RAW_OUTPUT}")
+$(grep -vE '(^|[[:space:]])(Note|Warning):' "${RAW_OUTPUT}" || true)
 \`\`\`
 EOF
 

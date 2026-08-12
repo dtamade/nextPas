@@ -241,3 +241,36 @@ gate 分类为 28 可修 + 19 不可修（bench lane 重写）。28 项全部落
    噪声行，属 bench lane 范围
 3. compiler snapshot（constructor-typing）、compiler-system B5g、tui/http stale lane：
    维持不代收
+
+## bench lane 收口：19 不可修 + 1 噪声全绿（v9，2026-08-12）
+
+### ✅ 已落地（本轮提交）
+
+- **`bench_fullchain.lpr` 完整重写**（632 行 diff）：弃用 TBenchSuite，改为逐场景
+  hand-rolled keep-alive 循环。补齐 v8 缺失的整套 marker 契约：
+  - **严格响应校验闭环**：`ReadResponse -> ResponseMatchesScenario ->
+    RecordScenarioResult`（status/content-length/body-bytes 逐项校验，`TFullchainResponseRead`）
+  - **dispatch truth 校验**：`ValidateDispatchTruth` 按 delta（命中 - 场景前基线）验证
+    direct/router/middleware 实际分发路径，`observed_*_handler_hits` 输出与迭代数严格一致
+  - **per-scenario h1_path**：echo_1k/sink_16k 走 llhttp，其余 fast
+  - **退出码语义**：no-match 打 header marker 后 `Halt(2)`；校验/分发失败 `Halt(3)`
+  - 4 个 source-contract gate 所需全部子串（含 `MIDDLEWARE_HOST + #13#10` 同行拼接）
+- **`run_flag_matrix.sh` sed 修复**：append_rows 旧正则只认 `<int> iters <dec> ns/op
+  <dec> ops/s`，实际 pascal 行是 `2,000 iters 743.8 ns/op 1.3 Mops/s 114.6 stddev`
+  （逗号千分位 + 单位后缀 + stddev 尾缀）→ 新正则 `[0-9][0-9,]*` + `[^[:space:]]*\/op`
+  + `tr -d ','`，C 行兼容
+- **`capture_server_comparison_snapshot.sh` 噪声过滤**：heredoc 嵌入处
+  `grep -vE '(^|[[:space:]])(Note|Warning):'`（`|| true` 保 set -e 安全），
+  FPC inline-note 噪声不再落入快照
+
+### 验证
+
+`make focused FOCUS=core/tests/nextpas.core.http/test_http_benchmarks`：
+**123 passed / 0 failed**（v8 为 103/20；19 不可修 + 1 噪声全部转绿）。
+
+### 收尾
+
+- `git diff --check` ✅ / `make hygiene` ✅（focused 内含 build-hygiene=pass）
+- 至此 v8 诊断的 47 个 CI 失败 gate 全部关闭（28 可修 + 19 重写 + 1 噪声）
+- 维持不代收：compiler snapshot（constructor-typing）、compiler-system B5g、
+  tui/http stale lane（他人）
