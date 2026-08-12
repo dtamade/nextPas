@@ -35,6 +35,15 @@ type
      * @return The combined rotation (AA * AB)
      *}
     class operator * (const AA, AB: TQuatf): TQuatf; inline;
+    {** Exact component-wise equality. Mirrors the vec `=` semantics
+     * (strict IEEE `=` on each component; NaN operands follow the
+     * platform comparison behavior, as with vec).
+     * @param AA First quaternion
+     * @param AB Second quaternion
+     * @return True if all four components are exactly equal
+     *}
+    class operator = (const AA, AB: TQuatf): Boolean; inline;
+    class operator <> (const AA, AB: TQuatf): Boolean; inline;
     {** Creates a quaternion from axis-angle representation.
      * @param AAxis The rotation axis (should be normalized)
      * @param AAngleRad The rotation angle in radians
@@ -128,6 +137,8 @@ type
     class function Create(const AX, AY, AZ, AW: Double): TQuatd; static; inline;
     class function Identity: TQuatd; static; inline;
     class operator * (const AA, AB: TQuatd): TQuatd; inline;
+    class operator = (const AA, AB: TQuatd): Boolean; inline;
+    class operator <> (const AA, AB: TQuatd): Boolean; inline;
     class function FromAxisAngle(const AAxis: TVec3d; const AAngleRad: Double): TQuatd; static;
     class function Slerp(const AA, AB: TQuatd; const AT: Double): TQuatd; static;
     class function Nlerp(const AA, AB: TQuatd; const AT: Double): TQuatd; static;
@@ -489,6 +500,16 @@ begin
     AA.W * AB.W - AA.X * AB.X - AA.Y * AB.Y - AA.Z * AB.Z);
 end;
 
+class operator TQuatf.= (const AA, AB: TQuatf): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and (AA.Z = AB.Z) and (AA.W = AB.W);
+end;
+
+class operator TQuatf.<> (const AA, AB: TQuatf): Boolean;
+begin
+  Result := not (AA = AB);
+end;
+
 class function TQuatf.FromAxisAngle(const AAxis: TVec3f; const AAngleRad: Single): TQuatf;
 var
   Axis: TVec3f;
@@ -726,6 +747,16 @@ begin
     AA.W * AB.Y - AA.X * AB.Z + AA.Y * AB.W + AA.Z * AB.X,
     AA.W * AB.Z + AA.X * AB.Y - AA.Y * AB.X + AA.Z * AB.W,
     AA.W * AB.W - AA.X * AB.X - AA.Y * AB.Y - AA.Z * AB.Z);
+end;
+
+class operator TQuatd.= (const AA, AB: TQuatd): Boolean;
+begin
+  Result := (AA.X = AB.X) and (AA.Y = AB.Y) and (AA.Z = AB.Z) and (AA.W = AB.W);
+end;
+
+class operator TQuatd.<> (const AA, AB: TQuatd): Boolean;
+begin
+  Result := not (AA = AB);
 end;
 
 class function TQuatd.FromAxisAngle(const AAxis: TVec3d; const AAngleRad: Double): TQuatd;

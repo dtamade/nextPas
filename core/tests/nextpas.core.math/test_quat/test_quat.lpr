@@ -1306,6 +1306,33 @@ begin
     'TQuatd Equals rejects negative infinite epsilon');
 end;
 
+procedure TestQuaternionEqualityOperators;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := TQuatf.Identity;
+  Check(TQuatf.Identity = TQuatf.Identity, 'TQuatf = true for identical quaternions');
+  Check(TQuatf.Identity = Qf, 'TQuatf = true for copied value');
+  Check(TQuatf.Identity <> TQuatf.Create(0.0, 0.0, 0.0, 0.0), 'TQuatf <> detects differing W');
+  Check(not (TQuatf.Create(1.0, 0.0, 0.0, 1.0) = TQuatf.Identity),
+    'TQuatf = false for differing X');
+  Check(TQuatf.Create(1.0, 2.0, 3.0, 4.0) <> TQuatf.Create(1.0, 2.0, 3.0, 4.00001),
+    'TQuatf <> distinguishes tiny float differences (exact semantics)');
+
+  { Matching infinities compare equal (ordered comparison, no raise). }
+  Qf := TQuatf.Identity;
+  Qf.X := SingleInfinity;
+  Check(Qf = Qf, 'TQuatf = accepts matching infinity');
+  Check(Qf <> TQuatf.Identity, 'TQuatf <> distinguishes infinity from finite');
+
+  Qd := TQuatd.Identity;
+  Check(TQuatd.Identity = Qd, 'TQuatd = true for identical quaternions');
+  Check(TQuatd.Identity <> TQuatd.Create(0.0, 0.0, 0.0, 0.0), 'TQuatd <> detects differing W');
+  Check(TQuatd.Create(1.0, 2.0, 3.0, 4.0) <> TQuatd.Create(1.0, 2.0, 3.0, 4.00001),
+    'TQuatd <> distinguishes tiny float differences (exact semantics)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.quat');
   T.Test('TQuatf contracts', @TestQuatfContracts);
@@ -1343,5 +1370,6 @@ begin
     @TestQuaternionMultiplicationIsNonCommutativeAndRightFirst);
   T.Test('quaternion Equals non-finite comparison contracts',
     @TestQuaternionEqualsNonFiniteComparisonContracts);
+  T.Test('quaternion equality operators', @TestQuaternionEqualityOperators);
   if not T.Run then Halt(1);
 end.
