@@ -28,6 +28,8 @@ procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
 procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey; ADestructor: Pointer): Int32;
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32;
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer;
 function platform_cpu_count: Int32;
@@ -104,6 +106,18 @@ begin
 end;
 
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
+begin
+  Result := -1;
+end;
+
+function platform_tls_create_with_destructor(out AKey: TPlatformTLSKey;
+  ADestructor: Pointer): Int32;
+begin
+  FillChar(AKey, SizeOf(AKey), 0);
+  Result := -1;
+end;
+
+function platform_tls_destroy_dtor(const AKey: TPlatformTLSKey): Int32;
 begin
   Result := -1;
 end;
