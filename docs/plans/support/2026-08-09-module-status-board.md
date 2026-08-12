@@ -334,3 +334,41 @@ Linux Verification / TUI Tests 仍红，均为既有他人红点（compiler cons
 - linux 应越过 id 模块继续后续模块（json/log/math/mem/net/platform/...）
   —— CI 复跑验证是否还有下一个既有断链
 - compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
+
+## Core CI 跟进 3：io.uring poller_windows_contract token 过期修复 + json 空容器循环下溢 40GB OOM 修复（v12，2026-08-12）
+
+### 0435a972a 前 Core CI 实况（31572483740）
+
+| job | 结论 | 失败点 |
+|---|---|---|
+| test-linux | 进行中 | io.uring 模块 test_poller_windows_contract 2 处过期源码断言 token |
+| test-macos | ✅ | — |
+
+### ✅ io.uring poller token 修复（`0435a972a`）
+
+- **根因**：reactor.iocp 重写（record-based `TIocpReactor`）后回调统一改为
+  `-IocpMapOsError(AError)` 传递，contract 测试仍断言旧式 `-int32(aerror)`
+- **修复**：2 处 token 同步为 `-iocpmaposerror(...)`（load-source 全小写匹配）
+- **验证**：io.uring 模块 9 项目全绿；poller_windows_contract 13/13
+
+### ✅ json roundtrip 40GB OOM 修复（`8b1bf7920`，用户机器死机数次）
+
+- **根因**：`test_json_roundtrip.lpr` 的 `RebuildViaBuilder` 辅助例程对空容器
+  `[]`/`{}` 走 `for I := 0 to V.ArrayLen - 1`（`I: UInt32`；
+  `ArrayLen`/`ObjectLen` 返回 `UInt32`）——上界 `0 - 1` 下溢为 `$FFFFFFFF`，
+  42 亿次迭代，builder 输出无限增长直到 OOM 40GB。与 geoip `5c8e90c29`
+  同型坑；测试本身非本线提交（`309681f90` Wave O gates，其他 lane）
+- **修复**：`Len > 0` 守卫循环，空容器直接跳过（builder 输出即 `[]`/`{}`）
+- **验证**：`make -C core/tests/nextpas.core.json/test_json_roundtrip clean test`
+  → 10 passed/0 failed；`ulimit -v 2GB` 上限下秒级完成，heaptrc 0 unfreed（修复
+  前该测试会冲到 40GB 直至 OOM 杀机）
+- **生产代码排查**：json.value.pas 内部无 `to X-1` 模式；json parser/reader 的
+  `LNumLen: SizeUInt` 在 number token 解析路径恒 ≥1，无同类下溢路径，未动生产代码
+
+### ⏳ 下一轮观察
+
+- linux 越过 io.uring 后继续（json/log/math/mem/net/platform/...）——json
+  roundtrip 修复已合入，CI 复跑应越过 json 模块。注意本轮同时观察
+  **main 上 30 个 build/ 文件的陌生删除**（平行 lane 或清理脚本所为，
+  本线未触碰、未代收）
+- compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
