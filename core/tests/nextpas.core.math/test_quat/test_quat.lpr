@@ -1333,6 +1333,90 @@ begin
     'TQuatd <> distinguishes tiny float differences (exact semantics)');
 end;
 
+procedure RaiseQuatfFromRotationMatrixNaN;
+var
+  M: TMat3f;
+begin
+  M := TMat3f.Identity;
+  M[0, 0] := SingleNaN;
+  TQuatf.FromRotationMatrix(M);
+end;
+
+procedure RaiseQuatdFromRotationMatrixNaN;
+var
+  M: TMat3d;
+begin
+  M := TMat3d.Identity;
+  M[0, 0] := DoubleNaN;
+  TQuatd.FromRotationMatrix(M);
+end;
+
+procedure TestQuaternionMatrixConversion;
+var
+  Q: TQuatf;
+  QR: TQuatf;
+  Qd: TQuatd;
+  M3: TMat3f;
+  M4: TMat4f;
+  XAxis, YAxis, ZAxis: TVec3f;
+begin
+  XAxis := TVec3f.Create(1.0, 0.0, 0.0);
+  YAxis := TVec3f.Create(0.0, 1.0, 0.0);
+  ZAxis := TVec3f.Create(0.0, 0.0, 1.0);
+
+  { Roundtrip: quat -> 3x3 matrix -> quat reproduces the rotation across
+    all Shepperd branches (Z 90deg for trace>0, X/Y/Z 180deg for the three
+    largest-diagonal branches). }
+  Q := TQuatf.FromAxisAngle(ZAxis, HALF_PI);
+  QR := TQuatf.FromRotationMatrix(Q.ToRotationMatrix);
+  CheckNear(1.0, QuatLengthSqr(QR), 0.000001, 'TQuatf FromRotationMatrix unit length (Z90)');
+  CheckVec3f(0.0, 1.0, 0.0, QR.Rotate(XAxis), 'TQuatf FromRotationMatrix roundtrip Z90 rotates X');
+  CheckVec3f(-1.0, 0.0, 0.0, QR.Rotate(YAxis), 'TQuatf FromRotationMatrix roundtrip Z90 rotates Y');
+
+  Q := TQuatf.FromAxisAngle(XAxis, Pi);
+  QR := TQuatf.FromRotationMatrix(Q.ToRotationMatrix);
+  CheckVec3f(1.0, 0.0, 0.0, QR.Rotate(XAxis), 'TQuatf FromRotationMatrix roundtrip X180 rotates X');
+  CheckVec3f(0.0, -1.0, 0.0, QR.Rotate(YAxis), 'TQuatf FromRotationMatrix roundtrip X180 rotates Y');
+
+  Q := TQuatf.FromAxisAngle(YAxis, Pi);
+  QR := TQuatf.FromRotationMatrix(Q.ToRotationMatrix);
+  CheckVec3f(-1.0, 0.0, 0.0, QR.Rotate(XAxis), 'TQuatf FromRotationMatrix roundtrip Y180 rotates X');
+
+  Q := TQuatf.FromAxisAngle(ZAxis, Pi);
+  QR := TQuatf.FromRotationMatrix(Q.ToRotationMatrix);
+  CheckVec3f(-1.0, 0.0, 0.0, QR.Rotate(XAxis), 'TQuatf FromRotationMatrix roundtrip Z180 rotates X');
+
+  { Identity matrix -> identity quaternion. }
+  QR := TQuatf.FromRotationMatrix(TMat3f.Identity);
+  CheckQuatf(0.0, 0.0, 0.0, 1.0, QR, 'TQuatf FromRotationMatrix identity matrix');
+
+  { ToRotationMatrix4 embeds the 3x3 rotation in the top-left block. }
+  Q := TQuatf.FromAxisAngle(ZAxis, HALF_PI);
+  M4 := Q.ToRotationMatrix4;
+  CheckNear(1.0, M4[3, 3], 0.0, 'TQuatf ToRotationMatrix4 [3,3] is 1');
+  CheckNear(0.0, M4[3, 0], 0.0, 'TQuatf ToRotationMatrix4 [3,0] is 0');
+  CheckNear(0.0, M4[0, 3], 0.0, 'TQuatf ToRotationMatrix4 [0,3] is 0');
+  M3 := Q.ToRotationMatrix;
+  CheckNear(M3[0, 0], M4[0, 0], 0.0, 'TQuatf ToRotationMatrix4 block [0,0]');
+  CheckNear(M3[1, 0], M4[1, 0], 0.0, 'TQuatf ToRotationMatrix4 block [1,0]');
+  CheckNear(M3[2, 1], M4[2, 1], 0.0, 'TQuatf ToRotationMatrix4 block [2,1]');
+  CheckNear(M3[2, 2], M4[2, 2], 0.0, 'TQuatf ToRotationMatrix4 block [2,2]');
+
+  { Double variants. }
+  Qd := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), Pi / 2.0);
+  CheckNear(1.0, QuatLengthSqr(TQuatd.FromRotationMatrix(Qd.ToRotationMatrix)),
+    0.000000000001, 'TQuatd FromRotationMatrix unit length');
+  CheckNear(1.0, TQuatd.FromRotationMatrix(TMat3d.Identity).W, 0.0,
+    'TQuatd FromRotationMatrix identity matrix W');
+  CheckNear(1.0, Qd.ToRotationMatrix4[3, 3], 0.0, 'TQuatd ToRotationMatrix4 [3,3] is 1');
+
+  { Non-finite matrices fail fast. }
+  ExpectArgumentErrorMessage('TQuatf.FromRotationMatrix: AMatrix must be finite',
+    'TQuatf FromRotationMatrix NaN matrix', @RaiseQuatfFromRotationMatrixNaN);
+  ExpectArgumentErrorMessage('TQuatd.FromRotationMatrix: AMatrix must be finite',
+    'TQuatd FromRotationMatrix NaN matrix', @RaiseQuatdFromRotationMatrixNaN);
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.quat');
   T.Test('TQuatf contracts', @TestQuatfContracts);
@@ -1371,5 +1455,6 @@ begin
   T.Test('quaternion Equals non-finite comparison contracts',
     @TestQuaternionEqualsNonFiniteComparisonContracts);
   T.Test('quaternion equality operators', @TestQuaternionEqualityOperators);
+  T.Test('quaternion matrix conversion', @TestQuaternionMatrixConversion);
   if not T.Run then Halt(1);
 end.

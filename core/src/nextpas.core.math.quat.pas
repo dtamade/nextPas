@@ -75,6 +75,11 @@ type
      * @return The rotation matrix
      *}
     function ToRotationMatrix: TMat3f;
+    {** Converts to a 4x4 rotation matrix (3x3 rotation embedded in the
+     * top-left block; W row/column identity).
+     * @return The 4x4 rotation matrix
+     *}
+    function ToRotationMatrix4: TMat4f;
     {** Rotates a vector by this quaternion.
      * @param AVector The vector to rotate
      * @return The rotated vector
@@ -114,6 +119,12 @@ type
      * @return The rotation quaternion
      *}
     class function FromRotationArc(const AFrom, ATo: TVec3f): TQuatf; static;
+    {** Creates a quaternion from a 3x3 rotation matrix (column-major
+     * Data[col,row]). Uses Shepperd''s method; the result is normalized.
+     * @param AMatrix The rotation matrix
+     * @return The quaternion representing the rotation
+     *}
+    class function FromRotationMatrix(const AMatrix: TMat3f): TQuatf; static;
     {** Rotates towards a target quaternion with a maximum angle.
      * @param ATarget The target quaternion
      * @param AMaxAngle The maximum rotation angle in radians
@@ -145,6 +156,7 @@ type
     class function Equals(const AA, AB: TQuatd; const AEpsilon: Double): Boolean; static; inline;
     procedure ToAxisAngle(out AAxis: TVec3d; out AAngleRad: Double);
     function ToRotationMatrix: TMat3d;
+    function ToRotationMatrix4: TMat4d;
     function Rotate(const AVector: TVec3d): TVec3d;
     function Conjugate: TQuatd; inline;
     function Dot(const AOther: TQuatd): Double; inline;
@@ -153,6 +165,7 @@ type
     class function FromEuler(const AYaw, APitch, ARoll: Double): TQuatd; static;
     function ToEuler: TVec3d;
     class function FromRotationArc(const AFrom, ATo: TVec3d): TQuatd; static;
+    class function FromRotationMatrix(const AMatrix: TMat3d): TQuatd; static;
     function RotateTowards(const ATarget: TQuatd; const AMaxAngle: Double): TQuatd;
     function Normalize: TQuatd;
     var
@@ -204,6 +217,24 @@ function IsFinite(const AValue: TQuatd): Boolean; overload; inline;
 begin
   Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and
     IsFinite(AValue.Z) and IsFinite(AValue.W);
+end;
+
+function IsFinite(const AValue: TMat3f): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue[0, 0]) and IsFinite(AValue[0, 1]) and
+    IsFinite(AValue[0, 2]) and IsFinite(AValue[1, 0]) and
+    IsFinite(AValue[1, 1]) and IsFinite(AValue[1, 2]) and
+    IsFinite(AValue[2, 0]) and IsFinite(AValue[2, 1]) and
+    IsFinite(AValue[2, 2]);
+end;
+
+function IsFinite(const AValue: TMat3d): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue[0, 0]) and IsFinite(AValue[0, 1]) and
+    IsFinite(AValue[0, 2]) and IsFinite(AValue[1, 0]) and
+    IsFinite(AValue[1, 1]) and IsFinite(AValue[1, 2]) and
+    IsFinite(AValue[2, 0]) and IsFinite(AValue[2, 1]) and
+    IsFinite(AValue[2, 2]);
 end;
 
 procedure ValidateAxisAngleInputs(const AFunctionName: string; const AAxis: TVec3f;
@@ -617,6 +648,24 @@ begin
   Result := RotationMatrixFromFiniteQuat(Self);
 end;
 
+function TQuatf.ToRotationMatrix4: TMat4f;
+var
+  R3: TMat3f;
+begin
+  ValidateQuaternionInput('TQuatf.ToRotationMatrix4', 'quaternion', Self);
+  R3 := RotationMatrixFromFiniteQuat(Self);
+  Result := TMat4f.Identity;
+  Result[0, 0] := R3[0, 0];
+  Result[1, 0] := R3[1, 0];
+  Result[2, 0] := R3[2, 0];
+  Result[0, 1] := R3[0, 1];
+  Result[1, 1] := R3[1, 1];
+  Result[2, 1] := R3[2, 1];
+  Result[0, 2] := R3[0, 2];
+  Result[1, 2] := R3[1, 2];
+  Result[2, 2] := R3[2, 2];
+end;
+
 function TQuatf.Rotate(const AVector: TVec3f): TVec3f;
 begin
   ValidateQuaternionInput('TQuatf.Rotate', 'quaternion', Self);
@@ -709,6 +758,55 @@ begin
   end;
   Axis := AFrom.Cross(ATo);
   Result := TQuatf.Create(Axis.X, Axis.Y, Axis.Z, 1.0 + D).Normalize;
+end;
+
+class function TQuatf.FromRotationMatrix(const AMatrix: TMat3f): TQuatf;
+var
+  M00, M11, M22, Trace, S: Single;
+begin
+  if not IsFinite(AMatrix) then
+    raise EArgumentError.Create('TQuatf.FromRotationMatrix: AMatrix must be finite');
+  M00 := AMatrix[0, 0];
+  M11 := AMatrix[1, 1];
+  M22 := AMatrix[2, 2];
+  Trace := M00 + M11 + M22;
+  if Trace > 0.0 then
+  begin
+    S := 0.5 / Sqrt(Trace + 1.0);
+    Result := TQuatf.Create(
+      (AMatrix[1, 2] - AMatrix[2, 1]) * S,
+      (AMatrix[2, 0] - AMatrix[0, 2]) * S,
+      (AMatrix[0, 1] - AMatrix[1, 0]) * S,
+      0.25 / S);
+  end
+  else if (M00 > M11) and (M00 > M22) then
+  begin
+    S := 2.0 * Sqrt(1.0 + M00 - M11 - M22);
+    Result := TQuatf.Create(
+      0.25 * S,
+      (AMatrix[1, 0] + AMatrix[0, 1]) / S,
+      (AMatrix[0, 2] + AMatrix[2, 0]) / S,
+      (AMatrix[1, 2] - AMatrix[2, 1]) / S);
+  end
+  else if M11 > M22 then
+  begin
+    S := 2.0 * Sqrt(1.0 + M11 - M00 - M22);
+    Result := TQuatf.Create(
+      (AMatrix[1, 0] + AMatrix[0, 1]) / S,
+      0.25 * S,
+      (AMatrix[1, 2] + AMatrix[2, 1]) / S,
+      (AMatrix[2, 0] - AMatrix[0, 2]) / S);
+  end
+  else
+  begin
+    S := 2.0 * Sqrt(1.0 + M22 - M00 - M11);
+    Result := TQuatf.Create(
+      (AMatrix[0, 2] + AMatrix[2, 0]) / S,
+      (AMatrix[1, 2] + AMatrix[2, 1]) / S,
+      0.25 * S,
+      (AMatrix[0, 1] - AMatrix[1, 0]) / S);
+  end;
+  Result := Result.Normalize;
 end;
 
 function TQuatf.RotateTowards(const ATarget: TQuatf; const AMaxAngle: Single): TQuatf;
@@ -866,6 +964,24 @@ begin
   Result := RotationMatrixFromFiniteQuat(Self);
 end;
 
+function TQuatd.ToRotationMatrix4: TMat4d;
+var
+  R3: TMat3d;
+begin
+  ValidateQuaternionInput('TQuatd.ToRotationMatrix4', 'quaternion', Self);
+  R3 := RotationMatrixFromFiniteQuat(Self);
+  Result := TMat4d.Identity;
+  Result[0, 0] := R3[0, 0];
+  Result[1, 0] := R3[1, 0];
+  Result[2, 0] := R3[2, 0];
+  Result[0, 1] := R3[0, 1];
+  Result[1, 1] := R3[1, 1];
+  Result[2, 1] := R3[2, 1];
+  Result[0, 2] := R3[0, 2];
+  Result[1, 2] := R3[1, 2];
+  Result[2, 2] := R3[2, 2];
+end;
+
 function TQuatd.Rotate(const AVector: TVec3d): TVec3d;
 begin
   ValidateQuaternionInput('TQuatd.Rotate', 'quaternion', Self);
@@ -958,6 +1074,55 @@ begin
   end;
   Axis := AFrom.Cross(ATo);
   Result := TQuatd.Create(Axis.X, Axis.Y, Axis.Z, 1.0 + D).Normalize;
+end;
+
+class function TQuatd.FromRotationMatrix(const AMatrix: TMat3d): TQuatd;
+var
+  M00, M11, M22, Trace, S: Double;
+begin
+  if not IsFinite(AMatrix) then
+    raise EArgumentError.Create('TQuatd.FromRotationMatrix: AMatrix must be finite');
+  M00 := AMatrix[0, 0];
+  M11 := AMatrix[1, 1];
+  M22 := AMatrix[2, 2];
+  Trace := M00 + M11 + M22;
+  if Trace > 0.0 then
+  begin
+    S := 0.5 / Sqrt(Trace + 1.0);
+    Result := TQuatd.Create(
+      (AMatrix[1, 2] - AMatrix[2, 1]) * S,
+      (AMatrix[2, 0] - AMatrix[0, 2]) * S,
+      (AMatrix[0, 1] - AMatrix[1, 0]) * S,
+      0.25 / S);
+  end
+  else if (M00 > M11) and (M00 > M22) then
+  begin
+    S := 2.0 * Sqrt(1.0 + M00 - M11 - M22);
+    Result := TQuatd.Create(
+      0.25 * S,
+      (AMatrix[1, 0] + AMatrix[0, 1]) / S,
+      (AMatrix[0, 2] + AMatrix[2, 0]) / S,
+      (AMatrix[1, 2] - AMatrix[2, 1]) / S);
+  end
+  else if M11 > M22 then
+  begin
+    S := 2.0 * Sqrt(1.0 + M11 - M00 - M22);
+    Result := TQuatd.Create(
+      (AMatrix[1, 0] + AMatrix[0, 1]) / S,
+      0.25 * S,
+      (AMatrix[1, 2] + AMatrix[2, 1]) / S,
+      (AMatrix[2, 0] - AMatrix[0, 2]) / S);
+  end
+  else
+  begin
+    S := 2.0 * Sqrt(1.0 + M22 - M00 - M11);
+    Result := TQuatd.Create(
+      (AMatrix[0, 2] + AMatrix[2, 0]) / S,
+      (AMatrix[1, 2] + AMatrix[2, 1]) / S,
+      0.25 * S,
+      (AMatrix[0, 1] - AMatrix[1, 0]) / S);
+  end;
+  Result := Result.Normalize;
 end;
 
 function TQuatd.RotateTowards(const ATarget: TQuatd; const AMaxAngle: Double): TQuatd;
