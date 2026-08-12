@@ -647,8 +647,43 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.math.scalar,
-  nextpas.core.text.conv;
+  nextpas.core.math.scalar;
+
+{ L0-safe float-to-string for ToString: math is an L0 module and must not
+  depend on L1 nextpas.core.text.conv. Replicates text.conv's FloatToStr
+  semantics exactly (FPC RTL Str(:0:15) + trailing-zero strip + '.' normalize)
+  so ToString output is locale-independent and unchanged. }
+function FloatToStr(const AValue: Double): string;
+var
+  LI, LDot: Integer;
+  C: Char;
+begin
+  Str(AValue:0:15, Result);
+  LDot := 0;
+  for LI := 1 to Length(Result) do
+    if Result[LI] in ['.', ','] then
+    begin
+      LDot := LI;
+      Break;
+    end;
+  if LDot > 0 then
+  begin
+    C := Result[LDot];
+    LI := Length(Result);
+    while (LI > LDot) and (Result[LI] = '0') do
+      Dec(LI);
+    if LI = LDot then
+      SetLength(Result, LDot - 1)
+    else
+      SetLength(Result, LI);
+    if C <> '.' then
+    begin
+      LDot := Pos(C, Result);
+      if LDot > 0 then
+        Result[LDot] := '.';
+    end;
+  end;
+end;
 
 const
   MAX_SINGLE_VALUE: Double = 3.40282346638528859812e38;
