@@ -3,6 +3,7 @@ program test_lockfree_slidingwindow;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.slidingwindow,
   nextpas.core.errors,

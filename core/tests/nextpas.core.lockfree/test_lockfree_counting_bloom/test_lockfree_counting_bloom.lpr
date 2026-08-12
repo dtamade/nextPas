@@ -2,6 +2,7 @@
 program test_lockfree_counting_bloom;
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.atomic,

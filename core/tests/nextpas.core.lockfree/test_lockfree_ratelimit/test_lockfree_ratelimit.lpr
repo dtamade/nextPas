@@ -3,6 +3,7 @@ program test_lockfree_ratelimit;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.math.scalar,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.ratelimit,

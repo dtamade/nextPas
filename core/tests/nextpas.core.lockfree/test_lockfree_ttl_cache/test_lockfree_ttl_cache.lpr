@@ -2,6 +2,7 @@
 program test_lockfree_ttl_cache;
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.system.classes,
   nextpas.core.text.conv,
   nextpas.core.platform.thread,
