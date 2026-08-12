@@ -404,3 +404,39 @@ Linux Verification / TUI Tests 仍红，均为既有他人红点（compiler cons
 - 新 CI run 应越过 lockfree，继续 log/math/...（compile gates 可过，预期推进到
   text.unicode 之后）。注意 main 上 30 个 build/ 文件陌生删除仍未动
 - compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
+
+## Core CI 跟进 5：argon2 验证异常漏出 + lockfree T2 三连断链（v14，2026-08-12）
+
+### CI run 31578235250 实况（含 lockfree/text.unicode 别名后）
+
+| job | 结论 | 失败点 |
+|---|---|---|
+| test-linux | FAIL | `test_argon2` "verify rejects tampered hash" unexpected exception（8/9） |
+| test-macos / test-freebsd / test-windows-runtime | ✅ | 越过了 lockfree（别名生效） |
+
+### ✅ 修复（`ec315bec6`，跨模块受控：crypto + lockfree）
+
+1. **argon2.pas**：`Argon2Verify` 对不可信输入直接 `Base64UrlDecode`，FPC 3.3.1
+   trunk 下 tampered hash 触发 `EConvertError` 漏出（本地 FPC 不抛，版本敏感）。
+   verify 语义 fail-closed：捕获解码异常返回 False；补 uses errors（re-export
+   Exception，encoding.base64 先例）
+2. **lockfree.deque_lf.pas**：枚举值不随类型别名自动可见——`dqOk/dqEmpty/dqFull`
+   未 re-export → deque_lf 测试编译 20 errors
+3. **test_lockfree_deque_lf.lpr**：契约断言读 deque_lf.pas（Phase D 已迁
+   deque_spin）→ 路径改 deque_spin，46/46
+4. **test_lockfree_lfu.lpr**：缺 `nextpas.core.thread.init`（线程驱动桥，
+   uses 第一位）→ Runtime 232，修复后 EXIT=0
+5. **check_tree_concurrency_contracts.py**：契约脚本匹配旧 API
+   `AtomicCompareExchange32(FLock,0,1)`，10 个树单元已迁
+   `atomic_compare_exchange_strong(FLock,LCasExpected,1,...)` → 正则同步
+
+### 验证
+
+argon2 9/9、deque_lf 46/46、lfu EXIT=0、tree_contracts EXIT=0、diff --check 干净
+
+### ⏳ 下一轮观察
+
+- 新 CI 应越过 argon2 与 lockfree，继续 hash/http/io/...；sweep2 后台扫剩余
+  模块找下一断链。build/ 30 文件陌生删除仍未动（疑似 Codex 重复事故，
+  先例 77732c0f4）
+- compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
