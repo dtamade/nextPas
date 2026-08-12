@@ -306,3 +306,31 @@ Linux Verification / TUI Tests 仍红，均为既有他人红点（compiler cons
 - **macOS net.async.dial EAV**：首次出现（前两轮 macOS 绿），且两提交（math/bench）
   均不触及 net/kqueue——判 flake。下一轮 Core CI 自然复跑观察，复发再深挖
 - compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
+
+## Core CI 跟进 2：math 修复后 linux 露出 id 模块 shim 断链（v11，2026-08-12）
+
+### d06005f 后 Core CI 实况（31558320199）
+
+| job | 结论 | 失败点 |
+|---|---|---|
+| test-linux | FAIL | `mem.allocator.growing` 编译时 Identifier not found `platform_tls_create_with_destructor`（id 模块 test_snowflake_boundary_contract） |
+| test-macos | ✅ | **net.async.dial flake 未复发**（前轮 EAV 确认一次性） |
+| test-windows-runtime / test-freebsd | ✅ | — |
+
+### ✅ id shim 断链修复（`1b2581c85`，跨模块受控修改）
+
+- **根因**：`fa88bafd5`（MEM2-A-001 TLS/clock FFI 迁 platform 层）后
+  `mem.allocator.growing` 初始化调用 `platform_tls_create_with_destructor`，
+  但 id 模块 4 个测试目录的本地 `nextpas.core.platform.thread` shim（确定性
+  假平台）未同步该 API → id 模块编译即挂。此断链在 main 已存在良久，CI 每次
+  更早 gate 失败从未到达；arch-contract 修复后首次暴露
+- **修复**：4 个 shim 补接口声明 + 实现（返回 -1，与既有 TLS stub 语义一致；
+  allocator 据此 `GCacheCleanupKeyCreated=false` 跳过销毁，行为自洽）
+- **验证**：id 模块 16 项目全绿 MODULE_STATUS=0（snowflake 7/clock 1/
+  uuid_v7 3/xid 2/id 72/ksuid 4 等）
+
+### ⏳ 下一轮观察
+
+- linux 应越过 id 模块继续后续模块（json/log/math/mem/net/platform/...）
+  —— CI 复跑验证是否还有下一个既有断链
+- compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
