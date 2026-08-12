@@ -274,3 +274,35 @@ gate 分类为 28 可修 + 19 不可修（bench lane 重写）。28 项全部落
 - 至此 v8 诊断的 47 个 CI 失败 gate 全部关闭（28 可修 + 19 重写 + 1 噪声）
 - 维持不代收：compiler snapshot（constructor-typing）、compiler-system B5g、
   tui/http stale lane（他人）
+
+## CI 跟进：bench 全绿后的剩余红点收口（v10，2026-08-12）
+
+### 8f62ab254 push 后 Core CI 实况
+
+| job | 结论 | 失败点 | 归属 |
+|---|---|---|---|
+| test-linux | FAIL | `ARCH-SOURCE-CONTRACT: l0-dependency math.vec:651 用 text.conv` | 同事 216f10441（新引入）|
+| test-macos | FAIL | `net.async.dial: DialRfcTimerDefaultsAndFirstFamilyCount EAccessViolation`（18/19） | 首次出现 flake（前两轮 macOS 绿）|
+| test-windows-runtime | ✅ | — | — |
+| test-freebsd | ✅ | — | — |
+
+Linux Verification / TUI Tests 仍红，均为既有他人红点（compiler constructor-typing
+`wrong-create-binding-target:8 expected=4` / TUI fpc 3.2.2），未触碰。
+
+### ✅ math L0 依赖修复（`4171721e4`，跨模块受控修改）
+
+- **根因**：`216f10441`（math backfill）为 ToString 引入 `nextpas.core.text.conv`
+  （L0 math 依赖 L1 text），打破 l0-dependency 硬门禁；提交只验证了 local-smoke /
+  api-surface / symbol-scope，漏了架构 source-contract
+- **修复**：math.vec 实现区本地复制 `FloatToStr` 同算法（FPC RTL `Str(:0:15)` +
+  去尾零 + '.' 归一，纯 FPC RTL 无上层依赖），移除 text.conv 导入；
+  ToString 输出逐字符不变，零调用点改动
+- **验证**：ARCH-SOURCE-CONTRACT PASS(issues=0)；test_vec 46/46、test_mat 27/27
+  （含 ToString 格式测试）；math 全量门禁 18 项目无 FAIL；api-surface 71 findings=0；
+  symbol-scope 2/2；rtl-isolation PASS
+
+### ⏳ 待观察
+
+- **macOS net.async.dial EAV**：首次出现（前两轮 macOS 绿），且两提交（math/bench）
+  均不触及 net/kqueue——判 flake。下一轮 Core CI 自然复跑观察，复发再深挖
+- compiler constructor-typing、TUI、B5g、tui/http stale lane：维持不代收
