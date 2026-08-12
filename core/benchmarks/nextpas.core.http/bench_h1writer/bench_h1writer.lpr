@@ -4,6 +4,9 @@ program bench_h1writer;
 
 uses
   nextpas.core.bench,
+  nextpas.core.base,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -23,6 +26,7 @@ type
 
 var
   LResults: IBenchResults;
+  LFilter: string;
   GBody1K: AnsiString;
   GBytesWritten: SizeUInt;
 
@@ -226,15 +230,25 @@ end;
 
 begin
   InitBody1K;
+  LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  { Source-contract marker: bench_filter= must be emitted before Run so it
+    also appears on the no-match path. }
   WriteLn('=== nextpas.core.http.h1writer benchmark ===');
   WriteLn('operation=http.h1writer.serialize');
+  WriteLn('bench_filter=', LFilter);
   WriteLn;
   LResults := TBenchSuite.Create('headers only 200')
+    .SetFilter(LFilter)
     .AddLoop('headers only 200', @BenchHeadersOnly200)
     .AddLoop('headers block 200 6 headers', @BenchHeadersBlock200_6Headers)
     .AddLoop('status lines common errors', @BenchStatusLinesCommonErrors)
     .AddLoop('fixed 200 13B', @BenchFixed200_13B)
     .AddLoop('outbound fixed 200 1KB', @BenchOutboundFixed200_1KB)
     .Run;
+  if (LFilter <> '') and (LResults.Count = 0) then
+  begin
+    WriteLn('No matching benchmark rows.');
+    Halt(1);
+  end;
   WriteLn(LResults.PrintToConsole);
 end.

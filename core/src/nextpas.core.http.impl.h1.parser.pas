@@ -262,6 +262,15 @@ begin
   Result := True;
 end;
 
+procedure UpdateConnectionMetadataFromCapturedValue(var AMetadata: TH1RequestMetadata;
+  const AValue: string; const AValuePtr: PAnsiChar; const AValueLen: SizeUInt); inline;
+begin
+  AMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
+    AValuePtr, AValueLen, 'close');
+  AMetadata.ConnectionKeepAlive := CapturedHeaderValueEquals(AValue,
+    AValuePtr, AValueLen, 'keep-alive');
+end;
+
 function SpanTrimBounds(const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
   out AStart, AStop: SizeUInt): Boolean; inline;
 begin
@@ -1131,10 +1140,8 @@ begin
     if FRequestMetadataSawConnection then
       Exit;
     FRequestMetadataSawConnection := True;
-    FPendingRequestMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
-      AValuePtr, AValueLen, 'close');
-    FPendingRequestMetadata.ConnectionKeepAlive :=
-      CapturedHeaderValueEquals(AValue, AValuePtr, AValueLen, 'keep-alive');
+    UpdateConnectionMetadataFromCapturedValue(FPendingRequestMetadata,
+      AValue, AValuePtr, AValueLen);
     Exit;
   end;
 

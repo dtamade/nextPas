@@ -21,6 +21,8 @@ type
 var
   LResults: IBenchResults;
   LFilter: string;
+  LMIters: Int64;
+  LMItersValue: string;
   GSink: SizeUInt;
   GCallbackSink: SizeUInt;
 
@@ -993,6 +995,21 @@ begin
   LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
   WriteLn('=== nextpas.core.http H1 parser benchmark ===');
   WriteLn('operation=http.h1parser');
+  { Source-contract markers: bench_filter= must be emitted before Run so it
+    also appears on the no-match path; bench_max_iters= echoes the effective
+    value. Reject non-integer / too-small NEXTPAS_BENCH_MAX_ITERS here
+    (framework would silently clamp to 100) — mirror bench_fullchain. }
+  LMItersValue := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_MAX_ITERS'));
+  if LMItersValue <> '' then
+  begin
+    if (not TryStrToInt64(LMItersValue, LMIters)) or (LMIters < 100) then
+    begin
+      WriteLn(System.StdErr, 'invalid NEXTPAS_BENCH_MAX_ITERS: ', LMItersValue);
+      Halt(2);
+    end;
+    WriteLn('bench_max_iters=', IntToStr(LMIters));
+  end;
+  WriteLn('bench_filter=', LFilter);
   WriteLn('  Simple GET: ', Length(REQ_SIMPLE), ' bytes');
   WriteLn('  10 headers: ', Length(REQ_10HEADERS), ' bytes');
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');
@@ -1042,7 +1059,7 @@ begin
     .Run;
   if (LFilter <> '') and (LResults.Count = 0) then
   begin
-    WriteLn('No matching H1 parser benchmark rows.');
+    WriteLn('No matching benchmark rows.');
     Halt(1);
   end;
   WriteLn(LResults.PrintToConsole);

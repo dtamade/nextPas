@@ -4,6 +4,9 @@ program bench_h1outbound;
 
 uses
   nextpas.core.bench,
+  nextpas.core.base,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.net.intf,
   nextpas.core.http.impl.h1.outbound;
@@ -37,6 +40,7 @@ type
 
 var
   LResults: IBenchResults;
+  LFilter: string;
   GPayload: array[0..1023] of Byte;
   GBytesDrained: SizeUInt;
 
@@ -167,12 +171,22 @@ end;
 
 begin
   InitPayload;
+  LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  { Source-contract marker: bench_filter= must be emitted before Run so it
+    also appears on the no-match path. }
   WriteLn('=== nextpas.core.http.h1outbound benchmark ===');
   WriteLn('operation=http.h1outbound.drain');
+  WriteLn('bench_filter=', LFilter);
   WriteLn;
   LResults := TBenchSuite.Create('buffer write+drain 1KB')
+    .SetFilter(LFilter)
     .AddLoop('buffer write+drain 1KB', @BenchBufferWriteDrain1KB)
     .AddLoop('buffer trydrain runtime 1KB chunk128', @BenchBufferTryDrainRuntime1KBChunk128)
     .Run;
+  if (LFilter <> '') and (LResults.Count = 0) then
+  begin
+    WriteLn('No matching benchmark rows.');
+    Halt(1);
+  end;
   WriteLn(LResults.PrintToConsole);
 end.

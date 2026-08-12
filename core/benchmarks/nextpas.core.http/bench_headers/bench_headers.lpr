@@ -5,6 +5,9 @@ program bench_headers;
 uses
   nextpas.core.bench,
   nextpas.core.bench.intf,
+  nextpas.core.base,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.time.base,
   nextpas.core.fs,
   nextpas.core.http.intf,
@@ -12,6 +15,7 @@ uses
 
 var
   LResults: IBenchResults;
+  LFilter: string;
   GSink: string;
 
 procedure BenchSetGet_5Headers(aIters: Int64);
@@ -164,23 +168,32 @@ begin
 end;
 
 begin
+  LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  { Source-contract markers: bench_filter= must be emitted before Run so it
+    also appears on the no-match path. }
   WriteLn('=== nextpas.core.http.headers benchmark ===');
   WriteLn('operation=http.headers');
+  WriteLn('bench_filter=', LFilter);
   WriteLn;
   LResults := TBenchSuite.Create('headers')
-    .SetQuiet(True)
+    .SetFilter(LFilter)
     .SetMinDuration(TDuration.FromMilliseconds(50))
     .SetMinSamples(5)
-    .AddLoop('Headers/SetGet/5', @BenchSetGet_5Headers)
-    .AddLoop('Headers/SetGet/15', @BenchSetGet_15Headers)
-    .AddLoop('Headers/Add/15', @BenchAdd_15Headers)
-    .AddLoop('Headers/Get/miss', @BenchGet_Miss)
-    .AddLoop('Headers/GetAll/miss', @BenchGetAll_Miss)
-    .AddLoop('Headers/Get/hit', @BenchGet_Hit)
-    .AddLoop('Headers/Get/hitUpper', @BenchGet_HitUppercase)
-    .AddLoop('Headers/Has', @BenchHas)
-    .AddLoop('Headers/Clone/10', @BenchClone_10Headers)
+    .AddLoop('Set/Get 5 headers', @BenchSetGet_5Headers)
+    .AddLoop('Set/Get 15 headers', @BenchSetGet_15Headers)
+    .AddLoop('Add 15 headers', @BenchAdd_15Headers)
+    .AddLoop('Get miss', @BenchGet_Miss)
+    .AddLoop('GetAll miss', @BenchGetAll_Miss)
+    .AddLoop('Get hit (5 headers, last)', @BenchGet_Hit)
+    .AddLoop('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase)
+    .AddLoop('Has', @BenchHas)
+    .AddLoop('Clone 10 headers', @BenchClone_10Headers)
     .Run;
+  if (LFilter <> '') and (LResults.Count = 0) then
+  begin
+    WriteLn('No matching benchmark rows.');
+    Halt(1);
+  end;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
   LResults.SaveToJSON('build/bench-headers.json');

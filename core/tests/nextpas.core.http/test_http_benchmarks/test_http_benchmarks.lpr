@@ -35,7 +35,7 @@ const
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
   HeaderUnitPath = 'src/nextpas.core.http.headers.pas';
   HttpMessageUnitPath = 'src/nextpas.core.http.message.pas';
-  H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
+  H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.conn.pas';
   H1ParserUnitPath = 'src/nextpas.core.http.impl.h1.parser.pas';
   H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';

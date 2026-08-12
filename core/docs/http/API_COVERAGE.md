@@ -24,6 +24,9 @@
 - **Server scale（Q2+S3）**：宣称 **Scale-ready (H1 server, Linux epoll)** — Q2-1 medians + S1-3 连接阶梯 + L1 p50/p99（nextPas）；H2 S3 multiplex ~3k req/s 为证据**非**整包宣称；**不**宣称 H3。详见 [`BENCHMARKS.md`](BENCHMARKS.md)。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
+- `bench_http_server` benchmark evidence summary: 基准行归一化证据（`operation=...` / `impl=...` / `iterations=...` / `ns/op=` / `req/s=`）与 Go/Rust 对照行统一维护在 [`BENCHMARKS.md`](BENCHMARKS.md)，本文件不复制逐次运行细节。当前对照快照串包括 `impl=rust_std` / `rust_profile=std_only` 与 `impl=rust_hyper` / `rust_profile=hyper_tokio` / `rust_http_stack=hyper_http1` / `rust_runtime=tokio_multi_thread`；fullchain smoke 含 `middleware_noop` 行及其 `observed_middleware_hits` 命中计数，用于锁服务器 dispatch 策略。这些数字是证据快照，**not a permanent ranking**。
+- `test_http_benchmarks` 现在还用 source-contract smoke 锁住 H1 server policy
+
 下列 **Public Surface Matrix** 是本文件的主内容：公开契约 ↔ 测试证据。
 
 ## Public Surface Matrix

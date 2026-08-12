@@ -4,6 +4,9 @@ program bench_router;
 
 uses
   nextpas.core.bench,
+  nextpas.core.base,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.message,
@@ -11,6 +14,7 @@ uses
 
 var
   LResults: IBenchResults;
+  LFilter: string;
   GSink: string;
   GDispatchCount: Int64;
 
@@ -194,10 +198,15 @@ begin
 end;
 
 begin
+  LFilter := Trim(GetEnvironmentVariable('NEXTPAS_BENCH_FILTER'));
+  { Source-contract marker: bench_filter= must be emitted before Run so it
+    also appears on the no-match path. }
   WriteLn('=== nextpas.core.http.router benchmark ===');
   WriteLn('operation=http.router.dispatch');
+  WriteLn('bench_filter=', LFilter);
   WriteLn;
   LResults := TBenchSuite.Create('Static match (5 routes)')
+    .SetFilter(LFilter)
     .AddLoop('Static match (5 routes)', @BenchStaticRoute_5Routes)
     .AddLoop('Static match (50 routes)', @BenchStaticRoute_50Routes)
     .AddLoop('Param :id', @BenchParamRoute)
@@ -208,5 +217,10 @@ begin
     .AddLoop('handler dispatch (match + no-op handler)', @BenchHandlerDispatch)
     .AddLoop('direct call (same request, no router)', @BenchDirectCall)
     .Run;
+  if (LFilter <> '') and (LResults.Count = 0) then
+  begin
+    WriteLn('No matching benchmark rows.');
+    Halt(1);
+  end;
   WriteLn(LResults.PrintToConsole);
 end.

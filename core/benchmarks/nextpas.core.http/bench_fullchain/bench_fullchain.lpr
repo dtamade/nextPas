@@ -85,7 +85,7 @@ var LValue: string;
 begin
   LValue := Trim(GetEnvironmentVariable(BENCH_MAX_ITERS_ENV));
   if LValue = '' then Exit(DEFAULT_ITERATIONS);
-  if (not TryStrToInt64(LValue, Result)) or (Result <= 0) then begin WriteLn(StdErr, 'invalid ', BENCH_MAX_ITERS_ENV); Halt(2); end;
+  if (not TryStrToInt64(LValue, Result)) or (Result <= 0) then begin WriteLn(StdErr, 'invalid ', BENCH_MAX_ITERS_ENV, ': ', LValue); Halt(2); end;
 end;
 function ConfiguredFilter: string;
 begin Result := Trim(GetEnvironmentVariable(BENCH_FILTER_ENV)); end;
@@ -95,6 +95,8 @@ begin
   LValue := Trim(GetEnvironmentVariable(BENCH_BACKEND_ENV));
   if (LValue = '') or (LValue = BENCH_BACKEND_THREADED) then Exit(TCP_SERVER_BACKEND_THREADED);
   if LValue = BENCH_BACKEND_EPOLL then Exit(TCP_SERVER_BACKEND_EPOLL);
+  WriteLn(StdErr, 'invalid ', BENCH_BACKEND_ENV, ': ', LValue,
+    ' (valid: ', BENCH_BACKEND_THREADED, ', ', BENCH_BACKEND_EPOLL, ')');
   Halt(2);
 end;
 function BackendName: string;
@@ -236,6 +238,7 @@ procedure BenchParamRoute(const ACtx: IBenchContext);
 var LResp: TFullchainResponseRead;
 begin GConn.Write(GParamReq[1], SizeUInt(Length(GParamReq))); LResp := ReadResponse(GConn); if LResp.Complete then GSink := GSink xor UInt64(LResp.BodyBytes); ACtx.SetBytes(Length('user:12345')); end;
 var LSuite: IBenchSuite;
+    LFullResults: IBenchResults;
 begin
   GIterations := ConfiguredIterations; GFilter := ConfiguredFilter; GBackend := ConfiguredBackend; GSink := 0;
   SetLength(GBody1K, 1024); FillChar(GBody1K[1], 1024, Ord('x'));
@@ -272,9 +275,15 @@ begin
       .Add('Middleware/Noop', @BenchMiddlewareNoop).Add('Router/Plaintext', @BenchPlaintext)
       .Add('Router/JSON', @BenchJson).Add('Router/Echo/1KB', @BenchEcho1K)
       .Add('Router/Sink/16KB', @BenchSink16K).Add('Router/Param', @BenchParamRoute);
-    WriteLn(LSuite.Run.PrintToConsole);
+    LFullResults := LSuite.Run;
+    WriteLn(LFullResults.PrintToConsole);
     GConn.Close;
   finally
     StopServer;
+  end;
+  if (GFilter <> '') and (LFullResults.Count = 0) then
+  begin
+    WriteLn('No matching full-chain scenarios.');
+    Halt(2);
   end;
 end.
