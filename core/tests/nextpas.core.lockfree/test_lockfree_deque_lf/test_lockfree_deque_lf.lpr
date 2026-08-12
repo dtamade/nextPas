@@ -256,7 +256,8 @@ var
   LSource: AnsiString;
 begin
   WriteLn('--- Source Contract ---');
-  LSource := ReadTextFile('../../../src/nextpas.core.lockfree.deque_lf.pas');
+  { Phase D: impl moved to deque_spin; contract lives with the real lock code }
+  LSource := ReadTextFile('../../../src/nextpas.core.lockfree.deque_spin.pas');
   Check(Pos('LCasExpected := 0;', LSource) > 0,
     'lock acquire CAS order uses expected=0 desired=1');
   Check(Pos('atomic_compare_exchange_strong(FLock, LCasExpected, 1', LSource) > 0,

@@ -29,10 +29,10 @@ def normalized_source(unit_name: str) -> str:
 def check_tree_lock_cas_order() -> list[str]:
     failures: list[str] = []
     correct_call = re.compile(
-        r"AtomicCompareExchange32\s*\(\s*FLock\s*,\s*0\s*,\s*1(?:\s*,|\s*\))"
+        r"atomic_compare_exchange_strong\s*\(\s*FLock\s*,\s*LCasExpected\s*,\s*1\b"
     )
     reversed_call = re.compile(
-        r"AtomicCompareExchange32\s*\(\s*FLock\s*,\s*1\s*,\s*0(?:\s*,|\s*\))"
+        r"atomic_compare_exchange_strong\s*\(\s*FLock\s*,\s*1\s*,\s*LCasExpected\b"
     )
 
     for unit_name in TREE_LOCK_UNITS:

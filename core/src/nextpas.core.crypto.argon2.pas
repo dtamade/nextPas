@@ -33,7 +33,7 @@ implementation
 uses
   nextpas.core.math, nextpas.core.crypto.hash,
   nextpas.core.crypto.constant_time, nextpas.core.crypto.random,
-  nextpas.core.encoding, nextpas.core.text.conv;
+  nextpas.core.encoding, nextpas.core.text.conv, nextpas.core.errors;
 
 type
   TStringArray = array of string;
@@ -232,8 +232,14 @@ begin
   end;
   if (LMemKiB < 8) or (LTime < 1) or (LPar < 1) then Exit;
 
-  LSalt := Base64UrlDecode(LParts[4]);
-  LHash := Base64UrlDecode(LParts[5]);
+  { 不可信输入：base64 解码失败（字符/填充位非法）视为验证失败，不抛异常 }
+  try
+    LSalt := Base64UrlDecode(LParts[4]);
+    LHash := Base64UrlDecode(LParts[5]);
+  except
+    on Exception do
+      Exit;
+  end;
   LHashLen := Length(LHash);
   if (Length(LSalt) = 0) or (LHashLen < 4) then Exit;
 
