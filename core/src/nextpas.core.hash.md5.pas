@@ -38,7 +38,17 @@ function NewMD5: IHasher;
 
 implementation
 
+{ The x86-64 asm fast paths are written for the SysV AMD64 register
+  convention (rdi/rsi/rdx/rcx as first args), which is invalid on
+  Windows x64 (rcx/rdx/r8/r9). Fall back to the portable Pascal
+  implementation there. }
 {$IFDEF CPUX86_64}
+  {$IFNDEF WINDOWS}
+    {$DEFINE HASH_X64_ASM}
+  {$ENDIF}
+{$ENDIF}
+
+{$IFDEF HASH_X64_ASM}
 {$I nextpas.core.hash.md5.x64.inc}
 {$ENDIF}
 
@@ -79,7 +89,7 @@ var
   A, B, C, D, F: UInt32;
   G, I: Integer;
 begin
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   MD5ProcessBlockX64(ABlock, AA, AB, AC, AD);
   Exit;
   {$ENDIF}
