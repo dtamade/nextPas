@@ -20,7 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses nextpas.core.mem.intf, nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.ansi, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
+uses nextpas.core.mem.intf, nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.image_mgr, nextpas.core.tui.ansi, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
 
 const
   STDIN_FD  = 0;
@@ -124,6 +124,7 @@ type
     FCapabilityProfile: TTuiTerminalCapabilityProfile;
     FCellWidth: Word;
     FCellHeight: Word;
+    FImageMgr: TImageManager;
     FOptions: TTerminalOptions;
     FActiveOptions: TTerminalOptions;
     FAllocator: IAllocator;
@@ -421,6 +422,7 @@ begin
   FFocusReportingEnabled := False;
   FBracketedPasteEnabled := False;
   FLastEnterResult := TTuiEnterResult.OkResult;
+  FImageMgr := nil;
   SetLength(FInputQueue, 256);
 end;
 
@@ -434,6 +436,7 @@ begin
   FMerged.Free;
   FCurr.Free;
   FPrev.Free;
+  FImageMgr.Free;
   FBackend.Free;
   FAllocator := nil;
   inherited;
@@ -640,6 +643,13 @@ begin
   if FActiveOptions.SynchronizedUpdate then
     FBackend.BeginSynchronizedUpdate;
   FBackend.DrawPatchesN(FPatches, LPatchCount);
+  { 图片协议传输/放置：消费 buffer 里调用方 PlaceImage 的占位。
+    kitty/sixel 才输出；half-block（不支持真图片）时为空操作，
+    调用方自行降级渲染。惰性创建——协议在 EnterTui 能力检测后才定。 }
+  if FImageMgr = nil then
+    FImageMgr := TImageManager.Create(GetImageProtocol);
+  FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
+    FPatches, LPatchCount);
 
   if AFrame.HasCursor then
   begin
