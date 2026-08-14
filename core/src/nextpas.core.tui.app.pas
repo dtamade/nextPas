@@ -118,8 +118,11 @@ end;
 
 destructor TApp.Destroy;
 begin
-  FScreens.Free;
+  { 先 join 在飞任务再释放屏幕:worker 可能仍在经共享指针写屏幕持有的
+    对象(如流缓冲),先 free FScreens 会在 worker 仍在写时释放目标
+    (use-after-free);TTaskManager.Destroy 走 ShutdownAndWait 全程 join }
   FTasks.Free;
+  FScreens.Free;
   FFocus.Free;
   FTerminal.Free;
   inherited;
@@ -326,6 +329,11 @@ begin
         ConsumeScreenQuitRequest;
       end;
     end;
+    { 退出循环后、销毁前排空:join 在飞 worker,防 Run 返回后 Destroy
+      释放屏幕资源时 worker 仍在写共享对象(use-after-free)。
+      ShutdownAndWait 置关闭态:此后本 App 不再接受新任务(再 Spawn 回 0);
+      异常路径由 Destroy 的先 join 顺序兜底 }
+    FTasks.ShutdownAndWait;
   except
     CleanupAfterRun(True);
     raise;
