@@ -1348,6 +1348,90 @@ begin
   LLoop.Free;
 end;
 
+{ === AsyncAcceptTimeout expired (no connection, deadline passes) === }
+
+procedure TestAsyncLoopAsyncAcceptTimeoutExpired;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LListenerFd: PtrInt;
+  LSa: sockaddr_in;
+  LSaLen: socklen_t;
+begin
+  GAcceptDone := False;
+  GAcceptResult := 0;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  (LListener as ITcpSocketRuntime).SetBlocking(False);
+  LListenerFd := PtrInt((LListener as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { Short deadline and no incoming connection -> accept times out }
+  LSaLen := SizeOf(LSa);
+  FillChar(LSa, SizeOf(LSa), 0);
+  Check(LLoop.AsyncAcceptTimeout(LListenerFd, @LSa, @LSaLen, 0,
+    TDeadline.After(TDuration.FromMilliseconds(50)),
+    @AcceptCallback, nil), 'AsyncAcceptTimeout accepted');
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GAcceptDone, 'accept deadline fired');
+  Check(GAcceptResult < 0, 'result negative = timeout');
+
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
+{ === AsyncAcceptTimeout success (connection arrives before deadline) === }
+
+procedure TestAsyncLoopAsyncAcceptTimeoutSuccess;
+var
+  LLoop: TAsyncLoop;
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LListenerFd: PtrInt;
+  LSa: sockaddr_in;
+  LSaLen: socklen_t;
+  LAcceptedFd: TPlatformSocket;
+begin
+  GAcceptDone := False;
+  GAcceptResult := 0;
+
+  LListener := NetTcpListen('127.0.0.1', 0);
+  (LListener as ITcpSocketRuntime).SetBlocking(False);
+  LListenerFd := PtrInt((LListener as ITcpSocketRuntime).NativeSocketHandle);
+
+  LLoop := TAsyncLoop.Create(32);
+  GLoopRef := @LLoop;
+
+  { Generous deadline; post first, then connect -> accept completes }
+  LSaLen := SizeOf(LSa);
+  FillChar(LSa, SizeOf(LSa), 0);
+  Check(LLoop.AsyncAcceptTimeout(LListenerFd, @LSa, @LSaLen, 0,
+    TDeadline.After(TDuration.FromSeconds(5)),
+    @AcceptCallback, nil), 'AsyncAcceptTimeout accepted');
+
+  LClient := NetTcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+
+  LLoop.Schedule(TDuration.FromMilliseconds(500), @LoopStopCallback, nil);
+  LLoop.Run;
+
+  Check(GAcceptDone, 'accept completed before deadline');
+  Check(GAcceptResult >= 0, 'accept result OK (fd >= 0)');
+  { Clean up the accepted fd }
+  if GAcceptResult >= 0 then
+  begin
+    LAcceptedFd.Value := cint(GAcceptResult);
+    platform_socket_close(LAcceptedFd);
+  end;
+
+  GLoopRef := nil;
+  LLoop.Free;
+end;
+
 { === AsyncRecvTimeout success === }
 
 var
@@ -1537,6 +1621,10 @@ begin
   T.Test('AsyncLoopAsyncRecvSend', @TestAsyncLoopAsyncRecvSend);
   T.Test('AsyncLoopAsyncRecv', @TestAsyncLoopAsyncRecv);
   T.Test('AsyncLoopAsyncAccept', @TestAsyncLoopAsyncAccept);
+  T.Test('AsyncLoopAsyncAcceptTimeoutExpired',
+    @TestAsyncLoopAsyncAcceptTimeoutExpired);
+  T.Test('AsyncLoopAsyncAcceptTimeoutSuccess',
+    @TestAsyncLoopAsyncAcceptTimeoutSuccess);
   T.Test('AsyncLoopAsyncRecvTimeoutSuccess',
     @TestAsyncLoopAsyncRecvTimeoutSuccess);
   T.Test('AsyncLoopAsyncRecvTimeoutExpired',
