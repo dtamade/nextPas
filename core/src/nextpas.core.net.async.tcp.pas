@@ -137,6 +137,13 @@ type
   private
     FListener: ITcpListener;
     FLoop: TAsyncLoop;
+    { accept 地址缓冲（监听器字段而非栈局部）：异步 accept op 延迟执行
+      accept4，向 Addr/AddrLen 写客户端地址——若指向已返回的栈局部即
+      悬垂写，破坏事件循环栈（对端地址写入调用方帧，间歇性连接失败）。
+      监听器生命周期覆盖 op 生命周期；EPOLLONESHOT 串行化保证同监听器
+      上一次 accept op 完成后才重 arm 复用同一缓冲，无并发写。 }
+    FSa: array[0..127] of Byte;
+    FSaLen: Int32;
     { 同步 try accept 前确保 listener 非阻塞：NetTcpListen 创建的 listener
       默认阻塞模式，无连接时阻塞 accept 会卡死事件循环线程。返回 False
       表示设置失败（此时调用方应放弃本次 accept 而非继续）。 }
@@ -381,8 +388,6 @@ function TAsyncTcpListener.AsyncAccept(ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: array[0..127] of Byte;
-  LSaLen: Int32;
   LListen: TPlatformSocket;
   LClient: TPlatformSocket;
   LRes: Int32;
@@ -396,11 +401,11 @@ begin
     Exit;
   end;
   LFd := PtrInt(NativeSocketHandle);
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
   LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
   { 同步 accept 优先：边沿触发 epoll/kqueue 上已有连接；可移植（非 accept4）。 }
-  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
   if LRes = 0 then
   begin
     if Assigned(ACallback) then
@@ -408,17 +413,15 @@ begin
     Result := True;
     Exit;
   end;
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
-  Result := FLoop.AsyncAccept(LFd, @LSa, @LSaLen, 0, ACallback, AContext);
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
+  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, ACallback, AContext);
 end;
 
 function TAsyncTcpListener.AsyncAcceptRef(ACallback: TIoCompletionRef;
   AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: array[0..127] of Byte;
-  LSaLen: Int32;
   LListen: TPlatformSocket;
   LClient: TPlatformSocket;
   LRes: Int32;
@@ -432,10 +435,10 @@ begin
     Exit;
   end;
   LFd := PtrInt(NativeSocketHandle);
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
   LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
-  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
   if LRes = 0 then
   begin
     if Assigned(ACallback) then
@@ -443,9 +446,9 @@ begin
     Result := True;
     Exit;
   end;
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
-  Result := FLoop.AsyncAccept(LFd, @LSa, @LSaLen, 0, @IoCompletionRefWrapper,
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
+  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, @IoCompletionRefWrapper,
     WrapIoCompletionRef(ACallback, AContext));
 end;
 
@@ -453,8 +456,6 @@ function TAsyncTcpListener.AsyncAcceptTimeout(const ADeadline: TDeadline;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: array[0..127] of Byte;
-  LSaLen: Int32;
   LListen: TPlatformSocket;
   LClient: TPlatformSocket;
   LRes: Int32;
@@ -468,10 +469,10 @@ begin
     Exit;
   end;
   LFd := PtrInt(NativeSocketHandle);
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
   LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
-  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
   if LRes = 0 then
   begin
     if Assigned(ACallback) then
@@ -479,9 +480,9 @@ begin
     Result := True;
     Exit;
   end;
-  FillChar(LSa, SizeOf(LSa), 0);
-  LSaLen := SizeOf(LSa);
-  Result := FLoop.AsyncAccept(LFd, @LSa, @LSaLen, 0, ACallback, AContext);
+  FillChar(FSa, SizeOf(FSa), 0);
+  FSaLen := SizeOf(FSa);
+  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, ACallback, AContext);
 end;
 
 { 工厂函数 }
