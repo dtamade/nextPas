@@ -529,8 +529,14 @@ begin
     else
       FBracketedPasteEnabled := False;
     FHasMouseTracking := FActiveOptions.RequestsMouseTracking;
-    FCellWidth := 0;
-    FCellHeight := 0;
+    if (LSize.XPixel > 0) and (LSize.Cols > 0) then
+      FCellWidth := LSize.XPixel div LSize.Cols
+    else
+      FCellWidth := 0;
+    if (LSize.YPixel > 0) and (LSize.Rows > 0) then
+      FCellHeight := LSize.YPixel div LSize.Rows
+    else
+      FCellHeight := 0;
     FFrameActive := False;
     FLastEnterResult := TTuiEnterResult.OkResult;
     Result := True;
@@ -798,8 +804,14 @@ begin
   if not ConsumeResize then Exit;
   if platform_console_get_size_fd(STDOUT_FD, LSize) <> 0 then Exit;
   ResizeBuffersTo(LSize.Cols, LSize.Rows);
-  FCellWidth := 0;
-  FCellHeight := 0;
+  if (LSize.XPixel > 0) and (LSize.Cols > 0) then
+    FCellWidth := LSize.XPixel div LSize.Cols
+  else
+    FCellWidth := 0;
+  if (LSize.YPixel > 0) and (LSize.Rows > 0) then
+    FCellHeight := LSize.YPixel div LSize.Rows
+  else
+    FCellHeight := 0;
   AResizeOut := ResizeEvent(LSize.Cols, LSize.Rows);
   AHasResize := True;
 end;

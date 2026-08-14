@@ -20,6 +20,9 @@ type
   TPlatformConsoleSize = record
     Cols: Int32;
     Rows: Int32;
+    { 终端 cell 像素尺寸（TIOCGWINSZ ws_xpixel/ws_ypixel，部分终端为 0） }
+    XPixel: Int32;
+    YPixel: Int32;
     {** @desc 检查尺寸是否有效（大于 0）
         @return True 如果尺寸有效 *}
     function IsValid: Boolean; inline;
@@ -213,17 +216,23 @@ var
 begin
   ASize.Cols := 0;
   ASize.Rows := 0;
+  ASize.XPixel := 0;
+  ASize.YPixel := 0;
   Result := PosixCheck(ioctl(AFd, TIOCGWINSZ, @LWin));
   if Result = 0 then
   begin
     ASize.Cols := Int32(LWin.ws_col);
     ASize.Rows := Int32(LWin.ws_row);
+    ASize.XPixel := Int32(LWin.ws_xpixel);
+    ASize.YPixel := Int32(LWin.ws_ypixel);
   end;
 end;
 {$ELSE}
 begin
   ASize.Cols := 0;
   ASize.Rows := 0;
+  ASize.XPixel := 0;
+  ASize.YPixel := 0;
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
