@@ -119,7 +119,17 @@ begin
   FTotalLen := 0;
 end;
 
+{ The x86-64 asm fast paths are written for the SysV AMD64 register
+  convention (rdi/rsi/rdx/rcx as first args), which is invalid on
+  Windows x64 (rcx/rdx/r8/r9). Fall back to the portable Pascal
+  implementation there. }
 {$IFDEF CPUX86_64}
+  {$IFNDEF WINDOWS}
+    {$DEFINE HASH_X64_ASM}
+  {$ENDIF}
+{$ENDIF}
+
+{$IFDEF HASH_X64_ASM}
 {$I nextpas.core.hash.sha256.x64.inc}
 {$I nextpas.core.hash.sha256.x64v2.inc}
 {$I nextpas.core.hash.sha256.avx2.inc}
@@ -127,7 +137,7 @@ end;
 {$I nextpas.core.hash.sha256.shani.inc}
 {$ENDIF}
 
-{$IFDEF CPUX86_64}
+{$IFDEF HASH_X64_ASM}
 var
   GHasSHANI: Boolean = False;
   GHasAVX2: Boolean = False;
@@ -168,7 +178,7 @@ end;
 
 procedure TSHA256Hasher.ProcessBlock(ABlock: PByte);
 begin
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   if GHasSHANI then
     ProcessBlockSHANI(ABlock, @FH[0])
   else if GHasAVX2 then
@@ -210,7 +220,7 @@ begin
     end;
   end;
 
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   while (LRemaining >= 128) and GHasAVX2 do
   begin
     ProcessBlocks2AVX2(LSrc, @FH[0]);
@@ -262,7 +272,7 @@ begin
       LBuf[LBufLen] := 0;
       Inc(LBufLen);
     end;
-    {$IFDEF CPUX86_64}
+    {$IFDEF HASH_X64_ASM}
     if GHasSHANI then
       ProcessBlockSHANI(@LBuf[0], @LH[0])
     else if GHasSSSE3 then
@@ -290,7 +300,7 @@ begin
   LBuf[62] := Byte(LTotalBits shr 8);
   LBuf[63] := Byte(LTotalBits);
 
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   if GHasSHANI then
     ProcessBlockSHANI(@LBuf[0], @LH[0])
   else if GHasSSSE3 then
@@ -344,7 +354,7 @@ begin
   Result := TSHA256Hasher.Create;
 end;
 
-{$IFDEF CPUX86_64}
+{$IFDEF HASH_X64_ASM}
 initialization
   InitSHA256Dispatch;
 {$ENDIF}

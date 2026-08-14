@@ -43,7 +43,17 @@ begin
   Result := (AX shl AN) or (AX shr (32 - AN));
 end;
 
+{ The x86-64 asm fast paths are written for the SysV AMD64 register
+  convention (rdi/rsi/rdx/rcx as first args), which is invalid on
+  Windows x64 (rcx/rdx/r8/r9). Fall back to the portable Pascal
+  implementation there. }
 {$IFDEF CPUX86_64}
+  {$IFNDEF WINDOWS}
+    {$DEFINE HASH_X64_ASM}
+  {$ENDIF}
+{$ENDIF}
+
+{$IFDEF HASH_X64_ASM}
 {$I nextpas.core.hash.sha1.x64.inc}
 {$I nextpas.core.hash.sha1.ssse3.inc}
 {$ENDIF}
@@ -57,7 +67,7 @@ var
   A, B, C, D, E, F, K, Tmp: UInt32;
   I: Integer;
 begin
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   if GSHA1HasSSSE3 then
   begin
     SHA1ProcessBlockSSSE3(ABlock, AH);
@@ -224,7 +234,7 @@ begin
   Result := TSHA1Hasher.Create;
 end;
 
-{$IFDEF CPUX86_64}
+{$IFDEF HASH_X64_ASM}
 procedure DetectSHA1Features;
 var
   LEcx: DWord;
@@ -240,7 +250,7 @@ end;
 {$ENDIF}
 
 initialization
-  {$IFDEF CPUX86_64}
+  {$IFDEF HASH_X64_ASM}
   DetectSHA1Features;
   {$ENDIF}
 
