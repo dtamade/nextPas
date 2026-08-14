@@ -110,6 +110,8 @@ type
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncAcceptTimeout(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+      const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncRecvFromTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       AAddr: Pointer; AAddrLen: Pointer; const ADeadline: TDeadline;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
@@ -699,6 +701,27 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncAcceptTimeout(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
+  const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite then
+    Exit(AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext));
+  { Same TimeoutCtx machinery as the recv/send timeout ops: the armed timer
+    cancels the pending accept by context on expiry and reports -ETIMEDOUT. }
+  LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
+  Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
 end;
 
 function TAsyncLoop.AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;

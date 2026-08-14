@@ -148,6 +148,10 @@ type
       默认阻塞模式，无连接时阻塞 accept 会卡死事件循环线程。返回 False
       表示设置失败（此时调用方应放弃本次 accept 而非继续）。 }
     function EnsureNonBlockingListen: Boolean;
+    { 三 accept 重载的唯一实现：同步 try-accept 快路径 + 异步回退（带超时
+      时经 loop AsyncAcceptTimeout 挂取消语义，否则原样注册）。 }
+    function AcceptImpl(const ADeadline: TDeadline; AHasDeadline: Boolean;
+      ACallback: TIoCompletion; AContext: Pointer): Boolean;
   public
     constructor Create(const AListener: ITcpListener; const ALoop: TAsyncLoop);
     destructor Destroy; override;
@@ -384,75 +388,7 @@ begin
   Result := (FListener as ITcpListenerRuntime).TryAccept(AConn);
 end;
 
-function TAsyncTcpListener.AsyncAccept(ACallback: TIoCompletion;
-  AContext: Pointer): Boolean;
-var
-  LFd: PtrInt;
-  LListen: TPlatformSocket;
-  LClient: TPlatformSocket;
-  LRes: Int32;
-begin
-  { 确保 listener 非阻塞：NetTcpListen 创建的 listener 默认阻塞模式，
-    无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
-    快路径必须先设；Windows 下 winsock accept 同样适用）。 }
-  if not EnsureNonBlockingListen then
-  begin
-    Result := False;
-    Exit;
-  end;
-  LFd := PtrInt(NativeSocketHandle);
-  FillChar(FSa, SizeOf(FSa), 0);
-  FSaLen := SizeOf(FSa);
-  LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
-  { 同步 accept 优先：边沿触发 epoll/kqueue 上已有连接；可移植（非 accept4）。 }
-  LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
-  if LRes = 0 then
-  begin
-    if Assigned(ACallback) then
-      ACallback(0, Int32(LClient.Value), AContext);
-    Result := True;
-    Exit;
-  end;
-  FillChar(FSa, SizeOf(FSa), 0);
-  FSaLen := SizeOf(FSa);
-  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, ACallback, AContext);
-end;
-
-function TAsyncTcpListener.AsyncAcceptRef(ACallback: TIoCompletionRef;
-  AContext: Pointer): Boolean;
-var
-  LFd: PtrInt;
-  LListen: TPlatformSocket;
-  LClient: TPlatformSocket;
-  LRes: Int32;
-begin
-  { 确保 listener 非阻塞：NetTcpListen 创建的 listener 默认阻塞模式，
-    无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
-    快路径必须先设；Windows 下 winsock accept 同样适用）。 }
-  if not EnsureNonBlockingListen then
-  begin
-    Result := False;
-    Exit;
-  end;
-  LFd := PtrInt(NativeSocketHandle);
-  FillChar(FSa, SizeOf(FSa), 0);
-  FSaLen := SizeOf(FSa);
-  LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
-  LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
-  if LRes = 0 then
-  begin
-    if Assigned(ACallback) then
-      ACallback(0, Int32(LClient.Value), AContext);
-    Result := True;
-    Exit;
-  end;
-  FillChar(FSa, SizeOf(FSa), 0);
-  FSaLen := SizeOf(FSa);
-  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, @IoCompletionRefWrapper,
-    WrapIoCompletionRef(ACallback, AContext));
-end;
-
-function TAsyncTcpListener.AsyncAcceptTimeout(const ADeadline: TDeadline;
+function TAsyncTcpListener.AcceptImpl(const ADeadline: TDeadline; AHasDeadline: Boolean;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
@@ -464,25 +400,49 @@ begin
     无连接时阻塞 accept 会卡死事件循环线程（reactor 注册路径才设非阻塞，
     快路径必须先设；Windows 下 winsock accept 同样适用）。 }
   if not EnsureNonBlockingListen then
-  begin
-    Result := False;
-    Exit;
-  end;
+    Exit(False);
   LFd := PtrInt(NativeSocketHandle);
   FillChar(FSa, SizeOf(FSa), 0);
   FSaLen := SizeOf(FSa);
   LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
+  { 同步 accept 优先：边沿触发 epoll/kqueue 上已有连接；可移植（非 accept4）。 }
   LRes := platform_socket_accept(LListen, @FSa, @FSaLen, LClient);
   if LRes = 0 then
   begin
     if Assigned(ACallback) then
       ACallback(0, Int32(LClient.Value), AContext);
-    Result := True;
-    Exit;
+    Exit(True);
   end;
   FillChar(FSa, SizeOf(FSa), 0);
   FSaLen := SizeOf(FSa);
-  Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, ACallback, AContext);
+  if AHasDeadline then
+    Result := FLoop.AsyncAcceptTimeout(LFd, @FSa, @FSaLen, 0, ADeadline,
+      ACallback, AContext)
+  else
+    Result := FLoop.AsyncAccept(LFd, @FSa, @FSaLen, 0, ACallback, AContext);
+end;
+
+function TAsyncTcpListener.AsyncAccept(ACallback: TIoCompletion;
+  AContext: Pointer): Boolean;
+begin
+  Result := AcceptImpl(TDeadline.Infinite, False, ACallback, AContext);
+end;
+
+function TAsyncTcpListener.AsyncAcceptRef(ACallback: TIoCompletionRef;
+  AContext: Pointer): Boolean;
+var
+  LCtx: Pointer;
+begin
+  LCtx := WrapIoCompletionRef(ACallback, AContext);
+  Result := AcceptImpl(TDeadline.Infinite, False, @IoCompletionRefWrapper, LCtx);
+  if not Result then
+    Dispose(PIoCompletionRefCtx(LCtx));
+end;
+
+function TAsyncTcpListener.AsyncAcceptTimeout(const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  Result := AcceptImpl(ADeadline, True, ACallback, AContext);
 end;
 
 { 工厂函数 }

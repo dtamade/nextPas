@@ -10,6 +10,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.async.loop,
   nextpas.core.io.poller,
   nextpas.core.net.async.tcp,
@@ -33,6 +34,14 @@ procedure OnDial(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 begin
   GStream := AStream;
   GError := AError;
+  GDone := True;
+  GLoop.Stop;
+end;
+
+procedure AcceptTimeoutCb(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+begin
+  GStream := nil;
+  GError := AResult;
   GDone := True;
   GLoop.Stop;
 end;
@@ -86,9 +95,38 @@ begin
   end;
 end;
 
+procedure TestAcceptTimeoutLoopback;
+var
+  LListener: IAsyncTcpListener;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  WriteLn('accept-timeout-smoke=skip truth=windows-use-wine-iocp');
+  Exit;
+{$ENDIF}
+  { AsyncAcceptTimeout with a short deadline and no client -> timeout callback. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GError := -9999;
+    GStream := nil;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    Check(LListener.AsyncAcceptTimeout(TDeadline.After(TDuration.FromMilliseconds(80)),
+      @AcceptTimeoutCb, nil), 'AsyncAcceptTimeout submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(1500), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'accept deadline fired');
+    Check(GError < 0, 'accept deadline result < 0');
+    LListener.Close;
+    WriteLn('accept-timeout-smoke=pass');
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('async_accept_connect_smoke');
   T.Test('AcceptConnectLoopback', @TestAcceptConnectLoopback);
+  T.Test('AcceptTimeoutLoopback', @TestAcceptTimeoutLoopback);
   if not T.Run then
     Halt(1);
 end.
