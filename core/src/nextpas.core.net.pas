@@ -65,6 +65,12 @@ type
   TAcquireAsyncCallback = nextpas.core.net.async.pool.TAcquireAsyncCallback;
   IConnectionPool = nextpas.core.net.async.pool.IConnectionPool;
 
+const
+  { TTcpAcceptResult 枚举值 alias（facade 完整性：调用方 switch 需引用值）}
+  tarAccepted = nextpas.core.net.intf.tarAccepted;
+  tarWouldBlock = nextpas.core.net.intf.tarWouldBlock;
+  tarTimeout = nextpas.core.net.intf.tarTimeout;
+
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
 { AF_UNIX 域 socket 监听/连接（Unix 平台；Windows 抛 ENetworkError unsupported）。
