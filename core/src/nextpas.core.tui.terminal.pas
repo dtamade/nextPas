@@ -790,6 +790,16 @@ begin
   end;
   if FPrev <> nil then FPrev.Reset;
   if FBackend <> nil then FBackend.ResetStyleCache;
+  { 图片协议：resize 后布局变化，kitty 旧坐标的图片会残留（同一 id 可
+    place 多处）。发 delete-all 清终端全部图片，重置 slots 让下一帧
+    重新传输+放置。sixel 为流式协议无此问题，但 delete-all 对非 kitty
+    后端无副作用。 }
+  if (FImageMgr <> nil) and (FBackend <> nil) then
+  begin
+    FBackend.AppendRawBytes(PByte(PAnsiChar(#27'_Ga=d,d=a,q=2'#27'\'))^, 16);
+    FBackend.Flush;
+    FImageMgr.InvalidateAll;
+  end;
 end;
 
 { Signal + Input }
