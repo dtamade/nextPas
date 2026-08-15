@@ -86,13 +86,29 @@ protocol modules such as HTTP.
 - Foundation-owned reactor self-wakeup, worker completion re-entry, and deadline wake are all landed
 - `epoll` still has a later phase where real protocol sessions such as HTTP H1 migrate fully onto the poll-driven path backed by `TryRead/TryWrite`
 
-#### macos/freebsd compile truth (kqueue source-landed)
-- `tsbKqueue` exists in the backend enum (`TTcpServerBackend`)
-- `nextpas.core.net.server.kqueue.pas` is a readiness-backed unit that calls `NewTcpReadinessServer`
-- The kqueue backend is source-landed and compiles on macOS/FreeBSD hosts
-- The host facade (`registertcpserverfactory(tsbKqueue, ...)`) is registered for non-Linux hosts
-- `readiness-backed` — kqueue reuses the same `TTcpReadinessServer` readiness-family driver shape as epoll
-- **not macos/freebsd runtime ready** — no runtime verification has been done on an actual macOS or FreeBSD host; compile-only confidence
+#### macos/freebsd compile truth (kqueue source-landed; event-driven wiring)
+- `tsbKqueue` exists in the backend enum (`TTcpServerBackend`) and is registered
+  as a built-in factory on macOS/FreeBSD hosts
+- `nextpas.core.net.server.kqueue.pas` is a B8 event-driven backend built on
+  `io.reactor.kqueue` (was a readiness alias that forwarded to
+  `NewTcpReadinessServer` before B8):
+  - `AsyncAccept` drives the listener; each accepted connection is bridged to
+    the readiness session contract via an `AsyncRecv(MSG_PEEK, 1)` completion
+    (peek signals readability without consuming data), mirroring the Windows
+    IOCP backend's zero-byte-recv shape
+  - poll-driven sessions advance via `TryRead`/`TryWrite`; non-poll sessions
+    fall back to worker handoff; writable waiters are re-advanced on a 1ms
+    retry timer; read-deadline wakes cancel the parked peek via
+    `TryCancelByContext`
+  - the server loop blocks on the reactor's `PollWait` (added in B8) so an
+    idle server does not spin
+- compile-gate verified on the Linux host via `NEXTPAS_FORCE_HOST_DARWIN`
+  (`tests/nextpas.core.net.server/test_net_server_kqueue_gate`); the kqueue
+  branch is excluded from Linux builds — Linux can only attest code
+  structure/API parity, not macOS/FreeBSD runtime behavior
+- **not macos/freebsd runtime ready** — no runtime verification has been done
+  on an actual macOS or FreeBSD host; runtime smoke is pending a real machine
+  (B8 follow-up)
 
 #### Windows truth
 - `tsbIocp` exists in the backend enum and is registered as a built-in factory on Windows (`RegisterTcpServerFactory(tsbIocp, ...)`)
@@ -118,9 +134,83 @@ TNetAddress.IPv6('::1', 8080)
 - `nextpas.core.net` socket APIs are the common cross-platform base.
 - `nextpas.core.net.server` currently ships a threaded runtime backend and a
   Linux-only phase-1 `epoll` backend.
-- macOS/FreeBSD: kqueue source-landed, readiness-backed, compile truth only — not macOS/FreeBSD runtime ready.
+- macOS/FreeBSD: kqueue event-driven backend source-landed (B8), compile truth only — not macOS/FreeBSD runtime ready.
 - Windows: phase-1 iocp factory registered on Windows hosts; wine-runtime-smoke only — not windows server runtime ready, not windows scale-ready.
 - IOCP is a completion/proactor family backend and must plug into a completion-aware foundation driver.
+
+## Event-Driven WebSocket Frame Processing (B8)
+
+`nextpas.core.net.server.ws` provides poll-ready WebSocket frame primitives
+for evented backends (epoll/kqueue/iocp). It is the non-blocking counterpart
+of the blocking `http.websocket` `IWebSocket`:
+
+- `TNetWsFrameDecoder` (`nextpas.core.net.server.ws.frame`) — incremental
+  decoder; feed poller-ready bytes with `Feed`, pull complete frames with
+  `TryDecode` (`nwsDecodeNeedMore` = keep waiting for readable interest).
+  Fragmentation is assembled internally exactly like the blocking
+  `TWebSocketImpl.ReadFrame`: a final continuation is returned as one message
+  with the starting data opcode. Server role requires masked client frames,
+  client role requires unmasked server frames (RFC 6455 §5.3).
+  Errors are terminal: protocol error / too-large stay sticky. Permessage-deflate
+  (RSV1) is rejected in this slice — compression stays on the blocking path.
+- `TNetWsFrameEncoder` — builds wire frames (unmasked for server role, masked
+  client role), including `BuildCloseFrame` with close-code validation.
+- `TNetWsFrameSession` (`nextpas.core.net.server.ws.session`) — plugs the codec
+  into the poll-driven session contract (`PollEvents`/`Advance`/`WakeDeadline`):
+  readable events are drained into the decoder, writable events flush a bounded
+  outbound queue, idle timeouts are delivered via `nwsEventTimeout` + close 1001,
+  queue overflow fails closed with `nwsEventOverflow`, and Ping is answered with
+  Pong automatically. `SendXxx` must be called from the session's reactor-thread
+  context (Advance or its callbacks); worker-side pushes should use worker
+  handoff, whose completions are drained on the reactor thread.
+
+```pascal
+uses nextpas.core.net.server,
+     nextpas.core.net.server.ws,
+     nextpas.core.websocket.base,
+     nextpas.core.time.base;
+
+{ inside an ITcpServerHandler that also implements
+  ITcpServerSessionFactoryWithContext.NewSession }
+function MyHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  Result := TNetWsFrameSession.Create(AConn, FFrameSink,
+    TNetWsFrameSessionOptions.Default
+      .WithIdleTimeout(TDuration.FromMilliseconds(60000)));
+end;
+
+{ sink receives: nwsEventFrame (data messages / close), nwsEventTimeout,
+  nwsEventOverflow, nwsEventClosed (always last) }
+procedure MySink.OnSessionEvent(const AEvent: TNetWsSessionEvent;
+  const AFrame: TNetWsFrame);
+begin
+  case AEvent of
+    nwsEventFrame: if AFrame.Opcode = Byte(WS_OPCODE_TEXT) then ...;
+  end;
+end;
+```
+
+### Integration point with the existing HTTP WebSocket server
+
+The HTTP upgrade handshake (`http.websocket.UpgradeWebSocket`) is still
+blocking and hands a hijacked `ITcpStream` to a blocking `IWebSocket`
+(frames on blocking `IReader`/`IWriter`, one worker per connection). The B8
+plan for the gateway is to add a non-blocking upgrade variant that returns the
+hijacked stream plus this frame session — after the handshake the connection
+runs on the readiness reactor and no longer occupies a worker. That variant,
+and a shared single codec inside `http.websocket` (the blocking parser's
+validation helpers are currently private copies, mirrored here), are B8
+follow-ups; this slice delivers and tests the frame layer.
+
+### epoll handoff semantics (S1-1, corrected)
+
+On Linux `tsbEpoll` the H1 HTTP transport's poll-owned path executes completed
+requests **inline on the reactor thread** by default. `PreferPollWorkerHandoff`
+defaults to `False`; it **must be explicitly enabled** to get per-request
+worker-handoff isolation (legacy behavior; the Net README previously implied
+handoff was the default). Correctness tests that assert handoff semantics set
+`PreferPollWorkerHandoff := True`.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.
 

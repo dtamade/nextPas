@@ -2412,15 +2412,31 @@ end;
 procedure TestKqueueBackendSourceContract;
 var
   LKqueueSource: string;
+  LReactorSource: string;
   LFacadeSource: string;
 begin
   LKqueueSource := LoadSourceText('src/nextpas.core.net.server.kqueue.pas');
   Check(Pos('function newtcpkqueueserver', LKqueueSource) > 0,
     'kqueue unit should expose a named backend constructor');
-  Check(Pos('nextpas.core.net.server.readiness', LKqueueSource) > 0,
-    'kqueue unit should depend on shared readiness owner');
-  Check(Pos('result := newtcpreadinessserver(aoptions);', LKqueueSource) > 0,
-    'kqueue unit should forward directly to shared readiness owner');
+  { B8: kqueue 从 readiness 别名升级为 io.reactor.kqueue 事件驱动接线 }
+  Check(Pos('nextpas.core.io.reactor.kqueue', LKqueueSource) > 0,
+    'kqueue unit should depend on the kqueue reactor owner');
+  Check(Pos('asyncaccept', LKqueueSource) > 0,
+    'kqueue unit should drive accept via AsyncAccept');
+  Check(Pos('kq_msg_peek', LKqueueSource) > 0,
+    'kqueue unit should bridge readiness via MSG_PEEK recv completions');
+  Check(Pos('computewaittimeoutms', LKqueueSource) > 0,
+    'kqueue unit should compute server-loop wait timeouts');
+  Check(Pos('$if defined(nextpas_macos) or defined(nextpas_freebsd)', LKqueueSource) > 0,
+    'kqueue unit should conditionally compile the event-driven branch');
+  Check(Pos('newtcpreadinessserver', LKqueueSource) = 0,
+    'kqueue unit must no longer alias the shared readiness owner');
+  Check(Pos('result := nil;', LKqueueSource) > 0,
+    'kqueue unit should keep an explicit nil-result non-kqueue path');
+
+  LReactorSource := LoadSourceText('src/nextpas.core.io.reactor.kqueue.pas');
+  Check(Pos('function pollwait', LReactorSource) > 0,
+    'kqueue reactor should expose PollWait for the server event loop');
 
   LFacadeSource := LoadSourceText('src/nextpas.core.net.server.pas');
   Check(Pos('nextpas.core.net.server.kqueue', LFacadeSource) > 0,
@@ -2451,8 +2467,14 @@ begin
     'net README should name the Linux epoll backend');
   CheckSourceContains(LReadme, 'kqueue source-landed',
     'net README should state kqueue source truth');
-  CheckSourceContains(LReadme, 'readiness-backed',
-    'net README should state kqueue uses the readiness backend family');
+  CheckSourceContains(LReadme, 'kqueue event-driven',
+    'net README should state kqueue uses the reactor event-driven wiring');
+  CheckSourceContains(LReadme, 'io.reactor.kqueue',
+    'net README should name the kqueue reactor owner');
+  CheckSourceContains(LReadme, 'msg_peek',
+    'net README should name the MSG_PEEK readiness bridge');
+  CheckSourceNotContains(LReadme, 'readiness-backed',
+    'net README must not describe kqueue as readiness-backed after B8');
   CheckSourceContains(LReadme, 'macos/freebsd compile truth',
     'net README should separate macOS/FreeBSD compile truth');
   CheckSourceContains(LReadme, 'not macos/freebsd runtime ready',
