@@ -67,6 +67,10 @@ type
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
+{ AF_UNIX 域 socket 监听/连接（Unix 平台；Windows 抛 ENetworkError unsupported）。
+  UnixListen 创建 0600 权限 socket 文件（bind 前 unlink 旧文件）。 }
+function UnixListen(const APath: string): ITcpListener; inline;
+function UnixConnect(const APath: string): ITcpStream; inline;
 { ATimeoutMs > 0 bounds OS connect(); <= 0 is unbounded blocking connect. }
 function TcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream; inline;
@@ -123,6 +127,16 @@ end;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
 begin
   Result := nextpas.core.net.tcp.NetTcpConnect(AAddr, APort);
+end;
+
+function UnixListen(const APath: string): ITcpListener;
+begin
+  Result := nextpas.core.net.tcp.NetUnixListen(APath);
+end;
+
+function UnixConnect(const APath: string): ITcpStream;
+begin
+  Result := nextpas.core.net.tcp.NetUnixConnect(APath);
 end;
 
 function TcpConnect(const AAddr: string; const APort: UInt16;

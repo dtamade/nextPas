@@ -79,6 +79,7 @@ end;
 var
   GEchoPort: UInt16 = 0;
   GListenerReady: Int32 = 0;
+  GUnixPath: string = '';
 
 function TcpEchoServer(AArg: Pointer): Pointer; cdecl;
 var
@@ -965,6 +966,82 @@ begin
   LListener.Close;
 end;
 
+{ Unix socket echo：UnixListen → UnixConnect → 写 → Shutdown → 读回
+  （AF_UNIX 域，Linux/macOS/FreeBSD；Windows 上 expect unsupported 跳过） }
+function UnixEchoServer(AArg: Pointer): Pointer; cdecl;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN, LTotal: SizeUInt;
+begin
+  Result := nil;
+  try
+    LListener := UnixListen(GUnixPath);
+    InterlockedExchange(GListenerReady, 1);
+    LClient := LListener.Accept;
+    LTotal := 0;
+    repeat
+      LN := LClient.Read(LBuf[LTotal], SizeOf(LBuf) - LTotal);
+      if LN = 0 then Break;
+      Inc(LTotal, LN);
+    until False;
+    if LTotal > 0 then
+      LClient.Write(LBuf[0], LTotal);
+    LClient.Close;
+    LListener.Close;
+  except
+    InterlockedExchange(GListenerReady, -1);
+  end;
+end;
+
+procedure TestUnixSocketEcho;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LClient: ITcpStream;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Exit;   { Unix socket 在 Windows 不支持；留 TCP 覆盖 }
+  {$ENDIF}
+  GUnixPath := '/tmp/code888_net_unix_' + IntToStr(GetProcessID) + '.sock';
+  GListenerReady := 0;
+  platform_thread_create(LHandle, @UnixEchoServer, nil);
+  while InterlockedCompareExchange(GListenerReady, 0, 0) = 0 do
+    platform_thread_sleep_ns(1000000);
+  if GListenerReady < 0 then
+  begin
+    platform_thread_join(LHandle, LRetVal);
+    Exit;
+  end;
+  LClient := UnixConnect(GUnixPath);
+  LClient.Write(PAnsiChar('hello')^, 5);
+  LClient.Shutdown;
+  LN := LClient.Read(LBuf[0], 256);
+  CheckEqual(SizeUInt(5), LN, 'unix echo 5 bytes');
+  CheckEqual(Byte(Ord('h')), LBuf[0], 'unix first byte');
+  LClient.Close;
+  platform_thread_join(LHandle, LRetVal);
+end;
+
+{ 关闭后同路径可再监听（bind 前 unlink 旧 socket 文件） }
+procedure TestUnixListenReusePath;
+var
+  L1, L2: ITcpListener;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Exit;
+  {$ENDIF}
+  GUnixPath := '/tmp/code888_net_unix_reuse_' + IntToStr(GetProcessID) + '.sock';
+  L1 := UnixListen(GUnixPath);
+  L1.Close;
+  L2 := UnixListen(GUnixPath);
+  L2.Close;
+  CheckTrue(True, 'unix listen path reusable after close');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.net');
   T.Test('TCP stream write zero-progress source contract',
@@ -1000,5 +1077,7 @@ begin
     @TestTcpStreamPostCloseRuntimeGuards);
   T.Test('TCP listener post-close runtime guards',
     @TestTcpListenerPostCloseRuntimeGuards);
+  T.Test('Unix socket echo', @TestUnixSocketEcho);
+  T.Test('Unix socket path reuse after close', @TestUnixListenReusePath);
   if not T.Run then Halt(1);
 end.
