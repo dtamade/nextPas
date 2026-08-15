@@ -327,7 +327,7 @@ end;
 
 procedure TSlabPool.FbMapInit(aMinCapacity: SizeUInt);
 var
-  LCap, LIdx, LLog, LTmp: SizeUInt;
+  LCap, LIdx: SizeUInt;
 begin
   LCap := HASH_MIN_CAP;
   while LCap < aMinCapacity do
@@ -388,7 +388,7 @@ var
   LOldAlignments: array of SizeUInt;
   LOldCap: SizeUInt;
 
-  LIdx, LLog, LTmp: SizeUInt;
+  LIdx: SizeUInt;
   LKey: PtrUInt;
   LPos: SizeUInt;
   LHash: QWord;
@@ -410,7 +410,6 @@ begin
   SetLength(FFbAlignments, aNewCapacity);
   FFbMask := aNewCapacity - 1;
 
-  LLog := 0;
   FFbHighShift := SizeUInt(64 - Log2UInt(aNewCapacity));
 
   for LIdx := 0 to FFbMask do
@@ -769,7 +768,7 @@ end;
 
 procedure TSlabPool.PageMapInit(aMinCapacity: SizeUInt);
 var
-  LCap, LIndex, LLog, LTmp: SizeUInt;
+  LCap, LIndex: SizeUInt;
 begin
   LCap := HASH_MIN_CAP;
   while LCap < aMinCapacity do
@@ -802,7 +801,7 @@ procedure TSlabPool.PageMapGrowIfNeeded(aNeedMore: SizeUInt);
 var
   LOldKeys: array of PtrUInt;
   LOldVals: array of Integer;
-  LOldCap, LIndex, LLog: SizeUInt;
+  LOldCap, LIndex: SizeUInt;
   LKey: PtrUInt;
   LVal: Integer;
   LPos: SizeUInt;

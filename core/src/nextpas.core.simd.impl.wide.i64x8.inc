@@ -208,7 +208,7 @@ begin
   Result := LDispatch^.CoreVectors.SubU32x16(a, b);
 end;
 
-function VecU32x16Mul(const a, b: TVecU32x16): TVecU32x16; inline;
+function VecU32x16Mul(const a, b: TVecU32x16): TVecU32x16;
 var
   LFunc: TVecU32x16MulFunc;
 begin
@@ -341,7 +341,7 @@ begin
   Result := LDispatch^.CoreVectors.MaxU32x16(a, b);
 end;
 
-function VecU64x8Add(const a, b: TVecU64x8): TVecU64x8; inline;
+function VecU64x8Add(const a, b: TVecU64x8): TVecU64x8;
 var
   LFunc: TVecU64x8AddFunc;
 begin

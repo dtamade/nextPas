@@ -54,9 +54,9 @@ procedure ClearEnv;
  * @desc 展开字符串中的环境变量引用
  *
  * @params
- *   AValue  包含 $VAR 或 ${VAR} 引用的字符串
+ *   AValue  包含 $VAR 或 $VAR 引用的字符串
  *
- * @note 支持 $NAME 和 ${NAME} 两种语法
+ * @note 支持 $NAME 和 $NAME 两种语法
  * @note 未定义的变量展开为空字符串
  *}
 function ExpandEnv(const AValue: string): string;
@@ -64,10 +64,10 @@ function ExpandEnv(const AValue: string): string;
  * @desc 展开字符串中的环境变量引用（未定义的变量用默认值替代）
  *
  * @params
- *   AValue    包含 $VAR 或 ${VAR} 引用的字符串
+ *   AValue    包含 $VAR 或 $VAR 引用的字符串
  *   ADefault  未定义变量的替代值
  *
- * @note 支持 $NAME 和 ${NAME} 两种语法
+ * @note 支持 $NAME 和 $NAME 两种语法
  * @note 未定义的变量展开为 ADefault（而非空字符串）
  *}
 function ExpandEnvWithDefault(const AValue, ADefault: string): string;
@@ -75,9 +75,9 @@ function ExpandEnvWithDefault(const AValue, ADefault: string): string;
  * @desc 展开字符串中的环境变量引用（未定义的变量抛出异常）
  *
  * @params
- *   AValue  包含 $VAR 或 ${VAR} 引用的字符串
+ *   AValue  包含 $VAR 或 $VAR 引用的字符串
  *
- * @note 支持 $NAME 和 ${NAME} 两种语法
+ * @note 支持 $NAME 和 $NAME 两种语法
  * @note 未定义的变量会抛出 EArgumentError
  * @note 适用于配置文件等需要严格环境变量的场景
  *}
@@ -219,6 +219,7 @@ var
   LAll: TStringArray;
   I, P, LCount: Integer;
 begin
+  Result := nil;
   LAll := EnvironmentVariables;
   SetLength(Result, Length(LAll));
   LCount := 0;

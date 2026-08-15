@@ -183,6 +183,7 @@ var
   LBackend: TSimdBackend;
   LCount: Integer;
 begin
+  Result := nil;
   SetLength(Result,
     Ord(High(TSimdBackend)) - Ord(Low(TSimdBackend)) + 1);
   LCount := 0;

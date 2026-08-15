@@ -189,7 +189,7 @@ function IsMemArenaStrictEnabled: Boolean; inline;
 function MemDebugCoverageGap(const AStats: TMemStats): Boolean; inline;
 
 {** Canonical raise-site message stem Type.Method: reason (see ERROR-POLICY). }
-function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string; inline;
+function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string;
 function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean; inline;
 {** Read TAllocError from EAllocError or mem EOutOfMemory (see ERROR-POLICY catch). }
 function TryAllocErrorCode(E: Exception; out ACode: TAllocError): Boolean; inline;
@@ -357,7 +357,7 @@ begin
   Result := nextpas.core.mem.error.FormatAllocErrorMsg(ATypeName, AMethod, AReason);
 end;
 
-function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
+function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean; inline;
 begin
   Result := nextpas.core.mem.error.IsWellFormedAllocErrorMsg(AMsg);
 end;
@@ -391,7 +391,7 @@ begin
     Result := DefaultHeap.ReallocMem(APtr, ASize);
 end;
 
-procedure FreeMem(APtr: Pointer);
+procedure FreeMem(APtr: Pointer); inline;
 begin
   if IsMemHeapDebugEnabled then
     DefaultAllocator.FreeMem(APtr)
@@ -399,7 +399,7 @@ begin
     DefaultHeap.FreeMem(APtr);
 end;
 
-procedure FreeMem(APtr: Pointer; ASize: SizeUInt);
+procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 begin
   if IsMemHeapDebugEnabled then
     DefaultAllocator.FreeMem(APtr)

@@ -1251,7 +1251,7 @@ begin
     LScaledW / LScaledLength);
 end;
 
-function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single; inline;
+function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Single): Single;
 var
   LScaleA: Double;
   LScaleB: Double;
@@ -1295,7 +1295,7 @@ begin
     Result := -Result;
 end;
 
-function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Double): Double; inline;
+function StableVec4Dot(const AX, AY, AZ, AW, BX, BY, BZ, BW: Double): Double;
 var
   LScaleA: Double;
   LScaleB: Double;

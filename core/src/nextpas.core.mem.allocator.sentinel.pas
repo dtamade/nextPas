@@ -155,12 +155,10 @@ procedure TSentinelAllocator.DrainOldest;
 var
   LIdx: Integer;
   LPtr: Pointer;
-  LSize: SizeUInt;
 begin
   if FQuarantineCount = 0 then Exit;
   LIdx := (FQuarantineHead + FQuarantineDepth - FQuarantineCount) mod FQuarantineDepth;
   LPtr := FQuarantinePtrs[LIdx];
-  LSize := FQuarantineSizes[LIdx];
   FQuarantinePtrs[LIdx] := nil;
   FQuarantineSizes[LIdx] := 0;
   Dec(FQuarantineCount);

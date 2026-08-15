@@ -9,6 +9,8 @@
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 {$GOTO ON}
+{$WARN 6058 off} // inline 例程无法内联的提示性 Note，非缺陷（统一豁免，供调试用 profiling 而非编译噪声）
+{$WARN 3123 off} // 含 open-array / assembler 的 inline 例程无法内联的提示性 Note，非缺陷（统一豁免）
 
 {$IFOPT O+}
   {$DEFINE NEXTPAS_CORE_INLINE}

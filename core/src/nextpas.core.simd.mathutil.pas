@@ -145,7 +145,7 @@ end;
 function SimdLnF32(AX: Single): Single;
 var
   LI: Int32;
-  LM, LM1, LM2, LResult: Single;
+  LM, LM1, LResult: Single;
   LE: Int32;
   LSubnormalAdj: Integer;
 const
@@ -174,7 +174,6 @@ begin
   Move(LI, LM, 4);
 
   LM1 := LM - 1.0;
-  LM2 := LM1 * LM1;
   LResult := LM1 * (0.99999994 + LM1 * (-0.49999925 + LM1 * (0.33332880 +
     LM1 * (-0.24999899 + LM1 * (0.20003712 + LM1 * (-0.16650993))))));
 

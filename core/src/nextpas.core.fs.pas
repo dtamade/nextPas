@@ -310,6 +310,7 @@ function Utf8TextToBytes(const AText: string): TBytes;
 var
   LLen: SizeInt;
 begin
+  Result := nil;
   LLen := Length(AText);
   SetLength(Result, LLen);
   if LLen > 0 then

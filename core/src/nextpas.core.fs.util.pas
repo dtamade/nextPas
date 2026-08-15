@@ -97,6 +97,7 @@ var
   LGrowData: Pointer;
   LGrowLen: PtrUInt;
 begin
+  Result := nil;
   LResult := platform_fs_file_size(PAnsiChar(APath), LSize);
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file size', APath);
@@ -121,8 +122,10 @@ begin
     Result := nil;
     Exit;
   end;
-  if (SizeOf(PtrUInt) < 8) and (LSize > Int64(High(PtrUInt))) then
+  {$IF SizeOf(PtrUInt) < 8}
+  if LSize > Int64(High(PtrUInt)) then
     raise EIOError.Create('file too large for address space: ' + APath);
+  {$ENDIF}
   SetLength(Result, LSize);
   LRead := 0;
   LResult := platform_fs_read_file_into(PAnsiChar(APath),
@@ -671,7 +674,6 @@ function FsReadFileText(const APath: string): string;
 var
   Bytes: TBytes;
   LOffset, LLen, I: SizeInt;
-  LUTF8Text: string;
 begin
   Bytes := FsReadFile(APath);
   LOffset := 0;

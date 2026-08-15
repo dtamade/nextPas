@@ -58,46 +58,38 @@ end;
 
 function X86VendorStringFromLeaf0(constref aLeaf0: TX86CPUIDRegs): string;
 var
-  LLeaf0: TX86CPUIDRegs;
   LResult: string;
 begin
-  LLeaf0 := aLeaf0;
   LResult := '';
   SetLength(LResult, 12);
-  Move(LLeaf0.EBX, LResult[1], 4);
-  Move(LLeaf0.EDX, LResult[5], 4);
-  Move(LLeaf0.ECX, LResult[9], 4);
+  Move(aLeaf0.EBX, LResult[1], 4);
+  Move(aLeaf0.EDX, LResult[5], 4);
+  Move(aLeaf0.ECX, LResult[9], 4);
   Result := LResult;
 end;
 
 function X86BrandStringFromExtendedLeaves(const aVendor: string; aMaxExtLeaf: DWord;
   constref aLeaf80000002, aLeaf80000003, aLeaf80000004: TX86CPUIDRegs): string;
 var
-  LLeaf2: TX86CPUIDRegs;
-  LLeaf3: TX86CPUIDRegs;
-  LLeaf4: TX86CPUIDRegs;
   LResult: string;
 begin
   if aMaxExtLeaf < $80000004 then
     Exit(aVendor + ' Processor');
 
-  LLeaf2 := aLeaf80000002;
-  LLeaf3 := aLeaf80000003;
-  LLeaf4 := aLeaf80000004;
   LResult := '';
   SetLength(LResult, 48);
-  Move(LLeaf2.EAX, LResult[1], 4);
-  Move(LLeaf2.EBX, LResult[5], 4);
-  Move(LLeaf2.ECX, LResult[9], 4);
-  Move(LLeaf2.EDX, LResult[13], 4);
-  Move(LLeaf3.EAX, LResult[17], 4);
-  Move(LLeaf3.EBX, LResult[21], 4);
-  Move(LLeaf3.ECX, LResult[25], 4);
-  Move(LLeaf3.EDX, LResult[29], 4);
-  Move(LLeaf4.EAX, LResult[33], 4);
-  Move(LLeaf4.EBX, LResult[37], 4);
-  Move(LLeaf4.ECX, LResult[41], 4);
-  Move(LLeaf4.EDX, LResult[45], 4);
+  Move(aLeaf80000002.EAX, LResult[1], 4);
+  Move(aLeaf80000002.EBX, LResult[5], 4);
+  Move(aLeaf80000002.ECX, LResult[9], 4);
+  Move(aLeaf80000002.EDX, LResult[13], 4);
+  Move(aLeaf80000003.EAX, LResult[17], 4);
+  Move(aLeaf80000003.EBX, LResult[21], 4);
+  Move(aLeaf80000003.ECX, LResult[25], 4);
+  Move(aLeaf80000003.EDX, LResult[29], 4);
+  Move(aLeaf80000004.EAX, LResult[33], 4);
+  Move(aLeaf80000004.EBX, LResult[37], 4);
+  Move(aLeaf80000004.ECX, LResult[41], 4);
+  Move(aLeaf80000004.EDX, LResult[45], 4);
   Result := nextpas.core.simd.cpuinfo.base.RemoveChars(LResult, #0);
   if Result = '' then
     Result := aVendor + ' Processor';

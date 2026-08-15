@@ -10,6 +10,7 @@ unit nextpas.core.io.binary;
     LName := R.ReadString(R.ReadUInt16LE); }
 
 {$I nextpas.core.settings.inc}
+{$WARN 5027 off} // FPC 对仅作为 Move 源参数的局部变量的 5027 误报，统一豁免
 
 interface
 

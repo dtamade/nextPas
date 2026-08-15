@@ -344,8 +344,6 @@ var
   LAddr, LAligned: PtrUInt;
   LMask: SizeUInt;
   LAlign: SizeUInt;
-  LShift: SizeUInt;
-  LTmp: SizeUInt;
 begin
   inherited Create;
 

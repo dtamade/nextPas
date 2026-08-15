@@ -534,15 +534,15 @@ function VecI64x2Max(const a, b: TVecI64x2): TVecI64x2; inline;
 // 添加 U64x2 高级 API
 
 // U64x2 arithmetic
-function VecU64x2Add(const a, b: TVecU64x2): TVecU64x2; inline;
-function VecU64x2Sub(const a, b: TVecU64x2): TVecU64x2; inline;
+function VecU64x2Add(const a, b: TVecU64x2): TVecU64x2;
+function VecU64x2Sub(const a, b: TVecU64x2): TVecU64x2;
 
 // U64x2 bitwise operations
-function VecU64x2And(const a, b: TVecU64x2): TVecU64x2; inline;
-function VecU64x2Or(const a, b: TVecU64x2): TVecU64x2; inline;
-function VecU64x2Xor(const a, b: TVecU64x2): TVecU64x2; inline;
-function VecU64x2Not(const a: TVecU64x2): TVecU64x2; inline;
-function VecU64x2AndNot(const a, b: TVecU64x2): TVecU64x2; inline;
+function VecU64x2And(const a, b: TVecU64x2): TVecU64x2;
+function VecU64x2Or(const a, b: TVecU64x2): TVecU64x2;
+function VecU64x2Xor(const a, b: TVecU64x2): TVecU64x2;
+function VecU64x2Not(const a: TVecU64x2): TVecU64x2;
+function VecU64x2AndNot(const a, b: TVecU64x2): TVecU64x2;
 
 // U64x2 comparison (unsigned)
 function VecU64x2CmpEq(const a, b: TVecU64x2): TMask2; inline;
@@ -557,16 +557,16 @@ function VecU64x2Max(const a, b: TVecU64x2): TVecU64x2; inline;
 // 添加 U32x4 高级 API
 
 // U32x4 arithmetic (bit-identical to I32x4, different semantics)
-function VecU32x4Add(const a, b: TVecU32x4): TVecU32x4; inline;
-function VecU32x4Sub(const a, b: TVecU32x4): TVecU32x4; inline;
-function VecU32x4Mul(const a, b: TVecU32x4): TVecU32x4; inline;
+function VecU32x4Add(const a, b: TVecU32x4): TVecU32x4;
+function VecU32x4Sub(const a, b: TVecU32x4): TVecU32x4;
+function VecU32x4Mul(const a, b: TVecU32x4): TVecU32x4;
 
 // U32x4 bitwise operations
-function VecU32x4And(const a, b: TVecU32x4): TVecU32x4; inline;
-function VecU32x4Or(const a, b: TVecU32x4): TVecU32x4; inline;
-function VecU32x4Xor(const a, b: TVecU32x4): TVecU32x4; inline;
-function VecU32x4Not(const a: TVecU32x4): TVecU32x4; inline;
-function VecU32x4AndNot(const a, b: TVecU32x4): TVecU32x4; inline;
+function VecU32x4And(const a, b: TVecU32x4): TVecU32x4;
+function VecU32x4Or(const a, b: TVecU32x4): TVecU32x4;
+function VecU32x4Xor(const a, b: TVecU32x4): TVecU32x4;
+function VecU32x4Not(const a: TVecU32x4): TVecU32x4;
+function VecU32x4AndNot(const a, b: TVecU32x4): TVecU32x4;
 
 // U32x4 shift operations
 function VecU32x4ShiftLeft(const a: TVecU32x4; count: Integer): TVecU32x4; inline;
@@ -660,16 +660,16 @@ function VecI32x8Max(const a, b: TVecI32x8): TVecI32x8; inline;
 // 添加 U32x8 高级 API
 
 // U32x8 arithmetic
-function VecU32x8Add(const a, b: TVecU32x8): TVecU32x8; inline;
-function VecU32x8Sub(const a, b: TVecU32x8): TVecU32x8; inline;
-function VecU32x8Mul(const a, b: TVecU32x8): TVecU32x8; inline;
+function VecU32x8Add(const a, b: TVecU32x8): TVecU32x8;
+function VecU32x8Sub(const a, b: TVecU32x8): TVecU32x8;
+function VecU32x8Mul(const a, b: TVecU32x8): TVecU32x8;
 
 // U32x8 bitwise operations
-function VecU32x8And(const a, b: TVecU32x8): TVecU32x8; inline;
-function VecU32x8Or(const a, b: TVecU32x8): TVecU32x8; inline;
-function VecU32x8Xor(const a, b: TVecU32x8): TVecU32x8; inline;
-function VecU32x8Not(const a: TVecU32x8): TVecU32x8; inline;
-function VecU32x8AndNot(const a, b: TVecU32x8): TVecU32x8; inline;
+function VecU32x8And(const a, b: TVecU32x8): TVecU32x8;
+function VecU32x8Or(const a, b: TVecU32x8): TVecU32x8;
+function VecU32x8Xor(const a, b: TVecU32x8): TVecU32x8;
+function VecU32x8Not(const a: TVecU32x8): TVecU32x8;
+function VecU32x8AndNot(const a, b: TVecU32x8): TVecU32x8;
 
 // U32x8 shift operations
 function VecU32x8ShiftLeft(const a: TVecU32x8; count: Integer): TVecU32x8; inline;
@@ -724,17 +724,17 @@ function VecI64x4Zero: TVecI64x4; inline;
 // 添加 U64x4 高级 API (AVX2)
 
 // U64x4 arithmetic
-function VecU64x4Add(const a, b: TVecU64x4): TVecU64x4; inline;
-function VecU64x4Sub(const a, b: TVecU64x4): TVecU64x4; inline;
+function VecU64x4Add(const a, b: TVecU64x4): TVecU64x4;
+function VecU64x4Sub(const a, b: TVecU64x4): TVecU64x4;
 
 // U64x4 bitwise operations
-function VecU64x4And(const a, b: TVecU64x4): TVecU64x4; inline;
-function VecU64x4Or(const a, b: TVecU64x4): TVecU64x4; inline;
-function VecU64x4Xor(const a, b: TVecU64x4): TVecU64x4; inline;
-function VecU64x4Not(const a: TVecU64x4): TVecU64x4; inline;
+function VecU64x4And(const a, b: TVecU64x4): TVecU64x4;
+function VecU64x4Or(const a, b: TVecU64x4): TVecU64x4;
+function VecU64x4Xor(const a, b: TVecU64x4): TVecU64x4;
+function VecU64x4Not(const a: TVecU64x4): TVecU64x4;
 
 // U64x4 shift operations (logical)
-function VecU64x4ShiftLeft(const a: TVecU64x4; count: Integer): TVecU64x4; inline;
+function VecU64x4ShiftLeft(const a: TVecU64x4; count: Integer): TVecU64x4;
 function VecU64x4ShiftRight(const a: TVecU64x4; count: Integer): TVecU64x4; inline;
 
 // U64x4 comparison (unsigned)
@@ -811,15 +811,15 @@ function VecI8x16Max(const a, b: TVecI8x16): TVecI8x16; inline;
 // 添加 U8x16 高级 API
 
 // U8x16 arithmetic
-function VecU8x16Add(const a, b: TVecU8x16): TVecU8x16; inline;
-function VecU8x16Sub(const a, b: TVecU8x16): TVecU8x16; inline;
+function VecU8x16Add(const a, b: TVecU8x16): TVecU8x16;
+function VecU8x16Sub(const a, b: TVecU8x16): TVecU8x16;
 
 // U8x16 bitwise operations
-function VecU8x16And(const a, b: TVecU8x16): TVecU8x16; inline;
-function VecU8x16Or(const a, b: TVecU8x16): TVecU8x16; inline;
-function VecU8x16Xor(const a, b: TVecU8x16): TVecU8x16; inline;
-function VecU8x16Not(const a: TVecU8x16): TVecU8x16; inline;
-function VecU8x16AndNot(const a, b: TVecU8x16): TVecU8x16; inline;
+function VecU8x16And(const a, b: TVecU8x16): TVecU8x16;
+function VecU8x16Or(const a, b: TVecU8x16): TVecU8x16;
+function VecU8x16Xor(const a, b: TVecU8x16): TVecU8x16;
+function VecU8x16Not(const a: TVecU8x16): TVecU8x16;
+function VecU8x16AndNot(const a, b: TVecU8x16): TVecU8x16;
 
 // U8x16 comparison (unsigned)
 function VecU8x16CmpEq(const a, b: TVecU8x16): TMask16; inline;
@@ -837,16 +837,16 @@ function VecU8x16Max(const a, b: TVecU8x16): TVecU8x16; inline;
 // 添加 U16x8 高级 API
 
 // U16x8 arithmetic
-function VecU16x8Add(const a, b: TVecU16x8): TVecU16x8; inline;
-function VecU16x8Sub(const a, b: TVecU16x8): TVecU16x8; inline;
-function VecU16x8Mul(const a, b: TVecU16x8): TVecU16x8; inline;
+function VecU16x8Add(const a, b: TVecU16x8): TVecU16x8;
+function VecU16x8Sub(const a, b: TVecU16x8): TVecU16x8;
+function VecU16x8Mul(const a, b: TVecU16x8): TVecU16x8;
 
 // U16x8 bitwise operations
-function VecU16x8And(const a, b: TVecU16x8): TVecU16x8; inline;
-function VecU16x8Or(const a, b: TVecU16x8): TVecU16x8; inline;
-function VecU16x8Xor(const a, b: TVecU16x8): TVecU16x8; inline;
-function VecU16x8Not(const a: TVecU16x8): TVecU16x8; inline;
-function VecU16x8AndNot(const a, b: TVecU16x8): TVecU16x8; inline;
+function VecU16x8And(const a, b: TVecU16x8): TVecU16x8;
+function VecU16x8Or(const a, b: TVecU16x8): TVecU16x8;
+function VecU16x8Xor(const a, b: TVecU16x8): TVecU16x8;
+function VecU16x8Not(const a: TVecU16x8): TVecU16x8;
+function VecU16x8AndNot(const a, b: TVecU16x8): TVecU16x8;
 
 // U16x8 shift operations
 function VecU16x8ShiftLeft(const a: TVecU16x8; count: Integer): TVecU16x8; inline;
@@ -1049,14 +1049,14 @@ function VecI64x8CmpNe(const a, b: TVecI64x8): TMask8; inline;
 
 // === 512-bit Integer Wide Operations ===
 // U32x16
-function VecU32x16Add(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16Sub(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16Mul(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16And(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16Or(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16Xor(const a, b: TVecU32x16): TVecU32x16; inline;
-function VecU32x16Not(const a: TVecU32x16): TVecU32x16; inline;
-function VecU32x16AndNot(const a, b: TVecU32x16): TVecU32x16; inline;
+function VecU32x16Add(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16Sub(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16Mul(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16And(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16Or(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16Xor(const a, b: TVecU32x16): TVecU32x16;
+function VecU32x16Not(const a: TVecU32x16): TVecU32x16;
+function VecU32x16AndNot(const a, b: TVecU32x16): TVecU32x16;
 function VecU32x16ShiftLeft(const a: TVecU32x16; count: Integer): TVecU32x16; inline;
 function VecU32x16ShiftRight(const a: TVecU32x16; count: Integer): TVecU32x16; inline;
 function VecU32x16CmpEq(const a, b: TVecU32x16): TMask16; inline;
@@ -1069,13 +1069,13 @@ function VecU32x16Min(const a, b: TVecU32x16): TVecU32x16; inline;
 function VecU32x16Max(const a, b: TVecU32x16): TVecU32x16; inline;
 
 // U64x8
-function VecU64x8Add(const a, b: TVecU64x8): TVecU64x8; inline;
-function VecU64x8Sub(const a, b: TVecU64x8): TVecU64x8; inline;
-function VecU64x8And(const a, b: TVecU64x8): TVecU64x8; inline;
-function VecU64x8Or(const a, b: TVecU64x8): TVecU64x8; inline;
-function VecU64x8Xor(const a, b: TVecU64x8): TVecU64x8; inline;
-function VecU64x8Not(const a: TVecU64x8): TVecU64x8; inline;
-function VecU64x8ShiftLeft(const a: TVecU64x8; count: Integer): TVecU64x8; inline;
+function VecU64x8Add(const a, b: TVecU64x8): TVecU64x8;
+function VecU64x8Sub(const a, b: TVecU64x8): TVecU64x8;
+function VecU64x8And(const a, b: TVecU64x8): TVecU64x8;
+function VecU64x8Or(const a, b: TVecU64x8): TVecU64x8;
+function VecU64x8Xor(const a, b: TVecU64x8): TVecU64x8;
+function VecU64x8Not(const a: TVecU64x8): TVecU64x8;
+function VecU64x8ShiftLeft(const a: TVecU64x8; count: Integer): TVecU64x8;
 function VecU64x8ShiftRight(const a: TVecU64x8; count: Integer): TVecU64x8; inline;
 function VecU64x8CmpEq(const a, b: TVecU64x8): TMask8; inline;
 function VecU64x8CmpLt(const a, b: TVecU64x8): TMask8; inline;
@@ -1122,13 +1122,13 @@ function VecI8x64Min(const a, b: TVecI8x64): TVecI8x64; inline;
 function VecI8x64Max(const a, b: TVecI8x64): TVecI8x64; inline;
 
 // U8x64
-function VecU8x64Add(const a, b: TVecU8x64): TVecU8x64; inline;
-function VecU8x64Sub(const a, b: TVecU8x64): TVecU8x64; inline;
-function VecU8x64And(const a, b: TVecU8x64): TVecU8x64; inline;
-function VecU8x64Or(const a, b: TVecU8x64): TVecU8x64; inline;
-function VecU8x64Xor(const a, b: TVecU8x64): TVecU8x64; inline;
-function VecU8x64Not(const a: TVecU8x64): TVecU8x64; inline;
-function VecU8x64CmpEq(const a, b: TVecU8x64): TMask64; inline;
+function VecU8x64Add(const a, b: TVecU8x64): TVecU8x64;
+function VecU8x64Sub(const a, b: TVecU8x64): TVecU8x64;
+function VecU8x64And(const a, b: TVecU8x64): TVecU8x64;
+function VecU8x64Or(const a, b: TVecU8x64): TVecU8x64;
+function VecU8x64Xor(const a, b: TVecU8x64): TVecU8x64;
+function VecU8x64Not(const a: TVecU8x64): TVecU8x64;
+function VecU8x64CmpEq(const a, b: TVecU8x64): TMask64;
 function VecU8x64CmpLt(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64CmpGt(const a, b: TVecU8x64): TMask64; inline;
 function VecU8x64CmpLe(const a, b: TVecU8x64): TMask64; inline;

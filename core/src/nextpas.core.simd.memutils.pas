@@ -43,8 +43,8 @@ procedure AlignedMemCopy(src, dst: Pointer; size: NativeUInt; alignment: NativeU
 procedure AlignedMemFill(dst: Pointer; size: NativeUInt; value: Byte; alignment: NativeUInt);
 
 // Memory prefetch hints
-procedure Prefetch(ptr: Pointer); inline;
-procedure PrefetchNTA(ptr: Pointer); inline;  // Non-temporal (won't pollute cache)
+procedure Prefetch(ptr: Pointer);
+procedure PrefetchNTA(ptr: Pointer);  // Non-temporal (won't pollute cache)
 
 // SIMD-optimized memory copy (SSE2/AVX2/AVX-512)
 procedure SimdMemCopy(src, dst: Pointer; size: NativeUInt);
@@ -305,7 +305,7 @@ begin
   RequireValidAlignment(alignment);
   {$PUSH}{$WARN 4055 OFF}
   addr := NativeUInt(ptr);
-  { mem.base.AlignUp(0) uses (not 0)+1 under {$Q+} and overflows; nil stays nil. }
+  { mem.base.AlignUp(0) uses (not 0)+1 under Q+ range checks and overflows; nil stays nil. }
   if addr = 0 then
     Exit(nil);
   aligned := nextpas.core.mem.base.AlignUp(SizeUInt(addr), SizeUInt(alignment));
@@ -319,7 +319,7 @@ end;
 function AlignUpSize(size: NativeUInt; alignment: NativeUInt): NativeUInt;
 begin
   RequireValidAlignment(alignment);
-  { size=0 is valid and must not call mem.base.AlignUp(0) under {$Q+}. }
+  { size=0 is valid and must not call mem.base.AlignUp(0) under Q+ range checks. }
   if size = 0 then
     Exit(0);
   { Reuse mem.base.AlignUp (overflow → 0); keep SIMD overflow raise contract. }
@@ -677,7 +677,7 @@ begin
   if count > 0 then
   begin
     // ✅ Safety check: prevent integer overflow in size calculation
-    { Avoid High(NativeUInt) under {$Q+} — FPC treats it as signed -1. }
+    { Avoid High(NativeUInt) under Q+ range checks — FPC treats it as signed -1. }
     maxCount := NativeUInt(not NativeUInt(0)) div NativeUInt(SizeOf(T));
     if count > maxCount then
       raise EOutOfMemory.CreateFmt('Allocation size overflow: count=%d, elemSize=%d', [count, SizeOf(T)]);

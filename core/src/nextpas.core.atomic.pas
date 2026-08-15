@@ -1,4 +1,5 @@
 unit nextpas.core.atomic;
+{$WARN 6058 off}
 
 {
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -225,14 +226,14 @@ function atomic_load(var aObj: PtrInt): PtrInt; overload; inline;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_load_64(var aObj: Int64): Int64; overload; inline;
+function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_load_64(var aObj: Int64): Int64; overload;
 
-function atomic_load_64(var aObj: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_load_64(var aObj: UInt64): UInt64; overload; inline;
+function atomic_load_64(var aObj: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_load_64(var aObj: UInt64): UInt64; overload;
 {$ENDIF}
 
-function atomic_load(var aObj: Pointer; aOrder: memory_order_t): Pointer; overload; inline;
+function atomic_load(var aObj: Pointer; aOrder: memory_order_t): Pointer; overload;
 function atomic_load(var aObj: Pointer): Pointer; overload; inline;
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -281,13 +282,13 @@ function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt; aOrder: memory_or
 function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt): PtrUInt; overload; inline;
 {$ENDIF}
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_exchange_64(var aObj: Int64; aDesired: Int64): Int64; overload; inline;
-function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64): UInt64; overload; inline;
+function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_exchange_64(var aObj: Int64; aDesired: Int64): Int64; overload;
+function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64): UInt64; overload;
 {$ENDIF}
-function atomic_exchange(var aObj: Pointer; aDesired: Pointer; aOrder: memory_order_t): Pointer; overload; inline;
-function atomic_exchange(var aObj: Pointer; aDesired: Pointer): Pointer; overload; inline;
+function atomic_exchange(var aObj: Pointer; aDesired: Pointer; aOrder: memory_order_t): Pointer; overload;
+function atomic_exchange(var aObj: Pointer; aDesired: Pointer): Pointer; overload;
 
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                          atomic_compare_exchange                           │
@@ -306,77 +307,77 @@ function atomic_compare_exchange_64(var aObj: UInt64; var aExpected: UInt64; aDe
 {$ENDIF}
 function atomic_compare_exchange(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer): Boolean; overload; inline;
 
-function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; overload; inline;
-function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32): Boolean; overload; inline;
+function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; overload;
+function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32): Boolean; overload;
 {$IFDEF CPU64}
-function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt): Boolean; overload; inline;
-function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt): Boolean; overload; inline;
+function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt): Boolean; overload;
+function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt): Boolean; overload;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; overload; inline;
-function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64): Boolean; overload; inline;
+function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; overload;
+function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64): Boolean; overload;
 {$ENDIF}
 
-function atomic_compare_exchange_strong(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer): Boolean; overload; inline;
+function atomic_compare_exchange_strong(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer): Boolean; overload;
 
-function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; overload; inline;
-function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32): Boolean; overload; inline;
+function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32): Boolean; overload;
+function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32): Boolean; overload;
 
 {$IFDEF CPU64}
-function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt): Boolean; overload; inline;
-function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt): Boolean; overload; inline;
+function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt): Boolean; overload;
+function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt): Boolean; overload;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; overload; inline;
-function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64): Boolean; overload; inline;
+function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64): Boolean; overload;
+function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64): Boolean; overload;
 {$ENDIF}
-function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer): Boolean; overload; inline;
+function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer): Boolean; overload;
 
 // ✅ Phase 3: CAS 带双内存序参数 (success_order, failure_order) - 对齐 C++11/Rust API
 function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$IFDEF CPU64}
 function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 function atomic_compare_exchange_strong(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$IFDEF CPU64}
 function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
-  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload; inline;
+  aSuccessOrder, aFailureOrder: memory_order_t): Boolean; overload;
 
 function atomic_update_if_equal(var aObj: Int32; const AExpected: Int32; const ADesired: Int32; out AObserved: Int32;
-  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload;
 function atomic_update_if_equal(var aObj: UInt32; const AExpected: UInt32; const ADesired: UInt32; out AObserved: UInt32;
-  AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
+  AOrder: memory_order_t = mo_seq_cst): Boolean; overload;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_update_if_equal_64(var aObj: Int64; const AExpected: Int64; const ADesired: Int64; out AObserved: Int64;
   AOrder: memory_order_t = mo_seq_cst): Boolean; overload; inline;
@@ -439,49 +440,49 @@ function atomic_update_if_equal_64(var aObj: UInt64; const AExpected: UInt64; co
  *   provides C++-style single-order convenience semantics.
  *}
 function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$IFDEF CPU64}
 function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 function atomic_compare_exchange_strong(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$IFDEF CPU64}
 function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 {$ENDIF}
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
-  aOrder: memory_order_t): Boolean; overload; inline;
+  aOrder: memory_order_t): Boolean; overload;
 
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                              atomic_increment                              │
 //└────────────────────────────────────────────────────────────────────────────┘
 
-function atomic_increment(var aObj: Int32): Int32; overload; inline;
-function atomic_increment(var aObj: UInt32): UInt32; overload; inline;
+function atomic_increment(var aObj: Int32): Int32; overload;
+function atomic_increment(var aObj: UInt32): UInt32; overload;
 {$IFDEF CPU64}
 function atomic_increment(var aObj: PtrInt): PtrInt; overload; inline;
 function atomic_increment(var aObj: PtrUInt): PtrUInt; overload; inline;
@@ -511,23 +512,23 @@ function atomic_decrement_64(var aObj: UInt64): UInt64; overload; inline;
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 添加 memory_order 参数版本
-function atomic_fetch_add(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_add(var aObj: Int32; aArg: Int32): Int32; overload; inline;
-function atomic_fetch_add(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
-function atomic_fetch_add(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
+function atomic_fetch_add(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_add(var aObj: Int32; aArg: Int32): Int32; overload;
+function atomic_fetch_add(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload;
+function atomic_fetch_add(var aObj: UInt32; aArg: UInt32): UInt32; overload;
 {$IFDEF CPU64}
-function atomic_fetch_add(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload; inline;
-function atomic_fetch_add(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload; inline;
-function atomic_fetch_add(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
-function atomic_fetch_add(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload; inline;
+function atomic_fetch_add(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload;
+function atomic_fetch_add(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload;
+function atomic_fetch_add(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload;
+function atomic_fetch_add(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload;
 {$ENDIF}
-function atomic_fetch_add(var aObj: Pointer; aOffset: PtrInt): Pointer; overload; inline;
+function atomic_fetch_add(var aObj: Pointer; aOffset: PtrInt): Pointer; overload;
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_fetch_add_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_fetch_add_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
-function atomic_fetch_add_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_fetch_add_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
+function atomic_fetch_add_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_fetch_add_64(var aObj: Int64; aArg: Int64): Int64; overload;
+function atomic_fetch_add_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_fetch_add_64(var aObj: UInt64; aArg: UInt64): UInt64; overload;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -535,23 +536,23 @@ function atomic_fetch_add_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; 
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 添加 memory_order 参数版本
-function atomic_fetch_sub(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_sub(var aObj: Int32; aArg: Int32): Int32; overload; inline;
-function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
-function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
+function atomic_fetch_sub(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_sub(var aObj: Int32; aArg: Int32): Int32; overload;
+function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload;
+function atomic_fetch_sub(var aObj: UInt32; aArg: UInt32): UInt32; overload;
 {$IFDEF CPU64}
-function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload; inline;
-function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload; inline;
-function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
-function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload; inline;
+function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload;
+function atomic_fetch_sub(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload;
+function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload;
+function atomic_fetch_sub(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload;
 {$ENDIF}
-function atomic_fetch_sub(var aObj: Pointer; aOffset: PtrInt): Pointer; overload; inline;
+function atomic_fetch_sub(var aObj: Pointer; aOffset: PtrInt): Pointer; overload;
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
-function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
+function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_fetch_sub_64(var aObj: Int64; aArg: Int64): Int64; overload;
+function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64): UInt64; overload;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -559,22 +560,22 @@ function atomic_fetch_sub_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; 
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 添加 memory_order 参数版本
-function atomic_fetch_and(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_and(var aObj: Int32; aArg: Int32): Int32; overload; inline;
-function atomic_fetch_and(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
-function atomic_fetch_and(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
+function atomic_fetch_and(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_and(var aObj: Int32; aArg: Int32): Int32; overload;
+function atomic_fetch_and(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload;
+function atomic_fetch_and(var aObj: UInt32; aArg: UInt32): UInt32; overload;
 {$IFDEF CPU64}
-function atomic_fetch_and(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload; inline;
-function atomic_fetch_and(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload; inline;
-function atomic_fetch_and(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
-function atomic_fetch_and(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload; inline;
+function atomic_fetch_and(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload;
+function atomic_fetch_and(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload;
+function atomic_fetch_and(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload;
+function atomic_fetch_and(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_fetch_and_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_fetch_and_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
-function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
+function atomic_fetch_and_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_fetch_and_64(var aObj: Int64; aArg: Int64): Int64; overload;
+function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64): UInt64; overload;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -582,22 +583,22 @@ function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; 
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 添加 memory_order 参数版本
-function atomic_fetch_or(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_or(var aObj: Int32; aArg: Int32): Int32; overload; inline;
-function atomic_fetch_or(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
-function atomic_fetch_or(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
+function atomic_fetch_or(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_or(var aObj: Int32; aArg: Int32): Int32; overload;
+function atomic_fetch_or(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload;
+function atomic_fetch_or(var aObj: UInt32; aArg: UInt32): UInt32; overload;
 {$IFDEF CPU64}
-function atomic_fetch_or(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload; inline;
-function atomic_fetch_or(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload; inline;
-function atomic_fetch_or(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
-function atomic_fetch_or(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload; inline;
+function atomic_fetch_or(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload;
+function atomic_fetch_or(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload;
+function atomic_fetch_or(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload;
+function atomic_fetch_or(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_fetch_or_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_fetch_or_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
-function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
+function atomic_fetch_or_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_fetch_or_64(var aObj: Int64; aArg: Int64): Int64; overload;
+function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64): UInt64; overload;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -605,22 +606,22 @@ function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; i
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 添加 memory_order 参数版本
-function atomic_fetch_xor(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_xor(var aObj: Int32; aArg: Int32): Int32; overload; inline;
-function atomic_fetch_xor(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
-function atomic_fetch_xor(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
+function atomic_fetch_xor(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_xor(var aObj: Int32; aArg: Int32): Int32; overload;
+function atomic_fetch_xor(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload;
+function atomic_fetch_xor(var aObj: UInt32; aArg: UInt32): UInt32; overload;
 {$IFDEF CPU64}
-function atomic_fetch_xor(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload; inline;
-function atomic_fetch_xor(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload; inline;
-function atomic_fetch_xor(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
-function atomic_fetch_xor(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload; inline;
+function atomic_fetch_xor(var aObj: PtrInt; aArg: PtrInt; aOrder: memory_order_t): PtrInt; overload;
+function atomic_fetch_xor(var aObj: PtrInt; aArg: PtrInt): PtrInt; overload;
+function atomic_fetch_xor(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order_t): PtrUInt; overload;
+function atomic_fetch_xor(var aObj: PtrUInt; aArg: PtrUInt): PtrUInt; overload;
 {$ENDIF}
 
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
-function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload; inline;
-function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64): Int64; overload; inline;
-function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload; inline;
-function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; inline;
+function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64; overload;
+function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64): Int64; overload;
+function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64; overload;
+function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64): UInt64; overload;
 {$ENDIF}
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -628,8 +629,8 @@ function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64): UInt64; overload; 
 //└────────────────────────────────────────────────────────────────────────────┘
 
 // ✅ Phase 3: 新增 fetch_max/min/nand 操作
-function atomic_fetch_max(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;
-function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32; overload; inline;
+function atomic_fetch_max(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload;
+function atomic_fetch_max(var aObj: Int32; aArg: Int32): Int32; overload;
 function atomic_fetch_max(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32; overload; inline;
 function atomic_fetch_max(var aObj: UInt32; aArg: UInt32): UInt32; overload; inline;
 function atomic_fetch_min(var aObj: Int32; aArg: Int32; aOrder: memory_order_t): Int32; overload; inline;

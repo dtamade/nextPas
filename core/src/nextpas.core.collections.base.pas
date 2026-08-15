@@ -12,7 +12,8 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.collections.element_manager.intf,
-  nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base,
+  Variants;
 
 // Suppress unused parameter hints - growth strategies and IsOverlap have intentionally unused params
 {$WARN 5024 OFF}

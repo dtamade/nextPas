@@ -1,3 +1,4 @@
+{$WARN 5027 off} // FPC 对仅作为 Move 源参数的局部变量的 5027 误报，统一豁免
 function ScalarNormalizeSignedZeroSingle(const aInput, aOutput: Single): Single; inline;
 var
   LBits: DWord;

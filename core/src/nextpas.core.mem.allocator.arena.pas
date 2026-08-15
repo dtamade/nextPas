@@ -193,6 +193,7 @@ end;
 
 function TVirtualArenaAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
+  Result := nil;
   raise EAllocError.Create(aeReallocNotSupported,
     FormatAllocErrorMsg('TVirtualArenaAllocator', 'ReallocMem',
       'arena does not track individual allocation sizes'));

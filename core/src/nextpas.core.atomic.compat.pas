@@ -31,12 +31,12 @@ const
 // Legacy PascalCase compatibility facade mirrored for older call sites.
 
 // ── Legacy Pointer RMW/arith overloads (Pointer + Pointer / bitwise on pointers) ──
-function atomic_fetch_add(var aObj: Pointer; aArg: Pointer): Pointer; overload; inline;
-function atomic_fetch_sub(var aObj: Pointer; aArg: Pointer): Pointer; overload; inline;
-function atomic_fetch_and(var aObj: Pointer; aArg: Pointer): Pointer; overload; inline;
-function atomic_fetch_or (var aObj: Pointer; aArg: Pointer): Pointer; overload; inline;
-function atomic_fetch_xor(var aObj: Pointer; aArg: Pointer): Pointer; overload; inline;
-function atomic_increment(var aObj: Pointer): Pointer; overload; inline;
+function atomic_fetch_add(var aObj: Pointer; aArg: Pointer): Pointer; overload;
+function atomic_fetch_sub(var aObj: Pointer; aArg: Pointer): Pointer; overload;
+function atomic_fetch_and(var aObj: Pointer; aArg: Pointer): Pointer; overload;
+function atomic_fetch_or (var aObj: Pointer; aArg: Pointer): Pointer; overload;
+function atomic_fetch_xor(var aObj: Pointer; aArg: Pointer): Pointer; overload;
+function atomic_increment(var aObj: Pointer): Pointer; overload;
 function atomic_decrement(var aObj: Pointer): Pointer; overload; inline;
 
 // ── Legacy helper names kept for older call sites ──

@@ -37,7 +37,7 @@ function FindRange32Value(const ACp: TUnicodeCodepoint; const ARanges: array of 
 
 implementation
 
-{ Bodies expanded in-place (no {$I}/IFDEF template). Multi-line DEFINE and
+{ Bodies expanded in-place (no include/IFDEF template). Multi-line DEFINE and
   include-body were unreliable under nextpas preprocess+green attach, which
   left bare @FindRange2 / @FindRange3Value residuals on the L3 ladder. }
 

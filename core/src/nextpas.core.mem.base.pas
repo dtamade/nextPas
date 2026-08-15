@@ -84,7 +84,7 @@ var
   LMask: SizeUInt;
 begin
   { AAlignment must be power of two (caller-guaranteed).
-    Classic (value+mask)&~mask avoids (not value)+1, which overflows under {$Q+}
+    Classic (value+mask)&~mask avoids (not value)+1, which overflows under Q+ (range checks)
     for value=0 (and breaks simd memutils / compile-time inlines). }
   LMask := AAlignment - 1;
   if AValue > High(SizeUInt) - LMask then
@@ -117,10 +117,11 @@ begin
   if AValue = 0 then
     Exit(0);
   { Delegate to bitops Bsr — native BSR/CLZ instruction, no loop. }
-  if SizeOf(SizeUInt) = 8 then
-    Result := SizeUInt(Bsr64(UInt64(AValue)))
-  else
-    Result := SizeUInt(Bsr32(UInt32(AValue)));
+  {$IF SizeOf(SizeUInt) = 8}
+  Result := SizeUInt(Bsr64(UInt64(AValue)));
+  {$ELSE}
+  Result := SizeUInt(Bsr32(UInt32(AValue)));
+  {$ENDIF}
 end;
 
 end.

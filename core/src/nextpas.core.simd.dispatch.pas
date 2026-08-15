@@ -2,6 +2,7 @@ unit nextpas.core.simd.dispatch;
 
 
 {$I nextpas.core.settings.inc}
+{$WARN 5027 off} // FPC 对仅作为 Move 源参数的局部变量的 5027 误报，统一豁免
 {$I nextpas.core.simd.settings.inc}
 
 interface
@@ -204,7 +205,6 @@ const
 
 var
   // Current active dispatch table
-  g_CurrentDispatch: PSimdDispatchTable;
   g_CurrentDispatchStatePtr: Pointer = nil;
   g_CurrentDispatchOwnedHead: PSimdDispatchPublishedState = nil;
   g_BackendDispatchStatePtrs: array[TSimdBackend] of Pointer;
@@ -216,7 +216,6 @@ var
   g_DefaultBackendDescriptions: array[TSimdBackend] of AnsiString;
   
   // Initialization state
-  g_DispatchInitialized: Boolean = False;
   g_DispatchState: LongInt = 0;  // 0=未初始化, 1=初始化中, 2=已完成
   g_ForcedBackend: TSimdBackend;
   g_BackendForced: Boolean = False;
@@ -433,14 +432,12 @@ procedure PublishCurrentDispatchState(const aState: PSimdDispatchPublishedState)
 begin
   if aState = nil then
   begin
-    g_CurrentDispatch := nil;
     atomic_store(g_CurrentDispatchStatePtr, nil, mo_release);
     Exit;
   end;
 
   // The active/current dispatch view does not need its own cloned publication:
   // the selected backend snapshot is already immutable and process-owned.
-  g_CurrentDispatch := @aState^.Table;
   atomic_store(g_CurrentDispatchStatePtr, Pointer(aState), mo_release);
 end;
 
@@ -450,7 +447,6 @@ var
   LNext: PSimdDispatchPublishedState;
 begin
   atomic_store(g_CurrentDispatchStatePtr, nil, mo_release);
-  g_CurrentDispatch := nil;
   LState := g_CurrentDispatchOwnedHead;
   g_CurrentDispatchOwnedHead := nil;
   while LState <> nil do
@@ -501,7 +497,6 @@ begin
   end;
 
   // Ensure best-backend selection is recalculated once rebuilders finish.
-  g_DispatchInitialized := False;
   InterlockedExchange(g_DispatchState, 0);
   atomic_thread_fence(mo_seq_cst);
   if aReinitializeDispatch then
@@ -600,7 +595,7 @@ begin
       PublishCurrentDispatchState(nil);
     end;
 
-    g_DispatchInitialized := True;
+    // WriteBarrier 之上不再需要旧式的布尔初始化标记：状态由 g_DispatchState 原子量承载。
     WriteBarrier;
     InterlockedExchange(g_DispatchState, 2);
 
@@ -645,7 +640,6 @@ end;
 
 procedure ReinitializeDispatchLocked; inline;
 begin
-  g_DispatchInitialized := False;
   InterlockedExchange(g_DispatchState, 0);
   atomic_thread_fence(mo_seq_cst);
   InitializeDispatch;
@@ -997,7 +991,6 @@ begin
     // Re-select immediately only after dispatch has already been initialized.
     LShouldReinitialize := (g_DispatchState = 2) and
       (InterlockedCompareExchange(g_RegisterBackendReinitializeSuspendDepth, 0, 0) = 0);
-    g_DispatchInitialized := False;
     InterlockedExchange(g_DispatchState, 0);  // Reset atomic state
     atomic_thread_fence(mo_seq_cst); // Full barrier before re-initialization
     if LShouldReinitialize then

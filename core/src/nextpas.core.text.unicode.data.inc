@@ -2,6 +2,8 @@
 // Generated: see core/scripts/gen_unicode_data.py
 // Do not edit manually.
 
+{$WARN 5025 off} // 自动生成的数据表在部分编译单位中未被引用，属于跨单元共享数据
+
 const
   // ── BMP Category Lookup (stage-2: [high][low] → TGeneralCategory ordinal) ──
   BMP_CATEGORY_TABLE: array[0..255, 0..255] of Byte = (

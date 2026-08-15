@@ -230,7 +230,7 @@ procedure ThreadCacheFlush(var ACache: TThreadCache;
 var
   LBlocks: array[0..CACHE_ADAPTIVE_BATCH_SMALL - 1] of Pointer;
   LBatchSize: Word;
-  LFlushCount, I: Word;
+  LFlushCount: Word;
   LNode: PFreeNode;
 begin
   if (ASizeClass < 0) or (ASizeClass >= MEM_SIZECLASS_COUNT) then

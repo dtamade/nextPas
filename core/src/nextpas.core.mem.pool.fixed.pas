@@ -219,11 +219,11 @@ type
     {** Acquire 的别名 *}
     function TryAcquire(out aUnit: Pointer): Boolean; inline;
     {** 加锁批量分配至多 aCount 个块 *}
-    function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer; inline;
+    function AcquireN(out aUnits: array of Pointer; aCount: Integer): Integer;
     {** 加锁归还一个块 *}
     procedure Release(aUnit: Pointer); inline;
     {** 加锁批量归还 aCount 个块 *}
-    procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer); inline;
+    procedure ReleaseN(const aUnits: array of Pointer; aCount: Integer);
 
     {** 加锁分配一个块，成功返回指针，耗尽返回 nil *}
     function Alloc: Pointer; inline;
@@ -297,7 +297,6 @@ end;
 
 constructor TFixedPool.Create(aBlockSize: SizeUInt; aCapacity: Integer; aAlignment: SizeUInt; aAllocator: IAllocator);
 var
-  LOverflowCheck: SizeUInt;
   LRaw: Pointer;
   LMask: SizeUInt;
   LAddr, LAligned: PtrUInt;

@@ -1,6 +1,7 @@
 unit nextpas.core.math.scalar;
 
 {$I nextpas.core.settings.inc}
+{$WARN 5027 off} // FPC 对仅作为 Move 源参数的局部变量的 5027 误报，统一豁免
 
 interface
 
@@ -42,7 +43,7 @@ function Max(AA, AB: SizeInt): SizeInt; overload; inline;
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
-function Max(AA, AB: Single): Single; overload; inline;
+function Max(AA, AB: Single): Single; overload;
 
 {** * Constrains a value to lie within a given range.
  * @param AValue The value to constrain

@@ -168,10 +168,10 @@ type
   private
     FRefCount: LongInt;
   protected
+  public
     procedure AfterConstruction; override;
     procedure BeforeDestruction; override;
     class function NewInstance: TObject; override;
-  public
     function QueryInterface(constref Aiid: TGuid; out AObj): LongInt; virtual;
     function _AddRef: LongInt; virtual;
     function _Release: LongInt; virtual;

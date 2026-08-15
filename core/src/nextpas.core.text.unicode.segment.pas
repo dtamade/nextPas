@@ -115,6 +115,7 @@ var
   LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
+  Result := nil;
   LLen := Length(AText);
   if LLen = 0 then
   begin
@@ -151,6 +152,7 @@ var
   LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
+  Result := nil;
   LLen := Length(AText);
   if LLen = 0 then
   begin
@@ -191,6 +193,7 @@ var
   LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
+  Result := nil;
   LLen := Length(AText);
   if LLen = 0 then
   begin
@@ -227,6 +230,7 @@ var
   LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
+  Result := nil;
   LLen := Length(AText);
   if LLen = 0 then
   begin
@@ -263,6 +267,7 @@ var
   LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
+  Result := nil;
   LLen := Length(AText);
   if LLen = 0 then
   begin
@@ -1135,7 +1140,6 @@ var
   LFPiOpen, LFPrevEastAsian: Boolean;
   LRiCount: Integer;
   LCh, LBaseCp: TUnicodeCodepoint;
-  LOrigRightU16, LOrigLeftU16: Boolean;
   LNumState: Integer; { 0=none 1=prefix 2=prefixop 3=num 4=numclose }
   LLb25Fixup: Integer;
   LPeekCls: TLineBreakClass;
@@ -1174,7 +1178,7 @@ var
     Result := False;
   end;
 
-  { UAX#14 $EastAsian = East_Asian_Width in {F, W, H} (UAX#11). }
+  { UAX#14 rule: East_Asian_Width in (F, W, H) (UAX#11). }
   function IsEastAsianCp(const ACp: TUnicodeCodepoint): Boolean;
   begin
     Result := IsEastAsianFWH(ACp);
@@ -1299,8 +1303,6 @@ begin
 
     LCh := LCps[LI + 1];
     LNew := LCls[LI + 1];
-    LOrigRightU16 := IsU16Ortho(LNew);
-    LOrigLeftU16 := IsU16Ortho(LCls[LI]);
 
     if (LCur = lbcBK) or ((LCur = lbcCR) and (LNew <> lbcLF)) then
     begin

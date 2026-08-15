@@ -59,7 +59,7 @@ type
 
     {** Free a block previously allocated by GetMem.
         ASize is required for O(1) size class lookup (hot path). }
-    procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
+    procedure FreeMem(APtr: Pointer; ASize: SizeUInt);
 
     {** Free a block previously allocated by GetMem.
         Size class is determined by scanning central pool spans.
@@ -424,7 +424,7 @@ end;
 {$pop}
 
 {$push}{$R-}
-procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
+procedure TGrowingAllocator.FreeMem(APtr: Pointer; ASize: SizeUInt);
 var
   LIndex: Int32;
   LNode: PFreeNode;

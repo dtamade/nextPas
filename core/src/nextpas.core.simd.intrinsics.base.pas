@@ -164,6 +164,7 @@ const
   SIMD_ALIGNMENT_512 = 64;
 
 // === 辅助宏和内联函数 ===
+{$MACRO ON}
 {$IFDEF SIMD_AGGRESSIVE_INLINE}
   {$DEFINE SIMD_INLINE := inline;}
 {$ELSE}
