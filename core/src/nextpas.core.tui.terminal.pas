@@ -173,6 +173,9 @@ type
     function TryEnterTui(const AOptions: TTerminalOptions): TTuiEnterResult; overload;
     procedure LeaveTui;
 
+    { 是否有图片正分帧传输（未传完）。调用方可加速帧循环或用于观测。 }
+    function HasPendingImageTransmit: Boolean;
+
     function BeginFrame: TFrame;
     procedure EndFrame(const AFrame: TFrame);
 
@@ -215,6 +218,9 @@ const
     若每次立即删图重传，封面会反复"消失-整图重传"闪烁；稳定前图片冻结
     在旧布局，拖动手感与"图片不跟随"以换取不闪，稳定后一次归位。 }
   kImageResizeStableNs = 60 * 1000 * 1000;  { 60ms }
+  { 分帧传输的图像流帧间隔：有待传数据时把 PollEvent 等待压到该值，
+    让 EndFrame 每流帧推进一档（32KB），整图完成后恢复空闲帧率。 }
+  kImageStreamFrameMs = 8;
 
 var
   GResizePending: LongInt = 0;
@@ -670,11 +676,15 @@ begin
   begin
     if platform_monotonic_ns - FResizePendingSinceNs >= kImageResizeStableNs then
     begin
-      { 尺寸已稳定（拖动结束/单次调整后）：delete-all 清掉旧坐标图片，
-        重传+重放归位。同一帧内完成，图片消失窗口不超过一帧。 }
-      FBackend.AppendRawBytes(PByte(PAnsiChar(#27'_Ga=d,d=a,q=2'#27'\'))^, 16);
-      FImageMgr.InvalidateAll;
       FResizeImagePending := False;
+      if GetImageProtocol <> ipKitty then
+      begin
+        { 非 kitty：无按 id 删除能力，保持整清重传（sixel 流式协议） }
+        FBackend.AppendRawBytes(PByte(PAnsiChar(#27'_Ga=d,d=a,q=2'#27'\'))^, 16);
+        FImageMgr.InvalidateAll;
+      end;
+      { kitty：Resolve 内按 slot 协调——纯扩大只重放不重传，
+        缩小/位移按 id 删除后重传 }
       FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
         FPatches, LPatchCount);
     end
@@ -804,6 +814,11 @@ begin
   Result := FCapabilityProfile.ImageProtocol.ActiveProtocol;
 end;
 
+function TTerminal.HasPendingImageTransmit: Boolean;
+begin
+  Result := (FImageMgr <> nil) and FImageMgr.HasPendingTransmit;
+end;
+
 procedure TTerminal.ResizeBuffersTo(AWidth, AHeight: Word);
 begin
   if FPrev <> nil then FPrev.Resize(TRect.Make(0, 0, AWidth, AHeight));
@@ -819,25 +834,34 @@ begin
   if FPrev <> nil then FPrev.Reset;
   if FBackend <> nil then FBackend.ResetStyleCache;
   { 图片协议：resize 后布局变化，旧坐标图片会残留。但拖动窗口时
-    SIGWINCH 连续到达——若每次立即 delete-all+整图重传，图片会反复
-    "消失-重现"闪烁。改为标记 pending：EndFrame 里检测到最后一次
-    resize 已过去 kImageResizeStableNs（尺寸稳定）才执行 delete-all +
-    InvalidateAll 归位；稳定前冻结图片层（不删不传不放，图片停在旧
-    布局）。sixel 为流式协议同样适用。 }
+    SIGWINCH 连续到达——若每次立即删图重传，图片会反复"消失-重现"
+    闪烁。改为标记 pending：EndFrame 里检测到最后一次 resize 已过去
+    kImageResizeStableNs（尺寸稳定）才归位；稳定前冻结图片层（不删
+    不传不放，图片停在旧布局）。归位细节：kitty 在 Resolve 内按 slot
+    协调（纯扩大免重传、缩小/位移按 id 删除重传），非 kitty 整清重传。 }
   FResizeImagePending := True;
   FResizePendingSinceNs := platform_monotonic_ns;
 end;
 
 { 把调用方给的等待超时收敛到"图片层稳定归位所需剩余时间"。
-  松手(最后一次 resize)后约 60ms 要出帧跑 delete-all+重传归位；若空闲帧
-  率(默认 IdleTickInterval=200ms)比这慢，封面归位会被拖到 200ms+ 的空闲
-  帧——上下拖拽松手后封面跳变会显得延迟很大。这里把等待输入超时压到
-  min(剩余稳定时间, 原超时)，让 PollEvent 在归位时刻准时醒来出帧。 }
+  松手(最后一次 resize)后约 60ms 要出帧归位（扩大重放/缩小重传）；
+  若空闲帧率(默认 IdleTickInterval=200ms)比这慢，封面归位会被拖到
+  200ms+ 的空闲帧——上下拖拽松手后封面跳变会显得延迟很大。这里把
+  等待输入超时压到 min(剩余稳定时间, 原超时)，让 PollEvent 在归位
+  时刻准时醒来出帧。 }
 function TTerminal.EffectiveWaitTimeout(ATimeoutMs: Integer): Integer;
 var
   LElapsedNs, LRemainMs: Int64;
 begin
   Result := ATimeoutMs;
+  { 图片分帧传输中：空闲帧率(200ms)会拖慢渐进重建（480KB/32KB≈15 帧），
+    把等待压到流帧间隔，让 EndFrame 每流帧推进一步，直到传完并放置。 }
+  if (FImageMgr <> nil) and FImageMgr.HasPendingTransmit then
+  begin
+    if (Result < 0) or (kImageStreamFrameMs < Result) then
+      Result := kImageStreamFrameMs;
+    Exit;
+  end;
   if not FResizeImagePending then Exit;
   LElapsedNs := platform_monotonic_ns - FResizePendingSinceNs;
   LRemainMs := (kImageResizeStableNs - LElapsedNs) div 1000000;
