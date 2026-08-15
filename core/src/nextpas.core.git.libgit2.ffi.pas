@@ -420,6 +420,55 @@ type
 
   git_patch = Pointer;
 
+  // ── Diff options (git_diff_options v1, libgit2 1.9 ABI) ──────────────
+  git_diff_options = record
+    version: cuint;           // GIT_DIFF_OPTIONS_VERSION = 1
+    flags: cuint;             // git_diff_flag_t
+    ignore_submodules: cint;  // git_submodule_ignore_t
+    pathspec: git_strarray;
+    notify_cb: Pointer;       // git_diff_notify_cb (1.9 头文件)
+    progress_cb: Pointer;     // git_diff_progress_cb (1.9 头文件)
+    payload: Pointer;         // 回调 payload
+    context_lines: cuint;     // 默认 3
+    interhunk_lines: cuint;   // 默认 0
+    oid_type: cint;           // git_oid_t
+    id_abbrev: Word;
+    max_size: Int64;          // git_off_t
+    old_prefix: PChar;
+    new_prefix: PChar;
+  end;
+  Pgit_diff_options = ^git_diff_options;
+
+  // ── Blame (git_blame_*) ────────────────────────────────────────────────
+  git_blame = Pointer;
+
+  git_blame_options = record
+    version: cuint;                    // GIT_BLAME_OPTIONS_VERSION = 1
+    flags: cuint;                      // git_blame_flag_t
+    min_match_characters: Word;        // GitBlameDefaultMinMatchSize
+    newest_commit: git_oid;
+    oldest_commit: git_oid;
+    min_line: csize_t;
+    max_line: csize_t;
+  end;
+  Pgit_blame_options = ^git_blame_options;
+
+  git_blame_hunk = record
+    lines_in_hunk: csize_t;
+    final_commit_id: git_oid;
+    final_start_line_number: csize_t;
+    final_signature: Pointer;         // git_signature*
+    final_committer: Pointer;         // git_signature* (libgit2 ≥1.x 字段)
+    orig_commit_id: git_oid;
+    orig_path: PChar;
+    orig_start_line_number: csize_t;
+    orig_signature: Pointer;          // git_signature*
+    orig_committer: Pointer;          // git_signature* (libgit2 ≥1.x 字段)
+    summary: PChar;                   // const char* (libgit2 ≥1.x 字段)
+    boundary: cchar;
+  end;
+  Pgit_blame_hunk = ^git_blame_hunk;
+
 implementation
 
 end.

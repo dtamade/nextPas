@@ -63,6 +63,9 @@ type
   // wraps each entry into an IGitCommit array.
   TGitCommitList = array of TGitCommit;
 
+  { M5+ (2026-08-15): pathspec 缓冲区数组（BuildDiffOptions 用，动态数组参数） }
+  TPAnsiCharArray = array of PAnsiChar;
+
   TGitRepository = class
   private
     FHandle: git_repository;
@@ -72,6 +75,10 @@ type
     // M5 helpers: resolve revspec to tree; collect libgit2 diff into TGitDiff
     procedure ResolveRevToTree(const ASpec: string; out AObj: git_object; out ATree: git_tree);
     function CollectDiff(ADiff: git_diff): TGitDiff;
+    // M5+ (2026-08-15): assemble git_diff_options from TGitDiffOptions
+    procedure BuildDiffOptions(const AOptions: TGitDiffOptions;
+      out LOpts: git_diff_options; var LPathStrs: TStringArray;
+      var LPathPtrs: TPAnsiCharArray);
   public
     constructor Create(const APath: string);
     constructor Clone(const AURL, ALocalPath: string);
@@ -109,8 +116,14 @@ type
 
     // M5: diff / revwalk facade (libgit2-based)
     function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    function DiffEx(const AOldRef, ANewRef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     function DiffWorkingTree(const ARef: string): TGitDiff;
+    function DiffWorkingTreeEx(const ARef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
+    // M5+ (2026-08-15): blame a file (libgit2 native, no CLI spawn)
+    function Blame(const APath: string): TGitBlame;
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -1497,18 +1510,55 @@ begin
   end;
 end;
 
+procedure TGitRepository.BuildDiffOptions(const AOptions: TGitDiffOptions;
+  out LOpts: git_diff_options; var LPathStrs: TStringArray;
+  var LPathPtrs: TPAnsiCharArray);
+var
+  I: Integer;
+begin
+  FillChar(LOpts, SizeOf(LOpts), 0);
+  LOpts.version := 1;   { GIT_DIFF_OPTIONS_VERSION }
+  if AOptions.UnifiedLines > 0 then
+    LOpts.context_lines := cuint(AOptions.UnifiedLines);
+  if AOptions.InterhunkLines > 0 then
+    LOpts.interhunk_lines := cuint(AOptions.InterhunkLines);
+  SetLength(LPathPtrs, Length(AOptions.Paths));
+  SetLength(LPathStrs, Length(AOptions.Paths));
+  for I := 0 to High(AOptions.Paths) do
+  begin
+    LPathStrs[I] := AOptions.Paths[I];
+    LPathPtrs[I] := PAnsiChar(LPathStrs[I]);
+  end;
+  if Length(LPathPtrs) > 0 then
+  begin
+    LOpts.pathspec.strings := PPChar(@LPathPtrs[0]);
+    LOpts.pathspec.count := csize_t(Length(LPathPtrs));
+  end;
+end;
+
 function TGitRepository.Diff(const AOldRef, ANewRef: string): TGitDiff;
+begin
+  Result := DiffEx(AOldRef, ANewRef, DefaultGitDiffOptions);
+end;
+
+function TGitRepository.DiffEx(const AOldRef, ANewRef: string;
+  const AOptions: TGitDiffOptions): TGitDiff;
 var
   LOldObj, LNewObj: git_object;
   LOldTree, LNewTree: git_tree;
   LDiff: git_diff;
+  LOpts: git_diff_options;
+  LPathStrs: TStringArray;
+  LPathPtrs: TPAnsiCharArray;
 begin
   Result.Files := nil;
   ResolveRevToTree(AOldRef, LOldObj, LOldTree);
   try
     ResolveRevToTree(ANewRef, LNewObj, LNewTree);
     try
-      CheckResult(git_diff_tree_to_tree(LDiff, FHandle, LOldTree, LNewTree, nil), 'Diff trees');
+      BuildDiffOptions(AOptions, LOpts, LPathStrs, LPathPtrs);
+      CheckResult(git_diff_tree_to_tree(LDiff, FHandle, LOldTree, LNewTree,
+        @LOpts), 'Diff trees');
       try
         Result := CollectDiff(LDiff);
       finally
@@ -1525,15 +1575,26 @@ begin
 end;
 
 function TGitRepository.DiffWorkingTree(const ARef: string): TGitDiff;
+begin
+  Result := DiffWorkingTreeEx(ARef, DefaultGitDiffOptions);
+end;
+
+function TGitRepository.DiffWorkingTreeEx(const ARef: string;
+  const AOptions: TGitDiffOptions): TGitDiff;
 var
   LObj: git_object;
   LTree: git_tree;
   LDiff: git_diff;
+  LOpts: git_diff_options;
+  LPathStrs: TStringArray;
+  LPathPtrs: TPAnsiCharArray;
 begin
   Result.Files := nil;
   ResolveRevToTree(ARef, LObj, LTree);
   try
-    CheckResult(git_diff_tree_to_workdir_with_index(LDiff, FHandle, LTree, nil), 'Diff tree to workdir');
+    BuildDiffOptions(AOptions, LOpts, LPathStrs, LPathPtrs);
+    CheckResult(git_diff_tree_to_workdir_with_index(LDiff, FHandle, LTree,
+      @LOpts), 'Diff tree to workdir');
     try
       Result := CollectDiff(LDiff);
     finally
@@ -1542,6 +1603,51 @@ begin
   finally
     git_object_free(LObj);
     git_tree_free(LTree);
+  end;
+end;
+
+function TGitRepository.Blame(const APath: string): TGitBlame;
+var
+  LBlame: git_blame;
+  LOpts: git_blame_options;
+  LHunk: Pgit_blame_hunk;
+  LCount, I: cardinal;
+  LOut: TGitBlame;
+  LOID: TGitOID;
+begin
+  Result.Path := APath;
+  Result.Hunks := nil;
+  if APath = '' then
+    Exit;
+  FillChar(LOpts, SizeOf(LOpts), 0);
+  LOpts.version := 1;   { GIT_BLAME_OPTIONS_VERSION }
+  LOut.Hunks := nil;
+  if git_blame_file(LBlame, FHandle, PAnsiChar(APath), @LOpts) <> GIT_OK then
+    Exit;               { 无历史/路径不存在 → 空 hunks（非异常） }
+  try
+    LCount := git_blame_get_hunk_count(LBlame);
+    if LCount = 0 then
+      Exit;
+    SetLength(LOut.Hunks, LCount);
+    for I := 0 to LCount - 1 do
+    begin
+      LHunk := git_blame_get_hunk_byindex(LBlame, I);
+      if LHunk = nil then
+        Continue;
+      LOut.Hunks[I].LinesInHunk := Integer(LHunk^.lines_in_hunk);
+      LOut.Hunks[I].FinalStartLine := Integer(LHunk^.final_start_line_number);
+      LOut.Hunks[I].OrigStartLine := Integer(LHunk^.orig_start_line_number);
+      if LHunk^.orig_path <> nil then
+        LOut.Hunks[I].OrigPath := string(LHunk^.orig_path);
+      LOID.Data := LHunk^.final_commit_id;
+      LOut.Hunks[I].FinalCommitId := GitOIDToString(LOID);
+      LOID.Data := LHunk^.orig_commit_id;
+      LOut.Hunks[I].OrigCommitId := GitOIDToString(LOID);
+      LOut.Hunks[I].Boundary := LHunk^.boundary <> #0;
+    end;
+    Result.Hunks := LOut.Hunks;
+  finally
+    git_blame_free(LBlame);
   end;
 end;
 

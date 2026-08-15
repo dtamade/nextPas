@@ -131,6 +131,12 @@ function git_oid_cmp(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
 function git_oid_equal(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
 function git_oid_iszero(const id: Pgit_oid): cint; cdecl;
 
+// Blame operations
+function git_blame_file(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl;
+function git_blame_get_hunk_count(blame: git_blame): cuint; cdecl;
+function git_blame_get_hunk_byindex(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl;
+procedure git_blame_free(blame: git_blame); cdecl;
+
 // Error handling
 function git_error_last: Pgit_error_t; cdecl;
 procedure git_error_clear; cdecl;
@@ -313,6 +319,10 @@ type
   TLibGit2_git_oid_cmp = function(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
   TLibGit2_git_oid_equal = function(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
   TLibGit2_git_oid_iszero = function(const id: Pgit_oid): cint; cdecl;
+  TLibGit2_git_blame_file = function(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl;
+  TLibGit2_git_blame_get_hunk_count = function(blame: git_blame): cuint; cdecl;
+  TLibGit2_git_blame_get_hunk_byindex = function(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl;
+  TLibGit2_git_blame_free = procedure(blame: git_blame); cdecl;
   TLibGit2_git_error_last = function: Pgit_error_t; cdecl;
   TLibGit2_git_error_clear = procedure; cdecl;
   TLibGit2_git_error_set_str = function(error_class: cint; const str: PChar): cint; cdecl;
@@ -450,6 +460,10 @@ function static_git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; c
 function static_git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_next';
 function static_git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_sorting';
 procedure static_git_revwalk_free(walk: git_revwalk); cdecl; external LIBGIT2_LIB name 'git_revwalk_free';
+function static_git_blame_file(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_blame_file';
+function static_git_blame_get_hunk_count(blame: git_blame): cuint; cdecl; external LIBGIT2_LIB name 'git_blame_get_hunk_count';
+function static_git_blame_get_hunk_byindex(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl; external LIBGIT2_LIB name 'git_blame_get_hunk_byindex';
+procedure static_git_blame_free(blame: git_blame); cdecl; external LIBGIT2_LIB name 'git_blame_free';
 function static_git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_fmt';
 function static_git_oid_cmp(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_cmp';
 function static_git_oid_equal(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_equal';
@@ -897,6 +911,26 @@ begin
   static_git_revwalk_free(walk);
 end;
 
+function git_blame_file(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl;
+begin
+  Result := static_git_blame_file(blame, repo, path, opts);
+end;
+
+function git_blame_get_hunk_count(blame: git_blame): cuint; cdecl;
+begin
+  Result := static_git_blame_get_hunk_count(blame);
+end;
+
+function git_blame_get_hunk_byindex(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl;
+begin
+  Result := static_git_blame_get_hunk_byindex(blame, index);
+end;
+
+procedure git_blame_free(blame: git_blame); cdecl;
+begin
+  static_git_blame_free(blame);
+end;
+
 function git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl;
 begin
   Result := static_git_oid_fmt(str, id);
@@ -1255,6 +1289,10 @@ var
   dyn_git_revwalk_next: TLibGit2_git_revwalk_next = nil;
   dyn_git_revwalk_sorting: TLibGit2_git_revwalk_sorting = nil;
   dyn_git_revwalk_free: TLibGit2_git_revwalk_free = nil;
+  dyn_git_blame_file: TLibGit2_git_blame_file = nil;
+  dyn_git_blame_get_hunk_count: TLibGit2_git_blame_get_hunk_count = nil;
+  dyn_git_blame_get_hunk_byindex: TLibGit2_git_blame_get_hunk_byindex = nil;
+  dyn_git_blame_free: TLibGit2_git_blame_free = nil;
   dyn_git_oid_equal: TLibGit2_git_oid_equal = nil;
   dyn_git_oid_iszero: TLibGit2_git_oid_iszero = nil;
   dyn_git_error_last: TLibGit2_git_error_last = nil;
@@ -1408,6 +1446,10 @@ begin
   dyn_git_revwalk_next := nil;
   dyn_git_revwalk_sorting := nil;
   dyn_git_revwalk_free := nil;
+  dyn_git_blame_file := nil;
+  dyn_git_blame_get_hunk_count := nil;
+  dyn_git_blame_get_hunk_byindex := nil;
+  dyn_git_blame_free := nil;
   dyn_git_oid_equal := nil;
   dyn_git_oid_iszero := nil;
   dyn_git_error_last := nil;
@@ -2093,6 +2135,34 @@ begin
   if not Assigned(dyn_git_revwalk_free) then
     Pointer(dyn_git_revwalk_free) := ResolveLibGit2Symbol('git_revwalk_free');
   dyn_git_revwalk_free(walk);
+end;
+
+function git_blame_file(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_blame_file) then
+    Pointer(dyn_git_blame_file) := ResolveLibGit2Symbol('git_blame_file');
+  Result := dyn_git_blame_file(blame, repo, path, opts);
+end;
+
+function git_blame_get_hunk_count(blame: git_blame): cuint; cdecl;
+begin
+  if not Assigned(dyn_git_blame_get_hunk_count) then
+    Pointer(dyn_git_blame_get_hunk_count) := ResolveLibGit2Symbol('git_blame_get_hunk_count');
+  Result := dyn_git_blame_get_hunk_count(blame);
+end;
+
+function git_blame_get_hunk_byindex(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl;
+begin
+  if not Assigned(dyn_git_blame_get_hunk_byindex) then
+    Pointer(dyn_git_blame_get_hunk_byindex) := ResolveLibGit2Symbol('git_blame_get_hunk_byindex');
+  Result := dyn_git_blame_get_hunk_byindex(blame, index);
+end;
+
+procedure git_blame_free(blame: git_blame); cdecl;
+begin
+  if not Assigned(dyn_git_blame_free) then
+    Pointer(dyn_git_blame_free) := ResolveLibGit2Symbol('git_blame_free');
+  dyn_git_blame_free(blame);
 end;
 
 function git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl;

@@ -520,6 +520,112 @@ begin
   CheckEqual(1, LDiff.Files[0].Additions, 'DiffWorkingTree should count one added line');
 end;
 
+{ M5+ (2026-08-15): DiffEx 参数化——unified 行数 + 路径过滤 }
+procedure TestDiffExOptions;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LFileA, LFileB: string;
+  LDiff: TGitDiff;
+  LOpts: TGitDiffOptions;
+  I, J: Integer;
+  LHunk: TGitDiffHunk;
+  HasContext: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'diffex']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager initialize for diffex');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+
+  LFileA := nextpas.core.fs.PathJoin([LRepoDir, 'a.txt']);
+  LFileB := nextpas.core.fs.PathJoin([LRepoDir, 'b.txt']);
+  nextpas.core.fs.WriteFile(LFileA, BytesOfString('a1' + LineEnding + 'a2' + LineEnding + 'a3' + LineEnding));
+  nextpas.core.fs.WriteFile(LFileB, BytesOfString('b1' + LineEnding + 'b2' + LineEnding + 'b3' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', '.'], 'git add all');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c1'], 'git commit c1');
+
+  nextpas.core.fs.WriteFile(LFileA, BytesOfString('a1' + LineEnding + 'a2-changed' + LineEnding + 'a3' + LineEnding));
+  nextpas.core.fs.WriteFile(LFileB, BytesOfString('b1' + LineEnding + 'b2-changed' + LineEnding + 'b3' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', '.'], 'git add both');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c2'], 'git commit c2');
+
+  LExt := LRepo as IGitRepositoryExt;
+
+  { 路径过滤：只 diff a.txt }
+  LOpts := DefaultGitDiffOptions;
+  SetLength(LOpts.Paths, 1);
+  LOpts.Paths[0] := 'a.txt';
+  LDiff := LExt.DiffEx('HEAD~1', 'HEAD', LOpts);
+  CheckEqual(1, Length(LDiff.Files), 'path filter keeps only a.txt');
+  CheckEqual('a.txt', LDiff.Files[0].NewPath, 'filtered file is a.txt');
+  LDiff := LExt.DiffEx('HEAD~1', 'HEAD', DefaultGitDiffOptions);
+  CheckEqual(2, Length(LDiff.Files), 'no filter reports both files');
+
+  { unified=0：hunk 内无空格上下文行 }
+  LOpts := DefaultGitDiffOptions;
+  LOpts.UnifiedLines := 0;
+  LDiff := LExt.DiffEx('HEAD~1', 'HEAD', LOpts);
+  CheckEqual(2, Length(LDiff.Files), 'unified=0 still both files');
+  HasContext := False;
+  for I := 0 to High(LDiff.Files[0].Hunks) do
+  begin
+    LHunk := LDiff.Files[0].Hunks[I];
+    for J := 0 to High(LHunk.Lines) do
+      if (Length(LHunk.Lines[J]) > 0) and (LHunk.Lines[J][1] = ' ') then
+        HasContext := True;
+  end;
+  Check(not HasContext, 'unified=0 drops context lines');
+end;
+
+{ M5+ (2026-08-15): Blame——逐 hunk 归属 commit }
+procedure TestBlameFile;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LFile: string;
+  LBlame: TGitBlame;
+  I: Integer;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'blame']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager initialize for blame');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+
+  LFile := nextpas.core.fs.PathJoin([LRepoDir, 'src.txt']);
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('one' + LineEnding + 'two' + LineEnding + 'three' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'src.txt'], 'git add src.txt');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c1'], 'git commit c1');
+
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('one' + LineEnding + 'two-changed' + LineEnding + 'three' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'src.txt'], 'git add src.txt (modified)');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c2'], 'git commit c2');
+
+  LExt := LRepo as IGitRepositoryExt;
+  LBlame := LExt.Blame('src.txt');
+
+  CheckEqual('src.txt', LBlame.Path, 'blame path');
+  Check(Length(LBlame.Hunks) >= 1, 'blame exposes hunks');
+  for I := 0 to High(LBlame.Hunks) do
+  begin
+    CheckEqual(40, Length(LBlame.Hunks[I].FinalCommitId), 'blame commit id 40 hex');
+    CheckEqual('src.txt', LBlame.Hunks[I].OrigPath, 'blame orig path');
+    Check(LBlame.Hunks[I].LinesInHunk >= 1, 'blame hunk lines >= 1');
+  end;
+  { 第二行被 c2 修改 → 至少存在一个起始行=2 的 hunk（或整体 hunk 覆盖） }
+end;
+
 procedure TestRevWalkAndParents;
 var
   LMgr: IGitManager;
@@ -586,6 +692,8 @@ begin
     T.Test('AddWorktree creates linked worktree', @TestAddWorktreeCreatesLinkedWorktree);
     T.Test('CommitOnHead creates commit', @TestCommitOnHeadCreatesCommit);
     T.Test('Diff reports hunks and stats', @TestDiffReportsHunksAndStats);
+    T.Test('DiffEx honors pathspec and unified', @TestDiffExOptions);
+    T.Test('Blame file', @TestBlameFile);
     T.Test('RevWalk and parent OIDs', @TestRevWalkAndParents);
   if not T.Run then Halt(1);
   finally
