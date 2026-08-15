@@ -44,6 +44,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
+| `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | yes | L0-L2 | focused-runtime |
 | `id` | L1 | ID generators | yes | L0-L1 | focused-runtime |
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
