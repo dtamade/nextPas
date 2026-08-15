@@ -31,6 +31,9 @@ type
     DataH: Integer;
     Chunks: array of Byte;
     ChunkLen: Integer;
+    { 各 kitty 分块在传输序列中的结束偏移。帧预算切分发送量时必须
+      停在分块边界上，否则残缺 APC 会被终端拒绝并把负载当文本回显 }
+    ChunkEnds: array of Integer;
     Pending: array of Byte;
     PendingLen: Integer;
     PendingSent: Integer;
@@ -145,6 +148,7 @@ begin
     FSlots[I].PendingLen := 0;
     FSlots[I].PendingSent := 0;
     SetLength(FSlots[I].Pending, 0);
+    SetLength(FSlots[I].ChunkEnds, 0);
     FSlots[I].SixelCacheLen := 0;
     SetLength(FSlots[I].SixelCache, 0);
   end;
@@ -164,51 +168,44 @@ procedure TImageManager.EncodeTransmitChunks(var Slot: TImageSlot;
   DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer);
 var
   Tmp: nextpas.core.text.builder.TStringBuilder;
-  Offset, ThisChunk: Integer;
+  Offset, ThisChunk, ChunkIdx: Integer;
   Header: AnsiString;
 begin
   Tmp.Init(1024);
+  SetLength(Slot.ChunkEnds,
+    (DataLen + MaxRawChunkBytes - 1) div MaxRawChunkBytes);
 
-  if DataLen <= MaxRawChunkBytes then
+  ChunkIdx := 0;
+  Offset := 0;
+  while Offset < DataLen do
   begin
-    Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
-      [Slot.Id, PixelWidth, PixelHeight]);
+    ThisChunk := DataLen - Offset;
+    if ThisChunk > MaxRawChunkBytes then ThisChunk := MaxRawChunkBytes;
+
+    if Offset = 0 then
+    begin
+      if ThisChunk < DataLen then
+        Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=1;',
+          [Slot.Id, PixelWidth, PixelHeight])
+      else
+        Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
+          [Slot.Id, PixelWidth, PixelHeight]);
+    end
+    else
+    begin
+      if Offset + ThisChunk < DataLen then
+        Header := #27'_Gm=1;'
+      else
+        Header := #27'_Gm=0;';
+    end;
+
     Tmp.AppendStr(Header);
-    Base64EncodeToBuilder(Tmp, PByte(DataPtr), DataLen);
+    Base64EncodeToBuilder(Tmp, PByte(DataPtr) + Offset, ThisChunk);
     Tmp.AppendByte(Ord(#27));
     Tmp.AppendByte(Ord('\'));
-  end
-  else
-  begin
-    Offset := 0;
-    while Offset < DataLen do
-    begin
-      ThisChunk := DataLen - Offset;
-      if ThisChunk > MaxRawChunkBytes then ThisChunk := MaxRawChunkBytes;
-
-      if Offset = 0 then
-      begin
-        if ThisChunk < DataLen then
-          Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=1;',
-            [Slot.Id, PixelWidth, PixelHeight])
-        else
-          Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
-            [Slot.Id, PixelWidth, PixelHeight]);
-      end
-      else
-      begin
-        if Offset + ThisChunk < DataLen then
-          Header := #27'_Gm=1;'
-        else
-          Header := #27'_Gm=0;';
-      end;
-
-      Tmp.AppendStr(Header);
-      Base64EncodeToBuilder(Tmp, PByte(DataPtr) + Offset, ThisChunk);
-      Tmp.AppendByte(Ord(#27));
-      Tmp.AppendByte(Ord('\'));
-      Inc(Offset, ThisChunk);
-    end;
+    Slot.ChunkEnds[ChunkIdx] := Tmp.Len;
+    Inc(ChunkIdx);
+    Inc(Offset, ThisChunk);
   end;
 
   Slot.ChunkLen := Tmp.Len;
@@ -274,8 +271,8 @@ procedure TImageManager.Resolve(var Buf: TBuffer; FrameStamp: Cardinal;
   end;
 
 var
-  I, SlotIdx, PlacementCount: Integer;
-  LSend: Integer;
+  I, J, SlotIdx, PlacementCount: Integer;
+  LSend, Target: Integer;
   P: TImagePlacement;
   Cap: Integer;
   TargetW, TargetH: Integer;
@@ -325,6 +322,7 @@ begin
       FSlots[SlotIdx].DataH := 0;
       FSlots[SlotIdx].PendingLen := 0;
       FSlots[SlotIdx].PendingSent := 0;
+      SetLength(FSlots[SlotIdx].ChunkEnds, 0);
       FSlots[SlotIdx].LastSentFrame := 0;
       FSlots[SlotIdx].SixelCacheLen := 0;
     end;
@@ -383,6 +381,7 @@ begin
             FSlots[SlotIdx].PendingLen := 0;
             FSlots[SlotIdx].PendingSent := 0;
             SetLength(FSlots[SlotIdx].Pending, 0);
+            SetLength(FSlots[SlotIdx].ChunkEnds, 0);
             FSlots[SlotIdx].PlacedArea := TRect.Make(0, 0, 0, 0);
           end;
         end;
@@ -414,6 +413,7 @@ begin
             FSlots[SlotIdx].PendingLen := 0;
             FSlots[SlotIdx].PendingSent := 0;
             SetLength(FSlots[SlotIdx].Pending, 0);
+            SetLength(FSlots[SlotIdx].ChunkEnds, 0);
           end;
 
           { 每帧同一 slot 只发送一次（同帧多 placement 共享进度）；
@@ -424,7 +424,22 @@ begin
           begin
             LSend := FSlots[SlotIdx].PendingLen - FSlots[SlotIdx].PendingSent;
             if LSend > FPendingBudget then
-              LSend := FPendingBudget;
+            begin
+              { 帧预算不能把 kitty 分块（APC）从中间切开：残缺 APC 会被
+                终端拒绝并把负载当文本回显。预算落在分块内部时发完整块，
+                最多超预算一个分块（约 4KB），不影响限流目的。 }
+              Target := FSlots[SlotIdx].PendingSent + FPendingBudget;
+              Cap := -1;
+              for J := 0 to System.Length(FSlots[SlotIdx].ChunkEnds) - 1 do
+                if FSlots[SlotIdx].ChunkEnds[J] >= Target then
+                begin
+                  Cap := FSlots[SlotIdx].ChunkEnds[J];
+                  Break;
+                end;
+              if Cap < 0 then
+                Cap := FSlots[SlotIdx].PendingLen;
+              LSend := Cap - FSlots[SlotIdx].PendingSent;
+            end;
             Backend.AppendRawBytes(
               FSlots[SlotIdx].Pending[FSlots[SlotIdx].PendingSent], LSend);
             Inc(FSlots[SlotIdx].PendingSent, LSend);
