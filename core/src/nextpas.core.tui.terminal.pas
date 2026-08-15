@@ -20,7 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses nextpas.core.mem.intf, nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.image_mgr, nextpas.core.tui.ansi, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
+uses nextpas.core.mem.intf, nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.image_mgr, nextpas.core.tui.ansi, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env, nextpas.core.platform.time;
 
 const
   STDIN_FD  = 0;
@@ -125,6 +125,8 @@ type
     FCellWidth: Word;
     FCellHeight: Word;
     FImageMgr: TImageManager;
+    FResizeImagePending: Boolean;
+    FResizePendingSinceNs: Int64;
     FOptions: TTerminalOptions;
     FActiveOptions: TTerminalOptions;
     FAllocator: IAllocator;
@@ -205,6 +207,13 @@ type
 
 implementation
 
+
+const
+  { resize 后图片层归位的稳定阈值：自最后一次 resize 起超过该时长才执行
+    delete-all+重传。拖动窗口时 SIGWINCH 连续到达（间隔通常远小于此值），
+    若每次立即删图重传，封面会反复"消失-整图重传"闪烁；稳定前图片冻结
+    在旧布局，拖动手感与"图片不跟随"以换取不闪，稳定后一次归位。 }
+  kImageResizeStableNs = 60 * 1000 * 1000;  { 60ms }
 
 var
   GResizePending: LongInt = 0;
@@ -423,6 +432,8 @@ begin
   FBracketedPasteEnabled := False;
   FLastEnterResult := TTuiEnterResult.OkResult;
   FImageMgr := nil;
+  FResizeImagePending := False;
+  FResizePendingSinceNs := 0;
   SetLength(FInputQueue, 256);
 end;
 
@@ -654,8 +665,24 @@ begin
     调用方自行降级渲染。惰性创建——协议在 EnterTui 能力检测后才定。 }
   if FImageMgr = nil then
     FImageMgr := TImageManager.Create(GetImageProtocol);
-  FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
-    FPatches, LPatchCount);
+  if FResizeImagePending then
+  begin
+    if platform_monotonic_ns - FResizePendingSinceNs >= kImageResizeStableNs then
+    begin
+      { 尺寸已稳定（拖动结束/单次调整后）：delete-all 清掉旧坐标图片，
+        重传+重放归位。同一帧内完成，图片消失窗口不超过一帧。 }
+      FBackend.AppendRawBytes(PByte(PAnsiChar(#27'_Ga=d,d=a,q=2'#27'\'))^, 16);
+      FImageMgr.InvalidateAll;
+      FResizeImagePending := False;
+      FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
+        FPatches, LPatchCount);
+    end
+    { 尺寸仍在变（拖动中）：冻结图片层，本帧不传输/不放置，避免
+      delete-all 风暴 + 新旧坐标重影。图片保持最后一次稳定布局。 }
+  end
+  else
+    FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
+      FPatches, LPatchCount);
 
   if AFrame.HasCursor then
   begin
@@ -790,16 +817,14 @@ begin
   end;
   if FPrev <> nil then FPrev.Reset;
   if FBackend <> nil then FBackend.ResetStyleCache;
-  { 图片协议：resize 后布局变化，kitty 旧坐标的图片会残留（同一 id 可
-    place 多处）。发 delete-all 清终端全部图片，重置 slots 让下一帧
-    重新传输+放置。sixel 为流式协议无此问题，但 delete-all 对非 kitty
-    后端无副作用。 }
-  if (FImageMgr <> nil) and (FBackend <> nil) then
-  begin
-    FBackend.AppendRawBytes(PByte(PAnsiChar(#27'_Ga=d,d=a,q=2'#27'\'))^, 16);
-    FBackend.Flush;
-    FImageMgr.InvalidateAll;
-  end;
+  { 图片协议：resize 后布局变化，旧坐标图片会残留。但拖动窗口时
+    SIGWINCH 连续到达——若每次立即 delete-all+整图重传，图片会反复
+    "消失-重现"闪烁。改为标记 pending：EndFrame 里检测到最后一次
+    resize 已过去 kImageResizeStableNs（尺寸稳定）才执行 delete-all +
+    InvalidateAll 归位；稳定前冻结图片层（不删不传不放，图片停在旧
+    布局）。sixel 为流式协议同样适用。 }
+  FResizeImagePending := True;
+  FResizePendingSinceNs := platform_monotonic_ns;
 end;
 
 { Signal + Input }
