@@ -18,6 +18,25 @@ begin
   Check(not StringsContains(A, 'qux'), 'not contains qux');
 end;
 
+{ R7 边界用例：空列表 / 空串 / 尾命中（proxy888 白名单判定收归本函数后
+  由本套件兜底，保证 5 域消费行为一致） }
+procedure TestContainsBoundary;
+var A: TStringArray;
+begin
+  { 空列表恒 False }
+  A := nil;
+  Check(not StringsContains(A, 'x'), 'empty list false');
+  { 空串 value：列表含空串则命中，否则不命中 }
+  A := TStringArray.Create('a', '');
+  Check(StringsContains(A, ''), 'empty value hit');
+  Check(not StringsContains(A, 'b'), 'empty value no hit other');
+  A := TStringArray.Create('a', 'b');
+  Check(not StringsContains(A, ''), 'empty value miss');
+  { 尾命中：末位元素命中 }
+  A := TStringArray.Create('a', 'b', 'zz');
+  Check(StringsContains(A, 'zz'), 'tail hit');
+end;
+
 procedure TestIndexOf;
 var A: TStringArray;
 begin
@@ -288,6 +307,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.text.strings');
   T.Test('Contains', @TestContains);
+  T.Test('Contains (boundary)', @TestContainsBoundary);
   T.Test('IndexOf/LastIndexOf', @TestIndexOf);
   T.Test('Sort', @TestSort);
   T.Test('Reverse', @TestReverse);
