@@ -140,6 +140,7 @@ begin
     Inc(LDec.Exponent);
   end;
 
+  FillChar(LDigits, SizeOf(LDigits), 0);
   LDigitCount := 0;
   while LMant > 0 do
   begin

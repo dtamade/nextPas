@@ -107,6 +107,8 @@ var
     LBufIdx: Integer;
     LV: UInt64;
   begin
+    Result := '';
+    FillChar(LBuf, SizeOf(LBuf), 0);
     LV := AVal;
     LBufIdx := 15;
     if LV = 0 then
@@ -193,6 +195,7 @@ var
 
   function GetArgInt(const AIdx: Integer): Int64;
   begin
+    Result := 0;
     RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtInteger: Result := AArgs[AIdx].VInteger;
@@ -210,6 +213,7 @@ var
 
   function GetArgUInt(const AIdx: Integer): UInt64;
   begin
+    Result := 0;
     RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtInteger: Result := UInt64(AArgs[AIdx].VInteger);
@@ -222,6 +226,7 @@ var
 
   function GetArgStr(const AIdx: Integer): string;
   begin
+    Result := '';
     RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtString: Result := AArgs[AIdx].VString^;
@@ -239,6 +244,7 @@ var
 
   function GetArgFloat(const AIdx: Integer): Double;
   begin
+    Result := 0;
     RequireArg(AIdx);
     case AArgs[AIdx].VType of
       vtExtended: Result := AArgs[AIdx].VExtended^;

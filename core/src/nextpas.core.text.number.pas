@@ -108,6 +108,7 @@ var
   LVal: UInt64;
   LMin: Int32;
 begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
   LMin := AMinDigits;
   if LMin > 16 then LMin := 16;
   if (AValue = 0) and (LMin <= 1) then

@@ -717,6 +717,7 @@ begin
     Exit(0);
 
   { Decode up to MAX_CPS codepoints (enough for any official test row). }
+  FillChar(LByteEnds, SizeOf(LByteEnds), 0);
   LCount := 0;
   LPos := 0;
   while (LPos < ALen) and (LCount < MAX_CPS) do
@@ -1007,6 +1008,7 @@ begin
   if (AData = nil) or (ALen = 0) then
     Exit(0);
 
+  FillChar(LByteEnds, SizeOf(LByteEnds), 0);
   LCount := 0;
   LPos := 0;
   while (LPos < ALen) and (LCount < MAX_CPS) do
@@ -1222,6 +1224,9 @@ var
 begin
   if (AData = nil) or (ALen = 0) then
     Exit(0);
+  FillChar(LByteEnds, SizeOf(LByteEnds), 0);
+  FillChar(LCls, SizeOf(LCls), 0);
+  FillChar(LCps, SizeOf(LCps), 0);
 
   LCount := 0;
   LPos := 0;

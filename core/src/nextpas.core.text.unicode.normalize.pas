@@ -519,6 +519,7 @@ var
   LI: SizeInt;
 begin
   LCount := ABuffer.Count;
+  FillChar(LCccs, SizeOf(LCccs), 0);
   if LCount = 0 then
     Exit;
 
