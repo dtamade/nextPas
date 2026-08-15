@@ -102,6 +102,9 @@ type
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     function Poll: Int32;
+    { 阻塞等待至多 ATimeoutMs（-1 = 无限），然后分发就绪事件。
+      kqueue server 事件循环用：无事件且无超时目标时挂起省 CPU。 }
+    function PollWait(const ATimeoutMs: Int64): Int32;
     function PollOne: Boolean;
     procedure Run;
     procedure Stop;
@@ -810,6 +813,31 @@ begin
   if Assigned(LCallback) then
     LCallback(LUserData, -ESysECANCELED, LContext);
   Result := True;
+end;
+
+function TKqueueReactor.PollWait(const ATimeoutMs: Int64): Int32;
+var
+  LTimeout: timespec;
+  LTimeoutPtr: Pointer;
+  LN, LI: Int32;
+begin
+  Result := 0;
+  if not IsValid then
+    Exit;
+  if ATimeoutMs < 0 then
+    LTimeoutPtr := nil
+  else
+  begin
+    LTimeout.tv_sec := ATimeoutMs div 1000;
+    LTimeout.tv_nsec := (ATimeoutMs mod 1000) * 1000000;
+    LTimeoutPtr := @LTimeout;
+  end;
+  LN := kevent(FKqFd, nil, 0, @FEvents[0], Int32(FMaxEvents), LTimeoutPtr);
+  if LN <= 0 then
+    Exit;
+  for LI := 0 to LN - 1 do
+    DispatchEvent(FEvents[LI]);
+  Result := LN;
 end;
 
 function TKqueueReactor.PollOne: Boolean;
