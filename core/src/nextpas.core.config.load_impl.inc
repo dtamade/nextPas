@@ -259,14 +259,18 @@ begin
   Result := TryLoadFromToml(AContent, AError);
 end;
 
-procedure TConfig.LoadFromEnv(const APrefix: string);
+function TConfig.LoadFromEnv(const APrefix: string): TStringArray;
 var
   LPtr: PPAnsiChar;
   LEnvBase: PAnsiChar;
   LEnvCursor: PAnsiChar;
   LEntry, LName, LValue, LKey: string;
   LEqPos: Integer;
+  LKeys: TStringArray;
+  LK: Integer;
 begin
+  Result := nil;
+  LK := 0;
   RequireConfigEnvPrefix(APrefix);
   FLock.AcquireWrite;
   try
@@ -282,7 +286,12 @@ begin
       LName := Copy(LEntry, 1, LEqPos - 1);
       LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
       if TryConfigEnvNameToKey(LName, APrefix, LKey) then
+      begin
         SetValueUnlocked(LKey, LValue);
+        SetLength(LKeys, LK + 1);
+        LKeys[LK] := LKey;
+        Inc(LK);
+      end;
     end;
     Inc(LPtr);
   end;
@@ -300,7 +309,12 @@ begin
         LName := Copy(LEntry, 1, LEqPos - 1);
         LValue := Copy(LEntry, LEqPos + 1, Length(LEntry) - LEqPos);
         if TryConfigEnvNameToKey(LName, APrefix, LKey) then
+        begin
           SetValueUnlocked(LKey, LValue);
+          SetLength(LKeys, LK + 1);
+          LKeys[LK] := LKey;
+          Inc(LK);
+        end;
       end;
     end;
     FreeEnvironmentStringsA(LEnvBase);
@@ -309,4 +323,5 @@ begin
   finally
     FLock.ReleaseWrite;
   end;
+  Result := LKeys;
 end;

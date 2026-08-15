@@ -173,7 +173,10 @@ type
     function TryLoadJson(const AContent: string; out AError: string): Boolean;
     function TryLoadYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadToml(const AContent: string; out AError: string): Boolean;
-    procedure LoadFromEnv(const APrefix: string);
+    { 加载环境变量层：APrefix 前缀（非空）剥去后，双下划线 `__` 映射点路径
+      （env-name → 配置 key，见 nextpas.core.config.env）。返回成功映射的
+      key 集（未映射/前缀外变量忽略，不崩溃）。 }
+    function LoadFromEnv(const APrefix: string): TStringArray;
     procedure SetString(const AKey, AValue: string);
     procedure SetInt(const AKey: string; AValue: Int64);
     procedure SetBool(const AKey: string; AValue: Boolean);

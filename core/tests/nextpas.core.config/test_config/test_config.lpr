@@ -1437,6 +1437,46 @@ begin
   end;
 end;
 
+{ LoadFromEnv 返回成功映射的 key 集：`__` → 点路径；前缀外与空后缀忽略 }
+procedure TestLoadFromEnvReturnsKeys;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+  I: Integer;
+  LHasHost, LHasNested, LHasOther: Boolean;
+begin
+  SetEnv('TESTCFG_HOST', 'envhost');
+  SetEnv('TESTCFG_SERVER__MAX_ROUNDS', '9');
+  SetEnv('TESTCFG_', 'ignored');
+  SetEnv('OTHER_PREFIX_KEY', 'nope');
+  try
+    LCfg := TConfig.Create;
+    try
+      LKeys := LCfg.LoadFromEnv('TESTCFG_');
+      CheckEqual(2, Length(LKeys), 'LoadFromEnv returns mapped keys');
+      LHasHost := False;
+      LHasNested := False;
+      LHasOther := False;
+      for I := 0 to High(LKeys) do
+      begin
+        if LKeys[I] = 'host' then LHasHost := True;
+        if LKeys[I] = 'server.max_rounds' then LHasNested := True;
+        if LKeys[I] = 'other.prefix.key' then LHasOther := True;
+      end;
+      CheckEqual(True, LHasHost, 'returns host key');
+      CheckEqual(True, LHasNested, 'returns nested key via __');
+      CheckEqual(False, LHasOther, 'prefix-external ignored');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('TESTCFG_HOST');
+    UnsetEnv('TESTCFG_SERVER__MAX_ROUNDS');
+    UnsetEnv('TESTCFG_');
+    UnsetEnv('OTHER_PREFIX_KEY');
+  end;
+end;
+
 { === Has / GetKeys Tests === }
 
 procedure TestHas;
@@ -2570,6 +2610,7 @@ begin
   T.Test('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Test('LoadFromEnv.Override', @TestLoadFromEnvOverride);
   T.Test('LoadFromEnv.RejectsEmptyPrefix', @TestLoadFromEnvRejectsEmptyPrefix);
+  T.Test('LoadFromEnv.ReturnsKeys', @TestLoadFromEnvReturnsKeys);
   T.Test('Has', @TestHas);
   T.Test('Has.CaseInsensitive', @TestHasCaseInsensitive);
   T.Test('GetKeys', @TestGetKeys);
