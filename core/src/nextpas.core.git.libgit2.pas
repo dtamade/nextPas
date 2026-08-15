@@ -77,6 +77,10 @@ type
     // Extended operations
     function ListRemotes: TStringArray;
     function PullFastForward(const RemoteName: string; out Error: string): TGitPullFastForwardResult;
+    // M5: diff / revwalk facade
+    function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    function DiffWorkingTree(const ARef: string): TGitDiff;
+    function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -104,6 +108,8 @@ type
     function Time: TDateTime;
     function ParentCount: Integer;
     function OIDString: string;
+    // M5: parent commit OID as 40-byte hex; '' when index out of range
+    function ParentOIDString(AIndex: Integer): string;
   end;
 
   TGitReferenceImpl = class(TInterfacedObject, IGitReference)
@@ -409,6 +415,30 @@ begin
   Result := FRepo.HasUncommittedChanges;
 end;
 
+function TGitRepositoryImpl.Diff(const AOldRef, ANewRef: string): TGitDiff;
+begin
+  Result := FRepo.Diff(AOldRef, ANewRef);
+end;
+
+function TGitRepositoryImpl.DiffWorkingTree(const ARef: string): TGitDiff;
+begin
+  Result := FRepo.DiffWorkingTree(ARef);
+end;
+
+function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
+var
+  LCommits: TGitCommitList;
+  LRepoIface: IGitRepository;
+  I: Integer;
+begin
+  Result := nil;
+  LCommits := FRepo.RevWalk(AStartRef, ALimit);
+  LRepoIface := Self as IGitRepository;
+  SetLength(Result, Length(LCommits));
+  for I := 0 to High(LCommits) do
+    Result[I] := TGitCommitImpl.Create(LRepoIface, FRepo, LCommits[I]);
+end;
+
 function TGitRepositoryImpl.ListRemotes: TStringArray;
 begin
   Result := FRepo.ListRemotes;
@@ -475,6 +505,11 @@ end;
 function TGitCommitImpl.OIDString: string;
 begin
   Result := GitOIDToString(FCommit.OID);
+end;
+
+function TGitCommitImpl.ParentOIDString(AIndex: Integer): string;
+begin
+  Result := FCommit.GetParentOIDString(AIndex);
 end;
 
 { TGitReferenceImpl }

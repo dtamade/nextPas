@@ -9,6 +9,7 @@ uses
   nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.git,
+  nextpas.core.git.base,
   nextpas.core.git.libgit2.binding;
 
 type
@@ -469,6 +470,103 @@ begin
   CheckEqual('first commit', LCommit.ShortMessage, 'HEAD commit should be our commit');
 end;
 
+procedure TestDiffReportsHunksAndStats;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LFile: string;
+  LDiff: TGitDiff;
+  LHunk: TGitDiffHunk;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'diff']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for diff test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+
+  LFile := nextpas.core.fs.PathJoin([LRepoDir, 'a.txt']);
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('line1' + LineEnding + 'line2' + LineEnding + 'line3' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'a.txt'], 'git add a.txt');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c1'], 'git commit c1');
+
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('line1' + LineEnding + 'line2-modified' + LineEnding + 'line3' + LineEnding + 'line4' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'a.txt'], 'git add a.txt (modified)');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'c2'], 'git commit c2');
+
+  LExt := LRepo as IGitRepositoryExt;
+  LDiff := LExt.Diff('HEAD~1', 'HEAD');
+
+  CheckEqual(1, Length(LDiff.Files), 'Diff HEAD~1..HEAD should report one file');
+  CheckEqual('a.txt', LDiff.Files[0].OldPath, 'Diff should report old path');
+  CheckEqual('a.txt', LDiff.Files[0].NewPath, 'Diff should report new path');
+  Check(LDiff.Files[0].Status = gdsModified, 'Diff should report modified status');
+  CheckEqual(2, LDiff.Files[0].Additions, 'Diff should count two added lines');
+  CheckEqual(1, LDiff.Files[0].Deletions, 'Diff should count one deleted line');
+  Check(Length(LDiff.Files[0].Hunks) >= 1, 'Diff should expose at least one hunk');
+  LHunk := LDiff.Files[0].Hunks[0];
+  CheckEqual(1, LHunk.OldStart, 'Hunk old start should be line 1');
+  CheckEqual(1, LHunk.NewStart, 'Hunk new start should be line 1');
+  Check(Length(LHunk.Lines) >= 4, 'Hunk should expose prefixed lines');
+
+  // Working-tree diff after an uncommitted change
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('line1' + LineEnding + 'line2-modified' + LineEnding + 'line3' + LineEnding + 'line4' + LineEnding + 'line5' + LineEnding));
+  LDiff := LExt.DiffWorkingTree('HEAD');
+  CheckEqual(1, Length(LDiff.Files), 'DiffWorkingTree should report the modified file');
+  CheckEqual(1, LDiff.Files[0].Additions, 'DiffWorkingTree should count one added line');
+end;
+
+procedure TestRevWalkAndParents;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LFile: string;
+  LCommits: TGitCommitArray;
+  LHead: IGitCommit;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'revwalk']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for revwalk test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+
+  LFile := nextpas.core.fs.PathJoin([LRepoDir, 'r.txt']);
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('v1' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'r.txt'], 'git add r.txt');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'r1'], 'git commit r1');
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('v2' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'r.txt'], 'git add r.txt (v2)');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'r2'], 'git commit r2');
+  nextpas.core.fs.WriteFile(LFile, BytesOfString('v3' + LineEnding));
+  CheckGitOk(LRepoDir, ['add', 'r.txt'], 'git add r.txt (v3)');
+  CheckGitOk(LRepoDir, ['commit', '-m', 'r3'], 'git commit r3');
+
+  LExt := LRepo as IGitRepositoryExt;
+
+  LCommits := LExt.RevWalk('', 0);
+  Check(Length(LCommits) >= 3, 'RevWalk should list all commits');
+  LHead := LRepo.HeadCommit;
+  CheckEqual(LHead.OIDString, LCommits[0].OIDString, 'RevWalk should start at HEAD');
+  CheckEqual(40, Length(LCommits[0].ParentOIDString(0)), 'Parent OID should be 40-byte hex');
+  CheckEqual(LCommits[1].OIDString, LCommits[0].ParentOIDString(0), 'Second commit should be HEAD parent');
+  CheckEqual('', LCommits[0].ParentOIDString(1), 'Parent index out of range should return empty');
+  Check(LCommits[0].Time >= LCommits[1].Time, 'RevWalk should be time-ordered newest first');
+
+  LCommits := LExt.RevWalk('HEAD', 2);
+  CheckEqual(2, Length(LCommits), 'RevWalk with limit should cap results');
+  LCommits := LExt.RevWalk('HEAD~2', 0);
+  CheckEqual(1, Length(LCommits), 'RevWalk from older start should list remaining commits');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -487,6 +585,8 @@ begin
     T.Test('HeadCommit metadata', @TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease);
     T.Test('AddWorktree creates linked worktree', @TestAddWorktreeCreatesLinkedWorktree);
     T.Test('CommitOnHead creates commit', @TestCommitOnHeadCreatesCommit);
+    T.Test('Diff reports hunks and stats', @TestDiffReportsHunksAndStats);
+    T.Test('RevWalk and parent OIDs', @TestRevWalkAndParents);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;

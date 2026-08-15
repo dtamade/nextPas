@@ -59,12 +59,19 @@ type
 
   TGitRemote = class;
 
+  // Backend-level commit list; the interface adapter (nextpas.core.git.libgit2)
+  // wraps each entry into an IGitCommit array.
+  TGitCommitList = array of TGitCommit;
+
   TGitRepository = class
   private
     FHandle: git_repository;
     FPath: string;
     FWorkDir: string;
     procedure CheckResult(AResult: Integer; const AOperation: string = '');
+    // M5 helpers: resolve revspec to tree; collect libgit2 diff into TGitDiff
+    procedure ResolveRevToTree(const ASpec: string; out AObj: git_object; out ATree: git_tree);
+    function CollectDiff(ADiff: git_diff): TGitDiff;
   public
     constructor Create(const APath: string);
     constructor Clone(const AURL, ALocalPath: string);
@@ -99,6 +106,11 @@ type
     function GetCommit(const AOID: TGitOID): TGitCommit;
     function GetHeadCommit: TGitCommit;
     function GetLastCommit: TGitCommit;
+
+    // M5: diff / revwalk facade (libgit2-based)
+    function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    function DiffWorkingTree(const ARef: string): TGitDiff;
+    function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -161,6 +173,8 @@ type
     property Time: TDateTime read GetTime;
     property ParentCount: Integer read GetParentCount;
     property OID: TGitOID read FOID;
+    // M5: parent commit OID as 40-byte hex; '' when index out of range
+    function GetParentOIDString(AIndex: Integer): string;
   end;
 
 
@@ -736,6 +750,7 @@ begin
   try
     Result := TGitCommit.Create(Self, HeadRef.OID);
   finally
+    HeadRef.Free;
   end;
 end;
 
@@ -1397,6 +1412,196 @@ begin
   else
     LSign := '-';
   Result := Result + ' ' + LSign + Format('%.2d%.2d', [Abs(LHours), LMins]);
+end;
+
+{ M5: diff / revwalk implementations }
+
+procedure TGitRepository.ResolveRevToTree(const ASpec: string; out AObj: git_object; out ATree: git_tree);
+begin
+  AObj := nil;
+  ATree := nil;
+  if ASpec = '' then
+    raise EGitError.Create(GIT_ENOTFOUND, 'Resolve revspec (empty)');
+  CheckResult(git_revparse_single(AObj, FHandle, PChar(ASpec)), 'Resolve revspec ' + ASpec);
+  try
+    // git_object_peel yields a borrowed-into-new reference; caller frees both.
+    CheckResult(git_object_peel(ATree, AObj, GIT_OBJECT_TREE), 'Peel revspec to tree');
+  except
+    git_object_free(AObj);
+    AObj := nil;
+    raise;
+  end;
+end;
+
+function TGitRepository.CollectDiff(ADiff: git_diff): TGitDiff;
+var
+  LDeltaCount, I, J, K: Integer;
+  LDelta: Pgit_diff_delta_t;
+  LPatch: git_patch;
+  LHunkCount, LLineCount, LLen: csize_t;
+  LHunk: Pgit_diff_hunk;
+  LLine: Pgit_diff_line;
+  LFile: TGitDiffFile;
+  LH: TGitDiffHunk;
+begin
+  Result.Files := nil;
+  LDeltaCount := git_diff_num_deltas(ADiff);
+  SetLength(Result.Files, LDeltaCount);
+  for I := 0 to LDeltaCount - 1 do
+  begin
+    LDelta := git_diff_get_delta(ADiff, I);
+    LFile.OldPath := string(LDelta^.old_file.path);
+    LFile.NewPath := string(LDelta^.new_file.path);
+    LFile.Status := TGitDiffStatus(LDelta^.status);
+    LFile.Additions := 0;
+    LFile.Deletions := 0;
+    LFile.Hunks := nil;
+    if git_patch_from_diff(LPatch, ADiff, I) = GIT_OK then
+    begin
+      try
+        LHunkCount := git_patch_num_hunks(LPatch);
+        SetLength(LFile.Hunks, LHunkCount);
+        for J := 0 to LHunkCount - 1 do
+        begin
+          if git_patch_get_hunk(LHunk, LLineCount, LPatch, J) <> GIT_OK then
+            Continue;
+          LH.OldStart := LHunk^.old_start;
+          LH.OldCount := LHunk^.old_lines;
+          LH.NewStart := LHunk^.new_start;
+          LH.NewCount := LHunk^.new_lines;
+          SetLength(LH.Header, LHunk^.header_len);
+          if LHunk^.header_len > 0 then
+            Move(LHunk^.header[0], LH.Header[1], LHunk^.header_len);
+          SetLength(LH.Lines, LLineCount);
+          for K := 0 to LLineCount - 1 do
+          begin
+            if git_patch_get_line_in_hunk(LLine, LPatch, J, K) <> GIT_OK then
+              Continue;
+            LLen := LLine^.content_len;
+            SetLength(LH.Lines[K], LLen + 1);
+            if LLen > 0 then
+              Move(LLine^.content^, LH.Lines[K][2], LLen);
+            LH.Lines[K][1] := Char(LLine^.origin);
+            case LLine^.origin of
+              '+': Inc(LFile.Additions);
+              '-': Inc(LFile.Deletions);
+            end;
+          end;
+          LFile.Hunks[J] := LH;
+        end;
+      finally
+        git_patch_free(LPatch);
+      end;
+    end;
+    Result.Files[I] := LFile;
+  end;
+end;
+
+function TGitRepository.Diff(const AOldRef, ANewRef: string): TGitDiff;
+var
+  LOldObj, LNewObj: git_object;
+  LOldTree, LNewTree: git_tree;
+  LDiff: git_diff;
+begin
+  Result.Files := nil;
+  ResolveRevToTree(AOldRef, LOldObj, LOldTree);
+  try
+    ResolveRevToTree(ANewRef, LNewObj, LNewTree);
+    try
+      CheckResult(git_diff_tree_to_tree(LDiff, FHandle, LOldTree, LNewTree, nil), 'Diff trees');
+      try
+        Result := CollectDiff(LDiff);
+      finally
+        git_diff_free(LDiff);
+      end;
+    finally
+      git_object_free(LNewObj);
+      git_tree_free(LNewTree);
+    end;
+  finally
+    git_object_free(LOldObj);
+    git_tree_free(LOldTree);
+  end;
+end;
+
+function TGitRepository.DiffWorkingTree(const ARef: string): TGitDiff;
+var
+  LObj: git_object;
+  LTree: git_tree;
+  LDiff: git_diff;
+begin
+  Result.Files := nil;
+  ResolveRevToTree(ARef, LObj, LTree);
+  try
+    CheckResult(git_diff_tree_to_workdir_with_index(LDiff, FHandle, LTree, nil), 'Diff tree to workdir');
+    try
+      Result := CollectDiff(LDiff);
+    finally
+      git_diff_free(LDiff);
+    end;
+  finally
+    git_object_free(LObj);
+    git_tree_free(LTree);
+  end;
+end;
+
+function TGitRepository.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
+var
+  LWalk: git_revwalk;
+  LOID: git_oid;
+  LObj: git_object;
+  LCommitOID: TGitOID;
+  rc: cint;
+  LCommits: TGitCommitList;
+begin
+  Result := nil;
+  CheckResult(git_revwalk_new(LWalk, FHandle), 'Create revwalk');
+  try
+    CheckResult(git_revwalk_sorting(LWalk, GIT_SORT_TOPOLOGICAL or GIT_SORT_TIME), 'Set revwalk sorting');
+    if AStartRef = '' then
+      CheckResult(git_revwalk_push_head(LWalk), 'Push HEAD to revwalk')
+    else
+    begin
+      CheckResult(git_revparse_single(LObj, FHandle, PChar(AStartRef)), 'Resolve revwalk start ' + AStartRef);
+      try
+        CheckResult(git_revwalk_push(LWalk, git_object_id(LObj)), 'Push revwalk start');
+      finally
+        git_object_free(LObj);
+      end;
+    end;
+    LCommits := nil;
+    while True do
+    begin
+      rc := git_revwalk_next(LOID, LWalk);
+      if rc = GIT_ITEROVER then Break;
+      if rc <> GIT_OK then
+        raise EGitError.Create(rc, 'Iterate revwalk');
+      LCommitOID.Data := LOID;
+      SetLength(LCommits, Length(LCommits) + 1);
+      LCommits[High(LCommits)] := GetCommit(LCommitOID);
+      if (ALimit > 0) and (Length(LCommits) >= ALimit) then Break;
+    end;
+    Result := LCommits;
+  finally
+    git_revwalk_free(LWalk);
+  end;
+end;
+
+function TGitCommit.GetParentOIDString(AIndex: Integer): string;
+var
+  LParent: git_commit;
+  LParentOID: TGitOID;
+begin
+  EnsureLoaded;
+  if (AIndex < 0) or (AIndex >= FParentCount) then
+    Exit('');
+  CheckGitResult(git_commit_parent(LParent, FHandle, AIndex), 'Get parent commit');
+  try
+    LParentOID.Data := git_object_id(LParent)^;
+    Result := GitOIDToString(LParentOID);
+  finally
+    git_commit_free(LParent);
+  end;
 end;
 
 end.

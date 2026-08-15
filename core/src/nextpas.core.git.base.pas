@@ -4,6 +4,8 @@ unit nextpas.core.git.base;
 
 interface
 
+uses
+  nextpas.core.text.base;
 
 type
   // High-level abstraction of branch types, avoiding direct exposure of libgit2 enums
@@ -58,6 +60,44 @@ type
     IndexOnly: Boolean;
   end;
 
+  // File-level diff status (mirrors git_delta_t values)
+  TGitDiffStatus = (
+    gdsUnmodified,
+    gdsAdded,
+    gdsDeleted,
+    gdsModified,
+    gdsRenamed,
+    gdsCopied,
+    gdsTypeChange,
+    gdsUnreadable,
+    gdsConflicted
+  );
+
+  // One unified-diff hunk: "@@ -OldStart,OldCount +NewStart,NewCount @@"
+  TGitDiffHunk = record
+    OldStart: Integer;
+    OldCount: Integer;
+    NewStart: Integer;
+    NewCount: Integer;
+    Header: string;          // hunk header text (without trailing newline)
+    Lines: TStringArray;     // prefixed lines (' ', '+', '-')
+  end;
+
+  // One changed file (opencode File.Diff analog: status + add/del counts + hunks)
+  TGitDiffFile = record
+    OldPath: string;
+    NewPath: string;
+    Status: TGitDiffStatus;
+    Additions: Integer;
+    Deletions: Integer;
+    Hunks: array of TGitDiffHunk;
+  end;
+  TGitDiffFileArray = array of TGitDiffFile;
+
+  // Whole diff result (files in delta order)
+  TGitDiff = record
+    Files: TGitDiffFileArray;
+  end;
 
 implementation
 

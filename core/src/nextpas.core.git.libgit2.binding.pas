@@ -98,6 +98,34 @@ function git_commit_create(out id: git_oid; repo: git_repository; const update_r
 // OID operations
 function git_oid_fromstr(out id: git_oid; const str: PChar): cint; cdecl;
 function git_oid_tostr(out str: PChar; size: csize_t; const id: Pgit_oid): PChar; cdecl;
+
+// Revparse (resolve ref/spec like 'HEAD', 'main~2' to an object)
+function git_revparse_single(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl;
+
+// Commit parent access
+function git_commit_parent(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl;
+
+// Diff operations (tree-to-tree / tree-to-workdir+index)
+function git_diff_tree_to_tree(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl;
+function git_diff_tree_to_workdir_with_index(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl;
+function git_diff_num_deltas(diff: git_diff): csize_t; cdecl;
+function git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
+procedure git_diff_free(diff: git_diff); cdecl;
+
+// Patch access (per-file diff hunks/lines)
+function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
+function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
+function git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
+function git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
+procedure git_patch_free(patch: git_patch); cdecl;
+
+// Revwalk (commit traversal along parents)
+function git_revwalk_new(out walk: git_revwalk; repo: git_repository): cint; cdecl;
+function git_revwalk_push_head(walk: git_revwalk): cint; cdecl;
+function git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; cdecl;
+function git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl;
+function git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl;
+procedure git_revwalk_free(walk: git_revwalk); cdecl;
 function git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl;
 function git_oid_cmp(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
 function git_oid_equal(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
@@ -263,6 +291,24 @@ type
   TLibGit2_git_commit_create = function(out id: git_oid; repo: git_repository; const update_ref: PChar; author: git_signature; committer: git_signature; const message_encoding: PChar; const message: PChar; tree: git_tree; parent_count: csize_t; const parents: Pointer): cint; cdecl;
   TLibGit2_git_oid_fromstr = function(out id: git_oid; const str: PChar): cint; cdecl;
   TLibGit2_git_oid_tostr = function(out str: PChar; size: csize_t; const id: Pgit_oid): PChar; cdecl;
+  TLibGit2_git_revparse_single = function(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl;
+  TLibGit2_git_commit_parent = function(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl;
+  TLibGit2_git_diff_tree_to_tree = function(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl;
+  TLibGit2_git_diff_tree_to_workdir_with_index = function(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl;
+  TLibGit2_git_diff_num_deltas = function(diff: git_diff): csize_t; cdecl;
+  TLibGit2_git_diff_get_delta = function(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
+  TLibGit2_git_diff_free = procedure(diff: git_diff); cdecl;
+  TLibGit2_git_patch_from_diff = function(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
+  TLibGit2_git_patch_num_hunks = function(patch: git_patch): csize_t; cdecl;
+  TLibGit2_git_patch_get_hunk = function(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
+  TLibGit2_git_patch_get_line_in_hunk = function(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
+  TLibGit2_git_patch_free = procedure(patch: git_patch); cdecl;
+  TLibGit2_git_revwalk_new = function(out walk: git_revwalk; repo: git_repository): cint; cdecl;
+  TLibGit2_git_revwalk_push_head = function(walk: git_revwalk): cint; cdecl;
+  TLibGit2_git_revwalk_push = function(walk: git_revwalk; const id: Pgit_oid): cint; cdecl;
+  TLibGit2_git_revwalk_next = function(out out_oid: git_oid; walk: git_revwalk): cint; cdecl;
+  TLibGit2_git_revwalk_sorting = function(walk: git_revwalk; sort_mode: cuint): cint; cdecl;
+  TLibGit2_git_revwalk_free = procedure(walk: git_revwalk); cdecl;
   TLibGit2_git_oid_fmt = function(out str: PChar; const id: Pgit_oid): cint; cdecl;
   TLibGit2_git_oid_cmp = function(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
   TLibGit2_git_oid_equal = function(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl;
@@ -386,6 +432,24 @@ function static_git_commit_create(out id: git_oid; repo: git_repository; const u
   tree: git_tree; parent_count: csize_t; const parents: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_commit_create';
 function static_git_oid_fromstr(out id: git_oid; const str: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_oid_fromstr';
 function static_git_oid_tostr(out str: PChar; size: csize_t; const id: Pgit_oid): PChar; cdecl; external LIBGIT2_LIB name 'git_oid_tostr';
+function static_git_revparse_single(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_revparse_single';
+function static_git_commit_parent(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_commit_parent';
+function static_git_diff_tree_to_tree(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_diff_tree_to_tree';
+function static_git_diff_tree_to_workdir_with_index(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_diff_tree_to_workdir_with_index';
+function static_git_diff_num_deltas(diff: git_diff): csize_t; cdecl; external LIBGIT2_LIB name 'git_diff_num_deltas';
+function static_git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl; external LIBGIT2_LIB name 'git_diff_get_delta';
+procedure static_git_diff_free(diff: git_diff); cdecl; external LIBGIT2_LIB name 'git_diff_free';
+function static_git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_from_diff';
+function static_git_patch_num_hunks(patch: git_patch): csize_t; cdecl; external LIBGIT2_LIB name 'git_patch_num_hunks';
+function static_git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_hunk';
+function static_git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_line_in_hunk';
+procedure static_git_patch_free(patch: git_patch); cdecl; external LIBGIT2_LIB name 'git_patch_free';
+function static_git_revwalk_new(out walk: git_revwalk; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_new';
+function static_git_revwalk_push_head(walk: git_revwalk): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_push_head';
+function static_git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_push';
+function static_git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_next';
+function static_git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_sorting';
+procedure static_git_revwalk_free(walk: git_revwalk); cdecl; external LIBGIT2_LIB name 'git_revwalk_free';
 function static_git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_fmt';
 function static_git_oid_cmp(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_cmp';
 function static_git_oid_equal(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_equal';
@@ -743,6 +807,96 @@ begin
   Result := static_git_oid_tostr(str, size, id);
 end;
 
+function git_revparse_single(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl;
+begin
+  Result := static_git_revparse_single(obj, repo, spec);
+end;
+
+function git_commit_parent(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl;
+begin
+  Result := static_git_commit_parent(parent, commit, n);
+end;
+
+function git_diff_tree_to_tree(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl;
+begin
+  Result := static_git_diff_tree_to_tree(diff, repo, old_tree, new_tree, opts);
+end;
+
+function git_diff_tree_to_workdir_with_index(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl;
+begin
+  Result := static_git_diff_tree_to_workdir_with_index(diff, repo, old_tree, opts);
+end;
+
+function git_diff_num_deltas(diff: git_diff): csize_t; cdecl;
+begin
+  Result := static_git_diff_num_deltas(diff);
+end;
+
+function git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
+begin
+  Result := static_git_diff_get_delta(diff, idx);
+end;
+
+procedure git_diff_free(diff: git_diff); cdecl;
+begin
+  static_git_diff_free(diff);
+end;
+
+function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
+begin
+  Result := static_git_patch_from_diff(patch, diff, idx);
+end;
+
+function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
+begin
+  Result := static_git_patch_num_hunks(patch);
+end;
+
+function git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
+begin
+  Result := static_git_patch_get_hunk(hunk, lines_in_hunk, patch, hunk_idx);
+end;
+
+function git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
+begin
+  Result := static_git_patch_get_line_in_hunk(line, patch, hunk_idx, line_idx);
+end;
+
+procedure git_patch_free(patch: git_patch); cdecl;
+begin
+  static_git_patch_free(patch);
+end;
+
+function git_revwalk_new(out walk: git_revwalk; repo: git_repository): cint; cdecl;
+begin
+  Result := static_git_revwalk_new(walk, repo);
+end;
+
+function git_revwalk_push_head(walk: git_revwalk): cint; cdecl;
+begin
+  Result := static_git_revwalk_push_head(walk);
+end;
+
+function git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; cdecl;
+begin
+  Result := static_git_revwalk_push(walk, id);
+end;
+
+function git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl;
+begin
+  Result := static_git_revwalk_next(out_oid, walk);
+end;
+
+function git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl;
+begin
+  Result := static_git_revwalk_sorting(walk, sort_mode);
+end;
+
+procedure git_revwalk_free(walk: git_revwalk); cdecl;
+begin
+  static_git_revwalk_free(walk);
+end;
+
 function git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl;
 begin
   Result := static_git_oid_fmt(str, id);
@@ -1083,6 +1237,24 @@ var
   dyn_git_oid_tostr: TLibGit2_git_oid_tostr = nil;
   dyn_git_oid_fmt: TLibGit2_git_oid_fmt = nil;
   dyn_git_oid_cmp: TLibGit2_git_oid_cmp = nil;
+  dyn_git_revparse_single: TLibGit2_git_revparse_single = nil;
+  dyn_git_commit_parent: TLibGit2_git_commit_parent = nil;
+  dyn_git_diff_tree_to_tree: TLibGit2_git_diff_tree_to_tree = nil;
+  dyn_git_diff_tree_to_workdir_with_index: TLibGit2_git_diff_tree_to_workdir_with_index = nil;
+  dyn_git_diff_num_deltas: TLibGit2_git_diff_num_deltas = nil;
+  dyn_git_diff_get_delta: TLibGit2_git_diff_get_delta = nil;
+  dyn_git_diff_free: TLibGit2_git_diff_free = nil;
+  dyn_git_patch_from_diff: TLibGit2_git_patch_from_diff = nil;
+  dyn_git_patch_num_hunks: TLibGit2_git_patch_num_hunks = nil;
+  dyn_git_patch_get_hunk: TLibGit2_git_patch_get_hunk = nil;
+  dyn_git_patch_get_line_in_hunk: TLibGit2_git_patch_get_line_in_hunk = nil;
+  dyn_git_patch_free: TLibGit2_git_patch_free = nil;
+  dyn_git_revwalk_new: TLibGit2_git_revwalk_new = nil;
+  dyn_git_revwalk_push_head: TLibGit2_git_revwalk_push_head = nil;
+  dyn_git_revwalk_push: TLibGit2_git_revwalk_push = nil;
+  dyn_git_revwalk_next: TLibGit2_git_revwalk_next = nil;
+  dyn_git_revwalk_sorting: TLibGit2_git_revwalk_sorting = nil;
+  dyn_git_revwalk_free: TLibGit2_git_revwalk_free = nil;
   dyn_git_oid_equal: TLibGit2_git_oid_equal = nil;
   dyn_git_oid_iszero: TLibGit2_git_oid_iszero = nil;
   dyn_git_error_last: TLibGit2_git_error_last = nil;
@@ -1218,6 +1390,24 @@ begin
   dyn_git_oid_tostr := nil;
   dyn_git_oid_fmt := nil;
   dyn_git_oid_cmp := nil;
+  dyn_git_revparse_single := nil;
+  dyn_git_commit_parent := nil;
+  dyn_git_diff_tree_to_tree := nil;
+  dyn_git_diff_tree_to_workdir_with_index := nil;
+  dyn_git_diff_num_deltas := nil;
+  dyn_git_diff_get_delta := nil;
+  dyn_git_diff_free := nil;
+  dyn_git_patch_from_diff := nil;
+  dyn_git_patch_num_hunks := nil;
+  dyn_git_patch_get_hunk := nil;
+  dyn_git_patch_get_line_in_hunk := nil;
+  dyn_git_patch_free := nil;
+  dyn_git_revwalk_new := nil;
+  dyn_git_revwalk_push_head := nil;
+  dyn_git_revwalk_push := nil;
+  dyn_git_revwalk_next := nil;
+  dyn_git_revwalk_sorting := nil;
+  dyn_git_revwalk_free := nil;
   dyn_git_oid_equal := nil;
   dyn_git_oid_iszero := nil;
   dyn_git_error_last := nil;
@@ -1777,6 +1967,132 @@ begin
   if not Assigned(dyn_git_oid_tostr) then
     Pointer(dyn_git_oid_tostr) := ResolveLibGit2Symbol('git_oid_tostr');
   Result := dyn_git_oid_tostr(str, size, id);
+end;
+
+function git_revparse_single(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revparse_single) then
+    Pointer(dyn_git_revparse_single) := ResolveLibGit2Symbol('git_revparse_single');
+  Result := dyn_git_revparse_single(obj, repo, spec);
+end;
+
+function git_commit_parent(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_commit_parent) then
+    Pointer(dyn_git_commit_parent) := ResolveLibGit2Symbol('git_commit_parent');
+  Result := dyn_git_commit_parent(parent, commit, n);
+end;
+
+function git_diff_tree_to_tree(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_diff_tree_to_tree) then
+    Pointer(dyn_git_diff_tree_to_tree) := ResolveLibGit2Symbol('git_diff_tree_to_tree');
+  Result := dyn_git_diff_tree_to_tree(diff, repo, old_tree, new_tree, opts);
+end;
+
+function git_diff_tree_to_workdir_with_index(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl;
+begin
+  if not Assigned(dyn_git_diff_tree_to_workdir_with_index) then
+    Pointer(dyn_git_diff_tree_to_workdir_with_index) := ResolveLibGit2Symbol('git_diff_tree_to_workdir_with_index');
+  Result := dyn_git_diff_tree_to_workdir_with_index(diff, repo, old_tree, opts);
+end;
+
+function git_diff_num_deltas(diff: git_diff): csize_t; cdecl;
+begin
+  if not Assigned(dyn_git_diff_num_deltas) then
+    Pointer(dyn_git_diff_num_deltas) := ResolveLibGit2Symbol('git_diff_num_deltas');
+  Result := dyn_git_diff_num_deltas(diff);
+end;
+
+function git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl;
+begin
+  if not Assigned(dyn_git_diff_get_delta) then
+    Pointer(dyn_git_diff_get_delta) := ResolveLibGit2Symbol('git_diff_get_delta');
+  Result := dyn_git_diff_get_delta(diff, idx);
+end;
+
+procedure git_diff_free(diff: git_diff); cdecl;
+begin
+  if not Assigned(dyn_git_diff_free) then
+    Pointer(dyn_git_diff_free) := ResolveLibGit2Symbol('git_diff_free');
+  dyn_git_diff_free(diff);
+end;
+
+function git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_patch_from_diff) then
+    Pointer(dyn_git_patch_from_diff) := ResolveLibGit2Symbol('git_patch_from_diff');
+  Result := dyn_git_patch_from_diff(patch, diff, idx);
+end;
+
+function git_patch_num_hunks(patch: git_patch): csize_t; cdecl;
+begin
+  if not Assigned(dyn_git_patch_num_hunks) then
+    Pointer(dyn_git_patch_num_hunks) := ResolveLibGit2Symbol('git_patch_num_hunks');
+  Result := dyn_git_patch_num_hunks(patch);
+end;
+
+function git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_patch_get_hunk) then
+    Pointer(dyn_git_patch_get_hunk) := ResolveLibGit2Symbol('git_patch_get_hunk');
+  Result := dyn_git_patch_get_hunk(hunk, lines_in_hunk, patch, hunk_idx);
+end;
+
+function git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl;
+begin
+  if not Assigned(dyn_git_patch_get_line_in_hunk) then
+    Pointer(dyn_git_patch_get_line_in_hunk) := ResolveLibGit2Symbol('git_patch_get_line_in_hunk');
+  Result := dyn_git_patch_get_line_in_hunk(line, patch, hunk_idx, line_idx);
+end;
+
+procedure git_patch_free(patch: git_patch); cdecl;
+begin
+  if not Assigned(dyn_git_patch_free) then
+    Pointer(dyn_git_patch_free) := ResolveLibGit2Symbol('git_patch_free');
+  dyn_git_patch_free(patch);
+end;
+
+function git_revwalk_new(out walk: git_revwalk; repo: git_repository): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_new) then
+    Pointer(dyn_git_revwalk_new) := ResolveLibGit2Symbol('git_revwalk_new');
+  Result := dyn_git_revwalk_new(walk, repo);
+end;
+
+function git_revwalk_push_head(walk: git_revwalk): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_push_head) then
+    Pointer(dyn_git_revwalk_push_head) := ResolveLibGit2Symbol('git_revwalk_push_head');
+  Result := dyn_git_revwalk_push_head(walk);
+end;
+
+function git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_push) then
+    Pointer(dyn_git_revwalk_push) := ResolveLibGit2Symbol('git_revwalk_push');
+  Result := dyn_git_revwalk_push(walk, id);
+end;
+
+function git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_next) then
+    Pointer(dyn_git_revwalk_next) := ResolveLibGit2Symbol('git_revwalk_next');
+  Result := dyn_git_revwalk_next(out_oid, walk);
+end;
+
+function git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_sorting) then
+    Pointer(dyn_git_revwalk_sorting) := ResolveLibGit2Symbol('git_revwalk_sorting');
+  Result := dyn_git_revwalk_sorting(walk, sort_mode);
+end;
+
+procedure git_revwalk_free(walk: git_revwalk); cdecl;
+begin
+  if not Assigned(dyn_git_revwalk_free) then
+    Pointer(dyn_git_revwalk_free) := ResolveLibGit2Symbol('git_revwalk_free');
+  dyn_git_revwalk_free(walk);
 end;
 
 function git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl;
