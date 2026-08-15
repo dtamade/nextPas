@@ -296,7 +296,10 @@ begin
       if TargetH < 1 then TargetH := 1;
     end;
 
-    if (TargetW < P.PixelWidth) or (TargetH < P.PixelHeight) then
+    { 仅两维都小于原图才降采样（省带宽）；任一维达到/超过原图像素就
+      传原图——区域被拉伸得很大时（如封面区吸收布局残差、高 DPI）若
+      仍"缩放"会把图像放大传输，字节甚至超过原图，resize 归位变慢。 }
+    if (TargetW < P.PixelWidth) and (TargetH < P.PixelHeight) then
     begin
       ScaleRgbaPixels(P.DataPtr, P.PixelWidth, P.PixelHeight,
         TargetW, TargetH, ScaledPixels);
