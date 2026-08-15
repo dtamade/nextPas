@@ -368,19 +368,22 @@ begin
     case FProtocol of
       ipKitty:
       begin
-        { 区域变化协调：新区域包含已放置区域 且 已传数据分辨率足够
-          （>= 新目标尺寸）时才免重传——数据仍在终端，下方放置块按新
-          区域重放即可；缩小/位移会留残影（"多出几个"类问题），分辨率
-          不足复用会模糊，两种都必须按 id 删除后重传。 }
+        { 区域变化协调：已传数据分辨率足够（>= 新目标尺寸）且新区域
+          「包含旧区域（纯扩大）」或「同尺寸平移（宽高不变，仅 X/Y 变
+          化）」时免重传——数据仍在终端，下方放置块同 id 按新区域重放
+          即可，旧位置由整帧文本重绘覆盖；缩小或分辨率不足复用会模
+          糊，仍须按 id 删除后重传。 }
         if FSlots[SlotIdx].Transmitted and
            ((FSlots[SlotIdx].PlacedArea.X <> P.Area.X) or
             (FSlots[SlotIdx].PlacedArea.Y <> P.Area.Y) or
             (FSlots[SlotIdx].PlacedArea.Width <> P.Area.Width) or
             (FSlots[SlotIdx].PlacedArea.Height <> P.Area.Height)) then
         begin
-          if not (RectContains(P.Area, FSlots[SlotIdx].PlacedArea) and
-                  (FSlots[SlotIdx].DataW >= TargetW) and
-                  (FSlots[SlotIdx].DataH >= TargetH)) then
+          if not ((FSlots[SlotIdx].DataW >= TargetW) and
+                  (FSlots[SlotIdx].DataH >= TargetH) and
+                  (RectContains(P.Area, FSlots[SlotIdx].PlacedArea) or
+                   ((FSlots[SlotIdx].PlacedArea.Width = P.Area.Width) and
+                    (FSlots[SlotIdx].PlacedArea.Height = P.Area.Height)))) then
           begin
             AppendDelete(Backend, FSlots[SlotIdx].Id);
             FSlots[SlotIdx].Transmitted := False;
@@ -390,7 +393,9 @@ begin
             SetLength(FSlots[SlotIdx].Pending, 0);
             SetLength(FSlots[SlotIdx].ChunkEnds, 0);
             FSlots[SlotIdx].PlacedArea := TRect.Make(0, 0, 0, 0);
-          end;
+          end
+          else
+            FSlots[SlotIdx].Placed := False;
         end;
 
         if not FSlots[SlotIdx].Transmitted then
