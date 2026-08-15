@@ -59,7 +59,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 const
   NS_PER_SEC_L  = Int64(1000000000);
@@ -253,13 +254,13 @@ var
 begin
   NanosToComponents(FNanos, LHour, LMinute, LSecond, LNano);
   if LNano = 0 then
-    Result := Format('%.2d:%.2d:%.2d', [LHour, LMinute, LSecond])
+    Result := TextFormat('%.2d:%.2d:%.2d', [LHour, LMinute, LSecond])
   else if (LNano mod 1000000) = 0 then
-    Result := Format('%.2d:%.2d:%.2d.%.3d', [LHour, LMinute, LSecond, LNano div 1000000])
+    Result := TextFormat('%.2d:%.2d:%.2d.%.3d', [LHour, LMinute, LSecond, LNano div 1000000])
   else if (LNano mod 1000) = 0 then
-    Result := Format('%.2d:%.2d:%.2d.%.6d', [LHour, LMinute, LSecond, LNano div 1000])
+    Result := TextFormat('%.2d:%.2d:%.2d.%.6d', [LHour, LMinute, LSecond, LNano div 1000])
   else
-    Result := Format('%.2d:%.2d:%.2d.%.9d', [LHour, LMinute, LSecond, LNano]);
+    Result := TextFormat('%.2d:%.2d:%.2d.%.9d', [LHour, LMinute, LSecond, LNano]);
 end;
 
 function TTimeOfDay.ToString: string;

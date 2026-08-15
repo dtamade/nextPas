@@ -97,6 +97,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.platform.time;
 
 const
@@ -431,7 +432,7 @@ var
   LYear, LMonth, LDay: Integer;
 begin
   JulianDayToDate(FJulianDay, LYear, LMonth, LDay);
-  Result := Format('%.4d-%.2d-%.2d', [LYear, LMonth, LDay]);
+  Result := TextFormat('%.4d-%.2d-%.2d', [LYear, LMonth, LDay]);
 end;
 
 function TDate.ToString: string;

@@ -96,6 +96,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.platform.time;
 
 { TDuration }
@@ -375,11 +376,11 @@ begin
   if LAbsNs < NS_PER_US then
     Result := IntToStr(FNs) + 'ns'
   else if LAbsNs < NS_PER_MS then
-    Result := Format('%.3fus', [LAbsNs / NS_PER_US])
+    Result := TextFormat('%.3fus', [LAbsNs / NS_PER_US])
   else if LAbsNs < NS_PER_SEC then
-    Result := Format('%.3fms', [LAbsNs / NS_PER_MS])
+    Result := TextFormat('%.3fms', [LAbsNs / NS_PER_MS])
   else
-    Result := Format('%.3fs', [LAbsNs / NS_PER_SEC]);
+    Result := TextFormat('%.3fs', [LAbsNs / NS_PER_SEC]);
 
   if LNeg and (LAbsNs >= NS_PER_US) then
     Result := '-' + Result;

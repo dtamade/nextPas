@@ -51,7 +51,8 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 const
   NS_PER_SEC_C  = Int64(1000000000);
@@ -216,16 +217,16 @@ var
 begin
   LNs := GetNanosecond;
   if LNs = 0 then
-    Result := Format('%sT%.2d:%.2d:%.2d',
+    Result := TextFormat('%sT%.2d:%.2d:%.2d',
       [FDate.ToISO8601, GetHour, GetMinute, GetSecond])
   else
   begin
-    LFrac := Format('%.9d', [LNs]);
+    LFrac := TextFormat('%.9d', [LNs]);
     LI := Length(LFrac);
     while (LI > 1) and (LFrac[LI] = '0') do
       Dec(LI);
     LFrac := Copy(LFrac, 1, LI);
-    Result := Format('%sT%.2d:%.2d:%.2d.%s',
+    Result := TextFormat('%sT%.2d:%.2d:%.2d.%s',
       [FDate.ToISO8601, GetHour, GetMinute, GetSecond, LFrac]);
   end;
 end;
