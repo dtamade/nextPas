@@ -28,6 +28,8 @@ type
     class function IsValidAddress(const AValue: string): Boolean; static;
   end;
 
+  TMailAddressArray = array of TMailAddress;
+
   { TMailAttachment - 邮件附件元数据 + 数据 }
   TMailAttachment = record
     FileName: string;
@@ -43,6 +45,7 @@ type
     From: TMailAddress;
     ToList: array of TMailAddress;
     CcList: array of TMailAddress;
+    ReplyToList: array of TMailAddress;
     Subject: string;
     DateUtc: Int64;         { Unix 秒（UTC）；0=未知 }
     BodyText: string;
@@ -250,6 +253,8 @@ begin
     Result := Result + Int64(Length(ToList[I].Full));
   for I := 0 to Length(CcList) - 1 do
     Result := Result + Int64(Length(CcList[I].Full));
+  for I := 0 to Length(ReplyToList) - 1 do
+    Result := Result + Int64(Length(ReplyToList[I].Full));
   for I := 0 to Length(Attachments) - 1 do
     Result := Result + Attachments[I].EstimatedSize;
 end;

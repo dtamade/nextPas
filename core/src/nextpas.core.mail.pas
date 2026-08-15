@@ -15,6 +15,7 @@ uses
 
 type
   TMailAddress = nextpas.core.mail.base.TMailAddress;
+  TMailAddressArray = nextpas.core.mail.base.TMailAddressArray;
   TMailAttachment = nextpas.core.mail.base.TMailAttachment;
   TMailMessage = nextpas.core.mail.base.TMailMessage;
 
