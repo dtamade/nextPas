@@ -214,10 +214,10 @@ implementation
 
 const
   { resize 后图片层归位的稳定阈值：自最后一次 resize 起超过该时长才执行
-    delete-all+重传。拖动窗口时 SIGWINCH 连续到达（间隔通常远小于此值），
-    若每次立即删图重传，封面会反复"消失-整图重传"闪烁；稳定前图片冻结
-    在旧布局，拖动手感与"图片不跟随"以换取不闪，稳定后一次归位。 }
-  kImageResizeStableNs = 60 * 1000 * 1000;  { 60ms }
+    归位（delete-all+重传）。拖动窗口时 SIGWINCH 连续到达，若每次立即删
+    图重传，封面会反复"消失-整图重传"闪烁；24ms 去抖足够避免毛刺，又比
+    原先 60ms 更早结束图片冻结，归位延迟更低。 }
+  kImageResizeStableNs = 24 * 1000 * 1000;  { 24ms }
   { 分帧传输的图像流帧间隔：有待传数据时把 PollEvent 等待压到该值，
     让 EndFrame 每流帧推进一档（32KB），整图完成后恢复空闲帧率。 }
   kImageStreamFrameMs = 8;
@@ -839,7 +839,8 @@ begin
     闪烁。改为标记 pending：EndFrame 里检测到最后一次 resize 已过去
     kImageResizeStableNs（尺寸稳定）才归位；稳定前冻结图片层（不删
     不传不放，图片停在旧布局）。归位细节：kitty 在 Resolve 内按 slot
-    协调（纯扩大免重传、缩小/位移按 id 删除重传），非 kitty 整清重传。 }
+    协调（纯扩大/同尺寸平移免重传、缩小按 id 删除重传），非 kitty 整
+    清重传。 }
   FResizeImagePending := True;
   FResizePendingSinceNs := platform_monotonic_ns;
 end;
