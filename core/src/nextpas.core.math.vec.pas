@@ -1547,6 +1547,8 @@ var
   LLogMagnitude: Double;
 begin
   LHasCandidate := False;
+  LBestCandidate := 0;
+  LDoubleCandidate := 0;
 
   if AU = BU then
     if TryCrossDifferenceCandidateDouble(AU, BV, AV, LDoubleCandidate) then

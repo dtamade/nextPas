@@ -494,6 +494,7 @@ end;
 
 class function TMat3f.Create(const AColumn0, AColumn1, AColumn2: TVec3f): TMat3f;
 begin
+  Result := Default(TMat3f);
   Result.Columns[0] := AColumn0;
   Result.Columns[1] := AColumn1;
   Result.Columns[2] := AColumn2;
@@ -709,6 +710,7 @@ end;
 
 class function TMat4f.Create(const AColumn0, AColumn1, AColumn2, AColumn3: TVec4f): TMat4f;
 begin
+  Result := Default(TMat4f);
   Result.Columns[0] := AColumn0;
   Result.Columns[1] := AColumn1;
   Result.Columns[2] := AColumn2;
@@ -983,6 +985,7 @@ end;
 
 class function TMat3d.Create(const AColumn0, AColumn1, AColumn2: TVec3d): TMat3d;
 begin
+  Result := Default(TMat3d);
   Result.Columns[0] := AColumn0;
   Result.Columns[1] := AColumn1;
   Result.Columns[2] := AColumn2;
@@ -1198,6 +1201,7 @@ end;
 
 class function TMat4d.Create(const AColumn0, AColumn1, AColumn2, AColumn3: TVec4d): TMat4d;
 begin
+  Result := Default(TMat4d);
   Result.Columns[0] := AColumn0;
   Result.Columns[1] := AColumn1;
   Result.Columns[2] := AColumn2;

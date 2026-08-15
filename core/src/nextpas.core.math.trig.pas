@@ -554,7 +554,7 @@ end;
 function PowerWithExpLimits(const ABase, AExponent, AOverflowLimit,
   AUnderflowZeroLimit: Double): Double;
 var
-  LAbsBase: Double;
+  LAbsBase: Double = 0;
   LLogAbsBase: Double;
   LResult: Double;
   LScaledExponent: Double;
