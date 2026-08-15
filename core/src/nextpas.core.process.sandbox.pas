@@ -79,9 +79,12 @@ end;
 
 function IsEmptySandboxSpec(const ASpec: TSandboxSpec): Boolean;
 begin
+  { 空 = 全字段零值（record 未配置/Default 初始化）→ 调用方跳过包装。
+    注意 Network 零值=False（禁网）也算空：record 零值即「未配置」，
+    不应因零值禁网把未配置规格误判为需要包装。 }
   Result := (Length(ASpec.RoBinds) = 0) and (Length(ASpec.Writable) = 0)
     and (not ASpec.DevNull) and (not ASpec.Proc)
-    and (not ASpec.TempTmp) and ASpec.Network and (not ASpec.ReadOnlyRoot);
+    and (not ASpec.TempTmp) and (not ASpec.Network) and (not ASpec.ReadOnlyRoot);
 end;
 
 { 找 '=' 分隔符位置（'src[=dst]' 挂载条目）；无 '=' 返回 0 }

@@ -36,12 +36,13 @@ var
 begin
   LSpec := DefaultSandboxSpec;
   CheckEqual(False, IsEmptySandboxSpec(LSpec), 'default spec is not empty');
+  { 零值 record（未配置）= 空 → 跳过包装（Network 零值=False 同样算空） }
   LSpec.RoBinds := nil;
   LSpec.Writable := nil;
   LSpec.DevNull := False;
   LSpec.Proc := False;
   LSpec.TempTmp := False;
-  LSpec.Network := True;
+  LSpec.Network := False;
   LSpec.ReadOnlyRoot := False;
   CheckEqual(True, IsEmptySandboxSpec(LSpec), 'zero spec is empty');
 end;
