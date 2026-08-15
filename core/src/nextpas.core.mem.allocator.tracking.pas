@@ -207,6 +207,7 @@ var
   LPos: SizeUInt;
   LHash: QWord;
 begin
+  Result := False;
   aSize := 0;
   aAllocId := 0;
   aTag := '';

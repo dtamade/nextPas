@@ -538,6 +538,7 @@ begin
     走 LOCK 前缀原子指令。 }
   IsMultiThread := True;
   AHandle := nil;
+  LState := nil;
   Result := platform_thread_host_state_create(LState, Pointer(AProc), AArg);
   if Result = 0 then
     AHandle := TPlatformThreadHandle(LState);

@@ -469,7 +469,8 @@ end;
 
 function UserCacheDir(const AAppName: string): string;
 var
-  LHome, LXdg: string;
+  LHome: string;
+  LXdg: string = '';
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := GetEnv('LOCALAPPDATA');
@@ -490,7 +491,8 @@ end;
 
 function UserConfigDir(const AAppName: string): string;
 var
-  LHome, LXdg: string;
+  LHome: string;
+  LXdg: string = '';
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := GetEnv('APPDATA');
@@ -511,7 +513,8 @@ end;
 
 function UserDataDir(const AAppName: string): string;
 var
-  LHome, LXdg: string;
+  LHome: string;
+  LXdg: string = '';
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := GetEnv('LOCALAPPDATA');

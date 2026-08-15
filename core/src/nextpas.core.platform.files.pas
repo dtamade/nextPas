@@ -847,6 +847,7 @@ var
   LNamePtr: PAnsiChar;
 {$ENDIF}
 begin
+  Result := 0;
   FillChar(AEntry, SizeOf(AEntry), 0);
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
   while True do

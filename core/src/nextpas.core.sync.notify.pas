@@ -91,6 +91,7 @@ var
   LDeadline: TInstant;
   LRemaining: Int64;
 begin
+  Result := False;
   if TryConsumePermit(FPermits) then
     Exit(True);
 

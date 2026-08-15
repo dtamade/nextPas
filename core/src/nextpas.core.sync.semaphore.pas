@@ -44,6 +44,7 @@ function TSemaphore.TryAcquire: Boolean;
 var
   LCurrent, LNew: Int32;
 begin
+  Result := False;
   LCurrent := atomic_load(FCount, mo_acquire);
   while True do
   begin
@@ -81,6 +82,7 @@ var
   LDeadline: TInstant;
   LRemaining: Int64;
 begin
+  Result := False;
   if TryAcquire then
     Exit(True);
   LDeadline := TInstant.Now;

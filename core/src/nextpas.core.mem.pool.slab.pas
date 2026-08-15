@@ -509,6 +509,7 @@ var
   LPos: SizeUInt;
   LHash: QWord;
 begin
+  Result := False;
   aRawPtr := nil;
   ASize := 0;
   AAlignment := 0;
@@ -859,6 +860,7 @@ var
   LIndex: SizeUInt;
   LHash: QWord;
 begin
+  Result := False;
   if aKey = 0 then aKey := 1;
   LHash := MulHash64(aKey);
   LIndex := (LHash shr FPageHighShift) and FPageMask;

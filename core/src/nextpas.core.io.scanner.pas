@@ -133,6 +133,7 @@ var
   LNewCap: SizeUInt;
 begin
   FToken := nil;
+  Result := False;
 
   while True do
   begin

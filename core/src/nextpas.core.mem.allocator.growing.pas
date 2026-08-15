@@ -670,6 +670,8 @@ var
   LClass: Int32;
   LNode: PFreeNode;
 begin
+  FillChar(LSizes, SizeOf(LSizes), 0);
+  FillChar(LClasses, SizeOf(LClasses), 0);
   LCount := ACount;
   if LCount > MAX_MIXED then
     LCount := MAX_MIXED;

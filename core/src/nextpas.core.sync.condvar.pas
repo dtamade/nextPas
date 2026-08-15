@@ -62,6 +62,7 @@ function TCondVar.WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int6
 var
   LRet: Int32;
 begin
+  Result := False;
   LRet := platform_condvar_timedwait(FHandle, TPlatformMutex(AMutex.NativeHandle^), ATimeoutNs);
   if LRet = 0 then
     Exit(True);

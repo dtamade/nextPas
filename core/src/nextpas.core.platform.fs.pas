@@ -1102,6 +1102,7 @@ var
   LR: Int32;
   LFileType: TPlatformFileType;
 begin
+  FillChar(LPathBuf, SizeOf(LPathBuf), 0);
   if (ARoot = nil) or (ARoot[0] = #0) or (ACallback = nil) then
     Exit(PLATFORM_WALK_BADARGS);
 

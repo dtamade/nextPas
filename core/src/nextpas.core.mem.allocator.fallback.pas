@@ -273,6 +273,7 @@ var
   LPos: SizeUInt;
   LHash: QWord;
 begin
+  Result := False;
   aSource := fsPrimary;
   aSize := 0;
   if (aKey = 0) or (aKey = FB_TOMBSTONE) then Exit(False);

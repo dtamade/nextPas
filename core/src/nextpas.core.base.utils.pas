@@ -88,6 +88,7 @@ end;
 
 function CheckedAddSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
 begin
+  Result := 0;
   if not TryAddSizeUInt(ALeft, ARight, Result) then
     raise EOverflow.Create('CheckedAddSizeUInt: size overflow');
 end;
@@ -107,6 +108,7 @@ end;
 
 function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt;
 begin
+  Result := 0;
   if not TryMulSizeUInt(ALeft, ARight, Result) then
     raise EOverflow.Create('CheckedMulSizeUInt: size overflow');
 end;

@@ -480,6 +480,7 @@ end;
 function THashMap.FindIndex(const AKey: K; AHash: UInt32; out AIndex: SizeUInt): Boolean;
 var idx: SizeUInt; start: SizeUInt;
 begin
+  Result := False;
   if FCapacity = 0 then begin AIndex := 0; Exit(False); end;
   idx := AHash and FMask; start := idx;
   while True do
@@ -733,6 +734,8 @@ begin
   if FCapacity = 0 then InitCapacity(4);
   h := KeyHash(AKey);
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
+  insertIdx := 0;
+  insertState := Ord(bsEmpty);
   while True do
   begin
     st := (FBuckets + idx)^.State;
@@ -796,6 +799,8 @@ begin
   if FCapacity = 0 then InitCapacity(4);
   h := KeyHash(AKey);
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
+  insertIdx := 0;
+  insertState := Ord(bsEmpty);
   while True do
   begin
     st := (FBuckets + idx)^.State;
