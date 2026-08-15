@@ -19,6 +19,9 @@ type
   IGitRemote = interface;
   IGitWorktree = interface;
 
+  // Revwalk result: commits along parents, newest-first (caller holds refs)
+  TGitCommitArray = array of IGitCommit;
+
   IGitRepository = interface
     ['{B3A3D3E7-7A20-4D59-8A71-1B8A4E2B2B6E}']
     function Path: string;
@@ -54,6 +57,14 @@ type
     ['{4E3F24A0-2F2B-4C62-8C9E-2C0D7E4A3A61}']
     function ListRemotes: TStringArray;
     function PullFastForward(const RemoteName: string; out Error: string): TGitPullFastForwardResult;
+    // M5: diff between two revs (commit/branch/tag/hash; libgit2 revparse spec).
+    // Unresolvable ref → EGitError. Returns files with hunks (empty hunks = no text delta).
+    function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    // M5: diff of a rev against the working tree + index (git diff <ref> semantics).
+    function DiffWorkingTree(const ARef: string): TGitDiff;
+    // M5: commit traversal from AStartRef along parents (topological + time order),
+    // newest-first; ALimit <= 0 = unlimited. Unresolvable ref → EGitError.
+    function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
   end;
 
   IGitCommit = interface
@@ -65,6 +76,8 @@ type
     function Time: TDateTime;
     function ParentCount: Integer;
     function OIDString: string;     // 40-byte hex
+    // M5: parent commit OID as 40-byte hex; '' when index out of range
+    function ParentOIDString(AIndex: Integer): string;
   end;
 
   IGitReference = interface

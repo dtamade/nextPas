@@ -294,6 +294,23 @@ const
   GIT_STATUS_IGNORED = 1 shl 14;
   GIT_STATUS_CONFLICTED = 1 shl 15;
 
+  // git_delta_t values
+  GIT_DELTA_UNMODIFIED = 0;
+  GIT_DELTA_ADDED = 1;
+  GIT_DELTA_DELETED = 2;
+  GIT_DELTA_MODIFIED = 3;
+  GIT_DELTA_RENAMED = 4;
+  GIT_DELTA_COPIED = 5;
+  GIT_DELTA_TYPECHANGE = 6;
+  GIT_DELTA_UNREADABLE = 7;
+  GIT_DELTA_CONFLICTED = 8;
+
+  // git_revwalk_sorting_t values
+  GIT_SORT_NONE = 0;
+  GIT_SORT_TOPOLOGICAL = 1;
+  GIT_SORT_TIME = 2;
+  GIT_SORT_REVERSE = 4;
+
   // Credential types (git_credential_t)
   GIT_CREDENTIAL_USERPASS_PLAINTEXT = 1 shl 0;
   GIT_CREDENTIAL_SSH_KEY = 1 shl 1;
@@ -359,6 +376,49 @@ type
     flags: cuint;       // git_worktree_prune_t
   end;
   Pgit_worktree_prune_options = ^git_worktree_prune_options;
+
+  // ── Diff / patch types (git_diff_* / git_patch_*) ────────────────────────
+  git_diff_file = record
+    id: git_oid;
+    path: PChar;
+    size: git_off_t;
+    flags: cuint;
+    mode: cuint;
+  end;
+  Pgit_diff_file = ^git_diff_file;
+
+  git_diff_delta_t = record
+    status: cint;       // git_delta_t
+    flags: cuint;
+    similarity: cuint;
+    nfiles: cuint;
+    old_file: git_diff_file;
+    new_file: git_diff_file;
+  end;
+  Pgit_diff_delta_t = ^git_diff_delta_t;
+
+  git_diff_hunk = record
+    old_start: cint;
+    old_lines: cint;
+    new_start: cint;
+    new_lines: cint;
+    header_len: csize_t;
+    header: array[0..127] of cchar;
+  end;
+  Pgit_diff_hunk = ^git_diff_hunk;
+
+  git_diff_line = record
+    origin: cchar;
+    old_lineno: cint;
+    new_lineno: cint;
+    num_lines: cint;
+    content_len: csize_t;
+    content_offset: git_off_t;
+    content: PChar;
+  end;
+  Pgit_diff_line = ^git_diff_line;
+
+  git_patch = Pointer;
 
 implementation
 

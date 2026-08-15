@@ -17,6 +17,12 @@ type
   TGitStatusEntry = nextpas.core.git.base.TGitStatusEntry;
   TGitStatusEntryArray = nextpas.core.git.base.TGitStatusEntryArray;
   TGitStatusFilter = nextpas.core.git.base.TGitStatusFilter;
+  TGitDiffStatus = nextpas.core.git.base.TGitDiffStatus;
+  TGitDiffHunk = nextpas.core.git.base.TGitDiffHunk;
+  TGitDiffFile = nextpas.core.git.base.TGitDiffFile;
+  TGitDiffFileArray = nextpas.core.git.base.TGitDiffFileArray;
+  TGitDiff = nextpas.core.git.base.TGitDiff;
+  TGitCommitArray = nextpas.core.git.intf.TGitCommitArray;
 
   TCredentialAcquireEvent = nextpas.core.git.intf.TCredentialAcquireEvent;
   TCertificateCheckEvent = nextpas.core.git.intf.TCertificateCheckEvent;
