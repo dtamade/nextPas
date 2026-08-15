@@ -839,8 +839,8 @@ begin
     闪烁。改为标记 pending：EndFrame 里检测到最后一次 resize 已过去
     kImageResizeStableNs（尺寸稳定）才归位；稳定前冻结图片层（不删
     不传不放，图片停在旧布局）。归位细节：kitty 在 Resolve 内按 slot
-    协调（纯扩大/同尺寸平移免重传、缩小按 id 删除重传），非 kitty 整
-    清重传。 }
+    协调（数据分辨率足够时删除旧显示后按新区域重放、不重传；分辨率
+    不足才整图重传），非 kitty 整清重传。 }
   FResizeImagePending := True;
   FResizePendingSinceNs := platform_monotonic_ns;
 end;
