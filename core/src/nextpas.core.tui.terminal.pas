@@ -684,16 +684,17 @@ begin
         FImageMgr.InvalidateAll;
       end;
       { kitty：Resolve 内按 slot 协调——纯扩大只重放不重传，
-        缩小/位移按 id 删除后重传 }
+        缩小/位移按 id 删除后重传。归位帧一次性传完（ABoosted），
+        避免渐进重建让松手后的封面归位显得延迟。 }
       FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
-        FPatches, LPatchCount);
+        FPatches, LPatchCount, True);
     end
     { 尺寸仍在变（拖动中）：冻结图片层，本帧不传输/不放置，避免
       delete-all 风暴 + 新旧坐标重影。图片保持最后一次稳定布局。 }
   end
   else
     FImageMgr.Resolve(FCurr, FFrameId, FBackend, FCellWidth, FCellHeight,
-      FPatches, LPatchCount);
+      FPatches, LPatchCount, False);
 
   if AFrame.HasCursor then
   begin
