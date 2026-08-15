@@ -22,6 +22,10 @@ type
   TGitDiffFile = nextpas.core.git.base.TGitDiffFile;
   TGitDiffFileArray = nextpas.core.git.base.TGitDiffFileArray;
   TGitDiff = nextpas.core.git.base.TGitDiff;
+  TGitDiffOptions = nextpas.core.git.base.TGitDiffOptions;
+  TGitBlameHunk = nextpas.core.git.base.TGitBlameHunk;
+  TGitBlameHunkArray = nextpas.core.git.base.TGitBlameHunkArray;
+  TGitBlame = nextpas.core.git.base.TGitBlame;
   TGitCommitArray = nextpas.core.git.intf.TGitCommitArray;
 
   TCredentialAcquireEvent = nextpas.core.git.intf.TCredentialAcquireEvent;
@@ -63,12 +67,18 @@ const
   gsConflicted = nextpas.core.git.base.gsConflicted;
 
 function NewGitManager: IGitManager; inline;
+function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
 function NewGitManager: IGitManager;
 begin
   Result := nextpas.core.git.libgit2.NewGitManager;
+end;
+
+function DefaultGitDiffOptions: TGitDiffOptions;
+begin
+  Result := nextpas.core.git.base.DefaultGitDiffOptions;
 end;
 
 end.
