@@ -15,6 +15,10 @@ uses
 
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
+{ AF_UNIX 域 socket 监听/连接（Unix 平台；Windows 抛 ENetworkError unsupported）。
+  UnixListen 在 APath 上建监听 socket（bind 前 unlink 旧文件，bind 后 chmod 0600）。 }
+function NetUnixListen(const APath: string): ITcpListener;
+function NetUnixConnect(const APath: string): ITcpStream;
 { ATimeoutMs > 0 bounds the OS connect() wait (nonblocking connect + poll).
   ATimeoutMs <= 0 keeps unbounded blocking connect (legacy). }
 function NetTcpConnect(const AAddr: string; const APort: UInt16;
@@ -36,7 +40,8 @@ uses
   nextpas.core.time.deadline,
   nextpas.core.platform.socket.base,
   nextpas.core.platform.error,
-  nextpas.core.net.resolve;
+  nextpas.core.net.resolve,
+  nextpas.core.fs;
 
 type
   TTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream,
@@ -128,6 +133,15 @@ var
   LIP: UInt32;
   LPort: UInt16;
 begin
+  { AF_UNIX（Linux/macOS/FreeBSD 均为 1，native-endian ushort）：
+    无 IP/端口，返回空地址（调用方不得据此做网络路由）。 }
+  if (ASa.Len >= 2) and (ASa.Storage[0] = 1) and (ASa.Storage[1] = 0) then
+  begin
+    Result.IP := '';
+    Result.Port := 0;
+    Result.IsIPv6 := False;
+    Exit;
+  end;
   platform_sockaddr_ipv4_extract(ASa, LIP, LPort);
   { Storage holds network-order s_addr; ipv4_to_string expects host-order word. }
   Result.IP := platform_ipv4_to_string(platform_ntohl(LIP));
@@ -975,6 +989,88 @@ begin
     raise ETimeoutError.Create(LLastMsg)
   else
     raise ENetworkError.Create(LLastMsg);
+end;
+
+{ AF_UNIX 平台常量（sockaddr family，native-endian）：Linux/macOS/FreeBSD = 1 }
+const
+  NET_AF_UNIX = 1;
+
+{ sockaddr_un → TPlatformSockAddr.Storage：family（2B native LE）+ sun_path。
+  sun_path 以 NUL 终止，长度取完整 sockaddr_un 语义（2 + pathlen + 1）。 }
+procedure FillUnixSockAddr(const APath: string; out ASa: TPlatformSockAddr);
+var
+  LFamily: UInt16;
+  LPathLen: Integer;
+begin
+  ASa.Clear;
+  LFamily := NET_AF_UNIX;
+  LPathLen := Length(APath);
+  if LPathLen > 107 then
+    raise EArgumentError.Create('unix socket path too long: ' + APath);
+  Move(LFamily, ASa.Storage[0], 2);
+  if LPathLen > 0 then
+    Move(APath[1], ASa.Storage[2], LPathLen);
+  ASa.Storage[2 + LPathLen] := 0;
+  ASa.Len := 2 + LPathLen + 1;
+end;
+
+function NetUnixListen(const APath: string): ITcpListener;
+var
+  LSock: TPlatformSocket;
+  LSa: TPlatformSockAddr;
+  LResult: Int32;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  raise ENetworkError.Create('unix socket listen: unsupported on this platform');
+  {$ELSE}
+  if APath = '' then
+    raise EArgumentError.Create('unix socket listen: empty path');
+  FillUnixSockAddr(APath, LSa);
+  LResult := platform_socket_create(NET_AF_UNIX, PLATFORM_SOCK_STREAM, 0, LSock);
+  if LResult <> 0 then
+    raise ENetworkError.Create('unix socket listen: socket create failed (' + IntToStr(LResult) + ')');
+  try
+    { 清理上一次残留的 socket 文件（无 listener 存活时安全）。 }
+    nextpas.core.fs.Remove(APath);
+    LResult := platform_socket_bind(LSock, @LSa.Storage[0], LSa.Len);
+    if LResult <> 0 then
+      raise ENetworkError.Create('unix socket listen: bind failed (' + IntToStr(LResult) + ')');
+    { 权限即认证：仅同用户可连（对齐 codex/grok UDS 控制面）。 }
+    nextpas.core.fs.Chmod(APath, TFilePermission($180));   { 0600 }
+    LResult := platform_socket_listen(LSock, NET_DEFAULT_BACKLOG);
+    if LResult <> 0 then
+      raise ENetworkError.Create('unix socket listen: listen failed (' + IntToStr(LResult) + ')');
+    Result := TTcpListener.Create(LSock, TNetAddress.Create('', 0));
+  except
+    platform_socket_close(LSock);
+    raise;
+  end;
+  {$ENDIF}
+end;
+
+function NetUnixConnect(const APath: string): ITcpStream;
+var
+  LSock: TPlatformSocket;
+  LSa: TPlatformSockAddr;
+  LResult: Int32;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  raise ENetworkError.Create('unix socket connect: unsupported on this platform');
+  {$ELSE}
+  if APath = '' then
+    raise EArgumentError.Create('unix socket connect: empty path');
+  FillUnixSockAddr(APath, LSa);
+  LResult := platform_socket_create(NET_AF_UNIX, PLATFORM_SOCK_STREAM, 0, LSock);
+  if LResult <> 0 then
+    raise ENetworkError.Create('unix socket connect: socket create failed (' + IntToStr(LResult) + ')');
+  LResult := platform_socket_connect(LSock, @LSa.Storage[0], LSa.Len);
+  if LResult <> 0 then
+  begin
+    platform_socket_close(LSock);
+    raise ENetworkError.Create('unix socket connect failed (' + IntToStr(LResult) + ')');
+  end;
+  Result := TTcpStream.Create(LSock, TNetAddress.Create('', 0), TNetAddress.Create('', 0));
+  {$ENDIF}
 end;
 
 end.
