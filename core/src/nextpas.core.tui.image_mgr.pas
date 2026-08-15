@@ -268,13 +268,6 @@ procedure TImageManager.Resolve(var Buf: TBuffer; FrameStamp: Cardinal;
     Result := False;
   end;
 
-  function RectContains(const Outer, Inner: TRect): Boolean;
-  begin
-    Result := (Outer.X <= Inner.X) and (Outer.Y <= Inner.Y) and
-              (Outer.X + Outer.Width >= Inner.X + Inner.Width) and
-              (Outer.Y + Outer.Height >= Inner.Y + Inner.Height);
-  end;
-
 var
   I, J, SlotIdx, PlacementCount: Integer;
   LSend, Target: Integer;
@@ -368,11 +361,11 @@ begin
     case FProtocol of
       ipKitty:
       begin
-        { 区域变化协调：已传数据分辨率足够（>= 新目标尺寸）且新区域
-          「包含旧区域（纯扩大）」或「同尺寸平移（宽高不变，仅 X/Y 变
-          化）」时免重传——数据仍在终端，下方放置块同 id 按新区域重放
-          即可，旧位置由整帧文本重绘覆盖；缩小或分辨率不足复用会模
-          糊，仍须按 id 删除后重传。 }
+        { 区域变化协调：已传数据分辨率足够（>= 新目标尺寸）时，无论新区域
+          是扩大、平移还是缩小，都要先按 id 删除旧显示再重放——同 id 的
+          place 是叠加语义，不清掉旧显示会残留拖影。delete 用小写 d=i
+          （只清显示、保留终端存储的数据），重放无需重传整图。只有新目标
+          分辨率超过已传数据（复用会模糊）才删除并整图重传。 }
         if FSlots[SlotIdx].Transmitted and
            ((FSlots[SlotIdx].PlacedArea.X <> P.Area.X) or
             (FSlots[SlotIdx].PlacedArea.Y <> P.Area.Y) or
@@ -380,10 +373,7 @@ begin
             (FSlots[SlotIdx].PlacedArea.Height <> P.Area.Height)) then
         begin
           if not ((FSlots[SlotIdx].DataW >= TargetW) and
-                  (FSlots[SlotIdx].DataH >= TargetH) and
-                  (RectContains(P.Area, FSlots[SlotIdx].PlacedArea) or
-                   ((FSlots[SlotIdx].PlacedArea.Width = P.Area.Width) and
-                    (FSlots[SlotIdx].PlacedArea.Height = P.Area.Height)))) then
+                  (FSlots[SlotIdx].DataH >= TargetH)) then
           begin
             AppendDelete(Backend, FSlots[SlotIdx].Id);
             FSlots[SlotIdx].Transmitted := False;
@@ -395,7 +385,11 @@ begin
             FSlots[SlotIdx].PlacedArea := TRect.Make(0, 0, 0, 0);
           end
           else
+          begin
+            { 数据仍在终端：清旧显示并按新区域重放，不重传 }
+            AppendDelete(Backend, FSlots[SlotIdx].Id);
             FSlots[SlotIdx].Placed := False;
+          end;
         end;
 
         if not FSlots[SlotIdx].Transmitted then
