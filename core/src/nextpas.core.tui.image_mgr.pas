@@ -63,9 +63,13 @@ type
     { 是否有图片处于分帧传输中（未传完）。调用方可据此加快帧循环，
       避免空闲帧率把渐进传输拖慢。 }
     function HasPendingTransmit: Boolean;
+    { ABoosted=True 表示本帧为 resize 归位帧：待传数据一次发完（仍保持
+      kitty 分块边界对齐），让松手后的封面重建立即完成而不是渐进 8ms/帧。
+      普通帧（切歌等）继续 32KB/帧限流，避免慢终端/PTY 背压冻结。 }
     procedure Resolve(var Buf: TBuffer; FrameStamp: Cardinal;
       Backend: TAnsiBackend; CellW, CellH: Word;
-      const Patches: TDiffEntries; PatchCount: Integer);
+      const Patches: TDiffEntries; PatchCount: Integer;
+      ABoosted: Boolean);
   end;
 
 implementation
@@ -251,7 +255,8 @@ end;
 
 procedure TImageManager.Resolve(var Buf: TBuffer; FrameStamp: Cardinal;
   Backend: TAnsiBackend; CellW, CellH: Word;
-  const Patches: TDiffEntries; PatchCount: Integer);
+  const Patches: TDiffEntries; PatchCount: Integer;
+  ABoosted: Boolean);
 
   function AreaIsDirty(const A: TRect): Boolean;
   var J: Integer;
@@ -284,6 +289,8 @@ var
 begin
   FCurrentFrame := FrameStamp;
   FPendingBudget := MaxTransmitBytesPerFrame;
+  if ABoosted then
+    FPendingBudget := MaxInt;   { 归位帧：一次传完，不牺牲分块边界 }
   PlacementCount := Buf.ImagePlacementCount;
 
   for I := 0 to PlacementCount - 1 do
