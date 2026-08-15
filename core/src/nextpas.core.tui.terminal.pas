@@ -149,6 +149,7 @@ type
     procedure EnsureFrameRuntime(const AOperation: AnsiString);
     procedure EnsureEndFrameAllowed(const AFrame: TFrame);
     procedure ResizeBuffersTo(AWidth, AHeight: Word);
+    function EffectiveWaitTimeout(ATimeoutMs: Integer): Integer;
     function GetHasTruecolor: Boolean; inline;
     function GetHasKittyKeyboard: Boolean; inline;
     function GetImageProtocol: TImageProtocol; inline;
@@ -827,6 +828,23 @@ begin
   FResizePendingSinceNs := platform_monotonic_ns;
 end;
 
+{ 把调用方给的等待超时收敛到"图片层稳定归位所需剩余时间"。
+  松手(最后一次 resize)后约 60ms 要出帧跑 delete-all+重传归位；若空闲帧
+  率(默认 IdleTickInterval=200ms)比这慢，封面归位会被拖到 200ms+ 的空闲
+  帧——上下拖拽松手后封面跳变会显得延迟很大。这里把等待输入超时压到
+  min(剩余稳定时间, 原超时)，让 PollEvent 在归位时刻准时醒来出帧。 }
+function TTerminal.EffectiveWaitTimeout(ATimeoutMs: Integer): Integer;
+var
+  LElapsedNs, LRemainMs: Int64;
+begin
+  Result := ATimeoutMs;
+  if not FResizeImagePending then Exit;
+  LElapsedNs := platform_monotonic_ns - FResizePendingSinceNs;
+  LRemainMs := (kImageResizeStableNs - LElapsedNs) div 1000000;
+  if LRemainMs < 0 then LRemainMs := 0;
+  if (Result < 0) or (LRemainMs < Result) then Result := Integer(LRemainMs);
+end;
+
 { Signal + Input }
 
 procedure TTerminal.CheckSignals(out AResizeOut: TEvent; out AHasResize: Boolean);
@@ -1204,7 +1222,7 @@ begin
     Exit(NoneEvent);
   end;
 
-  if not WaitForInput(STDIN_FD, ATimeoutMs) then
+  if not WaitForInput(STDIN_FD, EffectiveWaitTimeout(ATimeoutMs)) then
   begin
     CheckSignals(LResz, LHasResize);
     if LHasResize then Exit(LResz);
