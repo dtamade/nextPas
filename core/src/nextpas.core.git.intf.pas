@@ -60,11 +60,21 @@ type
     // M5: diff between two revs (commit/branch/tag/hash; libgit2 revparse spec).
     // Unresolvable ref → EGitError. Returns files with hunks (empty hunks = no text delta).
     function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    // M5+（参数化，2026-08-15）：Diff 带 options（unified 上下文行数 / 路径过滤）。
+    // 语义等同 Diff（向后兼容保留原签名）。
+    function DiffEx(const AOldRef, ANewRef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     // M5: diff of a rev against the working tree + index (git diff <ref> semantics).
     function DiffWorkingTree(const ARef: string): TGitDiff;
+    // M5+（参数化）：同上带 options。
+    function DiffWorkingTreeEx(const ARef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     // M5: commit traversal from AStartRef along parents (topological + time order),
     // newest-first; ALimit <= 0 = unlimited. Unresolvable ref → EGitError.
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
+    // M5+（2026-08-15）：blame 一个文件（经 libgit2 git_blame_file，不 spawn CLI）。
+    // 返回逐 hunk 归属（commit id / 起止行 / 路径）；文件无提交历史 → 空 hunks。
+    function Blame(const APath: string): TGitBlame;
   end;
 
   IGitCommit = interface

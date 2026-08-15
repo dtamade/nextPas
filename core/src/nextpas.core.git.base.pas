@@ -99,6 +99,42 @@ type
     Files: TGitDiffFileArray;
   end;
 
+  // Diff 参数化（M5 更深语义 2026-08-15）：unified 上下文行数 + 路径过滤
+  TGitDiffOptions = record
+    UnifiedLines: Integer;       // <=0 = libgit2 默认（3 行）
+    InterhunkLines: Integer;     // <=0 = 默认（0）
+    Paths: TStringArray;         // 空 = 全仓
+  end;
+
+  // One blame hunk: 一段连续行归属同一 commit
+  TGitBlameHunk = record
+    LinesInHunk: Integer;
+    FinalCommitId: string;       // 40-hex
+    FinalStartLine: Integer;     // 1-based（新文件行号）
+    OrigCommitId: string;        // 40-hex
+    OrigPath: string;
+    OrigStartLine: Integer;      // 1-based（原始文件行号）
+    Boundary: Boolean;           // 边界提交（超出可追溯历史）
+  end;
+  TGitBlameHunkArray = array of TGitBlameHunk;
+
+  // Whole blame result: hunks 按行序（文件 → 归属 commit 映射线）
+  TGitBlame = record
+    Path: string;
+    Hunks: TGitBlameHunkArray;
+  end;
+
+function DefaultGitDiffOptions: TGitDiffOptions; inline;
+
 implementation
+
+function DefaultGitDiffOptions: TGitDiffOptions; inline;
+begin
+  Result.UnifiedLines := 3;    { libgit2 默认 -U3，与无参 Diff 原行为一致 }
+  Result.InterhunkLines := 0;
+  Result.Paths := nil;
+end;
+
+end.
 
 end.

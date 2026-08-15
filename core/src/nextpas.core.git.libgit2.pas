@@ -79,8 +79,14 @@ type
     function PullFastForward(const RemoteName: string; out Error: string): TGitPullFastForwardResult;
     // M5: diff / revwalk facade
     function Diff(const AOldRef, ANewRef: string): TGitDiff;
+    function DiffEx(const AOldRef, ANewRef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     function DiffWorkingTree(const ARef: string): TGitDiff;
+    function DiffWorkingTreeEx(const ARef: string;
+      const AOptions: TGitDiffOptions): TGitDiff;
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
+    // M5+ (2026-08-15): blame a file (libgit2 native)
+    function Blame(const APath: string): TGitBlame;
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -420,9 +426,26 @@ begin
   Result := FRepo.Diff(AOldRef, ANewRef);
 end;
 
+function TGitRepositoryImpl.DiffEx(const AOldRef, ANewRef: string;
+  const AOptions: TGitDiffOptions): TGitDiff;
+begin
+  Result := FRepo.DiffEx(AOldRef, ANewRef, AOptions);
+end;
+
 function TGitRepositoryImpl.DiffWorkingTree(const ARef: string): TGitDiff;
 begin
   Result := FRepo.DiffWorkingTree(ARef);
+end;
+
+function TGitRepositoryImpl.DiffWorkingTreeEx(const ARef: string;
+  const AOptions: TGitDiffOptions): TGitDiff;
+begin
+  Result := FRepo.DiffWorkingTreeEx(ARef, AOptions);
+end;
+
+function TGitRepositoryImpl.Blame(const APath: string): TGitBlame;
+begin
+  Result := FRepo.Blame(APath);
 end;
 
 function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
