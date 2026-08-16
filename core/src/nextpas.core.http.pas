@@ -322,6 +322,14 @@ function ContentTypeMiddleware(
 function LoggerMiddleware: IHttpMiddleware; inline;
 {** @desc Request logging middleware with custom TLogger instance. }
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
+{** @desc Logger middleware with extras provider（默认 TLogger；provider 在
+   handler 返回后回调，可读 AReq/AW，返回的 key/value 追加到 http_request
+   事件——日志附加字段，见 nextpas.core.http.middleware.logger）。 }
+function LoggerMiddlewareWithExtras(
+  const AExtras: TLogExtrasProvider): IHttpMiddleware; inline;
+{** @desc Logger middleware with extras provider + custom TLogger. }
+function LoggerMiddlewareWithExtrasAndLogger(
+  const AExtras: TLogExtrasProvider; const ALogger: TLogger): IHttpMiddleware; inline;
 {** @desc Ensure X-Request-Id header on every response (preserves existing, generates UUID if missing). }
 function RequestIdMiddleware: IHttpMiddleware; inline;
 {** @desc Request ID middleware with custom header name. }
@@ -936,6 +944,19 @@ end;
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWith(ALogger);
+end;
+
+function LoggerMiddlewareWithExtras(
+  const AExtras: TLogExtrasProvider): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtras(AExtras);
+end;
+
+function LoggerMiddlewareWithExtrasAndLogger(
+  const AExtras: TLogExtrasProvider; const ALogger: TLogger): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtrasAndLogger(
+    AExtras, ALogger);
 end;
 
 function RequestIdMiddleware: IHttpMiddleware;
