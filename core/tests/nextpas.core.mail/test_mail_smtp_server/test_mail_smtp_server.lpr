@@ -660,6 +660,50 @@ begin
   LSink := nil;
 end;
 
+procedure TestPipelinedCommands;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LPayload: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  { 单包管线: EHLO+MAIL+RCPT+DATA 一次写入。
+    服务器一次 TryRead 读入全部行, 首行处理即切 Flushing;
+    缓冲内剩余命令必须续存处理, 不得丢行(回归: 见 DrainReadable 断点续存)。 }
+  LPayload := 'EHLO t'#13#10'MAIL FROM:<a@b.c>'#13#10'RCPT TO:<r@b.c>'#13#10
+    + 'DATA'#13#10;
+  try
+    C.Stream.Write(PAnsiChar(LPayload)^, Length(LPayload));
+  except
+  end;
+  ExpectMultiLine(C, 3000, '250', 'pipelined EHLO', '');
+  ExpectReply(C, 3000, '250', 'pipelined MAIL');
+  ExpectReply(C, 3000, '250', 'pipelined RCPT');
+  ExpectReply(C, 3000, '354', 'pipelined DATA');
+  { 正文与终止点紧随其后: 354 后同一数据流续存处理 }
+  LPayload := 'hello'#13#10'.'#13#10;
+  try
+    C.Stream.Write(PAnsiChar(LPayload)^, Length(LPayload));
+  except
+  end;
+  ExpectReply(C, 3000, '250', 'pipelined DATA done');
+  Check(SpinWait(LSink.MsgCount, 1), 'pipelined message delivered');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
 var
   T: TTestSuite;
 
@@ -674,6 +718,7 @@ begin
   T.Test('MaxRecipients', @TestMaxRecipients);
   T.Test('IdleTimeout', @TestIdleTimeout);
   T.Test('OverflowAbort', @TestOverflowAbort);
+  T.Test('PipelinedCommands', @TestPipelinedCommands);
   if not T.Run then
     Halt(1);
 end.

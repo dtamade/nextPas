@@ -118,6 +118,8 @@ type
       FOutBytes: SizeUInt;
       FHeadPos: SizeUInt;
       FReadBuf: array[0..4095] of Byte;
+      FReadPos: SizeUInt;            { 已处理读缓冲位置(Flushing 中断续存) }
+      FReadAvail: SizeUInt;          { 本批 TryRead 读入字节数 }
       FEnvelope: TEnvelopeBuild;
       FHeloState: (hsNone, hsHelo, hsEhlo);
       FAuthed: Boolean;
@@ -234,6 +236,8 @@ begin
     FConfig.OutboundQueueLimit := MAIL_SMTP_OUTBOUND_DEFAULT_LIMIT;
   FState := stCommand;
   FResumeState := stCommand;
+  FReadPos := 0;
+  FReadAvail := 0;
   ResetEnvelope;
   { 欢迎横幅进入出站队列并冲刷 }
   EnqueueStr('220 ' + FConfig.Domain + ' ESMTP' + #13#10);
@@ -583,7 +587,6 @@ procedure TMailSmtpServerSession.DrainReadable;
 var
   LRead: SizeUInt;
   LRes: TTcpStreamIOResult;
-  I: SizeUInt;
   B: Byte;
   LLine: string;
 begin
@@ -591,6 +594,68 @@ begin
     Exit;
   while (FState = stCommand) or (FState = stData) do
   begin
+    { 先消费因 Flushing 中断而保留的未处理字节(FReadPos..FReadAvail-1):
+      处理行导致切 Flushing 时 FReadPos 已停在断点, 剩余命令不丢
+      (pipeling/多行同批读入场景, 见 ProcessCommandLine 后 Exit) }
+    while (FReadPos < FReadAvail) and
+          ((FState = stCommand) or (FState = stData)) do
+    begin
+      B := FReadBuf[FReadPos];
+      Inc(FReadPos);
+      if B = 10 then
+      begin
+        { 行结束（去 CR）}
+        if (FLineLen > 0) and (FLineBuf[FLineLen - 1] = 13) then
+          Dec(FLineLen);
+        if FLineOver then
+        begin
+          { 超长行：RFC 5321 §4.5.3.1 行长度上限，整行丢弃并报 500 }
+          FLineLen := 0;
+          FLineOver := False;
+          EnqueueStr('500 5.5.2 Error: line too long' + #13#10);
+          BeginFlush(stCommand);
+          Exit;
+        end;
+        LLine := BuildLine;
+        FLineLen := 0;
+        FLineOver := False;
+        if FState = stCommand then
+        begin
+          ProcessCommandLine(LLine);
+          { 若进入 Flushing（有回复待写）则本 drain 停止，等可写事件；
+            未处理字节保留下次续读 }
+          if FState = stFlushing then
+            Exit;
+        end
+        else if FState = stData then
+        begin
+          HandleDataLine(LLine);
+          if FState = stFlushing then
+            Exit;
+        end;
+      end
+      else if B = 13 then
+      begin
+        { 忽略 CR（以 LF 为定界；行首 CR 属于 SMTP 折叠/裸换行场景，保守忽略）}
+      end
+      else
+      begin
+        if FLineLen >= MAIL_SMTP_LINE_LIMIT then
+          FLineOver := True
+        else if not FLineOver then
+        begin
+          if FLineLen >= SizeUInt(Length(FLineBuf)) then
+            SetLength(FLineBuf, FLineLen + 256);
+          FLineBuf[FLineLen] := B;
+          Inc(FLineLen);
+        end;
+      end;
+    end;
+    { 缓冲消费完：重置断点, 读新字节 }
+    FReadPos := 0;
+    FReadAvail := 0;
+    if (FState <> stCommand) and (FState <> stData) then
+      Exit;
     LRes := FConnRuntime.TryRead(FReadBuf[0], SizeOf(FReadBuf), LRead);
     case LRes of
       tsiorOk:
@@ -601,65 +666,10 @@ begin
             FState := stClosed;
             Exit;
           end;
-          for I := 0 to LRead - 1 do
-          begin
-            B := FReadBuf[I];
-            if B = 10 then
-            begin
-              { 行结束（去 CR）}
-              if (FLineLen > 0) and (FLineBuf[FLineLen - 1] = 13) then
-                Dec(FLineLen);
-              if FLineOver then
-              begin
-                { 超长行：RFC 5321 §4.5.3.1 行长度上限，整行丢弃并报 500 }
-                FLineLen := 0;
-                FLineOver := False;
-                EnqueueStr('500 5.5.2 Error: line too long' + #13#10);
-                BeginFlush(stCommand);
-                Exit;
-              end;
-              LLine := BuildLine;
-              FLineLen := 0;
-              FLineOver := False;
-              if FState = stCommand then
-              begin
-                ProcessCommandLine(LLine);
-                { 若进入 Flushing（有回复待写）则本 drain 停止，等可写事件 }
-                if FState = stFlushing then
-                  Exit;
-              end
-              else if FState = stData then
-              begin
-                HandleDataLine(LLine);
-                if FState = stFlushing then
-                  Exit;
-              end;
-            end
-            else if B = 13 then
-            begin
-              { 忽略 CR（以 LF 为定界；行首 CR 属于 SMTP 折叠/裸换行场景，保守忽略）}
-            end
-            else
-            begin
-              if FLineLen >= MAIL_SMTP_LINE_LIMIT then
-              begin
-                FLineOver := True;
-              end
-              else if not FLineOver then
-              begin
-                if FLineLen >= SizeUInt(Length(FLineBuf)) then
-                  SetLength(FLineBuf, FLineLen + 256);
-                FLineBuf[FLineLen] := B;
-                Inc(FLineLen);
-              end;
-            end;
-          end;
+          FReadAvail := LRead;
         end;
       tsiorWouldBlock:
-        begin
-          { 本批读尽：停止读循环，仍冲刷出站回复 }
-          Exit;
-        end;
+        Exit;
       tsiorClosed, tsiorTimeout:
         begin
           NotifyClosed;
@@ -721,7 +731,14 @@ begin
       FState := FResumeState;
       RefreshIdleDeadline;
       if FState = stClosed then
-        NotifyClosed;
+        NotifyClosed
+      else if FReadAvail > FReadPos then
+      begin
+        { 冲刷完成回到命令/数据态, 缓冲里还有未消费的命令行
+          (pipelining: 一次 TryRead 读入多行, 首行处理即切 Flushing):
+          立即续处理, 不等可读事件(内核已无新数据, 事件不会再来) }
+        DrainReadable;
+      end;
     end;
   end;
 end;
