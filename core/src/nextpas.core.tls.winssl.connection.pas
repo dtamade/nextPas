@@ -20,8 +20,7 @@ unit nextpas.core.tls.winssl.connection;
 interface
 
 uses
-  sysutils,
-  nextpas.core.base, Classes,
+  nextpas.core.base, nextpas.core.system.classes,
   nextpas.core.base.utils,
   {$IFDEF WINDOWS}
   Windows, winsock2,
@@ -33,6 +32,7 @@ uses
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base,
+  nextpas.core.tls.collections,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api,
@@ -99,7 +99,7 @@ type
   { TWinSSLSessionManager - 会话缓存管理器 }
   TWinSSLSessionManager = class
   private
-    FSessions: TStringList;
+    FSessions: specialize IStringMap<ISSLSession>;
     FLock: IMutex;
     FMaxSessions: Integer;
   public
@@ -500,51 +500,34 @@ end;
 constructor TWinSSLSessionManager.Create;
 begin
   inherited Create;
-  FSessions := TStringList.Create;
-  FSessions.Duplicates := dupIgnore;
-  FSessions.Sorted := False;
+  FSessions := TMapFactory.specialize CreateStringMap<ISSLSession>;
   FLock := Mutex;
   FMaxSessions := 100;
 end;
 
 destructor TWinSSLSessionManager.Destroy;
-var
-  i: Integer;
 begin
-  for i := 0 to FSessions.Count - 1 do
-  begin
-    if FSessions.Objects[i] <> nil then
-      ISSLSession(Pointer(FSessions.Objects[i]))._Release;
-  end;
+  FSessions := nil;
   FLock := nil;
-  FSessions.Free;
   inherited Destroy;
 end;
 
 procedure TWinSSLSessionManager.AddSession(const AID: string; ASession: ISSLSession);
 var
-  LIndex: Integer;
+  LKeys: TStringArray;
 begin
+  if ASession = nil then
+    Exit;
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
-    begin
-      if FSessions.Objects[LIndex] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-      FSessions.Delete(LIndex);
-    end;
-
-    if ASession <> nil then
-      ASession._AddRef;
-
-    FSessions.AddObject(AID, TObject(Pointer(ASession)));
-
+    FSessions.Put(AID, ASession);
+    { 缓存超限时驱逐最早插入的会话（TSimpleStringMap 槽位序近似插入序）。 }
     while FSessions.Count > FMaxSessions do
     begin
-      if FSessions.Objects[0] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[0]))._Release;
-      FSessions.Delete(0);
+      LKeys := FSessions.Keys;
+      if Length(LKeys) = 0 then
+        Break;
+      FSessions.Remove(LKeys[0]);
     end;
   finally
     FLock.Release;
@@ -553,42 +536,28 @@ end;
 
 function TWinSSLSessionManager.GetSession(const AID: string): ISSLSession;
 var
-  LIndex: Integer;
+  LSession: ISSLSession;
 begin
+  Result := nil;
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
+    if FSessions.TryGet(AID, LSession) then
     begin
-      Result := ISSLSession(Pointer(FSessions.Objects[LIndex]));
-      if not Result.IsValid then
-      begin
-        if FSessions.Objects[LIndex] <> nil then
-          ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-        FSessions.Delete(LIndex);
-        Result := nil;
-      end;
-    end
-    else
-      Result := nil;
+      if (LSession <> nil) and LSession.IsValid then
+        Result := LSession
+      else
+        FSessions.Remove(AID);
+    end;
   finally
     FLock.Release;
   end;
 end;
 
 procedure TWinSSLSessionManager.RemoveSession(const AID: string);
-var
-  LIndex: Integer;
 begin
   FLock.Acquire;
   try
-    LIndex := FSessions.IndexOf(AID);
-    if LIndex >= 0 then
-    begin
-      if FSessions.Objects[LIndex] <> nil then
-        ISSLSession(Pointer(FSessions.Objects[LIndex]))._Release;
-      FSessions.Delete(LIndex);
-    end;
+    FSessions.Remove(AID);
   finally
     FLock.Release;
   end;
@@ -596,19 +565,17 @@ end;
 
 procedure TWinSSLSessionManager.CleanupExpired;
 var
+  LKeys: TStringArray;
   i: Integer;
+  LSession: ISSLSession;
 begin
   FLock.Acquire;
   try
-    for i := FSessions.Count - 1 downto 0 do
-    begin
-      if not ISSLSession(Pointer(FSessions.Objects[i])).IsValid then
-      begin
-        if FSessions.Objects[i] <> nil then
-          ISSLSession(Pointer(FSessions.Objects[i]))._Release;
-        FSessions.Delete(i);
-      end;
-    end;
+    LKeys := FSessions.Keys;
+    for i := 0 to Length(LKeys) - 1 do
+      if FSessions.TryGet(LKeys[i], LSession) and
+        ((LSession = nil) or (not LSession.IsValid)) then
+        FSessions.Remove(LKeys[i]);
   finally
     FLock.Release;
   end;
