@@ -75,6 +75,7 @@ uses
   nextpas.core.platform.fs,
   nextpas.core.platform.path,
   nextpas.core.platform.random,
+  nextpas.core.fs.path,
   nextpas.core.fs.stream;
 
 procedure WriteAllOrRaise(const AFile: IFile; const ABuf; const ACount: SizeUInt;
