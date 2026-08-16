@@ -4,7 +4,7 @@ unit nextpas.core.net.server.runtime;
 
 interface
 
-uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline, nextpas.core.lockfree.mpsc;
+uses nextpas.core.net.intf, nextpas.core.net.server.base, nextpas.core.net.server.intf, nextpas.core.sync.intf, nextpas.core.platform.io.base, nextpas.core.time.deadline, nextpas.core.lockfree.mpsc, nextpas.core.collections.hashmap;
 
 type
   TTcpServerPollSessionTarget = class;
@@ -115,11 +115,26 @@ type
 
   TTcpServerPollTargetRegistry = class
   private
-    FItems: TTcpServerPollSessionTargetArray;
-    FCount: SizeUInt;
+    type
+      { target 指针 → FItems 槽位; 只比较指针值, 不读 target 字段:
+        批处理中已 Free 的 target 指针仍可能出现在本批事件条目里, 防悬垂 }
+      TIndexMap = specialize THashMap<Pointer, SizeUInt>;
+    var
+      FItems: TTcpServerPollSessionTargetArray;
+      FCount: SizeUInt;
+      FIndexMap: TIndexMap;
+      { min WakeDeadline 缓存: FMinValid=False 时惰性全扫重算。
+        常态(无 target 到期)下 ComputePollTimeoutMs/CollectExpiredTargets
+        从每轮 O(n) 降为 O(1); 到期批处理在同轮循环内完成, 删除不触发重算 }
+      FMinDeadline: TDeadline;
+      FMinValid: Boolean;
+    procedure RecomputeMinDeadline;
   public
+    constructor Create;
+    destructor Destroy; override;
     procedure RegisterTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterTarget(const ATarget: TTcpServerPollSessionTarget);
+    procedure InvalidateMinDeadline;
     function ContainsTarget(const ATarget: TTcpServerPollSessionTarget): Boolean;
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
@@ -147,6 +162,27 @@ procedure CloseServerOwnedTcpConn(const AConn: ITcpStream);
 implementation
 
 uses nextpas.core.base.utils, nextpas.core.errors, nextpas.core.sync.mutex, nextpas.core.thread, nextpas.core.time.base;
+
+{ registry O(1) 索引辅助: hash/equals 只操作指针值(不 deref),
+  deadline 先后比较用剩余时长(同一时钟基准) }
+function RegistryPtrHash(const AKey: Pointer): UInt32;
+begin
+  Result := HashOfPointer(AKey);
+end;
+
+function RegistryPtrEquals(const A, B: Pointer): Boolean;
+begin
+  Result := A = B;
+end;
+
+function RegistryDeadlineEarlier(const A, B: TDeadline): Boolean;
+begin
+  if A.IsInfinite then
+    Exit(False);
+  if B.IsInfinite then
+    Exit(True);
+  Result := A.Remaining.AsNanoseconds < B.Remaining.AsNanoseconds;
+end;
 
 type
   { Heap node so interfaces never enter T1 MPSC element type (unmanaged Pointer only). }
@@ -516,72 +552,114 @@ begin
   Drain;
 end;
 
+constructor TTcpServerPollTargetRegistry.Create;
+begin
+  inherited Create;
+  FIndexMap := TIndexMap.Create(16, @RegistryPtrHash, @RegistryPtrEquals);
+  FMinDeadline := TDeadline.Infinite;
+  FMinValid := False;
+end;
+
+destructor TTcpServerPollTargetRegistry.Destroy;
+begin
+  FIndexMap.Free;
+  inherited Destroy;
+end;
+
+procedure TTcpServerPollTargetRegistry.RecomputeMinDeadline;
+var
+  LI: SizeUInt;
+  LDeadline: TDeadline;
+begin
+  FMinDeadline := TDeadline.Infinite;
+  for LI := 0 to FCount - 1 do
+  begin
+    LDeadline := FItems[LI].WakeDeadline;
+    if LDeadline.IsInfinite then
+      Continue;
+    if FMinDeadline.IsInfinite or
+       RegistryDeadlineEarlier(LDeadline, FMinDeadline) then
+      FMinDeadline := LDeadline;
+  end;
+  FMinValid := True;
+end;
+
 procedure TTcpServerPollTargetRegistry.RegisterTarget(
   const ATarget: TTcpServerPollSessionTarget);
 begin
   if FCount >= SizeUInt(Length(FItems)) then
     SetLength(FItems, FCount + 8);
   FItems[FCount] := ATarget;
+  FIndexMap.AddOrAssign(Pointer(ATarget), FCount);
   Inc(FCount);
+  { min 缓存增量更新: 新 target 更早到期才刷新 }
+  if FMinValid and (not ATarget.WakeDeadline.IsInfinite) then
+    if FMinDeadline.IsInfinite or
+       RegistryDeadlineEarlier(ATarget.WakeDeadline, FMinDeadline) then
+      FMinDeadline := ATarget.WakeDeadline;
 end;
 
 procedure TTcpServerPollTargetRegistry.UnregisterTarget(
   const ATarget: TTcpServerPollSessionTarget);
 var
-  LI: SizeUInt;
+  LIdx: SizeUInt;
+  LMoved: TTcpServerPollSessionTarget;
 begin
-  if FCount = 0 then
+  if (FCount = 0) or (ATarget = nil) then
     Exit;
-  for LI := 0 to FCount - 1 do
-    if FItems[LI] = ATarget then
-    begin
-      Dec(FCount);
-      FItems[LI] := FItems[FCount];
-      FItems[FCount] := nil;
-      ATarget.DetachTicket;
-      Exit;
-    end;
+  if not FIndexMap.TryGetValue(Pointer(ATarget), LIdx) then
+    Exit;
+  Dec(FCount);
+  if LIdx < FCount then
+  begin
+    LMoved := FItems[FCount];
+    FItems[LIdx] := LMoved;
+    FIndexMap.AddOrAssign(Pointer(LMoved), LIdx);
+  end;
+  FItems[FCount] := nil;
+  FIndexMap.Remove(Pointer(ATarget));
+  { min 缓存: 被删的是当前(或并列)最早到期者才失效, 查询时惰性重算。
+    到期批处理在同一轮循环内完成(期间无查询), 不会退化为 O(n²) }
+  if FMinValid and (not ATarget.WakeDeadline.IsInfinite) then
+    if FMinDeadline.IsInfinite or
+       (not RegistryDeadlineEarlier(FMinDeadline, ATarget.WakeDeadline)) then
+      FMinValid := False;
+  ATarget.DetachTicket;
 end;
 
 function TTcpServerPollTargetRegistry.ContainsTarget(
   const ATarget: TTcpServerPollSessionTarget): Boolean;
-var
-  LI: SizeUInt;
 begin
-  Result := False;
-  if (ATarget = nil) or (FCount = 0) then
-    Exit;
-  for LI := 0 to FCount - 1 do
-    if FItems[LI] = ATarget then
-      Exit(True);
+  Result := (ATarget <> nil) and FIndexMap.ContainsKey(Pointer(ATarget));
+end;
+
+procedure TTcpServerPollTargetRegistry.InvalidateMinDeadline;
+begin
+  FMinValid := False;
 end;
 
 function TTcpServerPollTargetRegistry.ComputePollTimeoutMs: Int32;
 var
-  LI: SizeUInt;
-  LDeadline: TDeadline;
   LRemaining: TDuration;
   LMs: Int64;
 begin
   Result := -1;
   if FCount = 0 then
     Exit;
-  for LI := 0 to FCount - 1 do
-  begin
-    LDeadline := FItems[LI].WakeDeadline;
-    if LDeadline.IsInfinite then
-      Continue;
-    if LDeadline.IsExpired then
-      Exit(0);
-    LRemaining := LDeadline.Remaining;
-    LMs := LRemaining.AsMilliseconds;
-    if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
-      LMs := 1;
-    if LMs > High(Int32) then
-      LMs := High(Int32);
-    if (Result < 0) or (LMs < Result) then
-      Result := Int32(LMs);
-  end;
+  { O(1) 快速路径: 用 min 缓存; 失效才全扫 }
+  if not FMinValid then
+    RecomputeMinDeadline;
+  if FMinDeadline.IsInfinite then
+    Exit;
+  if FMinDeadline.IsExpired then
+    Exit(0);
+  LRemaining := FMinDeadline.Remaining;
+  LMs := LRemaining.AsMilliseconds;
+  if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+    LMs := 1;
+  if LMs > High(Int32) then
+    LMs := High(Int32);
+  Result := Int32(LMs);
 end;
 
 function TTcpServerPollTargetRegistry.CollectExpiredTargets: TTcpServerPollSessionTargetArray;
@@ -590,9 +668,14 @@ var
   LCount: SizeUInt;
 begin
   Result := nil;
-  LCount := 0;
   if FCount = 0 then
     Exit;
+  { O(1) 快速路径: min 未过期则无任何过期, 免轮末每轮 O(n) 全扫 }
+  if not FMinValid then
+    RecomputeMinDeadline;
+  if FMinDeadline.IsInfinite or (not FMinDeadline.IsExpired) then
+    Exit;
+  LCount := 0;
   for LI := 0 to FCount - 1 do
     if FItems[LI].WakeDeadline.IsExpired then
     begin
@@ -616,10 +699,14 @@ begin
   begin
     Result[LI] := FItems[LI];
     if FItems[LI] <> nil then
+    begin
       FItems[LI].DetachTicket;
+      FIndexMap.Remove(Pointer(FItems[LI]));
+    end;
     FItems[LI] := nil;
   end;
   FCount := 0;
+  FMinValid := False;
 end;
 
 procedure TTcpServerPollTargetRegistry.Clear;
@@ -629,8 +716,13 @@ begin
   if FCount = 0 then
     Exit;
   for LI := 0 to FCount - 1 do
+  begin
+    if FItems[LI] <> nil then
+      FIndexMap.Remove(Pointer(FItems[LI]));
     FItems[LI] := nil;
+  end;
   FCount := 0;
+  FMinValid := False;
 end;
 
 constructor TTcpServerWorkTask.Create(const AWork: ITcpServerWork;

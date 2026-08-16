@@ -200,12 +200,22 @@ procedure TTcpReadinessServer.HandleExpiredPollTargets;
 var
   LExpired: TTcpServerPollSessionTargetArray;
   LI: SizeUInt;
+  LThisRound: Int32;
 begin
   LExpired := FTargetRegistry.CollectExpiredTargets;
   if Length(LExpired) = 0 then
     Exit;
+  { 限批清理: 与限批 accept 同理, 到期风暴(万级连接同批到期)若一轮全部
+    处理会独占事件循环, active 连接延迟飙升。每轮限批, 剩余目标因
+    min 缓存已过期使下轮 poll 超时为 0 立即续清, 吞吐不减。 }
+  LThisRound := 0;
   for LI := 0 to SizeUInt(Length(LExpired)) - 1 do
+  begin
+    if LThisRound >= 512 then
+      Break;
+    Inc(LThisRound);
     HandlePollTarget(LExpired[LI], []);
+  end;
 end;
 
 procedure TTcpReadinessServer.DispatchAcceptedSession(const AConn: ITcpStream;
@@ -411,6 +421,7 @@ var
   LSocketHandle: PtrUInt;
   LHasSocketHandle: Boolean;
   LCallbackCompleted: Boolean;
+  LDeadlineBefore: TDeadline;
 begin
   LOwnership := tscoServer;
   LSocketHandle := 0;
@@ -422,6 +433,10 @@ begin
       LSocketHandle := ATarget.SocketHandle;
       LHasSocketHandle := True;
     end;
+    { 精确失效: HandleEvents 内部 Advance 可能改写 WakeDeadline
+      (如 Infinite→有限), 真变了才让 min 缓存失效, 否则每轮无条件
+      失效会让 ComputePollTimeoutMs 频繁 O(n) 重算(万级连接退化为 O(n²)) }
+    LDeadlineBefore := ATarget.WakeDeadline;
     LResult := ATarget.HandleEvents(AEvents, LNextEvents, LOwnership);
     LCallbackCompleted := True;
     if LResult = tsprDone then
@@ -473,6 +488,11 @@ begin
       end;
       ATarget.SetCurrentEvents(LNextEvents);
     end;
+    { Advance 可能已改变 session 的 WakeDeadline(如从 Infinite 转为有限):
+      仅当实际变化时失效 min 缓存, 下轮查询惰性重算; 无变化则缓存
+      O(1) 直达, 万级连接下避免每轮全扫退化 O(n²) }
+    if ATarget.WakeDeadline <> LDeadlineBefore then
+      FTargetRegistry.InvalidateMinDeadline;
   except
     if ATarget.CurrentEvents <> [] then
     begin
@@ -494,13 +514,20 @@ procedure TTcpReadinessServer.HandleListenerReady(
 var
   LConn: ITcpStream;
   LAcceptResult: TTcpAcceptResult;
+  LThisRound: Int32;
 begin
-  while FRunning do
+  { 限批 accept: 连接风暴时 accept 队列可积压成千上万, 若一次 accept 到
+    EAGAIN 才放手, 单轮会长时间独占事件循环(8000 连实测单轮 ~400ms),
+    active 连接延迟随之飙升。每轮限批后交还 poll 循环, 队列未空则
+    level-triggered 会立即再次触发, 吞吐不减、轮间保持对其它连接的服务。 }
+  LThisRound := 0;
+  while FRunning and (LThisRound < 512) do
   begin
     LConn := nil;
     LAcceptResult := FListenerRuntime.TryAccept(LConn);
     if LAcceptResult = tarAccepted then
     begin
+      Inc(LThisRound);
       DispatchAcceptedConn(AHandler, LConn);
       Continue;
     end;
@@ -511,7 +538,7 @@ end;
 procedure TTcpReadinessServer.ListenAndServe(const AAddr: string;
   const APort: UInt16; const AHandler: ITcpServerHandler);
 var
-  LEntries: array[0..7] of TPlatformPollEntry;
+  LEntries: array[0..255] of TPlatformPollEntry;
   LCount: Int32;
   LTimeoutMs: Int32;
   LErr: Int32;
