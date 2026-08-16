@@ -31,6 +31,11 @@ function ContextMiddleware: IHttpMiddleware;
    Returns nil if context middleware is not active or request has no bag. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 
+{** @desc Create a fresh request context bag. Attach with
+   IHttpRequestWithContext.SetContext; the caller decides lifetime
+   (owning middleware detaches it after the handler returns). }
+function NewHttpContext: IHttpContext;
+
 {** Typed string helper: stores as owned TObject box; missing key → ''. }
 function HttpContextGetString(const ACtx: IHttpContext;
   const AKey: string): string;
@@ -242,6 +247,11 @@ begin
   if Supports(AReq, IHttpRequestWithContext, LWithCtx) then
     Exit(LWithCtx.GetContext);
   Result := nil;
+end;
+
+function NewHttpContext: IHttpContext;
+begin
+  Result := THttpContext.Create;
 end;
 
 type
