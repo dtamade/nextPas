@@ -683,6 +683,115 @@ begin
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
+{ seed 倒序(consumer 先于 provider)令子接口先于父接口处理,父接口类型未注册
+  时 ProcessInterfaceMethods 的父 IMT 继承分支被跳过(IHasher 缺
+  IWriter.Write 即此症状)。ivcall 编码前补齐缺失的父 slots:父 slots 在前
+  (沿用父 SlotIndex)、自身 slots 后移,consts/方法 symbol/ret 标记同步覆盖,
+  布局与完整处理的 ProcessInterfaceMethods 一致,避免 ivcall slot 与 IMT
+  表错位。父接口 meta 尚未建立时无能为力,保持原状。 }
+procedure TSemanticAnalyzer.FixupInterfaceParentImt;
+var
+  I, J, K: LongInt;
+  IntfTypeId: LongInt;
+  Meta, ParentMeta: TTypeMetadata;
+  IntfName, ParentName, MethShort: string;
+  Slot: TVmtSlot;
+  SlotVal: Int64;
+  Missing, AlreadyIn, HasPrefix: Boolean;
+  MethodId, SymbolId: LongInt;
+  Symbol: TSemanticSymbol;
+  Built: TSemanticVmtSlotVec;
+begin
+  for I := 0 to FModel.TypeCount - 1 do
+  begin
+    if not SameText(FModel.TypeAt(I).Kind, 'interface') then
+      Continue;
+    IntfTypeId := FModel.TypeAt(I).TypeId;
+    IntfName := FModel.TypeAt(I).Name;
+    if not FModel.GetTypeMeta(IntfTypeId, Meta) then
+      Continue;
+    ParentName := Meta.ParentClassName;
+    if ParentName = '' then
+      Continue;
+    if not FModel.GetTypeMetaByName(ParentName, ParentMeta) or
+      (ParentMeta.VmtSlots = nil) then
+      Continue;
+    Missing := False;
+    for J := 0 to LongInt(ParentMeta.VmtSlots.Count) - 1 do
+      if not FModel.LookupConstValue(IntfName + '$vmt_slot_' +
+        ParentMeta.VmtSlots[SizeUInt(J)].MethodName, SlotVal) then
+      begin
+        Missing := True;
+        Break;
+      end;
+    if not Missing then
+      Continue; { 父 slots 已继承,无需重建 }
+    Built := TSemanticVmtSlotVec.Create;
+    for J := 0 to LongInt(ParentMeta.VmtSlots.Count) - 1 do
+    begin
+      Slot := ParentMeta.VmtSlots[SizeUInt(J)];
+      Slot.FuncQualName := IntfName + '.' + Slot.MethodName;
+      Built.Push(Slot);
+    end;
+    for J := 0 to FModel.SymbolCount - 1 do
+    begin
+      Symbol := FModel.SymbolAt(J);
+      if not SameText(Symbol.Kind, 'method') then
+        Continue;
+      HasPrefix := (Length(Symbol.Name) > Length(IntfName) + 1) and
+        SameText(Copy(Symbol.Name, 1, Length(IntfName) + 1), IntfName + '.');
+      if not HasPrefix then
+        Continue;
+      MethShort := Copy(Symbol.Name, Length(IntfName) + 2, MaxInt);
+      if (MethShort = '') or (Pos('.', MethShort) > 0) then
+        Continue;
+      AlreadyIn := False;
+      for K := 0 to LongInt(Built.Count) - 1 do
+        if SameText(Built[SizeUInt(K)].MethodName, MethShort) then
+        begin
+          AlreadyIn := True;
+          Break;
+        end;
+      if AlreadyIn then
+        Continue;
+      Slot := Default(TVmtSlot);
+      Slot.MethodName := MethShort;
+      Slot.SlotIndex := LongInt(Built.Count);
+      Slot.FuncQualName := IntfName + '.' + MethShort;
+      Built.Push(Slot);
+    end;
+    Meta.VmtSlots := Built;
+    Meta.VmtCount := LongInt(Built.Count);
+    for J := 0 to LongInt(Built.Count) - 1 do
+      FModel.AddConstValue(IntfName + '$vmt_slot_' +
+        Built[SizeUInt(J)].MethodName, Built[SizeUInt(J)].SlotIndex);
+    FModel.AddConstValue(IntfName + '$vmt_count', Meta.VmtCount);
+    for J := 0 to LongInt(ParentMeta.VmtSlots.Count) - 1 do
+    begin
+      MethShort := ParentMeta.VmtSlots[SizeUInt(J)].MethodName;
+      if FModel.FindSymbolByName(IntfName + '.' + MethShort) = 0 then
+      begin
+        MethodId := FModel.FindSymbolByName(ParentName + '.' + MethShort);
+        if MethodId > 0 then
+        begin
+          Symbol := FModel.SymbolAt(MethodId);
+          SymbolId := FModel.AddSymbol(IntfName + '.' + MethShort, 'method',
+            Symbol.OwnerUnitId, IntfTypeId, Symbol.ByteOffset);
+          FModel.SetSymbolParamCount(SymbolId, Symbol.ParamCount);
+          FModel.SetSymbolMinParamCount(SymbolId, Symbol.MinParamCount);
+          FModel.SetSymbolParamSignature(SymbolId, Symbol.ParamSignature);
+          FModel.SetSymbolReturnTypeId(SymbolId, Symbol.ReturnTypeId);
+        end;
+      end;
+      if TypeMetaRetStr(ParentName, MethShort) then
+        FModel.AddConstValue(IntfName + '$ret_str_' + MethShort, 1);
+      if TypeMetaRetPtr(ParentName, MethShort) then
+        FModel.AddConstValue(IntfName + '$ret_ptr_' + MethShort, 1);
+    end;
+    FModel.SetTypeMeta(IntfTypeId, Meta);
+  end;
+end;
+
 procedure TSemanticAnalyzer.VerifyInterfaceImplementation(
   const AClassTypeId: LongInt; const AInterfaceList: string;
   const AOwnerUnitId: string);

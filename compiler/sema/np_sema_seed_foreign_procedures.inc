@@ -109,6 +109,9 @@ begin
   SeedCachedTypeGaps;
   SemaTrace('SeedDeclarations...');
   SeedDeclarations;
+  { seed 倒序令子接口先处理,父 IMT 继承缺失;必须在 ivcall 编码(SeedHaltCalls)
+    之前补齐父 slots,否则 IHasher.Write 类调用 fallthrough 直呼未定义符号。 }
+  FixupInterfaceParentImt;
   RebindExplicitClassParents;
   CompletePendingSignatures;
   AssignScopesToSymbols;

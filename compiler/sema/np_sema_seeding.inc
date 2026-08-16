@@ -59,6 +59,12 @@ begin
        (Length(TypeSym.Name) > 1) and
        (TypeSym.Name[2] in ['A'..'Z'])) then
     begin
+      { 接口的 method symbol 前缀(IHasher.Sum)会误判 HasClassLikeMembers,
+        空 Meta 覆盖会清掉 seed 期已建的 VmtSlots 与 $vmt_slot_* consts
+        (IHasher.Write 因此长期 undefined)。已有明细的类型跳过覆盖。 }
+      if FModel.GetTypeMeta(ExistingTypeId, Meta) and
+        ((Meta.VmtSlots <> nil) or (Meta.VmtCount > 0)) then
+        Continue;
       ParentTypeId := 0;
       if not SameText(TypeSym.Name, 'TObject') then
         ParentTypeId := FModel.FindTypeByName('TObject');
