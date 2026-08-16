@@ -20,6 +20,8 @@ unit nextpas.core.tls.winssl.connection;
 interface
 
 uses
+  sysutils,
+  nextpas.core.base, Classes,
   nextpas.core.base.utils,
   {$IFDEF WINDOWS}
   Windows, winsock2,
@@ -97,7 +99,7 @@ type
   { TWinSSLSessionManager - 会话缓存管理器 }
   TWinSSLSessionManager = class
   private
-    FSessions: TStringArray;
+    FSessions: TStringList;
     FLock: IMutex;
     FMaxSessions: Integer;
   public
@@ -239,8 +241,8 @@ uses
 function NormalizeWinSSLCertificateLinkText(const AValue: string): string;
 begin
   Result := Trim(UpperCase(AValue));
-  Result := StringReplace(Result, ',', '', [rfReplaceAll]);
-  Result := StringReplace(Result, ' ', '', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', '', True);
+  Result := StringReplace(Result, ' ', '', True);
 end;
 
 function FindWinSSLIssuerCertificate(const ALeaf: ISSLCertificate;
@@ -311,31 +313,35 @@ const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
   LData: TStringArray;
+  LText: string;
+  LResumed: string;
 begin
   SetLength(Result, 0);
   if FID = '' then
     Exit;
-  try
-    StringPairsGet(LPairs, 'magic') := WINSSL_SESSION_SERIALIZATION_MAGIC;
-    StringPairsGet(LPairs, 'id') := FID;
-    StringPairsGet(LPairs, 'created_unix') := IntToStr(DateTimeToUnix(FCreationTime));
-    StringPairsGet(LPairs, 'timeout') := IntToStr(FTimeout);
-    StringPairsGet(LPairs, 'protocol') := IntToStr(Ord(FProtocolVersion));
-    StringPairsGet(LPairs, 'cipher') := FCipherName;
-    if FIsResumed then
-      StringPairsGet(LPairs, 'resumed') := '1'
-    else
-      StringPairsGet(LPairs, 'resumed') := '0';
-    Result := BytesOf(UTF8String(LData.Text));
-  finally
-  end;
+  if FIsResumed then
+    LResumed := '1'
+  else
+    LResumed := '0';
+  SetLength(LData, 7);
+  LData[0] := 'magic=' + WINSSL_SESSION_SERIALIZATION_MAGIC;
+  LData[1] := 'id=' + FID;
+  LData[2] := 'created_unix=' + IntToStr(DateTimeToUnix(FCreationTime));
+  LData[3] := 'timeout=' + IntToStr(FTimeout);
+  LData[4] := 'protocol=' + IntToStr(Ord(FProtocolVersion));
+  LData[5] := 'cipher=' + FCipherName;
+  LData[6] := 'resumed=' + LResumed;
+  LText := StringsJoin(LData, #10);
+  SetLength(Result, Length(LText));
+  if LText <> '' then
+    Move(LText[1], Result[0], Length(LText));
 end;
 
 function TWinSSLSession.TryLoadSerializedSessionData(const AData: TBytes): Boolean;
 const
   WINSSL_SESSION_SERIALIZATION_MAGIC = 'fafafa-winssl-session-v1';
 var
-  LData: TStringArray;
+  LPairs: TStringPairArray;
   LText: RawByteString;
   LID: string;
   LCipher: string;
@@ -350,7 +356,7 @@ begin
 
   SetString(LText, PAnsiChar(@AData[0]), Length(AData));
   try
-    LData.Text := string(UTF8String(LText));
+    LPairs := StringsParseKeyValues(string(UTF8String(LText)));
     if StringPairsGet(LPairs, 'magic') <> WINSSL_SESSION_SERIALIZATION_MAGIC then
       Exit;
 
@@ -494,6 +500,7 @@ end;
 constructor TWinSSLSessionManager.Create;
 begin
   inherited Create;
+  FSessions := TStringList.Create;
   FSessions.Duplicates := dupIgnore;
   FSessions.Sorted := False;
   FLock := Mutex;
@@ -504,12 +511,13 @@ destructor TWinSSLSessionManager.Destroy;
 var
   i: Integer;
 begin
-  for i := 0 to Length(FSessions) - 1 do
+  for i := 0 to FSessions.Count - 1 do
   begin
     if FSessions.Objects[i] <> nil then
       ISSLSession(Pointer(FSessions.Objects[i]))._Release;
   end;
   FLock := nil;
+  FSessions.Free;
   inherited Destroy;
 end;
 
@@ -532,7 +540,7 @@ begin
 
     FSessions.AddObject(AID, TObject(Pointer(ASession)));
 
-    while Length(FSessions) > FMaxSessions do
+    while FSessions.Count > FMaxSessions do
     begin
       if FSessions.Objects[0] <> nil then
         ISSLSession(Pointer(FSessions.Objects[0]))._Release;
@@ -592,7 +600,7 @@ var
 begin
   FLock.Acquire;
   try
-    for i := Length(FSessions) - 1 downto 0 do
+    for i := FSessions.Count - 1 downto 0 do
     begin
       if not ISSLSession(Pointer(FSessions.Objects[i])).IsValid then
       begin

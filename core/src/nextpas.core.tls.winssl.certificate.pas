@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.certificate;
 interface
 
 uses
-  Windows, nextpas.core.io.intf, nextpas.core.fs.stream,
+  sysutils, Windows, nextpas.core.base, nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.time,
@@ -741,7 +741,7 @@ begin
     Exit;
   
   if FileTimeToSystemTime(CertInfo^.NotBefore, SysTime) then
-    Result := SystemTimeToDateTime(SysTime);
+    Result := SysUtils.SystemTimeToDateTime(SysTime);
 end;
 
 function TWinSSLCertificate.GetNotAfter: TDateTime;
@@ -756,7 +756,7 @@ begin
     Exit;
   
   if FileTimeToSystemTime(CertInfo^.NotAfter, SysTime) then
-    Result := SystemTimeToDateTime(SysTime);
+    Result := SysUtils.SystemTimeToDateTime(SysTime);
 end;
 
 function TWinSSLCertificate.GetPublicKey: string;

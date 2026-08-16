@@ -19,6 +19,7 @@ interface
 
 uses
   {$IFDEF WINDOWS} Windows, {$ENDIF}
+  nextpas.core.base,
   nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,
   nextpas.core.fs,
@@ -622,7 +623,7 @@ begin
   CleanupCertificate;
 
   LCertData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_CERTIFICATE_SIZE,
     'Certificate stream',
     'TWinSSLContext.LoadCertificate'
@@ -774,7 +775,7 @@ begin
     );
   
   LCertData := ReadLimitedStreamBytes(
-    WrapTStream(AStream, False),
+    AStream,
     MAX_PRIVATE_KEY_SIZE,
     'Private key stream',
     'TWinSSLContext.LoadPrivateKey'
@@ -1367,7 +1368,7 @@ begin
   EnsureCredentialsAcquired;
 
   // Let exceptions propagate - caller must handle errors explicitly
-  LTransport := WrapTStream(AStream, False);
+  LTransport := AStream;
   Result := TWinSSLConnection.Create(Self, LTransport);
 end;
 

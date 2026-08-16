@@ -461,7 +461,7 @@ begin
       (LCipher = 'CHACHA20-POLY1305');
 
   InternalLog(sslLogDebug, Format('Cipher support check: %s = %s', [
-    ACipherName, BoolToStr(Result, True)
+    ACipherName, BoolToStr(Result, 'TRUE', 'FALSE')
   ]));
 end;
 
@@ -490,7 +490,7 @@ begin
   end;
 
   InternalLog(sslLogDebug, Format('Feature support check (type-safe): %d = %s',
-    [Ord(AFeature), BoolToStr(Result, True)]));
+    [Ord(AFeature), BoolToStr(Result, 'TRUE', 'FALSE')]));
 end;
 
 function TWinSSLLibrary.GetCapabilities: TSSLBackendCapabilities;
@@ -615,9 +615,9 @@ begin
 
   InternalLog(sslLogDebug, Format('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s (Win %d.%d.%d)',
     [
-      BoolToStr(Result.SupportsTLS13, True),
-      BoolToStr(Result.SupportsALPN, True),
-      BoolToStr(Result.SupportsSNI, True),
+      BoolToStr(Result.SupportsTLS13, 'TRUE', 'FALSE'),
+      BoolToStr(Result.SupportsALPN, 'TRUE', 'FALSE'),
+      BoolToStr(Result.SupportsSNI, 'TRUE', 'FALSE'),
       FWindowsVersion.Major,
       FWindowsVersion.Minor,
       FWindowsVersion.Build
