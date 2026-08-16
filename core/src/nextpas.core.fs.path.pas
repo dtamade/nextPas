@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.platform.path,
-  nextpas.core.fs.util;
+  nextpas.core.platform.files;
 
 const
   PathDelim = PLATFORM_PATH_SEP;
@@ -115,6 +115,9 @@ begin
   Result := FsPathOpWithFallback(APath, @platform_path_normalize, '.');
 end;
 
+{ 当前工作目录（本地实现，避免 fs.path↔fs.util 循环依赖） }
+function FsPathGetCwd: string; forward;
+
 function FsPathAbs(const APath: string): string;
 var
   LStack: array[0..FS_PATH_STACK_BUF_SIZE - 1] of AnsiChar;
@@ -141,9 +144,20 @@ begin
     Result := FsPathClean(APath)
   else
   begin
-    LCwd := FsGetCwd;
+    LCwd := FsPathGetCwd;
     Result := FsPathClean(LCwd + PLATFORM_PATH_SEP + APath);
   end;
+end;
+
+{ 当前工作目录（本地实现，避免 fs.path↔fs.util 循环依赖） }
+function FsPathGetCwd: string;
+var
+  LBuf: array[0..1023] of AnsiChar;
+begin
+  if platform_file_getcwd(@LBuf[0], 1024) <> nil then
+    Result := StrPas(@LBuf[0])
+  else
+    Result := '.';
 end;
 
 function FsPathIsAbs(const APath: string): Boolean;
