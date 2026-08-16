@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-07-26 B4 后实测）
+## 当前战况（2026-08-17 B6-EXTDECL 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **57** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → **57 (B5f-intfid)** |
-| undefined total | **75** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → **75 (B5f-intfid；接口ID 3 符号→0)** |
+| undefined unique | **34** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1: implementation 区 external 声明注册 binding) → 34 (B6-EXTDECL 口2: emitter 大小写敏感去重 + SeedImportedCallableSymbol CleanName)** |
+| undefined total | **52** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -39,7 +39,7 @@ vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但�
 global 定义（`^@X =`）。同一 .ll 对照：旧 52/69 = 新 60/79（浮出 8 uniq：
 TStream vmt ×6 + TVec 泛型 ×2，全属 method-object 既有家族）。之后以新
 口径为准，数字只降不升纪律从 60/79 起算。
-| opt 首错 | `use of undefined value '@ECore.Create'` —— **解析层（语法/类型）全清**，只剩 undefined 本征 | B6.5 后 |
+| opt 首错 | `use of undefined value '@GetCurrentThreadId'`——**runtime-decl 桶**（core 调 FPC System 内建 `GetCurrentThreadId`，stub System 无声明） | B6-EXTDECL 后 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -321,17 +321,30 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
         已知死逻辑（不动）：ProcessInterlockedOp 的 Increment +1 调整分支
         `Copy(...,1,7)='int 1'#10` 恒 False——语句形态丢结果无实害，
         赋值形态 Increment 在 L3 闭包不存在。
-      - [ ] **external declare 半场**（⚠️ 主战文件
-        `np_sema_seed_foreign_procedures.inc` 被并行会话占用，等对方提交）：
-        `np_open`、
-      `np_opendir`、`np_readdir`、`np_read`、`getcwd`、`system` 全部来自
-      `units/<target>/SysUtils.pas` stub 的 `external 'c' name '<libc名>'`
-      声明（例：`units/linux-x86_64/SysUtils.pas:563`
-      `function np_opendir(name: PChar): PDirHandle; cdecl; external 'c' name 'opendir';`）。
-      外部声明既没 emit 成 LLVM `declare`，调用点也没做 Pascal 名 → 实际符号名
-      的映射（应发 `@opendir` 而非 `@np_opendir`）。主战文件：
-      `sema/np_sema_seed_foreign_procedures.inc` + emitter declare 表。
-      验证：undefined 清零。
+      - [x] **B6-EXTDECL external 纯声明注册 + emitter 大小写去重** ✅
+        （2026-08-17，42/64 → 34/52 uniq/total，`np_*`/`getcwd`/
+        `system` 家族全清，opt 首错换人）——**两口服**：
+        **口1 implementation 区 external 声明注册 binding**
+        （42→38 uniq / 64→61 total）：`np_open` 等在 stub
+        SysUtils 的 **implementation 区**声明（`AttachImplementationBodiesInNode`
+        对无 body 声明直接 Continue），而既有 `RegisterBodiesInNode`
+        只覆盖 interface 区 → external 声明既无 symbol 也无 binding，
+        调用点 fallback 发 `@np_open` residual。修法：该分支新增无
+        body 处理——`FindDeclBody = nil` 且文本含 `;external:` 时
+        走 `SeedImportedCallableSymbol` 注册。主战文件
+        `compiler/sema/np_sema_seed_imported_unit_bodies.inc`。
+        **口2 emitter 大小写敏感去重 + CleanName 注册**
+        （38→34 uniq / 61→52 total）：两个根因——
+        ① emitter 函数去重循环用 `SameText`（大小写不敏感），core 的
+        Pascal `GetCwd`/`OpenDir`/`ReadDir`/`Stat`（define）把 stub 的
+        `getcwd`/`opendir`/`readdir`/`stat`（external declare）挤掉
+        （LLVM 大小写敏感，`call @getcwd` 无 declare）→ 改大小写敏感
+        比较（`np_hir_llvm_emitter.pas`）；② `SeedImportedCallableSymbol`
+        用**带 `;external:c:getcwd` 后缀的完整文本**注册 symbol 名，
+        调用点按纯名查 miss→fallback core 同名 Pascal 函数（sret
+        形态）→ 注册前截断 CleanName。新 fixture
+        `tests/compiler/pass/` 由 compiler-pass 58/58 全过低证明。
+        验证：undefined 34/52 稳定，无桶回升。
 - [x] **B6.5 call-site 类型一致性 + 全局名引号** ✅ c6d7d5d1c：预估的
       「一类修复工作」实测只有 **1 处** call 实参不匹配（python 静态扫描全
       .ll：SSA 定义类型 vs call 实参标注，唯一命中 = `np_string_release`

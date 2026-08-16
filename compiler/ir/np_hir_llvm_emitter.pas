@@ -304,13 +304,16 @@ begin
     LFunc := FModule.FunctionAt(I);
     { Same short/mangled name can appear twice (unit facade NewSHA256 vs real
       impl, TextFormat re-export, …). Prefer the *denser* body by instr count —
-      last-wins dropped real class-new bodies when a later empty facade won. }
+      last-wins dropped real class-new bodies when a later empty facade won.
+      LLVM identifiers are case-sensitive: @GetCwd (Pascal) and @getcwd
+      (libc external) are distinct symbols, so compare exactly — SameText here
+      wrongly let the Pascal define swallow the external declare. }
     LAlreadyEmitted := False;
     for J := 0 to FModule.FunctionCount - 1 do
     begin
       if J = I then
         Continue;
-      if not SameText(FModule.FunctionAt(J).Name, LFunc.Name) then
+      if FModule.FunctionAt(J).Name <> LFunc.Name then
         Continue;
       if HirFunctionInstrCount(FModule.FunctionAt(J)) >
         HirFunctionInstrCount(LFunc) then

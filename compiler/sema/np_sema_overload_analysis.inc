@@ -59,6 +59,51 @@ begin
   Result := MangledNameSig(AName, Sig);
 end;
 
+function TSemanticAnalyzer.TryRegisterForeignProcedureBinding(
+  const AText: string; const ASymbolId: LongInt): Boolean;
+var
+  CleanName, ExtRest, ExtLib, ExtSym: string;
+  ExtPos, ColonPos, I: LongInt;
+  Binding: TSemanticForeignProcedureBinding;
+begin
+  Result := False;
+  ExtPos := Pos(';external:', AText);
+  if ExtPos <= 0 then
+    Exit;
+  CleanName := AText;
+  if Pos(';', CleanName) > 0 then
+    CleanName := Copy(CleanName, 1, Pos(';', CleanName) - 1);
+  ExtRest := Copy(AText, ExtPos + Length(';external:'), MaxInt);
+  if Pos(';', ExtRest) > 0 then
+    ExtRest := Copy(ExtRest, 1, Pos(';', ExtRest) - 1);
+  ColonPos := Pos(':', ExtRest);
+  if ColonPos > 0 then
+  begin
+    ExtLib := Copy(ExtRest, 1, ColonPos - 1);
+    ExtSym := Copy(ExtRest, ColonPos + 1, MaxInt);
+  end
+  else
+  begin
+    ExtLib := ExtRest;
+    ExtSym := CleanName;
+  end;
+  if ExtSym = '' then
+    ExtSym := CleanName;
+  for I := 0 to FModel.ForeignProcedureBindingCount - 1 do
+  begin
+    Binding := FModel.ForeignProcedureBindingAt(I);
+    if SameText(Binding.PascalName, CleanName) then
+      Exit(False);
+  end;
+  FModel.AddForeignProcedureBinding(
+    CleanName, 'cdecl', ExtLib, ExtSym, ASymbolId);
+  FModel.AddTypedHirNode(
+    'foreign-procedure-binding', CleanName, ASymbolId, 0, ExtSym);
+  if ExtLib <> '' then
+    FModel.AddLibraryRequest(ExtLib, 'shared', 'strong');
+  Result := True;
+end;
+
 procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
   const ABody: TGreenNode; const ADecl: TGreenNode;
   const AOwnerUnitId: string);

@@ -16,6 +16,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     SymbolId: LongInt;
     SymbolIndex: LongInt;
     TypeId: LongInt;
+    CleanName: string;
   begin
     if (ANode = nil) or (Trim(AOwnerUnitId) = '') or
       (Trim(ANode.Text) = '') or (Pos('.', ANode.Text) > 0) then
@@ -27,6 +28,14 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       KindName := 'procedure'
     else
       Exit;
+    { ANode.Text 是 'getcwd;external:c:getcwd' 完整形态；symbol 名必须用
+      CleanName，否则调用点按纯名 getcwd 查 symbol miss，fallback 到 core
+      同名 Pascal GetCwd（返回 string，sret 形态错）而不是 stub 的 external。 }
+    CleanName := ANode.Text;
+    if Pos(';', CleanName) > 0 then
+      CleanName := Copy(CleanName, 1, Pos(';', CleanName) - 1);
+    if Trim(CleanName) = '' then
+      Exit;
 
     ParamCount := CountDeclParams(ANode);
     ParamSignature := GetParamSignature(ANode);
@@ -34,7 +43,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     begin
       Symbol := FModel.SymbolAt(SymbolIndex);
       if SameText(Symbol.OwnerUnitId, AOwnerUnitId) and
-        SameText(Symbol.Name, ANode.Text) and
+        SameText(Symbol.Name, CleanName) and
         SameText(Symbol.Kind, KindName) and
         (Symbol.ByteOffset = ANode.ByteOffset) then
         Exit;
@@ -53,7 +62,7 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       end;
 
     SymbolId := FModel.AddSymbol(
-      ANode.Text,
+      CleanName,
       KindName,
       AOwnerUnitId,
       TypeId,
@@ -62,6 +71,12 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     FModel.SetSymbolParamCount(SymbolId, ParamCount);
     FModel.SetSymbolMinParamCount(SymbolId, CountRequiredDeclParams(ANode));
     FModel.SetSymbolParamSignature(SymbolId, ParamSignature);
+
+    { B6-EXTDECL: body-less 的 external 纯声明（np_open;…;external:c:open 形态）
+      不经过 RegisterProcedureBody（只处理有 body 的），在此统一注册
+      foreign binding，否则调用点落 residual @np_open。 }
+    if Pos(';external:', ANode.Text) > 0 then
+      TryRegisterForeignProcedureBinding(ANode.Text, SymbolId);
 
     if AUnitScopeId > 0 then
       ScopeId := AUnitScopeId
@@ -231,7 +246,25 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
       begin
         BodyChild := FindDeclBody(Child);
         if BodyChild = nil then
+        begin
+          { Body-less 的 external 纯声明（np_open;…;external:c:open 形态，
+            SysUtils stub 将其放在 implementation 区）不经过
+            RegisterProcedureBody（只处理有 body 的）。仍需注册 symbol +
+            foreign binding，否则调用点发 residual @np_open（B6-EXTDECL）。 }
+          if Pos(';external:', Child.Text) > 0 then
+          begin
+            UnitScopeId := EnsureUnitScope(AOwnerUnitId);
+            SavedScopeId := FCurrentScopeId;
+            if UnitScopeId > 0 then
+              FCurrentScopeId := UnitScopeId;
+            try
+              SeedImportedCallableSymbol(Child, AOwnerUnitId, UnitScopeId);
+            finally
+              FCurrentScopeId := SavedScopeId;
+            end;
+          end;
           Continue;
+        end;
         UnitScopeId := EnsureUnitScope(AOwnerUnitId);
         SavedScopeId := FCurrentScopeId;
         if UnitScopeId > 0 then
