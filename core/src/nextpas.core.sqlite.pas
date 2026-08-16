@@ -14,12 +14,29 @@ interface
 
 uses
   nextpas.core.sqlite.base,
-  nextpas.core.sqlite.conn;
+  nextpas.core.sqlite.conn,
+  nextpas.core.sqlite.pool,
+  nextpas.core.sqlite.tx,
+  nextpas.core.sqlite.migrate;
 
 type
+  { conn }
   ESqliteError = nextpas.core.sqlite.conn.ESqliteError;
   TSqliteDb = nextpas.core.sqlite.conn.TSqliteDb;
   TSqliteQuery = nextpas.core.sqlite.conn.TSqliteQuery;
+
+  { pool }
+  ESqlitePoolError = nextpas.core.sqlite.pool.ESqlitePoolError;
+  TSqlitePool = nextpas.core.sqlite.pool.TSqlitePool;
+
+  { tx }
+  ESqliteTxError = nextpas.core.sqlite.tx.ESqliteTxError;
+  TSqliteTxProc = nextpas.core.sqlite.tx.TSqliteTxProc;
+
+  { migrate }
+  ESqliteMigrateError = nextpas.core.sqlite.migrate.ESqliteMigrateError;
+  TSqliteMigration = nextpas.core.sqlite.migrate.TSqliteMigration;
+  TSqliteMigrations = nextpas.core.sqlite.migrate.TSqliteMigrations;
 
 const
   SQLITE_OK = nextpas.core.sqlite.base.SQLITE_OK;
@@ -43,14 +60,78 @@ const
   SQLITE_CONSTRAINT_ROWID = nextpas.core.sqlite.base.SQLITE_CONSTRAINT_ROWID;
   SQLITE_CONSTRAINT_PINNED = nextpas.core.sqlite.base.SQLITE_CONSTRAINT_PINNED;
   SQLITE_CONSTRAINT_DATATYPE = nextpas.core.sqlite.base.SQLITE_CONSTRAINT_DATATYPE;
+  SQLITE_MIGRATIONS_TABLE = nextpas.core.sqlite.migrate.SQLITE_MIGRATIONS_TABLE;
 
 function SqliteOpen(const APath: string): TSqliteDb; inline;
+
+{ ---- tx 透传 ---- }
+procedure WithTransaction(const ADb: TSqliteDb;
+  const AProc: TSqliteTxProc); inline;
+procedure BeginTxn(const ADb: TSqliteDb;
+  const AImmediate: Boolean = False); inline;
+procedure CommitTxn(const ADb: TSqliteDb); inline;
+procedure RollbackTxn(const ADb: TSqliteDb); inline;
+function InTransaction(const ADb: TSqliteDb): Boolean; inline;
+function TxDepth(const ADb: TSqliteDb): Integer; inline;
+
+{ ---- migrate 透传 ---- }
+function MakeMigrations(const AMigrations: array of TSqliteMigration): TSqliteMigrations; inline;
+function Migrate(const ADb: TSqliteDb;
+  const AMigrations: TSqliteMigrations): Integer; inline;
+function MigrationVersion(const ADb: TSqliteDb): Int64; inline;
 
 implementation
 
 function SqliteOpen(const APath: string): TSqliteDb;
 begin
   Result := nextpas.core.sqlite.conn.SqliteOpen(APath);
+end;
+
+procedure WithTransaction(const ADb: TSqliteDb;
+  const AProc: TSqliteTxProc);
+begin
+  nextpas.core.sqlite.tx.WithTransaction(ADb, AProc);
+end;
+
+procedure BeginTxn(const ADb: TSqliteDb; const AImmediate: Boolean);
+begin
+  nextpas.core.sqlite.tx.BeginTxn(ADb, AImmediate);
+end;
+
+procedure CommitTxn(const ADb: TSqliteDb);
+begin
+  nextpas.core.sqlite.tx.CommitTxn(ADb);
+end;
+
+procedure RollbackTxn(const ADb: TSqliteDb);
+begin
+  nextpas.core.sqlite.tx.RollbackTxn(ADb);
+end;
+
+function InTransaction(const ADb: TSqliteDb): Boolean;
+begin
+  Result := nextpas.core.sqlite.tx.InTransaction(ADb);
+end;
+
+function TxDepth(const ADb: TSqliteDb): Integer;
+begin
+  Result := nextpas.core.sqlite.tx.TxDepth(ADb);
+end;
+
+function MakeMigrations(const AMigrations: array of TSqliteMigration): TSqliteMigrations;
+begin
+  Result := nextpas.core.sqlite.migrate.MakeMigrations(AMigrations);
+end;
+
+function Migrate(const ADb: TSqliteDb;
+  const AMigrations: TSqliteMigrations): Integer;
+begin
+  Result := nextpas.core.sqlite.migrate.Migrate(ADb, AMigrations);
+end;
+
+function MigrationVersion(const ADb: TSqliteDb): Int64;
+begin
+  Result := nextpas.core.sqlite.migrate.MigrationVersion(ADb);
 end;
 
 end.
