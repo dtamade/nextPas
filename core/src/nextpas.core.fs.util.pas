@@ -43,6 +43,8 @@ procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
 procedure FsSymlink(const ATarget, ALinkPath: string);
 function FsReadlink(const APath: string): string;
+{ POSIX realpath：整链解析（含中间段符号链接）；路径不存在/链接环 → 异常 }
+function FsRealPath(const APath: string): string;
 {** @desc 创建硬链接（对齐 Go os.Link / Rust hard_link） *}
 procedure FsHardLink(const AOldPath, ANewPath: string);
 {** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TFileInfo.ModTime 同单位） *}
@@ -65,6 +67,7 @@ uses
   nextpas.core.text.builder,
   nextpas.core.errors,
   nextpas.core.fs.errors,
+  nextpas.core.fs.path,
   nextpas.core.platform.base,
   nextpas.core.platform.error,
   nextpas.core.platform.files.base,
@@ -572,6 +575,57 @@ begin
     end;
     LBufLen := LBufLen * 2;
   until False;
+end;
+
+{ POSIX realpath 语义的整链解析：绝对化 → 自底向上逐段展开符号链接
+  （含中间段；展开目标相对则相对父目录拼接），路径不存在 → 异常，
+  循环防护（深度上限 40，超限视为链接环）。 }
+function FsRealPath(const APath: string): string;
+const
+  MAX_SYMLINK_FOLLOW = 40;
+var
+  P, Parent, Target: string;
+  Depth: Integer;
+begin
+  P := Trim(APath);
+  if P = '' then
+    raise EIOError.Create('realpath: empty path');
+  if not FsPathIsAbs(P) then
+    P := FsPathJoin([FsGetCwd, P]);
+  { 自底向上：解析整条路径的中间/末端符号链接，展开后从头重解析 }
+  Depth := 0;
+  while True do
+  begin
+    if not FsExists(P) then
+      raise ENotFoundError.Create('realpath: no such file or directory: ' + APath);
+    if FsIsSymlink(P) then
+    begin
+      Inc(Depth);
+      if Depth > MAX_SYMLINK_FOLLOW then
+        raise EIOError.Create('realpath: too many levels of symbolic links: ' + APath);
+      Target := FsReadlink(P);
+      if not FsPathIsAbs(Target) then
+        Target := FsPathJoin([FsPathDir(P), Target]);
+      P := FsPathClean(Target);
+      Continue;   { 展开后整条重解析 }
+    end;
+    Parent := FsPathDir(P);
+    if (Parent = P) or (Parent = '') then
+      Break;      { 到根 }
+    if FsIsSymlink(Parent) then
+    begin
+      Inc(Depth);
+      if Depth > MAX_SYMLINK_FOLLOW then
+        raise EIOError.Create('realpath: too many levels of symbolic links: ' + APath);
+      Target := FsReadlink(Parent);
+      if not FsPathIsAbs(Target) then
+        Target := FsPathJoin([FsPathDir(Parent), Target]);
+      P := FsPathClean(FsPathJoin([Target, FsPathBase(P)]));
+      Continue;
+    end;
+    P := Parent;
+  end;
+  Result := P;
 end;
 
 function UTF16LEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;

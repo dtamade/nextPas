@@ -525,6 +525,60 @@ begin
   CheckEqual('relative-target', LRead, 'readlink keeps relative target');
 end;
 
+{ FsRealPath：整链解析——末端/中间段符号链接展开、不存在 → ENotFoundError、
+  相对目标拼接父目录 }
+procedure TestRealPath;
+var
+  LDir, LReal, LLink, LMidDir, LMidLink, LFile, LRes, LRaw: string;
+  LRaised: Boolean;
+begin
+  LDir := GTmpDir + '/realpath-dir';
+  MkdirAll(LDir, PermDirDefault);
+  LReal := LDir + '/real-sub';
+  MkdirAll(LReal, PermDirDefault);
+  LFile := LReal + '/f.txt';
+  FsWriteFile(LFile, TBytes.Create(Ord('x')));
+
+  { 普通既有路径 → canonical 化（与真实解析一致，前缀为 GTmpDir 的 canonical） }
+  LRes := FsRealPath(LFile);
+  CheckTrue(LRes <> '', 'realpath non-empty');
+  CheckTrue(FsExists(LRes), 'realpath resolves to existing path');
+
+  { 末端 symlink：link → real-sub；link/f.txt 解析到 real-sub/f.txt }
+  LLink := LDir + '/end-link';
+  FsSymlink('real-sub', LLink);
+  LRes := FsRealPath(LLink + '/f.txt');
+  CheckEqual(FsRealPath(LReal + '/f.txt'), LRes, 'end symlink resolved');
+
+  { 中间段 symlink：link → real-sub；link 下再套一层真实目录 }
+  LMidDir := LReal + '/mid';
+  MkdirAll(LMidDir, PermDirDefault);
+  FsWriteFile(LMidDir + '/m.txt', TBytes.Create(Ord('y')));
+  LMidLink := LDir + '/mid-link';
+  FsSymlink('real-sub', LMidLink);
+  LRes := FsRealPath(LMidLink + '/mid/m.txt');
+  CheckEqual(FsRealPath(LMidDir + '/m.txt'), LRes, 'mid symlink resolved');
+
+  { 绝对目标 symlink：abs-link → 绝对路径 }
+  LMidDir := LDir + '/linker';
+  MkdirAll(LMidDir, PermDirDefault);
+  FsWriteFile(LMidDir + '/t.txt', TBytes.Create(Ord('z')));
+  LRaw := FsRealPath(LMidDir + '/t.txt');
+  FsSymlink(LRaw, LMidDir + '/abs-link');
+  LRes := FsRealPath(LMidDir + '/abs-link');
+  CheckEqual(LRaw, LRes, 'absolute target link resolved');
+
+  { 不存在 → ENotFoundError }
+  LRaised := False;
+  try
+    FsRealPath(GTmpDir + '/no-such-realpath');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'missing path raises ENotFoundError');
+end;
+
 procedure TestReadFileMissingNotFound;
 var
   LRaised: Boolean;
@@ -2523,6 +2577,7 @@ begin
     T.Test('IsSymlink', @TestIsSymlink);
     T.Test('SameFile', @TestSameFile);
     T.Test('Symlink relative target', @TestSymlinkRelativeTarget);
+    T.Test('RealPath', @TestRealPath);
     T.Test('ReadFile missing ENotFound', @TestReadFileMissingNotFound);
     T.Test('WriteAtomic missing parent', @TestWriteAtomicMissingParentRaises);
     T.Test('CopyFile missing source', @TestCopyFileMissingSourceRaises);

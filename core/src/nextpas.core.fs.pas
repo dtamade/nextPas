@@ -96,6 +96,9 @@ function ReadFile(const APath: string): TBytes; inline;
 function ReadFileText(const APath: string): string; inline;
 {** @desc 读取文件按行分割为字符串数组 *}
 function ReadFileLines(const APath: string): TStringArray; inline;
+{** @desc POSIX realpath：整链解析符号链接（含中间段）；不存在/环 → 异常。
+        安全路径基准（逻辑根 canonical 化）统一入口 *}
+function PathRealPath(const APath: string): string; inline;
 {** @desc 将字节数组写入文件 *}
 procedure WriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
@@ -351,6 +354,11 @@ end;
 function ReadFileLines(const APath: string): TStringArray;
 begin
   Result := nextpas.core.fs.util.FsReadFileLines(APath);
+end;
+
+function PathRealPath(const APath: string): string;
+begin
+  Result := nextpas.core.fs.util.FsRealPath(APath);
 end;
 
 procedure WriteFile(const APath: string; const AData: TBytes;
