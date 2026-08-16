@@ -5,6 +5,7 @@ program test_http_middlewares;
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.log,
   nextpas.core.test,
   nextpas.core.io.intf,
   nextpas.core.http.base,
@@ -105,6 +106,20 @@ type
     function QueryParam(const AName: string): string;
     function GetContext: IHttpContext;
     procedure SetContext(const ACtx: IHttpContext);
+  end;
+
+  TLogCaptureHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FLast: TLogRecord;
+    FCount: Int32;
+  public
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    function WithGroup(const AName: string): ILogHandler;
+    property Last: TLogRecord read FLast;
+    property Count: Int32 read FCount;
   end;
 
 { TMockResponseWriter }
@@ -276,6 +291,33 @@ begin Result := FContext; end;
 
 procedure TMockRequest.SetContext(const ACtx: IHttpContext);
 begin FContext := ACtx; end;
+
+{ TLogCaptureHandler }
+
+function TLogCaptureHandler.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := True;
+end;
+
+procedure TLogCaptureHandler.Handle(const ARecord: TLogRecord);
+begin
+  FLast := ARecord;
+  Inc(FCount);
+end;
+
+procedure TLogCaptureHandler.Flush;
+begin
+end;
+
+function TLogCaptureHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+begin
+  Result := Self;
+end;
+
+function TLogCaptureHandler.WithGroup(const AName: string): ILogHandler;
+begin
+  Result := Self;
+end;
 
 { === Recovery Tests === }
 
@@ -499,6 +541,95 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReq, LW);
   CheckEqual(Int64(404), Int64(LWObj.Status), 'logger handles 404 without crash');
+end;
+
+procedure TestLoggerExtras;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCap: TLogCaptureHandler;
+  LLog: TLogger;
+  LProvider: TLogExtrasProvider;
+  LI: Int32;
+  LFoundRequestId: Boolean;
+  LFoundStatusSeen: Boolean;
+begin
+  LCap := TLogCaptureHandler.Create;
+  LLog := TLogger.New(LCap);
+  LProvider := function(const AReq: IHttpRequest; const AW: IHttpResponseWriter): TLogFieldArray
+  var
+    LFields: TLogFieldArray;
+  begin
+    SetLength(LFields, 2);
+    LFields[0].Key := 'request_id';
+    LFields[0].Value := AReq.GetHeaders.Get('x-request-id');
+    LFields[1].Key := 'status_seen';
+    LFields[1].Value := IntToStr(Int64(AW.GetStatus));
+    Result := LFields;
+  end;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_CREATED);
+    end),
+    [LoggerMiddlewareWithExtrasAndLogger(LProvider, LLog)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/with-extras');
+  LReq.SetHeader('x-request-id', 'req-abc');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(201), Int64(LWObj.Status), 'extras logger preserves status');
+  CheckEqual(Int64(1), Int64(LCap.Count), 'one log record produced');
+  CheckEqual('http_request', LCap.Last.Message, 'record message is http_request');
+  Check(LCap.Last.AttrCount >= 6, 'record carries base fields plus extras');
+  LFoundRequestId := False;
+  LFoundStatusSeen := False;
+  for LI := 0 to LCap.Last.AttrCount - 1 do
+  begin
+    if LCap.Last.Attrs[LI].Key = 'request_id' then
+    begin
+      CheckEqual('req-abc', LCap.Last.Attrs[LI].SVal, 'request_id extra from request header');
+      LFoundRequestId := True;
+    end
+    else if LCap.Last.Attrs[LI].Key = 'status_seen' then
+    begin
+      CheckEqual('201', LCap.Last.Attrs[LI].SVal, 'status_seen extra from response status');
+      LFoundStatusSeen := True;
+    end;
+  end;
+  Check(LFoundRequestId, 'extras provider could read request header');
+  Check(LFoundStatusSeen, 'extras provider could read response status');
+end;
+
+procedure TestLoggerExtrasDefaultLogger;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LProvider: TLogExtrasProvider;
+begin
+  LProvider := function(const AReq: IHttpRequest; const AW: IHttpResponseWriter): TLogFieldArray
+  begin
+    Result := nil;
+  end;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [LoggerMiddlewareWithExtras(LProvider)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/default-logger');
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReq, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'extras logger with default logger passes through');
 end;
 
 { === CORS Tests === }
@@ -3760,6 +3891,8 @@ begin
   T.Test('Logger: calls next handler', @TestLoggerCallsNext);
   T.Test('Logger: preserves status', @TestLoggerPreservesStatus);
   T.Test('Logger: no crash on 404', @TestLoggerNoCrash);
+  T.Test('Logger: extras provider appends fields', @TestLoggerExtras);
+  T.Test('Logger: extras with default logger', @TestLoggerExtrasDefaultLogger);
   { CORS }
   T.Test('CORS: preflight → 204 + headers', @TestCorsPreflight);
   T.Test('CORS: normal GET with Origin', @TestCorsNormalRequest);
