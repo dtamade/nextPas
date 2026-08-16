@@ -1,0 +1,679 @@
+program test_mail_smtp_server;
+
+{ 批次 2：事件驱动 SMTP 服务器会话（mail.smtp.server）集成测试。
+  覆盖：banner、EHLO 能力列表、HELO、MAIL/RCPT/DATA 全流程与点转义、
+  SIZE 拒绝、RCPT 先于 MAIL、DATA 缺收件人、未知命令、VRFY/EXPN、
+  STARTTLS 探测拒、AUTH 未启用拒、RequireAuth、收件人上限、QUIT 关闭、
+  读空闲超时、出站队列溢出中止。
+
+  服务器走 epoll readiness 路径（Linux），客户端用 mail.smtp 客户端与
+  裸 TcpConnect 行协议。sink 计数经 SpinWait 由主线程观察（与
+  test_net_server_ws_session 同范式，无锁）。 }
+
+{$I nextpas.core.settings.inc}
+
+{$IF not defined(NEXTPAS_LINUX)}
+  {$ERROR test_mail_smtp_server requires the Linux epoll backend}
+{$ENDIF}
+
+uses
+  nextpas.core.thread.init,
+  Classes,
+  SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.test,
+  nextpas.core.net,
+  nextpas.core.net.intf,
+  nextpas.core.net.server,
+  nextpas.core.platform.thread,
+  nextpas.core.text.conv,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
+  nextpas.core.mail;
+
+type
+  PServerFixture = ^TServerFixture;
+  TServerFixture = record
+    Server: ITcpServer;
+    Handler: ITcpServerHandler;
+    Addr: string;
+    Port: UInt16;
+  end;
+
+  { 测试 sink：仅由 reactor 线程回调；计数字段在主线程经等待循环观察
+    （与 test_net_server_ws_session 既有范式一致，无锁）。 }
+  TTestSmtpSink = class(TInterfacedObject, ISmtpServerSink)
+  public
+    MsgCount: Int32;
+    TimeoutCount: Int32;
+    OverflowCount: Int32;
+    ClosedCount: Int32;
+    LastFrom: string;
+    LastRcptCount: Int32;
+    LastData: string;
+    constructor Create;
+    procedure OnServerEvent(const AEvent: TMailSmtpServerEvent;
+      const AEnvelope: TMailSmtpEnvelope);
+  end;
+
+  TTestSmtpHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  public
+    CreateCount: Int32;
+    ServeConnCalled: Boolean;
+    constructor Create(const ASink: TTestSmtpSink;
+      const AConfig: TMailSmtpServerConfig);
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+  private
+    FSinkObj: TTestSmtpSink;
+    FSink: ISmtpServerSink;
+    FConfig: TMailSmtpServerConfig;
+  end;
+
+{ 服务器线程：ListenAndServe 阻塞运行，退出时释放引用 }
+function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PServerFixture;
+begin
+  Result := nil;
+  LCtx := PServerFixture(AArg);
+  try
+    LCtx^.Server.ListenAndServe(LCtx^.Addr, LCtx^.Port, LCtx^.Handler);
+  finally
+    LCtx^.Server := nil;
+    LCtx^.Handler := nil;
+    Dispose(LCtx);
+  end;
+end;
+
+{ 启动 epoll 事件驱动 SMTP 服务器（factory → poll-driven 会话路径）。 }
+procedure StartSmtpServer(const ASink: TTestSmtpSink;
+  const AConfig: TMailSmtpServerConfig; out AServer: ITcpServer;
+  out AHandler: TTestSmtpHandler; out AThread: TPlatformThreadHandle);
+var
+  LCtx: PServerFixture;
+  LOptions: TTcpServerOptions;
+  LWait: Int32;
+begin
+  AHandler := TTestSmtpHandler.Create(ASink, AConfig);
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  AServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := AServer;
+  LCtx^.Handler := AHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(AThread, @ServerThreadFunc, LCtx);
+  LWait := 0;
+  while (not AServer.IsRunning) and (LWait < 600) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  Check(AServer.IsRunning, 'smtp server should start');
+  Check(AServer.LocalAddr.Port > 0, 'smtp server exposes bound port');
+end;
+
+{ 停止服务器并回收线程 }
+procedure StopSmtpServer(var AServer: ITcpServer; const AThread: TPlatformThreadHandle);
+var
+  LRet: Pointer;
+begin
+  if AServer <> nil then
+    AServer.Shutdown;
+  platform_thread_join(AThread, LRet);
+  AServer := nil;
+end;
+
+{ 等待某计数达到目标（5ms 步进，最大 3s）。 }
+function SpinWait(var AValue: Int32; const ATarget: Int32): Boolean;
+var
+  I: Int32;
+begin
+  Result := False;
+  for I := 1 to 600 do
+  begin
+    if AValue >= ATarget then
+      Exit(True);
+    platform_thread_sleep_ns(5000000);
+  end;
+end;
+
+{ ── 裸行协议客户端助手 ───────────────────────────────────────────── }
+
+type
+  TRawClient = record
+    Stream: ITcpStream;
+    function Open(const APort: UInt16): Boolean;
+    function ReadLine(const ATimeoutMs: Int64; out ALine: string): Boolean;
+    function SendLine(const ALine: string): Boolean;
+    procedure Close;
+  end;
+
+function TRawClient.Open(const APort: UInt16): Boolean;
+begin
+  try
+    Stream := TcpConnect('127.0.0.1', APort, 2000);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+function TRawClient.ReadLine(const ATimeoutMs: Int64; out ALine: string): Boolean;
+var
+  LB: TBytes;
+  LCap: Integer;
+  LRaw: Byte;
+begin
+  Result := False;
+  ALine := '';
+  SetLength(LB, 256);
+  LCap := 0;
+  try
+    if ATimeoutMs > 0 then
+      Stream.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs)))
+    else
+      Stream.SetReadDeadline(TDeadline.Infinite);
+    while True do
+    begin
+      LRaw := 0;
+      if Stream.Read(LRaw, 1) = 0 then
+        Exit;
+      if LRaw = 10 then
+        Break;
+      if LRaw <> 13 then
+      begin
+        if LCap >= Length(LB) then
+          SetLength(LB, LCap * 2);
+        LB[LCap] := LRaw;
+        Inc(LCap);
+      end;
+    end;
+    SetLength(LB, LCap);
+    ALine := ASCIIBytesToString(LB);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+function TRawClient.SendLine(const ALine: string): Boolean;
+var
+  LB: TBytes;
+begin
+  try
+    LB := StringToUTF8Bytes(ALine + #13#10);
+    Stream.Write(LB[0], Length(LB));
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+procedure TRawClient.Close;
+begin
+  if Stream <> nil then
+    try
+      Stream.Close;
+    except
+    end;
+  Stream := nil;
+end;
+
+{ 读横幅并断言 220 }
+procedure ExpectBanner(const C: TRawClient; const ATimeoutMs: Int64);
+var
+  LLine: string;
+begin
+  Check(C.ReadLine(ATimeoutMs, LLine), 'banner read');
+  Check(Copy(LLine, 1, 3) = '220', 'banner 220, got: ' + LLine);
+end;
+
+{ 读单行回复并断言码 }
+procedure ExpectReply(const C: TRawClient; const ATimeoutMs: Int64;
+  const ACode: string; const AWhat: string);
+var
+  LLine: string;
+begin
+  Check(C.ReadLine(ATimeoutMs, LLine), 'reply read for ' + AWhat);
+  Check(Copy(LLine, 1, 3) = ACode,
+    AWhat + ' expects ' + ACode + ', got: ' + LLine);
+end;
+
+{ 读多行回复直到非 '-' 结尾行；断言最终码；返回是否含某能力行 }
+function ExpectMultiLine(const C: TRawClient; const ATimeoutMs: Int64;
+  const ACode: string; const ACapPrefix: string; const AWhat: string): Boolean;
+var
+  LLine: string;
+begin
+  Result := False;
+  while True do
+  begin
+    Check(C.ReadLine(ATimeoutMs, LLine), 'multiline reply read for ' + AWhat);
+    Check(Copy(LLine, 1, 3) = ACode, AWhat + ' expects ' + ACode + ', got: ' + LLine);
+    if Copy(LLine, 4, 1) = '-' then
+    begin
+      if Pos(ACapPrefix, Copy(LLine, 5, Length(LLine) - 4)) = 1 then
+        Result := True;
+      Continue;
+    end;
+    Break;
+  end;
+end;
+
+{ ── 事件类型 ──────────────────────────────────────────────────────── }
+
+constructor TTestSmtpSink.Create;
+begin
+  inherited Create;
+end;
+
+procedure TTestSmtpSink.OnServerEvent(const AEvent: TMailSmtpServerEvent;
+  const AEnvelope: TMailSmtpEnvelope);
+begin
+  case AEvent of
+    msseMessage:
+      begin
+        Inc(MsgCount);
+        LastFrom := AEnvelope.From.Full;
+        LastRcptCount := Length(AEnvelope.Recipients);
+        LastData := UTF8BytesToString(AEnvelope.Data);
+      end;
+    msseTimeout:
+      Inc(TimeoutCount);
+    msseOverflow:
+      Inc(OverflowCount);
+    msseClosed:
+      Inc(ClosedCount);
+  end;
+end;
+
+constructor TTestSmtpHandler.Create(const ASink: TTestSmtpSink;
+  const AConfig: TMailSmtpServerConfig);
+begin
+  inherited Create;
+  FSinkObj := ASink;
+  FSink := ASink;
+  FConfig := AConfig;
+end;
+
+function TTestSmtpHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  { factory 路径应绕过 legacy ServeConn（对齐 ws 测试断言） }
+  ServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TTestSmtpHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  Inc(CreateCount);
+  Result := TMailSmtpServerSession.Create(AConn, FSink, FConfig);
+end;
+
+{ ── 测试用例 ──────────────────────────────────────────────────────── }
+
+function MakeConfig(APort: UInt16; AIoMs, AConnectMs: Int64): TSmtpClientConfig;
+begin
+  Result.Host := '127.0.0.1';
+  Result.Port := APort;
+  Result.HeloDomain := '';
+  Result.ConnectTimeoutMs := AConnectMs;
+  Result.IoTimeoutMs := AIoMs;
+end;
+
+procedure Test_Full;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartSmtpServer(LSink, LConfig, LServer, LHandler, LH);
+  LPort := LServer.LocalAddr.Port;
+
+  { EHLO 能力列表 }
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  Check(ExpectMultiLine(C, 2000, '250', '8BITMIME', 'EHLO caps'), '8BITMIME advertised');
+  // PIPELINING + SIZE 也应出现
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+  Check(SpinWait(LSink.ClosedCount, 1), 'closed after quit');
+
+  StopSmtpServer(LServer, LH);
+  LHandler := nil;
+  LSink := nil;
+end;
+
+procedure StartFixture(const AConfig: TMailSmtpServerConfig;
+  const ASink: TTestSmtpSink; out AServer: ITcpServer;
+  out AHandler: TTestSmtpHandler; out AThread: TPlatformThreadHandle;
+  out APort: UInt16);
+begin
+  StartSmtpServer(ASink, AConfig, AServer, AHandler, AThread);
+  APort := AServer.LocalAddr.Port;
+end;
+
+procedure TestHelloCommands;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LLine: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('HELO old.example');
+  ExpectReply(C, 2000, '250', 'HELO');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT2');
+  C.Close;
+  Check(SpinWait(LSink.ClosedCount, 1), 'closed after quit2');
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestMailRcptDataFlow;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  LClient: TSmtpClient;
+  LFrom: TMailAddress;
+  LTo: TMailAddressArray;
+  LData: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  { 用 mail.smtp 客户端走完整会话：EHLO/MAIL/RCPT/DATA（点转义）/QUIT }
+  LClient := TSmtpClient.Create(MakeConfig(LPort, 2000, 2000));
+  try
+    Check(LClient.TryConnect, 'client connect');
+    LFrom := TMailAddress.Parse('alice@example.com');
+    SetLength(LTo, 2);
+    LTo[0] := TMailAddress.Parse('bob@example.com');
+    LTo[1] := TMailAddress.Parse('carol@example.com');
+    LData := 'From: alice@example.com' + #13#10 +
+             'To: bob@example.com' + #13#10 +
+             'Subject: test' + #13#10 + #13#10 +
+             'line1' + #13#10 +
+             '.line' + #13#10 +
+             '..double' + #13#10 +
+             'end';
+    Check(LClient.TrySendMail(LFrom, LTo, LData), 'send mail accepted');
+    CheckEqual(250, LClient.LastReply.Code, 'final reply code');
+    Check(LClient.TryQuit, 'quit ok');
+  finally
+    LClient.Free;
+  end;
+
+  { 事件交付核验 }
+  Check(SpinWait(LSink.MsgCount, 1), 'server received message');
+  CheckEqual('alice@example.com', LSink.LastFrom, 'envelope from');
+  CheckEqual(2, LSink.LastRcptCount, 'envelope recipients');
+  { 点转义还原：'.line' 与 '..double' 应原样回到应用 }
+  Check(Pos('.line' + #13#10, LSink.LastData) > 0, 'dot unstuff single');
+  Check(Pos('..double' + #13#10, LSink.LastData) > 0, 'dot unstuff double');
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestSizeReject;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'SIZE', 'EHLO');
+  C.SendLine('MAIL FROM:<a@b.com> SIZE=99999999999');
+  ExpectReply(C, 2000, '552', 'SIZE reject');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'MAIL ok');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestOrderAndSyntax;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  { 未 HELO 先 RCPT → 503 }
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '503', 'rcpt before helo');
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
+  { RCPT 先于 MAIL → 503 }
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '503', 'rcpt before mail');
+  { 坏 MAIL 语法 → 501 }
+  C.SendLine('MAIL FROM:not-an-address');
+  ExpectReply(C, 2000, '501', 'bad from');
+  { 小写命令参数 → 大小写不敏感；RSET 清信封 }
+  C.SendLine('mail from:<lower@case.com>');
+  ExpectReply(C, 2000, '250', 'lowercase mail');
+  C.SendLine('RSET');
+  ExpectReply(C, 2000, '250', 'rset clears envelope');
+  { 坏 RCPT 语法 → 501 }
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'from ok');
+  C.SendLine('RCPT TO:bad');
+  ExpectReply(C, 2000, '501', 'bad rcpt');
+  { DATA 无 RCPT → 503 }
+  C.SendLine('DATA');
+  ExpectReply(C, 2000, '503', 'data no rcpt');
+  { 未知命令 → 500 }
+  C.SendLine('FOO BAR');
+  ExpectReply(C, 2000, '500', 'unknown cmd');
+  { 超长行（>64KiB）→ 500 }
+  C.SendLine(StringOfChar('A', 70000));
+  ExpectReply(C, 2000, '500', 'overlong line');
+  { VRFY/EXPN → 252 }
+  C.SendLine('VRFY user');
+  ExpectReply(C, 2000, '252', 'vrfy');
+  C.SendLine('EXPN list');
+  ExpectReply(C, 2000, '252', 'expn');
+  { STARTTLS 探测 → 454 }
+  C.SendLine('STARTTLS');
+  ExpectReply(C, 2000, '454', 'starttls probe');
+  { AUTH 未启用 → 503 }
+  C.SendLine('AUTH PLAIN AAAA');
+  ExpectReply(C, 2000, '503', 'auth disabled');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestRequireAuth;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.RequireAuth := True;
+  LConfig.AuthEnabled := True;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'AUTH', 'EHLO auth');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '530', 'auth required');
+  C.SendLine('AUTH PLAIN AAAA');
+  ExpectReply(C, 2000, '503', 'auth impl pending');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestMaxRecipients;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.MaxRecipients := 1;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO t');
+  ExpectMultiLine(C, 2000, '250', 'SIZE', 'EHLO');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'from');
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '250', 'rcpt1');
+  C.SendLine('RCPT TO:<w@z.com>');
+  ExpectReply(C, 2000, '452', 'too many rcpt');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestIdleTimeout;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LLine: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.IdleTimeout := TDuration.FromMilliseconds(300);
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  { 静默 → 服务器超时关闭；客户端读 EOF }
+  Check(not C.ReadLine(1500, LLine), 'idle timeout closes conn');
+  Check(SpinWait(LSink.TimeoutCount, 1), 'timeout event fired');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+procedure TestOverflowAbort;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LLine: string;
+begin
+  LSink := TTestSmtpSink.Create;
+  LConfig := TMailSmtpServerConfig.Default;
+  { 回复队列上限极小（< banner 22B）：首个回复即溢出 }
+  LConfig.OutboundQueueLimit := 16;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  { banner 超出 24B → 溢出中止 }
+  Check(not C.ReadLine(1500, LLine), 'overflow aborts conn');
+  Check(SpinWait(LSink.OverflowCount, 1), 'overflow event fired');
+  C.Close;
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+end;
+
+var
+  T: TTestSuite;
+
+begin
+  T := TTestSuite.Create('nextpas.core.mail.smtp.server');
+  T.Test('HelloCommands', @TestHelloCommands);
+  T.Test('EhloCapabilities', @Test_Full);
+  T.Test('MailRcptDataFlow', @TestMailRcptDataFlow);
+  T.Test('SizeReject', @TestSizeReject);
+  T.Test('OrderAndSyntax', @TestOrderAndSyntax);
+  T.Test('RequireAuth', @TestRequireAuth);
+  T.Test('MaxRecipients', @TestMaxRecipients);
+  T.Test('IdleTimeout', @TestIdleTimeout);
+  T.Test('OverflowAbort', @TestOverflowAbort);
+  if not T.Run then
+    Halt(1);
+end.
