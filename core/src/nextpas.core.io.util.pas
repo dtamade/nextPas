@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.platform.console;
 
 function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
 function IoCopyN(const ADst: IWriter; const ASrc: IReader; const AN: Int64): Int64;
@@ -20,6 +21,10 @@ function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
 function IoMultiReader(const AReaders: array of IReader): IReader;
 function IoMultiWriter(const AWriters: array of IWriter): IWriter;
 function IoNopCloser(const AInner: IReader): IReadCloser;
+{ 从文件描述符阻塞读一行（行尾 CR/LF 去除；EOF/错误 → 已读部分；
+  超 AMaxLen 截断并排空余下到行尾）。终端确认/交互行输入统一入口：
+  跨平台经 platform.console（POSIX read / Windows ReadFile） }
+function IoFdReadLine(const AFd: PtrInt; const AMaxLen: SizeUInt = 4096): string;
 function IoDiscard: IWriter;
 function IoNullReader: IReader;
 
@@ -35,6 +40,46 @@ uses
 
 const
   COPY_BUF_SIZE = 32768;
+
+{ IoFdReadLine：阻塞读一行。实现规约：
+  - 逐块 platform_console_read，遇 LF 或 CR 停（行尾；CRLF 均去）
+  - EOF/读错误 → 返回已读部分（空 = 无数据）
+  - 超出 AMaxLen → 截断并继续排空缓冲到行尾（丢弃余下，保证后续输入不串行）
+  用于启动确认等「读一行」场景；交互循环读多行应走流式拆分。 }
+function IoFdReadLine(const AFd: PtrInt; const AMaxLen: SizeUInt): string;
+const
+  BUF_SIZE = 256;
+var
+  Buf: array[0..BUF_SIZE - 1] of Byte;
+  Got, I: Int32;
+  N: SizeUInt;
+  Done: Boolean;
+begin
+  Result := '';
+  N := 0;
+  Done := False;
+  while True do
+  begin
+    Got := platform_console_read(AFd, @Buf, SizeOf(Buf));
+    if Got <= 0 then
+      Break;                     { EOF / 读错误 → 返回已读部分 }
+    for I := 0 to Got - 1 do
+    begin
+      if (Buf[I] = 10) or (Buf[I] = 13) then
+      begin
+        Done := True;
+        Break;
+      end;
+      if N < AMaxLen then
+      begin
+        Result := Result + Chr(Buf[I]);
+        Inc(N);
+      end;
+    end;
+    if Done then
+      Break;
+  end;
+end;
 
 procedure WriteAll(const AWriter: IWriter; const ABuf; const ACount: SizeUInt;
   const AContext: string);

@@ -13,7 +13,11 @@ uses
   nextpas.core.io.util,
   nextpas.core.io.pipe,
   nextpas.core.io.scanner,
-  nextpas.core.io;
+  nextpas.core.io,
+{$IFDEF NEXTPAS_UNIX}
+  nextpas.core.platform.posix.ffi,
+{$ENDIF}
+  nextpas.core.platform.console;
 
 var
   T: TTestSuite;
@@ -874,6 +878,68 @@ begin
   CheckEqual(SizeUInt(0), LR.Read(LBuf, 1), 'null returns 0');
 end;
 
+{ Util: IoFdReadLine —— 管道注入 fd 验证结构行读（阻塞语义不依赖终端） }
+{$IFDEF NEXTPAS_UNIX}
+procedure TestFdReadLine;
+var
+  Fds: array[0..1] of Int32;
+  Buf: array[0..15] of Byte;
+  LRes: string;
+  I: Integer;
+begin
+  if nextpas.core.platform.posix.ffi.pipe(@Fds[0]) <> 0 then
+  begin
+    Check(False, 'pipe create');
+    Exit;
+  end;
+  try
+    { 正常行 'y\n' → 'y' }
+    Buf[0] := Byte(Ord('y'));
+    Buf[1] := Byte(10);
+    CheckEqual(Int32(2),
+      nextpas.core.platform.console.platform_console_write(Fds[1], @Buf, 2),
+      'write y');
+    LRes := IoFdReadLine(Fds[0], 4096);
+    CheckEqual('y', LRes, 'plain line');
+
+    { CRLF 行 'yes\r\n' → 'yes' }
+    Move('yes'#13#10, Buf, 6);
+    CheckEqual(Int32(6),
+      nextpas.core.platform.console.platform_console_write(Fds[1], @Buf, 6),
+      'write yes crlf');
+    LRes := IoFdReadLine(Fds[0], 4096);
+    CheckEqual('yes', LRes, 'crlf trimmed');
+
+    { 多行取第一行 'a\nb\n' → 'a' }
+    Buf[0] := Byte(Ord('a'));
+    Buf[1] := Byte(10);
+    Buf[2] := Byte(Ord('b'));
+    Buf[3] := Byte(10);
+    CheckEqual(Int32(4),
+      nextpas.core.platform.console.platform_console_write(Fds[1], @Buf, 4),
+      'write two lines');
+    LRes := IoFdReadLine(Fds[0], 4096);
+    CheckEqual('a', LRes, 'first line only');
+
+    { 截断：AMaxLen=2, 'hello\n' → 'he'（余下排空） }
+    Move('hello'#10, Buf, 6);
+    CheckEqual(Int32(6),
+      nextpas.core.platform.console.platform_console_write(Fds[1], @Buf, 6),
+      'write hello');
+    LRes := IoFdReadLine(Fds[0], 2);
+    CheckEqual('he', LRes, 'truncated to 2');
+
+    { EOF 无数据 → ''（写端先关） }
+    nextpas.core.platform.posix.ffi.close(Fds[1]);
+    LRes := IoFdReadLine(Fds[0], 4096);
+    CheckEqual('', LRes, 'eof empty');
+  finally
+    nextpas.core.platform.posix.ffi.close(Fds[1]);
+    nextpas.core.platform.posix.ffi.close(Fds[0]);
+  end;
+end;
+{$ENDIF}
+
 { Util: NopCloser }
 
 procedure TestNopCloser;
@@ -1597,6 +1663,9 @@ begin
   T.Test('Scanner empty lines', @TestScannerEmptyLines);
   T.Test('Scanner nil inner', @TestScannerNilInner);
   T.Test('ByteWriter stream', @TestByteWriterStream);
+{$IFDEF NEXTPAS_UNIX}
+  T.Test('FdReadLine structural', @TestFdReadLine);
+{$ENDIF}
 
   if not T.Run then Halt(1);
 end.
