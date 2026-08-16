@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 B6-GETTID 后实测）
+## 当前战况（2026-08-17 B6-NOINLINE 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **33** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID：GetCurrentThreadId 裸调归零，统一走 platform_thread_id)** |
-| undefined total | **49** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID：GetCurrentThreadId×3 清零)** |
+| undefined unique | **30** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE：parser 指令表补 noinline，platform.memory 实现区不截断)** |
+| undefined total | **43** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE：platform_virtual_* 3 符号 6 total 清零，runtime-decl 桶整桶清零)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -474,6 +474,27 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       矛盾，改为真实特征描述（奇常数乘法散布小步长）。验证：
       `test_lockfree_msqueue` 20244/20244 过、0 泄漏，探针 34/52→33/49
       稳定，无桶回升。
+- [x] **B6-NOINLINE parser 指令表补 noinline，platform.memory 实现区不再截断** ✅
+      （2026-08-17，33/49 → 30/43 uniq/total，platform_virtual_* 3 符号
+      6 total 清零，**runtime-decl 桶整桶清零**）：platform_virtual_
+      reserve/commit/release 有实现（platform.memory.pas:432/453/496）却
+      0 define、调用点全 i64 fallback。查证：parser 的 `IsCallingDirective`
+      指令表（np_green_tree_parser_impl.inc:210）**无 `noinline`**，而
+      platform.memory 的 `procedure platform_secure_zero_memory_barrier;
+      noinline;`（249 行）触发**实现区静默截断**——该声明节点无任何
+      子节点（连 parameter-list 都没有）、250 行后全部实现（platform_
+      secure_zero_memory、platform_aligned_alloc 系列、platform_virtual_*、
+      platform_madvise_thp）整个丢失，且**无诊断错误**（parser 不报错
+      静默吞）。最小复刻 `procedure foo; noinline; begin…end; function
+      bar…` 坐实：foo 零子节点 + bar 整体丢失；指令表补 `noinline` 后
+      foo/bar 全恢复。修法：IsCallingDirective 加 `(L = 'noinline')`。
+      探针确认：platform_virtual 有 define（reserve/commit/release）且部分
+      调用点升级为正确签名（`call ptr @platform_virtual_reserve`）。
+      **挂账**：mem.central:88832/97126 等调用点仍是 i64 参数旧形态
+      （调用点编码未按 symbol 签名取参），此刻不 undefined（名字匹配
+      define 即 resolve），opt 过 IHasher.Write（B2）后下一层类型检查会
+      暴露——届时按 B6.5 类 call-site 类型一致性处理。验证：探针
+      30/43 稳定，compiler-pass 58/58，hygiene pass，无桶回升。
 - [x] **B6.5 call-site 类型一致性 + 全局名引号** ✅ c6d7d5d1c：预估的
       「一类修复工作」实测只有 **1 处** call 实参不匹配（python 静态扫描全
       .ll：SSA 定义类型 vs call 实参标注，唯一命中 = `np_string_release`
