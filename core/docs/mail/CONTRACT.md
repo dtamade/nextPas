@@ -21,12 +21,19 @@
   的 RFC 2047 编解码接入（语法委托 mime，INV-A3）。
 - SMTP 客户端（RFC 5321）：EHLO/HELO 回退、MAIL/RCPT/DATA、AUTH PLAIN/LOGIN、
   超时/取消、TryXxx 对偶（`nextpas.core.mail.smtp`）。
+- SMTP 服务器事件驱动会话（RFC 5321 务实子集，`nextpas.core.mail.smtp.server`）：
+  HELO/EHLO 能力（PIPELINING/8BITMIME/SIZE/AUTH/ENHANCEDSTATUSCODES）、
+  MAIL/RCPT/DATA（点转义、大小上限、收件人上限）、RSET/NOOP/QUIT/HELP/VRFY，
+  STARTTLS 探测位、AUTH 注册回调校验（缺省拒）；会话接入 `net.server`
+  poll-driven 契约（epoll/kqueue/iocp readiness 路径），出站回复队列有界背压，
+  读空闲超时经 WakeDeadline 由 reactor 唤醒。
 
 ### 1.2 明确不做（后续批次）
 
 | 能力 | 归属 |
 |------|------|
 | IMAP / POP3 客户端 | 后续批次（复用 mime 树 BODYSTRUCTURE 与 smtp 行协议骨架） |
+| STARTTLS 握手 / SMTPS / DANE | net/tls 与 deliverability 批次（本批仅探测位） |
 | MIME 语法本身 | `nextpas.core.mime`（L2，唯一语法所有者） |
 | DKIM/SPF/DMARC、DNS | deliverability / net.resolve 批次 |
 | 业务表/策略 | 应用层 |
@@ -85,6 +92,12 @@ end;
 - **[INV-A5]** 全部失败路径抛 `E*` 异常或 TryXxx 返回 False，绝不静默吞错；
   边界 try 由调用方（HTTP/SMTP 入口）统一捕获。
 - **[INV-A6]** 域名字段纯语法，不做 IDN-punycode / DNS 查询（net.resolve 批次）。
+- **[INV-A7]** SMTP 服务器会话不提供阻塞降级：`Run` 显式 501，只接
+  poll-driven 后端（事件驱动纪律，PLAN D9）；出站回复队列有界（背压超限
+  即 msseOverflow 失败关闭），DATA 上限/收件人上限受配置约束（RFC 5321 §4.5.3.1）。
+- **[INV-A8]** 服务器收信事件（msseMessage）在 reactor 线程交付，Envelope
+  持有 Data 的独立所有权副本；会话销毁/传输终止必发 msseClosed，消费方
+  不得在回调内执行阻塞 I/O。
 
 ## 6. 与 v0.1 差异表（v0.1 = 客户端草图）
 
@@ -103,9 +116,12 @@ end;
 ## 7. 测试与证据
 
 - `test_mail_address`（8 用例）、`test_mail_mime`（24 用例）、
-  `test_smtp_client`（13 用例，本地 mock 服务器）；重构后全绿。
-- 全部经 common.mk（heaptrc gate）；focused gate + 0 unfreed 证据见
-  lane 验收记录。
+  `test_smtp_client`（13 用例，本地 mock 服务器）、`test_mail_smtp_server`
+  （9 用例，epoll readiness 后端 + mail.smtp 客户端对跑）；全部经 common.mk
+  （heaptrc gate）0 unfreed。
+- `test_mail_smtp_server` 覆盖：banner/EHLO 能力/HELO、MAIL/RCPT/DATA 全流程
+  与点转义、SIZE/收件人上限、命令顺序与语法错误、VRFY/EXPN/STARTTLS 探测、
+  AUTH 未启用与 RequireAuth、QUIT 关闭、读空闲超时、出站背压溢出中止。
 
 ## 变更记录
 
@@ -113,3 +129,4 @@ end;
 |------|------|------|
 | 2026-07-06 | 0.1 | 客户端草图（IMailClient/IMailMessage/协议表） |
 | 2026-08-16 | 0.1→0.2 | 废弃客户端草图；邮件域落地：地址/消息模型/MIME 桥接（依赖 mime）/SMTP 客户端；E* 异常与不变量体系 |
+| 2026-08-16 | 0.2→0.3 | 新增 SMTP 服务器事件驱动会话（mail.smtp.server，net.server poll-driven）；边界决策见 plans/2026-08-16-smtp-server-module-boundary.md；INV-A7/A8 |

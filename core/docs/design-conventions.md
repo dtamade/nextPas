@@ -877,7 +877,7 @@ build/
 | `redis`     | Redis 客户端                                               |
 | `http`      | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
 | `websocket` | WebSocket（帧协议、Room、广播）                            |
-| `mail`      | 消息模型/RFC5322 地址/MIME 桥接（依赖 mime）/SMTP 客户端；IMAP/POP3 后续批次 |
+| `mail`      | 消息模型/RFC5322 地址/MIME 桥接（依赖 mime）/SMTP 客户端 + 事件驱动 SMTP 服务器（net.server poll-driven 会话）；IMAP/POP3 后续批次 |
 | `tui`       | 终端 UI（渲染、布局、Widget、事件）                        |
 | `migration` | 数据库迁移                                                 |
 | `ratelimit` | 限流、熔断、重试、降级                                     |
