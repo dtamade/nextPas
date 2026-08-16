@@ -11,7 +11,7 @@ unit nextpas.core.tls.dns.ldns;
  * @since 2026-02-05
  *}
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 
