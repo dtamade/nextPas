@@ -275,7 +275,7 @@ type
       the overload whose decl accepts that arity instead of the first
       registered body (value-position residual calls pass raw operands). }
     function EffectiveRuntimeCalleeName(const AName: string;
-      const ADecl: TGreenNode; const AArgCount: LongInt = -1): string;
+      const ADecl: TGreenNode): string;
     { 解析 ";external:lib:sym" 声明文本并注册 foreign binding（secret 去重）；
       body-less 的 external 纯声明也注册，供 EffectiveRuntimeCalleeName 查表。 }
     function TryRegisterForeignProcedureBinding(const AText: string;
