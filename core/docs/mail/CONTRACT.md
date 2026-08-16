@@ -1,106 +1,132 @@
-# nextpas.core.mail 代码契约
+# nextpas.core.mail 代码契约 v0.2
 
-**模块路径**：`core/src/nextpas.core.mail*.pas`
-**层级**：L3（依赖 L0-L2: net, tls, text, collections）
-**Owner**：待定
-**最后更新**：2026-07-06
-**版本**：0.1（规划阶段）
+**模块路径**：`core/src/nextpas.core.mail*.pas`（base/mime/smtp + 门面）
+**层级**：L3（依赖 L0-L2 与 `nextpas.core.mime`）
+**Owner**：codex/mime-mail-20260816（mailServer888 反哺）
+**最后更新**：2026-08-16
+**版本**：0.2（正式；v0.1 客户端草图废弃，见 §6 差异表）
 
 ---
 
-## 1. 接口契约
+## 1. 范围与边界
 
-### 1.1 核心接口
+### 1.1 范围内
+
+- RFC 5322 §3.4/§3.6：`TMailAddress`（display-name + local@domain）、
+  `TMailMessage` 摊平模型（From/Sender/ReplyTo/ToList/CcList/BccList/
+  Subject/DateUtc/MessageId/BodyText/BodyHtml/Attachments）。
+- 地址解析（务实 RFC 5321/5322 子集：长度/字符/点规则、`"Name" <addr>`、
+  `[1.2.3.4]` 字面量）。
+- 邮件特定 MIME 语义：日期容错解析/格式化、地址头、Subject 与 display-name
+  的 RFC 2047 编解码接入（语法委托 mime，INV-A3）。
+- SMTP 客户端（RFC 5321）：EHLO/HELO 回退、MAIL/RCPT/DATA、AUTH PLAIN/LOGIN、
+  超时/取消、TryXxx 对偶（`nextpas.core.mail.smtp`）。
+- SMTP 服务器事件驱动会话（RFC 5321 务实子集，`nextpas.core.mail.smtp.server`）：
+  HELO/EHLO 能力（PIPELINING/8BITMIME/SIZE/AUTH/ENHANCEDSTATUSCODES）、
+  MAIL/RCPT/DATA（点转义、大小上限、收件人上限）、RSET/NOOP/QUIT/HELP/VRFY，
+  STARTTLS 探测位、AUTH 注册回调校验（缺省拒）；会话接入 `net.server`
+  poll-driven 契约（epoll/kqueue/iocp readiness 路径），出站回复队列有界背压，
+  读空闲超时经 WakeDeadline 由 reactor 唤醒。
+
+### 1.2 明确不做（后续批次）
+
+| 能力 | 归属 |
+|------|------|
+| IMAP / POP3 客户端 | 后续批次（复用 mime 树 BODYSTRUCTURE 与 smtp 行协议骨架） |
+| STARTTLS 握手 / SMTPS / DANE | net/tls 与 deliverability 批次（本批仅探测位） |
+| MIME 语法本身 | `nextpas.core.mime`（L2，唯一语法所有者） |
+| DKIM/SPF/DMARC、DNS | deliverability / net.resolve 批次 |
+| 业务表/策略 | 应用层 |
+
+## 2. 公共面（base）
 
 ```pascal
-IMailClient = interface
-  function Connect(const AHost: string; APort: UInt16): Boolean;
-  function Login(const AUsername, APassword: string): Boolean;
-  function Send(const AMessage: TMailMessage): Boolean;
-  procedure Disconnect;
-  function GetLastError: string;
+TMailAddress = record
+  DisplayName: string;   // 已解引号、UTF-8；格式化时按需 RFC 2047 编码
+  LocalPart: string;     // 小写归一
+  Domain: string;        // 小写归一（纯语法，不做 IDN/DNS，INV-A6）
 end;
-
-IMailMessage = interface
-  procedure SetFrom(const AAddress: string);
-  procedure AddTo(const AAddress: string);
-  procedure AddCc(const AAddress: string);
-  procedure SetSubject(const ASubject: string);
-  procedure SetBody(const ABody: string);
-  procedure AddAttachment(const AFileName: string; const AData: TBytes);
-end;
-
-TMailMessage = record
-  From: string;
-  ToList: array of string;
-  CcList: array of string;
-  Subject: string;
-  Body: string;
-  Attachments: array of TMailAttachment;
-end;
-
+// class 方法：Parse / TryParse / IsValidAddress / IsValid
 TMailAttachment = record
-  FileName: string;
-  ContentType: string;
-  Data: TBytes;
+  FileName: string; ContentType: string; ContentId: string; Data: TBytes;
+end;
+TMailMessage = record
+  MessageId: string; From: TMailAddress; ToList/CcList/ReplyToList: array of TMailAddress;
+  Subject: string; DateUtc: Int64; BodyText/BodyHtml: string;
+  HasAttachments: Boolean; Attachments: array of TMailAttachment;
 end;
 ```
 
-### 1.2 协议支持
+> 摊平模型（BodyText/BodyHtml/Attachments）为网关层共识载体：收信解析后
+> 直接落库/展示，发信构建时经 `mail.mime` 桥接为完整 MIME 树（INV-A3）。
 
-| 协议 | 用途 | 端口 |
-|------|------|------|
-| SMTP | 发送邮件 | 25/465/587 |
-| IMAP | 接收邮件 | 143/993 |
-| POP3 | 接收邮件 | 110/995 |
+## 3. 桥接层（nextpas.core.mail.mime）
 
----
+- `MimeSerialize(TMailMessage): string`：Subject/display-name 按需 RFC 2047
+  编码；附件 filename 经 RFC 2231；头值 CR/LF 注入清洗；multipart
+  mixed/alternative 自动组装。
+- `MimeTryParse/MimeParse(string)`：MIME 树 → 摊平模型（首个 text/plain →
+  BodyText、首个 text/html → BodyHtml、attachment/text 其余 → 附件）；
+  RFC 2047 解码 Subject；Date 容错解析并上报 `miBadDate`。
+- 兼容面：`MimeParseHeaders/MimeHeaderValue/MimeParseContentType/
+  MimeParseParams/MimeBase64*/MimeQuotedPrintable*` 全部保留原名转发
+  （行为与 mime 层一致），既有调用方零迁移。
 
-## 2. 不变量
+## 4. 异常（INV-A5）
 
-- **[INV-1]** 连接状态机：Disconnected → Connected → Authenticated → Sending
-- **[INV-2]** 每次 Send 操作原子性：全部成功或全部失败
-- **[INV-3]** 附件大小不超过服务器限制（可配置）
-- **[INV-4]** 邮件地址格式验证（RFC 5322）
+- `EMailError`（根，继承 EParseError→ENextPasError 体系）。
+- `EMailAddressError`（地址语法违规，消息携带原始输入）、`EMailHeaderError`、
+  `EMailParseError`。网络/协议类异常归 smtp（`ESmtp*`）。
 
----
+## 5. 不变量
 
-## 3. 错误处理
+- **[INV-A1]** 地址解析严格遵循 RFC 5321/5322 务实子集；`Parse` 违规抛
+  `EMailAddressError`，`TryParse` 返回 False 且不抛；宽容仅限 obs 形态
+  （display-name 引号、纯 IP 字面量），不「逐字收下任何东西」。
+- **[INV-A2]** 消息构建不强制必选头（From/Date 由调用方策略补齐；桥接层
+  不静默补值——`MimeSerialize` 仅序列化已设置字段）。
+- **[INV-A3]** MIME 语法唯一所有者是 `nextpas.core.mime`；mail 不重复实现
+  头/传输编码/multipart 语法（防双实现漂移）。
+- **[INV-A4]** record 值语义 + 浅拷贝；跨线程只读共享安全（无懒初始化内部
+  状态）；构建期独占写入由调用方保证。
+- **[INV-A5]** 全部失败路径抛 `E*` 异常或 TryXxx 返回 False，绝不静默吞错；
+  边界 try 由调用方（HTTP/SMTP 入口）统一捕获。
+- **[INV-A6]** 域名字段纯语法，不做 IDN-punycode / DNS 查询（net.resolve 批次）。
+- **[INV-A7]** SMTP 服务器会话不提供阻塞降级：`Run` 显式 501，只接
+  poll-driven 后端（事件驱动纪律，PLAN D9）；出站回复队列有界（背压超限
+  即 msseOverflow 失败关闭），DATA 上限/收件人上限受配置约束（RFC 5321 §4.5.3.1）。
+- **[INV-A8]** 服务器收信事件（msseMessage）在 reactor 线程交付，Envelope
+  持有 Data 的独立所有权副本；会话销毁/传输终止必发 msseClosed，消费方
+  不得在回调内执行阻塞 I/O。
 
-| 场景 | 异常类型 |
-|------|----------|
-| 连接失败 | EConnectionError |
-| 认证失败 | EAuthenticationError |
-| 发送失败 | ESendError |
-| 协议错误 | EProtocolError |
+## 6. 与 v0.1 差异表（v0.1 = 客户端草图）
 
----
+| v0.1 元素 | v0.2 处置 |
+|---|---|
+| `IMailClient`（Connect/Login/Send/...） | 废弃；消息层无网络语义，SMTP 实体化为 `mail.smtp` |
+| `IMailMessage` + SetXxx/AddXxx | 废弃；record 值语义 + 函数式桥接 |
+| `TMailMessage` 平铺（From/ToList/... + Attachments） | 升级：结构化地址、新增 ReplyTo、DateUtc、MessageId、CID |
+| `TMailAttachment` | 保留（网关共识载体；MIME 树内等价于 Content-Disposition 部件） |
+| 协议支持表（SMTP/IMAP/POP3 端口） | SMTP 客户端落地；IMAP/POP3 批次 |
+| INV-1/2（连接状态机/发送原子性） | 归 smtp |
+| INV-3 附件大小 | 服务端限额是应用 policy；语法侧防护在 mime INV-M3 |
+| INV-4 地址验证 | 升级保留 → INV-A1 |
+| 错误 EConnectionError 等 | 废弃 → EMail*/ESmtp* |
 
-## 4. 线程安全
+## 7. 测试与证据
 
-- **IMailClient**: ❌ 非线程安全，每次连接独立实例
-- **TMailMessage**: 值类型，线程安全
-
----
-
-## 5. 内存管理
-
-- TMailMessage 为 record，栈分配
-- 附件数据 TBytes 由调用方管理生命周期
-- 连接内部缓冲区自动释放
-
----
-
-## 6. 测试策略
-
-- 单元测试：协议解析、地址验证、消息构建
-- 集成测试：本地 SMTP 服务器（可选）
-- 契约测试：接口不变量验证
-
----
+- `test_mail_address`（8 用例）、`test_mail_mime`（24 用例）、
+  `test_smtp_client`（13 用例，本地 mock 服务器）、`test_mail_smtp_server`
+  （9 用例，epoll readiness 后端 + mail.smtp 客户端对跑）；全部经 common.mk
+  （heaptrc gate）0 unfreed。
+- `test_mail_smtp_server` 覆盖：banner/EHLO 能力/HELO、MAIL/RCPT/DATA 全流程
+  与点转义、SIZE/收件人上限、命令顺序与语法错误、VRFY/EXPN/STARTTLS 探测、
+  AUTH 未启用与 RequireAuth、QUIT 关闭、读空闲超时、出站背压溢出中止。
 
 ## 变更记录
 
-| 日期 | 版本 | 变更描述 | 作者 |
-|------|------|----------|------|
-| 2026-07-06 | 0.1 | 初始规划版本 | Claude |
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-07-06 | 0.1 | 客户端草图（IMailClient/IMailMessage/协议表） |
+| 2026-08-16 | 0.1→0.2 | 废弃客户端草图；邮件域落地：地址/消息模型/MIME 桥接（依赖 mime）/SMTP 客户端；E* 异常与不变量体系 |
+| 2026-08-16 | 0.2→0.3 | 新增 SMTP 服务器事件驱动会话（mail.smtp.server，net.server poll-driven）；边界决策见 plans/2026-08-16-smtp-server-module-boundary.md；INV-A7/A8 |

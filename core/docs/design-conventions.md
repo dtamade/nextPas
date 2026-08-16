@@ -866,6 +866,7 @@ build/
 | `process`    | 进程管理                           |
 | `args`       | 命令行解析                         |
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
+| `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 
 ### L3: 框架（只依赖 L0-L2）
 
@@ -876,7 +877,7 @@ build/
 | `redis`     | Redis 客户端                                               |
 | `http`      | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
 | `websocket` | WebSocket（帧协议、Room、广播）                            |
-| `mail`      | SMTP/IMAP/POP3                                             |
+| `mail`      | 消息模型/RFC5322 地址/MIME 桥接（依赖 mime）/SMTP 客户端 + 事件驱动 SMTP 服务器（net.server poll-driven 会话）；IMAP/POP3 后续批次 |
 | `tui`       | 终端 UI（渲染、布局、Widget、事件）                        |
 | `migration` | 数据库迁移                                                 |
 | `ratelimit` | 限流、熔断、重试、降级                                     |

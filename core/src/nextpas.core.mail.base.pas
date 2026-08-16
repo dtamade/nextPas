@@ -10,9 +10,24 @@ unit nextpas.core.mail.base;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.errors;
 
 type
+  { EMailError - RFC 5322 邮件语义家族根。
+    继承 EParseError（ENextPasError 体系，带 Category/Inner 诊断），
+    与 mime 家族（EMimeError）并列，均从语法解析错误根派生。 }
+  EMailError = class(EParseError);
+
+  { 地址语法违规（严格模式）；消息文本携带原始输入 }
+  EMailAddressError = class(EMailError);
+
+  { 头字段语义违规（地址字段格式错误等）；消息文本携带字段名 }
+  EMailHeaderError = class(EMailError);
+
+  { 消息结构解析失败；消息文本携带段位置描述 }
+  EMailParseError = class(EMailError);
+
   { TMailAddress - RFC 5322 邮件地址（值语义 record） }
   TMailAddress = record
   public
@@ -58,7 +73,6 @@ type
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.text.conv;
 
 const
@@ -222,7 +236,7 @@ end;
 class function TMailAddress.Parse(const AValue: string): TMailAddress;
 begin
   if not TryParseRaw(AValue, Result) then
-    raise EParseError.Create('invalid mail address: ' + AValue);
+    raise EMailAddressError.Create('invalid mail address: ' + AValue);
 end;
 
 class function TMailAddress.IsValidAddress(const AValue: string): Boolean;
