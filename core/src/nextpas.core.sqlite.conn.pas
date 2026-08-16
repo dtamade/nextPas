@@ -77,6 +77,8 @@ type
     procedure Checkpoint;
     function Version: string;
     property Path: string read FPath;
+    { 原生 sqlite3* 句柄——供 sqlite.ffi 直接调用（如事务助手判断 autocommit）。 }
+    property Handle: TSqliteHandle read FDb;
   end;
 
 { Open or create a SQLite database file (''memory'' for in-memory). }
