@@ -21,6 +21,7 @@ function sqlite3_open_v2(const AFileName: PAnsiChar;
 function sqlite3_close_v2(ADb: TSqliteHandle): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_errmsg(ADb: TSqliteHandle): PAnsiChar; cdecl; external SQLITE3_LIB;
 function sqlite3_errcode(ADb: TSqliteHandle): Integer; cdecl; external SQLITE3_LIB;
+function sqlite3_get_autocommit(ADb: TSqliteHandle): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_extended_errcode(ADb: TSqliteHandle): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_extended_result_codes(ADb: TSqliteHandle; AOnOff: Integer): Integer; cdecl; external SQLITE3_LIB;
 function sqlite3_exec(ADb: TSqliteHandle; const ASql: PAnsiChar;

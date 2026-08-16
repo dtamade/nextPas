@@ -212,7 +212,7 @@ type
     function Remove(const AKey: K): Boolean;
 
     // Map convenience API
-    procedure Put(const AKey: K; const AValue: V); inline;
+    procedure Put(const AKey: K; const AValue: V);
     function Get(const AKey: K): V; inline;
 
     {**
