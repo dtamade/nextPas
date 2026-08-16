@@ -5,7 +5,7 @@ unit nextpas.core.tls.winssl.errors;
 
 interface
 
-uses nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} nextpas.core.tls.base, nextpas.core.time,
+uses nextpas.core.text.conv, nextpas.core.tls.winssl.base, {$IFDEF WINDOWS} Windows, {$ENDIF} nextpas.core.tls.base, nextpas.core.time,
   nextpas.core.fs, nextpas.core.exception;
 
 type

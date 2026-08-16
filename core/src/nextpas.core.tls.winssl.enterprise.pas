@@ -6,7 +6,8 @@ unit nextpas.core.tls.winssl.enterprise;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
+  nextpas.core.base,
+  nextpas.core.exception, nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry, Classes,
   nextpas.core.tls.logging,
   nextpas.core.tls.winssl.base,
   nextpas.core.tls.winssl.api;
@@ -18,7 +19,7 @@ type
     FFIPSEnabled: Boolean;
     FPolicyLoaded: Boolean;
     FTrustedRoots: TStringArray;
-    FGroupPolicies: TStringArray;
+    FGroupPolicies: TStringList;
     
     function DetectFIPSMode: Boolean;
     function LoadGroupPolicies: Boolean;
@@ -86,10 +87,12 @@ begin
   inherited Create;
   FFIPSEnabled := False;
   FPolicyLoaded := False;
+  FGroupPolicies := TStringList.Create;
 end;
 
 destructor TSSLEnterpriseConfig.Destroy;
 begin
+  FGroupPolicies.Free;
   inherited Destroy;
 end;
 
@@ -124,7 +127,6 @@ end;
 function TSSLEnterpriseConfig.LoadGroupPolicies: Boolean;
 var
   LReg: TRegistry;
-  LKeys: TStringArray;
   i: Integer;
   LValue: string;
 begin
@@ -139,15 +141,15 @@ begin
     if LReg.OpenKeyReadOnly(GP_CRYPTO_PATH) then
     begin
       try
-        LReg.GetValueNames(LKeys);
-        for i := 0 to Length(LKeys) - 1 do
+        LReg.GetValueNames(FGroupPolicies);
+        for i := 0 to FGroupPolicies.Count - 1 do
         begin
           try
-            LValue := LReg.ReadString(LKeys[i]);
-            FGroupPolicies.Values[LKeys[i]] := LValue;
+            LValue := LReg.ReadString(FGroupPolicies[i]);
+            FGroupPolicies.Values[FGroupPolicies[i]] := LValue;
           except
             on E: Exception do
-              TSecurityLog.Debug('Enterprise', Format('Failed to read group policy value %s: %s', [LKeys[i], E.Message]));
+              TSecurityLog.Debug('Enterprise', Format('Failed to read group policy value %s: %s', [FGroupPolicies[i], E.Message]));
           end;
         end;
         Result := True;
@@ -283,8 +285,12 @@ begin
 end;
 
 function TSSLEnterpriseConfig.GetAllPolicies: TStringArray;
+var
+  i: Integer;
 begin
-  Result.Assign(FGroupPolicies);
+  SetLength(Result, FGroupPolicies.Count);
+  for i := 0 to FGroupPolicies.Count - 1 do
+    Result[i] := FGroupPolicies[i];
 end;
 
 procedure TSSLEnterpriseConfig.Reload;

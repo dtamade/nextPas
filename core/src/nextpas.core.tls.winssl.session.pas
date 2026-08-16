@@ -19,6 +19,7 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base,
