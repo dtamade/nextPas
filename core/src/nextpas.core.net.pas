@@ -71,7 +71,8 @@ const
   tarWouldBlock = nextpas.core.net.intf.tarWouldBlock;
   tarTimeout = nextpas.core.net.intf.tarTimeout;
 
-function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
+function TcpListen(const AAddr: string; const APort: UInt16;
+  const ABacklog: Int32 = nextpas.core.net.base.NET_DEFAULT_BACKLOG): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
 { AF_UNIX 域 socket 监听/连接（Unix 平台；Windows 抛 ENetworkError unsupported）。
   UnixListen 创建 0600 权限 socket 文件（bind 前 unlink 旧文件）。 }
@@ -125,9 +126,10 @@ function CreateConnectionPool(const ALoop: TAsyncLoop): IConnectionPool;
 
 implementation
 
-function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
+function TcpListen(const AAddr: string; const APort: UInt16;
+  const ABacklog: Int32): ITcpListener;
 begin
-  Result := nextpas.core.net.tcp.NetTcpListen(AAddr, APort);
+  Result := nextpas.core.net.tcp.NetTcpListen(AAddr, APort, ABacklog);
 end;
 
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;

@@ -21,7 +21,11 @@ type
   end;
 
 const
-  NET_DEFAULT_BACKLOG = 128;
+  { 监听 accept 队列深度。128 在万级连接风暴(如 mailServer888 连接级压测 8000+
+    直连)下会瞬间打满:队列满后内核丢弃新 SYN(默认 tcp_abort_on_overflow=0),
+    客户端 connect 等到重传超时失败。Linux 内核按 somaxconn(默认 4096)min() 截断,
+    故取该上限;其他平台(SYSTEMV/QNX 等)128-1024 起步,同步放宽无副作用。 }
+  NET_DEFAULT_BACKLOG = 4096;
   NET_DEFAULT_BUFFER_SIZE = 65536;
 
 implementation
