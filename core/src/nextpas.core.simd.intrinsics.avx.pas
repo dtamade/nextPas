@@ -621,16 +621,16 @@ function avx_testnzc_pd256(const a, b: TM256): Boolean; begin Result := AVXRetur
 procedure avx_zeroupper; begin end;
 procedure avx_zeroall; begin end;
 
-initialization
-  EnsureExperimentalIntrinsicsEnabled;
-  EnsureExperimentalAvxTargetSupported;
-
 {
   Fast-path AVX FP arithmetic with IEEE 754 special value handling.
   These functions use real SIMD instructions while correctly handling
   special values (NaN, Inf, -0.0).
 }
 {$I nextpas.core.simd.intrinsics.avx.fastpath.inc}
+
+initialization
+  EnsureExperimentalIntrinsicsEnabled;
+  EnsureExperimentalAvxTargetSupported;
 
 end.
 

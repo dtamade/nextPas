@@ -47,10 +47,19 @@ type
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetByteSize(const AKey: string; ADefault: Int64 = 0): Int64;
+    function TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+    function TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+    function TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+    function TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
+    function GetDurationNsRequired(const AKey: string): Int64;
+    function GetByteSizeRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -152,6 +161,41 @@ begin
   Result := FConfig.GetFloat(AKey, ADefault);
 end;
 
+function TConfigAsIConfig.GetDurationNs(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetDurationNs(AKey, ADefault);
+end;
+
+function TConfigAsIConfig.GetByteSize(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetByteSize(AKey, ADefault);
+end;
+
+function TConfigAsIConfig.TryGetInt(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetInt(AKey, AValue);
+end;
+
+function TConfigAsIConfig.TryGetBool(const AKey: string; out AValue: Boolean): Boolean;
+begin
+  Result := FConfig.TryGetBool(AKey, AValue);
+end;
+
+function TConfigAsIConfig.TryGetFloat(const AKey: string; out AValue: Double): Boolean;
+begin
+  Result := FConfig.TryGetFloat(AKey, AValue);
+end;
+
+function TConfigAsIConfig.TryGetDurationNs(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetDurationNs(AKey, AValue);
+end;
+
+function TConfigAsIConfig.TryGetByteSize(const AKey: string; out AValue: Int64): Boolean;
+begin
+  Result := FConfig.TryGetByteSize(AKey, AValue);
+end;
+
 function TConfigAsIConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -170,6 +214,16 @@ end;
 function TConfigAsIConfig.GetFloatRequired(const AKey: string): Double;
 begin
   Result := FConfig.GetFloatRequired(AKey);
+end;
+
+function TConfigAsIConfig.GetDurationNsRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetDurationNsRequired(AKey);
+end;
+
+function TConfigAsIConfig.GetByteSizeRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetByteSizeRequired(AKey);
 end;
 
 procedure TConfigAsIConfig.Require(const AKeys: array of string);

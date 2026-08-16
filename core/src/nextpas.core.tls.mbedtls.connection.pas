@@ -114,7 +114,8 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.tls.mbedtls.certificate,
-  nextpas.core.tls.mbedtls.session;
+  nextpas.core.tls.mbedtls.session
+  {$IFDEF UNIX}, sockets {$ENDIF};
 
 const
   MBEDTLS_SSL_CONTEXT_SIZE = 4096;  // Increased for safety

@@ -22,6 +22,24 @@
   Helper: Check if a 256-bit packed single value contains NaN or Inf.
   Returns True if any lane has NaN or Inf.
 }
+{
+  Constants for AVX IEEE 754 special value detection.
+}
+const
+  AVX_EXPONENT_ONES_256: array[0..7] of DWord = (
+    $7F800000, $7F800000, $7F800000, $7F800000,
+    $7F800000, $7F800000, $7F800000, $7F800000
+  );
+  AVX_MANTISSA_MASK_256: array[0..7] of DWord = (
+    $007FFFFF, $007FFFFF, $007FFFFF, $007FFFFF,
+    $007FFFFF, $007FFFFF, $007FFFFF, $007FFFFF
+  );
+  AVX_SIGN_MASK_256: array[0..7] of DWord = (
+    $80000000, $80000000, $80000000, $80000000,
+    $80000000, $80000000, $80000000, $80000000
+  );
+
+
 function HasSpecialValues_ps256(constref a: TM256): Boolean; inline;
 const
   EXPONENT_MASK = DWord($7F800000);
@@ -40,7 +58,7 @@ end;
 }
 function HasSpecialValues_pd256(constref a: TM256): Boolean; inline;
 const
-  EXPONENT_MASK = QWord($7FF0000000000000000);
+  EXPONENT_MASK = QWord($7FF0000000000000);
 var
   i: Integer;
 begin
@@ -185,19 +203,3 @@ asm
   vzeroupper
 end;
 
-{
-  Constants for AVX IEEE 754 special value detection.
-}
-const
-  AVX_EXPONENT_ONES_256: array[0..7] of DWord = (
-    $7F800000, $7F800000, $7F800000, $7F800000,
-    $7F800000, $7F800000, $7F800000, $7F800000
-  );
-  AVX_MANTISSA_MASK_256: array[0..7] of DWord = (
-    $007FFFFF, $007FFFFF, $007FFFFF, $007FFFFF,
-    $007FFFFF, $007FFFFF, $007FFFFF, $007FFFFF
-  );
-  AVX_SIGN_MASK_256: array[0..7] of DWord = (
-    $80000000, $80000000, $80000000, $80000000,
-    $80000000, $80000000, $80000000, $80000000
-  );

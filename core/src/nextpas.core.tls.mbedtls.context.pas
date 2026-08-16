@@ -185,12 +185,30 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.exception,
-  nextpas.core.text.conv,
   nextpas.core.text.strings,
-    nextpas.core.tls.mbedtls.lib,
+  nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.mbedtls.certificate,
   nextpas.core.tls.mbedtls.session,
   nextpas.core.tls.mbedtls.connection;
+
+{ PAnsiChar 堆字符串分配/释放（StrNew/StrDispose 等价实现）。
+  不引入 SysUtils：其 TBytes 会遮蔽 nextpas.core.base.TBytes，破坏类方法签名匹配。 }
+function MbedtlsStrNew(const AText: AnsiString): PAnsiChar;
+var
+  L: SizeInt;
+begin
+  L := Length(AText);
+  Result := GetMem(L + 1);
+  if L > 0 then
+    Move(AText[1], Result^, L);
+  Result[L] := #0;
+end;
+
+procedure MbedtlsStrDispose(AStr: PAnsiChar);
+begin
+  if AStr <> nil then
+    FreeMem(AStr);
+end;
 
 const
   // MbedTLS structure sizes - use large buffers for safety
@@ -242,7 +260,7 @@ begin
   // 清理 ALPN 协议数组
   for I := 0 to High(FALPNProtocolsArray) do
     if FALPNProtocolsArray[I] <> nil then
-      StrDispose(FALPNProtocolsArray[I]);
+      MbedtlsStrDispose(FALPNProtocolsArray[I]);
   SetLength(FALPNProtocolsArray, 0);
 
   FreeConfig;
@@ -941,7 +959,7 @@ begin
   // 清理旧的数组
   for I := 0 to High(FALPNProtocolsArray) do
     if FALPNProtocolsArray[I] <> nil then
-      StrDispose(FALPNProtocolsArray[I]);
+      MbedtlsStrDispose(FALPNProtocolsArray[I]);
   SetLength(FALPNProtocolsArray, 0);
 
   if FSSLConfig = nil then Exit;
@@ -956,7 +974,7 @@ begin
     // 构建 NULL-terminated 数组 (需要额外一个 nil 结尾)
     SetLength(FALPNProtocolsArray, Length(LProtos) + 1);
     for I := 0 to Length(LProtos) - 1 do
-      FALPNProtocolsArray[I] := StrNew(PAnsiChar(AnsiString(Trim(LProtos[I]))));
+      FALPNProtocolsArray[I] := MbedtlsStrNew(AnsiString(Trim(LProtos[I])));
     FALPNProtocolsArray[Length(LProtos)] := nil;  // NULL 终止
 
     // 配置到 mbedtls

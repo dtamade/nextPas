@@ -185,7 +185,7 @@ begin
     raise EInvalidOperationError.Create('async file: loop not valid');
 
   New(LCtx);
-  LCtx^.Path := UTF8Encode(APath);
+  LCtx^.Path := APath;
   LCtx^.Loop := ALoop;
   LCtx^.Buf := ABuf;
   LCtx^.Size := ASize;
@@ -216,7 +216,7 @@ begin
     raise EInvalidOperationError.Create('async file: loop not valid');
 
   New(LCtx);
-  LCtx^.Path := UTF8Encode(APath);
+  LCtx^.Path := APath;
   LCtx^.Loop := ALoop;
   LCtx^.Buf := ABuf;
   LCtx^.Size := ASize;
@@ -252,7 +252,7 @@ begin
   Move(AData, LDataCopy^, ASize);
 
   New(LCtx);
-  LCtx^.Path := UTF8Encode(APath);
+  LCtx^.Path := APath;
   LCtx^.Loop := ALoop;
   LCtx^.Buf := nil;
   LCtx^.Size := ASize;
@@ -289,7 +289,7 @@ begin
   Move(AData, LDataCopy^, ASize);
 
   New(LCtx);
-  LCtx^.Path := UTF8Encode(APath);
+  LCtx^.Path := APath;
   LCtx^.Loop := ALoop;
   LCtx^.Buf := nil;
   LCtx^.Size := ASize;

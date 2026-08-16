@@ -25,7 +25,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
-  nextpas.core.tls.mbedtls.api;
+  nextpas.core.tls.mbedtls.api,
+  sysutils;
 
 type
   { TMbedTLSSession - MbedTLS 会话类 }

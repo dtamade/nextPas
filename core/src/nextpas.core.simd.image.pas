@@ -617,7 +617,8 @@ end;
 
 procedure RgbToYuv(const aSrc: TSimdImage; var aDst: TSimdImage);
 var
-  x, y: SizeUInt;
+  x: SizeUInt;
+  Row: SizeUInt;
   pSrc, pDst: PByte;
   R, G, B: Byte;
   Y, U, V: Integer;
@@ -625,10 +626,10 @@ begin
   if (aSrc.Format <> spfRGB24) or (aDst.Format <> spfRGB24) then Exit;
   if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
 
-  for y := 0 to aSrc.Height - 1 do
+  for Row := 0 to aSrc.Height - 1 do
   begin
-    pSrc := aSrc.RowPtr(y);
-    pDst := aDst.RowPtr(y);
+    pSrc := aSrc.RowPtr(Row);
+    pDst := aDst.RowPtr(Row);
     for x := 0 to aSrc.Width - 1 do
     begin
       R := pSrc[x * 3];
@@ -653,7 +654,8 @@ end;
 
 procedure YuvToRgb(const aSrc: TSimdImage; var aDst: TSimdImage);
 var
-  x, y: SizeUInt;
+  x: SizeUInt;
+  Row: SizeUInt;
   pSrc, pDst: PByte;
   Y, U, V: Integer;
   R, G, B: Integer;
@@ -661,10 +663,10 @@ begin
   if (aSrc.Format <> spfRGB24) or (aDst.Format <> spfRGB24) then Exit;
   if (aSrc.Height = 0) or (aSrc.Width = 0) then Exit;
 
-  for y := 0 to aSrc.Height - 1 do
+  for Row := 0 to aSrc.Height - 1 do
   begin
-    pSrc := aSrc.RowPtr(y);
-    pDst := aDst.RowPtr(y);
+    pSrc := aSrc.RowPtr(Row);
+    pDst := aDst.RowPtr(Row);
     for x := 0 to aSrc.Width - 1 do
     begin
       Y := pSrc[x * 3];

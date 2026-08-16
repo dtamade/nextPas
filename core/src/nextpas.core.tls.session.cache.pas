@@ -35,7 +35,8 @@ uses
   nextpas.core.tls.random,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.constant_time,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure
+  {$IFDEF UNIX}, baseunix {$ENDIF};
 
 const
   DEFAULT_SESSION_TIMEOUT = 300;  // 5 分钟

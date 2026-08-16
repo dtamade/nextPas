@@ -81,6 +81,7 @@ const
   HASH_SHA384 = nextpas.core.hash.base.haSHA384;
   HASH_SHA512 = nextpas.core.hash.base.haSHA512;
 
+type
   {**
    * 加密操作结果
    *}

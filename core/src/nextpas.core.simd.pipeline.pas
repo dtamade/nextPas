@@ -717,18 +717,18 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.BatchF32.ReduceSum(FSrc, FCount)
+    Result := nextpas.core.simd.ReduceSumF32(FSrc, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = poSquare) then
-    Result := nextpas.core.simd.BatchF32.ReduceDot(FSrc, FSrc, FCount)
+    Result := nextpas.core.simd.ReduceDotF32(FSrc, FSrc, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = poMulArray) then
-    Result := nextpas.core.simd.BatchF32.ReduceDot(FSrc, FSteps[0].ArrayPtr, FCount)
+    Result := nextpas.core.simd.ReduceDotF32(FSrc, FSteps[0].ArrayPtr, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = poMulScalar) then
-    Result := FSteps[0].ScalarA * nextpas.core.simd.BatchF32.ReduceSum(FSrc, FCount)
+    Result := FSteps[0].ScalarA * nextpas.core.simd.ReduceSumF32(FSrc, FCount)
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.BatchF32.ReduceSum(LTmp.Data, FCount);
+    Result := nextpas.core.simd.ReduceSumF32(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -738,12 +738,12 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.BatchF32.ReduceMax(FSrc, FCount)
+    Result := nextpas.core.simd.ReduceMaxF32(FSrc, FCount)
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.BatchF32.ReduceMax(LTmp.Data, FCount);
+    Result := nextpas.core.simd.ReduceMaxF32(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -753,12 +753,12 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.BatchF32.ReduceMin(FSrc, FCount)
+    Result := nextpas.core.simd.ReduceMinF32(FSrc, FCount)
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.BatchF32.ReduceMin(LTmp.Data, FCount);
+    Result := nextpas.core.simd.ReduceMinF32(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -768,12 +768,12 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.BatchF32.ReduceDot(FSrc, aOther, FCount)
+    Result := nextpas.core.simd.ReduceDotF32(FSrc, aOther, FCount)
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.BatchF32.ReduceDot(LTmp.Data, aOther, FCount);
+    Result := nextpas.core.simd.ReduceDotF32(LTmp.Data, aOther, FCount);
     LTmp.Free;
   end;
 end;
@@ -794,12 +794,12 @@ var LTmp: TSimdF32Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := SimdSqrt(nextpas.core.simd.BatchF32.ReduceDot(FSrc, FSrc, FCount))
+    Result := SimdSqrt(nextpas.core.simd.ReduceDotF32(FSrc, FSrc, FCount))
   else
   begin
     LTmp := TSimdF32Array.Create(FCount);
     Into(LTmp.Data);
-    Result := SimdSqrt(nextpas.core.simd.BatchF32.ReduceDot(LTmp.Data, LTmp.Data, FCount));
+    Result := SimdSqrt(nextpas.core.simd.ReduceDotF32(LTmp.Data, LTmp.Data, FCount));
     LTmp.Free;
   end;
 end;
