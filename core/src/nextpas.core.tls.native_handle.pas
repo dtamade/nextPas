@@ -13,7 +13,8 @@
     - 增强的错误消息（包含修复建议）
 
   使用示例:
-    uses nextpas.core.tls.native_handle;
+    uses nextpas.core.tls.native_handle,
+  nextpas.core.text.format;
 
     // 方式1: 简洁
     Handle := GetNativeHandle(Ctx);
@@ -34,6 +35,7 @@ interface
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.base.utils,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
@@ -233,7 +235,7 @@ var
   NativeAccess: ISSLNativeHandleAccess;
 begin
   if not Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
-    raise ESSLException.Create(Format(ERROR_NOT_AVAILABLE, ['']));
+    raise ESSLException.Create(TextFormat(ERROR_NOT_AVAILABLE, ['']));
 
   Result := NativeAccess.GetNativeHandle;
 end;
@@ -252,14 +254,14 @@ begin
 
   // 检查接口支持
   if not Supports(AObject, ISSLNativeHandleAccess, NativeAccess) then
-    raise ESSLException.Create(Format(ERROR_NOT_AVAILABLE, [ContextMsg]));
+    raise ESSLException.Create(TextFormat(ERROR_NOT_AVAILABLE, [ContextMsg]));
 
   // 获取句柄
   Result := NativeAccess.GetNativeHandle;
 
   // 检查句柄有效性
   if Result = nil then
-    raise ESSLException.Create(Format(ERROR_HANDLE_NULL, [ContextMsg]));
+    raise ESSLException.Create(TextFormat(ERROR_HANDLE_NULL, [ContextMsg]));
 end;
 
 function TryGetNativeHandle(const AObject: IInterface;

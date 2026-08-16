@@ -13,7 +13,8 @@ unit nextpas.core.tls.tls13.posthandshake;
 
 interface
 
-uses nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv;
+uses nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   TTLS13NewSessionTicket = record
@@ -209,14 +210,14 @@ begin
 
   if AHandshakeMessage[0] <> TLS_HANDSHAKE_TYPE_NEW_SESSION_TICKET then
   begin
-    AError := Format('Unexpected handshake type %d for NewSessionTicket parser', [AHandshakeMessage[0]]);
+    AError := TextFormat('Unexpected handshake type %d for NewSessionTicket parser', [AHandshakeMessage[0]]);
     Exit;
   end;
 
   LBodyLen := ReadUInt24(AHandshakeMessage, 1);
   if Length(AHandshakeMessage) <> 4 + Integer(LBodyLen) then
   begin
-    AError := Format(
+    AError := TextFormat(
       'NewSessionTicket length mismatch (expected=%d actual=%d)',
       [4 + Integer(LBodyLen), Length(AHandshakeMessage)]
     );
@@ -334,14 +335,14 @@ begin
 
   if AHandshakeMessage[0] <> TLS_HANDSHAKE_TYPE_END_OF_EARLY_DATA then
   begin
-    AError := Format('Unexpected handshake type %d for EndOfEarlyData parser', [AHandshakeMessage[0]]);
+    AError := TextFormat('Unexpected handshake type %d for EndOfEarlyData parser', [AHandshakeMessage[0]]);
     Exit;
   end;
 
   LBodyLen := ReadUInt24(AHandshakeMessage, 1);
   if Length(AHandshakeMessage) <> 4 + Integer(LBodyLen) then
   begin
-    AError := Format(
+    AError := TextFormat(
       'EndOfEarlyData length mismatch (expected=%d actual=%d)',
       [4 + Integer(LBodyLen), Length(AHandshakeMessage)]
     );
@@ -350,7 +351,7 @@ begin
 
   if LBodyLen <> 0 then
   begin
-    AError := Format('Invalid EndOfEarlyData body length %d', [Integer(LBodyLen)]);
+    AError := TextFormat('Invalid EndOfEarlyData body length %d', [Integer(LBodyLen)]);
     Exit;
   end;
 
@@ -379,14 +380,14 @@ begin
 
   if AHandshakeMessage[0] <> TLS_HANDSHAKE_TYPE_KEY_UPDATE then
   begin
-    AError := Format('Unexpected handshake type %d for KeyUpdate parser', [AHandshakeMessage[0]]);
+    AError := TextFormat('Unexpected handshake type %d for KeyUpdate parser', [AHandshakeMessage[0]]);
     Exit;
   end;
 
   LBodyLen := ReadUInt24(AHandshakeMessage, 1);
   if Length(AHandshakeMessage) <> 4 + Integer(LBodyLen) then
   begin
-    AError := Format(
+    AError := TextFormat(
       'KeyUpdate length mismatch (expected=%d actual=%d)',
       [4 + Integer(LBodyLen), Length(AHandshakeMessage)]
     );
@@ -395,7 +396,7 @@ begin
 
   if LBodyLen <> 1 then
   begin
-    AError := Format('Invalid KeyUpdate body length %d', [Integer(LBodyLen)]);
+    AError := TextFormat('Invalid KeyUpdate body length %d', [Integer(LBodyLen)]);
     Exit;
   end;
 
@@ -407,7 +408,7 @@ begin
       AInfo.RequestUpdate := True;
   else
     begin
-      AError := Format('Invalid KeyUpdate request value %d', [LRequest]);
+      AError := TextFormat('Invalid KeyUpdate request value %d', [LRequest]);
       Exit;
     end;
   end;

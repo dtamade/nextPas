@@ -4531,6 +4531,8 @@ begin
     SetLength(FHvarIndexMap, LMapCount);
     for LI := 0 to LMapCount - 1 do
     begin
+      LOuter := 0;
+      LInner := 0;
       if LMapBase + 6 + LI * LEntrySize + LEntrySize > FDataLength then Break;
       case LEntrySize of
         1: begin
@@ -6956,6 +6958,9 @@ var
 begin
   if not FGvarParsed then Exit;
   if (AGlyphIndex < 0) or (AGlyphIndex >= UInt32(FGvarGlyphCount)) then Exit;
+  LPtNums := nil;
+  LSharedPtNums := nil;
+  LPtNumCount := 0;
   LNumPoints := Length(AOutline.Points);
   if LNumPoints = 0 then Exit;
   LNumContours := AOutline.ContourCount;

@@ -33,7 +33,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.base64,
-  nextpas.core.tls.debug.utils;
+  nextpas.core.tls.debug.utils,
+  nextpas.core.text.format;
 
 type
   { TSSLUtils - SSL 工具类 }
@@ -338,7 +339,7 @@ begin
     LContext := ' - ' + AContext
   else
     LContext := '';
-  Result := Format('[%s]%s', [SSL_ERROR_MESSAGES[AError], LContext]);
+  Result := TextFormat('[%s]%s', [SSL_ERROR_MESSAGES[AError], LContext]);
 end;
 
 class function TSSLUtils.GetErrorDetails(AException: ESSLException): string;

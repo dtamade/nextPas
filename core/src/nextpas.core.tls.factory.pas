@@ -47,7 +47,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions, // 新增：类型化异常
   nextpas.core.tls.logging,
-  nextpas.core.tls.collections; // P0: 可替换的 Map 接口
+  nextpas.core.tls.collections,
+  nextpas.core.text.format; // P0: 可替换的 Map 接口
 
 type
   {** SSL库类类型 (用于内部注册) *}
@@ -543,7 +544,7 @@ end;
 function ReplayStoreClientScopeMessage(
   const AField, ACallSite: string): string;
 begin
-  Result := Format(
+  Result := TextFormat(
     '%s is server-scoped. Client contexts do not install replay stores; remove it from %s.',
     [AField, ACallSite]
   );
@@ -589,7 +590,7 @@ procedure LogContextLevelServerNameCompatibilityWarning(const ACallSite: string)
 begin
   TSecurityLog.Warning(
     'Factory',
-    Format(
+    TextFormat(
       '%s received TSSLConfig.ServerName as deprecated context-level SNI compatibility; ' +
       'CreateContext ignores it for new contexts; prefer per-connection SNI via ' +
       'ISSLClientConnection.SetServerName or TSSLConnector.Connect*(..., ServerName).',
@@ -1134,7 +1135,7 @@ begin
   
   if (ALibType <> sslAutoDetect) and not IsLibraryAvailable(ALibType) then
     raise ESSLConfigurationException.CreateWithContext(
-      Format('SSL library %s is not available on this system', [SSL_LIBRARY_NAMES[ALibType]]),
+      TextFormat('SSL library %s is not available on this system', [SSL_LIBRARY_NAMES[ALibType]]),
       sslErrLibraryNotFound,
       'TSSLFactory.SetDefaultLibrary',
       0,
@@ -1219,7 +1220,7 @@ begin
     end;
   else
     raise ESSLConfigurationException.CreateWithContext(
-      Format('SSL backend %s is not registered', [SSL_LIBRARY_NAMES[ALibType]]),
+      TextFormat('SSL backend %s is not registered', [SSL_LIBRARY_NAMES[ALibType]]),
       sslErrLibraryNotFound,
       'TSSLFactory.CreateLibraryInstance',
       0,
@@ -1523,11 +1524,11 @@ begin
     begin
       try
         LLib := GetLibrary(LType);
-        Result := Result + Format('  - %s: %s' + LineEnding,
+        Result := Result + TextFormat('  - %s: %s' + LineEnding,
           [SSL_LIBRARY_NAMES[LType], LLib.GetVersionString]);
       except
         on E: Exception do
-          TSecurityLog.Debug('Factory', Format('GetLibrary failed for %s: %s', [SSL_LIBRARY_NAMES[LType], E.Message]));
+          TSecurityLog.Debug('Factory', TextFormat('GetLibrary failed for %s: %s', [SSL_LIBRARY_NAMES[LType], E.Message]));
       end;
     end;
   end;
@@ -1547,7 +1548,7 @@ begin
   Result := Result + 'Platform: macOS' + LineEnding;
   {$ENDIF}
   
-  Result := Result + Format('Default Library: %s' + LineEnding,
+  Result := Result + TextFormat('Default Library: %s' + LineEnding,
     [SSL_LIBRARY_NAMES[GetDefaultLibrary]]);
 end;
 
@@ -1595,7 +1596,7 @@ begin
   except
     on E: Exception do
       raise ESSLCryptoError.CreateWithContext(
-        Format('Failed to generate cryptographically secure random bytes: %s', [E.Message]),
+        TextFormat('Failed to generate cryptographically secure random bytes: %s', [E.Message]),
         sslErrOther,
         'TSSLHelper.GenerateRandomBytes',
         0,
@@ -1628,6 +1629,7 @@ var
 
   procedure EnsureOpenSSLLoaded;
   begin
+    LCryptoLib := Default(TOpenSSLLibHandle);
     LCryptoLib := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
     if not LibLoaded(LCryptoLib) then
       raise ESSLInvalidArgument.Create(
@@ -1642,6 +1644,7 @@ var
       LoadEVP(LCryptoLib);
   end;
 begin
+  LCryptoLib := Default(TOpenSSLLibHandle);
   // Pure Pascal fast-paths
   case AHashType of
     sslHashMD5:    LHashBytes := nextpas.core.crypto.hash.MD5(AData);

@@ -15,7 +15,8 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.block,
-  nextpas.core.tui.widget.intf;
+  nextpas.core.tui.widget.intf,
+  nextpas.core.text.format;
 
 type
   TProgressItem = record
@@ -191,7 +192,7 @@ begin
 
     if FShowPercent then
     begin
-      PctStr := Format('%3d%%', [Round(FItems[I].Ratio * 100)]);
+      PctStr := TextFormat('%3d%%', [Round(FItems[I].Ratio * 100)]);
       WriteSegment(PctStr, PctW, FStyle);
     end;
   end;

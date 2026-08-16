@@ -152,7 +152,7 @@ begin
           begin
             SetHandshakeError(
               sslErrUnsupported,
-              Format('Cipher suite %s is unsupported by pure FreePascal encrypted handshake path',
+              TextFormat('Cipher suite %s is unsupported by pure FreePascal encrypted handshake path',
                 [TLS13CipherSuiteToString(ACipherSuite)])
             );
             Exit;
@@ -287,7 +287,7 @@ begin
                     begin
                       SetHandshakeError(
                         sslErrProtocol,
-                        Format('Server Finished length mismatch (expected=%d actual=%d)',
+                        TextFormat('Server Finished length mismatch (expected=%d actual=%d)',
                           [FHandshakeSecrets.HashSize, Integer(LMsgLen)])
                       );
                       Exit;
@@ -328,7 +328,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrProtocol,
-                Format('Unexpected inner content type %d during encrypted handshake', [LInnerContentType])
+                TextFormat('Unexpected inner content type %d during encrypted handshake', [LInnerContentType])
               );
               Exit;
             end;
@@ -339,7 +339,7 @@ begin
       begin
         SetHandshakeError(
           sslErrProtocol,
-          Format('Unexpected TLS record type %d during encrypted handshake', [LHeader.ContentType])
+          TextFormat('Unexpected TLS record type %d during encrypted handshake', [LHeader.ContentType])
         );
         Exit;
       end;
@@ -623,7 +623,7 @@ begin
   begin
     SetHandshakeError(
       sslErrUnsupported,
-      Format('Cipher suite %s is unsupported for client Finished encryption',
+      TextFormat('Cipher suite %s is unsupported for client Finished encryption',
         [TLS13CipherSuiteToString(ACipherSuite)])
     );
     Exit;

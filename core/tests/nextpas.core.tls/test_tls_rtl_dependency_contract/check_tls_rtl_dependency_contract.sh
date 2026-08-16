@@ -14,6 +14,19 @@ require_token() {
   rg -F --quiet -- "$token" "$CORE_ROOT/$path" || fail "$path missing token: $token"
 }
 
+# text formatting may use either the legacy conv.Format entry (deprecated,
+# internal forwarder) or the current format.TextFormat entry. Both are core
+# text helpers; the contract forbids bare/SysUtils Format, not this upgrade.
+require_any_token() {
+  local path="$1"
+  local token_a="$2"
+  local token_b="$3"
+  if ! rg -F --quiet -- "$token_a" "$CORE_ROOT/$path" && \
+     ! rg -F --quiet -- "$token_b" "$CORE_ROOT/$path"; then
+    fail "$path missing either token: $token_a or $token_b"
+  fi
+}
+
 reject_token() {
   local path="$1"
   local token="$2"
@@ -71,7 +84,7 @@ require_token "$CERTCHAIN" "nextpas.core.text.conv"
 reject_regex "$CERTCHAIN" '(^|[^.[:alnum:]_])Format\('
 reject_regex "$CERTCHAIN" '(^|[^.[:alnum:]_])Trim\('
 reject_regex "$CERTCHAIN" '(^|[^.[:alnum:]_])SameText\('
-require_token "$CERTCHAIN" "nextpas.core.text.conv.Format("
+require_any_token "$CERTCHAIN" "nextpas.core.text.conv.Format(" "TextFormat("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.Trim("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.SameText("
 
@@ -86,7 +99,7 @@ if interface_uses_block "$ASN1" | grep -F --quiet "SysUtils"; then
 fi
 require_token "$ASN1" "nextpas.core.text.conv"
 reject_regex "$ASN1" '(^|[^.[:alnum:]_])Format\('
-require_token "$ASN1" "nextpas.core.text.conv.Format("
+require_any_token "$ASN1" "nextpas.core.text.conv.Format(" "TextFormat("
 require_token "$ASN1_SHIM" "nextpas.core.crypto.asn1"
 reject_token "$ASN1_SHIM" "Classes,"
 reject_token "$ASN1_SHIM" "Contnrs,"

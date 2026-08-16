@@ -12,7 +12,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.conv,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire,
+  nextpas.core.text.format;
 
 type
   TTLS13EarlyDataSecrets = record
@@ -281,7 +282,7 @@ begin
   LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
   if LHashSize <= 0 then
   begin
-    AError := Format(
+    AError := TextFormat(
       'Unsupported TLS 1.3 cipher suite for client early-data key schedule: 0x%.4x',
       [ACipherSuite]
     );
@@ -290,7 +291,7 @@ begin
 
   if Length(APSK) <> LHashSize then
   begin
-    AError := Format(
+    AError := TextFormat(
       'TLS 1.3 early-data PSK length must be %d bytes for selected hash path (actual=%d)',
       [LHashSize, Length(APSK)]
     );
@@ -357,7 +358,7 @@ begin
   LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
   if LHashSize <= 0 then
   begin
-    AError := Format('Unsupported TLS 1.3 cipher suite for key schedule: 0x%.4x', [ACipherSuite]);
+    AError := TextFormat('Unsupported TLS 1.3 cipher suite for key schedule: 0x%.4x', [ACipherSuite]);
     Exit;
   end;
 
@@ -466,13 +467,13 @@ begin
   LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
   if LHashSize <= 0 then
   begin
-    AError := Format('Unsupported TLS 1.3 cipher suite for PSK handshake key schedule: 0x%.4x', [ACipherSuite]);
+    AError := TextFormat('Unsupported TLS 1.3 cipher suite for PSK handshake key schedule: 0x%.4x', [ACipherSuite]);
     Exit;
   end;
 
   if Length(APSK) <> LHashSize then
   begin
-    AError := Format(
+    AError := TextFormat(
       'TLS 1.3 PSK length must be %d bytes for selected hash path (actual=%d)',
       [LHashSize, Length(APSK)]
     );

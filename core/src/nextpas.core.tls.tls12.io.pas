@@ -5,7 +5,8 @@ unit nextpas.core.tls.tls12.io;
 interface
 
 uses
-  nextpas.core.base, nextpas.core.text.conv, nextpas.core.io.intf;
+  nextpas.core.base, nextpas.core.text.conv, nextpas.core.io.intf,
+  nextpas.core.text.format;
 
 type
   TTLS12HandshakeReader = class
@@ -156,7 +157,7 @@ begin
     if LContentType = TLS12_CONTENT_ALERT then
     begin
       if Length(LData) >= 2 then
-        AError := Format('received alert: level=%d desc=%d', [LData[0], LData[1]])
+        AError := TextFormat('received alert: level=%d desc=%d', [LData[0], LData[1]])
       else
         AError := 'received malformed alert';
       Exit;
@@ -164,7 +165,7 @@ begin
 
     if LContentType <> TLS12_CONTENT_HANDSHAKE then
     begin
-      AError := Format('unexpected content type %d', [LContentType]);
+      AError := TextFormat('unexpected content type %d', [LContentType]);
       Exit;
     end;
 
@@ -229,7 +230,7 @@ begin
     if LContentType = TLS12_CONTENT_ALERT then
     begin
       if Length(LData) >= 2 then
-        AAlertDesc := Format('server alert: level=%d desc=%d', [LData[0], LData[1]])
+        AAlertDesc := TextFormat('server alert: level=%d desc=%d', [LData[0], LData[1]])
       else
         AAlertDesc := 'malformed alert';
       Exit;
@@ -243,7 +244,7 @@ begin
       FNonHandshakeContentType := LContentType;
       FNonHandshakeData := LData;
       FHasNonHandshake := True;
-      AAlertDesc := Format('unexpected content type %d', [LContentType]);
+      AAlertDesc := TextFormat('unexpected content type %d', [LContentType]);
       Exit;
     end;
 

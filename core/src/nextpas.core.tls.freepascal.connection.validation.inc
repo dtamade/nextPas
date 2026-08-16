@@ -104,7 +104,7 @@ begin
   begin
     FSignedCertificateTimestampList := Copy(LCertificateInfo.LeafSignedCertificateTimestampList);
     FSignedCertificateTimestampCount := LCertificateInfo.LeafSignedCertificateTimestampCount;
-    FCertificateTransparencyStatus := Format(
+    FCertificateTransparencyStatus := TextFormat(
       'Received from TLS extension (%d SCTs)',
       [FSignedCertificateTimestampCount]
     );
@@ -118,7 +118,7 @@ begin
     except
       on E: Exception do
       begin
-        AError := Format('Failed to create peer certificate #%d: %s', [I + 1, E.Message]);
+        AError := TextFormat('Failed to create peer certificate #%d: %s', [I + 1, E.Message]);
         ClearPeerCertificateCache;
         Exit;
       end;
@@ -126,14 +126,14 @@ begin
 
     if LCertificate = nil then
     begin
-      AError := Format('Failed to create peer certificate #%d', [I + 1]);
+      AError := TextFormat('Failed to create peer certificate #%d', [I + 1]);
       ClearPeerCertificateCache;
       Exit;
     end;
 
     if not LCertificate.LoadFromDER(LCertificateInfo.Certificates[I]) then
     begin
-      AError := Format('Failed to load peer certificate #%d from DER', [I + 1]);
+      AError := TextFormat('Failed to load peer certificate #%d from DER', [I + 1]);
       ClearPeerCertificateCache;
       Exit;
     end;
@@ -176,7 +176,7 @@ begin
     begin
       FSignedCertificateTimestampList := Copy(LEmbeddedSCTList);
       FSignedCertificateTimestampCount := LEmbeddedSCTCount;
-      FCertificateTransparencyStatus := Format(
+      FCertificateTransparencyStatus := TextFormat(
         'Received from embedded X.509 extension (%d SCTs)',
         [FSignedCertificateTimestampCount]
       );
@@ -202,7 +202,7 @@ begin
     begin
       FSignedCertificateTimestampList := Copy(LOCSPSCTList);
       FSignedCertificateTimestampCount := LOCSPSCTCount;
-      FCertificateTransparencyStatus := Format(
+      FCertificateTransparencyStatus := TextFormat(
         'Received from OCSP response (%d SCTs)',
         [FSignedCertificateTimestampCount]
       );
@@ -725,7 +725,7 @@ begin
       if not SameText(NormalizeHostForVerify(FSessionBoundServerName), LNormalizedHost) then
       begin
         SetHandshakeError(sslErrHostnameMismatch,
-          Format('Resumed session was bound to "%s" but current connection targets "%s"',
+          TextFormat('Resumed session was bound to "%s" but current connection targets "%s"',
             [FSessionBoundServerName, FServerName]));
         Exit;
       end;
@@ -753,7 +753,7 @@ begin
     if not FPeerCertificate.VerifyHostname(LNormalizedHost) then
     begin
       SetHandshakeError(sslErrHostnameMismatch,
-        Format('Peer certificate hostname mismatch for "%s"', [LNormalizedHost]));
+        TextFormat('Peer certificate hostname mismatch for "%s"', [LNormalizedHost]));
       Exit;
     end;
   end;

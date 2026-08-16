@@ -9,7 +9,8 @@ uses
   nextpas.core.base.utils, nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509,
+  nextpas.core.text.format;
 
 type
   TTLS12ClientState = record
@@ -187,7 +188,7 @@ begin
     TLS12_ALERT_PROTOCOL_VERSION: Result := 'protocol_version';
     TLS12_ALERT_INTERNAL_ERROR: Result := 'internal_error';
   else
-    Result := Format('unknown(%d)', [ACode]);
+    Result := TextFormat('unknown(%d)', [ACode]);
   end;
 end;
 
@@ -233,7 +234,7 @@ begin
 
   if not TLS12GetCipherSuiteInfo(AState.CipherSuite, LSuiteInfo) then
   begin
-    AError := Format('Unsupported cipher suite: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
+    AError := TextFormat('Unsupported cipher suite: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
     Exit;
   end;
   LUseSHA384 := LSuiteInfo.PRFHash = phSHA384;
@@ -261,7 +262,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_CERTIFICATE then
     begin
-      AError := Format('Expected Certificate, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected Certificate, got type %d', [LHandshakeType]);
       Exit;
     end;
 
@@ -290,7 +291,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_SERVER_KEY_EXCHANGE then
     begin
-      AError := Format('Expected ServerKeyExchange, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected ServerKeyExchange, got type %d', [LHandshakeType]);
       Exit;
     end;
 
@@ -301,7 +302,7 @@ begin
 
     if (LSKE.NamedCurve <> TLS12_GROUP_X25519) and (LSKE.NamedCurve <> TLS12_GROUP_SECP256R1) then
     begin
-      AError := Format('Unsupported named curve: %d', [LSKE.NamedCurve]);
+      AError := TextFormat('Unsupported named curve: %d', [LSKE.NamedCurve]);
       Exit;
     end;
 
@@ -350,7 +351,7 @@ begin
           end;
         end;
     else
-      AError := Format('Unsupported SKE signature scheme: 0x%s', [IntToHex(LSKE.SignatureScheme, 4)]);
+      AError := TextFormat('Unsupported SKE signature scheme: 0x%s', [IntToHex(LSKE.SignatureScheme, 4)]);
       Exit;
     end;
 
@@ -376,7 +377,7 @@ begin
 
     if LHandshakeType <> TLS12_HANDSHAKE_SERVER_HELLO_DONE then
     begin
-      AError := Format('Expected ServerHelloDone, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected ServerHelloDone, got type %d', [LHandshakeType]);
       Exit;
     end;
 
@@ -719,7 +720,7 @@ begin
   end;
   if LHandshakeType <> TLS12_HANDSHAKE_SERVER_HELLO then
   begin
-    AError := Format('Expected ServerHello, got type %d', [LHandshakeType]);
+    AError := TextFormat('Expected ServerHello, got type %d', [LHandshakeType]);
     Exit;
   end;
 
@@ -850,7 +851,7 @@ begin
     Exit;
   end;
   if LHandshakeType <> TLS12_HANDSHAKE_SERVER_HELLO then
-  begin AError := Format('Expected ServerHello, got type %d', [LHandshakeType]); Exit; end;
+  begin AError := TextFormat('Expected ServerHello, got type %d', [LHandshakeType]); Exit; end;
 
   if not TryParseTLS12ServerHello(LServerHelloBody, 0, LServerHello, AError) then Exit;
 
@@ -896,7 +897,7 @@ begin
 
   if not TLS12GetCipherSuiteInfo(AState.CipherSuite, LSuiteInfo) then
   begin
-    AError := Format('Unsupported cipher suite for resumption: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
+    AError := TextFormat('Unsupported cipher suite for resumption: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
     Exit;
   end;
   LUseSHA384 := LSuiteInfo.PRFHash = phSHA384;
@@ -1098,7 +1099,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_SERVER_HELLO then
     begin
-      AError := Format('Expected ServerHello, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected ServerHello, got type %d', [LHandshakeType]);
       Exit;
     end;
 
@@ -1121,7 +1122,7 @@ begin
 
     if not TLS12GetCipherSuiteInfo(AState.CipherSuite, LSuiteInfo) then
     begin
-      AError := Format('Unsupported cipher suite: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
+      AError := TextFormat('Unsupported cipher suite: 0x%s', [IntToHex(AState.CipherSuite, 4)]);
       Exit;
     end;
     LUseSHA384 := LSuiteInfo.PRFHash = phSHA384;
@@ -1147,7 +1148,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_CERTIFICATE then
     begin
-      AError := Format('Expected Certificate, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected Certificate, got type %d', [LHandshakeType]);
       Exit;
     end;
     TLS12AppendTranscript(LTranscript, LFullMsg);
@@ -1171,7 +1172,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_SERVER_KEY_EXCHANGE then
     begin
-      AError := Format('Expected ServerKeyExchange, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected ServerKeyExchange, got type %d', [LHandshakeType]);
       Exit;
     end;
     TLS12AppendTranscript(LTranscript, LFullMsg);
@@ -1180,7 +1181,7 @@ begin
       Exit;
     if (LSKE.NamedCurve <> TLS12_GROUP_X25519) and (LSKE.NamedCurve <> TLS12_GROUP_SECP256R1) then
     begin
-      AError := Format('Unsupported named curve: %d', [LSKE.NamedCurve]);
+      AError := TextFormat('Unsupported named curve: %d', [LSKE.NamedCurve]);
       Exit;
     end;
 
@@ -1236,7 +1237,7 @@ begin
           Exit;
         end;
     else
-      AError := Format('Unsupported SKE signature scheme: 0x%s', [IntToHex(LSKE.SignatureScheme, 4)]);
+      AError := TextFormat('Unsupported SKE signature scheme: 0x%s', [IntToHex(LSKE.SignatureScheme, 4)]);
       Exit;
     end;
 
@@ -1248,7 +1249,7 @@ begin
     end;
     if LHandshakeType <> TLS12_HANDSHAKE_SERVER_HELLO_DONE then
     begin
-      AError := Format('Expected ServerHelloDone, got type %d', [LHandshakeType]);
+      AError := TextFormat('Expected ServerHelloDone, got type %d', [LHandshakeType]);
       Exit;
     end;
     TLS12AppendTranscript(LTranscript, LFullMsg);
@@ -1398,7 +1399,7 @@ begin
 
     if LContentType <> TLS12_CONTENT_CHANGE_CIPHER_SPEC then
     begin
-      AError := Format('Expected ChangeCipherSpec, got content type %d', [LContentType]);
+      AError := TextFormat('Expected ChangeCipherSpec, got content type %d', [LContentType]);
       Exit;
     end;
 

@@ -27,7 +27,8 @@ uses
   nextpas.core.tls.logging,
   nextpas.core.tls.cert.builder,
   nextpas.core.tls.context.builder,
-  nextpas.core.tls.factory;
+  nextpas.core.tls.factory,
+  nextpas.core.text.format;
 
 type
   { TSSLQuick - Simple one-liner SSL/TLS operations }
@@ -197,7 +198,7 @@ begin
     Result := True;
   except
     on E: Exception do
-      TSecurityLog.Warning('Quick', Format('GenerateSelfSignedToFiles failed: %s', [E.Message]));
+      TSecurityLog.Warning('Quick', TextFormat('GenerateSelfSignedToFiles failed: %s', [E.Message]));
   end;
 end;
 

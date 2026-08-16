@@ -19,7 +19,8 @@ unit nextpas.core.tls.connection.base;
 
 interface
 
-uses nextpas.core.base, nextpas.core.system.sysutils, nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions;
+uses nextpas.core.base, nextpas.core.system.sysutils, nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions,
+  nextpas.core.text.format;
 
 const
   { 字符串缓冲区大小 }
@@ -351,7 +352,7 @@ end;
 function RolelessHandshakeAmbiguityMessage(
   const AEntryPoint: string): string; inline;
 begin
-  Result := Format(
+  Result := TextFormat(
     '%s is ambiguous for sslCtxBoth. Use Connect or Accept to choose a role explicitly.',
     [AEntryPoint]
   );

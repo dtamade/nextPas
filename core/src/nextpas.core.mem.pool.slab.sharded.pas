@@ -404,6 +404,7 @@ var
   LPos: SizeUInt;
   LHash: QWord;
 begin
+  Result := False;
   if APtr = nil then Exit(False);
   LKey := PtrUInt(APtr);
   if (LKey = 0) or (LKey = FB_TOMBSTONE) then Exit(False);

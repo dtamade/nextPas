@@ -9,7 +9,8 @@ uses
   nextpas.core.text.conv, nextpas.core.io.intf,
   nextpas.core.tls.base,
   nextpas.core.tls.tls12.ciphersuite,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509,
+  nextpas.core.text.format;
 
 type
   TSSLSNICallback = function(const AHostname: string; out ACertDER, AKeyDER: TBytes): Boolean;
@@ -832,7 +833,7 @@ begin
               begin AError := 'Client CertificateVerify failed (ECDSA): ' + LDecError; Exit; end;
             end;
         else
-          AError := Format('Unsupported CertificateVerify scheme: 0x%s', [IntToHex(I, 4)]);
+          AError := TextFormat('Unsupported CertificateVerify scheme: 0x%s', [IntToHex(I, 4)]);
           Exit;
         end;
       finally

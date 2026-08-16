@@ -27,7 +27,8 @@ uses
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.time,
-  nextpas.core.tls.base;  // P2: TSSLProtocolVersions for shared helpers
+  nextpas.core.tls.base,
+  nextpas.core.text.format;  // P2: TSSLProtocolVersions for shared helpers
 
 {$IFDEF USE_SYNCOBJS}
   {$DEFINE HAS_CRITICAL_SECTION}
@@ -264,7 +265,7 @@ var
 begin
   LTimeStr := FormatDateTime('%Y-%m-%d %H:%M:%S', nextpas.core.time.DateTimeNow);
   // Format: [Time] [Level] [Category] Message
-  Result := nextpas.core.text.conv.Format(
+  Result := TextFormat(
     '[%s] [%s] [%s] %s',
     [LTimeStr, LOG_LEVEL_NAMES[ALevel], ACategory, AMessage]
   );
@@ -311,7 +312,7 @@ procedure TBaseLogger.LogAudit(const ACategory, AAction, AUser, ADetails: string
 var
   LMsg: string;
 begin
-  LMsg := nextpas.core.text.conv.Format(
+  LMsg := TextFormat(
     'Action=%s User=%s Details=%s',
     [AAction, AUser, ADetails]
   );
@@ -704,7 +705,7 @@ begin
   try
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));
-    LResult.Add(nextpas.core.text.conv.Format(
+    LResult.Add(TextFormat(
       '%-30s %8s %10s %10s %10s %10s',
       ['Name', 'Count', 'Total(ms)', 'Avg(ms)', 'Min(ms)', 'Max(ms)']
     ));
@@ -720,7 +721,7 @@ begin
         else
           LAvg := 0;
 
-        LResult.Add(nextpas.core.text.conv.Format(
+        LResult.Add(TextFormat(
           '%-30s %8d %10d %10.2f %10d %10d',
           [LEntry^.Name, LEntry^.Count, LEntry^.TotalTimeMs,
           LAvg, LEntry^.MinTimeMs, LEntry^.MaxTimeMs]

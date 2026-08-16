@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.time.base,
-  nextpas.core.stopwatch.tick;
+  nextpas.core.stopwatch.tick,
+  nextpas.core.text.format;
 
 type
   TLapArray = array of TDuration;
@@ -237,11 +238,11 @@ var
 begin
   LMs := ElapsedMs;
   if LMs < 1000 then
-    Result := Format('%d ms', [LMs])
+    Result := TextFormat('%d ms', [LMs])
   else if LMs < 60000 then
-    Result := Format('%.2f s', [LMs / 1000.0])
+    Result := TextFormat('%.2f s', [LMs / 1000.0])
   else
-    Result := Format('%.2f min', [LMs / 60000.0]);
+    Result := TextFormat('%.2f min', [LMs / 60000.0]);
 end;
 
 { TStopwatchScope }
@@ -259,7 +260,7 @@ begin
   begin
     FSw.Stop;
     if FName <> '' then
-      WriteLn(Format('%s: %s', [FName, FSw.ToString]));
+      WriteLn(TextFormat('%s: %s', [FName, FSw.ToString]));
     FActive := False;
   end;
 end;

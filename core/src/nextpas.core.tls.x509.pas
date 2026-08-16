@@ -45,7 +45,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.builder,
   nextpas.core.time,
-  nextpas.core.tls.asn1;
+  nextpas.core.tls.asn1,
+  nextpas.core.text.format;
 
 type
   // ========================================================================
@@ -469,7 +470,7 @@ end;
 
 function TX509Validity.ToString: string;
 begin
-  Result := nextpas.core.text.conv.Format('Not Before: %s, Not After: %s',
+  Result := TextFormat('Not Before: %s, Not After: %s',
     [nextpas.core.time.DateTimeToStr(NotBefore), nextpas.core.time.DateTimeToStr(NotAfter)]);
 end;
 
@@ -479,7 +480,7 @@ end;
 
 function TX509PublicKeyInfo.ToString: string;
 begin
-  Result := nextpas.core.text.conv.Format('%s (%d bits)', [KeyType, KeySize]);
+  Result := TextFormat('%s (%d bits)', [KeyType, KeySize]);
 end;
 
 // ========================================================================
@@ -489,7 +490,7 @@ end;
 function TX509Extension.ToString: string;
 begin
   if Critical then
-    Result := nextpas.core.text.conv.Format('%s (critical)', [Name])
+    Result := TextFormat('%s (critical)', [Name])
   else
     Result := Name;
 end;
@@ -1039,7 +1040,7 @@ begin
                   SAN.SANType := sanIPAddress;
                   // 转换 IP 地址
                   if Length(Child.RawData) = 4 then
-                    SAN.Value := nextpas.core.text.conv.Format('%d.%d.%d.%d',
+                    SAN.Value := TextFormat('%d.%d.%d.%d',
                       [Child.RawData[0], Child.RawData[1], Child.RawData[2], Child.RawData[3]])
                   else if Length(Child.RawData) = 16 then
                   begin

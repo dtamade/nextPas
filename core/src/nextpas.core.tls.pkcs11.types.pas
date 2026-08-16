@@ -24,7 +24,8 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.tls.pkcs11.api;
+  nextpas.core.tls.pkcs11.api,
+  nextpas.core.text.format;
 
 type
   { TPKCS11URI - RFC 7512 PKCS#11 URI representation
@@ -464,7 +465,7 @@ end;
 
 function TPKCS11KeyInfo.ToString: string;
 begin
-  Result := Format('Key: %s (Type: %s, Size: %d bits, Sign: %s, Decrypt: %s)',
+  Result := TextFormat('Key: %s (Type: %s, Size: %d bits, Sign: %s, Decrypt: %s)',
     [KeyLabel, PKCS11KeyTypeToString(KeyType), KeySize,
     BoolToStr(CanSign), BoolToStr(CanDecrypt)]);
 end;
@@ -510,13 +511,13 @@ begin
   Result.RwSessionCount := AInfo.ulRwSessionCount;
   Result.MaxPinLen := AInfo.ulMaxPinLen;
   Result.MinPinLen := AInfo.ulMinPinLen;
-  Result.HardwareVersion := Format('%d.%d', [AInfo.hardwareVersion.major, AInfo.hardwareVersion.minor]);
-  Result.FirmwareVersion := Format('%d.%d', [AInfo.firmwareVersion.major, AInfo.firmwareVersion.minor]);
+  Result.HardwareVersion := TextFormat('%d.%d', [AInfo.hardwareVersion.major, AInfo.hardwareVersion.minor]);
+  Result.FirmwareVersion := TextFormat('%d.%d', [AInfo.firmwareVersion.major, AInfo.firmwareVersion.minor]);
 end;
 
 function TPKCS11TokenInfo.ToString: string;
 begin
-  Result := Format('Token: %s (Manufacturer: %s, Model: %s, Serial: %s)',
+  Result := TextFormat('Token: %s (Manufacturer: %s, Model: %s, Serial: %s)',
     [TokenLabel, Manufacturer, Model, SerialNumber]);
 end;
 
@@ -543,13 +544,13 @@ begin
   Result.Description := TrimPKCS11String(AInfo.slotDescription);
   Result.Manufacturer := TrimPKCS11String(AInfo.manufacturerID);
   Result.Flags := AInfo.flags;
-  Result.HardwareVersion := Format('%d.%d', [AInfo.hardwareVersion.major, AInfo.hardwareVersion.minor]);
-  Result.FirmwareVersion := Format('%d.%d', [AInfo.firmwareVersion.major, AInfo.firmwareVersion.minor]);
+  Result.HardwareVersion := TextFormat('%d.%d', [AInfo.hardwareVersion.major, AInfo.hardwareVersion.minor]);
+  Result.FirmwareVersion := TextFormat('%d.%d', [AInfo.firmwareVersion.major, AInfo.firmwareVersion.minor]);
 end;
 
 function TPKCS11SlotInfo.ToString: string;
 begin
-  Result := Format('Slot %d: %s (Manufacturer: %s)',
+  Result := TextFormat('Slot %d: %s (Manufacturer: %s)',
     [SlotID, Description, Manufacturer]);
 end;
 
@@ -559,7 +560,7 @@ constructor EPKCS11Exception.Create(const AMessage: string; AReturnValue: CK_RV)
 var
   LMsg: string;
 begin
-  LMsg := Format('%s (CKR: 0x%x - %s)',
+  LMsg := TextFormat('%s (CKR: 0x%x - %s)',
     [AMessage, AReturnValue, PKCS11ReturnValueToString(AReturnValue)]);
   inherited Create(LMsg);
   FReturnValue := AReturnValue;
@@ -638,7 +639,7 @@ begin
     CKR_CRYPTOKI_NOT_INITIALIZED: Result := 'Cryptoki not initialized';
     CKR_CRYPTOKI_ALREADY_INITIALIZED: Result := 'Cryptoki already initialized';
   else
-    Result := Format('Unknown (0x%x)', [ARV]);
+    Result := TextFormat('Unknown (0x%x)', [ARV]);
   end;
 end;
 

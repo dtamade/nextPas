@@ -4,7 +4,8 @@ unit nextpas.core.tls.openssl.api.utils;
 
 interface
 
-uses nextpas.core.text.conv;
+uses nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 { Library handle management }
 function GetLibHandle: HMODULE;
@@ -92,7 +93,7 @@ begin
           Result := string(ErrStr);
       end
       else
-        Result := Format('OpenSSL Error: 0x%x', [ErrCode]);
+        Result := TextFormat('OpenSSL Error: 0x%x', [ErrCode]);
     end;
   end;
 end;

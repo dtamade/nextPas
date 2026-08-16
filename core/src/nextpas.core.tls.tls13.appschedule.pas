@@ -17,7 +17,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   TTLS13ApplicationSecrets = record
@@ -261,7 +262,7 @@ begin
   LHashSize := TLS13CipherSuiteHashSize(ACipherSuite);
   if LHashSize <= 0 then
   begin
-    AError := Format('Unsupported TLS 1.3 cipher suite for application key schedule: 0x%.4x', [ACipherSuite]);
+    AError := TextFormat('Unsupported TLS 1.3 cipher suite for application key schedule: 0x%.4x', [ACipherSuite]);
     Exit;
   end;
 
@@ -274,7 +275,7 @@ begin
 
   if Length(AHandshakeSecret) <> LHashSize then
   begin
-    AError := Format(
+    AError := TextFormat(
       'TLS 1.3 handshake secret length must be %d bytes for selected hash path (actual=%d)',
       [LHashSize, Length(AHandshakeSecret)]
     );
@@ -369,7 +370,7 @@ begin
 
   if Length(ACurrentTrafficSecret) <> AHashSize then
   begin
-    AError := Format('Invalid traffic secret length for key update (expected=%d actual=%d)',
+    AError := TextFormat('Invalid traffic secret length for key update (expected=%d actual=%d)',
       [AHashSize, Length(ACurrentTrafficSecret)]);
     Exit;
   end;
@@ -404,7 +405,7 @@ begin
 
   if Length(ATrafficSecret) <> AHashSize then
   begin
-    AError := Format('Invalid traffic secret length for key derivation (expected=%d actual=%d)',
+    AError := TextFormat('Invalid traffic secret length for key derivation (expected=%d actual=%d)',
       [AHashSize, Length(ATrafficSecret)]);
     Exit;
   end;
@@ -451,7 +452,7 @@ begin
   LHashSize := TLS13CipherSuiteHashSize(ASecrets.CipherSuite);
   if LHashSize <= 0 then
   begin
-    AError := Format('Cipher suite 0x%.4x does not support application key update path yet', [ASecrets.CipherSuite]);
+    AError := TextFormat('Cipher suite 0x%.4x does not support application key update path yet', [ASecrets.CipherSuite]);
     Exit;
   end;
 
@@ -460,7 +461,7 @@ begin
 
   if ASecrets.HashSize <> LHashSize then
   begin
-    AError := Format('Application secret hash size mismatch (expected=%d actual=%d)',
+    AError := TextFormat('Application secret hash size mismatch (expected=%d actual=%d)',
       [LHashSize, ASecrets.HashSize]);
     Exit;
   end;

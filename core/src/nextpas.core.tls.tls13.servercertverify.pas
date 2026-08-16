@@ -23,7 +23,8 @@ uses
   nextpas.core.text.strings,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.clienthello.parser,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509,
+  nextpas.core.text.format;
 
 function TrySelectTLS13ServerCertificateVerifyScheme(
   const AClientHello: TTLS13ClientHelloInfo;
@@ -1735,7 +1736,7 @@ begin
 
   if Length(ASignature) <> LModulusLength then
   begin
-    AError := Format('RSA signature length mismatch (expected=%d actual=%d)',
+    AError := TextFormat('RSA signature length mismatch (expected=%d actual=%d)',
       [LModulusLength, Length(ASignature)]);
     Exit;
   end;

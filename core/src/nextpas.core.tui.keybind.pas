@@ -8,7 +8,8 @@ unit nextpas.core.tui.keybind;
 interface
 
 uses
-  nextpas.core.tui.event;
+  nextpas.core.tui.event,
+  nextpas.core.text.format;
 
 type
   TKeybindMode = (kmNormal, kmInsert, kmVisual, kmCommand);
@@ -238,7 +239,7 @@ begin
         KeyStr := ModStr + '?';
       end;
 
-    Result := Result + Format('[%s] %-10s %s', [ModeStr, KeyStr, FBindings[I].Description]);
+    Result := Result + TextFormat('[%s] %-10s %s', [ModeStr, KeyStr, FBindings[I].Description]);
     if I < FCount - 1 then Result := Result + #10;
   end;
 end;

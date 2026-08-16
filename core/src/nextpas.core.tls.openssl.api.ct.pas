@@ -8,7 +8,8 @@ unit nextpas.core.tls.openssl.api.ct;
 
 interface
 
-uses nextpas.core.text.conv, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp;
+uses nextpas.core.text.conv, nextpas.core.tls.openssl.api, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp,
+  nextpas.core.text.format;
 
 const
   // CT 日志条目类型
@@ -539,7 +540,7 @@ begin
   if Assigned(SCT_get_version) then
   begin
     Version := SCT_get_version(SCT);
-    Result := Result + Format('Version: %d' + sLineBreak, [Version]);
+    Result := Result + TextFormat('Version: %d' + sLineBreak, [Version]);
   end;
   
   // 获取日志条目类型
@@ -550,7 +551,7 @@ begin
       CT_LOG_ENTRY_TYPE_X509: Result := Result + 'Type: X.509 Certificate' + sLineBreak;
       CT_LOG_ENTRY_TYPE_PRECERT: Result := Result + 'Type: Pre-Certificate' + sLineBreak;
     else
-      Result := Result + Format('Type: Unknown (%d)' + sLineBreak, [LogEntryType]);
+      Result := Result + TextFormat('Type: Unknown (%d)' + sLineBreak, [LogEntryType]);
     end;
   end;
   
@@ -558,7 +559,7 @@ begin
   if Assigned(SCT_get_timestamp) then
   begin
     Timestamp := SCT_get_timestamp(SCT);
-    Result := Result + Format('Timestamp: %d' + sLineBreak, [Timestamp]);
+    Result := Result + TextFormat('Timestamp: %d' + sLineBreak, [Timestamp]);
   end;
   
   // 获取来源
@@ -589,7 +590,7 @@ begin
     begin
       Result := Result + 'Log ID: ';
       for I := 0 to LogIdLen - 1 do
-        Result := Result + Format('%.2x', [LogId[I]]);
+        Result := Result + TextFormat('%.2x', [LogId[I]]);
       Result := Result + sLineBreak;
     end;
   end;

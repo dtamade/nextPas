@@ -9,7 +9,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.core,
-  nextpas.core.tls.openssl.loader;
+  nextpas.core.tls.openssl.loader,
+  nextpas.core.text.format;
 
 const
   { Error library codes }
@@ -558,7 +559,7 @@ begin
     ERR_LIB_PKCS7: Result := 'PKCS7';
     ERR_LIB_SYS: Result := 'SYSTEM';
   else
-    Result := Format('LIB_%d', [LibCode]);
+    Result := TextFormat('LIB_%d', [LibCode]);
   end;
 end;
 

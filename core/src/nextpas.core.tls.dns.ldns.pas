@@ -18,7 +18,8 @@ interface
 uses
   nextpas.core.platform.dl,
   nextpas.core.base,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 const
   // ldns 库名
@@ -531,7 +532,7 @@ begin
       ldns_resolver_set_dnssec(Resolver, 1);
 
     // 构造 TLSA 查询名称: _<port>._<protocol>.<domain>
-    QueryStr := AnsiString(Format('_%d._%s.%s', [APort, LowerCase(AProtocol), ADomain]));
+    QueryStr := AnsiString(TextFormat('_%d._%s.%s', [APort, LowerCase(AProtocol), ADomain]));
     QueryName := ldns_dname_new_frm_str(PAnsiChar(QueryStr));
     if QueryName = nil then
       Exit(False);

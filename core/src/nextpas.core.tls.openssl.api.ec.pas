@@ -12,7 +12,8 @@ unit nextpas.core.tls.openssl.api.ec;
 
 interface
 
-uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader;
+uses nextpas.core.tls.base, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+  nextpas.core.text.format;
 
 type
   // EC structures
@@ -477,7 +478,7 @@ begin
     NID_ED25519: Result := 'ED25519';
     NID_ED448: Result := 'ED448';
   else
-    Result := nextpas.core.text.conv.Format('Unknown(%d)', [nid]);
+    Result := TextFormat('Unknown(%d)', [nid]);
   end;
 end;
 

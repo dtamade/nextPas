@@ -17,7 +17,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   Exception = nextpas.core.exception.Exception;
@@ -124,7 +125,7 @@ uses
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
-  Result := nextpas.core.text.conv.Format(AFmt, AArgs);
+  Result := TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;

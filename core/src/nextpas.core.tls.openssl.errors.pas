@@ -24,7 +24,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.logging;
+  nextpas.core.tls.logging,
+  nextpas.core.text.format;
 
 {**
  * Get error message from OpenSSL error queue
@@ -136,7 +137,7 @@ begin
     LErrorCode := GetLastOpenSSLError;
     LErrorMsg := GetOpenSSLErrorString;
     raise ESSLCryptoError.CreateWithContext(
-      Format('%s failed: %s', [AOperation, LErrorMsg]),
+      TextFormat('%s failed: %s', [AOperation, LErrorMsg]),
       sslErrOther,
       AOperation,
       Integer(LErrorCode),
@@ -242,7 +243,7 @@ begin
     $1417D102:
       Result := '解密失败或MAC校验失败';
   else
-    Result := Format('OpenSSL 错误 (0x%x)', [AErrorCode]);
+    Result := TextFormat('OpenSSL 错误 (0x%x)', [AErrorCode]);
   end;
 end;
 
@@ -270,7 +271,7 @@ begin
     $1417D102:
       Result := 'Decryption failed or bad record MAC';
   else
-    Result := Format('OpenSSL error (0x%x)', [AErrorCode]);
+    Result := TextFormat('OpenSSL error (0x%x)', [AErrorCode]);
   end;
 end;
 

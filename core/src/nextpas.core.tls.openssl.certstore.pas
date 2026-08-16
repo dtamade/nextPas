@@ -21,7 +21,8 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.stack,
   nextpas.core.tls.openssl.native_handle,
-  nextpas.core.tls.openssl.certificate;
+  nextpas.core.tls.openssl.certificate,
+  nextpas.core.text.format;
 
 type
   TIntegerArray = array of Integer;
@@ -132,7 +133,7 @@ begin
     except
       on E: Exception do
         TSecurityLog.Warning('OpenSSL',
-          nextpas.core.text.conv.Format('Exception freeing X509 in cert store list: %s', [E.Message]));
+          TextFormat('Exception freeing X509 in cert store list: %s', [E.Message]));
     end;
     ACerts[I] := nil;
   end;
@@ -213,7 +214,7 @@ begin
       except
         // P3-8: 记录异常而不是静默忽略
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', TextFormat('Exception in TOpenSSLCertificateStore.Destroy: %s', [E.Message]));
       end;
     end;
   end;
@@ -279,7 +280,7 @@ begin
     FIssuerCache[High(FIssuerCache)] := NormalizeCertificateStoreDN(Issuer);
   except
     on E: Exception do
-      TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Failed to build index for certificate: %s', [E.Message]));
+      TSecurityLog.Warning('OpenSSL', TextFormat('Failed to build index for certificate: %s', [E.Message]));
   end;
 end;
 
@@ -352,7 +353,7 @@ begin
         LErrCode := ERR_peek_last_error();
 
       TSecurityLog.Warning('CertStore',
-        nextpas.core.text.conv.Format('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
+        TextFormat('X509_STORE_add_cert failed: %s', [GetFriendlyErrorMessage(LErrCode)]));
     end;
   end;
 
@@ -409,7 +410,7 @@ begin
       except
         on E: Exception do
           // Rust-quality: 记录错误而非静默忽略
-          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('X509_STORE_free failed in Clear: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', TextFormat('X509_STORE_free failed in Clear: %s', [E.Message]));
       end;
     end;
   end;
@@ -511,7 +512,7 @@ begin
               LErrCode := ERR_peek_last_error();
 
             TSecurityLog.Warning('CertStore',
-              nextpas.core.text.conv.Format('X509_STORE_add_cert failed while loading "%s": %s',
+              TextFormat('X509_STORE_add_cert failed while loading "%s": %s',
                 [AFileName, GetFriendlyErrorMessage(LErrCode)]));
 
             X509_free(X509Cert);
@@ -601,7 +602,7 @@ begin
         X509_STORE_set_default_paths(FStore);
       except
         on E: Exception do
-          TSecurityLog.Debug('CertStore', nextpas.core.text.conv.Format('X509_STORE_set_default_paths failed: %s', [E.Message]));
+          TSecurityLog.Debug('CertStore', TextFormat('X509_STORE_set_default_paths failed: %s', [E.Message]));
       end;
     end;
   end;

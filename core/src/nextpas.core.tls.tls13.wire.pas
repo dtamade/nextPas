@@ -14,7 +14,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.conv,
-  nextpas.core.tls.errors;
+  nextpas.core.tls.errors,
+  nextpas.core.text.format;
 
 const
   TLS_CONTENT_TYPE_CHANGE_CIPHER_SPEC = 20;
@@ -210,7 +211,7 @@ begin
     TLS13_CIPHER_CHACHA20_POLY1305_SHA256:
       Result := 'TLS_CHACHA20_POLY1305_SHA256';
   else
-    Result := Format('0x%.4x', [ACipherSuite]);
+    Result := TextFormat('0x%.4x', [ACipherSuite]);
   end;
 end;
 
@@ -244,7 +245,7 @@ begin
     TLS13_SIG_RSA_PSS_PSS_SHA512:
       Result := 'rsa_pss_pss_sha512';
   else
-    Result := Format('0x%.4x', [ASignatureScheme]);
+    Result := TextFormat('0x%.4x', [ASignatureScheme]);
   end;
 end;
 

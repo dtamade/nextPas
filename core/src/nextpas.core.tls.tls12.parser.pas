@@ -5,7 +5,8 @@ unit nextpas.core.tls.tls12.parser;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.text.format;
 
 type
   TTLS12ServerHello = record
@@ -253,7 +254,7 @@ begin
 
   if ASKE.CurveType <> 3 then
   begin
-    AError := Format('Unsupported curve type: %d (expected named_curve=3)', [ASKE.CurveType]);
+    AError := TextFormat('Unsupported curve type: %d (expected named_curve=3)', [ASKE.CurveType]);
     Exit;
   end;
 
@@ -305,7 +306,7 @@ begin
 
   if ALength <> 12 then
   begin
-    AError := Format('Finished verify_data must be 12 bytes, got %d', [ALength]);
+    AError := TextFormat('Finished verify_data must be 12 bytes, got %d', [ALength]);
     Exit;
   end;
 

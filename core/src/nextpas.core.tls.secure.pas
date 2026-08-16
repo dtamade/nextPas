@@ -23,7 +23,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
-  nextpas.core.mem.secure;  // P0 安全修复：使用安全内存清零
+  nextpas.core.mem.secure,
+  nextpas.core.text.format;  // P0 安全修复：使用安全内存清零
 
 type
   { Secure string - automatically zeroes memory on destruction }
@@ -333,7 +334,7 @@ begin
   except
     on E: Exception do
       raise ESSLCryptoError.CreateWithContext(
-        Format('Cryptographically secure RNG not available: %s', [E.Message]),
+        TextFormat('Cryptographically secure RNG not available: %s', [E.Message]),
         sslErrOther,
         'TSecureRandom.Generate',
         0,
@@ -773,7 +774,7 @@ begin
   else
     FKeys.AddObject(AKeyID, LWrapper);
 
-  TSecurityLog.Audit('SecureKeyStore', 'StoreKey', 'System', Format('Key stored: %s', [AKeyID]));
+  TSecurityLog.Audit('SecureKeyStore', 'StoreKey', 'System', TextFormat('Key stored: %s', [AKeyID]));
 end;
 
 function TSecureKeyStoreImpl.LoadKey(const AKeyID: string;
@@ -792,7 +793,7 @@ begin
   LWrapper := TBytesWrapper(FKeys.Objects[LIndex]);
   Result := DecryptKey(LWrapper.Data, APassword);
 
-  TSecurityLog.Audit('SecureKeyStore', 'LoadKey', 'System', Format('Key accessed: %s', [AKeyID]));
+  TSecurityLog.Audit('SecureKeyStore', 'LoadKey', 'System', TextFormat('Key accessed: %s', [AKeyID]));
 end;
 
 function TSecureKeyStoreImpl.HasKey(const AKeyID: string): Boolean;
@@ -812,7 +813,7 @@ begin
   begin
     // Wrapper's destructor will secure-zero the data
     FKeys.Delete(LIndex);
-    TSecurityLog.Audit('SecureKeyStore', 'DeleteKey', 'System', Format('Key deleted: %s', [AKeyID]));
+    TSecurityLog.Audit('SecureKeyStore', 'DeleteKey', 'System', TextFormat('Key deleted: %s', [AKeyID]));
   end;
 end;
 

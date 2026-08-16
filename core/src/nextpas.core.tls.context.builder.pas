@@ -24,7 +24,8 @@ uses
   nextpas.core.tls.safety,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.pin,
-  nextpas.core.tls.backend.selector;  // v1.3.0: 自动后端选择
+  nextpas.core.tls.backend.selector,
+  nextpas.core.text.format;  // v1.3.0: 自动后端选择
 
 type
   { Forward declarations }
@@ -202,7 +203,7 @@ begin
   if AForServer then
     TSecurityLog.Warning(
       'ContextBuilder',
-      nextpas.core.text.conv.Format(
+      TextFormat(
         '%s received WithSNI as deprecated context-level ServerName compatibility on a server context; ' +
         'BuildServer ignores it and server-side connections ignore it.',
         [ACallSite]
@@ -211,7 +212,7 @@ begin
   else
     TSecurityLog.Warning(
       'ContextBuilder',
-      nextpas.core.text.conv.Format(
+      TextFormat(
         '%s received WithSNI as deprecated context-level SNI compatibility on a client context; ' +
         'BuildClient ignores it and new client connections start without inherited ServerName. ' +
         'Prefer per-connection hostname via TSSLConnectionBuilder.WithHostname, ' +
@@ -657,7 +658,7 @@ end;
 
 function UnsupportedBuilderPKCS11PINMethodMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := nextpas.core.text.conv.Format(
+  Result := TextFormat(
     'Context builder does not support PKCS#11 PIN method %s; use UsePKCS11(...) with URI pin-source or WithPKCS11PIN for direct PIN',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -665,7 +666,7 @@ end;
 
 function MissingBuilderPKCS11PINSourceValueMessage(AMethod: TPKCS11PINMethod): string;
 begin
-  Result := nextpas.core.text.conv.Format(
+  Result := TextFormat(
     'Context builder PKCS#11 PIN method %s requires a non-empty source value',
     [PKCS11PINMethodToString(AMethod)]
   );
@@ -807,7 +808,7 @@ end;
 function BuilderClientReplayStoreScopeMessage(
   const AField, ACallSite: string): string;
 begin
-  Result := nextpas.core.text.conv.Format(
+  Result := TextFormat(
     '%s is server-scoped. Client context builders do not install replay stores; remove it from %s.',
     [AField, ACallSite]
   );

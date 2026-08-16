@@ -16,7 +16,8 @@ interface
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.text.format;
 
 // ============================================================================
 // General Error Raising Functions
@@ -136,7 +137,7 @@ end;
 procedure RaiseSSLErrorFmt(const ATemplate: string; const AArgs: array of const;
   ACode: TSSLErrorCode);
 begin
-  raise ESSLException.Create(Format(ATemplate, AArgs), ACode);
+  raise ESSLException.Create(TextFormat(ATemplate, AArgs), ACode);
 end;
 
 // ============================================================================
@@ -146,7 +147,7 @@ end;
 procedure RaiseFunctionNotAvailable(const AFuncName: string);
 begin
   raise ESSLException.Create(
-    Format('%s is not available. Ensure OpenSSL library is properly loaded ' +
+    TextFormat('%s is not available. Ensure OpenSSL library is properly loaded ' +
       'and the function exists in your OpenSSL version.', [AFuncName]),
     sslErrFunctionNotFound
   );
@@ -155,7 +156,7 @@ end;
 procedure RaiseInvalidParameter(const AParamName: string);
 begin
   raise ESSLInvalidArgument.Create(
-    Format('Invalid parameter "%s": value is nil, empty, or out of valid range', [AParamName]),
+    TextFormat('Invalid parameter "%s": value is nil, empty, or out of valid range', [AParamName]),
     sslErrInvalidParam
   );
 end;
@@ -163,7 +164,7 @@ end;
 procedure RaiseInvalidData(const AContext: string);
 begin
   raise ESSLInvalidArgument.Create(
-    Format('Invalid or corrupted data in %s. Check data format and integrity.', [AContext]),
+    TextFormat('Invalid or corrupted data in %s. Check data format and integrity.', [AContext]),
     sslErrInvalidData
   );
 end;
@@ -171,7 +172,7 @@ end;
 procedure RaiseNotInitialized(const AComponent: string);
 begin
   raise ESSLInitializationException.Create(
-    Format('%s not initialized. Call the appropriate initialization function first.', [AComponent]),
+    TextFormat('%s not initialized. Call the appropriate initialization function first.', [AComponent]),
     sslErrNotInitialized
   );
 end;
@@ -179,7 +180,7 @@ end;
 procedure RaiseMemoryError(const AOperation: string);
 begin
   raise ESSLOutOfMemoryException.Create(
-    Format('Memory allocation failed during %s. System may be low on memory.', [AOperation]),
+    TextFormat('Memory allocation failed during %s. System may be low on memory.', [AOperation]),
     sslErrMemory
   );
 end;
@@ -187,7 +188,7 @@ end;
 procedure RaiseUnsupported(const AFeature: string);
 begin
   raise ESSLConfigurationException.Create(
-    Format('%s is not supported by the current OpenSSL build or version.', [AFeature]),
+    TextFormat('%s is not supported by the current OpenSSL build or version.', [AFeature]),
     sslErrUnsupported
   );
 end;
@@ -199,7 +200,7 @@ end;
 procedure RaiseEncryptionError(const ADetails: string);
 begin
   raise ESSLEncryptionException.Create(
-    Format('Encryption failed: %s', [ADetails]),
+    TextFormat('Encryption failed: %s', [ADetails]),
     sslErrEncryptionFailed
   );
 end;
@@ -207,7 +208,7 @@ end;
 procedure RaiseDecryptionError(const ADetails: string);
 begin
   raise ESSLDecryptionException.Create(
-    Format('Decryption failed: %s', [ADetails]),
+    TextFormat('Decryption failed: %s', [ADetails]),
     sslErrDecryptionFailed
   );
 end;
@@ -215,7 +216,7 @@ end;
 procedure RaiseKeyDerivationError(const ADetails: string);
 begin
   raise ESSLKeyDerivationException.Create(
-    Format('Key derivation failed: %s', [ADetails]),
+    TextFormat('Key derivation failed: %s', [ADetails]),
     sslErrKeyDerivationFailed
   );
 end;
@@ -227,7 +228,7 @@ end;
 procedure RaiseCertificateError(const ADetails: string);
 begin
   raise ESSLCertificateException.Create(
-    Format('Certificate error: %s', [ADetails]),
+    TextFormat('Certificate error: %s', [ADetails]),
     sslErrCertificate
   );
 end;
@@ -235,7 +236,7 @@ end;
 procedure RaiseCertificateExpired(const ACertName: string);
 begin
   raise ESSLCertificateExpiredException.Create(
-    Format('Certificate expired: %s', [ACertName]),
+    TextFormat('Certificate expired: %s', [ACertName]),
     sslErrCertificateExpired
   );
 end;
@@ -243,7 +244,7 @@ end;
 procedure RaiseCertificateVerifyError(const ADetails: string);
 begin
   raise ESSLCertificateVerificationException.Create(
-    Format('Certificate verification failed: %s', [ADetails]),
+    TextFormat('Certificate verification failed: %s', [ADetails]),
     sslErrVerificationFailed
   );
 end;
@@ -255,7 +256,7 @@ end;
 procedure RaiseLoadError(const AFileName: string);
 begin
   raise ESSLFileNotFoundException.Create(
-    Format('Failed to load "%s". Verify the file exists and is readable.', [AFileName]),
+    TextFormat('Failed to load "%s". Verify the file exists and is readable.', [AFileName]),
     sslErrLoadFailed
   );
 end;
@@ -263,7 +264,7 @@ end;
 procedure RaiseParseError(const AContext: string);
 begin
   raise ESSLCertificateParseException.Create(
-    Format('Failed to parse %s. Ensure the data is in the correct format (PEM or DER).', [AContext]),
+    TextFormat('Failed to parse %s. Ensure the data is in the correct format (PEM or DER).', [AContext]),
     sslErrParseFailed
   );
 end;
@@ -271,7 +272,7 @@ end;
 procedure RaiseConnectionError(const ADetails: string);
 begin
   raise ESSLConnectionException.Create(
-    Format('SSL/TLS connection error: %s. Check network connectivity and server availability.', [ADetails]),
+    TextFormat('SSL/TLS connection error: %s. Check network connectivity and server availability.', [ADetails]),
     sslErrConnection
   );
 end;
@@ -279,7 +280,7 @@ end;
 procedure RaiseInvalidFormat(const AContext: string);
 begin
   raise ESSLInvalidArgument.Create(
-    Format('Invalid format in %s. Expected PEM-encoded or DER-encoded data.', [AContext]),
+    TextFormat('Invalid format in %s. Expected PEM-encoded or DER-encoded data.', [AContext]),
     sslErrInvalidFormat
   );
 end;
@@ -291,7 +292,7 @@ end;
 procedure RaiseInitializationError(const AComponent, ADetails: string);
 begin
   raise ESSLInitializationException.Create(
-    Format('%s initialization failed: %s', [AComponent, ADetails]),
+    TextFormat('%s initialization failed: %s', [AComponent, ADetails]),
     sslErrNotInitialized
   );
 end;
@@ -299,7 +300,7 @@ end;
 procedure RaiseConfigurationError(const AOption, AReason: string);
 begin
   raise ESSLConfigurationException.Create(
-    Format('Configuration error for %s: %s', [AOption, AReason]),
+    TextFormat('Configuration error for %s: %s', [AOption, AReason]),
     sslErrConfiguration
   );
 end;
@@ -307,7 +308,7 @@ end;
 procedure RaiseResourceExhausted(const AResource: string);
 begin
   raise ESSLResourceException.Create(
-    Format('Resource exhausted: %s', [AResource]),
+    TextFormat('Resource exhausted: %s', [AResource]),
     sslErrResourceExhausted
   );
 end;
@@ -315,7 +316,7 @@ end;
 procedure RaiseBufferError(const AOperation, AReason: string);
 begin
   raise ESSLResourceException.Create(
-    Format('Buffer error during %s: %s', [AOperation, AReason]),
+    TextFormat('Buffer error during %s: %s', [AOperation, AReason]),
     sslErrBufferTooSmall
   );
 end;
@@ -326,7 +327,7 @@ end;
 
 function FormatErrorMessage(const ATemplate: string; const AArgs: array of const): string;
 begin
-  Result := Format(ATemplate, AArgs);
+  Result := TextFormat(ATemplate, AArgs);
 end;
 
 function GetErrorMessage(ACode: TSSLErrorCode; const ALang: string): string;

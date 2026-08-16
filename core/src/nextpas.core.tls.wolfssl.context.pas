@@ -31,7 +31,8 @@ uses
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.native_handle,
   nextpas.core.tls.wolfssl.api,
-  nextpas.core.tls.secure;
+  nextpas.core.tls.secure,
+  nextpas.core.text.format;
 
 type
   { 证书固定记录 }
@@ -818,7 +819,7 @@ procedure TWolfSSLContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
+    TextFormat('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -857,7 +858,7 @@ procedure TWolfSSLContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current WolfSSL backend runtime. ' +
+    TextFormat('%s is not published by the current WolfSSL backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1027,7 +1028,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      TextFormat('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TWolfSSLContext.AddCertificatePinBase64'
     );
@@ -1209,7 +1210,7 @@ begin
 
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
+        TextFormat('wolfSSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
           [Ord(APolicy), LRet]),
         sslErrGeneral,
         'SetServerEarlyDataPolicy'
@@ -1237,7 +1238,7 @@ begin
     LRet := wolfSSL_CTX_set_max_early_data(FWolfSSLCtx, ASize);
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
+        TextFormat('wolfSSL_CTX_set_max_early_data failed (size=%d, return=%d)',
           [ASize, LRet]),
         sslErrGeneral,
         'SetServerMaxEarlyDataSize'
@@ -1286,7 +1287,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLException.CreateWithContext(
-      nextpas.core.text.conv.Format('OCSP response file not found: %s', [AFileName]),
+      TextFormat('OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'LoadServerStapledOCSPResponseFile'
     );
@@ -1303,7 +1304,7 @@ begin
 
       if LSize > MAX_OCSP_RESPONSE_SIZE then
         raise ESSLInvalidArgument.Create(
-          nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
+          TextFormat('OCSP response file too large (%d bytes, max %d)',
             [LSize, MAX_OCSP_RESPONSE_SIZE]),
           sslErrInvalidParam
         );
@@ -1319,7 +1320,7 @@ begin
       raise;
     on E: Exception do
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to load OCSP response file: %s', [E.Message]),
+        TextFormat('Failed to load OCSP response file: %s', [E.Message]),
         sslErrLoadFailed,
         'LoadServerStapledOCSPResponseFile'
       );

@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 function TryRSAES_PKCS1v15_Encode(
   const AMessage: TBytes;
@@ -46,7 +47,7 @@ begin
   LMLen := Length(AMessage);
   if LMLen > AKeyOctetLength - 11 then
   begin
-    AError := Format('Message too long for RSAES-PKCS1-v1_5 (mLen=%d, k=%d, max=%d)',
+    AError := TextFormat('Message too long for RSAES-PKCS1-v1_5 (mLen=%d, k=%d, max=%d)',
       [LMLen, AKeyOctetLength, AKeyOctetLength - 11]);
     Exit;
   end;

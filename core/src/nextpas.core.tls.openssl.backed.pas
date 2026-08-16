@@ -42,7 +42,8 @@ uses
   nextpas.core.tls.openssl.api.ec,
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.ocsp,
-  nextpas.core.tls.openssl.certificate;
+  nextpas.core.tls.openssl.certificate,
+  nextpas.core.text.format;
 
 type
   { TOpenSSLLibraryPaths - 自定义库路径配置 }
@@ -333,15 +334,15 @@ begin
 
     if FVersionNumber <> 0 then
       InternalLog(sslLogInfo,
-        Format('OpenSSL version: %s (0x%s)', [FVersionString, IntToHex(FVersionNumber, 8)]))
+        TextFormat('OpenSSL version: %s (0x%s)', [FVersionString, IntToHex(FVersionNumber, 8)]))
     else
-      InternalLog(sslLogInfo, Format('OpenSSL version: %s', [FVersionString]));
+      InternalLog(sslLogInfo, TextFormat('OpenSSL version: %s', [FVersionString]));
 
     Result := True;
   except
     on E: Exception do
     begin
-      SetError(-1, Format('OpenSSL version detection failed: %s', [E.Message]));
+      SetError(-1, TextFormat('OpenSSL version detection failed: %s', [E.Message]));
       InternalLog(sslLogWarning, FLastErrorString);
     end;
   end;
@@ -577,7 +578,7 @@ begin
   except
     on E: Exception do
     begin
-      SetError(-1, Format('OpenSSL core initialization failed: %s', [E.Message]));
+      SetError(-1, TextFormat('OpenSSL core initialization failed: %s', [E.Message]));
       InternalLog(sslLogError, FLastErrorString);
       Exit(False);
     end;
@@ -612,7 +613,7 @@ begin
   except
     on E: Exception do
     begin
-      SetError(-1, Format('OpenSSL initialization failed: %s', [E.Message]));
+      SetError(-1, TextFormat('OpenSSL initialization failed: %s', [E.Message]));
       InternalLog(sslLogError, FLastErrorString);
     end;
   end;
@@ -907,7 +908,7 @@ begin
     Result := False;
   end;
 
-  InternalLog(sslLogDebug, Format('Feature support check (type-safe): %d = %s',
+  InternalLog(sslLogDebug, TextFormat('Feature support check (type-safe): %d = %s',
     [Ord(AFeature), BoolToStr(Result)]));
 end;
 {$WARN 6018 ON}
@@ -1137,7 +1138,7 @@ begin
 
   NormalizeLegacyCapabilityBooleans(Result);
 
-  InternalLog(sslLogDebug, Format('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s',
+  InternalLog(sslLogDebug, TextFormat('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s',
     [
       BoolToStr(Result.SupportsTLS13),
       BoolToStr(Result.SupportsALPN),
@@ -1197,7 +1198,7 @@ begin
         end;
       except
         on E: Exception do
-          InternalLog(sslLogWarning, Format('Exception in GetLastError: %s', [E.Message]));
+          InternalLog(sslLogWarning, TextFormat('Exception in GetLastError: %s', [E.Message]));
       end;
     end;
   end;

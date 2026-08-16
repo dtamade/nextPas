@@ -16,7 +16,8 @@ interface
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.text.format;
 
 function TLS13AEADIsSupported(ACipherSuite: Word): Boolean;
 function TLS13AEADTagLength(ACipherSuite: Word): Integer;
@@ -78,13 +79,13 @@ begin
   LExpectedKeyLen := RequiredAESKeyLength(ACipherSuite);
   if LExpectedKeyLen = 0 then
   begin
-    AError := Format('Unsupported TLS 1.3 AES-GCM suite: 0x%.4x', [ACipherSuite]);
+    AError := TextFormat('Unsupported TLS 1.3 AES-GCM suite: 0x%.4x', [ACipherSuite]);
     Exit(False);
   end;
 
   if Length(AKey) <> LExpectedKeyLen then
   begin
-    AError := Format(
+    AError := TextFormat(
       'Invalid AES-GCM key length for suite 0x%.4x: expected %d bytes, got %d',
       [ACipherSuite, LExpectedKeyLen, Length(AKey)]
     );
@@ -93,7 +94,7 @@ begin
 
   if Length(ANonce) <> 12 then
   begin
-    AError := Format('Invalid AES-GCM nonce length: expected 12 bytes, got %d', [Length(ANonce)]);
+    AError := TextFormat('Invalid AES-GCM nonce length: expected 12 bytes, got %d', [Length(ANonce)]);
     Exit(False);
   end;
 
@@ -191,7 +192,7 @@ begin
 
         if Length(LTag) <> 16 then
         begin
-          AError := Format('AES-GCM encryption returned invalid tag length: %d', [Length(LTag)]);
+          AError := TextFormat('AES-GCM encryption returned invalid tag length: %d', [Length(LTag)]);
           Exit(False);
         end;
 
@@ -200,7 +201,7 @@ begin
       end;
   else
     begin
-      AError := Format('Unsupported TLS 1.3 cipher suite for pure AEAD: 0x%.4x', [ACipherSuite]);
+      AError := TextFormat('Unsupported TLS 1.3 cipher suite for pure AEAD: 0x%.4x', [ACipherSuite]);
       Result := False;
     end;
   end;
@@ -252,7 +253,7 @@ begin
       end;
   else
     begin
-      AError := Format('Unsupported TLS 1.3 cipher suite for pure AEAD: 0x%.4x', [ACipherSuite]);
+      AError := TextFormat('Unsupported TLS 1.3 cipher suite for pure AEAD: 0x%.4x', [ACipherSuite]);
       Result := False;
     end;
   end;

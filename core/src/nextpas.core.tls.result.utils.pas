@@ -37,7 +37,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.tls.base,
-  nextpas.core.text.conv; type TBooleanFunc = function: Boolean;
+  nextpas.core.text.conv,
+  nextpas.core.text.format; type TBooleanFunc = function: Boolean;
   TBooleanFuncOfObject = function: Boolean of object;
   TOperationResultFunc = function: TSSLOperationResult;
   TOperationResultFuncOfObject = function: TSSLOperationResult of object;
@@ -232,7 +233,7 @@ begin
     LCode := sslErrGeneral;
 
   if AContext <> '' then
-    LMsg := Format('%s: %s', [AContext, E.Message])
+    LMsg := TextFormat('%s: %s', [AContext, E.Message])
   else
     LMsg := E.Message;
 
@@ -332,7 +333,7 @@ begin
   if Self.IsOk then
     Result := 'Ok'
   else
-    Result := Format('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
+    Result := TextFormat('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
 end;
 
 function TSSLOperationResultHelper.OrElse(ADefault: TSSLOperationResult): TSSLOperationResult;
@@ -376,9 +377,9 @@ end;
 function TSSLDataResultHelper.ToString: string;
 begin
   if Self.IsOk then
-    Result := Format('Ok(%d bytes)', [Length(Self.Data)])
+    Result := TextFormat('Ok(%d bytes)', [Length(Self.Data)])
   else
-    Result := Format('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
+    Result := TextFormat('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
 end;
 
 { TSSLStringResultHelper }
@@ -414,9 +415,9 @@ end;
 function TSSLStringResultHelper.ToString: string;
 begin
   if Self.IsOk then
-    Result := Format('Ok("%s")', [Self.Value])
+    Result := TextFormat('Ok("%s")', [Self.Value])
   else
-    Result := Format('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
+    Result := TextFormat('Err(%d: %s)', [Ord(Self.ErrorCode), Self.ErrorMessage]);
 end;
 
 { 便捷函数 }

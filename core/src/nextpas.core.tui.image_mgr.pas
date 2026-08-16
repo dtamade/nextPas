@@ -11,7 +11,8 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.text.builder,
   nextpas.core.tui.sixel,
-  nextpas.core.tui.backend.ansi;
+  nextpas.core.tui.backend.ansi,
+  nextpas.core.text.format;
 
 type
   TImageSlot = record
@@ -189,10 +190,10 @@ begin
     if Offset = 0 then
     begin
       if ThisChunk < DataLen then
-        Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=1;',
+        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=1;',
           [Slot.Id, PixelWidth, PixelHeight])
       else
-        Header := Format(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
+        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
           [Slot.Id, PixelWidth, PixelHeight]);
     end
     else
@@ -228,7 +229,7 @@ begin
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('_'));
   Cmd.AppendByte(Ord('G'));
-  S := Format('a=p,q=2,z=-1,i=%d,c=%d,r=%d,C=1', [Id, Area.Width, Area.Height]);
+  S := TextFormat('a=p,q=2,z=-1,i=%d,c=%d,r=%d,C=1', [Id, Area.Width, Area.Height]);
   Cmd.AppendStr(S);
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('\'));
@@ -245,7 +246,7 @@ begin
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('_'));
   Cmd.AppendByte(Ord('G'));
-  S := Format('a=d,d=i,q=2,i=%d', [Id]);
+  S := TextFormat('a=d,d=i,q=2,i=%d', [Id]);
   Cmd.AppendStr(S);
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('\'));

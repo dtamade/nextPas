@@ -23,7 +23,8 @@ interface
 uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
      nextpas.core.tls.base, nextpas.core.tls.openssl.base,
      nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.evp,
-     nextpas.core.tls.logging, nextpas.core.tls.dane.ldns;
+     nextpas.core.tls.logging, nextpas.core.tls.dane.ldns,
+  nextpas.core.text.format;
 
 type
   {**
@@ -360,7 +361,7 @@ begin
   Result := CompareData(HashedData, ARecord.CertificateData);
 
   if Result then
-    TSecurityLog.Info('DANE', Format('Certificate matched TLSA record (usage=%d, selector=%d, matching=%d)',
+    TSecurityLog.Info('DANE', TextFormat('Certificate matched TLSA record (usage=%d, selector=%d, matching=%d)',
       [Ord(ARecord.Usage), Ord(ARecord.Selector), Ord(ARecord.MatchingType)]))
   else
     TSecurityLog.Debug('DANE', 'Certificate did not match TLSA record');
@@ -408,18 +409,18 @@ begin
   ClearRecords;
 
   // 使用 ldns 查询 TLSA 记录
-  TSecurityLog.Info('DANE', Format('Querying TLSA records for %s:%d', [ADomain, APort]));
+  TSecurityLog.Info('DANE', TextFormat('Querying TLSA records for %s:%d', [ADomain, APort]));
 
   if not QueryDNSTLSA(ADomain, APort, 'tcp', LdnsRecords, DNSSECStatus) then
   begin
-    TSecurityLog.Warning('DANE', Format('Failed to query TLSA records for %s:%d', [ADomain, APort]));
+    TSecurityLog.Warning('DANE', TextFormat('Failed to query TLSA records for %s:%d', [ADomain, APort]));
     FLastDNSSECStatus := 'DNS query failed';
     Exit(False);
   end;
 
   // 检查 DNSSEC 状态
   FLastDNSSECStatus := DNSSECStatusToStr(DNSSECStatus);
-  TSecurityLog.Info('DANE', Format('DNSSEC status: %s', [FLastDNSSECStatus]));
+  TSecurityLog.Info('DANE', TextFormat('DNSSEC status: %s', [FLastDNSSECStatus]));
 
   // 如果要求 DNSSEC 验证，检查状态
   if FRequireDNSSEC and (DNSSECStatus <> dnssecSecure) then
@@ -431,7 +432,7 @@ begin
   // 没有找到记录
   if Length(LdnsRecords) = 0 then
   begin
-    TSecurityLog.Info('DANE', Format('No TLSA records found for %s:%d', [ADomain, APort]));
+    TSecurityLog.Info('DANE', TextFormat('No TLSA records found for %s:%d', [ADomain, APort]));
     Exit(True);  // 查询成功，只是没有记录
   end;
 
@@ -441,21 +442,21 @@ begin
     // 检查 Usage 值是否有效 (0-3)
     if LdnsRecords[i].Usage > 3 then
     begin
-      TSecurityLog.Warning('DANE', Format('Invalid TLSA usage value: %d, skipping', [LdnsRecords[i].Usage]));
+      TSecurityLog.Warning('DANE', TextFormat('Invalid TLSA usage value: %d, skipping', [LdnsRecords[i].Usage]));
       Continue;
     end;
 
     // 检查 Selector 值是否有效 (0-1)
     if LdnsRecords[i].Selector > 1 then
     begin
-      TSecurityLog.Warning('DANE', Format('Invalid TLSA selector value: %d, skipping', [LdnsRecords[i].Selector]));
+      TSecurityLog.Warning('DANE', TextFormat('Invalid TLSA selector value: %d, skipping', [LdnsRecords[i].Selector]));
       Continue;
     end;
 
     // 检查 MatchingType 值是否有效 (0-2)
     if LdnsRecords[i].MatchingType > 2 then
     begin
-      TSecurityLog.Warning('DANE', Format('Invalid TLSA matching type value: %d, skipping', [LdnsRecords[i].MatchingType]));
+      TSecurityLog.Warning('DANE', TextFormat('Invalid TLSA matching type value: %d, skipping', [LdnsRecords[i].MatchingType]));
       Continue;
     end;
 
@@ -473,12 +474,12 @@ begin
     SetLength(FRecords, Length(FRecords) + 1);
     FRecords[High(FRecords)] := Rec;
 
-    TSecurityLog.Info('DANE', Format('Added TLSA record: usage=%d, selector=%d, matching=%d, data=%d bytes',
+    TSecurityLog.Info('DANE', TextFormat('Added TLSA record: usage=%d, selector=%d, matching=%d, data=%d bytes',
       [Ord(Rec.Usage), Ord(Rec.Selector), Ord(Rec.MatchingType), Length(Rec.CertificateData)]));
   end;
 
   Result := Length(FRecords) > 0;
-  TSecurityLog.Info('DANE', Format('Loaded %d TLSA records for %s:%d', [Length(FRecords), ADomain, APort]));
+  TSecurityLog.Info('DANE', TextFormat('Loaded %d TLSA records for %s:%d', [Length(FRecords), ADomain, APort]));
 end;
 
 procedure TDANEValidator.AddTLSARecord(AUsage: TDANEUsage; ASelector: TDANESelector;
@@ -498,7 +499,7 @@ begin
   SetLength(FRecords, Length(FRecords) + 1);
   FRecords[High(FRecords)] := Rec;
 
-  TSecurityLog.Info('DANE', Format('Added TLSA record (usage=%d, selector=%d, matching=%d)',
+  TSecurityLog.Info('DANE', TextFormat('Added TLSA record (usage=%d, selector=%d, matching=%d)',
     [Ord(AUsage), Ord(ASelector), Ord(AMatchingType)]));
 end;
 
@@ -591,7 +592,7 @@ begin
     if ValidateCertificate(ACertChain[i]) then
     begin
       Result := True;
-      TSecurityLog.Info('DANE', Format('Certificate chain validated at position %d', [i]));
+      TSecurityLog.Info('DANE', TextFormat('Certificate chain validated at position %d', [i]));
       Exit;
     end;
   end;
@@ -616,7 +617,7 @@ var
   Rec: TDANETLSARecord;
   UsageStr, SelectorStr, MatchingStr: string;
 begin
-  Result := Format('DANE TLSA Validator: %d records for %s:%d' + LineEnding,
+  Result := TextFormat('DANE TLSA Validator: %d records for %s:%d' + LineEnding,
     [Length(FRecords), FDomain, FPort]);
 
   for i := 0 to High(FRecords) do
@@ -641,7 +642,7 @@ begin
       dmSHA512: MatchingStr := 'SHA-512';
     end;
 
-    Result := Result + Format('  [%d] %s / %s / %s (%d bytes)' + LineEnding,
+    Result := Result + TextFormat('  [%d] %s / %s / %s (%d bytes)' + LineEnding,
       [i, UsageStr, SelectorStr, MatchingStr, Length(Rec.CertificateData)]);
   end;
 end;
@@ -659,13 +660,13 @@ end;
 procedure TDANEValidatorEx.SetDNSResolver(const AResolver: string);
 begin
   FDNSResolver := AResolver;
-  TSecurityLog.Info('DANE', Format('DNS resolver set to: %s', [AResolver]));
+  TSecurityLog.Info('DANE', TextFormat('DNS resolver set to: %s', [AResolver]));
 end;
 
 procedure TDANEValidatorEx.SetDNSTimeout(ATimeout: Integer);
 begin
   FDNSTimeout := ATimeout;
-  TSecurityLog.Info('DANE', Format('DNS timeout set to: %d ms', [ATimeout]));
+  TSecurityLog.Info('DANE', TextFormat('DNS timeout set to: %d ms', [ATimeout]));
 end;
 
 function TDANEValidatorEx.VerifyDNSSEC: Boolean;
@@ -686,7 +687,7 @@ begin
   end;
 
   // 验证 DNSSEC 链
-  TSecurityLog.Info('DANE', Format('Verifying DNSSEC for domain: %s', [FDomain]));
+  TSecurityLog.Info('DANE', TextFormat('Verifying DNSSEC for domain: %s', [FDomain]));
 
   DNSSECStatus := VerifyDNSSECChain(FDomain, LDNS_RR_TYPE_TLSA);
 

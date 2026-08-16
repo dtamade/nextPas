@@ -17,7 +17,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.system.classes,
-  nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.tls.x509verify;
+  nextpas.core.tls.base, nextpas.core.tls.crl, nextpas.core.tls.x509, nextpas.core.tls.x509verify,
+  nextpas.core.text.format;
 
 type
   { 证书链验证选项 }
@@ -593,7 +594,7 @@ begin
         except
           on E: Exception do
           begin
-            LLastMaterialError := nextpas.core.text.conv.Format(
+            LLastMaterialError := TextFormat(
               'Failed to parse configured CRL material #%d: %s',
               [LCRLIndex + 1, E.Message]
             );
@@ -810,7 +811,7 @@ begin
       if not CheckCertificateTime(CurrentCert) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d expired or not yet valid', [i]);
+        Result.ErrorMessage := TextFormat('Certificate %d expired or not yet valid', [i]);
         Exit;
       end;
     end;
@@ -821,7 +822,7 @@ begin
       if not CheckCertificateKeyUsage(CurrentCert, i > 0) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid key usage for certificate %d', [i]);
+        Result.ErrorMessage := TextFormat('Invalid key usage for certificate %d', [i]);
         Exit;
       end;
     end;
@@ -834,7 +835,7 @@ begin
         if i = 0 then
           Result.ErrorMessage := 'Strict-chain verification requires serverAuth extended key usage on the leaf certificate'
         else
-          Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid extended key usage for certificate %d', [i]);
+          Result.ErrorMessage := TextFormat('Invalid extended key usage for certificate %d', [i]);
         Exit;
       end;
     end;
@@ -847,14 +848,14 @@ begin
         Result.IsValid := False;
         Result.RevocationStatus := FLastRevocationStatus;
         if FLastRevocationStatus = 1 then
-          Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d is revoked', [i])
+          Result.ErrorMessage := TextFormat('Certificate %d is revoked', [i])
         else if FLastRevocationError <> '' then
-          Result.ErrorMessage := nextpas.core.text.conv.Format(
+          Result.ErrorMessage := TextFormat(
             'Certificate %d revocation/CRL verification failed: %s',
             [i, FLastRevocationError]
           )
         else
-          Result.ErrorMessage := nextpas.core.text.conv.Format('Certificate %d revocation/CRL status is unavailable', [i]);
+          Result.ErrorMessage := TextFormat('Certificate %d revocation/CRL status is unavailable', [i]);
         Exit;
       end;
     end;
@@ -866,7 +867,7 @@ begin
       if not CheckCertificateSignature(CurrentCert, IssuerCert) then
       begin
         Result.IsValid := False;
-        Result.ErrorMessage := nextpas.core.text.conv.Format('Invalid signature for certificate %d', [i]);
+        Result.ErrorMessage := TextFormat('Invalid signature for certificate %d', [i]);
         Exit;
       end;
     end;

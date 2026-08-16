@@ -14,7 +14,8 @@ unit nextpas.core.tls.tls13.servercertificate;
 
 interface
 
-uses nextpas.core.base, nextpas.core.text.conv;
+uses nextpas.core.base, nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   TTLS13CertificateArray = array of TBytes;
@@ -152,7 +153,7 @@ begin
       begin
         if Length(LBlocks[I].Data) = 0 then
         begin
-          AError := Format('PEM certificate block #%d is empty', [I + 1]);
+          AError := TextFormat('PEM certificate block #%d is empty', [I + 1]);
           Exit;
         end;
         ACertificates[I] := Copy(LBlocks[I].Data, 0, Length(LBlocks[I].Data));
@@ -232,7 +233,7 @@ begin
 
   if AData[0] <> TLS_CERT_STATUS_TYPE_OCSP then
   begin
-    AError := Format('Unsupported certificate status type %d', [AData[0]]);
+    AError := TextFormat('Unsupported certificate status type %d', [AData[0]]);
     Exit;
   end;
 
@@ -335,14 +336,14 @@ begin
 
   if AHandshake[0] <> TLS_HANDSHAKE_TYPE_CERTIFICATE then
   begin
-    AError := Format('Handshake type %d is not Certificate', [AHandshake[0]]);
+    AError := TextFormat('Handshake type %d is not Certificate', [AHandshake[0]]);
     Exit;
   end;
 
   LBodyLen := ReadUInt24(AHandshake, 1);
   if Length(AHandshake) <> 4 + Integer(LBodyLen) then
   begin
-    AError := Format(
+    AError := TextFormat(
       'TLS 1.3 Certificate handshake length mismatch (expected=%d actual=%d)',
       [4 + Integer(LBodyLen), Length(AHandshake)]
     );
@@ -385,7 +386,7 @@ begin
   begin
     if LOffset + 3 > LListEnd then
     begin
-      AError := Format('Certificate entry #%d is missing DER length', [LCount + 1]);
+      AError := TextFormat('Certificate entry #%d is missing DER length', [LCount + 1]);
       Exit;
     end;
 
@@ -393,7 +394,7 @@ begin
     Inc(LOffset, 3);
     if (LCertLen <= 0) or (LOffset + LCertLen > LListEnd) then
     begin
-      AError := Format('Certificate entry #%d DER length is invalid', [LCount + 1]);
+      AError := TextFormat('Certificate entry #%d DER length is invalid', [LCount + 1]);
       Exit;
     end;
 
@@ -406,7 +407,7 @@ begin
 
     if LOffset + 2 > LListEnd then
     begin
-      AError := Format('Certificate entry #%d is missing extension length', [LCount + 1]);
+      AError := TextFormat('Certificate entry #%d is missing extension length', [LCount + 1]);
       Exit;
     end;
 
@@ -414,7 +415,7 @@ begin
     Inc(LOffset, 2);
     if LOffset + LExtLen > LListEnd then
     begin
-      AError := Format('Certificate entry #%d extensions exceed certificate_list', [LCount + 1]);
+      AError := TextFormat('Certificate entry #%d extensions exceed certificate_list', [LCount + 1]);
       Exit;
     end;
 
@@ -428,7 +429,7 @@ begin
     begin
       if LExtOffset + 4 > LExtensionsEnd then
       begin
-        AError := Format('Certificate entry #%d extension header is truncated', [LCount + 1]);
+        AError := TextFormat('Certificate entry #%d extension header is truncated', [LCount + 1]);
         Exit;
       end;
 
@@ -437,7 +438,7 @@ begin
       Inc(LExtOffset, 4);
       if LExtOffset + Integer(LExtBodyLen) > LExtensionsEnd then
       begin
-        AError := Format('Certificate entry #%d extension length exceeds boundary', [LCount + 1]);
+        AError := TextFormat('Certificate entry #%d extension length exceeds boundary', [LCount + 1]);
         Exit;
       end;
 
@@ -452,7 +453,7 @@ begin
           AError
         ) then
         begin
-          AError := Format('Certificate entry #%d status_request is invalid: %s', [LCount + 1, AError]);
+          AError := TextFormat('Certificate entry #%d status_request is invalid: %s', [LCount + 1, AError]);
           Exit;
         end;
         AInfo.Entries[LCount].HasOCSPStapledResponse := True;
@@ -473,7 +474,7 @@ begin
           AError
         ) then
         begin
-          AError := Format(
+          AError := TextFormat(
             'Certificate entry #%d signed_certificate_timestamp is invalid: %s',
             [LCount + 1, AError]
           );
@@ -555,7 +556,7 @@ begin
     LCertLen := Length(LCertificates[I]);
     if (LCertLen <= 0) or (LCertLen > $FFFFFF) then
     begin
-      AError := Format('Certificate #%d length is invalid for TLS 1.3: %d', [I + 1, LCertLen]);
+      AError := TextFormat('Certificate #%d length is invalid for TLS 1.3: %d', [I + 1, LCertLen]);
       Exit;
     end;
 

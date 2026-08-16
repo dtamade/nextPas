@@ -132,6 +132,7 @@ var
   LFreeMask, LEmptyMask: TMask16;
   LBit: Integer;
 begin
+  Result := 0;
   LGroupIdx := (AHash shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
   while True do
@@ -236,6 +237,7 @@ var
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
   LMask, LEmptyMask: TMask16;
 begin
+  Result := False;
   if FCapacity = 0 then Exit(False);
   Lh := HashStr(AKey);
   Lh2 := Lh and $7F;
@@ -341,6 +343,7 @@ var
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
   LMask, LEmptyMask: TMask16;
 begin
+  Result := False;
   if FCapacity = 0 then Exit(False);
   Lh := HashStr(AKey);
   Lh2 := Lh and $7F;

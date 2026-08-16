@@ -17,7 +17,8 @@ uses
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.exception, nextpas.core.fs, nextpas.core.system.classes,
   nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
-  nextpas.core.git.base;
+  nextpas.core.git.base,
+  nextpas.core.text.format;
 
 type
   EGitError = class(Exception)
@@ -456,7 +457,7 @@ end;
 
 function TGitSignature.ToString: string;
 begin
-  Result := Format('%s <%s> %s', [FName, FEmail, GitTimeToString(FWhen)]);
+  Result := TextFormat('%s <%s> %s', [FName, FEmail, GitTimeToString(FWhen)]);
 end;
 
 function TGitRepository.CheckoutBranch(const ABranch: string): Boolean;
@@ -1349,7 +1350,7 @@ begin
   if not FInitialized then
     Initialize;
   if git_libgit2_version(@Major, @Minor, @Rev) = GIT_OK then
-    Result := Format('%d.%d.%d', [Major, Minor, Rev])
+    Result := TextFormat('%d.%d.%d', [Major, Minor, Rev])
   else
     Result := GIT_VERSION_UNKNOWN;
 end;
@@ -1424,7 +1425,7 @@ begin
     LSign := '+'
   else
     LSign := '-';
-  Result := Result + ' ' + LSign + Format('%.2d%.2d', [Abs(LHours), LMins]);
+  Result := Result + ' ' + LSign + TextFormat('%.2d%.2d', [Abs(LHours), LMins]);
 end;
 
 { M5: diff / revwalk implementations }

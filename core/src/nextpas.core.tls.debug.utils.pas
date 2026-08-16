@@ -40,7 +40,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions;
+  nextpas.core.tls.exceptions,
+  nextpas.core.text.format;
 
 type
   { TSSLDebugUtils - 调试工具类 }
@@ -455,7 +456,7 @@ procedure TSSLMemoryStream.EnsureReadable(ACount: Integer; const AContext: strin
 begin
   if (ACount < 0) or (FPosition < 0) or (FPosition + ACount > FSize) then
     raise ESSLResourceException.CreateWithContext(
-      Format('Failed to read %d bytes from stream', [ACount]),
+      TextFormat('Failed to read %d bytes from stream', [ACount]),
       sslErrInvalidData,
       AContext
     );
@@ -468,7 +469,7 @@ var
 begin
   if ACount < 0 then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Write count %d must be >= 0', [ACount]),
+      TextFormat('Write count %d must be >= 0', [ACount]),
       sslErrInvalidParam,
       'TSSLMemoryStream.EnsureWritableCapacity'
     );
@@ -494,7 +495,7 @@ procedure TSSLMemoryStream.SetSize(AValue: Integer);
 begin
   if AValue < 0 then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Size %d must be >= 0', [AValue]),
+      TextFormat('Size %d must be >= 0', [AValue]),
       sslErrInvalidParam,
       'TSSLMemoryStream.SetSize'
     );
@@ -515,7 +516,7 @@ procedure TSSLMemoryStream.SetPosition(AValue: Integer);
 begin
   if (AValue < 0) or (AValue > FSize) then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Position %d out of range [0..%d]', [AValue, FSize]),
+      TextFormat('Position %d out of range [0..%d]', [AValue, FSize]),
       sslErrInvalidParam,
       'TSSLMemoryStream.SetPosition'
     );
@@ -580,7 +581,7 @@ begin
   Result := nil;
   if ACount < 0 then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Read count %d must be >= 0', [ACount]),
+      TextFormat('Read count %d must be >= 0', [ACount]),
       sslErrInvalidParam,
       'TSSLMemoryStream.ReadBytes'
     );
@@ -702,7 +703,7 @@ end;
 
 procedure TSSLStringBuilder.AppendFormat(const AFormat: string; const AArgs: array of const);
 begin
-  AppendLine(Format(AFormat, AArgs));
+  AppendLine(TextFormat(AFormat, AArgs));
 end;
 
 procedure TSSLStringBuilder.Indent;
@@ -752,7 +753,7 @@ function TSSLBitSet.GetBit(AIndex: Integer): Boolean;
 begin
   if (AIndex < 0) or (AIndex >= FSize) then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Bit index %d out of range [0..%d)', [AIndex, FSize]),
+      TextFormat('Bit index %d out of range [0..%d)', [AIndex, FSize]),
       sslErrInvalidParam,
       'TSSLBitSet.GetBit'
     );
@@ -764,7 +765,7 @@ procedure TSSLBitSet.SetBit(AIndex: Integer; AValue: Boolean);
 begin
   if (AIndex < 0) or (AIndex >= FSize) then
     raise ESSLInvalidArgument.CreateWithContext(
-      Format('Bit index %d out of range [0..%d)', [AIndex, FSize]),
+      TextFormat('Bit index %d out of range [0..%d)', [AIndex, FSize]),
       sslErrInvalidParam,
       'TSSLBitSet.SetBit'
     );

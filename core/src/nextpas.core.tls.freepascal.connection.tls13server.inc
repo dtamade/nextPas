@@ -153,7 +153,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrProtocol,
-                Format('Expected ClientHello, got handshake type %d', [LHandshakeMessage[0]])
+                TextFormat('Expected ClientHello, got handshake type %d', [LHandshakeMessage[0]])
               );
               Exit;
             end;
@@ -184,7 +184,7 @@ begin
       begin
         SetHandshakeError(
           sslErrProtocol,
-          Format('Unexpected TLS record type %d before ClientHello', [LHeader.ContentType])
+          TextFormat('Unexpected TLS record type %d before ClientHello', [LHeader.ContentType])
         );
         Exit;
       end;
@@ -424,7 +424,7 @@ begin
         end;
       end;
   else
-    SetHandshakeError(sslErrUnsupported, Format(
+    SetHandshakeError(sslErrUnsupported, TextFormat(
       'Unsupported key_share group 0x%.4x from client', [LClientHello.KeyShareGroup]));
     Exit;
   end;
@@ -515,7 +515,7 @@ begin
   begin
     SetHandshakeError(
       sslErrUnsupported,
-      Format('Cipher suite %s is unsupported by pure FreePascal server handshake path',
+      TextFormat('Cipher suite %s is unsupported by pure FreePascal server handshake path',
         [TLS13CipherSuiteToString(LSelectedCipherSuite)])
     );
     Exit;
@@ -630,7 +630,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrHandshake,
-                Format('CertificateVerify signature length mismatch (expected=%d actual=%d)',
+                TextFormat('CertificateVerify signature length mismatch (expected=%d actual=%d)',
                   [LSignatureLength, Length(LCertVerifySignature)])
               );
               Exit;
@@ -644,7 +644,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrHandshake,
-                Format('ECDSA CertificateVerify signature is invalid DER length (max=%d actual=%d)',
+                TextFormat('ECDSA CertificateVerify signature is invalid DER length (max=%d actual=%d)',
                   [LSignatureLength, Length(LCertVerifySignature)])
               );
               Exit;
@@ -656,7 +656,7 @@ begin
       begin
         SetHandshakeError(
           sslErrUnsupported,
-          Format('Unsupported CertificateVerify scheme selected: %s',
+          TextFormat('Unsupported CertificateVerify scheme selected: %s',
             [TLS13SignatureSchemeToString(LSignatureScheme)])
         );
         Exit;
@@ -798,7 +798,7 @@ begin
               begin
                 SetHandshakeError(
                   sslErrProtocol,
-                  Format('Unexpected inner content type %d in client early-data record', [LInnerContentType])
+                  TextFormat('Unexpected inner content type %d in client early-data record', [LInnerContentType])
                 );
                 Exit;
               end;
@@ -902,7 +902,7 @@ begin
                     begin
                       SetHandshakeError(
                         sslErrProtocol,
-                        Format('Client Finished length mismatch (expected=%d actual=%d)',
+                        TextFormat('Client Finished length mismatch (expected=%d actual=%d)',
                           [FHandshakeSecrets.HashSize, Integer(LMsgLen)])
                       );
                       Exit;
@@ -944,7 +944,7 @@ begin
                   LAlertDescription := LInnerFragment[1];
                   SetHandshakeError(
                     sslErrHandshake,
-                    Format('Peer sent encrypted alert before client Finished (level=%d description=%d)',
+                    TextFormat('Peer sent encrypted alert before client Finished (level=%d description=%d)',
                       [LAlertLevel, LAlertDescription])
                   );
                 end
@@ -957,7 +957,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrProtocol,
-                Format('Unexpected inner content type %d before client Finished', [LInnerContentType])
+                TextFormat('Unexpected inner content type %d before client Finished', [LInnerContentType])
               );
               Exit;
             end;
@@ -968,7 +968,7 @@ begin
       begin
         SetHandshakeError(
           sslErrProtocol,
-          Format('Unexpected TLS record type %d while waiting for client Finished', [LHeader.ContentType])
+          TextFormat('Unexpected TLS record type %d while waiting for client Finished', [LHeader.ContentType])
         );
         Exit;
       end;

@@ -12,7 +12,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.conv,
-  nextpas.core.tls.tls13.wire;
+  nextpas.core.tls.tls13.wire,
+  nextpas.core.text.format;
 
 type
   TTLS13EncryptedExtensionsInfo = record
@@ -263,7 +264,7 @@ begin
 
   if AHandshakeMessage[0] <> TLS_HANDSHAKE_TYPE_ENCRYPTED_EXTENSIONS then
   begin
-    AError := Format(
+    AError := TextFormat(
       'Unexpected handshake type %d for EncryptedExtensions parser',
       [AHandshakeMessage[0]]
     );

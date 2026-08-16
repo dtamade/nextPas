@@ -5,7 +5,8 @@ unit nextpas.core.tui.sixel;
 interface
 
 uses
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.text.format;
 
 type
   TSixelPalette = array[0..255] of record R, G, B: Byte; end;
@@ -197,12 +198,12 @@ begin
   Out_.AppendByte(Ord(#27));
   Out_.AppendByte(Ord('P'));
   Out_.AppendStr('0;0;0q');
-  Header := Format('"1;1;%d;%d', [Width, Height]);
+  Header := TextFormat('"1;1;%d;%d', [Width, Height]);
   Out_.AppendStr(Header);
 
   for I := 0 to PalCount - 1 do
   begin
-    Header := Format('#%d;2;%d;%d;%d', [I,
+    Header := TextFormat('#%d;2;%d;%d;%d', [I,
       Palette[I].R * 100 div 255,
       Palette[I].G * 100 div 255,
       Palette[I].B * 100 div 255]);
@@ -214,7 +215,7 @@ begin
   begin
     for I := 0 to PalCount - 1 do
     begin
-      Header := Format('#%d', [I]);
+      Header := TextFormat('#%d', [I]);
       Out_.AppendStr(Header);
 
       LastChar := 255;

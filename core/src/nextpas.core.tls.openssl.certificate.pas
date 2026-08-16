@@ -35,7 +35,8 @@ uses
   nextpas.core.tls.openssl.api.stack,
   nextpas.core.tls.openssl.api.obj,
   nextpas.core.tls.openssl.api.crypto,
-  nextpas.core.tls.openssl.api.consts;
+  nextpas.core.tls.openssl.api.consts,
+  nextpas.core.text.format;
 
 type
   TOpenSSLCertificate = class(TInterfacedObject, ISSLCertificate, ISSLNativeHandleAccess)
@@ -173,7 +174,7 @@ begin
 
   if ALength = 4 then
   begin
-    Result := nextpas.core.text.conv.Format('%d.%d.%d.%d', [AData[0], AData[1], AData[2], AData[3]]);
+    Result := TextFormat('%d.%d.%d.%d', [AData[0], AData[1], AData[2], AData[3]]);
     Exit;
   end;
 
@@ -392,7 +393,7 @@ begin
       except
         // P3-8: 记录异常而不是静默忽略
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception in TOpenSSLCertificate.Destroy: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', TextFormat('Exception in TOpenSSLCertificate.Destroy: %s', [E.Message]));
       end;
     end;
   end;
@@ -721,7 +722,7 @@ begin
   except
     on E: Exception do
     begin
-      TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('GetSubject failed: %s', [E.Message]));
+      TSecurityLog.Debug('OpenSSL', TextFormat('GetSubject failed: %s', [E.Message]));
       Result := '';
     end;
   end;
@@ -743,7 +744,7 @@ begin
   except
     on E: Exception do
     begin
-      TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('GetIssuer failed: %s', [E.Message]));
+      TSecurityLog.Debug('OpenSSL', TextFormat('GetIssuer failed: %s', [E.Message]));
       Result := '';
     end;
   end;
@@ -936,7 +937,7 @@ begin
   if AlgName <> nil then
     Result := string(AlgName)
   else
-    Result := nextpas.core.text.conv.Format('NID:%d', [NID]);
+    Result := TextFormat('NID:%d', [NID]);
 end;
 
 function TOpenSSLCertificate.GetVersion: Integer;
@@ -982,7 +983,7 @@ begin
     except
       on E: Exception do
       begin
-        TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('X509_STORE_CTX_new failed: %s', [E.Message]));
+        TSecurityLog.Debug('OpenSSL', TextFormat('X509_STORE_CTX_new failed: %s', [E.Message]));
         Exit;
       end;
     end;
@@ -995,7 +996,7 @@ begin
     except
       on E: Exception do
       begin
-        TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('X509_verify_cert failed: %s', [E.Message]));
+        TSecurityLog.Debug('OpenSSL', TextFormat('X509_verify_cert failed: %s', [E.Message]));
         Result := False;
       end;
     end;
@@ -1006,7 +1007,7 @@ begin
         X509_STORE_CTX_free(Ctx);
       except
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception freeing X509_STORE_CTX in Verify: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', TextFormat('Exception freeing X509_STORE_CTX in Verify: %s', [E.Message]));
       end;
     end;
   end;
@@ -1287,7 +1288,7 @@ begin
           AResult.ErrorMessage := string(ErrorStr)
         else
           AResult.ErrorMessage := 'Certificate verification failed';
-        AResult.DetailedInfo := nextpas.core.text.conv.Format('OpenSSL error: %d - %s',
+        AResult.DetailedInfo := TextFormat('OpenSSL error: %d - %s',
           [ErrorCode, AResult.ErrorMessage]);
         
         // 映射常见的吊销相关错误到 RevocationStatus
@@ -1314,7 +1315,7 @@ begin
         X509_STORE_CTX_free(Ctx);
       except
         on E: Exception do
-          TSecurityLog.Warning('OpenSSL', nextpas.core.text.conv.Format('Exception freeing X509_STORE_CTX in VerifyEx: %s', [E.Message]));
+          TSecurityLog.Warning('OpenSSL', TextFormat('Exception freeing X509_STORE_CTX in VerifyEx: %s', [E.Message]));
       end;
     end;
   end;

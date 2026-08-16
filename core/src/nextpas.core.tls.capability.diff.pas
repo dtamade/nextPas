@@ -21,7 +21,8 @@ uses
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.text.format;
 
 type
   { TCapabilityDifference - 差异级别 }
@@ -401,7 +402,7 @@ begin
           (Abs(Result.SecurityScoreDiff) > 30) then
   begin
     Result.DifferenceLevel := cdIncompatible;
-    Result.Summary := nextpas.core.text.conv.Format('重大差异：%d 个功能缺失，安全评分差 %d 分',
+    Result.Summary := TextFormat('重大差异：%d 个功能缺失，安全评分差 %d 分',
       [Length(Result.RemovedFeatures), Abs(Result.SecurityScoreDiff)]);
   end
   else if (Length(Result.RemovedFeatures) > 0) or
@@ -409,12 +410,12 @@ begin
           (Changes > 5) then
   begin
     Result.DifferenceLevel := cdMajor;
-    Result.Summary := nextpas.core.text.conv.Format('较大差异：%d 处变更', [Changes]);
+    Result.Summary := TextFormat('较大差异：%d 处变更', [Changes]);
   end
   else
   begin
     Result.DifferenceLevel := cdMinor;
-    Result.Summary := nextpas.core.text.conv.Format('轻微差异：%d 处变更', [Changes]);
+    Result.Summary := TextFormat('轻微差异：%d 处变更', [Changes]);
   end;
 end;
 
@@ -443,14 +444,14 @@ begin
   AddLine('差异级别: ' + ADiff.Summary);
   AddLine('');
   AddLine('评分变化:');
-  AddLine(nextpas.core.text.conv.Format('  安全评分: %+d', [ADiff.SecurityScoreDiff]));
-  AddLine(nextpas.core.text.conv.Format('  性能评分: %+d', [ADiff.PerformanceScoreDiff]));
-  AddLine(nextpas.core.text.conv.Format('  兼容性级别: %+d', [ADiff.CompatibilityLevelDiff]));
+  AddLine(TextFormat('  安全评分: %+d', [ADiff.SecurityScoreDiff]));
+  AddLine(TextFormat('  性能评分: %+d', [ADiff.PerformanceScoreDiff]));
+  AddLine(TextFormat('  兼容性级别: %+d', [ADiff.CompatibilityLevelDiff]));
   AddLine('');
 
   if Length(ADiff.AddedFeatures) > 0 then
   begin
-    AddLine(nextpas.core.text.conv.Format('新增功能 (%d):', [Length(ADiff.AddedFeatures)]));
+    AddLine(TextFormat('新增功能 (%d):', [Length(ADiff.AddedFeatures)]));
     for I := 0 to High(ADiff.AddedFeatures) do
       AddLine('  + ' + ADiff.AddedFeatures[I]);
     AddLine('');
@@ -458,7 +459,7 @@ begin
 
   if Length(ADiff.RemovedFeatures) > 0 then
   begin
-    AddLine(nextpas.core.text.conv.Format('缺失功能 (%d):', [Length(ADiff.RemovedFeatures)]));
+    AddLine(TextFormat('缺失功能 (%d):', [Length(ADiff.RemovedFeatures)]));
     for I := 0 to High(ADiff.RemovedFeatures) do
       AddLine('  - ' + ADiff.RemovedFeatures[I]);
     AddLine('');
@@ -466,11 +467,11 @@ begin
 
   if Length(ADiff.ChangedFields) > 0 then
   begin
-    AddLine(nextpas.core.text.conv.Format('字段变更 (%d):', [Length(ADiff.ChangedFields)]));
+    AddLine(TextFormat('字段变更 (%d):', [Length(ADiff.ChangedFields)]));
     for I := 0 to High(ADiff.ChangedFields) do
     begin
-      AddLine(nextpas.core.text.conv.Format('  • %s:', [ADiff.ChangedFields[I].FieldName]));
-      AddLine(nextpas.core.text.conv.Format('      %s → %s',
+      AddLine(TextFormat('  • %s:', [ADiff.ChangedFields[I].FieldName]));
+      AddLine(TextFormat('      %s → %s',
         [ADiff.ChangedFields[I].OldValue, ADiff.ChangedFields[I].NewValue]));
     end;
     AddLine('');
@@ -617,8 +618,8 @@ begin
     HTML.Add('<h1>🔍 能力矩阵差异报告</h1>');
 
     // 差异级别
-    HTML.Add(nextpas.core.text.conv.Format('<div class="level %s">%s</div>', [LevelClass, LevelText]));
-    HTML.Add(nextpas.core.text.conv.Format('<p><strong>摘要:</strong> %s</p>', [ADiff.Summary]));
+    HTML.Add(TextFormat('<div class="level %s">%s</div>', [LevelClass, LevelText]));
+    HTML.Add(TextFormat('<p><strong>摘要:</strong> %s</p>', [ADiff.Summary]));
 
     // 评分差异
     HTML.Add('<h2>📊 评分变化</h2>');
@@ -626,25 +627,25 @@ begin
 
     // 安全评分
     if ADiff.SecurityScoreDiff > 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-positive"><div>安全评分</div><div style="font-size:28px;">+%d</div></div>', [ADiff.SecurityScoreDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-positive"><div>安全评分</div><div style="font-size:28px;">+%d</div></div>', [ADiff.SecurityScoreDiff]))
     else if ADiff.SecurityScoreDiff < 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-negative"><div>安全评分</div><div style="font-size:28px;">%d</div></div>', [ADiff.SecurityScoreDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-negative"><div>安全评分</div><div style="font-size:28px;">%d</div></div>', [ADiff.SecurityScoreDiff]))
     else
       HTML.Add('<div class="score-item score-neutral"><div>安全评分</div><div style="font-size:28px;">0</div></div>');
 
     // 性能评分
     if ADiff.PerformanceScoreDiff > 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-positive"><div>性能评分</div><div style="font-size:28px;">+%d</div></div>', [ADiff.PerformanceScoreDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-positive"><div>性能评分</div><div style="font-size:28px;">+%d</div></div>', [ADiff.PerformanceScoreDiff]))
     else if ADiff.PerformanceScoreDiff < 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-negative"><div>性能评分</div><div style="font-size:28px;">%d</div></div>', [ADiff.PerformanceScoreDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-negative"><div>性能评分</div><div style="font-size:28px;">%d</div></div>', [ADiff.PerformanceScoreDiff]))
     else
       HTML.Add('<div class="score-item score-neutral"><div>性能评分</div><div style="font-size:28px;">0</div></div>');
 
     // 兼容性
     if ADiff.CompatibilityLevelDiff > 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-positive"><div>兼容性</div><div style="font-size:28px;">+%d</div></div>', [ADiff.CompatibilityLevelDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-positive"><div>兼容性</div><div style="font-size:28px;">+%d</div></div>', [ADiff.CompatibilityLevelDiff]))
     else if ADiff.CompatibilityLevelDiff < 0 then
-      HTML.Add(nextpas.core.text.conv.Format('<div class="score-item score-negative"><div>兼容性</div><div style="font-size:28px;">%d</div></div>', [ADiff.CompatibilityLevelDiff]))
+      HTML.Add(TextFormat('<div class="score-item score-negative"><div>兼容性</div><div style="font-size:28px;">%d</div></div>', [ADiff.CompatibilityLevelDiff]))
     else
       HTML.Add('<div class="score-item score-neutral"><div>兼容性</div><div style="font-size:28px;">0</div></div>');
 
@@ -653,32 +654,32 @@ begin
     // 新增功能
     if Length(ADiff.AddedFeatures) > 0 then
     begin
-      HTML.Add(nextpas.core.text.conv.Format('<h2>➕ 新增功能 (%d)</h2>', [Length(ADiff.AddedFeatures)]));
+      HTML.Add(TextFormat('<h2>➕ 新增功能 (%d)</h2>', [Length(ADiff.AddedFeatures)]));
       HTML.Add('<ul class="feature-list">');
       for i := 0 to High(ADiff.AddedFeatures) do
-        HTML.Add(nextpas.core.text.conv.Format('<li class="added">✅ %s</li>', [ADiff.AddedFeatures[i]]));
+        HTML.Add(TextFormat('<li class="added">✅ %s</li>', [ADiff.AddedFeatures[i]]));
       HTML.Add('</ul>');
     end;
 
     // 缺失功能
     if Length(ADiff.RemovedFeatures) > 0 then
     begin
-      HTML.Add(nextpas.core.text.conv.Format('<h2>➖ 缺失功能 (%d)</h2>', [Length(ADiff.RemovedFeatures)]));
+      HTML.Add(TextFormat('<h2>➖ 缺失功能 (%d)</h2>', [Length(ADiff.RemovedFeatures)]));
       HTML.Add('<ul class="feature-list">');
       for i := 0 to High(ADiff.RemovedFeatures) do
-        HTML.Add(nextpas.core.text.conv.Format('<li class="removed">❌ %s</li>', [ADiff.RemovedFeatures[i]]));
+        HTML.Add(TextFormat('<li class="removed">❌ %s</li>', [ADiff.RemovedFeatures[i]]));
       HTML.Add('</ul>');
     end;
 
     // 字段变更
     if Length(ADiff.ChangedFields) > 0 then
     begin
-      HTML.Add(nextpas.core.text.conv.Format('<h2>🔄 字段变更 (%d)</h2>', [Length(ADiff.ChangedFields)]));
+      HTML.Add(TextFormat('<h2>🔄 字段变更 (%d)</h2>', [Length(ADiff.ChangedFields)]));
       for i := 0 to High(ADiff.ChangedFields) do
       begin
         HTML.Add('<div class="changed">');
-        HTML.Add(nextpas.core.text.conv.Format('<span class="field-name">%s:</span>', [ADiff.ChangedFields[i].FieldName]));
-        HTML.Add(nextpas.core.text.conv.Format('<span>%s</span><span class="arrow">→</span><span>%s</span>',
+        HTML.Add(TextFormat('<span class="field-name">%s:</span>', [ADiff.ChangedFields[i].FieldName]));
+        HTML.Add(TextFormat('<span>%s</span><span class="arrow">→</span><span>%s</span>',
           [ADiff.ChangedFields[i].OldValue, ADiff.ChangedFields[i].NewValue]));
         HTML.Add('</div>');
       end;

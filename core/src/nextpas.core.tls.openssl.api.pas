@@ -9,7 +9,8 @@ uses
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.loader,
   nextpas.core.platform.dl,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 const
   {$IFDEF WINDOWS}
@@ -1138,7 +1139,7 @@ begin
   if Assigned(OPENSSL_version_num) then
   begin
     VerNum := LongWord(OPENSSL_version_num());
-    Result := Format('%d.%d.%d', [
+    Result := TextFormat('%d.%d.%d', [
       (VerNum shr 28) and $F,
       (VerNum shr 20) and $FF,
       (VerNum shr 12) and $FF

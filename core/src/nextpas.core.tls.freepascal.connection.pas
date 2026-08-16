@@ -43,7 +43,8 @@ uses
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.crypto.tls12record,
   nextpas.core.tls.tls12.chacha20record,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509,
+  nextpas.core.text.format;
 
 type
   TFreePascalConnection = class(TBaseSSLConnection, ISSLClientConnection,
@@ -538,7 +539,7 @@ begin
   else
     Result := 'Policy failed';
 
-  Result := Format(
+  Result := TextFormat(
     '%s (%d/%d valid SCTs; statuses=%s)',
     [Result, LValidCount, Length(AResults), LStatuses]
   );
@@ -1161,7 +1162,7 @@ begin
   begin
     SetHandshakeError(
       sslErrProtocol,
-      Format('Received TLSInnerPlaintext exceeds record_size_limit (limit=%d actual=%d)',
+      TextFormat('Received TLSInnerPlaintext exceeds record_size_limit (limit=%d actual=%d)',
         [Integer(LLimit), APlaintextLength])
     );
     Exit;
@@ -1299,7 +1300,7 @@ begin
   if not TLS12GetCipherSuiteInfo(FTLS12State.CipherSuite, LSuiteInfo) then
   begin
     FLastErrorCode := sslErrUnsupported;
-    FLastErrorString := Format(
+    FLastErrorString := TextFormat(
       'Unsupported TLS 1.2 cipher suite for protected record: 0x%s',
       [IntToHex(FTLS12State.CipherSuite, 4)]
     );
@@ -1411,7 +1412,7 @@ begin
 
   if not TLS12GetCipherSuiteInfo(FTLS12State.CipherSuite, LSuiteInfo) then
   begin
-    AError := Format(
+    AError := TextFormat(
       'Unsupported TLS 1.2 cipher suite for protected record: 0x%s',
       [IntToHex(FTLS12State.CipherSuite, 4)]
     );
@@ -1569,7 +1570,7 @@ begin
 
     FLastErrorCode := sslErrProtocol;
     if Length(LData) >= 2 then
-      FLastErrorString := Format(
+      FLastErrorString := TextFormat(
         'TLS 1.2 renegotiation failed with alert level=%d desc=%d',
         [LData[0], LData[1]]
       )
@@ -1696,6 +1697,7 @@ var
   LTimeout: Integer;
 begin
   Result := False;
+  LMessage := nil;
 
   if Length(AHandshakeFragment) = 0 then
   begin
@@ -1805,7 +1807,7 @@ begin
       begin
         SetHandshakeError(
           sslErrUnsupported,
-          Format('Unsupported post-handshake message type %d', [LType])
+          TextFormat('Unsupported post-handshake message type %d', [LType])
         );
         Exit;
       end;
@@ -1863,7 +1865,7 @@ begin
   begin
     SetHandshakeError(
       sslErrUnsupported,
-      Format('Cipher suite %s is unsupported for TLS 1.3 KeyUpdate',
+      TextFormat('Cipher suite %s is unsupported for TLS 1.3 KeyUpdate',
         [TLS13CipherSuiteToString(FApplicationSecrets.CipherSuite)])
     );
     Exit;
@@ -2138,7 +2140,7 @@ begin
                   LAlertDescription := LInnerFragment[1];
                   SetHandshakeError(
                     sslErrHandshake,
-                    Format('Peer sent encrypted alert (level=%d description=%d)', [LAlertLevel, LAlertDescription])
+                    TextFormat('Peer sent encrypted alert (level=%d description=%d)', [LAlertLevel, LAlertDescription])
                   );
                 end
                 else
@@ -2150,7 +2152,7 @@ begin
             begin
               SetHandshakeError(
                 sslErrProtocol,
-                Format('Unexpected inner content type %d in application data phase', [LInnerContentType])
+                TextFormat('Unexpected inner content type %d in application data phase', [LInnerContentType])
               );
               Exit;
             end;
@@ -2161,7 +2163,7 @@ begin
       begin
         SetHandshakeError(
           sslErrProtocol,
-          Format('Unexpected TLS record type %d in application data phase', [LHeader.ContentType])
+          TextFormat('Unexpected TLS record type %d in application data phase', [LHeader.ContentType])
         );
         Exit;
       end;
@@ -2192,7 +2194,7 @@ begin
   begin
     SetHandshakeError(
       sslErrUnsupported,
-      Format('Cipher suite %s is unsupported in pure FreePascal application data path',
+      TextFormat('Cipher suite %s is unsupported in pure FreePascal application data path',
         [TLS13CipherSuiteToString(FApplicationSecrets.CipherSuite)])
     );
     Exit;
@@ -2203,7 +2205,7 @@ begin
   begin
     SetHandshakeError(
       sslErrProtocol,
-      Format('Application data fragment exceeds peer record_size_limit (limit=%d actual=%d)',
+      TextFormat('Application data fragment exceeds peer record_size_limit (limit=%d actual=%d)',
         [Integer(EffectivePeerTLS13PlaintextLimit), Length(LInnerPlaintext)])
     );
     Exit;
@@ -2494,7 +2496,7 @@ begin
         begin
           FLastErrorCode := sslErrHandshake;
           if Length(LPayloadBytes) >= 2 then
-            FLastErrorString := Format('Peer returned TLS alert: level=%d desc=%d', [LPayloadBytes[0], LPayloadBytes[1]])
+            FLastErrorString := TextFormat('Peer returned TLS alert: level=%d desc=%d', [LPayloadBytes[0], LPayloadBytes[1]])
           else
             FLastErrorString := 'Peer returned TLS alert after ClientHello';
           RecordError(FLastErrorCode, FLastErrorString);
@@ -2647,7 +2649,7 @@ begin
              (LServerHello.KeyShareGroup <> TLS13_GROUP_SECP384R1) then
           begin
             FLastErrorCode := sslErrUnsupported;
-            FLastErrorString := Format('Unsupported key_share group: 0x%s', [IntToHex(LServerHello.KeyShareGroup, 4)]);
+            FLastErrorString := TextFormat('Unsupported key_share group: 0x%s', [IntToHex(LServerHello.KeyShareGroup, 4)]);
             RecordError(FLastErrorCode, FLastErrorString);
             Exit;
           end;
@@ -2922,14 +2924,14 @@ end;
 procedure TFreePascalConnection.MarkUnsupported(const AOperation: string);
 begin
   FLastErrorCode := sslErrUnsupported;
-  FLastErrorString := Format('%s is unsupported by FreePascal backend', [AOperation]);
+  FLastErrorString := TextFormat('%s is unsupported by FreePascal backend', [AOperation]);
   RecordError(FLastErrorCode, FLastErrorString);
 end;
 
 procedure TFreePascalConnection.MarkPrecondition(const AOperation: string);
 begin
   FLastErrorCode := sslErrProtocol;
-  FLastErrorString := Format('%s requires completed TLS handshake', [AOperation]);
+  FLastErrorString := TextFormat('%s requires completed TLS handshake', [AOperation]);
   RecordError(FLastErrorCode, FLastErrorString);
 end;
 
@@ -3164,7 +3166,7 @@ begin
         if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
           FCipherName := LSuiteInfo.Name
         else
-          FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
+          FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
         if FStream = nil then
           FStream := SocketHandleAsIStream(FSocket);
 
@@ -3268,7 +3270,7 @@ begin
         if TLS12GetCipherSuiteInfo(LState.CipherSuite, LSuiteInfo) then
           FCipherName := LSuiteInfo.Name
         else
-          FCipherName := Format('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
+          FCipherName := TextFormat('TLS12_0x%s', [IntToHex(LState.CipherSuite, 4)]);
         FStream := SocketHandleAsIStream(FSocket);
 
         if LState.Resumed then
@@ -3400,7 +3402,7 @@ begin
       if (LCertificate = nil) or not LCertificate.LoadFromDER(FTLS12State.PeerCertificatesDER[I]) then
       begin
         FLastErrorCode := sslErrCertificate;
-        FLastErrorString := Format('Failed to load peer certificate #%d', [I + 1]);
+        FLastErrorString := TextFormat('Failed to load peer certificate #%d', [I + 1]);
         RecordError(FLastErrorCode, FLastErrorString);
         ClearPeerCertificateCache;
         Exit;
@@ -3430,7 +3432,7 @@ begin
     if TLS12GetCipherSuiteInfo(FTLS12State.CipherSuite, LSuiteInfo) then
       FCipherName := LSuiteInfo.Name
     else
-      FCipherName := Format('TLS12_0x%s', [IntToHex(FTLS12State.CipherSuite, 4)]);
+      FCipherName := TextFormat('TLS12_0x%s', [IntToHex(FTLS12State.CipherSuite, 4)]);
 
     // Create session for future resumption
     if Length(FTLS12State.SessionID) > 0 then

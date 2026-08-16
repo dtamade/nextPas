@@ -5,7 +5,8 @@ unit nextpas.core.tls.openssl.api.ocsp;
 interface
 
 uses nextpas.core.base, nextpas.core.exception, nextpas.core.tls.base, nextpas.core.tls.net.hooks, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
-  nextpas.core.platform.dl, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv;
+  nextpas.core.platform.dl, nextpas.core.tls.openssl.api.consts, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.ssl, nextpas.core.tls.openssl.api.x509, nextpas.core.tls.openssl.api.crypto, nextpas.core.tls.openssl.api.asn1, nextpas.core.tls.openssl.api.bio, nextpas.core.tls.openssl.api.evp, nextpas.core.tls.openssl.api.stack, nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   // Additional pointer types needed
@@ -644,7 +645,7 @@ begin
       begin
         Fail(
           ocspCheckResponseStatus,
-          Format('OCSP responder returned unsuccessful response status (%d)', [Result.ResponseStatus])
+          TextFormat('OCSP responder returned unsuccessful response status (%d)', [Result.ResponseStatus])
         );
         Exit;
       end;

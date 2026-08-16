@@ -21,7 +21,8 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
-  nextpas.core.tls.pkcs11.types;
+  nextpas.core.tls.pkcs11.types,
+  nextpas.core.text.format;
 
 type
   { TPKCS11PINManager - PIN acquisition and management }
@@ -90,7 +91,7 @@ begin
   
   if not IsFile(AFilePath) then
     raise EPKCS11Exception.Create(
-      Format('PIN file not found: %s', [AFilePath]),
+      TextFormat('PIN file not found: %s', [AFilePath]),
       CKR_GENERAL_ERROR);
   
   try
@@ -108,7 +109,7 @@ begin
   except
     on E: Exception do
       raise EPKCS11Exception.Create(
-        Format('Failed to read PIN from file: %s', [E.Message]),
+        TextFormat('Failed to read PIN from file: %s', [E.Message]),
         CKR_GENERAL_ERROR);
   end;
   
@@ -124,7 +125,7 @@ begin
   
   if Result = '' then
     raise EPKCS11Exception.Create(
-      Format('Environment variable not set or empty: %s', [AVarName]),
+      TextFormat('Environment variable not set or empty: %s', [AVarName]),
       CKR_PIN_INVALID);
 end;
 
@@ -231,12 +232,12 @@ begin
   
   if Length(APIN) < AMinLength then
     raise EPKCS11Exception.Create(
-      Format('PIN too short (minimum %d characters)', [AMinLength]),
+      TextFormat('PIN too short (minimum %d characters)', [AMinLength]),
       CKR_PIN_LEN_RANGE);
   
   if Length(APIN) > AMaxLength then
     raise EPKCS11Exception.Create(
-      Format('PIN too long (maximum %d characters)', [AMaxLength]),
+      TextFormat('PIN too long (maximum %d characters)', [AMaxLength]),
       CKR_PIN_LEN_RANGE);
   
   Result := True;

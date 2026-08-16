@@ -1308,6 +1308,7 @@ begin
     EmitLine('=== nextpas.core.bench v' + BENCH_VERSION + ' ===');
 
   LTotal := Length(AEntries);
+  LStartNs := 0;
   if Assigned(FConfig.OnProgress) and (LTotal > 0) then
     LStartNs := platform_monotonic_ns;
 

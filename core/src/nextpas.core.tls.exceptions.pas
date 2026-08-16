@@ -16,7 +16,8 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.tls.base,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 type
   {**
@@ -178,7 +179,7 @@ var
 begin
   LFullMessage := AMessage;
   if AErrorCode <> 0 then
-    LFullMessage := Format('%s (OpenSSL error: 0x%x)', [AMessage, AErrorCode]);
+    LFullMessage := TextFormat('%s (OpenSSL error: 0x%x)', [AMessage, AErrorCode]);
   inherited Create(LFullMessage);
   FErrorCode := sslErrOther;  // 旧版本不区分具体类型
   FNativeError := Integer(AErrorCode);
@@ -211,18 +212,18 @@ begin
   
   // 添加上下文信息
   if AContext <> '' then
-    LFullMessage := Format('[%s] %s', [AContext, LFullMessage]);
+    LFullMessage := TextFormat('[%s] %s', [AContext, LFullMessage]);
     
   // 添加原生错误码（如果有）
   if ANativeError <> 0 then
   begin
     case ALibraryType of
       sslOpenSSL:
-        LFullMessage := Format('%s (OpenSSL error: 0x%x)', [LFullMessage, ANativeError]);
+        LFullMessage := TextFormat('%s (OpenSSL error: 0x%x)', [LFullMessage, ANativeError]);
       sslWinSSL:
-        LFullMessage := Format('%s (WinSSL error: %d)', [LFullMessage, ANativeError]);
+        LFullMessage := TextFormat('%s (WinSSL error: %d)', [LFullMessage, ANativeError]);
     else
-      LFullMessage := Format('%s (Native error: %d)', [LFullMessage, ANativeError]);
+      LFullMessage := TextFormat('%s (Native error: %d)', [LFullMessage, ANativeError]);
     end;
   end;
   

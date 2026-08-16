@@ -24,7 +24,8 @@ uses
   nextpas.core.collections.vec,
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.api,
-  nextpas.core.tls.pkcs11.loader;
+  nextpas.core.tls.pkcs11.loader,
+  nextpas.core.text.format;
 
 type
   { TPKCS11Utils - Utility functions for PKCS#11 operations }
@@ -269,7 +270,7 @@ begin
   end;
   
   raise EPKCS11Exception.Create(
-    Format('Token not found: %s', [ATokenLabel]),
+    TextFormat('Token not found: %s', [ATokenLabel]),
     CKR_TOKEN_NOT_PRESENT);
 end;
 
@@ -290,7 +291,7 @@ begin
   end;
   
   raise EPKCS11Exception.Create(
-    Format('Slot not found: %d', [ASlotID]),
+    TextFormat('Slot not found: %d', [ASlotID]),
     CKR_SLOT_ID_INVALID);
 end;
 
@@ -437,7 +438,7 @@ begin
   end;
   
   raise EPKCS11Exception.Create(
-    Format('Key not found: %s', [AKeyLabel]),
+    TextFormat('Key not found: %s', [AKeyLabel]),
     CKR_KEY_HANDLE_INVALID);
 end;
 
@@ -470,7 +471,7 @@ begin
 
     LManufacturer := TrimPKCS11String(Info.manufacturerID);
     LDescription := TrimPKCS11String(Info.libraryDescription);
-    Result := Format(
+    Result := TextFormat(
       'PKCS#11 Module Information:'#13#10 +
       '  Cryptoki Version: %d.%d'#13#10 +
       '  Manufacturer: %s'#13#10 +

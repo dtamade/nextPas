@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv, nextpas.core.tls.x509;
+  nextpas.core.text.conv, nextpas.core.tls.x509,
+  nextpas.core.text.format;
 
 type
   TX509TrustStore = class
@@ -298,12 +299,12 @@ begin
       if LNow > LCurrent.Validity.NotAfter then
       begin
         Result.ErrorCode := X509_V_ERR_CERT_HAS_EXPIRED;
-        Result.ErrorMessage := Format('Certificate expired: %s', [LCurrent.Subject.CommonName]);
+        Result.ErrorMessage := TextFormat('Certificate expired: %s', [LCurrent.Subject.CommonName]);
       end
       else
       begin
         Result.ErrorCode := X509_V_ERR_CERT_NOT_YET_VALID;
-        Result.ErrorMessage := Format('Certificate not yet valid: %s', [LCurrent.Subject.CommonName]);
+        Result.ErrorMessage := TextFormat('Certificate not yet valid: %s', [LCurrent.Subject.CommonName]);
       end;
       Exit;
     end;
@@ -314,14 +315,14 @@ begin
         if AChain[I].KeyUsage <> [] then
         begin
           Result.ErrorCode := X509_V_ERR_KEY_USAGE;
-          Result.ErrorMessage := Format('Intermediate lacks keyCertSign: %s', [AChain[I].Subject.CommonName]);
+          Result.ErrorMessage := TextFormat('Intermediate lacks keyCertSign: %s', [AChain[I].Subject.CommonName]);
           Exit;
         end;
 
       if not AChain[I].BasicConstraints.IsCA then
       begin
         Result.ErrorCode := X509_V_ERR_INVALID_CA;
-        Result.ErrorMessage := Format('BasicConstraints CA=FALSE on intermediate: %s', [AChain[I].Subject.CommonName]);
+        Result.ErrorMessage := TextFormat('BasicConstraints CA=FALSE on intermediate: %s', [AChain[I].Subject.CommonName]);
         Exit;
       end;
 
@@ -375,7 +376,7 @@ begin
     if not MatchHostname(AHostname, AChain[0]) then
     begin
       Result.ErrorCode := X509_V_ERR_HOSTNAME_MISMATCH;
-      Result.ErrorMessage := Format('Hostname mismatch: expected %s', [AHostname]);
+      Result.ErrorMessage := TextFormat('Hostname mismatch: expected %s', [AHostname]);
       Exit;
     end;
   end;

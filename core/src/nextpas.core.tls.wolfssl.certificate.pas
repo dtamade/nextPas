@@ -28,7 +28,8 @@ uses
   nextpas.core.tls.x509,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.native_handle,
-  nextpas.core.tls.wolfssl.api;
+  nextpas.core.tls.wolfssl.api,
+  nextpas.core.text.format;
 
 type
   { TWolfSSLCertificate - WolfSSL 证书类 }
@@ -1048,7 +1049,7 @@ begin
       AResult.ErrorCode := 4;
       AResult.ChainStatus := 1;
       AResult.ErrorMessage := 'Certificate chain contains a nil entry';
-      AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
+      AResult.DetailedInfo := TextFormat('WolfSSL VerifyEx encountered a nil chain entry at index %d', [I]);
       Exit;
     end;
 
@@ -1061,7 +1062,7 @@ begin
         AResult.ErrorCode := 5;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate validity window is unavailable';
-        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
+        AResult.DetailedInfo := TextFormat('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
         Exit;
       end;
       if LCurrentTime < LNotBefore then
@@ -1069,7 +1070,7 @@ begin
         AResult.ErrorCode := 6;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is not yet valid';
-        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
+        AResult.DetailedInfo := TextFormat('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
         Exit;
       end;
       if LCurrentTime > LNotAfter then
@@ -1077,7 +1078,7 @@ begin
         AResult.ErrorCode := 7;
         AResult.ChainStatus := 1;
         AResult.ErrorMessage := 'Certificate is expired';
-        AResult.DetailedInfo := nextpas.core.text.conv.Format('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
+        AResult.DetailedInfo := TextFormat('WolfSSL VerifyEx rejected chain entry %d because notAfter is in the past', [I]);
         Exit;
       end;
     end;

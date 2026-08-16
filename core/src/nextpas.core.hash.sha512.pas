@@ -217,6 +217,7 @@ var
   LDigestSize: SizeUInt;
   LOutSize: SizeUInt;
 begin
+  FillChar(ADst, 0, 0);
   LDigestSize := SHA512_DIGEST_SIZE;
   if FIs384 then
     LDigestSize := SHA384_DIGEST_SIZE;

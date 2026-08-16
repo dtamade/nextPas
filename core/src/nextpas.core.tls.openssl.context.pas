@@ -43,7 +43,8 @@ uses
   nextpas.core.tls.pkcs11.types,
   nextpas.core.tls.pkcs11.backend,
   nextpas.core.tls.cert.pinning,
-  nextpas.core.tls.secure;
+  nextpas.core.tls.secure,
+  nextpas.core.text.format;
 
 type
   { TOpenSSLContext - OpenSSL 上下文类 }
@@ -311,7 +312,7 @@ procedure RequirePublishedOpenSSLContextCustomCipherSurface(
 begin
   if not OpenSSLPublishedCustomCipherSurfaceReady then
     raise ESSLInitializationException.CreateWithContext(
-      nextpas.core.text.conv.Format('OpenSSL custom cipher surface is incomplete in this runtime build; ' +
+      TextFormat('OpenSSL custom cipher surface is incomplete in this runtime build; ' +
         '%s publication remains unsupported until both TLS 1.2 and TLS 1.3 cipher helpers are available.',
         [AFeature]),
       sslErrUnsupported,
@@ -412,7 +413,7 @@ begin
   except
     on E: Exception do
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to read private key file: %s', [AFileName]),
+        TextFormat('Failed to read private key file: %s', [AFileName]),
         sslErrLoadFailed,
         AMethodName,
         0,
@@ -1069,7 +1070,7 @@ begin
   ApplyOptions;
   ApplyServerOCSPStaplingConfiguration;
   
-  TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('SSL Context created (Type: %d)', [Ord(FContextType)]));
+  TSecurityLog.Info('OpenSSL', TextFormat('SSL Context created (Type: %d)', [Ord(FContextType)]));
 end;
 
 destructor TOpenSSLContext.Destroy;
@@ -1312,7 +1313,7 @@ begin
     RaiseInvalidParameter('AFileName');
 
   if not nextpas.core.fs.IsFile(AFileName) then
-    RaiseSSLCertError(nextpas.core.text.conv.Format('Certificate file not found: %s', [AFileName]),
+    RaiseSSLCertError(TextFormat('Certificate file not found: %s', [AFileName]),
       'TOpenSSLContext.LoadCertificate');
 
   LSize := GetFileSizeByName(AFileName);
@@ -1328,7 +1329,7 @@ begin
     except
       on E: Exception do
         raise ESSLInitializationException.CreateWithContext(
-          nextpas.core.text.conv.Format('OpenSSL core not available: %s', [E.Message]),
+          TextFormat('OpenSSL core not available: %s', [E.Message]),
           sslErrNotInitialized,
           'TOpenSSLContext.LoadCertificate'
         );
@@ -1345,13 +1346,13 @@ begin
   FileNameA := AnsiString(AFileName);
   if SSL_CTX_use_certificate_file(FSSLContext, PAnsiChar(FileNameA), SSL_FILETYPE_PEM) <> 1 then
   begin
-    TSecurityLog.Error('OpenSSL', nextpas.core.text.conv.Format('Failed to load certificate: %s', [AFileName]));
+    TSecurityLog.Error('OpenSSL', TextFormat('Failed to load certificate: %s', [AFileName]));
     RaiseSSLCertError(
-      nextpas.core.text.conv.Format('Failed to load certificate from file: %s', [AFileName]),
+      TextFormat('Failed to load certificate from file: %s', [AFileName]),
       'TOpenSSLContext.LoadCertificate'
     );
   end;
-  TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Loaded certificate from file: %s', [AFileName]));
+  TSecurityLog.Info('OpenSSL', TextFormat('Loaded certificate from file: %s', [AFileName]));
 end;
 
 procedure TOpenSSLContext.LoadCertificate(AStream: IStream);
@@ -1433,7 +1434,7 @@ begin
   end;
 
   if not nextpas.core.fs.IsFile(AFileName) then
-    RaiseSSLCertError(nextpas.core.text.conv.Format('Private key file not found: %s', [AFileName]),
+    RaiseSSLCertError(TextFormat('Private key file not found: %s', [AFileName]),
       'TOpenSSLContext.LoadPrivateKey');
 
   LSize := GetFileSizeByName(AFileName);
@@ -1450,7 +1451,7 @@ begin
     BIO := BIO_new_file(PAnsiChar(FileNameA), 'r');
     if BIO = nil then
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to open private key file: %s', [AFileName]),
+        TextFormat('Failed to open private key file: %s', [AFileName]),
         sslErrLoadFailed,
         'TOpenSSLContext.LoadPrivateKey',
         Integer(GetLastOpenSSLError),
@@ -1481,7 +1482,7 @@ begin
       Data := ReadPrivateKeyFileBytes(AFileName, 'TOpenSSLContext.LoadPrivateKey');
       if not ParsePrivateKeyBuffer(Data, APassword, PKey) then
         raise ESSLKeyException.CreateWithContext(
-          nextpas.core.text.conv.Format('Failed to parse private key from file: %s', [AFileName]),
+          TextFormat('Failed to parse private key from file: %s', [AFileName]),
           sslErrParseFailed,
           'TOpenSSLContext.LoadPrivateKey',
           Integer(GetLastOpenSSLError),
@@ -1494,7 +1495,7 @@ begin
         FSSLContext,
         PKey,
         'TOpenSSLContext.LoadPrivateKey',
-        nextpas.core.text.conv.Format('Failed to use private key from file: %s', [AFileName])
+        TextFormat('Failed to use private key from file: %s', [AFileName])
       );
     finally
       EVP_PKEY_free(PKey);
@@ -1507,7 +1508,7 @@ begin
       Data := ReadPrivateKeyFileBytes(AFileName, 'TOpenSSLContext.LoadPrivateKey');
       if not ParsePrivateKeyBuffer(Data, APassword, PKey) then
         raise ESSLKeyException.CreateWithContext(
-          nextpas.core.text.conv.Format('Failed to parse private key from file: %s', [AFileName]),
+          TextFormat('Failed to parse private key from file: %s', [AFileName]),
           sslErrParseFailed,
           'TOpenSSLContext.LoadPrivateKey',
           Integer(GetLastOpenSSLError),
@@ -1518,7 +1519,7 @@ begin
           FSSLContext,
           PKey,
           'TOpenSSLContext.LoadPrivateKey',
-          nextpas.core.text.conv.Format('Failed to use private key from file: %s', [AFileName])
+          TextFormat('Failed to use private key from file: %s', [AFileName])
         );
         finally
           EVP_PKEY_free(PKey);
@@ -1530,7 +1531,7 @@ begin
     Data := ReadPrivateKeyFileBytes(AFileName, 'TOpenSSLContext.LoadPrivateKey');
     if not ParsePrivateKeyBuffer(Data, APassword, PKey) then
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to parse private key from file: %s', [AFileName]),
+        TextFormat('Failed to parse private key from file: %s', [AFileName]),
         sslErrParseFailed,
         'TOpenSSLContext.LoadPrivateKey',
         Integer(GetLastOpenSSLError),
@@ -1541,7 +1542,7 @@ begin
         FSSLContext,
         PKey,
         'TOpenSSLContext.LoadPrivateKey',
-        nextpas.core.text.conv.Format('Failed to use private key from file: %s', [AFileName])
+        TextFormat('Failed to use private key from file: %s', [AFileName])
       );
     finally
       EVP_PKEY_free(PKey);
@@ -1715,7 +1716,7 @@ begin
   except
     on E: Exception do
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to parse PKCS#11 URI: %s', [E.Message]),
+        TextFormat('Failed to parse PKCS#11 URI: %s', [E.Message]),
         sslErrParseFailed,
         'TOpenSSLContext.LoadPrivateKeyFromPKCS11',
         0,
@@ -1749,7 +1750,7 @@ begin
   except
     on E: Exception do
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to create PKCS#11 backend: %s', [E.Message]),
+        TextFormat('Failed to create PKCS#11 backend: %s', [E.Message]),
         sslErrLoadFailed,
         'TOpenSSLContext.LoadPrivateKeyFromPKCS11',
         0,
@@ -1782,14 +1783,14 @@ begin
       
       CheckPrivateKeyMatchesCertificate('TOpenSSLContext.LoadPrivateKeyFromPKCS11');
       TSecurityLog.Audit('OpenSSL', 'LoadPrivateKeyFromPKCS11', 'System', 
-        nextpas.core.text.conv.Format('Private key loaded from PKCS#11 token (Backend: %s)', [Backend.GetName]));
+        TextFormat('Private key loaded from PKCS#11 token (Backend: %s)', [Backend.GetName]));
     finally
       EVP_PKEY_free(PKey);
     end;
   except
     on E: EPKCS11Exception do
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('PKCS#11 error: %s', [E.Message]),
+        TextFormat('PKCS#11 error: %s', [E.Message]),
         sslErrLoadFailed,
         'TOpenSSLContext.LoadPrivateKeyFromPKCS11',
         Integer(E.ReturnValue),
@@ -1797,7 +1798,7 @@ begin
       );
     on E: Exception do
       raise ESSLKeyException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to load PKCS#11 private key: %s', [E.Message]),
+        TextFormat('Failed to load PKCS#11 private key: %s', [E.Message]),
         sslErrLoadFailed,
         'TOpenSSLContext.LoadPrivateKeyFromPKCS11',
         0,
@@ -1818,7 +1819,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLCertificateLoadException.CreateWithContext(
-      nextpas.core.text.conv.Format('CA file not found: %s', [AFileName]),
+      TextFormat('CA file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TOpenSSLContext.LoadCAFile',
       0,
@@ -1837,7 +1838,7 @@ begin
     except
       on E: Exception do
         raise ESSLInitializationException.CreateWithContext(
-          nextpas.core.text.conv.Format('OpenSSL core not available: %s', [E.Message]),
+          TextFormat('OpenSSL core not available: %s', [E.Message]),
           sslErrNotInitialized,
           'TOpenSSLContext.LoadCAFile'
         );
@@ -1854,7 +1855,7 @@ begin
   FileNameA := AnsiString(AFileName);
   if SSL_CTX_load_verify_locations(FSSLContext, PAnsiChar(FileNameA), nil) <> 1 then
     raise ESSLCertificateLoadException.CreateWithContext(
-      nextpas.core.text.conv.Format('Failed to load CA certificates from file: %s', [AFileName]),
+      TextFormat('Failed to load CA certificates from file: %s', [AFileName]),
       sslErrLoadFailed,
       'TOpenSSLContext.LoadCAFile',
       Integer(GetLastOpenSSLError),
@@ -1875,7 +1876,7 @@ begin
     except
       on E: Exception do
         raise ESSLInitializationException.CreateWithContext(
-          nextpas.core.text.conv.Format('OpenSSL core not available: %s', [E.Message]),
+          TextFormat('OpenSSL core not available: %s', [E.Message]),
           sslErrNotInitialized,
           'TOpenSSLContext.LoadCAPath'
         );
@@ -1895,7 +1896,7 @@ begin
   PathA := AnsiString(APath);
   if SSL_CTX_load_verify_locations(FSSLContext, nil, PAnsiChar(PathA)) <> 1 then
     raise ESSLCertificateLoadException.CreateWithContext(
-      nextpas.core.text.conv.Format('Failed to load CA certificates from directory: %s', [APath]),
+      TextFormat('Failed to load CA certificates from directory: %s', [APath]),
       sslErrLoadFailed,
       'TOpenSSLContext.LoadCAPath',
       Integer(GetLastOpenSSLError),
@@ -2178,7 +2179,7 @@ begin
 
   if (Length(FALPNWireData) = 0) or
     (SSL_CTX_set_alpn_protos(FSSLContext, @FALPNWireData[0], Length(FALPNWireData)) <> 0) then
-    RaiseConfigurationError('ALPN protocols', nextpas.core.text.conv.Format('failed to configure: %s', [FALPNProtocols]));
+    RaiseConfigurationError('ALPN protocols', TextFormat('failed to configure: %s', [FALPNProtocols]));
 
   // 仅在服务端设置选择回调，客户端只发送候选列表
   if (FContextType <> sslCtxClient) and Assigned(SSL_CTX_set_alpn_select_cb) then
@@ -2380,7 +2381,7 @@ begin
       raise;  // Re-raise SSL exceptions as-is
     on E: Exception do
       raise ESSLConnectionException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to create SSL connection: %s', [E.Message]),
+        TextFormat('Failed to create SSL connection: %s', [E.Message]),
         sslErrConnection,
         'TOpenSSLContext.CreateConnection'
       );
@@ -2420,7 +2421,7 @@ begin
       raise;  // Re-raise SSL exceptions as-is
     on E: Exception do
       raise ESSLConnectionException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to create SSL connection: %s', [E.Message]),
+        TextFormat('Failed to create SSL connection: %s', [E.Message]),
         sslErrConnection,
         'TOpenSSLContext.CreateConnection'
       );
@@ -2464,7 +2465,7 @@ begin
   // OpenSSL 客户端会从服务端的 session ticket 中获取 max_early_data 值
   // 这里仅记录状态，不调用 SSL_CTX_set_max_early_data
 
-  TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('Client early data %s',
+  TSecurityLog.Debug('OpenSSL', TextFormat('Client early data %s',
     [BoolToStr(AEnabled, 'enabled', 'disabled')]));
 end;
 
@@ -2493,7 +2494,7 @@ begin
 
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('SSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
+        TextFormat('SSL_CTX_set_max_early_data failed (policy=%d, return=%d)',
           [Ord(APolicy), LRet]),
         sslErrGeneral,
         'SetServerEarlyDataPolicy'
@@ -2502,7 +2503,7 @@ begin
 
   FServerEarlyDataPolicy := APolicy;
 
-  TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('Server early data policy set to %d', [Ord(APolicy)]));
+  TSecurityLog.Debug('OpenSSL', TextFormat('Server early data policy set to %d', [Ord(APolicy)]));
 end;
 
 function TOpenSSLContext.GetServerEarlyDataPolicy: TSSLEarlyDataServerPolicy;
@@ -2523,7 +2524,7 @@ begin
     LRet := SSL_CTX_set_max_early_data(FSSLContext, ASize);
     if LRet <> 1 then
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('SSL_CTX_set_max_early_data failed (size=%d, return=%d)',
+        TextFormat('SSL_CTX_set_max_early_data failed (size=%d, return=%d)',
           [ASize, LRet]),
         sslErrGeneral,
         'SetServerMaxEarlyDataSize'
@@ -2532,7 +2533,7 @@ begin
 
   FServerMaxEarlyDataSize := ASize;
 
-  TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('Server max early data size set to %d bytes', [ASize]));
+  TSecurityLog.Debug('OpenSSL', TextFormat('Server max early data size set to %d bytes', [ASize]));
 end;
 
 function TOpenSSLContext.GetServerMaxEarlyDataSize: Cardinal;
@@ -2565,7 +2566,7 @@ begin
   FServerStapledOCSPResponse := Copy(AResponseDER);
   ApplyServerOCSPStaplingConfiguration;
 
-  TSecurityLog.Debug('OpenSSL', nextpas.core.text.conv.Format('Server stapled OCSP response set (%d bytes)',
+  TSecurityLog.Debug('OpenSSL', TextFormat('Server stapled OCSP response set (%d bytes)',
     [Length(AResponseDER)]));
 end;
 
@@ -2578,7 +2579,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLException.CreateWithContext(
-      nextpas.core.text.conv.Format('OCSP response file not found: %s', [AFileName]),
+      TextFormat('OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'LoadServerStapledOCSPResponseFile'
     );
@@ -2595,7 +2596,7 @@ begin
 
       if LSize > MAX_OCSP_RESPONSE_SIZE then
         raise ESSLInvalidArgument.Create(
-          nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
+          TextFormat('OCSP response file too large (%d bytes, max %d)',
             [LSize, MAX_OCSP_RESPONSE_SIZE]),
           sslErrInvalidParam
         );
@@ -2604,7 +2605,7 @@ begin
       LStream.Read(FServerStapledOCSPResponse[0], LSize);
       ApplyServerOCSPStaplingConfiguration;
 
-      TSecurityLog.Info('OpenSSL', nextpas.core.text.conv.Format('Loaded server stapled OCSP response from %s (%d bytes)',
+      TSecurityLog.Info('OpenSSL', TextFormat('Loaded server stapled OCSP response from %s (%d bytes)',
         [AFileName, LSize]));
     finally
     end;
@@ -2613,7 +2614,7 @@ begin
       raise;
     on E: Exception do
       raise ESSLException.CreateWithContext(
-        nextpas.core.text.conv.Format('Failed to load OCSP response file: %s', [E.Message]),
+        TextFormat('Failed to load OCSP response file: %s', [E.Message]),
         sslErrLoadFailed,
         'LoadServerStapledOCSPResponseFile'
       );

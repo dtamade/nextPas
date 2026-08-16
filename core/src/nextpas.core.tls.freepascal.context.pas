@@ -27,7 +27,8 @@ uses
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.freepascal.earlydatareplay,
   nextpas.core.tls.freepascal.session,
-  nextpas.core.tls.secure;
+  nextpas.core.tls.secure,
+  nextpas.core.text.format;
 
 type
   TFreePascalPin = record
@@ -600,7 +601,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('Certificate file not found: %s', [AFileName]),
+      TextFormat('Certificate file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCertificate',
       0,
@@ -648,7 +649,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('Private key file not found: %s', [AFileName]),
+      TextFormat('Private key file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadPrivateKey',
       0,
@@ -728,7 +729,7 @@ begin
 
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('CA file not found: %s', [AFileName]),
+      TextFormat('CA file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCAFile',
       0,
@@ -748,7 +749,7 @@ procedure TFreePascalContext.LoadCAPath(const APath: string);
 begin
   if not nextpas.core.fs.IsDir(APath) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('CA path not found: %s', [APath]),
+      TextFormat('CA path not found: %s', [APath]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadCAPath',
       0,
@@ -880,7 +881,7 @@ procedure TFreePascalContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current FreePascal backend runtime. ' +
+    TextFormat('%s is not published by the current FreePascal backend runtime. ' +
       'The FreePascal backend currently publishes verify callback wiring; password/info callback kinds remain unsupported.',
       [AFeature]),
     sslErrUnsupported,
@@ -1287,7 +1288,7 @@ procedure TFreePascalContext.AddCRLFile(const AFileName: string);
 begin
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('CRL file not found: %s', [AFileName]),
+      TextFormat('CRL file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.AddCRLFile',
       0,
@@ -1326,7 +1327,7 @@ var
 begin
   if not nextpas.core.fs.IsFile(AFileName) then
     raise ESSLFileNotFoundException.CreateWithContext(
-      nextpas.core.text.conv.Format('Server stapled OCSP response file not found: %s', [AFileName]),
+      TextFormat('Server stapled OCSP response file not found: %s', [AFileName]),
       sslErrLoadFailed,
       'TFreePascalContext.LoadServerStapledOCSPResponseFile',
       0,
@@ -1343,7 +1344,7 @@ begin
       );
     if LSize > MAX_OCSP_RESPONSE_SIZE then
       raise ESSLInvalidArgument.Create(
-        nextpas.core.text.conv.Format('OCSP response file too large (%d bytes, max %d)',
+        TextFormat('OCSP response file too large (%d bytes, max %d)',
           [LSize, MAX_OCSP_RESPONSE_SIZE]),
         sslErrInvalidParam
       );

@@ -25,7 +25,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
-  nextpas.core.tls.wolfssl.api;
+  nextpas.core.tls.wolfssl.api,
+  nextpas.core.text.format;
 
 type
   { TWolfSSLLibrary - WolfSSL 库管理类 }
@@ -280,7 +281,7 @@ begin
   end;
 
   FInitialized := True;
-  InternalLog(sslLogInfo, Format('WolfSSL initialized: %s', [FCapabilities.VersionString]));
+  InternalLog(sslLogInfo, TextFormat('WolfSSL initialized: %s', [FCapabilities.VersionString]));
   Result := True;
 end;
 
