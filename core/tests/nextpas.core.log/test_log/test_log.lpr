@@ -349,6 +349,148 @@ begin
   CheckEqual(Int64(10), Int64(GCaptured[0].AttrCount), '10 attrs');
 end;
 
+{ ===== K37 异步文件落盘（core 反哺 NewAsyncFileHandler/NewAsyncJsonFileHandler）===== }
+
+{ 统计文件行数（供批量/兜底丢行断言） }
+function CountLines(const APath: string): Int32;
+var
+  LF: TextFile;
+  LLine: string;
+begin
+  Result := 0;
+  AssignFile(LF, APath);
+  Reset(LF);
+  while not Eof(LF) do
+  begin
+    ReadLn(LF, LLine);
+    Inc(Result);
+  end;
+  CloseFile(LF);
+end;
+
+procedure TestAsyncFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Msg('async file test');
+  LL.Warn^.Int('code', 42)^.Msg('async warning');
+  { Flush = 阻塞等排空 ack：此刻之前全部落盘（确定性，不依赖 sleep） }
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  Check(Pos('INF', LLine) > 0, 'async file: INF');
+  Check(Pos('async file test', LLine) > 0, 'async file: msg');
+  ReadLn(LF, LLine);
+  Check(Pos('WRN', LLine) > 0, 'async file: WRN');
+  Check(Pos('code=42', LLine) > 0, 'async file: attr');
+  CloseFile(LF);
+  { 释放 handler → sink Close + join 排空（停机 drain 语义） }
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncJsonFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_json_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncJsonFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Msg('async json test');
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('"level":"INF"', LLine) > 0, 'async json: level');
+  Check(Pos('"msg":"async json test"', LLine) > 0, 'async json: msg');
+  Check(Pos('"key":"val"', LLine) > 0, 'async json: attr');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncChildPrefix;
+var
+  LL, LChild: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  LPath := '/tmp/test_log_async_child_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  LChild := LL.With_('req', 'abc123').WithGroup('http');
+  LChild.Info^.Str('status', '200')^.Msg('child log');
+  LL.Flush;
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('req=abc123', LLine) > 0, 'async child: prefix attrs');
+  Check(Pos('http.status=200', LLine) > 0, 'async child: group prefix');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncBatchDrain;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 大批量（超 worker 攒批阈值，触发批量 Flush）+
+    释放 handler → drain：文件行数必须完整（不丢） }
+  LPath := '/tmp/test_log_async_batch_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
+  for LI := 1 to 1000 do
+    LL.Info^.Int('i', LI)^.Msg('batch line');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);   { drain }
+  CheckEqual(Int64(1000), Int64(CountLines(LPath)),
+    'async batch: all lines on disk after release');
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncFallback;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 队列满（容量 1）→ 同步直写兜底：混合路径也不丢日志 }
+  LPath := '/tmp/test_log_async_fb_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100 * 1024 * 1024, 5, 1), llInfo);
+  for LI := 1 to 2000 do
+    LL.Info^.Int('i', LI)^.Msg('fallback line payload');
+  LL.Flush;
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  CheckEqual(Int64(2000), Int64(CountLines(LPath)),
+    'async fallback: queue-full no loss');
+  DeleteFile(LPath);
+end;
+
+procedure TestAsyncRotation;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  { 异步路径轮转：小 AMaxBytes 由 worker 写侧触发 }
+  LPath := '/tmp/test_log_async_rot_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100, 3), llInfo);
+  for LI := 1 to 10 do
+    LL.Info^.Int('i', LI)^.Msg('rotation async line that is long enough');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  Check(FileExists(LPath + '.1'), 'async rotation: .1 created');
+  DeleteFile(LPath);
+  DeleteFile(LPath + '.1');
+  DeleteFile(LPath + '.2');
+  DeleteFile(LPath + '.3');
+end;
+
 procedure TestWithInt;
 var
   LL, LChild: TLogger;
@@ -1671,6 +1813,12 @@ begin
   T.Test('File handler', @TestFileHandler);
   T.Test('Multi handler', @TestMultiHandler);
   T.Test('File rotation', @TestFileRotation);
+  T.Test('Async file handler', @TestAsyncFileHandler);
+  T.Test('Async JSON file handler', @TestAsyncJsonFileHandler);
+  T.Test('Async child prefix', @TestAsyncChildPrefix);
+  T.Test('Async batch drain', @TestAsyncBatchDrain);
+  T.Test('Async queue-full fallback', @TestAsyncFallback);
+  T.Test('Async rotation', @TestAsyncRotation);
   T.Test('Many attrs', @TestManyAttrs);
   T.Test('WithInt', @TestWithInt);
   T.Test('WithGroup', @TestWithGroup);
