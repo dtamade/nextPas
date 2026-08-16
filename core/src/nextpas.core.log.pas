@@ -5,7 +5,10 @@ unit nextpas.core.log;
 interface
 
 uses
-  nextpas.core.log.intf;
+  nextpas.core.log.intf,
+  { 异步文件落盘（K37）：TChannel<T> 有界阻塞通道承载日志消息，后台线程
+    批量刷盘——写 syscall 移出日志调用线程，热路径不卡 IO。 }
+  nextpas.core.thread.channel;
 
 type
   TLogLevel = nextpas.core.log.intf.TLogLevel;
@@ -29,6 +32,23 @@ type
     AttrCount: Int32;
     Group: string;
   end;
+
+  { 异步文件落盘消息（K37）：TLogRecord + 渲染态（Group/Prefix）。WithAttrs/
+    WithGroup 派生 handler 与父共享同一队列，渲染态随消息传递——worker 端按
+    消息渲染，child 前缀不丢。lfkFlush 为排空哨兵：Flush 入队阻塞等待其 ack，
+    保证「此刻之前全部落盘」。 }
+  TLogFileMsgKind = (lfkRecord, lfkFlush);
+
+  TLogFileMsg = record
+    Kind: TLogFileMsgKind;
+    Rec: TLogRecord;
+    Group: string;
+    Prefix: array of TAttr;
+    PrefixCount: Int32;
+    FlushSeq: Int64;   { lfkFlush 专用：ack 序号 }
+  end;
+
+  TLogFileChannel = specialize TChannel<TLogFileMsg>;
 
   ILogHandler = interface
     ['{B2C3D4E5-F6A7-8901-BCDE-FA2345678901}']
@@ -100,6 +120,17 @@ function NewFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
   模式下日志采集直接读文件（日志系统可采集，无需再经 stdout 重定向）。 }
 function NewJsonFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
   AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5): ILogHandler;
+{ 异步文件落盘（K37）：与 NewFileHandler/NewJsonFileHandler 同渲染语义的
+  后台批量写变体——有界队列（AQueueCapacity）承载消息，worker 线程攒批刷盘
+  （每 cLogFileBatchFlush 条一次 Flush，写 syscall 合并，移出调用线程）；
+  队列满 → 同步直写兜底（不丢日志，仅退化为同步）；Flush 阻塞等待排空 ack；
+  handler 释放时 Close + join 排空。 }
+function NewAsyncFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
+  AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5;
+  AQueueCapacity: Int32 = 65536): ILogHandler;
+function NewAsyncJsonFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
+  AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5;
+  AQueueCapacity: Int32 = 65536): ILogHandler;
 function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
@@ -121,7 +152,10 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  { 异步文件落盘 worker（K37）：线程基类 + Flush ack 的 mutex/condvar 原语 }
+  nextpas.core.thread.base,
+  nextpas.core.platform.sync;
 
 const
   LEVEL_NAMES: array[TLogLevel] of string = (
@@ -263,6 +297,10 @@ begin
     EnterCriticalSection(GEventLock);
     try
       GEventBusy[LIdx] := False;
+      { 释放槽内驻留的 managed 引用（FHandler 接口等）：否则空闲槽仍持有
+        ILogHandler，导致 handler 引用计数无法归零——TLogger 释放、异步
+        落盘 sink 不回收、drain 不触发（文件落盘/轮转依赖时序成竞态）。 }
+      Finalize(GEventPool[LIdx]);
     finally
       LeaveCriticalSection(GEventLock);
     end;
@@ -779,12 +817,21 @@ type
     FLock: TRTLCriticalSection;
     procedure EnsureOpen;
     procedure Rotate;
+    { 锁内写一行（轮转 + 渲染 + 尺寸累计，不 Flush）：同步 Handle 与异步
+       worker/兜底路径共用同一渲染，行为与格式完全一致。 }
+    procedure WriteLine(const AGroup: string;
+      const APrefix: array of TAttr; const APrefixCount: Int32;
+      const ARecord: TLogRecord);
   public
     constructor Create(const APath: string; AMinLevel: TLogLevel;
       AMaxBytes: Int64; AMaxFiles: Int32; AJson: Boolean = False);
     destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
+    { 异步批量写（K37）：不 Flush，攒批由 worker 一次性落 OS（syscall 合并） }
+    procedure HandleRaw(const AMsg: TLogFileMsg);
+    { 兜底直写（K37）：队列满/关闭时同步写 + 立即 Flush（不丢日志） }
+    procedure HandleMsg(const AMsg: TLogFileMsg);
     procedure Flush;
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
@@ -859,73 +906,120 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
-procedure TFileHandler.Handle(const ARecord: TLogRecord);
+procedure TFileHandler.WriteLine(const AGroup: string;
+  const APrefix: array of TAttr; const APrefixCount: Int32;
+  const ARecord: TLogRecord);
 var
   LI: Int32;
   LSize: Int64;
   LKeyPrefix: string;
   LAttr: TAttr;
 begin
+  { 调用者须持 FLock（handle/worker/兜底三路并发安全） }
+  if FCurrentSize >= FMaxBytes then Rotate;
+  EnsureOpen;
+  if not FOpened then Exit;
+  if FJson then
+  begin
+    WriteJsonRecordTo(FFile, ARecord, AGroup, APrefix, APrefixCount);
+    { json 行长度以渲染字节量近似（轮转触发只需单调超限，
+      不要求字节精确）：level/msg/ts 常量 + 键值与前缀。 }
+    LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 8 +
+      Int64(Length(ARecord.Message)) + 8 +
+      Int64(Length(ARecord.Group));
+    for LI := 0 to APrefixCount - 1 do
+    begin
+      LAttr := APrefix[LI];
+      LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
+    end;
+    for LI := 0 to ARecord.AttrCount - 1 do
+    begin
+      LAttr := ARecord.Attrs[LI];
+      LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
+    end;
+    Inc(FCurrentSize, LSize);
+    Exit;
+  end;
+  if AGroup <> '' then LKeyPrefix := AGroup + '.' else LKeyPrefix := '';
+  LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
+  Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
+  for LI := 0 to APrefixCount - 1 do
+  begin
+    Write(FFile, ' ', LKeyPrefix, APrefix[LI].Key, '=');
+    LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(APrefix[LI].Key));
+    case APrefix[LI].Kind of
+      akString: begin Write(FFile, APrefix[LI].SVal); LSize := LSize + Int64(Length(APrefix[LI].SVal)); end;
+      akInt: begin Write(FFile, APrefix[LI].IVal); LSize := LSize + 12; end;
+      akFloat: begin Write(FFile, APrefix[LI].FVal:0:2); LSize := LSize + 10; end;
+      akBool: if APrefix[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
+              else begin Write(FFile, 'false'); LSize := LSize + 5; end;
+    end;
+  end;
+  for LI := 0 to ARecord.AttrCount - 1 do
+  begin
+    Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
+    LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
+    case ARecord.Attrs[LI].Kind of
+      akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize := LSize + Int64(Length(ARecord.Attrs[LI].SVal)); end;
+      akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize := LSize + 12; end;
+      akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize := LSize + 10; end;
+      akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
+              else begin Write(FFile, 'false'); LSize := LSize + 5; end;
+    end;
+  end;
+  WriteLn(FFile);
+  Inc(FCurrentSize, LSize + 1);
+end;
+
+procedure TFileHandler.Handle(const ARecord: TLogRecord);
+begin
   if FBroken then Exit;
   EnterCriticalSection(FLock);
   try
     if FBroken then Exit;
     try
-      if FCurrentSize >= FMaxBytes then Rotate;
-      EnsureOpen;
-      if not FOpened then Exit;
-      if FJson then
-      begin
-        WriteJsonRecordTo(FFile, ARecord, FGroup, FPrefix, FPrefixCount);
-        System.Flush(FFile);
-        { json 行长度以渲染字节量近似（轮转触发只需单调超限，
-          不要求字节精确）：level/msg/ts 常量 + 键值与前缀。 }
-        LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 8 +
-          Int64(Length(ARecord.Message)) + 8 +
-          Int64(Length(ARecord.Group));
-        for LI := 0 to FPrefixCount - 1 do
-        begin
-          LAttr := FPrefix[LI];
-          LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
-        end;
-        for LI := 0 to ARecord.AttrCount - 1 do
-        begin
-          LAttr := ARecord.Attrs[LI];
-          LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
-        end;
-        Inc(FCurrentSize, LSize);
-        Exit;
-      end;
-      if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
-      LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
-      Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
-      for LI := 0 to FPrefixCount - 1 do
-      begin
-        Write(FFile, ' ', LKeyPrefix, FPrefix[LI].Key, '=');
-        LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
-        case FPrefix[LI].Kind of
-          akString: begin Write(FFile, FPrefix[LI].SVal); LSize := LSize + Int64(Length(FPrefix[LI].SVal)); end;
-          akInt: begin Write(FFile, FPrefix[LI].IVal); LSize := LSize + 12; end;
-          akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize := LSize + 10; end;
-          akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
-                  else begin Write(FFile, 'false'); LSize := LSize + 5; end;
-        end;
-      end;
-      for LI := 0 to ARecord.AttrCount - 1 do
-      begin
-        Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
-        LSize := LSize + 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
-        case ARecord.Attrs[LI].Kind of
-          akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize := LSize + Int64(Length(ARecord.Attrs[LI].SVal)); end;
-          akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize := LSize + 12; end;
-          akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize := LSize + 10; end;
-          akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize := LSize + 4; end
-                  else begin Write(FFile, 'false'); LSize := LSize + 5; end;
-        end;
-      end;
-      WriteLn(FFile);
+      WriteLine(FGroup, FPrefix, FPrefixCount, ARecord);
+      { 同步路径保持逐行 Flush（实时可见，与既有语义一致） }
       System.Flush(FFile);
-      Inc(FCurrentSize, LSize + 1);
+    except
+      on E: Exception do
+      begin
+        FBroken := True;
+        if FOpened then begin System.Close(FFile); FOpened := False; end;
+      end;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TFileHandler.HandleRaw(const AMsg: TLogFileMsg);
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FBroken then Exit;
+    try
+      WriteLine(AMsg.Group, AMsg.Prefix, AMsg.PrefixCount, AMsg.Rec);
+    except
+      on E: Exception do
+      begin
+        FBroken := True;
+        if FOpened then begin System.Close(FFile); FOpened := False; end;
+      end;
+    end;
+  finally
+    LeaveCriticalSection(FLock);
+  end;
+end;
+
+procedure TFileHandler.HandleMsg(const AMsg: TLogFileMsg);
+begin
+  EnterCriticalSection(FLock);
+  try
+    if FBroken then Exit;
+    try
+      WriteLine(AMsg.Group, AMsg.Prefix, AMsg.PrefixCount, AMsg.Rec);
+      System.Flush(FFile);
     except
       on E: Exception do
       begin
@@ -940,7 +1034,14 @@ end;
 
 procedure TFileHandler.Flush;
 begin
-  if FOpened then System.Flush(FFile);
+  { 与写互斥（worker 攒批/兜底并发场景）：FPC TextFile 内部缓冲无锁，
+    并发 Write/Flush 会损坏缓冲状态（实测 Disk Full 伪错误）。 }
+  EnterCriticalSection(FLock);
+  try
+    if FOpened then System.Flush(FFile);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
 end;
 
 function TFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
@@ -986,6 +1087,286 @@ function NewJsonFileHandler(const APath: string; AMinLevel: TLogLevel;
   AMaxBytes: Int64; AMaxFiles: Int32): ILogHandler;
 begin
   Result := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles, True);
+end;
+
+{ ===== 异步文件落盘（K37）：TLogFileWorker / TLogFileSink / TAsyncFileHandler ===== }
+
+{ 批量攒批阈值：每 cLogFileBatchFlush 条主动 Flush 一次（写 syscall 合并、
+  采集实时性上界 = 阈值条延迟；崩溃丢失窗口同理有界） }
+const
+  cLogFileBatchFlush = 256;
+
+type
+  PPlatformMutex = ^TPlatformMutex;
+  PPlatformCondVar = ^TPlatformCondVar;
+
+  { 后台消费线程：记录消息攒批写（不 Flush），遇 lfkFlush 哨兵 → 落盘 + ack
+    （FAckMu/FAckCond 由 sink 创建共享，Flush 侧阻塞等 ack）。TChannel 语义：
+    Close 后剩余仍可消费（空且 Close 才返回 False）——停机 drain 由 sink
+    Shutdown 的 Close + WaitFor 保证，残余记录不丢。 }
+  TLogFileWorker = class(TWorkerThread)
+  private
+    FChannel: TLogFileChannel;
+    FIO: TFileHandler;
+    FAckMu: PPlatformMutex;        { sink 所有，worker 只 ack }
+    FAckCond: PPlatformCondVar;
+    FAckSeq: PInt64;               { ^sink.FAckSeq：ack 写共享计数（Flush 侧读） }
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AChannel: TLogFileChannel;
+      const AFileHandler: TFileHandler;
+      const AAckMu: PPlatformMutex; const AAckCond: PPlatformCondVar;
+      const AAckSeq: PInt64);
+  end;
+
+  { 异步落盘共享核心：有界队列 + worker + Flush ack。多个 TAsyncFileHandler
+    （WithAttrs/WithGroup 派生）共享同一核心——写序 FIFO 由通道保证、渲染态
+    随消息（child 前缀不丢）；引用归零 → Destroy 关通道 + join 排空。 }
+  ILogFileSink = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Push(const AMsg: TLogFileMsg);
+    procedure Flush;
+  end;
+
+  TLogFileSink = class(TInterfacedObject, ILogFileSink)
+  private
+    FChannel: TLogFileChannel;
+    FIO: TFileHandler;
+    FWorker: TLogFileWorker;
+    FAckMu: TPlatformMutex;
+    FAckCond: TPlatformCondVar;
+    FAckSeq: Int64;
+    FSeqMu: TRTLCriticalSection;
+    FFlushSeq: Int64;
+  public
+    constructor Create(const APath: string; AMinLevel: TLogLevel;
+      AMaxBytes: Int64; AMaxFiles: Int32; AJson: Boolean; ACapacity: Int32);
+    destructor Destroy; override;
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Push(const AMsg: TLogFileMsg);
+    procedure Flush;
+  end;
+
+  TAsyncFileHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FSink: ILogFileSink;   { 接口引用：最后一个 handler 释放 → sink 引用归零
+                              → Free（Close + join 排空，停机 drain） }
+    FGroup: string;
+    FPrefix: array of TAttr;
+    FPrefixCount: Int32;
+  public
+    constructor Create(const ASink: ILogFileSink);
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    function WithGroup(const AName: string): ILogHandler;
+  end;
+
+constructor TLogFileWorker.Create(const AChannel: TLogFileChannel;
+  const AFileHandler: TFileHandler;
+  const AAckMu: PPlatformMutex; const AAckCond: PPlatformCondVar;
+  const AAckSeq: PInt64);
+begin
+  inherited Create;
+  FChannel := AChannel;
+  FIO := AFileHandler;
+  FAckMu := AAckMu;
+  FAckCond := AAckCond;
+  FAckSeq := AAckSeq;
+end;
+
+procedure TLogFileWorker.Execute;
+var
+  LMsg: TLogFileMsg;
+  LBatch: Int32;
+begin
+  LBatch := 0;
+  try
+    while FChannel.Receive(LMsg) do
+    begin
+      if LMsg.Kind = lfkFlush then
+      begin
+        FIO.Flush;   { flush 哨兵前的全部记录已写，落 OS }
+        platform_mutex_lock(FAckMu^);
+        try
+          if LMsg.FlushSeq > FAckSeq^ then FAckSeq^ := LMsg.FlushSeq;
+          platform_condvar_broadcast(FAckCond^);
+        finally
+          platform_mutex_unlock(FAckMu^);
+        end;
+        Continue;
+      end;
+      FIO.HandleRaw(LMsg);
+      Inc(LBatch);
+      if LBatch >= cLogFileBatchFlush then
+      begin
+        FIO.Flush;
+        LBatch := 0;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      { 防御：worker 异常即停止（TWorkerThread 捕获保存）——调用方可经
+        HasException 观察；队列剩余会转满 → Push 兜底同步直写（不丢）。 }
+      WriteLn(StdErr, '[LOG] async file worker exception: ', E.Message);
+      raise;
+    end;
+  end;
+end;
+
+constructor TLogFileSink.Create(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32; AJson: Boolean; ACapacity: Int32);
+begin
+  inherited Create;
+  FChannel := TLogFileChannel.Create(ACapacity);
+  FIO := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles, AJson);
+  platform_mutex_init(FAckMu);
+  platform_condvar_init(FAckCond);
+  InitCriticalSection(FSeqMu);
+  FWorker := TLogFileWorker.Create(FChannel, FIO, @FAckMu, @FAckCond, @FAckSeq);
+  FWorker.Start;
+end;
+
+destructor TLogFileSink.Destroy;
+begin
+  { 停机 drain：Close 后 worker 消费残余（空且 Close 才退出）→ join }
+  FChannel.Close;
+  FWorker.WaitFor;
+  FWorker.Free;
+  FChannel.Free;
+  FIO.Free;
+  platform_mutex_destroy(FAckMu);
+  platform_condvar_destroy(FAckCond);
+  DoneCriticalSection(FSeqMu);
+  inherited Destroy;
+end;
+
+function TLogFileSink.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := FIO.Enabled(ALevel);
+end;
+
+procedure TLogFileSink.Push(const AMsg: TLogFileMsg);
+begin
+  { 非阻塞入队（O(1) 锁内拷贝）；满/已关闭 → 同步直写兜底（不丢日志，
+    仅退化为同步写 + 每行 Flush）。 }
+  if not FChannel.TrySend(AMsg) then
+    FIO.HandleMsg(AMsg);
+end;
+
+procedure TLogFileSink.Flush;
+var
+  LMsg: TLogFileMsg;
+  LSeq: Int64;
+begin
+  { 已关闭（Destroy 后防御）：队列已排空、worker 已退出，直接落盘返回 }
+  if FChannel.IsClosed then
+  begin
+    FIO.Flush;
+    Exit;
+  end;
+  EnterCriticalSection(FSeqMu);
+  try
+    Inc(FFlushSeq);
+    LSeq := FFlushSeq;
+  finally
+    LeaveCriticalSection(FSeqMu);
+  end;
+  LMsg.Kind := lfkFlush;
+  LMsg.FlushSeq := LSeq;
+  { 阻塞入队：停机/显式 flush 时队列即便满也须送达（排空语义） }
+  FChannel.Send(LMsg);
+  platform_mutex_lock(FAckMu);
+  try
+    while FAckSeq < LSeq do
+      platform_condvar_wait(FAckCond, FAckMu);
+  finally
+    platform_mutex_unlock(FAckMu);
+  end;
+end;
+
+constructor TAsyncFileHandler.Create(const ASink: ILogFileSink);
+begin
+  inherited Create;
+  FSink := ASink;
+  FPrefixCount := 0;
+end;
+
+function TAsyncFileHandler.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := FSink.Enabled(ALevel);
+end;
+
+procedure TAsyncFileHandler.Handle(const ARecord: TLogRecord);
+var
+  LMsg: TLogFileMsg;
+begin
+  LMsg.Kind := lfkRecord;
+  LMsg.Rec := ARecord;
+  LMsg.Group := FGroup;
+  LMsg.Prefix := FPrefix;
+  LMsg.PrefixCount := FPrefixCount;
+  FSink.Push(LMsg);
+end;
+
+procedure TAsyncFileHandler.Flush;
+begin
+  FSink.Flush;
+end;
+
+function TAsyncFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+var
+  LNew: TAsyncFileHandler;
+  LI: Int32;
+begin
+  LNew := TAsyncFileHandler.Create(FSink);
+  LNew.FGroup := FGroup;
+  SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
+  for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
+  for LI := 0 to High(AAttrs) do LNew.FPrefix[FPrefixCount + LI] := AAttrs[LI];
+  LNew.FPrefixCount := FPrefixCount + Length(AAttrs);
+  Result := LNew;
+end;
+
+function TAsyncFileHandler.WithGroup(const AName: string): ILogHandler;
+var
+  LNew: TAsyncFileHandler;
+  LI: Int32;
+begin
+  LNew := TAsyncFileHandler.Create(FSink);
+  SetLength(LNew.FPrefix, FPrefixCount);
+  for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
+  LNew.FPrefixCount := FPrefixCount;
+  if FGroup <> '' then
+    LNew.FGroup := FGroup + '.' + AName
+  else
+    LNew.FGroup := AName;
+  Result := LNew;
+end;
+
+function NewAsyncFileHandler(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32; AQueueCapacity: Int32): ILogHandler;
+var
+  LSink: TLogFileSink;
+begin
+  LSink := TLogFileSink.Create(APath, AMinLevel, AMaxBytes, AMaxFiles,
+    False, AQueueCapacity);
+  { handler 持 sink 引用；最后一个 handler 释放 → sink Destroy（排空+join） }
+  Result := TAsyncFileHandler.Create(LSink);
+end;
+
+function NewAsyncJsonFileHandler(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32; AQueueCapacity: Int32): ILogHandler;
+var
+  LSink: TLogFileSink;
+begin
+  LSink := TLogFileSink.Create(APath, AMinLevel, AMaxBytes, AMaxFiles,
+    True, AQueueCapacity);
+  Result := TAsyncFileHandler.Create(LSink);
 end;
 
 { TMultiHandler }
