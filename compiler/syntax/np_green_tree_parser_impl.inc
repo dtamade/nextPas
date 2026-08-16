@@ -219,7 +219,8 @@ begin
     (L = 'export') or (L = 'far') or (L = 'near') or
     (L = 'nostackframe') or (L = 'assembler') or (L = 'compilerproc') or
     (L = 'platform') or (L = 'deprecated') or (L = 'experimental') or
-    (L = 'unimplemented') or (L = 'library') or (L = 'interrupt');
+    (L = 'unimplemented') or (L = 'library') or (L = 'interrupt') or
+    (L = 'noinline');
 end;
 
 
