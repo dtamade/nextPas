@@ -61,12 +61,9 @@ begin
     begin
       { 接口的 method symbol 前缀(IHasher.Sum)会误判 HasClassLikeMembers,
         空 Meta 覆盖会清掉 seed 期已建的 VmtSlots 与 $vmt_slot_* consts
-        (IHasher.Write 因此长期 undefined)。已有明细的类型跳过覆盖——
-        Fields 也是明细:无 virtual 方法的类(TElementManager 等)VmtCount=0
-        但字段布局已注册,seed 空壳会清掉 Fields(b4b-i8 @FAllocator 根因)。 }
+        (IHasher.Write 因此长期 undefined)。已有明细的类型跳过覆盖。 }
       if FModel.GetTypeMeta(ExistingTypeId, Meta) and
-        ((Meta.VmtSlots <> nil) or (Meta.VmtCount > 0) or
-         (Meta.Fields <> nil)) then
+        ((Meta.VmtSlots <> nil) or (Meta.VmtCount > 0)) then
         Continue;
       ParentTypeId := 0;
       if not SameText(TypeSym.Name, 'TObject') then

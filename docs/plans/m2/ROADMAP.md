@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 B6-NOINLINE 后实测）
+## 当前战况（2026-08-17 B2-IMT 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **30** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE：parser 指令表补 noinline，platform.memory 实现区不截断)** |
-| undefined total | **43** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE：platform_virtual_* 3 符号 6 total 清零，runtime-decl 桶整桶清零)** |
+| undefined unique | **36** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE：parser 指令表补 noinline，platform.memory 实现区不截断) → 36 (B2-IMT²：IHasher.Write 清零、opt 首错推进 19700→50250 行；浮出 TStream vmt×6 + TVec×2，method-object 既有家族)** |
+| undefined total | **51** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE：platform_virtual_* 3 符号 6 total 清零，runtime-decl 桶整桶清零) → 51 (B2-IMT²)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -39,7 +39,14 @@ vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但�
 global 定义（`^@X =`）。同一 .ll 对照：旧 52/69 = 新 60/79（浮出 8 uniq：
 TStream vmt ×6 + TVec 泛型 ×2，全属 method-object 既有家族）。之后以新
 口径为准，数字只降不升纪律从 60/79 起算。
-| opt 首错 | `use of undefined value '@IHasher.Write'`——**B2 接口 vcall 域**（interface 方法调用未降级 vtable dispatch，探针 total=1） | B6-GETTID 后 |
+
+² B2-IMT 后数字**升格非回退**：IHasher.Write(1) 与 TFileStream.ReadBuffer(1)
+清零，opt 首错从 19700 行推进到 50250 行；同时 seed 期 meta 恢复让
+`@TStream.vmt`/`@TToolStatusEventVec.vmt` 表完整生成，其表项引用
+`TStream.GetPosition/SetPosition/GetSize/SetSize/Read/Write/Seek` 与
+`TVec.Create/GetDefaultGrowStrategyI`（8 uniq）计入口径——与 B5e 浮出的
+家族完全重合（method-object 桶），非新 bug。
+| opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——project-helper intrinsic 缺失类（B4 拆解表第一类） | B2-IMT 后 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己

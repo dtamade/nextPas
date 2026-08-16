@@ -516,8 +516,6 @@ type
     procedure ProcessInterfaceMethods(const ANode: TGreenNode;
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure FixupInterfaceParentImt;
-    procedure FixupAliasMethodSymbols;
-    function ResolveRecordAliasTypeName(const ATypeName: string): string;
     procedure VerifyInterfaceImplementation(const AClassTypeId: LongInt;
       const AInterfaceList: string; const AOwnerUnitId: string);
     procedure RegisterInterfaceSlots(const AClassTypeId: LongInt;
