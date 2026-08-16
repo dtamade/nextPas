@@ -1007,6 +1007,53 @@ begin
   CheckEqual('root', GHandlerCalled, '/ matches root');
 end;
 
+{ MatchPathPattern 语义矩阵（与 router 消费语义同源：':xxx' 单段非空、
+  '*xxx' 剩余可空、段数规则、折叠/空串边角） }
+procedure TestMatchPathPattern;
+begin
+  { 静态精确 }
+  Check(MatchPathPattern('/users', '/users'), 'static exact');
+  Check(not MatchPathPattern('/users', '/posts'), 'static different');
+  Check(not MatchPathPattern('/users', '/users/1'), 'static vs longer path');
+  Check(not MatchPathPattern('/users/1', '/users'), 'longer pattern vs path');
+  { 静态逐字（非前缀）}
+  Check(not MatchPathPattern('/users2', '/users'), 'static literal not prefix');
+  Check(not MatchPathPattern('/users', '/users2'), 'path longer than static');
+
+  { ':xxx' 单段通配 }
+  Check(MatchPathPattern('/users/:id', '/users/42'), 'param single');
+  Check(MatchPathPattern('/users/:id/posts/:pid', '/users/42/posts/9'), 'param multi');
+  Check(MatchPathPattern('/v1/:model/chat/completions', '/v1/gpt-4.5-turbo/chat/completions'),
+    'param dotted value');
+  Check(MatchPathPattern('/x/:p', '/x/a-b_c.d'), 'param arbitrary chars');
+  Check(not MatchPathPattern('/users/:id', '/users/42/posts'), 'param extra path seg');
+  Check(not MatchPathPattern('/users/:id/posts', '/users/42'), 'param missing path seg');
+  Check(not MatchPathPattern('/users/:id', '/users'), 'param no segment');
+
+  { '*xxx' 剩余通配（可空）}
+  Check(MatchPathPattern('/*', '/a/b/c'), 'wildcard rest');
+  Check(MatchPathPattern('/*', '/'), 'wildcard empty rest');
+  Check(MatchPathPattern('/files/*rest', '/files/a/b'), 'named wildcard rest');
+  Check(MatchPathPattern('/files/*rest', '/files/'), 'named wildcard empty rest');
+  Check(MatchPathPattern('/files/*rest', '/files'), 'named wildcard no rest segment');
+  Check(not MatchPathPattern('/a/*', '/b/c'), 'wildcard static mismatch');
+  { '*' 后段无意义（与 router InsertRoute Break 同源）}
+  Check(MatchPathPattern('/a/*x/b', '/a/z/b'), 'wildcard not last still matches rest');
+
+  { 段数 / 折叠 / 首尾斜杠 }
+  Check(MatchPathPattern('/a/b', '//a//b'), 'collapse inner slashes');
+  Check(MatchPathPattern('/a/b/', '/a/b'), 'trailing slash pattern');
+  Check(MatchPathPattern('/a/b', '/a/b/'), 'trailing slash path');
+  Check(MatchPathPattern('/', '/'), 'root matches root');
+  Check(not MatchPathPattern('/a', '/a/b/c'), 'segment count larger path');
+  Check(not MatchPathPattern('/a/b/c', '/a'), 'segment count larger pattern');
+
+  { 空串边角 }
+  Check(MatchPathPattern('', ''), 'empty matches empty');
+  Check(not MatchPathPattern('', '/'), 'empty pattern vs root');
+  Check(not MatchPathPattern('/', ''), 'root pattern vs empty');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.router');
   T.Test('Static route match', @TestStaticRouteMatch);
@@ -1041,5 +1088,6 @@ begin
   T.Test('Group: middleware applied', @TestRouterGroupWithMiddleware);
   T.Test('Group: nested prefix', @TestRouterGroupNested);
   T.Test('ServeHTTP trailing slash normalized', @TestServeHTTPTrailingSlashNormalized);
+  T.Test('MatchPathPattern matrix', @TestMatchPathPattern);
   if not T.Run then Halt(1);
 end.

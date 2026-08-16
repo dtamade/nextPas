@@ -73,6 +73,13 @@ type
 
 function NewRouter: IHttpRouter;
 
+{ 路径模式匹配（独立判定原语，与 THttpRouter 消费语义同源：nkParam 单段非空、
+  nkWildcard 剩余可空）。按 '/'-分段比较——':xxx' 段通配单个非空段；'*xxx' 段
+  （段首 '*'）通配剩余全部段（含空，须为末段，其后段无意义）；静态段逐字相等；
+  无通配时 pattern 与 path 段数必须相等。连续 '/' 折叠、首尾 '/' 忽略（等价
+  请求路径规范化）；空 pattern 只匹配空 path。 }
+function MatchPathPattern(const APattern, APath: string): Boolean;
+
 implementation
 
 uses
@@ -99,6 +106,60 @@ begin
       Exit;
     Inc(Result);
   end;
+end;
+
+{ MatchPathPattern: 单趟双指针扫描，语义与 token888 侧使用方对齐
+  （连续 '/' 折叠 → 段必然非空；'*' 段即返回 True → nkWildcard consumes rest
+  可空；无 '*' 时段数须相等）。零分配（仅静态段比较时 Copy 单段）。 }
+function MatchPathPattern(const APattern, APath: string): Boolean;
+var
+  LP, LE: SizeInt; { pattern 当前段起止（LE 指向段后 '/' 或串尾） }
+  LQ, LF: SizeInt; { path 当前段起止 }
+begin
+  Result := False;
+  if (APattern = '') or (APath = '') then
+    Exit(APattern = APath);
+
+  LP := 1;
+  LQ := 1;
+  while LP <= Length(APattern) do
+  begin
+    { pattern 段首：折叠前导 '/' }
+    while (LP <= Length(APattern)) and (APattern[LP] = '/') do
+      Inc(LP);
+    if LP > Length(APattern) then
+      Break;
+    LE := LP;
+    while (LE <= Length(APattern)) and (APattern[LE] <> '/') do
+      Inc(LE);
+
+    { '*xxx' 段：匹配剩余全部（可空）——其后段无意义 }
+    if APattern[LP] = '*' then
+      Exit(True);
+
+    { path 需有当前段（折叠前导 '/'，段非空） }
+    while (LQ <= Length(APath)) and (APath[LQ] = '/') do
+      Inc(LQ);
+    if LQ > Length(APath) then
+      Exit;
+    LF := LQ;
+    while (LF <= Length(APath)) and (APath[LF] <> '/') do
+      Inc(LF);
+
+    { ':xxx' 单段通配；静态段逐字相等 }
+    if (APattern[LP] <> ':') and
+       (Copy(APattern, LP, LE - LP) <> Copy(APath, LQ, LF - LQ)) then
+      Exit;
+
+    { 推进到下一段 }
+    LP := LE;
+    LQ := LF;
+  end;
+
+  { path 剩余段：折叠 '/' 后必须空 }
+  while (LQ <= Length(APath)) and (APath[LQ] = '/') do
+    Inc(LQ);
+  Result := LQ > Length(APath);
 end;
 
 { Normalize request path: strip trailing slash, collapse duplicate slashes.
