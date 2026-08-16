@@ -637,6 +637,7 @@ var
   LSparseValues: TIndexedConfigValueArray;
   LUseSparse: Boolean;
 begin
+  LSegment := '';
   LLowerPrefix := LowerCase(APrefix);
   LDenseValues := nil;
   LSparseValues := nil;
@@ -698,6 +699,7 @@ var
   LSlot: Integer;
   LStored: Integer;
 begin
+  Result := 0;
   if ACount <= 0 then
     Exit(-1);
 

@@ -178,6 +178,7 @@ var
   LDst: PByte;
   LOutSize: SizeUInt;
 begin
+  FillChar(ADst, 0, 0);
   LOutSize := DigestOutputSize(MD5_DIGEST_SIZE, ASize);
   if LOutSize = 0 then Exit;
   HashRequireBuffer(ADst, LOutSize, 'MD5.Sum');

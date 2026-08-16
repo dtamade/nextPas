@@ -254,6 +254,7 @@ var
   LHash: QWord;
   LKey: PtrUInt;
 begin
+  Result := False;
   // 查询 aKey+1，与 Insert 的存储格式一致 (CS-014)
   LKey := aKey + 1;
   LHash := MulHash64(LKey);

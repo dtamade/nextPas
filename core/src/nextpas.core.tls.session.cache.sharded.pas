@@ -289,6 +289,8 @@ var
   Found: Boolean;
 begin
   // 已在锁内调用
+  OldestKey := '';
+  OldestTime := 0;
   ToRemove := FMap.GetCount - FMaxEntries;
   while ToRemove > 0 do
   begin

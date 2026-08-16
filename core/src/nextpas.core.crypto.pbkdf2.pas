@@ -37,6 +37,7 @@ var
   LU, LT: TBytes;
   LHmac: IHasher;
 begin
+  FillChar(LBlockIdx, SizeOf(LBlockIdx), 0);
   LDigestSize := GetDigestSize(AAlgo);
   SetLength(Result, AKeyLen);
   LBlockCount := (AKeyLen + LDigestSize - 1) div LDigestSize;

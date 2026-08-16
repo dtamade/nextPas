@@ -124,6 +124,8 @@ var
   LX0, LY0, LX1, LY1, LX2, LY2: Single;
   LCount: Int32;
 begin
+  LX2 := 0;
+  LY2 := 0;
   SetLength(ALines, 0);
   if AOutline.ContourCount <= 0 then
     Exit;

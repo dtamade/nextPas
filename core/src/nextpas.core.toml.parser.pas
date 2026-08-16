@@ -1018,6 +1018,7 @@ var
   LPrevUnderscore: Boolean;
   LDigitCount: Int32;
 begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
   LStart := Pos;
   LNeg := False;
   LBase := 10;

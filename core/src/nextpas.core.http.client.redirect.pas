@@ -114,6 +114,7 @@ var
   LPortValue: Int64;
   LI: SizeInt;
 begin
+  LPortValue := 0;
   Result := True;
   LAuthorityStart := Pos('://', ALocation);
   if LAuthorityStart = 0 then

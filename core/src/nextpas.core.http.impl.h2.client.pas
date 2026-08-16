@@ -355,6 +355,7 @@ var
   LConsumed: SizeUInt;
   LErrorCode: UInt32;
 begin
+  AFrame := Default(TH2Frame);
   { Deliver any coalesced writes before blocking on the peer. }
   FlushWriteBuffer;
   while not DecodeNextFrame(AFrame, LConsumed) do
@@ -1019,6 +1020,7 @@ var
   LFrame: TH2Frame;
   LConsumed: SizeUInt;
 begin
+  LFrame := Default(TH2Frame);
   while DecodeNextFrame(LFrame, LConsumed) do
   begin
     if (LFrame.Header.StreamID <> 0) and (LFrame.Header.StreamID <> AStreamID) then

@@ -356,6 +356,7 @@ var
   LOutCount, LOutCap: Integer;
   LSB: TStringBuilder;
 begin
+  LCsiStart := 0;
   System.SetLength(Result, 0);
   if ALen <= 0 then
     Exit;

@@ -67,6 +67,7 @@ function TStampedLock.ReadLock: Int64;
 var
   LOld, LNew: Int64;
 begin
+  Result := 0;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
@@ -110,6 +111,7 @@ var
   LStart: TInstant;
   LOld, LNew: Int64;
 begin
+  Result := 0;
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TStampedLock.TryReadLockTimeout: timeout must be > 0');
   LStart := TInstant.Now;
@@ -138,6 +140,7 @@ function TStampedLock.WriteLock: Int64;
 var
   LOld, LNew: Int64;
 begin
+  Result := 0;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
@@ -183,6 +186,7 @@ var
   LStart: TInstant;
   LOld, LNew: Int64;
 begin
+  Result := 0;
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TStampedLock.TryWriteLockTimeout: timeout must be > 0');
   LStart := TInstant.Now;

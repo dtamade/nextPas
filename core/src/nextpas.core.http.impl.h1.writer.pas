@@ -512,6 +512,7 @@ var
   LFlusher: IFlusher;
   LOutbound: IH1OutboundBuffer;
 begin
+  LOutbound := nil;
   { Flush is non-terminating: SSE and other streaming protocols Flush between
     frames; only the conn loop's FinalizeResponse writes the terminal chunk. }
   if FFinalized then

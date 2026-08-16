@@ -245,6 +245,8 @@ var
   LCloseAfterDrain: Boolean;
   LInlineOnReactor: Boolean;
 begin
+  LOutbound := nil;
+  LCloseAfterDrain := False;
   AOwnership := tscoServer;
   AState.ClearPollReadDeadline;
 
@@ -473,6 +475,7 @@ var
     Result := tsprDone;
   end;
 begin
+  Result := tsprWait;
   AOwnership := tscoServer;
 
   while True do

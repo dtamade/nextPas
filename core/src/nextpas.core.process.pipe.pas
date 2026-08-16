@@ -564,6 +564,7 @@ var
   LRead: SizeUInt;
   LStdoutLen, LStderrLen: Integer;
 begin
+  LRead := 0;
   if ALimited then
     Exit;
 

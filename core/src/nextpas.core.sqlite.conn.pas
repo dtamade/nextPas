@@ -264,6 +264,7 @@ function TSqliteQuery.Step: Boolean;
 var
   LRC: Integer;
 begin
+  Result := False;
   LRC := sqlite3_step(FStmt);
   case LRC of
     SQLITE_ROW: Result := True;

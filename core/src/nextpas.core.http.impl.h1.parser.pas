@@ -295,6 +295,8 @@ var
   LNegative: Boolean;
   LCh: AnsiChar;
 begin
+  LStart := 0;
+  LStop := 0;
   AResult := 0;
   if (AValuePtr = nil) or
      (not SpanTrimBounds(AValuePtr, AValueLen, LStart, LStop)) then

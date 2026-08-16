@@ -200,6 +200,7 @@ var
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
   LMask, LEmptyMask: TMask16;
 begin
+  Result := False;
   if FCapacity = 0 then Exit(False);
   Lh := SwissHashI32(UInt32(AKey));
   Lh2 := Lh and $7F;
@@ -324,6 +325,7 @@ var
   LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
   LMask, LEmptyMask: TMask16;
 begin
+  Result := False;
   if FCapacity = 0 then Exit(False);
   Lh := SwissHashI32(UInt32(AKey));
   Lh2 := Lh and $7F;

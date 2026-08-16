@@ -2704,6 +2704,7 @@ var
   LECPrivateScalar: TBytes;
   LDigest: TBytes;
 begin
+  LEM := nil;
   SetLength(ASignature, 0);
   AError := '';
   Result := False;

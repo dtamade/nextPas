@@ -988,6 +988,7 @@ var
   LRng: TRandomGen;
   LLen, LPos, LPos2, LBlockLen, I, LTmp: Integer;
 begin
+  Result := nil;
   EnsureFuzzRng;
   LLen := Length(AData);
 

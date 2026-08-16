@@ -1034,6 +1034,7 @@ var
   LIdx: PJsonObjectIndex;
   LH, LSlot, LKeyIdx: UInt32;
 begin
+  Result := JSON_NODE_NONE;
   if (FIndices = nil) or (AObjectIdx >= FIndexCap) then Exit(JSON_NODE_NONE);
   LIdx := @FIndices[AObjectIdx];
   if LIdx^.Slots = nil then Exit(JSON_NODE_NONE);

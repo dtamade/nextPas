@@ -152,6 +152,7 @@ var LByte: Byte; I: SizeInt; LOutputPos: SizeInt;
   LStackBuf: array[0..STACK_BUF_SIZE - 1] of AnsiChar;
   LHeapStr: AnsiString;
 begin
+  FillChar(LStackBuf, SizeOf(LStackBuf), 0);
   ATruncated := False;
   if (AData = nil) or (ADataLen <= 0) then Exit('');
   LOutputPos := 0; LNode := HUFF_ROOT; I := 0;

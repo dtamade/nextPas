@@ -284,6 +284,8 @@ var
   end;
 
 begin
+  LSegCount := 0;
+  LSegments := nil;
   if ARoot = nil then
     ARoot := NewNode('', nkStatic);
 

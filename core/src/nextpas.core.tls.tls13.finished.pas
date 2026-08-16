@@ -157,6 +157,7 @@ function TLS13FinishedKeyForCipherSuite(
   const ATrafficSecret: TBytes
 ): TBytes;
 begin
+  Result := nil;
   if TLS13CipherSuiteIsSHA256(ACipherSuite) then
     Exit(TLS13FinishedKeySHA256(ATrafficSecret));
 
@@ -171,6 +172,7 @@ function TLS13ComputeFinishedVerifyDataForCipherSuite(
   const AFinishedKey, ATranscriptHash: TBytes
 ): TBytes;
 begin
+  Result := nil;
   if TLS13CipherSuiteIsSHA256(ACipherSuite) then
     Exit(TLS13ComputeFinishedVerifyDataSHA256(AFinishedKey, ATranscriptHash));
 
@@ -185,6 +187,7 @@ function TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(
   const ATrafficSecret, ATranscriptHash: TBytes
 ): TBytes;
 begin
+  Result := nil;
   if TLS13CipherSuiteIsSHA256(ACipherSuite) then
     Exit(TLS13ComputeFinishedVerifyDataFromTrafficSecretSHA256(ATrafficSecret, ATranscriptHash));
 
@@ -199,6 +202,7 @@ function TLS13VerifyFinishedForCipherSuite(
   const ATrafficSecret, ATranscriptHash, APeerVerifyData: TBytes
 ): Boolean;
 begin
+  Result := False;
   if TLS13CipherSuiteIsSHA256(ACipherSuite) then
     Exit(TLS13VerifyFinishedSHA256(ATrafficSecret, ATranscriptHash, APeerVerifyData));
 

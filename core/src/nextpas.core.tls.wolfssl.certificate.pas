@@ -960,6 +960,7 @@ function TWolfSSLCertificate.GetPublicKeyAlgorithm: string;
 var
   LSignatureAlgorithm: string;
 begin
+  Result := '';
   if TryGetParsedAlgorithmMetadata(Result, LSignatureAlgorithm) and (Result <> '') then
     Exit;
 
@@ -970,6 +971,7 @@ function TWolfSSLCertificate.GetSignatureAlgorithm: string;
 var
   LPublicKeyAlgorithm: string;
 begin
+  Result := '';
   if TryGetParsedAlgorithmMetadata(LPublicKeyAlgorithm, Result) and (Result <> '') then
     Exit;
 
@@ -1005,6 +1007,7 @@ var
   LKeyUsage: TSSLStringArray;
   I: Integer;
 begin
+  LCurrentTime := 0;
   ResetCertVerifyResult(AResult);
   Result := False;
 

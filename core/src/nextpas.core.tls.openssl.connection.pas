@@ -1636,6 +1636,7 @@ var
   StatusType: Integer;
   LServerStaplingContext: ISSLServerOCSPStaplingContext;
 begin
+  LServerStaplingContext := nil;
   if (FSSL = nil) or (FContext = nil) then
     Exit;
 

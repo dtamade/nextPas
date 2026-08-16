@@ -367,6 +367,7 @@ var
   Line, Item: string;
   i, SepPos: Integer;
 begin
+  Result := nil;
 
   if ACert = nil then
     Exit;

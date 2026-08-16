@@ -172,6 +172,7 @@ function TDeadlineResponseWriter.HeadersCommitted: Boolean;
 var
   LRealCommit: IHttpResponseWriterCommitState;
 begin
+  LRealCommit := nil;
   if Supports(FReal, IHttpResponseWriterCommitState, LRealCommit) and
      LRealCommit.HeadersCommitted then
     Exit(True);

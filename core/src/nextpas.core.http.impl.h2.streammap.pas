@@ -76,6 +76,7 @@ var
   LIndex: SizeInt;
   LFirstDeleted: SizeInt;
 begin
+  Result := 0;
   LMask := FCapacity - 1;
   LIndex := (AStreamID * 2654435761) and LMask; { Fibonacci hashing }
   LFirstDeleted := -1;

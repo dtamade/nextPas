@@ -280,6 +280,7 @@ function TMpscQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
+  Result := False;
   if TryDequeue(AValue) then
     Exit(True);
   while True do
@@ -299,6 +300,7 @@ var
   LStart: TInstant;
   LRemaining: Int64;
 begin
+  Result := False;
   if TryDequeue(AValue) then
     Exit(True);
   LStart := TInstant.Now;

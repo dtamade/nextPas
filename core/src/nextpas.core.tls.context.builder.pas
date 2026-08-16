@@ -1999,6 +1999,8 @@ var
   LAutoSelectBackend: Boolean;
   I: UInt32;
 begin
+  LImportedExplicitBackend := Default(TSSLLibraryType);
+  LImportedVerifyModeExplicit := False;
   Result := Self;
 
   if AJSON = '' then
@@ -2375,6 +2377,8 @@ begin
   if AINI = '' then
     Exit;
 
+  LImportedExplicitBackend := Default(TSSLLibraryType);
+  LImportedVerifyModeExplicit := False;
   FillChar(LImportedRequirements, SizeOf(LImportedRequirements), 0);
   LHasImportedPKCS11PINMethod := False;
   LHasImportedVerifyModeExplicit := False;
@@ -2732,6 +2736,8 @@ begin
     Exit;
 
   FillChar(LImportedRequirements, SizeOf(LImportedRequirements), 0);
+  LImportedExplicitBackend := Default(TSSLLibraryType);
+  LImportedVerifyModeExplicit := False;
   LHasImportedVerifyModeExplicit := False;
   LHasExplicitBackend := False;
   LHasAutoSelectBackend := False;

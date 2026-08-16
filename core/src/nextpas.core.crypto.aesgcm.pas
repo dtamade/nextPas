@@ -285,6 +285,7 @@ var
   Nk, I: Integer;
   Temp: UInt32;
 begin
+  FillChar(AExpandedKey, SizeOf(AExpandedKey), 0);
   case Length(AKey) of
     16: begin Nk := 4; ANr := 10; end;
     24: begin Nk := 6; ANr := 12; end;

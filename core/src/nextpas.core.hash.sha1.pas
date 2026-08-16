@@ -164,6 +164,7 @@ var
   LDst: PByte;
   LOutSize: SizeUInt;
 begin
+  FillChar(ADst, 0, 0);
   LOutSize := DigestOutputSize(SHA1_DIGEST_SIZE, ASize);
   if LOutSize = 0 then Exit;
   HashRequireBuffer(ADst, LOutSize, 'SHA1.Sum');

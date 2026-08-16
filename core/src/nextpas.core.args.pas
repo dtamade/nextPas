@@ -843,6 +843,7 @@ var
   LPrev, LCurr: array[0..63] of Int32;
   LS: string;
 begin
+  FillChar(LPrev, SizeOf(LPrev), 0);
   Result := '';
   LBest := MaxInt;
   for LI := 0 to Length(FCommands) - 1 do

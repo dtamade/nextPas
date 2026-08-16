@@ -187,6 +187,7 @@ function TRobinHoodMap.FindSlot(AKey: UInt64; out AIdx: Int32): Boolean;
 var
   LIdx, LDist: Int32;
 begin
+  Result := False;
   LIdx := Int32(HashKey(AKey) mod UInt32(FCapacity));
   LDist := 0;
   while True do

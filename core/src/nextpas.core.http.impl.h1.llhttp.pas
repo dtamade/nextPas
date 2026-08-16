@@ -11718,6 +11718,7 @@ var
   err: LongInt;
   settings: PTLlhttpSettingsT;
 begin
+  Result := HPE_OK;
   if (parser^.error <> 0) then
   begin
     Result := 0;

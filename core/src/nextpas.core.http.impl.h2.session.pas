@@ -654,6 +654,7 @@ var
   LConsumed: SizeUInt;
   LErrorCode: UInt32;
 begin
+  LFrame := Default(TH2Frame);
   Result := True;
   while DecodeNextFrame(LFrame, LConsumed) do
   begin

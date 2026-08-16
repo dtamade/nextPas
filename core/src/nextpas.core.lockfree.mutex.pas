@@ -66,6 +66,7 @@ function TConcurrentMutex.Lock: Boolean;
 var
   LExpected: Int32;
 begin
+  Result := False;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
@@ -86,6 +87,7 @@ var
   LRemaining: Int64;
   LExpected: Int32;
 begin
+  Result := False;
   LStart := TInstant.Now;
   while True do
   begin

@@ -231,6 +231,9 @@ var
     Result := -1;
   end;
 begin
+  { FPC does not track Snapshot() filling this out-param; zero it up front. }
+  for LI := 0 to VV_MAX_NODES - 1 do
+    LOtherEntries[LI] := Default(TVVEntry);
   Snapshot(LSelfEntries, LSelfCount);
   if AOther <> nil then
     AOther.Snapshot(LOtherEntries, LOtherCount)

@@ -457,6 +457,8 @@ var
 begin
   // 注意: 调用者必须持有分片锁
 
+  OldestKey := '';
+  OldestTime := 0;
   MaxEntriesPerShard := FMaxEntries div SHARD_COUNT;
 
   while FShards[AShardIndex].Cache.GetCount > MaxEntriesPerShard do

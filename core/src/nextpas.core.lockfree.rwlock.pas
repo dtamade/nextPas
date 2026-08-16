@@ -66,6 +66,7 @@ end;
 
 function TConcurrentRwLock.ReadLock: Boolean;
 begin
+  Result := False;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then

@@ -63,6 +63,7 @@ var
   LI, LStart, LPart, LVal: Integer;
   LS: string;
 begin
+  FillChar(LParts, SizeOf(LParts), 0);
   LStart := 1;
   LPart := 0;
   for LI := 1 to Length(AIP) + 1 do

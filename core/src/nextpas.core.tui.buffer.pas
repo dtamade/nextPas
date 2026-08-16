@@ -604,6 +604,7 @@ var
   LX, LY, LIdx: Integer;
   LSrc: PCell;
 begin
+  LOldDyn := nil;
   if RectEquals(ANewArea, FArea) then Exit;
 
   LOldArea := FArea;

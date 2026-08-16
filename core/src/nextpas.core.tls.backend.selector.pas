@@ -773,6 +773,7 @@ var
   Reasons: TStringArray;
   Caps: TSSLBackendCapabilities;
 begin
+    Reasons := nil;
     Caps := AMatch.Capabilities;
 
     // 根据匹配情况生成原因

@@ -864,6 +864,7 @@ var
   LFrame: TWebSocketFrame;
   LMessageOpcode: TWebSocketOpcode;
 begin
+  Result := Default(TWebSocketFrame);
   { Read frames until we get a complete data message }
   while True do
   begin
@@ -1220,6 +1221,7 @@ var
   LHeaderCount: Integer;
   LHeaderBytes: SizeUInt;
 begin
+  LCh := #0;
   AStatusCode := 0;
   LHeaderCount := 0;
   LHeaderBytes := 0;

@@ -143,6 +143,7 @@ var
   LTmp: array[0..19] of AnsiChar;
   LPos, LLen, I: Int32;
 begin
+  FillChar(LTmp, SizeOf(LTmp), 0);
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then
@@ -208,6 +209,7 @@ var
   LTmp: array[0..15] of AnsiChar;
   LPos, LLen, I: Int32;
 begin
+  FillChar(LTmp, SizeOf(LTmp), 0);
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if AValue = 0 then

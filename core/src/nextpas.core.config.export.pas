@@ -150,6 +150,7 @@ var
 begin
   RequireHierarchicalConfigPath(AKey);
 
+  LSegment := '';
   LNode := Self;
   LPos := 1;
   while NextConfigPathSegment(AKey, LPos, LSegment) do

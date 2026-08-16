@@ -69,6 +69,7 @@ function TConcurrentSemaphore.Acquire: Boolean;
 var
   LOld: Int64;
 begin
+  Result := False;
   while True do
   begin
     if atomic_load(FClosed, mo_acquire) <> 0 then
@@ -90,6 +91,7 @@ var
   LStart: TInstant;
   LRemaining: Int64;
 begin
+  Result := False;
   LStart := TInstant.Now;
   while True do
   begin

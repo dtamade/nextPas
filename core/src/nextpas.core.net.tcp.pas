@@ -279,6 +279,7 @@ var
   LResult: Int32;
   LWait: Int32;
 begin
+  Result := 0;
   EnsureOpen('read');
   if ACount = 0 then Exit(0);
   while True do

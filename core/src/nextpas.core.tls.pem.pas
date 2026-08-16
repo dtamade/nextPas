@@ -450,6 +450,9 @@ var
   Block: TPEMBlock;
   I: Integer;
 begin
+  StartMarker := '';
+  EndMarker := '';
+  TypeStr := '';
   // 清除旧数据
   for I := 0 to High(FBlocks) do
     if FBlocks[I].Headers <> nil then

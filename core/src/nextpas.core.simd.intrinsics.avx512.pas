@@ -159,36 +159,43 @@ end;
 
 function avx512_set1_ps512(Value: Single): TM512;
 begin
+  Result := Default(TM512);
   AVX512SetF32x16(Result, Value);
 end;
 
 function avx512_add_ps512(const a, b: TM512): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16Binary(Result, a, b, avx512OpAdd);
 end;
 
 function avx512_sub_ps512(const a, b: TM512): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16Binary(Result, a, b, avx512OpSub);
 end;
 
 function avx512_mul_ps512(const a, b: TM512): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16Binary(Result, a, b, avx512OpMul);
 end;
 
 function avx512_div_ps512(const a, b: TM512): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16Binary(Result, a, b, avx512OpDiv);
 end;
 
 function avx512_mask_add_ps512(const src, a, b: TM512; mask: UInt16): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16MaskAdd(Result, src, a, b, mask, True);
 end;
 
 function avx512_maskz_add_ps512(const a, b: TM512; mask: UInt16): TM512;
 begin
+  Result := Default(TM512);
   AVX512ApplyF32x16MaskAdd(Result, Default(TM512), a, b, mask, False);
 end;
 

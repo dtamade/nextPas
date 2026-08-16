@@ -538,6 +538,8 @@ var
   LNameHash, LValueHash: UInt32;
   LCachedName, LCachedValue: AnsiString;
 begin
+  LCachedName := '';
+  LCachedValue := '';
   LNameHash := H2FNV1a(AName);
   LValueHash := H2FNV1a(AValue);
   LSlot := (LNameHash xor LValueHash) and 7;

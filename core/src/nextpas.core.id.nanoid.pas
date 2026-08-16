@@ -48,6 +48,7 @@ var
   LByte: Integer;
   LAttempts, LMaxAttempts: SizeUInt;
 begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
   LAlphaLen := Length(AAlphabet);
   if ASize <= 0 then
     raise EArgumentError.Create('NanoIdCustom: size must be positive');

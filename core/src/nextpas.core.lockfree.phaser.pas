@@ -185,6 +185,7 @@ var
   LStart: TInstant;
   LUseTimeout: Boolean;
 begin
+  LStart := Default(TInstant);
   LUseTimeout := ATimeoutNs > 0;
   if LUseTimeout then
     LStart := TInstant.Now;

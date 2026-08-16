@@ -312,16 +312,19 @@ end;
 
 function simd_set1_epi32(Value: LongInt): TM128;
 begin
+  Result := Default(TM128);
   SIMDSetTM128I32(Result, Value);
 end;
 
 function simd_set1_epi16(Value: SmallInt): TM128;
 begin
+  Result := Default(TM128);
   SIMDSetTM128I16(Result, Value);
 end;
 
 function simd_set1_epi8(Value: ShortInt): TM128;
 begin
+  Result := Default(TM128);
   SIMDSetTM128I8(Result, Value);
 end;
 

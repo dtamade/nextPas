@@ -311,6 +311,7 @@ function IsNativeHandleAvailable(const AObject: IInterface): Boolean;
 var
   NativeAccess: ISSLNativeHandleAccess;
 begin
+  NativeAccess := nil;
   Result := Supports(AObject, ISSLNativeHandleAccess, NativeAccess) and
             (NativeAccess.GetNativeHandle <> nil);
 end;
@@ -332,6 +333,7 @@ function IsNativeHandleValid(const AObject: IInterface): Boolean;
 var
   NativeAccess: ISSLNativeHandleAccess;
 begin
+  NativeAccess := nil;
   Result := Supports(AObject, ISSLNativeHandleAccess, NativeAccess) and
             NativeAccess.IsNativeHandleValid;
 end;

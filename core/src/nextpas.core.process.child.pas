@@ -238,6 +238,7 @@ var
   LSleepNs: Int64;
   LHaveDeadline: Boolean;
 begin
+  LDeadline := Default(TInstant);
   if FWaited then
     Exit(FLastOutput);
   { Own pipes still held → drain while reaping (INV-13). Take* clears readers. }
@@ -492,6 +493,7 @@ var
   LCancelled: Boolean;
   LPollMs: Int32;
 begin
+  LDeadline := Default(TInstant);
   if FWaited then
     Exit(FLastOutput);
   EnsureAttached;
