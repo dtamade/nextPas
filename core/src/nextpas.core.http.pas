@@ -20,6 +20,7 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.router.group,
   nextpas.core.http.middleware,
+  nextpas.core.http.middleware.auth,
   nextpas.core.http.middleware.cors,
   nextpas.core.http.middleware.recovery,
   nextpas.core.http.middleware.responsetime,
@@ -110,6 +111,9 @@ type
   TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
   TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
   TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
+  TAuthOptions = nextpas.core.http.middleware.auth.TAuthOptions;
+  TAuthValidatorFunc = nextpas.core.http.middleware.auth.TAuthValidatorFunc;
+  TAuthCredentialKind = nextpas.core.http.middleware.auth.TAuthCredentialKind;
   TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
   TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
   THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
@@ -335,6 +339,14 @@ function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware; inline;
 function RateLimitMiddleware: IHttpMiddleware; inline;
 {** @desc Rate limit middleware with custom options. }
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware; inline;
+{** @desc Auth middleware with explicit options (Authorization: Bearer <token>
+   and X-API-Key channels). Acceptance via injected validator or static
+   credential lists compared in constant time. Subject stored in the request
+   context under AUTH_SUBJECT_KEY. }
+function AuthMiddleware(const AOptions: TAuthOptions): IHttpMiddleware; inline;
+{** @desc Auth middleware driven by an injected validator (default options:
+   realm 'restricted'). }
+function AuthMiddlewareWithValidator(const AValidator: TAuthValidatorFunc): IHttpMiddleware; inline;
 {** @desc Chain handler through middleware stack (first middleware = outermost wrapper) }
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 {** @desc Conditional middleware — apply AMiddleware only when APredicate returns True. }
@@ -371,6 +383,10 @@ function ServerHeaderMiddleware: IHttpMiddleware; inline;
 function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware; inline;
 {** @desc Context middleware — wraps requests with IHttpContext for data propagation. }
 function ContextMiddleware: IHttpMiddleware; inline;
+{** @desc Create a fresh request context bag (IHttpContext).
+   Attach with IHttpRequestWithContext.SetContext; owning middleware detaches
+   it after the handler returns. }
+function NewHttpContext: IHttpContext; inline;
 {** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
 {** @desc Typed context helpers (owned string/Int64 boxes). }
@@ -430,6 +446,8 @@ function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inli
 const
   HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
   HTTP_DEFAULT_BODY_READ_MAX = nextpas.core.http.base.HTTP_DEFAULT_BODY_READ_MAX;
+  { Context key for AuthMiddleware's authenticated subject. }
+  AUTH_SUBJECT_KEY = nextpas.core.http.middleware.auth.AUTH_SUBJECT_KEY;
 
 {** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
 function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
@@ -961,6 +979,16 @@ begin
   Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddlewareWith(AOptions);
 end;
 
+function AuthMiddleware(const AOptions: TAuthOptions): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.auth.AuthMiddleware(AOptions);
+end;
+
+function AuthMiddlewareWithValidator(const AValidator: TAuthValidatorFunc): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.auth.AuthMiddlewareWithValidator(AValidator);
+end;
+
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 begin
   Result := nextpas.core.http.middleware.Chain(AHandler, AMiddlewares);
@@ -1042,6 +1070,11 @@ end;
 function ContextMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.context.ContextMiddleware;
+end;
+
+function NewHttpContext: IHttpContext;
+begin
+  Result := nextpas.core.http.middleware.context.NewHttpContext;
 end;
 
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
