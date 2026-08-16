@@ -120,6 +120,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
   
   FFIPSEnabled := Result;
@@ -295,6 +296,7 @@ begin
     else
       Result := True; // 如果没有策略，默认信任
   finally
+    LReg.Free;
   end;
 end;
 
@@ -335,6 +337,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
 end;
 
@@ -361,6 +364,7 @@ begin
       end;
     end;
   finally
+    LReg.Free;
   end;
 end;
 
