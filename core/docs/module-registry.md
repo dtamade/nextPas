@@ -45,8 +45,10 @@ completion claim.
 | `json` | L2 | JSON format | `nextpas.core.json` | L0-L1 | focused-runtime |
 | `lockfree` | L1 | lock-free structures | `nextpas.core.lockfree` | L0 | focused-runtime |
 | `log` | L3 | logging framework | `nextpas.core.log` | L0-L2, `log.intf` low-level seam | focused-runtime |
+| `mail` | L3 | mail domain: message model / RFC5322 address / MIME bridge (depends on mime) / SMTP client | `nextpas.core.mail` | L0-L2 plus mime | focused-runtime |
 | `math` | L0 | scalar math | `nextpas.core.math` | RTL, base/errors, explicit platform math seams | focused-runtime |
 | `mem` | L0 | allocation/pools | `nextpas.core.mem` | L0 only, allowlisted fs/text/os/path debt | focused-runtime, source-contract |
+| `mime` | L2 | MIME format (RFC 2045/2046/2047/2231) | `nextpas.core.mime` | L0-L1 plus text/encoding/time; sibling of multipart (mail superset) | focused-runtime |
 | `multipart` | L2 | multipart format | `nextpas.core.multipart` | L0-L1, HTTP grammar only | source-contract |
 | `net` | L2 | network facade | `nextpas.core.net` | L0-L1, platform net/io | focused-runtime, source-contract |
 | `os` | Support | transitional OS facade | `nextpas.core.os` | explicit compatibility only | source-contract |
