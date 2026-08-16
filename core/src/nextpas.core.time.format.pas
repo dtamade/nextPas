@@ -108,13 +108,16 @@ end;
 function FormatDateTime(const APattern: string; const ADT: TDateTime): string;
 var
   LDays: Int64;
-  LDayNs: Int64;
+  LSubDaySec: Int64;
   LYear, LMonth, LDay, LHour, LMinute, LSecond: Word;
   LJD, LL, LN, LI, LJ: Int64;
 begin
   // TDateTime = days since 1899-12-30 + fractional day
   LDays := Trunc(ADT);
-  LDayNs := Round(Frac(ADT) * 864000000000.0);
+  { 按整秒 Round 分解（Double 存储的天数在 46127 天量级 ULP ~400ns：按纳秒
+    分解会在秒边界出现 ±1s 抖动——9120s 的 Double 表示 = 9119.99999955s；
+    Round 到秒消抖。86400.0 显式 Double 防 FPC Single 字面量默认）。 }
+  LSubDaySec := Round(Frac(ADT) * Double(86400.0));
 
   // Decode days → Gregorian Y/M/D via Meeus "Astronomical Algorithms" §7.
   // OLE epoch midnight 1899-12-30 = JD 2415018.5; noon JDN = 2415019.
@@ -130,11 +133,9 @@ begin
   LDay   := Word(LL - (2447 * LJ) div 80);
 
   // Decode fractional day → H:M:S
-  LHour   := Word(LDayNs div 3600000000000);
-  LDayNs  := LDayNs mod 3600000000000;
-  LMinute := Word(LDayNs div 60000000000);
-  LDayNs  := LDayNs mod 60000000000;
-  LSecond := Word(LDayNs div 1000000000);
+  LHour   := Word(LSubDaySec div 3600);
+  LMinute := Word((LSubDaySec mod 3600) div 60);
+  LSecond := Word(LSubDaySec mod 60);
 
   Result := DoFormat(APattern,
     LYear, LMonth, LDay,
