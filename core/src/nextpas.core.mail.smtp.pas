@@ -260,69 +260,73 @@ var
 begin
   Result := Default(TSmtpReply);
   LBuilder.Init(128);
-  LLine := ReadLine;
-  if Length(LLine) < 3 then
-    raise ESmtpProtocolError.Create('bad smtp reply: ' + LLine);
-  for I := 1 to 3 do
-    if (LLine[I] < '0') or (LLine[I] > '9') then
-      raise ESmtpProtocolError.Create('bad smtp reply code: ' + LLine);
-  LCode := (Ord(LLine[1]) - Ord('0')) * 100 +
-           (Ord(LLine[2]) - Ord('0')) * 10 +
-           (Ord(LLine[3]) - Ord('0'));
-  Result.Code := LCode;
-  Result.Category := LCode div 100;
+  try
+    LLine := ReadLine;
+    if Length(LLine) < 3 then
+      raise ESmtpProtocolError.Create('bad smtp reply: ' + LLine);
+    for I := 1 to 3 do
+      if (LLine[I] < '0') or (LLine[I] > '9') then
+        raise ESmtpProtocolError.Create('bad smtp reply code: ' + LLine);
+    LCode := (Ord(LLine[1]) - Ord('0')) * 100 +
+             (Ord(LLine[2]) - Ord('0')) * 10 +
+             (Ord(LLine[3]) - Ord('0'));
+    Result.Code := LCode;
+    Result.Category := LCode div 100;
 
-  { 首行的码后文本 }
-  LSep := Pos('-', LLine);
-  if LSep = 4 then
-  begin
-    { 多行：首行也算一条 Lines（如 EHLO 特性列表），继续读到同码 ' ' 结尾行 }
-    SetLength(Result.Lines, 1);
-    Result.Lines[0] := Copy(LLine, 5, Length(LLine) - 4);
-    if LBuilder.Len > 0 then
-      LBuilder.AppendChar(' ');
-    LBuilder.AppendStr(Result.Lines[0]);
-    while True do
+    { 首行的码后文本 }
+    LSep := Pos('-', LLine);
+    if LSep = 4 then
     begin
-      LLine := ReadLine;
-      if Copy(LLine, 1, 4) = IntToStr(LCode) + ' ' then
+      { 多行：首行也算一条 Lines（如 EHLO 特性列表），继续读到同码 ' ' 结尾行 }
+      SetLength(Result.Lines, 1);
+      Result.Lines[0] := Copy(LLine, 5, Length(LLine) - 4);
+      if LBuilder.Len > 0 then
+        LBuilder.AppendChar(' ');
+      LBuilder.AppendStr(Result.Lines[0]);
+      while True do
       begin
-        { 结束行（可带正文） }
-        if Length(LLine) > 4 then
+        LLine := ReadLine;
+        if Copy(LLine, 1, 4) = IntToStr(LCode) + ' ' then
         begin
+          { 结束行（可带正文） }
+          if Length(LLine) > 4 then
+          begin
+            SetLength(Result.Lines, Length(Result.Lines) + 1);
+            Result.Lines[High(Result.Lines)] := Copy(LLine, 5, Length(LLine) - 4);
+            if LBuilder.Len > 0 then
+              LBuilder.AppendChar(' ');
+            LBuilder.AppendStr(Copy(LLine, 5, Length(LLine) - 4));
+          end;
+          Break;
+        end
+        else if Copy(LLine, 1, 3) = IntToStr(LCode) then
+        begin
+          { 中间行 '250-…' }
           SetLength(Result.Lines, Length(Result.Lines) + 1);
           Result.Lines[High(Result.Lines)] := Copy(LLine, 5, Length(LLine) - 4);
           if LBuilder.Len > 0 then
             LBuilder.AppendChar(' ');
           LBuilder.AppendStr(Copy(LLine, 5, Length(LLine) - 4));
-        end;
-        Break;
-      end
-      else if Copy(LLine, 1, 3) = IntToStr(LCode) then
-      begin
-        { 中间行 '250-…' }
-        SetLength(Result.Lines, Length(Result.Lines) + 1);
-        Result.Lines[High(Result.Lines)] := Copy(LLine, 5, Length(LLine) - 4);
-        if LBuilder.Len > 0 then
-          LBuilder.AppendChar(' ');
-        LBuilder.AppendStr(Copy(LLine, 5, Length(LLine) - 4));
-      end
-      else
-        raise ESmtpProtocolError.Create('smtp multiline code mismatch: ' + LLine);
-    end;
-  end
-  else
-  begin
-    { 单行 '250 …' 或裸 '250' }
-    SetLength(Result.Lines, 1);
-    if Length(LLine) > 4 then
-      Result.Lines[0] := Copy(LLine, 5, Length(LLine) - 4)
+        end
+        else
+          raise ESmtpProtocolError.Create('smtp multiline code mismatch: ' + LLine);
+      end;
+    end
     else
-      Result.Lines[0] := '';
-    LBuilder.AppendStr(Result.Lines[0]);
+    begin
+      { 单行 '250 …' 或裸 '250' }
+      SetLength(Result.Lines, 1);
+      if Length(LLine) > 4 then
+        Result.Lines[0] := Copy(LLine, 5, Length(LLine) - 4)
+      else
+        Result.Lines[0] := '';
+      LBuilder.AppendStr(Result.Lines[0]);
+    end;
+    Result.Text := LBuilder.ToString;
+  finally
+    { ReadLine 超时/取消等 raise 路径也须释放缓冲（CA-016 配对纪律） }
+    LBuilder.Done;
   end;
-  Result.Text := LBuilder.ToString;
-  LBuilder.Done;
 end;
 
 procedure TSmtpClient.SendRaw(const AData: string);
