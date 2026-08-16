@@ -13,7 +13,8 @@ uses
   nextpas.core.net.intf,
   nextpas.core.platform.socket;
 
-function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
+function NetTcpListen(const AAddr: string; const APort: UInt16;
+  const ABacklog: Int32 = NET_DEFAULT_BACKLOG): ITcpListener;
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
 { AF_UNIX 域 socket 监听/连接（Unix 平台；Windows 抛 ENetworkError unsupported）。
   UnixListen 在 APath 上建监听 socket（bind 前 unlink 旧文件，bind 后 chmod 0600）。 }
@@ -163,6 +164,10 @@ begin
   FWriteDeadline := TDeadline.Infinite;
   FLastReadTimeoutMs := 0;
   FLastWriteTimeoutMs := 0;
+  { 默认禁 Nagle：请求-回复型 TCP(SMTP/HTTP/测试回环) 下 Nagle 与 delayed ACK
+    交互会产生 ~40ms 停顿(见 mailServer888 连接级压测实测);
+    UDS 等非 TCP socket 上该 sockopt 不适用, 错误被忽略无害。 }
+  SetNoDelay(True);
 end;
 
 destructor TTcpStream.Destroy;
@@ -701,7 +706,8 @@ begin
     Result := Result + ': ' + string(PAnsiChar(@LBuf[0]));
 end;
 
-function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
+function NetTcpListen(const AAddr: string; const APort: UInt16;
+  const ABacklog: Int32): ITcpListener;
 var
   LSock: TPlatformSocket;
   LSa: TPlatformSockAddr;
@@ -738,7 +744,7 @@ begin
     platform_socket_close(LSock);
     raise ENetworkError.Create(TcpListenBindError(LResult));
   end;
-  LResult := platform_socket_listen(LSock, NET_DEFAULT_BACKLOG);
+  LResult := platform_socket_listen(LSock, ABacklog);
   if LResult <> 0 then
   begin
     platform_socket_close(LSock);

@@ -331,12 +331,14 @@ var
   LFilled: Boolean;
 begin
   { Fill the listen backlog so a subsequent connect blocks, then assert dial
-    timeout. External blackhole IPs are unreliable under transparent proxies. }
-  LListener := TcpListen('127.0.0.1', 0);
+    timeout. External blackhole IPs are unreliable under transparent proxies.
+    小 backlog(4)显式指定: 默认 backlog 已提升到 4096(万级连接压测反哺),
+    256 个填充连接在 4096 队列下不再触发超时。 }
+  LListener := TcpListen('127.0.0.1', 0, 4);
   LPort := LListener.LocalAddr.Port;
   SetLength(LFillers, 0);
   LFilled := False;
-  for I := 1 to 256 do
+  for I := 1 to 32 do
   begin
     try
       LConn := TcpConnect('127.0.0.1', LPort, 100);
