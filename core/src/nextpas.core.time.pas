@@ -68,7 +68,10 @@ uses
   nextpas.core.platform.time;
 
 const
-  UNIX_EPOCH_TDATETIME = 25569.0;
+  { 显式 Double：FPC 浮点字面量默认 Single（4 字节），2026 年量级
+    （~46250 天）下 Single 秒级分钟精度即丢（实测 ~168s/拍）。类型化
+    常量使 TDateTime 域全部算术保持 Double 精确。 }
+  UNIX_EPOCH_TDATETIME: Double = 25569.0;
 
 function DateTimeNow: TDateTime;
 var
@@ -109,7 +112,7 @@ end;
 
 function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 begin
-  Result := Trunc((ANewer - AOlder) * 86400.0);
+  Result := Trunc((ANewer - AOlder) * Double(86400.0));   // Double 精度保秒
 end;
 
 function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
@@ -124,7 +127,7 @@ end;
 
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
 begin
-  Result := AValue + (ASeconds / 86400.0);
+  Result := AValue + (ASeconds / Double(86400.0));   // Int64/86400 走 Single 会丢精度
 end;
 
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate;
@@ -241,12 +244,19 @@ end;
 
 function DateTimeToUnix(const AValue: TDateTime): Int64;
 begin
-  Result := Round((AValue - UNIX_EPOCH_TDATETIME) * 86400.0);
+  { 用 Double 宽度做日->秒换算：FPC 浮点字面量默认是 Single（4 字节），
+    Single 在 2026 年量级 Unix 秒（~1.78e9）只保留 ~24bit，分钟精度即丢
+    （实测丢 ~168s）。字面量经 Double() 参与运算，Round 前误差降至亚秒。 }
+  Result := Round((Double(AValue) - Double(UNIX_EPOCH_TDATETIME)) *
+    Double(86400.0));
 end;
 
 function UnixToDateTime(const AValue: Int64): TDateTime;
 begin
-  Result := AValue / 86400.0 + UNIX_EPOCH_TDATETIME;
+  { 同上：Single 字面量在 Int64/86400 时溢出尾数丢失分钟精度。
+    Int64->Double 精确（<2^53），除 Double(86400.0) 保持双精度。 }
+  Result := Double(AValue) / Double(86400.0) +
+    Double(UNIX_EPOCH_TDATETIME);
 end;
 
 end.

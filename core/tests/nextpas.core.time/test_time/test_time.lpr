@@ -279,6 +279,22 @@ begin
   // Negative: exact day boundary
   CheckEqual(Int64(-86400), DateTimeToUnix(UnixToDateTime(-86400)), 'round-trip -1 day');
 
+  // 非 86400 倍数的 2026 年时刻（精度回归，FPC-1511）：浮点字面量默认
+  // Single，Int64/86400.0 走 Single 除法在此量级丢 ~分钟精度；Double()
+  // 显式转换后 round-trip 与相邻分钟可分辨必须成立。
+  CheckEqual(Int64(1786847520),
+    DateTimeToUnix(UnixToDateTime(1786847520)), 'round-trip 2026 非整天');
+  CheckEqual(Int64(1786847580),
+    DateTimeToUnix(UnixToDateTime(1786847580)), 'round-trip 2026 分钟对齐');
+  Check(UnixToDateTime(1786847520) <> UnixToDateTime(1786847560),
+    '2026 年相邻分钟可分辨（Single 网格不可分辨，修前必失败）');
+  Check(Abs(UnixToDateTime(1786847520) - UnixToDateTime(1786847580)) -
+    1.0 / 1440.0 < 1e-9, '2026 年相邻分钟差恰为 1 分钟');
+  // FormatDateTime(TDateTime) 日内纳秒因子回归（曾误用 8.64e11 = 1/100 天，
+  // 非整分钟显示错 100 倍）：2026-08-16T02:32:00Z
+  Check(FormatDateTime('%Y-%m-%dT%H:%M:%SZ', UnixToDateTime(1786847520)) =
+    '2026-08-16T02:32:00Z', 'FormatDateTime H:M:S 精确（修前 00:01:31）');
+
   // Current time produces reasonable Unix timestamp (> 2020)
   Check(DateTimeToUnix(DateTimeUtcNow) > 1577836800, 'current time > 2020');
 end;
