@@ -153,9 +153,7 @@ uses {$IFDEF WINDOWS}nextpas.core.platform.windows.ffi,{$ENDIF}
   nextpas.core.time, nextpas.core.tls.openssl.api.utils;
 
 {$IFDEF WINDOWS}
-function WaitForMultipleObjects(nCount: DWORD; lpHandles: Pointer;
-  bWaitAll: BOOL; dwMilliseconds: DWORD): DWORD; stdcall;
-  external 'kernel32' name 'WaitForMultipleObjects';
+{ WaitForMultipleObjects 由 nextpas.core.platform.windows.ffi 提供 }
 const
   WAIT_OBJECT_0 = 0;
   INFINITE = DWORD($FFFFFFFF);

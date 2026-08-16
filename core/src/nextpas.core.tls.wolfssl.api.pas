@@ -16,7 +16,7 @@
 
 unit nextpas.core.tls.wolfssl.api;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 

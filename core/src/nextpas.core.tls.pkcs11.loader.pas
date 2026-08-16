@@ -8,7 +8,7 @@ unit nextpas.core.tls.pkcs11.loader;
 {                                                                              }
 {******************************************************************************}
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 interface
 

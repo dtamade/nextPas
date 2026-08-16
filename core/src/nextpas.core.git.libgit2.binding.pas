@@ -221,11 +221,17 @@ procedure git_worktree_free(wt: git_worktree); cdecl;
 
 implementation
 
-uses nextpas.core.platform.dl;
+uses
+  nextpas.core.platform.dl,
+  nextpas.core.os.env;
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := ALib.Handle <> 0;
+  {$ELSE}
   Result := ALib.Handle <> nil;
+  {$ENDIF}
 end;
 
 function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
@@ -1365,7 +1371,7 @@ begin
   else
     Result := '';
   {$ELSE}
-  Result := GetEnvironmentVariable(LName);
+  Result := nextpas.core.os.env.GetEnvironmentVariable(LName);
   {$ENDIF}
 end;
 
