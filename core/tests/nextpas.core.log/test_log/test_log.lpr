@@ -214,6 +214,44 @@ begin
   Check(True, 'json no crash');
 end;
 
+{ json 文件 handler 反哺测试（K35）：NewJsonFileHandler 落盘结构化行与
+  NewJsonHandler 同渲染（stdout/文件采集格式一致），且带大小轮转。 }
+procedure TestJsonFileHandler;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+  LI: Int32;
+begin
+  LPath := '/tmp/test_log_jsonfile_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewJsonFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Int('n', 42)^.Msg('file json test');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release handler
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  Check(Pos('"level":"INF"', LLine) > 0, 'json file: level');
+  Check(Pos('"msg":"file json test"', LLine) > 0, 'json file: msg');
+  Check(Pos('"key":"val"', LLine) > 0, 'json file: attr key');
+  Check(Pos('"n":42', LLine) > 0, 'json file: attr int');
+  Check(Pos('"ts":', LLine) > 0, 'json file: ts');
+  DeleteFile(LPath);
+
+  { 轮转仍工作：小 AMaxBytes 触发 .1 }
+  LPath := '/tmp/test_log_jsonfile_rot_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewJsonFileHandler(LPath, llInfo, 100, 3), llInfo);
+  for LI := 1 to 8 do
+    LL.Info^.Str('payload', 'a rather long json attribute payload value')^.Msg('rotation json line');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  Check(FileExists(LPath + '.1'), 'json file: rotation created .1');
+  Check(FileExists(LPath) or FileExists(LPath + '.1'), 'json file: main file exists');
+  DeleteFile(LPath);
+  DeleteFile(LPath + '.1');
+  DeleteFile(LPath + '.2');
+  DeleteFile(LPath + '.3');
+end;
+
 procedure TestGlobalLogger;
 begin
   ResetCapture;
@@ -1626,6 +1664,7 @@ begin
   T.Test('Send (no msg)', @TestSend);
   T.Test('Console handler', @TestConsoleHandler);
   T.Test('JSON handler', @TestJsonHandler);
+  T.Test('JSON file handler', @TestJsonFileHandler);
   T.Test('Global logger', @TestGlobalLogger);
   T.Test('Disabled no alloc', @TestDisabledNoAlloc);
   T.Test('Null logger', @TestNullLogger);

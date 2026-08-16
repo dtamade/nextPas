@@ -95,6 +95,11 @@ function NewConsoleHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
 function NewJsonHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
 function NewFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
   AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5): ILogHandler;
+{ json 渲染的文件 handler（K35 反哺）：与 NewJsonHandler 同格式的结构化行
+  落盘 + 大小轮转（AMaxBytes/AMaxFiles 同 NewFileHandler 语义），供 json
+  模式下日志采集直接读文件（日志系统可采集，无需再经 stdout 重定向）。 }
+function NewJsonFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
+  AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5): ILogHandler;
 function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
@@ -557,7 +562,7 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
-procedure WriteJsonStr(const AStr: string);
+procedure WriteJsonStrTo(var AOut: TextFile; const AStr: string);
 var
   LI: Int32;
   LCh: Char;
@@ -583,45 +588,54 @@ begin
     end;
   end;
   LBuf := LBuf + '"';
-  Write(StdErr, LBuf);
+  Write(AOut, LBuf);
 end;
 
-procedure WriteJsonAttr(var AFirst: Boolean; const AGroup: string; const LA: TAttr);
+procedure WriteJsonAttrTo(var AOut: TextFile; var AFirst: Boolean;
+  const AGroup: string; const LA: TAttr);
 var LKey: string;
 begin
-  if not AFirst then Write(StdErr, ',');
+  if not AFirst then Write(AOut, ',');
   AFirst := False;
   if AGroup <> '' then LKey := AGroup + '.' + LA.Key else LKey := LA.Key;
-  WriteJsonStr(LKey);
-  Write(StdErr, ':');
+  WriteJsonStrTo(AOut, LKey);
+  Write(AOut, ':');
   case LA.Kind of
-    akString: WriteJsonStr(LA.SVal);
-    akInt: Write(StdErr, LA.IVal);
-    akFloat: Write(StdErr, LA.FVal:0:6);
-    akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
+    akString: WriteJsonStrTo(AOut, LA.SVal);
+    akInt: Write(AOut, LA.IVal);
+    akFloat: Write(AOut, LA.FVal:0:6);
+    akBool: if LA.BVal then Write(AOut, 'true') else Write(AOut, 'false');
   end;
 end;
 
-procedure TJsonLogHandler.Handle(const ARecord: TLogRecord);
+{ 渲染一行 JSON 日志到 AOut（K35 反哺共享：TJsonLogHandler 写 StdErr 与
+  TFileHandler json 模式写文件用同一渲染，保证 stdout/落盘行格式完全一致）。 }
+procedure WriteJsonRecordTo(var AOut: TextFile; const ARecord: TLogRecord;
+  const AGroup: string; const APrefix: array of TAttr; APrefixCount: Int32);
 var
   LI: Int32;
   LFirst: Boolean;
 begin
+  Write(AOut, '{"level":"', LEVEL_NAMES[ARecord.Level], '"');
+  if ARecord.Message <> '' then
+  begin
+    Write(AOut, ',"msg":');
+    WriteJsonStrTo(AOut, ARecord.Message);
+  end;
+  Write(AOut, ',"ts":', ARecord.TimestampNs);
+  LFirst := False;
+  for LI := 0 to APrefixCount - 1 do
+    WriteJsonAttrTo(AOut, LFirst, AGroup, APrefix[LI]);
+  for LI := 0 to ARecord.AttrCount - 1 do
+    WriteJsonAttrTo(AOut, LFirst, AGroup, ARecord.Attrs[LI]);
+  WriteLn(AOut, '}');
+end;
+
+procedure TJsonLogHandler.Handle(const ARecord: TLogRecord);
+begin
   EnterCriticalSection(FLock);
   try
-    Write(StdErr, '{"level":"', LEVEL_NAMES[ARecord.Level], '"');
-    if ARecord.Message <> '' then
-    begin
-      Write(StdErr, ',"msg":');
-      WriteJsonStr(ARecord.Message);
-    end;
-    Write(StdErr, ',"ts":', ARecord.TimestampNs);
-    LFirst := False;
-    for LI := 0 to FPrefixCount - 1 do
-      WriteJsonAttr(LFirst, FGroup, FPrefix[LI]);
-    for LI := 0 to ARecord.AttrCount - 1 do
-      WriteJsonAttr(LFirst, FGroup, ARecord.Attrs[LI]);
-    WriteLn(StdErr, '}');
+    WriteJsonRecordTo(StdErr, ARecord, FGroup, FPrefix, FPrefixCount);
     { 与 ConsoleHandler 同理：行尾立即 Flush，避免缓冲滞留与其他线程粘行。 }
     System.Flush(StdErr);
   finally
@@ -761,12 +775,13 @@ type
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     FGroup: string;
+    FJson: Boolean;
     FLock: TRTLCriticalSection;
     procedure EnsureOpen;
     procedure Rotate;
   public
     constructor Create(const APath: string; AMinLevel: TLogLevel;
-      AMaxBytes: Int64; AMaxFiles: Int32);
+      AMaxBytes: Int64; AMaxFiles: Int32; AJson: Boolean = False);
     destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
@@ -776,13 +791,14 @@ type
   end;
 
 constructor TFileHandler.Create(const APath: string; AMinLevel: TLogLevel;
-  AMaxBytes: Int64; AMaxFiles: Int32);
+  AMaxBytes: Int64; AMaxFiles: Int32; AJson: Boolean);
 begin
   inherited Create;
   FPath := APath;
   FMinLevel := AMinLevel;
   FMaxBytes := AMaxBytes;
   FMaxFiles := AMaxFiles;
+  FJson := AJson;
   FOpened := False;
   FCurrentSize := 0;
   FPrefixCount := 0;
@@ -848,6 +864,7 @@ var
   LI: Int32;
   LSize: Int64;
   LKeyPrefix: string;
+  LAttr: TAttr;
 begin
   if FBroken then Exit;
   EnterCriticalSection(FLock);
@@ -857,6 +874,28 @@ begin
       if FCurrentSize >= FMaxBytes then Rotate;
       EnsureOpen;
       if not FOpened then Exit;
+      if FJson then
+      begin
+        WriteJsonRecordTo(FFile, ARecord, FGroup, FPrefix, FPrefixCount);
+        System.Flush(FFile);
+        { json 行长度以渲染字节量近似（轮转触发只需单调超限，
+          不要求字节精确）：level/msg/ts 常量 + 键值与前缀。 }
+        LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 8 +
+          Int64(Length(ARecord.Message)) + 8 +
+          Int64(Length(ARecord.Group));
+        for LI := 0 to FPrefixCount - 1 do
+        begin
+          LAttr := FPrefix[LI];
+          LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
+        end;
+        for LI := 0 to ARecord.AttrCount - 1 do
+        begin
+          LAttr := ARecord.Attrs[LI];
+          LSize := LSize + Int64(Length(LAttr.Key)) + Int64(Length(LAttr.SVal)) + 12;
+        end;
+        Inc(FCurrentSize, LSize);
+        Exit;
+      end;
       if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
       LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
       Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
@@ -912,7 +951,7 @@ begin
   // Note: child shares same path but opens independently (append mode).
   // Rotation tracking is per-instance. For production use with child loggers,
   // prefer MultiHandler with a single FileHandler + ConsoleHandler for children.
-  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
+  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles, FJson);
   LNew.FGroup := FGroup;
   SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
   for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
@@ -926,7 +965,7 @@ var
   LNew: TFileHandler;
   LI: Int32;
 begin
-  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
+  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles, FJson);
   SetLength(LNew.FPrefix, FPrefixCount);
   for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
   LNew.FPrefixCount := FPrefixCount;
@@ -940,7 +979,13 @@ end;
 function NewFileHandler(const APath: string; AMinLevel: TLogLevel;
   AMaxBytes: Int64; AMaxFiles: Int32): ILogHandler;
 begin
-  Result := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles);
+  Result := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles, False);
+end;
+
+function NewJsonFileHandler(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32): ILogHandler;
+begin
+  Result := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles, True);
 end;
 
 { TMultiHandler }
