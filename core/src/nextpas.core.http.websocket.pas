@@ -12,7 +12,9 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.net.server.intf,
+  nextpas.core.net.server.ws.session;
 
 type
   { Callback to validate WebSocket Origin header during upgrade.
@@ -95,6 +97,20 @@ function UpgradeWebSocket(const AReq: IHttpRequest;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket; overload;
 
+{ 非阻塞 WebSocket 升级（B8 第二片）：完成 HTTP 握手（校验头、发 101），
+  把连接交给事件驱动的 TNetWsFrameSession 并接入 net/server 的 poll reactor
+  （经 IHttpConnContext.HostSessionContext → HandoffHijackedConn 迁移；
+  调用线程可为 worker 或 reactor，迁移在 reactor 线程执行）。
+  与阻塞路径的差异（有意为之）：
+  - 101 响应不带 permessage-deflate 扩展头：非阻塞路径暂不协商 deflate，
+    客户端使用 RSV1 即按协议错误 1002 处理（扩展未被确认不得使用）；
+  - 返回 IWebSocketFrameSession（事件驱动）而非阻塞 IWebSocket。
+  要求：AW 支持 IHttpHijacker + IHttpConnContext 且服务器为事件驱动
+  （prefer-poll）后端，否则 EHttpError。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+
 { Connect to a WebSocket server.
   Establishes TCP connection, performs client handshake, returns IWebSocket.
   Supports ws:// and wss:// schemes.
@@ -134,6 +150,13 @@ uses
   nextpas.core.http.impl.tls.stream,
   nextpas.core.tls.random,
   nextpas.core.compress.deflate;
+
+{ 公共握手：校验头 → hijack → 101。供 UpgradeWebSocket 与
+  UpgradeWebSocketHandoff（非阻塞）共用；见下实现。 }
+procedure PerformUpgradeHandshake(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AOptions: TWebSocketOptions;
+  const AOfferDeflate: Boolean; out AConn: ITcpStream;
+  out ADeflate: Boolean); forward;
 
 type
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
@@ -536,14 +559,33 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
+  LConn: ITcpStream;
+  LDeflate: Boolean;
+begin
+  LConn := nil;
+  LDeflate := False;
+  PerformUpgradeHandshake(AReq, AW, AOptions, AOptions.EnablePermessageDeflate,
+    LConn, LDeflate);
+  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
+    False, LConn, LDeflate);
+end;
+
+{ 公共握手：校验头 → hijack → 101（AOfferDeflate 决定是否回扩展头）。
+  所有权：成功返回后 AConn 由调用方持有（阻塞路径 → TWebSocketImpl；
+  非阻塞路径 → TNetWsFrameSession + poll target）。失败抛 EHttpError。 }
+procedure PerformUpgradeHandshake(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AOptions: TWebSocketOptions;
+  const AOfferDeflate: Boolean; out AConn: ITcpStream; out ADeflate: Boolean);
+var
   LUpgrade, LKey, LVersion, LOrigin: string;
   LConnectionValues, LKeyValues, LExtValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
-  LDeflate: Boolean;
 begin
+  ADeflate := False;
+  AConn := nil;
   if AReq = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket upgrade request is nil');
   if AW = nil then
@@ -592,11 +634,10 @@ begin
       raise EHttpError.Create(hekUpgrade, 'WebSocket: Origin must be present and non-null');
   end;
 
-  LDeflate := False;
-  if AOptions.EnablePermessageDeflate then
+  if AOfferDeflate and AOptions.EnablePermessageDeflate then
   begin
     LExtValues := AReq.Headers.GetAll('sec-websocket-extensions');
-    LDeflate := HeadersOfferPermessageDeflate(LExtValues);
+    ADeflate := HeadersOfferPermessageDeflate(LExtValues);
   end;
 
   { Hijack the connection }
@@ -610,7 +651,7 @@ begin
            'Upgrade: websocket'#13#10 +
            'Connection: Upgrade'#13#10 +
            'Sec-WebSocket-Accept: ' + LAccept + #13#10;
-  if LDeflate then
+  if ADeflate then
     LResp := LResp + 'Sec-WebSocket-Extensions: ' + WS_PMD_EXTENSION_VALUE + #13#10;
   LResp := LResp + #13#10;
   try
@@ -621,8 +662,47 @@ begin
   end;
 
   ApplyWebSocketCancelToken(LConn, AOptions.EffectiveCancelToken);
-  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
-    False, LConn, LDeflate);
+  AConn := LConn;
+end;
+
+{ 非阻塞升级（B8 第二片）：见 interface 注释。 }
+function UpgradeWebSocketHandoff(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const ASink: IWebSocketFrameSink;
+  const AOptions: TNetWsFrameSessionOptions): IWebSocketFrameSession;
+var
+  LConn: ITcpStream;
+  LDeflate: Boolean;
+  LConnCtx: IHttpConnContext;
+  LSessionCtx: ITcpServerSessionContext;
+  LPush: IWebSocketFrameWorkerPush;
+  LSession: TNetWsFrameSession;
+begin
+  LConn := nil;
+  PerformUpgradeHandshake(AReq, AW, TWebSocketOptions.Default, False, LConn,
+    LDeflate);
+  if not Supports(AW, IHttpConnContext, LConnCtx) then
+  begin
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade,
+      'WebSocket upgrade requires an evented tcp server backend');
+  end;
+  LSessionCtx := LConnCtx.HostSessionContext;
+  if LSessionCtx = nil then
+  begin
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade,
+      'WebSocket upgrade requires an evented tcp server backend');
+  end;
+  LSession := TNetWsFrameSession.Create(LConn, ASink, AOptions);
+  if Supports(LSessionCtx, IWebSocketFrameWorkerPush, LPush) then
+    LSession.SetFrameWorkerPush(LPush);
+  if not LSessionCtx.HandoffHijackedConn(LConn, LSession) then
+  begin
+    LSession.Cancel;
+    LConn.Close;
+    raise EHttpError.Create(hekUpgrade, 'WebSocket upgrade handoff failed');
+  end;
+  Result := LSession;
 end;
 
 { TWebSocketImpl }

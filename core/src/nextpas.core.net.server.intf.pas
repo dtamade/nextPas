@@ -35,14 +35,35 @@ type
     procedure Shutdown;
   end;
 
-  ITcpServerSessionContext = interface
-    ['{6F1D6F1D-4D7C-4E31-9100-410000000008}']
-    function WorkerHandoff: ITcpServerWorkerHandoff;
-  end;
-
   ITcpServerSession = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000003}']
     function Run: TTcpServerConnOwnership;
+  end;
+
+  ITcpServerSessionContext = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000008}']
+    function WorkerHandoff: ITcpServerWorkerHandoff;
+    { 将已 hijack 的连接（HTTP 升级等）以 ANewSession 重新托管到本 poll target。
+      迁移在 reactor 线程执行（经 completion 队列提交）：摘除当前会话的 poll
+      注册（不关连接、不 RestoreBlocking），以 ANewSession 重挂（SetBlocking(False)
+      + 新 poll 事件）。worker 线程可调；返回 False 表示不可迁移
+      （未托管 / 已 detach / 已 drain）。成功后 ANewSession 及连接由 poll 容器接管。 }
+    function HandoffHijackedConn(const AConn: ITcpStream;
+      const ANewSession: ITcpServerSession): Boolean;
+    { 将在途的 hijack 迁移提交到 reactor 线程执行（仅可由 poll 推进方 /
+      reactor 线程调用，如 http 让位完成后）。返回 True 表示确有迁移被提交；
+      无在途迁移（未登记或已提交）返回 False。 }
+    function SubmitHijackMigration: Boolean;
+  end;
+
+  { worker 线程可用的异步 WS 帧提交：经 poll 容器 completion 队列在 reactor
+    线程交付给目标会话（SendText 等仅限会话推进方调用的语义）。实现：
+    TTcpServerPollSessionContext；由升级函数注入 TNetWsFrameSession。 }
+  IWebSocketFrameWorkerPush = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000018}']
+    procedure SubmitSendText(const AText: string);
+    procedure SubmitSendBinary(const APayload: array of Byte);
+    procedure SubmitSendClose(const ACode: UInt16; const AReason: string);
   end;
 
   ITcpServerPollDrivenSession = interface

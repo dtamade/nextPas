@@ -12,12 +12,13 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.net.server.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
 type
   TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker,
-    IHttpResponseBodyBytes, IHttpResponseWriterCommitState)
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState, IHttpConnContext)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -25,6 +26,7 @@ type
     FStatus: THttpStatus;
     FChunkedWriter: IWriter;
     FConn: ITcpStream;
+    FSessionContext: ITcpServerSessionContext;
     FHijacked: Boolean;
     FFinalized: Boolean;
     FNoBodyAllowed: Boolean;
@@ -53,6 +55,9 @@ type
       const ASuppressBody: Boolean); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
       const ASuppressBody: Boolean; const AWriteTimeoutMs: Int64); overload;
+    { 绑定承载本连接的 poll session 上下文（IHttpConnContext 支持，非阻塞升级用） }
+    procedure AttachSessionContext(const AContext: ITcpServerSessionContext);
+    function HostSessionContext: ITcpServerSessionContext;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -567,6 +572,17 @@ begin
     raise EHttpError.Create(hekProtocol, 'Connection not available for hijack');
   FHijacked := True;
   Result := FConn;
+end;
+
+procedure TH1ResponseWriter.AttachSessionContext(
+  const AContext: ITcpServerSessionContext);
+begin
+  FSessionContext := AContext;
+end;
+
+function TH1ResponseWriter.HostSessionContext: ITcpServerSessionContext;
+begin
+  Result := FSessionContext;
 end;
 
 function TH1ResponseWriter.HasCommitted: Boolean;
