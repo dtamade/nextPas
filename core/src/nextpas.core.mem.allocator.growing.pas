@@ -173,7 +173,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  LThreadId := QWord(PtrUInt(platform_thread_id));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -194,7 +194,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  LThreadId := QWord(PtrUInt(platform_thread_id));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -468,7 +468,7 @@ begin
       NpSystemFreeMem(APtr);
     Exit;
   end;
-  if LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId)) then
+  if LOwnerThreadId <> QWord(PtrUInt(platform_thread_id)) then
   begin
     CentralPoolFree(FCentrals[LIndex], 1, @APtr);
     Exit;
