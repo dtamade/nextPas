@@ -577,22 +577,25 @@ begin
   until False;
 end;
 
-{ POSIX realpath 语义的整链解析：绝对化 → 自底向上逐段展开符号链接
-  （含中间段；展开目标相对则相对父目录拼接），路径不存在 → 异常，
-  循环防护（深度上限 40，超限视为链接环）。 }
+{ POSIX realpath 语义的整链解析：绝对化 → 自底向上逐段遍历，
+  普通段 basename 压栈、符号链接段展开（目标相对则相对父目录拼接）
+  并把已压栈普通段跟到展开目标后整链重解析；
+  路径不存在 → 异常，循环防护（深度上限 40，超限视为链接环）。 }
 function FsRealPath(const APath: string): string;
 const
   MAX_SYMLINK_FOLLOW = 40;
 var
   P, Parent, Target: string;
   Depth: Integer;
+  Stack: array of string;
+  I: Integer;
 begin
   P := Trim(APath);
   if P = '' then
     raise EIOError.Create('realpath: empty path');
   if not FsPathIsAbs(P) then
     P := FsPathJoin([FsGetCwd, P]);
-  { 自底向上：解析整条路径的中间/末端符号链接，展开后从头重解析 }
+  SetLength(Stack, 0);
   Depth := 0;
   while True do
   begin
@@ -606,26 +609,25 @@ begin
       Target := FsReadlink(P);
       if not FsPathIsAbs(Target) then
         Target := FsPathJoin([FsPathDir(P), Target]);
+      { 已压栈普通段跟随展开目标（目标可能本身含符号链接，整链重解析） }
+      for I := High(Stack) downto 0 do
+        Target := FsPathJoin([Target, Stack[I]]);
       P := FsPathClean(Target);
-      Continue;   { 展开后整条重解析 }
-    end;
-    Parent := FsPathDir(P);
-    if (Parent = P) or (Parent = '') then
-      Break;      { 到根 }
-    if FsIsSymlink(Parent) then
-    begin
-      Inc(Depth);
-      if Depth > MAX_SYMLINK_FOLLOW then
-        raise EIOError.Create('realpath: too many levels of symbolic links: ' + APath);
-      Target := FsReadlink(Parent);
-      if not FsPathIsAbs(Target) then
-        Target := FsPathJoin([FsPathDir(Parent), Target]);
-      P := FsPathClean(FsPathJoin([Target, FsPathBase(P)]));
+      SetLength(Stack, 0);
       Continue;
     end;
+    { 普通段：basename 压栈，上移至父目录；到根即完成 }
+    Parent := FsPathDir(P);
+    if (Parent = P) or (Parent = '') then
+      Break;
+    SetLength(Stack, Length(Stack) + 1);
+    Stack[High(Stack)] := FsPathBase(P);
     P := Parent;
   end;
+  { 根 + 栈反序还原路径 }
   Result := P;
+  for I := High(Stack) downto 0 do
+    Result := FsPathJoin([Result, Stack[I]]);
 end;
 
 function UTF16LEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;
