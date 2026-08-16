@@ -271,6 +271,15 @@ begin
       AOwnership := AState.ExecuteCurrentRequest;
     if AOwnership <> tscoServer then
     begin
+      { hijack 让位：若连接已在途非阻塞迁移（B8-2 WS 升级），提交迁移并保持
+        本 target 存活（tsprWait + 空事件），由 reactor 摘旧挂新——不能
+        tsprDone（会 Free target + RestoreBlocking，破坏迁移前提）。 }
+      if (AOwnership = tscoHandler) and (AState.FSessionContext <> nil) and
+        AState.FSessionContext.SubmitHijackMigration then
+      begin
+        ANextEvents := [];
+        Exit(tsprWait);
+      end;
       ANextEvents := [];
       Exit(tsprDone);
     end;
@@ -333,6 +342,13 @@ begin
 
   if AOwnership <> tscoServer then
   begin
+    { hijack 让位（worker 路径）：同上，提交在途迁移并保持 target 存活。 }
+    if (AOwnership = tscoHandler) and (AState.FSessionContext <> nil) and
+      AState.FSessionContext.SubmitHijackMigration then
+    begin
+      ANextEvents := [];
+      Exit(tsprWait);
+    end;
     ANextEvents := [];
     Exit(tsprDone);
   end;

@@ -159,6 +159,14 @@ type
     function Hijack: ITcpStream;
   end;
 
+  { 连接级 HTTP 升级上下文：由 H1 响应 writer 实现，非阻塞 WS 升级
+    （nextpas.core.http.websocket.UpgradeWebSocketHandoff）经它取得
+    承载本连接 poll 注册的 session 上下文，把连接迁移到事件驱动 WS 会话。 }
+  IHttpConnContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000001D}']
+    function HostSessionContext: ITcpServerSessionContext;
+  end;
+
   { Optional commit probe for response writers.
     RecoveryMiddleware uses this to avoid rewriting a 500 after headers
     are already on the wire (or otherwise committed by the transport). }

@@ -31,7 +31,8 @@ type
     procedure Run;
   end;
 
-  TTcpReadinessServer = class(TInterfacedObject, ITcpServer)
+  TTcpReadinessServer = class(TInterfacedObject, ITcpServer,
+    ITcpServerHijackMigration)
   private
     const WAKE_USERDATA = Pointer(PtrUInt(1));
   private
@@ -71,6 +72,8 @@ type
     procedure HandlePollTarget(const ATarget: TTcpServerPollSessionTarget;
       const AEvents: TPlatformPollEvents);
     procedure HandleListenerReady(const AHandler: ITcpServerHandler);
+    procedure ExecuteMigration(const ATicket: ITcpServerPollTargetTicket;
+      const AConn: ITcpStream; const ANewSession: ITcpServerSession);
   public
     constructor Create(const AOptions: TTcpServerOptions);
     destructor Destroy; override;
@@ -176,7 +179,7 @@ end;
 function TTcpReadinessServer.CreateSessionContext: TTcpServerPollSessionContext;
 begin
   Result := TTcpServerPollSessionContext.Create(FWorkerHandoff,
-    @EnqueueCompletion, @WakeReactor);
+    @EnqueueCompletion, @WakeReactor, Self);
 end;
 
 procedure TTcpReadinessServer.RegisterPollTarget(
@@ -532,6 +535,79 @@ begin
       Continue;
     end;
     Break;
+  end;
+end;
+
+procedure TTcpReadinessServer.ExecuteMigration(
+  const ATicket: ITcpServerPollTargetTicket;
+  const AConn: ITcpStream; const ANewSession: ITcpServerSession);
+var
+  LOldTarget: TTcpServerPollSessionTarget;
+  LNewTarget: TTcpServerPollSessionTarget;
+  LContext: TTcpServerPollSessionContext;
+  LErr: Int32;
+begin
+  { reactor 线程执行（经 completion 队列）：把自己 poll 注册摘除、以新会话重挂。
+    摘旧：不 RestoreBlocking、不关连接——连接与新会话一体；旧 ticket 随后
+    detach，http 完成回调 ResolveTarget 失败即静默让位，不会 RestoreBlocking
+    破坏新会话的非阻塞 socket。
+    连接级上下文跨迁移复用：新 target 重绑同一 context（worker 推送通道
+    经 context 的 handoff ticket 解析，迁移后仍指向新会话）。 }
+  LOldTarget := nil;
+  if (ATicket = nil) or (not ATicket.ResolveTarget(LOldTarget)) or
+    (LOldTarget = nil) or (not IsTargetRegistered(LOldTarget)) then
+    Exit;
+  LNewTarget := nil;
+  LContext := nil;
+  try
+    if LOldTarget.CurrentEvents <> [] then
+    begin
+      LErr := platform_poller_remove(FPoller, LOldTarget.SocketHandle);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller remove (hijack migrate) failed (' +
+          IntToStr(LErr) + ')');
+      LOldTarget.SetCurrentEvents([]);
+    end;
+    LContext := LOldTarget.Context;
+    UnregisterPollTarget(LOldTarget);
+    LOldTarget.DetachTicket;
+    LOldTarget.Free;
+    LOldTarget := nil;
+
+    if not TryCreateTcpServerPollSessionTarget(AConn, ANewSession, LNewTarget) then
+    begin
+      CloseServerOwnedTcpConn(AConn);
+      Exit;
+    end;
+    if LContext = nil then
+      LContext := CreateSessionContext;
+    LContext.BindTarget(LNewTarget);
+    RegisterPollTarget(LNewTarget);
+    if LNewTarget.CurrentEvents <> [] then
+    begin
+      LErr := platform_poller_add(FPoller, LNewTarget.SocketHandle,
+        LNewTarget.CurrentEvents, LNewTarget);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp readiness poller add (hijack migrate) failed (' +
+          IntToStr(LErr) + ')');
+    end;
+    { 迁移启动脉冲：hijack 连接可能有 http 解析残留的字节（prepend 前缀，
+      socket 上无新数据，epoll 不会事件化），立即调度一次可读推进让其
+      进入会话。无残留时 Advance 返回 WouldBlock，幂等地回到等待。 }
+    HandlePollTarget(LNewTarget, [peReadable]);
+    LNewTarget := nil;
+  except
+    on E: Exception do
+    begin
+      { 迁移失败：摘除新 target、关闭连接，避免残留半挂状态。 }
+      if LNewTarget <> nil then
+      begin
+        UnregisterPollTarget(LNewTarget);
+        LNewTarget.Free;
+      end;
+      CloseServerOwnedTcpConn(AConn);
+      raise;
+    end;
   end;
 end;
 

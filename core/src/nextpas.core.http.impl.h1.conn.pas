@@ -648,6 +648,7 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead, FOptions.WriteTimeout);
+    (LW as TH1ResponseWriter).AttachSessionContext(FSessionContext);
     { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
       the handler runs; a handler-set date wins (SetHeader replaces). }
     HttpEnsureDateHeader(LW.GetHeaders);
@@ -767,6 +768,7 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead, FOptions.WriteTimeout);
+    (LW as TH1ResponseWriter).AttachSessionContext(FSessionContext);
     { RFC 7231 §7.1.1.2: responses SHOULD carry a Date header. Inject before
       the handler runs; a handler-set date wins (SetHeader replaces). }
     HttpEnsureDateHeader(LW.GetHeaders);
