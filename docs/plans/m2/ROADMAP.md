@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 B6-EXTDECL 后实测）
+## 当前战况（2026-08-17 B6-GETTID 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **34** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1: implementation 区 external 声明注册 binding) → 34 (B6-EXTDECL 口2: emitter 大小写敏感去重 + SeedImportedCallableSymbol CleanName)** |
-| undefined total | **52** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2)** |
+| undefined unique | **33** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID：GetCurrentThreadId 裸调归零，统一走 platform_thread_id)** |
+| undefined total | **49** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID：GetCurrentThreadId×3 清零)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -39,7 +39,7 @@ vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但�
 global 定义（`^@X =`）。同一 .ll 对照：旧 52/69 = 新 60/79（浮出 8 uniq：
 TStream vmt ×6 + TVec 泛型 ×2，全属 method-object 既有家族）。之后以新
 口径为准，数字只降不升纪律从 60/79 起算。
-| opt 首错 | `use of undefined value '@GetCurrentThreadId'`——**runtime-decl 桶**（core 调 FPC System 内建 `GetCurrentThreadId`，stub System 无声明） | B6-EXTDECL 后 |
+| opt 首错 | `use of undefined value '@IHasher.Write'`——**B2 接口 vcall 域**（interface 方法调用未降级 vtable dispatch，探针 total=1） | B6-GETTID 后 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -456,6 +456,24 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
         形态）→ 注册前截断 CleanName。新 fixture
         `tests/compiler/pass/` 由 compiler-pass 58/58 全过低证明。
         验证：undefined 34/52 稳定，无桶回升。
+- [x] **B6-GETTID GetCurrentThreadId 裸调归零** ✅（2026-08-17，
+      33/49 uniq/total，runtime-decl 桶 GetCurrentThreadId×3 清零，opt 首错
+      换人 `@IHasher.Write`）：core 8 处裸调 FPC System 内建
+      `GetCurrentThreadId`（stub System 无声明 → residual），7 处 Linux
+      生效（msqueue:223 / channel:363 / mem.central:301 /
+      mem.allocator.growing:176/197/471；platform.thread:951/956 是
+      Windows 分支，Windows 下 stub 有声明，语义正确，不动）。**定点
+      探针实证**：FPC Linux 的 `GetCurrentThreadId` = gettid 语义
+      （主线程返回 1，非 pthread descriptor 地址）→ 与 core 已有
+      `platform_thread_id`（host 层 = `UInt64(UInt32(gettid))`，Linux）语义
+      一致。修法：调用点统一改 `platform_thread_id`（与 mem.central:338
+      既有「portable thread id」实践一致，符合 owner boundary 不裸用
+      FPC System）；msqueue/channel 补 implementation uses
+      `nextpas.core.platform.thread`；msqueue/channel 哈希注释原写
+      “pthread descriptor addresses, 8MB apart” 与 gettid 小数字实况
+      矛盾，改为真实特征描述（奇常数乘法散布小步长）。验证：
+      `test_lockfree_msqueue` 20244/20244 过、0 泄漏，探针 34/52→33/49
+      稳定，无桶回升。
 - [x] **B6.5 call-site 类型一致性 + 全局名引号** ✅ c6d7d5d1c：预估的
       「一类修复工作」实测只有 **1 处** call 实参不匹配（python 静态扫描全
       .ll：SSA 定义类型 vs call 实参标注，唯一命中 = `np_string_release`
