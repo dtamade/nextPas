@@ -4,6 +4,7 @@ program test_algorithm_availability;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp;
 

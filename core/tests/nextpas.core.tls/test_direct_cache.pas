@@ -4,6 +4,7 @@ program test_direct_cache;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.time.cpu,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.lib,

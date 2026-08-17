@@ -4,6 +4,7 @@ program test_modules_quick_validation;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.bn,

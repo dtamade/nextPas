@@ -4,7 +4,7 @@ program test_constant_time_comparebuffer_contract;
 
 uses
   nextpas.core.system.sysutils,
-  nextpas.core.tls.crypto.constant_time;
+  nextpas.core.crypto.constant_time;
 
 var
   TotalTests: Integer = 0;

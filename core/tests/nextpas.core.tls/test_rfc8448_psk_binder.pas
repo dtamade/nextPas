@@ -16,9 +16,11 @@ program test_rfc8448_psk_binder;
 uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.keyschedule,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.hkdf,
+  nextpas.core.tls.keyschedule.labels,
+  nextpas.core.crypto.hmac,
   nextpas.core.tls.tls13.clienthello,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 var
   GPassCount: Integer = 0;

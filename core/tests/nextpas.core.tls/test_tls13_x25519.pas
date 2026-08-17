@@ -4,7 +4,7 @@ program test_tls13_x25519;
 
 uses
   nextpas.core.system.sysutils,
-  nextpas.core.tls.crypto.x25519;
+  nextpas.core.crypto.x25519;
 
 procedure Fail(const AMessage: string);
 begin

@@ -4,7 +4,7 @@ program test_hash;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 var
   TestsPassed, TestsFailed: Integer;
@@ -297,7 +297,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('nextpas.core.tls.crypto.hash 单元测试');
+  WriteLn('nextpas.core.crypto.hash 单元测试');
   WriteLn('========================================');
 
   TestsPassed := 0;

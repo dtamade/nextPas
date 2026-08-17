@@ -7,6 +7,7 @@ uses
   nextpas.core.thread.init,
   {$ENDIF}
   nextpas.core.system.sysutils, nextpas.core.system.classes, SyncObjs,
+  nextpas.core.system,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 

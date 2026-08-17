@@ -5,7 +5,9 @@ program test_tls13_finished;
 uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.hkdf,
+  nextpas.core.crypto.hmac,
+  nextpas.core.tls.keyschedule.labels,
   nextpas.core.tls.tls13.finished;
 
 procedure Fail(const AMessage: string);

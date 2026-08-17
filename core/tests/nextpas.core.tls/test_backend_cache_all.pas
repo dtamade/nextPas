@@ -4,6 +4,7 @@ program test_backend_cache_all;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.time.cpu,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 

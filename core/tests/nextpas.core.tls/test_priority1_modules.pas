@@ -4,6 +4,7 @@ program test_priority1_modules;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
   // Core Infrastructure
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.consts,

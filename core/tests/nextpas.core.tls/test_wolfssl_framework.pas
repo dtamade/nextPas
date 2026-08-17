@@ -22,7 +22,8 @@ program test_wolfssl_framework;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, ctypes,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, nextpas.core.text.conv,
+  nextpas.core.io.stream_adapter, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.exceptions,
@@ -128,14 +129,14 @@ begin
   Result := @STUB_WOLFSSL_NATIVE_SESSION_ID[0];
 end;
 
-function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTime(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   if GStubWolfSSLSessionUnixTime = 0 then
     GStubWolfSSLSessionUnixTime := DateTimeToUnix(Now);
   Result := GStubWolfSSLSessionUnixTime;
 end;
 
-function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): clong; cdecl;
+function StubWolfSSLSessionGetTimeout(const session: PWOLFSSL_SESSION): LongInt; cdecl;
 begin
   Result := STUB_WOLFSSL_NATIVE_SESSION_TIMEOUT;
 end;
@@ -195,8 +196,8 @@ end;
 
 function NormalizeHexish(const AValue: string): string;
 begin
-  Result := UpperCase(StringReplace(StringReplace(Trim(AValue), ':', '', [rfReplaceAll]),
-    ' ', '', [rfReplaceAll]));
+  Result := UpperCase(StringReplace(StringReplace(Trim(AValue), ':', '', True),
+    ' ', '', True));
 end;
 
 procedure TestWolfSSLConstants;
@@ -732,13 +733,13 @@ begin
       SameText(LMemoryCert.GetFingerprintSHA256, LExpectedFingerprint));
 
     Test('SaveToStream writes PEM stream',
-      LCert.SaveToStream(LStream) and (LStream.Size > 0));
+      LCert.SaveToStream(TStreamWrapper.Create(LStream)) and (LStream.Size > 0));
     if LStream.Size = 0 then
       Exit;
 
     LStream.Position := 0;
     Test('LoadFromStream accepts PEM stream roundtrip',
-      LStreamCert.LoadFromStream(LStream));
+      LStreamCert.LoadFromStream(TStreamWrapper.Create(LStream)));
     Test('LoadFromStream roundtrip preserves fingerprint truth',
       SameText(LStreamCert.GetFingerprintSHA256, LExpectedFingerprint));
   finally
@@ -1068,8 +1069,8 @@ begin
       Test('FindByFingerprint supports normalized query variant',
         LStore.FindByFingerprint(LFingerprintVariant) <> nil);
 
-      LSubjectVariant := UpperCase(StringReplace(StringReplace(LCert.GetSubject, ',', ' , ', [rfReplaceAll]),
-        '=', ' = ', [rfReplaceAll]));
+      LSubjectVariant := UpperCase(StringReplace(StringReplace(LCert.GetSubject, ',', ' , ', True),
+        '=', ' = ', True));
       Test('FindBySubject supports normalized query variant', LStore.FindBySubject(LSubjectVariant) <> nil);
       Test('FindBySubject empty query returns nil', LStore.FindBySubject('') = nil);
       LSerialCompact := NormalizeHexish(LCert.GetSerialNumber);
@@ -1090,8 +1091,8 @@ begin
       Test('Load distinct-issuer fixture for issuer query semantics',
         LCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'));
       Test('Add distinct-issuer fixture returns true', LStore.AddCertificate(LCert));
-      LIssuerVariant := UpperCase(StringReplace(StringReplace(LCert.GetIssuer, ',', ' , ', [rfReplaceAll]),
-        '=', ' = ', [rfReplaceAll]));
+      LIssuerVariant := UpperCase(StringReplace(StringReplace(LCert.GetIssuer, ',', ' , ', True),
+        '=', ' = ', True));
       Test('FindByIssuer supports normalized query variant', LStore.FindByIssuer(LIssuerVariant) <> nil);
       Test('FindByIssuer empty query returns nil', LStore.FindByIssuer('') = nil);
       Test('Remove distinct-issuer fixture succeeds', LStore.RemoveCertificate(LCert));
@@ -1272,7 +1273,7 @@ begin
     LCtx := LLib.CreateContext(sslCtxClient);
     LStream := TMemoryStream.Create;
     try
-      LConn := LCtx.CreateConnection(LStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
       Test('Fresh WolfSSL connection does not report verify success before handshake',
         LConn.GetVerifyResult = -1);
       Test('Fresh WolfSSL connection reports not-verified diagnostic before handshake',
