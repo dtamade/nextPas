@@ -2211,7 +2211,7 @@ var
   LErr: string;
   I, LDiff: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'Signer key blob should not be empty');
 
   SetLength(LTranscriptHash, 32);
@@ -2272,7 +2272,7 @@ procedure TestSignerUnitHasNoExternalBigIntDependency;
 var
   LSource: string;
 begin
-  LSource := LowerCase(LoadFileText('../../src/nextpas.core.tls.tls13.servercertverify.pas'));
+  LSource := LowerCase(LoadFileText('../../../src/nextpas.core.tls.tls13.servercertverify.pas'));
 
   AssertTrue(
     Pos('nextpas.core.tls.openssl', LSource) = 0,
@@ -2296,7 +2296,7 @@ var
   I: Integer;
   LDiff: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'Signer key blob should not be empty');
 
   LMutatedKeyDER := BuildMutatedPrivateKeyBlob(LKeyBlob);
@@ -2352,7 +2352,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'Signer key blob should not be empty');
 
   LMutatedPKeyDER := BuildMutatedPrimePPrivateKeyBlob(LKeyBlob);
@@ -2404,7 +2404,7 @@ var
   I: Integer;
   LDiff: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'Signer key blob should not be empty');
 
   LMutatedBothDER := BuildMutatedPrimePAndPrivateExponentPrivateKeyBlob(LKeyBlob);
@@ -2462,7 +2462,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(Length(AMutatedKeyDER) > 0, ATestLabel + ': failed to build mutated key DER');
 
   SetLength(LTranscriptHash, 32);
@@ -2569,7 +2569,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildMutatedPrimeQPrivateKeyBlob(LKeyBlob);
   AssertFallbackSignatureMatchesValid(LMutated, 'prime-q-inconsistent');
 end;
@@ -2579,7 +2579,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildMutatedDPPrivateKeyBlob(LKeyBlob);
   AssertFallbackSignatureMatchesValid(LMutated, 'dp-inconsistent');
 end;
@@ -2589,7 +2589,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildMutatedDQPrivateKeyBlob(LKeyBlob);
   AssertFallbackSignatureMatchesValid(LMutated, 'dq-inconsistent');
 end;
@@ -2599,7 +2599,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildMutatedQInvPrivateKeyBlob(LKeyBlob);
   AssertFallbackSignatureMatchesValid(LMutated, 'qinv-inconsistent');
 end;
@@ -2609,7 +2609,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildPrimePIsOnePrivateKeyBlob(LKeyBlob);
   AssertFallbackRetainsCRTReasonInSuccessPath(LMutated, 'RSA CRT validation failed: p/q must be > 1', 'prime-p-is-one');
 end;
@@ -2619,7 +2619,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildPrimeQEqualPrimePPrivateKeyBlob(LKeyBlob);
   AssertFallbackRetainsCRTReasonInSuccessPath(LMutated, 'RSA CRT validation failed: p and q must be distinct', 'p-equals-q');
 end;
@@ -2629,7 +2629,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildDPZeroPrivateKeyBlob(LKeyBlob);
   AssertFallbackRetainsCRTReasonInSuccessPath(LMutated, 'RSA CRT validation failed: dp/dq must be non-zero', 'dp-zero');
 end;
@@ -2639,7 +2639,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildDQZeroPrivateKeyBlob(LKeyBlob);
   AssertFallbackRetainsCRTReasonInSuccessPath(LMutated, 'RSA CRT validation failed: dp/dq must be non-zero', 'dq-zero');
 end;
@@ -2649,7 +2649,7 @@ var
   LKeyBlob: TBytes;
   LMutated: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutated := BuildQInvZeroPrivateKeyBlob(LKeyBlob);
   AssertFallbackRetainsCRTReasonInSuccessPath(LMutated, 'RSA CRT validation failed: qInv is inconsistent with q mod p', 'qinv-zero');
 end;
@@ -2725,7 +2725,7 @@ var
   end;
 
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LInput := BuildDeterministicCertVerifyInput($D8);
 
   AssertStructuredFallbackFor(BuildMutatedPrimePPrivateKeyBlob(LKeyBlob), 'fallback-matrix-primep-inconsistent');
@@ -2810,7 +2810,7 @@ var
   end;
 
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LInput := BuildDeterministicCertVerifyInput($E1);
 
   AssertStructuredReasonFor(
@@ -2899,7 +2899,7 @@ var
   end;
 
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
 
   AssertPSSFallbackSuccess(BuildMutatedPrimeQPrivateKeyBlob(LKeyBlob), TLS13_SIG_RSA_PSS_RSAE_SHA256, 'fallback-pss-primeq-rsae');
   AssertPSSFallbackSuccess(BuildMutatedPrimeQPrivateKeyBlob(LKeyBlob), TLS13_SIG_RSA_PSS_PSS_SHA256, 'fallback-pss-primeq-pss');
@@ -2988,7 +2988,7 @@ var
   end;
 
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LInput := BuildDeterministicCertVerifyInput($F6);
 
   AssertStructuredFailure(BuildMutatedPrimePPrivateKeyBlob(LKeyBlob), TLS13_SIG_RSA_PSS_RSAE_SHA256, 'fallback-wavef-primep-pkcs1');
@@ -3556,7 +3556,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'Failed to extract DER from PEM private key');
 
   SetLength(LTranscriptHash, 32);
@@ -3592,7 +3592,7 @@ var
   LIntLen: Integer;
   LDiff: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_ecdsa_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_ecdsa_key.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'ECDSA private key blob should not be empty');
 
   SetLength(LTranscriptHash, 32);
@@ -3648,7 +3648,7 @@ begin
   AssertTrue(TryReadDERLength(LSigA, LOffset, LIntLen), 'ECDSA DER s length parse failed');
   AssertTrue(LIntLen > 0, 'ECDSA DER s length should be > 0');
 
-  LRSAKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LRSAKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(
     not TryBuildTLS13CertificateVerifySignature(
       TLS13_SIG_ECDSA_SECP256R1_SHA256,
@@ -3675,7 +3675,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'Failed to extract DER from PEM private key');
   AssertTrue(LType = pemPrivateKey, 'Expected PKCS#8 PRIVATE KEY input');
 
@@ -3725,7 +3725,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LMutatedPEM := BuildPEMPrivateKeyWithLeadingJunk(LKeyBlob);
 
   SetLength(LTranscriptHash, 32);
@@ -3758,8 +3758,8 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlobA := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LKeyBlobB := LoadFileBytes('certificate/test_certs/recipient_key.pem');
+  LKeyBlobA := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LKeyBlobB := LoadFileBytes('../certificate/test_certs/recipient_key.pem');
   LCombinedPEM := BuildPEMWithMultiplePrivateKeys(LKeyBlobA, LKeyBlobB);
 
   SetLength(LTranscriptHash, 32);
@@ -3804,7 +3804,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key_1024.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key_1024.pem');
   AssertTrue(Length(LKeyBlob) > 0, 'Fixture 1024-bit key blob should not be empty');
 
   SetLength(LTranscriptHash, 32);
@@ -3834,7 +3834,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LCertBlob := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LCertBlob := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
 
   SetLength(LTranscriptHash, 32);
   for I := 0 to 31 do
@@ -3884,7 +3884,7 @@ var
   LNoKeyPEM: TBytes;
   LEncryptedPEM: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   LInput := BuildDeterministicCertVerifyInput($92);
 
   AssertSignerFailureContains(
@@ -3940,8 +3940,8 @@ var
   LInput: TBytes;
   LMalformedPEM: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LCertBlob := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LCertBlob := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
   LInput := BuildDeterministicCertVerifyInput($A8);
 
   AssertSignerFailureContains(
@@ -4038,8 +4038,8 @@ var
   LDiff: Integer;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LCertBlob := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LCertBlob := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
   LInput := BuildDeterministicCertVerifyInput($B9);
 
   AssertTrue(
@@ -4168,7 +4168,7 @@ var
   end;
 
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'small-mod-waveD: failed to extract DER');
 
   if LType = pemPrivateKey then
@@ -4203,7 +4203,7 @@ var
   LSig: TBytes;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'Failed to extract DER for malformed-DER tests');
 
   SetLength(LTranscriptHash, 32);
@@ -4258,7 +4258,7 @@ var
   LTruncated: TBytes;
   LFieldTagOffset: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'Extended-DER: failed to extract DER');
 
   if LType = pemPrivateKey then
@@ -4312,8 +4312,8 @@ var
   LCertPEM: TBytes;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LCertPEM := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LCertPEM := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
 
   SetLength(LTranscriptHash, 32);
   for I := 0 to 31 do
@@ -4503,8 +4503,8 @@ var
   LInput: TBytes;
   LErr: string;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LCertPEM := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LCertPEM := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
   LInput := BuildDeterministicCertVerifyInput($B6);
 
   AssertTrue(
@@ -4624,8 +4624,8 @@ var
   LMalformedDER: TBytes;
   LEncryptedPEM: TBytes;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
-  LCertBlob := LoadFileBytes('certificate/test_certs/signer_cert.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
+  LCertBlob := LoadFileBytes('../certificate/test_certs/signer_cert.pem');
   LInput := BuildDeterministicCertVerifyInput($C6);
   LMalformedDER := [$00, $01, $02];
   LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
@@ -4689,7 +4689,7 @@ var
   LInput: TBytes;
   LMutated: TBytes;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS1-waveg: failed to extract DER');
 
   if LType = pemPrivateKey then
@@ -4749,7 +4749,7 @@ var
   LTagOffset: Integer;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS8-shape: failed to extract DER');
   AssertTrue(LType = pemPrivateKey, 'PKCS8-shape: expected PKCS#8 key type');
 
@@ -4785,7 +4785,7 @@ var
   LOIDTagOffset: Integer;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS8-oid: failed to extract DER');
   AssertTrue(LType = pemPrivateKey, 'PKCS8-oid: expected PKCS#8 key type');
 
@@ -4825,7 +4825,7 @@ var
   LOIDLength: Integer;
   LOIDTagOffset: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS8-len: failed to extract DER');
   AssertTrue(LType = pemPrivateKey, 'PKCS8-len: expected PKCS#8 key type');
 
@@ -4878,7 +4878,7 @@ var
   LOIDLength: Integer;
   LOIDTagOffset: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS8-oid-wavee: failed to extract DER');
   AssertTrue(LType = pemPrivateKey, 'PKCS8-oid-wavee: expected PKCS#8 key type');
   AssertTrue(
@@ -5001,7 +5001,7 @@ var
   LOIDLength: Integer;
   LOIDTagOffset: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS8-oid-wavef: failed to extract DER');
   AssertTrue(LType = pemPrivateKey, 'PKCS8-oid-wavef: expected PKCS#8 key type');
   AssertTrue(
@@ -5088,7 +5088,7 @@ var
   LType: TPEMType;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS1-core: failed to extract DER');
   AssertTrue(TryExtractPKCS1FromPKCS8DER(LDER, LPKCS1), 'PKCS1-core: failed to extract inner PKCS#1 DER');
 
@@ -5121,7 +5121,7 @@ var
   LType: TPEMType;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS1-crt-tag: failed to extract DER');
   AssertTrue(TryExtractPKCS1FromPKCS8DER(LDER, LPKCS1), 'PKCS1-crt-tag: failed to extract inner PKCS#1 DER');
 
@@ -5157,7 +5157,7 @@ var
   LType: TPEMType;
   I: Integer;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS1-crt-zero: failed to extract DER');
   AssertTrue(TryExtractPKCS1FromPKCS8DER(LDER, LPKCS1), 'PKCS1-crt-zero: failed to extract inner PKCS#1 DER');
 
@@ -5191,7 +5191,7 @@ var
   LInput: TBytes;
   LMutated: TBytes;
 begin
-  LPemBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LPemBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LPemBlob, LDER, LType), 'PKCS1-len-waveD: failed to extract DER');
 
   if LType = pemPrivateKey then
@@ -5236,7 +5236,7 @@ var
   LErr: string;
   I: Integer;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
 
   SetLength(LTranscriptHash, 32);
   for I := 0 to 31 do
@@ -5265,7 +5265,7 @@ var
   LMutatedBothDER: TBytes;
   LType: TPEMType;
 begin
-  LKeyBlob := LoadFileBytes('certificate/test_certs/signer_key.pem');
+  LKeyBlob := LoadFileBytes('../certificate/test_certs/signer_key.pem');
   AssertTrue(TryExtractFirstPrivateKeyDER(LKeyBlob, LDER, LType), 'Failed to extract private key DER for double-failure test');
 
   if LType = pemPrivateKey then
