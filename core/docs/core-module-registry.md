@@ -33,6 +33,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
+| `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
 | `errors` | L0 | error facade | yes | `exception`, `base` | focused-runtime |

@@ -854,6 +854,7 @@ build/
 | `net`        | TCP/UDP Socket、地址解析           |
 | `tls`        | TLS/SSL                            |
 | `dns`        | DNS 解析                           |
+| `deliverability` | SPF/DKIM/DMARC 邮件认证        |
 | `crypto`     | 哈希、加密、签名                   |
 | `compress`   | gzip/zlib/zstd                     |
 | `json`       | JSON                               |
