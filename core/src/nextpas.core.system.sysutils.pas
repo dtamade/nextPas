@@ -112,7 +112,6 @@ function GetEnvironmentVariable(const AName: string): string;
 
 { Process }
 function GetProcessID: SizeUInt;
-function ExecuteProcess(const APath, AParams: string): Integer;
 
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
@@ -437,11 +436,6 @@ function GetProcessID: SizeUInt;
 begin
   { FPC System owns GetProcessID; no BaseUnix/Windows in system facade. }
   Result := SizeUInt(System.GetProcessID);
-end;
-
-function ExecuteProcess(const APath, AParams: string): Integer;
-begin
-  Result := SysUtils.ExecuteProcess(APath, AParams);
 end;
 
 { Working directory — delegates to platform }
