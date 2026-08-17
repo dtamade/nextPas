@@ -1802,7 +1802,9 @@ begin
     Exit;
   end;
 
-  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
+  { TConstantTime.CompareBytes returns 1 when equal, 0 when different;
+    a recovered message that differs from the expected encoding must fail. }
+  if TConstantTime.CompareBytes(LRecovered, LExpected) = 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1834,7 +1836,8 @@ begin
     Exit;
   end;
 
-  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LRecovered, LExpected) = 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1946,7 +1949,8 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA256(LMPrime);
 
-  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LH, LExpectedH) = 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
@@ -2058,7 +2062,8 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA384(LMPrime);
 
-  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
+  { CompareBytes: 1 = equal, 0 = different; different must fail. }
+  if TConstantTime.CompareBytes(LH, LExpectedH) = 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
