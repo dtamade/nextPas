@@ -83,7 +83,7 @@ var
   OtherDefinition: TSystemContractDefinition;
   OtherKind: TSystemContractKind;
 begin
-  CheckEqual(Int64(27), Int64(SystemContractCount),
+  CheckEqual(Int64(28), Int64(SystemContractCount),
     'ledger should cover every declared system contract');
   for Kind := Low(TSystemContractKind) to High(TSystemContractKind) do
   begin
