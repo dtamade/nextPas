@@ -142,6 +142,16 @@
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.compare",
+      "reason": "temporary system compatibility facade text dependency (CompareStr delegation)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.text.utils",
+      "reason": "temporary system compatibility facade text dependency (BoolToStr delegation)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.text.format",
       "reason": "temporary system compatibility facade text dependency (TextFormat forward; mirrors conv allowlist entry)"
     },

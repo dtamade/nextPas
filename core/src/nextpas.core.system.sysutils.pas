@@ -66,7 +66,8 @@ function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
 function SplitString(const S, Delimiters: string): TStringArray;
 
 { Exception ownership }
-{ 转移当前线程异常对象所有权（调用方负责 Free，RTL 语义）；无异常返回 nil。 }
+{ 仅在 except 块内有效：取得当前异常对象并把引用计数 +1，块结束时不再自动释放，
+  所有权转移给调用方（负责 Free）。FPC 该符号属 System（objpash.inc），不在 SysUtils。 }
 function AcquireExceptionObject: Pointer;
 
 { Date/Time }
@@ -118,6 +119,10 @@ function GetEnvironmentVariable(const AName: string): string;
 { Process }
 function GetProcessID: SizeUInt;
 function ExecuteProcess(const APath, AParams: string): Integer;
+{ 执行外部程序并等待退出:参数数组逐项传递(空格安全,不按空格拆分;
+  stdin/stdout/stderr 接 /dev/null)。返回退出码;-1 = 启动失败/等待失败 }
+function RunProcessWait(const APath: string;
+  const AArgs: array of string): Integer;
 
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
@@ -134,7 +139,9 @@ uses
   nextpas.core.fs,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
-  nextpas.core.text.utils;
+  nextpas.core.text.utils,
+  nextpas.core.platform.process,
+  nextpas.core.platform.process.base;
 
 { Text formatting }
 
@@ -313,7 +320,9 @@ end;
 
 function AcquireExceptionObject: Pointer;
 begin
-  Result := SysUtils.AcquireExceptionObject;
+  { FPC 3.3.x 起该符号从 SysUtils 移入 System：SysUtils 限定调用失效
+    （RTL 漂移实测），显式 System 限定避免依赖隐式解析域。 }
+  Result := System.AcquireExceptionObject;
 end;
 
 function SplitString(const S, Delimiters: string): TStringArray;
@@ -489,6 +498,39 @@ end;
 function ExecuteProcess(const APath, AParams: string): Integer;
 begin
   Result := SysUtils.ExecuteProcess(APath, AParams);
+end;
+
+function RunProcessWait(const APath: string;
+  const AArgs: array of string): Integer;
+var
+  LProc: TPlatformProcess;
+  LPipes: TPlatformProcessPipes;
+  LArgv: array of PAnsiChar;
+  LResult: TPlatformProcessResult;
+  LI, LErr: Integer;
+begin
+  Result := -1;
+  SetLength(LArgv, Length(AArgs) + 2);
+  { POSIX argv 惯例:argv[0] 必须是程序名,否则 -c 等参数整体错位 }
+  LArgv[0] := PAnsiChar(APath);
+  for LI := 0 to High(AArgs) do
+    LArgv[LI + 1] := PAnsiChar(AArgs[LI]);
+  LArgv[Length(AArgs) + 1] := nil;
+  { [] 选项:子进程 stdin/stdout/stderr 全部接 /dev/null,无管道不阻塞 }
+  if platform_process_create_piped(PAnsiChar(APath), @LArgv[0], nil, [],
+      LProc, LPipes) <> 0 then Exit;
+  try
+    platform_process_close_handle(LPipes.StdinWrite);
+    platform_process_close_handle(LPipes.StdoutRead);
+    platform_process_close_handle(LPipes.StderrRead);
+    LErr := platform_process_wait(LProc, LResult, 30000);
+    if LErr <> 0 then Exit;
+    Result := LResult.ExitCode;
+  finally
+    platform_process_close_handle(LPipes.StdinWrite);
+    platform_process_close_handle(LPipes.StdoutRead);
+    platform_process_close_handle(LPipes.StderrRead);
+  end;
 end;
 
 { Working directory — delegates to platform }
