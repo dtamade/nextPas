@@ -775,6 +775,55 @@ begin
   end;
 end;
 
+{ 选区读取 API:无选区 HasSelection=False/SelectedText='';
+  移动+Shift 选择后有选区,SelectedText=选中字节;光标在选区内时
+  选区文本不随光标移动变化(Anchor/Cur 反转由内部处理) }
+procedure TestEditorSelectionAPI;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('abcd'#10'ef', 0);
+  Check(not LEditor.HasSelection, 'no selection initially');
+  Check(LEditor.SelectedText = '', 'empty text without selection');
+  LEditor.MoveRight;          { 光标到 1 }
+  LEditor.MoveRight;          { 光标到 2 }
+  LEditor.MoveRight;          { 光标到 3:Anchor=-1 纯移动,无选区 }
+  Check(not LEditor.HasSelection, 'plain moves keep no selection');
+  LEditor.MoveLeft;           { 光标 2 }
+  { 用 Shift 扩展:HandleKey 的 kcRight+kmShift 走 MoveRightInternal(Selecting) }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 光标 3,选区 [2,3) }
+  Check(LEditor.HasSelection, 'shift moves select');
+  Check(LEditor.SelectedText = 'c', 'selected text span');
+  { Anchor 在 2:再右移扩展 }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 光标 4,选区 [2,4) }
+  Check(LEditor.SelectedText = 'cd', 'selection grows right');
+  { 反向移动(Anchor 3,光标回到 2):选区 [2,3) }
+  LEditor.HandleKey(KeyCodeEvent(kcLeft, [kmShift]).Key);
+  Check(LEditor.SelectedText = 'c', 'selection shrinks');
+end;
+
+{ 删除选区:DeleteSelected 入撤销栈,一次 Undo 恢复 }
+procedure TestEditorDeleteSelectedUndo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('hello world', 0);
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 选 'h' }
+  LEditor.HandleKey(KeyCodeEvent(kcRight, [kmShift]).Key);  { 选 'he' }
+  LEditor.DeleteSelected;
+  Check(LEditor.Content = 'llo world', 'delete selected removes span');
+  Check(not LEditor.HasSelection, 'selection cleared after delete');
+  Check(LEditor.CursorRow = 0, 'cursor stays at deletion point');
+  LEditor.Undo;
+  Check(LEditor.Content = 'hello world', 'undo restores span');
+  { 无选区时无操作(Undo 恢复含 Anchor 的快照,先 MoveTo 清选区) }
+  LEditor.MoveTo(0);
+  LEditor.DeleteSelected;
+  Check(LEditor.Content = 'hello world', 'no-op without selection');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -822,5 +871,7 @@ begin
   T.Test('MoveTo', @TestEditorMoveTo);
   T.Test('ByteOffsetAt', @TestEditorByteOffsetAt);
   T.Test('FindHits', @TestEditorFindHits);
+  T.Test('SelectionAPI', @TestEditorSelectionAPI);
+  T.Test('DeleteSelected undo', @TestEditorDeleteSelectedUndo);
   if not T.Run then Halt(1);
 end.

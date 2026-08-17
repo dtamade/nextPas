@@ -54,6 +54,11 @@ type
     procedure CutSelection;
     procedure Paste;
     procedure PasteText(const AText: AnsiString);
+    { 选区读写(宿主剪贴板集成用:系统剪贴板复制/剪切选区;
+      DeleteSelected 入撤销栈,一次 Undo 恢复) }
+    function HasSelection: Boolean;
+    function SelectedText: AnsiString;
+    procedure DeleteSelected;
     procedure DeleteLine;
     procedure Undo;
     procedure Redo;
@@ -118,12 +123,10 @@ type
     function PrevGraphemeByte: Integer;
     function NextGraphemeByte: Integer;
 
-    function HasSelection: Boolean; inline;
     procedure ClearSelection; inline;
     procedure SelectionRange(out SelStart, SelEnd: Integer);
     procedure CollapseSelectionToStart;
     procedure CollapseSelectionToEnd;
-    function SelectedText: AnsiString;
     procedure DeleteSelection;
 
     procedure PushUndo;
@@ -166,6 +169,9 @@ type
     procedure CutSelection;
     procedure Paste;
     procedure PasteText(const AText: AnsiString);
+    function HasSelection: Boolean; inline;
+    function SelectedText: AnsiString;
+    procedure DeleteSelected;
     procedure DoPaste(const AText: AnsiString);
     procedure DeleteLine;
     procedure Undo;
@@ -882,6 +888,15 @@ procedure TInputEditor.CutSelection;
 begin
   if not HasSelection then Exit;
   FClipboard := SelectedText;
+  PushUndo;
+  DeleteSelection;
+  FTargetCol := -1;
+end;
+
+{ 删除选区(宿主剪贴板剪切用,入撤销栈;一次 Undo 恢复) }
+procedure TInputEditor.DeleteSelected;
+begin
+  if not HasSelection then Exit;
   PushUndo;
   DeleteSelection;
   FTargetCol := -1;
