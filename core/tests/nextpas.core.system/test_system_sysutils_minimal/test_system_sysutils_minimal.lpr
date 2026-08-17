@@ -167,122 +167,6 @@ begin
     'Supports should reject interface the object does not implement');
 end;
 
-procedure TestSplitStringSysUtilsSemantics;
-var
-  A: nextpas.core.system.sysutils.TStringArray;
-begin
-  A := nextpas.core.system.sysutils.SplitString('a,b,c', ',');
-  Check((Length(A) = 3) and (A[0] = 'a') and (A[2] = 'c'),
-    'SplitString should split on delimiter characters');
-  A := nextpas.core.system.sysutils.SplitString('a,,b', ',');
-  Check((Length(A) = 2) and (A[0] = 'a') and (A[1] = 'b'),
-    'SplitString should drop empty segments from consecutive delimiters');
-  A := nextpas.core.system.sysutils.SplitString('ab;cd', ';');
-  Check((Length(A) = 2) and (A[1] = 'cd'),
-    'SplitString should handle single trailing segment');
-  A := nextpas.core.system.sysutils.SplitString('', ',');
-  Check(Length(A) = 0, 'SplitString should return empty array for empty input');
-  A := nextpas.core.system.sysutils.SplitString('x;y', ',;');
-  Check((Length(A) = 2) and (A[0] = 'x') and (A[1] = 'y'),
-    'SplitString should treat every delimiter character as a separator');
-end;
-
-{ StrUtils 语义：从 AFrom（1-based）起查找子串；空子串在有效范围命中 AFrom。 }
-procedure TestPosExSysUtilsSemantics;
-begin
-  CheckEqual(7,
-    nextpas.core.system.sysutils.PosEx('world', 'hello world', 1),
-    'PosEx should find substring from start');
-  CheckEqual(7,
-    nextpas.core.system.sysutils.PosEx('world', 'hello world', 4),
-    'PosEx should find substring when AFrom is before the match');
-  CheckEqual(7,
-    nextpas.core.system.sysutils.PosEx('world', 'hello world', 5),
-    'PosEx should still match when AFrom is before the match');
-  CheckEqual(2,
-    nextpas.core.system.sysutils.PosEx('o', 'foo', 2),
-    'PosEx should skip earlier occurrences');
-  CheckEqual(0,
-    nextpas.core.system.sysutils.PosEx('zz', 'abc', 1),
-    'PosEx should return 0 on no match');
-  CheckEqual(3,
-    nextpas.core.system.sysutils.PosEx('', 'abc', 3),
-    'empty substring should hit at AFrom within range');
-  CheckEqual(4,
-    nextpas.core.system.sysutils.PosEx('', 'abc', 4),
-    'empty substring should hit at one-past-end');
-  CheckEqual(0,
-    nextpas.core.system.sysutils.PosEx('', 'abc', 5),
-    'empty substring beyond range should miss');
-  CheckEqual(0,
-    nextpas.core.system.sysutils.PosEx('a', 'abc', 0),
-    'AFrom below 1 should miss');
-end;
-
-{ AcquireExceptionObject：转移当前线程异常所有权（手动 Free，不泄漏）。 }
-procedure TestAcquireExceptionObjectOwnership;
-var
-  LExc: Exception;
-begin
-  LExc := nil;
-  try
-    raise Exception.Create('ownership probe');
-  except
-    on E: Exception do
-    begin
-      LExc := Exception(nextpas.core.system.sysutils.AcquireExceptionObject);
-      Check(LExc <> nil, 'AcquireExceptionObject should return the raised object');
-      CheckEqual('ownership probe', LExc.Message,
-        'transferred exception should keep its message');
-    end;
-  end;
-  LExc.Free;
-end;
-
-{ RunProcessWait：参数数组逐项传递(空格安全),等退出返回退出码;
-  stdin/stdout/stderr 接 /dev/null,不阻塞不残留。 }
-procedure TestRunProcessWait;
-begin
-  CheckEqual(0, nextpas.core.system.sysutils.RunProcessWait('/bin/true', []),
-    'true exits 0');
-  CheckEqual(1, nextpas.core.system.sysutils.RunProcessWait('/bin/false', []),
-    'false exits 1');
-  { 空格安全的参数数组:sh -c 的整串必须作为单参数传递,拆开则语法错 }
-  CheckEqual(7, nextpas.core.system.sysutils.RunProcessWait('/bin/sh',
-    ['-c', 'exit 7']), 'args array keeps space-containing parameter intact');
-  CheckEqual(-1, nextpas.core.system.sysutils.RunProcessWait(
-    '/nonexistent-xyz-no-such', []), 'missing binary reports -1');
-end;
-
-{ CompareText：ASCII 不区分大小写比较，返回序数（FPC SysUtils 语义）。 }
-procedure TestCompareText;
-begin
-  CheckEqual(0, nextpas.core.system.sysutils.CompareText('ABC', 'abc'),
-    'CompareText should be case-insensitive equal');
-  Check(nextpas.core.system.sysutils.CompareText('a', 'b') < 0,
-    'CompareText should order ascending');
-  Check(nextpas.core.system.sysutils.CompareText('b', 'a') > 0,
-    'CompareText should report descending order');
-end;
-
-{ UnixToDateTime：Unix 秒(UTC) → 本地 TDateTime；0 = 1970-01-01（任一时区日期不变）。 }
-procedure TestUnixToDateTime;
-begin
-  CheckEqual('1970-01-01',
-    nextpas.core.system.sysutils.FormatDateTime('yyyy-mm-dd',
-      nextpas.core.system.sysutils.UnixToDateTime(0)),
-    'UnixToDateTime(0) should be the Unix epoch date');
-end;
-
-{ FreeAndNil：释放并置 nil（FPC SysUtils 语义，无类型 var）。 }
-procedure TestFreeAndNil;
-var
-  LObj: TObject;
-begin
-  LObj := TObject.Create;
-  nextpas.core.system.sysutils.FreeAndNil(LObj);
-  Check(LObj = nil, 'FreeAndNil should nil the variable');
-end;
 procedure TestEncodeDateMatchesRtlEpoch;
 begin
   Check(nextpas.core.system.sysutils.EncodeDate(1899, 12, 30) = 0,
@@ -329,30 +213,6 @@ begin
     'whole-day difference should span leap years');
 end;
 
-{ DecodeDate/UnixDateDelta:日期分解与合成往返(SysUtils 语义)。
-  EncodeDate 由 core 反哺(core TDate),此处验证门面组合一致。 }
-procedure TestDecodeEncodeDate;
-var
-  Y, M, D: Word;
-begin
-  DecodeDate(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17), Y, M, D);
-  Check((Y = 2026) and (M = 8) and (D = 17),
-    'EncodeDate/DecodeDate should roundtrip the civil date');
-  Check(nextpas.core.system.sysutils.UnixDateDelta = 25569.0,
-    'UnixDateDelta should be the TDateTime offset of the Unix epoch');
-end;
-
-{ GetTickCount64:系统运行毫秒(单调非递减) }
-procedure TestGetTickCount64;
-var
-  A, B: QWord;
-begin
-  A := nextpas.core.system.sysutils.GetTickCount64;
-  nextpas.core.system.sysutils.Sleep(5);
-  B := nextpas.core.system.sysutils.GetTickCount64;
-  Check(B >= A, 'GetTickCount64 should be monotonic non-decreasing');
-end;
-
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -367,15 +227,6 @@ begin
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
-  T.Test('SplitString follows SysUtils semantics', @TestSplitStringSysUtilsSemantics);
-  T.Test('PosEx follows StrUtils semantics', @TestPosExSysUtilsSemantics);
-  T.Test('AcquireExceptionObject transfers ownership', @TestAcquireExceptionObjectOwnership);
-  T.Test('RunProcessWait execs with args array', @TestRunProcessWait);
-  T.Test('CompareText is case-insensitive', @TestCompareText);
-  T.Test('UnixToDateTime converts epoch', @TestUnixToDateTime);
-  T.Test('FreeAndNil nils after free', @TestFreeAndNil);
-  T.Test('DecodeDate/UnixDateDelta roundtrip', @TestDecodeEncodeDate);
-  T.Test('GetTickCount64 monotonic', @TestGetTickCount64);
   T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
   T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
   T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);

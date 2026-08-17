@@ -59,16 +59,9 @@ function TrimLeft(const AStr: string): string;
 function TrimRight(const AStr: string): string;
 function UpperCase(const AStr: string): string;
 function LowerCase(const AStr: string): string;
-function CompareText(const A, B: string): Integer;
 
 { String search }
 function Pos(const ASubStr, AStr: string): Integer;
-function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
-function SplitString(const S, Delimiters: string): TStringArray;
-
-{ Exception ownership }
-{ 仅在 except 块内有效：取得当前异常对象并把引用计数 +1，块结束不自动释放；所有权转移给调用方（负责 Free）。FPC 该符号属 System（objpash.inc），不在 SysUtils。 }
-function AcquireExceptionObject: Pointer;
 
 { Date/Time }
 function Now: TDateTime;
@@ -79,11 +72,6 @@ function DateToStr(const AValue: TDateTime): string;
 function TimeToStr(const AValue: TDateTime): string;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
-function UnixToDateTime(const AValue: Int64): TDateTime;
-{ Unix epoch 到 TDateTime 起点(1899-12-30)的天数偏移(SysUtils 语义) }
-const
-  UnixDateDelta = 25569.0;
-procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
 
 { File system }
 function FileExists(const AFileName: string): Boolean;
@@ -125,18 +113,13 @@ function GetEnvironmentVariable(const AName: string): string;
 { Process }
 function GetProcessID: SizeUInt;
 function ExecuteProcess(const APath, AParams: string): Integer;
-{ 执行外部程序并等待退出:参数数组逐项传递(空格安全,不按空格拆分;stdin/stdout/stderr 接 /dev/null)。返回退出码;-1 = 启动失败/等待失败 }
-function RunProcessWait(const APath: string; const AArgs: array of string): Integer;
 
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
-function GetTickCount64: QWord;
 
 { Error handling }
 function SysErrorMessage(AErrorCode: Integer): string;
 function GetLastOSError: Integer;
-{ 置空并释放对象(FPC SysUtils 语义,无类型 var 兼容任意对象变量) }
-procedure FreeAndNil(var AObj);
 
 implementation
 
@@ -147,9 +130,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
-  nextpas.core.time,
-  nextpas.core.platform.process,
-  nextpas.core.platform.process.base;
+  nextpas.core.time;
 
 { Text formatting }
 
@@ -291,79 +272,11 @@ begin
   Result := nextpas.core.text.conv.LowerCase(AStr);
 end;
 
-function CompareText(const A, B: string): Integer;
-begin
-  { SysUtils 语义:ASCII 大小写折叠后序数比较;不能用 UCA collation(排序语义不同) }
-  Result := nextpas.core.text.compare.TextCompareI(A, B);
-end;
-
 { String search }
 
 function Pos(const ASubStr, AStr: string): Integer;
 begin
   Result := System.Pos(ASubStr, AStr);
-end;
-
-function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
-var
-  LI, LJ, LSubLen, LStrLen: Integer;
-begin
-  { StrUtils 语义：从 AFrom（1-based）起查找；空子串在有效范围内命中 AFrom。 }
-  LSubLen := Length(ASubStr);
-  LStrLen := Length(AStr);
-  Result := 0;
-  if AFrom < 1 then
-    Exit;
-  if LSubLen = 0 then
-  begin
-    if AFrom <= LStrLen + 1 then
-      Result := AFrom;
-    Exit;
-  end;
-  if AFrom > LStrLen - LSubLen + 1 then
-    Exit;
-  for LI := AFrom to LStrLen - LSubLen + 1 do
-  begin
-    LJ := 1;
-    while (LJ <= LSubLen) and (AStr[LI + LJ - 1] = ASubStr[LJ]) do
-      Inc(LJ);
-    if LJ > LSubLen then
-      Exit(LI);
-  end;
-end;
-
-function AcquireExceptionObject: Pointer;
-begin
-  { FPC 3.3.x 起该符号从 SysUtils 移入 System：SysUtils 限定调用失效
-    （RTL 漂移实测），显式 System 限定避免依赖隐式解析域。 }
-  Result := System.AcquireExceptionObject;
-end;
-
-function SplitString(const S, Delimiters: string): TStringArray;
-var
-  I, Start, Count: Integer;
-begin
-  { SysUtils 语义：按 Delimiters 中任意字符切分，连续分隔符不产生空段。 }
-  SetLength(Result, 0);
-  Count := 0;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if System.Pos(S[I], Delimiters) > 0 then
-    begin
-      if I > Start then
-      begin
-        Inc(Count);
-        SetLength(Result, Count);
-        Result[Count - 1] := System.Copy(S, Start, I - Start);
-      end;
-      Start := I + 1;
-    end;
-  if Start <= Length(S) then
-  begin
-    Inc(Count);
-    SetLength(Result, Count);
-    Result[Count - 1] := System.Copy(S, Start, Length(S) - Start + 1);
-  end;
 end;
 
 { Date/Time — delegates to platform }
@@ -418,16 +331,6 @@ begin
     raise EConvertError.CreateFmt('EncodeDate: invalid date %d-%d-%d',
       [AYear, AMonth, ADay]);
   Result := LDate.ToJulianDay - DELPHI_EPOCH_JDN;
-end;
-
-function UnixToDateTime(const AValue: Int64): TDateTime;
-begin
-  Result := nextpas.core.time.UnixToDateTime(AValue);
-end;
-
-procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
-begin
-  SysUtils.DecodeDate(AValue, AYear, AMonth, ADay);
 end;
 
 { File system — delegates to nextpas.core.fs }
@@ -541,39 +444,6 @@ begin
   Result := SysUtils.ExecuteProcess(APath, AParams);
 end;
 
-function RunProcessWait(const APath: string;
-  const AArgs: array of string): Integer;
-var
-  LProc: TPlatformProcess;
-  LPipes: TPlatformProcessPipes;
-  LArgv: array of PAnsiChar;
-  LResult: TPlatformProcessResult;
-  LI, LErr: Integer;
-begin
-  Result := -1;
-  SetLength(LArgv, Length(AArgs) + 2);
-  { POSIX argv 惯例:argv[0] 必须是程序名,否则 -c 等参数整体错位 }
-  LArgv[0] := PAnsiChar(APath);
-  for LI := 0 to High(AArgs) do
-    LArgv[LI + 1] := PAnsiChar(AArgs[LI]);
-  LArgv[Length(AArgs) + 1] := nil;
-  { [] 选项:子进程 stdin/stdout/stderr 全部接 /dev/null,无管道不阻塞 }
-  if platform_process_create_piped(PAnsiChar(APath), @LArgv[0], nil, [],
-      LProc, LPipes) <> 0 then Exit;
-  try
-    platform_process_close_handle(LPipes.StdinWrite);
-    platform_process_close_handle(LPipes.StdoutRead);
-    platform_process_close_handle(LPipes.StderrRead);
-    LErr := platform_process_wait(LProc, LResult, 30000);
-    if LErr <> 0 then Exit;
-    Result := LResult.ExitCode;
-  finally
-    platform_process_close_handle(LPipes.StdinWrite);
-    platform_process_close_handle(LPipes.StdoutRead);
-    platform_process_close_handle(LPipes.StderrRead);
-  end;
-end;
-
 { Working directory — delegates to platform }
 
 function GetCurrentDir: string;
@@ -612,11 +482,6 @@ begin
   SysUtils.Sleep(AMilliseconds);
 end;
 
-function GetTickCount64: QWord;
-begin
-  Result := SysUtils.GetTickCount64;
-end;
-
 { Error handling — delegates to SysUtils }
 
 function SysErrorMessage(AErrorCode: Integer): string;
@@ -627,11 +492,6 @@ end;
 function GetLastOSError: Integer;
 begin
   Result := SysUtils.GetLastOSError;
-end;
-
-procedure FreeAndNil(var AObj);
-begin
-  nextpas.core.base.utils.FreeAndNil(AObj);
 end;
 
 end.
