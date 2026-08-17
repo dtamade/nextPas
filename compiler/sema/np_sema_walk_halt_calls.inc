@@ -5,6 +5,7 @@ var
   Operand: string;
   Value, CondValue, Folded: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
+  AncestorName: string;
   OwnerClassName: string;
   ReceiverName: string;
   ParamSnaps: TParamSnapshots;
@@ -2774,6 +2775,24 @@ begin
             FuncName
           ) then
             DestroyFuncName := FuncName;
+          { 目标类无 Destroy 方法体($vmt_func_ 缺失或槽解析失败, 未声明
+            destructor 的类如 TAstFacade 即此): 沿祖先链找第一个有方法体的
+            X.Destroy(found-anywhere-wins), 避免 residual 成 undefined
+            @Class.Destroy。TObject.Destroy 由根 seed 兜底。 }
+          if not LookupProcedureBody(DestroyFuncName, BranchNode, DeclNode) then
+          begin
+            AncestorName := NextClassAncestorName(StringValue);
+            while AncestorName <> '' do
+            begin
+              if LookupProcedureBody(AncestorName + '.Destroy',
+                BranchNode, DeclNode) then
+              begin
+                DestroyFuncName := AncestorName + '.Destroy';
+                Break;
+              end;
+              AncestorName := NextClassAncestorName(AncestorName);
+            end;
+          end;
           FModel.AddTypedHirNode(
             'object-free-runtime',
             NPSYSTEM_OBJECT_FREE,
@@ -2828,6 +2847,22 @@ begin
               FuncName
             ) then
               DestroyFuncName := FuncName;
+            { 同直接 receiver 分支: 无 Destroy 方法体时沿祖先链
+              found-anywhere-wins, 防 residual undefined。 }
+            if not LookupProcedureBody(DestroyFuncName, BranchNode, DeclNode) then
+            begin
+              AncestorName := NextClassAncestorName(StringValue);
+              while AncestorName <> '' do
+              begin
+                if LookupProcedureBody(AncestorName + '.Destroy',
+                  BranchNode, DeclNode) then
+                begin
+                  DestroyFuncName := AncestorName + '.Destroy';
+                  Break;
+                end;
+                AncestorName := NextClassAncestorName(AncestorName);
+              end;
+            end;
             FModel.AddTypedHirNode(
               'object-free-runtime',
               NPSYSTEM_OBJECT_FREE,
