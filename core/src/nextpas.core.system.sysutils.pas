@@ -26,6 +26,7 @@ type
   EConvertError = nextpas.core.exception.EConvertError;
   EAssertionFailed = nextpas.core.exception.EAssertionFailed;
   TBytes = nextpas.core.base.TBytes;
+  TStringArray = nextpas.core.base.TStringArray;
 
 { Text formatting }
 function Format(const AFmt: string; const AArgs: array of const): string;

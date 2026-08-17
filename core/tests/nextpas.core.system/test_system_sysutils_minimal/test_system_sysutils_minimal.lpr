@@ -132,6 +132,17 @@ begin
     'CompareStr should treat prefix as smaller');
 end;
 
+procedure TestTStringArrayAliasUsable;
+var
+  A: nextpas.core.system.sysutils.TStringArray;
+begin
+  SetLength(A, 2);
+  A[0] := 'a';
+  A[1] := 'b';
+  Check((Length(A) = 2) and (A[1] = 'b'),
+    'TStringArray should alias core dynamic string array');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -144,5 +155,6 @@ begin
     @TestTryStrToIntDelegatesToTextConvOwner);
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
+  T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
   if not T.Run then Halt(1);
 end.
