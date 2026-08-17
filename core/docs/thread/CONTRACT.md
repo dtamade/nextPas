@@ -47,7 +47,11 @@ end;
 
 ```pascal
 function ThreadPool(AWorkerCount: Integer = 0): IThreadPool;
-// AWorkerCount=0 → CPU 核心数
+// AWorkerCount=0 → CPU 核心数。使用建议（实测证据，2026-08-18）：
+// 短请求/高频 handler 场景显式给小池（如 4-8）——44 逻辑核机上
+// 0(=44) 池竞争劣化（只读 handler QPS 1508 vs 显式 4 的 2128，
+// 2-16 区间持平，QPS 采样 100 并发/万请求）；重 IO/阻塞 handler
+// 场景按需调大（池线程驻留阻塞 handler）。
 
 function CancellationSource: ICancellationSource;
 ```
