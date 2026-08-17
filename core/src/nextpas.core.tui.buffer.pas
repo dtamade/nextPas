@@ -59,6 +59,9 @@ type
     DataLen: Integer;
     PixelWidth: Integer;
     PixelHeight: Integer;
+    { True = 原始编码图流（kitty f=100，终端自解码，不做 RGBA 缩放）；
+      False = 调用方已解码的 RGBA 像素（f=32）。 }
+    Encoded: Boolean;
   end;
 
   TScaledPixelBuf = array of Byte;
@@ -143,6 +146,11 @@ type
     { 图像协议支持的占位声明。DataPtr 须保持有效直到 EndFrame 完成
       （调用方拥有数据）。 }
     procedure PlaceImage(AHash: QWord; const AImgArea: TRect;
+      ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
+    { 原始编码图流（如 PNG 字节）：终端按占位矩形拉伸显示，传输用
+      kitty f=100 直传（终端自解码）。仅 ipKitty 协议输出；
+      sixel/half-block 无终端解码能力，调用方应自行降级。 }
+    procedure PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
       ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
     function ImagePlacementCount: Integer; inline;
     function ImagePlacementAt(AIndex: Integer): TImagePlacement; inline;
@@ -946,6 +954,13 @@ begin
   FImagePlacements[FImagePlacementCount].PixelWidth := APixelWidth;
   FImagePlacements[FImagePlacementCount].PixelHeight := APixelHeight;
   Inc(FImagePlacementCount);
+end;
+
+procedure TBuffer.PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
+  ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
+begin
+  PlaceImage(AHash, AImgArea, ADataPtr, ADataLen, APixelWidth, APixelHeight);
+  FImagePlacements[FImagePlacementCount - 1].Encoded := True;
 end;
 
 function TBuffer.ImagePlacementCount: Integer;
