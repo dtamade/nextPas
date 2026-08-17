@@ -1199,6 +1199,26 @@ begin
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
+    { Local type cast TypeName(expr): type declared inside the method body
+      never enters the type table, so TryGetTypeCastTargetTypeId above missed
+      it and the call fallback would residual-call @TypeName (M2:
+      PSizeUIntArray / TPthreadKeyDtor, 2 uses). Single-arg identifier head
+      with no procedure symbol/body → cast: fold the arg, no call. Inside a
+      method, a bare callee may still be an implicit-self method call
+      (TSemanticAnalyzer.NextBodyIndexForNameLocal), so only fold when the
+      qualified Class.Method lookup also misses. }
+    if (ANode.ChildCount = 2) and (ANode.ChildAt(1) <> nil) and
+      (not LookupProcedureBody(ANode.ChildAt(0).Text, BranchNode, DeclNode)) and
+      (FModel.FindSymbolByName(ANode.ChildAt(0).Text) = 0) and
+      ((FCurrentMethodClass = '') or
+       ((FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text) = 0) and
+        (not LookupProcedureBody(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text,
+          BranchNode, DeclNode)))) then
+    begin
+      ABlob := '';
+      if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
+        Exit(True);
+    end;
     if TryEncodeInterlockedValueCall(ANode, ABlob) then
       Exit(True);
     ABlob := '';

@@ -124,8 +124,17 @@ begin
     end
     else if Pos('.', ANode.Text) = 0 then
     begin
-      { Type cast: TypeId(Arg) — skip call binding for type casts }
-      if TryGetTypeCastTargetTypeId(ANode, TypeCastTargetTypeId) then
+      { Type cast: TypeId(Arg) — skip call binding for type casts. The
+        TryGetTypeCastTargetTypeId lookup misses method-local types (never
+        registered in the type table); a single-arg identifier head with no
+        procedure symbol/body is still a cast, not an unknown callable
+        (M2: PSizeUIntArray / TPthreadKeyDtor in method bodies). }
+      if TryGetTypeCastTargetTypeId(ANode, TypeCastTargetTypeId) or
+        ((ANode.ChildCount = 2) and (ANode.ChildAt(0) <> nil) and
+         (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+         (MethodClass = '') and
+         (not LookupProcedureBody(ANode.ChildAt(0).Text, BodyNode, DeclNode)) and
+         (FModel.FindSymbolByName(ANode.ChildAt(0).Text) = 0)) then
       begin
         { Type cast detected; no call binding needed }
       end
