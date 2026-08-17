@@ -40,7 +40,7 @@ type
   { OSC 8 超链接 span（刀 21）：输出层 overlay——渲染方在真实重渲时扫描
     buffer 收集链接区间，设到 TTerminal；TAnsiBackend 绘制命中 cell 时
     包裹 `ESC]8;;url BEL` 开 / `ESC]8;;BEL` 关。Id <> 0 时开序列带
-    `id={Id}`（同 URL 多段共享 id 实现 hover 连续，grok osc8.rs）。
+    `id=Id`（同 URL 多段共享 id 实现 hover 连续，grok osc8.rs）。
     不参与 TCell（40 字节 QWord 比较约束），靠「链接样式（下划线/色）
     画进 cell」让 diff 输出自然携带链接重写。 }
   TTuiLinkSpan = record
