@@ -53,6 +53,14 @@ procedure AnsiDisableBracketedPaste(var B: TStringBuilder);
 procedure AnsiBeginSynchronizedUpdate(var B: TStringBuilder);
 procedure AnsiEndSynchronizedUpdate(var B: TStringBuilder);
 
+{ OSC 8 超链接（刀 21，锚 grok osc8.rs）：开 `ESC]8;id=..;url BEL` /
+  关 `ESC]8;;BEL`。BEL 终止（0x07）——OSC-BEL 后紧跟 CSI 的混合序列
+  主流终端均正确解析（如标题设置）；ST（ESC \）兼容面更窄。url 中
+  控制字符剔除，防提前终止序列/注入。 }
+procedure AnsiOsc8Open(var B: TStringBuilder; const AUrl: AnsiString;
+  AId: Cardinal = 0);
+procedure AnsiOsc8Close(var B: TStringBuilder);
+
 { Kitty keyboard progressive enhancement.
   flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
 const
@@ -100,6 +108,41 @@ begin
   B.AppendChar(';');
   B.AppendUInt(UInt64(AX) + 1);
   B.AppendChar('H');
+end;
+
+procedure AnsiOsc8Open(var B: TStringBuilder; const AUrl: AnsiString;
+  AId: Cardinal);
+var
+  LI: Integer;
+  LCh: Byte;
+begin
+  { ESC ] 8 ; params ; url BEL —— params 空时仍保留双分号（规范：`8;;url`）；
+    params 非空（id=..）时 `8;id=..;url` }
+  B.AppendByte(27); B.AppendChar(']'); B.AppendChar('8'); B.AppendChar(';');
+  if AId <> 0 then
+  begin
+    B.AppendStr('id=');
+    B.AppendUInt(AId);
+    B.AppendChar(';');
+  end
+  else
+    B.AppendChar(';');
+  for LI := 1 to System.Length(AUrl) do
+  begin
+    LCh := Byte(AUrl[LI]);
+    if (LCh < 32) or (LCh = 127) then
+      Continue;   { 剔除控制字符：防提前终止序列 / 注入 }
+    B.AppendByte(LCh);
+  end;
+  B.AppendByte(7);   { BEL }
+end;
+
+procedure AnsiOsc8Close(var B: TStringBuilder);
+begin
+  { ESC ] 8 ; ; BEL }
+  B.AppendByte(27); B.AppendChar(']'); B.AppendChar('8'); B.AppendChar(';');
+  B.AppendChar(';');
+  B.AppendByte(7);
 end;
 
 procedure AnsiClearScreen(var B: TStringBuilder);

@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
   nextpas.core.tui.backend.test,
   nextpas.core.platform.console,
@@ -505,6 +506,200 @@ begin
 end;
 
 
+{ === OSC 8 超链接（刀 21）=== }
+
+function EmptyLinkSpan: TTuiLinkSpan;
+begin
+  Result := Default(TTuiLinkSpan);
+end;
+
+procedure TestOsc8OpenNoId;
+var
+  LB: TStringBuilder;
+begin
+  LB.InitWith(64, nil);
+  try
+    AnsiOsc8Open(LB, 'https://example.com/x');
+    CheckEqual(#27']8;;https://example.com/x'#7, LB.ToString,
+      'open without id');
+  finally
+    LB.Done;
+  end;
+end;
+
+procedure TestOsc8OpenWithId;
+var
+  LB: TStringBuilder;
+begin
+  LB.InitWith(64, nil);
+  try
+    AnsiOsc8Open(LB, 'https://example.com/x', 7);
+    CheckEqual(#27']8;id=7;https://example.com/x'#7, LB.ToString,
+      'open with id');
+  finally
+    LB.Done;
+  end;
+end;
+
+procedure TestOsc8OpenStripsControlChars;
+var
+  LB: TStringBuilder;
+begin
+  LB.InitWith(64, nil);
+  try
+    AnsiOsc8Open(LB, 'https://a.b/'#27']8;evil'#7#10'x');
+    CheckEqual(#27']8;;https://a.b/]8;evilx'#7, LB.ToString,
+      'control chars stripped (no early terminate / inject)');
+  finally
+    LB.Done;
+  end;
+end;
+
+procedure TestOsc8Close;
+var
+  LB: TStringBuilder;
+begin
+  LB.InitWith(64, nil);
+  try
+    AnsiOsc8Close(LB);
+    CheckEqual(#27']8;;'#7, LB.ToString, 'close sequence');
+  finally
+    LB.Done;
+  end;
+end;
+
+{ 链接区 [0..3) 被开/关包裹，非链接区不包 }
+procedure TestOsc8DrawPatchesWrapsLinkSpan;
+var
+  LBE: TAnsiBackend;
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LLinks: array[0..0] of TTuiLinkSpan;
+  LOut: AnsiString;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LPrev.SetString(0, 0, '      ', StyleDefault);
+    LCurr.SetString(0, 0, 'A B C ', StyleDefault);
+    LPrev.Diff(LCurr, LPatches);
+
+    LLinks[0] := EmptyLinkSpan;
+    LLinks[0].Y := 0;
+    LLinks[0].ColStart := 0;
+    LLinks[0].ColEnd := 3;   { 覆盖 'A B' }
+    LLinks[0].Url := 'file:///tmp/x.txt';
+    LBE.SetLinkOverlay(LLinks);
+    LBE.DrawPatches(LPatches);
+    LOut := PendingString(LBE);
+
+    Check(Pos(#27']8;;file:///tmp/x.txt'#7, LOut) > 0, 'open emitted');
+    Check(Pos('B'#27']8;;'#7, LOut) > 0, 'close right after linked text B');
+  finally
+    LBE.Free; LPrev.Free; LCurr.Free;
+  end;
+end;
+
+{ 同一行两段不同链接：切换处关→开；id 透传 }
+procedure TestOsc8DrawPatchesLinkSwitch;
+var
+  LBE: TAnsiBackend;
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LLinks: array[0..1] of TTuiLinkSpan;
+  LOut: AnsiString;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LPrev.SetString(0, 0, '          ', StyleDefault);
+    LCurr.SetString(0, 0, 'ABCDEFGHIJ', StyleDefault);
+    LPrev.Diff(LCurr, LPatches);
+
+    LLinks[0] := EmptyLinkSpan;
+    LLinks[0].Y := 0;
+    LLinks[0].ColStart := 0;
+    LLinks[0].ColEnd := 3;   { ABC }
+    LLinks[0].Url := 'https://one.example';
+    LLinks[0].Id := 1;
+    LLinks[1] := EmptyLinkSpan;
+    LLinks[1].Y := 0;
+    LLinks[1].ColStart := 5;
+    LLinks[1].ColEnd := 8;   { FGH }
+    LLinks[1].Url := 'https://two.example';
+    LBE.SetLinkOverlay(LLinks);
+    LBE.DrawPatches(LPatches);
+    LOut := PendingString(LBE);
+
+    Check(Pos(#27']8;id=1;https://one.example'#7, LOut) > 0,
+      'first link open with id');
+    Check(Pos('C'#27']8;;'#7'D', LOut) > 0, 'first link closes after C');
+    Check(Pos(#27']8;;https://two.example'#7, LOut) > 0,
+      'second link open');
+    Check(Pos('H'#27']8;;'#7'I', LOut) > 0, 'second link closes after H');
+  finally
+    LBE.Free; LPrev.Free; LCurr.Free;
+  end;
+end;
+
+{ 无 overlay：不产生任何 OSC 8 序列 }
+procedure TestOsc8DrawPatchesNoOverlayNoWrap;
+var
+  LBE: TAnsiBackend;
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LOut: AnsiString;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LPrev.SetString(0, 0, '    ', StyleDefault);
+    LCurr.SetString(0, 0, 'TEST', StyleDefault);
+    LPrev.Diff(LCurr, LPatches);
+    { 未调 SetLinkOverlay：backend 保持空 overlay }
+    LBE.DrawPatches(LPatches);
+    LOut := PendingString(LBE);
+    Check(Pos(#27']8', LOut) = 0, 'no osc8 without overlay');
+  finally
+    LBE.Free; LPrev.Free; LCurr.Free;
+  end;
+end;
+
+{ 补丁流结束（行尾有未闭合链接）→ 显式关序列收尾 }
+procedure TestOsc8DrawPatchesClosesAtEnd;
+var
+  LBE: TAnsiBackend;
+  LPrev, LCurr: TBuffer;
+  LPatches: TDiffEntries;
+  LLinks: array[0..0] of TTuiLinkSpan;
+  LOut: AnsiString;
+begin
+  LBE := TAnsiBackend.Create(-1);
+  LPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  LCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LPrev.SetString(0, 0, '    ', StyleDefault);
+    LCurr.SetString(0, 0, 'ABC ', StyleDefault);
+    LPrev.Diff(LCurr, LPatches);
+
+    LLinks[0] := EmptyLinkSpan;
+    LLinks[0].Y := 0;
+    LLinks[0].ColStart := 0;
+    LLinks[0].ColEnd := 3;   { 链接覆盖 ABC，补丁流在行尾结束 }
+    LLinks[0].Url := 'https://end.example';
+    LBE.SetLinkOverlay(LLinks);
+    LBE.DrawPatches(LPatches);
+    LOut := PendingString(LBE);
+
+    Check(Pos('C'#27']8;;'#7, LOut) > 0, 'trailing link closed at patch end');
+  finally
+    LBE.Free; LPrev.Free; LCurr.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.backend');
   T.Test('test backend draw patches', @TestTestBackendDrawPatches);
@@ -548,5 +743,15 @@ begin
     @TestAnsiBackendBracketedPasteEnableDisable);
   T.Test('ansi backend synchronized update begin end',
     @TestAnsiBackendSynchronizedUpdateBeginEnd);
+  T.Test('osc8 open no id', @TestOsc8OpenNoId);
+  T.Test('osc8 open with id', @TestOsc8OpenWithId);
+  T.Test('osc8 open strips control chars', @TestOsc8OpenStripsControlChars);
+  T.Test('osc8 close', @TestOsc8Close);
+  T.Test('osc8 draw patches wraps link span', @TestOsc8DrawPatchesWrapsLinkSpan);
+  T.Test('osc8 draw patches link switch closes/reopens',
+    @TestOsc8DrawPatchesLinkSwitch);
+  T.Test('osc8 draw patches no overlay no wrap', @TestOsc8DrawPatchesNoOverlayNoWrap);
+  T.Test('osc8 draw patches clears link at patch end',
+    @TestOsc8DrawPatchesClosesAtEnd);
   if not T.Run then Halt(1);
 end.
