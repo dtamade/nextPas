@@ -859,6 +859,88 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.FixupAliasMethodSymbols;
+var
+  I, J: LongInt;
+  TypeId, AliasTargetId, ReturnTypeId: LongInt;
+  Meta: TTypeMetadata;
+  TypeName, TargetName, MethShort, RtName: string;
+begin
+  { record 类型别名 (TStringBuilder = TBufStringBuilder): 别名处理块只复制
+    VmtSlots(interface/class); record 方法不注册 symbol, 返回形态常量
+    ($ret_str_/$ret_ptr_) 也不复制。record 方法调用按 receiver 声明类型名
+    拼限定名 → 别名名调用返回形态判定失败 + callee 名落到未定义名。
+    后置补齐: 沿 AliasTargetTypeId 为目标类型每个限定方法复制返回形态
+    常量(从 body Decl 判定, record 方法无 symbol); callee 名发射在
+    walk_halt_calls 经 ResolveRecordAliasTypeName 跟随别名。 }
+  for I := 0 to FModel.TypeCount - 1 do
+  begin
+    TypeId := FModel.TypeAt(I).TypeId;
+    TypeName := FModel.TypeAt(I).Name;
+    if not FModel.GetTypeMeta(TypeId, Meta) then
+      Continue;
+    AliasTargetId := Meta.AliasTargetTypeId;
+    if (AliasTargetId <= 0) or (AliasTargetId > FModel.TypeCount) then
+      Continue;
+    TargetName := FModel.TypeAt(AliasTargetId - 1).Name;
+    if (TargetName = '') or SameText(TargetName, TypeName) then
+      Continue;
+    for J := 0 to LongInt(FProcedureBodies.Count) - 1 do
+    begin
+      if Length(FProcedureBodies[J].Name) <= Length(TargetName) + 1 then
+        Continue;
+      if not SameText(Copy(FProcedureBodies[J].Name, 1, Length(TargetName) + 1),
+        TargetName + '.') then
+        Continue;
+      MethShort := Copy(FProcedureBodies[J].Name, Length(TargetName) + 2, MaxInt);
+      if (MethShort = '') or (Pos('.', MethShort) > 0) then
+        Continue;
+      ReturnTypeId := DeclReturnTypeId(FProcedureBodies[J].Decl,
+        FProcedureBodies[J].OwnerUnitId);
+      if ReturnTypeId > 0 then
+      begin
+        RtName := FModel.TypeAt(ReturnTypeId - 1).Name;
+        if SameText(RtName, 'string') or SameText(RtName, 'TString') or
+          SameText(RtName, 'AnsiString') then
+          FModel.AddConstValue(TypeName + '$ret_str_' + MethShort, 1)
+        else if SameText(RtName, 'Pointer') then
+          FModel.AddConstValue(TypeName + '$ret_ptr_' + MethShort, 1);
+      end;
+    end;
+  end;
+end;
+
+function TSemanticAnalyzer.ResolveRecordAliasTypeName(
+  const ATypeName: string): string;
+var
+  TypeId, TargetId: LongInt;
+  Meta, TargetMeta: TTypeMetadata;
+  Name: string;
+begin
+  { record 别名链解析 (TStringBuilder → TBufStringBuilder): receiver 变量
+    声明为别名类型时, 方法 callee 名/字段查找必须落到真实定义类型。
+    只沿 record 目标解析, 不动 class/interface/pointer 别名语义。 }
+  Result := ATypeName;
+  Name := ATypeName;
+  TypeId := FModel.FindTypeByName(Name);
+  while (TypeId > 0) and (TypeId <= FModel.TypeCount) do
+  begin
+    if not FModel.GetTypeMeta(TypeId, Meta) then
+      Break;
+    TargetId := Meta.AliasTargetTypeId;
+    if (TargetId <= 0) or (TargetId > FModel.TypeCount) then
+      Break;
+    if not FModel.GetTypeMeta(TargetId, TargetMeta) or
+      (not TargetMeta.IsRecord) then
+      Break;
+    Result := FModel.TypeAt(TargetId - 1).Name;
+    if SameText(Result, Name) then
+      Break;
+    Name := Result;
+    TypeId := TargetId;
+  end;
+end;
+
 procedure TSemanticAnalyzer.VerifyInterfaceImplementation(
   const AClassTypeId: LongInt; const AInterfaceList: string;
   const AOwnerUnitId: string);

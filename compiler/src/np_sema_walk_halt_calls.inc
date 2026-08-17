@@ -2246,16 +2246,7 @@ begin
                 FuncName := LookupRecordVar(RhsNode.ChildAt(0).Text);
               if FuncName <> '' then
                 FuncName := ResolveRecordAliasTypeName(FuncName);
-              { 属性 read 目标解析（Message → FMessage）：字段名直查不中时
-                走 $read 注册，否则类属性会掉进 VmtSlot 分支被丢弃。 }
-              MemberName := RhsNode.ChildAt(1).Text;
-              if (FuncName <> '') and
-                (not TypeMetaFieldIsStr(FuncName, MemberName)) and
-                FModel.LookupStringConstValue(
-                  FuncName + '.' + MemberName + '$read', Decoded) and
-                TypeMetaFieldIsStr(FuncName, Decoded) then
-                MemberName := Decoded;
-              if TypeMetaFieldIsStr(FuncName, MemberName) then
+              if TypeMetaFieldIsStr(FuncName, RhsNode.ChildAt(1).Text) then
               begin
                 Value := TypeMetaFieldIndex(FuncName, MemberName);
                 if Value >= 0 then

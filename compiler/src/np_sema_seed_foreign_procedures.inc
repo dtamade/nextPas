@@ -112,6 +112,9 @@ begin
   { seed 倒序令子接口先处理,父 IMT 继承缺失;必须在 ivcall 编码(SeedHaltCalls)
     之前补齐父 slots,否则 IHasher.Write 类调用 fallthrough 直呼未定义符号。 }
   FixupInterfaceParentImt;
+  { record 类型别名返回形态常量后置补齐(TStringBuilder.ToString i64 假形态
+    根因): 必须在调用绑定(SeedCallBindings)之前完成。 }
+  FixupAliasMethodSymbols;
   RebindExplicitClassParents;
   CompletePendingSignatures;
   AssignScopesToSymbols;
