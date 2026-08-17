@@ -35,6 +35,10 @@ function SplitString(const S, Delimiters: string): TStringArray;
         返回源串字符数(截断前)。线程安全(无共享状态)。 *}
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
 
+{** @desc 读 NUL 结尾缓冲为 string(无 ShortString 255 上限;StrPas 会截断大缓冲)。
+        适合 worker 定长缓冲转 string 的场景。 *}
+function CStrToStr(const AP: PAnsiChar): string;
+
 implementation
 
 uses
@@ -273,6 +277,16 @@ begin
   if N > 0 then
     for I := 1 to N do
       P[I - 1] := S[I];
+end;
+
+function CStrToStr(const AP: PAnsiChar): string;
+var
+  N: SizeInt;
+begin
+  N := StrLen(AP);
+  SetLength(Result, N);
+  if N > 0 then
+    Move(AP^, Result[1], N);
 end;
 
 end.

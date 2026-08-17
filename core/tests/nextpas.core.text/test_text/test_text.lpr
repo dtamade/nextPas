@@ -299,6 +299,23 @@ begin
   CheckEqual(1, CopyStrToBuf('x', Buf, 1), 'buf len 1 keeps nul only');
 end;
 
+procedure TestCStrToStr;
+var
+  LBig: array[0..511] of AnsiChar;
+  I: Integer;
+begin
+  LBig[0] := #0;
+  CheckEqual('', CStrToStr(@LBig[0]), 'empty');
+
+  LBig[0] := 'a'; LBig[1] := #0;
+  CheckEqual('a', CStrToStr(@LBig[0]), 'short');
+
+  for I := 0 to 510 do
+    LBig[I] := 'x';
+  LBig[511] := #0;
+  CheckEqual(511, Length(CStrToStr(@LBig[0])), 'beyond 255 intact');
+end;
+
 procedure TestFacadeExtendedSurface;
 var
   LBuilder: IStringBuilder;
@@ -592,6 +609,7 @@ begin
   T.Test('UTF8 malformed consumes one byte', @TestUTF8MalformedConsumesOneByte);
   T.Test('Utils surface', @TestUtilsSurface);
   T.Test('CopyStrToBuf', @TestCopyStrToBuf);
+  T.Test('CStrToStr', @TestCStrToStr);
   T.Test('Facade extended surface', @TestFacadeExtendedSurface);
   T.Test('Facade owner routing', @TestFacadeOwnerRouting);
   T.Test('Utils ownership contracts', @TestUtilsOwnershipContracts);
