@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-18 caret-ptr 后实测）
+## 当前战况（2026-08-18 simd-constref 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **9** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶)** |
-| undefined total | **13** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶)** |
+| undefined unique | **7** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷)** |
+| undefined total | **11** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -243,7 +243,25 @@ undefined），unit 复现 mini_e 语法恢复（此前 FAKE-INIT）；compiler-
 58/58；hygiene pass。挂账：`^T` 形态覆盖所有类型位置（别名/参数/返回），
 本轮只实证 var 段。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result/@aElementCount 已出列） |
+¹⁷ simd-constref（本 commit）：`simd_cmpneq_pd(constref a, b: TM128)` 的
+参数引用在 .ll 中编成 `call i64 @a()`/`call i64 @b()`（参数名当函数调用），
+a/b 2 uniq undefined。根因链：① parser 参数名带修饰符前缀
+（`'constref:'`+名，np_green_tree_parse_declarations）；②
+SeedFunctionBodies 编码循环对「普通标量参数」else 分支发
+`var-decl-runtime` 节点时 AOperand 误传 `ParamChild.Text`（带前缀
+`constref:a`），其它 5 个子分支（str/arr/record/varref）均传干净名；
+③ HIR ProcessVarDecl hnkVarDeclRuntime 参数分支
+`RegisterAllocaEntry(AOperand)` 把 alloca 注册成 `constref:a`；④ encode
+gnkIdentifier 无条件发 `var <text>`（`var a`）；⑤ EmitExprVar
+`FindAlloca('a')` miss → 兜底 `hikCall('a')` → .ll `call @a()`。仅 constref
+且未被识别为 record/var 的参数形态暴露（simd TM128 走 i64 槽）；assembler
+实现的 simd 函数不引用参数名故无症状。修法：else 分支 AOperand 改用干净名
+`RetVarName`（与其余分支一致）。验证：9/13 → 7/11（a/b 出列，7 uniq 全归
+既有挂账：method-object 泛型家族 5 + SarLongint/Pos 各 1）；compiler-pass
+58/58；hygiene pass。挂账：TM128 参数仍按 i64 槽编码（B6.5 ABI 域），
+opt 类型一致性另议。
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -403,93 +421,6 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       模板名单点回绕不收敛。已回滚（探针实测恢复 9/13）。结论：
       必须做「实例化时递归展开嵌套泛型」的完整机制（实例名克隆 +
       FGenericWorkQueue 递归消费），单点回绕不可行。
-      **侦察更新（2026-08-18，只读）**：6/10 中 method-object 族
-      （TToolStatusEventVec.Count×4/Create×2/Push×1、TVec.Create×1、
-      TVec.GetDefaultGrowStrategyI×1）与 Pos 同属此条目根因。根因链
-      三段并确认：
-      ① `InstantiateGenericType`（declaration.inc:2230）只克隆方法
-      **符号**（`InstanceName.Method` AddSymbol，2395 行）与元数据/vmt
-      表项（2565 行 `$vmt_func_` 写 `TToolStatusEventVec.Count`），
-      **从不克隆方法体**——`ResolveClassMethodCalleeName`
-      （type_metadata.inc:147）沿 ClassHasMethod 命中符号
-      （FindSymbolByName）→ 最终 callee 名是实例名
-      `TToolStatusEventVec.Count`，而 FProcedureBodies 只有模板名
-      `TVec.Count` → MarkCallTargets 标定 miss → 不 define → undefined。
-      ② encode 路径**无类型参数替换上下文**（grep 全 sema 无
-      GenericArgSubst/CurrentGenericArgs 类状态）：泛型体 green tree
-      直接按名翻译，body 内 `T` 不换成实参——这是同单元泛型测试能过
-      （模板体不引用 T 布局）而 TVec<T> 必炸（体内嵌 TArray<T>/
-      TSpan<T>/IGrowthStrategy）的根因，也是回绕方案暴露 7 新 uniq
-      的同一机制。③ 函数特化已有先行范式：`specialize Fn<T>(...)`
-      调用（walk_halt_calls.inc:1786 / encode_runtime_expr.inc:1358）
-      把模板体按 `Fn$<实参>` 名 RegisterProcedureBody 克隆并
-      `FGenericWorkQueue.Push`，WorkHead 定点循环（seed_function_bodies
-      .inc:824）消费——类型特化缺的正是同款「克隆+入队」，但必须配
-      ②的替换地基，否则克隆体编出来仍是模板引用。
-      **实施分期建议**（每期独立探针+提交，数字只许降/持平）：
-      Ⅰ. encode 类型参数替换上下文（实例化时把模板体按实例替换
-      `T`→实参、`TVec.`→`InstanceName.`，嵌套 specialize 递归走
-      ResolveOrInstantiateInlineGeneric）——地基，零 undefined 口径
-      变化；Ⅱ. InstantiateGenericType 克隆模板方法体（复用 ③ 范式）
-      + 标 Needed + 入队；Ⅲ. 若 vmt 表项/内联引用仍有剩余，再排。
-      模板体注册名格式（`TVec.Count` vs `TVec<T>.Count`，影响 2406
-      行 SubstSig 匹配与克隆查找）实施时用 TEMP-DIAG 先确认。
-      **口 3 白名单克隆 ✅（2026-08-18，5/10 → 3/5，提交 8f90e4300）**：
-      白名单 {Count, GetDefaultGrowStrategyI}（体自包含：纯字段读 /
-      FactorGrow 全局调用），Needed 直标 + 防重，全 TVec 特化实例统一
-      生效，opt 首错保持 @Pos 零新错误。**剩余 3 uniq 依赖「缺口乙
-      （实例化上下文）」闭环**（2026-08-18 侦察，为下口立项）：
-      `TToolStatusEventVec.Create`×3 链 = Create(1参) → Create(4参) →
-      `inherited Create`(父类实例 TGenericCollection<TToolStatusEventRecord>)
-      + `TVecBuf.Create`(TArray<TToolStatusEventRecord>) + SyncDataPtr；
-      `Push`×1 链 = GetPtrUnchecked + `^ := aElement`(T 宽 store)；
-      `Pos`×1 链 = `ArgTypes[I]`(TStringVec default Items → GetItem) →
-      `GetPtrUnchecked(aIndex)^`(T 值 load)。三个链的公共需求：
-      ① 克隆体 encode 时把 `T` 映射到实参（TArray.GetPtrUnchecked 体
-      `PElement(FMemory) + aIndex` 的指针算术 stride、GetItem/Push 的
-      T load/store 宽度）；② 嵌套类型实例化（TVecBuf=specialize
-      TArray<T>、父类 specialize TGenericCollection<T> → 实例方法体
-      递归克隆——口 2 已证父类实例方法体能 define，缺的是名字一致与
-      字段/类型上下文）；③ FuncRef 短名统一（口 2 残留
-      `@DoPredicateFuncProxy` vs 全限定 define）。**实现形态建议**：
-      encode 方法体前建 `FCurrentGenericInstance`（模板名+实参表+实例名，
-      实例化时把 ArgTypes 存成 `InstanceName.$generic_args` consts），
-      类型名解析入口（TypeMeta*/FindTypeByName/cast/指针算术）对
-      「泛型参数名」查表回落实参；白名单按链成员扩（GetPtrUnchecked/
-      SyncDataPtr/TArray.GetPtrUnchecked/GetItem 等）。
-      **口 4 实例化上下文 ✅（2026-08-18，3/5 → 1/1，提交见本 commit）**：
-      按立项形态完整落地（FCurrentGenericInstance + `$generic_arg_<T>`
-      consts + TypeMetaSize 回退 + 白名单链扩 + Body 指针去重），
-      Create×3 链与 Push×1 链整链清零，剩 Pos×1。细节见注 ²¹。
-      **剩余 Pos×1（下口立项）**：opt 首错 201774 行 `call i64 @Pos(ptr,
-      i64, i64)`——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 处
-      haystack 是泛型 class 实例 default 索引属性（`TStringVec =
-      specialize TVec<string>`：`ArgTypes[I]` 读 `TVec.Items[I]` →
-      GetItem 实例方法体已 define，但 Items 读表达式本身仍残留
-      value-load 空洞）。与 strpos 形态不同：strpos 是缺 runtime
-      helper define，此处是**泛型实例 property read 的编码路径残渣**。
-      下口从建小样本（含 `specialize TVec<string>.Items[I]` 读的测试）
-      定位 value-load 空洞具体分支开始。
-      **口 2 尝试+回滚（2026-08-18，探针 5/10 → 10/20 升）**：
-      `InstantiateGenericType` 尾部加「模板方法体克隆」——按
-      `GenericName.` 前缀克隆全部模板方法体到实例名（手动 Push +
-      `IndexProcedureBodyName` + `FGenericWorkQueue.Push`；vmt 槽方法
-      显式 `Needed:=True`，其余靠调用点 walk 标定）。**正面证据**：
-      原 5 uniq 的 9 total（TToolStatusEventVec.Count×4/Create×3/
-      Push×1/GetDefaultGrowStrategyI×1）**全部清零**，递归克隆生效
-      （`.ll` 出现 `define @"TGenericCollection<TToolStatusEventRecord>.
-      DoEqualsFuncProxy"` —— 嵌套父类实例（带实参）方法体已生成）。
-      **新暴露 9 uniq / 20 total**（三类形态）：① 裸字段名当函数调用
-      `@FInternalEquals(i64,i64)`/`@FInternalComparer`/`@FIndex()`/
-      `@FCurrent()`（克隆体字段解析 miss，缺实例字段上下文）；② 函数
-      指针短名 `ptrtoint ptr @DoPredicateFuncProxy`（无限定）vs define
-      用全限定 `TGenericCollection<TToolStatusEventRecord>.
-      DoPredicateFuncProxy` —— 方法引用（FuncRef）取名不统一；③ 全局
-      函数 `@CompareByte`×5 未 define（FPC helper 族，克隆体调用点已
-      产出但无 body/declare）；另 opt 首错提前到 87483 行类型不匹配
-      （i32/i64）。结论：克隆机制本身成立，但需配套①实例字段上下文、
-      ②FuncRef 取名统一、③CompareByte 等 FPC helper 的 declare/stub
-      面，才能闭环——按「一次一个残渣面」拆口，勿再全量克隆上探针。
 - [~] **B5 const fold + intrinsic 尾巴**：const-upper 7 个 + `Pos`/`UpCase`/`Int`。
       - [x] **B5a Pos 主体（strpos 数组下标 haystack + const needle）** ✅
         （80→75 total，Pos 7→2）：主流残留是「字符串数组元素 haystack」——
