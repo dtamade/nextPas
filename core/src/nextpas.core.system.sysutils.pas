@@ -50,6 +50,10 @@ function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): 
 function BytesOf(const AStr: string): TBytes;
 function StringOf(const ABytes: TBytes): string;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+function Supports(const AInstance: TObject; const AIID: TGuid;
+  out AIntf): Boolean; overload;
+function Supports(const AInstance: IInterface; const AIID: TGuid;
+  out AIntf): Boolean; overload;
 
 { String manipulation }
 function Trim(const AStr: string): string;
@@ -227,6 +231,18 @@ end;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
 begin
   Result := nextpas.core.base.utils.CompareMem(A, B, ASize);
+end;
+
+function Supports(const AInstance: TObject; const AIID: TGuid;
+  out AIntf): Boolean;
+begin
+  Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
+end;
+
+function Supports(const AInstance: IInterface; const AIID: TGuid;
+  out AIntf): Boolean;
+begin
+  Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 
 { String manipulation }

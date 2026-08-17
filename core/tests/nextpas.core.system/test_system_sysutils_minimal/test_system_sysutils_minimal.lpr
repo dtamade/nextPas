@@ -7,6 +7,17 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.exception;
 
+type
+  IProbe = interface
+    ['{A0B1C2D3-0001-4E5F-8A9B-0C0D0E0F0001}']
+  end;
+
+  IOther = interface
+    ['{A0B1C2D3-0002-4E5F-8A9B-0C0D0E0F0002}']
+  end;
+
+  TProbe = class(TInterfacedObject, IProbe);
+
 var
   T: TTestSuite;
 
@@ -143,6 +154,19 @@ begin
     'TStringArray should alias core dynamic string array');
 end;
 
+procedure TestSupportsInterfaceQuery;
+var
+  Probe: IProbe;
+  Other: IProbe;
+  NotImpl: IOther;
+begin
+  Probe := TProbe.Create;
+  Check(nextpas.core.system.sysutils.Supports(Probe, IProbe, Other),
+    'Supports should resolve implemented interface');
+  Check(not nextpas.core.system.sysutils.Supports(Probe, IOther, NotImpl),
+    'Supports should reject interface the object does not implement');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -156,5 +180,6 @@ begin
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
+  T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
   if not T.Run then Halt(1);
 end.
