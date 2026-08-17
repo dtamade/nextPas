@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 localtypecast 后实测）
+## 当前战况（2026-08-17 result-fold 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **15** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴)** |
-| undefined total | **20** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴)** |
+| undefined unique | **15** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵)** |
+| undefined total | **20** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -202,7 +202,30 @@ symbol 是方法未绑定前的常态），implicit-self 绑定被抢 → `call 
 Double 立项后修正），opt 首错从 @Int 推进到 @Pos。验证：15/20 → 12/16
 （3 uniq 4 total），三复现测试（root 全局/方法/imported）rc 1→0；
 compiler-pass 58/58；hygiene pass。
-| opt 首错 | `use of undefined value '@Pos'`（.ll 217582 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int 已出列） |
+
+¹⁵ result-fold（本 commit）：`PathNameLenWithoutTrailingSeparators` 的
+`IsSep(APath[Result-1])` 实参错编——嵌套在数组索引里的 `Result` 走基础版
+EncodeRuntimeIntExpr（gnkIdentifier 编成 `var Result` 文本），emitter 按
+`Result` 找不到 alloca → 残差 `call i64 @Result()`（1 use，var-param 桶
+最后一格）；同时 PAnsiChar 索引无专用 encode，通用 arrload 的 `$ptr` 槽
+不存在 → 基址静默丢弃，实参只剩索引值（i64 vs 形参 ptr 不匹配，opt 挂）。
+修法三处：(1) 基础版 EncodeRuntimeIntExpr/BoolExpr 加 `ARetVarName` 参数
+（默认 ''），gnkIdentifier 把 `Result` 映射为 `var <retvar注册名>`（retvar
+alloca 以函数名注册），Fold 两处 fallback 调用点传 FCurrentRetVarName；
+(2) Fold gnkArrayAccess 三分支前加 PAnsiChar 分支（LookupPointerVar<>''）
+→ `arr_elem_ref <名>`（元素地址，匹配 Char 形参 ptr ABI）；(3)
+EmitExprArrElemRef `$ptr` fallback 到裸参数 alloca（PAnsiChar 参数只注册
+裸名），裸指针按 1 字节元素用 `gep_i8`（原固定 `gep_i64` 会把地址算 8 倍）。
+验证：12/16 → 11/15（@Result 出列，var-param 桶清零），test_result_idx
+复现 rc 1→0 且 `.ll` `getelementptr i8` + `call IsSep(ptr)` 类型匹配；
+compiler-pass 58/58；hygiene pass。**挂账**：IsSep 的 `C = '/'` body 错编
+（objectfree 模板——赋值 RHS 布尔值表达式无比较编码路径，值上下文 cmp
+缺口，L3 正确性）；`StrLen(APath)` 被宽松 cast 兜底误判为类型转换（静默
+错编「APath 地址当整数」；stage0 不用 StrLen，探针不受影响，但第三方程序
+会错——cast 兜底需排除已知可调用名）。**协议教训**：探针 rebuild 与
+`make test` 并发会互相删 build/ 产物（rebuild 链接失败 + fixture exit 127），
+必须串行。
+| opt 首错 | `use of undefined value '@Pos'`（.ll 218382 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己

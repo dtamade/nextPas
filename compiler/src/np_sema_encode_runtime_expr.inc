@@ -2873,40 +2873,15 @@ begin
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    ((LookupPointerVar(ANode.ChildAt(0).Text) = 'PChar') or
-     (LookupPointerVar(ANode.ChildAt(0).Text) = 'PAnsiChar') or
-     (LookupPointerVar(ANode.ChildAt(0).Text) = 'PUTF8Char')) then
+    (LookupPointerVar(ANode.ChildAt(0).Text) <> '') then
   begin
-    { Character pointer index: element address (Char formals are passed as
-      ptr to the character slot — IsSep(APath[Result-1])). The generic
+    { PAnsiChar/PChar/Pointer index: element address (Char formals are passed
+      as ptr to the character slot — IsSep(APath[Result-1])). The generic
       arrload fallback needs Name$ptr, which pointer params lack, so it drops
-      the base and the residual call gets only the index (M2: @Result 1 use).
-      Restricted to char pointers: numeric pointees (PInt32 etc.) take the
-      element as a value, not a Char-slot address. }
+      the base and the residual call gets only the index (M2: @Result 1 use). }
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
     begin
       ABlob := FuncName + 'arr_elem_ref ' + ANode.ChildAt(0).Text + #10;
-      Exit(True);
-    end;
-  end;
-  { Numeric pointee index (aSrc[i] of PInt32): element VALUE via gep scaled
-    by pointee size + load. Char pointers above stay address-only; the
-    generic arrload fallback needs Name$ptr, which pointer params lack, so it
-    used to drop the base and the residual call kept only the index (aSrc[i]
-    of ScalarArrayShrI32 → SarLongint's first arg degraded to i). }
-  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    (LookupPointerVar(ANode.ChildAt(0).Text) <> '') and
-    (not ((LookupPointerVar(ANode.ChildAt(0).Text) = 'PChar') or
-          (LookupPointerVar(ANode.ChildAt(0).Text) = 'PAnsiChar') or
-          (LookupPointerVar(ANode.ChildAt(0).Text) = 'PUTF8Char'))) and
-    EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
-  begin
-    Folded := PointeeElemSizeCode(LookupPointerVar(ANode.ChildAt(0).Text));
-    if Folded >= 1 then
-    begin
-      ABlob := FuncName + 'pelem_load ' + ANode.ChildAt(0).Text + ' ' +
-        IntToStr(Folded) + #10;
       Exit(True);
     end;
   end;
@@ -2953,107 +2928,5 @@ begin
     Exit(True);
   end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob, FCurrentRetVarName);
-end;
-
-function TSemanticAnalyzer.EncodePosConcatOperand(
-  const ANode: TGreenNode): string;
-var
-  LeftName, RightName: string;
-  Folded: LongInt;
-  FieldIdx: LongInt;
-begin
-  Result := '';
-  if ANode = nil then
-    Exit;
-  { Leaf forms with an existing $ts alloca pass through by name; literals
-    and '+' subtrees materialize into $pos_cat temps because
-    ProcessAssignTStringConcat needs two $ts allocas per concat node. }
-  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
-    Exit(ANode.Text);
-  if ANode.NodeKind = gnkStringLiteral then
-  begin
-    Inc(FBlockLabelCounter);
-    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(Result);
-    RegisterRuntimeStrVar(Result);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
-    FModel.AddTypedHirNode('assign-tstring-literal-runtime', Result, 0, 0,
-      DecodePascalStringLiteral(ANode.Text));
-    QueuePendingStringTempRelease(Result, Result);
-    Exit;
-  end;
-  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
-    (ANode.ChildCount >= 2) then
-  begin
-    LeftName := EncodePosConcatOperand(ANode.ChildAt(0));
-    if LeftName = '' then
-      Exit;
-    RightName := EncodePosConcatOperand(ANode.ChildAt(1));
-    if RightName = '' then
-      Exit;
-    Inc(FBlockLabelCounter);
-    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(Result);
-    RegisterRuntimeStrVar(Result);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
-    FModel.AddTypedHirNode('assign-tstring-concat-runtime', Result, 0, 0,
-      LeftName + #9 + RightName);
-    QueuePendingStringTempRelease(Result, Result);
-    Exit;
-  end;
-  { Char-code leaf (#9 / #$0A / 'x') as a 1-char string. The literal node
-    takes decoded bytes, so quote chars survive strlit's no-decode path.
-    Multi-segment (#13#10) is not one char — leave unsupported. }
-  if (ANode.NodeKind = gnkCharLiteral) and (Length(ANode.Text) >= 2) then
-  begin
-    Folded := 0;
-    if (ANode.Text[1] = '''') and (Length(ANode.Text) = 3) then
-      Folded := Ord(ANode.Text[2])
-    else if ANode.Text[1] = '#' then
-    begin
-      if Pos('#', Copy(ANode.Text, 2, Length(ANode.Text))) > 0 then
-        Exit;
-      if (Length(ANode.Text) >= 3) and (ANode.Text[2] = '$') then
-      begin
-        for FieldIdx := 3 to Length(ANode.Text) do
-        begin
-          Folded := Folded * 16;
-          if (ANode.Text[FieldIdx] >= '0') and
-            (ANode.Text[FieldIdx] <= '9') then
-            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('0')
-          else if (ANode.Text[FieldIdx] >= 'a') and
-            (ANode.Text[FieldIdx] <= 'f') then
-            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('a') + 10
-          else if (ANode.Text[FieldIdx] >= 'A') and
-            (ANode.Text[FieldIdx] <= 'F') then
-            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('A') + 10
-          else
-            Exit;
-        end;
-      end
-      else
-      begin
-        for FieldIdx := 2 to Length(ANode.Text) do
-        begin
-          if (ANode.Text[FieldIdx] < '0') or
-            (ANode.Text[FieldIdx] > '9') then
-            Exit;
-          Folded := Folded * 10 + Ord(ANode.Text[FieldIdx]) - Ord('0');
-        end;
-      end;
-    end
-    else
-      Exit;
-    if (Folded < 0) or (Folded > 255) then
-      Exit;
-    Inc(FBlockLabelCounter);
-    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
-    RegisterRuntimeVar(Result);
-    RegisterRuntimeStrVar(Result);
-    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
-    FModel.AddTypedHirNode('assign-tstring-literal-runtime', Result, 0, 0,
-      Chr(Folded));
-    QueuePendingStringTempRelease(Result, Result);
-  end;
 end;
 
