@@ -51,7 +51,8 @@ function StyleDefault: TStyle; inline;
 function StyleEquals(const A, B: TStyle): Boolean; inline;
 
 { 样式插值：Fg/Bg/Ul 逐色 ColorInterp（t∈[0,1]），修饰位取 A 侧
-  （主题过渡动画：过渡期不闪修饰）。结果 Fg/Bg/Ul 恒为 ckRgb。 }
+  （主题过渡动画：过渡期不闪修饰）。端点 t<=0/t>=1 保持 A/B 原值；
+  t∈(0,1) 且两端 ckRgb 才产生插值色，非 RGB 端按 ColorInterp 退化取 B。 }
 function StyleInterp(const A, B: TStyle; T: Double): TStyle;
 
 { 便利构造器——一行创建常用样式 }
