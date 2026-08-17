@@ -32,7 +32,18 @@ uses
   nextpas.core.tui.widget.kanban,
   nextpas.core.tui.widget.markdown,
   nextpas.core.tui.widget.tooltip,
-  nextpas.core.tui.widget.toast;
+  nextpas.core.tui.widget.toast,
+  nextpas.core.tui.widget.barchart,
+  nextpas.core.tui.widget.linechart,
+  nextpas.core.tui.widget.calendar,
+  nextpas.core.tui.widget.tree,
+  nextpas.core.tui.widget.file_tree,
+  nextpas.core.tui.widget.diffview,
+  nextpas.core.tui.widget.input_editor,
+  nextpas.core.tui.widget.command_palette,
+  nextpas.core.tui.widget.notification_center,
+  nextpas.core.tui.widget.popover,
+  nextpas.core.tui.widget.menu;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -125,6 +136,49 @@ type
   TToastItem = nextpas.core.tui.widget.toast.TToastItem;
   IToastManager = nextpas.core.tui.widget.toast.IToastManager;
   TToastManager = nextpas.core.tui.widget.toast.TToastManager;
+  IBarChart = nextpas.core.tui.widget.barchart.IBarChart;
+  TBarData = nextpas.core.tui.widget.barchart.TBarData;
+  TBarChart = nextpas.core.tui.widget.barchart.TBarChart;
+  ILineChart = nextpas.core.tui.widget.linechart.ILineChart;
+  TDataSeries = nextpas.core.tui.widget.linechart.TDataSeries;
+  TLineChart = nextpas.core.tui.widget.linechart.TLineChart;
+  ICalendar = nextpas.core.tui.widget.calendar.ICalendar;
+  TCalendarState = nextpas.core.tui.widget.calendar.TCalendarState;
+  TCalendar = nextpas.core.tui.widget.calendar.TCalendar;
+  ITree = nextpas.core.tui.widget.tree.ITree;
+  TTreeNode = nextpas.core.tui.widget.tree.TTreeNode;
+  PTreeNode = nextpas.core.tui.widget.tree.PTreeNode;
+  TTreeState = nextpas.core.tui.widget.tree.TTreeState;
+  TTree = nextpas.core.tui.widget.tree.TTree;
+  IFileTree = nextpas.core.tui.widget.file_tree.IFileTree;
+  TFileNode = nextpas.core.tui.widget.file_tree.TFileNode;
+  TFileTreeState = nextpas.core.tui.widget.file_tree.TFileTreeState;
+  TFileTree = nextpas.core.tui.widget.file_tree.TFileTree;
+  IDiffView = nextpas.core.tui.widget.diffview.IDiffView;
+  TDiffLineKind = nextpas.core.tui.widget.diffview.TDiffLineKind;
+  TDiffLine = nextpas.core.tui.widget.diffview.TDiffLine;
+  TDiffViewState = nextpas.core.tui.widget.diffview.TDiffViewState;
+  TDiffView = nextpas.core.tui.widget.diffview.TDiffView;
+  IInputEditor = nextpas.core.tui.widget.input_editor.IInputEditor;
+  TInputEditor = nextpas.core.tui.widget.input_editor.TInputEditor;
+  ICommandPalette = nextpas.core.tui.widget.command_palette.ICommandPalette;
+  TCommandItem = nextpas.core.tui.widget.command_palette.TCommandItem;
+  TCommandPaletteState = nextpas.core.tui.widget.command_palette.TCommandPaletteState;
+  TCommandPalette = nextpas.core.tui.widget.command_palette.TCommandPalette;
+  INotificationCenter = nextpas.core.tui.widget.notification_center.INotificationCenter;
+  TNotifLevel = nextpas.core.tui.widget.notification_center.TNotifLevel;
+  TNotification = nextpas.core.tui.widget.notification_center.TNotification;
+  TNotificationCenterState = nextpas.core.tui.widget.notification_center.TNotificationCenterState;
+  TNotificationCenter = nextpas.core.tui.widget.notification_center.TNotificationCenter;
+  IPopover = nextpas.core.tui.widget.popover.IPopover;
+  TPopoverAnchor = nextpas.core.tui.widget.popover.TPopoverAnchor;
+  TPopoverState = nextpas.core.tui.widget.popover.TPopoverState;
+  TPopover = nextpas.core.tui.widget.popover.TPopover;
+  IMenu = nextpas.core.tui.widget.menu.IMenu;
+  TMenuItemKind = nextpas.core.tui.widget.menu.TMenuItemKind;
+  TMenuItem = nextpas.core.tui.widget.menu.TMenuItem;
+  TMenuState = nextpas.core.tui.widget.menu.TMenuState;
+  TMenu = nextpas.core.tui.widget.menu.TMenu;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;

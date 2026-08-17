@@ -104,7 +104,12 @@ if [ -n "$FPC_BIN" ]; then
              test_tui_core_facade_rejects_select test_tui_core_facade_rejects_breadcrumb \
              test_tui_core_facade_rejects_timeline test_tui_core_facade_rejects_kanban \
              test_tui_core_facade_rejects_markdown test_tui_core_facade_rejects_tooltip \
-             test_tui_core_facade_rejects_toast; do
+             test_tui_core_facade_rejects_toast test_tui_core_facade_rejects_barchart \
+             test_tui_core_facade_rejects_linechart test_tui_core_facade_rejects_calendar \
+             test_tui_core_facade_rejects_tree test_tui_core_facade_rejects_file_tree \
+             test_tui_core_facade_rejects_diffview test_tui_core_facade_rejects_input_editor \
+             test_tui_core_facade_rejects_command_palette test_tui_core_facade_rejects_notification_center \
+             test_tui_core_facade_rejects_popover test_tui_core_facade_rejects_menu; do
     src="$REJECT_DIR/${rej}.lpr"
     if [ ! -f "$src" ]; then
       fail_check "缺 reject 源: $rej.lpr"

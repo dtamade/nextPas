@@ -16,7 +16,8 @@ The split is intentional:
 - `nextpas.core.tui.ext` owns stable app/runtime framework concerns: `TApp`, panel/layout helpers,
   theme, task, frame budget, focus, interaction, and animation primitives, plus the stable advanced
   widget set (panel/scrollview/modal/dialog/split_pane/select/statusbar/progress_group
-  /breadcrumb/timeline/kanban/markdown/tooltip/toast).
+  /breadcrumb/timeline/kanban/markdown/tooltip/toast/barchart/linechart/calendar/tree
+  /file_tree/diffview/input_editor/command_palette/notification_center/popover/menu).
 - `nextpas.core.tui.experimental` owns high-volatility protocol features such as image capability
   detection, image transport, sixel, and clipboard negotiation.
 - `nextpas.core.tui.full` keeps the migration-era broad surface alive, so existing code can keep
