@@ -342,6 +342,17 @@ begin
     'UnixDateDelta should be the TDateTime offset of the Unix epoch');
 end;
 
+{ GetTickCount64:系统运行毫秒(单调非递减) }
+procedure TestGetTickCount64;
+var
+  A, B: QWord;
+begin
+  A := nextpas.core.system.sysutils.GetTickCount64;
+  nextpas.core.system.sysutils.Sleep(5);
+  B := nextpas.core.system.sysutils.GetTickCount64;
+  Check(B >= A, 'GetTickCount64 should be monotonic non-decreasing');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -364,6 +375,7 @@ begin
   T.Test('UnixToDateTime converts epoch', @TestUnixToDateTime);
   T.Test('FreeAndNil nils after free', @TestFreeAndNil);
   T.Test('DecodeDate/UnixDateDelta roundtrip', @TestDecodeEncodeDate);
+  T.Test('GetTickCount64 monotonic', @TestGetTickCount64);
   T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
   T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
   T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);
