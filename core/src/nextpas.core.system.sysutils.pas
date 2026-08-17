@@ -130,6 +130,7 @@ function RunProcessWait(const APath: string; const AArgs: array of string): Inte
 
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
+function GetTickCount64: QWord;
 
 { Error handling }
 function SysErrorMessage(AErrorCode: Integer): string;
@@ -609,6 +610,11 @@ end;
 procedure Sleep(AMilliseconds: Cardinal);
 begin
   SysUtils.Sleep(AMilliseconds);
+end;
+
+function GetTickCount64: QWord;
+begin
+  Result := SysUtils.GetTickCount64;
 end;
 
 { Error handling — delegates to SysUtils }
