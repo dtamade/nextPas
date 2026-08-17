@@ -241,6 +241,7 @@ var
   I, Start, Count: Integer;
 begin
   { 连续分隔符不产生空段:SysUtils.SplitString 语义,行拆分等场景依赖 }
+  Result := Nil;
   SetLength(Result, 0);
   Count := 0;
   Start := 1;
