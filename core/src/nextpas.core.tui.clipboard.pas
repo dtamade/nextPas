@@ -156,17 +156,20 @@ begin
     LArgv[LI] := AArgs[LI];
   LArgv[LCount] := nil;
 
+  { 必须显式声明管道选项,否则 create_piped 只初始化 StdinWrite:=-1,
+    写入直接失败(曾导致 xclip 路径 Copy 永远返回 False) }
   LErr := platform_process_create_piped(
-    PAnsiChar(AToolPath), @LArgv[0], nil, [],
+    PAnsiChar(AToolPath), @LArgv[0], nil,
+    [poRedirectStdin, poCaptureStdout, poCaptureStderr],
     LProc, LPipes);
   if LErr <> 0 then Exit;
   try
     // Write input to stdin
     if Length(AInput) > 0 then
     begin
-      LWritten := platform_process_write_stdin(
-        LPipes.StdinWrite, @AInput[1], Length(AInput));
-      if LWritten <> Length(AInput) then Exit;
+      if (platform_process_write_stdin_ex(
+        LPipes.StdinWrite, @AInput[1], Length(AInput), LWritten) <> 0) or
+        (LWritten <> Length(AInput)) then Exit;
     end;
     // Close stdin to signal EOF
     platform_process_close_handle(LPipes.StdinWrite);
