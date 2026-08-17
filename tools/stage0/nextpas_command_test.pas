@@ -5,8 +5,8 @@ unit nextpas_command_test;
 interface
 
 uses
-  nextpas.core.path, nextpas.core.fs, process, nextpas_projection_types,
-  nextpas_command_envelope;
+  nextpas.core.path, nextpas.core.fs, nextpas.core.process,
+  nextpas_projection_types, nextpas_command_envelope;
 
 procedure RunTest(
   var AState: TNextPasState;
@@ -26,7 +26,7 @@ procedure RunTest(
 var
   ExitCode: LongInt;
   HarnessScriptPath: string;
-  Proc: TProcess;
+  Cmd: ICommand;
   WorkspaceRoot: string;
 begin
   if AWorkspaceOverride <> '' then
@@ -47,27 +47,22 @@ begin
   if not FileExists(HarnessScriptPath) then
     Fail(AState, 'missing-harness-script: ' + HarnessScriptPath, True);
 
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := '/usr/bin/env';
-    Proc.CurrentDirectory := WorkspaceRoot;
-    Proc.Options := [poWaitOnExit];
-    Proc.Parameters.Add('NEXTPAS_STAGE0=' + ExpandFileName(ParamStr(0)));
-    Proc.Parameters.Add('NEXTPAS_WORKSPACE_ROOT=' + WorkspaceRoot);
-    Proc.Parameters.Add('NEXTPAS_REPO_ROOT=' + WorkspaceRoot);
-    Proc.Parameters.Add(HarnessScriptPath);
-    if AListGroups then
-      Proc.Parameters.Add('--list-groups')
-    else
-    begin
-      Proc.Parameters.Add('--filter');
-      Proc.Parameters.Add(AFilterName);
-    end;
-    Proc.Execute;
-    ExitCode := Proc.ExitStatus;
-  finally
-    Proc.Free;
-  end;
+  { Run the harness via nextpas.core.process instead of the FPC Process stub
+    so the compile chain stops consuming it. EnvAdd injects NEXTPAS_* into
+    the child environment (inherited by the shell script), equivalent to the
+    old `env KEY=VALUE …` argv form. Status() keeps stdout/stderr inherited,
+    same as TProcess with poWaitOnExit. }
+  Cmd := Command('/usr/bin/env')
+    .Dir(WorkspaceRoot)
+    .EnvAdd('NEXTPAS_STAGE0', ExpandFileName(ParamStr(0)))
+    .EnvAdd('NEXTPAS_WORKSPACE_ROOT', WorkspaceRoot)
+    .EnvAdd('NEXTPAS_REPO_ROOT', WorkspaceRoot)
+    .Arg(HarnessScriptPath);
+  if AListGroups then
+    Cmd := Cmd.Arg('--list-groups')
+  else
+    Cmd := Cmd.Args(['--filter', AFilterName]);
+  ExitCode := Cmd.Status.ExitCode;
 
   Halt(ExitCode);
 end;
