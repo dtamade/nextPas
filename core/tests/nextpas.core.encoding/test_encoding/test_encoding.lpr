@@ -260,6 +260,50 @@ begin
   CheckEqual('abc123-_.~', UrlEncode('abc123-_.~'));
 end;
 
+{ GBK → UTF-8（纯表驱动，无平台依赖） }
+
+procedure TestGbkEmpty;
+begin
+  CheckEqual('', GbkToUtf8(''));
+end;
+
+procedure TestGbkAscii;
+begin
+  CheckEqual('abc123', GbkToUtf8('abc123'));
+end;
+
+procedure TestGbkHello;
+begin
+  // 你好 = C4 E3 BA C3
+  CheckEqual('你好', GbkToUtf8(#$C4#$E3#$BA#$C3));
+end;
+
+procedure TestGbkSingleChar;
+begin
+  // 中 = D6 D0，GB2312 一级字
+  CheckEqual('中', GbkToUtf8(#$D6#$D0));
+end;
+
+procedure TestGbkExtended;
+begin
+  // 囧 = 87 E5，GBK 扩展区（非 GB2312）
+  CheckEqual('囧', GbkToUtf8(#$87#$E5));
+end;
+
+procedure TestGbkMixed;
+begin
+  CheckEqual('a你好b', GbkToUtf8('a' + #$C4#$E3#$BA#$C3 + 'b'));
+end;
+
+procedure TestGbkInvalid;
+begin
+  CheckEqual('', GbkToUtf8(#$C4));        // 孤立首字节
+  CheckEqual('', GbkToUtf8(#$C4#$7F));    // 尾字节 0x7F 非法
+  CheckEqual('', GbkToUtf8(#$C4#$20));    // 尾字节越下界
+  CheckEqual('', GbkToUtf8(#$FF));        // 首字节越上界
+  CheckEqual('', GbkToUtf8(#$81#$40#$C4));// 前缀合法后跟孤立字节
+end;
+
 { Main }
 
 begin
@@ -291,6 +335,14 @@ begin
   T.Test('URL reserved chars', @TestUrlReserved);
   T.Test('URL no double encode', @TestUrlNoDoubleEncode);
   T.Test('URL unreserved passthrough', @TestUrlUnreserved);
+
+  T.Test('GBK empty', @TestGbkEmpty);
+  T.Test('GBK ASCII passthrough', @TestGbkAscii);
+  T.Test('GBK hello', @TestGbkHello);
+  T.Test('GBK single char', @TestGbkSingleChar);
+  T.Test('GBK extended char', @TestGbkExtended);
+  T.Test('GBK mixed', @TestGbkMixed);
+  T.Test('GBK invalid sequences', @TestGbkInvalid);
 
   if not T.Run then Halt(1);
 end.
