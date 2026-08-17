@@ -26,7 +26,13 @@ uses
   nextpas.core.tui.widget.split_pane,
   nextpas.core.tui.widget.select,
   nextpas.core.tui.widget.statusbar,
-  nextpas.core.tui.widget.progress_group;
+  nextpas.core.tui.widget.progress_group,
+  nextpas.core.tui.widget.breadcrumb,
+  nextpas.core.tui.widget.timeline,
+  nextpas.core.tui.widget.kanban,
+  nextpas.core.tui.widget.markdown,
+  nextpas.core.tui.widget.tooltip,
+  nextpas.core.tui.widget.toast;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -95,6 +101,30 @@ type
   IProgressGroup = nextpas.core.tui.widget.progress_group.IProgressGroup;
   TProgressItem = nextpas.core.tui.widget.progress_group.TProgressItem;
   TProgressGroup = nextpas.core.tui.widget.progress_group.TProgressGroup;
+  IBreadcrumb = nextpas.core.tui.widget.breadcrumb.IBreadcrumb;
+  TBreadcrumb = nextpas.core.tui.widget.breadcrumb.TBreadcrumb;
+  TTimelineEvent = nextpas.core.tui.widget.timeline.TTimelineEvent;
+  ITimeline = nextpas.core.tui.widget.timeline.ITimeline;
+  TTimeline = nextpas.core.tui.widget.timeline.TTimeline;
+  TKanbanCard = nextpas.core.tui.widget.kanban.TKanbanCard;
+  TKanbanColumn = nextpas.core.tui.widget.kanban.TKanbanColumn;
+  TKanbanState = nextpas.core.tui.widget.kanban.TKanbanState;
+  IKanban = nextpas.core.tui.widget.kanban.IKanban;
+  TKanban = nextpas.core.tui.widget.kanban.TKanban;
+  TMdLineKind = nextpas.core.tui.widget.markdown.TMdLineKind;
+  TMdLine = nextpas.core.tui.widget.markdown.TMdLine;
+  TMdLineArray = nextpas.core.tui.widget.markdown.TMdLineArray;
+  TMdTheme = nextpas.core.tui.widget.markdown.TMdTheme;
+  IMarkdown = nextpas.core.tui.widget.markdown.IMarkdown;
+  TMarkdown = nextpas.core.tui.widget.markdown.TMarkdown;
+  TTooltipPosition = nextpas.core.tui.widget.tooltip.TTooltipPosition;
+  ITooltip = nextpas.core.tui.widget.tooltip.ITooltip;
+  TTooltip = nextpas.core.tui.widget.tooltip.TTooltip;
+  TToastPosition = nextpas.core.tui.widget.toast.TToastPosition;
+  TToastLevel = nextpas.core.tui.widget.toast.TToastLevel;
+  TToastItem = nextpas.core.tui.widget.toast.TToastItem;
+  IToastManager = nextpas.core.tui.widget.toast.IToastManager;
+  TToastManager = nextpas.core.tui.widget.toast.TToastManager;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;
@@ -121,6 +151,11 @@ const
   PanelEdgesInner: TPanelEdges = [peInnerH, peInnerV];
   PanelEdgesNone: TPanelEdges = [];
 
+  tlInfo = nextpas.core.tui.widget.toast.tlInfo;
+  tlSuccess = nextpas.core.tui.widget.toast.tlSuccess;
+  tlWarning = nextpas.core.tui.widget.toast.tlWarning;
+  tlError = nextpas.core.tui.widget.toast.tlError;
+
 function ColorIsSet(const AColor: nextpas.core.tui.TColor): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
 function StyleDefault: TStyle; inline;
@@ -132,6 +167,7 @@ function PanelCell(const AGrid: TPanelGrid; ACol, ARow: Integer): nextpas.core.t
 function PanelCellSpan(const AGrid: TPanelGrid; ACol, ARow, AColSpan,
   ARowSpan: Integer): nextpas.core.tui.TRect; inline;
 function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit; inline;
+function MakeColumn(const ATitle: AnsiString; const ACards: array of TKanbanCard): TKanbanColumn; inline;
 
 implementation
 
@@ -181,6 +217,11 @@ end;
 function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit;
 begin
   Result := nextpas.core.tui.widget.panel.PanelHitTestSep(AGrid, AX, AY);
+end;
+
+function MakeColumn(const ATitle: AnsiString; const ACards: array of TKanbanCard): TKanbanColumn;
+begin
+  Result := nextpas.core.tui.widget.kanban.MakeColumn(ATitle, ACards);
 end;
 
 end.
