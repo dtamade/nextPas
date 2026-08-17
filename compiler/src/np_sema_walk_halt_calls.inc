@@ -8,9 +8,6 @@ var
   Operand: string;
   Value, CondValue, Folded: Int64;
   Decoded, StringValue, FuncName, ArgName, DestroyFuncName: string;
-  StrVarName: string;
-  MemberName: string;
-  UsedExcMemberArg: Boolean;
   AncestorName: string;
   OwnerClassName: string;
   ReceiverName: string;
