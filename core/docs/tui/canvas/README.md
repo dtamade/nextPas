@@ -2,7 +2,7 @@
 
 **域**: `nextpas.core.tui.canvas`（tui 名空间下的独立子域，不修改任何已封板的 tui 单元）
 
-**状态**: 新增子域 · 基础能力已交付（doc/raster/edit/view + 测试 + 基准 + 示例）
+**状态**: 新增子域 · 基础能力已交付（doc/raster/edit/view/clipboard/floodfill/export + 测试 + 基准 + 示例）
 
 ## 定位
 
@@ -22,6 +22,9 @@
 | `nextpas.core.tui.canvas.raster` | `RasterLine`（Bresenham 顺序点）、`RasterRectOutline/Fill`、`RasterEllipseOutline/Fill`，纯回调输出 |
 | `nextpas.core.tui.canvas.edit` | `TCanvasEditBuilder` 收集增量、`TCanvasUndoLog` 双栈撤销、`CanvasApplyOp(Inverse)` |
 | `nextpas.core.tui.canvas.view` | `TCanvasView`：文档↔屏幕坐标、缩放 1..4、平移/居中、屏幕行脏标记 |
+| `nextpas.core.tui.canvas.clipboard` | `TCanvasClipboard`：应用内单槽剪贴板（矩形快照复制/粘贴、越界裁剪、经 builder 入撤销栈） |
+| `nextpas.core.tui.canvas.floodfill` | `CanvasFloodFill4`：4-连通种子填充（显式栈、10 万格上限、增量可撤销） |
+| `nextpas.core.tui.canvas.export` | `CanvasExportTxt`/`CanvasExportAnsi`：活动层导出纯字形 / SGR 着色文本（零 RTL 依赖） |
 | `nextpas.core.tui.canvas` | 聚合门面（纯 re-export） |
 
 ## 快速上手
