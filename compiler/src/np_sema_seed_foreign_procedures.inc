@@ -115,6 +115,10 @@ begin
   { record 类型别名返回形态常量后置补齐(TStringBuilder.ToString i64 假形态
     根因): 必须在调用绑定(SeedCallBindings)之前完成。 }
   FixupAliasMethodSymbols;
+  { 跨单元常量别名 seed 时序: fs.pas 的 const 段处理时 error.pas 的基常量
+    未登记 → 别名常量没进表 → 引用处 residual。所有单元 seed 完后补登
+    (PLATFORM_FS_SHORT_READ_ERROR 3 uses)。 }
+  FinalizeConstSections;
   RebindExplicitClassParents;
   CompletePendingSignatures;
   AssignScopesToSymbols;
