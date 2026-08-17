@@ -11,6 +11,7 @@ unit nextpas.core.tui.canvas;
  *   - clipboard  应用内剪贴板（矩形快照复制/粘贴）
  *   - floodfill  4-连通区域种子填充（CanvasFloodFill4）
  *   - export     活动层导出 txt / ansi
+ *   - docstore   文档持久化 JSON 序列化（CanvasDocSaveToJson/LoadFromJson）
  *
  * 若只需其中一部分，可直接 use 对应子件，不必引入整域。
  *}
@@ -26,7 +27,8 @@ uses
   nextpas.core.tui.canvas.view,
   nextpas.core.tui.canvas.clipboard,
   nextpas.core.tui.canvas.floodfill,
-  nextpas.core.tui.canvas.export;
+  nextpas.core.tui.canvas.export,
+  nextpas.core.tui.canvas.docstore;
 
 implementation
 

@@ -25,6 +25,7 @@
 | `nextpas.core.tui.canvas.clipboard` | `TCanvasClipboard`：应用内单槽剪贴板（矩形快照复制/粘贴、越界裁剪、经 builder 入撤销栈） |
 | `nextpas.core.tui.canvas.floodfill` | `CanvasFloodFill4`：4-连通种子填充（显式栈、10 万格上限、增量可撤销） |
 | `nextpas.core.tui.canvas.export` | `CanvasExportTxt`/`CanvasExportAnsi`：活动层导出纯字形 / SGR 着色文本（零 RTL 依赖） |
+| `nextpas.core.tui.canvas.docstore` | `CanvasDocSaveToJson`/`CanvasDocLoadFromJson`：文档↔JSON 持久化（RLE 行编码 + 调色板去重，格式版本 1） |
 | `nextpas.core.tui.canvas` | 聚合门面（纯 re-export） |
 
 ## 快速上手
