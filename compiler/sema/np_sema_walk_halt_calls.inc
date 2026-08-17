@@ -2634,6 +2634,58 @@ begin
             { No VmtSlot — fall through to direct Intf.Method (should be rare). }
             InhParentName := StringValue;
           end;
+          { class virtual: 语句位历来按 direct call 静态绑定到声明类符号,
+            abstract virtual(无方法体, TCollection.Clear/AppendToUnchecked 即此)
+            产生 undefined 符号。命中 vmt 槽改发 vcall 槽 dispatch, 与上方
+            interface ivcall 分支同构(builder/emitter 已支持 vcall)。 }
+          Value := TypeMetaVmtSlot(StringValue,
+            Child.ChildAt(0).ChildAt(0).ChildAt(1).Text);
+          if Value >= 0 then
+          begin
+            Operand := 'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;
+            CondValue := 0; { ExtraArgCount = 实际入栈数 }
+            for ArgIndex := 1 to Child.ChildAt(0).ChildCount - 1 do
+            begin
+              RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
+              if RhsNode = nil then
+                Continue;
+              if (RhsNode.NodeKind = gnkIdentifier) and
+                SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+              begin
+                Operand := Operand + 'varref ' + FCurrentRetVarName + #10;
+                Inc(CondValue);
+                Continue;
+              end;
+              if (RhsNode.NodeKind = gnkIdentifier) and
+                IsRuntimeArrVar(RhsNode.Text) then
+              begin
+                Operand := Operand + 'var ' + RhsNode.Text + '$ptr' + #10;
+                Inc(CondValue);
+                Continue;
+              end;
+              if EvaluateIntegerConstant(RhsNode, Folded) then
+              begin
+                Operand := Operand + 'int ' + IntToStr(Folded) + #10;
+                Inc(CondValue);
+                Continue;
+              end;
+              if EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              begin
+                Operand := Operand + Decoded;
+                Inc(CondValue);
+              end;
+            end;
+            Operand := Operand + 'vcall ' + IntToStr(Value) + ' ' +
+              IntToStr(CondValue);
+            if TypeMetaRetPtr(StringValue,
+              Child.ChildAt(0).ChildAt(0).ChildAt(1).Text) then
+              Operand := Operand + ' p';
+            Operand := Operand + #10;
+            NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__',
+              0, 0, Operand);
+            AttachStatementCallExpr(NodeId, Child.ChildAt(0));
+            Continue;
+          end;
           Operand := InhParentName + '.' +
             Child.ChildAt(0).ChildAt(0).ChildAt(1).Text + #9 +
             'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;
@@ -2818,6 +2870,46 @@ begin
               Continue;
             end;
           end;
+          { class virtual 语句位(无参或带参 DotAccess): 与分支 1 同理,
+            命中 vmt 槽改发 vcall dispatch, 避免 abstract virtual direct call
+            产生 undefined 符号。 }
+          Value := TypeMetaVmtSlot(StringValue,
+            Child.ChildAt(0).ChildAt(1).Text);
+          if Value >= 0 then
+          begin
+            Operand := 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
+            CondValue := 0; { ExtraArgCount }
+            Arg := nil;
+            if Child.ChildAt(0).NodeKind = gnkFunctionCall then
+              Arg := Child.ChildAt(0)
+            else if (Child.ChildCount >= 2) and
+              (Child.ChildAt(1) <> nil) and
+              (Child.ChildAt(1).NodeKind = gnkFunctionCall) then
+              Arg := Child.ChildAt(1);
+            if Arg <> nil then
+            begin
+              for ArgIndex := 1 to Arg.ChildCount - 1 do
+              begin
+                RhsNode := Arg.ChildAt(ArgIndex);
+                if (RhsNode <> nil) and
+                  EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                begin
+                  Operand := Operand + Decoded;
+                  Inc(CondValue);
+                end;
+              end;
+            end;
+            Operand := Operand + 'vcall ' + IntToStr(Value) + ' ' +
+              IntToStr(CondValue);
+            if TypeMetaRetPtr(StringValue,
+              Child.ChildAt(0).ChildAt(1).Text) then
+              Operand := Operand + ' p';
+            Operand := Operand + #10;
+            NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__',
+              0, 0, Operand);
+            AttachStatementCallExpr(NodeId, Child.ChildAt(0));
+            Continue;
+          end;
           InhParentName := StringValue;
           while (InhParentName <> '') and
             (FModel.FindSymbolByName(InhParentName + '.' +
@@ -2873,6 +2965,47 @@ begin
         LookupProcedureBody(FCurrentMethodClass + '.' + Child.Text,
           BranchNode, DeclNode) then
       begin
+        { implicit-self 语句位 class virtual(无 receiver 方法调用): 同理
+          命中 vmt 槽改发 vcall, 避免 abstract virtual direct call undefined。 }
+        Value := TypeMetaVmtSlot(FCurrentMethodClass, Child.Text);
+        if Value >= 0 then
+        begin
+          Operand := 'var self' + #10;
+          CondValue := 0; { ExtraArgCount }
+          Arg := nil;
+          if (Child.ChildCount >= 1) and
+            (Child.ChildAt(0) <> nil) and
+            (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+            Arg := Child.ChildAt(0)
+          else
+            Arg := Child;
+          if Arg <> nil then
+          begin
+            if Arg.NodeKind = gnkFunctionCall then
+              ArgIndex := 1
+            else
+              ArgIndex := 0;
+            while ArgIndex < Arg.ChildCount do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+              begin
+                Operand := Operand + Decoded;
+                Inc(CondValue);
+              end;
+              Inc(ArgIndex);
+            end;
+          end;
+          Operand := Operand + 'vcall ' + IntToStr(Value) + ' ' +
+            IntToStr(CondValue);
+          if TypeMetaRetPtr(FCurrentMethodClass, Child.Text) then
+            Operand := Operand + ' p';
+          Operand := Operand + #10;
+          NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__',
+            0, 0, Operand);
+          AttachStatementCallExpr(NodeId, Child);
+          Continue;
+        end;
         Operand := FCurrentMethodClass + '.' + Child.Text + #9 +
           'var self' + #10;
         Arg := nil;
