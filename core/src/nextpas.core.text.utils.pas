@@ -4,6 +4,9 @@ unit nextpas.core.text.utils;
 
 interface
 
+uses
+  nextpas.core.base;
+
 function Trim(const S: string): string;
 function TrimLeft(const S: string): string;
 function TrimRight(const S: string): string;
@@ -20,6 +23,13 @@ function StrToIntDef(const S: string; ADefault: Int64): Int64;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
 function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 function QuotedStr(const S: string): string;
+
+{** @desc 从 AFrom(1-based)起查找子串;空子串在有效范围内命中 AFrom。
+        找不到或 AFrom 越界返回 0。StrUtils.PosEx 语义。 *}
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
+{** @desc 按 Delimiters 中任意字符切分;连续分隔符不产生空段;尾部分隔符不产生尾空段。
+        SysUtils.SplitString 语义。 *}
+function SplitString(const S, Delimiters: string): TStringArray;
 
 {** @desc 拷贝字符串到定长字节缓冲(截断至 ABufLen-1,留下 NUL;不抛)。
         返回源串字符数(截断前)。线程安全(无共享状态)。 *}
@@ -193,6 +203,60 @@ end;
 function QuotedStr(const S: string): string;
 begin
   Result := '''' + StringReplace(S, '''', '''''') + '''';
+end;
+
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer): Integer;
+var
+  LI, LJ, LSubLen, LStrLen: Integer;
+begin
+  LSubLen := Length(ASubStr);
+  LStrLen := Length(AStr);
+  Result := 0;
+  if AFrom < 1 then
+    Exit;
+  if LSubLen = 0 then
+  begin
+    if AFrom <= LStrLen + 1 then
+      Result := AFrom;
+    Exit;
+  end;
+  if AFrom > LStrLen - LSubLen + 1 then
+    Exit;
+  for LI := AFrom to LStrLen - LSubLen + 1 do
+  begin
+    LJ := 1;
+    while (LJ <= LSubLen) and (AStr[LI + LJ - 1] = ASubStr[LJ]) do
+      Inc(LJ);
+    if LJ > LSubLen then
+      Exit(LI);
+  end;
+end;
+
+function SplitString(const S, Delimiters: string): TStringArray;
+var
+  I, Start, Count: Integer;
+begin
+  { 连续分隔符不产生空段:SysUtils.SplitString 语义,行拆分等场景依赖 }
+  SetLength(Result, 0);
+  Count := 0;
+  Start := 1;
+  for I := 1 to Length(S) do
+    if System.Pos(S[I], Delimiters) > 0 then
+    begin
+      if I > Start then
+      begin
+        Inc(Count);
+        SetLength(Result, Count);
+        Result[Count - 1] := System.Copy(S, Start, I - Start);
+      end;
+      Start := I + 1;
+    end;
+  if Start <= Length(S) then
+  begin
+    Inc(Count);
+    SetLength(Result, Count);
+    Result[Count - 1] := System.Copy(S, Start, Length(S) - Start + 1);
+  end;
 end;
 
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
