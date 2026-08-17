@@ -119,6 +119,16 @@ function UserConfigDir(const AAppName: string = ''): string;
  * @note 根目录环境变量不存在时返回空字符串
  *}
 function UserDataDir(const AAppName: string = ''): string;
+{** @desc 获取用户状态目录
+ *
+ * @params
+ *   AAppName  可选应用名；非空时拼接到状态根目录下
+ *
+ * @return Unix: $XDG_STATE_HOME 或 $HOME/.local/state；Windows: %LOCALAPPDATA%
+ *
+ * @note 根目录环境变量不存在时返回空字符串
+ *}
+function UserStateDir(const AAppName: string = ''): string;
 
 implementation
 
@@ -526,6 +536,28 @@ begin
     LHome := GetEnv('HOME');
     if LHome <> '' then
       Result := LHome + '/.local/share'
+    else
+      Result := '';
+  end;
+{$ENDIF}
+  Result := JoinUserDir(Result, AAppName);
+end;
+
+function UserStateDir(const AAppName: string): string;
+var
+  LHome: string;
+  LXdg: string = '';
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('LOCALAPPDATA');
+{$ELSE}
+  if TryGetEnv('XDG_STATE_HOME', LXdg) and (LXdg <> '') then
+    Result := LXdg
+  else
+  begin
+    LHome := GetEnv('HOME');
+    if LHome <> '' then
+      Result := LHome + '/.local/state'
     else
       Result := '';
   end;

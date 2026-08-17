@@ -512,6 +512,30 @@ begin
   end;
 end;
 
+procedure TestUserStateDir;
+var
+  LState, LSaved: string;
+  LHadXdg: Boolean;
+begin
+  LHadXdg := TryGetEnv('XDG_STATE_HOME', LSaved);
+  try
+    UnsetEnv('XDG_STATE_HOME');
+    LState := UserStateDir;
+    Check(LState <> '', 'UserStateDir is not empty');
+    Check(Pos('.local/state', LState) > 0, 'UserStateDir fallback contains .local/state');
+
+    SetEnv('XDG_STATE_HOME', '/tmp/nextpas-xdg-state-test');
+    LState := UserStateDir('app');
+    CheckEqual('/tmp/nextpas-xdg-state-test/app', LState,
+      'UserStateDir XDG + AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_STATE_HOME', LSaved)
+    else
+      UnsetEnv('XDG_STATE_HOME');
+  end;
+end;
+
 procedure TestExpandEnv_PercentVar;
 begin
   SetEnv('NEXTPAS_TEST_PERCENT', 'pctval');
@@ -966,6 +990,7 @@ begin
   T.Test('UserCacheDir', @TestUserCacheDir);
   T.Test('UserConfigDir', @TestUserConfigDir);
   T.Test('UserDataDir', @TestUserDataDir);
+  T.Test('UserStateDir', @TestUserStateDir);
   T.Test('ExpandEnv_PercentVar', @TestExpandEnv_PercentVar);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
