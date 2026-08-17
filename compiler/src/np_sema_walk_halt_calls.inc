@@ -2905,7 +2905,7 @@ begin
               if RhsNode = nil then
                 Continue;
               if (RhsNode.NodeKind = gnkIdentifier) and
-                RhsNode.TextEquals('Result', True) and (FCurrentRetVarName <> '') then
+                SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
               begin
                 Operand := Operand + 'varref ' + FCurrentRetVarName + #10;
                 Inc(CondValue);
