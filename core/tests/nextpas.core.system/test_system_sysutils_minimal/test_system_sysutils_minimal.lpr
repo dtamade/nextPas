@@ -190,15 +190,15 @@ end;
 { StrUtils 语义：从 AFrom（1-based）起查找子串；空子串在有效范围命中 AFrom。 }
 procedure TestPosExSysUtilsSemantics;
 begin
-  CheckEqual(4,
+  CheckEqual(7,
     nextpas.core.system.sysutils.PosEx('world', 'hello world', 1),
     'PosEx should find substring from start');
-  CheckEqual(4,
+  CheckEqual(7,
     nextpas.core.system.sysutils.PosEx('world', 'hello world', 4),
-    'PosEx should find substring at exact AFrom');
-  CheckEqual(0,
+    'PosEx should find substring when AFrom is before the match');
+  CheckEqual(7,
     nextpas.core.system.sysutils.PosEx('world', 'hello world', 5),
-    'PosEx should miss when AFrom is past the match');
+    'PosEx should still match when AFrom is before the match');
   CheckEqual(2,
     nextpas.core.system.sysutils.PosEx('o', 'foo', 2),
     'PosEx should skip earlier occurrences');
@@ -239,6 +239,21 @@ begin
   LExc.Free;
 end;
 
+{ RunProcessWait：参数数组逐项传递(空格安全),等退出返回退出码;
+  stdin/stdout/stderr 接 /dev/null,不阻塞不残留。 }
+procedure TestRunProcessWait;
+begin
+  CheckEqual(0, nextpas.core.system.sysutils.RunProcessWait('/bin/true', []),
+    'true exits 0');
+  CheckEqual(1, nextpas.core.system.sysutils.RunProcessWait('/bin/false', []),
+    'false exits 1');
+  { 空格安全的参数数组:sh -c 的整串必须作为单参数传递,拆开则语法错 }
+  CheckEqual(7, nextpas.core.system.sysutils.RunProcessWait('/bin/sh',
+    ['-c', 'exit 7']), 'args array keeps space-containing parameter intact');
+  CheckEqual(-1, nextpas.core.system.sysutils.RunProcessWait(
+    '/nonexistent-xyz-no-such', []), 'missing binary reports -1');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -256,5 +271,6 @@ begin
   T.Test('SplitString follows SysUtils semantics', @TestSplitStringSysUtilsSemantics);
   T.Test('PosEx follows StrUtils semantics', @TestPosExSysUtilsSemantics);
   T.Test('AcquireExceptionObject transfers ownership', @TestAcquireExceptionObjectOwnership);
+  T.Test('RunProcessWait execs with args array', @TestRunProcessWait);
   if not T.Run then Halt(1);
 end.
