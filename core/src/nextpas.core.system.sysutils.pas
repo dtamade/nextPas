@@ -313,7 +313,9 @@ end;
 
 function AcquireExceptionObject: Pointer;
 begin
-  Result := SysUtils.AcquireExceptionObject;
+  { FPC 3.3.x 起 AcquireExceptionObject 从 SysUtils 移入 System 单元：
+    SysUtils 限定调用失效（RTL 漂移实测），未限定在 System 域解析。 }
+  Result := AcquireExceptionObject;
 end;
 
 function SplitString(const S, Delimiters: string): TStringArray;
