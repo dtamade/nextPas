@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 B-destroy-fallback 后实测）
+## 当前战况（2026-08-17 C-alias 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **28** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷)** |
-| undefined total | **41** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷)** |
+| undefined unique | **27** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸)** |
+| undefined total | **39** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -94,6 +94,24 @@ receiver 两处）在 `TypeMetaVmtSlot('Destroy')`/`$vmt_func_` 解析出的
 `@TAstFacade.Destroy` → undefined。验证：29/42 → 28/41；.ll 中该槽位
 call 从 `@TAstFacade.Destroy` 变 `@TObject.Destroy`（同函数 14 个 destroy
 调用中唯一异常者归位）；compiler-pass 58/58；hygiene pass。
+
+⁸ C-alias（本 commit）：record 类型别名（`TStringBuilder = TBufStringBuilder`，
+`core/src/nextpas.core.text.builder.pas:67`）的 receiver 方法调用
+（`LBuilder.ToString`，`nextpas.core.text.utils.pas:187`）callee 名用 receiver
+声明类型名拼限定名，而 record 方法既不注册 method symbol 也不复制
+`$ret_str_/$ret_ptr_` 形态常量（别名处理块只复制 interface/class 的
+VmtSlots）→ 返回形态判定失败（i64 假形态）且 `@TStringBuilder.ToString`
+未定义。修复两层：① `walk_halt_calls` 三处 record receiver 方法发射点
+（`Result := recvar.Method`、WriteLn 方法 sret、WriteLn 字段/方法）经新增
+`ResolveRecordAliasTypeName`（沿 AliasTargetTypeId 只解析 record 目标链）
+把 callee 名落到真实定义类型；② `FixupAliasMethodSymbols` 后置补齐从
+FProcedureBodies（record 方法无 symbol，只能从 body Decl 判定返回形态）
+复制 `$ret_str_/$ret_ptr_` 常量。TEMP-DIAG 实证：别名 AliasTargetTypeId
+已就位（=1864），符号表无 `TBufStringBuilder.ToString`（record 方法
+走 body 索引非符号表），卡点在绑定早退 + 发射名未跟随。验证：28/41 →
+27/39（恰为 ToString 2 处调用）；.ll 两处 `call i64 @TStringBuilder.ToString`
+变 `call void @TBufStringBuilder.ToString(ptr sret(%TString), …)`；
+compiler-pass 58/58；hygiene pass。
 | opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——宿主 `AVX2ArrayFractF64`（`pD[i] := pS[i] - Int(pS[i])`）；**依赖 Double 运算编码（全 .ll 无 load double/fadd——编译器从未支持浮点标量运算），需单独立项而非 B4 装填** | 本轮后仍 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 

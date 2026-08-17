@@ -1376,6 +1376,8 @@ begin
             FuncName := LookupClassVar(Arg.ChildAt(0).Text);
             if FuncName = '' then
               FuncName := LookupRecordVar(Arg.ChildAt(0).Text);
+            if FuncName <> '' then
+              FuncName := ResolveRecordAliasTypeName(FuncName);
             if TypeMetaFieldIsStr(FuncName, Arg.ChildAt(1).Text) then
             begin
               Value := TypeMetaFieldIndex(FuncName, Arg.ChildAt(1).Text);
@@ -1960,6 +1962,8 @@ begin
                 FuncName := LookupRecordVar(RhsNode.ChildAt(0).ChildAt(0).Text);
               if FuncName = '' then
                 FuncName := RhsNode.ChildAt(0).ChildAt(0).Text;
+              if FuncName <> '' then
+                FuncName := ResolveRecordAliasTypeName(FuncName);
               StringValue := FuncName + '.' + RhsNode.ChildAt(0).ChildAt(1).Text;
               if IsOwnedStringReturnFunc(StringValue) or
                 IsOwnedStringReturnFunc(RhsNode.ChildAt(0).ChildAt(1).Text) or
@@ -2004,6 +2008,8 @@ begin
               FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
               if FuncName = '' then
                 FuncName := LookupRecordVar(RhsNode.ChildAt(0).Text);
+              if FuncName <> '' then
+                FuncName := ResolveRecordAliasTypeName(FuncName);
               if TypeMetaFieldIsStr(FuncName, RhsNode.ChildAt(1).Text) then
               begin
                 Value := TypeMetaFieldIndex(FuncName, RhsNode.ChildAt(1).Text);
