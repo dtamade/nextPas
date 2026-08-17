@@ -367,6 +367,10 @@ begin
     'entry:' + LineEnding +
     '  ret i64 0' + LineEnding +
     '}' + LineEnding + LineEnding +
+    'define i64 @TWorker.Create(ptr %self) {' + LineEnding +
+    'entry:' + LineEnding +
+    '  ret i64 0' + LineEnding +
+    '}' + LineEnding + LineEnding +
     'define i64 @TWorker.Destroy(ptr %self) {' + LineEnding +
     'entry:' + LineEnding +
     '  ret i64 0' + LineEnding +

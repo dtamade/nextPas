@@ -125,7 +125,7 @@ uses
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
-  Result := TextFormat(AFmt, AArgs);
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;

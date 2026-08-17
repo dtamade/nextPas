@@ -7,6 +7,7 @@ program test_platform_fs_toctou;
 {$I nextpas.core.settings.inc}
 
 uses
+  cthreads,
   nextpas.core.fs,
   nextpas.core.fs.util,
   nextpas.core.text.conv,

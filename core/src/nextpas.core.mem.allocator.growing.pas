@@ -468,7 +468,7 @@ begin
       NpSystemFreeMem(APtr);
     Exit;
   end;
-  if LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId)) then
+  if LOwnerThreadId <> platform_thread_id then
   begin
     CentralPoolFree(FCentrals[LIndex], 1, @APtr);
     Exit;

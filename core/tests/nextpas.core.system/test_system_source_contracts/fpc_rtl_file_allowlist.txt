@@ -5,6 +5,7 @@
 SysUtils|nextpas.core.bench.pas
 SysUtils|nextpas.core.errors.pas
 SysUtils|nextpas.core.exception.pas
+SysUtils|nextpas.core.thread.base.pas
 SysUtils|nextpas.core.git.libgit2.backend.pas
 SysUtils|nextpas.core.git.libgit2.pas
 SysUtils|nextpas.core.http.impl.h1.parser.pas

@@ -53,8 +53,10 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |
 | `lockfree` | L1 | lock-free structures | yes | L0 plus approved L1 | focused-runtime |
 | `log` | L3 | logging runtime | yes | L0-L2; `log.intf` is L0 seam | focused-runtime |
+| `mail` | L3 | mail/SMTP domain | yes | L0-L2 | focused-runtime |
 | `math` | L0 | scalar/math contracts | yes | L0 only | focused-runtime |
 | `mem` | L0 with debt | allocators/pools | yes | L0 only; explicit debt allowlist | source-contract |
+| `mime` | L2 | MIME format layer | yes | L0-L1 | focused-runtime |
 | `multipart` | L2 | multipart format | yes | L0-L1 | focused-runtime |
 | `net` | L2 | networking | yes | L0-L1 | focused-runtime |
 | `numa` | L2 | NUMA topology/alloc | yes | L0-L1; host units debt | draft |

@@ -1,6 +1,6 @@
 program test_platform_signal_wine;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.platform.signal;

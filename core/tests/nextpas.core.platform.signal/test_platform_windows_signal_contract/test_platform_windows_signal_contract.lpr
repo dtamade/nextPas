@@ -74,10 +74,16 @@ procedure TestWindowsSignalBranchIsNotStub;
 var
   LSignal: string;
   LWindowsBranch: string;
+  LImplStart: SizeInt;
 begin
   LSignal := LoadSourceText('src/nextpas.core.platform.signal.pas');
-  LWindowsBranch := SliceBetween(LSignal, '{$IFDEF NEXTPAS_WINDOWS}',
-    '{$IF not defined(NEXTPAS_LINUX)');
+  { First {$IFDEF NEXTPAS_WINDOWS} guards the PLATFORM_SIGBREAK constant;
+    the implementation branch is the second occurrence later in the file. }
+  LImplStart := Pos('{$IFDEF NEXTPAS_WINDOWS}', LSignal);
+  LImplStart := Pos('{$IFDEF NEXTPAS_WINDOWS}',
+    Copy(LSignal, LImplStart + 1, Length(LSignal))) + LImplStart;
+  LWindowsBranch := SliceBetween(Copy(LSignal, LImplStart, Length(LSignal)),
+    '{$IFDEF NEXTPAS_WINDOWS}', '{$IF not defined(NEXTPAS_LINUX)');
   CheckAbsent(LWindowsBranch, 'Result := -1',
     'Windows signal branch must not return bare stub errors');
   CheckAbsent(LWindowsBranch, 'use SetConsoleCtrlHandler directly',

@@ -1230,7 +1230,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas|nextpas.core.system.heap.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"
@@ -1591,7 +1591,7 @@ require_token "src/nextpas.core.system.sysutils.pas" "ExceptClass = nextpas.core
 require_token "src/nextpas.core.system.sysutils.pas" "EConvertError = nextpas.core.exception.EConvertError;"
 require_token "src/nextpas.core.system.sysutils.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
 require_token "src/nextpas.core.system.sysutils.pas" "function Format"
-require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.conv.Format"
+require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.text.format.TextFormat"
 require_sysutils_facade_surface_allowlist
 
 require_file "src/nextpas.core.system.errors.pas"
