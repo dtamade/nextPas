@@ -283,6 +283,51 @@ begin
   nextpas.core.system.sysutils.FreeAndNil(LObj);
   Check(LObj = nil, 'FreeAndNil should nil the variable');
 end;
+procedure TestEncodeDateMatchesRtlEpoch;
+begin
+  Check(nextpas.core.system.sysutils.EncodeDate(1899, 12, 30) = 0,
+    'EncodeDate should pin the RTL epoch 1899-12-30 to 0.0');
+  Check(nextpas.core.system.sysutils.EncodeDate(1900, 1, 1) = 2,
+    'EncodeDate should count days from epoch');
+  Check(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) = 46251,
+    'EncodeDate should match RTL value for modern ISO dates');
+  Check(nextpas.core.system.sysutils.EncodeDate(2024, 2, 29) = 45351,
+    'EncodeDate should handle leap days');
+  Check(nextpas.core.system.sysutils.EncodeDate(9999, 12, 31) = 2958465,
+    'EncodeDate should cover the full Word year range');
+end;
+
+procedure TestEncodeDateInvalidRaises;
+begin
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 2, 30);
+    Check(False, 'EncodeDate should reject 2026-02-30');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad day');
+  end;
+  try
+    nextpas.core.system.sysutils.EncodeDate(2026, 13, 1);
+    Check(False, 'EncodeDate should reject month 13');
+  except
+    on E: nextpas.core.exception.EConvertError do Check(True, 'EncodeDate raises EConvertError for bad month');
+  end;
+end;
+
+procedure TestEncodeDateWholeDayDifference;
+begin
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 17)) = 0,
+    'whole-day difference should be 0 for same date');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 16)) = 1,
+    'whole-day difference should span yesterday');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17) -
+              nextpas.core.system.sysutils.EncodeDate(2026, 8, 18)) = -1,
+    'whole-day difference should be negative for tomorrow');
+  Check(Trunc(nextpas.core.system.sysutils.EncodeDate(2024, 3, 1) -
+              nextpas.core.system.sysutils.EncodeDate(2024, 2, 28)) = 2,
+    'whole-day difference should span leap years');
+end;
 
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
@@ -305,5 +350,8 @@ begin
   T.Test('CompareText is case-insensitive', @TestCompareText);
   T.Test('UnixToDateTime converts epoch', @TestUnixToDateTime);
   T.Test('FreeAndNil nils after free', @TestFreeAndNil);
+  T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
+  T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
+  T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);
   if not T.Run then Halt(1);
 end.

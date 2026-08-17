@@ -79,6 +79,7 @@ function DateTimeToStr(const AValue: TDateTime): string;
 function DateToStr(const AValue: TDateTime): string;
 function TimeToStr(const AValue: TDateTime): string;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
+function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 function UnixToDateTime(const AValue: Int64): TDateTime;
 
 { File system }
@@ -398,6 +399,23 @@ end;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
 begin
   Result := SysUtils.FormatDateTime(AFmt, AValue);
+end;
+
+function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
+const
+  { 1899-12-30 的儒略日：与 RTL TDateTime epoch (0.0) 对齐
+    （1900-01-01 = 2415021，前推两天）。 }
+  DELPHI_EPOCH_JDN = 2415019;
+var
+  LDate: nextpas.core.time.TDate;
+begin
+  { RTL 兼容：1899-12-30 = 0.0。TDate 按儒略日计数，减 epoch 即
+    RTL 口径的整日序号；年份 0..99 按字面值，不复刻 RTL 的
+    1900+ 特例（调用方自行防御古老年份）。 }
+  if not nextpas.core.time.TDate.TryCreate(AYear, AMonth, ADay, LDate) then
+    raise EConvertError.CreateFmt('EncodeDate: invalid date %d-%d-%d',
+      [AYear, AMonth, ADay]);
+  Result := LDate.ToJulianDay - DELPHI_EPOCH_JDN;
 end;
 
 function UnixToDateTime(const AValue: Int64): TDateTime;
