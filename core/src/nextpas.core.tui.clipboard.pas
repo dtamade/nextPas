@@ -164,8 +164,8 @@ begin
     // Write input to stdin
     if Length(AInput) > 0 then
     begin
-      LWritten := platform_process_write_stdin(
-        LPipes.StdinWrite, @AInput[1], Length(AInput));
+      if platform_process_write_stdin_ex(LPipes.StdinWrite, @AInput[1],
+        Length(AInput), LWritten) <> 0 then Exit;
       if LWritten <> Length(AInput) then Exit;
     end;
     // Close stdin to signal EOF
