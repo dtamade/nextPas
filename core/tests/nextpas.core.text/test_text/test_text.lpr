@@ -230,6 +230,8 @@ begin
 end;
 
 procedure TestUtilsSurface;
+var
+  LParts: TStringArray;
 begin
   CheckEqual('hello', nextpas.core.text.utils.Trim('  hello  '), 'utils trim');
   CheckEqual('000hi', nextpas.core.text.utils.PadLeft('hi', 5, '0'), 'utils pad left');
@@ -237,6 +239,45 @@ begin
   CheckEqual('abab', nextpas.core.text.utils.RepeatString('ab', 2), 'utils repeat');
   Check(nextpas.core.text.utils.IsEmpty(''), 'utils empty');
   Check(nextpas.core.text.utils.IsBlank(#9' '#10), 'utils blank');
+
+  { PosEx:StrUtils 语义,1-based 起查 }
+  CheckEqual(7, nextpas.core.text.utils.PosEx('world', 'hello world'), 'posex found');
+  CheckEqual(1, nextpas.core.text.utils.PosEx('hello', 'hello world'), 'posex at 1');
+  CheckEqual(0, nextpas.core.text.utils.PosEx('x', 'abc'), 'posex absent');
+  CheckEqual(2, nextpas.core.text.utils.PosEx('b', 'abc', 2), 'posex from');
+  CheckEqual(0, nextpas.core.text.utils.PosEx('b', 'abc', 3), 'posex from past end');
+  CheckEqual(0, nextpas.core.text.utils.PosEx('b', 'abc', 0), 'posex from below 1');
+  CheckEqual(0, nextpas.core.text.utils.PosEx('abc', 'ab'), 'posex longer needle');
+  CheckEqual(2, nextpas.core.text.utils.PosEx('', 'abc', 2), 'posex empty needle hits from');
+  CheckEqual(0, nextpas.core.text.utils.PosEx('', 'abc', 5), 'posex empty needle past end');
+
+  { SplitString:SysUtils 语义,连续分隔符不产生空段 }
+  LParts := nextpas.core.text.utils.SplitString('a,b,c', ',');
+  CheckEqual(Int64(3), Int64(Length(LParts)), 'split three');
+  CheckEqual('a', LParts[0], 'split 0');
+  CheckEqual('b', LParts[1], 'split 1');
+  CheckEqual('c', LParts[2], 'split 2');
+  LParts := nextpas.core.text.utils.SplitString('a,,b', ',');
+  CheckEqual(Int64(2), Int64(Length(LParts)), 'split no empty between');
+  CheckEqual('a', LParts[0], 'split no empty 0');
+  CheckEqual('b', LParts[1], 'split no empty 1');
+  LParts := nextpas.core.text.utils.SplitString(',a,', ',');
+  CheckEqual(Int64(1), Int64(Length(LParts)), 'split no edge empties');
+  CheckEqual('a', LParts[0], 'split no edge 0');
+  LParts := nextpas.core.text.utils.SplitString('', ',');
+  CheckEqual(Int64(0), Int64(Length(LParts)), 'split empty src');
+  LParts := nextpas.core.text.utils.SplitString('abc', ',');
+  CheckEqual(Int64(1), Int64(Length(LParts)), 'split no delimiter');
+  LParts := nextpas.core.text.utils.SplitString('a-b_c', '-_');
+  CheckEqual(Int64(3), Int64(Length(LParts)), 'split multi delimiter');
+  CheckEqual('a', LParts[0], 'split multi 0');
+  CheckEqual('b', LParts[1], 'split multi 1');
+  CheckEqual('c', LParts[2], 'split multi 2');
+  LParts := nextpas.core.text.utils.SplitString(',,,', ',');
+  CheckEqual(Int64(0), Int64(Length(LParts)), 'split all delimiters');
+  LParts := nextpas.core.text.utils.SplitString('a'#10'b'#10'c', #10);
+  CheckEqual(Int64(3), Int64(Length(LParts)), 'split newline');
+  CheckEqual('b', LParts[1], 'split newline mid');
 end;
 
 procedure TestCopyStrToBuf;
