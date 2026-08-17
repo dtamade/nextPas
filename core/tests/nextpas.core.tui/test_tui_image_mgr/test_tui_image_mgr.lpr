@@ -173,7 +173,7 @@ begin
     { 300x300 封面、CellW=8 CellH=20；区域高 44 行 → Target 224x880（高远超原图） }
     LBuf.PlaceImage($1234, TRect.Make(1, 5, 28, 44), @Pixels[0],
       300*300*4, 300, 300);
-    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
     Check(LBackend.PendingLength <= 500000,
       '大区域重传应 ≤ 原图量级（约480KB），不得放大传输');
   finally
@@ -226,7 +226,7 @@ begin
     { 区域 28x44（目标 224x880，高远超原图）→ 仅缩小规则 → 传原图 300x300 }
     LBuf.PlaceImage($1234, TRect.Make(1, 5, 28, 44), @Pixels[0],
       300*300*4, 300, 300);
-    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
     { 首帧只写约 32KB（全局预算），不得一次性写完整 480KB }
     Check(LBackend.PendingLength <= 32 * 1024 + 512,
       '首帧传输应受 32KB 预算限制');
@@ -234,7 +234,7 @@ begin
     while Frame <= 30 do
     begin
       LPrev := LBackend.PendingLength;
-      LMgr.Resolve(LBuf, Frame, LBackend, 8, 20, EmptyDiffs, 0);
+      LMgr.Resolve(LBuf, Frame, LBackend, 8, 20, EmptyDiffs, 0, False);
       Check(LBackend.PendingLength - LPrev <= 32 * 1024 + 512,
         '每帧传输增量应 ≤ 32KB');
       if LBackend.PendingLength = LPrev then Break;
@@ -284,14 +284,14 @@ begin
     while Frame <= 30 do
     begin
       LPrev := LBackend.PendingLength;
-      LMgr.Resolve(LBufBig, Frame, LBackend, 8, 20, EmptyDiffs, 0);
+      LMgr.Resolve(LBufBig, Frame, LBackend, 8, 20, EmptyDiffs, 0, True);
       if LBackend.PendingLength = LPrev then Break;
       Inc(Frame);
     end;
     Check(Frame <= 20, '大区域应在 20 帧内传完');
     LPrev := LBackend.PendingLength;
     { 阶段 B：扩大到 30x46（目标仍封顶 300x300，包含旧区域）→ 免重传 }
-    LMgr.Resolve(LBufBigger, 100, LBackend, 8, 20, EmptyDiffs, 0);
+    LMgr.Resolve(LBufBigger, 100, LBackend, 8, 20, EmptyDiffs, 0, False);
     Check(not BackendHasFrom(LBackend, LPrev, 'a=t'),
       '扩大且分辨率足够时不应重传');
     Check(BackendHasFrom(LBackend, LPrev, 'a=p'),
@@ -300,11 +300,13 @@ begin
       '扩大重放增量应只有 place 命令');
     LPrev := LBackend.PendingLength;
     { 阶段 C：缩小到 10x10（不包含旧区域）→ 按 id 删除并重传 }
-    LMgr.Resolve(LBufSmall, 200, LBackend, 8, 20, EmptyDiffs, 0);
+    LMgr.Resolve(LBufSmall, 200, LBackend, 8, 20, EmptyDiffs, 0, False);
     Check(BackendHasFrom(LBackend, LPrev, 'a=d,d=i'),
-      '缩小应删除旧数据');
-    Check(BackendHasFrom(LBackend, LPrev, 'a=t'),
-      '缩小应重传');
+      '缩小应删除旧显示（d,i 清显示保留终端数据）');
+    Check(not BackendHasFrom(LBackend, LPrev, 'a=t'),
+      '缩小复用已传数据，不应重传');
+    Check(BackendHasFrom(LBackend, LPrev, 'a=p'),
+      '缩小应 place 新区域');
   finally
     LBufBig.Free;
     LBufBigger.Free;
