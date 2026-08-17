@@ -81,6 +81,10 @@ function TimeToStr(const AValue: TDateTime): string;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
 function UnixToDateTime(const AValue: Int64): TDateTime;
+{ Unix epoch 到 TDateTime 起点(1899-12-30)的天数偏移(SysUtils 语义) }
+const
+  UnixDateDelta = 25569.0;
+procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
 
 { File system }
 function FileExists(const AFileName: string): Boolean;
@@ -421,6 +425,11 @@ end;
 function UnixToDateTime(const AValue: Int64): TDateTime;
 begin
   Result := nextpas.core.time.UnixToDateTime(AValue);
+end;
+
+procedure DecodeDate(const AValue: TDateTime; out AYear, AMonth, ADay: Word);
+begin
+  SysUtils.DecodeDate(AValue, AYear, AMonth, ADay);
 end;
 
 { File system — delegates to nextpas.core.fs }
