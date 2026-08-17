@@ -987,6 +987,18 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 
+{** @desc Windows FILETIME（1601 起 100ns tick）→ Unix 纳秒 epoch。
+    零值（无时间）映射为 0，与 POSIX 侧 stat 失败置零语义一致。 *}
+function WindowsFileTimeToUnixNs(const ATime: FILETIME): Int64; inline;
+var
+  LTicks: UInt64;
+begin
+  LTicks := (UInt64(ATime.dwHighDateTime) shl 32) or UInt64(ATime.dwLowDateTime);
+  if LTicks = 0 then
+    Exit(0);
+  Result := Int64(LTicks - WINDOWS_FILETIME_UNIX_EPOCH_OFFSET_100NS) * 100;
+end;
+
 {** @desc 将 Windows 文件属性映射为平台文件类型
     @param AAttrs dwFileAttributes 值
     @return TPlatformFileType 枚举值 *}
@@ -1204,6 +1216,9 @@ begin
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
   AStat.FileType := WindowsFileAttrsToFileType(LData.dwFileAttributes);
+  AStat.ModTime := WindowsFileTimeToUnixNs(LData.ftLastWriteTime);
+  AStat.AccessTime := WindowsFileTimeToUnixNs(LData.ftLastAccessTime);
+  AStat.CreateTime := WindowsFileTimeToUnixNs(LData.ftCreationTime);
   Result := 0;
 end;
 
@@ -1227,6 +1242,9 @@ begin
   AStat.Mode := LInfo.dwFileAttributes;
   AStat.NLink := LInfo.nNumberOfLinks;
   AStat.FileType := WindowsFileAttrsToFileType(LInfo.dwFileAttributes);
+  AStat.ModTime := WindowsFileTimeToUnixNs(LInfo.ftLastWriteTime);
+  AStat.AccessTime := WindowsFileTimeToUnixNs(LInfo.ftLastAccessTime);
+  AStat.CreateTime := WindowsFileTimeToUnixNs(LInfo.ftCreationTime);
   Result := 0;
 end;
 
