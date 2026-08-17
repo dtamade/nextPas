@@ -29,6 +29,8 @@ type
     function ThumbSize(ATrackHeight: Integer): Integer;
     function HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
     function OffsetFromDragY(const ATrackArea: TRect; ADragY: Integer): Integer;
+    function DragThumbTop(const ATrackArea: TRect;
+      ADragY, AGrabY, AGrabThumbTop: Integer): Integer;
     function PageUp: Integer;
     function PageDown: Integer;
     function Clamped: Integer;
@@ -57,6 +59,8 @@ type
     function ThumbSize(ATrackHeight: Integer): Integer;
     function HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
     function OffsetFromDragY(const ATrackArea: TRect; ADragY: Integer): Integer;
+    function DragThumbTop(const ATrackArea: TRect;
+      ADragY, AGrabY, AGrabThumbTop: Integer): Integer;
     function PageUp: Integer;
     function PageDown: Integer;
     function Clamped: Integer;
@@ -144,6 +148,19 @@ begin
   if LRelY < 0 then LRelY := 0;
   if LRelY > LAvailTrack then LRelY := LAvailTrack;
   Result := (LRelY * LMaxOffset) div LAvailTrack;
+end;
+
+{ 拖动不跳变：指针 Y 减抓取基线（AGrabY-AGrabThumbTop）得拇指顶，再钳制到轨道内。
+  直接映射指针会因「按下点不在拇指顶」产生首帧跳动 }
+function TScrollbar.DragThumbTop(const ATrackArea: TRect;
+  ADragY, AGrabY, AGrabThumbTop: Integer): Integer;
+var LThumbH, LMax: Integer;
+begin
+  LThumbH := ThumbSize(ATrackArea.Height);
+  Result := ADragY - (AGrabY - AGrabThumbTop);
+  if Result < ATrackArea.Y then Result := ATrackArea.Y;
+  LMax := ATrackArea.Y + ATrackArea.Height - LThumbH;
+  if Result > LMax then Result := LMax;
 end;
 
 function TScrollbar.PageUp: Integer;

@@ -174,6 +174,21 @@ begin
   Check(LS.OffsetFromDragY(TRect.Make(0, 0, 1, 20), 19) >= 0, 'drag at bottom gives valid offset');
 end;
 
+procedure TestScrollbarDragThumbTop;
+var LS: IScrollbar;
+begin
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10);
+  { ThumbSize(20) = 10*20/100 = 2；轨道 [5, 25)，拇指顶可动区 [5, 23] }
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 10, 8, 6) = 8,
+    'grab baseline offset preserved');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 3, 8, 6) = 5,
+    'clamped to track top');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 40, 8, 6) = 23,
+    'clamped to track bottom minus thumb');
+  Check(LS.DragThumbTop(TRect.Make(0, 5, 1, 20), 10, 10, 10) = 10,
+    'grab at thumb top follows pointer');
+end;
+
 { === Render === }
 
 procedure TestScrollbarRender;
@@ -227,6 +242,9 @@ begin
 
     { OffsetFromDragY }
     T.Test('Scrollbar OffsetFromDragY', @TestScrollbarOffsetFromDragY);
+
+    { DragThumbTop }
+    T.Test('Scrollbar DragThumbTop', @TestScrollbarDragThumbTop);
 
     { Render }
     T.Test('Scrollbar render', @TestScrollbarRender);
