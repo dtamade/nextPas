@@ -19,8 +19,27 @@ list_unit_facade_surface() {
       gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", s)
       return s
     }
-    function strip_pascal_line(s) {
-      gsub(/\{[^}]*\}/, "", s)
+    function strip_pascal_line(s,   i, j) {
+      # Drop block comments ({...}) that span multiple lines: the previous
+      # parser only removed single-line pairs, so the middle lines of a
+      # multi-line comment were misread as interface declarations.
+      if (in_block_comment) {
+        i = index(s, "}")
+        if (i == 0) {
+          return ""
+        }
+        in_block_comment = 0
+        s = substr(s, i + 1)
+      }
+      while ((i = index(s, "{")) > 0) {
+        j = index(s, "}")
+        if (j == 0) {
+          in_block_comment = 1
+          s = substr(s, 1, i - 1)
+          break
+        }
+        s = substr(s, 1, i - 1) substr(s, j + 1)
+      }
       sub(/\/\/.*/, "", s)
       return trim(s)
     }
@@ -30,6 +49,8 @@ list_unit_facade_surface() {
     }
     BEGIN {
       in_interface = 0
+      in_block_comment = 0
+      pending_decl = 0
       section = ""
       type_depth = 0
       unknown = 0
@@ -55,6 +76,14 @@ list_unit_facade_surface() {
         next
       }
       lower_line = tolower(line)
+      if (pending_decl) {
+        # Continuation of a multi-line function/procedure signature (the
+        # parameter list did not close on the declaring line).
+        if (line ~ /\)/) {
+          pending_decl = 0
+        }
+        next
+      }
       if (lower_line ~ /^uses([ \t]|$)/) {
         section = "uses"
         if (line ~ /;/) {
@@ -100,21 +129,33 @@ list_unit_facade_surface() {
       if (match(line, /^generic[ \t]+procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "procedure " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^generic[ \t]+function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "function " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^procedure[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "procedure " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^function[ \t]+([A-Za-z_][A-Za-z0-9_]*)/, parts)) {
         section = ""
         print "function " parts[1]
+        if ((line ~ /\(/) && (line !~ /\)/)) {
+          pending_decl = 1
+        }
         next
       }
       if (match(line, /^operator[ \t]*([^ \t(]+)/, parts)) {
