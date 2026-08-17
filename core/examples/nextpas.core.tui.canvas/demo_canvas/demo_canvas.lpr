@@ -10,12 +10,13 @@ program demo_canvas;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.color,
   nextpas.core.tui.canvas.base,
   nextpas.core.tui.canvas.raster,
   nextpas.core.tui.canvas.edit,
-  nextpas.core.tui.canvas.view;
+  nextpas.core.tui.canvas.view,
+  nextpas.core.text.format,
+  nextpas.core.text.conv;
 
 type
   { 光栅化回调适配器: 每点经 TCanvasEditBuilder.SetPixel 写入文档并记录增量 }
@@ -128,14 +129,14 @@ begin
       LView.SetScreenRect(0, 0, 56, 28);
       LView.SetDocSize(D.Width, D.Height);
       LView.SetZoom(2, 14, 7);
-      WriteLn(Format('view: zoom=%d origin=(%d,%d) doc(14,7)->screen(%d,%d)',
+      WriteLn(TextFormat('view: zoom=%d origin=(%d,%d) doc(14,7)->screen(%d,%d)',
         [LView.Zoom, LView.OriginX, LView.OriginY,
          LView.DocToScreenX(14), LView.DocToScreenY(7)]));
       LView.ConsumeDirty(LFull);
-      WriteLn(Format('view dirty consumed: full=%s', [BoolToStr(LFull, True)]));
+      WriteLn(TextFormat('view dirty consumed: full=%s', [BoolToStr(LFull)]));
       D.SetCell(0, 14, 7, CanvasMakeCell(Ord('*'), TUI_GREEN, TUI_BLACK));
       LView.MarkDocRectDirty(14, 7, 14, 7);
-      WriteLn(Format('doc(14,7) mark -> screen rows %d..%d dirty (zoom %d)',
+      WriteLn(TextFormat('doc(14,7) mark -> screen rows %d..%d dirty (zoom %d)',
         [LView.DocToScreenY(7), LView.DocToScreenY(7) + LView.Zoom - 1, LView.Zoom]));
     finally
       LView.Free;
