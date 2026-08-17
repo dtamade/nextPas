@@ -7,6 +7,7 @@ interface
 const
   PathDelim = '/';
   DirectorySeparator = '/';
+  PathSeparator = '/';
 
   // File attributes
   faAnyFile = $0000003F;
