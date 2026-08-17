@@ -1,5 +1,5 @@
 program test_mmx_raw_leaf_parity;
-{$I ../../src/nextpas.core.settings.inc}
+{$I nextpas.core.settings.inc}
 
 uses
   nextpas.core.thread.init,
