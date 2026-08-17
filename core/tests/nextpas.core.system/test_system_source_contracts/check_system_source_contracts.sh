@@ -434,6 +434,7 @@ function TrimLeft
 function TrimRight
 function UpperCase
 function LowerCase
+function CompareText
 function Pos
 function PosEx
 function SplitString
@@ -445,6 +446,8 @@ function DateTimeToStr
 function DateToStr
 function TimeToStr
 function FormatDateTime
+function EncodeDate
+function UnixToDateTime
 function FileExists
 function DirectoryExists
 function CreateDir
@@ -476,6 +479,7 @@ function RunProcessWait
 procedure Sleep
 function SysErrorMessage
 function GetLastOSError
+procedure FreeAndNil
 EOF
 )"
   require_facade_surface_allowlist "sysutils facade" "$actual" "$expected"

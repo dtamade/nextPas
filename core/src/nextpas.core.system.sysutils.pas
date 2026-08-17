@@ -67,8 +67,7 @@ function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
 function SplitString(const S, Delimiters: string): TStringArray;
 
 { Exception ownership }
-{ 仅在 except 块内有效：取得当前异常对象并把引用计数 +1，块结束时不再自动释放，
-  所有权转移给调用方（负责 Free）。FPC 该符号属 System（objpash.inc），不在 SysUtils。 }
+{ 仅在 except 块内有效：取得当前异常对象并把引用计数 +1，块结束不自动释放；所有权转移给调用方（负责 Free）。FPC 该符号属 System（objpash.inc），不在 SysUtils。 }
 function AcquireExceptionObject: Pointer;
 
 { Date/Time }
@@ -122,10 +121,8 @@ function GetEnvironmentVariable(const AName: string): string;
 { Process }
 function GetProcessID: SizeUInt;
 function ExecuteProcess(const APath, AParams: string): Integer;
-{ 执行外部程序并等待退出:参数数组逐项传递(空格安全,不按空格拆分;
-  stdin/stdout/stderr 接 /dev/null)。返回退出码;-1 = 启动失败/等待失败 }
-function RunProcessWait(const APath: string;
-  const AArgs: array of string): Integer;
+{ 执行外部程序并等待退出:参数数组逐项传递(空格安全,不按空格拆分;stdin/stdout/stderr 接 /dev/null)。返回退出码;-1 = 启动失败/等待失败 }
+function RunProcessWait(const APath: string; const AArgs: array of string): Integer;
 
 { Timing }
 procedure Sleep(AMilliseconds: Cardinal);
