@@ -50,10 +50,8 @@ function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): 
 function BytesOf(const AStr: string): TBytes;
 function StringOf(const ABytes: TBytes): string;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
-function Supports(const AInstance: TObject; const AIID: TGuid;
-  out AIntf): Boolean; overload;
-function Supports(const AInstance: IInterface; const AIID: TGuid;
-  out AIntf): Boolean; overload;
+function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean; overload;
+function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean; overload;
 
 { String manipulation }
 function Trim(const AStr: string): string;
@@ -64,7 +62,12 @@ function LowerCase(const AStr: string): string;
 
 { String search }
 function Pos(const ASubStr, AStr: string): Integer;
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
 function SplitString(const S, Delimiters: string): TStringArray;
+
+{ Exception ownership }
+{ 转移当前线程异常对象所有权（调用方负责 Free，RTL 语义）；无异常返回 nil。 }
+function AcquireExceptionObject: Pointer;
 
 { Date/Time }
 function Now: TDateTime;
@@ -278,6 +281,39 @@ end;
 function Pos(const ASubStr, AStr: string): Integer;
 begin
   Result := System.Pos(ASubStr, AStr);
+end;
+
+function PosEx(const ASubStr, AStr: string; const AFrom: Integer = 1): Integer;
+var
+  LI, LJ, LSubLen, LStrLen: Integer;
+begin
+  { StrUtils 语义：从 AFrom（1-based）起查找；空子串在有效范围内命中 AFrom。 }
+  LSubLen := Length(ASubStr);
+  LStrLen := Length(AStr);
+  Result := 0;
+  if AFrom < 1 then
+    Exit;
+  if LSubLen = 0 then
+  begin
+    if AFrom <= LStrLen + 1 then
+      Result := AFrom;
+    Exit;
+  end;
+  if AFrom > LStrLen - LSubLen + 1 then
+    Exit;
+  for LI := AFrom to LStrLen - LSubLen + 1 do
+  begin
+    LJ := 1;
+    while (LJ <= LSubLen) and (AStr[LI + LJ - 1] = ASubStr[LJ]) do
+      Inc(LJ);
+    if LJ > LSubLen then
+      Exit(LI);
+  end;
+end;
+
+function AcquireExceptionObject: Pointer;
+begin
+  Result := SysUtils.AcquireExceptionObject;
 end;
 
 function SplitString(const S, Delimiters: string): TStringArray;
