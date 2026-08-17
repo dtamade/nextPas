@@ -614,9 +614,6 @@ procedure FuzzStructured(const AName: string; ATest: TFuzzStructuredStringTest;
 procedure FuzzMultiStrategy(const AName: string; ATest: TFuzzBytesTest;
   const ACorpus: array of TBytes; AWorkers: Integer = 4;
   AIterationsPerWorker: Integer = 2500);
-procedure FuzzParallel(const AName: string; ATest: TFuzzBytesTest;
-  const ACorpus: array of TBytes; AWorkers: Integer = 4;
-  AIterationsPerWorker: Integer = 2500);
 
 implementation
 
