@@ -603,10 +603,16 @@ var
              TypeMetaIsPointer(OType.Text) or
              TypeMetaIsClass(OType.Text)) then
           begin
-            RegisterClassVar(OName, 'Pointer');
+            { 嵌套捕获的 class 参数必须用真实类型名注册 (与普通参数注册
+              RegisterClassVar(RetVarName, TypeChild.Text) 一致), 否则
+              ALexer.TokenCount 编码成 @Pointer.TokenCount 未定义。 }
+            if TypeMetaIsClass(OType.Text) then
+              RegisterClassVar(OName, OType.Text)
+            else
+              RegisterClassVar(OName, 'Pointer');
             if (Length(OType.Text) > 1) and (OType.Text[1] = '^') then
               RegisterPointerVar(OName, Copy(OType.Text, 2, MaxInt))
-            else
+            else if not TypeMetaIsClass(OType.Text) then
               RegisterPointerVar(OName, OType.Text);
             FModel.AddTypedHirNode('var-decl-ptr-runtime', OName, 0, 0, OName);
           end
@@ -643,7 +649,10 @@ var
              TypeMetaIsPointer(OType.Text) or
              TypeMetaIsClass(OType.Text)) then
           begin
-            RegisterClassVar(OVar.Text, 'Pointer');
+            if TypeMetaIsClass(OType.Text) then
+              RegisterClassVar(OVar.Text, OType.Text)
+            else
+              RegisterClassVar(OVar.Text, 'Pointer');
             FModel.AddTypedHirNode('var-decl-ptr-runtime', OVar.Text, 0, 0,
               OVar.Text);
           end

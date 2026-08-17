@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 C-alias 后实测）
+## 当前战况（2026-08-17 D-pointer 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **27** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸)** |
-| undefined total | **39** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸)** |
+| undefined unique | **24** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹)** |
+| undefined total | **35** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -112,6 +112,20 @@ FProcedureBodies（record 方法无 symbol，只能从 body Decl 判定返回形
 27/39（恰为 ToString 2 处调用）；.ll 两处 `call i64 @TStringBuilder.ToString`
 变 `call void @TBufStringBuilder.ToString(ptr sret(%TString), …)`；
 compiler-pass 58/58；hygiene pass。
+
+⁹ D-pointer（本 commit）：`RegisterOneOuterFrame`（嵌套函数捕获注册，
+`np_sema_seed_function_bodies.inc`）对捕获的 class 参数/变量硬编码
+`RegisterClassVar(OName, 'Pointer')`，而普通参数注册用真实类型名 →
+嵌套函数内 `ALexer.TokenCount`（const 参数, `np_unit_resolver.pas:163`）
+与 `AModel.TypeCount` 等类成员访问 Receiver 类型名落 'Pointer' →
+`@Pointer.TypeCount/TokenCount/GetTypeMeta` undefined（.ll 344506/344524/
+363578/363629），真实定义为 `@TSemanticModel.*`/`@TLexerResult.TokenCount`。
+修复：捕获注册两处（参数+变量）在 `TypeMetaIsClass` 时注册真实类型名，
+仅 `^`/pointer 保留 'Pointer'，与普通参数注册路径对齐。验证：27/39 →
+24/35（Pointer.* 4 uses/3 uniq 归零）；`.ll` 中 `@Pointer.(TypeCount|
+TokenCount|GetTypeMeta)` 计数 0；compiler-pass 58/58；hygiene pass。
+遗留（挂账）：嵌套捕获的接收者值未 store 进兜底 alloca（.ll 读未初始化
+slot，运行时 UB）——需静态链接/隐藏实参传播，非 undefined 口径，单独立项。
 | opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——宿主 `AVX2ArrayFractF64`（`pD[i] := pS[i] - Int(pS[i])`）；**依赖 Double 运算编码（全 .ll 无 load double/fadd——编译器从未支持浮点标量运算），需单独立项而非 B4 装填** | 本轮后仍 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
