@@ -114,7 +114,11 @@ begin
   end;
 
   while (FCount >= FCapacity) and (not FClosed) do
+  begin
+    Inc(FSendWaiting);
     platform_condvar_wait(FSendCond, FMutex);
+    Dec(FSendWaiting);
+  end;
 
   if FClosed then
   begin
@@ -127,7 +131,13 @@ begin
   Inc(FCount);
 
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FRecvCond);
+  { 等待计数驱动：仅在确有 receiver 等待时 signal。等待者（FRecvWaiting>0）
+    只在 FCount=0 时 wait（谓词检查与 wait 同在锁内配对），故此刻入队必是
+    它们等的那次 wake；receiver 未等待时（连续消费）不 signal，消灭逐事件
+    调度乒乓。不能用「空→非空跃迁」替代：多等待者场景下 count 从满跌到 0
+    只有一次跃迁、只 signal 一次会让其余等待者饿死（2026-08-17 教训）。 }
+  if FRecvWaiting > 0 then
+    platform_condvar_signal(FRecvCond);
 end;
 
 function TChannel.Receive(out AValue: T): Boolean;
@@ -157,7 +167,11 @@ begin
   end;
 
   while (FCount = 0) and (not FClosed) do
+  begin
+    Inc(FRecvWaiting);
     platform_condvar_wait(FRecvCond, FMutex);
+    Dec(FRecvWaiting);
+  end;
 
   if (FCount = 0) and FClosed then
   begin
@@ -173,7 +187,9 @@ begin
   Result := True;
 
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FSendCond);
+  { 与 Send 对称：仅在确有 sender 等待时 signal。 }
+  if FSendWaiting > 0 then
+    platform_condvar_signal(FSendCond);
 end;
 
 function TChannel.TrySend(const AValue: T): Boolean;
@@ -213,7 +229,8 @@ begin
   FTail := (FTail + 1) mod FCapacity;
   Inc(FCount);
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FRecvCond);
+  if FRecvWaiting > 0 then
+    platform_condvar_signal(FRecvCond);
   Result := True;
 end;
 
@@ -246,7 +263,8 @@ begin
   FHead := (FHead + 1) mod FCapacity;
   Dec(FCount);
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FSendCond);
+  if FSendWaiting > 0 then
+    platform_condvar_signal(FSendCond);
   Result := True;
 end;
 
@@ -285,11 +303,16 @@ begin
     Exit;
   end;
   while (FCount >= FCapacity) and (not FClosed) do
+  begin
+    Inc(FSendWaiting);
     if platform_condvar_timedwait(FSendCond, FMutex, ATimeoutNs) <> 0 then
     begin
+      Dec(FSendWaiting);
       platform_mutex_unlock(FMutex);
       Exit(False);
     end;
+    Dec(FSendWaiting);
+  end;
   if FClosed then
   begin
     platform_mutex_unlock(FMutex);
@@ -299,7 +322,8 @@ begin
   FTail := (FTail + 1) mod FCapacity;
   Inc(FCount);
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FRecvCond);
+  if FRecvWaiting > 0 then
+    platform_condvar_signal(FRecvCond);
   Result := True;
 end;
 
@@ -332,11 +356,16 @@ begin
     Exit;
   end;
   while (FCount = 0) and (not FClosed) do
+  begin
+    Inc(FRecvWaiting);
     if platform_condvar_timedwait(FRecvCond, FMutex, ATimeoutNs) <> 0 then
     begin
+      Dec(FRecvWaiting);
       platform_mutex_unlock(FMutex);
       Exit(False);
     end;
+    Dec(FRecvWaiting);
+  end;
   if (FCount = 0) and FClosed then
   begin
     platform_mutex_unlock(FMutex);
@@ -347,7 +376,8 @@ begin
   FHead := (FHead + 1) mod FCapacity;
   Dec(FCount);
   platform_mutex_unlock(FMutex);
-  platform_condvar_signal(FSendCond);
+  if FSendWaiting > 0 then
+    platform_condvar_signal(FSendCond);
   Result := True;
 end;
 
