@@ -755,8 +755,8 @@ var
   LTracker: ICoverageTracker;
 begin
   LTracker := CreateCoverageTracker;
-  { FuzzParallel uses its own internal tracker, this just verifies it works }
-  FuzzParallel('Coverage parallel', procedure(const Data: TBytes)
+  { FuzzMultiStrategy uses its own internal tracker, this just verifies it works }
+  FuzzMultiStrategy('Coverage parallel', procedure(const Data: TBytes)
   begin
     if Length(Data) > 0 then
     begin
