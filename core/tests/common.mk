@@ -56,7 +56,16 @@ run: build
 		$(BUILD_DIR)/$(PROGRAM); \
 	fi
 
+# * _wine / Windows-only-symbol 测试：WINE_ONLY_TEST=1 时 test 目标走
+#   wine-runtime-smoke（需 wine），无 wine 则 skip，避免 Linux 宿主编译引用
+#   Windows-only 符号或平台断言误报。WINE_ONLY_TEST 须在 include 前定义。
+ifeq ($(WINE_ONLY_TEST),1)
+test:
+	@command -v $(WINE) >/dev/null 2>&1 || { echo "wine not available; skip"; exit 0; }
+	$(MAKE) wine-runtime-smoke
+else
 test: run
+endif
 
 # Cross-compile to Win64 PE. truth tier remains wine-runtime-smoke when executed under Wine.
 wine-build: clean-src
