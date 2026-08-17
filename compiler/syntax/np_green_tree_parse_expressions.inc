@@ -952,6 +952,21 @@ begin
           (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
           Inc(ACursor);
       end;
+    tkCharLiteral:
+      begin
+        { FPC lexes `^T` (pointer to a single-letter type name) as a
+          control-char literal token (`^` + letter + delimiter). In type
+          position that is a pointer type, not a character value; keep the
+          text as `^T` so var/param/alias type references resolve. }
+        if (Length(Token.Lexeme) = 2) and (Token.Lexeme[1] = '^') and
+          (Token.Lexeme[2] in ['A'..'Z', 'a'..'z']) then
+        begin
+          Inc(ACursor);
+          Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset,
+            Length(Token.Lexeme), Token.Lexeme);
+          Exit;
+        end;
+      end;
     tkCaret:
       begin
         Inc(ACursor);
