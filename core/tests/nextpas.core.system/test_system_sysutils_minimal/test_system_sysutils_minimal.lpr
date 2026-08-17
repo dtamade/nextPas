@@ -187,6 +187,58 @@ begin
     'SplitString should treat every delimiter character as a separator');
 end;
 
+{ StrUtils 语义：从 AFrom（1-based）起查找子串；空子串在有效范围命中 AFrom。 }
+procedure TestPosExSysUtilsSemantics;
+begin
+  CheckEqual(4,
+    nextpas.core.system.sysutils.PosEx('world', 'hello world', 1),
+    'PosEx should find substring from start');
+  CheckEqual(4,
+    nextpas.core.system.sysutils.PosEx('world', 'hello world', 4),
+    'PosEx should find substring at exact AFrom');
+  CheckEqual(0,
+    nextpas.core.system.sysutils.PosEx('world', 'hello world', 5),
+    'PosEx should miss when AFrom is past the match');
+  CheckEqual(2,
+    nextpas.core.system.sysutils.PosEx('o', 'foo', 2),
+    'PosEx should skip earlier occurrences');
+  CheckEqual(0,
+    nextpas.core.system.sysutils.PosEx('zz', 'abc', 1),
+    'PosEx should return 0 on no match');
+  CheckEqual(3,
+    nextpas.core.system.sysutils.PosEx('', 'abc', 3),
+    'empty substring should hit at AFrom within range');
+  CheckEqual(4,
+    nextpas.core.system.sysutils.PosEx('', 'abc', 4),
+    'empty substring should hit at one-past-end');
+  CheckEqual(0,
+    nextpas.core.system.sysutils.PosEx('', 'abc', 5),
+    'empty substring beyond range should miss');
+  CheckEqual(0,
+    nextpas.core.system.sysutils.PosEx('a', 'abc', 0),
+    'AFrom below 1 should miss');
+end;
+
+{ AcquireExceptionObject：转移当前线程异常所有权（手动 Free，不泄漏）。 }
+procedure TestAcquireExceptionObjectOwnership;
+var
+  LExc: Exception;
+begin
+  LExc := nil;
+  try
+    raise Exception.Create('ownership probe');
+  except
+    on E: Exception do
+    begin
+      LExc := Exception(nextpas.core.system.sysutils.AcquireExceptionObject);
+      Check(LExc <> nil, 'AcquireExceptionObject should return the raised object');
+      CheckEqual('ownership probe', LExc.Message,
+        'transferred exception should keep its message');
+    end;
+  end;
+  LExc.Free;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -202,5 +254,7 @@ begin
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
   T.Test('SplitString follows SysUtils semantics', @TestSplitStringSysUtilsSemantics);
+  T.Test('PosEx follows StrUtils semantics', @TestPosExSysUtilsSemantics);
+  T.Test('AcquireExceptionObject transfers ownership', @TestAcquireExceptionObjectOwnership);
   if not T.Run then Halt(1);
 end.
