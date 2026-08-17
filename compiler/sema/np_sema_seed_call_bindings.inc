@@ -327,10 +327,10 @@ begin
 end;
 
 function EncodeRuntimeIntExpr(const ANode: TGreenNode;
-  out ABlob: string): Boolean; forward;
+  out ABlob: string; const ARetVarName: string = ''): Boolean; forward;
 
 function EncodeRuntimeBoolExpr(const ANode: TGreenNode;
-  out ABlob: string): Boolean;
+  out ABlob: string; const ARetVarName: string = ''): Boolean;
 var
   LeftBlob, RightBlob, Op, Pred: string;
 begin
@@ -350,16 +350,16 @@ begin
   else if Op = '>=' then Pred := 'sge'
   else
     Exit(False);
-  if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob) then
+  if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob, ARetVarName) then
     Exit(False);
-  if not EncodeRuntimeIntExpr(ANode.ChildAt(1), RightBlob) then
+  if not EncodeRuntimeIntExpr(ANode.ChildAt(1), RightBlob, ARetVarName) then
     Exit(False);
   ABlob := LeftBlob + RightBlob + 'cmp ' + Pred + #10;
   Result := True;
 end;
 
 function EncodeRuntimeIntExpr(const ANode: TGreenNode;
-  out ABlob: string): Boolean;
+  out ABlob: string; const ARetVarName: string): Boolean;
 var
   LeftBlob, RightBlob, Op: string;
   Parsed: Int64;
@@ -381,14 +381,20 @@ begin
       begin
         if ANode.Text = '' then
           Exit(False);
-        ABlob := 'var ' + ANode.Text + #10;
+        { Function Result folds to the retvar slot: `var Result` has no alloca
+          (retvar registers under the function name) and would residual-call
+          @Result() (M2: PathNameLenWithoutTrailingSeparators, 1 use). }
+        if (ANode.Text = 'Result') and (ARetVarName <> '') then
+          ABlob := 'var ' + ARetVarName + #10
+        else
+          ABlob := 'var ' + ANode.Text + #10;
         Exit(True);
       end;
     gnkUnaryExpression:
       begin
         if ANode.ChildCount < 1 then
           Exit(False);
-        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob) then
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob, ARetVarName) then
           Exit(False);
         Op := ANode.Text;
         if Op = '-' then
@@ -408,9 +414,9 @@ begin
       begin
         if ANode.ChildCount < 2 then
           Exit(False);
-        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob) then
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(0), LeftBlob, ARetVarName) then
           Exit(False);
-        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), RightBlob) then
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), RightBlob, ARetVarName) then
           Exit(False);
         Op := ANode.Text;
         if Op = '+' then
@@ -452,7 +458,7 @@ begin
           Exit(False);
         if ANode.ChildAt(0).NodeKind <> gnkIdentifier then
           Exit(False);
-        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), LeftBlob) then
+        if not EncodeRuntimeIntExpr(ANode.ChildAt(1), LeftBlob, ARetVarName) then
           Exit(False);
         ABlob := LeftBlob + 'arrload ' + ANode.ChildAt(0).Text + #10;
         Exit(True);

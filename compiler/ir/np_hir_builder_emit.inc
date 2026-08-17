@@ -340,10 +340,19 @@ procedure THIRBuilder.EmitExprArrElemRef(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   BaseAlloca, BasePtr, IndexVal: THIRValueId;
+  IsBarePtr: Boolean;
 begin
   IndexVal := S.Pop;
   IndexVal := NormalizeArrayIndexValue(AArg, IndexVal);
   BaseAlloca := FindAlloca(AArg + '$ptr');
+  IsBarePtr := False;
+  if BaseAlloca = 0 then
+  begin
+    { Pointer params (PAnsiChar/PChar) register only the bare name alloca
+      (ptr-typed slot); index into it directly instead of dropping the base. }
+    BaseAlloca := FindAlloca(AArg);
+    IsBarePtr := True;
+  end;
   if BaseAlloca = 0 then
     Exit;
   BasePtr := EmitLoad(GetPtrType, BaseAlloca);
@@ -354,7 +363,12 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'gep_i64';
+  { Bare pointer params have 1-byte elements (Char); $ptr arrays scale by
+    elem size in i64 units via gep_i64. }
+  if IsBarePtr then
+    Instr.IntrinsicName := 'gep_i8'
+  else
+    Instr.IntrinsicName := 'gep_i64';
   SetLength(Instr.Operands, 2);
   Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(IndexVal, GetIntType);

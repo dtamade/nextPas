@@ -1261,7 +1261,9 @@ begin
         Inc(StrCallArgCount);
       end
       else
+      begin
         Exit(False);
+      end;
     end;
     if LookupProcedureBody(ANode.ChildAt(0).Text, BranchNode, DeclNode) and
       (DeclNode <> nil) then
@@ -2135,7 +2137,7 @@ begin
         ABlob := FuncName + ArgName + 'mod' + #10
       else
       begin
-        Result := EncodeRuntimeIntExpr(ANode, ABlob);
+        Result := EncodeRuntimeIntExpr(ANode, ABlob, FCurrentRetVarName);
         Exit;
       end;
       Exit(True);
@@ -2338,6 +2340,20 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (LookupPointerVar(ANode.ChildAt(0).Text) <> '') then
+  begin
+    { PAnsiChar/PChar/Pointer index: element address (Char formals are passed
+      as ptr to the character slot — IsSep(APath[Result-1])). The generic
+      arrload fallback needs Name$ptr, which pointer params lack, so it drops
+      the base and the residual call gets only the index (M2: @Result 1 use). }
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
+    begin
+      ABlob := FuncName + 'arr_elem_ref ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     TryClassFieldArrayAccess(ANode, BaseName, OwnerClassName, FieldName) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
@@ -2379,6 +2395,6 @@ begin
     ABlob := 'int ' + IntToStr(FModel.FindTypeByName(ANode.Text)) + #10;
     Exit(True);
   end;
-  Result := EncodeRuntimeIntExpr(ANode, ABlob);
+  Result := EncodeRuntimeIntExpr(ANode, ABlob, FCurrentRetVarName);
 end;
 
