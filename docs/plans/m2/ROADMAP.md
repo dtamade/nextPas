@@ -261,7 +261,7 @@ gnkIdentifier 无条件发 `var <text>`（`var a`）；⑤ EmitExprVar
 58/58；hygiene pass。挂账：TM128 参数仍按 i64 槽编码（B6.5 ABI 域），
 opt 类型一致性另议。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b 已出列） |
+| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
