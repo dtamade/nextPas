@@ -42,6 +42,7 @@ function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
 function StrToFloat(const AStr: string): Double;
 function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
+function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
 
 { Bytes helpers (SysUtils-compat for tests / facades) }
 function BytesOf(const AStr: string): TBytes;
@@ -121,7 +122,8 @@ uses
   SysUtils,
   nextpas.core.path,
   nextpas.core.fs,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.text.utils;
 
 { Text formatting }
 
@@ -187,6 +189,17 @@ end;
 function CurrToStr(const AValue: Currency): string;
 begin
   Result := nextpas.core.text.conv.FloatToStr(AValue);
+end;
+
+function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean): string;
+begin
+  { SysUtils 语义：UseBoolStrs=True 输出 'True'/'False'，否则 '1'/'0'。 }
+  if AUseBoolStrs then
+    Result := nextpas.core.text.utils.BoolToStr(AValue)
+  else if AValue then
+    Result := '1'
+  else
+    Result := '0';
 end;
 
 function BytesOf(const AStr: string): TBytes;

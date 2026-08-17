@@ -106,6 +106,18 @@ begin
     'TryStrToInt64 should reject out-of-range input');
 end;
 
+procedure TestBoolToStrSysUtilsSemantics;
+begin
+  CheckEqual('True', nextpas.core.system.sysutils.BoolToStr(True, True),
+    'BoolToStr with UseBoolStrs=True should emit True for true');
+  CheckEqual('False', nextpas.core.system.sysutils.BoolToStr(False, True),
+    'BoolToStr with UseBoolStrs=True should emit False for false');
+  CheckEqual('1', nextpas.core.system.sysutils.BoolToStr(True),
+    'BoolToStr default should emit 1 for true');
+  CheckEqual('0', nextpas.core.system.sysutils.BoolToStr(False),
+    'BoolToStr default should emit 0 for false');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -116,5 +128,6 @@ begin
   T.Test('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
   T.Test('TryStrToInt/TryStrToInt64 delegate to conversion owner',
     @TestTryStrToIntDelegatesToTextConvOwner);
+  T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   if not T.Run then Halt(1);
 end.
