@@ -1088,8 +1088,12 @@ begin
                 FModel.AddTypedHirNode('var-decl-varref-runtime', RetVarName,
                   0, 0, RetVarName)
               else
+                { Operand must be the clean name: HIR registers the parameter
+                  alloca under AOperand, and encode references it by bare name.
+                  'constref:a' here made FindAlloca('a') miss -> residual call
+                  @a() in simd_cmpneq_pd(a, b: TM128). }
                 FModel.AddTypedHirNode('var-decl-runtime', RetVarName,
-                  0, 0, ParamChild.Text);
+                  0, 0, RetVarName);
             end;
           end;
           Break;

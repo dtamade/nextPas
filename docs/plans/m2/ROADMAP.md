@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-18 caret-ptr 后实测）
+## 当前战况（2026-08-18 simd-constref 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **9** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶)** |
-| undefined total | **13** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶)** |
+| undefined unique | **7** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷)** |
+| undefined total | **11** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -243,7 +243,25 @@ undefined），unit 复现 mini_e 语法恢复（此前 FAKE-INIT）；compiler-
 58/58；hygiene pass。挂账：`^T` 形态覆盖所有类型位置（别名/参数/返回），
 本轮只实证 var 段。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result/@aElementCount 已出列） |
+¹⁷ simd-constref（本 commit）：`simd_cmpneq_pd(constref a, b: TM128)` 的
+参数引用在 .ll 中编成 `call i64 @a()`/`call i64 @b()`（参数名当函数调用），
+a/b 2 uniq undefined。根因链：① parser 参数名带修饰符前缀
+（`'constref:'`+名，np_green_tree_parse_declarations）；②
+SeedFunctionBodies 编码循环对「普通标量参数」else 分支发
+`var-decl-runtime` 节点时 AOperand 误传 `ParamChild.Text`（带前缀
+`constref:a`），其它 5 个子分支（str/arr/record/varref）均传干净名；
+③ HIR ProcessVarDecl hnkVarDeclRuntime 参数分支
+`RegisterAllocaEntry(AOperand)` 把 alloca 注册成 `constref:a`；④ encode
+gnkIdentifier 无条件发 `var <text>`（`var a`）；⑤ EmitExprVar
+`FindAlloca('a')` miss → 兜底 `hikCall('a')` → .ll `call @a()`。仅 constref
+且未被识别为 record/var 的参数形态暴露（simd TM128 走 i64 槽）；assembler
+实现的 simd 函数不引用参数名故无症状。修法：else 分支 AOperand 改用干净名
+`RetVarName`（与其余分支一致）。验证：9/13 → 7/11（a/b 出列，7 uniq 全归
+既有挂账：method-object 泛型家族 5 + SarLongint/Pos 各 1）；compiler-pass
+58/58；hygiene pass。挂账：TM128 参数仍按 i64 槽编码（B6.5 ABI 域），
+opt 类型一致性另议。
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -391,6 +409,18 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       method-object 桶的最大剩余块。⚠️ 大口：涉及泛型模板导出/导入
       （green tree 跨 unit 取模板体）+ 实例化编码，可能要动 seeding
       （对方占用中）——排在对方 B2 提交后。
+      更新（2026-08-18 尝试+回滚）：「模板名回绕」方案（helper
+      ResolveGenericInstanceMethodName 接入 ResolveClassMethodCalleeName/
+      MarkProcedureBodyNeededByName/ResolvePropertyReadCallee/
+      EffectiveRuntimeCalleeName，调用点与 vmt 槽统一到模板名）实测
+      **9/13 → 12/25 升**：Create/GetDefaultGrowStrategyI 4 total 出列，
+      但模板体被标定编码后内部引用暴露 7 新 uniq（TSpan.FromPointer×2、
+      FIndex×2、FCurrent、GetAllocator、GetElementSize、
+      TAlignedWrapperStrategy.DEFAULT_ALIGN_SIZE）——TVec 模板内嵌
+      specialize TArray<T>(TVecBuf)/TSpan/IGrowthStrategy 递归实例化链，
+      模板名单点回绕不收敛。已回滚（探针实测恢复 9/13）。结论：
+      必须做「实例化时递归展开嵌套泛型」的完整机制（实例名克隆 +
+      FGenericWorkQueue 递归消费），单点回绕不可行。
 - [~] **B5 const fold + intrinsic 尾巴**：const-upper 7 个 + `Pos`/`UpCase`/`Int`。
       - [x] **B5a Pos 主体（strpos 数组下标 haystack + const needle）** ✅
         （80→75 total，Pos 7→2）：主流残留是「字符串数组元素 haystack」——
