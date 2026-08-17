@@ -24,7 +24,9 @@ uses
   nextpas.core.tui.widget.modal,
   nextpas.core.tui.widget.dialog,
   nextpas.core.tui.widget.split_pane,
-  nextpas.core.tui.widget.select;
+  nextpas.core.tui.widget.select,
+  nextpas.core.tui.widget.statusbar,
+  nextpas.core.tui.widget.progress_group;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -87,6 +89,12 @@ type
   ISelect = nextpas.core.tui.widget.select.ISelect;
   TSelectState = nextpas.core.tui.widget.select.TSelectState;
   TSelect = nextpas.core.tui.widget.select.TSelect;
+  IStatusBar = nextpas.core.tui.widget.statusbar.IStatusBar;
+  TStatusSegment = nextpas.core.tui.widget.statusbar.TStatusSegment;
+  TStatusBar = nextpas.core.tui.widget.statusbar.TStatusBar;
+  IProgressGroup = nextpas.core.tui.widget.progress_group.IProgressGroup;
+  TProgressItem = nextpas.core.tui.widget.progress_group.TProgressItem;
+  TProgressGroup = nextpas.core.tui.widget.progress_group.TProgressGroup;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;
