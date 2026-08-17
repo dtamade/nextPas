@@ -37,6 +37,8 @@ function Int64ToStr(const AValue: Int64): string;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 function StrToInt(const AStr: string): Integer;
 function StrToInt64(const AStr: string): Int64;
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
+function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
 function StrToFloat(const AStr: string): Double;
 function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
@@ -158,6 +160,18 @@ end;
 function StrToInt64(const AStr: string): Int64;
 begin
   Result := nextpas.core.text.conv.StrToInt(AStr);
+end;
+
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
+begin
+  Result := nextpas.core.text.conv.TryStrToInt(AStr, AValue);
+end;
+
+function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
+begin
+  { 委托 text.conv：其 Val 语义接受 0x/$ 前缀与十进制，
+    与 RTL SysUtils 仅十进制的行为存在差异（此处有意跟随 nextpas 语义）。 }
+  Result := nextpas.core.text.conv.TryStrToInt64(AStr, AValue);
 end;
 
 function StrToFloat(const AStr: string): Double;

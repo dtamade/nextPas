@@ -83,6 +83,29 @@ begin
     'Trim should collapse all-whitespace input to empty text');
 end;
 
+procedure TestTryStrToIntDelegatesToTextConvOwner;
+var
+  VI: Integer;
+  V64: Int64;
+begin
+  Check(nextpas.core.system.sysutils.TryStrToInt('42', VI)
+    and (VI = 42), 'TryStrToInt should parse positive decimal');
+  Check(nextpas.core.system.sysutils.TryStrToInt('-7', VI)
+    and (VI = -7), 'TryStrToInt should parse negative decimal');
+  Check(not nextpas.core.system.sysutils.TryStrToInt('abc', VI),
+    'TryStrToInt should reject non-numeric input');
+  Check(not nextpas.core.system.sysutils.TryStrToInt('', VI),
+    'TryStrToInt should reject empty input');
+  Check(nextpas.core.system.sysutils.TryStrToInt('123', VI)
+    and (VI = 123), 'TryStrToInt should keep working after failures');
+  Check(nextpas.core.system.sysutils.TryStrToInt64('9007199254740993', V64)
+    and (V64 = 9007199254740993), 'TryStrToInt64 should span Int64 range');
+  Check(not nextpas.core.system.sysutils.TryStrToInt64('not-a-number', V64),
+    'TryStrToInt64 should reject non-numeric input');
+  Check(not nextpas.core.system.sysutils.TryStrToInt64('99999999999999999999999', V64),
+    'TryStrToInt64 should reject out-of-range input');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -91,5 +114,7 @@ begin
   T.Test('SameText delegates to text conversion owner', @TestSameTextDelegatesToTextConvOwner);
   T.Test('IntToStr delegates to text conversion owner', @TestIntToStrDelegatesToTextConvOwner);
   T.Test('Trim delegates to text conversion owner', @TestTrimDelegatesToTextConvOwner);
+  T.Test('TryStrToInt/TryStrToInt64 delegate to conversion owner',
+    @TestTryStrToIntDelegatesToTextConvOwner);
   if not T.Run then Halt(1);
 end.
