@@ -118,6 +118,20 @@ begin
     'BoolToStr default should emit 0 for false');
 end;
 
+procedure TestCompareStrCaseSensitive;
+begin
+  Check(nextpas.core.system.sysutils.CompareStr('abc', 'abc') = 0,
+    'CompareStr should return 0 for identical strings');
+  Check(nextpas.core.system.sysutils.CompareStr('abc', 'abd') < 0,
+    'CompareStr should order by byte value');
+  Check(nextpas.core.system.sysutils.CompareStr('B', 'a') < 0,
+    'CompareStr should be case-sensitive (uppercase before lowercase)');
+  Check(nextpas.core.system.sysutils.CompareStr('z', 'a') > 0,
+    'CompareStr should report greater for later characters');
+  Check(nextpas.core.system.sysutils.CompareStr('ab', 'abc') < 0,
+    'CompareStr should treat prefix as smaller');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -129,5 +143,6 @@ begin
   T.Test('TryStrToInt/TryStrToInt64 delegate to conversion owner',
     @TestTryStrToIntDelegatesToTextConvOwner);
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
+  T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   if not T.Run then Halt(1);
 end.

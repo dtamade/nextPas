@@ -29,6 +29,7 @@ type
 
 { Text formatting }
 function Format(const AFmt: string; const AArgs: array of const): string;
+function CompareStr(const A, B: string): Integer;
 function SameText(const A, B: string): Boolean;
 
 { Numeric conversion }
@@ -123,6 +124,7 @@ uses
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.base.utils,
+  nextpas.core.text.compare,
   nextpas.core.text.utils;
 
 { Text formatting }
@@ -135,6 +137,11 @@ end;
 function SameText(const A, B: string): Boolean;
 begin
   Result := nextpas.core.text.conv.SameText(A, B);
+end;
+
+function CompareStr(const A, B: string): Integer;
+begin
+  Result := nextpas.core.text.compare.TextCompare(A, B);
 end;
 
 { Numeric conversion }
