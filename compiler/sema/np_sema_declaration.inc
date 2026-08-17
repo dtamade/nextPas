@@ -2113,6 +2113,12 @@ begin
               would otherwise drop slots and residual-call bare @IChild.Method. }
             if AliasTargetMeta.VmtSlots <> nil then
               AliasLocalMeta.VmtSlots := AliasTargetMeta.VmtSlots;
+            { Record re-export must keep Fields — last-wins would otherwise drop
+              them and string field loads residual-call @Type.Field (M2:
+              TInterfaceSlotMeta re-exported by np_semantic_model). SetTypeMeta
+              clones shared field vecs, so aliasing is ownership-safe. }
+            if AliasTargetMeta.Fields <> nil then
+              AliasLocalMeta.Fields := AliasTargetMeta.Fields;
           end;
           FModel.SetTypeMeta(TypeId, AliasLocalMeta);
           FModel.SetTypeParent(TypeId, AliasTargetId);
