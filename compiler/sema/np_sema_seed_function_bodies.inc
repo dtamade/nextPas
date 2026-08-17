@@ -5,19 +5,44 @@ var
   K: LongInt;
   Prefix: string;
   Entry: TProcedureBodyEntry;
+  CurName, ParentName: string;
+  TypeId: LongInt;
+  Meta: TTypeMetadata;
+  Depth: LongInt;
 begin
   { VMT: constructing Class requires sibling methods (GetVal, etc.). }
   if AClassName = '' then
     Exit;
-  Prefix := AClassName + '.';
-  for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    if (Length(FProcedureBodies[K].Name) > Length(Prefix)) and
-      SameText(Copy(FProcedureBodies[K].Name, 1, Length(Prefix)), Prefix) then
+  { 子类 vmt 表引用祖先方法槽(TFileStream.vmt = [TStream.vmt, …]);只标
+    记类自身时,祖先方法若无 direct call 缺 define → vmt 表项 undefined
+    (TStream 6 方法,B5e method-object 家族)。沿祖先链全部标记。 }
+  CurName := AClassName;
+  Depth := 0;
+  while (CurName <> '') and (Depth < 16) do
+  begin
+    Prefix := CurName + '.';
+    for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
+      if (Length(FProcedureBodies[K].Name) > Length(Prefix)) and
+        SameText(Copy(FProcedureBodies[K].Name, 1, Length(Prefix)), Prefix) then
+      begin
+        Entry := FProcedureBodies[K];
+        Entry.Needed := True;
+        FProcedureBodies[K] := Entry;
+      end;
+    ParentName := '';
+    TypeId := FModel.FindTypeByName(CurName);
+    if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
     begin
-      Entry := FProcedureBodies[K];
-      Entry.Needed := True;
-      FProcedureBodies[K] := Entry;
+      if FModel.TypeAt(TypeId - 1).ParentTypeId > 0 then
+        ParentName := FModel.TypeAt(FModel.TypeAt(TypeId - 1).ParentTypeId - 1).Name
+      else if FModel.GetTypeMeta(TypeId, Meta) and (Meta.ParentClassName <> '') then
+        ParentName := Meta.ParentClassName;
     end;
+    if (ParentName = '') or SameText(ParentName, CurName) then
+      Break;
+    CurName := ParentName;
+    Inc(Depth);
+  end;
 end;
 
 procedure TSemanticAnalyzer.MarkProcedureBodyNeededByName(const AName: string);
