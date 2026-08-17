@@ -59,6 +59,7 @@ function TrimLeft(const AStr: string): string;
 function TrimRight(const AStr: string): string;
 function UpperCase(const AStr: string): string;
 function LowerCase(const AStr: string): string;
+function CompareText(const A, B: string): Integer;
 
 { String search }
 function Pos(const ASubStr, AStr: string): Integer;
@@ -78,6 +79,7 @@ function DateTimeToStr(const AValue: TDateTime): string;
 function DateToStr(const AValue: TDateTime): string;
 function TimeToStr(const AValue: TDateTime): string;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
+function UnixToDateTime(const AValue: Int64): TDateTime;
 
 { File system }
 function FileExists(const AFileName: string): Boolean;
@@ -130,6 +132,8 @@ procedure Sleep(AMilliseconds: Cardinal);
 { Error handling }
 function SysErrorMessage(AErrorCode: Integer): string;
 function GetLastOSError: Integer;
+{ 置空并释放对象(FPC SysUtils 语义,无类型 var 兼容任意对象变量) }
+procedure FreeAndNil(var AObj);
 
 implementation
 
@@ -140,6 +144,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
+  nextpas.core.time,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base;
 
@@ -283,6 +288,12 @@ begin
   Result := nextpas.core.text.conv.LowerCase(AStr);
 end;
 
+function CompareText(const A, B: string): Integer;
+begin
+  { SysUtils 语义:ASCII 大小写折叠后序数比较;不能用 UCA collation(排序语义不同) }
+  Result := nextpas.core.text.compare.TextCompareI(A, B);
+end;
+
 { String search }
 
 function Pos(const ASubStr, AStr: string): Integer;
@@ -387,6 +398,11 @@ end;
 function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
 begin
   Result := SysUtils.FormatDateTime(AFmt, AValue);
+end;
+
+function UnixToDateTime(const AValue: Int64): TDateTime;
+begin
+  Result := nextpas.core.time.UnixToDateTime(AValue);
 end;
 
 { File system — delegates to nextpas.core.fs }
@@ -581,6 +597,11 @@ end;
 function GetLastOSError: Integer;
 begin
   Result := SysUtils.GetLastOSError;
+end;
+
+procedure FreeAndNil(var AObj);
+begin
+  nextpas.core.base.utils.FreeAndNil(AObj);
 end;
 
 end.
