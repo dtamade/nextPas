@@ -298,6 +298,27 @@ begin
   CheckEqual(Int64(102), Int64(StringDisplayWidth(S)), '100 ascii + 1 wide CJK = 102');
 end;
 
+{ TruncateToWidth - 边界与完整簇语义 }
+procedure TestTruncateToWidth;
+begin
+  CheckEqual('', TruncateToWidth('', 5), 'empty string');
+  CheckEqual('', TruncateToWidth('abc', 0), 'maxcols 0');
+  CheckEqual('a', TruncateToWidth('abc', 1), 'ascii cut at 1 keeps a');
+  CheckEqual('ab', TruncateToWidth('abc', 2), 'ascii cut at 2');
+  CheckEqual('abc', TruncateToWidth('abc', 3), 'ascii exact fit');
+  CheckEqual('abc', TruncateToWidth('abc', 99), 'ascii over fit keeps all');
+  { 中文宽 2 列：不劈字 }
+  CheckEqual('名', TruncateToWidth('名称', 2), 'cjk cut at 2 keeps 名');
+  CheckEqual('', TruncateToWidth('名称', 1), 'cjk col 1 drops whole cluster');
+  CheckEqual('名称', TruncateToWidth('名称', 4), 'cjk exact 4');
+  { 混合：已有宽度 + 放不下的簇整体丢弃 }
+  CheckEqual('a', TruncateToWidth('a写', 2), 'a + wide 2/3');
+  CheckEqual('a写', TruncateToWidth('a写', 3), 'a + wide exact 3');
+  { 多字节 ASCII 之外的窄字符（é = 2 字节 1 列） }
+  CheckEqual(#$C3#$A9, TruncateToWidth(#$C3#$A9'x', 1), 'e-acute 1 col');
+  CheckEqual('', TruncateToWidth(#$C3#$A9, 0), 'e-acute maxcols 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.width');
   T.Test('control chars width 0', @TestControlChars);
@@ -326,5 +347,6 @@ begin
   T.Test('simd boundary 32B', @TestSimdBoundary32);
   T.Test('long ascii 4096B', @TestLongAscii);
   T.Test('non-ascii at end', @TestNonAsciiAtEnd);
+  T.Test('truncate to width', @TestTruncateToWidth);
   if not T.Run then Halt(1);
 end.
