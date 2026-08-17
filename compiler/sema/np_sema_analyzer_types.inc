@@ -455,6 +455,10 @@ type
       const AOwnerUnitId: string);
     procedure ProcessConstSection(const ANode: TGreenNode;
       const AOwnerUnitId: string);
+    { 跨单元常量别名 seed 时序补登: 所有单元 seed 完后对未登记值的
+      const decl 重解析 (PLATFORM_FS_SHORT_READ_ERROR = PLATFORM_ERR_IO,
+      另一单元的基常量此时已登记)。 }
+    procedure FinalizeConstSections;
     procedure ProcessProcedureDecl(const ANode: TGreenNode;
       const AOwnerUnitId: string);
     procedure ProcessFunctionDecl(const ANode: TGreenNode;

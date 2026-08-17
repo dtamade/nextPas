@@ -90,6 +90,73 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.FinalizeConstSections;
+  procedure FixSection(const ANode: TGreenNode);
+  var
+    J, K: LongInt;
+    Child, ValueChild: TGreenNode;
+    Value: Int64;
+    FloatValue: Double;
+    StringValue: string;
+  begin
+    if ANode = nil then
+      Exit;
+    for J := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(J);
+      if (Child = nil) or (Child.NodeKind <> gnkConstDecl) then
+        Continue;
+      { 值已登记(任意类型)则 skip; 只补登首次 Evaluate 失败的常量。 }
+      if FModel.LookupConstValue(Child.Text, Value) or
+        FModel.LookupFloatConstValue(Child.Text, FloatValue) or
+        FModel.LookupStringConstValue(Child.Text, StringValue) then
+        Continue;
+      for K := 0 to Child.ChildCount - 1 do
+      begin
+        ValueChild := Child.ChildAt(K);
+        if EvaluateIntegerConstant(ValueChild, Value) then
+        begin
+          FModel.AddConstValue(Child.Text, Value);
+          Break;
+        end;
+        if EvaluateFloatConstant(ValueChild, FloatValue) then
+        begin
+          FModel.AddFloatConstValue(Child.Text, FloatValue);
+          Break;
+        end;
+        if EvaluateStringConstant(ValueChild, StringValue) then
+        begin
+          FModel.AddStringConstValue(Child.Text, StringValue);
+          Break;
+        end;
+      end;
+    end;
+  end;
+  procedure ScanNode(const ANode: TGreenNode);
+  var
+    I: LongInt;
+    Child: TGreenNode;
+  begin
+    if ANode = nil then
+      Exit;
+    if ANode.NodeKind = gnkConstSection then
+      FixSection(ANode);
+    for I := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(I);
+      if Child <> nil then
+        ScanNode(Child);
+    end;
+  end;
+var
+  I: LongInt;
+begin
+  for I := 0 to FImportedUnitTrees.Count - 1 do
+    ScanNode(FImportedUnitTrees[I].RootNode);
+  if (FRootAst <> nil) and (FRootAst.RootNode <> nil) then
+    ScanNode(FRootAst.RootNode);
+end;
+
 procedure TSemanticAnalyzer.ProcessProcedureDecl(const ANode: TGreenNode;
   const AOwnerUnitId: string);
 var
