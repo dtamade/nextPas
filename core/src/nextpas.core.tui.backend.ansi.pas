@@ -37,6 +37,7 @@ type
     FLastBg: TColor;
     FLastUl: TColor;
     FLastModifier: TModifier;
+    FLinkOverlay: TTuiLinkOverlay;
   public
     constructor Create(AFd: Int32; const AAllocator: IAllocator = nil);
     destructor Destroy; override;
@@ -44,6 +45,11 @@ type
     { 重置缓存的 SGR 状态——进入 alt screen / 首帧前调用，确保下次
       ApplyCellStyle 发出完整 SGR 序列。 }
     procedure ResetStyleCache;
+
+    { 刀 21：本帧 OSC 8 链接 overlay（TTerminal.EndFrame 每帧传入；
+      empty/nil = 无链接，绘制不包裹）。命中 cell 输出
+      `ESC]8;;url BEL` 开 / `ESC]8;;BEL` 关。 }
+    procedure SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
 
     { buffer 级 helper。不 flush；帧末调 Flush。 }
     procedure HideCursor;
@@ -68,6 +74,9 @@ type
       按行主序产出，同行相邻 cell 复用光标不发 MoveTo。 }
     procedure DrawPatches(const APatches: TDiffEntries);
     procedure DrawPatchesN(const APatches: TDiffEntries; ACount: Integer);
+
+    { 刀 21：查 overlay 命中 (X,Y) 的链接 span；未命中 → Url='' }
+    function LinkSpanAt(AX, AY: Word): TTuiLinkSpan;
 
     { 把 builder 内容一次性 flush 到 fd。返回 False 表示写失败。 }
     function Flush: Boolean;
@@ -205,22 +214,69 @@ begin
   DrawPatchesN(APatches, System.Length(APatches));
 end;
 
+procedure TAnsiBackend.SetLinkOverlay(const ALinks: array of TTuiLinkSpan);
+var
+  LI: Integer;
+begin
+  System.SetLength(FLinkOverlay, System.Length(ALinks));
+  for LI := 0 to System.Length(ALinks) - 1 do
+    FLinkOverlay[LI] := ALinks[LI];
+end;
+
+{ 查 overlay：返回 (X,Y) 命中的链接 span（含 id）；未命中 → Url=''。
+  overlay 规模每帧几十条、patch 数百，线性扫可接受。 }
+function TAnsiBackend.LinkSpanAt(AX, AY: Word): TTuiLinkSpan;
+var
+  LI: Integer;
+begin
+  Result := Default(TTuiLinkSpan);
+  for LI := 0 to System.Length(FLinkOverlay) - 1 do
+    if (FLinkOverlay[LI].Y = AY) and (AX >= FLinkOverlay[LI].ColStart) and
+       (AX < FLinkOverlay[LI].ColEnd) then
+    begin
+      Result := FLinkOverlay[LI];
+      Exit;
+    end;
+end;
+
 procedure TAnsiBackend.DrawPatchesN(const APatches: TDiffEntries; ACount: Integer);
 var
   LI: Integer;
   LCurX, LCurY: Integer;
   LGlyphLen: Integer;
+  LSpan: TTuiLinkSpan;
+  LInLink: TTuiLinkSpan;   { 当前激活的 OSC 8 链接；Url='' = 无 }
 begin
   if ACount = 0 then Exit;
   LCurX := -1;
   LCurY := -1;
+  LInLink := Default(TTuiLinkSpan);
   for LI := 0 to ACount - 1 do
   begin
     if (APatches[LI].X <> LCurX) or (APatches[LI].Y <> LCurY) then
     begin
+      { 光标移动：离开当前链接上下文（OSC 8 是 sticky 写属性——只有
+        写过的 cell 继承，move 到新位置后旧链接不延续，但显式关更安全，
+        对齐 grok「每 run 包裹」语义）。 }
+      if LInLink.Url <> '' then
+      begin
+        AnsiOsc8Close(FOut);
+        LInLink := Default(TTuiLinkSpan);
+      end;
       AnsiMoveTo(FOut, APatches[LI].X, APatches[LI].Y);
       LCurX := APatches[LI].X;
       LCurY := APatches[LI].Y;
+    end;
+
+    { OSC 8 包裹：命中链接区且链接（url 或 id）变化 → 开/关切换 }
+    LSpan := LinkSpanAt(APatches[LI].X, APatches[LI].Y);
+    if (LSpan.Url <> LInLink.Url) or (LSpan.Id <> LInLink.Id) then
+    begin
+      if LInLink.Url <> '' then
+        AnsiOsc8Close(FOut);
+      if LSpan.Url <> '' then
+        AnsiOsc8Open(FOut, LSpan.Url, LSpan.Id);
+      LInLink := LSpan;
     end;
 
     if (not FLastInit) or
@@ -258,6 +314,9 @@ begin
     else
       Inc(LCurX);
   end;
+  { 补丁流结束：关掉残留链接（已显示文本不受影响，仅终止后续继承） }
+  if LInLink.Url <> '' then
+    AnsiOsc8Close(FOut);
 end;
 
 function TAnsiBackend.Flush: Boolean;
