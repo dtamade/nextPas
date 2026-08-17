@@ -254,6 +254,36 @@ begin
     '/nonexistent-xyz-no-such', []), 'missing binary reports -1');
 end;
 
+{ CompareText：ASCII 不区分大小写比较，返回序数（FPC SysUtils 语义）。 }
+procedure TestCompareText;
+begin
+  CheckEqual(0, nextpas.core.system.sysutils.CompareText('ABC', 'abc'),
+    'CompareText should be case-insensitive equal');
+  Check(nextpas.core.system.sysutils.CompareText('a', 'b') < 0,
+    'CompareText should order ascending');
+  Check(nextpas.core.system.sysutils.CompareText('b', 'a') > 0,
+    'CompareText should report descending order');
+end;
+
+{ UnixToDateTime：Unix 秒(UTC) → 本地 TDateTime；0 = 1970-01-01（任一时区日期不变）。 }
+procedure TestUnixToDateTime;
+begin
+  CheckEqual('1970-01-01',
+    nextpas.core.system.sysutils.FormatDateTime('yyyy-mm-dd',
+      nextpas.core.system.sysutils.UnixToDateTime(0)),
+    'UnixToDateTime(0) should be the Unix epoch date');
+end;
+
+{ FreeAndNil：释放并置 nil（FPC SysUtils 语义，无类型 var）。 }
+procedure TestFreeAndNil;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  nextpas.core.system.sysutils.FreeAndNil(LObj);
+  Check(LObj = nil, 'FreeAndNil should nil the variable');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -272,5 +302,8 @@ begin
   T.Test('PosEx follows StrUtils semantics', @TestPosExSysUtilsSemantics);
   T.Test('AcquireExceptionObject transfers ownership', @TestAcquireExceptionObjectOwnership);
   T.Test('RunProcessWait execs with args array', @TestRunProcessWait);
+  T.Test('CompareText is case-insensitive', @TestCompareText);
+  T.Test('UnixToDateTime converts epoch', @TestUnixToDateTime);
+  T.Test('FreeAndNil nils after free', @TestFreeAndNil);
   if not T.Run then Halt(1);
 end.
