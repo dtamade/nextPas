@@ -85,6 +85,7 @@ uses
   nextpas.core.tui.widget.form,
   nextpas.core.tui.widget.syntax,
   nextpas.core.tui.widget.toast,
+  nextpas.core.tui.widget.toast.anim,
   nextpas.core.tui.widget.chat_theme;
 
 { 门面 re-export：FPC 不支持自动 re-export，消费方 uses 本单元后
@@ -231,6 +232,7 @@ type
   IRadioGroup = nextpas.core.tui.widget.form.IRadioGroup;
   IHighlighter = nextpas.core.tui.widget.syntax.IHighlighter;
   IToastManager = nextpas.core.tui.widget.toast.IToastManager;
+  IToastAnim = nextpas.core.tui.widget.toast.anim.IToastAnim;
 
   TListItem = nextpas.core.tui.widget.list.TListItem;
   TListItems = nextpas.core.tui.widget.list.TListItems;
@@ -343,6 +345,9 @@ type
   TCheckboxState = nextpas.core.tui.widget.form.TCheckboxState;
   TRadioGroupState = nextpas.core.tui.widget.form.TRadioGroupState;
   TToastManager = nextpas.core.tui.widget.toast.TToastManager;
+  TToastKind = nextpas.core.tui.widget.toast.anim.TToastKind;
+  TToastEntry = nextpas.core.tui.widget.toast.anim.TToastEntry;
+  TToastAnim = nextpas.core.tui.widget.toast.anim.TToastAnim;
 
   TChatTheme = nextpas.core.tui.widget.chat_theme.TTheme;
 
@@ -506,6 +511,11 @@ const
   tlSuccess = nextpas.core.tui.widget.toast.tlSuccess;
   tlWarning = nextpas.core.tui.widget.toast.tlWarning;
   tlError = nextpas.core.tui.widget.toast.tlError;
+  tkInfo = nextpas.core.tui.widget.toast.anim.tkInfo;
+  tkSpin = nextpas.core.tui.widget.toast.anim.tkSpin;
+  tkOk = nextpas.core.tui.widget.toast.anim.tkOk;
+  tkErr = nextpas.core.tui.widget.toast.anim.tkErr;
+  tkWarn = nextpas.core.tui.widget.toast.anim.tkWarn;
   tkNormal = nextpas.core.tui.widget.syntax.tkNormal;
   tkKeyword = nextpas.core.tui.widget.syntax.tkKeyword;
   tkString = nextpas.core.tui.widget.syntax.tkString;
