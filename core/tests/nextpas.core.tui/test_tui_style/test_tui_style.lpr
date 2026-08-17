@@ -136,6 +136,27 @@ begin
   Check(mbBold in LS.AddMod, 'bold');
 end;
 
+procedure TestStyleInterp;
+var
+  A, B, R: TStyle;
+begin
+  A := TStyle.Default.WithFg(RgbColor(0, 0, 0)).WithModifier([mbBold]);
+  B := TStyle.Default.WithFg(RgbColor(100, 100, 100));
+  { T=0 端点取 A；修饰位取 A 侧 }
+  R := StyleInterp(A, B, 0);
+  Check(ColorEquals(R.Fg, A.Fg), 'T=0 takes A fg');
+  Check(mbBold in R.AddMod, 'modifier kept from A');
+  { T=1 端点取 B }
+  R := StyleInterp(A, B, 1);
+  Check(ColorEquals(R.Fg, B.Fg), 'T=1 takes B fg');
+  { T=0.5 中点：RGB 线性插值 }
+  R := StyleInterp(A, B, 0.5);
+  Check(R.Fg.Kind = ckRgb, 'midpoint fg is rgb');
+  CheckEqual(Int64(50), Int64(R.Fg.R), 'midpoint R');
+  CheckEqual(Int64(50), Int64(R.Fg.G), 'midpoint G');
+  CheckEqual(Int64(50), Int64(R.Fg.B), 'midpoint B');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.style');
   T.Test('default', @TestDefault);
@@ -150,5 +171,6 @@ begin
   T.Test('patch self only', @TestPatchSelfOnly);
   T.Test('patch other only', @TestPatchOtherOnly);
   T.Test('with fg bg chain', @TestWithFgBgChain);
+  T.Test('style interp', @TestStyleInterp);
   if not T.Run then Halt(1);
 end.

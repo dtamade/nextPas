@@ -42,7 +42,31 @@ type
     class function Dracula: TTheme; static;
   end;
 
+{ 主题插值：16 槽逐 StyleInterp（t∈[0,1]，0=A、1=B）。
+  主题过渡动画用；非 RGB 端点按 ColorInterp 回退语义处理 }
+function ThemeInterp(const A, B: TTheme; T: Double): TTheme;
+
 implementation
+
+function ThemeInterp(const A, B: TTheme; T: Double): TTheme;
+begin
+  Result.Bg            := StyleInterp(A.Bg, B.Bg, T);
+  Result.Fg            := StyleInterp(A.Fg, B.Fg, T);
+  Result.Border        := StyleInterp(A.Border, B.Border, T);
+  Result.BorderFocused := StyleInterp(A.BorderFocused, B.BorderFocused, T);
+  Result.Title         := StyleInterp(A.Title, B.Title, T);
+  Result.Highlight     := StyleInterp(A.Highlight, B.Highlight, T);
+  Result.Primary       := StyleInterp(A.Primary, B.Primary, T);
+  Result.Secondary     := StyleInterp(A.Secondary, B.Secondary, T);
+  Result.Success       := StyleInterp(A.Success, B.Success, T);
+  Result.Warning       := StyleInterp(A.Warning, B.Warning, T);
+  Result.Error_        := StyleInterp(A.Error_, B.Error_, T);
+  Result.Muted         := StyleInterp(A.Muted, B.Muted, T);
+  Result.Header        := StyleInterp(A.Header, B.Header, T);
+  Result.StatusBar     := StyleInterp(A.StatusBar, B.StatusBar, T);
+  Result.Button        := StyleInterp(A.Button, B.Button, T);
+  Result.ButtonActive  := StyleInterp(A.ButtonActive, B.ButtonActive, T);
+end;
 
 class function TTheme.Dark: TTheme;
 begin

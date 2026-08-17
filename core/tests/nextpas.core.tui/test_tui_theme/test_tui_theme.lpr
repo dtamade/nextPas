@@ -134,6 +134,27 @@ begin
   Check(not StyleEquals(N.Bg, D.Bg), 'Nord/Dracula Bg differ');
 end;
 
+procedure TestThemeInterp;
+var
+  A, B, R: TTheme;
+begin
+  A := TTheme.Nord;
+  B := TTheme.Dracula;
+  { T=0 恒等 A }
+  R := ThemeInterp(A, B, 0);
+  Check(ColorEquals(R.Bg.Bg, A.Bg.Bg), 'T=0 bg');
+  Check(ColorEquals(R.Success.Fg, A.Success.Fg), 'T=0 success');
+  { T=1 恒等 B }
+  R := ThemeInterp(A, B, 1);
+  Check(ColorEquals(R.Error_.Fg, B.Error_.Fg), 'T=1 error');
+  Check(ColorEquals(R.ButtonActive.Bg, B.ButtonActive.Bg), 'T=1 button active');
+  { T=0.5 中点：RGB 插值，非端槽位仍有效 }
+  R := ThemeInterp(A, B, 0.5);
+  Check(R.Primary.Fg.Kind = ckRgb, 'midpoint primary fg is rgb');
+  Check(R.Muted.Fg.Kind = ckRgb, 'midpoint muted fg is rgb');
+  Check(R.StatusBar.Bg.Kind = ckRgb, 'midpoint statusbar bg is rgb');
+end;
+
 
 begin
   T := TTestSuite.Create('tui_theme');
@@ -149,5 +170,6 @@ begin
   T.Test('Different presets have different styles', @TestThemeDifferentPresets);
     T.Test('Light Success != Error', @TestThemeLightSuccessError);
   T.Test('Nord Dracula Primary differ', @TestThemeNordDraculaPrimaryDiffer);
-if not T.Run then Halt(1);
+  T.Test('ThemeInterp', @TestThemeInterp);
+  if not T.Run then Halt(1);
 end.
