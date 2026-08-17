@@ -417,6 +417,21 @@ begin
   end;
 end;
 
+function EncodePascalStringLiteral(const AValue: string): string;
+var
+  Q: LongInt;
+begin
+  Result := '''';
+  for Q := 1 to Length(AValue) do
+  begin
+    if AValue[Q] = '''' then
+      Result := Result + ''''''''
+    else
+      Result := Result + AValue[Q];
+  end;
+  Result := Result + '''';
+end;
+
 { === Codegen methods (extracted to np_sema_codegen.inc) === }
 {$I np_sema_codegen.inc}
 

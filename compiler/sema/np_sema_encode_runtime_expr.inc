@@ -1220,6 +1220,16 @@ begin
       end
       else if (ANode.ChildAt(StrCallIdx) <> nil) and
         (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+        EvaluateStringConstant(ANode.ChildAt(StrCallIdx), FuncName) then
+      begin
+        { String const identifier formal (PATH_ENV_PREFIX='PATH='): fold to
+          strlit, not residual call @CONST() (M2 const-upper). }
+        ABlob := ABlob + 'strlit ' +
+          EncodePascalStringLiteral(FuncName) + #10;
+        Inc(StrCallArgCount, 2);
+      end
+      else if (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
         IsRuntimeArrVar(ANode.ChildAt(StrCallIdx).Text) then
       begin
         ABlob := ABlob + 'arrvar ' + ANode.ChildAt(StrCallIdx).Text + #10;

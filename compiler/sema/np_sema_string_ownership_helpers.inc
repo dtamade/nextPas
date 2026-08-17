@@ -819,6 +819,17 @@ begin
       QueuePendingStringTempRelease(TempName, SourceName);
       Blob := 'strvar ' + TempName + #10;
     end
+    else if (ArgNode.NodeKind = gnkIdentifier) and
+      EvaluateStringConstant(ArgNode, LitValue) then
+    begin
+      { String const identifier formal (PATH_ENV_PREFIX='PATH='): materialize
+        as literal temp, not residual call @CONST() (M2 const-upper). }
+      Blob := EmitStrConcatOperand(ArgNode, ADestVar);
+      if Blob <> '' then
+        Blob := 'strvar ' + Blob + #10
+      else
+        Blob := '';
+    end
     else if ArgNode.NodeKind = gnkStringLiteral then
     begin
       LitValue := DecodePascalStringLiteral(ArgNode.Text);
@@ -890,6 +901,12 @@ begin
       QueuePendingStringTempRelease(TempName, SourceName);
       Result := Result + #9 + 'strvar ' + TempName + #10;
     end
+    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+      EvaluateStringConstant(ArgNode, Decoded) then
+      { String const identifier formal: fold to strlit, not residual
+        call @CONST() (M2 const-upper). }
+      Result := Result + #9 + 'strlit ' +
+        EncodePascalStringLiteral(Decoded) + #10
     else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkStringLiteral) then
       Result := Result + #9 + 'strlit ' + ArgNode.Text + #10
     else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then

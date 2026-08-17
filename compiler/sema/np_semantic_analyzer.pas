@@ -322,6 +322,8 @@ end;
 
 function DecodePascalStringLiteral(const AText: string): string; forward;
 
+function EncodePascalStringLiteral(const AValue: string): string; forward;
+
 function ParamNameIsByRef(const AName: string): Boolean;
 begin
   Result := (Pos('var:', AName) = 1) or (Pos('out:', AName) = 1);
