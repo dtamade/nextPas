@@ -17,6 +17,7 @@ type
   EConvertError = SysUtils.EConvertError;
   EAssertionFailed = SysUtils.EAssertionFailed;
   EAbort = SysUtils.EAbort;
+  EArgumentException = SysUtils.EArgumentException;
 {$ELSE}
 type
   { Base Exception class — nextPas native implementation.
@@ -37,6 +38,7 @@ type
   EConvertError = class(Exception);
   EAssertionFailed = class(Exception);
   EAbort = class(Exception);
+  EArgumentException = class(Exception);
 {$ENDIF}
 
   TErrorCategory = (
