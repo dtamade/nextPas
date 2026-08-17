@@ -697,6 +697,84 @@ begin
   Check(LEditor.CursorRow = 29, 'Cursor row 29 after MoveDown');
 end;
 
+{ --- MoveTo:字节定位(越界 clamp),不进撤销栈 --- }
+
+procedure TestEditorMoveTo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('hello'#10'world'#10, 0);
+  { world 行 'r' 前:hello(0-4) LF(5) w(6) o(7) r(8) }
+  LEditor.MoveTo(8);
+  LEditor.InsertChar(Ord('!'));
+  Check(LEditor.Content = 'hello'#10'wo!rld'#10, 'MoveTo positions caret');
+  { 越界高位 clamp 到末尾 }
+  LEditor.MoveTo(999);
+  LEditor.InsertChar(Ord('X'));
+  Check(LEditor.Content = 'hello'#10'wo!rld'#10'X', 'MoveTo clamps high');
+  { 越界低位 clamp 到 0 }
+  LEditor.MoveTo(-5);
+  LEditor.InsertChar(Ord('Y'));
+  Check(LEditor.Content = 'Yhello'#10'wo!rld'#10'X', 'MoveTo clamps low');
+  { 定位不污染撤销栈:Undo 仍回到定位前全文 }
+end;
+
+{ --- ByteOffsetAt:屏幕坐标 → 字节偏移(行/列 clamp) --- }
+
+procedure TestEditorByteOffsetAt;
+var
+  LEditor: IInputEditor;
+  A: TRect;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('abc'#10'def'#10, 0);
+  A := TRect.Make(0, 0, 10, 10);
+  Check(LEditor.ByteOffsetAt(A, 0, 0) = 0, 'col0 row0');
+  Check(LEditor.ByteOffsetAt(A, 2, 0) = 2, 'col2 row0');
+  Check(LEditor.ByteOffsetAt(A, 99, 0) = 3, 'col clamp row0');
+  Check(LEditor.ByteOffsetAt(A, 0, 1) = 4, 'row1 start');
+  Check(LEditor.ByteOffsetAt(A, 1, 1) = 5, 'row1 col1');
+  { 视口底部外 clamp 到末行(尾换行产生的空行)行首 }
+  Check(LEditor.ByteOffsetAt(A, 0, 99) = 8, 'row clamp to last');
+end;
+
+{ --- SetFindHits:渲染命中高亮(当前/非当前样式),清除 --- }
+
+procedure TestEditorFindHits;
+var
+  LEditor: IInputEditor;
+  B: TBuffer;
+  H: array of TFindHit;
+  St, CurSt: TStyle;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.ReplaceContent('foo bar foo'#10, 0);
+  B := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5), nil);
+  try
+    St.Fg := IndexedColor(1);
+    St.Bg := IndexedColor(7);
+    CurSt.Fg := IndexedColor(2);
+    CurSt.Bg := IndexedColor(8);
+    SetLength(H, 2);
+    H[0].Start := 0; H[0].Len := 3;   { 行首 foo }
+    H[1].Start := 8; H[1].Len := 3;   { 行尾 foo }
+    LEditor.SetFindHits(H, 0, St, CurSt);
+    LEditor.Render(TRect.Make(0, 0, 30, 5), B);
+    Check(B.CellAt(0, 0)^.Bg.Index = 8, 'cur hit style bg');
+    Check(B.CellAt(8, 0)^.Bg.Index = 7, 'non-cur hit style bg');
+    Check(B.CellAt(4, 0)^.Bg.Index <> 7, 'gap not highlighted');
+    { 空数组清除高亮:新帧(TBuffer 每帧新建,样式合并语义下不可复用旧缓冲) }
+    LEditor.SetFindHits([], -1, St, CurSt);
+    B.Free;
+    B := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5), nil);
+    LEditor.Render(TRect.Make(0, 0, 30, 5), B);
+    Check(B.CellAt(0, 0)^.Bg.Index <> 8, 'clear hits');
+  finally
+    B.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -741,5 +819,8 @@ begin
   T.Test('Content empty', @TestEditorContentEmpty);
   T.Test('CursorScreenPos', @TestEditorCursorScreenPos);
   T.Test('CursorRow', @TestEditorCursorRow);
+  T.Test('MoveTo', @TestEditorMoveTo);
+  T.Test('ByteOffsetAt', @TestEditorByteOffsetAt);
+  T.Test('FindHits', @TestEditorFindHits);
   if not T.Run then Halt(1);
 end.
