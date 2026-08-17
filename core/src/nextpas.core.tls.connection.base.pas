@@ -19,7 +19,7 @@ unit nextpas.core.tls.connection.base;
 
 interface
 
-uses nextpas.core.base, nextpas.core.system.sysutils, nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions,
+uses nextpas.core.base, nextpas.core.text.conv, nextpas.core.time, nextpas.core.tls.base, nextpas.core.tls.exceptions,
   nextpas.core.text.format;
 
 const
