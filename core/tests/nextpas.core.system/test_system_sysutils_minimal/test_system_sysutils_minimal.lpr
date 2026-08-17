@@ -167,6 +167,26 @@ begin
     'Supports should reject interface the object does not implement');
 end;
 
+procedure TestSplitStringSysUtilsSemantics;
+var
+  A: nextpas.core.system.sysutils.TStringArray;
+begin
+  A := nextpas.core.system.sysutils.SplitString('a,b,c', ',');
+  Check((Length(A) = 3) and (A[0] = 'a') and (A[2] = 'c'),
+    'SplitString should split on delimiter characters');
+  A := nextpas.core.system.sysutils.SplitString('a,,b', ',');
+  Check((Length(A) = 2) and (A[0] = 'a') and (A[1] = 'b'),
+    'SplitString should drop empty segments from consecutive delimiters');
+  A := nextpas.core.system.sysutils.SplitString('ab;cd', ';');
+  Check((Length(A) = 2) and (A[1] = 'cd'),
+    'SplitString should handle single trailing segment');
+  A := nextpas.core.system.sysutils.SplitString('', ',');
+  Check(Length(A) = 0, 'SplitString should return empty array for empty input');
+  A := nextpas.core.system.sysutils.SplitString('x;y', ',;');
+  Check((Length(A) = 2) and (A[0] = 'x') and (A[1] = 'y'),
+    'SplitString should treat every delimiter character as a separator');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -181,5 +201,6 @@ begin
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
+  T.Test('SplitString follows SysUtils semantics', @TestSplitStringSysUtilsSemantics);
   if not T.Run then Halt(1);
 end.

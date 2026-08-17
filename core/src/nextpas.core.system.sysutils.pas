@@ -64,6 +64,7 @@ function LowerCase(const AStr: string): string;
 
 { String search }
 function Pos(const ASubStr, AStr: string): Integer;
+function SplitString(const S, Delimiters: string): TStringArray;
 
 { Date/Time }
 function Now: TDateTime;
@@ -277,6 +278,33 @@ end;
 function Pos(const ASubStr, AStr: string): Integer;
 begin
   Result := System.Pos(ASubStr, AStr);
+end;
+
+function SplitString(const S, Delimiters: string): TStringArray;
+var
+  I, Start, Count: Integer;
+begin
+  { SysUtils 语义：按 Delimiters 中任意字符切分，连续分隔符不产生空段。 }
+  SetLength(Result, 0);
+  Count := 0;
+  Start := 1;
+  for I := 1 to Length(S) do
+    if System.Pos(S[I], Delimiters) > 0 then
+    begin
+      if I > Start then
+      begin
+        Inc(Count);
+        SetLength(Result, Count);
+        Result[Count - 1] := System.Copy(S, Start, I - Start);
+      end;
+      Start := I + 1;
+    end;
+  if Start <= Length(S) then
+  begin
+    Inc(Count);
+    SetLength(Result, Count);
+    Result[Count - 1] := System.Copy(S, Start, Length(S) - Start + 1);
+  end;
 end;
 
 { Date/Time — delegates to platform }
