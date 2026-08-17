@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.path, nextpas.core.fs, nextpas.core.process,
-  nextpas.driver.projection.types, nextpas.driver.command.envelope;
+  nextpas_projection_types, nextpas_command_envelope;
 
 procedure RunTest(
   var AState: TNextPasState;

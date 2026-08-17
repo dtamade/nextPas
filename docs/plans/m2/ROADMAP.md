@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 P1-Classes-zero 后实测）
+## 当前战况（2026-08-17 P2-Process-zero 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **32** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³：TStream vmt×6 清零，method-object 家族再浮出 TCollection×2) → 32 (P1-Classes-zero⁴：数字持平，@TStream/@TFileStream 全部 define 从 .ll 消失)** |
-| undefined total | **45** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³)** |
+| undefined unique | **31** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³：TStream vmt×6 清零，method-object 家族再浮出 TCollection×2) → 32 (P1-Classes-zero⁴：数字持平，@TStream/@TFileStream 全部 define 从 .ll 消失) → 31 (P2-Process-zero⁵：TProcess.FCurrentDirectory 出列)** |
+| undefined total | **44** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -63,6 +63,16 @@ TStream/vmt 家族 6 uniq 8 total 清零；新浮出 `TCollection.AppendToUnchec
 与 `nextpas.core.exception.Exception` 是互不相关的两个 class(TObject)，
 `on Exception` 会失效。此口同时让 B6.5 挂账的
 `TFileStream.Create`（4 参 define vs 3 实参）符号从 .ll 消失自动减压。
+
+⁵ P2-Process-zero（本 commit）：`nextpas_command_test.pas`（stage0 test 命令）
+的 RunTest 改用 `nextpas.core.process`（ICommand builder：
+`/usr/bin/env` + Dir + EnvAdd×3 + Arg + Status.ExitCode），去掉 `uses
+process`。编译链对 `Process` stub 消费清零：`.ll` 中 @TProcess.*/
+@np_unit_init_process 全部消失，`TProcess.FCurrentDirectory`(1) 出列 →
+31/44。行为验证：新编译器 `test --list-groups` 实测列出 11 组。
+B6.5 挂账 `TProcess.Create`（2 参 define vs 1 实参）随之自动减压。
+注意：原实现 `--filter` 是独立参数，迁移时用 `Args(['--filter', name])`
+保持 argv 语义一致。
 | opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——宿主 `AVX2ArrayFractF64`（`pD[i] := pS[i] - Int(pS[i])`）；**依赖 Double 运算编码（全 .ll 无 load double/fadd——编译器从未支持浮点标量运算），需单独立项而非 B4 装填** | 本轮后仍 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
