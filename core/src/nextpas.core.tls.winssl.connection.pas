@@ -27,7 +27,7 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.sync, nextpas.core.time,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.sync, nextpas.core.time,
   nextpas.core.io.intf,
   nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
@@ -945,7 +945,7 @@ var
 begin
   UpdateSessionReuseTruthFromContext(LSessionID);
   if LSessionID = '' then
-    LSessionID := Format('winssl-session-%p', [Pointer(@FCtxtHandle)]);
+    LSessionID := nextpas.core.text.format.TextFormat('winssl-session-0x%x', [PtrUInt(@FCtxtHandle)]);
 
   LProtocol := DoGetProtocolVersion;
   LCipher := DoGetCipherName;
@@ -1747,7 +1747,7 @@ begin
     CALG_DES:     CipherName := 'DES';
     CALG_RC4:     CipherName := 'RC4';
   else
-    CipherName := Format('0x%x', [ConnInfo.aiCipher]);
+    CipherName := nextpas.core.text.format.TextFormat('0x%x', [ConnInfo.aiCipher]);
   end;
 
   case ConnInfo.aiHash of
@@ -1761,9 +1761,9 @@ begin
   end;
 
   if HashName <> '' then
-    Result := Format('%s_%s (%d bits)', [CipherName, HashName, ConnInfo.dwCipherStrength])
+    Result := nextpas.core.text.format.TextFormat('%s_%s (%d bits)', [CipherName, HashName, ConnInfo.dwCipherStrength])
   else
-    Result := Format('%s (%d bits)', [CipherName, ConnInfo.dwCipherStrength]);
+    Result := nextpas.core.text.format.TextFormat('%s (%d bits)', [CipherName, ConnInfo.dwCipherStrength]);
 end;
 
 function TWinSSLConnection.DoGetPeerCertificate: ISSLCertificate;
@@ -1906,7 +1906,7 @@ begin
     CERT_E_INVALID_NAME: Result := 'Invalid name';
     TRUST_E_CERT_SIGNATURE: Result := 'Invalid signature';
   else
-    Result := Format('Verification error: 0x%x', [VerifyResult]);
+    Result := nextpas.core.text.format.TextFormat('Verification error: 0x%x', [VerifyResult]);
   end;
 end;
 
@@ -2149,7 +2149,7 @@ begin
     begin
       FLastError := MapSchannelError(Status);
       NotifyInfoCallback(2, Integer(Status),
-        Format('Client handshake initialization failed: %s (0x%x)',
+        nextpas.core.text.format.TextFormat('Client handshake initialization failed: %s (0x%x)',
           [GetSchannelErrorMessageEN(Status), Status]));
 
       case Status of
@@ -2163,7 +2163,7 @@ begin
           );
       else
         raise ESSLHandshakeException.CreateWithContext(
-          Format('Client handshake initialization failed: %s', [GetSchannelErrorMessageEN(Status)]),
+          nextpas.core.text.format.TextFormat('Client handshake initialization failed: %s', [GetSchannelErrorMessageEN(Status)]),
           sslErrHandshake,
           'TWinSSLConnection.ClientHandshake',
           Status,
@@ -2215,7 +2215,7 @@ begin
       begin
         FLastError := MapSchannelError(Status);
         NotifyInfoCallback(2, Integer(Status),
-          Format('Client handshake failed: %s (0x%x)',
+          nextpas.core.text.format.TextFormat('Client handshake failed: %s (0x%x)',
             [GetSchannelErrorMessageEN(Status), Status]));
 
         case Status of
@@ -2259,7 +2259,7 @@ begin
 
         else
           raise ESSLHandshakeException.CreateWithContext(
-            Format('Client handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
+            nextpas.core.text.format.TextFormat('Client handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
             sslErrHandshake,
             'TWinSSLConnection.ClientHandshake',
             Status,
@@ -2385,7 +2385,7 @@ begin
       FLastError := MapSchannelError(Status);
 
       NotifyInfoCallback(2, Integer(Status),
-        Format('Server handshake failed: %s (0x%x)',
+        nextpas.core.text.format.TextFormat('Server handshake failed: %s (0x%x)',
           [GetSchannelErrorMessageEN(Status), Status]));
 
       if IsValidSecHandle(FCtxtHandle) then
@@ -2457,7 +2457,7 @@ begin
 
       else
         raise ESSLHandshakeException.CreateWithContext(
-          Format('Server handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
+          nextpas.core.text.format.TextFormat('Server handshake failed: %s', [GetSchannelErrorMessageEN(Status)]),
           sslErrHandshake,
           'TWinSSLConnection.ServerHandshake',
           Status,

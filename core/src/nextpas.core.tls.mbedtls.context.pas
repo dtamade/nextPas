@@ -20,6 +20,7 @@ uses
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.encoding.base64,
   nextpas.core.io.intf,
   nextpas.core.io.util,
@@ -826,7 +827,7 @@ procedure TMbedTLSContext.RejectUnsupportedCallbackAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCallbacks before installing a non-nil callback.',
       [AFeature]),
     sslErrUnsupported,
@@ -852,7 +853,7 @@ procedure TMbedTLSContext.RejectUnsupportedCustomCipherAssignment(
   const AFeature, AMethodName: string);
 begin
   raise ESSLConfigurationException.CreateWithContext(
-    nextpas.core.text.conv.Format('%s is not published by the current MbedTLS backend runtime. ' +
+    nextpas.core.text.format.TextFormat('%s is not published by the current MbedTLS backend runtime. ' +
       'Check ISSLLibrary.GetCapabilities.SupportsCustomCipherSuites before installing a custom non-default cipher override.',
       [AFeature]),
     sslErrUnsupported,
@@ -1051,7 +1052,7 @@ begin
 
   if Length(LHash) <> 32 then
     raise ESSLException.CreateWithContext(
-      nextpas.core.text.conv.Format('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
+      nextpas.core.text.format.TextFormat('Invalid Base64 hash length: expected 32, got %d', [Length(LHash)]),
       sslErrInvalidParam,
       'TMbedTLSContext.AddCertificatePinBase64'
     );

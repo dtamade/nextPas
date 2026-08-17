@@ -113,6 +113,7 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.text.strings,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
@@ -1474,7 +1475,7 @@ begin
           begin
             Addr4 := AltName^.IPAddress.pbData;
             if Addr4 <> nil then
-              AddToResult(nextpas.core.text.conv.Format('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
+              AddToResult(nextpas.core.text.format.TextFormat('%d.%d.%d.%d', [Addr4[0], Addr4[1], Addr4[2], Addr4[3]]));
           end
           else if AltName^.IPAddress.cbData = 16 then
           begin

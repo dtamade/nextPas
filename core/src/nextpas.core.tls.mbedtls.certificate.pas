@@ -162,6 +162,7 @@ uses
   nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.text.strings,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
@@ -1144,7 +1145,7 @@ begin
 
     AResult.Success := True;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := nextpas.core.text.conv.Format(
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat(
         'MbedTLS certificate verification passed after applying VerifyEx flag exceptions (native flags=%u, ignored=%u)',
         [LFlags, LIgnoredFlags])
     else
@@ -1168,11 +1169,11 @@ begin
       LErrorMessage := Trim(LErrorMessage + ' (not trusted)');
     AResult.ErrorMessage := LErrorMessage;
     if LIgnoredFlags <> 0 then
-      AResult.DetailedInfo := nextpas.core.text.conv.Format(
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat(
         'MbedTLS verification flags: native=%u effective=%u ignored=%u',
         [LFlags, LEffectiveFlags, LIgnoredFlags])
     else
-      AResult.DetailedInfo := nextpas.core.text.conv.Format('MbedTLS verification flags: %u', [LEffectiveFlags]);
+      AResult.DetailedInfo := nextpas.core.text.format.TextFormat('MbedTLS verification flags: %u', [LEffectiveFlags]);
   end;
 end;
 
