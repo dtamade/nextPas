@@ -329,6 +329,19 @@ begin
     'whole-day difference should span leap years');
 end;
 
+{ DecodeDate/UnixDateDelta:日期分解与合成往返(SysUtils 语义)。
+  EncodeDate 由 core 反哺(core TDate),此处验证门面组合一致。 }
+procedure TestDecodeEncodeDate;
+var
+  Y, M, D: Word;
+begin
+  DecodeDate(nextpas.core.system.sysutils.EncodeDate(2026, 8, 17), Y, M, D);
+  Check((Y = 2026) and (M = 8) and (D = 17),
+    'EncodeDate/DecodeDate should roundtrip the civil date');
+  Check(nextpas.core.system.sysutils.UnixDateDelta = 25569.0,
+    'UnixDateDelta should be the TDateTime offset of the Unix epoch');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
@@ -350,6 +363,7 @@ begin
   T.Test('CompareText is case-insensitive', @TestCompareText);
   T.Test('UnixToDateTime converts epoch', @TestUnixToDateTime);
   T.Test('FreeAndNil nils after free', @TestFreeAndNil);
+  T.Test('DecodeDate/UnixDateDelta roundtrip', @TestDecodeEncodeDate);
   T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
   T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);
   T.Test('EncodeDate spans whole days', @TestEncodeDateWholeDayDifference);
