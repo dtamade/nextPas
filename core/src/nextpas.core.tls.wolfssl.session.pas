@@ -299,7 +299,7 @@ begin
   if AX509 = nil then
     Exit;
 
-  LTemp := TWolfSSLCertificate.Create(AX509);
+  LTemp := TWolfSSLCertificate.Create(AX509, False);
   try
     LDER := LTemp.SaveToDER;
     if Length(LDER) = 0 then
@@ -312,8 +312,10 @@ begin
       Result := LOwned;
       LOwned := nil;
     finally
+      LOwned.Free;
     end;
   finally
+    LTemp.Free;
   end;
 end;
 
@@ -709,6 +711,7 @@ begin
     Result := LClone;
     LClone := nil;
   finally
+    LClone.Free;
   end;
 end;
 

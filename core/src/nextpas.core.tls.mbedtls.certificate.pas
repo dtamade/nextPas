@@ -416,6 +416,7 @@ end;
 function TMbedTLSCertificate.TryLoadX509Parser(
   out AParser: TX509Certificate): Boolean;
 var
+  LParser: TX509Certificate;
   LDER: TBytes;
 begin
   AParser := nil;
@@ -424,22 +425,24 @@ begin
   if FX509Crt = nil then
     Exit;
 
-  AParser := TX509Certificate.Create;
+  LParser := TX509Certificate.Create;
   try
     if Length(FDERData) > 0 then
-      AParser.LoadFromDER(FDERData)
+      LParser.LoadFromDER(FDERData)
     else if FPEMData <> '' then
-      AParser.LoadFromPEM(FPEMData)
+      LParser.LoadFromPEM(FPEMData)
     else
     begin
       LDER := SaveToDER;
       if Length(LDER) = 0 then
         Exit;
-      AParser.LoadFromDER(LDER);
+      LParser.LoadFromDER(LDER);
     end;
+    AParser := LParser;
     Result := True;
-  except
-    Result := False;
+  finally
+    if not Result then
+      LParser.Free;
   end;
 end;
 
@@ -466,6 +469,7 @@ begin
 
     Result := (APublicKeyAlgorithm <> '') or (ASignatureAlgorithm <> '');
   finally
+    LParser.Free;
   end;
 end;
 
@@ -700,6 +704,7 @@ begin
       Result.KeyUsage := X509KeyUsageToBitfield(LParser.KeyUsage);
       Result.SubjectAltNames := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
     finally
+      LParser.Free;
     end;
   end
   else
@@ -725,6 +730,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -759,6 +765,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -795,6 +802,7 @@ begin
       if Result <> '' then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -890,6 +898,7 @@ begin
       if Result > 0 then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -940,6 +949,7 @@ begin
       if Result > 0 then
         Exit;
     finally
+      LParser.Free;
     end;
   end;
 
@@ -1011,6 +1021,7 @@ begin
       Result := Ord(LParser.Version) + 1;
       Exit;
     finally
+      LParser.Free;
     end;
   end;
 end;
@@ -1203,6 +1214,8 @@ var
     if (Pos('*.', APattern) = 1) then
     begin
       try
+        PatternParts := StringsSplit(APattern, '.');
+        HostParts := StringsSplit(AHostname, '.');
 
         // Same label count
         if Length(PatternParts) = Length(HostParts) then
@@ -1331,6 +1344,7 @@ begin
   try
     Result := LParser.IsCA;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1394,6 +1408,7 @@ begin
       end;
     end;
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1408,6 +1423,7 @@ begin
   try
     Result := X509SubjectAltNamesToStrings(LParser.SubjectAltNames);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1422,6 +1438,7 @@ begin
   try
     Result := X509KeyUsageToStrings(LParser.KeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1436,6 +1453,7 @@ begin
   try
     Result := X509ExtKeyUsageToStrings(LParser.ExtKeyUsage);
   finally
+    LParser.Free;
   end;
 end;
 
@@ -1587,6 +1605,7 @@ begin
     Result := LClone;
     LClone := nil;
   finally
+    LClone.Free;
   end;
 end;
 
@@ -1603,6 +1622,7 @@ end;
 destructor TMbedTLSCertificateStore.Destroy;
 begin
   Clear;
+  FCertificates.Free;
   FreeStore;
   inherited Destroy;
 end;

@@ -130,3 +130,5 @@ test_x509v3_extkeyusage_contract
 test_x509v3_keyusage_contract
 test_x509v3_subjectaltname_contract
 test_zerocopy_view
+test_mbedtls_framework
+test_wolfssl_framework
