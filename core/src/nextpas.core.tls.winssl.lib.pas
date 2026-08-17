@@ -21,6 +21,7 @@ uses
   Windows,
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.winssl.base,
@@ -221,7 +222,7 @@ begin
     FWindowsVersion.IsServer := False; // Simplified: can't detect with basic OSVERSIONINFO
     Result := True;
     
-    InternalLog(sslLogInfo, Format('Windows version detected: %d.%d Build %d (%s)',
+    InternalLog(sslLogInfo, nextpas.core.text.format.TextFormat('Windows version detected: %d.%d Build %d (%s)',
       [FWindowsVersion.Major, FWindowsVersion.Minor, FWindowsVersion.Build,
       'Workstation'])); // Simplified log
   end
@@ -268,9 +269,9 @@ begin
   end
   else
   begin
-    SetError(Status, Format('Schannel not available: %s', 
+    SetError(Status, nextpas.core.text.format.TextFormat('Schannel not available: %s', 
       [GetSchannelErrorString(Status)]));
-    InternalLog(sslLogError, Format('Schannel support check failed: %s',
+    InternalLog(sslLogError, nextpas.core.text.format.TextFormat('Schannel support check failed: %s',
       [GetSchannelErrorString(Status)]));
   end;
 end;
@@ -361,7 +362,7 @@ function TWinSSLLibrary.GetVersionString: string;
 begin
   // Windows Schannel 版本与 Windows 版本对应
   if FInitialized then
-    Result := Format('Windows Schannel %d.%d (Build %d)',
+    Result := nextpas.core.text.format.TextFormat('Windows Schannel %d.%d (Build %d)',
       [FWindowsVersion.Major, FWindowsVersion.Minor, FWindowsVersion.Build])
   else
     Result := 'Windows Schannel (not initialized)';
@@ -460,7 +461,7 @@ begin
       (LCipher = 'CHACHA20_POLY1305') or
       (LCipher = 'CHACHA20-POLY1305');
 
-  InternalLog(sslLogDebug, Format('Cipher support check: %s = %s', [
+  InternalLog(sslLogDebug, nextpas.core.text.format.TextFormat('Cipher support check: %s = %s', [
     ACipherName, BoolToStr(Result, 'TRUE', 'FALSE')
   ]));
 end;
@@ -489,7 +490,7 @@ begin
     Result := False;
   end;
 
-  InternalLog(sslLogDebug, Format('Feature support check (type-safe): %d = %s',
+  InternalLog(sslLogDebug, nextpas.core.text.format.TextFormat('Feature support check (type-safe): %d = %s',
     [Ord(AFeature), BoolToStr(Result, 'TRUE', 'FALSE')]));
 end;
 
@@ -535,7 +536,7 @@ begin
   // v1.2.0 新增字段
   Result.BackendType := sslWinSSL;
   Result.BackendImplType := sslImplOSNative;  // WinSSL 使用操作系统原生 API
-  Result.BackendVersion := Format('Windows %d.%d.%d',
+  Result.BackendVersion := nextpas.core.text.format.TextFormat('Windows %d.%d.%d',
     [FWindowsVersion.Major, FWindowsVersion.Minor, FWindowsVersion.Build]);
   Result.SupportsDTLS := False;  // Schannel 不支持 DTLS
 
@@ -613,7 +614,7 @@ begin
 
   NormalizeLegacyCapabilityBooleans(Result);
 
-  InternalLog(sslLogDebug, Format('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s (Win %d.%d.%d)',
+  InternalLog(sslLogDebug, nextpas.core.text.format.TextFormat('GetCapabilities: TLS1.3=%s, ALPN=%s, SNI=%s (Win %d.%d.%d)',
     [
       BoolToStr(Result.SupportsTLS13, 'TRUE', 'FALSE'),
       BoolToStr(Result.SupportsALPN, 'TRUE', 'FALSE'),

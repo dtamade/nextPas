@@ -7,7 +7,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
   nextpas.core.tls.logging,
   nextpas.core.tls.collections,
   nextpas.core.tls.winssl.base,
@@ -162,7 +162,7 @@ begin
             except
               on E: Exception do
                 TSecurityLog.Debug('Enterprise',
-                  Format('Failed to read group policy value %s: %s', [LName, E.Message]));
+                  nextpas.core.text.format.TextFormat('Failed to read group policy value %s: %s', [LName, E.Message]));
             end;
           end;
         until LStatus <> ERROR_SUCCESS;
