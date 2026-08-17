@@ -472,6 +472,7 @@ function ParamStr
 function GetEnvironmentVariable
 function GetProcessID
 function ExecuteProcess
+function RunProcessWait
 procedure Sleep
 function SysErrorMessage
 function GetLastOSError
