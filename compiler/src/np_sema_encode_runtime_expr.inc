@@ -2873,12 +2873,16 @@ begin
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    (LookupPointerVar(ANode.ChildAt(0).Text) <> '') then
+    ((LookupPointerVar(ANode.ChildAt(0).Text) = 'PChar') or
+     (LookupPointerVar(ANode.ChildAt(0).Text) = 'PAnsiChar') or
+     (LookupPointerVar(ANode.ChildAt(0).Text) = 'PUTF8Char')) then
   begin
-    { PAnsiChar/PChar/Pointer index: element address (Char formals are passed
-      as ptr to the character slot — IsSep(APath[Result-1])). The generic
+    { Character pointer index: element address (Char formals are passed as
+      ptr to the character slot — IsSep(APath[Result-1])). The generic
       arrload fallback needs Name$ptr, which pointer params lack, so it drops
-      the base and the residual call gets only the index (M2: @Result 1 use). }
+      the base and the residual call gets only the index (M2: @Result 1 use).
+      Restricted to char pointers: numeric pointees (PInt32 etc.) take the
+      element as a value, not a Char-slot address. }
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
     begin
       ABlob := FuncName + 'arr_elem_ref ' + ANode.ChildAt(0).Text + #10;

@@ -700,6 +700,20 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       fadd/fsub/fmul/fdiv/fneg、fcmp、fptosi/sitofp、参数 f64 ABI，
       以及 Int/Trunc/Round/Frac 内置折叠（llvm.trunc.f64 或 runtime
       helper）。**范围=一个功能面，单独立项，不放 B4 装填**。
+- [ ] **B6.5-Sar 整数移位链 + 指针元素值索引（@SarLongint 1 use）**：SIMD
+      标量模板 `Result.i[i] := SarLongint(aSrc[i], count)`（core simd
+      scalar.arith.wide，探针经 dispatch 表引入）。三层缺口互相依赖：
+      (1) **移位链全缺**——encode/emitter 无 shl/shr/sar token（lexer
+      只有 tkShrKeyword），`SarLongint`（FPC 算术右移内建）无识别 →
+      残差 `call @SarLongint`；(2) **数值指针（PInt32）索引无值语义**——
+      result-fold 口把字符指针索引收窄到 arr_elem_ref（地址，Char 形参
+      ptr ABI）后，PInt32[I] 落通用 arrload（$ptr 缺失→基址丢）→ 赋值
+      RHS 编码失败静默错编（`F := P[I]` 实测变 `F := I 地址`）；需
+      「元素大小感知的 gep+load」；(3) **标量整数参数分配 ptr 槽**——
+      参数注册 `TypeMetaSize>0` 分支把非 record 标量（Int32/Integer）
+      RegisterClassVar → var-decl-ptr-runtime（.ll `F(I: Int32)` 形参
+      ptr）。三件套一起动（sar → `ashr` 指令链 + 数值指针索引元素大小
+      编码 + 标量参数槽类型修正），属 B6.5 类型正确性面。
 - [x] **B6.5 call-site 类型一致性 + 全局名引号** ✅ c6d7d5d1c：预估的
       「一类修复工作」实测只有 **1 处** call 实参不匹配（python 静态扫描全
       .ll：SSA 定义类型 vs call 实参标注，唯一命中 = `np_string_release`
