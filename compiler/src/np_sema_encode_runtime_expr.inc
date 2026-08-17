@@ -1451,46 +1451,6 @@ begin
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
-    { FPC magic CompareByte(const buf1, const buf2; len): untyped-const
-      formals take ADDRESSES. The generic arg loop folds aLeft[1] to an index
-      constant (strcharload has no builder token), so the call degenerated to
-      @CompareByte(1, 1, len) with no define (b4b-i8). String-index args pass
-      the char buffer address via np_tstring_data; the callee maps to the
-      runtime lexicographic byte compare. }
-    if (ANode.ChildCount = 4) and (ANode.ChildAt(3) <> nil) and
-      SameText(ANode.ChildAt(0).Text, 'CompareByte') then
-    begin
-      ABlob := '';
-      for StrCallIdx := 1 to 2 do
-      begin
-        RhsNode := ANode.ChildAt(StrCallIdx);
-        if (RhsNode <> nil) and (RhsNode.NodeKind = gnkArrayAccess) and
-          (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
-          (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
-          IsRuntimeStrVar(RhsNode.ChildAt(0).Text) then
-        begin
-          if not EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), FuncName) then
-            Exit(False);
-          ABlob := ABlob + 'tsdata ' + RhsNode.ChildAt(0).Text + #10 +
-            FuncName + 'int 1' + #10 + 'sub' + #10 + 'add' + #10;
-        end
-        else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkDereference) and
-          (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
-          (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) then
-        begin
-          { @(P^) = P — pass the pointer value, not a load through it. }
-          ABlob := ABlob + 'var ' + RhsNode.ChildAt(0).Text + #10;
-        end
-        else if EncodeRuntimeIntExprFold(RhsNode, FuncName) then
-          ABlob := ABlob + FuncName
-        else
-          Exit(False);
-      end;
-      if not EncodeRuntimeIntExprFold(ANode.ChildAt(3), ArgName) then
-        Exit(False);
-      ABlob := ABlob + ArgName + 'call np_compare_byte 3' + #10;
-      Exit(True);
-    end;
     { Local type cast TypeName(expr): type declared inside the method body
       never enters the type table, so TryGetTypeCastTargetTypeId above missed
       it and the call fallback would residual-call @TypeName (M2:

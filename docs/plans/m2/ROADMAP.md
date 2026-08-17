@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 reexport-fields 后实测）
+## 当前战况（2026-08-17 localtypecast 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **15** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³)** |
-| undefined total | **20** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³)** |
+| undefined unique | **15** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴)** |
+| undefined total | **20** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -180,7 +180,29 @@ ASlot)` 方法调用。修法：别名分支继承 `AliasTargetMeta.Fields`（Se
 `S := ASlot.Name` → `call i64 @TSlot.Name`（rc=1）；修复后 rc=0、
 `np_tstring_field_assign`。验证：16/21 → 15/20（仅此 1 use 出列，无浮出），
 opt 首错 57371→57476 行微移非回退；compiler-pass 58/58；hygiene pass。
-| opt 首错 | `use of undefined value '@Int'`（.ll 57476 行 `call i64 @Int(i64)`）——宿主 `AVX2ArrayFractF64`（`pD[i] := pS[i] - Int(pS[i])`）；**依赖 Double 运算编码（全 .ll 无 load double/fadd——编译器从未支持浮点标量运算），需单独立项而非 B4 装填** | 本轮后仍 |
+
+¹⁴ localtypecast（本 commit）：`PSizeUIntArray` 1 use（`TGrowingAllocator.
+MixedBatch` 的 `LSizesPtr := PSizeUIntArray(ASizes)`）+ `TPthreadKeyDtor`
+1 use（`platform_tls_create_with_destructor` 的
+`pthread_key_create(@LKey, TPthreadKeyDtor(ADestructor))`）——都是**方法/
+函数体内 type 段声明的局部类型**作强制 cast 目标。根因：局部类型不进类型
+表（WalkDeclarations 只处理单元级 type 段，方法体 type 段无
+ProcessTypeSection），`TryGetTypeCastTargetTypeId`（ResolveTypeId）解析失败
+→ sema 报 unknown-callable（root 场景）/ encode 层 fallback residual call
+@类型名（imported 场景 .ll 错编）。修法双修：encode 层 1199 通用
+gnkFunctionCall 分支开头加宽松 cast 兜底（单参 + 标识符头 + 无过程
+symbol/body → 按 cast fold 实参值、不发 call）；sema 层 SeedCallBindings
+cast 检测加同款豁免（合法 local type cast 不再误报）。**首轮宽松版回归**：
+`NextBodyIndexForNameLocal(Index)` 类无前缀方法调用被兜底误判 cast（裸名无
+symbol 是方法未绑定前的常态），implicit-self 绑定被抢 → `call ptr @self()`
+8 uses 浮出（uniq 15→13 但 total 20→24 升）→ 收紧：豁免仅在
+`FCurrentMethodClass=''`（sema）或 `Class.Method` 限定查也 miss（encode）
+时生效。**附带出列**：`Int` 2 uses（`AVX2ArrayFractF64` 的 `Int(pS[i])`
+浮点取整内建）被兜底 fold 成 identity 值传递——语义近似非真实现（B6.5-
+Double 立项后修正），opt 首错从 @Int 推进到 @Pos。验证：15/20 → 12/16
+（3 uniq 4 total），三复现测试（root 全局/方法/imported）rc 1→0；
+compiler-pass 58/58；hygiene pass。
+| opt 首错 | `use of undefined value '@Pos'`（.ll 217582 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 动态数组元素实参错编（haystack 编成 I 索引），strpos 形态修复小口 | 本轮后仍（@Int 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
