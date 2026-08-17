@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-17 B2-IMT 后实测）
+## 当前战况（2026-08-17 祖先-cohort 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **36** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE：parser 指令表补 noinline，platform.memory 实现区不截断) → 36 (B2-IMT²：IHasher.Write 清零、opt 首错推进 19700→50250 行；浮出 TStream vmt×6 + TVec×2，method-object 既有家族)** |
-| undefined total | **51** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE：platform_virtual_* 3 符号 6 total 清零，runtime-decl 桶整桶清零) → 51 (B2-IMT²)** |
+| undefined unique | **32** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³：TStream vmt×6 清零，method-object 家族再浮出 TCollection×2)** |
+| undefined total | **45** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -46,7 +46,14 @@ TStream vmt ×6 + TVec 泛型 ×2，全属 method-object 既有家族）。之�
 `TStream.GetPosition/SetPosition/GetSize/SetSize/Read/Write/Seek` 与
 `TVec.Create/GetDefaultGrowStrategyI`（8 uniq）计入口径——与 B5e 浮出的
 家族完全重合（method-object 桶），非新 bug。
-| opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——project-helper intrinsic 缺失类（B4 拆解表第一类） | B2-IMT 后 |
+
+³ 祖先-cohort（本 commit）：`MarkClassMethodCohort` 沿祖先链标记——子类
+vmt 表引用父类方法槽（`TFileStream.vmt = [TStream.vmt, …]`），父类方法
+无 direct Create/Destroy 触达时缺 define（TStream 6 方法）。修复后
+TStream/vmt 家族 6 uniq 8 total 清零；新浮出 `TCollection.AppendToUnchecked`/
+`Clear`（class virtual 方法被 direct call 且方法体未注册，method-object
+家族成员继续暴露，挂账）。
+| opt 首错 | `use of undefined value '@Int'`（.ll 50250 行 `call i64 @Int(i64)`）——宿主 `AVX2ArrayFractF64`（`pD[i] := pS[i] - Int(pS[i])`）；**依赖 Double 运算编码（全 .ll 无 load double/fadd——编译器从未支持浮点标量运算），需单独立项而非 B4 装填** | 本轮后仍 |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -502,6 +509,25 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       define 即 resolve），opt 过 IHasher.Write（B2）后下一层类型检查会
       暴露——届时按 B6.5 类 call-site 类型一致性处理。验证：探针
       30/43 稳定，compiler-pass 58/58，hygiene pass，无桶回升。
+- [x] **B6-COHORT 祖先链 cohort（method-object 家族：TStream.vmt 表项清零）** ✅
+      （2026-08-17，36/51 → 32/45 uniq/total，TStream vmt×6 清零）：子类
+      vmt 表引用祖先方法槽（`TFileStream.vmt = [TStream.vmt, …]`），但
+      `MarkClassMethodCohort` 只标记被 direct 触达类自身——TStream 的
+      virtual 方法（SetPosition/GetSize/SetSize/Read/Write/Seek）无 direct
+      Create/Destroy 触达 → Needed=False → 无 define → vmt 表项 undefined。
+      修法：cohort 沿祖先链（FindTypeByName → ParentTypeId，深度≤16）全部
+      标记，与「类实例化则整族方法可用」语义一致。验证：TStream 家族 6
+      uniq 8 total 清零；**挂账**：新浮出 `TCollection.AppendToUnchecked`/
+      `Clear`（class virtual 方法被 direct call 且方法体未注册——祖先
+      cohort 扩大了可达面后 method-object 家族继续暴露，下口按 class
+      virtual dispatch/方法体注册处理）。compiler-pass 58/58，hygiene pass。
+- [ ] **B6.5-Double 浮点标量运算编码（opt 首错 @Int 依赖项）**：全 .ll
+      0 次 load double / fadd——nextPas 前端从无浮点标量运算编码。
+      `Int(pS[i])`（AVX2ArrayFractF64:3047）宿主函数整体畸形（pS[i] 取值
+      退化为索引）。需要：double literal → f64 常量、load/store double、
+      fadd/fsub/fmul/fdiv/fneg、fcmp、fptosi/sitofp、参数 f64 ABI，
+      以及 Int/Trunc/Round/Frac 内置折叠（llvm.trunc.f64 或 runtime
+      helper）。**范围=一个功能面，单独立项，不放 B4 装填**。
 - [x] **B6.5 call-site 类型一致性 + 全局名引号** ✅ c6d7d5d1c：预估的
       「一类修复工作」实测只有 **1 处** call 实参不匹配（python 静态扫描全
       .ll：SSA 定义类型 vs call 实参标注，唯一命中 = `np_string_release`

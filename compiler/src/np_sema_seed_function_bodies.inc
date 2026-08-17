@@ -4,7 +4,7 @@ procedure TSemanticAnalyzer.MarkClassMethodCohort(const AClassName: string);
 var
   K: LongInt;
   Prefix: string;
-  PEntry: ^TProcedureBodyEntry;
+  Entry: TProcedureBodyEntry;
   CurName, ParentName: string;
   TypeId: LongInt;
   Meta: TTypeMetadata;
@@ -22,14 +22,13 @@ begin
   begin
     Prefix := CurName + '.';
     for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
-    begin
-      { Pointer access: GetItem copies the record (managed fields) twice
-        per hit; the table is scanned per cohort over 15k+ bodies. }
-      PEntry := FProcedureBodies.GetPtrUnchecked(K);
-      if (Length(PEntry^.Name) > Length(Prefix)) and
-        SameText(Copy(PEntry^.Name, 1, Length(Prefix)), Prefix) then
-        PEntry^.Needed := True;
-    end;
+      if (Length(FProcedureBodies[K].Name) > Length(Prefix)) and
+        SameText(Copy(FProcedureBodies[K].Name, 1, Length(Prefix)), Prefix) then
+      begin
+        Entry := FProcedureBodies[K];
+        Entry.Needed := True;
+        FProcedureBodies[K] := Entry;
+      end;
     ParentName := '';
     TypeId := FModel.FindTypeByName(CurName);
     if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
