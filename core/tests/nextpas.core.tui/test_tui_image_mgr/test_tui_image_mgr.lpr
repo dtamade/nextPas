@@ -316,6 +316,84 @@ begin
   end;
 end;
 
+{ 编码图流（kitty f=100 直传）：终端自解码，不做 RGBA 缩放——
+  f=100 头 s/v 必须是真实像素尺寸，数据原样 base64 传输 }
+procedure TestResolveEncodedPngKitty;
+var
+  LMgr: TImageManager;
+  LBackend: TAnsiBackend;
+  LBuf: TBuffer;
+  Png: array[0..31] of Byte;
+  EmptyDiffs: TDiffEntries;
+  Frame: Cardinal;
+  LPrev: Integer;
+begin
+  LMgr := TImageManager.Create(ipKitty);
+  LBackend := TAnsiBackend.Create(-1, nil);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 50));
+  try
+    FillChar(Png, SizeOf(Png), 0);
+    { PNG 签名 + IHDR:宽 20 高 10 }
+    Png[0] := $89; Png[1] := $50; Png[2] := $4E; Png[3] := $47;
+    Png[4] := $0D; Png[5] := $0A; Png[6] := $1A; Png[7] := $0A;
+    Png[12] := $49; Png[13] := $48; Png[14] := $44; Png[15] := $52;
+    Png[16] := 0; Png[17] := 0; Png[18] := 0; Png[19] := 20;  { width }
+    Png[20] := 0; Png[21] := 0; Png[22] := 0; Png[23] := 10;  { height }
+    SetLength(EmptyDiffs, 0);
+    LBuf.PlaceImageEncoded($5678, TRect.Make(1, 5, 12, 6), @Png[0],
+      SizeOf(Png), 20, 10);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
+    { 首帧传输头必须用 f=100，s/v = 像素尺寸；数据量小(32B)一帧传完 }
+    Check(BackendHasFrom(LBackend, 0, 'f=100'), 'encoded 传输头应 f=100');
+    Check(BackendHasFrom(LBackend, 0, 's=20,v=10'),
+      'encoded 传输 s/v 应为真实像素尺寸（不缩放不换算 cell）');
+    Check(not BackendHasFrom(LBackend, 0, 'f=32'),
+      'encoded 传输不得用 f=32 RGBA 格式');
+    Frame := 2;
+    while Frame <= 10 do
+    begin
+      LPrev := LBackend.PendingLength;
+      LMgr.Resolve(LBuf, Frame, LBackend, 8, 20, EmptyDiffs, 0, False);
+      if LBackend.PendingLength = LPrev then Break;
+      Inc(Frame);
+    end;
+    Check(BackendHasFrom(LBackend, 0, 'a=p'),
+      '传输完成后应放置图片');
+    Check(not LMgr.HasPendingTransmit, '传输完成后无 pending');
+  finally
+    LBuf.Free;
+    LBackend.Free;
+    LMgr.Free;
+  end;
+end;
+
+{ 编码图流在 sixel 协议下无输出：终端无解码能力，调用方自行降级 }
+procedure TestResolveEncodedSixelSkipped;
+var
+  LMgr: TImageManager;
+  LBackend: TAnsiBackend;
+  LBuf: TBuffer;
+  Png: array[0..31] of Byte;
+  EmptyDiffs: TDiffEntries;
+begin
+  LMgr := TImageManager.Create(ipSixel);
+  LBackend := TAnsiBackend.Create(-1, nil);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 50));
+  try
+    FillChar(Png, SizeOf(Png), 7);
+    SetLength(EmptyDiffs, 0);
+    LBuf.PlaceImageEncoded($5678, TRect.Make(1, 5, 12, 6), @Png[0],
+      SizeOf(Png), 20, 10);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
+    Check(LBackend.PendingLength = 0,
+      'sixel 下 encoded 图流应跳过（无解码能力）');
+  finally
+    LBuf.Free;
+    LBackend.Free;
+    LMgr.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('tui_image_mgr');
   T.Test('TImageManager.Create kitty', @TestImageManagerCreate);
@@ -333,5 +411,7 @@ begin
   T.Test('Resolve large-area transmit bounded', @TestResolveLargeAreaTransmitBounded);
   T.Test('Resolve throttled across frames', @TestResolveThrottledAcrossFrames);
   T.Test('Resolve geometry reuse on expand', @TestResolveGeometryReuse);
+  T.Test('Resolve encoded PNG kitty', @TestResolveEncodedPngKitty);
+  T.Test('Resolve encoded skipped on sixel', @TestResolveEncodedSixelSkipped);
   if not T.Run then Halt(1);
 end.

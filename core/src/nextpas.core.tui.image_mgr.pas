@@ -55,7 +55,8 @@ type
     FPendingBudget: Integer;
     function FindSlot(Hash: QWord; PixelWidth, PixelHeight, DataLen: Integer): Integer;
     procedure EncodeTransmitChunks(var Slot: TImageSlot;
-      DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer);
+      DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer;
+      AEncoded: Boolean);
     procedure AppendPlace(Backend: TAnsiBackend; Id: LongWord; const Area: TRect);
     procedure AppendDelete(Backend: TAnsiBackend; Id: LongWord);
   public
@@ -170,15 +171,25 @@ begin
 end;
 
 procedure TImageManager.EncodeTransmitChunks(var Slot: TImageSlot;
-  DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer);
+  DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer;
+  AEncoded: Boolean);
 var
   Tmp: nextpas.core.text.builder.TStringBuilder;
   Offset, ThisChunk, ChunkIdx: Integer;
   Header: AnsiString;
+  Fmt: Integer;
 begin
   Tmp.Init(1024);
   SetLength(Slot.ChunkEnds,
     (DataLen + MaxRawChunkBytes - 1) div MaxRawChunkBytes);
+
+  { AEncoded：原始编码图流（PNG 等）走 f=100 直传，终端自解码；
+    调用方需在 PixelWidth/Height 传入真实像素尺寸（f=100 的 s/v
+    终端用于布局，非 RGBA 禁用 f=32 的 4 字节/像素假设）。 }
+  if AEncoded then
+    Fmt := 100
+  else
+    Fmt := 32;
 
   ChunkIdx := 0;
   Offset := 0;
@@ -190,11 +201,11 @@ begin
     if Offset = 0 then
     begin
       if ThisChunk < DataLen then
-        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=1;',
-          [Slot.Id, PixelWidth, PixelHeight])
+        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=%d,s=%d,v=%d,m=1;',
+          [Slot.Id, Fmt, PixelWidth, PixelHeight])
       else
-        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=32,s=%d,v=%d,m=0;',
-          [Slot.Id, PixelWidth, PixelHeight]);
+        Header := TextFormat(#27'_Ga=t,q=2,i=%d,f=%d,s=%d,v=%d,m=0;',
+          [Slot.Id, Fmt, PixelWidth, PixelHeight]);
     end
     else
     begin
@@ -290,6 +301,10 @@ begin
   for I := 0 to PlacementCount - 1 do
   begin
     P := Buf.ImagePlacementAt(I);
+    { encoded 图流只走 kitty（终端自解码）；sixel/half-block 无解码
+      能力，skip——调用方负责降级渲染 }
+    if P.Encoded and (FProtocol <> ipKitty) then
+      Continue;
     SlotIdx := FindSlot(P.Hash, P.PixelWidth, P.PixelHeight, P.DataLen);
 
     if SlotIdx < 0 then
@@ -335,7 +350,12 @@ begin
     ScaledPtr := P.DataPtr;
     ScaledLen := P.DataLen;
 
-    if (CellW > 0) and (CellH > 0) then
+    if P.Encoded then
+    begin
+      { 编码图流：终端按占位矩形拉伸，传输头 s/v = 真实像素尺寸；
+        编码数据无法重编码缩放，直接传原图 }
+    end
+    else if (CellW > 0) and (CellH > 0) then
     begin
       TargetW := P.Area.Width * Integer(CellW);
       TargetH := P.Area.Height * Integer(CellH);
@@ -399,7 +419,7 @@ begin
           begin
             { 整段传输序列构建一次并缓存，随后逐帧限流发送 }
             EncodeTransmitChunks(FSlots[SlotIdx], ScaledPtr, ScaledLen,
-              TargetW, TargetH);
+              TargetW, TargetH, P.Encoded);
             FSlots[SlotIdx].DataW := TargetW;
             FSlots[SlotIdx].DataH := TargetH;
             FSlots[SlotIdx].Pending := FSlots[SlotIdx].Chunks;
