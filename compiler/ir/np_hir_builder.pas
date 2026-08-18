@@ -161,6 +161,7 @@ type
     procedure EmitExprArrLoad(var S: TExprStack);
     procedure EmitExprArrLoadPtr(var S: TExprStack);
     procedure EmitExprArrElemRef(var S: TExprStack; const AArg: string);
+    procedure EmitExprPtrElemLoad(var S: TExprStack; const AArg: string);
     procedure EmitExprFieldRef(var S: TExprStack; const AArg: string);
     procedure EmitExprRLoad(var S: TExprStack; const AArg: string);
     procedure EmitExprFieldStrLen(var S: TExprStack; const AArg: string);

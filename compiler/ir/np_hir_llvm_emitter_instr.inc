@@ -179,6 +179,35 @@ begin
           ' ' + Op + ', ' + LTruncVal);
         NoteValueLlvmType(AInstr.ResultId, LlvmType);
       end;
+    hikShl:
+      if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = shl ' + LlvmType +
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
+    hikShr:
+      { Arithmetic shift right (SarLongint): 'ashr' keeps the sign bit —
+        SarLongint bodies ran into this missing render and left a dangling
+        SSA (opt: use of undefined value %v…). }
+      if Length(AInstr.Operands) >= 2 then
+      begin
+        if (LlvmType = '') or (LlvmType = 'void') or (LlvmType = 'ptr') then
+          LlvmType := 'i64';
+        Op := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, LlvmType,
+          'bin0.' + IntToStr(AInstr.ResultId));
+        LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, LlvmType,
+          'bin1.' + IntToStr(AInstr.ResultId));
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = ashr ' + LlvmType +
+          ' ' + Op + ', ' + LTruncVal);
+        NoteValueLlvmType(AInstr.ResultId, LlvmType);
+      end;
     hikNeg:
       if Length(AInstr.Operands) >= 1 then
       begin
@@ -494,6 +523,32 @@ begin
             'gep8.base.' + IntToStr(AInstr.ResultId));
           Emit('  ' + ValueRef(AInstr.ResultId) +
             ' = getelementptr i8, ptr ' + LTruncVal + ', i64 ' + Op);
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'gep_i16' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'gep16.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'gep16.base.' + IntToStr(AInstr.ResultId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = getelementptr i16, ptr ' + LTruncVal + ', i64 ' + Op);
+          NoteValueLlvmType(AInstr.ResultId, 'ptr');
+        end;
+      end
+      else if AInstr.IntrinsicName = 'gep_i32' then
+      begin
+        if Length(AInstr.Operands) >= 2 then
+        begin
+          Op := EmitCastValueToLlvmType(AInstr.Operands[1].ValueId, 'i64',
+            'gep32.' + IntToStr(AInstr.ResultId));
+          LTruncVal := EmitCastValueToLlvmType(AInstr.Operands[0].ValueId, 'ptr',
+            'gep32.base.' + IntToStr(AInstr.ResultId));
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = getelementptr i32, ptr ' + LTruncVal + ', i64 ' + Op);
           NoteValueLlvmType(AInstr.ResultId, 'ptr');
         end;
       end

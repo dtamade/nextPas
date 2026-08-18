@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-18 simd-constref 后实测）
+## 当前战况（2026-08-18 b65-sar 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **7** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷)** |
-| undefined total | **11** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷)** |
+| undefined unique | **6** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸)** |
+| undefined total | **10** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -261,7 +261,31 @@ gnkIdentifier 无条件发 `var <text>`（`var a`）；⑤ EmitExprVar
 58/58；hygiene pass。挂账：TM128 参数仍按 i64 槽编码（B6.5 ABI 域），
 opt 类型一致性另议。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 217000 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b 已出列） |
+¹⁸ b65-sar（本 commit）：SIMD 标量模板
+`Result.i[i] := SarLongint(aSrc[i], count)`（core simd
+scalar.arith.wide）三层缺口一次收净，数字 7/11 → 6/10（top 变
+5+1：method-object 泛型家族 5 → TToolStatusEventVec.Count×4/
+Create×2/Push×1 + TVec.Create×1/GetDefaultGrowStrategyI×1，project-
+helper 仅 Pos；SarLongint 出列、零新 uniq）。(1) **标量参数槽**：
+`ParamTypeIsScalarCode`（16+ 位标量 → 'i' i64 槽，不再 RegisterClassVar/
+'p' ptr 槽；8 位 Char/Byte/Boolean 保旧路径——Char 形参惯例接字符槽
+地址，IsSep(C: Char) 类调用点依赖之）；(2) **RHS 数值指针索引**：
+encode `PInt32[i]` → 新 token `pelem_load`（元素大小感知 gep_i16/32/64/
+i8 + load；PChar/… 仍走地址语义），`PointeeElemSizeCode` 沿
+AliasTargetTypeId 取 pointee size（PInt32→4）；(3) **移位链**：
+`SarLongint(a,b)` → `a b sar` → hikShr → emitter `ashr`（顺带补 hikShl
+`shl` 渲染，此前两指令均无渲染 → dangling SSA）；LHS 配套两处：`aDst[i]`
+赋值目标经 `LowerArrayElemExpr` bare-name alloca 路径（指针形参无 $ptr
+槽，旧 fallback 丢基址 → `use of undefined value %v…`，opt 116945 行），
+`ProcessAssignArrElem` 两处 StoreType 改为元素宽度优先（TargetResult.
+TypeId 为 htkInt/htkPointer 时用之；RHS 是 i64(SarLongint)、元素 i32 时
+按 RHS store 会写溢出）。验证：6/10 保持、opt 首错从 116945 行 SSA 空洞
+推进到 201034 行 `@Pos`（B4b 域）；compiler-pass 58/58；hygiene pass。
+挂账：8 位标量（Byte/Char/Boolean）参数仍走 ptr 槽（B6.5 ABI 域）、
+公共 `arrload` 兜底未随动（ProcessAssignArrElem fallback 174-198 仍按
+RHS 宽度 store，主路径不触发即可）。
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 201034 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -649,7 +673,8 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       fadd/fsub/fmul/fdiv/fneg、fcmp、fptosi/sitofp、参数 f64 ABI，
       以及 Int/Trunc/Round/Frac 内置折叠（llvm.trunc.f64 或 runtime
       helper）。**范围=一个功能面，单独立项，不放 B4 装填**。
-- [ ] **B6.5-Sar 整数移位链 + 指针元素值索引（@SarLongint 1 use）**：SIMD
+- [x] **B6.5-Sar 整数移位链 + 指针元素值索引（@SarLongint 1 use）** ✅（本 commit，
+      7/11 → 6/10）：SIMD
       标量模板 `Result.i[i] := SarLongint(aSrc[i], count)`（core simd
       scalar.arith.wide，探针经 dispatch 表引入）。三层缺口互相依赖：
       (1) **移位链全缺**——encode/emitter 无 shl/shr/sar token（lexer

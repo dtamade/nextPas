@@ -680,6 +680,29 @@ var
     end;
   end;
 
+  { Fresh scalar locals/params (Int32/SizeUInt/…) are register-passed ints,
+    not class refs. Without this, TypeMetaSize>0 pushed them into
+    RegisterClassVar / 'p' ptr slots (aShift of ScalarArrayShrI32 became a
+    ptr formal → load-ptr ABI chaos at the SarLongint call site). 8-bit
+    scalars (Char/Byte/Boolean) stay on the old ptr-slot path: Char formals
+    conventionally receive the character slot address (IsSep(C: Char)
+    callers pass P[I] element addresses), so flipping them would break those
+    call sites. }
+  function ParamTypeIsScalarCode(const ATypeName: string): Boolean;
+  var
+    TypeIdTmp: LongInt;
+    FactTmp: TSemanticScalarTypeFact;
+  begin
+    Result := False;
+    if ATypeName = '' then
+      Exit;
+    TypeIdTmp := FModel.FindTypeByName(ATypeName);
+    if TypeIdTmp > 0 then
+      Result := FModel.GetTypeScalarFact(TypeIdTmp, FactTmp) and
+        (FactTmp.Kind in [sskBool, sskInt, sskFloat]) and
+        (FactTmp.BitWidth >= 16);
+  end;
+
   { Mid-seed callee discovery: TypedHir "call Name" scan misses structured
     shekCall expr operands. Walk green call targets of every Needed body so
     helpers like CreateDispatchPublishedState become Needed after their caller
@@ -903,7 +926,8 @@ begin
                 begin
                   if TypeMetaIsRecord(TypeChild.Text) then
                     RegisterRecordVar(RetVarName, TypeChild.Text)
-                  else if not TypeMetaIsInterface(TypeChild.Text) then
+                  else if (not TypeMetaIsInterface(TypeChild.Text)) and
+                    (not ParamTypeIsScalarCode(TypeChild.Text)) then
                     RegisterClassVar(RetVarName, TypeChild.Text);
                 end;
               end;
@@ -928,6 +952,8 @@ begin
                   ParamTypes := ParamTypes + 'r'
                 else if IsVarP then
                   ParamTypes := ParamTypes + 'v'
+                else if ParamTypeIsScalarCode(ParamChild.ChildAt(0).Text) then
+                  ParamTypes := ParamTypes + 'i'
                 else
                   ParamTypes := ParamTypes + 'p';
               end

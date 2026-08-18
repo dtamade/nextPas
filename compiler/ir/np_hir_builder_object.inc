@@ -39,7 +39,12 @@ begin
 
         if ValueType <> 0 then
         begin
-          if FModule.Types.GetType(ValueType).Kind = htkPointer then
+          { 元素宽度优先于 RHS 宽度:标量参数槽改造后 RHS 可能是 i64
+            (SarLongint),元素若是 i32,按 RHS store 会写溢出。 }
+          if (TargetResult.TypeId <> 0) and
+            (FModule.Types.GetType(TargetResult.TypeId).Kind in [htkInt, htkPointer]) then
+            StoreType := TargetResult.TypeId
+          else if FModule.Types.GetType(ValueType).Kind = htkPointer then
             StoreType := GetPtrType
           else
             StoreType := GetIntType;
@@ -146,7 +151,12 @@ begin
 
     if ValueType <> 0 then
     begin
-      if FModule.Types.GetType(ValueType).Kind = htkPointer then
+      { 元素宽度优先于 RHS 宽度:标量参数槽改造后 RHS 可能是 i64
+        (SarLongint),元素若是 i32,按 RHS store 会写溢出。 }
+      if (TargetResult.TypeId <> 0) and
+        (FModule.Types.GetType(TargetResult.TypeId).Kind in [htkInt, htkPointer]) then
+        StoreType := TargetResult.TypeId
+      else if FModule.Types.GetType(ValueType).Kind = htkPointer then
         StoreType := GetPtrType
       else
         StoreType := GetIntType;

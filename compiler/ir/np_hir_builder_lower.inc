@@ -705,6 +705,7 @@ var
   BaseResult, IndexResult: THIRExprResult;
   BaseAlloca, BasePtr, ElemPtr, IndexValue: THIRValueId;
   HirType: THIRTypeId;
+  ElemBytes: LongInt;
   Instr: THIRInstr;
 begin
   InitExprResult(AResult);
@@ -741,7 +742,44 @@ begin
   begin
     BaseAlloca := FindAlloca(Symbol.Name + '$ptr');
     if BaseAlloca = 0 then
-      Exit(False);
+    begin
+      { Pointer param (PInt32 aSrc — bare-name alloca, no $ptr dual slot):
+        address = base + idx*elemsize. The old fallback dropped the base and
+        left a dangling SSA (opt: use of undefined value %v…). }
+      BaseAlloca := FindAlloca(Symbol.Name);
+      if BaseAlloca = 0 then
+        Exit(False);
+      BasePtr := EmitLoad(GetPtrType, BaseAlloca);
+      if BasePtr = 0 then
+        Exit(False);
+      IndexValue := NormalizeArrayIndexValue(Symbol.Name, IndexValue);
+      if IndexValue = 0 then
+        Exit(False);
+      HirType := ExprHirTypeId(AExpr);
+      ElemBytes := 1;
+      if HirType <> 0 then
+        ElemBytes := FModule.Types.GetType(HirType).BitWidth div 8;
+      if ElemBytes < 1 then
+        ElemBytes := 1;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      case ElemBytes of
+        2: Instr.IntrinsicName := 'gep_i16';
+        4: Instr.IntrinsicName := 'gep_i32';
+        8: Instr.IntrinsicName := 'gep_i64';
+      else Instr.IntrinsicName := 'gep_i8';
+      end;
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
+      Instr.Operands[1] := MakeTypedOperand(IndexValue, GetIntType);
+      EmitInstr(Instr);
+      ElemPtr := Instr.ResultId;
+      SetExprAddress(AResult, ElemPtr, HirType);
+      Result := AResult.AddressValueId <> 0;
+      Exit;
+    end;
     BasePtr := EmitLoad(GetPtrType, BaseAlloca);
     if BasePtr = 0 then
       Exit(False);

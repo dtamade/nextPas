@@ -376,6 +376,53 @@ begin
   S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
+procedure THIRBuilder.EmitExprPtrElemLoad(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  SpacePos, ElemBytes, LoadBits: LongInt;
+  Name: string;
+  BaseAlloca, BasePtr, IndexVal, ElemAddr: THIRValueId;
+  LoadType: THIRTypeId;
+begin
+  { AArg = "<ptrname> <elembytes>", index already on stack. Numeric pointee
+    (PInt32) element value: gep scaled by pointee size + load width. }
+  SpacePos := Pos(' ', AArg);
+  if SpacePos <= 0 then
+    Exit;
+  Name := Copy(AArg, 1, SpacePos - 1);
+  ElemBytes := StrToIntDef(Copy(AArg, SpacePos + 1, Length(AArg)), 1);
+  IndexVal := S.Pop;
+  BaseAlloca := FindAlloca(Name);
+  if (BaseAlloca = 0) or (IndexVal = 0) then
+    Exit;
+  BasePtr := EmitLoad(GetPtrType, BaseAlloca);
+  if BasePtr = 0 then
+    Exit;
+  IndexVal := NormalizeArrayIndexValue(Name, IndexVal);
+  if IndexVal = 0 then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  case ElemBytes of
+    2: Instr.IntrinsicName := 'gep_i16';
+    4: Instr.IntrinsicName := 'gep_i32';
+    8: Instr.IntrinsicName := 'gep_i64';
+  else Instr.IntrinsicName := 'gep_i8';
+  end;
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(IndexVal, GetIntType);
+  EmitInstr(Instr);
+  ElemAddr := Instr.ResultId;
+
+  LoadBits := ElemBytes * 8;
+  LoadType := GetIntTypeByWidth(LoadBits, True);
+  S.PushTyped(EmitLoad(LoadType, ElemAddr), LoadType);
+end;
+
 procedure THIRBuilder.EmitExprFieldRef(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
