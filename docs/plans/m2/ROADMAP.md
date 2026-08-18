@@ -445,6 +445,37 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       模板名单点回绕不收敛。已回滚（探针实测恢复 9/13）。结论：
       必须做「实例化时递归展开嵌套泛型」的完整机制（实例名克隆 +
       FGenericWorkQueue 递归消费），单点回绕不可行。
+      **侦察更新（2026-08-18，只读）**：6/10 中 method-object 族
+      （TToolStatusEventVec.Count×4/Create×2/Push×1、TVec.Create×1、
+      TVec.GetDefaultGrowStrategyI×1）与 Pos 同属此条目根因。根因链
+      三段并确认：
+      ① `InstantiateGenericType`（declaration.inc:2230）只克隆方法
+      **符号**（`InstanceName.Method` AddSymbol，2395 行）与元数据/vmt
+      表项（2565 行 `$vmt_func_` 写 `TToolStatusEventVec.Count`），
+      **从不克隆方法体**——`ResolveClassMethodCalleeName`
+      （type_metadata.inc:147）沿 ClassHasMethod 命中符号
+      （FindSymbolByName）→ 最终 callee 名是实例名
+      `TToolStatusEventVec.Count`，而 FProcedureBodies 只有模板名
+      `TVec.Count` → MarkCallTargets 标定 miss → 不 define → undefined。
+      ② encode 路径**无类型参数替换上下文**（grep 全 sema 无
+      GenericArgSubst/CurrentGenericArgs 类状态）：泛型体 green tree
+      直接按名翻译，body 内 `T` 不换成实参——这是同单元泛型测试能过
+      （模板体不引用 T 布局）而 TVec<T> 必炸（体内嵌 TArray<T>/
+      TSpan<T>/IGrowthStrategy）的根因，也是回绕方案暴露 7 新 uniq
+      的同一机制。③ 函数特化已有先行范式：`specialize Fn<T>(...)`
+      调用（walk_halt_calls.inc:1786 / encode_runtime_expr.inc:1358）
+      把模板体按 `Fn$<实参>` 名 RegisterProcedureBody 克隆并
+      `FGenericWorkQueue.Push`，WorkHead 定点循环（seed_function_bodies
+      .inc:824）消费——类型特化缺的正是同款「克隆+入队」，但必须配
+      ②的替换地基，否则克隆体编出来仍是模板引用。
+      **实施分期建议**（每期独立探针+提交，数字只许降/持平）：
+      Ⅰ. encode 类型参数替换上下文（实例化时把模板体按实例替换
+      `T`→实参、`TVec.`→`InstanceName.`，嵌套 specialize 递归走
+      ResolveOrInstantiateInlineGeneric）——地基，零 undefined 口径
+      变化；Ⅱ. InstantiateGenericType 克隆模板方法体（复用 ③ 范式）
+      + 标 Needed + 入队；Ⅲ. 若 vmt 表项/内联引用仍有剩余，再排。
+      模板体注册名格式（`TVec.Count` vs `TVec<T>.Count`，影响 2406
+      行 SubstSig 匹配与克隆查找）实施时用 TEMP-DIAG 先确认。
 - [~] **B5 const fold + intrinsic 尾巴**：const-upper 7 个 + `Pos`/`UpCase`/`Int`。
       - [x] **B5a Pos 主体（strpos 数组下标 haystack + const needle）** ✅
         （80→75 total，Pos 7→2）：主流残留是「字符串数组元素 haystack」——
