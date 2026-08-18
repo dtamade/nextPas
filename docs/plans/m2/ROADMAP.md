@@ -512,6 +512,29 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       + 标 Needed + 入队；Ⅲ. 若 vmt 表项/内联引用仍有剩余，再排。
       模板体注册名格式（`TVec.Count` vs `TVec<T>.Count`，影响 2406
       行 SubstSig 匹配与克隆查找）实施时用 TEMP-DIAG 先确认。
+      **口 3 白名单克隆 ✅（2026-08-18，5/10 → 3/5，提交 8f90e4300）**：
+      白名单 {Count, GetDefaultGrowStrategyI}（体自包含：纯字段读 /
+      FactorGrow 全局调用），Needed 直标 + 防重，全 TVec 特化实例统一
+      生效，opt 首错保持 @Pos 零新错误。**剩余 3 uniq 依赖「缺口乙
+      （实例化上下文）」闭环**（2026-08-18 侦察，为下口立项）：
+      `TToolStatusEventVec.Create`×3 链 = Create(1参) → Create(4参) →
+      `inherited Create`(父类实例 TGenericCollection<TToolStatusEventRecord>)
+      + `TVecBuf.Create`(TArray<TToolStatusEventRecord>) + SyncDataPtr；
+      `Push`×1 链 = GetPtrUnchecked + `^ := aElement`(T 宽 store)；
+      `Pos`×1 链 = `ArgTypes[I]`(TStringVec default Items → GetItem) →
+      `GetPtrUnchecked(aIndex)^`(T 值 load)。三个链的公共需求：
+      ① 克隆体 encode 时把 `T` 映射到实参（TArray.GetPtrUnchecked 体
+      `PElement(FMemory) + aIndex` 的指针算术 stride、GetItem/Push 的
+      T load/store 宽度）；② 嵌套类型实例化（TVecBuf=specialize
+      TArray<T>、父类 specialize TGenericCollection<T> → 实例方法体
+      递归克隆——口 2 已证父类实例方法体能 define，缺的是名字一致与
+      字段/类型上下文）；③ FuncRef 短名统一（口 2 残留
+      `@DoPredicateFuncProxy` vs 全限定 define）。**实现形态建议**：
+      encode 方法体前建 `FCurrentGenericInstance`（模板名+实参表+实例名，
+      实例化时把 ArgTypes 存成 `InstanceName.$generic_args` consts），
+      类型名解析入口（TypeMeta*/FindTypeByName/cast/指针算术）对
+      「泛型参数名」查表回落实参；白名单按链成员扩（GetPtrUnchecked/
+      SyncDataPtr/TArray.GetPtrUnchecked/GetItem 等）。
       **口 2 尝试+回滚（2026-08-18，探针 5/10 → 10/20 升）**：
       `InstantiateGenericType` 尾部加「模板方法体克隆」——按
       `GenericName.` 前缀克隆全部模板方法体到实例名（手动 Push +
