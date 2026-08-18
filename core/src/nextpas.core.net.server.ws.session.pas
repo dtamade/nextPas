@@ -43,6 +43,11 @@ uses
 
 const
   NET_WS_OUTBOUND_DEFAULT_LIMIT = 65536;
+  { 批量写分段冲刷阈值（上限一半）：SendTexts 拼缓冲累计到阈值即冲刷一次，
+    防整批未写出缓冲触顶 64KiB 溢出（那会把快消费者也判成溢出断连）；
+    阈值下快消费者 ~32KiB/次冲刷，慢消费者 WouldBlock 停在阈值处、余帧
+    入队自然超限断连（与逐帧 SendText 溢出语义一致）。 }
+  NET_WS_BATCH_FLUSH_THRESHOLD = 32 * 1024;
 
 type
   TNetWsSessionEvent = (
@@ -343,8 +348,8 @@ begin
   if (FState = stClosed) or (FState = stClosing) then
     Exit;
   { 逐帧拼缓冲（EnqueueWire 每帧检查出站上限，溢出中止与 SendText 同义），
-    尾次统一 FlushOutbound：一次冲刷承载整批（省 N-1 次冲刷调用/syscall；
-    WouldBlock 语义不变——缓冲保留待可写事件续写）。 }
+    累计达阈值分段冲刷、尾次统一收尾——一次冲刷承载 ≥1 帧（省冲 syscall
+    调用；WouldBlock 语义不变——缓冲保留待可写事件续写）。 }
   for LI := 0 to High(ATexts) do
   begin
     SetLength(LBytes, Length(ATexts[LI]));
@@ -357,6 +362,12 @@ begin
     EnqueueWire(LSeg);
     if FState = stClosed then
       Break;      { 溢出中止：后续帧不再投递（与逐帧 SendText 语义一致） }
+    if FOutBytes >= NET_WS_BATCH_FLUSH_THRESHOLD then
+    begin
+      if FState = stReading then
+        FState := stFlushing;
+      FlushOutbound;
+    end;
   end;
   if FState = stReading then
     FState := stFlushing;
