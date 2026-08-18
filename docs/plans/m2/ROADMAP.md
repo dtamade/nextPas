@@ -30,8 +30,8 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **3** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰)** |
-| undefined total | **5** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰)** |
+| undefined unique | **3** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹)** |
+| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -321,7 +321,26 @@ Create/Push 链含父类实例（inherited Create）、嵌套类型（TVecBuf=
 TArray<T>）、全局函数与 T 布局 store——需「实例上下文 + 链上克隆」面，
 下口按链闭合成员逐个扩白名单。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 201416 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint/@TVec.* 裸模板名/@TToolStatusEventVec.{Count,GetDefaultGrowStrategyI} 已出列，剩 Create×3/Push×1/Pos×1） |
+²¹ b4b-i3（本 commit）：B4b 缺口乙闭环第一刀——**实例化上下文
+（FCurrentGenericInstance）**。按口 3 立项形态落地：`InstantiateGenericType`
+存 `InstanceName.$generic_inst`（存在标记）与 `InstanceName.$generic_arg_<T>`
+= 实参 consts（declaration.inc）；seed WorkHead 循环 encode 克隆体前按
+方法名推导实例名并查标记设 `FCurrentGenericInstance`、编码后清除
+（seed_function_bodies.inc）；`TypeMetaSize` wrapper 遇 `Result<=0` 且
+当前实例存在时查 `$generic_arg_<ATypeName>` 回落实参递归解析
+（overload_analysis.inc）。白名单按链闭合扩：通用
+{Count, GetDefaultGrowStrategyI}；`TArray` 模板 + {GetPtrUnchecked,
+GetMemory, GetCount}；`TToolStatusEventVec` 实例 + {Create, Push,
+GetPtrUnchecked, SyncDataPtr, GetItem}；去重从「名唯一」改「Body 指针
+唯一」——同名重载（TVec.Create ×2）各自克隆。验证：**3/5 → 1/1**
+（Create×3 链 + Push×1 链整链清零——T 指针算术 stride / T load-store
+宽度全部经实参映射解析成功；Count/GetDefaultGrowStrategyI 无回退）；
+opt 首错仍 `@Pos`（201416 → 201774 行）；compiler-pass 58/58；
+hygiene pass。剩余：`Pos`×1——泛型 default 索引属性 haystack 兜底
+（`ArgTypes[I]` → `TVec.Items` → `GetItem` 实例方法已 define，但
+`TVec.Items[I]` 读表达式的 value-load 路径仍残，下口按 strpos 形态收）
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 201774 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（`@Pos`×1——Create×3/Push×1/@Int/@Result/@aElementCount/@a/@b/@SarLongint/@TVec.* 裸模板名/@TToolStatusEventVec.{Count,GetDefaultGrowStrategyI,Create,Push,GetPtrUnchecked,SyncDataPtr,GetItem} 已出列） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -535,6 +554,19 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       类型名解析入口（TypeMeta*/FindTypeByName/cast/指针算术）对
       「泛型参数名」查表回落实参；白名单按链成员扩（GetPtrUnchecked/
       SyncDataPtr/TArray.GetPtrUnchecked/GetItem 等）。
+      **口 4 实例化上下文 ✅（2026-08-18，3/5 → 1/1，提交见本 commit）**：
+      按立项形态完整落地（FCurrentGenericInstance + `$generic_arg_<T>`
+      consts + TypeMetaSize 回退 + 白名单链扩 + Body 指针去重），
+      Create×3 链与 Push×1 链整链清零，剩 Pos×1。细节见注 ²¹。
+      **剩余 Pos×1（下口立项）**：opt 首错 201774 行 `call i64 @Pos(ptr,
+      i64, i64)`——`declaration.inc` 的 `Pos('<', ArgTypes[I])` 处
+      haystack 是泛型 class 实例 default 索引属性（`TStringVec =
+      specialize TVec<string>`：`ArgTypes[I]` 读 `TVec.Items[I]` →
+      GetItem 实例方法体已 define，但 Items 读表达式本身仍残留
+      value-load 空洞）。与 strpos 形态不同：strpos 是缺 runtime
+      helper define，此处是**泛型实例 property read 的编码路径残渣**。
+      下口从建小样本（含 `specialize TVec<string>.Items[I]` 读的测试）
+      定位 value-load 空洞具体分支开始。
       **口 2 尝试+回滚（2026-08-18，探针 5/10 → 10/20 升）**：
       `InstantiateGenericType` 尾部加「模板方法体克隆」——按
       `GenericName.` 前缀克隆全部模板方法体到实例名（手动 Push +

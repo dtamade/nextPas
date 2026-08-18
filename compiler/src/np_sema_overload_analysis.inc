@@ -1009,7 +1009,7 @@ function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
 var
   ArgName: string;
 begin
-  Result := nextpas.compiler.sema.type_check.TypeMetaSize(FModel, ATypeName);
+  Result := np_sema_type_check.TypeMetaSize(FModel, ATypeName);
   { B4b 缺口乙: cloned generic instance bodies reference template type
     params (T) in field/pointer types. Resolve through the instance's
     T→实参 mapping stored by InstantiateGenericType, only when the raw

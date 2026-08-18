@@ -1404,11 +1404,10 @@ begin
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentGenericInstance := '';
-    FProcedureBodies.GetPtrUnchecked(I)^.Encoded := True;
-      end;
-      finally
-        PhaseEnd('seed.encode');
-      end;
+    Entry := FProcedureBodies[I];
+    Entry.Encoded := True;
+    FProcedureBodies[I] := Entry;
+  end;
     end; { fixed-point outer while }
 
     NeededCount := 0;

@@ -2336,6 +2336,7 @@ var
   Entry: TPendingSignatureEntry;
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
+  IsVecInstance, IsArrayTemplate: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2712,6 +2713,8 @@ begin
     (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
     one slice per probe. Whitelisted bodies are self-contained (field reads,
     global calls) so we mark them Needed immediately. }
+  IsVecInstance := SameText(InstanceName, 'TToolStatusEventVec');
+  IsArrayTemplate := SameText(GenericName, 'TArray');
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
@@ -2721,10 +2724,29 @@ begin
     if (MethodShortName = '') or (MethodShortName[1] = '<') then
       Continue; { Fn<T> generic function, not a TVec method }
     if not ((SameText(MethodShortName, 'Count')) or
-            (SameText(MethodShortName, 'GetDefaultGrowStrategyI'))) then
+            (SameText(MethodShortName, 'GetDefaultGrowStrategyI')) or
+            (IsArrayTemplate and (
+               SameText(MethodShortName, 'GetPtrUnchecked') or
+               SameText(MethodShortName, 'GetMemory') or
+               SameText(MethodShortName, 'GetCount'))) or
+            (IsVecInstance and (
+               SameText(MethodShortName, 'Create') or
+               SameText(MethodShortName, 'Push') or
+               SameText(MethodShortName, 'GetPtrUnchecked') or
+               SameText(MethodShortName, 'SyncDataPtr') or
+               SameText(MethodShortName, 'GetItem')))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
-    if FirstBodyIndexForNameLocal(InstBodyName) >= 0 then
+    { Skip only when this exact template entry was already cloned; overloads
+      sharing a name (TVec.Create ×2) each clone onto the instance. }
+    K := FirstBodyIndexForNameLocal(InstBodyName);
+    while K >= 0 do
+    begin
+      if FProcedureBodies[K].Body = FProcedureBodies[BodyIdx].Body then
+        Break;
+      K := FProcedureBodyNameNext[K];
+    end;
+    if K >= 0 then
       Continue;
     BodyEntry.Name := InstBodyName;
     BodyEntry.Body := FProcedureBodies[BodyIdx].Body;
