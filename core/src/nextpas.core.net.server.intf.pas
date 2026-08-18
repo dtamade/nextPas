@@ -62,6 +62,10 @@ type
   IWebSocketFrameWorkerPush = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000018}']
     procedure SubmitSendText(const AText: string);
+    { 批量发文本帧：1 次 completion 入队 + 1 次唤醒承载整批，reactor 循环
+      逐帧 SendText（数据写侧不可省，省的是控制面 N-1 次 completion 分配/
+      MPSC 入队/FWake——订阅广播等大批量推送路径的吞吐关键）。 }
+    procedure SubmitSendTexts(const ATexts: array of string);
     procedure SubmitSendBinary(const APayload: array of Byte);
     procedure SubmitSendClose(const ACode: UInt16; const AReason: string);
   end;

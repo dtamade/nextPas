@@ -616,6 +616,55 @@ begin
   end;
 end;
 
+procedure TestBatchPushViaWorker;
+var
+  LHandler: TUpgradeTestHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LFrame: TNetWsFrame;
+  LReader: TUpgradeClientReader;
+  LTexts: array of string;
+  LI: Integer;
+begin
+  LSink := TUpgradeTestSink.Create(usmRecord);
+    LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  LThread := StartUpgradeServer(LHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Write(BuildUpgradeRequest('')[1],
+      SizeUInt(Length(BuildUpgradeRequest(''))));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) > 0, 'upgraded');
+    WaitForCount(LHandler.UpgradeCount, 1000);
+
+    { 服务端一次批量推送 3 帧（SendTextsFromWorker：1 completion + 1 唤醒），
+      客户端按序收到整批——批量接口端到端语义。 }
+    SetLength(LTexts, 3);
+    LTexts[0] := 'b1';
+    LTexts[1] := 'b2';
+    LTexts[2] := 'b3';
+    LHandler.Sink.Session.SendTextsFromWorker(LTexts);
+    LReader.Init;
+    for LI := 0 to High(LTexts) do
+    begin
+      LFrame := Default(TNetWsFrame);
+      Check(TUpgradeClientReader_ReadFrame(LConn, LReader, 2000, LFrame) =
+        nwsDecodeFrame, 'batch frame ' + IntToStr(LI) + ' decoded');
+      Check(LFrame.Opcode = Byte(WS_OPCODE_TEXT), 'batch opcode text');
+      Check(BytesToStr(LFrame.Payload) = LTexts[LI],
+        'batch frame ' + IntToStr(LI) + ' ordered');
+    end;
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
 { ==================== main ==================== }
 
 var
@@ -629,6 +678,7 @@ begin
     LTest.Test('ping auto pong', @TestPingPong);
     LTest.Test('close handshake reply', @TestCloseHandshake);
     LTest.Test('server-initiated push from non-reactor thread', @TestServerInitiatedPush);
+    LTest.Test('batch push via worker channel', @TestBatchPushViaWorker);
     LTest.Test('no idle timeout keeps alive', @TestNoIdleTimeoutMisclose);
     if not LTest.Run then Halt(1);
   finally

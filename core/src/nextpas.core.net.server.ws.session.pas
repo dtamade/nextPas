@@ -71,6 +71,9 @@ type
     { worker 线程可用的异步发送（经 SetFrameWorkerPush 注入的推送通道，
       在 reactor 线程交付；未注入通道时为空操作）。 }
     procedure SendTextFromWorker(const AText: string);
+    { 批量发文本帧（worker 线程）：内部一次 SubmitSendTexts（1 completion +
+      1 唤醒），reactor 循环投递——大批量推送路径省控制面。 }
+    procedure SendTextsFromWorker(const ATexts: array of string);
     procedure SendBinaryFromWorker(const APayload: TBytes);
     procedure SendCloseFromWorker(const ACode: UInt16; const AReason: string);
   end;
@@ -137,6 +140,7 @@ type
     procedure SendClose(const ACode: UInt16; const AReason: string);
     procedure Cancel;
     procedure SendTextFromWorker(const AText: string);
+    procedure SendTextsFromWorker(const ATexts: array of string);
     procedure SendBinaryFromWorker(const APayload: TBytes);
     procedure SendCloseFromWorker(const ACode: UInt16; const AReason: string);
     { 注入 worker→reactor 推送通道（升级函数在握手时设置；nil 则 FromWorker 为空操作） }
@@ -362,6 +366,13 @@ procedure TNetWsFrameSession.SendTextFromWorker(const AText: string);
 begin
   if FWorkerPush <> nil then
     FWorkerPush.SubmitSendText(AText);
+end;
+
+procedure TNetWsFrameSession.SendTextsFromWorker(
+  const ATexts: array of string);
+begin
+  if FWorkerPush <> nil then
+    FWorkerPush.SubmitSendTexts(ATexts);
 end;
 
 procedure TNetWsFrameSession.SendBinaryFromWorker(const APayload: TBytes);

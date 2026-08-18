@@ -134,6 +134,7 @@ type
       const ANewSession: ITcpServerSession): Boolean;
     function SubmitHijackMigration: Boolean;
     procedure SubmitSendText(const AText: string);
+    procedure SubmitSendTexts(const ATexts: array of string);
     procedure SubmitSendBinary(const APayload: array of Byte);
     procedure SubmitSendClose(const ACode: UInt16; const AReason: string);
   end;
@@ -169,6 +170,20 @@ type
     constructor Create(const ATicket: ITcpServerPollTargetTicket;
       const AKind: TTcpServerFramePushKind; const AText: string;
       const APayload: array of Byte; const ACode: UInt16; const AReason: string);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  { 批量发文本帧 completion：一次入队+唤醒承载 N 帧，reactor 循环逐帧
+    SendText（省控制面：completion 分配/MPSC 入队/FWake 各 N-1 次）。 }
+  TTcpServerFramePushBatchCompletion = class(TInterfacedObject,
+    ITcpServerWorkCompletion)
+  private
+    FTargetTicket: ITcpServerPollTargetTicket;
+    FTexts: array of string;
+  public
+    constructor Create(const ATicket: ITcpServerPollTargetTicket;
+      const ATexts: array of string);
     procedure Complete(const AOutcome: TTcpServerWorkOutcome;
       const AOwnership: TTcpServerConnOwnership);
   end;
@@ -569,6 +584,44 @@ begin
   FTargetTicket := nil;
 end;
 
+{ TTcpServerFramePushBatchCompletion }
+
+constructor TTcpServerFramePushBatchCompletion.Create(
+  const ATicket: ITcpServerPollTargetTicket;
+  const ATexts: array of string);
+var
+  LI: Integer;
+begin
+  inherited Create;
+  FTargetTicket := ATicket;
+  SetLength(FTexts, Length(ATexts));
+  for LI := 0 to High(ATexts) do
+    FTexts[LI] := ATexts[LI];
+end;
+
+procedure TTcpServerFramePushBatchCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+var
+  LTarget: TTcpServerPollSessionTarget;
+  LSession: IWebSocketFrameSession;
+  LI: Integer;
+begin
+  LTarget := nil;
+  LSession := nil;
+  if (FTargetTicket <> nil) and FTargetTicket.ResolveTarget(LTarget) and
+    (LTarget <> nil) then
+  begin
+    if Supports(LTarget.PollSession, IWebSocketFrameSession, LSession) then
+      for LI := 0 to High(FTexts) do
+        LSession.SendText(FTexts[LI]);
+  end;
+  LSession := nil;
+  LTarget := nil;
+  FTargetTicket := nil;
+  FTexts := nil;
+end;
+
 constructor TTcpServerPollWorkerHandoff.Create(
   const ABaseHandoff: ITcpServerWorkerHandoff;
   const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
@@ -700,6 +753,25 @@ end;
 procedure TTcpServerPollSessionContext.SubmitSendText(const AText: string);
 begin
   SubmitFramePush(fpSendText, AText, [], 0, '');
+end;
+
+procedure TTcpServerPollSessionContext.SubmitSendTexts(
+  const ATexts: array of string);
+begin
+  if (FWorkerHandoff = nil) or (FWorkerHandoff.TargetTicket = nil) then
+    Exit;
+  if not Assigned(FEnqueueCompletion) then
+    Exit;
+  if Length(ATexts) = 0 then
+    Exit;
+  { 整批一个 completion + 一次唤醒（与单帧 SubmitFramePush 同一入队/唤醒
+    通道，控制面成本与帧数无关）。 }
+  FEnqueueCompletion(FWorkerHandoff.TargetTicket,
+    TTcpServerFramePushBatchCompletion.Create(FWorkerHandoff.TargetTicket,
+      ATexts),
+    tswoCompleted, tscoHandler);
+  if Assigned(FWake) then
+    FWake();
 end;
 
 procedure TTcpServerPollSessionContext.SubmitSendBinary(
