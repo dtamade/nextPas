@@ -173,6 +173,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -1829,6 +1830,11 @@ end;
 function TNilHeadersRequest.GetContentLength: Int64;
 begin
   Result := 0;
+end;
+
+function TNilHeadersRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
 end;
 
 function TNilHeadersRequest.GetRemoteAddr: string;
