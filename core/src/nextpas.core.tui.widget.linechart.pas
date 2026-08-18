@@ -110,6 +110,7 @@ var
   CellW, CellH: Integer;
   PrevX, PrevY, CurX, CurY: Integer;
   YAxisWidth, XAxisHeight, LegendHeight: Integer;
+  LCAWidth, LCAHeight: Integer;
   MaxLabelStr, MinLabelStr: AnsiString;
   LegendX: Integer;
 begin
@@ -150,8 +151,15 @@ begin
 
   ChartArea.X := Inner.X + YAxisWidth;
   ChartArea.Y := Inner.Y + LegendHeight;
-  ChartArea.Width := Inner.Width - YAxisWidth;
-  ChartArea.Height := Inner.Height - LegendHeight - XAxisHeight;
+  { 画布区宽/高以 Integer 中间量计算并 clamp≥0 再入 Word 字段：无符号减法
+    下溢（如 24÷13=1 行高段：1-1-1=-1→65535）会绕过下方 >0 检查，令
+    TCanvas.Render 在 65535 高巨区全量循环（曾致 h=1 折线图渲染 200+ms） }
+  LCAWidth := Integer(Inner.Width) - YAxisWidth;
+  if LCAWidth < 0 then LCAWidth := 0;
+  LCAHeight := Integer(Inner.Height) - LegendHeight - XAxisHeight;
+  if LCAHeight < 0 then LCAHeight := 0;
+  ChartArea.Width := LCAWidth;
+  ChartArea.Height := LCAHeight;
   if (ChartArea.Width <= 0) or (ChartArea.Height <= 0) then Exit;
 
   CellW := ChartArea.Width; CellH := ChartArea.Height;
