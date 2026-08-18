@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-18 b4b-i1 后实测）
+## 当前战况（2026-08-18 b4b-i2 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **5** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹)** |
-| undefined total | **10** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹)** |
+| undefined unique | **3** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰)** |
+| undefined total | **5** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -303,7 +303,25 @@ compiler-pass 58/58；hygiene pass。挂账：父类槽 `TGenericCollection<T>.v
 待实例化（B4b 分期Ⅱ 递归）；`TVec.GetDefaultGrowStrategyI` 等改名后方法体
 仍缺 define（B4b 分期Ⅱ 方法体克隆）。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 201034 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint/@TVec.* 裸模板名已出列，剩 5 全实例名形态） |
+²⁰ b4b-i2（本 commit）：B4b 分期Ⅱ 首刀——**白名单方法体克隆**。
+口 2 全量克隆探针 5/10 → 10/20 升（已回滚，见 B4b 条目失败记录），
+但正面情报：原 5 uniq 9 total 全清、递归克隆能生成嵌套父类实例方法体
+（`TGenericCollection<TToolStatusEventRecord>.DoEqualsFuncProxy` 已
+define）；残渣三类形态（裸字段当函数 `@FInternalEquals`、函数指针短名
+`@DoPredicateFuncProxy`、全局函数 `@CompareByte`×5）。据此收窄：
+`InstantiateGenericType` 克隆循环加**白名单 {Count, GetDefaultGrow
+StrategyI}**（体自包含：纯字段读 / `FactorGrow(1.5)` 全局调用——FactorGrow
+基线已在 defined.txt），手动 Push + `IndexProcedureBodyName` +
+`FirstBodyIndexForNameLocal` 防重，`Needed:=True` 直标。验证：
+**5/10 → 3/5**（Count×4 + GetDefaultGrowStrategyI×1 清零，全 TVec
+特化实例统一生效）；opt 首错保持 `@Pos`（201416 行，克隆体编码零新
+错误）；compiler-pass 58/58；hygiene pass。剩余：
+`TToolStatusEventVec.Create`×3 + `Push`×1 + `Pos`×1。挂账：
+Create/Push 链含父类实例（inherited Create）、嵌套类型（TVecBuf=
+TArray<T>）、全局函数与 T 布局 store——需「实例上下文 + 链上克隆」面，
+下口按链闭合成员逐个扩白名单。
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 201416 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint/@TVec.* 裸模板名/@TToolStatusEventVec.{Count,GetDefaultGrowStrategyI} 已出列，剩 Create×3/Push×1/Pos×1） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
@@ -494,6 +512,26 @@ sema 文件的未提交改动）。开工前 `git status` 看到这些改动 = �
       + 标 Needed + 入队；Ⅲ. 若 vmt 表项/内联引用仍有剩余，再排。
       模板体注册名格式（`TVec.Count` vs `TVec<T>.Count`，影响 2406
       行 SubstSig 匹配与克隆查找）实施时用 TEMP-DIAG 先确认。
+      **口 2 尝试+回滚（2026-08-18，探针 5/10 → 10/20 升）**：
+      `InstantiateGenericType` 尾部加「模板方法体克隆」——按
+      `GenericName.` 前缀克隆全部模板方法体到实例名（手动 Push +
+      `IndexProcedureBodyName` + `FGenericWorkQueue.Push`；vmt 槽方法
+      显式 `Needed:=True`，其余靠调用点 walk 标定）。**正面证据**：
+      原 5 uniq 的 9 total（TToolStatusEventVec.Count×4/Create×3/
+      Push×1/GetDefaultGrowStrategyI×1）**全部清零**，递归克隆生效
+      （`.ll` 出现 `define @"TGenericCollection<TToolStatusEventRecord>.
+      DoEqualsFuncProxy"` —— 嵌套父类实例（带实参）方法体已生成）。
+      **新暴露 9 uniq / 20 total**（三类形态）：① 裸字段名当函数调用
+      `@FInternalEquals(i64,i64)`/`@FInternalComparer`/`@FIndex()`/
+      `@FCurrent()`（克隆体字段解析 miss，缺实例字段上下文）；② 函数
+      指针短名 `ptrtoint ptr @DoPredicateFuncProxy`（无限定）vs define
+      用全限定 `TGenericCollection<TToolStatusEventRecord>.
+      DoPredicateFuncProxy` —— 方法引用（FuncRef）取名不统一；③ 全局
+      函数 `@CompareByte`×5 未 define（FPC helper 族，克隆体调用点已
+      产出但无 body/declare）；另 opt 首错提前到 87483 行类型不匹配
+      （i32/i64）。结论：克隆机制本身成立，但需配套①实例字段上下文、
+      ②FuncRef 取名统一、③CompareByte 等 FPC helper 的 declare/stub
+      面，才能闭环——按「一次一个残渣面」拆口，勿再全量克隆上探针。
 - [~] **B5 const fold + intrinsic 尾巴**：const-upper 7 个 + `Pos`/`UpCase`/`Int`。
       - [x] **B5a Pos 主体（strpos 数组下标 haystack + const needle）** ✅
         （80→75 total，Pos 7→2）：主流残留是「字符串数组元素 haystack」——

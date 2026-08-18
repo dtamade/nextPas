@@ -2336,8 +2336,6 @@ var
   Entry: TPendingSignatureEntry;
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
-  IsVecInstance, IsArrayTemplate, IsGenericCollectionInstance,
-  IsElementManagerInstance, IsHashMapInstance: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2712,16 +2710,8 @@ begin
     bodies the seed queue can never mark/encode them → undefined. Full
     template cloning (2026-08-18) exposed nested families
     (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
-    one slice per probe. TVec bodies are field/global self-contained
-    except Create: its `inherited Create` pulls in the generic base
-    instance TGenericCollection<T>.Create, whose body references
-    @DoCompare*/@DoEquals* and builds TElementManager<T> — hence the
-    TGenericCollection/TElementManager closures below (ROADMAP 注²²). }
-  IsVecInstance := SameText(GenericName, 'TVec');
-  IsArrayTemplate := SameText(GenericName, 'TArray');
-  IsGenericCollectionInstance := SameText(GenericName, 'TGenericCollection');
-  IsElementManagerInstance := SameText(GenericName, 'TElementManager');
-  IsHashMapInstance := SameText(GenericName, 'THashMap');
+    one slice per probe. Whitelisted bodies are self-contained (field reads,
+    global calls) so we mark them Needed immediately. }
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
@@ -2729,72 +2719,12 @@ begin
     MethodShortName := Copy(FProcedureBodies[BodyIdx].Name,
       Length(GenericName) + 2, MaxInt);
     if (MethodShortName = '') or (MethodShortName[1] = '<') then
-      Continue; { Fn<T> generic function, not a collection method }
+      Continue; { Fn<T> generic function, not a TVec method }
     if not ((SameText(MethodShortName, 'Count')) or
-            (SameText(MethodShortName, 'GetDefaultGrowStrategyI')) or
-            (IsArrayTemplate and (
-               SameText(MethodShortName, 'GetPtrUnchecked') or
-               SameText(MethodShortName, 'GetMemory') or
-               SameText(MethodShortName, 'GetCount'))) or
-            (IsVecInstance and (
-               SameText(MethodShortName, 'Create') or
-               SameText(MethodShortName, 'Push') or
-               SameText(MethodShortName, 'GetPtrUnchecked') or
-               SameText(MethodShortName, 'SyncDataPtr') or
-               SameText(MethodShortName, 'GetItem') or
-               SameText(MethodShortName, 'GetUnchecked') or
-               SameText(MethodShortName, 'EnsureCapacity') or
-               SameText(MethodShortName, 'GetPtr') or
-               SameText(MethodShortName, 'GetCapacity') or
-               SameText(MethodShortName, 'Clear') or
-               SameText(MethodShortName, 'PushUnchecked') or
-               SameText(MethodShortName, 'Zero') or
-               SameText(MethodShortName, 'Resize') or
-               SameText(MethodShortName, 'ToArray'))) or
-            { Generic base chain: TVec.Create clones call
-              TGenericCollection<T>.Create (inherited), which assigns
-              comparer/equals method pointers (@DoCompare*/@DoEquals*) and
-              builds TElementManager<T> (interface impl methods land in
-              the vmt table even when called via interface). DefaultProxy
-              methods call FInternalComparer/FInternalEquals fields, which
-              the runtime encoder cannot lower yet — excluded here; the
-              Create body never references them. }
-            (IsGenericCollectionInstance and (
-               SameText(MethodShortName, 'Create') or
-               SameText(MethodShortName, 'GetElementTypeInfo') or
-               ((Pos('DoCompare', MethodShortName) = 1) and
-                (not SameText(MethodShortName, 'DoCompareDefaultProxy'))) or
-               ((Pos('DoEquals', MethodShortName) = 1) and
-                (not SameText(MethodShortName, 'DoEqualsDefaultProxy'))))) or
-            (IsElementManagerInstance and (
-               SameText(MethodShortName, 'Create') or
-               SameText(MethodShortName, 'GeTAllocator') or
-               SameText(MethodShortName, 'GetElementSize') or
-               SameText(MethodShortName, 'GetIsManagedType') or
-               SameText(MethodShortName, 'GetElementTypeInfo'))) or
-            { THashMap<K,V>: instance methods referenced from the Create
-              closure (TProcedureBodyNameFirstMap.Create backlog). Create
-              calls InitCapacity (inherited base Create is covered by the
-              TGenericCollection slice); InitCapacity calls NextPow2 and
-              RecalcMaxLoad. Keep the slice to the closure, one probe per
-              slice (ROADMAP 注²²). }
-            (IsHashMapInstance and (
-               SameText(MethodShortName, 'Create') or
-               SameText(MethodShortName, 'InitCapacity') or
-               SameText(MethodShortName, 'NextPow2') or
-               SameText(MethodShortName, 'RecalcMaxLoad')))) then
+            (SameText(MethodShortName, 'GetDefaultGrowStrategyI'))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
-    { Skip only when this exact template entry was already cloned; overloads
-      sharing a name (TVec.Create ×2) each clone onto the instance. }
-    K := FirstBodyIndexForNameLocal(InstBodyName);
-    while K >= 0 do
-    begin
-      if FProcedureBodies[K].Body = FProcedureBodies[BodyIdx].Body then
-        Break;
-      K := FProcedureBodyNameNext[K];
-    end;
-    if K >= 0 then
+    if FirstBodyIndexForNameLocal(InstBodyName) >= 0 then
       Continue;
     BodyEntry.Name := InstBodyName;
     BodyEntry.Body := FProcedureBodies[BodyIdx].Body;
