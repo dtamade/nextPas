@@ -72,6 +72,7 @@ type
     function GetBody: IReader;
     function GetContentLength: Int64;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     property Method: THttpMethod read GetMethod;
@@ -84,6 +85,10 @@ type
     property Body: IReader read GetBody;
     property ContentLength: Int64 read GetContentLength;
     property RemoteAddr: string read GetRemoteAddr;
+    { Peer address without the port: '1.2.3.4' or raw IPv6 like '::1'.
+      RemoteAddr renders 'ip:port' ('[ip]:port' for IPv6); RemoteIp is the
+      bare address (what rate limiting / login throttling keys need). }
+    property RemoteIp: string read GetRemoteIp;
   end;
 
   { Per-request options that override client defaults when present on a request }

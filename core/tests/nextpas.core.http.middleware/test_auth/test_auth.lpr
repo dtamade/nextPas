@@ -58,6 +58,7 @@ type
     function GetContentLength: Int64;
     function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     function GetContext: IHttpContext;
@@ -82,6 +83,7 @@ type
     function GetContentLength: Int64;
     function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
   end;
@@ -193,6 +195,11 @@ begin
   Result := nil;
 end;
 
+function TMockRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
+end;
+
 function TMockRequest.GetRemoteAddr: string;
 begin
   Result := '127.0.0.1';
@@ -272,6 +279,11 @@ end;
 function TBasicRequest.GetTrailers: IHttpHeaders;
 begin
   Result := nil;
+end;
+
+function TBasicRequest.GetRemoteIp: string;
+begin
+  Result := GetRemoteAddr;
 end;
 
 function TBasicRequest.GetRemoteAddr: string;
