@@ -27,6 +27,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
 | `compress` | L2 | compression formats | yes | L0-L1 | focused-runtime |
+| `checksum` | L1 | checksums (CRC-32) | yes | L0 | focused-runtime |
 | `config` | L3 | configuration framework | yes | L0-L2 | focused-runtime |
 | `contracts` | L0 support | assertions/contracts | yes | L0 root | source-contract |
 | `cookie` | L2 | HTTP cookie helpers | yes | L0-L1 | focused-runtime |
@@ -49,6 +50,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | yes | L0-L2 | focused-runtime |
 | `id` | L1 | ID generators | yes | L0-L1 | focused-runtime |
+| `image` | L2 | image encoding | yes | L0-L2 | focused-runtime |
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller abstractions | yes | L0 plus approved L1 | focused-runtime |
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |
