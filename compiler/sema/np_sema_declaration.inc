@@ -2256,6 +2256,8 @@ var
   ParentSym: TSemanticSymbol;
   AlreadyExists: Boolean;
   Entry: TPendingSignatureEntry;
+  InstBodyName: string;
+  BodyEntry: TProcedureBodyEntry;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2586,6 +2588,40 @@ begin
   end
   else if TypeMetaVmtCount(InstanceName) < 0 then
     FModel.AddConstValue(InstanceName + '$vmt_count', 0);
+  { B4b 分期Ⅱ(白名单): clone template method bodies onto the instance
+    name. ResolveClassMethodCalleeName lands on instance symbols
+    (TToolStatusEventVec.Count) after instantiation, but without cloned
+    bodies the seed queue can never mark/encode them → undefined. Full
+    template cloning (2026-08-18) exposed nested families
+    (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
+    one slice per probe. Whitelisted bodies are self-contained (field reads,
+    global calls) so we mark them Needed immediately. }
+  for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
+  begin
+    if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
+      Continue;
+    MethodShortName := Copy(FProcedureBodies[BodyIdx].Name,
+      Length(GenericName) + 2, MaxInt);
+    if (MethodShortName = '') or (MethodShortName[1] = '<') then
+      Continue; { Fn<T> generic function, not a TVec method }
+    if not ((SameText(MethodShortName, 'Count')) or
+            (SameText(MethodShortName, 'GetDefaultGrowStrategyI'))) then
+      Continue;
+    InstBodyName := InstanceName + '.' + MethodShortName;
+    if FirstBodyIndexForNameLocal(InstBodyName) >= 0 then
+      Continue;
+    BodyEntry.Name := InstBodyName;
+    BodyEntry.Body := FProcedureBodies[BodyIdx].Body;
+    BodyEntry.Decl := FProcedureBodies[BodyIdx].Decl;
+    BodyEntry.OwnerUnitId := FProcedureBodies[BodyIdx].OwnerUnitId;
+    BodyEntry.ScopeId := FProcedureBodies[BodyIdx].ScopeId;
+    BodyEntry.Needed := True;
+    BodyEntry.Encoded := False;
+    BodyEntry.Queued := False;
+    FProcedureBodies.Push(BodyEntry);
+    IndexProcedureBodyName(InstBodyName, LongInt(FProcedureBodies.Count) - 1);
+    FGenericWorkQueue.Push(LongInt(FProcedureBodies.Count) - 1);
+  end;
   SubstSig := TypeMetaParentClass(GenericName);
   if SubstSig <> '' then
   begin
