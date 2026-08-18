@@ -86,12 +86,14 @@ type
     FContentLength: Int64;
     FBodyReader: IReader;
     FContext: IHttpContext;
+    FRemote: string;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
     procedure SetBodyReader(const ABody: IReader);
     procedure SetBodyBytes(const AData: TBytes);
     procedure SetHeader(const AName, AValue: string);
+    procedure SetRemoteAddr(const AAddr: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetPath: string;
@@ -102,6 +104,7 @@ type
     function GetContentLength: Int64;
     function GetTrailers: IHttpHeaders;
     function GetRemoteAddr: string;
+    function GetRemoteIp: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
     function GetContext: IHttpContext;
@@ -227,6 +230,12 @@ begin
   FUrl.Path := APath;
   FHeaders := NewHttpHeaders;
   FContentLength := 0;
+  FRemote := '127.0.0.1';
+end;
+
+procedure TMockRequest.SetRemoteAddr(const AAddr: string);
+begin
+  FRemote := AAddr;
 end;
 
 procedure TMockRequest.SetContentLength(const AValue: Int64);
@@ -277,8 +286,30 @@ begin Result := FContentLength; end;
 function TMockRequest.GetTrailers: IHttpHeaders;
 begin Result := nil; end;
 
+function TMockRequest.GetRemoteIp: string;
+var
+  LLast, I: SizeInt;
+begin
+  Result := FRemote;
+  if Result = '' then
+    Exit;
+  if Result[1] = '[' then
+  begin
+    I := Pos(']', Result);
+    if I > 2 then
+      Result := Copy(Result, 2, I - 2);
+    Exit;
+  end;
+  LLast := 0;
+  for I := 1 to Length(Result) do
+    if Result[I] = ':' then
+      LLast := I;
+  if LLast > 1 then
+    Result := Copy(Result, 1, LLast - 1);
+end;
+
 function TMockRequest.GetRemoteAddr: string;
-begin Result := '127.0.0.1'; end;
+begin Result := FRemote; end;
 
 function TMockRequest.PathParam(const AName: string): string;
 begin Result := ''; end;
@@ -1675,6 +1706,44 @@ begin
   LHandler.ServeHTTP(LReqIntf, LW);
   Check(LHandlerCalled, 'handler called under limit');
   CheckEqual(Int64(200), Int64(LWObj.Status), 'status 200');
+end;
+
+{ The fallback limit key is the peer IP without its port: two connections
+  from the same host on different ephemeral ports share one bucket. Keying
+  on RemoteAddr ('ip:port') would make every connection its own bucket and
+  the limiter never trigger. }
+procedure TestRateLimitRemoteIpFallback;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [RateLimitMiddlewareWith(MakeRateLimitOpts(1, 60))]
+  );
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetRemoteAddr('10.0.0.7:11111');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(200), Int64(LWObj.Status), 'first connection allowed');
+
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReq.SetRemoteAddr('10.0.0.7:22222');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(429), Int64(LWObj.Status),
+    'same bare IP shares the bucket regardless of port');
 end;
 
 procedure TestRateLimitSetsHeaders;
@@ -3939,6 +4008,7 @@ begin
   T.Test('CacheControl: handler still called', @TestCacheControlHandlerStillCalled);
   { RateLimit }
   T.Test('RateLimit: allows under limit', @TestRateLimitAllowsUnderLimit);
+  T.Test('RateLimit: key uses bare IP (port stripped)', @TestRateLimitRemoteIpFallback);
   T.Test('RateLimit: sets rate limit headers', @TestRateLimitSetsHeaders);
   T.Test('RateLimit: blocks after limit exceeded', @TestRateLimitBlocksAfterLimit);
   T.Test('RateLimit: default 100/60s', @TestRateLimitDefaultOptions);
