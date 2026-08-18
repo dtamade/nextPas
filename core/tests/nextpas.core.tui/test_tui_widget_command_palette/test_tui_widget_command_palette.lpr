@@ -194,6 +194,31 @@ begin
   end;
 end;
 
+{ PH29：极小区 sweep——1..6×1..6 全组合渲染不抛异常（修复前
+  PalW := AArea.Width - 4 在窄区 Word 下溢 65533 绕过 <=0 检查） }
+procedure TestCommandPaletteRenderTinyAreas;
+var
+  CP: ICommandPalette;
+  Buf: TBuffer;
+  State: TCommandPaletteState;
+  LW, LH: Integer;
+begin
+  CP := TCommandPalette.New([TCommandItem.Make('open', 'Open a file')]);
+  for LW := 1 to 6 do
+    for LH := 1 to 6 do
+    begin
+      State := TCommandPaletteState.Empty;
+      State.Open;
+      Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, LW, LH));
+      try
+        CP.RenderStateful(TRect.Make(0, 0, LW, LH), Buf, State);
+        Check(True, 'render in tiny area');
+      finally
+        Buf.Free;
+      end;
+    end;
+end;
+
 procedure TestCommandPaletteUpdateFilter;
 var
   CP: ICommandPalette;
@@ -288,6 +313,7 @@ begin
   { CommandPalette widget tests }
   T.Test('render empty', @TestCommandPaletteRenderEmpty);
   T.Test('render with items', @TestCommandPaletteRenderWithItems);
+  T.Test('render tiny areas', @TestCommandPaletteRenderTinyAreas);
   T.Test('update filter', @TestCommandPaletteUpdateFilter);
   T.Test('selected item', @TestCommandPaletteSelectedItem);
   T.Test('builder chaining', @TestCommandPaletteBuilderChaining);
