@@ -124,25 +124,34 @@ begin
 end;
 
 function TUpgradeClientReader_ReadFrame(const AConn: ITcpStream;
-  const AReader: TUpgradeClientReader; const ATimeoutMs: UInt32;
+  var AReader: TUpgradeClientReader; const ATimeoutMs: UInt32;
   out AFrame: TNetWsFrame): TNetWsDecodeCode;
 var
-  LDecoder: TNetWsFrameDecoder;
   LBuf: array[0..4095] of Byte;
   LRead: SizeUInt;
   LWait: Int32;
 begin
-  LDecoder := AReader.Decoder;
+  { 解码器状态必须跨调用持久：ReadFrame 每次只产出一帧，若读到的
+    网络块含多帧，余帧留在解码器缓冲里等下一次调用续解。局部复制
+    会在函数返回时丢弃余帧（整帧跳过），故直接操作 AReader.Decoder。 }
   LWait := 0;
   repeat
-    Result := LDecoder.TryDecode(AFrame);
+    Result := AReader.Decoder.TryDecode(AFrame);
     if Result <> nwsDecodeNeedMore then
       Exit;
     if not ReadBlockingChunk(AConn, LBuf, SizeOf(LBuf), LRead) then
       Exit(nwsDecodeClosed);
     if LRead = 0 then
-      Exit(nwsDecodeClosed);
-    LDecoder.Feed(PByte(@LBuf[0]), LRead);
+    begin
+      { 非阻塞升级后的 0 读 = 数据未到（非连接关闭）；等待重试，
+        避免把仍在途的批量推送误判为关闭而丢帧。 }
+      platform_thread_sleep_ns(2000000);
+      Inc(LWait);
+      if LWait > ATimeoutMs then
+        Exit(nwsDecodeNeedMore);
+      Continue;
+    end;
+    AReader.Decoder.Feed(PByte(@LBuf[0]), LRead);
     Inc(LWait);
     if LWait > ATimeoutMs then
       Exit(nwsDecodeNeedMore);
@@ -665,6 +674,60 @@ begin
   end;
 end;
 
+procedure TestBatchPushLarge;
+var
+  LHandler: TUpgradeTestHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LFrame: TNetWsFrame;
+  LReader: TUpgradeClientReader;
+  LTexts: array of string;
+  LI, LJ: Integer;
+  LPad: string;
+begin
+  LSink := TUpgradeTestSink.Create(usmRecord);
+    LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  LThread := StartUpgradeServer(LHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Write(BuildUpgradeRequest('')[1],
+      SizeUInt(Length(BuildUpgradeRequest(''))));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) > 0, 'upgraded');
+    WaitForCount(LHandler.UpgradeCount, 1000);
+
+    { 700 帧批量推送：单帧 ~106B、合计 ~74KiB > 64KiB 出站上限——不经
+      BatchFlush 分段冲刷（32KiB/次）必在 EnqueueWire 触限溢出断连；
+      分段冲刷后快消费者整批无损送达。客户端逐帧收齐校验顺序与内容，
+      覆盖批量接口端到端无损 + 大批量防溢出语义。 }
+    SetLength(LTexts, 700);
+    LPad := '';
+    for LJ := 1 to 100 do
+      LPad := LPad + 'x';
+    for LI := 0 to High(LTexts) do
+      LTexts[LI] := 'L' + IntToStr(LI) + ':' + LPad;
+    LHandler.Sink.Session.SendTextsFromWorker(LTexts);
+    LReader.Init;
+    for LI := 0 to High(LTexts) do
+    begin
+      LFrame := Default(TNetWsFrame);
+      Check(TUpgradeClientReader_ReadFrame(LConn, LReader, 3000, LFrame) =
+        nwsDecodeFrame, 'large batch frame ' + IntToStr(LI) + ' decoded');
+      Check(LFrame.Opcode = Byte(WS_OPCODE_TEXT), 'large batch opcode text');
+      Check(Copy(BytesToStr(LFrame.Payload), 1, Length('L' + IntToStr(LI))) =
+        'L' + IntToStr(LI), 'large batch frame ' + IntToStr(LI) + ' ordered');
+    end;
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
 { ==================== main ==================== }
 
 var
@@ -679,6 +742,7 @@ begin
     LTest.Test('close handshake reply', @TestCloseHandshake);
     LTest.Test('server-initiated push from non-reactor thread', @TestServerInitiatedPush);
     LTest.Test('batch push via worker channel', @TestBatchPushViaWorker);
+    LTest.Test('large batch push no overflow', @TestBatchPushLarge);
     LTest.Test('no idle timeout keeps alive', @TestNoIdleTimeoutMisclose);
     if not LTest.Run then Halt(1);
   finally
