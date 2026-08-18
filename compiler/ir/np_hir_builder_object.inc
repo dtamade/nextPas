@@ -462,12 +462,17 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if FSemaModel.GetTypeMetaByName(AClassName, Meta) and
-      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
-      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName
-    else if not FSemaModel.LookupStringConstValue(
+    { Instance $vmt_func_ consts carry the instance name for generic
+      specializations (TVec.Create → TToolStatusEventVec.Create); the shared
+      template VmtSlots still hold the bare template name. Prefer consts,
+      fall back to VmtSlots. }
+    FuncName := '';
+    if not FSemaModel.LookupStringConstValue(
       AClassName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
+    if (FuncName = '') and FSemaModel.GetTypeMetaByName(AClassName, Meta) and
+      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
+      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName;
     Funcs[I + 1] := FuncName;
   end;
   FModule.AddVmtGlobal(AClassName, Funcs);
@@ -515,12 +520,17 @@ begin
     Funcs[0] := '';
   for I := 0 to VmtCount - 1 do
   begin
-    if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
-      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
-      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName
-    else if not FSemaModel.LookupStringConstValue(
+    { Instance $vmt_func_ consts carry the instance name for generic
+      specializations (TVec.Create → TToolStatusEventVec.Create); the shared
+      template VmtSlots still hold the bare template name. Prefer consts,
+      fall back to VmtSlots. }
+    FuncName := '';
+    if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
+    if (FuncName = '') and FSemaModel.GetTypeMetaByName(ClsName, Meta) and
+      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
+      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName;
     if (FuncName <> '') and
       FSemaModel.LookupStringConstValue(
         Copy(FuncName, 1, Pos('.', FuncName) - 1) + '$abstract_' +

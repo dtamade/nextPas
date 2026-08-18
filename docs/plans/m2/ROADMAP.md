@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-18 b65-sar 后实测）
+## 当前战况（2026-08-18 b4b-i1 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **6** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸)** |
-| undefined total | **10** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸)** |
+| undefined unique | **5** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹)** |
+| undefined total | **10** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -285,7 +285,25 @@ TypeId 为 htkInt/htkPointer 时用之；RHS 是 i64(SarLongint)、元素 i32 �
 公共 `arrload` 兜底未随动（ProcessAssignArrElem fallback 174-198 仍按
 RHS 宽度 store，主路径不触发即可）。
 
-| opt 首错 | `use of undefined value '@Pos'`（.ll 201034 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint 已出列） |
+¹⁹ b4b-i1（本 commit）：B4b 分期Ⅰ第一刀——**vmt 表槽位名统一到实例名**。
+`EnsureVmtForClass`/`ProcessVmtStore` 槽位名获取改为**优先查
+`<Class>$vmt_func_N` consts**（`InstantiateGenericType` 2565 行已把模板
+`TVec.` 前缀替换成 `InstanceName.`），共享的模板 `Meta.VmtSlots`
+（FuncQualName 仍是裸模板名 `TVec.Create` / `TVec.GetDefaultGrowStrategyI`）
+降为回退；改的是 HIR builder 两处循环，不复制/污染共享 VmtSlots。
+普通类 consts 与 VmtSlots 同源（declaration.inc:1439 父类 slots 复制），
+优先级反转零行为变化，仅泛型实例差异生效。验证：**6/10 → 5/10**——
+vmt 表 `@TVec.Create`/`@TVec.GetDefaultGrowStrategyI` 两处裸模板名引用
+合并进实例名（`TToolStatusEventVec.Create` 3 total：2 调用点 + 1 vmt 槽），
+剩余 5 uniq 全部实例名形态（Count×4/Create×3/Push×1/GetDefault
+GrowStrategyI×1 + Pos×1）；opt 首错保持 `@Pos`（201034 行，vmt 改动零新
+错误面，402182 行 vmt 表已无裸模板名，仅剩带引号父类槽
+`@"TGenericCollection<T>.vmt"`——不在探针口径，opt 面排队在 @Pos 后）。
+compiler-pass 58/58；hygiene pass。挂账：父类槽 `TGenericCollection<T>.vmt`
+待实例化（B4b 分期Ⅱ 递归）；`TVec.GetDefaultGrowStrategyI` 等改名后方法体
+仍缺 define（B4b 分期Ⅱ 方法体克隆）。
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 201034 行 `call i64 @Pos(ptr, i64, i64)`）——`declaration.inc` 的 `Pos('<', ArgTypes[I])`：**haystack 是泛型 class 实例的 default 索引属性**（`TStringVec = specialize TVec<string>`，`ArgTypes[I]` → `TVec.Items` read `GetItem`），551 分支 haystack 各子分支全部 miss（非数组变量）→ 兜底 `arrload ArgTypes` 在 emitter 无 `$ptr` alloca → 栈残留 I 顶做实参（haystack 编成 I 索引）。**根因=B4b 泛型实例机制，非 strpos 形态**，随 B4b 立项收 | 本轮后仍（@Int/@Result/@aElementCount/@a/@b/@SarLongint/@TVec.* 裸模板名已出列，剩 5 全实例名形态） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
