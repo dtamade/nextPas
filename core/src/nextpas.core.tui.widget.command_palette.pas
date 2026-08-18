@@ -270,10 +270,12 @@ begin
   if VisCount > FMaxVisible then VisCount := FMaxVisible;
 
   PalW := FWidth;
-  if PalW > AArea.Width - 4 then PalW := AArea.Width - 4;
+  { AArea.Width-4 经 Integer 运算：Word-Word 在窄区（宽<4）下溢 65533 会
+    绕过下方 <=0 检查（PH29，与 linechart 同源下溢）}
+  if PalW > Integer(AArea.Width) - 4 then PalW := Integer(AArea.Width) - 4;
   if PalW <= 0 then Exit;
   PalH := VisCount + 3; // border top + input + items + border bottom
-  if PalH > AArea.Height - 2 then PalH := AArea.Height - 2;
+  if PalH > Integer(AArea.Height) - 2 then PalH := Integer(AArea.Height) - 2;
   if PalH <= 0 then Exit;
 
   PalX := AArea.X + (AArea.Width - PalW) div 2;
