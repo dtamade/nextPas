@@ -531,6 +531,107 @@ begin
   LListener.Close;
 end;
 
+{ Wave: client extra headers (WithHeader) are sent in the upgrade request. }
+procedure TestClientSendsExtraHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: TWebSocketOptions;
+  LWs: IWebSocket;
+  LFrame: TWebSocketFrame;
+  LCaught: Boolean;
+  LMsg: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LServerWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    if AReq.Headers.Get('X-Auth') <> 'secret-token' then
+    begin
+      HttpWriteErrorUnauthorized(AW, 'missing auth header');
+      Exit;
+    end;
+    LServerWs := UpgradeWebSocket(AReq, AW);
+    LF := LServerWs.ReadFrame;
+    if LF.Opcode = wsOpText then
+      LServerWs.WriteText(UTF8BytesToString(LF.Payload));
+    LServerWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    { Without the extra header the server rejects the upgrade with 401. }
+    LCaught := False;
+    LMsg := '';
+    try
+      ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws');
+    except
+      on E: EHttpError do
+      begin
+        LCaught := True;
+        LMsg := E.Message;
+      end;
+    end;
+    CheckTrue(LCaught, 'missing extra header is rejected');
+    Check(Pos('got 401', LMsg) > 0, 'missing extra header rejection surfaces 401');
+
+    { With the extra header the upgrade succeeds and the echo round-trips. }
+    LOpts := TWebSocketOptions.Default.WithHeader('X-Auth', 'secret-token');
+    LWs := ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws', LOpts);
+    try
+      CheckTrue(LWs.IsOpen, 'extra header client: open');
+      LWs.WriteText('hello');
+      LFrame := LWs.ReadFrame;
+      CheckEqual(Ord(wsOpText), Ord(LFrame.Opcode), 'extra header client: text opcode');
+      CheckEqual('hello', UTF8BytesToString(LFrame.Payload), 'extra header client: echo body');
+      LWs.Close(1000, 'done');
+    finally
+      LWs := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Wave: TWebSocketOptions.WithHeader source contract + CRLF validation. }
+procedure TestWebSocketOptionsWithHeaderContract;
+var
+  LOpts: TWebSocketOptions;
+  LSource: string;
+  LCaught: Boolean;
+begin
+  LOpts := TWebSocketOptions.Default;
+  CheckEqual(0, Length(LOpts.Headers), 'Default has no extra headers');
+  LOpts := LOpts.WithHeader('Cookie', 'sid=abc');
+  CheckEqual(1, Length(LOpts.Headers), 'WithHeader appends one header');
+  CheckEqual('Cookie', LOpts.Headers[0].Name, 'header name preserved');
+  CheckEqual('sid=abc', LOpts.Headers[0].Value, 'header value preserved');
+  LOpts := LOpts.WithHeader('X-Auth', 'token');
+  CheckEqual(2, Length(LOpts.Headers), 'WithHeader preserves earlier headers');
+
+  LSource := ReadFileText('../../../src/nextpas.core.http.websocket.pas');
+  Check(Pos('function WithHeader(const AName, AValue: string)',
+    LSource) > 0, 'TWebSocketOptions exposes WithHeader');
+  Check(Pos('Headers: array of TWebSocketHeader', LSource) > 0,
+    'TWebSocketOptions stores extra headers');
+  Check(Pos('WebSocket extra header must not contain CR/LF', LSource) > 0,
+    'extra header CR/LF injection is rejected');
+
+  LCaught := False;
+  try
+    { Validation runs before dial, so the bogus header must fail locally. }
+    ConnectWebSocket('ws://127.0.0.1:9/ws',
+      TWebSocketOptions.Default.WithHeader('X-Auth'#13'Injected', 'v'));
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  CheckTrue(LCaught, 'CR in header name rejected by validation');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.websocket.client');
 
@@ -550,6 +651,10 @@ begin
     @TestClientPermessageDeflateDeclinedStillWorks);
   T.Test('WebSocket live ConnectTimeout via backlog-full peer',
     @TestWebSocketLiveConnectTimeout);
+  T.Test('WebSocket client sends extra headers via WithHeader',
+    @TestClientSendsExtraHeaders);
+  T.Test('WebSocket options WithHeader contract + CRLF rejection',
+    @TestWebSocketOptionsWithHeaderContract);
 
   if not T.Run then Halt(1);
 end.

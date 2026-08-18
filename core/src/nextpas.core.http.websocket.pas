@@ -22,6 +22,13 @@ type
     AOrigin is the raw Origin header value (empty if absent). }
   TWebSocketOriginCheck = function(const AOrigin: string): Boolean;
 
+  { Extra header to send in the client upgrade request (e.g. Cookie for
+    session auth). Name/Value must not contain CR/LF. }
+  TWebSocketHeader = record
+    Name: string;
+    Value: string;
+  end;
+
   TWebSocketOptions = record
     MaxFrameSize: Int64;
     MaxMessageSize: Int64;
@@ -44,12 +51,18 @@ type
       accept extension with client_no_context_takeover and
       server_no_context_takeover (no shared LZ77 context across messages). }
     EnablePermessageDeflate: Boolean;
+    { Extra headers to send in the client upgrade request (order preserved).
+      Default: none. }
+    Headers: array of TWebSocketHeader;
     class function Default: TWebSocketOptions; static;
     function WithConnectTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithCancelToken(const AToken: IHttpCancelToken): TWebSocketOptions;
     function WithEnablePermessageDeflate(
       const AEnable: Boolean): TWebSocketOptions;
+    { Append an extra header to the upgrade request (e.g. Cookie for auth).
+      CR/LF in name or value are rejected by ValidateWebSocketOptions. }
+    function WithHeader(const AName, AValue: string): TWebSocketOptions;
     function EffectiveCancelToken: IHttpCancelToken;
   end;
 
@@ -264,6 +277,17 @@ begin
   Result.EnablePermessageDeflate := AEnable;
 end;
 
+function TWebSocketOptions.WithHeader(const AName, AValue: string): TWebSocketOptions;
+var
+  N: Integer;
+begin
+  Result := Self;
+  N := Length(Result.Headers);
+  SetLength(Result.Headers, N + 1);
+  Result.Headers[N].Name := AName;
+  Result.Headers[N].Value := AValue;
+end;
+
 function TWebSocketOptions.EffectiveCancelToken: IHttpCancelToken;
 begin
   if HasCancelToken then
@@ -273,6 +297,8 @@ begin
 end;
 
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
+var
+  I: Integer;
 begin
   if AOptions.MaxFrameSize < 0 then
     raise EHttpError.Create(hekArgument, 'WebSocket max frame size must not be negative');
@@ -284,6 +310,19 @@ begin
   if AOptions.Timeout < 0 then
     raise EHttpError.Create(hekArgument,
       'WebSocket Timeout must not be negative');
+  { 额外请求头不得含 CR/LF（防注入升级请求行/头区）。 }
+  for I := 0 to High(AOptions.Headers) do
+  begin
+    if (Pos(#13, AOptions.Headers[I].Name) > 0) or
+       (Pos(#10, AOptions.Headers[I].Name) > 0) or
+       (Pos(#13, AOptions.Headers[I].Value) > 0) or
+       (Pos(#10, AOptions.Headers[I].Value) > 0) then
+      raise EHttpError.Create(hekArgument,
+        'WebSocket extra header must not contain CR/LF');
+    if AOptions.Headers[I].Name = '' then
+      raise EHttpError.Create(hekArgument,
+        'WebSocket extra header name must not be empty');
+  end;
 end;
 
 { ConnectTimeout>0 wins for OS dial; else Timeout; 0 = unbounded. }
@@ -1435,6 +1474,7 @@ var
   LDialMs: Int64;
   LHandshakeMs: Int64;
   LDeflate: Boolean;
+  LI: Integer;
 begin
   if AClient = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
@@ -1542,6 +1582,9 @@ begin
     if AOptions.EnablePermessageDeflate then
       LRequest := LRequest + 'Sec-WebSocket-Extensions: ' +
         WS_PMD_EXTENSION_VALUE + #13#10;
+    for LI := 0 to High(AOptions.Headers) do
+      LRequest := LRequest + AOptions.Headers[LI].Name + ': ' +
+        AOptions.Headers[LI].Value + #13#10;
     LRequest := LRequest + #13#10;
 
     { Send upgrade request + read response under handshake deadline }
