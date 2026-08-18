@@ -1,6 +1,6 @@
 unit nextpas.core.encoding;
 {**
- * @desc 编解码门面：Base64、Hex、URL 编码、Varint。
+ * @desc 编解码门面：Base64、Base32、Hex、URL 编码、Varint。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -10,6 +10,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.encoding.base,
+  nextpas.core.encoding.base32,
   nextpas.core.encoding.base64,
   nextpas.core.encoding.gbk,
   nextpas.core.encoding.hex,
@@ -19,6 +20,9 @@ uses
 type
   TBase64Variant = nextpas.core.encoding.base.TBase64Variant;
   THexCase = nextpas.core.encoding.base.THexCase;
+
+function Base32Encode(const AData: TBytes): string; inline;
+function Base32Decode(const AEncoded: string): TBytes; inline;
 
 function Base64Encode(const AData: TBytes): string; inline;
 function Base64Decode(const AEncoded: string): TBytes; inline;
@@ -40,6 +44,16 @@ function UrlDecode(const AEncoded: string): string; inline;
 function GbkToUtf8(const AStr: string): string; inline;
 
 implementation
+
+function Base32Encode(const AData: TBytes): string;
+begin
+  Result := nextpas.core.encoding.base32.Base32Encode(AData);
+end;
+
+function Base32Decode(const AEncoded: string): TBytes;
+begin
+  Result := nextpas.core.encoding.base32.Base32Decode(AEncoded);
+end;
 
 function Base64Encode(const AData: TBytes): string;
 begin
