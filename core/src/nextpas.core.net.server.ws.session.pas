@@ -61,6 +61,10 @@ type
   IWebSocketFrameSession = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000017}']
     procedure SendText(const AText: string);
+    { 批量发文本帧（reactor/会话推进方）：循环 BuildFrame+EnqueueWire 只拼
+      缓冲，尾次统一 FlushOutbound 一次冲刷——省 N-1 次冲刷调用/syscall
+      （与 SendText 相同的溢出/非法帧/WouldBlock 语义，仅合并冲刷时机）。 }
+    procedure SendTexts(const ATexts: array of string);
     procedure SendBinary(const APayload: TBytes);
     { 发送数据帧（text/binary/raw opcode 0-2）。控帧/close 请用专门入口。 }
     procedure SendFrame(const AOpcode: Byte; const APayload: TBytes);
@@ -135,6 +139,7 @@ type
     destructor Destroy; override;
     { IWebSocketFrameSession }
     procedure SendText(const AText: string);
+    procedure SendTexts(const ATexts: array of string);
     procedure SendBinary(const APayload: TBytes);
     procedure SendFrame(const AOpcode: Byte; const APayload: TBytes);
     procedure SendClose(const ACode: UInt16; const AReason: string);
@@ -326,6 +331,36 @@ begin
   if Length(AText) > 0 then
     Move(AText[1], LBytes[0], SizeUInt(Length(AText)));
   SendFrame(Byte(WS_OPCODE_TEXT), LBytes);
+end;
+
+procedure TNetWsFrameSession.SendTexts(const ATexts: array of string);
+var
+  LI: Integer;
+  LBytes: TBytes;
+  LSeg: TBytes;
+  LCode: TNetWsEncodeCode;
+begin
+  if (FState = stClosed) or (FState = stClosing) then
+    Exit;
+  { 逐帧拼缓冲（EnqueueWire 每帧检查出站上限，溢出中止与 SendText 同义），
+    尾次统一 FlushOutbound：一次冲刷承载整批（省 N-1 次冲刷调用/syscall；
+    WouldBlock 语义不变——缓冲保留待可写事件续写）。 }
+  for LI := 0 to High(ATexts) do
+  begin
+    SetLength(LBytes, Length(ATexts[LI]));
+    if Length(ATexts[LI]) > 0 then
+      Move(ATexts[LI][1], LBytes[0], SizeUInt(Length(ATexts[LI])));
+    LCode := TNetWsFrameEncoder.BuildFrame(Byte(WS_OPCODE_TEXT), True,
+      LBytes, nwsServer, LSeg);
+    if LCode <> nwsEncodeOk then
+      Continue;   { 与 SendFrame 相同：非法帧静默丢弃 }
+    EnqueueWire(LSeg);
+    if FState = stClosed then
+      Break;      { 溢出中止：后续帧不再投递（与逐帧 SendText 语义一致） }
+  end;
+  if FState = stReading then
+    FState := stFlushing;
+  FlushOutbound;
 end;
 
 procedure TNetWsFrameSession.SendBinary(const APayload: TBytes);

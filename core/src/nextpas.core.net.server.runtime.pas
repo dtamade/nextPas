@@ -605,7 +605,6 @@ procedure TTcpServerFramePushBatchCompletion.Complete(
 var
   LTarget: TTcpServerPollSessionTarget;
   LSession: IWebSocketFrameSession;
-  LI: Integer;
 begin
   LTarget := nil;
   LSession := nil;
@@ -613,8 +612,9 @@ begin
     (LTarget <> nil) then
   begin
     if Supports(LTarget.PollSession, IWebSocketFrameSession, LSession) then
-      for LI := 0 to High(FTexts) do
-        LSession.SendText(FTexts[LI]);
+      { 批量写：一次 EnqueueWire 拼接 + 单次 FlushOutbound 冲刷（省 N-1
+        次冲刷调用/syscall——写侧批量化，B18）。 }
+      LSession.SendTexts(FTexts);
   end;
   LSession := nil;
   LTarget := nil;
