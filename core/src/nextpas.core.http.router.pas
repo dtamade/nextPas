@@ -556,6 +556,7 @@ var
   LM: THttpMethod;
   LFound: Boolean;
   LAllow: string;
+  LTerminal: THttpHandlerFunc;
 
   procedure InvokeHandler(const AHandler: THttpHandlerFunc;
     const AParams: TRouteParams);
@@ -663,13 +664,26 @@ begin
 
   if LFound then
   begin
-    AW.Headers.SetHeader('allow', LAllow);
-    HttpWriteErrorResponse(AW, HTTP_STATUS_METHOD_NOT_ALLOWED,
-      'method_not_allowed', 'Method not allowed');
-    Exit;
-  end;
-
-  HttpWriteErrorNotFound(AW, 'Route not found');
+    { Not-found and method-not-allowed responses are terminal handlers that
+      run through the same middleware chain as matched routes: middleware is
+      a global request chain (recovery/metrics/headers/CORS-preflight apply
+      to every response, including 404/405). Status, Allow and problem body
+      are untouched. }
+    LTerminal := procedure(const AR: IHttpRequest;
+      const RW: IHttpResponseWriter)
+      begin
+        RW.Headers.SetHeader('allow', LAllow);
+        HttpWriteErrorResponse(RW, HTTP_STATUS_METHOD_NOT_ALLOWED,
+          'method_not_allowed', 'Method not allowed');
+      end;
+  end
+  else
+    LTerminal := procedure(const AR: IHttpRequest;
+      const RW: IHttpResponseWriter)
+      begin
+        HttpWriteErrorNotFound(RW, 'Route not found');
+      end;
+  InvokeHandler(LTerminal, nil);
 end;
 
 procedure THttpRouter.Get(const APattern: string; const AHandler: THttpHandlerFunc);
