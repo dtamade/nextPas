@@ -112,6 +112,11 @@ type
     function SetStringP(AX, AY: Integer; AStr: PAnsiChar; ALen, AMaxWidth: Integer;
       const AStyle: TStyle): Integer;
 
+    { 从 (AX,AY) 起把 AStr 重复填充 AWidth 列(按字素推进,超宽安全截断;
+      与 SetStringN 的「写一次截断」互补,画横线/分隔线热路径零堆分配)。 }
+    function FillH(AX, AY: Integer; const AStr: AnsiString; AWidth: Integer;
+      const AStyle: TStyle): Integer;
+
     { 对 A 与 Area 交集内每个 cell 应用样式。 }
     procedure SetStyle(const A: TRect; const AStyle: TStyle);
 
@@ -514,6 +519,78 @@ begin
 
     if LRemaining = 0 then Break;
     if LAdv.Width > LRemaining then Break;
+    PrepareWriteSpan(LCursor, AY, LAdv.Width);
+    LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
+    CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
+    CellApplyStyle(LCP^, AStyle);
+    if LAdv.Width = 2 then
+    begin
+      LCP := (ContentBase + (IndexOfPos(LCursor + 1, AY)));
+      CellReset(LCP^);
+      LCP^.Width := 0;
+      LCP^.Skip := True;
+    end;
+    Inc(LCursor, LAdv.Width);
+    Inc(Result, LAdv.Width);
+    Dec(LRemaining, LAdv.Width);
+    Inc(LI, LAdv.ByteLen);
+  end;
+end;
+
+{ 把 AStr 重复填充 AWidth 列(按字素推进,越界/超宽安全截断)。
+  与 SetStringN「写一次截断」互补:画横线/分隔线等重复段,
+  热路径零堆分配(常量串复用,逐格直写) }
+function TBuffer.FillH(AX, AY: Integer; const AStr: AnsiString; AWidth: Integer;
+  const AStyle: TStyle): Integer;
+var
+  LLeft, LRight, LRemaining, LHidden, LI, LCursor: Integer;
+  LCP: PCell;
+  LAdv: TGraphemeAdvance;
+  LData: PAnsiChar;
+begin
+  Result := 0;
+  LLeft := Integer(FArea.X);
+  LRight := LLeft + Integer(FArea.Width);
+  if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
+  if AX >= LRight then Exit;
+  if (Length(AStr) = 0) or (AWidth <= 0) then Exit;
+
+  LData := PAnsiChar(AStr);
+  LCursor := AX;
+  LHidden := 0;
+  if LCursor < LLeft then
+  begin
+    LHidden := LLeft - LCursor;
+    LCursor := LLeft;
+  end;
+
+  MarkRowDirty(AY - FArea.Y);
+  LRemaining := LRight - LCursor;
+  if LRemaining > AWidth then LRemaining := AWidth;
+  if LRemaining <= 0 then Exit;
+
+  LI := 0;
+  while LRemaining > 0 do
+  begin
+    if LI >= Length(AStr) then LI := 0;   { 串尾回绕重复填充 }
+    LAdv := GraphemeAt(LData^, Length(AStr), LI);
+    if LAdv.Width = 0 then
+    begin
+      Inc(LI, LAdv.ByteLen);
+      Continue;
+    end;
+    if LHidden > 0 then
+    begin
+      if LAdv.Width <= LHidden then
+      begin
+        Dec(LHidden, LAdv.Width);
+        Inc(LI, LAdv.ByteLen);
+        Continue;
+      end;
+      { 字素横跨左裁剪边:丢弃头残段,整字素从可见起点完整写出 }
+      LHidden := 0;
+    end;
+    if LAdv.Width > LRemaining then Break;   { 放不下:整体停止 }
     PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
     CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
