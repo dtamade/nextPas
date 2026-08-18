@@ -252,6 +252,81 @@ begin
     ' unpublished callback setters fail-closed on non-nil assignments and accept nil clears');
 end;
 
+procedure CheckFreePascalPartialCallbackSurface;
+var
+  LLib: ISSLLibrary;
+  LCtx: ISSLContext;
+  LProbe: TCallbackProbe;
+  LKind: TCallbackKind;
+  LRejected: Boolean;
+  LLowerMsg: string;
+begin
+  if not TSSLFactory.IsLibraryAvailable(sslFreePascal) then
+  begin
+    WriteLn('[SKIP] FreePascal backend not available on this platform');
+    Exit;
+  end;
+
+  LLib := TSSLFactory.GetLibrary(sslFreePascal);
+  Require(LLib <> nil, 'FreePascal library should be creatable when available');
+  Require(LLib.GetCapabilities.SupportsCallbacks,
+    'FreePascal must publish SupportsCallbacks=True for this contract');
+
+  LCtx := LLib.CreateContext(sslCtxClient);
+  Require(LCtx <> nil, 'FreePascal context should be creatable');
+  LProbe := TCallbackProbe.Create;
+  try
+    try
+      AssignNonNilCallback(LCtx, ckVerify, LProbe);
+    except
+      on E: Exception do
+        raise Exception.CreateFmt(
+          'FreePascal must accept non-nil Verify callback while SupportsCallbacks=True: %s', [E.Message]);
+    end;
+    try
+      ClearCallback(LCtx, ckVerify);
+    except
+      on E: Exception do
+        raise Exception.CreateFmt(
+          'FreePascal must accept nil Verify clear while SupportsCallbacks=True: %s', [E.Message]);
+    end;
+
+    for LKind := ckPassword to ckInfo do
+    begin
+      LRejected := False;
+      try
+        AssignNonNilCallback(LCtx, LKind, LProbe);
+      except
+        on E: ESSLException do
+        begin
+          LLowerMsg := LowerCase(E.Message);
+          Require((E.ErrorCode = sslErrUnsupported) or (Pos('unsupported', LLowerMsg) > 0) or
+            (Pos('不支持', E.Message) > 0),
+            Format('FreePascal non-nil %s rejection must report unsupported semantics: %s',
+              [CallbackKindName(LKind), E.Message]));
+          LRejected := True;
+        end;
+      end;
+
+      Require(LRejected,
+        Format('FreePascal must reject non-nil %s while the kind remains unpublished', [CallbackKindName(LKind)]));
+
+      try
+        ClearCallback(LCtx, LKind);
+      except
+        on E: Exception do
+          raise Exception.CreateFmt(
+            'FreePascal should accept nil clear for %s while the kind remains unpublished: %s',
+            [CallbackKindName(LKind), E.Message]);
+      end;
+    end;
+  finally
+    LProbe.Free;
+  end;
+
+  WriteLn('[PASS] FreePascal partial callback surface: verify wired, password/info fail closed');
+end;
+
 procedure CheckOpenSSLIncompleteSurfaceFailsClosed;
 var
   LLib: ISSLLibrary;
@@ -357,7 +432,7 @@ begin
 
   CheckOpenSSLPublishedStateFromRuntimeGate;
   CheckWinSSLPartialBackend(sslWinSSL);
-  CheckUnpublishedBackend(sslFreePascal);
+  CheckFreePascalPartialCallbackSurface;
   CheckUnpublishedBackend(sslWolfSSL);
   CheckUnpublishedBackend(sslMbedTLS);
   CheckOpenSSLIncompleteSurfaceFailsClosed;

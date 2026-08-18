@@ -177,6 +177,15 @@ begin
     // Test version
     TestModule('OpenSSL 版本获取', GetOpenSSLVersionString <> '');
     WriteLn('    版本: ', GetOpenSSLVersionString);
+
+    // 懒加载各模块导出符号，与运行时 TOpenSSLLoader 的实际绑定路径一致
+    LoadOpenSSLBIO;
+    LoadOpenSSLBN;
+    LoadEVP(TOpenSSLLoader.GetLibraryHandle(osslLibCrypto));
+    LoadOpenSSLHMAC;
+    LoadOpenSSLRSA;
+    LoadOpenSSLRAND;
+    LoadOpenSSLERR;
   end;
 end;
 
@@ -229,7 +238,7 @@ begin
     // Hash algorithms
     TestModule('EVP_sha256 函数指针', Assigned(EVP_sha256));
     TestModule('EVP_sha512 函数指针', Assigned(EVP_sha512));
-    TestModule('EVP_sha3_256 函数指针', Assigned(EVP_sha3_256));
+    TestModule('EVP_sha384 函数指针', Assigned(EVP_sha384));
     TestModule('EVP_blake2b512 函数指针', Assigned(EVP_blake2b512));
 
     // Ciphers
@@ -258,6 +267,9 @@ begin
 
   if TOpenSSLLoader.IsModuleLoaded(osmCore) then
   begin
+    LoadOpenSSLCore;
+    LoadOpenSSLSSL;
+
     TestModule('SSL_CTX_new 函数指针', Assigned(SSL_CTX_new));
     TestModule('SSL_CTX_free 函数指针', Assigned(SSL_CTX_free));
     TestModule('SSL_new 函数指针', Assigned(SSL_new));
@@ -319,14 +331,14 @@ begin
     WriteLn;
     WriteLn('结论: 所有65个模块的类型定义、常量和');
     WriteLn('      函数声明都正确,可以正常使用!');
-    Halt(0);
+    ExitCode := 0;
   end
   else
   begin
     WriteLn('✗✗✗ 部分验证失败! ✗✗✗');
     WriteLn;
     WriteLn('请检查失败的模块定义。');
-    Halt(1);
+    ExitCode := 1;
   end;
 
   if TOpenSSLLoader.IsModuleLoaded(osmCore) then

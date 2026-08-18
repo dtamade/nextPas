@@ -26,6 +26,7 @@ uses
 const
   CUSTOM_CIPHER_LIST = 'HIGH:!aNULL:!MD5';
   CUSTOM_CIPHER_SUITES = 'TLS_AES_128_GCM_SHA256';
+  FPC_CUSTOM_CIPHER_LIST = 'ECDHE-RSA-AES128-GCM-SHA256:AES128-GCM-SHA256';
 
 procedure Require(ACondition: Boolean; const AMessage: string);
 begin
@@ -164,6 +165,36 @@ begin
     'OpenSSL published backend should accept custom cipher-suites override');
 
   WriteLn('[PASS] OpenSSL published custom-cipher setters accept custom non-default overrides');
+end;
+
+procedure CheckPublishedFreePascalBackend;
+var
+  LLib: ISSLLibrary;
+  LCtx: ISSLContext;
+begin
+  if not TSSLFactory.IsLibraryAvailable(sslFreePascal) then
+  begin
+    WriteLn('[SKIP] FreePascal backend not available on this platform');
+    Exit;
+  end;
+
+  LLib := TSSLFactory.GetLibrary(sslFreePascal);
+  Require(LLib <> nil, 'FreePascal library should be creatable when available');
+  Require(LLib.GetCapabilities.SupportsCustomCipherSuites,
+    'FreePascal must publish SupportsCustomCipherSuites=True for this contract');
+
+  LCtx := LLib.CreateContext(sslCtxClient);
+  Require(LCtx <> nil, 'FreePascal context should be creatable');
+
+  LCtx.SetCipherList(FPC_CUSTOM_CIPHER_LIST);
+  Require(LCtx.GetCipherList = FPC_CUSTOM_CIPHER_LIST,
+    'FreePascal published backend should accept custom cipher-list override');
+
+  LCtx.SetCipherSuites(CUSTOM_CIPHER_SUITES);
+  Require(LCtx.GetCipherSuites = CUSTOM_CIPHER_SUITES,
+    'FreePascal published backend should accept custom cipher-suites override');
+
+  WriteLn('[PASS] FreePascal published custom-cipher setters accept custom non-default overrides');
 end;
 
 procedure CheckUnpublishedBackend(ABackend: TSSLLibraryType);
@@ -342,23 +373,21 @@ begin
   WriteLn('=============================================');
 
   CheckOpenSSLBackendCapability;
-  CheckBackendCapability(sslFreePascal, False);
+  CheckBackendCapability(sslFreePascal, True);
   CheckBackendCapability(sslWinSSL, False);
   CheckBackendCapability(sslMbedTLS, False);
   CheckBackendCapability(sslWolfSSL, False);
 
   CheckPublishedOpenSSLBackend;
-  CheckUnpublishedBackend(sslFreePascal);
+  CheckPublishedFreePascalBackend;
   CheckUnpublishedBackend(sslWinSSL);
   CheckUnpublishedBackend(sslMbedTLS);
   CheckUnpublishedBackend(sslWolfSSL);
 
-  CheckFactoryRejectsCustomCipherOverride(sslFreePascal);
   CheckFactoryRejectsCustomCipherOverride(sslWinSSL);
   CheckFactoryRejectsCustomCipherOverride(sslMbedTLS);
   CheckFactoryRejectsCustomCipherOverride(sslWolfSSL);
 
-  CheckDirectLibraryRejectsCustomDefaultConfig(sslFreePascal);
   CheckDirectLibraryRejectsCustomDefaultConfig(sslWinSSL);
   CheckDirectLibraryRejectsCustomDefaultConfig(sslMbedTLS);
   CheckDirectLibraryRejectsCustomDefaultConfig(sslWolfSSL);

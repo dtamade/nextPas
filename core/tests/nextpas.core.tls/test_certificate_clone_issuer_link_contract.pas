@@ -125,14 +125,14 @@ begin
       Exit;
     end;
 
-    LLeafPEM := ReadTextFile('tests/certificate/test_certs/signer_cert.pem');
+    LLeafPEM := ReadTextFile('certificate/test_certs/signer_cert.pem');
     if not LLeaf.LoadFromPEM(LLeafPEM) then
     begin
       Fail(LPrefix + 'failed to load leaf fixture');
       Exit;
     end;
 
-    LIssuerPEM := ReadTextFile('tests/certificate/test_certs/ca_cert.pem');
+    LIssuerPEM := ReadTextFile('certificate/test_certs/ca_cert.pem');
     if not LIssuer.LoadFromPEM(LIssuerPEM) then
     begin
       Fail(LPrefix + 'failed to load issuer fixture');

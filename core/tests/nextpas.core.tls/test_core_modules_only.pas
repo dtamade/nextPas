@@ -132,6 +132,15 @@ begin
 
     if TOpenSSLLoader.IsModuleLoaded(osmCore) then
     begin
+      // 懒加载各模块导出符号，与运行时 TOpenSSLLoader 的实际绑定路径一致
+      LoadOpenSSLBIO;
+      LoadOpenSSLBN;
+      LoadEVP(TOpenSSLLoader.GetLibraryHandle(osslLibCrypto));
+      LoadOpenSSLHMAC;
+      LoadOpenSSLRSA;
+      LoadOpenSSLRAND;
+      LoadOpenSSLERR;
+
       // BIO
       TestModule('BIO_new', Assigned(BIO_new));
       TestModule('BIO_free', Assigned(BIO_free));
@@ -172,7 +181,7 @@ begin
       // Hash algorithms
       TestModule('EVP_sha256', Assigned(EVP_sha256));
       TestModule('EVP_sha512', Assigned(EVP_sha512));
-      TestModule('EVP_sha3_256', Assigned(EVP_sha3_256));
+      TestModule('EVP_sha384', Assigned(EVP_sha384));
       TestModule('EVP_blake2b512', Assigned(EVP_blake2b512));
 
       // Ciphers
@@ -231,11 +240,11 @@ begin
     WriteLn('注意: 部分模块(modes, stack, obj, rand_old,');
     WriteLn('      async, comp, legacy_ciphers)有编译');
     WriteLn('      错误,需要修复后再验证。');
-    Halt(0);
+    ExitCode := 0;
   end
   else
   begin
     WriteLn('✗ 部分测试失败!');
-    Halt(1);
+    ExitCode := 1;
   end;
 end.

@@ -116,7 +116,8 @@ begin
 
   LCipherLen := ReadUInt16(LHandshake, LOffset);
   Inc(LOffset, 2);
-  AssertEqualsWord(6, LCipherLen, 'ClientHello cipher_suites length should be 6 bytes (three suites)');
+  AssertEqualsWord(16, LCipherLen,
+    'ClientHello cipher_suites length should be 16 bytes (eight default suites: three TLS 1.3 + five TLS 1.2 fallback)');
 
   LCipherSuite1 := ReadUInt16(LHandshake, LOffset);
   LCipherSuite2 := ReadUInt16(LHandshake, LOffset + 2);

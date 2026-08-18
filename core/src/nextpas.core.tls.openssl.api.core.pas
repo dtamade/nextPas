@@ -744,8 +744,9 @@ end;
 
 procedure LoadOpenSSLCore;
 begin
-  // P0-1.1: 核心模块已加载则无需重复初始化
-  if TOpenSSLLoader.IsModuleLoaded(osmCore) then
+  // 兼容层(legacy api 的 LoadOpenSSLLibrary)会预置 osmCore 状态位但只绑定
+  // 兼容层变量;以本模块核心指针是否实际绑定为准,避免跨入口互斥锁死
+  if Assigned(SSL_CTX_new) and Assigned(OPENSSL_init_ssl) then
     Exit;
   
   // Try OpenSSL 3.x first (recommended version)

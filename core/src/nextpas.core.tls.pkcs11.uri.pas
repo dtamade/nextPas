@@ -239,7 +239,7 @@ begin
     // Parse path attributes (separated by ';')
     if PathPart <> '' then
     begin
-      
+      Attributes := StringsSplit(PathPart, ';');
       for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);
@@ -255,8 +255,7 @@ begin
     // Parse query attributes (separated by '&')
     if QueryPart <> '' then
     begin
-      Attributes.Clear;
-      
+      Attributes := StringsSplit(QueryPart, '&');
       for I := 0 to Length(Attributes) - 1 do
       begin
         SepPos := Pos('=', Attributes[I]);

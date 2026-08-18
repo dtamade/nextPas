@@ -13,7 +13,7 @@ uses
   nextpas.core.tls.openssl.certificate;
 
 const
-  CERT_FIXTURE_PATH = 'tests/certificate/test_certs/signer_cert.pem';
+  CERT_FIXTURE_PATH = 'certificate/test_certs/signer_cert.pem';
   TEMP_OUTPUT_PATH = 'tmp/openssl_certificate_bio_contract/output-cert.pem';
 
 var
