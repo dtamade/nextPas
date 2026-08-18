@@ -163,6 +163,30 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFoldCore(
       Result := TmpMeta.Size;
   end;
 
+  { Element byte size of a pointer pointee (PInt32 → alias target Int32 → 4).
+    PChar/… stay 1; anything unresolved defaults to 1. }
+  function PointeeElemSizeCode(const ATypeName: string): Int64;
+  var
+    TmpId, TmpTarget: LongInt;
+    TmpMeta: TTypeMetadata;
+  begin
+    Result := 1;
+    if ATypeName = '' then
+      Exit;
+    TmpId := FModel.FindTypeByName(ATypeName);
+    if TmpId <= 0 then
+      Exit;
+    if FModel.GetTypeMeta(TmpId, TmpMeta) and (TmpMeta.Size > 1) and
+      (TmpMeta.AliasTargetTypeId > 0) then
+    begin
+      TmpTarget := TmpMeta.AliasTargetTypeId;
+      if FModel.GetTypeMeta(TmpTarget, TmpMeta) and (TmpMeta.Size > 1) then
+        Result := TmpMeta.Size;
+    end
+    else if FModel.GetTypeMeta(TmpId, TmpMeta) and (TmpMeta.Size > 1) then
+      Result := TmpMeta.Size;
+  end;
+
   { P^.Field or P^.RecField.SubField value load.
     Nested form beats unit.path.FreeFunc heuristic when SubField collides
     with a free function name (e.g. LDispatch^.Memory.Utf8Validate). }
@@ -2886,6 +2910,27 @@ begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
     begin
       ABlob := FuncName + 'arr_elem_ref ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+  end;
+  { Numeric pointee index (aSrc[i] of PInt32): element VALUE via gep scaled
+    by pointee size + load. Char pointers above stay address-only; the
+    generic arrload fallback needs Name$ptr, which pointer params lack, so it
+    used to drop the base and the residual call kept only the index (aSrc[i]
+    of ScalarArrayShrI32 → SarLongint's first arg degraded to i). }
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (LookupPointerVar(ANode.ChildAt(0).Text) <> '') and
+    (not ((LookupPointerVar(ANode.ChildAt(0).Text) = 'PChar') or
+          (LookupPointerVar(ANode.ChildAt(0).Text) = 'PAnsiChar') or
+          (LookupPointerVar(ANode.ChildAt(0).Text) = 'PUTF8Char'))) and
+    EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
+  begin
+    Folded := PointeeElemSizeCode(LookupPointerVar(ANode.ChildAt(0).Text));
+    if Folded > 1 then
+    begin
+      ABlob := FuncName + 'pelem_load ' + ANode.ChildAt(0).Text + ' ' +
+        IntToStr(Folded) + #10;
       Exit(True);
     end;
   end;
