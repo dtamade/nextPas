@@ -54,6 +54,11 @@ type
     FGenericWorkQueue: TLongIntVec;
     FGenericCache: TGenericCacheVec;
     FPendingSignatures: TPendingSignatureVec;
+    { Instance name of the generic being instantiated while its cloned method
+      bodies are encoded; lets TypeMetaSize resolve template type params (T)
+      through InstanceName.$generic_arg_<Param> consts. Empty outside
+      InstantiateGenericType-driven encoding. }
+    FCurrentGenericInstance: string;
     FInliningStack: TStringVec;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;

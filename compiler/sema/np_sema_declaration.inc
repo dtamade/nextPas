@@ -2237,7 +2237,7 @@ var
   GenericTypeId: LongInt;
   GenericType: TSemanticType;
   InstanceName: string;
-  I, J, BodyIdx: LongInt;
+  I, J, K, BodyIdx: LongInt;
   SizeVal: Int64;
   Symbol: TSemanticSymbol;
   NewSymbolId: LongInt;
@@ -2258,6 +2258,7 @@ var
   Entry: TPendingSignatureEntry;
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
+  IsVecInstance, IsArrayTemplate: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2383,6 +2384,14 @@ begin
   end;
 
   InstanceName := FModel.TypeAt(AInstanceTypeId - 1).Name;
+  { B4b 缺口乙: persist T→实参 mapping so TypeMetaSize can resolve template
+    type params while encoding cloned instance bodies (Create/Push chains
+    reference T through TVecBuf/TArray field types). }
+  FModel.AddStringConstValue(InstanceName + '.$generic_inst', GenericName);
+  for I := 0 to ParamNames.Count - 1 do
+    if I < ArgTypes.Count then
+      FModel.AddStringConstValue(
+        InstanceName + '.$generic_arg_' + ParamNames[I], ArgTypes[I]);
   QualPrefix := GenericName + '.';
   for I := 0 to FModel.SymbolCount - 1 do
   begin
@@ -2596,6 +2605,8 @@ begin
     (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
     one slice per probe. Whitelisted bodies are self-contained (field reads,
     global calls) so we mark them Needed immediately. }
+  IsVecInstance := SameText(InstanceName, 'TToolStatusEventVec');
+  IsArrayTemplate := SameText(GenericName, 'TArray');
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
@@ -2605,10 +2616,29 @@ begin
     if (MethodShortName = '') or (MethodShortName[1] = '<') then
       Continue; { Fn<T> generic function, not a TVec method }
     if not ((SameText(MethodShortName, 'Count')) or
-            (SameText(MethodShortName, 'GetDefaultGrowStrategyI'))) then
+            (SameText(MethodShortName, 'GetDefaultGrowStrategyI')) or
+            (IsArrayTemplate and (
+               SameText(MethodShortName, 'GetPtrUnchecked') or
+               SameText(MethodShortName, 'GetMemory') or
+               SameText(MethodShortName, 'GetCount'))) or
+            (IsVecInstance and (
+               SameText(MethodShortName, 'Create') or
+               SameText(MethodShortName, 'Push') or
+               SameText(MethodShortName, 'GetPtrUnchecked') or
+               SameText(MethodShortName, 'SyncDataPtr') or
+               SameText(MethodShortName, 'GetItem')))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
-    if FirstBodyIndexForNameLocal(InstBodyName) >= 0 then
+    { Skip only when this exact template entry was already cloned; overloads
+      sharing a name (TVec.Create ×2) each clone onto the instance. }
+    K := FirstBodyIndexForNameLocal(InstBodyName);
+    while K >= 0 do
+    begin
+      if FProcedureBodies[K].Body = FProcedureBodies[BodyIdx].Body then
+        Break;
+      K := FProcedureBodyNameNext[K];
+    end;
+    if K >= 0 then
       Continue;
     BodyEntry.Name := InstBodyName;
     BodyEntry.Body := FProcedureBodies[BodyIdx].Body;

@@ -521,6 +521,7 @@ var
   NodeId, WorkHead: LongInt;
   NeededCount, EncodedCount: LongInt;
   OuterFrame, WalkDecl: TGreenNode;
+  InstName: string;
 
   { Nested local bodies capture outer params/locals (CopyChunk→ABuf). Without
     outer-frame registration, encode residual becomes call @ABuf() and opt
@@ -1305,6 +1306,22 @@ begin
     RegisterOuterFrameCapturesFor(Entry.Decl, Entry.OwnerUnitId);
     SavedTerminated := FCurrentBlockTerminated;
     FCurrentBlockTerminated := False;
+    { B4b 缺口乙: while encoding a cloned generic instance body, expose the
+      instance name so TypeMetaSize can resolve template type params (T).
+      Only method names (last '.' segment stripped) that carry a
+      $generic_inst marker are treated as instance contexts. }
+    FCurrentGenericInstance := '';
+    InstName := Entry.Name;
+    J := Length(InstName);
+    while (J > 0) and (InstName[J] <> '.') do
+      Dec(J);
+    if J > 1 then
+    begin
+      InstName := Copy(InstName, 1, J - 1);
+      if FModel.LookupStringConstValue(
+        InstName + '.$generic_inst', ArrOperand) then
+        FCurrentGenericInstance := InstName;
+    end;
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
     begin
@@ -1336,6 +1353,7 @@ begin
     FCurrentMethodClass := '';
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
+    FCurrentGenericInstance := '';
     Entry := FProcedureBodies[I];
     Entry.Encoded := True;
     FProcedureBodies[I] := Entry;
