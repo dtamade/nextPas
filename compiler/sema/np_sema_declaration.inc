@@ -2258,7 +2258,8 @@ var
   Entry: TPendingSignatureEntry;
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
-  IsVecInstance, IsArrayTemplate: Boolean;
+  IsVecInstance, IsArrayTemplate, IsGenericCollectionInstance,
+  IsElementManagerInstance: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2611,12 +2612,15 @@ begin
     bodies the seed queue can never mark/encode them → undefined. Full
     template cloning (2026-08-18) exposed nested families
     (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
-    one slice per probe. Whitelisted bodies are mostly self-contained
-    (field reads, global calls); bodies with `inherited Create` pull in
-    the generic base instance (TGenericCollection<T>.Create) — that chain
-    is tracked in ROADMAP 注²² as the next closure. }
+    one slice per probe. TVec bodies are field/global self-contained
+    except Create: its `inherited Create` pulls in the generic base
+    instance TGenericCollection<T>.Create, whose body references
+    @DoCompare*/@DoEquals* and builds TElementManager<T> — hence the
+    TGenericCollection/TElementManager closures below (ROADMAP 注²²). }
   IsVecInstance := SameText(GenericName, 'TVec');
   IsArrayTemplate := SameText(GenericName, 'TArray');
+  IsGenericCollectionInstance := SameText(GenericName, 'TGenericCollection');
+  IsElementManagerInstance := SameText(GenericName, 'TElementManager');
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
@@ -2624,7 +2628,7 @@ begin
     MethodShortName := Copy(FProcedureBodies[BodyIdx].Name,
       Length(GenericName) + 2, MaxInt);
     if (MethodShortName = '') or (MethodShortName[1] = '<') then
-      Continue; { Fn<T> generic function, not a TVec method }
+      Continue; { Fn<T> generic function, not a collection method }
     if not ((SameText(MethodShortName, 'Count')) or
             (SameText(MethodShortName, 'GetDefaultGrowStrategyI')) or
             (IsArrayTemplate and (
@@ -2645,7 +2649,28 @@ begin
                SameText(MethodShortName, 'PushUnchecked') or
                SameText(MethodShortName, 'Zero') or
                SameText(MethodShortName, 'Resize') or
-               SameText(MethodShortName, 'ToArray')))) then
+               SameText(MethodShortName, 'ToArray'))) or
+            { Generic base chain: TVec.Create clones call
+              TGenericCollection<T>.Create (inherited), which assigns
+              comparer/equals method pointers (@DoCompare*/@DoEquals*) and
+              builds TElementManager<T> (interface impl methods land in
+              the vmt table even when called via interface). DefaultProxy
+              methods call FInternalComparer/FInternalEquals fields, which
+              the runtime encoder cannot lower yet — excluded here; the
+              Create body never references them. }
+            (IsGenericCollectionInstance and (
+               SameText(MethodShortName, 'Create') or
+               SameText(MethodShortName, 'GetElementTypeInfo') or
+               ((Pos('DoCompare', MethodShortName) = 1) and
+                (not SameText(MethodShortName, 'DoCompareDefaultProxy'))) or
+               ((Pos('DoEquals', MethodShortName) = 1) and
+                (not SameText(MethodShortName, 'DoEqualsDefaultProxy'))))) or
+            (IsElementManagerInstance and (
+               SameText(MethodShortName, 'Create') or
+               SameText(MethodShortName, 'GeTAllocator') or
+               SameText(MethodShortName, 'GetElementSize') or
+               SameText(MethodShortName, 'GetIsManagedType') or
+               SameText(MethodShortName, 'GetElementTypeInfo')))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
     { Skip only when this exact template entry was already cloned; overloads

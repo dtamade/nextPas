@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-20 b4b-i4 后实测）
+## 当前战况（2026-08-20 b4b-i5 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²)** |
-| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²)** |
+| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** |
+| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -363,7 +363,28 @@ PushUnchecked/Zero/Resize/ToArray）+ 通用 {Count, GetDefaultGrowStrategyI} +
 同属「泛型基类实例方法链」（TGenericCollection 112 方法，Create 体内嵌
 `TElementManager<T>` 模板），下一口收 |
 
-| opt 首错 | `use of undefined value '@TGenericCollection<Boolean>.Create'`（.ll 207650 行，`TMirBoolVec.Create` 克隆体的 `inherited Create`）——**探针口径盲区**：尖括号实例名（`TGenericCollection<T>.Create` 系列）不在 `$sym` 统计口径，uniq 仍报 1/1，实际 opt 卡在此处。剩余 2 类符号同属「泛型基类实例方法链」：`TGenericCollection<T>.Create`（TVec 白名单克隆带出的泛型父类实例方法，T=Boolean/LongInt/string/IMirOptimizationPass 等 30+）+ `TProcedureBodyNameFirstMap.Create`（THashMap 家族，父类同为 TGenericCollection）——下一口收 | 本轮后仍（`@Pos` 连续两轮清零；TVec 直系 14 方法 110 实例清零；`TGenericCollection<T>.Create` 系列 + `THashMap.Create` 挂账，见注²²） |
+²³ b4b-i5（本 commit）：**泛型基类实例方法链闭合**——白名单扩
+`TGenericCollection`/`TElementManager` 实例方法族 + DefaultProxy 排除。
+验证轨迹：**4/182 (R5) → 2/6 (R6)**（R5 浮出：DoCompare*/DoEquals* 克隆体完整化
+引用 DefaultProxy 2 方法，其体调 FInternalComparer/FInternalEquals 字段方法指针
+（编码缺陷）→ 176 undefined；R6 排除 DefaultProxy → 2/6，遗留
+`CompareByte`×5（字符串比较链挂账）+ `TProcedureBodyNameFirstMap.Create`×1
+（THashMap 挂账））。**R7 结论（探针 2/6 持平，未提交）**：尖括号实例名
+（`TGenericCollection<Boolean>.Create`）的 inherited 解析试验
+（`NextClassAncestorName` strip 模板名回查）验证**无效**——克隆体
+`TGenericCollection<T>.Create` 的 **body 注册即残缺**：StatementList 仅 1 条
+`gnkProcedureCallStatement('Create')`（inherited 前缀丢失、FElementManager/case
+分支全缺）；该 'Create' 语句被语句级 walk（walk_halt_calls 3103 全局函数优先
+分支）误绑定到 .ll 中同名全局符号 Create（某 FsCreate 包装），输出裸
+`call @Create`。对照 `TBoolVec.Create` 克隆体完整（inherited →
+`TGenericCollection<Boolean>.Create` + 字段 + SyncDataPtr），推因：
+耗时登记（泛型模板方法体完整注册）晚于实例化克隆源的时序缺口——与 b4b-i4 的
+FGenericRetrySpecs 同域但未覆盖（方法体 Body 共享指针而非实例化重解析）。
+**根因挂账 b4b-i6**，不再占探针轮。数字纪律说明：b4b-i4 的 1/1 掩盖口径盲区
+（尖括号实例名不在 `$sym`），2/6 即当前真实残余；compiler-pass 58/58；
+hygiene pass。 |
+
+| opt 首错 | `use of undefined value '@CompareByte'`（.ll 46424 行，DoCompareStr 链）——修后次错 `@TProcedureBodyNameFirstMap.Create`（354043 行）；再后是 90 处裸 `call @Create`（克隆体残缺，被 walk 全局函数分支误绑定 FsCreate 包装符号 Create），根因见注²³——全部挂账，下一口收 | 本轮实测（探针 2/6；opt 三段推进：CompareByte → THashMap.Create → 克隆体残缺家族；`TGenericCollection<T>.Create` 克隆体 body 注册即残缺，见注²³） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
