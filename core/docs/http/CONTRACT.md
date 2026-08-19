@@ -27,6 +27,7 @@ http.middleware          ← 链原语（HandlerFunc / MiddlewareFunc / Chain）
 http.middleware.*        ← 内建产品 middleware（cors/recovery/logger/…）
 http.client / server     ← facade 编排（server 委托 net.server）
 http.static / websocket  ← helper 级公开面
+http.websocket.room      ← 房间语义（Join/Leave/Broadcast + 有界管理器，IWebSocketRoom）
 http.form / cookie / sse ← 表单、Cookie、SSE 辅助
 http.impl.registry       ← 版本 → transport factory
 http.impl.cancel.adapter ← 共享 IHttpCancelToken → INetCancelToken 桥（h1/h2/websocket）
