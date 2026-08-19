@@ -1036,7 +1036,10 @@ begin
     fomReadWrite: LAccess := GENERIC_READ or GENERIC_WRITE;
   end;
   if AAppend then
-    LAccess := LAccess or FILE_APPEND_DATA;
+    // FILE_APPEND_DATA 仅在未授予 FILE_WRITE_DATA（GENERIC_WRITE 隐含）时
+    // 才把写入钉在文件末尾；否则 WriteFile 按文件指针（新句柄=0）覆写
+    // 已有内容，append 退化为覆盖。追加句柄只授 FILE_APPEND_DATA。
+    LAccess := (LAccess and not GENERIC_WRITE) or FILE_APPEND_DATA;
   case ACreate of
     fcmOpenExisting:     LDisposition := OPEN_EXISTING;
     fcmCreateAlways:     LDisposition := CREATE_ALWAYS;
