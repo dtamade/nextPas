@@ -486,7 +486,9 @@ begin
   if FWriteDeadline.IsExpired then
     Exit(tsiorTimeout);
 
-  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
+  { MSG_NOSIGNAL：对端断连（RST）时 send 返回 EPIPE 而非 SIGPIPE 杀进程
+    （F-7：WS 广播写已断开连接曾致进程 141 死亡）。 }
+  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), PLATFORM_MSG_NOSIGNAL, LSent);
   if LResult = 0 then
   begin
     AWritten := SizeUInt(LSent);
