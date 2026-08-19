@@ -452,6 +452,14 @@ function MoveFileA(lpExistingFileName: LPCSTR; lpNewFileName: LPCSTR): BOOL; std
     @return TRUE 成功 *}
 function MoveFileW(lpExistingFileName: LPCWSTR; lpNewFileName: LPCWSTR): BOOL; stdcall; external 'kernel32' name 'MoveFileW';
 
+{** @desc 移动文件（Unicode，可覆盖已存在目标）
+    @param lpExistingFileName 现有路径
+    @param lpNewFileName 新路径
+    @param dwFlags MOVEFILE_* 标志（如 MOVEFILE_REPLACE_EXISTING）
+    @return TRUE 成功 *}
+function MoveFileExW(lpExistingFileName: LPCWSTR; lpNewFileName: LPCWSTR;
+  dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'MoveFileExW';
+
 { Working directory }
 
 {** @desc 获取当前目录（ANSI）
