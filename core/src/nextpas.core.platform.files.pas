@@ -1329,7 +1329,8 @@ begin
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ANewPath, LNewPath) then
     Exit(PLATFORM_ERR_INVALID);
-  if MoveFileW(PWideChar(LOldPath), PWideChar(LNewPath)) then
+  if MoveFileExW(PWideChar(LOldPath), PWideChar(LNewPath),
+    DWORD($1)) then  { MOVEFILE_REPLACE_EXISTING = 1 }
     Result := 0
   else
     Result := platform_get_last_error;
