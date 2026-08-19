@@ -199,6 +199,14 @@ begin
           if TypeChild <> nil then
             TypeName := LowerCase(TypeChild.Text);
         end;
+        { Open-array params (const aSrc: array of T) parse to an empty
+          gnkArrayType text; without a placeholder the identity signature
+          collapses across overloads (TCollection.Create(aAllocator,aData)
+          vs (aSrc: array of T; aAllocator; aData)) and
+          RegisterProcedureBody overwrites the full main-overload body
+          with the delegating overload (b4b-i6). '?' keeps them apart. }
+        if TypeName = '' then
+          TypeName := '?';
         if Result <> '' then
           Result := Result + '|';
         Result := Result + TypeName;
