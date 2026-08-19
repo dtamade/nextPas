@@ -47,6 +47,7 @@ uses
   nextpas.core.http.static,
   nextpas.core.http.form,
   nextpas.core.http.websocket,
+  nextpas.core.http.websocket.room,
   nextpas.core.http.server,
   nextpas.core.http.client,
   nextpas.core.http.stream,
@@ -124,6 +125,8 @@ type
   TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
+  IWebSocketRoom = nextpas.core.http.websocket.room.IWebSocketRoom;
+  TWebSocketRoomManager = nextpas.core.http.websocket.room.TWebSocketRoomManager;
 
   { Re-export HSTS types }
   THstsOptions = nextpas.core.http.middleware.hsts.THstsOptions;
@@ -224,6 +227,7 @@ const
   wsOpPong = nextpas.core.http.websocket.wsOpPong;
   WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.websocket.room.WEBSOCKET_ROOM_DEFAULT_MAX;
 
   { TCP server backends }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;

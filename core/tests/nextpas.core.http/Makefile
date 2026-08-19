@@ -59,6 +59,7 @@ PROJECTS := \
 	test_http_https_smoke \
 	test_http_websocket \
 	test_http_websocket_client \
+	test_http_websocket_room \
 	test_http_fuzz \
 	test_http_https_redirect
 
