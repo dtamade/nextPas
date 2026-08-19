@@ -950,6 +950,7 @@ begin
   FGenericCache.Free;
   FCompilerProcNames.Free;
   FGenericWorkQueue.Free;
+  FGenericRetrySpecs.Free;
   if FPendingSignatures <> nil then
   begin
     for Index := 0 to LongInt(FPendingSignatures.Count) - 1 do

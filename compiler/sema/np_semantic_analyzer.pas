@@ -374,6 +374,7 @@ begin
     FGenericCache := specialize TVec<TGenericCacheEntry>.Create(0, FAllocator);
     FCompilerProcNames := specialize TVec<string>.Create(0, FAllocator);
     FGenericWorkQueue := specialize TVec<LongInt>.Create(0, FAllocator);
+    FGenericRetrySpecs := specialize TVec<string>.Create(0, FAllocator);
     FPendingSignatures := TPendingSignatureVec.Create(0, FAllocator);
     FProcedureBodies := TProcedureBodyVec.Create(0, FAllocator);
     FProcedureBodyNameNext := TProcedureBodyNameNextVec.Create(0, FAllocator);
@@ -389,6 +390,7 @@ begin
     FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
     FCompilerProcNames := specialize TVec<string>.Create;
     FGenericWorkQueue := specialize TVec<LongInt>.Create;
+    FGenericRetrySpecs := specialize TVec<string>.Create;
     FPendingSignatures := TPendingSignatureVec.Create;
     FProcedureBodies := TProcedureBodyVec.Create;
     FProcedureBodyNameNext := TProcedureBodyNameNextVec.Create;

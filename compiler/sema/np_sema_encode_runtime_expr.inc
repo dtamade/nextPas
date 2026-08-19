@@ -342,8 +342,8 @@ var
   StrCallIdx, StrCallArgCount, K, ArgIndex, DotPos: LongInt;
   TargetTypeId, SourceExprId, CastExprId: LongInt;
   CastChildren: array of LongInt;
-  BranchNode, DeclNode, RhsNode: TGreenNode;
-  Operand: string;
+  BranchNode, DeclNode, RhsNode, BaseNode: TGreenNode;
+  Operand, PropName, BaseNodeName: string;
 begin
   ABlob := '';
   AExprId := 0;
@@ -655,6 +655,60 @@ begin
       if Folded >= 0 then
         FuncName := 'field ' + BaseName + ' ' + IntToStr(Folded) + ' p' +
           #10 + Operand + 'tsload' + #10;
+    end
+    else if (ANode.ChildAt(2) <> nil) and
+      (ANode.ChildAt(2).NodeKind = gnkArrayAccess) and
+      (ANode.ChildAt(2).ChildCount >= 2) and
+      (ANode.ChildAt(2).ChildAt(0) <> nil) then
+    begin
+      { Class/record instance indexed property haystack — two shapes:
+        - X[I]        default indexed property (TVec<string> Items)
+        - X.Items[I]  explicit property access
+        Materialize the string via the property getter call. Without this
+        branch the strpos fast path falls through and the Pos call is
+        emitted with garbage args (stray const plus the loop index). }
+      BaseNode := ANode.ChildAt(2).ChildAt(0);
+      Operand := '';
+      PropName := '';
+      BaseNodeName := '';
+      if BaseNode.NodeKind = gnkIdentifier then
+      begin
+        BaseNodeName := BaseNode.Text;
+        Operand := LookupClassVar(BaseNodeName);
+        if Operand = '' then
+          Operand := LookupRecordVar(BaseNodeName);
+        { default indexed property getter heuristic (TVec.Items → GetItem) }
+        PropName := 'Item';
+      end
+      else if (BaseNode.NodeKind = gnkDotAccess) and
+        (BaseNode.ChildCount >= 2) and
+        (BaseNode.ChildAt(0) <> nil) and
+        (BaseNode.ChildAt(0).NodeKind = gnkIdentifier) and
+        (BaseNode.ChildAt(1) <> nil) and
+        (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) then
+      begin
+        BaseNodeName := BaseNode.ChildAt(0).Text;
+        Operand := LookupClassVar(BaseNodeName);
+        if Operand = '' then
+          Operand := LookupRecordVar(BaseNodeName);
+        PropName := BaseNode.ChildAt(1).Text;
+      end;
+      if (Operand <> '') and (PropName <> '') and
+        EncodeRuntimeIntExprFold(ANode.ChildAt(2).ChildAt(1), ArgName) then
+      begin
+        Inc(FBlockLabelCounter);
+        ReceiverVarName := '$pos_hay_' + IntToStr(FBlockLabelCounter);
+        RegisterRuntimeVar(ReceiverVarName);
+        RegisterRuntimeStrVar(ReceiverVarName);
+        FModel.AddTypedHirNode('var-decl-tstring-runtime', ReceiverVarName,
+          0, 0, ReceiverVarName);
+        FModel.AddTypedHirNode('assign-tstring-call-runtime',
+          ResolvePropertyReadCallee(Operand, PropName), 0, 0,
+          ReceiverVarName + #9 + 'callee ' +
+          ResolvePropertyReadCallee(Operand, PropName) + #9 +
+          'var ' + BaseNodeName + #9 + ArgName);
+        FuncName := 'strvar ' + ReceiverVarName + #10;
+      end;
     end
     else if (ANode.ChildAt(2) <> nil) and
       (ANode.ChildAt(2).NodeKind = gnkFunctionCall) and

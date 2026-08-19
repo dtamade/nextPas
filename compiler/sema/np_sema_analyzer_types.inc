@@ -52,6 +52,7 @@ type
     { Scratch work tables on FAllocator when present. }
     FCompilerProcNames: TStringVec;
     FGenericWorkQueue: TLongIntVec;
+    FGenericRetrySpecs: TStringVec;
     FGenericCache: TGenericCacheVec;
     FPendingSignatures: TPendingSignatureVec;
     { Instance name of the generic being instantiated while its cloned method

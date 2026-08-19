@@ -458,10 +458,13 @@ var
   SymbolCacheEligible: Boolean;
   ResolvedTypeId: LongInt;
   Age: Int64;
-  SymBefore, SymAfter, J: LongInt;
+  SymBefore, SymAfter, J, K: LongInt;
   Sym: TSemanticSymbol;
   CacheEntry: PCachedUnitSymbols;
   CachedSym: TCachedSymbolEntry;
+  RetryPass: LongInt;
+  RetryTypeId: LongInt;
+  SpecText: string;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -578,6 +581,26 @@ begin
       { Cold path: full parse + interface symbols + implementation bodies. }
       ParseAndRegisterUnitBodies(SourcePath, ResolvedUnit.CanonicalName,
         OwnerUnitId, TmpDiag);
+    end;
+    { B4b: unit-graph order is discovery order, so a template unit can
+      register after earlier units already instantiated it (TStringVec =
+      specialize TVec<string> in sema, template in core.collections.vec).
+      Replay deferred instantiations now that every unit's declarations are
+      in the model; a replay can itself defer deeper dependencies, so the
+      bound is a total-item safety valve, not a per-pass cap. }
+    RetryPass := 0;
+    while (FGenericRetrySpecs.Count > 0) and (RetryPass < 4096) do
+    begin
+      SpecText := FGenericRetrySpecs[FGenericRetrySpecs.Count - 1];
+      FGenericRetrySpecs.Delete(FGenericRetrySpecs.Count - 1);
+      J := Pos(#9, SpecText);
+      OwnerUnitId := Copy(SpecText, J + 1, MaxInt);
+      SpecText := Copy(SpecText, 1, J - 1);
+      K := Pos(#9, OwnerUnitId);
+      RetryTypeId := StrToInt(Copy(OwnerUnitId, K + 1, MaxInt));
+      OwnerUnitId := Copy(OwnerUnitId, 1, K - 1);
+      InstantiateGenericType(RetryTypeId, SpecText, OwnerUnitId);
+      Inc(RetryPass);
     end;
   finally
     TmpDiag.Free;

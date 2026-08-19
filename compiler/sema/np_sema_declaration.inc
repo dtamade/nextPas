@@ -2310,7 +2310,15 @@ begin
     end;
   end;
   if GenericTypeId <= 0 then
+  begin
+    { Unit-graph order is discovery order, not topo: template units (e.g.
+      core.collections.vec) can register after earlier units instantiate
+      them, leaving TStringVec & co as empty shells. Defer the call;
+      SeedImportedUnitBodies replays deferred specs once all types are in. }
+    FGenericRetrySpecs.Push(ASpecText + #9 + AOwnerUnitId + #9 +
+      IntToStr(AInstanceTypeId));
     Exit;
+  end;
   GenericType := FModel.TypeAt(GenericTypeId - 1);
   ParamStr := GenericType.TypeParams;
   ConstraintStr := GenericType.TypeConstraints;
@@ -2603,9 +2611,11 @@ begin
     bodies the seed queue can never mark/encode them → undefined. Full
     template cloning (2026-08-18) exposed nested families
     (TSpan/TGenericCollection/FInternal*); grow the whitelist per closure,
-    one slice per probe. Whitelisted bodies are self-contained (field reads,
-    global calls) so we mark them Needed immediately. }
-  IsVecInstance := SameText(InstanceName, 'TToolStatusEventVec');
+    one slice per probe. Whitelisted bodies are mostly self-contained
+    (field reads, global calls); bodies with `inherited Create` pull in
+    the generic base instance (TGenericCollection<T>.Create) — that chain
+    is tracked in ROADMAP 注²² as the next closure. }
+  IsVecInstance := SameText(GenericName, 'TVec');
   IsArrayTemplate := SameText(GenericName, 'TArray');
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
@@ -2626,7 +2636,16 @@ begin
                SameText(MethodShortName, 'Push') or
                SameText(MethodShortName, 'GetPtrUnchecked') or
                SameText(MethodShortName, 'SyncDataPtr') or
-               SameText(MethodShortName, 'GetItem')))) then
+               SameText(MethodShortName, 'GetItem') or
+               SameText(MethodShortName, 'GetUnchecked') or
+               SameText(MethodShortName, 'EnsureCapacity') or
+               SameText(MethodShortName, 'GetPtr') or
+               SameText(MethodShortName, 'GetCapacity') or
+               SameText(MethodShortName, 'Clear') or
+               SameText(MethodShortName, 'PushUnchecked') or
+               SameText(MethodShortName, 'Zero') or
+               SameText(MethodShortName, 'Resize') or
+               SameText(MethodShortName, 'ToArray')))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
     { Skip only when this exact template entry was already cloned; overloads
