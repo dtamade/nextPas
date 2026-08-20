@@ -34,6 +34,7 @@ type
   TMailSmtpServerConfig = nextpas.core.mail.smtp.server.TMailSmtpServerConfig;
   TMailSmtpServerSession = nextpas.core.mail.smtp.server.TMailSmtpServerSession;
   ISmtpServerSink = nextpas.core.mail.smtp.server.ISmtpServerSink;
+  ISmtpMailPolicyHook = nextpas.core.mail.smtp.server.ISmtpMailPolicyHook;
 
 const
   { smtp 服务器会话事件枚举值（FPC 枚举值不随类型别名传播，须显式 re-export） }
