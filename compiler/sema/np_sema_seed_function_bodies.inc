@@ -182,6 +182,44 @@ begin
   end;
 end;
 
+{ 接口实现方法可达性:imt 常量(thunk)静态调 实现类.方法,而接口调用点
+  (ivcall) 只经 slot/thunk,可达性收集看不到实现类方法 — thunk 引用悬空
+  (opt: use of undefined value '@TImpl.Foo1')。只 mark root 单元的实现类:
+  导入单元全量 seed 会爆泛型/克隆家族,留待专用口。 }
+procedure TSemanticAnalyzer.MarkInterfaceImplementorMethods(
+  const ARootOwnerUnitId: string);
+var
+  I, J, K: LongInt;
+  T: TSemanticType;
+  Meta, IntfMeta: TTypeMetadata;
+begin
+  for I := 0 to FModel.TypeCount - 1 do
+  begin
+    T := FModel.TypeAt(I);
+    if (T.Name = '') or (not SameText(T.Kind, 'declared')) then
+      Continue;
+    if (ARootOwnerUnitId <> '') and
+      (not SameText(T.OwnerUnitId, ARootOwnerUnitId)) then
+      Continue;
+    if not FModel.GetTypeMeta(T.TypeId, Meta) then
+      Continue;
+    if (Meta.InterfaceSlots = nil) or (Meta.InterfaceSlots.Count = 0) then
+      Continue;
+    for J := 0 to LongInt(Meta.InterfaceSlots.Count) - 1 do
+    begin
+      if not FModel.GetTypeMetaByName(
+        Meta.InterfaceSlots[SizeUInt(J)].InterfaceName, IntfMeta) then
+        Continue;
+      if (IntfMeta.VmtSlots = nil) or (IntfMeta.VmtCount <= 0) then
+        Continue;
+      for K := 0 to IntfMeta.VmtCount - 1 do
+        if K < LongInt(IntfMeta.VmtSlots.Count) then
+          MarkProcedureBodyNeededByName(
+            T.Name + '.' + IntfMeta.VmtSlots[SizeUInt(K)].MethodName);
+    end;
+  end;
+end;
+
 procedure TSemanticAnalyzer.CollectReachableBodyRoots;
 var
   I: LongInt;
@@ -460,6 +498,8 @@ begin
   MarkNameAndEnqueue('TInterfacedObject._Release');
   MarkNameAndEnqueue('Exception.Create');
   MarkNameAndEnqueue('Exception.Destroy');
+
+  MarkInterfaceImplementorMethods(RootId);
 
   for I := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if FProcedureBodies[I].Needed then

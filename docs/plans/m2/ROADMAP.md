@@ -30,8 +30,8 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** |
-| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** |
+| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** |
+| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -556,6 +556,23 @@ compiler-pass 58/58；hygiene pass。puny 全链 opt 仍被既有 `@Copy` 未定
 挂账：method-object / project-helper Sarlongint / b2-next / capture-ub /
 b65-double / sar-shift / case-selector 的 PTypeInfo 侧 不变；toolchain
 sse2 汇编面 `crc32l %sil` 继续挂账。 |
+
+³¹ b4b-i13（本 commit）：**接口实现方法可达性闭环**（b2-next 挂账清零）。
+真根因：imt 常量（thunk）静态调 `@实现类.方法`，而接口调用点（ivcall）
+只经 slot/thunk，可达性收集（main green + TypedHir call + body 内 call）
+看不到实现类方法 — thunk 引用悬空（opt: `use of undefined value
+'@TImpl.Bar1'`）。修法：CollectReachableBodyRoots 根标记段新增
+MarkInterfaceImplementorMethods：遍历 root 单元 declared 类型中带
+InterfaceSlots 的类，对其接口 VmtSlots 方法逐名 Mark（ClassName.MethodName）。
+只限 root 单元：导入单元接口方法全量 seed 会爆泛型/克隆家族（远端同类
+缺口并入挂账，留待专用口）。验证：iface mini（IFoo 父接口 2 方法 +
+IBar 自身 1 方法，TImpl implements IBar）→ TImpl.Foo1/Foo2/Bar1 三方法
+define、thunk 引用解析、build succeeded、opt -O2 + `-passes=verify` PASS；
+needed 13→16；isep/path/generic/hashmap 回归双 PASS；compiler-pass
+58/58；hygiene pass。挂账：method-object / project-helper Sarlongint /
+capture-ub / b65-double / sar-shift / case-selector 的 PTypeInfo 侧 /
+导入单元接口实现方法（root 限定外的 b2-next 同族）不变；toolchain sse2
+汇编面 `crc32l %sil` 继续挂账。 |
 
 | opt 首错 | `use of undefined value '@CompareByte'`（.ll 46424 行，DoCompareStr 链）——修后次错 `@TProcedureBodyNameFirstMap.Create`（354043 行）；再后是 90 处裸 `call @Create`（克隆体残缺，被 walk 全局函数分支误绑定 FsCreate 包装符号 Create），根因见注²³/²⁴——全部挂账，下一口收 | 本轮实测（探针 2/6；opt 三段推进：CompareByte → THashMap.Create → 克隆体残缺家族；`TGenericCollection<T>.Create` 克隆体 body 注册即残缺，根因链见注²³/²⁴） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |

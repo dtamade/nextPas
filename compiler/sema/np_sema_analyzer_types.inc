@@ -604,6 +604,7 @@ type
     procedure MarkClassMethodCohort(const AClassName: string);
     procedure MarkProcedureBodyNeededByName(const AName: string);
     procedure MarkBodiesFromTypedHirCalls;
+    procedure MarkInterfaceImplementorMethods(const ARootOwnerUnitId: string);
     procedure CollectReachableBodyRoots;
     procedure SeedFunctionBodies;
     procedure SeedUnitLifecycleBodies;
