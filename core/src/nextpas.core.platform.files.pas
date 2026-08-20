@@ -101,6 +101,12 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
     @return 0 成功，否则返回错误码 *}
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 
+{** @desc 同步目录到磁盘（POSIX：open 目录 + fsync，保证 rename 后目录项
+    持久化——断电不丢 rename；Windows 无此语义，no-op 返回 0）
+    @param APath 目录路径
+    @return 0 成功，否则返回错误码 *}
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+
 {** @desc 截断文件到指定大小（通过句柄）
     @param AHandle 文件句柄
     @param ASize 目标大小
@@ -404,6 +410,22 @@ end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32;
 begin
   Result := PosixCheck(fsync(AHandle.Value));
+end;
+
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+var
+  LH: TPlatformFileHandle;
+  LClose: Int32;
+begin
+  { POSIX 允许以 O_RDONLY 打开目录并对其 fsync；失败返回错误码，
+    调用方决定是否致命（原子写路径忽略——rename 已原子完成）。 }
+  Result := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if Result <> 0 then
+    Exit;
+  Result := PosixCheck(fsync(LH.Value));
+  LClose := platform_file_close(LH);
+  if (Result = 0) and (LClose <> 0) then
+    Result := LClose;
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
@@ -1185,6 +1207,14 @@ begin
     Result := platform_get_last_error;
 end;
 
+function platform_file_sync_dir(const APath: PAnsiChar): Int32;
+begin
+  { Windows 无 POSIX 目录 fsync 语义（FlushFileBuffers 对目录句柄
+    需 FILE_FLAG_BACKUP_SEMANTICS，代价高收益微）；no-op 对齐
+    Go os.Open(dir).Sync 在 Windows 失败即忽略的路径。 }
+  Result := 0;
+end;
+
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
 var
   LNewPos: Int64;
@@ -1640,6 +1670,7 @@ function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer; 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; AOffset: Int64; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64; AOrigin: TPlatformFileSeekOrigin; out ANewPos: Int64): Int32; begin ANewPos := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_sync(const AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_sync_dir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -709,6 +709,39 @@ end;
 {$ENDIF}
 {$ENDIF}
 
+{ 目录部分提取：含 '/' → 最后一个 '/' 及其前；否则 "."（当前目录）。
+  rename 后 fsync 目录使目录项持久化（对齐 Go persistLocked dir sync）。
+  失败忽略——rename 已原子完成，未持久化目录项只意味着崩溃后回退
+  旧文件/无文件，绝不撕裂。 }
+procedure SyncDirOf(const APath: PAnsiChar);
+var
+  LDirBuf: array[0..1023] of AnsiChar;
+  LPathLen, LSlash, LI: Int32;
+begin
+  if APath = nil then
+    Exit;
+  LPathLen := 0;
+  LSlash := -1;
+  while (LPathLen < 1010) and (APath[LPathLen] <> #0) do
+  begin
+    if APath[LPathLen] = '/' then
+      LSlash := LPathLen;
+    Inc(LPathLen);
+  end;
+  if LSlash < 0 then
+  begin
+    LDirBuf[0] := '.';
+    LDirBuf[1] := #0;
+  end
+  else
+  begin
+    for LI := 0 to LSlash do
+      LDirBuf[LI] := APath[LI];
+    LDirBuf[LSlash + 1] := #0;
+  end;
+  platform_file_sync_dir(@LDirBuf[0]);
+end;
+
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
 const
@@ -778,7 +811,14 @@ begin
 
   LR := platform_file_rename(@LTmpPath[0], APath);
   if LR <> 0 then
-    platform_file_unlink(@LTmpPath[0]);
+    platform_file_unlink(@LTmpPath[0])
+  else
+  begin
+    { rename 后 fsync 目录：断电后 rename 的目录项持久化（对齐 Go
+      persistLocked 的 dir sync；失败忽略——rename 已原子完成，
+      目录项未持久化只意味着崩溃后回退旧文件/无文件，绝不撕裂）。 }
+    SyncDirOf(APath);
+  end;
   Result := LR;
 end;
 
