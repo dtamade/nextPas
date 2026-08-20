@@ -30,8 +30,8 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** |
-| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** |
+| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** |
+| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -462,6 +462,26 @@ opt 未运行过产物）；② CompareByte 调用点参数签名 i64/ptr 混用
 method-object / (5) case 选择器 / project-helper SarLongint / b2-next /
 capture-ub / b65-double / isep-body / strlen-cast / sar-shift 挂账不变。
 数字：mini 0/0 + opt PASS；compiler-pass 待跑；hygiene pass。 |
+
+²⁷ b4b-i9（本 commit）：**THashMap.Create 白名单 slice**。注²² 挂账
+`TProcedureBodyNameFirstMap.Create`（THashMap 家族）b51 探针复现为 opt 首错
+`use of undefined value '@TNameFirstMap.Create'`（.ll 699 行）——THashMap 模板
+方法体未克隆到实例名（白名单未覆盖该 GenericName）。临时 [wl-diag] 诊断：
+GenericName=THashMap、InstanceName=TNameFirstMap、templateEntries=42（模板侧
+42 个 `THashMap.` 前缀 body entry 完整存在，名字形态匹配，问题只在白名单）。
+修法：白名单扩 THashMap slice {Create, InitCapacity, NextPow2, RecalcMaxLoad}
+——Create 闭包：Create 调 InitCapacity（inherited base Create 由
+TGenericCollection slice 覆盖），InitCapacity 调 NextPow2/RecalcMaxLoad；保持
+slice 到闭包边界，one probe per slice。验证：hashmap mini
+（build/m2_mini_hashmap.pas，`specialize THashMap<string,LongInt>`）opt -O2
+PASS + `-passes=verify` PASS、undefined uniq=0、
+`@TNameFirstMap.(Create|InitCapacity|NextPow2|RecalcMaxLoad)` 4 define 齐；
+m2_mini_generic 回归 opt PASS + verify PASS + 0 undefined；compiler-pass
+58/58；hygiene pass。挂账：TVecBuf 泛型别名 / method-object / (5) case 选择器 /
+project-helper SarLongint / b2-next / capture-ub / b65-double / isep-body /
+strlen-cast / sar-shift 不变；toolchain 汇编面 `nextpas.core.simd.sse2`
+（`crc32l %sil` 非法寄存器，emitter 指令编码既有问题，属 native 后端非 LLVM
+链）与本口无因果，继续挂账。
 
 | opt 首错 | `use of undefined value '@CompareByte'`（.ll 46424 行，DoCompareStr 链）——修后次错 `@TProcedureBodyNameFirstMap.Create`（354043 行）；再后是 90 处裸 `call @Create`（克隆体残缺，被 walk 全局函数分支误绑定 FsCreate 包装符号 Create），根因见注²³/²⁴——全部挂账，下一口收 | 本轮实测（探针 2/6；opt 三段推进：CompareByte → THashMap.Create → 克隆体残缺家族；`TGenericCollection<T>.Create` 克隆体 body 注册即残缺，根因链见注²³/²⁴） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |

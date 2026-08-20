@@ -2259,7 +2259,7 @@ var
   InstBodyName: string;
   BodyEntry: TProcedureBodyEntry;
   IsVecInstance, IsArrayTemplate, IsGenericCollectionInstance,
-  IsElementManagerInstance: Boolean;
+  IsElementManagerInstance, IsHashMapInstance: Boolean;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -2621,6 +2621,7 @@ begin
   IsArrayTemplate := SameText(GenericName, 'TArray');
   IsGenericCollectionInstance := SameText(GenericName, 'TGenericCollection');
   IsElementManagerInstance := SameText(GenericName, 'TElementManager');
+  IsHashMapInstance := SameText(GenericName, 'THashMap');
   for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if Pos(GenericName + '.', FProcedureBodies[BodyIdx].Name) <> 1 then
@@ -2670,7 +2671,18 @@ begin
                SameText(MethodShortName, 'GeTAllocator') or
                SameText(MethodShortName, 'GetElementSize') or
                SameText(MethodShortName, 'GetIsManagedType') or
-               SameText(MethodShortName, 'GetElementTypeInfo')))) then
+               SameText(MethodShortName, 'GetElementTypeInfo'))) or
+            { THashMap<K,V>: instance methods referenced from the Create
+              closure (TProcedureBodyNameFirstMap.Create backlog). Create
+              calls InitCapacity (inherited base Create is covered by the
+              TGenericCollection slice); InitCapacity calls NextPow2 and
+              RecalcMaxLoad. Keep the slice to the closure, one probe per
+              slice (ROADMAP 注²²). }
+            (IsHashMapInstance and (
+               SameText(MethodShortName, 'Create') or
+               SameText(MethodShortName, 'InitCapacity') or
+               SameText(MethodShortName, 'NextPow2') or
+               SameText(MethodShortName, 'RecalcMaxLoad')))) then
       Continue;
     InstBodyName := InstanceName + '.' + MethodShortName;
     { Skip only when this exact template entry was already cloned; overloads
