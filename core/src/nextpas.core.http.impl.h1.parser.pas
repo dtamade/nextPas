@@ -646,10 +646,20 @@ begin
        transport can signal the status (Pascal context) before any body chunk
        is dispatched. Regular informational (1xx, except 101) responses carry
        no body and are not the final status, so they must NOT pause — llhttp
-       flows straight on to the next message within the same Execute. }
+       flows straight on to the next message within the same Execute.
+       Zero-body final responses (HEAD skip, 204/304, explicit
+       Content-Length: 0) also must NOT pause: the message completes at the
+       header block, and pausing would leave the transport read loop waiting
+       for body bytes that can never arrive (observed: hangs until the read
+       deadline, e.g. an SSE upstream answering with an empty body). }
     if LSelf.FStatusSplit and
        (not (HttpStatusIsInformational(LSelf.FStatusCode) and
-             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) then
+             (LSelf.FStatusCode <> HTTP_STATUS_SWITCHING_PROTOCOLS))) and
+       (not (((p0^.flags and F_SKIPBODY) <> 0) or
+             (LSelf.FStatusCode = HTTP_STATUS_NO_CONTENT) or
+             (LSelf.FStatusCode = HTTP_STATUS_NOT_MODIFIED) or
+             (((p0^.flags and F_CONTENT_LENGTH) <> 0) and
+              (p0^.content_length = 0)))) then
       Exit(HPE_PAUSED);
   end;
   Result := 0;
