@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.errors,
+  nextpas.core.net.intf,
   nextpas.core.net.server.base,
   nextpas.core.tls.base;
 
@@ -140,6 +141,13 @@ type
     function EffectiveCancelToken: IHttpCancelToken;
   end;
 
+  { Custom transport dial for HTTP clients: returns a connected ITcpStream to
+    AHost:APort (or raises). Mirrors the H2 test-hook shape but as a public,
+    per-client option. Used by nextpas.core.http.impl.h1.client for every fresh
+    connection when assigned. }
+  THttpDialFunc = function(const AHost: string; const APort: UInt16;
+    const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream;
+
   THttpClientOptions = record
     { Request IO deadline (ms) for read/write after the socket is up. 0 = none.
       With IHttpCancelToken, mid-read/write is polled in short slices and raises
@@ -166,6 +174,16 @@ type
       https targets use CONNECT then TLS over the tunnel; http targets use
       absolute-form request-line. UserInfo injects Proxy-Authorization Basic. }
     ProxyUrl: string;
+    { Custom transport dial: when assigned, every fresh connection for this
+      client goes through ADial instead of the built-in TcpConnect. The dial
+      func MUST raise on failure (callers expect exceptions from the transport
+      layer) and MUST NOT return nil. Typical use: tunneling through a
+      SOCKS5/SOCKS5h proxy (nextpas.core.net.socks5.Socks5Dial → ITcpStream),
+      which the http://-only WithProxyUrl cannot express. Idle connections are
+      still pooled by target authority (host/port) — the tunneled socket is a
+      plain TCP pipe to the origin once established. Mutually exclusive with
+      ProxyUrl: when both are set, ProxyUrl wins. }
+    DialFunc: THttpDialFunc;
     class function Default: THttpClientOptions; static;
     function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
     function WithConnectTimeout(const ATimeoutMs: Int64): THttpClientOptions;
@@ -175,6 +193,7 @@ type
     function WithIdleTTL(const AIdleTTLMs: Int64): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
     function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
+    function WithDialFunc(const ADial: THttpDialFunc): THttpClientOptions;
     function WithTLSContext(const ATLSContext: ISSLContext): THttpClientOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
@@ -336,7 +355,6 @@ implementation
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.net.intf,
   nextpas.core.net.cancel;
 
 { EHttpError }
@@ -1054,6 +1072,7 @@ begin
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
   Result.ProxyUrl := '';
+  Result.DialFunc := nil;
 end;
 
 function THttpClientOptions.WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
@@ -1114,6 +1133,13 @@ function THttpClientOptions.WithProxyUrl(
 begin
   Result := Self;
   Result.ProxyUrl := AProxyUrl;
+end;
+
+function THttpClientOptions.WithDialFunc(
+  const ADial: THttpDialFunc): THttpClientOptions;
+begin
+  Result := Self;
+  Result.DialFunc := ADial;
 end;
 
 function THttpClientOptions.WithTLSContext(

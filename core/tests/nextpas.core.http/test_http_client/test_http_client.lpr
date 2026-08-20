@@ -469,6 +469,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -2607,6 +2608,11 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
   Result := Self;
 end;
@@ -8887,11 +8893,95 @@ end;
 
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
+{ DialFunc 测试全局记录（匿名函数避免闭包捕获，沿用代理测试的全局模式） }
+var
+  GDialFuncCount: Integer = 0;
+  GDialFuncHost: string = '';
+  GDialFuncPort: UInt16 = 0;
+  GDialFuncServerPort: UInt16 = 0;
+
+{ DialFunc 注入：连接经自定义拨号建立（SOCKS5 隧道等语义）；拨号函数收到
+  请求 URL 的目标 host/port；请求/响应经隧道完整往返。 }
+procedure TestClientWithDialFunc;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/dialed', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LB := 'via-dial';
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Length(LB)));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], Length(LB));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    GDialFuncCount := 0;
+    GDialFuncHost := '';
+    GDialFuncPort := 0;
+    GDialFuncServerPort := LPort;
+    LClient := NewHttpClient.WithDialFunc(
+      function(const AHost: string; const APort: UInt16;
+        const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
+      begin
+        Inc(GDialFuncCount);
+        GDialFuncHost := AHost;
+        GDialFuncPort := APort;
+        { 隧道语义：拨号函数决定实际连接目标（本例落到进程内服务器） }
+        Result := TcpConnect('127.0.0.1', GDialFuncServerPort);
+      end);
+    LResp := LClient.Get('http://dial-target.test:8080/dialed');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200 via dial func');
+    LBody := ReadBodyStr(LResp);
+    CheckEqual('via-dial', LBody, 'body matches');
+    CheckEqual(1, GDialFuncCount, 'dial func invoked once');
+    CheckEqual('dial-target.test', GDialFuncHost, 'dial receives request host');
+    CheckEqual(Int64(8080), Int64(GDialFuncPort), 'dial receives request port');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ DialFunc 失败必须以异常上抛（传输层语义），不得返回 nil 让上层崩溃。 }
+procedure TestClientDialFuncFailureRaises;
+var
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LClient := NewHttpClient.WithDialFunc(
+    function(const AHost: string; const APort: UInt16;
+      const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream
+    begin
+      Result := nil;
+      raise EHttpError.Create(hekConnect, 'dial func: tunnel failed (test)');
+    end);
+  LRaised := False;
+  try
+    LClient.Get('http://127.0.0.1:1/nope');
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'dial func failure propagates as exception');
+end;
+
 { Main }
 
 begin
   T := TTestSuite.Create('nextpas.core.http.client');
   T.Test('Client GET returns 200 + body', @TestClientGet200);
+  T.Test('Client dials through custom DialFunc tunnel', @TestClientWithDialFunc);
+  T.Test('Client DialFunc failure propagates as exception',
+    @TestClientDialFuncFailureRaises);
   T.Test('Client Send rejects nil request', @TestClientSendRejectsNilRequest);
   T.Test('H1 client transport rejects nil request inputs',
     @TestH1ClientTransportRejectsNilRequestInputs);

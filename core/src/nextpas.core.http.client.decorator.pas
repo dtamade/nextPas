@@ -69,6 +69,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient; virtual;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient; virtual;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient; virtual;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient; virtual;
   end;
 
@@ -476,6 +477,11 @@ end;
 function THttpClientForwarder.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));
+end;
+
+function THttpClientForwarder.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithDialFunc(ADial));
 end;
 
 function THttpClientForwarder.WithTLSContext(

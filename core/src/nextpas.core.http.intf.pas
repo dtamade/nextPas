@@ -303,6 +303,12 @@ type
     {** Rebuild transport with plain HTTP forward proxy (http://host:port).
        Decorators re-stack around the new base client. }
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    {** Rebuild transport with a custom dial function used instead of the
+       built-in TCP connect. The callback must return an established,
+       framed stream to AHost:APort or raise EHttpError. DialFunc wins over
+       the built-in dial only; WithProxyUrl (if set) still takes precedence
+       over both. Connections are pooled per target authority. }
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     {** Rebuild transport with client TLS context (direct https / CONNECT).
        Nil clears to transport default (SecureClient). }
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
