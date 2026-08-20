@@ -227,6 +227,13 @@ make -C core/examples/nextpas.core.http/http_websocket_echo_demo run
   preemptive `Proxy-Authorization: Basic` only (no Digest/NTLM/407 challenge
   retry). Optional `TLSContext` / `WithTLSContext` for verify-none / custom trust;
   H1 direct https is supported without proxy.
+- `WithDialFunc(Dial)` / `THttpClientOptions.DialFunc` — custom transport dial
+  replacing the built-in TCP connect. `Dial` receives target host, port, and the
+  effective connect/request timeouts; must return an established `ITcpStream` or
+  raise `EHttpError`. Use case: SOCKS5/other tunnel transports where only the
+  dial differs from direct (TLS and HTTP framing stay built-in). Connections are
+  pooled per target authority. Precedence: `WithProxyUrl` > `DialFunc` >
+  built-in dial. For raw SOCKS5 dialing see `nextpas.core.net.socks5.Socks5Dial`.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
 - `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
   (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).

@@ -146,6 +146,7 @@ type
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
   THttpClient = nextpas.core.http.client.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
+  THttpDialFunc = nextpas.core.http.base.THttpDialFunc;
   THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
   THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 

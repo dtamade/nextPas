@@ -73,6 +73,7 @@ begin
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
   LH1Options.IdleTTL := AOptions.IdleTTL;
   LH1Options.ProxyUrl := AOptions.ProxyUrl;
+  LH1Options.DialFunc := AOptions.DialFunc;
   LH1Options.TLSContext := AOptions.TLSContext;
   Result := NewH1ClientTransport(LH1Options);
 end;
