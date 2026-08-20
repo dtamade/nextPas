@@ -180,6 +180,11 @@ end;
 const
   { Fallback slice when cancel token is probe-only (no WakeHandle). }
   NET_IO_CANCEL_SLICE_MS = 10;
+  { poll 路径单次 send() 上限（256KB）：poll 拥有阻塞与 deadline，send 用
+    MSG_DONTWAIT 非阻塞发送——若一次 send 整个剩余块（如 16MB 大帧），
+    阻塞式 send 会在内核里等整个消息入队，SO_SNDTIMEO 已被 poll 路径清除、
+    deadline 无法打断（G3 反哺：写超时对慢客户端失效）。 }
+  NET_TCP_WRITE_CHUNK = 262144;
 
 procedure TTcpStream.EnsureOpen(const AOperation: string);
 begin
@@ -329,19 +334,32 @@ var
   LPtr: PByte;
   LRemaining: SizeUInt;
   LWait: Int32;
+  LFlags: Int32;
+  LChunk: Int32;
 begin
   EnsureOpen('write');
   if ACount = 0 then Exit(0);
   LPtr := @ABuf;
   LRemaining := ACount;
   Result := 0;
+  { poll 路径（有 waitable cancel token）：send 用 MSG_DONTWAIT，阻塞与
+    deadline 全部由 poll 拥有——否则单次巨型阻塞 send() 会在内核里停住
+    越过写 deadline（G3：慢客户端填满发送缓冲时写超时不生效）。
+    非 poll 路径维持阻塞 send + SO_SNDTIMEO 切片语义。
+    Windows（无 MSG_DONTWAIT）维持旧行为：阻塞 send 受块大小切片约束。 }
+  LFlags := PLATFORM_MSG_NOSIGNAL;
+  if CancelWakeHandle <> 0 then
+    LFlags := LFlags or PLATFORM_MSG_DONTWAIT;
   while LRemaining > 0 do
   begin
     ThrowIfCanceled;
     LWait := WaitIO(PLATFORM_POLL_OUT, FWriteDeadline, 'write');
     if LWait = 0 then
       Continue;
-    LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), PLATFORM_MSG_NOSIGNAL, LSent);
+    LChunk := Int32(LRemaining);
+    if LChunk > NET_TCP_WRITE_CHUNK then
+      LChunk := NET_TCP_WRITE_CHUNK;
+    LResult := platform_socket_send(FSocket, LPtr, LChunk, LFlags, LSent);
     if LResult <> 0 then
     begin
       if platform_socket_error_would_block(LResult) or

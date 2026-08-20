@@ -70,6 +70,32 @@ type
     procedure SubmitSendClose(const ACode: UInt16; const AReason: string);
   end;
 
+  { 阻塞 WebSocket 会话的 shutdown 通知句柄。实现：http.websocket 模块
+    （每服务端会话一个，经 IWsServerShutdownRegistry 登记）。
+    ShutdownAll 先 NotifyShutdown（waitable cancel token 唤醒阻塞在
+    ReadMessage 的连接线程——mid-poll 设置读 deadline 无效，poll 在旧的
+    无限超时上继续阻塞；close frame 1001 由会话收尾路径补发），
+    再 WaitFinished 等待收尾；超时后 ForceClose 强关底层连接。 }
+  IWsServerShutdownNotifier = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000013}']
+    { 会话已收尾（连接线程侧调用，幂等）：从注册表摘除并释放底层引用，
+      唤醒 WaitFinished 等待者。与 ShutdownAll 并发安全。 }
+    procedure Detach;
+    procedure NotifyShutdown;
+    function WaitFinished(const ATimeoutNs: Int64): Boolean;
+    procedure ForceClose;
+  end;
+
+  { 服务器级 WS shutdown 注册表（threaded 后端每服务器一个，经
+    ITcpServerSessionContext 暴露给 http 层；阻塞升级路径登记会话）。
+    Shutdown 时服务器对全部登记会话执行优雅收尾。 }
+  IWsServerShutdownRegistry = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000014}']
+    procedure RegisterShutdownNotifier(const ANotifier: IWsServerShutdownNotifier);
+    procedure UnregisterShutdownNotifier(const ANotifier: IWsServerShutdownNotifier);
+    procedure ShutdownAll(const ATimeoutNs: Int64);
+  end;
+
   ITcpServerPollDrivenSession = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000010}']
     function PollEvents: TPlatformPollEvents;

@@ -311,15 +311,23 @@ type
   end;
 
   TTcpServerDefaultSessionContext = class(TInterfacedObject,
-    ITcpServerSessionContext)
+    ITcpServerSessionContext, IWsServerShutdownRegistry)
   private
     FWorkerHandoff: ITcpServerWorkerHandoff;
+    FWsLock: IMutex;
+    FWsNotifiers: array of IWsServerShutdownNotifier;
   public
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
+    destructor Destroy; override;
     function WorkerHandoff: ITcpServerWorkerHandoff;
     function HandoffHijackedConn(const AConn: ITcpStream;
       const ANewSession: ITcpServerSession): Boolean;
     function SubmitHijackMigration: Boolean;
+    procedure RegisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure UnregisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure ShutdownAll(const ATimeoutNs: Int64);
   end;
 
   TTcpServerPollQueuedCompletion = class(TInterfacedObject,
@@ -1154,6 +1162,15 @@ constructor TTcpServerDefaultSessionContext.Create(
 begin
   inherited Create;
   FWorkerHandoff := AWorkerHandoff;
+  FWsLock := nextpas.core.sync.mutex.TMutex.Create;
+end;
+
+destructor TTcpServerDefaultSessionContext.Destroy;
+begin
+  { 释放前清空登记：会话收尾路径应已逐个 Unregister，这里兜底防悬挂。 }
+  FWsNotifiers := nil;
+  FWsLock := nil;
+  inherited Destroy;
 end;
 
 function TTcpServerDefaultSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
@@ -1172,6 +1189,86 @@ end;
 function TTcpServerDefaultSessionContext.SubmitHijackMigration: Boolean;
 begin
   Result := False;
+end;
+
+procedure TTcpServerDefaultSessionContext.RegisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    SetLength(FWsNotifiers, N + 1);
+    FWsNotifiers[N] := ANotifier;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.UnregisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  I, N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    for I := 0 to N - 1 do
+      if FWsNotifiers[I] = ANotifier then
+      begin
+        FWsNotifiers[I] := FWsNotifiers[N - 1];
+        SetLength(FWsNotifiers, N - 1);
+        Break;
+      end;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.ShutdownAll(
+  const ATimeoutNs: Int64);
+var
+  LSnapshot: array of IWsServerShutdownNotifier;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
+  I, N: SizeInt;
+begin
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    SetLength(LSnapshot, N);
+    for I := 0 to N - 1 do
+      LSnapshot[I] := FWsNotifiers[I];
+  finally
+    FWsLock.Release;
+  end;
+  if N = 0 then
+    Exit;
+  { 先全部唤醒（连接线程被 waitable cancel 唤醒 → ReadMessage 退出，
+    close frame 1001 由会话收尾路径补发），再逐个等待收尾；剩余时间
+    递减，超时强关。0 = 无限等待（与 HTTP ShutdownTimeout=0 语义一致）。 }
+  for I := 0 to N - 1 do
+    LSnapshot[I].NotifyShutdown;
+  if ATimeoutNs <= 0 then
+  begin
+    for I := 0 to N - 1 do
+      LSnapshot[I].WaitFinished(0);
+    Exit;
+  end;
+  LDeadline := TDeadline.After(TDuration.FromNanoseconds(ATimeoutNs));
+  for I := 0 to N - 1 do
+  begin
+    LRemaining := LDeadline.Remaining;
+    if LRemaining.AsNanoseconds <= 0 then
+      LSnapshot[I].ForceClose
+    else if not LSnapshot[I].WaitFinished(LRemaining.AsNanoseconds) then
+      LSnapshot[I].ForceClose;
+  end;
 end;
 
 procedure CreateTcpServerRuntimeContext(
