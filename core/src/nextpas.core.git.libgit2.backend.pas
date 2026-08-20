@@ -125,6 +125,8 @@ type
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitList;
     // M5+ (2026-08-15): blame a file (libgit2 native, no CLI spawn)
     function Blame(const APath: string): TGitBlame;
+    // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
+    function ConfigEntries: TGitConfigEntryArray;
 
     // Backward compatibility with old naming
     function HasUncommit: Boolean;
@@ -1649,6 +1651,45 @@ begin
     Result.Hunks := LOut.Hunks;
   finally
     git_blame_free(LBlame);
+  end;
+end;
+
+function TGitRepository.ConfigEntries: TGitConfigEntryArray;
+var
+  Cfg: git_config;
+  Iter: git_config_iterator;
+  LEntry: Pgit_config_entry;
+  rc: cint;
+  N: Integer;
+begin
+  Result := nil;
+  CheckGitResult(git_repository_config(Cfg, FHandle), 'Open repository config');
+  try
+    CheckGitResult(git_config_iterator_new(Iter, Cfg), 'New config iterator');
+    try
+      N := 0;
+      while True do
+      begin
+        rc := git_config_next(LEntry, Iter);
+        if rc = GIT_ITEROVER then
+          Break;
+        if rc <> GIT_OK then
+          raise EGitError.Create(rc, 'Iterate config entries');
+        if LEntry <> nil then
+        begin
+          SetLength(Result, N + 1);
+          if LEntry^.name <> nil then
+            Result[N].Name := string(LEntry^.name);
+          if LEntry^.value <> nil then
+            Result[N].Value := string(LEntry^.value);
+          Inc(N);
+        end;
+      end;
+    finally
+      git_config_iterator_free(Iter);
+    end;
+  finally
+    git_config_free(Cfg);
   end;
 end;
 

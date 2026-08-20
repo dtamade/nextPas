@@ -75,6 +75,11 @@ type
     // M5+（2026-08-15）：blame 一个文件（经 libgit2 git_blame_file，不 spawn CLI）。
     // 返回逐 hunk 归属（commit id / 起止行 / 路径）；文件无提交历史 → 空 hunks。
     function Blame(const APath: string): TGitBlame;
+    // k42（2026-08-20）：repo 本地配置条目快照（libgit2 git_repository_config +
+    // 迭代器——include/includeIf/worktree config 由 libgit2 解析）。
+    // 合并视图：local + worktree + global + system（同 git config --list 语义）。
+    // 读取失败 → EGitError。
+    function ConfigEntries: TGitConfigEntryArray;
   end;
 
   IGitCommit = interface

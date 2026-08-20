@@ -124,6 +124,14 @@ type
     Hunks: TGitBlameHunkArray;
   end;
 
+  // One repo configuration entry (k42): include-resolved merged view
+  // (local + worktree + global + system, libgit2 config semantics).
+  TGitConfigEntry = record
+    Name: string;
+    Value: string;
+  end;
+  TGitConfigEntryArray = array of TGitConfigEntry;
+
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
