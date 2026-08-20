@@ -259,10 +259,12 @@ begin
     LPtr := @AData[0]
   else
     LPtr := nil;
-  LResult := platform_fs_write_atomic(PAnsiChar(APath), LPtr, PtrUInt(Length(AData)));
+  LResult := platform_fs_write_atomic(PAnsiChar(APath), LPtr, PtrUInt(Length(AData)),
+    UInt32(APerm));
   if LResult <> 0 then
     RaiseFsError(LResult, 'atomic write', APath);
-  { platform_fs_write_atomic creates with default perms; honor caller perm. }
+  { 临时文件已按 APerm 创建（rename 后 inode 权限不变）；此处 chmod
+    兜底平台忽略创建权限的情况（如 Windows 无 mode 位）。 }
   if APerm <> PermDefault then
   begin
     LResult := platform_file_chmod(PAnsiChar(APath), UInt32(APerm));
