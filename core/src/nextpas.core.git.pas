@@ -26,6 +26,8 @@ type
   TGitBlameHunk = nextpas.core.git.base.TGitBlameHunk;
   TGitBlameHunkArray = nextpas.core.git.base.TGitBlameHunkArray;
   TGitBlame = nextpas.core.git.base.TGitBlame;
+  TGitConfigEntry = nextpas.core.git.base.TGitConfigEntry;
+  TGitConfigEntryArray = nextpas.core.git.base.TGitConfigEntryArray;
   TGitCommitArray = nextpas.core.git.intf.TGitCommitArray;
 
   TCredentialAcquireEvent = nextpas.core.git.intf.TCredentialAcquireEvent;
