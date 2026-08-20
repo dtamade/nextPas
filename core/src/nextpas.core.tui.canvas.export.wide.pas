@@ -4,7 +4,8 @@
  * CanvasExportTxtWide: 活动层纯字形快照(UTF-8), 按显示列对齐——
  *   双宽字形(如 CJK)输出一次并跳过被其覆盖的右邻格(与渲染一致),
  *   Ch=0 输出空格, 每行换行;
- * CanvasExportAnsiWide: 同上, 每字 SGR 前景+背景, 末尾 \e[0m 重置。
+ * CanvasExportAnsiWide: 同上, 每字 SGR 前景+背景(相邻同色省略,
+ *   终端 SGR 状态跨格/跨行延续), 末尾 \e[0m 重置。
  * 写文件失败(路径不可写等)返回 False。不直接依赖 FPC RTL。
  *}
 
@@ -107,6 +108,7 @@ end;
 function CanvasExportAnsiWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
 var
   S, Line: AnsiString;
+  FgS, BgS, LastSgr: AnsiString;
   X, Y: Integer;
   Cell: TCanvasCell;
   WideNext: Boolean;
@@ -115,6 +117,7 @@ begin
   if ADoc = nil then
     Exit;
   S := '';
+  LastSgr := '';
   for Y := 0 to ADoc.Height - 1 do
   begin
     Line := '';
@@ -127,7 +130,14 @@ begin
         Continue;
       end;
       Cell := ADoc.GetCell(ADoc.ActiveIndex, X, Y);
-      Line := Line + SgrColor(Cell.Fg, True) + SgrColor(Cell.Bg, False);
+      { 同色压缩: 与上一格 SGR 相同则省略(终端 SGR 状态跨格/跨行延续) }
+      FgS := SgrColor(Cell.Fg, True);
+      BgS := SgrColor(Cell.Bg, False);
+      if FgS + BgS <> LastSgr then
+      begin
+        Line := Line + FgS + BgS;
+        LastSgr := FgS + BgS;
+      end;
       if Cell.Ch <> 0 then
         Line := Line + UTF8EncodeToStr(Cell.Ch)
       else
