@@ -53,6 +53,7 @@ type
     LastRcptCount: Int32;
     LastData: string;
     LastClientIP: string;
+    LastClosedIP: string;
     constructor Create;
     procedure OnServerEvent(const AEvent: TMailSmtpServerEvent;
       const AEnvelope: TMailSmtpEnvelope);
@@ -303,7 +304,10 @@ begin
     msseOverflow:
       Inc(OverflowCount);
     msseClosed:
-      Inc(ClosedCount);
+      begin
+        Inc(ClosedCount);
+        LastClosedIP := AEnvelope.ClientIP;
+      end;
   end;
 end;
 
@@ -471,6 +475,9 @@ begin
   { 点转义还原：'.line' 与 '..double' 应原样回到应用 }
   Check(Pos('.line' + #13#10, LSink.LastData) > 0, 'dot unstuff single');
   Check(Pos('..double' + #13#10, LSink.LastData) > 0, 'dot unstuff double');
+  { 关闭事件携带对端 IP（批次 9.4：连接生命周期按 IP 归账的前提） }
+  Check(SpinWait(LSink.ClosedCount, 1), 'closed event delivered');
+  CheckEqual('127.0.0.1', LSink.LastClosedIP, 'closed event carries peer ip');
 
   StopSmtpServer(LServer, LH);
   LSink := nil;

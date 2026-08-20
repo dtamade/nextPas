@@ -22,7 +22,9 @@ unit nextpas.core.mail.smtp.server;
  *
  * 业务集成：应用实现 ISmtpServerSink，服务器在 reactor 线程回调
  * OnServerEvent(msseMessage, Envelope) 交付一封收信（MAIL/RCPT/DATA 收集
- * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）。
+ * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）；
+ * msseClosed 事件信封亦携带 ClientIP（对端 IP 与 msseMessage 同源），
+ * 供消费方按 IP 归账连接生命周期（如 per-IP 并发连接计数递减）。
  * 业务侧回调内不执行阻塞 I/O；向会话内送数据须经
  * context.WorkerHandoff 在 reactor 线程交付。
  *
@@ -218,12 +220,21 @@ begin
 end;
 
 procedure TMailSmtpServerSession.NotifyClosed;
+var
+  LEnv: TMailSmtpEnvelope;
 begin
   if FClosedNotified then
     Exit;
   FClosedNotified := True;
   if FSink <> nil then
-    FSink.OnServerEvent(msseClosed, Default(TMailSmtpEnvelope));
+  begin
+    { 关闭事件信封携带对端 IP（与 msseMessage 同源 RemoteAddr，连接
+      已终止但地址为 accept 时缓存的 sockaddr，仍可读）：消费方按 IP
+      归账连接生命周期（如 per-IP 并发连接计数递减）。 }
+    LEnv := Default(TMailSmtpEnvelope);
+    LEnv.ClientIP := FConn.RemoteAddr.IP;
+    FSink.OnServerEvent(msseClosed, LEnv);
+  end;
 end;
 
 procedure TMailSmtpServerSession.AbortSession;
