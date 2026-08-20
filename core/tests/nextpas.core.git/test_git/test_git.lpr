@@ -673,6 +673,89 @@ begin
   CheckEqual(1, Length(LCommits), 'RevWalk from older start should list remaining commits');
 end;
 
+procedure TestConfigEntriesReadsRepoConfig;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LEntries: TGitConfigEntryArray;
+  I: Integer;
+  LHasFsmonitor, LHasDiffTextconv, LHasAliasStatus, LHasUserName: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'config']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for config test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  Check(LRepo <> nil, 'InitRepository should return repository');
+  LExt := LRepo as IGitRepositoryExt;
+
+  { 写入本地配置：exec-risk 相关键 + 常规键 }
+  CheckGitOk(LRepoDir, ['config', 'core.fsmonitor', '/tmp/pwn'], 'write core.fsmonitor');
+  CheckGitOk(LRepoDir, ['config', 'diff.evil.textconv', '/tmp/pwn'], 'write diff.*.textconv');
+  CheckGitOk(LRepoDir, ['config', 'alias.status', '!whoami'], 'write alias.status');
+  CheckGitOk(LRepoDir, ['config', 'user.name', 't'], 'write user.name');
+
+  LEntries := LExt.ConfigEntries;
+  Check(Length(LEntries) >= 4, 'ConfigEntries should enumerate entries');
+  LHasFsmonitor := False;
+  LHasDiffTextconv := False;
+  LHasAliasStatus := False;
+  LHasUserName := False;
+  for I := 0 to High(LEntries) do
+  begin
+    if LEntries[I].Name = 'core.fsmonitor' then
+      LHasFsmonitor := LEntries[I].Value = '/tmp/pwn';
+    if LEntries[I].Name = 'diff.evil.textconv' then
+      LHasDiffTextconv := LEntries[I].Value = '/tmp/pwn';
+    if LEntries[I].Name = 'alias.status' then
+      LHasAliasStatus := LEntries[I].Value = '!whoami';
+    if LEntries[I].Name = 'user.name' then
+      LHasUserName := LEntries[I].Value = 't';
+  end;
+  Check(LHasFsmonitor, 'ConfigEntries should see core.fsmonitor value');
+  Check(LHasDiffTextconv, 'ConfigEntries should see diff.*.textconv value');
+  Check(LHasAliasStatus, 'ConfigEntries should see alias.status=!cmd value');
+  Check(LHasUserName, 'ConfigEntries should see plain user.name value');
+end;
+
+procedure TestConfigEntriesResolvesInclude;
+var
+  LMgr: IGitManager;
+  LRepoDir: string;
+  LRepo: IGitRepository;
+  LExt: IGitRepositoryExt;
+  LEntries: TGitConfigEntryArray;
+  I: Integer;
+  LSeen: Boolean;
+begin
+  LRepoDir := nextpas.core.fs.PathJoin([GTmpDir, 'config-include']);
+  nextpas.core.fs.MkdirAll(LRepoDir);
+
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'libgit2 manager should initialize for include test');
+  LRepo := LMgr.InitRepository(LRepoDir, False);
+  Check(LRepo <> nil, 'InitRepository should return repository');
+  LExt := LRepo as IGitRepositoryExt;
+
+  { include.path → 附加配置里的键应被 libgit2 解析进快照 }
+  CheckGitOk(LRepoDir, ['config', 'include.path', 'extra'], 'write include.path');
+  nextpas.core.fs.WriteFile(
+    nextpas.core.fs.PathJoin([LRepoDir, '.git', 'extra']),
+    BytesOfString('[core]'#10'fsmonitor = /tmp/pwn-inc'#10)
+  );
+
+  LEntries := LExt.ConfigEntries;
+  LSeen := False;
+  for I := 0 to High(LEntries) do
+    if (LEntries[I].Name = 'core.fsmonitor') and
+      (LEntries[I].Value = '/tmp/pwn-inc') then
+      LSeen := True;
+  Check(LSeen, 'ConfigEntries should resolve include.path content');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -695,6 +778,8 @@ begin
     T.Test('DiffEx honors pathspec and unified', @TestDiffExOptions);
     T.Test('Blame file', @TestBlameFile);
     T.Test('RevWalk and parent OIDs', @TestRevWalkAndParents);
+    T.Test('ConfigEntries reads repo config (k42)', @TestConfigEntriesReadsRepoConfig);
+    T.Test('ConfigEntries resolves include (k42)', @TestConfigEntriesResolvesInclude);
   if not T.Run then Halt(1);
   finally
     CleanupTmpDir;
