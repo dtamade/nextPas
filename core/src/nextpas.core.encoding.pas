@@ -39,6 +39,8 @@ function SignedVarintDecode(const AData: TBytes; out ABytesRead: Integer): Int64
 
 function UrlEncode(const AValue: string): string; inline;
 function UrlDecode(const AEncoded: string): string; inline;
+{ RFC 3986 严格 percent-decode（path 语义：'+' 保持字面、非法 '%' 宽容保留） }
+function PercentDecode(const AEncoded: string): string; inline;
 
 { GBK (CP936) 双字节 → UTF-8；非法序列整体返回空串（调用方回退） }
 function GbkToUtf8(const AStr: string): string; inline;
@@ -113,6 +115,11 @@ end;
 function UrlDecode(const AEncoded: string): string;
 begin
   Result := nextpas.core.encoding.url.UrlDecode(AEncoded);
+end;
+
+function PercentDecode(const AEncoded: string): string;
+begin
+  Result := nextpas.core.encoding.url.PercentDecode(AEncoded);
 end;
 
 function GbkToUtf8(const AStr: string): string;

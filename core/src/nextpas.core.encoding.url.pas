@@ -9,6 +9,9 @@ uses
 
 function UrlEncode(const AValue: string): string;
 function UrlDecode(const AEncoded: string): string;
+{ RFC 3986 严格 percent-decode：仅解码 %xx 转义，'+' 保持字面。
+  区别于 UrlDecode 的 form/query 语义（'+' → 空格）。 }
+function PercentDecode(const AEncoded: string): string;
 
 implementation
 
@@ -109,6 +112,43 @@ begin
   if (Length(Result) > 0) and
      (not UTF8IsValid(PByte(PAnsiChar(Result)), Length(Result))) then
     raise EConvertError.Create('UrlDecode: invalid UTF-8');
+end;
+
+{ RFC 3986 §2.1 percent-encoded octets。与 UrlDecode 的三处差异：
+  1. '+' 保持字面（path 中 '+' 是 sub-delim，非空格；form 语义只适用 query）；
+  2. 截断/非法 '%' 序列原样保留，不抛异常（畸形 path 应得 404 而非 500）；
+  3. 不做 UTF-8 校验（URI path 是字节序列，解码结果由上层按需校验）。 }
+function PercentDecode(const AEncoded: string): string;
+var
+  LI, LJ, LLen: Integer;
+begin
+  LLen := Length(AEncoded);
+  if LLen = 0 then
+    Exit('');
+
+  SetLength(Result, LLen);
+  LI := 1;
+  LJ := 1;
+
+  while LI <= LLen do
+  begin
+    if (AEncoded[LI] = '%') and (LI + 2 <= LLen) and
+       (AEncoded[LI + 1] in ['0'..'9', 'a'..'f', 'A'..'F']) and
+       (AEncoded[LI + 2] in ['0'..'9', 'a'..'f', 'A'..'F']) then
+    begin
+      Result[LJ] := Chr((HexVal(AEncoded[LI + 1]) shl 4) or
+        HexVal(AEncoded[LI + 2]));
+      Inc(LI, 3);
+    end
+    else
+    begin
+      Result[LJ] := AEncoded[LI];
+      Inc(LI);
+    end;
+    Inc(LJ);
+  end;
+
+  SetLength(Result, LJ - 1);
 end;
 
 end.

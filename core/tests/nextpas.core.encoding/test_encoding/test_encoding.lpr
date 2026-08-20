@@ -379,6 +379,23 @@ begin
   CheckEqual('abc123-_.~', UrlEncode('abc123-_.~'));
 end;
 
+procedure TestPercentDecode;
+begin
+  CheckEqual('', PercentDecode(''), 'empty');
+  CheckEqual('abc', PercentDecode('abc'), 'no escape');
+  CheckEqual('@', PercentDecode('%40'), 'at sign');
+  CheckEqual('matrix@mock.example.com', PercentDecode('matrix%40mock.example.com'),
+    'email address');
+  CheckEqual('a+b', PercentDecode('a+b'), 'plus literal (path semantics)');
+  CheckEqual('a/b', PercentDecode('a%2Fb'), 'encoded slash');
+  CheckEqual(#$E4#$BD#$A0, PercentDecode('%E4%BD%A0'), 'utf-8 bytes');
+  CheckEqual('100%', PercentDecode('100%'), 'truncated percent lenient');
+  CheckEqual('%2', PercentDecode('%2'), 'single hex digit lenient');
+  CheckEqual('%zz', PercentDecode('%zz'), 'invalid hex lenient');
+  CheckEqual('a/%zz@b', PercentDecode('a%2F%zz%40b'), 'mixed');
+  CheckEqual(#0, PercentDecode('%00'), 'nul byte');
+end;
+
 { GBK → UTF-8（纯表驱动，无平台依赖） }
 
 procedure TestGbkEmpty;
@@ -469,6 +486,7 @@ begin
   T.Test('URL reserved chars', @TestUrlReserved);
   T.Test('URL no double encode', @TestUrlNoDoubleEncode);
   T.Test('URL unreserved passthrough', @TestUrlUnreserved);
+  T.Test('PercentDecode matrix', @TestPercentDecode);
 
   T.Test('GBK empty', @TestGbkEmpty);
   T.Test('GBK ASCII passthrough', @TestGbkAscii);
