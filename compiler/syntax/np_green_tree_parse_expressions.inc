@@ -48,6 +48,19 @@ begin
               Token.Lexeme := Token.Lexeme + '>';
               Inc(ACursor);
             end;
+            { Method form `specialize X<T>.M`: the '<' args ended the dot
+              walk above (b4b-i7), so resume it after '>' — otherwise the
+              '.M' token is left dangling and the callee resolves as the
+              bare generic name, leaving cloned Create bodies truncated at
+              `specialize TElementManager<T>.Create(...)`. }
+            while (ACursor + 1 < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkDot) and
+              (ALexer.TokenAt(ACursor + 1).Kind = tkIdentifier) do
+            begin
+              Token.Lexeme := Token.Lexeme + '.' +
+                ALexer.TokenAt(ACursor + 1).Lexeme;
+              Inc(ACursor, 2);
+            end;
           end;
           if (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind = tkLParen) then

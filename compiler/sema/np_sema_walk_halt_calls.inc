@@ -1054,6 +1054,94 @@ begin
           end;
         end;
       end;
+      if FNoFold and (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
+        (Arg.ChildCount >= 1) and (Arg.ChildAt(0) <> nil) and
+        (Arg.ChildAt(0).NodeKind = gnkIdentifier) and
+        (Pos('specialize ', Arg.ChildAt(0).Text) = 1) and
+        (Pos('.', Copy(Arg.ChildAt(0).Text, 12,
+          Length(Arg.ChildAt(0).Text) - 11)) > 0) then
+      begin
+        { b4b-i7: F := specialize X<T>.M(...) — materialize the instance on
+          demand and emit class-new with the resolved callee. The older walk
+          branch only knew the compile-time free-function specialize form
+          and dropped the method part, truncating cloned Create bodies at
+          the FElementManager assignment (b4b-i7). }
+        FuncName := ResolveSpecializedClassMethodCall(
+          Copy(Arg.ChildAt(0).Text, 12, Length(Arg.ChildAt(0).Text) - 11));
+        if FuncName <> '' then
+        begin
+          OwnerClassName := Copy(FuncName, 1, Pos('.', FuncName) - 1);
+          Value := TypeMetaSize(OwnerClassName);
+          CondValue := -1;
+          if FCurrentMethodClass <> '' then
+            CondValue := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+          if CondValue >= 0 then
+          begin
+            Inc(FBlockLabelCounter);
+            ArgName := '$obj_tmp_' + IntToStr(FBlockLabelCounter);
+            Operand := ArgName + #9 + FuncName;
+            ArgIndex := 0;
+            if Arg.NodeKind = gnkFunctionCall then
+              ArgIndex := 1;
+            while ArgIndex < Arg.ChildCount do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and
+                EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+                Operand := Operand + #9 + StringValue;
+              Inc(ArgIndex);
+            end;
+            RegisterRuntimeVar(ArgName);
+            RegisterClassVar(ArgName, OwnerClassName);
+            { The assigned field itself must also resolve as a class var so
+              later `FElementManager.GetElementSize` finds its method via
+              LookupClassVar instead of dropping the RHS (b4b-i7). }
+            RegisterClassVar(Decoded, OwnerClassName);
+            FModel.AddTypedHirNode('class-new-runtime',
+              IntToStr(Value), 0, 0, Operand);
+            if (TypeMetaVmtCount(OwnerClassName) > 0) or
+              (TypeMetaInterfaces(OwnerClassName) <> '') then
+              FModel.AddTypedHirNode('vmt-store-runtime', OwnerClassName, 0, 0,
+                ArgName + #9 + OwnerClassName);
+            FModel.AddTypedHirNode('field-store-runtime', Decoded, 0, 0,
+              'self' + #9 + IntToStr(CondValue) + #9 + 'var ' + ArgName + #10);
+          end
+          else
+          begin
+            RegisterRuntimeVar(Decoded);
+            RegisterClassVar(Decoded, OwnerClassName);
+            Operand := Decoded + #9 + FuncName;
+            ArgIndex := 0;
+            if Arg.NodeKind = gnkFunctionCall then
+              ArgIndex := 1;
+            while ArgIndex < Arg.ChildCount do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and
+                EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+                Operand := Operand + #9 + StringValue;
+              Inc(ArgIndex);
+            end;
+            FModel.AddTypedHirNode('class-new-runtime',
+              IntToStr(Value), 0, 0, Operand);
+            if (TypeMetaVmtCount(OwnerClassName) > 0) or
+              (TypeMetaInterfaces(OwnerClassName) <> '') then
+              FModel.AddTypedHirNode('vmt-store-runtime', OwnerClassName, 0, 0,
+                Decoded + #9 + OwnerClassName);
+            if (LookupClassVar(Decoded) <> '') and
+              TypeMetaIsInterface(LookupClassVar(Decoded)) and
+              FModel.LookupConstValue(
+                OwnerClassName + '$intf_offset_' + LookupClassVar(Decoded),
+                Value) then
+            begin
+              FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
+              FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
+                Decoded + #9 + IntToStr(Value div 8));
+            end;
+          end;
+          Continue;
+        end;
+      end;
       if FNoFold and (Arg <> nil) and
         (Arg.NodeKind = gnkDotAccess) and (Arg.ChildCount >= 2) and
         (Arg.ChildAt(0) <> nil) and (Arg.ChildAt(1) <> nil) then
@@ -1770,6 +1858,36 @@ begin
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
         FCurrentBlockTerminated := True;
         Continue;
+      end;
+      if FNoFold and (Pos('specialize ', Child.Text) = 1) and
+        (Pos('.', Copy(Child.Text, 12, Length(Child.Text) - 11)) > 0) then
+      begin
+        { b4b-i7: statement-form `specialize X<T>.M(...)` — same on-demand
+          instantiation path as the assignment RHS branch above. }
+        Decoded := ResolveSpecializedClassMethodCall(
+          Copy(Child.Text, 12, Length(Child.Text) - 11));
+        if Decoded <> '' then
+        begin
+          Arg := nil;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+            (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+            Arg := Child.ChildAt(0);
+          Operand := Decoded + #9 + 'var self' + #10;
+          if Arg <> nil then
+          begin
+            for ArgIndex := 1 to Arg.ChildCount - 1 do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and
+                EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+                Operand := Operand + #9 + StringValue;
+            end;
+          end;
+          NodeId := FModel.AddTypedHirNode('call-runtime', Decoded, 0, 0,
+            Operand);
+          AttachStatementCallExpr(NodeId, Child);
+          Continue;
+        end;
       end;
       if FNoFold and (Pos('specialize ', Child.Text) = 1) then
       begin

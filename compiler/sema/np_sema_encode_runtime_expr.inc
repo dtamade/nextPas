@@ -1288,7 +1288,11 @@ begin
     { Residual: keep encoded arg value; cast is identity at i64/ptr handle. }
     Exit(True);
   end;
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+  { Zero-arg calls (ChildCount = 1: callee only) reach the implicit-self
+    member chain below via the FCurrentMethodClass branch; without the >= 1
+    guard, `LTypeInfo := GetElementTypeInfo()` fell through and was dropped
+    (b4b-i7). }
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
   begin
@@ -1598,6 +1602,52 @@ begin
     ABlob := 'var ' + ArgName + #10;
     Exit(True);
   end;
+  { DotAccess method reference `R.Method` used as a value (F := R.M): no
+    parens, so gnkFunctionCall never wraps it — encode as a zero-arg member
+    call with receiver. Method-only: unresolved members fall through to the
+    field-access branches below (b4b-i7). }
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount = 2) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
+  begin
+    ReceiverVarName := ANode.ChildAt(0).Text;
+    if SameText(ReceiverVarName, 'Self') and (FCurrentMethodClass <> '') then
+    begin
+      ReceiverVarName := 'self';
+      FuncName := FCurrentMethodClass;
+    end
+    else
+      FuncName := LookupClassVar(ReceiverVarName);
+    if FuncName <> '' then
+    begin
+      ArgName := ResolveClassMethodCalleeName(FuncName,
+        ANode.ChildAt(1).Text);
+      if (ArgName <> '') or
+        (TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text) >= 0) then
+      begin
+        if ArgName = '' then
+          ArgName := FuncName + '.' + ANode.ChildAt(1).Text;
+        { Receiver may be a current-class field — load from self+idx; a bare
+          'var FField' has no alloca and degrades to call @FField. }
+        if (ReceiverVarName <> 'self') and
+          (TypeMetaFieldIndex(FCurrentMethodClass, ReceiverVarName) >= 0) then
+        begin
+          BaseName := 'field self ' +
+            IntToStr(TypeMetaFieldIndex(FCurrentMethodClass, ReceiverVarName));
+          if TypeMetaFieldIsPtr(FCurrentMethodClass, ReceiverVarName) then
+            BaseName := BaseName + ' p' + #10
+          else
+            BaseName := BaseName + #10;
+        end
+        else
+          BaseName := 'var ' + ReceiverVarName + #10;
+        ABlob := BaseName + 'call ' + ArgName + ' 1' + #10;
+        Exit(True);
+      end;
+    end;
+  end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
@@ -1711,6 +1761,21 @@ begin
       FuncName := LookupClassVar(ReceiverVarName);
     if FuncName <> '' then
     begin
+      { The receiver may be a current-class field (class-var registered by
+        the walk); its value must load from self+idx — a bare 'var FField'
+        has no alloca and degrades to call @FField (b4b-i7). }
+      if (ReceiverVarName <> 'self') and
+        (TypeMetaFieldIndex(FCurrentMethodClass, ReceiverVarName) >= 0) then
+      begin
+        BaseName := 'field self ' +
+          IntToStr(TypeMetaFieldIndex(FCurrentMethodClass, ReceiverVarName));
+        if TypeMetaFieldIsPtr(FCurrentMethodClass, ReceiverVarName) then
+          BaseName := BaseName + ' p' + #10
+        else
+          BaseName := BaseName + #10;
+      end
+      else
+        BaseName := 'var ' + ReceiverVarName + #10;
       ABlob := '';
       StrCallArgCount := 0;
       for StrCallIdx := 1 to ANode.ChildCount - 1 do
@@ -1764,7 +1829,7 @@ begin
       Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(0).ChildAt(1).Text);
       if (Folded >= 0) and (not TypeMetaIsInterface(FuncName)) then
       begin
-        ABlob := 'var ' + ReceiverVarName + #10 +
+        ABlob := BaseName +
           ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
           IntToStr(StrCallArgCount);
         if TypeMetaRetPtr(FuncName, ANode.ChildAt(0).ChildAt(1).Text) then
@@ -1776,7 +1841,7 @@ begin
       begin
         { Multi-arg interface: ExtraArgCount = StrCallArgCount (args already
           pushed). Zero-arg keeps ExtraArgCount 0. Avoid bare @IHasher.Method. }
-        ABlob := 'var ' + ReceiverVarName + #10 +
+        ABlob := BaseName +
           ABlob + 'ivcall ' + IntToStr(Folded) + ' ' +
           IntToStr(StrCallArgCount);
         if TypeMetaRetPtr(FuncName, ANode.ChildAt(0).ChildAt(1).Text) then
@@ -1792,7 +1857,7 @@ begin
             ANode.ChildAt(0).ChildAt(1).Text) = 0) do
           ArgName := NextClassAncestorName(ArgName);
         if ArgName = '' then ArgName := FuncName;
-        ABlob := 'var ' + ReceiverVarName + #10 +
+        ABlob := BaseName +
           ABlob + 'call ' + ArgName + '.' +
           ANode.ChildAt(0).ChildAt(1).Text + ' ' +
           IntToStr(StrCallArgCount + 1) + #10;

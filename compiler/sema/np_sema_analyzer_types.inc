@@ -270,6 +270,7 @@ type
       out ATargetTypeId: LongInt): Boolean;
     function TryGetIntrinsicExprName(const ACallNode: TGreenNode;
       out AName: string): Boolean;
+    function ResolveSpecializedClassMethodCall(const ACallee: string): string;
     function IsWrappedCallChild(
       const AParent: TGreenNode;
       const AChild: TGreenNode

@@ -410,6 +410,30 @@ TGC 的 DoCompare*/DoEquals*/GetElementTypeInfo 克隆体完整（其体无 spec
 （np_hir_builder_process.inc）无分支——参数退化为索引常量。本轮 mini 实测
 opt 首错 = `@CompareByte`（.ll 2311 行）。compiler-pass 58/58；hygiene pass。 |
 
+²⁵ b4b-i7（本 commit）：**specialize 泛型方法调用链 + 零参方法调用编码**。
+（a）parser：`specialize X<T>.M` 在 '>' 后恢复 '.M' 拼接（原 dot-walk 被
+尖括号参数截断，callee 退化为裸泛型名）；（b）新增
+`ResolveSpecializedClassMethodCall`：模板参数经 FCurrentGenericInstance 的
+`$generic_arg_<name>` 替换为实参、实例类型 FindTypeByName<=0 时
+ResolveOrInstantiateInlineGeneric 现场实例化、最后
+ResolveClassMethodCalleeName 决议 callee；（c）walk 两个分支：赋值 RHS
+`F := specialize X<T>.M(...)`（RegisterClassVar(Decoded,OwnerClassName) 让
+后续 `FElementManager.GetElementSize` 经 LookupClassVar 找到方法）与语句
+形式；（d）encode 成员调用链守卫 `ChildCount>=2` 放宽为 `>=1`——零参调用
+`GetElementTypeInfo()` 之前整个被挡在隐式 self 分支（FCurrentMethodClass
+链解析 + `var self` + `call Class.Method n+1`）之外而静默丢弃，修后 .ll 出现
+`%v = call ptr @"TGenericCollection<Boolean>.GetElementTypeInfo"(ptr %self)`
++ store 到 LTypeInfo；（e）receiver 为当前类字段时用 `field self <idx> [p]`
+而非 `var FField`（后者无 alloca，退化为 `call @FField()`），并新增
+DotAccess 无括号方法引用分支（`FElementManager.GetElementSize` 无括号形态）。
+**未收，挂账（5）**：`case LTypeInfo^.Kind of` 整体缺失——LowerRuntimeCase
+Statement 第 1458 行选择器 EncodeRuntimeIntExprFold 失败即 Exit；根因链：
+walker 局部变量声明（codegen 1850-1859）对 `LTypeInfo: PTypeInfo` 未注册
+pointer var（TypeMetaIsPointer('PTypeInfo') 判定不成立）→
+LookupPointerVar('LTypeInfo')='' → TryPointerFieldAccess 失败；case 体内
+`TInternalCompareMethod(@DoCompareBool)` 方法引用存储是另一独立缺口。数字：
+R8 探针 undefined uniq=2 total=6 持平不升；compiler-pass 58/58；hygiene pass。 |
+
 | opt 首错 | `use of undefined value '@CompareByte'`（.ll 46424 行，DoCompareStr 链）——修后次错 `@TProcedureBodyNameFirstMap.Create`（354043 行）；再后是 90 处裸 `call @Create`（克隆体残缺，被 walk 全局函数分支误绑定 FsCreate 包装符号 Create），根因见注²³/²⁴——全部挂账，下一口收 | 本轮实测（探针 2/6；opt 三段推进：CompareByte → THashMap.Create → 克隆体残缺家族；`TGenericCollection<T>.Create` 克隆体 body 注册即残缺，根因链见注²³/²⁴） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 

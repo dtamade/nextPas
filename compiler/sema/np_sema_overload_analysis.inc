@@ -664,6 +664,82 @@ begin
     AName := '';
 end;
 
+{ b4b-i7: resolve `specialize X<T>.M` — generic class method call at a
+  runtime call site. Template params resolve through the current generic
+  instance map ($generic_arg_<name>); the instance type is materialized on
+  demand so its whitelist clones enter the seed queue, then the callee name
+  lands on X<args>.M. Nested generic args (TArray<T> as an arg) keep their
+  template tokens — only a direct template-param arg is substituted here.
+  The walk's older specialize branch only handled the compile-time
+  free-function form `specialize X<T>` and dropped the method part, leaving
+  cloned Create bodies truncated at `FElementManager := specialize
+  TElementManager<T>.Create(...)` (b4b-i7). }
+function TSemanticAnalyzer.ResolveSpecializedClassMethodCall(
+  const ACallee: string): string;
+var
+  LtPos, GtPos, I, J, K, GenericTypeId: LongInt;
+  GenericName, MethodPart, ArgsText, ArgName, Subst, InstanceName: string;
+begin
+  Result := '';
+  LtPos := Pos('<', ACallee);
+  if LtPos <= 0 then
+    Exit;
+  GtPos := Length(ACallee);
+  while (GtPos > LtPos) and (ACallee[GtPos] <> '>') do
+    Dec(GtPos);
+  if (GtPos <= LtPos) or (GtPos + 2 > Length(ACallee)) or
+    (ACallee[GtPos + 1] <> '.') then
+    Exit; { free-function form, handled by the walk's older branch }
+  GenericName := Copy(ACallee, 1, LtPos - 1);
+  ArgsText := Copy(ACallee, LtPos + 1, GtPos - LtPos - 1);
+  MethodPart := Copy(ACallee, GtPos + 2, MaxInt);
+  InstanceName := GenericName + '<';
+  I := 1;
+  while I <= Length(ArgsText) do
+  begin
+    while (I <= Length(ArgsText)) and (ArgsText[I] = ' ') do
+      Inc(I);
+    J := I;
+    while (J <= Length(ArgsText)) and (ArgsText[J] <> ',') do
+      Inc(J);
+    ArgName := Copy(ArgsText, I, J - I);
+    while (Length(ArgName) > 0) and (ArgName[Length(ArgName)] = ' ') do
+      Delete(ArgName, Length(ArgName), 1);
+    Subst := ArgName;
+    if (FCurrentGenericInstance <> '') and
+      FModel.LookupStringConstValue(
+        FCurrentGenericInstance + '.$generic_arg_' + ArgName, Subst) then
+      { template param -> concrete generic arg }
+    else
+      Subst := ArgName;
+    InstanceName := InstanceName + Subst;
+    if (J <= Length(ArgsText)) and (ArgsText[J] = ',') then
+      InstanceName := InstanceName + ',';
+    I := J + 1;
+  end;
+  InstanceName := InstanceName + '>';
+  if FModel.FindTypeByName(InstanceName) <= 0 then
+  begin
+    GenericTypeId := 0;
+    for K := 0 to FModel.TypeCount - 1 do
+      if SameText(FModel.TypeAt(K).Name, GenericName) then
+      begin
+        GenericTypeId := FModel.TypeAt(K).TypeId;
+        Break;
+      end;
+    if GenericTypeId > 0 then
+      ResolveOrInstantiateInlineGeneric(InstanceName,
+        FModel.TypeAt(GenericTypeId - 1).OwnerUnitId)
+    else
+      ResolveOrInstantiateInlineGeneric(InstanceName, '');
+    if FModel.FindTypeByName(InstanceName) <= 0 then
+      Exit;
+  end;
+  Result := ResolveClassMethodCalleeName(InstanceName, MethodPart);
+  if Result = '' then
+    Result := InstanceName + '.' + MethodPart;
+end;
+
 function TSemanticAnalyzer.IsWrappedCallChild(
   const AParent: TGreenNode;
   const AChild: TGreenNode
