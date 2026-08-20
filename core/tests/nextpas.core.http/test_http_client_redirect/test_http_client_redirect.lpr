@@ -464,6 +464,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
     function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -2377,6 +2378,11 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithDialFunc(const ADial: THttpDialFunc): IHttpClient;
 begin
   Result := Self;
 end;
