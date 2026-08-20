@@ -591,6 +591,7 @@ type
     procedure LowerRuntimeForStatement(const ANode: TGreenNode);
     procedure LowerRuntimeRepeatStatement(const ANode: TGreenNode);
     procedure LowerRuntimeCaseStatement(const ANode: TGreenNode);
+    function IsCharValueOperand(const ANode: TGreenNode): Boolean;
     procedure LowerRuntimeTryFinallyStatement(const ANode: TGreenNode);
     procedure LowerRuntimeTryExceptStatement(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);

@@ -815,7 +815,14 @@ begin
       CharValue := Ord(ANode.ChildAt(1).Text[2]);
       if TryEmitIntLiteral(CharValue) then
       begin
-        if SameText(ANode.ChildAt(0).Text, 'Pred') then
+        { Ord('A') is the bare value — no suffix. Plain 'int N', not the
+          structured 'expr N': a folded char literal can sit in the middle
+          of a binary blob (DigitDecode: Ord(C) - Ord('A')), where the
+          structured line is dropped (ParseIntExprArgTyped does not push
+          it) and the sub loses its right operand. }
+        if SameText(ANode.ChildAt(0).Text, 'Ord') then
+          ABlob := 'int ' + IntToStr(CharValue) + #10
+        else if SameText(ANode.ChildAt(0).Text, 'Pred') then
           ABlob := ABlob + 'expr ' + IntToStr(AExprId) + #10 + 'int 1' + #10 + 'sub' + #10
         else if SameText(ANode.ChildAt(0).Text, 'Succ') then
           ABlob := ABlob + 'expr ' + IntToStr(AExprId) + #10 + 'int 1' + #10 + 'add' + #10
@@ -838,6 +845,11 @@ begin
     end
     else if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ABlob) then
     begin
+      { Intrinsic consuming a Char value (Ord/UpCase/Pred/Succ on a Char
+        param): the operand folds to the slot address; load the i8 first
+        (Ord(C) in DigitDecode's case bodies otherwise sums the address). }
+      if IsCharValueOperand(ANode.ChildAt(1)) then
+        ABlob := ABlob + 'charval' + #10;
       if SameText(ANode.ChildAt(0).Text, 'Pred') then
         ABlob := ABlob + 'int 1' + #10 + 'sub' + #10
       else if SameText(ANode.ChildAt(0).Text, 'Succ') then

@@ -1444,6 +1444,33 @@ begin
   FContinueLabels.Pop;
 end;
 
+{ Char-like operand in a value context: 8-bit scalar params register as
+  pseudo class vars (slot holds the char address) and char-pointer index
+  access (S[Result]) folds to the element address via arr_elem_ref — both
+  need the i8 loaded before the value is consumed (case selector, Ord/UpCase
+  args). Numeric pointees (pelem_load) and string vars already carry values;
+  bare pointers (S <> nil) and Char-arg call sites must stay addresses. }
+function TSemanticAnalyzer.IsCharValueOperand(const ANode: TGreenNode): Boolean;
+var
+  ClsName, PtrType: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if ANode.NodeKind = gnkIdentifier then
+  begin
+    ClsName := LookupClassVar(ANode.Text);
+    Result := (ClsName <> '') and (TypeMetaSize(ClsName) = 1);
+  end
+  else if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    PtrType := LookupPointerVar(ANode.ChildAt(0).Text);
+    Result := SameText(PtrType, 'PChar') or SameText(PtrType, 'PAnsiChar') or
+      SameText(PtrType, 'PUTF8Char');
+  end;
+end;
+
 procedure TSemanticAnalyzer.LowerRuntimeCaseStatement(const ANode: TGreenNode);
 var
   SelectorNode, SelectorChild, LabelNode, LabelExpr: TGreenNode;
@@ -1457,6 +1484,8 @@ begin
     Exit;
   if not EncodeRuntimeIntExprFold(ANode.ChildAt(0), SelectorBlob) then
     Exit;
+  if IsCharValueOperand(ANode.ChildAt(0)) then
+    SelectorBlob := SelectorBlob + 'charval' + #10;
 
   SelectorCount := 0;
   HasElse := False;
