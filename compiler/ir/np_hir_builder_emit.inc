@@ -235,6 +235,23 @@ begin
   S.PushTyped(LenVal, GetIntTypeByWidth(64, True));
 end;
 
+procedure THIRBuilder.EmitExprTsData(var S: TExprStack; const AArg: string);
+var
+  TsSlot, DataPtr: THIRValueId;
+begin
+  { Char-buffer address of a TString (untyped-const formals like
+    CompareByte's buf params). Slot is the bare 24B alloca for locals/params;
+    const-formal materializations use Name$ts (b4b-i8). }
+  TsSlot := FindAlloca(AArg);
+  if TsSlot = 0 then
+    TsSlot := FindAlloca(AArg + '$ts');
+  if TsSlot = 0 then
+    Exit;
+  DataPtr := EmitTStringData(TsSlot);
+  if DataPtr <> 0 then
+    S.PushTyped(DataPtr, GetPtrType);
+end;
+
 procedure THIRBuilder.EmitExprStrLit(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;

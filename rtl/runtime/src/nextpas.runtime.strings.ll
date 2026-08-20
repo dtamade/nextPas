@@ -86,6 +86,37 @@ not_equal:
 }
 
 ; ============================================================
+; np_compare_byte — memcmp 语义字节比较，返回字典序符号
+; (FPC magic CompareByte 的运行时映射: -1/0/+1 语义由调用方按符号使用)
+; ============================================================
+define i64 @np_compare_byte(ptr %a_ptr, ptr %b_ptr, i64 %len) {
+entry:
+  %len_zero = icmp eq i64 %len, 0
+  br i1 %len_zero, label %equal, label %loop
+loop:
+  %i = phi i64 [ 0, %entry ], [ %i_next, %loop_cont ]
+  %done = icmp eq i64 %i, %len
+  br i1 %done, label %equal, label %body
+body:
+  %ap = getelementptr i8, ptr %a_ptr, i64 %i
+  %bp = getelementptr i8, ptr %b_ptr, i64 %i
+  %ac = load i8, ptr %ap
+  %bc = load i8, ptr %bp
+  %eq = icmp eq i8 %ac, %bc
+  br i1 %eq, label %loop_cont, label %differ
+differ:
+  %ac64 = zext i8 %ac to i64
+  %bc64 = zext i8 %bc to i64
+  %diff = sub i64 %ac64, %bc64
+  ret i64 %diff
+loop_cont:
+  %i_next = add i64 %i, 1
+  br label %loop
+equal:
+  ret i64 0
+}
+
+; ============================================================
 ; np_str_pos — substring 搜索，1-based 或 0
 ; ============================================================
 define i64 @np_str_pos(ptr %sub_ptr, i64 %sub_len, ptr %s_ptr, i64 %s_len) {

@@ -156,6 +156,7 @@ type
     procedure EmitExprVarRef(var S: TExprStack; const AArg: string);
     procedure EmitExprRecVar(var S: TExprStack; const AArg: string);
     procedure EmitExprStrVar(var S: TExprStack; const AArg: string);
+    procedure EmitExprTsData(var S: TExprStack; const AArg: string);
     procedure EmitExprStrLit(var S: TExprStack; const AArg: string);
     procedure EmitExprIs(var S: TExprStack; const AArg: string);
     procedure EmitExprArrLoad(var S: TExprStack);

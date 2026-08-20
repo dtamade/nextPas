@@ -158,6 +158,7 @@ begin
   Emit('declare void @np_tstring_from_int(ptr %dst, i64 %val)');
   Emit('declare i64 @np_tstring_equal(ptr %a, ptr %b)');
   Emit('declare i64 @np_tstring_compare(ptr %a, ptr %b)');
+  Emit('declare i64 @np_compare_byte(ptr %a, ptr %b, i64 %len)');
   Emit('declare void @np_tstring_field_assign(ptr %dst, ptr %src)');
   Emit('declare void @np_tstring_field_fini(ptr %s)');
   Emit('declare void @np_tstring_ret_move(ptr %sret_dst, ptr %src)');

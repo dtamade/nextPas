@@ -247,7 +247,11 @@ procedure THIRBuilder.EnsureAlloca(const AName: string; AType: THIRTypeId);
 var
   Instr: THIRInstr;
 begin
-  if FindAlloca(AName) <> 0 then Exit;
+  { Existence check must be side-effect free: FindAlloca falls through to the
+    global ref fallback, which materializes a global_ref instruction when a
+    SameText-matching global exists (local b vs global B). That non-zero value
+    made EnsureAlloca exit early and the local never got an alloca. }
+  if FindLocalAlloca(AName) <> 0 then Exit;
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;

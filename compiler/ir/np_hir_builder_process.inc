@@ -101,6 +101,7 @@ begin
         S.PushTyped(Instr.ResultId, GetPtrType);
       end
       else if Token = 'strvar' then EmitExprStrVar(S, Arg)
+      else if Token = 'tsdata' then EmitExprTsData(S, Arg)
       else if Token = 'strlit' then EmitExprStrLit(S, Arg)
       else if Token = 'var' then EmitExprVar(S, Arg)
       else if Token = 'varref' then EmitExprVarRef(S, Arg)
@@ -558,10 +559,6 @@ begin
     (ANode.NodeKind <> hnkRetRuntime) and
     (ANode.NodeKind <> hnkRetTStringRuntime) then
   begin
-    WriteLn(StdErr, '[hir] FlushPendingCleanup count=',
-      IntToStr(FPendingCleanupNodes.Count),
-      ' before kind=', ANode.Kind);
-    Flush(StdErr);
     FlushPendingCleanupNodes;
   end;
 

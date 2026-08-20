@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-20 b4b-i6 后实测）
+## 当前战况（2026-08-20 b4b-i8 后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复；R8 探针待跑) |
-| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复；R8 探针待跑) |
+| undefined unique | **1** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** |
+| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -433,6 +433,35 @@ pointer var（TypeMetaIsPointer('PTypeInfo') 判定不成立）→
 LookupPointerVar('LTypeInfo')='' → TryPointerFieldAccess 失败；case 体内
 `TInternalCompareMethod(@DoCompareBool)` 方法引用存储是另一独立缺口。数字：
 R8 探针 undefined uniq=2 total=6 持平不升；compiler-pass 58/58；hygiene pass。 |
+
+²⁶ b4b-i8（本 commit）：**CompareByte 链 + seed meta 保护 + 属性/虚方法引用
++ 局部 alloca 副作用修复**，mini（build/m2_mini_generic.pas）**opt 全链通过**
+（undefined uniq=0 total=0；opt+llc+ld 成功、diagnostic=0、可执行文件产出）。
+（a）CompareByte magic：encode 端新增 untyped-const 地址参数处理（字符串索引
+参数经 `tsdata` 取 char 缓冲地址+索引修正，`P^` 传指针值），映射到 runtime
+`np_compare_byte`（declare 进 np_hir_llvm_emitter_helpers.inc、define 进
+`nextpas.runtime.strings.ll` 字典序 memcmp），5 处 `@CompareByte` 清零；
+（b）SeedCachedTypeGaps 保护补 `Meta.Fields<>nil`（原只查 VmtSlots/VmtCount，
+方法全非 virtual 的类如 TElementManager 被空 meta 覆盖，META-CLR 55→0）；
+（c）1653 无括号方法引用分支排除 `$read` 属性（`aSrc.Data` 是属性读取不是
+方法引用）并对 virtual/abstract 成员（TCollection.GetCount）改走 vmt vcall
+（direct call @Type.GetCount 无 define）；2242 `$read` getter 分支同样加
+vcall 分发；（d）**EnsureAlloca 副作用修复（本轮最后一根因）**：存在性检查
+原用 `FindAlloca`，它查不到局部时回退 SameText 全局匹配并当场 materialize
+global_ref——局部 `b: Byte` 撞上程序级全局 `B: TBoolVec` 后 `FindAlloca` 返回
+非零 → EnsureAlloca 提前退出，局部 b 永远无 alloca，全部引用落 `@g_b`（未定义
+全局，opt 报 use of undefined value）。修法：改用无副作用的 `FindLocalAlloca`；
+（e）PByte 元素索引值加载：numeric-pointee 分支护栏 `Folded>1` 放宽为 `>=1`
+（PByte 元素大小 1 时之前落进丢 base 的通用 arrload fallback，`b := pB[i]`
+只编出索引 i）；builder 端 EmitExprPtrElemLoad 已支持 size 1（gep_i8+i8 load）。
+验证：Utf8Validate_SSE2 的 `b := pB[i]` 变为 gep+load i8+sext 的整数比较，
+`@g_b` 归零、`@g_B`（程序变量）保留。**挂账**：① 可执行文件 PT_INTERP=
+/lib/ld64.so.1 本机不存在（toolchain linker profile 既有问题，此前轮次只验
+opt 未运行过产物）；② CompareByte 调用点参数签名 i64/ptr 混用（x86-64 ABI
+等价，运行时正确，静态类型注解待统一）；③ THashMap.Create / TVecBuf 泛型别名 /
+method-object / (5) case 选择器 / project-helper SarLongint / b2-next /
+capture-ub / b65-double / isep-body / strlen-cast / sar-shift 挂账不变。
+数字：mini 0/0 + opt PASS；compiler-pass 待跑；hygiene pass。 |
 
 | opt 首错 | `use of undefined value '@CompareByte'`（.ll 46424 行，DoCompareStr 链）——修后次错 `@TProcedureBodyNameFirstMap.Create`（354043 行）；再后是 90 处裸 `call @Create`（克隆体残缺，被 walk 全局函数分支误绑定 FsCreate 包装符号 Create），根因见注²³/²⁴——全部挂账，下一口收 | 本轮实测（探针 2/6；opt 三段推进：CompareByte → THashMap.Create → 克隆体残缺家族；`TGenericCollection<T>.Create` 克隆体 body 注册即残缺，根因链见注²³/²⁴） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
