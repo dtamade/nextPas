@@ -26,6 +26,12 @@ unit nextpas.core.mail.smtp.server;
  * 业务侧回调内不执行阻塞 I/O；向会话内送数据须经
  * context.WorkerHandoff 在 reactor 线程交付。
  *
+ * MAIL 阶段同步策略：配置 MailPolicy（ISmtpMailPolicyHook）后，会话在
+ * MAIL FROM 解析成功、信封 From 定值前回调 EvaluateMailFrom（reactor
+ * 线程，须短非阻塞：令牌桶/计数判定，不得做 DNS/DB 等阻塞操作）；
+ * 返回 '' 放行，非空为完整拒绝回复行。拒绝后信封未定值，客户端可
+ * 重发 MAIL 或 RSET。典型消费：限流、greylisting 预判、来源域策略。
+ *
  * 线程约束：SendXxx/Cancel 由推进方（reactor 线程，即 Advance）调用。
  *}
 
@@ -76,6 +82,19 @@ type
       const AEnvelope: TMailSmtpEnvelope);
   end;
 
+  { MAIL FROM 阶段同步策略钩子：应用在信封 From 定值前裁决是否接受
+    本封发件人。reactor 线程调用，须短非阻塞（μs 级，如令牌桶/计数判定），
+    不得做 DNS/DB/网络等可能阻塞的操作（D9：阻塞操作须卸载到 worker）。
+    典型消费：连接/消息限流、greylisting 预判、来源域策略。
+    返回 '' = 放行；非空 = 完整拒绝回复行（状态码 + 增强码 + 文案 + CRLF，
+    如 '452 4.7.1 Too many messages' + #13#10）。拒绝后信封未定值，
+    客户端可重发 MAIL/RSET。 }
+  ISmtpMailPolicyHook = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000021}']
+    function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+  end;
+
   TMailSmtpServerConfig = record
     Domain: string;                  { EHLO/HELO banner 域名；'' → 'localhost' }
     MaxMessageSize: Int64;           { DATA 上限；0 → 64MiB }
@@ -85,6 +104,7 @@ type
     RequireAuth: Boolean;            { 已 AUTH 才接受 MAIL（Submission 语义） }
     AuthEnabled: Boolean;            { 是否广播 AUTH 并接受 AUTH 命令 }
     AuthCallback: TMethod;           { 预留：凭证校验回调；本批缺省拒（见 plans §6） }
+    MailPolicy: ISmtpMailPolicyHook; { MAIL 阶段同步策略钩子；nil = 关闭 }
     class function Default: TMailSmtpServerConfig; static;
   end;
 
@@ -127,6 +147,7 @@ type
       FEnvelope: TEnvelopeBuild;
       FHeloState: (hsNone, hsHelo, hsEhlo);
       FAuthed: Boolean;
+      FMailPolicy: ISmtpMailPolicyHook;
       FClosedNotified: Boolean;
       FDataBytes: SizeUInt;
       FDataBuf: TBytes;              { DATA 明文累积（去点转义、含行界） }
@@ -174,6 +195,7 @@ begin
   Result.AuthEnabled := False;
   Result.AuthCallback.Code := nil;
   Result.AuthCallback.Data := nil;
+  Result.MailPolicy := nil;
 end;
 
 { 从累积行缓冲构造 string（去 CRLF）}
@@ -230,6 +252,7 @@ begin
     raise EArgumentError.Create('smtp server session requires stream runtime seam');
   FSink := ASink;
   FConfig := AConfig;
+  FMailPolicy := FConfig.MailPolicy;
   if FConfig.Domain = '' then
     FConfig.Domain := 'localhost';
   if FConfig.MaxMessageSize <= 0 then
@@ -373,6 +396,7 @@ var
   LAddr: TMailAddress;
   LSize: Int64;
   LOk: Boolean;
+  LPolicyReply: string;
 begin
   if not SplitVerb(ALine, LVerb, LArgs) then
   begin
@@ -436,6 +460,17 @@ begin
           EnqueueStr('552 5.3.4 Message size exceeds fixed limit' + #13#10);
           BeginFlush(stCommand);
           Exit;
+        end;
+        if FMailPolicy <> nil then
+        begin
+          LPolicyReply := FMailPolicy.EvaluateMailFrom(LAddr,
+            FConn.RemoteAddr.IP);
+          if LPolicyReply <> '' then
+          begin
+            EnqueueStr(LPolicyReply);
+            BeginFlush(stCommand);
+            Exit;
+          end;
         end;
         FEnvelope.From := LAddr;
         FEnvelope.FromSet := True;
