@@ -87,6 +87,8 @@ type
     function RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
     // M5+ (2026-08-15): blame a file (libgit2 native)
     function Blame(const APath: string): TGitBlame;
+    // k42 (2026-08-20): repo config entry snapshot (include-resolved merged view)
+    function ConfigEntries: TGitConfigEntryArray;
 
     // Worktree operations (IGitWorktreeExt)
     function AddWorktree(const AName, APath, ARef: string;
@@ -446,6 +448,11 @@ end;
 function TGitRepositoryImpl.Blame(const APath: string): TGitBlame;
 begin
   Result := FRepo.Blame(APath);
+end;
+
+function TGitRepositoryImpl.ConfigEntries: TGitConfigEntryArray;
+begin
+  Result := FRepo.ConfigEntries;
 end;
 
 function TGitRepositoryImpl.RevWalk(const AStartRef: string; ALimit: Integer): TGitCommitArray;
