@@ -1301,9 +1301,12 @@ end;
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
   const AOwnerUnitId: string; const ATypeId: LongInt);
 var
-  I, J: LongInt;
+  I, J, K: LongInt;
   Child, NameNode: TGreenNode;
+  TypeChild: TGreenNode;
   FieldTypeId: LongInt;
+  ClassTypeName, SpecText: string;
+  NewTypeId: LongInt;
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
   ClsName, ParentName, ConstName, FieldName, ParentStringVal, InhParentName: string;
@@ -1589,6 +1592,75 @@ begin
       if Meta.Fields = nil then
         Meta.Fields := TSemanticFieldMetaVec.Create;
       Meta.Fields.Push(Field);
+    end
+    else if Child.NodeKind = gnkTypeSection then
+    begin
+      { Class-local type section (TVecBuf = specialize TArray<T>). Register
+        each alias so call sites inside cloned bodies can resolve the
+        receiver; generic args (T) stay unbound until instantiation. }
+      for J := 0 to Child.ChildCount - 1 do
+      begin
+        NameNode := Child.ChildAt(J);
+        if (NameNode = nil) or (NameNode.NodeKind <> gnkTypeDecl) then
+          Continue;
+        ClassTypeName := NameNode.Text;
+        if ClassTypeName = '' then
+          Continue;
+        TypeChild := nil;
+        for K := 0 to NameNode.ChildCount - 1 do
+          if NameNode.ChildAt(K) <> nil then
+          begin
+            TypeChild := NameNode.ChildAt(K);
+            Break;
+          end;
+        if (TypeChild = nil) or (TypeChild.NodeKind <> gnkIdentifier) then
+          Continue;
+        SpecText := TypeChild.Text;
+        NewTypeId := FModel.AddType(ClassTypeName, 'declared');
+        FModel.SetTypeParent(NewTypeId, 0);
+        { Register as a unit-scoped type symbol too: field receivers
+          (FBuf: TVecBuf) resolve via ResolveTypeIdForOwner, which scans
+          symbols, not the bare type table — without this the field
+          TypeId was 0 and method receivers fell back to PAnsiChar. }
+        FModel.AddSymbol(ClassTypeName, 'type', AOwnerUnitId, NewTypeId, 0);
+        if Pos('<', SpecText) > 0 then
+        begin
+          { Generic-parameterized alias: keep the spec text and the owning
+            class so instantiation can expand it (T -> concrete arg). }
+          FModel.AddStringConstValue(ClassTypeName + '$class_spec', SpecText);
+          FModel.AddStringConstValue(ClassTypeName + '$class_owner',
+            ClsName);
+          FModel.AddStringConstValue(ClassTypeName + '$class_owner_unit',
+            AOwnerUnitId);
+          FModel.AddConstValue(ClassTypeName + '$size', 8);
+          FModel.SetTypeKind(NewTypeId, 'alias');
+          { Seed a metadata entry so GetTypeMeta can find the alias;
+            FindTypeByName alone does not create one. }
+          FModel.SetTypeAliasTarget(NewTypeId, 0);
+        end
+        else
+        begin
+          { Concrete class-local alias: forward to the resolved target when
+            it is already registered, mirroring ProcessTypeSection. }
+          FieldTypeId := ResolveTypeIdForOwner(SpecText, AOwnerUnitId);
+          if FieldTypeId > 0 then
+          begin
+            if FModel.GetTypeMeta(FieldTypeId, Meta) and (Meta.Size > 0) then
+            begin
+              FModel.AddConstValue(ClassTypeName + '$size', Meta.Size);
+              FModel.SetTypeParent(NewTypeId, FieldTypeId);
+            end;
+            FModel.SetTypeKind(NewTypeId, 'alias');
+            FModel.SetTypeAliasTarget(NewTypeId, FieldTypeId);
+          end
+          else
+          begin
+            FModel.AddConstValue(ClassTypeName + '$size', 8);
+            FModel.SetTypeKind(NewTypeId, 'alias');
+            FModel.SetTypeAliasTarget(NewTypeId, 0);
+          end;
+        end;
+      end;
     end
     else if Child.NodeKind = gnkClassMethod then
     begin

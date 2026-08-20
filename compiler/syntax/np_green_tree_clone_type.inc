@@ -473,38 +473,11 @@ begin
               end
               else if CurrentToken(ALexer, ACursor).Kind = tkTypeKeyword then
               begin
-                { skip nested type section: may contain multiple decls }
-                Inc(ACursor);
-                Nesting := 0;
-                while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
-                begin
-                  if (Nesting = 0) and
-                    (CurrentToken(ALexer, ACursor).Kind in
-                      [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
-                       tkPublishedKeyword, tkEndKeyword]) then
-                    Break;
-                  if (CurrentToken(ALexer, ACursor).Kind in
-                    [tkRecordKeyword, tkObjectKeyword,
-                     tkClassKeyword, tkInterfaceKeyword]) and
-                    ((ACursor <= 0) or
-                     (ALexer.TokenAt(ACursor - 1).Kind <> tkOfKeyword)) then
-                  begin
-                    if (CurrentToken(ALexer, ACursor).Kind = tkClassKeyword) and
-                      (ACursor + 1 < ALexer.TokenCount) and
-                      (ALexer.TokenAt(ACursor + 1).Kind in
-                        [tkFunctionKeyword, tkProcedureKeyword,
-                         tkConstructorKeyword, tkDestructorKeyword,
-                         tkOperatorKeyword]) then
-                      { class as method modifier, not type declaration }
-                    else
-                      Inc(Nesting);
-                  end
-                  else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
-                    (Nesting > 0) then
-                    Dec(Nesting);
-                  Inc(ACursor);
-                end;
+                { Parse nested type section (TVecBuf = specialize TArray<T>)
+                  so sema can register class-local types; previously skipped
+                  to the next visibility label, dropping the declarations. }
+                ParseTypeSection(ALexer, ACursor, TypeNode, ATree,
+                  ADiagnostics, ARootFileId);
               end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkProcedureKeyword, tkFunctionKeyword,

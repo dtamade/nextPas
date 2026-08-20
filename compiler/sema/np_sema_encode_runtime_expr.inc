@@ -344,6 +344,7 @@ var
   CastChildren: array of LongInt;
   BranchNode, DeclNode, RhsNode, BaseNode: TGreenNode;
   Operand, PropName, BaseNodeName: string;
+  FldMeta: TFieldMeta;
 begin
   ABlob := '';
   AExprId := 0;
@@ -2213,15 +2214,12 @@ begin
       Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text);
       ArgName := 'field self ' + IntToStr(Folded) + ' p' + #10;
       FuncName := '';
-      for StrCallIdx := 1 to FModel.SymbolCount do
-        if (FModel.SymbolAt(StrCallIdx).Name = ANode.ChildAt(0).Text) and
-          (FModel.SymbolAt(StrCallIdx).Kind = 'field') then
-        begin
-          if FModel.SymbolAt(StrCallIdx).TypeId > 0 then
-            FuncName := FModel.TypeAt(
-              FModel.SymbolAt(StrCallIdx).TypeId - 1).Name;
-          Break;
-        end;
+      { Field type comes from the current class's field meta, not the first
+        symbol table hit: other classes (text.builder FBuf: PAnsiChar) share
+        the field name and hijacked the receiver type. }
+      if FModel.GetFieldMetaByName(FModel.FindTypeByName(FCurrentMethodClass),
+        ANode.ChildAt(0).Text, FldMeta) and (FldMeta.TypeId > 0) then
+        FuncName := FModel.TypeAt(FldMeta.TypeId - 1).Name;
       if FuncName <> '' then
       begin
         Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
@@ -2247,8 +2245,17 @@ begin
             ABlob := ABlob + 'arr_load' + #10;
         end
         else
+        begin
+          { Class-local alias receiver (TVecBuf = specialize TArray<T>):
+            expand via the active generic instance so the callee names a
+            real cloned body instead of the template alias. }
+          Operand := ResolveClassMethodCalleeName(FuncName,
+            ANode.ChildAt(1).Text);
+          if Operand = '' then
+            Operand := FuncName + '.' + ANode.ChildAt(1).Text;
           ABlob := ArgName +
-            'call ' + FuncName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
+            'call ' + Operand + ' 1' + #10;
+        end;
         Exit(True);
       end;
       FuncName := '';

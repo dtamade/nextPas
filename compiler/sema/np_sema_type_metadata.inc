@@ -66,14 +66,19 @@ var
   FoundAny: string;
   function ClassHasMethod(const AOwner, AMethod: string): Boolean;
   begin
-    Result := (FirstBodyIndexForNameLocal(AOwner + '.' + AMethod) >= 0) or
-      (FModel.FindSymbolByName(AOwner + '.' + AMethod) <> 0);
+    { A direct call needs a real body; a bare symbol (abstract virtual,
+      un-cloned generic method like TArray<Boolean>.Create without a
+      whitelist body) would emit an undefined callee. }
+    Result := FirstBodyIndexForNameLocal(AOwner + '.' + AMethod) >= 0;
   end;
   function PeelAliasClassName(const AName: string): string;
   var
     Cur: string;
     Tid, G, LocalDot, LocalIdx: LongInt;
     M: TTypeMetadata;
+    SpecText, SpecOwner, GenericName, ArgsText, ArgName, Subst,
+      ExpandedName: string;
+    LtPos, GtPos, ArgI, ArgJ, Depth: LongInt;
   begin
     Result := AName;
     Cur := AName;
@@ -107,6 +112,67 @@ var
         Break;
       if M.AliasTargetTypeId <= 0 then
       begin
+        { Class-local generic alias (TVecBuf = specialize TArray<T>):
+          T stays unbound until instantiation, so the alias target is 0.
+          Expand through the active generic instance's $generic_arg_<T>
+          consts and instantiate the concrete target on demand. }
+        if (FCurrentGenericInstance <> '') and
+          FModel.LookupStringConstValue(Cur + '$class_spec', SpecText) and
+          (SpecText <> '') then
+        begin
+          LtPos := Pos('<', SpecText);
+          if LtPos > 0 then
+          begin
+            Depth := 1;
+            GtPos := LtPos + 1;
+            while (GtPos <= Length(SpecText)) and (Depth > 0) do
+            begin
+              if SpecText[GtPos] = '<' then
+                Inc(Depth)
+              else if SpecText[GtPos] = '>' then
+                Dec(Depth);
+              Inc(GtPos);
+            end;
+            GenericName := Copy(SpecText, 1, LtPos - 1);
+            ArgsText := Copy(SpecText, LtPos + 1, GtPos - LtPos - 2);
+            ExpandedName := GenericName + '<';
+            ArgI := 1;
+            while ArgI <= Length(ArgsText) do
+            begin
+              while (ArgI <= Length(ArgsText)) and (ArgsText[ArgI] = ' ') do
+                Inc(ArgI);
+              ArgJ := ArgI;
+              while (ArgJ <= Length(ArgsText)) and (ArgsText[ArgJ] <> ',') do
+                Inc(ArgJ);
+              ArgName := Copy(ArgsText, ArgI, ArgJ - ArgI);
+              while (Length(ArgName) > 0) and
+                (ArgName[Length(ArgName)] = ' ') do
+                Delete(ArgName, Length(ArgName), 1);
+              Subst := ArgName;
+              if FModel.LookupStringConstValue(
+                FCurrentGenericInstance + '.$generic_arg_' + ArgName,
+                Subst) then
+                { template param -> concrete generic arg }
+              else
+                Subst := ArgName;
+              ExpandedName := ExpandedName + Subst;
+              if (ArgJ <= Length(ArgsText)) and (ArgsText[ArgJ] = ',') then
+                ExpandedName := ExpandedName + ',';
+              ArgI := ArgJ + 1;
+            end;
+            ExpandedName := ExpandedName + '>';
+            SpecOwner := '';
+            FModel.LookupStringConstValue(Cur + '$class_owner_unit',
+              SpecOwner);
+            if FModel.FindTypeByName(ExpandedName) <= 0 then
+              ResolveOrInstantiateInlineGeneric(ExpandedName, SpecOwner);
+            if FModel.FindTypeByName(ExpandedName) > 0 then
+            begin
+              Result := ExpandedName;
+              Break;
+            end;
+          end;
+        end;
         Result := Cur;
         Break;
       end;
