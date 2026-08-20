@@ -22,7 +22,8 @@ unit nextpas.core.mail.smtp.server;
  *
  * 业务集成：应用实现 ISmtpServerSink，服务器在 reactor 线程回调
  * OnServerEvent(msseMessage, Envelope) 交付一封收信（MAIL/RCPT/DATA 收集
- * 完毕后的信封）。业务侧回调内不执行阻塞 I/O；向会话内送数据须经
+ * 完毕后的信封；Envelope.ClientIP 为对端 IP，同 reactor 线程读取）。
+ * 业务侧回调内不执行阻塞 I/O；向会话内送数据须经
  * context.WorkerHandoff 在 reactor 线程交付。
  *
  * 线程约束：SendXxx/Cancel 由推进方（reactor 线程，即 Advance）调用。
@@ -59,11 +60,14 @@ type
     msseClosed       { 传输终止（EOF/取消/QUIT 完成）；不再有后续事件 }
   );
 
-  { 一封信的信封：MAIL FROM + RCPT TO 列表 + DATA 原始字节 }
+  { 一封信的信封：MAIL FROM + RCPT TO 列表 + DATA 原始字节 + 对端 IP。
+    ClientIP 在 DATA 完成时从连接 RemoteAddr 读取（reactor 线程），供
+    消费方做收信时刻的源身份判定（SPF、日志、限流）。 }
   TMailSmtpEnvelope = record
     From: TMailAddress;
     Recipients: array of TMailAddress;
     Data: TBytes;                    { DATA 收集后原始字节（含 CRLF，去点转义） }
+    ClientIP: string;                { 对端 IP（点分/字面量，不解析为地址类型） }
   end;
 
   ISmtpServerSink = interface
@@ -541,6 +545,7 @@ begin
     LDeliver.From := FEnvelope.From;
     LDeliver.Recipients := FEnvelope.Recipients;
     FEnvelope.Recipients := nil;
+    LDeliver.ClientIP := FConn.RemoteAddr.IP;
     SetLength(LDeliver.Data, FDataLen);
     if FDataLen > 0 then
       Move(FDataBuf[0], LDeliver.Data[0], FDataLen);
