@@ -207,9 +207,10 @@ function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar
     @param APath 目标文件路径
     @param AData 数据指针
     @param ALen 数据长度
-    @return 0 成功，否则返回错误码 *}
+    @param APerm 临时文件创建权限（POSIX mode；创建时即生效，
+          避免「0666&umask 落盘 → rename → 事后 chmod」窗口） *}
 function platform_fs_write_atomic(const APath: PAnsiChar;
-  AData: Pointer; ALen: PtrUInt): Int32;
+  AData: Pointer; ALen: PtrUInt; APerm: UInt32): Int32;
 
 {** @desc 读取整个文件到内存（自动分配缓冲区）
     @param APath 文件路径
@@ -743,7 +744,7 @@ begin
 end;
 
 function platform_fs_write_atomic(const APath: PAnsiChar;
-  AData: Pointer; ALen: PtrUInt): Int32;
+  AData: Pointer; ALen: PtrUInt; APerm: UInt32): Int32;
 const
   HEX: array[0..15] of AnsiChar = '0123456789abcdef';
   MAX_ATOMIC_TEMP_ATTEMPTS = 16;
@@ -777,7 +778,11 @@ begin
     end;
     LTmpPath[LPathLen] := #0;
 
-    LR := platform_file_open(@LTmpPath[0], fomWriteOnly, fcmCreateNew, LH);
+    { 临时文件创建即带最终权限（对齐 Go os.WriteFile 0600：umask 只会
+      剥位不会加位，绝不存在组/其他可读窗口——含写满数据后的 fsync
+      期间与 rename 后的瞬间）。}
+    LR := platform_file_open_ex(@LTmpPath[0], fomWriteOnly, fcmCreateNew,
+      False, False, APerm, LH);
     if LR = 0 then
       Break;
   end;
