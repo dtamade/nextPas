@@ -52,6 +52,7 @@ type
     LastFrom: string;
     LastRcptCount: Int32;
     LastData: string;
+    LastClientIP: string;
     constructor Create;
     procedure OnServerEvent(const AEvent: TMailSmtpServerEvent;
       const AEnvelope: TMailSmtpEnvelope);
@@ -283,6 +284,7 @@ begin
         LastFrom := AEnvelope.From.Full;
         LastRcptCount := Length(AEnvelope.Recipients);
         LastData := UTF8BytesToString(AEnvelope.Data);
+        LastClientIP := AEnvelope.ClientIP;
       end;
     msseTimeout:
       Inc(TimeoutCount);
@@ -438,6 +440,7 @@ begin
   Check(SpinWait(LSink.MsgCount, 1), 'server received message');
   CheckEqual('alice@example.com', LSink.LastFrom, 'envelope from');
   CheckEqual(2, LSink.LastRcptCount, 'envelope recipients');
+  CheckEqual('127.0.0.1', LSink.LastClientIP, 'envelope client ip (loopback peer)');
   { 点转义还原：'.line' 与 '..double' 应原样回到应用 }
   Check(Pos('.line' + #13#10, LSink.LastData) > 0, 'dot unstuff single');
   Check(Pos('..double' + #13#10, LSink.LastData) > 0, 'dot unstuff double');

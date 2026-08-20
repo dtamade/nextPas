@@ -96,8 +96,9 @@ end;
   poll-driven 后端（事件驱动纪律，PLAN D9）；出站回复队列有界（背压超限
   即 msseOverflow 失败关闭），DATA 上限/收件人上限受配置约束（RFC 5321 §4.5.3.1）。
 - **[INV-A8]** 服务器收信事件（msseMessage）在 reactor 线程交付，Envelope
-  持有 Data 的独立所有权副本；会话销毁/传输终止必发 msseClosed，消费方
-  不得在回调内执行阻塞 I/O。
+  持有 Data 的独立所有权副本；`Envelope.ClientIP` 为对端 IP（连接 RemoteAddr
+  读取，reactor 线程，纯文本不做解析），消费方可在回调内直接使用但不执行
+  阻塞 I/O；会话销毁/传输终止必发 msseClosed。
 
 ## 6. 与 v0.1 差异表（v0.1 = 客户端草图）
 
