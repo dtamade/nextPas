@@ -75,15 +75,20 @@ type
     FConfig: TMailSmtpServerConfig;
   end;
 
-  { MAIL 策略钩子 mock：可切换放行/拒绝，记录调用与入参 }
+  { MAIL/RCPT 策略钩子 mock：可切换放行/拒绝，记录调用与入参 }
   TTestMailPolicy = class(TInterfacedObject, ISmtpMailPolicyHook)
   public
-    RejectReply: string;   { '' = 放行; 非空 = 完整拒绝行(含 CRLF) }
-    Calls: Int32;
+    RejectReply: string;       { '' = 放行 MAIL; 非空 = 完整拒绝行(含 CRLF) }
+    RcptRejectReply: string;   { '' = 放行 RCPT; 非空 = 完整拒绝行(含 CRLF) }
+    Calls: Int32;              { EvaluateMailFrom 次数 }
+    RcptCalls: Int32;          { EvaluateRcptTo 次数 }
     LastFrom: string;
+    LastRcpt: string;
     LastIP: string;
     constructor Create;
     function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+    function EvaluateRcptTo(const AFrom: TMailAddress; const ARcpt: TMailAddress;
       const AClientIP: string): string;
   end;
 
@@ -338,6 +343,7 @@ constructor TTestMailPolicy.Create;
 begin
   inherited Create;
   RejectReply := '';
+  RcptRejectReply := '';
 end;
 
 function TTestMailPolicy.EvaluateMailFrom(const AFrom: TMailAddress;
@@ -347,6 +353,16 @@ begin
   LastFrom := AFrom.Full;
   LastIP := AClientIP;
   Result := RejectReply;
+end;
+
+function TTestMailPolicy.EvaluateRcptTo(const AFrom: TMailAddress;
+  const ARcpt: TMailAddress; const AClientIP: string): string;
+begin
+  Inc(RcptCalls);
+  LastFrom := AFrom.Full;
+  LastRcpt := ARcpt.Full;
+  LastIP := AClientIP;
+  Result := RcptRejectReply;
 end;
 
 { ── 测试用例 ──────────────────────────────────────────────────────── }
@@ -581,6 +597,65 @@ begin
   ExpectReply(C, 2000, '221', 'QUIT');
   C.Close;
   CheckEqual(2, LPolicy.Calls, 'policy called twice (reject + allow)');
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+  LPolicyRef := nil;
+end;
+
+{ RCPT 阶段同步策略钩子(9.5)：拒绝 → 该收件人未入列(DATA 缺 RCPT → 503)，
+  释放后重发 RCPT 成功并完成 DATA }
+procedure TestRcptPolicyHook;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LPolicy: TTestMailPolicy;
+  LPolicyRef: ISmtpMailPolicyHook;
+begin
+  LSink := TTestSmtpSink.Create;
+  LPolicy := TTestMailPolicy.Create;
+  LPolicy.RcptRejectReply := '451 4.7.1 Greylisted, try again later' + #13#10;
+  LPolicyRef := LPolicy;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.MailPolicy := LPolicyRef;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'mail ok');
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '451', 'rcpt rejected by policy');
+  { 收件人未入列: DATA → 503 }
+  C.SendLine('DATA');
+  ExpectReply(C, 2000, '503', 'data after rejected rcpt (no recipients)');
+  { 释放后重发 RCPT 成功 }
+  LPolicy.RcptRejectReply := '';
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '250', 'rcpt ok after policy release');
+  C.SendLine('DATA');
+  ExpectReply(C, 2000, '354', 'data accepted');
+  C.SendLine('Subject: t');
+  C.SendLine('');
+  C.SendLine('body');
+  C.SendLine('.');
+  ExpectReply(C, 2000, '250', 'message queued');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+  { 250 回复已读回 ⇒ EvaluateRcptTo 必已完成 }
+  CheckEqual(2, LPolicy.RcptCalls, 'rcpt policy called twice (reject + allow)');
+  CheckEqual('a@b.com', LPolicy.LastFrom, 'rcpt policy sees mail from');
+  CheckEqual('x@y.com', LPolicy.LastRcpt, 'rcpt policy sees rcpt to');
+  CheckEqual('127.0.0.1', LPolicy.LastIP, 'rcpt policy sees peer ip');
+  Check(SpinWait(LSink.MsgCount, 1), 'message delivered after rcpt release');
 
   StopSmtpServer(LServer, LH);
   LSink := nil;
@@ -825,6 +900,7 @@ begin
   T.Test('MailRcptDataFlow', @TestMailRcptDataFlow);
   T.Test('SizeReject', @TestSizeReject);
   T.Test('MailPolicyHook', @TestMailPolicyHook);
+  T.Test('RcptPolicyHook', @TestRcptPolicyHook);
   T.Test('OrderAndSyntax', @TestOrderAndSyntax);
   T.Test('RequireAuth', @TestRequireAuth);
   T.Test('MaxRecipients', @TestMaxRecipients);
