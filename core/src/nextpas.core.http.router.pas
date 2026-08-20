@@ -83,6 +83,7 @@ function MatchPathPattern(const APattern, APath: string): Boolean;
 implementation
 
 uses
+  nextpas.core.encoding,
   nextpas.core.http.message,
   nextpas.core.http.middleware;
 
@@ -477,7 +478,10 @@ const
         begin
           SetLength(AParams, Length(AParams) + 1);
           AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-          AParams[High(AParams)].Value := LSeg;
+          { 路径参数按 RFC 3986 percent-decode（%xx → 原字符；如邮箱地址
+            客户端 encodeURIComponent 后 %40）。段内解码不改 '/' 拆分语义，
+            '+' 保持字面（PercentDecode 为 path 语义，非 form 语义）。 }
+          AParams[High(AParams)].Value := PercentDecode(LSeg);
           LRest := Copy(APath, LEnd, Length(APath) - LEnd + 1);
           LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
           if LResult <> nil then
@@ -495,7 +499,8 @@ const
       begin
         SetLength(AParams, Length(AParams) + 1);
         AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-        AParams[High(AParams)].Value := Copy(APath, 2, Length(APath) - 1);
+        AParams[High(AParams)].Value := PercentDecode(
+          Copy(APath, 2, Length(APath) - 1));
         if ANode^.Children[LI]^.HasHandler then
           Exit(ANode^.Children[LI]^.Handler);
         SetLength(AParams, Length(AParams) - 1);
