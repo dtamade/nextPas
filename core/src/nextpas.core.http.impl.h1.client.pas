@@ -35,6 +35,10 @@ type
       on CONNECT and on absolute-form when the request lacks that header.
       Wave I freeze: Basic only — no Digest/NTLM/Negotiate challenge retry. }
     ProxyUrl: string;
+    { Custom transport dial (see THttpClientOptions.DialFunc). When assigned,
+      every fresh connection is established through it instead of the built-in
+      TcpConnect; ProxyUrl takes precedence when both are set. }
+    DialFunc: THttpDialFunc;
     { Optional client TLS context for direct H1 https and https-over-CONNECT.
       Nil uses TSSLQuick.SecureClient. }
     TLSContext: ISSLContext;
@@ -616,9 +620,16 @@ var
 
   procedure PrepareFreshConnection;
   begin
-    { ConnectTimeout (or Timeout when ConnectTimeout=0) bounds OS dial. }
-    LConn := H1ClientDial(LConnectHost, LConnectPort, FOptions.ConnectTimeout,
-      LTimeoutMs);
+    { ConnectTimeout (or Timeout when ConnectTimeout=0) bounds OS dial.
+      Custom dial func (SOCKS5 tunnels etc.) replaces the built-in TcpConnect;
+      it receives the same deadline budget and must raise on failure. WithProxyUrl
+      strictly takes precedence: a proxied request always dials the proxy host. }
+    if (FOptions.ProxyUrl = '') and Assigned(FOptions.DialFunc) then
+      LConn := FOptions.DialFunc(LConnectHost, LConnectPort,
+        FOptions.ConnectTimeout, LTimeoutMs)
+    else
+      LConn := H1ClientDial(LConnectHost, LConnectPort, FOptions.ConnectTimeout,
+        LTimeoutMs);
     { New dial: ConnectTimeout also bounds post-dial first write / CONNECT. }
     if FOptions.ConnectTimeout > 0 then
       ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
