@@ -144,8 +144,9 @@ type
   { Custom transport dial for HTTP clients: returns a connected ITcpStream to
     AHost:APort (or raises). Mirrors the H2 test-hook shape but as a public,
     per-client option. Used by nextpas.core.http.impl.h1.client for every fresh
-    connection when assigned. }
-  THttpDialFunc = function(const AHost: string; const APort: UInt16;
+    connection when assigned. Function reference: callers may capture context
+    (e.g. proxy endpoint + per-lease credential slot) in a closure. }
+  THttpDialFunc = reference to function(const AHost: string; const APort: UInt16;
     const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream;
 
   THttpClientOptions = record
