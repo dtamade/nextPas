@@ -603,6 +603,14 @@ begin
     ClsName := ClassTypes[I];
     if (VarName = '') or (ClsName = '') then
       Continue;
+    { 8-bit char/byte/bool params register as pseudo class vars to get the
+      pointer-slot ABI; Pointer covers P^ deref lookups. Neither is an object
+      — emitting an object-free guard on them yields a dead null-check
+      template (IsSep/StrLen residuals). }
+    if SameText(ClsName, 'Pointer') then
+      Continue;
+    if TypeMetaSize(ClsName) = 1 then
+      Continue;
     DestroyFuncName := ClsName + '.Destroy';
     Value := TypeMetaVmtSlot(ClsName, 'Destroy');
     if (Value >= 0) and FModel.LookupStringConstValue(

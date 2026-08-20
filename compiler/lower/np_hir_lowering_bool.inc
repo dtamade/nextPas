@@ -1,3 +1,33 @@
+{ Char-like operand in a compare: 8-bit scalar params are registered as
+  pseudo class vars (the slot holds the char address, not the value) and
+  char-pointer index access (StrLen: S[Result] <> #0) folds to the element
+  address via arr_elem_ref. Both need the i8 loaded before comparing; flag
+  them so the caller appends 'charval'. Numeric pointees (pelem_load) and
+  string vars already carry values, and bare pointers (S <> nil) must stay
+  address compares — only the three Char pointer kinds match here. }
+function IsCharValueBlobOperand(const Ctx: TSemaHirLoweringContext;
+  const ANode: TGreenNode): Boolean;
+var
+  VarTypeName: string;
+begin
+  Result := False;
+  if ANode = nil then
+    Exit;
+  if ANode.NodeKind = gnkIdentifier then
+  begin
+    VarTypeName := Ctx.RuntimeVars.LookupClassVar(ANode.Text);
+    Result := (VarTypeName <> '') and
+      (np_sema_type_check.TypeMetaSize(Ctx.Model, VarTypeName) = 1);
+  end
+  else if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    VarTypeName := Ctx.RuntimeVars.LookupPointerVar(ANode.ChildAt(0).Text);
+    Result := SameText(VarTypeName, 'PChar') or
+      SameText(VarTypeName, 'PAnsiChar') or SameText(VarTypeName, 'PUTF8Char');
+  end;
+end;
+
 function EncodeRuntimeBoolExprFold(const Ctx: TSemaHirLoweringContext;
   const ANode: TGreenNode; out ABlob: string;
   const AAllowOwnedStringCompare: Boolean): Boolean;
@@ -185,6 +215,10 @@ begin
     Exit(False);
   if not Ctx.EncodeRuntimeIntExprFold(Ctx.CallbackCtx, ANode.ChildAt(1), RightBlob) then
     Exit(False);
+  if IsCharValueBlobOperand(Ctx, ANode.ChildAt(0)) then
+    LeftBlob := LeftBlob + 'charval' + #10;
+  if IsCharValueBlobOperand(Ctx, ANode.ChildAt(1)) then
+    RightBlob := RightBlob + 'charval' + #10;
   ABlob := LeftBlob + RightBlob + 'cmp ' + Pred + #10;
   Result := True;
 end;

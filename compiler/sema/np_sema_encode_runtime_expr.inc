@@ -1923,6 +1923,61 @@ begin
       Exit(True);
     end;
   end;
+  { Single-char literal 'x' / #num folds to its ordinal in value context
+    (IsSep body: Result := C = '/'). Without this the RHS of comparisons
+    stays un-encodable and the whole assignment is silently dropped. }
+  if ((ANode.NodeKind = gnkStringLiteral) and (Length(ANode.Text) = 3) and
+    (ANode.Text[1] = '''') and (ANode.Text[3] = '''')) then
+  begin
+    Folded := Ord(ANode.Text[2]);
+    { Plain 'int N', not structured 'expr': a char literal can sit in the
+      middle of a comparison blob (IsSep: C = '/'), where a structured
+      expr line is dropped (ParseIntExprArgTyped does not push it) and
+      the compare loses its left operand. }
+    ABlob := 'int ' + IntToStr(Folded) + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkCharLiteral) and (Length(ANode.Text) >= 2) then
+  begin
+    if ANode.Text[1] = '''' then
+      Folded := Ord(ANode.Text[2])
+    else if ANode.Text[1] = '#' then
+    begin
+      { #num / #$hex char-code literal: fold to the code, not the '#'
+        ordinal. Multi-segment strings (#13#10) are not scalar chars —
+        leave them to the string paths (returns False). }
+      if Pos('#', Copy(ANode.Text, 2, Length(ANode.Text))) > 0 then
+        Exit(False);
+      Folded := 0;
+      if (Length(ANode.Text) >= 3) and (ANode.Text[2] = '$') then
+      begin
+        for K := 3 to Length(ANode.Text) do
+        begin
+          Folded := Folded * 16;
+          if (ANode.Text[K] >= '0') and (ANode.Text[K] <= '9') then
+            Folded := Folded + Ord(ANode.Text[K]) - Ord('0')
+          else if (ANode.Text[K] >= 'a') and (ANode.Text[K] <= 'f') then
+            Folded := Folded + Ord(ANode.Text[K]) - Ord('a') + 10
+          else if (ANode.Text[K] >= 'A') and (ANode.Text[K] <= 'F') then
+            Folded := Folded + Ord(ANode.Text[K]) - Ord('A') + 10
+          else
+            Exit(False);
+        end;
+      end
+      else
+      begin
+        for K := 2 to Length(ANode.Text) do
+          if (ANode.Text[K] >= '0') and (ANode.Text[K] <= '9') then
+            Folded := Folded * 10 + Ord(ANode.Text[K]) - Ord('0')
+          else
+            Exit(False);
+      end;
+    end
+    else
+      Exit(False);
+    ABlob := 'int ' + IntToStr(Folded) + #10;
+    Exit(True);
+  end;
   if NeedsFoldFallback(ANode) then
   begin
     { Under NoFold still fold pure intrinsics (SizeOf/Ord/...) — otherwise
@@ -2363,6 +2418,41 @@ begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) and
       EncodeRuntimeIntExprFold(ANode.ChildAt(1), ArgName) then
     begin
+      { Comparison in value context (IsSep: Result := C = '/'). Char-like
+        params/pointers registered as pseudo class vars hold the char slot
+        address; load the i8 value before comparing. Char-pointer index
+        access (StrLen: S[Result] <> #0) encodes the element address via
+        arr_elem_ref (the Char-arg ABI needs the slot), so it needs the
+        same value load here; only the three Char pointer kinds are
+        affected — numeric pointees (pelem_load) already carry the value. }
+      if ANode.ChildAt(0).NodeKind = gnkIdentifier then
+      begin
+        OwnerClassName := LookupClassVar(ANode.ChildAt(0).Text);
+        if (OwnerClassName <> '') and (TypeMetaSize(OwnerClassName) = 1) then
+          FuncName := FuncName + 'charval' + #10;
+      end
+      else if (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
+        (ANode.ChildAt(0).ChildCount >= 2) and
+        (ANode.ChildAt(0).ChildAt(0) <> nil) and
+        (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+        ((LookupPointerVar(ANode.ChildAt(0).ChildAt(0).Text) = 'PChar') or
+         (LookupPointerVar(ANode.ChildAt(0).ChildAt(0).Text) = 'PAnsiChar') or
+         (LookupPointerVar(ANode.ChildAt(0).ChildAt(0).Text) = 'PUTF8Char')) then
+        FuncName := FuncName + 'charval' + #10;
+      if ANode.ChildAt(1).NodeKind = gnkIdentifier then
+      begin
+        OwnerClassName := LookupClassVar(ANode.ChildAt(1).Text);
+        if (OwnerClassName <> '') and (TypeMetaSize(OwnerClassName) = 1) then
+          ArgName := ArgName + 'charval' + #10;
+      end
+      else if (ANode.ChildAt(1).NodeKind = gnkArrayAccess) and
+        (ANode.ChildAt(1).ChildCount >= 2) and
+        (ANode.ChildAt(1).ChildAt(0) <> nil) and
+        (ANode.ChildAt(1).ChildAt(0).NodeKind = gnkIdentifier) and
+        ((LookupPointerVar(ANode.ChildAt(1).ChildAt(0).Text) = 'PChar') or
+         (LookupPointerVar(ANode.ChildAt(1).ChildAt(0).Text) = 'PAnsiChar') or
+         (LookupPointerVar(ANode.ChildAt(1).ChildAt(0).Text) = 'PUTF8Char')) then
+        ArgName := ArgName + 'charval' + #10;
       if ANode.Text = '+' then
         ABlob := FuncName + ArgName + 'add' + #10
       else if ANode.Text = '-' then
@@ -2373,6 +2463,18 @@ begin
         ABlob := FuncName + ArgName + 'div' + #10
       else if SameText(ANode.Text, 'mod') then
         ABlob := FuncName + ArgName + 'mod' + #10
+      else if ANode.Text = '=' then
+        ABlob := FuncName + ArgName + 'cmp eq' + #10
+      else if ANode.Text = '<>' then
+        ABlob := FuncName + ArgName + 'cmp ne' + #10
+      else if ANode.Text = '<' then
+        ABlob := FuncName + ArgName + 'cmp slt' + #10
+      else if ANode.Text = '<=' then
+        ABlob := FuncName + ArgName + 'cmp sle' + #10
+      else if ANode.Text = '>' then
+        ABlob := FuncName + ArgName + 'cmp sgt' + #10
+      else if ANode.Text = '>=' then
+        ABlob := FuncName + ArgName + 'cmp sge' + #10
       else
       begin
         Result := EncodeRuntimeIntExpr(ANode, ABlob, FCurrentRetVarName);

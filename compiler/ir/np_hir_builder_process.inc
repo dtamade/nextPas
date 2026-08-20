@@ -147,6 +147,14 @@ begin
         else
           S.Push(EmitLoad(GetIntType, V));
       end
+      else if Token = 'charval' then
+      begin
+        { Char param value: the slot holds the char address, not the value
+          (8-bit scalar ABI). Load i8 from the address before comparing. }
+        V := S.PopTyped(OperandType);
+        S.PushTyped(EmitLoad(GetIntTypeByWidth(8, False), V),
+          GetIntTypeByWidth(8, False));
+      end
       else if Token = 'recvar' then EmitExprRecVar(S, Arg)
       else if Token = 'is' then EmitExprIs(S, Arg)
       else if Token = 'arr_load' then EmitExprArrLoad(S)
