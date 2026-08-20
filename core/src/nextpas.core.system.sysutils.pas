@@ -131,11 +131,60 @@ uses
   nextpas.core.text.utils,
   nextpas.core.time;
 
+{ Returns True when AFmt uses any specifier outside the TextFormat safe set
+  (%% %[-][0][width][.precision](s|d|u|x|X|f), including %f with no explicit
+  precision). Such format strings fall back to the RTL SysUtils implementation,
+  whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
+  TextFormat does not cover. }
+function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean;
+var
+  LIdx, LLen: Integer;
+begin
+  Result := False;
+  LLen := Length(AFmt);
+  LIdx := 1;
+  while LIdx <= LLen do
+  begin
+    if AFmt[LIdx] <> '%' then
+    begin
+      Inc(LIdx);
+      Continue;
+    end;
+    Inc(LIdx);
+    if LIdx > LLen then Exit(False);
+    if AFmt[LIdx] = '%' then
+    begin
+      Inc(LIdx);
+      Continue;
+    end;
+    if AFmt[LIdx] = '-' then Inc(LIdx);
+    if (LIdx <= LLen) and (AFmt[LIdx] = '0') then Inc(LIdx);
+    while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
+      Inc(LIdx);
+    if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
+    begin
+      Inc(LIdx);
+      while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
+        Inc(LIdx);
+    end;
+    if LIdx > LLen then Exit(False);
+    case AFmt[LIdx] of
+      'd', 'u', 'x', 'X', 's', 'f': ;
+    else
+      Exit(True);
+    end;
+    Inc(LIdx);
+  end;
+end;
+
 { Text formatting }
 
 function Format(const AFmt: string; const AArgs: array of const): string;
 begin
-  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  if FormatNeedsSysUtilsFallback(AFmt) then
+    Result := SysUtils.Format(AFmt, AArgs)
+  else
+    Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;
@@ -215,6 +264,7 @@ end;
 
 function BytesOf(const AStr: string): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(AStr));
   if Length(AStr) > 0 then
     Move(AStr[1], Result[0], Length(AStr));
@@ -222,6 +272,7 @@ end;
 
 function StringOf(const ABytes: TBytes): string;
 begin
+  Result := '';
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));

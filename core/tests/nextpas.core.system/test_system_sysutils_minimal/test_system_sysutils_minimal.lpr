@@ -5,7 +5,8 @@ program test_system_sysutils_minimal;
 uses
   nextpas.core.test,
   nextpas.core.system.sysutils,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  SysUtils;  { RTL reference only: proves fallback parity for extended specifiers }
 
 type
   IProbe = interface
@@ -26,6 +27,38 @@ begin
   CheckEqual('value=42 text=nextpas',
     nextpas.core.system.sysutils.Format('value=%d text=%s', [42, 'nextpas']),
     'Format should cover compiler CreateFmt pressure');
+end;
+
+procedure TestFormatSafeSetStaysOnTextFormat;
+begin
+  CheckEqual('100% done',
+    nextpas.core.system.sysutils.Format('100%% done', []),
+    '%% escape should stay on TextFormat');
+  CheckEqual('x=3.14',
+    nextpas.core.system.sysutils.Format('x=%.2f', [3.14159]),
+    '%.2f with explicit precision should stay on TextFormat');
+  CheckEqual('0x0F',
+    nextpas.core.system.sysutils.Format('%s0x%02X', ['', 15]),
+    'width/precision flags should stay on TextFormat');
+end;
+
+procedure TestFormatExtendedSpecifiersFallbackToRtl;
+begin
+  CheckEqual(SysUtils.Format('%g', [3.14159]),
+    nextpas.core.system.sysutils.Format('%g', [3.14159]),
+    '%g should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('%.3g', [3.14159]),
+    nextpas.core.system.sysutils.Format('%.3g', [3.14159]),
+    '%.3g should honor precision through RTL fallback');
+  CheckEqual(SysUtils.Format('%.2e', [12345.678]),
+    nextpas.core.system.sysutils.Format('%.2e', [12345.678]),
+    '%.2e should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('%c', ['A']),
+    nextpas.core.system.sysutils.Format('%c', ['A']),
+    '%c should fall back to RTL SysUtils formatting');
+  CheckEqual(SysUtils.Format('v=%g tag=%s', [0.5, 'x']),
+    nextpas.core.system.sysutils.Format('v=%g tag=%s', [0.5, 'x']),
+    'mixed %g/%s should fall back to RTL via one scan');
 end;
 
 procedure TestExceptionFormattingAliasesCanonicalRoot;
@@ -216,6 +249,8 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
+  T.Test('Format safe set stays on TextFormat', @TestFormatSafeSetStaysOnTextFormat);
+  T.Test('Format extended specifiers fall back to RTL', @TestFormatExtendedSpecifiersFallbackToRtl);
   T.Test('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Test('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Test('SameText delegates to text conversion owner', @TestSameTextDelegatesToTextConvOwner);
