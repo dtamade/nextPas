@@ -707,12 +707,14 @@ begin
       else if AInstr.IntrinsicName = 'vmt_store' then
       begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
-          Emit('  store ptr @' + AInstr.CallTarget + '.vmt, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          Emit('  store ptr ' + LlvmGlobalRef(AInstr.CallTarget + '.vmt') +
+            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
       end
       else if AInstr.IntrinsicName = 'imt_store' then
       begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
-          Emit('  store ptr @' + AInstr.CallTarget + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+          Emit('  store ptr ' + LlvmGlobalRef(AInstr.CallTarget) +
+            ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
       end
       else if AInstr.IntrinsicName = 'exc_store' then
       begin
