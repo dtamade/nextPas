@@ -284,6 +284,28 @@ begin
   finally LBuf.Free; end;
 end;
 
+{ PH33 P3：数据更新面——SetTitles 原地替换页签标题 }
+procedure TestTabsSetTitles;
+var LT: ITabsWidget; LBuf: TBuffer; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['alpha', 'beta']);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 1));
+  try
+    LT.SetTitles(['delta', 'gamma']);
+    LT.Render(TRect.Make(0, 0, 30, 1), LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('gamma', LRow) > 0, 'new title gamma visible');
+    Check(Pos('alpha', LRow) = 0, 'old title alpha gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsWithTitlesChaining;
+var LT: ITabsWidget;
+begin
+  LT := TTabsWidget.New(['a']).WithTitles(['x', 'y', 'z']);
+  Check(LT <> nil, 'WithTitles chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_tabs');
   { TTabsState }
@@ -310,5 +332,7 @@ begin
   T.Test('Tabs very narrow with sep', @TestTabsVeryNarrowWithSep);
   T.Test('Tabs empty area', @TestTabsEmptyArea);
   T.Test('Tabs empty separator', @TestTabsEmptySeparator);
+  T.Test('SetTitles in-place update (PH33 P3)', @TestTabsSetTitles);
+  T.Test('WithTitles chaining (PH33 P3)', @TestTabsWithTitlesChaining);
   if not T.Run then Halt(1);
 end.

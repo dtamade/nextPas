@@ -27,6 +27,10 @@ type
     function WithShowLabels(L: Boolean): IBarChart;
     function WithStyle(const S: TStyle): IBarChart;
     function WithBlock(ABlock: IBlock): IBarChart;
+    { 数据更新面（PH33 P3，additive）：原地替换 / 追加数据条 }
+    procedure SetBars(const ABars: array of TBarData);
+    procedure AddBar(const ABar: TBarData);
+    function WithBars(const ABars: array of TBarData): IBarChart;
   end;
 
   TBarChart = class(TInterfacedObject, IWidget, IBarChart)
@@ -49,6 +53,9 @@ type
     function WithShowLabels(L: Boolean): IBarChart;
     function WithStyle(const S: TStyle): IBarChart;
     function WithBlock(ABlock: IBlock): IBarChart;
+    procedure SetBars(const ABars: array of TBarData);
+    procedure AddBar(const ABar: TBarData);
+    function WithBars(const ABars: array of TBarData): IBarChart;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -145,6 +152,31 @@ end;
 function TBarChart.WithBlock(ABlock: IBlock): IBarChart;
 begin
   FBlock := ABlock;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——原地替换 / 追加数据条 }
+procedure TBarChart.SetBars(const ABars: array of TBarData);
+var
+  LI: Integer;
+begin
+  SetLength(FBars, System.Length(ABars));
+  for LI := 0 to System.High(ABars) do
+    FBars[LI] := ABars[LI];
+end;
+
+procedure TBarChart.AddBar(const ABar: TBarData);
+var
+  LN: Integer;
+begin
+  LN := System.Length(FBars);
+  SetLength(FBars, LN + 1);
+  FBars[LN] := ABar;
+end;
+
+function TBarChart.WithBars(const ABars: array of TBarData): IBarChart;
+begin
+  SetBars(ABars);
   Result := Self;
 end;
 

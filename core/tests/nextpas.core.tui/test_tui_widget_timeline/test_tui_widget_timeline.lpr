@@ -141,6 +141,31 @@ begin
 end;
 
 
+{ PH33 P3：数据更新面——SetEvents 原地替换 + AddEvent 追加 }
+procedure TestTimelineSetAddEvents;
+var LT: ITimeline; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LT := TTimeline.New([TTimelineEvent.Make('10:00', 'start')]);
+  LT.SetEvents([TTimelineEvent.Make('11:00', 'replaced')]);
+  LT.AddEvent(TTimelineEvent.Make('12:00', 'appended'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 5));
+  try
+    LT.Render(TRect.Make(0, 0, 40, 5), LBuf);
+    LAll := '';
+    for I := 0 to 4 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('replaced', LAll) > 0, 'replaced event visible');
+    Check(Pos('appended', LAll) > 0, 'appended event visible');
+    Check(Pos('start', LAll) = 0, 'old event gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTimelineWithEventsChaining;
+var LT: ITimeline;
+begin
+  LT := TTimeline.New([]).WithEvents([TTimelineEvent.Make('t', 'chained')]);
+  Check(LT <> nil, 'WithEvents chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_timeline');
   T.Test('EventMake', @TestEventMake);
@@ -159,5 +184,7 @@ begin
   T.Test('render clips to area height', @TestRenderClipsToAreaHeight);
   T.Test('render zero area', @TestRenderZeroAreaNoCrash);
   T.Test('render narrow width title prefix', @TestRenderNarrowWidthStillShowsTitlePrefix);
+  T.Test('SetEvents/AddEvent update (PH33 P3)', @TestTimelineSetAddEvents);
+  T.Test('WithEvents chaining (PH33 P3)', @TestTimelineWithEventsChaining);
 if not T.Run then Halt(1);
 end.

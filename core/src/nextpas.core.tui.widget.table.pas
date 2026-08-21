@@ -58,6 +58,8 @@ type
     function WithHeaderStyle(const S: TStyle): ITable;
     function WithHighlightStyle(const S: TStyle): ITable;
     function WithHeader(Show: Boolean): ITable;
+    { 数据更新面（PH33 P3，additive）：追加单行（整体替换走 WithRows）}
+    procedure AddRow(const ARow: TTableRow);
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTableState);
   end;
@@ -80,6 +82,7 @@ type
     function WithHeaderStyle(const S: TStyle): ITable;
     function WithHighlightStyle(const S: TStyle): ITable;
     function WithHeader(Show: Boolean): ITable;
+    procedure AddRow(const ARow: TTableRow);
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -175,6 +178,16 @@ begin
   for I := 0 to High(ARows) do
     FRows[I] := ARows[I];
   Result := Self;
+end;
+
+{ PH33 P3：数据更新面——追加单行（此前整体替换是唯一更新途径）}
+procedure TTable.AddRow(const ARow: TTableRow);
+var
+  LN: Integer;
+begin
+  LN := Length(FRows);
+  SetLength(FRows, LN + 1);
+  FRows[LN] := ARow;
 end;
 
 function TTable.WithBlock(ABlock: IBlock): ITable;

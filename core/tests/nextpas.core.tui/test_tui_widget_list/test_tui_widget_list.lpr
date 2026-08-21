@@ -221,6 +221,31 @@ begin
   Check(LState.Selected = 0, 'Previous at 0 stays at 0');
 end;
 
+{ PH33 P3：数据更新面——SetItems 原地替换列表内容 }
+procedure TestListSetItems;
+var LL: IListWidget; LBuf: TBuffer; LAll: AnsiString;
+begin
+  LL := TListWidget.FromStrings(['alpha', 'beta']);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 12, 3));
+  try
+    LL.SetItems([TListItem.FromString('x-ray'),
+      TListItem.FromString('yankee'), TListItem.FromString('zulu')]);
+    LL.Render(TRect.Make(0, 0, 12, 3), LBuf);
+    LAll := LBuf.RowAsString(0) + LBuf.RowAsString(1) + LBuf.RowAsString(2);
+    Check(Pos('x-ray', LAll) > 0, 'row 0 replaced');
+    Check(Pos('zulu', LAll) > 0, 'row 2 zulu');
+    Check(Pos('alpha', LAll) = 0, 'old alpha gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestListWithItemsChaining;
+var LL: IListWidget;
+begin
+  LL := TListWidget.FromStrings(['a'])
+    .WithItems([TListItem.FromString('chained')]);
+  Check(LL <> nil, 'WithItems chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.list');
   T.Test('simple render', @TestSimpleRender);
@@ -239,5 +264,7 @@ begin
   T.Test('ListItem FromString', @TestListItemFromString);
   T.Test('ListState Next boundary', @TestListStateNextBoundary);
   T.Test('ListState Previous boundary', @TestListStatePreviousBoundary);
+  T.Test('SetItems in-place update (PH33 P3)', @TestListSetItems);
+  T.Test('WithItems chaining (PH33 P3)', @TestListWithItemsChaining);
   if not T.Run then Halt(1);
 end.

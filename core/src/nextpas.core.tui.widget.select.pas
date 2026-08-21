@@ -39,6 +39,9 @@ type
     function WithStyle(const S: TStyle): ISelect;
     function WithHighlightStyle(const S: TStyle): ISelect;
     function WithBlock(ABlock: IBlock): ISelect;
+    { 数据更新面（PH33 P3，additive）：原地替换选项 }
+    procedure SetItems(const AItems: array of AnsiString);
+    function WithItems(const AItems: array of AnsiString): ISelect;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);
   end;
 
@@ -61,6 +64,8 @@ type
     function WithStyle(const S: TStyle): ISelect;
     function WithHighlightStyle(const S: TStyle): ISelect;
     function WithBlock(ABlock: IBlock): ISelect;
+    procedure SetItems(const AItems: array of AnsiString);
+    function WithItems(const AItems: array of AnsiString): ISelect;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -161,6 +166,22 @@ end;
 function TSelect.WithBlock(ABlock: IBlock): ISelect;
 begin
   FBlock := ABlock;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——原地替换选项（此前仅构造注入）}
+procedure TSelect.SetItems(const AItems: array of AnsiString);
+var
+  LI: Integer;
+begin
+  SetLength(FItems, System.Length(AItems));
+  for LI := 0 to System.High(AItems) do
+    FItems[LI] := AItems[LI];
+end;
+
+function TSelect.WithItems(const AItems: array of AnsiString): ISelect;
+begin
+  SetItems(AItems);
   Result := Self;
 end;
 

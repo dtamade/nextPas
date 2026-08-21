@@ -318,6 +318,30 @@ begin
   end;
 end;
 
+{ PH33 P3：数据更新面——SetNodes 原地替换节点集 }
+procedure TestTreeSetNodes;
+var LT: ITree; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LT := TTree.New([TTreeNode.Make('old-root')]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5));
+  try
+    LT.SetNodes([TTreeNode.Make('fresh-root')]);
+    LT.Render(TRect.Make(0, 0, 30, 5), LBuf);
+    LAll := '';
+    for I := 0 to 4 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('fresh-root', LAll) > 0, 'new root visible');
+    Check(Pos('old-root', LAll) = 0, 'old root gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTreeWithNodesChaining;
+var LT: ITree;
+begin
+  LT := TTree.New([TTreeNode.Make('a')])
+    .WithNodes([TTreeNode.Make('x'), TTreeNode.Make('y')]);
+  Check(LT <> nil, 'WithNodes chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.tree');
 
@@ -347,6 +371,8 @@ begin
   T.Test('tree state ensure size idempotent', @TestTreeStateEnsureSizeIdempotent);
   T.Test('tree node with empty children', @TestTreeNodeWithEmptyChildren);
   T.Test('tree render multiple roots', @TestTreeRenderMultipleRoots);
+  T.Test('SetNodes in-place update (PH33 P3)', @TestTreeSetNodes);
+  T.Test('WithNodes chaining (PH33 P3)', @TestTreeWithNodesChaining);
 
   if not T.Run then Halt(1);
 end.

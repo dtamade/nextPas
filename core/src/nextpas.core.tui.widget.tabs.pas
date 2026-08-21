@@ -32,6 +32,9 @@ type
     function WithActiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithInactiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithSeparator(const ASep: AnsiString): ITabsWidget;
+    { 数据更新面（PH33 P3，additive）：原地替换页签 }
+    procedure SetTitles(const ATitles: array of AnsiString);
+    function WithTitles(const ATitles: array of AnsiString): ITabsWidget;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTabsState);
   end;
@@ -48,7 +51,9 @@ type
     function WithActiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithInactiveStyle(const AStyle: TStyle): ITabsWidget;
     function WithSeparator(const ASep: AnsiString): ITabsWidget;
-
+    { 数据更新面（PH33 P3，additive）：原地替换页签 }
+    procedure SetTitles(const ATitles: array of AnsiString);
+    function WithTitles(const ATitles: array of AnsiString): ITabsWidget;
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTabsState);
@@ -84,6 +89,22 @@ begin FInactiveStyle := AStyle; Result := Self; end;
 
 function TTabsWidget.WithSeparator(const ASep: AnsiString): ITabsWidget;
 begin FSeparator := ASep; Result := Self; end;
+
+{ PH33 P3：数据更新面——原地替换页签 }
+procedure TTabsWidget.SetTitles(const ATitles: array of AnsiString);
+var
+  LI: Integer;
+begin
+  SetLength(FTitles, System.Length(ATitles));
+  for LI := 0 to System.High(ATitles) do
+    FTitles[LI] := ATitles[LI];
+end;
+
+function TTabsWidget.WithTitles(const ATitles: array of AnsiString): ITabsWidget;
+begin
+  SetTitles(ATitles);
+  Result := Self;
+end;
 
 procedure TTabsWidget.Render(const AArea: TRect; ABuffer: TBuffer);
 var
