@@ -315,6 +315,8 @@ var
   PCharTypeId, PAnsiCharTypeId: LongInt;
   PUInt32TypeId, PDoubleTypeId, PWideCharTypeId, PNativeUIntTypeId: LongInt;
   PSizeIntTypeId, PSizeUIntTypeId: LongInt;
+  IntfTypeId, IntfMethodSymbolId: LongInt;
+  IntfMeta: TTypeMetadata;
 begin
   BooleanTypeId := AModel.AddType('Boolean', 'builtin');
   IntegerTypeId := AModel.AddType('Integer', 'builtin');
@@ -447,6 +449,60 @@ begin
   AModel.AddType('TGUID', 'record');
   AModel.AddType('IInterface', 'interface');
   AModel.AddType('IUnknown', 'interface');
+  { IInterface dispatch metadata — COM standard slot order (QueryInterface=0,
+    _AddRef=1, _Release=2). Without it the expression-position call in
+    Supports (AInstance.QueryInterface) misses the dispatched-member-call
+    contract (empty Meta → no known layout → no method symbol) and falls
+    back to a static @IInterface.QueryInterface residual with no define.
+    $vmt_count const also satisfies TypeIdHasKnownClassLayout's fallback;
+    symbols carry 'pp' param kinds (constref TGuid + untyped out) so
+    legacy param kinds can be built without a DeclNode. }
+  IntfTypeId := AModel.FindTypeByName('IInterface');
+  if IntfTypeId > 0 then
+  begin
+    { Interface refs are 8-byte pointers (same as user interface decls,
+      np_sema_declaration.inc sets Meta.Size := 8). Without a known size the
+      Supports receiver var lowers to i64 and the slot-dispatch call fails
+      the IR type check. Explicit fields only — managed record assignment. }
+    IntfMeta.TypeId := IntfTypeId;
+    IntfMeta.Size := 8;
+    IntfMeta.IsRecord := False;
+    IntfMeta.VmtCount := 3;
+    IntfMeta.ParentClassId := 0;
+    IntfMeta.ParentClassName := '';
+    IntfMeta.Interfaces := '';
+    IntfMeta.ArrElemSize := 0;
+    IntfMeta.ArrElemType := '';
+    IntfMeta.ArrLowBound := 0;
+    IntfMeta.ArrHighBound := -1;
+    IntfMeta.ArrLength := 0;
+    IntfMeta.IsStaticArray := False;
+    IntfMeta.Fields := nil;
+    IntfMeta.VmtSlots := nil;
+    IntfMeta.RetPtrMethods := nil;
+    IntfMeta.Properties := nil;
+    IntfMeta.InterfaceSlots := nil;
+    IntfMeta.AliasTargetTypeId := 0;
+    AModel.SetTypeMeta(IntfTypeId, IntfMeta);
+    AModel.AddConstValue('IInterface$vmt_count', 3);
+    AModel.AddConstValue('IInterface$vmt_slot_QueryInterface', 0);
+    AModel.AddConstValue('IInterface$vmt_slot__AddRef', 1);
+    AModel.AddConstValue('IInterface$vmt_slot__Release', 2);
+    IntfMethodSymbolId := AModel.AddSymbol(
+      'IInterface.QueryInterface', 'function', 'system',
+      LongIntTypeId, 0);
+    AModel.SetSymbolParamCount(IntfMethodSymbolId, 2);
+    AModel.SetSymbolMinParamCount(IntfMethodSymbolId, 2);
+    AModel.SetSymbolParamSignature(IntfMethodSymbolId, 'pp');
+    IntfMethodSymbolId := AModel.AddSymbol(
+      'IInterface._AddRef', 'function', 'system', LongIntTypeId, 0);
+    AModel.SetSymbolParamCount(IntfMethodSymbolId, 0);
+    AModel.SetSymbolMinParamCount(IntfMethodSymbolId, 0);
+    IntfMethodSymbolId := AModel.AddSymbol(
+      'IInterface._Release', 'function', 'system', LongIntTypeId, 0);
+    AModel.SetSymbolParamCount(IntfMethodSymbolId, 0);
+    AModel.SetSymbolMinParamCount(IntfMethodSymbolId, 0);
+  end;
   AModel.AddType('PSingle', 'alias');
   { Exception hierarchy — commonly used across core modules }
   AModel.AddType('Exception', 'class');

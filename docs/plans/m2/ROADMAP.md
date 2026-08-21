@@ -30,8 +30,8 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **4** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **5 (b4b-i13³² 真实全量基线:探针刷新后 CompareByte/TNameFirstMap/SarLongint 全清,暴露面扩大浮出 Pos×68 等,见注³²)** → **4 (b4b-i14³³ vmt/imt store 引号,TVec uniq 清零 total -11,opt 首错进语义层)** |
-| undefined total | **1** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **87 (b4b-i13³² 真实全量基线,见注³²)** → **76 (b4b-i14³³ vmt/imt store 引号,TVec×11 清零,opt 首错进语义层)** |
+| undefined unique | **2** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **5 (b4b-i13³² 真实全量基线:探针刷新后 CompareByte/TNameFirstMap/SarLongint 全清,暴露面扩大浮出 Pos×68 等,见注³²)** → **4 (b4b-i14³³ vmt/imt store 引号,TVec uniq 清零 total -11,opt 首错进语义层)** → **2 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** |
+| undefined total | **74** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **87 (b4b-i13³² 真实全量基线,见注³²)** → **76 (b4b-i14³³ vmt/imt store 引号,TVec×11 清零,opt 首错进语义层)** → **74 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -618,7 +618,29 @@ DoContains/DoCountOf/DoFill/IsCompatible 等槽填成实例名前缀（TC.XXX）
 回退基类实现或白名单扩展）。工作方式：每口先设计最便宜的可信验证
 （定向 mini 探针），全量仅用于基线刷新节点，不逐口串行等待。 |
 
-| opt 首错 | `use of undefined value '@IInterface.QueryInterface'`（.ll 97582 行，接口 vcall 槽方法体缺失——method-object 泛型家族近亲）；上一口为 IR 语法层 `store ptr @TVec<string>.vmt`（已修，注³³） | 本轮实测（探针 4/76；TVec 引号修复后 opt 从语法层进入语义层） |
+³⁴ b4b-i15（本 commit）：**内建 IInterface dispatch 元数据 seed + S_OK
+常量化**（iface-qinterface / s-ok-const 两口清零）。根因：sema builtins
+对 `IInterface` 只 AddType 不设 meta——Meta.Size=0 且无 `$vmt_count`
+const，表达式位接口方法调用过不了 TypeIdHasKnownClassLayout
+（np_sema_type_check.pas 要求 `(not IsRecord) and Size>0` 或 vmt_count
+const），TryGetDispatchedMemberCallContract 失败 → 静态绑定 fallback →
+`@IInterface.QueryInterface` 无 define（S_OK 同理无 fold）。修法：
+np_sema_builtins.pas 在 AddType('IUnknown') 后补全元数据——`$vmt_count`=3、
+`$vmt_slot_{QueryInterface,_AddRef,_Release}`=0/1/2 consts、三方法符号
+（QueryInterface 2 参 'pp' 签名；_AddRef/_Release 0 参）、Meta.Size:=8 +
+IsRecord:=False（SetTypeMeta 全字段显式赋值）。S_OK：core.base.pas const
+区加 `S_OK = 0`（FPC System/ObjPas 均无此常量，实验证实双编译器无冲突）。
+放弃路径记录：① base.pas 声明 `IInterface = interface`——FPC 下与
+System.IInterface 分裂继承树，nextpas.core.process.pipe.pas 报
+"Got IReader, expected IInterface"，回滚；② SetTypeScalarFact(sskPointer)——
+receiver 类型名被解析成 'Pointer' → `@Pointer.QueryInterface`，回退。
+验证：qi mini（TFoo class Supports 表达式位）slot dispatch 形态
+`load vmt → gep slot 0 → call i64 %v378(ptr,…)`、双步 opt PASS；十 mini
+回归 8 PASS + puny(@Copy)/cmpgen(@TC.DoContains) 为注³³已知挂账非新回归；
+compiler-pass 58/58；全量 4/76→**2/74**，opt 首错推进到 `@Pos`
+（362582 行，pos-intrinsic 口成下一目标）；hygiene pass；git diff --check。 |
+
+| opt 首错 | `use of undefined value '@Pos'`（.ll 362582 行，Pos 内建无运行时方法体——pos-intrinsic 口，project-helper 桶 total 68 占残留 92%）；上一口为 `@IInterface.QueryInterface`（已修，注³⁴） | 本轮实测（探针 2/74；接口 dispatch 元数据 seed 后 opt 进入 Pos 内建） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己

@@ -29,6 +29,9 @@ const
   SIZE_32 = SizeOf(UInt32);
   SIZE_64 = SizeOf(UInt64);
 
+  { HRESULT semantics for IInterface.QueryInterface (COM standard value). }
+  S_OK = 0;
+
 { ============================================================ }
 { Canonical type aliases                                       }
 { ============================================================ }
