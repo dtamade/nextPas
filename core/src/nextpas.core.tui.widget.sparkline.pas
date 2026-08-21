@@ -23,6 +23,9 @@ type
     function WithStyle(const S: TStyle): ISparkline;
     function WithMax(M: Double): ISparkline;
     function WithBlock(ABlock: IBlock): ISparkline;
+    { PH33 P1：数据更新面（此前仅构造时一次性注入，动态刷新须重建对象）}
+    procedure SetData(const AData: array of Double);
+    function WithData(const AData: array of Double): ISparkline;
   end;
 
   TSparkline = class(TInterfacedObject, IWidget, ISparkline)
@@ -37,6 +40,8 @@ type
     function WithStyle(const S: TStyle): ISparkline;
     function WithMax(M: Double): ISparkline;
     function WithBlock(ABlock: IBlock): ISparkline;
+    procedure SetData(const AData: array of Double);
+    function WithData(const AData: array of Double): ISparkline;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -89,6 +94,22 @@ end;
 function TSparkline.WithBlock(ABlock: IBlock): ISparkline;
 begin
   FBlock := ABlock;
+  Result := Self;
+end;
+
+{ PH33 P1：数据更新面——原地替换序列，Render 自动适应（auto max 语义不变）}
+procedure TSparkline.SetData(const AData: array of Double);
+var
+  I: Integer;
+begin
+  SetLength(FData, Length(AData));
+  for I := 0 to High(AData) do
+    FData[I] := AData[I];
+end;
+
+function TSparkline.WithData(const AData: array of Double): ISparkline;
+begin
+  SetData(AData);
   Result := Self;
 end;
 

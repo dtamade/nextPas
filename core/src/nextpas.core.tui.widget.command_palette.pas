@@ -214,7 +214,7 @@ begin FMaxVisible := AMax; Result := Self; end;
 
 procedure TCommandPalette.UpdateFilter(var AState: TCommandPaletteState);
 var
-  I, Count: Integer;
+  I, J, Count, LScore, LSwap: Integer;
   Query: AnsiString;
 begin
   Query := AState.Input.Text;
@@ -229,6 +229,23 @@ begin
       Inc(Count);
     end;
   end;
+
+  { PH33 P1：按 FuzzyScore 降序排名（此前 Score 只算不用）；插入排序稳定，
+    同分保持原序；空查询全 1000 分 = 原序不变 }
+  if Count > 1 then
+    for I := 1 to Count - 1 do
+    begin
+      LScore := FuzzyScore(Query, FItems[AState.FilteredIndices[I]].Name);
+      J := I - 1;
+      while (J >= 0) and
+            (FuzzyScore(Query, FItems[AState.FilteredIndices[J]].Name) < LScore) do
+      begin
+        LSwap := AState.FilteredIndices[J + 1];
+        AState.FilteredIndices[J + 1] := AState.FilteredIndices[J];
+        AState.FilteredIndices[J] := LSwap;
+        Dec(J);
+      end;
+    end;
 
   SetLength(AState.FilteredIndices, Count);
   if AState.Selected >= Count then

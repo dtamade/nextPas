@@ -32,6 +32,12 @@ type
     procedure Tick(DeltaMs: Integer);
     function GetCount: Integer;
     function GetVisible: Integer;
+    { PH33 P2：配置面（additive，默认值 = New 既有值：tpTopRight/3000ms/5/30）}
+    function WithPosition(P: TToastPosition): IToastManager;
+    function WithDuration(Ms: Integer): IToastManager;
+    function WithMaxVisible(N: Integer): IToastManager;
+    function WithWidth(W: Integer): IToastManager;
+    function WithLevelStyle(Level: TToastLevel; const S: TStyle): IToastManager;
     property Count: Integer read GetCount;
     property Visible: Integer read GetVisible;
   end;
@@ -54,6 +60,11 @@ type
     procedure Tick(DeltaMs: Integer);
     function GetCount: Integer;
     function GetVisible: Integer;
+    function WithPosition(P: TToastPosition): IToastManager;
+    function WithDuration(Ms: Integer): IToastManager;
+    function WithMaxVisible(N: Integer): IToastManager;
+    function WithWidth(W: Integer): IToastManager;
+    function WithLevelStyle(Level: TToastLevel; const S: TStyle): IToastManager;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -112,6 +123,30 @@ function TToastManager.GetVisible: Integer;
 begin
   Result := Length(FItems);
   if Result > FMaxVisible then Result := FMaxVisible;
+end;
+
+{ PH33 P2：配置面（additive，默认值 = New 既有值）}
+function TToastManager.WithPosition(P: TToastPosition): IToastManager;
+begin FPosition := P; Result := Self; end;
+
+function TToastManager.WithDuration(Ms: Integer): IToastManager;
+begin FDurationMs := Ms; Result := Self; end;
+
+function TToastManager.WithMaxVisible(N: Integer): IToastManager;
+begin FMaxVisible := N; Result := Self; end;
+
+function TToastManager.WithWidth(W: Integer): IToastManager;
+begin FWidth := W; Result := Self; end;
+
+function TToastManager.WithLevelStyle(Level: TToastLevel; const S: TStyle): IToastManager;
+begin
+  case Level of
+    tlInfo:    FInfoStyle := S;
+    tlSuccess: FSuccessStyle := S;
+    tlWarning: FWarningStyle := S;
+    tlError:   FErrorStyle := S;
+  end;
+  Result := Self;
 end;
 
 procedure TToastManager.Render(const AArea: TRect; ABuffer: TBuffer);

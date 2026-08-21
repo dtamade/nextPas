@@ -47,6 +47,11 @@ type
     function GetCount: Integer;
     function UnreadCount: Integer;
     function GetItem(I: Integer): TNotification;
+    { 配置面（PH33 P2，additive：默认值 = 既有行为）}
+    function WithWidth(AWidth: Integer): INotificationCenter;
+    function WithStyle(const S: TStyle): INotificationCenter;
+    function WithSelectedStyle(const S: TStyle): INotificationCenter;
+    function WithUnreadStyle(const S: TStyle): INotificationCenter;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TNotificationCenterState);
     property Count: Integer read GetCount;
@@ -70,6 +75,10 @@ type
     function GetCount: Integer; inline;
     function UnreadCount: Integer;
     function GetItem(I: Integer): TNotification;
+    function WithWidth(AWidth: Integer): INotificationCenter;
+    function WithStyle(const S: TStyle): INotificationCenter;
+    function WithSelectedStyle(const S: TStyle): INotificationCenter;
+    function WithUnreadStyle(const S: TStyle): INotificationCenter;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -156,6 +165,19 @@ begin
   Result := FItems[I];
 end;
 
+{ PH33 P2：配置面（additive，默认值 = New 既有值）}
+function TNotificationCenter.WithWidth(AWidth: Integer): INotificationCenter;
+begin FWidth := AWidth; Result := Self; end;
+
+function TNotificationCenter.WithStyle(const S: TStyle): INotificationCenter;
+begin FStyle := S; Result := Self; end;
+
+function TNotificationCenter.WithSelectedStyle(const S: TStyle): INotificationCenter;
+begin FSelectedStyle := S; Result := Self; end;
+
+function TNotificationCenter.WithUnreadStyle(const S: TStyle): INotificationCenter;
+begin FUnreadStyle := S; Result := Self; end;
+
 procedure TNotificationCenter.Render(const AArea: TRect; ABuffer: TBuffer);
 var LState: TNotificationCenterState;
 begin
@@ -166,6 +188,7 @@ end;
 procedure TNotificationCenter.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TNotificationCenterState);
 var
   PanelX, PanelW, PanelH, I, Y, Row, ViewH: Integer;
+  LInnerW, LInnerH, LTextW: Integer;
   PanelArea, Inner: TRect;
   LineSty: TStyle;
   LevelStr: AnsiChar;
@@ -188,7 +211,11 @@ begin
     .WithBorderStyle(FStyle)
     .Render(PanelArea, ABuffer);
 
-  Inner := TRect.Make(PanelX + 1, AArea.Y + 1, PanelW - 2, PanelH - 2);
+  { PH33 P1：窄区减法先 Integer clamp≥0 再入 Word（PH29 同款，PanelW<6/
+    PanelH<2 时 Inner.Width-4 曾下溢巨区写）}
+  LInnerW := PanelW - 2; if LInnerW < 0 then LInnerW := 0;
+  LInnerH := PanelH - 2; if LInnerH < 0 then LInnerH := 0;
+  Inner := TRect.Make(PanelX + 1, AArea.Y + 1, LInnerW, LInnerH);
   ViewH := Inner.Height;
 
   if AState.ScrollY > FCount - ViewH then
@@ -218,7 +245,8 @@ begin
     ABuffer.SetStringN(Inner.X, Y, '[', 1, LineSty);
     ABuffer.SetStringN(Inner.X + 1, Y, LevelStr, 1, LineSty);
     ABuffer.SetStringN(Inner.X + 2, Y, '] ', 2, LineSty);
-    ABuffer.SetStringN(Inner.X + 4, Y, FItems[Row].Title, Inner.Width - 4, LineSty);
+    LTextW := Inner.Width - 4; if LTextW < 0 then LTextW := 0;
+    ABuffer.SetStringN(Inner.X + 4, Y, FItems[Row].Title, LTextW, LineSty);
     Inc(Y);
   end;
 end;
