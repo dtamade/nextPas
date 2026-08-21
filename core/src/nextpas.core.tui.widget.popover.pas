@@ -37,6 +37,9 @@ type
     function WithStyle(const S: TStyle): IPopover;
     function WithHighlightStyle(const S: TStyle): IPopover;
     function WithBorder(B: Boolean): IPopover;
+    { 数据更新面（PH33 P3，additive）：原地替换条目 }
+    procedure SetItems(const AItems: array of AnsiString);
+    function WithItems(const AItems: array of AnsiString): IPopover;
     procedure RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
       ABuffer: TBuffer; var AState: TPopoverState);
   end;
@@ -60,6 +63,8 @@ type
     function WithStyle(const S: TStyle): IPopover;
     function WithHighlightStyle(const S: TStyle): IPopover;
     function WithBorder(B: Boolean): IPopover;
+    procedure SetItems(const AItems: array of AnsiString);
+    function WithItems(const AItems: array of AnsiString): IPopover;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -142,6 +147,22 @@ end;
 function TPopover.WithBorder(B: Boolean): IPopover;
 begin
   FHasBorder := B;
+  Result := Self;
+end;
+
+{ PH33 P3：数据更新面——原地替换条目（此前仅构造注入）}
+procedure TPopover.SetItems(const AItems: array of AnsiString);
+var
+  LI: Integer;
+begin
+  SetLength(FItems, System.Length(AItems));
+  for LI := 0 to System.High(AItems) do
+    FItems[LI] := AItems[LI];
+end;
+
+function TPopover.WithItems(const AItems: array of AnsiString): IPopover;
+begin
+  SetItems(AItems);
   Result := Self;
 end;
 

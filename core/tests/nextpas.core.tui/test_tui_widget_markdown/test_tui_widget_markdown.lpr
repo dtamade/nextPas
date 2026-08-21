@@ -236,6 +236,35 @@ begin
   Check(LMarkdown <> nil, 'Builder chaining should work');
 end;
 
+{ PH33 P3：数据更新面——SetSource 原地替换源文本（渲染时重解析） }
+procedure TestMarkdownSetSource;
+var
+  LMarkdown: IMarkdown;
+  LBuffer: TBuffer;
+  LAll: AnsiString;
+  I: Integer;
+begin
+  LMarkdown := TMarkdown.New('old-line');
+  LMarkdown.SetSource('fresh token xyz');
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 5));
+  try
+    LMarkdown.Render(TRect.Make(0, 0, 40, 5), LBuffer);
+    LAll := '';
+    for I := 0 to 4 do LAll := LAll + LBuffer.RowAsString(I);
+    Check(Pos('fresh token xyz', LAll) > 0, 'new source rendered');
+    Check(Pos('old-line', LAll) = 0, 'old source gone');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestMarkdownWithSourceChaining;
+var LMarkdown: IMarkdown;
+begin
+  LMarkdown := TMarkdown.New('a').WithSource('b').WithTheme(TMdTheme.Default);
+  Check(LMarkdown <> nil, 'WithSource chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.markdown');
   T.Test('TMdLineKind enum', @TestMdLineKindEnum);
@@ -257,5 +286,7 @@ begin
   T.Test('TMarkdown.WithBlock', @TestMarkdownWithBlock);
   T.Test('TMarkdown.Render', @TestMarkdownRender);
   T.Test('TMarkdown builder chaining', @TestMarkdownBuilderChaining);
+  T.Test('SetSource in-place update (PH33 P3)', @TestMarkdownSetSource);
+  T.Test('WithSource chaining (PH33 P3)', @TestMarkdownWithSourceChaining);
   if not T.Run then Halt(1);
 end.

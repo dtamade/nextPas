@@ -48,6 +48,9 @@ type
     function WithWidth(W: Integer): IMenu;
     function ItemCount: Integer;
     function SelectableCount: Integer;
+    { 数据更新面（PH33 P3，additive）：原地替换菜单项 }
+    procedure SetItems(const AItems: array of TMenuItem);
+    function WithItems(const AItems: array of TMenuItem): IMenu;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TMenuState);
     procedure MoveUp(var AState: TMenuState);
@@ -70,6 +73,8 @@ type
     function WithWidth(W: Integer): IMenu;
     function ItemCount: Integer;
     function SelectableCount: Integer;
+    procedure SetItems(const AItems: array of TMenuItem);
+    function WithItems(const AItems: array of TMenuItem): IMenu;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -141,6 +146,23 @@ begin FDisabledStyle := S; Result := Self; end;
 
 function TMenu.WithWidth(W: Integer): IMenu;
 begin FWidth := W; Result := Self; end;
+
+{ PH33 P3：数据更新面——原地替换菜单项（record 值语义，含 WithChildren
+  子树整体拷贝）}
+procedure TMenu.SetItems(const AItems: array of TMenuItem);
+var
+  LI: Integer;
+begin
+  SetLength(FItems, System.Length(AItems));
+  for LI := 0 to System.High(AItems) do
+    FItems[LI] := AItems[LI];
+end;
+
+function TMenu.WithItems(const AItems: array of TMenuItem): IMenu;
+begin
+  SetItems(AItems);
+  Result := Self;
+end;
 
 function TMenu.ItemCount: Integer;
 begin Result := Length(FItems); end;

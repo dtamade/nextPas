@@ -270,6 +270,24 @@ begin
   Check(not S.HasSelection, 'clear after select');
 end;
 
+{ PH33 P3：数据更新面——AddRow 逐行追加（无需整表重建） }
+procedure TestTableAddRow;
+var LT: ITable; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LT := TTable.New([TTableColumn.Make('A', Fixed(12)),
+    TTableColumn.Make('B', Fixed(12))]);
+  LT.AddRow(TTableRow.Make(['r1c1', 'r1c2']));
+  LT.AddRow(TTableRow.Make(['added-row-x', 'added-row-y']));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 26, 4));
+  try
+    LT.Render(TRect.Make(0, 0, 26, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('r1c2', LAll) > 0, 'first added row visible');
+    Check(Pos('added-row-y', LAll) > 0, 'second added row visible');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_table');
   try
@@ -301,6 +319,7 @@ begin
     T.Test('Table render small area', @TestTableRenderSmallArea);
     T.Test('Table multiple rows', @TestTableMultipleRows);
     T.Test('TableState select boundary', @TestTableStateSelectBoundary);
+    T.Test('AddRow append (PH33 P3)', @TestTableAddRow);
 
     WriteLn;
   if not T.Run then Halt(1);

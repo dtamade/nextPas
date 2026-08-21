@@ -26,6 +26,9 @@ type
     function WithStyle(const S: TStyle): ILineChart;
     function WithAxisStyle(const S: TStyle): ILineChart;
     function WithBlock(ABlock: IBlock): ILineChart;
+    { PH33 P3，additive：数据更新面 }
+    procedure SetSeries(const ASeries: array of TDataSeries);
+    function WithSeries(const ASeries: array of TDataSeries): ILineChart;
   end;
 
   TLineChart = class(TInterfacedObject, IWidget, ILineChart)
@@ -46,6 +49,10 @@ type
     function WithStyle(const S: TStyle): ILineChart;
     function WithAxisStyle(const S: TStyle): ILineChart;
     function WithBlock(ABlock: IBlock): ILineChart;
+
+    { PH33 P3，additive：数据更新面 }
+    procedure SetSeries(const ASeries: array of TDataSeries);
+    function WithSeries(const ASeries: array of TDataSeries): ILineChart;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -100,6 +107,17 @@ begin FAxisStyle := S; Result := Self; end;
 
 function TLineChart.WithBlock(ABlock: IBlock): ILineChart;
 begin FBlock := ABlock; Result := Self; end;
+
+{ PH33 P3：数据更新面——整体替换系列集，record 值拷贝 }
+procedure TLineChart.SetSeries(const ASeries: array of TDataSeries);
+var I: Integer;
+begin
+  SetLength(FSeries, Length(ASeries));
+  for I := 0 to High(ASeries) do FSeries[I] := ASeries[I];
+end;
+
+function TLineChart.WithSeries(const ASeries: array of TDataSeries): ILineChart;
+begin SetSeries(ASeries); Result := Self; end;
 
 procedure TLineChart.Render(const AArea: TRect; ABuffer: TBuffer);
 var

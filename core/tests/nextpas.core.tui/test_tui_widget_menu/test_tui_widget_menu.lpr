@@ -132,8 +132,12 @@ begin
   LState := TMenuState.Default;
   LArea := TRect.Make(0, 0, 20, 5);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LMenu.RenderStateful(LArea, LBuf, LState);
-  Check(True, 'Should render stateful menu');
+  try
+    LMenu.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render stateful menu');
+  finally
+    LBuf.Free;
+  end;
 end;
 
 procedure TestMenuMoveDown;
@@ -223,6 +227,32 @@ begin
   Check(LMenu <> nil, 'Should chain builder calls');
 end;
 
+{ PH33 P3：数据更新面——SetItems 原地替换菜单项 }
+procedure TestMenuSetItems;
+var LM: IMenu; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LM := TMenu.New([TMenuItem.Action('Old Item')]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 24, 4));
+  try
+    LM.SetItems([TMenuItem.Action('Fresh Action X'),
+      TMenuItem.Separator,
+      TMenuItem.Action('Another Y')]);
+    LM.Render(TRect.Make(0, 0, 24, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos('Fresh Action X', LAll) > 0, 'new item visible');
+    Check(Pos('Old Item', LAll) = 0, 'old item gone');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMenuWithItemsChaining;
+var LM: IMenu;
+begin
+  LM := TMenu.New([TMenuItem.Action('a')])
+    .WithItems([TMenuItem.Action('x'), TMenuItem.Action('y')]);
+  Check(LM <> nil, 'WithItems chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_menu');
   T.Test('TMenuItem.Action', @TestMenuItemAction);
@@ -242,5 +272,7 @@ begin
   T.Test('IMenu.MoveUp', @TestMenuMoveUp);
   T.Test('IMenu.MoveUp wraps at start', @TestMenuMoveUpWrap);
   T.Test('IMenu builder chaining', @TestMenuBuilderChaining);
+  T.Test('SetItems in-place update (PH33 P3)', @TestMenuSetItems);
+  T.Test('WithItems chaining (PH33 P3)', @TestMenuWithItemsChaining);
   if not T.Run then Halt(1);
 end.
