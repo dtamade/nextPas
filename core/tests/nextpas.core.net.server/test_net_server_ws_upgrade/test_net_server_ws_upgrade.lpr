@@ -179,19 +179,31 @@ begin
   Dispose(LCtx);
 end;
 
+function StartUpgradeServerWithOpts(const AHandler: TUpgradeTestHandler;
+  const AOptions: THttpServerOptions; out AServer: THttpServer;
+  out APort: UInt16): TPlatformThreadHandle; forward;
+
 function StartUpgradeServer(const AHandler: TUpgradeTestHandler;
   out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
 var
-  LCtx: PServerCtx;
-  LHandle: TPlatformThreadHandle;
-  LWait: Int32;
   LOptions: THttpServerOptions;
 begin
   { 非阻塞升级要求 evented 后端（poll 会话上下文 + hijack 迁移），
     显式指定 epoll（本测试在 Linux 运行）。 }
   LOptions := THttpServerOptions.Default;
   LOptions.Backend := tsbEpoll;
-  AServer := THttpServer.Create(AHandler, LOptions);
+  Result := StartUpgradeServerWithOpts(AHandler, LOptions, AServer, APort);
+end;
+
+function StartUpgradeServerWithOpts(const AHandler: TUpgradeTestHandler;
+  const AOptions: THttpServerOptions; out AServer: THttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
+var
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+begin
+  AServer := THttpServer.Create(AHandler, AOptions);
   New(LCtx);
   LCtx^.Server := AServer;
   LCtx^.Addr := '127.0.0.1';
@@ -728,6 +740,140 @@ begin
   end;
 end;
 
+procedure TestShutdownSendsGoingAwayClose;
+var
+  LHandler: TUpgradeTestHandler;
+  LHandlerKeepAlive: IHttpHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LFrame: TNetWsFrame;
+  LReader: TUpgradeClientReader;
+  LFrameData: string;
+  LOptions: THttpServerOptions;
+  LBuf: array[0..63] of Byte;
+  LRead: SizeUInt;
+begin
+  { B8：shutdown drain 补发 close frame 1001 going away。客户端保持连接
+    打开时 Shutdown → 会话须收到 close frame（非 EOF 裸断）→ drain 完成
+    后连接被关闭 → 客户端读 EOF；sink 收到 nwsEventClosed。 }
+  LSink := TUpgradeTestSink.Create(usmRecord);
+    LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  { StopUpgradeServer 释放 server 会连带释放 handler 接口链；测试在 join 后
+    仍需读 Sink 计数，持强引用保活（既有用例均在 Stop 前访问，无此问题）。 }
+  LHandlerKeepAlive := LHandler;
+  LOptions := THttpServerOptions.Default;
+  LOptions.Backend := tsbEpoll;
+  { 5s drain 上限：实现缺陷时 Shutdown 不得悬挂测试（正常路径毫秒级完成） }
+  LOptions.ShutdownTimeout := 5000;
+  LThread := StartUpgradeServerWithOpts(LHandler, LOptions, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Write(BuildUpgradeRequest('')[1],
+      SizeUInt(Length(BuildUpgradeRequest(''))));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) > 0, 'upgraded');
+    WaitForCount(LHandler.UpgradeCount, 1000);
+    { ping→pong 证明会话已在 reactor 注册并被驱动（Shutdown 前连接存活，
+      且不会因升级/迁移未落地而误测空 drain） }
+    LFrameData := BuildMaskedFrame(Byte(WS_OPCODE_PING), 'pre-shutdown');
+    LConn.Write(LFrameData[1], SizeUInt(Length(LFrameData)));
+    LReader.Init;
+    LFrame := Default(TNetWsFrame);
+    Check(TUpgradeClientReader_ReadFrame(LConn, LReader, 2000, LFrame) =
+      nwsDecodeFrame, 'pong received before shutdown');
+    Check(LFrame.Opcode = Byte(WS_OPCODE_PONG), 'pre-shutdown pong opcode');
+
+    { 连接保持打开时 Shutdown：事件驱动会话须收到 close frame 1001 }
+    LServer.Shutdown;
+    LFrame := Default(TNetWsFrame);
+    Check(TUpgradeClientReader_ReadFrame(LConn, LReader, 2000, LFrame) =
+      nwsDecodeFrame, 'close frame after shutdown');
+    Check(LFrame.Opcode = Byte(WS_OPCODE_CLOSE), 'close opcode');
+    Check(LFrame.CloseCode = 1001, 'close code 1001 going away');
+
+    { drain 完成后服务端关闭 TCP：join 后连接已关闭，读到 EOF }
+    StopUpgradeServer(LServer, LThread);
+    LServer := nil;
+    LRead := 1;
+    Check(ReadBlockingChunk(LConn, LBuf, SizeOf(LBuf), LRead),
+      'read after drain exit');
+    Check(LRead = 0, 'EOF after graceful shutdown (no extra frames)');
+
+    { 会话收尾通知 sink }
+    WaitForCount(LHandler.Sink.ClosedCount, 1000);
+    Check(LHandler.Sink.ClosedCount >= 1, 'sink received session close');
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    if LServer <> nil then
+      StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
+procedure TestShutdownNoDoubleCloseAfterHandshake;
+var
+  LHandler: TUpgradeTestHandler;
+  LHandlerKeepAlive: IHttpHandler;
+  LSink: IWebSocketFrameSink;
+  LServer: THttpServer;
+  LThread: TPlatformThreadHandle;
+  LPort: UInt16;
+  LConn: ITcpStream;
+  LRespHead: string;
+  LFrame: TNetWsFrame;
+  LReader: TUpgradeClientReader;
+  LFrameData: string;
+  LOptions: THttpServerOptions;
+  LCode: TNetWsDecodeCode;
+begin
+  { B8 G2b 等价：close 握手已回执后 Shutdown，不得重复补发第二帧——
+    会话 close 语义由一次握手承担，shutdown drain 的补发逻辑受
+    FCloseSent 防重约束。 }
+  LSink := TUpgradeTestSink.Create(usmRecord);
+    LHandler := TUpgradeTestHandler.Create(LSink as TUpgradeTestSink);
+  { 同上：join 后 finally 仍访问 Sink，持强引用保活 }
+  LHandlerKeepAlive := LHandler;
+  LOptions := THttpServerOptions.Default;
+  LOptions.Backend := tsbEpoll;
+  LOptions.ShutdownTimeout := 5000;
+  LThread := StartUpgradeServerWithOpts(LHandler, LOptions, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Write(BuildUpgradeRequest('')[1],
+      SizeUInt(Length(BuildUpgradeRequest(''))));
+    LRespHead := ReadUpgradeResponseHead(LConn, 2000);
+    Check(Pos('HTTP/1.1 101', LRespHead) > 0, 'upgraded');
+    WaitForCount(LHandler.UpgradeCount, 1000);
+    { 客户端发 close 1000 → 服务端回执 close 1000（互发完成） }
+    LFrameData := BuildMaskedFrame(Byte(WS_OPCODE_CLOSE),
+      Chr($03) + Chr($E8));
+    LConn.Write(LFrameData[1], SizeUInt(Length(LFrameData)));
+    LReader.Init;
+    LFrame := Default(TNetWsFrame);
+    Check(TUpgradeClientReader_ReadFrame(LConn, LReader, 2000, LFrame) =
+      nwsDecodeFrame, 'close reply received');
+    Check(LFrame.Opcode = Byte(WS_OPCODE_CLOSE), 'close reply opcode');
+    Check(LFrame.CloseCode = 1000, 'close reply code 1000');
+
+    { 握手完成后 Shutdown：不得出现第二帧（EOF 或静默均可，唯独不是帧） }
+    LServer.Shutdown;
+    StopUpgradeServer(LServer, LThread);
+    LServer := nil;
+    LFrame := Default(TNetWsFrame);
+    LCode := TUpgradeClientReader_ReadFrame(LConn, LReader, 500, LFrame);
+    Check(LCode <> nwsDecodeFrame, 'no second close frame after handshake');
+    LConn.Close;
+  finally
+    LHandler.Sink.Session := nil;
+    if LServer <> nil then
+      StopUpgradeServer(LServer, LThread);
+  end;
+end;
+
 { ==================== main ==================== }
 
 var
@@ -744,6 +890,8 @@ begin
     LTest.Test('batch push via worker channel', @TestBatchPushViaWorker);
     LTest.Test('large batch push no overflow', @TestBatchPushLarge);
     LTest.Test('no idle timeout keeps alive', @TestNoIdleTimeoutMisclose);
+    LTest.Test('shutdown sends going-away close 1001', @TestShutdownSendsGoingAwayClose);
+    LTest.Test('shutdown no double close after handshake', @TestShutdownNoDoubleCloseAfterHandshake);
     if not LTest.Run then Halt(1);
   finally
   end;

@@ -163,6 +163,15 @@ of the blocking `http.websocket` `IWebSocket`:
   Pong automatically. `SendXxx` must be called from the session's reactor-thread
   context (Advance or its callbacks); worker-side pushes should use worker
   handoff, whose completions are drained on the reactor thread.
+  Server shutdown: the session implements `ITcpServerSessionShutdown`
+  (`BeginShutdownClose` = close frame 1001 going away through the same
+  guarded path as idle timeout / protocol error). The epoll readiness server
+  calls it on every registered hook-capable target during its shutdown drain
+  phase, keeps polling writable events until those sessions finish flushing
+  (bounded by `TTcpServerOptions.ShutdownTimeoutNs`; `<= 0` waits without a
+  deadline, matching the blocking path's `WaitFinished(0)` semantics), then
+  force-closes any stragglers. Sessions that already completed the close
+  handshake are not sent a second frame (`FCloseSent` guard).
 
 ```pascal
 uses nextpas.core.net.server,

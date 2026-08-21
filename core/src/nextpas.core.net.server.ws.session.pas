@@ -103,7 +103,7 @@ type
   { 事件驱动的 WS 帧服务器会话（见单元头注释）。 }
   TNetWsFrameSession = class(TInterfacedObject, ITcpServerSession,
     ITcpServerPollDrivenSession, ITcpServerPollDrivenSessionWithDeadline,
-    IWebSocketFrameSession)
+    ITcpServerSessionShutdown, IWebSocketFrameSession)
   private
     type
       TSessState = (
@@ -155,6 +155,8 @@ type
     procedure SendCloseFromWorker(const ACode: UInt16; const AReason: string);
     { 注入 worker→reactor 推送通道（升级函数在握手时设置；nil 则 FromWorker 为空操作） }
     procedure SetFrameWorkerPush(const APush: IWebSocketFrameWorkerPush);
+    { ITcpServerSessionShutdown }
+    procedure BeginShutdownClose;
     { ITcpServerSession }
     function Run: TTcpServerConnOwnership;
     { ITcpServerPollDrivenSession }
@@ -303,6 +305,17 @@ begin
   if FState in [stReading, stFlushing] then
     FState := stClosing;
   FlushOutbound;
+end;
+
+{ 服务器 shutdown 钩子（readiness reactor drain 阶段调用，reactor 线程）：
+  补发 close frame 1001 going away 并冲刷——与 idle timeout/protocol error
+  同一 BeginServerClose 通道（stClosed 幂等、FCloseSent 防重、已互发 close
+  不重复补发）；drain 由 reactor 可写事件驱动 Advance/FlushOutbound 完成，
+  超 ShutdownTimeout 期限未完成的会话由 server 强关（等价阻塞路径
+  ForceClose）。 }
+procedure TNetWsFrameSession.BeginShutdownClose;
+begin
+  BeginServerClose(WS_CLOSE_GOING_AWAY, 'going away');
 end;
 
 { WebSocket 会话专用：控帧 >125 由编码器拒绝（SendFrame 静默丢弃非法帧）。 }
