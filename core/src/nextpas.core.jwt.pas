@@ -54,6 +54,43 @@ type
   返回 header.payload.signature。ASecret 为空抛 EArgumentError。 }
 function JwtSignHS256(const APayloadJson, ASecret: string): string;
 
+{ —— 易用层 —— }
+
+type
+  { Try 风格验证结果：业务侧免 try/except。Ok=False 时 Code/Reason 给失败因
+    （Reason 复用异常消息，可直接进日志）；Ok=True 时 Claims 有效。 }
+  TJwtVerifyOutcome = record
+    Ok: Boolean;
+    Code: TJwtErrorCode;
+    Reason: string;
+    Claims: TJwtClaims;
+  end;
+
+{ 结构化 claims → payload 紧凑 JSON。空字符串字段与 <=0 的时间字段不写入
+  （payload 最小化，不泄露未设置项）。 }
+function BuildClaimsPayload(const AClaims: TJwtClaims): string;
+
+{ 一行签发：结构化 claims 直接出 token（= BuildClaimsPayload + JwtSignHS256，
+  payload 合法性由构造保证）。ASecret 为空抛 EArgumentError。 }
+function JwtSignHS256Claims(const AClaims: TJwtClaims; const ASecret: string): string;
+
+{ 会话 claims 速造：sub/iss/aud + iat=ANowSeconds、exp=ANow+ATtl、
+  jti = 安全随机 16 字节 hex（随机源不可用时留空，调用方可自填）。
+  ATtlSeconds <= 0 抛 EArgumentError。 }
+function JwtSessionClaims(const ASubject, AIssuer, AAudience: string;
+  const ANowSeconds, ATtlSeconds: Int64): TJwtClaims;
+
+{ 免 now 验证：内部取 core.time UTC 当前 Unix 秒。测试/回放等需要确定性
+  时钟的场景仍用显式 ANowSeconds 版本 JwtVerifyHS256。 }
+function JwtVerifyHS256Now(const AToken, ASecret: string;
+  const AIssuer: string = ''; const AAudience: string = ''): TJwtClaims;
+
+{ Try 风格验证：语义同 JwtVerifyHS256 但失败不抛异常，AOutcome.Code/Reason
+  给失败因。编程错误（ASecret 为空）仍抛 EArgumentError——不掩盖调用方 bug。 }
+function TryJwtVerifyHS256(const AToken, ASecret: string; const ANowSeconds: Int64;
+  out AOutcome: TJwtVerifyOutcome;
+  const AIssuer: string = ''; const AAudience: string = ''): Boolean;
+
 { 验证 + 解析：格式 → header(alg 白名单) → 签名(常量时间) → exp/nbf →
   可选 iss/aud（AIssuer/AAudience 非空才校验；aud 数组形态任一匹配即通过）。
   ANowSeconds 由调用方注入。失败 raise EJwtError。 }
@@ -66,9 +103,12 @@ function JwtDecode(const AToken: string): TJwtClaims;
 implementation
 
 uses
-  nextpas.core.encoding.base64,
   nextpas.core.crypto.hmac,
-  nextpas.core.json;
+  nextpas.core.crypto.random,
+  nextpas.core.encoding,
+  nextpas.core.json.builder,
+  nextpas.core.json,
+  nextpas.core.time;
 
 constructor EJwtError.Create(const ACode: TJwtErrorCode; const AMessage: string);
 begin
@@ -254,6 +294,112 @@ begin
     Base64UrlEncode(StringToBytes(APayloadJson));
   LMac := HMAC_SHA256(StringToBytes(ASecret), StringToBytes(LSigningInput));
   Result := LSigningInput + '.' + Base64UrlEncode(LMac);
+end;
+
+{ —— 易用层 —— }
+
+function BuildClaimsPayload(const AClaims: TJwtClaims): string;
+var
+  B: IJsonBuilder;
+begin
+  B := JsonBuilder;
+  B.BeginObject;
+  if AClaims.Subject <> '' then
+  begin
+    B.Key('sub');
+    B.Str(AClaims.Subject);
+  end;
+  if AClaims.Issuer <> '' then
+  begin
+    B.Key('iss');
+    B.Str(AClaims.Issuer);
+  end;
+  if AClaims.Audience <> '' then
+  begin
+    B.Key('aud');
+    B.Str(AClaims.Audience);
+  end;
+  if AClaims.ExpiresAt > 0 then
+  begin
+    B.Key('exp');
+    B.Int(AClaims.ExpiresAt);
+  end;
+  if AClaims.NotBefore > 0 then
+  begin
+    B.Key('nbf');
+    B.Int(AClaims.NotBefore);
+  end;
+  if AClaims.IssuedAt > 0 then
+  begin
+    B.Key('iat');
+    B.Int(AClaims.IssuedAt);
+  end;
+  if AClaims.JwtId <> '' then
+  begin
+    B.Key('jti');
+    B.Str(AClaims.JwtId);
+  end;
+  B.EndObject;
+  Result := B.ToString;
+end;
+
+function JwtSignHS256Claims(const AClaims: TJwtClaims; const ASecret: string): string;
+begin
+  Result := JwtSignHS256(BuildClaimsPayload(AClaims), ASecret);
+end;
+
+function JwtSessionClaims(const ASubject, AIssuer, AAudience: string;
+  const ANowSeconds, ATtlSeconds: Int64): TJwtClaims;
+var
+  LRand: TBytes;
+begin
+  { now <= 0 静默通过会造出 1970 年即过期的 token（exp=now+ttl），
+    错误延迟到验证期才暴露——构造期 fail-fast }
+  if (ANowSeconds <= 0) or (ATtlSeconds <= 0) then
+    raise EArgumentError.Create('jwt: now and ttl must be positive');
+  Result := Default(TJwtClaims);
+  Result.Subject := ASubject;
+  Result.Issuer := AIssuer;
+  Result.Audience := AAudience;
+  Result.IssuedAt := ANowSeconds;
+  Result.ExpiresAt := ANowSeconds + ATtlSeconds;
+  LRand := GenerateSecureRandomBytes(16);
+  if Length(LRand) = 16 then
+    Result.JwtId := HexEncode(LRand)
+  else
+    Result.JwtId := ''; { 随机源不可用时留空，调用方可自填 }
+end;
+
+function JwtVerifyHS256Now(const AToken, ASecret: string;
+  const AIssuer: string = ''; const AAudience: string = ''): TJwtClaims;
+begin
+  Result := JwtVerifyHS256(AToken, ASecret,
+    DateTimeToUnix(DateTimeUtcNow), AIssuer, AAudience);
+end;
+
+function TryJwtVerifyHS256(const AToken, ASecret: string; const ANowSeconds: Int64;
+  out AOutcome: TJwtVerifyOutcome;
+  const AIssuer: string = ''; const AAudience: string = ''): Boolean;
+begin
+  AOutcome := Default(TJwtVerifyOutcome);
+  try
+    AOutcome.Claims := JwtVerifyHS256(AToken, ASecret, ANowSeconds, AIssuer, AAudience);
+    AOutcome.Ok := True;
+  except
+    on E: EJwtError do
+    begin
+      AOutcome.Code := E.Code;
+      AOutcome.Reason := E.Message;
+    end;
+    on E: EArgumentError do
+      raise; { 编程错误（空密钥）不吞——不掩盖调用方 bug }
+    on E: Exception do
+    begin
+      AOutcome.Code := jeMalformed;
+      AOutcome.Reason := E.Message;
+    end;
+  end;
+  Result := AOutcome.Ok;
 end;
 
 function JwtDecode(const AToken: string): TJwtClaims;

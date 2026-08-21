@@ -9,6 +9,7 @@ uses
   nextpas.core.exception,
   nextpas.core.encoding.base64,
   nextpas.core.json,
+  nextpas.core.time,
   nextpas.core.jwt;
 
 var
@@ -411,6 +412,120 @@ begin
   CheckEqual(Int64(1750000000), LClaims.ExpiresAt, 'float numeric date truncated');
 end;
 
+{ —— 易用层 —— }
+
+procedure TestBuildClaimsPayloadMinimal;
+var
+  LClaims: TJwtClaims;
+  LPayload: string;
+begin
+  { 空字符串字段与 <=0 时间字段不写入（payload 最小化） }
+  LClaims := Default(TJwtClaims);
+  LClaims.Subject := 'u1';
+  LPayload := BuildClaimsPayload(LClaims);
+  Check(Pos('"sub":"u1"', LPayload) > 0, 'sub written');
+  Check(Pos('iss', LPayload) = 0, 'empty iss omitted');
+  Check(Pos('exp', LPayload) = 0, 'zero exp omitted');
+  Check(Pos('{', LPayload) = 1, 'json object');
+end;
+
+procedure TestSignClaimsRoundTrip;
+var
+  LClaims, LBack: TJwtClaims;
+  LToken: string;
+begin
+  LClaims := JwtSessionClaims('user-9', 'gw', 'api', 1000, 600);
+  LToken := JwtSignHS256Claims(LClaims, 'secret');
+  LBack := JwtVerifyHS256(LToken, 'secret', 1200);
+  CheckEqual('user-9', LBack.Subject, 'sub');
+  CheckEqual('gw', LBack.Issuer, 'iss');
+  CheckEqual('api', LBack.Audience, 'aud');
+  CheckEqual(Int64(1000), LBack.IssuedAt, 'iat');
+  CheckEqual(Int64(1600), LBack.ExpiresAt, 'exp');
+  CheckEqual(32, Length(LBack.JwtId), 'jti = 16-byte hex');
+end;
+
+procedure TestSessionClaimsTtlValidation;
+var
+  LOk: Boolean;
+
+  procedure ExpectArgError(const ANow, ATtl: Int64; const AMsg: string);
+  var
+    LOkLocal: Boolean;
+  begin
+    LOkLocal := False;
+    try
+      JwtSessionClaims('u', '', '', ANow, ATtl);
+    except
+      on E: EArgumentError do LOkLocal := True;
+      on E: Exception do LOkLocal := False;
+    end;
+    Check(LOkLocal, AMsg);
+  end;
+
+begin
+  ExpectArgError(1000, 0, 'ttl = 0 -> EArgumentError');
+  ExpectArgError(1000, -5, 'ttl < 0 -> EArgumentError');
+  ExpectArgError(0, 60, 'now = 0 -> EArgumentError');
+  ExpectArgError(-1, 60, 'now < 0 -> EArgumentError');
+end;
+
+procedure TestVerifyNow;
+var
+  LToken: string;
+begin
+  { 免 now 版本走真实时钟：60s TTL 会话 token 必然有效 }
+  LToken := JwtSignHS256Claims(
+    JwtSessionClaims('now-user', '', '', DateTimeToUnix(DateTimeUtcNow), 60), 's');
+  CheckEqual('now-user', JwtVerifyHS256Now(LToken, 's').Subject, 'verify-now subject');
+end;
+
+procedure TestTryStyleOk;
+var
+  LOutcome: TJwtVerifyOutcome;
+begin
+  Check(TryJwtVerifyHS256(KNOWN_TOKEN, KNOWN_SECRET, 0, LOutcome),
+    'try-style ok returns True');
+  Check(LOutcome.Ok, 'outcome ok flag');
+  CheckEqual('1234567890', LOutcome.Claims.Subject, 'try-style claims');
+end;
+
+procedure TestTryStyleExpiredNoRaise;
+var
+  LToken: string;
+  LOutcome: TJwtVerifyOutcome;
+  LOk: Boolean;
+begin
+  LToken := JwtSignHS256('{"exp":100}', 's');
+  { 过期不抛异常：Ok=False + Code=jeExpired + Reason 可进日志 }
+  LOk := True;
+  try
+    Check(not TryJwtVerifyHS256(LToken, 's', 200, LOutcome),
+      'try-style expired returns False');
+  except
+    LOk := False;
+  end;
+  Check(LOk, 'try-style must not raise on expired');
+  Check(LOutcome.Code = jeExpired, 'outcome code jeExpired');
+  Check(Length(LOutcome.Reason) > 0, 'outcome reason for logs');
+end;
+
+procedure TestTryStyleEmptySecretReraises;
+var
+  LOutcome: TJwtVerifyOutcome;
+  LOk: Boolean;
+begin
+  { 编程错误（空密钥）不被 Try 吞掉——fail-fast }
+  LOk := False;
+  try
+    TryJwtVerifyHS256(KNOWN_TOKEN, '', 0, LOutcome);
+  except
+    on E: EArgumentError do LOk := True;
+    on E: Exception do LOk := False;
+  end;
+  Check(LOk, 'empty secret re-raised even in try-style');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.jwt');
   T.Test('Sign/verify round trip', @TestSignRoundTrip);
@@ -431,5 +546,12 @@ begin
   T.Test('Empty secret raises', @TestEmptySecretRaises);
   T.Test('Sign non-object payload raises', @TestSignNonObjectPayloadRaises);
   T.Test('Float NumericDate truncated', @TestFloatNumericDate);
+  T.Test('BuildClaimsPayload minimal', @TestBuildClaimsPayloadMinimal);
+  T.Test('Sign claims round trip', @TestSignClaimsRoundTrip);
+  T.Test('Session claims ttl validation', @TestSessionClaimsTtlValidation);
+  T.Test('Verify now (real clock)', @TestVerifyNow);
+  T.Test('Try-style ok', @TestTryStyleOk);
+  T.Test('Try-style expired no raise', @TestTryStyleExpiredNoRaise);
+  T.Test('Try-style empty secret re-raises', @TestTryStyleEmptySecretReraises);
   if not T.Run then Halt(1);
 end.
