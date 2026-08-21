@@ -110,6 +110,64 @@ begin
   Check(R.Height <= 2, 'small clip h');
 end;
 
+{ PH33 P2：边框开启且外框 ≥3×3 时 ContentArea = 居中区 内缩 1 }
+procedure TestContentAreaBorderInset;
+var M: IModal; R: TRect;
+begin
+  M := TModal.New.WithSize(10, 6).WithBorder(True);
+  R := M.ContentArea(TRect.Make(0, 0, 40, 20));
+  CheckEqual(Int64(8), Int64(R.Width), 'border inset w');
+  CheckEqual(Int64(4), Int64(R.Height), 'border inset h');
+  CheckEqual(Int64(16), Int64(R.X), 'border inset x');
+  CheckEqual(Int64(8), Int64(R.Y), 'border inset y');
+end;
+
+{ PH33 P2：外框 <3×3 时退化——ContentArea = 外框本身 }
+procedure TestContentAreaBorderTiny;
+var M: IModal; R: TRect;
+begin
+  M := TModal.New.WithSize(2, 2).WithBorder(True);
+  R := M.ContentArea(TRect.Make(0, 0, 40, 20));
+  CheckEqual(Int64(2), Int64(R.Width), 'tiny keeps outer w');
+  CheckEqual(Int64(2), Int64(R.Height), 'tiny keeps outer h');
+end;
+
+{ PH33 P2：WithTitle/WithBorder 渲染——边框角与标题落在外框顶行 }
+procedure TestRenderTitleBorder;
+var
+  M: IModal;
+  LBuf: TBuffer;
+  LArea: TRect;
+  LRow: AnsiString;
+begin
+  M := TModal.New.WithSize(20, 6).WithVisible(True)
+    .WithDimBackground(False).WithBorder(True).WithTitle('Hi');
+  LArea := TRect.Make(0, 0, 40, 12);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    M.Render(LArea, LBuf);
+    LRow := LBuf.RowAsString(3);   { 外框 [10..29]x[3..8]，顶行 y=3 }
+    Check(Pos('┌', LRow) > 0, 'top-left border glyph on outer top row');
+    Check(Pos('Hi', LRow) > 0, 'title text on border top row');
+  finally LBuf.Free; end;
+end;
+
+{ PH33 P2：默认无标题无边框 = 既有行为（不画边框角）}
+procedure TestRenderDefaultNoBorder;
+var
+  M: IModal;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  M := TModal.New.WithSize(10, 4).WithVisible(True).WithDimBackground(False);
+  LArea := TRect.Make(0, 0, 40, 12);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    M.Render(LArea, LBuf);
+    Check(Pos('┌', LBuf.RowAsString(4)) = 0, 'default render draws no border');
+  finally LBuf.Free; end;
+end;
+
 procedure TestDimBackgroundApplied;
 var B: TBuffer; A: TRect; LCell: PCell;
 begin
@@ -148,6 +206,10 @@ begin
   T.Test('ContentArea oversize clips', @TestContentAreaOversize);
   T.Test('ContentArea minimum 1x1', @TestContentAreaMinimum);
   T.Test('ContentArea small container', @TestContentAreaSmallContainer);
+  T.Test('ContentArea border inset (PH33 P2)', @TestContentAreaBorderInset);
+  T.Test('ContentArea border tiny (PH33 P2)', @TestContentAreaBorderTiny);
+  T.Test('Render title+border (PH33 P2)', @TestRenderTitleBorder);
+  T.Test('Render default no border (PH33 P2)', @TestRenderDefaultNoBorder);
   T.Test('Dim background applied', @TestDimBackgroundApplied);
   T.Test('Render empty area', @TestRenderEmptyArea);
   if not T.Run then Halt(1);

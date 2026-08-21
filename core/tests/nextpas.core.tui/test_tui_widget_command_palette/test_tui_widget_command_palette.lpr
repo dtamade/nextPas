@@ -236,6 +236,38 @@ begin
   Check(Length(State.FilteredIndices) > 0, 'filter produces results');
 end;
 
+{ PH33 P1：过滤结果按 FuzzyScore 降序排名（此前 Score 只算不用）。
+  query='sa' 手算：'sa'=前缀50+连续(10+20)=80 > 'sta'=60+10=70 >
+  'xsa'=10+20=30（'as' 非 'sa' 子序列不入集）；空查询全 1000 同分 →
+  插入排序稳定保持原序 }
+procedure TestCommandPaletteFilterRanking;
+var
+  CP: ICommandPalette;
+  State: TCommandPaletteState;
+begin
+  CP := TCommandPalette.New([
+    TCommandItem.Make('xsa', 'C'),
+    TCommandItem.Make('sa', 'A'),
+    TCommandItem.Make('sta', 'B')
+  ]);
+  State := TCommandPaletteState.Empty;
+  State.Open;
+  State.Input.Text := 'sa';
+  CP.UpdateFilter(State);
+  Check(Length(State.FilteredIndices) = 3, 'all three match as subsequence');
+  Check((State.FilteredIndices[0] = 1) and
+        (State.FilteredIndices[1] = 2) and
+        (State.FilteredIndices[2] = 0),
+        'filter results ranked by FuzzyScore descending');
+
+  State.Input.Text := '';
+  CP.UpdateFilter(State);
+  Check((State.FilteredIndices[0] = 0) and
+        (State.FilteredIndices[1] = 1) and
+        (State.FilteredIndices[2] = 2),
+        'empty query keeps original order (stable sort)');
+end;
+
 procedure TestCommandPaletteSelectedItem;
 var
   CP: ICommandPalette;
@@ -315,6 +347,7 @@ begin
   T.Test('render with items', @TestCommandPaletteRenderWithItems);
   T.Test('render tiny areas', @TestCommandPaletteRenderTinyAreas);
   T.Test('update filter', @TestCommandPaletteUpdateFilter);
+  T.Test('filter ranking by score (PH33 P1)', @TestCommandPaletteFilterRanking);
   T.Test('selected item', @TestCommandPaletteSelectedItem);
   T.Test('builder chaining', @TestCommandPaletteBuilderChaining);
   T.Test('hidden palette', @TestCommandPaletteHidden);
