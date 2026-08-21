@@ -21,6 +21,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `args` | L2 | CLI parsing | yes | L0-L1 | focused-runtime |
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `atomic` | L0 | atomic primitives | yes | L0 only | focused-runtime |
+| `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
