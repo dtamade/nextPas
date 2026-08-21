@@ -33,7 +33,6 @@ asm
   vmovdqu (%rax), %xmm13
   leaq SHUF_DC00(%rip), %rax
   vmovdqu (%rax), %xmm14
-  leaq K(%rip), %rbp
 
   // Load and byte-swap W[0..15]
   vmovdqu (%r14), %xmm4
@@ -46,13 +45,13 @@ asm
   vpshufb %xmm12, %xmm7, %xmm7
 
   // Store W[0..15]+K to stack
-  vpaddd (%rbp), %xmm4, %xmm0
+  vpaddd K(%rip), %xmm4, %xmm0
   vmovdqu %xmm0, (%rsp)
-  vpaddd 16(%rbp), %xmm5, %xmm0
+  vpaddd K+16(%rip), %xmm5, %xmm0
   vmovdqu %xmm0, 16(%rsp)
-  vpaddd 32(%rbp), %xmm6, %xmm0
+  vpaddd K+32(%rip), %xmm6, %xmm0
   vmovdqu %xmm0, 32(%rsp)
-  vpaddd 48(%rbp), %xmm7, %xmm0
+  vpaddd K+48(%rip), %xmm7, %xmm0
   vmovdqu %xmm0, 48(%rsp)
 
   // W[16..19] — pure SIMD
@@ -85,7 +84,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm4
-  vpaddd 64(%rbp), %xmm4, %xmm0
+  vpaddd K+64(%rip), %xmm4, %xmm0
   vmovdqu %xmm0, 64(%rsp)
 
   // W[20..23] — pure SIMD
@@ -118,7 +117,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm5
-  vpaddd 80(%rbp), %xmm5, %xmm0
+  vpaddd K+80(%rip), %xmm5, %xmm0
   vmovdqu %xmm0, 80(%rsp)
 
   // W[24..27] — pure SIMD
@@ -151,7 +150,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm6
-  vpaddd 96(%rbp), %xmm6, %xmm0
+  vpaddd K+96(%rip), %xmm6, %xmm0
   vmovdqu %xmm0, 96(%rsp)
 
   // W[28..31] — pure SIMD
@@ -184,7 +183,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm7
-  vpaddd 112(%rbp), %xmm7, %xmm0
+  vpaddd K+112(%rip), %xmm7, %xmm0
   vmovdqu %xmm0, 112(%rsp)
 
   // W[32..35] — pure SIMD
@@ -217,7 +216,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm4
-  vpaddd 128(%rbp), %xmm4, %xmm0
+  vpaddd K+128(%rip), %xmm4, %xmm0
   vmovdqu %xmm0, 128(%rsp)
 
   // W[36..39] — pure SIMD
@@ -250,7 +249,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm5
-  vpaddd 144(%rbp), %xmm5, %xmm0
+  vpaddd K+144(%rip), %xmm5, %xmm0
   vmovdqu %xmm0, 144(%rsp)
 
   // W[40..43] — pure SIMD
@@ -283,7 +282,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm6
-  vpaddd 160(%rbp), %xmm6, %xmm0
+  vpaddd K+160(%rip), %xmm6, %xmm0
   vmovdqu %xmm0, 160(%rsp)
 
   // W[44..47] — pure SIMD
@@ -316,7 +315,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm7
-  vpaddd 176(%rbp), %xmm7, %xmm0
+  vpaddd K+176(%rip), %xmm7, %xmm0
   vmovdqu %xmm0, 176(%rsp)
 
   // W[48..51] — pure SIMD
@@ -349,7 +348,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm4
-  vpaddd 192(%rbp), %xmm4, %xmm0
+  vpaddd K+192(%rip), %xmm4, %xmm0
   vmovdqu %xmm0, 192(%rsp)
 
   // W[52..55] — pure SIMD
@@ -382,7 +381,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm5
-  vpaddd 208(%rbp), %xmm5, %xmm0
+  vpaddd K+208(%rip), %xmm5, %xmm0
   vmovdqu %xmm0, 208(%rsp)
 
   // W[56..59] — pure SIMD
@@ -415,7 +414,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm6
-  vpaddd 224(%rbp), %xmm6, %xmm0
+  vpaddd K+224(%rip), %xmm6, %xmm0
   vmovdqu %xmm0, 224(%rsp)
 
   // W[60..63] — pure SIMD
@@ -448,7 +447,7 @@ asm
   vpxor %xmm8, %xmm3, %xmm3
   vpshufb %xmm14, %xmm3, %xmm3
   vpaddd %xmm3, %xmm0, %xmm7
-  vpaddd 240(%rbp), %xmm7, %xmm0
+  vpaddd K+240(%rip), %xmm7, %xmm0
   vmovdqu %xmm0, 240(%rsp)
 
   // Load state and do 64 rounds

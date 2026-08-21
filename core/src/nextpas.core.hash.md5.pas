@@ -232,6 +232,7 @@ end;
 
 function TMD5Hasher.SumBytes: TBytes;
 begin
+  Result := nil;
   SetLength(Result, MD5_DIGEST_SIZE);
   Sum(Result[0], MD5_DIGEST_SIZE);
 end;

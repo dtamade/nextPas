@@ -28,7 +28,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm4
-  vbroadcasti128 64(%rbp), %ymm9
+  vbroadcasti128 K+64(%rip), %ymm9
   vpaddd %ymm9, %ymm4, %ymm0
   vmovdqu %xmm0, 64(%rsp)
   vextracti128 $1, %ymm0, 320(%rsp)
@@ -170,7 +170,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm5
-  vbroadcasti128 80(%rbp), %ymm9
+  vbroadcasti128 K+80(%rip), %ymm9
   vpaddd %ymm9, %ymm5, %ymm0
   vmovdqu %xmm0, 80(%rsp)
   vextracti128 $1, %ymm0, 336(%rsp)
@@ -312,7 +312,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm6
-  vbroadcasti128 96(%rbp), %ymm9
+  vbroadcasti128 K+96(%rip), %ymm9
   vpaddd %ymm9, %ymm6, %ymm0
   vmovdqu %xmm0, 96(%rsp)
   vextracti128 $1, %ymm0, 352(%rsp)
@@ -454,7 +454,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm7
-  vbroadcasti128 112(%rbp), %ymm9
+  vbroadcasti128 K+112(%rip), %ymm9
   vpaddd %ymm9, %ymm7, %ymm0
   vmovdqu %xmm0, 112(%rsp)
   vextracti128 $1, %ymm0, 368(%rsp)
@@ -596,7 +596,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm4
-  vbroadcasti128 128(%rbp), %ymm9
+  vbroadcasti128 K+128(%rip), %ymm9
   vpaddd %ymm9, %ymm4, %ymm0
   vmovdqu %xmm0, 128(%rsp)
   vextracti128 $1, %ymm0, 384(%rsp)
@@ -738,7 +738,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm5
-  vbroadcasti128 144(%rbp), %ymm9
+  vbroadcasti128 K+144(%rip), %ymm9
   vpaddd %ymm9, %ymm5, %ymm0
   vmovdqu %xmm0, 144(%rsp)
   vextracti128 $1, %ymm0, 400(%rsp)
@@ -880,7 +880,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm6
-  vbroadcasti128 160(%rbp), %ymm9
+  vbroadcasti128 K+160(%rip), %ymm9
   vpaddd %ymm9, %ymm6, %ymm0
   vmovdqu %xmm0, 160(%rsp)
   vextracti128 $1, %ymm0, 416(%rsp)
@@ -1022,7 +1022,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm7
-  vbroadcasti128 176(%rbp), %ymm9
+  vbroadcasti128 K+176(%rip), %ymm9
   vpaddd %ymm9, %ymm7, %ymm0
   vmovdqu %xmm0, 176(%rsp)
   vextracti128 $1, %ymm0, 432(%rsp)
@@ -1164,7 +1164,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm4
-  vbroadcasti128 192(%rbp), %ymm9
+  vbroadcasti128 K+192(%rip), %ymm9
   vpaddd %ymm9, %ymm4, %ymm0
   vmovdqu %xmm0, 192(%rsp)
   vextracti128 $1, %ymm0, 448(%rsp)
@@ -1306,7 +1306,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm5
-  vbroadcasti128 208(%rbp), %ymm9
+  vbroadcasti128 K+208(%rip), %ymm9
   vpaddd %ymm9, %ymm5, %ymm0
   vmovdqu %xmm0, 208(%rsp)
   vextracti128 $1, %ymm0, 464(%rsp)
@@ -1448,7 +1448,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm6
-  vbroadcasti128 224(%rbp), %ymm9
+  vbroadcasti128 K+224(%rip), %ymm9
   vpaddd %ymm9, %ymm6, %ymm0
   vmovdqu %xmm0, 224(%rsp)
   vextracti128 $1, %ymm0, 480(%rsp)
@@ -1590,7 +1590,7 @@
   vpxor %ymm8, %ymm3, %ymm3
   vpshufb %ymm14, %ymm3, %ymm3
   vpaddd %ymm3, %ymm0, %ymm7
-  vbroadcasti128 240(%rbp), %ymm9
+  vbroadcasti128 K+240(%rip), %ymm9
   vpaddd %ymm9, %ymm7, %ymm0
   vmovdqu %xmm0, 240(%rsp)
   vextracti128 $1, %ymm0, 496(%rsp)
