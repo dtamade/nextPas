@@ -35,6 +35,7 @@ type
     FMaxConnections: Integer;
     FBusyTimeoutMs: Integer;
     FWal: Boolean;
+    FForeignKeys: Boolean;
     FLock: INativeMutex;
     { 空闲读连接（Acquire 弹出 / Release 回收） }
     FIdle: array of TSqliteDb;
@@ -48,7 +49,8 @@ type
     function PopIdle(out ADb: TSqliteDb): Boolean;
   public
     constructor Create(const APath: string; const AMaxConnections: Integer = 8;
-      const ABusyTimeoutMs: Integer = 5000; const AWal: Boolean = True);
+      const ABusyTimeoutMs: Integer = 5000; const AWal: Boolean = True;
+      const AForeignKeys: Boolean = False);
     destructor Destroy; override;
     { 取一个读连接；容量耗尽抛 ESqlitePoolError。 }
     function Acquire: TSqliteDb;
@@ -64,6 +66,9 @@ type
     property Path: string read FPath;
     property MaxConnections: Integer read FMaxConnections;
     property BusyTimeoutMs: Integer read FBusyTimeoutMs;
+    { 每连接 PRAGMA foreign_keys 开关(默认 off = SQLite 引擎默认,
+      不改变既有行为); on 时外键约束与 ON DELETE CASCADE 生效。 }
+    property ForeignKeys: Boolean read FForeignKeys;
   end;
 
 implementation
@@ -77,7 +82,7 @@ end;
 
 constructor TSqlitePool.Create(const APath: string;
   const AMaxConnections: Integer; const ABusyTimeoutMs: Integer;
-  const AWal: Boolean);
+  const AWal: Boolean; const AForeignKeys: Boolean);
 begin
   inherited Create;
   if AMaxConnections < 1 then
@@ -87,6 +92,7 @@ begin
   FMaxConnections := AMaxConnections;
   FBusyTimeoutMs := ABusyTimeoutMs;
   FWal := AWal;
+  FForeignKeys := AForeignKeys;
   FLock := nextpas.core.sync.Mutex;
 end;
 
@@ -101,7 +107,7 @@ begin
   Result := FPath = ':memory:';
 end;
 
-{ 新建一条连接并统一初始化（WAL + busy timeout）。 }
+{ 新建一条连接并统一初始化（WAL + busy timeout + 可选 foreign_keys）。 }
 function TSqlitePool.CreateConnection: TSqliteDb;
 begin
   Result := TSqliteDb.Create(FPath);
@@ -110,6 +116,8 @@ begin
       Result.Exec('PRAGMA journal_mode=WAL');
     if FBusyTimeoutMs > 0 then
       Result.BusyTimeout(FBusyTimeoutMs);
+    if FForeignKeys then
+      Result.Exec('PRAGMA foreign_keys=ON');
   except
     Result.Free;
     raise;

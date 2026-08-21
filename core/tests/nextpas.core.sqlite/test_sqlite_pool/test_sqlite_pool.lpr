@@ -225,6 +225,76 @@ begin
   end;
 end;
 
+procedure TestPoolForeignKeys;
+var
+  PoolOff, PoolOn: TSqlitePool;
+  Db, W: TSqliteDb;
+  Q: TSqliteQuery;
+  LRaised: Boolean;
+begin
+  { 默认 off = SQLite 引擎默认, 既有行为不变 }
+  ResetDbFiles;
+  PoolOff := TSqlitePool.Create(TempDbPath, 2);
+  try
+    Db := PoolOff.Acquire;
+    Q := Db.Query('PRAGMA foreign_keys');
+    try
+      Check(Q.Step, 'default fk pragma returns a row');
+      CheckEqual(Int64(0), Q.GetInt64(0), 'foreign_keys off by default');
+    finally
+      Q.Free;
+    end;
+    PoolOff.Release(Db);
+  finally
+    PoolOff.Close;
+    PoolOff.Free;
+  end;
+
+  { on: 读连接与写连接统一生效; 违反约束抛错; ON DELETE CASCADE 生效 }
+  ResetDbFiles;
+  PoolOn := TSqlitePool.Create(TempDbPath, 2, 5000, True, True);
+  try
+    Check(PoolOn.ForeignKeys, 'ForeignKeys property reflects the option');
+    W := PoolOn.Writer;
+    W.Exec('CREATE TABLE parent (id INTEGER PRIMARY KEY)');
+    W.Exec('CREATE TABLE child (id INTEGER PRIMARY KEY, ' +
+      'pid INTEGER NOT NULL REFERENCES parent(id) ON DELETE CASCADE)');
+    W.Exec('INSERT INTO parent (id) VALUES (1)');
+    W.Exec('INSERT INTO child (id, pid) VALUES (10, 1)');
+
+    LRaised := False;
+    try
+      W.Exec('INSERT INTO child (id, pid) VALUES (11, 99)');
+    except
+      on E: ESqliteError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'fk violation raises on writer connection');
+
+    Db := PoolOn.Acquire;
+    Q := Db.Query('PRAGMA foreign_keys');
+    try
+      Check(Q.Step, 'fk pragma returns a row on reader');
+      CheckEqual(Int64(1), Q.GetInt64(0), 'foreign_keys on for readers');
+    finally
+      Q.Free;
+    end;
+
+    W.Exec('DELETE FROM parent WHERE id = 1');
+    Q := Db.Query('SELECT COUNT(*) FROM child');
+    try
+      Check(Q.Step, 'count after cascade returns a row');
+      CheckEqual(Int64(0), Q.GetInt64(0), 'ON DELETE CASCADE removed child rows');
+    finally
+      Q.Free;
+    end;
+    PoolOn.Release(Db);
+  finally
+    PoolOn.Close;
+    PoolOn.Free;
+  end;
+end;
+
 begin
   GDbPath := GetTempDir + 'pp888_sqlite_pool_test' + IntToStr(GetProcessID) + '.db';
   T := TTestSuite.Create('nextpas.core.sqlite.pool');
@@ -234,6 +304,7 @@ begin
   T.Test('dedicated writer identity + release guard', @TestPoolWriterIdentity);
   T.Test('close idempotent + acquire/writer guard', @TestPoolCloseAndClosedAcquire);
   T.Test('writer writes / pooled readers consistent', @TestPoolWritesViaWriterReadsConsistent);
+  T.Test('foreign_keys option (default off / on enforces + cascades)', @TestPoolForeignKeys);
   ResetDbFiles;
   if not T.Run then Halt(1);
 end.
