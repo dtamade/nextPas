@@ -69,6 +69,10 @@ type
     function NewLayer(const AName: AnsiString): Integer;
     { 删除层。仅剩 1 层时返回 False（拒绝）。索引其后各层前移。 }
     function DeleteLayer(AIndex: Integer): Boolean;
+    { 重排层：把 AIndex 层沿索引方向移动 ADelta 格（越界截断）。
+      返回移动后的新索引；无法移动（索引非法/ADelta=0/已到边界）返回 -1。
+      活动层跟随其内容移动，保持活动内容不变。 }
+    function MoveLayer(AIndex, ADelta: Integer): Integer;
     procedure ClearLayer(AIndex: Integer);
     procedure ClearAll;
     { 保留左上重叠区，新区域填 CANVAS_CELL_EMPTY；全量置脏。 }
@@ -225,6 +229,42 @@ begin
     FActive := Length(FLayers) - 1;
   MarkAllDirty;
   Result := True;
+end;
+
+function TCanvasDoc.MoveLayer(AIndex, ADelta: Integer): Integer;
+var
+  Target, Step, Nxt: Integer;
+  Tmp: TCanvasLayer;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FLayers)) or (ADelta = 0) then
+    Exit(-1);
+  Target := AIndex + ADelta;
+  if Target < 0 then
+    Target := 0;
+  if Target > High(FLayers) then
+    Target := High(FLayers);
+  if Target = AIndex then
+    Exit(-1);
+  { 相邻交换到目标位；记录数组整体换位（动态数组按引用换）。
+    活动层若被交换波及则跟随内容，保证活动内容不漂移。 }
+  if ADelta > 0 then
+    Step := 1
+  else
+    Step := -1;
+  while AIndex <> Target do
+  begin
+    Nxt := AIndex + Step;
+    Tmp := FLayers[AIndex];
+    FLayers[AIndex] := FLayers[Nxt];
+    FLayers[Nxt] := Tmp;
+    if FActive = AIndex then
+      FActive := Nxt
+    else if FActive = Nxt then
+      FActive := AIndex;
+    AIndex := Nxt;
+  end;
+  MarkAllDirty;
+  Result := Target;
 end;
 
 procedure TCanvasDoc.ClearLayer(AIndex: Integer);
