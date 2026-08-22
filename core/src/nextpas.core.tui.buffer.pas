@@ -62,6 +62,13 @@ type
     { True = 原始编码图流（kitty f=100，终端自解码，不做 RGBA 缩放）；
       False = 调用方已解码的 RGBA 像素（f=32）。 }
     Encoded: Boolean;
+    { 刀 60 source-crop：kitty 源矩形裁剪（像素坐标）。SrcW/SrcH > 0
+      时放置命令发射 x/y/w/h 键——部分可见块只显示可见带；
+      全 0 = 整图放置（既有行为零回归）。 }
+    SrcX: Integer;
+    SrcY: Integer;
+    SrcW: Integer;
+    SrcH: Integer;
   end;
 
   TScaledPixelBuf = array of Byte;
@@ -156,7 +163,9 @@ type
       kitty f=100 直传（终端自解码）。仅 ipKitty 协议输出；
       sixel/half-block 无终端解码能力，调用方应自行降级。 }
     procedure PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
-      ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
+      ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer;
+      ASrcX: Integer = 0; ASrcY: Integer = 0; ASrcW: Integer = 0;
+      ASrcH: Integer = 0);
     function ImagePlacementCount: Integer; inline;
     function ImagePlacementAt(AIndex: Integer): TImagePlacement; inline;
   end;
@@ -1030,14 +1039,26 @@ begin
   FImagePlacements[FImagePlacementCount].DataLen := ADataLen;
   FImagePlacements[FImagePlacementCount].PixelWidth := APixelWidth;
   FImagePlacements[FImagePlacementCount].PixelHeight := APixelHeight;
+  FImagePlacements[FImagePlacementCount].SrcX := 0;
+  FImagePlacements[FImagePlacementCount].SrcY := 0;
+  FImagePlacements[FImagePlacementCount].SrcW := 0;
+  FImagePlacements[FImagePlacementCount].SrcH := 0;
   Inc(FImagePlacementCount);
 end;
 
 procedure TBuffer.PlaceImageEncoded(AHash: QWord; const AImgArea: TRect;
-  ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer);
+  ADataPtr: Pointer; ADataLen: Integer; APixelWidth, APixelHeight: Integer;
+  ASrcX, ASrcY, ASrcW, ASrcH: Integer);
 begin
   PlaceImage(AHash, AImgArea, ADataPtr, ADataLen, APixelWidth, APixelHeight);
-  FImagePlacements[FImagePlacementCount - 1].Encoded := True;
+  with FImagePlacements[FImagePlacementCount - 1] do
+  begin
+    Encoded := True;
+    SrcX := ASrcX;
+    SrcY := ASrcY;
+    SrcW := ASrcW;
+    SrcH := ASrcH;
+  end;
 end;
 
 function TBuffer.ImagePlacementCount: Integer;
