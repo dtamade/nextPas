@@ -857,8 +857,12 @@ function TUnicodeCollator.CollectElements(const ANormalized: string): TCollation
 var
   LCount: SizeInt;
 begin
+  { CollectElementsInto 向 AElements 填充前 LCount 个有效元素（容量可能
+    超配）；此前实现先取计数再抹空重设，返回全零数据——真 bug。 }
+  Result := nil;
   LCount := CollectElementsInto(ANormalized, Result);
-  SetLength(Result, LCount);
+  if Length(Result) <> LCount then
+    SetLength(Result, LCount);
 end;
 
 procedure AppendU16BE(var AKey: TCollationKey; var APos: SizeInt; const AValue: UInt16);
@@ -1136,6 +1140,7 @@ var
 begin
   if AText = '' then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;
