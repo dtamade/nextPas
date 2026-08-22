@@ -4,7 +4,7 @@ program test_lockfree_counter_keyed;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.lockfree.counter.keyed,
   nextpas.core.errors,
   nextpas.core.atomic,

@@ -149,6 +149,7 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.format"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.utils"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.path"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.time"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.fs"
 )
 

@@ -16,6 +16,10 @@ const
   PLATFORM_SIGKILL = 9;
   PLATFORM_SIGHUP  = 1;
   PLATFORM_SIGPIPE = 13;
+  { 崩溃族信号：POSIX 值在 Linux/macOS/FreeBSD 一致 }
+  PLATFORM_SIGABRT = 6;
+  PLATFORM_SIGBUS  = 7;
+  PLATFORM_SIGSEGV = 11;
 {$IFDEF NEXTPAS_WINDOWS}
   { Windows console control event: Ctrl+Break has no POSIX signal twin. }
   PLATFORM_SIGBREAK = 21;
@@ -33,12 +37,27 @@ const
   PLATFORM_SIGWINCH = 28;
 {$ENDIF}
 
+  { sigaction 行为旗标（platform_signal_set_flags 的 AFlags 位）。
+    数值为平台无关抽象位，由各后端映射到自身 sa_flags。 }
+  PLATFORM_SA_RESTART   = 1;
+  PLATFORM_SA_RESETHAND = 2;
+
 {** @desc 设置信号处理函数（POSIX sigaction / Windows SetConsoleCtrlHandler）
     @param ASignal 信号编号（PLATFORM_SIGINT / PLATFORM_SIGTERM 等）
     @param AHandler 信号处理回调函数
     @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
+
+{** @desc 设置信号处理函数（可指定 sigaction 行为旗标）
+    @param ASignal 信号编号
+    @param AHandler 信号处理回调函数
+    @param AFlags PLATFORM_SA_* 位或组合；含未知位返回 PLATFORM_ERR_INVALID
+    @return 0 成功，PLATFORM_ERR_* 错误码
+    @note POSIX 后端映射到 sa_flags；Windows 无对应概念，
+      请求 PLATFORM_SA_RESETHAND 返回 PLATFORM_ERR_UNSUPPORTED。 *}
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
 
 {** @desc 忽略指定信号（POSIX SIG_IGN / Windows 移除处理器）
     @param ASignal 信号编号
@@ -111,19 +130,35 @@ begin
   ASet.Bits[LIdx] := ASet.Bits[LIdx] or (QWord(1) shl LBit);
 end;
 
-function platform_signal_set(ASignal: Int32;
-  AHandler: TPlatformSignalHandler): Int32;
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
+const
+  LINUX_KNOWN_FLAGS = PLATFORM_SA_RESTART or PLATFORM_SA_RESETHAND;
 var
   LAct: TLibcSigAction;
+  LMapped: UInt32;
 begin
+  if (AFlags and not LINUX_KNOWN_FLAGS) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  LMapped := 0;
+  if (AFlags and PLATFORM_SA_RESTART) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESTART);
+  if (AFlags and PLATFORM_SA_RESETHAND) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESETHAND);
   FillChar(LAct, SizeOf(LAct), 0);
   LAct.sa_handler := Pointer(AHandler);
-  LAct.sa_flags := SA_RESTART;
+  LAct.sa_flags := Int32(LMapped);
   SigSetEmpty(LAct.sa_mask);
   if sigaction(ASignal, @LAct, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
+end;
+
+function platform_signal_set(ASignal: Int32;
+  AHandler: TPlatformSignalHandler): Int32;
+begin
+  Result := platform_signal_set_flags(ASignal, AHandler, PLATFORM_SA_RESTART);
 end;
 
 function platform_signal_ignore(ASignal: Int32): Int32;
@@ -199,18 +234,34 @@ uses
   nextpas.core.platform.darwin.ffi,
   nextpas.core.platform.error;
 
-function platform_signal_set(ASignal: Int32;
-  AHandler: TPlatformSignalHandler): Int32;
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
+const
+  DARWIN_KNOWN_FLAGS = PLATFORM_SA_RESTART or PLATFORM_SA_RESETHAND;
 var
   LAct: TPlatformDarwinSigAction;
+  LMapped: UInt32;
 begin
+  if (AFlags and not DARWIN_KNOWN_FLAGS) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  LMapped := 0;
+  if (AFlags and PLATFORM_SA_RESTART) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESTART);
+  if (AFlags and PLATFORM_SA_RESETHAND) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESETHAND);
   FillChar(LAct, SizeOf(LAct), 0);
   LAct.sa_handler := TPlatformDarwinSigActionHandler(AHandler);
-  LAct.sa_flags := SA_RESTART;
+  LAct.sa_flags := Int32(LMapped);
   if sigaction(ASignal, @LAct, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
+end;
+
+function platform_signal_set(ASignal: Int32;
+  AHandler: TPlatformSignalHandler): Int32;
+begin
+  Result := platform_signal_set_flags(ASignal, AHandler, PLATFORM_SA_RESTART);
 end;
 
 function platform_signal_ignore(ASignal: Int32): Int32;
@@ -282,18 +333,34 @@ uses
   nextpas.core.platform.freebsd.ffi,
   nextpas.core.platform.error;
 
-function platform_signal_set(ASignal: Int32;
-  AHandler: TPlatformSignalHandler): Int32;
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
+const
+  FREEBSD_KNOWN_FLAGS = PLATFORM_SA_RESTART or PLATFORM_SA_RESETHAND;
 var
   LAct: TPlatformFreeBSDSigAction;
+  LMapped: UInt32;
 begin
+  if (AFlags and not FREEBSD_KNOWN_FLAGS) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  LMapped := 0;
+  if (AFlags and PLATFORM_SA_RESTART) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESTART);
+  if (AFlags and PLATFORM_SA_RESETHAND) <> 0 then
+    LMapped := LMapped or UInt32(SA_RESETHAND);
   FillChar(LAct, SizeOf(LAct), 0);
   LAct.sa_handler := TPlatformFreeBSDSigActionHandler(AHandler);
-  LAct.sa_flags := SA_RESTART;
+  LAct.sa_flags := Int32(LMapped);
   if sigaction(ASignal, @LAct, nil) <> 0 then
     Result := platform_get_errno
   else
     Result := 0;
+end;
+
+function platform_signal_set(ASignal: Int32;
+  AHandler: TPlatformSignalHandler): Int32;
+begin
+  Result := platform_signal_set_flags(ASignal, AHandler, PLATFORM_SA_RESTART);
 end;
 
 function platform_signal_ignore(ASignal: Int32): Int32;
@@ -497,6 +564,18 @@ begin
   Result := 0;
 end;
 
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
+begin
+  { Windows console ctrl 模型无 sigaction 旗标概念；
+    RESETHAND（一次性语义）无对应实现。 }
+  if (AFlags and PLATFORM_SA_RESETHAND) <> 0 then
+    Exit(PLATFORM_ERR_UNSUPPORTED);
+  if (AFlags and not PLATFORM_SA_RESTART) <> 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_signal_set(ASignal, AHandler);
+end;
+
 function platform_signal_reset(ASignal: Int32): Int32;
 var
   LIndex: Int32;
@@ -556,6 +635,9 @@ end;
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_signal_set_flags(ASignal: Int32;
+  AHandler: TPlatformSignalHandler; AFlags: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_signal_ignore(ASignal: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
