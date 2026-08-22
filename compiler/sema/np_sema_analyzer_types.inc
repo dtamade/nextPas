@@ -198,6 +198,7 @@ type
       const AAllowOwnedStringReturn: Boolean; out ABlob: string): Boolean;
     function EncodeStrCallArgs(const ACallNode: TGreenNode;
       const ADestVar: string): string;
+    function EncodePosConcatOperand(const ANode: TGreenNode): string;
     function EncodeCallStatementArgs(
       const ACallName: string; const ACallNode, ADeclNode: TGreenNode): string;
     function NewBlockLabel(const APrefix: string): string;

@@ -776,6 +776,23 @@ begin
           FuncName := '';
       end;
     end;
+    { Concat-tree operands (',' + SC + ',') and char-literal needles
+      (#9/#10 blob scans) match none of the shapes above; left unfilled
+      they fall through to generic int folding, which lowers the tree to
+      ptrtoint/add garbage args on a bare @Pos call. Unsupported kinds
+      yield '' here and degrade to the previous behavior unchanged. }
+    if (ABlob = '') and (ANode.ChildAt(1) <> nil) then
+    begin
+      ArgName := EncodePosConcatOperand(ANode.ChildAt(1));
+      if ArgName <> '' then
+        ABlob := 'strvar ' + ArgName + #10;
+    end;
+    if (FuncName = '') and (ANode.ChildAt(2) <> nil) then
+    begin
+      ArgName := EncodePosConcatOperand(ANode.ChildAt(2));
+      if ArgName <> '' then
+        FuncName := 'strvar ' + ArgName + #10;
+    end;
     if (ABlob <> '') and (FuncName <> '') then
     begin
       ABlob := ABlob + FuncName + 'strpos' + #10;
@@ -2773,5 +2790,107 @@ begin
     Exit(True);
   end;
   Result := EncodeRuntimeIntExpr(ANode, ABlob, FCurrentRetVarName);
+end;
+
+function TSemanticAnalyzer.EncodePosConcatOperand(
+  const ANode: TGreenNode): string;
+var
+  LeftName, RightName: string;
+  Folded: LongInt;
+  FieldIdx: LongInt;
+begin
+  Result := '';
+  if ANode = nil then
+    Exit;
+  { Leaf forms with an existing $ts alloca pass through by name; literals
+    and '+' subtrees materialize into $pos_cat temps because
+    ProcessAssignTStringConcat needs two $ts allocas per concat node. }
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ANode.Text) then
+    Exit(ANode.Text);
+  if ANode.NodeKind = gnkStringLiteral then
+  begin
+    Inc(FBlockLabelCounter);
+    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(Result);
+    RegisterRuntimeStrVar(Result);
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
+    FModel.AddTypedHirNode('assign-tstring-literal-runtime', Result, 0, 0,
+      DecodePascalStringLiteral(ANode.Text));
+    QueuePendingStringTempRelease(Result, Result);
+    Exit;
+  end;
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
+    (ANode.ChildCount >= 2) then
+  begin
+    LeftName := EncodePosConcatOperand(ANode.ChildAt(0));
+    if LeftName = '' then
+      Exit;
+    RightName := EncodePosConcatOperand(ANode.ChildAt(1));
+    if RightName = '' then
+      Exit;
+    Inc(FBlockLabelCounter);
+    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(Result);
+    RegisterRuntimeStrVar(Result);
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
+    FModel.AddTypedHirNode('assign-tstring-concat-runtime', Result, 0, 0,
+      LeftName + #9 + RightName);
+    QueuePendingStringTempRelease(Result, Result);
+    Exit;
+  end;
+  { Char-code leaf (#9 / #$0A / 'x') as a 1-char string. The literal node
+    takes decoded bytes, so quote chars survive strlit's no-decode path.
+    Multi-segment (#13#10) is not one char — leave unsupported. }
+  if (ANode.NodeKind = gnkCharLiteral) and (Length(ANode.Text) >= 2) then
+  begin
+    Folded := 0;
+    if (ANode.Text[1] = '''') and (Length(ANode.Text) = 3) then
+      Folded := Ord(ANode.Text[2])
+    else if ANode.Text[1] = '#' then
+    begin
+      if Pos('#', Copy(ANode.Text, 2, Length(ANode.Text))) > 0 then
+        Exit;
+      if (Length(ANode.Text) >= 3) and (ANode.Text[2] = '$') then
+      begin
+        for FieldIdx := 3 to Length(ANode.Text) do
+        begin
+          Folded := Folded * 16;
+          if (ANode.Text[FieldIdx] >= '0') and
+            (ANode.Text[FieldIdx] <= '9') then
+            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('0')
+          else if (ANode.Text[FieldIdx] >= 'a') and
+            (ANode.Text[FieldIdx] <= 'f') then
+            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('a') + 10
+          else if (ANode.Text[FieldIdx] >= 'A') and
+            (ANode.Text[FieldIdx] <= 'F') then
+            Folded := Folded + Ord(ANode.Text[FieldIdx]) - Ord('A') + 10
+          else
+            Exit;
+        end;
+      end
+      else
+      begin
+        for FieldIdx := 2 to Length(ANode.Text) do
+        begin
+          if (ANode.Text[FieldIdx] < '0') or
+            (ANode.Text[FieldIdx] > '9') then
+            Exit;
+          Folded := Folded * 10 + Ord(ANode.Text[FieldIdx]) - Ord('0');
+        end;
+      end;
+    end
+    else
+      Exit;
+    if (Folded < 0) or (Folded > 255) then
+      Exit;
+    Inc(FBlockLabelCounter);
+    Result := '$pos_cat_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(Result);
+    RegisterRuntimeStrVar(Result);
+    FModel.AddTypedHirNode('var-decl-tstring-runtime', Result, 0, 0, Result);
+    FModel.AddTypedHirNode('assign-tstring-literal-runtime', Result, 0, 0,
+      Chr(Folded));
+    QueuePendingStringTempRelease(Result, Result);
+  end;
 end;
 
