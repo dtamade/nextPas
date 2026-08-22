@@ -21,10 +21,13 @@ uses
   nextpas.core.compress.deflate,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.atomic,
   nextpas.core.platform.thread;
 
 var
   T: TTestSuite;
+  { G3 写超时测试的跨线程标志（handler 线程写、主线程断言）。 }
+  G3WriteTimeoutHit: LongInt;
 
 function ReadTextFile(const APath: string): string;
 var
@@ -401,8 +404,8 @@ begin
   LHttpSource := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
   Check(SourceHas(LHttpSource, 'IoWriteAll(LConn'),
     'server handshake must handle short writes');
-  Check(SourceHas(LHttpSource, 'IoWriteAll(FWriter'),
-    'websocket frames must handle short writes');
+  Check(SourceHas(LHttpSource, 'WriteAll(LBuf[0], LBufLen)'),
+    'websocket frames must handle short writes via deadline-aware WriteAll');
   Check(SourceHas(LHttpSource, 'IoWriteAll(LWriter'),
     'client handshake must handle short writes');
 end;
@@ -3327,6 +3330,384 @@ begin
   end;
 end;
 
+{ Test (B7 G1): server shutdown wakes a blocked WS read loop and the session
+  teardown sends close frame 1001 going-away; connection is closed when
+  Shutdown returns. }
+procedure TestShutdownSendsGoingAwayClose;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LPayloadLen: Integer;
+  LCode: Integer;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    { 阻塞读循环（与 pascn realtime handler 同构）：shutdown 唤醒后退出，
+      Destroy 收尾路径补发 close 1001。 }
+    while True do
+    begin
+      try
+        LF := LWs.ReadMessage;
+      except
+        Break;
+      end;
+      if LF.Opcode = wsOpClose then
+        Break;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'shutdown-close: got 101');
+
+      { 服务器 shutdown：waitable cancel 唤醒连接线程 → 收尾补发 close 1001。
+        Shutdown 内部等待会话收尾完成后返回。 }
+      LServer.Shutdown;
+
+      { 客户端应收到 FIN+close 帧（首字节 $88），payload 前两字节 = 1001 }
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 2) or (LN = 0);
+      Check(Length(LResp) >= 2, 'shutdown-close: received frame bytes');
+      if Length(LResp) >= 2 then
+      begin
+        Check(Ord(LResp[1]) = $88, 'shutdown-close: FIN+close opcode');
+        LPayloadLen := Ord(LResp[2]) and $7F;
+        if Length(LResp) >= 2 + LPayloadLen then
+        begin
+          LCode := (Ord(LResp[3]) shl 8) or Ord(LResp[4]);
+          CheckEqual(1001, LCode, 'shutdown-close: code 1001 going away');
+        end
+        else
+          Check(False, 'shutdown-close: close frame payload incomplete');
+      end;
+      { shutdown 返回后连接应已关闭：后续读为 EOF }
+      try
+        LN := LConn.Read(LBuf[0], 4096);
+      except
+        LN := 0;
+      end;
+      Check(LN = 0, 'shutdown-close: EOF after shutdown returns');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test (B7 G2): server-side teardown without an explicit Close sends close
+  frame 1001 going-away before the connection closes. }
+procedure TestTeardownSendsGoingAwayClose;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LPayloadLen: Integer;
+  LCode: Integer;
+  LPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    { 不显式 Close，直接返回：Destroy 收尾路径应补发 close 1001。 }
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'teardown-close: got 101');
+
+      { 保留 101 头之后已到达的残余字节：close frame 可能与 101 同段
+        到达（loopback 合并段），重置会丢失它。 }
+      LPos := Pos(#13#10#13#10, LResp) + 4;
+      LResp := Copy(LResp, LPos, MaxInt);
+
+      { 读至 EOF：应包含一个 close frame（1001），随后连接关闭 }
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+      Check(Length(LResp) >= 4, 'teardown-close: received close frame');
+      if Length(LResp) >= 4 then
+      begin
+        Check(Ord(LResp[1]) = $88, 'teardown-close: FIN+close opcode');
+        LPayloadLen := Ord(LResp[2]) and $7F;
+        if Length(LResp) >= 2 + LPayloadLen then
+        begin
+          LCode := (Ord(LResp[3]) shl 8) or Ord(LResp[4]);
+          CheckEqual(1001, LCode, 'teardown-close: code 1001 going away');
+        end
+        else
+          Check(False, 'teardown-close: close frame payload incomplete');
+      end;
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test (B7 G2b): an explicit Close(1000) must not be followed by a second
+  close frame on teardown. }
+procedure TestExplicitCloseSendsSingleCloseFrame;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LPos: SizeInt;
+  LOp: Byte;
+  LFrameLen: Integer;
+  LCloseCount: Integer;
+  LCode: Integer;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    LWs.Close(1000, 'bye');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'single-close: got 101');
+
+      { 保留 101 头之后的残余字节：close frame 可能与 101 同段到达。 }
+      LPos := Pos(#13#10#13#10, LResp) + 4;
+      LResp := Copy(LResp, LPos, MaxInt);
+
+      { 读至 EOF，逐帧统计 close 帧（$88）：必须恰好一个 }
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+      LCloseCount := 0;
+      LPos := 1;
+      while LPos + 1 <= Length(LResp) do
+      begin
+        LOp := Ord(LResp[LPos]);
+        LFrameLen := Ord(LResp[LPos + 1]) and $7F;
+        if LOp = $88 then
+        begin
+          Inc(LCloseCount);
+          if LPos + 3 <= Length(LResp) then
+            LCode := (Ord(LResp[LPos + 2]) shl 8) or Ord(LResp[LPos + 3])
+          else
+            LCode := -1;
+        end;
+        Inc(LPos, 2 + LFrameLen);
+      end;
+      CheckEqual(1, LCloseCount, 'single-close: exactly one close frame');
+      CheckEqual(1000, LCode, 'single-close: code 1000 normal closure');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test (B7 G3): server write timeout fires when the peer stops reading and
+  fills the OS send buffer; the write raises instead of blocking forever. }
+procedure TestServerWriteTimeoutKicksSlowClient;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LPayload: TBytes;
+begin
+  SetLength(LPayload, 16777216);
+  FillChar(LPayload[0], Length(LPayload), Ord('A'));
+  InterlockedExchange(G3WriteTimeoutHit, 0);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LOpts: TWebSocketOptions;
+  begin
+    LOpts := TWebSocketOptions.Default.WithWriteTimeout(200);
+    LWs := UpgradeWebSocket(AReq, AW, LOpts);
+    try
+      { 16MB 单帧：对端不读 → OS 发送缓冲满 → 200ms 写超时抛错 }
+      LWs.WriteBinary(LPayload);
+    except
+      on E: Exception do
+        InterlockedExchange(G3WriteTimeoutHit, 1);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'write-timeout: got 101');
+
+      { 故意不读：让服务端 16MB 写阻塞并触发 200ms 写超时 }
+      platform_thread_sleep_ns(1500000000);
+
+      { 读至 EOF（缓冲的 partial 数据 + 连接关闭） }
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+      CheckEqual(1, InterlockedExchange(G3WriteTimeoutHit, 0),
+        'write-timeout: handler observed write timeout');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 begin
   T := TTestSuite.Create('http.websocket');
@@ -3375,6 +3756,12 @@ begin
   T.Test('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
   T.Test('BinaryFrame', @TestBinaryFrame);
   T.Test('CloseFrame', @TestCloseFrame);
+  T.Test('ShutdownSendsGoingAwayClose', @TestShutdownSendsGoingAwayClose);
+  T.Test('TeardownSendsGoingAwayClose', @TestTeardownSendsGoingAwayClose);
+  T.Test('ExplicitCloseSendsSingleCloseFrame',
+    @TestExplicitCloseSendsSingleCloseFrame);
+  T.Test('ServerWriteTimeoutKicksSlowClient',
+    @TestServerWriteTimeoutKicksSlowClient);
   T.Test('OriginValidationRejectsDisallowed', @TestOriginValidationRejectsDisallowed);
   T.Test('OriginValidationAcceptsAllowed', @TestOriginValidationAcceptsAllowed);
   T.Test('OriginNullRejectedByDefault', @TestOriginNullRejectedByDefault);

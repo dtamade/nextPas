@@ -59,6 +59,9 @@ type
     FEvents: TPlatformPollEvents;
     FWakeDeadline: TDeadline;
     FTicket: ITcpServerPollTargetTicket;
+    { 服务器 shutdown drain 标记：reactor 线程已对本 target 发起过
+      BeginShutdownClose（防 drain 阶段逐轮重扫时重复发起）。 }
+    FShutdownClose: Boolean;
     { 连接级上下文（worker handoff / hijack 迁移载体）。迁移（hijack）时
       复用同一 context 并重绑新 target 的 ticket，保证 worker 推送通道
       跨会话迁移保持有效。强引用不成环：ticket 对 target 是弱引用。 }
@@ -86,6 +89,9 @@ type
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
     procedure SetContext(const AContext: ITcpServerSessionContext);
     function Context: TTcpServerPollSessionContext;
+    { shutdown drain 标记（见 FShutdownClose）：drain 发启与收尾判定共用 }
+    procedure MarkShutdownClose;
+    function IsShutdownClose: Boolean;
   end;
 
   TTcpServerPollWorkerHandoff = class(TInterfacedObject,
@@ -232,6 +238,13 @@ type
     function ContainsTarget(const ATarget: TTcpServerPollSessionTarget): Boolean;
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+    { 快照全部已注册 target（副本；调用方不得持引用跨轮使用）：
+      shutdown drain 发启时逐轮扫描。 }
+    function Snapshot: TTcpServerPollSessionTargetArray;
+    { 是否存在已标记 shutdown-close 的 target：drain 收尾判定（全部
+      drain 完成 = 无标记 target 残留）。O(n) 扫描，仅 shutdown drain
+      路径调用。 }
+    function AnyShutdownClose: Boolean;
     function Drain: TTcpServerPollSessionTargetArray;
     procedure Clear;
   end;
@@ -311,15 +324,23 @@ type
   end;
 
   TTcpServerDefaultSessionContext = class(TInterfacedObject,
-    ITcpServerSessionContext)
+    ITcpServerSessionContext, IWsServerShutdownRegistry)
   private
     FWorkerHandoff: ITcpServerWorkerHandoff;
+    FWsLock: IMutex;
+    FWsNotifiers: array of IWsServerShutdownNotifier;
   public
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
+    destructor Destroy; override;
     function WorkerHandoff: ITcpServerWorkerHandoff;
     function HandoffHijackedConn(const AConn: ITcpStream;
       const ANewSession: ITcpServerSession): Boolean;
     function SubmitHijackMigration: Boolean;
+    procedure RegisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure UnregisterShutdownNotifier(
+      const ANotifier: IWsServerShutdownNotifier);
+    procedure ShutdownAll(const ATimeoutNs: Int64);
   end;
 
   TTcpServerPollQueuedCompletion = class(TInterfacedObject,
@@ -483,6 +504,16 @@ function TTcpServerPollSessionTarget.HandleEvents(
 begin
   Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
   RefreshWakeDeadline;
+end;
+
+procedure TTcpServerPollSessionTarget.MarkShutdownClose;
+begin
+  FShutdownClose := True;
+end;
+
+function TTcpServerPollSessionTarget.IsShutdownClose: Boolean;
+begin
+  Result := FShutdownClose;
 end;
 
 constructor TTcpServerPollQueuedCompletion.Create(
@@ -1012,6 +1043,31 @@ begin
   SetLength(Result, LCount);
 end;
 
+function TTcpServerPollTargetRegistry.Snapshot: TTcpServerPollSessionTargetArray;
+var
+  LI: SizeUInt;
+begin
+  Result := nil;
+  if FCount = 0 then
+    Exit;
+  SetLength(Result, FCount);
+  for LI := 0 to FCount - 1 do
+    Result[LI] := FItems[LI];
+end;
+
+function TTcpServerPollTargetRegistry.AnyShutdownClose: Boolean;
+var
+  LI: SizeUInt;
+begin
+  { FCount 为无符号：0 时直接返回，避免 FCount-1 下溢扫越界 }
+  Result := False;
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if (FItems[LI] <> nil) and FItems[LI].IsShutdownClose then
+      Exit(True);
+end;
+
 function TTcpServerPollTargetRegistry.Drain: TTcpServerPollSessionTargetArray;
 var
   LI: SizeUInt;
@@ -1154,6 +1210,15 @@ constructor TTcpServerDefaultSessionContext.Create(
 begin
   inherited Create;
   FWorkerHandoff := AWorkerHandoff;
+  FWsLock := nextpas.core.sync.mutex.TMutex.Create;
+end;
+
+destructor TTcpServerDefaultSessionContext.Destroy;
+begin
+  { 释放前清空登记：会话收尾路径应已逐个 Unregister，这里兜底防悬挂。 }
+  FWsNotifiers := nil;
+  FWsLock := nil;
+  inherited Destroy;
 end;
 
 function TTcpServerDefaultSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
@@ -1172,6 +1237,86 @@ end;
 function TTcpServerDefaultSessionContext.SubmitHijackMigration: Boolean;
 begin
   Result := False;
+end;
+
+procedure TTcpServerDefaultSessionContext.RegisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    SetLength(FWsNotifiers, N + 1);
+    FWsNotifiers[N] := ANotifier;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.UnregisterShutdownNotifier(
+  const ANotifier: IWsServerShutdownNotifier);
+var
+  I, N: SizeInt;
+begin
+  if ANotifier = nil then
+    Exit;
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    for I := 0 to N - 1 do
+      if FWsNotifiers[I] = ANotifier then
+      begin
+        FWsNotifiers[I] := FWsNotifiers[N - 1];
+        SetLength(FWsNotifiers, N - 1);
+        Break;
+      end;
+  finally
+    FWsLock.Release;
+  end;
+end;
+
+procedure TTcpServerDefaultSessionContext.ShutdownAll(
+  const ATimeoutNs: Int64);
+var
+  LSnapshot: array of IWsServerShutdownNotifier;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
+  I, N: SizeInt;
+begin
+  FWsLock.Acquire;
+  try
+    N := Length(FWsNotifiers);
+    SetLength(LSnapshot, N);
+    for I := 0 to N - 1 do
+      LSnapshot[I] := FWsNotifiers[I];
+  finally
+    FWsLock.Release;
+  end;
+  if N = 0 then
+    Exit;
+  { 先全部唤醒（连接线程被 waitable cancel 唤醒 → ReadMessage 退出，
+    close frame 1001 由会话收尾路径补发），再逐个等待收尾；剩余时间
+    递减，超时强关。0 = 无限等待（与 HTTP ShutdownTimeout=0 语义一致）。 }
+  for I := 0 to N - 1 do
+    LSnapshot[I].NotifyShutdown;
+  if ATimeoutNs <= 0 then
+  begin
+    for I := 0 to N - 1 do
+      LSnapshot[I].WaitFinished(0);
+    Exit;
+  end;
+  LDeadline := TDeadline.After(TDuration.FromNanoseconds(ATimeoutNs));
+  for I := 0 to N - 1 do
+  begin
+    LRemaining := LDeadline.Remaining;
+    if LRemaining.AsNanoseconds <= 0 then
+      LSnapshot[I].ForceClose
+    else if not LSnapshot[I].WaitFinished(LRemaining.AsNanoseconds) then
+      LSnapshot[I].ForceClose;
+  end;
 end;
 
 procedure CreateTcpServerRuntimeContext(
