@@ -1,6 +1,6 @@
-program test_pg;
+program test_db_pg;
 
-{ Contract tests for nextpas.core.pg against a live local PostgreSQL.
+{ Contract tests for nextpas.core.db.pg against a live local PostgreSQL.
    Requires: PG server reachable via $NEXTPAS_PG_TEST_CONN (default
    'host=/var/run/postgresql dbname=nextpas_pg_test user=dtamade').
    All tests are TestSeq (serial) because they share one database. }
@@ -11,7 +11,9 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.base,
-  nextpas.core.pg;
+  nextpas.core.db.pg,
+  nextpas.core.db,
+  nextpas.core.db.base;
 
 var
   T: TTestSuite;
@@ -304,9 +306,110 @@ begin
   end;
 end;
 
+{ ===== blob（hex + ::bytea cast）===== }
+
+procedure TestBlobRoundtrip;
+var
+  Conn: TPgConn;
+  Q: TPgQuery;
+  LB: TBytes;
+begin
+  Conn := PgOpen(GConn);
+  try
+    Conn.Exec('DROP TABLE IF EXISTS t_pg_blob CASCADE');
+    Conn.Exec('CREATE TABLE t_pg_blob (id INT PRIMARY KEY, data BYTEA)');
+    Q := Conn.Query('INSERT INTO t_pg_blob (id, data) VALUES ($1, $2)');
+    try
+      Q.BindInt64(1, 1);
+      { 含 0x00 / 0xFF / 高位字节的二进制 }
+      LB := TBytes.Create($00, $01, $7F, $80, $FF, $AB, $CD, $EF);
+      Q.BindBlob(2, LB);
+      while Q.Step do ;
+    finally
+      Q.Free;
+    end;
+    Q := Conn.Query('SELECT id, data FROM t_pg_blob WHERE id = $1');
+    try
+      Q.BindInt64(1, 1);
+      Check(Q.Step, 'blob row present');
+      CheckEqual(Length(LB), Length(Q.GetBlob(1)), 'blob length roundtrip');
+      Check(Q.GetBlob(1)[0] = $00, 'blob byte 0x00');
+      Check(Q.GetBlob(1)[4] = $FF, 'blob byte 0xFF');
+      Check(Q.GetBlob(1)[7] = $EF, 'blob last byte');
+      Check(not Q.IsNull(1), 'blob column not null');
+      Check(Q.ColumnFieldOid(1) = 17, 'field oid = bytea');
+    finally
+      Q.Free;
+    end;
+    { NULL blob 与显式 NULL 绑定 }
+    Q := Conn.Query('INSERT INTO t_pg_blob (id, data) VALUES ($1, $2)');
+    try
+      Q.BindInt64(1, 2);
+      Q.BindNull(2);
+      while Q.Step do ;
+    finally
+      Q.Free;
+    end;
+    Q := Conn.Query('SELECT data FROM t_pg_blob WHERE id = $1');
+    try
+      Q.BindInt64(1, 2);
+      Check(Q.Step and Q.IsNull(0), 'null bytea reads as null');
+    finally
+      Q.Free;
+    end;
+  finally
+    Conn.Free;
+  end;
+end;
+
+{ ===== 统一层：连接与错误字段 ===== }
+
+procedure TestUnifiedPgConnectAndRoundtrip;
+var
+  Conn: IDbConnection;
+  Q: IDbQuery;
+begin
+  Conn := ConnectPostgres(GConn);
+  Check(Conn.Kind = dbkPostgres, 'unified kind = dbkPostgres');
+  Conn.Exec('DROP TABLE IF EXISTS t_db_unified_pg CASCADE');
+  Conn.Exec('CREATE TABLE t_db_unified_pg (id INT PRIMARY KEY, v TEXT)');
+  Q := Conn.Query('INSERT INTO t_db_unified_pg (id, v) VALUES (?, ?)');
+  Q.BindInt64(1, 42);
+  Q.BindText(2, 'unified');
+  Check(not Q.Step, 'unified insert via ? placeholders');
+  Q := Conn.Query('SELECT v FROM t_db_unified_pg WHERE id = ?');
+  Q.BindInt64(1, 42);
+  Check(Q.Step, 'unified select row');
+  CheckEqual('unified', Q.GetText(0), 'unified text roundtrip');
+end;
+
+procedure TestUnifiedPgErrorFields;
+var
+  Conn: IDbConnection;
+  LState: string;
+  LBackend: TDbKind;
+begin
+  LState := '';
+  Conn := ConnectPostgres(GConn);
+  Conn.Exec('DROP TABLE IF EXISTS t_db_unified_err CASCADE');
+  Conn.Exec('CREATE TABLE t_db_unified_err (id INT PRIMARY KEY)');
+  Conn.Exec('INSERT INTO t_db_unified_err VALUES (1)');
+  try
+    Conn.Exec('INSERT INTO t_db_unified_err VALUES (1)');
+  except
+    on E: EDbError do
+    begin
+      LState := E.SqlState;
+      LBackend := E.Backend;
+    end;
+  end;
+  CheckEqual('23505', LState, 'EDbError carries pg sqlstate');
+  Check(LBackend = dbkPostgres, 'EDbError backend field set');
+end;
+
 begin
   GConn := TestConnStr;
-  T := TTestSuite.Create('nextpas.core.pg');
+  T := TTestSuite.Create('nextpas.core.db.pg');
   T.TestSeq('connect & version', @TestConnectAndVersion);
   T.TestSeq('create/insert/select roundtrip', @TestCreateInsertSelect);
   T.TestSeq('NULL bind', @TestNullBind);
@@ -317,5 +420,8 @@ begin
   T.TestSeq('changes', @TestChanges);
   T.TestSeq('error fields', @TestErrorFields);
   T.TestSeq('caller-managed transactions', @TestTransactionSelfManaged);
+  T.TestSeq('blob hex+cast roundtrip', @TestBlobRoundtrip);
+  T.TestSeq('unified connect & ? placeholder roundtrip', @TestUnifiedPgConnectAndRoundtrip);
+  T.TestSeq('unified error carries sqlstate', @TestUnifiedPgErrorFields);
   if not T.Run then Halt(1);
 end.

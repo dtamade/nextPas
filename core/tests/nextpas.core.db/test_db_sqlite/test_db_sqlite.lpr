@@ -1,4 +1,4 @@
-program test_sqlite;
+program test_db_sqlite;
 
 {$I nextpas.core.settings.inc}
 
@@ -7,7 +7,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,
-  nextpas.core.sqlite;
+  nextpas.core.db.sqlite;
 
 var
   T: TTestSuite;
@@ -332,7 +332,7 @@ end;
 
 begin
   GDbPath := GetTempDir + 'pp888_sqlite_test' + IntToStr(GetProcessID) + '.db';
-  T := TTestSuite.Create('nextpas.core.sqlite');
+  T := TTestSuite.Create('nextpas.core.db.sqlite');
   T.Test('memory create/insert/select roundtrip', @TestMemoryCreateTableInsertSelect);
   T.Test('NULL bind and column type', @TestNullBind);
   T.Test('multi-statement exec', @TestExecMultiStatements);

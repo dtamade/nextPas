@@ -1,8 +1,8 @@
-program test_sqlite_tx;
+program test_db_tx;
 
-{ nextpas.core.sqlite.tx 契约测试（B7）：
+{ nextpas.core.db.sqlite.tx 契约测试（B7）：
   提交/回滚重抛/嵌套计数/裸 Begin-Commit-Rollback/autocommit 守卫/
-  事务内读己写。全部走门面 nextpas.core.sqlite（验证 re-export）。 }
+  事务内读己写。全部走门面 nextpas.core.db.sqlite（验证 re-export）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -10,7 +10,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.base,
-  nextpas.core.sqlite;
+  nextpas.core.db.sqlite;
 
 var
   T: TTestSuite;
@@ -253,7 +253,7 @@ begin
 end;
 
 begin
-  T := TTestSuite.Create('nextpas.core.sqlite.tx');
+  T := TTestSuite.Create('nextpas.core.db.sqlite.tx');
   T.Test('WithTransaction commits procedure-style Exec', @TestWithTransactionCommit);
   T.Test('WithTransaction rolls back + re-raises on error', @TestWithTransactionRollbackOnError);
   T.Test('nested WithTransaction protects the outer scope', @TestNestedWithTransaction);

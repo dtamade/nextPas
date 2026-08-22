@@ -1,7 +1,7 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.sqlite/test_sqlite
-PROGRAM := test_sqlite
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.db/test_db_pool
+PROGRAM := test_db_pool
 SOURCE := $(PROGRAM).lpr
 HEAPTRC_LOG ?= $(BUILD_DIR)/heaptrc.log
 RUN_LOG ?= $(BUILD_DIR)/run.log
@@ -21,6 +21,6 @@ heaptrc: build
 	@grep -F '0 unfreed memory blocks' $(HEAPTRC_LOG) >/dev/null || { cat $(RUN_LOG); cat $(HEAPTRC_LOG); exit 1; }
 	@cat $(RUN_LOG)
 	@cat $(HEAPTRC_LOG)
-	@printf '\nsqlite-heaptrc=pass\n'
+	@printf '\nsqlite-pool-heaptrc=pass\n'
 clean:
 	rm -rf $(BUILD_DIR)

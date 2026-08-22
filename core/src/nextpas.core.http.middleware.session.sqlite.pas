@@ -27,7 +27,7 @@ interface
 
 uses
   nextpas.core.http.middleware.session,
-  nextpas.core.sqlite.pool;
+  nextpas.core.db.sqlite.pool;
 
 {** @desc Build a sqlite-backed session store. Ensures the session table.
    AMaxAgeMs is the server-side session TTL. ATableName defaults to
@@ -40,7 +40,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.http.base,
-  nextpas.core.sqlite,
+  nextpas.core.db.sqlite,
   nextpas.core.time;
 
 type

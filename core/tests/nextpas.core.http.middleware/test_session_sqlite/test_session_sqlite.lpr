@@ -7,8 +7,8 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,
-  nextpas.core.sqlite,
-  nextpas.core.sqlite.pool,
+  nextpas.core.db.sqlite,
+  nextpas.core.db.sqlite.pool,
   nextpas.core.time,
   nextpas.core.http.middleware.session,
   nextpas.core.http.middleware.session.sqlite;

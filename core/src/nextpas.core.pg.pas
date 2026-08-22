@@ -1,33 +1,30 @@
 unit nextpas.core.pg;
 
-{** @desc PostgreSQL L2 facade: re-exports the friendly surface.
-       Usage:
-         Conn := PgOpen('host=/var/run/postgresql dbname=myapp user=app');
-         Conn.Exec('CREATE TABLE t (id BIGINT PRIMARY KEY, v TEXT)');
-         Q := Conn.Query('SELECT v FROM t WHERE id = $1');
-         Q.BindInt64(1, 42);
-         while Q.Step do ... *}
+{** @desc DEPRECATED 兼容 shim —— PostgreSQL 家族已收编进 nextpas.core.db。
+       新代码请使用 nextpas.core.db（统一入口）或
+       nextpas.core.db.pg（PostgreSQL 后端门面）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.pg.base,
-  nextpas.core.pg.conn;
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.db.pg;
 
 type
-  EPgError = nextpas.core.pg.base.EPgError;
-  TPgConn  = nextpas.core.pg.conn.TPgConn;
-  TPgQuery = nextpas.core.pg.conn.TPgQuery;
+  EPgError = nextpas.core.db.pg.EPgError;
+  TPgConn  = nextpas.core.db.pg.TPgConn;
+  TPgQuery = nextpas.core.db.pg.TPgQuery;
 
 const
-  CONNECTION_OK        = nextpas.core.pg.base.CONNECTION_OK;
-  CONNECTION_BAD       = nextpas.core.pg.base.CONNECTION_BAD;
-  PGRES_EMPTY_QUERY    = nextpas.core.pg.base.PGRES_EMPTY_QUERY;
-  PGRES_COMMAND_OK     = nextpas.core.pg.base.PGRES_COMMAND_OK;
-  PGRES_TUPLES_OK      = nextpas.core.pg.base.PGRES_TUPLES_OK;
-  PGRES_FATAL_ERROR    = nextpas.core.pg.base.PGRES_FATAL_ERROR;
+  CONNECTION_OK        = nextpas.core.db.pg.CONNECTION_OK;
+  CONNECTION_BAD       = nextpas.core.db.pg.CONNECTION_BAD;
+  PGRES_EMPTY_QUERY    = nextpas.core.db.pg.PGRES_EMPTY_QUERY;
+  PGRES_COMMAND_OK     = nextpas.core.db.pg.PGRES_COMMAND_OK;
+  PGRES_TUPLES_OK      = nextpas.core.db.pg.PGRES_TUPLES_OK;
+  PGRES_FATAL_ERROR    = nextpas.core.db.pg.PGRES_FATAL_ERROR;
 
 function PgOpen(const AConnInfo: string): TPgConn; inline;
 
@@ -35,7 +32,7 @@ implementation
 
 function PgOpen(const AConnInfo: string): TPgConn;
 begin
-  Result := nextpas.core.pg.conn.PgOpen(AConnInfo);
+  Result := nextpas.core.db.pg.PgOpen(AConnInfo);
 end;
 
 end.

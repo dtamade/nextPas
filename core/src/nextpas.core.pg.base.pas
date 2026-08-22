@@ -1,82 +1,39 @@
 unit nextpas.core.pg.base;
 
-{** @desc PostgreSQL L2 module: public constants and type aliases.
-       Raw libpq ABI declarations live in nextpas.core.pg.ffi (resolved
-       at runtime via nextpas.core.pg.loader, dlopen on libpq.so.5).
-       The friendly surface (TPgConn / TPgQuery / EPgError) lives in
-       nextpas.core.pg.conn and is re-exported by the nextpas.core.pg
-       facade. EPgError lives here so the loader can raise it too. *}
+{** @desc DEPRECATED 兼容 shim —— 已迁入 nextpas.core.db.pg.base。
+       新代码请使用 nextpas.core.db.* 家族（见 core/docs/db/CONTRACT.md）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.db.pg.base;
 
 const
-  { ConnStatusType (PQstatus) }
-  CONNECTION_OK  = 0;
-  CONNECTION_BAD = 1;
-
-  { ExecStatusType (PQresultStatus) }
-  PGRES_EMPTY_QUERY    = 0;
-  PGRES_COMMAND_OK     = 1;
-  PGRES_TUPLES_OK      = 2;
-  PGRES_COPY_OUT       = 3;
-  PGRES_COPY_IN        = 4;
-  PGRES_BAD_RESPONSE   = 5;
-  PGRES_NONFATAL_ERROR = 6;
-  PGRES_FATAL_ERROR    = 7;
-
-  { PQresultErrorField field codes (single ASCII chars) }
-  PG_DIAG_SEVERITY       = 83;  { 'S' }
-  PG_DIAG_SQLSTATE       = 67;  { 'C' }
-  PG_DIAG_MESSAGE_PRIMARY = 77; { 'M' }
-  PG_DIAG_DETAIL         = 68;  { 'D' }
-  PG_DIAG_HINT           = 72;  { 'H' }
-
-  { Shared-library name. Linux carries only the versioned soname
-    (libpq.so.5), no dev symlink — hence dlopen instead of a
-    compile-time external link. }
-  PG_LIBRARY_NAME = 'libpq.so.5';
+  CONNECTION_OK  = nextpas.core.db.pg.base.CONNECTION_OK;
+  CONNECTION_BAD = nextpas.core.db.pg.base.CONNECTION_BAD;
+  PGRES_EMPTY_QUERY    = nextpas.core.db.pg.base.PGRES_EMPTY_QUERY;
+  PGRES_COMMAND_OK     = nextpas.core.db.pg.base.PGRES_COMMAND_OK;
+  PGRES_TUPLES_OK      = nextpas.core.db.pg.base.PGRES_TUPLES_OK;
+  PGRES_COPY_OUT       = nextpas.core.db.pg.base.PGRES_COPY_OUT;
+  PGRES_COPY_IN        = nextpas.core.db.pg.base.PGRES_COPY_IN;
+  PGRES_BAD_RESPONSE   = nextpas.core.db.pg.base.PGRES_BAD_RESPONSE;
+  PGRES_NONFATAL_ERROR = nextpas.core.db.pg.base.PGRES_NONFATAL_ERROR;
+  PGRES_FATAL_ERROR    = nextpas.core.db.pg.base.PGRES_FATAL_ERROR;
+  PG_DIAG_SEVERITY        = nextpas.core.db.pg.base.PG_DIAG_SEVERITY;
+  PG_DIAG_SQLSTATE        = nextpas.core.db.pg.base.PG_DIAG_SQLSTATE;
+  PG_DIAG_MESSAGE_PRIMARY = nextpas.core.db.pg.base.PG_DIAG_MESSAGE_PRIMARY;
+  PG_DIAG_DETAIL          = nextpas.core.db.pg.base.PG_DIAG_DETAIL;
+  PG_DIAG_HINT            = nextpas.core.db.pg.base.PG_DIAG_HINT;
+  PG_LIBRARY_NAME = nextpas.core.db.pg.base.PG_LIBRARY_NAME;
 
 type
-  PGconn   = Pointer;   { PGconn*   }
-  PGresult = Pointer;   { PGresult* }
-
-  {** @desc PostgreSQL error, carries libpq diagnostics.
-       MessagePrimary is in Message; SqlState/Severity/Detail are the
-       standard PG error fields when the server provided them. *}
-  EPgError = class(ENextPasError)
-  private
-    FSqlState: string;
-    FSeverity: string;
-    FDetail: string;
-  public
-    constructor Create(const AMessage: string); overload;
-    constructor Create(const AMessage, ASqlState, ASeverity, ADetail: string); overload;
-    property SqlState: string read FSqlState;
-    property Severity: string read FSeverity;
-    property Detail: string read FDetail;
-  end;
+  PGconn   = nextpas.core.db.pg.base.PGconn;
+  PGresult = nextpas.core.db.pg.base.PGresult;
+  EPgError = nextpas.core.db.pg.base.EPgError;
 
 implementation
-
-constructor EPgError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage);
-  FSqlState := '';
-  FSeverity := '';
-  FDetail := '';
-end;
-
-constructor EPgError.Create(const AMessage, ASqlState, ASeverity, ADetail: string);
-begin
-  inherited Create(AMessage);
-  FSqlState := ASqlState;
-  FSeverity := ASeverity;
-  FDetail := ADetail;
-end;
 
 end.

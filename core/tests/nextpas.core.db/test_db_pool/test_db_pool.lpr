@@ -1,8 +1,8 @@
-program test_sqlite_pool;
+program test_db_pool;
 
-{ nextpas.core.sqlite.pool 契约测试（B7）：
+{ nextpas.core.db.sqlite.pool 契约测试（B7）：
   池复用/容量上限/WAL+busy_timeout PRAGMA 断言/写连接身份与守卫/
-  关闭语义/写读一致。全部走门面 nextpas.core.sqlite（验证 re-export）。 }
+  关闭语义/写读一致。全部走门面 nextpas.core.db.sqlite（验证 re-export）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -11,7 +11,7 @@ uses
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,
-  nextpas.core.sqlite;
+  nextpas.core.db.sqlite;
 
 var
   T: TTestSuite;
@@ -297,7 +297,7 @@ end;
 
 begin
   GDbPath := GetTempDir + 'pp888_sqlite_pool_test' + IntToStr(GetProcessID) + '.db';
-  T := TTestSuite.Create('nextpas.core.sqlite.pool');
+  T := TTestSuite.Create('nextpas.core.db.sqlite.pool');
   T.Test('pool reuse (acquire/release/re-acquire)', @TestPoolReuse);
   T.Test('pool capacity cap raises', @TestPoolCapacityCap);
   T.Test('WAL + busy_timeout applied uniformly (PRAGMA)', @TestPoolWalAndBusyTimeout);

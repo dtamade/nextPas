@@ -1,10 +1,10 @@
-unit nextpas.core.pg.ffi;
+unit nextpas.core.db.pg.ffi;
 
 {** @desc Raw libpq C ABI as cdecl procedure types.
        Unlike nextpas.core.sqlite.ffi (compile-time `external`), libpq
        is loaded at runtime: the build host only ships libpq.so.5 (no
        unversioned dev symlink), so `external 'pq'` would not link.
-       nextpas.core.pg.loader binds these vars to dlsym addresses via
+       nextpas.core.db.pg.loader binds these vars to dlsym addresses via
        nextpas.core.platform.dl. Raw declarations only — no helpers. *}
 
 {$I nextpas.core.settings.inc}
@@ -12,7 +12,7 @@ unit nextpas.core.pg.ffi;
 interface
 
 uses
-  nextpas.core.pg.base;
+  nextpas.core.db.pg.base;
 
 type
   TPQconnectdb    = function(const AConnInfo: PAnsiChar): PGconn; cdecl;
@@ -43,7 +43,7 @@ type
   TPQserverVersion = function(AConn: PGconn): Integer; cdecl;
 
 var
-  { Bound by nextpas.core.pg.loader; callers must PgEnsureLoaded first
+  { Bound by nextpas.core.db.pg.loader; callers must PgEnsureLoaded first
     (TPgConn.Create does it). Never call while nil. }
   pq_connectdb:    TPQconnectdb;
   pq_finish:       TPQfinish;

@@ -1,6 +1,6 @@
-program test_sqlite_migrate;
+program test_db_migrate;
 
-{ nextpas.core.sqlite.migrate 契约测试（B7）：
+{ nextpas.core.db.sqlite.migrate 契约测试（B7）：
   首次迁移/幂等（跑两遍同结果）/按版本有序应用/失败批次整批回滚/
   版本上下限校验/列表乱序拒绝/无迁移版本=0。走门面 re-export。 }
 
@@ -10,7 +10,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.base,
-  nextpas.core.sqlite;
+  nextpas.core.db.sqlite;
 
 var
   T: TTestSuite;
@@ -230,7 +230,7 @@ begin
 end;
 
 begin
-  T := TTestSuite.Create('nextpas.core.sqlite.migrate');
+  T := TTestSuite.Create('nextpas.core.db.sqlite.migrate');
   T.Test('first run applies migrations + records version', @TestMigrateFirstRun);
   T.Test('idempotent: second run applies nothing', @TestMigrateIdempotentSecondRun);
   T.Test('ordered migrations applied in version order', @TestMigrateOrderedMigrations);

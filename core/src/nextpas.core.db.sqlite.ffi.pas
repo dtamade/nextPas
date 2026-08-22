@@ -1,4 +1,4 @@
-unit nextpas.core.sqlite.ffi;
+unit nextpas.core.db.sqlite.ffi;
 
 {** @desc Raw SQLite C ABI declarations (sqlite3.h 3.46.1, system libsqlite3).
        Raw declarations only — no helpers, no wrappers. *}
@@ -8,7 +8,7 @@ unit nextpas.core.sqlite.ffi;
 interface
 
 uses
-  nextpas.core.sqlite.base;
+  nextpas.core.db.sqlite.base;
 
 const
   SQLITE3_LIB = 'sqlite3';
