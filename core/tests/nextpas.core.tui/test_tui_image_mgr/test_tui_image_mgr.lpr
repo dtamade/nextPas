@@ -367,6 +367,61 @@ begin
   end;
 end;
 
+{ 刀 60 source-crop：SrcW/SrcH > 0 → 放置命令携带 kitty 源矩形键
+  x/y/w/h（像素坐标）；全 0 → 不发射裁剪键（零回归） }
+procedure TestResolveEncodedCropKitty;
+var
+  LMgr: TImageManager;
+  LBackend: TAnsiBackend;
+  LBuf: TBuffer;
+  Png: array[0..31] of Byte;
+  EmptyDiffs: TDiffEntries;
+begin
+  LMgr := TImageManager.Create(ipKitty);
+  LBackend := TAnsiBackend.Create(-1, nil);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 50));
+  try
+    FillChar(Png, SizeOf(Png), 0);
+    { PNG 签名 + IHDR:宽 20 高 10 }
+    Png[0] := $89; Png[1] := $50; Png[2] := $4E; Png[3] := $47;
+    Png[4] := $0D; Png[5] := $0A; Png[6] := $1A; Png[7] := $0A;
+    Png[12] := $49; Png[13] := $48; Png[14] := $44; Png[15] := $52;
+    Png[16] := 0; Png[17] := 0; Png[18] := 0; Png[19] := 20;  { width }
+    Png[20] := 0; Png[21] := 0; Png[22] := 0; Png[23] := 10;  { height }
+    SetLength(EmptyDiffs, 0);
+    { 源带 y=4..8（h=5）：部分可见块只显示可见像素带 }
+    LBuf.PlaceImageEncoded($9ABC, TRect.Make(2, 6, 12, 3), @Png[0],
+      SizeOf(Png), 20, 10, 0, 4, 20, 5);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
+    Check(BackendHasFrom(LBackend, 0, 'x=0,y=4,w=20,h=5'),
+      'crop 放置应发射源矩形键 x/y/w/h');
+    Check(BackendHasFrom(LBackend, 0, 'c=12,r=3'),
+      'crop 放置仍携带目标格 c/r');
+  finally
+    LBuf.Free;
+    LBackend.Free;
+    LMgr.Free;
+  end;
+
+  LMgr := TImageManager.Create(ipKitty);
+  LBackend := TAnsiBackend.Create(-1, nil);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 50));
+  try
+    SetLength(EmptyDiffs, 0);
+    { 全 0 裁剪 = 整图：不得出现 x= 键（零回归锚） }
+    LBuf.PlaceImageEncoded($9ABD, TRect.Make(2, 6, 12, 3), @Png[0],
+      SizeOf(Png), 20, 10);
+    LMgr.Resolve(LBuf, 1, LBackend, 8, 20, EmptyDiffs, 0, False);
+    Check(BackendHasFrom(LBackend, 0, 'a=p'), '整图放置应有 a=p');
+    Check(not BackendHasFrom(LBackend, 0, ',x='),
+      '整图放置不应发射源矩形键');
+  finally
+    LBuf.Free;
+    LBackend.Free;
+    LMgr.Free;
+  end;
+end;
+
 { 编码图流在 sixel 协议下无输出：终端无解码能力，调用方自行降级 }
 procedure TestResolveEncodedSixelSkipped;
 var
@@ -413,5 +468,6 @@ begin
   T.Test('Resolve geometry reuse on expand', @TestResolveGeometryReuse);
   T.Test('Resolve encoded PNG kitty', @TestResolveEncodedPngKitty);
   T.Test('Resolve encoded skipped on sixel', @TestResolveEncodedSixelSkipped);
+  T.Test('Resolve encoded crop keys (K60)', @TestResolveEncodedCropKitty);
   if not T.Run then Halt(1);
 end.
