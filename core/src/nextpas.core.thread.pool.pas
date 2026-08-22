@@ -70,7 +70,6 @@ function WorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   LPool: TThreadPool;
   LNodePtr: Pointer;
-  LNode: PTaskNode;
 begin
   Result := nil;
   LPool := TThreadPool(AArg);
