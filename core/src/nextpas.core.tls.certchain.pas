@@ -343,6 +343,8 @@ begin
   begin
     try
 
+      CertParts := StringsSplit(ACertName, '.');
+      HostParts := StringsSplit(AHostname, '.');
       // 域名级数必须相同
       if Length(CertParts) = Length(HostParts) then
       begin

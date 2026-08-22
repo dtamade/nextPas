@@ -970,6 +970,7 @@ begin
   // 解析逗号分隔的协议列表
   try
 
+    LProtos := StringsSplit(AProtocols, ',', True);
     if Length(LProtos) = 0 then Exit;
 
     // 构建 NULL-terminated 数组 (需要额外一个 nil 结尾)

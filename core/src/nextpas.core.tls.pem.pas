@@ -256,8 +256,10 @@ var
   Line: string;
   InHeaders: Boolean;
   HeaderEnded: Boolean;
+  LHeaderCount: Integer;
 begin
   Result := '';
+  LHeaderCount := 0;
 
   // 找到内容开始位置 (紧跟在 BEGIN 标记之后)
   ContentStart := Pos(AStartMarker, Copy(FText, APos, Length(FText)));
@@ -284,7 +286,7 @@ begin
       if Line = '' then
       begin
         // 空行分隔头部和内容
-        if InHeaders and (Length(AHeaders) > 0) then
+        if InHeaders and (LHeaderCount > 0) then
         begin
           InHeaders := False;
           HeaderEnded := True;
@@ -300,6 +302,7 @@ begin
         // 这是一个头部字段
         SetLength(AHeaders, Length(AHeaders) + 1);
         AHeaders[High(AHeaders)] := Line;
+        Inc(LHeaderCount);
       end
       else
       begin
