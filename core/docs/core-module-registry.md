@@ -18,6 +18,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 
 | Module | Layer | Owner | Public facade | Allowed dependencies | Truth level |
 | --- | --- | --- | --- | --- | --- |
+| `agent` | L3 | AI provider clients (OpenAI-compat/Anthropic) + generic tool loop (`nextpas.core.agent.*`) | yes | L0-L2 plus json/http/async owners | draft |
 | `args` | L2 | CLI parsing | yes | L0-L1 | focused-runtime |
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `auth` | L3 | JWT/session/authentication token primitives (`nextpas.core.auth.*`, `nextpas.core.jwt`) | yes | L0-L2 plus crypto/hash/encoding owners | focused-runtime |
