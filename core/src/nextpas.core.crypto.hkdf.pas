@@ -117,6 +117,7 @@ var
   LDigestSize: SizeUInt;
 begin
   LDigestSize := GetDigestSize(AAlgo);
+  Result := nil;
   SetLength(Result, LDigestSize);
   if Length(AIKM) > 0 then
   begin
@@ -137,6 +138,7 @@ end;
 function HKDF_ExpandBytes(AAlgo: THashAlgorithm;
   const APRK, AInfo: TBytes; ALength: SizeUInt): TBytes;
 begin
+  Result := nil;
   SetLength(Result, ALength);
   if ALength = 0 then Exit;
   if Length(APRK) = 0 then begin SetLength(Result, 0); Exit; end;

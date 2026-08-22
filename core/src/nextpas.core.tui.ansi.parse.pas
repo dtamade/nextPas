@@ -357,6 +357,7 @@ var
   LSB: TStringBuilder;
 begin
   LCsiStart := 0;
+  Result := nil;
   System.SetLength(Result, 0);
   if ALen <= 0 then
     Exit;

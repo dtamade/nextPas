@@ -216,6 +216,7 @@ end;
 
 function TUuid.ToString: string;
 begin
+  Result := '';
   FormatUuid(FBytes, Result);
 end;
 

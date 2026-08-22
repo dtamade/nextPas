@@ -52,6 +52,7 @@ begin
     finally
       LCtx.Free;
     end;
+    Result := nil;
     SetLength(Result, AOutLen);
     Move(LHash[0], Result[0], AOutLen);
   end
@@ -154,6 +155,7 @@ function SplitBy(const AValue: string; const ASep: Char): TStringArray;
 var
   I, LStart: Integer;
 begin
+  Result := nil;
   SetLength(Result, 0);
   LStart := 1;
   for I := 1 to Length(AValue) do

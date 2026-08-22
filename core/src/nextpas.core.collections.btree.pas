@@ -1185,6 +1185,7 @@ var
   i, LCount: Integer;
 begin
   LCount := 0;
+  LToRemove := nil;
   SetLength(LToRemove, FInner.Count);
   for E in FInner do
     if not AOther.Contains(E.Key) then

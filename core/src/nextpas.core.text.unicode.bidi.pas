@@ -938,6 +938,7 @@ begin
   N := Length(ALevels);
   if N = 0 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;
@@ -988,6 +989,7 @@ function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
 var
   I, L: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, ALogicalCount);
   for I := 0 to ALogicalCount - 1 do
     Result[I] := -1;

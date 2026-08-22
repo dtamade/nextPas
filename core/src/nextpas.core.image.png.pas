@@ -233,6 +233,7 @@ begin
     raise EIOError.Create('png: decompressed size mismatch');
 
   { 反滤波逐行还原 + 转 RGBA 输出 }
+  Result := nil;
   SetLength(Result, AWidth * AHeight * 4);
   SetLength(LRow, RowLen);
   SetLength(LPrev, RowLen);

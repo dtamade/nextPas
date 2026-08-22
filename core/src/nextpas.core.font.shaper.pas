@@ -142,6 +142,7 @@ begin
   LCount := Length(ACodepoints);
   if LCount = 0 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

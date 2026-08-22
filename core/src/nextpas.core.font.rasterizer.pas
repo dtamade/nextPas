@@ -471,6 +471,7 @@ var
   LScaled: TFontGlyphOutline;
   LMinX, LMinY, LMaxX, LMaxY: Single;
 begin
+  Result := Default(TFontRasterResult);
   FontRasterResultClear(Result);
 
   if AOutline.ContourCount <= 0 then
@@ -554,6 +555,7 @@ var
   LBaseX, LBaseY: Single;
   LX0, LY0, LX1, LY1: Single;
 begin
+  Result := Default(TFontRasterResult);
   FontRasterResultClear(Result);
 
   if AOutline.ContourCount <= 0 then

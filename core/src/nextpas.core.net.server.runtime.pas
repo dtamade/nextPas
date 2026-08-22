@@ -1289,6 +1289,7 @@ begin
   FWsLock.Acquire;
   try
     N := Length(FWsNotifiers);
+    LSnapshot := nil;
     SetLength(LSnapshot, N);
     for I := 0 to N - 1 do
       LSnapshot[I] := FWsNotifiers[I];

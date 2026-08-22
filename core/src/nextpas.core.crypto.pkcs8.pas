@@ -54,6 +54,7 @@ function HexToBytes(const AHex: string): TBytes;
 var
   I: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(AHex) div 2);
   for I := 0 to High(Result) do
     Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
@@ -133,6 +134,7 @@ var
   LInput, LU, LT: TBytes;
   LBlockIdx: array[0..3] of Byte;
 begin
+  Result := nil;
   SetLength(Result, AKeyLen);
   LBlockCount := (AKeyLen + 31) div 32;
 
@@ -172,6 +174,7 @@ var
   LInput, LU, LT: TBytes;
   LBlockIdx: array[0..3] of Byte;
 begin
+  Result := nil;
   SetLength(Result, AKeyLen);
   LBlockCount := (AKeyLen + 19) div 20;
 
@@ -432,6 +435,7 @@ var
   LOffset: Integer;
 begin
   SetLength(LPassBytes, Length(APassword)); if Length(APassword) > 0 then Move(APassword[1], LPassBytes[0], Length(APassword));
+  Result := nil;
   SetLength(Result, AKeyLen);
   LOffset := 0;
 

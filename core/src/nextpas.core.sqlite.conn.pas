@@ -322,6 +322,7 @@ var
 begin
   LP := sqlite3_column_blob(FStmt, AIndex);
   LL := sqlite3_column_bytes(FStmt, AIndex);
+  Result := nil;
   SetLength(Result, LL);
   if LL > 0 then
     Move(LP^, Result[0], LL);

@@ -249,6 +249,7 @@ begin
   { Empty input → insert a random byte }
   if LLen = 0 then
   begin
+    Result := nil;
     SetLength(Result, 1);
     Result[0] := Byte(GFuzzRng.NextIntRange(0, 255));
     Exit;
@@ -455,6 +456,7 @@ var
   I: Integer;
 begin
   EnsureFuzzRng;
+  Result := nil;
   SetLength(Result, ALen);
   for I := 0 to ALen - 1 do
     Result[I] := Byte(GFuzzRng.NextIntRange(0, 255));

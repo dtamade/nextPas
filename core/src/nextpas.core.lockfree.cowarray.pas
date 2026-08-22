@@ -297,6 +297,7 @@ var
   I: Int32;
 begin
   LData := PData(atomic_load(PPointer(@FData)^, mo_acquire));
+  Result := nil;
   SetLength(Result, LData^.FCount);
   for I := 0 to LData^.FCount - 1 do
     Result[I] := LData^.FItems[I];

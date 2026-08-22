@@ -227,6 +227,7 @@ end;
 function StringsFilter(const AArr: TStringArray; APredicate: TStringPredicate): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -241,6 +242,7 @@ end;
 function StringsMap(const AArr: TStringArray; AMapper: TStringMapper): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := AMapper(AArr[i]);
@@ -356,6 +358,7 @@ var
   LLine: string;
 begin
   LLines := StringsParseLines(AText);
+  Result := nil;
   SetLength(Result, Length(LLines));
   LCount := 0;
   for i := 0 to High(LLines) do
@@ -393,6 +396,7 @@ end;
 function StringPairsKeys(const APairs: TStringPairArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(APairs));
   for i := 0 to High(APairs) do
     Result[i] := APairs[i].Key;
@@ -403,6 +407,7 @@ end;
 function StringsTrimAll(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.Trim(AArr[i]);
@@ -411,6 +416,7 @@ end;
 function StringsToUpper(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.UpperCase(AArr[i]);
@@ -419,6 +425,7 @@ end;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 var i: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   for i := 0 to High(AArr) do
     Result[i] := nextpas.core.text.utils.LowerCase(AArr[i]);
@@ -427,6 +434,7 @@ end;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -477,6 +485,7 @@ end;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
 var i, LCount: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(AArr));
   LCount := 0;
   for i := 0 to High(AArr) do
@@ -588,6 +597,7 @@ end;
 function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
 var I: SizeUInt;
 begin
+  Result := nil;
   SetLength(Result, ACount);
   for I := 0 to ACount - 1 do
     Result[I] := AValue;
