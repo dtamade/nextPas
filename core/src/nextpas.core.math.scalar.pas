@@ -40,6 +40,10 @@ function Max(AA, AB: SizeUInt): SizeUInt; overload; inline;
 
 function Min(AA, AB: SizeInt): SizeInt; overload; inline;
 function Max(AA, AB: SizeInt): SizeInt; overload; inline;
+{ Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
+  would otherwise widen to SizeInt and lose the exact-type match. }
+function Min(AA, AB: Int32): Int32; overload; inline;
+function Max(AA, AB: Int32): Int32; overload; inline;
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
@@ -293,6 +297,12 @@ function TotalVariance(const AData: array of Single): Single; overload;
  *}
 function SumSquaredDeviations(const AData: array of Double): Double; overload;
 function SumSquaredDeviations(const AData: array of Single): Single; overload;
+
+const
+  { Largest finite value representable by each floating-point type
+    (replaces RTL Math MaxDouble / MaxSingle). }
+  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
+  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 implementation
 
@@ -591,10 +601,6 @@ end;
 {$ELSE}
   {$FATAL Unsupported Extended floating-point layout}
 {$ENDIF}
-
-const
-  MAX_DOUBLE_VALUE: Double = 1.79769313486231570815e308;
-  MAX_SINGLE_VALUE: Single = 3.40282346638528859812e38;
 
 function UInt64AbsInt64(const AValue: Int64): UInt64; inline;
 begin
@@ -1015,6 +1021,16 @@ begin
 end;
 
 function Max(AA, AB: SizeInt): SizeInt;
+begin
+  if AA > AB then Result := AA else Result := AB;
+end;
+
+function Min(AA, AB: Int32): Int32;
+begin
+  if AA < AB then Result := AA else Result := AB;
+end;
+
+function Max(AA, AB: Int32): Int32;
 begin
   if AA > AB then Result := AA else Result := AB;
 end;

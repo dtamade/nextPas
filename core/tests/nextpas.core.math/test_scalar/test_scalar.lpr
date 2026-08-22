@@ -359,6 +359,10 @@ begin
   CheckNear(2.5, nextpas.core.math.scalar.Max(Single(1.5), Single(2.5)), 0.0, 'Max Single');
   CheckEqual(Int64(1), Int64(nextpas.core.math.scalar.Min(Int64(1), Int64(2))), 'Min Int64');
   CheckEqual(Int64(2), Int64(nextpas.core.math.scalar.Max(Int64(1), Int64(2))), 'Max Int64');
+  CheckEqual(Int64(-2147483648), Int64(nextpas.core.math.scalar.Min(Int32(-2147483648), Int32(5))), 'Min Int32 Low bound');
+  CheckEqual(Int64(2147483647), Int64(nextpas.core.math.scalar.Max(Int32(5), Int32(2147483647))), 'Max Int32 High bound');
+  CheckEqual(Int64(-9223372036854775808), Int64(nextpas.core.math.scalar.Min(Int64(-9223372036854775808), Int64(5))), 'Min Int64 Low bound');
+  CheckEqual(Int64(5), Int64(nextpas.core.math.scalar.Max(Int32(-7), Int32(5))), 'Max Int32 negative vs positive');
   CheckNear(-1.5, nextpas.core.math.scalar.Min(-1.5, 2.0), 0.0, 'Min Double');
   CheckNear(2.0, nextpas.core.math.scalar.Max(-1.5, 2.0), 0.0, 'Max Double');
   Check(IsNaN(nextpas.core.math.scalar.Min(MakeNaN, 1.0)), 'Min Double propagates NaN first');
