@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf;
 
 type
@@ -30,6 +31,8 @@ type
     procedure DrawCircle(CX, CY, Radius: Integer);
     procedure Plot(const AData: array of Double; APlotMax: Double);
     function WithStyle(const S: TStyle): ICanvas;
+    { 布局配置面（PH33 P2b，additive）：块包装 }
+    function WithBlock(ABlock: IBlock): ICanvas;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
   end;
@@ -39,6 +42,7 @@ type
     FWidth, FHeight: Integer;
     FDots: array of Byte;
     FStyle: TStyle;
+    FBlock: IBlock;
   public
     class function New(CellWidth, CellHeight: Integer): ICanvas; static;
 
@@ -53,6 +57,7 @@ type
     procedure DrawCircle(CX, CY, Radius: Integer);
     procedure Plot(const AData: array of Double; APlotMax: Double);
     function WithStyle(const S: TStyle): ICanvas;
+    function WithBlock(ABlock: IBlock): ICanvas;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -229,6 +234,13 @@ begin
   Result := Self;
 end;
 
+{ PH33 P2b：布局配置面——块包装（additive，nil 时行为不变） }
+function TCanvas.WithBlock(ABlock: IBlock): ICanvas;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
+
 procedure TCanvas.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   CellW, CellH: Integer;
@@ -238,10 +250,21 @@ var
   CP: Word;
   B0, B1, B2: Byte;
   GlyphStr: AnsiString;
+  LArea: TRect;
 begin
   if AArea.IsEmpty then Exit;
-  CellW := AArea.Width;
-  CellH := AArea.Height;
+
+  { PH33 P2b：块包装——先画块，再以块内容区为绘制区 }
+  LArea := AArea;
+  if FBlock <> nil then
+  begin
+    FBlock.Render(AArea, ABuffer);
+    LArea := FBlock.Inner(AArea);
+    if LArea.IsEmpty then Exit;
+  end;
+
+  CellW := LArea.Width;
+  CellH := LArea.Height;
   SetLength(GlyphStr, 3);
 
   for Col := 0 to CellW - 1 do
@@ -263,7 +286,7 @@ begin
       GlyphStr[1] := Chr(B0);
       GlyphStr[2] := Chr(B1);
       GlyphStr[3] := Chr(B2);
-      ABuffer.SetStringN(AArea.X + Col, AArea.Y + Row, GlyphStr, 1, FStyle);
+      ABuffer.SetStringN(LArea.X + Col, LArea.Y + Row, GlyphStr, 1, FStyle);
     end;
 end;
 

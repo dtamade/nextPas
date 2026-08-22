@@ -7,6 +7,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.tabs,
   nextpas.core.test;
@@ -306,6 +307,30 @@ begin
   Check(LT <> nil, 'WithTitles chains and returns interface');
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（边框在区边缘、内容仍在） }
+procedure TestTabsWithBlock;
+var LT: ITabsWidget; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LT := TTabsWidget.New(['alpha', 'beta'])
+    .WithBlock(TBlock.Bordered('T'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 4));
+  try
+    LT.Render(TRect.Make(0, 0, 30, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('alpha', LAll) > 0, 'tab title visible inside block');
+    Check(Pos('beta', LAll) > 0, 'second tab visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsWithBlockChaining;
+var LT: ITabsWidget;
+begin
+  LT := TTabsWidget.New(['a']).WithBlock(TBlock.Bordered('x'));
+  Check(LT <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_tabs');
   { TTabsState }
@@ -334,5 +359,7 @@ begin
   T.Test('Tabs empty separator', @TestTabsEmptySeparator);
   T.Test('SetTitles in-place update (PH33 P3)', @TestTabsSetTitles);
   T.Test('WithTitles chaining (PH33 P3)', @TestTabsWithTitlesChaining);
+  T.Test('WithBlock render (PH33 P2b)', @TestTabsWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestTabsWithBlockChaining);
   if not T.Run then Halt(1);
 end.
