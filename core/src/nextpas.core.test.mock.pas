@@ -453,6 +453,7 @@ function MockValueHash(const AV: TMockValue): Integer;
 begin
   Result := Ord(AV.Kind);
   case AV.Kind of
+    mvUnset: ; { 无载体字段可混入，保留 Ord 基值 }
     mvString: Result := Result * 31 + Length(AV.StrVal);
     mvInt64:  Result := Result * 31 + Integer(AV.IntVal and $FFFFFFFF);
     mvBool:   Result := Result * 31 + Ord(AV.BoolVal);
