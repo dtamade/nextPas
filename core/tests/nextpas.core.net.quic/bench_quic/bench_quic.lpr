@@ -26,7 +26,9 @@ uses
   nextpas.core.net.quic.pn,
   nextpas.core.net.quic.header,
   nextpas.core.net.quic.tls,
-  nextpas.core.net.quic.protect;
+  nextpas.core.net.quic.protect,
+  nextpas.core.net.quic.frame,
+  nextpas.core.net.quic.reliable;
 
 const
   cValue1B: UInt64 = 25;
@@ -61,6 +63,15 @@ var
   GOutPkt: TBytes;
   GOutPay: TBytes;
   GOutPn: UInt64;
+  { Q3 帧 + 可靠骨架固定输入 }
+  GCryptoWire: TBytes;      { 已编码的 1200B CRYPTO 帧（解析输入） }
+  GAckRanges: TQuicAckRangeArray;   { 8 段降序 ranges（ACK 编码输入） }
+  GAckWire: TBytes;         { 已编码 ACK 帧 }
+  GTracker: TQuicSentTracker;       { 512 在途包（结算输入） }
+  GTSettleRanges: TQuicAckRangeArray;
+  GEst: TQuicRttEstimator;
+  GLost: TQuicPnArray;
+  GLostBytes: Integer;
 
 procedure BenchVarintEncode1B(const ACtx: IBenchContext);
 begin
@@ -131,6 +142,52 @@ begin
   TryQuicUnprotectPacket(GProtChacha, -1, GChaChaKeys, 1, GOutPn, GOutPay);
 end;
 
+{ ---- Q3：帧编解码 + 可靠骨架 ---- }
+
+procedure BenchFrameCryptoAppend(const ACtx: IBenchContext);
+begin
+  GOutPkt := nil;
+  QuicCryptoAppend(GOutPkt, 0, GPayload);
+end;
+
+procedure BenchFrameCryptoParse(const ACtx: IBenchContext);
+var
+  LFrame: TQuicFrame;
+begin
+  TryQuicFrameParse(GCryptoWire, 0, Length(GCryptoWire), LFrame);
+end;
+
+procedure BenchFrameAckAppend8(const ACtx: IBenchContext);
+begin
+  GOutPkt := nil;
+  QuicAckAppend(GOutPkt, GAckRanges[0].Hi, 500, GAckRanges);
+end;
+
+procedure BenchFrameAckParse(const ACtx: IBenchContext);
+var
+  LFrame: TQuicFrame;
+  LRng: TQuicAckRangeArray;
+begin
+  if TryQuicFrameParse(GAckWire, 0, Length(GAckWire), LFrame, LRng) then
+    GOutPn := LFrame.LargestAcked;
+end;
+
+procedure BenchReliableTrackSettle512(const ACtx: IBenchContext);
+var
+  LStats: TQuicAckStats;
+  LI: Integer;
+begin
+  { 入口恒为空转态（上一轮已全部结算）：512 登记 + 单大 range 全结算 }
+  for LI := 0 to 511 do
+    GTracker.Track(UInt64(LI), UInt64(LI * 100), 100, True);
+  GTracker.OnAckFrame(511, GTSettleRanges, LStats);
+end;
+
+procedure BenchReliableDetectLostScan(const ACtx: IBenchContext);
+begin
+  GTracker.DetectLost(GEst, 1000000000, GLost, GLostBytes);
+end;
+
 function FindNsPerOp(const AAll: TBenchResultArray;
   const AName: string): Double;
 var
@@ -147,8 +204,8 @@ var
   LResults: IBenchResults;
   LAll: TBenchResultArray;
   LN, LI: Integer;
-  LRow: array[0..12] of Double;
-  LNames: array[0..12] of string;
+  LRow: array[0..18] of Double;
+  LNames: array[0..18] of string;
 begin
   WriteLn('QUIC Q1 Primitives Benchmark (nextpas.core.net.quic.*)');
   WriteLn('======================================================');
@@ -196,6 +253,28 @@ begin
     Halt(1);
   end;
 
+  { Q3 帧与可靠骨架固定输入 }
+  GCryptoWire := nil;
+  QuicCryptoAppend(GCryptoWire, 0, GPayload);
+  SetLength(GAckRanges, 8);
+  for LI := 0 to 7 do
+  begin
+    GAckRanges[LI].Hi := UInt64(511 - LI * 64);
+    GAckRanges[LI].Lo := GAckRanges[LI].Hi - 31;   { 每段 32 包、段间 32 空档 }
+  end;
+  GAckWire := nil;
+  if not QuicAckAppend(GAckWire, GAckRanges[0].Hi, 500, GAckRanges) then
+  begin
+    WriteLn('FATAL: ack fixture build failed');
+    Halt(1);
+  end;
+  GTSettleRanges := nil;
+  SetLength(GTSettleRanges, 1);
+  GTSettleRanges[0].Lo := 0;
+  GTSettleRanges[0].Hi := 511;
+  GTracker := TQuicSentTracker.Create(cQuicSentWindowDefault);
+  QuicRttInit(GEst);
+
   LSuite := TBenchSuite.Create('quic_q1')
     .SetMinDuration(TDuration.FromMilliseconds(300))
     .SetMaxIterations(200000)
@@ -215,7 +294,13 @@ begin
     .Add('protect/aes_1200b', @BenchProtectAes)
     .Add('protect/unprotect_aes_1200b', @BenchUnprotectAes)
     .Add('protect/chacha_1200b', @BenchProtectChacha)
-    .Add('protect/unprotect_chacha_1200b', @BenchUnprotectChacha);
+    .Add('protect/unprotect_chacha_1200b', @BenchUnprotectChacha)
+    .Add('frame/crypto_append_1162b', @BenchFrameCryptoAppend)
+    .Add('frame/crypto_parse_1162b', @BenchFrameCryptoParse)
+    .Add('frame/ack_append_8ranges', @BenchFrameAckAppend8)
+    .Add('frame/ack_parse_8ranges', @BenchFrameAckParse)
+    .Add('reliable/track_settle_512_cycle', @BenchReliableTrackSettle512)
+    .Add('reliable/detect_lost_scan_empty', @BenchReliableDetectLostScan);
 
   LResults := LSuite.Run;
   LAll := LResults.GetAll;
@@ -233,10 +318,16 @@ begin
   LNames[10] := 'protect/unprotect_aes_1200b';
   LNames[11] := 'protect/chacha_1200b';
   LNames[12] := 'protect/unprotect_chacha_1200b';
+  LNames[13] := 'frame/crypto_append_1162b';
+  LNames[14] := 'frame/crypto_parse_1162b';
+  LNames[15] := 'frame/ack_append_8ranges';
+  LNames[16] := 'frame/ack_parse_8ranges';
+  LNames[17] := 'reliable/track_settle_512_cycle';
+  LNames[18] := 'reliable/detect_lost_scan_empty';
 
   WriteLn('  Benchmark                    ns/op       ops/s');
   WriteLn('  ---------------------------------------------------');
-  for LI := 0 to 12 do
+  for LI := 0 to 18 do
   begin
     LRow[LI] := FindNsPerOp(LAll, LNames[LI]);
     if LRow[LI] > 0 then
