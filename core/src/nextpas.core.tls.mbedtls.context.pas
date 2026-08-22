@@ -970,6 +970,9 @@ begin
   // 解析逗号分隔的协议列表
   try
 
+    { LProtos 此前从未赋值即被 Length() 读取，恒为 0 → 恒 Exit，
+      ALPN 协议配置静默失效；按逗号分割恢复语义（removeEmpty，条目已有 Trim） }
+    LProtos := nextpas.core.text.strings.StringsSplit(AProtocols, ',', True);
     if Length(LProtos) = 0 then Exit;
 
     // 构建 NULL-terminated 数组 (需要额外一个 nil 结尾)
