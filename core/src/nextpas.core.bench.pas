@@ -1270,6 +1270,7 @@ begin
   for I := 0 to FResultCount - 1 do
     if FResults[I].Skipped then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1290,6 +1291,7 @@ begin
   for I := 0 to FResultCount - 1 do
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1329,6 +1331,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) and
        (Copy(FResults[I].Name, 1, Length(APrefix)) = APrefix) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1358,6 +1361,7 @@ begin
         Inc(LCount);
     end;
   end;
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1386,6 +1390,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) and
        (Pos(ASubstring, FResults[I].Name) > 0) then
       Inc(LCount);
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1529,6 +1534,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1569,6 +1575,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1607,6 +1614,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LCount := 0;
   for I := 0 to FResultCount - 1 do
@@ -1645,6 +1653,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1786,6 +1795,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1831,6 +1841,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1890,6 +1901,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -1959,6 +1971,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   SetLength(LHasMetric, LCount);
   SetLength(LValues, LCount);
@@ -2052,6 +2065,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2113,6 +2127,7 @@ begin
        (FResults[I].Outliers > 0) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2136,6 +2151,7 @@ begin
        (FResults[I].Outliers = 0) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2159,6 +2175,7 @@ begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2216,6 +2233,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2270,6 +2288,7 @@ begin
     end;
   end;
 
+  Result := nil;
   SetLength(Result, LCount);
   for I := 0 to LCount - 1 do
     Result[I] := LGroups[I];
@@ -2735,6 +2754,7 @@ begin
   end;
 
   { 第二遍：收集 }
+  Result := nil;
   SetLength(Result, LTotal);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2856,6 +2876,7 @@ begin
        (ExtractGroupName(FResults[I].Name) = AGroupName) then
       Inc(LCount);
 
+  Result := nil;
   SetLength(Result, LCount);
   LIdx := 0;
   for I := 0 to FResultCount - 1 do
@@ -2875,6 +2896,7 @@ var
   I: Integer;
 begin
   LResults := CollectGroupResults(AGroupName);
+  Result := nil;
   SetLength(Result, Length(LResults));
   for I := 0 to High(LResults) do
     Result[I] := LResults[I].NsPerOp;

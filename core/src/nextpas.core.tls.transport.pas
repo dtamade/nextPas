@@ -137,6 +137,7 @@ begin
   LAvail := FWritePos - FReadPos;
   if AMaxBytes > LAvail then
     AMaxBytes := LAvail;
+  Result := nil;
   SetLength(Result, AMaxBytes);
   if AMaxBytes > 0 then
   begin

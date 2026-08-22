@@ -276,6 +276,8 @@ var
   PathParts, QueryParts: TStringArray;
   I: Integer;
 begin
+PathParts := nil;
+QueryParts := nil;
   try
     // Build path attributes
     if AURI.Token <> '' then

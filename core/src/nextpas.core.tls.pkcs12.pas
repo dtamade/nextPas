@@ -72,6 +72,7 @@ begin
     for I := 0 to (Length(LPassBytes) + LBlockSize - 1) div LBlockSize * LBlockSize - 1 do
       LI[J + I] := LPassBytes[I mod Length(LPassBytes)];
 
+  Result := nil;
   SetLength(Result, AKeyLen);
   SetLength(LA, 0);
   I := 0;

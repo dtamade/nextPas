@@ -221,6 +221,7 @@ var
   LLen: SizeInt;
 begin
   LLen := Length(AValue);
+  Result := nil;
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(AValue[1], Result[0], LLen);

@@ -56,6 +56,7 @@ begin
   LPaddedSeq[10] := Byte(ASeqNum shr 8);
   LPaddedSeq[11] := Byte(ASeqNum);
 
+  Result := nil;
   SetLength(Result, 12);
   for I := 0 to 11 do
     Result[I] := AImplicitNonce[I] xor LPaddedSeq[I];
@@ -63,6 +64,7 @@ end;
 
 function BuildAAD(ASeqNum: UInt64; AContentType: Byte; APlaintextLen: Integer): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 13);
   Result[0] := Byte(ASeqNum shr 56);
   Result[1] := Byte(ASeqNum shr 48);

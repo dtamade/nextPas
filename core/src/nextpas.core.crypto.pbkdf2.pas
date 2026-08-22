@@ -39,6 +39,7 @@ var
 begin
   FillChar(LBlockIdx, SizeOf(LBlockIdx), 0);
   LDigestSize := GetDigestSize(AAlgo);
+  Result := nil;
   SetLength(Result, AKeyLen);
   LBlockCount := (AKeyLen + LDigestSize - 1) div LDigestSize;
 

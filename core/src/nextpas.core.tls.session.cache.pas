@@ -397,6 +397,7 @@ var
   Keys: specialize THashMap<string, TSessionCacheEntry>.TKeyArray;
   Found: Boolean;
 begin
+OldestTime := 0;
   // 注意: 调用者必须持有锁
 
   while FCache.GetCount > FMaxSessions do

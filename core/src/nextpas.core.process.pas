@@ -378,6 +378,7 @@ var
   I, J, Start, N: Integer;
   InQ: Boolean;
 begin
+  Result := nil;
   SetLength(Result, 0);
   N := 0;
   I := 1;
@@ -579,6 +580,7 @@ begin
   { SizeOf(Char) is 1 in {$H+} mode (AnsiString), but 2 in Delphi Unicode mode.
     This defensive multiplication ensures correctness if the compiler mode changes. }
   LLen := Length(AStr) * SizeOf(Char);
+  Result := nil;
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(AStr[1], Result[0], LLen);

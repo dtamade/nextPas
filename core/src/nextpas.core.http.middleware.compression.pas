@@ -358,6 +358,7 @@ end;
 
 function TBufferedResponseWriter.GetBody: TBytes;
 begin
+  Result := nil;
   SetLength(Result, FBodyLen);
   if FBodyLen > 0 then
     Move(FBody[0], Result[0], FBodyLen);

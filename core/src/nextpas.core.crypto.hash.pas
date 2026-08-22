@@ -119,6 +119,7 @@ uses
 
 function StringToBytes(const S: string): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(S));
   if Length(S) > 0 then
     Move(S[1], Result[0], Length(S));
@@ -175,6 +176,7 @@ function THashContext.Final: TBytes;
 begin
   if FInner = nil then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

@@ -176,6 +176,7 @@ var
   LLen: Integer;
 begin
   LLen := Length(AStr);
+  Result := nil;
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(AStr[1], Result[0], LLen);

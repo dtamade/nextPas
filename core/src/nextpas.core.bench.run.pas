@@ -242,6 +242,7 @@ begin
   LEntryCount := Length(AEntries);
   if LEntryCount = 0 then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

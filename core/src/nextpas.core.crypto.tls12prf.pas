@@ -28,6 +28,7 @@ uses
 
 function ConcatBytes(const ALeft, ARight: TBytes): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(ALeft) + Length(ARight));
   if Length(ALeft) > 0 then Move(ALeft[0], Result[0], Length(ALeft));
   if Length(ARight) > 0 then Move(ARight[0], Result[Length(ALeft)], Length(ARight));
@@ -35,6 +36,7 @@ end;
 
 function StringToBytes(const AValue: string): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(AValue));
   if Length(AValue) > 0 then
     Move(AValue[1], Result[0], Length(AValue));
@@ -48,6 +50,7 @@ begin
   LLabelBytes := StringToBytes(ALabel);
   LLabelLen := Length(LLabelBytes);
   LSeedLen := Length(ASeed);
+  Result := nil;
   SetLength(Result, LLabelLen + LSeedLen);
   if LLabelLen > 0 then
     Move(LLabelBytes[0], Result[0], LLabelLen);
@@ -61,6 +64,7 @@ var
 begin
   LLeftLen := Length(ALeft);
   LRightLen := Length(ARight);
+  Result := nil;
   SetLength(Result, LLeftLen + LRightLen);
   if LLeftLen > 0 then
     Move(ALeft[0], Result[0], LLeftLen);
@@ -73,6 +77,7 @@ var
   A, ANext, HMACResult: TBytes;
   LOffset, LCopyLen: Integer;
 begin
+  Result := nil;
   SetLength(Result, ALength);
   A := HMAC_SHA256(ASecret, ASeed);
   LOffset := 0;
@@ -95,6 +100,7 @@ var
   A, ANext, HMACResult: TBytes;
   LOffset, LCopyLen: Integer;
 begin
+  Result := nil;
   SetLength(Result, ALength);
   A := HMAC_SHA384(ASecret, ASeed);
   LOffset := 0;

@@ -633,6 +633,7 @@ var
   Tmp: array of T;
 begin
   if Length(aArr) <= 1 then Exit;
+  Tmp := nil;
   SetLength(Tmp, Length(aArr));
   MergeSort(aArr, 0, High(aArr), Tmp);
 end;

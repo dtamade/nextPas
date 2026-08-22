@@ -2215,6 +2215,7 @@ var
   LDecodedBytes: TBytes;
 begin
   try
+  LLines := nil;
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');
 

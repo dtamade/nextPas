@@ -130,6 +130,7 @@ end;
 
 function THMACHasher.SumBytes: TBytes;
 begin
+  Result := nil;
   SetLength(Result, FDigestSize);
   Sum(Result[0], FDigestSize);
 end;
@@ -201,6 +202,7 @@ function HMAC_SHA256(const AKey, AData: TBytes): TBytes;
 var LD: TSHA256Digest;
 begin
   LD := HmacSHA256(AKey, AData);
+  Result := nil;
   SetLength(Result, SHA256_DIGEST_SIZE);
   Move(LD[0], Result[0], SHA256_DIGEST_SIZE);
 end;
@@ -209,6 +211,7 @@ function HMAC_SHA384(const AKey, AData: TBytes): TBytes;
 var LD: TSHA384Digest;
 begin
   LD := HmacSHA384(AKey, AData);
+  Result := nil;
   SetLength(Result, SHA384_DIGEST_SIZE);
   Move(LD[0], Result[0], SHA384_DIGEST_SIZE);
 end;
@@ -222,6 +225,7 @@ begin
     LH := NewHMAC(haSHA1, AKey, 0);
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
+  Result := nil;
   SetLength(Result, SHA1_DIGEST_SIZE);
   LH.Sum(Result[0], SHA1_DIGEST_SIZE);
 end;

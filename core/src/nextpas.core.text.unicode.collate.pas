@@ -857,6 +857,7 @@ function TUnicodeCollator.CollectElements(const ANormalized: string): TCollation
 var
   LCount: SizeInt;
 begin
+  Result := nil;
   LCount := CollectElementsInto(ANormalized, Result);
   SetLength(Result, LCount);
 end;
@@ -1136,6 +1137,7 @@ var
 begin
   if AText = '' then
   begin
+    Result := nil;
     SetLength(Result, 0);
     Exit;
   end;

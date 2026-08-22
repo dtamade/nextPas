@@ -82,6 +82,7 @@ implementation
 
 function TLS12BuildRecordHeader(AContentType: Byte; ALength: Integer): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 5);
   Result[0] := AContentType;
   Result[1] := TLS12_VERSION_MAJOR;
@@ -92,6 +93,7 @@ end;
 
 function TLS12BuildHandshakeHeader(AHandshakeType: Byte; ABodyLength: Integer): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 4);
   Result[0] := AHandshakeType;
   Result[1] := Byte(ABodyLength shr 16);

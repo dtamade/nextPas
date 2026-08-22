@@ -466,6 +466,7 @@ function X509SubjectAltNamesToStrings(
 var
   I: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(ASANs));
   for I := 0 to High(ASANs) do
     Result[I] := ASANs[I].Value;
@@ -1409,6 +1410,7 @@ function TWolfSSLCertificate.GetSubjectAltNames: TSSLStringArray;
 var
   LParser: TX509Certificate;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if not TryLoadX509Parser(LParser) then
     Exit;
@@ -1424,6 +1426,7 @@ function TWolfSSLCertificate.GetKeyUsage: TSSLStringArray;
 var
   LParser: TX509Certificate;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if not TryLoadX509Parser(LParser) then
     Exit;
@@ -1439,6 +1442,7 @@ function TWolfSSLCertificate.GetExtendedKeyUsage: TSSLStringArray;
 var
   LParser: TX509Certificate;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if not TryLoadX509Parser(LParser) then
     Exit;
@@ -1842,6 +1846,7 @@ var
   I: Integer;
   LExists: Boolean;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if ACert = nil then Exit;
 

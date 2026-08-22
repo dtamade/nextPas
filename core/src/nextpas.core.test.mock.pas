@@ -920,6 +920,7 @@ var
 begin
   LSetupCount := Length(FSetups);
   LWhenCount := Length(FWhenMethodNames);
+  Result := nil;
   SetLength(Result, LSetupCount + LWhenCount);
   LOutIdx := 0;
   { Copy all setup method names }

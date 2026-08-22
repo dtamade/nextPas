@@ -43,6 +43,7 @@ end;
 
 function GetHTTP2ALPNProtocols: TStringArray;
 begin
+  Result := nil;
   SetLength(Result, 2);
   Result[0] := HTTP2_ALPN_PROTOCOL;
   Result[1] := HTTP11_ALPN_PROTOCOL;

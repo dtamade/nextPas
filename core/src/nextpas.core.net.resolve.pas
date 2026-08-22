@@ -111,6 +111,7 @@ var
   LI, LJ: Integer;
   LHost: AnsiString;
 begin
+  Result := nil;
   SetLength(Result, 0);
   if (AHost = '') or (AHost = 'localhost') then
   begin

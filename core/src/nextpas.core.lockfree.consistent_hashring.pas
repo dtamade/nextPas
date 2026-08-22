@@ -291,6 +291,7 @@ var
   LSeenCount: Int32;
   LIsNew: Boolean;
 begin
+  Result := nil;
   SetLength(Result, 0);
   AcquireLock;
   try
