@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.canvas,
   nextpas.core.test;
@@ -280,6 +281,34 @@ begin
   Check(not LCanvas.GetDot(5, 5), 'ClearDot on unset dot should be no-op');
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（点阵绘制进块内容区） }
+procedure TestCanvasWithBlock;
+var
+  LCanvas: ICanvas;
+  LBuf: TBuffer;
+  LAll: AnsiString;
+  I: Integer;
+begin
+  LCanvas := TCanvas.New(2, 2).WithBlock(TBlock.Bordered('T'));
+  LCanvas.SetDot(0, 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 14));
+  try
+    LCanvas.Render(TRect.Make(0, 0, 20, 14), LBuf);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    LAll := '';
+    for I := 1 to 13 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$A0, LAll) > 0, 'braille dot visible inside block');
+  finally LBuf.Free; end;
+end;
+
+procedure TestCanvasWithBlockChaining;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(1, 1).WithBlock(TBlock.Bordered('x'));
+  Check(LCanvas <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.canvas');
   T.Test('TCanvas.New', @TestCanvasNew);
@@ -304,5 +333,7 @@ begin
   T.Test('TCanvas.DrawCircle zero radius', @TestCanvasDrawCircleZeroRadius);
   T.Test('TCanvas.SetDot boundary', @TestCanvasSetDotBoundary);
   T.Test('TCanvas.ClearDot not set', @TestCanvasClearDotNotSet);
+  T.Test('TCanvas WithBlock render (PH33 P2b)', @TestCanvasWithBlock);
+  T.Test('TCanvas WithBlock chaining (PH33 P2b)', @TestCanvasWithBlockChaining);
   if not T.Run then Halt(1);
 end.

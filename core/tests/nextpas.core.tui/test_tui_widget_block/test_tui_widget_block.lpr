@@ -260,6 +260,70 @@ begin
   end;
 end;
 
+{ PH33 P2b：布局属性——WithPadding 内容区四边内缩（边框收缩之后叠加） }
+procedure TestInnerPadding;
+var
+  LBlock: IBlock;
+  LInner: TRect;
+begin
+  LBlock := TBlock.New
+    .WithBorders([bsLeft, bsRight, bsTop, bsBottom]).WithPadding(2);
+  LInner := LBlock.Inner(TRect.Make(0, 0, 20, 12));
+  CheckEqual(Int64(3), Int64(LInner.X), 'x = left border 1 + pad 2');
+  CheckEqual(Int64(3), Int64(LInner.Y), 'y = top border 1 + pad 2');
+  CheckEqual(Int64(14), Int64(LInner.Width), 'w = 20 - 2*1 border - 2*2 pad');
+  CheckEqual(Int64(6), Int64(LInner.Height), 'h = 12 - 2*1 border - 2*2 pad');
+end;
+
+procedure TestInnerPaddingNoBorders;
+var
+  LInner: TRect;
+begin
+  LInner := TBlock.New.WithPadding(1).Inner(TRect.Make(5, 5, 10, 8));
+  CheckEqual(Int64(6), Int64(LInner.X), 'x inset by pad');
+  CheckEqual(Int64(6), Int64(LInner.Y), 'y inset by pad');
+  CheckEqual(Int64(8), Int64(LInner.Width), 'w minus 2*pad');
+  CheckEqual(Int64(6), Int64(LInner.Height), 'h minus 2*pad');
+end;
+
+procedure TestInnerPaddingOversizeClampsEmpty;
+var
+  LInner: TRect;
+begin
+  { 内缩超过区尺寸 -> 空区（语义对齐 tui888 geometry margin） }
+  LInner := TBlock.New.WithBorders([bsLeft, bsRight]).WithPadding(9)
+    .Inner(TRect.Make(0, 0, 10, 4));
+  CheckEqual(Int64(0), Int64(LInner.Width), 'oversized pad clamps to empty w');
+end;
+
+procedure TestPaddingNegativeClampsZero;
+var
+  LInner: TRect;
+begin
+  LInner := TBlock.New.WithPadding(-3).Inner(TRect.Make(0, 0, 10, 4));
+  CheckEqual(Int64(10), Int64(LInner.Width), 'negative pad treated as 0');
+end;
+
+procedure TestRenderPaddingUnchangedEdges;
+var
+  LBuf: TBuffer;
+  LBlock: IBlock;
+begin
+  { padding 只收缩内容区，边框仍绘制在区边缘 }
+  LBlock := TBlock.Bordered('T').WithPadding(1);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 12, 5));
+  try
+    LBlock.Render(TRect.Make(0, 0, 12, 5), LBuf);
+    Check(Pos(#$e2#$94#$8c, LBuf.RowAsString(0)) > 0, 'top-left border at edge');
+    Check(Pos(#$e2#$94#$94, LBuf.RowAsString(4)) > 0, 'bottom-left border at edge');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWithPaddingChaining;
+begin
+  Check(TBlock.New.WithPadding(2).WithTitle('x') <> nil, 'padding chains');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.block');
   T.Test('render all borders', @TestRenderAllBorders);
@@ -278,5 +342,11 @@ begin
   T.Test('title long clips', @TestTitleLongClips);
   T.Test('rounded border set', @TestRoundedBorderSet);
   T.Test('border style applied', @TestBorderStyleApplied);
+  T.Test('inner padding with borders (PH33 P2b)', @TestInnerPadding);
+  T.Test('inner padding no borders (PH33 P2b)', @TestInnerPaddingNoBorders);
+  T.Test('padding oversize clamps empty (PH33 P2b)', @TestInnerPaddingOversizeClampsEmpty);
+  T.Test('negative padding clamps zero (PH33 P2b)', @TestPaddingNegativeClampsZero);
+  T.Test('render padding keeps border edges (PH33 P2b)', @TestRenderPaddingUnchangedEdges);
+  T.Test('WithPadding chaining (PH33 P2b)', @TestWithPaddingChaining);
   if not T.Run then Halt(1);
 end.

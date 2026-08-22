@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.input,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.command_palette,
   nextpas.core.test;
 
@@ -315,6 +316,34 @@ begin
   end;
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（浮层在块内容区内定位，项仍可见） }
+procedure TestPaletteWithBlock;
+var CP: ICommandPalette; Buf: TBuffer; State: TCommandPaletteState;
+    LAll: AnsiString; I: Integer;
+begin
+  CP := TCommandPalette.New([TCommandItem.Make('open-file', 'Open')])
+    .WithBlock(TBlock.Bordered('T'));
+  State := TCommandPaletteState.Empty;
+  State.Open;
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 60, 20));
+  try
+    CP.RenderStateful(TRect.Make(0, 0, 60, 20), Buf, State);
+    LAll := '';
+    for I := 0 to 19 do LAll := LAll + Buf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, Buf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('open-file', LAll) > 0, 'item visible inside block');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestPaletteWithBlockChaining;
+var CP: ICommandPalette;
+begin
+  CP := TCommandPalette.New([]).WithBlock(TBlock.Bordered('x'));
+  Check(CP <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.command_palette');
 
@@ -351,6 +380,8 @@ begin
   T.Test('selected item', @TestCommandPaletteSelectedItem);
   T.Test('builder chaining', @TestCommandPaletteBuilderChaining);
   T.Test('hidden palette', @TestCommandPaletteHidden);
+  T.Test('WithBlock render (PH33 P2b)', @TestPaletteWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestPaletteWithBlockChaining);
 
   if not T.Run then Halt(1);
 end.

@@ -11,6 +11,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.breadcrumb,
   nextpas.core.test;
 
@@ -246,6 +247,30 @@ begin
   CheckEqual(Int64(7), Int64(LCrumb.TotalWidth), 'total width calc');
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（边框在区边缘、内容仍在） }
+procedure TestBreadcrumbWithBlock;
+var LC: IBreadcrumb; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LC := TBreadcrumb.New(['home', 'docs'])
+    .WithBlock(TBlock.Bordered('T'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 4));
+  try
+    LC.Render(TRect.Make(0, 0, 30, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('home', LAll) > 0, 'item visible inside block');
+    Check(Pos('docs', LAll) > 0, 'second item visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbWithBlockChaining;
+var LC: IBreadcrumb;
+begin
+  LC := TBreadcrumb.New(['a']).WithBlock(TBlock.Bordered('x'));
+  Check(LC <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_breadcrumb');
   T.Test('TBreadcrumb.New creates instance', @TestBreadcrumbNew);
@@ -266,5 +291,7 @@ begin
   T.Test('Empty area', @TestBreadcrumbEmptyArea);
   T.Test('Single item', @TestBreadcrumbSingleItem);
   T.Test('Total width calc', @TestBreadcrumbTotalWidthCalc);
+  T.Test('WithBlock render (PH33 P2b)', @TestBreadcrumbWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestBreadcrumbWithBlockChaining);
   if not T.Run then Halt(1);
 end.

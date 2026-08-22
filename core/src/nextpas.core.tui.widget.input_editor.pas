@@ -17,6 +17,7 @@ uses
   nextpas.core.text.width, nextpas.core.text.utf8,
   nextpas.core.tui.event,
   nextpas.core.tui.widget.syntax,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf;
 
 type
@@ -85,6 +86,8 @@ type
     function WithSelectionStyle(const S: TStyle): IInputEditor;
     function WithPlaceholder(const P: AnsiString): IInputEditor;
     function WithMaxLines(N: Integer): IInputEditor;
+    { 布局配置面（PH33 P2b，additive）：块包装 }
+    function WithBlock(ABlock: IBlock): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
@@ -112,7 +115,9 @@ type
     FFindCur: Integer;         { 当前命中下标(-1 无) }
     FFindStyle: TStyle;        { 非当前命中高亮 }
     FFindCurStyle: TStyle;     { 当前命中高亮(可加粗区分) }
+    FBlock: IBlock;            { PH33 P2b：块包装(nil=无块) }
 
+    procedure RenderContent(const AArea: TRect; ABuffer: TBuffer);
     function LineCount_: Integer;
     procedure CursorToRowCol(out Row, Col: Integer);
     function RowColToByte(Row, Col: Integer): Integer;
@@ -198,6 +203,7 @@ type
     function WithSelectionStyle(const S: TStyle): IInputEditor;
     function WithPlaceholder(const P: AnsiString): IInputEditor;
     function WithMaxLines(N: Integer): IInputEditor;
+    function WithBlock(ABlock: IBlock): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
@@ -1036,7 +1042,26 @@ begin FPlaceholder := P; Result := Self; end;
 function TInputEditor.WithMaxLines(N: Integer): IInputEditor;
 begin FMaxLines := N; Result := Self; end;
 
+{ PH33 P2b：布局配置面——块包装（additive，nil 时行为不变） }
+function TInputEditor.WithBlock(ABlock: IBlock): IInputEditor;
+begin FBlock := ABlock; Result := Self; end;
+
 procedure TInputEditor.Render(const AArea: TRect; ABuffer: TBuffer);
+var
+  LArea: TRect;
+begin
+  { PH33 P2b：块包装——先画块，再以块内容区为内容渲染区 }
+  LArea := AArea;
+  if FBlock <> nil then
+  begin
+    FBlock.Render(AArea, ABuffer);
+    LArea := FBlock.Inner(AArea);
+    if LArea.IsEmpty then Exit;
+  end;
+  RenderContent(LArea, ABuffer);
+end;
+
+procedure TInputEditor.RenderContent(const AArea: TRect; ABuffer: TBuffer);
 var
   VisH, Row, I, StartB, EndB, DrawRow, LineLen: Integer;
   SelStart, SelEnd: Integer;

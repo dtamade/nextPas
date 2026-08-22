@@ -10,6 +10,7 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.event,
+  nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.syntax,
   nextpas.core.tui.widget.input_editor,
@@ -824,6 +825,30 @@ begin
   Check(LEditor.Content = 'hello world', 'no-op without selection');
 end;
 
+{ PH33 P2b：布局配置面——WithBlock 块包装（边框在区边缘、占位文本仍在内容区） }
+procedure TestEditorWithBlock;
+var LE: IInputEditor; LBuf: TBuffer; LAll: AnsiString; I: Integer;
+begin
+  LE := TInputEditor.New
+    .WithPlaceholder('ph-mark')
+    .WithBlock(TBlock.Bordered('T'));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 4));
+  try
+    LE.Render(TRect.Make(0, 0, 30, 4), LBuf);
+    LAll := '';
+    for I := 0 to 3 do LAll := LAll + LBuf.RowAsString(I);
+    Check(Pos(#$E2#$94#$8C, LBuf.RowAsString(0)) > 0, 'block border drawn');
+    Check(Pos('ph-mark', LAll) > 0, 'placeholder visible inside block');
+  finally LBuf.Free; end;
+end;
+
+procedure TestEditorWithBlockChaining;
+var LE: IInputEditor;
+begin
+  LE := TInputEditor.New.WithBlock(TBlock.Bordered('x'));
+  Check(LE <> nil, 'WithBlock chains and returns interface');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -873,5 +898,7 @@ begin
   T.Test('FindHits', @TestEditorFindHits);
   T.Test('SelectionAPI', @TestEditorSelectionAPI);
   T.Test('DeleteSelected undo', @TestEditorDeleteSelectedUndo);
+  T.Test('WithBlock render (PH33 P2b)', @TestEditorWithBlock);
+  T.Test('WithBlock chaining (PH33 P2b)', @TestEditorWithBlockChaining);
   if not T.Run then Halt(1);
 end.
