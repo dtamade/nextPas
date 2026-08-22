@@ -36,6 +36,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
+| `db` | L3 | unified database access over sqlite/pg adapters (`nextpas.core.db.*`) | yes | L0-L2 plus sqlite/pg owners | focused-runtime |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
@@ -91,6 +92,11 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+
+Database family direction: database-related module families (`sqlite`, `pg`)
+have `db` (L3) as their terminal home. Top-level units stay put until the
+physical fold-in lands as a separately authorized governance slice; see
+`core/docs/plans/2026-08-23-db-module-boundary.md` for the two-phase plan.
 
 ## Gate policy
 
