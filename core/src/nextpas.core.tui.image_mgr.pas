@@ -57,7 +57,8 @@ type
     procedure EncodeTransmitChunks(var Slot: TImageSlot;
       DataPtr: Pointer; DataLen: Integer; PixelWidth, PixelHeight: Integer;
       AEncoded: Boolean);
-    procedure AppendPlace(Backend: TAnsiBackend; Id: LongWord; const Area: TRect);
+    procedure AppendPlace(Backend: TAnsiBackend; Id: LongWord;
+      const P: TImagePlacement);
     procedure AppendDelete(Backend: TAnsiBackend; Id: LongWord);
   public
     constructor Create(AProtocol: TImageProtocol);
@@ -231,7 +232,8 @@ begin
   Tmp.Done;
 end;
 
-procedure TImageManager.AppendPlace(Backend: TAnsiBackend; Id: LongWord; const Area: TRect);
+procedure TImageManager.AppendPlace(Backend: TAnsiBackend; Id: LongWord;
+  const P: TImagePlacement);
 var
   Cmd: nextpas.core.text.builder.TStringBuilder;
   S: AnsiString;
@@ -240,7 +242,14 @@ begin
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('_'));
   Cmd.AppendByte(Ord('G'));
-  S := TextFormat('a=p,q=2,z=-1,i=%d,c=%d,r=%d,C=1', [Id, Area.Width, Area.Height]);
+  { 刀 60 source-crop：SrcW/SrcH > 0 → 发射 kitty 源矩形键 x/y/w/h
+    （像素坐标），终端只显示该带——部分可见块局部放置 }
+  if (P.SrcW > 0) and (P.SrcH > 0) then
+    S := TextFormat('a=p,q=2,z=-1,i=%d,x=%d,y=%d,w=%d,h=%d,c=%d,r=%d,C=1',
+      [Id, P.SrcX, P.SrcY, P.SrcW, P.SrcH, P.Area.Width, P.Area.Height])
+  else
+    S := TextFormat('a=p,q=2,z=-1,i=%d,c=%d,r=%d,C=1',
+      [Id, P.Area.Width, P.Area.Height]);
   Cmd.AppendStr(S);
   Cmd.AppendByte(Ord(#27));
   Cmd.AppendByte(Ord('\'));
@@ -492,7 +501,7 @@ begin
             (FSlots[SlotIdx].PlacedArea.Height <> P.Area.Height)) then
         begin
           Backend.MoveTo(P.Area.X, P.Area.Y);
-          AppendPlace(Backend, FSlots[SlotIdx].Id, P.Area);
+          AppendPlace(Backend, FSlots[SlotIdx].Id, P);
           FSlots[SlotIdx].Placed := True;
           FSlots[SlotIdx].PlacedArea := P.Area;
         end;
