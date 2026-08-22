@@ -553,13 +553,16 @@ end;
 
 function ParseBenchOutput(const AOutput: string; AParser: TXLangParser): TBenchResultArray;
 begin
-  case AParser of
-    xlGo:   Result := ParseGoBenchOutput(AOutput);
-    xlRust: Result := ParseRustBenchOutput(AOutput);
-    xlFPC:  Result := ParseFPCBenchOutput(AOutput);
+  { 测试契约：非法强转的解析器类型必须抛 EParseError（见 test_bench_xlang），
+    故用 if 链保留运行时防御，放弃 case 的穷尽性静态检查。 }
+  if AParser = xlGo then
+    Result := ParseGoBenchOutput(AOutput)
+  else if AParser = xlRust then
+    Result := ParseRustBenchOutput(AOutput)
+  else if AParser = xlFPC then
+    Result := ParseFPCBenchOutput(AOutput)
   else
     raise EParseError.Create('Unknown parser type');
-  end;
 end;
 
 end.
