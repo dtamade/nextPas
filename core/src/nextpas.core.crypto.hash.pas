@@ -364,49 +364,47 @@ end;
 
 function CreateHashContext(AAlgorithm: THashAlgorithm): THashContext;
 begin
+  { 非法强转落此默认值，保持定义性；正常路径由 case 覆盖。 }
+  Result := nil;
   case AAlgorithm of
     haMD5: Result := TMD5Context.Create;
     haSHA1: Result := TSHA1Context.Create;
     haSHA256: Result := TSHA256Context.Create;
     haSHA384: Result := TSHA384Context.Create;
     haSHA512: Result := TSHA512Context.Create;
-  else
-    Result := nil;
   end;
 end;
 
 function GetHashDigestSize(AAlgorithm: THashAlgorithm): Integer;
 begin
+  Result := 0; { 防御非法强转 }
   case AAlgorithm of
     haMD5: Result := 16;
     haSHA1: Result := 20;
     haSHA256: Result := 32;
     haSHA384: Result := 48;
     haSHA512: Result := 64;
-  else
-    Result := 0;
   end;
 end;
 
 function GetHashBlockSize(AAlgorithm: THashAlgorithm): Integer;
 begin
+  Result := 0; { 防御非法强转 }
   case AAlgorithm of
     haMD5, haSHA1, haSHA256: Result := 64;
     haSHA384, haSHA512: Result := 128;
-  else
-    Result := 0;
   end;
 end;
 
 function GetHashAlgorithmName(AAlgorithm: THashAlgorithm): string;
 begin
+  Result := ''; { 防御非法强转 }
   case AAlgorithm of
     haMD5: Result := 'MD5';
     haSHA1: Result := 'SHA-1';
     haSHA256: Result := 'SHA-256';
     haSHA384: Result := 'SHA-384';
-    haSHA512: Result := 'SHA-512';  else
-    Result := '';
+    haSHA512: Result := 'SHA-512';
   end;
 end;
 
