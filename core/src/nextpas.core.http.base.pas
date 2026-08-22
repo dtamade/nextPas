@@ -362,6 +362,8 @@ uses
 
 function HttpErrorKindToCategory(const AKind: THttpErrorKind): TErrorCategory;
 begin
+  { 非法强转落网络类默认值，保持定义性；正常路径由 case 全覆盖。 }
+  Result := ecNetwork;
   case AKind of
     hekArgument:
       Result := ecInvalidArgument;
