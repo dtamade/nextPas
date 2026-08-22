@@ -702,6 +702,7 @@ var
   LAvg: Double;
   LResult: TStringArray;
 begin
+  LResult := nil;
   try
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));

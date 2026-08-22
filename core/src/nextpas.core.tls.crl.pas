@@ -620,6 +620,7 @@ var
   URLList: nextpas.core.text.base.TStringArray;
 begin
   SetLength(Result, 0);
+  URLList := nil;
   try
     // 查找 CRL Distribution Points 扩展
     for I := 0 to High(ACert.Extensions) do

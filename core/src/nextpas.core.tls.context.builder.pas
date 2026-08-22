@@ -2214,6 +2214,7 @@ var
   LProtocolStr, LVerifyStr, LOptionsStr: string;
   LDecodedBytes: TBytes;
 begin
+  LLines := nil;
   try
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');

@@ -175,6 +175,7 @@ function StringToBytes(const AStr: string): TBytes;
 var
   LLen: Integer;
 begin
+  Result := nil;
   LLen := Length(AStr);
   SetLength(Result, LLen);
   if LLen > 0 then

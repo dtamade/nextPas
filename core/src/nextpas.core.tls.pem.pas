@@ -258,6 +258,7 @@ var
   HeaderEnded: Boolean;
 begin
   Result := '';
+  AHeaders := nil;
 
   // 找到内容开始位置 (紧跟在 BEGIN 标记之后)
   ContentStart := Pos(AStartMarker, Copy(FText, APos, Length(FText)));
