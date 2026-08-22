@@ -258,6 +258,7 @@ function StringToBytes(const AValue: string): TBytes;
 var
   LLen: SizeInt;
 begin
+  Result := nil;
   LLen := Length(AValue);
   SetLength(Result, LLen);
   if LLen > 0 then
@@ -539,17 +540,23 @@ begin
       Exit(True);
 end;
 
+function Sha1DigestToBytes(const ADigest: TSHA1Digest): TBytes;
+var
+  I: SizeInt;
+begin
+  Result := nil;
+  SetLength(Result, Length(ADigest));
+  for I := 0 to High(ADigest) do
+    Result[I] := ADigest[I];
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
-  LDigest: TSHA1Digest;
-  LBytes: TBytes;
 begin
   LConcat := AKey + WS_GUID;
-  LDigest := SHA1Of(LConcat[1], SizeUInt(Length(LConcat)));
-  SetLength(LBytes, SHA1_DIGEST_SIZE);
-  Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
-  Result := Base64Encode(LBytes);
+  Result := Base64Encode(Sha1DigestToBytes(
+    SHA1Of(LConcat[1], SizeUInt(Length(LConcat)))));
 end;
 
 procedure ValidateHandshakeKey(const AKey: string);
@@ -1255,6 +1262,10 @@ begin
 
       wsOpContinuation:
         raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected continuation frame');
+    else
+      { RFC 6455 §5.1: unknown opcode MUST fail the connection. ReadFrame
+        already rejects reserved opcodes; this guards future call sites. }
+      raise EHttpError.Create(hekProtocol, 'WebSocket: unsupported opcode');
     end;
   end;
 end;
@@ -1541,16 +1552,10 @@ end;
 function ValidateAcceptKey(const AKey, AAccept: string): Boolean;
 var
   LConcat: string;
-  LDigest: TSHA1Digest;
-  LBytes: TBytes;
-  LExpected: string;
 begin
   LConcat := AKey + WS_GUID;
-  LDigest := SHA1Of(LConcat[1], SizeUInt(Length(LConcat)));
-  SetLength(LBytes, SHA1_DIGEST_SIZE);
-  Move(LDigest[0], LBytes[0], SHA1_DIGEST_SIZE);
-  LExpected := Base64Encode(LBytes);
-  Result := AAccept = LExpected;
+  Result := AAccept = Base64Encode(Sha1DigestToBytes(
+    SHA1Of(LConcat[1], SizeUInt(Length(LConcat)))));
 end;
 
 procedure ReadHttpResponse(const AReader: IReader;
@@ -1689,7 +1694,7 @@ function ConnectWebSocket(const AClient: IHttpClient;
   const AOptions: TWebSocketOptions): IWebSocket;
 var
   LParsedUrl: TUrl;
-  LScheme, LHost, LPath, LKey, LAccept: string;
+  LScheme, LHost, LPath, LKey: string;
   LPort: UInt16;
   LConn, LTlsConn, LActive: ITcpStream;
   LReader: IReader;
