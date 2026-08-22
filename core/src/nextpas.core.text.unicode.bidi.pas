@@ -617,6 +617,8 @@ begin
                     C := bcL;
                     Break;
                   end;
+              else
+                ; { 中性与弱类型：按 UCD BD16 继续向前扫描 }
               end;
             end;
             if C <> Dir then

@@ -112,6 +112,7 @@ type
 
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string;
 begin
+  Result := ''; { 防御非法强转 }
   case AKind of
     idnaOk: Result := '';
     idnaEmptyDomain: Result := 'empty domain';
@@ -133,8 +134,6 @@ begin
     idnaContextJ: Result := 'ContextJ violation';
     idnaCheckBidi: Result := 'CheckBidi violation';
     idnaDisallowedSTD3: Result := 'STD3 disallowed ASCII code point';
-  else
-    Result := 'unknown IDNA error';
   end;
 end;
 

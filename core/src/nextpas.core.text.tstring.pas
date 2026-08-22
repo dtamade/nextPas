@@ -65,8 +65,12 @@ type
   end;
 
 { 编译期布局断言 — 防止跨平台 SizeOf 变化 }
-{$ASSERT SizeOf(TString) = 24}
-{$ASSERT SizeOf(TStringHeader) = 8}
+{$IF SizeOf(TString) <> 24}
+  {$ERROR TString layout drift: expected SizeOf(TString)=24}
+{$IFEND}
+{$IF SizeOf(TStringHeader) <> 8}
+  {$ERROR TStringHeader layout drift: expected SizeOf(TStringHeader)=8}
+{$IFEND}
 
 { 顶层操作 — 编译器 emit / RAII 使用 }
 procedure StringInit(var S: TString);
