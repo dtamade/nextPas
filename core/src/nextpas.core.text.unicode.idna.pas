@@ -5,7 +5,7 @@ unit nextpas.core.text.unicode.idna;
  *
  * Processing (§4): Map(full string) → NFC → Break('.') → Convert/Validate.
  * Validity Criteria (§4.1): NFC · CheckHyphens · no leading combining mark ·
- * per-codepoint status ∈ {valid, deviation} · ContextJ (RFC 5892 App A) ·
+ * per-codepoint status ∈ valid/deviation · ContextJ (RFC 5892 App A) ·
  * CheckBidi (RFC 5893 §2, when the domain is a Bidi domain name).
  *
  * Profile flags (fixed): UseSTD3ASCIIRules=True (enforced in validity per
@@ -303,7 +303,7 @@ begin
     Exit(True);
   if ACps[AIdx] = UNICODE_ZWJ then
     Exit(False);
-  { ZWNJ: (Joining_Type:{L,D})(T)* ZWNJ (T)*(Joining_Type:{R,D}) }
+  (* ZWNJ: (Joining_Type:{L,D})(T)* ZWNJ (T)*(Joining_Type:{R,D}) *)
   J := AIdx - 1;
   while (J >= 0) and (GetJoiningType(ACps[J]) = jtTransparent) do
     Dec(J);

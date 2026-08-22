@@ -12,7 +12,7 @@
   Usage:
     Fuzz('parser survives noise', procedure(const Data: TBytes)
     begin
-      ParseSomething(Data);  { any EAssertionFailed is minimized+reported }
+      ParseSomething(Data);  (any EAssertionFailed is minimized+reported)
     end, [Seed1, Seed2], 10000); }
 
 unit nextpas.core.test.fuzz;

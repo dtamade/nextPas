@@ -87,16 +87,16 @@ type
 function ClassifyGraphError(AStatus: Integer; const ACode,
   AMessage: string): TGraphErrorKind;
 
-{ 列收件箱消息：GET {base}/v1.0/me/messages?$top=N&$orderby=receivedDateTime
+(* 列收件箱消息：GET {base}/v1.0/me/messages?$top=N&$orderby=receivedDateTime
   %20desc&$select=id,subject,receivedDateTime,hasAttachments,from。
   ATop 必须 >0；ABaseUrl 尾 '/' 容忍。非 2xx 走错误信封分类；
-  JSON 缺 value 数组或条目缺 id → Unexpected/graph_parse_error。 }
+  JSON 缺 value 数组或条目缺 id → Unexpected/graph_parse_error。 *)
 function GraphListMessages(const AClient: IHttpClient; const ABaseUrl,
   AAccessToken: string; ATop: Integer): TGraphListResult;
 
-{ 取单封详情：GET {base}/v1.0/me/messages/{id}?$select=id,subject,
+(* 取单封详情：GET {base}/v1.0/me/messages/{id}?$select=id,subject,
   receivedDateTime,body,bodyPreview,hasAttachments,from,toRecipients
-  （id 经 UrlEncode）。结果语义同上。 }
+  （id 经 UrlEncode）。结果语义同上。 *)
 function GraphGetMessage(const AClient: IHttpClient; const ABaseUrl,
   AAccessToken, AMessageId: string): TGraphMessageResult;
 
@@ -208,7 +208,7 @@ begin
     end
     else if LE.IsStr and (LE.AsStr.ToString <> '') then
     begin
-      { OAuth 风格扁平信封：{"error":"invalid_grant","error_description":...} }
+      (* OAuth 风格扁平信封：{"error":"invalid_grant","error_description":...} *)
       ACode := LE.AsStr.ToString;
       LV := LDoc.Root.Get('error_description');
       if LV.IsStr and (LV.AsStr.ToString <> '') then

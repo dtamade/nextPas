@@ -37,7 +37,7 @@ unit nextpas.core.http.middleware.session;
  *
  *       Usage:
  *         LOpts := TSessionOptions.Default;
- *         LOpts.Store := NewMemorySessionStore(30 * 60 * 1000); { TTL ms }
+ *         LOpts.Store := NewMemorySessionStore(30 * 60 * 1000); (TTL ms)
  *         LOpts.CookieName := 'sid';
  *         router.Use(SessionMiddleware(LOpts));
  *
@@ -80,8 +80,8 @@ type
     constructor Create(const ATokenHash: string = '');
     function Get(const AKey: string): string;
     procedure Put(const AKey, AValue: string);
-    { Persisted wire format '{k=v\n...}'. Keys and values must not contain
-      newline or '=' — the documented constraint of this format. }
+    (* Persisted wire format '{k=v\n...}'. Keys and values must not contain
+      newline or '=' — the documented constraint of this format. *)
     function Serialize: string;
     class function Deserialize(const AData, ATokenHash: string): TSessionData;
       static;

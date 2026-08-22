@@ -270,11 +270,11 @@ type
     function LookupSinglePosXAdvance(AGlyphId: UInt16): Int16;
     {** 是否包含 GPOS MarkToBase 数据 }
     function HasMarkToBase: Boolean;
-    {** 查找 MarkToBase 锚点。不匹配返回 {0,0}。 }
+    {** 查找 MarkToBase 锚点。不匹配返回 (0,0)。 }
     function LookupMarkToBase(AMarkGlyph, ABaseGlyph: UInt16): TFontAnchor;
     {** 是否包含 GPOS MarkToMark 数据 }
     function HasMarkToMark: Boolean;
-    {** 查找 MarkToMark 锚点。不匹配返回 {0,0}。 }
+    {** 查找 MarkToMark 锚点。不匹配返回 (0,0)。 }
     function LookupMarkToMark(AMarkGlyph, ABaseMarkGlyph: UInt16): TFontAnchor;
     {** 是否包含 GPOS CursivePos 数据 }
     function HasCursivePos: Boolean;

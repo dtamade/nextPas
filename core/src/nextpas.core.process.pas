@@ -577,7 +577,7 @@ function StringToBytes(const AStr: string): TBytes;
 var
   LLen: Integer;
 begin
-  { SizeOf(Char) is 1 in {$H+} mode (AnsiString), but 2 in Delphi Unicode mode.
+  { SizeOf(Char) is 1 in $H+ mode (AnsiString), but 2 in Delphi Unicode mode.
     This defensive multiplication ensures correctness if the compiler mode changes. }
   LLen := Length(AStr) * SizeOf(Char);
   Result := nil;
