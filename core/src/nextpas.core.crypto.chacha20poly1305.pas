@@ -41,6 +41,10 @@ function TryChaCha20Poly1305DecryptCombined(
   out APlaintext: TBytes
 ): Boolean;
 
+{** @desc RFC 8439 §2.3 块函数：key 32B + nonce 12B + counter -> 64B 密钥流块
+ *       （QUIC ChaCha20 头保护掩码等仅取块流的消费方使用） *}
+function ChaCha20Block(const AKey, ANonce: TBytes; ACounter: UInt32): TBytes;
+
 implementation
 
 uses nextpas.core.crypto.constant_time;

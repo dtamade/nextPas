@@ -1,9 +1,11 @@
 program test_quic_tls;
 
 { QUIC-TLS 适配层（RFC 9001 §5）单元测试：
-  附录 A.2 固定向量逐字节比对（initial secrets / 双方向 key-iv-hp）
-  + HP mask 双 oracle 交叉核对（python cryptography 与 OpenSSL CLI
-  独立计算一致：mask(hp,sample)=f075deae…、mask(hp,0^16)=d5249fc6…）。
+  附录 A.1 固定向量逐字节比对（initial secrets / 双方向 key-iv-hp）
+  + HP mask oracle 对拍（python cryptography AES-ECB 独立计算：
+  mask(client_hp,sample000102..)=64017422…、mask(client_hp,0^16)=3c84e0ab…）。
+  常量基线 = RFC v1 盐 38762cf7f55934b34d179ae6a4c80cadccbb7f0a
+  （一手 RFC 原文定案；python cryptography 独立重算全链一致）。
   仅依赖 nextPas/core（无 system 垫片）。 }
 
 {$I nextpas.core.settings.inc}
@@ -20,16 +22,16 @@ uses
 const
   cHexDigits: array[0..15] of Char = '0123456789abcdef';
 
-  { RFC 9001 A.2：DCID = 8394c8f03e515708 }
+  { RFC 9001 A.1：DCID = 8394c8f03e515708（v1 盐派生） }
   cDcidHex = '8394c8f03e515708';
-  cClientSecretHex = 'c66ca1135e6bac2a9b747cd5d298318b5b8cbb585e7c839ffa5e9c734ac18e9e';
-  cServerSecretHex = 'a517049a0ae777c6071751a320f427d47aca55f856618786ca9eebddde05a562';
-  cClientKeyHex = '0c93ed1de834789f80d8ee32bdd011fb';
-  cClientIvHex = '1829c4a9b9256610bb62ec60';
-  cClientHpHex = 'cb2a4b6fe006bc6e649244f5cea4ecf3';
-  cServerKeyHex = '8b569d5cffbe121301ff332b70e73bd7';
-  cServerIvHex = '5e11d756c2ad65912b44a471';
-  cServerHpHex = '176d365a889837d4731101d386284323';
+  cClientSecretHex = 'c00cf151ca5be075ed0ebfb5c80323c42d6b7db67881289af4008f1f6c357aea';
+  cServerSecretHex = '3c199828fd139efd216c155ad844cc81fb82fa8d7446fa7d78be803acdda951b';
+  cClientKeyHex = '1f369613dd76d5467730efcbe3b1a22d';
+  cClientIvHex = 'fa044b2f42a3fd3b46fb255c';
+  cClientHpHex = '9f50449e04a0e810283a1e9933adedd2';
+  cServerKeyHex = 'cf3a5331653c364c88f0f379b6067e37';
+  cServerIvHex = '0ac1493ca1905853b0bba03e';
+  cServerHpHex = 'c206b8d9b9f0f37644430b490eeaa314';
 
 function HexNibbleVal(C: Char): Byte;
 begin
@@ -70,7 +72,7 @@ var
 begin
   LSuite := TTestSuite.Create('quic_tls');
 
-  LSuite.Test('A.2 initial secrets byte-exact', procedure
+  LSuite.Test('A.1 initial secrets byte-exact', procedure
   var
     LSec: TQuicInitialSecrets;
   begin
@@ -81,7 +83,7 @@ begin
     CheckEqual(cServerSecretHex, BytesToHex(LSec.ServerSecret));
   end);
 
-  LSuite.Test('A.2 client key/iv/hp byte-exact', procedure
+  LSuite.Test('A.1 client key/iv/hp byte-exact', procedure
   var
     LKs: TQuicKeySet;
   begin
@@ -94,7 +96,7 @@ begin
     CheckEqual(cClientHpHex, BytesToHex(LKs.Hp));
   end);
 
-  LSuite.Test('A.2 server key/iv/hp byte-exact', procedure
+  LSuite.Test('A.1 server key/iv/hp byte-exact', procedure
   var
     LKs: TQuicKeySet;
   begin
@@ -112,26 +114,26 @@ begin
     SetLength(LSalt, Length(cQuicV1Salt));
     for LI := 0 to High(cQuicV1Salt) do
       LSalt[LI] := cQuicV1Salt[LI];
-    CheckEqual('38762cf7ab8a8aa4beaccae63eaf0dc2d476d3de', BytesToHex(LSalt));
+    CheckEqual('38762cf7f55934b34d179ae6a4c80cadccbb7f0a', BytesToHex(LSalt));
   end);
 
-  { HP mask oracle：双 oracle（python cryptography + OpenSSL CLI）一致值 }
+  { HP mask oracle：python cryptography AES-ECB 独立计算值 }
   LSuite.Test('hp mask AES oracle vectors', procedure
   var
     LMask: TBytes;
   begin
     LMask := QuicHeaderProtectionMaskAES(HexToBytes(cClientHpHex),
       HexToBytes('000102030405060708090a0b0c0d0e0f'));
-    CheckEqual('f075deae102815889b0969722233689e', BytesToHex(LMask));
+    CheckEqual('640174229de556fd4dd99e709f66a13e', BytesToHex(LMask));
 
     LMask := QuicHeaderProtectionMaskAES(HexToBytes(cClientHpHex),
       HexToBytes('00000000000000000000000000000000'));
-    CheckEqual('d5249fc60b63d3d085007588de4ef133', BytesToHex(LMask));
+    CheckEqual('3c84e0abe1ade2049cf3770c8eefd2f4', BytesToHex(LMask));
 
     { server hp key 换钥自洽：同样本不同钥必不同掩码 }
     LMask := QuicHeaderProtectionMaskAES(HexToBytes(cServerHpHex),
       HexToBytes('000102030405060708090a0b0c0d0e0f'));
-    CheckNotEqual('f075deae102815889b0969722233689e', BytesToHex(LMask));
+    CheckNotEqual('640174229de556fd4dd99e709f66a13e', BytesToHex(LMask));
     CheckEqual(16, Length(LMask));
   end);
 

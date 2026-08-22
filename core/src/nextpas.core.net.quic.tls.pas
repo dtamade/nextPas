@@ -11,9 +11,11 @@ unit nextpas.core.net.quic.tls;
  * - header protection mask（AES-128-ECB 单块；ChaCha20 变体随 Q2 套件
  *   协商落地）。
  *
- * 完整性锚点：RFC 9001 附录 A.2 固定向量逐字节比对
- * （DCID=8394c8f03e515708，client_secret=c66ca113…）；HP mask 以独立
- * oracle（OpenSSL AES-128-ECB）交叉核对。
+ * 完整性锚点：RFC 9001 附录 A.1 固定向量逐字节比对
+ * （v1 盐=38762cf7f55934b34d179ae6a4c80cadccbb7f0a，
+ * DCID=8394c8f03e515708，client_secret=c00cf151…）；HP mask 以
+ * python cryptography AES-ECB 独立 oracle 交叉核对。黄金常量只认
+ * 一手文档（Q2 盐值事故教训，见 proxy888 wiki/quic-roadmap.md §3.1）。
  *
  * @note Thread safety: 纯函数（无共享状态）。
  *}
@@ -29,15 +31,31 @@ uses
 const
   { RFC 9001 §5.2 Version 1 initial salt（20 字节） }
   cQuicV1Salt: array[0..19] of Byte = (
-    $38, $76, $2C, $F7, $AB, $8A, $8A, $A4, $BE, $AC,
-    $CA, $E6, $3E, $AF, $0D, $C2, $D4, $76, $D3, $DE);
+    $38, $76, $2C, $F7, $F5, $59, $34, $B3, $4D, $17,
+    $9A, $E6, $A4, $C8, $0C, $AD, $CC, $BB, $7F, $0A);
+
+type
+  { QUIC-TLS 密码套件（RFC 9001 §7 表格子集；initial 相恒 AES-128-GCM） }
+  TQuicCipherSuite = (
+    qcsAes128GcmSha256 = 0,
+    qcsChaCha20Poly1305Sha256 = 1
+  );
+
+const
+  { 套件对应密钥形态长度：AEAD key / HP key / iv（RFC 9001 §7） }
+  cQuicSuiteKeyLen: array[TQuicCipherSuite] of Integer = (16, 32);
+  cQuicSuiteHpLen: array[TQuicCipherSuite] of Integer = (16, 32);
+  cQuicSuiteIvLen: array[TQuicCipherSuite] of Integer = (12, 12);
+  { HP 掩码输出长度：AES-ECB 全块 16B（§5.4.3）/ ChaCha20 密钥流前 5B（§5.4.4）；
+    包头掩码至多消费 mask[0..4]，两套件均够用 }
+  cQuicSuiteHpMaskLen: array[TQuicCipherSuite] of Integer = (16, 5);
 
 type
   { 单方向密钥三元组：包保护 AEAD 密钥 / 12B nonce 基量 / HP 掩码密钥 }
   TQuicKeySet = record
     Key: TBytes;   { AEAD key（initial 相恒 AES-128：16B） }
     Iv: TBytes;    { nonce 基量（12B） }
-    Hp: TBytes;    { header protection key（16B） }
+    Hp: TBytes;    { header protection key（AES 相 16B / ChaCha20 相 32B） }
   end;
 
   { DCID 派生的双方向 initial secret }
@@ -58,6 +76,22 @@ function DeriveQuicInitialSecrets(const ADestCid: TBytes): TQuicInitialSecrets;
  *       握手/应用相套件协商后走同一函数（key 长度随套件）。
  *}
 function DeriveQuicKeySet(const ASecret: TBytes): TQuicKeySet;
+
+{**
+ * @desc 按套件的 key/hp 长度派生三元组（ChaCha20 相 key/hp 各 32B，
+ *       iv 仍 12B）。ASecret 长度必须 32B，否则返回空三元组。
+ *}
+function DeriveQuicKeySetForSuite(const ASecret: TBytes;
+  ASuite: TQuicCipherSuite): TQuicKeySet;
+
+{**
+ * @desc 套件分派的 HP 掩码：AES 相 = AES-ECB 单块（16B，消费方取前
+ *       5 字节）；ChaCha20 相 = RFC 9001 §5.4.4——counter =
+ *       sample[0..3] 小端、nonce = sample[4..15]、掩码取密钥流前
+ *       5 字节。密钥长度不符套件或样本非 16B 返回 nil。
+ *}
+function QuicHeaderProtectionMaskForSuite(const AHpKey, ASample: TBytes;
+  ASuite: TQuicCipherSuite): TBytes;
 
 {**
  * @desc RFC 9001 §5.4.2：mask = AES-ECB(hp, sample)。sample 为包头内
@@ -90,7 +124,9 @@ function QuicHeaderProtectionMaskAESPrepared(
 implementation
 
 uses
+  nextpas.core.bytes,
   nextpas.core.crypto.hkdf,
+  nextpas.core.crypto.chacha20poly1305,
   nextpas.core.tls.keyschedule.labels;
 
 function BytesOfConst(const AConst: array of Byte): TBytes;
@@ -119,6 +155,50 @@ begin
   Result.Key := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic key', nil, 16);
   Result.Iv := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic iv', nil, 12);
   Result.Hp := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic hp', nil, 16);
+end;
+
+function DeriveQuicKeySetForSuite(const ASecret: TBytes;
+  ASuite: TQuicCipherSuite): TQuicKeySet;
+begin
+  Result := Default(TQuicKeySet);
+  if Length(ASecret) <> 32 then
+    Exit;
+  if ASuite = qcsChaCha20Poly1305Sha256 then
+  begin
+    Result.Key := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic key', nil, 32);
+    Result.Iv := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic iv', nil, 12);
+    Result.Hp := TLS13_HKDF_Expand_Label_SHA256(ASecret, 'quic hp', nil, 32);
+  end
+  else
+    Result := DeriveQuicKeySet(ASecret);
+end;
+
+function QuicHeaderProtectionMaskForSuite(const AHpKey, ASample: TBytes;
+  ASuite: TQuicCipherSuite): TBytes;
+var
+  LBlock: TBytes;
+  LCounter: UInt32;
+  LI: Integer;
+  LNonce12: TBytes;
+begin
+  Result := nil;
+  if (Length(ASample) <> 16) or
+     (Length(AHpKey) <> cQuicSuiteHpLen[ASuite]) then
+    Exit;
+  if ASuite = qcsChaCha20Poly1305Sha256 then
+  begin
+    { RFC 9001 §5.4.4：counter = LE(sample[0..3])，nonce = sample[4..15]，
+      mask = 密钥流前 5 字节（A.5 向量 aefefe7d03 实证） }
+    LCounter := UInt32(ASample[0]) or (UInt32(ASample[1]) shl 8) or
+      (UInt32(ASample[2]) shl 16) or (UInt32(ASample[3]) shl 24);
+    SetLength(LNonce12, 12);
+    for LI := 0 to 11 do
+      LNonce12[LI] := ASample[LI + 4];
+    LBlock := ChaCha20Block(AHpKey, LNonce12, LCounter);
+    Result := SpanCopySlice(TByteSpan.FromBytes(LBlock), 0, 5);
+  end
+  else
+    Result := QuicHeaderProtectionMaskAES(AHpKey, ASample);
 end;
 
 function QuicHeaderProtectionMaskAES(const AHpKey, ASample: TBytes): TBytes;
