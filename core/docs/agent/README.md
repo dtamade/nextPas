@@ -102,6 +102,7 @@ if LProvider = nil then
 | [`API.md`](API.md) | **公开 API 契约权威**：全部类型/接口签名与语义 |
 | [`WIRE-MAPPINGS.md`](WIRE-MAPPINGS.md) | 各厂商线级协议映射真相源（含怪癖清单） |
 | [`DESIGN.md`](DESIGN.md) | 对标分析与决策记录（为何这样设计） |
+| [`SELECTION.md`](SELECTION.md) | **选型分析**：17 个选型点的候选×先例×维度×翻案条件 |
 | [`CONSUMERS.md`](CONSUMERS.md) | **首发客户剧本**：token888 / code888 消费面、迁移映射、收益表 |
 | [`ERRORS.md`](ERRORS.md) | 错误流转矩阵、重试判定表、取消语义全表 |
 | [`LIFECYCLE.md`](LIFECYCLE.md) | 对象状态机、流式时序、并行工具执行、资源所有权 |

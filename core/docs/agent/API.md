@@ -327,6 +327,7 @@ TProviderOptions = record          { 公共段，两厂商选项 record 内嵌 }
   ConnectTimeoutMs: Int64;         { 默认 10_000 }
   TotalTimeoutMs: Int64;           { 默认 300_000（LLM 长尾合理值）}
   Transport: IAgentTransport;      { 注入点：测试/装饰器；nil → 生产 http transport }
+  Logger: ILogger;                 { log.intf 接缝（SELECTION C15）；nil → NullLogger 零开销 }
   ExtraHeaders: TWireHeaderArray;
 end;
 
@@ -434,6 +435,7 @@ TAgentLoopOptions = record
   PreToolCall: TLoopHook;          { 三形态 SetPreToolCall 重载注入 }
   PostToolResult: TLoopHook;       { 三形态 SetPostToolResult 重载注入 }
   Clock: IAgentClock;              { 注入；默认真实时钟 }
+  Logger: ILogger;                 { 同 C15：nil → NullLogger }
   Cancel: IAsyncCancellationToken; { 可选运行令牌 }
 end;
 

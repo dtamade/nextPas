@@ -79,12 +79,14 @@ Run() → roRunning:
   Infer 抛不可恢复错误 → Failed（LastError 非 nil）
 ```
 
-## 5. 并行工具执行设施（补定决策 D14）
+## 5. 并行工具执行设施（决策 D14，经 SELECTION C9 修订）
 
-- **决定**：loop 的并行工具批次经底座 **`nextpas.core.async` 任务设施**
-  （taskgroup 语义）执行：每工具一个任务，轮线程提交后等待全部完成；
-  取消令牌为父令牌的子令牌（单工具失败不取消兄弟任务——错误各自合成 result 回喂）。
-- **理由**：不自造线程池（底座已有）；子令牌树天然表达"批内隔离"。
+- **决定**：并行工具批 = L1 `IThreadPool.SubmitBatch` 单锁批量提交 + 原子完成
+  计数 + 轮线程 `WaitAllTimeout` 汇合；池实例由 loop 构造注入（默认共享进程池）。
+- **为何不是 async.taskgroup**：已核实其工厂绑定 `TAsyncLoop`，面向事件循环
+  runtime；同步阻塞的工具批次用它需凭空造 Loop，属设施错配。
+- **失败隔离**：每工具持有父令牌的子令牌（async.cancellation.CreateChildToken），
+  单工具失败/超时不取消兄弟任务，各自合成 result 回喂。
 - **边界**：并行度 = 批大小，不做全局并发上限（v1 明确不支持，inbox 记录）；
   工具实现内部再开线程与本模块无关。
 - loop 本身仍单线程编排（事件回调在轮线程触发，消费者无需加锁）。
