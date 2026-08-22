@@ -33,9 +33,11 @@
 
 铁律：
 
-1. `base`/`errors`/`intf` 不依赖本模块任何其他单元；`intf` 只依赖 `base`+`errors`。
-2. 协议域（base/fold）**零 IO**：不 uses http/net/fs，纯数据+纯函数，可独立单测。
-3. provider 域是唯一知道线级协议细节的地方；loop/session/tools 域只消费
+1. `base`/`errors`/`intf` 不依赖本模块任何其他实现单元（errors 只依赖 base）；
+   错误码枚举属纯词表，物理落位在 base。
+2. 协议域（base/fold/sse）**零 IO**：不 uses http/net/fs，纯数据+纯函数，可独立单测。
+3. provider 域是唯一知道线级协议细节的地方，且**编解码器是公开表面**
+   （D13：网关型客户直接复用）；loop/session/tools 域只消费
    `IAgentProvider` 词表，永远看不到 wire 类型。
 4. 只向下依赖 L0-L2 底座；禁止使用 FPC RTL 应用类型（TStream/SysUtils 函数等），
    遵循 core 双编译器纪律。
@@ -45,8 +47,8 @@
 | 单元 | 层 | 职责 | 允许依赖 |
 |------|---|------|---------|
 | `nextpas.core.agent` | 门面 | 纯 re-export 公共词表与入口函数 | 全部子单元 |
-| `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec、枚举、sentinel 常量、TTriState、TJsonText | base, errors |
-| `nextpas.core.agent.errors.pas` | 错误 | TAgentErrorCode、EAgentError/EAgentCancelled、HTTP status→错误码分类器 | base |
+| `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode、枚举、sentinel 常量、TTriState、TJsonText（纯词表零 IO，只依赖底座）| core.base |
+| `nextpas.core.agent.errors.pas` | 错误 | EAgentError/EAgentCancelled 异常类、HTTP status→错误码分类器（枚举在 base）| agent.base, core.base |
 | `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
 | `nextpas.core.agent.fold.pas` | 协议 | TAssistantBuild 增量累积器 + FoldDelta/FoldDeltas 纯折叠（唯一实现，禁止重写） | base, errors |
 | `nextpas.core.agent.sse.pas` | 协议 | **feed 式增量 SSE 解析器**（Feed(buf)→events；内部单元，http.sse 晋升候选） | base, bytes |
@@ -54,8 +56,8 @@
 | `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上） | intf, base |
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
 | `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获 | base, errors, json |
-| `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容协议适配器 | common, transport, intf |
-| `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 协议适配器 | common, transport, intf |
+| `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）| common, transport, intf |
+| `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；同上公开编解码器 | common, transport, intf |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold |
 | `nextpas.core.agent.tools.pas` | 工具 | 参数校验（务实级）、结果截断工具、executor 包装（超时/取消） | base, intf, json, text |
 | `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转；策略全部可注入 | intf, fold, tools, errors |

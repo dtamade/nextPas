@@ -84,6 +84,16 @@ LProvider := NewFakeProvider(FAKE_SCRIPT_HELLO);  { 脚本化增量回放 }
 // 或：真实 provider + scripted transport + fake clock，全链路零睡眠零网络
 ```
 
+### 环境变量装配（新项目五分钟接入）
+
+```pascal
+LProvider := NewOpenAIProviderFromEnv;   { NEXTPAS_AGENT_OPENAI_API_KEY/_MODEL/_BASE_URL }
+if LProvider = nil then
+  ;  { 必填 env 缺失返回 nil——绝不静默回退（CONSUMERS.md §3）}
+```
+
+完整接入检查单见 [`CONSUMERS.md`](CONSUMERS.md) §4。
+
 ## 文档索引
 
 | 文档 | 角色 |
@@ -92,6 +102,7 @@ LProvider := NewFakeProvider(FAKE_SCRIPT_HELLO);  { 脚本化增量回放 }
 | [`API.md`](API.md) | **公开 API 契约权威**：全部类型/接口签名与语义 |
 | [`WIRE-MAPPINGS.md`](WIRE-MAPPINGS.md) | 各厂商线级协议映射真相源（含怪癖清单） |
 | [`DESIGN.md`](DESIGN.md) | 对标分析与决策记录（为何这样设计） |
+| [`CONSUMERS.md`](CONSUMERS.md) | **首发客户剧本**：token888 / code888 消费面、迁移映射、收益表 |
 | [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划 |
 | [`ROADMAP.md`](ROADMAP.md) | 实施波次与出口证据 |
 

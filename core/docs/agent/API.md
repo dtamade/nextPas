@@ -90,6 +90,28 @@ TMessage = record
 end;
 TMessageArray = array of TMessage;
 
+{ ---- 流增量 ---- }
+
+TAgentErrorInfo = record          { sdkError 携带的中途错误信息 }
+  Code: TAgentErrorCode;          { 枚举物理落位在 base（词表同源），见 §2 }
+  Message: string;
+  Retryable: Boolean;
+  RetryAfterMs: Int64;            { CUsageUnknown=未提供 }
+end;
+
+TStreamDelta = record
+  Kind: TStreamDeltaKind;
+  TextDelta: string;              { sdkTextDelta / sdkThinkingDelta 载荷 }
+  ToolIndex: Integer;             { 并行工具槽位；非工具事件为 -1 }
+  ToolCallId: string;             { sdkToolCallStart 携带厂商调用 id }
+  ToolName: string;               { sdkToolCallStart 携带 }
+  ArgumentsDelta: string;         { sdkToolCallDelta 的参数 JSON 片段 }
+  FinishReason: TFinishReason;    { sdkFinish 携带 }
+  Usage: TTokenUsage;             { sdkUsage 携带 }
+  Error: TAgentErrorInfo;         { sdkError 携带 }
+end;
+TStreamDeltaArray = array of TStreamDelta;
+
 function MessageText(const AMsg: TMessage): string;  { 拼 pkText 便利函数 }
 
 { ---- 补全请求 ---- }
@@ -158,6 +180,8 @@ TAgentErrorCode = (
   aecToolFailed,         { loop 层：工具执行抛异常 }
   aecBudgetExhausted     { loop 层：预算达限（正常收尾态，见 ARCHITECTURE §5）}
 );
+{ 落位说明：TAgentErrorCode 是纯词表，物理定义在 nextpas.core.agent.base；
+  本单元只拥有异常类与分类函数，依赖 base。 }
 
 EAgentError = class(Exception)
 public
@@ -283,6 +307,12 @@ function NewAnthropicProvider(const AOpts: TAnthropicOptions): IAgentProvider;
 function NewFakeProvider(const AScriptJson: TJsonText): IAgentProvider;
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock): IAgentProvider;
+
+{ 环境装配（契约见 CONSUMERS.md §3）：必填 env 缺失返回 nil，绝不静默回退。
+  NEXTPAS_AGENT_OPENAI_API_KEY / _MODEL / _BASE_URL
+  NEXTPAS_AGENT_ANTHROPIC_API_KEY / _MODEL / _BASE_URL }
+function NewOpenAIProviderFromEnv: IAgentProvider;
+function NewAnthropicProviderFromEnv: IAgentProvider;
 ```
 
 无全局注册表、无可变单例（决策 D4）：实例由消费方持有，库形态多 agent 宿主安全。
@@ -449,7 +479,55 @@ function NewEchoProvider: IAgentProvider;   { 单 delta 回显 user 输入的极
 CI 纪律：仓库内任何 test/example/benchmark 禁止触公网 LLM API；
 需要"接近真实"时用 scripted transport + 快照 wire 体（TESTING.md）。
 
-## 8. 版本与稳定性
+## 8. 纯编解码器（决策 D13：公开表面，客户复用）
+
+> 动机见 CONSUMERS.md：网关型客户（token888）不消费"客户端调用"，
+> 消费的是协议翻译本身。编解码器与 provider 工厂共用同一实现——
+> 单一事实源，公开即免费。编码器为纯函数；流解码器为有状态对象
+> （每角色一实例，引用计数管理，替代裸指针状态配对）。
+
+```pascal
+{ ---- OpenAI Chat Completions 族（nextpas.core.agent.provider.openai）---- }
+
+function EncodeOpenAIRequest(const AReq: TCompletionRequest;
+  const ATools: TToolSpecArray; AStream: Boolean): TJsonText;
+
+procedure DecodeOpenAIResponse(const ABody: TJsonText;
+  out AMsg: TMessage);                       { 违反协议抛 aecProtocol }
+
+function NewOpenAIWireDecoder: IAgentWireDecoder;
+
+{ ---- Anthropic Messages 族（nextpas.core.agent.provider.anthropic）---- }
+
+function EncodeAnthropicRequest(const AReq: TCompletionRequest;
+  const ATools: TToolSpecArray; AStream: Boolean): TJsonText;
+
+procedure DecodeAnthropicResponse(const ABody: TJsonText;
+  out AMsg: TMessage);
+
+function NewAnthropicWireDecoder: IAgentWireDecoder;
+```
+
+```pascal
+{ 流帧解码器（intf 定义）：把厂商 SSE 帧归约为词表增量。
+  provider 工厂内部与 Stream() 路径共用；Finalize 抹平 usage/finish 到达顺序 }
+IAgentWireDecoder = interface
+  procedure DecodeEvent(const AEvent: TWireSSEEvent;
+    out ADeltas: TStreamDeltaArray);   { ping 等 0 增量帧合法 }
+  procedure Finalize(out ADeltas: TStreamDeltaArray);
+end;
+```
+
+规则：
+
+- 编解码器**只认 WIRE-MAPPINGS.md**；怪癖修正落在实现+快照测试，不落调用方。
+- `Decode*Response`/`DecodeEvent` 对未知字段执行 Extra 无损回注；对违反协议的
+  输入一律抛 `EAgentError[aecProtocol]`（带 RawBodySnippet），绝不静默跳过。
+- 解码器实例不跨消息复用、非线程安全（单角色独占）；编码函数无状态可并发。
+- 网关型客户的入站侧解析（server 方向）不属于本模块范围（README 非目标），
+  词表可直接复用。
+
+## 9. 版本与稳定性
 
 - v1 全部公共表面标注 draft；首个 landing 后进入 registry truth-level 演进流程。
 - 语义版本化随 core 模块纪律；破坏性词表变更必须先改本文档并更新 ROADMAP inbox。

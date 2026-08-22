@@ -20,6 +20,7 @@
 | `test_transport_stream` | transport.http + 时序 | scripted chunk 流验证**真增量时序**：喂 chunk N 即产出对应事件（不等到 EOF）；Cancel 中途立即返回 False 且 GetCancelled=True；非流式 RoundTrip 超时/连接失败归因 aecTimeout/aecTransport |
 | `test_provider_openai` | openai 适配器 | 请求编码快照（含 sentinel 省略、Q-O1 改名、tools 编码）；响应解码快照（非流式+流式全事件序）；怪癖 Q-O2..Q-O6 各一条回归 |
 | `test_provider_anthropic` | anthropic 适配器 | 同上对称集；Q-A1 首信封、Q-A2 usage 双源合成、Q-A3 signature 透传、Q-A4 tool_result 分组、MaxTokens unset→aecConfig |
+| `test_codecs` | 公开编解码器（D13） | 快照 wire → Decode → 词表 → Encode 语义等价往返（Extra 保真）；WireDecoder 跨断裂帧与 Finalize 双序（usage 先/后）等价；协议违例输入抛 aecProtocol 带 RawBodySnippet；网关式双角色并行解码互不污染 |
 | `test_retry` | WithRetry + fake clock | 429 按 Retry-After 重试成功；指数退避曲线+抖动边界；MaxAttempts 耗尽抛原始错误；白名单外错误直通不睡；取消打断退避（fake clock 推进+令牌触发）；全程零真实睡眠 |
 | `test_tools` | 校验/截断/包装 | 名称合法性、schema 结构校验失败→error result；2000 行/64KB 截断标记 Truncated；executor 超时包装经 fake clock 生效 |
 | `test_loop` | TAgentLoop 全语义 | 单轮直答；工具单轮/并行批（全 tcParallel 才并行——用记录执行顺序的桩断言串并行）；hook block/stop 三值；预算耗尽走"引导总结"收尾 roBudgetExhausted；防打转阈值触发 roDoomLoop；取消在轮界/工具界生效 roCancelled；OnEvent 事件序快照 |
