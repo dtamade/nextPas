@@ -705,6 +705,7 @@ var
   rc: cint;
 begin
   Result := nil;
+  List := nil;
   try
     CheckGitResult(git_branch_iterator_new(Iterator, FHandle, AType), 'New branch iterator');
     try
