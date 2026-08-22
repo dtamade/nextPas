@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.base,
@@ -15,8 +14,8 @@ uses
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.api.evp;
-
+  nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.backed;
 const
   CERTIFICATE_EXPORT_BIO_NEW_CALL = 1;
   PRIVATE_KEY_EXPORT_BIO_NEW_CALL = 2;
@@ -59,7 +58,7 @@ function BuildCAOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-pem-export-bio-new-nil-result-root.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := True;
   Result.ValidDays := 30;
 end;
@@ -68,7 +67,7 @@ function BuildLeafOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-pem-export-bio-new-nil-result-leaf.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := False;
   Result.ValidDays := 30;
 end;

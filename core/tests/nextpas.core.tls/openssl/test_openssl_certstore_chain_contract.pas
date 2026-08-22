@@ -3,10 +3,11 @@ program test_openssl_certstore_chain_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
-  nextpas.core.tls.cert.utils;
+  nextpas.core.tls.cert.utils,
+  nextpas.core.tls.factory;
 
 procedure AssertTrue(const AName: string; ACondition: Boolean; const ADetail: string = '');
 begin
@@ -44,14 +45,14 @@ var
 begin
   LRootOptions := TCertificateUtils.DefaultGenOptions;
   LRootOptions.CommonName := 'openssl-chain-root.local';
-  LRootOptions.Organization := 'fafafa.ssl';
+  LRootOptions.Organization := 'nextpas.core.tls';
   LRootOptions.IsCA := True;
   AssertTrue('Generate root CA should succeed',
     TCertificateUtils.GenerateSelfSigned(LRootOptions, ARootCertPEM, ARootKeyPEM));
 
   LInterOptions := TCertificateUtils.DefaultGenOptions;
   LInterOptions.CommonName := 'openssl-chain-intermediate.local';
-  LInterOptions.Organization := 'fafafa.ssl';
+  LInterOptions.Organization := 'nextpas.core.tls';
   LInterOptions.IsCA := True;
   AssertTrue('Generate intermediate CA should succeed',
     TCertificateUtils.GenerateSigned(
@@ -64,7 +65,7 @@ begin
 
   LLeafOptions := TCertificateUtils.DefaultGenOptions;
   LLeafOptions.CommonName := 'openssl-chain-leaf.local';
-  LLeafOptions.Organization := 'fafafa.ssl';
+  LLeafOptions.Organization := 'nextpas.core.tls';
   LLeafOptions.IsCA := False;
   AssertTrue('Generate leaf certificate should succeed',
     TCertificateUtils.GenerateSigned(

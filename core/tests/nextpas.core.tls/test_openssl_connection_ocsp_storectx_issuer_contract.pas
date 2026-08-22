@@ -3,10 +3,10 @@ program test_openssl_connection_ocsp_storectx_issuer_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
@@ -17,8 +17,8 @@ uses
   nextpas.core.tls.openssl.api.stack,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.certificate,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 // INTENTIONAL_OCSP_CORE_SURFACE: this OpenSSL-specific contract file
 // intentionally keeps direct core OCSP compatibility-surface coverage
 // as backend proof for storectx-issuer fail-closed behavior. Ordinary
@@ -438,7 +438,7 @@ begin
     PrepareStoreCtxIssuerChain;
     LPeerCert := BuildPeerCertificateInterface(GLeafX509);
 
-    LConn := TOpenSSLConnectionOCSPAccess.Create(LContext, LStream);
+    LConn := TOpenSSLConnectionOCSPAccess.Create(LContext, TStreamWrapper.Create(LStream));
     SetLength(LStubResponse, 1);
     LStubResponse[0] := 1;
     LConn.SetStubOCSPResponse(LStubResponse);

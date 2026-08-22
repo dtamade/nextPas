@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.loader;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 Dynamic Library Loader                                }
+{  nextpas.core.tls - PKCS#11 Dynamic Library Loader                                }
 {                                                                              }
 {  Purpose: Load PKCS#11 modules dynamically and manage function pointers     }
 {                                                                              }

@@ -13,7 +13,7 @@
  * - 安全性：定期重填，避免可预测性
  * - 可配置：支持启用/禁用优化
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-21
  * @phase Phase B - Performance Optimization

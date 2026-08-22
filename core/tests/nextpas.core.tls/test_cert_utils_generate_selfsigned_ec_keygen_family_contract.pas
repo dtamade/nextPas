@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.base,
@@ -18,8 +17,8 @@ uses
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.ec,
-  nextpas.core.tls.openssl.api.obj;
-
+  nextpas.core.tls.openssl.api.obj,
+  nextpas.core.tls.openssl.backed;
 type
   TInstallFailureWrapper = procedure;
 
@@ -67,7 +66,7 @@ begin
   Result.KeyType := ktECDSA;
   Result.ECCurve := 'prime256v1';
   Result.CommonName := 'selfsigned-ec-keygen-family-contract.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.ValidDays := 30;
 end;
 

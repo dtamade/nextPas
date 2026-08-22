@@ -6,7 +6,7 @@ program test_winssl_connection_edge_cases;
   test_winssl_connection_edge_cases - WinSSL 连接边界情况测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-01-18
 
   描述:

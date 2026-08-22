@@ -1,6 +1,6 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL DES Module                                           }
+{  nextpas.core.tls - OpenSSL DES Module                                           }
 {                                                                              }
 {  Copyright (c) 2024 fafafa                                                  }
 {                                                                              }

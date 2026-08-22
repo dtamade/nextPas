@@ -4,7 +4,6 @@ program test_freepascal_client_ct_sct_surface;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.ocsp,
@@ -23,14 +22,16 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.x509;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.x509,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 const
   TLS_EXTENSION_SIGNED_CERTIFICATE_TIMESTAMP = $0012;
   X509_EXTENSION_OCSP_SIGNED_CERTIFICATE_TIMESTAMP = '1.3.6.1.4.1.11129.2.4.5';
@@ -353,12 +354,12 @@ var
   LCombinedPEM: AnsiString;
   I: Integer;
 begin
-  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')));
-  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_key.pem')));
+  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem')));
+  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_key.pem')));
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
@@ -397,7 +398,7 @@ begin
   LCertificatePEM := BytesToAnsiString(ReadFileBytes(ACertificateFileName));
   if AIncludeCAChain then
   begin
-    LCAPEM := BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem'));
+    LCAPEM := BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem'));
     Result.CertificateBlob := AnsiStringToBytes(LCertificatePEM + LineEnding + LCAPEM);
   end
   else
@@ -1052,7 +1053,7 @@ begin
   AssertTrue(Result <> nil, 'FreePascal client context should be created');
   Result.SetPreferredVersion(sslProtocolTLS13);
   Result.SetVerifyMode(AVerifyMode);
-  Result.LoadCAFile('tests/certificate/test_certs/ca_cert.pem');
+  Result.LoadCAFile('certificate/test_certs/ca_cert.pem');
 end;
 
 function NewClientContext: ISSLContext;
@@ -1078,7 +1079,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'CT surface connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1147,7 +1148,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'TLS SCT surface connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1212,7 +1213,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'TLS SCT validation connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1267,7 +1268,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Leaf-only TLS SCT validation connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1325,7 +1326,7 @@ begin
       nil
     );
     try
-      LConn := LCtx.CreateConnection(LStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
       AssertTrue(LConn <> nil, 'CT issuer-source connection should be created');
       (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1384,7 +1385,7 @@ begin
     LOCSPResponse
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'OCSP-delivered SCT surface connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1429,7 +1430,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required-CT connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1481,7 +1482,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required-CT policy connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1518,7 +1519,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Verify-none required-CT connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1550,7 +1551,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Malformed SCT connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1578,8 +1579,8 @@ var
   LExpectedSCTList: TBytes;
 begin
   LMaterial := LoadStaticServerMaterial(
-    'tests/certificate/test_certs/ct_embedded_sct_leaf_cert.pem',
-    'tests/certificate/test_certs/ct_embedded_sct_leaf_key.pem'
+    'certificate/test_certs/ct_embedded_sct_leaf_cert.pem',
+    'certificate/test_certs/ct_embedded_sct_leaf_key.pem'
   );
   LExpectedSCTList := BuildFixtureEmbeddedSCTList;
 
@@ -1591,7 +1592,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Embedded SCT fallback connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 
@@ -1625,8 +1626,8 @@ var
   LStream: TScriptedCTServerStream;
 begin
   LMaterial := LoadStaticServerMaterial(
-    'tests/certificate/test_certs/ct_embedded_sct_malformed_leaf_cert.pem',
-    'tests/certificate/test_certs/ct_embedded_sct_leaf_key.pem'
+    'certificate/test_certs/ct_embedded_sct_malformed_leaf_cert.pem',
+    'certificate/test_certs/ct_embedded_sct_leaf_key.pem'
   );
 
   LCtx := NewClientContext;
@@ -1637,7 +1638,7 @@ begin
     nil
   );
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Malformed embedded SCT connection should be created');
     (LConn as ISSLClientConnection).SetServerName('ct.example.com');
 

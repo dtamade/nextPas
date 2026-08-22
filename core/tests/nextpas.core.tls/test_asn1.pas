@@ -269,7 +269,7 @@ begin
     Node := Reader.Parse;
     try
       Check('解析 UTCTime', Node.IsUTCTime);
-      ExpectedDate := EncodeDate(2025, 12, 25) + EncodeTime(12, 0, 0, 0);
+      ExpectedDate := EncodeDate(2025, 12, 25) + (12 / 24);  { 12:00:00 = 0.5 天,core.sysutils 无 EncodeTime }
       Check('UTCTime 值正确', Abs(Node.AsDateTime - ExpectedDate) < 1/86400,
             DateTimeToStr(Node.AsDateTime));
     finally
@@ -345,7 +345,7 @@ begin
   FailedTests := 0;
 
   WriteLn('========================================');
-  WriteLn('fafafa.ssl ASN.1 解析器测试');
+  WriteLn('nextpas.core.tls ASN.1 解析器测试');
   WriteLn('========================================');
 
   try

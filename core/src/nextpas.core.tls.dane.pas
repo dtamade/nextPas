@@ -10,7 +10,7 @@
  * - VerifyDNSSEC 返回 False
  * - GetDNSSECStatus 返回 "ldns library not available"
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.1.0
  * @since 2026-01-31
  *}

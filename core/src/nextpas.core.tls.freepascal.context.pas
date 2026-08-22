@@ -874,6 +874,7 @@ begin
         'Private key does not appear to be encrypted, but a password was provided',
         sslErrLoadFailed, AMethodName, 0, sslFreePascal);
   finally
+    LReader.Free;  // TPEMReader 为 class 堆对象，必须显式释放，否则每次解密路径泄漏解析器及其 PEM 块
   end;
 end;
 

@@ -4,18 +4,24 @@ program test_get_proc;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.platform.dl,
   nextpas.core.tls.openssl.api.core;
 
 var
   LProc1, LProc2: Pointer;
+  LHandle: TPlatformLibrary;
 
 begin
   LoadOpenSSLCore();
   WriteLn('Loaded OpenSSL');
   WriteLn;
 
-  WriteLn('Method 1: GetProcAddress');
-  LProc1 := GetProcAddress(GetCryptoLibHandle, 'RAND_bytes');
+  WriteLn('Method 1: TPlatformLibrary.Sym');
+  LHandle := GetCryptoLibHandle;
+  if LHandle.IsValid then
+    LHandle.Sym(PAnsiChar('RAND_bytes'), LProc1)
+  else
+    LProc1 := nil;
   WriteLn('  Result: ', PtrUInt(LProc1));
   WriteLn;
 

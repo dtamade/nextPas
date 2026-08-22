@@ -12,7 +12,7 @@ unit nextpas.core.tls.ocsp;
 
   OCSP 用于在线查询证书吊销状态，比 CRL 更高效。
 
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 

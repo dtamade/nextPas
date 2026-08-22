@@ -15,10 +15,14 @@ program test_real_websites;
 }
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
+  nextpas.core.system.classes,
+  nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
-  fafafa.examples.tcp;
+  nextpas.core.tls.tls,
+  nextpas.core.tls.safety,
+  tls_test_sockets;
 
 type
   TWebsiteTest = record
@@ -51,6 +55,7 @@ procedure TestWebsite(const ATest: TWebsiteTest; const AConnector: TSSLConnector
 var
   Sock: TSocketHandle;
   TLS: TSSLStream;
+  TLSI: IStream;
   LVerifyResult: Integer;
   LVerifyResultString: string;
 begin
@@ -73,7 +78,8 @@ begin
         end;
       end;
 
-      TLS := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
+      TLSI := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
+      TLS := TSSLStream(TLSI);
       GetCertificateVerificationInfo(TLS.Connection, LVerifyResult, LVerifyResultString);
 
       WriteLn('✓ ',
@@ -90,8 +96,8 @@ begin
       end;
     end;
   finally
-    if TLS <> nil then
-      TLS.Free;
+    TLSI := nil;
+    TLS := nil;
     CloseSocket(Sock);
   end;
 end;
@@ -104,7 +110,7 @@ var
   EffectiveTotal: Integer;
 begin
   WriteLn('====================================================');
-  WriteLn('fafafa.ssl - 真实网站连接测试（简版）');
+  WriteLn('nextpas.core.tls - 真实网站连接测试（简版）');
   WriteLn('====================================================');
   WriteLn;
 

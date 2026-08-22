@@ -8,13 +8,15 @@ program test_e2e_scenarios;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.thread.init, // Must be first: threading is used before other units' initialization
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   {$IFDEF UNIX}
   ctypes,
   {$ENDIF}
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  fafafa.ssl,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   test_openssl_base;
@@ -54,9 +56,47 @@ type
 
 function socket(domain, atype, protocol: cint): cint; cdecl; external 'c';
 function connect(sockfd: cint; addr: Pointer; addrlen: cuint): cint; cdecl; external 'c';
+function bind(sockfd: cint; addr: Pointer; addrlen: cuint): cint; cdecl; external 'c';
+function listen(sockfd: cint; backlog: cint): cint; cdecl; external 'c';
+function accept(sockfd: cint; addr: Pointer; addrlen: Pointer): cint; cdecl; external 'c';
 function close(fd: cint): cint; cdecl; external 'c';
 function htons(hostshort: cushort): cushort; cdecl; external 'c';
+function htonl(hostlong: cuint): cuint; cdecl; external 'c';
+function setsockopt(sockfd: cint; level, optname: cint; optval: Pointer; optlen: cuint): cint; cdecl; external 'c';
 function gethostbyname(name: PChar): PHostEnt; cdecl; external 'c';
+
+function CreateListenSocket(APort: Word): TSocket;
+const
+  SOL_SOCKET = 1;
+  SO_REUSEADDR = 2;
+var
+  S: TSocket;
+  Addr: tsockaddr_in;
+  LOpt: cint;
+begin
+  Result := INVALID_SOCKET;
+  S := socket(AF_INET, SOCK_STREAM, 0);
+  if S < 0 then Exit;
+
+  LOpt := 1;
+  setsockopt(S, SOL_SOCKET, SO_REUSEADDR, @LOpt, SizeOf(LOpt));
+
+  FillChar(Addr, SizeOf(Addr), 0);
+  Addr.sin_family := AF_INET;
+  Addr.sin_port := htons(APort);
+  Addr.sin_addr.s_addr := htonl($7F000001); // 127.0.0.1
+  if bind(S, @Addr, SizeOf(Addr)) < 0 then
+  begin
+    close(S);
+    Exit;
+  end;
+  if listen(S, 5) < 0 then
+  begin
+    close(S);
+    Exit;
+  end;
+  Result := S;
+end;
 
 function ConnectSocket(const Host: string; Port: Word): TSocket;
 var
@@ -100,119 +140,211 @@ function ConnectSocket(const Host: string; Port: Word): TSocket; begin Result :=
 procedure CloseSocket(S: TSocket); begin end;
 {$ENDIF}
 
-procedure TestSessionResumption;
+{$IFDEF UNIX}
+type
+  TTLSServerThread = class(TThread)
+  private
+    FListenSock: TSocket;
+    FContext: ISSLContext;
+    FSuccess: Boolean;
+    FError: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AListenSock: TSocket; AContext: ISSLContext);
+    property Success: Boolean read FSuccess;
+    property Error: string read FError;
+  end;
+
+constructor TTLSServerThread.Create(AListenSock: TSocket; AContext: ISSLContext);
+begin
+  inherited Create(True);
+  FListenSock := AListenSock;
+  FContext := AContext;
+  FSuccess := False;
+  FError := '';
+  FreeOnTerminate := False;
+end;
+
+procedure TTLSServerThread.Execute;
 var
-  Ctx: ISSLContext;
+  LClientSock: TSocket;
+  LConn: ISSLConnection;
+begin
+  LClientSock := accept(FListenSock, nil, nil);
+  if LClientSock < 0 then
+  begin
+    FError := 'accept() failed';
+    Exit;
+  end;
+  try
+    LConn := FContext.CreateConnection(THandle(LClientSock));
+    if LConn.Accept then
+      FSuccess := True
+    else
+      FError := 'TLS Accept failed';
+  finally
+    close(LClientSock);
+  end;
+end;
+
+function ConnectLoopback(APort: Word): TSocket;
+var
+  S: TSocket;
+  Addr: tsockaddr_in;
+begin
+  Result := INVALID_SOCKET;
+  S := socket(AF_INET, SOCK_STREAM, 0);
+  if S < 0 then Exit;
+  FillChar(Addr, SizeOf(Addr), 0);
+  Addr.sin_family := AF_INET;
+  Addr.sin_port := htons(APort);
+  Addr.sin_addr.s_addr := htonl($7F000001);
+  if connect(S, @Addr, SizeOf(Addr)) < 0 then
+  begin
+    close(S);
+    Exit;
+  end;
+  Result := S;
+end;
+{$ENDIF}
+
+const
+  RESUMPTION_PORT = 44591;
+
+procedure TestSessionResumption;
+{$IFDEF UNIX}
+var
+  LServerCtx, LClientCtx: ISSLContext;
   Conn1, Conn2: ISSLConnection;
   Resumption1, Resumption2: ISSLSessionResumption;
-  Sock1, Sock2: TSocket;
   Sess: ISSLSession;
-  Buf: array[0..1023] of Byte;
-  ReadBytes: Integer;
-  CAFile: string;
+  Sock1, Sock2: TSocket;
+  LListenSock: TSocket;
+  LServerThread: TTLSServerThread;
+{$ENDIF}
 begin
   WriteLn;
   WriteLn('=== Session Resumption Tests ===');
-
-  CAFile := '';
-  if FileExists('/etc/ssl/certs/ca-certificates.crt') then
-    CAFile := '/etc/ssl/certs/ca-certificates.crt'
-  else if FileExists('/etc/pki/tls/certs/ca-bundle.crt') then
-    CAFile := '/etc/pki/tls/certs/ca-bundle.crt';
-
-  if CAFile = '' then
-  begin
-    Runner.Skip('Session Resumption - Setup', 'No system CA bundle found');
-    Exit;
+  {$IFDEF UNIX}
+  // Loopback OpenSSL server with a session cache: deterministic, offline-safe
+  LServerCtx := GLib.CreateContext(sslCtxServer);
+  LServerCtx.SetProtocolVersions([sslProtocolTLS12]);
+  LServerCtx.SetSessionCacheMode(True);
+  LServerCtx.SetSessionTimeout(300);
+  try
+    LServerCtx.LoadCertificate('certs/server-cert.pem');
+    LServerCtx.LoadPrivateKey('certs/server-key.pem');
+  except
+    on E: Exception do
+    begin
+      Runner.Skip('Session Resumption - Server cert/key', E.Message);
+      Exit;
+    end;
   end;
 
-  Ctx := GLib.CreateContext(sslCtxClient);
-  Ctx.SetSessionCacheMode(True);
-  Ctx.LoadCAFile(CAFile);
+  LClientCtx := GLib.CreateContext(sslCtxClient);
+  LClientCtx.SetProtocolVersions([sslProtocolTLS12]);
+  LClientCtx.SetVerifyMode([]);
 
-  // First connection
-  Sock1 := ConnectSocket('www.cloudflare.com', 443);
-  if Sock1 = INVALID_SOCKET then
+  LListenSock := CreateListenSocket(RESUMPTION_PORT);
+  if LListenSock = INVALID_SOCKET then
   begin
-    Runner.Skip('Session Resumption - Connect 1', 'Socket failed');
+    Runner.Skip('Session Resumption - Listen', 'Failed to bind port ' + IntToStr(RESUMPTION_PORT));
     Exit;
   end;
 
   try
-    Conn1 := Ctx.CreateConnection(Sock1);
-    (Conn1 as ISSLClientConnection).SetServerName('www.cloudflare.com');
-    if Conn1.Connect then
-    begin
-      Runner.Check('Session Resumption - Handshake 1', True);
+    // First handshake: full (no reuse)
+    LServerThread := TTLSServerThread.Create(LListenSock, LServerCtx);
+    LServerThread.Start;
 
-      if not Supports(Conn1, ISSLSessionResumption, Resumption1) then
+    Sock1 := ConnectLoopback(RESUMPTION_PORT);
+    if Sock1 = INVALID_SOCKET then
+    begin
+      LServerThread.WaitFor;
+      LServerThread.Free;
+      Runner.Skip('Session Resumption - Connect 1', 'Loopback connect failed');
+      Exit;
+    end;
+
+    try
+      Conn1 := LClientCtx.CreateConnection(THandle(Sock1));
+      if Conn1.Connect then
       begin
-        Runner.Check('Session Resumption - Owner Surface 1', False,
+        Runner.Check('Session Resumption - Handshake 1', True);
+
+        if not Supports(Conn1, ISSLSessionResumption, Resumption1) then
+        begin
+          Runner.Check('Session Resumption - Owner Surface 1', False,
+            'Connection does not expose ISSLSessionResumption');
+          Exit;
+        end;
+        Runner.Check('Session Resumption - Owner Surface 1', True);
+        Runner.Check('Session Resumption - Full handshake', not Resumption1.IsSessionReused);
+
+        Sess := Resumption1.GetSession;
+        Runner.Check('Session Resumption - Extract Session', Sess <> nil);
+      end
+      else
+      begin
+        Runner.Check('Session Resumption - Handshake 1', False, GLib.GetLastErrorString);
+        Exit;
+      end;
+    finally
+      CloseSocket(Sock1);
+    end;
+
+    LServerThread.WaitFor;
+    Runner.Check('Session Resumption - Server accept 1', LServerThread.Success, LServerThread.Error);
+    LServerThread.Free;
+
+    if Sess = nil then Exit;
+
+    // Second handshake: must reuse the cached session
+    LServerThread := TTLSServerThread.Create(LListenSock, LServerCtx);
+    LServerThread.Start;
+
+    Sock2 := ConnectLoopback(RESUMPTION_PORT);
+    if Sock2 = INVALID_SOCKET then
+    begin
+      LServerThread.WaitFor;
+      LServerThread.Free;
+      Runner.Skip('Session Resumption - Connect 2', 'Loopback connect failed');
+      Exit;
+    end;
+
+    try
+      Conn2 := LClientCtx.CreateConnection(THandle(Sock2));
+      if not Supports(Conn2, ISSLSessionResumption, Resumption2) then
+      begin
+        Runner.Check('Session Resumption - Owner Surface 2', False,
           'Connection does not expose ISSLSessionResumption');
         Exit;
       end;
-      Runner.Check('Session Resumption - Owner Surface 1', True);
-
-      // For TLS 1.3, NewSessionTicket can be delivered post-handshake.
-      // Drive a small request/response so OpenSSL can process post-handshake messages
-      // before we snapshot the session.
-      try
-        Conn1.WriteString('HEAD / HTTP/1.1'#13#10 +
-          'Host: www.cloudflare.com'#13#10 +
-          'Connection: close'#13#10#13#10);
-        ReadBytes := Conn1.Read(Buf[0], SizeOf(Buf));
-        if ReadBytes < 0 then
-          ReadBytes := 0;
-      except
-        ReadBytes := 0;
-      end;
-
-      // Extract session for reuse
-      Sess := Resumption1.GetSession;
-      Runner.Check('Session Resumption - Extract Session', Sess <> nil,
-        Format('Read %d bytes before GetSession', [ReadBytes]));
-    end
-    else
-    begin
-      Runner.Check('Session Resumption - Handshake 1', False, GLib.GetLastErrorString);
-      Exit;
+      Runner.Check('Session Resumption - Owner Surface 2', True);
+      Resumption2.SetSession(Sess);  // Set session before Connect
+      if Conn2.Connect then
+      begin
+        Runner.Check('Session Resumption - Handshake 2', True);
+        Runner.Check('Session Resumption - Reused', Resumption2.IsSessionReused,
+          Format('Was reused: %s', [BoolToStr(Resumption2.IsSessionReused, True)]));
+      end
+      else
+        Runner.Check('Session Resumption - Handshake 2', False, GLib.GetLastErrorString);
+    finally
+      CloseSocket(Sock2);
     end;
+
+    LServerThread.WaitFor;
+    Runner.Check('Session Resumption - Server accept 2', LServerThread.Success, LServerThread.Error);
+    LServerThread.Free;
   finally
-    CloseSocket(Sock1);
+    CloseSocket(LListenSock);
   end;
-
-  // Second connection (reuse session)
-  if Sess = nil then Exit;
-
-  Sock2 := ConnectSocket('www.cloudflare.com', 443);
-  if Sock2 = INVALID_SOCKET then
-  begin
-    Runner.Skip('Session Resumption - Connect 2', 'Socket failed');
-    Exit;
-  end;
-
-  try
-    Conn2 := Ctx.CreateConnection(Sock2);
-    if not Supports(Conn2, ISSLSessionResumption, Resumption2) then
-    begin
-      Runner.Check('Session Resumption - Owner Surface 2', False,
-        'Connection does not expose ISSLSessionResumption');
-      Exit;
-    end;
-    Runner.Check('Session Resumption - Owner Surface 2', True);
-    Resumption2.SetSession(Sess);  // Set session before Connect
-    (Conn2 as ISSLClientConnection).SetServerName('www.cloudflare.com');
-    if Conn2.Connect then
-    begin
-      Runner.Check('Session Resumption - Handshake 2', True);
-      Runner.Check('Session Resumption - Reused', Resumption2.IsSessionReused,
-        Format('Was reused: %s', [BoolToStr(Resumption2.IsSessionReused, True)]));
-    end
-    else
-      Runner.Check('Session Resumption - Handshake 2', False, GLib.GetLastErrorString);
-  finally
-    CloseSocket(Sock2);
-  end;
+  {$ELSE}
+  Runner.Skip('Session Resumption - Setup', 'Loopback resumption is UNIX-only');
+  {$ENDIF}
 end;
 
 procedure TestLargeDataTransfer;
@@ -321,7 +453,8 @@ begin
     end;
 
     Runner.PrintSummary;
-    Halt(Runner.FailCount);
+    // 自然结束而非 Halt:让程序级全局接口变量(GLib 等)正常终结,heaptrc 保持 0 unfreed
+    ExitCode := Runner.FailCount;
   finally
     Runner.Free;
   end;

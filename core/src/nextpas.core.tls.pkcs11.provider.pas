@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.provider;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 Provider Backend (OpenSSL 3.x)                        }
+{  nextpas.core.tls - PKCS#11 Provider Backend (OpenSSL 3.x)                        }
 {                                                                              }
 {  Purpose: Load PKCS#11 keys using OpenSSL 3.x Provider + OSSL_STORE API    }
 {                                                                              }

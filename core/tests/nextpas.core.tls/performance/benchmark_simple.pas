@@ -3,10 +3,12 @@ program benchmark_simple;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.time,
   nextpas.core.tls.factory,
-  nextpas.core.tls.utils,
-  fafafa.ssl;
+  nextpas.core.tls.base,
+  nextpas.core.tls.utils;
 
 const
   ITERATIONS = 10000;
@@ -41,12 +43,12 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('fafafa.ssl 性能基准测试');
+  WriteLn('nextpas.core.tls 性能基准测试');
   WriteLn('========================================');
   WriteLn;
 
   // 检测SSL库
-  Lib := GetLibraryInstance(DetectBestLibrary);
+  Lib := TSSLFactory.GetLibraryInstance(TSSLFactory.DetectBestLibrary);
   if not Lib.Initialize then
   begin
     WriteLn('错误: 无法初始化SSL库');
@@ -65,7 +67,7 @@ begin
   Write('测试 SHA-256...');
   StartTime := Now;
   for I := 1 to ITERATIONS do
-    Hash := SHA256Hash(TEST_DATA);
+    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashSHA256);
   EndTime := Now;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
@@ -77,7 +79,7 @@ begin
   Write('测试 SHA-1...');
   StartTime := Now;
   for I := 1 to ITERATIONS do
-    Hash := SHA1Hash(TEST_DATA);
+    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashSHA1);
   EndTime := Now;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');
@@ -89,7 +91,7 @@ begin
   Write('测试 MD5...');
   StartTime := Now;
   for I := 1 to ITERATIONS do
-    Hash := MD5Hash(TEST_DATA);
+    Hash := TSSLHelper.HashData(BytesOf(TEST_DATA), sslHashMD5);
   EndTime := Now;
   ElapsedMS := DateTimeMillisecondsBetween(EndTime, StartTime);
   WriteLn(' ✓');

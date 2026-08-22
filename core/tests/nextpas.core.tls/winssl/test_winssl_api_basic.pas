@@ -184,7 +184,7 @@ end;
 begin
   WriteLn('');
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL API 基础测试');
+  WriteLn('  nextpas.core.tls - WinSSL API 基础测试');
   WriteLn('==============================================');
   WriteLn('');
   WriteLn('测试环境:');
@@ -211,7 +211,7 @@ end.
 {$ELSE}
 begin
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL API 基础测试');
+  WriteLn('  nextpas.core.tls - WinSSL API 基础测试');
   WriteLn('==============================================');
   WriteLn('[BLOCKED] [platform] WinSSL API 测试仅支持 Windows 运行时');
   WriteLn('[SKIP] [platform] 当前平台非 Windows，跳过 WinSSL API 绑定验证');

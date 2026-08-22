@@ -9,11 +9,10 @@ uses
   nextpas.core.system.sysutils,
   Math,
   nextpas.core.time,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.cert.rotation,
-  nextpas.core.tls.factory;
-
+  nextpas.core.tls.factory,
+  nextpas.core.tls.openssl.backed;
 procedure Fail(const AMessage: string);
 begin
   WriteLn('❌ ', AMessage);
@@ -44,8 +43,8 @@ begin
   LMgr := TCertificateRotationManager.Create(LCtx);
   try
     FillChar(LCfg, SizeOf(LCfg), 0);
-    LCfg.CertificatePath := 'tests/certificate/test_certs/signer_cert.pem';
-    LCfg.PrivateKeyPath := 'tests/certificate/test_certs/signer_key.pem';
+    LCfg.CertificatePath := 'certificate/test_certs/signer_cert.pem';
+    LCfg.PrivateKeyPath := 'certificate/test_certs/signer_key.pem';
     LCfg.CheckIntervalSeconds := 1;
     LCfg.ExpiryWarningDays := 30;
     LCfg.AutoReloadOnChange := False;
@@ -86,8 +85,8 @@ begin
   LMgr := TCertificateRotationManager.Create(LCtx);
   try
     FillChar(LCfg, SizeOf(LCfg), 0);
-    LCfg.CertificatePath := 'tests/certificate/test_certs/nonexistent_cert.pem';
-    LCfg.PrivateKeyPath := 'tests/certificate/test_certs/signer_key.pem';
+    LCfg.CertificatePath := 'certificate/test_certs/nonexistent_cert.pem';
+    LCfg.PrivateKeyPath := 'certificate/test_certs/signer_key.pem';
     LCfg.CheckIntervalSeconds := 1;
     LCfg.ExpiryWarningDays := 30;
 
@@ -105,7 +104,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl certificate rotation expiry tests');
+  WriteLn('nextpas.core.tls certificate rotation expiry tests');
   WriteLn('==============================================');
 
   TestExpiryWithValidCertificate;

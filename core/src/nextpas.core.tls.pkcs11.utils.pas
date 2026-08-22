@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.utils;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 Utility Functions                                     }
+{  nextpas.core.tls - PKCS#11 Utility Functions                                     }
 {                                                                              }
 {  Purpose: Helper functions for PKCS#11 operations                           }
 {                                                                              }

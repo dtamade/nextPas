@@ -3,9 +3,13 @@ program test_https_actual;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
-  nextpas.core.tls.utils;
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  nextpas.core.tls.utils,
+  nextpas.core.tls.factory,
+  nextpas.core.tls.base,
+  nextpas.core.tls.encoding;
 
 procedure Test1_HashData;
 var
@@ -51,11 +55,11 @@ begin
   LData := BytesOf(LOriginal);
 
   // 编码
-  LBase64 := TSSLUtils.BytesToBase64(LData);
+  LBase64 := TEncodingUtils.Base64Encode(LData);
   WriteLn('Base64 Encoded: ', LBase64);
 
   // 解码
-  LDecoded := TSSLUtils.Base64ToBytes(LBase64);
+  LDecoded := TEncodingUtils.Base64Decode(LBase64);
   WriteLn('Decoded: ', StringOf(LDecoded));
 
   // 验证
@@ -78,11 +82,11 @@ begin
   LData := BytesOf('Test');
 
   // 编码
-  LHex := TSSLUtils.BytesToHex(LData);
+  LHex := TEncodingUtils.BytesToHex(LData);
   WriteLn('Hex Encoded: ', LHex);
 
   // 解码
-  LDecoded := TSSLUtils.HexToBytes(LHex);
+  LDecoded := TEncodingUtils.HexToBytes(LHex);
   WriteLn('Decoded: ', StringOf(LDecoded));
 
   // 验证
@@ -100,10 +104,10 @@ var
 begin
   WriteLn('=== Test 4: SSL 支持检查 ===');
 
-  if CheckSSLSupport then
+  if TSSLFactory.GetAvailableLibraries <> [] then
   begin
     WriteLn('✅ SSL Support: Available');
-    LInfo := GetSSLSupportInfo;
+    LInfo := TSSLFactory.GetSystemInfo;
     WriteLn(LInfo);
   end
   else
@@ -131,7 +135,7 @@ begin
       LContext.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
       LVersions := LContext.GetProtocolVersions;
 
-      WriteLn('Protocol Versions Set: ', Length(LVersions), ' versions');
+      WriteLn('Protocol Versions Set: ', Integer(LVersions), ' versions');
 
       // 设置验证模式
       LContext.SetVerifyMode([sslVerifyPeer]);
@@ -180,7 +184,7 @@ begin
   WriteLn('=== Test 7: 随机字节生成 ===');
 
   LBytes := TSSLHelper.GenerateRandomBytes(16);
-  LHex := TSSLUtils.BytesToHex(LBytes);
+  LHex := TEncodingUtils.BytesToHex(LBytes);
 
   WriteLn('Random Bytes (16): ', LHex);
 
@@ -198,7 +202,7 @@ var
 
 begin
   WriteLn('╔══════════════════════════════════════════════════════════╗');
-  WriteLn('║     fafafa.ssl 实际实现功能测试                      ║');
+  WriteLn('║     nextpas.core.tls 实际实现功能测试                      ║');
   WriteLn('╚══════════════════════════════════════════════════════════╝');
   WriteLn;
 

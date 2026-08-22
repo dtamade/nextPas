@@ -1780,6 +1780,11 @@ begin
   if Assigned(X509_get_extended_key_usage) then
   begin
     EKUFlags := X509_get_extended_key_usage(FX509);
+    // OpenSSL 对缺失(或空)EKU 扩展返回全位掩码,语义是"用途不受限";
+    // 契约要求 strict-chain 等检查将"无显式 EKU"视为未声明 serverAuth,
+    // 因此全位掩码按空数组处理
+    if EKUFlags = $FFFFFFFF then
+      Exit;
     if (EKUFlags and XKU_SSL_SERVER) <> 0 then
       AddToResult('serverAuth');
     if (EKUFlags and XKU_SSL_CLIENT) <> 0 then

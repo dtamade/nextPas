@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.library - WinSSL 库管理实现
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   
   描述:
@@ -609,7 +609,7 @@ begin
   Result.CompatibilityLevel := 90;  // 90% 兼容性
   Result.KnownIssues :=
     'Feature availability depends on Windows version; session resumption / session tickets remain experimental ' +
-    'in fafafa.ssl WinSSL runtime proof (current dedicated Windows CI recorded observed_reuse=false with session_configured=true); ' +
+    'in nextpas.core.tls WinSSL runtime proof (current dedicated Windows CI recorded observed_reuse=false with session_configured=true); ' +
     'does not support PEM private keys directly';
 
   NormalizeLegacyCapabilityBooleans(Result);

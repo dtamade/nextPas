@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.certstore - WinSSL 证书存储实现
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-09
 
   描述:

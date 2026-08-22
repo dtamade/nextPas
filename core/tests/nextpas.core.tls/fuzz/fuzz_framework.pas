@@ -3,7 +3,7 @@ unit fuzz_framework;
 {$mode objfpc}{$H+}
 
 {**
- * Fuzz Testing Framework for fafafa.ssl
+ * Fuzz Testing Framework for nextpas.core.tls
  *
  * Provides infrastructure for fuzzing security-critical functions:
  * - Random input generation with various strategies

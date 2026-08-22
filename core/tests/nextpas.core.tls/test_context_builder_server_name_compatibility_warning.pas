@@ -7,7 +7,6 @@ program test_context_builder_server_name_compatibility_warning;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.cert.utils,

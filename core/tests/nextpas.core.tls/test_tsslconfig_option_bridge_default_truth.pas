@@ -8,7 +8,6 @@ program test_tsslconfig_option_bridge_default_truth;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -135,7 +134,7 @@ begin
     Assert(ssoEnableSessionTickets in AutoConfig.Options,
       'auto-detected library default config keeps session-ticket option after SetDefaultLibrary');
 
-    Config := CreateDefaultConfig(sslCtxClient);
+    Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
 
     Assert(not Config.EnableCompression,
       'CreateDefaultConfig keeps EnableCompression = False under FreePascal default library');

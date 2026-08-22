@@ -1,6 +1,6 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL AES Module                                           }
+{  nextpas.core.tls - OpenSSL AES Module                                           }
 {                                                                              }
 {  Copyright (c) 2024 fafafa                                                  }
 {                                                                              }

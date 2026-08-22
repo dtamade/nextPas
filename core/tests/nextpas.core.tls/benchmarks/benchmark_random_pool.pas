@@ -243,7 +243,7 @@ end;
 
 begin
   WriteLn('╔════════════════════════════════════════════════════════╗');
-  WriteLn('║  fafafa.ssl Random Pool Benchmark                     ║');
+  WriteLn('║  nextpas.core.tls Random Pool Benchmark                     ║');
   WriteLn('║  Phase B: Performance Optimization                     ║');
   WriteLn('╚════════════════════════════════════════════════════════╝');
   WriteLn;

@@ -13,7 +13,7 @@ unit test_openssl_base;
 {  - 统一的日志和错误报告                                                     }
 {                                                                              }
 {  Phase: P1 - 测试框架重构                                                   }
-{  Author: fafafa.ssl team                                                    }
+{  Author: nextpas.core.tls team                                                    }
 {  Date: 2025-12-25                                                           }
 {                                                                              }
 {******************************************************************************}
@@ -523,7 +523,7 @@ begin
   if not FOpenSSLInitialized then
   begin
     // 加载核心库
-    if TOpenSSLLoader.GetLibraryHandle(osslLibCrypto) <> 0 then
+    if TOpenSSLLoader.GetLibraryHandle(osslLibCrypto).IsValid then
     begin
       // 加载核心模块
       LoadOpenSSLCore;

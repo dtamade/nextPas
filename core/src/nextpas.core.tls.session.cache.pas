@@ -18,7 +18,7 @@ unit nextpas.core.tls.session.cache;
   - 会话复用率: > 90%
   - 内存效率: < 2KB/session
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 2.0.0 (哈希表优化)
 }
 

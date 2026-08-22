@@ -30,10 +30,10 @@ type
     function GetPreferredVersion: TSSLProtocolVersion;
 
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
     procedure LoadCAFile(const AFileName: string);
@@ -78,7 +78,7 @@ type
     procedure ClearCertificatePins;
 
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     function IsValid: Boolean;
 
     function GetNativeHandle: Pointer;
@@ -262,7 +262,7 @@ procedure TMockContext.LoadCertificate(const AFileName: string);
 begin
 end;
 
-procedure TMockContext.LoadCertificate(AStream: TStream);
+procedure TMockContext.LoadCertificate(AStream: IStream);
 begin
 end;
 
@@ -274,7 +274,7 @@ procedure TMockContext.LoadPrivateKey(const AFileName: string; const APassword: 
 begin
 end;
 
-procedure TMockContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TMockContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 begin
 end;
 
@@ -438,7 +438,7 @@ begin
   Result := nil;
 end;
 
-function TMockContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TMockContext.CreateConnection(AStream: IStream): ISSLConnection;
 begin
   Result := nil;
 end;

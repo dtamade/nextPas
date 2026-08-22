@@ -5,6 +5,7 @@ program test_backend_password_protected_key_capability_truth_contract;
 uses
   nextpas.core.system.sysutils,
   nextpas.core.system.classes,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -98,7 +99,7 @@ var
 begin
   LRejected := False;
   try
-    ACtx.LoadPrivateKey(AStream, TEST_PASSWORD);
+    ACtx.LoadPrivateKey(TStreamWrapper.Create(AStream, False), TEST_PASSWORD);
   except
     on E: ESSLException do
     begin
@@ -143,7 +144,7 @@ var
   LCtx: ISSLContext;
   LTempDir: string;
   LTempFile: string;
-  LStream: TStringStream;
+  LStream: TMemoryStream;
 begin
   if not TSSLFactory.IsLibraryAvailable(ABackend) then
   begin
@@ -153,6 +154,7 @@ begin
 
   LLib := TSSLFactory.GetLibrary(ABackend);
   Require(LLib <> nil, SSL_LIBRARY_NAMES[ABackend] + ' library should be creatable when available');
+  // 本过程只适用于发布 SupportsPasswordProtectedKeys=False 的后端
   Require(not LLib.GetCapabilities.SupportsPasswordProtectedKeys,
     SSL_LIBRARY_NAMES[ABackend] + ' must publish SupportsPasswordProtectedKeys=False for this contract');
 
@@ -164,7 +166,9 @@ begin
   ForceDirectories(LTempDir);
   LTempFile := IncludeTrailingPathDelimiter(LTempDir) +
     LowerCase(SSL_LIBRARY_NAMES[ABackend]) + '_encrypted_private_key.pem';
-  LStream := TStringStream.Create(ENCRYPTED_PRIVATE_KEY_SENTINEL);
+  LStream := TMemoryStream.Create;
+  LStream.Write(ENCRYPTED_PRIVATE_KEY_SENTINEL[1], Length(ENCRYPTED_PRIVATE_KEY_SENTINEL));
+  LStream.Position := 0;
   try
     with TStringList.Create do
     try
@@ -190,17 +194,62 @@ begin
     ' rejects non-empty password on unpublished password-protected key surfaces');
 end;
 
+procedure ExpectAcceptsNonEmptyPassword(ACtx: ISSLContext;
+  ABackend: TSSLLibraryType);
+begin
+  try
+    ACtx.LoadPrivateKeyPEM(ENCRYPTED_PRIVATE_KEY_SENTINEL, TEST_PASSWORD);
+  except
+    on E: ESSLException do
+    begin
+      // 支持密码的后端可以因 sentinel 内容无法解密而报解析错误，但绝不能以
+      // "password unsupported" 语义拒绝 —— 那与 SupportsPasswordProtectedKeys=True 矛盾
+      Require(not IsUnsupportedPasswordMessage(E.Message),
+        Format('%s must not reject non-empty password with unsupported semantics when SupportsPasswordProtectedKeys=True: %s',
+          [SSL_LIBRARY_NAMES[ABackend], E.Message]));
+    end;
+  end;
+end;
+
+procedure CheckAcceptsNonEmptyPassword(ABackend: TSSLLibraryType);
+var
+  LLib: ISSLLibrary;
+  LCtx: ISSLContext;
+begin
+  if not TSSLFactory.IsLibraryAvailable(ABackend) then
+  begin
+    WriteLn('[SKIP] ', SSL_LIBRARY_NAMES[ABackend], ' backend not available on this platform');
+    Exit;
+  end;
+
+  LLib := TSSLFactory.GetLibrary(ABackend);
+  Require(LLib <> nil, SSL_LIBRARY_NAMES[ABackend] + ' library should be creatable when available');
+  Require(LLib.GetCapabilities.SupportsPasswordProtectedKeys,
+    SSL_LIBRARY_NAMES[ABackend] + ' must publish SupportsPasswordProtectedKeys=True for this contract');
+
+  LCtx := LLib.CreateContext(sslCtxClient);
+  Require(LCtx <> nil, SSL_LIBRARY_NAMES[ABackend] + ' context should be creatable');
+
+  ExpectAcceptsNonEmptyPassword(LCtx, ABackend);
+
+  WriteLn('[PASS] ', SSL_LIBRARY_NAMES[ABackend],
+    ' accepts non-empty password surface on published password-protected key path');
+end;
+
 begin
   WriteLn('Testing password-protected key capability truth contract');
   WriteLn('=======================================================');
 
-  CheckBackendCapability(sslFreePascal, False);
+  CheckBackendCapability(sslFreePascal, True);
   CheckBackendCapability(sslWolfSSL, False);
   CheckBackendCapability(sslMbedTLS, True);
   CheckBackendCapability(sslWinSSL, True);
 
-  CheckRejectsNonEmptyPassword(sslFreePascal);
   CheckRejectsNonEmptyPassword(sslWolfSSL);
+
+  // freepascal 后端真实实现了密码保护私钥(PKCS#8 PBES2+PBKDF2+AES-CBC 与
+  // Traditional PEM DEK-Info+EVP_BytesToKey),按能力矩阵走接受路径而非拒绝路径
+  CheckAcceptsNonEmptyPassword(sslFreePascal);
 
   WriteLn('=======================================================');
   WriteLn('✅ password-protected key capability truth contract verified');

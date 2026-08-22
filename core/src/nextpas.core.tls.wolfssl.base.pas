@@ -9,7 +9,7 @@
  * - 轻量级，适合嵌入式
  * - 商业许可证（需注意）
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

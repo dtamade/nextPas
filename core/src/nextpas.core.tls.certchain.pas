@@ -1,6 +1,6 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - A unified SSL/TLS library for FreePascal                      }
+{  nextpas.core.tls - A unified SSL/TLS library for FreePascal                      }
 {                                                                              }
 {  Copyright (c) 2024 fafafa                                                  }
 {                                                                              }
@@ -737,6 +737,7 @@ begin
 
     Result := True;
   finally
+    ChainList.Free;
   end;
 end;
 

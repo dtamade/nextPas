@@ -4,7 +4,6 @@ program test_factory_logging_scope_clarification;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -92,7 +91,7 @@ var
 begin
   TestHeader('Request path rejects non-default LogLevel');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Config.LogLevel := sslLogInfo;
 
@@ -108,7 +107,7 @@ begin
 
   Recorder := TLogRecorder.Create;
   try
-    Config := CreateDefaultConfig(sslCtxClient);
+    Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
     Config.LibraryType := sslFreePascal;
     Config.LogCallback := @Recorder.HandleLog;
 

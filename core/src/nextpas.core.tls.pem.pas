@@ -23,7 +23,7 @@ unit nextpas.core.tls.pem;
   - X509 CRL
   - PKCS7 / CMS
 
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 

@@ -2,7 +2,7 @@ unit nextpas.core.tls.openssl.api.engine;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL ENGINE Module                                         }
+{  nextpas.core.tls - OpenSSL ENGINE Module                                         }
 {                                                                              }
 {  Purpose: OpenSSL ENGINE API bindings for hardware acceleration and         }
 {           custom cryptographic implementations                               }

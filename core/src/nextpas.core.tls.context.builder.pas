@@ -88,7 +88,7 @@ type
     function WithServerEarlyDataReplayStoreFile(const AFile: string): ISSLContextBuilder;
     function WithServerEarlyDataReplayStoreDirectory(const ADirectory: string): ISSLContextBuilder;
 
-    // HTTP transport hooks (fafafa.ssl does not implement networking)
+    // HTTP transport hooks (nextpas.core.tls does not implement networking)
     function WithHTTPHooks(AHTTPGet: TSSLHTTPGetCallback;
       AHTTPPost: TSSLHTTPPostCallback): ISSLContextBuilder;
 

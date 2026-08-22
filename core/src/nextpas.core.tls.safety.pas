@@ -15,7 +15,7 @@ unit nextpas.core.tls.safety;
  * - Unit types to prevent parameter confusion
  * - Rust-inspired type safety patterns
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.4.0
  * @since 2025-01-19
  *}

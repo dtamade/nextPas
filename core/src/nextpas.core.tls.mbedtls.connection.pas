@@ -5,7 +5,7 @@
  * 继承 TBaseSSLConnection 基类，实现 MbedTLS 后端的连接功能。
  * 负责 TLS 握手、数据传输和连接管理。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2026-01-10
  * @updated 2026-02-04 - 重构为使用 TBaseSSLConnection 基类

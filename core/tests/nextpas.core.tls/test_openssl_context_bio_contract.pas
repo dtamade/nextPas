@@ -3,20 +3,20 @@ program test_openssl_context_bio_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.pem;
-
+  nextpas.core.tls.openssl.api.pem,
+  nextpas.core.tls.openssl.backed;
 const
-  CERT_FIXTURE_PATH = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FIXTURE_PATH = 'tests/certificate/test_certs/signer_key.pem';
+  CERT_FIXTURE_PATH = 'certificate/test_certs/signer_cert.pem';
+  KEY_FIXTURE_PATH = 'certificate/test_certs/signer_key.pem';
   PASSWORD_SENTINEL = 'context-bio-contract';
 
 var
@@ -25,6 +25,17 @@ var
   PassedTests: Integer = 0;
   FailedTests: Integer = 0;
   SkippedTests: Integer = 0;
+
+function PEMStream(const APEM: string): IStream;
+var
+  LS: TMemoryStream;
+begin
+  LS := TMemoryStream.Create;
+  if Length(APEM) > 0 then
+    LS.WriteBuffer(PAnsiChar(APEM)^, Length(APEM));
+  LS.Position := 0;
+  Result := TStreamWrapper.Create(LS, True);
+end;
 
 procedure AssertTrue(const AName: string; ACondition: Boolean; const ADetail: string = '');
 begin
@@ -73,34 +84,30 @@ end;
 procedure AssertLoadCertificateStreamControlledFailure(const AName, ACertificatePEM: string);
 var
   LCtx: ISSLContext;
-  LStream: TStringStream;
+  LStream: IStream;
   LRaised: Boolean;
   LControlled: Boolean;
   LDetail: string;
 begin
   LCtx := CreateServerContext;
-  LStream := TStringStream.Create(ACertificatePEM);
+  LStream := PEMStream(ACertificatePEM);
+  LRaised := False;
+  LControlled := False;
+  LDetail := '';
   try
-    LRaised := False;
-    LControlled := False;
-    LDetail := '';
-    try
-      LCtx.LoadCertificate(LStream);
-    except
-      on E: Exception do
-      begin
-        LRaised := True;
-        LControlled := E is ESSLException;
-        LDetail := E.ClassName + ': ' + E.Message;
-      end;
+    LCtx.LoadCertificate(LStream);
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      LControlled := E is ESSLException;
+      LDetail := E.ClassName + ': ' + E.Message;
     end;
-
-    AssertTrue(AName + ' should raise', LRaised,
-      'expected LoadCertificate(AStream) to fail');
-    AssertTrue(AName + ' should raise controlled ESSLException', LControlled, LDetail);
-  finally
-    LStream.Free;
   end;
+
+  AssertTrue(AName + ' should raise', LRaised,
+    'expected LoadCertificate(AStream) to fail');
+  AssertTrue(AName + ' should raise controlled ESSLException', LControlled, LDetail);
 end;
 
 procedure AssertLoadCertificatePEMControlledFailure(const AName, ACertificatePEM: string);
@@ -162,34 +169,30 @@ procedure AssertLoadPrivateKeyStreamControlledFailure(
   const AName, APrivateKeyPEM, APassword: string);
 var
   LCtx: ISSLContext;
-  LStream: TStringStream;
+  LStream: IStream;
   LRaised: Boolean;
   LControlled: Boolean;
   LDetail: string;
 begin
   LCtx := CreateServerContext;
-  LStream := TStringStream.Create(APrivateKeyPEM);
+  LStream := PEMStream(APrivateKeyPEM);
+  LRaised := False;
+  LControlled := False;
+  LDetail := '';
   try
-    LRaised := False;
-    LControlled := False;
-    LDetail := '';
-    try
-      LCtx.LoadPrivateKey(LStream, APassword);
-    except
-      on E: Exception do
-      begin
-        LRaised := True;
-        LControlled := E is ESSLException;
-        LDetail := E.ClassName + ': ' + E.Message;
-      end;
+    LCtx.LoadPrivateKey(LStream, APassword);
+  except
+    on E: Exception do
+    begin
+      LRaised := True;
+      LControlled := E is ESSLException;
+      LDetail := E.ClassName + ': ' + E.Message;
     end;
-
-    AssertTrue(AName + ' should raise', LRaised,
-      'expected LoadPrivateKey(AStream, password) to fail');
-    AssertTrue(AName + ' should raise controlled ESSLException', LControlled, LDetail);
-  finally
-    LStream.Free;
   end;
+
+  AssertTrue(AName + ' should raise', LRaised,
+    'expected LoadPrivateKey(AStream, password) to fail');
+  AssertTrue(AName + ' should raise controlled ESSLException', LControlled, LDetail);
 end;
 
 procedure AssertLoadPrivateKeyPEMControlledFailure(

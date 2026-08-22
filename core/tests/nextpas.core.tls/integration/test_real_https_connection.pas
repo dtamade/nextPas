@@ -189,7 +189,7 @@ begin
 
     Request := 'GET / HTTP/1.1' + #13#10 +
                'Host: ' + AHostname + #13#10 +
-               'User-Agent: fafafa.ssl-test/1.0' + #13#10 +
+               'User-Agent: nextpas.core.tls-test/1.0' + #13#10 +
                'Connection: close' + #13#10 +
                #13#10;
 

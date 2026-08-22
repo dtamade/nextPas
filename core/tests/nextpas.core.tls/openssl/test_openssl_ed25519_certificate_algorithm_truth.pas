@@ -64,7 +64,7 @@ begin
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.KeyType := ktEd25519;
   LOptions.CommonName := 'openssl-ed25519-algorithm-truth.local';
-  LOptions.Organization := 'fafafa.ssl';
+  LOptions.Organization := 'nextpas.core.tls';
 
   try
     AssertTrue('GenerateSelfSigned(Ed25519) should succeed',

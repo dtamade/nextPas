@@ -194,7 +194,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - 统一原生句柄辅助单元简化测试');
+  WriteLn('nextpas.core.tls - 统一原生句柄辅助单元简化测试');
   WriteLn('============================================');
   WriteLn;
 

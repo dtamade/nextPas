@@ -4,6 +4,7 @@ program test_openssl_blake2_ready_contract;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.platform.dl,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.blake2;
@@ -61,14 +62,14 @@ end;
 
 procedure TestBLAKE2LoadedStateMatchesHelperReadiness;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
   LLoadResult: Boolean;
   LExpectedReady: Boolean;
 begin
   ResetLoaderState;
 
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
   begin
     Fail('Unable to load libcrypto for BLAKE2 contract test');
     Exit;

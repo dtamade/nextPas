@@ -6,7 +6,6 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert.advanced,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.openssl.base,
@@ -14,8 +13,8 @@ uses
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.pem;
-
+  nextpas.core.tls.openssl.api.pem,
+  nextpas.core.tls.openssl.backed;
 const
   VALID_CRL_PEM =
     '-----BEGIN X509 CRL-----'#10 +

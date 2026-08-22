@@ -6,7 +6,7 @@ unit nextpas.core.tls.dns.ldns;
  * 提供对 ldns DNS 库的动态绑定，支持 DNS TLSA 查询和 DNSSEC 验证。
  * ldns 是一个可选依赖，如果不可用，相关功能将优雅降级。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-05
  *}

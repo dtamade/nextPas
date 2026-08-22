@@ -7,7 +7,6 @@ program test_factory_config_server_name_isolation;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib;
@@ -86,7 +85,7 @@ begin
   Lib := TSSLFactory.GetLibrary(sslFreePascal);
   OriginalConfig := Lib.GetDefaultConfig;
   try
-    OneShotConfig := CreateDefaultConfig(sslCtxClient);
+    OneShotConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
     OneShotConfig.LibraryType := sslFreePascal;
     OneShotConfig.ContextType := sslCtxClient;
     OneShotConfig.ServerName := 'sticky.example.com';

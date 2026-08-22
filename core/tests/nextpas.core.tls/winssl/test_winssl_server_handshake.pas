@@ -153,7 +153,7 @@ end;
 begin
   WriteLn('');
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL 服务端握手测试');
+  WriteLn('  nextpas.core.tls - WinSSL 服务端握手测试');
   WriteLn('==============================================');
   WriteLn('');
   WriteLn('测试环境:');
@@ -180,7 +180,7 @@ end.
 {$ELSE}
 begin
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL 服务端握手测试');
+  WriteLn('  nextpas.core.tls - WinSSL 服务端握手测试');
   WriteLn('==============================================');
   WriteLn('[BLOCKED] [platform] WinSSL 服务端握手测试仅支持 Windows 运行时');
   WriteLn('[SKIP] [platform] 当前平台非 Windows，执行阻塞契约输出');

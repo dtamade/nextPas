@@ -3,9 +3,10 @@ program test_openssl_certificate_hostname_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -37,7 +38,7 @@ begin
   Check(LLib <> nil, 'OpenSSL library instance should exist');
   Check(LLib.Initialize, 'OpenSSL library should initialize');
 
-  LSanCert := LoadCertificate('tests/certs/san-test.pem', 'SAN');
+  LSanCert := LoadCertificate('certs/san-test.pem', 'SAN');
   Check(LSanCert.VerifyHostname('san-test.local'),
     'SAN fixture should accept DNS:san-test.local');
   Check(LSanCert.VerifyHostname('example.test'),
@@ -48,7 +49,7 @@ begin
     'SAN fixture should reject unrelated hostname');
 
   LConflictCert := LoadCertificate(
-    'tests/certificate/test_certs/san_cn_conflict_cert.pem',
+    'certificate/test_certs/san_cn_conflict_cert.pem',
     'SAN-vs-CN conflict'
   );
   Check(not LConflictCert.VerifyHostname('cn-only.example.com'),
@@ -57,7 +58,7 @@ begin
     'SAN-vs-CN conflict fixture should still accept SAN DNS entry');
 
   LWildcardCert := LoadCertificate(
-    'tests/certificate/test_certs/san_wildcard_cert.pem',
+    'certificate/test_certs/san_wildcard_cert.pem',
     'Wildcard SAN'
   );
   Check(LWildcardCert.VerifyHostname('api.example.com'),

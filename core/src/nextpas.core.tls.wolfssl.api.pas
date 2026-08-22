@@ -9,7 +9,7 @@
  * - 仅绑定 TLS 主链路所需的最小 API 子集
  * - 其他功能通过能力矩阵标记为不支持
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

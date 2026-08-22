@@ -6,7 +6,7 @@ program test_winssl_session_management;
   test_winssl_session_management - WinSSL Session 管理测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-01-18
 
   描述:

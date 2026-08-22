@@ -7,7 +7,6 @@ program test_factory_server_name_compatibility_warning;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -116,7 +115,7 @@ begin
   LLogger.SetMinLevel(selWarning);
   TSecurityLog.Logger := LLogger;
   try
-    LConfig := CreateDefaultConfig(sslCtxClient);
+    LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
     LConfig.LibraryType := sslFreePascal;
     LConfig.ContextType := sslCtxClient;
     LConfig.ServerName := 'oneshot-warning.example.com';
@@ -155,7 +154,7 @@ begin
   LLogger.SetMinLevel(selWarning);
   TSecurityLog.Logger := LLogger;
   try
-    LConfig := CreateDefaultConfig(sslCtxClient);
+    LConfig := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
     LConfig.LibraryType := sslFreePascal;
     LConfig.ContextType := sslCtxClient;
 

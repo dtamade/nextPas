@@ -4,45 +4,48 @@ program test_certchain;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  WinSock2,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  tls_test_sockets,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  nextpas.core.tls.certchain,
-  fafafa.ssl;
+  nextpas.core.tls.certchain;
 
 procedure TestCertificateChainValidation;
 var
-  WSAData: TWSAData;
   SSLLib: ISSLLibrary;
   Context: ISSLContext;
   Connection: ISSLConnection;
   ClientConn: ISSLClientConnection;
   CertVerify: ISSLCertificateVerification;
-  Socket: THandle;
-  ServerAddr: TSockAddrIn;
-  HostEnt: PHostEnt;
+  Socket: TSocketHandle;
   PeerCert: ISSLCertificate;
   CertChain: TSSLCertificateArray;
   ChainVerifier: ISSLCertificateChainVerifier;
   VerifyResult: TChainVerifyResult;
   CertInfo: TSSLCertificateInfo;
   i: Integer;
+  NetErr: string;
 begin
   WriteLn('=== 测试证书链验证功能 ===');
   WriteLn;
 
-  // 初始化 Winsock
-  if WSAStartup($0202, WSAData) <> 0 then
+  // 初始化网络
+  if not InitNetwork(NetErr) then
   begin
-    WriteLn('错误: 无法初始化 Winsock');
+    WriteLn('错误: 无法初始化网络: ', NetErr);
     Exit;
   end;
 
   try
     // 初始化 SSL 库
     WriteLn('初始化 SSL 库...');
+    {$IFDEF WINDOWS}
     SSLLib := TSSLFactory.GetLibraryInstance(sslWinSSL);
+    {$ELSE}
+    SSLLib := TSSLFactory.GetLibraryInstance(sslOpenSSL);
+    {$ENDIF}
     if not SSLLib.Initialize then
     begin
       WriteLn('错误: 无法初始化 SSL 库');
@@ -56,34 +59,14 @@ begin
 
     // 创建 TCP 连接
     WriteLn('连接到 www.google.com:443...');
-    Socket := WinSock2.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if Socket = INVALID_SOCKET then
-    begin
-      WriteLn('错误: 无法创建 socket');
-      Exit;
-    end;
-
-    // 解析主机名
-    HostEnt := gethostbyname('www.google.com');
-    if HostEnt = nil then
-    begin
-      WriteLn('错误: 无法解析主机名');
-      closesocket(Socket);
-      Exit;
-    end;
-
-    // 设置服务器地址
-    FillChar(ServerAddr, SizeOf(ServerAddr), 0);
-    ServerAddr.sin_family := AF_INET;
-    ServerAddr.sin_port := htons(443);
-    ServerAddr.sin_addr.S_addr := PInAddr(HostEnt^.h_addr_list^)^.S_addr;
-
-    // 连接到服务器
-    if WinSock2.connect(Socket, ServerAddr, SizeOf(ServerAddr)) = SOCKET_ERROR then
-    begin
-      WriteLn('错误: 无法连接到服务器');
-      closesocket(Socket);
-      Exit;
+    try
+      Socket := ConnectTCP('www.google.com', 443);
+    except
+      on E: Exception do
+      begin
+        WriteLn('错误: 无法连接到服务器: ', E.Message);
+        Exit;
+      end;
     end;
 
     WriteLn('TCP 连接成功建立');
@@ -99,7 +82,7 @@ begin
     if not Connection.Connect then
     begin
       WriteLn('错误: SSL 握手失败');
-      closesocket(Socket);
+      CloseSocket(Socket);
       Exit;
     end;
 
@@ -112,7 +95,7 @@ begin
     if PeerCert = nil then
     begin
       WriteLn('错误: 无法获取服务器证书');
-      closesocket(Socket);
+      CloseSocket(Socket);
       Exit;
     end;
 
@@ -132,7 +115,7 @@ begin
     if not Supports(Connection, ISSLCertificateVerification, CertVerify) then
     begin
       WriteLn('错误: 连接未暴露 ISSLCertificateVerification');
-      closesocket(Socket);
+      CloseSocket(Socket);
       Exit;
     end;
     CertChain := CertVerify.GetPeerCertificateChain;
@@ -175,13 +158,12 @@ begin
 
     if Assigned(VerifyResult.Warnings) then
     begin
-      if VerifyResult.Warnings.Count > 0 then
+      if Length(VerifyResult.Warnings) > 0 then
       begin
         WriteLn('  警告:');
-        for i := 0 to VerifyResult.Warnings.Count - 1 do
+        for i := 0 to Length(VerifyResult.Warnings) - 1 do
           WriteLn('    - ', VerifyResult.Warnings[i]);
       end;
-      VerifyResult.Warnings.Free;
     end;
     WriteLn;
 
@@ -193,7 +175,6 @@ begin
     if not VerifyResult.IsValid then
       WriteLn('  错误: ', VerifyResult.ErrorMessage);
     if Assigned(VerifyResult.Warnings) then
-      VerifyResult.Warnings.Free;
     WriteLn;
 
     // 测试主机名不匹配的情况
@@ -204,7 +185,6 @@ begin
     if not VerifyResult.IsValid then
       WriteLn('  错误: ', VerifyResult.ErrorMessage);
     if Assigned(VerifyResult.Warnings) then
-      VerifyResult.Warnings.Free;
     WriteLn;
 
     // 测试允许自签名证书
@@ -213,18 +193,17 @@ begin
     VerifyResult := ChainVerifier.VerifyCertificate(PeerCert, 'www.google.com');
     WriteLn('  允许自签名结果: ', VerifyResult.IsValid);
     if Assigned(VerifyResult.Warnings) then
-      VerifyResult.Warnings.Free;
 
     // 关闭连接
     WriteLn;
     WriteLn('关闭 SSL 连接...');
     Connection.Shutdown;
-    closesocket(Socket);
+    CloseSocket(Socket);
 
     WriteLn;
     WriteLn('=== 测试完成 ===');
   finally
-    WSACleanup;
+    CleanupNetwork;
   end;
 end;
 
@@ -238,7 +217,4 @@ begin
     end;
   end;
 
-  WriteLn;
-  WriteLn('按 Enter 键退出...');
-  ReadLn;
 end.

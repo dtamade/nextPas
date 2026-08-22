@@ -10,7 +10,7 @@
  *
  * Thread Safety: 所有类方法线程安全
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2025-09-28
  *
@@ -1515,7 +1515,7 @@ var
   LType: TSSLLibraryType;
   LLib: ISSLLibrary;
 begin
-  Result := 'fafafa.ssl v' + FAFAFA_SSL_VERSION_STRING + LineEnding;
+  Result := 'nextpas.core.tls v' + FAFAFA_SSL_VERSION_STRING + LineEnding;
   Result := Result + '可用的SSL库:' + LineEnding;
   
   for LType := Low(TSSLLibraryType) to High(TSSLLibraryType) do

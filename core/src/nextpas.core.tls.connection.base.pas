@@ -12,7 +12,7 @@ unit nextpas.core.tls.connection.base;
  * - 状态管理：统一的连接状态和错误跟踪
  * - 性能监控：共享的性能指标收集
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-04
  *}

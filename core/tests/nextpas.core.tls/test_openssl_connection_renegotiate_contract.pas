@@ -3,17 +3,17 @@ program test_openssl_connection_renegotiate_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.ssl,
-  nextpas.core.tls.openssl.connection;
-
+  nextpas.core.tls.openssl.connection,
+  nextpas.core.tls.openssl.backed;
 type
   TOpenSSLConnectionAccess = class(TOpenSSLConnection)
   public
@@ -75,7 +75,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TOpenSSLConnectionAccess.Create(AContext, LStream);
+    LConn := TOpenSSLConnectionAccess.Create(AContext, TStreamWrapper.Create(LStream));
     if LConn = nil then
       raise Exception.Create('stream connection constructor warmup returned nil');
   finally
@@ -97,7 +97,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TOpenSSLConnectionAccess.Create(AContext, LStream);
+    LConn := TOpenSSLConnectionAccess.Create(AContext, TStreamWrapper.Create(LStream));
     LConn.ForceConnectedState;
 
     LRaised := False;

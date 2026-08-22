@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.uri;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 URI Parser (RFC 7512)                                 }
+{  nextpas.core.tls - PKCS#11 URI Parser (RFC 7512)                                 }
 {                                                                              }
 {  Purpose: Parse and generate PKCS#11 URIs according to RFC 7512             }
 {                                                                              }

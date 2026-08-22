@@ -320,7 +320,7 @@ begin
   LBaseDirectory := NormalizeReplayStoreDirectory(LBaseDirectory);
   Result := nextpas.core.fs.PathJoin([
     LBaseDirectory,
-    'fafafa.ssl',
+    'nextpas.core.tls',
     'freepascal',
     'early-data-replay'
   ]);

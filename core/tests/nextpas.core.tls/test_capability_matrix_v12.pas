@@ -4,7 +4,6 @@ program test_capability_matrix_v12;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory;
 
@@ -350,7 +349,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - Capability Matrix v1.2.0 Test');
+  WriteLn('nextpas.core.tls - Capability Matrix v1.2.0 Test');
   WriteLn('==========================================');
   WriteLn;
 

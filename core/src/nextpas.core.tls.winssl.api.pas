@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.api - Windows Schannel API 函数绑定
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-04
   
   描述:

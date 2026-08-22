@@ -12,7 +12,7 @@
  *
  * Note: Full functionality tests require MbedTLS library to be installed.
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2026-01-09
  * @updated 2026-01-10

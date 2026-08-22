@@ -9,14 +9,15 @@ program benchmark_throughput;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time,
+  nextpas.core.system.sysutils,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.mbedtls.lib,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   // 使用一个返回较大响应的服务
@@ -80,7 +81,7 @@ begin
       // 发送 HTTP GET
       LRequest := 'GET ' + TEST_PATH + ' HTTP/1.1'#13#10 +
                   'Host: ' + TEST_HOST + #13#10 +
-                  'User-Agent: fafafa.ssl-benchmark/1.0'#13#10 +
+                  'User-Agent: nextpas.core.tls-benchmark/1.0'#13#10 +
                   'Accept: */*'#13#10 +
                   'Connection: close'#13#10#13#10;
 

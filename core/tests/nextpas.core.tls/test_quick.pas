@@ -4,11 +4,11 @@ program test_quick;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,  // Ensure all linked backends are registered
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.quick,
-  nextpas.core.tls.cert.builder;
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.openssl.backed;
 
 procedure TestContextBuilder;
 var

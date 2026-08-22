@@ -9,10 +9,13 @@ program test_integration_tls_end_to_end;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, Math,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  nextpas.core.time,
+  Math,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  fafafa.ssl,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   test_openssl_base;
@@ -268,7 +271,8 @@ begin
     TestProtocolVersions;
 
     Runner.PrintSummary;
-    Halt(Runner.FailCount);
+    // 自然结束而非 Halt:让程序级全局接口变量正常终结,heaptrc 保持 0 unfreed
+    ExitCode := Runner.FailCount;
   finally
     Runner.Free;
   end;

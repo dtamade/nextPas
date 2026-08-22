@@ -4,7 +4,6 @@ program test_freepascal_client_cert_verify_flags_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.cert.utils,
@@ -14,14 +13,16 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.freepascal.context.material;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.freepascal.context.material,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
     CertificateBlob: TBytes;
@@ -159,12 +160,12 @@ var
   LCombinedPEM: AnsiString;
   I: Integer;
 begin
-  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')));
-  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_key.pem')));
+  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem')));
+  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_key.pem')));
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 2;
   if ASerialNumber > 0 then
@@ -475,7 +476,7 @@ begin
   Result.SetPreferredVersion(sslProtocolTLS13);
   Result.SetVerifyMode([sslVerifyPeer]);
   Result.SetCertVerifyFlags(AVerifyFlags);
-  Result.LoadCAFile('tests/certificate/test_certs/ca_cert.pem');
+  Result.LoadCAFile('certificate/test_certs/ca_cert.pem');
 end;
 
 function RequireRevocationMaterialSupport(AContext: ISSLContext): IFreePascalContextRevocationMaterial;
@@ -500,7 +501,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Hostname mismatch connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -533,7 +534,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyIgnoreHostname]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Ignore-hostname connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -560,7 +561,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyDefault]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Expired-certificate connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -593,7 +594,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyIgnoreExpiry]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Ignore-expiry connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -620,7 +621,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyStrictChain]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Strict-chain connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -653,7 +654,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyCheckRevocation]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Revocation-check connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -685,7 +686,7 @@ begin
   LCtx := NewClientContext([sslCertVerifyCheckCRL]);
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'CRL-check connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -718,10 +719,10 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyCheckRevocation]);
   LRevocationMaterial := RequireRevocationMaterialSupport(LCtx);
-  LRevocationMaterial.AddCRLFile('tests/certificate/test_certs/revocation_nonmatching_crl.pem');
+  LRevocationMaterial.AddCRLFile('certificate/test_certs/revocation_nonmatching_crl.pem');
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Revocation-material connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -749,10 +750,10 @@ begin
 
   LCtx := NewClientContext([sslCertVerifyCheckCRL]);
   LRevocationMaterial := RequireRevocationMaterialSupport(LCtx);
-  LRevocationMaterial.AddCRLFile('tests/certificate/test_certs/revocation_revoked_crl.pem');
+  LRevocationMaterial.AddCRLFile('certificate/test_certs/revocation_revoked_crl.pem');
   LStream := TScriptedVerifyFlagsServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'CRL-material connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 

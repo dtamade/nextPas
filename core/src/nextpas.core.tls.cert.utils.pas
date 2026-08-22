@@ -24,7 +24,7 @@ unit nextpas.core.tls.cert.utils;
  *   - nextpas.core.tls.exceptions
  *   - nextpas.core.crypto.utils (for fingerprint)
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2025-11-26
  *}
@@ -433,7 +433,7 @@ class function TCertificateUtils.DefaultGenOptions: TCertGenOptions;
 begin
   FillChar(Result, SizeOf(Result), 0);
   Result.CommonName := 'localhost';
-  Result.Organization := 'fafafa.ssl';
+  Result.Organization := 'nextpas.core.tls';
   Result.OrganizationalUnit := 'Development';
   Result.Country := 'US';
   Result.State := 'California';

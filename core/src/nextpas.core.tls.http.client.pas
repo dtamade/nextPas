@@ -7,10 +7,10 @@ unit nextpas.core.tls.http.client;
   简单的 HTTP 客户端
   
   为 OCSP Stapling 提供基础的 HTTP POST 支持。
-  注意：fafafa.ssl 不实现网络通信。本单元仅作为兼容/桥接层，
+  注意：nextpas.core.tls 不实现网络通信。本单元仅作为兼容/桥接层，
   实际 HTTP 传输必须由上层注入（见 nextpas.core.tls.net.hooks）。
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 
@@ -51,7 +51,7 @@ begin
   inherited Create;
   FTimeout := 10000;  // 10 秒
   FContentType := 'application/ocsp-request';
-  FUserAgent := 'fafafa.ssl/1.0';
+  FUserAgent := 'nextpas.core.tls/1.0';
 end;
 
 destructor TSimpleHTTPClient.Destroy;

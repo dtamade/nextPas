@@ -3,18 +3,21 @@ program test_openssl_server_ocsp_stapling_callback_contract;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  ctypes,
   nextpas.core.tls.base,
-  fafafa.ssl,
+  nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.consts;
 
 const
-  OCSP_FIXTURE_FILE = 'tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
-  CERT_FILE = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FILE = 'tests/certificate/test_certs/signer_key.pem';
+  OCSP_FIXTURE_FILE = 'fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
+  CERT_FILE = 'certificate/test_certs/signer_cert.pem';
+  KEY_FILE = 'certificate/test_certs/signer_key.pem';
 
 type
   TOpenSSLStatusCallback = function(ssl: PSSL; arg: Pointer): Integer; cdecl;

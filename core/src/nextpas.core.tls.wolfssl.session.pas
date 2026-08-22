@@ -5,7 +5,7 @@
  * 实现 ISSLSession 接口的 WolfSSL 后端。
  * 支持 TLS 会话恢复和会话票据。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}

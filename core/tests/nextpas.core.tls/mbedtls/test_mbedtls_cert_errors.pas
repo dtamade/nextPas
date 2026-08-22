@@ -14,10 +14,13 @@ program test_mbedtls_cert_errors;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, TypInfo,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 type
   TTestResult = record

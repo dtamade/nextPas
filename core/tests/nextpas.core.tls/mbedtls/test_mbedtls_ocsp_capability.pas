@@ -12,10 +12,12 @@ program test_mbedtls_ocsp_capability;
 }
 
 uses
-  nextpas.core.system.sysutils, TypInfo,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  TypInfo,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.lib,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 // INTENTIONAL_OCSP_CORE_SURFACE: this MbedTLS-specific capability/runtime
 // file intentionally keeps direct core OCSP compatibility-surface coverage

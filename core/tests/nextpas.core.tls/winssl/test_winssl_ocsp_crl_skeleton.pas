@@ -18,7 +18,7 @@ program test_winssl_ocsp_crl_skeleton;
  * - 设置环境变量 FAFAFA_WINSSL_REVOCATION_TEST=1
  * - 需要网络连接
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2025-12-23
  *}

@@ -3,9 +3,10 @@ program test_openssl_verify_ex_store_flag_isolation_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory;
 
 procedure Check(ACondition: Boolean; const AMessage: string);
 begin
@@ -39,12 +40,12 @@ begin
 
   LExpiredLeaf := TSSLFactory.CreateCertificate(sslOpenSSL);
   Check(LExpiredLeaf <> nil, 'Expired leaf certificate object should be created');
-  Check(LExpiredLeaf.LoadFromFile('tests/certs/expired-signer.pem'),
+  Check(LExpiredLeaf.LoadFromFile('certs/expired-signer.pem'),
     'Expired verification fixture should load');
 
   LCACert := TSSLFactory.CreateCertificate(sslOpenSSL);
   Check(LCACert <> nil, 'CA certificate object should be created');
-  Check(LCACert.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+  Check(LCACert.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'CA verification fixture should load');
 
   LStore := TSSLFactory.CreateCertificateStore(sslOpenSSL);
@@ -93,7 +94,7 @@ begin
 
   LSelfSignedLeaf := TSSLFactory.CreateCertificate(sslOpenSSL);
   Check(LSelfSignedLeaf <> nil, 'Self-signed leaf certificate object should be created');
-  Check(LSelfSignedLeaf.LoadFromFile('tests/certs/version1-cert.pem'),
+  Check(LSelfSignedLeaf.LoadFromFile('certs/version1-cert.pem'),
     'Self-signed verification fixture should load');
 
   LEmptyStore := TSSLFactory.CreateCertificateStore(sslOpenSSL);

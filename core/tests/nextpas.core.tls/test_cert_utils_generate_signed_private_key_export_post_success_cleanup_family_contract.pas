@@ -6,15 +6,14 @@ uses
   nextpas.core.system.sysutils,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
-  nextpas.core.tls.openssl.api.evp;
-
+  nextpas.core.tls.openssl.api.evp,
+  nextpas.core.tls.openssl.backed;
 var
   GLib: ISSLLibrary = nil;
   TotalTests: Integer = 0;
@@ -53,7 +52,7 @@ function BuildCAOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-private-key-export-post-success-root.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := True;
   Result.ValidDays := 30;
 end;
@@ -62,7 +61,7 @@ function BuildLeafOptions: TCertGenOptions;
 begin
   Result := TCertificateUtils.DefaultGenOptions;
   Result.CommonName := 'signed-private-key-export-post-success-leaf.local';
-  Result.Organization := 'fafafa.ssl contract';
+  Result.Organization := 'nextpas.core.tls contract';
   Result.IsCA := False;
   Result.ValidDays := 30;
 end;

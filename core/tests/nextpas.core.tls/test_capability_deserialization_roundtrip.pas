@@ -159,7 +159,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl capability deserialization round-trip tests');
+  WriteLn('nextpas.core.tls capability deserialization round-trip tests');
   WriteLn('==============================================');
   TestJSONRoundTrip;
   TestXMLRoundTrip;

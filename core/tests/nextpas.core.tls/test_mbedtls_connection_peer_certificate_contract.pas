@@ -4,7 +4,7 @@ program test_mbedtls_connection_peer_certificate_contract;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,
   nextpas.core.tls.mbedtls.lib,
@@ -112,8 +112,8 @@ begin
     Exit;
   end;
 
-  LLeafPEM := ReadTextFile('tests/certificate/test_certs/signer_cert.pem');
-  LIssuerPEM := ReadTextFile('tests/certificate/test_certs/ca_cert.pem');
+  LLeafPEM := ReadTextFile('certificate/test_certs/signer_cert.pem');
+  LIssuerPEM := ReadTextFile('certificate/test_certs/ca_cert.pem');
   if (LLeafPEM = '') or (LIssuerPEM = '') then
   begin
     MarkSkip('mbedtls connection peer certificate contract',
@@ -162,7 +162,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TMbedTLSConnection.Create(nil, nil, LStream);
+    LConn := TMbedTLSConnection.Create(nil, nil, TStreamWrapper.Create(LStream, False));
 
     mbedtls_ssl_get_peer_cert := @StubMbedTLSSSLGetPeerCert;
 

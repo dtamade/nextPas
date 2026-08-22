@@ -2,11 +2,11 @@
   nextpas.core.tls.base - SSL/TLS 基础定义（类型+接口）
   
   版本: 2.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-11-05
   
   描述:
-    定义 fafafa.ssl 库的所有基础类型、常量、枚举、异常类和接口。
+    定义 nextpas.core.tls 库的所有基础类型、常量、枚举、异常类和接口。
     按照 fafafa.模块名.base.pas 命名规范，此文件包含：
     - 所有类型定义（从 abstract.types 迁移）
     - 所有接口定义（从 abstract.intf 迁移）
@@ -635,10 +635,10 @@ type
                               const ASize: Integer;
                               const AIsOutgoing: Boolean) of object;
 
-  { HTTP GET 回调（由上层网络库实现，fafafa.ssl 不实现网络传输） }
+  { HTTP GET 回调（由上层网络库实现，nextpas.core.tls 不实现网络传输） }
   TSSLHTTPGetCallback = function(const AURL: string; ATimeoutMs: Integer): TSSLDataResult of object;
 
-  { HTTP POST 回调（由上层网络库实现，fafafa.ssl 不实现网络传输） }
+  { HTTP POST 回调（由上层网络库实现，nextpas.core.tls 不实现网络传输） }
   TSSLHTTPPostCallback = function(const AURL, AContentType: string;
     const ABody: TBytes; ATimeoutMs: Integer): TSSLDataResult of object;
 
@@ -769,7 +769,7 @@ type
   {**
    * ISSLHttpHooksAccess - HTTP 传输 hooks 访问接口（可选）
    *
-   * fafafa.ssl 不实现网络通信。任何依赖 HTTP 的功能（例如 OCSP 在线检查、CT log list 下载）
+   * nextpas.core.tls 不实现网络通信。任何依赖 HTTP 的功能（例如 OCSP 在线检查、CT log list 下载）
    * 必须通过上层注入的回调完成。
    *
    * 注入优先级由调用方决定；推荐：
@@ -809,7 +809,7 @@ type
    * ISSLLibrary - SSL库管理接口
    *
    * 提供 SSL/TLS 库的初始化、版本查询、功能检测和工厂方法。
-   * 这是使用 fafafa.ssl 的入口点接口。
+   * 这是使用 nextpas.core.tls 的入口点接口。
    *
    * @stable 1.0
    * @locked 2025-12-24

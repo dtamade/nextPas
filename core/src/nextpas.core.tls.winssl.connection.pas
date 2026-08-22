@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.connection - WinSSL 连接实现
 
   版本: 1.1 - 重构为使用 TBaseSSLConnection 基类
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   修改: 2026-02-04
 

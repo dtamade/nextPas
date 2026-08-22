@@ -1,6 +1,6 @@
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - OpenSSL EC (Elliptic Curve) Module                           }
+{  nextpas.core.tls - OpenSSL EC (Elliptic Curve) Module                           }
 {                                                                              }
 {  Copyright (c) 2024 fafafa                                                  }
 {                                                                              }

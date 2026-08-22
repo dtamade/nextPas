@@ -61,7 +61,7 @@ begin
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.KeyType := ktEd25519;
   LOptions.CommonName := 'x509-ed25519-parser-truth.local';
-  LOptions.Organization := 'fafafa.ssl';
+  LOptions.Organization := 'nextpas.core.tls';
 
   LGenerated := False;
   try

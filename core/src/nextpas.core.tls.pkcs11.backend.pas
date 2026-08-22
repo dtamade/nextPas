@@ -2,7 +2,7 @@ unit nextpas.core.tls.pkcs11.backend;
 
 {******************************************************************************}
 {                                                                              }
-{  fafafa.ssl - PKCS#11 Backend Abstraction                                   }
+{  nextpas.core.tls - PKCS#11 Backend Abstraction                                   }
 {                                                                              }
 {  Purpose: Abstract interface for PKCS#11 key loading backends               }
 {                                                                              }

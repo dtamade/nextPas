@@ -8,11 +8,10 @@ program test_quick_cert;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.quick,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base;
-
+  nextpas.core.tls.base,
+  nextpas.core.tls.openssl.backed;
 var
   Info: TSSLCertificateInfo;
   Host: string;
@@ -34,8 +33,8 @@ begin
     WriteLn('  颁发者: ', Info.Issuer);
     WriteLn('  有效期开始: ', DateTimeToStr(Info.NotBefore));
     WriteLn('  有效期结束: ', DateTimeToStr(Info.NotAfter));
-    WriteLn('  是否有效: ', BoolToStr((Now >= Info.NotBefore) and (Now <= Info.NotAfter), 'Yes', 'No'));
-    WriteLn('  是否过期: ', BoolToStr(Now > Info.NotAfter, 'Yes', 'No'));
+    WriteLn('  是否有效: ', BoolToStr((Now >= Info.NotBefore) and (Now <= Info.NotAfter)));
+    WriteLn('  是否过期: ', BoolToStr(Now > Info.NotAfter));
     WriteLn('  距离过期: ', Trunc(Info.NotAfter - Now), ' 天');
     WriteLn('  SHA256指纹: ', Info.FingerprintSHA256);
 

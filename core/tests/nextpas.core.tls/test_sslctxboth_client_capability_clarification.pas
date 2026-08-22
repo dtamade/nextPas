@@ -7,8 +7,8 @@ program test_sslctxboth_client_capability_clarification;
   inherit it implicitly. }
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -92,7 +92,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
     CheckTrue(LName + ' dual-context stream connection created',
       LConn <> nil, 'CreateConnection(TStream) returned nil');
     CheckTrue(LName + ' dual-context stream connection exposes ISSLClientConnection',
@@ -166,7 +166,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
     if not Supports(LConn, ISSLEarlyDataConnection, LEarlyConn) then
     begin
       Skip(LName + ' dual-context early-data client gate',

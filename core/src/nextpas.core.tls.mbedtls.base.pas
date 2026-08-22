@@ -10,7 +10,7 @@
  * - 嵌入式友好，许可证友好（Apache 2.0）
  * - 需要手动管理熵源和随机数生成器
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

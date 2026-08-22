@@ -6,16 +6,15 @@ uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
-  fafafa.ssl,
   nextpas.core.tls.cert.utils,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
-  nextpas.core.tls.openssl.api.pem;
-
+  nextpas.core.tls.openssl.api.pem,
+  nextpas.core.tls.openssl.backed;
 const
-  CERT_FIXTURE_PATH = 'tests/certificate/test_certs/signer_cert.pem';
+  CERT_FIXTURE_PATH = 'certificate/test_certs/signer_cert.pem';
 
 var
   GLib: ISSLLibrary = nil;

@@ -208,8 +208,8 @@ begin
 
   // 生成一个自签名 CA
   CAOptions := TCertificateUtils.DefaultGenOptions;
-  CAOptions.CommonName := 'fafafa.ssl Test Root CA';
-  CAOptions.Organization := 'fafafa.ssl';
+  CAOptions.CommonName := 'nextpas.core.tls Test Root CA';
+  CAOptions.Organization := 'nextpas.core.tls';
   CAOptions.IsCA := True;
   CAOptions.ValidDays := 30;
 
@@ -219,7 +219,7 @@ begin
   // 生成一个由该 CA 签名的叶证书
   LeafOptions := TCertificateUtils.DefaultGenOptions;
   LeafOptions.CommonName := 'leaf.test';
-  LeafOptions.Organization := 'fafafa.ssl';
+  LeafOptions.Organization := 'nextpas.core.tls';
   LeafOptions.IsCA := False;
   LeafOptions.ValidDays := 30;
 

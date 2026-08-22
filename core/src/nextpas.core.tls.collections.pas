@@ -7,7 +7,7 @@
  * - 当前提供基于动态数组的简单实现
  * - 接口设计兼容 fafafa.core 的集合框架
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2025-12-27
  *}

@@ -1,12 +1,12 @@
 {
-  test_basic - fafafa.ssl 基础功能测试程序
+  test_basic - nextpas.core.tls 基础功能测试程序
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-09-28
 
   描述:
-    测试 fafafa.ssl 库的基本功能，包括：
+    测试 nextpas.core.tls 库的基本功能，包括：
     1. 库检测和加载
     2. 上下文创建
     3. 证书处理
@@ -19,14 +19,24 @@ program test_basic;
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;  // 主库单元
+  nextpas.core.tls.factory,
+  nextpas.core.tls.exceptions;  // 主库单元
 
 procedure PrintSeparator;
 begin
   WriteLn('========================================');
+end;
+
+function SupportText(AFlag: Boolean): string;
+begin
+  if AFlag then
+    Result := '支持'
+  else
+    Result := '不支持';
 end;
 
 procedure TestLibraryDetection;
@@ -40,7 +50,7 @@ begin
   PrintSeparator;
 
   WriteLn('检查 SSL 支持...');
-  if not CheckSSLSupport then
+  if TSSLFactory.GetAvailableLibraries = [] then
   begin
     WriteLn('❌ 错误: 没有可用的 SSL 库！');
     Exit;
@@ -113,7 +123,8 @@ begin
     // 测试从配置创建
     WriteLn;
     WriteLn('使用配置结构创建上下文...');
-    LConfig := CreateDefaultConfig(sslCtxServer);
+    LConfig := Default(TSSLConfig);
+    LConfig.ContextType := sslCtxServer;
     LConfig.LibraryType := TSSLFactory.GetDefaultLibrary;
     LConfig.ProtocolVersions := [sslProtocolTLS12, sslProtocolTLS13];
 
@@ -236,7 +247,7 @@ begin
   WriteLn('测试 5: 系统信息');
   PrintSeparator;
 
-  WriteLn(GetSSLSupportInfo);
+  WriteLn(TSSLFactory.GetSystemInfo);
 
   // 测试特定功能支持
   WriteLn;
@@ -246,19 +257,19 @@ begin
   if Assigned(LLib) then
   begin
     WriteLn('  SNI (Server Name Indication): ',
-      BoolToStr(LLib.IsFeatureSupported(sslFeatSNI), '支持', '不支持'));
+      SupportText(LLib.IsFeatureSupported(sslFeatSNI)));
     WriteLn('  ALPN (Application Layer Protocol Negotiation): ',
-      BoolToStr(LLib.IsFeatureSupported(sslFeatALPN), '支持', '不支持'));
+      SupportText(LLib.IsFeatureSupported(sslFeatALPN)));
     WriteLn('  Session Resumption: ',
-      BoolToStr(LLib.IsFeatureSupported(sslFeatSessionTickets), '支持', '不支持'));
+      SupportText(LLib.IsFeatureSupported(sslFeatSessionTickets)));
 
     // 协议版本支持
     WriteLn;
     WriteLn('协议版本支持:');
-    WriteLn('  TLS 1.0: ', BoolToStr(LLib.IsProtocolSupported(sslProtocolTLS10), '✓', '✗'));
-    WriteLn('  TLS 1.1: ', BoolToStr(LLib.IsProtocolSupported(sslProtocolTLS11), '✓', '✗'));
-    WriteLn('  TLS 1.2: ', BoolToStr(LLib.IsProtocolSupported(sslProtocolTLS12), '✓', '✗'));
-    WriteLn('  TLS 1.3: ', BoolToStr(LLib.IsProtocolSupported(sslProtocolTLS13), '✓', '✗'));
+    WriteLn('  TLS 1.0: ', SupportText(LLib.IsProtocolSupported(sslProtocolTLS10)));
+    WriteLn('  TLS 1.1: ', SupportText(LLib.IsProtocolSupported(sslProtocolTLS11)));
+    WriteLn('  TLS 1.2: ', SupportText(LLib.IsProtocolSupported(sslProtocolTLS12)));
+    WriteLn('  TLS 1.3: ', SupportText(LLib.IsProtocolSupported(sslProtocolTLS13)));
   end;
 end;
 
@@ -305,7 +316,7 @@ procedure RunAllTests;
 begin
   WriteLn;
   WriteLn('================================');
-  WriteLn('  fafafa.ssl 基础功能测试');
+  WriteLn('  nextpas.core.tls 基础功能测试');
   WriteLn('================================');
   WriteLn;
   WriteLn('时间: ', DateTimeToStr(Now));

@@ -83,7 +83,7 @@ begin
 
   if not TCertificateUtils.TryGenerateSelfSignedSimple(
     'early-data.local',
-    'fafafa.ssl',
+    'nextpas.core.tls',
     30,
     LCertPEM,
     LKeyPEM

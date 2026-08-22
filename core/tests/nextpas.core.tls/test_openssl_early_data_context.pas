@@ -14,8 +14,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
-  fafafa.ssl;  // 注册所有后端
-
+  nextpas.core.tls.openssl.backed;
 var
   Lib: ISSLLibrary;
   Ctx: ISSLContext;

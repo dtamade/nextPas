@@ -4,7 +4,6 @@ program test_factory_connection_scope_clarification;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.factory,
@@ -104,7 +103,7 @@ var
 begin
   TestHeader('Request path rejects custom HandshakeTimeout');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Config.HandshakeTimeout := 100;
 
@@ -122,7 +121,7 @@ var
 begin
   TestHeader('Request path rejects custom BufferSize');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Config.BufferSize := SSL_DEFAULT_BUFFER_SIZE * 2;
 

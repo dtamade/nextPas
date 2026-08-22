@@ -5,7 +5,7 @@ program test_mbedtls_connection_session_reused_contract;
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.api,
   nextpas.core.tls.mbedtls.session,
@@ -88,7 +88,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := TMbedTLSConnection.Create(nil, nil, LStream) as ISSLConnection;
+    LConn := TMbedTLSConnection.Create(nil, nil, TStreamWrapper.Create(LStream, False)) as ISSLConnection;
     LSession := TMbedTLSSession.Create;
     AssertTrue('connection exposes ISSLSessionResumption owner path',
       Supports(LConn, ISSLSessionResumption, LResumption));

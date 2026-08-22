@@ -15,10 +15,15 @@ program test_real_websites_comprehensive;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
-  fafafa.examples.tcp;
+  nextpas.core.tls.tls,
+  nextpas.core.time,
+  nextpas.core.tls.safety,
+  tls_test_sockets;
 
 type
   TWebsiteTest = record
@@ -119,6 +124,7 @@ function RunTest(const ATest: TWebsiteTest; const AConnector: TSSLConnector): TT
 var
   Sock: TSocketHandle;
   TLS: TSSLStream;
+  TLSI: IStream;
   StartMs: QWord;
   Request: RawByteString;
   LVerifyResult: Integer;
@@ -137,7 +143,7 @@ begin
   try
     try
       try
-        Sock := ConnectTCP(ATest.Host, ATest.Port);
+        Sock := ConnectTCP(ATest.Host, ATest.Port, 2);
       except
         on E: Exception do
         begin
@@ -147,7 +153,8 @@ begin
         end;
       end;
 
-      TLS := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
+      TLSI := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
+      TLS := TSSLStream(TLSI);
       Result.Protocol := ProtocolVersionToString(TLS.Connection.GetProtocolVersion);
       Result.Cipher := TLS.Connection.GetCipherName;
       GetCertificateVerificationInfo(TLS.Connection, LVerifyResult, Result.VerifyResult);
@@ -155,12 +162,12 @@ begin
       // 发送一个轻量 HEAD 请求（只验证加密通道可写即可）
       Request := 'HEAD / HTTP/1.1'#13#10 +
                  'Host: ' + ATest.Host + #13#10 +
-                 'User-Agent: fafafa.ssl-test_real_websites_comprehensive/1.0'#13#10 +
+                 'User-Agent: nextpas.core.tls-test_real_websites_comprehensive/1.0'#13#10 +
                  'Connection: close'#13#10 +
                  #13#10;
 
       if Length(Request) > 0 then
-        TLS.WriteBuffer(Request[1], Length(Request));
+        TLS.Write(Request[1], Length(Request));
 
       Result.Success := True;
     except
@@ -172,8 +179,8 @@ begin
     end;
   finally
     Result.ResponseTime := GetTickCount64 - StartMs;
-    if TLS <> nil then
-      TLS.Free;
+    TLSI := nil;
+    TLS := nil;
     CloseSocket(Sock);
   end;
 end;
@@ -187,7 +194,7 @@ var
   EffectiveTotal: Integer;
 begin
   WriteLn('================================================================');
-  WriteLn('fafafa.ssl - Comprehensive Real Website Test (50+ Sites)');
+  WriteLn('nextpas.core.tls - Comprehensive Real Website Test (50+ Sites)');
   WriteLn('================================================================');
   WriteLn;
 
@@ -211,7 +218,8 @@ begin
     for I := Low(TEST_SITES) to High(TEST_SITES) do
     begin
       Inc(GTotalTests);
-      Write(Format('[%2d/%2d] %-20s ', [GTotalTests, Length(TEST_SITES), TEST_SITES[I].Description]));
+      // 重定向下 Write 不刷缓冲,进度不可见;用 WriteLn 每站一行
+      WriteLn(Format('[%2d/%2d] %-20s ', [GTotalTests, Length(TEST_SITES), TEST_SITES[I].Description]));
 
       R := RunTest(TEST_SITES[I], Connector);
 

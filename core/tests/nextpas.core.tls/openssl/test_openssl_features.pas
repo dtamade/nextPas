@@ -3,15 +3,17 @@ program test_openssl_features;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, DynLibs,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
   nextpas.core.tls.factory,
   nextpas.core.tls.base,
-  fafafa.ssl,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.openssl.base,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.core,
+  nextpas.core.platform.dl,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.openssl.api.pem,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.ec,
@@ -103,11 +105,12 @@ end;
 
 function RawOpenSSLFunctionExported(const AName: string): Boolean;
 var
-  LLibHandle: TLibHandle;
+  LLibHandle: TPlatformLibrary;
+  LAddr: Pointer;
 begin
   LLibHandle := GetCryptoLibHandle;
-  Result := (LLibHandle <> NilHandle) and
-    Assigned(GetProcedureAddress(LLibHandle, PChar(AName)));
+  Result := LLibHandle.IsValid and
+    (LLibHandle.Sym(PAnsiChar(AName), LAddr) = 0);
 end;
 
 procedure PrepareOpenSSLDERPrivateKeyRuntimeSurfaces;
@@ -382,7 +385,7 @@ end;
 procedure TestCapabilityMatrixRuntimeDriftContract;
 var
   SSLLib: TOpenSSLLibrary;
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
   LOrigSetMaxEarly: TSSL_CTX_set_max_early_data;
   LCaps: TSSLBackendCapabilities;
 begin
@@ -399,7 +402,7 @@ begin
     end;
 
     LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-    if LHandle = NilHandle then
+    if LHandle.IsInvalid then
     begin
       WriteLn('[SKIP] libssl handle unavailable; skip capability-drift check');
       Exit;
@@ -432,7 +435,7 @@ end;
 procedure TestSessionTicketCapabilityMatrixRuntimeDriftContract;
 var
   SSLLib: TOpenSSLLibrary;
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
   LOrigSetTicketExtCb: TSSL_set_session_ticket_ext_cb;
   LCaps: TSSLBackendCapabilities;
 begin
@@ -449,7 +452,7 @@ begin
     end;
 
     LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-    if LHandle = NilHandle then
+    if LHandle.IsInvalid then
     begin
       WriteLn('[SKIP] libssl handle unavailable; skip session-ticket capability-drift check');
       Exit;
@@ -482,7 +485,7 @@ end;
 procedure TestPostHandshakeCapabilityMatrixRuntimeDriftContract;
 var
   SSLLib: TOpenSSLLibrary;
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
   LOrigVerifyPostHandshake: TSSL_verify_client_post_handshake;
   LCaps: TSSLBackendCapabilities;
 begin
@@ -499,7 +502,7 @@ begin
     end;
 
     LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-    if LHandle = NilHandle then
+    if LHandle.IsInvalid then
     begin
       WriteLn('[SKIP] libssl handle unavailable; skip post-handshake capability-drift check');
       Exit;
@@ -812,7 +815,7 @@ begin
   LProbeStream := TMemoryStream.Create;
   try
     LCtx := LProbeLib.CreateContext(sslCtxClient);
-    LConn := LCtx.CreateConnection(LProbeStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LProbeStream, False));
 
     Require(not Supports(LConn, ISSLCertificateTransparency, LCT),
       'OpenSSL connection must not expose ISSLCertificateTransparency by default');
@@ -886,6 +889,8 @@ var
   LOrigEngineInit: TENGINE_init;
   LOrigEngineLoadPrivateKey: TENGINE_load_private_key;
   LCaps: TSSLBackendCapabilities;
+  LCaps2: TSSLBackendCapabilities;
+
   LRuntimeReady: Boolean;
 begin
   WriteLn;
@@ -930,8 +935,8 @@ begin
     ENGINE_init := nil;
     ENGINE_load_private_key := nil;
     try
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsPKCS11,
+      LCaps2 := SSLLib.GetCapabilities;
+      Require(not LCaps2.SupportsPKCS11,
         'PKCS#11 capability must stop claiming supported when neither Provider nor ENGINE backend is runtime-ready');
     finally
       OSSL_PROVIDER_load := LOrigProviderLoad;
@@ -953,6 +958,9 @@ var
   SSLLib: TOpenSSLLibrary;
   LOrigSetCipherSuites: TSSL_CTX_set_ciphersuites;
   LCaps: TSSLBackendCapabilities;
+  LCaps2: TSSLBackendCapabilities;
+  LCaps3: TSSLBackendCapabilities;
+
   LRuntimeSupported: Boolean;
 begin
   WriteLn;
@@ -986,8 +994,8 @@ begin
     LOrigSetCipherSuites := SSL_CTX_set_ciphersuites;
     if not Assigned(LOrigSetCipherSuites) then
     begin
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsChaChaPoly,
+      LCaps2 := SSLLib.GetCapabilities;
+      Require(not LCaps2.SupportsChaChaPoly,
         'ChaCha20-Poly1305 capability must be false when SSL_CTX_set_ciphersuites is unavailable');
       WriteLn('✅ ChaCha20-Poly1305 capability matrix baseline contract verified');
       Exit;
@@ -995,8 +1003,8 @@ begin
 
     SSL_CTX_set_ciphersuites := nil;
     try
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsChaChaPoly,
+      LCaps3 := SSLLib.GetCapabilities;
+      Require(not LCaps3.SupportsChaChaPoly,
         'ChaCha20-Poly1305 capability must stop claiming supported when SSL_CTX_set_ciphersuites is not runtime-ready');
     finally
       SSL_CTX_set_ciphersuites := LOrigSetCipherSuites;
@@ -1013,6 +1021,9 @@ var
   SSLLib: TOpenSSLLibrary;
   LOrigPKCS12Parse: nextpas.core.tls.openssl.api.pkcs12.TPKCS12_parse;
   LCaps: TSSLBackendCapabilities;
+  LCaps2: TSSLBackendCapabilities;
+  LCaps3: TSSLBackendCapabilities;
+
   LSurfaceReady: Boolean;
 begin
   WriteLn;
@@ -1049,8 +1060,8 @@ begin
     LOrigPKCS12Parse := nextpas.core.tls.openssl.api.pkcs12.PKCS12_parse;
     if not Assigned(LOrigPKCS12Parse) then
     begin
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsPKCS12,
+      LCaps2 := SSLLib.GetCapabilities;
+      Require(not LCaps2.SupportsPKCS12,
         'PKCS#12 capability must be false when PKCS12_parse is unavailable');
       WriteLn('✅ PKCS#12 capability matrix baseline contract verified');
       Exit;
@@ -1058,8 +1069,8 @@ begin
 
     nextpas.core.tls.openssl.api.pkcs12.PKCS12_parse := nil;
     try
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsPKCS12,
+      LCaps3 := SSLLib.GetCapabilities;
+      Require(not LCaps3.SupportsPKCS12,
         'PKCS#12 capability must stop claiming supported when PKCS12_parse is not runtime-ready');
     finally
       nextpas.core.tls.openssl.api.pkcs12.PKCS12_parse := LOrigPKCS12Parse;
@@ -1077,6 +1088,8 @@ var
   LOrigSetMin: TSSL_CTX_set_min_proto_version;
   LOrigSetMax: TSSL_CTX_set_max_proto_version;
   LCaps: TSSLBackendCapabilities;
+  LCaps2: TSSLBackendCapabilities;
+
   LTLS13Runtime: Boolean;
 begin
   WriteLn;
@@ -1118,16 +1131,16 @@ begin
     SSL_CTX_set_min_proto_version := @StubRejectTLS13SetMinProtoPolicy;
     SSL_CTX_set_max_proto_version := @StubRejectTLS13SetMaxProtoPolicy;
     try
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsTLS13,
+      LCaps2 := SSLLib.GetCapabilities;
+      Require(not LCaps2.SupportsTLS13,
         'TLS 1.3 capability must stop claiming supported when runtime policy rejects TLS 1.3');
-      Require(LCaps.MaxTLSVersion = sslProtocolTLS12,
+      Require(LCaps2.MaxTLSVersion = sslProtocolTLS12,
         'Max TLS version must fall back to TLS 1.2 when runtime policy rejects TLS 1.3');
-      Require(LCaps.ZeroRTTSupport <> sslSupportStable,
+      Require(LCaps2.ZeroRTTSupport <> sslSupportStable,
         '0-RTT support must stop claiming stable when runtime policy rejects TLS 1.3');
-      Require(LCaps.EarlyDataSupport <> sslSupportStable,
+      Require(LCaps2.EarlyDataSupport <> sslSupportStable,
         'Early-data support must stop claiming stable when runtime policy rejects TLS 1.3');
-      Require(LCaps.PostHandshakeAuthSupport <> sslSupportStable,
+      Require(LCaps2.PostHandshakeAuthSupport <> sslSupportStable,
         'Post-handshake auth support must stop claiming stable when runtime policy rejects TLS 1.3');
     finally
       SSL_CTX_set_min_proto_version := LOrigSetMin;
@@ -1146,6 +1159,8 @@ var
   LOrigSetMin: TSSL_CTX_set_min_proto_version;
   LOrigSetMax: TSSL_CTX_set_max_proto_version;
   LCaps: TSSLBackendCapabilities;
+  LCaps2: TSSLBackendCapabilities;
+
   LDTLSRuntime: Boolean;
 begin
   WriteLn;
@@ -1192,8 +1207,8 @@ begin
         'DTLS 1.0 runtime probe must respect DTLS policy setters');
       Require(not SSLLib.IsProtocolSupported(sslProtocolDTLS12),
         'DTLS 1.2 runtime probe must respect DTLS policy setters');
-      LCaps := SSLLib.GetCapabilities;
-      Require(not LCaps.SupportsDTLS,
+      LCaps2 := SSLLib.GetCapabilities;
+      Require(not LCaps2.SupportsDTLS,
         'DTLS capability must stop claiming supported when runtime policy rejects DTLS protocol setters');
     finally
       SSL_CTX_set_min_proto_version := LOrigSetMin;

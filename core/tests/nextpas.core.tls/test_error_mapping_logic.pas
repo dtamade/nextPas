@@ -2,7 +2,7 @@
   test_error_mapping_logic - 错误映射逻辑测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-01-17
 
   描述:

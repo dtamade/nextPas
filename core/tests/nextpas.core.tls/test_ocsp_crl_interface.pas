@@ -12,10 +12,11 @@ program test_ocsp_crl_interface;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.cert.advanced,
+  nextpas.core.tls.base,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  nextpas.core.tls.factory;
-
+  nextpas.core.tls.factory,
+  nextpas.core.tls.openssl.backed;
 var
   LContext: ISSLContext;
   LOCSPClient: IOCSPClient;

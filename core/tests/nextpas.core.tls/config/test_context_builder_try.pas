@@ -1088,7 +1088,7 @@ begin
 
   if not TCertificateUtils.TryGenerateSelfSignedSimple(
     'builder-replay-errors.local',
-    'fafafa.ssl',
+    'nextpas.core.tls',
     30,
     LCertPEM,
     LKeyPEM

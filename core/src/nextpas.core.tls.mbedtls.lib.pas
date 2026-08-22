@@ -13,7 +13,7 @@
  * - 需要管理全局熵源和随机数生成器
  * - 这些资源在 Initialize 时创建，供所有上下文共享
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

@@ -3,7 +3,7 @@ unit benchmark_framework;
 {$mode objfpc}{$H+}
 
 {**
- * Performance Baseline Framework for fafafa.ssl
+ * Performance Baseline Framework for nextpas.core.tls
  *
  * Provides infrastructure for benchmarking security-critical operations:
  * - High-resolution timing
@@ -22,7 +22,7 @@ unit benchmark_framework;
 interface
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time, StrUtils;
+  nextpas.core.system.classes, nextpas.core.time, StrUtils, SysUtils;
 
 type
   { Benchmark test procedure type }

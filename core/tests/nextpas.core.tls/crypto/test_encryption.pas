@@ -3,24 +3,36 @@ program test_encryption;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
-  fafafa.ssl,
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory,
   nextpas.core.tls.secure;
 
-procedure TestEncryption;
 var
-  LKeyStore: TSecureKeyStoreImpl;
+  LKeyStore: ISecureKeyStore;
   LOriginal, LDecrypted: TSecureBytes;
-  LEncrypted: TBytes;
   LPassword: string;
   LTestData: TBytes;
+  LFactory: ISSLLibrary;
 begin
-  WriteLn('=== Testing TSecureKeyStore AES-256-GCM Encryption ===');
+  WriteLn('=== Testing ISecureKeyStore AES-256-GCM Encryption ===');
+  WriteLn;
+
+  // Initialize OpenSSL backend so EVP/KDF symbols are loaded
+  LFactory := TSSLFactory.GetLibraryInstance(sslOpenSSL);
+  if LFactory = nil then
+  begin
+    WriteLn('FATAL: OpenSSL backend is not available');
+    ExitCode := 1;
+    Exit;
+  end;
+  WriteLn('OpenSSL backend: ', LFactory.GetVersionString);
   WriteLn;
 
   // Create key store
-  WriteLn('1. Creating TSecureKeyStore...');
-  LKeyStore := TSecureKeyStoreImpl.Create('test_password');
+  WriteLn('1. Creating key store...');
+  LKeyStore := CreateSecureKeyStore;
   try
     WriteLn('   ✓ Key store created');
     WriteLn;
@@ -36,18 +48,18 @@ begin
     WriteLn;
     WriteLn;
 
-    // Encrypt
+    // Encrypt and store under a key id
     WriteLn('3. Encrypting with AES-256-GCM...');
     LPassword := 'MySecurePassword123!';
-    LEncrypted := LKeyStore.EncryptKey(LOriginal, LPassword);
+    LKeyStore.StoreKey('test-key', LOriginal, LPassword);
     WriteLn('   ✓ Encryption successful');
-    WriteLn('   Encrypted size: ', Length(LEncrypted), ' bytes (includes salt+IV+tag)');
+    WriteLn('   Encrypted blob size: ', LOriginal.Size, ' bytes (plaintext)');
     WriteLn;
 
     // Decrypt
     WriteLn('4. Decrypting...');
-    LDecrypted := LKeyStore.DecryptKey(LEncrypted, LPassword);
-   WriteLn('   ✓ Decryption successful');
+    LDecrypted := LKeyStore.LoadKey('test-key', LPassword);
+    WriteLn('   ✓ Decryption successful');
     WriteLn;
 
     // Verify
@@ -61,7 +73,7 @@ begin
       // Test wrong password
       WriteLn('6. Testing authentication (wrong password)...');
       try
-        LDecrypted := LKeyStore.DecryptKey(LEncrypted, 'WrongPassword');
+        LDecrypted := LKeyStore.LoadKey('test-key', 'WrongPassword');
         WriteLn('   ✗ FAILED: Should have rejected wrong password');
         ExitCode := 1;
       except
@@ -79,20 +91,7 @@ begin
       WriteLn('   ✗ FAILED: Data mismatch');
       ExitCode := 1;
     end;
-
   finally
-    LKeyStore.Free;
-  end;
-end;
-
-begin
-  try
-    TestEncryption;
-  except
-    on E: Exception do
-    begin
-      WriteLn('ERROR: ', E.Message);
-      ExitCode := 1;
-    end;
+    LKeyStore := nil;
   end;
 end.

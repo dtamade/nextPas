@@ -11,12 +11,12 @@ program test_native_handle_unified;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.native_handle,
-  nextpas.core.tls.exceptions;
-
+  nextpas.core.tls.exceptions,
+  nextpas.core.tls.freepascal.lib,
+  nextpas.core.tls.openssl.backed;
 type
   PSSL_CTX = Pointer;  // OpenSSL 类型（简化）
   PSSL = Pointer;
@@ -319,7 +319,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl - 统一原生句柄辅助单元测试');
+  WriteLn('nextpas.core.tls - 统一原生句柄辅助单元测试');
   WriteLn('==========================================');
   WriteLn;
 

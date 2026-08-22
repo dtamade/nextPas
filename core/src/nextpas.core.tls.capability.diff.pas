@@ -4,7 +4,7 @@
  *
  * v1.3.0 阶段 2
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.3.0
  * @since 2026-02-05
  *}

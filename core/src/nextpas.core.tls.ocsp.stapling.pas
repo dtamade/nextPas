@@ -16,7 +16,7 @@ unit nextpas.core.tls.ocsp.stapling;
   RFC 6066 (TLS Extensions) - OCSP Status Request
   RFC 6961 (TLS Multiple Certificate Status Request)
   
-  @author fafafa.ssl team
+  @author nextpas.core.tls team
   @version 1.0.0
 }
 

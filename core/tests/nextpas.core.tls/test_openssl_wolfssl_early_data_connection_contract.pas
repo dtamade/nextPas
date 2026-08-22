@@ -3,9 +3,10 @@ program test_openssl_wolfssl_early_data_connection_contract;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.factory,
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
   nextpas.core.tls.base,
-  fafafa.ssl,
   nextpas.core.tls.openssl.backed,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.tls.wolfssl.lib;
@@ -224,7 +225,7 @@ begin
 
     LStream := TMemoryStream.Create;
     try
-      LConn := LCtx.CreateConnection(LStream);
+      LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
       CheckTrue(LName + ' helper keeps early-data connection absent when capability is none',
         not TSSLHelper.SupportsEarlyDataConnection(LConn),
         'TSSLHelper.SupportsEarlyDataConnection should be False when capability is none');
@@ -249,7 +250,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
 
     CheckTrue(LName + ' helper detects ISSLEarlyDataConnection',
       TSSLHelper.SupportsEarlyDataConnection(LConn),

@@ -299,7 +299,7 @@ begin
 end;
 
 begin
-  WriteLn('fafafa.ssl wolfssl metadata accuracy tests');
+  WriteLn('nextpas.core.tls wolfssl metadata accuracy tests');
   WriteLn('============================================');
 
   TestEmptyCertificateMetadata;

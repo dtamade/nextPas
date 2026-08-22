@@ -201,9 +201,9 @@ begin
 
     if Block.Headers <> nil then
     begin
-      Check('PEM头部 - 头部数量', Block.Headers.Count = 2);
-      Check('PEM头部 - Proc-Type', Pos('ENCRYPTED', Block.Headers.Text) > 0);
-      Check('PEM头部 - DEK-Info', Pos('AES-256-CBC', Block.Headers.Text) > 0);
+      Check('PEM头部 - 头部数量', Length(Block.Headers) = 2);
+      Check('PEM头部 - Proc-Type', Pos('ENCRYPTED', Block.Headers[0]) > 0);
+      Check('PEM头部 - DEK-Info', Pos('AES-256-CBC', Block.Headers[1]) > 0);
       Check('PEM头部 - IsEncrypted', Block.IsEncrypted);
     end;
   finally

@@ -13,7 +13,7 @@ program test_factory_logic;
   test_factory_logic - 工厂模式逻辑测试
 
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2026-01-18
 
   描述:

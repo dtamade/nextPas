@@ -1,5 +1,5 @@
 {******************************************************************************}
-{  fafafa.ssl - OpenSSL CMAC EVP Module (OpenSSL 3.x Compatible)             }
+{  nextpas.core.tls - OpenSSL CMAC EVP Module (OpenSSL 3.x Compatible)             }
 {  Copyright (c) 2024 fafafa                                                  }
 {******************************************************************************}
 

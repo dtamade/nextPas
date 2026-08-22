@@ -25,7 +25,7 @@ unit nextpas.core.tls.debug.utils;
  *
  * Thread Safety: TSSLUtils 类方法线程安全，辅助类非线程安全
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.1.0
  * @since 2025-12-16
  *}

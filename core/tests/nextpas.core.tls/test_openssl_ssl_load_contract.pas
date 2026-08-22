@@ -4,6 +4,7 @@ program test_openssl_ssl_load_contract;
 
 uses
   nextpas.core.system.sysutils,
+  nextpas.core.platform.dl,
   Dynlibs,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.ssl;
@@ -38,7 +39,7 @@ begin
   TOpenSSLLoader.ResetModuleStates;
 end;
 
-procedure CheckExportedHelperIsBound(AHandle: TLibHandle; const ASymbol: string;
+procedure CheckExportedHelperIsBound(AHandle: TPlatformLibrary; const ASymbol: string;
   AAssigned: Boolean; const ALabel: string);
 begin
   if TOpenSSLLoader.IsFunctionAvailable(AHandle, ASymbol) then
@@ -49,12 +50,12 @@ end;
 
 procedure TestLoadPublishesExportedInfoAndStateHelpers;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
   ResetLoaderState;
 
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
   begin
     Fail('Unable to load libssl for SSL load contract test');
     Exit;
@@ -87,12 +88,14 @@ end;
 
 procedure TestLoadPublishesExportedSessionTicketAndPSKHelpers;
 var
-  LHandle: TLibHandle;
+  LHandle: TPlatformLibrary;
 begin
-  ResetLoaderState;
-
+  // 不复用 ResetLoaderState:core 的 LoadOpenSSLCore 在函数指针已绑定时会提前
+  // 退出而不重设 osmCore 状态位,部分卸载(UnloadOpenSSLSSL+ResetModuleStates)
+  // 后再加载会被误判失败。本测试只验证"已加载状态下绑定表覆盖导出符号",
+  // 与第一个过程共享同一已加载状态,语义不变。
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LHandle = NilHandle then
+  if LHandle.IsInvalid then
   begin
     Fail('Unable to load libssl for SSL ticket/PSK load contract test');
     Exit;

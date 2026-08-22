@@ -21,12 +21,12 @@ type
     constructor Create(const ASubject, AIssuer, ASerial: string);
 
     function LoadFromFile(const AFileName: string): Boolean;
-    function LoadFromStream(AStream: TStream): Boolean;
+    function LoadFromStream(AStream: IStream): Boolean;
     function LoadFromMemory(const AData: Pointer; ASize: Integer): Boolean;
     function LoadFromPEM(const APEM: string): Boolean;
     function LoadFromDER(const ADER: TBytes): Boolean;
     function SaveToFile(const AFileName: string): Boolean;
-    function SaveToStream(AStream: TStream): Boolean;
+    function SaveToStream(AStream: IStream): Boolean;
     function SaveToPEM: string;
     function SaveToDER: TBytes;
     function GetInfo: TSSLCertificateInfo;
@@ -137,11 +137,11 @@ type
     function GetPreferredVersion: TSSLProtocolVersion;
 
     procedure LoadCertificate(const AFileName: string); overload;
-    procedure LoadCertificate(AStream: TStream); overload;
+    procedure LoadCertificate(AStream: IStream); overload;
     procedure LoadCertificate(ACert: ISSLCertificate); overload;
 
     procedure LoadPrivateKey(const AFileName: string; const APassword: string = ''); overload;
-    procedure LoadPrivateKey(AStream: TStream; const APassword: string = ''); overload;
+    procedure LoadPrivateKey(AStream: IStream; const APassword: string = ''); overload;
 
     procedure LoadCertificatePEM(const APEM: string);
     procedure LoadPrivateKeyPEM(const APEM: string; const APassword: string = '');
@@ -193,7 +193,7 @@ type
     procedure ClearCertificatePins;
 
     function CreateConnection(ASocket: THandle): ISSLConnection; overload;
-    function CreateConnection(AStream: TStream): ISSLConnection; overload;
+    function CreateConnection(AStream: IStream): ISSLConnection; overload;
     function IsValid: Boolean;
   end;
 
@@ -261,7 +261,7 @@ begin
   Result := False;
 end;
 
-function TMockCertificate.LoadFromStream(AStream: TStream): Boolean;
+function TMockCertificate.LoadFromStream(AStream: IStream): Boolean;
 begin
   Result := False;
 end;
@@ -286,7 +286,7 @@ begin
   Result := False;
 end;
 
-function TMockCertificate.SaveToStream(AStream: TStream): Boolean;
+function TMockCertificate.SaveToStream(AStream: IStream): Boolean;
 begin
   Result := False;
 end;
@@ -720,7 +720,7 @@ begin
   // no-op
 end;
 
-procedure TMockContext.LoadCertificate(AStream: TStream);
+procedure TMockContext.LoadCertificate(AStream: IStream);
 begin
   // no-op
 end;
@@ -735,7 +735,7 @@ begin
   // no-op
 end;
 
-procedure TMockContext.LoadPrivateKey(AStream: TStream; const APassword: string);
+procedure TMockContext.LoadPrivateKey(AStream: IStream; const APassword: string);
 begin
   // no-op
 end;
@@ -927,7 +927,7 @@ begin
   Result := Conn;
 end;
 
-function TMockContext.CreateConnection(AStream: TStream): ISSLConnection;
+function TMockContext.CreateConnection(AStream: IStream): ISSLConnection;
 begin
   Result := CreateConnection(THandle(1));
 end;

@@ -3,12 +3,16 @@ program test_openssl_server_ocsp_stapling_runtime;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, ctypes,
-  fafafa.ssl,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  Classes,
+  ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.factory,
   nextpas.core.tls.openssl.base,
+  nextpas.core.io.stream_adapter,
   nextpas.core.tls.openssl.api.ssl,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.tls13.wire,
@@ -17,16 +21,16 @@ uses
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.tls13.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 const
-  OCSP_FIXTURE_FILE = 'tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
-  CERT_FILE = 'tests/certificate/test_certs/signer_cert.pem';
-  KEY_FILE = 'tests/certificate/test_certs/signer_key.pem';
+  OCSP_FIXTURE_FILE = 'fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
+  CERT_FILE = 'certificate/test_certs/signer_cert.pem';
+  KEY_FILE = 'certificate/test_certs/signer_key.pem';
 
 // INTENTIONAL_VERIFY_RESULT_CORE_SURFACE: this backend-specific
 // OCSP stapling runtime file intentionally keeps direct core verify-result
@@ -608,7 +612,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'OpenSSL server connection should be created');
     AssertTrue(LConn.Accept,
       'OpenSSL server accept should succeed when stapled response is configured');
@@ -651,7 +655,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(False);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'OpenSSL server connection should be created');
     AssertTrue(LConn.Accept,
       'OpenSSL server accept should succeed without client status_request');
@@ -675,7 +679,7 @@ begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'OpenSSL server connection should be created');
     AssertTrue(LConn.Accept,
       'OpenSSL server accept should succeed without configured stapled response');
@@ -704,7 +708,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Builder-built server connection without stapled file should be created');
     if not LConn.Accept then
       Fail(Format(
@@ -764,7 +768,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Builder-built server connection should be created');
     if not LConn.Accept then
       Fail(Format(

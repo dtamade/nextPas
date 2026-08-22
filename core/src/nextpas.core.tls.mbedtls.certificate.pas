@@ -4,7 +4,7 @@
  *
  * 实现 ISSLCertificate 和 ISSLCertificateStore 接口的 MbedTLS 后端。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-10
  *}

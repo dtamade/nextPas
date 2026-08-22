@@ -14,7 +14,7 @@ unit nextpas.core.tls.openssl.loader;
 {  4. 错误处理 - 统一的错误报告机制                                            }
 {                                                                              }
 {  Phase: 3.3 P0 - 代码去重                                                   }
-{  Author: fafafa.ssl team                                                    }
+{  Author: nextpas.core.tls team                                                    }
 {  Date: 2025-12-16                                                           }
 {                                                                              }
 {******************************************************************************}

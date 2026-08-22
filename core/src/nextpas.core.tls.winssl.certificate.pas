@@ -2,7 +2,7 @@
   nextpas.core.tls.winssl.certificate - WinSSL 证书实现
   
   版本: 1.0
-  作者: fafafa.ssl 开发团队
+  作者: nextpas.core.tls 开发团队
   创建: 2025-10-06
   
   描述:

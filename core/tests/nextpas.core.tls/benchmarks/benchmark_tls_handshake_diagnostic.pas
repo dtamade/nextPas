@@ -20,11 +20,17 @@ program benchmark_tls_handshake_diagnostic;
  *}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.system.classes,
+  Sockets,
   benchmark_framework,
-  fafafa.ssl,
+  nextpas.core.text.conv,
+  nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
-  fafafa.examples.tcp;
+  nextpas.core.time,
+  nextpas.core.tls.tls,
+  tls_test_sockets;
 
 const
   DEFAULT_HOST = 'www.example.com';
@@ -64,6 +70,9 @@ var
   { Reusable context for overhead comparison }
   GSharedContext: ISSLContext;
 
+  { Pre-check probe result (avoids a local var in the main block) }
+  GProbeTiming: TTimingBreakdown;
+
 { ============================================================================ }
 { Timing Utilities                                                             }
 { ============================================================================ }
@@ -83,12 +92,14 @@ var
   Sock: TSocketHandle;
   Connector: TSSLConnector;
   TLS: TSSLStream;
+  TLSI: IStream;
   NetErr: string;
   StartTime, DNSEnd, TCPEnd, TLSEnd: Int64;
 begin
   Result := False;
   Sock := INVALID_SOCKET;
   TLS := nil;
+  TLSI := nil;
 
   FillChar(Timing, SizeOf(Timing), 0);
   StartTime := GetTickCount64MS;
@@ -119,7 +130,8 @@ begin
     Connector := TSSLConnector.FromContext(AContext)
       .WithTimeout(HANDSHAKE_TIMEOUT_MS);
 
-    TLS := Connector.ConnectSocket(THandle(Sock), AHost);
+    TLSI := Connector.ConnectSocket(THandle(Sock), AHost);
+    TLS := TSSLStream(TLSI); // Keep TLSI alive until after use
     TLSEnd := GetTickCount64MS;
     Timing.TLSTime := TLSEnd - TCPEnd;
 
@@ -141,8 +153,8 @@ begin
   end;
 
   // Cleanup
-  if TLS <> nil then
-    TLS.Free;
+  TLSI := nil;
+  TLS := nil;
   if Sock <> INVALID_SOCKET then
     CloseSocket(Sock);
 end;
@@ -346,7 +358,8 @@ var
   HostPort: string;
   ColonPos: Integer;
 begin
-  GIterations := 100;
+  // 默认迭代数取小值,保证 CI 全量(120s 预算)内可完成;完整基准用参数指定
+  GIterations := 5;
   GTestHost := DEFAULT_HOST;
   GTestPort := DEFAULT_PORT;
 
@@ -410,13 +423,21 @@ begin
   WriteLn;
 
   // Initialize stats
-  FillChar(GTLSStats, SizeOf(GTLSStats), 0);
-  SetLength(GTLSStats.Timings, 0);
+  // Default() 而非 FillChar:GTLSStats 含动态数组/字符串,直接清零会丢弃数组引用
+  GTLSStats := Default(TDiagnosticStats);
+
+  // 预检:目标不可达(离线/被墙)时跳过整个基准,而不是逐个挂起
+  if not ConnectAndHandshakeWithTiming(GTestHost, GTestPort, GSharedContext, GProbeTiming) then
+  begin
+    WriteLn('SKIPPED: cannot reach ', GTestHost, ':', GTestPort,
+      ' (offline or blocked); TLS handshake diagnostic benchmark requires network access');
+    Exit;
+  end;
 
   // Create benchmark instance
   GBenchmark := TBenchmark.Create;
   try
-    GBenchmark.WarmupIterations := 5;
+    GBenchmark.WarmupIterations := 3;
     GBenchmark.RegressionThreshold := 0.30;
 
     WriteLn('Running diagnostic tests...');
@@ -429,8 +450,8 @@ begin
     PrintDiagnosticReport;
 
     // Reset for second test
-    FillChar(GTLSStats, SizeOf(GTLSStats), 0);
-    SetLength(GTLSStats.Timings, 0);
+    // 同上:FillChar 会丢弃 Timings 数组引用,Default 安全重置
+    GTLSStats := Default(TDiagnosticStats);
 
     WriteLn;
     WriteLn('Test 2: TLS 1.3 with shared context (reused)');

@@ -13,14 +13,18 @@ program benchmark_mbedtls_vs_openssl;
 }
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.time, nextpas.core.system.classes,
+  nextpas.core.tls.openssl.backed,
+  nextpas.core.system.sysutils,
+  nextpas.core.time,
+  nextpas.core.system.classes,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
+  nextpas.core.tls.mbedtls.lib,
   nextpas.core.tls.openssl.api.core,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.bio,
   nextpas.core.tls.openssl.api.x509,
-  fafafa.examples.tcp;
+  tls_test_sockets;
 
 const
   TEST_HOST = 'www.google.com';

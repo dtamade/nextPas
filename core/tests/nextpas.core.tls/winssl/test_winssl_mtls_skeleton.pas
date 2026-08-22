@@ -19,7 +19,7 @@ program test_winssl_mtls_skeleton;
  * - 设置 FAFAFA_WINSSL_MTLS_SERVER（目标服务器）
  * - 设置 FAFAFA_WINSSL_CLIENT_CERT_SUBJECT 或 FAFAFA_WINSSL_PFX
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2025-12-23
  *}

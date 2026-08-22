@@ -4,11 +4,7 @@ program test_openssl_loader_required_symbol_contract;
 
 uses
   nextpas.core.system.sysutils,
-  {$IFDEF WINDOWS}
-  Windows,
-  {$ELSE}
-  Dynlibs,
-  {$ENDIF}
+  nextpas.core.platform.dl,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api.aes,
   nextpas.core.tls.openssl.api.sha,
@@ -44,32 +40,24 @@ begin
     Format('%s (expected=%d actual=%d)', [AMessage, AExpected, AActual]));
 end;
 
-function LoadMismatchedLibrary: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+function LoadMismatchedLibrary: TPlatformLibrary;
 var
   LPath: string;
 begin
+  Result := Default(TPlatformLibrary);
   LPath := ParamStr(1);
   if LPath <> '' then
   begin
-    {$IFDEF WINDOWS}
-    Result := LoadLibrary(PChar(LPath));
-    {$ELSE}
-    Result := LoadLibrary(LPath);
-    {$ENDIF}
+    platform_dl_open(PAnsiChar(LPath), PLATFORM_DL_LAZY, Result);
     Exit;
   end;
 
-  {$IFDEF WINDOWS}
-  Result := LoadLibrary('kernel32.dll');
-  {$ELSE}
-  Result := LoadLibrary('libc.so.6');
-  if Result = 0 then
-    Result := LoadLibrary('libc.so');
-  {$ENDIF}
+  if platform_dl_open(PAnsiChar('libc.so.6'), PLATFORM_DL_LAZY, Result) <> 0 then
+    platform_dl_open(PAnsiChar('libc.so'), PLATFORM_DL_LAZY, Result);
 end;
 
 procedure Test_LoadFunctions_FailsClosedWhenRequiredBindingMissing(
-  ALibHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF});
+  ALibHandle: TPlatformLibrary);
 var
   LExistingProc: Pointer;
   LMissingProc: Pointer;
@@ -104,7 +92,7 @@ begin
 end;
 
 procedure Test_AES_ModuleStaysUnloadedWhenRequiredSymbolsMissing(
-  ALibHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF});
+  ALibHandle: TPlatformLibrary);
 begin
   WriteLn('=== AES module should not publish loaded state before required symbols exist ===');
 
@@ -122,7 +110,7 @@ begin
 end;
 
 procedure Test_SHA_ModuleStaysUnloadedWhenRequiredSymbolsMissing(
-  ALibHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF});
+  ALibHandle: TPlatformLibrary);
 begin
   WriteLn('=== SHA module should not publish loaded state before required symbols exist ===');
 
@@ -153,10 +141,10 @@ begin
 end;
 
 var
-  LMismatchedHandle: {$IFDEF WINDOWS}HMODULE{$ELSE}TLibHandle{$ENDIF};
+  LMismatchedHandle: TPlatformLibrary;
 begin
   LMismatchedHandle := LoadMismatchedLibrary;
-  if LMismatchedHandle = 0 then
+  if LMismatchedHandle.IsInvalid then
   begin
     WriteLn('Failed to load mismatched host library for contract test');
     Halt(1);

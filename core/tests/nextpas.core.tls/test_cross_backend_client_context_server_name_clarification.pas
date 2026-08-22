@@ -7,8 +7,8 @@ program test_cross_backend_client_context_server_name_clarification;
   backends no longer inherit it. }
 
 uses
+  nextpas.core.io.stream_adapter,
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.freepascal.lib,
@@ -93,7 +93,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
     CheckTrue(LName + ' client stream connection created',
       LConn <> nil, 'CreateConnection(TStream) returned nil');
     CheckTrue(LName + ' client stream connection exposes ISSLClientConnection',

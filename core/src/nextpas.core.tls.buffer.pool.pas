@@ -14,7 +14,7 @@
  * - 减少 90%+ 内存分配
  * - 读取吞吐量提升 30-50%
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-05
  *}

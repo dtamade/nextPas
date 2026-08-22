@@ -3,7 +3,7 @@
  *
  * v1.3.0 阶段 2
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.3.0
  * @since 2026-02-05
  *}
@@ -264,7 +264,7 @@ var
 
 begin
   WriteLn('═══════════════════════════════════════════════════════════');
-  WriteLn('  fafafa.ssl 能力矩阵差异对比测试');
+  WriteLn('  nextpas.core.tls 能力矩阵差异对比测试');
   WriteLn('  v1.3.0 阶段 2');
   WriteLn('═══════════════════════════════════════════════════════════');
 

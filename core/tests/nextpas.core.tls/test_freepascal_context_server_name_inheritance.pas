@@ -7,7 +7,7 @@ program test_freepascal_context_server_name_inheritance;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.freepascal.lib;
@@ -75,7 +75,7 @@ begin
 
   Stream := TMemoryStream.Create;
   try
-    Conn := Ctx.CreateConnection(Stream);
+    Conn := Ctx.CreateConnection(TStreamWrapper.Create(Stream, False));
     ClientConn := Conn as ISSLClientConnection;
 
     Assert(ClientConn.GetServerName = '',

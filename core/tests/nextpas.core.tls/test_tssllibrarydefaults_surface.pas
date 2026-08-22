@@ -3,9 +3,10 @@ program test_tssllibrarydefaults_surface;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.base,
+  nextpas.core.tls.factory,
   nextpas.core.system.sysutils,
-  fafafa.ssl;
-
+  nextpas.core.tls.freepascal.lib;
 type
   TLogRecorder = class
   public
@@ -98,7 +99,7 @@ end;
 
 begin
   WriteLn('========================================');
-  WriteLn('  fafafa.ssl TSSLLibraryDefaults 测试');
+  WriteLn('  nextpas.core.tls TSSLLibraryDefaults 测试');
   WriteLn('========================================');
 
   Test_DefaultBaseline;

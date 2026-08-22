@@ -191,7 +191,7 @@ end;
 begin
   WriteLn('');
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL 证书功能测试');
+  WriteLn('  nextpas.core.tls - WinSSL 证书功能测试');
   WriteLn('==============================================');
   WriteLn('');
   WriteLn('测试环境:');
@@ -217,7 +217,7 @@ end.
 {$ELSE}
 begin
   WriteLn('==============================================');
-  WriteLn('  fafafa.ssl - WinSSL 证书功能测试');
+  WriteLn('  nextpas.core.tls - WinSSL 证书功能测试');
   WriteLn('==============================================');
   WriteLn('[BLOCKED] [platform] WinSSL 证书测试仅支持 Windows 运行时');
   WriteLn('[SKIP] [platform] 当前平台非 Windows，跳过 WinSSL 证书功能验证');

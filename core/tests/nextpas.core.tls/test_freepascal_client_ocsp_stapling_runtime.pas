@@ -4,7 +4,6 @@ program test_freepascal_client_ocsp_stapling_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.ocsp,
@@ -16,14 +15,16 @@ uses
   nextpas.core.tls.tls13.serverhello,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.x509;
-
+  nextpas.core.crypto.hash,
+  nextpas.core.tls.x509,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 type
   TServerMaterial = record
     CertificateBlob: TBytes;
@@ -159,12 +160,12 @@ var
   LCombinedPEM: AnsiString;
   I: Integer;
 begin
-  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_cert.pem')));
-  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('tests/certificate/test_certs/ca_key.pem')));
+  LCACertPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_cert.pem')));
+  LCAKeyPEM := string(BytesToAnsiString(ReadFileBytes('certificate/test_certs/ca_key.pem')));
 
   LOptions := TCertificateUtils.DefaultGenOptions;
   LOptions.CommonName := ACommonName;
-  LOptions.Organization := 'fafafa.ssl-tests';
+  LOptions.Organization := 'nextpas.core.tls-tests';
   LOptions.ValidDays := 30;
   LOptions.NotBefore := Now - 1;
   LOptions.NotAfter := Now + 30;
@@ -730,7 +731,7 @@ begin
   AssertTrue(Result <> nil, 'FreePascal client context should be created');
   Result.SetPreferredVersion(sslProtocolTLS13);
   Result.SetVerifyMode(AVerifyMode);
-  Result.LoadCAFile('tests/certificate/test_certs/ca_cert.pem');
+  Result.LoadCAFile('certificate/test_certs/ca_cert.pem');
 
   LOptions := Result.GetOptions;
   if AEnableStapling then
@@ -770,7 +771,7 @@ begin
   LCtx := NewClientContext(True, False);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Optional OCSP connection should be created');
     AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
     (LConn as ISSLClientConnection).SetServerName('example.com');
@@ -800,11 +801,11 @@ var
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
-  LFixture := LoadOCSPFixture('tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
+  LFixture := LoadOCSPFixture('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   LCtx := NewClientContext(True, False);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Optional stapled-response connection should be created');
     AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
     (LConn as ISSLClientConnection).SetServerName('example.com');
@@ -837,7 +838,7 @@ begin
   LCtx := NewClientContext(True, True);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required-stapling connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -864,11 +865,11 @@ var
   LFixture: TBytes;
 begin
   LMaterial := GenerateCASignedServerMaterial('example.com', ['DNS:example.com']);
-  LFixture := LoadOCSPFixture('tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
+  LFixture := LoadOCSPFixture('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   LCtx := NewClientContext(True, True);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required stapled-response connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -901,7 +902,7 @@ begin
   LCtx := NewClientContext(True, False);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Optional good-status stapled-response connection should be created');
     AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
     (LConn as ISSLClientConnection).SetServerName('example.com');
@@ -945,7 +946,7 @@ begin
   LCtx := NewClientContext(True, True);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required good-status stapled-response connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -980,7 +981,7 @@ begin
   LCtx := NewClientContext(True, False);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Optional unknown-status stapled-response connection should be created');
     AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
     (LConn as ISSLClientConnection).SetServerName('example.com');
@@ -1022,7 +1023,7 @@ begin
   LCtx := NewClientContext(True, True);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, LFixture);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Required unknown-status stapled-response connection should be created');
     (LConn as ISSLClientConnection).SetServerName('example.com');
 
@@ -1053,7 +1054,7 @@ begin
   LCtx := NewClientContextWithVerifyMode(True, True, []);
   LStream := TScriptedOCSPServerStream.Create(LMaterial.CertificateBlob, LMaterial.PrivateKeyBlob, nil);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Verify-none required-stapling connection should be created');
     AssertTrue(Supports(LConn, ISSLOCSPStapling, LOCSP), 'Connection should support ISSLOCSPStapling');
     (LConn as ISSLClientConnection).SetServerName('example.com');

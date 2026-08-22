@@ -196,7 +196,7 @@ end;
 
 begin
   WriteLn('╔════════════════════════════════════════════════════════╗');
-  WriteLn('║  fafafa.ssl Random Pool Test Suite                    ║');
+  WriteLn('║  nextpas.core.tls Random Pool Test Suite                    ║');
   WriteLn('║  Phase B: Performance Optimization                     ║');
   WriteLn('╚════════════════════════════════════════════════════════╝');
   WriteLn;

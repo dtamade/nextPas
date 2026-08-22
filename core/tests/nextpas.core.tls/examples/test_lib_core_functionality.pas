@@ -310,7 +310,7 @@ end;
 
 begin
   WriteLn('================================================================');
-  WriteLn('  fafafa.ssl - Core Functionality Verification');
+  WriteLn('  nextpas.core.tls - Core Functionality Verification');
   WriteLn('================================================================');
   WriteLn;
   WriteLn('Platform: ', {$I %FPCTARGETOS%});

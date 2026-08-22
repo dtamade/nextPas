@@ -14,7 +14,7 @@
  * - 使用回调函数而非 fd 进行 I/O
  * - 配置和上下文分离（ssl_config 可共享）
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

@@ -15,7 +15,7 @@
  * - 日志异步写入
  * - 生产者-消费者模式
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-05
  *}

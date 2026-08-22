@@ -1,8 +1,54 @@
 # nextpas.core.http Inbox
 
-最近更新：2026-06-03
+最近更新：2026-08-20
 
 ## 当前批次
+
+- 2026-08-20 编译警告清理批次（来源：proxy888 `make gate` 全量编译暴露，
+  FPC 3.3.1 x86_64 Linux，`-MObjFPC -Sh -Sg -O2 -gl`；非本轮功能回归，
+  均为既有代码的编译期告警）：
+  - `nextpas.core.http.base.pas(378,24)` Unreachable code：`CaseOpKind`
+    枚举分支全覆盖后 `else Result := ecNetwork;` 不可达（proxy888
+    selector 修过同类模式：删不可达 else 即可，零行为影响）
+  - `nextpas.core.http.client.helpers.pas(345,43)` Comparison might be
+    always false due to range of constant and expression + `(346,5)`
+    Unreachable code：`UInt64(AMaxSize) > UInt64(High(SizeUInt))` 在
+    64 位平台恒 false（SizeUInt 与 UInt64 同宽）；32 位平台有意义——
+    修复需按 CPU 位宽条件编译，或保留防御并注释说明平台语义
+  - `nextpas.core.http.middleware.decompress.pas(112,49)` 同上恒 false
+    比较模式（`(113,11)` Unreachable）
+  - `nextpas.core.http.middleware.compression.pas(361,19)` Function result
+    variable of a managed type does not seem to be initialized：疑似真实
+    bug（managed 函数结果未初始化路径），需人工核查
+  - `nextpas.core.http.impl.h2.session.pas(476,18)` / `(566,10)`
+    Unreachable code：需看上下文定不可达来源
+  - `nextpas.core.thread.pool.pas(166,44)` Range check error while
+    evaluating constants (128 must be between 0 and 127)：`@FNodePool[128]`
+    为取「数组末尾哨兵地址」（end pointer，与 `@FNodePool[0]` 配对做
+    归属判定），语义正确仅编译期常量越界告警——可改为
+    `PtrUInt(@FNodePool) + SizeOf(TTaskNode) * 128` 或
+    `PtrUInt(@FNodePool[High(FNodePool)]) + SizeOf(TTaskNode)` 消除
+  - Note（低优先）：`http.impl.h2.client.pas(1543,3)` LHostKey 未用、
+    `http.impl.h2.session.request.pas(54,3)` LScheme 未用、
+    `nextpas.core.http.websocket.pas(496,3)` LDigest 未用、
+    `middleware.healthcheck.pas(17,12)` / `http.pas(371,71)/(373,74)`
+    Comment level 2
+  - 2026-08-20 第二轮补充（同 gate 批次）：tls 域 managed 未初始化
+    `tls.context.builder.pas(2218,5)` LLines、`tls.pem.pas(287,34)`
+    AHeaders、`tls.crl.pas(678,21)` URLList、`tls.certchain.pas(347,17)/
+    (347,37)` CertParts/HostParts；`http.websocket.pas(224,19)` function
+    result managed 未初始化 + `(992,5)` Case statement does not handle
+    all possible cases（新枚举值/缺 default）；`config.pas(40,38)`
+    Comment level 2
+  - 模式观察（proxy888 侧 9 处同类实证）：FPC 3.3.1 对「函数结果动态数组
+    + `SetLength(Result, ...)` 首次初始化」系统性误报 "Function result
+    variable of a managed type does not seem to be initialized"（
+    SetLength 不被识别为初始化，字面量与表达式参数均触发）；tls 域上述
+    managed 警告疑同类。统一消法：SetLength 前加 `Result := nil;`（
+    零行为变化）。若后续集中清理，先按此模式批量处理并复核。
+  建议：低风险项（删 else、初始化 managed 结果、哨兵地址改指针算术）
+  优先清理，平台相关比较按位宽条件编译；每项走 http 模块 focused gate（
+  `make focused FOCUS=core/tests/nextpas.core.http/...`）验证。
 
 - 本轮继续补 raw-wire malformed chunk framing proof：terminal `0` chunk 后 trailer field 已完整结束、最终空 trailer section 只收到单个 `CR` 后 EOF 的子类，现在也已在 parser/server/security 三层有 focused 证据，输入 `...0\r\nX-Test: value\r\n\r` 会稳定被拒绝
 - 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类 truncated trailer section CR 截断，本轮主要是把 current truth 锁进回归

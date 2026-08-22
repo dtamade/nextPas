@@ -4,9 +4,8 @@ program test_cert_utils_verify_chain_contract;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
-  nextpas.core.tls.cert.utils;
-
+  nextpas.core.tls.cert.utils,
+  nextpas.core.tls.openssl.backed;
 var
   TotalTests: Integer = 0;
   PassedTests: Integer = 0;

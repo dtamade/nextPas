@@ -19,7 +19,7 @@ unit nextpas.core.tls.crypto.utils;
  *   - OpenSSL 1.1.1+ or 3.0+
  *   - nextpas.core.tls.exceptions
  * 
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 2.0.0
  * @since 2025-11-26
  * 

@@ -471,7 +471,6 @@ var
   LX509: PX509;
   LEVP: PEVP_PKEY;
   LBio: PBIO;
-  LPassBytes, LNameBytes: TBytes;
   LDataPtr: PAnsiChar;
   LDataLen: Integer;
 begin
@@ -488,16 +487,11 @@ begin
   LX509 := LCertEx.X509Handle;
   LEVP := LKeyEx.EVP_PKEYHandle;
   
-  // Prepare password and name
-  if AOptions.Password <> '' then
-    LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.Password);
-  if AOptions.FriendlyName <> '' then
-    LNameBytes := nextpas.core.text.conv.StringToUTF8Bytes(AOptions.FriendlyName);
-  
-  // Create PKCS#12 structure
+  // Create PKCS#12 structure.
+  // UTF8String conversion guarantees the trailing NUL that OpenSSL C strings need.
   LP12 := nextpas.core.tls.openssl.api.pkcs12.PKCS12_create(
-    PAnsiChar(LPassBytes),
-    PAnsiChar(LNameBytes),
+    PAnsiChar(UTF8String(AOptions.Password)),
+    PAnsiChar(UTF8String(AOptions.FriendlyName)),
     LEVP,
     LX509,
     nil,  // CA certs
@@ -566,7 +560,6 @@ var
   LCertPtr: PX509;
   LKeyPtr: PEVP_PKEY;
   LCAStack: Pointer;  // PSTACK_OF_X509
-  LPassBytes: TBytes;
 begin
   Result := False;
   ACert := nil;
@@ -588,14 +581,13 @@ begin
     if not Assigned(LP12) then Exit;
     
     try
-      LPassBytes := nextpas.core.text.conv.StringToUTF8Bytes(APassword);
       LCertPtr := nil;
       LKeyPtr := nil;
       LCAStack := nil;
       
-      // Parse PKCS#12
+      // Parse PKCS#12 (UTF8String conversion guarantees the trailing NUL)
       if nextpas.core.tls.openssl.api.pkcs12.PKCS12_parse(
-        LP12, PAnsiChar(LPassBytes),
+        LP12, PAnsiChar(UTF8String(APassword)),
         LKeyPtr, LCertPtr, LCAStack) = 1 then
       begin
         if Assigned(LCertPtr) and Assigned(LKeyPtr) then

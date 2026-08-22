@@ -3,10 +3,22 @@ program test_freepascal_backend_basic;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
+  nextpas.core.text.conv,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, nextpas.core.time,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base;
+  nextpas.core.tls.base,
+  nextpas.core.tls.freepascal.lib;
+function InvalidPEMStream(const APEM: string): IStream;
+var
+  LS: TMemoryStream;
+begin
+  LS := TMemoryStream.Create;
+  if Length(APEM) > 0 then
+    LS.WriteBuffer(PAnsiChar(APEM)^, Length(APEM));
+  LS.Position := 0;
+  Result := TStreamWrapper.Create(LS, True);
+end;
 
 procedure AssertTrue(ACondition: Boolean; const AMessage: string);
 begin
@@ -30,8 +42,8 @@ end;
 function BuildLooseDNQueryVariant(const AValue: string): string;
 begin
   Result := Trim(AValue);
-  Result := StringReplace(Result, ',', ' , ', [rfReplaceAll]);
-  Result := StringReplace(Result, '=', ' = ', [rfReplaceAll]);
+  Result := StringReplace(Result, ',', ' , ', True);
+  Result := StringReplace(Result, '=', ' = ', True);
   Result := '  ' + LowerCase(Result) + '  ';
 end;
 
@@ -48,7 +60,7 @@ var
   LLoopLeaf: ISSLCertificate;
   LChainIssuer: ISSLCertificate;
   LChain: TSSLCertificateArray;
-  LInvalidStream: TStringStream;
+  LInvalidStream: IStream;
   LValidDER: TBytes;
   LTruncatedDER: TBytes;
   LValidPEM: string;
@@ -100,7 +112,7 @@ begin
   LCert := LLib.CreateCertificate;
   AssertTrue(LCert <> nil, 'CreateCertificate should return certificate instance');
   AssertTrue(
-    LCert.LoadFromFile('tests/certificate/test_certs/signer_cert.pem'),
+    LCert.LoadFromFile('certificate/test_certs/signer_cert.pem'),
     'FreePascal certificate should load PEM file'
   );
   AssertTrue(LCert.GetFingerprintSHA256 <> '',
@@ -112,13 +124,9 @@ begin
 
   LInvalidCert := LLib.CreateCertificate;
   AssertTrue(LInvalidCert <> nil, 'CreateCertificate should return invalid input check certificate instance');
-  LInvalidStream := TStringStream.Create('not-a-certificate');
-  try
-    AssertTrue(not LInvalidCert.LoadFromStream(LInvalidStream),
-      'FreePascal certificate should reject invalid stream data');
-  finally
-    LInvalidStream.Free;
-  end;
+  LInvalidStream := InvalidPEMStream('not-a-certificate');
+  AssertTrue(not LInvalidCert.LoadFromStream(LInvalidStream),
+    'FreePascal certificate should reject invalid stream data');
 
   LValidDER := LCert.SaveToDER;
   AssertTrue(Length(LValidDER) > 16,
@@ -132,9 +140,9 @@ begin
   AssertTrue(LValidPEM <> '',
     'Loaded certificate should export PEM for invalid block-type contract');
   LWrongTypePEM := StringReplace(LValidPEM, '-----BEGIN CERTIFICATE-----',
-    '-----BEGIN PUBLIC KEY-----', [rfReplaceAll]);
+    '-----BEGIN PUBLIC KEY-----', True);
   LWrongTypePEM := StringReplace(LWrongTypePEM, '-----END CERTIFICATE-----',
-    '-----END PUBLIC KEY-----', [rfReplaceAll]);
+    '-----END PUBLIC KEY-----', True);
   AssertTrue(not LInvalidCert.LoadFromPEM(LWrongTypePEM),
     'FreePascal certificate should reject PEM payload without CERTIFICATE block type');
 
@@ -184,7 +192,7 @@ begin
   LHostCert := LLib.CreateCertificate;
   AssertTrue(LHostCert <> nil, 'CreateCertificate should return SAN-vs-CN contract certificate instance');
   AssertTrue(
-    LHostCert.LoadFromFile('tests/certificate/test_certs/san_cn_conflict_cert.pem'),
+    LHostCert.LoadFromFile('certificate/test_certs/san_cn_conflict_cert.pem'),
     'FreePascal certificate should load SAN/CN conflict fixture PEM file'
   );
   AssertTrue(not LHostCert.VerifyHostname('cn-only.example.com'),
@@ -195,7 +203,7 @@ begin
   LWildcardCert := LLib.CreateCertificate;
   AssertTrue(LWildcardCert <> nil, 'CreateCertificate should return wildcard contract certificate instance');
   AssertTrue(
-    LWildcardCert.LoadFromFile('tests/certificate/test_certs/san_wildcard_cert.pem'),
+    LWildcardCert.LoadFromFile('certificate/test_certs/san_wildcard_cert.pem'),
     'FreePascal certificate should load wildcard SAN fixture PEM file'
   );
   AssertTrue(LWildcardCert.VerifyHostname('api.example.com'),
@@ -206,7 +214,7 @@ begin
   LKUCert := LLib.CreateCertificate;
   AssertTrue(LKUCert <> nil, 'CreateCertificate should return KU/EKU fixture certificate instance');
   AssertTrue(
-    LKUCert.LoadFromFile('tests/certificate/test_certs/keyusage_cert.pem'),
+    LKUCert.LoadFromFile('certificate/test_certs/keyusage_cert.pem'),
     'FreePascal certificate should load KU/EKU fixture PEM file'
   );
 
@@ -239,8 +247,8 @@ begin
   AssertTrue(LStore.GetCertificate(0) <> nil, 'Certificate store should return certificate by index');
   AssertTrue(LStore.FindByFingerprint(LCert.GetFingerprintSHA256) <> nil,
     'Certificate store should find certificate by fingerprint');
-  LSerialCompact := StringReplace(StringReplace(UpperCase(LCert.GetFingerprintSHA256), ':', '', [rfReplaceAll]),
-    ' ', '', [rfReplaceAll]);
+  LSerialCompact := StringReplace(StringReplace(UpperCase(LCert.GetFingerprintSHA256), ':', '', True),
+    ' ', '', True);
   AssertTrue(LSerialCompact <> '',
     'Loaded certificate should expose fingerprint for normalized fingerprint query contract');
   LFingerprintVariant := '';
@@ -266,8 +274,8 @@ begin
   AssertTrue(LStore.FindByIssuer('') = nil,
     'Certificate store should return nil for empty issuer query');
 
-  LSerialCompact := StringReplace(StringReplace(UpperCase(LCert.GetSerialNumber), ':', '', [rfReplaceAll]),
-    ' ', '', [rfReplaceAll]);
+  LSerialCompact := StringReplace(StringReplace(UpperCase(LCert.GetSerialNumber), ':', '', True),
+    ' ', '', True);
   AssertTrue(LSerialCompact <> '',
     'Loaded certificate should expose serial for normalized serial query contract');
   LSerialVariant := '';
@@ -292,7 +300,7 @@ begin
   LChainIssuer := LLib.CreateCertificate;
   AssertTrue(LLoopLeaf <> nil, 'Leaf certificate clone should be created for chain issuer-link contract');
   AssertTrue(LChainIssuer <> nil, 'Issuer certificate should be created for chain issuer-link contract');
-  AssertTrue(LChainIssuer.LoadFromFile('tests/certificate/test_certs/ca_cert.pem'),
+  AssertTrue(LChainIssuer.LoadFromFile('certificate/test_certs/ca_cert.pem'),
     'Issuer fixture should load for chain issuer-link contract');
   LLoopLeaf.SetIssuerCertificate(LChainIssuer);
   LChain := LStore.BuildCertificateChain(LLoopLeaf);
@@ -386,7 +394,7 @@ begin
 
   LStream := TMemoryStream.Create;
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream));
     AssertTrue(LConn <> nil, 'CreateConnection(TStream) should return connection');
 
     FillChar(LBuf, SizeOf(LBuf), 0);
@@ -415,7 +423,7 @@ begin
 
   LClientStream := TMemoryStream.Create;
   try
-    LTLS12ClientConn := LTLS12ClientCtx.CreateConnection(LClientStream);
+    LTLS12ClientConn := LTLS12ClientCtx.CreateConnection(TStreamWrapper.Create(LClientStream));
     AssertTrue(LTLS12ClientConn <> nil, 'TLS1.2 client connection should be created');
     AssertTrue(not LTLS12ClientConn.Connect, 'TLS1.2 client connect to empty stream should fail');
     AssertTrue(
@@ -432,7 +440,7 @@ begin
 
   LServerStream := TMemoryStream.Create;
   try
-    LTLS12ServerConn := LTLS12ServerCtx.CreateConnection(LServerStream);
+    LTLS12ServerConn := LTLS12ServerCtx.CreateConnection(TStreamWrapper.Create(LServerStream));
     AssertTrue(LTLS12ServerConn <> nil, 'TLS1.2 server connection should be created');
     AssertTrue(not LTLS12ServerConn.Accept, 'TLS1.2 server accept to empty stream should fail');
     AssertTrue(

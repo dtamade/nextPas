@@ -4,7 +4,6 @@ program test_freepascal_server_ocsp_stapling_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  fafafa.ssl,
   nextpas.core.tls.base,
   nextpas.core.tls.context.builder,
   nextpas.core.tls.factory,
@@ -14,12 +13,14 @@ uses
   nextpas.core.tls.tls13.parser,
   nextpas.core.tls.tls13.recordcrypto,
   nextpas.core.tls.tls13.aead,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.servercertificate,
-  nextpas.core.tls.crypto.hash;
-
+  nextpas.core.crypto.hash,
+  Classes,
+  nextpas.core.io.stream_adapter,
+  nextpas.core.tls.freepascal.lib;
 procedure Fail(const AMessage: string);
 begin
   WriteLn('FAIL: ', AMessage);
@@ -416,8 +417,8 @@ begin
   AssertTrue(Result <> nil, 'FreePascal server context should be created');
   Result.SetPreferredVersion(sslProtocolTLS13);
   Result.SetSessionCacheMode(False);
-  Result.LoadCertificate('tests/certificate/test_certs/signer_cert.pem');
-  Result.LoadPrivateKey('tests/certificate/test_certs/signer_key.pem');
+  Result.LoadCertificate('certificate/test_certs/signer_cert.pem');
+  Result.LoadPrivateKey('certificate/test_certs/signer_key.pem');
 end;
 
 function NewServerContextFromBuilder(const AStapledResponseFile: string = ''): ISSLContext;
@@ -428,8 +429,8 @@ begin
     .WithBackend(sslFreePascal)
     .WithTLS13
     .WithSessionCache(False)
-    .WithCertificate('tests/certificate/test_certs/signer_cert.pem')
-    .WithPrivateKey('tests/certificate/test_certs/signer_key.pem');
+    .WithCertificate('certificate/test_certs/signer_cert.pem')
+    .WithPrivateKey('certificate/test_certs/signer_key.pem');
 
   if AStapledResponseFile <> '' then
     LBuilder := LBuilder.WithServerOCSPStapledResponseFile(AStapledResponseFile);
@@ -451,13 +452,13 @@ begin
     Supports(LCtx, ISSLServerOCSPStaplingContext, LStaplingContext),
     'FreePascal server context should expose public server stapling interface'
   );
-  LFixture := ReadFileBytes('tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
+  LFixture := ReadFileBytes('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   AssertTrue(Length(LFixture) > 0, 'OCSP fixture should not be empty');
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Server connection should be created');
     AssertTrue(LConn.Accept, 'Server accept should succeed when stapled response is configured');
     AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
@@ -488,13 +489,13 @@ begin
     Supports(LCtx, ISSLServerOCSPStaplingContext, LStaplingContext),
     'FreePascal server context should expose public server stapling interface'
   );
-  LFixture := ReadFileBytes('tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
+  LFixture := ReadFileBytes('fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der');
   AssertTrue(Length(LFixture) > 0, 'OCSP fixture should not be empty');
   LStaplingContext.SetServerStapledOCSPResponse(LFixture);
 
   LStream := TOfflineStaplingObserveClientStream.Create(False);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Server connection should be created');
     AssertTrue(LConn.Accept, 'Server accept should succeed without client status_request');
     AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
@@ -516,7 +517,7 @@ begin
   LCtx := NewServerContext;
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Server connection should be created');
     AssertTrue(LConn.Accept, 'Server accept should succeed without configured stapled response');
     AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');
@@ -538,7 +539,7 @@ var
   LStaplingContext: ISSLServerOCSPStaplingContext;
   LFixtureFile: string;
 begin
-  LFixtureFile := 'tests/fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
+  LFixtureFile := 'fixtures/p2/ocsp/ocsp_response_successful_basic_v1.der';
   LFixture := ReadFileBytes(LFixtureFile);
   AssertTrue(Length(LFixture) > 0, 'OCSP fixture should not be empty');
 
@@ -557,7 +558,7 @@ begin
 
   LStream := TOfflineStaplingObserveClientStream.Create(True);
   try
-    LConn := LCtx.CreateConnection(LStream);
+    LConn := LCtx.CreateConnection(TStreamWrapper.Create(LStream, False));
     AssertTrue(LConn <> nil, 'Builder-built server connection should be created');
     AssertTrue(LConn.Accept, 'Builder-built server accept should succeed with stapled response file');
     AssertTrue(LStream.ObservedCertificateMessage, 'Scripted client should observe the Certificate message');

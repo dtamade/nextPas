@@ -5,7 +5,7 @@
  * Monitors certificate files for changes and reloads them without disrupting
  * active connections.
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-31
  *

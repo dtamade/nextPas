@@ -9,7 +9,7 @@
  * - 能力门控：不支持的功能通过 TSSLBackendCapabilities 显式标记
  * - 统一语义：与 OpenSSL/WinSSL 后端保持一致的失败语义（fail-fast）
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-09
  *}

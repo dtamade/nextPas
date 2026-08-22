@@ -8,10 +8,9 @@ program test_tsslconfig_option_bridge_precedence_freeze;
 
 uses
   nextpas.core.system.sysutils,
-  fafafa.ssl,
   nextpas.core.tls.base,
-  nextpas.core.tls.factory;
-
+  nextpas.core.tls.factory,
+  nextpas.core.tls.freepascal.lib;
 var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
@@ -42,7 +41,7 @@ var
 begin
   TestHeader('NormalizeConfig lets legacy booleans override conflicting option bits');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
 
   Include(Config.Options, ssoDisableCompression);
@@ -53,7 +52,7 @@ begin
   Assert(Config.EnableCompression,
     'EnableCompression=True remains projected from final option truth');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Exclude(Config.Options, ssoEnableSessionTickets);
   Config.EnableSessionTickets := True;
@@ -63,7 +62,7 @@ begin
   Assert(Config.EnableSessionTickets,
     'EnableSessionTickets=True remains projected from final option truth');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Include(Config.Options, ssoEnableOCSPStapling);
   Config.EnableOCSPStapling := False;
@@ -81,7 +80,7 @@ var
 begin
   TestHeader('Factory one-shot CreateContext follows legacy boolean precedence');
 
-  Config := CreateDefaultConfig(sslCtxClient);
+  Config := SSLConfigFromContextConfig(CreateDefaultContextConfig(sslCtxClient));
   Config.LibraryType := sslFreePascal;
   Exclude(Config.Options, ssoEnableSessionTickets);
   Config.EnableSessionTickets := True;

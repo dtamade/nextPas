@@ -4,7 +4,7 @@ program test_wolfssl_connection_peer_certificate_contract;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
-  nextpas.core.tls.base,
+  nextpas.core.io.stream_adapter,  nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.api,
   nextpas.core.tls.wolfssl.lib,
@@ -123,7 +123,7 @@ begin
   LStream := TMemoryStream.Create;
   LConn := nil;
   try
-    LConn := TWolfSSLConnection.Create(LCtx, LStream);
+    LConn := TWolfSSLConnection.Create(LCtx, TStreamWrapper.Create(LStream, False));
     wolfSSL_get_peer_certificate := @StubWolfSSLGetPeerCertificateFromDER;
 
     LCert := LConn.GetPeerCertificate;

@@ -4,7 +4,7 @@
  * Implements OWASP-compliant certificate pinning for enhanced security.
  * Supports both certificate pinning and public key pinning (SPKI).
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-01-31
  *

@@ -5,7 +5,7 @@
  * 继承 TBaseSSLConnection 基类，实现 WolfSSL 后端的连接功能。
  * 支持基于 Socket 和 Stream 的 TLS 连接。
  *
- * @author fafafa.ssl team
+ * @author nextpas.core.tls team
  * @version 1.0.0
  * @since 2026-02-04
  *}

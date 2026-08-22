@@ -3,10 +3,10 @@ program test_openssl_complete;
 {$mode objfpc}{$H+}
 
 uses
+  nextpas.core.tls.openssl.backed,
   nextpas.core.system.sysutils,
   nextpas.core.tls.factory,
-  nextpas.core.tls.base,
-  fafafa.ssl;
+  nextpas.core.tls.base;
 
 procedure TestOpenSSL;
 var
