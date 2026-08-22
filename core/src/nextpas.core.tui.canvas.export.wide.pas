@@ -1,12 +1,12 @@
 {**
  * nextpas.core.tui.canvas.export.wide - 宽字形对齐的字符画布导出
  *
- * CanvasExportTxtWide: 活动层纯字形快照(UTF-8), 按显示列对齐——
- *   双宽字形(如 CJK)输出一次并跳过被其覆盖的右邻格(与渲染一致),
- *   Ch=0 输出空格, 每行换行;
- * CanvasExportAnsiWide: 同上, 每字 SGR 前景+背景(相邻同色省略,
- *   终端 SGR 状态跨格/跨行延续), 末尾 \e[0m 重置。
- * 写文件失败(路径不可写等)返回 False。不直接依赖 FPC RTL。
+ * CanvasExportTxtWideToStr / CanvasExportAnsiWideToStr: 生成导出文本
+ *   (不落盘, 供剪贴板/预览等复用), 活动层纯字形快照(UTF-8),
+ *   按显示列对齐——双宽字形(如 CJK)输出一次并跳过被其覆盖的右邻格
+ *   (与渲染一致), Ch=0 输出空格, 每行换行;
+ * CanvasExportTxtWide / CanvasExportAnsiWide: 同一生成逻辑 + 写文件,
+ *   写文件失败(路径不可写等)返回 False。不直接依赖 FPC RTL。
  *}
 
 unit nextpas.core.tui.canvas.export.wide;
@@ -19,13 +19,21 @@ uses
   nextpas.core.tui.canvas.base,
   nextpas.core.tui.color;
 
-{** @desc 宽字形对齐文本导出: 逐格扫描活动层, 双宽字形输出一次并跳过
-    被覆盖的下一格(与渲染一致); 每行以换行结尾; 失败返回 False *}
+{** @desc 宽字形对齐文本导出为字符串: 逐格扫描活动层, 双宽字形输出一次
+    并跳过被覆盖的下一格(与渲染一致); 每行以换行结尾。
+    文档为空引用返回空串 *}
+function CanvasExportTxtWideToStr(ADoc: TCanvasDoc): AnsiString;
+
+{** @desc 宽字形对齐 ANSI 导出为字符串: 每格 SGR 前景+背景 + 字形
+    (ckRgb → 38;2;r;g;b / 48;2;r;g;b, ckIndexed → 3x/4x 索引),
+    相邻同色省略(终端 SGR 状态跨格/跨行延续), 末尾 \e[0m。
+    文档为空引用返回空串 *}
+function CanvasExportAnsiWideToStr(ADoc: TCanvasDoc): AnsiString;
+
+{** @desc 宽字形对齐文本导出: 生成字符串后写文件; 失败返回 False *}
 function CanvasExportTxtWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
 
-{** @desc 宽字形对齐 ANSI 导出: 每格 SGR 前景+背景 + 字形
-    (ckRgb → 38;2;r;g;b / 48;2;r;g;b, ckIndexed → 3x/4x 索引),
-    双宽字形跳过被覆盖格, 末尾 \e[0m; 失败返回 False *}
+{** @desc 宽字形对齐 ANSI 导出: 生成字符串后写文件; 失败返回 False *}
 function CanvasExportAnsiWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
 
 implementation
@@ -68,14 +76,14 @@ end;
 
 { 逐格扫描活动层: 双宽字形输出一次并跳过被覆盖的右邻格(与渲染器
   WideNext 语义一致), 保证导出文本的显示列与画布画面一致。 }
-function CanvasExportTxtWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
+function CanvasExportTxtWideToStr(ADoc: TCanvasDoc): AnsiString;
 var
   S, Line: AnsiString;
   X, Y: Integer;
   Cell: TCanvasCell;
   WideNext: Boolean;
 begin
-  Result := False;
+  Result := '';
   if ADoc = nil then
     Exit;
   S := '';
@@ -102,10 +110,18 @@ begin
     end;
     S := S + Line + #10;
   end;
-  Result := FileWriteAllText(AFileName, S);
+  Result := S;
 end;
 
-function CanvasExportAnsiWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
+function CanvasExportTxtWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
+begin
+  Result := False;
+  if ADoc = nil then
+    Exit;
+  Result := FileWriteAllText(AFileName, CanvasExportTxtWideToStr(ADoc));
+end;
+
+function CanvasExportAnsiWideToStr(ADoc: TCanvasDoc): AnsiString;
 var
   S, Line: AnsiString;
   FgS, BgS, LastSgr: AnsiString;
@@ -113,7 +129,7 @@ var
   Cell: TCanvasCell;
   WideNext: Boolean;
 begin
-  Result := False;
+  Result := '';
   if ADoc = nil then
     Exit;
   S := '';
@@ -147,8 +163,15 @@ begin
     end;
     S := S + Line + #10;
   end;
-  S := S + ESC + '[0m';
-  Result := FileWriteAllText(AFileName, S);
+  Result := S + ESC + '[0m';
+end;
+
+function CanvasExportAnsiWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
+begin
+  Result := False;
+  if ADoc = nil then
+    Exit;
+  Result := FileWriteAllText(AFileName, CanvasExportAnsiWideToStr(ADoc));
 end;
 
 end.
