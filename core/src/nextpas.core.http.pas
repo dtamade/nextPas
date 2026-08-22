@@ -368,9 +368,9 @@ function WhenMiddleware(
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 {** @desc Async middleware — dispatches handler execution to a thread pool. }
 function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware; inline;
-{** @desc Health check middleware at /healthz — returns 200 OK with {"status":"ok"}. }
+{** @desc Health check middleware at /healthz — responds 200 OK with JSON ok-status body. }
 function HealthCheckMiddleware: IHttpMiddleware; inline;
-{** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
+{** @desc Health check middleware at custom path — responds 200 OK with JSON ok-status body. }
 function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware; inline;
 {** @desc Create a new thread-safe metrics collector. }
 function NewHttpMetricsCollector: IHttpMetricsCollector; inline;
