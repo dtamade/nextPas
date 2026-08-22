@@ -475,6 +475,9 @@ begin
           Exit(True);
         end;
     end;
+  else
+    { 防御：Kind 损坏时按未命中处理，不放大破坏。 }
+    ;
   end;
 end;
 
@@ -507,6 +510,8 @@ begin
         FreeNode(ANode^.Children[I]);
     hnkCollision:
       SetLength(ANode^.Collision, 0);
+  else
+    ; { 叶子无子节点，仅走统一 Dispose；未知 Kind 同样只 Dispose 自身 }
   end;
   Dispose(ANode);
 end;
