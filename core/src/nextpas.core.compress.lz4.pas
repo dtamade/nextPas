@@ -12,7 +12,7 @@ function Lz4Compress(const AData: TBytes): TBytes;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 function Lz4DecompressWithMaxOutputSize(const AData: TBytes;
   const AOriginalSize: Int32; const AMaxOutputSize: SizeUInt): TBytes;
-function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
 
 implementation
 
