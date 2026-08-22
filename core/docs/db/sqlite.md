@@ -1,10 +1,10 @@
-# nextpas.core.sqlite 代码契约
+# nextpas.core.db.sqlite 代码契约
 
-**模块路径**：`core/src/nextpas.core.sqlite*.pas`（7 个源文件）
-**层级**：L2（依赖 L0-L1: base, exception, errors, sync）
-**Owner**：proxy888 反哺（Claude 负责）
-**最后更新**：2026-08-16
-**版本**：1.1（B7：新增 pool / tx / migrate 三个助手模块）
+**模块路径**：`core/src/nextpas.core.db.sqlite*.pas`（7 个源文件，nextpas.core.db 家族 SQLite 后端子模块）
+**层级**：L2 实现（挂在 L3 `nextpas.core.db` 家族下；依赖 L0-L1: base, exception, errors, sync）
+**Owner**：proxy888 反哺（Claude 负责）；2026-08-23 起由 core-db lane 收编维护
+**最后更新**：2026-08-23（物理收编进 db 家族；单元名 nextpas.core.sqlite.* → nextpas.core.db.sqlite.*）
+**版本**：1.2（收编版；新增 SetTxnDepth 簿记原语供泛化事务层使用）
 
 ---
 
@@ -104,10 +104,10 @@ sqlite.migrate:
 
 ## 4. 测试
 
-- `tests/nextpas.core.sqlite/test_sqlite/`：11 契约用例（conn/base 表面）
-- `tests/nextpas.core.sqlite/test_sqlite_pool/`：6 用例（复用/上限/WAL+busy_timeout PRAGMA/写连接身份与守卫/关闭语义/写读一致）
-- `tests/nextpas.core.sqlite/test_sqlite_tx/`：7 用例（提交/回滚重抛/嵌套/深度计数/裸 Begin-Commit-Rollback/守卫/事务内读己写）
-- `tests/nextpas.core.sqlite/test_sqlite_migrate/`：7 用例（首迁/幂等/有序/失败批次回滚/上下限/乱序拒绝/无迁移=0）
+- `tests/nextpas.core.db.sqlite/test_sqlite/`：11 契约用例（conn/base 表面）
+- `tests/nextpas.core.db.sqlite/test_sqlite_pool/`：6 用例（复用/上限/WAL+busy_timeout PRAGMA/写连接身份与守卫/关闭语义/写读一致）
+- `tests/nextpas.core.db.sqlite/test_sqlite_tx/`：7 用例（提交/回滚重抛/嵌套/深度计数/裸 Begin-Commit-Rollback/守卫/事务内读己写）
+- `tests/nextpas.core.db.sqlite/test_sqlite_migrate/`：7 用例（首迁/幂等/有序/失败批次回滚/上下限/乱序拒绝/无迁移=0）
 - 全部含 heaptrc 泄漏门禁
 
 ## 5. 已知边界（不承诺）

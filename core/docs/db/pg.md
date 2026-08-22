@@ -1,10 +1,10 @@
-# nextpas.core.pg 代码契约
+# nextpas.core.db.pg 代码契约
 
-**模块路径**：`core/src/nextpas.core.pg*.pas`（5 个源文件）
-**层级**：L2（依赖 L0-L1: platform.dl, exception, text.conv）
-**Owner**：token888 反哺；与 proxy888 联合评审
-**最后更新**：2026-08-10
-**版本**：1.0
+**模块路径**：`core/src/nextpas.core.db.pg*.pas`（5 个源文件，nextpas.core.db 家族 PostgreSQL 后端子模块）
+**层级**：L2 实现（挂在 L3 `nextpas.core.db` 家族下；依赖 L0-L1: platform.dl, exception, text.conv）
+**Owner**：token888 反哺；与 proxy888 联合评审；2026-08-23 起由 core-db lane 收编维护
+**最后更新**：2026-08-23（物理收编进 db 家族；单元名 nextpas.core.pg.* → nextpas.core.db.pg.*）
+**版本**：1.1（收编版）
 
 ---
 
@@ -35,13 +35,20 @@ TPgConn:
   function ErrorMessage: string;
 
 TPgQuery:
-  procedure BindText/Int64/Double/Null(AIndex, ...);  // 绑定 1-based，与 $N 编号对应
+  procedure BindText/Int64/Double/Blob/Null(AIndex, ...);  // 绑定 1-based，与 $N 编号对应
   function Step: Boolean;                            // True=有行；首次调用触发执行
   procedure Reset;                                   // 释放结果，可重新 Step
   function ColumnCount / ColumnName(AIndex): ...
+  function ColumnFieldOid(AIndex): Cardinal;         // PQftype；未执行 = 0
   function IsNull(AIndex): Boolean;
   function GetInt64/GetDouble/GetText(AIndex): ...   // 列 0-based；NULL -> 0 / ''
+  function GetBlob(AIndex): TBytes;                  // bytea hex 输出解码；非 \x 前缀抛 EPgError
 ```
+
+> **1.1 收编新增（2026-08-23）**：`BindBlob` 将二进制编码为 `\x…` hex 文本参数，
+> `ExecuteOnce` 对相应 `$N` 追加 `::bytea` cast（服务端按 bytea 解析）；
+> `GetBlob` 解码 bytea 的 hex 文本输出。真机门禁见
+> `core/tests/nextpas.core.db/test_db_pg` 的 `blob hex+cast roundtrip` 用例。
 
 ### 1.3 绑定与取值索引约定
 
@@ -84,7 +91,7 @@ TPgQuery:
 
 ## 4. 测试
 
-- `tests/nextpas.core.pg/test_pg/`：10 契约用例，全部 `TestSeq`（共享测试库串行）：
+- `tests/nextpas.core.db.pg/test_pg/`：10 契约用例，全部 `TestSeq`（共享测试库串行）：
   连接与版本、建插查 roundtrip、NULL 绑定、多语句 exec、参数化 step-through、
   唯一约束 → SQLSTATE 23505、坏连接报错、Changes、错误字段、自管事务
   （BEGIN/ROLLBACK/COMMIT）+ heaptrc 泄漏门禁。

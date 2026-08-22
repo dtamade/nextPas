@@ -1,5 +1,13 @@
 # nextpas.core.db 模块边界设计（2026-08-23）
 
+> **执行状态更新（2026-08-23，同日）**：总控升级授权——lane 在 worktree 内
+> 直接完成阶段 B 的物理收编，"完全做好再合并到 main"。原两阶段计划合并为
+> 单批执行；本文 D2 的"阶段 A/B 拆分"保留为决策记录。实际落地形态：
+> sqlite/pg 全部单元物理迁入 `nextpas.core.db.sqlite.*` / `nextpas.core.db.pg.*`，
+> 旧单元名保留 deprecated re-export shim（删除条件见 `core/docs/db/CONTRACT.md`
+> §3），统一层（base/intf/adapters/tx/migrate/门面）同批交付。
+> pg Blob 经 hex + `::bytea` cast 真机验证通过，未触发 fail-closed 降级。
+
 ## 背景
 
 core 现有两个数据库模块是各自反哺时落在顶层的：

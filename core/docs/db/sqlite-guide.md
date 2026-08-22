@@ -1,4 +1,4 @@
-# nextpas.core.sqlite 助手模块（B7：pool / tx / migrate）
+# nextpas.core.db.sqlite 助手模块（B7：pool / tx / migrate）
 
 本级文档面向**消费方**（如 mailGateway888 proxy888 存储层）。先读完[代码契约](./CONTRACT.md)，
 这里只讲三个助手的用法、边界与典型组合。
@@ -6,7 +6,7 @@
 ## 1. 概览
 
 B7 之前 core 只提供连接表面（`TSqliteDb`/`TSqliteQuery`）。B7 新增三个 L2 助手，全部经
-`nextpas.core.sqlite` 门面 re-export：
+`nextpas.core.db.sqlite` 门面 re-export：
 
 | 模块 | 资产 | 解决什么 |
 |------|------|----------|
@@ -184,9 +184,9 @@ end;
 ## 6. 门禁
 
 ```bash
-make focused FOCUS=core/tests/nextpas.core.sqlite/test_sqlite_pool
-make focused FOCUS=core/tests/nextpas.core.sqlite/test_sqlite_tx
-make focused FOCUS=core/tests/nextpas.core.sqlite/test_sqlite_migrate
+make focused FOCUS=core/tests/nextpas.core.db.sqlite/test_sqlite_pool
+make focused FOCUS=core/tests/nextpas.core.db.sqlite/test_sqlite_tx
+make focused FOCUS=core/tests/nextpas.core.db.sqlite/test_sqlite_migrate
 ```
 
 每个目标含 heaptrc 泄漏门禁（`0 unfreed memory blocks`）。

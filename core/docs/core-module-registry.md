@@ -36,7 +36,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `coroutine` | L3 | coroutine scheduler | yes | L0-L2 | focused-runtime |
 | `crypto` | L2 | cryptography | yes | L0-L1 plus backend owners | source-contract + focused-runtime |
 | `csv` | L2 | CSV parser/writer | yes | L0-L1 | focused-runtime |
-| `db` | L3 | unified database access over sqlite/pg adapters (`nextpas.core.db.*`) | yes | L0-L2 plus sqlite/pg owners | focused-runtime |
+| `db` | L3 | unified database access family: IDbConnection/IDbQuery over sqlite+pg backends (`nextpas.core.db.*`; `nextpas.core.db.sqlite.*` and `nextpas.core.db.pg.*` are the L2 backend implementations) | yes | L0-L2 (sqlite/pg owners are in-family) | focused-runtime |
 | `deliverability` | L2 | SPF/DKIM/DMARC email authentication | yes | L0-L1 plus crypto/hash/dns owner | focused-runtime |
 | `dns` | L2 | DNS record codec + UDP resolver | yes | L0-L1 plus net owner | focused-runtime |
 | `encoding` | L1 | codecs | yes | L0 plus bytes/text seam | focused-runtime |
@@ -68,14 +68,14 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `numa` | L2 | NUMA topology/alloc | yes | L0-L1; host units debt | draft |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
-| `pg` | L2 | PostgreSQL database (libpq FFI, dlopen) | yes | L0-L1; platform.dl | focused-runtime |
+| `pg` | L2 backend of `db` | PostgreSQL database (libpq FFI, dlopen); units live at `nextpas.core.db.pg.*` (old `nextpas.core.pg.*` unit names are deprecated shims) | yes | L0-L1; platform.dl | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
 | `process` | L2 | process management | yes | L0-L1 | focused-runtime |
 | `props` | L3 | property helpers | yes | L0-L2 | draft |
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
-| `sqlite` | L2 | SQLite database (system libsqlite3 FFI) | yes | L0-L1 | focused-runtime |
+| `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (old `nextpas.core.sqlite.*` unit names are deprecated shims) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
@@ -93,10 +93,12 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
 
-Database family direction: database-related module families (`sqlite`, `pg`)
-have `db` (L3) as their terminal home. Top-level units stay put until the
-physical fold-in lands as a separately authorized governance slice; see
-`core/docs/plans/2026-08-23-db-module-boundary.md` for the two-phase plan.
+Database family: `sqlite` and `pg` are L2 backend implementations inside the
+`db` (L3) family; their units physically live under `nextpas.core.db.sqlite.*`
+and `nextpas.core.db.pg.*`. Old `nextpas.core.sqlite.*` / `nextpas.core.pg.*`
+unit names remain only as deprecated re-export shims pending consumer sweep;
+removal conditions in `core/docs/db/CONTRACT.md`. Design record:
+`core/docs/plans/2026-08-23-db-module-boundary.md`.
 
 ## Gate policy
 
