@@ -713,7 +713,6 @@ var
   LValueStr: AnsiString;
   LStatusSeen: Boolean;
   LRegularSeen: Boolean;
-  LNameLower: AnsiString;
   LJ: SizeInt;
 begin
   if AResponse.HeadersDecoded then
@@ -1540,7 +1539,6 @@ function TH2ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
   LHost: string;
-  LHostKey: string;
   LPort: UInt16;
   LSecure: Boolean;
   LRawConn: ITcpStream;
@@ -1571,7 +1569,6 @@ begin
     else
       LPort := 80;
   end;
-  LHostKey := CanonicalPoolHostKey(LHost);
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LCancel := H2RequestCancelToken(AReq);
   HttpThrowIfCanceled(LCancel);
