@@ -472,8 +472,6 @@ begin
         end;
       tsiorTimeout, tsiorClosed:
         Exit(False);
-    else
-      Exit(False);
     end;
   end;
 end;
@@ -558,12 +556,6 @@ begin
           ANextEvents := [];
           Exit(False);
         end;
-    else
-      begin
-        AClosed := True;
-        ANextEvents := [];
-        Exit(False);
-      end;
     end;
   end;
 

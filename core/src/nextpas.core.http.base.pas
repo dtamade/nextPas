@@ -374,8 +374,6 @@ begin
     hekConnect, hekProtocol, hekRedirect, hekBody, hekUpgrade, hekRegistry,
       hekStatus, hekUnknown:
       Result := ecNetwork;
-  else
-    Result := ecNetwork;
   end;
 end;
 
