@@ -224,6 +224,51 @@ begin
   Check(Pos('QQ==', LResult) > 0, 'One byte: 2 pad chars');
 end;
 
+{ --- k53 (code888 backfeed): tmux DCS passthrough envelope --- }
+
+procedure TestOsc52SeqPlainMatchesLegacy;
+var
+  LClip: TClipboard;
+begin
+  { False 分支必须与既有 GetOSC52Copy 输出逐字节一致（零回归） }
+  LClip.Method := cmNone;
+  Check(Osc52Sequence('hello', False) = LClip.GetOSC52Copy('hello'),
+    'plain branch byte-identical to GetOSC52Copy');
+end;
+
+procedure TestOsc52SeqPassthroughEnvelope;
+var
+  LGot, LWant: AnsiString;
+begin
+  { 锚 grok-build clipboard.rs osc52_sequence("hi", true)：
+    ESC Ptmux ; ESC ESC ]52;c;aGk= BEL ST —— 内层 OSC 以 BEL 终止、
+    额外翻倍 ESC 开启内层解析、ST 收尾 }
+  LGot := Osc52Sequence('hi', True);
+  LWant := #27'Ptmux;'#27#27']52;c;' + 'aGk=' + #7#27'\';
+  Check(LGot = LWant, 'passthrough envelope exact bytes');
+end;
+
+procedure TestOsc52SeqPassthroughEmpty;
+var
+  LGot: AnsiString;
+begin
+  { 空载荷：Base64Encode('')='' → 信封骨架仍完整 }
+  LGot := Osc52Sequence('', True);
+  Check(Pos(#27'Ptmux;'#27#27']52;c;'#7#27'\', LGot) = 1,
+    'empty payload keeps full envelope skeleton');
+end;
+
+procedure TestClipboardDetectPassthroughField;
+var
+  LClip: TClipboard;
+begin
+  { 字段存在且为 Boolean；具体值随环境（CI 无 TMUX → False，
+    tmux pane 内 → True）——只验可赋值与读取稳定 }
+  LClip := TClipboard.Detect;
+  LClip.TmuxPassthrough := True;
+  Check(LClip.TmuxPassthrough, 'field assignable and readable');
+end;
+
 begin
   T := TTestSuite.Create('tui_clipboard');
   T.Test('GetOSC52Copy empty text', @TestGetOSC52CopyEmpty);
@@ -244,5 +289,9 @@ begin
   T.Test('GetOSC52Copy zeroes', @TestGetOSC52CopyZeroes);
   T.Test('GetOSC52Copy all printable', @TestGetOSC52CopyAllPrintable);
   T.Test('GetOSC52Copy one byte padding', @TestGetOSC52CopyOneByte);
+  T.Test('Osc52Seq plain matches legacy', @TestOsc52SeqPlainMatchesLegacy);
+  T.Test('Osc52Seq passthrough envelope', @TestOsc52SeqPassthroughEnvelope);
+  T.Test('Osc52Seq passthrough empty', @TestOsc52SeqPassthroughEmpty);
+  T.Test('Detect passthrough field', @TestClipboardDetectPassthroughField);
   if not T.Run then Halt(1);
 end.

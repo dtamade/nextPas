@@ -20,12 +20,25 @@ type
   TClipboard = record
     Method: TClipboardMethod;
     ExternalTool: AnsiString;
+    { 刀 k53（code888 反哺）：直接终端是 tmux pane（TMUX 环境变量非空）
+      时为 True —— cmOSC52 发射走 DCS passthrough 信封，穿透 tmux
+      到达外层终端剪贴板（锚 grok-build clipboard.rs osc52_sequence；
+      仅当 tmux 是 IMMEDIATE 终端时正确——编辑器 :terminal 内层模拟器
+      是 libvterm，信封会渲染成可见垃圾，code888 顶层应用无此场景） }
+    TmuxPassthrough: Boolean;
 
     class function Detect: TClipboard; static;
     function Copy(const Text: AnsiString): Boolean;
     function Paste: AnsiString;
     function GetOSC52Copy(const Text: AnsiString): AnsiString;
   end;
+
+{ OSC52 复制序列构造（纯函数）。ATmuxPassthrough=False →
+  ESC]52;c;<b64>ST（现款）；True → tmux DCS passthrough 信封
+  ESC Ptmux; ESC(翻倍) ESC]52;c;<b64>BEL ST——内层以 BEL 终止
+  （信封内 ST 的 ESC 需再翻倍，BEL 更简单可靠；锚 grok 逐字节）。 }
+function Osc52Sequence(const Text: AnsiString;
+  ATmuxPassthrough: Boolean): AnsiString;
 
 implementation
 
@@ -230,6 +243,7 @@ var
 begin
   Result.Method := cmNone;
   Result.ExternalTool := '';
+  Result.TmuxPassthrough := platform_env_get_str('TMUX') <> '';
 
   if IsOSC52Terminal then
   begin
@@ -246,13 +260,23 @@ begin
   end;
 end;
 
-function TClipboard.GetOSC52Copy(const Text: AnsiString): AnsiString;
+function Osc52Sequence(const Text: AnsiString;
+  ATmuxPassthrough: Boolean): AnsiString;
 var
   Encoded: AnsiString;
 begin
   Encoded := Base64Encode(Text);
-  // ESC ] 52 ; c ; <base64> ESC backslash
-  Result := #27']52;c;' + Encoded + #27'\';
+  if ATmuxPassthrough then
+    // DCS passthrough: ESC Ptmux ; ESC(escaped) OSC52(BEL) ST
+    Result := #27'Ptmux;'#27#27']52;c;' + Encoded + #7#27'\'
+  else
+    // ESC ] 52 ; c ; <base64> ESC backslash
+    Result := #27']52;c;' + Encoded + #27'\';
+end;
+
+function TClipboard.GetOSC52Copy(const Text: AnsiString): AnsiString;
+begin
+  Result := Osc52Sequence(Text, False);
 end;
 
 function TClipboard.Copy(const Text: AnsiString): Boolean;
@@ -264,7 +288,7 @@ begin
   case Method of
     cmOSC52:
     begin
-      Seq := GetOSC52Copy(Text);
+      Seq := Osc52Sequence(Text, TmuxPassthrough);
       Written := platform_console_write(1, @Seq[1], Length(Seq));
       Result := (Written = Length(Seq));
     end;
