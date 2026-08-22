@@ -24,10 +24,22 @@ uses
 function CanvasFloodFill4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
   const AFill: TCanvasCell; ABuilder: TCanvasEditBuilder): Integer;
 
+{** @desc 同上, 但填充限制在边界矩形 [ABX0..ABX1]x[ABY0..ABY1] 内
+    (含端点; 选区限定填充等场景)。种子在边界外返回 0。
+    边界自动与文档矩形求交。 *}
+function CanvasFloodFill4In(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
+  const AFill: TCanvasCell; ABuilder: TCanvasEditBuilder;
+  ABX0, ABY0, ABX1, ABY1: Integer): Integer;
+
 {** @desc 只读扫描 (AX,AY) 的同色连通区域, 不修改文档, 逐点回调 OnPoint
     @return 区域格数; 种子越界、图层非法或回调未设置返回 0 *}
 function CanvasFloodFillScan4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
   const OnPoint: TRasterPointProc): Integer;
+
+{** @desc 同上, 但扫描限制在边界矩形内(选区限定预览等场景) *}
+function CanvasFloodFillScan4In(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
+  const OnPoint: TRasterPointProc;
+  ABX0, ABY0, ABX1, ABY1: Integer): Integer;
 
 implementation
 
@@ -43,9 +55,18 @@ const
 
 function CanvasFloodFill4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
   const AFill: TCanvasCell; ABuilder: TCanvasEditBuilder): Integer;
+begin
+  Result := CanvasFloodFill4In(ADoc, ALayer, AX, AY, AFill, ABuilder,
+    0, 0, ADoc.Width - 1, ADoc.Height - 1);
+end;
+
+function CanvasFloodFill4In(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
+  const AFill: TCanvasCell; ABuilder: TCanvasEditBuilder;
+  ABX0, ABY0, ABX1, ABY1: Integer): Integer;
 var
   Stack: array of TFloodNode;
   SP: Integer;                 { 栈元素数 }
+  BX0, BY0, BX1, BY1: Integer; { 与文档求交后的有效边界 }
   Seed: TCanvasCell;
   Node: TFloodNode;
   X, Y: Integer;
@@ -55,7 +76,15 @@ begin
     Exit;
   if (ALayer < 0) or (ALayer >= ADoc.LayerCount) then
     Exit;
-  if (AX < 0) or (AY < 0) or (AX >= ADoc.Width) or (AY >= ADoc.Height) then
+  { 边界与文档矩形求交; 空交集即无填充 }
+  if ABX0 < 0 then BX0 := 0 else BX0 := ABX0;
+  if ABY0 < 0 then BY0 := 0 else BY0 := ABY0;
+  if ABX1 > ADoc.Width - 1 then BX1 := ADoc.Width - 1 else BX1 := ABX1;
+  if ABY1 > ADoc.Height - 1 then BY1 := ADoc.Height - 1 else BY1 := ABY1;
+  if (BX0 > BX1) or (BY0 > BY1) then
+    Exit;
+  { 种子必须在边界内(选区外点击不填) }
+  if (AX < BX0) or (AX > BX1) or (AY < BY0) or (AY > BY1) then
     Exit;
   Seed := ADoc.GetCell(ALayer, AX, AY);
   { 种子与填充色相同则无变化 }
@@ -82,28 +111,28 @@ begin
     if SP + 4 > Length(Stack) then
       SetLength(Stack, Length(Stack) * 2);
     { 右 }
-    if X + 1 < ADoc.Width then
+    if X + 1 <= BX1 then
     begin
       Stack[SP].X := X + 1;
       Stack[SP].Y := Y;
       Inc(SP);
     end;
     { 左 }
-    if X - 1 >= 0 then
+    if X - 1 >= BX0 then
     begin
       Stack[SP].X := X - 1;
       Stack[SP].Y := Y;
       Inc(SP);
     end;
     { 下 }
-    if Y + 1 < ADoc.Height then
+    if Y + 1 <= BY1 then
     begin
       Stack[SP].X := X;
       Stack[SP].Y := Y + 1;
       Inc(SP);
     end;
     { 上 }
-    if Y - 1 >= 0 then
+    if Y - 1 >= BY0 then
     begin
       Stack[SP].X := X;
       Stack[SP].Y := Y - 1;
@@ -117,10 +146,19 @@ end;
   否则同格会被邻居反复入栈造成循环。 }
 function CanvasFloodFillScan4(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
   const OnPoint: TRasterPointProc): Integer;
+begin
+  Result := CanvasFloodFillScan4In(ADoc, ALayer, AX, AY, OnPoint,
+    0, 0, ADoc.Width - 1, ADoc.Height - 1);
+end;
+
+function CanvasFloodFillScan4In(ADoc: TCanvasDoc; ALayer, AX, AY: Integer;
+  const OnPoint: TRasterPointProc;
+  ABX0, ABY0, ABX1, ABY1: Integer): Integer;
 var
   Stack: array of TFloodNode;
   Visited: array of Boolean;
   SP: Integer;                 { 栈元素数 }
+  BX0, BY0, BX1, BY1: Integer; { 与文档求交后的有效边界 }
   Seed: TCanvasCell;
   Node: TFloodNode;
   X, Y: Integer;
@@ -130,7 +168,15 @@ begin
     Exit;
   if (ALayer < 0) or (ALayer >= ADoc.LayerCount) then
     Exit;
-  if (AX < 0) or (AY < 0) or (AX >= ADoc.Width) or (AY >= ADoc.Height) then
+  { 边界与文档矩形求交; 空交集即无扫描 }
+  if ABX0 < 0 then BX0 := 0 else BX0 := ABX0;
+  if ABY0 < 0 then BY0 := 0 else BY0 := ABY0;
+  if ABX1 > ADoc.Width - 1 then BX1 := ADoc.Width - 1 else BX1 := ABX1;
+  if ABY1 > ADoc.Height - 1 then BY1 := ADoc.Height - 1 else BY1 := ABY1;
+  if (BX0 > BX1) or (BY0 > BY1) then
+    Exit;
+  { 种子必须在边界内 }
+  if (AX < BX0) or (AX > BX1) or (AY < BY0) or (AY > BY1) then
     Exit;
   Seed := ADoc.GetCell(ALayer, AX, AY);
 
@@ -158,28 +204,28 @@ begin
     if SP + 4 > Length(Stack) then
       SetLength(Stack, Length(Stack) * 2);
     { 右 }
-    if X + 1 < ADoc.Width then
+    if X + 1 <= BX1 then
     begin
       Stack[SP].X := X + 1;
       Stack[SP].Y := Y;
       Inc(SP);
     end;
     { 左 }
-    if X - 1 >= 0 then
+    if X - 1 >= BX0 then
     begin
       Stack[SP].X := X - 1;
       Stack[SP].Y := Y;
       Inc(SP);
     end;
     { 下 }
-    if Y + 1 < ADoc.Height then
+    if Y + 1 <= BY1 then
     begin
       Stack[SP].X := X;
       Stack[SP].Y := Y + 1;
       Inc(SP);
     end;
     { 上 }
-    if Y - 1 >= 0 then
+    if Y - 1 >= BY0 then
     begin
       Stack[SP].X := X;
       Stack[SP].Y := Y - 1;
