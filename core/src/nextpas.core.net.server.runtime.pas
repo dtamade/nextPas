@@ -59,6 +59,9 @@ type
     FEvents: TPlatformPollEvents;
     FWakeDeadline: TDeadline;
     FTicket: ITcpServerPollTargetTicket;
+    { 服务器 shutdown drain 标记：reactor 线程已对本 target 发起过
+      BeginShutdownClose（防 drain 阶段逐轮重扫时重复发起）。 }
+    FShutdownClose: Boolean;
     { 连接级上下文（worker handoff / hijack 迁移载体）。迁移（hijack）时
       复用同一 context 并重绑新 target 的 ticket，保证 worker 推送通道
       跨会话迁移保持有效。强引用不成环：ticket 对 target 是弱引用。 }
@@ -86,6 +89,9 @@ type
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
     procedure SetContext(const AContext: ITcpServerSessionContext);
     function Context: TTcpServerPollSessionContext;
+    { shutdown drain 标记（见 FShutdownClose）：drain 发启与收尾判定共用 }
+    procedure MarkShutdownClose;
+    function IsShutdownClose: Boolean;
   end;
 
   TTcpServerPollWorkerHandoff = class(TInterfacedObject,
@@ -232,6 +238,13 @@ type
     function ContainsTarget(const ATarget: TTcpServerPollSessionTarget): Boolean;
     function ComputePollTimeoutMs: Int32;
     function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+    { 快照全部已注册 target（副本；调用方不得持引用跨轮使用）：
+      shutdown drain 发启时逐轮扫描。 }
+    function Snapshot: TTcpServerPollSessionTargetArray;
+    { 是否存在已标记 shutdown-close 的 target：drain 收尾判定（全部
+      drain 完成 = 无标记 target 残留）。O(n) 扫描，仅 shutdown drain
+      路径调用。 }
+    function AnyShutdownClose: Boolean;
     function Drain: TTcpServerPollSessionTargetArray;
     procedure Clear;
   end;
@@ -491,6 +504,16 @@ function TTcpServerPollSessionTarget.HandleEvents(
 begin
   Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
   RefreshWakeDeadline;
+end;
+
+procedure TTcpServerPollSessionTarget.MarkShutdownClose;
+begin
+  FShutdownClose := True;
+end;
+
+function TTcpServerPollSessionTarget.IsShutdownClose: Boolean;
+begin
+  Result := FShutdownClose;
 end;
 
 constructor TTcpServerPollQueuedCompletion.Create(
@@ -1018,6 +1041,31 @@ begin
       Inc(LCount);
     end;
   SetLength(Result, LCount);
+end;
+
+function TTcpServerPollTargetRegistry.Snapshot: TTcpServerPollSessionTargetArray;
+var
+  LI: SizeUInt;
+begin
+  Result := nil;
+  if FCount = 0 then
+    Exit;
+  SetLength(Result, FCount);
+  for LI := 0 to FCount - 1 do
+    Result[LI] := FItems[LI];
+end;
+
+function TTcpServerPollTargetRegistry.AnyShutdownClose: Boolean;
+var
+  LI: SizeUInt;
+begin
+  { FCount 为无符号：0 时直接返回，避免 FCount-1 下溢扫越界 }
+  Result := False;
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if (FItems[LI] <> nil) and FItems[LI].IsShutdownClose then
+      Exit(True);
 end;
 
 function TTcpServerPollTargetRegistry.Drain: TTcpServerPollSessionTargetArray;

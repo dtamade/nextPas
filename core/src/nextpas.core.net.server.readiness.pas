@@ -38,6 +38,15 @@ type
   private
     FOptions: TTcpServerOptions;
     FRunning: Boolean;
+    { shutdown drain：Shutdown 请求后 reactor 主循环不立即退出，先对全部
+      已注册 poll target 中实现 ITcpServerSessionShutdown 的会话补发 close
+      frame 1001 并驱动 drain（复用会话 Advance/FlushOutbound 状态机与
+      HandlePollTarget 常规推进）；期限 = FOptions.ShutdownTimeoutNs
+      （<=0 无限等待，与阻塞路径 IWsServerShutdownNotifier.WaitFinished(0)
+      语义一致），超时或全部完成后退出循环，残余 target 由
+      ReleaseRegisteredPollTargets 强关兜底（等价阻塞路径 ForceClose）。 }
+    FShutdownDraining: Boolean;
+    FShutdownDeadline: TDeadline;
     FListener: ITcpListener;
     FListenerRuntime: ITcpListenerRuntime;
     FListenerSocketRuntime: ITcpSocketRuntime;
@@ -53,6 +62,8 @@ type
     procedure RegisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     function ComputePollTimeoutMs: Int32;
+    function ComputeShutdownAwareTimeoutMs: Int32;
+    procedure InitiateShutdownCloses;
     procedure HandleExpiredPollTargets;
     procedure DispatchAcceptedSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession);
@@ -197,6 +208,33 @@ end;
 function TTcpReadinessServer.ComputePollTimeoutMs: Int32;
 begin
   Result := FTargetRegistry.ComputePollTimeoutMs;
+end;
+
+{ 常规轮询超时叠加 shutdown drain 期限：drain 中 poll 最长等 shutdown
+  剩余时间（无事件、全部会话 WouldBlock 卡住时也能到点退出强关）；
+  未 drain 或期限无限时维持会话 deadline 语义不变。 }
+function TTcpReadinessServer.ComputeShutdownAwareTimeoutMs: Int32;
+var
+  LMs: Int32;
+  LRemaining: TDuration;
+  LRemMs: Int64;
+begin
+  LMs := ComputePollTimeoutMs;
+  if not FShutdownDraining then
+    Exit(LMs);
+  if FShutdownDeadline.IsInfinite then
+    Exit(LMs);
+  LRemaining := FShutdownDeadline.Remaining;
+  if LRemaining.AsNanoseconds <= 0 then
+    Exit(0);
+  LRemMs := LRemaining.AsMilliseconds;
+  if (LRemMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+    LRemMs := 1;
+  if LRemMs > High(Int32) then
+    LRemMs := High(Int32);
+  if (LMs < 0) or (LRemMs < Int64(LMs)) then
+    LMs := Int32(LRemMs);
+  Result := LMs;
 end;
 
 procedure TTcpReadinessServer.HandleExpiredPollTargets;
@@ -512,6 +550,34 @@ begin
   end;
 end;
 
+{ shutdown drain 发启：对全部已注册 target 中实现 ITcpServerSessionShutdown
+  的会话补发 close frame 1001（标记防重、幂等），并以可写事件推进一次完成
+  首个冲刷尝试 + poller 事件集同步（同 HandlePollTarget 常规路径）。逐轮在
+  drain 阶段循环顶部调用：drain 期间新登记/迁移完成的 WS 会话也被覆盖。 }
+procedure TTcpReadinessServer.InitiateShutdownCloses;
+var
+  LTargets: TTcpServerPollSessionTargetArray;
+  LI: SizeUInt;
+  LShutdown: ITcpServerSessionShutdown;
+begin
+  LTargets := FTargetRegistry.Snapshot;
+  if Length(LTargets) = 0 then
+    Exit;
+  for LI := 0 to SizeUInt(Length(LTargets)) - 1 do
+  begin
+    if LTargets[LI] = nil then
+      Continue;
+    if LTargets[LI].IsShutdownClose then
+      Continue;
+    if not Supports(LTargets[LI].PollSession, ITcpServerSessionShutdown,
+      LShutdown) then
+      Continue;
+    LTargets[LI].MarkShutdownClose;
+    LShutdown.BeginShutdownClose;
+    HandlePollTarget(LTargets[LI], [peWritable]);
+  end;
+end;
+
 procedure TTcpReadinessServer.HandleListenerReady(
   const AHandler: ITcpServerHandler);
 var
@@ -668,11 +734,26 @@ begin
     end;
 
     FRunning := True;
+    FShutdownDraining := False;
+    FShutdownDeadline := TDeadline.Infinite;
     try
       LRuntimeContextReady := False;
-      while FRunning do
+      while FRunning or FShutdownDraining do
       begin
-        LTimeoutMs := ComputePollTimeoutMs;
+        { shutdown drain 阶段：每轮先补发启（容忍 drain 期间新登记/迁移
+          完成的 WS 会话也进入优雅收尾），再判定收尾——无待收尾会话或
+          超 ShutdownTimeout 期限即退出（残余由 finally 强关兜底）。 }
+        if FShutdownDraining then
+        begin
+          InitiateShutdownCloses;
+          if (not FTargetRegistry.AnyShutdownClose) or
+             FShutdownDeadline.IsExpired then
+          begin
+            FShutdownDraining := False;
+            Break;
+          end;
+        end;
+        LTimeoutMs := ComputeShutdownAwareTimeoutMs;
         LErr := platform_poller_wait(FPoller, @LEntries[0], Length(LEntries),
           LTimeoutMs,
           LCount);
@@ -734,6 +815,14 @@ var
   LWoken: Boolean;
 begin
   FRunning := False;
+  FShutdownDraining := True;
+  { 优雅收尾期限：>0 时以 ShutdownTimeoutNs 为 drain 上限（超时强关）；
+    <=0 无限等待（与阻塞路径 WaitFinished(0) 语义一致）。 }
+  if FOptions.ShutdownTimeoutNs > 0 then
+    FShutdownDeadline := TDeadline.After(
+      TDuration.FromNanoseconds(FOptions.ShutdownTimeoutNs))
+  else
+    FShutdownDeadline := TDeadline.Infinite;
   LWoken := False;
   if FPollerReady then
     LWoken := platform_poller_wake(FPoller) = 0;
