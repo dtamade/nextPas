@@ -20,7 +20,6 @@ type
   {** @desc Rope（大字符串数据结构）
     @details 二叉树结构，O(log n) 拼接/切片/插入/删除。
       适用场景：文本编辑器、大字符串处理、协同编辑。
- * @concurrency Thread-safe (see source for details).
   }
   TRope = class
   private

@@ -34,7 +34,6 @@ type
   {** @desc XOR 布隆过滤器
     @details 静态成员过滤器；每次查找读取 3 个指纹槽位。
       静态构建：需要在构造时提供所有键。
-  {** @concurrency Thread-safe (see source for details). }
       假阳性率约 0.39% (8-bit 指纹)。 }
   TXorFilter = class
   private

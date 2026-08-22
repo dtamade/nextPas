@@ -33,7 +33,6 @@ const
 type
   TUnrolledResult = (ulOk, ulNotFound, ulExists, ulFull, ulClosed);
 
-  {** @concurrency Thread-safe (see source for details). }
   generic TConcurrentUnrolledListImpl<T> = class
   private
     type

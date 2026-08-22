@@ -12,7 +12,7 @@ unit nextpas.core.lockfree.deque;
  *   - TryPush/TryPop: only owner thread can call
  *   - TrySteal: multiple thief threads compete via CAS
  *   - Close: safe to call from any thread
- *   - {$IFDEF LOCKFREE_DEBUG}: claim/check owner thread on push/pop (audit F-005)
+ *   - $IFDEF LOCKFREE_DEBUG: claim/check owner thread on push/pop (audit F-005)
  *
  * @see Work Stealing — Blumofe & Leiserson, 1999
  * @see Cilk — work-stealing based parallel programming

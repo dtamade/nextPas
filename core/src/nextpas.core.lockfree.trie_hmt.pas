@@ -67,7 +67,6 @@ type
     Size: Int32;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   THashMappedTrie = class
   private
     FRoot: PHmtNode;

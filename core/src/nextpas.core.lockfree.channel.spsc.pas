@@ -26,7 +26,6 @@ type
       **限制**:
       - 仅支持 1P1C，不支持 MPMC
       - 不支持 Close（需要手动同步）
-  {** @concurrency Thread-safe (see source for details). }
     }
   generic TLockFreeChannelSpscImpl<T> = class
   private type

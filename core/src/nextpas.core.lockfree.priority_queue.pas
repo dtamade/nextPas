@@ -7,7 +7,6 @@ unit nextpas.core.lockfree.priority_queue;
  *
  * @see java.util.concurrent.PriorityBlockingQueue — reference implementation
  * @see Go container/heap — similar heap-based priority queue
- * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}

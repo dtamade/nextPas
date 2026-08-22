@@ -15,7 +15,6 @@ type
       使用 head/tail 指针 + CAS 实现 MPMC 安全。
       容量自动取整到 2 的幂，使用位掩码取模。
       适用场景：生产者-消费者、日志缓冲、实时系统。
- * @concurrency Thread-safe (see source for details).
   }
   generic TRingBufferImpl<T> = class
   private type

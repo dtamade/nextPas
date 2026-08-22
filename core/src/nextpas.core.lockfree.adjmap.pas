@@ -66,7 +66,6 @@ type
     FDistance: Int64;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   TAdjMapImpl = class
   private
     FVertices: array of TAdjVertex;

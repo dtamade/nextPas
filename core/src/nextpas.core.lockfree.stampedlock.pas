@@ -24,7 +24,6 @@ type
       - TryOptimisticRead: 无锁乐观读，返回 stamp，使用后需 Validate
       - Unlock: 释放锁
       适用场景：读多写少、读操作很短的场景。
- * @concurrency Thread-safe (see source for details).
   }
   TStampedLock = class
   private

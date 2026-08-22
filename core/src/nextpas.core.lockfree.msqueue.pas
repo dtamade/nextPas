@@ -47,7 +47,6 @@ type
       - 节点池自动扩容
       - 生命周期: Close → join producers/consumers → Free
       - Destroy 会 Close；Free 前必须 quiescent（无并发出入队）
- * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
   private

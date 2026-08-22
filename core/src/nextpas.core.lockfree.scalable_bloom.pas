@@ -31,7 +31,6 @@ type
       当当前层 FPR 超过阈值时自动添加新层。
       每层递增容量、递减 FPR。
       只支持 Add + Contains（标准布隆语义）。
- * @concurrency Thread-safe (see source for details).
   }
   generic TScalableBloomFilterImpl<T> = class
   private

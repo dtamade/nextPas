@@ -13,7 +13,6 @@ type
   {** @desc 并发 Fenwick 树 (二叉索引树)
     @details 支持 O(log n) 前缀和查询和单点更新。
       适用于统计、排名、频率计数等场景。
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentFenwickTree = class
   private

@@ -42,7 +42,6 @@ type
    *   - 线程安全：原子计数器
    *   - 仅删除已成功添加且尚未删除的元素；删除误报键会破坏保证
    *}
-  {** @concurrency Thread-safe (see source for details). }
   TCountingBloomFilter = class
   private
     FWidth: Int32;

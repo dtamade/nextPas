@@ -9,7 +9,6 @@ unit nextpas.core.lockfree.skiplist;
  *
  * @see crossbeam-skiplist (Rust) — similar concurrent skip list design
  * @see java.util.concurrent.ConcurrentSkipListMap — reference implementation
- * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}

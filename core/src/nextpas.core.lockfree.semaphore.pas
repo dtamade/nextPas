@@ -14,7 +14,6 @@ type
     @details 基于原子操作的信号量实现。
       支持 Acquire/Release/TryAcquire/AcquireTimeout。
       适用于资源池、限流等场景。
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentSemaphore = class
   private

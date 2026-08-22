@@ -12,7 +12,6 @@ type
     @details 基于原子操作的读写锁实现。
       支持 ReadLock/WriteLock/Unlock/TryReadLock/TryWriteLock。
       适用于读多写少的场景。
- * @concurrency Thread-safe (see source for details).
   }
   TConcurrentRwLock = class
   private

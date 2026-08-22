@@ -15,7 +15,6 @@ type
   {** @desc G-Counter (只增计数器)
     @details 多节点合并取最大值。每个节点独立计数，合并时取各节点最大值之和。
       适用场景：分布式计数、页面浏览量、点赞数。
- * @concurrency Thread-safe (see source for details).
   }
   TGCounter = class
   private

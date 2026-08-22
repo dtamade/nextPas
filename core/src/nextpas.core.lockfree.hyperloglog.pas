@@ -29,7 +29,6 @@ uses
   nextpas.core.errors;
 
 type
-  {** @concurrency Thread-safe (see source for details). }
   THyperLogLog = class
   private
     FRegisters: array of Int32;

@@ -38,7 +38,6 @@ type
     @details 每个节点维护一个递增计数器。
       Compare 判断两个向量的因果关系（happens-before）。
       Merge 取各节点计数器的最大值（join）。
-  {** @concurrency Thread-safe (see source for details). }
       线程安全：CAS 自旋锁保护所有变更操作。 }
   TVersionVector = class
   private

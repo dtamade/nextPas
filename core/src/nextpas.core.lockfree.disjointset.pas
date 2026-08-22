@@ -23,7 +23,6 @@ type
       - Union: 按秩合并，均摊 O(α(n)) ≈ O(1)
       - 线程安全：自旋锁保护扩容、路径压缩和按秩合并不变量
       - 适用于动态连通性查询、聚类、图算法
- * @concurrency Thread-safe (see source for details).
   }
   TLockFreeDisjointSet = class
   private

@@ -21,7 +21,6 @@ type
       - 有序存储，二分查找
       - 写时复制，读无锁
       - 适用场景：排行榜、时间线索引、小规模有序集合
- * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentSortedSetImpl<T> = class
   private type

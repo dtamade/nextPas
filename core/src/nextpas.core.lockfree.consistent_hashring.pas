@@ -36,7 +36,6 @@ type
   end;
   PRingNode = ^TRingNode;
 
-  {** @concurrency Thread-safe (see source for details). }
   TConsistentHashRing = class
   private
     FNodes: array of TRingNode;

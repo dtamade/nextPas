@@ -42,7 +42,6 @@ type
     Right: PFibNode;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
   TLockFreeFibonacciHeap = class
   private
     FMin: PFibNode;

@@ -14,7 +14,6 @@ type
     @details 基于分片锁 HashMap 实现，使用访问计数器近似 LRU。
       支持 Get/Put/Remove/Clear/Capacity/Count。
       适用于缓存、淘汰等场景。
- * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentLruCacheImpl<TKey, TValue> = class
   private

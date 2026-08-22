@@ -24,7 +24,7 @@ type
    *
    * @safety
    *   FTail 的非原子读取是刻意设计，依赖 single-consumer contract 保证安全。
-   *   Under {$IFDEF LOCKFREE_DEBUG}, consumer-side methods claim/check owner thread id
+   *   Under $IFDEF LOCKFREE_DEBUG, consumer-side methods claim/check owner thread id
    *   (audit F-005). Default builds keep zero overhead.
    *}
   generic TMpscQueueImpl<T> = class

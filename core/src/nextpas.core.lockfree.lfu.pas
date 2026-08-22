@@ -15,7 +15,6 @@ type
       访问频率最低的条目优先被淘汰。
       支持 Get/Put/Remove/Contains/Count/HitRate。
       适用于缓存、淘汰等场景。
- * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentLFUCacheImpl<TKey, TValue> = class
   private

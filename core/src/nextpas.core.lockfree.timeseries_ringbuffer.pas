@@ -72,7 +72,6 @@ type
       ADefaultTTLMs: Int64 = TSRING_DEFAULT_TTL_MS);
     destructor Destroy; override;
 
-  {** @concurrency Thread-safe (see source for details). }
     {** @desc 追加一个值（使用默认 TTL） }
     function Append(const AValue: AnsiString): TTSRingResult;
     {** @desc 追加一个值（指定 TTL 毫秒，0=永不过期） }
