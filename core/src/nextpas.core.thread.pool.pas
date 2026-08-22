@@ -163,7 +163,7 @@ end;
 procedure TThreadPool.FreeNode(ANode: PTaskNode);
 begin
   if (PtrUInt(ANode) < PtrUInt(@FNodePool[0])) or
-     (PtrUInt(ANode) >= PtrUInt(@FNodePool[128])) then
+     (PtrUInt(ANode) >= PtrUInt(@FNodePool) + SizeOf(FNodePool)) then
     Dispose(ANode);
 end;
 
