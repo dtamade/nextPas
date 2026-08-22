@@ -103,6 +103,10 @@ if LProvider = nil then
 | [`WIRE-MAPPINGS.md`](WIRE-MAPPINGS.md) | 各厂商线级协议映射真相源（含怪癖清单） |
 | [`DESIGN.md`](DESIGN.md) | 对标分析与决策记录（为何这样设计） |
 | [`CONSUMERS.md`](CONSUMERS.md) | **首发客户剧本**：token888 / code888 消费面、迁移映射、收益表 |
+| [`ERRORS.md`](ERRORS.md) | 错误流转矩阵、重试判定表、取消语义全表 |
+| [`LIFECYCLE.md`](LIFECYCLE.md) | 对象状态机、流式时序、并行工具执行、资源所有权 |
+| [`SECURITY.md`](SECURITY.md) | 密钥流转、脱敏等级、DoS 防线、fail-closed 清单 |
+| [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径 |
 | [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划 |
 | [`ROADMAP.md`](ROADMAP.md) | 实施波次与出口证据 |
 

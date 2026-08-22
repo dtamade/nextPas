@@ -1,0 +1,87 @@
+# ERRORS：错误流转矩阵与语义细则
+
+> 权威来源链：本文档 > API.md §2 > 代码注释。所有层的错误行为必须能在
+> 本文档找到对应行；新增错误码/错误路径先改这里。
+
+## 1. 错误产生点矩阵
+
+| 层 | 可产生的错误码 | 说明 |
+|----|--------------|------|
+| transport.http | aecTransport, aecTimeout, aecServer, aecRateLimited, aecAuthentication, aecNotFound, aecInvalidRequest | 连接/读写失败与超时由传输直接产生；HTTP 状态码经公共分类器归约（非 2xx 一律在此转错误码，adapter 见不到裸状态码） |
+| provider.openai / anthropic | aecProtocol, aecConfig, aecContextOverflow | 编解码违例；本地配置缺失（MaxTokens/key）；超窗措辞识别 |
+| provider.fake | aecProtocol | 脚本耗尽后再调用 |
+| WithRetry | （透传最后一次原始错误）| 重试耗尽不包装、不改码、不丢 RetryAfterMs |
+| agent.sse | （无异常）| 解析失败产出非法帧交由上层判 protocol；行超限抛 aecProtocol |
+| loop | aecToolFailed, aecBudgetExhausted（收尾态）, aecCancelled, aecConfig | 工具异常兜底；预算走 RunOutcome 而非异常（见 §5）|
+| 词表/fold | aecProtocol | delta 序列违反折叠规则 |
+
+## 2. 重试判定权威表
+
+| 错误码 | Retryable | 典型来源 | RetryAfterMs 适用 |
+|--------|-----------|---------|------------------|
+| aecInvalidRequest | 否 | 400（非超窗措辞） | 否 |
+| aecAuthentication | 否 | 401/403 | 否 |
+| aecNotFound | 否 | 404 | 否 |
+| aecRateLimited | 是 | 429 | 是（头优先于退避曲线）|
+| aecTransport | 是 | connect/reset/broken pipe | 否 |
+| aecTimeout | 是 | connect/整体超时 | 否 |
+| aecServer | 是 | 5xx, 529(overloaded) | 若带头则用 |
+| aecContextOverflow | 否 | 400 + 超窗措辞 | 否（需消费方改 history）|
+| aecProtocol | 否 | 帧违例/脚本耗尽 | 否 |
+| aecCancelled | 否 | 令牌触发 | 否 |
+| aecConfig | 否 | 本地装配 | 否 |
+| aecToolFailed / aecBudgetExhausted | 否 | loop 层 | 否 |
+
+铁律重申：上游 4xx 语义错误**原样透传**（token888 归因分离），WithRetry 白名单
+默认 `[aecRateLimited, aecTransport, aecTimeout, aecServer]`。
+
+## 3. 公共错误信封解析算法
+
+```
+function ClassifyUpstreamError(Status, Headers, Body):
+  Snippet := Utf8SafeTruncate(Body, 8KB)          { 见 §6 }
+  Msg     := ExtractJsonField(Body, "error.message")   { 两厂商同形，openai:
+             error.{message,type,code}；anthropic: error.{type,message} }
+  Code    := ErrorCodeForStatus(Status)
+  if Code = aecInvalidRequest and MatchesOverflowPhrases(Msg):
+    Code := aecContextOverflow                    { 覆盖 400 归因 }
+  if Status = 429:
+    RetryAfterMs := ParseRetryAfter(Headers)      { retry-after-ms > retry-after(秒);
+                                                     HTTP-date 不解析 → CUsageUnknown }
+  raise EAgentError(Code, Msg, Retryable=IsRetryable(Code),
+                    Provider=<name>, RequestId=ProbeRequestIdHeaders(Headers),
+                    RawBodySnippet=Snippet)
+```
+
+## 4. 异常形态与消息规范
+
+- 单一异常族：`EAgentError`（含全部上下文字段）+ `EAgentCancelled` 子类。
+  不建深层继承树；不引入异常链（Pascal 无此惯例），上下文进字段不进 message。
+- Message 格式：`[<provider>] <code-name>: <upstream-or-local message>`，
+  例 `[anthropic] rate_limited: Number of requests too high (status=429)`。
+  本地错误 Provider 为空串，前缀省略。
+- EAgentCancelled.Message 固定 `"operation cancelled"`；判定取消永远看类型/码，
+  不做字符串匹配。
+
+## 5. 取消语义全表
+
+| 场景 | 行为 |
+|------|------|
+| `IAgentCompletion.NextDelta` 进行中 Cancel | 当前阻塞读被打断，返回 False；GetCancelled=True；已产出 delta 有效 |
+| `Complete()` 任意阶段取消 | 抛 EAgentCancelled（aecCancelled）|
+| `Loop.Run()` 轮界/工具界检测 | 终止轮询，RunOutcome=roCancelled；FinalMessage 为 nil 时 Transcript 保留已完成部分 |
+| 工具执行中取消 | 令牌已传入 IToolContext；工具自行响应；忽略令牌的工具由其 TimeoutMs 兜底 |
+| 退避睡眠中取消 | SleepMs 返回 False，立即以最后一次原始错误终止（不吞为成功）|
+| 取消后的资源 | 连接关闭/归还由 transport 完成（拥有线程内）；磁盘类副作用本模块无 |
+
+## 6. 边界细则
+
+- **Utf8SafeTruncate**：8KB 截断必须回退到 UTF-8 序列边界（最多回退 3 字节），
+  绝不产出半字符——错误摘要会进日志，半字符会破坏下游 JSON 编码。
+- **sdkError delta 之后必 EOF**：adapter 产出 sdkError 后不得再产出任何其他
+  delta；completion 将该错误缓存并在 EOF 后首次 GetMessage 时抛出对应
+  EAgentError（pull 循环本身不被异常打断——错误延迟到取结果时刻）。
+  替代方案（NextDelta 直接抛）被否决：破坏"拉取循环直线代码"形态。
+- **幂等**：EOF 后再调 NextDelta 恒 False 且无副作用；Close/Free 重复调用安全。
+- **空输入**：Messages 空 + System 空 → Complete 直接 aecConfig（不发无效请求）；
+  Tools 空 → 不上送 tools 字段。

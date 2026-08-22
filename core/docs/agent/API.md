@@ -531,3 +531,22 @@ end;
 
 - v1 全部公共表面标注 draft；首个 landing 后进入 registry truth-level 演进流程。
 - 语义版本化随 core 模块纪律；破坏性词表变更必须先改本文档并更新 ROADMAP inbox。
+
+## 10. 默认值总表（单一事实源）
+
+| 项 | 默认值 | 定义处 |
+|----|--------|--------|
+| OpenAI BaseUrl | `https://api.openai.com`（拼 `/v1/chat/completions`）| provider 常量 |
+| Anthropic BaseUrl | `https://api.anthropic.com`（拼 `/v1/messages`）| provider 常量 |
+| Anthropic-Version | `2023-06-01`（CANTHROPIC_VERSION_DEFAULT）| provider 常量 |
+| ConnectTimeoutMs | 10_000 | TProviderOptions |
+| TotalTimeoutMs | 300_000 | TProviderOptions |
+| TRetryPolicy.Default | attempts=3, initial=1000ms, max=30_000ms, ×2.0, jitter=0.1, 白名单四码, RespectRetryAfter=True, 总上限 120_000ms | retry 单元 |
+| TAgentLoopOptions.MaxRounds | 10 | loop |
+| DoomLoopThreshold | 3 | loop |
+| TruncateLines / TruncateBytes | 2000 / 65536 | loop |
+| 读 chunk / 行缓冲上限 | 32 KiB / 1 MiB | PERFORMANCE §2 |
+| RawBodySnippet 上限 | 8 KiB | ERRORS §6 |
+| env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
+
+修改任何默认值必须同步本表并跑受影响 gate。

@@ -60,7 +60,7 @@
 | `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；同上公开编解码器 | common, transport, intf |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold |
 | `nextpas.core.agent.tools.pas` | 工具 | 参数校验（务实级）、结果截断工具、executor 包装（超时/取消） | base, intf, json, text |
-| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转；策略全部可注入 | intf, fold, tools, errors |
+| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转；策略全部可注入；并行工具经 async 任务设施（LIFECYCLE §5，决策 D14） | intf, fold, tools, errors, async |
 | `nextpas.core.agent.session.pas` | 会话 | IAgentTranscriptStore 接口 + 内存实现（W4 起）；JSONL 实现后置独立 wave | base, intf, fs |
 
 体积指引：单文件 >800 行必须拆分（provider.openai 与 anthropic 预期各 ~500-700 行，
