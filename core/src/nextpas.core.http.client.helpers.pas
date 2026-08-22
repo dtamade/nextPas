@@ -342,9 +342,13 @@ begin
     raise EHttpError.CreateOp(hekProtocol, 'content_encoding',
       'unsupported Content-Encoding: ' + LEncoding);
 
+  { SizeUInt 与 SizeInt 同宽的 64 位平台上非负 Int64 上限恒可承载；
+    仅 32 位及以下平台需要防御 SizeUInt 截断。 }
+  {$IFNDEF CPU64}
   if (AMaxSize > 0) and (UInt64(AMaxSize) > UInt64(High(SizeUInt))) then
     raise EHttpError.Create(hekArgument,
       'content-encoding max decompressed size exceeds platform capacity');
+  {$ENDIF}
 
   try
     if (LEncoding = 'gzip') or (LEncoding = 'x-gzip') then
