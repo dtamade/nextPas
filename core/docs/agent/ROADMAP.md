@@ -23,10 +23,37 @@
 
 ## Inbox（活动输入池，非承诺）
 
-- Gemini / Responses 协议编解码器——token888 上游侧存在真实需求（CONSUMERS.md §5），
-  待其接入立项时进 WIRE-MAPPINGS 立节后实施。
-- IdleGuard 装饰器（code888 的空闲超时 408 语义）——待 code888 Phase 1 接入时
-  评估是否上移为通用 transport 装饰器。
+提升候选按"架构已预留扩展位 / 需新立项"分两组；每项标注触发条件。
+立项 = 先改对应规格文档，再动代码。
+
+### 组 A：装饰器/接口扩展位已预留，落地即插即用
+
+- **WithFallback 装饰器**（多 provider 容灾链：主路错误码命中白名单→次路重放）——
+  纯组合 `IAgentProvider` 即可实现，~百行级。触发：任一客户表达多供应商容灾需求。
+- **WithThrottle 装饰器**（客户端限流防 429，消费 core.ratelimit 令牌桶）——
+  与 ratelimit 模块的标准库协同故事。触发：客户出现持续 429 场景。
+- **IdleGuard 装饰器**（code888 空闲超时 408 语义）——待 code888 Phase 1 接入时
+  评估上移为通用 transport 装饰器。
+- **WithHedge 对冲装饰器**（延迟敏感场景 T 毫秒后并发第二请求取先达）——
+  双倍 token 成本必须显式 opt-in。触发：交互式 agent 产品提出 p95 延迟诉求。
+- **Provider 级 tracing 钩子**（onRequest/onResponse/onRetry 观测事件，
+  loop OnEvent 的 provider 层对位）——触发：首个生产接入方要求请求级追踪。
+
+### 组 B：能力面扩张，需进 WIRE-MAPPINGS/API 立节
+
+- **Structured Output**（OpenAI json_schema strict / Anthropic structured outputs；
+  v1 冻结项解冻候选）——对工具参数可靠性与类型化抽取价值大。触发：任一客户
+  需要"保证 JSON 形状"的输出。
+- **CountTokens API**（Anthropic /count_tokens 已存在先例；精确计数仍不入约束路径，
+  仅作观测）——触发：计费精度诉求出现。
+- **Prompt-cache 断点策略**（loop 自动放置 cache_control 断点；agent 循环每轮全量
+  重发历史，缓存命中可省 ~90% 输入费用）——与 §W3 前缀稳定不变量配套。
+  触发：W3 落地后按真实账单数据评估。
+- **增量 JSON 参数校验**（工具参数片段边到边校验，坏参数流中即败而非执行时败）
+  ——依赖 json 域流式解析能力，先查底座再立项。
+- **Gemini / Responses 协议编解码器**——token888 上游侧存在真实需求
+  （CONSUMERS.md §5），待其接入立项时实施。
+- **loop 全局工具并发上限**（D14 明确 v1 不做）——出现跨批资源争用证据时立项。
 
 ## 明确不做（v1 冻结）
 
