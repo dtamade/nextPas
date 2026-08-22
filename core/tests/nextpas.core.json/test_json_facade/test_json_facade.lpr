@@ -307,6 +307,35 @@ begin
     'large-object last duplicate value retained');
 end;
 
+procedure TestJsonFieldReaders;
+var Doc: IJsonDocument; V: TJsonValue;
+begin
+  Doc := JsonParse('{"i":42,"f":1.5,"s":"txt","b":true,"wrong":"7"}');
+  Check(not Doc.HasError, 'fixture parses');
+  V := Doc.Root;
+  CheckEqual(Int64(42), JsonIntField(V, 'i', -1), 'int field');
+  CheckEqual(Int64(-1), JsonIntField(V, 'wrong', -1), 'string value is not an int field');
+  CheckEqual(Int64(-1), JsonIntField(V, 'missing', -1), 'missing int default');
+  Check(JsonFloatField(V, 'f', 0.0) = 1.5, 'float field');
+  Check(JsonFloatField(V, 'i', 0.0) = 42.0, 'int promotes to float field');
+  CheckEqual('txt', JsonStrField(V, 's', 'x'), 'str field');
+  CheckEqual('x', JsonStrField(V, 'missing', 'x'), 'missing str default');
+  CheckEqual('x', JsonStrField(V, 'i', 'x'), 'wrong-type str default');
+  Check(JsonBoolField(V, 'b', False), 'bool field');
+  Check(JsonBoolField(V, 'missing', True), 'missing bool default');
+end;
+
+procedure TestJsonFieldReadersNonObject;
+var Doc: IJsonDocument; Arr: TJsonValue;
+begin
+  Doc := JsonParse('[1,2]');
+  Arr := Doc.Root;
+  Check(Arr.IsArray, 'fixture is array');
+  CheckEqual(Int64(9), JsonIntField(Arr, 'k', 9), 'array input returns int default');
+  CheckEqual('d', JsonStrField(Arr, 'k', 'd'), 'array input returns str default');
+  Check(JsonBoolField(Arr.ArrayGet(99), 'k', True), 'invalid view returns bool default');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.json (facade)');
   T.Test('parse interface', @TestJsonParseInterface);
@@ -331,5 +360,7 @@ begin
     @TestDuplicateKeyLookupAndIterationSmallObject);
   T.Test('duplicate keys large object lookup and iteration',
     @TestDuplicateKeyLookupAndIterationLargeObject);
+  T.Test('field readers with defaults', @TestJsonFieldReaders);
+  T.Test('field readers non-object inputs', @TestJsonFieldReadersNonObject);
   if not T.Run then Halt(1);
 end.
