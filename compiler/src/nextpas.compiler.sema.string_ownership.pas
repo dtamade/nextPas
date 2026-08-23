@@ -1,5 +1,5 @@
 {**
- * np_sema_string_ownership.pas
+ * nextpas.compiler.sema.string_ownership.pas
  *
  * 字符串所有权分析模块 — 从 TSemanticAnalyzer 提取
  *
@@ -16,17 +16,17 @@
  * 对标：rustc 的 borrowck 模块（简化版）
  *}
 
-unit np_sema_string_ownership;
+unit nextpas.compiler.sema.string_ownership;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  nextpas.compiler.syntax.green_tree, np_semantic_model, np_hir_types,
+  nextpas.compiler.syntax.green_tree, nextpas.compiler.sema.semantic_model, np_hir_types,
   nextpas.compiler.diagnostics.sink, np_base_types, nextpas.compiler.syntax.ast_facade,
-  nextpas.compiler.frontend.unit_graph, np_sema_runtime_vars, nextpas.compiler.frontend.source_database,
-  np_sema_overload;
+  nextpas.compiler.frontend.unit_graph, nextpas.compiler.sema.runtime_vars, nextpas.compiler.frontend.source_database,
+  nextpas.compiler.sema.overload;
 
 type
   { Context record — 打包 TSemanticAnalyzer 中 SO 方法需要的所有依赖 }
@@ -212,7 +212,7 @@ procedure RegisterConcatOwnedStringReturnConsumers(const Ctx: TSemaOwnershipCont
 implementation
 
 uses
-  nextpas.core.text.conv, np_sema_type_check;
+  nextpas.core.text.conv, nextpas.compiler.sema.type_check;
 
 { === B1: String return 检测 === }
 

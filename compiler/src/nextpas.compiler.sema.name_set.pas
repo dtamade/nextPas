@@ -1,6 +1,6 @@
-{ np_sema_name_set.pas — Case-insensitive sorted string set for fast lookup }
+{ nextpas.compiler.sema.name_set.pas — Case-insensitive sorted string set for fast lookup }
 
-unit np_sema_name_set;
+unit nextpas.compiler.sema.name_set;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

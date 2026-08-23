@@ -1,11 +1,11 @@
-unit np_semantic_property_meta_vec;
+unit nextpas.compiler.sema.property_meta_vec;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
 
-{ Satellite unit: specialize TVec<TPropertyMeta> outside np_semantic_model so
+{ Satellite unit: specialize TVec<TPropertyMeta> outside nextpas.compiler.sema.semantic_model so
   the model object file stays under the ELF per-object section limit (~65k with
-  -CX function sections). See also np_semantic_vmt_slot_vec. }
+  -CX function sections). See also nextpas.compiler.sema.vmt_slot_vec. }
 
 interface
 

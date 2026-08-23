@@ -7,7 +7,7 @@ unit np_hir_builder;
 interface
 
 uses
-  np_semantic_model, np_hir_types, np_hir_model, nextpas.compiler.frontend.source_database,
+  nextpas.compiler.sema.semantic_model, np_hir_types, np_hir_model, nextpas.compiler.frontend.source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

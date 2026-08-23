@@ -1,4 +1,4 @@
-unit np_semantic_analyzer;
+unit nextpas.compiler.sema.analyzer;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -11,11 +11,11 @@ interface
 
 uses
   nextpas.compiler.syntax.ast_facade, np_base_types, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.preprocessor,
-  nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph, np_semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
+  nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph, nextpas.compiler.sema.semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
   nextpas.compiler.frontend.phase_timing,
-  np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
-  np_sema_type_check, np_hir_lowering, np_sema_runtime_vars,
-  np_sema_string_ownership,
+  np_hir_types, nextpas.compiler.sema.name_set, nextpas.compiler.sema.builtins, nextpas.compiler.sema.overload,
+  nextpas.compiler.sema.type_check, nextpas.compiler.ir.hir.lowering, nextpas.compiler.sema.runtime_vars,
+  nextpas.compiler.sema.string_ownership,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec,
   nextpas.core.collections.hashmap;
@@ -479,7 +479,7 @@ function TSemanticAnalyzer.TypeIdArrayHasKnownTypes(
   const ATypeIds: TTypeIdArray
 ): Boolean;
 begin
-  Result := np_sema_overload.TypeIdArrayHasKnownTypes(ATypeIds);
+  Result := nextpas.compiler.sema.overload.TypeIdArrayHasKnownTypes(ATypeIds);
 end;
 
 function TSemanticAnalyzer.CanonicalTypeId(const ATypeId: LongInt): LongInt;
@@ -494,7 +494,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.CanonicalTypeId(Ctx, ATypeId);
+  Result := nextpas.compiler.sema.overload.CanonicalTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsPointerTypeId(const ATypeId: LongInt): Boolean;
@@ -509,7 +509,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.IsPointerTypeId(Ctx, ATypeId);
+  Result := nextpas.compiler.sema.overload.IsPointerTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesExactMatch(
@@ -526,7 +526,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.DeclParamTypesExactMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
+  Result := nextpas.compiler.sema.overload.DeclParamTypesExactMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.DeclParamTypesCompatibleMatch(
@@ -543,7 +543,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.DeclParamTypesCompatibleMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
+  Result := nextpas.compiler.sema.overload.DeclParamTypesCompatibleMatch(Ctx, ADecl, AOwnerUnitId, AArgTypeIds, AArgCount);
 end;
 
 function TSemanticAnalyzer.MethodSymbolIdForExactClassTypeMember(

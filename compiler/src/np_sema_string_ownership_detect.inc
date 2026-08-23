@@ -113,7 +113,7 @@ end;
 function TypeIdIsManagedString(const Ctx: TSemaOwnershipContext;
   const ATypeId: LongInt): Boolean;
 begin
-  Result := np_sema_type_check.TypeIdIsManagedString(Ctx.Model, ATypeId);
+  Result := nextpas.compiler.sema.type_check.TypeIdIsManagedString(Ctx.Model, ATypeId);
 end;
 
 
@@ -205,7 +205,7 @@ begin
   { Accept both class and record field assignments as safe targets for
     owned string returns. If type metadata is not fully resolved (e.g.
     imported record types), trust the assignment as safe. }
-  if np_sema_type_check.TypeMetaIsClass(Ctx.Model, ClassTypeName) or np_sema_type_check.TypeMetaIsRecord(Ctx.Model, ClassTypeName) then
+  if nextpas.compiler.sema.type_check.TypeMetaIsClass(Ctx.Model, ClassTypeName) or nextpas.compiler.sema.type_check.TypeMetaIsRecord(Ctx.Model, ClassTypeName) then
   begin
     if Ctx.Model.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
       Exit(FieldMeta.IsString and TypeIdIsManagedString(Ctx, FieldMeta.TypeId));

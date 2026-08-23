@@ -208,7 +208,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.ResolveTypeId(Ctx, ATypeName);
+  Result := nextpas.compiler.sema.overload.ResolveTypeId(Ctx, ATypeName);
 end;
 
 function TSemanticAnalyzer.ResolveTypeIdForOwner(
@@ -226,7 +226,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.ResolveTypeIdForOwner(Ctx, ATypeName, APreferredOwnerUnitId, AAllowDirectImportSearch);
+  Result := nextpas.compiler.sema.overload.ResolveTypeIdForOwner(Ctx, ATypeName, APreferredOwnerUnitId, AAllowDirectImportSearch);
 end;
 
 function TSemanticAnalyzer.ImplicitSystemObjectParentTypeId(

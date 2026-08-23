@@ -2,59 +2,59 @@
 function TSemanticAnalyzer.TypeMetaFieldIndex(
   const ATypeName, AFieldName: string): Int64;
 begin
-  Result := np_sema_type_check.TypeMetaFieldIndex(FModel, ATypeName, AFieldName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaFieldIndex(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsStr(
   const ATypeName, AFieldName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaFieldIsStr(FModel, ATypeName, AFieldName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaFieldIsStr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsPtr(
   const ATypeName, AFieldName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaFieldIsPtr(FModel, ATypeName, AFieldName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaFieldIsPtr(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIsDynArray(
   const ATypeName, AFieldName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaFieldIsDynArray(FModel, ATypeName, AFieldName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaFieldIsDynArray(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldDynArrayElemSize(
   const ATypeName, AFieldName: string): Int64;
 begin
-  Result := np_sema_type_check.TypeMetaFieldDynArrayElemSize(FModel, ATypeName, AFieldName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaFieldDynArrayElemSize(FModel, ATypeName, AFieldName);
 end;
 
 function TSemanticAnalyzer.TypeMetaVmtSlot(
   const ATypeName, AMethodName: string): Int64;
 begin
-  Result := np_sema_type_check.TypeMetaVmtSlot(FModel, ATypeName, AMethodName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaVmtSlot(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetPtr(
   const ATypeName, AMethodName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaRetPtr(FModel, ATypeName, AMethodName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaRetPtr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaRetStr(
   const ATypeName, AMethodName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaRetStr(FModel, ATypeName, AMethodName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaRetStr(FModel, ATypeName, AMethodName);
 end;
 
 function TSemanticAnalyzer.TypeMetaParentClass(const ATypeName: string): string;
 begin
-  Result := np_sema_type_check.TypeMetaParentClass(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaParentClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.NextClassAncestorName(const ATypeName: string): string;
 begin
-  Result := np_sema_type_check.NextClassAncestorName(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.NextClassAncestorName(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.ResolveClassMethodCalleeName(const AClassName,
@@ -293,12 +293,12 @@ end;
 
 function TSemanticAnalyzer.TypeMetaVmtCount(const ATypeName: string): Int64;
 begin
-  Result := np_sema_type_check.TypeMetaVmtCount(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaVmtCount(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaInterfaces(const ATypeName: string): string;
 begin
-  Result := np_sema_type_check.TypeMetaInterfaces(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaInterfaces(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeSignatureForTypeId(const ATypeId: LongInt): string;
@@ -313,7 +313,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.TypeSignatureForTypeId(Ctx, ATypeId);
+  Result := nextpas.compiler.sema.overload.TypeSignatureForTypeId(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.TypeIdHasStableScalarFact(

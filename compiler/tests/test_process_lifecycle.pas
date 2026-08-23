@@ -3,7 +3,7 @@ program test_process_lifecycle;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.exception, np_semantic_model, np_hir_builder, np_hir_model,
+  nextpas.core.exception, nextpas.compiler.sema.semantic_model, np_hir_builder, np_hir_model,
   np_hir_types, np_system_contracts;
 
 function HasProcessContract(const AFunc: THIRFunction;

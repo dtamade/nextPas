@@ -1,11 +1,11 @@
-unit np_sema_builtins;
+unit nextpas.compiler.sema.builtins;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_semantic_model, np_sema_name_set;
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.sema.name_set;
 
 type
   {**

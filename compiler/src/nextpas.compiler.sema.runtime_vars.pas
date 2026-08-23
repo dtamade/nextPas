@@ -1,5 +1,5 @@
 {**
- * np_sema_runtime_vars.pas
+ * nextpas.compiler.sema.runtime_vars.pas
  *
  * 运行时变量注册表 — 从 TSemanticAnalyzer 提取的纯数据管理方法
  *
@@ -8,7 +8,7 @@
  * 对标：rustc 的 local_names 表，Go gc 的 func info
  *}
 
-unit np_sema_runtime_vars;
+unit nextpas.compiler.sema.runtime_vars;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

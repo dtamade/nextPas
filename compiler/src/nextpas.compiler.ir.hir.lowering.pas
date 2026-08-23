@@ -1,5 +1,5 @@
 {**
- * np_hir_lowering.pas
+ * nextpas.compiler.ir.hir.lowering.pas
  *
  * AST→HIR 降级模块 — 从 sema/ 提取到 lower/ 桥接层
  *
@@ -9,7 +9,7 @@
  * 对标：rustc 的 hir_lowering, FPC 的 code generation
  *}
 
-unit np_hir_lowering;
+unit nextpas.compiler.ir.hir.lowering;
 
 {$mode objfpc}{$H+}
 
@@ -20,14 +20,14 @@ uses
   nextpas.compiler.syntax.green_tree,
   nextpas.compiler.frontend.unit_graph,
   nextpas.compiler.syntax.ast_facade,
-  np_semantic_model,
-  np_sema_builtins,
-  np_sema_type_check,
-  np_sema_runtime_vars,
+  nextpas.compiler.sema.semantic_model,
+  nextpas.compiler.sema.builtins,
+  nextpas.compiler.sema.type_check,
+  nextpas.compiler.sema.runtime_vars,
   np_hir_model,
   nextpas.compiler.frontend.source_database,
   nextpas.compiler.diagnostics.sink,
-  np_sema_overload,
+  nextpas.compiler.sema.overload,
   np_base_types;
 
 type

@@ -3,7 +3,7 @@ program test_hir_object_free_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_types, np_hir_model, np_system_contracts,
+  SysUtils, nextpas.compiler.sema.semantic_model, np_hir_types, np_hir_model, np_system_contracts,
   np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
 
 var

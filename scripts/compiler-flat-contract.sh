@@ -16,6 +16,12 @@ migrated=(
   np_query_database np_package_manifest np_package_lock
   np_package_workflow np_incremental_cache np_file_change_detector
   np_parallel_scheduler np_compiler_phase
+  np_semantic_model np_semantic_analyzer np_sema_type_check
+  np_sema_overload np_sema_builtins np_sema_name_set
+  np_sema_runtime_vars np_sema_string_ownership
+  np_semantic_field_meta_vec np_semantic_interface_slot_vec
+  np_semantic_property_meta_vec np_semantic_vmt_slot_vec
+  np_hir_lowering
 )
 for name in "${migrated[@]}"; do
   hits=$(grep -rl "\b${name}\b" compiler tools tests --include='*.pas' \
@@ -65,7 +71,11 @@ layer_of() {
   esac
 }
 
-io_exempt="nextpas.compiler.syntax.preprocessor"
+# 轴 B/C I/O 族显式例外（一行一单元；理由见 docs/plans/compiler-modernization-refactor.md R9/§3）：
+# - syntax.preprocessor: include 解析需读源文件（N2 登记）
+# - sema.analyzer: 播种期对导入单元源文件做 FsExists/FsStat 新鲜度检查（N4 登记，收口归 N7 评估）
+io_exempt="nextpas.compiler.syntax.preprocessor
+nextpas.compiler.sema.analyzer"
 
 for f in compiler/src/*.pas; do
   unit=$(grep -m1 '^unit ' "$f" | sed 's/^unit \([a-z_.]*\);.*/\1/')
@@ -78,8 +88,15 @@ for f in compiler/src/*.pas; do
       nextpas.compiler.*)
         dlayer=$(layer_of "$dep")
         if [ "$dlayer" -ge 0 ] && [ "$dlayer" -gt "$ulayer" ]; then
-          echo "FAIL(layer-A): $unit($ulayer) -> $dep($dlayer) upward"
-          fail=1
+          # R9 结构债(N7 手术清单)：typed-HIR 所有权迁出 sema 前的已知上行边，逐条登记
+          case "$unit|$dep" in
+            nextpas.compiler.sema.analyzer|nextpas.compiler.ir*|\
+            nextpas.compiler.sema.string_ownership|nextpas.compiler.ir*) ;;
+            *)
+              echo "FAIL(layer-A): $unit($ulayer) -> $dep($dlayer) upward"
+              fail=1
+              ;;
+          esac
         fi
         ;;
       nextpas.core.*)

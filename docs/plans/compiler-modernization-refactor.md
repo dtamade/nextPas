@@ -4,7 +4,8 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.12：P0 计时探针落地+相位实测表；
+创建：2026-08-23　最后更新：2026-08-23（v2.13：N4 落地+门禁例外登记；
+v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
 v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
 v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
@@ -12,12 +13,12 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ## 0. 状态仪表盘（每批落地时更新此块）
 
 ```
-迁移进度  ██████████░░░░░░  N1✅ N2✅ N3✅(+收尾) │ 24/66 单元 │ compiler/src 44 文件
-性能批次  ██░░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
+迁移进度  █████████████░░░  N1✅ N2✅ N3✅(+收尾) N4✅ │ 37/66 单元 │ compiler/src 38 pas+55 inc
+性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
 正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    N4 sema×12+lowering 迁移 → mini-regress 13 探针
+下一口    N5 ir×24+backend 迁移 → P1 播种路径索引分配
 ```
 
 ---
@@ -135,8 +136,9 @@ tools/stage0/ 14 nextpas_* + 2 杂项   →  N6 后改 nextpas.driver.*
 
 生产单元总数 **66 = 65 个 `np_` 前缀 + 1 个 `nextpas_` 前缀(json_helpers)**。
 inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自然分组可读）。
-迁移现状（v2.9 时点）：syntax/diagnostics/targets 已清空，src 持 22 文件；
-实时进度以顶部 §0 仪表盘与 `§2.0 复现块`第二条命令为准。
+迁移现状（N4 后）：diagnostics/targets/syntax/frontend/sema/lower 六目录
+已清空，src 持 38 pas+55 inc；实时进度以顶部 §0 仪表盘与
+`§2.0 复现块`第二条命令为准。
 
 ## 3. 四支柱方案
 
@@ -291,7 +293,7 @@ IInterface ×12（COM 基础设施支持用户代码）。考量：
 | N1 | targets.facts + diagnostics ×4 + sink accessors inc | contract+rebuild+cp58/58+tree mini | ✅ 8d2b94d90 |
 | N2 | syntax ×5 + 11 inc + 清理 units 陈旧遮蔽副本 ×19 | 同上 | ✅ a9d8c054c |
 | N3 | frontend ×14 | 同上 | ✅ 34986b475 |
-| N4 | sema ×12 + ir.hir.lowering | +mini-regress | ⬜ |
+| N4 | sema ×12 + ir.hir.lowering | +mini-regress | ✅ 门禁例外两类登记（I/O 族 FsExists/FsStat、sema→ir 上行边 R9）；十三探针回归见提交说明 |
 | N5 | ir ×25 + backend.plan | +全量 residual 对比 | ⬜ |
 | N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ⬜ |
 
@@ -354,70 +356,60 @@ git diff --check && make hygiene
 ## 5. 完整映射表（66 单元；✅=已落地）
 
 生产单元总计 **66**（65 个 `np_` 前缀 + json_helpers）；
-已落地 **10**，待迁 **56**。
+已落地 **37**（N1-N4），待迁 **29**。src 现状：38 pas + 55 inc
+（含 phase_timing 探针单元，不计入 66 生产单元口径）。
 
-### 已完成 ✅（N1+N2，10 单元 + 12 inc）
+### 已完成 ✅（N1-N4，37 单元 + 55 inc）
 
-| 新名 | 原位置 |
-|------|--------|
-| nextpas.compiler.targets.facts | targets/np_target_facts |
-| nextpas.compiler.diagnostics.sink | diagnostics/np_diagnostics_sink |
-| nextpas.compiler.diagnostics.enhanced | diagnostics/np_diagnostics_enhanced |
-| nextpas.compiler.diagnostics.json | diagnostics/np_diagnostics_json |
-| nextpas.compiler.diagnostics.json_helpers | diagnostics/nextpas_json_helpers |
-| nextpas.compiler.syntax.lexer | syntax/np_lexer |
-| nextpas.compiler.syntax.green_tree | syntax/np_green_tree |
-| nextpas.compiler.syntax.preprocessor | syntax/np_preprocessor |
-| nextpas.compiler.syntax.ast_facade | syntax/np_ast_facade |
-| nextpas.compiler.syntax.error_recovery | syntax/np_error_recovery |
+| 新名 | 原位置 | 批 |
+|------|--------|----|
+| nextpas.compiler.targets.facts | targets/np_target_facts | N1 |
+| nextpas.compiler.diagnostics.sink | diagnostics/np_diagnostics_sink | N1 |
+| nextpas.compiler.diagnostics.enhanced | diagnostics/np_diagnostics_enhanced | N1 |
+| nextpas.compiler.diagnostics.json | diagnostics/np_diagnostics_json | N1 |
+| nextpas.compiler.diagnostics.json_helpers | diagnostics/nextpas_json_helpers | N1 |
+| nextpas.compiler.syntax.lexer | syntax/np_lexer | N2 |
+| nextpas.compiler.syntax.green_tree | syntax/np_green_tree | N2 |
+| nextpas.compiler.syntax.preprocessor | syntax/np_preprocessor | N2 |
+| nextpas.compiler.syntax.ast_facade | syntax/np_ast_facade | N2 |
+| nextpas.compiler.syntax.error_recovery | syntax/np_error_recovery | N2 |
+| nextpas.compiler.frontend.source_database | frontend/np_source_database | N3 |
+| nextpas.compiler.frontend.unit_graph | frontend/np_unit_graph | N3 |
+| nextpas.compiler.frontend.unit_resolver | frontend/np_unit_resolver | N3 |
+| nextpas.compiler.frontend.compilation_session | frontend/np_compilation_session | N3 |
+| nextpas.compiler.frontend.workspace_model | frontend/np_workspace_model | N3 |
+| nextpas.compiler.frontend.symbol_cache | frontend/np_symbol_cache | N3 |
+| nextpas.compiler.frontend.query_database | frontend/np_query_database | N3 |
+| nextpas.compiler.frontend.package_manifest | frontend/np_package_manifest | N3 |
+| nextpas.compiler.frontend.package_lock | frontend/np_package_lock | N3 |
+| nextpas.compiler.frontend.package_workflow | frontend/np_package_workflow | N3 |
+| nextpas.compiler.frontend.incremental_cache | frontend/np_incremental_cache | N3 |
+| nextpas.compiler.frontend.file_change_detector | frontend/np_file_change_detector | N3 |
+| nextpas.compiler.frontend.parallel_scheduler | frontend/np_parallel_scheduler | N3 |
+| nextpas.compiler.frontend.compiler_phase | frontend/np_compiler_phase | N3 |
+| nextpas.compiler.sema.semantic_model | sema/np_semantic_model | N4 |
+| nextpas.compiler.sema.analyzer | sema/np_semantic_analyzer | N4 |
+| nextpas.compiler.sema.type_check | sema/np_sema_type_check | N4 |
+| nextpas.compiler.sema.overload | sema/np_sema_overload | N4 |
+| nextpas.compiler.sema.builtins | sema/np_sema_builtins | N4 |
+| nextpas.compiler.sema.name_set | sema/np_sema_name_set | N4 |
+| nextpas.compiler.sema.runtime_vars | sema/np_sema_runtime_vars | N4 |
+| nextpas.compiler.sema.string_ownership | sema/np_sema_string_ownership | N4 |
+| nextpas.compiler.sema.field_meta_vec | sema/np_semantic_field_meta_vec | N4 |
+| nextpas.compiler.sema.interface_slot_vec | sema/np_semantic_interface_slot_vec | N4 |
+| nextpas.compiler.sema.property_meta_vec | sema/np_semantic_property_meta_vec | N4 |
+| nextpas.compiler.sema.vmt_slot_vec | sema/np_semantic_vmt_slot_vec | N4 |
+| nextpas.compiler.ir.hir.lowering | lower/np_hir_lowering | N4 |
 
-inc 随宿主迁入不改名（sink accessors ×1；syntax 家族 ×11）。
+inc 随宿主迁入不改名：syntax 家族 ×11、sink accessors ×1、frontend ×7、
+sema 家族 ×33、hir_lowering 家族 ×3。
 
-### 待迁移（56 单元）
+### 待迁移（29 单元）
 
-#### frontend(14) → nextpas.compiler.frontend.*（N3 批）
-
-| 现名 | 新名 |
-|------|------|
-| np_source_database | …frontend.source_database |
-| np_unit_graph | …frontend.unit_graph |
-| np_unit_resolver | …frontend.unit_resolver |
-| np_compilation_session | …frontend.compilation_session |
-| np_workspace_model | …frontend.workspace_model |
-| np_symbol_cache | …frontend.symbol_cache |
-| np_query_database | …frontend.query_database |
-| np_package_manifest | …frontend.package_manifest |
-| np_package_lock | …frontend.package_lock |
-| np_package_workflow | …frontend.package_workflow |
-| np_incremental_cache | …frontend.incremental_cache |
-| np_file_change_detector | …frontend.file_change_detector |
-| np_parallel_scheduler | …frontend.parallel_scheduler |
-| np_compiler_phase | …frontend.compiler_phase |
-
-（表中 `…` = `nextpas.compiler`，下同。）
-
-#### sema(12) → nextpas.compiler.sema.*（N4 批）
-
-| 现名 | 新名 |
-|------|------|
-| np_semantic_model | …sema.semantic_model |
-| np_semantic_analyzer | …sema.analyzer |
-| np_sema_type_check | …sema.type_check |
-| np_sema_overload | …sema.overload |
-| np_sema_builtins | …sema.builtins |
-| np_sema_name_set | …sema.name_set |
-| np_sema_runtime_vars | …sema.runtime_vars |
-| np_sema_string_ownership | …sema.string_ownership |
-| np_semantic_field_meta_vec | …sema.field_meta_vec |
-| np_semantic_interface_slot_vec | …sema.interface_slot_vec |
-| np_semantic_property_meta_vec | …sema.property_meta_vec |
-| np_semantic_vmt_slot_vec | …sema.vmt_slot_vec |
-
-#### lower(1) + ir(25) → nextpas.compiler.ir.*（N4/N5 批）
+#### ir(24) → nextpas.compiler.ir.*（N5 批）
 
 | 现名 | 新名 | 批 |
 |------|------|----|
-| np_hir_lowering | …ir.hir.lowering | N4 |
 | np_hir_types | …ir.hir.types | N5 |
 | np_hir_model | …ir.hir.model | N5 |
 | np_hir_builder | …ir.hir.builder | N5 |
@@ -459,8 +451,8 @@ nextpas_projection_types/context/json/text、nextpas_command_{build,test,
 env,doctor,query,pkg}、nextpas_command_envelope、nextpas_json_helpers
 （本地副本届时与 src 版二选一收口）、target_config、nextpas.pas 入口。
 
-inc 随宿主迁入不改名（sink accessors ×1；syntax 家族 ×11 已迁；
-sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
+inc 随宿主迁入不改名（syntax ×11 / sink accessors ×1 / frontend ×7 /
+sema ×33 / hir_lowering ×3 已随各批迁入；ir 其余 ×16 随 N5）。
 
 ## 6. 执行台账（发现·决策·勘误）
 
@@ -481,6 +473,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | D13 | 总控确认轮 | 内部模块化全量审计（127 条内部依赖边）：推翻「ir→sema 唯一反向依赖」旧表述——实测上行违规 6 条+sema↔ir 双向耦合 14 边；根因=typed-HIR 在 sema 内构建（架构级信号：HIR 构建职责可能本应在 ir 层，归 N7 裁决）；意外发现 syntax.green_tree 反向依赖 frontend.source_database、unit_resolver 依赖 toolchain_profiles；处置入 R9：N3-N5 每批验收门必须处置进门禁射程的新增 FAIL |
 | D14 | N3 | 工具教训：zsh 不对裸变量做字段分词——N3 首次用 `$files` 变量传文件清单导致 sed 整串当单文件名、清扫大面积空转（残留 90）；N1/N2 的内联 `$(grep -rl …)` 恰好可分词故未暴露。修复=回归内联模式，残留清零。后续批次统一内联或 `${=var}` |
 | D15 | P0 | 工具教训：探针副本陈旧伪装回归——A/B 实测后恢复 i17 并 rebuild 了 build/stage0-bootstrap/nextpas，但忘记重拷 `./nextpas-m2-l3-probe`，收尾 tree mini 用了无-i17 的 B 组二进制报 SyncDataPtr undefined exit 1。鉴别=源码 diff 干净+重建后刷新探针即 PASS。纪律：**每次 rebuild 后凡跑 mini 必先重拷探针**（§4.3 命令块已含此步，执行时不可跳） |
+| D16 | N4 | 工具教训：点分单元的磁盘文件名必须与 unit 名一致——N4 首轮只 git mv 目录未改文件名（np_semantic_model.pas 内声明 nextpas.compiler.sema.semantic_model），FPC 按单元名搜文件直接 Fatal Can't find。N1-N3 未暴露因当时 mv 与改名一步完成。纪律：**迁移=目录+文件名+unit 头三件齐改** |
 
 ## 7. 风险登记册
 
@@ -535,7 +528,8 @@ P0 基线数字，回滚判据客观化。
 | v2.9 | e32964a74 | 可用性收尾轮：§0 顶部状态仪表盘（每批更新）、风险册编号 R1-R7b-R8、§4.3 验收门精确复现命令（tree mini 全命令）、§2.4 迁移现状标注——此后文档冻结进执行节奏，边际工作转向 N3/P0 |
 | v2.10 | 326585e07 | 总控确认轮：内部模块化全量依赖审计（127 边）——推翻「唯一反向依赖」旧表述，实测 6 条上行违规+sema↔ir 双向耦合；R9 结构债立项；支柱三修正；N3-N5 验收门加 FAIL 处置要求；台账 D13。回答「模块化是否足够好」：及格但未达顶尖，结构债已全部登记在案 |
 | v2.11 | 1440adc69 | N3 落地：frontend 14 单元+7 inc 迁入 src（累计 24/66）；仪表盘刷新；台账 D14 记 zsh 分词工具教训 |
-| v2.12 | （本提交） | P0 落地+N3 收尾（门禁扩至 23 名+漏网改名 21 处，05ef72669）：phase_timing 探针五相接线；§2.3 实测相位表——tree mini sema 占 99%/播种占 80%，i17 开销 +4.8s(1.6%) 非主要矛盾；perf top-10 受阻登记归 P1；仪表盘/批次表同步 |
+| v2.12 | ba84edf37 | P0 落地+N3 收尾（门禁扩至 23 名+漏网改名 21 处，05ef72669）：phase_timing 探针五相接线；§2.3 实测相位表——tree mini sema 占 99%/播种占 80%，i17 开销 +4.8s(1.6%) 非主要矛盾；perf top-10 受阻登记归 P1；仪表盘/批次表同步 |
+| v2.13 | （本提交） | N4 落地：sema 12 单元+hir_lowering 迁入 src（累计 37/66，src 38 pas+55 inc）；门禁清单扩至 36 名+两类显式例外登记（sema.analyzer I/O 族 FsExists/FsStat 播种新鲜度检查、sema.analyzer/sema.string_ownership→ir 上行边 R9/N7）；台账 D16 点分文件名纪律；§5 映射表重写为 N1-N4 全量状态 |
 
 ## 10. 文档维护规则
 

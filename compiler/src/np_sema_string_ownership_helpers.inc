@@ -104,7 +104,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.RegisterConcatOwnedStringReturnConsumers(Ctx, AConcatNode, AChanged);
+  nextpas.compiler.sema.string_ownership.RegisterConcatOwnedStringReturnConsumers(Ctx, AConcatNode, AChanged);
 end;
 
 
@@ -114,19 +114,19 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsRootOwnedStringReturnCandidate(Ctx, AEntry, AIsStrReturn);
+  Result := nextpas.compiler.sema.string_ownership.IsRootOwnedStringReturnCandidate(Ctx, AEntry, AIsStrReturn);
 end;
 
 
 function TSemanticAnalyzer.DeclReturnsString(const ADecl: TGreenNode): Boolean;
 begin
-  Result := np_sema_type_check.DeclReturnsString(ADecl);
+  Result := nextpas.compiler.sema.type_check.DeclReturnsString(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclaresStringLocal(const ADecl: TGreenNode;
   const AName: string): Boolean;
 begin
-  Result := np_sema_type_check.DeclaresStringLocal(ADecl, AName);
+  Result := nextpas.compiler.sema.type_check.DeclaresStringLocal(ADecl, AName);
 end;
 
 function TSemanticAnalyzer.StringReturnFunctionNameFromNode(
@@ -135,7 +135,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.StringReturnFunctionNameFromNode(
+  Result := nextpas.compiler.sema.string_ownership.StringReturnFunctionNameFromNode(
     Ctx, ANode, AName);
 end;
 
@@ -145,7 +145,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.FunctionCallReturnsString(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.FunctionCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.MemberCallReturnsString(
@@ -154,7 +154,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.MemberCallReturnsString(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.MemberCallReturnsString(Ctx, ANode);
 end;
 
 function TSemanticAnalyzer.TypeIdIsManagedString(
@@ -163,7 +163,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.TypeIdIsManagedString(Ctx, ATypeId);
+  Result := nextpas.compiler.sema.string_ownership.TypeIdIsManagedString(Ctx, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsSupportedOwnedStringReturnIdentifierTarget(
@@ -172,7 +172,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnIdentifierTarget(Ctx, ATargetNode);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnIdentifierTarget(Ctx, ATargetNode);
 end;
 
 
@@ -182,7 +182,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnStoreTarget(Ctx, ATargetNode);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnStoreTarget(Ctx, ATargetNode);
 end;
 
 
@@ -192,7 +192,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConsumerTarget(Ctx, ATargetNode);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnConsumerTarget(Ctx, ATargetNode);
 end;
 
 
@@ -202,7 +202,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.AssignmentOwnsStringReturn(Ctx, ANode, AEntry);
+  Result := nextpas.compiler.sema.string_ownership.AssignmentOwnsStringReturn(Ctx, ANode, AEntry);
 end;
 
 
@@ -212,7 +212,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.AssignmentOwnsTopLevelStringReturn(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.AssignmentOwnsTopLevelStringReturn(Ctx, ANode);
 end;
 
 
@@ -223,7 +223,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CallArgumentOwnsStringReturn(Ctx, ACallNode, AArgNode, AArgPosition, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.CallArgumentOwnsStringReturn(Ctx, ACallNode, AArgNode, AArgPosition, AFuncName);
 end;
 
 
@@ -233,7 +233,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.DirectOwnedStringReturnAssignmentNode(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.DirectOwnedStringReturnAssignmentNode(Ctx, ANode);
 end;
 
 
@@ -243,7 +243,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnArgument(Ctx, ACallNode, AArgNode, AArgPosition);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnArgument(Ctx, ACallNode, AArgNode, AArgPosition);
 end;
 
 
@@ -253,7 +253,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.LengthArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.LengthArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
 
 
@@ -263,7 +263,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnLengthArgument(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnLengthArgument(Ctx, ANode, AFuncName);
 end;
 
 
@@ -306,7 +306,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitOwnedStringConcatLengthTemp(Ctx, ANode, ABlob);
+  Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringConcatLengthTemp(Ctx, ANode, ABlob);
 end;
 
 
@@ -316,7 +316,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CopyArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.CopyArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
 
 
@@ -326,7 +326,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCopyArgument(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnCopyArgument(Ctx, ANode, AFuncName);
 end;
 
 
@@ -336,7 +336,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitOwnedStringCopyTemp(Ctx, ACopyNode, ADestName, ATempName);
+  Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringCopyTemp(Ctx, ACopyNode, ADestName, ATempName);
 end;
 
 
@@ -346,7 +346,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.WriteArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.WriteArgumentOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
 
 
@@ -356,7 +356,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnWriteArgument(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnWriteArgument(Ctx, ANode, AFuncName);
 end;
 
 
@@ -366,7 +366,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitOwnedStringWriteTemp(Ctx, ANode, ATempName);
+  Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringWriteTemp(Ctx, ANode, ATempName);
 end;
 
 
@@ -376,7 +376,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitOwnedStringConcatWriteTemp(Ctx, ANode, ATempName);
+  Result := nextpas.compiler.sema.string_ownership.EmitOwnedStringConcatWriteTemp(Ctx, ANode, ATempName);
 end;
 
 
@@ -386,7 +386,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.ConcatOperandOwnsStringReturn(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.ConcatOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
 
 
@@ -396,7 +396,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnConcatOperand(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnConcatOperand(Ctx, ANode, AFuncName);
 end;
 
 
@@ -406,7 +406,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.ConcatExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
+  Result := nextpas.compiler.sema.string_ownership.ConcatExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
 end;
 
 
@@ -416,7 +416,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CompareOperandOwnsStringReturn(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.CompareOperandOwnsStringReturn(Ctx, ANode, AFuncName);
 end;
 
 
@@ -426,7 +426,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.IsSupportedOwnedStringReturnCompareOperand(Ctx, ANode, AFuncName);
+  Result := nextpas.compiler.sema.string_ownership.IsSupportedOwnedStringReturnCompareOperand(Ctx, ANode, AFuncName);
 end;
 
 
@@ -436,7 +436,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.BoolConditionHasSupportedOwnedStringCompare(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.BoolConditionHasSupportedOwnedStringCompare(Ctx, ANode);
 end;
 
 
@@ -446,7 +446,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CompareExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.CompareExpressionConsumesOwnedStringReturnDeferred(Ctx, ANode);
 end;
 
 
@@ -457,7 +457,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.NodeConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
+  Result := nextpas.compiler.sema.string_ownership.NodeConsumesOwnedStringReturnDeferred(Ctx, ANode, AInsideDirectOwnedAssignmentRhs);
 end;
 
 
@@ -468,7 +468,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.ScanOwnedStringReturnConsumers(Ctx, ANode, AEntry, AChanged);
+  nextpas.compiler.sema.string_ownership.ScanOwnedStringReturnConsumers(Ctx, ANode, AEntry, AChanged);
 end;
 
 
@@ -478,7 +478,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.ScanTopLevelOwnedStringReturnConsumers(Ctx, ANode, AChanged);
+  nextpas.compiler.sema.string_ownership.ScanTopLevelOwnedStringReturnConsumers(Ctx, ANode, AChanged);
 end;
 
 
@@ -488,7 +488,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.CheckDeferredOwnedStringReturnConsumers(Ctx, ANode);
+  nextpas.compiler.sema.string_ownership.CheckDeferredOwnedStringReturnConsumers(Ctx, ANode);
 end;
 
 
@@ -497,7 +497,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.PreRegisterOwnedStringReturnConsumers(Ctx);
+  nextpas.compiler.sema.string_ownership.PreRegisterOwnedStringReturnConsumers(Ctx);
 end;
 
 
@@ -541,7 +541,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.EmitOwnedStringCleanupNodes(Ctx, AExceptName);
+  nextpas.compiler.sema.string_ownership.EmitOwnedStringCleanupNodes(Ctx, AExceptName);
 end;
 
 
@@ -550,7 +550,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.EmitOwnedDynArrayCleanupNodes(Ctx);
+  nextpas.compiler.sema.string_ownership.EmitOwnedDynArrayCleanupNodes(Ctx);
 end;
 
 
@@ -586,7 +586,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  np_sema_string_ownership.EmitOwnedManagedRecordCleanupNodes(Ctx);
+  nextpas.compiler.sema.string_ownership.EmitOwnedManagedRecordCleanupNodes(Ctx);
 end;
 
 procedure TSemanticAnalyzer.EmitClassVarFreeCleanupNodes;
@@ -738,7 +738,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitStrConcatOperand(Ctx, ANode, ADestVar);
+  Result := nextpas.compiler.sema.string_ownership.EmitStrConcatOperand(Ctx, ANode, ADestVar);
 end;
 
 
@@ -748,7 +748,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.ConcatTreeHasSupportedOwnedStringReturn(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.ConcatTreeHasSupportedOwnedStringReturn(Ctx, ANode);
 end;
 
 
@@ -758,7 +758,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CanEmitStrConcatOperand(Ctx, ANode);
+  Result := nextpas.compiler.sema.string_ownership.CanEmitStrConcatOperand(Ctx, ANode);
 end;
 
 
@@ -768,7 +768,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.CanEmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn);
+  Result := nextpas.compiler.sema.string_ownership.CanEmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn);
 end;
 
 
@@ -778,7 +778,7 @@ var
   Ctx: TSemaOwnershipContext;
 begin
   FillOwnershipContext(Ctx);
-  Result := np_sema_string_ownership.EmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn, ABlob);
+  Result := nextpas.compiler.sema.string_ownership.EmitStrCompareOperand(Ctx, ANode, AAllowOwnedStringReturn, ABlob);
 end;
 
 
@@ -929,7 +929,7 @@ var Ctx: TSemaHirLoweringContext;
 begin
   Ctx.Model := FModel;
   Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
-  np_hir_lowering.EmitBlockLabel(Ctx, ALabel);
+  nextpas.compiler.ir.hir.lowering.EmitBlockLabel(Ctx, ALabel);
   FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 
@@ -938,7 +938,7 @@ var Ctx: TSemaHirLoweringContext;
 begin
   Ctx.Model := FModel;
   Ctx.CurrentBlockTerminated := FCurrentBlockTerminated;
-  np_hir_lowering.EmitGotoLabel(Ctx, ALabel);
+  nextpas.compiler.ir.hir.lowering.EmitGotoLabel(Ctx, ALabel);
   FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
 end;
 destructor TSemanticAnalyzer.Destroy;

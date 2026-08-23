@@ -1269,7 +1269,7 @@ begin
   Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
   Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
   { Delegate }
-  Result := np_hir_lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
+  Result := nextpas.compiler.ir.hir.lowering.BuildRuntimeScalarHirExpr(Ctx, ANode, AExprId);
   { Sync mutable state back }
   FCurrentBlockTerminated := Ctx.CurrentBlockTerminated;
   FBlockLabelCounter := Ctx.BlockLabelCounter;
@@ -1280,7 +1280,7 @@ procedure TSemanticAnalyzer.AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
 var Ctx: TSemaHirLoweringContext;
 begin
   Ctx.Model := FModel;
-  np_hir_lowering.AttachRuntimeReturnExpr(Ctx, AHirNodeId, AReturnVarName);
+  nextpas.compiler.ir.hir.lowering.AttachRuntimeReturnExpr(Ctx, AHirNodeId, AReturnVarName);
 end;
 
 procedure TSemanticAnalyzer.AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
@@ -1331,7 +1331,7 @@ begin
   Ctx.EncodeRuntimeIntExprFold := @SemaBridge_EncodeRuntimeIntExprFold;
   Ctx.CanEmitStrCompareOperand := @SemaBridge_CanEmitStrCompareOperand;
   Ctx.EmitStrCompareOperand := @SemaBridge_EmitStrCompareOperand;
-  Result := np_hir_lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
+  Result := nextpas.compiler.ir.hir.lowering.EncodeRuntimeBoolExprFold(Ctx, ANode, ABlob,
     AAllowOwnedStringCompare);
 end;
 

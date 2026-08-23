@@ -1,6 +1,6 @@
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
 begin
-  np_sema_builtins.SeedBuiltinTypes(FModel);
+  nextpas.compiler.sema.builtins.SeedBuiltinTypes(FModel);
 end;
 
 procedure TSemanticAnalyzer.SeedCachedTypeGaps;

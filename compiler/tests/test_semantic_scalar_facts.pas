@@ -7,8 +7,8 @@ uses
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
   nextpas.compiler.syntax.lexer,
-  np_semantic_analyzer,
-  np_semantic_model,
+  nextpas.compiler.sema.analyzer,
+  nextpas.compiler.sema.semantic_model,
   nextpas.compiler.frontend.unit_graph;
 
 function BuildModel(const ASource: string): TSemanticModel;

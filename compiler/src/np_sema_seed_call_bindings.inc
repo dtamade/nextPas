@@ -485,7 +485,7 @@ end;
 
 function TSemanticAnalyzer.IsSimpleIdentifierName(const AName: string): Boolean;
 begin
-  Result := np_sema_type_check.IsSimpleIdentifierName(AName);
+  Result := nextpas.compiler.sema.type_check.IsSimpleIdentifierName(AName);
 end;
 
 function TSemanticAnalyzer.RegisterSymbol(
@@ -885,5 +885,5 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
+  Result := nextpas.compiler.sema.overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
 end;

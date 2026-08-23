@@ -12,8 +12,8 @@ uses
   np_hir_model,
   np_hir_types,
   nextpas.compiler.syntax.lexer,
-  np_semantic_analyzer,
-  np_semantic_model,
+  nextpas.compiler.sema.analyzer,
+  nextpas.compiler.sema.semantic_model,
   np_system_contracts,
   nextpas.compiler.frontend.unit_graph;
 

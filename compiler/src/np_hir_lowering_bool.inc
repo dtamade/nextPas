@@ -17,7 +17,7 @@ begin
   begin
     VarTypeName := Ctx.RuntimeVars.LookupClassVar(ANode.Text);
     Result := (VarTypeName <> '') and
-      (np_sema_type_check.TypeMetaSize(Ctx.Model, VarTypeName) = 1);
+      (nextpas.compiler.sema.type_check.TypeMetaSize(Ctx.Model, VarTypeName) = 1);
   end
   else if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
@@ -116,11 +116,11 @@ begin
       (ANode.ChildAt(1) <> nil) and
       (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
     begin
-      if np_sema_type_check.TypeMetaIsInterface(Ctx.Model, ANode.ChildAt(1).Text) then
+      if nextpas.compiler.sema.type_check.TypeMetaIsInterface(Ctx.Model, ANode.ChildAt(1).Text) then
       begin
         if (Ctx.RuntimeVars.LookupClassVar(ANode.ChildAt(0).Text) <> '') and
           (Pos(ANode.ChildAt(1).Text,
-            np_sema_type_check.TypeMetaInterfaces(Ctx.Model,
+            nextpas.compiler.sema.type_check.TypeMetaInterfaces(Ctx.Model,
               Ctx.RuntimeVars.LookupClassVar(ANode.ChildAt(0).Text))) > 0) then
           ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10
         else
@@ -140,7 +140,7 @@ begin
       (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
       (ANode.ChildAt(1) <> nil) and
       (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-      (np_sema_type_check.TypeMetaIsInterface(Ctx.Model, ANode.ChildAt(1).Text)) then
+      (nextpas.compiler.sema.type_check.TypeMetaIsInterface(Ctx.Model, ANode.ChildAt(1).Text)) then
     begin
       ABlob := 'var ' + ANode.ChildAt(0).Text + #10;
       Exit(True);
@@ -188,10 +188,10 @@ begin
       FieldIdx := -1;
       if RecTypeName <> '' then
       begin
-        FieldIdx := np_sema_type_check.TypeMetaFieldIndex(Ctx.Model,
+        FieldIdx := nextpas.compiler.sema.type_check.TypeMetaFieldIndex(Ctx.Model,
           RecTypeName, 'FIndex');
         if FieldIdx < 0 then
-          FieldIdx := np_sema_type_check.TypeMetaFieldIndex(Ctx.Model,
+          FieldIdx := nextpas.compiler.sema.type_check.TypeMetaFieldIndex(Ctx.Model,
             RecTypeName, 'Index');
       end;
       { Layout fallback: TGreenNode = (FOwner:ptr, FIndex:LongInt) → slot 1. }

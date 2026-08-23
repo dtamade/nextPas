@@ -1,5 +1,5 @@
 {**
- * np_sema_type_check.pas
+ * nextpas.compiler.sema.type_check.pas
  *
  * 类型检查/元数据查询模块 — 从 TSemanticAnalyzer 提取
  *
@@ -16,14 +16,14 @@
  * 对标：rustc 的 ty 模块
  *}
 
-unit np_sema_type_check;
+unit nextpas.compiler.sema.type_check;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_semantic_model, nextpas.compiler.syntax.green_tree;
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.syntax.green_tree;
 
 { === 基本类型元数据 === }
 

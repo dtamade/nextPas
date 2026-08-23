@@ -21,7 +21,7 @@ interface
 uses
   SysUtils,
   nextpas.core.text.conv,
-  np_semantic_model;
+  nextpas.compiler.sema.semantic_model;
 
 const
   { V2 wire format: magic | version | headerSize | payloadSize |

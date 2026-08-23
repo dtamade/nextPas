@@ -1,12 +1,12 @@
 {**
- * np_sema_overload.pas
+ * nextpas.compiler.sema.overload.pas
  *
  * 重载解析模块 — 从 TSemanticAnalyzer 提取
  *
  * 对标：rustc 的 fn_ctxt/overload_resolution
  *}
 
-unit np_sema_overload;
+unit nextpas.compiler.sema.overload;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -18,9 +18,9 @@ uses
   nextpas.compiler.syntax.green_tree,
   nextpas.compiler.frontend.unit_graph,
   nextpas.compiler.syntax.ast_facade,
-  np_semantic_model,
-  np_sema_builtins,
-  np_sema_type_check,
+  nextpas.compiler.sema.semantic_model,
+  nextpas.compiler.sema.builtins,
+  nextpas.compiler.sema.type_check,
   nextpas.core.collections.vec,
   nextpas.core.collections.hashmap;
 

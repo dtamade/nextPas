@@ -1,13 +1,13 @@
 function TSemanticAnalyzer.MangledName(const AName: string;
   AParamCount: LongInt): string;
 begin
-  Result := np_sema_overload.MangledName(AName, AParamCount);
+  Result := nextpas.compiler.sema.overload.MangledName(AName, AParamCount);
 end;
 
 function TSemanticAnalyzer.MangledNameSig(const AName: string;
   const ASig: string): string;
 begin
-  Result := np_sema_overload.MangledNameSig(AName, ASig);
+  Result := nextpas.compiler.sema.overload.MangledNameSig(AName, ASig);
 end;
 
 function TSemanticAnalyzer.EffectiveRuntimeCalleeName(const AName: string;
@@ -241,7 +241,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.ParamDeclTypeId(Ctx, AParamDecl, AOwnerUnitId);
+  Result := nextpas.compiler.sema.overload.ParamDeclTypeId(Ctx, AParamDecl, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.LookupProcedureBody(const AName: string;
@@ -389,7 +389,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.LookupCallBindingDeclaration(
+  Result := nextpas.compiler.sema.overload.LookupCallBindingDeclaration(
     Ctx, AName, AArgCount, AArgTypeIds, AArgSignature,
     AHasArgSignature, AHasTypeMismatchEvidence,
     AResolutionFailureKind, ABody, ADecl, AOwnerUnitId);
@@ -405,7 +405,7 @@ begin
   Ctx.RootAst := FRootAst;
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
-  Result := np_sema_overload.OwnerUnitAllowsProjectSourceDiagnostic(Ctx, AOwnerUnitId);
+  Result := nextpas.compiler.sema.overload.OwnerUnitAllowsProjectSourceDiagnostic(Ctx, AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.HasInstalledSourceImports: Boolean;
@@ -433,7 +433,7 @@ begin
   Ctx.RootAst := FRootAst;
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
-  Result := np_sema_overload.UnitDirectlyImports(Ctx, AOwnerUnitId, AImportedUnitId);
+  Result := nextpas.compiler.sema.overload.UnitDirectlyImports(Ctx, AOwnerUnitId, AImportedUnitId);
 end;
 
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
@@ -592,19 +592,19 @@ end;
 
 function TSemanticAnalyzer.CallArgumentCount(const ACallNode: TGreenNode): LongInt;
 begin
-  Result := np_sema_type_check.CallArgumentCount(ACallNode);
+  Result := nextpas.compiler.sema.type_check.CallArgumentCount(ACallNode);
 end;
 
 function TSemanticAnalyzer.BareCallCalleeName(
   const ACallNode: TGreenNode
 ): string;
 begin
-  Result := np_sema_type_check.BareCallCalleeName(ACallNode);
+  Result := nextpas.compiler.sema.type_check.BareCallCalleeName(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsIntrinsicExprName(const AName: string): Boolean;
 begin
-  Result := np_sema_type_check.IsIntrinsicExprName(AName);
+  Result := nextpas.compiler.sema.type_check.IsIntrinsicExprName(AName);
 end;
 
 function TSemanticAnalyzer.TryGetTypeCastTargetTypeId(
@@ -745,21 +745,21 @@ function TSemanticAnalyzer.IsWrappedCallChild(
   const AChild: TGreenNode
 ): Boolean;
 begin
-  Result := np_sema_type_check.IsWrappedCallChild(AParent, AChild);
+  Result := nextpas.compiler.sema.type_check.IsWrappedCallChild(AParent, AChild);
 end;
 
 function TSemanticAnalyzer.IsImplicitSelfCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
 begin
-  Result := np_sema_type_check.IsImplicitSelfCallNode(ACallNode);
+  Result := nextpas.compiler.sema.type_check.IsImplicitSelfCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.IsQualifiedCallNode(
   const ACallNode: TGreenNode
 ): Boolean;
 begin
-  Result := np_sema_type_check.IsQualifiedCallNode(ACallNode);
+  Result := nextpas.compiler.sema.type_check.IsQualifiedCallNode(ACallNode);
 end;
 
 function TSemanticAnalyzer.ExtractDirectMemberCall(
@@ -770,7 +770,7 @@ function TSemanticAnalyzer.ExtractDirectMemberCall(
   out AArgCount: LongInt
 ): Boolean;
 begin
-  Result := np_sema_type_check.ExtractDirectMemberCall(ACallNode, AReceiverName, AMemberName, AMemberOffset, AArgCount);
+  Result := nextpas.compiler.sema.type_check.ExtractDirectMemberCall(ACallNode, AReceiverName, AMemberName, AMemberOffset, AArgCount);
 end;
 
 function TSemanticAnalyzer.TypeIdForVariable(const AName: string): LongInt;
@@ -935,7 +935,7 @@ function TSemanticAnalyzer.TypeSymbolForTypeId(
   out ASymbol: TSemanticSymbol
 ): Boolean;
 begin
-  Result := np_sema_type_check.TypeSymbolForTypeId(FModel, ATypeId, ASymbol);
+  Result := nextpas.compiler.sema.type_check.TypeSymbolForTypeId(FModel, ATypeId, ASymbol);
 end;
 
 function TSemanticAnalyzer.ClassTypeHasKnownNonMethodMember(
@@ -967,21 +967,21 @@ function TSemanticAnalyzer.TypeIdHasKnownClassLayout(
   const ATypeId: LongInt
 ): Boolean;
 begin
-  Result := np_sema_type_check.TypeIdHasKnownClassLayout(FModel, ATypeId);
+  Result := nextpas.compiler.sema.type_check.TypeIdHasKnownClassLayout(FModel, ATypeId);
 end;
 
 function TSemanticAnalyzer.IsDeferredSystemObjectMember(
   const AMemberName: string
 ): Boolean;
 begin
-  Result := np_sema_type_check.IsDeferredSystemObjectMember(AMemberName);
+  Result := nextpas.compiler.sema.type_check.IsDeferredSystemObjectMember(AMemberName);
 end;
 
 function TSemanticAnalyzer.TypeMetaSize(const ATypeName: string): Int64;
 var
   ArgName: string;
 begin
-  Result := np_sema_type_check.TypeMetaSize(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaSize(FModel, ATypeName);
   { B4b 缺口乙: cloned generic instance bodies reference template type
     params (T) in field/pointer types. Resolve through the instance's
     T→实参 mapping stored by InstantiateGenericType, only when the raw
@@ -994,30 +994,30 @@ end;
 
 function TSemanticAnalyzer.TypeMetaIsDynArrayType(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaIsDynArrayType(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaIsDynArrayType(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsRecord(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaIsRecord(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaIsRecord(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsPointer(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaIsPointer(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaIsPointer(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsClass(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaIsClass(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaIsClass(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeMetaIsInterface(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeMetaIsInterface(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeMetaIsInterface(FModel, ATypeName);
 end;
 
 function TSemanticAnalyzer.TypeIsInterfaceByName(const ATypeName: string): Boolean;
 begin
-  Result := np_sema_type_check.TypeIsInterfaceByName(FModel, ATypeName);
+  Result := nextpas.compiler.sema.type_check.TypeIsInterfaceByName(FModel, ATypeName);
 end;

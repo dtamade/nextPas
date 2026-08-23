@@ -33,13 +33,13 @@ end;
 
 function TSemanticAnalyzer.CountDeclParams(const ADecl: TGreenNode): LongInt;
 begin
-  Result := np_sema_overload.CountDeclParams(ADecl);
+  Result := nextpas.compiler.sema.overload.CountDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.CountRequiredDeclParams(
   const ADecl: TGreenNode): LongInt;
 begin
-  Result := np_sema_overload.CountRequiredDeclParams(ADecl);
+  Result := nextpas.compiler.sema.overload.CountRequiredDeclParams(ADecl);
 end;
 
 function TSemanticAnalyzer.DeclReturnTypeId(const ADecl: TGreenNode;
@@ -80,7 +80,7 @@ end;
 function TSemanticAnalyzer.DeclAcceptsArgCount(const ADecl: TGreenNode;
   const AArgCount: LongInt): Boolean;
 begin
-  Result := np_sema_overload.DeclAcceptsArgCount(ADecl, AArgCount);
+  Result := nextpas.compiler.sema.overload.DeclAcceptsArgCount(ADecl, AArgCount);
 end;
 
 function TSemanticAnalyzer.DeclParamSignatureMatchesArgs(
@@ -96,7 +96,7 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.DeclParamSignatureMatchesArgs(Ctx, ADecl, AArgSignature, AArgCount);
+  Result := nextpas.compiler.sema.overload.DeclParamSignatureMatchesArgs(Ctx, ADecl, AArgSignature, AArgCount);
 end;
 
 function TSemanticAnalyzer.GetParamSignature(const ADecl: TGreenNode): string;
@@ -111,14 +111,14 @@ begin
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;
-  Result := np_sema_overload.GetParamSignature(Ctx, ADecl);
+  Result := nextpas.compiler.sema.overload.GetParamSignature(Ctx, ADecl);
 end;
 
 function TSemanticAnalyzer.GetParamIdentitySignature(
   const ADecl: TGreenNode
 ): string;
 begin
-  Result := np_sema_overload.GetParamIdentitySignature(ADecl);
+  Result := nextpas.compiler.sema.overload.GetParamIdentitySignature(ADecl);
 end;
 
 function TSemanticAnalyzer.GetSubstitutedParamSignature(

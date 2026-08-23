@@ -3,7 +3,7 @@ program test_hir_large_alloc_runtime_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  Classes, SysUtils, Process, np_semantic_model, np_hir_builder,
+  Classes, SysUtils, Process, nextpas.compiler.sema.semantic_model, np_hir_builder,
   np_hir_llvm_emitter;
 
 const

@@ -5,7 +5,7 @@ program test_incremental_cache_entry_identity;
 uses
   SysUtils,
   nextpas.compiler.frontend.incremental_cache,
-  np_semantic_model;
+  nextpas.compiler.sema.semantic_model;
 
 procedure Fail(const AMessage: string);
 begin

@@ -10,7 +10,7 @@ const
 
 type
   { Persistent cache entry for an imported unit's symbol table.
-    Mirrors TCachedSymbolEntry in np_semantic_analyzer but adds TypeRefName
+    Mirrors TCachedSymbolEntry in nextpas.compiler.sema.analyzer but adds TypeRefName
     for cross-session type resolution. }
   TDiskCachedSymbolEntry = record
     Name: string;

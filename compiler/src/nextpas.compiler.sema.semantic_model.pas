@@ -1,4 +1,4 @@
-unit np_semantic_model;
+unit nextpas.compiler.sema.semantic_model;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -9,10 +9,10 @@ uses
   nextpas.compiler.syntax.green_tree, np_hir_types,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.vec,
-  np_semantic_field_meta_vec,
-  np_semantic_vmt_slot_vec,
-  np_semantic_property_meta_vec,
-  np_semantic_interface_slot_vec;
+  nextpas.compiler.sema.field_meta_vec,
+  nextpas.compiler.sema.vmt_slot_vec,
+  nextpas.compiler.sema.property_meta_vec,
+  nextpas.compiler.sema.interface_slot_vec;
 
 type
   TSemanticHirValueClass = (
@@ -158,15 +158,15 @@ type
   end;
 
   { Re-export from satellite units (keeps nested TVec specializes out of this .o). }
-  TFieldMeta = np_semantic_field_meta_vec.TFieldMeta;
-  TSemanticFieldMetaVec = np_semantic_field_meta_vec.TSemanticFieldMetaVec;
-  TVmtSlot = np_semantic_vmt_slot_vec.TVmtSlot;
-  TSemanticVmtSlotVec = np_semantic_vmt_slot_vec.TSemanticVmtSlotVec;
-  TPropertyMeta = np_semantic_property_meta_vec.TPropertyMeta;
-  TSemanticPropertyMetaVec = np_semantic_property_meta_vec.TSemanticPropertyMetaVec;
-  TInterfaceSlotMeta = np_semantic_interface_slot_vec.TInterfaceSlotMeta;
+  TFieldMeta = nextpas.compiler.sema.field_meta_vec.TFieldMeta;
+  TSemanticFieldMetaVec = nextpas.compiler.sema.field_meta_vec.TSemanticFieldMetaVec;
+  TVmtSlot = nextpas.compiler.sema.vmt_slot_vec.TVmtSlot;
+  TSemanticVmtSlotVec = nextpas.compiler.sema.vmt_slot_vec.TSemanticVmtSlotVec;
+  TPropertyMeta = nextpas.compiler.sema.property_meta_vec.TPropertyMeta;
+  TSemanticPropertyMetaVec = nextpas.compiler.sema.property_meta_vec.TSemanticPropertyMetaVec;
+  TInterfaceSlotMeta = nextpas.compiler.sema.interface_slot_vec.TInterfaceSlotMeta;
   TSemanticInterfaceSlotMetaVec =
-    np_semantic_interface_slot_vec.TSemanticInterfaceSlotMetaVec;
+    nextpas.compiler.sema.interface_slot_vec.TSemanticInterfaceSlotMetaVec;
 
   { Shared string product table; also used by nested RetPtrMethods (no extra
     specialize — reuses this unit's TVec<string>). }

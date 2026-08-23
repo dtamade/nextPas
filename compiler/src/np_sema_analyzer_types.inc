@@ -211,7 +211,7 @@ type
     function ProcedureBodyScopeIdForDecl(const ADecl: TGreenNode): LongInt;
     function ParamDeclTypeId(const AParamDecl: TGreenNode;
       const AOwnerUnitId: string): LongInt;
-    // === overload resolution group (→ np_sema_overload.pas) ===
+    // === overload resolution group (→ nextpas.compiler.sema.overload.pas) ===
     function LookupProcedureBody(const AName: string;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function LookupCallBindingDeclaration(const AName: string;

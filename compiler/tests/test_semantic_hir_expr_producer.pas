@@ -10,8 +10,8 @@ uses
   np_hir_builder,
   np_hir_llvm_emitter,
   nextpas.compiler.syntax.lexer,
-  np_semantic_analyzer,
-  np_semantic_model,
+  nextpas.compiler.sema.analyzer,
+  nextpas.compiler.sema.semantic_model,
   nextpas.compiler.frontend.unit_graph;
 
 function BuildModel(const ASource: string): TSemanticModel;

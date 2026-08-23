@@ -24,7 +24,7 @@ uses
   np_hir_printer, np_hir_llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
   nextpas.compiler.frontend.unit_graph, nextpas.compiler.frontend.unit_resolver,
-  np_semantic_model, np_semantic_analyzer, nextpas.compiler.frontend.workspace_model,
+  nextpas.compiler.sema.semantic_model, nextpas.compiler.sema.analyzer, nextpas.compiler.frontend.workspace_model,
   nextpas.compiler.frontend.compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
   nextpas.compiler.frontend.query_database,
   nextpas.compiler.frontend.file_change_detector,

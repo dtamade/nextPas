@@ -35,7 +35,7 @@ uses
   SysUtils, Classes,
   nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink, nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph,
-  np_semantic_analyzer, np_semantic_model, np_bench_timing;
+  nextpas.compiler.sema.analyzer, nextpas.compiler.sema.semantic_model, np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;

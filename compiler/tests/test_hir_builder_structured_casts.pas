@@ -7,7 +7,7 @@ uses
   np_hir_llvm_emitter,
   np_hir_model,
   np_hir_types,
-  np_semantic_model;
+  nextpas.compiler.sema.semantic_model;
 
 var
   Model: TSemanticModel;
