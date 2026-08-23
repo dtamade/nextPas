@@ -321,6 +321,24 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 文件使用，body 名索引扩容接 swiss.str；第三刀=FProcedureBodies 多趟
 全表扫描（477/504/517/528 行四趟）合并。THashMap 消费面与 i17 的
 LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
+**P1 实施细则（2026-08-23 深读定稿，下会话可直接开工）**：
+
+- **刀① 常量折叠廉价化**：`SameText(X.Text,'String')` 类常量簇改局部
+  helper——先 `=` 精确短路，长度不等立即 False，仅剩差异时做一次折叠；
+  覆盖 'String'/'AnsiString' ≥8 组与 'Create'/'Destroy'/'Halt' 家族
+  （seed inc 行号簇 26-199）。注意 SameText 本身不分配堆，省的是分支
+  折叠周期；分配大头在刀②。
+- **刀② 查找分配消除**：`np_sema_overload_analysis.inc:295`
+  `TryGetValue(LowerCase(AName))` 每次调用分配临时串——analyzer 加
+  `FBodyLookupScratch: string` 复用字段承载折叠结果（容量保持后近似零
+  分配），Index 侧同步用 scratch 折叠；后续演进=core swiss 增 fold-aware
+  变体（R6 登记，修 core 本体）。
+- **刀③ 全表扫描合并**：seed_function_bodies 四趟 FProcedureBodies
+  全表循环（行 477 标记/504 与 517 逐字重复的 Enqueue 扫描/528
+  Needed&&!Visited 三扫）合并为单趟状态机。
+- **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
+  seed 相对 §2.3 基线 235s/238s 对比；验收=总分钟数降+residual 0/0
+  保持+十三探针零新回归。
 | P2 | sema/HIR 接 compiler.mem UnitScope/SessionScope | RSS 显著降 | ⬜ |
 | P3 | 单元级并行 sema（parallel_scheduler+sync.waitgroup） | **前置：分区 ID 语义设计 spike（L2）**；通过后端到端 ≥2×（44 逻辑核，seed 相目标近线性） | ⬜ 受 L2 约束 |
 | P4 | backend cache 单元级复用 | 基线刷新脱离 2 小时级 | ⬜ |
