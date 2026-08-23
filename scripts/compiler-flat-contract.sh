@@ -78,7 +78,8 @@ fi
 #            registered I/O-capable (frontend) or an explicit per-unit
 #            exception below.
 layer_of() {
-  case "$1" in
+  # D19: 追加点号使裸族段名(如 nextpas.compiler.frontend)也能命中 *. 模式
+  case "$1." in
     nextpas.compiler.base.*|nextpas.compiler.diagnostics.*|nextpas.compiler.targets.*) echo 0 ;;
     nextpas.compiler.syntax.*) echo 1 ;;
     nextpas.compiler.frontend.*|nextpas.compiler.sema.*) echo 2 ;;
@@ -94,6 +95,34 @@ layer_of() {
 # - backend.plan: 规划期 FsDir 目录探测（N5 登记，收口归 N7/P2 评估）
 # - toolchain.plan/profiles: FsExists/fs 探测工具链与 profile 落盘（N6 登记）
 # - toolchain.runner: ExecuteStep 执行工具链进程+fs 探测=runner 本职（N6 登记）
+exempt_layer_a() {
+  # $1=unit $2=dep(族段截断名)。R9 已知债逐条登记：
+  # sema 三单元+compilation_session→ir(typed-HIR/MIR 所有权未迁出)
+  # compilation_session→backend(plan 编排)/unit_resolver→toolchain(profile 校验)
+  # green_tree→frontend(source_database 快照接口)
+  case "$2" in
+    nextpas.compiler.ir)
+      case "$1" in
+        nextpas.compiler.sema.analyzer|nextpas.compiler.sema.semantic_model|\
+nextpas.compiler.sema.string_ownership|nextpas.compiler.frontend.compilation_session) return 0 ;;
+      esac ;;
+    nextpas.compiler.backend)
+      case "$1" in
+        nextpas.compiler.frontend.compilation_session) return 0 ;;
+      esac ;;
+    nextpas.compiler.toolchain)
+      case "$1" in
+        nextpas.compiler.frontend.unit_resolver|\
+nextpas.compiler.frontend.compilation_session) return 0 ;;
+      esac ;;
+    nextpas.compiler.frontend)
+      case "$1" in
+        nextpas.compiler.syntax.green_tree) return 0 ;;
+      esac ;;
+  esac
+  return 1
+}
+
 io_exempt="nextpas.compiler.syntax.preprocessor
 nextpas.compiler.sema.analyzer
 nextpas.compiler.backend.plan
@@ -112,19 +141,14 @@ for f in compiler/src/*.pas; do
       nextpas.compiler.*)
         dlayer=$(layer_of "$dep")
         if [ "$dlayer" -ge 0 ] && [ "$dlayer" -gt "$ulayer" ]; then
-          # R9 结构债(N7 手术清单)：typed-HIR/MIR 所有权迁出 sema/frontend 前
-          # 的已知上行边（N4/N5 逐条登记）
-          case "$unit|$dep" in
-            nextpas.compiler.sema.analyzer|nextpas.compiler.ir*|\
-            nextpas.compiler.sema.string_ownership|nextpas.compiler.ir*|\
-            nextpas.compiler.sema.semantic_model|nextpas.compiler.ir*|\
-            nextpas.compiler.frontend.compilation_session|nextpas.compiler.ir*|\
-            nextpas.compiler.frontend.compilation_session|nextpas.compiler.backend*) ;;
-            *)
-              echo "FAIL(layer-A): $unit($ulayer) -> $dep($dlayer) upward"
-              fail=1
-              ;;
-          esac
+          # R9 结构债(N7 手术清单)：已知上行边(unit,dep族)白名单——D19 修复后
+          # 本检查首次真实生效；每条豁免即一条待手术项，N7 清零时同步删除
+          if exempt_layer_a "$unit" "$dep"; then
+            :
+          else
+            echo "FAIL(layer-A): $unit($ulayer) -> $dep($dlayer) upward"
+            fail=1
+          fi
         fi
         ;;
       nextpas.core.*)

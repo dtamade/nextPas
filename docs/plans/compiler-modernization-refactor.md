@@ -365,6 +365,19 @@ P5+ 地平线批次见 §3.5.3）。
   ③i17 开销 A/B ✅（反向补丁 a3e71253c 实测 +4.8s/~1.6%，见 §2.3）；
 - **验收**：数字可复现达成（同输入两轮偏差全部 <2% <10% 阈值）。
 
+### 4.2.2 N7 结构债手术清单（D19 修复后的 8 条实测上行边）
+
+| # | 边 | 根因 | 手术方向 |
+|---|-----|------|----------|
+| 1-3 | sema.analyzer / sema.semantic_model / sema.string_ownership → ir | typed-HIR 在 sema 内构建（历史设计） | typed-HIR 构建职责迁 ir 层，sema 只产出语义事实 |
+| 4 | frontend.compilation_session → ir | 会话直接持有 HIR/MIR 全流程对象 | 编排下沉 driver 或引入阶段结果接口 |
+| 5 | frontend.compilation_session → backend | 同上（plan 对象） | 同 4 |
+| 6-7 | frontend.compilation_session / frontend.unit_resolver → toolchain | session 直连 runner；resolver 内联 profile 校验 | 校验上移编排层/resolver 回调注入 |
+| 8 | syntax.green_tree → frontend | green_tree 消费 source_database 快照接口 | 快照接口下移 L1 或依赖反转 |
+
+豁免即工单：`exempt_layer_a` 白名单每删一条=一条手术完成；
+全部清零时轴 A 检查零豁免运行。
+
 ### 4.3 验收门定义（每批必过）
 
 ```bash
@@ -496,6 +509,7 @@ sema ×33 / hir_lowering ×3 / ir ×15 / backend ×1 / toolchain ×8 已随各�
 | D16 | N4 | 工具教训：点分单元的磁盘文件名必须与 unit 名一致——N4 首轮只 git mv 目录未改文件名（np_semantic_model.pas 内声明 nextpas.compiler.sema.semantic_model），FPC 按单元名搜文件直接 Fatal Can't find。N1-N3 未暴露因当时 mv 与改名一步完成。纪律：**迁移=目录+文件名+unit 头三件齐改** |
 | D17 | N6 | 工具教训：文档批量编辑脚本变量重赋值截断整文档——python heredoc 中误写 `s=end_marker.replace(...)` 把全文覆盖成单行落盘。恢复=git restore 回 HEAD（提交纪律的价值实证）；重做改用**先写 /tmp 副本+wc 行数+抽查再 cp 落盘**。附带教训：门禁 ` name ` 模式对点分新名后缀段误报（target_config ⊂ nextpas.driver.target_config），已加 `(^|[^a-z_.])` 前缀卫兵 |
 | D18 | N6 | 流程教训：make verify 长期未进批次验收链导致三重腐烂——compiler/tests 五脚本 -Fu 缺 src、verify_local 21 处硬编码旧布局路径、两个契约红点（constructor-typing/class-alloc）带病存续无人知。修复=脚本路径全量接 src；红点经 stash 二分+去 i17 复测归档为既有债转 m2 队列。纪律建议：**每批验收链至少含一个 make verify 组件轮换**，防收口时集中爆雷 |
+| D19 | N6 收口后 | 门禁重大缺陷：轴 A 层位检查自诞生起从未生效——dep 提取正则把点分名截断在族段(nextpas.compiler.frontend)，而 layer_of 模式要求族后有字面点号(frontend.*)，两者错位致检查恒跳过；且旧豁免的 unit\|dep 复合 case 写法本身永不命中(双保险失效)。修复=layer_of 追加点号+嵌套白名单 exempt_layer_a。修复后首跑即现形 **8 条真实上行违规**，与 R9 台账完全吻合(清单准、检查瞎)。教训：**新检查器上线必须先验证它能红**——用已知违例做阳性对照 |
 
 ## 7. 风险登记册
 
