@@ -790,6 +790,13 @@ begin
     raise;
   end;
 
+  { F-7：101 已写出即协议切换完成，I/O 时序归 WS 层所有。h1 在读请求前
+    装配的每请求读死线（ReadTimeout，默认 30s 绝对期限）若不清除会原封
+    传给升级后的连接——长驻 WS 恰好在握手 30s 后被掐断，心跳无效。
+    清读写两向；WS 写路径自带每写 WriteTimeoutMs（B7），读侧存活由应用层
+    ping/pong 负责。阻塞与非阻塞 handoff 共用本路径，一处修复两端受益。 }
+  ClearWebSocketStreamDeadline(LConn);
+
   AConn := LConn;
 end;
 
