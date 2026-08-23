@@ -1,12 +1,12 @@
-unit nextpas_command_envelope;
+unit nextpas.driver.command.envelope;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  nextpas_projection_types, nextpas_projection_json,
-  nextpas_projection_text;
+  nextpas.driver.projection.types, nextpas.driver.projection.json,
+  nextpas.driver.projection.text;
 
 const
   ExitSuccessCode = 0;

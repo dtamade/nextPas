@@ -1,4 +1,4 @@
-unit nextpas_command_test;
+unit nextpas.driver.command.test;
 
 {$mode objfpc}{$H+}
 
@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.path, nextpas.core.fs, nextpas.core.process,
-  nextpas_projection_types, nextpas_command_envelope;
+  nextpas.driver.projection.types, nextpas.driver.command.envelope;
 
 procedure RunTest(
   var AState: TNextPasState;

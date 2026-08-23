@@ -1,4 +1,4 @@
-unit target_config;
+unit nextpas.driver.target_config;
 
 {$mode objfpc}{$H+}
 

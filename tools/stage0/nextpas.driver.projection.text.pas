@@ -1,11 +1,11 @@
-unit nextpas_projection_text;
+unit nextpas.driver.projection.text;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  nextpas.core.text.conv, nextpas_projection_types, nextpas_json_helpers;
+  nextpas.core.text.conv, nextpas.driver.projection.types, nextpas.compiler.diagnostics.json_helpers;
 
 procedure WriteProjectionLine(
   const UseStdErr: Boolean;

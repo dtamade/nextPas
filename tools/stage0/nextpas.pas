@@ -11,10 +11,10 @@ program nextpas;
 {$UNITPATH ../../compiler/targets}
 
 uses
-  nextpas_projection_types, nextpas_command_envelope,
-  nextpas_command_build, nextpas_command_test, nextpas_command_env,
-  nextpas_command_doctor, nextpas_command_query, nextpas_command_pkg,
-  nextpas_projection_context;
+  nextpas.driver.projection.types, nextpas.driver.command.envelope,
+  nextpas.driver.command.build, nextpas.driver.command.test, nextpas.driver.command.env,
+  nextpas.driver.command.doctor, nextpas.driver.command.query, nextpas.driver.command.pkg,
+  nextpas.driver.projection.context;
 
 var
   State: TNextPasState;

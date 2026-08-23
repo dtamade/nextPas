@@ -1,4 +1,4 @@
-unit nextpas_projection_types;
+unit nextpas.driver.projection.types;
 
 {$mode objfpc}{$H+}
 

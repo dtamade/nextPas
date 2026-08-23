@@ -4,7 +4,8 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.14：N5 落地 63/66；
+创建：2026-08-23　最后更新：2026-08-23（v2.15：N6 落地 66/66 命名收官；
+v2.14：N5 落地 63/66；
 v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
 v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
@@ -13,12 +14,12 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ## 0. 状态仪表盘（每批落地时更新此块）
 
 ```
-迁移进度  ███████████████░  N1✅ N2✅ N3✅ N4✅ N5✅ │ 63/66 单元 │ 仅剩 toolchain ×3
+迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
 正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    N6 toolchain×3+壳层 nextpas.driver.*+make verify 收口 → P1 播种索引分配
+下一口    P1 播种路径索引分配(swiss+LowerCase 消除) → P2 arena
 ```
 
 ---
@@ -136,8 +137,9 @@ tools/stage0/ 14 nextpas_* + 2 杂项   →  N6 后改 nextpas.driver.*
 
 生产单元总数 **66 = 65 个 `np_` 前缀 + 1 个 `nextpas_` 前缀(json_helpers)**。
 inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自然分组可读）。
-迁移现状（N5 后）：仅剩 toolchain 三单元未迁，src 持 64 pas+71 inc；
-实时进度以顶部 §0 仪表盘与 `§2.0 复现块`第二条命令为准。
+迁移现状（N6 后）：九个散布目录全部清空，compiler 生产单元 66/66 落位 src；
+壳层 driver.* 留驻 tools/stage0。实时进度以顶部 §0 仪表盘与
+`§2.0 复现块`第二条命令为准。
 
 ## 3. 四支柱方案
 
@@ -294,7 +296,7 @@ IInterface ×12（COM 基础设施支持用户代码）。考量：
 | N3 | frontend ×14 | 同上 | ✅ 34986b475 |
 | N4 | sema ×12 + ir.hir.lowering | +mini-regress | ✅ 门禁例外两类登记（I/O 族 FsExists/FsStat、sema→ir 上行边 R9）；十三探针回归见提交说明 |
 | N5 | ir ×25 + backend.plan | +全量 residual 对比 | ✅ 门禁例外+1（backend.plan I/O 族 FsDir）；全量 residual 对比归 N6 收口轮统一跑（本轮十三探针+tree mini 代替） |
-| N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ⬜ |
+| N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ✅ 分两提交：N6a toolchain(2abcd33bb)+N6b 壳层 driver.*/json_helpers 收口。make verify 分解结果：hygiene/contract/incremental-cache/incremental-gate/system-intrinsics 全过；**constructor-typing 与 hir-class-alloc-contract 两红点为既有债**（stash 二分+去 i17 复测证明早于今日全部改动，疑似更早 b4b 行为变更，其脚本 flags 腐烂即久未运行之证）；verify_local 21 处旧布局路径已修至 src；residual 全量补跑挂下会话首项 |
 
 每批模板：git mv → unit 头改写 → 全仓 uses 同步（含 build 探针源）→
 contract 门禁清单扩充 → 清 ppu 重建 → 验收门 → commit。
@@ -355,10 +357,11 @@ git diff --check && make hygiene
 ## 5. 完整映射表（66 单元；✅=已落地）
 
 生产单元总计 **66**（65 个 `np_` 前缀 + json_helpers）；
-已落地 **63**（N1-N5），待迁 **3**（toolchain）。src 现状：64 pas + 71 inc
-（含 phase_timing 探针单元，不计入 66 生产单元口径）。
+已落地 **66/66**（N1-N6）。src 现状：67 pas + 71 inc
+（含 phase_timing 探针单元，不计入 66 生产单元口径）；stage0 壳层 12 单元
+改 nextpas.driver.{command,projection}.* 留驻 tools/stage0，json_helpers 双胞胎已收口。
 
-### 已完成 ✅（N1-N5，63 单元 + 71 inc）
+### 已完成 ✅（N1-N6，66 单元 + 79 inc）
 
 | 新名 | 原位置 | 批 |
 |------|--------|----|
@@ -425,28 +428,23 @@ git diff --check && make hygiene
 | nextpas.compiler.ir.mir.pass.vectorize | ir/np_mir_pass_vectorize | N5 |
 | nextpas.compiler.ir.mir.to_llvm | ir/np_mir_to_llvm | N5 |
 | nextpas.compiler.backend.plan | backend/np_backend_plan | N5 |
+| nextpas.compiler.toolchain.plan | toolchain/np_toolchain_plan | N6 |
+| nextpas.compiler.toolchain.profiles | toolchain/np_toolchain_profiles | N6 |
+| nextpas.compiler.toolchain.runner | toolchain/np_toolchain_runner | N6 |
 
 inc 随宿主迁入不改名：syntax 家族 ×11、sink accessors ×1、frontend ×7、
 sema 家族 ×33、hir_lowering 家族 ×3、ir 家族 ×15、backend accessors ×1。
 
-### 待迁移（3 单元）
+### 壳层改名（N6b，tools/stage0 留驻）
 
-#### toolchain(3) → nextpas.compiler.toolchain.*（N6 批）
-
-| 现名 | 新名 | 批 |
-|------|------|----|
-| np_toolchain_runner | …toolchain.runner | N6 |
-| np_toolchain_profiles | …toolchain.profiles | N6 |
-| np_toolchain_plan | …toolchain.plan | N6 |
-
-#### stage0 壳层 14 单元 → nextpas.driver.*（N6 批，留 tools/stage0）
-
-nextpas_projection_types/context/json/text、nextpas_command_{build,test,
-env,doctor,query,pkg}、nextpas_command_envelope、nextpas_json_helpers
-（本地副本届时与 src 版二选一收口）、target_config、nextpas.pas 入口。
+nextpas_command_{build,doctor,envelope,env,pkg,query,test} →
+nextpas.driver.command.*；nextpas_projection_{types,context,json,text} →
+nextpas.driver.projection.*；target_config → nextpas.driver.target_config；
+nextpas_json_helpers 双胞胎删除（与 src 版逐行一致），消费方统一改用
+nextpas.compiler.diagnostics.json_helpers；入口 nextpas.pas 名称不变。
 
 inc 随宿主迁入不改名（syntax ×11 / sink accessors ×1 / frontend ×7 /
-sema ×33 / hir_lowering ×3 已随各批迁入；ir 其余 ×16 随 N5）。
+sema ×33 / hir_lowering ×3 / ir ×15 / backend ×1 / toolchain ×8 已随各批迁入）。
 
 ## 6. 执行台账（发现·决策·勘误）
 
@@ -468,6 +466,8 @@ sema ×33 / hir_lowering ×3 已随各批迁入；ir 其余 ×16 随 N5）。
 | D14 | N3 | 工具教训：zsh 不对裸变量做字段分词——N3 首次用 `$files` 变量传文件清单导致 sed 整串当单文件名、清扫大面积空转（残留 90）；N1/N2 的内联 `$(grep -rl …)` 恰好可分词故未暴露。修复=回归内联模式，残留清零。后续批次统一内联或 `${=var}` |
 | D15 | P0 | 工具教训：探针副本陈旧伪装回归——A/B 实测后恢复 i17 并 rebuild 了 build/stage0-bootstrap/nextpas，但忘记重拷 `./nextpas-m2-l3-probe`，收尾 tree mini 用了无-i17 的 B 组二进制报 SyncDataPtr undefined exit 1。鉴别=源码 diff 干净+重建后刷新探针即 PASS。纪律：**每次 rebuild 后凡跑 mini 必先重拷探针**（§4.3 命令块已含此步，执行时不可跳） |
 | D16 | N4 | 工具教训：点分单元的磁盘文件名必须与 unit 名一致——N4 首轮只 git mv 目录未改文件名（np_semantic_model.pas 内声明 nextpas.compiler.sema.semantic_model），FPC 按单元名搜文件直接 Fatal Can't find。N1-N3 未暴露因当时 mv 与改名一步完成。纪律：**迁移=目录+文件名+unit 头三件齐改** |
+| D17 | N6 | 工具教训：文档批量编辑脚本变量重赋值截断整文档——python heredoc 中误写 `s=end_marker.replace(...)` 把全文覆盖成单行落盘。恢复=git restore 回 HEAD（提交纪律的价值实证）；重做改用**先写 /tmp 副本+wc 行数+抽查再 cp 落盘**。附带教训：门禁 ` name ` 模式对点分新名后缀段误报（target_config ⊂ nextpas.driver.target_config），已加 `(^|[^a-z_.])` 前缀卫兵 |
+| D18 | N6 | 流程教训：make verify 长期未进批次验收链导致三重腐烂——compiler/tests 五脚本 -Fu 缺 src、verify_local 21 处硬编码旧布局路径、两个契约红点（constructor-typing/class-alloc）带病存续无人知。修复=脚本路径全量接 src；红点经 stash 二分+去 i17 复测归档为既有债转 m2 队列。纪律建议：**每批验收链至少含一个 make verify 组件轮换**，防收口时集中爆雷 |
 
 ## 7. 风险登记册
 
@@ -524,7 +524,8 @@ P0 基线数字，回滚判据客观化。
 | v2.11 | 1440adc69 | N3 落地：frontend 14 单元+7 inc 迁入 src（累计 24/66）；仪表盘刷新；台账 D14 记 zsh 分词工具教训 |
 | v2.12 | ba84edf37 | P0 落地+N3 收尾（门禁扩至 23 名+漏网改名 21 处，05ef72669）：phase_timing 探针五相接线；§2.3 实测相位表——tree mini sema 占 99%/播种占 80%，i17 开销 +4.8s(1.6%) 非主要矛盾；perf top-10 受阻登记归 P1；仪表盘/批次表同步 |
 | v2.13 | 92dbb1556 | N4 落地：sema 12 单元+hir_lowering 迁入 src（累计 37/66，src 38 pas+55 inc）；门禁清单扩至 36 名+两类显式例外登记（sema.analyzer I/O 族 FsExists/FsStat 播种新鲜度检查、sema.analyzer/sema.string_ownership→ir 上行边 R9/N7）；台账 D16 点分文件名纪律；§5 映射表重写为 N1-N4 全量状态 |
-| v2.14 | （本提交） | N5 落地：ir 25 单元+backend.plan 迁入 src（累计 63/66，仅剩 toolchain ×3；src 64 pas+71 inc）；门禁清单扩至 62 名+例外+1（backend.plan FsDir）+上行边登记扩至 frontend.compilation_session→ir/backend 全族；全量 residual 对比诚实改挂 N6 收口轮（本轮以十三探针+tree mini 代证） |
+| v2.14 | 91ff9e29d | N5 落地：ir 25 单元+backend.plan 迁入 src（累计 63/66，仅剩 toolchain ×3；src 64 pas+71 inc）；门禁清单扩至 62 名+例外+1（backend.plan FsDir）+上行边登记扩至 frontend.compilation_session→ir/backend 全族；全量 residual 对比诚实改挂 N6 收口轮（本轮以十三探针+tree mini 代证） |
+| v2.15 | （本提交） | N6 落地=命名支柱收官：N6a toolchain ×3（2abcd33bb，66 生产单元全清，I/O 例外+3）；N6b 壳层 nextpas.driver.{command,projection}.*+target_config 改名+json_helpers 双胞胎收口+门禁前缀卫兵修复（点分后缀误报）；§5 全表收官；台账 D17 文档脚本截断教训 |
 
 ## 10. 文档维护规则
 

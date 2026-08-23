@@ -1,4 +1,4 @@
-unit nextpas_command_build;
+unit nextpas.driver.command.build;
 
 {$mode objfpc}{$H+}
 
@@ -6,10 +6,10 @@ interface
 
 uses
   nextpas.core.exception, nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
-  nextpas_projection_types, nextpas_command_envelope,
-  nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
+  nextpas.driver.projection.types, nextpas.driver.command.envelope,
+  nextpas.driver.projection.json, nextpas.driver.projection.text, nextpas.driver.projection.context,
   nextpas.compiler.frontend.compilation_session, nextpas.compiler.targets.facts, nextpas.compiler.frontend.workspace_model,
-  nextpas.compiler.toolchain.runner, target_config;
+  nextpas.compiler.toolchain.runner, nextpas.driver.target_config;
 
 function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
 procedure RunBuild(
@@ -28,7 +28,7 @@ procedure RunBuild(
 implementation
 
 uses
-  nextpas_json_helpers;
+  nextpas.compiler.diagnostics.json_helpers;
 
 function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
 begin

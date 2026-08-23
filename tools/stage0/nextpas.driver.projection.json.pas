@@ -1,11 +1,11 @@
-unit nextpas_projection_json;
+unit nextpas.driver.projection.json;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  nextpas.core.text.conv, nextpas_projection_types, nextpas_json_helpers;
+  nextpas.core.text.conv, nextpas.driver.projection.types, nextpas.compiler.diagnostics.json_helpers;
 
 procedure AppendBuildContextProjectionJsonFields(
   var AFields: string;

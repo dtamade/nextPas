@@ -31,9 +31,16 @@ migrated=(
   np_mir_pass_licm np_mir_pass_strength_red np_mir_pass_tailcall
   np_mir_pass_vectorize np_mir_to_llvm np_backend_plan
   np_toolchain_runner np_toolchain_profiles np_toolchain_plan
+  nextpas_command_build nextpas_command_doctor nextpas_command_envelope
+  nextpas_command_env nextpas_command_pkg nextpas_command_query
+  nextpas_command_test
+  nextpas_projection_types nextpas_projection_context
+  nextpas_projection_json nextpas_projection_text
+  target_config nextpas_json_helpers
 )
 for name in "${migrated[@]}"; do
-  hits=$(grep -rl "\b${name}\b" compiler tools tests --include='*.pas' \
+  # (^|[^a-z_.]) 前缀卫兵：排除点分新名的后缀段（如 nextpas.driver.target_config）
+  hits=$(grep -rE "(^|[^a-z_.])${name}\b" compiler tools tests --include='*.pas' \
     --include='*.inc' --include='*.lpr' 2>/dev/null | wc -l)
   if [ "$hits" -ne 0 ]; then
     echo "FAIL: stale references to ${name}: ${hits} file(s)"
@@ -41,9 +48,10 @@ for name in "${migrated[@]}"; do
   fi
 done
 
-# 2. json_helpers split: stage0 keeps the local twin, compiler side is dotted.
-if grep -rq 'nextpas_json_helpers' compiler --include='*.pas' 2>/dev/null; then
-  echo "FAIL: compiler tree must use nextpas.compiler.diagnostics.json_helpers"
+# 2. json_helpers unified: the stage0 local twin was deleted at N6; both sides
+#    now use nextpas.compiler.diagnostics.json_helpers — no bare name anywhere.
+if grep -rq 'nextpas_json_helpers' compiler tools --include='*.pas' 2>/dev/null; then
+  echo "FAIL: bare nextpas_json_helpers must not exist (use nextpas.compiler.diagnostics.json_helpers)"
   fail=1
 fi
 

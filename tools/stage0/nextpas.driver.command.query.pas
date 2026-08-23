@@ -1,4 +1,4 @@
-unit nextpas_command_query;
+unit nextpas.driver.command.query;
 
 {$mode objfpc}{$H+}
 
@@ -6,11 +6,11 @@ interface
 
 uses
   nextpas.core.exception, nextpas.core.path, nextpas.core.fs,
-  nextpas_projection_types, nextpas_command_envelope,
-  nextpas_command_build, nextpas_projection_json, nextpas_projection_text,
-  nextpas_projection_context,
+  nextpas.driver.projection.types, nextpas.driver.command.envelope,
+  nextpas.driver.command.build, nextpas.driver.projection.json, nextpas.driver.projection.text,
+  nextpas.driver.projection.context,
   nextpas.compiler.frontend.compilation_session, nextpas.compiler.targets.facts, nextpas.compiler.frontend.workspace_model,
-  target_config;
+  nextpas.driver.target_config;
 
 procedure RunQuerySymbols(
   var AState: TNextPasState;

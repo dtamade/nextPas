@@ -1,4 +1,4 @@
-unit nextpas_command_doctor;
+unit nextpas.driver.command.doctor;
 
 {$mode objfpc}{$H+}
 
@@ -6,9 +6,9 @@ interface
 
 uses
   nextpas.core.path, nextpas.core.fs,
-  nextpas_projection_types, nextpas_command_envelope,
-  nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
-  nextpas.compiler.frontend.package_workflow, nextpas.compiler.frontend.workspace_model, target_config;
+  nextpas.driver.projection.types, nextpas.driver.command.envelope,
+  nextpas.driver.projection.json, nextpas.driver.projection.text, nextpas.driver.projection.context,
+  nextpas.compiler.frontend.package_workflow, nextpas.compiler.frontend.workspace_model, nextpas.driver.target_config;
 
 procedure RunDoctor(
   var AState: TNextPasState;
