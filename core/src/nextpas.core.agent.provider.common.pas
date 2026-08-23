@@ -18,7 +18,22 @@ uses
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.agent.base,
-  nextpas.core.agent.errors;
+  nextpas.core.agent.errors,
+  nextpas.core.agent.intf;
+
+type
+  { provider 选项公共段（API.md §3.1）：两厂商选项 record 内嵌。
+    Transport 注入点供测试/装饰器替换；nil → 生产 http transport }
+  TProviderOptions = record
+    ApiKey: string;                  { 空 → Complete 时抛 aecConfig }
+    BaseUrl: string;                 { 空 → 厂商官方默认（各适配器常量）}
+    Model: string;                   { 回退默认；生效序 request.Model > 本值 }
+    ConnectTimeoutMs: Int64;         { 默认 10_000 }
+    TotalTimeoutMs: Int64;           { 默认 300_000（LLM 长尾合理值）}
+    Transport: IAgentTransport;
+    Logger: ILogger;                 { nil → NullLogger 零开销 }
+    ExtraHeaders: TWireHeaderArray;
+  end;
 
 const
   CMaxRawBodySnippetBytes = 8 * 1024;   { ERRORS §6：RawBodySnippet 上限 }
@@ -189,6 +204,7 @@ begin
   if not AValue.IsObject then
     Exit;
   LBld := JsonBuilder;
+  LBld.BeginObject;
   LCaptured := 0;
   for I := 0 to Integer(AValue.ObjectLen) - 1 do
   begin
@@ -214,7 +230,10 @@ begin
     Inc(LCaptured);
   end;
   if LCaptured > 0 then
+  begin
+    LBld.EndObject;
     Result := LBld.ToString;
+  end;
 end;
 
 procedure WriteExtraFields(const ABld: IJsonBuilder;

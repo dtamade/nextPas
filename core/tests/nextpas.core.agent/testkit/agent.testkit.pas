@@ -21,12 +21,15 @@ uses
   nextpas.core.agent.sse;
 
 type
-  { 单个脚本响应：非流式取 BodyText；流式按 Chunks 序列投喂 }
+  { 单个脚本响应：非流式取 BodyText；流式按 Chunks 序列投喂。
+    RaiseUpstream=True 时按生产 transport 同款算法把非 2xx 归约为
+    EAgentError 抛出（含 Provider 归因与 retry-after 解析）}
   TScriptResponse = record
     Status: Integer;
     Headers: TWireHeaderArray;
     BodyText: string;                { 非流式路径全量响应体 }
     Chunks: TStringArray;            { 流式路径：原始 SSE 字节序列 }
+    RaiseUpstream: Boolean;
   end;
   TScriptResponseArray = array of TScriptResponse;
 
@@ -34,10 +37,15 @@ type
   private
     FResponses: TScriptResponseArray;
     FNext: Integer;
+    FLastRequest: TWireRequest;
+    FProviderName: string;           { 上游错误归因名（生产为适配器传入）}
     function PopNext: TScriptResponse;
   public
     constructor Create;
     procedure Add(const AResp: TScriptResponse);
+    { 最近一次请求快照（URL/头/体断言用）}
+    function LastRequest: TWireRequest;
+    property ProviderName: string read FProviderName write FProviderName;
     { IAgentTransport }
     procedure RoundTrip(const AReq: TWireRequest; out AResp: TWireResponse);
     function OpenStream(const AReq: TWireRequest): IAgentWireStream;
@@ -80,12 +88,20 @@ type
 
 implementation
 
+uses
+  nextpas.core.agent.provider.common;
+
 { ---- TScriptedTransport ---- }
 
 constructor TScriptedTransport.Create;
 begin
   inherited Create;
   FNext := 0;
+end;
+
+function TScriptedTransport.LastRequest: TWireRequest;
+begin
+  Result := FLastRequest;
 end;
 
 procedure TScriptedTransport.Add(const AResp: TScriptResponse);
@@ -111,7 +127,11 @@ procedure TScriptedTransport.RoundTrip(const AReq: TWireRequest;
 var
   LScript: TScriptResponse;
 begin
+  FLastRequest := AReq;
   LScript := PopNext;
+  if LScript.RaiseUpstream and (LScript.Status <> 200) then
+    raise BuildUpstreamError(FProviderName, LScript.BodyText,
+      LScript.Status, LScript.Headers);
   AResp.StatusCode := LScript.Status;
   AResp.Headers := Copy(LScript.Headers, 0, Length(LScript.Headers));
   AResp.RequestId := WireHeaderValue(LScript.Headers, 'x-request-id');
@@ -123,6 +143,7 @@ function TScriptedTransport.OpenStream(
 var
   LScript: TScriptResponse;
 begin
+  FLastRequest := AReq;
   LScript := PopNext;
   Result := TScriptedWireStream.Create(LScript.Chunks);
 end;

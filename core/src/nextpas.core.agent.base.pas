@@ -130,6 +130,9 @@ type
     MessageId: string;              { sdkEnvelope 携带厂商消息 id }
     Model: string;                  { sdkEnvelope 携带实际服务模型 id }
     Signature: string;              { sdkThinkingDelta 携带 thinking 签名透传 }
+    UnmappedJson: TJsonText;        { 旁路：未映射枚举/未知块级键的 JSON object
+                                      文本；fold 收口时并入消息 ExtraJson
+                                      （WIRE-MAPPINGS §0 未映射枚举值规则）}
   end;
   TStreamDeltaArray = array of TStreamDelta;
 
@@ -222,9 +225,15 @@ type
   function WireHeaderValue(const AHeaders: TWireHeaderArray;
     const AName: string): string;
 
+  { 合并多个 ExtraJson object 文本为一个；无效/空条目跳过，重名后者胜。
+    解码侧多来源捕获（根/choice/message 级）与 fold 旁路通道共用 }
+  function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;
+
 implementation
 
 uses
+  nextpas.core.json,
+  nextpas.core.json.builder,
   nextpas.core.text.builder,
   nextpas.core.text.compare;
 
@@ -335,6 +344,55 @@ function TCompletionRequest.WithTools(const ASpecs: TToolSpecArray): TCompletion
 begin
   Result := Self;
   Result.Tools := Copy(ASpecs, 0, Length(ASpecs));
+end;
+
+function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;
+var
+  B: IJsonBuilder;
+  I, J, K: Integer;
+  Doc: IJsonDocument;
+  LKey: string;
+  LSeen: array of string;
+  LSeenAlready: Boolean;
+begin
+  Result := '';
+  B := nil;
+  LSeen := nil;
+  for I := 0 to High(ATexts) do
+  begin
+    if ATexts[I] = '' then
+      Continue;
+    Doc := JsonParse(ATexts[I]);
+    if Doc.HasError or (not Doc.Root.IsObject) then
+      Continue;                        { 防御：捕获产物恒为合法 object，坏值跳过 }
+    if B = nil then
+    begin
+      B := JsonBuilder;
+      B.BeginObject;
+    end;
+    for J := 0 to Integer(Doc.Root.ObjectLen) - 1 do
+    begin
+      LKey := Doc.Root.ObjectKeyAt(UInt32(J)).ToString;
+      LSeenAlready := False;
+      for K := 0 to High(LSeen) do     { 重名后者胜：跳过已写键 }
+        if LSeen[K] = LKey then
+        begin
+          LSeenAlready := True;
+          Break;
+        end;
+      if LSeenAlready then
+        Continue;
+      SetLength(LSeen, Length(LSeen) + 1);
+      LSeen[High(LSeen)] := LKey;
+      B.Key(LKey);
+      B.RawJson(JsonStringify(Doc.Root.ObjectValueAt(UInt32(J))));
+    end;
+  end;
+  if B <> nil then
+  begin
+    B.EndObject;
+    Result := B.ToString;
+  end;
 end;
 
 end.

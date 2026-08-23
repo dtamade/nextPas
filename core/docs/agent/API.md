@@ -118,8 +118,14 @@ TStreamDelta = record
   MessageId: string;              { sdkEnvelope 携带厂商消息 id }
   Model: string;                  { sdkEnvelope 携带实际服务模型 id }
   Signature: string;              { sdkThinkingDelta 携带 thinking 签名透传 }
+  UnmappedJson: TJsonText;        { 旁路：未映射枚举/未知块级键的 JSON object
+                                    文本；fold 收口时并入消息 ExtraJson
+                                    （WIRE-MAPPINGS §0 未映射枚举值规则）}
 end;
 TStreamDeltaArray = array of TStreamDelta;
+
+{ 合并多个 ExtraJson object 文本；无效条目跳过，重名后者胜 }
+function MergeExtraJson(const ATexts: array of TJsonText): TJsonText;
 
 function MessageText(const AMsg: TMessage): string;
 { 拼 pkText：顺序直连无分隔符。不变量：MessageText(fold 结果) == 正文
@@ -626,9 +632,11 @@ function EncodeOpenAIRequest(const AReq: TCompletionRequest;
   AStream: Boolean): TJsonText;
 
 procedure DecodeOpenAIResponse(const ABody: TJsonText;
-  out AMsg: TMessage);                       { 违反协议抛 aecProtocol }
+  out AMsg: TMessage;
+  const ALog: ILogger = nil);                { 违反协议抛 aecProtocol }
 
-function NewOpenAIWireDecoder: IAgentWireDecoder;
+function NewOpenAIWireDecoder(
+  const ALog: ILogger = nil): IAgentWireDecoder;
 
 { ---- Anthropic Messages 族（nextpas.core.agent.provider.anthropic）---- }
 
@@ -636,10 +644,15 @@ function EncodeAnthropicRequest(const AReq: TCompletionRequest;
   AStream: Boolean): TJsonText;
 
 procedure DecodeAnthropicResponse(const ABody: TJsonText;
-  out AMsg: TMessage);
+  out AMsg: TMessage;
+  const ALog: ILogger = nil);                { 违反协议抛 aecProtocol }
 
-function NewAnthropicWireDecoder: IAgentWireDecoder;
+function NewAnthropicWireDecoder(
+  const ALog: ILogger = nil): IAgentWireDecoder;
 ```
+
+可选 `ALog`：未映射枚举值（零值+`agent.unmapped.*` 捕获之外）与 Q-O7
+多 choice 丢弃在此 warn；nil 时仅保留 Extra 证据不告警。
 
 ```pascal
 { 流帧解码器（intf 定义）：把厂商 SSE 帧归约为词表增量。

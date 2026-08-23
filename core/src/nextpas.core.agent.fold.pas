@@ -39,6 +39,7 @@ type
     FModel: string;
     FFinishReason: TFinishReason;
     FUsage: TTokenUsage;
+    FUnmapped: array of TJsonText;   { delta 旁路捕获（未映射枚举等），收口并入 }
     procedure ProtocolError(const AMsg: string);
     function FindSlot(AToolIndex: Integer): Integer;
     procedure EnsureCurrentKind(AKind: TBuildTextKind);
@@ -211,6 +212,11 @@ begin
       { 不进入消息：错误缓存是 IAgentCompletion 实现的职责（ERRORS §6）}
       ;
   end;
+  if ADelta.UnmappedJson <> '' then
+  begin
+    SetLength(FUnmapped, Length(FUnmapped) + 1);
+    FUnmapped[High(FUnmapped)] := ADelta.UnmappedJson;
+  end;
 end;
 
 function TAssistantBuild.Finish: TMessage;
@@ -228,6 +234,8 @@ begin
   Result.Model := FModel;
   Result.FinishReason := FFinishReason;
   Result.Usage := FUsage;
+  if Length(FUnmapped) > 0 then
+    Result.ExtraJson := MergeExtraJson(FUnmapped);
 end;
 
 function TAssistantBuild.PartialText: string;

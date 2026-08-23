@@ -50,14 +50,14 @@
 | `nextpas.core.agent` | 门面 | 纯 re-export 公共词表与入口函数 | 全部子单元 |
 | `nextpas.core.agent.base.pas` | 词表 | TMessage/TPart/TStreamDelta/TTokenUsage/TCompletionRequest/TToolSpec/TAgentErrorCode、枚举、sentinel 常量、TTriState、TJsonText、TWire* wire 词表（纯词表零 IO，只依赖底座）| core.base |
 | `nextpas.core.agent.errors.pas` | 错误 | EAgentError/EAgentCancelled 异常类、HTTP status→错误码分类器（枚举在 base）| agent.base, core.base |
-| `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
+| `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentWireDecoder/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
 | `nextpas.core.agent.fold.pas` | 协议 | TAssistantBuild 增量累积器 + FoldDelta/FoldDeltas 纯折叠（唯一实现，禁止重写） | base, errors |
 | `nextpas.core.agent.sse.pas` | 协议 | **feed 式增量 SSE 解析器**（Feed(buf)→PopEvent；内部单元，http.sse 晋升候选）；DoS 上限触发抛 aecProtocol（SECURITY §3）| base, errors, text.builder |
 | `nextpas.core.agent.clock.pas` | 支撑 | IAgentClock 实现：真实时钟（可取消睡眠）+ fake 时钟（测试注入） | intf, async.cancellation, stopwatch, time.sleep |
 | `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上） | intf, base, errors |
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
 | `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获、帧序 FSM 骨架 | base, errors, json, intf |
-| `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）| common, transport, intf |
+| `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）；Q-O1..O7 全部落码+gate | base, errors, intf, common, transport, fold, json, json.builder, text.builder, os.env |
 | `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；同上公开编解码器 | common, transport, intf |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
 | `nextpas.core.agent.tools.pas` | 工具 | 参数校验（§1.5 规范）、结果截断信封、executor 包装（超时/取消） | base, intf, json, text |

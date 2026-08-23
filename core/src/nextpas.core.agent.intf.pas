@@ -43,6 +43,17 @@ type
     function OpenStream(const AReq: TWireRequest): IAgentWireStream;
   end;
 
+  { 流帧解码器（API.md §8，D13 公开编解码器）：把厂商 SSE 帧归约为词表增量。
+    provider 工厂内部与 Stream() 路径共用同一实现；Finalize 抹平 usage/finish
+    到达顺序。实例不跨消息复用、非线程安全（单角色独占） }
+  IAgentWireDecoder = interface
+    { ping 等 0 增量帧合法（ADeltas 为空数组）；违反协议抛 aecProtocol }
+    procedure DecodeEvent(const AEvent: TWireSSEEvent;
+      out ADeltas: TStreamDeltaArray);
+    { 流终止后调用一次；重复调用返回空数组 }
+    procedure Finalize(out ADeltas: TStreamDeltaArray);
+  end;
+
   { ---- 词表层（loop/session/消费方只见这些）---- }
 
   IAgentCompletion = interface
