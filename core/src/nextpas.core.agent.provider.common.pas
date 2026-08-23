@@ -14,9 +14,11 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.log.intf,
+  nextpas.core.async.cancellation,
   nextpas.core.text.conv,
   nextpas.core.json,
   nextpas.core.json.builder,
+  nextpas.core.text.builder,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf;
@@ -38,6 +40,79 @@ type
 const
   CMaxRawBodySnippetBytes = 8 * 1024;   { ERRORS §6：RawBodySnippet 上限 }
   CMaxExtraKeys = 64;                   { SECURITY §3：未知键捕获上限 }
+
+type
+  { 工具槽：跨 chunk 的 index 分桶缓冲。真实世界（sub2api 生产经验）存在
+    id+args 先到、name 后到甚至缺失的流。两适配器共用同一分桶机制
+    （WIRE-MAPPINGS Q-A6：provider.common 单一实现）}
+  TWireToolSlot = record
+    Index: Integer;
+    Id: string;
+    Name: string;
+    Args: IStringBuilder;
+    Announced: Boolean;
+  end;
+
+  { 槽池：单角色独占，不跨消息复用 }
+  TWireToolSlotPool = class(TInterfacedObject)
+  private
+    FSlots: array of TWireToolSlot;
+    function GetAnnounced(ASlot: Integer): Boolean;
+    function GetHasName(ASlot: Integer): Boolean;
+  public
+    function Find(AIdx: Integer; out ACreated: Boolean): Integer;
+    function Count: Integer;
+    { 首个非空 id 生效；宣告前 name 持续更新，宣告后宽容忽略重复元数据 }
+    procedure UpdateIdentity(ASlot: Integer; const AId, AName: string);
+    procedure AppendArgs(ASlot: Integer; const AFrag: string);
+    property Announced[ASlot: Integer]: Boolean read GetAnnounced;
+    property HasName[ASlot: Integer]: Boolean read GetHasName;
+    { 发 sdkToolCallStart 并冲刷既有缓冲 args——不含调用方随后直出的本片 }
+    procedure Announce(ASlot: Integer; var ADeltas: TStreamDeltaArray);
+    { Finalize 兜底：未宣告且带任一已知信息的槽全部冲刷并 warn
+      （id 可能也缺——词表允许空串，绝不让已收参数片段无声丢失）}
+    procedure FlushUnannounced(const ALog: ILogger; const ASrc: string;
+      var ADeltas: TStreamDeltaArray);
+    destructor Destroy; override;
+  end;
+
+  { 线背完成对象（两适配器共用）：wire 流事件→decoder 归约→词表增量
+    逐个交付；EOF 收口唯一 fold（DESIGN D1）；sdkError 缓存至 GetMessage
+    抛出（ERRORS §6）；弃置未读完即析构 → Cancel 上游流（W2 取消贯通）}
+  TWireBackedCompletion = class(TInterfacedObject, IAgentCompletion)
+  private
+    FStream: IAgentWireStream;
+    FDecoder: IAgentWireDecoder;
+    FToken: IAsyncCancellationToken;
+    FProviderName: string;
+    FPending: TStreamDeltaArray;
+    FIdx: Integer;
+    FAccum: TStreamDeltaArray;
+    FSourceDone: Boolean;
+    FFolded: Boolean;
+    FCancelled: Boolean;
+    FMsg: TMessage;
+    FErrMsg: string;
+    FErrCode: TAgentErrorCode;
+    FErrAfterMs: Int64;
+    procedure AppendDeltas(const AArr: TStreamDeltaArray);
+    procedure CloseOnce;
+  public
+    constructor Create(const AStream: IAgentWireStream;
+      const ADecoder: IAgentWireDecoder;
+      const AToken: IAsyncCancellationToken;
+      const AProviderName: string);
+    destructor Destroy; override;
+    function NextDelta(out ADelta: TStreamDelta): Boolean;
+    procedure Cancel;
+    function GetCancelled: Boolean;
+    function GetMessage: TMessage;
+    function GetUsage: TTokenUsage;
+  end;
+
+{ 词表增量追加（容量倍增由 SetLength 摊还；两适配器与槽池共用）}
+procedure AddStreamDelta(var AArr: TStreamDeltaArray;
+  const AD: TStreamDelta);
 
 { UTF-8 安全截断：最多回退 3 字节到序列边界，绝不产出半字符 }
 function Utf8SafeTruncate(const S: string; AMaxBytes: Integer): string;
@@ -72,6 +147,9 @@ procedure WriteExtraFields(const ABld: IJsonBuilder;
   const AExtraJson: TJsonText; const AKnownNames: array of string);
 
 implementation
+
+uses
+  nextpas.core.agent.fold;
 
 function Utf8SafeTruncate(const S: string; AMaxBytes: Integer): string;
 var
@@ -271,6 +349,235 @@ begin
     ABld.Key(LKey);
     ABld.RawJson(JsonStringify(Root.ObjectGet(LKey)));
   end;
+end;
+
+{ ---- 共享 wire 流资产 ---- }
+
+procedure AddStreamDelta(var AArr: TStreamDeltaArray;
+  const AD: TStreamDelta);
+var
+  N: Integer;
+begin
+  N := Length(AArr);
+  SetLength(AArr, N + 1);
+  AArr[N] := AD;
+end;
+
+function TWireToolSlotPool.GetAnnounced(ASlot: Integer): Boolean;
+begin
+  Result := FSlots[ASlot].Announced;
+end;
+
+function TWireToolSlotPool.GetHasName(ASlot: Integer): Boolean;
+begin
+  Result := FSlots[ASlot].Name <> '';
+end;
+
+{ 记录含 string/接口字段：置空触发数组级终结，槽位资产不泄漏 }
+destructor TWireToolSlotPool.Destroy;
+begin
+  SetLength(FSlots, 0);
+  inherited Destroy;
+end;
+
+function TWireToolSlotPool.Find(AIdx: Integer;
+  out ACreated: Boolean): Integer;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FSlots) do
+    if FSlots[I].Index = AIdx then
+    begin
+      ACreated := False;
+      Exit(I);
+    end;
+  SetLength(FSlots, Length(FSlots) + 1);
+  Result := High(FSlots);
+  FSlots[Result] := Default(TWireToolSlot);
+  FSlots[Result].Index := AIdx;
+  FSlots[Result].Args := MakeStringBuilder;
+  ACreated := True;
+end;
+
+function TWireToolSlotPool.Count: Integer;
+begin
+  Result := Length(FSlots);
+end;
+
+procedure TWireToolSlotPool.UpdateIdentity(ASlot: Integer;
+  const AId, AName: string);
+begin
+  if (AId <> '') and (FSlots[ASlot].Id = '') then
+    FSlots[ASlot].Id := AId;
+  if (not FSlots[ASlot].Announced) and (AName <> '') then
+    FSlots[ASlot].Name := AName;
+end;
+
+procedure TWireToolSlotPool.AppendArgs(ASlot: Integer; const AFrag: string);
+begin
+  if AFrag <> '' then
+    FSlots[ASlot].Args.AppendStr(AFrag);
+end;
+
+procedure TWireToolSlotPool.Announce(ASlot: Integer;
+  var ADeltas: TStreamDeltaArray);
+var
+  LD: TStreamDelta;
+begin
+  LD := Default(TStreamDelta);
+  LD.Kind := sdkToolCallStart;
+  LD.ToolIndex := FSlots[ASlot].Index;
+  LD.ToolCallId := FSlots[ASlot].Id;
+  LD.ToolName := FSlots[ASlot].Name;
+  AddStreamDelta(ADeltas, LD);
+  if FSlots[ASlot].Args.Len > 0 then
+  begin
+    LD := Default(TStreamDelta);
+    LD.Kind := sdkToolCallDelta;
+    LD.ToolIndex := FSlots[ASlot].Index;
+    LD.ArgumentsDelta := FSlots[ASlot].Args.ToString;
+    AddStreamDelta(ADeltas, LD);
+  end;
+  FSlots[ASlot].Announced := True;
+end;
+
+procedure TWireToolSlotPool.FlushUnannounced(const ALog: ILogger;
+  const ASrc: string; var ADeltas: TStreamDeltaArray);
+var
+  I: Integer;
+begin
+  for I := 0 to High(FSlots) do
+    if (not FSlots[I].Announced) and
+       ((FSlots[I].Id <> '') or (FSlots[I].Name <> '') or
+        (FSlots[I].Args.Len > 0)) then
+    begin
+      if ALog <> nil then
+        ALog.Warn(ASrc + ': flushing tool call slot ' +
+          IntToStr(FSlots[I].Index) + ' whose name never arrived');
+      Announce(I, ADeltas);
+    end;
+end;
+
+{ ---- TWireBackedCompletion ---- }
+
+constructor TWireBackedCompletion.Create(const AStream: IAgentWireStream;
+  const ADecoder: IAgentWireDecoder;
+  const AToken: IAsyncCancellationToken;
+  const AProviderName: string);
+begin
+  inherited Create;
+  FStream := AStream;
+  FDecoder := ADecoder;
+  FToken := AToken;
+  FProviderName := AProviderName;
+  FIdx := 0;
+end;
+
+destructor TWireBackedCompletion.Destroy;
+begin
+  { 弃置未读完的流：硬取消上游在途请求（transport 联动），不拖到超时 }
+  if not FSourceDone then
+    Cancel;
+  inherited Destroy;
+end;
+
+procedure TWireBackedCompletion.AppendDeltas(const AArr: TStreamDeltaArray);
+var
+  I: Integer;
+begin
+  for I := 0 to High(AArr) do
+  begin
+    if AArr[I].Kind = sdkError then
+    begin
+      { 首个中途错误缓存（ERRORS §6）：GetMessage 时抛出 }
+      if FErrMsg = '' then
+      begin
+        FErrMsg := AArr[I].Error.Message;
+        FErrCode := AArr[I].Error.Code;
+        FErrAfterMs := AArr[I].Error.RetryAfterMs;
+      end;
+      Continue;
+    end;
+    AddStreamDelta(FAccum, AArr[I]);
+    AddStreamDelta(FPending, AArr[I]);
+  end;
+end;
+
+procedure TWireBackedCompletion.CloseOnce;
+begin
+  if FFolded then
+    Exit;
+  FFolded := True;
+  FoldDeltas(FAccum, FMsg);            { 唯一 fold，EOF 收口一次 }
+end;
+
+function TWireBackedCompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
+var
+  LEv: TWireSSEEvent;
+  LArr: TStreamDeltaArray;
+begin
+  if FCancelled then
+    Exit(False);
+  if Assigned(FToken) and FToken.IsCancelled then
+  begin
+    Cancel;
+    Exit(False);
+  end;
+  while FIdx >= Length(FPending) do
+  begin
+    if FSourceDone then
+    begin
+      CloseOnce;
+      Exit(False);
+    end;
+    if FStream.NextEvent(LEv) then
+    begin
+      FDecoder.DecodeEvent(LEv, LArr);
+      AppendDeltas(LArr);
+    end
+    else
+    begin
+      FSourceDone := True;             { 断连即 EOF，Finalize 收口 }
+      FDecoder.Finalize(LArr);
+      AppendDeltas(LArr);
+    end;
+  end;
+  ADelta := FPending[FIdx];
+  Inc(FIdx);
+  Result := True;
+end;
+
+procedure TWireBackedCompletion.Cancel;
+begin
+  FCancelled := True;
+  FStream.Cancel;
+end;
+
+function TWireBackedCompletion.GetCancelled: Boolean;
+begin
+  Result := FCancelled or FStream.GetCancelled;
+end;
+
+function TWireBackedCompletion.GetMessage: TMessage;
+var
+  E: EAgentError;
+begin
+  if not FFolded then
+    raise EAgentMisuse.Create('GetMessage before EOF');
+  if FErrMsg <> '' then
+  begin
+    E := EAgentError.CreateUpstream(FErrCode, FProviderName, FErrMsg,
+      '', '', FErrAfterMs);
+    raise E;
+  end;
+  Result := FMsg;
+end;
+
+function TWireBackedCompletion.GetUsage: TTokenUsage;
+begin
+  if not FFolded then
+    raise EAgentMisuse.Create('GetUsage before EOF');
+  Result := FMsg.Usage;
 end;
 
 end.

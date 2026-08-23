@@ -242,9 +242,11 @@ end;
 procedure TestDecodeUnmappedFinish;
 var
   M: TMessage;
-  Log: TCapturingLogger;
+  Cap: TCapturingLogger;             { 具体类型：断言 Count 用 }
+  Log: ILogger;                      { 接口持有：引用计数负责释放 }
 begin
-  Log := TCapturingLogger.Create;
+  Cap := TCapturingLogger.Create;
+  Log := Cap;
   DecodeOpenAIResponse(
     '{"id":"x","model":"m","choices":[{"message":{"role":"assistant",' +
     '"content":"a"},"finish_reason":"weird_stop"}],"usage":{}}',
@@ -252,7 +254,7 @@ begin
   Check(M.FinishReason = frNone, 'unknown reason -> zero value');
   Check(Pos('"agent.unmapped.finish_reason":"weird_stop"',
     M.ExtraJson) > 0, 'unmapped preserved under reserved key');
-  Check(Log.Count > 0, 'warn emitted');
+  Check(Cap.Count > 0, 'warn emitted');
 end;
 
 procedure TestDecodeViolations;
@@ -293,9 +295,11 @@ end;
 procedure TestQO7MultiChoice;
 var
   M: TMessage;
-  Log: TCapturingLogger;
+  Cap: TCapturingLogger;             { 具体类型：断言 Count 用 }
+  Log: ILogger;                      { 接口持有：引用计数负责释放 }
 begin
-  Log := TCapturingLogger.Create;
+  Cap := TCapturingLogger.Create;
+  Log := Cap;
   DecodeOpenAIResponse(
     '{"id":"x","model":"m","choices":[' +
     '{"message":{"role":"assistant","content":"first"},' +
@@ -303,7 +307,7 @@ begin
     '{"message":{"role":"assistant","content":"second"},' +
     '"finish_reason":"stop"}],"usage":{}}', M, Log);
   CheckEqual('first', MessageText(M), 'only choice 0 kept');
-  Check(Log.Count > 0, 'Q-O7 warn logged');
+  Check(Cap.Count > 0, 'Q-O7 warn logged');
 end;
 
 function Ev(const AData: string): TWireSSEEvent;

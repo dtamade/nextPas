@@ -131,15 +131,6 @@ begin
   raise E;
 end;
 
-procedure AddDelta(var AArr: TStreamDeltaArray; const AD: TStreamDelta);
-var
-  N: Integer;
-begin
-  N := Length(AArr);
-  SetLength(AArr, N + 1);
-  AArr[N] := AD;
-end;
-
 { Q-O1：模型名前缀判定 }
 function UsesMaxCompletionTokens(const AModel: string): Boolean;
 var
@@ -698,19 +689,7 @@ end;
 { ---- 解码：流帧归约（WIRE-MAPPINGS §1.3）---- }
 
 type
-  { 工具槽：跨 chunk 的延迟命名缓冲。真实世界（sub2api 生产经验）存在
-    id+args 先到、name 后到甚至缺失的流：Start 只在 name 就绪时发出，
-    args 先行片段缓冲在槽内，Finalize 兜底冲刷未命名的残留槽 }
-  TOpenAIToolSlot = record
-    Index: Integer;
-    Id: string;
-    Name: string;
-    Args: IStringBuilder;
-    Announced: Boolean;
-  end;
-  TOpenAIToolSlotArray = array of TOpenAIToolSlot;
-
-  { 帧序状态机：首信封一次（Q-O5 Start 只发一次的前提）、tool index 分桶、
+    { 帧序状态机：首信封一次（Q-O5 Start 只发一次的前提）、tool index 分桶、
     [DONE] 终止。单角色独占，不跨消息复用 }
   TOpenAIWireDecoder = class(TInterfacedObject, IAgentWireDecoder)
   private
@@ -718,16 +697,13 @@ type
     FSawEnvelope: Boolean;
     FDone: Boolean;
     FFinalized: Boolean;
-    FSlots: TOpenAIToolSlotArray;    { 按 index 分桶的 tool 槽位 }
+    FPool: TWireToolSlotPool;        { 按 index 分桶的 tool 槽位（共享实现）}
     FPendingUnmapped: TJsonText;     { 无同帧增量可挂的块级未知键，顺延 }
-    function FindSlot(AIdx: Integer; out ACreated: Boolean): Integer;
-    procedure AnnounceSlot(var ASlot: TOpenAIToolSlot;
-      var ADeltas: TStreamDeltaArray);
     procedure HandleToolCalls(const AEntries: TJsonValue;
       const ASrc: string; var ADeltas: TStreamDeltaArray);
-    function HasSlots: Boolean;
   public
     constructor Create(const ALog: ILogger);
+    destructor Destroy; override;
     procedure DecodeEvent(const AEvent: TWireSSEEvent;
       out ADeltas: TStreamDeltaArray);
     procedure Finalize(out ADeltas: TStreamDeltaArray);
@@ -737,47 +713,13 @@ constructor TOpenAIWireDecoder.Create(const ALog: ILogger);
 begin
   inherited Create;
   FLog := ALog;
+  FPool := TWireToolSlotPool.Create;
 end;
 
-function TOpenAIWireDecoder.FindSlot(AIdx: Integer;
-  out ACreated: Boolean): Integer;
-var
-  I: Integer;
+destructor TOpenAIWireDecoder.Destroy;
 begin
-  for I := 0 to High(FSlots) do
-    if FSlots[I].Index = AIdx then
-    begin
-      ACreated := False;
-      Exit(I);
-    end;
-  SetLength(FSlots, Length(FSlots) + 1);
-  Result := High(FSlots);
-  FSlots[Result] := Default(TOpenAIToolSlot);
-  FSlots[Result].Index := AIdx;
-  FSlots[Result].Args := MakeStringBuilder;
-  ACreated := True;
-end;
-
-procedure TOpenAIWireDecoder.AnnounceSlot(var ASlot: TOpenAIToolSlot;
-  var ADeltas: TStreamDeltaArray);
-var
-  LD: TStreamDelta;
-begin
-  LD := Default(TStreamDelta);
-  LD.Kind := sdkToolCallStart;
-  LD.ToolIndex := ASlot.Index;
-  LD.ToolCallId := ASlot.Id;
-  LD.ToolName := ASlot.Name;
-  AddDelta(ADeltas, LD);
-  if ASlot.Args.Len > 0 then
-  begin
-    LD := Default(TStreamDelta);
-    LD.Kind := sdkToolCallDelta;
-    LD.ToolIndex := ASlot.Index;
-    LD.ArgumentsDelta := ASlot.Args.ToString;
-    AddDelta(ADeltas, LD);
-  end;
-  ASlot.Announced := True;
+  FPool.Free;
+  inherited Destroy;
 end;
 
 { Q-O5（修订版，依 sub2api 生产经验）：
@@ -822,29 +764,25 @@ begin
         LArgs := LFn.Get('arguments').AsStr.ToString;
     end;
 
-    LSlotPos := FindSlot(LIdx, LCreated);
-    if (LId <> '') and (FSlots[LSlotPos].Id = '') then
-      FSlots[LSlotPos].Id := LId;      { 首个非空 id 生效 }
-    if not FSlots[LSlotPos].Announced then
+    LSlotPos := FPool.Find(LIdx, LCreated);
+    FPool.UpdateIdentity(LSlotPos, LId, LName);
+    if not FPool.Announced[LSlotPos] then
     begin
-      if LName <> '' then
-        FSlots[LSlotPos].Name := LName; { name 未就绪前持续更新 }
-      if FSlots[LSlotPos].Name <> '' then
-        AnnounceSlot(FSlots[LSlotPos], ADeltas);
-      if LArgs <> '' then
+      if FPool.HasName[LSlotPos] then
       begin
-        if FSlots[LSlotPos].Announced then
+        FPool.Announce(LSlotPos, ADeltas); { 先冲既有缓冲（不含本片）}
+        if LArgs <> '' then
         begin
-          { 已宣告：本片段直出（先于冲刷的只有此前缓冲） }
+          { 已宣告：本片段直出 }
           LD := Default(TStreamDelta);
           LD.Kind := sdkToolCallDelta;
           LD.ToolIndex := LIdx;
           LD.ArgumentsDelta := LArgs;
-          AddDelta(ADeltas, LD);
-        end
-        else
-          FSlots[LSlotPos].Args.AppendStr(LArgs); { name 仍未就绪：继续缓冲 }
-      end;
+          AddStreamDelta(ADeltas, LD);
+        end;
+      end
+      else if LArgs <> '' then
+        FPool.AppendArgs(LSlotPos, LArgs); { name 未就绪：继续缓冲 }
     end
     else if LArgs <> '' then
     begin
@@ -853,14 +791,9 @@ begin
       LD.Kind := sdkToolCallDelta;
       LD.ToolIndex := LIdx;
       LD.ArgumentsDelta := LArgs;
-      AddDelta(ADeltas, LD);
+      AddStreamDelta(ADeltas, LD);
     end;
   end;
-end;
-
-function TOpenAIWireDecoder.HasSlots: Boolean;
-begin
-  Result := Length(FSlots) > 0;
 end;
 
 procedure TOpenAIWireDecoder.DecodeEvent(const AEvent: TWireSSEEvent;
@@ -916,7 +849,7 @@ begin
       LD.Kind := sdkEnvelope;
       LD.MessageId := LId;
       LD.Model := LModel;
-      AddDelta(ADeltas, LD);
+      AddStreamDelta(ADeltas, LD);
       FSawEnvelope := True;
     end;
   end;
@@ -946,7 +879,7 @@ begin
             LD := Default(TStreamDelta);
             LD.Kind := sdkTextDelta;
             LD.TextDelta := LId;
-            AddDelta(ADeltas, LD);
+            AddStreamDelta(ADeltas, LD);
           end;
         end;
         { Q-O2：reasoning_content 增量 → 思考增量；无签名字段。
@@ -964,7 +897,7 @@ begin
             LD := Default(TStreamDelta);
             LD.Kind := sdkThinkingDelta;
             LD.TextDelta := LId;
-            AddDelta(ADeltas, LD);
+            AddStreamDelta(ADeltas, LD);
           end;
         end;
         if LDv.Get('tool_calls').IsValid and
@@ -988,7 +921,7 @@ begin
           LD.FinishReason := MapFinishReason(LRv, LUnmapped);
           { 生产怪癖（sub2api）：部分上游发 "stop" 却带了 tool_calls——
             归约为本流已开槽即 frToolCalls，保住消费方循环判据 }
-          if (LD.FinishReason = frStop) and HasSlots then
+          if (LD.FinishReason = frStop) and (FPool.Count > 0) then
             LD.FinishReason := frToolCalls;
           if LUnmapped <> '' then
           begin
@@ -1001,7 +934,7 @@ begin
             LBld.EndObject;
             LD.UnmappedJson := LBld.ToString;
           end;
-          AddDelta(ADeltas, LD);
+          AddStreamDelta(ADeltas, LD);
         end;
       end
       else if LF.IsValid and (not LF.IsNull) then
@@ -1017,7 +950,7 @@ begin
     LD := Default(TStreamDelta);
     LD.Kind := sdkUsage;
     FillUsage(LU, LD.Usage);
-    AddDelta(ADeltas, LD);
+    AddStreamDelta(ADeltas, LD);
   end;
 
   { 块级未知键无损捕获：挂到本帧末个增量；无增量则顺延到下一帧；
@@ -1036,26 +969,14 @@ begin
 end;
 
 procedure TOpenAIWireDecoder.Finalize(out ADeltas: TStreamDeltaArray);
-var
-  I: Integer;
 begin
   ADeltas := nil;
   if FFinalized then
     Exit;                              { 幂等：重复调用返回空数组 }
   FFinalized := True;
-  { 延迟命名兜底：name 始终未到的槽以已知信息冲刷（id 可能也缺——
-    词表允许空串），绝不让已收到的参数片段无声丢失 }
-  for I := 0 to High(FSlots) do
-    if not FSlots[I].Announced then
-    begin
-      if (FSlots[I].Id <> '') or (FSlots[I].Name <> '') or
-        (FSlots[I].Args.Len > 0) then
-      begin
-        WarnLog(FLog, 'openai: flushing tool call slot ' +
-          IntToStr(FSlots[I].Index) + ' whose name never arrived');
-        AnnounceSlot(FSlots[I], ADeltas);
-      end;
-    end;
+  { 延迟命名兜底：name 始终未到的槽以已知信息冲刷，绝不让已收到的
+    参数片段无声丢失（共享实现）}
+  FPool.FlushUnannounced(FLog, 'openai', ADeltas);
   { OpenAI 的 usage/finish 内联于帧序（Q-O3）；缺 [DONE] 断连（Q-O4）
     由 fold 对缺 finish 宽容收口 }
   if FPendingUnmapped <> '' then
@@ -1074,40 +995,6 @@ end;
 { ---- provider 与 completion ---- }
 
 type
-  { 拉式真增量：wire 流事件 → decoder 归约 → 词表增量逐个交付；
-    EOF 时 Finalize 并以唯一 fold 收口一次（DESIGN D1）。
-    sdkError 缓存至 GetMessage 抛出（ERRORS §6），不混入折叠消息 }
-  TOpenAICompletion = class(TInterfacedObject, IAgentCompletion)
-  private
-    FStream: IAgentWireStream;
-    FDecoder: IAgentWireDecoder;
-    FToken: IAsyncCancellationToken;
-    FProviderName: string;           { 上游错误归因（'openai'/'grok'）}
-    FPending: TStreamDeltaArray;
-    FIdx: Integer;
-    FAccum: TStreamDeltaArray;
-    FSourceDone: Boolean;
-    FFolded: Boolean;
-    FCancelled: Boolean;
-    FMsg: TMessage;
-    FErrMsg: string;
-    FErrCode: TAgentErrorCode;
-    FErrAfterMs: Int64;
-    procedure AppendDeltas(const AArr: TStreamDeltaArray);
-    procedure CloseOnce;
-  public
-    constructor Create(const AStream: IAgentWireStream;
-      const ADecoder: IAgentWireDecoder;
-      const AToken: IAsyncCancellationToken;
-      const AProviderName: string);
-    destructor Destroy; override;
-    function NextDelta(out ADelta: TStreamDelta): Boolean;
-    procedure Cancel;
-    function GetCancelled: Boolean;
-    function GetMessage: TMessage;
-    function GetUsage: TTokenUsage;
-  end;
-
   { 同一实现承载 openai/grok 两家族：FName 用于错误归因与 GetName；
     BaseUrl 差异由各自 Options 预填默认值消化 }
   TOpenAIProvider = class(TInterfacedObject, IAgentProvider)
@@ -1131,130 +1018,6 @@ type
     function Stream(const AReq: TCompletionRequest;
       const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
   end;
-
-constructor TOpenAICompletion.Create(const AStream: IAgentWireStream;
-  const ADecoder: IAgentWireDecoder;
-  const AToken: IAsyncCancellationToken;
-  const AProviderName: string);
-begin
-  inherited Create;
-  FStream := AStream;
-  FDecoder := ADecoder;
-  FToken := AToken;
-  FProviderName := AProviderName;
-  FIdx := 0;
-end;
-
-destructor TOpenAICompletion.Destroy;
-begin
-  { 弃置未读完的流：硬取消上游在途请求（transport 联动），不拖到超时 }
-  if not FSourceDone then
-    Cancel;
-  inherited Destroy;
-end;
-
-procedure TOpenAICompletion.AppendDeltas(const AArr: TStreamDeltaArray);
-var
-  I, N: Integer;
-begin
-  for I := 0 to High(AArr) do
-  begin
-    if AArr[I].Kind = sdkError then
-    begin
-      { 首个中途错误缓存（ERRORS §6）：GetMessage 时抛出 }
-      if FErrMsg = '' then
-      begin
-        FErrMsg := AArr[I].Error.Message;
-        FErrCode := AArr[I].Error.Code;
-        FErrAfterMs := AArr[I].Error.RetryAfterMs;
-      end;
-      Continue;
-    end;
-    N := Length(FAccum);
-    SetLength(FAccum, N + 1);
-    FAccum[N] := AArr[I];
-    N := Length(FPending);
-    SetLength(FPending, N + 1);
-    FPending[N] := AArr[I];
-  end;
-end;
-
-procedure TOpenAICompletion.CloseOnce;
-begin
-  if FFolded then
-    Exit;
-  FFolded := True;
-  FoldDeltas(FAccum, FMsg);            { 唯一 fold，EOF 收口一次 }
-end;
-
-function TOpenAICompletion.NextDelta(out ADelta: TStreamDelta): Boolean;
-var
-  LEv: TWireSSEEvent;
-  LArr: TStreamDeltaArray;
-begin
-  if FCancelled then
-    Exit(False);
-  if Assigned(FToken) and FToken.IsCancelled then
-  begin
-    Cancel;
-    Exit(False);
-  end;
-  while FIdx >= Length(FPending) do
-  begin
-    if FSourceDone then
-    begin
-      CloseOnce;
-      Exit(False);
-    end;
-    if FStream.NextEvent(LEv) then
-    begin
-      FDecoder.DecodeEvent(LEv, LArr);
-      AppendDeltas(LArr);
-    end
-    else
-    begin
-      FSourceDone := True;             { Q-O4：断连即 EOF，Finalize 收口 }
-      FDecoder.Finalize(LArr);
-      AppendDeltas(LArr);
-    end;
-  end;
-  ADelta := FPending[FIdx];
-  Inc(FIdx);
-  Result := True;
-end;
-
-procedure TOpenAICompletion.Cancel;
-begin
-  FCancelled := True;
-  FStream.Cancel;
-end;
-
-function TOpenAICompletion.GetCancelled: Boolean;
-begin
-  Result := FCancelled or FStream.GetCancelled;
-end;
-
-function TOpenAICompletion.GetMessage: TMessage;
-var
-  E: EAgentError;
-begin
-  if not FFolded then
-    raise EAgentMisuse.Create('GetMessage before EOF');
-  if FErrMsg <> '' then
-  begin
-    E := EAgentError.CreateUpstream(FErrCode, FProviderName, FErrMsg,
-      '', '', FErrAfterMs);
-    raise E;
-  end;
-  Result := FMsg;
-end;
-
-function TOpenAICompletion.GetUsage: TTokenUsage;
-begin
-  if not FFolded then
-    raise EAgentMisuse.Create('GetUsage before EOF');
-  Result := FMsg.Usage;
-end;
 
 { ---- TOpenAIProvider ---- }
 
@@ -1349,7 +1112,7 @@ end;
 function TOpenAIProvider.Stream(
   const AReq: TCompletionRequest): IAgentCompletion;
 begin
-  Result := TOpenAICompletion.Create(
+  Result := TWireBackedCompletion.Create(
     FTransport.OpenStream(BuildWireRequest(AReq, True)),
     NewOpenAIWireDecoder(FLog), nil, FName);
 end;
@@ -1357,7 +1120,7 @@ end;
 function TOpenAIProvider.Stream(const AReq: TCompletionRequest;
   const AToken: IAsyncCancellationToken): IAgentCompletion;
 begin
-  Result := TOpenAICompletion.Create(
+  Result := TWireBackedCompletion.Create(
     FTransport.OpenStream(BuildWireRequest(AReq, True)),
     NewOpenAIWireDecoder(FLog), AToken, FName);
 end;
