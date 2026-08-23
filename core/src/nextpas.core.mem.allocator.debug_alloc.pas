@@ -13,8 +13,8 @@
 
 适用场景：调试内存泄漏、分析分配热点。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.debug_alloc;

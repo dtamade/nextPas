@@ -10,9 +10,9 @@
 
 本单元所有接口完全遵守 `空操作原则`, 输入参数 `count = 0` 时, 不进行任何操作.
 
-Author:    fafafaStudio
+Author:    nextpas.core
 Contact:   dtamade@gmail.com | QQ Group: 685403987 | QQ:179033731
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator;

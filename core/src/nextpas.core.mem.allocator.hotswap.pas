@@ -13,8 +13,8 @@ Hotswap allocator — 运行时原子替换分配器。
 
 适用场景: 运行时切换 debug/release 分配器、A/B 测试分配策略。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.allocator.hotswap;

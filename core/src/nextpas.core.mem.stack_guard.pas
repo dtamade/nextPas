@@ -12,8 +12,8 @@
 
 适用场景: Arena/池分配器的递归保护。
 
-Author:    fafafaStudio
-Copyright: (c) 2025 fafafaStudio. All rights reserved.
+Author:    nextpas.core
+Copyright: (c) 2025 nextpas.core. All rights reserved.
 }
 
 unit nextpas.core.mem.stack_guard;
