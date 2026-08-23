@@ -2,12 +2,16 @@ unit nextpas.core.tui.clipboard;
 
 // OS clipboard access for TUI applications.
 //
-// Supports three methods:
+// Supports four methods:
 //   cmOSC52    — terminal escape sequence (works over SSH)
 //   cmExternal — pipe to xclip/xsel/pbcopy/wl-copy
+//   cmWin32    — native Win32 clipboard (Windows, user32)
 //   cmNone     — no clipboard available
 //
 // Detect() probes the environment and picks the best available method.
+// POSIX priority: external tool > OSC52 —— 外部工具直连系统剪贴板,
+// 双向真实可达;OSC52 是单向(仅复制)且依赖外层终端支持(Terminator、
+// gnome-terminal 等不识别 → 静默失败),只作无工具时(SSH 场景)兜底。
 
 {$I nextpas.core.settings.inc}
 
@@ -15,7 +19,8 @@ unit nextpas.core.tui.clipboard;
 interface
 
 type
-  TClipboardMethod = (cmOSC52, cmExternal, cmNone);
+  { cmOSC52 保持首成员:零初始化记录语义与旧版一致(零值 = cmOSC52) }
+  TClipboardMethod = (cmOSC52, cmExternal, cmWin32, cmNone);
 
   TClipboard = record
     Method: TClipboardMethod;
@@ -28,6 +33,9 @@ type
     TmuxPassthrough: Boolean;
 
     class function Detect: TClipboard; static;
+    { POSIX 侧通道决策(纯函数,可单测):外部工具优先,OSC52 兜底,
+      全无 → cmNone。Detect 收集环境布尔后委托此函数 }
+    class function PickPosixMethod(AHasTool, AOSC52Terminal, ATmux: Boolean): TClipboardMethod; static;
     function Copy(const Text: AnsiString): Boolean;
     function Paste: AnsiString;
     function GetOSC52Copy(const Text: AnsiString): AnsiString;
@@ -47,7 +55,12 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.which,
   nextpas.core.platform.process,
-  nextpas.core.platform.process.base;
+  nextpas.core.platform.process.base
+  {$IFDEF NEXTPAS_WINDOWS}
+    , nextpas.core.platform.windows.base
+    , nextpas.core.platform.windows.ffi
+    , nextpas.core.platform.windows.utf16
+  {$ENDIF};
 
 
 // ---------- Base64 encoder (self-contained) ----------
@@ -235,7 +248,88 @@ begin
     Result := '';
 end;
 
+{$IFDEF NEXTPAS_WINDOWS}
+const
+  GMEM_MOVEABLE  = DWORD($0002);
+  CF_UNICODETEXT = UINT($000D);
+
+{ Win32 原生写剪贴板:UTF-8 → UTF-16 → CF_UNICODETEXT。
+  成功后 HMem 所有权移交系统(不得 GlobalFree);失败路径自清理 }
+function Win32SetClipboardText(const AText: AnsiString): Boolean;
+var
+  LWide: UnicodeString;
+  LHMem, LHSet: HANDLE;
+  PLock: Pointer;
+  LBytes: PtrUInt;
+begin
+  Result := False;
+  if AText = '' then Exit;
+  if not platform_windows_utf8_to_wide_checked(PAnsiChar(AText), LWide) then Exit;
+  LBytes := (Length(LWide) + 1) * SizeOf(WideChar);
+  LHMem := GlobalAlloc(GMEM_MOVEABLE, LBytes);
+  if LHMem = nil then Exit;
+  PLock := GlobalLock(LHMem);
+  if PLock = nil then
+  begin
+    GlobalFree(LHMem);
+    Exit;
+  end;
+  Move(PWideChar(LWide)^, PLock^, LBytes);
+  GlobalUnlock(LHMem);
+  { 剪贴板可能被其他进程短暂占用:OpenClipboard 失败即放弃(无重试,
+    与外部工具路径同等语义——失败由调用方 toast 反馈) }
+  if not OpenClipboard(nil) then
+  begin
+    GlobalFree(LHMem);
+    Exit;
+  end;
+  try
+    EmptyClipboard;
+    LHSet := SetClipboardData(CF_UNICODETEXT, LHMem);
+    if LHSet <> nil then
+      Result := True
+    else
+      GlobalFree(LHMem);
+  finally
+    CloseClipboard;
+  end;
+end;
+
+{ Win32 原生读剪贴板:CF_UNICODETEXT → UTF-8;无文本格式返回空 }
+function Win32GetClipboardText: AnsiString;
+var
+  LHMem: HANDLE;
+  PLock: PWideChar;
+begin
+  Result := '';
+  if not OpenClipboard(nil) then Exit;
+  try
+    LHMem := GetClipboardData(CF_UNICODETEXT);
+    if LHMem = nil then Exit;
+    PLock := PWideChar(GlobalLock(LHMem));
+    if PLock <> nil then
+    try
+      Result := platform_windows_wide_to_utf8(PLock);
+    finally
+      GlobalUnlock(LHMem);
+    end;
+  finally
+    CloseClipboard;
+  end;
+end;
+{$ENDIF}
+
 // ---------- TClipboard ----------
+
+class function TClipboard.PickPosixMethod(AHasTool, AOSC52Terminal,
+  ATmux: Boolean): TClipboardMethod;
+begin
+  { 外部工具直连系统剪贴板,复制/粘贴双向真实可达 → 首选 }
+  if AHasTool then Exit(cmExternal);
+  { 无工具时 OSC52 兜底(SSH 场景);tmux pane 走 DCS passthrough 信封 }
+  if AOSC52Terminal or ATmux then Exit(cmOSC52);
+  Result := cmNone;
+end;
 
 class function TClipboard.Detect: TClipboard;
 var
@@ -245,19 +339,17 @@ begin
   Result.ExternalTool := '';
   Result.TmuxPassthrough := platform_env_get_str('TMUX') <> '';
 
-  if IsOSC52Terminal then
-  begin
-    Result.Method := cmOSC52;
-    Exit;
-  end;
+  {$IFDEF NEXTPAS_WINDOWS}
+  { Win32 原生剪贴板:不依赖终端对 OSC52 的支持(conhost/老版 Windows
+    Terminal 均可用),复制粘贴双向真实可达 → Windows 上唯一正解 }
+  Result.Method := cmWin32;
+  Exit;
+  {$ENDIF}
 
   Tool := FindExternalTool;
-  if Tool <> '' then
-  begin
-    Result.Method := cmExternal;
-    Result.ExternalTool := Tool;
-    Exit;
-  end;
+  Result.Method := PickPosixMethod(Tool <> '', IsOSC52Terminal,
+    Result.TmuxPassthrough);
+  Result.ExternalTool := Tool;
 end;
 
 function Osc52Sequence(const Text: AnsiString;
@@ -309,6 +401,10 @@ begin
     end;
     cmNone:
       Result := False;
+    {$IFDEF NEXTPAS_WINDOWS}
+    cmWin32:
+      Result := Win32SetClipboardText(Text);
+    {$ENDIF}
   end;
 end;
 
@@ -337,6 +433,10 @@ begin
     end;
     cmNone:
       Result := '';
+    {$IFDEF NEXTPAS_WINDOWS}
+    cmWin32:
+      Result := Win32GetClipboardText;
+    {$ENDIF}
   end;
 end;
 
