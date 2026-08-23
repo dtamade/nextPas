@@ -192,6 +192,13 @@ begin
   Check(Ord(cmNone) > Ord(cmWin32), 'cmNone stays last');
 end;
 
+procedure TestCliTimeoutAnchor;
+begin
+  { 老版冻结教训锚定:外部剪贴板命令整体限时 400ms、超时 SIGKILL——
+    挂死的 xclip(wl-copy)会冻住 TUI 并留孤儿进程 }
+  CheckEqual(400, CLIP_CLI_TIMEOUT_MS, 'cli timeout stays 400ms');
+end;
+
 procedure TestGetOSC52CopyTwoBytes;
 var
   LClip: TClipboard;
@@ -328,5 +335,6 @@ begin
   T.Test('PickPosix osc52 fallback', @TestPickPosixOsc52Fallback);
   T.Test('PickPosix none', @TestPickPosixNone);
   T.Test('Clipboard enum order stable', @TestClipboardEnumOrderStable);
+  T.Test('CLI timeout anchor 400ms', @TestCliTimeoutAnchor);
   if not T.Run then Halt(1);
 end.
