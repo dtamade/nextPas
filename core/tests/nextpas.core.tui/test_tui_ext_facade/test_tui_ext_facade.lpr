@@ -5,6 +5,7 @@ program test_tui_ext_facade;
 uses
   nextpas.core.thread.init,  { 必须第一：链接 tui.task（线程前置契约，见 CONTRACT §4） }
   nextpas.core.tui.ext,
+  nextpas.core.tui.cell,     { PH33 P4：PCell/Glyph 读回断言 }
   nextpas.core.test;
 
 type
@@ -332,6 +333,73 @@ begin
   end;
 end;
 
+{ PH33 P4：解禁扩面正测——gauge/canvas/sparkline 经 ext facade 构造并真渲染。
+  对应同批删除的 rejects 探针（负测试删除翻转必须正测试就位，防裸删没人管）：
+  内容落格断言（label 文本 / 非空白盲文字符）证明符号真从 facade 可达可用 }
+function ExtBufGlyphs(ABuf: TBuffer): AnsiString;
+var
+  LI, LJ: Integer;
+  LP: PCell;
+begin
+  Result := '';
+  LP := ABuf.ContentPtr;
+  for LI := 0 to ABuf.Length_ - 1 do
+  begin
+    for LJ := 0 to Integer(LP^.Glyph.Len) - 1 do
+      Result := Result + AnsiChar(LP^.Glyph.Bytes[LJ]);
+    Inc(LP);
+  end;
+end;
+
+function ExtHasBrailleNonBlank(const S: AnsiString): Boolean;
+var LI: Integer;
+begin
+  Result := False;
+  for LI := 1 to Length(S) do
+    if Ord(S[LI]) >= $A1 then   { UTF-8 续字节粗筛：命中非 ASCII 即继续细判 }
+    begin
+      if (LI + 2 <= Length(S)) and (Ord(S[LI]) = $E2)
+        and (Ord(S[LI + 1]) in [$A0..$A3]) and (Ord(S[LI + 2]) > $80) then
+        Exit(True);             { U+2801..U+28FF：有点盲文（E2 A0/A1/A2/A3 xx）}
+    end;
+end;
+
+procedure TestExtDataWidgets;
+var
+  LGauge: IGauge;
+  LSpark: ISparkline;
+  LCanvas: ICanvas;
+  LArea: TRect;
+  LBuf: TBuffer;
+begin
+  LArea := TRect.Make(0, 0, 24, 3);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LGauge := TGauge.New.WithPercent(50).WithLabel('abc');
+    Check(LGauge <> nil, 'ext exposes TGauge');
+    LGauge.Render(LArea, LBuf);
+    Check(Pos('abc', ExtBufGlyphs(LBuf)) > 0, 'gauge label rendered via ext');
+
+    LSpark := TSparkline.New([0.1, 0.9, 0.4, 0.7]);
+    Check(LSpark <> nil, 'ext exposes TSparkline');
+    LBuf.ClearRect(LBuf.Area);   { 无 ClearAll：整区重置为空 cell }
+    LSpark.Render(LArea, LBuf);
+    Check(ExtHasBrailleNonBlank(ExtBufGlyphs(LBuf)),
+      'sparkline braille dots rendered via ext');
+
+    LCanvas := TCanvas.New(4, 3);
+    Check(LCanvas <> nil, 'ext exposes TCanvas');
+    LCanvas.SetDot(1, 1);
+    Check(LCanvas.GetDot(1, 1), 'canvas dot roundtrip via ext');
+    LBuf.ClearRect(LBuf.Area);   { 无 ClearAll：整区重置为空 cell }
+    LCanvas.Render(LArea, LBuf);
+    Check(ExtHasBrailleNonBlank(ExtBufGlyphs(LBuf)),
+      'canvas braille dot rendered via ext');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
@@ -351,5 +419,6 @@ begin
   T.Test('ext dialog surface', @TestExtDialogSurface);
   T.Test('ext split_pane surface', @TestExtSplitPaneSurface);
   T.Test('ext select surface', @TestExtSelectSurface);
+  T.Test('ext data widgets surface', @TestExtDataWidgets);
   if not T.Run then Halt(1);
 end.
