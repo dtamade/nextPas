@@ -11,8 +11,8 @@ fail() {
 
 echo "[TEST] run_all_module_tests fpc host override contract"
 
-if ! rg -F --quiet -- 'FPC_EXE="${FAFAFA_FPC_EXE:-fpc}"' "$SCRIPT"; then
-  fail "script should expose FAFAFA_FPC_EXE override with default fpc"
+if ! rg -F --quiet -- 'FPC_EXE="${NEXTPAS_FPC_EXE:-fpc}"' "$SCRIPT"; then
+  fail "script should expose NEXTPAS_FPC_EXE override with default fpc"
 fi
 
 if ! rg -F --quiet -- 'if [[ "$FPC_EXE" == */* ]]; then' "$SCRIPT"; then

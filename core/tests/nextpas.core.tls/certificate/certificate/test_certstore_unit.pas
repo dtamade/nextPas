@@ -239,7 +239,7 @@ begin
   AssertTrue('Verify fails without CA loaded', not Verified);
 
   TempCAFile := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    Format('fafafa_ssl_test_ca_%d.pem', [Random(1000000)]);
+    Format('nextpas_ssl_test_ca_%d.pem', [Random(1000000)]);
 
   AssertTrue('Write CA PEM to temp file', TCertificateUtils.SaveToFile(TempCAFile, CACertPEM));
   try

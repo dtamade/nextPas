@@ -34,13 +34,13 @@ echo "[TEST] active doc metadata truth contract"
 
 require_fixed "$BACKEND_SELECTION_DOC" "**文档版本**: v1.5.0" \
   "BACKEND_SELECTION_GUIDE footer must reflect the current shipped doc version"
-require_fixed "$BACKEND_SELECTION_DOC" "**适用版本**: fafafa.ssl v1.5.0+" \
+require_fixed "$BACKEND_SELECTION_DOC" "**适用版本**: nextpas.ssl v1.5.0+" \
   "BACKEND_SELECTION_GUIDE footer must reflect the current shipped applicability range"
 require_fixed "$BACKEND_SELECTION_DOC" "**更新日期**: 2026-05-21" \
   "BACKEND_SELECTION_GUIDE footer must reflect the current update date"
 require_absent "$BACKEND_SELECTION_DOC" "**文档版本**: 1.0" \
   "BACKEND_SELECTION_GUIDE footer must stop advertising stale 1.0 doc version"
-require_absent "$BACKEND_SELECTION_DOC" "**适用版本**: fafafa.ssl v1.3.0+" \
+require_absent "$BACKEND_SELECTION_DOC" "**适用版本**: nextpas.ssl v1.3.0+" \
   "BACKEND_SELECTION_GUIDE footer must stop advertising stale v1.3 applicability"
 
 require_fixed "$ARCHITECTURE_DOC" "**文档版本**: v1.5.0" \

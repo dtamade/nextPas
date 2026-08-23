@@ -50,7 +50,7 @@ require_fixed "$backend_matrix" '- `MbedTLS`: public surface 已发布 `GetSessi
 
 require_fixed "$mbedtls_matrix" '| Session 复用 | ⚠️ 当前 public surface 已发布 | 当前 backend 已发布 `GetSession / SetSession` 与 session serialize / deserialize / cache candidate path；但 local source/header truth 只有 `mbedtls_ssl_set_session` / `mbedtls_ssl_get_session` / `mbedtls_ssl_session_load/save`，没有像 `SSL_session_reused` / `wolfSSL_session_reused` 那样的 public reused getter，因此当前不把 `SetSession(...)` 自动解释成 observed resumed-handshake |' \
   "MbedTLS dedicated matrix must describe session resumption as bounded by the current observed-reuse truth gap"
-require_fixed "$mbedtls_matrix" '当前 `Session Ticket` / `Session Cache` 这两行描述的是 fafafa.ssl 已发布的候选 surface；它们不单独构成“当前连接已经命中 resumed handshake”的 runtime proof。' \
+require_fixed "$mbedtls_matrix" '当前 `Session Ticket` / `Session Cache` 这两行描述的是 nextpas.ssl 已发布的候选 surface；它们不单独构成“当前连接已经命中 resumed handshake”的 runtime proof。' \
   "MbedTLS dedicated matrix must separate candidate cache/ticket surface from observed reuse proof"
 require_absent "$mbedtls_matrix" "| Session 复用 | ✅ 支持 | 完整支持 |" \
   "MbedTLS dedicated matrix must stop claiming unconditional session-resumption support"

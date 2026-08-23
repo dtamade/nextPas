@@ -43,7 +43,7 @@ for file in \
   "$https_server" \
   "$digital_signature" \
   "$mutual_tls"; do
-  require_fixed "$file" "fafafa.ssl" \
+  require_fixed "$file" "nextpas.ssl" \
     "$file must use the public facade unit in top-level active examples"
   require_absent "$file" "nextpas.core.tls.base" \
     "$file must stop teaching direct base-unit imports in top-level active examples"

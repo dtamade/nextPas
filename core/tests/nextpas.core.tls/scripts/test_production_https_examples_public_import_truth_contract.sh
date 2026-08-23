@@ -40,13 +40,13 @@ for file in \
   "$client_simple" \
   "$client_post" \
   "$client_session"; do
-  require_fixed "$file" "  fafafa.ssl," \
+  require_fixed "$file" "  nextpas.ssl," \
     "$file must use the public facade unit alongside its helper"
   require_fixed "$file" "  fafafa.examples.tcp;" \
     "$file must keep the TCP helper unit"
 done
 
-require_fixed "$server_simple" "  fafafa.ssl;" \
+require_fixed "$server_simple" "  nextpas.ssl;" \
   "https_server_simple must use the public facade unit"
 
 for file in \

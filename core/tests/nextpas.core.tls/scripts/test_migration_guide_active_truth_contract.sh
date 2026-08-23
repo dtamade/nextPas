@@ -39,11 +39,11 @@ require_fixed "$migration_guide" '预 `v1.0` 的历史变更只适合帮助你�
   "MIGRATION_GUIDE must demote pre-v1.0 version history to historical context"
 require_fixed "$migration_guide" "uses" \
   "MIGRATION_GUIDE must keep concrete code examples"
-require_fixed "$migration_guide" "fafafa.ssl," \
+require_fixed "$migration_guide" "nextpas.ssl," \
   "MIGRATION_GUIDE must use the current public facade unit"
 require_fixed "$migration_guide" "nextpas.core.tls.context.builder;" \
   "MIGRATION_GUIDE must use the current context-builder unit"
-require_fixed "$migration_guide" '旧的 `nextpas.core.tls.abstract.intf` 已经收进当前公开接口面；新代码优先使用 `fafafa.ssl`，需要核对核心接口定义时再回到 `nextpas.core.tls.base` 的 source truth。' \
+require_fixed "$migration_guide" '旧的 `nextpas.core.tls.abstract.intf` 已经收进当前公开接口面；新代码优先使用 `nextpas.ssl`，需要核对核心接口定义时再回到 `nextpas.core.tls.base` 的 source truth。' \
   "MIGRATION_GUIDE must route new code to the facade and demote nextpas.core.tls.base to source-truth reference status"
 require_fixed "$migration_guide" "LContext := TSSLContextBuilder.Create" \
   "MIGRATION_GUIDE must use current builder-based context creation in migration examples"
@@ -80,7 +80,7 @@ require_absent "$migration_guide" "CreateOpenSSLLibrary;" \
   "MIGRATION_GUIDE must stop promoting backend-specific CreateOpenSSLLibrary in active migration examples"
 require_absent "$migration_guide" "LLib := TSSLFactory.GetLibrary(sslOpenSSL);" \
   "MIGRATION_GUIDE low-level helper example must stop using stale GetLibrary entrypoint"
-require_absent "$migration_guide" '旧的 `nextpas.core.tls.abstract.intf` 已经收进当前公开接口面；新代码直接使用 `fafafa.ssl` 或 `nextpas.core.tls.base`。' \
+require_absent "$migration_guide" '旧的 `nextpas.core.tls.abstract.intf` 已经收进当前公开接口面；新代码直接使用 `nextpas.ssl` 或 `nextpas.core.tls.base`。' \
   "MIGRATION_GUIDE must stop teaching nextpas.core.tls.base as an ordinary new-code import path"
 require_absent "$migration_guide" "  nextpas.core.tls.base," \
   "MIGRATION_GUIDE must stop teaching split base-unit imports in active examples"

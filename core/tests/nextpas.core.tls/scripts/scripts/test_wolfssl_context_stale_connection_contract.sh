@@ -53,8 +53,8 @@ require_absent "$context_file" \
   'destructor TWolfSSLConnection\.Destroy;' \
   'legacy destructor is removed from wolfssl.context'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
   'socket factory path still uses modern wolfssl.connection unit'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
   'stream factory path still uses modern wolfssl.connection unit'

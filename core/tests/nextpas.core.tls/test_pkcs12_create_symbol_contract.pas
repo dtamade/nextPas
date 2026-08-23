@@ -52,7 +52,7 @@ begin
   WriteLn('=== PKCS12 create symbol guard ===');
 
   LOriginalPKCS12Create := PKCS12_create;
-  LOutputFile := GetTempDir(False) + 'fafafa_pkcs12_create_symbol_contract.p12';
+  LOutputFile := GetTempDir(False) + 'nextpas_pkcs12_create_symbol_contract.p12';
   if FileExists(LOutputFile) then
     DeleteFile(LOutputFile);
 

@@ -15,11 +15,11 @@ var
   LRunner: TSuiteRunner;
 begin
   WriteLn('=======================================');
-  WriteLn('  fafafa.ssl 单元测试运行器');
+  WriteLn('  nextpas.ssl 单元测试运行器');
   WriteLn('=======================================');
   WriteLn;
 
-  LRunner := TSuiteRunner.Create('fafafa.ssl Unit Tests');
+  LRunner := TSuiteRunner.Create('nextpas.ssl Unit Tests');
   LRunner.Add(DiscoverTests(TTestOpenSSLCore.Create, 'OpenSSLCore'));
   LRunner.RunAll;
   LRunner.Summary;

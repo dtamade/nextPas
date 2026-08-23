@@ -138,7 +138,7 @@ begin
     Check(SameText(LCA.PublicKeyInfo.ECCurve, 'secp384r1'), 'Issuer curve is secp384r1');
     Check(Length(LCA.PublicKeyInfo.ECPoint) = 97, 'Issuer P-384 public key is 97-byte uncompressed point');
 
-    LResult := VerifyX509Chain(LChain, LStore, 'fafafa-p384-leaf.test');
+    LResult := VerifyX509Chain(LChain, LStore, 'nextpas-p384-leaf.test');
     Check(LResult.IsValid, 'P-384 ECDSA-SHA384 certificate chain verifies: ' + LResult.ErrorMessage);
   finally
     LLeaf.Free;

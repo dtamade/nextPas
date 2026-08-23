@@ -77,7 +77,7 @@ begin
   LBindings[0].FuncPtr := @LExistingProc;
   LBindings[0].Required := False;
 
-  LBindings[1].Name := 'fafafa_ssl_missing_required_symbol';
+  LBindings[1].Name := 'nextpas_ssl_missing_required_symbol';
   LBindings[1].FuncPtr := @LMissingProc;
   LBindings[1].Required := True;
 

@@ -241,7 +241,7 @@ run_benchmark() {
   TOTAL_BENCHMARKS=$((TOTAL_BENCHMARKS + 1))
 
   # 运行基准测试
-  if (cd "$OUTPUT_DIR" && FAFAFA_PROJECT_ROOT="$PROJECT_ROOT" "$benchmark_bin" "$iterations") > "$OUTPUT_DIR/${benchmark_name}_${TIMESTAMP}.log" 2>&1; then
+  if (cd "$OUTPUT_DIR" && NEXTPAS_PROJECT_ROOT="$PROJECT_ROOT" "$benchmark_bin" "$iterations") > "$OUTPUT_DIR/${benchmark_name}_${TIMESTAMP}.log" 2>&1; then
     log_success "$benchmark_name: 运行成功"
     PASSED_BENCHMARKS=$((PASSED_BENCHMARKS + 1))
 
@@ -303,7 +303,7 @@ EOF
 
 # 主程序
 echo "================================================================"
-echo "fafafa.ssl 性能基准测试套件"
+echo "nextpas.ssl 性能基准测试套件"
 echo "================================================================"
 echo ""
 

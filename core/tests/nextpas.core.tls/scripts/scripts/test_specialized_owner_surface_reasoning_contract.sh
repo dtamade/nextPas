@@ -35,7 +35,7 @@ require_absent() {
 require_fixed '这里直接回到 `CreateConnection(...)`，是因为 stapled OCSP runtime state 通过 `ISSLOCSPStapling` 挂在连接对象上，握手失败时的 verify 结果也通过 `ISSLCertificateVerification` 从连接侧读取；如果你只是普通客户端接入而不需要这层 owner surface，握手入口仍可保持在 `TSSLConnector` / `TSSLStream`。' \
   "$ocsp_guide" \
   "OCSP_USAGE_GUIDE must explain why it intentionally uses the connection owner path"
-require_fixed "  fafafa.ssl," \
+require_fixed "  nextpas.ssl," \
   "$ocsp_guide" \
   "OCSP_USAGE_GUIDE must use the current public facade unit in active OCSP examples"
 require_fixed "  nextpas.core.tls.context.builder;" \
@@ -54,10 +54,10 @@ require_fixed "**版本**: rolling" \
 require_fixed "**最后更新**: 2026-05-21" \
   "$ct_guide" \
   "CT_IMPLEMENTATION_GUIDE must refresh its active update date"
-require_fixed "**适用范围**: 当前 fafafa.ssl active CT runtime / validator / log-client guidance" \
+require_fixed "**适用范围**: 当前 nextpas.ssl active CT runtime / validator / log-client guidance" \
   "$ct_guide" \
   "CT_IMPLEMENTATION_GUIDE must classify itself as current active CT guidance instead of a frozen v1.0 page"
-require_fixed "  fafafa.ssl," \
+require_fixed "  nextpas.ssl," \
   "$ct_guide" \
   "CT_IMPLEMENTATION_GUIDE must use the current public facade unit in active CT examples"
 require_fixed "  nextpas.core.tls.context.builder;" \
@@ -69,7 +69,7 @@ require_absent "**版本**: 1.0" \
 require_absent "**创建日期**: 2026-01-30" \
   "$ct_guide" \
   "CT_IMPLEMENTATION_GUIDE must stop advertising stale creation-date snapshot as current guidance"
-require_absent "**适用于**: fafafa.ssl v1.0+" \
+require_absent "**适用于**: nextpas.ssl v1.0+" \
   "$ct_guide" \
   "CT_IMPLEMENTATION_GUIDE must stop advertising stale v1.0 applicability as current guidance"
 require_absent "  nextpas.core.tls.base," \

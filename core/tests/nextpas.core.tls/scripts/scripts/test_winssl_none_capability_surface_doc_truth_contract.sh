@@ -39,10 +39,10 @@ require_fixed "$TOP_MATRIX" \
   "Top-level backend matrix must continue to classify WinSSL OCSP stapling as unavailable"
 
 require_fixed "$WINSSL_MATRIX" \
-  "| OCSP Stapling | ❌ 当前 capability 不发布 | Schannel 可能存在系统级自动行为；但 fafafa.ssl 当前 \`OCSPStaplingSupport=sslSupportNone\`，且不暴露 \`ISSLServerOCSPStaplingContext\` |" \
+  "| OCSP Stapling | ❌ 当前 capability 不发布 | Schannel 可能存在系统级自动行为；但 nextpas.ssl 当前 \`OCSPStaplingSupport=sslSupportNone\`，且不暴露 \`ISSLServerOCSPStaplingContext\` |" \
   "WinSSL dedicated matrix must describe OCSP stapling as none-published capability"
 require_fixed "$WINSSL_MATRIX" \
-  "| 0-RTT          | ❌ 当前 capability 不发布 | Windows Schannel 可能存在 TLS 1.3 / early-data 平台潜力；但 fafafa.ssl 当前 \`EarlyDataSupport=sslSupportNone\`，且不暴露 \`ISSLEarlyDataContext\` |" \
+  "| 0-RTT          | ❌ 当前 capability 不发布 | Windows Schannel 可能存在 TLS 1.3 / early-data 平台潜力；但 nextpas.ssl 当前 \`EarlyDataSupport=sslSupportNone\`，且不暴露 \`ISSLEarlyDataContext\` |" \
   "WinSSL dedicated matrix must describe early-data as none-published capability"
 
 if grep -Fq -- "| OCSP Stapling | ⚠️ 部分" "$WINSSL_MATRIX"; then

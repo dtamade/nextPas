@@ -39,7 +39,7 @@ assert_contains "$GUIDE_FILE" ".WithPKCS11PINMethod(pmEnvironment)" \
   "PKCS#11 guide lost the builder environment PIN example"
 assert_contains "$GUIDE_FILE" ".WithPKCS11PINMethod(pmFile)" \
   "PKCS#11 guide lost the builder file PIN example"
-facade_import_count="$( (rg -F -- '  fafafa.ssl,' "$GUIDE_FILE" || true) | wc -l | tr -d ' ' )"
+facade_import_count="$( (rg -F -- '  nextpas.ssl,' "$GUIDE_FILE" || true) | wc -l | tr -d ' ' )"
 if [[ "$facade_import_count" != "3" ]]; then
   echo "[FAIL] PKCS#11 guide must use the current public facade unit in all three active builder examples"
   echo "[INFO] expected 3 facade import lines, found: $facade_import_count"

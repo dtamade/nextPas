@@ -35,7 +35,7 @@ echo "[TEST] active connection API docs truth contract"
 
 require_fixed "$api_doc" "**版本:** rolling" \
   "API_DOCUMENTATION must declare rolling doc version instead of stale 2.0.0 snapshot"
-require_fixed "$api_doc" "  fafafa.ssl," \
+require_fixed "$api_doc" "  nextpas.ssl," \
   "API_DOCUMENTATION must use the current public facade import in active examples"
 require_fixed "$api_doc" "  nextpas.core.tls.context.builder;" \
   "API_DOCUMENTATION must keep the builder unit import where ISSLContextBuilder is referenced"

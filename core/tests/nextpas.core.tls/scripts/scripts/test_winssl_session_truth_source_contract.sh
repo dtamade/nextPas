@@ -57,7 +57,7 @@ require_absent "$connection_file" \
   'function TWinSSLSession\.IsNativeHandleValid: Boolean;' \
   'winssl connection session no longer implements IsNativeHandleValid'
 require_match "$session_file" \
-  'TWinSSLSession = class\(fafafa\.ssl\.winssl\.connection\.TWinSSLSession\)' \
+  'TWinSSLSession = class\(nextpas\.core\.tls\.winssl\.connection\.TWinSSLSession\)' \
   'winssl session unit is now a compatibility shim over the canonical connection implementation'
 require_absent "$session_file" \
   'TWinSSLSession = class\(TInterfacedObject,\s*ISSLSession' \
@@ -69,8 +69,8 @@ require_absent "$test_file" \
   'LSession\.GetNativeHandle' \
   'winssl session management test no longer relies on stale ISSLSession.GetNativeHandle'
 require_match "$design_doc" \
-  'src/fafafa\.ssl\.winssl\.connection\.pas' \
+  'src/nextpas\.core\.tls\.winssl\.connection\.pas' \
   'WinSSL design doc points to the canonical session truth source'
 require_match "$status_doc" \
-  'fafafa\.ssl\.winssl\.connection\.pas' \
+  'nextpas\.core\.tls\.winssl\.connection\.pas' \
   'WinSSL status report points session ownership at the connection unit'

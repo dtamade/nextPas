@@ -47,15 +47,15 @@ require_fixed "$facade" "ssoEnableALPN = nextpas.core.tls.base.ssoEnableALPN;" \
   "main facade must re-export ssoEnableALPN"
 require_fixed "$facade" "ssoRequireCertificateTransparency = nextpas.core.tls.base.ssoRequireCertificateTransparency;" \
   "main facade must re-export the tail option constants too"
-require_fixed "$api_ref" '主门面 `fafafa.ssl` 当前也 re-export `TSSLOption` / `TSSLOptions` 与 `sso*` option 常量；普通调用方配置 context options 时不需要回退 `nextpas.core.tls.base`。' \
+require_fixed "$api_ref" '主门面 `nextpas.ssl` 当前也 re-export `TSSLOption` / `TSSLOptions` 与 `sso*` option 常量；普通调用方配置 context options 时不需要回退 `nextpas.core.tls.base`。' \
   "API reference must record the main-facade option-surface coverage"
 
 mkdir -p "$units_dir" "$bin_dir"
 fpc -B -Fu./src -Fu./tests -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
-  fail "facade-only option contract compiles via uses fafafa.ssl" "expected binary missing: $binary"
+  fail "facade-only option contract compiles via uses nextpas.ssl" "expected binary missing: $binary"
 fi
-pass "facade-only option contract compiles via uses fafafa.ssl"
+pass "facade-only option contract compiles via uses nextpas.ssl"
 
 "$binary" >/dev/null
 pass "facade-only option contract runs successfully"

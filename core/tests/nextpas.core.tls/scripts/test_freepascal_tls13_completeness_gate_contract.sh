@@ -164,7 +164,7 @@ cat > "$fake_bin/fpc" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-marker="${FAFAFA_FAKE_FPC_MARKER:?}"
+marker="${NEXTPAS_FAKE_FPC_MARKER:?}"
 printf '%s\n' "$*" >> "$marker"
 
 out_path=""
@@ -196,7 +196,7 @@ set +e
 path_output="$(
   cd "$PROJECT_ROOT" && \
   PATH="$fake_bin:$PATH" \
-  FAFAFA_FAKE_FPC_MARKER="$marker_file" \
+  NEXTPAS_FAKE_FPC_MARKER="$marker_file" \
   bash scripts/run_freepascal_tls13_completeness_gate.sh \
     --fast-local \
     --run-id "$run_id" \

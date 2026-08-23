@@ -56,7 +56,7 @@ require_fixed "$CODING_DOC" "**版本**: v1.5.0" \
   "CODING_STANDARDS must refresh the active version header"
 require_fixed "$CODING_DOC" "**最后更新**: 2026-05-21" \
   "CODING_STANDARDS must refresh the active update date"
-require_fixed "$CODING_DOC" "**适用范围**: fafafa.ssl 当前仓库活跃代码、测试与文档示例" \
+require_fixed "$CODING_DOC" "**适用范围**: nextpas.ssl 当前仓库活跃代码、测试与文档示例" \
   "CODING_STANDARDS must declare its current active applicability scope"
 require_absent "$CODING_DOC" "**版本**: 1.0.0" \
   "CODING_STANDARDS must stop advertising stale 1.0.0 metadata"

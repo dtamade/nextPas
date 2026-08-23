@@ -34,7 +34,7 @@ cat > "$FAKE_ROOT/fpc" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-log_file="${FAFAFA_FAKE_FPC_LOG:?}"
+log_file="${NEXTPAS_FAKE_FPC_LOG:?}"
 printf '__RUN__\n' >> "$log_file"
 printf '%s\n' "$@" >> "$log_file"
 
@@ -66,7 +66,7 @@ set +e
 (
   cd "$FAKE_ROOT"
   PATH="$FAKE_ROOT:$PATH" \
-  FAFAFA_FAKE_FPC_LOG="$FAKE_FPC_LOG" \
+  NEXTPAS_FAKE_FPC_LOG="$FAKE_FPC_LOG" \
   bash scripts/run_freepascal_tls13_completeness_gate.sh \
     --fast-local \
     --run-id "$MALICIOUS_RUN_ID" >"$STDOUT_LOG" 2>"$STDERR_LOG"

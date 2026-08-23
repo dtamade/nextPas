@@ -193,7 +193,7 @@ WinSSL Session 基准对比报告
 **错误**: `Fatal: Can't find unit Windows`
 **解决**: 确保在 Windows 系统上编译，WinSSL 仅支持 Windows
 
-**错误**: `Fatal: Can't find unit fafafa.ssl.winssl.lib`
+**错误**: `Fatal: Can't find unit nextpas.ssl.winssl.lib`
 **解决**:
 ```bash
 # 设置 FPC 单元路径
@@ -247,14 +247,14 @@ fpc -Fu../../src test_winssl_session_reuse_benchmark.pas
 
 ```pascal
 // 可选：通过环境变量覆盖
-set FAFAFA_WINSSL_SESSION_HOST=example.com
+set NEXTPAS_WINSSL_SESSION_HOST=example.com
 ```
 
 ### 修改迭代次数
 
 ```pascal
 // 可选：通过环境变量覆盖
-set FAFAFA_WINSSL_BENCH_ITERATIONS=100
+set NEXTPAS_WINSSL_BENCH_ITERATIONS=100
 ```
 
 ### 修改协议版本

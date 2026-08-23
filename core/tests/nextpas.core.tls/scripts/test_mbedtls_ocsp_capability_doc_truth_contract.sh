@@ -79,13 +79,13 @@ require_fixed "$CAPABILITY_CACHE_TEST" \
   "Capability cache test must keep MbedTLS OCSP support at none"
 
 require_fixed "$MBEDTLS_DOC" \
-  "| OCSP | ❌ 当前 capability 不发布 | 当前 backend 没有 shipped online OCSP verification public surface；如需相关 revocation workflow，需由应用层在 fafafa.ssl 已发布 surface 之外自行实现 |" \
+  "| OCSP | ❌ 当前 capability 不发布 | 当前 backend 没有 shipped online OCSP verification public surface；如需相关 revocation workflow，需由应用层在 nextpas.ssl 已发布 surface 之外自行实现 |" \
   "MbedTLS dedicated matrix must describe generic OCSP as unpublished capability"
 require_fixed "$MBEDTLS_DOC" \
   '| OCSP Stapling | ❌ 当前 capability 不发布 | 当前 backend 不暴露 `ISSLOCSPStapling` / `ISSLServerOCSPStaplingContext`；`server_ocsp_stapled_response_file` 配置会在 builder 侧 fail-fast |' \
   "MbedTLS dedicated matrix must describe OCSP stapling as unpublished capability"
 require_fixed "$MBEDTLS_DOC" \
-  "1. **OCSP / OCSP Stapling**: 当前 backend 不发布 online OCSP 或 stapled-response public capability；如需相关 revocation workflow，需在 fafafa.ssl 已发布 surface 之外自行实现" \
+  "1. **OCSP / OCSP Stapling**: 当前 backend 不发布 online OCSP 或 stapled-response public capability；如需相关 revocation workflow，需在 nextpas.ssl 已发布 surface 之外自行实现" \
   "MbedTLS limitation note must distinguish unpublished capability from application-layer workflow"
 
 require_absent "$MBEDTLS_DOC" \

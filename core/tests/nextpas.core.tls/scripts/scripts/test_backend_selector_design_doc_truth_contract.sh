@@ -112,7 +112,7 @@ require_fixed "$SELECTOR_DOC" \
   '当前公开 selector API 以 `SelectBestBackend(...)` / `SelectBestBackends(...)` 与 `TSSLContextBuilder.WithAutoBackendSelection(...)` 为准。' \
   "Selector design doc must point to the current public selector API"
 require_fixed "$SELECTOR_DOC" \
-  '当前 source 尚未发布 `TBackendSelector` / `TBackendSelectionResult` / `WithPreferredBackend(...)` / `WithFallbackBackend(...)` / `WithAllowPartialMatch` 这组草案 surface，也没有 dedicated `FAFAFA_SSL_BACKEND` / `FAFAFA_SSL_DISABLE_BACKEND` / `FAFAFA_SSL_SELECTOR_DEBUG` selector entrypoint。' \
+  '当前 source 尚未发布 `TBackendSelector` / `TBackendSelectionResult` / `WithPreferredBackend(...)` / `WithFallbackBackend(...)` / `WithAllowPartialMatch` 这组草案 surface，也没有 dedicated `NEXTPAS_SSL_BACKEND` / `NEXTPAS_SSL_DISABLE_BACKEND` / `NEXTPAS_SSL_SELECTOR_DEBUG` selector entrypoint。' \
   "Selector design doc must record the retired draft API surface as unpublished"
 require_fixed "$SELECTOR_DOC" \
   'WinSSL 当前 `OCSPStaplingSupport=sslSupportNone`、`EarlyDataSupport=sslSupportNone`，因此 requirement 不能把它算成支持 server OCSP / early-data 的 backend。' \
@@ -139,7 +139,7 @@ require_absent "$SELECTOR_DOC" \
   ".WithAllowPartialMatch" \
   "Selector design doc must stop publishing WithAllowPartialMatch as a live builder API"
 require_absent "$SELECTOR_DOC" \
-  "export FAFAFA_SSL_BACKEND=openssl" \
+  "export NEXTPAS_SSL_BACKEND=openssl" \
   "Selector design doc must stop publishing nonexistent selector env vars"
 
 echo "[PASS] backend selector design doc truth contract passed"

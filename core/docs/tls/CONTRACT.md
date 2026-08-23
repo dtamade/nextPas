@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tls*.pas`
 **层级**：L2（依赖 L0–L1、hash、crypto、net/platform 后端 FFI）
 **Owner**：hash / crypto / tls lane
-**最后更新**：2026-07-20
-**版本**：1.1
+**最后更新**：2026-08-23
+**版本**：1.2
 
 ---
 
@@ -91,9 +91,44 @@ make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
 
 ---
 
+## 5. 测试环境变量契约（2026-08-23 去 fafafa 品牌更名）
+
+测试侧 opt-in 门与环境变量已由 `FAFAFA_*` 统一更名为 `NEXTPAS_*`，
+旧名不再被读取。映射表：
+
+| 旧名 | 新名 |
+|------|------|
+| `FAFAFA_RUN_NETWORK_TESTS` | `NEXTPAS_RUN_NETWORK_TESTS` |
+| `FAFAFA_TLS_CA` | `NEXTPAS_TLS_CA` |
+| `FAFAFA_PROJECT_ROOT` | `NEXTPAS_PROJECT_ROOT` |
+| `FAFAFA_SSL_FREEPASCAL_EARLY_DATA_REPLAY_STORE_DIR` | `NEXTPAS_SSL_EARLY_DATA_REPLAY_STORE_DIR` |
+| `FAFAFA_WINSSL_*`（REVOCATION_TEST / PFX / PFX_PASSWORD / CLIENT_CERT_SUBJECT / MTLS_SERVER / MTLS_PORT / SESSION_HOST / SESSION_ATTEMPTS / ENABLE_NATIVE_PROBE / NATIVE_PROBE_CHILD / BENCH_ITERATIONS / PEER_CERT_HOST / REQUIRE_REUSE / REQUIRE_NATIVE_REUSE） | `NEXTPAS_WINSSL_*`（同名后缀） |
+
+有意保留的 fafafa 字样（非品牌残留，属行为/历史事实）：
+
+- 会话序列化 MAGIC（`fafafa-winssl/mbedtls/wolfssl-session-v1`）：线格式
+  稳定标签，改值破坏既有持久化 blob 兼容。
+- `nextpas.core.math.vec.compat` 的兼容层文档：该单元职责即桥接旧
+  fafafa.game 向量 API。
+- `tui.base`/`tui.input` 的「移植自 fafafa.tui」出处说明。
+- `platform.mmap` 的共享内存文件名前缀 `fafafa_shm_`：运行时命名。
+- `core/tests/shared/tls_test_sockets.pas` 头部出处说明。
+
+### 离线边界
+
+- 回环类测试（session resumption、loopback accept 等）默认可离线运行。
+- 真实网络项一律经 `NEXTPAS_RUN_NETWORK_TESTS=1` 或对应专项变量显式
+  开启；未开启时输出 SKIP 而非 FAIL。依赖外网的对端包括 badssl.com、
+  www.cloudflare.com 及 WinSSL 专项变量指定的服务器。
+- 计时敏感断言（如 padding-oracle 恒时校验）对机器负载敏感，偶发红
+  属抖动，复跑三次判定。
+
+---
+
 ## 变更记录
 
 | 日期 | 版本 | 变更 |
 |------|------|------|
+| 2026-08-23 | 1.2 | 测试环境变量 NEXTPAS_* 更名映射；离线边界说明 |
 | 2026-07-20 | 1.1 | IStream 门面；分层边界；shim 说明 |
 | 2026-07-01 | 1.0 | 初始版本 |

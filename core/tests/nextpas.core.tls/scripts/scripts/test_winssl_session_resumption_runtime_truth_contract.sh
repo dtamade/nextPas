@@ -77,7 +77,7 @@ require_match "$suite_file" \
   'broader WinSSL runtime suite includes the session-resumption proof lane'
 
 require_match "$suite_file" \
-  'FAFAFA_RUN_NETWORK_TESTS = "1"' \
+  'NEXTPAS_RUN_NETWORK_TESTS = "1"' \
   'session-resumption lane opts into the real network path'
 
 require_match "$suite_file" \
@@ -101,15 +101,15 @@ require_match "$proof_file" \
   'WinSSL session-resumption proof checks performance-metric reuse truth'
 
 require_match "$proof_file" \
-  'FAFAFA_WINSSL_REQUIRE_REUSE' \
+  'NEXTPAS_WINSSL_REQUIRE_REUSE' \
   'WinSSL session-resumption proof supports a strict reuse-observed mode'
 
 require_match "$proof_file" \
-  'FAFAFA_WINSSL_REQUIRE_NATIVE_REUSE' \
+  'NEXTPAS_WINSSL_REQUIRE_NATIVE_REUSE' \
   'WinSSL session-resumption proof supports a strict native-reuse-observed mode'
 
 require_match "$proof_file" \
-  'FAFAFA_WINSSL_ENABLE_NATIVE_PROBE' \
+  'NEXTPAS_WINSSL_ENABLE_NATIVE_PROBE' \
   'WinSSL session-resumption proof gates the native probe behind an explicit opt-in switch'
 
 require_match "$proof_file" \

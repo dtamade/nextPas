@@ -51,7 +51,7 @@ require_match() {
 require_absent_glob() {
   local pattern="$1"
   local name="$2"
-  if rg -n --glob 'src/fafafa.ssl*.pas' --multiline --multiline-dotall "$pattern" src/fafafa.ssl*.pas >/dev/null 2>&1; then
+  if rg -n --glob 'src/nextpas.ssl*.pas' --multiline --multiline-dotall "$pattern" src/nextpas.ssl*.pas >/dev/null 2>&1; then
     fail "$name" "unexpected placeholder marker still present in active Pascal sources"
   else
     pass "$name"
@@ -67,7 +67,7 @@ read -r source_count compile_count skipped_count <<EOF
 $(python3 - <<'PY'
 from pathlib import Path
 src = Path('src')
-all_files = sorted(src.glob('fafafa.ssl*.pas'))
+all_files = sorted(src.glob('nextpas.ssl*.pas'))
 patterns = ('nextpas.core.tls.winssl', 'rand_old.pas', 'nextpas.core.tls.http.simple')
 compile_files = [f for f in all_files if not any(p in f.name for p in patterns)]
 skipped = [f for f in all_files if any(p in f.name for p in patterns)]
@@ -80,21 +80,21 @@ if [[ "$source_count" == "237" ]]; then
   pass "source inventory contains 237 Pascal units"
 else
   fail "source inventory contains 237 Pascal units" \
-    "expected 237 src/fafafa.ssl*.pas files, found $source_count"
+    "expected 237 src/nextpas.ssl*.pas files, found $source_count"
 fi
 
 if [[ "$compile_count" == "225" ]]; then
   pass "Linux compile sieve contains 225 Pascal units"
 else
   fail "Linux compile sieve contains 225 Pascal units" \
-    "expected 225 Linux-compilable src/fafafa.ssl*.pas files, found $compile_count"
+    "expected 225 Linux-compilable src/nextpas.ssl*.pas files, found $compile_count"
 fi
 
 if [[ "$skipped_count" == "12" ]]; then
   pass "Linux compile sieve skip inventory stays at 12 WinSSL-only units"
 else
   fail "Linux compile sieve skip inventory stays at 12 WinSSL-only units" \
-    "expected 12 intentionally skipped src/fafafa.ssl*.pas files, found $skipped_count"
+    "expected 12 intentionally skipped src/nextpas.ssl*.pas files, found $skipped_count"
 fi
 
 skeleton_count="$(find tests/winssl -maxdepth 1 -name '*skeleton*.pas' | wc -l | tr -d ' ')"
@@ -171,9 +171,9 @@ require_fixed "tests/winssl/test_winssl_ocsp_crl_skeleton.pas" '{$IFDEF WINDOWS}
 require_fixed "tests/winssl/test_winssl_ocsp_crl_skeleton.pas" "Skip('OCSP 在线测试', '仅 Windows 平台')" \
   "WinSSL OCSP/CRL skeleton skips outside Windows"
 
-if rg -n --glob 'src/fafafa.ssl*.pas' --multiline --multiline-dotall '\b(TODO|FIXME|skeleton|placeholder)\b' src/fafafa.ssl*.pas >/dev/null; then
+if rg -n --glob 'src/nextpas.ssl*.pas' --multiline --multiline-dotall '\b(TODO|FIXME|skeleton|placeholder)\b' src/nextpas.ssl*.pas >/dev/null; then
   fail "active Pascal sources must not contain placeholder markers" \
-    "placeholder marker found in active src/fafafa.ssl*.pas"
+    "placeholder marker found in active src/nextpas.ssl*.pas"
 else
   pass "active Pascal sources contain no placeholder markers"
 fi

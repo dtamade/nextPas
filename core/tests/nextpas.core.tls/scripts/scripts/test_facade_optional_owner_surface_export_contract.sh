@@ -63,15 +63,15 @@ require_fixed "$facade" "ISSLCertificateTransparency = nextpas.core.tls.base.ISS
   "main facade re-exports ISSLCertificateTransparency"
 require_fixed "$facade" "ISSLCertificateTransparencyValidation = nextpas.core.tls.base.ISSLCertificateTransparencyValidation;" \
   "main facade re-exports ISSLCertificateTransparencyValidation"
-require_fixed "$api_ref" '主门面 `fafafa.ssl` 当前也 re-export `ISSLConnectionControl` / `ISSLConnectionInfo` / `ISSLDiagnostics` 等 connection-side owner interfaces；普通调用方不需要回退 `nextpas.core.tls.base`。' \
+require_fixed "$api_ref" '主门面 `nextpas.ssl` 当前也 re-export `ISSLConnectionControl` / `ISSLConnectionInfo` / `ISSLDiagnostics` 等 connection-side owner interfaces；普通调用方不需要回退 `nextpas.core.tls.base`。' \
   "API reference records main-facade owner-interface re-export truth"
 
 mkdir -p "$units_dir" "$bin_dir"
 fpc -B -Fu./src -Fu./tests -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ -x "$binary" ]]; then
-  pass "facade-only contract source compiles via uses fafafa.ssl"
+  pass "facade-only contract source compiles via uses nextpas.ssl"
 else
-  fail "facade-only contract source compiles via uses fafafa.ssl" "expected binary missing: $binary"
+  fail "facade-only contract source compiles via uses nextpas.ssl" "expected binary missing: $binary"
 fi
 
 printf '[PASS] facade optional owner surface export contract passed\n'

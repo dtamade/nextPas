@@ -34,7 +34,7 @@ build_root="tmp/test_tsslcontextconfig_factory_direct_application"
 units_dir="$build_root/units"
 bin_dir="$build_root/bin"
 binary="$bin_dir/test_tsslcontextconfig_surface"
-fpc_exe="${FAFAFA_FPC_EXE:-fpc}"
+fpc_exe="${NEXTPAS_FPC_EXE:-fpc}"
 
 printf '[TEST] TSSLContextConfig factory direct-application contract\n'
 

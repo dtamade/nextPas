@@ -244,8 +244,8 @@ begin
 
     WriteLn('OpenSSL Version: ', GetOpenSSLVersionString);
 
-    if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') <> '1' then
-      Runner.Skip('Network tests gate', '[environment] network tests disabled (FAFAFA_RUN_NETWORK_TESTS!=1)')
+    if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') <> '1' then
+      Runner.Skip('Network tests gate', '[environment] network tests disabled (NEXTPAS_RUN_NETWORK_TESTS!=1)')
     else
       RunErrorTests;
 

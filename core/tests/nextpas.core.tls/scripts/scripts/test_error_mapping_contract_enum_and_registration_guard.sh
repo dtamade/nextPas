@@ -32,7 +32,7 @@ require_absent() {
 
 echo "[TEST] error mapping contract enum/registration guard"
 
-require_fixed "fafafa.ssl," \
+require_fixed "nextpas.ssl," \
   "error-mapping contract must keep the facade registration path in uses"
 require_fixed "SSLErrorToString(sslErrNone)" \
   "error-mapping contract must use the current no-error enum truth"

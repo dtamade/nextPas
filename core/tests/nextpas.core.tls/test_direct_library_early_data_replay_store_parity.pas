@@ -49,13 +49,13 @@ end;
 function BuildReplayStoreFilePath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_direct_library_replay_store.bin';
+    'nextpas_ssl_' + ALabel + '_direct_library_replay_store.bin';
 end;
 
 function BuildReplayStoreDirectoryPath(const ALabel: string): string;
 begin
   Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_ssl_' + ALabel + '_direct_library_replay_store_dir';
+    'nextpas_ssl_' + ALabel + '_direct_library_replay_store_dir';
 end;
 
 procedure CleanupReplayStoreFiles(const AFileName: string);

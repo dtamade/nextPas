@@ -34,7 +34,7 @@ echo "[TEST] performance optimization guide public import truth contract"
 
 require_fixed "$guide" "  SysUtils," \
   "PERFORMANCE_OPTIMIZATION_GUIDE first sample must keep SysUtils import"
-require_fixed "$guide" "  fafafa.ssl;" \
+require_fixed "$guide" "  nextpas.ssl;" \
   "PERFORMANCE_OPTIMIZATION_GUIDE samples must use the public facade unit"
 require_fixed "$guide" "Resumption1, Resumption2: ISSLSessionResumption;" \
   "PERFORMANCE_OPTIMIZATION_GUIDE must keep the session owner-path sample"

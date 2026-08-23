@@ -1,5 +1,5 @@
 ╔════════════════════════════════════════════════════════╗
-║  fafafa.ssl Random Pool Benchmark                     ║
+║  nextpas.ssl Random Pool Benchmark                     ║
 ║  Phase B: Performance Optimization                     ║
 ╚════════════════════════════════════════════════════════╝
 

@@ -39,7 +39,7 @@ printf '[TEST] facade zero-copy supporting-type export contract\n'
 
 require_fixed "$facade" "TBytesView = nextpas.core.tls.base.TBytesView;" \
   "main facade must re-export TBytesView"
-require_fixed "$api_ref" '主门面 `fafafa.ssl` 当前也 re-export `TBytesView`；使用 `nextpas.core.tls.encoding` / `nextpas.core.tls.crypto.utils` 的 zero-copy 入口时不需要回退 `nextpas.core.tls.base`。' \
+require_fixed "$api_ref" '主门面 `nextpas.ssl` 当前也 re-export `TBytesView`；使用 `nextpas.core.tls.encoding` / `nextpas.core.tls.crypto.utils` 的 zero-copy 入口时不需要回退 `nextpas.core.tls.base`。' \
   "API reference must record the main-facade zero-copy supporting type"
 
 mkdir -p "$units_dir" "$bin_dir"

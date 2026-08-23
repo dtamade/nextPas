@@ -31,7 +31,7 @@ guide="docs/guides/STORE_USAGE_GUIDE.md"
 
 echo "[TEST] STORE_USAGE_GUIDE current public import truth"
 
-require_fixed "$guide" "  fafafa.ssl," \
+require_fixed "$guide" "  nextpas.ssl," \
   "STORE_USAGE_GUIDE must use the current public facade import in active examples"
 require_fixed "$guide" "  nextpas.core.tls.winssl.certstore;" \
   "STORE_USAGE_GUIDE must keep the WinSSL certstore helper import for Windows-specific store access"

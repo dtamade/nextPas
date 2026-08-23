@@ -55,7 +55,7 @@ require_fixed "$winssl_matrix" "WriteLn(Cert.GetSubject);" \
   "WinSSL backend matrix must read certificate subjects through GetSubject"
 require_fixed "$winssl_matrix" "  nextpas.core.tls.context.builder;" \
   "WinSSL backend matrix must import the current builder entry when using TSSLContextBuilder"
-require_fixed "$winssl_matrix" "  fafafa.ssl," \
+require_fixed "$winssl_matrix" "  nextpas.ssl," \
   "WinSSL backend matrix must use the current public facade unit in the active certificate-store example"
 
 echo "[PASS] WinSSL store active docs truth contract is satisfied."

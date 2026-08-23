@@ -32,7 +32,7 @@ probe="tests/contract/test_linux_quickstart_public_entry_probe.pas"
 
 echo "[TEST] linux quickstart current public truth contract"
 
-require_fixed "$guide" "  fafafa.ssl;" \
+require_fixed "$guide" "  nextpas.ssl;" \
   "LINUX_QUICKSTART sample must use the public facade unit"
 require_fixed "$guide" "  Lib := TSSLFactory.GetLibraryInstance(sslAutoDetect);" \
   "LINUX_QUICKSTART sample must use current public library entrypoint"
@@ -40,7 +40,7 @@ require_fixed "$guide" "  WriteLn('检测到: ', LibraryTypeToString(Lib.GetLibr
   "LINUX_QUICKSTART sample must use current public backend-name helper"
 require_fixed "$guide" "examples/01_tls_client.pas" \
   "LINUX_QUICKSTART must point to the current TLS client example"
-require_fixed "$guide" "### Q: 编译时报 \"Can't find unit fafafa.ssl\"" \
+require_fixed "$guide" "### Q: 编译时报 \"Can't find unit nextpas.ssl\"" \
   "LINUX_QUICKSTART FAQ must route new users to the public facade unit"
 require_fixed "$guide" "nextpas.core.tls.pas                # 主门面 / 当前普通入口" \
   "LINUX_QUICKSTART project structure must show the current public facade"
@@ -50,9 +50,9 @@ require_fixed "$guide" "nextpas.core.tls.openssl.backed.pas # OpenSSL ISSLLibrar
   "LINUX_QUICKSTART project structure must stop naming a nonexistent OpenSSL facade unit"
 require_fixed "$guide" "**更新日期**: 2026-05-21" \
   "LINUX_QUICKSTART metadata must be current"
-require_fixed "$guide" "**适用版本**: fafafa.ssl v1.5.0" \
+require_fixed "$guide" "**适用版本**: nextpas.ssl v1.5.0" \
   "LINUX_QUICKSTART version metadata must match current release truth"
-require_fixed "$guide" "https://github.com/dtamade/fafafa.ssl/issues" \
+require_fixed "$guide" "https://github.com/dtamade/nextpas.ssl/issues" \
   "LINUX_QUICKSTART GitHub URL must point to the real repository"
 
 require_absent "$guide" "  nextpas.core.tls.factory;" \
@@ -67,9 +67,9 @@ require_absent "$guide" "examples/01_basic_ssl_client.pas" \
   "LINUX_QUICKSTART must stop pointing to the removed basic SSL client example"
 require_absent "$guide" "nextpas.core.tls.openssl.pas" \
   "LINUX_QUICKSTART must stop naming the nonexistent nextpas.core.tls.openssl.pas unit"
-require_absent "$guide" "**适用版本**: fafafa.ssl v1.0.0-rc" \
+require_absent "$guide" "**适用版本**: nextpas.ssl v1.0.0-rc" \
   "LINUX_QUICKSTART must stop advertising the stale v1.0.0-rc snapshot"
-require_absent "$guide" "yourusername/fafafa.ssl" \
+require_absent "$guide" "yourusername/nextpas.ssl" \
   "LINUX_QUICKSTART must stop using placeholder GitHub repository URLs"
 
 mkdir -p tmp/linux_quickstart_public_entry_probe

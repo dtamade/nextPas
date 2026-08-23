@@ -15,9 +15,9 @@ program test_winssl_mtls_skeleton;
  * - 证书链验证
  *
  * 运行条件:
- * - 设置环境变量 FAFAFA_RUN_NETWORK_TESTS=1
- * - 设置 FAFAFA_WINSSL_MTLS_SERVER（目标服务器）
- * - 设置 FAFAFA_WINSSL_CLIENT_CERT_SUBJECT 或 FAFAFA_WINSSL_PFX
+ * - 设置环境变量 NEXTPAS_RUN_NETWORK_TESTS=1
+ * - 设置 NEXTPAS_WINSSL_MTLS_SERVER（目标服务器）
+ * - 设置 NEXTPAS_WINSSL_CLIENT_CERT_SUBJECT 或 NEXTPAS_WINSSL_PFX
  *
  * @author nextpas.core.tls team
  * @version 1.0.0
@@ -176,13 +176,13 @@ begin
   BeginSection('客户端证书查找');
 
   {$IFDEF WINDOWS}
-  if GetEnvironmentVariable('FAFAFA_WINSSL_CLIENT_CERT_SUBJECT') = '' then
+  if GetEnvironmentVariable('NEXTPAS_WINSSL_CLIENT_CERT_SUBJECT') = '' then
   begin
-    Skip('按主题查找证书', 'FAFAFA_WINSSL_CLIENT_CERT_SUBJECT 未设置');
+    Skip('按主题查找证书', 'NEXTPAS_WINSSL_CLIENT_CERT_SUBJECT 未设置');
     Exit;
   end;
 
-  CertSubject := GetEnvironmentVariable('FAFAFA_WINSSL_CLIENT_CERT_SUBJECT');
+  CertSubject := GetEnvironmentVariable('NEXTPAS_WINSSL_CLIENT_CERT_SUBJECT');
 
   Store := OpenSystemStore(SSL_STORE_MY);
   if Store = nil then
@@ -222,14 +222,14 @@ begin
   BeginSection('PFX 证书加载');
 
   {$IFDEF WINDOWS}
-  PFXPath := GetEnvironmentVariable('FAFAFA_WINSSL_PFX');
+  PFXPath := GetEnvironmentVariable('NEXTPAS_WINSSL_PFX');
   if PFXPath = '' then
   begin
-    Skip('PFX 加载测试', 'FAFAFA_WINSSL_PFX 未设置');
+    Skip('PFX 加载测试', 'NEXTPAS_WINSSL_PFX 未设置');
     Exit;
   end;
 
-  PFXPassword := GetEnvironmentVariable('FAFAFA_WINSSL_PFX_PASSWORD');
+  PFXPassword := GetEnvironmentVariable('NEXTPAS_WINSSL_PFX_PASSWORD');
 
   Lib := CreateWinSSLLibrary;
   if not Lib.Initialize then
@@ -315,16 +315,16 @@ begin
   BeginSection('mTLS 握手');
 
   {$IFDEF WINDOWS}
-  if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') <> '1' then
   begin
-    Skip('mTLS 握手测试', 'FAFAFA_RUN_NETWORK_TESTS != 1');
+    Skip('mTLS 握手测试', 'NEXTPAS_RUN_NETWORK_TESTS != 1');
     Exit;
   end;
 
-  ServerHost := GetEnvironmentVariable('FAFAFA_WINSSL_MTLS_SERVER');
+  ServerHost := GetEnvironmentVariable('NEXTPAS_WINSSL_MTLS_SERVER');
   if ServerHost = '' then
   begin
-    Skip('mTLS 握手测试', 'FAFAFA_WINSSL_MTLS_SERVER 未设置');
+    Skip('mTLS 握手测试', 'NEXTPAS_WINSSL_MTLS_SERVER 未设置');
     Exit;
   end;
 
@@ -354,12 +354,12 @@ begin
     Ctx.SetProtocolVersions([sslProtocolTLS12, sslProtocolTLS13]);
 
     // 加载客户端证书
-    if GetEnvironmentVariable('FAFAFA_WINSSL_PFX') <> '' then
+    if GetEnvironmentVariable('NEXTPAS_WINSSL_PFX') <> '' then
     begin
       try
         Ctx.LoadPrivateKey(
-          GetEnvironmentVariable('FAFAFA_WINSSL_PFX'),
-          GetEnvironmentVariable('FAFAFA_WINSSL_PFX_PASSWORD')
+          GetEnvironmentVariable('NEXTPAS_WINSSL_PFX'),
+          GetEnvironmentVariable('NEXTPAS_WINSSL_PFX_PASSWORD')
         );
         Check('加载客户端证书 (PFX)', True);
       except
@@ -372,7 +372,7 @@ begin
     end
     else
     begin
-      Skip('加载客户端证书', '需要设置 FAFAFA_WINSSL_PFX');
+      Skip('加载客户端证书', '需要设置 NEXTPAS_WINSSL_PFX');
       Exit;
     end;
 
@@ -450,11 +450,11 @@ begin
   WriteLn;
   WriteLn('说明:');
   WriteLn('  此测试需要设置以下环境变量:');
-  WriteLn('  - FAFAFA_RUN_NETWORK_TESTS=1 (启用网络测试)');
-  WriteLn('  - FAFAFA_WINSSL_MTLS_SERVER (mTLS 服务器地址)');
-  WriteLn('  - FAFAFA_WINSSL_PFX (客户端 PFX 证书路径)');
-  WriteLn('  - FAFAFA_WINSSL_PFX_PASSWORD (PFX 密码，可选)');
-  WriteLn('  - FAFAFA_WINSSL_CLIENT_CERT_SUBJECT (或使用存储中的证书)');
+  WriteLn('  - NEXTPAS_RUN_NETWORK_TESTS=1 (启用网络测试)');
+  WriteLn('  - NEXTPAS_WINSSL_MTLS_SERVER (mTLS 服务器地址)');
+  WriteLn('  - NEXTPAS_WINSSL_PFX (客户端 PFX 证书路径)');
+  WriteLn('  - NEXTPAS_WINSSL_PFX_PASSWORD (PFX 密码，可选)');
+  WriteLn('  - NEXTPAS_WINSSL_CLIENT_CERT_SUBJECT (或使用存储中的证书)');
   WriteLn;
 
   TestCertificateStoreAccess;

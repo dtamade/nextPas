@@ -45,7 +45,7 @@ require_absent "$platform_doc" "| **FIPS 模式** | 默认构建不发布      |
   "Platform support doc still markets WinSSL FIPS capability as published truth"
 require_present "$platform_doc" "| **FIPS 模式** | 默认构建不发布      | 当前 capability 不发布 |" \
   "Platform support doc no longer records the current OpenSSL/WinSSL FIPS truth"
-require_present "$platform_doc" "OpenSSL 若要进入 FIPS 路线，需要额外的专门模块/构建；当前 fafafa.ssl 默认 OpenSSL backend capability 仍为未发布。" \
+require_present "$platform_doc" "OpenSSL 若要进入 FIPS 路线，需要额外的专门模块/构建；当前 nextpas.ssl 默认 OpenSSL backend capability 仍为未发布。" \
   "Platform support doc no longer records the current OpenSSL FIPS note"
 require_present "$platform_doc" 'WinSSL 目前可检测/遵循 Windows FIPS policy，但 `SupportsFIPSMode` 仍未作为当前 backend capability 发布。' \
   "Platform support doc no longer records the WinSSL FIPS helper-vs-capability boundary"

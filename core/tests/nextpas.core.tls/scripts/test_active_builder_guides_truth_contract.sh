@@ -66,7 +66,7 @@ require_fixed "$security_guide" '.WithVerifyNone               // 危险！' \
   "security best practices guide must use the current insecure verify-disable entrypoint"
 require_fixed "$security_guide" '.WithProtocols([sslProtocolSSL3, sslProtocolTLS10])' \
   "security best practices guide must use current protocol-set API for the weak-protocol anti-example"
-require_fixed "$security_guide" '  fafafa.ssl,' \
+require_fixed "$security_guide" '  nextpas.ssl,' \
   "security best practices guide must keep the current public facade import in active builder examples"
 
 printf '[PASS] active builder guidance truth contract passed\n'

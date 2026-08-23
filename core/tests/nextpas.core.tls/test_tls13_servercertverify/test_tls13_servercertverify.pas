@@ -4331,7 +4331,7 @@ begin
     'baseline signing failed for mixed-PEM tests: ' + LErr
   );
 
-  LUnknownPEM := BuildPEMBlockWithType('FAFAFA UNKNOWN KEY', [$01, $02, $03]);
+  LUnknownPEM := BuildPEMBlockWithType('NEXTPAS UNKNOWN KEY', [$01, $02, $03]);
   LECPRIVATEPEM := BuildPEMBlockWithType('EC PRIVATE KEY', [$01, $02, $03]);
 
   LRSAUnknown := BuildPEMWithMultiplePrivateKeys(LKeyBlob, LUnknownPEM);
@@ -4364,7 +4364,7 @@ begin
     LTranscriptHash[I] := Byte($A0 + I);
   LInput := BuildTLS13ServerCertificateVerifyInputSHA256(LTranscriptHash);
 
-  LUnknownPEM := BuildPEMBlockWithType('FAFAFA UNKNOWN KEY', [$01, $02, $03]);
+  LUnknownPEM := BuildPEMBlockWithType('NEXTPAS UNKNOWN KEY', [$01, $02, $03]);
   LECPRIVATEPEM := BuildPEMBlockWithType('EC PRIVATE KEY', [$01, $02, $03]);
   LPEMNoRSA := BuildPEMWithMultiplePrivateKeys(LECPRIVATEPEM, LUnknownPEM);
 
@@ -4518,7 +4518,7 @@ begin
     'pem-waveg-baseline signing failed: ' + LErr
   );
 
-  LUnknownPEM := BuildPEMBlockWithType('FAFAFA UNKNOWN KEY', [$01, $02, $03]);
+  LUnknownPEM := BuildPEMBlockWithType('NEXTPAS UNKNOWN KEY', [$01, $02, $03]);
   LECPRIVATEPEM := BuildPEMBlockWithType('EC PRIVATE KEY', [$01, $02, $03]);
   LEncryptedPEM := BytesOf('-----BEGIN ENCRYPTED PRIVATE KEY-----' + LineEnding +
     'AQID' + LineEnding +

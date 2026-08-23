@@ -41,9 +41,9 @@ require_fixed "$facade" "TBuildValidationResult = nextpas.core.tls.base.TBuildVa
   "main facade must re-export TBuildValidationResult"
 require_fixed "$facade" "TSSLErrorRecord = nextpas.core.tls.base.TSSLErrorRecord;" \
   "main facade must re-export TSSLErrorRecord"
-require_fixed "$api_ref" '主门面 `fafafa.ssl` 当前也 re-export `TBuildValidationResult`；使用 `nextpas.core.tls.context.builder` 时不需要回退 `nextpas.core.tls.base` 才能接住 `Validate*` / `Build*WithValidation(...)` 的结果。' \
+require_fixed "$api_ref" '主门面 `nextpas.ssl` 当前也 re-export `TBuildValidationResult`；使用 `nextpas.core.tls.context.builder` 时不需要回退 `nextpas.core.tls.base` 才能接住 `Validate*` / `Build*WithValidation(...)` 的结果。' \
   "API reference must record the main-facade builder-validation supporting type"
-require_fixed "$api_ref" '主门面 `fafafa.ssl` 当前也 re-export `TSSLErrorRecord`；与 `TSSLDiagnosticInfo` 一起使用时不需要回退 `nextpas.core.tls.base`。' \
+require_fixed "$api_ref" '主门面 `nextpas.ssl` 当前也 re-export `TSSLErrorRecord`；与 `TSSLDiagnosticInfo` 一起使用时不需要回退 `nextpas.core.tls.base`。' \
   "API reference must record the main-facade diagnostics supporting type"
 
 mkdir -p "$units_dir" "$bin_dir"

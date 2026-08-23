@@ -32,7 +32,7 @@ proof_file="tests/winssl/test_winssl_session_resumption.pas"
 printf '[TEST] WinSSL native-probe worker quarantine contract\n'
 
 require_match "$proof_file" \
-  'FAFAFA_WINSSL_NATIVE_PROBE_CHILD' \
+  'NEXTPAS_WINSSL_NATIVE_PROBE_CHILD' \
   'WinSSL native probe quarantine uses an explicit child-mode switch'
 
 require_match "$proof_file" \

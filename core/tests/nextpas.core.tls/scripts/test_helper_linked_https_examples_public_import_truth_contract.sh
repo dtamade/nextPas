@@ -35,21 +35,21 @@ client_session="examples/https_client/https_client_session.pas"
 
 echo "[TEST] helper-linked https examples public import truth contract"
 
-require_fixed "$server_common" "  fafafa.ssl;" \
+require_fixed "$server_common" "  nextpas.ssl;" \
   "https_server_common must use the public facade unit"
-require_fixed "$server_simple" "  fafafa.ssl," \
+require_fixed "$server_simple" "  nextpas.ssl," \
   "https_server_simple must use the public facade unit alongside its helper"
 require_fixed "$server_simple" "  https_server_common;" \
   "https_server_simple must keep the server helper unit"
-require_fixed "$server_alpn" "  fafafa.ssl," \
+require_fixed "$server_alpn" "  nextpas.ssl," \
   "https_server_alpn must use the public facade unit alongside its helper"
 require_fixed "$server_alpn" "  https_server_common;" \
   "https_server_alpn must keep the server helper unit"
-require_fixed "$server_mtls" "  fafafa.ssl," \
+require_fixed "$server_mtls" "  nextpas.ssl," \
   "https_server_mtls must use the public facade unit alongside its helper"
 require_fixed "$server_mtls" "  https_server_common;" \
   "https_server_mtls must keep the server helper unit"
-require_fixed "$client_session" "  fafafa.ssl," \
+require_fixed "$client_session" "  nextpas.ssl," \
   "https_client_session must use the public facade unit alongside its helper"
 require_fixed "$client_session" "  fafafa.examples.tcp;" \
   "https_client_session must keep the TCP helper unit"

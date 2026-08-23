@@ -46,9 +46,9 @@ var Lib: ISSLLibrary; Ctx: ISSLContext; Conn: ISSLConnection; S: TSocket; ok: Bo
 begin
   WriteLn('=== 主机名不匹配（wrong.host.badssl.com）===');
 
-  if GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS') <> '1' then
   begin
-    Check('跳过网络测试 (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('跳过网络测试 (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     Exit;
   end;
 

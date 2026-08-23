@@ -33,11 +33,11 @@ security_demo="examples/security_enhancements_demo.pas"
 
 echo "[TEST] security entry examples public import truth contract"
 
-require_fixed "$simple_test" "  fafafa.ssl," \
+require_fixed "$simple_test" "  nextpas.ssl," \
   "simple_test must use the public facade unit alongside helper units"
 require_fixed "$cert_pinning_simple" "nextpas.core.tls.cert.pinning" \
   "example_cert_pinning_simple must keep the specialized pinning unit"
-require_fixed "$security_demo" "  fafafa.ssl," \
+require_fixed "$security_demo" "  nextpas.ssl," \
   "security_enhancements_demo must use the public facade unit"
 require_fixed "$security_demo" "nextpas.core.tls.context.builder" \
   "security_enhancements_demo must keep the current builder unit"

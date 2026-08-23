@@ -37,39 +37,39 @@ winssl_fips="examples/09_winssl_fips.pas"
 
 echo "[TEST] specialized / utility examples public import truth contract"
 
-require_fixed "$example_cert_pinning" "  fafafa.ssl," \
+require_fixed "$example_cert_pinning" "  nextpas.ssl," \
   "example_cert_pinning must use the public facade unit"
 require_fixed "$example_cert_pinning" "  nextpas.core.tls.cert.pinning;" \
   "example_cert_pinning must keep the pinning owner unit"
 
-require_fixed "$example_error_handling" "  fafafa.ssl," \
+require_fixed "$example_error_handling" "  nextpas.ssl," \
   "example_error_handling must use the public facade unit"
 require_fixed "$example_error_handling" "  nextpas.core.tls.exceptions;" \
   "example_error_handling must keep the exceptions owner unit"
 
-require_fixed "$example_result_type" "  fafafa.ssl," \
+require_fixed "$example_result_type" "  nextpas.ssl," \
   "example_result_type must use the public facade unit"
 require_fixed "$example_result_type" "  nextpas.core.tls.crypto.utils," \
   "example_result_type must keep crypto owner unit"
 
-require_fixed "$example_streaming_operations" "  fafafa.ssl," \
+require_fixed "$example_streaming_operations" "  nextpas.ssl," \
   "example_streaming_operations must use the public facade unit for TBytesView"
 require_fixed "$example_streaming_operations" "  nextpas.core.tls.crypto.utils," \
   "example_streaming_operations must keep crypto owner unit"
 require_fixed "$example_streaming_operations" "  nextpas.core.tls.encoding;" \
   "example_streaming_operations must keep encoding owner unit"
 
-require_fixed "$test_ssl_context" "  fafafa.ssl," \
+require_fixed "$test_ssl_context" "  nextpas.ssl," \
   "test_ssl_context must use the public facade unit"
 require_fixed "$test_ssl_context" "  nextpas.core.tls.openssl.backed," \
   "test_ssl_context must keep OpenSSL backend owner unit"
 
-require_fixed "$generate_certificate" "  fafafa.ssl," \
+require_fixed "$generate_certificate" "  nextpas.ssl," \
   "02_generate_certificate must use the public facade unit"
 require_fixed "$generate_certificate" "  nextpas.core.tls.openssl.backed," \
   "02_generate_certificate must keep OpenSSL backend owner unit"
 
-require_fixed "$winssl_fips" "  WriteLn('    fafafa.ssl;');" \
+require_fixed "$winssl_fips" "  WriteLn('    nextpas.ssl;');" \
   "09_winssl_fips must print the public facade import guidance"
 require_absent "$winssl_fips" "nextpas.core.tls.factory," \
   "09_winssl_fips must stop printing factory split-import guidance"

@@ -35,9 +35,9 @@ if [[ "$exit_code" -ne 0 ]]; then
   exit 1
 fi
 
-if printf '%s\n' "$output" | rg -n --quiet 'fafafa\.ssl\.tls\.pas\([^)]*\) Warning:'; then
+if printf '%s\n' "$output" | rg -n --quiet 'nextpas\.core\.tls\.tls\.pas\([^)]*\) Warning:'; then
   echo "[FAIL] nextpas.core.tls.tls should compile without file-local warnings"
-  printf '%s\n' "$output" | rg -n 'fafafa\.ssl\.tls\.pas\([^)]*\) Warning:' || true
+  printf '%s\n' "$output" | rg -n 'nextpas\.core\.tls\.tls\.pas\([^)]*\) Warning:' || true
   exit 1
 fi
 

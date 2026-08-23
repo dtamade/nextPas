@@ -50,7 +50,7 @@ require_fixed "$pem_unit" "function LoadCertificateFromPEM(const AFileName: stri
 
 require_fixed "$guide" "推荐入口分两层：" \
   "PKCS12 guide must explicitly distinguish helper-vs-raw entrypoints"
-require_fixed "$guide" '- 高入口 helper：`fafafa.ssl` / `TPKCS12Manager` / `DefaultPKCS12Options`' \
+require_fixed "$guide" '- 高入口 helper：`nextpas.ssl` / `TPKCS12Manager` / `DefaultPKCS12Options`' \
   "PKCS12 guide must publish the high-level helper entrypoint"
 require_fixed "$guide" '- OpenSSL raw API：`nextpas.core.tls.openssl.api.pkcs12` + `nextpas.core.tls.openssl.api.pem`' \
   "PKCS12 guide must publish the raw OpenSSL API entrypoint"

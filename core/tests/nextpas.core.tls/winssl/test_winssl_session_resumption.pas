@@ -20,7 +20,7 @@ var
 
 const
   ResumeMarkerPrefix = '[WINSSL-SESSION-RESUME] ';
-  NativeProbeChildEnv = 'FAFAFA_WINSSL_NATIVE_PROBE_CHILD';
+  NativeProbeChildEnv = 'NEXTPAS_WINSSL_NATIVE_PROBE_CHILD';
 
 type
   TQueryContextAttributesExCandidate = record
@@ -43,7 +43,7 @@ var
 
 function ResolveSessionHost: string;
 begin
-  Result := Trim(GetEnvironmentVariable('FAFAFA_WINSSL_SESSION_HOST'));
+  Result := Trim(GetEnvironmentVariable('NEXTPAS_WINSSL_SESSION_HOST'));
   if Result = '' then
     Result := 'www.cloudflare.com';
 end;
@@ -288,16 +288,16 @@ begin
   AProbeSucceeded := False;
   ALastMarker := 'none';
 
-  LOriginalHost := GetEnvironmentVariable('FAFAFA_WINSSL_SESSION_HOST');
-  LOriginalAttempts := GetEnvironmentVariable('FAFAFA_WINSSL_SESSION_ATTEMPTS');
-  LOriginalRunNet := GetEnvironmentVariable('FAFAFA_RUN_NETWORK_TESTS');
-  LOriginalProbeEnabled := GetEnvironmentVariable('FAFAFA_WINSSL_ENABLE_NATIVE_PROBE');
+  LOriginalHost := GetEnvironmentVariable('NEXTPAS_WINSSL_SESSION_HOST');
+  LOriginalAttempts := GetEnvironmentVariable('NEXTPAS_WINSSL_SESSION_ATTEMPTS');
+  LOriginalRunNet := GetEnvironmentVariable('NEXTPAS_RUN_NETWORK_TESTS');
+  LOriginalProbeEnabled := GetEnvironmentVariable('NEXTPAS_WINSSL_ENABLE_NATIVE_PROBE');
   LOriginalChildMode := GetEnvironmentVariable(NativeProbeChildEnv);
 
-  SetProcessEnvironment('FAFAFA_WINSSL_SESSION_HOST', AHost);
-  SetProcessEnvironment('FAFAFA_WINSSL_SESSION_ATTEMPTS', IntToStr(AAttemptCount));
-  SetProcessEnvironment('FAFAFA_RUN_NETWORK_TESTS', '1');
-  SetProcessEnvironment('FAFAFA_WINSSL_ENABLE_NATIVE_PROBE', '1');
+  SetProcessEnvironment('NEXTPAS_WINSSL_SESSION_HOST', AHost);
+  SetProcessEnvironment('NEXTPAS_WINSSL_SESSION_ATTEMPTS', IntToStr(AAttemptCount));
+  SetProcessEnvironment('NEXTPAS_RUN_NETWORK_TESTS', '1');
+  SetProcessEnvironment('NEXTPAS_WINSSL_ENABLE_NATIVE_PROBE', '1');
   SetProcessEnvironment(NativeProbeChildEnv, '1');
 
   LProcess := TProcess.Create(nil);
@@ -323,10 +323,10 @@ begin
   end;
   LProcess.Free;
 
-  SetProcessEnvironment('FAFAFA_WINSSL_SESSION_HOST', LOriginalHost);
-  SetProcessEnvironment('FAFAFA_WINSSL_SESSION_ATTEMPTS', LOriginalAttempts);
-  SetProcessEnvironment('FAFAFA_RUN_NETWORK_TESTS', LOriginalRunNet);
-  SetProcessEnvironment('FAFAFA_WINSSL_ENABLE_NATIVE_PROBE', LOriginalProbeEnabled);
+  SetProcessEnvironment('NEXTPAS_WINSSL_SESSION_HOST', LOriginalHost);
+  SetProcessEnvironment('NEXTPAS_WINSSL_SESSION_ATTEMPTS', LOriginalAttempts);
+  SetProcessEnvironment('NEXTPAS_RUN_NETWORK_TESTS', LOriginalRunNet);
+  SetProcessEnvironment('NEXTPAS_WINSSL_ENABLE_NATIVE_PROBE', LOriginalProbeEnabled);
   SetProcessEnvironment(NativeProbeChildEnv, LOriginalChildMode);
 
   LOutputLines := TStringList.Create;
@@ -592,20 +592,20 @@ var
 begin
   BeginSection('WinSSL session resumption truth');
 
-  LRunNet := EnvEnabled('FAFAFA_RUN_NETWORK_TESTS');
+  LRunNet := EnvEnabled('NEXTPAS_RUN_NETWORK_TESTS');
   if not LRunNet then
   begin
-    Check('skip network test (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('skip network test (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     EmitResumeMarker('summary skipped=true reason=network_gate');
     Exit;
   end;
 
-  LAttemptCount := EnvInt('FAFAFA_WINSSL_SESSION_ATTEMPTS', 4);
+  LAttemptCount := EnvInt('NEXTPAS_WINSSL_SESSION_ATTEMPTS', 4);
   if LAttemptCount < 1 then
     LAttemptCount := 1;
-  LRequireReuse := EnvEnabled('FAFAFA_WINSSL_REQUIRE_REUSE');
-  LRequireNativeReuse := EnvEnabled('FAFAFA_WINSSL_REQUIRE_NATIVE_REUSE');
-  LNativeProbeEnabled := EnvEnabled('FAFAFA_WINSSL_ENABLE_NATIVE_PROBE') or
+  LRequireReuse := EnvEnabled('NEXTPAS_WINSSL_REQUIRE_REUSE');
+  LRequireNativeReuse := EnvEnabled('NEXTPAS_WINSSL_REQUIRE_NATIVE_REUSE');
+  LNativeProbeEnabled := EnvEnabled('NEXTPAS_WINSSL_ENABLE_NATIVE_PROBE') or
     LRequireNativeReuse;
   LNativeProbeChildMode := IsNativeProbeChildMode;
   LObservedReuse := False;

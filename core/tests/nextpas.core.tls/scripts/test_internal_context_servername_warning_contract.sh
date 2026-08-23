@@ -20,8 +20,8 @@ fpc -B -Fu./src -Fu./tests -Fu./tests/framework \
   tests/contract/test_capabilities_contract.pas >"$log_file" 2>&1
 
 declare -a patterns=(
-  'fafafa\.ssl\.wolfssl\.connection\.pas\([0-9]+,[0-9]+\) Warning: Symbol "ISSLContext\.GetServerName" is deprecated'
-  'fafafa\.ssl\.mbedtls\.connection\.pas\([0-9]+,[0-9]+\) Warning: Symbol "ISSLContext\.GetServerName" is deprecated'
+  'nextpas\.core\.tls\.wolfssl\.connection\.pas\([0-9]+,[0-9]+\) Warning: Symbol "ISSLContext\.GetServerName" is deprecated'
+  'nextpas\.core\.tls\.mbedtls\.connection\.pas\([0-9]+,[0-9]+\) Warning: Symbol "ISSLContext\.GetServerName" is deprecated'
 )
 
 for pattern in "${patterns[@]}"; do

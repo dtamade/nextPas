@@ -52,7 +52,7 @@ begin
   WriteLn;
   WriteLn('=== PEM encrypted private key cipher symbol guard ===');
 
-  LTempOut := GetTempDir(False) + 'fafafa_pem_encrypted_privatekey_cipher_symbol_contract.pem';
+  LTempOut := GetTempDir(False) + 'nextpas_pem_encrypted_privatekey_cipher_symbol_contract.pem';
   LOriginalEVPAes256Cbc := EVP_aes_256_cbc;
   LRaised := False;
   LDetail := '';

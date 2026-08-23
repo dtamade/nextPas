@@ -20,7 +20,7 @@ text = workflow.read_text(encoding="utf-8")
 
 required_fragments = [
     'name: 🧾 Linux CI Result Summary',
-    'echo "## 🐧 fafafa.ssl Linux CI Result" >> $GITHUB_STEP_SUMMARY',
+    'echo "## 🐧 nextpas.ssl Linux CI Result" >> $GITHUB_STEP_SUMMARY',
     'echo "- Build & Test job result: ${{ needs.build-and-test.result }}" >> $GITHUB_STEP_SUMMARY',
     'echo "- Scope: ubuntu-latest build-and-test lane from this run only." >> $GITHUB_STEP_SUMMARY',
     'echo "- Review the \\`build-and-test\\` logs and \\`test-results-linux\\` artifact for details." >> $GITHUB_STEP_SUMMARY',

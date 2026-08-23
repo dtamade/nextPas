@@ -66,10 +66,10 @@ require_fixed "$BACKEND_MATRIX" \
   "Top-level matrix must keep WolfSSL server-OCSP public-surface truth"
 
 require_fixed "$WINSSL_MATRIX" \
-  "| OCSP Stapling | ❌ 当前 capability 不发布 | Schannel 可能存在系统级自动行为；但 fafafa.ssl 当前 \`OCSPStaplingSupport=sslSupportNone\`，且不暴露 \`ISSLServerOCSPStaplingContext\` |" \
+  "| OCSP Stapling | ❌ 当前 capability 不发布 | Schannel 可能存在系统级自动行为；但 nextpas.ssl 当前 \`OCSPStaplingSupport=sslSupportNone\`，且不暴露 \`ISSLServerOCSPStaplingContext\` |" \
   "WinSSL dedicated matrix must keep server-OCSP none-published truth"
 require_fixed "$WINSSL_MATRIX" \
-  "| 0-RTT          | ❌ 当前 capability 不发布 | Windows Schannel 可能存在 TLS 1.3 / early-data 平台潜力；但 fafafa.ssl 当前 \`EarlyDataSupport=sslSupportNone\`，且不暴露 \`ISSLEarlyDataContext\` |" \
+  "| 0-RTT          | ❌ 当前 capability 不发布 | Windows Schannel 可能存在 TLS 1.3 / early-data 平台潜力；但 nextpas.ssl 当前 \`EarlyDataSupport=sslSupportNone\`，且不暴露 \`ISSLEarlyDataContext\` |" \
   "WinSSL dedicated matrix must keep early-data none-published truth"
 
 require_fixed "$MBEDTLS_MATRIX" \

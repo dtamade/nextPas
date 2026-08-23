@@ -44,7 +44,7 @@ var
   Candidate: string;
   ParentDir: string;
 begin
-  RootHint := GetEnvironmentVariable('FAFAFA_PROJECT_ROOT');
+  RootHint := GetEnvironmentVariable('NEXTPAS_PROJECT_ROOT');
   if RootHint <> '' then
   begin
     Candidate := ExpandFileName(IncludeTrailingPathDelimiter(RootHint) + ARelativePath);

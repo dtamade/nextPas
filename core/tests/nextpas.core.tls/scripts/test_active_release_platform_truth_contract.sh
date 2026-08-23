@@ -59,7 +59,7 @@ require("## 历史快照：v1.0.0" in texts["release"],
         "RELEASE_NOTES keeps v1.0.0 only as historical snapshot")
 
 for stale in [
-    "# fafafa.ssl v1.0.0 - Release Notes",
+    "# nextpas.ssl v1.0.0 - Release Notes",
     "**版本**: 1.0.0 (Production Ready)",
     "**状态**: ✅ 生产环境就绪 (99.5%)",
 ]:

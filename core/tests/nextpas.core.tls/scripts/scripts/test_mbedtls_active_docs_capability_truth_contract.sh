@@ -38,7 +38,7 @@ require_fixed "$mbedtls_matrix" "| 0-RTT | ❌ 当前 capability 不发布 | 当
   "MbedTLS matrix must stop implying published 0-RTT support"
 require_fixed "$mbedtls_matrix" "| 自定义 I/O | ❌ 当前 public callback surface 不发布 | 当前 transport path 仅使用内置 socket/stream BIO wiring，不提供 caller-supplied I/O callback seam |" \
   "MbedTLS matrix must stop implying published custom I/O callbacks"
-require_fixed "$mbedtls_matrix" "  fafafa.ssl," \
+require_fixed "$mbedtls_matrix" "  nextpas.ssl," \
   "MbedTLS matrix backend identifier example must use the current public facade unit"
 require_fixed "$mbedtls_matrix" "  nextpas.core.tls.context.builder;" \
   "MbedTLS matrix backend identifier example must import the current builder entry"
@@ -59,7 +59,7 @@ require_fixed "$mbedtls_guide" 'MbedTLS 与其它 backend 共享统一核心接�
   "MbedTLS guide must explain backend-specific capability truth"
 require_fixed "$mbedtls_guide" '当前 `SupportsCallbacks=False`：verify / password / info callback 的 non-nil assignment 会 fail-closed `unsupported`。' \
   "MbedTLS guide must record callback publication truth"
-require_fixed "$mbedtls_guide" '当前 `SupportsFIPSMode=False`：不要把上游 Mbed TLS 的认证/商业版本能力当成 fafafa.ssl 当前 backend truth。' \
+require_fixed "$mbedtls_guide" '当前 `SupportsFIPSMode=False`：不要把上游 Mbed TLS 的认证/商业版本能力当成 nextpas.ssl 当前 backend truth。' \
   "MbedTLS guide must record current FIPS capability truth"
 require_fixed "$mbedtls_guide" '当前不发布 `ISSLEarlyDataContext / ISSLEarlyDataConnection` public surface；0-RTT 应视为 current capability none。' \
   "MbedTLS guide must record current 0-RTT publication truth"

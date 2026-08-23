@@ -66,7 +66,7 @@ assert_not_contains "$DOC" \
   "ZERO_DEPENDENCY_DEPLOYMENT still publishes fixed performance numbers as long-term truth"
 
 assert_contains "$DOC" \
-  "fafafa.ssl;" \
+  "nextpas.ssl;" \
   "ZERO_DEPENDENCY_DEPLOYMENT should use the current facade import"
 assert_contains "$DOC" \
   "Lib := TSSLFactory.GetLibraryInstance(sslWinSSL);" \

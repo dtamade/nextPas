@@ -189,9 +189,9 @@ var
   oV, wV: Integer;
 begin
   WriteLn('=== 跨后端一致性（合同）===');
-  runNet := EnvEnabled('FAFAFA_RUN_NETWORK_TESTS');
+  runNet := EnvEnabled('NEXTPAS_RUN_NETWORK_TESTS');
   if not runNet then begin
-    Check('跳过网络测试 (FAFAFA_RUN_NETWORK_TESTS!=1)', True);
+    Check('跳过网络测试 (NEXTPAS_RUN_NETWORK_TESTS!=1)', True);
     Exit;
   end;
 

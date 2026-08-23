@@ -36,7 +36,7 @@ try:
 except IndexError:
     require(False, "backend selection guide quickstart headings changed unexpectedly")
 
-require("  fafafa.ssl," in builder, "builder quickstart must use the current public facade import")
+require("  nextpas.ssl," in builder, "builder quickstart must use the current public facade import")
 require("  nextpas.core.tls.context.builder;" in builder, "builder quickstart must keep the builder unit import")
 require("  Ctx: ISSLContext;" in builder, "builder quickstart must keep the current facade-exposed ISSLContext type")
 require("nextpas.core.tls.base," not in builder, "builder quickstart must stop teaching direct base-unit imports")

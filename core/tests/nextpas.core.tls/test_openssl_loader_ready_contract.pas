@@ -87,7 +87,7 @@ begin
     Exit;
   end;
 
-  LMissingSymbol := 'fafafa_required_symbol_that_must_not_exist';
+  LMissingSymbol := 'nextpas_required_symbol_that_must_not_exist';
 
   LBindings[0].Name := 'AES_encrypt';
   LBindings[0].FuncPtr := @LPresent;

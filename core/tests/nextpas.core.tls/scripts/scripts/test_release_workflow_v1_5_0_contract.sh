@@ -141,9 +141,9 @@ for workflow in ".github/workflows/release.yml" ".github/workflows/release.yml.d
     "$workflow rejects versions other than v1.5.0"
   require_match "$workflow" 'git rev-parse -q --verify "refs/tags/\$VERSION"' \
     "$workflow requires an existing approved tag"
-  require_match "$workflow" "FAFAFA_SSL_VERSION_STRING = '1\\.5\\.0'" \
+  require_match "$workflow" "NEXTPAS_SSL_VERSION_STRING = '1\\.5\\.0'" \
     "$workflow verifies source version string"
-  require_match "$workflow" 'FAFAFA_SSL_INTERFACE_VERSION = 10500' \
+  require_match "$workflow" 'NEXTPAS_SSL_INTERFACE_VERSION = 10500' \
     "$workflow verifies interface version"
   require_match "$workflow" '<Version Major="1" Minor="5" Release="0" Build="0"/>' \
     "$workflow verifies Lazarus package version"
@@ -219,11 +219,11 @@ for workflow in ".github/workflows/release.yml" ".github/workflows/release.yml.d
     "$workflow no longer contains placeholder GitHub URLs"
 done
 
-require_fixed "src/nextpas.core.tls.base.pas" "FAFAFA_SSL_VERSION_STRING = '1.5.0';" \
+require_fixed "src/nextpas.core.tls.base.pas" "NEXTPAS_SSL_VERSION_STRING = '1.5.0';" \
   "source version string is v1.5.0"
-require_fixed "src/nextpas.core.tls.base.pas" "FAFAFA_SSL_INTERFACE_VERSION = 10500;" \
+require_fixed "src/nextpas.core.tls.base.pas" "NEXTPAS_SSL_INTERFACE_VERSION = 10500;" \
   "source interface version is 10500"
-require_fixed "fafafa_ssl.lpk" '<Version Major="1" Minor="5" Release="0" Build="0"/>' \
+require_fixed "nextpas_ssl.lpk" '<Version Major="1" Minor="5" Release="0" Build="0"/>' \
   "Lazarus package version is 1.5.0"
 require_fixed "README.md" "Version-v1.5.0" \
   "README version badge is v1.5.0"
@@ -237,7 +237,7 @@ require_fixed "CHANGELOG.md" "## [Unreleased]" \
   "CHANGELOG keeps a fresh Unreleased section"
 require_fixed "CHANGELOG.md" "## [1.5.0] - 2026-05-12" \
   "CHANGELOG has a v1.5.0 release section"
-require_fixed "RELEASE_NOTES_V1.5.0.md" "FAFAFA_SSL_INTERFACE_VERSION = 10500" \
+require_fixed "RELEASE_NOTES_V1.5.0.md" "NEXTPAS_SSL_INTERFACE_VERSION = 10500" \
   "release notes record interface version"
 require_fixed "RELEASE_NOTES_V1.5.0.md" "TSSLFactory.*" \
   "release notes document TSSLFactory migration"

@@ -1,7 +1,7 @@
 # BN (Big Number) Integration Test Report
 
 **Date:** 2025-01-28  
-**Module:** `fafafa.ssl.openssl.bn`  
+**Module:** `nextpas.ssl.openssl.bn`  
 **Test File:** `test_bn_simple.pas`  
 **Status:** ✅ **ALL TESTS PASSED**
 
@@ -70,9 +70,9 @@
 ## Technical Details
 
 ### Dependencies
-- `fafafa.ssl.openssl.core` - Core library loading
-- `fafafa.ssl.openssl.bn` - Big number operations
-- `fafafa.ssl.openssl.crypto` - Memory management
+- `nextpas.ssl.openssl.core` - Core library loading
+- `nextpas.ssl.openssl.bn` - Big number operations
+- `nextpas.ssl.openssl.crypto` - Memory management
 
 ### OpenSSL Version
 - **Loaded:** OpenSSL 3.x

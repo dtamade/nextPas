@@ -49,7 +49,7 @@ require_fixed "$WINSSL_QUICKSTART" "│       │   ├── nextpas.core.tls.f
   "WINSSL_QUICKSTART tree must classify nextpas.core.tls.factory.pas correctly"
 require_fixed "$WINSSL_QUICKSTART" "│       │   ├── nextpas.core.tls.base.pas           # 底层 source truth / supporting types" \
   "WINSSL_QUICKSTART tree must classify nextpas.core.tls.base.pas as source-truth owner"
-require_absent_regex "$WINSSL_QUICKSTART" '^│       │   ├── fafafa\.ssl\.base\.pas$' \
+require_absent_regex "$WINSSL_QUICKSTART" '^│       │   ├── nextpas\.core\.tls\.base\.pas$' \
   "WINSSL_QUICKSTART must stop leaving nextpas.core.tls.base.pas unlabeled in the structure snippet"
 
 require_fixed "$AGENTS_DOC" '主门面入口是 `src/nextpas.core.tls.pas`，推荐 builder 入口是 `src/nextpas.core.tls.context.builder.pas`；`src/nextpas.core.tls.base.pas` 主要承载底层 source truth / supporting types。' \

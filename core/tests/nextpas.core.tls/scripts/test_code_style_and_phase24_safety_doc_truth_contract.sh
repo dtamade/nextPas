@@ -25,7 +25,7 @@ require_absent_in() {
 
 require_contains_in "$STYLE_DOC" 'LContext.CreateConnection(YourConnectedSocket)'
 require_absent_in "$STYLE_DOC" 'LContext.CreateConnection;'
-require_contains_in "$STYLE_DOC" '  fafafa.ssl,'
+require_contains_in "$STYLE_DOC" '  nextpas.ssl,'
 require_contains_in "$STYLE_DOC" '  nextpas.core.tls.context.builder;'
 require_absent_in "$STYLE_DOC" 'nextpas.core.tls.base;'
 

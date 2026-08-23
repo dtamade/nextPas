@@ -36,7 +36,7 @@ require_fixed '这里直接回到 `CreateConnection(...)`，是因为 `ISSLEarly
   "$guide" \
   "EARLY_DATA_GUIDE must explain why it intentionally uses context/connection owner surfaces"
 
-uses_count="$( (rg -F -- 'uses fafafa.ssl;' "$guide" || true) | wc -l | tr -d ' ' )"
+uses_count="$( (rg -F -- 'uses nextpas.ssl;' "$guide" || true) | wc -l | tr -d ' ' )"
 if [[ "$uses_count" != "2" ]]; then
   echo "[FAIL] EARLY_DATA_GUIDE must use the current public facade unit in both active early-data examples"
   echo "[INFO] expected 2 facade import lines, found: $uses_count"

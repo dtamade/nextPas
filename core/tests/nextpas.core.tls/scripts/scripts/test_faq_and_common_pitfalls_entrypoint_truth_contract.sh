@@ -46,7 +46,7 @@ assert_not_contains "$PITFALLS" \
   "COMMON_PITFALLS still teaches the removed singleton custom-path API"
 
 assert_contains "$FAQ" \
-  '普通新代码推荐直接 `uses fafafa.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS；只有在你明确固定某个 backend 时，才需要关心 backend-specific 依赖。' \
+  '普通新代码推荐直接 `uses nextpas.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS；只有在你明确固定某个 backend 时，才需要关心 backend-specific 依赖。' \
   "FAQ should teach the current preferred entrypoint"
 assert_contains "$FAQ" \
   'Windows 可以直接使用 `WinSSL` backend，不要求安装 OpenSSL。' \
@@ -61,7 +61,7 @@ assert_contains "$FAQ" \
   "SetCustomLibraryPaths('/custom/path/libcrypto.so', '/custom/path/libssl.so');" \
   "FAQ should document the current OpenSSL-specific custom-path fallback"
 assert_contains "$FAQ" \
-  "https://github.com/dtamade/fafafa.ssl/issues" \
+  "https://github.com/dtamade/nextpas.ssl/issues" \
   "FAQ should link to the live repository issues URL"
 assert_contains "$FAQ" \
   '[QUICKSTART.md](QUICKSTART.md)' \
@@ -70,7 +70,7 @@ assert_contains "$FAQ" \
   '[API_REFERENCE.md](../reference/API_REFERENCE.md)' \
   "FAQ should link to the live API reference doc"
 assert_contains "$FAQ" \
-  "本FAQ基于fafafa.ssl v1.5.0。" \
+  "本FAQ基于nextpas.ssl v1.5.0。" \
   "FAQ should reflect the current shipped version line"
 assert_not_contains "$FAQ" \
   "yourusername" \

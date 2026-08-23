@@ -32,13 +32,13 @@ require_fixed "$facade" "TSSLStringArray = nextpas.core.tls.base.TSSLStringArray
   "main facade must re-export TSSLStringArray"
 require_fixed "$facade" "TSSLCertVerifyResult = nextpas.core.tls.base.TSSLCertVerifyResult;" \
   "main facade must re-export TSSLCertVerifyResult"
-require_fixed "$api_ref" '`fafafa.ssl` 主门面当前也 re-export 证书 public surface 常用 supporting types（如 `TSSLStringArray` / `TSSLCertVerifyResult` / `TSSLCertVerifyFlags`）。' \
+require_fixed "$api_ref" '`nextpas.ssl` 主门面当前也 re-export 证书 public surface 常用 supporting types（如 `TSSLStringArray` / `TSSLCertVerifyResult` / `TSSLCertVerifyFlags`）。' \
   "API reference must record the main facade certificate supporting-type coverage"
 
 mkdir -p "$units_dir" "$bin_dir"
 fpc -B -Fu./src -Fu./tests -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
-  fail "facade certificate supporting-type contract source must compile through uses fafafa.ssl"
+  fail "facade certificate supporting-type contract source must compile through uses nextpas.ssl"
 fi
 
 "$binary"

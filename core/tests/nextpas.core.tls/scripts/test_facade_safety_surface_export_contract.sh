@@ -36,17 +36,17 @@ require_fixed "$facade" "TKeySize = nextpas.core.tls.safety.TKeySize;" \
   "main facade must re-export TKeySize"
 require_fixed "$facade" "function SSLVersionToString(AVersion: TSSLVersion): string;" \
   "main facade must forward SSLVersionToString"
-require_fixed "$api_ref" '`fafafa.ssl` 主门面当前也 re-export 这组 non-generic type-safety public surface（如 `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize`）；`TSecureData<T>` / `TResult<T, E>` 继续保留在 `nextpas.core.tls.safety`。' \
+require_fixed "$api_ref" '`nextpas.ssl` 主门面当前也 re-export 这组 non-generic type-safety public surface（如 `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize`）；`TSecureData<T>` / `TResult<T, E>` 继续保留在 `nextpas.core.tls.safety`。' \
   "API reference must record the main facade type-safety surface coverage"
-require_fixed "$readme" '`fafafa.ssl` 主门面当前也 re-export `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize` 这组 non-generic type-safety surface；`TSecureData<T>` / `TResult<T, E>` 继续保留在 `nextpas.core.tls.safety`。' \
+require_fixed "$readme" '`nextpas.ssl` 主门面当前也 re-export `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize` 这组 non-generic type-safety surface；`TSecureData<T>` / `TResult<T, E>` 继续保留在 `nextpas.core.tls.safety`。' \
   "README must mention the current facade type-safety surface"
-require_fixed "$migration" '如果你在新代码里要直接使用 `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize`，当前可以直接从 `fafafa.ssl` 取得；若你要使用 `TSecureData<T>` / `TResult<T, E>` 这组 generic pattern，则继续单独 `uses nextpas.core.tls.safety`。' \
+require_fixed "$migration" '如果你在新代码里要直接使用 `TSSLVersion` / `TKeySize` / `TTimeoutDuration` / `TBufferSize`，当前可以直接从 `nextpas.ssl` 取得；若你要使用 `TSecureData<T>` / `TResult<T, E>` 这组 generic pattern，则继续单独 `uses nextpas.core.tls.safety`。' \
   "migration guide must explain current safety-surface entrypoints"
 
 mkdir -p "$units_dir" "$bin_dir"
 fpc -B -Fu./src -Fu./tests -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
-  fail "facade safety-surface contract source must compile through uses fafafa.ssl"
+  fail "facade safety-surface contract source must compile through uses nextpas.ssl"
 fi
 
 "$binary"

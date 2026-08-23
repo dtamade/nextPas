@@ -15,7 +15,7 @@ def require(cond: bool, msg: str) -> None:
         raise SystemExit(1)
 
 require(
-    "本节前两个主场景优先展示当前普通新代码入口：`uses fafafa.ssl, nextpas.core.tls.context.builder;` + `TSSLContextBuilder` / `TSSLConnector` / `TSSLAcceptor` / `TSSLStream`。" in doc,
+    "本节前两个主场景优先展示当前普通新代码入口：`uses nextpas.ssl, nextpas.core.tls.context.builder;` + `TSSLContextBuilder` / `TSSLConnector` / `TSSLAcceptor` / `TSSLStream`。" in doc,
     "USER_GUIDE must explicitly declare the ordinary-user main entrypoint for the first two scenarios",
 )
 require(

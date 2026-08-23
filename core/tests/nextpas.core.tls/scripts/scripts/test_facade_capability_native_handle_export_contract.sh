@@ -56,13 +56,13 @@ require_fixed "$facade" "function IsFeatureStable(ASupport: TSSLFeatureSupportLe
   "main facade must declare IsFeatureStable"
 require_fixed "$facade" "function GetCapabilitiesDescription(const ACaps: TSSLBackendCapabilities): string;" \
   "main facade must declare GetCapabilitiesDescription"
-require_fixed "$api_ref" '`fafafa.ssl` 主门面当前也 re-export `ISSLNativeHandleAccess` 与 capability helper surface（如 `TSSLBackendCapabilities` / `IsFeatureStable(...)` / `GetCapabilitiesDescription(...)`）。' \
+require_fixed "$api_ref" '`nextpas.ssl` 主门面当前也 re-export `ISSLNativeHandleAccess` 与 capability helper surface（如 `TSSLBackendCapabilities` / `IsFeatureStable(...)` / `GetCapabilitiesDescription(...)`）。' \
   "API reference must record the main facade capability/native-handle coverage"
 
 mkdir -p "$units_dir" "$bin_dir"
 fpc -B -Fu./src -Fu./tests -FU"$units_dir" -FE"$bin_dir" -o"$binary" "$contract_src" >/dev/null
 if [[ ! -x "$binary" ]]; then
-  fail "facade capability/native-handle contract source must compile through uses fafafa.ssl"
+  fail "facade capability/native-handle contract source must compile through uses nextpas.ssl"
 fi
 
 "$binary"

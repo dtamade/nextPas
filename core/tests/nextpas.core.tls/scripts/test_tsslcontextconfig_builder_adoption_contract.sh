@@ -24,7 +24,7 @@ build_root="tmp/test_tsslcontextconfig_builder_adoption"
 units_dir="$build_root/units"
 bin_dir="$build_root/bin"
 binary="$bin_dir/test_context_builder_try"
-fpc_exe="${FAFAFA_FPC_EXE:-fpc}"
+fpc_exe="${NEXTPAS_FPC_EXE:-fpc}"
 
 printf '[TEST] TSSLContextConfig builder adoption contract\n'
 

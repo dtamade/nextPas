@@ -147,7 +147,7 @@ begin
     'FreePascal certificate should reject PEM payload without CERTIFICATE block type');
 
   LScanDir := IncludeTrailingPathDelimiter(GetTempDir(False)) +
-    'fafafa_fp_store_scan_' + IntToStr(Int64(GetTickCount64));
+    'nextpas_fp_store_scan_' + IntToStr(Int64(GetTickCount64));
   AssertTrue(ForceDirectories(LScanDir),
     'Temporary directory for LoadFromPath filtering contract should be created');
 

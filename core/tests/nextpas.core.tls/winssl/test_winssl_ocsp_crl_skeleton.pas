@@ -15,7 +15,7 @@ program test_winssl_ocsp_crl_skeleton;
  * - 证书链验证标志
  *
  * 运行条件:
- * - 设置环境变量 FAFAFA_WINSSL_REVOCATION_TEST=1
+ * - 设置环境变量 NEXTPAS_WINSSL_REVOCATION_TEST=1
  * - 需要网络连接
  *
  * @author nextpas.core.tls team
@@ -153,9 +153,9 @@ begin
   BeginSection('OCSP 在线检查');
 
   {$IFDEF WINDOWS}
-  if GetEnvironmentVariable('FAFAFA_WINSSL_REVOCATION_TEST') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_WINSSL_REVOCATION_TEST') <> '1' then
   begin
-    Skip('OCSP 在线测试', 'FAFAFA_WINSSL_REVOCATION_TEST != 1');
+    Skip('OCSP 在线测试', 'NEXTPAS_WINSSL_REVOCATION_TEST != 1');
     Exit;
   end;
 
@@ -199,9 +199,9 @@ begin
   BeginSection('CRL 检查');
 
   {$IFDEF WINDOWS}
-  if GetEnvironmentVariable('FAFAFA_WINSSL_REVOCATION_TEST') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_WINSSL_REVOCATION_TEST') <> '1' then
   begin
-    Skip('CRL 检查测试', 'FAFAFA_WINSSL_REVOCATION_TEST != 1');
+    Skip('CRL 检查测试', 'NEXTPAS_WINSSL_REVOCATION_TEST != 1');
     Exit;
   end;
 
@@ -235,9 +235,9 @@ begin
   BeginSection('吊销检查超时');
 
   {$IFDEF WINDOWS}
-  if GetEnvironmentVariable('FAFAFA_WINSSL_REVOCATION_TEST') <> '1' then
+  if GetEnvironmentVariable('NEXTPAS_WINSSL_REVOCATION_TEST') <> '1' then
   begin
-    Skip('吊销检查超时测试', 'FAFAFA_WINSSL_REVOCATION_TEST != 1');
+    Skip('吊销检查超时测试', 'NEXTPAS_WINSSL_REVOCATION_TEST != 1');
     Exit;
   end;
 
@@ -286,7 +286,7 @@ begin
   WriteLn('================================================================');
   WriteLn;
   WriteLn('说明:');
-  WriteLn('  此测试需要设置环境变量 FAFAFA_WINSSL_REVOCATION_TEST=1');
+  WriteLn('  此测试需要设置环境变量 NEXTPAS_WINSSL_REVOCATION_TEST=1');
   WriteLn('  以启用在线吊销检查测试。');
   WriteLn;
 

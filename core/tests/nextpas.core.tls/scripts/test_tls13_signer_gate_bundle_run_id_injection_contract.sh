@@ -34,9 +34,9 @@ cp "$ROOT_DIR/scripts/run_tls13_signer_gate_bundle.sh" "$FAKE_SCRIPTS/"
 cat > "$FAKE_SCRIPTS/run_tls13_signer_gate_ci.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-run_id="${FAFAFA_TLS13_SIGNER_GATE_RUN_ID:?}"
-output_dir="${FAFAFA_TLS13_SIGNER_GATE_OUTPUT_DIR:?}"
-printf '%s\n' "$run_id" > "${FAFAFA_FAKE_CI_RUN_ID_LOG:?}"
+run_id="${NEXTPAS_TLS13_SIGNER_GATE_RUN_ID:?}"
+output_dir="${NEXTPAS_TLS13_SIGNER_GATE_OUTPUT_DIR:?}"
+printf '%s\n' "$run_id" > "${NEXTPAS_FAKE_CI_RUN_ID_LOG:?}"
 mkdir -p "$output_dir"
 cat > "$output_dir/wave_b_ci_gate_summary_tls13_signer_${run_id}.md" <<'SUMMARY'
 Overall Status: **PASS**
@@ -99,8 +99,8 @@ chmod +x "$FAKE_SCRIPTS/"*.sh
 set +e
 (
   cd "$FAKE_ROOT"
-  FAFAFA_FAKE_CI_RUN_ID_LOG="$RUN_ID_LOG" \
-  FAFAFA_TLS13_SIGNER_GATE_ARCHIVE=0 \
+  NEXTPAS_FAKE_CI_RUN_ID_LOG="$RUN_ID_LOG" \
+  NEXTPAS_TLS13_SIGNER_GATE_ARCHIVE=0 \
   bash scripts/run_tls13_signer_gate_bundle.sh \
     --run-id "$MALICIOUS_RUN_ID" \
     --reports-dir "$REPORTS_DIR" \

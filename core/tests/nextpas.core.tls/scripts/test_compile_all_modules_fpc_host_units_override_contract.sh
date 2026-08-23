@@ -11,12 +11,12 @@ fail() {
 
 echo "[TEST] compile_all_modules fpc host/units override contract"
 
-if ! rg -F --quiet -- 'DEFAULT_FPC_EXE = os.environ.get("FAFAFA_FPC_EXE", "fpc")' "$SCRIPT_PATH"; then
-  fail "script should define DEFAULT_FPC_EXE from FAFAFA_FPC_EXE env"
+if ! rg -F --quiet -- 'DEFAULT_FPC_EXE = os.environ.get("NEXTPAS_FPC_EXE", "fpc")' "$SCRIPT_PATH"; then
+  fail "script should define DEFAULT_FPC_EXE from NEXTPAS_FPC_EXE env"
 fi
 
-if ! rg -F --quiet -- 'DEFAULT_FPC_UNITS_BASE = os.environ.get("FAFAFA_FPC_UNITS_BASE", "")' "$SCRIPT_PATH"; then
-  fail "script should define DEFAULT_FPC_UNITS_BASE from FAFAFA_FPC_UNITS_BASE env"
+if ! rg -F --quiet -- 'DEFAULT_FPC_UNITS_BASE = os.environ.get("NEXTPAS_FPC_UNITS_BASE", "")' "$SCRIPT_PATH"; then
+  fail "script should define DEFAULT_FPC_UNITS_BASE from NEXTPAS_FPC_UNITS_BASE env"
 fi
 
 if ! rg -F --quiet -- '--fpc-exe' "$SCRIPT_PATH"; then

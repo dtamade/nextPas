@@ -34,7 +34,7 @@ chmod +x "$FAKE_BIN/timeout"
 export PATH="$FAKE_BIN:$PATH"
 
 # Keep outputs isolated and cheap.
-export FAFAFA_FAST_LOCAL=1
+export NEXTPAS_FAST_LOCAL=1
 
 if ! bash "$SCRIPT" --modules PKCS7 --fast-local >"$LOG_FILE" 2>&1; then
   echo "[FAIL] expected module tests to succeed even when timeout is unavailable"

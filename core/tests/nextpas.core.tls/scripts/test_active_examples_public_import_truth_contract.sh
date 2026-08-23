@@ -37,19 +37,19 @@ real_world_test="examples/validation/real_world_test.pas"
 
 echo "[TEST] active examples public import truth contract"
 
-require_fixed "$https_rest_client" "  fafafa.ssl;" \
+require_fixed "$https_rest_client" "  nextpas.ssl;" \
   "04_https_rest_client must use the public facade unit"
-require_fixed "$certificate_chain" "  fafafa.ssl;" \
+require_fixed "$certificate_chain" "  nextpas.ssl;" \
   "07_certificate_chain must use the public facade unit"
-require_fixed "$demo_fluent_api" "  fafafa.ssl," \
+require_fixed "$demo_fluent_api" "  nextpas.ssl," \
   "demo_fluent_api must use the public facade unit alongside utility units"
-require_fixed "$winssl_health_checker" "  fafafa.ssl;" \
+require_fixed "$winssl_health_checker" "  nextpas.ssl;" \
   "winssl_health_checker must use the public facade unit"
-require_fixed "$winssl_rest_client" "  fafafa.ssl;" \
+require_fixed "$winssl_rest_client" "  nextpas.ssl;" \
   "winssl_rest_client must use the public facade unit"
-require_fixed "$tcp_helper" "  fafafa.ssl;" \
+require_fixed "$tcp_helper" "  nextpas.ssl;" \
   "fafafa.examples.tcp must use the public facade unit"
-require_fixed "$real_world_test" "  fafafa.ssl," \
+require_fixed "$real_world_test" "  nextpas.ssl," \
   "real_world_test must use the public facade unit alongside helper units"
 
 for file in \

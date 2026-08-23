@@ -50,26 +50,26 @@ require_fixed "$docs_readme" "TSSLContextBuilder" \
 require_absent "$docs_readme" 'Ctx := TSSLFactory.CreateContext(sslCtxClient);' \
   "docs/README.md quick-start must not teach factory-direct as the primary context creation"
 
-require_fixed "$user_guide" "SysUtils, fafafa.ssl;" \
+require_fixed "$user_guide" "SysUtils, nextpas.ssl;" \
   "USER_GUIDE must use the current public facade unit in active examples"
 require_fixed "$user_guide" "LLib := TSSLFactory.GetLibraryInstance(sslOpenSSL);" \
   "USER_GUIDE must use TSSLFactory.GetLibraryInstance for OpenSSL-focused examples"
 
 require_fixed "$integration_guide" "nextpas.core.tls.context.builder;" \
   "INTEGRATION_GUIDE must keep the current builder unit in hook/client setup examples"
-require_fixed "$integration_guide" "  fafafa.ssl;" \
+require_fixed "$integration_guide" "  nextpas.ssl;" \
   "INTEGRATION_GUIDE must use the current public facade unit in active examples"
 
-require_fixed "$faq_guide" '普通新代码推荐直接 `uses fafafa.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS；只有在你明确固定某个 backend 时，才需要关心 backend-specific 依赖。' \
+require_fixed "$faq_guide" '普通新代码推荐直接 `uses nextpas.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS；只有在你明确固定某个 backend 时，才需要关心 backend-specific 依赖。' \
   "FAQ must state the current facade-plus-builder import truth"
-require_fixed "$architecture_doc" '普通新代码优先使用 `uses fafafa.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
+require_fixed "$architecture_doc" '普通新代码优先使用 `uses nextpas.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
   "ARCHITECTURE must state the current facade-plus-builder import truth"
-require_fixed "$reference_architecture" '普通新代码优先使用 `uses fafafa.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
+require_fixed "$reference_architecture" '普通新代码优先使用 `uses nextpas.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
   "reference ARCHITECTURE must state the current facade-plus-builder import truth"
-require_fixed "$migration_v11" '普通新代码优先使用 `uses fafafa.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
+require_fixed "$migration_v11" '普通新代码优先使用 `uses nextpas.ssl, nextpas.core.tls.context.builder;`，然后通过 `TSSLContextBuilder` / `TSSLConnector` 建立 TLS' \
   "MIGRATION_GUIDE_V1.1 must state the current facade-plus-builder import truth"
 
-require_fixed "$winssl_quickstart" "fafafa.ssl;" \
+require_fixed "$winssl_quickstart" "nextpas.ssl;" \
   "WINSSL_QUICKSTART must use the current public facade unit"
 require_fixed "$winssl_quickstart" "Lib := TSSLFactory.GetLibraryInstance(sslWinSSL);" \
   "WINSSL_QUICKSTART must use the current WinSSL library entrypoint"
@@ -78,14 +78,14 @@ require_fixed "$winssl_quickstart" "Ctx := Lib.CreateContext(sslCtxClient);" \
 require_fixed "$winssl_quickstart" "WriteLn('Using backend: ', LibraryTypeToString(LLib.GetLibraryType));" \
   "WINSSL_QUICKSTART must use current library-type reporting instead of stale GetLibraryName"
 
-require_fixed "$winssl_guide" "fafafa.ssl;" \
+require_fixed "$winssl_guide" "nextpas.ssl;" \
   "WINSSL_USER_GUIDE must use the current public facade unit in examples"
 require_fixed "$winssl_guide" "Lib := TSSLFactory.GetLibraryInstance(sslWinSSL);" \
   "WINSSL_USER_GUIDE must use the current WinSSL library entrypoint"
 
 require_fixed "$mbedtls_guide" "Lib := TSSLFactory.GetLibraryInstance(sslMbedTLS);" \
   "MBEDTLS_USER_GUIDE must use the current MbedTLS library entrypoint"
-require_fixed "$mbedtls_guide" "fafafa.ssl;" \
+require_fixed "$mbedtls_guide" "nextpas.ssl;" \
   "MBEDTLS_USER_GUIDE must use the current public facade unit"
 
 require_fixed "$troubleshooting" "if not TSSLFactory.IsLibraryAvailable(sslOpenSSL) then" \
@@ -99,7 +99,7 @@ require_fixed "$api_reference" "backend-specific low-level creators" \
   "API_REFERENCE must classify backend-specific creators as low-level entrypoints"
 require_fixed "$api_reference" "LLib := TSSLFactory.GetLibraryInstance(sslOpenSSL);" \
   "API_REFERENCE examples must use the current public library-entrypoint truth"
-require_fixed "$api_reference" "SysUtils, fafafa.ssl;" \
+require_fixed "$api_reference" "SysUtils, nextpas.ssl;" \
   "API_REFERENCE capability examples must use the current public facade unit"
 require_fixed "$api_reference" "WriteLn('Backend not available: ', LibraryTypeToString(ABackend));" \
   "API_REFERENCE capability examples must use the public LibraryTypeToString helper for backend names"
@@ -129,7 +129,7 @@ for file in \
   "$architecture_doc" \
   "$reference_architecture" \
   "$migration_v11"; do
-  require_absent "$file" '`uses fafafa.ssl;` + `TSSLContextBuilder` / `TSSLConnector`' \
+  require_absent "$file" '`uses nextpas.ssl;` + `TSSLContextBuilder` / `TSSLConnector`' \
     "$file must stop implying TSSLContextBuilder comes from the main facade alone"
 done
 require_absent "$user_guide" "nextpas.core.tls.openssl" \

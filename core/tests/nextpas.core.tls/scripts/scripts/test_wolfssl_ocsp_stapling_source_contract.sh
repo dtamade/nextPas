@@ -75,10 +75,10 @@ require_match "$context_file" \
   'wolfSSL_set_tlsext_status_ocsp_resp\(ssl,\s*LResponseCopy,\s*Length\(LResponse\)\)' \
   'server callback injects stapled response into native WolfSSL handle'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*ASocket\);' \
   'server context socket connection path uses modern WolfSSL connection unit'
 require_match "$context_file" \
-  'Result := fafafa\.ssl\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
+  'Result := nextpas\.core\.tls\.wolfssl\.connection\.TWolfSSLConnection\.Create\(Self,\s*AStream\);' \
   'server context stream connection path uses modern WolfSSL connection unit'
 
 require_match "$connection_file" \

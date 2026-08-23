@@ -49,7 +49,7 @@ require_fixed "$quick" ".WithRSAKey(TKeySize.Bits(2048))" \
   "quick helper must adopt type-safe RSA config"
 require_fixed "$quick" ".WithRSAKey(TKeySize.Bits(4096))" \
   "quick CA helper must adopt type-safe RSA config"
-require_fixed "$readme" "  fafafa.ssl," \
+require_fixed "$readme" "  nextpas.ssl," \
   "README certificate example must import the facade type-safe surface"
 require_fixed "$readme" '.WithRSAKey(TKeySize.Bits(2048))' \
   "README certificate example must show type-safe RSA config"

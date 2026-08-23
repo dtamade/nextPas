@@ -79,7 +79,7 @@ begin
   WriteLn;
   WriteLn('=== PEM helper BIO guard ===');
 
-  LTempFile := GetTempDir(False) + 'fafafa_pem_helper_bio_contract.pem';
+  LTempFile := GetTempDir(False) + 'nextpas_pem_helper_bio_contract.pem';
   LTempOut := LTempFile + '.out';
   if not WriteTempTextFile(LTempFile, 'not-a-real-pem') then
   begin

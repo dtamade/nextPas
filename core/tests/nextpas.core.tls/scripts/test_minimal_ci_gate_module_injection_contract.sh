@@ -20,7 +20,7 @@ mkdir -p "$FAKE_BIN"
 
 cat > "$FAKE_BIN/bash" <<'EOF'
 #!/usr/bin/bash
-printf '%s\n' "$@" >> "${FAFAFA_FAKE_BASH_LOG:?}"
+printf '%s\n' "$@" >> "${NEXTPAS_FAKE_BASH_LOG:?}"
 exit 0
 EOF
 chmod +x "$FAKE_BIN/bash"
@@ -33,7 +33,7 @@ set +e
 output="$(
   cd "$ROOT_DIR"
   PATH="$FAKE_BIN:$PATH" \
-  FAFAFA_FAKE_BASH_LOG="$FAKE_BASH_LOG" \
+  NEXTPAS_FAKE_BASH_LOG="$FAKE_BASH_LOG" \
   /usr/bin/bash "$SCRIPT" --skip-compile --skip-phase2-dryrun --modules "PKCS7; touch '$FLAG_FILE'" 2>&1
 )"
 exit_code=$?
