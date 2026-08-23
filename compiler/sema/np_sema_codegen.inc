@@ -917,6 +917,16 @@ begin
     Exit(False);
 
   ACalleeName := FModel.SymbolAt(TargetSymbolId - 1).Name;
+  { Inline generic instances clone whitelisted template bodies under the
+    instance name but keep template-named method symbols, so a bare
+    implicit-self sibling call resolves here to e.g. TVec.SyncDataPtr
+    while only "TVec<T>.SyncDataPtr" has an encoded body. Prefer a
+    registered body under the receiver type name when present. }
+  if (Pos('<', ReceiverTypeName) > 0) and (MemberName <> '') and
+    (not SameText(ACalleeName, ReceiverTypeName + '.' + MemberName)) and
+    LookupProcedureBody(ReceiverTypeName + '.' + MemberName,
+      BodyNode, DeclNode) then
+    ACalleeName := ReceiverTypeName + '.' + MemberName;
   if (ACalleeName = '') or
     not LookupCallBindingDeclaration(
       ACalleeName,

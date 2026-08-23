@@ -26,12 +26,12 @@ B6.5 类型一致性与 VMT 引号已清（2026-07-26，opt 能完整解析全 .
 输出 `undefined uniq/total` + 分桶 + opt 首错 + 历史趋势
 （history: `.nextpas/m2-residual-history.tsv`）。**这个数字只许降不许升。**
 
-## 当前战况（2026-08-21 b4b-i13 真实全量基线后实测）
+## 当前战况（2026-08-23 b4b-i17 真实全量基线后实测）
 
 | 指标 | 值 | 轨迹 |
 |------|-----|------|
-| undefined unique | **2** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **5 (b4b-i13³² 真实全量基线:探针刷新后 CompareByte/TNameFirstMap/SarLongint 全清,暴露面扩大浮出 Pos×68 等,见注³²)** → **4 (b4b-i14³³ vmt/imt store 引号,TVec uniq 清零 total -11,opt 首错进语义层)** → **2 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** → **1 (b4b-i16³⁵ Pos 拼接+字符字面量操作数物化,project-helper 桶整桶清零 Pos -68)** |
-| undefined total | **6** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **87 (b4b-i13³² 真实全量基线,见注³²)** → **76 (b4b-i14³³ vmt/imt store 引号,TVec×11 清零,opt 首错进语义层)** → **74 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** |
+| undefined unique | **0** | 305 → 80 (B0) → 79 (B1) → 84 (B3a+对方B2) → 79 (B4) → 78 (B3b) → 64 (B3c) → 60 (B4a) → 54 (B6-atomic) → 54 (B5a-strpos) → 54 (B5b-toml) → 53 (B5c-upcase) → 52 (B5d-ecore) → 60 (B5e 口径扩展¹) → 57 (B5f-intfid) → **42 (2026-08-16 基线) → 38 (B6-EXTDECL 口1) → 34 (B6-EXTDECL 口2) → 33 (B6-GETTID) → 30 (B6-NOINLINE) → 36 (B2-IMT²) → 32 (祖先-cohort³) → 32 (P1-Classes-zero⁴) → 31 (P2-Process-zero⁵) → 29 (A-vcall⁶) → 28 (B-destroy-fallback⁷) → 27 (C-alias⁸) → 24 (D-pointer⁹) → 18 (const-upper¹⁰) → 17 (const-fini¹¹) → 16 (stub-pathsep¹²) → 15 (reexport-fields¹³) → 12 (localtypecast¹⁴) → 11 (result-fold¹⁵) → 9 (caret-ptr¹⁶) → 7 (simd-constref¹⁷) → 6 (b65-sar¹⁸) → 5 (b4b-i1¹⁹) → 3 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **5 (b4b-i13³² 真实全量基线:探针刷新后 CompareByte/TNameFirstMap/SarLongint 全清,暴露面扩大浮出 Pos×68 等,见注³²)** → **4 (b4b-i14³³ vmt/imt store 引号,TVec uniq 清零 total -11,opt 首错进语义层)** → **2 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** → **1 (b4b-i16³⁵ Pos 拼接+字符字面量操作数物化,project-helper 桶整桶清零 Pos -68)** → **0 (b4b-i17³⁶ ordinary 契约实例名优先,SyncDataPtr×6 归零,undefined 全表清零,opt 首错转支配性违规)** |
+| undefined total | **0** | 1338 → 251 (B0) → 173 (B1) → 166 (B3a+对方B2) → 161 (B4) → 120 (B3b) → 103 (B3c) → 92 (B4a) → 80 (B6-atomic；atomic 桶整桶清零) → 75 (B5a-strpos；Pos 7→2) → 74 (B5b-toml；Pos 2→1) → 72 (B5c-upcase；UpCase 2→0) → 69 (B5d-ecore；ECore.Create 3→0) → 79 (B5e 口径扩展¹) → 75 (B5f-intfid；接口ID 3 符号→0) → **64 (2026-08-16 基线) → 61 (B6-EXTDECL 口1) → 52 (B6-EXTDECL 口2) → 49 (B6-GETTID) → 43 (B6-NOINLINE) → 51 (B2-IMT²) → 45 (祖先-cohort³) → 44 (P2-Process-zero⁵) → 42 (A-vcall⁶) → 41 (B-destroy-fallback⁷) → 39 (C-alias⁸) → 35 (D-pointer⁹) → 25 (const-upper¹⁰) → 22 (const-fini¹¹) → 21 (stub-pathsep¹²) → 20 (reexport-fields¹³) → 16 (localtypecast¹⁴) → 15 (result-fold¹⁵) → 13 (caret-ptr¹⁶) → 11 (simd-constref¹⁷) → 10 (b65-sar¹⁸) → 10 (b4b-i1¹⁹) → 5 (b4b-i2²⁰) → 1 (b4b-i3²¹) → 1 (b4b-i4²²) → **2 (b4b-i5²³)** → 2 (b4b-i6²⁴ 静态修复) → 2 (b4b-i7²⁵ R8 探针 2/6 持平) → **0 (b4b-i8²⁶ mini 表面 0/0 + opt PASS)** → **0 (b4b-i9²⁷ THashMap slice,hashmap mini 0/0 + generic 回归 0/0 + 双 opt PASS)** → **0 (b4b-i10²⁸ TVecBuf 泛型别名,双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i11²⁹ isep-body/strlen-cast,isep/path 双 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i12³⁰ case 选择器字符取值,puny switch 语义闭环 + 四 mini 0/0 + 双 opt PASS + compiler-pass 58/58)** → **0 (b4b-i13³¹ 接口实现方法可达性,iface mini TImpl 三方法 define + 五 mini 双 opt PASS + compiler-pass 58/58)** → **87 (b4b-i13³² 真实全量基线,见注³²)** → **76 (b4b-i14³³ vmt/imt store 引号,TVec×11 清零,opt 首错进语义层)** → **74 (b4b-i15³⁴ IInterface dispatch 元数据+S_OK 常量,iface-qinterface/S_OK 两口清零)** → **6 (b4b-i16³⁵ Pos 操作数物化,Pos×68 清零 project-helper 桶整桶消失)** → **0 (b4b-i17³⁶ SyncDataPtr×6 收口,undefined 全表归零)** |
 
 ¹ B5e 探针口径扩展（2026-07-26）：旧口径只统计 `call|invoke` 引用，漏掉
 vmt/imt 表项与 store 操作数（`ptr @X`）——imt 4 缺口 opt 报错但探针不计
@@ -666,7 +666,28 @@ puny mini 的 @Copy 为 mini 级暴露、全量不可达，hnkTStringCopyRuntime
 compiler-pass 58/58；opt 首错推进到 `@TVec.SyncDataPtr`（479600 行，
 method-object 口成下一目标）；hygiene pass；git diff --check。 |
 
-| opt 首错 | `use of undefined value '@TVec.SyncDataPtr'`（.ll 479600 行，method-object 泛型家族 vmt 槽实例名填充但克隆白名单未覆盖）；上一口为 `@Pos`（已修，注³⁵，pos-intrinsic 口整桶清零） | 本轮实测（探针 1/6；残留仅 TVec.SyncDataPtr×6） |
+³⁶ b4b-i17（本 commit）：**ordinary 成员调用契约实例名优先——SyncDataPtr
+口收口，undefined 全表归零（uniq 1→0、total 6→0）**。根因链：内联特化
+`specialize TVec<T>.Xxx(...)` 只克隆白名单方法体到实例名、方法符号仍挂
+模板名（np_sema_declaration.inc InstantiateGenericType 批量注册）；别名实例
+则符号与体都带实例前缀——双路径不对称。语句位隐式 self 调用
+（walk_halt_calls.inc :3122 分支）产的 blob 用实例名正确，但
+AttachStatementCallExpr 附带的结构化表达式经 TryGetOrdinaryMemberCallContract
+按**符号名**解析落模板名 `TVec.SyncDataPtr`；builder ProcessCallRuntime
+（np_hir_builder_runtime.inc :81）见 ExprId>0 整体弃 blob 用表达式 →
+实例名 define 16 个齐全却无人调用、模板名 call 无 define。修法
+（np_sema_codegen.inc +9 行）：ordinary 契约解析中接收者类型名含 '<' 且
+`ReceiverTypeName + '.' + MemberName` 下有注册体时改用该实例名。
+复现探针：build/m2_mini_tree.pas（uses np_green_tree 拉编译器单元，
+8 分钟替代 2 小时全量）。验证：tree mini exit 1→0、@TVec.SyncDataPtr 残留
+3→0、双步 opt PASS；十三探针回归 11 PASS + puny(@Copy)/cmpgen(@TC.DoContains)
+注³³已知挂账不变；compiler-pass 58/58；全量基线 0/0（本轮 sema 单相
+~150 分钟，i17 新增的 LookupProcedureBody 名字扫描疑似有性能代价，
+列入 perf 批次首项量化）；hygiene pass；git diff --check。新浮出记录：
+opt 首错性质切换——undefined 清零后暴露支配性违规（`$wrt_tmp` alloca 在
+try-end 后发射不支配使用块），归 emitter temp-placement 新口（下一目标）。 |
+
+| opt 首错 | `Instruction does not dominate all uses!`（`%v8224 = alloca i64` 等 `$wrt_tmp` 家族 alloca 在 `@RunEnvStatus` 的 `np_try_pop()` 后发射、不支配使用块，.ll 9979 行；性质从 undefined 转为支配性违规——undefined uniq/total 已全表清空、buckets/undefined_uniq 明细均为空文件）；上一口为 `@TVec.SyncDataPtr`（已修，注³⁶） | 本轮实测（探针 **0/0**；opt 因新首错仍 FAIL，归 emitter temp-placement 新口） |
 | toolchain planning | **ready**（5 库 link argv 完整），失败点=llvm-opt-exec-failed | B7 后 |
 
 ⚠️ B3a 那一格数字是**两个会话改动的混合体**，别用它给单个提交归因。B3a 自己
