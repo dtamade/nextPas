@@ -132,6 +132,19 @@ begin
   Check(Hit = shNone, 'hit outside is none');
 end;
 
+procedure TestScrollbarHitNoHitWhenNotOverflow;
+var LS: IScrollbar; Hit: TScrollbarHit;
+begin
+  { 未溢出(TotalItems <= VisibleItems)= 无滚动条可点,整列 shNone:
+    退化态 ThumbSize 铺满整轨,不拦会把沟槽点击误判成 shThumb }
+  LS := TScrollbar.New.WithTotal(3).WithVisible(10).WithOffset(0);
+  Hit := LS.HitAt(TRect.Make(0, 0, 1, 10), 5);
+  Check(Hit = shNone, 'no hit when total < visible');
+  LS := TScrollbar.New.WithTotal(10).WithVisible(10).WithOffset(0);
+  Hit := LS.HitAt(TRect.Make(0, 0, 1, 10), 0);
+  Check(Hit = shNone, 'no hit when total = visible');
+end;
+
 { === Page navigation === }
 
 procedure TestScrollbarPageUp;
@@ -231,6 +244,8 @@ begin
     { Hit test }
     T.Test('Scrollbar HitAbove', @TestScrollbarHitAbove);
     T.Test('Scrollbar HitBelow', @TestScrollbarHitBelow);
+    T.Test('Scrollbar HitNoHitWhenNotOverflow',
+      @TestScrollbarHitNoHitWhenNotOverflow);
 
     { Page navigation }
     T.Test('Scrollbar PageUp', @TestScrollbarPageUp);

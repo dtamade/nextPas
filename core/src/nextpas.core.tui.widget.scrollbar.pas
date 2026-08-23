@@ -126,6 +126,10 @@ function TScrollbar.HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
 var LRelY, LTS, LTSz: Integer;
 begin
   Result := shNone;
+  { 未溢出(无滚动条)时整列无命中:退化态 ThumbSize 铺满整轨,
+    不拦会把「点沟槽」误判成 shThumb(调用方渲染侧本就不画,
+    命中/渲染同条件是消费方纪律,此处再兜一层底) }
+  if FTotalItems <= FVisibleItems then Exit;
   if (AY < ATrackArea.Y) or (AY >= ATrackArea.Y + ATrackArea.Height) then Exit;
   LRelY := AY - ATrackArea.Y;
   LTS := ThumbStart(ATrackArea.Height);
