@@ -471,6 +471,138 @@ begin
   CheckEqual('world', LEvs[1].Data, 'rt second data');
 end;
 
+{ ── 刀 61：TSSEFeeder 增量解码 ─────────────────────────────────────── }
+
+procedure AppendEvs(var ADst: TSSEventArray; const ASrc: TSSEventArray);
+var
+  I, N: Integer;
+begin
+  N := Length(ADst);
+  SetLength(ADst, N + Length(ASrc));
+  for I := 0 to High(ASrc) do
+    ADst[N + I] := ASrc[I];
+end;
+
+procedure CompareEvs(const AExp, AAct: TSSEventArray; const ATag: string);
+var
+  I: Integer;
+begin
+  CheckEqual(Int64(Length(AExp)), Int64(Length(AAct)), ATag + ' count');
+  for I := 0 to High(AExp) do
+  begin
+    CheckEqual(AExp[I].Event, AAct[I].Event, ATag + ' event[' + IntToStr(I) + ']');
+    CheckEqual(AExp[I].Data, AAct[I].Data, ATag + ' data[' + IntToStr(I) + ']');
+    CheckEqual(AExp[I].Id, AAct[I].Id, ATag + ' id[' + IntToStr(I) + ']');
+    CheckEqual(AExp[I].Retry, AAct[I].Retry, ATag + ' retry[' + IntToStr(I) + ']');
+  end;
+end;
+
+{ LF/CRLF/lone-CR 混合 + 多行 data + comment + 无冒号字段 + 未知字段 +
+  空 data 帧丢弃 + EOF 残余帧；等价基准文档 }
+const
+  KFEEDER_DOC =
+    ': comment'#10 +
+    'id: e1'#13#10 +
+    'event: delta'#10 +
+    'data: {"a":1}'#13#10 +
+    'data: {"b":2}'#10 +
+    #10 +
+    'retry: 1500'#13 +
+    'data'#10 +
+    'x-unknown: y'#10 +
+    #10 +
+    'data: tail';
+
+procedure TestFeederSplitEquivalence;
+var
+  Exp, Act, Evs: TSSEventArray;
+  LFeed: TSSEFeeder;
+  P: Integer;
+begin
+  Exp := ParseSSE(KFEEDER_DOC);
+  CheckEqual(Int64(2), Int64(Length(Exp)), 'fixture sanity: 2 events');
+  { 文档每个字节位切两刀 → 三段喂入 → 与整包解析逐字段相等 }
+  for P := 1 to Length(KFEEDER_DOC) - 1 do
+  begin
+    Act := nil;
+    LFeed := TSSEFeeder.Create;
+    try
+      LFeed.Feed(Copy(KFEEDER_DOC, 1, P), Evs);
+      AppendEvs(Act, Evs);
+      LFeed.Feed(Copy(KFEEDER_DOC, P + 1, MaxInt), Evs);
+      AppendEvs(Act, Evs);
+      LFeed.Finish(Evs);
+      AppendEvs(Act, Evs);
+    finally
+      LFeed.Free;
+    end;
+    CompareEvs(Exp, Act, 'split@' + IntToStr(P));
+  end;
+end;
+
+procedure TestFeederMidCRLFMultiline;
+var
+  Evs: TSSEventArray;
+  LFeed: TSSEFeeder;
+begin
+  { chunk 边界切在 \r 与 \n 之间：悬挂 CR 待定 → 单一终止符 }
+  LFeed := TSSEFeeder.Create;
+  try
+    LFeed.Feed('data: a'#13, Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'nothing completes before LF');
+    LFeed.Feed(#10'data: b'#10#10, Evs);
+    CheckEqual(Int64(1), Int64(Length(Evs)), 'mid-CRLF keeps one frame');
+    CheckEqual('a'#10'b', Evs[0].Data, 'multiline joined across chunks');
+  finally
+    LFeed.Free;
+  end;
+end;
+
+procedure TestFeederProgressive;
+var
+  Evs: TSSEventArray;
+  LFeed: TSSEFeeder;
+begin
+  { 帧完成即产出；半行跨块累积不丢字 }
+  LFeed := TSSEFeeder.Create;
+  try
+    LFeed.Feed('event: add'#10'data: 1'#10#10, Evs);
+    CheckEqual(Int64(1), Int64(Length(Evs)), 'first frame immediate');
+    CheckEqual('add', Evs[0].Event, 'first frame event');
+    LFeed.Feed('data: par', Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'open frame held');
+    LFeed.Feed('tial', Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'same-line continuation held');
+    LFeed.Feed(#10, Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'line end does not close frame');
+    LFeed.Feed(#10, Evs);
+    CheckEqual(Int64(1), Int64(Length(Evs)), 'blank line closes frame');
+    CheckEqual('partial', Evs[0].Data, 'chunked line reassembled');
+  finally
+    LFeed.Free;
+  end;
+end;
+
+procedure TestFeederFinishResidual;
+var
+  Evs: TSSEventArray;
+  LFeed: TSSEFeeder;
+begin
+  { EOF 残余帧（无终止符）由 Finish 冲刷；Finish 幂等 }
+  LFeed := TSSEFeeder.Create;
+  try
+    LFeed.Feed('data: tail', Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'residual not emitted early');
+    LFeed.Finish(Evs);
+    CheckEqual(Int64(1), Int64(Length(Evs)), 'finish flushes residual');
+    CheckEqual('tail', Evs[0].Data, 'residual data');
+    LFeed.Finish(Evs);
+    CheckEqual(Int64(0), Int64(Length(Evs)), 'finish idempotent');
+  finally
+    LFeed.Free;
+  end;
+end;
+
 var
   T: TTestSuite;
 begin
@@ -496,5 +628,9 @@ begin
   T.Test('SSE: ParseSSE final frame no trailing blank', @TestParseSSENoTrailingBlank);
   T.Test('SSE: ParseSSE retry field', @TestParseSSERetry);
   T.Test('SSE: ParseSSE writer round-trip', @TestParseSSEWriterRoundTrip);
+  T.Test('SSE: Feeder split equivalence sweep (K61)', @TestFeederSplitEquivalence);
+  T.Test('SSE: Feeder mid-CRLF across chunks (K61)', @TestFeederMidCRLFMultiline);
+  T.Test('SSE: Feeder progressive emission (K61)', @TestFeederProgressive);
+  T.Test('SSE: Feeder finish residual + idempotent (K61)', @TestFeederFinishResidual);
   if not T.Run then Halt(1);
 end.
