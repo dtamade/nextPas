@@ -52,7 +52,8 @@ const
   cRetryNonceHex = '461599d35d632bf2239825bb';
 
 type
-  TSrvFlightMode = (sfOk, sfBadAlpn, sfNoTp, sfBadFin, sfBadCv);
+  TSrvFlightMode = (sfOk, sfBadAlpn, sfNoTp, sfBadFin, sfBadCv,
+    sfNoDgram, sfSmallDgram);
 
   TSrvFixture = record
     XPriv: TBytes;
@@ -85,6 +86,15 @@ type
     procedure Clear;
   end;
 
+  { RFC 9221 数据报接收收集器 }
+  TQ5DgramCollector = class
+  public
+    Datas: array[0..7] of string;
+    Count: Integer;
+    procedure OnDgram(const AData: TBytes);
+    procedure Clear;
+  end;
+
 procedure TQ5Collector.OnData(AStreamId: UInt64; const AData: TBytes;
   AFin: Boolean);
 var
@@ -109,6 +119,28 @@ begin
   Count := 0;
 end;
 
+procedure TQ5DgramCollector.OnDgram(const AData: TBytes);
+var
+  LI: Integer;
+begin
+  if Count <= High(Datas) then
+  begin
+    Datas[Count] := '';
+    for LI := 0 to Length(AData) - 1 do
+      Datas[Count] := Datas[Count] + Chr(AData[LI]);
+    Inc(Count);
+  end;
+end;
+
+procedure TQ5DgramCollector.Clear;
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(Datas) do
+    Datas[LI] := '';
+  Count := 0;
+end;
+
 function THookTarget.Hook(const ACerts: TQuicDerList;
   out AError: string): Boolean;
 begin
@@ -121,6 +153,7 @@ end;
 var
   GHookTarget: THookTarget;
   GQ5Col: TQ5Collector;
+  GQ5Dgm: TQ5DgramCollector;
   { 夹具走单元级全局：规避「捕获含托管字段的记录 + out 参数」组合下的
     堆损坏（测试顺序执行，无共享冲突） }
   GFx: TSrvFixture;
@@ -401,6 +434,12 @@ begin
     LTP := nil;
     QuicParamAddVarint(LTP, cQuicParamMaxIdleTimeout, 60000);
     QuicParamAddEmpty(LTP, cQuicParamDisableActiveMigration);
+    { RFC 9221 §3：缺省通告 65535；sfNoDgram 省略参数（不支持语义）；
+      sfSmallDgram 收窄为 8（超界违规面） }
+    if AMode = sfSmallDgram then
+      QuicParamAddVarint(LTP, cQuicParamMaxDatagramFrameSize, 8)
+    else if AMode <> sfNoDgram then
+      QuicParamAddVarint(LTP, cQuicParamMaxDatagramFrameSize, 65535);
     QuicParamAddBytes(LTP, cQuicParamInitialSourceConnectionId, F.Scid);
     LM := EncodeQuicTransportParams(LTP);
     TBU16(LEntries, cQuicTpExtType);
@@ -663,6 +702,7 @@ var
 begin
   GHookTarget := THookTarget.Create;
   GQ5Col := TQ5Collector.Create;
+  GQ5Dgm := TQ5DgramCollector.Create;
 
   LSuite := TTestSuite.Create('quic_conn');
 
@@ -1196,6 +1236,244 @@ begin
     end;
   end);
 
+  { ---------- E3 RFC 9221 数据报平面 ---------- }
+  LSuite.Test('e3: datagram negotiated via transport parameters', procedure
+  var
+    Conn: TQuicClientConnection;
+  begin
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      CheckTrue(Conn.DatagramSupported, 'peer announced support');
+      CheckEqual(65535, Conn.PeerMaxDatagramSize, 'announced limit');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram send fail-closed faces', procedure
+  var
+    Conn, LIdle: TQuicClientConnection;
+  begin
+    { 未连接直接拒（新实例未 Start） }
+    LIdle := MakeConn(True, nil);
+    try
+      CheckFalse(LIdle.SendDatagram(BytesOf([1])), 'not connected rejects');
+      CheckFalse(LIdle.DatagramSupported, 'idle not negotiated');
+    finally
+      LIdle.Free;
+    end;
+    { 对端未通告：握手正常完成但数据报面关闭 }
+    Conn := DriveFull(sfNoDgram, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      CheckTrue(Conn.Phase = qcpConnected, 'handshake completed');
+      CheckFalse(Conn.DatagramSupported, 'missing TP means unsupported');
+      CheckFalse(Conn.SendDatagram(BytesOf([1])), 'send rejected');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram over peer limit rejected', procedure
+  var
+    Conn: TQuicClientConnection;
+    LSix, LSeven: TBytes;
+  begin
+    Conn := DriveFull(sfSmallDgram, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      CheckTrue(Conn.DatagramSupported, 'small window announced');
+      CheckEqual(8, Conn.PeerMaxDatagramSize, 'limit is 8');
+      LSix := BytesOf([1, 2, 3, 4, 5, 6]);
+      LSeven := BytesOf([1, 2, 3, 4, 5, 6, 7]);
+      CheckTrue(Conn.SendDatagram(LSix),
+        'frame 1+1+6=8 fits exactly');
+      CheckFalse(Conn.SendDatagram(LSeven),
+        'frame 1+1+7=9 exceeds limit');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram send emits protected with-length frame', procedure
+  var
+    Conn: TQuicClientConnection;
+    LPn: UInt64;
+    LPkt, LPayload, LD: TBytes;
+    LF: TQuicFrame;
+    LPos, LI: Integer;
+    LOk: Boolean;
+  begin
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      Conn.OnTimer(1000000);   { 时钟基准 }
+      LD := BytesOf([Ord('h'), Ord('i'), Ord('d'), Ord('g'), Ord('!')]);
+      CheckTrue(Conn.SendDatagram(LD), 'send accepted');
+      LOk := False;
+      while Conn.TakeOutbound(LPkt) do
+      begin
+        if (Length(LPkt) > 0) and ((LPkt[0] and $80) = 0) then
+        begin
+          CheckTrue(TryQuicUnprotectPacket(LPkt, 8,
+            Conn.ApplicationWriteKeys, 0, LPn, LPayload),
+            'unprotect outbound with app write keys');
+          LPos := 0;
+          while LPos < Length(LPayload) do
+          begin
+            if not TryQuicFrameParse(LPayload, LPos, Length(LPayload),
+              LF) then
+              Break;
+            Inc(LPos, LF.Consumed);
+            if Ord(LF.Kind) = Ord(qfkDatagram) then
+            begin
+              LOk := True;
+              CheckEqual(UInt64(cQfDatagramWithLength), LF.FrameType,
+                'with-length form on wire');
+              CheckEqual(5, LF.DataLen, 'data len');
+              CheckTrue(LF.DataLen = Length(LD), 'payload present');
+              for LI := 0 to Length(LD) - 1 do
+                CheckEqual(Integer(LD[LI]),
+                  Integer(LPayload[LF.DataOfs + LI]), 'byte match');
+              Break;
+            end;
+          end;
+        end;
+      end;
+      CheckTrue(LOk, 'datagram frame found in outbound');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram receive delivers coalesced via callback', procedure
+  var
+    Conn: TQuicClientConnection;
+    LFrames, LPkt: TBytes;
+  begin
+    GQ5Dgm.Clear;
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      Conn.HookDatagram(@GQ5Dgm.OnDgram);
+      { 同包两条数据报：WITH_LENGTH 定界语义 }
+      LFrames := nil;
+      QuicDatagramAppend(LFrames,
+        BytesOf([Ord('A'), Ord('B'), Ord('C')]));
+      QuicDatagramAppend(LFrames, BytesOf([Ord('D'), Ord('E')]));
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'datagram packet fed');
+      CheckEqual(2, GQ5Dgm.Count, 'both delivered in order');
+      CheckTrue(GQ5Dgm.Datas[0] = 'ABC', 'first payload');
+      CheckTrue(GQ5Dgm.Datas[1] = 'DE', 'second payload');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram receive violations are fatal', procedure
+  var
+    Conn: TQuicClientConnection;
+    LFrames, LPkt: TBytes;
+  begin
+    { 未通告对端发来 DATAGRAM = PROTOCOL_VIOLATION（RFC 9221 §5） }
+    Conn := DriveFull(sfNoDgram, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      LFrames := nil;
+      QuicDatagramAppend(LFrames, BytesOf([1, 2, 3]));
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      { OnDatagram 返回值 = 连接仍存活；违规即 False }
+      CheckFalse(Conn.OnDatagram(LPkt), 'feed reports closed');
+      CheckTrue(Conn.Phase = qcpClosed, 'unsupported closes connection');
+      CheckTrue(Pos('datagram', Conn.LastError) > 0, 'error names cause');
+    finally
+      Conn.Free;
+    end;
+    { 超对端通告上界的帧同罪 }
+    GQ5Dgm.Clear;
+    Conn := DriveFull(sfSmallDgram, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      Conn.HookDatagram(@GQ5Dgm.OnDgram);
+      LFrames := nil;
+      QuicDatagramAppend(LFrames, BytesOf([1, 2, 3, 4, 5, 6, 7]));
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckFalse(Conn.OnDatagram(LPkt), 'oversize feed reports closed');
+      CheckTrue(Conn.Phase = qcpClosed, 'oversize closes connection');
+      CheckEqual(0, GQ5Dgm.Count, 'no delivery on violation');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('e3: datagram queue bound under blocked congestion window',
+    procedure
+  var
+    Conn: TQuicClientConnection;
+    LId: UInt64;
+    LFrames, LPkt, LChunk: TBytes;
+    LI, LFirstReject: Integer;
+  begin
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      Conn.OnTimer(1000000);
+      LFrames := nil;
+      QuicMaxStreamsAppend(LFrames, True, 4);
+      QuicMaxDataAppend(LFrames, 400000);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'connection grants');
+      CheckTrue(Conn.OpenStream(False, LId), 'stream open');
+      LFrames := nil;
+      QuicMaxStreamDataAppend(LFrames, 0, 400000);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 1, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'stream grant');
+      { 100KB 流量远超初始拥塞窗：窗口持续堵死，ACK 不至则不泄 }
+      SetLength(LChunk, 1000);
+      for LI := 0 to 99 do
+        CheckTrue(Conn.StreamWrite(LId, LChunk, False), 'fill window');
+      { 队列容量 32：允许个别数据报随余量泄出，但必在上界附近拒绝 }
+      LFirstReject := -1;
+      for LI := 0 to 63 do
+      begin
+        if not Conn.SendDatagram(LChunk) then
+        begin
+          LFirstReject := LI;
+          Break;
+        end;
+      end;
+      CheckTrue((LFirstReject >= 0) and (LFirstReject <= 34),
+        'queue bound hit within cap+slack');
+      CheckFalse(Conn.SendDatagram(LChunk),
+        'stays full while window blocked');
+    finally
+      Conn.Free;
+    end;
+  end);
+
   LSuite.Test('source contract: no bare FPC RTL in quic.conn', procedure
   var
     LSrcPath, LHit: string;
@@ -1214,5 +1492,7 @@ begin
   GHookTarget := nil;
   GQ5Col.Free;
   GQ5Col := nil;
+  GQ5Dgm.Free;
+  GQ5Dgm := nil;
   if not LRunner.AllPassed then Halt(1);
 end.

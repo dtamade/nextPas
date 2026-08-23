@@ -41,6 +41,7 @@ const
   cQuicParamActiveConnectionIdLimit         = $0E;
   cQuicParamInitialSourceConnectionId       = $0F;
   cQuicParamRetrySourceConnectionId         = $10;
+  cQuicParamMaxDatagramFrameSize            = $20;  { RFC 9221 §3 }
 
 type
   TQuicTransportParamEntry = record

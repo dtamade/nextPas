@@ -67,6 +67,9 @@ const
   cQuicMaxRecvRangesPerSpace = 32;  { ACK 簿记有界上界 }
   cQuicMaxCryptoHolds = 16;         { 乱序暂存槽上界（fail-closed） }
   cQuicResendThresholdUs = 200000;  { 重发固定阈（骨架期，PTO 属 Q5） }
+  cQuicDgramQueueCap = 32;          { 未封包数据报滞留上界（fail-closed） }
+  { RFC 9221 §3 RECOMMENDED 通告值 }
+  cQuicMaxDgramSizeOffer = 65535;
 
 type
   TQuicConnPhase = (
@@ -89,6 +92,9 @@ type
   { 自定义链验证钩子：ACerts 为 DER 列表（叶在前）。返回 False 即失败 }
   TQuicCertVerifyHook = function(const ACerts: TQuicDerList;
     out AError: string): Boolean of object;
+
+  { RFC 9221 应用层数据报到达回调（与网络层 OnDatagram 不同层） }
+  TOnQuicDatagram = procedure(const AData: TBytes) of object;
 
   TQuicClientParams = record
     Hostname: string;
@@ -159,6 +165,14 @@ type
     FPeerParams: TQuicTransportParamArray;
     FPeerParamsValid: Boolean;
     FDgramOut: array of TBytes;
+
+    { ---- RFC 9221 数据报平面（应用层帧，非网络层 FDgramOut） ---- }
+    FDgramEnabled: Boolean;          { 对端 TP 通告 max_datagram_frame_size>0 }
+    FPeerMaxDgramSize: Integer;      { 对端允许的单帧总字节数上界 }
+    FDgramQ: array[0..cQuicDgramQueueCap - 1] of TBytes;
+    FDgramQCount: Integer;
+    FDgramQHead: Integer;
+    FOnDgram: TOnQuicDatagram;
 
     function TakeError(const AMsg: string): Boolean;
     procedure HandleMuxFatal(const AReason: string);
@@ -251,6 +265,17 @@ type
     { 对端 STREAM 数据回调透传（等价 Mux.OnStreamData 赋值） }
     procedure HookStreamData(AHandler: TOnStreamData);
     procedure HookStreamReset(AHandler: TOnStreamReset);
+
+    { ---- RFC 9221 数据报平面（hysteria2 UDP 中继承载） ---- }
+    {** 发送一个不可靠数据报（WITH_LENGTH 形态入队，FlushApplication
+      *  出包；受拥塞控制不保证送达）。未协商/超对端上限/滞留队列满
+      *  返回 False（丢弃责任在调用方重试）。 *}
+    function SendDatagram(const AData: TBytes): Boolean;
+    {** 对端数据报到达回调 *}
+    procedure HookDatagram(AHandler: TOnQuicDatagram);
+    { 对端是否通告支持数据报（EE 后生效）与单帧总字节上界 }
+    property DatagramSupported: Boolean read FDgramEnabled;
+    property PeerMaxDatagramSize: Integer read FPeerMaxDgramSize;
     { 观测面：首个 Initial 的 DCID（Retry 完整性验证的 ODCID 即它） }
     property LocalFirstDcid: TBytes read FLocalDcid;
   end;
@@ -461,6 +486,9 @@ begin
   QuicParamAddVarint(LEntries, cQuicParamMaxAckDelay, 25);
   QuicParamAddVarint(LEntries, cQuicParamActiveConnectionIdLimit, 8);
   QuicParamAddEmpty(LEntries, cQuicParamDisableActiveMigration);
+  { RFC 9221 §3：数据报支持通告（RECOMMENDED 65535） }
+  QuicParamAddVarint(LEntries, cQuicParamMaxDatagramFrameSize,
+    cQuicMaxDgramSizeOffer);
   LRaw := EncodeQuicTransportParams(LEntries);
 
   { TLS 扩展线格式：type(u16)+len(u16)+data }
@@ -1022,6 +1050,7 @@ var
   LRaw: TBytes;
   LTotal, LPos, LEType, LELen, LIdx, LI: Integer;
   LOk, LMismatch: Boolean;
+  LDgramVal: UInt64;
 begin
   if FPhase <> qcpHandshake then
   begin
@@ -1104,6 +1133,19 @@ begin
     TakeError('initial_source_connection_id mismatch');
     Exit;
   end;
+
+  { RFC 9221 §3：max_datagram_frame_size 缺省 = 不支持；值 >0 = 支持，
+    语义为对端允许接收的单个 DATAGRAM 帧总字节数上界（帧类型+
+    长度前缀+载荷全含）；0 与缺省同义（不支持，非错误） }
+  FDgramEnabled := False;
+  FPeerMaxDgramSize := 0;
+  if QuicParamGetVarint(FPeerParams, cQuicParamMaxDatagramFrameSize,
+    LDgramVal) and (LDgramVal > 0) then
+  begin
+    FDgramEnabled := True;
+    FPeerMaxDgramSize := Integer(LDgramVal);
+  end;
+
   FPeerParamsValid := True;
 end;
 
@@ -1452,6 +1494,23 @@ begin
       qfkMaxStreams:
         FMux.HandleMaxStreams(LF.FrameType = cQfMaxStreamsBidi,
           LF.MaxValue);
+      qfkDatagram:
+        begin
+          { RFC 9221 §5：仅 0-RTT/1-RTT 合法（客户端收不到 0-RTT）；
+            未通告或超对端上界 = PROTOCOL_VIOLATION }
+          if ASpace <> qspApplication then
+          begin
+            TakeError('datagram frame outside application space');
+            Exit;
+          end;
+          if (not FDgramEnabled) or (LF.Consumed > FPeerMaxDgramSize) then
+          begin
+            TakeError('datagram frame violates negotiated limit');
+            Exit;
+          end;
+          if Assigned(FOnDgram) then
+            FOnDgram(SliceOf(APayload, LF.DataOfs, LF.DataLen));
+        end;
       qfkNewConnectionId, qfkRetireConnectionId, qfkPathChallenge,
       qfkPathResponse, qfkDataBlocked, qfkStreamDataBlocked,
       qfkStreamsBlocked:
@@ -1692,9 +1751,10 @@ end;
 
 procedure TQuicClientConnection.FlushApplication;
 var
-  LAck, LFrames, LPkt: TBytes;
+  LAck, LFrames, LPkt, LDgram: TBytes;
   LHasAck: Boolean;
-  LRoom: Integer;
+  LRoom, LDgramLen: Integer;
+  LDgramSent: Boolean;
 begin
   if FPhase <> qcpConnected then
     Exit;
@@ -1708,8 +1768,33 @@ begin
     LRoom := cQuicAppPacketRoom - Length(LFrames);
     if LRoom < 32 then
       Break;   { ACK 已占满预算：下轮再发数据 }
-    if not FMux.CollectFrames(LFrames, LRoom) then
-      Break;   { 复用器无产出 }
+
+    { RFC 9221 §5.4：数据报受拥塞控制，与流帧同包竞争预算；
+      统一 WITH_LENGTH 形态（0x31）支持共包多条定界。
+      LDgramSent 让「仅 ACK+数据报、无流帧」也能出包（低延迟优先），
+      纯 ACK 无产出仍按原样滞留下轮随行 }
+    LDgramSent := False;
+    while FDgramQCount > 0 do
+    begin
+      LDgram := FDgramQ[FDgramQHead];
+      LDgramLen := 1 + QuicVarintEncodedLen(UInt64(Length(LDgram)))
+        + Length(LDgram);
+      if LDgramLen > LRoom then
+        Break;   { 本包余量不足：留待下轮（不拆分数据报） }
+      QuicDatagramAppend(LFrames, LDgram);
+      FDgramQ[FDgramQHead] := nil;
+      FDgramQHead := (FDgramQHead + 1) mod cQuicDgramQueueCap;
+      Dec(FDgramQCount);
+      Dec(LRoom, LDgramLen);
+      LDgramSent := True;
+    end;
+
+    if not FMux.CollectFrames(LFrames, LRoom) and (not LDgramSent) then
+      Break;   { 复用器无产出且无数据报：无事可做 }
+    { 保底：protect 样本区需 APnLen+tag=20 字节，不足即补 PADDING，
+      否则小数据报包被拒后队列已排空无法归还 }
+    if (Length(LFrames) > 0) and (Length(LFrames) < 24) then
+      QuicPaddingAppend(LFrames, 24 - Length(LFrames));
     LPkt := BuildShortPacket(4, LFrames);
     if LPkt = nil then
     begin
@@ -1783,6 +1868,34 @@ end;
 procedure TQuicClientConnection.HookStreamReset(AHandler: TOnStreamReset);
 begin
   FMux.OnStreamReset := AHandler;
+end;
+
+function TQuicClientConnection.SendDatagram(const AData: TBytes): Boolean;
+var
+  LFrameLen, LTail: Integer;
+begin
+  Result := False;
+  if FPhase <> qcpConnected then
+    Exit;
+  if not FDgramEnabled then
+    Exit;   { 对端未通告支持：fail-closed }
+  { RFC 9221 §3：上界含帧类型+长度前缀+载荷全长 }
+  LFrameLen := 1 + QuicVarintEncodedLen(UInt64(Length(AData)));
+  LTail := LFrameLen + Length(AData);
+  if (LTail > FPeerMaxDgramSize) or (LTail > cQuicAppPacketRoom) then
+    Exit;   { 超对端上界或单包预算：调用方分片或改走流 }
+  if FDgramQCount >= cQuicDgramQueueCap then
+    Exit;   { 滞留上界：拥塞窗满时拒绝而非无限积压 }
+  LTail := (FDgramQHead + FDgramQCount) mod cQuicDgramQueueCap;
+  FDgramQ[LTail] := AData;
+  Inc(FDgramQCount);
+  FlushApplication;
+  Result := True;
+end;
+
+procedure TQuicClientConnection.HookDatagram(AHandler: TOnQuicDatagram);
+begin
+  FOnDgram := AHandler;
 end;
 
 end.
