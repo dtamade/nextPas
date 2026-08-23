@@ -4,7 +4,8 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（N2 落地后）
+创建：2026-08-23　最后更新：2026-08-23（v2 完善：目录对照树、命名细则、
+映射全表展开 66 单元、P0 设计草案、维护规则；计数修正 66=10+56）
 
 ---
 
@@ -52,6 +53,26 @@ core THashMap（修正早期 O(n²) 判断），但每次查找现场 LowerCase(
 全量一轮 ~130-155 分钟（FPC 编同一棵树 ~75 秒，差两个数量级）。
 精确阶段耗时分布未知——P0 前禁止凭感觉优化。
 
+### 2.4 目录形态对照
+
+```
+重构前（散布 9 目录）                    重构后（src 平铺）
+compiler/                               compiler/
+├── frontend/ 14 pas+7 inc              ├── src/            ← 全部 .pas+.inc
+├── syntax/    5 pas+11 inc             │     nextpas.compiler.
+├── sema/      12 pas+33 inc            │       targets.facts.pas
+├── lower/      1 pas+3 inc             │       diagnostics.sink.pas
+├── ir/        25 pas+16 inc            │       syntax.lexer.pas
+├── backend/    1 pas+1 inc             │       …(66 单元平铺)
+├── toolchain/  3 pas+8 inc             ├── tests/
+├── diagnostics/ 4 pas+1 inc            ├── nextpas.package.toml
+└── targets/    1 pas                   └── README.md
+tools/stage0/ 14 nextpas_* + 2 杂项   →  N6 后改 nextpas.driver.*
+```
+
+生产单元总数 **66 = 65 个 `np_` 前缀 + 1 个 `nextpas_` 前缀(json_helpers)**。
+inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自然分组可读）。
+
 ## 3. 四支柱方案
 
 ```
@@ -63,6 +84,18 @@ core THashMap（修正早期 O(n²) 判断），但每次查找现场 LowerCase(
                      受控例外；contract 门禁脚本防回潮
 支柱四 高性能        P0 测量先行 → P1 索引分配 → P2 arena → P3 并行 → P4 增量
 ```
+
+### 3.1 命名规范细则
+
+- **格式**：`nextpas.compiler.<area>.<topic>`——area 单层、topic 可含下划线，
+  全小写；与 core 的 `nextpas.core.<module>.<sub>` 同构；
+- **area 词汇表冻结**（九选一 + driver）：`base` / `diagnostics` / `targets`
+  / `syntax` / `frontend` / `sema` / `ir`（hir 与 mir 用二级段：
+  `ir.hir.*` / `ir.mir.*`）/ `backend` / `toolchain`；stage0 壳层 N6 起用
+  `driver`；
+- **禁止**：新造 area 同义词（如 `parser`/`codegen`）、缩写（`sem`/`fe`）、
+  大写；跨域单元按主要消费方归属，不设 `common`/`misc` 杂货 area；
+- **文件名 = 单元名 + `.pas`**，一一对应（FPC/np 双端解析硬约束）。
 
 ## 4. 批次计划与验收门
 
@@ -92,6 +125,20 @@ contract 门禁清单扩充 → 清 ppu 重建 → 验收门 → commit。
 
 节奏：N1→N2→**P0**→N3→N4→P1→N5→P2→N6→P3→P4。
 
+### 4.2.1 P0 阶段计时探针设计草案
+
+- **打点位置**（复用 SemaTrace 冷路径先例——写文件不算热 walk）：
+  `lex`（lexer 进入/退出）、`parse`（green_tree 构建）、`resolution`
+  （unit_resolver 全程）、`seed`（SeedFunctionBodies 进度已有日志，改为
+  带时间戳）、`sema-per-unit`、`hir-build`、`emit-llvm`、尾部
+  `opt -O2 / verify` 由 residual 脚本计时；
+- **输出**：`/tmp/m2-phase-timing.tsv`（phase,unit?,ms），会话结束汇总一行
+  进构建日志；默认关闭，环境变量 `NEXTPAS_PHASE_TIMING=1` 开启；
+- **交付物**：①各相耗时占比表进本文件 §2.3 与 ROADMAP 新列；
+  ②perf record 采样 top-10 热函数清单；③b4b-i17 LookupProcedureBody
+  开销专项数字（对比 i16 探针二进制同输入耗时）；
+- **验收**：三件套齐 + 数字可复现（同输入两次运行偏差 <10%）。
+
 ### 4.3 验收门定义（每批必过）
 
 ```bash
@@ -103,7 +150,10 @@ git diff --check && make hygiene
 # N4+: mini-regress 13 探针；N5: 全量 residual 对比；N6: make verify
 ```
 
-## 5. 完整映射表（65 单元；✅=已落地）
+## 5. 完整映射表（66 单元；✅=已落地）
+
+生产单元总计 **66**（65 个 `np_` 前缀 + json_helpers）；
+已落地 **10**，待迁 **56**。
 
 ### 已完成 ✅（N1+N2，10 单元 + 12 inc）
 
@@ -122,41 +172,94 @@ git diff --check && make hygiene
 
 inc 随宿主迁入不改名（sink accessors ×1；syntax 家族 ×11）。
 
-### 待迁移（55 单元）
+### 待迁移（56 单元）
 
-**frontend(14)**：np_source_database/unit_graph/unit_resolver/
-compilation_session/workspace_model/symbol_cache/query_database/
-package_manifest/package_lock/package_workflow/incremental_cache/
-file_change_detector/parallel_scheduler/compiler_phase
-→ `nextpas.compiler.frontend.*`
+#### frontend(14) → nextpas.compiler.frontend.*（N3 批）
 
-**sema(12)**：np_semantic_model→sema.semantic_model；
-np_semantic_analyzer→sema.analyzer；np_sema_type_check→sema.type_check；
-np_sema_overload→sema.overload；np_sema_builtins→sema.builtins；
-np_sema_name_set→sema.name_set；np_sema_runtime_vars→sema.runtime_vars；
-np_sema_string_ownership→sema.string_ownership；
-np_semantic_field_meta_vec→sema.field_meta_vec；
-np_semantic_interface_slot_vec→sema.interface_slot_vec；
-np_semantic_property_meta_vec→sema.property_meta_vec；
-np_semantic_vmt_slot_vec→sema.vmt_slot_vec
+| 现名 | 新名 |
+|------|------|
+| np_source_database | …frontend.source_database |
+| np_unit_graph | …frontend.unit_graph |
+| np_unit_resolver | …frontend.unit_resolver |
+| np_compilation_session | …frontend.compilation_session |
+| np_workspace_model | …frontend.workspace_model |
+| np_symbol_cache | …frontend.symbol_cache |
+| np_query_database | …frontend.query_database |
+| np_package_manifest | …frontend.package_manifest |
+| np_package_lock | …frontend.package_lock |
+| np_package_workflow | …frontend.package_workflow |
+| np_incremental_cache | …frontend.incremental_cache |
+| np_file_change_detector | …frontend.file_change_detector |
+| np_parallel_scheduler | …frontend.parallel_scheduler |
+| np_compiler_phase | …frontend.compiler_phase |
 
-**lower(1)**：np_hir_lowering→ir.hir.lowering
+（表中 `…` = `nextpas.compiler`，下同。）
 
-**ir(25)**：np_hir_types/model/builder/printer/verifier/to_mir/
-llvm_emitter→ir.hir.{types,model,builder,printer,verifier,to_mir,
-llvm_emitter}；np_mir_model/optimize/opt_level→ir.mir.{model,optimize,
-opt_level}；np_mir_pass_{registry,constfold,cse,dce,deadarg,devirt,escape,
-inline,inline_heuristic,licm,strength_red,tailcall,vectorize}
-→ir.mir.pass.*；np_mir_to_llvm→ir.mir.to_llvm；
-np_system_contracts→ir.system_contracts
+#### sema(12) → nextpas.compiler.sema.*（N4 批）
 
-**backend(1)**：np_backend_plan→backend.plan
+| 现名 | 新名 |
+|------|------|
+| np_semantic_model | …sema.semantic_model |
+| np_semantic_analyzer | …sema.analyzer |
+| np_sema_type_check | …sema.type_check |
+| np_sema_overload | …sema.overload |
+| np_sema_builtins | …sema.builtins |
+| np_sema_name_set | …sema.name_set |
+| np_sema_runtime_vars | …sema.runtime_vars |
+| np_sema_string_ownership | …sema.string_ownership |
+| np_semantic_field_meta_vec | …sema.field_meta_vec |
+| np_semantic_interface_slot_vec | …sema.interface_slot_vec |
+| np_semantic_property_meta_vec | …sema.property_meta_vec |
+| np_semantic_vmt_slot_vec | …sema.vmt_slot_vec |
 
-**toolchain(3)**：np_toolchain_runner/profiles/plan→toolchain.{runner,
-profiles,plan}
+#### lower(1) + ir(25) → nextpas.compiler.ir.*（N4/N5 批）
 
-**stage0 壳层(N6)**：14 个 nextpas_* → `nextpas.driver.*`（留 tools/stage0，
-本地 json_helpers 副本届时收口）
+| 现名 | 新名 | 批 |
+|------|------|----|
+| np_hir_lowering | …ir.hir.lowering | N4 |
+| np_hir_types | …ir.hir.types | N5 |
+| np_hir_model | …ir.hir.model | N5 |
+| np_hir_builder | …ir.hir.builder | N5 |
+| np_hir_printer | …ir.hir.printer | N5 |
+| np_hir_verifier | …ir.hir.verifier | N5 |
+| np_hir_to_mir | …ir.hir.to_mir | N5 |
+| np_hir_llvm_emitter | …ir.hir.llvm_emitter | N5 |
+| np_system_contracts | …ir.system_contracts | N5 |
+| np_mir_model | …ir.mir.model | N5 |
+| np_mir_optimize | …ir.mir.optimize | N5 |
+| np_mir_opt_level | …ir.mir.opt_level | N5 |
+| np_mir_pass_registry | …ir.mir.pass.registry | N5 |
+| np_mir_pass_constfold | …ir.mir.pass.constfold | N5 |
+| np_mir_pass_cse | …ir.mir.pass.cse | N5 |
+| np_mir_pass_dce | …ir.mir.pass.dce | N5 |
+| np_mir_pass_deadarg | …ir.mir.pass.deadarg | N5 |
+| np_mir_pass_devirt | …ir.mir.pass.devirt | N5 |
+| np_mir_pass_escape | …ir.mir.pass.escape | N5 |
+| np_mir_pass_inline | …ir.mir.pass.inline | N5 |
+| np_mir_pass_inline_heuristic | …ir.mir.pass.inline_heuristic | N5 |
+| np_mir_pass_licm | …ir.mir.pass.licm | N5 |
+| np_mir_pass_strength_red | …ir.mir.pass.strength_red | N5 |
+| np_mir_pass_tailcall | …ir.mir.pass.tailcall | N5 |
+| np_mir_pass_vectorize | …ir.mir.pass.vectorize | N5 |
+| np_mir_to_llvm | …ir.mir.to_llvm | N5 |
+
+#### backend(1) + toolchain(3)（N5/N6 批）
+
+| 现名 | 新名 | 批 |
+|------|------|----|
+| np_backend_plan | …backend.plan | N5 |
+| np_toolchain_runner | …toolchain.runner | N6 |
+| np_toolchain_profiles | …toolchain.profiles | N6 |
+| np_toolchain_plan | …toolchain.plan | N6 |
+
+#### stage0 壳层 14 单元 → nextpas.driver.*（N6 批，留 tools/stage0）
+
+nextpas_projection_types/context/json/text、nextpas_command_{build,test,
+env,doctor,query,pkg}、nextpas_command_envelope、nextpas_json_helpers
+（本地副本届时与 src 版二选一收口）、target_config、nextpas.pas 入口。
+
+inc 随宿主迁入不改名（sink accessors ×1；syntax 家族 ×11 已迁；
+sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 
 ## 6. 执行台账（发现·决策·勘误）
 
@@ -197,10 +300,22 @@ profiles,plan}
 上一可构建态；N 批间无交叉依赖（自底向上顺序仅保证 uses 引用单调收敛）。
 P 批引入运行时行为前必须先落 P0 基线数字，回滚判据客观化。
 
-## 10. 附录
+## 10. 文档维护规则
+
+- **每批落地时**：更新 §4 批次状态、§5 映射表勾销、§6 台账追加 D 条目、
+  顶部「最后更新」时间——与该批 commit 同文件同提交；
+- **发现即记**：迁移中任何勘误/故障根因/决策变化，当批进 §6/§8，
+  不许事后补忆；
+- **数字纪律**：本文所有计数与耗时必须来自命令实测，写前跑一遍；
+- **单一权威**：本文件是重构唯一权威来源；附录 B（flat-namespace v2）
+  即日起**冻结不再更新**，仅作历史细化参考；两文冲突时以本文为准；
+- **收口条件**：N6+P4 全部落地、§4 两表全 ✅、§7 风险册关闭或转永久监控，
+  本文件转为 `Landed` 状态归档进 `docs/architecture/`（稳定事实部分）。
+
+## 11. 附录
 
 - 附录 A：`docs/plans/compiler-core-reuse-map.md`——core 能力地图×绑定矩阵
   （API 面核实、禁区、两代福利机制）
-- 附录 B：本文档前身 `docs/plans/compiler-flat-namespace.md` v2
-  （四支柱细化与待决策项 §8，其中未决项由本文件 §8 决策日志接管）
+- 附录 B：`docs/plans/compiler-flat-namespace.md` v2——**已冻结**（§10 维护
+  规则），四支柱细化与历史待决策项参考；冲突以本文为准
 - 附录 C：ROADMAP `docs/plans/m2/ROADMAP.md`——undefined 归零战报与注³⁶
