@@ -48,6 +48,7 @@ const
   cQfResetStream = $04;    { §19.4 }
   cQfStopSending = $05;    { §19.5 }
   cQfCrypto = $06;
+  cQfNewToken = $07;       { §19.7 }
   cQfMaxData = $10;        { §19.9 }
   cQfMaxStreamData = $11;  { §19.10 }
   cQfMaxStreamsBidi = $12; { §19.11 双向 }
@@ -81,7 +82,7 @@ const
 
 type
   TQuicFrameKind = (
-    qfkPadding, qfkPing, qfkAck, qfkCrypto, qfkStream,
+    qfkPadding, qfkPing, qfkAck, qfkCrypto, qfkNewToken, qfkStream,
     qfkResetStream, qfkStopSending,
     qfkMaxData, qfkMaxStreamData, qfkMaxStreams,
     qfkDataBlocked, qfkStreamDataBlocked, qfkStreamsBlocked,
@@ -374,6 +375,20 @@ begin
         AFrame.DataLen := Integer(LVal);
         AFrame.Kind := qfkCrypto;
         AFrame.Consumed := LPos - AOffset + AFrame.DataLen;
+      end;
+
+    cQfNewToken:
+      begin
+        { §19.7：varint 长度 + 不透明 token。客户端 MAY 不存储
+          （本栈无重连场景）；正确消费整帧而非视为未知帧 }
+        if not QuicVarintDecode(APayload, LPos, LVal, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if LVal > UInt64(AEnd_ - LPos) then
+          Exit;   { 声明长度越过载荷尾 }
+        Inc(LPos, Integer(LVal));
+        AFrame.Kind := qfkNewToken;
+        AFrame.Consumed := LPos - AOffset;
       end;
 
     cQfStreamBase..cQfStreamBase + 7:

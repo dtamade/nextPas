@@ -128,6 +128,8 @@ type
     FTlsSuite: Word;
     FInitialAlive: Boolean;
     FHasAppKeys: Boolean;
+    FLastDropReason: string;   { 最近一次收包静默丢弃原因（诊断面） }
+    FRxShortOk, FRxPeekFail, FRxOtherVer: Integer;  { 接收分类计数（诊断面） }
     FInitialKeysC, FInitialKeysS: TQuicPacketKeys;
     FHsKeysC, FHsKeysS: TQuicPacketKeys;
     FAppKeysW: TQuicPacketKeys;     { 我方 1-RTT 写 }
@@ -174,6 +176,7 @@ type
     FDgramQHead: Integer;
     FOnDgram: TOnQuicDatagram;
 
+    function GetDebugRx: string;
     function TakeError(const AMsg: string): Boolean;
     procedure HandleMuxFatal(const AReason: string);
     function GetCongestionWindow: UInt64;
@@ -254,6 +257,10 @@ type
 
     property Phase: TQuicConnPhase read FPhase;
     property LastError: string read FLastError;
+    { 最近一次收包静默丢弃原因（诊断/取证用；成功收包时清空） }
+    property LastDropReason: string read FLastDropReason;
+    { 接收分类计数 short-ok/peek-fail/异版本（诊断面） }
+    property DebugRx: string read GetDebugRx;
     property PeerParamsValid: Boolean read FPeerParamsValid;
     property PeerParams: TQuicTransportParamArray read FPeerParams;
     property ApplicationWriteKeys: TQuicPacketKeys read FAppKeysW;
@@ -412,6 +419,14 @@ begin
   Result := FAppTracker.InFlightBytes;
 end;
 
+function TQuicClientConnection.GetDebugRx: string;
+begin
+  Result := 'shortOk=' + IntToStr(FRxShortOk) +
+    ' peekFail=' + IntToStr(FRxPeekFail) +
+    ' otherVer=' + IntToStr(FRxOtherVer) +
+    ' drop="' + FLastDropReason + '"';
+end;
+
 function TQuicClientConnection.TakeError(const AMsg: string): Boolean;
 begin
   if FLastError = '' then
@@ -561,7 +576,7 @@ begin
   LSuites[0] := cTlsSuiteAes128GcmSha256;
   LSuites[1] := cTlsSuiteChaCha20Poly1305Sha256;
   LCh := BuildTLS13ClientHelloHandshakeWithCiphers(FParams.Hostname,
-    FParams.ALPN, FX25519Pub, LSuites);
+    FParams.ALPN, FX25519Pub, LSuites, False, False, True);
   LCh := PatchChExtraExtension(LCh, BuildTransportParamsExt);
   AppendTail(FTranscript, LCh);
   Result := QueueCryptoFrames(qspInitial, LCh);
@@ -1367,10 +1382,18 @@ var
   LPayload: TBytes;
 begin
   if not FHasAppKeys then
+  begin
+    FLastDropReason := 'short packet before app keys';
     Exit;   { 密钥未就绪（乱序到达）：静默丢弃，等对端重传 }
+  end;
   if not TryQuicUnprotectPacket(APacket, 0, FAppKeysR,
     FLargestRecvPn[qspApplication], LPn, LPayload) then
+  begin
+    FLastDropReason := 'short packet unprotect failed';
     Exit;
+  end;
+  FLastDropReason := '';
+  Inc(FRxShortOk);
   RecordRecvPn(qspApplication, LPn);
   { 授予参数必须先于任何应用空间帧落地：MAX_STREAMS/MAX_DATA 帧
     相对 initial_* 参数是增量语义，顺序颠倒会被零值覆盖 }
@@ -1446,6 +1469,8 @@ var
   LOfs, LEnd: Integer;
   LF: TQuicFrame;
   LRanges: TQuicAckRangeArray;
+  LCloseReason: string;
+  LHexDigits: string;
 begin
   LOfs := 0;
   LEnd := Length(APayload);
@@ -1453,13 +1478,22 @@ begin
   begin
     if not TryQuicFrameParse(APayload, LOfs, LEnd, LF, LRanges) then
     begin
-      TakeError('frame parse failed');
+      { 诊断面：空间+偏移+失败处首字节（对端发了什么可取证） }
+      LHexDigits := '0123456789abcdef';
+      if LOfs < LEnd then
+        TakeError('frame parse failed space=' + IntToStr(Ord(ASpace)) +
+          ' ofs=' + IntToStr(LOfs) + '/' + IntToStr(LEnd) +
+          ' byte=0x' + LHexDigits[1 + (APayload[LOfs] shr 4)] +
+          LHexDigits[1 + (APayload[LOfs] and $F)])
+      else
+        TakeError('frame parse failed space=' + IntToStr(Ord(ASpace)) +
+          ' ofs=' + IntToStr(LOfs) + '/' + IntToStr(LEnd));
       Exit;
     end;
     Inc(LOfs, LF.Consumed);
     case LF.Kind of
-      qfkPadding, qfkPing:
-        ;
+      qfkPadding, qfkPing, qfkNewToken:
+        ;   { NEW_TOKEN（§19.7）：客户端不重连场景无 token 复用，忽略 }
       qfkAck:
         SettleAckFrame(ASpace, LRanges, LF.AckDelayRaw);
       qfkCrypto:
@@ -1468,10 +1502,21 @@ begin
             SliceOf(APayload, LF.DataOfs, LF.DataLen));
       qfkConnectionClose:
         begin
-          if LF.CloseSpace = qcsTransport then
-            TakeError('connection closed by peer (transport)')
+          { 诊断面：码/触发帧/原因短语并入错误文本（对端为何关连可取证） }
+          if LF.ReasonLen > 0 then
+          begin
+            SetLength(LCloseReason, LF.ReasonLen);
+            Move(APayload[LF.ReasonOfs], LCloseReason[1], LF.ReasonLen);
+          end
           else
-            TakeError('connection closed by peer (application)');
+            LCloseReason := '';
+          if LF.CloseSpace = qcsTransport then
+            TakeError('connection closed by peer (transport) code=' +
+              IntToStr(Int64(LF.ErrorCode)) + ' frame_type=' +
+              IntToStr(Int64(LF.CloseFrameType)) + LCloseReason)
+          else
+            TakeError('connection closed by peer (application) code=' +
+              IntToStr(Int64(LF.ErrorCode)) + LCloseReason);
           Exit;
         end;
       qfkHandshakeDone:
@@ -1536,10 +1581,16 @@ begin
   while (FPhase <> qcpClosed) and (LPos < Length(ADgram)) do
   begin
     if ADgram[LPos] = 0 then
+    begin
+      Inc(FRxPeekFail);   { 裸零分支计数并入 peek-fail（诊断面） }
       Break;   { 裸零非包头；coalesced 尾随 PADDING 归前包 }
+    end;
     LCur := SliceOf(ADgram, LPos, Length(ADgram) - LPos);
     if not TryPeekQuicHeader(LCur, 0, LInfo) then
+    begin
+      Inc(FRxPeekFail);
       Break;   { 我方 SCID 为空 ⇒ 短头 DCID 长度恒 0 }
+    end;
 
     if not LInfo.IsLong then
     begin
@@ -1548,6 +1599,7 @@ begin
     end;
     if LInfo.Version <> cQuicVersionV1 then
     begin
+      Inc(FRxOtherVer);
       if LInfo.Version = cQuicVersionVersionNegotiation then
         TakeError('version negotiation unsupported');
       Break;

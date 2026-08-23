@@ -82,7 +82,11 @@ function BuildTLS13ClientHelloHandshakeWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean = False;
-  AIncludeSignedCertificateTimestamp: Boolean = False
+  AIncludeSignedCertificateTimestamp: Boolean = False;
+    { QUIC-TLS（RFC 9001 §4.2）：QUIC 模式禁报 <TLS1.3 版本——Go 栈
+      （crypto/tls quic.go）见 supported_versions 含旧版即发
+      protocol_version alert 关连；经典 TLS 路径保持双版本缺省 }
+  AQuic13Only: Boolean = False
 ): TBytes;
 
 function BuildTLS13ClientHelloHandshakeWithComputedPSKBinderAndCiphers(
@@ -263,6 +267,18 @@ begin
   AppendByte(LData, 4); // 长度 = 4 (2 versions)
   AppendUInt16(LData, TLS13_VERSION);    // TLS 1.3
   AppendUInt16(LData, TLS_LEGACY_VERSION); // TLS 1.2
+  Result := BuildExtensionHeader(TLS_EXTENSION_SUPPORTED_VERSIONS, LData);
+end;
+
+{ QUIC 模式：只报 TLS1.3（RFC 9001 §4.2——QUIC 握手报旧版本即违约，
+  Go 栈实测见旧版直接 protocol_version alert 关连） }
+function BuildExtensionSupportedVersionsQuic: TBytes;
+var
+  LData: TBytes;
+begin
+  SetLength(LData, 0);
+  AppendByte(LData, 2); // 长度 = 2 (1 version)
+  AppendUInt16(LData, TLS13_VERSION);    // TLS 1.3
   Result := BuildExtensionHeader(TLS_EXTENSION_SUPPORTED_VERSIONS, LData);
 end;
 
@@ -895,7 +911,8 @@ function BuildTLS13ClientHelloBodyWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean;
-  AIncludeSignedCertificateTimestamp: Boolean
+  AIncludeSignedCertificateTimestamp: Boolean;
+  AQuic13Only: Boolean
 ): TBytes;
 var
   LRandom, LSessionId: TBytes;
@@ -966,7 +983,10 @@ begin
   LExt := BuildExtensionRecordSizeLimit(TLS13_RECORD_SIZE_LIMIT_DEFAULT);
   AppendBytes(LExtensions, LExt);
 
-  LExt := BuildExtensionSupportedVersions;
+  if AQuic13Only then
+    LExt := BuildExtensionSupportedVersionsQuic
+  else
+    LExt := BuildExtensionSupportedVersions;
   AppendBytes(LExtensions, LExt);
 
   LExt := BuildExtensionPSKKeyExchangeModes;
@@ -1000,7 +1020,8 @@ function BuildTLS13ClientHelloHandshakeWithCiphers(
   const AKeyShare: TBytes;
   const ACipherSuites: TTLS13CipherSuiteList;
   AIncludeStatusRequest: Boolean;
-  AIncludeSignedCertificateTimestamp: Boolean
+  AIncludeSignedCertificateTimestamp: Boolean;
+  AQuic13Only: Boolean
 ): TBytes;
 var
   LBody: TBytes;
@@ -1011,7 +1032,8 @@ begin
     AKeyShare,
     ACipherSuites,
     AIncludeStatusRequest,
-    AIncludeSignedCertificateTimestamp
+    AIncludeSignedCertificateTimestamp,
+    AQuic13Only
   );
 
   Result := nil;
