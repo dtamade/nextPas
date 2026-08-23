@@ -262,7 +262,10 @@ IAgentClock = interface
   function SleepMs(AMs: Int64; const AToken: IAsyncCancellationToken): Boolean;
 end;
 
-{ ---- wire 层（自定义 transport / 测试装饰器的落点；不进门面）---- }
+{ ---- wire 层（自定义 transport / 测试装饰器的落点；不进门面）----
+  落位说明：TWire* 记录与 WireHeaderValue 是纯词表，物理定义在
+  nextpas.core.agent.base（sse/transport/intf 共用，ARCHITECTURE §2）；
+  本节接口在 nextpas.core.agent.intf。}
 
 TWireHeader = record
   Name: string;

@@ -154,6 +154,37 @@ type
     Truncated: Boolean;
   end;
 
+  { ---- wire 词表（sse/transport/intf 共用；API.md §3）---- }
+
+  TWireHeader = record
+    Name: string;
+    Value: string;
+  end;
+  TWireHeaderArray = array of TWireHeader;
+
+  TWireRequest = record
+    Url: string;                     { 本模块仅 POST（chat/messages 端点），方法由 transport 固定 }
+    BodyJson: TJsonText;             { 已序列化请求体 }
+    Headers: TWireHeaderArray;       { 仅鉴权与语义头；Host/Content-Length 等
+                                       物理头由 transport/http client 补全 }
+    ConnectTimeoutMs: Int64;         { CTimeoutDefault }
+    TotalTimeoutMs: Int64;           { CTimeoutDefault }
+  end;
+
+  TWireResponse = record
+    StatusCode: Integer;
+    Headers: TWireHeaderArray;
+    BodyText: string;                { 非流式路径全量响应体 }
+    RequestId: string;
+  end;
+
+  { SSE 帧（增量解析产物）}
+  TWireSSEEvent = record
+    Event: string;                   { event: 字段；无则空串 }
+    Data: string;                    { 多行 data: 拼接（\n 连接）}
+  end;
+  TWireSSEEventArray = array of TWireSSEEvent;
+
   { ---- 补全请求 ---- }
 
   TCompletionRequest = record
@@ -186,10 +217,16 @@ type
     正文 sdkTextDelta 的依序连接 }
   function MessageText(const AMsg: TMessage): string;
 
+  { wire 头查找（大小写不敏感，首个命中返回；未命中空串）。
+    RequestId 探测 / retry-after 解析 / 消费方自定义头检查共用 }
+  function WireHeaderValue(const AHeaders: TWireHeaderArray;
+    const AName: string): string;
+
 implementation
 
 uses
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.text.compare;
 
 function TTokenUsage.Known: Boolean;
 begin
@@ -228,6 +265,20 @@ begin
     if AMsg.Parts[I].Kind = pkText then
       SB.AppendStr(AMsg.Parts[I].Text);
   Result := SB.ToString;
+end;
+
+function WireHeaderValue(const AHeaders: TWireHeaderArray;
+  const AName: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(AHeaders) do
+    if SameText(AHeaders[I].Name, AName) then
+    begin
+      Result := AHeaders[I].Value;
+      Break;
+    end;
 end;
 
 class function TCompletionRequest.New(const AModel: string): TCompletionRequest; static;
