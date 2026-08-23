@@ -72,6 +72,10 @@ arena、并发原语三大件基本闲置；同时 417 处手搓数组是重复�
 **已知候选缺口**（待 P0 确认后再立项，不预先实现）：
 case-fold 键缓存（消 per-lookup `LowerCase` 分配）、fat record 的 move 语义。
 
+各阶段「需求 → 精确 core 单元与 API」的绑定矩阵见
+`docs/plans/compiler-core-reuse-map.md`（含一套代码吃 FPC 创世与 np 自举
+两代优化福利的机制说明）。
+
 ### 支柱三：分层依赖规则（模块化的硬边界）
 
 编译器层与 core 层位对齐——**compiler Ln 只准依赖 core ≤Ln**：
