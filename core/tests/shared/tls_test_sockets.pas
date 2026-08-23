@@ -189,6 +189,25 @@ begin
     (fpSetsockopt(ASocket, SOL_SOCKET, SO_SNDTIMEO, @TimeVal, SizeOf(TimeVal)) = 0);
 end;
 
+// 数字 IPv4 直接经 StrToHostAddr 解析；其余走名字解析。
+// 不能只依赖名字解析：hosts/DNS 可能把数字串误解析到非预期地址
+// （实测环境曾把 '127.0.0.1' 解析到 10.x 外网地址）。
+// 注意 StrToHostAddr 返回主机字节序，sin_addr 需要 htonl 转网络字节序。
+function ResolveAddressString(const AAddress: string; out ANetAddr: in_addr): Boolean;
+var
+  LEntry: THostEntry;
+begin
+  ANetAddr := StrToHostAddr(AAddress);
+  if ANetAddr.s_addr <> 0 then
+  begin
+    ANetAddr.s_addr := htonl(ANetAddr.s_addr);
+    Exit(True);
+  end;
+  Result := ResolveHostByName(AAddress, LEntry);
+  if Result then
+    ANetAddr := LEntry.Addr;
+end;
+
 function ConnectTCP(const AHost: string; APort: Word; ATimeoutSec: Integer = 10): TSocketHandle;
 var
   Sock: cint;
@@ -202,8 +221,8 @@ begin
   if Sock < 0 then
     raise Exception.Create('Unable to create socket');
 
-  // NetDB's ResolveHostByName returns H.Addr in network byte order.
-  if not ResolveHostByName(AHost, HostEntry) then
+  // 数字 IPv4 直析，其余走名字解析（见 ResolveAddressString 注释）。
+  if not ResolveAddressString(AHost, HostEntry.Addr) then
   begin
     fpClose(Sock);
     raise Exception.CreateFmt('Unable to resolve host: %s', [AHost]);
@@ -274,7 +293,7 @@ begin
     Addr.sin_addr.s_addr := 0  // INADDR_ANY
   else
   begin
-    if not ResolveHostByName(AAddress, HostEntry) then
+    if not ResolveAddressString(AAddress, HostEntry.Addr) then
     begin
       fpClose(Sock);
       raise Exception.CreateFmt('Unable to resolve bind address: %s', [AAddress]);
