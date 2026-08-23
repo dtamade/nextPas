@@ -413,6 +413,58 @@ begin
   FOwner.FNodes[FIndex] := D;
 end;
 
+function TGreenNode.TextLen: LongInt;
+var
+  D: TGreenNodeData;
+begin
+  Result := 0;
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit;
+  D := FOwner.FNodes[FIndex];
+  if (D.TextStart >= 0) and (D.TextStart + D.TextLen <= Length(FOwner.FNodeText)) then
+    Result := D.TextLen;
+end;
+
+function TGreenNode.TextEquals(const AValue: string; AIgnoreCase: Boolean): Boolean;
+var
+  D: TGreenNodeData;
+  P, Q: PChar;
+  I, L: LongInt;
+  C1, C2: AnsiChar;
+begin
+  { Mirror GetText's validity rules exactly: an out-of-range node yields ''
+    so it only ever equals an empty AValue. }
+  Result := False;
+  if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
+    Exit(L = 0);
+  D := FOwner.FNodes[FIndex];
+  L := Length(AValue);
+  if (D.TextStart < 0) or (D.TextLen <= 0) or
+    (D.TextStart + D.TextLen > Length(FOwner.FNodeText)) then
+    Exit(L = 0);
+  if D.TextLen <> L then
+    Exit;
+  if L = 0 then
+    Exit(True);
+  P := @FOwner.FNodeText[D.TextStart + 1];
+  Q := @AValue[1];
+  for I := 0 to L - 1 do
+  begin
+    C1 := P[I];
+    C2 := Q[I];
+    if AIgnoreCase then
+    begin
+      if (C1 >= 'A') and (C1 <= 'Z') then
+        Inc(C1, $20);
+      if (C2 >= 'A') and (C2 <= 'Z') then
+        Inc(C2, $20);
+    end;
+    if C1 <> C2 then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
 
 function TGreenNode.ChildCount: LongInt;
 begin

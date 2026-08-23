@@ -622,10 +622,10 @@ begin
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
         if FNoFold and (IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) or
-          (SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+          (Child.ChildAt(0).ChildAt(0).TextEquals('Result', True) and
            (FCurrentRetVarName <> '') and IsRecordVar(FCurrentRetVarName))) then
         begin
-          if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+          if Child.ChildAt(0).ChildAt(0).TextEquals('Result', True) and
             (FCurrentRetVarName <> '') then
             StringValue := LookupRecordVar(FCurrentRetVarName)
           else
@@ -644,7 +644,7 @@ begin
               (Child.ChildAt(0).ChildAt(1) <> nil) and
               TypeMetaFieldIsStr(StringValue, Child.ChildAt(0).ChildAt(1).Text) then
             begin
-              if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+              if Child.ChildAt(0).ChildAt(0).TextEquals('Result', True) and
                 (FCurrentRetVarName <> '') then
                 ReceiverName := FCurrentRetVarName
               else
@@ -670,7 +670,7 @@ begin
             end;
             if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
             begin
-              if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+              if Child.ChildAt(0).ChildAt(0).TextEquals('Result', True) and
                 (FCurrentRetVarName <> '') then
                 AddRecordFieldStoreRuntimeNode(
                   Decoded,
@@ -731,13 +731,13 @@ begin
             TypeMetaFieldIsStr(
               LookupClassVar(Child.ChildAt(0).ChildAt(0).Text),
               Child.ChildAt(0).ChildAt(1).Text)) or
-           (SameText(Child.ChildAt(0).ChildAt(0).Text, 'Self') and
+           (Child.ChildAt(0).ChildAt(0).TextEquals('Self', True) and
             (FCurrentMethodClass <> '') and
             TypeMetaFieldIsStr(
               FCurrentMethodClass,
               Child.ChildAt(0).ChildAt(1).Text))) then
         begin
-          if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Self') then
+          if Child.ChildAt(0).ChildAt(0).TextEquals('Self', True) then
           begin
             OwnerClassName := FCurrentMethodClass;
             ArgName := 'self';
@@ -1373,7 +1373,7 @@ begin
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
-            SameText(Arg.ChildAt(0).Text, 'IntToStr') then
+            Arg.ChildAt(0).TextEquals('IntToStr', True) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(1), Operand) then
             begin
@@ -1385,7 +1385,7 @@ begin
           end
           else if (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 4) and (Arg.ChildAt(0) <> nil) and
-            SameText(Arg.ChildAt(0).Text, 'Copy') then
+            Arg.ChildAt(0).TextEquals('Copy', True) then
           begin
             if not EmitOwnedStringCopyTemp(Arg, Decoded, Operand) then
             begin
@@ -1818,7 +1818,7 @@ begin
     end;
     if Child.NodeKind = gnkProcedureCallStatement then
     begin
-      if SameText(Child.Text, 'Halt') then
+      if Child.TextEquals('Halt', True) then
       begin
         Operand := '0';
         Arg := nil;
@@ -1827,7 +1827,7 @@ begin
           Arg := Child.ChildAt(0);
           if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
             (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
-            SameText(Arg.ChildAt(0).Text, 'Halt') then
+            Arg.ChildAt(0).TextEquals('Halt', True) then
             Arg := Arg.ChildAt(1);
         end;
         if FNoFold and (Arg <> nil) then
@@ -1936,7 +1936,7 @@ begin
         end;
         Continue;
       end;
-      if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
+      if Child.TextEquals('WriteLn', True) or Child.TextEquals('Write', True) then
       begin
         { Bare System.Write/WriteLn only. Method form LH.Write (DotAccess callee)
           must not fall into write_i64_decimal — that steals interface Write. }
@@ -1977,17 +1977,17 @@ begin
             end;
             { Batch 25/27: textfile handle is not an integer payload. }
             if (RhsNode.NodeKind = gnkIdentifier) and
-              (SameText(RhsNode.Text, 'ErrOutput') or
-               SameText(RhsNode.Text, 'Output') or
-               SameText(RhsNode.Text, 'StdOut') or
-               SameText(RhsNode.Text, 'StdErr') or
-               SameText(RhsNode.Text, 'Input')) then
+              (RhsNode.TextEquals('ErrOutput', True) or
+               RhsNode.TextEquals('Output', True) or
+               RhsNode.TextEquals('StdOut', True) or
+               RhsNode.TextEquals('StdErr', True) or
+               RhsNode.TextEquals('Input', True)) then
             begin
-              if SameText(RhsNode.Text, 'ErrOutput') or
-                SameText(RhsNode.Text, 'StdErr') then
+              if RhsNode.TextEquals('ErrOutput', True) or
+                RhsNode.TextEquals('StdErr', True) then
                 ArgName := 'WriteErr'
-              else if SameText(RhsNode.Text, 'Output') or
-                SameText(RhsNode.Text, 'StdOut') then
+              else if RhsNode.TextEquals('Output', True) or
+                RhsNode.TextEquals('StdOut', True) then
                 ArgName := 'Write';
               Inc(ArgIndex);
               Continue;
@@ -2009,7 +2009,7 @@ begin
               )
             else if (RhsNode.NodeKind = gnkFunctionCall) and
               (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
-              SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
+              RhsNode.ChildAt(0).TextEquals('IntToStr', True) and
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
               AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand, ArgName)
             else if EmitOwnedStringWriteTemp(RhsNode, Operand) then
@@ -2177,7 +2177,7 @@ begin
               AddWriteIntRuntimeNode(RhsNode, Operand, ArgName);
             Inc(ArgIndex);
           end;
-          if SameText(Child.Text, 'WriteLn') then
+          if Child.TextEquals('WriteLn', True) then
             FModel.AddTypedHirNode(
               'write-string-runtime', ArgName, 0, 0, #10
             );
@@ -2205,13 +2205,13 @@ begin
             Decoded := Decoded + IntToStr(Value);
           Inc(ArgIndex);
         end;
-        if SameText(Child.Text, 'WriteLn') then
+        if Child.TextEquals('WriteLn', True) then
           Decoded := Decoded + #10;
         FModel.AddTypedHirNode('write-call', Child.Text, 0, 0, Decoded);
         Continue;
         end;
       end;
-      if FNoFold and SameText(Child.Text, 'SetLength') then
+      if FNoFold and Child.TextEquals('SetLength', True) then
       begin
         Arg := nil;
         ArgIndex := 0;
@@ -2261,7 +2261,7 @@ begin
             (RhsNode.ChildAt(1) <> nil) and
             (RhsNode.ChildAt(0).NodeKind = gnkIdentifier) and
             (RhsNode.ChildAt(1).NodeKind = gnkIdentifier) and
-            SameText(RhsNode.ChildAt(0).Text, 'Self') and
+            RhsNode.ChildAt(0).TextEquals('Self', True) and
             (FCurrentMethodClass <> '') and
             TypeMetaFieldIsDynArray(
               FCurrentMethodClass, RhsNode.ChildAt(1).Text) then
@@ -2282,8 +2282,8 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and (SameText(Child.Text, 'Inc') or
-        SameText(Child.Text, 'Dec')) and
+      if FNoFold and (Child.TextEquals('Inc', True) or
+        Child.TextEquals('Dec', True)) and
         not ((Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
           (Child.ChildAt(0).NodeKind = gnkDotAccess) and
           (Child.ChildAt(0).ChildCount >= 2) and
@@ -2312,7 +2312,7 @@ begin
               would residual-call @Result() and re-alloca a detached slot. }
             if SameText(Decoded, 'Result') and (FCurrentRetVarName <> '') then
               Decoded := FCurrentRetVarName;
-            if SameText(Child.Text, 'Inc') then
+            if Child.TextEquals('Inc', True) then
               StringValue := 'add'
             else
               StringValue := 'sub';
@@ -2347,7 +2347,7 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and SameText(Child.Text, 'FillChar') then
+      if FNoFold and Child.TextEquals('FillChar', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2371,7 +2371,7 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and SameText(Child.Text, 'Move') then
+      if FNoFold and Child.TextEquals('Move', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2392,7 +2392,7 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and SameText(Child.Text, 'GetMem') then
+      if FNoFold and Child.TextEquals('GetMem', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2412,7 +2412,7 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and SameText(Child.Text, 'FreeMem') then
+      if FNoFold and Child.TextEquals('FreeMem', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2430,7 +2430,7 @@ begin
         end;
         Continue;
       end;
-      if FNoFold and SameText(Child.Text, 'Assigned') then
+      if FNoFold and Child.TextEquals('Assigned', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2452,7 +2452,7 @@ begin
         was split into .inc files — M2 B6). Lowers to HIR interlocked-*
         intrinsics -> LLVM cmpxchg/atomicrmw instead of a direct call. }
       { InterlockedCompareExchange(Target, NewValue, CompareValue) -> old value }
-      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange') then
+      if FNoFold and Child.TextEquals('InterlockedCompareExchange', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2481,7 +2481,7 @@ begin
         Continue;
       end;
       { InterlockedExchange(Target, NewValue) -> old value }
-      if FNoFold and SameText(Child.Text, 'InterlockedExchange') then
+      if FNoFold and Child.TextEquals('InterlockedExchange', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2502,7 +2502,7 @@ begin
         Continue;
       end;
       { InterlockedExchangeAdd(Target, Value) -> old value }
-      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd') then
+      if FNoFold and Child.TextEquals('InterlockedExchangeAdd', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2523,7 +2523,7 @@ begin
         Continue;
       end;
       { InterlockedCompareExchange64(Target, NewValue, CompareValue) -> old value }
-      if FNoFold and SameText(Child.Text, 'InterlockedCompareExchange64') then
+      if FNoFold and Child.TextEquals('InterlockedCompareExchange64', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2552,7 +2552,7 @@ begin
         Continue;
       end;
       { InterlockedExchangeAdd64(Target, Value) -> old value }
-      if FNoFold and SameText(Child.Text, 'InterlockedExchangeAdd64') then
+      if FNoFold and Child.TextEquals('InterlockedExchangeAdd64', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2573,7 +2573,7 @@ begin
         Continue;
       end;
       { InterlockedIncrement(Target) -> new value (= old + 1) }
-      if FNoFold and SameText(Child.Text, 'InterlockedIncrement') then
+      if FNoFold and Child.TextEquals('InterlockedIncrement', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2593,7 +2593,7 @@ begin
         Continue;
       end;
       { InterlockedDecrement(Target) -> new value (= old - 1) }
-      if FNoFold and SameText(Child.Text, 'InterlockedDecrement') then
+      if FNoFold and Child.TextEquals('InterlockedDecrement', True) then
       begin
         Arg := Child;
         ArgIndex := 0;
@@ -2710,7 +2710,7 @@ begin
                 if RhsNode = nil then
                   Continue;
                 if (RhsNode.NodeKind = gnkIdentifier) and
-                  SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+                  RhsNode.TextEquals('Result', True) and (FCurrentRetVarName <> '') then
                 begin
                   Operand := Operand + 'varref ' + FCurrentRetVarName + #10;
                   Inc(CondValue);
@@ -2724,7 +2724,7 @@ begin
                   Continue;
                 end;
                 if (RhsNode.NodeKind = gnkIdentifier) and
-                  SameText(RhsNode.Text, 'Result') and
+                  RhsNode.TextEquals('Result', True) and
                   IsRuntimeArrVar(FCurrentRetVarName) then
                 begin
                   Operand := Operand + 'var ' + FCurrentRetVarName + '$ptr' + #10;
@@ -2775,7 +2775,7 @@ begin
               if RhsNode = nil then
                 Continue;
               if (RhsNode.NodeKind = gnkIdentifier) and
-                SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+                RhsNode.TextEquals('Result', True) and (FCurrentRetVarName <> '') then
               begin
                 Operand := Operand + 'varref ' + FCurrentRetVarName + #10;
                 Inc(CondValue);
@@ -2821,7 +2821,7 @@ begin
               Continue;
             { out/untyped + static-array Result need address, not loaded value. }
             if (RhsNode.NodeKind = gnkIdentifier) and
-              SameText(RhsNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+              RhsNode.TextEquals('Result', True) and (FCurrentRetVarName <> '') then
             begin
               Operand := Operand + #9 + 'varref ' + FCurrentRetVarName + #10;
               Continue;
@@ -2886,7 +2886,7 @@ begin
         (Child.ChildAt(0).ChildCount >= 2) and
         (Child.ChildAt(0).ChildAt(0) <> nil) and
         (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
-        SameText(Child.ChildAt(0).ChildAt(1).Text, 'Free') then
+        Child.ChildAt(0).ChildAt(1).TextEquals('Free', True) then
       begin
         StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
         if StringValue <> '' then

@@ -319,7 +319,7 @@ var
   begin
     if ANode = nil then
       Exit;
-    if ANode.Text <> '' then
+    if ANode.TextLen <> 0 then
     begin
       { Bare `Foo;` is gnkProcedureCallStatement with Text=Foo and no children.
         Unit-init reachability must mark those or np_unit_init_* emits
@@ -336,7 +336,7 @@ var
     begin
       C0 := ANode.ChildAt(0);
       C1 := ANode.ChildAt(1);
-      if (C0 <> nil) and (C1 <> nil) and (C0.Text <> '') and (C1.Text <> '') then
+      if (C0 <> nil) and (C1 <> nil) and (C0.TextLen <> 0) and (C1.TextLen <> 0) then
       begin
         Qual := C0.Text + '.' + C1.Text;
         MarkNameAndEnqueue(Qual);
@@ -367,21 +367,21 @@ var
       Exit;
     if ANode.NodeKind = gnkFunctionCall then
     begin
-      if ANode.Text <> '' then
+      if ANode.TextLen <> 0 then
         MarkNameAndEnqueue(ANode.Text);
       Callee := nil;
       if ANode.ChildCount >= 1 then
         Callee := ANode.ChildAt(0);
       if Callee <> nil then
       begin
-        if (Callee.NodeKind = gnkIdentifier) and (Callee.Text <> '') then
+        if (Callee.NodeKind = gnkIdentifier) and (Callee.TextLen <> 0) then
           MarkNameAndEnqueue(Callee.Text)
         else if (Callee.NodeKind = gnkDotAccess) and (Callee.ChildCount >= 2) then
         begin
           C0 := Callee.ChildAt(0);
           C1 := Callee.ChildAt(1);
-          if (C0 <> nil) and (C1 <> nil) and (C0.Text <> '') and
-            (C1.Text <> '') then
+          if (C0 <> nil) and (C1 <> nil) and (C0.TextLen <> 0) and
+            (C1.TextLen <> 0) then
           begin
             Qual := C0.Text + '.' + C1.Text;
             MarkNameAndEnqueue(Qual);
@@ -394,32 +394,32 @@ var
     begin
       { Bare procedure statement: Text holds callee; optional child0 is
         expression-form callee (DotAccess / FunctionCall). Args are children. }
-      if ANode.Text <> '' then
+      if ANode.TextLen <> 0 then
         MarkNameAndEnqueue(ANode.Text);
       Callee := nil;
       if ANode.ChildCount >= 1 then
         Callee := ANode.ChildAt(0);
       if Callee <> nil then
       begin
-        if (Callee.NodeKind = gnkIdentifier) and (Callee.Text <> '') then
+        if (Callee.NodeKind = gnkIdentifier) and (Callee.TextLen <> 0) then
           MarkNameAndEnqueue(Callee.Text)
         else if (Callee.NodeKind = gnkDotAccess) and (Callee.ChildCount >= 2) then
         begin
           C0 := Callee.ChildAt(0);
           C1 := Callee.ChildAt(1);
-          if (C0 <> nil) and (C1 <> nil) and (C0.Text <> '') and
-            (C1.Text <> '') then
+          if (C0 <> nil) and (C1 <> nil) and (C0.TextLen <> 0) and
+            (C1.TextLen <> 0) then
           begin
             Qual := C0.Text + '.' + C1.Text;
             MarkNameAndEnqueue(Qual);
             MarkNameAndEnqueue(C1.Text);
           end;
         end
-        else if (Callee.NodeKind = gnkFunctionCall) and (Callee.Text <> '') then
+        else if (Callee.NodeKind = gnkFunctionCall) and (Callee.TextLen <> 0) then
           MarkNameAndEnqueue(Callee.Text);
       end;
     end
-    else if (ANode.NodeKind = gnkIdentifier) and (ANode.Text <> '') and
+    else if (ANode.NodeKind = gnkIdentifier) and (ANode.TextLen <> 0) and
       (FirstBodyIndexForNameLocal(ANode.Text) >= 0) then
       MarkNameAndEnqueue(ANode.Text);
     for ChildIdx := 0 to ANode.ChildCount - 1 do
@@ -617,8 +617,8 @@ var
           if OParam.ChildCount > 0 then
             OType := OParam.ChildAt(0);
           if (OType <> nil) and
-            (SameText(OType.Text, 'String') or
-             SameText(OType.Text, 'AnsiString')) then
+            (OType.TextEquals('String', True) or
+             OType.TextEquals('AnsiString', True)) then
           begin
             RegisterRuntimeStrVar(OName);
             RegisterBorrowedRuntimeStrVar(OName);
@@ -666,15 +666,15 @@ var
         begin
           OVar := OChild.ChildAt(OK);
           if (OVar = nil) or (OVar.NodeKind <> gnkVarDecl) or
-            (OVar.Text = '') or IsRuntimeVar(OVar.Text) then
+            (OVar.TextLen = 0) or IsRuntimeVar(OVar.Text) then
             Continue;
           RegisterRuntimeVar(OVar.Text);
           OType := nil;
           if OVar.ChildCount > 0 then
             OType := OVar.ChildAt(0);
           if (OType <> nil) and
-            (SameText(OType.Text, 'String') or
-             SameText(OType.Text, 'AnsiString')) then
+            (OType.TextEquals('String', True) or
+             OType.TextEquals('AnsiString', True)) then
           begin
             RegisterRuntimeStrVar(OVar.Text);
             FModel.AddTypedHirNode('var-decl-tstring-runtime', OVar.Text,
@@ -753,21 +753,21 @@ var
       Exit;
     if ANode.NodeKind = gnkFunctionCall then
     begin
-      if ANode.Text <> '' then
+      if ANode.TextLen <> 0 then
         MarkProcedureBodyNeededByName(ANode.Text);
       Callee := nil;
       if ANode.ChildCount >= 1 then
         Callee := ANode.ChildAt(0);
       if Callee <> nil then
       begin
-        if (Callee.NodeKind = gnkIdentifier) and (Callee.Text <> '') then
+        if (Callee.NodeKind = gnkIdentifier) and (Callee.TextLen <> 0) then
           MarkProcedureBodyNeededByName(Callee.Text)
         else if (Callee.NodeKind = gnkDotAccess) and (Callee.ChildCount >= 2) then
         begin
           C0 := Callee.ChildAt(0);
           C1 := Callee.ChildAt(1);
-          if (C0 <> nil) and (C1 <> nil) and (C0.Text <> '') and
-            (C1.Text <> '') then
+          if (C0 <> nil) and (C1 <> nil) and (C0.TextLen <> 0) and
+            (C1.TextLen <> 0) then
           begin
             Qual := C0.Text + '.' + C1.Text;
             MarkProcedureBodyNeededByName(Qual);
@@ -778,32 +778,32 @@ var
     end
     else if ANode.NodeKind = gnkProcedureCallStatement then
     begin
-      if ANode.Text <> '' then
+      if ANode.TextLen <> 0 then
         MarkProcedureBodyNeededByName(ANode.Text);
       Callee := nil;
       if ANode.ChildCount >= 1 then
         Callee := ANode.ChildAt(0);
       if Callee <> nil then
       begin
-        if (Callee.NodeKind = gnkIdentifier) and (Callee.Text <> '') then
+        if (Callee.NodeKind = gnkIdentifier) and (Callee.TextLen <> 0) then
           MarkProcedureBodyNeededByName(Callee.Text)
         else if (Callee.NodeKind = gnkDotAccess) and (Callee.ChildCount >= 2) then
         begin
           C0 := Callee.ChildAt(0);
           C1 := Callee.ChildAt(1);
-          if (C0 <> nil) and (C1 <> nil) and (C0.Text <> '') and
-            (C1.Text <> '') then
+          if (C0 <> nil) and (C1 <> nil) and (C0.TextLen <> 0) and
+            (C1.TextLen <> 0) then
           begin
             Qual := C0.Text + '.' + C1.Text;
             MarkProcedureBodyNeededByName(Qual);
             MarkProcedureBodyNeededByName(C1.Text);
           end;
         end
-        else if (Callee.NodeKind = gnkFunctionCall) and (Callee.Text <> '') then
+        else if (Callee.NodeKind = gnkFunctionCall) and (Callee.TextLen <> 0) then
           MarkProcedureBodyNeededByName(Callee.Text);
       end;
     end
-    else if (ANode.NodeKind = gnkIdentifier) and (ANode.Text <> '') and
+    else if (ANode.NodeKind = gnkIdentifier) and (ANode.TextLen <> 0) and
       (FirstBodyIndexForNameLocal(ANode.Text) >= 0) then
       MarkProcedureBodyNeededByName(ANode.Text);
     for ChildIdx := 0 to ANode.ChildCount - 1 do
@@ -923,8 +923,8 @@ begin
               begin
                 TypeChild := ParamChild.ChildAt(0);
                 if (TypeChild <> nil) and
-                  (SameText(TypeChild.Text, 'String') or
-                   SameText(TypeChild.Text, 'AnsiString')) then
+                  (TypeChild.TextEquals('String', True) or
+                   TypeChild.TextEquals('AnsiString', True)) then
                 begin
                   IsStrParam := True;
                   RegisterRuntimeStrVar(RetVarName);
@@ -932,7 +932,7 @@ begin
                 end
                 else if (TypeChild <> nil) and
                   ((TypeChild.NodeKind = gnkArrayType) or
-                   ((TypeChild.Text = '') and (K + 1 < Child.ChildCount) and
+                   ((TypeChild.TextLen = 0) and (K + 1 < Child.ChildCount) and
                     (Child.ChildAt(K + 1) <> nil) and
                     (Child.ChildAt(K + 1).NodeKind = gnkArrayType)) or
                    ((TypeChild.NodeKind = gnkIdentifier) and
@@ -1013,8 +1013,8 @@ begin
         end
         else if (Child.NodeKind = gnkIdentifier) and
           (Child.NodeKind <> gnkBeginBlock) and
-          (SameText(Child.Text, 'String') or
-           SameText(Child.Text, 'AnsiString')) then
+          (Child.TextEquals('String', True) or
+           Child.TextEquals('AnsiString', True)) then
           IsStrReturn := True
         else if (Child.NodeKind = gnkIdentifier) and
           (Child.NodeKind <> gnkBeginBlock) and
@@ -1233,7 +1233,7 @@ begin
           begin
             Decl := Child.ChildAt(K);
             if (Decl = nil) or (Decl.NodeKind <> gnkConstDecl) or
-              (Decl.Text = '') then
+              (Decl.TextLen = 0) then
               Continue;
             ArrayTypeNode := nil;
             if Decl.ChildCount > 0 then
@@ -1256,7 +1256,7 @@ begin
           begin
             Decl := Child.ChildAt(K);
             if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
-              (Decl.Text = '') then
+              (Decl.TextLen = 0) then
               Continue;
             RegisterRuntimeVar(Decl.Text);
             ArrayTypeNode := FindArrayTypeNodeForVarDecl(Child, K);
@@ -1267,8 +1267,8 @@ begin
                 'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand);
             end
             else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
-              (SameText(Decl.ChildAt(0).Text, 'String') or
-               SameText(Decl.ChildAt(0).Text, 'AnsiString')) then
+              (Decl.ChildAt(0).TextEquals('String', True) or
+               Decl.ChildAt(0).TextEquals('AnsiString', True)) then
             begin
               RegisterRuntimeStrVar(Decl.Text);
               RegisterOwnedRuntimeStrVar(Decl.Text);

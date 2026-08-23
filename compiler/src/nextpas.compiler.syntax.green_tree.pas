@@ -135,6 +135,12 @@ type
     function NodeKindName: string;
     function ChildCount: LongInt;
     function ChildAt(const AIndex: LongInt): TGreenNode;
+    { Zero-allocation text accessors: TextLen mirrors GetText's validity
+      rules without materializing the substring; TextEquals compares in
+      place (AIgnoreCase folds ASCII 'A'..'Z' — same table semantics as
+      nextpas.core.text SameText). }
+    function TextLen: LongInt;
+    function TextEquals(const AValue: string; AIgnoreCase: Boolean = False): Boolean;
     function IsNil: Boolean; inline;
     property NodeKind: TGreenNodeKind read GetNodeKind write SetNodeKind;
     property ByteOffset: LongInt read GetByteOffset;

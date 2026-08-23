@@ -4,9 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.19：seed 子相归因 96%=encode+
-gdb 剖析解锁+刀④噪声级落地+刀①③ D20 降级；v2.18：P1 刀② 落地
-seed -1.5%/-2.4%；v2.17：residual 全量复跑 0/0 确认+P1 刀②细则补全；
+创建：2026-08-23　最后更新：2026-08-23（v2.20：P1 刀⑤ 绿树零分配文本
+API 落地 seed 累计 -8%；v2.19：seed 子相归因 96%=encode+gdb 剖析解锁+
+刀④噪声级落地+刀①③ D20 降级；v2.18：P1 刀② 落地 seed -1.5%/-2.4%；
+v2.17：residual 全量复跑 0/0 确认+P1 刀②细则补全；
 v2.16：D19 门禁修复+N7 清单+P1 侦察；v2.15：N6 落地 66/66 命名收官；
 v2.14：N5 落地 63/66；
 v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
@@ -18,11 +19,11 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
-性能批次  ██▌░░░░░░░░░░░░░  P0✅ │ P1: 刀②✅ -1.5~-2.4%·子相探针+gdb 剖析✅ │ encode 占 seed 96%=下一靶
+性能批次  ██▊░░░░░░░░░░░░░  P0✅ │ P1: 刀②✅-1.5~2.4%·刀⑤✅-4.5~6.0%(累计-8%) │ encode 96%→已削
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 刀⑤ encode 字符串构造(fpc_copy 55% 真靶) → swiss 接线 → P2 arena
+下一口    P1 下刀=SymbolAt/ResolveTypeIdForOwner 按值记录返回 → swiss 接线 → P2 arena
 ```
 
 ---
@@ -116,6 +117,13 @@ seed **231954/232932 ms**、sema **292387/293084 ms**、resolution
 约 -3~-6s——两轮均低于基线两轮下界，方向一致；幅度与 i17 A/B 实测的
 查找机制总开销上界（+4.8s）同量级，归因干净（消除的是两处查找点的
 LowerCase 每次调用临时串分配）。
+
+**P1 刀⑤ 落地实测**（2026-08-23，同协议两轮，轮间方差 seed 1.2%，
+测量时环境有并发单线程构建·负载 10/44 核）：seed **221592/219036 ms**、
+sema **280708/278678 ms**、encode 相 **218.1/215.6 s**。对刀② 状态：
+seed **-10.4/-13.9s（-4.5%/-6.0%）**；对 P0 基线累计 **-13.8/-19.7s
+（-5.9%/-8.3%）**——迄今最大单刀。GetText 分配风暴假说证实：绿树
+`.Text` 每次访问都 Copy() 物化子串，判空与字面量比较占大头。
 
 **P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
 `np_sema_seed_function_bodies.inc`；一轮 tree mini）：
@@ -344,7 +352,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅（-1.5%/-2.4%）+子相探针+gdb 剖析基建✅+刀④✅（噪声级）；刀①③经 D20 动态降级挂起；🎯 刀⑤=encode 字符串构造（见 §2.3 剖析） |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅+刀⑤✅（累计 seed -8%）+子相探针+gdb 剖析基建✅；刀①③ D20 降级挂起；下一靶=SymbolAt/ResolveTypeIdForOwner 按值返回（见 §2.3 剖析） |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -390,12 +398,21 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   之间无交叉；Needed/Queued/Encoded 终态集合不变。实测 seed
   241.0/255.2s——**噪声级**（第二轮含机器抖动，轮间差 14s）：被转换
   路径本就只占 seed <3%，保留改动（严格少拷贝、全门禁绿）但如实记零。
-- **刀⑤ encode 字符串构造（🎯 新靶，下一批）**：剖析显示 encode 内
-  fpc_copy+ansistr_assign 占 55%——AddTypedNode 格式化串
-  （'var '+name+#10 等）、MangledNameSig/GetParamSignature 级联拼接、
-  ParamTypes 累加。方向：HIR 节点文本构造廉价化（预分配/复用 builder）
-  与按值记录传递就地化；先对 encode 内 AddTypedNode 调用簇做计数探针
-  再动手。
+- **刀⑤ encode 文本访问去分配（✅ 已落地，迄今最大单刀）**：根因=
+  `TGreenNode.GetText` 每次访问 `Copy()` 物化子串——`X.Text <> ''`
+  判空与 `SameText(X.Text,'lit')` 字面量比较都先付一次堆分配。实现=
+  绿树新增零分配 API `TextLen`（镜像 GetText 有效性规则）与
+  `TextEquals(AValue, AIgnoreCase)`（就地逐字节比较，忽略大小写折
+  ASCII A-Z=text.utils.SameText 同表语义；无效节点仅等于空串，边界
+  与 GetText 严格一致）。转换：seed 文件 26 处判空→TextLen+5 组
+  SameText 字面量→TextEquals（编码循环参数处理/Return 扫描/外层帧
+  注册/初始扫描），walk_halt_calls 45 处 SameText→TextEquals（BFS
+  扩展路径全量，sed 受限模式 `[A-Za-z_.()0-9]+\.Text` 机械替换后
+  修复 `.Text.TextEquals` 双重限定笔误）；call_binding 的 .Text 系
+  传参用途不动。**实测 seed 221.6/219.0s 对刀② 232.0/232.9s 即
+  -4.5%/-6.0%**。遗留靶：SymbolAt/ResolveTypeIdForOwner 按值记录
+  返回（画像次帧 10+9 样本）留待下刀。
+- **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
 - **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
   seed 相对 §2.3 基线 235s/238s 对比；验收=总分钟数降+residual 0/0
   保持+十三探针零新回归。
@@ -632,6 +649,7 @@ P0 基线数字，回滚判据客观化。
 | v2.17 | （本提交） | residual 全量复跑核对：N5/N6 挂账销项（uniq/total=0/0 保持、opt 首错=同族支配性违规 %v8263@RunEnvStatus 仅编号位移）；P1 刀②两条实现级保证补入实施细则（ASCII 折叠语义等价+scratch 缓冲唯一性纪律） |
 | v2.18 | （本提交） | P1 刀② 落地：共享 FoldAsciiInto（sema.overload）+analyzer FBodyLookupScratch+Context PString 借用；两查找点消 LowerCase 分配；Index 侧不改（Put 键别名）；实测 seed 235/238s→232/233s（-1.5%/-2.4%，轮间方差 0.4%）；穷举 65k 字节组合折叠等价 failures=0+SetLength 十万次 alloc-delta=0 两项前置实证 |
 | v2.19 | （本提交） | seed 子相探针（reach/plan/encode）落地：**encode 占 seed ~96%**，刀③四趟扫描所在 reach/plan <3%；gdb 符号化采样法解锁 perf 受阻（stage0-debug -g 版+135 样本）：fpc_copy 38.5%+ansistr_assign 16.3%=托管拷贝风暴，真靶=encode 字符串构造；刀④ mark/scan 17 处 RMW→GetPtrUnchecked 就地化（噪声级如实记零）；D20 教训=归因必须先映射相位再选靶，刀①③静态降级挂起；刀⑤ encode 字符串构造立项 |
+| v2.20 | （本提交） | P1 刀⑤ 落地：绿树零分配文本 API `TextLen`+`TextEquals`（镜像 GetText 有效性与 SameText 折叠语义）；seed 文件 26 判空+5 组字面量、walk_halt_calls 45 组 BFS 路径全量转换；实测 seed 221.6/219.0s 对刀② -4.5%/-6.0%、对 P0 基线累计 -5.9%/-8.3%=迄今最大单刀；遗留靶=SymbolAt/ResolveTypeIdForOwner 按值记录返回 |
 
 ## 10. 文档维护规则
 
