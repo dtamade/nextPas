@@ -4,7 +4,7 @@ procedure TSemanticAnalyzer.MarkClassMethodCohort(const AClassName: string);
 var
   K: LongInt;
   Prefix: string;
-  Entry: TProcedureBodyEntry;
+  PEntry: ^TProcedureBodyEntry;
   CurName, ParentName: string;
   TypeId: LongInt;
   Meta: TTypeMetadata;
@@ -22,13 +22,14 @@ begin
   begin
     Prefix := CurName + '.';
     for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
-      if (Length(FProcedureBodies[K].Name) > Length(Prefix)) and
-        SameText(Copy(FProcedureBodies[K].Name, 1, Length(Prefix)), Prefix) then
-      begin
-        Entry := FProcedureBodies[K];
-        Entry.Needed := True;
-        FProcedureBodies[K] := Entry;
-      end;
+    begin
+      { Pointer access: GetItem copies the record (managed fields) twice
+        per hit; the table is scanned per cohort over 15k+ bodies. }
+      PEntry := FProcedureBodies.GetPtrUnchecked(K);
+      if (Length(PEntry^.Name) > Length(Prefix)) and
+        SameText(Copy(PEntry^.Name, 1, Length(Prefix)), Prefix) then
+        PEntry^.Needed := True;
+    end;
     ParentName := '';
     TypeId := FModel.FindTypeByName(CurName);
     if (TypeId > 0) and (TypeId <= FModel.TypeCount) then
@@ -49,7 +50,6 @@ procedure TSemanticAnalyzer.MarkProcedureBodyNeededByName(const AName: string);
 var
   Bare, LClassName, LMethodName, Resolved: string;
   Index, DotPos, J: LongInt;
-  Entry: TProcedureBodyEntry;
 begin
   { Exact mark via name walk. Cohort only for Create/Destroy. }
   if AName = '' then
@@ -62,9 +62,7 @@ begin
   Index := FirstBodyIndexForNameLocal(Bare);
   while Index >= 0 do
   begin
-    Entry := FProcedureBodies[Index];
-    Entry.Needed := True;
-    FProcedureBodies[Index] := Entry;
+    FProcedureBodies.GetPtrUnchecked(Index)^.Needed := True;
     Index := NextBodyIndexForNameLocal(Index);
   end;
   if not SameText(Bare, AName) then
@@ -72,9 +70,7 @@ begin
     Index := FirstBodyIndexForNameLocal(AName);
     while Index >= 0 do
     begin
-      Entry := FProcedureBodies[Index];
-      Entry.Needed := True;
-      FProcedureBodies[Index] := Entry;
+      FProcedureBodies.GetPtrUnchecked(Index)^.Needed := True;
       Index := NextBodyIndexForNameLocal(Index);
     end;
   end;
@@ -228,18 +224,19 @@ var
   QHead, QTail: LongInt;
   Visited: array of Boolean;
   NeededCount: LongInt;
-  Entry: TProcedureBodyEntry;
+  PEntry: ^TProcedureBodyEntry;
 
   procedure EnqueueBody(const AIndex: LongInt);
   begin
     if (AIndex < 0) or (AIndex >= LongInt(FProcedureBodies.Count)) then
       Exit;
-    if not FProcedureBodies[AIndex].Needed then
+    PEntry := FProcedureBodies.GetPtrUnchecked(AIndex);
+    if not PEntry^.Needed then
       Exit;
     if Visited[AIndex] then
       Exit;
     Visited[AIndex] := True;
-    if FProcedureBodies[AIndex].Body = nil then
+    if PEntry^.Body = nil then
       Exit;
     { Always enqueue Needed bodies. Flood-prone units (simd/math/crypto) expand
       via WalkGreenForCallTargets only (see WalkBodyForReachability) — never the
@@ -255,9 +252,7 @@ var
   begin
     if (AIndex < 0) or (AIndex >= LongInt(FProcedureBodies.Count)) then
       Exit;
-    Entry := FProcedureBodies[AIndex];
-    Entry.Needed := True;
-    FProcedureBodies[AIndex] := Entry;
+    FProcedureBodies.GetPtrUnchecked(AIndex)^.Needed := True;
     EnqueueBody(AIndex);
   end;
 
@@ -476,20 +471,19 @@ begin
   { Initial seeds: root unit + CLI + minimal System VMT. }
   for I := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
-    Entry := FProcedureBodies[I];
-    if (RootId <> '') and SameText(Entry.OwnerUnitId, RootId) then
-      Entry.Needed := True;
-    if SameText(Entry.Name, 'ParamCount') or
-      SameText(Entry.Name, 'ParamStr') or
+    PEntry := FProcedureBodies.GetPtrUnchecked(I);
+    if (RootId <> '') and SameText(PEntry^.OwnerUnitId, RootId) then
+      PEntry^.Needed := True;
+    if SameText(PEntry^.Name, 'ParamCount') or
+      SameText(PEntry^.Name, 'ParamStr') or
       { L3 residual: method WalkGreenForCallTargets misses some free helpers
         (ChangeFileExt$ss / ResolveExecutablePath$sis /
         CompilerCreateUnitAllocator). Force-seed until the callee-token mark
         path is complete. }
-      SameText(Entry.Name, 'ChangeFileExt') or
-      SameText(Entry.Name, 'ResolveExecutablePath') or
-      SameText(Entry.Name, 'CompilerCreateUnitAllocator') then
-      Entry.Needed := True;
-    FProcedureBodies[I] := Entry;
+      SameText(PEntry^.Name, 'ChangeFileExt') or
+      SameText(PEntry^.Name, 'ResolveExecutablePath') or
+      SameText(PEntry^.Name, 'CompilerCreateUnitAllocator') then
+      PEntry^.Needed := True;
   end;
   MarkNameAndEnqueue('TObject.Create');
   MarkNameAndEnqueue('TObject.Destroy');
@@ -550,6 +544,7 @@ procedure TSemanticAnalyzer.SeedFunctionBodies;
 var
   I, J, K: LongInt;
   Entry: TProcedureBodyEntry;
+  PEntry: ^TProcedureBodyEntry;
   ParamCount: LongInt;
   Child, ParamChild, TypeChild, Decl, ArrayTypeNode: TGreenNode;
   SavedTerminated: Boolean;
@@ -831,7 +826,12 @@ var
 begin
   FSeedingBodiesActive := True;
   try
-    CollectReachableBodyRoots;
+    PhaseBegin('seed.reach');
+    try
+      CollectReachableBodyRoots;
+    finally
+      PhaseEnd('seed.reach');
+    end;
     FGenericWorkQueue.Clear;
     FGenericWorkQueue.EnsureCapacity(LongInt(FProcedureBodies.Count) + 64);
     WorkHead := 0;
@@ -842,28 +842,34 @@ begin
       Queued flag replaces O(n) membership scan of FGenericWorkQueue. }
     while True do
     begin
-      MarkBodiesFromTypedHirCalls;
-      ExpandNeededBodiesCallTargets;
+      PhaseBegin('seed.plan');
+      try
+        MarkBodiesFromTypedHirCalls;
+        ExpandNeededBodiesCallTargets;
+      finally
+        PhaseEnd('seed.plan');
+      end;
       for I := 0 to LongInt(FProcedureBodies.Count) - 1 do
       begin
-        if FProcedureBodies[I].Body = nil then
+        PEntry := FProcedureBodies.GetPtrUnchecked(I);
+        if PEntry^.Body = nil then
           Continue;
-        if not FProcedureBodies[I].Needed then
+        if not PEntry^.Needed then
           Continue;
-        if FProcedureBodies[I].Encoded then
+        if PEntry^.Encoded then
           Continue;
-        if FProcedureBodies[I].Queued then
+        if PEntry^.Queued then
           Continue;
-        Entry := FProcedureBodies[I];
-        Entry.Queued := True;
-        FProcedureBodies[I] := Entry;
+        PEntry^.Queued := True;
         FGenericWorkQueue.Push(I);
       end;
       if WorkHead >= LongInt(FGenericWorkQueue.Count) then
         Break;
 
-  while WorkHead < LongInt(FGenericWorkQueue.Count) do
-  begin
+    PhaseBegin('seed.encode');
+    try
+      while WorkHead < LongInt(FGenericWorkQueue.Count) do
+      begin
     I := FGenericWorkQueue[WorkHead];
     Inc(WorkHead);
     if (WorkHead mod 50 = 0) or (WorkHead = 1) then
@@ -873,8 +879,7 @@ begin
     Entry := FProcedureBodies[I];
     if (Entry.Body = nil) or (Entry.Decl = nil) then
     begin
-      Entry.Encoded := True;
-      FProcedureBodies[I] := Entry;
+      FProcedureBodies.GetPtrUnchecked(I)^.Encoded := True;
       Continue;
     end;
     if Entry.Encoded then
@@ -1394,10 +1399,11 @@ begin
     FCurrentRetVarName := '';
     FCurrentOwnedStringReturn := False;
     FCurrentGenericInstance := '';
-    Entry := FProcedureBodies[I];
-    Entry.Encoded := True;
-    FProcedureBodies[I] := Entry;
-  end;
+    FProcedureBodies.GetPtrUnchecked(I)^.Encoded := True;
+      end;
+      finally
+        PhaseEnd('seed.encode');
+      end;
     end; { fixed-point outer while }
 
     NeededCount := 0;

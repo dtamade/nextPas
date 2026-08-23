@@ -4,9 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.18：P1 刀② 落地 seed -1.5%/-2.4%；
-v2.17：residual 全量复跑 0/0 确认+P1 刀②细则补全；v2.16：D19 门禁修复+
-N7 清单+P1 侦察；v2.15：N6 落地 66/66 命名收官；
+创建：2026-08-23　最后更新：2026-08-23（v2.19：seed 子相归因 96%=encode+
+gdb 剖析解锁+刀④噪声级落地+刀①③ D20 降级；v2.18：P1 刀② 落地
+seed -1.5%/-2.4%；v2.17：residual 全量复跑 0/0 确认+P1 刀②细则补全；
+v2.16：D19 门禁修复+N7 清单+P1 侦察；v2.15：N6 落地 66/66 命名收官；
 v2.14：N5 落地 63/66；
 v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
@@ -17,11 +18,11 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
-性能批次  ██▌░░░░░░░░░░░░░  P0✅ 探针+实测 │ P1 刀②✅ seed -1.5~-2.4% │ 刀①③+swiss 待做
+性能批次  ██▌░░░░░░░░░░░░░  P0✅ │ P1: 刀②✅ -1.5~-2.4%·子相探针+gdb 剖析✅ │ encode 占 seed 96%=下一靶
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 刀①常量折叠廉价化 → 刀③四趟合并 → swiss 接线 → P2 arena
+下一口    P1 刀⑤ encode 字符串构造(fpc_copy 55% 真靶) → swiss 接线 → P2 arena
 ```
 
 ---
@@ -115,6 +116,30 @@ seed **231954/232932 ms**、sema **292387/293084 ms**、resolution
 约 -3~-6s——两轮均低于基线两轮下界，方向一致；幅度与 i17 A/B 实测的
 查找机制总开销上界（+4.8s）同量级，归因干净（消除的是两处查找点的
 LowerCase 每次调用临时串分配）。
+
+**P1 seed 细分归因**（2026-08-23，子相探针 `seed.reach/plan/encode` 接入
+`np_sema_seed_function_bodies.inc`；一轮 tree mini）：
+
+| 子相 | 实测 | 占 seed 比 |
+|------|------|-----------|
+| seed.reach（CollectReachableBodyRoots 可达性预扫） | 399-971 ms | ~0.4% |
+| seed.plan（定点 MarkTypedHir+ExpandCallTargets ×3 轮） | 2.1-5.4 s | ~2% |
+| **seed.encode（逐体编码排水）** | **234-251 s** | **~96%** |
+
+结论：**播种的 96% 在编码循环内部**——静态侦察锁定的刀③四趟全表扫描
+位于 reach/plan，合计 <3%，动态证据将其降级为噪声级。
+
+**函数级剖析**（2026-08-23，gdb 批采样法解锁：perf 被
+kernel.perf_event_paranoid=3 阻塞且探针二进制 strip——以
+`build/stage0-debug`（stage0-fpc-flags 全参 `-g -O1` 经脚本形态构建，
+110MB not stripped）跑 tree mini、每 2s `gdb -batch -p PID -ex 'bt 6'`
+采 135 样本聚合）：叶帧排名 **fpc_copy 38.5%、fpc_ansistr_assign
+16.3%（合计 55%=托管类型深拷贝）、TVec.GetItem+vec.pas:1038 约 22%、
+SYSTEM MOVE 8.9%**；次帧显示拷贝主要经 GetItem 按值返回触发。真靶=
+encode 内字符串构造（AddTypedNode 的 `'var '+name+#10` 格式化拼接、
+MangledNameSig/GetParamSignature 级联）与按值记录传递，非表扫描。
+**D20 教训：剖析归因必须先映射到相位再选靶**——刀①③系纯静态侦察产物，
+被动态证据证伪为噪声级。
 
 **b4b-i17 开销量化**（同输入 A/B：正向=含 i17 的 LookupProcedureBody
 实例名扫描，反向=`git apply -R` a3e71253c 的 +9 行后重编译）：
@@ -319,7 +344,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅（seed -1.5%/-2.4%，见 §2.3 实测）；刀①常量折叠廉价化/刀③四趟全表合并/swiss 接线待做（细则见下行） |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅（-1.5%/-2.4%）+子相探针+gdb 剖析基建✅+刀④✅（噪声级）；刀①③经 D20 动态降级挂起；🎯 刀⑤=encode 字符串构造（见 §2.3 剖析） |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -332,11 +357,10 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
 **P1 实施细则（2026-08-23 深读定稿，下会话可直接开工）**：
 
-- **刀① 常量折叠廉价化**：`SameText(X.Text,'String')` 类常量簇改局部
-  helper——先 `=` 精确短路，长度不等立即 False，仅剩差异时做一次折叠；
-  覆盖 'String'/'AnsiString' ≥8 组与 'Create'/'Destroy'/'Halt' 家族
-  （seed inc 行号簇 26-199）。注意 SameText 本身不分配堆，省的是分支
-  折叠周期；分配大头在刀②。
+- **刀① 常量折叠廉价化（⬇️ D20 动态降级）**：SameText 本身已是长度
+  早退+逐字节表查（text.conv:414），无分配；其调用点散布 reach/plan/
+  encode，但 encode 内每次仅数次数十 ns——预期噪声级，**挂起不排期**，
+  留作 encode 字符串构造收口后复查。
 - **刀② 查找分配消除（✅ 已落地）**：两处查找点改复用折叠缓冲——
   ①`np_sema_overload_analysis.inc` FirstBodyIndexForNameLocal；
   ②`np_sema_overload_helpers.inc` CtxFirstBodyIndexForName（调用绑定
@@ -355,9 +379,23 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   SetLength+写入，禁止整体赋值（会共享缓冲触发 CoW）；实测 unique 串
   容量内反复 SetLength 十万次 alloc-delta=0，热身后零堆操作。
   后续演进=core swiss 增 fold-aware 变体（R6 登记，修 core 本体）。
-- **刀③ 全表扫描合并**：seed_function_bodies 四趟 FProcedureBodies
-  全表循环（行 477 标记/504 与 517 逐字重复的 Enqueue 扫描/528
-  Needed&&!Visited 三扫）合并为单趟状态机。
+- **刀③ 全表扫描合并（⬇️ D20 动态降级）**：四趟扫描位于 reach/plan
+  子相，合计占 seed <3%（§2.3 归因表）；其读改写拷贝已由刀④ 就地化，
+  合并状态机不再有可测量收益，**挂起不排期**。
+- **刀④ mark/scan 路径去拷贝（✅ 已落地，噪声级）**：seed 文件 17 处
+  `Entry := FProcedureBodies[i] … [i] := Entry` 读改写与高频 GetItem
+  读改 `GetPtrUnchecked(i)^` 就地访问（MarkClassMethodCohort 全表扫/
+  MarkProcedureBodyNeededByName 链/EnqueueBody/MarkIndex/初始种子扫/
+  定点入队扫/编码块两处写回）。语义审计：指针取用点与任何 Push 重分配
+  之间无交叉；Needed/Queued/Encoded 终态集合不变。实测 seed
+  241.0/255.2s——**噪声级**（第二轮含机器抖动，轮间差 14s）：被转换
+  路径本就只占 seed <3%，保留改动（严格少拷贝、全门禁绿）但如实记零。
+- **刀⑤ encode 字符串构造（🎯 新靶，下一批）**：剖析显示 encode 内
+  fpc_copy+ansistr_assign 占 55%——AddTypedNode 格式化串
+  （'var '+name+#10 等）、MangledNameSig/GetParamSignature 级联拼接、
+  ParamTypes 累加。方向：HIR 节点文本构造廉价化（预分配/复用 builder）
+  与按值记录传递就地化；先对 encode 内 AddTypedNode 调用簇做计数探针
+  再动手。
 - **度量协议**：每刀落地后 `NEXTPAS_PHASE_TIMING=1` tree mini 两轮，
   seed 相对 §2.3 基线 235s/238s 对比；验收=总分钟数降+residual 0/0
   保持+十三探针零新回归。
@@ -593,6 +631,7 @@ P0 基线数字，回滚判据客观化。
 | v2.16 | （本提交） | 收口深化：D19 轴 A 层位检查复活（截断错位+豁免写法双重失效→首次真实运行现形 8 条 R9 违规）；§4.2.2 N7 手术清单立项；P1 静态侦察+实施细则两块（140 处热点/LookupProcedureBody 分配实锤/三刀次序） |
 | v2.17 | （本提交） | residual 全量复跑核对：N5/N6 挂账销项（uniq/total=0/0 保持、opt 首错=同族支配性违规 %v8263@RunEnvStatus 仅编号位移）；P1 刀②两条实现级保证补入实施细则（ASCII 折叠语义等价+scratch 缓冲唯一性纪律） |
 | v2.18 | （本提交） | P1 刀② 落地：共享 FoldAsciiInto（sema.overload）+analyzer FBodyLookupScratch+Context PString 借用；两查找点消 LowerCase 分配；Index 侧不改（Put 键别名）；实测 seed 235/238s→232/233s（-1.5%/-2.4%，轮间方差 0.4%）；穷举 65k 字节组合折叠等价 failures=0+SetLength 十万次 alloc-delta=0 两项前置实证 |
+| v2.19 | （本提交） | seed 子相探针（reach/plan/encode）落地：**encode 占 seed ~96%**，刀③四趟扫描所在 reach/plan <3%；gdb 符号化采样法解锁 perf 受阻（stage0-debug -g 版+135 样本）：fpc_copy 38.5%+ansistr_assign 16.3%=托管拷贝风暴，真靶=encode 字符串构造；刀④ mark/scan 17 处 RMW→GetPtrUnchecked 就地化（噪声级如实记零）；D20 教训=归因必须先映射相位再选靶，刀①③静态降级挂起；刀⑤ encode 字符串构造立项 |
 
 ## 10. 文档维护规则
 
