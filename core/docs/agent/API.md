@@ -13,7 +13,8 @@
 - **回调三形态**：对外回调一律提供 method pointer / anonymous / plain proc 三种
   重载，内部统一存 `reference to`，参数用命名过程类型。
 - 所有 JSON 载荷字段类型为 `TJsonText = type string`（owned 全量 JSON 文本，
-  无损携带；禁止用 borrow 视图跨作用域）。
+  无损携带；禁止用 borrow 视图跨作用域）。类型别名定义在 nextpas.core.agent.base：
+  `TJsonText = type string;`
 
 ## 1. base 词表（nextpas.core.agent.base）
 
@@ -234,7 +235,8 @@ TWireHeaderArray = array of TWireHeader;
 TWireRequest = record
   Url: string;                      { 本模块仅 POST（chat/messages 端点），方法由 transport 固定 }
   BodyJson: TJsonText;              { 已序列化请求体 }
-  Headers: TWireHeaderArray;        { 含 auth/content-type/accept }
+  Headers: TWireHeaderArray;        { 仅鉴权与语义头；Host/Content-Length 等
+                                      物理头由 transport/http client 补全 }
   ConnectTimeoutMs: Int64;          { CTimeoutDefault }
   TotalTimeoutMs: Int64;            { CTimeoutDefault }
 end;
@@ -304,6 +306,8 @@ IAgentTool = interface
 end;
 
 { ---- 会话（W4 起；接口先行冻结讨论）---- }
+{ ThreadId 所有权：由消费方生成并持有（建议 core.id 的 ulid/v7）；
+  loop 不感知会话身份，store 的 Append/Load 顺序即 transcript 数组序 }
 
 IAgentTranscriptStore = interface
   procedure Append(const AThreadId: string; const AMsg: TMessage);
@@ -360,6 +364,7 @@ end;
 TOpenAIOptions = record
   Common: TProviderOptions;
   Organization: string;            { 可选 header }
+  { New 填入全部默认值（BaseUrl/超时/版本常量）；调用方按需覆盖字段 }
   class function New(const AModel: string): TOpenAIOptions; static;
 end;
 
@@ -548,6 +553,7 @@ function NewAnthropicWireDecoder: IAgentWireDecoder;
 IAgentWireDecoder = interface
   procedure DecodeEvent(const AEvent: TWireSSEEvent;
     out ADeltas: TStreamDeltaArray);   { ping 等 0 增量帧合法 }
+  { 流终止后调用一次（usage/finish 异序抹平）；重复调用返回空数组 }
   procedure Finalize(out ADeltas: TStreamDeltaArray);
 end;
 ```
@@ -582,6 +588,7 @@ end;
 | 读 chunk / 行缓冲上限 | 32 KiB / 1 MiB | PERFORMANCE §2 |
 | SSE 单事件 data 上限 | 8 MiB | SECURITY §3 |
 | 工具参数预检上限 | 256 KiB（超限合成 error result） | SECURITY §3 |
+| Extra 未知键捕获上限 | 单消息/part 64 个，超出丢弃并 warn | SECURITY §3 |
 | RawBodySnippet 上限 | 8 KiB | ERRORS §6 |
 | Logger 缺省 | nil → NullLogger（log.intf，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |

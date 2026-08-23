@@ -54,7 +54,9 @@ var
   LStream: IAgentCompletion;
   LDelta: TStreamDelta;
 begin
-  LStream := LProvider.Stream(AReq, []);
+  LStream := LProvider.Stream(
+    TCompletionRequest.New('gpt-4o').WithUserText('讲个关于编译器的笑话'),
+    []);
   while LStream.NextDelta(LDelta) do
     if LDelta.Kind = sdkTextDelta then
       Write(LDelta.TextDelta);
