@@ -310,6 +310,58 @@ begin
     CheckEqual('174080', BytesToHex(LOut));
   end);
 
+  { ---------- DATAGRAM（RFC 9221 §4）---------- }
+  LSuite.Test('DATAGRAM golden vectors both forms and rejection face', procedure
+  var
+    LPayload, LOut, LSlice: TBytes;
+    LFrame: TQuicFrame;
+  begin
+    { WITH_LENGTH 形态：0x31 + Len(varint) + 数据；'aabbcc' ⇒ 3103aabbcc }
+    LOut := nil;
+    QuicDatagramAppend(LOut, HexToBytes('aabbcc'));
+    CheckEqual('3103aabbcc', BytesToHex(LOut));
+    LPayload := HexToBytes('3103aabbcc');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(Int64(Ord(qfkDatagram)), Int64(Ord(LFrame.Kind)));
+    CheckEqual(2, LFrame.DataOfs);
+    CheckEqual(3, LFrame.DataLen);
+    CheckEqual(5, LFrame.Consumed);
+    LSlice := Copy(LPayload, LFrame.DataOfs, LFrame.DataLen);
+    CheckEqual('aabbcc', BytesToHex(LSlice));
+
+    { 空数据报合法：3100，DataLen=0 }
+    LOut := nil;
+    QuicDatagramAppend(LOut, nil);
+    CheckEqual('3100', BytesToHex(LOut));
+    LPayload := HexToBytes('3100');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(0, LFrame.DataLen);
+    CheckEqual(2, LFrame.Consumed);
+
+    { 裸形态（LEN=0）：数据延伸到包尾；30ee ⇒ 数据 ee }
+    LOut := nil;
+    QuicDatagramTailAppend(LOut, HexToBytes('ee'));
+    CheckEqual('30ee', BytesToHex(LOut));
+    LPayload := HexToBytes('30ee');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(1, LFrame.DataOfs);
+    CheckEqual(1, LFrame.DataLen);
+    CheckEqual(2, LFrame.Consumed);
+
+    { 共包迭代：WITH_LENGTH 定界后紧随 PING 可解析——证明非尾帧可共存 }
+    LPayload := HexToBytes('3103aabbcc01');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(5, LFrame.Consumed);
+    CheckTrue(TryQuicFrameParse(LPayload, 5, Length(LPayload), LFrame));
+    CheckEqual(Int64(Ord(qfkPing)), Int64(Ord(LFrame.Kind)));
+
+    { 拒绝面：长度声明越过载荷尾 / 只有类型字节 }
+    LPayload := HexToBytes('3104aabb');
+    CheckFalse(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    LPayload := HexToBytes('31');
+    CheckFalse(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+  end);
+
   { ---------- STREAM 位型矩阵 ---------- }
   LSuite.Test('STREAM bit matrix roundtrip all 8 combos', procedure
   var

@@ -56,6 +56,8 @@ const
   cQfStreamDataBlocked = $15;   { §19.13 }
   cQfStreamsBlockedBidi = $16;  { §19.14 双向 }
   cQfStreamsBlockedUni = $17;   { §19.14 单向 }
+  cQfDatagram = $30;            { RFC 9221 §4：LEN=0 数据延伸到包尾 }
+  cQfDatagramWithLength = $31;  { RFC 9221 §4：LEN=1 显式长度 }
   cQfStreamBase = $08;     { 0x08..0x0f：OFF=$04 LEN=$02 FIN=$01 }
   cQfNewConnectionId = $18;
   cQfRetireConnectionId = $19;
@@ -84,7 +86,7 @@ type
     qfkMaxData, qfkMaxStreamData, qfkMaxStreams,
     qfkDataBlocked, qfkStreamDataBlocked, qfkStreamsBlocked,
     qfkNewConnectionId, qfkRetireConnectionId, qfkPathChallenge,
-    qfkPathResponse, qfkConnectionClose, qfkHandshakeDone);
+    qfkPathResponse, qfkConnectionClose, qfkHandshakeDone, qfkDatagram);
 
   { ACK range：闭区间 [Lo..Hi]，降序排列 }
   TQuicAckRange = record
@@ -197,6 +199,13 @@ procedure QuicStreamDataBlockedAppend(var ABuf: TBytes; AStreamId,
   AMaxStreamData: UInt64);
 procedure QuicStreamsBlockedAppend(var ABuf: TBytes; ABidi: Boolean;
   AMaxStreams: UInt64);
+
+{** @desc DATAGRAM（RFC 9221 §4）编码：0x31 WITH_LENGTH 形态，可与其他
+ *       帧共包；空数据报合法 *}
+procedure QuicDatagramAppend(var ABuf: TBytes; const AData: TBytes);
+
+{** @desc 0x30 裸形态：数据延伸至包尾，仅可作包内最后一帧 *}
+procedure QuicDatagramTailAppend(var ABuf: TBytes; const AData: TBytes);
 
 {** @desc ACidLen ∈[1,20]、AResetToken 须恰 16 元素；违反返回 False *}
 function QuicNewConnectionIdAppend(var ABuf: TBytes; ASeq,
@@ -546,6 +555,31 @@ begin
         AFrame.Kind := qfkConnectionClose;
         AFrame.Consumed := (LPos - AOffset) + AFrame.ReasonLen;
       end;
+    { DATAGRAM（RFC 9221 §4）：0x30 LEN=0 数据延伸到包尾（仅限包内
+      最后一帧）；0x31 显式长度可与其他帧共包。数据区零拷贝
+      （DataOfs/DataLen）；空数据报合法（Length=0）。
+      流控语义：不占任何流控窗口（§5.3），走拥塞控制器（§5.4） }
+    cQfDatagram:
+      begin
+        AFrame.DataOfs := LPos;
+        AFrame.DataLen := AEnd_ - LPos;
+        AFrame.Consumed := AEnd_ - AOffset;
+        AFrame.Kind := qfkDatagram;
+      end;
+
+    cQfDatagramWithLength:
+      begin
+        if not QuicVarintDecode(APayload, LPos, LVal, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if LVal > UInt64(AEnd_ - LPos) then
+          Exit;   { 声明长度越过载荷尾 }
+        AFrame.DataOfs := LPos;
+        AFrame.DataLen := Integer(LVal);
+        AFrame.Consumed := (LPos - AOffset) + AFrame.DataLen;
+        AFrame.Kind := qfkDatagram;
+      end;
+
   else
     Exit;   { 未知/未实现类型：fail-closed（§12.4 FRAME_ENCODING_ERROR） }
   end;
@@ -648,6 +682,21 @@ begin
   if not QuicVarintAppend(ABuf, cQfCrypto) or
      not QuicVarintAppend(ABuf, AOffset) or
      not QuicVarintAppend(ABuf, UInt64(Length(AData))) then
+    Exit;
+  AppendTailBytes(ABuf, AData);
+end;
+
+procedure QuicDatagramAppend(var ABuf: TBytes; const AData: TBytes);
+begin
+  if not QuicVarintAppend(ABuf, cQfDatagramWithLength) or
+     not QuicVarintAppend(ABuf, UInt64(Length(AData))) then
+    Exit;
+  AppendTailBytes(ABuf, AData);
+end;
+
+procedure QuicDatagramTailAppend(var ABuf: TBytes; const AData: TBytes);
+begin
+  if not QuicVarintAppend(ABuf, cQfDatagram) then
     Exit;
   AppendTailBytes(ABuf, AData);
 end;
