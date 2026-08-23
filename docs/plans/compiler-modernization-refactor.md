@@ -4,7 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.15：N6 落地 66/66 命名收官；
+创建：2026-08-23　最后更新：2026-08-23（v2.17：residual 全量复跑 0/0 确认+
+P1 刀②细则补全；v2.16：D19 门禁修复+N7 清单+P1 侦察；v2.15：N6 落地
+66/66 命名收官；
 v2.14：N5 落地 63/66；
 v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
@@ -16,7 +18,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
-正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
+正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
 下一口    P1 播种路径索引分配(swiss+LowerCase 消除) → P2 arena
@@ -296,7 +298,7 @@ IInterface ×12（COM 基础设施支持用户代码）。考量：
 | N3 | frontend ×14 | 同上 | ✅ 34986b475 |
 | N4 | sema ×12 + ir.hir.lowering | +mini-regress | ✅ 门禁例外两类登记（I/O 族 FsExists/FsStat、sema→ir 上行边 R9）；十三探针回归见提交说明 |
 | N5 | ir ×25 + backend.plan | +全量 residual 对比 | ✅ 门禁例外+1（backend.plan I/O 族 FsDir）；全量 residual 对比归 N6 收口轮统一跑（本轮十三探针+tree mini 代替） |
-| N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ✅ 分两提交：N6a toolchain(2abcd33bb)+N6b 壳层 driver.*/json_helpers 收口。make verify 分解结果：hygiene/contract/incremental-cache/incremental-gate/system-intrinsics 全过；**constructor-typing 与 hir-class-alloc-contract 两红点为既有债**（stash 二分+去 i17 复测证明早于今日全部改动，疑似更早 b4b 行为变更，其脚本 flags 腐烂即久未运行之证）；verify_local 21 处旧布局路径已修至 src；residual 全量补跑挂下会话首项 |
+| N6 | toolchain ×3 + stage0 壳层 nextpas.driver.* + 配置收口 | make verify 全量 | ✅ 分两提交：N6a toolchain(2abcd33bb)+N6b 壳层 driver.*/json_helpers 收口。make verify 分解结果：hygiene/contract/incremental-cache/incremental-gate/system-intrinsics 全过；**constructor-typing 与 hir-class-alloc-contract 两红点为既有债**（stash 二分+去 i17 复测证明早于今日全部改动，疑似更早 b4b 行为变更，其脚本 flags 腐烂即久未运行之证）；verify_local 21 处旧布局路径已修至 src；residual 全量补跑已完成（0/0 保持+opt 首错=已知支配性违规不变）✅ |
 
 每批模板：git mv → unit 头改写 → 全仓 uses 同步（含 build 探针源）→
 contract 门禁清单扩充 → 清 ppu 重建 → 验收门 → commit。
@@ -333,6 +335,14 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   `FBodyLookupScratch: string` 复用字段承载折叠结果（容量保持后近似零
   分配），Index 侧同步用 scratch 折叠；后续演进=core swiss 增 fold-aware
   变体（R6 登记，修 core 本体）。
+  两条实现级保证：①折叠语义——helper 只折 ASCII `'A'..'Z'`→小写，
+  与 FPC `SysUtils.LowerCase` 文档语义（仅转换 A-Z 区间字符）逐字一致；
+  Pascal 标识符本身 ASCII 限定，键空间零变化=N 行为不变；查找/索引两侧
+  必须换用同一 helper（现状两侧同为 LowerCase，对称替换保持配对不变
+  式）。②scratch 唯一性——字段只允许 SetLength+逐字节写入，禁止任何
+  整体赋值 `Scratch := S`（会共享缓冲触发 CoW 重分配）；首次分配后
+  引用计数恒为 1，unique 串 SetLength 至更短长度不重分配仅改长度，
+  热身之后每次调用零堆操作。
 - **刀③ 全表扫描合并**：seed_function_bodies 四趟 FProcedureBodies
   全表循环（行 477 标记/504 与 517 逐字重复的 Enqueue 扫描/528
   Needed&&!Visited 三扫）合并为单趟状态机。
@@ -569,6 +579,7 @@ P0 基线数字，回滚判据客观化。
 | v2.14 | 91ff9e29d | N5 落地：ir 25 单元+backend.plan 迁入 src（累计 63/66，仅剩 toolchain ×3；src 64 pas+71 inc）；门禁清单扩至 62 名+例外+1（backend.plan FsDir）+上行边登记扩至 frontend.compilation_session→ir/backend 全族；全量 residual 对比诚实改挂 N6 收口轮（本轮以十三探针+tree mini 代证） |
 | v2.15 | （本提交） | N6 落地=命名支柱收官：N6a toolchain ×3（2abcd33bb，66 生产单元全清，I/O 例外+3）；N6b 壳层 nextpas.driver.{command,projection}.*+target_config 改名+json_helpers 双胞胎收口+门禁前缀卫兵修复（点分后缀误报）；§5 全表收官；台账 D17 文档脚本截断教训 |
 | v2.16 | （本提交） | 收口深化：D19 轴 A 层位检查复活（截断错位+豁免写法双重失效→首次真实运行现形 8 条 R9 违规）；§4.2.2 N7 手术清单立项；P1 静态侦察+实施细则两块（140 处热点/LookupProcedureBody 分配实锤/三刀次序） |
+| v2.17 | （本提交） | residual 全量复跑核对：N5/N6 挂账销项（uniq/total=0/0 保持、opt 首错=同族支配性违规 %v8263@RunEnvStatus 仅编号位移）；P1 刀②两条实现级保证补入实施细则（ASCII 折叠语义等价+scratch 缓冲唯一性纪律） |
 
 ## 10. 文档维护规则
 
