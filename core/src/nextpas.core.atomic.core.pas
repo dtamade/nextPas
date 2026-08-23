@@ -62,6 +62,9 @@ function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): I
 function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 {$ENDIF}
+{$IF DEFINED(CPUARM)}
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+{$ENDIF}
 procedure _backend_read_barrier; inline;
 procedure _backend_write_barrier; inline;
 procedure _backend_full_barrier; inline;
@@ -612,6 +615,21 @@ end;
 function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 begin
   Result := InterlockedExchangeAdd64(aTarget, aValue);
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPUARM)}
+// arm32 无 64 位原生交换：LDREXD/STREXD 独占环构造 xchg（返回旧值）。
+// AAPCS：r0=@aTarget，aValue 低字在 r2、高字在 r3；返回值低字 r0、高字 r1。
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; assembler; nostackframe;
+asm
+.Larmxchg64_loop:
+  ldrexd  r4, r5, [r0]
+  strexd  r6, r2, r3, [r0]
+  cmp     r6, #0
+  bne     .Larmxchg64_loop
+  mov     r0, r4
+  mov     r1, r5
 end;
 {$ENDIF}
 

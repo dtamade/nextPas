@@ -281,7 +281,7 @@ function atomic_exchange(var aObj: PtrInt; aDesired: PtrInt): PtrInt; overload; 
 function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt; aOrder: memory_order_t): PtrUInt; overload; inline;
 function atomic_exchange(var aObj: PtrUInt; aDesired: PtrUInt): PtrUInt; overload; inline;
 {$ENDIF}
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86) OR DEFINED(CPUARM)}
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64; overload;
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64): Int64; overload;
 function atomic_exchange_64(var aObj: UInt64; aDesired: UInt64; aOrder: memory_order_t): UInt64; overload;
@@ -1701,7 +1701,7 @@ begin
 end;
 {$ENDIF}
 
-{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86) OR DEFINED(CPUARM)}
 function atomic_exchange_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t): Int64;
 begin
   AtomicValidateRmwOrder(aOrder);
