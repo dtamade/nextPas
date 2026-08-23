@@ -68,6 +68,8 @@ id/model                          → TMessage.Id/.Model
 帧序（含容错）：
 
 ```
+data: {"id":..,"model":..,"choices":[{"delta":{"role":"assistant",...}}]}（首 chunk）
+                                      → sdkEnvelope(MessageId,Model)
 data: {"choices":[{"delta":{"role":"assistant","content":"片段"},...}]}   → sdkTextDelta
 data: {"choices":[{"delta":{"tool_calls":[{"index":N,"id":..,"function":{"name":..,"arguments":""}}]}}]}
                                       → sdkToolCallStart(index=N)
@@ -148,9 +150,9 @@ id / model                            → Id / Model
 
 | event | data 关键载荷 | 产物 |
 |-------|--------------|------|
-| `message_start` | `message{id,model,usage{input_tokens,...}}` | 记录 id/model；InputTokens 暂存 |
+| `message_start` | `message{id,model,usage{input_tokens,...}}` | `sdkEnvelope{MessageId,Model}`；InputTokens 暂存至流末合成 |
 | `content_block_start` | `index, content_block{type:text\|thinking\|tool_use{id,name}}` | text/thinking 开 part；tool_use → `sdkToolCallStart` |
-| `content_block_delta` | `delta{type: text_delta{text}\| input_json_delta{partial_json}\| thinking_delta{thinking}\| signature_delta{signature}}` | 对应 `sdkTextDelta` / `sdkToolCallDelta` / `sdkThinkingDelta`；signature 并入 part.Signature |
+| `content_block_delta` | `delta{type: text_delta{text}\| input_json_delta{partial_json}\| thinking_delta{thinking}\| signature_delta{signature}}` | 对应 `sdkTextDelta` / `sdkToolCallDelta` / `sdkThinkingDelta`；signature 经 `sdkThinkingDelta.Signature` 透传 |
 | `content_block_stop` | `index` | 工具槽 → `sdkToolCallEnd`；其余收 part |
 | `message_delta` | `delta{stop_reason}, usage{output_tokens(累计)}` | OutputTokens 暂存（累计值取最后一次） |
 | `message_stop` | — | 触发 FinalizeStream 合成 `sdkFinish`+`sdkUsage` |

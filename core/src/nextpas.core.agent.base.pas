@@ -40,13 +40,14 @@ type
 
   TStreamDeltaKind = (
     sdkTextDelta,        { TextDelta 追加正文 }
-    sdkThinkingDelta,    { TextDelta 追加思考内容 }
+    sdkThinkingDelta,    { TextDelta 追加思考内容；Signature 携带签名透传 }
     sdkToolCallStart,    { ToolIndex/ToolCallId/ToolName 就位 }
     sdkToolCallDelta,    { ArgumentsDelta 追加参数 JSON 片段 }
     sdkToolCallEnd,      { 该槽位参数流结束 }
     sdkFinish,           { FinishReason 就位，正文/工具流结束 }
     sdkUsage,            { Usage 就位（可与 sdkFinish 异序到达，fold 抹平）}
-    sdkError             { Error 就位（流中途错误上报；fold 跳过）}
+    sdkError,            { Error 就位（流中途错误上报；fold 跳过）}
+    sdkEnvelope          { MessageId/Model 就位（流首信封事件；fold 记入消息）}
   );
 
   { 错误码词表（物理落位本单元；异常类在 nextpas.core.agent.errors）}
@@ -126,6 +127,9 @@ type
     FinishReason: TFinishReason;    { sdkFinish 携带 }
     Usage: TTokenUsage;             { sdkUsage 携带 }
     Error: TAgentErrorInfo;         { sdkError 携带 }
+    MessageId: string;              { sdkEnvelope 携带厂商消息 id }
+    Model: string;                  { sdkEnvelope 携带实际服务模型 id }
+    Signature: string;              { sdkThinkingDelta 携带 thinking 签名透传 }
   end;
   TStreamDeltaArray = array of TStreamDelta;
 

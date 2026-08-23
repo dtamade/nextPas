@@ -37,7 +37,8 @@ TStreamDeltaKind = (
   sdkToolCallEnd,      { 该槽位参数流结束 }
   sdkFinish,           { FinishReason 就位，正文/工具流结束 }
   sdkUsage,            { Usage 就位（可与 sdkFinish 异序到达，fold 抹平）}
-  sdkError             { Error 就位（中途可恢复上报或终止）}
+  sdkError,            { Error 就位（流中途错误上报；fold 跳过）}
+  sdkEnvelope          { MessageId/Model 就位（流首信封事件；fold 记入消息）}
 );
 ```
 
@@ -114,6 +115,9 @@ TStreamDelta = record
   FinishReason: TFinishReason;    { sdkFinish 携带 }
   Usage: TTokenUsage;             { sdkUsage 携带 }
   Error: TAgentErrorInfo;         { sdkError 携带 }
+  MessageId: string;              { sdkEnvelope 携带厂商消息 id }
+  Model: string;                  { sdkEnvelope 携带实际服务模型 id }
+  Signature: string;              { sdkThinkingDelta 携带 thinking 签名透传 }
 end;
 TStreamDeltaArray = array of TStreamDelta;
 

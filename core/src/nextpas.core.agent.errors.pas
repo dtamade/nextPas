@@ -133,6 +133,7 @@ end;
 
 function AgentErrorCodeName(ACode: TAgentErrorCode): string;
 begin
+  Result := 'unknown';   { 未映射枚举值防御位 }
   case ACode of
     aecNone:              Result := 'none';
     aecInvalidRequest:    Result := 'invalid_request';
@@ -148,8 +149,6 @@ begin
     aecConfig:            Result := 'config';
     aecToolFailed:        Result := 'tool_failed';
     aecBudgetExhausted:   Result := 'budget_exhausted';
-  else
-    Result := 'unknown';   { 未映射枚举值防御位 }
   end;
 end;
 
