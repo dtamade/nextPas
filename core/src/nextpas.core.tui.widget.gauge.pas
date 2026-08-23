@@ -31,6 +31,10 @@ type
     function WithLabel(const S: AnsiString): IGauge;
     function WithFilledStyle(const S: TStyle): IGauge;
     function WithEmptyStyle(const S: TStyle): IGauge;
+    { PH33 P4：基础样式旋钮（additive，默认不调用 = 既有行为不变）——一次
+      设置 filled/empty 两区（label 随所在区取色）；后续 WithFilledStyle/
+      WithEmptyStyle/WithThreshold 按 builder 顺序覆盖各自面 }
+    function WithStyle(const S: TStyle): IGauge;
     function WithBlock(ABlock: IBlock): IGauge;
     function WithThreshold(Limit: Double; const S: TStyle): IGauge;
   end;
@@ -51,6 +55,7 @@ type
     function WithLabel(const S: AnsiString): IGauge;
     function WithFilledStyle(const S: TStyle): IGauge;
     function WithEmptyStyle(const S: TStyle): IGauge;
+    function WithStyle(const S: TStyle): IGauge;
     function WithBlock(ABlock: IBlock): IGauge;
     function WithThreshold(Limit: Double; const S: TStyle): IGauge;
 
@@ -128,6 +133,14 @@ end;
 
 function TGauge.WithEmptyStyle(const S: TStyle): IGauge;
 begin
+  FEmptyStyle := S;
+  Result := Self;
+end;
+
+{ PH33 P4：基础样式旋钮（additive）——filled/empty 两区一次着色 }
+function TGauge.WithStyle(const S: TStyle): IGauge;
+begin
+  FFilledStyle := S;
   FEmptyStyle := S;
   Result := Self;
 end;

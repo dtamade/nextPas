@@ -43,7 +43,12 @@ uses
   nextpas.core.tui.widget.command_palette,
   nextpas.core.tui.widget.notification_center,
   nextpas.core.tui.widget.popover,
-  nextpas.core.tui.widget.menu;
+  nextpas.core.tui.widget.menu,
+  { PH33 P4：解禁扩面（tui888 PH33 计划 §1.4 审计 A−；full facade 同名别名
+    在册先例）——数据可视化三件套 }
+  nextpas.core.tui.widget.gauge,
+  nextpas.core.tui.widget.sparkline,
+  nextpas.core.tui.widget.canvas;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -179,6 +184,14 @@ type
   TMenuItem = nextpas.core.tui.widget.menu.TMenuItem;
   TMenuState = nextpas.core.tui.widget.menu.TMenuState;
   TMenu = nextpas.core.tui.widget.menu.TMenu;
+  { PH33 P4：解禁扩面（gauge/canvas/sparkline）——ext rejects 探针同批删除，
+    正测 test_tui_ext_facade 增构造+渲染断言守门 }
+  IGauge = nextpas.core.tui.widget.gauge.IGauge;
+  TGauge = nextpas.core.tui.widget.gauge.TGauge;
+  ISparkline = nextpas.core.tui.widget.sparkline.ISparkline;
+  TSparkline = nextpas.core.tui.widget.sparkline.TSparkline;
+  ICanvas = nextpas.core.tui.widget.canvas.ICanvas;
+  TCanvas = nextpas.core.tui.widget.canvas.TCanvas;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;
