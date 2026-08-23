@@ -1,4 +1,4 @@
-unit np_workspace_model;
+unit nextpas.compiler.frontend.workspace_model;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -11,7 +11,7 @@ uses
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.exception,
   nextpas.core.collections.vec,
-  np_package_manifest;
+  nextpas.compiler.frontend.package_manifest;
 
 type
   EWorkspaceModelError = class(ENextPasError)

@@ -9,7 +9,7 @@ unit nextpas.compiler.syntax.green_tree;
 interface
 
 uses
-  nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.lexer, np_source_database,
+  nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.lexer, nextpas.compiler.frontend.source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

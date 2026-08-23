@@ -1,5 +1,5 @@
 {**
- * np_parallel_scheduler.pas — Parallel Build Scheduler
+ * nextpas.compiler.frontend.parallel_scheduler.pas — Parallel Build Scheduler
  *
  * 并行编译调度器。按拓扑序分层，同层并行编译。
  *
@@ -11,7 +11,7 @@
  * 对标 Go 的 go build -p 并行编译
  *}
 
-unit np_parallel_scheduler;
+unit nextpas.compiler.frontend.parallel_scheduler;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -22,7 +22,7 @@ uses
   SysUtils,
   nextpas.core.text.strings,
   nextpas.core.collections.vec,
-  np_unit_graph;
+  nextpas.compiler.frontend.unit_graph;
 
 type
   {** 编译任务状态 }

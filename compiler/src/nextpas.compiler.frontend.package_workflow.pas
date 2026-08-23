@@ -1,4 +1,4 @@
-unit np_package_workflow;
+unit nextpas.compiler.frontend.package_workflow;
 
 {$mode objfpc}{$H+}
 
@@ -7,7 +7,7 @@ interface
 uses
   { Avoid nextpas.core.text facade (unicode closure) — Trim/SameText live in conv. }
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.path,
-  np_package_manifest, np_package_lock, np_workspace_model;
+  nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_lock, nextpas.compiler.frontend.workspace_model;
 
 type
   TPackageManifestTruth = record

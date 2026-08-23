@@ -15,7 +15,7 @@ uses
   np_semantic_analyzer,
   np_semantic_model,
   np_system_contracts,
-  np_unit_graph;
+  nextpas.compiler.frontend.unit_graph;
 
 const
   LocalOwnedSource =

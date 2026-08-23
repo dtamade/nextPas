@@ -1,11 +1,11 @@
 {**
- * np_query_database.pas — Query Database
+ * nextpas.compiler.frontend.query_database.pas — Query Database
  *
  * 编译查询缓存接口。存储和检索语义分析结果。
  * 当前为基础实现，缓存策略待 AL4 完善。
  *}
 
-unit np_query_database;
+unit nextpas.compiler.frontend.query_database;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

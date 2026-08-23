@@ -1,4 +1,4 @@
-unit np_unit_resolver;
+unit nextpas.compiler.frontend.unit_resolver;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -16,8 +16,8 @@ uses
   nextpas.core.time, nextpas.core.mem.intf,
   nextpas.core.collections.vec,
   nextpas.compiler.syntax.ast_facade, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
-  np_package_manifest, nextpas.compiler.syntax.preprocessor, np_source_database,
-  nextpas.compiler.targets.facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
+  nextpas.compiler.frontend.package_manifest, nextpas.compiler.syntax.preprocessor, nextpas.compiler.frontend.source_database,
+  nextpas.compiler.targets.facts, np_text_primitives, np_toolchain_profiles, nextpas.compiler.frontend.unit_graph;
 
 type
   TUnitResolverStringVec = specialize TVec<string>;

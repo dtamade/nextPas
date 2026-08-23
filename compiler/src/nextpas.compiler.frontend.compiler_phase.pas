@@ -1,4 +1,4 @@
-unit np_compiler_phase;
+unit nextpas.compiler.frontend.compiler_phase;
 
 {$mode objfpc}{$H+}
 

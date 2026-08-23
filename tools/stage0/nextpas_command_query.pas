@@ -9,7 +9,7 @@ uses
   nextpas_projection_types, nextpas_command_envelope,
   nextpas_command_build, nextpas_projection_json, nextpas_projection_text,
   nextpas_projection_context,
-  np_compilation_session, nextpas.compiler.targets.facts, np_workspace_model,
+  nextpas.compiler.frontend.compilation_session, nextpas.compiler.targets.facts, nextpas.compiler.frontend.workspace_model,
   target_config;
 
 procedure RunQuerySymbols(

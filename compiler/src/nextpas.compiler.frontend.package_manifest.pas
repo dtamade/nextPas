@@ -1,4 +1,4 @@
-unit np_package_manifest;
+unit nextpas.compiler.frontend.package_manifest;
 
 {$mode objfpc}{$H+}
 

@@ -1,4 +1,4 @@
-unit np_symbol_cache;
+unit nextpas.compiler.frontend.symbol_cache;
 
 {$mode objfpc}{$H+}
 

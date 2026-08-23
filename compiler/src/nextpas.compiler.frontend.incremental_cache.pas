@@ -1,5 +1,5 @@
 {**
- * np_incremental_cache.pas — Incremental Compilation Cache
+ * nextpas.compiler.frontend.incremental_cache.pas — Incremental Compilation Cache
  *
  * 符号表热缓存：序列化 TSemanticModel 为二进制格式，
  * 通过依赖指纹实现增量编译。
@@ -12,7 +12,7 @@
  * 对标 rustc 的 incr-comp-session-cache，Go 的 build cache
  *}
 
-unit np_incremental_cache;
+unit nextpas.compiler.frontend.incremental_cache;
 
 {$mode objfpc}{$H+}
 

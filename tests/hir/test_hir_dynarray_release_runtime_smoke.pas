@@ -12,7 +12,7 @@ uses
   nextpas.compiler.syntax.lexer,
   np_semantic_analyzer,
   np_semantic_model,
-  np_unit_graph;
+  nextpas.compiler.frontend.unit_graph;
 
 const
   ResizeSource =

@@ -8,8 +8,8 @@ uses
   nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
   nextpas.core.mem,
   nextpas_projection_types, nextpas_json_helpers,
-  np_compilation_session, np_workspace_model, np_package_workflow,
-  np_package_manifest, np_package_lock,
+  nextpas.compiler.frontend.compilation_session, nextpas.compiler.frontend.workspace_model, nextpas.compiler.frontend.package_workflow,
+  nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_lock,
   np_toolchain_profiles, target_config;
 
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);

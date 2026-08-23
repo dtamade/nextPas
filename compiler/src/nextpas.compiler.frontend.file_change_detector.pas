@@ -1,5 +1,5 @@
 {**
- * np_file_change_detector.pas — File Change Detector
+ * nextpas.compiler.frontend.file_change_detector.pas — File Change Detector
  *
  * 文件变更检测接口。使用 mtime 机制追踪文件变更。
  * 支持目录扫描和文件级变更检测。
@@ -7,7 +7,7 @@
  * 对标 Go 的 build cache mtime 检查
  *}
 
-unit np_file_change_detector;
+unit nextpas.compiler.frontend.file_change_detector;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}

@@ -9,7 +9,7 @@ uses
   nextpas.core.text.conv,
   nextpas_projection_types, nextpas_command_envelope,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
-  np_workspace_model, target_config;
+  nextpas.compiler.frontend.workspace_model, target_config;
 
 procedure RunEnvStatus(
   var AState: TNextPasState;

@@ -1,4 +1,4 @@
-unit np_compilation_session;
+unit nextpas.compiler.frontend.compilation_session;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -21,15 +21,15 @@ uses
   nextpas.core.collections.vec,
   nextpas.compiler.syntax.ast_facade, np_backend_plan, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree,
   nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor, np_hir_types, np_hir_model, np_hir_builder,
-  np_hir_printer, np_hir_llvm_emitter, np_source_database, nextpas.compiler.targets.facts,
+  np_hir_printer, np_hir_llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
   np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
-  np_unit_graph, np_unit_resolver,
-  np_semantic_model, np_semantic_analyzer, np_workspace_model,
-  np_compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
-  np_query_database,
-  np_file_change_detector,
-  np_parallel_scheduler,
-  np_incremental_cache,
+  nextpas.compiler.frontend.unit_graph, nextpas.compiler.frontend.unit_resolver,
+  np_semantic_model, np_semantic_analyzer, nextpas.compiler.frontend.workspace_model,
+  nextpas.compiler.frontend.compiler_phase, np_mir_model, np_hir_to_mir, np_mir_optimize,
+  nextpas.compiler.frontend.query_database,
+  nextpas.compiler.frontend.file_change_detector,
+  nextpas.compiler.frontend.parallel_scheduler,
+  nextpas.compiler.frontend.incremental_cache,
   np_mir_to_llvm, nextpas.compiler.diagnostics.json_helpers;
 
 type

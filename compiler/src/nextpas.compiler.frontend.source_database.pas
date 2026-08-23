@@ -1,4 +1,4 @@
-unit np_source_database;
+unit nextpas.compiler.frontend.source_database;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../rtl/core/base}

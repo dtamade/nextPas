@@ -1,4 +1,4 @@
-unit np_package_lock;
+unit nextpas.compiler.frontend.package_lock;
 
 {$mode objfpc}{$H+}
 

@@ -1,4 +1,4 @@
-unit np_unit_graph;
+unit nextpas.compiler.frontend.unit_graph;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -10,7 +10,7 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.collections.vec,
-  nextpas.core.text.conv, np_source_database, np_text_primitives;
+  nextpas.core.text.conv, nextpas.compiler.frontend.source_database, np_text_primitives;
 
 type
   TStringArray = array of string;
