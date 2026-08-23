@@ -50,6 +50,7 @@ const
   CSeedUnset          = Low(Int64);
   CTimeoutDefault     = 0;             { 0=用 transport 默认；<0=无限 }
   CUsageUnknown       = -1;            { TTokenUsage 各字段未知值 }
+  CRetryAfterUnknown  = -1;            { RetryAfterMs 未提供/不适用 }
 ```
 
 ### 1.3 记录
@@ -80,7 +81,7 @@ end;
 TPartArray = array of TPart;
 
 TMessage = record
-  Id: string;                      { 厂商消息 id 或本地生成 }
+  Id: string;                      { 厂商消息 id；厂商未给则空串（SELECTION C14，不本地伪造）}
   Role: TMessageRole;
   Parts: TPartArray;
   Model: string;                   { assistant：实际服务模型 id }
@@ -96,7 +97,7 @@ TAgentErrorInfo = record          { sdkError 携带的中途错误信息 }
   Code: TAgentErrorCode;          { 枚举物理落位在 base（词表同源），见 §2 }
   Message: string;
   Retryable: Boolean;
-  RetryAfterMs: Int64;            { CUsageUnknown=未提供 }
+  RetryAfterMs: Int64;            { CRetryAfterUnknown=未提供 }
 end;
 
 TStreamDelta = record
@@ -120,7 +121,7 @@ TCompletionRequest = record
   Model: string;                   { 必填：无默认值，调用方显式决定 }
   System: string;                  { 顶层 system 便利字段 }
   Messages: TMessageArray;         { 对话历史（不含本轮待发 user 时自行前置）}
-  MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填→见 §6 }
+  MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填→WIRE-MAPPINGS §2.1 }
   Temperature: Double;             { CTemperatureUnset }
   TopP: Double;                    { CTopPUnset }
   Seed: Int64;                     { CSeedUnset }
@@ -154,7 +155,7 @@ TToolSpec = record
   Description: string;
   ParametersJson: TJsonText;       { JSON Schema 文本 }
   Capabilities: TToolCapabilities;
-  TimeoutMs: Int64;                { CTimeoutDefault=不限；loop 用它包 executor }
+  TimeoutMs: Int64;                { 0=不限（本字段语境）；loop 用它包 executor }
 end;
 TToolSpecArray = array of TToolSpec;
 
@@ -191,7 +192,7 @@ EAgentError = class(Exception)
 public
   ErrorCode: TAgentErrorCode;   { 缺省 aecNone }
   Retryable: Boolean;           { 由错误码推导，构造时算好 }
-  RetryAfterMs: Int64;          { CUsageUnknown=未提供；仅 RateLimited 有意义 }
+  RetryAfterMs: Int64;          { CRetryAfterUnknown=未提供；仅 RateLimited 有意义 }
   Provider: string;             { 'openai' | 'anthropic' | ''=本地 }
   RequestId: string;            { 上游 x-request-id 回显（有则填）}
   RawBodySnippet: string;       { 上游错误体摘要 ≤8KB；本地错误为空 }
@@ -318,6 +319,19 @@ function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   NEXTPAS_AGENT_ANTHROPIC_API_KEY / _MODEL / _BASE_URL }
 function NewOpenAIProviderFromEnv: IAgentProvider;
 function NewAnthropicProviderFromEnv: IAgentProvider;
+
+{ 时钟构造（nextpas.core.agent.clock；选型见 SELECTION C8）}
+function NewSystemClock: IAgentClock;   { 真实时钟；SleepMs 底层 WaitForCancel }
+
+type
+  { 测试时钟：SleepMs 记录请睡时长并立即返回；由测试驱动 Advance 推进虚拟时间，
+    配合 WithRetry 实现零睡眠退避断言（TESTING §3）}
+  TFakeClock = class(TInterfacedObject, IAgentClock)
+  public
+    procedure Advance(AMs: Int64);              { 推进虚拟时钟并放行挂起的 SleepMs }
+    function VirtualNowMs: Int64;
+    function LastSleepRequestMs: Int64;         { 最近一次被请求的睡眠时长 }
+  end;
 ```
 
 无全局注册表、无可变单例（决策 D4）：实例由消费方持有，库形态多 agent 宿主安全。
@@ -359,9 +373,9 @@ TAssistantBuild = class     { 增量累积器；Create 后连续 FoldDelta，Fin
 end;
 
 { 一次性折叠：deltas 数组 → 消息。唯一权威实现：
-  loop、IAgentCompletion.GetMessage、测试三方共用，禁止任何地方重写折叠逻辑 }
-function FoldDeltas(const ADeltas: array of TStreamDelta;
-  out AMsg: TMessage): TTokenUsage;
+  loop、IAgentCompletion.GetMessage、测试三方共用，禁止任何地方重写折叠逻辑。
+  usage 随 AMsg.Usage 携带（单一来源，不另设返回值）}
+procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);
 ```
 
 折叠规则（协议域铁律，违例抛 `EAgentError[aecProtocol]`）：
@@ -377,6 +391,9 @@ function FoldDeltas(const ADeltas: array of TStreamDelta;
 ## 5. 重试策略（nextpas.core.agent.retry）
 
 ```pascal
+TRetryAttemptHook = reference to procedure(const AAttempt: Integer;
+  const ADelayMs: Int64; const ALastError: EAgentError);
+
 TRetryPolicy = record
   MaxAttempts: Integer;            { ≥1；1=不重试 }
   InitialDelayMs: Int64;           { 默认 1000 }
@@ -387,6 +404,7 @@ TRetryPolicy = record
                                      [aecRateLimited, aecTransport, aecTimeout, aecServer] }
   RespectRetryAfter: Boolean;      { 默认 True：服务器指示优先于退避曲线 }
   MaxTotalRetryMs: Int64;          { 总退避上限，默认 120_000 }
+  OnAttempt: TRetryAttemptHook;    { 每次重试前上报（nil=静默）；副本方法 WithOnAttempt 注入 }
   class function Default: TRetryPolicy; static;
 end;
 
@@ -406,7 +424,9 @@ function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
 
 ```pascal
 TLoopEventKind = (levRunStart, levRoundStart, levRoundEnd,
-  levToolCallStart, levToolCallEnd, levRetry, levBudgetWarning, levRunEnd);
+  levToolCallStart, levToolCallEnd, levBudgetWarning, levRunEnd);
+{ 注意：无 levRetry——重试发生在 WithRetry 装饰器层，loop 不可见；
+  重试观测走 TRetryPolicy.OnAttempt }
 
 TLoopEvent = record
   Kind: TLoopEventKind;

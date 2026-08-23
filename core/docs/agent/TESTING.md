@@ -36,6 +36,11 @@
 | ScriptedTransport | 实现 IAgentTransport：按脚本返回 TWireResponse 或逐块投喂 OpenStream；可编排"延迟 3 块后 Cancel" |
 | Wire 快照 | `tests/nextpas.core.agent/snapshots/{openai,anthropic}/*.json`；采集脚本脱敏规则见上 |
 
+替身落位：ScriptedTransport/FakeClock 接线与 wire 快照装载位于
+`tests/nextpas.core.agent/testkit/agent.testkit.pas`（测试树，不进 src/）；
+例外是 `TFakeClock` 本体——它在产品单元 `nextpas.core.agent.clock` 公开
+（API.md §3），因消费方自建离线测试同样需要它。
+
 ## 4. 基准计划（nextpas.core.bench 强制）
 
 | Bench | 度量 | 回归阈值（首版基线落地后冻结）|

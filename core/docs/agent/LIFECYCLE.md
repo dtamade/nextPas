@@ -27,6 +27,8 @@
 规则：
 
 - `GetMessage` 首次调用完成 fold 收口并缓存；重复调用返回同一结果（幂等）。
+- `GetUsage` 适用同一缓存/幂等规则（EOF 后有效；Active 期访问同报
+  'completion not drained'）。
 - Active 期调用 GetMessage/GetUsage 属消费方时序违反：直接 raise
   `EAgentError[aecProtocol]`，message 固定 `'completion not drained'`
   （不新增公开错误码位）。
