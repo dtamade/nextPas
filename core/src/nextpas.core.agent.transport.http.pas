@@ -127,6 +127,10 @@ type
       FIsErrorResp: Boolean;         { HTTP 层非 2xx：体走错误累积 }
       FDead: Boolean;                { 流已失败：后续 chunk 弃置 }
       FErrBody: string;
+      { ---- 终态幂等（仅消费方线程触碰）---- }
+      FDone: Boolean;
+      FLastErrCode: TAgentErrorCode; { aecNone=自然 EOF；否则重复抛 }
+      FLastErrMsg: string;
       procedure PushMsg(const AMsg: TTWireMsg);
       procedure DrainParser;
       procedure PushErrorObj(const AErr: EAgentError);
@@ -476,6 +480,14 @@ function TWireStream.NextEvent(out AEvent: TWireSSEEvent): Boolean;
 var
   LMsg: TTWireMsg;
 begin
+  { 终态幂等：EOF 后再调返回 False，错误后再调重抛同一错误——
+    消费方误用不挂起。终态仅消费方线程写，无需加锁 }
+  if FDone then
+  begin
+    if FLastErrCode <> aecNone then
+      raise EAgentError.CreateLocal(FLastErrCode, FLastErrMsg);
+    Exit(False);
+  end;
   while True do
   begin
     if FChannel.ReceiveTimeout(LMsg, CWaitSliceNs) then
@@ -489,13 +501,24 @@ begin
         wmkStatus:
           Continue;                  { 状态仅供内部时序，词表层不可见 }
         wmkEOF:
-          Exit(False);
+          begin
+            FDone := True;
+            Exit(False);
+          end;
         wmkError:
-          raise EAgentError.CreateLocal(LMsg.ErrCode, LMsg.ErrMsg);
+          begin
+            FDone := True;
+            FLastErrCode := LMsg.ErrCode;
+            FLastErrMsg := LMsg.ErrMsg;
+            raise EAgentError.CreateLocal(LMsg.ErrCode, LMsg.ErrMsg);
+          end;
       end;
     end;
     if GetCancelled then
+    begin
+      FDone := True;                 { 取消即终态：后续调用直接 False }
       Exit(False);                   { 取消优先于一切后续事件 }
+    end;
   end;
 end;
 

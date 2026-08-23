@@ -39,6 +39,7 @@ begin
     Check(W.NextEvent(Ev) and (Ev.Data = 'B'), 'event B from chunk2');
     Check(W.NextEvent(Ev) and (Ev.Data = 'C'), 'event C from chunk3');
     Check(not W.NextEvent(Ev), 'eof after all chunks');
+    Check(not W.NextEvent(Ev), 'eof idempotent on repeat calls');
     Check(not W.GetCancelled, 'not cancelled on natural eof');
   finally
     T.Free;
