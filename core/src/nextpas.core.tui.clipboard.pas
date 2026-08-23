@@ -22,6 +22,14 @@ type
   { cmOSC52 保持首成员:零初始化记录语义与旧版一致(零值 = cmOSC52) }
   TClipboardMethod = (cmOSC52, cmExternal, cmWin32, cmNone);
 
+const
+  { 外部剪贴板命令(wl-copy/xclip/xsel/pb*)整体限时毫秒数。
+    挂死场景(死 X socket、SSH X11 转发卡顿)会冻住 TUI——老版
+    grok-switch clipboard.go 的 clipboardCLITimeout=400ms 同款上限;
+    超时一律 SIGKILL,不冻 UI、不留孤儿进程 }
+  CLIP_CLI_TIMEOUT_MS = 400;
+
+type
   TClipboard = record
     Method: TClipboardMethod;
     ExternalTool: AnsiString;
@@ -56,6 +64,10 @@ uses
   nextpas.core.platform.which,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base
+  {$IFDEF NEXTPAS_UNIX}
+    , nextpas.core.platform.posix.base       { TPollFd/POLLIN:限时捕获管道轮询 }
+    , nextpas.core.platform                  { platform_monotonic_ns:截止时钟 }
+  {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
     , nextpas.core.platform.windows.base
     , nextpas.core.platform.windows.ffi
@@ -199,8 +211,14 @@ begin
     end;
     // Close stdin to signal EOF
     platform_process_close_handle(LPipes.StdinWrite);
-    // Wait for process
-    if platform_process_wait(LProc, LResult, 5000) <> 0 then Exit;
+    // Wait for process — 限时 + 超时 SIGKILL:外部命令挂死(死 X socket/
+    // SSH X11 卡顿)会冻住 TUI,老版 grok-switch clipboard.go 同款 400ms 上限
+    if platform_process_wait(LProc, LResult, CLIP_CLI_TIMEOUT_MS) <> 0 then
+    begin
+      platform_process_kill(LProc);
+      platform_process_wait(LProc, LResult, 200);
+      Exit;
+    end;
     Result := LResult.IsSuccess;
   finally
     platform_process_close_handle(LPipes.StdinWrite);
@@ -209,7 +227,83 @@ begin
   end;
 end;
 
-{ Run a tool and capture its stdout.  Returns the captured text. }
+{ Run a tool and capture its stdout.  Returns the captured text.
+  POSIX 限时版:platform_process_run 无超时参数,粘贴路径若遇挂死的
+  xclip -o(死 X socket)会永久冻住 TUI —— poll 带截止时钟读管道,
+  超时 SIGKILL。语义与旧实现一致:退出码 0 且有输出才返回内容。 }
+{$IFDEF NEXTPAS_UNIX}
+function RunCaptureStdout(const AToolPath: AnsiString;
+  const AArgs: array of PAnsiChar): AnsiString;
+var
+  LProc: TPlatformProcess;
+  LPipes: TPlatformProcessPipes;
+  LArgv: array[0..7] of PAnsiChar;
+  LI, LCount: Int32;
+  LFd: TPollFd;
+  LChunk: array[0..1023] of AnsiChar;
+  LN, LErr: Int32;
+  LResult: TPlatformProcessResult;
+  LDeadline, LNow: UInt64;
+  LRemainMs: Int32;
+begin
+  Result := '';
+  // Build nil-terminated argv
+  LCount := Length(AArgs);
+  if LCount > 7 then LCount := 7;
+  for LI := 0 to LCount - 1 do
+    LArgv[LI] := AArgs[LI];
+  LArgv[LCount] := nil;
+
+  if platform_process_create_piped(
+    PAnsiChar(AToolPath), @LArgv[0], nil,
+    [poCaptureStdout, poCaptureStderr],
+    LProc, LPipes) <> 0 then Exit;
+  try
+    LDeadline := platform_monotonic_ns +
+      UInt64(CLIP_CLI_TIMEOUT_MS) * 1000000;
+    while True do
+    begin
+      LNow := platform_monotonic_ns;
+      if LNow >= LDeadline then
+      begin
+        platform_process_kill(LProc);
+        platform_process_wait(LProc, LResult, 200);
+        Exit('');
+      end;
+      LRemainMs := (LDeadline - LNow) div 1000000;
+      if LRemainMs < 1 then LRemainMs := 1;
+      LFd.fd := LPipes.StdoutRead;
+      LFd.events := POLLIN;
+      LFd.revents := 0;
+      { 就绪数 0=本段超时(下轮循环判截止),<0=poll 错误(放弃) }
+      if platform_io_poll(@LFd, 1, LRemainMs) <= 0 then Continue;
+      LErr := platform_process_read_stdout_ex(LPipes.StdoutRead,
+        @LChunk[0], SizeOf(LChunk), LN);
+      if LErr <> 0 then Break;
+      if LN <= 0 then Break;                    { EOF:子进程输出完毕 }
+      SetLength(Result, Length(Result) + LN);
+      Move(LChunk[0], Result[Length(Result) - LN + 1], LN);
+    end;
+    { 输出收完等退出码:同样限时 }
+    if platform_process_wait(LProc, LResult, CLIP_CLI_TIMEOUT_MS) <> 0 then
+    begin
+      platform_process_kill(LProc);
+      platform_process_wait(LProc, LResult, 200);
+      Exit('');
+    end;
+    if (not LResult.IsSuccess) or (Length(Result) = 0) then
+      Result := '';
+  finally
+    platform_process_close_handle(LPipes.StdinWrite);
+    platform_process_close_handle(LPipes.StdoutRead);
+    platform_process_close_handle(LPipes.StderrRead);
+  end;
+end;
+{$ENDIF}
+
+{ Windows 兜底版:cmExternal 在 Windows 上不可达(Detect 恒 cmWin32),
+  仅保证单元可编译;无超时是可接受的死代码 }
+{$IFDEF NEXTPAS_WINDOWS}
 function RunCaptureStdout(const AToolPath: AnsiString;
   const AArgs: array of PAnsiChar): AnsiString;
 var
@@ -219,7 +313,6 @@ var
   LOutLen, LExitCode: Int32;
 begin
   Result := '';
-  // Build nil-terminated argv
   LCount := Length(AArgs);
   if LCount > 7 then LCount := 7;
   for LI := 0 to LCount - 1 do
@@ -234,6 +327,7 @@ begin
       SetString(Result, @LBuf[0], LOutLen);
   end;
 end;
+{$ENDIF}
 
 { Build a tool path from the tool name.  Returns empty string if not found. }
 function ResolveToolPath(const ATool: AnsiString): AnsiString;
@@ -375,14 +469,28 @@ function TClipboard.Copy(const Text: AnsiString): Boolean;
 var
   Seq, LPath: AnsiString;
   Written: Int32;
+  PSeq: PAnsiChar;
+  LRemaining: Integer;
 begin
   Result := False;
   case Method of
     cmOSC52:
     begin
       Seq := Osc52Sequence(Text, TmuxPassthrough);
-      Written := platform_console_write(1, @Seq[1], Length(Seq));
-      Result := (Written = Length(Seq));
+      { 转义序列必须整条落流:短写补齐重试。半截 OSC52 会被终端当普通
+        字符渲染(老版序列问题同类),且未闭合的解析态还会吞掉后续帧输出 }
+      LRemaining := Length(Seq);
+      PSeq := nil;
+      if LRemaining > 0 then
+        PSeq := @Seq[1];
+      while (LRemaining > 0) and (PSeq <> nil) do
+      begin
+        Written := platform_console_write(1, Pointer(PSeq), LRemaining);
+        if Written <= 0 then Break;
+        Inc(PSeq, Written);
+        Dec(LRemaining, Written);
+      end;
+      Result := (LRemaining = 0);
     end;
     cmExternal:
     begin
