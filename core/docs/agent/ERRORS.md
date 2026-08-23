@@ -11,7 +11,7 @@
 | provider.openai / anthropic | aecProtocol, aecConfig, aecContextOverflow | 编解码违例；本地配置缺失（MaxTokens/key）；超窗措辞识别 |
 | provider.fake | aecProtocol | 脚本耗尽后再调用 |
 | WithRetry | （透传最后一次原始错误）| 重试耗尽不包装、不改码、不丢 RetryAfterMs |
-| agent.sse | （无异常）| 解析失败产出非法帧交由上层判 protocol；行超限抛 aecProtocol |
+| agent.sse | aecProtocol | 正常解析仅产帧不抛错；触发 DoS 上限（SECURITY §3）直接抛 aecProtocol 终止流 |
 | loop | aecToolFailed, aecBudgetExhausted（收尾态）, aecCancelled, aecConfig | 工具异常兜底；预算走 RunOutcome 而非异常（见 §5）|
 | 词表/fold | aecProtocol | delta 序列违反折叠规则 |
 

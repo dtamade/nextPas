@@ -164,6 +164,6 @@ TAgentLoop.Run(userText)
 
 门面只 re-export：全部公共 record/enum/常量、`IAgentProvider/IAgentCompletion/
 IAgentTool/IAgentClock`、构造函数（`NewOpenAIProvider/NewAnthropicProvider/
-NewFakeProvider/WithRetry`）、`TAgentLoop`、便利函数（`MessageText` 等）。
-wire 层类型（TWireRequest/TWireSSEEvent）与 `agent.sse` 不进门面——自定义
-transport 的消费方显式引 `nextpas.core.agent.intf`。
+NewFakeProvider/NewXxxProviderFromEnv/WithRetry`）、`TAgentLoop`、便利函数
+（`MessageText` 等）。wire 层类型（TWireRequest/TWireSSEEvent）与 `agent.sse`
+不进门面——自定义 transport 的消费方显式引 `nextpas.core.agent.intf`。

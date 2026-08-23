@@ -29,11 +29,13 @@ L3  nextpas.core.agent
 uses nextpas.core.agent;
 
 var
+  LOpts: TOpenAIOptions;
   LProvider: IAgentProvider;
   LReply: TMessage;
 begin
-  LProvider := NewOpenAIProvider(
-    TOpenAIOptions.New('gpt-4o').WithApiKeyFromEnv);
+  LOpts := TOpenAIOptions.New('gpt-4o');
+  LOpts.Common.ApiKey := ReadApiKeyFromSecretStore;   { 显式注入；env 路径用 NewOpenAIProviderFromEnv }
+  LProvider := NewOpenAIProvider(LOpts);
 
   LReply := LProvider.Complete(
     TCompletionRequest.New('gpt-4o')

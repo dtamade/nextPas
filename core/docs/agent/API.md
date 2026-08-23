@@ -133,10 +133,14 @@ TCompletionRequest = record
   class function New(const AModel: string): TCompletionRequest; static;
 end;
 
-{ builder 风格便利（返回修改后的副本，record 值语义链式）}
-function WithSystem(const R: TCompletionRequest; const AText: string): TCompletionRequest;
-function WithUserText(const R: TCompletionRequest; const AText: string): TCompletionRequest;
-function WithMaxTokens(const R: TCompletionRequest; AN: Int64): TCompletionRequest;
+{ builder 便利：TCompletionRequest 的 advancedrecords 方法，返回修改后的副本
+  （record 值语义，支持链式书写，见 README 用例）：
+    function WithSystem(const AText: string): TCompletionRequest;
+    function WithUserText(const AText: string): TCompletionRequest;
+    function WithMaxTokens(AN: Int64): TCompletionRequest;
+    function WithTemperature(AValue: Double): TCompletionRequest;
+    function WithStop(const ASeq: TStringArray): TCompletionRequest;
+  需 {$modeswitch advancedrecords}（design-conventions §11 允许追加）。}
 ```
 
 ### 1.4 工具词表
@@ -225,7 +229,7 @@ end;
 TWireHeaderArray = array of TWireHeader;
 
 TWireRequest = record
-  Url: string;
+  Url: string;                      { 本模块仅 POST（chat/messages 端点），方法由 transport 固定 }
   BodyJson: TJsonText;              { 已序列化请求体 }
   Headers: TWireHeaderArray;        { 含 auth/content-type/accept }
   ConnectTimeoutMs: Int64;          { CTimeoutDefault }
@@ -253,8 +257,9 @@ IAgentWireStream = interface
 end;
 
 IAgentTransport = interface
-  function RoundTrip(const AReq: TWireRequest; out AResp: TWireResponse): Boolean;
-  { False 时经 EAgentError(aecTransport/Timeout...) 报告失败 }
+  { 失败一律抛 EAgentError（aecTransport/aecTimeout/上游状态经公共分类器归约的码）；
+    无布尔返回值——成功即 out 参数有效，失败即异常 }
+  procedure RoundTrip(const AReq: TWireRequest; out AResp: TWireResponse);
   function OpenStream(const AReq: TWireRequest): IAgentWireStream;
 end;
 
@@ -323,7 +328,7 @@ function NewAnthropicProviderFromEnv: IAgentProvider;
 TProviderOptions = record          { 公共段，两厂商选项 record 内嵌 }
   ApiKey: string;                  { 空 → Complete 时抛 aecConfig }
   BaseUrl: string;                 { 空 → 厂商官方默认（常量表）}
-  Model: string;                   { 默认模型；request.Model 为空时回退 }
+  Model: string;                   { 回退默认；生效序 request.Model > 本值，皆空 → aecConfig }
   ConnectTimeoutMs: Int64;         { 默认 10_000 }
   TotalTimeoutMs: Int64;           { 默认 300_000（LLM 长尾合理值）}
   Transport: IAgentTransport;      { 注入点：测试/装饰器；nil → 生产 http transport }
@@ -548,7 +553,10 @@ end;
 | DoomLoopThreshold | 3 | loop |
 | TruncateLines / TruncateBytes | 2000 / 65536 | loop |
 | 读 chunk / 行缓冲上限 | 32 KiB / 1 MiB | PERFORMANCE §2 |
+| SSE 单事件 data 上限 | 8 MiB | SECURITY §3 |
+| 工具参数预检上限 | 256 KiB（超限合成 error result） | SECURITY §3 |
 | RawBodySnippet 上限 | 8 KiB | ERRORS §6 |
+| Logger 缺省 | nil → NullLogger（log.intf，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
 
 修改任何默认值必须同步本表并跑受影响 gate。

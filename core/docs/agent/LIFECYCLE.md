@@ -100,7 +100,7 @@ Run() → roRunning:
 | TAssistantBuild | completion 内部 | GetMessage 缓存后可复用缓冲 | — |
 | Transcript 数组 | loop run 对象 | IAgentLoopRun 存活期 | — |
 | FakeProvider 脚本 | 值语义拷贝 | 随记录 | — |
-| 工具任务句柄 | taskgroup | Run 返回前 Join 全部 | 是 |
+| 工具任务句柄 | IThreadPool 批任务 | Run 返回前 WaitAll 汇合 | 是 |
 
 通用规则（ARCHITECTURE §6 重申+细化）：Close/Free 幂等；析构路径 best-effort
 吞异常并走 log.intf warn；任何资源不得跨线程释放（谁拥有谁释放）。

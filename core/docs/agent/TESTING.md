@@ -14,6 +14,7 @@
 
 | Gate | 覆盖 | 关键断言 |
 |------|------|---------|
+| `test_compile_skeleton`（W0）| 空 facade + base + errors 骨架 | 单元可编译；uses 方向符合 ARCHITECTURE §1 铁律 |
 | `test_protocol` | base 词表 + fold | FoldDeltas 全词表矩阵：text/thinking 交错、tool 多槽并行折叠（index 分桶）、usage/finish 三种到达顺序等价、违例序列抛 aecProtocol、Extra 无损往返 |
 | `test_errors` | 错误分类器 | ErrorCodeForStatus 全状态映射；Retryable 推导表；RetryAfterMs 解析（ms 头/秒头/date 拒绝→unknown）；超窗措辞全集识别 |
 | `test_sse` | agent.sse 增量解析器 | 帧跨 chunk 断裂、多行 data、CRLF/LF、BOM、event+data 组合、半帧保持状态、EOF 收口、恶意超长行上限 |

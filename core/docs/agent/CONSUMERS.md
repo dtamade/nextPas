@@ -34,8 +34,8 @@ token888 为每个上游协议维护一套 `IProtocolAdapter`（decode 请求/en
 ```
 
 - 上游 OpenAI-compat / Anthropic Messages 两族的 encode/decode/stream-decode
-  直接删除自研实现，改调 `NewOpenAIWireEncoder/NewOpenAIWireDecoder/
-  NewAnthropicWireEncoder/NewAnthropicWireDecoder`（见 API.md §9）。
+  直接删除自研实现，改调 `EncodeOpenAIRequest / DecodeOpenAIResponse /
+  NewOpenAIWireDecoder` 与 anthropic 对应三件（API.md §8）。
 - 流状态所有权模型不变：每角色一个 decoder 实例（接口引用计数管理，
   替代裸 Pointer+FreeState，消除一类释放 bug 面）。
 - `Finalize` 语义等价替换其 FinalizeStream。
