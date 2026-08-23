@@ -88,6 +88,9 @@ function IsPascalKeywordP(P: PAnsiChar; Len: Integer): Boolean;
 
 implementation
 
+uses
+  nextpas.core.text.grapheme;
+
 
 { Zero-allocation keyword hash table.
   128 slots, open addressing with linear probing (max probe = 2).
@@ -593,6 +596,7 @@ function TokenizePascalStateful(const Line: AnsiString;
 var
   Tokens: array of TToken;
   Count, I, Start, Len: Integer;
+  LGR: TGraphemeResult;
 
   procedure AddToken(AStart, ALen: Integer; AKind: TTokenKind);
   begin
@@ -709,8 +713,19 @@ begin
       Continue;
     end;
 
-    AddToken(I, 1, tkNormal);
-    Inc(I);
+    { 高位字节按完整 UTF-8 图素发一个 token（逐字节拆 token 会让 CJK
+      渲染成单字节乱码格——PH33 P5a）；ASCII 兜底仍逐字符 }
+    if Ord(Line[I]) >= $80 then
+    begin
+      LGR := GraphemeNext(PByte(@Line[I]), SizeUInt(Len - I + 1));
+      AddToken(I, LGR.ByteLen, tkNormal);
+      Inc(I, LGR.ByteLen);
+    end
+    else
+    begin
+      AddToken(I, 1, tkNormal);
+      Inc(I);
+    end;
   end;
 
   SetLength(Tokens, Count);
@@ -724,6 +739,7 @@ function TPascalHighlighter.TokenizeLine(P: PAnsiChar; Len: Integer;
   Dst: PToken; MaxTokens: Integer): Integer;
 var
   Count, I, Start: Integer;
+  LGR: TGraphemeResult;
 
   procedure Emit(AStart, ALen: Integer; AKind: TTokenKind); inline;
   begin
@@ -843,8 +859,18 @@ begin
       Continue;
     end;
 
-    Emit(I, 1, tkNormal);
-    Inc(I);
+    { 同 TokenizePascalStateful：高位字节按完整图素发 token（PH33 P5a） }
+    if Ord(Ch(I)) >= $80 then
+    begin
+      LGR := GraphemeNext(PByte(P) + (I - 1), SizeUInt(Len - I + 1));
+      Emit(I, LGR.ByteLen, tkNormal);
+      Inc(I, LGR.ByteLen);
+    end
+    else
+    begin
+      Emit(I, 1, tkNormal);
+      Inc(I);
+    end;
   end;
 
   if Count > MaxTokens then Count := MaxTokens;

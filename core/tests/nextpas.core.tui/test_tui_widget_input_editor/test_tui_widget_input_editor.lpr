@@ -849,6 +849,86 @@ begin
   Check(LE <> nil, 'WithBlock chains and returns interface');
 end;
 
+{ PH33 P5a：行号 gutter 默认关=内容区与 AArea 重合（既有渲染逐字节不变） }
+procedure TestEditorGutterOff;
+var LE: IInputEditor; LBuf: TBuffer; LCell: PCell; I: Integer;
+begin
+  LE := TInputEditor.New;
+  LE.ReplaceContent('abc', 3);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    for I := 0 to 2 do
+    begin
+      LCell := LBuf.CellAt(I, 0);
+      Check(LCell <> nil, 'cell exists');
+      Check(Chr(LCell^.Glyph.Bytes[0]) = Chr(Ord('a') + I),
+        'gutter off: content starts at AArea.X unchanged');
+    end;
+  finally LBuf.Free; end;
+end;
+
+{ PH33 P5a：gutter 开——行号右对齐+1 隔列，宽=max位数+1 钳≥3，内容区左移同宽 }
+procedure TestEditorGutterOn;
+var LE: IInputEditor; LBuf: TBuffer;
+
+  function CellCh(AX, AY: Integer): AnsiChar;
+  var LC: PCell;
+  begin
+    LC := LBuf.CellAt(AX, AY);
+    if (LC = nil) or (LC^.Glyph.Len = 0) then Result := ' '
+    else Result := Chr(LC^.Glyph.Bytes[0]);
+  end;
+
+begin
+  LE := TInputEditor.New.WithLineNumbers(True);
+  LE.ReplaceContent('ab'#10'c', 4);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    { LineCount=2 → GutW=max(1+1,3)=3：行号在 x=1，隔列 x=2，内容 x=3 起 }
+    Check(CellCh(0, 0) = ' ', 'gutter pad left of number');
+    Check(CellCh(1, 0) = '1', 'line number right-aligned');
+    Check(CellCh(2, 0) = ' ', 'separator column');
+    Check(CellCh(3, 0) = 'a', 'content shifted by gutter width');
+    Check(CellCh(4, 0) = 'b', 'content second char');
+    Check(CellCh(1, 1) = '2', 'second line number');
+    Check(CellCh(3, 1) = 'c', 'second line content at same X');
+  finally LBuf.Free; end;
+  { 视口高于行数：越过末行的空行不画号 }
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 3));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 3), LBuf);
+    Check(CellCh(1, 2) = ' ', 'no number past last line');
+  finally LBuf.Free; end;
+end;
+
+{ PH33 P5a：syntax token CJK——token 落显示列（旧 bug 字节偏移直当列，
+  ':=' 错落字节列 7），且高位字节按完整图素成 token（格内完整字形非乱码） }
+procedure TestEditorSyntaxCJKColumn;
+var LE: IInputEditor; LBuf: TBuffer; LCell: PCell;
+begin
+  LE := TInputEditor.New;
+  LE.SetHighlighter(TPascalHighlighter.Create, TSyntaxTheme.Default);
+  LE.ReplaceContent('中文 := 1', 11);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LE.Render(TRect.Make(0, 0, 20, 1), LBuf);
+    LCell := LBuf.CellAt(0, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Len = 3) and (LCell^.Glyph.Bytes[0] = $E4),
+      'CJK ident drawn as whole grapheme, not lone bytes');
+    Check(LCell^.Width = 2, 'CJK cell display width 2');
+    LCell := LBuf.CellAt(2, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Bytes[0] = $E6), 'second grapheme at display col 2');
+    LCell := LBuf.CellAt(5, 0);
+    Check((LCell <> nil) and (LCell^.Glyph.Bytes[0] = Ord(':')),
+      'operator at display col 5 (byte-offset bug put it at 7)');
+    Check(LBuf.CellAt(6, 0)^.Glyph.Bytes[0] = Ord('='), '= follows :');
+    Check(LBuf.CellAt(7, 0)^.Glyph.Bytes[0] = 32, 'untokenized gap stays space');
+    Check(LBuf.CellAt(8, 0)^.Glyph.Bytes[0] = Ord('1'), 'number at display col 8');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -900,5 +980,8 @@ begin
   T.Test('DeleteSelected undo', @TestEditorDeleteSelectedUndo);
   T.Test('WithBlock render (PH33 P2b)', @TestEditorWithBlock);
   T.Test('WithBlock chaining (PH33 P2b)', @TestEditorWithBlockChaining);
+  T.Test('Gutter off default (PH33 P5a)', @TestEditorGutterOff);
+  T.Test('Gutter on (PH33 P5a)', @TestEditorGutterOn);
+  T.Test('Syntax CJK column (PH33 P5a)', @TestEditorSyntaxCJKColumn);
   if not T.Run then Halt(1);
 end.
