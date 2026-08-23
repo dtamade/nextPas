@@ -7,8 +7,9 @@
  * 流式真增量：h1 client 的 Send 会读完整响应才返回，因此 OpenStream 把
  * Send 放到专属 worker 线程执行；ResponseBodyChunk 回调把字节喂给
  * agent.sse 解析器并经通道交付消费方。NextEvent 以 100ms 切片等待，
- * 取消延迟上界一个切片。W1 为协作式取消；硬中断（IHttpCancelToken 贯通）
- * 属 ROADMAP W2。
+ * 取消延迟上界一个切片。硬中断（W2）：流持有 IHttpCancelToken 并注入
+ * 请求——Cancel 联动在途 Send 的 mid-IO 轮询随即抛 hekCanceled；
+ * 消费方主动取消的回声按 D2 以 EOF 形态呈现。
  *}
 
 unit nextpas.core.agent.transport.http;
@@ -117,6 +118,7 @@ type
       FProvider: string;
       FClient: IHttpClient;
       FRequest: IHttpRequest;
+      FHttpCancel: IHttpCancelToken;  { 硬中断：Cancel 联动在途 Send（W2）}
       FChannel: TWireMsgChannel;
       FLock: IMutex;                 { 仅护 FCancelled 标志 }
       FCancelled: Boolean;
@@ -230,20 +232,18 @@ var
   B: THttpRequestBuilder;
   I: Integer;
 begin
-  B := THttpRequestBuilder.Create(hmPost, AReq.Url);
-  B.ContentType('application/json');
+  { builder 方法返回修改副本：必须链式接住返回值，语句式调用会把
+    标量设置丢在临时副本上（Header 例外——共享 IHttpHeaders 可变）}
+  B := THttpRequestBuilder.Create(hmPost, AReq.Url)
+    .ContentType('application/json');
   for I := 0 to High(AReq.Headers) do
-    B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
+    B := B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
   if AReq.TotalTimeoutMs <> CTimeoutDefault then
-    B.Timeout(AReq.TotalTimeoutMs);
+    B := B.Timeout(AReq.TotalTimeoutMs);
   if Assigned(AChunkProc) then
-  begin
-    { SSE 路径：体不缓冲，逐块直投回调（h1 client 设计意图）}
-    B.ResponseBodyChunk(AChunkProc);
-    B.SkipBodyBuffer;
-  end;
+    B := B.ResponseBodyChunk(AChunkProc).SkipBodyBuffer;
   if Assigned(AStatusProc) then
-    B.ResponseStatus(AStatusProc);
+    B := B.ResponseStatus(AStatusProc);
   Result := B.Body(AReq.BodyJson).Build;
 end;
 
@@ -334,10 +334,14 @@ end;
 
 destructor TWireStream.Destroy;
 begin
-  { worker 可能仍在 Send 中：等其收尾再拆状态（上界为请求超时；
-    消费方应先 Cancel 再释放以缩短等待）}
+  { worker 可能仍在 Send 中：先硬取消在途请求再等收尾——等待上界从
+    "请求超时（至多 TotalTimeout 300s）"缩到 IO 切片级；消费方仍应优先
+    显式 Cancel。W2 复核结论：每流专属 worker 保留（长生命周期流的正确
+    形态），Destroy 确定性由硬取消保证 }
   if FWorker <> nil then
   begin
+    if FHttpCancel <> nil then
+      FHttpCancel.Cancel;
     FWorker.WaitFor;
     FWorker.Free;
     FWorker := nil;
@@ -354,16 +358,20 @@ begin
   FLock := TMutex.Create;
   FChannel := TWireMsgChannel.Create(256);
   FParser := TSSEParser.Create;
-  B := THttpRequestBuilder.Create(hmPost, AReq.Url);
-  B.ContentType('application/json');
+  FHttpCancel := NewHttpCancelToken;
+  { builder 方法返回修改副本：链式接住返回值（同 BuildPostRequest 注释）}
+  B := THttpRequestBuilder.Create(hmPost, AReq.Url)
+    .ContentType('application/json');
   for I := 0 to High(AReq.Headers) do
-    B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
+    B := B.Header(AReq.Headers[I].Name, AReq.Headers[I].Value);
   if AReq.TotalTimeoutMs <> CTimeoutDefault then
-    B.Timeout(AReq.TotalTimeoutMs);
+    B := B.Timeout(AReq.TotalTimeoutMs);
+  { 硬中断贯通：worker 的在途 Send 在 mid-IO 切片轮询此令牌 }
   { SSE 路径：体不缓冲，逐块直投回调（h1 client 设计意图）}
-  B.ResponseBodyChunk(@OnBodyChunk);
-  B.ResponseStatus(@OnResponseStatus);
-  B.SkipBodyBuffer;
+  B := B.CancelToken(FHttpCancel)
+    .ResponseBodyChunk(@OnBodyChunk)
+    .ResponseStatus(@OnResponseStatus)
+    .SkipBodyBuffer;
   FRequest := B.Body(AReq.BodyJson).Build;
   FWorker := TWorker.Create(Self);
   FWorker.Start;
@@ -507,6 +515,13 @@ begin
           end;
         wmkError:
           begin
+            { 消费方主动取消引发的 hekCanceled 回声：按 D2 以 EOF 形态
+              呈现，不抛——判定取消永远看 GetCancelled }
+            if (LMsg.ErrCode = aecCancelled) and GetCancelled then
+            begin
+              FDone := True;
+              Exit(False);
+            end;
             FDone := True;
             FLastErrCode := LMsg.ErrCode;
             FLastErrMsg := LMsg.ErrMsg;
@@ -530,6 +545,9 @@ begin
   finally
     FLock.Release;
   end;
+  { 硬中断：worker 在途 Send 的 mid-IO 轮询随即抛 hekCanceled（W2）}
+  if FHttpCancel <> nil then
+    FHttpCancel.Cancel;
   FChannel.Close;                    { 唤醒阻塞中的 ReceiveTimeout }
 end;
 

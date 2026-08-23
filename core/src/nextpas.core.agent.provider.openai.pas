@@ -1100,6 +1100,7 @@ type
       const ADecoder: IAgentWireDecoder;
       const AToken: IAsyncCancellationToken;
       const AProviderName: string);
+    destructor Destroy; override;
     function NextDelta(out ADelta: TStreamDelta): Boolean;
     procedure Cancel;
     function GetCancelled: Boolean;
@@ -1142,6 +1143,14 @@ begin
   FToken := AToken;
   FProviderName := AProviderName;
   FIdx := 0;
+end;
+
+destructor TOpenAICompletion.Destroy;
+begin
+  { 弃置未读完的流：硬取消上游在途请求（transport 联动），不拖到超时 }
+  if not FSourceDone then
+    Cancel;
+  inherited Destroy;
 end;
 
 procedure TOpenAICompletion.AppendDeltas(const AArr: TStreamDeltaArray);

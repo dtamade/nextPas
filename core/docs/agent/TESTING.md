@@ -18,7 +18,7 @@
 | `test_protocol` | base 词表 + fold | FoldDeltas 全词表矩阵：text/thinking 交错、tool 多槽并行折叠（index 分桶）、usage/finish 三种到达顺序等价、违例序列抛 aecProtocol、Extra 无损往返 |
 | `test_errors` | 错误分类器 | ErrorCodeForStatus 全状态映射；Retryable 推导表；RetryAfterMs 解析（ms 头/秒头/date 拒绝→unknown）；超窗措辞全集识别 |
 | `test_sse` | agent.sse 增量解析器 | 帧跨 chunk 断裂、多行 data、CRLF/LF、BOM、event+data 组合、半帧保持状态、**UTF-8 多字节序列跨 Feed 边界断裂**（WIRE-MAPPINGS §0）、EOF 收口、恶意超长行上限 |
-| `test_transport_stream` | transport.http + 时序 | scripted chunk 流验证**真增量时序**：喂 chunk N 即产出对应事件（不等到 EOF）；Cancel 中途立即返回 False 且 GetCancelled=True；非流式 RoundTrip 超时/连接失败归因 aecTimeout/aecTransport |
+| `test_transport_stream` | transport.http + 时序 | scripted chunk 流验证**真增量时序**：喂 chunk N 即产出对应事件（不等到 EOF）；Cancel 中途立即返回 False 且 GetCancelled=True；非流式 RoundTrip 超时/连接失败归因 aecTimeout/aecTransport；**回环硬取消**（裸 TCP 恒长 chunked SSE 源）：Cancel 后 NextEvent 在 IO 切片级返回 False 而非等满请求超时，弃置未读完的流 Destroy 快速收合 worker |
 | `test_provider_openai` | openai 适配器 | 请求编码快照（含 sentinel 省略、Q-O1 改名、tools 编码）；响应解码快照（非流式+流式全事件序）；怪癖 Q-O2..Q-O6 各一条回归 |
 | `test_provider_anthropic` | anthropic 适配器 | 同上对称集；Q-A1 首信封、Q-A2 usage 双源合成、Q-A3 signature 透传、Q-A4 tool_result 分组、MaxTokens unset→aecConfig |
 | `test_codecs` | 公开编解码器（D13） | 快照 wire → Decode → 词表 → Encode 语义等价往返（Extra 保真）；未映射枚举值→零值+`agent.unmapped.*`+warn；WireDecoder 跨断裂帧与 Finalize 双序（usage 先/后）等价、anthropic 无 message_stop 的 EOF 抛 aecProtocol（Q-A8）；协议违例输入抛 aecProtocol 带 RawBodySnippet；网关式双角色并行解码互不污染 |

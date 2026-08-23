@@ -27,7 +27,13 @@
 - ReadAllBody 倍增预分配（原逐 chunk SetLength 重拷）；错误体累积 64KB 封顶
   （信封摘要只需 8KB）防恶意大 4xx 体——已落地。
 - 流式线程模型决策：每流专属 worker 为长生命周期流的正确形态（池化 worker 同样
-  被流期钉死；Destroy 依赖 WaitFor 确定性收尾），非技术债——W2 取消贯通时复核。
+  被流期钉死；Destroy 确定性由硬取消保证，回环实测收合 ~100ms），非技术债——
+  W2 取消贯通复核完毕。
+- **W2 取消贯通发现并修复 W1 潜伏缺陷**：transport.http 的 builder 以语句式调用
+  fluent 链（返回值被丢弃），标量设置（Timeout/ResponseBodyChunk/ResponseStatus/
+  SkipBodyBuffer/CancelToken）全部落在临时副本上——非流式碰巧能跑（直接读响应
+  对象），**流式真增量从未生效**；gate 全走 scripted transport 故 W1 未暴露。
+  已改链式赋值修复；test_transport_stream 新增回环硬取消两测作为真装配证据。
 
 ## Inbox（活动输入池，非承诺）
 
