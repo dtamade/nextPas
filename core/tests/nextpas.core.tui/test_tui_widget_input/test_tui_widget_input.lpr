@@ -3,6 +3,7 @@ program test_tui_widget_input;
 uses
   nextpas.core.tui.base,
   nextpas.core.tui.color,
+  nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
@@ -443,6 +444,261 @@ begin
   Check(LS.Text = 'ac', 'forward delete');
 end;
 
+{ === 选区(鼠标拖选/Shift 扩展/双击词/全选) === }
+
+procedure TestSelectionBeginUpdate;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello world');
+  Check(not LS.HasSelection, 'no selection initially');
+  LS.BeginSelect(6);
+  Check(not LS.HasSelection, 'anchor=head is not a selection');
+  LS.UpdateSelect(11);
+  Check(LS.HasSelection, 'anchor<>head has selection');
+  Check(LS.SelFrom = 6, 'sel from 6');
+  Check(LS.SelTo = 11, 'sel to 11');
+  LS.ClearSelection;
+  Check(not LS.HasSelection, 'cleared');
+end;
+
+procedure TestSelectionReversed;
+var LS: TInputState;
+begin
+  { 反向拖拽(从右往左):From/To 归一化 }
+  LS := TInputState.WithText('hello world');
+  LS.BeginSelect(11);
+  LS.UpdateSelect(6);
+  Check(LS.SelFrom = 6, 'reversed from still 6');
+  Check(LS.SelTo = 11, 'reversed to still 11');
+  CheckEqual('world', LS.SelectedText, 'reversed selected text');
+end;
+
+procedure TestSelectionSelectedText;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello');
+  CheckEqual('', LS.SelectedText, 'no selection empty text');
+  LS.BeginSelect(1);
+  LS.UpdateSelect(3);
+  CheckEqual('el', LS.SelectedText, 'utf8-safe byte slice');
+  LS := TInputState.WithText('你好世界');
+  LS.BeginSelect(0);
+  LS.UpdateSelect(3);
+  CheckEqual('你', LS.SelectedText, 'cjk single char selection');
+end;
+
+procedure TestSelectionDelete;
+var LS: TInputState; LHad: Boolean;
+begin
+  LS := TInputState.WithText('hello world');
+  LHad := LS.DeleteSelection;
+  Check(not LHad, 'no selection delete returns false');
+  CheckEqual('hello world', LS.Text, 'text untouched');
+  LS.BeginSelect(5);
+  LS.UpdateSelect(11);
+  LHad := LS.DeleteSelection;
+  Check(LHad, 'delete returns true with selection');
+  CheckEqual('hello', LS.Text, 'tail removed');
+  Check(LS.Cursor = 5, 'cursor lands at from');
+  Check(not LS.HasSelection, 'selection cleared after delete');
+end;
+
+procedure TestSelectionInsertReplaces;
+var LS: TInputState;
+begin
+  { 标准编辑器语义:输入/粘贴替换选区 }
+  LS := TInputState.WithText('hello world');
+  LS.BeginSelect(0);
+  LS.UpdateSelect(5);
+  LS.InsertChar(Ord('X'));
+  CheckEqual('X world', LS.Text, 'typing replaces selection');
+  Check(LS.Cursor = 1, 'cursor after replacement');
+  Check(not LS.HasSelection, 'selection consumed');
+  LS := TInputState.WithText('hello world');
+  LS.BeginSelect(6);
+  LS.UpdateSelect(11);
+  LS.InsertStr('there');
+  CheckEqual('hello there', LS.Text, 'paste replaces selection');
+end;
+
+procedure TestSelectionWordAt;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('foo bar baz');
+  Check(LS.SelectWordAt(0), 'click inside word selects');
+  Check(LS.SelFrom = 0, 'word from start');
+  Check(LS.SelTo = 3, 'word to end');
+  Check(LS.Cursor = 3, 'cursor lands at word end (neovim style)');
+  Check(LS.SelectWordAt(5), 'second word');
+  Check(LS.SelFrom = 4, 'second word from');
+  Check(LS.SelTo = 7, 'second word to');
+  Check(not LS.SelectWordAt(3), 'click on blank refuses');
+  Check(LS.SelectWordAt(100), 'click past tail falls back to last word');
+  Check(LS.SelFrom = 8, 'past-tail selects last word from');
+  Check(LS.SelTo = 11, 'past-tail selects last word to');
+  LS := TInputState.Empty;
+  Check(not LS.SelectWordAt(0), 'empty text refuses');
+  { CJK 无空格连续串视为一个词 }
+  LS := TInputState.WithText('你好世界');
+  Check(LS.SelectWordAt(3), 'cjk click selects');
+  Check(LS.SelFrom = 0, 'cjk word from start');
+  Check(LS.SelTo = 12, 'cjk word to text length');
+end;
+
+procedure TestSelectionSelectAll;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('hello');
+  LS.SelectAll;
+  Check(LS.HasSelection, 'select all has selection');
+  CheckEqual('hello', LS.SelectedText, 'select all content');
+  LS := TInputState.Empty;
+  LS.SelectAll;
+  Check(not LS.HasSelection, 'empty select all noop');
+end;
+
+procedure TestColToBytePos;
+var LS: TInputState;
+begin
+  LS := TInputState.WithText('abc');
+  Check(LS.ColToBytePos(0) = 0, 'col 0 at 0');
+  Check(LS.ColToBytePos(1) = 1, 'col 1 at 1');
+  Check(LS.ColToBytePos(2) = 2, 'col 2 at 2');
+  Check(LS.ColToBytePos(3) = 3, 'col at tail');
+  Check(LS.ColToBytePos(100) = 3, 'beyond tail clamps to end');
+  Check(LS.ColToBytePos(-1) = 0, 'negative clamps to 0');
+  LS := TInputState.WithText('ab你');
+  Check(LS.ColToBytePos(2) = 2, 'wide char col start');
+  Check(LS.ColToBytePos(3) = 2, 'wide char middle clamps to its head');
+  Check(LS.ColToBytePos(4) = 5, 'after wide char');
+  LS := TInputState.Empty;
+  Check(LS.ColToBytePos(5) = 0, 'empty text maps to 0');
+end;
+
+procedure TestHandleKeyShiftExtend;
+var LS: TInputState; KE: TKeyEvent;
+begin
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcLeft;
+  KE.Modifiers := [kmShift];
+  LS := TInputState.WithText('abc');
+  LS.HandleKey(KE);
+  Check(LS.HasSelection, 'shift+left starts selection at cursor');
+  CheckEqual('c', LS.SelectedText, 'one char selected');
+  LS.HandleKey(KE);
+  CheckEqual('bc', LS.SelectedText, 'extends over b');
+  Check(LS.Cursor = 1, 'head moved to 1');
+  KE.Modifiers := [];
+  LS.HandleKey(KE);
+  Check(not LS.HasSelection, 'plain left collapses selection');
+  Check(LS.Cursor = 0, 'and moves normally');
+  { Shift+Home 全选到行首 }
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcHome;
+  KE.Modifiers := [kmShift];
+  LS := TInputState.WithText('abc');
+  LS.Cursor := 2;
+  LS.HandleKey(KE);
+  CheckEqual('ab', LS.SelectedText, 'shift+home selects to start');
+  { Ctrl+Shift+Right 按词扩展 }
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcRight;
+  KE.Modifiers := [kmCtrl, kmShift];
+  LS := TInputState.WithText('foo bar');
+  LS.Cursor := 0;
+  LS.HandleKey(KE);
+  CheckEqual('foo', LS.SelectedText, 'ctrl+shift+right extends by word');
+end;
+
+procedure TestHandleKeyDeleteSelectionKeys;
+var LS: TInputState; KE: TKeyEvent;
+begin
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcBackspace;
+  LS := TInputState.WithText('hello world');
+  LS.BeginSelect(5);
+  LS.UpdateSelect(11);
+  LS.HandleKey(KE);
+  CheckEqual('hello', LS.Text, 'backspace deletes whole selection');
+  FillChar(KE, SizeOf(KE), 0);
+  KE.Code := kcDelete;
+  LS := TInputState.WithText('hello world');
+  LS.BeginSelect(0);
+  LS.UpdateSelect(5);
+  LS.HandleKey(KE);
+  CheckEqual(' world', LS.Text, 'delete key deletes whole selection');
+  Check(LS.Cursor = 0, 'cursor at from');
+end;
+
+procedure TestRenderHighlight;
+var LI: IInput; LBuf: TBuffer; LS: TInputState;
+begin
+  LI := TInput.New;
+  LS := TInputState.WithText('abcdef');
+  LS.BeginSelect(1);
+  LS.UpdateSelect(4);   { 选 bcde,列 1..3 }
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LI.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    Check(not (mbReversed in LBuf.CellAt(0, 0)^.Modifier), 'before range plain');
+    Check(mbReversed in LBuf.CellAt(1, 0)^.Modifier, 'range start highlighted');
+    Check(mbReversed in LBuf.CellAt(3, 0)^.Modifier, 'range last highlighted');
+    Check(not (mbReversed in LBuf.CellAt(4, 0)^.Modifier), 'after range plain');
+  finally LBuf.Free; end;
+end;
+
+procedure TestRenderHighlightClipsToViewport;
+var LI: IInput; LBuf: TBuffer; LS: TInputState; LI2: Integer;
+
+  function CellSel(ABuf: TBuffer; AX, AY: Integer): Boolean;
+  var LC: PCell;
+  begin
+    LC := ABuf.CellAt(AX, AY);
+    Result := (LC <> nil) and (LC^.Bg.Kind = ckIndexed) and (LC^.Bg.Index = 5);
+  end;
+
+begin
+  { 用专属背景色标记选区,与默认光标的 mbReversed 区分 }
+  LI := TInput.New.WithSelectionStyle(TStyle.Default.WithBg(IndexedColor(5)));
+  { 视口 4 列,文本 10 字符全选:可见 4 格全部高亮,不越界 }
+  LS := TInputState.WithText('abcdefghij');
+  LS.BeginSelect(0);
+  LS.UpdateSelect(10);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LI.RenderStateful(TRect.Make(0, 0, 4, 1), LBuf, LS);
+    for LI2 := 0 to 3 do
+      Check(CellSel(LBuf, LI2, 0), 'visible cell highlighted');
+  finally LBuf.Free; end;
+  { 选区完全滚出视口左侧:无高亮、不越界 }
+  LS := TInputState.WithText('abcdefghijklmnop');
+  LS.BeginSelect(0);
+  LS.UpdateSelect(2);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LI.RenderStateful(TRect.Make(0, 0, 4, 1), LBuf, LS);
+    for LI2 := 0 to 3 do
+      Check(not CellSel(LBuf, LI2, 0), 'scrolled-out selection not drawn');
+  finally LBuf.Free; end;
+end;
+
+procedure TestRenderHighlightMasked;
+var LI: IInput; LBuf: TBuffer; LS: TInputState;
+begin
+  LI := TInput.New.WithMask('*');
+  LS := TInputState.WithText('secret');
+  LS.BeginSelect(1);
+  LS.UpdateSelect(4);   { 遮罩显示列 1..3 }
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LI.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    Check(not (mbReversed in LBuf.CellAt(0, 0)^.Modifier), 'masked before plain');
+    Check(mbReversed in LBuf.CellAt(1, 0)^.Modifier, 'masked range highlighted');
+    Check(mbReversed in LBuf.CellAt(3, 0)^.Modifier, 'masked range end highlighted');
+    Check(not (mbReversed in LBuf.CellAt(4, 0)^.Modifier), 'masked after plain');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_input');
   try
@@ -485,6 +741,21 @@ begin
     T.Test('HandleKey home', @TestInputStateHandleKeyHome);
     T.Test('HandleKey end', @TestInputStateHandleKeyEnd);
     T.Test('HandleKey delete', @TestInputStateHandleKeyDelete);
+
+    { 选区 }
+    T.Test('Selection BeginUpdate', @TestSelectionBeginUpdate);
+    T.Test('Selection Reversed', @TestSelectionReversed);
+    T.Test('Selection SelectedText', @TestSelectionSelectedText);
+    T.Test('Selection Delete', @TestSelectionDelete);
+    T.Test('Selection InsertReplaces', @TestSelectionInsertReplaces);
+    T.Test('Selection WordAt', @TestSelectionWordAt);
+    T.Test('Selection SelectAll', @TestSelectionSelectAll);
+    T.Test('ColToBytePos', @TestColToBytePos);
+    T.Test('HandleKey ShiftExtend', @TestHandleKeyShiftExtend);
+    T.Test('HandleKey DeleteSelectionKeys', @TestHandleKeyDeleteSelectionKeys);
+    T.Test('Render Highlight', @TestRenderHighlight);
+    T.Test('Render Highlight ClipsToViewport', @TestRenderHighlightClipsToViewport);
+    T.Test('Render Highlight Masked', @TestRenderHighlightMasked);
 
     WriteLn;
   if not T.Run then Halt(1);
