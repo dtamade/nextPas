@@ -1567,6 +1567,96 @@ begin
   CheckEqual('req-2', LW2.GetHeaders.Get('x-request-id'), 'second request gets req-2');
 end;
 
+procedure TestRequestIdStashesIntoContext;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LSeenId: string;
+begin
+  LSeenId := '';
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      LSeenId := HttpContextGetString(HttpContextOf(AReq), CONTEXT_REQUEST_ID);
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end),
+    [ContextMiddleware, RequestIdMiddleware]
+  );
+  LReq := TMockRequest.Create(hmGet, '/ctx');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  Check(LWObj.GetHeaders.Get('x-request-id') <> '', 'response header id present');
+  CheckEqual(LWObj.GetHeaders.Get('x-request-id'), LSeenId,
+    'generated id stashed into context bag');
+
+  { 入站已有 id：袋中必须是透传值而非新值。 }
+  LSeenId := '';
+  LReq := TMockRequest.Create(hmGet, '/ctx');
+  LReq.GetHeaders.SetHeader('x-request-id', 'proxy-req-9');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual('proxy-req-9', LSeenId, 'preserved id stashed into context bag');
+end;
+
+{ 端到端组合：context + requestid + logger(extras 读袋) —— http_request
+  日志事件必须携带与响应头一致的 request_id 字段。 }
+procedure TestRequestIdFeedsLoggerExtras;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LCap: TLogCaptureHandler;
+  LLog: TLogger;
+  LProvider: TLogExtrasProvider;
+  LI: Int32;
+  LFound: Boolean;
+begin
+  LCap := TLogCaptureHandler.Create;
+  LLog := TLogger.New(LCap);
+  LProvider := function(const AReq: IHttpRequest; const AW: IHttpResponseWriter): TLogFieldArray
+  var
+    LFields: TLogFieldArray;
+  begin
+    SetLength(LFields, 1);
+    LFields[0].Key := 'request_id';
+    LFields[0].Value := HttpContextGetString(HttpContextOf(AReq), CONTEXT_REQUEST_ID);
+    Result := LFields;
+  end;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_CREATED);
+    end),
+    [ContextMiddleware, RequestIdMiddleware,
+     LoggerMiddlewareWithExtrasAndLogger(LProvider, LLog)]
+  );
+  LReq := TMockRequest.Create(hmPost, '/logged');
+  LReq.GetHeaders.SetHeader('x-request-id', 'log-corr-1');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(1), Int64(LCap.Count), 'one log record produced');
+  LFound := False;
+  for LI := 0 to LCap.Last.AttrCount - 1 do
+    if LCap.Last.Attrs[LI].Key = 'request_id' then
+    begin
+      CheckEqual('log-corr-1', LCap.Last.Attrs[LI].SVal,
+        'http_request log carries context request_id');
+      LFound := True;
+    end;
+  Check(LFound, 'request_id attribute present in log record');
+end;
+
 { CacheControlMiddleware tests }
 
 procedure TestCacheControlSetsHeader;
@@ -4000,6 +4090,8 @@ begin
   T.Test('RequestIdWithGenerator: preserves existing', @TestRequestIdWithGeneratorPreservesExisting);
   T.Test('RequestIdWithGenerator: custom header', @TestRequestIdWithGeneratorCustomHeader);
   T.Test('RequestIdWithGenerator: unique per request', @TestRequestIdWithGeneratorUniquePerRequest);
+  T.Test('RequestId: stashes id into context bag', @TestRequestIdStashesIntoContext);
+  T.Test('RequestId: feeds logger extras via context', @TestRequestIdFeedsLoggerExtras);
   { CacheControl }
   T.Test('CacheControl: sets header on response', @TestCacheControlSetsHeader);
   T.Test('CacheControl: NoCache convenience', @TestNoCacheMiddlewareSetsHeader);
