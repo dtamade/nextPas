@@ -1065,8 +1065,9 @@ begin
       Inc(NumBytes);
     end;
 
-    LenBytes[0] := $80 or NumBytes;
-    FStream.Write(LenBytes[0], SizeOf(Byte));
+    // 标记字节存放在载荷字节之后，避免覆写最低有效长度字节
+    LenBytes[NumBytes] := Byte($80 or NumBytes);
+    FStream.Write(LenBytes[NumBytes], SizeOf(Byte));
     for I := NumBytes - 1 downto 0 do
       FStream.Write(LenBytes[I], SizeOf(Byte));
   end;

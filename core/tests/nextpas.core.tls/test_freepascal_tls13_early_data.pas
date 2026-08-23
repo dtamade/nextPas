@@ -3137,7 +3137,9 @@ var
   LRejectStream: TScriptedEarlyDataServerStream;
   LSession: ISSLSession;
   LConnector: TSSLConnector;
-  LTLSStream: TSSLStream;
+  // Hold the IStream interface so the underlying TSSLStream stays alive:
+  // casting to the raw class would drop the only reference and free it immediately.
+  LTLSStream: IStream;
 begin
   LInitialCtx := TSSLFactory.CreateContext(sslCtxClient, sslFreePascal);
   AssertTrue(LInitialCtx <> nil, 'Initial connector client context should be created');
@@ -3145,16 +3147,17 @@ begin
   LInitialCtx.SetVerifyMode([]);
   LInitialStream := TScriptedEarlyDataServerStream.CreateInitial(TLS13_CIPHER_CHACHA20_POLY1305_SHA256);
   try
-    LTLSStream := TSSLStream(TSSLConnector.FromContext(LInitialCtx)
-      .ConnectStream(TStreamWrapper.Create(LInitialStream, False), 'example.com'));
+    LConnector := TSSLConnector.FromContext(LInitialCtx);
+    LTLSStream := LConnector.ConnectStream(
+      TStreamWrapper.Create(LInitialStream, False), 'example.com');
     try
       LSession := RequireSessionResumption(
-        LTLSStream.Connection,
+        TSSLStream(LTLSStream).Connection,
         'Initial connector handshake connection should expose session-resumption owner path'
       ).GetSession;
       AssertTrue(LSession <> nil, 'Initial connector handshake should capture resumable session');
     finally
-      LTLSStream.Free;
+      LTLSStream := nil;
     end;
   finally
     LInitialStream.Free;
@@ -3174,11 +3177,11 @@ begin
     LConnector := TSSLConnector.FromContext(LResumedCtx)
       .WithSession(LSession)
       .WithEarlyData(BytesOf('PING'));
-    LTLSStream := TSSLStream(LConnector.ConnectStream(TStreamWrapper.Create(LAcceptStream, False), 'example.com'));
+    LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LAcceptStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector accepted early-data handshake should succeed');
-    AssertTrue(Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn),
       'Connector accepted-path connection should expose early-data connection interface');
-    if Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataAccepted,
         'Connector accepted-path client should report accepted early-data status');
     AssertTrue(BytesEqual(BytesOf('PING'), LAcceptStream.CapturedEarlyData),
@@ -3186,7 +3189,7 @@ begin
     AssertTrue(LAcceptStream.ObservedEndOfEarlyData,
       'Connector accepted-path should still send EndOfEarlyData before Finished');
   finally
-    LTLSStream.Free;
+    LTLSStream := nil;
     LAcceptStream.Free;
   end;
 
@@ -3196,11 +3199,11 @@ begin
     LConnector := TSSLConnector.FromContext(LResumedCtx)
       .WithSession(LSession)
       .WithEarlyData(BytesOf('NOPE'));
-    LTLSStream := TSSLStream(LConnector.ConnectStream(TStreamWrapper.Create(LRejectStream, False), 'example.com'));
+    LTLSStream := LConnector.ConnectStream(TStreamWrapper.Create(LRejectStream, False), 'example.com');
     AssertTrue(LTLSStream <> nil, 'Connector rejected early-data handshake should still succeed');
-    AssertTrue(Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn),
+    AssertTrue(Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn),
       'Connector rejected-path connection should expose early-data connection interface');
-    if Supports(LTLSStream.Connection, ISSLEarlyDataConnection, LEarlyConn) then
+    if Supports(TSSLStream(LTLSStream).Connection, ISSLEarlyDataConnection, LEarlyConn) then
       AssertTrue(LEarlyConn.GetEarlyDataStatus = sslEarlyDataRejected,
         'Connector rejected-path client should report rejected early-data status');
     AssertTrue(Length(LRejectStream.CapturedEarlyData) = 0,
@@ -3208,7 +3211,7 @@ begin
     AssertTrue(not LRejectStream.ObservedEndOfEarlyData,
       'Connector reject path should not send EndOfEarlyData');
   finally
-    LTLSStream.Free;
+    LTLSStream := nil;
     LRejectStream.Free;
   end;
 end;

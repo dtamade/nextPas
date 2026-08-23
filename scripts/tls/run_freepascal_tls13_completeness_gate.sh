@@ -100,7 +100,7 @@ TEST_FILES=(
   "core/tests/nextpas.core.tls/test_tls13_resumption.pas"
   "core/tests/nextpas.core.tls/test_rfc8448_psk_binder.pas"
   "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas"
-  "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas"
+  "core/tests/nextpas.core.tls/test_tls13_servercertverify/test_tls13_servercertverify.pas"
   "core/tests/nextpas.core.tls/test_freepascal_revocation_fast_contracts.pas"
   "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas"
   "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas"
@@ -131,7 +131,11 @@ run_test_case() {
   local file="$2"
   local units_dir="$WORK_ROOT/${name}.units"
   local bin_dir="$WORK_ROOT/${name}.bin"
+  # Test programs open fixtures relative to their own source directory
+  # (flat programs use "certificate/...", subdirectory projects use "../certificate/...").
+  local run_cwd="$PROJECT_ROOT/$(dirname "$file")"
   local exe_path="$bin_dir/$name"
+  local run_exe_path="$PROJECT_ROOT/$exe_path"
   local compile_cmd_words=(
     "$FPC_EXE"
     -B
@@ -144,7 +148,7 @@ run_test_case() {
     "$file"
   )
   local run_cmd_words=(
-    "$exe_path"
+    "$run_exe_path"
   )
   local display_cmd
   display_cmd="mkdir -p $(shell_join "$units_dir" "$bin_dir") && $(shell_join "${compile_cmd_words[@]}") && $(shell_join "${run_cmd_words[@]}")"
@@ -166,7 +170,7 @@ run_test_case() {
   local run_ec=0
   if [[ "$compile_ec" == "0" ]]; then
     (
-      cd "$PROJECT_ROOT"
+      cd "$run_cwd"
       "${run_cmd_words[@]}"
     )
     run_ec=$?

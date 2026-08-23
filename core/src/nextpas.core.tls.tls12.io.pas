@@ -42,6 +42,7 @@ function TLS12ReadHandshakeMessage(AStream: IStream; out AHandshakeType: Byte;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.io.util,
   nextpas.core.tls.tls12.wire;
 
@@ -79,7 +80,13 @@ begin
     SetLength(ABuf, AOffset + ACount);
   if ACount = 0 then
     Exit(True);
-  IoReadFull(AStream, ABuf[AOffset], SizeUInt(ACount));
+  // EOF 等读失败按 Try 契约返回 False，不向握手调用方抛异常
+  try
+    IoReadFull(AStream, ABuf[AOffset], SizeUInt(ACount));
+  except
+    on E: EIOError do
+      Exit(False);
+  end;
   Result := True;
 end;
 

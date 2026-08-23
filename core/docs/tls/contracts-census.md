@@ -213,12 +213,23 @@
 
 | 契约 | 状态 | 备注 |
 |------|------|------|
-| test_freepascal_tls13_completeness_gate_contract.sh | gate 可运行但内部 12 组红 | 需逐组修 test_freepascal_* 程序 |
+| test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 17/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
+| test_freepascal_tls13_early_data（gate 内部组） | 连接器 early-data 子测试 AV | `TSSLStream` 实例字段被相邻堆块越界覆写（VMT 合法、引用计数/字段被踩、崩溃点随构建布局漂移；gdb watch + heaptrc 取证）。测试侧悬垂指针生命周期 bug 已修（`LTLSStream: TSSLStream` 裸指针持有改为 `IStream` 接口持有）；剩余为纯 Pascal 加密/记录层深层越界写，需专人专项 |
 | test_tls13_interop_matrix.sh / test_tls13_advanced_interop.sh | 运行时互操作失败 | TLS1.3 client-cert 握手等场景，需真实 s_server 调试 |
 | test_freepascal_tls12_interop_matrix.sh | 8 过 1 败 | 单套件待查 |
 | test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
 | test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
 | test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
+
+## 完整性门战果（2026-08-23 第二批）
+
+`scripts/tls/run_freepascal_tls13_completeness_gate.sh`：**6/18 → 17/18 组绿**。
+
+| 根因 | 修复 | 影响组数 |
+|------|------|---------|
+| gate 以 PROJECT_ROOT 为运行 cwd，而测试程序按自身目录解析证书路径（扁平程序 `certificate/...`、子目录项目 `../certificate/...`） | gate 运行步改为以各测试源文件所在目录为 cwd；同步契约脚本 servercertverify 子目录路径 | 10（含 servercertverify 清单路径修正） |
+| `TASN1Writer.WriteLength` 长格式分支把标记字节写入 `LenBytes[0]`，覆写最低有效长度字节（357→386 类破坏），任何 ≥128 字节的原始类型 DER 写入均损坏 | 标记字节改存 `LenBytes[NumBytes]`；openssl asn1parse 与独立复现程序双重验证 | 1（ct_sct OCSP-delivered SCT） |
+| `TLS12ReadExact` 让 `IoReadFull` 的 EIOError 逃逸，违反 Try 契约（空流上 Connect 应返回 False 并可查错误） | EOF 转 False；补 uses nextpas.core.exception | 1（backend_basic） |
 
 ## 变更记录
 
@@ -226,3 +237,4 @@
 |------|------|
 | 2026-08-23 | 首次全量普查；删除纯文档死目标 71；机械路径修复转绿 12 |
 | 2026-08-23 | 第二轮路径清零 PASS 30→83；第三轮内容对账 PASS 83→174，删死契约 73，反哺修复 3 个迁移受损工具 |
+| 2026-08-23 | 完整性门 6/18→17/18：cwd 规则修复 10 组；修复 TASN1Writer.WriteLength 长格式长度覆写核心 bug；修复 TLS12 IO 层 EOF 异常逃逸；early_data 测试侧悬垂接口修复并登记深层越界写积压 |

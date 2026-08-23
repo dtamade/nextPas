@@ -28,7 +28,7 @@ for expected in \
   "core/tests/nextpas.core.tls/test_tls13_resumption.pas" \
   "core/tests/nextpas.core.tls/test_rfc8448_psk_binder.pas" \
   "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas" \
-  "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas" \
+  "core/tests/nextpas.core.tls/test_tls13_servercertverify/test_tls13_servercertverify.pas" \
   "core/tests/nextpas.core.tls/test_freepascal_revocation_fast_contracts.pas" \
   "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas" \
   "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas" \
