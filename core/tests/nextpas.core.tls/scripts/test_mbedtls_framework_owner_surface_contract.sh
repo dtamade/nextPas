@@ -33,6 +33,8 @@ for pattern in "${forbidden_patterns[@]}"; do
   fi
 done
 
-"$binary" >/dev/null
+# 测试程序按自身目录解析 certificate/ 夹具路径，须以源文件目录为 cwd 运行
+# （与 run_freepascal_tls13_completeness_gate.sh 的 cwd 规则一致）
+(cd core/tests/nextpas.core.tls && "$PROJECT_ROOT/$binary") >/dev/null
 
 echo "[PASS] test_mbedtls_framework.pas stays on owner-path SNI and verify-result surfaces"

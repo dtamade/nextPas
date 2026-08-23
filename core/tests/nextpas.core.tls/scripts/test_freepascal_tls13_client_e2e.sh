@@ -34,8 +34,8 @@ if ! kill -0 "$SERVER_PID" 2>/dev/null; then
   exit 0
 fi
 
-# Verify server works with openssl s_client
-RESULT=$(echo "Q" | openssl s_client -connect 127.0.0.1:$PORT -tls1_3 2>&1)
+# Verify server works with openssl s_client (s_client 可能因自签校验非零退出，豁免)
+RESULT=$(echo "Q" | openssl s_client -connect 127.0.0.1:$PORT -tls1_3 2>&1 || true)
 if echo "$RESULT" | grep -q "TLSv1.3"; then
   echo "[PASS] OpenSSL s_server TLS 1.3 confirmed"
 else
@@ -71,7 +71,8 @@ mkdir -p tmp/tls12smoke_units tmp/tls12smoke_bin
   core/tests/nextpas.core.tls/crypto/test_tls12_openssl_smoke.pas >/dev/null 2>&1
 
 # TLS 1.2 uses same BigInt/ECDSA/X25519 as TLS 1.3
-kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null
+# wait 返回被杀进程的状态码(>128)，set -e 下必须豁免
+kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null || true
 
 openssl s_server -tls1_2 \
   -cipher ECDHE-RSA-AES128-GCM-SHA256 -groups X25519 \

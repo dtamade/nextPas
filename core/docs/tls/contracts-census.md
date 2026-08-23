@@ -211,11 +211,9 @@
 
 ## 七、剩余已知积压
 
-| 契约 | 状态 | 备注 |
-|------|------|------|
-| test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 18/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
-| test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
-| test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
+无。ci.yml `freepascal-tls13-completeness` job 已补建（2026-08-24，沿用既有
+fpc-trunk 缓存模式，安装步骤含 libwolfssl-dev/libmbedtls-dev 以支撑
+WolfSSL/MbedTLS 后端覆盖组），门契约全段绿。
 
 ## 完整性门战果（2026-08-23 第二批）
 
@@ -285,6 +283,30 @@ cross_backend_interop、server_groups_interop。
   Expired。pristine HEAD 复测证实预存。修复：fixture 时间基准备齐为 UTC（RFC 6960 本义；
   生产代码无 WriteGeneralizedTime 使用方，无需动产线）。门 **18 PASS / 0 FAIL**。
 
+### 积压表清零至单条（2026-08-24 续）
+
+- **client_e2e 超时(143) 系误诊**：脚本 91 行全为本地测试（s_server + 7 单测 + TLS1.2
+  冒烟），无外部服务依赖。真凶是 cross_backend 同款 `set -e` wait 地雷——死在重启
+  s_server 的 kill/wait 行，143 即被 SIGTERM 的 s_server，"后续段"从未存在。修复后
+  全绿：7 crypto + 1 interop，exit 0；顺带加固命令替换里 s_client 非零退出隐患。
+- **mbedtls framework "35 败/80.2%" 系 cwd 伪象**：从测试源目录运行二进制为
+  252/252（100%）；契约脚本从仓库根运行，证书夹具按相对路径解析失败得 177 总数/
+  35 败——census 数字正是这个伪象的快照，无深层产品问题。契约改为以测试源目录为
+  cwd 运行二进制（沿用完整性门第二批 cwd 规则先例）。mbedtls 契约家族 10/10 PASS。
+
+积压表仅剩 ci.yml job 一项，待 owner 决策。
+
+### 积压清零（2026-08-24 续二）
+
+- **ci.yml `freepascal-tls13-completeness` job 补建**：该 job 在全部 git 历史中从未
+  存在，契约要求其存在且安装步骤显式含 libwolfssl-dev/libmbedtls-dev。按契约自身
+  规定的形状落地：镜像 verify-linux-x86_64 的 fpc-trunk 缓存模式（共享 cache key
+  v4），运行 `run_freepascal_tls13_completeness_gate.sh --fast-local`。CI 预算影响
+  有界（增量约一次门时长，trunk 构建走热缓存）。门契约全段绿（dry-run 清单、
+  CI job 形状、ALPN 断言、fake-fpc PATH/报告行断言）。
+
+**普查积压清零**：第七节不再有登记项。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -296,3 +318,5 @@ cross_backend_interop、server_groups_interop。
 | 2026-08-23 | 清偿 benchmarks/examples 5 处 TSSLStream 硬转型积压（真实站点四类握手运行实证）；全仓硬转型归零 |
 | 2026-08-23 | TLS1.3 真实 OpenSSL 互操作打通：修复 poll 返回约定反转、非阻塞句柄所有权边界、AVX2 4-block ChaCha 错误布局三叠加根因；interop matrix 0/5→5/5、advanced 7/7；新增 ≥256B KAT 防回归；完整性门保持 18/18 |
 | 2026-08-24 | TLS1.2/1.3 互操作收官：签名器区分语境放行 pkcs1 SKE（TLS1.3 CV 验证侧拒绝不变）；修复 ServerHello 压缩方法向量误编码（构建器+解析器双侧归正）；cross_backend 4/4（修 set -e wait 中止 + pipefail 管道污染双层地雷）；server_groups 3/3（路径现代化 + 示例 10 去 fafafa.ssl 补后端注册）；OCSP fixture 时区错位修复；门 18/18 |
+| 2026-08-24 | 积压表清零至单条：client_e2e 超时定性为 set -e wait 地雷误诊（无外部服务依赖），全绿 7+1；mbedtls framework "35 败" 定性为 cwd 伪象（正确 cwd 下 252/252），契约改测试目录运行，家族 10/10 |
+| 2026-08-24 | 积压清零：ci.yml 补建 freepascal-tls13-completeness job（trunk 缓存模式 + wolfssl/mbedtls 后端覆盖），门契约全段绿；普查第七节不再有登记项 |
