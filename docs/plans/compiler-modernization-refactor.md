@@ -4,9 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.2 审查轮：非目标、耗时参考、
-P3 基线 44 核、台账 D6、风险 R8 层位断言缺口、决策补全、回滚精确化、
-版本历史；v2.1：目录对照树、命名细则、映射全表 66 单元、P0 草案、维护规则）
+创建：2026-08-23　最后更新：2026-08-23（v2.3：R8 双轴层位门禁落地、
+审计命令复现块 §2.0；v2.2 审查轮：非目标/耗时/P3 基线/D6/R8 立项/
+决策补全/版本历史；v2.1：目录树/命名细则/映射全表 66 单元/P0 草案）
 
 ---
 
@@ -35,6 +35,19 @@ P3 基线 44 核、台账 D6、风险 R8 层位断言缺口、决策补全、回
 | stage0 CLI 投影字段、命令面行为 | N6 仅改单元名与路径，不动 CLI 语义 |
 
 ## 2. 现状审计基线（2026-08-23 实测）
+
+### 2.0 审计命令复现块（数字纪律：任何数字可由此重跑）
+
+```bash
+# core 各家族 uses 计数
+grep -rho 'nextpas\.core\.[a-z_.]*' compiler --include='*.pas' --include='*.inc' | sort | uniq -c | sort -rn
+# 生产单元分布（迁移进度）
+for d in frontend syntax sema lower ir backend toolchain diagnostics targets; do echo "$d: $(ls compiler/$d/*.pas 2>/dev/null | wc -l)"; done; ls compiler/src/*.pas | wc -l
+# 手搓动态数组存量
+grep -rn 'SetLength' compiler --include='*.pas' --include='*.inc' | wc -l
+# 层位与命名契约（§4.3 门禁之一）
+scripts/compiler-flat-contract.sh
+```
 
 ### 2.1 命名与目录（重构前）
 
@@ -92,8 +105,12 @@ inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自�
 支柱二 复用 core     R1 数据结构只取 core / R2 unit 级 arena /
                      R3 swiss 特化热表 / R4 text.builder 拼接 /
                      R5 并发只走 core 原语 / R6 缺口修 core 本体不开特例
-支柱三 分层硬边界    compiler Ln → core ≤Ln；ir.hir.builder→sema.model 一条
-                     受控例外；contract 门禁脚本防回潮
+支柱三 分层硬边界    双轴模型：轴 A 编译器内部序 Ln 只依赖 ≤Ln（0 base/
+                     diagnostics/targets，1 syntax，2 frontend/sema，
+                     3 ir/backend，4 toolchain）；轴 B/C core 能力天花板——
+                     L3+ 家族禁入，L2 I/O 族(fs/json/io/process/encoding/
+                     compress)须 area 注册(frontend/driver)或显式例外；
+                     contract 门禁脚本已实现（覆盖 src 随批扩展）
 支柱四 高性能        P0 测量先行 → P1 索引分配 → P2 arena → P3 并行 → P4 增量
 ```
 
@@ -287,6 +304,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | D4 | N2 | units/linux-x86_64/ 19 个被跟踪的陈旧 np_* 快照（历史会话手动 cp，无生成无消费脚本）在 np 解析 target-installed 域中遮蔽正主并拖断已改名依赖链（nextpas_json_helpers not found 根因）；删除并随 N2 提交留痕。build/ 探针源加入每批同步范围 |
 | D5 | N2 | np 自举对点分名的解析经 tree mini 实证成立（exit0+双步 opt PASS），N1 时已首次验证 |
 | D6 | 文档 | 本主文档建立并取代 flat-namespace v2 成单一权威（v2 冻结）；审查轮修正：G1/支柱一计数 65→66、补非目标 §1.1、P3 基线注明 44 逻辑核、层位断言缺口入风险册 R8 |
+| D7 | 审查轮 | R8 落地：contract 门禁新增双轴层位检查——轴 A 编译器内部序（src 点分名推断层）、轴 B/C core I/O 能力注册制；实现时发现原「compiler Ln→core ≤Ln」刚性耦合被现实推翻（diagnostics 用 text/collections、preprocessor 用 fs），改为解耦模型并登记首个例外 syntax.preprocessor(fs)。门禁一次通过 |
 
 ## 7. 风险登记册
 
@@ -300,7 +318,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | arena 悬垂指针 | 只接管树状所有权对象；leak_check 抽检 | 待 P2 |
 | 并行破坏模型不变量 | 写入面审计 + 每 unit 独立 arena 合并 | 待 P3 |
 | rtl lane 的 np_ 家族与本方案冲突 | rtl 改名归 rtl lane；compiler 只消费不拥有 | 监控 |
-| R8: 分层断言（compiler Ln→core ≤Ln）尚未进 contract 门禁 | G4 度量缺口——P0 前补进脚本（按 uses 的 core 二级段前缀映射层位表断言） | **开放** |
+| R8: 分层断言（compiler Ln→core ≤Ln）尚未进 contract 门禁 | G4 度量缺口——P0 前补进脚本（按 uses 的 core 二级段前缀映射层位表断言） | ✅ 关闭：双轴模型实现（轴 A 编译器内部序+轴 B/C I/O 能力注册制，preprocessor.fs 首个注册例外）；审查轮同时修正原刚性耦合模型——diagnostics(L0)用 text/collections(L1)、preprocessor(L1)用 fs(L2) 证明「层数=core 层数」不成立，解耦为内部序×能力天花板 |
 
 ## 8. 决策日志
 
@@ -330,7 +348,8 @@ P0 基线数字，回滚判据客观化。
 | — | dabb4cb10 | 附录 A：core 复用绑定矩阵 |
 | v2 | c6145180f | 本主文档建立：十章结构+执行台账 D1-D5 |
 | v2.1 | a9fdac52d | 目录对照树/命名细则/映射全表/P0 草案/维护规则；计数修正 66=10+56 |
-| v2.2 | （本提交） | 审查轮：非目标 §1.1、耗时参考、P3 基线 44 核、台账 D6、风险 R8、决策日志补全、回滚措辞精确化 |
+| v2.2 | 5f2c2808a | 审查轮：非目标 §1.1、耗时参考、P3 基线 44 核、台账 D6、风险 R8、决策日志补全、回滚措辞精确化 |
+| v2.3 | （本提交） | R8 落地为双轴层位门禁（轴 A 内部序/轴 B/C I/O 注册制，D7 含模型修正依据）；§2.0 审计命令复现块；支柱三描述同步 |
 
 ## 10. 文档维护规则
 
