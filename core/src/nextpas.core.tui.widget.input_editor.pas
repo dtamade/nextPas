@@ -88,6 +88,8 @@ type
     function WithMaxLines(N: Integer): IInputEditor;
     { 布局配置面（PH33 P2b，additive）：块包装 }
     function WithBlock(ABlock: IBlock): IInputEditor;
+    { 行号 gutter 开关（PH33 P5a，additive）：默认关=既有行为逐字节不变 }
+    function WithLineNumbers(AOn: Boolean): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
@@ -97,6 +99,7 @@ type
     FCurByte: Integer;
     FTargetCol: Integer;
     FMaxLines: Integer;
+    FLineNumbers: Boolean;
     FScrollRow: Integer;
     FAnchor: Integer;
     FUndoStack: array of TEditorSnapshot;
@@ -204,16 +207,26 @@ type
     function WithPlaceholder(const P: AnsiString): IInputEditor;
     function WithMaxLines(N: Integer): IInputEditor;
     function WithBlock(ABlock: IBlock): IInputEditor;
+    function WithLineNumbers(AOn: Boolean): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.text.grapheme;
 
 type
   TEditorAdv = record ByteLen, Width: Integer; Codepoint: UInt32; end;
+
+{ PH33 P5a：gutter 宽=max(最大行号位数+1,3)——RenderContent 绘制与
+  CursorScreenPos 光标换算共用，两处口径必须一致 }
+function EditorGutW(ALineCount: Integer): Integer; inline;
+begin
+  Result := Length(IntToStr(ALineCount)) + 1;
+  if Result < 3 then Result := 3;
+end;
 
 function EditorGraphemeAt(const ABuf; ALen, AOffset: Integer): TEditorAdv; inline;
 var LGR: TGraphemeResult; LDec: TUTF8DecodeResult;
@@ -1046,6 +1059,10 @@ begin FMaxLines := N; Result := Self; end;
 function TInputEditor.WithBlock(ABlock: IBlock): IInputEditor;
 begin FBlock := ABlock; Result := Self; end;
 
+{ PH33 P5a：行号 gutter 开关（additive，默认关=既有行为逐字节不变） }
+function TInputEditor.WithLineNumbers(AOn: Boolean): IInputEditor;
+begin FLineNumbers := AOn; Result := Self; end;
+
 procedure TInputEditor.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   LArea: TRect;
@@ -1074,14 +1091,36 @@ var
   TokCount, T: Integer;
   H, HS, HE, HSCol, HECol: Integer;
   HRect: TRect;
+  LGutW, LI2: Integer;
+  LNumStr: string;
+  LContent: TRect;
+  BndCol: array of Integer;
 begin
   VisH := AArea.Height;
   if VisH <= 0 then Exit;
   EnsureCursorVisible(VisH);
 
+  { PH33 P5a：行号 gutter——行号右对齐 + 1 隔列，内容区左移同宽；
+    默认关时 LContent=AArea 零变化。宽式见 EditorGutW }
+  LContent := AArea;
+  if FLineNumbers then
+  begin
+    LGutW := EditorGutW(LineCount_);
+    for LI2 := 0 to VisH - 1 do
+    begin
+      if FScrollRow + LI2 >= LineCount_ then Break;  { 越过末行不画号 }
+      LNumStr := IntToStr(FScrollRow + LI2 + 1);
+      ABuffer.SetStringN(AArea.X + LGutW - 1 - Length(LNumStr),
+        AArea.Y + LI2, LNumStr, Length(LNumStr),
+        TStyle.Default.WithFg(TUI_DARK_GRAY));
+    end;
+    LContent.X := AArea.X + LGutW;
+    LContent.Width := AArea.Width - LGutW;
+  end;
+
   if IsEmpty then
   begin
-    ABuffer.SetStringN(AArea.X, AArea.Y, FPlaceholder, AArea.Width, FPlaceholderStyle);
+    ABuffer.SetStringN(LContent.X, LContent.Y, FPlaceholder, LContent.Width, FPlaceholderStyle);
     Exit;
   end;
 
@@ -1112,18 +1151,35 @@ begin
     if (FSyntaxDoc <> nil) and (LineLen > 0) then
     begin
       FSyntaxDoc.GetTokens(FScrollRow + DrawRow, TokPtr, TokCount);
-      for T := 0 to TokCount - 1 do
+      { PH33 P5a：token 字节偏移→显示列换算（与选区/查找命中同 EditorGraphemeAt
+        口径）——此前字节偏移直当屏幕列，CJK 多字节行高亮错位。token 起始
+        字节严格递增，单趟图素游走收集各边界列 }
+      if TokCount > 0 then
       begin
-        if TokPtr[T].Start - 1 < AArea.Width then
-          ABuffer.SetStringP(AArea.X + TokPtr[T].Start - 1, AArea.Y + DrawRow,
-            @FText[StartB + TokPtr[T].Start], TokPtr[T].Len,
-            AArea.Width - TokPtr[T].Start + 1,
-            FSyntaxTheme.StyleFor(TokPtr[T].Kind));
+        SetLength(BndCol, TokCount);
+        P := StartB;
+        Col := 0;
+        for T := 0 to TokCount - 1 do
+        begin
+          while P < StartB + TokPtr[T].Start - 1 do
+          begin
+            Adv := EditorGraphemeAt(FText[1], Length(FText), P);
+            Inc(Col, Adv.Width);
+            Inc(P, Adv.ByteLen);
+          end;
+          BndCol[T] := Col;
+        end;
+        for T := 0 to TokCount - 1 do
+          if BndCol[T] < LContent.Width then
+            ABuffer.SetStringP(LContent.X + BndCol[T], LContent.Y + DrawRow,
+              @FText[StartB + TokPtr[T].Start], TokPtr[T].Len,
+              LContent.Width - BndCol[T],
+              FSyntaxTheme.StyleFor(TokPtr[T].Kind));
       end;
     end
     else
-      ABuffer.SetStringP(AArea.X, AArea.Y + DrawRow,
-        @FText[StartB + 1], LineLen, AArea.Width, FTextStyle);
+      ABuffer.SetStringP(LContent.X, LContent.Y + DrawRow,
+        @FText[StartB + 1], LineLen, LContent.Width, FTextStyle);
 
     if SelActive and (SelStart < EndB) and (SelEnd > StartB) then
     begin
@@ -1147,8 +1203,8 @@ begin
       if SelColEnd > SelColStart then
       begin
         C := SelColEnd - SelColStart;
-        if C > AArea.Width - SelColStart then C := AArea.Width - SelColStart;
-        SelRect := TRect.Make(AArea.X + SelColStart, AArea.Y + DrawRow, C, 1);
+        if C > LContent.Width - SelColStart then C := LContent.Width - SelColStart;
+        SelRect := TRect.Make(LContent.X + SelColStart, LContent.Y + DrawRow, C, 1);
         ABuffer.SetStyle(SelRect, FSelectionStyle);
       end;
     end;
@@ -1180,8 +1236,8 @@ begin
         if HECol > HSCol then
         begin
           C := HECol - HSCol;
-          if C > AArea.Width - HSCol then C := AArea.Width - HSCol;
-          HRect := TRect.Make(AArea.X + HSCol, AArea.Y + DrawRow, C, 1);
+          if C > LContent.Width - HSCol then C := LContent.Width - HSCol;
+          HRect := TRect.Make(LContent.X + HSCol, LContent.Y + DrawRow, C, 1);
           if H = FFindCur then
             ABuffer.SetStyle(HRect, FFindCurStyle)
           else
@@ -1199,10 +1255,13 @@ begin
 end;
 
 function TInputEditor.CursorScreenPos(const AArea: TRect): TPosition;
-var Row, Col: Integer;
+var Row, Col, G: Integer;
 begin
   CursorToRowCol(Row, Col);
-  Result.X := AArea.X + Col;
+  { PH33 P5a：gutter 开时与 RenderContent 内容区同宽偏移（EditorGutW） }
+  G := 0;
+  if FLineNumbers then G := EditorGutW(LineCount_);
+  Result.X := AArea.X + Col + G;
   Result.Y := AArea.Y + (Row - FScrollRow);
 end;
 
