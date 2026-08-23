@@ -4,8 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2 完善：目录对照树、命名细则、
-映射全表展开 66 单元、P0 设计草案、维护规则；计数修正 66=10+56）
+创建：2026-08-23　最后更新：2026-08-23（v2.2 审查轮：非目标、耗时参考、
+P3 基线 44 核、台账 D6、风险 R8 层位断言缺口、决策补全、回滚精确化、
+版本历史；v2.1：目录对照树、命名细则、映射全表 66 单元、P0 草案、维护规则）
 
 ---
 
@@ -13,7 +14,7 @@ worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
 
 | # | 目标 | 度量 |
 |---|------|------|
-| G1 | 命名统一 `nextpas.compiler.<area>.<topic>` 点分扁平 | 65 单元零 `np_` 残留（contract 门禁断言） |
+| G1 | 命名统一 `nextpas.compiler.<area>.<topic>` 点分扁平 | 66 单元零 `np_` 残留（contract 门禁断言） |
 | G2 | 全部生产单元进 `compiler/src/` 平铺 | 九个散布目录清空 |
 | G3 | 充分复用 nextpas.core，禁止重复造轮子 | 绑定矩阵落地；SetLength 手搓数组不再新增 |
 | G4 | 模块化分层硬边界 | compiler Ln 只依赖 core ≤Ln；受控例外显式登记 |
@@ -23,6 +24,15 @@ worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
 **一套代码吃两代福利**：所有绑定都落在 core 上——FPC 创世期 core 优化直接
 加速编译器构建；np 自举期 core 的代码生成优化反过来加速自举。飞轮成立，
 零二次移植。
+
+### 1.1 非目标（明确出界项）
+
+| 出界项 | 归属 |
+|--------|------|
+| `rtl/core/` 的 np_ 家族改名（base_types/text_primitives/process/classes/sysutils/allocator…） | rtl lane；compiler 只消费不拥有（D1） |
+| core 本体新增能力（如 case-fold 键缓存） | 修 core 本体走 core lane 测试后消费（R6）；不在本 lane 直接改 core |
+| MIR pass 语义、emitter 代码形状等行为级改动 | m2 ROADMAP 咬合队列（b4b-i* / temp-placement 口），与本重构并行不混批 |
+| stage0 CLI 投影字段、命令面行为 | N6 仅改单元名与路径，不动 CLI 语义 |
 
 ## 2. 现状审计基线（2026-08-23 实测）
 
@@ -46,6 +56,8 @@ sysutils/allocator 等）——**rtl 层资产，不在本重构范围**（见�
 手搓 SetLength 动态数组 **417 处**。热路径事实：符号/body 名索引已在用
 core THashMap（修正早期 O(n²) 判断），但每次查找现场 LowerCase() 分配 +
 契约路径残余扫描 + SameText 调用面。
+（uses 计数口径：对 compiler 生产代码按 `nextpas.core.<前缀>` grep 聚合，
+含子模块展开；`~` 前缀为跨子模块家族合计。）
 
 ### 2.3 性能基线
 
@@ -76,7 +88,7 @@ inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自�
 ## 3. 四支柱方案
 
 ```
-支柱一 扁平命名      65 单元 → compiler/src/ 点分名（N1-N6 机械迁移）
+支柱一 扁平命名      66 单元 → compiler/src/ 点分名（N1-N6 机械迁移）
 支柱二 复用 core     R1 数据结构只取 core / R2 unit 级 arena /
                      R3 swiss 特化热表 / R4 text.builder 拼接 /
                      R5 并发只走 core 原语 / R6 缺口修 core 本体不开特例
@@ -113,6 +125,10 @@ inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自�
 每批模板：git mv → unit 头改写 → 全仓 uses 同步（含 build 探针源）→
 contract 门禁清单扩充 → 清 ppu 重建 → 验收门 → commit。
 
+单批耗时实测参考：N1 ≈ 45 分钟（含全部验证门与 tree mini 8 分钟）；
+N2 ≈ 35 分钟。预计 N3-N5 同量级（引用面 frontend 最大 ~60 文件）；
+N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天）。
+
 ### 4.2 P 系列（性能，测量先行）
 
 | 批 | 内容 | 验收 | 状态 |
@@ -120,7 +136,7 @@ contract 门禁清单扩充 → 清 ppu 重建 → 验收门 → commit。
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ⬜ 下一起点 |
 | P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ⬜ |
 | P2 | sema/HIR 接 compiler.mem UnitScope/SessionScope | RSS 显著降 | ⬜ |
-| P3 | 单元级并行 sema（parallel_scheduler+sync.waitgroup） | 多核扩展比 ≥2 | ⬜ |
+| P3 | 单元级并行 sema（parallel_scheduler+sync.waitgroup） | 多核扩展比 ≥2（端到端下限；机器 44 逻辑核，seed 相目标近线性） | ⬜ |
 | P4 | backend cache 单元级复用 | 基线刷新脱离 2 小时级 | ⬜ |
 
 节奏：N1→N2→**P0**→N3→N4→P1→N5→P2→N6→P3→P4。
@@ -270,6 +286,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | D3 | N1 | contract 门禁首跑抓到 Pos('nextpas.core.crypto',…) 字符串字面量误报——门禁改为剥引号后再匹配 |
 | D4 | N2 | units/linux-x86_64/ 19 个被跟踪的陈旧 np_* 快照（历史会话手动 cp，无生成无消费脚本）在 np 解析 target-installed 域中遮蔽正主并拖断已改名依赖链（nextpas_json_helpers not found 根因）；删除并随 N2 提交留痕。build/ 探针源加入每批同步范围 |
 | D5 | N2 | np 自举对点分名的解析经 tree mini 实证成立（exit0+双步 opt PASS），N1 时已首次验证 |
+| D6 | 文档 | 本主文档建立并取代 flat-namespace v2 成单一权威（v2 冻结）；审查轮修正：G1/支柱一计数 65→66、补非目标 §1.1、P3 基线注明 44 逻辑核、层位断言缺口入风险册 R8 |
 
 ## 7. 风险登记册
 
@@ -283,6 +300,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | arena 悬垂指针 | 只接管树状所有权对象；leak_check 抽检 | 待 P2 |
 | 并行破坏模型不变量 | 写入面审计 + 每 unit 独立 arena 合并 | 待 P3 |
 | rtl lane 的 np_ 家族与本方案冲突 | rtl 改名归 rtl lane；compiler 只消费不拥有 | 监控 |
+| R8: 分层断言（compiler Ln→core ≤Ln）尚未进 contract 门禁 | G4 度量缺口——P0 前补进脚本（按 uses 的 core 二级段前缀映射层位表断言） | **开放** |
 
 ## 8. 决策日志
 
@@ -293,12 +311,26 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | 2026-08-23 | stage0 壳层留 tools/stage0 改 nextpas.driver.*（N6） | 默认项未被推翻 |
 | 2026-08-23 | np_system_contracts 归 ir.system_contracts | 与消费方一致 |
 | 2026-08-23 | units 陈旧副本删除属迁移正当范围 | D4 证据链 |
+| 2026-08-23 | json_helpers 双胞胎：壳层留旧名吃本地副本，src 版为点分正名，N6 二选一收口 | D2 |
+| 2026-08-23 | build/ 探针源纳入每批 uses 同步范围 | D4 故障教训 |
+| 2026-08-23 | 验收证据持久化载体 = 批次 commit message（关键数字必须写入），/tmp 日志视为易失 | 数字纪律 |
 
 ## 9. 回滚策略
 
-每批独立 commit、行为零变化、验证门齐全——任一批可独立 revert 回到
-上一可构建态；N 批间无交叉依赖（自底向上顺序仅保证 uses 引用单调收敛）。
-P 批引入运行时行为前必须先落 P0 基线数字，回滚判据客观化。
+每批独立 commit、行为零变化、验证门齐全——回滚自最新批次**向前逐个
+revert**（后批引用前批新名，逆序才能保持每步可构建）；N 批间无交叉依赖
+（自底向上顺序仅保证 uses 引用单调收敛）。P 批引入运行时行为前必须先落
+P0 基线数字，回滚判据客观化。
+
+### 9.1 版本历史
+
+| 版本 | commit | 内容 |
+|------|--------|------|
+| v1 | cc9c7eef5 | flat-namespace 方案 v2（四支柱初版，现附录 B 冻结） |
+| — | dabb4cb10 | 附录 A：core 复用绑定矩阵 |
+| v2 | c6145180f | 本主文档建立：十章结构+执行台账 D1-D5 |
+| v2.1 | a9fdac52d | 目录对照树/命名细则/映射全表/P0 草案/维护规则；计数修正 66=10+56 |
+| v2.2 | （本提交） | 审查轮：非目标 §1.1、耗时参考、P3 基线 44 核、台账 D6、风险 R8、决策日志补全、回滚措辞精确化 |
 
 ## 10. 文档维护规则
 
