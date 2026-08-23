@@ -2,7 +2,7 @@
 {                                                                              }
 {  nextpas.core.tls.openssl.api.param - OpenSSL 3.0+ OSSL_PARAM Module Pascal Binding   }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 unit nextpas.core.tls.openssl.api.param;

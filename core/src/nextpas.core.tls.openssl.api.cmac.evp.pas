@@ -1,6 +1,6 @@
 {******************************************************************************}
 {  nextpas.core.tls - OpenSSL CMAC EVP Module (OpenSSL 3.x Compatible)             }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {******************************************************************************}
 
 unit nextpas.core.tls.openssl.api.cmac.evp;

@@ -2,7 +2,7 @@
 {                                                                              }
 {  nextpas.core.tls - OpenSSL SHA Module                                           }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {******************************************************************************}
 

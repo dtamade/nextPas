@@ -1,11 +1,11 @@
 {**
  * Unit: nextpas.core.tls.collections
- * Purpose: 可替换的集合接口 - 为 fafafa.core 集成预留
+ * Purpose: 可替换的集合接口 - 为 nextpas.core.collections 集成预留
  *
  * 设计目标:
- * - 定义简单的 Map 接口，方便后续替换为 fafafa.core 的 HashMap
+ * - 定义简单的 Map 接口，方便后续替换为 nextpas.core.collections 的 HashMap
  * - 当前提供基于动态数组的简单实现
- * - 接口设计兼容 fafafa.core 的集合框架
+ * - 接口设计兼容 nextpas.core.collections 的集合框架
  *
  * @author nextpas.core.tls team
  * @version 1.0.0
@@ -36,7 +36,7 @@ type
    *
    * 设计说明:
    * - 当前由 TSimpleMap 实现（O(n) 查找）
-   * - 后续可替换为 fafafa.core 的 THashMap（O(1) 查找）
+   * - 后续可替换为 nextpas.core.collections 的 THashMap（O(1) 查找）
    * - 接口保持稳定，实现可替换
    *}
   generic IMap<TKey, TValue> = interface
@@ -116,7 +116,7 @@ type
    * - 内存占用小
    * - 适合小规模数据（< 100 项）
    *
-   * 后续可替换为 fafafa.core 的 THashMap 获得 O(1) 性能
+   * 后续可替换为 nextpas.core.collections 的 THashMap 获得 O(1) 性能
    *}
   generic TSimpleStringMap<TValue> = class(TInterfacedObject, specialize IStringMap<TValue>)
   private type
@@ -185,7 +185,7 @@ type
    * 使用示例:
    *   LMap := TMapFactory.CreateStringMap<TMyValue>;
    *
-   * 后续集成 fafafa.core 时，只需修改此工厂的实现
+   * 后续集成 nextpas.core.collections 时，只需修改此工厂的实现
    *}
   TMapFactory = class
   public
@@ -514,7 +514,7 @@ end;
 generic class function TMapFactory.CreateStringMap<TValue>: specialize IStringMap<TValue>;
 begin
   // 当前使用简单实现
-  // 后续集成 fafafa.core 时，可替换为:
+  // 后续集成 nextpas.core.collections 时，可替换为:
   // Result := specialize THashMap<string, TValue>.Create;
   Result := specialize TSimpleStringMap<TValue>.Create;
 end;
@@ -522,7 +522,7 @@ end;
 generic class function TMapFactory.CreateIntegerMap<TValue>: specialize IIntegerMap<TValue>;
 begin
   // 当前使用简单实现
-  // 后续集成 fafafa.core 时，可替换为:
+  // 后续集成 nextpas.core.collections 时，可替换为:
   // Result := specialize THashMap<Integer, TValue>.Create;
   Result := specialize TSimpleIntegerMap<TValue>.Create;
 end;

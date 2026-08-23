@@ -2,7 +2,7 @@
 {                                                                              }
 {  nextpas.core.tls - A unified SSL/TLS library for FreePascal                      }
 {                                                                              }
-{  Copyright (c) 2024 fafafa                                                  }
+{  Copyright (c) 2024 nextpas.core.tls                                        }
 {                                                                              }
 {  证书链验证模块 - 提供完整的证书链验证功能                                 }
 {                                                                              }
