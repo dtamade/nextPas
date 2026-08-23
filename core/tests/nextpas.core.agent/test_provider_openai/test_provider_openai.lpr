@@ -12,6 +12,7 @@ uses
   nextpas.core.agent.intf,
   nextpas.core.agent.fold,
   nextpas.core.agent.provider.openai,
+  nextpas.core.agent.provider.common,
   agent.testkit,
   nextpas.core.test;
 
@@ -311,6 +312,18 @@ begin
   Result.Data := AData;
 end;
 
+procedure AppendAllDeltas(var ADst: TStreamDeltaArray;
+  const ASrc: TStreamDeltaArray);
+var
+  I: Integer;
+begin
+  for I := 0 to High(ASrc) do
+  begin
+    SetLength(ADst, Length(ADst) + 1);
+    ADst[High(ADst)] := ASrc[I];
+  end;
+end;
+
 procedure FeedDec(D: IAgentWireDecoder; const AData: string;
   var AAll: TStreamDeltaArray);
 var
@@ -357,7 +370,8 @@ begin
   Check(All[5].Kind = sdkToolCallStart, 'start slot1');
   Check(All[6].Kind = sdkToolCallDelta, 'first-fragment args slot1');
   Check(All[7].Kind = sdkFinish, 'finish');
-  Check(All[7].FinishReason = frStop, 'finish mapped');
+  Check(All[7].FinishReason = frToolCalls,
+    'stop with open slots corrected to tool_calls (Q-O8)');
   Check(All[8].Kind = sdkUsage, 'usage last (Q-O3)');
 
   D.DecodeEvent(Ev('[DONE]'), Fin);
@@ -533,6 +547,231 @@ begin
   Check(Hit, 'upstream 400 classified with provider attribution');
 end;
 
+procedure TestReasoningAliasAndPrecedence;
+var
+  M: TMessage;
+  D: IAgentWireDecoder;
+  All, Arr: TStreamDeltaArray;
+
+  function ThinkText(const AM: TMessage): string;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 0 to High(AM.Parts) do
+      if AM.Parts[I].Kind = pkThinking then
+        Result := Result + AM.Parts[I].Text;
+  end;
+
+begin
+  { 非流式：reasoning_content 缺席时 reasoning 兜底；两者并存前者优先 }
+  DecodeOpenAIResponse(
+    '{"id":"a","model":"m","choices":[{"message":{"role":"assistant",' +
+    '"content":"x","reasoning":"grok-style"},"finish_reason":"stop"}]}',
+    M, nil);
+  CheckEqual('grok-style', ThinkText(M), 'Q-O2 reasoning alias (nonstream)');
+  DecodeOpenAIResponse(
+    '{"id":"b","model":"m","choices":[{"message":{"role":"assistant",' +
+    '"content":"x","reasoning_content":"deepseek",' +
+    '"reasoning":"grok-style"},"finish_reason":"stop"}]}', M, nil);
+  CheckEqual('deepseek', ThinkText(M), 'reasoning_content precedence');
+
+  { 流式同理 }
+  D := NewOpenAIWireDecoder(nil);
+  All := nil;
+  FeedDec(D, '{"id":"s","model":"m","choices":[{"delta":' +
+    '{"content":"c","reasoning":"think1"}}]}', All);
+  FeedDec(D, '{"choices":[{"delta":{"reasoning":"think2"}}]}', All);
+  FeedDec(D, '[DONE]', All);
+  Check(All[0].Kind = sdkEnvelope, 'envelope precedes deltas');
+  Check(All[1].Kind = sdkTextDelta, 'text before thinking');
+  Check(All[2].Kind = sdkThinkingDelta, 'Q-O2 alias -> thinking delta');
+  CheckEqual('think1', All[2].TextDelta, 'alias payload');
+  Check(All[3].Kind = sdkThinkingDelta, 'canonical still works');
+  D.Finalize(Arr);
+end;
+
+procedure TestPingFrameSkipped;
+var
+  D: IAgentWireDecoder;
+  Arr: TStreamDeltaArray;
+  Ev2: TWireSSEEvent;
+begin
+  D := NewOpenAIWireDecoder(nil);
+  Ev2 := Default(TWireSSEEvent);
+  Ev2.Event := 'ping';
+  Ev2.Data := '"keepalive"';           { 订阅网关心跳数据非 JSON }
+  D.DecodeEvent(Ev2, Arr);
+  CheckEqual(Integer(0), Integer(Length(Arr)), 'Q-O9 ping frame skipped');
+  { 后续正常帧不受影响 }
+  FeedDec(D, '{"id":"z","model":"m","choices":[{"delta":{"content":"ok"}}]}',
+    Arr);
+  Check(Length(Arr) >= 1, 'frame after ping flows');
+end;
+
+procedure TestToolIndexMissingTolerated;
+var
+  D: IAgentWireDecoder;
+  All: TStreamDeltaArray;
+begin
+  D := NewOpenAIWireDecoder(nil);
+  All := nil;
+  { 单工具流省略 index：容忍按槽 0（sub2api 生产形态）}
+  FeedDec(D, '{"id":"i","model":"m","choices":[{"delta":{"tool_calls":' +
+    '[{"id":"t1","function":{"name":"f","arguments":""}}]}}]}', All);
+  FeedDec(D, '{"choices":[{"delta":{"tool_calls":[' +
+    '{"function":{"arguments":"{}"}}]}}]}', All);
+  FeedDec(D, '[DONE]', All);
+  Check(All[0].Kind = sdkEnvelope, 'envelope first');
+  Check(All[1].Kind = sdkToolCallStart, 'missing index tolerated');
+  CheckEqual(Integer(0), All[1].ToolIndex, 'defaulted to slot 0');
+  Check(All[2].Kind = sdkToolCallDelta, 'args follow same slot');
+end;
+
+procedure TestDeferredToolNaming;
+var
+  D: IAgentWireDecoder;
+  All: TStreamDeltaArray;
+  Fin: TStreamDeltaArray;
+  M: TMessage;
+begin
+  { id+args 先到、name 后到：Start 延迟到 name 就绪，缓冲 args 先行冲刷 }
+  D := NewOpenAIWireDecoder(nil);
+  All := nil;
+  FeedDec(D, '{"id":"d","model":"m","choices":[{"delta":{"tool_calls":[{"index":0,"id":"late_1","function":{"name":"","arguments":"{\"city\":\"上海\""}}]}}]}', All);
+  CheckEqual(Integer(1), Integer(Length(All)),
+    'no Start before name arrives (envelope only)');
+  FeedDec(D, '{"choices":[{"delta":{"tool_calls":[{"index":0,' +
+    '"function":{"name":"weather","arguments":"}"}}]}}]}', All);
+  Check(All[0].Kind = sdkEnvelope, 'envelope precedes tool deltas');
+  Check(All[1].Kind = sdkToolCallStart, 'deferred Start on name');
+  CheckEqual('late_1', All[1].ToolCallId, 'buffered id kept');
+  CheckEqual('weather', All[1].ToolName, 'buffered name');
+  CheckEqual('{"city":"上海"', All[2].ArgumentsDelta,
+    'pre-arrival args flushed first');
+  CheckEqual('}', All[3].ArgumentsDelta, 'then live fragment');
+  FeedDec(D, '[DONE]', All);
+  FoldDeltas(All, M);
+  CheckEqual('{"city":"上海"}', M.Parts[0].ArgumentsJson,
+    'fold reassembles buffered+live args');
+  D.Finalize(Fin);
+end;
+
+procedure TestDeferredNamingNeverArrives;
+var
+  D: IAgentWireDecoder;
+  All, Fin: TStreamDeltaArray;
+  M: TMessage;
+begin
+  { name 始终未到：Finalize 兜底冲刷，参数片段绝不无声丢失 }
+  D := NewOpenAIWireDecoder(nil);
+  All := nil;
+  FeedDec(D, '{"id":"n","model":"m","choices":[{"delta":{"tool_calls":' +
+    '[{"index":0,"id":"ghost","function":{"name":"","arguments":' +
+    '"{\"x\":1}"}}]}}]}', All);
+  FeedDec(D, '{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}', All);
+  FeedDec(D, '[DONE]', All);
+  D.Finalize(Fin);
+  AppendAllDeltas(All, Fin);
+  Check(All[High(All)].Kind = sdkToolCallDelta, 'fallback flush at finalize');
+  CheckEqual('{"x":1}', All[High(All)].ArgumentsDelta, 'args preserved');
+  FoldDeltas(All, M);
+  CheckEqual('{"x":1}', M.Parts[0].ArgumentsJson, 'fold sees flushed args');
+end;
+
+procedure TestStopWithToolsCorrected;
+var
+  M: TMessage;
+  D: IAgentWireDecoder;
+  All: TStreamDeltaArray;
+begin
+  { Q-O8：上游发 "stop" 却带 tool_calls → frToolCalls }
+  DecodeOpenAIResponse(
+    '{"id":"q","model":"m","choices":[{"message":{"role":"assistant",' +
+    '"tool_calls":[{"id":"c1","type":"function","function":{"name":"f",' +
+    '"arguments":"{}"}}]},"finish_reason":"stop"}],"usage":{}}', M, nil);
+  Check(M.FinishReason = frToolCalls, 'nonstream stop+tools corrected');
+
+  D := NewOpenAIWireDecoder(nil);
+  All := nil;
+  FeedDec(D, '{"id":"w","model":"m","choices":[{"delta":{"tool_calls":' +
+    '[{"index":0,"id":"c2","function":{"name":"g","arguments":""}}]}}]}',
+    All);
+  FeedDec(D, '{"choices":[{"delta":{},"finish_reason":"stop"}]}', All);
+  Check(All[High(All)].Kind = sdkFinish, 'finish emitted');
+  Check(All[High(All)].FinishReason = frToolCalls,
+    'stream stop+slots corrected');
+end;
+
+procedure TestFlatErrorEnvelope;
+var
+  Resp: TScriptResponse;
+  T: TScriptedTransport;
+  Opts: TGrokOptions;
+  P: IAgentProvider;
+  LMsg: string;
+begin
+  { xAI 扁平信封：error 是字符串而非对象 }
+  CheckEqual('Could not decrypt the provided encrypted_content.',
+    ExtractErrorMessage(
+      '{"code":"invalid-argument","error":"Could not decrypt ' +
+      'the provided encrypted_content."}'),
+    'flat xai envelope message extracted');
+
+  Resp := Default(TScriptResponse);
+  Resp.Status := 400;
+  Resp.BodyText := '{"code":"invalid-argument","error":"boom-flat"}';
+  Resp.RaiseUpstream := True;
+  T := TScriptedTransport.Create;
+  T.ProviderName := 'grok';
+  T.Add(Resp);
+  Opts := TGrokOptions.New('m');
+  Opts.Common.ApiKey := 'k';
+  Opts.Common.Transport := T;
+  P := NewGrokProvider(Opts);
+  LMsg := '';
+  try
+    P.Complete(TCompletionRequest.New('m'));
+  except
+    on E: EAgentError do
+      LMsg := E.Message;
+  end;
+  Check(Pos('boom-flat', LMsg) > 0, 'flat envelope reaches error message');
+end;
+
+procedure TestGrokFamily;
+var
+  Ch: TStringArray;
+  Resp: TScriptResponse;
+  T: TScriptedTransport;
+  Opts: TGrokOptions;
+  P: IAgentProvider;
+  M: TMessage;
+begin
+  CheckEqual('https://api.x.ai/v1/chat/completions', BuildGrokUrl(''),
+    'grok default base');
+  CheckEqual('https://proxy/x/v1/chat/completions',
+    BuildGrokUrl('https://proxy/x/'), 'grok proxy join');
+
+  Resp := Default(TScriptResponse);
+  Resp.Status := 200;
+  Resp.BodyText :=
+    '{"id":"g1","model":"grok-4","choices":[{"message":{"role":' +
+    '"assistant","content":"hi!"},"finish_reason":"stop"}],"usage":{}}';
+  T := TScriptedTransport.Create;
+  T.ProviderName := 'grok';
+  T.Add(Resp);
+  Opts := TGrokOptions.New('grok-4');
+  Opts.Common.ApiKey := 'xai-k';
+  Opts.Common.Transport := T;
+  P := NewGrokProvider(Opts);
+  CheckEqual('grok', P.GetName, 'grok attribution name');
+  M := P.Complete(TCompletionRequest.New('').WithUserText('yo'));
+  CheckEqual('hi!', MessageText(M), 'grok family complete works');
+  CheckEqual('https://api.x.ai/v1/chat/completions', T.LastRequest.Url,
+    'grok url from family default');
+end;
+
 procedure TestUrlAndOptionsDefaults;
 begin
   CheckEqual('https://api.openai.com/v1/chat/completions',
@@ -583,5 +822,13 @@ begin
   T.Test('provider upstream error', @TestProviderUpstreamError);
   T.Test('url join and defaults', @TestUrlAndOptionsDefaults);
   T.Test('from env', @TestFromEnv);
+  T.Test('reasoning alias and precedence', @TestReasoningAliasAndPrecedence);
+  T.Test('ping frame skipped', @TestPingFrameSkipped);
+  T.Test('tool index missing tolerated', @TestToolIndexMissingTolerated);
+  T.Test('deferred tool naming', @TestDeferredToolNaming);
+  T.Test('deferred naming never arrives', @TestDeferredNamingNeverArrives);
+  T.Test('stop with tools corrected', @TestStopWithToolsCorrected);
+  T.Test('flat error envelope', @TestFlatErrorEnvelope);
+  T.Test('grok family', @TestGrokFamily);
   if not T.Run then Halt(1);
 end.

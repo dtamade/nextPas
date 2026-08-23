@@ -10,6 +10,11 @@
  * 编解码器公开即免费（D13）：Encode/Decode/NewWireDecoder 与 provider 工厂
  * 共用同一实现。编码器纯函数可并发；解码器实例单角色独占，不跨消息复用。
  * 未映射枚举值：词表零值 + agent.unmapped.<field> 捕获 + warn，绝不臆造近似。
+ *
+ * 家族：openai（api.openai.com）与 grok（api.x.ai）共用 Chat Completions
+ * wire 方言与编解码器；差异仅默认端点、鉴权归因名与环境变量前缀。
+ * Grok 特有怪癖（reasoning 别名、订阅网关 ping 心跳帧）内建于共享解码器，
+ * 依据 sub2api 生产经验核对（WIRE-MAPPINGS §1.5/§1.6）。
  *)
 
 unit nextpas.core.agent.provider.openai;
@@ -42,12 +47,26 @@ const
   COPENAI_ENV_MODEL = 'NEXTPAS_AGENT_OPENAI_MODEL';
   COPENAI_ENV_BASE_URL = 'NEXTPAS_AGENT_OPENAI_BASE_URL';
 
+  { Grok（xAI）家族：官方 API 为 https://api.x.ai 的 Chat Completions
+    方言（sub2api 确认订阅上游同形）；编解码器复用 OpenAI 族实现，
+    Grok 特有怪癖（reasoning 别名、ping 心跳帧）已内建于共享解码器 }
+  CGROK_DEFAULT_BASE_URL = 'https://api.x.ai';
+  CGROK_ENV_API_KEY = 'NEXTPAS_AGENT_GROK_API_KEY';
+  CGROK_ENV_MODEL = 'NEXTPAS_AGENT_GROK_MODEL';
+  CGROK_ENV_BASE_URL = 'NEXTPAS_AGENT_GROK_BASE_URL';
+
 type
   { API.md §3.1；Common.Model 为回退默认（生效序 request.Model > 本值） }
   TOpenAIOptions = record
     Common: TProviderOptions;
     Organization: string;            { 可选 OpenAI-Organization 头 }
     class function New(const AModel: string): TOpenAIOptions; static;
+  end;
+
+  { Grok 家族选项：无 Organization 等额外头；BaseUrl 默认 api.x.ai }
+  TGrokOptions = record
+    Common: TProviderOptions;
+    class function New(const AModel: string): TGrokOptions; static;
   end;
 
 { ---- 纯编解码器（D13 公开表面；只认 WIRE-MAPPINGS §1）---- }
@@ -65,10 +84,14 @@ function NewOpenAIWireDecoder(
   /chat/completions，否则追加完整默认路径（支持反代前缀部署）。公开便于测试 }
 function BuildOpenAIUrl(const ABaseUrl: string): string;
 
-{ ---- provider 工厂 ---- }
+{ ---- provider 工厂（openai 与 grok 两家族共用编解码器实现）---- }
 
 function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider;
 function NewOpenAIProviderFromEnv: IAgentProvider;
+
+function BuildGrokUrl(const ABaseUrl: string): string;
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider;
+function NewGrokProviderFromEnv: IAgentProvider;
 
 implementation
 
@@ -146,13 +169,13 @@ begin
   AUnmapped := S;
 end;
 
-function BuildOpenAIUrl(const ABaseUrl: string): string;
+function JoinCCUrl(const ABaseUrl, ADefault: string): string;
 var
   LBase: string;
 begin
   LBase := ABaseUrl;
   if LBase = '' then
-    LBase := COPENAI_DEFAULT_BASE_URL;
+    LBase := ADefault;
   while (LBase <> '') and (LBase[Length(LBase)] = '/') do
     Delete(LBase, Length(LBase), 1);
   if (Length(LBase) >= 3) and
@@ -160,6 +183,16 @@ begin
     Result := LBase + '/chat/completions'
   else
     Result := LBase + '/v1/chat/completions';
+end;
+
+function BuildOpenAIUrl(const ABaseUrl: string): string;
+begin
+  Result := JoinCCUrl(ABaseUrl, COPENAI_DEFAULT_BASE_URL);
+end;
+
+function BuildGrokUrl(const ABaseUrl: string): string;
+begin
+  Result := JoinCCUrl(ABaseUrl, CGROK_DEFAULT_BASE_URL);
 end;
 
 { usage 字段填充：缺失字段保持 CUsageUnknown，绝不读成零（Q-O3 容忍）}
@@ -607,9 +640,13 @@ begin
       AMsg.Parts[High(AMsg.Parts)].Text := LRole;
     end;
   end;
-  if LM.Get('reasoning_content').IsStr then
+  { Q-O2：reasoning_content（xAI Grok 系别名 `reasoning` 兜底，前者优先）}
+  if LM.Get('reasoning_content').IsStr or LM.Get('reasoning').IsStr then
   begin
-    LRole := LM.Get('reasoning_content').AsStr.ToString;
+    if LM.Get('reasoning_content').IsStr then
+      LRole := LM.Get('reasoning_content').AsStr.ToString
+    else
+      LRole := LM.Get('reasoning').AsStr.ToString;
     if LRole <> '' then
     begin
       AddPart(AMsg.Parts, pkThinking);
@@ -640,6 +677,16 @@ begin
         CaptureExtraJson(LFn, CKNOWN_FUNCTION, CMaxExtraKeys, ALog)]);
     end;
 
+  { 生产怪癖（sub2api）：finish "stop" 却带 tool_calls → frToolCalls，
+    保住消费方循环判据 }
+  if AMsg.FinishReason = frStop then
+    for I := 0 to High(AMsg.Parts) do
+      if AMsg.Parts[I].Kind = pkToolCall then
+      begin
+        AMsg.FinishReason := frToolCalls;
+        Break;
+      end;
+
   SetLength(LExtras, 4);
   LExtras[0] := CaptureExtraJson(Root, CKNOWN_ROOT, CMaxExtraKeys, ALog);
   LExtras[1] := CaptureExtraJson(LC0, CKNOWN_CHOICE, CMaxExtraKeys, ALog);
@@ -651,6 +698,18 @@ end;
 { ---- 解码：流帧归约（WIRE-MAPPINGS §1.3）---- }
 
 type
+  { 工具槽：跨 chunk 的延迟命名缓冲。真实世界（sub2api 生产经验）存在
+    id+args 先到、name 后到甚至缺失的流：Start 只在 name 就绪时发出，
+    args 先行片段缓冲在槽内，Finalize 兜底冲刷未命名的残留槽 }
+  TOpenAIToolSlot = record
+    Index: Integer;
+    Id: string;
+    Name: string;
+    Args: IStringBuilder;
+    Announced: Boolean;
+  end;
+  TOpenAIToolSlotArray = array of TOpenAIToolSlot;
+
   { 帧序状态机：首信封一次（Q-O5 Start 只发一次的前提）、tool index 分桶、
     [DONE] 终止。单角色独占，不跨消息复用 }
   TOpenAIWireDecoder = class(TInterfacedObject, IAgentWireDecoder)
@@ -659,12 +718,14 @@ type
     FSawEnvelope: Boolean;
     FDone: Boolean;
     FFinalized: Boolean;
-    FSeenIdx: array of Integer;      { 已 Start 的 tool 槽位 }
+    FSlots: TOpenAIToolSlotArray;    { 按 index 分桶的 tool 槽位 }
     FPendingUnmapped: TJsonText;     { 无同帧增量可挂的块级未知键，顺延 }
-    function IsSeen(AIdx: Integer): Boolean;
-    procedure MarkSeen(AIdx: Integer);
+    function FindSlot(AIdx: Integer; out ACreated: Boolean): Integer;
+    procedure AnnounceSlot(var ASlot: TOpenAIToolSlot;
+      var ADeltas: TStreamDeltaArray);
     procedure HandleToolCalls(const AEntries: TJsonValue;
       const ASrc: string; var ADeltas: TStreamDeltaArray);
+    function HasSlots: Boolean;
   public
     constructor Create(const ALog: ILogger);
     procedure DecodeEvent(const AEvent: TWireSSEEvent;
@@ -678,31 +739,59 @@ begin
   FLog := ALog;
 end;
 
-function TOpenAIWireDecoder.IsSeen(AIdx: Integer): Boolean;
+function TOpenAIWireDecoder.FindSlot(AIdx: Integer;
+  out ACreated: Boolean): Integer;
 var
   I: Integer;
 begin
-  Result := False;
-  for I := 0 to High(FSeenIdx) do
-    if FSeenIdx[I] = AIdx then
-      Exit(True);
+  for I := 0 to High(FSlots) do
+    if FSlots[I].Index = AIdx then
+    begin
+      ACreated := False;
+      Exit(I);
+    end;
+  SetLength(FSlots, Length(FSlots) + 1);
+  Result := High(FSlots);
+  FSlots[Result] := Default(TOpenAIToolSlot);
+  FSlots[Result].Index := AIdx;
+  FSlots[Result].Args := MakeStringBuilder;
+  ACreated := True;
 end;
 
-procedure TOpenAIWireDecoder.MarkSeen(AIdx: Integer);
+procedure TOpenAIWireDecoder.AnnounceSlot(var ASlot: TOpenAIToolSlot;
+  var ADeltas: TStreamDeltaArray);
+var
+  LD: TStreamDelta;
 begin
-  SetLength(FSeenIdx, Length(FSeenIdx) + 1);
-  FSeenIdx[High(FSeenIdx)] := AIdx;
+  LD := Default(TStreamDelta);
+  LD.Kind := sdkToolCallStart;
+  LD.ToolIndex := ASlot.Index;
+  LD.ToolCallId := ASlot.Id;
+  LD.ToolName := ASlot.Name;
+  AddDelta(ADeltas, LD);
+  if ASlot.Args.Len > 0 then
+  begin
+    LD := Default(TStreamDelta);
+    LD.Kind := sdkToolCallDelta;
+    LD.ToolIndex := ASlot.Index;
+    LD.ArgumentsDelta := ASlot.Args.ToString;
+    AddDelta(ADeltas, LD);
+  end;
+  ASlot.Announced := True;
 end;
 
-{ Q-O5：条目缺 index=协议违例；首片携带 id+name → Start，后续片仅 args 片段
-  → Delta；同槽重复元数据宽容忽略；本适配器不产 End（fold 对 finish 封槽）}
+{ Q-O5（修订版，依 sub2api 生产经验）：
+  - index 缺省容忍按 0 处理（部分兼容网关单工具流省略 index）；负数仍违例；
+  - Start 只在 name 就绪时发出一次；name 未到先缓冲 id/args（延迟命名）；
+  - 同槽重复元数据宽容忽略；本适配器不产 End（fold 对 finish 封槽）}
 procedure TOpenAIWireDecoder.HandleToolCalls(const AEntries: TJsonValue;
   const ASrc: string; var ADeltas: TStreamDeltaArray);
 var
-  I: Integer;
+  I, LSlotPos: Integer;
   LItem, LFn, LIdxV: TJsonValue;
   LIdx: Integer;
   LId, LName, LArgs: string;
+  LCreated: Boolean;
   LD: TStreamDelta;
 begin
   for I := 0 to Integer(AEntries.ArrayLen) - 1 do
@@ -711,11 +800,14 @@ begin
     if not LItem.IsObject then
       ProtocolError(ASrc, 'tool call stream entry must be an object');
     LIdxV := LItem.Get('index');
-    if not LIdxV.IsInt then
-      ProtocolError(ASrc, 'tool call stream entry missing integer index');
-    LIdx := Integer(LIdxV.AsInt);
-    if LIdx < 0 then
-      ProtocolError(ASrc, 'tool call stream entry negative index');
+    if LIdxV.IsInt then
+    begin
+      LIdx := Integer(LIdxV.AsInt);
+      if LIdx < 0 then
+        ProtocolError(ASrc, 'tool call stream entry negative index');
+    end
+    else
+      LIdx := 0;                       { 缺省容忍：单工具流按槽 0 }
     LId := '';
     LName := '';
     LArgs := '';
@@ -729,26 +821,34 @@ begin
       if LFn.Get('arguments').IsStr then
         LArgs := LFn.Get('arguments').AsStr.ToString;
     end;
-    if not IsSeen(LIdx) then
+
+    LSlotPos := FindSlot(LIdx, LCreated);
+    if (LId <> '') and (FSlots[LSlotPos].Id = '') then
+      FSlots[LSlotPos].Id := LId;      { 首个非空 id 生效 }
+    if not FSlots[LSlotPos].Announced then
     begin
-      MarkSeen(LIdx);
-      LD := Default(TStreamDelta);
-      LD.Kind := sdkToolCallStart;
-      LD.ToolIndex := LIdx;
-      LD.ToolCallId := LId;
-      LD.ToolName := LName;
-      AddDelta(ADeltas, LD);
+      if LName <> '' then
+        FSlots[LSlotPos].Name := LName; { name 未就绪前持续更新 }
+      if FSlots[LSlotPos].Name <> '' then
+        AnnounceSlot(FSlots[LSlotPos], ADeltas);
       if LArgs <> '' then
       begin
-        LD := Default(TStreamDelta);
-        LD.Kind := sdkToolCallDelta;
-        LD.ToolIndex := LIdx;
-        LD.ArgumentsDelta := LArgs;
-        AddDelta(ADeltas, LD);
+        if FSlots[LSlotPos].Announced then
+        begin
+          { 已宣告：本片段直出（先于冲刷的只有此前缓冲） }
+          LD := Default(TStreamDelta);
+          LD.Kind := sdkToolCallDelta;
+          LD.ToolIndex := LIdx;
+          LD.ArgumentsDelta := LArgs;
+          AddDelta(ADeltas, LD);
+        end
+        else
+          FSlots[LSlotPos].Args.AppendStr(LArgs); { name 仍未就绪：继续缓冲 }
       end;
     end
     else if LArgs <> '' then
     begin
+      { 已宣告：重复 id/name 宽容忽略，args 片段直出 }
       LD := Default(TStreamDelta);
       LD.Kind := sdkToolCallDelta;
       LD.ToolIndex := LIdx;
@@ -756,6 +856,11 @@ begin
       AddDelta(ADeltas, LD);
     end;
   end;
+end;
+
+function TOpenAIWireDecoder.HasSlots: Boolean;
+begin
+  Result := Length(FSlots) > 0;
 end;
 
 procedure TOpenAIWireDecoder.DecodeEvent(const AEvent: TWireSSEEvent;
@@ -779,6 +884,10 @@ begin
   ADeltas := nil;
   if FFinalized then
     raise EAgentMisuse.Create('openai decoder reused after Finalize');
+  { 订阅网关计费/保活心跳帧（sub2api 生产怪癖）：event 名 ping 的帧
+    数据非 JSON，跳过；其余 event 名不拦截——OpenAI 方言载荷在 data 行 }
+  if AEvent.Event = 'ping' then
+    Exit;
   if AEvent.Data = '[DONE]' then                    { §1.3 终止符 }
   begin
     FDone := True;
@@ -840,10 +949,16 @@ begin
             AddDelta(ADeltas, LD);
           end;
         end;
-        { Q-O2：reasoning_content 增量 → 思考增量；无签名字段 }
-        if LDv.Get('reasoning_content').IsStr then
+        { Q-O2：reasoning_content 增量 → 思考增量；无签名字段。
+          `reasoning` 是 xAI Grok 系的等价别名（sub2api 确认两者并存，
+          reasoning_content 优先）}
+        if LDv.Get('reasoning_content').IsStr or
+          LDv.Get('reasoning').IsStr then
         begin
-          LId := LDv.Get('reasoning_content').AsStr.ToString;
+          if LDv.Get('reasoning_content').IsStr then
+            LId := LDv.Get('reasoning_content').AsStr.ToString
+          else
+            LId := LDv.Get('reasoning').AsStr.ToString;
           if LId <> '' then
           begin
             LD := Default(TStreamDelta);
@@ -871,6 +986,10 @@ begin
           LD := Default(TStreamDelta);
           LD.Kind := sdkFinish;
           LD.FinishReason := MapFinishReason(LRv, LUnmapped);
+          { 生产怪癖（sub2api）：部分上游发 "stop" 却带了 tool_calls——
+            归约为本流已开槽即 frToolCalls，保住消费方循环判据 }
+          if (LD.FinishReason = frStop) and HasSlots then
+            LD.FinishReason := frToolCalls;
           if LUnmapped <> '' then
           begin
             WarnLog(FLog, 'openai: unmapped finish_reason "' + LUnmapped +
@@ -917,13 +1036,28 @@ begin
 end;
 
 procedure TOpenAIWireDecoder.Finalize(out ADeltas: TStreamDeltaArray);
+var
+  I: Integer;
 begin
   ADeltas := nil;
   if FFinalized then
     Exit;                              { 幂等：重复调用返回空数组 }
   FFinalized := True;
-  { OpenAI 的 usage/finish 均内联于帧序（Q-O3/Q-O5），无需尾帧重排；
-    缺 [DONE] 断连（Q-O4）由 fold 对缺 finish 宽容收口 }
+  { 延迟命名兜底：name 始终未到的槽以已知信息冲刷（id 可能也缺——
+    词表允许空串），绝不让已收到的参数片段无声丢失 }
+  for I := 0 to High(FSlots) do
+    if not FSlots[I].Announced then
+    begin
+      if (FSlots[I].Id <> '') or (FSlots[I].Name <> '') or
+        (FSlots[I].Args.Len > 0) then
+      begin
+        WarnLog(FLog, 'openai: flushing tool call slot ' +
+          IntToStr(FSlots[I].Index) + ' whose name never arrived');
+        AnnounceSlot(FSlots[I], ADeltas);
+      end;
+    end;
+  { OpenAI 的 usage/finish 内联于帧序（Q-O3）；缺 [DONE] 断连（Q-O4）
+    由 fold 对缺 finish 宽容收口 }
   if FPendingUnmapped <> '' then
   begin
     WarnLog(FLog,
@@ -948,6 +1082,7 @@ type
     FStream: IAgentWireStream;
     FDecoder: IAgentWireDecoder;
     FToken: IAsyncCancellationToken;
+    FProviderName: string;           { 上游错误归因（'openai'/'grok'）}
     FPending: TStreamDeltaArray;
     FIdx: Integer;
     FAccum: TStreamDeltaArray;
@@ -963,7 +1098,8 @@ type
   public
     constructor Create(const AStream: IAgentWireStream;
       const ADecoder: IAgentWireDecoder;
-      const AToken: IAsyncCancellationToken);
+      const AToken: IAsyncCancellationToken;
+      const AProviderName: string);
     function NextDelta(out ADelta: TStreamDelta): Boolean;
     procedure Cancel;
     function GetCancelled: Boolean;
@@ -971,16 +1107,20 @@ type
     function GetUsage: TTokenUsage;
   end;
 
+  { 同一实现承载 openai/grok 两家族：FName 用于错误归因与 GetName；
+    BaseUrl 差异由各自 Options 预填默认值消化 }
   TOpenAIProvider = class(TInterfacedObject, IAgentProvider)
   private
     FOpts: TOpenAIOptions;
     FTransport: IAgentTransport;
     FLog: ILogger;
+    FName: string;
     function ResolveModel(const AReq: TCompletionRequest): string;
     function BuildWireRequest(const AReq: TCompletionRequest;
       AStream: Boolean): TWireRequest;
   public
-    constructor Create(const AOpts: TOpenAIOptions);
+    constructor Create(const AOpts: TOpenAIOptions;
+      const AName: string = 'openai');
     function GetName: string;
     function Complete(const AReq: TCompletionRequest): TMessage; overload;
     function Complete(const AReq: TCompletionRequest;
@@ -993,12 +1133,14 @@ type
 
 constructor TOpenAICompletion.Create(const AStream: IAgentWireStream;
   const ADecoder: IAgentWireDecoder;
-  const AToken: IAsyncCancellationToken);
+  const AToken: IAsyncCancellationToken;
+  const AProviderName: string);
 begin
   inherited Create;
   FStream := AStream;
   FDecoder := ADecoder;
   FToken := AToken;
+  FProviderName := AProviderName;
   FIdx := 0;
 end;
 
@@ -1091,7 +1233,7 @@ begin
     raise EAgentMisuse.Create('GetMessage before EOF');
   if FErrMsg <> '' then
   begin
-    E := EAgentError.CreateUpstream(FErrCode, 'openai', FErrMsg,
+    E := EAgentError.CreateUpstream(FErrCode, FProviderName, FErrMsg,
       '', '', FErrAfterMs);
     raise E;
   end;
@@ -1107,20 +1249,22 @@ end;
 
 { ---- TOpenAIProvider ---- }
 
-constructor TOpenAIProvider.Create(const AOpts: TOpenAIOptions);
+constructor TOpenAIProvider.Create(const AOpts: TOpenAIOptions;
+  const AName: string);
 begin
   inherited Create;
   FOpts := AOpts;
+  FName := AName;
   FLog := AOpts.Common.Logger;
   if FOpts.Common.Transport <> nil then
     FTransport := FOpts.Common.Transport
   else
-    FTransport := NewHttpTransport('openai');
+    FTransport := NewHttpTransport(FName);
 end;
 
 function TOpenAIProvider.GetName: string;
 begin
-  Result := 'openai';
+  Result := FName;
 end;
 
 function TOpenAIProvider.ResolveModel(
@@ -1198,7 +1342,7 @@ function TOpenAIProvider.Stream(
 begin
   Result := TOpenAICompletion.Create(
     FTransport.OpenStream(BuildWireRequest(AReq, True)),
-    NewOpenAIWireDecoder(FLog), nil);
+    NewOpenAIWireDecoder(FLog), nil, FName);
 end;
 
 function TOpenAIProvider.Stream(const AReq: TCompletionRequest;
@@ -1206,7 +1350,7 @@ function TOpenAIProvider.Stream(const AReq: TCompletionRequest;
 begin
   Result := TOpenAICompletion.Create(
     FTransport.OpenStream(BuildWireRequest(AReq, True)),
-    NewOpenAIWireDecoder(FLog), AToken);
+    NewOpenAIWireDecoder(FLog), AToken, FName);
 end;
 
 { ---- 工厂 ---- }
@@ -1240,6 +1384,42 @@ begin
   if (O.Common.ApiKey = '') or (O.Common.Model = '') then
     Exit(nil);
   Result := NewOpenAIProvider(O);
+end;
+
+{ ---- Grok 家族（wire 同族，仅默认端点与归因名不同）---- }
+
+class function TGrokOptions.New(const AModel: string): TGrokOptions;
+begin
+  Result := Default(TGrokOptions);
+  Result.Common.BaseUrl := CGROK_DEFAULT_BASE_URL;
+  Result.Common.Model := AModel;
+  Result.Common.ConnectTimeoutMs := COPENAI_CONNECT_TIMEOUT_MS;
+  Result.Common.TotalTimeoutMs := COPENAI_TOTAL_TIMEOUT_MS;
+end;
+
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider;
+var
+  LO: TOpenAIOptions;
+begin
+  LO := Default(TOpenAIOptions);
+  LO.Common := AOpts.Common;
+  Result := TOpenAIProvider.Create(LO, 'grok');
+end;
+
+function NewGrokProviderFromEnv: IAgentProvider;
+var
+  O: TGrokOptions;
+  LUrl: string;
+begin
+  O := TGrokOptions.New('');
+  O.Common.ApiKey := GetEnvironmentVariable(CGROK_ENV_API_KEY);
+  O.Common.Model := GetEnvironmentVariable(CGROK_ENV_MODEL);
+  LUrl := GetEnvironmentVariable(CGROK_ENV_BASE_URL);
+  if LUrl <> '' then
+    O.Common.BaseUrl := LUrl;
+  if (O.Common.ApiKey = '') or (O.Common.Model = '') then
+    Exit(nil);
+  Result := NewGrokProvider(O);
 end;
 
 end.

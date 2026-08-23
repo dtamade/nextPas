@@ -159,12 +159,17 @@ begin
   if Doc.HasError then
     Exit;
   LErr := Doc.Root.Get('error');
-  if not LErr.IsObject then
-    Exit;
-  LMsg := LErr.Get('message');
-  if not LMsg.IsStr then
-    Exit;
-  Result := LMsg.AsStr.ToString;
+  if LErr.IsObject then
+  begin
+    LMsg := LErr.Get('message');
+    if LMsg.IsStr then
+      Exit(LMsg.AsStr.ToString);
+    Exit('');
+  end;
+  { xAI 扁平信封（error 是字符串而非对象，sub2api 生产确认两种形态并存）：
+    code 为 "invalid-argument" 之类、error 直接承载消息文本 }
+  if LErr.IsStr then
+    Exit(LErr.AsStr.ToString);
 end;
 
 function BuildUpstreamError(const AProvider, ABody: string;

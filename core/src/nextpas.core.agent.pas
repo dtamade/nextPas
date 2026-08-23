@@ -37,6 +37,12 @@ function BuildOpenAIUrl(const ABaseUrl: string): string; inline;
 function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider; inline;
 function NewOpenAIProviderFromEnv: IAgentProvider; inline;
 
+{ ---- Grok（xAI）家族：同族 wire，复用 OpenAI 编解码器 ---- }
+
+function BuildGrokUrl(const ABaseUrl: string): string; inline;
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider; inline;
+function NewGrokProviderFromEnv: IAgentProvider; inline;
+
 implementation
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode;
@@ -86,6 +92,21 @@ end;
 function NewOpenAIProviderFromEnv: IAgentProvider;
 begin
   Result := nextpas.core.agent.provider.openai.NewOpenAIProviderFromEnv;
+end;
+
+function BuildGrokUrl(const ABaseUrl: string): string;
+begin
+  Result := nextpas.core.agent.provider.openai.BuildGrokUrl(ABaseUrl);
+end;
+
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider;
+begin
+  Result := nextpas.core.agent.provider.openai.NewGrokProvider(AOpts);
+end;
+
+function NewGrokProviderFromEnv: IAgentProvider;
+begin
+  Result := nextpas.core.agent.provider.openai.NewGrokProviderFromEnv;
 end;
 
 end.

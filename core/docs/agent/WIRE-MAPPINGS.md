@@ -83,9 +83,13 @@ data: [DONE]                                                             → 终
 
 ### 1.4 错误信封
 
+嵌套形态（OpenAI 官方）与扁平形态（xAI）并存，提取器两者都认：
+
 ```json
 {"error": {"message": "...", "type": "invalid_request_error", "code": "..."}}
+{"code": "invalid-argument", "error": "Could not decrypt ..."}
 ```
+
 状态→错误码走公共分类器；429 附带 `retry-after` 头按公共规则解析。
 
 ### 1.5 OpenAI 怪癖清单
@@ -93,12 +97,24 @@ data: [DONE]                                                             → 终
 | # | 怪癖 | 处置 |
 |---|------|------|
 | Q-O1 | 推理族模型拒绝 `max_tokens`，要求 `max_completion_tokens` | 按模型名前缀判定（`o1`/`o3`/`gpt-5` 等，常量表可扩展）；判定失败由上游 400 自然暴露并归因 |
-| Q-O2 | `reasoning_content` 增量字段（兼容系厂商普遍支持） | 映射为 `sdkThinkingDelta`；缺省无此字段即无思考输出 |
+| Q-O2 | `reasoning_content` 增量字段（兼容系厂商普遍支持） | 映射为 `sdkThinkingDelta`；缺省无此字段即无思考输出。**别名**：xAI Grok 系用 `reasoning`，两者并存时 `reasoning_content` 优先（sub2api issue#5302 生产确认）|
 | Q-O3 | usage 仅当 `stream_options.include_usage=true` 才随末 chunk 到达，且 `choices:[]` | 必发该选项；兼容端不支持则 usage 保持 CUsageUnknown（Known=False），绝不臆造 |
 | Q-O4 | 部分兼容网关不发 `[DONE]` 直接断连 | 连接关闭=EOF；fold 正常收口 |
-| Q-O5 | tool_calls 首片携带 id+name、后续片仅 index+args 片段；条目缺 `index` 视为协议违例 | Start 只在首片发一次；adapter 按 index 分桶累积（禁止下游自行维护桶——词表已抽象掉）；OpenAI 不产 End 事件，封槽由 fold 对 sdkFinish 隐式完成（API §4）|
+| Q-O5 | tool_calls 首片携带 id+name、后续片仅 index+args 片段 | Start 只在 **name 就绪时** 发一次；name 未到先缓冲 id/args（延迟命名——部分上游 id+args 先到、name 后到甚至缺失，Finalize 兜底冲刷）。条目缺 `index` **容忍按 0**（单工具流的省略形态，sub2api 生产确认）；负数仍违例。OpenAI 不产 End 事件，封槽由 fold 对 sdkFinish 隐式完成（API §4）|
 | Q-O6 | 空 `choices` 数组的中间 chunk 存在 | 跳过，不算协议错误 |
 | Q-O7 | `choices` 可能多于一条（n>1 场景） | v1 固定单选择：index>0 的 choice 丢弃并 warn（对"绝不静默丢弃"的显式豁免——多选择语义超出 v1 词表，记录在案）|
+| Q-O8 | 上游发 `"stop"` 却带了 tool_calls | 归约为本流已开槽即 frToolCalls（流式看槽表；非流式看 pkToolCall 部件）——保住消费方循环判据（sub2api 同款纠正）|
+| Q-O9 | 订阅网关注入 `event: ping` 计费心跳帧，数据非 JSON | 解码器按 event 名跳过该帧；其余 event 名不拦截（方言载荷在 data 行）|
+
+### 1.6 Grok（xAI）家族
+
+- 官方 API：`POST {BaseUrl\|https://api.x.ai}/v1/chat/completions`，Bearer 鉴权；
+  wire 与 Chat Completions 同族（订阅上游亦为同方言，sub2api 确认）。
+- 编解码器/provider 复用 OpenAI 族实现：差异仅默认端点、归因名 `'grok'`、
+  env 前缀 `NEXTPAS_AGENT_GROK_*`。
+- 适用怪癖全集 = §1.5（含 Q-O2 别名与 Q-O9 心跳帧）。
+- v1 inbox（未入词表）：`reasoning_effort` 参数、`x_search` 服务端工具、
+  Responses 族 encrypted_reasoning 重试语义。
 
 ## 2. Anthropic Messages 适配器
 

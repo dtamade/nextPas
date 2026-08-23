@@ -377,10 +377,17 @@ function NewFakeProvider(const AScriptJson: TJsonText): IAgentProvider;
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock): IAgentProvider;
 
+{ Grok（xAI）家族：wire 与 OpenAI Chat Completions 同族（WIRE-MAPPINGS
+  §1.6），编解码器复用；差异仅默认端点 api.x.ai、归因名 'grok'、env 前缀 }
+function BuildGrokUrl(const ABaseUrl: string): string;
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider;
+
 { 环境装配（契约见 CONSUMERS.md §3）：必填 env 缺失返回 nil，绝不静默回退。
   NEXTPAS_AGENT_OPENAI_API_KEY / _MODEL / _BASE_URL
+  NEXTPAS_AGENT_GROK_API_KEY / _MODEL / _BASE_URL
   NEXTPAS_AGENT_ANTHROPIC_API_KEY / _MODEL / _BASE_URL }
 function NewOpenAIProviderFromEnv: IAgentProvider;
+function NewGrokProviderFromEnv: IAgentProvider;
 function NewAnthropicProviderFromEnv: IAgentProvider;
 
 { 时钟构造（nextpas.core.agent.clock；选型见 SELECTION C8）}
@@ -418,6 +425,11 @@ TOpenAIOptions = record
   Organization: string;            { 可选 header }
   { New 填入全部默认值（BaseUrl/超时/版本常量）；调用方按需覆盖字段 }
   class function New(const AModel: string): TOpenAIOptions; static;
+end;
+
+TGrokOptions = record
+  Common: TProviderOptions;
+  class function New(const AModel: string): TGrokOptions; static;
 end;
 
 TAnthropicOptions = record
