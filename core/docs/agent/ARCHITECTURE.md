@@ -85,7 +85,7 @@ Complete(req, tools)
 Stream(req, tools)
   → adapter 编码请求 → transport.OpenStream()
       http client 发出 POST（响应头到达即返回）
-      循环：IReader.Read(4-64KB chunk)
+      循环：IReader.Read(32KB chunk，PERFORMANCE §2)
             → agent.sse.Feed(chunk) → 完整 SSE 帧
             → adapter.DecodeFrame(frame) → 0..N 个 TStreamDelta
             → 立即经 IAgentWireStream.NextEvent 上抛   ← 首 token 无整包缓冲

@@ -200,6 +200,8 @@ end;
 
 EAgentCancelled = class(EAgentError);   { ErrorCode 固定 aecCancelled }
 
+TAgentErrorCodes = set of TAgentErrorCode;
+
 { HTTP status → 错误码分类器（transport 与适配器共用，单一事实源）}
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode;
 function IsRetryable(ACode: TAgentErrorCode): Boolean;
@@ -243,6 +245,11 @@ TWireResponse = record
   BodyText: string;                 { 非流式路径全量响应体 }
   RequestId: string;
 end;
+
+{ wire 头查找（大小写不敏感，首个命中返回；未命中空串）。
+  RequestId 探测 / retry-after 解析 / 消费方自定义头检查共用 }
+function WireHeaderValue(const AHeaders: TWireHeaderArray;
+  const AName: string): string;
 
 { SSE 帧（增量解析产物）}
 TWireSSEEvent = record
