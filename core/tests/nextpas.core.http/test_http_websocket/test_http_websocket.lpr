@@ -104,6 +104,30 @@ begin
   AServer := nil;
 end;
 
+function StartServerWithOpts(const AHandler: IHttpHandler;
+  const AOpts: THttpServerOptions; out AServer: THttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
+var
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+begin
+  AServer := THttpServer.Create(AHandler, AOpts);
+  New(LCtx);
+  LCtx^.Server := AServer;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+  LWait := 0;
+  while (not AServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  APort := AServer.LocalAddr.Port;
+  Result := LHandle;
+end;
+
 function RepeatChar(const ACh: Char; const ACount: SizeUInt): string;
 var
   I: SizeUInt;
@@ -3708,6 +3732,206 @@ begin
   end;
 end;
 
+{ F-7 回归：升级后的连接不得继承 h1 每请求读死线。
+  用例 1（带流量）：IdleTimeout=400ms 的服务器上持续收发约 1.5s（>3 倍超时窗），
+  每帧都应得到回声——修复前连接在 ~400ms 被绝对死线掐断，第二轮即失败。 }
+procedure TestUpgradedConnectionSurvivesPastIdleTimeout;
+const
+  IDLE_MS = 400;
+  ROUNDS = 6;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp, LFrame: string;
+  LBuf: array[0..1023] of Byte;
+  LN: SizeUInt;
+  I: Integer;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    repeat
+      try
+        LF := LWs.ReadFrame;
+      except
+        Exit;
+      end;
+      if LF.Opcode = wsOpClose then
+      begin
+        LWs.Close(1000, '');
+        Exit;
+      end;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
+    until False;
+  end);
+  LHandle := StartServerWithOpts(LRouter as IHttpHandler,
+    THttpServerOptions.Default.WithReadTimeout(IDLE_MS), LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'idle-survive: got 101');
+
+      for I := 1 to ROUNDS do
+      begin
+        LFrame := BuildMaskedFrame($01, 'r' + IntToStr(I));
+        LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+        { 每轮独立读期限：EOF（服务器掐线）或读超时都算失败 }
+        LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(2)));
+        LResp := '';
+        repeat
+          LN := 0;
+          try
+            LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+          except
+            LN := 0;
+          end;
+          if LN > 0 then
+          begin
+            SetLength(LResp, Length(LResp) + Int32(LN));
+            Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+          end;
+        until (Length(LResp) >= 4) or (LN = 0);
+        Check(Length(LResp) >= 4,
+          'idle-survive: round ' + IntToStr(I) + ' got echo frame');
+        if Length(LResp) >= 4 then
+        begin
+          Check(Ord(LResp[1]) = $81, 'idle-survive: FIN+text opcode');
+          Check(Copy(LResp, 3, 2) = 'r' + IntToStr(I),
+            'idle-survive: round ' + IntToStr(I) + ' payload matches');
+        end
+        else
+          Break;
+        platform_thread_sleep_ns(250000000);
+      end;
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ 用例 2（静默）：升级后不发任何帧静置 3 倍超时窗，再发一帧仍应得到回声——
+  证明移除的是绝对死线而非仅活跃期续命。 }
+procedure TestSilentUpgradedConnectionSurvivesPastIdleTimeout;
+const
+  IDLE_MS = 400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LResp, LFrame: string;
+  LBuf: array[0..1023] of Byte;
+  LN: SizeUInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    repeat
+      try
+        LF := LWs.ReadFrame;
+      except
+        Exit;
+      end;
+      if LF.Opcode = wsOpClose then
+      begin
+        LWs.Close(1000, '');
+        Exit;
+      end;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
+    until False;
+  end);
+  LHandle := StartServerWithOpts(LRouter as IHttpHandler,
+    THttpServerOptions.Default.WithReadTimeout(IDLE_MS), LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('101', LResp) > 0, 'silent-survive: got 101');
+
+      platform_thread_sleep_ns(1200000000);
+
+      LFrame := BuildMaskedFrame($01, 'still-alive');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(2)));
+      LResp := '';
+      repeat
+        LN := 0;
+        try
+          LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Pos('still-alive', LResp) > 0) or (LN = 0);
+      Check(Pos('still-alive', LResp) > 0,
+        'silent-survive: connection alive and echoing after idle window');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 begin
   T := TTestSuite.Create('http.websocket');
@@ -3771,5 +3995,9 @@ begin
     @TestPermessageDeflateNotNegotiatedByDefault);
   T.Test('PermessageDeflateCompressedTextEcho',
     @TestPermessageDeflateCompressedTextEcho);
+  T.Test('UpgradedConnectionSurvivesPastIdleTimeout',
+    @TestUpgradedConnectionSurvivesPastIdleTimeout);
+  T.Test('SilentUpgradedConnectionSurvivesPastIdleTimeout',
+    @TestSilentUpgradedConnectionSurvivesPastIdleTimeout);
   if not T.Run then Halt(1);
 end.
