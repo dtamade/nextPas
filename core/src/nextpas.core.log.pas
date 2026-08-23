@@ -111,6 +111,12 @@ function AttrInt(const AKey: string; AVal: Int64): TAttr; inline;
 function AttrFloat(const AKey: string; AVal: Double): TAttr; inline;
 function AttrBool(const AKey: string; AVal: Boolean): TAttr; inline;
 
+{** 控制台着色开关决策：NO_COLOR 环境变量存在且非空即禁用（no-color.org
+    约定）；否则仅当 stderr 是终端时着色。重定向/管道（journald、日志
+    采集、测试捕获）输出纯文本，机器解析不被 ANSI 转义字节污染。
+    TConsoleHandler 构造时求值一次；导出以便消费方与测试对齐同一契约。 }
+function LogConsoleColorsEnabled: Boolean;
+
 function NewConsoleHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
 function NewJsonHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
 function NewFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
@@ -152,6 +158,8 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
+  nextpas.core.platform.env,
+  nextpas.core.platform.console,
   nextpas.core.time.base,
   { 异步文件落盘 worker（K37）：线程基类 + Flush ack 的 mutex/condvar 原语 }
   nextpas.core.thread.base,
@@ -443,6 +451,15 @@ end;
 
 { Console Handler }
 
+{ NO_COLOR 约定（no-color.org）：存在且非空即禁用；否则仅 stderr 为终端
+  时着色（fd 2——控制台日志写往 StdErr）。重定向/管道输出纯文本。 }
+function LogConsoleColorsEnabled: Boolean;
+begin
+  if platform_env_get_str('NO_COLOR') <> '' then
+    Exit(False);
+  Result := platform_console_is_terminal(2);
+end;
+
 type
   TConsoleHandler = class(TInterfacedObject, ILogHandler)
   private
@@ -450,6 +467,7 @@ type
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     FGroup: string;
+    FColor: Boolean;
     FLock: TRTLCriticalSection;
   public
     constructor Create(AMinLevel: TLogLevel);
@@ -466,6 +484,7 @@ begin
   inherited Create;
   FMinLevel := AMinLevel;
   FPrefixCount := 0;
+  FColor := LogConsoleColorsEnabled;
   InitCriticalSection(FLock);
 end;
 
@@ -489,13 +508,19 @@ begin
   EnterCriticalSection(FLock);
   try
     if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
-    Write(StdErr, LEVEL_COLORS[ARecord.Level], LEVEL_NAMES[ARecord.Level], RESET, ' ');
+    if FColor then
+      Write(StdErr, LEVEL_COLORS[ARecord.Level], LEVEL_NAMES[ARecord.Level], RESET, ' ')
+    else
+      Write(StdErr, LEVEL_NAMES[ARecord.Level], ' ');
     if ARecord.Message <> '' then
       Write(StdErr, ARecord.Message);
     for LI := 0 to FPrefixCount - 1 do
     begin
       LA := FPrefix[LI];
-      Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
+      if FColor then
+        Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET)
+      else
+        Write(StdErr, ' ', LKeyPrefix, LA.Key, '=');
       case LA.Kind of
         akString: Write(StdErr, LA.SVal);
         akInt: Write(StdErr, LA.IVal);
@@ -506,7 +531,10 @@ begin
     for LI := 0 to ARecord.AttrCount - 1 do
     begin
       LA := ARecord.Attrs[LI];
-      Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
+      if FColor then
+        Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET)
+      else
+        Write(StdErr, ' ', LKeyPrefix, LA.Key, '=');
       case LA.Kind of
         akString: Write(StdErr, LA.SVal);
         akInt: Write(StdErr, LA.IVal);

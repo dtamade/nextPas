@@ -7,6 +7,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.thread.base,
   nextpas.core.platform.thread,
+  nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
@@ -203,6 +204,28 @@ begin
   LL := TLogger.New(NewConsoleHandler(llError), llError);
   LL.Error^.Str('test', 'console')^.Msg('error output');
   Check(True, 'console no crash');
+end;
+
+{ F6：控制台着色决策契约。NO_COLOR（no-color.org 约定）存在且非空必禁色；
+  测试进程 stderr 恒为重定向（套件输出被捕获）→ 非终端 → 亦禁色。
+  交互终端下的着色路径无法在自动化中构造，由人工/冒烟面覆盖。 }
+procedure TestConsoleColorsNoColorEnvWins;
+begin
+  platform_env_set('NO_COLOR', '1');
+  try
+    Check(not LogConsoleColorsEnabled, 'NO_COLOR non-empty disables colors');
+    platform_env_set('NO_COLOR', '');
+    Check(not LogConsoleColorsEnabled,
+      'empty NO_COLOR falls through to tty detection');
+  finally
+    platform_env_unset('NO_COLOR');
+  end;
+end;
+
+procedure TestConsoleColorsRedirectedStderrDisables;
+begin
+  Check(not LogConsoleColorsEnabled,
+    'redirected stderr (test harness) must disable colors');
 end;
 
 procedure TestJsonHandler;
@@ -1805,6 +1828,8 @@ begin
   T.Test('Err helper', @TestErrHelper);
   T.Test('Send (no msg)', @TestSend);
   T.Test('Console handler', @TestConsoleHandler);
+  T.Test('Console colors: NO_COLOR wins', @TestConsoleColorsNoColorEnvWins);
+  T.Test('Console colors: redirected stderr disables', @TestConsoleColorsRedirectedStderrDisables);
   T.Test('JSON handler', @TestJsonHandler);
   T.Test('JSON file handler', @TestJsonFileHandler);
   T.Test('Global logger', @TestGlobalLogger);
