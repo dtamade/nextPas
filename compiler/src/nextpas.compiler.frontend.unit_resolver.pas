@@ -17,7 +17,7 @@ uses
   nextpas.core.collections.vec,
   nextpas.compiler.syntax.ast_facade, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
   nextpas.compiler.frontend.package_manifest, nextpas.compiler.syntax.preprocessor, nextpas.compiler.frontend.source_database,
-  nextpas.compiler.targets.facts, np_text_primitives, np_toolchain_profiles, nextpas.compiler.frontend.unit_graph;
+  nextpas.compiler.targets.facts, np_text_primitives, nextpas.compiler.toolchain.profiles, nextpas.compiler.frontend.unit_graph;
 
 type
   TUnitResolverStringVec = specialize TVec<string>;

@@ -1,4 +1,4 @@
-unit np_toolchain_profiles;
+unit nextpas.compiler.toolchain.profiles;
 
 {$mode objfpc}{$H+}
 

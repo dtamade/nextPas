@@ -1,4 +1,4 @@
-unit np_toolchain_plan;
+unit nextpas.compiler.toolchain.plan;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../backend}
@@ -12,7 +12,7 @@ uses
   nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.os.env,
   nextpas.core.collections.vec,
-  nextpas.compiler.backend.plan, nextpas.compiler.targets.facts, np_toolchain_profiles,
+  nextpas.compiler.backend.plan, nextpas.compiler.targets.facts, nextpas.compiler.toolchain.profiles,
   nextpas.compiler.diagnostics.json_helpers;
 
 type

@@ -9,7 +9,7 @@ uses
   nextpas_projection_types, nextpas_command_envelope,
   nextpas_projection_json, nextpas_projection_text, nextpas_projection_context,
   nextpas.compiler.frontend.compilation_session, nextpas.compiler.targets.facts, nextpas.compiler.frontend.workspace_model,
-  np_toolchain_runner, target_config;
+  nextpas.compiler.toolchain.runner, target_config;
 
 function TargetFactsFromConfig(const TargetConfig: TTargetConfig): TTargetFactsView;
 procedure RunBuild(

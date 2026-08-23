@@ -22,7 +22,7 @@ uses
   nextpas.compiler.syntax.ast_facade, nextpas.compiler.backend.plan, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree,
   nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.builder,
   nextpas.compiler.ir.hir.printer, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.frontend.source_database, nextpas.compiler.targets.facts,
-  np_toolchain_plan, np_toolchain_profiles, np_toolchain_runner,
+  nextpas.compiler.toolchain.plan, nextpas.compiler.toolchain.profiles, nextpas.compiler.toolchain.runner,
   nextpas.compiler.frontend.unit_graph, nextpas.compiler.frontend.unit_resolver,
   nextpas.compiler.sema.semantic_model, nextpas.compiler.sema.analyzer, nextpas.compiler.frontend.workspace_model,
   nextpas.compiler.frontend.compiler_phase, nextpas.compiler.ir.mir.model, nextpas.compiler.ir.hir.to_mir, nextpas.compiler.ir.mir.optimize,

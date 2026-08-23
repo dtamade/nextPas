@@ -30,6 +30,7 @@ migrated=(
   np_mir_pass_escape np_mir_pass_inline_heuristic np_mir_pass_inline
   np_mir_pass_licm np_mir_pass_strength_red np_mir_pass_tailcall
   np_mir_pass_vectorize np_mir_to_llvm np_backend_plan
+  np_toolchain_runner np_toolchain_profiles np_toolchain_plan
 )
 for name in "${migrated[@]}"; do
   hits=$(grep -rl "\b${name}\b" compiler tools tests --include='*.pas' \
@@ -83,9 +84,14 @@ layer_of() {
 # - syntax.preprocessor: include 解析需读源文件（N2 登记）
 # - sema.analyzer: 播种期对导入单元源文件做 FsExists/FsStat 新鲜度检查（N4 登记，收口归 N7 评估）
 # - backend.plan: 规划期 FsDir 目录探测（N5 登记，收口归 N7/P2 评估）
+# - toolchain.plan/profiles: FsExists/fs 探测工具链与 profile 落盘（N6 登记）
+# - toolchain.runner: ExecuteStep 执行工具链进程+fs 探测=runner 本职（N6 登记）
 io_exempt="nextpas.compiler.syntax.preprocessor
 nextpas.compiler.sema.analyzer
-nextpas.compiler.backend.plan"
+nextpas.compiler.backend.plan
+nextpas.compiler.toolchain.plan
+nextpas.compiler.toolchain.profiles
+nextpas.compiler.toolchain.runner"
 
 for f in compiler/src/*.pas; do
   unit=$(grep -m1 '^unit ' "$f" | sed 's/^unit \([a-z_.]*\);.*/\1/')

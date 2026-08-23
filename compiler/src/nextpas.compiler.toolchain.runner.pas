@@ -1,4 +1,4 @@
-unit np_toolchain_runner;
+unit nextpas.compiler.toolchain.runner;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../../core/src}
@@ -11,7 +11,7 @@ uses
   nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.exception,
   nextpas.core.collections.vec,
-  np_toolchain_plan;
+  nextpas.compiler.toolchain.plan;
 
 type
   EToolchainRunnerError = class(ENextPasError)

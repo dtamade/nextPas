@@ -10,7 +10,7 @@ uses
   nextpas_projection_types, nextpas_json_helpers,
   nextpas.compiler.frontend.compilation_session, nextpas.compiler.frontend.workspace_model, nextpas.compiler.frontend.package_workflow,
   nextpas.compiler.frontend.package_manifest, nextpas.compiler.frontend.package_lock,
-  np_toolchain_profiles, target_config;
+  nextpas.compiler.toolchain.profiles, target_config;
 
 procedure ClearBuildCommandContextValue(var AContext: TBuildCommandContext);
 procedure ClearSessionProjectionContextValue(var AContext: TSessionProjectionContext);
