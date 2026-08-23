@@ -95,6 +95,7 @@ var
   LMsgType: Byte;
   LBodyLen: Cardinal;
   LSessionIdLen: Integer;
+  LCompLen: Integer;
   LExtTotalLen: Integer;
   LExtEnd: Integer;
   LExtType, LExtLen: Word;
@@ -145,10 +146,18 @@ begin
   AInfo.SelectedCipherSuite := ReadUInt16(AHandshake, LOffset);
   Inc(LOffset, 2);
 
-  // legacy_compression_method
+  // legacy_compression_methods<1..2^8-1>：u8 长度前缀 + 方法串
+  // （RFC 8446 §4.1.3；此前漏读长度前缀导致扩展区错位）
   if LOffset + 1 > Length(AHandshake) then
     Exit;
-  Inc(LOffset, 1);
+  LCompLen := AHandshake[LOffset];
+  Inc(LOffset);
+  if LCompLen > 0 then
+  begin
+    if LOffset + LCompLen > Length(AHandshake) then
+      Exit;
+    Inc(LOffset, LCompLen);
+  end;
 
   // extensions (optional in TLS 1.2)
   if LOffset >= Length(AHandshake) then

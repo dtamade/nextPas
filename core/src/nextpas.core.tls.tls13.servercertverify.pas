@@ -126,6 +126,7 @@ uses
   nextpas.core.crypto.rsa.ct;
 
 const
+  { RFC 8446 §4.4.3 原文定案：上下文串含「1.3」句点（2026-08-23 复核） }
   TLS13_SERVER_CERTVERIFY_CONTEXT = 'TLS 1.3, server CertificateVerify';
   TLS13_CLIENT_CERTVERIFY_CONTEXT = 'TLS 1.3, client CertificateVerify';
   OID_RSA_ENCRYPTION = '1.2.840.113549.1.1.1';

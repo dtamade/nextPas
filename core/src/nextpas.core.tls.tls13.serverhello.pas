@@ -138,6 +138,9 @@ begin
   AppendByte(Result, Byte(Length(ALegacySessionID)));
   AppendBytes(Result, ALegacySessionID);
   AppendUInt16(Result, ACipherSuite);
+  { legacy_compression_methods<1..2^8-1>：u8 长度前缀 + 方法串
+    （RFC 8446 §4.1.3；TLS 1.3 恒 [00] 空压缩） }
+  AppendByte(Result, 1);
   AppendByte(Result, 0);
   AppendUInt16(Result, Word(Length(LExtensions)));
   AppendBytes(Result, LExtensions);
