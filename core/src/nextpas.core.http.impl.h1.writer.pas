@@ -18,7 +18,8 @@ uses
 
 type
   TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker,
-    IHttpResponseBodyBytes, IHttpResponseWriterCommitState, IHttpConnContext)
+    IHttpResponseBodyBytes, IHttpResponseWriterCommitState, IHttpConnContext,
+    IHttpPeerProbe)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -73,6 +74,9 @@ type
     function HasCommitted: Boolean;
     function HeadersCommitted: Boolean;
     function IsHijacked: Boolean;
+    { IHttpPeerProbe：委托底层连接的 ITcpPeerProbe；连接不支持（如
+      包装流）或无连接时恒 True（保守，绝不误报断连）。 }
+    function PeerAlive: Boolean;
     function GetBodyBytesWritten: Int64;
     property Headers: IHttpHeaders read GetHeaders;
   end;
@@ -598,6 +602,18 @@ end;
 function TH1ResponseWriter.IsHijacked: Boolean;
 begin
   Result := FHijacked;
+end;
+
+function TH1ResponseWriter.PeerAlive: Boolean;
+var
+  LProbe: ITcpPeerProbe;
+begin
+  Result := True;
+  if (FConn = nil) or FHijacked then
+    Exit;
+  if FConn.QueryInterface(ITcpPeerProbe, LProbe) <> 0 then
+    Exit;                        { 包装流不支持探测：保守 True }
+  Result := LProbe.PeerAlive;
 end;
 
 function TH1ResponseWriter.GetBodyBytesWritten: Int64;

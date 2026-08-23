@@ -92,6 +92,14 @@ type
       out AWritten: SizeUInt): TTcpStreamIOResult;
   end;
 
+  { 非破坏性对端存活探测（长前置 server 工作期间的客户端断连识别）。
+    True = 存活或无法判定（保守）；False = 对端已确认关闭/重置。
+    永不阻塞、永不消费数据。可选能力：经 Supports/QueryInterface 探测。 }
+  ITcpPeerProbe = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000007}']
+    function PeerAlive: Boolean;
+  end;
+
   ITcpListenerRuntime = interface(ITcpSocketRuntime)
     ['{C1D2E3F4-A5B6-7890-ABCD-300000000006}']
     function TryAccept(out AConn: ITcpStream): TTcpAcceptResult;

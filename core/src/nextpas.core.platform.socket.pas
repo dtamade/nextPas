@@ -72,9 +72,11 @@ const
   PLATFORM_SHUT_WR     = 1;
   PLATFORM_SHUT_RDWR   = 2;
   { Winsock 无 MSG_NOSIGNAL/MSG_DONTWAIT：占位 0（Windows 非阻塞发送
-    需 ioctlsocket(FIONBIO) socket 模式，net.tcp poll 路径维持旧行为）。 }
+    需 ioctlsocket(FIONBIO) socket 模式，net.tcp poll 路径维持旧行为）。
+    MSG_PEEK 为 Winsock 真值。 }
   PLATFORM_MSG_NOSIGNAL = 0;
   PLATFORM_MSG_DONTWAIT = 0;
+  PLATFORM_MSG_PEEK = 2;
 {$ELSE}
   PLATFORM_AF_INET     = AF_INET;
   PLATFORM_AF_INET6    = AF_INET6;
@@ -113,12 +115,15 @@ const
 {$IFDEF NEXTPAS_MACOS}
   PLATFORM_MSG_NOSIGNAL = $20000;
   PLATFORM_MSG_DONTWAIT = $80;
+  PLATFORM_MSG_PEEK = 1;
 {$ELSEIF defined(NEXTPAS_FREEBSD)}
   PLATFORM_MSG_NOSIGNAL = $20000;
   PLATFORM_MSG_DONTWAIT = $80;
+  PLATFORM_MSG_PEEK = 2;
 {$ELSE}
   PLATFORM_MSG_NOSIGNAL = $00004000;
   PLATFORM_MSG_DONTWAIT = $00000040;
+  PLATFORM_MSG_PEEK = 2;
 {$ENDIF}
 {$ENDIF}
 
@@ -199,6 +204,14 @@ function platform_socket_send(const ASocket: TPlatformSocket;
     @return 0 成功，否则返回错误码 *}
 function platform_socket_recv(const ASocket: TPlatformSocket;
   ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32;
+
+{** @desc 非破坏性对端存活探测（server 侧长前置工作的客户端断连识别）
+    POSIX：一字节 recv(MSG_PEEK|MSG_DONTWAIT)——0 字节=对端 FIN→False，
+    EAGAIN/EWOULDBLOCK=存活无数据→True，EINTR=无法判定（保守 True），
+    其余错误（RESET/NOTCONN/BADF 等）=连接已坏→False。
+    Windows：无 MSG_DONTWAIT 等价物，阻塞 socket 上窥探可能挂死
+    worker 线程——恒返回 True（无法判定，保守）。永不消费数据。 }
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
 
 {** @desc 关闭套接字的读/写/读写端
     @param ASocket 套接字句柄
@@ -647,6 +660,23 @@ function platform_socket_shutdown(const ASocket: TPlatformSocket;
   AHow: Int32): Int32;
 begin
   Result := PosixCheck(nextpas.core.platform.posix.ffi.shutdown(ASocket.Value, AHow));
+end;
+
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
+var
+  LBuf: Byte;
+  LN: Int32;
+  LRc: Int32;
+begin
+  { 一字节窥探：不消费数据、不阻塞（MSG_DONTWAIT）。 }
+  LRc := platform_socket_recv(ASocket, @LBuf, 1,
+    PLATFORM_MSG_PEEK or PLATFORM_MSG_DONTWAIT, LN);
+  if LRc = 0 then
+    Exit(LN > 0);            { 0 字节 = 对端已 FIN → False；有数据 → True }
+  if platform_socket_error_would_block(LRc) or
+     platform_socket_error_timed_out(LRc) or (LRc = ESysEINTR) then
+    Exit(True);              { 无数据 / 被中断：存活或无法判定，保守 True }
+  Exit(False);               { RESET/NOTCONN/BADF 等：连接已坏 }
 end;
 
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
@@ -1415,6 +1445,12 @@ begin
   end;
 end;
 
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean;
+begin
+  { 无 MSG_DONTWAIT 等价物：阻塞 socket 上窥探可能挂死 worker——保守 True。 }
+  Result := True;
+end;
+
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 type
   { FPC's winsock bindings in this toolchain do not expose addrinfo/getaddrinfo.
@@ -2027,6 +2063,7 @@ function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; 
 function platform_socket_connect(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32; begin ASent := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_peer_alive(const ASocket: TPlatformSocket): Boolean; begin Result := True; end;
 function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

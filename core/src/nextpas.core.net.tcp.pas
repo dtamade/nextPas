@@ -47,7 +47,8 @@ uses
 type
   TTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream,
     ITcpSocketRuntime,
-    ITcpStreamRuntime)
+    ITcpStreamRuntime,
+    ITcpPeerProbe)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -89,6 +90,8 @@ type
       out ARead: SizeUInt): TTcpStreamIOResult;
     function TryWrite(const ABuf; const ACount: SizeUInt;
       out AWritten: SizeUInt): TTcpStreamIOResult;
+    { ITcpPeerProbe：非破坏性对端存活探测（平台层 peek 封装）。 }
+    function PeerAlive: Boolean;
   end;
 
   TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime,
@@ -517,6 +520,13 @@ begin
   if platform_socket_error_would_block(LResult) then
     Exit(tsiorWouldBlock);
   raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
+end;
+
+function TTcpStream.PeerAlive: Boolean;
+begin
+  if FClosed then
+    Exit(False);
+  Result := platform_socket_peer_alive(FSocket);
 end;
 
 procedure TTcpStream.ApplyReadTimeout;
