@@ -46,6 +46,8 @@ type
   TStringArray = array of string;
   { Borrowed scratch-buffer pointer for allocation-free fold lookups. }
   PString = ^string;
+  { Same-name symbol-id scratch for type-resolution chain walks. }
+  TSymbolIdArray = array of LongInt;
   { Shared scratch vectors for imported unit tables (analyzer owns, contexts borrow). }
   TSemaImportedOwnerVec = specialize TVec<string>;
   TSemaImportedTreeVec = specialize TVec<TGreenTree>;

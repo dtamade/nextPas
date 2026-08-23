@@ -398,19 +398,56 @@ begin
   Result := ResolveTypeIdForOwner(Ctx, ATypeName, '', True);
 end;
 
+{ Fill AIds with every symbol sharing AName's LowerCase key, in insertion
+  order. AddSymbol links each new symbol into the same-name chain keyed by
+  LowerCase(Name) and never mutates Name afterwards, so chain membership is
+  exactly SameText(Name, AName) for ASCII identifiers (both fold 'A'..'Z'
+  only). Two walks: the first counts, the second fills back-to-front —
+  SymbolId equals push index + 1, so newest-to-oldest fill yields ascending
+  insertion order. }
+procedure CollectSameNameIdsInsertionOrder(
+  const Ctx: TSemaOverloadContext;
+  const AName: string;
+  out AIds: TSymbolIdArray
+);
+var
+  FillPos: LongInt;
+  Head: LongInt;
+begin
+  AIds := nil;
+  FillPos := 0;
+  Head := Ctx.Model.FirstSymbolIdByName(AName);
+  while Head > 0 do
+  begin
+    Inc(FillPos);
+    Head := Ctx.Model.NextSymbolIdSameName(Head);
+  end;
+  SetLength(AIds, FillPos);
+  Dec(FillPos);
+  Head := Ctx.Model.FirstSymbolIdByName(AName);
+  while (FillPos >= 0) and (Head > 0) do
+  begin
+    AIds[FillPos] := Head;
+    Dec(FillPos);
+    Head := Ctx.Model.NextSymbolIdSameName(Head);
+  end;
+end;
+
 function ResolveTypeIdForOwner(const Ctx: TSemaOverloadContext; 
   const ATypeName: string;
   const APreferredOwnerUnitId: string;
   const AAllowDirectImportSearch: Boolean
 ): LongInt;
 var
+  CandidateIds: TSymbolIdArray;
   CandidateSeen: Boolean;
   DirectImportMatchCount: LongInt;
   DotPos: LongInt;
   I: LongInt;
-  Index: LongInt;
+  K: LongInt;
   NormalizedOwnerUnitId: string;
   PreferredMatchCount: LongInt;
+  QualifiedIds: TSymbolIdArray;
   QualifiedOwnerUnitId: string;
   ShortTypeName: string;
   Symbol: TSemanticSymbol;
@@ -444,11 +481,11 @@ begin
     begin
       PreferredMatchCount := 0;
       UniqueTypeId := 0;
-      for Index := 0 to Ctx.Model.SymbolCount - 1 do
+      CollectSameNameIdsInsertionOrder(Ctx, ShortTypeName, QualifiedIds);
+      for K := 0 to High(QualifiedIds) do
       begin
-        Symbol := Ctx.Model.SymbolAt(Index);
+        Symbol := Ctx.Model.SymbolAt(QualifiedIds[K] - 1);
         if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ShortTypeName) and
           SameText(Symbol.OwnerUnitId, QualifiedOwnerUnitId) and
           (Symbol.TypeId > 0) and (Symbol.TypeId <= Ctx.Model.TypeCount) then
         begin
@@ -471,16 +508,19 @@ begin
     end;
   end;
 
+  { One chain walk serves the owner-preferred, direct-import and fallback
+    scans below — all three filter on ATypeName. }
+  CollectSameNameIdsInsertionOrder(Ctx, ATypeName, CandidateIds);
+
   NormalizedOwnerUnitId := NormalizeUnitIdentity(APreferredOwnerUnitId);
   if NormalizedOwnerUnitId <> '' then
   begin
     PreferredMatchCount := 0;
     UniqueTypeId := 0;
-    for Index := 0 to Ctx.Model.SymbolCount - 1 do
+    for K := 0 to High(CandidateIds) do
     begin
-      Symbol := Ctx.Model.SymbolAt(Index);
+      Symbol := Ctx.Model.SymbolAt(CandidateIds[K] - 1);
       if SameText(Symbol.Kind, 'type') and
-        SameText(Symbol.Name, ATypeName) and
         SameText(Symbol.OwnerUnitId, NormalizedOwnerUnitId) and
         (Symbol.TypeId > 0) and (Symbol.TypeId <= Ctx.Model.TypeCount) then
       begin
@@ -508,11 +548,10 @@ begin
     begin
       DirectImportMatchCount := 0;
       UniqueTypeId := 0;
-      for Index := 0 to Ctx.Model.SymbolCount - 1 do
+      for K := 0 to High(CandidateIds) do
       begin
-        Symbol := Ctx.Model.SymbolAt(Index);
+        Symbol := Ctx.Model.SymbolAt(CandidateIds[K] - 1);
         if SameText(Symbol.Kind, 'type') and
-          SameText(Symbol.Name, ATypeName) and
           UnitDirectlyImports(Ctx, NormalizedOwnerUnitId, Symbol.OwnerUnitId) and
           (Symbol.TypeId > 0) and (Symbol.TypeId <= Ctx.Model.TypeCount) then
         begin
@@ -528,10 +567,10 @@ begin
 
   CandidateSeen := False;
   UniqueTypeId := 0;
-  for Index := 0 to Ctx.Model.SymbolCount - 1 do
+  for K := 0 to High(CandidateIds) do
   begin
-    Symbol := Ctx.Model.SymbolAt(Index);
-    if SameText(Symbol.Kind, 'type') and SameText(Symbol.Name, ATypeName) and
+    Symbol := Ctx.Model.SymbolAt(CandidateIds[K] - 1);
+    if SameText(Symbol.Kind, 'type') and
       (Symbol.TypeId > 0) and (Symbol.TypeId <= Ctx.Model.TypeCount) then
     begin
       { Prefer later type entry (full definition over forward declaration) }

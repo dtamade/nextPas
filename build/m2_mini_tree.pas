@@ -11,6 +11,6 @@ begin
     seeding context where TVec<TGreenNodeData>.Create's bare sibling
     call leaks the template name @TVec.SyncDataPtr in the full build. }
   T := TGreenTree.Create;
-  if T.RootKind = 0 then
+  if T.RootKind = grkUnknown then
     T := nil;
 end.
