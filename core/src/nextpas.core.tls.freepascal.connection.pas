@@ -878,11 +878,24 @@ begin
   AppendBytes(Result, LBody);
 end;
 
+function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
+begin
+  {$IFDEF WINDOWS}
+  Result.Value := PtrUInt(AHandle);
+  {$ELSE}
+  Result.Value := Int32(AHandle);
+  {$ENDIF}
+end;
+
 constructor TFreePascalConnection.Create(AContext: ISSLContext; ASocket: THandle);
 begin
   inherited Create(AContext);
   FSocket := ASocket;
   FStream := nil;
+  // 同步握手模型要求阻塞语义：调用方（如 FPC TInetSocket）可能交入非阻塞
+  // 句柄，非阻塞 recv 在对端响应未到达时立即 EAGAIN，握手会误判 IO 失败。
+  if FSocket >= 0 then
+    platform_socket_set_nonblocking(FreePascalHandleToSocket(FSocket), False);
   InitializeState(AContext);
 end;
 
@@ -977,15 +990,6 @@ begin
   inherited Destroy;
 end;
 
-function FreePascalHandleToSocket(AHandle: THandle): TPlatformSocket; inline;
-begin
-  {$IFDEF WINDOWS}
-  Result.Value := PtrUInt(AHandle);
-  {$ELSE}
-  Result.Value := Int32(AHandle);
-  {$ENDIF}
-end;
-
 function TFreePascalConnection.SendData(const ABuffer; ASize: Integer): Integer;
 var
   LSock: TPlatformSocket;
@@ -1021,8 +1025,9 @@ begin
   LSock := FreePascalHandleToSocket(FSocket);
   if FReadTimeoutMs > 0 then
   begin
+    // platform_socket_poll 约定：1=就绪，0=超时，负值=错误
     LErr := platform_socket_poll(LSock, PLATFORM_POLL_IN, FReadTimeoutMs, LRevents);
-    if LErr <> 0 then
+    if LErr <= 0 then
       Exit(-1);
   end;
 

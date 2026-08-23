@@ -214,7 +214,6 @@
 | 契约 | 状态 | 备注 |
 |------|------|------|
 | test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 18/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
-| test_tls13_interop_matrix.sh / test_tls13_advanced_interop.sh | 运行时互操作失败 | TLS1.3 client-cert 握手等场景，需真实 s_server 调试 |
 | test_freepascal_tls12_interop_matrix.sh | 8 过 1 败 | 单套件待查 |
 | test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
 | test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
@@ -244,6 +243,18 @@ early_data 连接器子测试的"深层越界写"假设被证伪。gdb 硬件观
 
 benchmarks/examples 5 处 `TSSLStream(TLSI)` 同轮清偿：统一改走 `Supports(TLSI, ISSLStreamConnectionAccess)` + `GetConnection`，流 I/O 直接走 `IStream`，删除全部裸类变量与 finally 清引用。运行实证：`benchmark_tls_handshake` 对真实站点完成 session_resumption / tls12 / tls13 / tls12_13 四类握手全成功；diagnostic 基准不可达分支干净跳过（EXIT=0）。全仓 `TSSLStream(` 硬转型归零。
 
+### TLS1.3 真实 OpenSSL 互操作打通（2026-08-23 第三批续）
+
+`test_tls13_interop_matrix.sh` 0/5 → **5/5**，`test_tls13_advanced_interop.sh` → **7/7**（client-cert ×4、KeyUpdate ×2、0-RTT）。纯 Pascal TLS1.3 客户端首次与真实 OpenSSL s_server 完成完整握手、PSK 恢复与 0-RTT。三个叠加根因，全部由 gdb/对拍实证：
+
+| 根因 | 修复 |
+|------|------|
+| `RecvData` 把 `platform_socket_poll` 的"1=就绪"当失败（`if LErr <> 0 then Exit(-1)`），localhost 上服务端响应毫秒级到达，poll 必返 1，直连 socket 路径读取必死；门内脚本化服务端走流传输故从未暴露 | 改为约定一致的 `LErr <= 0` 拒绝（0=超时、负=错误） |
+| FPC trunk 的 `TInetSocket = class(TNonBlockingSocketStream)` 交入非阻塞句柄，包装层 recv 立即 EAGAIN | 连接构造器在句柄所有权边界恢复阻塞语义 |
+| `chacha20.4block.x86_64.inc` AVX2 路径行复制布局与 RFC 8439 字节序不一致：≥256 字节输入从第 16 字节起错乱；Poly1305 只覆盖密文，标签照过、明文全错——自洽往返测试无法发现 | 禁用坏路径走已验证双块/标量回退；test_chacha20poly1305 新增 ≥256B 权威对拍 KAT 防回归（9/9） |
+
+完整性门保持 **18 PASS / 0 FAIL**。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -253,3 +264,4 @@ benchmarks/examples 5 处 `TSSLStream(TLSI)` 同轮清偿：统一改走 `Suppor
 | 2026-08-23 | 完整性门 6/18→17/18：cwd 规则修复 10 组；修复 TASN1Writer.WriteLength 长格式长度覆写核心 bug；修复 TLS12 IO 层 EOF 异常逃逸；early_data 测试侧悬垂接口修复并登记深层越界写积压 |
 | 2026-08-23 | 完整性门 17/18→18/18：gdb 取证证实工具链接口 ABI 偏移（非越界写），新增 ISSLStreamConnectionAccess 能力接口替换全部硬转型；修复重放存储短读 fail-closed 沦陷；登记 benchmarks/examples 5 处同类硬转型积压 |
 | 2026-08-23 | 清偿 benchmarks/examples 5 处 TSSLStream 硬转型积压（真实站点四类握手运行实证）；全仓硬转型归零 |
+| 2026-08-23 | TLS1.3 真实 OpenSSL 互操作打通：修复 poll 返回约定反转、非阻塞句柄所有权边界、AVX2 4-block ChaCha 错误布局三叠加根因；interop matrix 0/5→5/5、advanced 7/7；新增 ≥256B KAT 防回归；完整性门保持 18/18 |

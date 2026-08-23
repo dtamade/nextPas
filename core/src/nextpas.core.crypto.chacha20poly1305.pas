@@ -194,6 +194,10 @@ function ChaCha20Xor(const AKey, ANonce: TBytes; ACounter: UInt32; const AInput:
 const
   ROT16_MASK: array[0..15] of Byte = (2,3,0,1, 6,7,4,5, 10,11,8,9, 14,15,12,13);
   ROT8_MASK: array[0..15] of Byte = (3,0,1,2, 7,4,5,6, 11,8,9,10, 15,12,13,14);
+  { 4-block AVX2 路径的行复制布局与 RFC 8439 四块连续字节序不一致：≥256 字节
+    输入从第 16 字节起错乱（标签不受影响，Poly1305 只覆盖密文）。禁用待重写，
+    走已对拍验证的双块/标量回退；KAT 回归见 crypto 测试套件。 }
+  CHACHA20_AVX2_4BLOCK_ENABLED = False;
 var
   LState: array[0..15] of UInt32;
   LBlock: array[0..31] of UInt32;
@@ -212,7 +216,7 @@ begin
   LState[15] := Load32LE(ANonce, 8);
 
   // AVX2 4-block path (256 bytes at a time) — guarded by CPUID
-  if ChaCha20DetectAVX2 then
+  if CHACHA20_AVX2_4BLOCK_ENABLED and ChaCha20DetectAVX2 then
   begin
     {$I nextpas.core.crypto.chacha20.4block.x86_64.inc}
   end;
