@@ -164,6 +164,15 @@ type
     function Hijack: ITcpStream;
   end;
 
+  { Server 侧对端存活探测（长前置工作期间客户端断连识别）。
+    由持有客户端连接的 response writer 实现，委托传输层
+    ITcpPeerProbe（net 面）；不支持时恒 True（保守）。可选能力：
+    handler 经 Supports/QueryInterface 探测。 }
+  IHttpPeerProbe = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000001E}']
+    function PeerAlive: Boolean;
+  end;
+
   { 连接级 HTTP 升级上下文：由 H1 响应 writer 实现，非阻塞 WS 升级
     （nextpas.core.http.websocket.UpgradeWebSocketHandoff）经它取得
     承载本连接 poll 注册的 session 上下文，把连接迁移到事件驱动 WS 会话。 }
