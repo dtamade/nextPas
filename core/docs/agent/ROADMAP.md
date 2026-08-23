@@ -21,6 +21,14 @@
 - W2：retry 不依赖 anthropic；两者并行可行但 landing 分开提交（可回滚逻辑单元）。
 - W3：loop 只准消费 intf 词表；发现需要 wire 信息即为分层违规，回 W1/W2 修词表。
 
+### 实现期整改记录（W0-W1 施工沉淀）
+
+- sse 多行 data 累积改 `IStringBuilder`（摊还 O(1) 追加，原字符串拼接 O(n²)）——已落地。
+- ReadAllBody 倍增预分配（原逐 chunk SetLength 重拷）；错误体累积 64KB 封顶
+  （信封摘要只需 8KB）防恶意大 4xx 体——已落地。
+- 流式线程模型决策：每流专属 worker 为长生命周期流的正确形态（池化 worker 同样
+  被流期钉死；Destroy 依赖 WaitFor 确定性收尾），非技术债——W2 取消贯通时复核。
+
 ## Inbox（活动输入池，非承诺）
 
 提升候选按"架构已预留扩展位 / 需新立项"分两组；每项标注触发条件。
@@ -42,6 +50,8 @@
   loop OnEvent 的 provider 层对位）——触发：首个生产接入方要求请求级追踪。
 
 ### 组 B：能力面扩张（含 v1.1 承诺位）
+
+v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按触发评估）。
 
 - **Structured Output**【v1.1 承诺位 #1】——词表保留位 `ResponseSchemaJson`
   已立（v1 置非空即 aecConfig，防破坏性变更）；立项 = WIRE-MAPPINGS 立 strict

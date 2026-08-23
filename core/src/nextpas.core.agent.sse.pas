@@ -17,6 +17,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text.builder,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
 
@@ -36,7 +37,7 @@ type
     FEvents: array of TWireSSEEvent;
     FEventHead: SizeInt;             { 已消费事件数 }
     FEventName: string;
-    FData: string;                   { 多行 data 以 #10 连接累积 }
+    FDataBuf: IStringBuilder;        { 多行 data 以 #10 连接累积（摊还 O(1) 追加）}
     FHasData: Boolean;
     procedure ProcessLine(const ALine: string);
     procedure DispatchFrame;
@@ -97,17 +98,19 @@ begin
   begin
     if FHasData then
     begin
-      if Length(FData) + Length(LValue) + 1 > CSSEMaxEventDataByte then
+      if FDataBuf.Len + SizeUInt(Length(LValue)) + 1 > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
           + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
-      FData := FData + #10 + LValue;
+      FDataBuf.AppendStr(#10);
+      FDataBuf.AppendStr(LValue);
     end
     else
     begin
       if Length(LValue) > CSSEMaxEventDataByte then
         ProtocolError('sse event data exceeds '
           + IntToStr(CSSEMaxEventDataByte) + ' bytes limit');
-      FData := LValue;
+      FDataBuf := MakeStringBuilder;
+      FDataBuf.AppendStr(LValue);
       FHasData := True;
     end;
   end
@@ -126,10 +129,10 @@ begin
     LN := Length(FEvents);
     SetLength(FEvents, LN + 1);
     FEvents[LN].Event := FEventName;
-    FEvents[LN].Data := FData;
+    FEvents[LN].Data := FDataBuf.ToString;
   end;
   FEventName := '';
-  FData := '';
+  FDataBuf := nil;
   FHasData := False;
 end;
 

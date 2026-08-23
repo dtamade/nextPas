@@ -50,6 +50,8 @@ uses
 const
   CReadChunkBytes = 32 * 1024;      { PERFORMANCE §2 读块尺寸 }
   CWaitSliceNs = 100 * 1000 * 1000; { NextEvent 等待切片：100ms }
+  CMaxErrorBodyBytes = 64 * 1024;   { 错误体累积封顶：信封摘要只需 8KB
+                                      （CMaxRawBodySnippetBytes），留 8 倍裕度 }
 
 type
   { ---- wire 消息通道载荷 ---- }
@@ -98,6 +100,9 @@ end;
 type
   { ---- 流式会话 ----
     worker 线程跑阻塞 Send；消费方线程经通道拉事件。
+    线程模型决策：每流专属 worker（非 IThreadPool）是刻意选择——
+    流生命周期以秒~分钟计，池化 worker 同样会被钉死整个流期，
+    且 Destroy 依赖 WaitFor 获得确定性收尾；W2 取消贯通时复核此结论。
     一实例一次流，不复用（intf 契约：流不跨消息复用）}
     TWireStream = class(TInterfacedObject, IAgentWireStream)
     private type
@@ -185,22 +190,33 @@ begin
 end;
 
 function ReadAllBody(const AReader: IReader): string;
+const
+  CInitialCapBytes = 64 * 1024;
 var
   LBuf: array of Byte;
+  LAcc: string;
+  LCap: SizeInt;
   LN: SizeUInt;
   LTotal: SizeInt;
 begin
   SetLength(LBuf, CReadChunkBytes);
-  Result := '';
+  { 倍增预分配：避免逐 chunk SetLength 的 O(n²) 重拷 }
+  LCap := CInitialCapBytes;
+  SetLength(LAcc, LCap);
   LTotal := 0;
   repeat
     LN := AReader.Read(LBuf[0], CReadChunkBytes);
     if LN = 0 then
       Break;
-    SetLength(Result, LTotal + SizeInt(LN));
-    Move(LBuf[0], PAnsiChar(@Result[LTotal + 1])^, LN);
+    while LTotal + SizeInt(LN) > LCap do
+    begin
+      LCap := LCap * 2;
+      SetLength(LAcc, LCap);
+    end;
+    Move(LBuf[0], PAnsiChar(@LAcc[LTotal + 1])^, LN);
     Inc(LTotal, SizeInt(LN));
   until False;
+  Result := Copy(LAcc, 1, LTotal);   { 收口到实际长度，一次分配 }
 end;
 
 function BuildPostRequest(const AReq: TWireRequest;
@@ -400,10 +416,14 @@ begin
     Exit;                            { 失败后到尾的 chunk 一律弃置 }
   if FIsErrorResp then
   begin
-    { 非 2xx：累积原始体供错误信封分类（headers 于 Send 返回后统一取）}
-    SetLength(FErrBody, Length(FErrBody) + SizeInt(ASize));
-    Move(AData^, PAnsiChar(@FErrBody[Length(FErrBody) - SizeInt(ASize) + 1])^,
-      ASize);
+    { 非 2xx：累积原始体供错误信封分类（headers 于 Send 返回后统一取）；
+      超出封顶即弃置——恶意大 4xx 体不占内存 }
+    if Length(FErrBody) < CMaxErrorBodyBytes then
+    begin
+      SetLength(FErrBody, Length(FErrBody) + SizeInt(ASize));
+      Move(AData^, PAnsiChar(@FErrBody[Length(FErrBody) - SizeInt(ASize) + 1])^,
+        ASize);
+    end;
     Exit;
   end;
   try
