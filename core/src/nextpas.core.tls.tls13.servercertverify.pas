@@ -2721,13 +2721,13 @@ begin
     Exit;
   end;
 
+  // rsa_pkcs1 在 TLS 1.3 CertificateVerify 中被禁止（RFC 8446 §4.4.3），
+  // 但 TLS 1.2 ServerKeyExchange 必须使用它（RFC 5246 §7.4.3）。
+  // 本函数是共享签名基础设施，场景合法性由调用方保证；
+  // 验证侧 TryVerifyTLS13CertificateVerifySignature 仍按 RFC 拒绝 pkcs1。
   case ASignatureScheme of
     TLS13_SIG_RSA_PKCS1_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA384:
-      begin
-        AError := 'rsa_pkcs1 signature schemes are not permitted in TLS 1.3 CertificateVerify (RFC 8446 §4.4.3)';
-        Exit;
-      end;
+    TLS13_SIG_RSA_PKCS1_SHA384,
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
@@ -2773,6 +2773,18 @@ begin
   end;
 
   case ASignatureScheme of
+    TLS13_SIG_RSA_PKCS1_SHA256:
+      begin
+        if not TryBuildRSAPKCS1v15EncodedMessageSHA256(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
+          Exit;
+      end;
+
+    TLS13_SIG_RSA_PKCS1_SHA384:
+      begin
+        if not TryBuildRSAPKCS1v15EncodedMessageSHA384(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
+          Exit;
+      end;
+
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256:
       begin

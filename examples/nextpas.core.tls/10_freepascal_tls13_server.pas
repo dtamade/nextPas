@@ -3,10 +3,12 @@ program freepascal_tls13_server;
 {$mode objfpc}{$H+}
 {$IFDEF UNIX}
 uses cthreads, BaseUnix, Sockets, SysUtils, Classes,
-  fafafa.ssl, nextpas.core.tls.base, nextpas.core.tls.factory;
+  nextpas.core.tls.base, nextpas.core.tls.factory,
+  nextpas.core.tls.freepascal.lib;
 {$ELSE}
 uses SysUtils, Classes, WinSock2,
-  fafafa.ssl, nextpas.core.tls.base, nextpas.core.tls.factory;
+  nextpas.core.tls.base, nextpas.core.tls.factory,
+  nextpas.core.tls.freepascal.lib;
 {$ENDIF}
 
 { ============================================================================
@@ -50,6 +52,19 @@ begin
   if fpListen(Result, 5) <> 0 then
   begin WriteLn('ERROR: listen() failed'); Halt(1); end;
 end;
+procedure PrintLastHandshakeError(const AConn: ISSLConnection);
+var
+  LDia: ISSLDiagnostics;
+  LInfo: TSSLDiagnosticInfo;
+  LI: Integer;
+begin
+  if not Supports(AConn, ISSLDiagnostics, LDia) then
+    Exit;
+  LInfo := LDia.GetDiagnosticInfo;
+  for LI := 0 to High(LInfo.ErrorHistory) do
+    WriteLn('    [ERR] ' + LInfo.ErrorHistory[LI].ErrorMessage);
+end;
+
 var
   LPort: Word;
   LListenSock, LClientSock: cint;
@@ -116,7 +131,10 @@ begin
       LServed := True;
     end
     else
+    begin
       WriteLn('  [FAIL] TLS handshake failed');
+      PrintLastHandshakeError(LConn);
+    end;
 
     LConn := nil;
     fpClose(LClientSock);

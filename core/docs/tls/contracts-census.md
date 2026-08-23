@@ -214,8 +214,6 @@
 | 契约 | 状态 | 备注 |
 |------|------|------|
 | test_freepascal_tls13_completeness_gate_contract.sh | gate 本体 18/18 组绿；契约仅剩 ci.yml 段红 | 契约要求 ci.yml 存在 `freepascal-tls13-completeness` job，该 job 在全部 git 历史中从未存在（`git log -S` 为空），需 CI 预算 owner 决策后补建 |
-| test_freepascal_tls12_interop_matrix.sh | 8 过 1 败 | 单套件待查 |
-| test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
 | test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
 | test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
 
@@ -255,6 +253,38 @@ benchmarks/examples 5 处 `TSSLStream(TLSI)` 同轮清偿：统一改走 `Suppor
 
 完整性门保持 **18 PASS / 0 FAIL**。
 
+### TLS1.2 互操作战线收官（2026-08-24）
+
+积压表移除三行：tls12_interop matrix（实测 9/9 全绿，被 poll 修复顺带治好，census 记录过期）、
+cross_backend_interop、server_groups_interop。
+
+- **生产 bug（TLS1.2 服务端 SKE 签名被拒）**：`TryBuildTLS13CertificateVerifySignature`
+  对 `rsa_pkcs1_sha256/384` 直接 Exit 拒绝——该拒绝规则属于 TLS1.3 CertificateVerify
+  语境（RFC 8446 §4.4.3），但同一签名器被 tls12.server 复用做 SKE 签名，而 TLS1.2
+  ECDHE_RSA 恰恰必须 pkcs1（RFC 5246 §7.4.3）。修复：签名侧把 pkcs1 移入允许列表并接通
+  单元内已有的 `TryBuildRSAPKCS1v15EncodedMessageSHA256/384` EMSA 编码 + CRT/裸指数签名
+  尾部；**验证侧** `TryVerifyTLS13CertificateVerifySignature` 的 pkcs1 拒绝保持不变。
+- **test_cross_backend_interop.sh 双层脚本地雷**：① `set -e` 下 `wait` 被杀 s_server
+  返回 >128 直接中止全脚本（此前"编译错误"掩盖了这层）；② `pipefail` 下 s_client 因
+  自签证书校验必以非零退出，管道化 grep 判定恒假。改为输出落盘 + `|| true` 豁免 +
+  对文件 grep + `timeout 8` 防挂死。结果 **4/4 PASS**：FPC client↔OpenSSL 双向 GCM 与
+  ChaCha20-Poly1305，EMS=TRUE。
+- **test_freepascal_tls13_server_groups_interop.sh 路径现代化**：编译单元路径从退役的
+  扁平布局（./src/crypto 等）改 core/src；示例 `10_freepascal_tls13_server.pas` uses 去掉
+  已退役的 `fafafa.ssl` 别名门面（现役 API 全在 nextpas.core.tls.base/factory）并补后端注册
+  单元 `nextpas.core.tls.freepascal.lib`。结果 **3/3 PASS**：X25519/P-256/P-384 key_share。
+- **生产 bug（TLS1.3 ServerHello 压缩方法多写一字节）**：构建器按 ClientHello 的向量式
+  `legacy_compression_methods<1..2^8-1>`（u8 长度前缀+方法）编码，而 ServerHello 是单字节
+  `legacy_compression_method=0`（RFC 8446 §4.1.3）；自家解析器按同样错误语义自洽往返，
+  单测无法发现，真 OpenSSL s_client 报 bad length。FPC 客户端对真实服务器互操作不受影响
+  （真实服务器发单字节 00，旧解析器长度读到 0 等价单字节）。修复：构建器与解析器双侧归正，
+  HRR/PSK 变体共用同一 Body 构建器一并修复。s_client -msg 字节级取证定位。
+- **完整性门回归红点（OCSP 新鲜度时区错位，非本轮引入）**：a3900f7f5 把新鲜度校验基准
+  改为 DateTimeUtcNow（对真实 OpenSSL 产物正确），但 ocsp_stapling_runtime 测试 fixture
+  仍用本地时间写 GeneralizedTime，TZ=UTC+8 下 ThisUpdate 恒比 UTC now 晚 7 小时被判
+  Expired。pristine HEAD 复测证实预存。修复：fixture 时间基准备齐为 UTC（RFC 6960 本义；
+  生产代码无 WriteGeneralizedTime 使用方，无需动产线）。门 **18 PASS / 0 FAIL**。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -265,3 +295,4 @@ benchmarks/examples 5 处 `TSSLStream(TLSI)` 同轮清偿：统一改走 `Suppor
 | 2026-08-23 | 完整性门 17/18→18/18：gdb 取证证实工具链接口 ABI 偏移（非越界写），新增 ISSLStreamConnectionAccess 能力接口替换全部硬转型；修复重放存储短读 fail-closed 沦陷；登记 benchmarks/examples 5 处同类硬转型积压 |
 | 2026-08-23 | 清偿 benchmarks/examples 5 处 TSSLStream 硬转型积压（真实站点四类握手运行实证）；全仓硬转型归零 |
 | 2026-08-23 | TLS1.3 真实 OpenSSL 互操作打通：修复 poll 返回约定反转、非阻塞句柄所有权边界、AVX2 4-block ChaCha 错误布局三叠加根因；interop matrix 0/5→5/5、advanced 7/7；新增 ≥256B KAT 防回归；完整性门保持 18/18 |
+| 2026-08-24 | TLS1.2/1.3 互操作收官：签名器区分语境放行 pkcs1 SKE（TLS1.3 CV 验证侧拒绝不变）；修复 ServerHello 压缩方法向量误编码（构建器+解析器双侧归正）；cross_backend 4/4（修 set -e wait 中止 + pipefail 管道污染双层地雷）；server_groups 3/3（路径现代化 + 示例 10 去 fafafa.ssl 补后端注册）；OCSP fixture 时区错位修复；门 18/18 |

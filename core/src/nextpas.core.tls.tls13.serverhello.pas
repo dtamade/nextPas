@@ -138,9 +138,9 @@ begin
   AppendByte(Result, Byte(Length(ALegacySessionID)));
   AppendBytes(Result, ALegacySessionID);
   AppendUInt16(Result, ACipherSuite);
-  { legacy_compression_methods<1..2^8-1>：u8 长度前缀 + 方法串
-    （RFC 8446 §4.1.3；TLS 1.3 恒 [00] 空压缩） }
-  AppendByte(Result, 1);
+  { legacy_compression_method：单字节恒 0。向量式 legacy_compression_methods
+    只存在于 ClientHello（RFC 8446 §4.1.2）；ServerHello 无长度前缀
+    （§4.1.3），多写一字节会使对端按 ext_len=0 解析而报 bad length。 }
   AppendByte(Result, 0);
   AppendUInt16(Result, Word(Length(LExtensions)));
   AppendBytes(Result, LExtensions);

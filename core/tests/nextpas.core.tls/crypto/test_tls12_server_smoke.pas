@@ -3,7 +3,9 @@ program test_tls12_server_smoke;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets, ssockets,
+  nextpas.core.system.sysutils, nextpas.core.system.classes, Sockets,
+  nextpas.core.io.intf,
+  nextpas.core.tls.socket_stream,
   nextpas.core.tls.tls12.server,
   nextpas.core.tls.tls12.recordcrypto,
   nextpas.core.tls.x509,
@@ -28,7 +30,7 @@ var
   LServerSocket, LClientHandle: Longint;
   LAddr: TInetSockAddr;
   LAddrLen: TSockLen;
-  LClientStream: TSocketStream;
+  LClientStream: IStream;
   LConfig: TTLS12ServerConfig;
   LState: TTLS12ServerState;
   LError: string;
@@ -108,7 +110,7 @@ begin
     Halt(1);
   end;
 
-  LClientStream := TSocketStream.Create(LClientHandle);
+  LClientStream := SocketHandleAsIStream(LClientHandle);
   try
     WriteLn('[INFO] Client connected, starting handshake...');
     LOk := TryTLS12ServerHandshake(LClientStream, LConfig, LState, LError);
@@ -125,7 +127,7 @@ begin
       Halt(1);
     end;
   finally
-    LClientStream.Free;
+    LClientStream := nil;
   end;
 
   CloseSocket(LServerSocket);

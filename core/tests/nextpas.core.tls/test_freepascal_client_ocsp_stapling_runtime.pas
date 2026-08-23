@@ -4,6 +4,7 @@ program test_freepascal_client_ocsp_stapling_runtime;
 
 uses
   nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.base,
   nextpas.core.tls.ocsp,
@@ -223,7 +224,9 @@ begin
     LLeafCertificate.LoadFromDER(LCertificates[0]);
     LIssuerCertificate.LoadFromDER(LCertificates[1]);
     LCertID := TOCSPCertID.Create(LLeafCertificate, LIssuerCertificate);
-    LNow := Now;
+    // OCSP GeneralizedTime 按 RFC 6960 是 UTC；新鲜度校验基准为 DateTimeUtcNow，
+    // fixture 必须写 UTC 而非本地时间（否则 TZ≠UTC 时被误判 Expired）
+    LNow := DateTimeUtcNow;
 
     LBasicWriter := TASN1Writer.Create;
     try

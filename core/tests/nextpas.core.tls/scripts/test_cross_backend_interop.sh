@@ -46,19 +46,22 @@ if tmp/interop_bin/test_tls12_openssl_smoke $PORT >/dev/null 2>&1; then
 else
   echo "FAIL"; FAIL=$((FAIL+1))
 fi
-kill $SRV_PID 2>/dev/null; wait $SRV_PID 2>/dev/null; PORT=$((PORT+1))
+# wait 返回被杀进程的状态码(>128)，set -e 下必须豁免
+kill $SRV_PID 2>/dev/null; wait $SRV_PID 2>/dev/null || true; PORT=$((PORT+1))
 
 # Test 2: OpenSSL client → FreePascal server (GCM)
 echo -n "[TEST] OpenSSL client → FPC server (GCM): "
-tmp/interop_bin/test_tls12_server_smoke $PORT "$TMPDIR/rsa.crt" "$TMPDIR/rsa.key" &
+tmp/interop_bin/test_tls12_server_smoke $PORT "$TMPDIR/rsa.crt" "$TMPDIR/rsa.key" > /dev/null 2>&1 &
 SRV_PID=$!; sleep 1
-if echo "Q" | openssl s_client -connect 127.0.0.1:$PORT -tls1_2 \
-  -cipher ECDHE-RSA-AES128-GCM-SHA256 -groups X25519 -no_ticket 2>&1 | grep -q "Cipher is ECDHE"; then
+# s_client 因自签证书校验必以非零退出；先落盘再 grep，避免 pipefail 污染判定
+echo "Q" | timeout 8 openssl s_client -connect 127.0.0.1:$PORT -tls1_2 \
+  -cipher ECDHE-RSA-AES128-GCM-SHA256 -groups X25519 -no_ticket > "$TMPDIR/cli_gcm.log" 2>&1 || true
+if grep -q "Cipher is ECDHE" "$TMPDIR/cli_gcm.log"; then
   echo "PASS"; PASS=$((PASS+1))
 else
   echo "FAIL"; FAIL=$((FAIL+1))
 fi
-wait $SRV_PID 2>/dev/null; PORT=$((PORT+1))
+wait $SRV_PID 2>/dev/null || true; PORT=$((PORT+1))
 
 # Test 3: FreePascal client → OpenSSL server (ChaCha20)
 echo -n "[TEST] FPC client → OpenSSL server (ChaCha20): "
@@ -70,19 +73,20 @@ if tmp/interop_bin/test_tls12_openssl_smoke $PORT >/dev/null 2>&1; then
 else
   echo "FAIL"; FAIL=$((FAIL+1))
 fi
-kill $SRV_PID 2>/dev/null; wait $SRV_PID 2>/dev/null; PORT=$((PORT+1))
+kill $SRV_PID 2>/dev/null; wait $SRV_PID 2>/dev/null || true; PORT=$((PORT+1))
 
 # Test 4: OpenSSL client → FreePascal server (ChaCha20)
 echo -n "[TEST] OpenSSL client → FPC server (ChaCha20): "
-tmp/interop_bin/test_tls12_server_smoke $PORT "$TMPDIR/rsa.crt" "$TMPDIR/rsa.key" &
+tmp/interop_bin/test_tls12_server_smoke $PORT "$TMPDIR/rsa.crt" "$TMPDIR/rsa.key" > /dev/null 2>&1 &
 SRV_PID=$!; sleep 1
-if echo "Q" | openssl s_client -connect 127.0.0.1:$PORT -tls1_2 \
-  -cipher ECDHE-RSA-CHACHA20-POLY1305 -groups X25519 -no_ticket 2>&1 | grep -q "Cipher is ECDHE"; then
+echo "Q" | timeout 8 openssl s_client -connect 127.0.0.1:$PORT -tls1_2 \
+  -cipher ECDHE-RSA-CHACHA20-POLY1305 -groups X25519 -no_ticket > "$TMPDIR/cli_chacha.log" 2>&1 || true
+if grep -q "Cipher is ECDHE" "$TMPDIR/cli_chacha.log"; then
   echo "PASS"; PASS=$((PASS+1))
 else
   echo "FAIL"; FAIL=$((FAIL+1))
 fi
-wait $SRV_PID 2>/dev/null; PORT=$((PORT+1))
+wait $SRV_PID 2>/dev/null || true; PORT=$((PORT+1))
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
