@@ -29,6 +29,11 @@ type
     procedure SelectNext;
     procedure SelectPrev;
     function VisibleCount: Integer;
+    { PH33 P5b：目录真扫描建态（复用 fs.dir FsReadDir，软失败不抛异常）。
+      根节点恒建（basename）；Result=True=根可读且子树已扫。深度边界外
+      的子目录保持收拢（children 未装载不假装展开） }
+    function LoadDir(const APath: AnsiString; AMaxDepth: Integer;
+      AShowHidden: Boolean): Boolean;
   end;
 
   IFileTree = interface(IWidget)
@@ -65,6 +70,12 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.exception,
+  nextpas.core.fs.base,
+  nextpas.core.fs.dir,
+  nextpas.core.text.unicode;
 
 
 { TFileTreeState }
@@ -109,6 +120,111 @@ end;
 function TFileTreeState.VisibleCount: Integer;
 begin
   Result := Length(Nodes);
+end;
+
+{ PH33 P5b：LoadDir 私有辅助——路径收尾斜杠剥离 + '/'/'\' 双分隔符取
+  basename（与 tui888 FileTreeRootOf 口径一致；core 侧自持不外泄） }
+function FtStripTrailingSep(const APath: AnsiString): AnsiString;
+begin
+  Result := APath;
+  while (Length(Result) > 1) and ((Result[Length(Result)] = '/') or
+    (Result[Length(Result)] = '\')) do
+    Delete(Result, Length(Result), 1);
+end;
+
+function FtBaseName(const APath: AnsiString): AnsiString;
+var
+  LStripped: AnsiString;
+  I: Integer;
+begin
+  LStripped := FtStripTrailingSep(APath);
+  for I := Length(LStripped) downto 1 do
+    if (LStripped[I] = '/') or (LStripped[I] = '\') then
+      Exit(Copy(LStripped, I + 1, Length(LStripped) - I));
+  Result := LStripped;   { 无分隔符：整体即名；'/' 已被剥成根名本身 }
+end;
+
+function FtJoinPath(const ADir, AName: AnsiString): AnsiString;
+begin
+  if (ADir <> '') and (ADir[Length(ADir)] <> '/') and (ADir[Length(ADir)] <> '\') then
+    Result := ADir + '/' + AName
+  else
+    Result := ADir + AName;
+end;
+
+{ 每层条目排序：目录在前，同类按 CompareText（Unicode 排序器）升序；
+  插入排序——单层条目量级小，稳定性无关紧要、确定性靠全序 }
+procedure FtSortEntries(var AEntries: TDirEntryArray);
+var
+  I, J: Integer;
+  LTmp: TDirEntry;
+begin
+  for I := 1 to High(AEntries) do
+  begin
+    LTmp := AEntries[I];
+    J := I - 1;
+    while (J >= 0) and
+      ((LTmp.IsDir and not AEntries[J].IsDir) or
+       ((LTmp.IsDir = AEntries[J].IsDir) and
+        (CompareText(LTmp.Name, AEntries[J].Name) < 0))) do
+    begin
+      AEntries[J + 1] := AEntries[J];
+      Dec(J);
+    end;
+    AEntries[J + 1] := LTmp;
+  end;
+end;
+
+function TFileTreeState.LoadDir(const APath: AnsiString; AMaxDepth: Integer;
+  AShowHidden: Boolean): Boolean;
+
+  procedure ScanDir(const ADirPath: AnsiString; ADepth: Integer);
+  var
+    LEntries: TDirEntryArray;
+    I, LIdx: Integer;
+  begin
+    LEntries := FsReadDir(string(ADirPath));
+    FtSortEntries(LEntries);
+    for I := 0 to High(LEntries) do
+    begin
+      { 隐藏项（前导点）默认滤；./.. 平台层已滤（platform_dir_read 契约）}
+      if not AShowHidden and (LEntries[I].Name <> '') and
+        (LEntries[I].Name[1] = '.') then
+        Continue;
+      { 符号链接 ftSymlink→IsDir=False 不跟随（天然防环） }
+      LIdx := AddNode(AnsiString(LEntries[I].Name), LEntries[I].IsDir, ADepth);
+      if LEntries[I].IsDir then
+      begin
+        if ADepth < AMaxDepth then
+          ScanDir(FtJoinPath(ADirPath, AnsiString(LEntries[I].Name)), ADepth + 1)
+        else
+          Nodes[LIdx].Expanded := False;   { 边界外未装载：诚实收拢 }
+      end;
+    end;
+  end;
+
+var
+  LRoot: Integer;
+  LStripped: AnsiString;
+begin
+  Result := False;
+  if APath = '' then Exit;              { 空路径：无节点 }
+  Nodes := nil;
+  Selected := 0;
+  ScrollY := 0;
+  LStripped := FtStripTrailingSep(APath);
+  LRoot := AddNode(FtBaseName(APath), True, 0);
+  Nodes[LRoot].Expanded := False;       { 读成功前先收拢 }
+  if AMaxDepth < 0 then AMaxDepth := 0;
+  try
+    if AMaxDepth > 0 then
+      ScanDir(LStripped, 1);
+    Nodes[LRoot].Expanded := True;
+    Result := True;
+  except
+    on E: ENextPasError do
+      SetLength(Nodes, LRoot + 1);      { 中途读失败软着陆：截回单根态 }
+  end;
 end;
 
 { Helper }
