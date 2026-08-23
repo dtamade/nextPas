@@ -145,9 +145,9 @@ uses
   nextpas.core.mem.utils,
   nextpas.core.base.utils;
 
-{$IF DEFINED(CPUARM)}
-{ arm32 无 FPC 64 位内建：转发到本库缝合层（LDREXD/STREXD 实现）。
-  同名声明在 CPUARM 下遮蔽 System 版本，调用点无需改动。 }
+{$IF DEFINED(CPUARM) OR DEFINED(CPU386)}
+{ arm32/i386 无 FPC 64 位内建：转发到本库缝合层（arm32=LDREXD/STREXD，
+  i386=LOCK CMPXCHG8B）。同名声明遮蔽缺失的 System 版本，调用点无需改动。 }
 function InterlockedCompareExchange64(var Target: Int64; NewValue, Comparand: Int64): Int64; inline;
 begin
   Result := _backend_cmpxchg_i64(Target, NewValue, Comparand);

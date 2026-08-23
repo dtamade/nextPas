@@ -1,6 +1,10 @@
 unit nextpas.core.atomic.core;
 
 {$I nextpas.core.settings.inc}
+{ x86 系汇编为 Intel 风格（i386-linux 目标缺省 AT&T 读入器，显式钉扎） }
+{$IF DEFINED(CPU386)}
+{$asmmode intel}
+{$ENDIF}
 {$MACRO ON}
 
 // Tagged pointer: tag bits (low-bit tagging mode)
@@ -63,6 +67,11 @@ function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 {$ENDIF}
 {$IF DEFINED(CPUARM)}
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; inline;
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+{$ENDIF}
+{$IF DEFINED(CPU386)}
 function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; inline;
 function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
@@ -662,6 +671,57 @@ asm
   bne     .Larmadd64_loop
   mov     r0, r4
   mov     r1, r5
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPU386)}
+// i386 无 FPC 64 位内建：LOCK CMPXCHG8B 单指令强 CAS——比较-交换且无论成败
+// 都把观察旧值留在 EDX:EAX，无需重试环。EBX/ESI 为调用方保存寄存器，需手工保护。
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64;
+var
+  LRes: Int64;
+begin
+  asm
+    push  ebx
+    push  esi
+    mov   esi, aTarget
+    mov   eax, dword ptr [aExpected]
+    mov   edx, dword ptr [aExpected+4]
+    mov   ebx, dword ptr [aDesired]
+    mov   ecx, dword ptr [aDesired+4]
+    lock cmpxchg8b qword ptr [esi]
+    mov   dword ptr [LRes], eax
+    mov   dword ptr [LRes+4], edx
+    pop   esi
+    pop   ebx
+  end;
+  Result := LRes;
+end;
+
+// 交换 = CAS 环写 desired（i386 无原生 64 位 XCHG）
+function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64;
+var
+  LSeen: Int64;
+begin
+  LSeen := aTarget;
+  repeat
+    Result := _backend_cmpxchg_i64(aTarget, aValue, LSeen);
+    if Result = LSeen then Break;
+    LSeen := Result;
+  until False;
+end;
+
+// 取加 = CAS 环加
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64;
+var
+  LSeen: Int64;
+begin
+  LSeen := aTarget;
+  repeat
+    Result := _backend_cmpxchg_i64(aTarget, LSeen + aValue, LSeen);
+    if Result = LSeen then Break;
+    LSeen := Result;
+  until False;
 end;
 {$ENDIF}
 

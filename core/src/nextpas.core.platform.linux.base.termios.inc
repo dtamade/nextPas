@@ -7,7 +7,9 @@ const
   NCCS = 32;
   NCC  = 8;
 
-{$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64) or defined(NEXTPAS_RISCV64) or defined(NEXTPAS_ARM)}
+{$IF defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64) or defined(NEXTPAS_RISCV64) or defined(NEXTPAS_ARM) or defined(NEXTPAS_I386)}
+{ i386 与 x86_64 同属 $5401 系 tty ioctl，UAPI 数值逐项一致
+  （对照 FPC rtl/linux/termios.inc cpui386/cpux86_64 两段实证） }
 
   TCGETS          = $5401;
   TCSETS          = $5402;
