@@ -4,9 +4,10 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.3：R8 双轴层位门禁落地、
-审计命令复现块 §2.0；v2.2 审查轮：非目标/耗时/P3 基线/D6/R8 立项/
-决策补全/版本历史；v2.1：目录树/命名细则/映射全表 66 单元/P0 草案）
+创建：2026-08-23　最后更新：2026-08-23（v2.4：§3.2 先例对照 Zig/Rust/Go、
+台账 D8；v2.3：R8 双轴层位门禁落地、§2.0 审计命令复现块；v2.2 审查轮：
+非目标/耗时/P3 基线/D6/决策补全/版本历史；v2.1：目录树/命名细则/
+映射全表 66 单元/P0 草案）
 
 ---
 
@@ -125,6 +126,28 @@ inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自�
 - **禁止**：新造 area 同义词（如 `parser`/`codegen`）、缩写（`sem`/`fe`）、
   大写；跨域单元按主要消费方归属，不设 `common`/`misc` 杂货 area；
 - **文件名 = 单元名 + `.pas`**，一一对应（FPC/np 双端解析硬约束）。
+
+### 3.2 先例对照（Zig / Rust / Go）
+
+来源：Go 为本机 `/usr/local/go/src/cmd/compile` 一手考察；
+Zig（ziglang/zig `src/`）、Rust（rust-lang/rust `compiler/`）为公开仓库
+结构。目的不是照搬，而是校验本方案每个决策是否站在三家已验证的形态上。
+
+| 先例事实 | 我们的对应 | 判定 |
+|----------|-----------|------|
+| **Go**：`cmd/compile/main.go` 薄入口（命令解析+驱动），全部逻辑在 `internal/<pkg>`；`internal/` 即「外部禁入」标记 | `tools/stage0` 薄壳 N6 改 `nextpas.driver.*`；contract 门禁承担 internal 边界角色 | ✅ 方案获背书 |
+| **Go**：`internal/` 平铺小包（syntax/types/ir/noder/typecheck/walk/escape/inline/devirtualize/ssa/ssagen/gc…），一包一阶段职责，无九层目录树 | `compiler/src/` 平铺点分单元，area=包语义 | ✅ 同构 |
+| **Rust**：`compiler/rustc_<crate>` 前缀即组件身份（rustc_ast/rustc_parse/rustc_hir/rustc_middle/rustc_codegen_llvm…），crate 边界编译期强制 | `nextpas.compiler.<area>` 点分前缀；contract 门禁=编译期边界的 Pascal 等价物 | ✅ 同构 |
+| **Rust**：codegen_ssa trait 抽象后端，llvm/cranelift/gcc 可插拔 | emitter 单元按后端隔离（ir.hir.llvm_emitter）；未来多后端沿此缝切开 | ✅ 预留 |
+| **Zig**：编译器自宿从早期就是唯一路径（stage1 C++ 已删除），单一 `src/` 树；文件即模块 | np 自举飞轮是本重构第一原则；src 平铺同型 | ✅ 方案获背书 |
+| **Go**：SSA pass 表驱动注册（pass 序列数据化，非散落调用） | `np_mir_pass_registry` 已存在；P 批把 MIR pass 接线对齐表驱动形态 | ✅ 待办(P) |
+| **Go**：types 与 types2 两套类型检查器长期共存的历史包袱 | 警示：sema 只允许一套类型检查路径；N4 迁移时若发现平行实现须登记而非扩散 | ⚠️ 纪律 |
+| **Go**：per-arch 后端目录（amd64/arm64/loong64…×9） | 单目标阶段拒绝复制；多目标时以 targets facts 参数化而非目录倍增 | ❌ 拒绝 |
+| **Zig**：文件名大写驼峰（Sema.zig） | 与 core 全小写规范冲突，拒绝；保持点分小写 | ❌ 拒绝 |
+| **Rust**：Cargo 式多 crate 构建图 | FPC 单元模型下 unit 即边界，无需构建级再切分；门禁脚本替代 cargo 依赖声明 | ❌ 拒绝 |
+
+**结论**：本方案四支柱在三家先例上均有直接同构物，无孤注；三处显式拒绝
+各有理由记录在案。
 
 ## 4. 批次计划与验收门
 
@@ -305,6 +328,7 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 | D5 | N2 | np 自举对点分名的解析经 tree mini 实证成立（exit0+双步 opt PASS），N1 时已首次验证 |
 | D6 | 文档 | 本主文档建立并取代 flat-namespace v2 成单一权威（v2 冻结）；审查轮修正：G1/支柱一计数 65→66、补非目标 §1.1、P3 基线注明 44 逻辑核、层位断言缺口入风险册 R8 |
 | D7 | 审查轮 | R8 落地：contract 门禁新增双轴层位检查——轴 A 编译器内部序（src 点分名推断层）、轴 B/C core I/O 能力注册制；实现时发现原「compiler Ln→core ≤Ln」刚性耦合被现实推翻（diagnostics 用 text/collections、preprocessor 用 fs），改为解耦模型并登记首个例外 syntax.preprocessor(fs)。门禁一次通过 |
+| D8 | 总控指令 | 增补 §3.2 先例对照（Zig/Rust/Go）：Go 本机一手考察（main.go 薄入口+internal 平铺包），Zig/Rust 公开结构；四支柱全部获得先例同构背书，三处显式拒绝（per-arch 目录复制/驼峰文件名/多 crate 构建切分）记录在案；新增一条纪律——sema 禁止平行类型检查路径扩散（Go types/types2 包袱教训） |
 
 ## 7. 风险登记册
 
@@ -349,7 +373,8 @@ P0 基线数字，回滚判据客观化。
 | v2 | c6145180f | 本主文档建立：十章结构+执行台账 D1-D5 |
 | v2.1 | a9fdac52d | 目录对照树/命名细则/映射全表/P0 草案/维护规则；计数修正 66=10+56 |
 | v2.2 | 5f2c2808a | 审查轮：非目标 §1.1、耗时参考、P3 基线 44 核、台账 D6、风险 R8、决策日志补全、回滚措辞精确化 |
-| v2.3 | （本提交） | R8 落地为双轴层位门禁（轴 A 内部序/轴 B/C I/O 注册制，D7 含模型修正依据）；§2.0 审计命令复现块；支柱三描述同步 |
+| v2.3 | 7a696feb7 | R8 落地为双轴层位门禁（轴 A 内部序/轴 B/C I/O 注册制，D7 含模型修正依据）；§2.0 审计命令复现块；支柱三描述同步 |
+| v2.4 | （本提交） | 总控指令：增补 §3.2 先例对照（Zig/Rust/Go），四支柱获先例背书+三拒绝项+sema 单类型检查路径纪律；台账 D8 |
 
 ## 10. 文档维护规则
 
