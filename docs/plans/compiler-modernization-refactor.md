@@ -4,10 +4,20 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.8：§3.5 顶尖基准与路线——Go
-锚点一手实测+量化目标表+P5+ 地平线；v2.7：接口立项清单 §3.4.1；v2.6：
-范式决策 §3.4；v2.5：诚实局限 §3.3；v2.4：先例对照 §3.2；v2.1-v2.3：
-结构完善与层位门禁）
+创建：2026-08-23　最后更新：2026-08-23（v2.9：顶部状态仪表盘+风险编号
+R1-R8+验收门精确命令；v2.8：§3.5 顶尖基准；v2.7：接口立项清单；
+v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
+
+## 0. 状态仪表盘（每批落地时更新此块）
+
+```
+迁移进度  ██████░░░░░░░░░░  N1✅ N2✅ │ 10/66 单元 │ compiler/src 22 文件
+性能批次  ░░░░░░░░░░░░░░░░░  P0 待启动（下一插入点，N3 后）
+正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
+门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
+顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
+下一口    N3 frontend×14 → P0 阶段计时探针
+```
 
 ---
 
@@ -98,6 +108,8 @@ tools/stage0/ 14 nextpas_* + 2 杂项   →  N6 后改 nextpas.driver.*
 
 生产单元总数 **66 = 65 个 `np_` 前缀 + 1 个 `nextpas_` 前缀(json_helpers)**。
 inc 随宿主迁入不改名，最终与 .pas 同居 src 平铺（按前缀自然分组可读）。
+迁移现状（v2.9 时点）：syntax/diagnostics/targets 已清空，src 持 22 文件；
+实时进度以顶部 §0 仪表盘与 `§2.0 复现块`第二条命令为准。
 
 ## 3. 四支柱方案
 
@@ -285,10 +297,16 @@ P5+ 地平线批次见 §3.5.3）。
 ### 4.3 验收门定义（每批必过）
 
 ```bash
-scripts/compiler-flat-contract.sh          # 旧名残留=0；禁入 core 家族=0
+scripts/compiler-flat-contract.sh          # 旧名残留=0；禁入 core 家族=0；层位双轴
 make rebuild-compiler                      # FPC 创世构建
 make test TEST_FILTER=compiler-pass        # fixtures 58/58
-./nextpas-m2-l3-probe build build/m2_mini_tree.pas … + 双步 opt   # np 自举解析
+# np 自举解析（完整命令，探针需先 command install -m 0755 build/stage0-bootstrap/nextpas ./nextpas-m2-l3-probe 刷新）:
+rm -f .nextpas/cache/backend/linux-x86_64/m2_mini_tree.ll
+./nextpas-m2-l3-probe build build/m2_mini_tree.pas --target linux-x86_64 \
+  --toolchain-binding linux-x86_64-to-linux-x86_64-llvm --workspace "$PWD" \
+  --out-dir /tmp/m2-nX-tree
+opt -O2 .nextpas/cache/backend/linux-x86_64/m2_mini_tree.ll -o /tmp/t.bc \
+  && opt -passes=verify /tmp/t.bc -o /dev/null && echo TREE-DUAL-OPT-PASS
 git diff --check && make hygiene
 # N4+: mini-regress 13 探针；N5: 全量 residual 对比；N6: make verify
 ```
@@ -425,15 +443,15 @@ sema ×33 / ir ×16 / frontend ×7 / 其余随各批）。
 
 | 风险 | 对策 | 状态 |
 |------|------|------|
-| FPC dotted 解析 | core/src 全量背书 | ✅ 关闭 |
-| np 自举解析新名 | tree mini 每批实证 | ✅ 机制关闭，逐批复跑 |
-| 漏改 uses | 旧名 grep 清零 + contract 门禁 | 运行中 |
-| 半途不可构建态 | 批内一次性完成，commit 即可构建态 | 运行中 |
-| P 批行为变化 | residual 0/0 保持 + 测量先行 | 待 P0 |
-| arena 悬垂指针 | 只接管树状所有权对象；leak_check 抽检 | 待 P2 |
-| 并行破坏模型不变量 | 写入面审计 + 每 unit 独立 arena 合并 | 待 P3 |
-| rtl lane 的 np_ 家族与本方案冲突 | rtl 改名归 rtl lane；compiler 只消费不拥有 | 监控 |
-| R8: 分层断言（compiler Ln→core ≤Ln）尚未进 contract 门禁 | G4 度量缺口——P0 前补进脚本（按 uses 的 core 二级段前缀映射层位表断言） | ✅ 关闭：双轴模型实现（轴 A 编译器内部序+轴 B/C I/O 能力注册制，preprocessor.fs 首个注册例外）；审查轮同时修正原刚性耦合模型——diagnostics(L0)用 text/collections(L1)、preprocessor(L1)用 fs(L2) 证明「层数=core 层数」不成立，解耦为内部序×能力天花板 |
+| R1 FPC dotted 解析 | core/src 全量背书 | ✅ 关闭 |
+| R2 np 自举解析新名 | tree mini 每批实证 | ✅ 机制关闭，逐批复跑 |
+| R3 漏改 uses | 旧名 grep 清零 + contract 门禁 | 运行中 |
+| R4 半途不可构建态 | 批内一次性完成，commit 即可构建态 | 运行中 |
+| R5 P 批行为变化 | residual 0/0 保持 + 测量先行 | 待 P0 |
+| R6 arena 悬垂指针 | 只接管树状所有权对象；leak_check 抽检 | 待 P2 |
+| R7 并行破坏模型不变量 | 写入面审计 + 每 unit 独立 arena 合并（并入 L2 spike） | 待 P3 |
+| R7b rtl lane 的 np_ 家族与本方案冲突 | rtl 改名归 rtl lane；compiler 只消费不拥有 | 监控 |
+| R8 分层断言缺口 | 双轴层位门禁（轴 A 内部序+轴 B/C I/O 注册制） | ✅ 关闭（D7）；原刚性 Ln→core≤Ln 模型被现实推翻已记档 |
 
 ## 8. 决策日志
 
@@ -469,7 +487,8 @@ P0 基线数字，回滚判据客观化。
 | v2.5 | 2ceee73b9 | 诚实评估轮：新增 §3.3 已知设计局限（L1 巨类 26,194 行实测/L2 并行 ID 难题/L3 目标待 P0）与三条推翻条件；P3 加 spike 前置；台账 D9——回答「方案是否要推翻」：方向不推翻，局限如实入档 |
 | v2.6 | 2f2df17c4 | 总控问询：新增 §3.4 范式决策（为什么编译器内部不用一切皆接口——五考量+接口立项三标准）；台账 D10 |
 | v2.7 | 69b25104b | 总控追问：§3.4 立项标准④依赖反转+§3.4.1 内部模块接口立项清单（ir→sema 缝量化 ~15 只读方法/~77 调用点归 N7；emitter/sink/P3 访问面条件触发）；纪律四条；台账 D11 |
-| v2.8 | （本提交） | 总控目标：新增 §3.5 顶尖编译器基准与路线——Go 锚点一手实测（冷 8.65s/热 0.19s，~900× 差距锚定）、量化目标表、P5+ 地平线批次（诊断/查询式增量/LSP/fuzz）；台账 D12 |
+| v2.8 | 80b8575ac | 总控目标：新增 §3.5 顶尖编译器基准与路线——Go 锚点一手实测（冷 8.65s/热 0.19s，~900× 差距锚定）、量化目标表、P5+ 地平线批次（诊断/查询式增量/LSP/fuzz）；台账 D12 |
+| v2.9 | （本提交） | 可用性收尾轮：§0 顶部状态仪表盘（每批更新）、风险册编号 R1-R7b-R8、§4.3 验收门精确复现命令（tree mini 全命令）、§2.4 迁移现状标注——此后文档冻结进执行节奏，边际工作转向 N3/P0 |
 
 ## 10. 文档维护规则
 
