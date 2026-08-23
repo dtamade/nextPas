@@ -56,13 +56,12 @@ function ConnectAndHandshake(const AHost: string; APort: Word;
 var
   Sock: TSocketHandle;
   Connector: TSSLConnector;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
   TLSI: IStream;
   NetErr: string;
 begin
   Result := False;
   Sock := INVALID_SOCKET;
-  TLS := nil;
   TLSI := nil;
 
   try
@@ -81,8 +80,9 @@ begin
 
     try
       TLSI := Connector.ConnectSocket(THandle(Sock), AHost);
-      TLS := TSSLStream(TLSI); // Keep TLSI alive until after use
-      Result := (TLS <> nil) and (TLS.Connection <> nil);
+      // 接口指针与对象基址不保证相同，禁止硬转型回具体类
+      Result := Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) and
+        (LConnAccess.GetConnection <> nil);
     except
       on E: Exception do
       begin
@@ -93,7 +93,6 @@ begin
     end;
   finally
     TLSI := nil;
-    TLS := nil;
     if Sock <> INVALID_SOCKET then
       CloseSocket(Sock);
   end;

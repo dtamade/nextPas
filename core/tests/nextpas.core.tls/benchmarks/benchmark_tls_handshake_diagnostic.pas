@@ -91,14 +91,13 @@ function ConnectAndHandshakeWithTiming(const AHost: string; APort: Word;
 var
   Sock: TSocketHandle;
   Connector: TSSLConnector;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
   TLSI: IStream;
   NetErr: string;
   StartTime, DNSEnd, TCPEnd, TLSEnd: Int64;
 begin
   Result := False;
   Sock := INVALID_SOCKET;
-  TLS := nil;
   TLSI := nil;
 
   FillChar(Timing, SizeOf(Timing), 0);
@@ -131,12 +130,13 @@ begin
       .WithTimeout(HANDSHAKE_TIMEOUT_MS);
 
     TLSI := Connector.ConnectSocket(THandle(Sock), AHost);
-    TLS := TSSLStream(TLSI); // Keep TLSI alive until after use
+    // 接口指针与对象基址不保证相同，禁止硬转型回具体类
     TLSEnd := GetTickCount64MS;
     Timing.TLSTime := TLSEnd - TCPEnd;
 
     Timing.TotalTime := TLSEnd - StartTime;
-    Timing.Success := (TLS <> nil) and (TLS.Connection <> nil);
+    Timing.Success := Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) and
+      (LConnAccess.GetConnection <> nil);
     Result := Timing.Success;
 
   except
@@ -154,7 +154,6 @@ begin
 
   // Cleanup
   TLSI := nil;
-  TLS := nil;
   if Sock <> INVALID_SOCKET then
     CloseSocket(Sock);
 end;

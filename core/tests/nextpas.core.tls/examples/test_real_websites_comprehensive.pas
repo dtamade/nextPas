@@ -123,7 +123,8 @@ var
 function RunTest(const ATest: TWebsiteTest; const AConnector: TSSLConnector): TTestResult;
 var
   Sock: TSocketHandle;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
+  LConn: ISSLConnection;
   TLSI: IStream;
   StartMs: QWord;
   Request: RawByteString;
@@ -139,7 +140,6 @@ begin
 
   StartMs := GetTickCount64;
   Sock := INVALID_SOCKET;
-  TLS := nil;
   try
     try
       try
@@ -154,10 +154,13 @@ begin
       end;
 
       TLSI := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
-      TLS := TSSLStream(TLSI);
-      Result.Protocol := ProtocolVersionToString(TLS.Connection.GetProtocolVersion);
-      Result.Cipher := TLS.Connection.GetCipherName;
-      GetCertificateVerificationInfo(TLS.Connection, LVerifyResult, Result.VerifyResult);
+      // 接口指针与对象基址不保证相同，禁止硬转型回具体类
+      if not Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) then
+        raise Exception.Create('TLS stream does not expose ISSLStreamConnectionAccess');
+      LConn := LConnAccess.GetConnection;
+      Result.Protocol := ProtocolVersionToString(LConn.GetProtocolVersion);
+      Result.Cipher := LConn.GetCipherName;
+      GetCertificateVerificationInfo(LConn, LVerifyResult, Result.VerifyResult);
 
       // 发送一个轻量 HEAD 请求（只验证加密通道可写即可）
       Request := 'HEAD / HTTP/1.1'#13#10 +
@@ -167,7 +170,7 @@ begin
                  #13#10;
 
       if Length(Request) > 0 then
-        TLS.Write(Request[1], Length(Request));
+        TLSI.Write(Request[1], Length(Request));
 
       Result.Success := True;
     except
@@ -180,7 +183,6 @@ begin
   finally
     Result.ResponseTime := GetTickCount64 - StartMs;
     TLSI := nil;
-    TLS := nil;
     CloseSocket(Sock);
   end;
 end;

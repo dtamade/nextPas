@@ -219,7 +219,6 @@
 | test_cross_backend_interop.sh / server_groups_interop.sh | 编译错误 | 冒烟程序需 API 现代化 |
 | test_freepascal_tls13_client_e2e.sh | 超时(143) | 加密层 7 过，后续段依赖外部服务 |
 | test_mbedtls_framework_owner_surface_contract.sh | 二进制 80.2% 通过（35 败） | legacy framework 测试程序深层对账 |
-| benchmarks/examples 5 处 `TSSLStream(TLSI)` 硬转型 | 该工具链下潜伏崩溃 | benchmark_tls_handshake(.pas/_diagnostic)、test_real_websites×3；不在门禁执行集，需统一改走 ISSLStreamConnectionAccess |
 
 ## 完整性门战果（2026-08-23 第二批）
 
@@ -241,6 +240,10 @@ early_data 连接器子测试的"深层越界写"假设被证伪。gdb 硬件观
 
 **门禁结果：18 PASS / 0 FAIL**（报告：test-reports/freepascal_tls13_completeness_*.md，运行后清理）。
 
+### 硬转型存量清偿（2026-08-23 第三批续）
+
+benchmarks/examples 5 处 `TSSLStream(TLSI)` 同轮清偿：统一改走 `Supports(TLSI, ISSLStreamConnectionAccess)` + `GetConnection`，流 I/O 直接走 `IStream`，删除全部裸类变量与 finally 清引用。运行实证：`benchmark_tls_handshake` 对真实站点完成 session_resumption / tls12 / tls13 / tls12_13 四类握手全成功；diagnostic 基准不可达分支干净跳过（EXIT=0）。全仓 `TSSLStream(` 硬转型归零。
+
 ## 变更记录
 
 | 日期 | 内容 |
@@ -249,3 +252,4 @@ early_data 连接器子测试的"深层越界写"假设被证伪。gdb 硬件观
 | 2026-08-23 | 第二轮路径清零 PASS 30→83；第三轮内容对账 PASS 83→174，删死契约 73，反哺修复 3 个迁移受损工具 |
 | 2026-08-23 | 完整性门 6/18→17/18：cwd 规则修复 10 组；修复 TASN1Writer.WriteLength 长格式长度覆写核心 bug；修复 TLS12 IO 层 EOF 异常逃逸；early_data 测试侧悬垂接口修复并登记深层越界写积压 |
 | 2026-08-23 | 完整性门 17/18→18/18：gdb 取证证实工具链接口 ABI 偏移（非越界写），新增 ISSLStreamConnectionAccess 能力接口替换全部硬转型；修复重放存储短读 fail-closed 沦陷；登记 benchmarks/examples 5 处同类硬转型积压 |
+| 2026-08-23 | 清偿 benchmarks/examples 5 处 TSSLStream 硬转型积压（真实站点四类握手运行实证）；全仓硬转型归零 |

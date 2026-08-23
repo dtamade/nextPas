@@ -54,7 +54,8 @@ var
 procedure TestWebsite(const ATest: TWebsiteTest; const AConnector: TSSLConnector);
 var
   Sock: TSocketHandle;
-  TLS: TSSLStream;
+  LConnAccess: ISSLStreamConnectionAccess;
+  LConn: ISSLConnection;
   TLSI: IStream;
   LVerifyResult: Integer;
   LVerifyResultString: string;
@@ -64,7 +65,6 @@ begin
     [GTotalTests, Length(TEST_SITES), ATest.Description, ATest.Host, ATest.Port]));
 
   Sock := INVALID_SOCKET;
-  TLS := nil;
   try
     try
       try
@@ -79,12 +79,15 @@ begin
       end;
 
       TLSI := AConnector.ConnectSocket(THandle(Sock), ATest.Host);
-      TLS := TSSLStream(TLSI);
-      GetCertificateVerificationInfo(TLS.Connection, LVerifyResult, LVerifyResultString);
+      // 接口指针与对象基址不保证相同，禁止硬转型回具体类
+      if not Supports(TLSI, ISSLStreamConnectionAccess, LConnAccess) then
+        raise Exception.Create('TLS stream does not expose ISSLStreamConnectionAccess');
+      LConn := LConnAccess.GetConnection;
+      GetCertificateVerificationInfo(LConn, LVerifyResult, LVerifyResultString);
 
       WriteLn('✓ ',
-        ProtocolVersionToString(TLS.Connection.GetProtocolVersion), ' / ',
-        TLS.Connection.GetCipherName, ' | ',
+        ProtocolVersionToString(LConn.GetProtocolVersion), ' / ',
+        LConn.GetCipherName, ' | ',
         LVerifyResultString);
 
       Inc(GPassedTests);
@@ -97,7 +100,6 @@ begin
     end;
   finally
     TLSI := nil;
-    TLS := nil;
     CloseSocket(Sock);
   end;
 end;
