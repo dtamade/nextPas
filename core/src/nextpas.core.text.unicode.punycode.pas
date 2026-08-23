@@ -84,6 +84,8 @@ function PunycodeEncodeCodepoints(const ACps: array of TUnicodeCodepoint;
   const ACount: SizeInt): string;
 var
   N, Delta, Bias, H, B, M, Q, K, T, I: Int64;
+  { i386 的 for 不接受 Int64 控制变量；循环界即数组长度域，SizeInt 等价 }
+  CI: SizeInt;
   Basic: string;
   OutLen: SizeInt;
   Handled: array of Boolean;
@@ -93,19 +95,19 @@ begin
   if ACount <= 0 then
     Exit;
   SetLength(Handled, ACount);
-  for I := 0 to ACount - 1 do
-    Handled[I] := False;
+  for CI := 0 to ACount - 1 do
+    Handled[CI] := False;
 
   Basic := '';
   B := 0;
   AllBasic := True;
-  for I := 0 to ACount - 1 do
+  for CI := 0 to ACount - 1 do
   begin
-    if ACps[I] < $80 then
+    if ACps[CI] < $80 then
     begin
-      Basic := Basic + Chr(ACps[I]);
+      Basic := Basic + Chr(ACps[CI]);
       Inc(B);
-      Handled[I] := True;
+      Handled[CI] := True;
     end
     else
       AllBasic := False;
@@ -130,22 +132,22 @@ begin
   while H < ACount do
   begin
     M := $10FFFF;
-    for I := 0 to ACount - 1 do
-      if (not Handled[I]) and (ACps[I] >= N) and (ACps[I] < M) then
-        M := ACps[I];
+    for CI := 0 to ACount - 1 do
+      if (not Handled[CI]) and (ACps[CI] >= N) and (ACps[CI] < M) then
+        M := ACps[CI];
     if M - N > (High(Int64) - Delta) div (H + 1) then
       Exit(''); { overflow }
     Inc(Delta, (M - N) * (H + 1));
     N := M;
-    for I := 0 to ACount - 1 do
+    for CI := 0 to ACount - 1 do
     begin
-      if ACps[I] < N then
+      if ACps[CI] < N then
       begin
         Inc(Delta);
         if Delta = 0 then
           Exit('');
       end;
-      if ACps[I] = N then
+      if ACps[CI] = N then
       begin
         Q := Delta;
         K := BASE;
@@ -167,7 +169,7 @@ begin
         Bias := Adapt(Delta, H + 1, H = B);
         Delta := 0;
         Inc(H);
-        Handled[I] := True;
+        Handled[CI] := True;
       end;
     end;
     Inc(Delta);

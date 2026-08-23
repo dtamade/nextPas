@@ -136,7 +136,9 @@ begin
 
   LStart := 0;
   FCount := 0;
-  for LI := 0 to LSize - 1 do
+  { i386 的 for 不接受 Int64 控制变量，while 等价改写 }
+  LI := 0;
+  while LI < LSize do
   begin
     if LP[LI] = 10 then
     begin
@@ -154,6 +156,7 @@ begin
       Inc(FCount);
       LStart := SizeUInt(LI) + 1;
     end;
+    Inc(LI);
   end;
   if LStart < SizeUInt(LSize) then
   begin
