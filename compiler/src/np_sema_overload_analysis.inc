@@ -287,12 +287,18 @@ begin
   Result := False;
 end;
 
+procedure TSemanticAnalyzer.FoldBodyNameIntoScratch(const AName: string);
+begin
+  FoldAsciiInto(FBodyLookupScratch, AName);
+end;
+
 function TSemanticAnalyzer.FirstBodyIndexForNameLocal(const AName: string): LongInt;
 begin
   Result := -1;
   if (AName = '') or (FProcedureBodyNameFirst = nil) then
     Exit;
-  if not FProcedureBodyNameFirst.TryGetValue(LowerCase(AName), Result) then
+  FoldBodyNameIntoScratch(AName);
+  if not FProcedureBodyNameFirst.TryGetValue(FBodyLookupScratch, Result) then
     Result := -1;
 end;
 
@@ -386,6 +392,7 @@ begin
   Ctx.ProcedureBodies := FProcedureBodies;
   Ctx.BodyNameFirst := FProcedureBodyNameFirst;
   Ctx.BodyNameNext := FProcedureBodyNameNext;
+  Ctx.BodyLookupScratch := @FBodyLookupScratch;
   Ctx.ImportedUnitOwners := FImportedUnitOwners;
   Ctx.ImportedUnitTrees := FImportedUnitTrees;
   Ctx.BuiltinRegistry := FBuiltinRegistry;

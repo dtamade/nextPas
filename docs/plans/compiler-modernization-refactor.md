@@ -4,9 +4,9 @@
 发起：总控指令「充分模块化、现代化；编译器必须大量复用 nextpas.core；
 命名扁平化 `nextpas.xx` 风格全部进 src 目录；架构朝优雅和高性能发展」
 worktree：`.worktrees/compiler-system`（lane 分支 `codex/compiler-system`）
-创建：2026-08-23　最后更新：2026-08-23（v2.17：residual 全量复跑 0/0 确认+
-P1 刀②细则补全；v2.16：D19 门禁修复+N7 清单+P1 侦察；v2.15：N6 落地
-66/66 命名收官；
+创建：2026-08-23　最后更新：2026-08-23（v2.18：P1 刀② 落地 seed -1.5%/-2.4%；
+v2.17：residual 全量复跑 0/0 确认+P1 刀②细则补全；v2.16：D19 门禁修复+
+N7 清单+P1 侦察；v2.15：N6 落地 66/66 命名收官；
 v2.14：N5 落地 63/66；
 v2.13：N4 落地+门禁例外登记；v2.12：P0 计时探针落地+相位实测表；
 v2.11：N3 落地；v2.9：顶部状态仪表盘+风险编号 R1-R8+验收门精确命令；
@@ -17,11 +17,11 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 
 ```
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
-性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
+性能批次  ██▌░░░░░░░░░░░░░  P0✅ 探针+实测 │ P1 刀②✅ seed -1.5~-2.4% │ 刀①③+swiss 待做
 正确性    residual 0/0 ✅(0823全量复跑)   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
 门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
-下一口    P1 播种路径索引分配(swiss+LowerCase 消除) → P2 arena
+下一口    P1 刀①常量折叠廉价化 → 刀③四趟合并 → swiss 接线 → P2 arena
 ```
 
 ---
@@ -108,6 +108,13 @@ env `NEXTPAS_PHASE_TIMING=1`，TSV `/tmp/m2-phase-timing.tsv`；tree mini
 结论：**瓶颈高度集中——sema 相占 tree mini 全程 ~99%，其中
 SeedFunctionBodies 播种独占 ~80%**。P1 索引分配优化的主战场即播种路径；
 resolution 的 4.7s 为次要目标；syntax/mir 可忽略。
+
+**P1 刀② 落地实测**（2026-08-23，同协议两轮，轮间方差 seed 0.4%）：
+seed **231954/232932 ms**、sema **292387/293084 ms**、resolution
+4562/4575 ms。对 P0 基线：seed **-3.4s/-5.8s（-1.5%/-2.4%）**、sema
+约 -3~-6s——两轮均低于基线两轮下界，方向一致；幅度与 i17 A/B 实测的
+查找机制总开销上界（+4.8s）同量级，归因干净（消除的是两处查找点的
+LowerCase 每次调用临时串分配）。
 
 **b4b-i17 开销量化**（同输入 A/B：正向=含 i17 的 LookupProcedureBody
 实例名扫描，反向=`git apply -R` a3e71253c 的 +9 行后重编译）：
@@ -312,7 +319,7 @@ N6 最重（壳层改名 + 三脚本收口 + make verify 全量，预留半天�
 | 批 | 内容 | 验收 | 状态 |
 |----|------|------|------|
 | P0 | 阶段计时探针 + perf 定位 3.3 体秒去向；量化 b4b-i17 的 LookupProcedureBody 开销 | 耗时表进 ROADMAP 新列 | ✅ 相位表+方差 <2%+i17 开销 1.6%；perf top-10 受阻（无 root+二进制 strip），归 P1 启动补 |
-| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ⬜ 静态侦察已就绪（见下行 P1 侦察块） |
+| P1 | 残余扫描清零 + LowerCase 分配消除 + swiss 接线 | 分钟数降；residual 0/0 保持 | ◐ 刀②✅（seed -1.5%/-2.4%，见 §2.3 实测）；刀①常量折叠廉价化/刀③四趟全表合并/swiss 接线待做（细则见下行） |
 
 **P1 静态侦察（2026-08-23，只读 grep，数字可复现）**：播种热区字符串
 操作点共 **140 处**——`np_sema_seed_function_bodies.inc` ×63、
@@ -330,19 +337,24 @@ LookupProcedureBody 开销（+4.5s/1.9%，§2.3）同源。
   覆盖 'String'/'AnsiString' ≥8 组与 'Create'/'Destroy'/'Halt' 家族
   （seed inc 行号簇 26-199）。注意 SameText 本身不分配堆，省的是分支
   折叠周期；分配大头在刀②。
-- **刀② 查找分配消除**：`np_sema_overload_analysis.inc:295`
-  `TryGetValue(LowerCase(AName))` 每次调用分配临时串——analyzer 加
-  `FBodyLookupScratch: string` 复用字段承载折叠结果（容量保持后近似零
-  分配），Index 侧同步用 scratch 折叠；后续演进=core swiss 增 fold-aware
-  变体（R6 登记，修 core 本体）。
-  两条实现级保证：①折叠语义——helper 只折 ASCII `'A'..'Z'`→小写，
-  与 FPC `SysUtils.LowerCase` 文档语义（仅转换 A-Z 区间字符）逐字一致；
-  Pascal 标识符本身 ASCII 限定，键空间零变化=N 行为不变；查找/索引两侧
-  必须换用同一 helper（现状两侧同为 LowerCase，对称替换保持配对不变
-  式）。②scratch 唯一性——字段只允许 SetLength+逐字节写入，禁止任何
-  整体赋值 `Scratch := S`（会共享缓冲触发 CoW 重分配）；首次分配后
-  引用计数恒为 1，unique 串 SetLength 至更短长度不重分配仅改长度，
-  热身之后每次调用零堆操作。
+- **刀② 查找分配消除（✅ 已落地）**：两处查找点改复用折叠缓冲——
+  ①`np_sema_overload_analysis.inc` FirstBodyIndexForNameLocal；
+  ②`np_sema_overload_helpers.inc` CtxFirstBodyIndexForName（调用绑定
+  主热路径，经 TSemaOverloadContext 走同一张 map）。实现=共享
+  `FoldAsciiInto(var AScratch: string; const AName: string)` 放
+  sema.overload 单元；analyzer 持 `FBodyLookupScratch` 唯一缓冲，
+  Context 以 `BodyLookupScratch: PString` 借用（record 局部重建无复用
+  价值故用指针；nil 回退 LowerCase 保持旧语义）。**对原细则的偏差**：
+  Index 侧不改 scratch——THashMap.AddOrAssign 对键做托管赋值
+  （`Bucket.Key := AKey` 引用别名），传可变缓冲会腐化已存键；
+  注册期仅 15.6k 次维持局部 Key 不动。
+  两条实现级保证：①折叠语义——helper 只折 ASCII `'A'..'Z'`→小写
+  （`or $20`），与 text.char 表驱动 ToLower（ccUpper 仅覆盖 A-Z 区间）
+  逐位一致，穷举验证长度 1+2 全字节组合 failures=0；Pascal 标识符
+  ASCII 限定，键空间零变化=N 行为不变。②scratch 唯一性——字段只经
+  SetLength+写入，禁止整体赋值（会共享缓冲触发 CoW）；实测 unique 串
+  容量内反复 SetLength 十万次 alloc-delta=0，热身后零堆操作。
+  后续演进=core swiss 增 fold-aware 变体（R6 登记，修 core 本体）。
 - **刀③ 全表扫描合并**：seed_function_bodies 四趟 FProcedureBodies
   全表循环（行 477 标记/504 与 517 逐字重复的 Enqueue 扫描/528
   Needed&&!Visited 三扫）合并为单趟状态机。
@@ -580,6 +592,7 @@ P0 基线数字，回滚判据客观化。
 | v2.15 | （本提交） | N6 落地=命名支柱收官：N6a toolchain ×3（2abcd33bb，66 生产单元全清，I/O 例外+3）；N6b 壳层 nextpas.driver.{command,projection}.*+target_config 改名+json_helpers 双胞胎收口+门禁前缀卫兵修复（点分后缀误报）；§5 全表收官；台账 D17 文档脚本截断教训 |
 | v2.16 | （本提交） | 收口深化：D19 轴 A 层位检查复活（截断错位+豁免写法双重失效→首次真实运行现形 8 条 R9 违规）；§4.2.2 N7 手术清单立项；P1 静态侦察+实施细则两块（140 处热点/LookupProcedureBody 分配实锤/三刀次序） |
 | v2.17 | （本提交） | residual 全量复跑核对：N5/N6 挂账销项（uniq/total=0/0 保持、opt 首错=同族支配性违规 %v8263@RunEnvStatus 仅编号位移）；P1 刀②两条实现级保证补入实施细则（ASCII 折叠语义等价+scratch 缓冲唯一性纪律） |
+| v2.18 | （本提交） | P1 刀② 落地：共享 FoldAsciiInto（sema.overload）+analyzer FBodyLookupScratch+Context PString 借用；两查找点消 LowerCase 分配；Index 侧不改（Put 键别名）；实测 seed 235/238s→232/233s（-1.5%/-2.4%，轮间方差 0.4%）；穷举 65k 字节组合折叠等价 failures=0+SetLength 十万次 alloc-delta=0 两项前置实证 |
 
 ## 10. 文档维护规则
 

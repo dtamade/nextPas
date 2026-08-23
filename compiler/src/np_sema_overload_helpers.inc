@@ -113,11 +113,20 @@ begin
   Result := -1;
   if AName = '' then
     Exit;
-  if (Ctx.BodyNameFirst <> nil) and
-    Ctx.BodyNameFirst.TryGetValue(LowerCase(AName), Result) then
-    Exit;
   if Ctx.BodyNameFirst <> nil then
-    Exit(-1);
+  begin
+    { Borrowed analyzer scratch avoids the per-call LowerCase allocation;
+      fold must match IndexProcedureBodyName's registration keys exactly. }
+    if Ctx.BodyLookupScratch <> nil then
+    begin
+      FoldAsciiInto(Ctx.BodyLookupScratch^, AName);
+      if not Ctx.BodyNameFirst.TryGetValue(Ctx.BodyLookupScratch^, Result) then
+        Result := -1;
+    end
+    else if not Ctx.BodyNameFirst.TryGetValue(LowerCase(AName), Result) then
+      Result := -1;
+    Exit;
+  end;
   Result := FirstBodyIndexForName(Ctx.ProcedureBodies, AName);
 end;
 

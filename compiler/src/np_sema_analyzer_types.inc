@@ -49,6 +49,11 @@ type
       TSemaOverloadContext.BodyName* so LookupCallBinding can use O(overloads). }
     FProcedureBodyNameFirst: TProcedureBodyNameFirstMap;
     FProcedureBodyNameNext: TProcedureBodyNameNextVec;
+    { Reusable ASCII-fold buffer for body-name lookups. Owned by this
+      instance and never aliased out (map Put stores key aliases, so only
+      read-only TryGetValue may receive it); unique-buffer SetLength does
+      no heap work once warmed. }
+    FBodyLookupScratch: string;
     { Scratch work tables on FAllocator when present. }
     FCompilerProcNames: TStringVec;
     FGenericWorkQueue: TLongIntVec;
@@ -259,6 +264,9 @@ type
     function FirstBodyIndexForNameLocal(const AName: string): LongInt;
     function NextBodyIndexForNameLocal(const APrevIndex: LongInt): LongInt;
     procedure IndexProcedureBodyName(const AName: string; const AIndex: LongInt);
+    { ASCII-fold AName into FBodyLookupScratch (same range as
+      nextpas.core.text.utils.LowerCase's table: 'A'..'Z' only). }
+    procedure FoldBodyNameIntoScratch(const AName: string);
     function LookupOverload(const AName: string; AArgCount: LongInt;
       out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
     function CallArgumentCount(const ACallNode: TGreenNode): LongInt;

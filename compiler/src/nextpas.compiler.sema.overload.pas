@@ -44,6 +44,8 @@ type
   TProcedureBodyNameNextVec = specialize TVec<LongInt>;
   TTypeIdArray = array of LongInt;
   TStringArray = array of string;
+  { Borrowed scratch-buffer pointer for allocation-free fold lookups. }
+  PString = ^string;
   { Shared scratch vectors for imported unit tables (analyzer owns, contexts borrow). }
   TSemaImportedOwnerVec = specialize TVec<string>;
   TSemaImportedTreeVec = specialize TVec<TGreenTree>;
@@ -65,6 +67,8 @@ type
       scans are O(overloads) instead of O(all bodies). }
     BodyNameFirst: TProcedureBodyNameFirstMap;
     BodyNameNext: TProcedureBodyNameNextVec;
+    { Analyzer-owned fold scratch, borrowed; nil falls back to LowerCase. }
+    BodyLookupScratch: PString;
     ImportedUnitOwners: TSemaImportedOwnerVec;
     ImportedUnitTrees: TSemaImportedTreeVec;
     BuiltinRegistry: TBuiltinRegistry;
@@ -91,6 +95,11 @@ function FirstBodyIndexForName(const ABodies: TProcedureBodyVec;
   const AName: string): LongInt;
 function NextBodyIndexForName(const ABodies: TProcedureBodyVec;
   const AName: string; const APrevIndex: LongInt): LongInt;
+{ ASCII-only case fold ('A'..'Z' → or $20) into a caller-owned buffer —
+  bit-identical to nextpas.core.text.utils.LowerCase's table semantics.
+  Shared by analyzer and context lookups so lookup keys match the
+  IndexProcedureBodyName registration fold exactly. }
+procedure FoldAsciiInto(var AScratch: string; const AName: string);
 { Prefer BodyNameFirst/Next when present (O(overloads)); else linear walk. }
 function CtxFirstBodyIndexForName(const Ctx: TSemaOverloadContext;
   const AName: string): LongInt;
@@ -164,6 +173,18 @@ function UnitDirectlyImports(
 implementation
 
 { === 重载解析核心实现 === }
+
+procedure FoldAsciiInto(var AScratch: string; const AName: string);
+var
+  I: LongInt;
+begin
+  SetLength(AScratch, Length(AName));
+  for I := 1 to Length(AName) do
+    if (AName[I] >= 'A') and (AName[I] <= 'Z') then
+      AScratch[I] := Chr(Byte(AName[I]) or $20)
+    else
+      AScratch[I] := AName[I];
+end;
 
 {$I np_sema_overload_helpers.inc}
 
