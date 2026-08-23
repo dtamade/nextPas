@@ -1783,6 +1783,55 @@ begin
   Check(not IsMulOverflow(SizeUInt(10), SizeUInt(20)), 'IsMulOverflow false');
 end;
 
+procedure TestSameValueIsZero;
+begin
+  try
+  { SameValue: exact equality, near equality beyond default epsilon, NaN }
+  WriteLn('M1');
+  Check(SameValue(1.0, 1.0), 'SameValue Double equal');
+  WriteLn('M2');
+  Check(SameValue(1.0, 1.0 + 1e-16), 'SameValue Double within default eps');
+  WriteLn('M3');
+  Check(not SameValue(1.0, 1.01), 'SameValue Double differs');
+  WriteLn('M4');
+  Check(not SameValue(MakeNaN, MakeNaN), 'SameValue Double NaN unequal');
+  WriteLn('M5');
+  Check(SameValue(Single(0.5), Single(0.5)), 'SameValue Single equal');
+  WriteLn('M6');
+  Check(not SameValue(Single(0.5), Single(0.6)), 'SameValue Single differs');
+
+  { explicit epsilon path }
+  WriteLn('M7');
+  Check(SameValue(1.0, 1.5, 0.6), 'SameValue Double custom eps accepts');
+  WriteLn('M8');
+  Check(not SameValue(1.0, 1.5, 0.4), 'SameValue Double custom eps rejects');
+
+  { IsZero: zero and noise vs real magnitudes }
+  WriteLn('M9');
+  Check(IsZero(0.0), 'IsZero Double zero');
+  WriteLn('M10');
+  Check(IsZero(1e-300), 'IsZero Double subnormal-scale treated as zero');
+  WriteLn('M11');
+  Check(not IsZero(1.0), 'IsZero Double one is not zero');
+  WriteLn('M12');
+  Check(not IsZero(MakeNaN), 'IsZero Double NaN is not zero');
+  WriteLn('M13');
+  Check(IsZero(Single(0.0)), 'IsZero Single zero');
+  WriteLn('M14');
+  Check(not IsZero(Single(1.0)), 'IsZero Single one is not zero');
+
+  { infinite inputs compare equal to themselves via SameValue contract }
+  WriteLn('M15');
+  Check(SameValue(MakePositiveInfinity, MakePositiveInfinity),
+    'SameValue Double +Inf equals itself');
+  except
+    on E: Exception do begin
+      WriteLn('MARKER raised: ', E.ClassName, ': ', E.Message);
+      raise;
+    end;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.scalar');
   T.Test('constants', @TestConstants);
@@ -1810,5 +1859,6 @@ begin
   T.Test('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Test('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
   T.Test('overflow helpers', @TestOverflowHelpers);
+  T.Test('SameValue IsZero default-epsilon contracts', @TestSameValueIsZero);
   if not T.Run then Halt(1);
 end.

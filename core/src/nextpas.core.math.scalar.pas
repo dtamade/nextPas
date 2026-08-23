@@ -177,6 +177,28 @@ function FloatEquals(const AA, AB: Single; const AEpsilon: Single): Boolean; ove
 function FloatIsZero(const AValue: Double; const AEpsilon: Double): Boolean; overload; inline;
 function FloatIsZero(const AValue: Single; const AEpsilon: Single): Boolean; overload; inline;
 
+{** * Tests approximate equality (RTL-Math-compatible name).
+ * AEpsilon <= 0 derives a magnitude-relative default tolerance
+ * (8 * machine-epsilon * max(|AA|, |AB|)), matching the RTL contract of a
+ * magnitude-based default. NaN never compares equal; equal infinities do.
+ * @param AA First value
+ * @param AB Second value
+ * @param AEpsilon Tolerance; 0 or negative selects the derived default
+ * @return True if the values are approximately equal
+ *}
+function SameValue(const AA, AB: Double; AEpsilon: Double = 0): Boolean; overload; inline;
+function SameValue(const AA, AB: Single; AEpsilon: Single = 0): Boolean; overload; inline;
+
+{** * Tests whether a floating-point value is approximately zero
+ * (RTL-Math-compatible name). AEpsilon <= 0 derives an absolute default
+ * tolerance of 8 * machine epsilon.
+ * @param AValue The value to test
+ * @param AEpsilon Tolerance; 0 or negative selects the derived default
+ * @return True if |AValue| <= AEpsilon
+ *}
+function IsZero(const AValue: Double; AEpsilon: Double = 0): Boolean; overload; inline;
+function IsZero(const AValue: Single; AEpsilon: Single = 0): Boolean; overload; inline;
+
 {** * Converts degrees to radians.
  * @param ADegrees Angle in degrees
  * @return Equivalent angle in radians
@@ -1525,6 +1547,62 @@ begin
   if (not ValidComparisonEpsilon(AEpsilon)) or IsNaN(AValue) or IsInfinite(AValue) then
     Exit(False);
   Result := Abs(AValue) <= AEpsilon;
+end;
+
+const
+  SINGLE_MACHINE_EPSILON: Single = 1.1920928955078125e-7;
+  DOUBLE_MACHINE_EPSILON: Double = 2.2204460492503131e-16;
+
+function SameValue(const AA, AB: Double; AEpsilon: Double): Boolean;
+begin
+  { Non-finite inputs short-circuit before epsilon derivation so NaN never
+    reaches the tolerance arithmetic. }
+  if IsNaN(AA) or IsNaN(AB) then
+    Exit(False);
+  if IsInfinite(AA) or IsInfinite(AB) then
+    Exit(AA = AB);
+  if AEpsilon <= 0 then
+  begin
+    if Abs(AA) > Abs(AB) then
+      AEpsilon := Abs(AA) * (DOUBLE_MACHINE_EPSILON * 8)
+    else
+      AEpsilon := Abs(AB) * (DOUBLE_MACHINE_EPSILON * 8);
+  end;
+  Result := FloatEquals(AA, AB, AEpsilon);
+end;
+
+function SameValue(const AA, AB: Single; AEpsilon: Single): Boolean;
+begin
+  if SingleIsNaN(AA) or SingleIsNaN(AB) then
+    Exit(False);
+  if SingleIsInfinite(AA) or SingleIsInfinite(AB) then
+    Exit(AA = AB);
+  if AEpsilon <= 0 then
+  begin
+    if Abs(AA) > Abs(AB) then
+      AEpsilon := Abs(AA) * (SINGLE_MACHINE_EPSILON * 8)
+    else
+      AEpsilon := Abs(AB) * (SINGLE_MACHINE_EPSILON * 8);
+  end;
+  Result := FloatEquals(AA, AB, AEpsilon);
+end;
+
+function IsZero(const AValue: Double; AEpsilon: Double): Boolean;
+begin
+  if IsNaN(AValue) or IsInfinite(AValue) then
+    Exit(False);
+  if AEpsilon <= 0 then
+    AEpsilon := DOUBLE_MACHINE_EPSILON * 8;
+  Result := FloatIsZero(AValue, AEpsilon);
+end;
+
+function IsZero(const AValue: Single; AEpsilon: Single): Boolean;
+begin
+  if SingleIsNaN(AValue) or SingleIsInfinite(AValue) then
+    Exit(False);
+  if AEpsilon <= 0 then
+    AEpsilon := SINGLE_MACHINE_EPSILON * 8;
+  Result := FloatIsZero(AValue, AEpsilon);
 end;
 
 function DegToRad(const ADegrees: Single): Single;
