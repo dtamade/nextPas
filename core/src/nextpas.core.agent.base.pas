@@ -1,0 +1,285 @@
+{**
+ * nextpas.core.agent.base - agent 模块词表：纯数据与纯枚举，零 IO。
+ *
+ * 契约权威：core/docs/agent/API.md §1。实现与文档冲突时先改文档。
+ *}
+
+unit nextpas.core.agent.base;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base;
+
+const
+  { ---- Sentinel 常量（API.md §1.2）：未设置的字段绝不上送 wire ---- }
+  CTemperatureUnset   = -2.0;          { 合法域 [0.0, 2.0]，负值即 unset }
+  CTopPUnset          = -2.0;
+  CMaxTokensUnset     = 0;             { >0 有效 }
+  CSeedUnset          = Low(Int64);
+  CTimeoutDefault     = 0;             { 0=用 transport 默认；<0=无限 }
+  CUsageUnknown       = -1;            { TTokenUsage 各字段未知值 }
+  CRetryAfterUnknown  = -1;            { RetryAfterMs 未提供/不适用 }
+
+type
+  { owned 全量 JSON 文本：core 的 TJsonValue 是 borrow 视图，词表只存文本 }
+  TJsonText = type string;
+
+  { ---- 对话角色与部件 ---- }
+
+  TMessageRole = (mrSystem, mrUser, mrAssistant, mrTool);
+
+  TPartKind = (pkText, pkThinking, pkToolCall, pkToolResult, pkImage);
+
+  TFinishReason = (frNone, frStop, frLength, frToolCalls, frContentFilter);
+
+  { 三态布尔：tsUnset 即不上送（Pascal 无 nullable 的诚实替代）}
+  TTriState = (tsUnset, tsFalse, tsTrue);
+
+  TStreamDeltaKind = (
+    sdkTextDelta,        { TextDelta 追加正文 }
+    sdkThinkingDelta,    { TextDelta 追加思考内容 }
+    sdkToolCallStart,    { ToolIndex/ToolCallId/ToolName 就位 }
+    sdkToolCallDelta,    { ArgumentsDelta 追加参数 JSON 片段 }
+    sdkToolCallEnd,      { 该槽位参数流结束 }
+    sdkFinish,           { FinishReason 就位，正文/工具流结束 }
+    sdkUsage,            { Usage 就位（可与 sdkFinish 异序到达，fold 抹平）}
+    sdkError             { Error 就位（流中途错误上报；fold 跳过）}
+  );
+
+  { 错误码词表（物理落位本单元；异常类在 nextpas.core.agent.errors）}
+  TAgentErrorCode = (
+    aecNone,
+    aecInvalidRequest,     { 上游 400 类语义错误；不可重试，RawBody 保真 }
+    aecAuthentication,     { 401/403 }
+    aecNotFound,           { 404：模型/端点不存在 }
+    aecRateLimited,        { 429；可重试，RetryAfterMs 生效 }
+    aecTransport,          { 连接/读/写失败、连接重置；可重试 }
+    aecTimeout,            { 连接/整体超时；可重试 }
+    aecServer,             { 上游 5xx；可重试 }
+    aecContextOverflow,    { 提示超窗；不可自动重试，需消费方裁剪历史 }
+    aecProtocol,           { 厂商响应/SSE 帧违反协议；不可重试 }
+    aecCancelled,          { 经令牌取消 }
+    aecConfig,             { 本地配置缺失/非法（缺 key、缺 MaxTokens 等）}
+    aecToolFailed,         { loop 层：工具执行抛异常 }
+    aecBudgetExhausted     { loop 层：预算达限（正常收尾态）}
+  );
+
+  { ---- 用量 ---- }
+
+  TTokenUsage = record
+    InputTokens: Int64;              { CUsageUnknown = 未知 }
+    OutputTokens: Int64;
+    CacheReadInputTokens: Int64;
+    CacheWriteInputTokens: Int64;
+    ReasoningTokens: Int64;
+    function Known: Boolean;         { 至少一个字段有真实值 }
+    function TotalKnownTokens: Int64;{ 已知字段之和 }
+  end;
+
+  { ---- 消息部件 ---- }
+
+  TPart = record
+    Kind: TPartKind;
+    Text: string;                    { pkText/pkThinking 内容 }
+    ToolCallId: string;              { pkToolCall / pkToolResult 配对键 }
+    ToolName: string;                { pkToolCall }
+    ArgumentsJson: TJsonText;        { pkToolCall 参数全文（start+delta 折叠）}
+    ResultJson: TJsonText;           { pkToolResult 回喂内容 }
+    IsError: Boolean;                { pkToolResult 失败标记 }
+    ImageUrl: string;                { pkImage：URL 或 data URI }
+    Signature: string;               { pkThinking 厂商签名，不透明透传 }
+    ExtraJson: TJsonText;            { 未知字段无损捕获，编码时回注原位 }
+  end;
+  TPartArray = array of TPart;
+
+  TMessage = record
+    Id: string;                      { 厂商消息 id；厂商未给则空串 }
+    Role: TMessageRole;
+    Parts: TPartArray;
+    Model: string;                   { assistant：实际服务模型 id }
+    FinishReason: TFinishReason;
+    Usage: TTokenUsage;
+    ExtraJson: TJsonText;            { 消息级未知字段无损捕获 }
+    function IsEmpty: Boolean;       { 无 id/model/parts/usage 的零值消息 }
+  end;
+  TMessageArray = array of TMessage;
+
+  { ---- 流增量 ---- }
+
+  TAgentErrorInfo = record          { sdkError 携带的中途错误信息 }
+    Code: TAgentErrorCode;
+    Message: string;
+    Retryable: Boolean;
+    RetryAfterMs: Int64;            { CRetryAfterUnknown=未提供 }
+  end;
+
+  TStreamDelta = record
+    Kind: TStreamDeltaKind;
+    TextDelta: string;              { sdkTextDelta / sdkThinkingDelta 载荷 }
+    ToolIndex: Integer;             { 并行工具槽位；非工具事件为 -1 }
+    ToolCallId: string;             { sdkToolCallStart 携带厂商调用 id }
+    ToolName: string;               { sdkToolCallStart 携带 }
+    ArgumentsDelta: string;         { sdkToolCallDelta 的参数 JSON 片段 }
+    FinishReason: TFinishReason;    { sdkFinish 携带 }
+    Usage: TTokenUsage;             { sdkUsage 携带 }
+    Error: TAgentErrorInfo;         { sdkError 携带 }
+  end;
+  TStreamDeltaArray = array of TStreamDelta;
+
+  { ---- 工具词表 ---- }
+
+  { v1 仅保留有明确消费语义的标志；其余候选进 inbox 等语义立项 }
+  TToolCapability = (tcParallel);
+  TToolCapabilities = set of TToolCapability;
+
+  TToolSpec = record
+    Name: string;                    { 限字母数字下划线连字符，1..64 字符，AddTool 时校验 }
+    Description: string;
+    ParametersJson: TJsonText;       { JSON Schema 文本；AddTool 时务实级校验 }
+    Capabilities: TToolCapabilities;
+    TimeoutMs: Int64;                { CTimeoutDefault（0=缺省即不限）}
+  end;
+  TToolSpecArray = array of TToolSpec;
+
+  TToolResult = record
+    ContentJson: TJsonText;          { 回喂模型的 JSON 文本 }
+    IsError: Boolean;                { true → 以 error 形态回喂，循环继续 }
+    Truncated: Boolean;
+  end;
+
+  { ---- 补全请求 ---- }
+
+  TCompletionRequest = record
+    Model: string;                   { 必填：无默认值，调用方显式决定 }
+    System: string;                  { 顶层 system 便利字段 }
+    Messages: TMessageArray;         { 对话历史（不含本轮待发 user 时自行前置）}
+    Tools: TToolSpecArray;           { 随请求携带（WithTools builder）}
+    ResponseSchemaJson: TJsonText;   { v1.1 保留位：v1 置非空即 aecConfig }
+    MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填 }
+    Temperature: Double;             { CTemperatureUnset }
+    TopP: Double;                    { CTopPUnset }
+    Seed: Int64;                     { CSeedUnset }
+    StopSequences: TStringArray;
+    ParallelToolCalls: TTriState;    { tsUnset 不上送 }
+    Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
+    ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时生效 }
+    ExtraJson: TJsonText;            { 逃生舱：浅合并进请求根对象 }
+    class function New(const AModel: string): TCompletionRequest; static;
+      { 工厂：其余字段全部为 sentinel 缺省 }
+    function WithSystem(const AText: string): TCompletionRequest;
+    function WithUserText(const AText: string): TCompletionRequest;
+    function WithMaxTokens(AN: Int64): TCompletionRequest;
+    function WithTemperature(AValue: Double): TCompletionRequest;
+    function WithStop(const ASeq: TStringArray): TCompletionRequest;
+    function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
+      { builder 全部返回修改后的副本（record 值语义链式书写）}
+  end;
+
+  { 拼 pkText：顺序直连无分隔符。不变量：MessageText(fold 结果) ==
+    正文 sdkTextDelta 的依序连接 }
+  function MessageText(const AMsg: TMessage): string;
+
+implementation
+
+uses
+  nextpas.core.text.builder;
+
+function TTokenUsage.Known: Boolean;
+begin
+  Result := (InputTokens <> CUsageUnknown)
+    or (OutputTokens <> CUsageUnknown)
+    or (CacheReadInputTokens <> CUsageUnknown)
+    or (CacheWriteInputTokens <> CUsageUnknown)
+    or (ReasoningTokens <> CUsageUnknown);
+end;
+
+function TTokenUsage.TotalKnownTokens: Int64;
+begin
+  Result := 0;
+  if InputTokens > 0 then
+    Result := Result + InputTokens;
+  if OutputTokens > 0 then
+    Result := Result + OutputTokens;
+end;
+
+function TMessage.IsEmpty: Boolean;
+begin
+  { usage 以 TotalKnownTokens=0 判定：同时覆盖全 CUsageUnknown 与全零，
+    保证 Default(TMessage)（取消路径空记录）判 IsEmpty 为真 }
+  Result := (Id = '') and (Model = '') and (Length(Parts) = 0)
+    and (FinishReason = frNone) and (Usage.TotalKnownTokens = 0)
+    and (ExtraJson = '');
+end;
+
+function MessageText(const AMsg: TMessage): string;
+var
+  I: Integer;
+  SB: IStringBuilder;
+begin
+  SB := MakeStringBuilder;
+  for I := 0 to High(AMsg.Parts) do
+    if AMsg.Parts[I].Kind = pkText then
+      SB.AppendStr(AMsg.Parts[I].Text);
+  Result := SB.ToString;
+end;
+
+class function TCompletionRequest.New(const AModel: string): TCompletionRequest; static;
+begin
+  Result := Default(TCompletionRequest);
+  Result.Model := AModel;
+  Result.Temperature := CTemperatureUnset;
+  Result.TopP := CTopPUnset;
+  Result.Seed := CSeedUnset;
+  { MaxTokens/ThinkingBudgetTokens 零位即 CMaxTokensUnset；TriState 零位即 tsUnset }
+end;
+
+function TCompletionRequest.WithSystem(const AText: string): TCompletionRequest;
+begin
+  Result := Self;
+  Result.System := AText;
+end;
+
+function TCompletionRequest.WithUserText(const AText: string): TCompletionRequest;
+var
+  LPart: TPart;
+  LMsg: TMessage;
+begin
+  Result := Self;
+  LPart := Default(TPart);
+  LPart.Kind := pkText;
+  LPart.Text := AText;
+  LMsg := Default(TMessage);
+  LMsg.Role := mrUser;
+  SetLength(LMsg.Parts, 1);
+  LMsg.Parts[0] := LPart;
+  Insert(LMsg, Result.Messages, Length(Result.Messages));
+end;
+
+function TCompletionRequest.WithMaxTokens(AN: Int64): TCompletionRequest;
+begin
+  Result := Self;
+  Result.MaxTokens := AN;
+end;
+
+function TCompletionRequest.WithTemperature(AValue: Double): TCompletionRequest;
+begin
+  Result := Self;
+  Result.Temperature := AValue;
+end;
+
+function TCompletionRequest.WithStop(const ASeq: TStringArray): TCompletionRequest;
+begin
+  Result := Self;
+  Result.StopSequences := Copy(ASeq, 0, Length(ASeq));
+end;
+
+function TCompletionRequest.WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
+begin
+  Result := Self;
+  Result.Tools := Copy(ASpecs, 0, Length(ASpecs));
+end;
+
+end.

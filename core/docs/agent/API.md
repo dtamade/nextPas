@@ -89,7 +89,9 @@ TMessage = record
   FinishReason: TFinishReason;
   Usage: TTokenUsage;
   ExtraJson: TJsonText;            { 消息级未知字段无损捕获 }
-  function IsEmpty: Boolean;       { 区分"空记录=无产出"与合法消息（取消路径语义）}
+  function IsEmpty: Boolean;       { 区分"空记录=无产出"与合法消息（取消路径语义）；
+                                     usage 以 TotalKnownTokens=0 判定，
+                                     覆盖全 CUsageUnknown 与全零两种形态 }
 end;
 TMessageArray = array of TMessage;
 
@@ -148,9 +150,10 @@ end;
     function WithMaxTokens(AN: Int64): TCompletionRequest;
     function WithTemperature(AValue: Double): TCompletionRequest;
     function WithStop(const ASeq: TStringArray): TCompletionRequest;
-    function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest; overload;
-    function WithTools(const ATools: array of IAgentTool): TCompletionRequest; overload;
-    { 第二形态提取各工具的 Spec——builder 链全程不断裂 }
+    function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
+    { WithTools(array of IAgentTool) 第二形态落位在 tools 层自由函数
+      （base 不依赖 intf 的分层约束，ARCHITECTURE §1），提取各工具的 Spec——
+      builder 链经其不断裂；随 W3 tools 落地 }
   需 {$modeswitch advancedrecords}（design-conventions §11 允许追加）。}
 ```
 
