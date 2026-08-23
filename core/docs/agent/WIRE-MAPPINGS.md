@@ -13,6 +13,12 @@
 | 超窗识别 | 状态 400 + 消息匹配（不区分大小写）：`context length` / `maximum context` / `token limit` / `too many tokens` / `context_length_exceeded` / `prompt is too long` → `aecContextOverflow` |
 | 错误体摘要 | 上游非 2xx 时截取响应体前 8KB 进 RawBodySnippet；JSON error 信封优先提取 message 字段 |
 | 流中途错误 | HTTP 200 且流已开始后到达的错误帧：产出 `sdkError` delta 后终止流（消费方可见），不吞进日志（token888 反例） |
+| 未映射枚举值 | 厂商新增/未知枚举值（finish_reason、delta 类型等）：取词表零值（frNone 等），原始文本写入消息级 `ExtraJson` 保留键 `agent.unmapped.<field>`，记 warn。**绝不臆造近似映射** |
+| 多字节边界 | SSE 解析按**字节缓冲**工作：UTF-8 序列可跨 Feed() 调用断裂，帧未完整前不得按字符解码（test_sse 有专项断言） |
+| SSE 帧文法 | `:` 开头行=注释/keep-alive，忽略；`event:` 无 `data:` 的帧跳过；`id:`/`retry:` 字段 v1 忽略（debug 日志）；未知 event 名 warn+跳过（帧级"未映射"规则）；`data:` 多行以 `\n` 连接 |
+| 系统消息确定性 | 顶层 system = 按数组顺序首个 mrSystem 文本；多个 system 段以 `\n\n` 连接；历史中后续 mrSystem 消息按各厂商规则保留原位——算法固定，保障前缀字节稳定（PERFORMANCE §6）|
+| BaseUrl 拼接 | 去尾部 `/` 后拼接端点路径；BaseUrl 已含 `/v1` 结尾则只追加 `/chat/completions` 或 `/messages`，否则追加完整默认路径（支持反代前缀部署）|
+| Extra 冲突 | 编码时 ExtraJson 键与已知字段同名：已知字段胜出（Extra 让位）；解码侧黑名单已排除，不产生冲突 |
 | 时间语义 | 一切毫秒时长 Int64；ms→ns 换算前做溢出防护 |
 
 ## 1. OpenAI Chat Completions 兼容适配器
@@ -27,6 +33,8 @@
 | `Model` | `model`（必填） |
 | `System` | `messages[0] = {role:"system", content}`（与历史 System 消息合并去重） |
 | `Messages[mrUser].pkText` | `{role:"user", content:"..."}` |
+| `Messages[mrUser].pkImage` | content parts 数组形态：`{role:"user", content:[{type:"text"...},{type:"image_url", image_url:{url}}]}`（URL/data URI 均直传）|
+| `Messages[mrAssistant].pkThinking` | 非流式：`message.reasoning_content` → pkThinking；流式见 Q-O2。无该字段的模型自然缺省 |
 | `Messages[mrAssistant].pkText` | `{role:"assistant", content:"..."}` |
 | `Messages[mrAssistant].pkToolCall` | `{role:"assistant", content:null|文本, tool_calls:[{id,type:"function",function:{name,arguments}}]}`（arguments 为折叠后全文） |
 | `Messages[mrTool].pkToolResult` | 每部分一条 `{role:"tool", tool_call_id, content}` |
@@ -36,7 +44,7 @@
 | `Seed` ≠ CSeedUnset | `seed` |
 | `StopSequences` 非空 | `stop` |
 | `ParallelToolCalls` ≠ tsUnset | `parallel_tool_calls` |
-| `Tools[]` | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象） |
+| `Tools` 非空（AReq.Tools） | `tools:[{type:"function", function:{name, description, parameters}}]`（parameters 为 JSON Schema 对象）；**空数组不上送字段** |
 | 流式调用 | 追加 `"stream":true, "stream_options":{"include_usage":true}`（quirk Q-O3） |
 | `ExtraJson` | 浅合并进请求根对象 |
 
@@ -86,8 +94,9 @@ data: [DONE]                                                             → 终
 | Q-O2 | `reasoning_content` 增量字段（兼容系厂商普遍支持） | 映射为 `sdkThinkingDelta`；缺省无此字段即无思考输出 |
 | Q-O3 | usage 仅当 `stream_options.include_usage=true` 才随末 chunk 到达，且 `choices:[]` | 必发该选项；兼容端不支持则 usage 保持 CUsageUnknown（Known=False），绝不臆造 |
 | Q-O4 | 部分兼容网关不发 `[DONE]` 直接断连 | 连接关闭=EOF；fold 正常收口 |
-| Q-O5 | tool_calls 首片携带 id+name、后续片仅 index+args 片段 | Start 只在首片发一次；adapter 按 index 分桶累积（禁止下游自行维护桶——词表已抽象掉） |
+| Q-O5 | tool_calls 首片携带 id+name、后续片仅 index+args 片段；条目缺 `index` 视为协议违例 | Start 只在首片发一次；adapter 按 index 分桶累积（禁止下游自行维护桶——词表已抽象掉）；OpenAI 不产 End 事件，封槽由 fold 对 sdkFinish 隐式完成（API §4）|
 | Q-O6 | 空 `choices` 数组的中间 chunk 存在 | 跳过，不算协议错误 |
+| Q-O7 | `choices` 可能多于一条（n>1 场景） | v1 固定单选择：index>0 的 choice 丢弃并 warn（对"绝不静默丢弃"的显式豁免——多选择语义超出 v1 词表，记录在案）|
 
 ## 2. Anthropic Messages 适配器
 
@@ -102,14 +111,16 @@ data: [DONE]                                                             → 终
 | **`MaxTokens`** | **`max_tokens` 厂商强制必填**。unset → 本地抛 `aecConfig`（绝不静默填默认——code888 的 4096 隐式行为被明确否决） |
 | `System` / 历史 mrSystem | 顶层 `system`（字符串；多段拼接） |
 | `Messages[mrUser].pkText` | `{role:"user", content:[{type:"text", text}]}` |
-| `pkImage` | `{type:"image", source:{type:"base64", media_type, data}}`（data URI 解析；mime 白名单 png/jpeg/gif/webp，违者 aecConfig） |
+| `pkImage` | data URI → `{type:"image", source:{type:"base64", media_type, data}}`；http(s) URL → `source:{type:"url", url}`（mime 白名单 png/jpeg/gif/webp，违者 aecConfig） |
 | `Messages[mrAssistant].pkText` | `{type:"text"}` 块 |
 | `pkThinking` | `{type:"thinking", thinking, signature}`（signature 原样透传，见 Q-A3） |
 | `pkToolCall` | `{type:"tool_use", id, name, input:<折叠后的 JSON 对象>}` |
 | `Messages[mrTool].pkToolResult` | 归并为**一条** `{role:"user", content:[{type:"tool_result", tool_use_id, content, is_error}]}`（Q-A4 分组规则） |
-| `Tools[]` | `tools:[{name, description, input_schema}]` |
+| `Tools` 非空（AReq.Tools） | `tools:[{name, description, input_schema}]`；空数组不上送字段 |
 | `Temperature` ≥0 | `temperature` |
+| `Seed` ≠ CSeedUnset | 无对应参数：忽略 + debug 日志（与 ParallelToolCalls 同规则）|
 | `StopSequences` | `stop_sequences` |
+| `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送；**tsTrue 而 Budget unset → aecConfig**（anthropic 强制 budget_tokens）|
 | `Thinking` 三态 / Budget | `thinking:{"type":"enabled","budget_tokens":N}`；tsFalse 显式 `{"type":"disabled"}`；tsUnset 不上送 |
 | 流式调用 | `"stream":true` |
 
@@ -165,11 +176,14 @@ id / model                            → Id / Model
 | Q-A5 | 无 parallel_tool_calls 参数 | 见 §2.1 注意事项 |
 | Q-A6 | `input_json_delta` 的 partial_json 是纯片段，可能跨块断裂 | 与 openai 同一 index 分桶 + StringBuilder 累积机制（provider.common 单一实现） |
 | Q-A7 | 429/5xx 响应可能带 `retry-after` 秒级头 | 公共规则解析；HTTP-date 形态不解析返回 unknown |
+| Q-A8 | 连接在 `message_stop` 之前死亡（截断流） | **fail-closed**：decoder.Finalize 无 message_start→stop 完整轨迹即抛 aecProtocol，绝不把截断答案合成完整消息（与 Q-A1 同精神；对照 OpenAI Q-O4 的宽容是各自协议现实）|
 
 ## 3. 明确不做（v1 边界）
 
-OpenAI 侧：`logprobs`、`response_format`/JSON mode、audio/modality 参数、
-legacy `functions` 字段、`tool_choice` 细粒度枚举（v1 固定 auto）。
+OpenAI 侧：`logprobs`、`response_format`/JSON mode（词表保留位
+ResponseSchemaJson 已立，v1 置非空即 aecConfig）、audio/modality 参数、
+legacy `functions` 字段、`tool_choice` 细粒度控制、`reasoning_effort`
+推理力度旋钮（后两项 + structured output 均 **v1.1 承诺位**，ROADMAP 组 B#1-2）。
 Anthropic 侧：`metadata.user_id`、citations、server-side tools（web_search 等）、
 `container`/code-execution、prompt caching 显式 `cache_control` 打点（缓存命中
 用量照常记录，但主动打点策略留给消费方经 ExtraJson 注入）。

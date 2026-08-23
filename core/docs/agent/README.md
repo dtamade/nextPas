@@ -40,8 +40,7 @@ begin
   LReply := LProvider.Complete(
     TCompletionRequest.New('gpt-4o')
       .WithSystem('你是一个简洁的助手')
-      .WithUserText('用一句话介绍 TLS 1.3'),
-    []);
+      .WithUserText('用一句话介绍 TLS 1.3'));
 
   WriteLn(MessageText(LReply));
 end.
@@ -55,8 +54,7 @@ var
   LDelta: TStreamDelta;
 begin
   LStream := LProvider.Stream(
-    TCompletionRequest.New('gpt-4o').WithUserText('讲个关于编译器的笑话'),
-    []);
+    TCompletionRequest.New('gpt-4o').WithUserText('讲个关于编译器的笑话'));
   while LStream.NextDelta(LDelta) do
     if LDelta.Kind = sdkTextDelta then
       Write(LDelta.TextDelta);
@@ -117,7 +115,8 @@ if LProvider = nil then
 
 ## 非目标（v1）
 
-- 不做 MCP（消息模型预留扩展点，不堵死后续接入）。
+- 不做 MCP（v1；词表不堵死：工具名允许 `<server>__<tool>` 扁平命名空间，
+  外部 MCP 客户端可经 IAgentTool 接入，无需改本模块）。
 - 不内置业务工具集；不做 embeddings / 图像生成 / WebSocket realtime。
 - 不内置定价表：只提供 Int64 token 用量，计价由消费方注入。
 - 不做服务端代理网关（那是 token888 的领域）。

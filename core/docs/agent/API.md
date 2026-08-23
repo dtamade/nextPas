@@ -89,6 +89,7 @@ TMessage = record
   FinishReason: TFinishReason;
   Usage: TTokenUsage;
   ExtraJson: TJsonText;            { 消息级未知字段无损捕获 }
+  function IsEmpty: Boolean;       { 区分"空记录=无产出"与合法消息（取消路径语义）}
 end;
 TMessageArray = array of TMessage;
 
@@ -114,7 +115,9 @@ TStreamDelta = record
 end;
 TStreamDeltaArray = array of TStreamDelta;
 
-function MessageText(const AMsg: TMessage): string;  { 拼 pkText 便利函数 }
+function MessageText(const AMsg: TMessage): string;
+{ 拼 pkText：顺序直连无分隔符。不变量：MessageText(fold 结果) == 正文
+  sdkTextDelta 的依序连接——流式已打印内容与非流式取文本完全一致 }
 
 { ---- 补全请求 ---- }
 
@@ -122,6 +125,9 @@ TCompletionRequest = record
   Model: string;                   { 必填：无默认值，调用方显式决定 }
   System: string;                  { 顶层 system 便利字段 }
   Messages: TMessageArray;         { 对话历史（不含本轮待发 user 时自行前置）}
+  Tools: TToolSpecArray;           { 随请求携带（WithTools builder），接口单参数化 }
+  ResponseSchemaJson: TJsonText;   { v1.1 保留位：置非空时 v1 编码器抛 aecConfig
+                                     （ROADMAP inbox 组 B#1，先占词表防破坏性变更）}
   MaxTokens: Int64;                { CMaxTokensUnset；anthropic 强制必填→WIRE-MAPPINGS §2.1 }
   Temperature: Double;             { CTemperatureUnset }
   TopP: Double;                    { CTopPUnset }
@@ -142,21 +148,26 @@ end;
     function WithMaxTokens(AN: Int64): TCompletionRequest;
     function WithTemperature(AValue: Double): TCompletionRequest;
     function WithStop(const ASeq: TStringArray): TCompletionRequest;
+    function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest; overload;
+    function WithTools(const ATools: array of IAgentTool): TCompletionRequest; overload;
+    { 第二形态提取各工具的 Spec——builder 链全程不断裂 }
   需 {$modeswitch advancedrecords}（design-conventions §11 允许追加）。}
 ```
 
 ### 1.4 工具词表
 
 ```pascal
-TToolCapability = (tcParallel, tcIdempotent, tcReadOnly, tcNeedsConfirm);
+{ v1 仅保留有明确消费语义的标志；其余候选（Idempotent/ReadOnly/NeedsConfirm）
+  进 inbox 等语义立项（纪律：不暴露未测试的兼容 API）}
+TToolCapability = (tcParallel);
 TToolCapabilities = set of TToolCapability;
 
 TToolSpec = record
-  Name: string;                    { ^[a-zA-Z0-9_-]{1,64}$，注册时校验 }
+  Name: string;                    { ^[a-zA-Z0-9_-]{1,64}$，AddTool 时校验 }
   Description: string;
-  ParametersJson: TJsonText;       { JSON Schema 文本 }
+  ParametersJson: TJsonText;       { JSON Schema 文本；AddTool 时做务实级校验（§1.5）}
   Capabilities: TToolCapabilities;
-  TimeoutMs: Int64;                { 0=不限（本字段语境）；loop 用它包 executor }
+  TimeoutMs: Int64;                { CTimeoutDefault（0=缺省即不限，全局 timeout 方言一致）}
 end;
 TToolSpecArray = array of TToolSpec;
 
@@ -166,6 +177,22 @@ TToolResult = record
   Truncated: Boolean;
 end;
 ```
+
+### 1.5 务实级工具参数校验（ValidateToolArguments 规范）
+
+v1 校验的构造全集（超出即属完整 JSON-Schema 校验器范畴，明确不做）：
+
+1. 预检：`Length(ArgumentsJson) ≤ 256 KiB`（SECURITY §3），超限直接 error result。
+2. 根必须是合法 JSON **object**（解析失败/非 object → error result）。
+3. `ParametersJson` 本身非法或根非 object → `AddTool` 时即抛 `aecConfig`
+   （注册期快速失败；运行期不再重复校验 spec 本身）。
+4. `required[]` 中的键必须出现在参数顶层。
+5. 顶层 `properties` 声明了 string/number/boolean 类型的键做类型核对
+   （number 接受 int/float）；array/object/null 类型不深查。
+6. 嵌套深度 ≤ 8 层（防深嵌套 DoS）。
+
+校验失败一律**合成 error result 回喂模型**（循环继续），不是异常——
+参数错误是模型的错误，不是调用方的。
 
 ## 2. 错误分类（nextpas.core.agent.errors）
 
@@ -200,6 +227,10 @@ public
 end;
 
 EAgentCancelled = class(EAgentError);   { ErrorCode 固定 aecCancelled }
+
+{ 消费方时序/用法违规（如 Active 期 GetMessage）：不占厂商协议错误码位，
+  让 catch 边界能区分"我的 bug"与"上游的错" }
+EAgentMisuse = class(EAgentError);      { ErrorCode 固定 aecConfig }
 
 TAgentErrorCodes = set of TAgentErrorCode;
 
@@ -277,6 +308,7 @@ end;
 
 IAgentCompletion = interface
   function NextDelta(out ADelta: TStreamDelta): Boolean;  { False=EOF }
+  procedure Cancel;                    { 幂等，任意线程；使 NextDelta 返回 False }
   function GetCancelled: Boolean;      { EOF 后读取区分取消 }
   function GetMessage: TMessage;       { EOF 后有效：内部 fold 的最终消息 }
   function GetUsage: TTokenUsage;      { EOF 后有效；未知字段=CUsageUnknown }
@@ -284,10 +316,14 @@ end;
 
 IAgentProvider = interface
   function GetName: string;                       { 'openai'|'anthropic'|'fake' }
+  { 工具经 AReq.Tools 随请求携带（builder 链不断裂）；可选令牌重载用于
+    全程取消（Stream 的令牌触发时自动 Cancel 返回的 completion）}
+  function Complete(const AReq: TCompletionRequest): TMessage; overload;
   function Complete(const AReq: TCompletionRequest;
-    const ATools: TToolSpecArray): TMessage;      { 取消→EAgentCancelled }
+    const AToken: IAsyncCancellationToken): TMessage; overload;
+  function Stream(const AReq: TCompletionRequest): IAgentCompletion; overload;
   function Stream(const AReq: TCompletionRequest;
-    const ATools: TToolSpecArray): IAgentCompletion;
+    const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
 end;
 
 { ---- 工具 ---- }
@@ -393,11 +429,17 @@ procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);
 折叠规则（协议域铁律，违例抛 `EAgentError[aecProtocol]`）：
 
 - `sdkToolCallStart` 开槽（ToolIndex 分桶）；`sdkToolCallDelta` 按 index 追加
-  ArgumentsDelta（IStringBuilder 累积防 O(n²)）；`sdkToolCallEnd` 封槽；
-  未 Start 先 Delta = 协议违例。
-- `sdkUsage`/`sdkFinish` 到达顺序任意，`Finish` 统一合成（FinalizeStream 语义）。
-- `sdkTextDelta`/`sdkThinkingDelta` 依序生成对应 part；thinking part 保留
+  ArgumentsDelta（IStringBuilder 累积防 O(n²)）；`sdkToolCallEnd` 封槽。
+  **`sdkFinish` 隐式封全部未闭槽**——End 是建议性事件，OpenAI 协议天然不产
+  它（WIRE-MAPPINGS Q-O5），缺 End 不是违例；未 Start 先 Delta 才是。
+- 连续 `sdkTextDelta`/`sdkThinkingDelta` 追加进同一 part，直到 part 类别切换
+  才开新 part（正文与思考交错时各自成段）；thinking part 保留
   Signature 字段透传。
+- `sdkError` 不进入消息：fold 跳过它；错误缓存是 IAgentCompletion 实现的职责
+  （ERRORS §6），fold 保持纯词表变换。
+- `sdkUsage`/`sdkFinish` 到达顺序任意，`Finish` 统一合成（FinalizeStream 语义）。
+- 空输入 → 空 mrAssistant 消息、frNone、Usage 全未知——合法结果不抛错。
+- 未映射的厂商枚举值处理见 WIRE-MAPPINGS §0 公共规则（零值+Extra 保留键+warn）。
 - fold 只认词表，不知道任何厂商名——厂商差异必须在 adapter 内归约为词表。
 
 ## 5. 重试策略（nextpas.core.agent.retry）
@@ -421,31 +463,47 @@ TRetryPolicy = record
 end;
 
 { 装饰器：包装任意 IAgentProvider（含 fake）；睡在 AClock 上（测试零睡眠）；
-  每次重试前检查 ACancel（intf 侧可选令牌版本另列）；每次尝试经 OnRetry 上报 }
+  每次尝试经 TRetryPolicy.OnAttempt 上报 }
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock): IAgentProvider; overload;
 function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AClock: IAgentClock; const AToken: IAsyncCancellationToken): IAgentProvider; overload;
 ```
 
-语义：仅对 `RetryOn` 且 `IsRetryable` 的错误重试；`RetryAfterMs` 有效且
-`RespectRetryAfter` 时直接采用；指数退避 `min(prev*Multiplier, MaxDelayMs)` ± jitter；
-超过 `MaxAttempts-1` 次后抛最后一次原始错误。
+语义（可断言的精确定义）：
+
+- 仅对 `RetryOn` ∩ `IsRetryable` 的错误重试。
+- 第 n 次重试前延迟：`base_n = min(InitialDelayMs × Multiplier^(n-1), MaxDelayMs)`；
+  实际延迟 = `base_n × f`，`f ∈ [1-Jitter, 1+Jitter]` 均匀分布。
+- `RetryAfterMs ≠ CRetryAfterUnknown` 且 `RespectRetryAfter` 时直接采用服务器值
+  （不经曲线）。
+- 累计退避超过 `MaxTotalRetryMs` → 停止重试，抛最后一次原始错误。
+- `OnAttempt(AAttempt=即将开始的尝试序号从 1 起, ADelayMs=本次尝试前的睡眠时长,
+  首次尝试为 0, ALastError=上一次失败)`。
+- 取消优先于一切：令牌在睡眠/尝试边界触发 → 抛 `EAgentCancelled`
+  （不吞为成功、不还原成原始错误）。
+- 流式作用域：装饰器只重试到**拿到流且收到首个 delta** 为止；流中途失败原样
+  上抛（重放意味着向消费方重复投递 delta——禁止）。
 
 ## 6. 循环（nextpas.core.agent.loop）
 
 ```pascal
+TLoopOutcome = (roCompleted, roCancelled, roBudgetExhausted, roDoomLoop,
+  roRoundsExhausted, roFailed);
+
 TLoopEventKind = (levRunStart, levRoundStart, levRoundEnd,
   levToolCallStart, levToolCallEnd, levBudgetWarning, levRunEnd);
 { 注意：无 levRetry——重试发生在 WithRetry 装饰器层，loop 不可见；
-  重试观测走 TRetryPolicy.OnAttempt }
+  重试观测走 TRetryPolicy.OnAttempt。levBudgetWarning 在剩余输出预算
+  首次低于 20% 时触发一次 }
 
 TLoopEvent = record
   Kind: TLoopEventKind;
   Round: Integer;
   ToolName: string;
+  ToolCallId: string;              { 工具事件关联键；非工具事件为空 }
   ElapsedMs: Int64;
-  DetailJson: TJsonText;           { 结构化细节，事件类型自解释 }
+  DetailJson: TJsonText;           { 自由结构细节；快照断言只看 Kind/Round/ToolCallId }
 end;
 
 TLoopEventHandler = reference to procedure(const AEvent: TLoopEvent);
@@ -462,39 +520,65 @@ TLoopHookProc = function(const ASpec: TToolSpec;
   const AArgsJson: TJsonText): THookVerdict;
 
 TAgentLoopOptions = record
+  RequestBase: TCompletionRequest; { 请求模板：Model/System/MaxTokens/Temperature 等
+                                     由这里取；loop 每轮以其为底、追加 transcript 为
+                                     Messages、注入注册的工具。Model 必填（同请求规则）}
   MaxRounds: Integer;              { 默认 10 }
   MaxOutputTokens: Int64;          { 跨轮累计输出预算；CMaxTokensUnset=不限 }
   MaxToolCalls: Integer;           { 整次 run 工具调用总数；0=不限 }
   DoomLoopThreshold: Integer;      { 连续相同 call 判定阈值，默认 3；0=关闭检测 }
   TruncateLines: Integer;          { 工具结果截断行数上限，默认 2000；0=关 }
   TruncateBytes: Integer;          { 截断字节上限，默认 65536；0=关 }
-  OnEvent: TLoopEventHandler;      { 内部统一存储；三形态 SetEventHook 重载注入 }
-  PreToolCall: TLoopHook;          { 三形态 SetPreToolCall 重载注入 }
-  PostToolResult: TLoopHook;       { 三形态 SetPostToolResult 重载注入 }
   Clock: IAgentClock;              { 注入；默认真实时钟 }
   Logger: ILogger;                 { 同 C15：nil → NullLogger }
   Cancel: IAsyncCancellationToken; { 可选运行令牌 }
 end;
+{ 回调不在 Options 里：SetXxx 是唯一注入通道，避免双通道绕过归一化 }
 
 TAgentLoop = class
-  constructor Create(const AProvider: IAgentProvider);
-  procedure AddTool(const ATool: IAgentTool);          { 实例作用域容器 }
-  property Options: TAgentLoopOptions read FOptions write FOptions;
+  constructor Create(const AProvider: IAgentProvider); overload;
+  constructor Create(const AProvider: IAgentProvider;
+    const APool: IThreadPool); overload;   { 并行工具池；nil → 共享进程池 }
+  procedure AddTool(const ATool: IAgentTool);    { 注册即校验 spec/schema → aecConfig }
+  procedure SetEventHook(AHandler: TLoopEventHandler); overload;
+  procedure SetEventHook(AHandler: TLoopEventHandlerMethod); overload;
+  procedure SetEventHook(AHandler: TLoopEventHandlerProc); overload;
+  procedure SetPreToolCall(AHook: TLoopHook); overload;
+  procedure SetPreToolCall(AHook: TLoopHookMethod); overload;
+  procedure SetPreToolCall(AHook: TLoopHookProc); overload;
+  procedure SetPostToolResult(AHook: TLoopHook); overload;
+  procedure SetPostToolResult(AHook: TLoopHookMethod); overload;
+  procedure SetPostToolResult(AHook: TLoopHookProc); overload;
 
-  { 直线入口：内部维护 transcript；取消/预算按 §ARCHITECTURE 语义收尾 }
+  Options: TAgentLoopOptions;      { 公开字段：Run 前配置（record 直赋合法）}
+
+  { 直线入口：内部维护 transcript；取消/预算按 ARCHITECTURE §5 语义收尾 }
   function Run(const AUserText: string): IAgentLoopRun; overload;
   function Run(const AMessages: TMessageArray): IAgentLoopRun; overload;
 end;
 
 IAgentLoopRun = interface
-  function FinalMessage: TMessage;        { 最终 assistant 文本消息 }
+  function FinalMessage: TMessage;        { 最终 assistant 文本消息；无产出时空记录
+                                            （用 TMessage.IsEmpty 区分）}
+  function TryGetFinalMessage(out AMsg: TMessage): Boolean;  { False=无产出 }
   function Transcript: TMessageArray;     { 全程消息（含 tool 往返）}
-  function Outcome: TLoopOutcome;         { roCompleted | roCancelled |
-                                            roBudgetExhausted | roDoomLoop | roFailed }
+  function Outcome: TLoopOutcome;
   function TotalUsage: TTokenUsage;
   function LastError: EAgentError;        { roFailed 时非 nil }
 end;
 ```
+
+收尾语义（三种终止统一路径，normative）：预算耗尽 / 防打转 / MaxRounds 用尽
+都执行"追加 system 引导消息 → 禁工具推理一次"；该轮成功则 `FinalMessage`=引导回复、
+`Outcome`=触发原因（roBudgetExhausted/roDoomLoop/roRoundsExhausted）；该轮失败则
+`Outcome=roFailed` 且 `LastError` 就位。hook/OnEvent 回调抛异常**不吞**：直接冒泡，
+Run 以 roFailed 终止（编程错误必须响亮）。
+
+工具结果截断信封（normative）：截断作用于结果的 UTF-8 安全切文本投影，
+产出**合法 JSON 包裹** `{"truncated":true,"content":"<切后文本>"}`
+（键名为 tools 单元公开常量）；顺序固定 `Execute → 截断信封化 →
+PostToolResult hook → 回喂`——hook 只见截断后载荷，超大结果到不了 hook
+（DoS 时序保证），`Truncated=True` 随 pkToolResult 记录。
 
 hook 与事件回调的注入统一走 `SetXxx` 三形态重载（anonymous / method / proc），
 内部按 design-conventions 回调范式存 `reference to`。
@@ -529,7 +613,7 @@ CI 纪律：仓库内任何 test/example/benchmark 禁止触公网 LLM API；
 { ---- OpenAI Chat Completions 族（nextpas.core.agent.provider.openai）---- }
 
 function EncodeOpenAIRequest(const AReq: TCompletionRequest;
-  const ATools: TToolSpecArray; AStream: Boolean): TJsonText;
+  AStream: Boolean): TJsonText;
 
 procedure DecodeOpenAIResponse(const ABody: TJsonText;
   out AMsg: TMessage);                       { 违反协议抛 aecProtocol }
@@ -539,7 +623,7 @@ function NewOpenAIWireDecoder: IAgentWireDecoder;
 { ---- Anthropic Messages 族（nextpas.core.agent.provider.anthropic）---- }
 
 function EncodeAnthropicRequest(const AReq: TCompletionRequest;
-  const ATools: TToolSpecArray; AStream: Boolean): TJsonText;
+  AStream: Boolean): TJsonText;
 
 procedure DecodeAnthropicResponse(const ABody: TJsonText;
   out AMsg: TMessage);

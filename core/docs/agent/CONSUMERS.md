@@ -114,13 +114,16 @@ sentinel 选项、唯一 fold、transport 接缝、注入时钟）。迁移是**
 ```pascal
 // 1) 装配（显式 或 env）
 LProvider := NewOpenAIProviderFromEnv;
-if LProvider = nil then LProvider := NewFakeProvider(CDemoScript);
+if LProvider = nil then
+  raise EAgentError.Create(aecConfig, 0, 'NEXTPAS_AGENT_OPENAI_* 未配置');
+  { 演示代码才允许降级 fake；生产路径绝不静默回退（§3）}
 
 // 2) 可靠性（一行装饰）
 LProvider := WithRetry(LProvider, TRetryPolicy.Default, NewSystemClock);
 
-// 3) 调用：一行全量 或 pull 式流式
-LReply := LProvider.Complete(TCompletionRequest.New('gpt-4o').WithUserText('hi'), []);
+// 3) 调用：一行全量 或 pull 式流式（工具随请求携带）
+LReply := LProvider.Complete(
+  TCompletionRequest.New('gpt-4o').WithUserText('hi'));
 
 // 4) 测试离线：NewFakeProvider 脚本回放，CI 零网络零睡眠
 ```

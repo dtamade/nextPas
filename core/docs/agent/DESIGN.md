@@ -67,14 +67,16 @@
 
 ### D8 工具 = record spec + 接口执行器，能力标志驱动并行
 - **决定**：TToolSpec（schema 文本+能力集）与 IAgentTool 执行解耦；批内全部声明
-  tcParallel 才并行；调用侧务实级 schema 校验失败合成 error result 回喂模型。
+  tcParallel 才并行；调用侧务实级校验（规范全集见 API §1.5）失败合成 error
+  result 回喂模型。**v1 词表只保留 tcParallel 一个标志**——Idempotent/ReadOnly/
+  NeedsConfirm 无消费语义前不进词表（inbox 立项后回归）。
 - **备选**：硬编码并行白名单；完整 JSON-Schema 校验器。
 - **理由**：code888 验证了能力标志比白名单健壮；完整 schema 校验是一个独立模块
   级工程（validation/json 域），v1 明确降级为结构校验并在 TESTING 记录边界。
   工具失败双防线：实现方返回 IsError，异常由 loop 兜底转 aecToolFailed。
 
 ### D9 用量 Int64 + 计价外置
-- **决定**：TTokenUsage 六字段 Int64，未知=-1；不内置价格表。
+- **决定**：TTokenUsage 五字段 Int64，未知=-1；不内置价格表。
 - **理由**：token888 整数货币数学证明估算/浮点进入约束路径必出事；价格易变，
   标准库内置必然腐烂。缓存命中/推理 token 字段齐备，计价函数由消费方注入。
 

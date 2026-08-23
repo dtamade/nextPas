@@ -54,14 +54,14 @@
 | `nextpas.core.agent.fold.pas` | 协议 | TAssistantBuild 增量累积器 + FoldDelta/FoldDeltas 纯折叠（唯一实现，禁止重写） | base, errors |
 | `nextpas.core.agent.sse.pas` | 协议 | **feed 式增量 SSE 解析器**（Feed(buf)→events；内部单元，http.sse 晋升候选） | base, bytes |
 | `nextpas.core.agent.clock.pas` | 支撑 | IAgentClock 实现：真实时钟（可取消睡眠）+ fake 时钟（测试注入） | intf, async.cancellation |
-| `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上） | intf, base |
+| `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上） | intf, base, errors |
 | `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
-| `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获 | base, errors, json |
+| `nextpas.core.agent.provider.common.pas` | 适配支撑 | 适配器共享 helper：wire JSON 组装/读取、SSE data 帧→delta 的公共骨架、Extra 无损捕获、帧序 FSM 骨架 | base, errors, json, intf |
 | `nextpas.core.agent.provider.openai.pas` | 适配 | OpenAI Chat Completions 兼容适配器；公开纯编解码器 Encode/Decode/WireDecoder（D13）| common, transport, intf |
 | `nextpas.core.agent.provider.anthropic.pas` | 适配 | Anthropic Messages 适配器；同上公开编解码器 | common, transport, intf |
-| `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold |
-| `nextpas.core.agent.tools.pas` | 工具 | 参数校验（务实级）、结果截断工具、executor 包装（超时/取消） | base, intf, json, text |
-| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转；策略全部可注入；并行工具经 IThreadPool.SubmitBatch（LIFECYCLE §5，决策 D14/C9） | intf, fold, tools, errors, thread |
+| `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径 | intf, fold, json |
+| `nextpas.core.agent.tools.pas` | 工具 | 参数校验（§1.5 规范）、结果截断信封、executor 包装（超时/取消） | base, intf, json, text |
+| `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | intf, fold, tools, errors, thread, json |
 | `nextpas.core.agent.session.pas` | 会话 | IAgentTranscriptStore 接口 + 内存实现（W4 起）；JSONL 实现后置独立 wave | base, intf, fs |
 
 体积指引：单文件 >800 行必须拆分（provider.openai 与 anthropic 预期各 ~500-700 行，
@@ -103,20 +103,22 @@ Stream(req, tools)
 ```
 TAgentLoop.Run(userText)
   └─ round = 1..MaxRounds:
-       provider.Stream(history ∪ tools)          ← 每轮全量重发历史（v1 语义）
-       drain deltas: OnDelta 透传 + FoldDelta 累积
+       provider.Stream(req = RequestBase + transcript 追加为 Messages)
+                                                  ← 每轮全量重发历史（v1 语义）；
+                                                    前缀字节稳定不变量 PERFORMANCE §6
+       drain deltas: OnEvent(lev*) 透传 + FoldDelta 累积
        assistant := build.Finish
-       if 无 pkToolCall part: return 完成
+       if 无 pkToolCall part → 终止路径（§5 引导语义或 roCompleted）
        收集本轮 tool calls（按 ToolIndex 排序）
-       并行判定：批内全部 spec ∈ tcParallel 才并行，否则串行
+       并行判定：批内全部 spec ∈ tcParallel 才并行；串/并行都经线程池执行
        for each call:
          PreToolCall hook → proceed / block(合成 error result) / stop turn
-         ValidateToolArguments（务实级校验，失败合成 error result 回喂模型）
-         executor.Execute(args, cancelToken)      [超时包装]
-         PostToolResult hook / TruncateToolResult（默认 2000 行 / 64KB 上限）
+         ValidateToolArguments（§API 1.5 规范，失败合成 error result 回喂模型）
+         Execute(args, 子令牌)                    [线程池 + TimeoutMs 汇合，弃置策略 LIFECYCLE §5]
+         截断信封化（UTF-8 安全切 + 合法 JSON 包裹 + Truncated 标记）
+         PostToolResult hook（只见截断后载荷——DoS 时序）
        history += assistant msg + 一条 mrTool 消息（每 call 一个 pkToolResult part）
-       预算结算（usage 增量累计）；超限 → 终止轮询，按 §5 预算语义收尾
-       防打转：连续相同 (toolName + argsHash) ≥ N（默认 3）→ 强制终止并回喂引导
+       预算结算（usage 增量累计）；终止检查走统一引导收尾（LIFECYCLE §4）
 ```
 
 ## 4. 并发与取消模型
@@ -133,7 +135,7 @@ TAgentLoop.Run(userText)
 - pull 式（NextDelta/NextEvent）：Cancel 后返回 False（EOF 形态），消费方用
   `GetCancelled` 区分取消与正常结束——**不靠异常打断拉取循环**。
 - 全量式（Complete / Loop.Run）：抛 `EAgentCancelled`。
-- 退避睡眠一律走 `IAgentClock.Sleep(ms, token)`，令牌触发立即返回
+- 退避睡眠一律走 `IAgentClock.SleepMs(ms, token)`，令牌触发立即返回
   （真实时钟底层 `WaitForCancel`；ns 换算带溢出防护）。
 - 取消后磁盘/资源收尾由拥有线程独占执行（code888 M8 规则）。
 
@@ -164,6 +166,7 @@ TAgentLoop.Run(userText)
 
 门面只 re-export：全部公共 record/enum/常量、`IAgentProvider/IAgentCompletion/
 IAgentTool/IAgentClock`、构造函数（`NewOpenAIProvider/NewAnthropicProvider/
-NewFakeProvider/NewXxxProviderFromEnv/WithRetry`）、`TAgentLoop`、便利函数
-（`MessageText` 等）。wire 层类型（TWireRequest/TWireSSEEvent）与 `agent.sse`
-不进门面——自定义 transport 的消费方显式引 `nextpas.core.agent.intf`。
+NewFakeProvider/NewEchoProvider/NewXxxProviderFromEnv/NewSystemClock`）、
+`TFakeClock`、`WithRetry`、`TAgentLoop`、便利函数（`MessageText` 等）。
+wire 层类型（TWireRequest/TWireSSEEvent）与 `agent.sse` 不进门面——自定义
+transport 的消费方显式引 `nextpas.core.agent.intf`。

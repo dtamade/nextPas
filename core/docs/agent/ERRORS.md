@@ -1,7 +1,8 @@
 # ERRORS：错误流转矩阵与语义细则
 
-> 权威来源链：本文档 > API.md §2 > 代码注释。所有层的错误行为必须能在
-> 本文档找到对应行；新增错误码/错误路径先改这里。
+> 权威来源链：**API.md**（词表与签名权威）> **本文档**（错误行为细则）>
+> 代码注释。DESIGN/SELECTION 是论证记录，不作实施依据。
+> 所有层的错误行为必须能在本文档找到对应行；新增错误码/错误路径先改这里。
 
 ## 1. 错误产生点矩阵
 
@@ -47,7 +48,7 @@ function ClassifyUpstreamError(Status, Headers, Body):
     Code := aecContextOverflow                    { 覆盖 400 归因 }
   if Status = 429:
     RetryAfterMs := ParseRetryAfter(Headers)      { retry-after-ms > retry-after(秒);
-                                                     HTTP-date 不解析 → CUsageUnknown }
+                                                     HTTP-date 不解析 → CRetryAfterUnknown }
   raise EAgentError(Code, Msg, Retryable=IsRetryable(Code),
                     Provider=<name>, RequestId=ProbeRequestIdHeaders(Headers),
                     RawBodySnippet=Snippet)
@@ -68,10 +69,10 @@ function ClassifyUpstreamError(Status, Headers, Body):
 | 场景 | 行为 |
 |------|------|
 | `IAgentCompletion.NextDelta` 进行中 Cancel | 当前阻塞读被打断，返回 False；GetCancelled=True；已产出 delta 有效 |
-| `Complete()` 任意阶段取消 | 抛 EAgentCancelled（aecCancelled）|
-| `Loop.Run()` 轮界/工具界检测 | 终止轮询，RunOutcome=roCancelled；FinalMessage 为 nil 时 Transcript 保留已完成部分 |
-| 工具执行中取消 | 令牌已传入 IToolContext；工具自行响应；忽略令牌的工具由其 TimeoutMs 兜底 |
-| 退避睡眠中取消 | SleepMs 返回 False，立即以最后一次原始错误终止（不吞为成功）|
+| `Complete()` 任意阶段取消 | 抛 `EAgentCancelled`——**取消优先于一切结果**（含退避中的最后一次原始错误）|
+| `Loop.Run()` 轮界/工具界检测 | 终止轮询，RunOutcome=roCancelled；FinalMessage 为空记录（IsEmpty 判别，TryGetFinalMessage=False），Transcript 保留已完成部分 |
+| 工具执行中取消 | 令牌已传入 IToolContext；工具自行响应；忽略令牌的工具无抢占式中断——超时后合成 timeout error result，工作线程弃置（LIFECYCLE §5 弃置策略），Run 不被无限拖住 |
+| 退避睡眠中取消 | SleepMs 返回 False → 抛 `EAgentCancelled`（与 Complete 行同一规则的两面，不吞为成功、不还原为原始错误）|
 | 取消后的资源 | 连接关闭/归还由 transport 完成（拥有线程内）；磁盘类副作用本模块无 |
 
 ## 6. 边界细则
@@ -79,9 +80,8 @@ function ClassifyUpstreamError(Status, Headers, Body):
 - **Utf8SafeTruncate**：8KB 截断必须回退到 UTF-8 序列边界（最多回退 3 字节），
   绝不产出半字符——错误摘要会进日志，半字符会破坏下游 JSON 编码。
 - **sdkError delta 之后必 EOF**：adapter 产出 sdkError 后不得再产出任何其他
-  delta；completion 将该错误缓存并在 EOF 后首次 GetMessage 时抛出对应
-  EAgentError（pull 循环本身不被异常打断——错误延迟到取结果时刻）。
-  替代方案（NextDelta 直接抛）被否决：破坏"拉取循环直线代码"形态。
-- **幂等**：EOF 后再调 NextDelta 恒 False 且无副作用；Close/Free 重复调用安全。
-- **空输入**：Messages 空 + System 空 → Complete 直接 aecConfig（不发无效请求）；
-  Tools 空 → 不上送 tools 字段。
+  delta；错误由 IAgentCompletion 实现缓存（fold 跳过 sdkError，不进消息），
+  EOF 后首次 GetMessage 抛出对应 `EAgentError`，重复调用重复抛同一缓存实例
+  （pull 循环本身不被异常打断——错误延迟到取结果时刻）。
+- **空输入**：Messages 空 + System 空 → `aecConfig`，在**适配器编码入口统一
+  检查**（两厂商同规则；test_provider_* 各一条断言）；不发无效请求。
