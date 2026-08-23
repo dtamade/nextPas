@@ -17,7 +17,7 @@ v2.6：范式决策；v2.5：诚实局限；v2.4：先例对照）
 迁移进度  ████████████████  N1-N6 全部✅ │ 66/66 单元+壳层 driver.* │ 九目录散布→src 平铺完成
 性能批次  ██░░░░░░░░░░░░░░  P0✅ 计时探针落地 │ tree mini: sema 占 99%·播种占 80%·i17 开销仅 1.6%
 正确性    residual 0/0 ✅   compiler-pass 58/58 ✅   opt 首错=支配性违规(新口)
-门禁      contract pass ✅   FPC rebuild ✅   np 自举 tree mini ✅
+门禁      contract pass ✅(78名+层位A已激活·8豁免=N7工单)   FPC rebuild ✅   tree mini ✅
 顶尖差距  冷编译 ~900×      RSS 1.4GB→目标 ≤400MB     增量:无→目标秒级(§3.5)
 下一口    P1 播种路径索引分配(swiss+LowerCase 消除) → P2 arena
 ```
@@ -568,6 +568,7 @@ P0 基线数字，回滚判据客观化。
 | v2.13 | 92dbb1556 | N4 落地：sema 12 单元+hir_lowering 迁入 src（累计 37/66，src 38 pas+55 inc）；门禁清单扩至 36 名+两类显式例外登记（sema.analyzer I/O 族 FsExists/FsStat 播种新鲜度检查、sema.analyzer/sema.string_ownership→ir 上行边 R9/N7）；台账 D16 点分文件名纪律；§5 映射表重写为 N1-N4 全量状态 |
 | v2.14 | 91ff9e29d | N5 落地：ir 25 单元+backend.plan 迁入 src（累计 63/66，仅剩 toolchain ×3；src 64 pas+71 inc）；门禁清单扩至 62 名+例外+1（backend.plan FsDir）+上行边登记扩至 frontend.compilation_session→ir/backend 全族；全量 residual 对比诚实改挂 N6 收口轮（本轮以十三探针+tree mini 代证） |
 | v2.15 | （本提交） | N6 落地=命名支柱收官：N6a toolchain ×3（2abcd33bb，66 生产单元全清，I/O 例外+3）；N6b 壳层 nextpas.driver.{command,projection}.*+target_config 改名+json_helpers 双胞胎收口+门禁前缀卫兵修复（点分后缀误报）；§5 全表收官；台账 D17 文档脚本截断教训 |
+| v2.16 | （本提交） | 收口深化：D19 轴 A 层位检查复活（截断错位+豁免写法双重失效→首次真实运行现形 8 条 R9 违规）；§4.2.2 N7 手术清单立项；P1 静态侦察+实施细则两块（140 处热点/LookupProcedureBody 分配实锤/三刀次序） |
 
 ## 10. 文档维护规则
 
