@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FILE="$ROOT_DIR/tests/winssl/test_winssl_integration_multi.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+FILE="${ROOT_DIR}/core/tests/nextpas.core.tls/winssl/test_winssl_integration_multi.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -11,7 +11,7 @@ fail() {
 
 echo "[TEST] winssl integration multi tls13 optional contract"
 
-[[ -f "$FILE" ]] || fail "missing file: tests/winssl/test_winssl_integration_multi.pas"
+[[ -f "$FILE" ]] || fail "missing file: core/tests/nextpas.core.tls/winssl/test_winssl_integration_multi.pas"
 
 if ! rg -F --quiet -- 'function IsOptionalTLS13OnlyFailure' "$FILE"; then
   fail "test_winssl_integration_multi.pas should classify TLS 1.3-only Schannel platform failures explicitly"

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -33,17 +33,17 @@ require_pattern() {
 }
 
 expected_hits="$(cat <<'EOF'
-tests/mbedtls/benchmark_handshake_simple.pas
-tests/mbedtls/test_mbedtls_cert_chain.pas
-tests/mbedtls/test_mbedtls_cert_errors.pas
-tests/mbedtls/test_mbedtls_cert_verify_flags.pas
-tests/mbedtls/test_mbedtls_lowlevel.pas
-tests/mbedtls/test_mbedtls_safe.pas
-tests/mbedtls/test_mbedtls_simple_connection.pas
+core/tests/nextpas.core.tls/mbedtls/benchmark_handshake_simple.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_cert_chain.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_cert_errors.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_cert_verify_flags.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_lowlevel.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_safe.pas
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_simple_connection.pas
 EOF
 )"
 
-actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' tests/mbedtls | sort || true)"
+actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' core/tests/nextpas.core.tls/mbedtls | sort || true)"
 compare_file_list "MbedTLS direct-core verify-result residual file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-FILE="$ROOT_DIR/tests/unit/test_winssl_comprehensive.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+FILE="${ROOT_DIR}/core/tests/nextpas.core.tls/unit/test_winssl_comprehensive.pas"
 
 fail() {
   echo "[FAIL] $1"
@@ -11,7 +11,7 @@ fail() {
 
 echo "[TEST] winssl comprehensive factory registration contract"
 
-[[ -f "$FILE" ]] || fail "missing file: tests/unit/test_winssl_comprehensive.pas"
+[[ -f "$FILE" ]] || fail "missing file: core/tests/nextpas.core.tls/unit/test_winssl_comprehensive.pas"
 
 if ! rg -F --quiet -- 'procedure EnsureWinSSLBackendRegistered;' "$FILE"; then
   fail "test_winssl_comprehensive.pas should define an explicit WinSSL backend registration guard"

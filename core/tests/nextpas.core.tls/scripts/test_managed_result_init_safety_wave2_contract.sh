@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WIRE_FILE="$ROOT_DIR/src/nextpas.core.tls.tls13.wire.pas"
-SESSION_FILE="$ROOT_DIR/src/nextpas.core.tls.freepascal.session.pas"
-SESSION_RESUMPTION_TEST_FILE="$ROOT_DIR/tests/test_freepascal_client_session_resumption.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+WIRE_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.tls13.wire.pas"
+SESSION_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.freepascal.session.pas"
+SESSION_RESUMPTION_TEST_FILE="${ROOT_DIR}/core/tests/nextpas.core.tls/test_freepascal_client_session_resumption.pas"
 
 echo "[TEST] managed result init safety wave2 contract"
 

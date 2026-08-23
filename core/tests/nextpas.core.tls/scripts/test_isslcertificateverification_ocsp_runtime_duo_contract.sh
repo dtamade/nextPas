@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
@@ -33,12 +33,12 @@ require_pattern() {
 }
 
 expected_hits="$(cat <<'EOF'
-tests/openssl/test_openssl_server_ocsp_stapling_runtime.pas
-tests/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas
+core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_runtime.pas
+core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas
 EOF
 )"
 
-actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' tests/openssl tests/wolfssl | sort || true)"
+actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\b' core/tests/nextpas.core.tls/openssl core/tests/nextpas.core.tls/wolfssl | sort || true)"
 compare_file_list "OpenSSL/WolfSSL OCSP runtime verify-result residual file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(

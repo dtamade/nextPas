@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 2026-08-23 布局修复：契约以仓库根相对路径取文件
+cd "$(dirname "$0")/../../../.."
+
 check_backend() {
   local file="$1"
 

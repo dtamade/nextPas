@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 
 echo "[TEST] managed result init safety wave6 contract"
 
@@ -15,7 +15,7 @@ root = Path(sys.argv[1])
 targets = [
     "core/tests/nextpas.core.tls/test_tls13_posthandshake.pas",
     "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas",
-    "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas",
+    "core/tests/nextpas.core.tls/test_tls13_servercertverify/test_tls13_servercertverify.pas",
     "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas",
     "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas",
     "core/tests/nextpas.core.tls/test_freepascal_client_ocsp_stapling_runtime.pas",
@@ -38,7 +38,7 @@ for target in targets:
             f"{target} no longer initializes empty TBytes Result with SetLength(Result, 0)")
 
 required_patterns = {
-    "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas": [
+    "core/tests/nextpas.core.tls/test_tls13_servercertverify/test_tls13_servercertverify.pas": [
         r"function LoadFileBytes\(.*?begin\s+Result := nil;.*?SetLength\(Result, LStream.Size\);",
         r"function QWordToBytes\(.*?begin\s+Result := nil;.*?if AValue = 0 then",
         r"function BuildPEMPrivateKeyWithLeadingJunk\(.*?begin\s+Result := nil;.*?LJunkBytes :=",

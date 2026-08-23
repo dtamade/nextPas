@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-KEYSCHEDULE_FILE="$ROOT_DIR/src/nextpas.core.tls.tls13.keyschedule.pas"
-CLIENTHELLO_FILE="$ROOT_DIR/src/nextpas.core.tls.tls13.clienthello.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+KEYSCHEDULE_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.tls13.keyschedule.pas"
+CLIENTHELLO_FILE="${ROOT_DIR}/core/src/nextpas.core.tls.tls13.clienthello.pas"
 
 echo "[TEST] managed result init safety wave4 contract"
 

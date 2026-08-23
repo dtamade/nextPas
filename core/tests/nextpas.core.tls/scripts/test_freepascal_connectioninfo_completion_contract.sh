@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-conn_file="$ROOT_DIR/src/nextpas.core.tls.freepascal.connection.pas"
-session_file="$ROOT_DIR/src/nextpas.core.tls.freepascal.session.pas"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+conn_file="${ROOT_DIR}/core/src/nextpas.core.tls.freepascal.connection.pas"
+session_file="${ROOT_DIR}/core/src/nextpas.core.tls.freepascal.session.pas"
 
 if rg -n --fixed-strings "function TFreePascalConnection.GetConnectionInfo" "$conn_file" >/dev/null; then
   echo "[FAIL] FreePascal backend unexpectedly grew a dedicated GetConnectionInfo override"

@@ -140,6 +140,29 @@
 - `test_winssl_windows_validation_bundle_contract.sh`
 - `test_withsni_surface_truth_contract.sh`
 
+## 五、第二轮：路径类清零与复活战果（2026-08-23 续）
+
+对首轮积压 110 个施加第二遍变换（`$ROOT_DIR/src|tests` 变量前缀、
+`$SCRIPT_DIR/../.."` 深度变体、裸 `src|tests/<子目录>` 形态）并逐簇甄别后：
+
+| 终态 | 数量 | 说明 |
+|------|------|------|
+| PASS | **83** | 首轮 30 → 净增 53（含 managed-init wave2/4/5/6 家族复活）|
+| PATH-BROKEN | **0** | 布局失配类全数消灭 |
+| CONTENT-FAIL | 142 | 路径已通，断言与现树内容漂移——下一对账 slice 主战场 |
+| OTHER-rc1/rc2 | 28/4 | 个案分析 |
+
+本轮删除累计：纯文档死目标 71 + 引用消失工具/样例的契约 23 +
+被重构吞没单元（tls13.primitives）与旧门面快照（CreateDefaultConfig）
+的过期契约 2，共 **96**。
+
+修复手册新增两条判例：
+- `$ROOT_DIR/scripts/*_draft.sh` 类调用：draft 工具未随移植存活，
+  对应契约一律删；活工具例外重指（如 `scripts/tls/compile_all_modules.py`，
+  其旧契约已随批删除，可按新路径重建）。
+- 断言「残留直调集合」的契约（isslcertificateverification residual 系）：
+  rg glob 必须带模块前缀且目录参数无尾斜杠形态也要覆盖。
+
 ## 变更记录
 
 | 日期 | 内容 |
