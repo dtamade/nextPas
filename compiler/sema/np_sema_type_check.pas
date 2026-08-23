@@ -23,7 +23,7 @@ unit np_sema_type_check;
 interface
 
 uses
-  np_semantic_model, np_green_tree;
+  np_semantic_model, nextpas.compiler.syntax.green_tree;
 
 { === 基本类型元数据 === }
 

@@ -9,6 +9,8 @@ fail=0
 # 1. Migrated names must not appear anywhere in code trees.
 migrated=(
   np_target_facts np_diagnostics_sink np_diagnostics_enhanced
+  np_lexer np_green_tree np_preprocessor np_ast_facade
+  np_error_recovery
   np_diagnostics_json
 )
 for name in "${migrated[@]}"; do

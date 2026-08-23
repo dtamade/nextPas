@@ -4,10 +4,10 @@ program test_system_intrinsic_self_aliases;
 
 uses
   SysUtils,
-  np_ast_facade,
+  nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
-  np_green_tree,
-  np_lexer,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer,
   np_semantic_analyzer,
   np_semantic_model,
   np_symbol_cache,

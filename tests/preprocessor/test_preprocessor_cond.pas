@@ -3,7 +3,7 @@ program test_preprocessor_cond;
 {$mode objfpc}{$H+}
 
 uses
-  np_base_types, np_lexer, np_preprocessor;
+  np_base_types, nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.preprocessor;
 
 var
   Failures: LongInt = 0;

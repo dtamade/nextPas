@@ -15,8 +15,8 @@ uses
   nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.time, nextpas.core.mem.intf,
   nextpas.core.collections.vec,
-  np_ast_facade, nextpas.compiler.diagnostics.sink, np_green_tree, np_lexer,
-  np_package_manifest, np_preprocessor, np_source_database,
+  nextpas.compiler.syntax.ast_facade, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
+  np_package_manifest, nextpas.compiler.syntax.preprocessor, np_source_database,
   nextpas.compiler.targets.facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type

@@ -4,8 +4,8 @@ program test_parser_external_class_operator_impl;
 
 uses
   nextpas.compiler.diagnostics.sink,
-  np_green_tree,
-  np_lexer;
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer;
 
 function CountNodesByKind(const ANode: TGreenNode;
   const AKind: TGreenNodeKind): LongInt;

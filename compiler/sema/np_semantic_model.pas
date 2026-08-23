@@ -6,7 +6,7 @@ unit np_semantic_model;
 interface
 
 uses
-  np_green_tree, np_hir_types,
+  nextpas.compiler.syntax.green_tree, np_hir_types,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.vec,
   np_semantic_field_meta_vec,

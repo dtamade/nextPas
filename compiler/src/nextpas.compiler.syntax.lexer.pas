@@ -1,4 +1,4 @@
-unit np_lexer;
+unit nextpas.compiler.syntax.lexer;
 
 {$mode objfpc}{$H+}
 {$UNITPATH ../diagnostics}

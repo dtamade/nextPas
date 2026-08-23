@@ -1,5 +1,5 @@
 {**
- * np_error_recovery.pas — Parser Error Recovery
+ * nextpas.compiler.syntax.error_recovery.pas — Parser Error Recovery
  *
  * 对标 rustc_parse error recovery。
  *
@@ -15,14 +15,14 @@
  *     Recovery.SkipToSync(ACursor);
  *}
 
-unit np_error_recovery;
+unit nextpas.compiler.syntax.error_recovery;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_lexer, nextpas.compiler.diagnostics.sink, np_base_types;
+  nextpas.compiler.syntax.lexer, nextpas.compiler.diagnostics.sink, np_base_types;
 
 type
   {**

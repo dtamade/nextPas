@@ -1,5 +1,5 @@
 {
-  lex_bench — minimum-throughput benchmark for np_lexer.
+  lex_bench — minimum-throughput benchmark for nextpas.compiler.syntax.lexer.
 
   Usage:
     lex_bench <path-to-source.pas> <min-mb-per-sec>
@@ -29,7 +29,7 @@ program lex_bench;
 {$UNITPATH ../../rtl/core/classes}
 
 uses
-  SysUtils, Classes, np_lexer, np_bench_timing;
+  SysUtils, Classes, nextpas.compiler.syntax.lexer, np_bench_timing;
 
 const
   TARGET_BYTES: Int64 = 16 * 1024 * 1024;

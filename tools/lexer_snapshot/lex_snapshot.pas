@@ -31,7 +31,7 @@ program lex_snapshot;
 {$UNITPATH ../../rtl/core/classes}
 
 uses
-  SysUtils, Classes, np_lexer;
+  SysUtils, Classes, nextpas.compiler.syntax.lexer;
 
 procedure Die(const AMsg: string; const AExitCode: LongInt);
 begin

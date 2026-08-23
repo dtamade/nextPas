@@ -1,5 +1,5 @@
 {
-  parser_bench — minimum-throughput benchmark for np_green_tree parser.
+  parser_bench — minimum-throughput benchmark for nextpas.compiler.syntax.green_tree parser.
 
   Usage:
     parser_bench <path-to-source.pas> <min-mb-per-sec>
@@ -34,7 +34,7 @@ program parser_bench;
 
 uses
   SysUtils, Classes,
-  np_lexer, np_green_tree, nextpas.compiler.diagnostics.sink, np_source_database,
+  nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.green_tree, nextpas.compiler.diagnostics.sink, np_source_database,
   np_bench_timing;
 
 const

@@ -4,10 +4,10 @@ program test_semantic_phase1_type_entry;
 
 uses
   SysUtils,
-  np_ast_facade,
+  nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
-  np_green_tree,
-  np_lexer,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer,
   np_semantic_analyzer,
   np_semantic_model,
   np_unit_graph;

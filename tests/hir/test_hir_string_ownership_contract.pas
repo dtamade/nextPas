@@ -4,14 +4,14 @@ program test_hir_string_ownership_contract;
 
 uses
   SysUtils,
-  np_ast_facade,
+  nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
-  np_green_tree,
+  nextpas.compiler.syntax.green_tree,
   np_hir_builder,
   np_hir_llvm_emitter,
   np_hir_model,
   np_hir_types,
-  np_lexer,
+  nextpas.compiler.syntax.lexer,
   np_semantic_analyzer,
   np_semantic_model,
   np_system_contracts,

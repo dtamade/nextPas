@@ -1,4 +1,4 @@
-unit np_green_tree;
+unit nextpas.compiler.syntax.green_tree;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
@@ -9,7 +9,7 @@ unit np_green_tree;
 interface
 
 uses
-  nextpas.compiler.diagnostics.sink, np_lexer, np_source_database,
+  nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.lexer, np_source_database,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 

@@ -1,4 +1,4 @@
-unit np_ast_facade;
+unit nextpas.compiler.syntax.ast_facade;
 
 {$mode objfpc}{$H+}
 {$UNITPATH .}
@@ -6,7 +6,7 @@ unit np_ast_facade;
 interface
 
 uses
-  np_green_tree;
+  nextpas.compiler.syntax.green_tree;
 
 type
   TAstFacade = class

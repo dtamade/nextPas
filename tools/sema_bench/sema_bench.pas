@@ -33,7 +33,7 @@ program sema_bench;
 
 uses
   SysUtils, Classes,
-  np_lexer, np_green_tree, np_ast_facade,
+  nextpas.compiler.syntax.lexer, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink, np_source_database, np_unit_graph,
   np_semantic_analyzer, np_semantic_model, np_bench_timing;
 

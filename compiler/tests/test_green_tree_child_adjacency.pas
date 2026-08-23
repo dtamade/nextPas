@@ -5,8 +5,8 @@ program test_green_tree_child_adjacency;
 uses
   SysUtils,
   nextpas.compiler.diagnostics.sink,
-  np_green_tree,
-  np_lexer;
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer;
 
 procedure Fail(const AMessage: string);
 begin

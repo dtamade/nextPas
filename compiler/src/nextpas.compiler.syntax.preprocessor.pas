@@ -1,4 +1,4 @@
-unit np_preprocessor;
+unit nextpas.compiler.syntax.preprocessor;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
@@ -10,7 +10,7 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.collections.vec,
-  np_base_types, np_lexer;
+  np_base_types, nextpas.compiler.syntax.lexer;
 
 type
   IIncludeResolver = interface
