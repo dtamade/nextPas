@@ -6,9 +6,9 @@ uses
   nextpas.core.fs,
   nextpas.core.path,
   nextpas.core.text.conv,
-  np_compilation_session,
+  nextpas.compiler.frontend.compilation_session,
   nextpas.compiler.targets.facts,
-  np_workspace_model;
+  nextpas.compiler.frontend.workspace_model;
 
 procedure Fail(const AMessage: string);
 begin

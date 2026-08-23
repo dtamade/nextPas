@@ -10,8 +10,12 @@ fail=0
 migrated=(
   np_target_facts np_diagnostics_sink np_diagnostics_enhanced
   np_lexer np_green_tree np_preprocessor np_ast_facade
-  np_error_recovery
-  np_diagnostics_json
+  np_error_recovery np_diagnostics_json
+  np_source_database np_unit_graph np_unit_resolver
+  np_compilation_session np_workspace_model np_symbol_cache
+  np_query_database np_package_manifest np_package_lock
+  np_package_workflow np_incremental_cache np_file_change_detector
+  np_parallel_scheduler np_compiler_phase
 )
 for name in "${migrated[@]}"; do
   hits=$(grep -rl "\b${name}\b" compiler tools tests --include='*.pas' \

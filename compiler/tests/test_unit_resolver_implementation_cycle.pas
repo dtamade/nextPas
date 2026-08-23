@@ -11,10 +11,10 @@ uses
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
   nextpas.compiler.syntax.lexer,
-  np_package_manifest,
-  np_source_database,
+  nextpas.compiler.frontend.package_manifest,
+  nextpas.compiler.frontend.source_database,
   nextpas.compiler.targets.facts,
-  np_unit_resolver;
+  nextpas.compiler.frontend.unit_resolver;
 
 procedure WriteTextFile(const APath: string; const AText: string);
 var

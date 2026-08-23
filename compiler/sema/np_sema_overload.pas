@@ -16,7 +16,7 @@ interface
 uses
   SysUtils,
   nextpas.compiler.syntax.green_tree,
-  np_unit_graph,
+  nextpas.compiler.frontend.unit_graph,
   nextpas.compiler.syntax.ast_facade,
   np_semantic_model,
   np_sema_builtins,

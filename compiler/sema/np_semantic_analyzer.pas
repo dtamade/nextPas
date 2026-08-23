@@ -11,7 +11,7 @@ interface
 
 uses
   nextpas.compiler.syntax.ast_facade, np_base_types, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.preprocessor,
-  np_source_database, np_unit_graph, np_semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
+  nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph, np_semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
   np_sema_type_check, np_hir_lowering, np_sema_runtime_vars,
   np_sema_string_ownership,
@@ -25,7 +25,7 @@ implementation
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.system.contracts, np_symbol_cache, nextpas.compiler.diagnostics.enhanced;
+  nextpas.core.system.contracts, nextpas.compiler.frontend.symbol_cache, nextpas.compiler.diagnostics.enhanced;
 
 type
   TStringArray = array of string;
