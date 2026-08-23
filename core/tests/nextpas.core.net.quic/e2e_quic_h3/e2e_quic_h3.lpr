@@ -102,10 +102,14 @@ var
 begin
   if RecvArmed or (Udp = nil) or DoneOk or DoneFail then
     Exit;
+  { 先置已挂再提交：reactor 对已就绪数据会在提交调用内同步完成回调
+    （清标志），后写 LOk 会把该清除覆盖回 True 造成永久停读 }
+  RecvArmed := True;
   LOk := Udp.AsyncRecvFromTimeout(@Rx[0], UInt32(Length(Rx)),
     TDeadline.After(TDuration.FromMilliseconds(CRecvTimeoutMs)),
     @TDrv.OnRecv, Self);
-  RecvArmed := LOk;   { 提交失败不得假标已挂 }
+  if not LOk then
+    RecvArmed := False;   { 提交被拒：下一 tick 重试 }
 end;
 
 class procedure TDrv.OnRecv(AResult: Int32; ABytes: Int32;

@@ -120,10 +120,15 @@ type
     procedure DetectLost(const AEst: TQuicRttEstimator; ATimeNowUs: UInt64;
       out ALostPns: TQuicPnArray; out ALostBytes: Integer);
 
+    {** @desc 查包发送时刻；不在途返回 -1（持久拥塞跨度判定用） *}
+    function TimeSentOf(APn: UInt64): Int64;
+
     property InFlightCount: Integer read FInFlightCount;
     property InFlightBytes: Integer read FInFlightBytes;
     property LargestAcked: UInt64 read FLargestAcked;
     property HasLargestAcked: Boolean read FHasLargestAcked;
+    { 最高已登记包号（拥塞控制恢复期判定用；未登记过为 0） }
+    property HighestTracked: UInt64 read FHighestTracked;
     property Capacity: Integer read FCapacity;
   end;
 
@@ -332,6 +337,16 @@ begin
       FSlots[LI] := LSlot;
     end;
   end;
+end;
+
+function TQuicSentTracker.TimeSentOf(APn: UInt64): Int64;
+var
+  LSlot: TQuicSentSlot;
+begin
+  Result := -1;
+  LSlot := FSlots[SlotIndex(APn)];
+  if (LSlot.State = qssInFlight) and (LSlot.Pn = APn) then
+    Result := Int64(LSlot.TimeSentUs);
 end;
 
 end.

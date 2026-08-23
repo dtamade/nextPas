@@ -73,6 +73,42 @@ type
       out AError: string): Boolean;
   end;
 
+{ Q5 流数据收集器（of object 形态要求实例方法） }
+type
+  TQ5Collector = class
+  public
+    Texts: array[0..7] of string;
+    Fins: array[0..7] of Boolean;
+    Count: Integer;
+    procedure OnData(AStreamId: UInt64; const AData: TBytes;
+      AFin: Boolean);
+    procedure Clear;
+  end;
+
+procedure TQ5Collector.OnData(AStreamId: UInt64; const AData: TBytes;
+  AFin: Boolean);
+var
+  LI: Integer;
+begin
+  if Count <= High(Texts) then
+  begin
+    Texts[Count] := '';
+    for LI := 0 to Length(AData) - 1 do
+      Texts[Count] := Texts[Count] + Chr(AData[LI]);
+    Fins[Count] := AFin;
+    Inc(Count);
+  end;
+end;
+
+procedure TQ5Collector.Clear;
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(Texts) do
+    Texts[LI] := '';
+  Count := 0;
+end;
+
 function THookTarget.Hook(const ACerts: TQuicDerList;
   out AError: string): Boolean;
 begin
@@ -84,6 +120,7 @@ end;
 
 var
   GHookTarget: THookTarget;
+  GQ5Col: TQ5Collector;
   { 夹具走单元级全局：规避「捕获含托管字段的记录 + out 参数」组合下的
     堆损坏（测试顺序执行，无共享冲突） }
   GFx: TSrvFixture;
@@ -286,7 +323,9 @@ end;
 
 { 服务端完整飞行。输出：Initial 数据报（含 SH）+ 两段 Handshake 数据报
   （EeMsg | Cert+CV+Fin 拆分），供顺序/乱序/coalesced 用例复用。
-  F.Transcript 终态 = CH..CV——恰为客户端 Fin 的 verify_data 基线。
+  F.Transcript 终态 = CH..SF——恰为客户端 Fin 的 verify_data 基线
+  （RFC 8446 §4.4.4：客户端 Finished 覆盖「through the server's Finished」，
+  含服务器 Finished 本消息；2026-08-23 aioquic 对拍修正）。
   AHsReadKeys = 服务端握手读钥（= 客户端写方向）。 }
 function SrvFlight(var F: TSrvFixture; const ACh: TBytes;
   AMode: TSrvFlightMode; const AClientDcid: TBytes;
@@ -405,7 +444,8 @@ begin
     LCvm[High(LCvm)] := LCvm[High(LCvm)] xor $01;
   TB(F.Transcript, LCvm);
 
-  { ---- ServerFinished（覆盖至 CV；不入 F.Transcript）---- }
+  { ---- ServerFinished（自身验证覆盖至 CV；消息本体入 F.Transcript
+    ——客户端 Fin 基线 = CH..SF，RFC 8446 §4.4.4）---- }
   LVData := TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(
     cSuiteAes128, GFx.HsSecrets.ServerHandshakeTrafficSecret,
     SHA256(GFx.Transcript));
@@ -413,6 +453,7 @@ begin
   TBByte(LM, 20);
   TBU24(LM, Length(LVData));
   TB(LM, LVData);
+  TB(F.Transcript, LM);
   if AMode = sfBadFin then
     LM[High(LM)] := LM[High(LM)] xor $01;
 
@@ -621,6 +662,7 @@ var
 
 begin
   GHookTarget := THookTarget.Create;
+  GQ5Col := TQ5Collector.Create;
 
   LSuite := TTestSuite.Create('quic_conn');
 
@@ -719,6 +761,8 @@ begin
       end;
       Check(LAckCount = 2, 'ack for both spaces carried');
       Check(Length(LGotFin) > 4, 'crypto fin frame present');
+      { 基线 = CH..SF（夹具 F.Transcript 终态已含服务器 Finished，
+        RFC 8446 §4.4.4） }
       LExpectFin :=
         TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(
         cSuiteAes128, GFx.HsSecrets.ClientHandshakeTrafficSecret,
@@ -1008,6 +1052,150 @@ begin
   end);
 
   { ---------- 源码契约：新单元不得裸 uses FPC RTL ---------- }
+  { ---------- Q5 应用平面接线 ---------- }
+  LSuite.Test('q5: stream open gate fail-closed then unlocked by peer', procedure
+  var
+    Conn: TQuicClientConnection;
+    LId, LPn: UInt64;
+    LFrames, LPkt, LPayload: TBytes;
+    LF: TQuicFrame;
+  begin
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      Check(Conn.Phase = qcpConnected, 'connected');
+      if Conn = nil then
+        Exit;
+      { 夹具服务器参数不含流控授予 ⇒ fail-closed 拒开 }
+      CheckFalse(Conn.OpenStream(False, LId), 'no grant fail-closed');
+      CheckFalse(Conn.OpenStream(True, LId), 'no uni grant fail-closed');
+      { 注入服务器 MAX_STREAMS(bidi=2,uni=1) + MAX_DATA(65536) 包 }
+      LFrames := nil;
+      QuicMaxStreamsAppend(LFrames, True, 2);
+      QuicMaxStreamsAppend(LFrames, False, 1);
+      QuicMaxDataAppend(LFrames, 65536);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'grant packet accepted');
+      CheckTrue(Conn.OpenStream(False, LId), 'bidi unlocked');
+      CheckEqual(UInt64(0), LId);
+      CheckTrue(Conn.OpenStream(False, LId));
+      CheckEqual(UInt64(4), LId);
+      CheckFalse(Conn.OpenStream(False, LId), 'grant of 2 exhausted');
+      CheckTrue(Conn.OpenStream(True, LId), 'uni unlocked');
+      CheckEqual(UInt64(2), LId);
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('q5: stream write emits protected stream frame', procedure
+  var
+    Conn: TQuicClientConnection;
+    LId, LPn: UInt64;
+    LFrames, LPkt, LPayload, LData: TBytes;
+    LF: TQuicFrame;
+    LPos: Integer;
+    LOk: Boolean;
+  begin
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      { 第一步：连接级授予解锁开流（MAX_STREAMS + MAX_DATA） }
+      LFrames := nil;
+      QuicMaxStreamsAppend(LFrames, True, 4);
+      QuicMaxDataAppend(LFrames, 65536);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'grants accepted');
+      Conn.OnTimer(1000000);   { 建立时钟基准 }
+      CheckTrue(Conn.OpenStream(False, LId));
+      CheckEqual(UInt64(0), LId);
+      { 第二步：对已存在的流 0 注入流级授予（先开后授路径） }
+      LFrames := nil;
+      QuicMaxStreamDataAppend(LFrames, 0, 65536);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 1, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'stream grant accepted');
+      LData := BytesOf([Ord('p'), Ord('i'), Ord('n'), Ord('g')]);
+      CheckTrue(Conn.StreamWrite(0, LData, True), 'write accepted');
+      { 出站队列：授予包已消费，此处应为应用空间短头包（首帧为随包
+        ACK，需遍历载荷定位 STREAM 帧） }
+      LOk := False;
+      while Conn.TakeOutbound(LPkt) do
+      begin
+        if (Length(LPkt) > 0) and ((LPkt[0] and $80) = 0) then
+        begin
+          { 我方出站包 DCID=服务器 SCID（夹具 8 字节） }
+          CheckTrue(TryQuicUnprotectPacket(LPkt, 8,
+            Conn.ApplicationWriteKeys, 0, LPn, LPayload),
+            'unprotect with app write keys');
+          LPos := 0;
+          while LPos < Length(LPayload) do
+          begin
+            if not TryQuicFrameParse(LPayload, LPos, Length(LPayload),
+              LF) then
+              Break;
+            Inc(LPos, LF.Consumed);
+            if Ord(LF.Kind) = Ord(qfkStream) then
+            begin
+              LOk := True;
+              CheckEqual(UInt64(0), LF.StreamId, 'stream id');
+              CheckEqual(UInt64(0), LF.Offset, 'offset');
+              CheckEqual(True, LF.Fin, 'fin bit');
+              CheckEqual(4, LF.DataLen, 'data len');
+              Break;
+            end;
+          end;
+        end;
+      end;
+      CheckTrue(LOk, 'stream frame found in outbound');
+    finally
+      Conn.Free;
+    end;
+  end);
+
+  LSuite.Test('q5: inbound stream data reassembles across packets', procedure
+  var
+    Conn: TQuicClientConnection;
+    LFrames, LPkt: TBytes;
+  begin
+    GQ5Col.Clear;
+    Conn := DriveFull(sfOk, True, False);
+    try
+      Check(Conn <> nil, 'drive attempted');
+      if Conn = nil then
+        Exit;
+      Conn.HookStreamData(@GQ5Col.OnData);
+      { 先发尾部段（ofs=2, fin），再发头部段（ofs=0）——乱序到达 }
+      LFrames := nil;
+      QuicStreamAppend(LFrames, 1, 2, BytesOf([Ord('C'), Ord('D')]),
+        True, True);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 0, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'tail segment fed');
+      CheckEqual(0, GQ5Col.Count, 'gap holds delivery');
+      LFrames := nil;
+      QuicStreamAppend(LFrames, 1, 0, BytesOf([Ord('A'), Ord('B')]),
+        False, True);
+      LPkt := QuicProtectPacket(BytesOf([$43]), 1, 4, LFrames,
+        Conn.ApplicationReadKeys);
+      CheckTrue(Conn.OnDatagram(LPkt), 'head segment fed');
+      { 交付设计：数据段不带 fin，final size 达成时补独立零长 FIN 事件 }
+      CheckEqual(3, GQ5Col.Count, 'ordered delivery + fin event');
+      CheckTrue(GQ5Col.Texts[0] = 'AB', 'first window text');
+      CheckFalse(GQ5Col.Fins[0], 'first not fin');
+      CheckTrue(GQ5Col.Texts[1] = 'CD', 'second window text');
+      CheckFalse(GQ5Col.Fins[1], 'data segment carries no fin');
+      CheckTrue(GQ5Col.Texts[2] = '', 'fin event zero length');
+      CheckTrue(GQ5Col.Fins[2], 'fin event flagged');
+    finally
+      Conn.Free;
+    end;
+  end);
+
   LSuite.Test('source contract: no bare FPC RTL in quic.conn', procedure
   var
     LSrcPath, LHit: string;
@@ -1024,5 +1212,7 @@ begin
   LRunner.Summary;
   GHookTarget.Free;
   GHookTarget := nil;
+  GQ5Col.Free;
+  GQ5Col := nil;
   if not LRunner.AllPassed then Halt(1);
 end.

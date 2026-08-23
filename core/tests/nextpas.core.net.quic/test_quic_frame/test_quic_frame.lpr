@@ -212,6 +212,104 @@ begin
     CheckEqual(cCloseAppGoldenHex, BytesToHex(LOut));
   end);
 
+  { ---------- Q5 流控/流管理族黄金向量（RFC 9000 §19.4/§19.5/§19.9-§19.14）---------- }
+  LSuite.Test('RESET_STREAM and STOP_SENDING golden vectors', procedure
+  var
+    LPayload, LOut: TBytes;
+    LFrame: TQuicFrame;
+  begin
+    { RESET_STREAM = 04 + StreamID(0x0c) + AppErr(varint2=200→40c8)
+      + FinalSize(varint2=1024→4400) }
+    LPayload := HexToBytes('040c40c84400');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(Int64(Ord(qfkResetStream)), Int64(Ord(LFrame.Kind)));
+    CheckEqual(UInt64($0C), LFrame.StreamId);
+    CheckEqual(UInt64(200), LFrame.ErrorCode);
+    CheckEqual(UInt64(1024), LFrame.FinalSize);
+    CheckEqual(6, LFrame.Consumed);
+    LOut := nil;
+    QuicResetStreamAppend(LOut, $0C, 200, 1024);
+    CheckEqual('040c40c84400', BytesToHex(LOut));
+
+    { STOP_SENDING = 05 + StreamID + AppErr }
+    LPayload := HexToBytes('050c40c8');
+    CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+    CheckEqual(Int64(Ord(qfkStopSending)), Int64(Ord(LFrame.Kind)));
+    CheckEqual(UInt64($0C), LFrame.StreamId);
+    CheckEqual(UInt64(200), LFrame.ErrorCode);
+    CheckEqual(4, LFrame.Consumed);
+    LOut := nil;
+    QuicStopSendingAppend(LOut, $0C, 200);
+    CheckEqual('050c40c8', BytesToHex(LOut));
+  end);
+
+  LSuite.Test('flow control family golden vectors both ways', procedure
+  var
+    LPayload, LOut: TBytes;
+    LFrame: TQuicFrame;
+
+    procedure RoundTrip(const AHex: string; AKind: TQuicFrameKind;
+      AStreamId, AMaxValue: UInt64);
+    begin
+      LPayload := HexToBytes(AHex);
+      CheckTrue(TryQuicFrameParse(LPayload, 0, Length(LPayload), LFrame));
+      CheckEqual(Int64(Ord(AKind)), Int64(Ord(LFrame.Kind)));
+      if AStreamId <> UInt64($FFFFFFFFFFFFFFFF) then
+        CheckEqual(AStreamId, LFrame.StreamId);
+      CheckEqual(AMaxValue, LFrame.MaxValue);
+      CheckEqual(Length(LPayload), LFrame.Consumed);
+      CheckEqual(AHex, BytesToHex(LPayload));
+    end;
+
+  begin
+    { MAX_DATA = 10 + Maximum Data；65536 需 4 字节 varint 80010000
+      （前缀 $80=4 字节形态；$C0 为 8 字节形态） }
+    LOut := nil;
+    QuicMaxDataAppend(LOut, 65536);
+    CheckEqual('1080010000', BytesToHex(LOut));
+    RoundTrip('1080010000', qfkMaxData,
+      UInt64($FFFFFFFFFFFFFFFF), 65536);
+
+    { MAX_STREAM_DATA = 11 + StreamID(08) + Max(12345→7039) }
+    LOut := nil;
+    QuicMaxStreamDataAppend(LOut, 8, 12345);
+    CheckEqual('11087039', BytesToHex(LOut));
+    RoundTrip('11087039', qfkMaxStreamData, 8, 12345);
+
+    { MAX_STREAMS 双向 0x12 / 单向 0x13：128→4080 }
+    LOut := nil;
+    QuicMaxStreamsAppend(LOut, True, 128);
+    CheckEqual('124080', BytesToHex(LOut));
+    RoundTrip('124080', qfkMaxStreams,
+      UInt64($FFFFFFFFFFFFFFFF), 128);
+    LOut := nil;
+    QuicMaxStreamsAppend(LOut, False, 128);
+    CheckEqual('134080', BytesToHex(LOut));
+
+    { DATA_BLOCKED = 14 + Max(63 单字节 varint) }
+    LOut := nil;
+    QuicDataBlockedAppend(LOut, 63);
+    CheckEqual('143f', BytesToHex(LOut));
+    RoundTrip('143f', qfkDataBlocked,
+      UInt64($FFFFFFFFFFFFFFFF), 63);
+
+    { STREAM_DATA_BLOCKED = 15 + StreamID + Max }
+    LOut := nil;
+    QuicStreamDataBlockedAppend(LOut, 8, 63);
+    CheckEqual('15083f', BytesToHex(LOut));
+    RoundTrip('15083f', qfkStreamDataBlocked, 8, 63);
+
+    { STREAMS_BLOCKED 双向 0x16 / 单向 0x17 }
+    LOut := nil;
+    QuicStreamsBlockedAppend(LOut, True, 128);
+    CheckEqual('164080', BytesToHex(LOut));
+    RoundTrip('164080', qfkStreamsBlocked,
+      UInt64($FFFFFFFFFFFFFFFF), 128);
+    LOut := nil;
+    QuicStreamsBlockedAppend(LOut, False, 128);
+    CheckEqual('174080', BytesToHex(LOut));
+  end);
+
   { ---------- STREAM 位型矩阵 ---------- }
   LSuite.Test('STREAM bit matrix roundtrip all 8 combos', procedure
   var
@@ -345,7 +443,7 @@ begin
   { ---------- 截断扫描：所有真前缀干净拒绝 ---------- }
   LSuite.Test('truncation scan rejects every proper prefix', procedure
   var
-    LVectors: array[0..5] of string;
+    LVectors: array[0..7] of string;
     LPkt, LSlice: TBytes;
     LFrame: TQuicFrame;
     LV, LI: Integer;
@@ -357,6 +455,9 @@ begin
     LVectors[3] := cNcidGoldenHex;
     LVectors[4] := cCloseGoldenHex;
     LVectors[5] := cCloseAppGoldenHex;
+    { Q5 流控/流管理族（手算向量，见下方 golden 用例） }
+    LVectors[6] := '040c40c84400';   { RESET_STREAM }
+    LVectors[7] := '11087039';       { MAX_STREAM_DATA }
     LOkAll := True;
     for LV := 0 to High(LVectors) do
     begin
@@ -380,10 +481,11 @@ begin
     LInfo: TQuicFrame;
     LPkt: TBytes;
   begin
-    { 未实现但 RFC 已定义（流控族/RESET/NEW_TOKEN）与未知类型一律拒 }
-    LPkt := HexToBytes('10');           { MAX_DATA }
+    { 未实现但 RFC 已定义（NEW_TOKEN）与未知类型一律拒；
+      流控族 0x04/0x10..0x17 已于 Q5 扩面实现，此处仅余截断形态 }
+    LPkt := HexToBytes('10');           { MAX_DATA 截断（缺 Maximum Data） }
     CheckFalse(TryQuicFrameParse(LPkt, 0, 1, LInfo));
-    LPkt := HexToBytes('04');           { RESET_STREAM }
+    LPkt := HexToBytes('04');           { RESET_STREAM 截断 }
     CheckFalse(TryQuicFrameParse(LPkt, 0, 1, LInfo));
     LPkt := HexToBytes('07');           { NEW_TOKEN }
     CheckFalse(TryQuicFrameParse(LPkt, 0, 1, LInfo));

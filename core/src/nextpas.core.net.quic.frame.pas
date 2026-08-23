@@ -7,12 +7,15 @@ unit nextpas.core.net.quic.frame;
  * CRYPTO / STREAM / NEW_CONNECTION_ID / RETIRE_CONNECTION_ID /
  * PATH_CHALLENGE / PATH_RESPONSE / CONNECTION_CLOSE(0x1c+0x1d) /
  * HANDSHAKE_DONE。
+ * Q5 扩面：流控与流管理族（RFC 9000 §19.4-19.5/§19.9-19.14）——
+ * RESET_STREAM / STOP_SENDING / MAX_DATA / MAX_STREAM_DATA /
+ * MAX_STREAMS(0x12+0x13) / DATA_BLOCKED / STREAM_DATA_BLOCKED /
+ * STREAMS_BLOCKED(0x16+0x17)。
  *
  * fail-closed 语义（RFC 9000 §12.4 原文定案）：
  * - "MUST treat the receipt of a frame of unknown type as a connection
- *   error of type FRAME_ENCODING_ERROR"——未知类型一律拒；本单元对未
- *   实现但 RFC 已定义的类型（RESET_STREAM/STOP_SENDING/NEW_TOKEN/
- *   流控族 0x10..0x17）同样返回 False，待流控批次扩面；
+ *   error of type FRAME_ENCODING_ERROR"——未知类型一律拒；未实现的
+ *   RFC 已定义类型（NEW_TOKEN 0x07 等）同样返回 False；
  * - 结构非法（截断、LEN 越界、NCID 长度 ∉[1,20]、ACK range 下溢、
  *   range 数超界）一律 False，不产出半解析态。
  *
@@ -42,7 +45,17 @@ const
   cQfPing = $01;
   cQfAckV1 = $02;          { 无 ECN counts }
   cQfAckEcn = $03;         { 带 ECN counts }
+  cQfResetStream = $04;    { §19.4 }
+  cQfStopSending = $05;    { §19.5 }
   cQfCrypto = $06;
+  cQfMaxData = $10;        { §19.9 }
+  cQfMaxStreamData = $11;  { §19.10 }
+  cQfMaxStreamsBidi = $12; { §19.11 双向 }
+  cQfMaxStreamsUni = $13;  { §19.11 单向 }
+  cQfDataBlocked = $14;    { §19.12 }
+  cQfStreamDataBlocked = $15;   { §19.13 }
+  cQfStreamsBlockedBidi = $16;  { §19.14 双向 }
+  cQfStreamsBlockedUni = $17;   { §19.14 单向 }
   cQfStreamBase = $08;     { 0x08..0x0f：OFF=$04 LEN=$02 FIN=$01 }
   cQfNewConnectionId = $18;
   cQfRetireConnectionId = $19;
@@ -67,6 +80,9 @@ const
 type
   TQuicFrameKind = (
     qfkPadding, qfkPing, qfkAck, qfkCrypto, qfkStream,
+    qfkResetStream, qfkStopSending,
+    qfkMaxData, qfkMaxStreamData, qfkMaxStreams,
+    qfkDataBlocked, qfkStreamDataBlocked, qfkStreamsBlocked,
     qfkNewConnectionId, qfkRetireConnectionId, qfkPathChallenge,
     qfkPathResponse, qfkConnectionClose, qfkHandshakeDone);
 
@@ -117,6 +133,13 @@ type
     { RETIRE_CONNECTION_ID 序号 / PATH_* 数据区（8B 零拷贝） }
     RetireSeq: UInt64;
     PathDataOfs: Integer;
+
+    { 流控/流管理族（Q5）：MaxValue 承载 MAX_DATA/MAX_STREAM_DATA/
+      MAX_STREAMS/DATA_BLOCKED/STREAM_DATA_BLOCKED/STREAMS_BLOCKED 的
+      「Maximum ...」字段；FinalSize 仅 RESET_STREAM（§19.4）；
+      ErrorCode 复用承载 RESET/STOP 的应用错误码 }
+    MaxValue: UInt64;
+    FinalSize: UInt64;
   end;
 
 {** @desc 从 APayload[AOffset..AEnd_) 解析一帧；失败返回 False。
@@ -158,6 +181,22 @@ procedure QuicCryptoAppend(var ABuf: TBytes; AOffset: UInt64;
  *       包尾帧（LEN 位省略=线上语义延伸到包尾）；AWantLen=True 显式带长 *}
 procedure QuicStreamAppend(var ABuf: TBytes; AStreamId, AOffset: UInt64;
   const AData: TBytes; AFin, AWantLen: Boolean);
+
+{ ---- 流控/流管理族编码助手（§19.4-§19.5/§19.9-§19.14，Q5）---- }
+procedure QuicResetStreamAppend(var ABuf: TBytes; AStreamId,
+  AErrorCode, AFinalSize: UInt64);
+procedure QuicStopSendingAppend(var ABuf: TBytes; AStreamId,
+  AErrorCode: UInt64);
+procedure QuicMaxDataAppend(var ABuf: TBytes; AMaxData: UInt64);
+procedure QuicMaxStreamDataAppend(var ABuf: TBytes; AStreamId,
+  AMaxStreamData: UInt64);
+procedure QuicMaxStreamsAppend(var ABuf: TBytes; ABidi: Boolean;
+  AMaxStreams: UInt64);
+procedure QuicDataBlockedAppend(var ABuf: TBytes; AMaxData: UInt64);
+procedure QuicStreamDataBlockedAppend(var ABuf: TBytes; AStreamId,
+  AMaxStreamData: UInt64);
+procedure QuicStreamsBlockedAppend(var ABuf: TBytes; ABidi: Boolean;
+  AMaxStreams: UInt64);
 
 {** @desc ACidLen ∈[1,20]、AResetToken 须恰 16 元素；违反返回 False *}
 function QuicNewConnectionIdAppend(var ABuf: TBytes; ASeq,
@@ -356,6 +395,86 @@ begin
         AFrame.DataOfs := LPos;
         AFrame.Kind := qfkStream;
         AFrame.Consumed := LPos - AOffset + AFrame.DataLen;
+      end;
+
+    { ---- 流控/流管理族（§19.4/§19.5/§19.9-19.14，Q5）----
+      布局原文定案：
+      RESET_STREAM   = 0x04 + StreamID(i) + AppErr(i) + FinalSize(i)
+      STOP_SENDING   = 0x05 + StreamID(i) + AppErr(i)
+      MAX_DATA       = 0x10 + Maximum Data(i)
+      MAX_STREAM_DATA= 0x11 + StreamID(i) + Maximum Stream Data(i)
+      MAX_STREAMS    = 0x12|0x13 + Maximum Streams(i)
+      DATA_BLOCKED   = 0x14 + Maximum Data(i)
+      STREAM_DATA_BLOCKED = 0x15 + StreamID(i) + Maximum Stream Data(i)
+      STREAMS_BLOCKED= 0x16|0x17 + Maximum Streams(i) }
+    cQfResetStream:
+      begin
+        if not QuicVarintDecode(APayload, LPos, AFrame.StreamId, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if not QuicVarintDecode(APayload, LPos, AFrame.ErrorCode, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if not QuicVarintDecode(APayload, LPos, AFrame.FinalSize, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        AFrame.Kind := qfkResetStream;
+        AFrame.Consumed := LPos - AOffset;
+      end;
+
+    cQfStopSending:
+      begin
+        if not QuicVarintDecode(APayload, LPos, AFrame.StreamId, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if not QuicVarintDecode(APayload, LPos, AFrame.ErrorCode, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        AFrame.Kind := qfkStopSending;
+        AFrame.Consumed := LPos - AOffset;
+      end;
+
+    cQfMaxData, cQfDataBlocked:
+      begin
+        if not QuicVarintDecode(APayload, LPos, AFrame.MaxValue, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if LType = cQfMaxData then
+          AFrame.Kind := qfkMaxData
+        else
+          AFrame.Kind := qfkDataBlocked;
+        AFrame.Consumed := LPos - AOffset;
+      end;
+
+    cQfMaxStreamData, cQfStreamDataBlocked:
+      begin
+        if not QuicVarintDecode(APayload, LPos, AFrame.StreamId, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if not QuicVarintDecode(APayload, LPos, AFrame.MaxValue, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        if LType = cQfMaxStreamData then
+          AFrame.Kind := qfkMaxStreamData
+        else
+          AFrame.Kind := qfkStreamDataBlocked;
+        AFrame.Consumed := LPos - AOffset;
+      end;
+
+    cQfMaxStreamsBidi, cQfMaxStreamsUni,
+    cQfStreamsBlockedBidi, cQfStreamsBlockedUni:
+      begin
+        if not QuicVarintDecode(APayload, LPos, AFrame.MaxValue, LConsumed) then
+          Exit;
+        Inc(LPos, LConsumed);
+        case LType of
+          cQfMaxStreamsBidi:     AFrame.Kind := qfkMaxStreams;
+          cQfMaxStreamsUni:      AFrame.Kind := qfkMaxStreams;
+          cQfStreamsBlockedBidi: AFrame.Kind := qfkStreamsBlocked;
+        else
+          AFrame.Kind := qfkStreamsBlocked;
+        end;
+        AFrame.Consumed := LPos - AOffset;
       end;
 
     cQfNewConnectionId:
@@ -557,6 +676,85 @@ begin
     if not QuicVarintAppend(ABuf, UInt64(Length(AData))) then
       Exit;
   AppendTailBytes(ABuf, AData);
+end;
+
+procedure QuicResetStreamAppend(var ABuf: TBytes; AStreamId,
+  AErrorCode, AFinalSize: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfResetStream) or
+     not QuicVarintAppend(ABuf, AStreamId) or
+     not QuicVarintAppend(ABuf, AErrorCode) or
+     not QuicVarintAppend(ABuf, AFinalSize) then
+    Exit;
+end;
+
+procedure QuicStopSendingAppend(var ABuf: TBytes; AStreamId,
+  AErrorCode: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfStopSending) or
+     not QuicVarintAppend(ABuf, AStreamId) or
+     not QuicVarintAppend(ABuf, AErrorCode) then
+    Exit;
+end;
+
+procedure QuicMaxDataAppend(var ABuf: TBytes; AMaxData: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfMaxData) or
+     not QuicVarintAppend(ABuf, AMaxData) then
+    Exit;
+end;
+
+procedure QuicMaxStreamDataAppend(var ABuf: TBytes; AStreamId,
+  AMaxStreamData: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfMaxStreamData) or
+     not QuicVarintAppend(ABuf, AStreamId) or
+     not QuicVarintAppend(ABuf, AMaxStreamData) then
+    Exit;
+end;
+
+procedure QuicMaxStreamsAppend(var ABuf: TBytes; ABidi: Boolean;
+  AMaxStreams: UInt64);
+var
+  LType: Byte;
+begin
+  if ABidi then
+    LType := cQfMaxStreamsBidi
+  else
+    LType := cQfMaxStreamsUni;
+  if not QuicVarintAppend(ABuf, LType) or
+     not QuicVarintAppend(ABuf, AMaxStreams) then
+    Exit;
+end;
+
+procedure QuicDataBlockedAppend(var ABuf: TBytes; AMaxData: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfDataBlocked) or
+     not QuicVarintAppend(ABuf, AMaxData) then
+    Exit;
+end;
+
+procedure QuicStreamDataBlockedAppend(var ABuf: TBytes; AStreamId,
+  AMaxStreamData: UInt64);
+begin
+  if not QuicVarintAppend(ABuf, cQfStreamDataBlocked) or
+     not QuicVarintAppend(ABuf, AStreamId) or
+     not QuicVarintAppend(ABuf, AMaxStreamData) then
+    Exit;
+end;
+
+procedure QuicStreamsBlockedAppend(var ABuf: TBytes; ABidi: Boolean;
+  AMaxStreams: UInt64);
+var
+  LType: Byte;
+begin
+  if ABidi then
+    LType := cQfStreamsBlockedBidi
+  else
+    LType := cQfStreamsBlockedUni;
+  if not QuicVarintAppend(ABuf, LType) or
+     not QuicVarintAppend(ABuf, AMaxStreams) then
+    Exit;
 end;
 
 function QuicNewConnectionIdAppend(var ABuf: TBytes; ASeq,

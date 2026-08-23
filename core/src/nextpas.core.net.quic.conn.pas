@@ -54,7 +54,11 @@ uses
   nextpas.core.net.quic.header,
   nextpas.core.net.quic.tls,
   nextpas.core.net.quic.protect,
-  nextpas.core.net.quic.frame;
+  nextpas.core.net.quic.frame,
+  nextpas.core.net.quic.reliable,
+  nextpas.core.net.quic.flow,
+  nextpas.core.net.quic.congestion,
+  nextpas.core.net.quic.stream;
 
 const
   { QUIC transport parameters 扩展类型（RFC 9001 §8.2 原文定案） }
@@ -138,6 +142,15 @@ type
     FSentSpans: array[TQuicSpace] of array of TQuicSentCryptoSpan;
     FSentSpanLastUs: array[TQuicSpace] of UInt64;
 
+    { ---- Q5 应用平面：流复用 + 拥塞 + 应用空间可靠性 ---- }
+    FMux: TQuicStreamMux;
+    FReno: TQuicNewReno;
+    FAppTracker: TQuicSentTracker;   { 应用空间在途簿记（STREAM 载荷包） }
+    FAppRtt: TQuicRttEstimator;
+    FAckDelayExponent: UInt64;       { 对端 ack_delay_exponent（钳制 ≤30） }
+    FMaxAckDelayUs: UInt64;          { 对端 max_ack_delay（ms→µs） }
+    FPeerParamsApplied: Boolean;     { 传输参数授予值只消费一次 }
+
     FTranscript: TBytes;
     FHsSecrets: TTLS13HandshakeSecrets;
     FAppSecrets: TTLS13ApplicationSecrets;
@@ -148,6 +161,9 @@ type
     FDgramOut: array of TBytes;
 
     function TakeError(const AMsg: string): Boolean;
+    procedure HandleMuxFatal(const AReason: string);
+    function GetCongestionWindow: UInt64;
+    function GetInFlightBytes: Integer;
     procedure RandomBytes(out ADst: TBytes; ACount: Integer);
     procedure DeriveInitialKeys(const ADCID: TBytes);
     procedure ResetForRetry;
@@ -172,7 +188,7 @@ type
     function BuildAckFrameFor(ASpace: TQuicSpace;
       out AHas: Boolean): TBytes;
     procedure SettleAckFrame(ASpace: TQuicSpace;
-      const ARanges: TQuicAckRangeArray);
+      const ARanges: TQuicAckRangeArray; ADelayRaw: UInt64);
     function PnInRanges(APn: UInt64;
       const ARanges: TQuicAckRangeArray): Boolean;
     procedure FeedCrypto(ASpace: TQuicSpace; AOffset: UInt64;
@@ -191,6 +207,11 @@ type
     function HandleRetryPacket(const APacket: TBytes): Boolean;
     procedure ProcessFrames(ASpace: TQuicSpace; const APayload: TBytes);
     procedure DiscardInitialKeys;
+    { Q5 应用平面 }
+    procedure ApplyPeerGrantsOnce;
+    procedure SettleApplicationAck(
+      const ARanges: TQuicAckRangeArray; ADelayRaw: UInt64);
+    procedure DetectApplicationLoss(ANowUs: UInt64);
   public
     constructor Create(const AParams: TQuicClientParams);
     destructor Destroy; override;
@@ -200,11 +221,36 @@ type
     function TakeOutbound(out ADgram: TBytes): Boolean;
     procedure OnTimer(ANowUs: UInt64);
 
+    { ---- Q5 流应用平面 ---- }
+    {** 打开本地流（受对端 MAX_STREAMS 授予门禁）；须握手完成后使用 *}
+    function OpenStream(AUnidirectional: Boolean;
+      out AStreamId: UInt64): Boolean;
+
+    {** 入队流数据并立即尝试封包发出（拥塞窗/流控钳制下可能部分
+      *  滞留，滞留部分由 OnTimer 驱动续发） *}
+    function StreamWrite(AStreamId: UInt64; const AData: TBytes;
+      AFin: Boolean): Boolean;
+
+    {** 复位发送侧（排队 RESET_STREAM 并清空待发） *}
+    function StreamReset(AStreamId, AErrorCode: UInt64): Boolean;
+
+    {** 应用空间封包泵：控制帧+重发+新数据在拥塞窗内尽量出包。
+      *  时钟基准 = 最近一次 OnTimer 的 ANowUs *}
+    procedure FlushApplication;
+
     property Phase: TQuicConnPhase read FPhase;
     property LastError: string read FLastError;
     property PeerParamsValid: Boolean read FPeerParamsValid;
     property PeerParams: TQuicTransportParamArray read FPeerParams;
     property ApplicationWriteKeys: TQuicPacketKeys read FAppKeysW;
+    property ApplicationReadKeys: TQuicPacketKeys read FAppKeysR;
+    { Q5 观测面：应用空间拥塞窗与复用器 }
+    property CongestionWindow: UInt64 read GetCongestionWindow;
+    property InFlightBytes: Integer read GetInFlightBytes;
+    property Mux: TQuicStreamMux read FMux;
+    { 对端 STREAM 数据回调透传（等价 Mux.OnStreamData 赋值） }
+    procedure HookStreamData(AHandler: TOnStreamData);
+    procedure HookStreamReset(AHandler: TOnStreamReset);
     { 观测面：首个 Initial 的 DCID（Retry 完整性验证的 ODCID 即它） }
     property LocalFirstDcid: TBytes read FLocalDcid;
   end;
@@ -223,6 +269,9 @@ const
   cMsgCertificateVerify = 15;
   cMsgFinished = 20;
   cMsgKeyUpdate = 24;
+
+  { Q5：应用空间单包帧区预算（短头≈1+SCID+PN4+tag16，留 ACK 余量） }
+  cQuicAppPacketRoom = 1100;
 
   { RFC 9001 §5.8 原文定案的 Retry Integrity 常量（AES-128-GCM 空载荷） }
   cRetryIntegrityKey: array[0..15] of Byte = (
@@ -295,6 +344,13 @@ begin
   FPhase := qcpIdle;
   FInitialAlive := False;
   FHasAppKeys := False;
+  FPeerParamsApplied := False;
+  FMux := TQuicStreamMux.Create(cQuicDefaultFlowWindow,
+    cQuicDefaultFlowWindow);
+  FMux.OnFatal := @HandleMuxFatal;
+  FReno := TQuicNewReno.Create(1200);
+  FAppTracker := TQuicSentTracker.Create(1024);
+  QuicRttInit(FAppRtt);
   for LI := Low(TQuicSpace) to High(TQuicSpace) do
   begin
     FSendPn[LI] := 0;
@@ -309,8 +365,26 @@ end;
 
 destructor TQuicClientConnection.Destroy;
 begin
+  FMux.Free;
+  FReno.Free;
+  FAppTracker.Free;
   FLeafCert.Free;
   inherited Destroy;
+end;
+
+procedure TQuicClientConnection.HandleMuxFatal(const AReason: string);
+begin
+  TakeError('stream fatal: ' + AReason);
+end;
+
+function TQuicClientConnection.GetCongestionWindow: UInt64;
+begin
+  Result := FReno.Cwnd;
+end;
+
+function TQuicClientConnection.GetInFlightBytes: Integer;
+begin
+  Result := FAppTracker.InFlightBytes;
 end;
 
 function TQuicClientConnection.TakeError(const AMsg: string): Boolean;
@@ -720,7 +794,7 @@ begin
 end;
 
 procedure TQuicClientConnection.SettleAckFrame(ASpace: TQuicSpace;
-  const ARanges: TQuicAckRangeArray);
+  const ARanges: TQuicAckRangeArray; ADelayRaw: UInt64);
 var
   LKept: array of TQuicSentCryptoSpan;
   LI, LK: Integer;
@@ -741,6 +815,8 @@ begin
     FCryptoAcked[ASpace] := FSentSpans[ASpace][0].CryptoLo
   else
     FCryptoAcked[ASpace] := FCryptoEnd[ASpace];
+  if ASpace = qspApplication then
+    SettleApplicationAck(ARanges, ADelayRaw);
 end;
 
 procedure TQuicClientConnection.FeedCrypto(ASpace: TQuicSpace;
@@ -1209,9 +1285,14 @@ begin
     FAppSecrets.ServerApplicationTrafficSecret, FSuite);
   FHasAppKeys := True;
 
-  { 客户端 Finished（RFC 8446 §4.4.4）：client handshake traffic secret }
+  { 客户端 Finished（RFC 8446 §4.4.4 原文：verify_data 覆盖「through the
+    server's Finished」）——transcript 必须含服务器 Finished 本消息，
+    与上方验证服务器 Finished 所用的 CH..CV 前缀哈希是两个不同基线。
+    互操作缺陷（2026-08-23 aioquic 对拍揭穿）：此前误复用前缀哈希，
+    自写双向单测因对称实现互相印证而不可见 }
   LClientFin := TLS13ComputeFinishedVerifyDataFromTrafficSecretForCipherSuite(
-    FTlsSuite, FHsSecrets.ClientHandshakeTrafficSecret, LHash);
+    FTlsSuite, FHsSecrets.ClientHandshakeTrafficSecret,
+    SHA256(FTranscript));
   LMsg := nil;
   QuicBufAppendByte(LMsg, cMsgFinished);
   AppendU24(LMsg, Length(LClientFin));
@@ -1249,6 +1330,9 @@ begin
     FLargestRecvPn[qspApplication], LPn, LPayload) then
     Exit;
   RecordRecvPn(qspApplication, LPn);
+  { 授予参数必须先于任何应用空间帧落地：MAX_STREAMS/MAX_DATA 帧
+    相对 initial_* 参数是增量语义，顺序颠倒会被零值覆盖 }
+  ApplyPeerGrantsOnce;
   ProcessFrames(qspApplication, LPayload);
 end;
 
@@ -1335,7 +1419,7 @@ begin
       qfkPadding, qfkPing:
         ;
       qfkAck:
-        SettleAckFrame(ASpace, LRanges);
+        SettleAckFrame(ASpace, LRanges, LF.AckDelayRaw);
       qfkCrypto:
         if LF.DataLen > 0 then
           FeedCrypto(ASpace, LF.Offset,
@@ -1348,9 +1432,30 @@ begin
             TakeError('connection closed by peer (application)');
           Exit;
         end;
+      qfkHandshakeDone:
+        ;   { 仅观测面 }
+      qfkStream:
+        if FPhase = qcpConnected then
+        begin
+          ApplyPeerGrantsOnce;
+          FMux.HandleStreamData(LF.StreamId, LF.Offset,
+            SliceOf(APayload, LF.DataOfs, LF.DataLen), LF.Fin);
+        end;
+      qfkResetStream:
+        FMux.HandleResetStream(LF.StreamId, LF.ErrorCode, LF.FinalSize);
+      qfkStopSending:
+        FMux.HandleStopSending(LF.StreamId, LF.ErrorCode);
+      qfkMaxData:
+        FMux.HandleMaxData(LF.MaxValue);
+      qfkMaxStreamData:
+        FMux.HandleMaxStreamData(LF.StreamId, LF.MaxValue);
+      qfkMaxStreams:
+        FMux.HandleMaxStreams(LF.FrameType = cQfMaxStreamsBidi,
+          LF.MaxValue);
       qfkNewConnectionId, qfkRetireConnectionId, qfkPathChallenge,
-      qfkPathResponse, qfkHandshakeDone, qfkStream:
-        ;  { CID/迁移族：单 CID 不迁移故忽略；HANDSHAKE_DONE 仅观测；流族属 Q5 }
+      qfkPathResponse, qfkDataBlocked, qfkStreamDataBlocked,
+      qfkStreamsBlocked:
+        ;  { CID/迁移族：单 CID 不迁移故忽略；阻塞通告为对端观测面 }
     end;
     if FPhase = qcpClosed then
       Exit;
@@ -1473,6 +1578,12 @@ begin
      (ANowUs - FSentSpanLastUs[qspHandshake] >= cQuicResendThresholdUs) and
      (Length(FSentSpans[qspHandshake]) > 0) then
     RequeueUnackedCrypto(qspHandshake, False);
+  { Q5 应用空间：丢失检测 → 拥塞联动 + STREAM 重发入队，随后封包泵 }
+  if FPhase = qcpConnected then
+  begin
+    DetectApplicationLoss(ANowUs);
+    FlushApplication;
+  end;
 end;
 
 procedure TQuicClientConnection.Start;
@@ -1500,6 +1611,178 @@ begin
   FMsgBuf[qspInitial] := nil;
   FSentCryptoData[qspInitial] := nil;
   FRetryToken := nil;   { 地址验证 token 单次有效 }
+end;
+
+{ ---- Q5 应用平面 ---- }
+
+procedure TQuicClientConnection.ApplyPeerGrantsOnce;
+var
+  LMaxAckDelayMs: UInt64;
+
+  function GrantOrZero(AId: UInt64): UInt64;
+  var
+    LV: UInt64;
+  begin
+    if not QuicParamGetVarint(FPeerParams, AId, LV) then
+      LV := 0;
+    Result := LV;
+  end;
+
+begin
+  if FPeerParamsApplied or (not FPeerParamsValid) then
+    Exit;
+  FPeerParamsApplied := True;
+  { 授予缺失按 0 处理：对端不给预算即不可发（fail-closed） }
+  FMux.ApplyPeerGrants(
+    GrantOrZero(cQuicParamInitialMaxData),
+    GrantOrZero(cQuicParamInitialMaxStreamDataBidiLocal),
+    GrantOrZero(cQuicParamInitialMaxStreamDataBidiRemote),
+    GrantOrZero(cQuicParamInitialMaxStreamDataUni),
+    GrantOrZero(cQuicParamInitialMaxStreamsBidi),
+    GrantOrZero(cQuicParamInitialMaxStreamsUni));
+  { ACK 延迟缩放参数（缺省 = §18.2 RECOMMENDED：指数 3 / 延迟 25ms） }
+  if not QuicParamGetVarint(FPeerParams, cQuicParamAckDelayExponent,
+    FAckDelayExponent) then
+    FAckDelayExponent := 3;
+  if FAckDelayExponent > 30 then
+    FAckDelayExponent := 30;   { 防 shl 移位越界 }
+  if not QuicParamGetVarint(FPeerParams, cQuicParamMaxAckDelay,
+    LMaxAckDelayMs) then
+    LMaxAckDelayMs := 25;
+  FMaxAckDelayUs := LMaxAckDelayMs * 1000;
+end;
+
+function TQuicClientConnection.OpenStream(AUnidirectional: Boolean;
+  out AStreamId: UInt64): Boolean;
+begin
+  Result := False;
+  AStreamId := 0;
+  if FPhase <> qcpConnected then
+    Exit;   { 握手完成后才可开流 }
+  ApplyPeerGrantsOnce;
+  if AUnidirectional then
+    Result := FMux.OpenUni(AStreamId)
+  else
+    Result := FMux.OpenBidi(AStreamId);
+end;
+
+function TQuicClientConnection.StreamWrite(AStreamId: UInt64;
+  const AData: TBytes; AFin: Boolean): Boolean;
+begin
+  Result := False;
+  if FPhase <> qcpConnected then
+    Exit;
+  ApplyPeerGrantsOnce;
+  if not FMux.StreamWrite(AStreamId, AData, AFin) then
+    Exit;
+  FlushApplication;
+  Result := True;
+end;
+
+function TQuicClientConnection.StreamReset(AStreamId,
+  AErrorCode: UInt64): Boolean;
+begin
+  Result := False;
+  if FPhase <> qcpConnected then
+    Exit;
+  Result := FMux.ResetLocal(AStreamId, AErrorCode);
+  if Result then
+    FlushApplication;
+end;
+
+procedure TQuicClientConnection.FlushApplication;
+var
+  LAck, LFrames, LPkt: TBytes;
+  LHasAck: Boolean;
+  LRoom: Integer;
+begin
+  if FPhase <> qcpConnected then
+    Exit;
+  ApplyPeerGrantsOnce;
+  while FReno.CanSend(UInt64(FAppTracker.InFlightBytes)) do
+  begin
+    LFrames := nil;
+    LAck := BuildAckFrameFor(qspApplication, LHasAck);
+    if LHasAck then
+      AppendTail(LFrames, LAck);
+    LRoom := cQuicAppPacketRoom - Length(LFrames);
+    if LRoom < 32 then
+      Break;   { ACK 已占满预算：下轮再发数据 }
+    if not FMux.CollectFrames(LFrames, LRoom) then
+      Break;   { 复用器无产出 }
+    LPkt := BuildShortPacket(4, LFrames);
+    if LPkt = nil then
+    begin
+      FMux.RollbackStaged;
+      Break;
+    end;
+    FAppTracker.Track(FSendPn[qspApplication], FLastTimerUs,
+      Length(LPkt), True);
+    FMux.CommitSent(FSendPn[qspApplication]);
+    SendSpacePacket(qspApplication, LFrames, False);
+  end;
+end;
+
+procedure TQuicClientConnection.SettleApplicationAck(
+  const ARanges: TQuicAckRangeArray; ADelayRaw: UInt64);
+var
+  LStats: TQuicAckStats;
+  LLatest, LDelayScaled: UInt64;
+begin
+  if Length(ARanges) = 0 then
+    Exit;
+  if not FAppTracker.OnAckFrame(ARanges[0].Hi, ARanges, LStats) then
+    Exit;
+  if LStats.HasSampleCandidate and
+     (FLastTimerUs >= LStats.SampleTimeSentUs) then
+  begin
+    LLatest := FLastTimerUs - LStats.SampleTimeSentUs;
+    LDelayScaled := ADelayRaw shl FAckDelayExponent;
+    QuicRttOnSample(FAppRtt, LLatest, LDelayScaled, True,
+      FMaxAckDelayUs);
+    FReno.OnAcked(LStats.SamplePn, UInt64(FAppTracker.HighestTracked),
+      UInt64(LStats.AckedBytes));
+  end;
+  FMux.OnAckRanges(ARanges);
+  FlushApplication;   { 确认释放窗口后立即续发滞留数据 }
+end;
+
+procedure TQuicClientConnection.DetectApplicationLoss(ANowUs: UInt64);
+var
+  LLostPns: TQuicPnArray;
+  LLostBytes, LI: Integer;
+  LEarliest: UInt64;
+  LT: Int64;
+begin
+  FAppTracker.DetectLost(FAppRtt, ANowUs, LLostPns, LLostBytes);
+  if Length(LLostPns) = 0 then
+    Exit;
+  FReno.OnLost(UInt64(FAppTracker.HighestTracked));
+  LEarliest := High(UInt64);
+  for LI := 0 to High(LLostPns) do
+  begin
+    LT := FAppTracker.TimeSentOf(LLostPns[LI]);
+    if (LT >= 0) and (UInt64(LT) < LEarliest) then
+      LEarliest := UInt64(LT);
+  end;
+  if (FAppTracker.InFlightCount = 0) and
+     (LEarliest < High(UInt64)) and (ANowUs >= LEarliest) then
+  begin
+    if QuicIsPersistentCongestion(ANowUs - LEarliest,
+       QuicComputePtoUs(FAppRtt, FMaxAckDelayUs)) then
+      FReno.OnPersistentCongestion(UInt64(FAppTracker.HighestTracked));
+  end;
+  FMux.OnLostPns(LLostPns);
+end;
+
+procedure TQuicClientConnection.HookStreamData(AHandler: TOnStreamData);
+begin
+  FMux.OnStreamData := AHandler;
+end;
+
+procedure TQuicClientConnection.HookStreamReset(AHandler: TOnStreamReset);
+begin
+  FMux.OnStreamReset := AHandler;
 end;
 
 end.
