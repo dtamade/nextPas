@@ -7,9 +7,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
-factory_file="src/nextpas.core.tls.factory.pas"
-openssl_file="src/nextpas.core.tls.openssl.backed.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+factory_file="core/src/nextpas.core.tls.factory.pas"
+openssl_file="core/src/nextpas.core.tls.openssl.backed.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 
 if ! rg -n --quiet \

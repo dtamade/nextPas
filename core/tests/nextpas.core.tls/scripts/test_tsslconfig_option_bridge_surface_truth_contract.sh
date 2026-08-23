@@ -7,9 +7,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
 api_ref="docs/reference/API_REFERENCE.md"
-security_test="tests/security/test_session_security.pas"
+security_test="core/tests/nextpas.core.tls/security/test_session_security.pas"
 
 require_fixed() {
   local needle="$1"
@@ -54,19 +54,19 @@ require_fixed 'legacy boolean 赢，先回写对应 option bit，再把最终 `O
   "API reference no longer records the frozen option-bridge precedence truth"
 
 require_fixed "option-bridge boolean field surface" \
-  "tests/test_factory_logic.pas" \
+  "core/tests/nextpas.core.tls/test_factory_logic.pas" \
   "test_factory_logic no longer declares its option-bridge compatibility coverage"
 require_fixed "option-bridge boolean field surface" \
-  "tests/test_data_structures.pas" \
+  "core/tests/nextpas.core.tls/test_data_structures.pas" \
   "test_data_structures no longer declares its option-bridge compatibility coverage"
 require_fixed "INTENTIONAL_COMPAT: this file intentionally keeps option-bridge boolean" \
-  "tests/test_tsslconfig_option_bridge_default_truth.pas" \
+  "core/tests/nextpas.core.tls/test_tsslconfig_option_bridge_default_truth.pas" \
   "default-truth option-bridge coverage lost its compatibility label"
 require_fixed "INTENTIONAL_COMPAT: this file intentionally freezes the remaining" \
-  "tests/test_tsslconfig_option_bridge_precedence_freeze.pas" \
+  "core/tests/nextpas.core.tls/test_tsslconfig_option_bridge_precedence_freeze.pas" \
   "precedence-freeze option-bridge coverage lost its compatibility label"
 require_fixed "INTENTIONAL_COMPAT: this file intentionally covers the direct-library" \
-  "tests/test_direct_library_default_config_parity.pas" \
+  "core/tests/nextpas.core.tls/test_direct_library_default_config_parity.pas" \
   "direct-library default-config parity lost its option-bridge compatibility label"
 
 require_absent "EnableSessionTickets :=" \

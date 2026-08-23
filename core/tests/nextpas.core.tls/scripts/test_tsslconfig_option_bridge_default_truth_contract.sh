@@ -28,19 +28,19 @@ check_registration_creator() {
   fi
 }
 
-check_constructor_normalization "src/nextpas.core.tls.openssl.backed.pas"
-check_constructor_normalization "src/nextpas.core.tls.freepascal.lib.pas"
-check_constructor_normalization "src/nextpas.core.tls.winssl.lib.pas"
-check_constructor_normalization "src/nextpas.core.tls.mbedtls.lib.pas"
-check_constructor_normalization "src/nextpas.core.tls.wolfssl.lib.pas"
+check_constructor_normalization "core/src/nextpas.core.tls.openssl.backed.pas"
+check_constructor_normalization "core/src/nextpas.core.tls.freepascal.lib.pas"
+check_constructor_normalization "core/src/nextpas.core.tls.winssl.lib.pas"
+check_constructor_normalization "core/src/nextpas.core.tls.mbedtls.lib.pas"
+check_constructor_normalization "core/src/nextpas.core.tls.wolfssl.lib.pas"
 
-check_registration_creator "src/nextpas.core.tls.openssl.backed.pas" "TSSLFactory.RegisterLibrary(sslOpenSSL, @CreateOpenSSLLibrary,"
-check_registration_creator "src/nextpas.core.tls.freepascal.lib.pas" "TSSLFactory.RegisterLibrary(sslFreePascal, @CreateFreePascalSSLLibrary,"
-check_registration_creator "src/nextpas.core.tls.winssl.lib.pas" "TSSLFactory.RegisterLibrary(sslWinSSL, @CreateWinSSLLibrary,"
-check_registration_creator "src/nextpas.core.tls.mbedtls.lib.pas" "TSSLFactory.RegisterLibrary(sslMbedTLS, @CreateMbedTLSLibrary,"
-check_registration_creator "src/nextpas.core.tls.wolfssl.lib.pas" "TSSLFactory.RegisterLibrary(sslWolfSSL, @CreateWolfSSLLibrary,"
+check_registration_creator "core/src/nextpas.core.tls.openssl.backed.pas" "TSSLFactory.RegisterLibrary(sslOpenSSL, @CreateOpenSSLLibrary,"
+check_registration_creator "core/src/nextpas.core.tls.freepascal.lib.pas" "TSSLFactory.RegisterLibrary(sslFreePascal, @CreateFreePascalSSLLibrary,"
+check_registration_creator "core/src/nextpas.core.tls.winssl.lib.pas" "TSSLFactory.RegisterLibrary(sslWinSSL, @CreateWinSSLLibrary,"
+check_registration_creator "core/src/nextpas.core.tls.mbedtls.lib.pas" "TSSLFactory.RegisterLibrary(sslMbedTLS, @CreateMbedTLSLibrary,"
+check_registration_creator "core/src/nextpas.core.tls.wolfssl.lib.pas" "TSSLFactory.RegisterLibrary(sslWolfSSL, @CreateWolfSSLLibrary,"
 
-if ! rg -n --quiet 'FDefaultConfig\.EnableSessionTickets := True;' "src/nextpas.core.tls.freepascal.lib.pas"; then
+if ! rg -n --quiet 'FDefaultConfig\.EnableSessionTickets := True;' "core/src/nextpas.core.tls.freepascal.lib.pas"; then
   echo "[FAIL] FreePascal library constructor no longer preserves session-ticket default truth"
   exit 1
 fi

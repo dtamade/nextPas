@@ -20,10 +20,10 @@ check_backend() {
   fi
 }
 
-check_backend "src/nextpas.core.tls.openssl.backed.pas"
-check_backend "src/nextpas.core.tls.freepascal.lib.pas"
-check_backend "src/nextpas.core.tls.winssl.lib.pas"
-check_backend "src/nextpas.core.tls.mbedtls.lib.pas"
-check_backend "src/nextpas.core.tls.wolfssl.lib.pas"
+check_backend "core/src/nextpas.core.tls.openssl.backed.pas"
+check_backend "core/src/nextpas.core.tls.freepascal.lib.pas"
+check_backend "core/src/nextpas.core.tls.winssl.lib.pas"
+check_backend "core/src/nextpas.core.tls.mbedtls.lib.pas"
+check_backend "core/src/nextpas.core.tls.wolfssl.lib.pas"
 
 echo "[PASS] library-default log callback detachment remains aligned across backend library paths"

@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-source_file="src/nextpas.core.tls.base.pas"
+source_file="core/src/nextpas.core.tls.base.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 user_guide="docs/guides/USER_GUIDE.md"
 migration_guide="docs/guides/MIGRATION_GUIDE.md"

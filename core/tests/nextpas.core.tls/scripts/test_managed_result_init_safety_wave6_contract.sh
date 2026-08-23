@@ -13,17 +13,17 @@ import sys
 root = Path(sys.argv[1])
 
 targets = [
-    "tests/test_tls13_posthandshake.pas",
-    "tests/test_tls13_clienthello_parser.pas",
-    "tests/test_tls13_servercertverify.pas",
-    "tests/test_freepascal_client_certificateverify_runtime.pas",
-    "tests/test_freepascal_client_chain_trust_runtime.pas",
-    "tests/test_freepascal_client_ocsp_stapling_runtime.pas",
-    "tests/test_freepascal_server_ocsp_stapling_runtime.pas",
-    "tests/test_freepascal_client_online_ocsp_runtime.pas",
-    "tests/test_freepascal_client_ct_sct_surface.pas",
-    "tests/test_freepascal_client_cert_verify_flags_runtime.pas",
-    "tests/test_freepascal_tls13_early_data.pas",
+    "core/tests/nextpas.core.tls/test_tls13_posthandshake.pas",
+    "core/tests/nextpas.core.tls/test_tls13_clienthello_parser.pas",
+    "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_certificateverify_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_chain_trust_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_ocsp_stapling_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_server_ocsp_stapling_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_online_ocsp_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_ct_sct_surface.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_client_cert_verify_flags_runtime.pas",
+    "core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas",
 ]
 
 def require(condition: bool, message: str) -> None:
@@ -38,13 +38,13 @@ for target in targets:
             f"{target} no longer initializes empty TBytes Result with SetLength(Result, 0)")
 
 required_patterns = {
-    "tests/test_tls13_servercertverify.pas": [
+    "core/tests/nextpas.core.tls/test_tls13_servercertverify.pas": [
         r"function LoadFileBytes\(.*?begin\s+Result := nil;.*?SetLength\(Result, LStream.Size\);",
         r"function QWordToBytes\(.*?begin\s+Result := nil;.*?if AValue = 0 then",
         r"function BuildPEMPrivateKeyWithLeadingJunk\(.*?begin\s+Result := nil;.*?LJunkBytes :=",
         r"function BuildPEMWithMultiplePrivateKeys\(.*?begin\s+Result := nil;.*?LSepBytes :=",
     ],
-    "tests/test_freepascal_tls13_early_data.pas": [
+    "core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas": [
         r"function ReadBytesFromFile\(.*?begin\s+Result := nil;.*?AssertTrue",
         r"function BytesOf\(.*?begin\s+Result := nil;.*?SetLength\(Result, Length\(AValue\)\);",
     ],

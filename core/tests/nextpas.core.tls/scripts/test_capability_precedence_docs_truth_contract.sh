@@ -31,9 +31,9 @@ guide="docs/CAPABILITY_MATRIX_GUIDE.md"
 api_reference="docs/reference/API_REFERENCE.md"
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
 migration_guide="docs/MIGRATION_GUIDE_V1.1.md"
-base_unit="src/nextpas.core.tls.base.pas"
-serializer_unit="src/nextpas.core.tls.capability.serializer.pas"
-diff_unit="src/nextpas.core.tls.capability.diff.pas"
+base_unit="core/src/nextpas.core.tls.base.pas"
+serializer_unit="core/src/nextpas.core.tls.capability.serializer.pas"
+diff_unit="core/src/nextpas.core.tls.capability.diff.pas"
 
 echo "[TEST] capability precedence docs truth contract"
 

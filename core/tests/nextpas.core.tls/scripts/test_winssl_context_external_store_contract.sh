@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-FILE="src/nextpas.core.tls.winssl.context.pas"
+FILE="core/src/nextpas.core.tls.winssl.context.pas"
 
 assert_contains() {
   local file="$1"

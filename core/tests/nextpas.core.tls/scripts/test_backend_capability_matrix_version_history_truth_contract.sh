@@ -19,7 +19,7 @@ require_fixed() {
 }
 
 matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
-base_unit="src/nextpas.core.tls.base.pas"
+base_unit="core/src/nextpas.core.tls.base.pas"
 roadmap="docs/ROADMAP.md"
 release_notes="docs/RELEASE_NOTES.md"
 

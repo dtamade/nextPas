@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,10 +38,10 @@ require_absent() {
   fi
 }
 
-connection_file="src/nextpas.core.tls.winssl.connection.pas"
-base_file="src/nextpas.core.tls.winssl.base.pas"
-context_file="src/nextpas.core.tls.winssl.context.pas"
-library_file="src/nextpas.core.tls.winssl.lib.pas"
+connection_file="core/src/nextpas.core.tls.winssl.connection.pas"
+base_file="core/src/nextpas.core.tls.winssl.base.pas"
+context_file="core/src/nextpas.core.tls.winssl.context.pas"
+library_file="core/src/nextpas.core.tls.winssl.lib.pas"
 
 require_absent "$connection_file" \
   'TWinSSLContext\(FContext\)' \

@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-factory_file="src/nextpas.core.tls.factory.pas"
+factory_file="core/src/nextpas.core.tls.factory.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 
 require_fixed() {
@@ -51,19 +51,19 @@ require_fixed 'legacy boolean 赢，先回写对应 option bit，再把最终 `O
   "API reference no longer explains the final option-truth projection"
 
 require_fixed "TSSLFactory.NormalizeConfig(LConfig);" \
-  "src/nextpas.core.tls.openssl.backed.pas" \
+  "core/src/nextpas.core.tls.openssl.backed.pas" \
   "OpenSSL SetDefaultConfig no longer normalizes conflicting option-bridge input"
 require_fixed "TSSLFactory.NormalizeConfig(LConfig);" \
-  "src/nextpas.core.tls.freepascal.lib.pas" \
+  "core/src/nextpas.core.tls.freepascal.lib.pas" \
   "FreePascal SetDefaultConfig no longer normalizes conflicting option-bridge input"
 require_fixed "TSSLFactory.NormalizeConfig(LConfig);" \
-  "src/nextpas.core.tls.winssl.lib.pas" \
+  "core/src/nextpas.core.tls.winssl.lib.pas" \
   "WinSSL SetDefaultConfig no longer normalizes conflicting option-bridge input"
 require_fixed "TSSLFactory.NormalizeConfig(LConfig);" \
-  "src/nextpas.core.tls.mbedtls.lib.pas" \
+  "core/src/nextpas.core.tls.mbedtls.lib.pas" \
   "MbedTLS SetDefaultConfig no longer normalizes conflicting option-bridge input"
 require_fixed "TSSLFactory.NormalizeConfig(LConfig);" \
-  "src/nextpas.core.tls.wolfssl.lib.pas" \
+  "core/src/nextpas.core.tls.wolfssl.lib.pas" \
   "WolfSSL SetDefaultConfig no longer normalizes conflicting option-bridge input"
 
 echo "[PASS] TSSLConfig option-bridge precedence truth remains frozen across source and docs"

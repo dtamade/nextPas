@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-test_file="tests/test_capability_matrix_v12.pas"
+test_file="core/tests/nextpas.core.tls/test_capability_matrix_v12.pas"
 
 require_fixed() {
   local pattern="$1"

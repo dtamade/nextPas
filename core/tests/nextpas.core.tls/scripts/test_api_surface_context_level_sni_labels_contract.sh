@@ -8,11 +8,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 declare -a files=(
-  "tests/examples/test_lib_core_functionality.pas"
-  "tests/diagnostic/test_error_handling.pas"
-  "tests/diagnostic/test_error_handling_comprehensive.pas"
-  "tests/security/test_memory_safety.pas"
-  "tests/security/test_input_validation.pas"
+  "core/tests/nextpas.core.tls/examples/test_lib_core_functionality.pas"
+  "core/tests/nextpas.core.tls/diagnostic/test_error_handling.pas"
+  "core/tests/nextpas.core.tls/diagnostic/test_error_handling_comprehensive.pas"
+  "core/tests/nextpas.core.tls/security/test_memory_safety.pas"
+  "core/tests/nextpas.core.tls/security/test_input_validation.pas"
 )
 
 pattern='(Context|Ctx|LCtx|LContext)\.SetServerName\('

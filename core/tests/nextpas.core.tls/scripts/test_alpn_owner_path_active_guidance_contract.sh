@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-source_file="src/nextpas.core.tls.base.pas"
+source_file="core/src/nextpas.core.tls.base.pas"
 winssl_guide="docs/guides/WINSSL_USER_GUIDE.md"
 alpn_example="examples/https_server/https_server_alpn.pas"
 

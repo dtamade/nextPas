@@ -7,8 +7,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-source_file="src/nextpas.core.tls.winssl.certificate.pas"
-runtime_test="tests/winssl/test_winssl_certstore.pas"
+source_file="core/src/nextpas.core.tls.winssl.certificate.pas"
+runtime_test="core/tests/nextpas.core.tls/winssl/test_winssl_certstore.pas"
 
 if rg -n --quiet 'CERT_NAME_SIMPLE_DISPLAY_TYPE' "$source_file"; then
   echo "[FAIL] WinSSL certificate identity getters still use CERT_NAME_SIMPLE_DISPLAY_TYPE"

@@ -7,9 +7,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
-factory_file="src/nextpas.core.tls.factory.pas"
-debug_file="src/nextpas.core.tls.debug.utils.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+factory_file="core/src/nextpas.core.tls.factory.pas"
+debug_file="core/src/nextpas.core.tls.debug.utils.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 arch_ref="docs/reference/ARCHITECTURE.md"
 ca_doc="docs/CA_CERTIFICATE_AUTO_LOADING.md"

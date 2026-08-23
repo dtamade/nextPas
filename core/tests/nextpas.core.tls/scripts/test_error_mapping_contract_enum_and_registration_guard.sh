@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-test_file="tests/contract/test_error_mapping_contract.pas"
+test_file="core/tests/nextpas.core.tls/contract/test_error_mapping_contract.pas"
 
 fail() {
   echo "[FAIL] $1" >&2

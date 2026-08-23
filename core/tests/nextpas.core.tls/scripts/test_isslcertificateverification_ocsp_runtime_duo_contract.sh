@@ -42,8 +42,8 @@ actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\
 compare_file_list "OpenSSL/WolfSSL OCSP runtime verify-result residual file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(
-  "tests/openssl/test_openssl_server_ocsp_stapling_runtime.pas"
-  "tests/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas"
+  "core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_runtime.pas"
+  "core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas"
 )
 
 declare -a required_comment_patterns=(
@@ -59,8 +59,8 @@ for file in "${residual_files[@]}"; do
   done
 done
 
-require_pattern "tests/openssl/test_openssl_server_ocsp_stapling_runtime.pas" "GetVerifyResultString"
-require_pattern "tests/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas" "GetVerifyResult"
-require_pattern "tests/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas" "GetVerifyResultString"
+require_pattern "core/tests/nextpas.core.tls/openssl/test_openssl_server_ocsp_stapling_runtime.pas" "GetVerifyResultString"
+require_pattern "core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas" "GetVerifyResult"
+require_pattern "core/tests/nextpas.core.tls/wolfssl/test_wolfssl_server_ocsp_stapling_runtime.pas" "GetVerifyResultString"
 
 echo "[PASS] OpenSSL/WolfSSL OCSP runtime verify-result duo stays intentionally frozen"

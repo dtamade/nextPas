@@ -33,9 +33,9 @@ actual_hits="$(rg -lP '\b(?:Conn|LConn|LConnection)\.GetVerifyResult(?:String)?\
 compare_file_list "WinSSL runtime direct-core verify-result file set" "$actual_hits" "$expected_hits"
 
 declare -a residual_files=(
-  "tests/winssl/test_winssl_error_mapping_online.pas"
-  "tests/winssl/test_winssl_hostname_mismatch_online.pas"
-  "tests/winssl/test_winssl_revocation_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_error_mapping_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_hostname_mismatch_online.pas"
+  "core/tests/nextpas.core.tls/winssl/test_winssl_revocation_online.pas"
 )
 
 declare -a required_comment_patterns=(

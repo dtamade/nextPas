@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,9 +38,9 @@ require_absent() {
   fi
 }
 
-connection_file="src/nextpas.core.tls.winssl.connection.pas"
-proof_file="tests/winssl/test_winssl_session_resumption.pas"
-shim_file="src/nextpas.core.tls.winssl.session.pas"
+connection_file="core/src/nextpas.core.tls.winssl.connection.pas"
+proof_file="core/tests/nextpas.core.tls/winssl/test_winssl_session_resumption.pas"
+shim_file="core/src/nextpas.core.tls.winssl.session.pas"
 
 printf '[TEST] WinSSL session-info probe allowlist contract\n'
 

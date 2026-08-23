@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-builder_file="src/nextpas.core.tls.context.builder.pas"
+builder_file="core/src/nextpas.core.tls.context.builder.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 
 if ! rg -n --quiet 'Compatibility-only context-level SNI\.' "$builder_file"; then

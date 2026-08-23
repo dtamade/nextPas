@@ -7,8 +7,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-guide_file="tests/winssl/SESSION_REUSE_BENCHMARK_GUIDE.md"
-prog_file="tests/winssl/test_winssl_session_reuse_benchmark.pas"
+guide_file="core/tests/nextpas.core.tls/winssl/SESSION_REUSE_BENCHMARK_GUIDE.md"
+prog_file="core/tests/nextpas.core.tls/winssl/test_winssl_session_reuse_benchmark.pas"
 
 if rg -n --quiet '70-90%|> 95%|98\.0%|快速握手|达到预期性能提升目标' "$guide_file" "$prog_file"; then
   echo "[FAIL] WinSSL benchmark still promises runtime-proven high reuse/performance truth"

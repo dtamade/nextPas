@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,7 +38,7 @@ require_absent() {
   fi
 }
 
-session_file="src/nextpas.core.tls.winssl.session.pas"
+session_file="core/src/nextpas.core.tls.winssl.session.pas"
 
 printf '[TEST] WinSSL session shim safe fallback contract\n'
 

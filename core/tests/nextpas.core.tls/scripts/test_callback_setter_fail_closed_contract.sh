@@ -27,12 +27,12 @@ require_fixed() {
   fi
 }
 
-base_file="src/nextpas.core.tls.base.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
 api_reference_file="docs/reference/API_REFERENCE.md"
-openssl_ctx="src/nextpas.core.tls.openssl.context.pas"
-freepascal_ctx="src/nextpas.core.tls.freepascal.context.pas"
-wolfssl_ctx="src/nextpas.core.tls.wolfssl.context.pas"
-mbedtls_ctx="src/nextpas.core.tls.mbedtls.context.pas"
+openssl_ctx="core/src/nextpas.core.tls.openssl.context.pas"
+freepascal_ctx="core/src/nextpas.core.tls.freepascal.context.pas"
+wolfssl_ctx="core/src/nextpas.core.tls.wolfssl.context.pas"
+mbedtls_ctx="core/src/nextpas.core.tls.mbedtls.context.pas"
 
 echo "[TEST] callback setter fail-closed contract"
 

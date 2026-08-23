@@ -21,7 +21,7 @@ require_fixed() {
   fi
 }
 
-source_file="src/nextpas.core.tls.base.pas"
+source_file="core/src/nextpas.core.tls.base.pas"
 design_v2="docs/reference/INTERFACE_DESIGN_V2.md"
 
 printf '[TEST] ISSLConnection whole-surface taxonomy contract\n'
@@ -31,7 +31,7 @@ from pathlib import Path
 import re
 import sys
 
-path = Path("src/nextpas.core.tls.base.pas")
+path = Path("core/src/nextpas.core.tls.base.pas")
 lines = path.read_text(encoding="utf-8").splitlines()
 start = next(i for i, line in enumerate(lines) if line.strip() == "ISSLConnection = interface")
 end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == "end;")

@@ -18,8 +18,8 @@ require_fixed() {
   fi
 }
 
-logging_runtime="tests/test_clibrary_library_default_logging_scope_clarification.pas"
-connection_runtime="tests/test_clibrary_library_default_config_connection_scope_clarification.pas"
+logging_runtime="core/tests/nextpas.core.tls/test_clibrary_library_default_logging_scope_clarification.pas"
+connection_runtime="core/tests/nextpas.core.tls/test_clibrary_library_default_config_connection_scope_clarification.pas"
 
 for runtime_file in "$logging_runtime" "$connection_runtime"; do
   require_fixed "sslOpenSSL," "$runtime_file" \

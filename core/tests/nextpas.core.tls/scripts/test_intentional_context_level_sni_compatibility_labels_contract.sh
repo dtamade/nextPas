@@ -8,7 +8,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 declare -a files=(
-  "tests/test_context_builder_server_servername_runtime_consistency.pas"
+  "core/tests/nextpas.core.tls/test_context_builder_server_servername_runtime_consistency.pas"
 )
 
 pattern='(Context|Ctx|LCtx|LContext)\.SetServerName\('

@@ -28,8 +28,8 @@ require_absent() {
 }
 
 guide="docs/guides/security-best-practices.md"
-pinning_unit="src/nextpas.core.tls.cert.pinning.pas"
-pem_unit="src/nextpas.core.tls.openssl.api.pem.pas"
+pinning_unit="core/src/nextpas.core.tls.cert.pinning.pas"
+pem_unit="core/src/nextpas.core.tls.openssl.api.pem.pas"
 
 echo "[TEST] security best practices pinning helper truth contract"
 

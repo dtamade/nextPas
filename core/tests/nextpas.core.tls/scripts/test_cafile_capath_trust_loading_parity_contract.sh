@@ -18,7 +18,7 @@ require_fixed() {
   fi
 }
 
-factory_file="src/nextpas.core.tls.factory.pas"
+factory_file="core/src/nextpas.core.tls.factory.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 
 require_fixed "$factory_file" \

@@ -7,8 +7,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-source_file="src/nextpas.core.tls.winssl.certificate.pas"
-runtime_test="tests/winssl/test_winssl_unit_comprehensive.pas"
+source_file="core/src/nextpas.core.tls.winssl.certificate.pas"
+runtime_test="core/tests/nextpas.core.tls/winssl/test_winssl_unit_comprehensive.pas"
 
 required_source_patterns=(
   'TryLoadParsedWinSSLCertificate\(Self, LParser\)'

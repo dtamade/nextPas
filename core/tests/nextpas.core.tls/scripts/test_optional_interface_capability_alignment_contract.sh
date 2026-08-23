@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -27,12 +27,12 @@ require_match() {
   fi
 }
 
-openssl_context="src/nextpas.core.tls.openssl.context.pas"
-openssl_lib="src/nextpas.core.tls.openssl.backed.pas"
-openssl_connection="src/nextpas.core.tls.openssl.connection.pas"
-wolfssl_context="src/nextpas.core.tls.wolfssl.context.pas"
-wolfssl_lib="src/nextpas.core.tls.wolfssl.lib.pas"
-wolfssl_connection="src/nextpas.core.tls.wolfssl.connection.pas"
+openssl_context="core/src/nextpas.core.tls.openssl.context.pas"
+openssl_lib="core/src/nextpas.core.tls.openssl.backed.pas"
+openssl_connection="core/src/nextpas.core.tls.openssl.connection.pas"
+wolfssl_context="core/src/nextpas.core.tls.wolfssl.context.pas"
+wolfssl_lib="core/src/nextpas.core.tls.wolfssl.lib.pas"
+wolfssl_connection="core/src/nextpas.core.tls.wolfssl.connection.pas"
 
 printf '[TEST] optional interface capability alignment contract\n'
 

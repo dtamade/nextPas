@@ -7,11 +7,11 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-conn_base_file="src/nextpas.core.tls.connection.base.pas"
-backend_contract="tests/contract/test_backend_contract.pas"
-mbedtls_contract="tests/test_mbedtls_connection_session_reused_contract.pas"
-openssl_contract="tests/test_openssl_connection_session_reused_contract.pas"
-winssl_mock_file="tests/winssl/test_session_save_logic.pas"
+conn_base_file="core/src/nextpas.core.tls.connection.base.pas"
+backend_contract="core/tests/nextpas.core.tls/contract/test_backend_contract.pas"
+mbedtls_contract="core/tests/nextpas.core.tls/test_mbedtls_connection_session_reused_contract.pas"
+openssl_contract="core/tests/nextpas.core.tls/test_openssl_connection_session_reused_contract.pas"
+winssl_mock_file="core/tests/nextpas.core.tls/winssl/test_session_save_logic.pas"
 
 require_fixed() {
   local file="$1"
@@ -76,7 +76,7 @@ require_fixed "$winssl_mock_file" \
 
 actual_residuals="$(
   rg -lP '\b(?:Conn|LConn|LConn1|LConn2|ResumedConn|InitialConn|LTLSStream\.Connection)\.(?:GetSession|SetSession|IsSessionReused)\b' \
-    tests --glob '!tests/scripts/**' | sort
+    tests --glob '!core/tests/nextpas.core.tls/scripts/**' | sort
 )"
 
 expected_residuals=$'tests/contract/test_backend_contract.pas'

@@ -34,11 +34,11 @@ check_file() {
   fi
 }
 
-check_file "src/nextpas.core.tls.openssl.backed.pas" "TOpenSSLLibrary"
-check_file "src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
-check_file "src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
-check_file "src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
-check_file "src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
+check_file "core/src/nextpas.core.tls.openssl.backed.pas" "TOpenSSLLibrary"
+check_file "core/src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
+check_file "core/src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
+check_file "core/src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
+check_file "core/src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
 
 if ! rg -F -n --quiet '`ClientEarlyDataEnabled`' "$api_ref"; then
   echo "[FAIL] API reference no longer records direct-library early-data coverage"

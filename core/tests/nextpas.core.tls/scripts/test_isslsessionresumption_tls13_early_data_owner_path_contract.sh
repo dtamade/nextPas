@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-target_file="tests/test_freepascal_tls13_early_data.pas"
+target_file="core/tests/nextpas.core.tls/test_freepascal_tls13_early_data.pas"
 
 if rg -n --quiet '\b(?:LConn|LTLSStream\.Connection)\.(?:GetSession|SetSession|IsSessionReused)\b' "$target_file"; then
   echo "[FAIL] direct core session-resumption mirror still present in $target_file"

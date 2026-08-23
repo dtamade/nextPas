@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,7 +38,7 @@ require_absent() {
   fi
 }
 
-context_file="src/nextpas.core.tls.wolfssl.context.pas"
+context_file="core/src/nextpas.core.tls.wolfssl.context.pas"
 
 require_absent "$context_file" \
   'TWolfSSLConnection = class\(TInterfacedObject,\s*ISSLConnection,\s*ISSLNativeHandleAccess\)' \

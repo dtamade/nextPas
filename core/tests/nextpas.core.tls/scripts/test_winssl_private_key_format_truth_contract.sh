@@ -44,8 +44,8 @@ PY
   fi
 }
 
-winssl_lib="src/nextpas.core.tls.winssl.lib.pas"
-winssl_ctx="src/nextpas.core.tls.winssl.context.pas"
+winssl_lib="core/src/nextpas.core.tls.winssl.lib.pas"
+winssl_ctx="core/src/nextpas.core.tls.winssl.context.pas"
 api_reference="docs/reference/API_REFERENCE.md"
 winssl_matrix="docs/reference/WINSSL_BACKEND_CAPABILITY_MATRIX.md"
 winssl_design="docs/reference/WINSSL_DESIGN.md"

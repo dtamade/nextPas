@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,10 +38,10 @@ require_absent() {
   fi
 }
 
-api_file="src/nextpas.core.tls.wolfssl.api.pas"
-context_file="src/nextpas.core.tls.wolfssl.context.pas"
-connection_file="src/nextpas.core.tls.wolfssl.connection.pas"
-lib_file="src/nextpas.core.tls.wolfssl.lib.pas"
+api_file="core/src/nextpas.core.tls.wolfssl.api.pas"
+context_file="core/src/nextpas.core.tls.wolfssl.context.pas"
+connection_file="core/src/nextpas.core.tls.wolfssl.connection.pas"
+lib_file="core/src/nextpas.core.tls.wolfssl.lib.pas"
 
 require_match "$api_file" \
   'TwolfSSL_UseOCSPStapling = function\(ssl: PWOLFSSL;\s*statusType: Byte;\s*options: Byte\): Integer; cdecl;' \

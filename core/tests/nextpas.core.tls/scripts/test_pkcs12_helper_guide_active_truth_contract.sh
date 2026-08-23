@@ -29,9 +29,9 @@ require_absent() {
 
 guide="docs/guides/PKCS12_USER_GUIDE.md"
 api_reference="docs/reference/API_REFERENCE.md"
-facade="src/nextpas.core.tls.pas"
-advanced_unit="src/nextpas.core.tls.cert.advanced.pas"
-pem_unit="src/nextpas.core.tls.openssl.api.pem.pas"
+facade="core/src/nextpas.core.tls.pas"
+advanced_unit="core/src/nextpas.core.tls.cert.advanced.pas"
+pem_unit="core/src/nextpas.core.tls.openssl.api.pem.pas"
 
 echo "[TEST] PKCS12 helper guide active truth contract"
 

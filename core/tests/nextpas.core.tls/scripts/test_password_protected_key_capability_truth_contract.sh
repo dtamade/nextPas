@@ -35,13 +35,13 @@ PY
   fi
 }
 
-base_file="src/nextpas.core.tls.base.pas"
-freepascal_lib="src/nextpas.core.tls.freepascal.lib.pas"
-freepascal_ctx="src/nextpas.core.tls.freepascal.context.pas"
-wolfssl_lib="src/nextpas.core.tls.wolfssl.lib.pas"
-wolfssl_ctx="src/nextpas.core.tls.wolfssl.context.pas"
-mbedtls_lib="src/nextpas.core.tls.mbedtls.lib.pas"
-winssl_lib="src/nextpas.core.tls.winssl.lib.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
+freepascal_lib="core/src/nextpas.core.tls.freepascal.lib.pas"
+freepascal_ctx="core/src/nextpas.core.tls.freepascal.context.pas"
+wolfssl_lib="core/src/nextpas.core.tls.wolfssl.lib.pas"
+wolfssl_ctx="core/src/nextpas.core.tls.wolfssl.context.pas"
+mbedtls_lib="core/src/nextpas.core.tls.mbedtls.lib.pas"
+winssl_lib="core/src/nextpas.core.tls.winssl.lib.pas"
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
 api_reference="docs/reference/API_REFERENCE.md"
 winssl_matrix="docs/reference/WINSSL_BACKEND_CAPABILITY_MATRIX.md"

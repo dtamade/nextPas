@@ -28,8 +28,8 @@ require_absent() {
 }
 
 audit="docs/test_reports/INTERFACE_DESIGN_AUDIT_V1.5.0.md"
-factory="src/nextpas.core.tls.factory.pas"
-builder="src/nextpas.core.tls.context.builder.pas"
+factory="core/src/nextpas.core.tls.factory.pas"
+builder="core/src/nextpas.core.tls.context.builder.pas"
 architecture="docs/ARCHITECTURE.md"
 v2_doc="docs/reference/INTERFACE_DESIGN_V2.md"
 

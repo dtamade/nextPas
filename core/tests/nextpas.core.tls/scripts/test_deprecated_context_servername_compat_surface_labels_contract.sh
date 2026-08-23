@@ -8,30 +8,30 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 declare -A allowed_files=(
-  ["tests/config/test_config_import_export.pas"]=1
-  ["tests/config/test_config_snapshot_clone.pas"]=1
-  ["tests/config/test_config_validation.pas"]=1
-  ["tests/config/test_context_builder_merge_advanced_option_snapshot_semantics.pas"]=1
-  ["tests/config/test_context_builder_server_name_compat_marker.pas"]=1
-  ["tests/test_context_builder_server_name_compatibility_warning.pas"]=1
-  ["tests/test_context_builder_server_servername_runtime_consistency.pas"]=1
-  ["tests/test_data_structures.pas"]=1
-  ["tests/test_factory_logic.pas"]=1
-  ["tests/test_factory_config_server_name_isolation.pas"]=1
-  ["tests/test_factory_server_name_compatibility_warning.pas"]=1
-  ["tests/test_factory_server_name_scope_clarification.pas"]=1
-  ["tests/test_freepascal_context_server_name_inheritance.pas"]=1
-  ["tests/test_freepascal_library_default_config_server_name_clarification.pas"]=1
-  ["tests/test_openssl_library_default_config_server_name_clarification.pas"]=1
-  ["tests/test_transformation_methods.pas"]=1
-  ["tests/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas"]=1
-  ["tests/test_tsslcontextconfig_surface.pas"]=1
+  ["core/tests/nextpas.core.tls/config/test_config_import_export.pas"]=1
+  ["core/tests/nextpas.core.tls/config/test_config_snapshot_clone.pas"]=1
+  ["core/tests/nextpas.core.tls/config/test_config_validation.pas"]=1
+  ["core/tests/nextpas.core.tls/config/test_context_builder_merge_advanced_option_snapshot_semantics.pas"]=1
+  ["core/tests/nextpas.core.tls/config/test_context_builder_server_name_compat_marker.pas"]=1
+  ["core/tests/nextpas.core.tls/test_context_builder_server_name_compatibility_warning.pas"]=1
+  ["core/tests/nextpas.core.tls/test_context_builder_server_servername_runtime_consistency.pas"]=1
+  ["core/tests/nextpas.core.tls/test_data_structures.pas"]=1
+  ["core/tests/nextpas.core.tls/test_factory_logic.pas"]=1
+  ["core/tests/nextpas.core.tls/test_factory_config_server_name_isolation.pas"]=1
+  ["core/tests/nextpas.core.tls/test_factory_server_name_compatibility_warning.pas"]=1
+  ["core/tests/nextpas.core.tls/test_factory_server_name_scope_clarification.pas"]=1
+  ["core/tests/nextpas.core.tls/test_freepascal_context_server_name_inheritance.pas"]=1
+  ["core/tests/nextpas.core.tls/test_freepascal_library_default_config_server_name_clarification.pas"]=1
+  ["core/tests/nextpas.core.tls/test_openssl_library_default_config_server_name_clarification.pas"]=1
+  ["core/tests/nextpas.core.tls/test_transformation_methods.pas"]=1
+  ["core/tests/nextpas.core.tls/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas"]=1
+  ["core/tests/nextpas.core.tls/test_tsslcontextconfig_surface.pas"]=1
 )
 
 # Files that test the config surface itself and use deprecated fields as part of
 # their coverage but are exempt from the INTENTIONAL_COMPAT marker requirement.
 declare -A marker_exempt_files=(
-  ["tests/test_tsslcontextconfig_surface.pas"]=1
+  ["core/tests/nextpas.core.tls/test_tsslcontextconfig_surface.pas"]=1
 )
 
 marker='INTENTIONAL_COMPAT:'

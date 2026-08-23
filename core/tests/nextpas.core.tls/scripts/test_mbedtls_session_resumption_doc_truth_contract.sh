@@ -27,7 +27,7 @@ require_absent() {
   fi
 }
 
-mbedtls_conn="src/nextpas.core.tls.mbedtls.connection.pas"
+mbedtls_conn="core/src/nextpas.core.tls.mbedtls.connection.pas"
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
 mbedtls_matrix="docs/reference/MBEDTLS_BACKEND_CAPABILITY_MATRIX.md"
 mbedtls_guide="docs/guides/MBEDTLS_USER_GUIDE.md"

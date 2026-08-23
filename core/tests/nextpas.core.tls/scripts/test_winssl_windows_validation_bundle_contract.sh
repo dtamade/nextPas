@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -38,10 +38,10 @@ require_absent() {
   fi
 }
 
-checklist="tests/windows/WINDOWS_VALIDATION_CHECKLIST.md"
-bundle="tests/windows/VALIDATION_BUNDLE.md"
-quick_runner="tests/quick_winssl_validation.ps1"
-full_runner="tests/run_winssl_tests.ps1"
+checklist="core/tests/nextpas.core.tls/windows/WINDOWS_VALIDATION_CHECKLIST.md"
+bundle="core/tests/nextpas.core.tls/windows/VALIDATION_BUNDLE.md"
+quick_runner="core/tests/nextpas.core.tls/quick_winssl_validation.ps1"
+full_runner="core/tests/nextpas.core.tls/run_winssl_tests.ps1"
 status_report="docs/test_reports/WINSSL_BACKEND_STATUS_REPORT.md"
 
 printf '[TEST] WinSSL Windows validation bundle contract\n'

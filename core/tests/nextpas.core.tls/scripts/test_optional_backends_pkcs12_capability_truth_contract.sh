@@ -27,8 +27,8 @@ require_absent() {
   fi
 }
 
-mbedtls_lib="src/nextpas.core.tls.mbedtls.lib.pas"
-wolfssl_lib="src/nextpas.core.tls.wolfssl.lib.pas"
+mbedtls_lib="core/src/nextpas.core.tls.mbedtls.lib.pas"
+wolfssl_lib="core/src/nextpas.core.tls.wolfssl.lib.pas"
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
 faq_guide="docs/guides/FAQ.md"
 pkcs12_guide="docs/guides/PKCS12_USER_GUIDE.md"

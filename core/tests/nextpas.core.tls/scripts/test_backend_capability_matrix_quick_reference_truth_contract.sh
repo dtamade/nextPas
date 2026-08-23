@@ -28,8 +28,8 @@ require_regex() {
 }
 
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
-freepascal_lib="src/nextpas.core.tls.freepascal.lib.pas"
-winssl_lib="src/nextpas.core.tls.winssl.lib.pas"
+freepascal_lib="core/src/nextpas.core.tls.freepascal.lib.pas"
+winssl_lib="core/src/nextpas.core.tls.winssl.lib.pas"
 winssl_matrix="docs/reference/WINSSL_BACKEND_CAPABILITY_MATRIX.md"
 
 echo "[TEST] backend capability matrix quick-reference truth contract"

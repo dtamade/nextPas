@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 fail() {
@@ -9,8 +9,8 @@ fail() {
   exit 1
 }
 
-builder_file="src/nextpas.core.tls.context.builder.pas"
-contract_src="tests/contract/test_builder_empty_verifymode_validation_entry.pas"
+builder_file="core/src/nextpas.core.tls.context.builder.pas"
+contract_src="core/tests/nextpas.core.tls/contract/test_builder_empty_verifymode_validation_entry.pas"
 build_root="tmp/test_builder_empty_verifymode_validation_entry"
 units_dir="$build_root/units"
 bin_dir="$build_root/bin"

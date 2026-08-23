@@ -30,7 +30,7 @@ require_absent() {
 audit="docs/test_reports/INTERFACE_DESIGN_AUDIT_V1.5.0.md"
 backend_matrix="docs/BACKEND_CAPABILITY_MATRIX.md"
 api_reference="docs/reference/API_REFERENCE.md"
-base_unit="src/nextpas.core.tls.base.pas"
+base_unit="core/src/nextpas.core.tls.base.pas"
 migration_guide="docs/MIGRATION_GUIDE_V1.1.md"
 
 echo "[TEST] interface audit capability current truth contract"

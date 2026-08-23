@@ -27,9 +27,9 @@ require_fixed() {
   fi
 }
 
-winssl_ctx="src/nextpas.core.tls.winssl.context.pas"
-winssl_test="tests/unit/test_winssl_comprehensive.pas"
-callback_runtime_contract="tests/test_backend_callback_setter_fail_closed_contract.pas"
+winssl_ctx="core/src/nextpas.core.tls.winssl.context.pas"
+winssl_test="core/tests/nextpas.core.tls/unit/test_winssl_comprehensive.pas"
+callback_runtime_contract="core/tests/nextpas.core.tls/test_backend_callback_setter_fail_closed_contract.pas"
 api_reference_file="docs/reference/API_REFERENCE.md"
 winssl_design_file="docs/reference/WINSSL_DESIGN.md"
 

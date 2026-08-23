@@ -7,7 +7,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-base_file="src/nextpas.core.tls.base.pas"
+base_file="core/src/nextpas.core.tls.base.pas"
 api_ref="docs/reference/API_REFERENCE.md"
 
 if ! rg -n --quiet "deprecated 'Use per-connection SNI via ISSLClientConnection\\.SetServerName';" "$base_file"; then

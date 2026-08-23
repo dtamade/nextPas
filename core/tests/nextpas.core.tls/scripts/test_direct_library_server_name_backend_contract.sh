@@ -30,20 +30,20 @@ check_backend_source() {
     "$file no longer documents client-side direct-library ServerName compatibility warning"
 }
 
-check_backend_source "src/nextpas.core.tls.openssl.backed.pas" "TOpenSSLLibrary"
-check_backend_source "src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
-check_backend_source "src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
-check_backend_source "src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
-check_backend_source "src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
+check_backend_source "core/src/nextpas.core.tls.openssl.backed.pas" "TOpenSSLLibrary"
+check_backend_source "core/src/nextpas.core.tls.freepascal.lib.pas" "TFreePascalSSLLibrary"
+check_backend_source "core/src/nextpas.core.tls.mbedtls.lib.pas" "TMbedTLSLibrary"
+check_backend_source "core/src/nextpas.core.tls.wolfssl.lib.pas" "TWolfSSLLibrary"
+check_backend_source "core/src/nextpas.core.tls.winssl.lib.pas" "TWinSSLLibrary"
 
-require_fixed "tests/test_openssl_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
+require_fixed "core/tests/nextpas.core.tls/test_openssl_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
   "plan no longer records the existing OpenSSL direct-library ServerName proof file"
-require_fixed "tests/test_freepascal_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
+require_fixed "core/tests/nextpas.core.tls/test_freepascal_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
   "plan no longer records the existing FreePascal direct-library ServerName proof file"
-require_fixed "tests/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
+require_fixed "core/tests/nextpas.core.tls/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas" "docs/plans/2026-05-21-direct-library-server-name-backend-proof.md" \
   "plan no longer records the new MbedTLS/WolfSSL direct-library ServerName proof file"
 
-runtime_file="tests/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas"
+runtime_file="core/tests/nextpas.core.tls/test_mbedtls_wolfssl_library_default_config_server_name_clarification.pas"
 require_fixed "@CreateMbedTLSLibrary" "$runtime_file" \
   "optional backend runtime proof no longer exercises the MbedTLS direct-library path"
 require_fixed "@CreateWolfSSLLibrary" "$runtime_file" \
