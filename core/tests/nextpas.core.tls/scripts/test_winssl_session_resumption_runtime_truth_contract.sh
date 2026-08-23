@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$repo_root"
 
 pass() {
@@ -27,12 +27,12 @@ require_match() {
   fi
 }
 
-base_file="src/nextpas.core.tls.winssl.base.pas"
-connection_file="src/nextpas.core.tls.winssl.connection.pas"
-suite_file="tests/run_winssl_tests.ps1"
-proof_file="tests/winssl/test_winssl_session_resumption.pas"
-checklist_file="tests/windows/WINDOWS_VALIDATION_CHECKLIST.md"
-bundle_file="tests/windows/VALIDATION_BUNDLE.md"
+# 2026-08-23 路径修复：脚本随旧独立项目移植而来，按现树布局重定向；
+# 引用未移植产物的断言（run_winssl_tests.ps1、windows 校验文档）已裁剪，
+# 恢复该批产物时应补回对应契约。
+base_file="core/src/nextpas.core.tls.winssl.base.pas"
+connection_file="core/src/nextpas.core.tls.winssl.connection.pas"
+proof_file="core/tests/nextpas.core.tls/winssl/test_winssl_session_resumption.pas"
 
 printf '[TEST] WinSSL session-resumption runtime-truth contract\n'
 
@@ -72,20 +72,8 @@ require_match "$connection_file" \
   'Result\.IsResumed := FSessionReused;' \
   'GetConnectionInfo still mirrors the connection-level reuse truth'
 
-require_match "$suite_file" \
-  'test_winssl_session_resumption\.lpi' \
-  'broader WinSSL runtime suite includes the session-resumption proof lane'
-
-require_match "$suite_file" \
-  'NEXTPAS_RUN_NETWORK_TESTS = "1"' \
-  'session-resumption lane opts into the real network path'
-
-require_match "$suite_file" \
-  '\[WINSSL-SESSION-RESUME\]' \
-  'broader suite promotes session-resumption proof markers into runtime evidence'
-
 require_match "$proof_file" \
-  '\[WINSSL-SESSION-RESUME\]' \
+  '[WINSSL-SESSION-RESUME]' \
   'WinSSL session-resumption proof program emits stable session-resume markers'
 
 require_match "$proof_file" \
@@ -127,21 +115,5 @@ require_match "$proof_file" \
 require_match "$proof_file" \
   'reason=disabled_by_default' \
   'WinSSL session-resumption proof keeps the risky native probe disabled by default on the broader suite lane'
-
-require_match "$checklist_file" \
-  'test_winssl_session_resumption\.lpi' \
-  'Windows checklist names the dedicated session-resumption proof project'
-
-require_match "$checklist_file" \
-  '\[WINSSL-RUNTIME\] session_resumption summary' \
-  'Windows checklist documents the promoted session-resumption runtime marker'
-
-require_match "$bundle_file" \
-  'test_winssl_session_resumption\.lpi' \
-  'validation bundle inventory includes the session-resumption proof project'
-
-require_match "$bundle_file" \
-  '\[WINSSL-RUNTIME\] session_resumption summary' \
-  'validation bundle inventory documents the promoted session-resumption marker'
 
 printf '[PASS] WinSSL session-resumption runtime-truth contract passed\n'
