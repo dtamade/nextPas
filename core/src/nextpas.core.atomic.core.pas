@@ -64,6 +64,8 @@ function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 {$ENDIF}
 {$IF DEFINED(CPUARM)}
 function _backend_xchg_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; inline;
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; inline;
 {$ENDIF}
 procedure _backend_read_barrier; inline;
 procedure _backend_write_barrier; inline;
@@ -628,6 +630,36 @@ asm
   strexd  r6, r2, r3, [r0]
   cmp     r6, #0
   bne     .Larmxchg64_loop
+  mov     r0, r4
+  mov     r1, r5
+end;
+
+// CAS：期望值匹配才写入，总返回旧值。参数 r0=@t，desired=r2:r3，expected=r4:r5
+function _backend_cmpxchg_i64(var aTarget: Int64; aDesired, aExpected: Int64): Int64; assembler; nostackframe;
+asm
+.Larmcas64_loop:
+  ldrexd  r6, r7, [r0]
+  cmp     r6, r4
+  cmpeq   r7, r5
+  bne     .Larmcas64_out
+  strexd  r8, r2, r3, [r0]
+  cmp     r8, #0
+  bne     .Larmcas64_loop
+.Larmcas64_out:
+  mov     r0, r6
+  mov     r1, r7
+end;
+
+// fetch-add：返回旧值。参数 r0=@t，value=r2:r3
+function _backend_xadd_i64(var aTarget: Int64; aValue: Int64): Int64; assembler; nostackframe;
+asm
+.Larmadd64_loop:
+  ldrexd  r4, r5, [r0]
+  adds    r6, r4, r2
+  adc     r7, r5, r3
+  strexd  r8, r6, r7, [r0]
+  cmp     r8, #0
+  bne     .Larmadd64_loop
   mov     r0, r4
   mov     r1, r5
 end;

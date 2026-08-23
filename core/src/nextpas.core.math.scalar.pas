@@ -13,7 +13,9 @@ uses
  * @param AB Second operand
  * @return True if AA + AB would overflow
  *}
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 {** * Checks whether multiplying two values would overflow.
@@ -21,7 +23,9 @@ function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
  * @param AB Second operand
  * @return True if AA * AB would overflow
  *}
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsMulOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 {** * Returns the lesser of two values.
@@ -42,8 +46,10 @@ function Min(AA, AB: SizeInt): SizeInt; overload; inline;
 function Max(AA, AB: SizeInt): SizeInt; overload; inline;
 { Int32 overloads: SizeInt is 64-bit on x86_64, so plain Integer arguments
   would otherwise widen to SizeInt and lose the exact-type match. }
+{$IF DEFINED(CPU64)}
 function Min(AA, AB: Int32): Int32; overload; inline;
 function Max(AA, AB: Int32): Int32; overload; inline;
+{$ENDIF}
 function Min(AA, AB: Double): Double; overload; inline;
 function Max(AA, AB: Double): Double; overload; inline;
 function Min(AA, AB: Single): Single; overload; inline;
@@ -1003,22 +1009,26 @@ begin
     (AEpsilon >= 0.0);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := AA > High(SizeUInt) - AB;
 end;
+{$ENDIF}
 
 function IsAddOverflow(AA, AB: UInt32): Boolean;
 begin
   Result := AA > High(UInt32) - AB;
 end;
 
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean;
 begin
   if AA = 0 then
     Exit(False);
   Result := AB > High(SizeUInt) div AA;
 end;
+{$ENDIF}
 
 function IsMulOverflow(AA, AB: UInt32): Boolean;
 begin
@@ -1047,6 +1057,7 @@ begin
   if AA > AB then Result := AA else Result := AB;
 end;
 
+{$IF DEFINED(CPU64)}
 function Min(AA, AB: Int32): Int32;
 begin
   if AA < AB then Result := AA else Result := AB;
@@ -1056,6 +1067,7 @@ function Max(AA, AB: Int32): Int32;
 begin
   if AA > AB then Result := AA else Result := AB;
 end;
+{$ENDIF}
 
 function Min(AA, AB: Single): Single;
 begin

@@ -215,9 +215,15 @@ function BatchScaleOffsetF64(const AInput: array of Double;
                              const AScale, AOffset: Double;
                              var AOutput: array of Double): SizeInt;
 
+{ 32 位目标 SizeUInt≡UInt32（LongWord），SizeUInt 重载与 UInt32 版撞签名，
+  仅 64 位声明；调用方传 SizeUInt 时自动落到 UInt32 重载 }
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
+{$ENDIF}
 function IsMulOverflow(AA, AB: UInt32): Boolean; overload; inline;
 
 function Min(AA, AB: SizeUInt): SizeUInt; overload; inline;
@@ -803,20 +809,24 @@ begin
   Result := nextpas.core.math.batch.BatchScaleOffsetF64(AInput, AScale, AOffset, AOutput);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsAddOverflow(AA, AB);
 end;
+{$ENDIF}
 
 function IsAddOverflow(AA, AB: UInt32): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsAddOverflow(AA, AB);
 end;
 
+{$IF DEFINED(CPU64)}
 function IsMulOverflow(AA, AB: SizeUInt): Boolean;
 begin
   Result := nextpas.core.math.scalar.IsMulOverflow(AA, AB);
 end;
+{$ENDIF}
 
 function IsMulOverflow(AA, AB: UInt32): Boolean;
 begin

@@ -33,6 +33,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.atomic.core,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.mutex,
@@ -143,6 +144,25 @@ implementation
 uses
   nextpas.core.mem.utils,
   nextpas.core.base.utils;
+
+{$IF DEFINED(CPUARM)}
+{ arm32 无 FPC 64 位内建：转发到本库缝合层（LDREXD/STREXD 实现）。
+  同名声明在 CPUARM 下遮蔽 System 版本，调用点无需改动。 }
+function InterlockedCompareExchange64(var Target: Int64; NewValue, Comparand: Int64): Int64; inline;
+begin
+  Result := _backend_cmpxchg_i64(Target, NewValue, Comparand);
+end;
+
+function InterlockedExchangeAdd64(var Target: Int64; Value: Int64): Int64; inline;
+begin
+  Result := _backend_xadd_i64(Target, Value);
+end;
+
+function InterlockedExchange64(var Target: Int64; Value: Int64): Int64; inline;
+begin
+  Result := _backend_xchg_i64(Target, Value);
+end;
+{$ENDIF}
 
 var
   GDefaultCollector: TAllocStatsCollector = nil;
