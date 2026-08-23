@@ -48,7 +48,7 @@ var
 begin
   LClip := TClipboard.Detect;
   // In CI/test environment, might be cmNone or cmExternal
-  Check(LClip.Method in [cmOSC52, cmExternal, cmNone], 'Method should be valid');
+  Check(LClip.Method in [cmOSC52, cmExternal, cmWin32, cmNone], 'Method should be valid');
 end;
 
 { --- Deepened tests --- }
@@ -156,9 +156,40 @@ var
   LClip: TClipboard;
 begin
   LClip := TClipboard.Detect;
-  Check(LClip.Method in [cmOSC52, cmExternal, cmNone], 'Detect: valid method');
+  Check(LClip.Method in [cmOSC52, cmExternal, cmWin32, cmNone], 'Detect: valid method');
   if LClip.Method = cmExternal then
     Check(Length(LClip.ExternalTool) > 0, 'External method has tool name');
+end;
+
+{ --- POSIX 通道决策矩阵(PickPosixMethod 纯函数) --- }
+
+procedure TestPickPosixToolWins;
+begin
+  { 外部工具可用 → 恒 cmExternal(直连系统剪贴板,双向真实可达;
+    不再让 OSC52 抢占——OSC52 依赖外层终端支持,不支持时静默失败) }
+  Check(TClipboard.PickPosixMethod(True, False, False) = cmExternal, 'tool only');
+  Check(TClipboard.PickPosixMethod(True, True, False) = cmExternal, 'tool + osc52 terminal');
+  Check(TClipboard.PickPosixMethod(True, False, True) = cmExternal, 'tool + tmux');
+end;
+
+procedure TestPickPosixOsc52Fallback;
+begin
+  { 无工具:OSC52 兜底——识别的终端或 tmux pane 均可 }
+  Check(TClipboard.PickPosixMethod(False, True, False) = cmOSC52, 'osc52 terminal');
+  Check(TClipboard.PickPosixMethod(False, False, True) = cmOSC52, 'tmux pane fallback');
+end;
+
+procedure TestPickPosixNone;
+begin
+  Check(TClipboard.PickPosixMethod(False, False, False) = cmNone, 'nothing available');
+end;
+
+procedure TestClipboardEnumOrderStable;
+begin
+  { 零初始化记录语义锚定:cmOSC52 必须是首成员(Ord=0),
+    旧代码依赖零值 = cmOSC52 的默认行为 }
+  Check(Ord(cmOSC52) = 0, 'cmOSC52 stays first (zero-init semantics)');
+  Check(Ord(cmNone) > Ord(cmWin32), 'cmNone stays last');
 end;
 
 procedure TestGetOSC52CopyTwoBytes;
@@ -293,5 +324,9 @@ begin
   T.Test('Osc52Seq passthrough envelope', @TestOsc52SeqPassthroughEnvelope);
   T.Test('Osc52Seq passthrough empty', @TestOsc52SeqPassthroughEmpty);
   T.Test('Detect passthrough field', @TestClipboardDetectPassthroughField);
+  T.Test('PickPosix tool wins', @TestPickPosixToolWins);
+  T.Test('PickPosix osc52 fallback', @TestPickPosixOsc52Fallback);
+  T.Test('PickPosix none', @TestPickPosixNone);
+  T.Test('Clipboard enum order stable', @TestClipboardEnumOrderStable);
   if not T.Run then Halt(1);
 end.
